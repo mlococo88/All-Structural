@@ -1124,6 +1124,9 @@ body.rwDashColl #rwDash { display: none; }
       <div class="iw"><input type="number" id="Lh" value="8" min="0.5" max="30" step="0.5"><span class="iw-unit">ft</span></div></div>
     <div class="ig full"><label for="Df_add">Soil Cover — Toe (above ftg top)</label>
       <div class="iw"><input type="number" id="Df_add" value="0" min="0" max="10" step="0.25"><span class="iw-unit">ft</span></div></div>
+    <!-- RWHP (2026-11-07): stem above the retained backfill (exposed stem). Saved only when not 0; absent (older saves) = 0. -->
+    <div class="ig full"><label for="h_proj">Stem projection above retained grade h<sub>p</sub></label>
+      <div class="iw"><input type="number" id="h_proj" value="0" min="0" max="38" step="0.25" title="Height of the stem above the retained backfill at the stem back face. Earth, water and surcharge act on H_ret = H − h_p only."><span class="iw-unit">ft</span></div></div>
   </div>
 <!-- RWPL (2026-11-07): Phase 8b, foundation type and pile rows (pile-supported footing). Spread footing is the default; every field
      below is saved only when it differs from its default, so a spread-footing project saves and opens exactly as before. -->
@@ -1827,6 +1830,27 @@ function eqCheck(title, latex, ok, ref='', where=null) {
     ${whereBlock(where)}
   </div>`;
 }
+// RWHP (2026-11-07): the retained height in the worked steps. With no stem projection (h_p = 0) the symbols stay H and H_s (the text
+// is as before); with a projection they read H_ret = H − h_p and H_s,ret = H_s − h_p, and the derivation step rwHpEq is shown.
+const rwHt  = r => r && r.h_p > 0 ? 'H_{ret}' : 'H';        // KaTeX
+const rwHu  = r => r && r.h_p > 0 ? 'H_ret' : 'H';          // plain text
+const rwHst = r => r && r.h_p > 0 ? 'H_{s,ret}' : 'H_s';
+const rwHsu = r => r && r.h_p > 0 ? 'H_s,ret' : 'H_s';
+function rwHpEq(r, stem) {   // '' at h_p = 0
+  if (!(r && r.h_p > 0)) return '';
+  const N = (v, d) => (isFinite(v) ? (+v).toFixed(d) : '—');
+  return stem
+    ? eq('Retained height on the stem (the stem projects h<sub>p</sub> above the retained grade)',
+        `H_{s,ret} = H_s - h_p = ${N(r.inp.Hs,2)} - ${N(r.h_p,2)} = \\boxed{${N(r.Hs_ret,2)}\\ \\text{ft}}`, '',
+        [{sym:'H_s', desc:'stem height (footing top to stem top)', val:N(r.inp.Hs,2), unit:'ft'},
+         {sym:'h_p', desc:'stem projection above the retained grade (input)', val:N(r.h_p,2), unit:'ft'},
+         {sym:'H_{s,ret}', desc:'retained height on the stem: earth, water and surcharge act below the grade only', val:N(r.Hs_ret,2), unit:'ft'}])
+    : eq('Retained height (the stem projects h<sub>p</sub> above the retained grade)',
+        `H_{ret} = H - h_p = (H_s + t_f) - h_p = ${N(r.H,3)} - ${N(r.h_p,2)} = \\boxed{${N(r.H_ret,3)}\\ \\text{ft}}`, '',
+        [{sym:'H', desc:'total wall height H_s + t_f (stem top to footing bottom)', val:N(r.H,3), unit:'ft'},
+         {sym:'h_p', desc:'stem projection above the retained grade (input)', val:N(r.h_p,2), unit:'ft'},
+         {sym:'H_{ret}', desc:'retained height, backfill surface at the stem to footing bottom: earth, water and surcharge act on it; the stem self weight is on the full H_s', val:N(r.H_ret,3), unit:'ft'}]);
+}
 // If a title starts with "N.N " or "Step N —", render the leading number in accent color
 function fmtEqTitle(title) {
   const m = title.match(/^(\d+(?:\.\d+)?\s+|Step\s+\d+\s*[—-]\s*|[A-Za-z]+\s+Step\s+\d+\s*[—-]\s*)(.*)$/);
@@ -2257,6 +2281,8 @@ function rwPileSchedule(r) {
   const shape = { hp: 'steel H-pile', pipe: 'steel pipe pile', square: 'square precast concrete', round: 'round (timber / cast-in-place)' }[P.shape] || P.shape;
   return { rows, h, Lseg, shape, desig: P.desig || '', D: P.D, embed: P.embed, isA, combs: P.comb.map((c, j) => ({ n: j + 1, label: c.label })) };
 }
+// RWHP (2026-11-07): the least retained height on the stem with a projection above the grade (Decision, pending engineer review)
+const RW_HP_MINRET = 1.0;   // ft
 function calcAll(inp) {
   const errors = [], warnings = [];
 
@@ -2266,6 +2292,15 @@ function calcAll(inp) {
   const ts_top_ft = inp.ts_top / 12;
   const B   = inp.Lt + ts_bot_ft + inp.Lh;   // total footing width, ft
   const H   = inp.Hs + tf_ft;                // total wall height, ft
+  // RWHP (2026-11-07): stem projection above the retained grade h_p (input h_proj; 0 or absent = backfill at the stem top, as before).
+  // Earth, water and surcharge act on the retained height only: H_ret = H − h_p (grade at the stem → footing base) and H_s,ret = H_s − h_p
+  // on the stem. The stem self weight, the barrier and the collision stay on the full stem. A sloped backfill starts at the grade at the
+  // stem back face, where the stem is t_g thick (t_g = t_top at h_p = 0).
+  const h_p    = Math.max(0, +inp.h_proj || 0);
+  const H_ret  = H - h_p;
+  const Hs_ret = inp.Hs - h_p;
+  const t_g    = h_p > 0 ? inp.ts_top + (inp.ts_bot - inp.ts_top) * h_p / inp.Hs : inp.ts_top;   // stem thickness at the grade (in)
+  const t_g_ft = t_g / 12;
   const Df  = tf_ft + inp.Df_add;            // total toe embedment depth (ftg + soil cover), ft
   const dk_ft = inp.useShearKey ? inp.dk / 12 : 0;
   // RWPB (2026-11-07, engineer instruction): the bottom mat stays at the normal bottom cover c_c on piles too; the bars run between
@@ -2306,7 +2341,7 @@ function calcAll(inp) {
       : calcKa(inp.phi, inp.beta);
     // RW2H2 (2026-11-07): on the pressure-plane height H′ = H + (L_h + t_bot − t_top)·tanβ (the height of the static thrust and of the
     // AASHTO Extreme Event I P_AE; = H for a level backfill). Was H: ΔP_E understated by (H′/H)² with a sloped backfill.
-    const Hq = H + (inp.beta > 0 ? (inp.Lh + ts_bot_ft - ts_top_ft) * Math.tan(beta_r) : 0);
+    const Hq = H_ret + (inp.beta > 0 ? (inp.Lh + ts_bot_ft - t_g_ft) * Math.tan(beta_r) : 0);   // RWHP: on the retained height (= H′ below)
     // Total M-O active force: Pae = ½·Kae·γ·H′²·(1−kv)
     Kae    = KaeMO;
     Pae    = 0.5 * KaeMO * inp.gamma_s * Hq * Hq * (1 - kv);
@@ -2315,7 +2350,7 @@ function calcAll(inp) {
     Pe_inc = Math.max(0, Pae - Pa_MO);
     // Acts at 0.6H′ from base (Seed & Whitman / ASCE 7 commentary)
     Mo_seis = Pe_inc * (0.6 * Hq);
-    if (inp.basis !== 'AASHTO') warnings.push(`Seismic: ΔPe = ${f(Pe_inc/1000,3)} k/ft acting at 0.6H${Hq > H + 1e-9 ? '′' : ''} = ${f(0.6*Hq,2)} ft. Add to O.T. check. Verify with geotechnical engineer.`);   // RWE1: ACI branch only (AASHTO: Extreme Event I)
+    if (inp.basis !== 'AASHTO') warnings.push(`Seismic: ΔPe = ${f(Pe_inc/1000,3)} k/ft acting at 0.6H${Hq > H_ret + 1e-9 ? '′' : (h_p > 0 ? '_ret' : '')} = ${f(0.6*Hq,2)} ft. Add to O.T. check. Verify with geotechnical engineer.`);   // RWE1: ACI branch only (AASHTO: Extreme Event I)
   }
 
   // ── Column / beam loads (per linear foot of wall) ─────────────
@@ -2364,7 +2399,11 @@ function calcAll(inp) {
   const gamma_s_sub = hasWT ? Math.max(0, gamma_sat - gamma_w) : inp.gamma_s; // buoyant unit weight below WT
 
   // Hydrostatic force (triangular, acts from WT depth to base of footing)
-  const hw     = hasWT ? H - wt_d : 0;          // height of water column at base
+  // RWHP: d_WT is entered from the top of the wall; the pressures use its depth below the retained grade, wt_r = max(0, d_WT − h_p)
+  // (a water table above the retained grade is taken at the grade, with a note). wt_r = wt_d at h_p = 0.
+  const wt_r   = hasWT ? Math.max(0, wt_d - h_p) : H_ret;
+  if (hasWT && wt_d < h_p - 1e-9) warnings.push(`Water table ${f(wt_d,2)} ft below the top of the wall is above the retained grade (h_p = ${f(h_p,2)} ft): water is taken at the retained grade (no water above it).`);
+  const hw     = hasWT ? H_ret - wt_r : 0;      // height of water column at base
   const F_hyd  = hasWT ? 0.5 * gamma_w * hw * hw : 0;  // lb/ft, horizontal
   const y_hyd  = hw / 3;                          // moment arm from base
 
@@ -2388,6 +2427,8 @@ function calcAll(inp) {
     errors.push(`Footing too thin (${inp.tf}") for cover + rebar. Increase t_f.`);
   if (inp.ts_bot <= inp.cov_stem + 2)
     errors.push(`Stem too thin (${inp.ts_bot}") for cover + rebar. Increase t_s.`);
+  if (h_p > 0 && !(Hs_ret >= RW_HP_MINRET - 1e-9))   // RWHP: at least RW_HP_MINRET of retained height on the stem
+    errors.push(`Stem projection above retained grade h_p = ${f(h_p,2)} ft leaves H_s − h_p = ${f(Hs_ret,2)} ft of retained height on the stem: it must be at least ${f(RW_HP_MINRET,1)} ft (0 ≤ h_p ≤ H_s − ${f(RW_HP_MINRET,1)} ft).`);
   // RWTE (2026-11-07): pile-supported footing: the depth over the pile heads d_p = t_f − embedment − clear − d_b (punching, the ACI
   // cap depth) must be positive; the same 2-in allowance for the bar as the spread-footing rule above. Was not checked here: t_f at or
   // below embedment + clear threw (sel_toe null) or gave a negative d_p, and the page showed no named limit.
@@ -2419,7 +2460,7 @@ function calcAll(inp) {
   // Coulomb wall friction is only meaningful on a real concrete–soil interface. For a
   // cantilever wall whose heel is long enough that the Rankine wedge forms entirely in soil,
   // stability pressure acts on the soil–soil virtual plane at the heel end (δ = β).
-  const heelLongForRankine = inp.Lh >= H * Math.tan(Math.PI/4 - toRad(inp.phi)/2);
+  const heelLongForRankine = inp.Lh >= H_ret * Math.tan(Math.PI/4 - toRad(inp.phi)/2);
   const coulombDeltaWarn = isAASHTO && A.ep_method === 'coulomb' && A.ep_cond !== 'atrest' && (A.delta || 0) > 0;
   if (coulombDeltaWarn)
     warnings.push(`Coulomb with wall friction δ = ${A.delta}° is applied to STABILITY on a ${heelLongForRankine ? 'LONG' : 'short'} heel — `
@@ -2434,11 +2475,12 @@ function calcAll(inp) {
   // (H = backfill surface to footing bottom, as the table lookup). Auto h_eq: beyond H/2 → LS not required (h_eq = 0, noted);
   // a manual h_eq is the user's override and is applied whatever the distance. The checkbox stays the off switch.
   const ls_dir  = A.traffic_dir === 'perpendicular' ? 'perpendicular' : 'parallel';
-  const ls_dist = Math.max(0, A.heq_dist || 0), ls_half = H / 2;
+  // RWHP: H = the retained height H_ret (Art. 3.11.6.4.1: backfill surface to the bottom of the footing), for the table and the H/2 rule
+  const ls_dist = Math.max(0, A.heq_dist || 0), ls_half = H_ret / 2;
   const ls_auto_off = isAASHTO && !!A.ll_surcharge && A.heq_mode !== 'manual' && ls_dist > ls_half;
   const ls_on = isAASHTO && !!A.ll_surcharge && !ls_auto_off;
   const heq = ls_on
-    ? (A.heq_mode === 'manual' ? A.heq : heqAASHTO(H, ls_dist, ls_dir))
+    ? (A.heq_mode === 'manual' ? A.heq : heqAASHTO(H_ret, ls_dist, ls_dir))
     : 0;
   const q_ll_aashto = heq * inp.gamma_s;   // psf, AASHTO LL surcharge pressure
   // Effective surcharge used in pressure calcs: ACI uses q_sur; AASHTO adds heq surcharge
@@ -2448,10 +2490,10 @@ function calcAll(inp) {
   // Above WT zone: height h_above, Ka*gamma_s pressure
   // Sloped backfill: Rankine pressure acts on the vertical plane through the heel end,
   // whose height is H' = H + L_rise·tanβ (slope starts at the back edge of the stem top).
-  const L_rise  = inp.Lh + (ts_bot_ft - ts_top_ft);        // stem-top back edge → heel end (ft)
+  const L_rise  = inp.Lh + (ts_bot_ft - t_g_ft);           // stem back face at the grade → heel end (ft); RWHP: t_g (= t_top at h_p = 0)
   const dH_slope = inp.beta > 0 ? L_rise * Math.tan(b_r) : 0;
-  const Hp      = H + dH_slope;                           // pressure-plane height (ft)
-  const wt_dp   = hasWT ? wt_d + dH_slope : Hp;           // WT depth on that plane
+  const Hp      = H_ret + dH_slope;                       // pressure-plane height (ft); RWHP: on the retained height
+  const wt_dp   = hasWT ? wt_r + dH_slope : Hp;           // WT depth on that plane
   const h_above = hasWT ? Math.min(wt_dp, Hp) : Hp;
   const h_below = hasWT ? Math.max(0, Hp - wt_dp) : 0;
 
@@ -2479,14 +2521,15 @@ function calcAll(inp) {
 
   // Lateral pressure at key elevations (psf, soil only — add hydrostatic separately)
   const p_top       = Ka * inp.q_sur;
-  const p_stem_base = Ka * inp.gamma_s * Math.min(inp.Hs, wt_d)
-                    + (hasWT && wt_d < inp.Hs ? Ka * gamma_s_sub * (inp.Hs - wt_d) : 0)
+  // RWHP: depths below the retained grade (H_s,ret, H_ret, wt_r; = H_s, H, d_WT at h_p = 0)
+  const p_stem_base = Ka * inp.gamma_s * Math.min(Hs_ret, wt_r)
+                    + (hasWT && wt_r < Hs_ret ? Ka * gamma_s_sub * (Hs_ret - wt_r) : 0)
                     + Ka * inp.q_sur;
-  const p_ftg_base  = Ka * inp.gamma_s * Math.min(H, wt_d)
-                    + (hasWT && wt_d < H ? Ka * gamma_s_sub * (H - wt_d) : 0)
+  const p_ftg_base  = Ka * inp.gamma_s * Math.min(H_ret, wt_r)
+                    + (hasWT && wt_r < H_ret ? Ka * gamma_s_sub * (H_ret - wt_r) : 0)
                     + Ka * inp.q_sur;
   // Effective (soil-only) active pressure at the water-table depth — the break point
-  const p_wt        = hasWT ? Ka * inp.gamma_s * wt_d + Ka * inp.q_sur : p_ftg_base;
+  const p_wt        = hasWT ? Ka * inp.gamma_s * wt_r + Ka * inp.q_sur : p_ftg_base;
   const p_hyd_base  = hasWT ? gamma_w * hw : 0;   // hydrostatic at base of footing
 
   // ── Passive resistance (lb/ft) ───────────────────────────────
@@ -2513,12 +2556,12 @@ function calcAll(inp) {
   const Wstem = inp.gamma_c * (ts_top_ft + ts_bot_ft) / 2 * inp.Hs;
   // Soil over heel: moist above the WT, saturated below (total stress; uplift is
   // applied separately on the footing base).
-  const h_sat_heel = hasWT ? Math.max(0, inp.Hs - wt_d) : 0;
-  const w_soil_col = inp.gamma_s * (inp.Hs - h_sat_heel) + gamma_sat * h_sat_heel;  // psf on heel
+  const h_sat_heel = hasWT ? Math.max(0, Hs_ret - wt_r) : 0;
+  const w_soil_col = inp.gamma_s * (Hs_ret - h_sat_heel) + gamma_sat * h_sat_heel;  // psf on heel; RWHP: soil column H_s,ret (= H_s at h_p = 0)
   const Wsoil_rect = w_soil_col * inp.Lh;
   // Sloping-backfill wedge above the stem top (triangle, rise L_rise·tanβ at the heel end)
   const Wwedge = 0.5 * inp.gamma_s * L_rise * dH_slope;
-  const x_wedge = inp.Lt + ts_top_ft + (2/3) * L_rise;
+  const x_wedge = inp.Lt + t_g_ft + (2/3) * L_rise;   // RWHP: from the stem back face at the grade
   const Wsoil = Wsoil_rect + Wwedge;
   const Wsur  = inp.q_sur * inp.Lh;
   const W_col = P_col_svc;    // column service vertical load (lb/ft)
@@ -3004,7 +3047,7 @@ function calcAll(inp) {
       const P_AE = 0.5 * Kae * inp.gamma_s * Hp * Hp * (1 - inp.kv), y_AE = Hp / 3;
       const Ww = Wftg + Wstem + W_bar, Ws = Wsoil;
       const y_stem_c = tf_ft + inp.Hs * (ts_bot_ft + 2 * ts_top_ft) / (3 * (ts_bot_ft + ts_top_ft));
-      const y_IR = (Wftg * tf_ft / 2 + Wstem * y_stem_c + W_bar * (H + bar_h_ft / 2) + Wsoil_rect * (tf_ft + inp.Hs / 2) + Wwedge * (H + dH_slope / 3)) / Math.max(Ww + Ws, 1e-9);
+      const y_IR = (Wftg * tf_ft / 2 + Wstem * y_stem_c + W_bar * (H + bar_h_ft / 2) + Wsoil_rect * (tf_ft + Hs_ret / 2) + Wwedge * (H_ret + dH_slope / 3)) / Math.max(Ww + Ws, 1e-9);
       const P_IR = inp.kh * (Ww + Ws);
       const H_oth = P_ES + gEQ * P_LS + P_hyd, M_oth = P_ES * y_ES + gEQ * P_LS * y_LS + P_hyd * y_hyd;
       const V_min  = V_DC + W_bar + Wsoil + V_ES_v - V_up;                         // resisting vertical (sliding, e)
@@ -3075,8 +3118,10 @@ function calcAll(inp) {
   // cantilever of height hsec (from top of stem down). Splits into the 3-block
   // effective-stress profile at the WT plus the hydrostatic triangle.
   // WT depth is measured from top of wall = top of stem (backfill level with stem top).
-  function stemDemand(hsec) {
-    const wtd = hasWT ? wt_d : hsec;             // depth to WT from top of stem
+  // RWHP: hsec0 is measured from the stem top; the earth and water start at the retained grade, h_p below it (retained depth hsec).
+  function stemDemand(hsec0) {
+    const hsec = Math.max(0, hsec0 - h_p);
+    const wtd = hasWT ? wt_r : hsec;             // depth to WT below the retained grade
     const h1 = Math.min(wtd, hsec);              // moist zone within this cantilever
     const h2 = Math.max(0, hsec - h1);           // submerged zone
     // Forces (lb/ft) and arms above the section
@@ -3095,16 +3140,16 @@ function calcAll(inp) {
   const sd_base = stemDemand(inp.Hs);
   // Hydrostatic load factor: AASHTO treats water as WA (γ = 1.0); ACI folds it into H (1.6)
   const gWA = isAASHTO ? 1.00 : 1.6;
-  const stem_water = hasWT && wt_d < inp.Hs;    // WT intersects the stem
+  const stem_water = hasWT && wt_r < Hs_ret;    // WT intersects the stem (RWHP: below the grade)
 
   const Mu_stem_strI = etaMx * (gEH * sd_base.M_soil   // RW2H4: × η
                      + gWA * sd_base.M_hyd
-                     + gES * (Ka * inp.q_sur   * inp.Hs ** 2 / 2)
-                     + gLS * (Ka * q_ll_stem   * inp.Hs ** 2 / 2));
+                     + gES * (Ka * inp.q_sur   * Hs_ret ** 2 / 2)
+                     + gLS * (Ka * q_ll_stem   * Hs_ret ** 2 / 2));
   const Vu_stem_strI = etaMx * (gEH * sd_base.V_soil
                      + gWA * sd_base.V_hyd
-                     + gES * (Ka * inp.q_sur * inp.Hs)
-                     + gLS * (Ka * q_ll_stem * inp.Hs));
+                     + gES * (Ka * inp.q_sur * Hs_ret)
+                     + gLS * (Ka * q_ll_stem * Hs_ret));
 
   // ── EXTREME EVENT II stem case (MassDOT §3.3.2.4) ──
   // Earth pressure at γ_p = 1.0 PLUS the collision at γ_CT = 1.0.
@@ -3119,13 +3164,13 @@ function calcAll(inp) {
     const arm_stem = arm_base - tf_ft;               // above base of STEM
     Mu_stem_ee2 = 1.00 * sd_base.M_soil              // γ_p = 1.0 earth (water-aware)
                 + 1.00 * sd_base.M_hyd               // γ_WA = 1.0 hydrostatic
-                + 1.00 * (Ka * inp.q_sur   * inp.Hs ** 2 / 2)
-                + 0.50 * (Ka * q_ll_stem   * inp.Hs ** 2 / 2)   // LS reduced
+                + 1.00 * (Ka * inp.q_sur   * Hs_ret ** 2 / 2)
+                + 0.50 * (Ka * q_ll_stem   * Hs_ret ** 2 / 2)   // LS reduced
                 + ctR.CT_h * 1000 * arm_stem;                    // γ_CT = 1.0 collision
     Vu_stem_ee2 = 1.00 * sd_base.V_soil
                 + 1.00 * sd_base.V_hyd
-                + 1.00 * (Ka * inp.q_sur * inp.Hs)
-                + 0.50 * (Ka * q_ll_stem * inp.Hs)
+                + 1.00 * (Ka * inp.q_sur * Hs_ret)
+                + 0.50 * (Ka * q_ll_stem * Hs_ret)
                 + ctR.CT_h * 1000;
   }
 
@@ -3138,19 +3183,19 @@ function calcAll(inp) {
   const eeQ = isAASHTO && aashtoR && aashtoR.ee1 ? aashtoR.ee1 : null;
   const stemSeis = z => {   // factored seismic-combination M (lb·ft/ft) and V (lb/ft) at depth z below the stem top; null without seismic
     if (!hasSeismic || !(z > 0)) return null;
-    const sd = stemDemand(z);
+    const sd = stemDemand(z), zr = Math.max(0, z - h_p);   // RWHP: earth on the retained depth zr; the inertia on the full stem above z
     if (!isAASHTO) {
-      const Pe = Pe_inc * (z / Hp) ** 2;   // RW2H2: ΔP_E is on H′ now (was (z/H)² with ΔP_E on H: same value)
-      return { M: gEH*sd.M_soil + gWA*sd.M_hyd + gES*Ka*inp.q_sur*z*z/2 + gLS*Ka*q_ll_stem*z*z/2 + Pe*0.6*z,
-               V: gEH*sd.V_soil + gWA*sd.V_hyd + gES*Ka*inp.q_sur*z + gLS*Ka*q_ll_stem*z + Pe, Pe };
+      const Pe = Pe_inc * (zr / Hp) ** 2;   // RW2H2: ΔP_E is on H′ now (was (z/H)² with ΔP_E on H: same value)
+      return { M: gEH*sd.M_soil + gWA*sd.M_hyd + gES*Ka*inp.q_sur*zr*zr/2 + gLS*Ka*q_ll_stem*zr*zr/2 + Pe*0.6*zr,
+               V: gEH*sd.V_soil + gWA*sd.V_hyd + gES*Ka*inp.q_sur*zr + gLS*Ka*q_ll_stem*zr + Pe, Pe };
     }
     if (!eeQ) return null;
-    const PAE = 0.5 * Kae * inp.gamma_s * z * z * (1 - inp.kv), MAE = PAE * z / 3;
+    const PAE = 0.5 * Kae * inp.gamma_s * zr * zr * (1 - inp.kv), MAE = PAE * zr / 3;
     let WI = 0, MI = 0; const n = 24;
     for (let i = 0; i < n; i++) { const zz = (i + 0.5) * z / n, w = inp.gamma_c * (inp.ts_top + (inp.ts_bot - inp.ts_top) * zz / inp.Hs) / 12 * z / n; WI += w; MI += w * (z - zz); }
     WI += W_bar; MI += W_bar * (z + bar_h_ft / 2);
     const PIR = inp.kh * WI, MIR = inp.kh * MI;
-    const oM = Ka*inp.q_sur*z*z/2 + sd.M_hyd + eeQ.gEQ*Ka*q_ll_stem*z*z/2, oV = Ka*inp.q_sur*z + sd.V_hyd + eeQ.gEQ*Ka*q_ll_stem*z;
+    const oM = Ka*inp.q_sur*zr*zr/2 + sd.M_hyd + eeQ.gEQ*Ka*q_ll_stem*zr*zr/2, oV = Ka*inp.q_sur*zr + sd.V_hyd + eeQ.gEQ*Ka*q_ll_stem*zr;
     const useAE = 0.5 * PAE > sd.V_soil;
     const c1 = { M: MAE + 0.5*MIR + oM, V: PAE + 0.5*PIR + oV };
     const c2 = { M: (useAE ? 0.5*MAE : sd.M_soil) + MIR + oM, V: (useAE ? 0.5*PAE : sd.V_soil) + PIR + oV };
@@ -3316,16 +3361,17 @@ function calcAll(inp) {
   const Hs_mid = inp.Hs / 2;                                   // design height for top half
   const ts_mid = (inp.ts_bot + inp.ts_top) / 2;               // stem width at mid-height (in)
   const sd_mid = stemDemand(Hs_mid);                           // water-aware
+  const Hs_mid_r = Math.max(0, Hs_mid - h_p);                  // RWHP: retained depth above the mid-height section (= H_s/2 at h_p = 0)
 
   // Strength I at the mid-height section (soil + water + surcharge)
   const Mu_stemT_strI = etaMx * (gEH * sd_mid.M_soil   // RW2H4: × η
                       + gWA * sd_mid.M_hyd
-                      + gES * (Ka * inp.q_sur   * Hs_mid ** 2 / 2)
-                      + gLS * (Ka * q_ll_stem   * Hs_mid ** 2 / 2));
+                      + gES * (Ka * inp.q_sur   * Hs_mid_r ** 2 / 2)
+                      + gLS * (Ka * q_ll_stem   * Hs_mid_r ** 2 / 2));
   const Vu_stemT_strI = etaMx * (gEH * sd_mid.V_soil
                       + gWA * sd_mid.V_hyd
-                      + gES * (Ka * inp.q_sur * Hs_mid)
-                      + gLS * (Ka * q_ll_stem * Hs_mid));
+                      + gES * (Ka * inp.q_sur * Hs_mid_r)
+                      + gLS * (Ka * q_ll_stem * Hs_mid_r));
 
   // Extreme Event II at the mid-height section (MassDOT: γ_p = 1.0 earth + γ_CT = 1.0)
   let Mu_stemT_ee2 = 0, Vu_stemT_ee2 = 0, Mu_stemT_ct = 0;
@@ -3335,13 +3381,13 @@ function calcAll(inp) {
     Mu_stemT_ct   = ctR.CT_h * 1000 * arm_mid;
     Mu_stemT_ee2  = 1.00 * sd_mid.M_soil
                   + 1.00 * sd_mid.M_hyd
-                  + 1.00 * (Ka * inp.q_sur   * Hs_mid ** 2 / 2)
-                  + 0.50 * (Ka * q_ll_stem   * Hs_mid ** 2 / 2)
+                  + 1.00 * (Ka * inp.q_sur   * Hs_mid_r ** 2 / 2)
+                  + 0.50 * (Ka * q_ll_stem   * Hs_mid_r ** 2 / 2)
                   + Mu_stemT_ct;
     Vu_stemT_ee2  = 1.00 * sd_mid.V_soil
                   + 1.00 * sd_mid.V_hyd
-                  + 1.00 * (Ka * inp.q_sur * Hs_mid)
-                  + 0.50 * (Ka * q_ll_stem * Hs_mid)
+                  + 1.00 * (Ka * inp.q_sur * Hs_mid_r)
+                  + 0.50 * (Ka * q_ll_stem * Hs_mid_r)
                   + ctR.CT_h * 1000;
   }
 
@@ -3780,10 +3826,10 @@ function calcAll(inp) {
   //     AASHTO 10th §5.10.8.1.2a: max(d, 15d_b, L/20), L = clear span of the cantilever stem = H_s.
   const tAt  = zb => inp.ts_bot - (inp.ts_bot - inp.ts_top) * zb / inp.Hs;           // stem thickness at zb ft above the joint (in)
   const ctArmTop = ctR ? (ctR.y_CT - tf_ft - inp.Hs) : 0;                              // collision height above the stem top
-  const MuS = zb => { const z = inp.Hs - zb, sd = stemDemand(z);                       // Strength I / U = 1.6H at zb (lb·ft/ft)
-    return etaMx * (gEH*sd.M_soil + gWA*sd.M_hyd + gES*(Ka*inp.q_sur*z*z/2) + gLS*(Ka*q_ll_stem*z*z/2)); };   // RW2H4: × η
-  const MuE = zb => { if (!ctR) return 0; const z = inp.Hs - zb, sd = stemDemand(z);  // AASHTO Extreme Event II at zb
-    return sd.M_soil + sd.M_hyd + Ka*inp.q_sur*z*z/2 + 0.5*Ka*q_ll_stem*z*z/2 + ctR.CT_h*1000*(ctArmTop + z); };
+  const MuS = zb => { const z = inp.Hs - zb, sd = stemDemand(z), zr = Math.max(0, z - h_p);   // Strength I / U = 1.6H at zb (lb·ft/ft); RWHP: surcharge on zr
+    return etaMx * (gEH*sd.M_soil + gWA*sd.M_hyd + gES*(Ka*inp.q_sur*zr*zr/2) + gLS*(Ka*q_ll_stem*zr*zr/2)); };   // RW2H4: × η
+  const MuE = zb => { if (!ctR) return 0; const z = inp.Hs - zb, sd = stemDemand(z), zr = Math.max(0, z - h_p);  // AASHTO Extreme Event II at zb
+    return sd.M_soil + sd.M_hyd + Ka*inp.q_sur*zr*zr/2 + 0.5*Ka*q_ll_stem*zr*zr/2 + ctR.CT_h*1000*(ctArmTop + z); };
   const phiE = isAASHTO ? 1.00 : 0.90;
   const MnOf = (sets, zb) => {                                                          // nominal moment of the effective bars (lb·ft/ft)
     const T = sets.reduce((a, q) => a + q.A, 0); if (T <= 0) return 0;
@@ -3994,11 +4040,11 @@ function calcAll(inp) {
     // deflecting enough to mobilize full active) — LL surcharge stays on Kₐ.
     const Ko_serv  = 1 - Math.sin(toRad(inp.phi));
     const K_serv   = A.serv_ko ? Ko_serv : Ka;
-    const M_serv_stemT = (Ka > 0 ? sd_mid.M_soil * (K_serv / Ka) : 0) + sd_mid.M_hyd + Ka * inp.q_sur * Hs_mid ** 2 / 2 + Ka * q_ll_stem * Hs_mid ** 2 / 2;   // RW2L4: S3 at mid-height
+    const M_serv_stemT = (Ka > 0 ? sd_mid.M_soil * (K_serv / Ka) : 0) + sd_mid.M_hyd + Ka * inp.q_sur * Hs_mid_r ** 2 / 2 + Ka * q_ll_stem * Hs_mid_r ** 2 / 2;   // RW2L4: S3 at mid-height
     const M_serv_stem = (Ka > 0 ? sd_base.M_soil * (K_serv / Ka) : 0)
                       + sd_base.M_hyd
-                      + (Ka * inp.q_sur   * inp.Hs ** 2 / 2)
-                      + (Ka * q_ll_stem   * inp.Hs ** 2 / 2);
+                      + (Ka * inp.q_sur   * Hs_ret ** 2 / 2)
+                      + (Ka * q_ll_stem   * Hs_ret ** 2 / 2);
     // RW2M2 (2026-11-07): heel and toe Service I moments (all γ = 1.0, η = 1.0) from the Service I base reaction, worked the same way
     // as the Strength I footing design (AASHTO LRFD 10th Art. 5.6.7 with Table 3.4.1-1 Service I). Spread footing: the total vertical
     // load (water uplift added back, it acts on the same underside) as a trapezoid, or the soil block of length 3x̄ in partial contact
@@ -4234,6 +4280,7 @@ function calcAll(inp) {
     basis: inp.basis, isAASHTO, aashtoR, heq, q_ll_aashto, q_sur_eff,
     // Geometry
     B, H, Df, tf_ft, ts_bot_ft, ts_top_ft, dk_ft, x_front, x_back,
+    h_p, H_ret, Hs_ret, t_g, wt_r, Hs_mid_r,   // RWHP: stem projection above the retained grade, retained heights, stem thickness and WT depth at/below the grade
     // Water table
     hasWT, wt_d, hw, gamma_w, gamma_sat, gamma_s_sub, wt_depth_eff, inclHydro, F_hyd, F_uplift,
     // Seismic
@@ -4378,6 +4425,7 @@ function getInputs() {
     aci_ftg_nolams: !!(document.getElementById('aci_ftg_nolams') || {}).checked,   // RW2L6 (2026-11-07): default off   // RWEC (2026-11-07)
     ...(b('toe_hook') ? { toe_hook: true } : {}),   // RWDS (2026-11-07): F2 hooked at the toe end; absent = straight (as before)
     vh_enable: b('vh_enable'), vh_hlo: n('vh_hlo'), vh_hhi: n('vh_hhi'),
+    h_proj: Math.max(0, n('h_proj')),   // RWHP (2026-11-07): stem projection above the retained grade (ft); blank / absent = 0
     Lt: n('Lt'), Lh: n('Lh'), Df_add: n('Df_add'),
     gamma_s: n('gamma_s'), phi, coh: n('coh'), qa: n('qa'),
     beta: n('beta'), q_sur: n('q_sur'),
@@ -4641,20 +4689,23 @@ function plotStemPressure(r) {
   const { inp } = r;
   // Water table measured from top of WALL; stem top is at the same elevation
   // (backfill to top of stem). Depth z here is from top of stem.
-  const hasWTstem = r.hasWT && r.wt_d < inp.Hs;
+  // RWHP (2026-11-07): with a stem projection h_p the soil, water and surcharge start at the retained grade (z = h_p); zw = the WT depth
+  // used by the analysis, from the stem top (= d_WT at h_p = 0).
+  const hp = r.h_p || 0, zw = hp + r.wt_r;
+  const hasWTstem = r.hasWT && zw < inp.Hs;
   const N = 60, zs = [], soil = [], sur = [], tot = [], hyd = [];
   for (let i = 0; i <= N; i++) {
-    const z = i/N * inp.Hs;
+    const z = i/N * inp.Hs, zr = Math.max(0, z - hp);
     zs.push(z);
     // Effective soil pressure honoring the WT break
     let ps;
-    if (hasWTstem && z > r.wt_d) {
-      ps = r.Ka * inp.gamma_s * r.wt_d + r.Ka * r.gamma_s_sub * (z - r.wt_d);
+    if (hasWTstem && z > zw) {
+      ps = r.Ka * inp.gamma_s * r.wt_r + r.Ka * r.gamma_s_sub * (z - zw);
     } else {
-      ps = r.Ka * inp.gamma_s * z;
+      ps = r.Ka * inp.gamma_s * zr;
     }
-    const pq = r.Ka * inp.q_sur;
-    const ph = hasWTstem && z > r.wt_d ? r.gamma_w * (z - r.wt_d) : 0;
+    const pq = z >= hp ? r.Ka * inp.q_sur : 0;
+    const ph = hasWTstem && z > zw ? r.gamma_w * (z - zw) : 0;
     soil.push(ps); sur.push(pq); hyd.push(ph); tot.push(ps + pq + ph);
   }
   const traces = [
@@ -4675,13 +4726,17 @@ function plotStemPressure(r) {
       hovertemplate: 'z = %{y:.2f} ft<br>p = %{x:,.0f} psf<extra>total</extra>' });
   }
   const shapes = hasWTstem ? [{
-    type:'line', xref:'paper', x0:0, x1:1, y0:r.wt_d, y1:r.wt_d,
+    type:'line', xref:'paper', x0:0, x1:1, y0:zw, y1:zw,
     line:{ color:'#1f7fd6', width:1.2, dash:'dash' }
   }] : [];
   const annotations = hasWTstem ? [{
-    xref:'paper', x:0.98, y:r.wt_d, text:'W.T.', showarrow:false,
+    xref:'paper', x:0.98, y:zw, text:'W.T.', showarrow:false,
     font:{ color:'#1f7fd6', size:10 }, yshift:-8
   }] : [];
+  if (hp > 0) {   // RWHP: the retained grade
+    shapes.push({ type:'line', xref:'paper', x0:0, x1:1, y0:hp, y1:hp, line:{ color:'#7a5a2a', width:1.4 } });
+    annotations.push({ xref:'paper', x:0.98, y:hp, text:'Retained grade (h_p = ' + f(hp,2) + ' ft)', showarrow:false, font:{ color:'#7a5a2a', size:10 }, yshift:8, xanchor:'right' });
+  }
   Plotly.react(el, traces, pltLayout({
     title: { text: 'Lateral Pressure on Stem — p(z)' + (hasWTstem?' · water-table aware':''), font: { size: 13 } },
     xaxis: { title: 'Pressure (psf)', rangemode: 'tozero', gridcolor:'#e8edf5' },
@@ -4697,10 +4752,10 @@ function plotStemSM(r) {
   const { inp } = r;
   const N = 50, zs = [], Vs = [], Ms = [];
   for (let i = 0; i <= N; i++) {
-    const z = i/N * inp.Hs;
+    const z = i/N * inp.Hs, zr = Math.max(0, z - (r.h_p || 0));   // RWHP: the earth and surcharge below the retained grade (zr = z at h_p = 0)
     zs.push(z);
-    Vs.push(1.6*(0.5*r.Ka*inp.gamma_s*z*z + r.Ka*inp.q_sur*z)/1000);
-    Ms.push(1.6*(r.Ka*inp.gamma_s*z**3/6 + r.Ka*inp.q_sur*z*z/2)/1000);
+    Vs.push(1.6*(0.5*r.Ka*inp.gamma_s*zr*zr + r.Ka*inp.q_sur*zr)/1000);
+    Ms.push(1.6*(r.Ka*inp.gamma_s*zr**3/6 + r.Ka*inp.q_sur*zr*zr/2)/1000);
   }
   const cut = r.s1_full ? null : inp.Hs - r.z_s1_end;   // RWS13: depth from the top where S1 ends (S3–S1 lap above mid-height); was the alternate-bar cut-off
   Plotly.react(el, [
@@ -4961,12 +5016,12 @@ function renderStabilityAASHTO(r) {
     h += eq('Coulomb correction term \u0393',
       `\\Gamma = \\left[1+\\sqrt{\\frac{\\sin(\\phi+\\delta)\\sin(\\phi-\\beta)}{\\sin(\\theta-\\delta)\\sin(\\theta+\\beta)}}\\right]^2`,'\u00a73.11.5.3');
     if (r.coulombDeltaWarn) {
-      const Lreq = r.H * Math.tan(Math.PI/4 - inp.phi*Math.PI/360);
+      const Lreq = r.H_ret * Math.tan(Math.PI/4 - inp.phi*Math.PI/360);   // RWHP
       h += `<div class="alert warn" style="margin-top:8px;line-height:1.55;">
         \u26a0 <b>Coulomb wall friction on a cantilever wall — check that it is appropriate for STABILITY.</b><br>
         <b>What the app is doing:</b> the same Coulomb K<sub>a</sub> (δ = ${F(A.delta,0)}°) is used for the stem design <i>and</i> for sliding / eccentricity / bearing.<br>
         <b>Why that can be unconservative:</b> wall friction δ only exists where soil slides against the concrete stem. For external stability of a cantilever wall the soil block sitting on the heel moves <i>with</i> the wall, so the earth pressure acts on a <b>vertical soil-on-soil plane through the heel end</b> (the "virtual back"). There is no concrete interface on that plane — the Rankine condition applies, with the resultant parallel to the backfill surface (δ = β = ${F(inp.beta,0)}°). Coulomb with δ &gt; β lowers K<sub>a</sub> and tilts the thrust downward, understating both the driving force and the overturning moment (AASHTO C3.11.5.3 / Fig. 3.11.5.3-1; Bowles; Das).<br>
-        <b>Heel length test:</b> the Rankine wedge from the heel end is fully in soil (does not cut the stem) when L<sub>h</sub> ≥ H·tan(45° − φ/2) = ${F(Lreq,2)} ft. This wall: L<sub>h</sub> = ${F(inp.Lh,2)} ft → <b>${r.heelLongForRankine ? 'LONG heel — use Rankine for stability' : 'SHORT heel — the failure wedge intersects the stem; a Coulomb analysis on the stem face (or a trial-wedge analysis) is more defensible, but δ should still be limited to a value justified for the stem–backfill interface'}</b>.<br>
+        <b>Heel length test:</b> the Rankine wedge from the heel end is fully in soil (does not cut the stem) when L<sub>h</sub> ≥ ${r.h_p > 0 ? 'H<sub>ret</sub>' : 'H'}·tan(45° − φ/2) = ${F(Lreq,2)} ft. This wall: L<sub>h</sub> = ${F(inp.Lh,2)} ft → <b>${r.heelLongForRankine ? 'LONG heel — use Rankine for stability' : 'SHORT heel — the failure wedge intersects the stem; a Coulomb analysis on the stem face (or a trial-wedge analysis) is more defensible, but δ should still be limited to a value justified for the stem–backfill interface'}</b>.<br>
         <b>What to do:</b> run stability with <b>Rankine</b> (set the earth-pressure method to Rankine, or δ = 0 with β = 0), which is also what most DOT manuals require for cantilever walls. Coulomb with wall friction remains acceptable for the <i>stem structural design</i>, since the stem back face is a true concrete–soil interface — but the app uses one K<sub>a</sub> for both, so the conservative path is Rankine throughout.
       </div>`;
     }
@@ -4981,14 +5036,15 @@ function renderStabilityAASHTO(r) {
   h += `</div></div>`;
 
   if (A.ll_surcharge) {   // RWLS (2026-11-07): table by traffic direction, distance and the H/2 applicability test worked
-    const lsC = heqCols(r.H, a.ls_dir), lsPar = a.ls_dir !== 'perpendicular';
+    const lsC = heqCols(r.H_ret, a.ls_dir), lsPar = a.ls_dir !== 'perpendicular';   // RWHP: on the retained height
     h += `<div class="card" style="margin-bottom:16px;">
       <div class="card-hd"><span class="card-title">Step 2 \u2014 Live Load Surcharge (equivalent soil height)</span><span class="card-ref">AASHTO \u00a73.11.6.4.1 \u00b7 ${lsC.tbl}</span></div>
       <div class="card-body">`;
-    h += eq('Where LS applies: vehicular load within H/2 behind the back face',
-      `d = ${F(a.ls_dist,2)}\\ \\text{ft} ${a.ls_dist <= a.ls_half ? '\\leq' : '>'} \\frac{H}{2} = \\frac{${F(r.H,2)}}{2} = ${F(a.ls_half,2)}\\ \\text{ft} \\;\\Rightarrow\\; \\text{${a.ls_dist <= a.ls_half ? 'LS required' : 'LS not required'}}`, '\u00a73.11.6.4.1',
+    h += rwHpEq(r);   // RWHP
+    h += eq('Where LS applies: vehicular load within ' + rwHu(r) + '/2 behind the back face',
+      `d = ${F(a.ls_dist,2)}\\ \\text{ft} ${a.ls_dist <= a.ls_half ? '\\leq' : '>'} \\frac{${rwHt(r)}}{2} = \\frac{${F(r.H_ret,2)}}{2} = ${F(a.ls_half,2)}\\ \\text{ft} \\;\\Rightarrow\\; \\text{${a.ls_dist <= a.ls_half ? 'LS required' : 'LS not required'}}`, '\u00a73.11.6.4.1',
       [{sym:'d', desc:'distance from the back face of the wall to the edge of traffic', val:F(a.ls_dist,2), unit:'ft'},
-       {sym:'H', desc:'wall height, backfill surface to footing bottom', val:F(r.H,2), unit:'ft'}]);
+       {sym:rwHt(r), desc:'wall height, backfill surface to footing bottom' + (r.h_p > 0 ? ' (the retained height H − h_p: the stem projection above the grade is not counted)' : ''), val:F(r.H_ret,2), unit:'ft'}]);
     if (a.ls_auto_off)
       h += `<div class="alert info" style="margin:4px 0 8px;">\u2139 <b>LS not required</b> \u2014 the traffic edge is farther than H/2 behind the back face (AASHTO \u00a73.11.6.4.1), so no live-load surcharge is applied: h<sub>eq</sub> = 0, P<sub>LS</sub> = 0 and the heel LS load is 0 in every limit state. A manual h<sub>eq</sub> (h<sub>eq</sub> Source) overrides this.</div>`;
     else if (A.heq_mode !== 'manual')
@@ -4996,7 +5052,7 @@ function renderStabilityAASHTO(r) {
         lsPar
           ? `h_{eq,0} = ${F(lsC.c0,3)},\\; h_{eq,1} = ${F(lsC.c1,2)} \\;\\Rightarrow\\; h_{eq} = ${a.ls_dist >= 1 ? 'h_{eq,1}' : `h_{eq,0} + (h_{eq,1} - h_{eq,0})\\,d = ${F(lsC.c0,3)} + (${F(lsC.c1,2)} - ${F(lsC.c0,3)})(${F(a.ls_dist,2)})`} = \\boxed{${F(a.heq,3)}\\ \\text{ft}}`
           : `h_{eq} = \\boxed{${F(a.heq,3)}\\ \\text{ft}}`, lsC.tbl,
-        [{sym:'H', desc:'wall height (linear interpolation between 5, 10 and 20 ft)', val:F(r.H,2), unit:'ft'},
+        [{sym:rwHt(r), desc:'wall height (linear interpolation between 5, 10 and 20 ft)' + (r.h_p > 0 ? ', the retained height H − h_p' : ''), val:F(r.H_ret,2), unit:'ft'},
          ...(lsPar ? [{sym:'h_{eq,0}', desc:'0-ft column at H', val:F(lsC.c0,3), unit:'ft'}, {sym:'h_{eq,1}', desc:'"1.0 ft or further" column at H', val:F(lsC.c1,2), unit:'ft'}] : []),
          {sym:'h_{eq}', desc:'equivalent height of soil for LL surcharge' + (lsPar && a.ls_dist > 0 && a.ls_dist < 1 ? ' (0 < d < 1 ft: linear between the two columns)' : ''), val:F(a.heq,3), unit:'ft'}]);
     else
@@ -5013,13 +5069,14 @@ function renderStabilityAASHTO(r) {
   h += `<div class="card" style="margin-bottom:16px;">
     <div class="card-hd"><span class="card-title">Step 3 \u2014 Unfactored Load Components (per ft of wall)</span><span class="card-ref">EH horizontal \u00b7 EV vertical \u00b7 LS live surcharge</span></div>
     <div class="card-body">`;
+  if (!A.ll_surcharge) h += rwHpEq(r);   // RWHP (with LS on it is worked in Step 2)
   h += eq('Horizontal earth pressure resultant (EH)',
     (r.hasWT
       ? `P_{EH} = \\text{3-block effective-stress resultant on } H' = \\boxed{${F(a.P_EH,0)}\\ \\text{lb/ft}} \\ \\text{at}\\ y=${F(a.y_EH,2)}\\,\\text{ft}`
       : `P_{EH} = \\tfrac{1}{2}K_a\\gamma_s H'^2${inp.beta>0?'\\cos\\beta':''} = \\boxed{${F(a.P_EH,0)}\\ \\text{lb/ft}} \\ \\text{at}\\ y=\\tfrac{H'}{3}=${F(a.y_EH,2)}\\,\\text{ft}`),'\u00a73.11.5',
     [{sym:'K_a', desc:'active/at-rest coefficient', val:F(r.Ka,4), unit:''},
      {sym:'\\gamma_s', desc:'soil unit weight', val:F(inp.gamma_s,0), unit:'pcf'},
-     {sym:"H'", desc: inp.beta>0 ? 'pressure-plane height at heel end = H + L·tanβ' : 'total wall height', val:F(r.Hp,2), unit:'ft'},
+     {sym:"H'", desc: inp.beta>0 ? (r.h_p > 0 ? 'pressure-plane height at heel end = H_ret + L·tanβ (H_ret = H − h_p, L from the stem back face at the grade)' : 'pressure-plane height at heel end = H + L·tanβ') : (r.h_p > 0 ? 'retained height H_ret = H − h_p (Step 2)' : 'total wall height'), val:F(r.Hp,2), unit:'ft'},
      {sym:'P_{EH}', desc:'horizontal earth resultant', val:F(a.P_EH,0), unit:'lb/ft'},
      {sym:'y', desc:'height of resultant above base', val:F(a.y_EH,2), unit:'ft'}]);
   if (a.ls_on)   // RWLS
@@ -5187,7 +5244,7 @@ function renderStabilityAASHTO(r) {
       h += `<div class="alert info" style="margin:4px 0 8px;">\u2139 MassDOT \u00a73.3.2.4: the collision "shall be assumed to engage the entire section of wall" \u2014 a section is the length between expansion joints. No 45\u00b0 spread is taken.</div>`;
     h += eq('Lever arm and overturning moment about the toe',
       `y_{CT} = H + h_{CT} = ${F(r.H,2)} + ${F(A.ct_h_app/12,2)} = \\boxed{${F(c.y_CT,2)}\\ \\text{ft}} \\;\\Rightarrow\\; M_{CT} = CT\\cdot y_{CT} = \\boxed{${F(c.M_CT/1000,2)}\\ \\text{kip\u00b7ft/ft}}`,'',
-      [{sym:'H', desc:'top of stem above base of footing = ROADWAY level', val:F(r.H,2), unit:'ft'},
+      [{sym:'H', desc:'top of stem above base of footing = ROADWAY level' + (r.h_p > 0 ? ' (with the stem projecting h_p = ' + F(r.h_p,2) + ' ft above the retained grade, the collision is still applied from the stem top: Decision, pending engineer review)' : ''), val:F(r.H,2), unit:'ft'},   // RWHP
        {sym:'h_{CT}', desc:'height of application above roadway (Table 3.3.2-1)', val:F(A.ct_h_app/12,2), unit:'ft'},
        {sym:'y_{CT}', desc:'lever arm above base of footing', val:F(c.y_CT,2), unit:'ft'},
        {sym:'M_{CT}', desc:'collision overturning moment', val:F(c.M_CT/1000,2), unit:'kip·ft/ft'}]);
@@ -5592,8 +5649,9 @@ function renderStabilitySoil(r) {
 
   // ════ STEP 2 — LATERAL FORCES ════
   h += `<div class="card" style="margin-bottom:16px;">
-    <div class="card-hd"><span class="card-title">Step 2 — Lateral Driving Forces</span><span class="card-ref">per foot of wall · H = ${F(r.H,3)} ft</span></div>
+    <div class="card-hd"><span class="card-title">Step 2 — Lateral Driving Forces</span><span class="card-ref">per foot of wall · ${rwHu(r)} = ${F(r.H_ret,3)} ft</span></div>
     <div class="card-body">`;
+  h += rwHpEq(r);   // RWHP
   if (r.hasWT) {
     h += eq('Active force — above water table (moist soil)',
       `P_{a,1} = \\tfrac{1}{2} K_a \\gamma_s h_1^2 = \\tfrac{1}{2}(${F(r.Ka,4)})(${F(inp.gamma_s,0)})(${F(r.h_above,2)})^2 = \\boxed{${F(0.5*r.Ka*inp.gamma_s*r.h_above**2,1)}\\ \\text{lb/ft}}`,'',
@@ -5622,10 +5680,10 @@ function renderStabilitySoil(r) {
        {sym:'F_{hyd}', desc:'hydrostatic resultant', val:F(r.F_hyd,1), unit:'lb/ft'}]);
   } else {
     h += eq('Active soil resultant (triangular distribution)',
-      `P_a = \\tfrac{1}{2} K_a \\gamma_s H^2 = \\tfrac{1}{2}(${F(r.Ka,4)})(${F(inp.gamma_s,0)})(${F(r.H,3)})^2 = \\boxed{${F(r.Pa_tri,1)}\\ \\text{lb/ft}}`,'',
+      `P_a = \\tfrac{1}{2} K_a \\gamma_s ${rwHt(r)}^2 = \\tfrac{1}{2}(${F(r.Ka,4)})(${F(inp.gamma_s,0)})(${F(r.H_ret,3)})^2 = \\boxed{${F(r.Pa_tri,1)}\\ \\text{lb/ft}}`,'',
       [{sym:'K_a', desc:'active coefficient', val:F(r.Ka,4), unit:''},
        {sym:'\\gamma_s', desc:'soil unit weight', val:F(inp.gamma_s,0), unit:'pcf'},
-       {sym:'H', desc:'total wall height', val:F(r.H,3), unit:'ft'},
+       {sym:rwHt(r), desc: r.h_p > 0 ? 'retained height H − h_p' : 'total wall height', val:F(r.H_ret,3), unit:'ft'},
        {sym:'P_a', desc:'active soil resultant', val:F(r.Pa_tri,1), unit:'lb/ft'}]);
   }
   if (r.Pa_incl_deg > 0) {
@@ -5639,14 +5697,14 @@ function renderStabilitySoil(r) {
       `P_{a,V} = P_a\\sin${iSym} = ${F(r.Pa_tri,1)}\\sin(${F(r.Pa_incl_deg,1)}°) = \\boxed{${F(r.Pa_tri_v,1)}\\ \\text{lb/ft}}`,'',
       [{sym:'P_{a,V}', desc:'vertical component (stabilizing)', val:F(r.Pa_tri_v,1), unit:'lb/ft'}]);
   }
-  h += eq('Surcharge lateral force (uniform over H)',
-    `P_{a,sur} = K_a q_s H = (${F(r.Ka,4)})(${F(inp.q_sur,0)})(${F(r.H,3)}) = \\boxed{${F(r.Pa_sur_h,1)}\\ \\text{lb/ft}}`,'',
+  h += eq('Surcharge lateral force (uniform over ' + rwHu(r) + ')',
+    `P_{a,sur} = K_a q_s ${rwHt(r)} = (${F(r.Ka,4)})(${F(inp.q_sur,0)})(${F(r.H_ret,3)}) = \\boxed{${F(r.Pa_sur_h,1)}\\ \\text{lb/ft}}`,'',
     [{sym:'q_s', desc:'surcharge pressure', val:F(inp.q_sur,0), unit:'psf'},
-     {sym:'H', desc:'total wall height', val:F(r.H,3), unit:'ft'},
+     {sym:rwHt(r), desc: r.h_p > 0 ? 'retained height H − h_p' : 'total wall height', val:F(r.H_ret,3), unit:'ft'},
      {sym:'P_{a,sur}', desc:'lateral surcharge force', val:F(r.Pa_sur_h,1), unit:'lb/ft'}]);
   if (r.hasSeismic) {
     h += eq('Seismic increment — Mononobe-Okabe (kh = '+F(inp.kh,3)+', kv = '+F(inp.kv,3)+')',
-      `\\Delta P_E = P_{AE} - \\tfrac{1}{2}K_{A,MO}\\gamma_s ${r.Hp > r.H + 1e-9 ? "H'" : 'H'}^2 = ${F(r.Pae,1)} - ${F(r.Pa_MO,1)} = \\boxed{${F(r.Pe_inc,1)}\\ \\text{lb/ft}} \\quad \\text{(at } 0.6${r.Hp > r.H + 1e-9 ? "H'" : 'H'} \\text{)}`,'ASCE 7-22 §11.8',   // RW2H2: the static M-O baseline as computed (was labelled P_a with the Rankine/Coulomb thrust)
+      `\\Delta P_E = P_{AE} - \\tfrac{1}{2}K_{A,MO}\\gamma_s ${r.Hp > r.H_ret + 1e-9 ? "H'" : rwHt(r)}^2 = ${F(r.Pae,1)} - ${F(r.Pa_MO,1)} = \\boxed{${F(r.Pe_inc,1)}\\ \\text{lb/ft}} \\quad \\text{(at } 0.6${r.Hp > r.H_ret + 1e-9 ? "H'" : rwHt(r)} \\text{)}`,'ASCE 7-22 §11.8',   // RW2H2: the static M-O baseline as computed (was labelled P_a with the Rankine/Coulomb thrust)
       [{sym:'k_h', desc:'horizontal seismic coefficient', val:F(inp.kh,3), unit:''},
        {sym:'k_v', desc:'vertical seismic coefficient', val:F(inp.kv,3), unit:''},
        {sym:'P_{AE}', desc:'total seismic active force', val:F(r.Pae,1), unit:'lb/ft'},
@@ -5689,12 +5747,13 @@ function renderStabilitySoil(r) {
     `W_{stem} = \\gamma_c\\,\\frac{t_{s,top}+t_{s,bot}}{2}\\,H_s = \\boxed{${F(r.Wstem,1)}\\ \\text{lb/ft}} \\quad x = ${F(r.x_stem,3)}\\ \\text{ft}`,'',
     [{sym:'t_{s,top}', desc:'stem thickness at top', val:F(inp.ts_top,1), unit:'in'},
      {sym:'t_{s,bot}', desc:'stem thickness at base', val:F(inp.ts_bot,1), unit:'in'},
-     {sym:'H_s', desc:'stem height', val:F(inp.Hs,2), unit:'ft'},
+     {sym:'H_s', desc: r.h_p > 0 ? 'stem height (the full stem, including the ' + F(r.h_p,2) + ' ft above the retained grade)' : 'stem height', val:F(inp.Hs,2), unit:'ft'},
      {sym:'W_{stem}', desc:'stem self-weight', val:F(r.Wstem,1), unit:'lb/ft'},
      {sym:'x', desc:'moment arm from toe', val:F(r.x_stem,3), unit:'ft'}]);
   h += eq('Soil block on heel',
-    `W_{soil} = \\gamma_s H_s L_h = (${F(inp.gamma_s,0)})(${F(inp.Hs,2)})(${F(inp.Lh,2)}) = \\boxed{${F(r.Wsoil,1)}\\ \\text{lb/ft}} \\quad x = ${F(r.x_soil,3)}\\ \\text{ft}`,'',
-    [{sym:'L_h', desc:'heel length', val:F(inp.Lh,2), unit:'ft'},
+    `W_{soil} = \\gamma_s ${rwHst(r)} L_h = (${F(inp.gamma_s,0)})(${F(r.Hs_ret,2)})(${F(inp.Lh,2)}) = \\boxed{${F(r.Wsoil,1)}\\ \\text{lb/ft}} \\quad x = ${F(r.x_soil,3)}\\ \\text{ft}`,'',
+    [...(r.h_p > 0 ? [{sym:'H_{s,ret}', desc:'soil height on the heel: H_s − h_p (Step 2)', val:F(r.Hs_ret,2), unit:'ft'}] : []),
+     {sym:'L_h', desc:'heel length', val:F(inp.Lh,2), unit:'ft'},
      {sym:'W_{soil}', desc:'soil weight on heel', val:F(r.Wsoil,1), unit:'lb/ft'},
      {sym:'x', desc:'moment arm from toe', val:F(r.x_soil,3), unit:'ft'}]);
   if (inp.q_sur > 0)
@@ -5749,8 +5808,8 @@ function renderStabilitySoil(r) {
        {sym:'h_w', desc:'water head at base', val:F(r.hw,2), unit:'ft'},
        {sym:'M_{o,w}', desc:'hydrostatic overturning moment', val:F(r.Mo_hyd,1), unit:'lb·ft/ft'}]);
   if (r.hasSeismic)
-    h += eq('Overturning moment — seismic increment (at 0.6H' + (r.Hp > r.H + 1e-9 ? '\u2032' : '') + ')',
-      `M_{o,E} = \\Delta P_E \\cdot 0.6${r.Hp > r.H + 1e-9 ? "H'" : 'H'} = (${F(r.Pe_inc,1)})(${F(0.6*r.Hp,2)}) = \\boxed{${F(r.Mo_seis,1)}\\ \\text{lb·ft/ft}}`,'',
+    h += eq('Overturning moment — seismic increment (at 0.6H' + (r.Hp > r.H_ret + 1e-9 ? '\u2032' : r.h_p > 0 ? '_ret' : '') + ')',
+      `M_{o,E} = \\Delta P_E \\cdot 0.6${r.Hp > r.H_ret + 1e-9 ? "H'" : rwHt(r)} = (${F(r.Pe_inc,1)})(${F(0.6*r.Hp,2)}) = \\boxed{${F(r.Mo_seis,1)}\\ \\text{lb·ft/ft}}`,'',
       [{sym:'\\Delta P_E', desc:'seismic force increment', val:F(r.Pe_inc,1), unit:'lb/ft'},
        {sym:'M_{o,E}', desc:'seismic overturning moment', val:F(r.Mo_seis,1), unit:'lb·ft/ft'}]);
   h += eq('Total overturning moment',
@@ -5927,13 +5986,13 @@ function renderStabilitySoil(r) {
        {sym:'\\theta', desc:'seismic inertia angle', val:F(th,2), unit:'°'},
        {sym:'K_{AE}', desc:'seismic active pressure coefficient', val:F(r.Kae,4), unit:''}]);
     h += eq('Total seismic-active force',
-      `P_{AE} = \\tfrac{1}{2}K_{AE}\\gamma_s ${r.Hp > r.H + 1e-9 ? "H'" : 'H'}^2(1-k_v) = \\tfrac{1}{2}(${F(r.Kae,4)})(${F(inp.gamma_s,0)})(${F(r.Hp,3)})^2(1-${F(inp.kv,3)}) = \\boxed{${F(r.Pae,1)}\\ \\text{lb/ft}}`,'',
+      `P_{AE} = \\tfrac{1}{2}K_{AE}\\gamma_s ${r.Hp > r.H_ret + 1e-9 ? "H'" : rwHt(r)}^2(1-k_v) = \\tfrac{1}{2}(${F(r.Kae,4)})(${F(inp.gamma_s,0)})(${F(r.Hp,3)})^2(1-${F(inp.kv,3)}) = \\boxed{${F(r.Pae,1)}\\ \\text{lb/ft}}`,'',
       [{sym:'K_{AE}', desc:'seismic active coefficient', val:F(r.Kae,4), unit:''},
-       {sym: r.Hp > r.H + 1e-9 ? "H'" : 'H', desc: r.Hp > r.H + 1e-9 ? 'pressure-plane height through the heel end (as the static thrust)' : 'total wall height', val:F(r.Hp,3), unit:'ft'},   // RW2H2
+       {sym: r.Hp > r.H_ret + 1e-9 ? "H'" : rwHt(r), desc: r.Hp > r.H_ret + 1e-9 ? 'pressure-plane height through the heel end (as the static thrust)' : (r.h_p > 0 ? 'retained height H − h_p' : 'total wall height'), val:F(r.Hp,3), unit:'ft'},   // RW2H2
        {sym:'P_{AE}', desc:'total seismic active force', val:F(r.Pae,1), unit:'lb/ft'}]);
     h += eq('Seismic increment and application point',
-      `\\Delta P_E = P_{AE} - P_{a,MO} = ${F(r.Pae,1)} - ${F(r.Pa_MO,1)} = \\boxed{${F(r.Pe_inc,1)}\\ \\text{lb/ft}} \\text{ at } 0.6${r.Hp > r.H + 1e-9 ? "H'" : 'H'} = ${F(0.6*r.Hp,2)}\\ \\text{ft above base}`,'',
-      [{sym:'P_{a,MO}', desc:'static active force, the same M-O expression at \u03b8 = 0: \u00bdK_A,MO\u03b3_s' + (r.Hp > r.H + 1e-9 ? 'H\u2032\u00b2' : 'H\u00b2'), val:F(r.Pa_MO,1), unit:'lb/ft'},   // RW2H2
+      `\\Delta P_E = P_{AE} - P_{a,MO} = ${F(r.Pae,1)} - ${F(r.Pa_MO,1)} = \\boxed{${F(r.Pe_inc,1)}\\ \\text{lb/ft}} \\text{ at } 0.6${r.Hp > r.H_ret + 1e-9 ? "H'" : rwHt(r)} = ${F(0.6*r.Hp,2)}\\ \\text{ft above base}`,'',
+      [{sym:'P_{a,MO}', desc:'static active force, the same M-O expression at \u03b8 = 0: \u00bdK_A,MO\u03b3_s' + (r.Hp > r.H_ret + 1e-9 ? 'H\u2032\u00b2' : rwHu(r) + '\u00b2'), val:F(r.Pa_MO,1), unit:'lb/ft'},   // RW2H2
        {sym:'\\Delta P_E', desc:'seismic force increment', val:F(r.Pe_inc,1), unit:'lb/ft'}]);
     h += `<div class="alert warn">⚠ Simplified M-O per Seed &amp; Whitman (1970). Verify with the project geotechnical engineer; sites with liquefaction potential require site-specific study (IBC §1803.5.12). Seismic FOS acceptance criteria may be reduced to 1.1 per local practice — confirm with AHJ.</div>`;
     h += `</div></div>`;
@@ -6246,29 +6305,30 @@ function renderStem(r) {
 
   // ════ STEP 1 — FACTORED DEMANDS ════
   h += `<div class="card" style="margin-bottom:16px;">
-    <div class="card-hd"><span class="card-title">Step 1 — Factored Demands at Base of Stem</span><span class="card-ref">${r.isAASHTO?'Strength I: ' + F(gEH,2) + 'EH + 1.75LS' + (r.sq_base ? ' / Extreme Event I' : '') + ' · AASHTO §3.4.1':'U = 1.6H' + (r.sq_base ? ' / 1.2D + 1.0E + 1.6H' : '') + ' · ACI 318-19 §5.3'} · H_s = ${F(inp.Hs,2)} ft</span></div>
+    <div class="card-hd"><span class="card-title">Step 1 — Factored Demands at Base of Stem</span><span class="card-ref">${r.isAASHTO?'Strength I: ' + F(gEH,2) + 'EH + 1.75LS' + (r.sq_base ? ' / Extreme Event I' : '') + ' · AASHTO §3.4.1':'U = 1.6H' + (r.sq_base ? ' / 1.2D + 1.0E + 1.6H' : '') + ' · ACI 318-19 §5.3'} · H_s = ${F(inp.Hs,2)} ft${r.h_p > 0 ? ' · H_s,ret = ' + F(r.Hs_ret,2) + ' ft' : ''}</span></div>
     <div class="card-body">`;
+  h += rwHpEq(r, true);   // RWHP: earth, water and surcharge below the grade only
   h += eq('Factored moment — triangular soil pressure component (γ'+(r.isAASHTO?'_{EH}='+F(gEH,2)+(inp.aashto.ep_cond==='atrest'?', at-rest':'')+', Table 3.4.1-2':'=1.6')+')',
-    `M_{u,soil} = ${gEH}\\cdot\\frac{K_a\\gamma_s H_s^3}{6} = ${gEH}\\cdot\\frac{(${F(r.Ka,4)})(${F(inp.gamma_s,0)})(${F(inp.Hs,2)})^3}{6} = \\boxed{${F(gEH*r.Ka*inp.gamma_s*inp.Hs**3/6,1)}\\ \\text{lb·ft/ft}}`,'',
+    `M_{u,soil} = ${gEH}\\cdot\\frac{K_a\\gamma_s ${rwHst(r)}^3}{6} = ${gEH}\\cdot\\frac{(${F(r.Ka,4)})(${F(inp.gamma_s,0)})(${F(r.Hs_ret,2)})^3}{6} = \\boxed{${F(gEH*r.Ka*inp.gamma_s*r.Hs_ret**3/6,1)}\\ \\text{lb·ft/ft}}`,'',
     [{sym:'K_a', desc:'active/at-rest coefficient', val:F(r.Ka,4), unit:''},
      {sym:'\\gamma_s', desc:'soil unit weight', val:F(inp.gamma_s,0), unit:'pcf'},
-     {sym:'H_s', desc:'stem height', val:F(inp.Hs,2), unit:'ft'},
-     {sym:'M_{u,soil}', desc:'factored soil-pressure moment', val:F(gEH*r.Ka*inp.gamma_s*inp.Hs**3/6,1), unit:'lb·ft/ft'}]);
+     {sym:rwHst(r), desc: r.h_p > 0 ? 'retained height on the stem H_s − h_p' : 'stem height', val:F(r.Hs_ret,2), unit:'ft'},
+     {sym:'M_{u,soil}', desc:'factored soil-pressure moment', val:F(gEH*r.Ka*inp.gamma_s*r.Hs_ret**3/6,1), unit:'lb·ft/ft'}]);
   if (inp.q_sur > 0)
     h += eq('Factored moment — dead surcharge component (γ'+(r.isAASHTO?'_{ES}=1.50':'=1.6')+')',
-      `M_{u,ES} = ${gES}\\cdot\\frac{K_a q_s H_s^2}{2} = \\boxed{${F(gES*r.Ka*inp.q_sur*inp.Hs**2/2,1)}\\ \\text{lb·ft/ft}}`,'',
+      `M_{u,ES} = ${gES}\\cdot\\frac{K_a q_s ${rwHst(r)}^2}{2} = \\boxed{${F(gES*r.Ka*inp.q_sur*r.Hs_ret**2/2,1)}\\ \\text{lb·ft/ft}}`,'',
       [{sym:'q_s', desc:'dead surcharge pressure', val:F(inp.q_sur,0), unit:'psf'},
-       {sym:'M_{u,ES}', desc:'factored dead-surcharge moment', val:F(gES*r.Ka*inp.q_sur*inp.Hs**2/2,1), unit:'lb·ft/ft'}]);
+       {sym:'M_{u,ES}', desc:'factored dead-surcharge moment', val:F(gES*r.Ka*inp.q_sur*r.Hs_ret**2/2,1), unit:'lb·ft/ft'}]);
   if (r.isAASHTO && q_ll_stem > 0)
     h += eq('Factored moment — live-load surcharge component (γ_{LS}=1.75, h_{eq})',
-      `M_{u,LS} = 1.75\\cdot\\frac{K_a\\,\\gamma_s h_{eq}\\,H_s^2}{2} = 1.75\\cdot\\frac{(${F(r.Ka,4)})(${F(q_ll_stem,0)})(${F(inp.Hs,2)})^2}{2} = \\boxed{${F(gLS*r.Ka*q_ll_stem*inp.Hs**2/2,1)}\\ \\text{lb·ft/ft}}`,'',
+      `M_{u,LS} = 1.75\\cdot\\frac{K_a\\,\\gamma_s h_{eq}\\,${rwHst(r)}^2}{2} = 1.75\\cdot\\frac{(${F(r.Ka,4)})(${F(q_ll_stem,0)})(${F(r.Hs_ret,2)})^2}{2} = \\boxed{${F(gLS*r.Ka*q_ll_stem*r.Hs_ret**2/2,1)}\\ \\text{lb·ft/ft}}`,'',
       [{sym:'\\gamma_s h_{eq}', desc:'LL surcharge pressure', val:F(q_ll_stem,0), unit:'psf'},
-       {sym:'M_{u,LS}', desc:'factored LL-surcharge moment', val:F(gLS*r.Ka*q_ll_stem*inp.Hs**2/2,1), unit:'lb·ft/ft'}]);
+       {sym:'M_{u,LS}', desc:'factored LL-surcharge moment', val:F(gLS*r.Ka*q_ll_stem*r.Hs_ret**2/2,1), unit:'lb·ft/ft'}]);
   if (r.stem_water) {
     h += eq('Water-table adjustment — buoyant soil below WT + hydrostatic',
       `M_{u,hyd} = ${r.isAASHTO?'\\gamma_{WA}':'\\gamma'}\\cdot\\tfrac{1}{2}\\gamma_w h_2^2\\cdot\\tfrac{h_2}{3} = \\boxed{${F((r.isAASHTO?1.0:1.6)*r.sd_base_Mhyd,1)}\\ \\text{lb·ft/ft}}`,
       r.isAASHTO?'γ_WA = 1.0 (AASHTO §3.4.1)':'γ = 1.6 (ACI H)',
-      [{sym:'h_2', desc:'submerged height of stem (below WT)', val:F(Math.max(0,inp.Hs-r.wt_d),2), unit:'ft'},
+      [{sym:'h_2', desc:'submerged height of stem (below WT)', val:F(Math.max(0,r.Hs_ret-r.wt_r),2), unit:'ft'},   // RWHP: = H_s − d_WT at h_p = 0
        {sym:"\\gamma'", desc:'buoyant unit weight used below WT', val:F(r.gamma_s_sub,1), unit:'pcf'},
        {sym:'M_{u,hyd}', desc:'factored hydrostatic moment on stem', val:F((r.isAASHTO?1.0:1.6)*r.sd_base_Mhyd,1), unit:'lb·ft/ft'}]);
   }
@@ -6277,12 +6337,12 @@ function renderStem(r) {
     const q = r.sq_base;
     h += r.isAASHTO
       ? eq('Extreme Event I at the stem base (φ = 1.0): case 1 P_AE,s + 0.5P_IR,s, case 2 max(0.5P_AE,s, P_A,s) + P_IR,s; ES and water at 1.0' + (q_ll_stem > 0 ? ', LS at γ_EQ' : ''),
-          `P_{AE,s} = \\tfrac{1}{2}K_{AE}\\gamma_s H_s^2(1-k_v) = ${F(q.PAE,0)}\\ \\text{at } \\tfrac{H_s}{3};\\quad P_{IR,s} = k_h W_{s} = ${F(inp.kh,3)}(${F(q.WI,0)}) = ${F(q.PIR,0)};\\quad M_{u,EQ} = \\max(${F(q.c1.M,0)},\; ${F(q.c2.M,0)}) = \\boxed{${F(q.M,0)}\\ \\text{lb·ft/ft}}`, '\u00a711.6.5.1',
-          [{sym:'W_s', desc:'stem (and barrier) weight above the section', val:F(q.WI,0), unit:'lb/ft'},
+          `P_{AE,s} = \\tfrac{1}{2}K_{AE}\\gamma_s ${rwHst(r)}^2(1-k_v) = ${F(q.PAE,0)}\\ \\text{at } \\tfrac{${rwHst(r)}}{3};\\quad P_{IR,s} = k_h W_{s} = ${F(inp.kh,3)}(${F(q.WI,0)}) = ${F(q.PIR,0)};\\quad M_{u,EQ} = \\max(${F(q.c1.M,0)},\; ${F(q.c2.M,0)}) = \\boxed{${F(q.M,0)}\\ \\text{lb·ft/ft}}`, '\u00a711.6.5.1',
+          [{sym:'W_s', desc:'stem (and barrier) weight above the section' + (r.h_p > 0 ? ' (the full stem height H_s, the projection included)' : ''), val:F(q.WI,0), unit:'lb/ft'},
            {sym:'M_{u,EQ,1}', desc:'case 1: P_AE,s·H_s/3 + 0.5·M_IR + other', val:F(q.c1.M,0), unit:'lb·ft/ft'},
            {sym:'M_{u,EQ,2}', desc:'case 2: ' + (q.useAE ? '0.5·P_AE,s·H_s/3' : 'M_A,s (static soil)') + ' + M_IR + other', val:F(q.c2.M,0), unit:'lb·ft/ft'}])
       : eq('Seismic combination U = 1.2D + 1.0E + 1.6H (ACI 318-19 Eq. 5.3.1e, H per §5.3.8)',
-          `\\Delta P_{E,s} = \\Delta P_E\\left(\\tfrac{H_s}{${r.Hp > r.H + 1e-9 ? "H'" : 'H'}}\\right)^2 = ${F(r.Pe_inc,1)}\\left(\\tfrac{${F(inp.Hs,2)}}{${F(r.Hp,2)}}\\right)^2 = ${F(q.Pe,1)};\\quad M_{u,E} = M_{u,1.6H} + 1.0\\,\\Delta P_{E,s}(0.6H_s) = ${F(r.Mu_stem_strI,0)} + ${F(q.Pe,1)}(${F(0.6*inp.Hs,2)}) = \\boxed{${F(q.M,0)}\\ \\text{lb·ft/ft}}`, 'ACI 5.3.1e');
+          `\\Delta P_{E,s} = \\Delta P_E\\left(\\tfrac{${rwHst(r)}}{${r.Hp > r.H_ret + 1e-9 ? "H'" : rwHt(r)}}\\right)^2 = ${F(r.Pe_inc,1)}\\left(\\tfrac{${F(r.Hs_ret,2)}}{${F(r.Hp,2)}}\\right)^2 = ${F(q.Pe,1)};\\quad M_{u,E} = M_{u,1.6H} + 1.0\\,\\Delta P_{E,s}(0.6${rwHst(r)}) = ${F(r.Mu_stem_strI,0)} + ${F(q.Pe,1)}(${F(0.6*r.Hs_ret,2)}) = \\boxed{${F(q.M,0)}\\ \\text{lb·ft/ft}}`, 'ACI 5.3.1e');
   }
   if (r.isAASHTO && r.etaMx !== 1)   // RW2H4
     h += eq('Load modifier \u03b7 on the Strength I demand (AASHTO Art. 1.3.2.1, Eq. 1.3.2.1-2)',
@@ -6433,13 +6493,14 @@ function renderStem(r) {
 
   // ════ MID-HEIGHT (TOP-HALF) STEM SECTION ════
   h += `<div class="sec-heading">Stem — Mid-Height (Top-Half) Section</div>`;
-  h += `<div class="alert info" style="margin-bottom:12px;">The tapered stem's upper bars are governed by the section at mid-height (h_s/2 = ${F(r.Hs_mid,2)} ft above base), where the wall is thinner (t = ${F(r.ts_mid,2)} in) but still retains significant soil${r.aashtoR&&r.aashtoR.ct?' and the collision force still applies':''}. This section is designed as a cantilever fixed at mid-height.</div>`;
+  h += `<div class="alert info" style="margin-bottom:12px;">The tapered stem's upper bars are governed by the section at mid-height (h_s/2 = ${F(r.Hs_mid,2)} ft above base), where the wall is thinner (t = ${F(r.ts_mid,2)} in) but still ${r.h_p > 0 ? (r.Hs_mid_r > 0 ? 'retains ' + F(r.Hs_mid_r,2) + ' ft of soil above it (the grade is h_p = ' + F(r.h_p,2) + ' ft below the stem top)' : 'sits at or above the retained grade (h_p = ' + F(r.h_p,2) + ' ft): no earth load above it') : 'retains significant soil'}${r.aashtoR&&r.aashtoR.ct?' and the collision force still applies':''}. This section is designed as a cantilever fixed at mid-height.</div>`;
   h += `<div class="card" style="margin-bottom:16px;">
     <div class="card-hd"><span class="card-title">Mid Step 1 — Factored Demands at Mid-Height</span><span class="card-ref">${r.isAASHTO?'Strength I / Extreme Event II' + (r.sq_mid ? ' / Extreme Event I' : ''):'U = 1.6H' + (r.sq_mid ? ' / 1.2D + 1.0E + 1.6H' : '')} · h = ${F(r.Hs_mid,2)} ft</span></div>
     <div class="card-body">`;
   h += eq('Factored moment — soil + surcharge over top half',
     `M_{u,soil} = \\boxed{${F(r.Mu_stemT_soil,1)}\\ \\text{lb·ft/ft}}`,'',
     [{sym:'h', desc:'design height (h_s/2, fixed at mid)', val:F(r.Hs_mid,2), unit:'ft'},
+     ...(r.h_p > 0 ? [{sym:'h_{ret}', desc:'retained depth above the section, max(0, h − h_p): earth and surcharge act on it only', val:F(r.Hs_mid_r,2), unit:'ft'}] : []),   // RWHP
      {sym:'M_{u,soil}', desc:'factored soil+surcharge moment', val:F(r.Mu_stemT_soil,1), unit:'lb·ft/ft'}]);
   if (r.Mu_stemT_ct > 0)
     h += eq('Additional collision moment (Extreme Event II, γ_CT = 1.0)',
@@ -6664,9 +6725,9 @@ function renderFooting(r) {
   h += eq('Factored downward load (uniform over heel)',
 `w_u = ${r.isAASHTO ? `${r.etHeel !== 1 ? F(r.etHeel,3) + '\\big(' : ''}${F(r.gHeel[0],2)}\\,w_{EV} + ${F(r.gHeel[1],2)}\\gamma_c t_f + ${F(r.gHeel[2],2)}\\,q_s + ${F(r.gHeel[3],2)}\\,q_{LS}${r.etHeel !== 1 ? '\\big)\\ (' + (r.heel_min_governs ? '1/\\eta' : '\\eta') + ', Art.\\ 1.3.2.1)' : ''}` : `${F(r.gHeel[0],1)}(w_{EV} + \\gamma_c t_f) + ${F(r.gHeel[2],1)}\\,q_s`} = \\boxed{${F(r.wu_heel,1)}\\ \\text{psf}}`,
     r.heel_min_governs ? (r.isAASHTO ? 'Strength Ia (min vertical) governs Case A' : 'U = 0.9D + 1.6H governs Case A') : (r.isAASHTO ? 'Strength I (max vertical) governs Case A' : 'U = 1.2D + 1.6H governs Case A'),
-    [{sym:'w_{EV}', desc: r.hasWT ? 'soil column on heel (moist above WT, saturated below)' : 'soil column on heel = γ_s·H_s', val:F(r.w_soil_col,1), unit:'psf'},
+    [{sym:'w_{EV}', desc: r.hasWT ? 'soil column on heel (moist above WT, saturated below)' : 'soil column on heel = γ_s·' + rwHsu(r), val:F(r.w_soil_col,1), unit:'psf'},
      {sym:'\\gamma_s', desc:'soil unit weight', val:F(inp.gamma_s,0), unit:'pcf'},
-     {sym:'H_s', desc:'soil height on heel', val:F(inp.Hs,2), unit:'ft'},
+     {sym:rwHst(r), desc: r.h_p > 0 ? 'soil height on heel = H_s − h_p (the stem projects h_p above the retained grade)' : 'soil height on heel', val:F(r.Hs_ret,2), unit:'ft'},
      {sym:'t_f', desc:'footing thickness', val:F(r.tf_ft,3), unit:'ft'},
      {sym:'w_u', desc:'factored downward pressure', val:F(r.wu_heel,1), unit:'psf'}]);
   const upHs = r.hcG_up ? rwUpSteps(r, r.hcG_up, 'heel') : null;   // RWUP (2026-11-07): water uplift split out (ACI)
@@ -6715,7 +6776,7 @@ function renderFooting(r) {
     h += eq('MassDOT §3.3.2.2 — heel top steel (DL only, no upward relief)',
       `M_{u,MD} = \\frac{w_{DL} L_h^2}{2} = \\boxed{${F(r.Mu_heel_md,1)}\\ \\text{lb·ft/ft}} \\quad (\\gamma = \\phi = 1.0)`,'MassDOT §3.3.2.2',
       [{sym:'w_{DL}', desc:'DL of soil above heel + heel self-weight (γ = 1.0, NO live load)',
-        val:F(inp.gamma_s*inp.Hs + inp.gamma_c*r.tf_ft,1), unit:'psf'},
+        val:F(inp.gamma_s*r.Hs_ret + inp.gamma_c*r.tf_ft,1), unit:'psf'},   // RWHP: soil height H_s,ret
        {sym:'M_{u,MD}', desc:'MassDOT heel design moment (upward pressure NOT credited)',
         val:F(r.Mu_heel_md,1), unit:'lb·ft/ft'}]);
     h += `<div class="alert ${r.heel_md_governs?'warn':'info'}" style="margin-top:8px;">
@@ -7079,7 +7140,7 @@ const LS_OK = _lsAvailable();
 
 // Snapshot every form field by id → plain object
 const RWTB_FIELDS = ['proj_date', 'proj_chkdate'];   // RWTB (2026-11-06): the optional title-block dates (Project tab)
-const RWLS_DEF = { aashto_traffic_dir: 'parallel', toe_hook: false, ovr_bar_s4: '0', ovr_spc_s4: '0', key_bk: '12', aashto_gamma_eq: '0' };   // RWE1: + γ_EQ (saved only when not 0)   // RWSK: + key width (saved only when not 12 in; absent = 12 in)   // RWFF: + the S4 override (saved only when set)   // RWLS (2026-11-07) / RWDS (toe_hook): saved only when not the default; absent → the default
+const RWLS_DEF = { h_proj: '0', aashto_traffic_dir: 'parallel', toe_hook: false, ovr_bar_s4: '0', ovr_spc_s4: '0', key_bk: '12', aashto_gamma_eq: '0' };   // RWE1: + γ_EQ (saved only when not 0)   // RWSK: + key width (saved only when not 12 in; absent = 12 in)   // RWFF: + the S4 override (saved only when set)   // RWLS (2026-11-07) / RWDS (toe_hook): saved only when not the default; absent → the default
 Object.assign(RWLS_DEF, RWPL_DEF);   // RWPL (2026-11-07): the pile fields are saved only when changed; old saves open as a spread footing
 function snapshotFields() {
   const out = {};
@@ -7402,6 +7463,13 @@ function rwInputErrors() {
     if (a && b && val('vh_hhi') < val('vh_hlo')) err('vh_hhi', `${lab('vh_hhi')} (${raw('vh_hhi')}) must not be less than ${lab('vh_hlo')} (${raw('vh_hlo')}).`);
   } else need('Hs', gt0);
   const tfOk = need('tf', gt0), tsbOk = need('ts_bot', gt0); need('ts_top', gt0);
+  // RWHP (2026-11-07): 0 ≤ h_p ≤ H_s − RW_HP_MINRET (the lowest stem height when the wall varies in height); blank = 0
+  if (!blank('h_proj')) {
+    const hp = val('h_proj'), vh = on('vh_enable'), hs = vh ? val('vh_hlo') : val('Hs');
+    if (hp < 0) err('h_proj', `${lab('h_proj')} = ${raw('h_proj')} ft: must be 0 or greater.`);
+    else if (hp > 0 && isFinite(hs) && hs > 0 && hp > hs - RW_HP_MINRET + 1e-9)
+      err('h_proj', `${lab('h_proj')} = ${raw('h_proj')} ft leaves ${f(hs - hp, 2)} ft of retained height on the ${vh ? 'low end of the stem (H_low = ' + raw('vh_hlo') + ' ft)' : 'stem (H_s = ' + raw('Hs') + ' ft)'}: it must be at least ${f(RW_HP_MINRET, 1)} ft (h_p ≤ ${f(hs - RW_HP_MINRET, 2)} ft).`);
+  }
   need('Lt', ge0, '0 for no toe'); need('Lh', ge0, '0 for no heel'); opt('Df_add', ge0);
   // ── Materials ──
   need('fc', gt0); need('fy', gt0); need('gamma_c', gt0);
@@ -7486,7 +7554,8 @@ function rwInputErrors() {
 }
 // the field ids of the analysis' own fatal messages (calcAll), so they get a link too
 function rwIeIdOf(msg) {
-  const T = [[/f'c/, 'fc'], [/f_y/, 'fy'], [/q_a/, 'qa'], [/η/, 'aashto_eta'], [/φ_b/, 'aashto_phi_b'], [/γ_e/, 'aashto_gamma_e1'],
+  const T = [[/^Stem projection above retained grade/, 'h_proj'], [/f'c/, 'fc'],   // RWHP: + h_p
+    [/f_y/, 'fy'], [/q_a/, 'qa'], [/η/, 'aashto_eta'], [/φ_b/, 'aashto_phi_b'], [/γ_e/, 'aashto_gamma_e1'],
     [/Backfill slope/, 'beta'], [/Footing too thin/, 'tf'], [/Stem too thin/, 'ts_bot'], [/^Seismic/, 'kh'], [/Stem: d/, 'ts_bot'], [/Heel: d/, 'tf'], [/Toe: d/, 'tf'], [/^Calculation error/, null]];   // RWTE: Toe
   const t = T.find(([re]) => re.test(msg)); return t ? t[1] : null;
 }
@@ -10759,6 +10828,10 @@ function rwrModel(r) {
   const g = id => ((document.getElementById(id) || {}).value || '').trim();
   const meta = { name: g('proj_name'), num: g('proj_num'), eng: g('proj_eng'), chk: g('proj_chk'), notes: g('proj_notes'), date: g('proj_date'), chkDate: g('proj_chkdate') };   // RWTB: + the title-block dates
   const AA = s => 'AASHTO LRFD 10th Ed. ' + s;
+  // RWHP (2026-11-07): the retained-height steps, shown only with a stem projection (h_p > 0)
+  const hpH = () => r.h_p > 0 ? [rwrS({ id: 'Hret', label: 'Retained height: the stem projects h_p = ' + rwrN(r.h_p, 2) + ' ft above the retained grade; earth, water and surcharge act on H_ret only (the stem self weight on the full H_s)', sym: 'H_{ret}', eq: 'H \\minus h_{p}', sub: rwrN(r.H, 3) + ' \\minus ' + rwrN(r.h_p, 2), value: r.H_ret, unit: 'ft', d: 3 })] : [];
+  const hpHs = () => r.h_p > 0 ? [rwrS({ id: 'Hsret', label: 'Retained height on the stem: earth, water and surcharge act below the retained grade only', sym: 'H_{s,ret}', eq: 'H_{s} \\minus h_{p}', sub: rwrN(inp.Hs, 2) + ' \\minus ' + rwrN(r.h_p, 2), value: r.Hs_ret, unit: 'ft', d: 2 })] : [];
+  const HT = rwHt(r), HST = rwHst(r).replace('H_s', 'H_{s}');
   const CK = {};   // r.checks key -> report key of the step that works it (for the summary)
   const DC = {}; { const ks = Object.keys(r.checks); rwResultRows(r).forEach((x, i) => { DC[ks[i]] = x; }); }
   const dcv = k => (DC[k] && typeof DC[k].dc === 'number') ? DC[k].dc : NaN;
@@ -10798,6 +10871,7 @@ function rwrModel(r) {
       ['Footing thickness t_f', rwrCell(inp.tf, 1), 'in'], ['Stem thickness at base t_s,bot', rwrCell(inp.ts_bot, 1), 'in'], ['Stem thickness at top t_s,top', rwrCell(inp.ts_top, 1), 'in'],
       ['Toe length L_t', rwrCell(inp.Lt, 2), 'ft'], ['Heel length L_h', rwrCell(inp.Lh, 2), 'ft'], ['Toe soil cover above footing D_f,add', rwrCell(inp.Df_add, 2), 'ft'],
       ['Total toe embedment D_f = t_f + D_f,add', rwrCell(r.Df, 3), 'ft'], ['Footing width B', rwrCell(r.B, 3), 'ft'], ['Total wall height H = H_s + t_f', rwrCell(r.H, 3), 'ft'],
+      ...(r.h_p > 0 ? [['Stem projection above the retained grade h_p', rwrCell(r.h_p, 2), 'ft'], ['Retained height H_ret = H − h_p (on the stem H_s − h_p = ' + rwrN(r.Hs_ret, 2) + ' ft)', rwrCell(r.H_ret, 3), 'ft']] : []),   // RWHP
       ...(inp.useShearKey ? [['Shear key depth d_k', rwrCell(inp.dk, 0), 'in'], ['Shear key width b_k', rwrCell(r.keyR ? r.keyR.bk : inp.key_bk, 0), 'in']] : []),   // RWSK: + b_k
       ...(r.hasBarrier ? [['Barrier height / weight W_bar', rwrN(r.bar_h_ft, 2) + ' ft / ' + rwrN(r.W_bar, 0) + ' lb/ft', '–'],
         ['Barrier weight from', inp.bar_mode === 'geom' ? 'geometry: thickness ' + rwrN(inp.bar_t, 1) + ' in × height × γ_c' : 'entered weight', '–'], ['Barrier offset from the stem-top centreline (+ toward the heel)', rwrCell(inp.bar_ecc, 1), 'in']] : [])];   // RWPR: + barrier mode / offset
@@ -10841,20 +10915,20 @@ function rwrModel(r) {
       else st.push(rwrS({ id: 'Ka', label: 'Active coefficient, sloped backfill', sym: 'K_{a}', eq: '\\cos\\beta\\,\\frac{\\cos\\beta \\minus \\sqrt{\\cos^{2}\\beta \\minus \\cos^{2}\\phi}}{\\cos\\beta + \\sqrt{\\cos^{2}\\beta \\minus \\cos^{2}\\phi}}', sub: '\\phi = ' + rwrN(inp.phi, 0) + RWR_DEG + ',\\; \\beta = ' + rwrN(inp.beta, 0) + RWR_DEG, value: r.Ka, unit: '', d: 4, ref: 'Rankine' }));
       st.push(rwrS({ id: 'Kp', label: 'Passive coefficient', sym: 'K_{p}', eq: '\\tan^{2}\\left(45' + RWR_DEG + ' + \\frac{\\phi}{2}\\right)', sub: '\\tan^{2}\\left(45' + RWR_DEG + ' + \\frac{' + rwrN(inp.phi, 0) + RWR_DEG + '}{2}\\right)', value: r.Kp, unit: '', d: 4, ref: 'Rankine' }));
       subs.push(sub('Step 1 — Earth pressure coefficients', [rwrItem('st1', [{ title: 'Coefficients', steps: st }]), onTab('stabKa')])); }
-    { const T = [], s1 = [], Ka = rwrN(r.Ka, 4), gs = rwrN(inp.gamma_s, 0);
+    { const T = [], s1 = hpH(), Ka = rwrN(r.Ka, 4), gs = rwrN(inp.gamma_s, 0);   // RWHP: + H_ret
       if (r.hasWT) {
         s1.push(rwrS({ id: 'Pa1', label: 'Active force above the water table (moist soil)', sym: 'P_{a,1}', eq: '\\frac{1}{2} K_{a} \\gamma_{s} h_{1}^{2}', sub: '\\frac{1}{2}(' + Ka + ')(' + gs + ')(' + rwrN(r.h_above, 2) + ')^{2}', value: 0.5 * r.Ka * inp.gamma_s * r.h_above ** 2, unit: 'lb/ft', d: 1 }));
         s1.push(rwrS({ id: 'Pa2', label: 'Active force below the water table, rectangular block from the soil above', sym: 'P_{a,2}', eq: 'K_{a} \\gamma_{s} h_{1} h_{2}', sub: '(' + Ka + ')(' + gs + ')(' + rwrN(r.h_above, 2) + ')(' + rwrN(r.h_below, 2) + ')', value: r.Ka * inp.gamma_s * r.h_above * r.h_below, unit: 'lb/ft', d: 1 }));
         s1.push(rwrS({ id: 'Pa3', label: 'Active force below the water table, buoyant soil', sym: 'P_{a,3}', eq: '\\frac{1}{2} K_{a} \\gamma^{\\prime} h_{2}^{2}', sub: '\\frac{1}{2}(' + Ka + ')(' + rwrN(r.gamma_s_sub, 1) + ')(' + rwrN(r.h_below, 2) + ')^{2}', value: 0.5 * r.Ka * r.gamma_s_sub * r.h_below ** 2, unit: 'lb/ft', d: 1, note: 'γ′ = γ_sat − γ_w = ' + rwrN(r.gamma_sat, 1) + ' − ' + rwrN(r.gamma_w, 1) + ' pcf' }));
         s1.push(rwrS({ id: 'Pa', label: 'Total active soil resultant', sym: 'P_{a}', eq: 'P_{a,1} + P_{a,2} + P_{a,3}', sub: '', value: r.Pa_tri, unit: 'lb/ft', d: 1 }));
         s1.push(rwrS({ id: 'Fhyd', label: 'Hydrostatic force (water column)', sym: 'F_{hyd}', eq: '\\frac{1}{2}\\gamma_{w} h_{w}^{2}', sub: '\\frac{1}{2}(' + rwrN(r.gamma_w, 1) + ')(' + rwrN(r.hw, 2) + ')^{2}', value: r.F_hyd, unit: 'lb/ft', d: 1 }));
-      } else s1.push(rwrS({ id: 'Pa', label: 'Active soil resultant (triangular distribution)', sym: 'P_{a}', eq: '\\frac{1}{2} K_{a} \\gamma_{s} H^{2}', sub: '\\frac{1}{2}(' + Ka + ')(' + gs + ')(' + rwrN(r.H, 3) + ')^{2}', value: r.Pa_tri, unit: 'lb/ft', d: 1 }));
+      } else s1.push(rwrS({ id: 'Pa', label: 'Active soil resultant (triangular distribution)', sym: 'P_{a}', eq: '\\frac{1}{2} K_{a} \\gamma_{s} ' + HT + '^{2}', sub: '\\frac{1}{2}(' + Ka + ')(' + gs + ')(' + rwrN(r.H_ret, 3) + ')^{2}', value: r.Pa_tri, unit: 'lb/ft', d: 1 }));
       if (r.Pa_incl_deg > 0) { const iS = r.coulombThrust ? '(\\delta + \\omega)' : '\\beta';
         s1.push(rwrS({ id: 'PaH', label: 'Horizontal component' + (r.coulombThrust ? ' (Coulomb: inclined at δ + ω)' : ' (inclined at β)'), sym: 'P_{a,H}', eq: 'P_{a}\\cos' + iS, sub: rwrN(r.Pa_tri, 1) + '\\cos(' + rwrN(r.Pa_incl_deg, 1) + RWR_DEG + ')', value: r.Pa_tri_h, unit: 'lb/ft', d: 1 }));
         s1.push(rwrS({ id: 'PaV', label: 'Vertical component (acts downward at the heel, stabilizing)', sym: 'P_{a,V}', eq: 'P_{a}\\sin' + iS, sub: rwrN(r.Pa_tri, 1) + '\\sin(' + rwrN(r.Pa_incl_deg, 1) + RWR_DEG + ')', value: r.Pa_tri_v, unit: 'lb/ft', d: 1 })); }
       T.push({ title: 'Active earth pressure' + (r.hasWT ? ' and water' : ''), steps: s1 });
-      const s2 = [rwrS({ id: 'Pasur', label: 'Surcharge lateral force (uniform over H)', sym: 'P_{a,sur}', eq: 'K_{a} q_{s} H', sub: '(' + Ka + ')(' + rwrN(inp.q_sur, 0) + ')(' + rwrN(r.H, 3) + ')', value: r.Pa_sur_h, unit: 'lb/ft', d: 1 })];
-      if (r.hasSeismic) s2.push(rwrS({ id: 'dPE', label: 'Seismic increment, Mononobe-Okabe (acts at 0.6H)', sym: '\\Delta P_{E}', eq: 'P_{AE} \\minus P_{a,MO}', sub: rwrN(r.Pae, 1) + ' \\minus ' + rwrN(r.Pa_MO, 1), value: r.Pe_inc, unit: 'lb/ft', d: 1, ref: 'ASCE 7-22 §11.8', note: 'k_h = ' + rwrN(inp.kh, 3) + ', k_v = ' + rwrN(inp.kv, 3) }));
+      const s2 = [rwrS({ id: 'Pasur', label: 'Surcharge lateral force (uniform over ' + rwHu(r) + ')', sym: 'P_{a,sur}', eq: 'K_{a} q_{s} ' + HT, sub: '(' + Ka + ')(' + rwrN(inp.q_sur, 0) + ')(' + rwrN(r.H_ret, 3) + ')', value: r.Pa_sur_h, unit: 'lb/ft', d: 1 })];
+      if (r.hasSeismic) s2.push(rwrS({ id: 'dPE', label: 'Seismic increment, Mononobe-Okabe (acts at 0.6' + (r.Hp > r.H_ret + 1e-9 ? 'H′' : rwHu(r)) + ')', sym: '\\Delta P_{E}', eq: 'P_{AE} \\minus P_{a,MO}', sub: rwrN(r.Pae, 1) + ' \\minus ' + rwrN(r.Pa_MO, 1), value: r.Pe_inc, unit: 'lb/ft', d: 1, ref: 'ASCE 7-22 §11.8', note: 'k_h = ' + rwrN(inp.kh, 3) + ', k_v = ' + rwrN(inp.kv, 3) }));
       s2.push(rwrS({ id: 'Fh', label: 'Total horizontal driving force', sym: 'F_{h}', eq: 'P_{a,H} + P_{a,sur}' + (r.hasWT ? ' + F_{hyd}' : ''), sub: rwrN(r.Pa_tri_h, 1) + ' + ' + rwrN(r.Pa_sur_h, 1) + (r.hasWT ? ' + ' + rwrN(r.F_hyd, 1) : ''), value: r.Fh, unit: 'lb/ft', d: 1 }));
       T.push({ title: 'Surcharge' + (r.hasSeismic ? ', seismic' : '') + ' and total thrust', steps: s2 });
       const s3 = [rwrS({ id: 'Pp', label: 'Passive resistance at the toe (embedment D_f = ' + rwrN(r.Df, 2) + ' ft)', sym: 'P_{p}', eq: '\\frac{1}{2} K_{p} \\gamma_{s} D_{f}^{2}', sub: '\\frac{1}{2}(' + rwrN(r.Kp, 4) + ')(' + gs + ')(' + rwrN(r.Df, 3) + ')^{2}', value: r.Pp_toe, unit: 'lb/ft', d: 1,
@@ -10865,7 +10939,7 @@ function rwrModel(r) {
     { const st = [], gc = rwrN(inp.gamma_c, 0);
       st.push(rwrS({ id: 'Wftg', label: 'Footing self-weight (arm x = ' + rwrN(r.x_ftg, 3) + ' ft)', sym: 'W_{ftg}', eq: '\\gamma_{c} B t_{f}', sub: '(' + gc + ')(' + rwrN(r.B, 3) + ')(' + rwrN(r.tf_ft, 3) + ')', value: r.Wftg, unit: 'lb/ft', d: 1 }));
       st.push(rwrS({ id: 'Wstem', label: 'Stem self-weight, trapezoid (arm x = ' + rwrN(r.x_stem, 3) + ' ft)', sym: 'W_{stem}', eq: '\\gamma_{c}\\,\\frac{t_{s,top} + t_{s,bot}}{2}\\,H_{s}', sub: '(' + gc + ')\\frac{' + rwrN(inp.ts_top, 1) + ' + ' + rwrN(inp.ts_bot, 1) + '}{2\\cdot 12}(' + rwrN(inp.Hs, 2) + ')', value: r.Wstem, unit: 'lb/ft', d: 1 }));
-      st.push(rwrS({ id: 'Wsoil', label: 'Soil block on the heel (arm x = ' + rwrN(r.x_soil, 3) + ' ft)', sym: 'W_{soil}', eq: '\\gamma_{s} H_{s} L_{h}', sub: '(' + rwrN(inp.gamma_s, 0) + ')(' + rwrN(inp.Hs, 2) + ')(' + rwrN(inp.Lh, 2) + ')', value: r.Wsoil, unit: 'lb/ft', d: 1 }));
+      st.push(rwrS({ id: 'Wsoil', label: 'Soil block on the heel (arm x = ' + rwrN(r.x_soil, 3) + ' ft)', sym: 'W_{soil}', eq: '\\gamma_{s} ' + HST + ' L_{h}', sub: '(' + rwrN(inp.gamma_s, 0) + ')(' + rwrN(r.Hs_ret, 2) + ')(' + rwrN(inp.Lh, 2) + ')', value: r.Wsoil, unit: 'lb/ft', d: 1 }));
       if (inp.q_sur > 0) st.push(rwrS({ id: 'Wsur', label: 'Surcharge on the heel (arm x = ' + rwrN(r.x_soil, 3) + ' ft)', sym: 'W_{sur}', eq: 'q_{s} L_{h}', sub: '(' + rwrN(inp.q_sur, 0) + ')(' + rwrN(inp.Lh, 2) + ')', value: r.Wsur, unit: 'lb/ft', d: 1 }));
       if (inp.beta > 0) st.push(rwrS({ id: 'PaV3', label: 'Vertical earth pressure component at the heel (arm x = B = ' + rwrN(r.B, 3) + ' ft)', sym: 'P_{a,V}', eq: '', sub: '', value: r.Pa_tri_v, unit: 'lb/ft', d: 1 }));
       if (r.hasCol) st.push(rwrS({ id: 'wcol', label: 'Column / beam service load DL + LL + SL over L_dist (arm x = ' + rwrN(r.x_col, 3) + ' ft)', sym: 'w_{col}', eq: '\\frac{P_{DL} + P_{LL} + P_{SL}}{L_{dist}}', sub: '\\frac{(' + rwrN(inp.col_DL, 1) + ' + ' + rwrN(inp.col_LL, 1) + ' + ' + rwrN(inp.col_SL, 1) + ')\\times 1000}{' + rwrN(inp.col_Ldist, 1) + '}', value: r.W_col, unit: 'lb/ft', d: 1 }));
@@ -10877,7 +10951,7 @@ function rwrModel(r) {
       s1.push(rwrS({ id: 'Moa', label: 'Overturning moment, active soil (resultant height y_a)', sym: 'M_{o,a}', eq: 'P_{a,H}\\,y_{a}', sub: '(' + rwrN(r.Pa_tri_h, 1) + ')(' + rwrN(r.y_Pa, 3) + ')', value: r.Mo_tri, unit: 'lb-ft/ft', d: 1 }));
       s1.push(rwrS({ id: 'Mos', label: "Overturning moment, surcharge (resultant at H'/2)", sym: 'M_{o,s}', eq: "P_{a,sur}\\frac{H^{\\prime}}{2}", sub: '(' + rwrN(r.Pa_sur_h, 1) + ')\\frac{' + rwrN(r.Hp, 3) + '}{2}', value: r.Mo_sur, unit: 'lb-ft/ft', d: 1 }));
       if (r.hasWT) s1.push(rwrS({ id: 'Mow', label: 'Overturning moment, hydrostatic (resultant at h_w/3)', sym: 'M_{o,w}', eq: 'F_{hyd}\\frac{h_{w}}{3}', sub: '(' + rwrN(r.F_hyd, 1) + ')\\frac{' + rwrN(r.hw, 2) + '}{3}', value: r.Mo_hyd, unit: 'lb-ft/ft', d: 1 }));
-      if (r.hasSeismic) s1.push(rwrS({ id: 'MoE', label: 'Overturning moment, seismic increment (at 0.6' + (r.Hp > r.H + 1e-9 ? 'H′' : 'H') + ')', sym: 'M_{o,E}', eq: '\\Delta P_{E}\\cdot 0.6' + (r.Hp > r.H + 1e-9 ? "H'" : 'H'), sub: '(' + rwrN(r.Pe_inc, 1) + ')(' + rwrN(0.6 * r.Hp, 2) + ')', value: r.Mo_seis, unit: 'lb-ft/ft', d: 1 }));
+      if (r.hasSeismic) s1.push(rwrS({ id: 'MoE', label: 'Overturning moment, seismic increment (at 0.6' + (r.Hp > r.H_ret + 1e-9 ? 'H′' : rwHu(r)) + ')', sym: 'M_{o,E}', eq: '\\Delta P_{E}\\cdot 0.6' + (r.Hp > r.H_ret + 1e-9 ? "H'" : rwHt(r)), sub: '(' + rwrN(r.Pe_inc, 1) + ')(' + rwrN(0.6 * r.Hp, 2) + ')', value: r.Mo_seis, unit: 'lb-ft/ft', d: 1 }));
       s1.push(rwrS({ id: 'Mo', label: 'Total overturning moment', sym: 'M_{OT}', eq: '\\sum M_{o}', sub: '', value: r.Mo, unit: 'lb-ft/ft', d: 1 }));
       T.push({ title: 'Overturning moments', steps: s1 });
       const s2 = [rwrS({ id: 'MsOT', label: 'Resisting moment relied on for overturning (surcharge and column live / snow excluded)', sym: 'M_{stab,OT}', eq: 'M_{stab} \\minus q_{sur}L_{h}x_{sur} \\minus (P_{LL} + P_{S})_{col}x_{col}', sub: rwrN(r.Ms, 1) + ' \\minus ' + rwrN(r.Ms_OT_excl, 1), value: r.Ms_OT, unit: 'lb-ft/ft', d: 1,
@@ -10937,15 +11011,16 @@ function rwrModel(r) {
       else st.push(rwrS({ id: 'K', label: 'Rankine active coefficient', sym: 'K_{a}', eq: '\\tan^{2}\\left(45' + RWR_DEG + ' \\minus \\frac{\\phi}{2}\\right)', sub: '\\tan^{2}\\left(45' + RWR_DEG + ' \\minus \\frac{' + ph + '}{2}\\right)', value: r.Ka, unit: '', d: 4, ref: AA('Art. 3.11.5.3') }));
       st.push(rwrS({ id: 'Kp', label: 'Passive coefficient (toe resistance)', sym: 'K_{p}', eq: '', sub: '', value: r.Kp, unit: '', d: 4, ref: AA('Art. 3.11.5.4') }));
       subs.push(sub('Step 1 — Earth pressure coefficient', [rwrItem('sa1', [{ title: 'Coefficients', steps: st }]), onTab('stabKa')])); }
-    if (A.ll_surcharge) { const lsC = heqCols(r.H, a.ls_dir), lsPar = a.ls_dir !== 'perpendicular', lsMid = lsPar && a.ls_dist > 0 && a.ls_dist < 1;   // RWLS (2026-11-07)
-      const ls = [rwrS({ id: 'half', label: 'Where LS applies: vehicular load within H/2 behind the back face (d = ' + rwrN(a.ls_dist, 2) + ' ft' + (a.ls_dist <= a.ls_half ? ' ≤ H/2: LS required)' : ' > H/2: LS not required)'), sym: '\\frac{H}{2}', eq: '', sub: '\\frac{' + rwrN(r.H, 2) + '}{2}', value: a.ls_half, unit: 'ft', d: 2, ref: AA('Art. 3.11.6.4.1') })];
+    if (A.ll_surcharge) { const lsC = heqCols(r.H_ret, a.ls_dir),   // RWHP: on H_ret
+      lsPar = a.ls_dir !== 'perpendicular', lsMid = lsPar && a.ls_dist > 0 && a.ls_dist < 1;   // RWLS (2026-11-07)
+      const ls = [...hpH(), rwrS({ id: 'half', label: 'Where LS applies: vehicular load within ' + rwHu(r) + '/2 behind the back face (d = ' + rwrN(a.ls_dist, 2) + ' ft' + (a.ls_dist <= a.ls_half ? ' ≤ ' + rwHu(r) + '/2: LS required)' : ' > ' + rwHu(r) + '/2: LS not required)'), sym: '\\frac{' + HT + '}{2}', eq: '', sub: '\\frac{' + rwrN(r.H_ret, 2) + '}{2}', value: a.ls_half, unit: 'ft', d: 2, ref: AA('Art. 3.11.6.4.1') })];
       if (!a.ls_auto_off) ls.push(A.heq_mode === 'manual'
         ? rwrS({ id: 'heq', label: 'Equivalent height (manual override)', sym: 'h_{eq}', eq: '', sub: '', value: a.heq, unit: 'ft', d: 2 })
-        : rwrS({ id: 'heq', label: 'Equivalent height, ' + (lsPar ? 'walls parallel to traffic' : 'abutments perpendicular to traffic') + ', interpolated on H = ' + rwrN(r.H, 2) + ' ft' + (lsPar ? ' (columns at H: 0 ft ' + rwrN(lsC.c0, 3) + ', 1.0 ft or further ' + rwrN(lsC.c1, 2) + ')' : ''), sym: 'h_{eq}', eq: lsMid ? 'h_{eq,0} + (h_{eq,1} \\minus h_{eq,0})\\,d' : '', sub: lsMid ? rwrN(lsC.c0, 3) + ' + (' + rwrN(lsC.c1, 2) + ' \\minus ' + rwrN(lsC.c0, 3) + ')(' + rwrN(a.ls_dist, 2) + ')' : '', value: a.heq, unit: 'ft', d: 3, ref: AA(lsC.tbl) }));
+        : rwrS({ id: 'heq', label: 'Equivalent height, ' + (lsPar ? 'walls parallel to traffic' : 'abutments perpendicular to traffic') + ', interpolated on ' + rwHu(r) + ' = ' + rwrN(r.H_ret, 2) + ' ft' + (lsPar ? ' (columns at ' + rwHu(r) + ': 0 ft ' + rwrN(lsC.c0, 3) + ', 1.0 ft or further ' + rwrN(lsC.c1, 2) + ')' : ''), sym: 'h_{eq}', eq: lsMid ? 'h_{eq,0} + (h_{eq,1} \\minus h_{eq,0})\\,d' : '', sub: lsMid ? rwrN(lsC.c0, 3) + ' + (' + rwrN(lsC.c1, 2) + ' \\minus ' + rwrN(lsC.c0, 3) + ')(' + rwrN(a.ls_dist, 2) + ')' : '', value: a.heq, unit: 'ft', d: 3, ref: AA(lsC.tbl) }));
       else ls.push({ type: 'note', text: 'LS not required (Art. 3.11.6.4.1): h_eq = 0, so P_LS = 0 and the heel LS load is 0 in every limit state.' });
       subs.push(sub('Step 2 — Live-load surcharge (equivalent soil height)', [rwrItem('sa2', [{ title: 'Surcharge', steps: a.ls_auto_off ? ls.slice(0, 1) : ls.concat([
       rwrS({ id: 'qLS', label: 'Equivalent surcharge pressure', sym: 'q_{LS}', eq: '\\gamma_{s}\\,h_{eq}', sub: '(' + rwrN(inp.gamma_s, 0) + ')(' + rwrN(a.heq, 2) + ')', value: a.q_ll_aashto, unit: 'psf', d: 0, ref: AA('Art. 3.11.6.4') })]) }]), onTab('stabLS')])); }
-    { const st = [rwrS({ id: 'PEH', label: 'Horizontal earth pressure resultant EH (at y = ' + rwrN(a.y_EH, 2) + ' ft)', sym: 'P_{EH}', eq: r.hasWT ? '\\text{3-block effective-stress resultant on } H^{\\prime}' : '\\frac{1}{2}K_{a}\\gamma_{s} H^{\\prime 2}' + (inp.beta > 0 ? '\\cos\\beta' : ''), sub: r.hasWT ? '' : '\\frac{1}{2}(' + rwrN(r.Ka, 4) + ')(' + rwrN(inp.gamma_s, 0) + ')(' + rwrN(r.Hp, 2) + ')^{2}' + (inp.beta > 0 ? '\\cos ' + rwrN(inp.beta, 0) + RWR_DEG : ''), value: a.P_EH, unit: 'lb/ft', d: 0, ref: AA('Art. 3.11.5') })];
+    { const st = [...(A.ll_surcharge ? [] : hpH()), rwrS({ id: 'PEH', label: 'Horizontal earth pressure resultant EH (at y = ' + rwrN(a.y_EH, 2) + ' ft)', sym: 'P_{EH}', eq: r.hasWT ? '\\text{3-block effective-stress resultant on } H^{\\prime}' : '\\frac{1}{2}K_{a}\\gamma_{s} H^{\\prime 2}' + (inp.beta > 0 ? '\\cos\\beta' : ''), sub: r.hasWT ? '' : '\\frac{1}{2}(' + rwrN(r.Ka, 4) + ')(' + rwrN(inp.gamma_s, 0) + ')(' + rwrN(r.Hp, 2) + ')^{2}' + (inp.beta > 0 ? '\\cos ' + rwrN(inp.beta, 0) + RWR_DEG : ''), value: a.P_EH, unit: 'lb/ft', d: 0, ref: AA('Art. 3.11.5') })];
       if (a.ls_on) st.push(rwrS({ id: 'PLS', label: "Live-load surcharge horizontal LS (at y = H'/2 = " + rwrN(a.y_LS, 2) + ' ft)', sym: 'P_{LS}', eq: 'K_{a}\\,q_{LS}\\,H^{\\prime}', sub: '(' + rwrN(r.Ka, 4) + ')(' + rwrN(a.q_ll_aashto, 0) + ')(' + rwrN(r.Hp, 2) + ')', value: a.P_LS, unit: 'lb/ft', d: 0, ref: AA('Art. 3.11.6.4') }));
       st.push(rwrS({ id: 'VDC', label: 'Vertical dead load of the structure DC', sym: 'V_{DC}', eq: 'W_{ftg} + W_{stem}' + (r.W_bar > 0 ? ' + W_{bar}' : ''), sub: rwrN(r.Wftg, 0) + ' + ' + rwrN(r.Wstem, 0) + (r.W_bar > 0 ? ' + ' + rwrN(r.W_bar, 0) : ''), value: r.Wftg + r.Wstem + r.W_bar, unit: 'lb/ft', d: 0 }));
       st.push(rwrS({ id: 'VEV', label: 'Vertical earth load EV' + (r.Wwedge > 0 ? ' (soil on the heel + slope wedge)' : ' (soil on the heel)'), sym: 'V_{EV}', eq: 'W_{soil}', sub: '', value: r.Wsoil, unit: 'lb/ft', d: 0 }));
@@ -11079,21 +11154,21 @@ function rwrModel(r) {
       S.subs.push(sub('Seismic — Mononobe-Okabe detail', [rwrItem('st9', [{ title: 'Mononobe-Okabe', ref: 'ASCE 7-22 §11.8', steps: [
         rwrS({ id: 'th', label: 'Seismic inertia angle', sym: '\\theta', eq: '\\arctan\\left(\\frac{k_{h}}{1 \\minus k_{v}}\\right)', sub: '\\arctan\\left(\\frac{' + rwrN(inp.kh, 3) + '}{1 \\minus ' + rwrN(inp.kv, 3) + '}\\right)', value: th, unit: 'deg', d: 2 }),
         rwrS({ id: 'Kae', label: 'M-O combined coefficient (δ = ' + rwrN(inp.delta_mo, 0) + '°)', sym: 'K_{AE}', eq: '\\frac{\\cos^{2}(\\phi \\minus \\theta)}{\\cos\\theta\\,\\cos(\\delta + \\theta)\\left[1 + \\sqrt{\\frac{\\sin(\\phi + \\delta)\\sin(\\phi \\minus \\theta \\minus \\beta)}{\\cos(\\delta + \\theta)\\cos\\beta}}\\right]^{2}}', sub: '', value: r.Kae, unit: '', d: 4 }),
-        rwrS({ id: 'Pae', label: 'Total seismic-active force', sym: 'P_{AE}', eq: '\\frac{1}{2}K_{AE}\\gamma_{s} ' + (r.Hp > r.H + 1e-9 ? "H'" : 'H') + '^{2}(1 \\minus k_{v})', sub: '\\frac{1}{2}(' + rwrN(r.Kae, 4) + ')(' + rwrN(inp.gamma_s, 0) + ')(' + rwrN(r.Hp, 3) + ')^{2}(1 \\minus ' + rwrN(inp.kv, 3) + ')', value: r.Pae, unit: 'lb/ft', d: 1 }),
-        rwrS({ id: 'dPE', label: 'Seismic increment, applied at 0.6' + (r.Hp > r.H + 1e-9 ? 'H′' : 'H') + ' = ' + rwrN(0.6 * r.Hp, 2) + ' ft above the base', sym: '\\Delta P_{E}', eq: 'P_{AE} \\minus P_{a,MO}', sub: rwrN(r.Pae, 1) + ' \\minus ' + rwrN(r.Pa_MO, 1), value: r.Pe_inc, unit: 'lb/ft', d: 1 })] }]),
+        rwrS({ id: 'Pae', label: 'Total seismic-active force', sym: 'P_{AE}', eq: '\\frac{1}{2}K_{AE}\\gamma_{s} ' + (r.Hp > r.H_ret + 1e-9 ? "H'" : rwHt(r)) + '^{2}(1 \\minus k_{v})', sub: '\\frac{1}{2}(' + rwrN(r.Kae, 4) + ')(' + rwrN(inp.gamma_s, 0) + ')(' + rwrN(r.Hp, 3) + ')^{2}(1 \\minus ' + rwrN(inp.kv, 3) + ')', value: r.Pae, unit: 'lb/ft', d: 1 }),
+        rwrS({ id: 'dPE', label: 'Seismic increment, applied at 0.6' + (r.Hp > r.H_ret + 1e-9 ? 'H′' : rwHu(r)) + ' = ' + rwrN(0.6 * r.Hp, 2) + ' ft above the base', sym: '\\Delta P_{E}', eq: 'P_{AE} \\minus P_{a,MO}', sub: rwrN(r.Pae, 1) + ' \\minus ' + rwrN(r.Pa_MO, 1), value: r.Pe_inc, unit: 'lb/ft', d: 1 })] }]),
         { type: 'note', warn: true, text: 'Simplified M-O per Seed & Whitman (1970). Verify with the project geotechnical engineer; seismic FOS acceptance may be reduced to 1.1 per local practice (confirm with the AHJ).' }])); }
   }
 
   /* ---------- 4. Stem ---------- */
   {
     const subs = [], gEH = r.gEH, gLS = isA ? 1.75 : 1.6, gES = isA ? 1.50 : 1.6, qll = isA ? r.q_ll_aashto : 0, ss = r.sel_stem;
-    const T1 = [rwrS({ id: 'Msoil', label: 'Factored moment, triangular soil pressure (γ' + (isA ? '_EH = ' + rwrN(gEH, 2) + (A.ep_cond === 'atrest' ? ', at-rest' : '') + ', Table 3.4.1-2' : ' = 1.6') + ')', sym: 'M_{u,soil}', eq: gEH + '\\cdot\\frac{K_{a}\\gamma_{s} H_{s}^{3}}{6}', sub: gEH + '\\cdot\\frac{(' + rwrN(r.Ka, 4) + ')(' + rwrN(inp.gamma_s, 0) + ')(' + rwrN(inp.Hs, 2) + ')^{3}}{6}', value: gEH * r.Ka * inp.gamma_s * inp.Hs ** 3 / 6, unit: 'lb-ft/ft', d: 1})];
-    if (inp.q_sur > 0) T1.push(rwrS({ id: 'MES', label: 'Factored moment, dead surcharge (γ' + (isA ? '_ES = 1.50' : ' = 1.6') + ')', sym: 'M_{u,ES}', eq: gES + '\\cdot\\frac{K_{a} q_{s} H_{s}^{2}}{2}', sub: gES + '\\cdot\\frac{(' + rwrN(r.Ka, 4) + ')(' + rwrN(inp.q_sur, 0) + ')(' + rwrN(inp.Hs, 2) + ')^{2}}{2}', value: gES * r.Ka * inp.q_sur * inp.Hs ** 2 / 2, unit: 'lb-ft/ft', d: 1 }));
-    if (isA && qll > 0) T1.push(rwrS({ id: 'MLS', label: 'Factored moment, live-load surcharge (γ_LS = 1.75)', sym: 'M_{u,LS}', eq: '1.75\\cdot\\frac{K_{a}\\gamma_{s}h_{eq}H_{s}^{2}}{2}', sub: '1.75\\cdot\\frac{(' + rwrN(r.Ka, 4) + ')(' + rwrN(qll, 0) + ')(' + rwrN(inp.Hs, 2) + ')^{2}}{2}', value: gLS * r.Ka * qll * inp.Hs ** 2 / 2, unit: 'lb-ft/ft', d: 1}));
+    const T1 = [...hpHs(), rwrS({ id: 'Msoil', label: 'Factored moment, triangular soil pressure (γ' + (isA ? '_EH = ' + rwrN(gEH, 2) + (A.ep_cond === 'atrest' ? ', at-rest' : '') + ', Table 3.4.1-2' : ' = 1.6') + ')', sym: 'M_{u,soil}', eq: gEH + '\\cdot\\frac{K_{a}\\gamma_{s} ' + HST + '^{3}}{6}', sub: gEH + '\\cdot\\frac{(' + rwrN(r.Ka, 4) + ')(' + rwrN(inp.gamma_s, 0) + ')(' + rwrN(r.Hs_ret, 2) + ')^{3}}{6}', value: gEH * r.Ka * inp.gamma_s * r.Hs_ret ** 3 / 6, unit: 'lb-ft/ft', d: 1})];
+    if (inp.q_sur > 0) T1.push(rwrS({ id: 'MES', label: 'Factored moment, dead surcharge (γ' + (isA ? '_ES = 1.50' : ' = 1.6') + ')', sym: 'M_{u,ES}', eq: gES + '\\cdot\\frac{K_{a} q_{s} ' + HST + '^{2}}{2}', sub: gES + '\\cdot\\frac{(' + rwrN(r.Ka, 4) + ')(' + rwrN(inp.q_sur, 0) + ')(' + rwrN(r.Hs_ret, 2) + ')^{2}}{2}', value: gES * r.Ka * inp.q_sur * r.Hs_ret ** 2 / 2, unit: 'lb-ft/ft', d: 1 }));
+    if (isA && qll > 0) T1.push(rwrS({ id: 'MLS', label: 'Factored moment, live-load surcharge (γ_LS = 1.75)', sym: 'M_{u,LS}', eq: '1.75\\cdot\\frac{K_{a}\\gamma_{s}h_{eq}' + HST + '^{2}}{2}', sub: '1.75\\cdot\\frac{(' + rwrN(r.Ka, 4) + ')(' + rwrN(qll, 0) + ')(' + rwrN(r.Hs_ret, 2) + ')^{2}}{2}', value: gLS * r.Ka * qll * r.Hs_ret ** 2 / 2, unit: 'lb-ft/ft', d: 1}));
     if (isA && r.etaMx !== 1) T1.push(rwrS({ id: 'Meta', label: 'Load modifier η on the Strength I demand (sum of the factored moments above)', sym: 'M_{u,StrI}', eq: '\\eta\\sum\\gamma_{i} M_{i}', sub: rwrN(r.etaMx, 3) + '(' + rwrN(r.Mu_stem_strI / r.etaMx, 1) + ')', value: r.Mu_stem_strI, unit: 'lb-ft/ft', d: 1, ref: AA('Art. 1.3.2.1') }));   // RW2H4
-    if (r.stem_water) T1.push(rwrS({ id: 'Mhyd', label: 'Water-table adjustment: buoyant soil below the water table + hydrostatic (h_2 = ' + rwrN(Math.max(0, inp.Hs - r.wt_d), 2) + ' ft)', sym: 'M_{u,hyd}', eq: (isA ? '\\gamma_{WA}' : '\\gamma') + '\\cdot\\frac{1}{2}\\gamma_{w} h_{2}^{2}\\cdot\\frac{h_{2}}{3}', sub: '', value: (isA ? 1.0 : 1.6) * r.sd_base_Mhyd, unit: 'lb-ft/ft', d: 1, ref: isA ? AA('Table 3.4.1-1, γ_WA = 1.0') : 'γ = 1.6 (ACI H)' }));
-    if (r.sq_base) T1.push(isA ? rwrS({ id: 'MuEQ', label: 'Extreme Event I at the stem base (φ = 1.0): case 1 P_AE,s + 0.5P_IR,s, case 2 max(0.5P_AE,s, P_A,s) + P_IR,s (P_AE,s = ' + rwrN(r.sq_base.PAE, 0) + ' at H_s/3, P_IR,s = ' + rwrN(r.sq_base.PIR, 0) + ' lb/ft)', sym: 'M_{u,EQ}', eq: '\\max(M_{1},\\, M_{2})', sub: '\\max(' + rwrN(r.sq_base.c1.M, 0) + ',\\, ' + rwrN(r.sq_base.c2.M, 0) + ')', value: r.Mu_stem_eq, unit: 'lb-ft/ft', d: 0, ref: AA('Art. 11.6.5.1') })
-      : rwrS({ id: 'MuEQ', label: 'Seismic combination U = 1.2D + 1.0E + 1.6H: ΔP_E,s = ΔP_E(H_s/' + (r.Hp > r.H + 1e-9 ? 'H′' : 'H') + ')² = ' + rwrN(r.sq_base.Pe, 1) + ' lb/ft at 0.6H_s', sym: 'M_{u,E}', eq: 'M_{u,1.6H} + 1.0\\,\\Delta P_{E,s}(0.6H_{s})', sub: rwrN(r.Mu_stem_strI, 0) + ' + ' + rwrN(r.sq_base.Pe, 1) + '(' + rwrN(0.6 * inp.Hs, 2) + ')', value: r.Mu_stem_eq, unit: 'lb-ft/ft', d: 0, ref: 'ACI 318-19 Eq. 5.3.1e' }));   // RWSQ
+    if (r.stem_water) T1.push(rwrS({ id: 'Mhyd', label: 'Water-table adjustment: buoyant soil below the water table + hydrostatic (h_2 = ' + rwrN(Math.max(0, r.Hs_ret - r.wt_r), 2) + ' ft)', sym: 'M_{u,hyd}', eq: (isA ? '\\gamma_{WA}' : '\\gamma') + '\\cdot\\frac{1}{2}\\gamma_{w} h_{2}^{2}\\cdot\\frac{h_{2}}{3}', sub: '', value: (isA ? 1.0 : 1.6) * r.sd_base_Mhyd, unit: 'lb-ft/ft', d: 1, ref: isA ? AA('Table 3.4.1-1, γ_WA = 1.0') : 'γ = 1.6 (ACI H)' }));
+    if (r.sq_base) T1.push(isA ? rwrS({ id: 'MuEQ', label: 'Extreme Event I at the stem base (φ = 1.0): case 1 P_AE,s + 0.5P_IR,s, case 2 max(0.5P_AE,s, P_A,s) + P_IR,s (P_AE,s = ' + rwrN(r.sq_base.PAE, 0) + ' at H_s/3, P_IR,s = ' + rwrN(r.sq_base.PIR, 0) + ' lb/ft' + (r.h_p > 0 ? '; P_AE,s on H_s,ret = ' + rwrN(r.Hs_ret, 2) + ' ft, P_IR,s on the full stem' : '') + ')', sym: 'M_{u,EQ}', eq: '\\max(M_{1},\\, M_{2})', sub: '\\max(' + rwrN(r.sq_base.c1.M, 0) + ',\\, ' + rwrN(r.sq_base.c2.M, 0) + ')', value: r.Mu_stem_eq, unit: 'lb-ft/ft', d: 0, ref: AA('Art. 11.6.5.1') })
+      : rwrS({ id: 'MuEQ', label: 'Seismic combination U = 1.2D + 1.0E + 1.6H: ΔP_E,s = ΔP_E(' + rwHsu(r) + '/' + (r.Hp > r.H_ret + 1e-9 ? 'H′' : rwHu(r)) + ')² = ' + rwrN(r.sq_base.Pe, 1) + ' lb/ft at 0.6' + rwHsu(r), sym: 'M_{u,E}', eq: 'M_{u,1.6H} + 1.0\\,\\Delta P_{E,s}(0.6' + HST + ')', sub: rwrN(r.Mu_stem_strI, 0) + ' + ' + rwrN(r.sq_base.Pe, 1) + '(' + rwrN(0.6 * r.Hs_ret, 2) + ')', value: r.Mu_stem_eq, unit: 'lb-ft/ft', d: 0, ref: 'ACI 318-19 Eq. 5.3.1e' }));   // RWSQ
     T1.push(rwrS({ id: 'Mu', label: 'Total factored design moment' + (r.stem_eq_governs ? (isA ? ' (Extreme Event I governs)' : ' (seismic combination governs)') : r.stem_ee2_governs ? ' (Extreme Event II governs)' : ''), sym: 'M_{u}', eq: r.sq_base ? '\\max(M_{u,StrI},\\, ' + (r.Mu_stem_ee2 > 0 ? 'M_{u,EE2},\\, ' : '') + 'M_{u,EQ})' : r.stem_ee2_governs ? '\\max(M_{u,StrI},\\, M_{u,EE2})' : '\\sum M_{u,i}', sub: r.sq_base ? '\\max(' + rwrN(r.Mu_stem_strI, 1) + ',\\, ' + (r.Mu_stem_ee2 > 0 ? rwrN(r.Mu_stem_ee2, 1) + ',\\, ' : '') + rwrN(r.Mu_stem_eq, 1) + ')' : r.stem_ee2_governs ? '\\max(' + rwrN(r.Mu_stem_strI, 1) + ',\\, ' + rwrN(r.Mu_stem_ee2, 1) + ')' : '', value: r.Mu_stem_lbft, unit: 'lb-ft/ft', d: 1, note: r.stem_water ? 'water-aware: the 3-block effective-stress profile plus the hydrostatic triangle' : '' }));
     T1.push(rwrS({ id: 'Vu', label: 'Factored shear at the base', sym: 'V_{u}', eq: '', sub: '', value: r.Vu_stem, unit: 'lb/ft', d: 1, note: r.sq_base ? 'includes the seismic combination (' + rwrN(r.Vu_stem_eq, 0) + ' lb/ft)' : '' }));   // RWSQ
     const T2 = [rwrS({ id: 'd', label: 'Effective depth (S1 bar #' + ss.bar.num + ', d_b = ' + rwrN(ss.bar.db, 3) + ' in; tension on the back face)', sym: 'd', eq: 't_{s,bot} \\minus c_{c} \\minus \\frac{d_{b}}{2}', sub: rwrN(inp.ts_bot, 1) + ' \\minus ' + rwrN(inp.cov_stem, 2) + ' \\minus ' + rwrN(ss.bar.db / 2, 4), value: r.d_stem, unit: 'in', d: 3 })];
@@ -12421,9 +12496,10 @@ function rwSelfChecks(r) {
   } catch (e) { add('Bearing diagrams', false, 'could not be evaluated: ' + e.message); }
   // 5. stem moment at the base: the lateral pressure integrated over the stem height (Simpson, 400 strips) vs the force resultants
   {
-    const wt = r.hasWT ? r.wt_d : Infinity, N = 400, h = Hs / N;
-    const pS = z => r.Ka * inp.gamma_s * Math.min(z, wt) + r.Ka * r.gamma_s_sub * Math.max(0, z - wt);
-    const pW = z => r.hasWT ? r.gamma_w * Math.max(0, z - wt) : 0;
+    // RWHP: z from the stem top; the soil and water start at the retained grade z = h_p (zr = z − h_p), the WT wt_r below it
+    const hp = r.h_p || 0, wt = r.hasWT ? r.wt_r : Infinity, N = 400, h = Hs / N, Hr = Hs - hp;
+    const pS = z0 => { const z = Math.max(0, z0 - hp); return r.Ka * inp.gamma_s * Math.min(z, wt) + r.Ka * r.gamma_s_sub * Math.max(0, z - wt); };
+    const pW = z0 => { const z = Math.max(0, z0 - hp); return r.hasWT ? r.gamma_w * Math.max(0, z - wt) : 0; };
     let Ms = 0, Mw = 0;
     for (let i = 0; i <= N; i++) { const z = i * h, w = (i === 0 || i === N) ? 1 : (i % 2 ? 4 : 2); Ms += w * pS(z) * (Hs - z); Mw += w * pW(z) * (Hs - z); }
     Ms *= h / 3; Mw *= h / 3;
@@ -12431,9 +12507,9 @@ function rwSelfChecks(r) {
       `earth ${n(Ms, 0)} vs ${n(r.sd_base_Msoil, 0)}; water ${n(Mw, 0)} vs ${n(r.sd_base_Mhyd, 0)} lb·ft/ft (unfactored)`, 'stemFlex');
     if (r.gEH != null && r.gWA != null) {
       const qll = r.isAASHTO ? r.q_ll_aashto : 0;
-      const Mu = (r.etaMx || 1) * (r.gEH * Ms + r.gWA * Mw + r.gES * r.Ka * inp.q_sur * Hs * Hs / 2 + r.gLS * r.Ka * qll * Hs * Hs / 2);   // RW2H4: × η
+      const Mu = (r.etaMx || 1) * (r.gEH * Ms + r.gWA * Mw + r.gES * r.Ka * inp.q_sur * Hr * Hr / 2 + r.gLS * r.Ka * qll * Hr * Hr / 2);   // RW2H4: × η; RWHP: surcharge on H_s,ret
       add('Stem base: factored M_u from the integrated pressures', near(Mu, r.Mu_stem_strI, 1e-4, 0.5),
-        `γ_EH·${n(Ms, 0)} + γ_WA·${n(Mw, 0)} + γ_ES·K_a q_s H_s²/2 + γ_LS·K_a q_LL H_s²/2 = ${n(Mu, 0)} vs M_u = ${n(r.Mu_stem_strI, 0)} lb·ft/ft (${r.isAASHTO ? 'Strength I' : 'U = 1.6H'}; factors as the analysis: ${[r.gEH, r.gWA, r.gES, r.gLS].map(g => n(g, 2)).join(', ')})`, 'stemFlex');
+        `γ_EH·${n(Ms, 0)} + γ_WA·${n(Mw, 0)} + γ_ES·K_a q_s ${rwHsu(r)}²/2 + γ_LS·K_a q_LL ${rwHsu(r)}²/2 = ${n(Mu, 0)} vs M_u = ${n(r.Mu_stem_strI, 0)} lb·ft/ft (${r.isAASHTO ? 'Strength I' : 'U = 1.6H'}; factors as the analysis: ${[r.gEH, r.gWA, r.gES, r.gLS].map(g => n(g, 2)).join(', ')})`, 'stemFlex');
     }
   }
   // 6. reinforcement: A_s = A_b(bar table) × 12 / s for every bar mark
@@ -12751,6 +12827,7 @@ function rwpxBuild(r, meta) {
   p.notes.push('Retaining wall on ' + r.pile.rows.length + ' rows of vertical piles, worked per ft of wall (Stability tab, Pile Step 2). Sent as a ' + rwpxR3(seg.L) + ' ft segment with ' + Lay.n + ' piles: P = V·L, Vx = H·L, My about the segment\'s pile-group centroid.');
   p.notes.push(isA ? 'AASHTO mode: Strength I (maximum / minimum vertical), Extreme Event I and II are factored (factored:true), as the wall\'s pile check.'
                    : 'ACI / IBC mode: the cases are service (ASD) combinations of ASCE 7-16 §2.4.1 (factored:false), checked in the wall against allowable pile capacities; Pile Designer\'s LRFD resistances are not imported back in this mode (reference only).');
+  if (r.h_p > 0) p.notes.push('Stem projects h_p = ' + rwpxR3(r.h_p) + ' ft above the retained grade: earth, water and surcharge on the retained height H_ret = H − h_p = ' + rwpxR3(r.H_ret) + ' ft; the stem weight on the full stem (RWHP).');   // RWHP: absent at h_p = 0 (payload unchanged)
   p.notes.push('Per-pile governing loads (pileDesign): per combination the row with the largest and the smallest pile load of the wall\'s pile check, P per pile, lateral share h = H/N, pinned head. No drag load is modelled (DR = 0).');
   p.contentHash = rwpxHash(p);
   return { p, n: cases.length, seg, Lay };
