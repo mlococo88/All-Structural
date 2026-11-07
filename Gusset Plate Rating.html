@@ -1245,7 +1245,8 @@ const GPR = (function () {
     // shared geometry and detailing
     ['E', 'both', 'Material and geometry', 'E', 'Modulus of elasticity of steel', 29000, 'ksi', 'LRFD 10th Ed. 6.4.1', 0, ''],
     ['thW', 'both', 'Material and geometry', '\\theta_W', 'Whitmore spread angle, each side', 30, 'deg', 'LRFD 10th Ed. 6.14.2.8 (C6.14.2.8); MBE 3rd Ed. 6A.6.12.6.7, 6A.6.12.6.8', 0, 'Spread from the outer fasteners of the row farthest from the work point to the row nearest it.', 'engineer-confirmed 2026-10-05'],
-    ['hStd', 'both', 'Material and geometry', '\\Delta_{std}', 'Standard hole: hole diameter minus fastener diameter', 0.0625, 'in', 'LRFD 10th Ed. Table 6.13.2.4.2-1', 0, 'Rivet holes are taken as d + 1/16 in, the same as standard bolt holes.'],
+    ['hStd', 'both', 'Material and geometry', '\\Delta_{std}', 'Standard hole: hole diameter minus fastener diameter (rivets; bolts up to 7/8 in)', 0.0625, 'in', 'LRFD 10th Ed. Table 6.13.2.4.2-1', 0, 'Rivet holes are taken as d + 1/16 in for every diameter.'],
+    ['hStdL', 'both', 'Material and geometry', '\\Delta_{std,1}', 'Standard hole for bolts of 1 in diameter and larger: hole diameter minus bolt diameter', 0.125, 'in', 'LRFD 10th Ed. Table 6.13.2.4.2-1', 0, 'L2, 2026-11-07: d + 1/8 in for d ≥ 1 in (was d + 1/16 in for every diameter).'],
     ['hOv78', 'both', 'Material and geometry', '\\Delta_{ovs}', 'Oversize hole allowance, d ≤ 7/8 in', 0.1875, 'in', 'LRFD 10th Ed. Table 6.13.2.4.2-1', 0, ''],
     ['hOv1', 'both', 'Material and geometry', '\\Delta_{ovs}', 'Oversize hole allowance, d = 1 in', 0.25, 'in', 'LRFD 10th Ed. Table 6.13.2.4.2-1', 0, ''],
     ['hOvL', 'both', 'Material and geometry', '\\Delta_{ovs}', 'Oversize hole allowance, d ≥ 1 1/8 in', 0.3125, 'in', 'LRFD 10th Ed. Table 6.13.2.4.2-1', 0, ''],
@@ -1270,8 +1271,8 @@ const GPR = (function () {
     ['phiVU', 'lrfr', 'LRFR resistance factors', '\\phi_{vu}', 'Shear fracture, net plane', 0.80, '', 'LRFD 10th Ed. 6.5.4.2; MBE 6A.6.12.6.6', 0, ''],
     // C14 (O1): chord splice at the joint, compression (LRFR rating check)
     ['phiCS', 'lrfr', 'LRFR resistance factors', '\\phi_{cs}', 'Chord splice in compression (gusset and splice plates at the splice line)', 0.85, '', 'MBE 3rd Ed. Table 6A.6.12.6.2-1, 6A.6.12.6.9 (verify); NCHRP W-197 (rating value; LRFD 10th Ed. 6.5.4.2 design value 0.65 not used)', 1, 'Value as reported for the chord-splice resistance factor of NCHRP W-197 / MBE; the printed table was not available. Engineer decision 2026-10-19: the rating keeps the MBE 3rd Ed. value. For design of truss gusset plate chord splices, LRFD 10th Ed. 6.5.4.2 gives a lower factor (0.65); it is not used for rating.'],
-    ['Ksp', 'lrfr', 'LRFR plate resistances', 'K_{sp}', 'Effective length factor, chord splice in compression (length = centre-to-centre distance between the first fastener lines of the two chords)', 0.65, '', 'MBE 3rd Ed. 6A.6.12.6.9 (verify)', 1, 'Judgment until confirmed: 0.65 (fixed-fixed, LRFD 10th Ed. C4.6.2.5). It only matters when K l/r exceeds the limit below.'],
-    ['spKLr', 'lrfr', 'LRFR plate resistances', '(Kl/r)_{lim}', 'Chord splice: slenderness K l/r at or below which F_cr = F_y', 25, '', 'MBE 3rd Ed. Eq. 6A.6.12.6.9-2 (verify)', 1, 'Above it, F_cr from the LRFD 10th Ed. 6.9.4.1.1 column curve.'],
+    ['Ksp', 'lrfr', 'LRFR plate resistances', 'K_{sp}', 'Effective length factor, chord splice in compression (length = centre-to-centre distance between the first fastener lines of the two chords)', 0.50, '', 'LRFD 10th Ed. 6.14.2.8.6 (Eq. 6.14.2.8.6-2); MBE 3rd Ed. 6A.6.12.6.9 (verify)', 0, 'L1, 2026-11-07: LRFD 10th Ed. 6.14.2.8.6 gives K = 0.50 for chord splices (was 0.65, judgment). It only matters when K l/r exceeds the limit below.'],
+    ['spKLr', 'lrfr', 'LRFR plate resistances', '(Kl/r)_{lim}', 'Chord splice: slenderness K l/r at or below which F_cr = F_y', 25, '', 'LRFD 10th Ed. Eq. 6.14.2.8.6-2; MBE 3rd Ed. Eq. 6A.6.12.6.9-2 (verify)', 0, 'Above it, F_cr from the LRFD 10th Ed. 6.9.4.1.1 column curve.'],
     // LRFR nominal resistances
     ['FvR0', 'lrfr', 'LRFR fastener strengths', 'F_v', 'Rivet nominal shear strength: built before 1936 or of unknown origin', 23, 'ksi', 'MBE 3rd Ed. 6A.6.12.5.1, Table 6A.6.12.5.1-1', 1, ''],
     ['FvR1', 'lrfr', 'LRFR fastener strengths', 'F_v', 'Rivet nominal shear strength: ASTM A502 Grade 1', 29, 'ksi', 'MBE 3rd Ed. Table 6A.6.12.5.1-1', 1, ''],
@@ -1495,9 +1496,11 @@ const GPR = (function () {
         memberDef({ id: 'L2-U2', role: 'web', ang: 90, sec: { type: 'H', w: 10, d2: 10, desc: 'Built-up H' }, cut: 12.5, fast: { nR: 5, nL: 2, p: 3.5, g: '5', e: 14, off: 0 }, F: { DC: 40, DW: 6, LL: [55, 40] } })
       ],
       ll: [{ name: 'HL-93', kind: 'design', use: 'lrfr', gL: 1.75 }, { name: 'HS20', kind: 'design', use: 'lfr', gL: 1.3 }],
+      autoPartial: true,
       planes: [{ kind: 'above', name: 'Horizontal plane through the top line of chord fasteners', on: true, side: 'auto', Lg: '', Ln: '' },
         { kind: 'below', name: 'Horizontal plane through the bottom line of chord fasteners', on: true, side: 'auto', Lg: '', Ln: '' }],
       fac: { phiC: 1.0, phiS: 1.0 },
+      slip: { on: false, cls: 'A' },
       code: {},
       src: '',
       ui: { itab: 'project', otab: 'summary', col: {}, view: { members: true, fasteners: true, whitmore: true, planes: true, block: true, lmid: true, labels: true, dc: true }, dcCase: 0, rpt: { inputs: true, params: true, geometry: true, checks: true, rating: true, drawing: true, validation: true, method: false, detail: 'full' }, open: {} }
@@ -1530,7 +1533,7 @@ const GPR = (function () {
   const spliceList = P => (P && P.splice && Array.isArray(P.splice.plates)) ? P.splice.plates : [];
   function plateTs(pl) { const n = Math.max(1, Math.round(num(pl.n)) || 1), t = num(pl.t), L = pl.loss || {}; return Array.from({ length: n }, (_, i) => { const x = num((L.per || [])[i]) || 0; return L.mode === 'thk' ? t - x : L.mode === 'pct' ? t * (1 - x / 100) : t; }); }
   function gageList(g, nL) { if (nL < 2) return []; let a = String(g ?? '').split(/[,;\s]+/).map(num).filter(x => isFinite(x)); if (!a.length) a = [NaN]; const out = []; for (let i = 0; i < nL - 1; i++) out.push(a[Math.min(i, a.length - 1)]); return out; }
-  function holeDia(f, p) { const d = num(f.d); if (f.hole === 'oversize') return d + (d <= 0.875 + 1e-9 ? p.hOv78 : d <= 1 + 1e-9 ? p.hOv1 : p.hOvL); return d + p.hStd; }
+  function holeDia(f, p) { const d = num(f.d); if (f.hole === 'oversize') return d + (d <= 0.875 + 1e-9 ? p.hOv78 : d <= 1 + 1e-9 ? p.hOv1 : p.hOvL); return d + (d >= 1 - 1e-9 && (f.grade === 'A325' || f.grade === 'A490') ? p.hStdL : p.hStd); }   // L2: standard bolt holes d + 1/8 for d ≥ 1 in
 
   /* ---------- member geometry ---------- */
   function memberGeom(m, idx, p) {
@@ -1772,10 +1775,14 @@ const GPR = (function () {
         wr('R<sub>F</sub>', parts.some(z => z.tf > 0) ? `Filler factor (1 + γ)/(1 + 2γ), γ = t<sub>f</sub>/t<sub>p</sub> = ${parts.map(z => `${f3(z.tf)}/${f3(tminP)}`).join('; ')}${parts.some(z => z.tf > 0 && !z.fillOn) ? ' (not applied: thinner than the limit or rivets excluded)' : ''}` : 'Filler factor (no filler)', parts.map(z => f3(z.RF)).join('; '), '', 'LRFD 6.13.6.1.4')];
       return { C, phi: q.phi, sym, subst, where, keys: [...new Set(parts.flatMap(z => z.keys))], parts }; }
 
-    function capBRG(hs, w, meth, dirTxt) { const lrfr = meth === 'lrfr', A = lrfr ? p.brA : p.brAL, Bc = lrfr ? p.brB : p.brBL, phi = lrfr ? p.phiBB : 1;
+    function capBRG(hs, w, meth, dirTxt, fsC) { const lrfr = meth === 'lrfr', A = lrfr ? p.brA : p.brAL, Bc = lrfr ? p.brB : p.brBL, phi = lrfr ? p.phiBB : 1;
       const L = lcHoles(hs, w); let Rn = 0; const rows = [];
       L.forEach(o => { const h = o.h; ts.forEach(t => { const r1 = A * h.d * t * Fu, r2 = Bc * (isFinite(o.Lc) ? o.Lc : 1e9) * t * Fu; Rn += Math.min(r1, r2); }); rows.push({ ...o, r1: A * h.d * ts[0] * Fu, r2: Bc * o.Lc * ts[0] * Fu }); });
-      const C = phi * Rn, h0 = hs[0], nG = L.filter(o => Bc * o.Lc < A * o.h.d - 1e-9).length;
+      let C = phi * Rn; const h0 = hs[0], nG = L.filter(o => Bc * o.Lc < A * o.h.d - 1e-9).length;
+      /* L8: per fastener, the lower of bearing and the fastener's share of the shear resistance (C_FS / (holes × plates)), summed, where the holes are mixed
+         (some bearing-governed, some shear-governed); otherwise min(ΣFS, ΣBR) is the same and the bearing sum stays as it was. */
+      let pf = null; if (isFinite(fsC) && fsC > 0 && L.length) { const sh = fsC / (L.length * Np), bs = []; L.forEach(o => ts.forEach(t => bs.push(phi * Math.min(A * o.h.d * t * Fu, Bc * (isFinite(o.Lc) ? o.Lc : 1e9) * t * Fu))));
+        const nB = bs.filter(b => b < sh - 1e-9).length; if (nB > 0 && nB < bs.length) { const Cp = bs.reduce((s2, b) => s2 + Math.min(b, sh), 0); pf = { sh, nB, n: bs.length, C0: C, Cp }; C = Cp; } }
       // group the per-hole table by Lc
       // group holes: those where A d t F_u governs (by d), and those where B L_c t F_u governs (by L_c)
       const byLc = {}; L.forEach(o => { const lcG = isFinite(o.Lc) && Bc * o.Lc < A * o.h.d - 1e-9, k = lcG ? 'L' + f3(o.Lc) + '|' + o.kind : 'D' + f3(o.h.d); (byLc[k] = byLc[k] || { Lc: o.Lc, kind: o.kind, n: 0, d: o.h.d, lcG, LcMin: o.Lc }).n++; if (!lcG) byLc[k].LcMin = Math.min(byLc[k].LcMin, o.Lc); });
@@ -1784,10 +1791,11 @@ const GPR = (function () {
       const uni = ts.every(t => Math.abs(t - ts[0]) < 1e-9), perPlate = ts.map(t => L.reduce((s, o) => s + Math.min(A * o.h.d * t * Fu, Bc * (isFinite(o.Lc) ? o.Lc : 1e9) * t * Fu), 0));
       const grpTex = t => grp.map(gq => gq.lcG ? T`${gq.n}(${f1(Bc)})(${f3(gq.Lc)})(${f4(t)})(${f0(Fu)})` : T`${gq.n}(${f1(A)})(${f3(gq.d)})(${f4(t)})(${f0(Fu)})`).join(' + ');
       const subst = (uni ? T`R_n = ${Np > 1 ? Np : ''}\left[${grpTex(ts[0])}\right] = ${Np > 1 ? T`${Np}(${f1(perPlate[0])})` : f1(perPlate[0])} = ${f1(Rn)}\ \text{kip}`
-        : T`R_n = \textstyle\sum_{plates} = ${perPlate.map(f1).join(' + ')} = ${f1(Rn)}\ \text{kip}\ \ (t = ${ts.map(f4).join(', ')})`) + T`, \quad ${lrfr ? T`\phi_{bb}R_n = ${f2(phi)}(${f1(Rn)})` : T`C = R_n`} = ${f1(C)}\ \text{kip}`;
+        : T`R_n = \textstyle\sum_{plates} = ${perPlate.map(f1).join(' + ')} = ${f1(Rn)}\ \text{kip}\ \ (t = ${ts.map(f4).join(', ')})`) + T`, \quad ${lrfr ? T`\phi_{bb}R_n = ${f2(phi)}(${f1(Rn)})` : T`C = R_n`} = ${f1(pf ? pf.C0 : C)}\ \text{kip}` + (pf ? T`; \ \text{per fastener: } \sum\min(\text{bearing}, ${f2(pf.sh)}) = ${f1(C)}\ \text{kip}` : '');
       const where = [wr('d', 'Fastener diameter', f3(h0.d), 'in', 'Input'), wr('d<sub>h</sub>', 'Hole diameter', f4(h0.dh), 'in', 'LRFD Table 6.13.2.4.2-1'),
         wr('L<sub>c</sub>', `Clear distance ${escH(dirTxt)}: to the next hole (s − d<sub>h</sub>) or to the plate edge (L<sub>e</sub> − d<sub>h</sub>/2): ${grp.map(gq => gq.lcG ? `${gq.n} hole${gq.n > 1 ? 's' : ''} with L<sub>c</sub> = ${f3(gq.Lc)} in (${gq.kind === 'hole' ? 'to next hole' : 'to edge'}; L<sub>c</sub> governs)` : `${gq.n} hole${gq.n > 1 ? 's' : ''} with L<sub>c</sub> ≥ ${f3(gq.LcMin)} in (${f1(A)}d governs)`).join('; ')}`, `${L.length}`, 'holes', 'Geometry'),
-        ...plateWhere(), ...(lrfr ? [wr('φ<sub>bb</sub>', 'Resistance factor, bearing', f2(phi), '', 'LRFD 6.5.4.2')] : [wr('φ', 'Included in the coefficients 1.8 and 0.9', '—', '', 'Std. Spec. 10.56.1.3.2')])];
+        ...plateWhere(), ...(lrfr ? [wr('φ<sub>bb</sub>', 'Resistance factor, bearing', f2(phi), '', 'LRFD 6.5.4.2')] : [wr('φ', 'Included in the coefficients 1.8 and 0.9', '—', '', 'Std. Spec. 10.56.1.3.2')]),
+        ...(pf ? [wr('Per fastener', `Some holes are governed by bearing and others by fastener shear: each hole and plate takes the lower of its factored bearing and its share of the fastener-shear resistance (${f1(fsC)} kip / (${L.length} holes × ${Np} plates) = ${f2(pf.sh)} kip); ${pf.nB} of ${pf.n} hole-plates governed by bearing (L8)`, f1(pf.Cp), 'kip', 'LRFD 10th Ed. 6.13.2.7, 6.13.2.9')] : [])];
       return { C, phi, sym, subst, where, keys: lrfr ? ['brA', 'brB', 'phiBB', 'hStd'] : ['brAL', 'brBL', 'hStd'], lc: L, nG, note: nG ? `${nG} hole${nG > 1 ? 's' : ''} governed by the clear distance L_c.` : '' }; }
 
     function capWY(g, meth) { const lrfr = meth === 'lrfr', phi = lrfr ? p.phiY : p.phiYL, W = g.W, Ag = W.Wg * sumT, Rn = Fy * Ag, C = phi * Rn;
@@ -1835,7 +1843,8 @@ const GPR = (function () {
     (P.planes || []).forEach((q, qi) => { if (q.on === false) return; let a, e, nm = q.name;
       if (q.kind === 'above' || q.kind === 'below') { if (!chordHoles.length) { warn.push(`${nm}: there are no chord members, so this plane is not defined.`); return; } const y = q.kind === 'above' ? Math.max(...chordHoles.map(h => h.y)) : Math.min(...chordHoles.map(h => h.y)); a = [0, y]; e = [1, 0]; }
       else { const p1 = [num(q.x1), num(q.y1)], p2 = [num(q.x2), num(q.y2)]; a = p1; e = mul(sub(p2, p1), 1 / vlen(sub(p2, p1))); }
-      const iv = lineIntervals(a, e, poly); if (!iv.length) { warn.push(`${nm}: the line does not cross the plate.`); return; }
+      const segL = q.kind === 'user' && q.seg ? vlen(sub([num(q.x2), num(q.y2)], [num(q.x1), num(q.y1)])) : null;   // M3: a user plane may be the segment point 1 → point 2 only
+      const iv = lineIntervals(a, e, poly).map(([t0, t1]) => segL == null ? [t0, t1] : [Math.max(t0, 0), Math.min(t1, segL)]).filter(([t0, t1]) => t1 - t0 > 1e-9); if (!iv.length) { warn.push(`${nm}: the ${segL == null ? 'line' : 'segment'} does not cross the plate.`); return; }
       const LgAuto = iv.reduce((s, [t0, t1]) => s + t1 - t0, 0), segs = iv.map(([t0, t1]) => [add(a, mul(e, t0)), add(a, mul(e, t1))]);
       const cross = holes.filter(h => segs.some(([A, B]) => distSeg([h.x, h.y], A, B) < h.dh / 2 - 1e-9)); let LnAuto = LgAuto - cross.reduce((s, h) => s + h.dn, 0), stag = null;
       // C10: with custom patterns in the joint, staggered chains (s²/4g) along each part of the line inside the plate, through the holes on the line and the
@@ -1850,13 +1859,35 @@ const GPR = (function () {
       const sd = c => crs(e, sub(c, a)); let sign;
       if (q.kind === 'above') sign = 1; else if (q.kind === 'below') sign = -1;
       else if (q.side === 'left') sign = 1; else if (q.side === 'right') sign = -1; else { const w = sd([0, 0]); sign = Math.abs(w) < 1e-9 ? 1 : -Math.sign(w); }
-      const mem = P.members.map((m, i) => sign * sd(G[i].centroid) > 1e-6 ? i : -1).filter(i => i >= 0);
+      const ldI = q.kind === 'user' && q.loaded ? P.members.findIndex(m => m.id === q.loaded) : -1;   // M3: loaded member: the demand is that member's force component along the plane
+      if (q.kind === 'user' && q.loaded && ldI < 0) warn.push(`${nm}: the loaded member "${q.loaded}" is not a member of the joint; the loaded side is used instead.`);
+      const mem = ldI >= 0 ? [ldI] : P.members.map((m, i) => sign * sd(G[i].centroid) > 1e-6 ? i : -1).filter(i => i >= 0);
       const straddle = P.members.map((m, i) => { const s = G[i].holes.map(h => sign * sd([h.x, h.y])); return s.some(x => x > 1e-6) && s.some(x => x < -1e-6) ? m.id : null; }).filter(Boolean);
       if (straddle.length) warn.push(`${nm}: the fastener group of ${straddle.join(', ')} straddles the plane; each member is assigned to the side of its fastener centroid.`);
-      const dem = { DC: 0, DW: 0, LL: P.ll.map(() => 0) }, comp = mem.map(i => ({ i, c: dot(G[i].u, e) }));
+      const dem = { DC: 0, DW: 0, LL: P.ll.map(() => 0) }, comp = mem.map(i => ({ i, c: ldI >= 0 ? Math.abs(dot(G[i].u, e)) : dot(G[i].u, e) }));
       comp.forEach(({ i, c }) => { const m = P.members[i]; dem.DC += num(m.F.DC) * c; dem.DW += num(m.F.DW) * c; m.F.LL.forEach((x, k) => dem.LL[k] += num(x) * c); });
-      planes.push({ qi, nm, kind: q.kind, a, e, iv, segs, LgAuto, LnAuto, Lg, Ln, ovG, ovN, cross, mem, comp, dem, sign, stag });
+      planes.push({ qi, nm, kind: q.kind, a, e, iv, segs, LgAuto, LnAuto, Lg, Ln, ovG, ovN, cross, mem, comp, dem, sign, stag, ...(ldI >= 0 ? { part: { i: ldI, user: true } } : {}) });
     });
+    /* M3 (LRFD 10th Ed. 6.14.2.8.3): automatic partial shear planes around each web member that can be in compression (DC + DW < 0 or any LL < 0).
+       For each other member j: the line along j's fastener line nearest to the compression member i (outermost gage line of j on i's side), from the plate edge
+       to the first fastener line of another member (fastener-field strips extended toward the work point, not past it; i and j excluded), taking the part of the
+       line that contains the projection of i's fastener centroid. Demand = i's force × |u_i · e| (rated with i in compression). Shear yielding only (Eq. 6.14.2.8.3-1).
+       Every candidate is checked (the lowest governs), which covers the governing plane of the three bullets of 6.14.2.8.3 (conservative). */
+    if (P.autoPartial !== false) P.members.forEach((mi, i) => { if (mi.role === 'chord' || !G[i].holes.length) return; const F = mi.F, canC = num(F.DC) + num(F.DW) < 0 || F.LL.some(x => num(x) < 0); if (!canC) return;
+      const angOf = k => ((num(P.members[k].ang) % 360) + 360) % 360, others = P.members.map((m, k) => k).filter(k => k !== i && G[k].holes.length).sort((x, y) => ((angOf(x) - angOf(i) + 360) % 360) - ((angOf(y) - angOf(i) + 360) % 360));
+      const adj = others.length ? [...new Set([others[0], others[others.length - 1]])] : [];   // the adjoining members: next to i in angle on each side
+      P.members.forEach((mj, j) => { if (!adj.includes(j)) return;
+        const uj = G[j].u, nj = [-uj[1], uj[0]], si = Math.sign(crs(uj, G[i].centroid)) || 1;
+        const hsJ = P.chord === 'continuous' && mj.role === 'chord' ? chordHoles : G[j].holes, dsJ = hsJ.map(h => crs(uj, [h.x, h.y]) * si), dJ = Math.max(...dsJ), aJ = mul(nj, dJ * si), e = uj;
+        const ti = dot(sub(G[i].centroid, aJ), e), ivAll = lineIntervals(aJ, e, poly), ivi = ivAll.find(([t0, t1]) => ti >= t0 - 1e-9 && ti <= t1 + 1e-9) || ivAll.slice().sort((x, y) => Math.min(Math.abs(x[0] - ti), Math.abs(x[1] - ti)) - Math.min(Math.abs(y[0] - ti), Math.abs(y[1] - ti)))[0];
+        if (!ivi) return; let t0 = ivi[0], t1 = ivi[1];
+        P.members.forEach((mk, k) => { if (k === i || k === j || !G[k].holes.length || (P.chord === 'continuous' && chordIdx.includes(k) && chordIdx.includes(j))) return; const uk = G[k].u, cs = G[k].holes.map(h => crs(uk, [h.x, h.y])), c0 = Math.min(...cs), c1 = Math.max(...cs), den = crs(uk, e);
+          const hit = c => { if (Math.abs(den) < 1e-9) return null; const t = (c - crs(uk, aJ)) / den, pt = add(aJ, mul(e, t)); return dot(pt, uk) >= -1e-9 ? t : null; };   // the strip of k's fastener lines, from the WP outward
+          [hit(c0), hit(c1)].filter(t => t != null).forEach(t => { if (t <= ti && t > t0) t0 = t; if (t >= ti && t < t1) t1 = t; }); });
+        if (t1 - t0 < 0.5) return; if (planes.some(q => q.part && q.part.auto && q.part.i === i && Math.abs(Math.abs(dot(q.e, e)) - 1) < 1e-9 && Math.abs(crs(e, sub(q.a, aJ))) < 1e-6)) return;   // same line already (continuous chord)
+        const A = add(aJ, mul(e, t0)), B = add(aJ, mul(e, t1)), Lg0 = t1 - t0, c = Math.abs(dot(G[i].u, e)), dem = { DC: num(F.DC) * c, DW: num(F.DW) * c, LL: F.LL.map(x => num(x) * c) };
+        const cross = holes.filter(h => distSeg([h.x, h.y], A, B) < h.dh / 2 - 1e-9), Ln0 = Lg0 - cross.reduce((s2, h) => s2 + h.dn, 0);
+        planes.push({ qi: null, nm: `Partial plane around ${mi.id} along the fastener line of ${P.members[j].role === 'chord' && P.chord === 'continuous' ? 'the chord' : mj.id}`, kind: 'partial', a: A, e, iv: [[0, Lg0]], segs: [[A, B]], LgAuto: Lg0, LnAuto: Ln0, Lg: Lg0, Ln: Ln0, ovG: null, ovN: null, cross, mem: [i], comp: [{ i, c }], dem, sign: 1, stag: null, part: { i, j, auto: true } }); }); });
 
     /* ----- C14-C17 helpers. A section along a line (coordinate y along the line) is a set of strips { y0, y1, w (width across the line), Fy, Fu }:
        area, centroid, moment of inertia, extreme fibres, yield force, plastic neutral axis (equal yield force each side) and plastic moment. ----- */
@@ -1891,7 +1922,7 @@ const GPR = (function () {
         sp.forEach((s, k) => { const n = Math.round(num(s.n)), b = num(s.w), t = num(s.t), y = num(s.y), fl = s.orient === 'flange';
           els.push({ nm: `Splice plate ${k + 1}: ${n} × ${f3(b)} × ${f4(t)} in, ${fl ? 'flange plate' : 'web plate (in the gusset plane)'} at ${f3(y)} in`, kind: fl ? 'flange' : 'web', y0: fl ? y - t / 2 : y - b / 2, y1: fl ? y + t / 2 : y + b / 2, w: fl ? n * b : n * t, Fy: num(s.Fy), Fu: num(s.Fu), n, b, t, nh: Math.round(num(s.nh)), yc: y }); });
         const S = secProps(els), e = Math.abs(S.yb), ce = S.yb > 0 ? S.yb - S.ymin : S.ymax - S.yb, Se = ce > 1e-9 ? S.I / ce : Infinity;
-        const l = G[i0].sIn + G[i1].sIn, tmn = Math.min(...els.map(q => q.t)), r = tmn / Math.sqrt(12), KLr = p.Ksp * l / r, FyMin = Math.min(...els.map(q => q.Fy)), Fe = PI * PI * p.E / (KLr * KLr);
+        const l = G[i0].sIn + G[i1].sIn, tmn = tminP,   /* L1 (LRFD 10th Ed. Eq. 6.14.2.8.6-2): r from the gusset plate thickness t_g (thinnest gusset plate after loss), not the thinnest plate crossing */ r = tmn / Math.sqrt(12), KLr = p.Ksp * l / r, FyMin = Math.min(...els.map(q => q.Fy)), Fe = PI * PI * p.E / (KLr * KLr);
         const eqF = KLr <= p.spKLr + 1e-9 ? 'le' : Fe / FyMin >= 0.44 ? '1' : '2', Fcr = eqF === 'le' ? FyMin : eqF === '1' ? Math.pow(0.658, FyMin / Fe) * FyMin : 0.877 * Fe;
         const dnS = Math.max(G[i0].dn, G[i1].dn), capOn = p.capAnOn >= 0.5, FuMin = Math.min(...els.map(q => q.Fu));
         const net = [i0, i1].map(i => { const Q = G[i].P(G[i].sIn, 0), ivn = lineIntervals(Q, nrm, poly), segs = ivn.map(([a, b]) => [add(Q, mul(nrm, a)), add(Q, mul(nrm, b))]), Lg = ivn.reduce((s, [a, b]) => s + b - a, 0);
@@ -1933,7 +1964,7 @@ const GPR = (function () {
           wr('I, c', `Moment of inertia about the centroid; distance to the extreme fibre on the side of the eccentricity (plates from ${f3(z.S.ymin)} to ${f3(z.S.ymax)} in)`, `${f1(z.S.I)}, ${f3(z.ce)}`, 'in⁴, in', 'Geometry'),
           wr('S<sub>g</sub>', 'Gross section modulus, I/c', isFinite(z.Se) ? f2(z.Se) : '∞', 'in³', 'Geometry'),
           wr('l', `Centre-to-centre distance between the first fastener lines of the two chords (${escH(P.members[z.i1].id)} ${f3(G[z.i1].sIn)} + ${escH(P.members[z.i0].id)} ${f3(G[z.i0].sIn)} in from the WP)`, f3(z.l), 'in', 'MBE 6A.6.12.6.9 (verify)'),
-          wr('r', `t<sub>min</sub>/√12, t<sub>min</sub> = thinnest plate crossing the splice line`, `${f4(z.tmn)}/√12 = ${f4(z.r)}`, 'in', 'Geometry'), wr('K<sub>sp</sub>', 'Effective length factor (judgment, verify)', f2(p.Ksp), '', 'MBE 6A.6.12.6.9 (verify)'),
+          wr('r', `t<sub>g</sub>/√12, t<sub>g</sub> = gusset plate thickness (thinnest gusset plate after section loss)`, `${f4(z.tmn)}/√12 = ${f4(z.r)}`, 'in', 'LRFD 10th Ed. Eq. 6.14.2.8.6-2'), wr('K<sub>sp</sub>', 'Effective length factor for chord splices', f2(p.Ksp), '', 'LRFD 10th Ed. 6.14.2.8.6'),
           wr('F<sub>y</sub>', z.els.some(q => q.Fy !== z.FyMin) ? 'Lowest F<sub>y</sub> of the plates crossing the splice line (conservative)' : 'Yield strength', f1(z.FyMin), 'ksi', 'Input'),
           wr('φ<sub>cs</sub>', ownPhi(p, P, 'phiCS') ? 'Resistance factor, truss gusset plate chord splice (LRFD design value, owner RIDOT: LRFR Guidelines 4.2.1)' : 'Resistance factor, chord splice (MBE rating value; the LRFD 10th Ed. 6.5.4.2 design value for truss gusset plate chord splices, 0.65, is not used)', f2(phi), '', ownPhi(p, P, 'phiCS') ? 'LRFD 10th Ed. 6.5.4.2; RIDOT 4.2.1' : 'MBE Table 6A.6.12.6.2-1 (verify)')], keys: ['phiCS', 'Ksp', 'spKLr', 'E'] }; }
     function capSPY() { const z = spl, phi = p.phiCS, den = 1 / z.S.A + (isFinite(z.Se) ? z.e / z.Se : 0), Rn = z.FyMin / den, C = phi * Rn;   // H1: LRFD 10th Ed. Eq. 6.14.2.8.6-3 (eccentric, phi_cs)
@@ -1958,16 +1989,16 @@ const GPR = (function () {
     const checks = [];
     const mk = (o) => { checks.push(o); return o; };
     const memDem = m => ({ DC: num(m.F.DC), DW: num(m.F.DW), LL: m.F.LL.map(num) });
-    P.members.forEach((m, i) => { const g = G[i]; if (isChordCont(i)) return; const dem = memDem(m), L = g.Lc, nm = m.id;
+    P.members.forEach((m, i) => { const g = G[i]; if (isChordCont(i)) return; const dem = memDem(m), L = g.Lc, nm = m.id, splW = P.chord === 'spliced' && m.role === 'chord' && chordIdx.length >= 2 ? ' (chord splice: kept, conservative; LRFD 10th Ed. 6.14.2.8.4, 6.14.2.8.5 and C6.14.2.8.6 do not apply it to chord splices)' : '';   // L1 label
       const fsL = capFS([[m, g]], 'lrfr', L), fsF = capFS([[m, g]], 'lfr', L);
       mk({ id: `${nm}-FS`, ls: 'fs', grp: 'Fastener shear', mem: i, who: nm, title: `${nm}: ${FAST[m.fast.grade].kind === 'rivet' ? 'rivet' : 'bolt'} shear`, dirs: 'any', dem, cap: { lrfr: { '+': fsL, '-': fsL }, lfr: { '+': fsF, '-': fsF } } });
       mk({ id: `${nm}-BR`, ls: 'brg', grp: 'Bearing', mem: i, who: nm, title: `${nm}: bearing at fastener holes`, dirs: 'any', dem,
-        cap: { lrfr: { '+': capBRG(g.holes, g.u, 'lrfr', 'toward the free end of the member (member in tension)'), '-': capBRG(g.holes, mul(g.u, -1), 'lrfr', 'toward the work point (member in compression)') }, lfr: { '+': capBRG(g.holes, g.u, 'lfr', 'toward the free end of the member (member in tension)'), '-': capBRG(g.holes, mul(g.u, -1), 'lfr', 'toward the work point (member in compression)') } } });
+        cap: { lrfr: { '+': capBRG(g.holes, g.u, 'lrfr', 'toward the free end of the member (member in tension)', fsL.C), '-': capBRG(g.holes, mul(g.u, -1), 'lrfr', 'toward the work point (member in compression)', fsL.C) }, lfr: { '+': capBRG(g.holes, g.u, 'lfr', 'toward the free end of the member (member in tension)', fsF.C), '-': capBRG(g.holes, mul(g.u, -1), 'lfr', 'toward the work point (member in compression)', fsF.C) } } });
       if (g.W.ok) {
         const wy = { lrfr: capWY(g, 'lrfr'), lfr: capWY(g, 'lfr') }, wf = { lrfr: capWF(g, 'lrfr'), lfr: capWF(g, 'lfr') }, wb = { lrfr: capWB(g, 'lrfr'), lfr: capWB(g, 'lfr') };
-        mk({ id: `${nm}-WY`, ls: 'wy', grp: 'Whitmore tension', mem: i, who: nm, title: `${nm}: Whitmore section, tension yielding`, dirs: '+', dem, cap: { lrfr: { '+': wy.lrfr }, lfr: { '+': wy.lfr } } });
-        mk({ id: `${nm}-WF`, ls: 'wf', grp: 'Whitmore tension', mem: i, who: nm, title: `${nm}: Whitmore section, tension fracture`, dirs: '+', dem, cap: { lrfr: { '+': wf.lrfr }, lfr: { '+': wf.lfr } } });
-        mk({ id: `${nm}-WB`, ls: 'wb', grp: 'Whitmore compression', mem: i, who: nm, title: `${nm}: Whitmore section, compression buckling`, dirs: '-', dem, cap: { lrfr: { '-': wb.lrfr }, lfr: { '-': wb.lfr } } });
+        mk({ id: `${nm}-WY`, ls: 'wy', grp: 'Whitmore tension', mem: i, who: nm, title: `${nm}: Whitmore section, tension yielding${splW}`, dirs: '+', dem, cap: { lrfr: { '+': wy.lrfr }, lfr: { '+': wy.lfr } } });
+        mk({ id: `${nm}-WF`, ls: 'wf', grp: 'Whitmore tension', mem: i, who: nm, title: `${nm}: Whitmore section, tension fracture${splW}`, dirs: '+', dem, cap: { lrfr: { '+': wf.lrfr }, lfr: { '+': wf.lfr } } });
+        mk({ id: `${nm}-WB`, ls: 'wb', grp: 'Whitmore compression', mem: i, who: nm, title: `${nm}: Whitmore section, compression buckling${splW}`, dirs: '-', dem, cap: { lrfr: { '-': wb.lrfr }, lfr: { '-': wb.lfr } } });
       } else { warn.push(`Member ${nm}: ${g.W.err}`); const why = `${g.W.err} The Whitmore section could not be placed.`;
         mk({ id: `${nm}-WY`, ls: 'wy', grp: 'Whitmore tension', mem: i, who: nm, title: `${nm}: Whitmore section, tension yielding`, dirs: '+', dem, err: why, cap: {} });
         mk({ id: `${nm}-WF`, ls: 'wf', grp: 'Whitmore tension', mem: i, who: nm, title: `${nm}: Whitmore section, tension fracture`, dirs: '+', dem, err: why, cap: {} });
@@ -1984,7 +2015,7 @@ const GPR = (function () {
       const chordInfo = { i0, i1, axis, Lj };
       mk({ id: 'CH-FS', ls: 'fs', grp: 'Fastener shear', mem: null, chord: chordInfo, who: lbl, title: `${lbl}: chord fasteners, force difference ΔF`, dirs: 'any', dem, cap: { lrfr: { '+': fsL, '-': fsL }, lfr: { '+': fsF, '-': fsF } } });
       mk({ id: 'CH-BR', ls: 'brg', grp: 'Bearing', mem: null, chord: chordInfo, who: lbl, title: `${lbl}: bearing at chord fastener holes, ΔF`, dirs: 'any', dem,
-        cap: { lrfr: { '+': capBRG(hs, axis, 'lrfr', `toward ${P.members[i0].id}`), '-': capBRG(hs, mul(axis, -1), 'lrfr', `toward ${P.members[i1].id}`) }, lfr: { '+': capBRG(hs, axis, 'lfr', `toward ${P.members[i0].id}`), '-': capBRG(hs, mul(axis, -1), 'lfr', `toward ${P.members[i1].id}`) } } });
+        cap: { lrfr: { '+': capBRG(hs, axis, 'lrfr', `toward ${P.members[i0].id}`, fsL.C), '-': capBRG(hs, mul(axis, -1), 'lrfr', `toward ${P.members[i1].id}`, fsL.C) }, lfr: { '+': capBRG(hs, axis, 'lfr', `toward ${P.members[i0].id}`, fsF.C), '-': capBRG(hs, mul(axis, -1), 'lfr', `toward ${P.members[i1].id}`, fsF.C) } } });
     } else if (P.chord === 'spliced' && chordIdx.length === 1) warn.push('Chord ends at the joint (single chord member): the chord member is checked like a web member for its full force through the gusset plates (chord mode "spliced at the joint"); there is no chord force-difference (ΔF) check.');
     else if (P.chord === 'spliced' && chordIdx.length) { warn.push(`Chord spliced at the joint: each chord member is checked like a web member for its full force through the gusset plates; the splice section itself is checked at the splice line (checks SPL-C, SPL-TY, SPL-TF; LRFR, MBE 3rd Ed. 6A.6.12.6.9, verify; fix log C14)${spl && !spl.nSp ? '. No splice plates are entered, so only the gusset plates are counted at the splice line (conservative where splice plates exist)' : ''}.`);
       const sdem = spl.N, base = { grp: 'Chord splice', mem: null, splice: true, who: spl.lbl, dem: sdem };
@@ -1993,6 +2024,9 @@ const GPR = (function () {
         mk({ ...base, id: 'SPL-TY', ls: 'spy', dirs: '+', title: `${spl.lbl}: splice in tension, gross section yielding`, cap: { lrfr: { '+': capSPY() } } });
         mk({ ...base, id: 'SPL-TF', ls: 'spf', dirs: '+', title: `${spl.lbl}: splice in tension, net section fracture`, cap: { lrfr: { '+': capSPF() } } }); } }
     planes.forEach((pl, k) => { const id = `SP${k + 1}`;
+      if (pl.part) { const y = { lrfr: capPV(pl, 'lrfr', 'pvy'), lfr: capPV(pl, 'lfr', 'pvy') }, mid = P.members[pl.part.i].id;   // M3: partial plane around a compression member
+        mk({ id: id + '-Y', ls: 'pvy', grp: 'Partial shear plane', plane: k, who: pl.nm, title: `${pl.nm}: shear yielding (gross), ${mid} in compression`, dirs: '-', dem: pl.dem, cap: { lrfr: { '-': y.lrfr }, lfr: { '-': y.lfr } } });
+        mk({ id: id + '-U', ls: 'pvu', grp: 'Partial shear plane', plane: k, who: pl.nm, title: `${pl.nm}: shear fracture (net)`, dirs: 'any', dem: pl.dem, na: 'Not checked on a partial shear plane: LRFD 10th Ed. 6.14.2.8.3 applies only Eq. 6.14.2.8.3-1 (shear yielding) to partial planes.', cap: {} }); return; }
       if (!pl.mem.length) { mk({ id: id + '-Y', ls: 'pvy', grp: 'Partial shear plane', plane: k, who: pl.nm, title: `${pl.nm}: shear yielding`, dirs: 'any', dem: pl.dem, na: 'No member fastener group lies on the loaded side of this plane.', cap: {} }); return; }
       const y = { lrfr: capPV(pl, 'lrfr', 'pvy'), lfr: capPV(pl, 'lfr', 'pvy') }, u = { lrfr: capPV(pl, 'lrfr', 'pvu'), lfr: capPV(pl, 'lfr', 'pvu') };
       mk({ id: id + '-Y', ls: 'pvy', grp: 'Partial shear plane', plane: k, who: pl.nm, title: `${pl.nm}: shear yielding (gross)`, dirs: 'any', dem: pl.dem, cap: { lrfr: { '+': y.lrfr, '-': y.lrfr }, lfr: { '+': y.lfr, '-': y.lfr } } });
@@ -2042,7 +2076,7 @@ const GPR = (function () {
         return { j, n, v, m, qn, qv, qm, r16: qv * qv + qn * qn, r1: qm + qn * qn + qv * qv * qv * qv }; });
       const mx = k => rows.reduce((a, r) => !a || r[k] > a[k] ? r : a, null);
       pint.push({ key, nm, S, N, V, M, res, rows, hasN, g16: hasN ? mx('r16') : null, g1: mx('r1'), note }); }
-    planes.forEach((pl, k) => { if (!pl.mem.length) return; const nOut = mul([-pl.e[1], pl.e[0]], pl.sign), N = zeroD(), V = zeroD(), M = zeroD();
+    planes.forEach((pl, k) => { if (!pl.mem.length || pl.part) return; const nOut = mul([-pl.e[1], pl.e[0]], pl.sign), N = zeroD(), V = zeroD(), M = zeroD();
       const els = pl.iv.map(([a, b]) => ({ y0: a, y1: b, w: sumT, Fy, Fu })), S0 = secProps(els), Cpt = add(pl.a, mul(pl.e, S0.yb));
       pl.mem.forEach(i => { const m = P.members[i]; accD(N, m, dot(G[i].u, nOut)); accD(V, m, dot(G[i].u, pl.e)); accD(M, m, crs(mul(Cpt, -1), G[i].u)); });
       const vr = meth => Math.min(capPV(pl, meth, 'pvy').C, capPV(pl, meth, 'pvu').C);
@@ -2073,7 +2107,21 @@ const GPR = (function () {
     const ecc = P.members.map((m, i) => { const g = G[i], e = dot(g.centroid, g.v), tol = Math.max(p.eccTol, p.eccPct / 100 * (g.tmax - g.tmin)); if (!(Math.abs(e) > tol + 1e-9)) return null;
       const F = memDem(m), Mf = CASES.map((cs, j) => ({ j, M: Math.abs(facVal(F, cs)) * Math.abs(e) })).reduce((a, r) => !a || r.M > a.M ? r : a, null);
       return { i, id: m.id, e, tol, spread: g.tmax - g.tmin, M: { DC: F.DC * e, DW: F.DW * e, LL: F.LL.map(x => x * e) }, Mf }; }).filter(Boolean);
-    const adv = { pint, edges, ecc, spl };
+    /* M7 (advisory, off by default): bolt slip, Service II. LRFD 10th Ed. Eq. 6.13.2.8-1: R_n = K_c K_h K_s N_s P_t per bolt and slip plane (P_t: Table 6.13.2.8-1,
+       120 ksi column for A325, 150 ksi for A490; K_h: Table 6.13.2.8-2, standard 1.00 / oversize 0.85; K_s: Table 6.13.2.8-3 by surface class; K_c 0.80 for Class C).
+       Total = R_n per plane × the shear-plane count of the fastener-shear check. RF = (R_n − (DC + DW)) / (γ_LL LL), dead and live in the live-load direction,
+       γ_LL = 1.30 Inventory / 1.00 other levels (MBE Service II, verify; MBE not in references). Never part of the governing rating factor. */
+    const PT = { 0.625: [19, 24], 0.75: [28, 35], 0.875: [39, 49], 1: [51, 64], 1.125: [64, 80], 1.25: [81, 102], 1.375: [97, 121], 1.5: [118, 148] }, KS = { A: 0.30, B: 0.50, C: 0.30, D: 0.45 };
+    const SL = P.slip || {}, slip = !SL.on ? null : (() => { const cls = KS[SL.cls] != null ? SL.cls : 'A', Ks = KS[cls], Kc = cls === 'C' ? 0.80 : 1.0, rows = [];
+      checks.filter(c => c.ls === 'fs' && c.cap.lrfr && c.cap.lrfr['+'] && !c.err).forEach(c => { const mids = c.mem != null ? [c.mem] : c.chord ? [c.chord.i0, c.chord.i1] : []; const parts = c.cap.lrfr['+'].parts || [];
+        if (!mids.length || !mids.every(i => FAST[P.members[i].fast.grade].kind === 'bolt')) return;
+        let Rn = 0; const bits = []; mids.forEach((i, k) => { const f = P.members[i].fast, d = Math.round(num(f.d) * 1000) / 1000, pt = PT[d], Pt = pt ? pt[f.grade === 'A490' ? 1 : 0] : NaN, Kh = f.hole === 'oversize' ? 0.85 : 1.0, Np_ = parts[k] ? parts[k].planes : NaN;
+          Rn += Kc * Kh * Ks * Pt * Np_; bits.push({ id: P.members[i].id, d, Pt, Kh, N: Np_ }); });
+        const cases = CASES.map((cs, j) => { if (cs.meth !== 'lrfr') return null; const L = c.dem.LL[cs.k]; if (!(Math.abs(L) > 1e-9)) return null; const dd = Math.sign(L), D = (c.dem.DC + c.dem.DW) * dd, g = cs.lvl === 'Inventory' ? 1.30 : 1.00;
+          return { j, g, D, L: Math.abs(L), RF: (Rn - D) / (g * Math.abs(L)) }; }).filter(Boolean);
+        rows.push({ id: c.id, who: c.who, Rn, bits, cases, min: cases.length ? Math.min(...cases.map(q => q.RF)) : null }); });
+      return { cls, Ks, Kc, rows }; })();
+    const adv = { pint, edges, ecc, spl, slip };
     return { errors: [], warnings: warn, P, p, poly, ts, Np, Fy, Fu, G, holes, planes, checks, cases: CASES, gov, incomplete, deadOver, eqm, span, stops, adv };
   }
 
@@ -2511,7 +2559,7 @@ const GPDXF = (function () {
 
   /* ---------- fastener layout (same rules as the engine's memberGeom; duplicated here, the engine is not changed) ---------- */
   function gageList(g, nL) { if (nL < 2) return []; let a = String(g ?? '').split(/[,;\s]+/).map(num).filter(x => isFinite(x)); if (!a.length) a = [NaN]; const out = []; for (let i = 0; i < nL - 1; i++) out.push(a[Math.min(i, a.length - 1)]); return out; }
-  function holeDia(f, p) { const d = num(f.d); if (f.hole === 'oversize') return d + (d <= 0.875 + 1e-9 ? p.hOv78 : d <= 1 + 1e-9 ? p.hOv1 : p.hOvL); return d + p.hStd; }
+  function holeDia(f, p) { const d = num(f.d); if (f.hole === 'oversize') return d + (d <= 0.875 + 1e-9 ? p.hOv78 : d <= 1 + 1e-9 ? p.hOv1 : p.hOvL); return d + (d >= 1 - 1e-9 && (f.grade === 'A325' || f.grade === 'A490') ? p.hStdL : p.hStd); }   // L2: standard bolt holes d + 1/8 for d ≥ 1 in
   function memGeo(m, p) {
     const f = m.fast, th = num(m.ang) * PI / 180, u = [Math.cos(th), Math.sin(th)], v = [-Math.sin(th), Math.cos(th)];
     const nR = Math.round(num(f.nR)), nL = Math.round(num(f.nL)), pitch = num(f.p), e = num(f.e), off = num(f.off) || 0;
@@ -2863,7 +2911,7 @@ const GPDXF = (function () {
           if (ds[ds.length - 1] - ds[0] > TOLD) W.push(`${tag}: hole diameters vary from ${fs(ds[0])} to ${fs(ds[ds.length - 1])} in; ${fs(dh)} in (median) was used.`);
           const dKey = `M${n}.D` in data && data[`M${n}.D`] !== '' && !inVal(data[`M${n}.D`], 'pos').err;
           if (!dKey) { const keep = base && Math.abs(holeDia(m.fast, p) - dh) <= TOLD;
-            if (!keep) { let d; if (m.fast.hole === 'oversize') { d = [0.625, 0.75, 0.875, 1, 1.125, 1.25, 1.375, 1.5].find(x => Math.abs(holeDia({ ...m.fast, d: x }, p) - dh) <= TOLD); } if (d == null) d = dh - p.hStd; const d16 = Math.round(d * 16) / 16; if (Math.abs(d - d16) < 0.002) d = d16; m.fast.d = r6(d);
+            if (!keep) { let d; if (m.fast.hole === 'oversize') { d = [0.625, 0.75, 0.875, 1, 1.125, 1.25, 1.375, 1.5].find(x => Math.abs(holeDia({ ...m.fast, d: x }, p) - dh) <= TOLD); } if (d == null) { d = dh - p.hStd; if (d >= 1 - 1e-9 && (m.fast.grade === 'A325' || m.fast.grade === 'A490')) d = dh - p.hStdL; } const d16 = Math.round(d * 16) / 16; if (Math.abs(d - d16) < 0.002) d = d16; m.fast.d = r6(d);
               W.push(`${tag}: fastener diameter d = ${fs(m.fast.d)} in was inferred from the hole circles (${fs(dh)} in, ${m.fast.hole} holes)${base ? `; it was ${fs(num(base.fast.d))} in` : ''}. Give M${n}.D in GP-DATA to set it.`); } }
           const hd = holeDia(m.fast, p); if (Math.abs(hd - dh) > TOLD) W.push(`${tag}: the hole circles are ${fs(dh)} in, but d = ${fs(num(m.fast.d))} in with ${m.fast.hole} holes gives ${fs(hd)} in; the model uses ${fs(hd)} in.`);
           if (m.__dhData != null && Math.abs(m.__dhData - dh) > TOLD) W.push(`${tag}: GP-DATA M${n}.HOLE=${fs(m.__dhData)} in does not match the hole circles (${fs(dh)} in).`);
@@ -3025,7 +3073,7 @@ function panePlates() {
   const vt = P.plates.poly.map((q, i) => `<tr><td class="an">${i + 1}</td><td>${cell(`plates.poly.${i}.0`, 'num', 'x')}</td><td>${cell(`plates.poly.${i}.1`, 'num', 'y')}</td><td class="ax"><button type="button" class="x-btn" data-act="delVtx" data-i="${i}" title="Delete vertex ${i + 1}">×</button></td></tr>`).join('');
   const planes = P.planes.map((q, i) => `<div class="row-blk"><div class="row-hd"><span>${q.kind === 'user' ? 'User plane' : q.kind === 'above' ? 'Auto: above chord fasteners' : 'Auto: below chord fasteners'}</span>${q.kind === 'user' ? `<button type="button" class="x-btn" data-act="delPlane" data-i="${i}" title="Delete plane">×</button>` : ''}</div>
       <div class="sec-body" style="padding:0 0 6px">${fld('Name', `planes.${i}.name`, '', 'text', { full: true })}${fld('Include this plane', `planes.${i}.on`, '', 'bool')}
-      ${q.kind === 'user' ? `${fld('Point 1, x', `planes.${i}.x1`, 'in')}${fld('Point 1, y', `planes.${i}.y1`, 'in')}${fld('Point 2, x', `planes.${i}.x2`, 'in')}${fld('Point 2, y', `planes.${i}.y2`, 'in')}${fld('Loaded side (members whose fasteners lie there)', `planes.${i}.side`, '', 'sel', { full: true, options: [['auto', 'Side away from the work point'], ['left', 'Left of point 1 → point 2'], ['right', 'Right of point 1 → point 2']] })}` : ''}
+      ${q.kind === 'user' ? `${fld('Point 1, x', `planes.${i}.x1`, 'in')}${fld('Point 1, y', `planes.${i}.y1`, 'in')}${fld('Point 2, x', `planes.${i}.x2`, 'in')}${fld('Point 2, y', `planes.${i}.y2`, 'in')}${fld('Loaded side (members whose fasteners lie there)', `planes.${i}.side`, '', 'sel', { full: true, options: [['auto', 'Side away from the work point'], ['left', 'Left of point 1 → point 2'], ['right', 'Right of point 1 → point 2']] })}${fld('Segment only (point 1 to point 2, not the whole line)', `planes.${i}.seg`, '', 'bool')}${fld('Loaded member (partial plane around a compression member)', `planes.${i}.loaded`, '', 'sel', { full: true, options: [['', 'None: members on the loaded side'], ...P.members.map(m => [m.id, m.id])] })}` : ''}
       ${fld('Gross length override', `planes.${i}.Lg`, 'in', 'ovr', { auto: `pl.${i}.Lg` })}${fld('Net length override', `planes.${i}.Ln`, 'in', 'ovr', { auto: `pl.${i}.Ln` })}</div></div>`).join('');
   return `
   ${secHd('sec-plt', 'Gusset plates')}
@@ -3050,7 +3098,7 @@ function panePlates() {
       ${fld('Offset of centroid from chord work line', `splice.plates.${i}.y`, 'in', 'dim')}${fld('Holes across one plate', `splice.plates.${i}.nh`, '', 'num', { note: 'first fastener line' })}</div></div>`).join('')}
     <div class="arr-foot"><button type="button" class="proj-btn" data-act="addSplice">Add a splice plate</button></div></div>
   ${secHd('sec-planes', 'Partial shear planes')}
-  <div class="sec-body one-col" id="sec-planes"><p class="note">The demand on a plane is the component along the plane of the resultant of the forces of the members whose fastener groups lie on the loaded side. Automatic planes run through the top (and bottom) line of chord fasteners; the loaded side is above (below).</p>${planes}
+  <div class="sec-body one-col" id="sec-planes"><p class="note">The demand on a plane is the component along the plane of the resultant of the forces of the members whose fastener groups lie on the loaded side. Automatic planes run through the top (and bottom) line of chord fasteners; the loaded side is above (below). A user plane with a loaded member is a partial plane: its demand is that member's force component along the plane, rated with the member in compression, shear yielding only (LRFD 10th Ed. 6.14.2.8.3).</p>${fld('Automatic partial planes around compression web members (LRFD 10th Ed. 6.14.2.8.3)', 'autoPartial', '', 'bool', { full: true })}${planes}
     <div class="arr-foot"><button type="button" class="proj-btn" data-act="addPlane">Add a plane (two points)</button></div></div>`;
 }
 
@@ -3160,6 +3208,8 @@ function paneRating() { return `
     <p class="note">${P.owner === 'RIDOT' ? 'RIDOT LRFR Guidelines (Sept 2022): 4.2.1, resistance factors as in the LRFD Specifications for new construction, so the LRFR gusset factors default to LRFD 10th Ed. 6.5.4.2 (φ compression 0.75, shear yielding 0.80, chord splice 0.65) instead of the MBE rating values; 4.2.2, condition factor φ<sub>c</sub> required (Table 4); 4.2.3, system factor per MBE Table 6A.4.2.4-1 (verify); 6.5.4, gusset plates per MBE 6A.6.12.6. Decision pending engineer review (M5).' : P.owner === 'MassDOT' ? 'No MassDOT rule changes a gusset result here. Bridge Manual 7.2.2.3B: gusset plates of trusses designed by ASD or LFD are rated by LFR as well (choose the method above).' : P.owner === 'CTDOT' ? 'The CTDOT Bridge Design Manual has no gusset-plate rating rules; AASHTO values are used.' : 'AASHTO MBE / LRFD values, as in the code parameters.'}</p></div>
   ${secHd('sec-fac', 'LRFR condition and system factors')}<div class="sec-body" id="sec-fac">${fld('Condition factor φ<sub>c</sub>', 'fac.phiC', '')}${fld('System factor φ<sub>s</sub>', 'fac.phiS', '')}
     <p class="note">MBE Eq. 6A.4.2.1-1: C = φ<sub>c</sub>φ<sub>s</sub>φR<sub>n</sub>, with φ<sub>c</sub>φ<sub>s</sub> ≥ 0.85. Defaults 1.0; MBE Table 6A.4.2.4-1 lists 0.90 for riveted members in truss bridges. Confirm the values the owner applies to gusset plates (verify).</p></div>
+  ${secHd('sec-slip', 'Bolt slip (advisory)')}<div class="sec-body" id="sec-slip">${fld('Check bolt slip, Service II (advisory)', 'slip.on', '', 'bool')}${fld('Faying surface class', 'slip.cls', '', 'sel', { options: [['A', 'Class A (K_s 0.30)'], ['B', 'Class B (K_s 0.50)'], ['C', 'Class C, galvanized (K_s 0.30, K_c 0.80)'], ['D', 'Class D (K_s 0.45)']] })}
+    <p class="note">LRFD 10th Ed. 6.13.2.8; shown under Advisory checks, never in the rating factor. Off by default: whether the MBE requires slip in a gusset rating is not confirmed (verify).</p></div>
   ${secHd('sec-dc', 'Drawing colours')}<div class="sec-body one-col" id="sec-dc">${fld('Colour the drawing by D/C for', 'ui.dcCase', '', 'sel', { options: [['0', '—']] })}
     <p class="note">D/C = (factored dead + factored live) / (φ<sub>c</sub>φ<sub>s</sub>)φR<sub>n</sub> for the selected rating case. D/C &gt; 1 is equivalent to RF &lt; 1.</p></div>`; }
 
@@ -3314,7 +3364,7 @@ function renderSummary() {
   const scope = card('sum-scope', 'Not included in Phase 1', '', `<ul class="dlist">${SCOPE_OUT.map(s => `<li>${s}</li>`).join('')}</ul>`);
   $('#tab-summary').innerHTML = vfy + head + errC + tbl + warns + advC + eqmC + scope;
 }
-const SCOPE_OUT = ['LFR chord splice check (the LFR rating checks a spliced chord through the Whitmore checks of the chord members, FHWA-IF-09-014)', 'Combined shear, axial force and moment on a plane, shear with a normal force on a partial shear plane, free-edge slenderness and eccentric fastener groups: advisory only, with a ratio, never in the rating factor (see Advisory checks)', 'Fastener groups loaded eccentrically: the fasteners share the member force equally (the advisory note gives the eccentric moment)', 'Localized section loss (loss is applied uniformly to each plate)', 'Fatigue and serviceability (slip) of bolted connections'];
+const SCOPE_OUT = ['LFR chord splice check (the LFR rating checks a spliced chord through the Whitmore checks of the chord members, FHWA-IF-09-014)', 'Combined shear, axial force and moment on a plane, shear with a normal force on a partial shear plane, free-edge slenderness and eccentric fastener groups: advisory only, with a ratio, never in the rating factor (see Advisory checks)', 'Fastener groups loaded eccentrically: the fasteners share the member force equally (the advisory note gives the eccentric moment)', 'Localized section loss (loss is applied uniformly to each plate)', 'Fatigue of bolted connections; bolt slip (Service II) is only an optional advisory check (Rating input tab, off by default)'];
 
 /* ---------- drawing ---------- */
 const DCOL = { pass: '#2c7a4b', warn: '#c98a1b', fail: '#c3352b', na: '#9aa39d' };
@@ -3444,6 +3494,11 @@ function advItems() { const A = R.adv, out = [], lds = `DC / DW / ${P.ll.map(c =
       body: `<p class="note-p">${ADV_NOTE} Limit L<sub>g</sub>/t ≤ ${f2(R.p.edgeC)}√(E/F<sub>y</sub>) = ${f2(R.p.edgeC)}√(${f0(R.p.E)}/${f1(R.Fy)}) = ${f2(E.limR || 0)}, t = ${f4(E.t || 0)} in (thinnest plate after section loss), so L<sub>g</sub> ≤ ${f2(E.lim || 0)} in. This is the former design rule for stiffening a free edge (AASHTO Std. Spec. 17th Ed. 10.16.11, former LRFD 6.14.2.8; FHWA-IF-09-014; verify). MBE 3rd Ed. 6A.6.12.6 and NCHRP W-197 (NCHRP 12-84) did not adopt it as a rating limit: the Whitmore buckling check with L<sub>mid</sub> covers plate stability in rating.</p>
         <p class="note-p">Free edge: a run of the plate outline that is not beside a member, i.e. outside every member outline (width in the plate plane, from the member end outward) and outside the strip of every fastener field (outer holes across, from the row nearest the WP outward). L<sub>g</sub> is measured along the outline, corners included (conservative). The member widths are the drawing inputs.</p>
         ${E.runs.length ? `<div class="tscroll"><table class="tbl narrow"><thead><tr><th>Free edge</th><th>From (x, y)</th><th>To (x, y)</th><th class="right">L<sub>g</sub> (in)</th><th class="right">L<sub>g</sub>/t</th><th class="right">Ratio</th></tr></thead><tbody>${E.runs.map((r, k) => `<tr><td class="lbl">E${k + 1}: ${esc(r.fromN.join(', ') || 'plate')} to ${esc(r.toN.join(', ') || 'plate')}</td><td>${f2(r.a[0])}, ${f2(r.a[1])}</td><td>${f2(r.b[0])}, ${f2(r.b[1])}</td><td class="val">${f2(r.L)}</td><td class="val">${f1(r.Lt)}</td><td class="val">${advR(r.ratio)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="note-p">No free edge: the whole outline is beside members.</p>'}` }); }
+  // M7: bolt slip, Service II (advisory, only when switched on)
+  if (A.slip) { const S = A.slip, mn = S.rows.filter(r => r.min != null).reduce((a, r) => Math.min(a, r.min), Infinity);
+    out.push({ id: 'adv-slip', title: 'Bolt slip, Service II (M7)', ref: 'LRFD 10th Ed. 6.13.2.8, Eq. 6.13.2.8-1, Tables 6.13.2.8-1 to -3; MBE Service II (verify)', ratio: isFinite(mn) ? 1 / Math.max(mn, 1e-9) : null,
+      body: `<p class="note-p">${ADV_NOTE} Whether the MBE requires a slip check in a gusset rating is not confirmed (verify, MBE not in references); RIDOT LRFR Guidelines 6.5.4 asks for splices to be rated where slip is observed. R<sub>n</sub> = K<sub>c</sub>K<sub>h</sub>K<sub>s</sub>N<sub>s</sub>P<sub>t</sub> per bolt and slip plane (LRFD 10th Ed. Eq. 6.13.2.8-1), surface Class ${esc(S.cls)}: K<sub>s</sub> = ${f2(S.Ks)}, K<sub>c</sub> = ${f2(S.Kc)}; total = R<sub>n</sub> × slip planes (the shear-plane count of the fastener-shear check). RF = (R<sub>n</sub> − DC − DW)/(γ<sub>LL</sub>LL), with γ<sub>LL</sub> = 1.30 (Inventory) or 1.00 (other levels), dead and live load in the live-load direction (MBE Service II, verify). Ratio shown = 1/RF.</p>
+        ${S.rows.length ? `<div class="tscroll"><table class="tbl narrow"><thead><tr><th>Check</th><th>Bolts</th><th class="right">R<sub>n</sub> (kip)</th>${R.cases.map(cs => cs.meth === 'lrfr' ? `<th class="right">${esc(cs.label)}</th>` : '').join('')}</tr></thead><tbody>${S.rows.map(r => `<tr><td class="lbl">${esc(r.id)}</td><td>${r.bits.map(b => `${esc(b.id)}: d ${frac(b.d)}, P<sub>t</sub> ${isFinite(b.Pt) ? f0(b.Pt) : '— (no table value)'}, K<sub>h</sub> ${f2(b.Kh)}, ${b.N} planes`).join('; ')}</td><td class="val">${f1(r.Rn)}</td>${R.cases.map((cs, j) => { if (cs.meth !== 'lrfr') return ''; const q = r.cases.find(z => z.j === j); return `<td class="val">${q ? `<span class="${q.RF < 1 ? 'n-warn' : ''}">${f2(q.RF)}</span> <small class="n-dim">(γ ${f2(q.g)})</small>` : '—'}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>` : '<p class="note-p">No bolted member: every fastener group is riveted (slip does not apply).</p>'}` }); }
   // C17 (O4): eccentric fastener groups
   { const ec = A.ecc;
     out.push({ id: 'adv-ecc', title: 'Eccentric fastener groups (O4)', ref: 'Judgment; LRFD 10th Ed. 6.13.1 (verify)', ratio: null, flag: ec.length,
