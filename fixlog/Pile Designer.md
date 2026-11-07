@@ -19994,3 +19994,44 @@ index 06a42e4..b58d4e3 100644
   - `check-syntax`: pass. `tests/engine` handoffs and pile-group: pass. `pile-library`: see the PR. 0 console errors.
 - **Hand-off:** `pileResults.fixity.Lf` (= `R.buckling.Lf_buck`) changes with L_f for these cases. The format is unchanged.
 - **Other copies:** the integral-abutment path already uses 0.465 S_u (PDA-D2) and is unchanged.
+
+## 2026-11-07 — PR: claude/pile-m3-plunge (PDA-M3) — plunge: AASHTO 10.9.3.10.5 casing-to-grout bond and bar development added; the 40 d_b / 3 ft rule kept and labelled a tool detailing rule   [check-logic change]
+- **Problem (review M3):** the "plunge develops the cased load" check was a hard fail on a tool rule, L_p ≥ max(40 d_b, 3 ft), which is not an AASHTO provision. The checks that 10.9.3.10.5 requires were missing: casing-to-grout bond, and bar development per Sec. 5.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024):
+  - Art. 10.9.3.10.5: casing-to-grout bond and bar development length are to be checked per Sec. 5.
+  - C10.9.3.10.5: typical ultimate bond is 0.15–0.25 ksi for smooth bar and pipe, 0.30–0.50 ksi for deformed bars.
+  - Art. 5.10.8.2.1a (Eqs. 5.10.8.2.1a-1, -2): tension development.
+  - Art. 5.10.8.2.2a (Eqs. 5.10.8.2.2a-1 to -3): compression development.
+- **Decisions (pending engineer review):**
+  - The plunge rule stays as a check, in the status, labelled "detailing rule (tool, not AASHTO)".
+  - (a) Casing-to-grout bond:
+    - The demand is the casing's share of the load at the top of the plunge, by axial stiffness EA_c / (EA_c + EA_b + E_g A_g) × STL. E_g = 2500 f'c^0.33 (as the CFST module). In tension, the share is A_ct/(A_ct + A_b) × T_u, used only when the joint efficiency is > 0.
+    - The resistance is φ τ π ID L_p, with τ = 0.15 ksi (the lower end of C10.9.3.10.5 for smooth pipe), the inner casing surface only, and φ = φ_CC (no factor is given in Table 10.5.5.2.5-2).
+  - (b) Bar development within L_p, for the uncased-length force with the grout neglected (compression P_u,unc, tension T_u − P_t, each at most f_yb A_b):
+    - λ_er = force / (f_yb A_b); λ_rc, λ_rl, λ_cf and λ = 1.0 (no reduction taken).
+    - Compression: ℓ_d = max(0.63 d_b f_y/√f'c, 0.3 d_b f_y) λ_er, at least 8 in.
+    - Tension: ℓ_d = 0.17 d_b [λ_er f_y / (1.97 f'c^0.25)]², at least 12 in.
+    - Note for f_yb > 100 ksi: outside the Sec. 5 bar range; confirm with the bar supplier.
+  - Micropile only, and only when L_p > 0 (with L_p = 0 the plunge rule already fails).
+- **Where:**
+  - `computeAll`, Module G, after `const cover_ok = …` (anchor `// PDA-M3 (2026-11-07)`): `R.geoChecks.cgBond`, `R.geoChecks.barDev` and `casID`. Both `.ok` flags are in `R.geoChecks.pass`.
+  - Display:
+    - on-screen Module G: the plunge note is relabelled and two CheckRows are added;
+    - printed `RptGeomChecks`: two RptChecks with notes;
+    - Report steps `gc/cgs`, `gc/cgb`, `gc/ldc`, `gc/ldt` and `gc/bdev`; the `gc/pl` label is changed;
+    - summary rows (`gcSummaryRows`): the plunge row is renamed, with basis "tool rule: max(40 d_b, 3 ft)", and there are new rows for "casing-to-grout bond in the plunge" and "bar development in the plunge";
+    - the Module 03 plunge note.
+  - One-time load note for a micropile with a plunge (pdaRev < 8); `pdaRev` 7 → 8. No input changed.
+- **Check cases:**
+  - Default (L_p 3 ft, STL 86 kip):
+    - Casing share: EA_c 29000(7.955) = 230.7e3; EA_b 22.9e3; E_g A_g 3950(28.38) = 112.1e3; share 0.631, so P_cas = 54.3 kip.
+    - Bond: φR_n = 0.75(0.15)π(6.094)(36) = **77.5 kip ≥ 54.3 OK**.
+    - Bar, compression: F = min(76.4, 59.25) = 59.25 kip, λ_er = 1; ℓ_d = max(0.63(1.003)(75)/2, 0.3(1.003)(75)) = **23.7 in ≤ 36 OK**.
+    - The tool rule stays NG (3.0 < 3.34 ft).
+  - V4 (STL 0, T_u 50): F = 41.75 kip, λ_er = 0.705; ℓ_d = 0.17(1.003)[0.705(75)/(1.97 · 4^0.25)]² = **61.4 in > 36 NG**. The bond check passes (no casing share; e_j = 0).
+  - V2 (f_yb 120, STL 150, T_u 100, e_j 50 %): P_cas = 150(0.598) = 89.8 > 77.5 kip **NG**; ℓ_d,t = 93.8 in > 36 **NG**; the f_yb > 100 ksi note is shown.
+- **How verified:**
+  - `computeAll` on 15 cases main vs branch: only the new `geoChecks` fields. The Module G and overall status do not move in these cases, because the tool plunge rule already fails at L_p = 3 ft.
+  - App and Report main vs branch: the relabelled rule, the new steps, rows and notes. 0 unresolved references, 0 duplicate keys, no NaN.
+  - `check-syntax`: pass. `pile-library`: library checks pass; its page-text checks show the new text. 0 console errors.
+- **Other copies:** none.
