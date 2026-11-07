@@ -2436,6 +2436,7 @@ function renderStatus(r) {
 - **Differences found and resolved:**
   1. The tool's `.fbox` style (the formula boxes of the ACI cards) also matched KaTeX's `span.fbox`, which draws `\boxed{}`. The boxed results were drawn as empty grey boxes with the value spilling out. Fix: the tool's two rules became `div.fbox` (its three formula boxes are divs).
   2. A "·" inside `\text{…}` (units such as lb·ft/ft) has no text-mode glyph in KaTeX, which printed `\cdotp` in red. MathJax set it as typed. Fix: `rwKxText()` sets each "·" inside `\text{…}` as `\(\mathord{\cdotp}\)` before rendering. Nothing else in the TeX is changed.
+  3. KaTeX keeps a hidden MathML copy of each formula, absolutely positioned. With no positioned ancestor it escaped the equation box's own horizontal scroll, and on a 390 px phone the page scrolled sideways (Stability 101 px, Stem 38 px, Footing 3 px; caught by `phone-layout`). Fix: `.eq-math { position: relative; }`.
 - **Checks:**
   - Eight walls (ACI and AASHTO; water, seismic, key, passive, column, collision, yield line, interface shear, Coulomb, LS, rock, manual δ_b / q_R): every `.eq-math` of the Stability, Stem and Footing tabs is set by KaTeX. 0 `.katex-error`, 0 red output, no `$$` left, 0 console errors.
   - The tab text with the maths removed is identical, main vs branch.

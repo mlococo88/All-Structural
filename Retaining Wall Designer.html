@@ -443,6 +443,7 @@ select option { background: #fff; color: var(--text); }
 }
 .eq-block.eq-fail .eq-math { border-left-color: var(--fail); background: #fdf7f6; }
 .eq-math .katex-display { margin: 4px 0 !important; }   /* RWKX: KaTeX (was mjx-container, MathJax) */
+.eq-math { position: relative; }   /* RWKX: KaTeX's hidden MathML copy is absolutely positioned; contained here, it stays inside the box's own scroll (else the page scrolled sideways on a phone) */
 .eq-math-row { display: flex; align-items: center; gap: 12px; }
 .eq-math-row .eq-math { flex: 1; }
 .eq-where { padding: 10px 16px 12px; }
