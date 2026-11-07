@@ -229,6 +229,9 @@ const AUD = [
     ['Math.abs(R.aashtoR.ct.ee2.V_ct_min - 17347) < 1 && Math.abs(R.aashtoR.ct.ee2.sliding_dcr_ct - 0.256) < 0.001', 'V 17347, sliding DCR 0.256']]],
   ['RWCV same with γ_EH "full": unchanged (V 18166)', { design_basis: 'AASHTO', beta: 10, aashto_ep_method: 'rankine', aashto_ct_enable: true, aashto_ct_eh: 'full' }, [
     ['Math.abs(R.aashtoR.ct.ee2.V_ct_min - 18166) < 1', 'V 18166']]],
+  ['RWCV AASHTO collision, Coulomb δ 20°, MassDOT: V 17694 → 16583, sliding 0.232, e −0.257; Step 7b M_r worked', { design_basis: 'AASHTO', aashto_delta: 20, aashto_ct_enable: true, aashto_ct_eh: 'zero' }, [
+    ['Math.abs(R.aashtoR.ct.ee2.V_ct_min - 16583) < 1 && Math.abs(R.aashtoR.ct.ee2.sliding_dcr_ct - 0.232) < 0.001 && Math.abs(R.aashtoR.ct.ee2.e_ct + 0.257) < 0.001', 'V 16583, DCR 0.232, e −0.257'],
+    ['/Resisting moment about the toe/.test(T.stability)', 'Stability Step 7b M_r']]],
   ['RWEC AASHTO unchanged by the ACI select', { design_basis: 'AASHTO', aci_ecc_limit: 'b6' }, [['R.ecc_lim_aci === null && /e=1\\.43/.test(R.checks.ecc.val)', 'AASHTO e check as before']]],
 ];
 for (const [name, set, tests, opt] of AUD.filter(x => !process.env.RW_AUD || x[0].startsWith(process.env.RW_AUD))) {
