@@ -1690,7 +1690,7 @@ const uxCtl=SharedListInput.bindInput(g('iUX'),{label:'Custom x stations',events
 - `node tests/check-syntax.mjs "Shear and Moment Diagrams.html"`, `node tests/smoke/phone-layout.mjs --tool smd` and `node tests/smoke/project-library.mjs --tool smd` pass.
 - **Saved data:** none changed. **Other copies:** none.
 
-## 2026-11-07 — PR: claude/sm-low-items (review LOW items L1–L6, L8, L9: LV, SMDL, SMDC, MRE, TBS, ZSR, SMD8, SMW)   [L1: results change only for invalid input; L4: new output; L5: table rows; others display only]
+## 2026-11-07 — PR: claude/sm-low-items (PR #1115: https://github.com/mlococo88/All-Structural/pull/1115) (review LOW items L1–L6, L8, L9: LV, SMDL, SMDC, MRE, TBS, ZSR, SMD8, SMW)   [L1: results change only for invalid input; L4: new output; L5: table rows; others display only]
 Review of 2026-11-07, LOW findings. L7 (closed-form FER) is a separate PR. Every code site is tagged with its item code.
 
 ### LV (L1). Solver input check: positions clamped and flagged, NaN blocked, saved data not rewritten   [results change for invalid input only]
