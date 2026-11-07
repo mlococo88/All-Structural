@@ -3633,7 +3633,7 @@ Calculation audit, item 9 (2). Engineer decision (2026-11-07). Code sites are ta
 ### Saved data
 - No input or format change. Old ACI projects with k_h > 0 change their stability FOS and pass/fail as above.
 
-## 2026-11-07 — PR: claude/rw-stem-seismic — Stem designed for the seismic increment: ACI U = 1.2D + 1.0E + 1.6H, AASHTO Extreme Event I (two cases, φ 1.0), at the base, at mid-height and along the height (RWSQ; calculation change)
+## 2026-11-07 — PR: claude/rw-stem-seismic — Stem designed for the seismic increment: ACI U = 1.2D + 1.0E + 1.6H, AASHTO Extreme Event I (two cases, φ 1.0), at the base, at mid-height and along the height (RWSQ; calculation change) (PR #954: https://github.com/mlococo88/All-Structural/pull/954)
 
 Calculation audit, item 9 (3). Engineer decision (2026-11-07). Code sites are tagged `RWSQ`.
 
