@@ -1940,7 +1940,7 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
 - **Other copies:** none.
 - **Open items:** a seasoned / unseasoned input for sawn lumber (K<sub>cr</sub> 2.0 for unseasoned in dry service) was not added; advisory for timbers only.
 
-## 2026-11-07 — PR: claude/timber-eymin (TBE1: glulam beam stability F<sub>bE</sub> with E<sub>y,min</sub>)   [calc change] [MORE conservative]
+## 2026-11-07 — PR: claude/timber-eymin (PR #1011: https://github.com/mlococo88/All-Structural/pull/1011) (TBE1: glulam beam stability F<sub>bE</sub> with E<sub>y,min</sub>)   [calc change] [MORE conservative]
 
 Line numbers are approximate; search for the anchor text. Code sites are tagged `TBE1`.
 
