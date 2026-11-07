@@ -3860,7 +3860,7 @@ Review Phase 8 (pile-supported footing), PR 8b. Engineer decisions 2026-11-07 (r
   - AASHTO mode (`aashto-only`): `pile_Rn` with `pile_phic`, `pile_Rnup` with `pile_phiup`, and the factored lateral resistance `pile_Hr`, kip per pile;
   - `pile_passive`: an opt-in passive credit against H (off by default; used from 8c).
 - `rwPileInputs()` returns `inp.fnd` = {type, rows:[{x, s}], shape, desig, D, embed, clr, Pa, Ta, Ha, Rn, phic, Rnup, phiup, Hr, passive}.
-  `getInputs()` adds `fnd: rwPileInputs()` (anchor `key_bk: n('key_bk') > 0`).
+  `getInputs()` adds `fnd` only when the type is 'pile' (anchor `key_bk: n('key_bk') > 0`), so a spread footing's `inp` and results are byte-identical.
 - `rwPileUI()` shows the pile fields for the foundation type, the row count and the mode. It is called from `onBasisChange` (after the
   aci-only / aashto-only toggles), `syncConditionalUI` and `onInputChange`.
 - Input checks (`rwInputErrors`, block `// ── RWPL (2026-11-07): pile-supported footing ──`), pile mode only:
@@ -3965,7 +3965,7 @@ Review Phase 8 (pile-supported footing), PR 8b. Engineer decisions 2026-11-07 (r
 +    e.style.display = show ? '' : 'none';
 +  });
 +}
-+    fnd: rwPileInputs(),   // RWPL (2026-11-07): foundation type and pile rows (Phase 8); type 'spread' = as before
++    ...(() => { const fd = rwPileInputs(); return fd.type === 'pile' ? { fnd: fd } : {}; })(),   // RWPL (2026-11-07): foundation type and pile rows (Phase 8); present only on piles, so a spread footing's inputs are as before
 +  rwPileUI();   // RWPL: the pile fields follow the foundation type, the row count and the mode
 +Object.assign(RWLS_DEF, RWPL_DEF);   // RWPL (2026-11-07): the pile fields are saved only when changed; old saves open as a spread footing
 +  rwPileUI();   // RWPL
