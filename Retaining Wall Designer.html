@@ -1144,6 +1144,13 @@ body.rwDashColl #rwDash { display: none; }
       <div class="hint">Display only — cohesion is <b>not used</b> in sliding, bearing or earth pressure.</div></div>
     <div class="ig"><label for="qa">Allow. Bearing q<sub>a</sub></label>
       <div class="iw"><input type="number" id="qa" value="3000" min="500" max="20000" step="250"><span class="iw-unit">psf</span></div></div>
+    <div class="ig full aci-only"><label for="aci_ecc_limit">Eccentricity limit (service)</label>   <!-- RWEC (2026-11-07): ACI-mode eccentricity limit; old saves without it open with "none" -->
+      <select id="aci_ecc_limit" onchange="onInputChange()">
+        <option value="b6" selected>Middle third (e ≤ B/6) — full contact</option>
+        <option value="b4">e ≤ B/4</option>
+        <option value="none">No eccentricity limit (IBC / ACI) — information only</option>
+      </select></div>
+    <div class="hint aci-only" id="hint_aci_ecc">Neither code sets a maximum eccentricity: ACI 318-19 §13.2.6.1 proportions the footing for bearing and for stability against overturning and sliding under the general building code, and IBC 2018 §1807.2.1 asks for stability against overturning, sliding, excessive foundation pressure and water uplift. The limit is the engineer's choice (the middle third keeps the whole base in contact). A project saved before this option opens with "No eccentricity limit", as it was calculated.</div>
     <div class="ig"><label for="beta">Backfill Slope β</label>
       <div class="iw"><input type="number" id="beta" value="0" min="0" max="30" step="1"><span class="iw-unit">°</span></div></div>
     <div class="ig"><label for="q_sur">Surcharge q<sub>s</sub></label>
@@ -1709,7 +1716,7 @@ const RW_CARDS = {
   stabLS:      ['stability', null, 'Step 2 — Live Load Surcharge'],
   stabOT:      ['stability', 'Step 4 — Overturning Check', null],
   stabSlide:   ['stability', 'Step 5 — Sliding Check', 'Step 4 — Sliding Resistance'],
-  stabEcc:     ['stability', null, 'Step 5 — Eccentricity Limit'],
+  stabEcc:     ['stability', 'Step 6 — Bearing Pressure Check', 'Step 5 — Eccentricity Limit'],   // RWEC: ACI e check in Step 6
   stabBrg:     ['stability', 'Step 6 — Bearing Pressure Check', 'Step 6 — Bearing Resistance'],
   stabFactBrg: ['stability', 'Step 7 — Factored Bearing for Footing Design', null],
   stabCol:     ['stability', 'Column / Beam Load Combinations', null],
@@ -2329,6 +2336,12 @@ function calcAll(inp) {
   const x_R = SumV > 0 ? (Ms - Mo) / SumV : B / 2;
   const e   = B / 2 - x_R;
   const tension_zone = Math.abs(e) > B / 6;
+  // RWEC (2026-11-07): ACI-mode eccentricity limit (engineer decision, audit item 7). Neither ACI 318-19 §13.2.6.1 nor IBC 2018
+  // §1807.2.1 sets a maximum e; the user picks middle third (B/6, default for new projects), B/4, or none (information only;
+  // projects saved before the option open with 'none', the earlier behaviour).
+  const aci_ecc_limit = isAASHTO ? null : (inp.aci_ecc_limit || 'none');
+  const ecc_lim_aci   = aci_ecc_limit === 'b6' ? B / 6 : aci_ecc_limit === 'b4' ? B / 4 : null;
+  const ecc_ok_aci    = ecc_lim_aci === null || Math.abs(e) <= ecc_lim_aci + 1e-9;
   if (tension_zone) {
     warnings.push(`e = ${f(e,2)} ft > B/6 = ${f(B/6,2)} ft — tension zone in soil. Widen heel.`);
   }
@@ -3447,6 +3460,7 @@ function calcAll(inp) {
     ot:      { ok: FOS_OT >= 1.5,        label: 'O.T.',         val: `FOS=${f(FOS_OT)}` },
     sliding: { ok: FOS_SL >= 1.5,        label: 'Sliding',      val: `FOS=${f(FOS_SL)}` },
     bearing: { ok: bearing_ok,           label: 'Bearing',      val: `${f(q_max/1000,2)} ksf` },
+    ...(ecc_lim_aci !== null ? { ecc: { ok: ecc_ok_aci, label: 'Eccentricity', val: `e=${f(Math.abs(e),2)}${ecc_ok_aci ? '≤' : '>'}${f(ecc_lim_aci,2)}ft` } } : {}),   // RWEC
   };
   const checks = {
     ...stabChecks,
@@ -3547,6 +3561,7 @@ function calcAll(inp) {
     ldh_stem, ldh_avail, hook_ok, ldA_stem, ldhA_stem, epst_stem, epst_heel, epst_toe, aciCr,
     Hp, dH_slope, y_Pa, heelLongForRankine, coulombDeltaWarn, Wwedge, Wsoil_rect, w_soil_col, wt_at_surface, M_wedge_heel,
     sel_stem, sel_temp, ld_stem, rho_min, b_TS_stem, b_TS_ftg,
+    aci_ecc_limit, ecc_lim_aci, ecc_ok_aci,   // RWEC
     ld_S3, s13_ld_a1, s13_ld_a3, s13_lst1, s13_lst3, s13_ratio, s13_diff, s13_big, s13_ld_big, s13_lst_sm, s13_lst,   // RWS13
     z_req, s1_ext_d, s1_ext_db, s1_ext_L, s1_ext, z_s1_lap, z_s1_ext, z_s1_need, s1_full, z_s1_end, s13_lap_prov, s13_lap_ok, s1_end_ok,
     s13_dc, s13_dc_z, s13_Mu_at, s13_Mn_at, s13_ok,
@@ -3616,6 +3631,7 @@ function getInputs() {
     tf: n('tf'), ts_bot: n('ts_bot'), ts_top: n('ts_top'),
     // MassDOT footing rules + variable-height
     massdot_ftg: b('massdot_ftg'),
+    aci_ecc_limit: (document.getElementById('aci_ecc_limit') || {}).value || 'none',   // RWEC (2026-11-07)
     ...(b('toe_hook') ? { toe_hook: true } : {}),   // RWDS (2026-11-07): F2 hooked at the toe end; absent = straight (as before)
     vh_enable: b('vh_enable'), vh_hlo: n('vh_hlo'), vh_hhi: n('vh_hhi'),
     Lt: n('Lt'), Lh: n('Lh'), Df_add: n('Df_add'),
@@ -4761,6 +4777,12 @@ function renderStability(r) {
     [{sym:'B', desc:'footing width', val:F(r.B,3), unit:'ft'},
      {sym:'e', desc:'eccentricity of resultant', val:F(r.e,4), unit:'ft'},
      {sym:'B/6', desc:'kern limit', val:F(r.B/6,4), unit:'ft'}]);
+  // RWEC (2026-11-07): eccentricity limit (input, Soil tab); no code limit (ACI 318-19 §13.2.6.1, IBC 2018 §1807.2.1)
+  if (r.ecc_lim_aci !== null)
+    h += eqCheck('Eccentricity limit (engineer\u2019s choice: ' + (r.aci_ecc_limit === 'b6' ? 'middle third, full contact' : 'e ≤ B/4') + '; no code limit, ACI 318-19 §13.2.6.1 / IBC 2018 §1807.2.1)',
+      `|e| = ${F(Math.abs(r.e),3)}\\ \\text{ft} ${r.ecc_ok_aci ? '\\leq' : '>'} \\frac{B}{${r.aci_ecc_limit === 'b6' ? 6 : 4}} = \\frac{${F(r.B,3)}}{${r.aci_ecc_limit === 'b6' ? 6 : 4}} = ${F(r.ecc_lim_aci,3)}\\ \\text{ft} \\Rightarrow D/C = ${F(Math.abs(r.e)/r.ecc_lim_aci,3)}`, r.ecc_ok_aci, 'ACI 13.2.6.1');
+  else
+    h += `<div class="alert info" style="margin:4px 0 8px;">ℹ No eccentricity limit (input, Soil tab): e = ${F(r.e,3)} ft is reported for information. Neither ACI 318-19 §13.2.6.1 nor IBC 2018 §1807.2.1 sets a maximum eccentricity; bearing, overturning and sliding are checked.${RWEC_MIGRATED ? ' This project was saved before the option existed and opens with “No eccentricity limit”, as it was calculated; choose a limit to check e.' : ''}</div>`;
   if (!r.tension_zone) {
     h += eq('Resultant within kern (|e| ≤ B/6) — trapezoidal distribution',
       `q_{toe,heel} = \\frac{\\Sigma V}{B}\\left(1 \\pm \\frac{6e}{B}\\right) \\Rightarrow q_{toe} = ${F(r.q_toe,1)},\\ q_{heel} = ${F(r.q_heel,1)}\\ \\text{psf}`,'',
@@ -5841,12 +5863,17 @@ function snapshotFields() {
   return out;
 }
 // Restore fields from a snapshot object, then fire dependent UI toggles
+let RWEC_MIGRATED = false;   // RWEC: the open project had no aci_ecc_limit (saved before 2026-11-07) and was set to 'none'
 function restoreFields(fields) {
   if (!fields) return;
   /* RWTB (2026-11-06): a project or autosave saved before the title-block dates (or with them blank) has no such field: they open
      blank (not the value of the project open before) */
   RWTB_FIELDS.forEach(id => { if (!(id in fields)) { const el = document.getElementById(id); if (el) el.value = ''; } });
   Object.entries(RWLS_DEF).forEach(([id, d]) => { if (!(id in fields)) { const el = document.getElementById(id); if (el) { if (el.type === 'checkbox') el.checked = !!d; else el.value = d; } } });   // RWLS / RWDS
+  /* RWEC (2026-11-07) migration: a project or autosave saved before the ACI eccentricity limit has no aci_ecc_limit; it opens with
+     'none' (information only), its results as saved. New projects take the page default (middle third). */
+  RWEC_MIGRATED = !('aci_ecc_limit' in fields);
+  if (RWEC_MIGRATED) { const el = document.getElementById('aci_ecc_limit'); if (el) el.value = 'none'; }
   Object.entries(fields).forEach(([id, val]) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -8580,7 +8607,7 @@ function rwResultRows(r) {
     ot:           () => ['IBC 2021 §1807.2.3; FOS ≥ 1.5, D/C = 1.5 / FOS', 1.5 / r.FOS_OT],
     sliding:      () => A ? [AA('10.6.3.4') + '; Strength I', a.sliding_dcr] : ['IBC 2021 §1807.2.3; FOS ≥ 1.5, D/C = 1.5 / FOS', 1.5 / r.FOS_SL],
     bearing:      () => A ? [AA(a.onRock ? '10.6.5' : '10.6.3.1') + '; Strength I / Ia', a.q_ult_gov / a.q_R_A] : ['service loads; q<sub>max</sub> ≤ q<sub>a</sub>', r.q_max / r.inp.qa],
-    ecc:          () => [AA('11.6.3.3') + '; e ≤ ' + a.e_limit_label, Math.abs(a.e_A) / a.e_limit],
+    ecc:          () => A ? [AA('11.6.3.3') + '; e ≤ ' + a.e_limit_label, Math.abs(a.e_A) / a.e_limit] : ['service loads; e ≤ ' + (r.aci_ecc_limit === 'b6' ? 'B/6 (middle third)' : 'B/4') + ', the engineer\u2019s limit (no limit in ACI 318-19 §13.2.6.1 / IBC 2018 §1807.2.1)', Math.abs(r.e) / r.ecc_lim_aci],   // RWEC
     stemFlex:     () => [A ? AA('5.6.3') : 'ACI 318-19 §9.5 / §22.2', r.As_stem_des / r.sel_stem.As_prov,
                          r.stem_overstressed ? 'section over-stressed' : (r.stem_ee2_governs ? 'Extreme Event II governs' : '')],
     stemShear:    () => [A ? AA('5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', r.Vu_stem / r.phiVc_stem],
@@ -9490,7 +9517,7 @@ function rwrModel(r) {
     subs.push(sub('Wall geometry', [{ type: 'table', head: ['Quantity', 'Value', 'Unit'], rows: geo },
       fig ? { type: 'figure', svg: fig, caption: 'Wall section (as on the Overview tab)' } : null]));
     const soil = [['Soil unit weight γ_s', rwrCell(inp.gamma_s, 0), 'pcf'], ['Friction angle φ', rwrCell(inp.phi, 0), 'deg'], ['Cohesion c', rwrCell(inp.coh, 0), 'psf'],
-      ['Backfill slope β', rwrCell(inp.beta, 0), 'deg'], ['Surcharge q_s', rwrCell(inp.q_sur, 0), 'psf'], ['Allowable bearing q_a', rwrCell(inp.qa, 0), 'psf'],
+      ['Backfill slope β', rwrCell(inp.beta, 0), 'deg'], ['Surcharge q_s', rwrCell(inp.q_sur, 0), 'psf'], ['Allowable bearing q_a', rwrCell(inp.qa, 0), 'psf'], ...(r.isAASHTO ? [] : [['Eccentricity limit (service)', r.aci_ecc_limit === 'b6' ? 'middle third, e ≤ B/6' : r.aci_ecc_limit === 'b4' ? 'e ≤ B/4' : 'none (e for information)', '–']]),   // RWEC
       ['Base friction coefficient μ (ACI basis)', rwrCell(inp.mu, 4), '–'], ['Passive resistance', inp.inclPassive ? 'included' : 'neglected', '–'],
       ...(r.hasWT ? [['Water table depth from top d_WT', rwrCell(r.wt_d, 2), 'ft'], ['Water height at footing base h_w', rwrCell(r.hw, 3), 'ft'], ['Water unit weight γ_w', rwrCell(r.gamma_w, 1), 'pcf'],
         ['Saturated / buoyant unit weight γ_sat / γ′', rwrN(r.gamma_sat, 1) + ' / ' + rwrN(r.gamma_s_sub, 1), 'pcf'], ['Hydrostatic uplift distribution', r.upliftTri ? 'triangular' : 'uniform', '–']] : [['Water table', 'none', '–']]),
@@ -9584,6 +9611,8 @@ function rwrModel(r) {
       if (!r.tension_zone) { st.push(rwrS({ id: 'qtoe', label: 'Bearing pressure at the toe, resultant within the kern (trapezoidal)', sym: 'q_{toe}', eq: '\\frac{\\sum V}{B}\\left(1 + \\frac{6e}{B}\\right)', sub: '\\frac{' + rwrN(r.SumV, 1) + '}{' + rwrN(r.B, 3) + '}\\left(1 + \\frac{6(' + rwrN(r.e, 4) + ')}{' + rwrN(r.B, 3) + '}\\right)', value: r.q_toe, unit: 'psf', d: 1 }));
         st.push(rwrS({ id: 'qheel', label: 'Bearing pressure at the heel', sym: 'q_{heel}', eq: '\\frac{\\sum V}{B}\\left(1 \\minus \\frac{6e}{B}\\right)', sub: '\\frac{' + rwrN(r.SumV, 1) + '}{' + rwrN(r.B, 3) + '}\\left(1 \\minus \\frac{6(' + rwrN(r.e, 4) + ')}{' + rwrN(r.B, 3) + '}\\right)', value: r.q_heel, unit: 'psf', d: 1 })); }
       else st.push(rwrS({ id: 'qmaxT', label: 'Peak bearing pressure, resultant outside the kern (triangular)', sym: 'q_{max}', eq: '\\frac{2\\sum V}{3\\bar{x}}', sub: '\\frac{2(' + rwrN(r.SumV, 1) + ')}{3(' + rwrN(r.x_R, 4) + ')}', value: r.q_max, unit: 'psf', d: 1 }));
+      if (r.ecc_lim_aci !== null) { st.push(rwrS({ id: 'ecc', label: 'Eccentricity limit e ≤ B/' + (r.aci_ecc_limit === 'b6' ? '6 (middle third, full contact)' : '4') + ': the engineer\u2019s choice (no code limit: ACI 318-19 §13.2.6.1, IBC 2018 §1807.2.1)', sym: '\\frac{|e|}{B/' + (r.aci_ecc_limit === 'b6' ? 6 : 4) + '}', eq: '', sub: '\\frac{' + rwrN(Math.abs(r.e), 3) + '}{' + rwrN(r.ecc_lim_aci, 3) + '}', value: dcv('ecc'), unit: '', d: 3, ok: ok('ecc'), ref: 'ACI 318-19 §13.2.6.1' })); CK.ecc = 'st6/ecc'; }   // RWEC
+      else st.push(rwrS({ id: 'ecc', label: 'Eccentricity: no limit (input), e reported for information; neither ACI 318-19 §13.2.6.1 nor IBC 2018 §1807.2.1 sets a maximum', sym: 'e', eq: '', sub: '', value: r.e, unit: 'ft', d: 3 }));   // RWEC
       st.push(rwrS({ id: 'dc', label: 'Bearing check: q_max ≤ q_a (service loads)', sym: '\\frac{q_{max}}{q_{a}}', eq: '', sub: '\\frac{' + rwrN(r.q_max, 1) + '}{' + rwrN(inp.qa, 0) + '}', value: dcv('bearing'), unit: '', d: 3, ok: ok('bearing') }));
       CK.bearing = 'st6/dc';
       const fig = (() => { try { const C = rwbpCombos(r); return rwbpSVG(r, C.list.find(x => x.key === 'svc')); } catch (e) { return ''; } })();   // RWBP: to scale (was buildBearingDiagram)

@@ -3178,3 +3178,64 @@ Calculation audit, item 5b. Engineer decision (2026-11-07). Code sites are tagge
 
 ### Saved data
 - No input added; no key or format change. Old projects open with the new layout (S1 shorter, no cut-off) and two new check rows.
+
+## 2026-11-07 — PR: claude/rw-aci-ecc — ACI mode: eccentricity limit select (middle third default, B/4, none = information only); old saves open with "none" (RWEC; calculation change: new check)
+
+Calculation audit, item 7. Engineer decision (2026-11-07). Code sites are tagged `RWEC`. AASHTO mode unchanged.
+
+### RWEC-1. Input, calculation and migration   [§4: new check]
+- **Input (Soil tab, ACI only):** "Eccentricity limit (service)" `aci_ecc_limit`: `b6` middle third e ≤ B/6 (page default, new projects), `b4` e ≤ B/4, `none` no eccentricity limit (IBC / ACI), e for information. Hint: neither code sets a maximum eccentricity.
+- **Provisions (verified; cited and paraphrased):** ACI 318-19 §13.2.6.1 (PDF p. 196, printed 194): foundations proportioned for bearing and for stability against overturning and sliding per the general building code. IBC 2018 §1807.2.1: retaining walls stable against overturning, sliding, excessive foundation pressure and water uplift. Neither sets an eccentricity limit; the limit is the engineer's choice (as in Spread Footing, #908 / #913). The tool's IBC citations elsewhere say 2021 (not in the references); unchanged here.
+- **Check:** `checks.ecc` (ACI) only when a limit is chosen: |e| ≤ B/6 or B/4 with the service e (`B/2 − x̄`), D/C = |e|/limit. With `none` there is no row (as before) and e is shown for information. The tension-zone warning is unchanged.
+- **Migration (§5):** a project, autosave, library item or import saved before this option has no `aci_ecc_limit`; `restoreFields` sets it to `none` (the earlier behaviour, results as saved) and the Stability Step 6 note says so. `calcAll` also treats a missing value as `none`. New projects take the page default (middle third).
+- **Before / after** (`git diff -U0`, calculation and migration):
+```diff
+@@ -2331,0 +2339,6 @@ function calcAll(inp) {
++  // RWEC (2026-11-07): ACI-mode eccentricity limit (engineer decision, audit item 7). Neither ACI 318-19 §13.2.6.1 nor IBC 2018
++  // §1807.2.1 sets a maximum e; the user picks middle third (B/6, default for new projects), B/4, or none (information only;
++  // projects saved before the option open with 'none', the earlier behaviour).
++  const aci_ecc_limit = isAASHTO ? null : (inp.aci_ecc_limit || 'none');
++  const ecc_lim_aci   = aci_ecc_limit === 'b6' ? B / 6 : aci_ecc_limit === 'b4' ? B / 4 : null;
++  const ecc_ok_aci    = ecc_lim_aci === null || Math.abs(e) <= ecc_lim_aci + 1e-9;
+@@ -3449,0 +3463 @@ function calcAll(inp) {
++    ...(ecc_lim_aci !== null ? { ecc: { ok: ecc_ok_aci, label: 'Eccentricity', val: `e=${f(Math.abs(e),2)}${ecc_ok_aci ? '≤' : '>'}${f(ecc_lim_aci,2)}ft` } } : {}),   // RWEC
+@@ -3549,0 +3564 @@ function calcAll(inp) {
++    aci_ecc_limit, ecc_lim_aci, ecc_ok_aci,   // RWEC
+@@ -3618,0 +3634 @@ function getInputs() {
++    aci_ecc_limit: (document.getElementById('aci_ecc_limit') || {}).value || 'none',   // RWEC (2026-11-07)
+@@ -5843,0 +5866 @@ function snapshotFields() {
++let RWEC_MIGRATED = false;   // RWEC: the open project had no aci_ecc_limit (saved before 2026-11-07) and was set to 'none'
+@@ -5849,0 +5873,4 @@ function restoreFields(fields) {
++  /* RWEC (2026-11-07) migration: a project or autosave saved before the ACI eccentricity limit has no aci_ecc_limit; it opens with
++     'none' (information only), its results as saved. New projects take the page default (middle third). */
++  RWEC_MIGRATED = !('aci_ecc_limit' in fields);
++  if (RWEC_MIGRATED) { const el = document.getElementById('aci_ecc_limit'); if (el) el.value = 'none'; }
+```
+
+### RWEC-2. Display
+- **Stability tab, Step 6:** the e check with D/C, or the information note (with the migration notice for an old save).
+- **Dashboard row** "Eccentricity" in ACI mode, linked to Step 6 (`RW_CARDS.stabEcc` now has the ACI card).
+- **Report:** step `st6/ecc` (check or information) and the input echo row "Eccentricity limit (service)".
+
+### Check cases (re-run with `calcAll` and in the browser)
+- **ACI default** (B = 12.5 ft): e = −0.219 ft (toward the heel), B/6 = 2.083 ft, D/C = 0.105, **PASS**. Other results unchanged: FS_OT 7.54, FS_SL 1.656, q_max 1466 psf.
+- **ACI variant** (L_t 2, L_h 3, t_f 24 in, key 36 in, passive on, q_a 4000; B = 6.5 ft): e = 1.366 ft.
+  - B/6 = 1.083 ft: D/C **1.261, FAIL** (new; before: warning only).
+  - B/4 = 1.625 ft: D/C **0.841, PASS**.
+  - "No limit": information only, no row.
+  - FS_OT 1.877, FS_SL 1.939, q_max 3015 psf in every case.
+- **Old save** (autosave without the field): opens with "No eccentricity limit", no e row, results as before.
+- **AASHTO default:** unchanged (e 1.43 ≤ 3.13 ft, B/4).
+
+### How verified
+- origin/main vs branch, headless Chromium, the twelve audit walls (fresh page, so the branch is on the new default B/6) and three ACI walls with "none":
+  - with "none" `_R` differs only by the three new fields (`aci_ecc_limit`, `ecc_lim_aci` = null, `ecc_ok_aci`);
+  - with the default B/6 the ACI walls also gain `checks.ecc` and its row;
+  - the AASHTO walls differ only by the three new fields (null);
+  - Export JSON gains only `aci_ecc_limit` in `fields`.
+- Tests: check-syntax; smoke/retaining-wall-checks (table `AUD`: RWEC default, variant B/6 FAIL and B/4 PASS, old autosave → none with the notice, AASHTO unchanged); phone-layout rwall 390/768; project-library retwall (its "results identical" steps list only the new fields and, on a fresh page, the new `checks.ecc`); dxf-print-sheets rw.
+
+### Saved data
+- `aci_ecc_limit` is a new field (additive), saved with every project.
+- Old saves without it open with "none" (migration above), so their results and pass/fail are unchanged.
+- **Open item:** this changes pass/fail for new ACI projects (or an old project after the user picks a limit) where e > the chosen limit.
