@@ -3251,7 +3251,7 @@ polynomial can be fitted.</td></tr>
 <tr><td class="s">Fit selection</td><td>Auto selects the lowest RMS residual with a parsimony tiebreak that
 prefers the simpler curve when residuals are within 5%. Forcing a type documents an engineering choice.</td></tr>
 <tr><td class="s">Springing restraint</td><td>Fixed or pinned. See Part 1.3.3 — this materially changes the rating.</td></tr>
-<tr><td class="s">Elements</td><td>0 uses the §7.2.7.2B minimum. Higher values refine the solution; see Part 1.3.6. Capped at 120.</td></tr>
+<tr><td class="s">Elements</td><td>0 uses the §7.2.7.2B minimum rounded up to a multiple of 4, so the quarter points and the crown are nodes (§7.2.7.7B, §7.2.2.6). Higher values refine the solution; see Part 1.3.6. Capped at 120.</td></tr>
 <tr><td class="s">Ring depth, crown / springings</td><td>ft. Equal values give a prismatic ring; unequal values
 taper linearly along the arc.</td></tr>
 <tr><td class="s">Ring depth overrides</td><td><span class="mono">x, d</span> pairs, ft, interpolated by station.
@@ -6853,8 +6853,11 @@ const {step,eqLine,vars,dtab,msg,badge,num,nfx,esc}=R;
 const KSF_PSI=0.144;               // 1 psi = 0.144 ksf
 function secTag(M,i){
   const n=M.nN-1;
-  const named={0:"SL-L",[Math.round(n*0.25)]:"QP-L",[Math.round(n*0.5)]:"CR",
-               [Math.round(n*0.75)]:"QP-R",[n]:"SL-R"};
+  /* MQN (M-3, 2026-11-07): a node is called QP / CR only when it IS the quarter point / crown (equal arc length:
+     node n/4, n/2, 3n/4 exist only when n is a multiple of 4 / of 2). Otherwise the nearest node keeps its number. */
+  const named={0:"SL-L",[n]:"SL-R"};
+  if(n%2===0)named[n/2]="CR";
+  if(n%4===0){named[n/4]="QP-L";named[3*n/4]="QP-R";}
   if(named[i])return named[i];
   // §7.2.7.7B: points where significant changes in section properties occur
   if(M.dChange&&M.dChange.indexOf(i)>=0)return "SC"+i;
@@ -7500,6 +7503,12 @@ function validate(p,M,results){
     /* B9 — element count and slenderness */
     (()=>{
       const specMin=Math.max(10,Math.ceil(M.g.span/4));
+      /* MQN (M-3): quarter points must be analysed (§7.2.7.7B, §7.2.2.6) */
+      if(M.nEl%4!==0)
+        add("wn","Quarter points are not nodes",
+          `The mesh in use has ${M.nEl} elements, not a multiple of 4, so there is no node at the quarter points`+
+          (M.nEl%2?" or at the crown":"")+`. §7.2.7.7B and §7.2.2.6 require influence lines and ratings there at a minimum. `+
+          `The nearest nodes are named by number, not QP. Enter 0 (auto) or a multiple of 4.`,"§7.2.7.7B / §7.2.2.6");
       const dl=M.stiffCheck?M.stiffCheck.dOverL:null;
       if(dl&&dl>0.5)
         add("wn","Elements are deep relative to their length",
@@ -7619,6 +7628,11 @@ function geometrySection(p,M){
   h+=step({label:"Required number of elements",ref:"§7.2.7.2B",
     sym:"n_{el,min}=\\max\\left(10,\\ \\dfrac{L_c}{4}\\right)",
     sub:`\\max\\left(10,\\ \\dfrac{${num(M.g.span)}}{4}\\right)`,res:num(specMin,0)});
+  {const nq=Math.ceil(specMin/4)*4;
+   h+=step({label:"Rounded up to a multiple of 4 (quarter points and crown at nodes)",ref:"§7.2.7.7B / §7.2.2.6",
+    sym:"n_{el,auto}=4\\left\\lceil n_{el,min}/4\\right\\rceil",sub:`4\\left\\lceil ${num(specMin,0)}/4\\right\\rceil`,res:num(nq,0),
+    note:"Used when the element count input is 0 (auto). "+((M.nEl%4===0)?"With a multiple of 4 the quarter points (QP-L, QP-R) and the crown (CR) are nodes.":
+      "The mesh in use is not a multiple of 4, so the quarter points are not nodes: the nearest nodes are named by number (N…), not QP.")});}
   h+=step({label:"Elements used in this model",sym:"n_{el}",sub:"",res:num(M.nEl,0),
     note:(M.nEl>specMin
       ?`${nfx(M.nEl/specMin,1)}× the code minimum. `
@@ -9768,7 +9782,7 @@ function inputPanel(){
     `</div>`+
     row("Springing restraint","fixed = built-in; pinned = rotation released",
       sel("support",[["fixed","Fixed"],["pinned","Pinned"]]))+
-    row("Elements","0 = auto (code minimum)",nb("nelem","1",0)),"§7.2.7.2B");
+    row("Elements","0 = auto (code minimum, rounded up to a multiple of 4)",nb("nelem","1",0)),"§7.2.7.2B");
 
   h+=UI.pnl("ip_ring",c(),"Ring Depth",
     row("Depth at crown","in",nb("dCrown","1",3))+
@@ -10059,7 +10073,9 @@ function readP(){
     if(!(Rr>0))throw new Error(`The rise is ${nfx(Rr,3)} ft. Enter a positive rise; a rise of zero is a flat beam, not an arch.`);
   }
   let nEl=Math.floor(n("nelem"));
-  const auto=Math.max(10,Math.ceil(S/4));
+  /* MQN (M-3): the §7.2.7.2B minimum, rounded UP to a multiple of 4 so the quarter points and the crown are nodes
+     (influence lines and ratings there, §7.2.7.7B / §7.2.2.6). A count entered by the user is kept as entered. */
+  const auto=Math.ceil(Math.max(10,Math.ceil(S/4))/4)*4;
   if(!nEl||nEl<auto)nEl=auto;
   nEl=Math.min(nEl,120);
 

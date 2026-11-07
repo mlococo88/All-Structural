@@ -1342,3 +1342,46 @@ Basis: 780 CMR 10th Ed. (Massachusetts amendments to IBC 2021), Ch. 16: 1613.1 a
 - Rendered text of every tab and the Report: 0 console errors, 0 KaTeX errors. Excel built for all cases.
 - `check-syntax` (pass); `project-library --tool asce7`: against main its result comparison differs only by the Note 2 advisory (`R.warn`) and `seis.sysLimit` (NL → 100), as intended; with `--a HEAD` (same calculation both sides) ALL PASS, so the save / open / undo paths are unaffected; `phone-layout --tool asce7` pass; `engine handoffs` 10 passed.
 - **Other copies:** none.
+
+## 2026-11-07 — PR: claude/asce7-m3m4-elf-permitted — A7M3 + A7M4: ELF permission checks, Sec. 11.4.8 Exception 3 (Site E, S_1 ≥ 0.2) and Table 12.6-1 (review M3, M4; §4; PR #1074: https://github.com/mlococo88/All-Structural/pull/1074)
+
+### A7M3 / A7M4. ELF procedure permitted?   [check logic change] [more conservative]
+- **Where:** `solve()`, new block just before `/* manually entered hazard data */` (anchor `/* A7M3 + A7M4 (2026-11-07)`); seismic tab panel `o-se4` before `eq(b,"Base value"` (anchor `if(q.elf && (q.elf.siteE`); the "Not Included in the Seismic Module" note; User Manual 8.1; Excel seismic section (two `statusRow`s before the Sec. 11.6 note row); new input `S.irreg` (DEF, anchor `irreg:"none"`) on the Seismic input tab, "Weight and Period" panel.
+- **Before:** no check. The seismic tab said Sec. 12.6 "must also be checked"; Site E with S_1 ≥ 0.2 gave only the Sec. 11.4.8 "Review" flag and a base shear.
+- **After:** with T = max(T_used, C_u·T_a) and T_s = S_D1/S_DS:
+  - **Sec. 11.4.8 Exception 3** (Site Class E, S_1 ≥ 0.2, no site-specific analysis): ELF permitted only if T ≤ T_s; otherwise a blocking check "ELF not permitted …".
+  - **Table 12.6-1** (SDC D, E, F): ELF permitted if any of: Risk I/II and ≤ 2 levels; light-frame system; no irregularity and h_n ≤ 160 ft; no irregularity, h_n > 160 ft and T < 3.5T_s; only horizontal 2–5 / vertical 4, 5a, 5b irregularities and h_n ≤ 160 ft. Otherwise a blocking check. The seismic tab shows the T_s step, the condition table and the verdict; Excel shows the status rows.
+  - Both use the existing cross-tab check mechanism (`xc("err",…)`, shown as "Blocked" on the dashboard and in the checks), like the Table 12.2-1 screen. They do not stop the rest of the calculation (`R.xBlocked` is not consumed anywhere), so wind and snow stay available; the seismic tab states that the base shear shown is not admissible.
+  - `R.seis.elf` is set only when a check applies (SDC D–F or Site E with S_1 ≥ 0.2); otherwise `R` is unchanged.
+- **Decisions (pending engineer review):** T for both checks is the larger of the period used and C_u·T_a (conservative). Irregularities are a user input (`none` / `limited` / `other`, default `none`: saved projects without the field read `none`, i.e. the assumption the tool made before, now stated); the tool does not evaluate Tables 12.3-1/12.3-2. "Two stories" is taken as the number of levels with weight in the story schedule.
+- **Provisions:** ASCE/SEI 7-16 Sec. 11.4.8 Exception 3 and Sec. 11.4.6 (T_s); Table 12.6-1; Sec. 12.6 (**verify (ASCE 7-16 PDF unreadable)**; the three Sec. 11.4.8 exceptions as summarised in the IBC 2018→2021 changes PDF, slide "Site-Specific Hazard Analysis Requirements"). That slide groups Exception 2 under "Site Class D & E"; the tool applies Exception 2 to Site D only (unchanged) — open item for the engineer.
+- **Check cases (main → branch):**
+  - Manual S_s = 0.6, S_1 = 0.3, Site E, h_n = 200 ft, one level, Risk II (review M3 case): F_a = 1.54, F_v = 2.8: S_DS = ⅔·1.54·0.6 = 0.616, S_D1 = ⅔·2.8·0.3 = 0.560; T_s = 0.909 s; T_a = 0.02·200^0.75 = 1.064 s, C_u = 1.4, C_uT_a = 1.489 s. Before: V = 210.59 k, "Review" only. After: **blocking** "ELF not permitted: Site Class E …, T = 1.489 s > T_s = 0.909 s". (Table 12.6-1 is met: Risk II, one level.)
+  - Same, h_n = 30 ft: T = 0.359 s ≤ 0.909 s → permitted; nothing moves except the new display.
+  - Review variant C (S_s 1.2, S_1 0.5, Site D, Risk IV, SCBF, h_n 100 ft, 5 levels, SDC D): T_s = 0.600/0.816 = 0.735 s, T = max(0.632, 1.4·0.632 = 0.885) = 0.885 s; regular, h_n ≤ 160 ft → **permitted**; V = 1020 k unchanged.
+  - Variant C with irregularity "other": **blocking** "ELF not permitted in SDC D (Table 12.6-1)".
+  - Default, B, gable, hip, monoslope, Chatham, Methuen, ORC: `R` identical.
+- **How verified:** headless Chromium main vs branch, 16 cases, leaf diff of `R` + hand-off (moved only as above; the hand-off gains a note line where a check fails); rendered text of every tab and the Report (0 console / KaTeX errors); Excel built in all cases; `check-syntax`, `project-library --tool asce7`, `phone-layout --tool asce7`, `engine handoffs`.
+- **Saved data:** one new optional field `irreg` in the project / autosave JSON (`asce7bldg.*`); older saves open with `none`. No key or existing field changed.
+- **Correction to the A7M1/M2 entry above:** its check case says the Table 12.2-1 error "blocks the calculation". It shows as a blocking check ("Blocked" on the dashboard); like every `xc("err",…)` check it does not stop the other results. Nothing was changed for this.
+
+## 2026-11-07 — PR: claude/asce7-m5-snow-in-w — A7M5: 20 % of the design snow in the effective seismic weight where p_f > 30 psf (review M5; §4; PR #1076: https://github.com/mlococo88/All-Structural/pull/1076)
+
+### A7M5. Snow in W, Sec. 12.7.2   [calc change] [more conservative]
+- **Where:** `solve()` seismic block, anchor `sq.Wt=S.seisW;` (now preceded by the `A7M5` block) and the level list just after `const lv=S.levels.filter(l=>l.w>0)`; seismic tab panel `o-se5` (new first step); Excel seismic section, the `inp("Wt",…)` row; new input `S.snowInW` (DEF, Seismic input tab, "Weight and Period" panel).
+- **Before:**
+  ```js
+    sq.Wt=S.seisW;
+    sq.Vbase=sq.Cs*sq.Wt;
+  ```
+  W was the entered value only; nothing added snow where p_f > 30 psf.
+- **After:** where `R.snow.pfDes > 30` and `S.snowInW` is false: `W_s = 0.2 × R.snow.balanced × plan area / 1000` (kip); `W = S.seisW + W_s`; W_s is also added to the highest level with weight (its `w`, with `wIn` / `wSnow` recorded), so C_vx and F_x include it. Worked step "Snow in the effective seismic weight" with a note; Excel rows W_in, p_s, A, `W_s = 0.2·p_s·A/1000`, `W = W_in + W_s` (live formulas). With the box ticked, a note states that the entered weights include it.
+- **Decisions (pending engineer review):** trigger on the design flat roof snow p_f,des (with the 780 CMR Table 1604.11 minimum), amount on the balanced design snow (with the minimum and rain-on-snow where they apply) over the full plan area, all of it at the highest level; the default adds it (old saves have no `snowInW` and so get it added: the §4 change). A project whose W already includes snow should tick the new box.
+- **Provision:** ASCE/SEI 7-16 Sec. 12.7.2, item 4 (**verify (ASCE 7-16 PDF unreadable)**).
+- **Check cases (main → branch):**
+  - Variant B (Adams, p_f = 45.44 psf, 100 × 60 ft, W = 1200 k, one level): W_s = 0.2·45.44·6000/1000 = 54.52 k; W = 1254.52 k; C_s = 0.0747; **V = 89.60 → 93.67 k**; M_base 2150.40 → 2248.11 k-ft.
+  - Variant C (manual p_g 40, Risk IV: p_f = 0.7·1.2·40 = 33.6 psf): W_s = 0.2·33.6·6000/1000 = 40.32 k; W = 5040.32 k; **V = 0.204·5040.32 = 1028.23 k (was 1020.00)**; roof F_x 348.77 → 360.79 k.
+  - Adams flat (p_f,des = 40 psf): W_s = 48 k; V = 71.68 → 74.55 k.
+  - Default Melrose (p_f,des = 30.00, not > 30): unchanged; likewise gable/hip/monoslope Melrose, Chatham, Site E cases.
+- **How verified:** headless Chromium, main vs branch, 16 cases: leaf diff of `R` + hand-off (moved: W, V, level forces, story shears and moments, the seismic lateral column of the combinations; hand-off unchanged); rendered text of every tab and the Report (0 console / KaTeX errors); Excel built in all cases; `check-syntax`, `project-library --tool asce7`, `phone-layout --tool asce7`, `engine handoffs`.
+- **Saved data:** new optional field `snowInW` (default false); no key or existing field changed.
