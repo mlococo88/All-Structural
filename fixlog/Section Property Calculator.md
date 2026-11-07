@@ -3477,3 +3477,32 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
   - `check-syntax` passes; Validation 136/136.
   - Headless probe, main vs branch, tolerance 1e-13: the only differences are the PNA location of the two gap models (gap, dblC) and the `flat` flag. Every Z and all other values are identical, including all 1,660 shapes.
   - The new wording shows on the Plastic tab and in the Report. 0 console errors.
+
+## 2026-11-07 — PR: claude/spc-l6-verify — SPL6: "verify" badges removed from AISC 360-16 Eq. E4-8, E4-9, F2-7 and the J2.4 / Table J2.5 weld strength; engineer checks A4 and A5 closed (review L6; wording only; PR #1110: https://github.com/mlococo88/All-Structural/pull/1110)
+
+- **Outcome of the checks (against the printed AISC 360-16 Specification and the AISC v16.0 Design Examples, both in the engineer's reference folder; cited, not quoted):**
+  - **A4 / P2a-O1 — closed.** The equation numbers and forms match the printed Specification:
+    - Eq. E4-9: r̄o² = x_o² + y_o² + (I_x + I_y)/A_g. The Specification defines it with I_x, I_y about the principal axes. The tool uses I_x + I_y about the centroidal x and y axes, which is the same sum (invariant).
+    - Eq. E4-8: H = 1 − (x_o² + y_o²)/r̄o².
+    - Eq. F2-7: r_ts² = √(I_y C_w)/S_x.
+  - **A5 / P2b, O2 — closed.**
+    - Fillet weld in shear per Section J2.4 with Table J2.5: φ = 0.75, Ω = 2.00, F_nw = 0.60F_EXX on the effective throat 0.707w (equal-leg fillet, J2.2a). The tool takes no directional increase (1.0 + 0.50 sin^1.5 θ), which is conservative; for longitudinal welds θ = 0 anyway.
+    - HSS corner radii: the AISC v16.0 Design Examples state that the Manual Table 1-11 properties use an outside corner radius of 2t_des (Examples I.3 and I.4). This confirms the tool's 2t_des outside / t_des inside basis (C1 O2).
+  - Still open: A3 (AutoCAD MASSPROP sign and principal-moment order). Only the engineer can do it. The independent DXF re-parse of the review matches the tool exactly.
+- **Changes (wording and badges only):**
+  - Properties → buckling table: "AISC 360-16 Eq. E4-9 " + `VFY2('Equation number as understood …')` → "AISC 360-16 Eq. E4-9". The same for E4-8.
+  - Calc block "Polar radius of gyration about the shear centre, and flexural constant": badge `VFY2('Equation numbers as understood …; shear centre from the thin-wall model')` → `VFY` ("thin-wall — verify"). The shear centre is still thin-wall.
+  - Report steps bk.ro, bk.H, bk.rts: ref "AISC 360-16 Eq. E4-9 (equation number: verify)" → "AISC 360-16 Eq. E4-9". The same for E4-8 and F2-7.
+  - References table: "Eq. E4-8 (H), E4-9 (r̄o), F2-7 (r_ts): equation numbers as understood by the tool, verify" → "Eq. E4-8 (H), E4-9 (r̄o), F2-7 (r_ts)".
+  - Weld calc block:
+    - ref "… throat 0.707w — verify" → "… throat 0.707w".
+    - badge `VFY2('Weld strength as understood for AISC 360-16 J2.4; minimum size (Table J2.4) and base metal not checked')` → `VFY2('Weld metal strength per AISC 360-16 J2.4 / Table J2.5. Not checked: minimum and maximum weld size (Table J2.4, J2.2b) and base metal (J4.2)')`. The badge stays, for the items that are not checked (review L2).
+  - Method text: "(AISC 360-16 J2.4, Table J2.5 — verify)" → "(AISC 360-16 J2.4, Table J2.5)".
+  - HSS model: "the basis of the AISC tables as understood — verify" → "the basis of AISC Manual Table 1-11 as stated in the AISC v16.0 Design Examples".
+  - Code comment of `WELD_PHI`: "— verify" → "checked against the printed Specification, SPL6".
+- **ENGINEER_CHECKS.md:** rows A4 and A5 removed. **tools.html** ("Open engineer checks"): the Section Properties item for E4-8/E4-9/F2-7, J2.4/J2.5 and HSS radii is removed; the A3 MASSPROP item stays. AUDIT.md has no separate entry for A4 or A5.
+- **§4:** no formula, factor or value changed. Code references are unchanged apart from removing "verify".
+- **Verified:**
+  - `check-syntax` passes.
+  - Headless probe, main vs branch: 0 value differences (40 models, all 1,660 shapes, Validation 136/136).
+  - Every output tab built; 0 console errors.
