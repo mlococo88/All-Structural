@@ -3007,7 +3007,7 @@ Calculation audit, item 5 (PR 5a). Engineer decision (2026-11-07). Code sites ar
 - A wall whose toe is too short for straight F2 bars now shows a FAIL that was not checked before.
 - The S1D lap drawn in ACI mode changes where ℓd < 12 in (e.g. 15.6 → 14.8 in at the default).
 
-## 2026-11-07 — PR: claude/rw-stem-s1s3 — Stem back-face layout: S1 to mid-height + the S3–S1 lap, S3 above; alternate-bar cut-off removed; S1 end and moment along the height checked (RWS13; calculation and detailing change)
+## 2026-11-07 — PR: claude/rw-stem-s1s3 — Stem back-face layout: S1 to mid-height + the S3–S1 lap, S3 above; alternate-bar cut-off removed; S1 end and moment along the height checked (RWS13; calculation and detailing change) (PR #948: https://github.com/mlococo88/All-Structural/pull/948)
 
 Calculation audit, item 5b. Engineer decision (2026-11-07). Code sites are tagged `RWS13`.
 
