@@ -6237,3 +6237,49 @@ index 50f3837..c2d5000 100644
 - **Grade 60 unchanged (proof):** with f_y = 60,000 psi, `sfdEty` returns 0.002 and 0.002 + 0.003 === 0.005 in IEEE arithmetic, so both branches and the interpolation are the same expressions as before. SF harness (16 cases: def, rev, sfe, sfe5, dir, sfe9, revEx, thin, revHook, edgeHook, slender, devsec, sey = Seymour as saved, wt, seyW, fy80), origin/main vs branch: `R` and `P2` 0 differences in every Grade 60 case (15 of 16); only `fy80` moves (52 values, all P–M ratios and capacities). Dashboard text identical in the Grade 60 cases; the Report differs only in the φ label. 0 console / KaTeX errors.
 - **How verified:** SF harness as above; `phiFlexure` evaluated in Node at the check points; check-syntax, spread-footing-scroll, phone-layout --tool sf, project-library --tool spreadfooting, start-chooser, spread-footing-nobear.
 - **Saved data:** none. **Other copies:** none (the φ function is local to this tool).
+
+## 2026-11-07 — PR: claude/sf-h1-slender (PR #974: https://github.com/mlococo88/All-Structural/pull/974) (SFSL: slender pedestal: P–M check with moment magnification, ACI 318-19 6.6.4; fails where unstable or beyond 1.4× first order, 6.2.5.3; CALCULATION CHANGE for slender pedestals only)
+
+- **Problem:** when k ℓ_u/r > 22 (6.2.5.1(a), k = 2.0 since SFKS), the tool showed a "slender" flag but the P–M ratio used the first-order base moments, so the pedestal could PASS silently.
+- **Where / exact code (`Spread Footing.html`):**
+  - `netResultant` (anchor `/* SFSL: factored sustained axial and pedestal-base moments */`): each `pl` entry gets `sus:{P,mx,my}`, the factored dead share (pedestal self-weight plus the D load type: P, and the base moments `mx + P e_y + V_y h`, `my + P e_x + V_x h`). In direct factored mode it is `null` (no dead / live split).
+  - New `sfslMag(pt,g)` (anchor `/* ---- SFSL (2026-11-07): moment magnification of a slender pedestal`). Per combination and per axis:
+    - E_c = 57√f′c ksi; (EI)_eff = 0.4E_cI_g/(1 + β).
+    - P_c,s = π²(EI)_eff/(2h)², with β_ds.
+    - δ_s = 1/(1 − P_u/(0.75P_c,s)) ≥ 1.
+    - P_c,ns = π²(EI)_eff/h², with β_dns; δ = C_m/(1 − P_u/(0.75P_c,ns)) ≥ 1, C_m = 1.0.
+    - M_2,min = P_u(0.6 + 0.03b)/12.
+    - M_c = δ·max(δ_s|M_u|, M_2,min).
+    - The minimum is applied about one axis at a time: point A uses the minimum about x, point B the minimum about y.
+    - `unstable` when 1 − P_u/(0.75P_c) ≤ 0; `over14` when δ_sδ > 1.4 on an axis with a non-zero first-order moment.
+  - `pedDes`:
+    - Before: `const pmRat=isPatch?[]:sfpmRatios(pmBars,bx,by,fc,fy,pmPts,phiPn_max);`
+    - After: `pmRat1` = that first-order result (kept). When `slenderFlag`, `pmRat` = per combination the worse of `sfpmRatios` on the A and B points (mode `'unstable'`, ratio ∞, where unstable). `pmPts` become the magnified points (the P–M plot), plus `slm`, `slGov`, `slFail`.
+  - Displays:
+    - Dashboard "Pedestal design": a fail reason when `slFail`. "Pedestal P–M (biaxial)": "slender: moments magnified … δ_sδ up to …".
+    - Report: Ties and slenderness step `sl` (ok = !slFail) and a new topic "Moment magnification, slender pedestal" worked for the governing combination. A P–M branch for mode `'unstable'`.
+    - Pedestal tab: an eqBlock after the slenderness screen, plus a failbox. Pedestal table: "YES (magnified)" / "YES (NG)". 3D pick table: MAGNIFIED / NG with δ_sδ.
+- **Governing provisions (ACI 318-19, printed pages checked):**
+  - 6.2.5.1(a) slenderness limit; 6.2.5.3 (second-order M_u ≤ 1.4 × first order).
+  - 6.6.4.4.2 (P_c), 6.6.4.4.3 (k ≥ 1 for sway), 6.6.4.4.4(a) ((EI)_eff).
+  - 6.6.4.6.1 / 6.6.4.6.2(b) (δ_s, with β_ds in place of β_dns); 6.6.4.6.4 → 6.6.4.5.1–6.6.4.5.4 (along the length; C_m; M_2,min).
+  - 19.2.2.1(b) (E_c).
+- **Decisions (pending engineer review), all conservative:**
+  - The pedestal is a sway cantilever (fixed at the footing, free at the top).
+  - All of the first-order base moment is treated as a sway moment (M_2ns = 0).
+  - δ_s is computed for this pedestal alone (no story averaging).
+  - C_m = 1.0.
+  - β_ds = |dead-load share of M_u| / |M_u| about each axis; β_dns = factored dead axial / P_u. Both are 1.0 in direct factored mode.
+  - Both axes are magnified whenever the pedestal is slender about its weaker axis.
+  - M_2,min about one axis is combined with the actual (magnified) moment about the other. This is "each axis separately" in the sense of R6.6.4.5.4: the minimum is never applied about both axes at once.
+- **Check case (harness `slender`: default project, both pedestals h = 8 ft, 18 × 18 in, Ped 2 Wx V_x = 20 k; k ℓ_u/r = 2·96/5.4 = 35.6 > 22).** Ped 2, combination 1.2D + 1.0(+Wx) + L + 0.5S, P_u = 273.24 k, M_uy = 160.0 kip-ft, M_ux = 0:
+  - I_g = 18⁴/12 = 8748 in⁴; E_c = 57√4000 = 3605 ksi; (EI)_eff,s = 0.4·3605·8748 = 12.61 × 10⁶ kip-in² (β_ds = 0).
+  - P_c,s = π²·12.61e6/192² = 3377.3 k; δ_s = 1/(1 − 273.24/(0.75·3377.3)) = **1.121**.
+  - β_dns = 183.24/273.24 = 0.671 (1.2·(150 + 2.70)); (EI)_eff,ns = 12.61e6/1.671 = 7.55e6; P_c,ns = π²·7.55e6/96² = 8086 k; δ = 1/(1 − 273.24/6065) = **1.047**.
+  - About y: M_c = 1.047·1.121·160.0 = **187.8** kip-ft. About x: M_2,min = 273.24·(0.6 + 0.03·18)/12 = 25.96 → M_c = 1.047·25.96 = **27.2** kip-ft.
+  - δ_sδ = 1.174 ≤ 1.4.
+  - **Before:** P–M ratio **0.649** (160.0 / 246.56), PASS, and the slender flag only.
+  - **After:** **0.864** (point A: M_ux = 27.2 with M_uy = 187.8). Without the minimum about x (point B) it is 0.762. With δ_s alone (the review's estimate) it is ≈ 0.72.
+  - Ped 1: 0.255 → 0.347 (governing combination now 1.2D + 1.0(−Wx) + L + 0.5S).
+- **Cases that move:** only `slender`. The other 15 harness cases are not slender. Their only differences are the new `sus` fields on `combos[].nr.pl` (data, no result).
+- **Saved data:** none. **Other copies:** none.
