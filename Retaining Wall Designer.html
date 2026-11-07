@@ -6248,7 +6248,7 @@ function renderFooting(r) {
     [{sym:'M_{up}', desc:'upward-bearing moment at face', val:F(r.Mu_heel_up,1), unit:'lb·ft/ft'}]);
   const hbLbl = {std:'Standard (relief credited)', norelief:'No upward relief', envelope:'Envelope'}[r.heelBasis] || 'Standard';
   h += eq('Case A — Standard: net moment & shear (upward relief credited)',
-    `M_{u,A} = M_{down} - M_{up} = ${Fk(r.Mu_heel_std)}\ \text{kip·ft/ft}, \quad V_{u,A} = ${r.heelPile ? '\left| w_u L_h - \sum q_i \right|' : '\left| w_u L_h - ' + (upHs ? 'F_{up}' : '\tfrac{q_0+q_L}{2}L_h') + ' \right|'} = ${Fk(r.Vu_heel_std)}\ \text{kip/ft}`,'');
+    `M_{u,A} = M_{down} - M_{up} = ${Fk(r.Mu_heel_std)}\\ \\text{kip·ft/ft}, \\quad V_{u,A} = ${r.heelPile ? '\\left| w_u L_h - \\sum q_i \\right|' : '\\left| w_u L_h - ' + (upHs ? 'F_{up}' : '\\tfrac{q_0+q_L}{2}L_h') + ' \\right|'} = ${Fk(r.Vu_heel_std)}\\ \\text{kip/ft}`,'');
   h += eq('Case B — No upward relief: full factored downward cantilever (max load factors)',
     `M_{u,B} = M_{down} = ${Fk(r.Mu_heel_nr)}\\ \\text{kip·ft/ft}, \\quad V_{u,B} = w_u L_h = ${Fk(r.Vu_heel_nr)}\\ \\text{kip/ft}`,'');
   h += eq(`Design values — basis: ${hbLbl}${r.heel_md_governs?' (MassDOT §3.3.2.2 governs)':''}`,
