@@ -1586,7 +1586,7 @@ const uxCtl=SharedListInput.bindInput(g('iUX'),{label:'Custom x stations',events
 - **Decision (pending engineer review):** the note is shown only for an LRFD-type list (a 1.2D row) with snow load, since without snow load the added rows reduce to 1.2D + 1.6L, 1.2D + 1.0L and 1.2D + 0.5W, which the other rows bound for loads of one sign. An ASD list gets no note (the ASD preset already has D + S, D + 0.75L + 0.75S and so on).
 - **Other copies:** none (Steel Beam Design has its own list, not changed). **Open items:** none from this change.
 
-## 2026-11-07 — PR: claude/sm-pattern-warn (PATW: warning that pattern live load is not generated; review H2, interim)   [display only; no result change]
+## 2026-11-07 — PR: claude/sm-pattern-warn (PR #1084: https://github.com/mlococo88/All-Structural/pull/1084) (PATW: warning that pattern live load is not generated; review H2, interim)   [display only; no result change]
 - **Why:** review finding H2: the envelope applies each load case to all of its spans at once. For a continuous beam this under-reports the positive span moments and the end reactions (two 15 ft spans, D = 1, L = 2 kip/ft: tool M⁺ = 69.61 kip·ft and R_A = 24.75 kip; with L on span 1 only, 87.50 and 27.75). This is the quick interim warning. Pattern generation follows in a separate PR.
 - **Governing provision:** 2018 IBC Sec. 1607.12 (floor live load placed on the spans that give the greatest effect) and ASCE 7-16 Sec. 4.3.3 (partial loading). Cited and paraphrased only.
 - **Where:**
