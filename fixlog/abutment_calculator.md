@@ -15468,7 +15468,7 @@ Review Phase 8, PR 8h (planned move into `shared/`, CLAUDE.md §3). No computed 
 ### Open items
 - C-13 punching perimeter: see above.
 
-## 2026-11-07 — PR: claude/pile-group-one-row — PG1: one pile row in the moment direction is an input error (was: overturning moment silently dropped) (calculation change for Σx'² = 0 or Σy'² = 0 layouts only)
+## 2026-11-07 — PR: claude/pile-group-one-row — PG1: one pile row in the moment direction is an input error (was: overturning moment silently dropped) (calculation change for Σx'² = 0 or Σy'² = 0 layouts only) (PR #996: https://github.com/mlococo88/All-Structural/pull/996)
 ### Where / before / after (C-8, computeAll)
 ```diff
 +      /* PG1 (2026-11-07): a group with no lever arm about an axis (Σx'² = 0: one pile row in the moment direction; or Σy'² = 0)

@@ -39,7 +39,7 @@
 - `abutment_calculator.html` `pileReaction` calls `SharedPileGroup.reaction`, and its C-8 group properties come from `SharedPileGroup.groupProps`. Consumers: Retaining Wall Designer, abutment calculator.
 - Proof: tests/engine/pile-group.test.mjs (the abutment's former code frozen in the test, bit-identical on 2000 random inputs; the file delegates) and tests/smoke/abutment-pile-group-parity.mjs (main vs branch LAST_R identical on 14 cases). See fixlog/abutment_calculator.md.
 
-## 2026-11-07 — PR: claude/pile-group-one-row — PG1: a moment the pile group has no lever arm for is flagged, not dropped (calculation change for those layouts only)
+## 2026-11-07 — PR: claude/pile-group-one-row — PG1: a moment the pile group has no lever arm for is flagged, not dropped (calculation change for those layouts only) (PR #996: https://github.com/mlococo88/All-Structural/pull/996)
 ### Where / before / after
 ```diff
 -      (a zero Sxx or Syy drops that term). pi = {n, Sxx, Syy, Sxy}. Same expression and operation order as the abutment
