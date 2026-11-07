@@ -3165,7 +3165,7 @@ index 56a8a3f..13f8372 100644
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
 
-## 2026-11-07 — PR: claude/spc-h1-warn — SPH1: warning for sloped-flange shapes (S, C, MC, ST) in the plate model; plate-model table extended to I_y, S_y, Z_y, r_y (review H1, interim; display only, no result change)
+## 2026-11-07 — PR: claude/spc-h1-warn — SPH1: warning for sloped-flange shapes (S, C, MC, ST) in the plate model; plate-model table extended to I_y, S_y, Z_y, r_y (review H1, interim; display only, no result change); PR #1070: https://github.com/mlococo88/All-Structural/pull/1070
 
 - **Problem (review H1):** the plate model of S, C, MC and ST shapes (average t_f over the full b_f, no flange slope, no root fillets) overstates the minor-axis properties for **every** shape of these families (I_y +5 to +34 %, S_y up to +34 %, Z_y up to +16 %, r_y up to +14 % over the AISC v16.0 tables). The plate model is the default, the C1 table listed only A, I_x and J, and the shape hint called the difference "a little different". Unconservative for, e.g., column buckling about y of built-up channels.
 - **Fix (display only):**
