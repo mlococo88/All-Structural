@@ -3842,7 +3842,7 @@ Follow-up to item 3 (#944). Engineer answer (2026-11-07): the vertical component
 ### Decisions (pending engineer review)
 - The factor on P_a,V applies to all three EE II stability checks (sliding, eccentricity, bearing), as one load takes one factor. Under the MassDOT option this lowers the bearing pressure slightly (β 10°: 1754 → 1611 psf); the alternative (keep P_a,V at 1.00 for bearing only) was not adopted because the horizontal thrust that goes with it is not applied.
 
-## 2026-11-07 — PR: claude/rw-aci-uplift-split — ACI footing design with water: the uplift is split out of the factored base pressure, γ_U = 1.6 for the toe and 0.9 for the heel (ACI 318-19 §5.3.8) (RWUP; calculation change)
+## 2026-11-07 — PR: claude/rw-aci-uplift-split — ACI footing design with water: the uplift is split out of the factored base pressure, γ_U = 1.6 for the toe and 0.9 for the heel (ACI 318-19 §5.3.8) (RWUP; calculation change) (PR #960: https://github.com/mlococo88/All-Structural/pull/960)
 
 Calculation audit, item 1 follow-up (#942 added a display note, RWUPN). Engineer answer (2026-11-07): split the uplift out, 1.6 where it adds to the effect (toe), 0.9 where it is permanent and counteracts (heel downward load), in U = 1.2D + 1.6H and 0.9D + 1.6H. Code sites are tagged `RWUP`.
 
