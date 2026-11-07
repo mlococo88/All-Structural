@@ -19939,7 +19939,7 @@ index 06a42e4..b58d4e3 100644
 - **Saved data:** none changed.
 - **Other copies:** none.
 
-## 2026-11-07 — PR: claude/pile-m1-uncased-pm (PDA-M1) — uncased length: combined axial + flexure check (compression and tension)   [check-logic change]
+## 2026-11-07 — PR: claude/pile-m1-uncased-pm (PR #1010: https://github.com/mlococo88/All-Structural/pull/1010) (PDA-M1) — uncased length: combined axial + flexure check (compression and tension)   [check-logic change]
 - **Problem (review M1):** below the casing tip, the bar + grout section was checked for axial (Module 03), tension (Module 09) and bar-only flexure (Module G), each on its own. There was no interaction. An uplift + lateral case (T_u 50, M 0.5) passed each check, 0.88 and 0.53, while the combined demand is 1.41.
 - **Governing provision:** AASHTO LRFD 10th Ed. (2024):
   - Art. 10.9.3.10.1: micropile structural design per Sec. 5 for the reinforced grout section, cased and uncased lengths.
