@@ -5877,7 +5877,7 @@ Other walls (heel M_s, before → after):
 ### Saved data
 - No input or format change.
 
-## 2026-11-07 — PR: claude/rw2-m3-pile-cap-tension — Piles in uplift: a "Pile–Cap Tension" FAIL row with the tension and the embedment, and a warning; the connection is designed by the engineer (RW2M3; check added, pile mode with uplift only)
+## 2026-11-07 — PR: claude/rw2-m3-pile-cap-tension — Piles in uplift: a "Pile–Cap Tension" FAIL row with the tension and the embedment, and a warning; the connection is designed by the engineer (RW2M3; check added, pile mode with uplift only) (PR #1142: https://github.com/mlococo88/All-Structural/pull/1142)
 
 Second-pass review finding M3 (2026-11-07). Code sites are tagged `RW2M3`.
 
