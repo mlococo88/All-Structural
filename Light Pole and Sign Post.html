@@ -671,7 +671,7 @@
         <div class="row"><label>Shaft shape<span class="note">drilled pier or square pier/pile cap</span></label><div class="ctl"><select id="shaftShape"><option value="round">Round (drilled shaft)</option><option value="square">Square</option></select></div></div>
         <div class="row"><label id="lblShaftB">Shaft diameter, b</label><div class="ctl"><input id="b" type="number" value="3.0" step="0.25"><span class="unit">ft</span></div></div>
         <div class="row"><label>Shaft projection above grade, p<span class="note">top of shaft (base plate) above grade; 0 = flush</span></label><div class="ctl"><input id="shaftProj" type="number" value="0" step="0.25" min="0"><span class="unit">ft</span></div></div>
-        <div class="row ibcOnly"><label>Soil class<span class="note">IBC Table 1806.2 presumptive values</span></label><div class="ctl"><select id="soilClass" class="combo-sel">
+        <div class="row ibcOnly"><label>Soil class<span class="note">IBC Table 1806.2 presumptive values. Massachusetts (780 CMR 10th Ed. §1806.3): the lateral values are set by the registered design professional, and isolated poles may use 2 × the values of the MA Table 1806.2 (§1806.3.1); these IBC presets do not apply there — use Custom (LPL14)</span></label><div class="ctl"><select id="soilClass" class="combo-sel">
             <option value="rock1">Crystalline bedrock</option>
             <option value="rock2">Sedimentary &amp; foliated rock</option>
             <option value="gravel">Sandy gravel / gravel (GW, GP)</option>
@@ -1431,7 +1431,7 @@ function applyShapeUI(){
       ? `${dLabel} — top<span class="note">outside, at top</span>`
       : `${dLabel}<span class="note">outside (constant section)</span>`;
   if($('poleDiaBaseLabel')) $('poleDiaBaseLabel').innerHTML=`${dLabel} — base<span class="note">outside, at grade</span>`;
-  if($('poleTwTopLabel'))   $('poleTwTopLabel').innerHTML = tapered ? `Wall thickness — top` : `Wall thickness`;
+  if($('poleTwTopLabel'))   $('poleTwTopLabel').innerHTML = (tapered ? `Wall thickness — top` : `Wall thickness`)+`<span class="note">the design wall: for ERW HSS and pipe, AISC 360-16 §B4.2 takes 0.93 × nominal</span>`;   // LPL13
   if($('poleDepthTopLabel'))$('poleDepthTopLabel').innerHTML = `Depth<span class="note">rect. HSS, into-wind dimension</span>`;
   lppApplyLtsRowsUI();   // LTS-L1
 }
@@ -3206,7 +3206,8 @@ function lppShaftRows(push, reo, Mu, Vu){
   const T=reo.tie, L=reo.long;
   push('Shaft flexure (P–M)','ACI 318-19 §22.4',Mu,L.phiMn,'lb·ft');
   push('Shaft shear','ACI 318-19 §22.5',Vu,T.phiVc,'lb');
-  push('Longitudinal steel, min','ACI 318-19 §10.6.1.1',reo.AsMin,L.As,'in²',L.As>=reo.AsMin,reo.AsMin/Math.max(L.As,1e-9));
+  // LPL1 (2026-11-07): the citation follows the minimum used — 1 % (§10.6.1.1) or 0.5 % of A_g, i.e. 1 % of a reduced effective area ≥ ½A_g (§10.3.1.2)
+  push('Longitudinal steel, min',reo.rhoMin>=0.01?'ACI 318-19 §10.6.1.1':'ACI 318-19 §10.6.1.1 with §10.3.1.2 (½A_g)',reo.AsMin,L.As,'in²',L.As>=reo.AsMin,reo.AsMin/Math.max(L.As,1e-9));
   push('Longitudinal steel, max','ACI 318-19 §10.6.1.1',L.As,reo.AsMax,'in²');
   push('Bar clear spacing','ACI 318-19 §25.2.3',Math.max(1.5,1.5*L.bar.d),L.sClear,'in',L.sClear>=Math.max(1.5,1.5*L.bar.d),Math.max(1.5,1.5*L.bar.d)/Math.max(L.sClear,1e-9));
   push('Tie spacing','ACI 318-19 §25.7.2.1',T.s,T.sLimit,'in');
@@ -3216,6 +3217,14 @@ function lppShaftRows(push, reo, Mu, Vu){
     const r2=push('Tie spacing, shear','ACI 318-19 §22.5, §10.6.2',T.s,lim?sReq:NaN,'in',T.checks.shear,lim?T.s/sReq:0); r2.dec=1;
     if(!lim) r2.capTxt=T.mode==='min'?'not required (V_u ≤ ½φV_c)':'not limiting (V_s = 0)';
   }
+}
+// LPL2 (2026-11-07, review L2): drilled-shaft concrete flow. The check rows use ACI 318-19 §25.2.3 (1.5 in / 1.5 d_b). AASHTO LRFD
+// 10th Ed. (2024) Art. 5.12.9.5.2 (cast-in-place piling; Art. 10.8.3.9.3 points to it for drilled shafts) asks for a clear distance of at
+// least the greater of 5 × the maximum aggregate size and 5.0 in. Not adopted as a check (the shaft is designed to ACI 318-19, Q-C4):
+// shown as a REVIEW note when the clear spacing is below 5.0 in. Decision (pending engineer review).
+function lppShaftFlowMsg(reo){
+  const s=reo&&reo.long?reo.long.sClear:NaN;
+  return (isFinite(s)&&s<5.0)?`Longitudinal bar clear spacing ${fmt(s,2)} in is below 5.0 in: drilled-shaft practice for concrete flow (AASHTO LRFD 10th Ed. Art. 5.12.9.5.2 / 10.8.3.9.3: the greater of 5 × the maximum aggregate size and 5.0 in) — review the cage (the ACI 318-19 §25.2.3 minimum is checked separately).`:null;
 }
 function collectChecks(ctx){
   const C=[];
@@ -3266,6 +3275,7 @@ function summaryHTML(ctx){
     warnL.push(`Natural frequency n<sub>1</sub> ≈ ${natL.map(x=>fmt(x.n1,2)).join(' / ')} Hz &lt; 1 Hz (Rayleigh estimate): the structure is <b>flexible</b> (ASCE 7-16 §26.2). G<sub>f</sub> = ${inp.gf?fmt(inp.gf.Gf,3):'—'} from §26.11.5 (β = ${fmt(inp.beta,3)}); G used = max(entered ${fmt(inp.Ginput!==undefined?inp.Ginput:inp.G,2)}, G<sub>f</sub>) = <b>${fmt(inp.G,3)}</b>. Dynamic effects beyond G<sub>f</sub> (vortex shedding, galloping) are not checked.`);
   if(mode==='pole'){ const oa=lppOffAxisFixtures(fixtures); if(oa.length) warnL.push(lppOffAxisMsg(oa)); }
   if(stacks.some(st=>st.found&&st.found.bolts)) warnL.push('<b>Base plate:</b> '+lppEsc(LPP_BP_VERIFY));
+  stacks.forEach(st=>{ const m=st.found&&lppShaftFlowMsg(st.found.reo); if(m) warnL.push('<b>Shaft cage'+(st.label?' ('+lppEsc(st.label)+')':'')+':</b> '+lppEsc(m)); });   // LPL2
   if(stacks.some(st=>st.found&&st.found.Tu>0))
     warnL.push((mode==='sign'?'Monopost torsion from the eccentric sign wind (Cases B/C)':'Torsion from the wind on offset fixtures and arms')+': the <b>torsional resistance of the soil around the shaft is NOT CHECKED</b> — verify with the geotechnical engineer.');
   if(warnL.length) H+=`<div class="flag" style="background:#fbeeea;border-color:#e0a390;color:#8a2318;margin:8px 0">${warnL.join('<br>')}</div>`;
@@ -6181,6 +6191,7 @@ function lppDashItems(){
       :{name:'Drilled shaft',dc:null,st:'warn',cond:['select the Broms soil model'],text:'select the Broms soil model',ref:'Art. 13.6.1.1'},card('shaft','ltsFndCard',post+' foundation — drilled shaft')));
     if(X.fd) ltsShaftChecks(X.fd).forEach(c=>out.push(Object.assign({name:c.name,dc:c.ratio,st:c.ok?'pass':'fail',cond:[],   // LPH4
       text:lppChkVal(c)+` (utilization ${fmt(100*c.ratio,0)}%)`,ref:c.code+' (shaft reinforcement per ACI 318-19, Q-C4)'},card('shaft','ltsFndCard',post+' foundation — drilled shaft'))));
+    { const m=X.fd&&X.fd.gov&&lppShaftFlowMsg(X.fd.reo); if(m) out.push(Object.assign({name:'Shaft cage clear spacing (concrete flow)',dc:null,st:'warn',cond:['< 5.0 in: review'],text:m,ref:'AASHTO LRFD 10th Art. 5.12.9.5.2 (practice; not an ACI check)'},card('shaft','ltsFndCard',post+' foundation — drilled shaft'))); }   // LPL2
     if(X.fd&&X.fd.gov&&X.fd.Tu>0) out.push(Object.assign({name:'Shaft — soil torsion resistance',dc:null,st:'warn',none:'not computed',cond:['not computed: check per Art. 13.6'],   // LPM2 (2026-11-07)
       text:`T_u = ${fmt(X.fd.Tu,0)} lb·ft: the soil's torsional resistance around the shaft is not computed — check per LRFDLTS Art. 13.6 (geotechnical engineer).`,ref:'LRFDLTS Art. 13.6 (shall resist the applied torsion; no method given)'},card('shaft','ltsFndCard',post+' foundation — drilled shaft')));
     anch();
@@ -6206,6 +6217,7 @@ function lppDashItems(){
       out.push({name:c.name+(c.label?' · '+c.label:''),dc:c.ratio,st:c.ok?'pass':'fail',cond,
         text:`${fmt(c.demand,d)} ${c.unit} vs ${c.capTxt!==undefined?c.capTxt:fmt(c.cap,d)+' '+c.unit} (utilization ${fmt(100*c.ratio,0)}%)`,ref:c.code,go:()=>lppGoto(k,si),where:lppTgt(k,si)});
     });
+    { const m=s.found&&lppShaftFlowMsg(s.found.reo); if(m) out.push({name:'Shaft cage clear spacing (concrete flow)'+(s.label?' · '+s.label:''),dc:null,st:'warn',cond:['< 5.0 in: review'],text:m,ref:'AASHTO LRFD 10th Art. 5.12.9.5.2 (practice; not an ACI check)',go:()=>lppGoto('spacing',si),where:lppTgt('spacing',si)}); }   // LPL2
     if(s.found&&s.found.Tu>0)   // LPM2 (2026-11-07): no silent pass on the soil torsion (the Summary's warning, also in the check panel)
       out.push({name:'Shaft — soil torsion resistance'+(s.label?' · '+s.label:''),dc:null,st:'warn',cond:['not computed: verify'],
         text:`T_u = ${fmt(s.found.Tu,0)} lb·ft: the soil's torsional resistance around the shaft is not computed — verify with the geotechnical engineer.`,ref:'not checked by this tool (open item N2)',go:()=>lppGoto('torsion',si),where:lppTgt('torsion',si)});
@@ -7999,7 +8011,7 @@ function ltsAddCard(page,id,nm,title,hint,body){
 function ltsStepsHTML(steps){
   return `<ol class="steps">${steps.map(s=>`<li id="st-lts-${lppEsc(s.id)}"><b>${lppEsc(s.label)}:</b> ${SharedSteps.line(s,true)}${s.ref?` <span class="eq-ref">[${lppEsc(s.ref)}]</span>`:''}${s.note?`<div class="tbl-note">${lppEsc(s.note)}</div>`:''}</li>`).join('')}</ol>`;
 }
-const LTS_LIMITS=['The soil torsional resistance of the shaft is not checked (LRFDLTS Art. 13.6 gives no method).','The dimensioned drawings and DXF are produced in the IBC mode only.','8-, 12- and 16-sided sections are not built.','Mast arms, high-mast towers (55 ft and taller: warning) and fatigue design are outside this mode; cables are not supported.'];
+const LTS_LIMITS=['The soil torsional resistance of the shaft is not checked (LRFDLTS Art. 13.6 gives no method).','The vertical (axial) bearing resistance of the shaft (Art. 13.6.1.2) is not checked: the axial loads of these supports are small (LPL10, 2026-11-07).','Ice on a square or rectangular support is taken as radial ice on a round of the side width (a few % below the square perimeter; Strength I only; LPL7).','Balanced twin arms: no "one arm loaded" wind case (Art. 3.9.4.1 is written for overhead cantilevered supports; LPL9).','The dimensioned drawings and DXF are produced in the IBC mode only.','8-, 12- and 16-sided sections are not built.','Mast arms, high-mast towers (55 ft and taller: warning) and fatigue design are outside this mode; cables are not supported.'];
 function ltsDevHTML(){
   return `<p class="lts-basis"><b>Known limits (accepted by the engineer, 2026-11-02):</b> ${LTS_LIMITS.join(' ')}</p>`;
 
@@ -8130,6 +8142,7 @@ function ltsCalc(){
     +`${lppLtsLast&&lppLtsLast.wd?`<tr><td>Base weld</td><td>${lppLtsLast.wd.type==='cjp'?'CJP: base metal governs':`<b>${lppLtsLast.wd.ok?'OK':'NOT OK'}</b>, ratio ${fmt(lppLtsLast.wd.ratio,3)}`}</td><td>Art. 5.14 → AWS D1.1 / AISC 360-16 §J2</td></tr>`:''}`
     +`${lppLtsLast&&lppLtsLast.fd?(lppLtsLast.fd.gov?`<tr><td>Drilled shaft embedment (Broms)</td><td>L = <b>${fmt(lppLtsLast.fd.gov.br.L,2)} ft</b> required; shaft moment ${fmt(lppLtsLast.fd.gm.br.Mu,2)} kip-ft</td><td>Art. 13.6.1.1, C13.6.1.1 (pp. 13-3, 13-4)</td></tr>`:`<tr><td>Drilled shaft</td><td><b>select the Broms soil model</b></td><td>Art. 13.6.1.1</td></tr>`):''}`
     +`${lppLtsLast&&lppLtsLast.fd?ltsShaftChecks(lppLtsLast.fd).map(c=>`<tr><td>${lppEsc(c.name)}</td><td><b>${c.ok?'OK':'NOT OK'}</b>, ${lppChkVal(c)} (${fmt(c.ratio,3)})</td><td>${lppEsc(c.code)}${c.name.startsWith('Shaft torsion')&&!c.ok?'; torsion reinforcement required (not designed here)':''}</td></tr>`).join(''):''}`   // LPH4
+    +`${lppLtsLast&&lppLtsLast.fd&&lppLtsLast.fd.gov&&lppShaftFlowMsg(lppLtsLast.fd.reo)?`<tr><td>Shaft cage clear spacing (concrete flow)</td><td><b>REVIEW</b>: ${lppEsc(lppShaftFlowMsg(lppLtsLast.fd.reo))}</td><td>AASHTO LRFD 10th Art. 5.12.9.5.2 (Art. 13.6.2 → BDS; not applied, Q-C4)</td></tr>`:''}`   // LPL2
     +`${lppLtsLast&&lppLtsLast.fd&&lppLtsLast.fd.gov&&lppLtsLast.fd.Tu>0?`<tr><td>Shaft — soil torsion resistance</td><td><b>REVIEW — not computed</b>: T<sub>u</sub> = ${fmt(lppLtsLast.fd.Tu,0)} lb·ft at the groundline; check the soil's torsional resistance around the shaft (geotechnical engineer)</td><td>Art. 13.6 (p. 13-2): drilled shafts shall resist the applied torsion; no method given (open item N2)</td></tr>`:''}`   // LPM2
     +`${lppLtsLast&&lppLtsLast.mc?`<tr><td>Anchorage ductility</td><td><b>required — verify in the Anchorage app</b>: concrete-governed tension strengths &gt; rod steel strength N<sub>sa</sub> (or anchor reinforcement); not checked by this tool</td><td>Art. 5.16.3, C5.16.3 (p. 5-37)</td></tr>`:''}`   // LPM3
     +`${lppLtsLast&&typeof lppAnchorChipHTML==='function'&&LPP_ANCH?`<tr><td>Anchors — Anchorage app</td><td>${LPP_ANCH.groups.map(gg=>`${lppEsc(gg.label)}: ${lppAnchorChipHTML(gg.id)}`).join('<br>')}</td><td>LRFDLTS combinations sent from the Anchorage tab (HANDOFF.md §4.11)</td></tr>`:''}`
