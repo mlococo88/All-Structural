@@ -43,6 +43,8 @@ const CASES = [
   ['RWPL pile row outside the footing', { fnd_type: 'pile', pile_x2: 20 }, 'pile_x2', 'e'],
   ['RWPL two pile rows at the same x', { fnd_type: 'pile', pile_x2: 1.5 }, 'pile_x2', 'e'],
   ['RWPL embedment + clear ≥ t_f', { fnd_type: 'pile', pile_embed: 16 }, 'pile_embed', 'e'],
+  ['RWTE pile t_f 8 in ≤ embedment + clear + 2 (was a throw)', { fnd_type: 'pile', tf: 8 }, 'pile_embed', 'e'],
+  ['RWTE pile t_f 17 in = embedment 12 + clear 3 + 2 (d_p ≤ 0)', { fnd_type: 'pile', tf: 17 }, 'pile_embed', 'e'],
   ['RWPL AASHTO φ_c > 1', { fnd_type: 'pile', design_basis: 'AASHTO', pile_phic: 1.2 }, 'pile_phic', 'e'],
   ['RWHP stem projection leaves < 1 ft retained (H_s 12, h_p 11.5)', { h_proj: 11.5 }, 'h_proj', 'e'],
   ['RWHP stem projection negative', { h_proj: -1 }, 'h_proj', 'e'],
@@ -257,7 +259,7 @@ const AUD = [
     ['Math.abs(R.pile.comb[0].L.rows[0].P - 83.604) < 0.001 && Math.abs(R.pile.comb[0].L.rows[1].P - 77.664) < 0.001 && Math.abs(R.pile.govC.cap.c - 195) < 1e-9', 'Strength I max'],
     ['R.checks.pileSpacing.ok && R.checks.pileEdge.ok && R.checks.pileEmbed.ok && !R.checks.eeSliding && !R.warnings.some(w => /^AASHTO bearing/.test(w))', 'detailing checks (Art. 10.7.1.2), no soil notes']]],
   ['RWPL 8d ACI t_f 36 in on piles: toe M_u 17521.6 (q 12896 at 1.5 ft), heel M_up 44434.6 (U = 0.9D + 1.6H), punching 77.38 ≤ 403.0 kip', { fnd_type: 'pile', tf: 36 }, [
-    ['Math.abs(R.pileFtg.cmax.rows[0].q - 12896.05) < 0.1 && Math.abs(R.Mu_toe_net - 17521.58) < 0.1 && Math.abs(R.Vu_toe - 11681.05) < 0.1 && Math.abs(R.d_toe - 20.625) < 1e-9', 'toe from the pile row, d over the pile heads'],
+    ['Math.abs(R.pileFtg.cmax.rows[0].q - 12896.05) < 0.1 && Math.abs(R.Mu_toe_net - 17521.58) < 0.1 && Math.abs(R.Vu_toe - 11681.05) < 0.1 && Math.abs(R.d_toe - 32.625) < 1e-9 && R.cov_bot === 3 && R.cov_ph === 15 && R.checks.crackToe.ok && R.checks.toeShear.ok', 'toe from the pile row; RWPB: bottom bars at c_c (d 32.625), crack and shear pass'],
     ['R.heel_min_governs && Math.abs(R.Mu_heel_up - 44434.60) < 0.1 && Math.abs(R.Mu_heel_net - 9997.40) < 0.1', 'heel'],
     ['Math.abs(R.pilePunch.dp - 20.25) < 1e-9 && Math.abs(R.pilePunch.rows[0].bo - 129) < 1e-9 && Math.abs(R.pilePunch.rows[0].phiVc - 403012.3) < 1 && R.checks.pilePunch.ok && R.checks.pileCapD.ok', 'punching, cap depth'],
     ['/Pile Cap — Punching around the Piles/i.test(T.footing) && /Factored pile reactions under the toe/i.test(T.footing) && /Pile cap — punching around the piles/.test(P)', 'Footing tab and Report']]],
