@@ -2034,8 +2034,19 @@ function flexRegions(cb,A){
   }
   if(cur)regs.push(cur);
   if(!regs.length)regs.push({x1:0,x2:L,sign:1});
-  /* extend adjacent regions to meet at the inflection point midway */
-  for(let i=0;i<regs.length-1;i++){const mid=(regs[i].x2+regs[i+1].x1)/2;regs[i].x2=mid;regs[i+1].x1=mid;}
+  /* extend adjacent regions to meet at the inflection point. L5 (2026-11-07): the zero of M, linearly interpolated between
+     the stations either side of the sign change (exact for a linear segment; within one station spacing otherwise).
+     Before: the midpoint of the last station of one region and the first of the next (up to half a station off). */
+  for(let i=0;i<regs.length-1;i++){
+    const ia=xs.indexOf(regs[i].x2),ib=xs.indexOf(regs[i+1].x1);let x0=(regs[i].x2+regs[i+1].x1)/2;
+    if(ia>=0&&ib>ia){
+      let j0=ia;while(j0>0&&Math.abs(M[j0])<=tol)j0--;   /* back over near-zero stations the region absorbed */
+      for(let j=j0;j<ib;j++){const m1=M[j],m2=M[j+1];
+        if(m1===0){x0=xs[j];break;}
+        if(m1*m2<0||m2===0){x0=m2===0?xs[j+1]:xs[j]+m1*(xs[j+1]-xs[j])/(m1-m2);break;}}
+    }
+    regs[i].x2=x0;regs[i+1].x1=x0;
+  }
   regs[0].x1=0;regs[regs.length-1].x2=L;
   return regs.filter(r=>r.x2-r.x1>1e-6);
 }
