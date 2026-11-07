@@ -15358,7 +15358,76 @@ index cedb10f..5b89752 100644
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
 
-## 2026-11-07 — PR: claude/abut-shared-pile-group — 8h: pileReaction and the C-8 pile-group properties from shared/pile-group.js (refactor; results bit-identical)
+## 2026-11-07 — PR: claude/abut-h1-punch-round (PR #993: https://github.com/mlococo88/All-Structural/pull/993) (ABH1: punching shear around round / pipe / drilled piles uses the circular critical section π(D + d_v); square and H-piles unchanged)   [calc change] [MORE conservative]
+
+Source: code-compliance review of 2026-11-07, item H1.
+
+### ABH1. Round-pile punching perimeter
+- **Where:** `computeAll` C-13 (anchor `const rnd=p.pileShape==="round";`, the per-pile loop `let b0=0, arcF=1;`); Tab 4 §4.6 (`renderTabFound`, anchor `pnc.rnd? eqB("Critical perimeter at d_v/2 from the pile face (round pile`); the Report worked step (`abrModel`, anchor `Critical perimeter at d_v/2 from the round pile`); the pile plan figure (`pilePlanSVG`, dashed circles for round piles).
+- **Before:** every pile shape used a square envelope of side D + d_v (b₀ = 4(D + d_v) for an interior pile); faces outside the footing were dropped face by face.
+- **After:** `pileShape === "round"`: the critical section is the circle of diameter D + d_v about the pile centre, b₀ = π(D + d_v)·f_arc, where f_arc is the share of that circle inside the footing plan (found by 0.1° steps; 1.0 for an interior pile). H-pile ("hp") and square piles keep the square envelope exactly as before.
+- **Problem:** the square envelope of a round pile overstates b₀ by 4/π (27 %) — unconservative.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 5.12.8.6.1 (two-way critical section placed so that b₀ is a minimum but not closer than 0.5d_v to the perimeter of the reaction area: for a round pile, a circle of diameter D + d_v), 5.12.8.6.3 and Eq. 5.12.8.6.3-1 (V_n), C5.12.8.6.3 (only the part of the perimeter that resists the shear counts near an edge).
+- **Check case (review §2.2 variant: piles 3 × 8 grid, Extreme Event I on, A_s = 0.20, Site Class D; pile shape round, D = 16 in; t_f = 3 ft, embedment 12 in, clear 3 in, #8 → d_e = 20 in, d_v = max(18, 17.28) = 18 in; f′c = 4 ksi; V_u = 200.97 kip, Strength I):**
+  - Before: b₀ = 4(16 + 18) = 136 in; V_n = 0.126·√4·136·18 = 616.9 kip; φV_n = 555.2 kip; D/C = 200.97/555.2 = **0.362**.
+  - After: b₀ = π(16 + 18) = 106.81 in; V_n = 0.126·2·106.81·18 = 484.5 kip; φV_n = 436.1 kip; D/C = 200.97/436.1 = **0.461**.
+- **How verified:** headless Chromium, origin/main vs this branch, 12 scenarios (default; HP piles + EE I; round piles; square piles; rock; spread + EQ; fixed bearings; Coulomb + water + independent wings; integral; semi-integral; MassDOT piles; round piles near the heel edge): only the round-pile scenarios move (punching b₀, V_n, D/C and the governing pile number, 2 → 1, tied loads); every other computed value is identical. All tabs and the Report render with no console errors; self-test passes. `node tests/check-syntax.mjs abutment_calculator.html`, `node tests/smoke/project-library.mjs --tool abutment`: pass.
+- **Saved data:** no key or format change. A saved round-pile project shows the new (lower) capacity on open.
+- **Other copies:** none (Pile Designer does not check cap punching).
+- **Open items:** none. A pile whose circle is cut by a footing edge counts only the arc inside the footing (conservative).
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 839ae53..97bd06f 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -4551 +4551,2 @@ function computeAll(){
+-    const sPile=+p.pileSize;                             // square-envelope side (round treated as square envelope), in
++    const sPile=+p.pileSize;                             // H-pile / square: square-envelope side; round: diameter D (in)
++    const rnd=p.pileShape==="round";                     // ABH1 (2026-11-07): round / pipe / drilled pile: circular critical section of diameter D + d_v [5.12.8.6.1]
+@@ -4562 +4563,7 @@ function computeAll(){
+-      let b0=0;                                          // ft
++      let b0=0, arcF=1;                                  // ft; arcF = share of the circular perimeter inside the footing (round piles)
++      if(rnd){                                           // ABH1: circle of radius e2 about the pile centre; only the arc inside the footing plan counts (C5.12.8.6.3), by 0.1° steps
++        const NS=3600; let nin=0;
++        for(let k=0;k<NS;k++){ const t=(k+0.5)*2*Math.PI/NS, xx=xt+e2*Math.cos(t), yy=yc+e2*Math.sin(t);
++          if(xx>=-1e-6&&xx<=B+1e-6&&yy>=-Lftg/2-1e-6&&yy<=Lftg/2+1e-6) nin++; }
++        arcF=nin/NS; b0=2*Math.PI*e2*arcF;
++      }else{
+@@ -4566,0 +4574 @@ function computeAll(){
++      }
+@@ -4573 +4581 @@ function computeAll(){
+-        gov={dc, Vu, Vn, b0:b0in, dv:dvF, de:deF, pile:no, sides, spanX:spanX*12, spanY:spanY*12}; }
++        gov={dc, Vu, Vn, b0:b0in, dv:dvF, de:deF, pile:no, sides, spanX:spanX*12, spanY:spanY*12, arcF}; }
+@@ -4575 +4583 @@ function computeAll(){
+-    R.checks.punching={...gov, sPile, betaC, vnCoef, embed:embP, clrTop:clrP, hP, db:dbF, ls:R.checks.pileComp.ls, lbl:det.c?.lbl};
++    R.checks.punching={...gov, sPile, betaC, vnCoef, embed:embP, clrTop:clrP, hP, db:dbF, ls:R.checks.pileComp.ls, lbl:det.c?.lbl, rnd};
+@@ -6869 +6877 @@ function renderTabFound(R){
+-      ${govNote((pnc.lbl||"")+" — "+(pnc.ls||"")+" (governing pile "+pnc.pile+", "+pnc.sides+"-sided critical section)")}
++      ${govNote((pnc.lbl||"")+" — "+(pnc.ls||"")+" (governing pile "+pnc.pile+", "+(pnc.rnd? fmt(100*pnc.arcF,0)+" % of the circular critical section inside the footing)" : pnc.sides+"-sided critical section)"))}
+@@ -6876 +6884,4 @@ function renderTabFound(R){
+-      ${eqB("Critical perimeter at d_v/2 from the pile face (square envelope, edge-truncated)","AASHTO 5.12.8.6.3",[
++      ${pnc.rnd? eqB("Critical perimeter at d_v/2 from the pile face (round pile: circle of diameter D + d_v, edge-truncated)","AASHTO 5.12.8.6.1, 5.12.8.6.3",[
++        `b_0 = \\pi\\,(D+d_v)\\,f_{arc} = \\pi\\,(${fmtT(pnc.sPile,1)}+${fmtT(pnc.dv)})\\,(${fmtT(pnc.arcF,3)}) = ${fmtT(pnc.b0,1)}\\ \\text{in}`],
++        "D = pile diameter (panel I-7). The critical section is the circle at d_v/2 from the pile face (the minimum perimeter not closer than 0.5d_v, 5.12.8.6.1). f_arc = share of that circle inside the footing plan (1.0 for an interior pile); the part beyond a footing edge is not counted (C5.12.8.6.3).")
++      : eqB("Critical perimeter at d_v/2 from the pile face (square envelope, edge-truncated)","AASHTO 5.12.8.6.3",[
+@@ -6883 +6894 @@ function renderTabFound(R){
+-        "β_c = ratio of long to short side of the reaction area (≈ 1.0 for square/round piles). Round/H-piles are treated with a square envelope of side = pile size (conservative).")}
++        "β_c = ratio of long to short side of the reaction area (≈ 1.0 for square/round piles). H-piles are treated with a square envelope of side = pile size; round piles with the circular section above (ABH1).")}
+@@ -8253,2 +8264,3 @@ function pilePlanSVG(R){   // ABINT: the plan as a string (drawPilePlan on scree
+-      s+=`<rect x="${Xc(c.y)-sd/2*sc}" y="${Yc(c.x)-sd/2*sc}" width="${sd*sc}" height="${sd*sc}" fill="none" stroke="#7a2020" stroke-width="0.9" stroke-dasharray="3 2"/>`; });
+-    s+=`<text x="${Xc(Lft/2)}" y="${Yc(B/2)+44}" text-anchor="end" font-size="9.5" font-family="Times New Roman" fill="#7a2020">dashed squares: punching perimeter, side = pile + d_v = ${fmt(pn.sPile+pn.dv,1)} in (§4.6)</text>`; }
++      s+=pn.rnd? `<circle cx="${Xc(c.y)}" cy="${Yc(c.x)}" r="${sd/2*sc}" fill="none" stroke="#7a2020" stroke-width="0.9" stroke-dasharray="3 2"/>`
++        : `<rect x="${Xc(c.y)-sd/2*sc}" y="${Yc(c.x)-sd/2*sc}" width="${sd*sc}" height="${sd*sc}" fill="none" stroke="#7a2020" stroke-width="0.9" stroke-dasharray="3 2"/>`; });
++    s+=`<text x="${Xc(Lft/2)}" y="${Yc(B/2)+44}" text-anchor="end" font-size="9.5" font-family="Times New Roman" fill="#7a2020">dashed ${pn.rnd?"circles":"squares"}: punching perimeter, ${pn.rnd?"diameter":"side"} = pile + d_v = ${fmt(pn.sPile+pn.dv,1)} in (§4.6)</text>`; }
+@@ -9691 +9703,2 @@ function abrModel(){
+-        w.add({id:"b0",label:"Critical perimeter at d_v/2 from the pile ("+pu.sides+" sides inside the footing)",sym:"b_{0}",eq:"",sub:"",value:pu.b0,unit:"in",d:1});
++        if(pu.rnd) w.add({id:"b0",label:"Critical perimeter at d_v/2 from the round pile (circle of diameter D + d_v; "+abrN(100*pu.arcF,0)+" % inside the footing)",sym:"b_{0}",eq:"\\pi\\,(D + d_{v})\\,f_{arc}",sub:"\\pi\\cdot ("+abrN(pu.sPile,1)+" + "+abrN(pu.dv,2)+")\\cdot "+abrN(pu.arcF,3),value:pu.b0,unit:"in",d:1});   // ABH1
++        else w.add({id:"b0",label:"Critical perimeter at d_v/2 from the pile ("+pu.sides+" sides inside the footing)",sym:"b_{0}",eq:"",sub:"",value:pu.b0,unit:"in",d:1});
+```
+## 2026-11-07 — PR: claude/abut-shared-pile-group — 8h: pileReaction and the C-8 pile-group properties from shared/pile-group.js (refactor; results bit-identical) (PR #990: https://github.com/mlococo88/All-Structural/pull/990)
 
 Review Phase 8, PR 8h (planned move into `shared/`, CLAUDE.md §3). No computed result changes.
 ### Where / before / after

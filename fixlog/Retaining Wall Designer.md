@@ -4897,3 +4897,164 @@ Open item raised in #960 (RWUP). Engineer instruction relayed 2026-11-07 (no que
 
 ### Saved data
 - No input or format change.
+## 2026-11-07 — PR: claude/rw-left-breakpoint — Check summary as a left column from 1200 px (was 1500 px); 240 px wide from 1200 to 1499 px (RWLB; display only, no result change) (PR #984: https://github.com/mlococo88/All-Structural/pull/984)
+
+### RWLB. The check summary is on the left at common laptop widths   [display only]
+- **Decision (pending engineer review):** the engineer asked (2026-11-07) for "the summary cards … on the left panel"; at 1280–1499 px (laptops, and 1920 px screens at 125–150 % scaling) RWDC / RWDL (#926, #959) still put the summary above the output tabs. The left column now starts at **1200 px** in Retaining Wall Designer, Spread Footing and Light Pole and Sign Post alike (one PR per tool). From 1200 to 1499 px the column is **240 px** wide; at 1500 px and wider it is 292 px as before (layout unchanged there). Below 1200 px (tablet, phone) nothing changes: the summary sits above the output tabs, and the phone keeps "results first / Show inputs". Same collapse button (« / » → 42 px strip) and key `retaincalcpro.dashCollapsed.v1`.
+- **Why 1200:** at 1200 px the column (240) + inputs (344) leave a 616 px output panel; every output tab fits without sideways scroll (checked on all nine tabs at 1200, 1280 and 1400 px). The Overview card's two groups (Stability / Structural) were cramped at that width (bars and values overlapping), so from 1200 to 1279 px with the column open they stack, exactly as they already do at 1100 px and below.
+- **Where:**
+  - CSS, RWDC block: before `@media screen and (min-width: 1500px) {` (the rule holding `body.rwDashWide #rwDashCol { display: block; flex: 0 0 292px; …`); after:
+```css
+/* RWLB (…): the left column starts at 1200 px (was 1500 px) … */
+@media screen and (min-width: 1200px) and (max-width: 1499.98px) { body.rwDashWide #rwDashCol { flex-basis: 240px; width: 240px; } }
+/* RWLB: … the Overview card's Stability / Structural groups stack, as they already do at 1100 px and below */
+@media screen and (min-width: 1200px) and (max-width: 1279.98px) {
+  body.rwDashWide:not(.rwDashColl) .sc-cols { grid-template-columns: 1fr; }
+  body.rwDashWide:not(.rwDashColl) .sc-group + .sc-group { border-left: 0; border-top: 1px solid var(--border); }
+  body.rwDashWide:not(.rwDashColl) .sc-gov { text-align: left; }
+}
+@media screen and (min-width: 1200px) {
+```
+  - JS: `const RWDC = { … mq: window.matchMedia ? window.matchMedia('screen and (min-width:1500px)') : null, …` → `'screen and (min-width:1200px)'` (comment `/* RWLB: was 1500px */`).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data (§5):** no key or format changed.
+- **How verified:** origin/main vs branch at 1920, 1280 and 1200 px, three walls (ACI default; AASHTO default, 1 FAIL; ACI H_s 22 ft / q_a 2500 psf, 5 FAIL): `window._R`, Export JSON fields, every localStorage key and value, the Report text (`textContent`: the Report's subsections use `content-visibility:auto`, so `innerText` drops off-screen subsections and depends on the layout) and the four-sheet DXF **identical**; 0 console errors. No sideways page scroll at 390, 768, 1200, 1280, 1400, 1920 px (every output tab at 1200 / 1280 / 1400). Screenshots before / after at 1200, 1280, 1400 (and after at 1920, 768, 390; the 5-FAIL wall at 1280) looked at. Tests: check-syntax; smoke/retaining-wall-checks; phone-layout rwall 390/768; project-library retwall.
+
+## 2026-11-07 — PR: claude/rw-pile-schedule — Pile-supported footing: pile schedule (Drawings sheet 5 with a pile layout plan, Report table); the stale Phase 8b warning removed (RWPL; display only, no result change) (PR #981: https://github.com/mlococo88/All-Structural/pull/981)
+
+Review Phase 8, pile schedule (the open item of 8e). Code sites are tagged `RWPL`. No computed value changes; spread-footing walls are byte-identical.
+### RWPL-11. `rwPileSchedule(r)` (new, after `rwPileAnalysis`)
+- One row per pile row, read from `r.pile` (Stability tab, Pile Step 2); nothing new is computed, only selected:
+  - compression: the combination with the largest P_i / capacity for that row (P_i > 0), its P_i and capacity;
+  - uplift: the combination with the largest −P_i / uplift capacity for that row (P_i < 0), else none;
+  - lateral: h = H/N of the governing lateral combination (`r.pile.govH`; the same on every pile);
+  - piles per ft = 1/s; count per joint segment when the wall length is known (AASHTO collision input L_joint, the only length in the model): the
+    first pile s/2 from the joint, then every s (the rule of the elevation and the 3D view), n = ceil((L − s/2)/s).
+- Combinations are numbered in `r.pile.comb` order (the Pile Step 2 table order).
+### RWPL-12. Drawings: sheet 5 "PILE LAYOUT PLAN AND PILE SCHEDULE" (pile mode only; block `/* ===== 5. PILE LAYOUT AND PILE SCHEDULE`)
+- Plan from above, toe at the bottom: footing B × segment length (joint spacing, or the nominal length of the elevation sheet), stem faces,
+  piles of each row (hidden: under the footing; squares, or circles for pipe / round), row lines, the first spacing of each row dimensioned,
+  "ROW i @ s O.C.", a chain of the row positions from the toe and B.
+- Pile schedule table at paper size: ROW, X FROM TOE, SPACING, PILES/FT, NO. IN L (or NO./SEGMENT "-"), PILE, EMBED., P_MAX / capacity / comb.,
+  UPLIFT / capacity / comb., H/N / capacity / comb.; notes: the combination list, the selection rule, the capacities' basis, the count rule,
+  "pile length, tip elevation and driving criteria by the geotechnical engineer".
+- The sheet is appended after sheet 4, so sheets 1–4 keep their numbers; it is drawn only when `r.pile` has results (spread footing: 4 sheets, as before).
+  It is in the DXF and the print like every sheet. Links: Pile Step 2, punching.
+### RWPL-13. Report: "Pile schedule" (last sub of the "Pile-supported footing" section)
+- The same rows (kip per pile: P / capacity (comb.)), the combination list, the count rule, a link to the Drawings tab.
+### RWPL-14. Stale warning removed
+- `calcAll`: the Phase 8b warning "Pile-supported footing selected: the piles are drawn, but the pile analysis is not in this version yet
+  (Phase 8c) …" was still pushed in pile mode (8c meant to remove it; it survived the 8b/8c merge). It contradicted the pile results shown. Removed. Display only.
+### Check case (default wall, t_f 36 in, 2 rows at 1.5 / 11.0 ft, s = 6 ft, ACI)
+- Row 1: x 1'-6", 6'-0", 0.1667 /ft, P_max 59.7 kip ≤ P_a 100 (1) D + H + L; uplift none; H/N 13.50 kip vs H_a 8.0 (1).
+- Row 2: x 11'-0", P_max 56.6 kip (1). These are the Pile Step 2 table values (and the 8e loads sheet).
+- AASHTO, collision joint 41 ft, rows 1.5 / 11.0 / 6.0 ft at s 6 / 6 / 8 ft: 7, 7 and 5 piles in the 41-ft segment (3, 9, …, 39 ft; 4, 12, …, 36 ft).
+### How verified
+- origin/main vs branch, headless Chromium, the 12 audit walls (spread): `_R`, Export JSON, autosave, Report, tab texts and DXF identical.
+- Pile mode (ACI default; AASHTO collision + k_h + 3 rows): the only differences are the warning removed, the Report sub "Pile schedule" and sheet 5 in the DXF.
+- Sheet 5 screenshotted (ACI and AASHTO); `check-syntax`; `retaining-wall-checks`; `phone-layout --tool rwall --w 390,768`; `project-library --tool retwall`; `dxf-print-sheets --tool rw`.
+### Other copies
+- None.
+### Open items
+- **Decision (pending engineer review):** the schedule shows, per row, the combination with the largest load-to-capacity ratio (not the largest load), so it matches the checks when the capacities differ by limit state (AASHTO strength vs extreme event).
+- **Decision (pending engineer review):** the count per segment uses "first pile s/2 from the joint"; the actual layout at joints is the detailer's.
+
+### Before / after (code, `git diff -U0` of `Retaining Wall Designer.html`)
+```diff
+-/* RWDL (2026-11-07, engineer: "the summary cards should be on the left panel" as in Spread Footing): each row is styled as
+-   Spread Footing's dashboard chip (SFDC): a 1 px border in the status colour on a tinted background, the check name in bold.
+-   Display only. */
+-.rwdCh { border-left-width: 1px; }
+-.rwdCh.pass { border-color: var(--pass); background: #ECFDF5; } .rwdCh.fail { border-color: var(--fail); background: #FEF2F2; }
+-.rwdCh.warn { border-color: var(--warn); background: #FFFBEB; } .rwdCh.na { border-color: var(--slate-400); background: var(--slate-50); }
+-.rwdCh.pass:hover { background: #D1FAE5; } .rwdCh.fail:hover { background: #FEE2E2; } .rwdCh.warn:hover { background: #FEF3C7; } .rwdCh.na:hover { background: var(--slate-100); }
+-.rwdCh .rwdN { font-weight: 700; color: var(--slate-900); }
++/* RWPL (2026-11-07, Phase 8 pile schedule; display only): the pile schedule of the Drawings (sheet 5) and the Report, one row per
++   pile row. Every number is read from r.pile (Stability tab, Pile Step 2); nothing is computed here but the selection:
++   - compression: the combination with the largest P_i / capacity for that row (P_i > 0), with its P_i and capacity;
++   - uplift: the combination with the largest −P_i / uplift capacity for that row (P_i < 0), or none;
++   - lateral: h = H/N, the same on every pile, of the governing lateral combination (P.govH);
++   - count: piles of the row in one joint segment (AASHTO collision input L_joint, the only wall length in the model), placed as
++     in the elevation and the 3D view: the first pile s/2 from the joint, then every s. With no length: piles per ft only.
++   Combinations are numbered in r.pile.comb order (the order of the Pile Step 2 table). */
++function rwPileSchedule(r) {
++  const P = r && r.pile; if (!P || P.err || !P.comb || !P.comb.length || !P.g) return null;
++  const inp = r.inp, isA = r.isAASHTO, A = inp.aashto || {};
++  const Lseg = (isA && A.ct_enable && A.ct_ljoint > 0) ? A.ct_ljoint : null;
++  const nIn = (L, s) => (L > s / 2 ? Math.ceil((L - s / 2) / s - 1e-9) : 0);
++  const num = c => P.comb.indexOf(c) + 1;
++  const rows = P.rows.map((rw, i) => {
++    let c = null, t = null;
++    P.comb.forEach(cb => { const x = cb.L.rows[i]; if (!x || !isFinite(x.P)) return;
++      const dc = x.P > 0 ? x.P / Math.max(cb.cap.c, 1e-9) : 0, dt = x.P < 0 ? -x.P / Math.max(cb.cap.t, 1e-9) : 0;
++      if (x.P > 0 && (!c || dc > c.dc)) c = { P: x.P, cap: cb.cap.c, cs: cb.cap.cs, dc, label: cb.label, n: num(cb) };
++      if (x.P < 0 && (!t || dt > t.dc)) t = { P: -x.P, cap: cb.cap.t, ts: cb.cap.ts, dc: dt, label: cb.label, n: num(cb) }; });
++    return { row: i + 1, x: rw.x, s: rw.s, n: 1 / rw.s, count: Lseg ? nIn(Lseg, rw.s) : null, c, t };
++  });
++  const gh = P.govH, h = gh && gh.L.rows.length ? { h: gh.L.rows[0].h, cap: gh.cap.h, hs: gh.cap.hs, dc: gh.dcH, label: gh.label, n: num(gh) } : null;
++  const shape = { hp: 'steel H-pile', pipe: 'steel pipe pile', square: 'square precast concrete', round: 'round (timber / cast-in-place)' }[P.shape] || P.shape;
++  return { rows, h, Lseg, shape, desig: P.desig || '', D: P.D, embed: P.embed, isA, combs: P.comb.map((c, j) => ({ n: j + 1, label: c.label })) };
++}
+-  // RWPL (2026-11-07, Phase 8b): pile-supported footing selected: inputs and drawings only in this version
+-  if (inp.fnd && inp.fnd.type === 'pile') warnings.push('Pile-supported footing selected: the piles are drawn, but the pile analysis is not in this version yet (Phase 8c). The stability and footing results shown are still those of a spread footing on soil.');
++  // RWPL (2026-11-07): the Phase 8b warning "pile analysis not in this version yet" is removed (stale since 8c / 8d: the piles are analysed)
++    // RWPL (2026-11-07, pile schedule; display only): one row per pile row; values from Pile Step 2 (rwPileSchedule)
++    const PS = rwPileSchedule(r);
++    if (PS) {
++      const cmb = q => q ? N(q.P, 2) + ' / ' + N(q.cap, 2) + ' (' + q.n + ')' : 'none';
++      const prow = PS.rows.map(q => ['Row ' + q.row, N(q.x, 2), N(q.s, 2), N(q.n, 4), q.count == null ? '–' : String(q.count), PS.shape + (PS.desig ? ', ' + PS.desig : '') + ', D = ' + N(PS.D, 1) + ' in', N(PS.embed, 1),
++        cmb(q.c), cmb(q.t), PS.h ? N(PS.h.h, 2) + ' / ' + N(PS.h.cap, 2) + ' (' + PS.h.n + ')' : '–']);
++      const cap = isA ? 'factored resistance' : 'allowable';
++      subs.push(sub('Pile schedule', [{ type: 'table', wide: true, caption: 'Pile schedule (per pile row; loads per pile, kip)', head: ['Row', 'x from the toe (ft)', 'Spacing s (ft)', 'Piles per ft', PS.Lseg ? 'Piles in ' + N(PS.Lseg, 1) + ' ft' : 'Piles per segment', 'Pile', 'Embedment (in)', 'Compression P / ' + cap + ' (comb.)', 'Uplift T / ' + cap + ' (comb.)', 'Lateral h / ' + cap + ' (comb.)'], rows: prow },
++        { type: 'note', text: 'Combinations: ' + PS.combs.map(c => '(' + c.n + ') ' + c.label).join('; ') + '. For each row the combination with the largest load-to-capacity ratio is shown; the lateral load h = H/N is the same on every pile. Every value is worked in Pile Step 2 (above; on screen: Stability tab, Pile Step 2).' },
++        { type: 'note', text: PS.Lseg ? 'Piles per segment: one joint segment of ' + N(PS.Lseg, 1) + ' ft (the collision input), the first pile s/2 from the joint, then every s (as drawn on the Drawings, sheet 5).' : 'The wall length is not in the model: piles per ft only; the Drawings (sheet 5) show a typical segment at a nominal length.' },
++        { type: 'note', text: '[[tab:drawings|On screen: Drawings tab, sheet 5 (pile layout plan and pile schedule)]]' }]));
++    }
++  /* ================= 5. PILE LAYOUT AND PILE SCHEDULE (pile-supported footing only; RWPL, display only) ================= */
++  const PS = rwPileSchedule(r);
++  if (PS) sheet('piles', 'PILE LAYOUT PLAN AND PILE SCHEDULE', P => {
++    const h = 0.085 * P, hs = 0.072 * P, F = inp.fnd, d = F.D, round = F.shape === 'pipe' || F.shape === 'round';
++    const Lknown = PS.Lseg ? PS.Lseg * 12 : null, Lw = Lknown || Math.max(2 * G.H, 240);
++    // plan: x along the wall, y from the toe (toe at the bottom); the footing, the stem faces, the piles (hidden: under the footing)
++    D.rect(L.conc, 0, 0, Lw, G.B);
++    D.line(L.conc, 0, G.xf, Lw, G.xf); D.line(L.conc, 0, G.xbt, Lw, G.xbt); if (Math.abs(G.xbb - G.xbt) > 1e-6) D.line(L.hid, 0, G.xbb, Lw, G.xbb);
++    const freeY = (y0, y1) => { const ys = [y0, ...F.rows.map(rw => rw.x * 12).filter(y => y > y0 && y < y1), y1].sort((p1, p2) => p1 - p2);   // the middle of the widest gap between rows
++      let best = [y0, y1], w = -1; ys.slice(1).forEach((y, j) => { if (y - ys[j] > w) { w = y - ys[j]; best = [ys[j], y]; } }); return (best[0] + best[1]) / 2; };
++    T(L.txt, Lw / 2, (G.xf + G.xbt) / 2 - 0.035 * P, hs, 'STEM', 1);
++    T(L.txt, Lw / 2, freeY(0, G.xf) - 0.035 * P, hs, 'TOE', 1); T(L.txt, Lw / 2, freeY(Math.max(G.xbb, G.xbt), G.B) - 0.035 * P, hs, 'HEEL', 1);
++    const ord = F.rows.map((rw, i) => ({ rw, i })).sort((p1, p2) => p1.rw.x - p2.rw.x);
++    ord.forEach(({ rw, i }) => { const s = rw.s * 12, y = rw.x * 12; if (!(s > 0)) return; const xs = [];
++      for (let x = s / 2; x < Lw - 1e-6; x += s) { xs.push(x); if (round) D.circle(L.hid, x, y, d / 2); else D.rect(L.hid, x - d / 2, y - d / 2, x + d / 2, y + d / 2); }
++      D.line(L.hid, -0.1 * P, y, Lw + 0.1 * P, y, D.ltype('DASHED'));   // row line
++      if (xs.length > 1) D.dimH(L.dim, xs[0], xs[1], y + d / 2 + 0.22 * P, y + d / 2, '<>');
++      T(L.txt, Lw + 0.18 * P, y - 0.035 * P, h, 'ROW ' + (i + 1) + ' @ ' + rwdwFI(s) + ' O.C.', 0); });
++    D.h = 0.085 * P;
++    D.chainV(L.dim, [0, ...ord.map(o => o.rw.x * 12)], -0.45 * P, 0);
++    D.dimV(L.dim, 0, G.B, -0.9 * P, 0, 'B = <>');
++    T(L.txt, -1.05 * P, G.B / 2, hs, 'FROM THE TOE', 1, 90);
++    const yd = -0.5 * P;
++    if (Lknown) D.dimH(L.dim, 0, Lw, yd, 0, 'JOINT SPACING <> (COLLISION INPUT)');
++    else T(L.txt, Lw / 2, yd, hs, 'WALL LENGTH NOT IN THE MODEL: TYPICAL SEGMENT AT A NOMINAL LENGTH; FIRST PILE S/2 FROM THE SEGMENT END', 1);
++    const sbK = scaleBar(Lw / 2, yd - 0.45 * P, P, 'PILE LAYOUT PLAN (FROM ABOVE, TOE AT THE BOTTOM)  ·  SCALE ' + rwdwScName(P));
++    const ivP = D.mark();
++    // the schedule below the plan, at paper size
++    const yT = yd - 1.3 * P, th = 0.068 * P, pile = (PS.desig || ({ hp: 'H-PILE', pipe: 'PIPE', square: 'SQ. PRECAST', round: 'ROUND' }[F.shape] || 'PILE')) + ', D = ' + rwdwIn(PS.D);
++    const capS = isA ? 'RESIST.' : 'ALLOW.';
++    const rows = PS.rows.map(q => [String(q.row), rwdwFI(q.x * 12), rwdwFI(q.s * 12), rwdwN(q.n, 4), q.count == null ? '-' : String(q.count), pile, rwdwIn(PS.embed),
++      q.c ? rwdwN(q.c.P, 1) : '-', q.c ? rwdwN(q.c.cap, 1) : '-', q.c ? '(' + q.c.n + ')' : '-',
++      q.t ? rwdwN(q.t.P, 1) : 'NONE', q.t ? rwdwN(q.t.cap, 1) : '-', q.t ? '(' + q.t.n + ')' : '-',
++      PS.h ? rwdwN(PS.h.h, 2) : '-', PS.h ? rwdwN(PS.h.cap, 1) : '-', PS.h ? '(' + PS.h.n + ')' : '-']);
++    D.text(L.txt, 0, yT, 0.12 * P, 'PILE SCHEDULE (' + ({ hp: 'STEEL H-PILES', pipe: 'STEEL PIPE PILES', square: 'SQUARE PRECAST CONCRETE PILES', round: 'ROUND PILES' }[F.shape] || 'PILES') + ', VERTICAL)', 0);
++    const t = table(0, yT - 0.12 * P, ['ROW', 'X FROM TOE', 'SPACING', 'PILES/FT', PS.Lseg ? 'NO. IN ' + rwdwFI(PS.Lseg * 12) : 'NO./SEGMENT', 'PILE', 'EMBED.', 'P_MAX (KIP)', capS + ' (KIP)', 'COMB.', 'UPLIFT (KIP)', capS + ' (KIP)', 'COMB.', 'H/N (KIP)', capS + ' (KIP)', 'COMB.'], rows, th, [1, 2, 3, 4, 7, 8, 10, 11, 13, 14]);
++    const comb = PS.combs.map(c => '(' + c.n + ') ' + c.label.toUpperCase()).join('; ');
++    const notes = ['COMBINATIONS: ' + comb + '.',
++      'PER PILE, FROM THE PILE ANALYSIS (STABILITY TAB, PILE STEP 2): P_MAX = THE COMPRESSION OF THE COMBINATION WITH THE LARGEST P / CAPACITY FOR THE ROW; UPLIFT LIKEWISE;',
++      'H/N = THE LATERAL LOAD PER PILE (EQUAL SHARE)' + (F.passive ? ', NET OF THE PASSIVE CREDIT' : '') + '. ' + (isA ? 'RESISTANCES: PHI_C R_N, PHI_UP R_N,UP (STRENGTH), 1.0 R_N, 0.80 R_N,UP (EXTREME EVENT), H_R AS ENTERED.' : 'ALLOWABLE CAPACITIES (SERVICE LOADS) AS ENTERED: P_A, T_A, H_A.'),
++      'NO. IN SEGMENT: PILES OF THE ROW IN ONE SEGMENT, FIRST PILE S/2 FROM THE SEGMENT END (AS DRAWN); ' + (PS.Lseg ? 'SEGMENT = THE JOINT SPACING OF THE COLLISION INPUT.' : 'THE WALL LENGTH IS NOT IN THE MODEL: PILES PER FT ONLY.'),
++      'PILE LENGTH, TIP ELEVATION AND DRIVING CRITERIA: BY THE GEOTECHNICAL ENGINEER (NOT IN THE TOOL).'];
++    const wrap = (s0, n) => { const out = []; let line = ''; String(s0).split(/\s+/).forEach(w => { if (line && (line + ' ' + w).length > n) { out.push(line); line = '   ' + w; } else line = line ? line + ' ' + w : w; }); if (line) out.push(line); return out; };
++    const nl = []; notes.forEach(s0 => wrap(s0, 170).forEach(q => nl.push(q)));
++    nl.forEach((s2, j) => D.text(L.txt, 0, yT - 0.3 * P - t.h - 0.115 * j * P, 0.062 * P, s2, 0));
++    return { known: sbK, iv: ivP };
++  }, [8, 12, 16, 24, 32, 48, 64, 96, 192], [['stabPile', 'pile reactions'], ['ftgPunch', 'punching']]);
++
+```

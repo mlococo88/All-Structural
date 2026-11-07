@@ -425,7 +425,10 @@
     .lpdMsg{grid-column:1/-1;font-size:8.5pt;padding:5px 8px;border:1px solid var(--line);border-left:4px solid var(--bad);background:#FEF2F2;color:#7F1D1D;border-radius:3px}
     .lpdMsg.none{border-left-color:var(--slate-400);background:var(--slate-50);color:var(--slate-600)}
   }
-  @media screen and (min-width:1500px){
+  /* LPLB (2026-11-07, Decision pending engineer review: "the summary cards should be on the left panel"): the left column starts at
+     1200 px (was 1500 px), as in Retaining Wall Designer and Spread Footing; from 1200 to 1499 px it is 240 px wide (rule after this
+     block), at 1500 px and wider 292 px as before */
+  @media screen and (min-width:1200px){
     .wrap{max-width:1792px}   /* 1500 + 292 (the column): at 1792 px and wider the input and output panels keep their old widths */
     body.lppDashWide #lppDashCol{display:block;flex:0 0 292px;width:292px;height:100%;overflow-y:auto;overflow-x:hidden;position:relative;
       padding:0 6px 24px;border-right:1px solid var(--line);background:var(--slate-50);overscroll-behavior:contain}
@@ -440,6 +443,12 @@
     body.lppDashWide.lppDashColl #lppDashCnt span{font-size:7.5pt;padding:1px 2px;white-space:normal;text-align:center;width:36px}
     body.lppDashWide #lppDashCol::-webkit-scrollbar{width:7px}
     body.lppDashWide #lppDashCol::-webkit-scrollbar-thumb{background:#c2ccd6;border-radius:4px}
+  }
+  @media screen and (min-width:1200px) and (max-width:1499.98px){   /* LPLB */
+    body.lppDashWide #lppDashCol{flex-basis:240px;width:240px}
+    body.lppDashWide .grid2 .col-in{flex-basis:calc((100% - 240px)*.33);max-width:calc((100% - 240px)*.33)}
+    body.lppDashWide.lppDashColl #lppDashCol{flex-basis:42px;width:42px}
+    body.lppDashWide.lppDashColl .grid2 .col-in{flex-basis:calc((100% - 42px)*.33);max-width:calc((100% - 42px)*.33)}
   }
 </style>
 </head>
@@ -1694,6 +1703,8 @@ function poleWindNominal(inp){
   // Wind-on-ice uses the iced width D + 2t and the gust factor G (ASCE 7-22 §10.5 → Ch. 26–29, verify).
   const NSTRIP=100, dzs=inp.H/NSTRIP, strips=[];
   let Fpole=0, Mpole=0, FpoleI=0, MpoleI=0;
+  const rectDir=inp.poleShape==='rect' && inp.mode!=='sign' && inp.poleDepthTop>0;   // LPH2
+  let Fd=0, Md=0, FdI=0, MdI=0;
   for(let i=0;i<NSTRIP;i++){
     const z=(i+0.5)*dzs;
     const w_in=inp.poleDiaTop+(inp.poleDiaBase-inp.poleDiaTop)*(inp.H-z)/inp.H;   // in, local width
@@ -1702,7 +1713,16 @@ function poleWindNominal(inp){
     const td=iceTd(inp,lppZg(inp,z));                                                              // in, design ice at z (+ p, LPPJ)
     const FI=0.00256*Kzs*inp.Kzt*inp.Kd*inp.Vice*inp.Vice*inp.G*inp.cfPole*((w_in+2*td)/12)*dzs; // lb
     const Wi=iceWeight(td, w_in, inp.iceDen)*dzs;                                                  // lb, ice on the strip
-    strips.push({z,F,FI,td,Wi});
+    const st={z,F,FI,td,Wi};
+    // LPH2 (2026-11-07): a rectangular pole (pole mode) also gets the strip force on its depth face (depth along x, width B
+    // along y): wind toward 0°/180° sees B, toward 90°/270° sees the depth; lppPoleWindDir() combines them per azimuth.
+    if(rectDir){
+      const d_in=inp.poleDepthTop+((inp.poleDepthBase!==undefined?inp.poleDepthBase:inp.poleDepthTop)-inp.poleDepthTop)*(inp.H-z)/inp.H;
+      st.Fd =0.00256*Kzs*inp.Kzt*inp.Kd*inp.V*inp.V*inp.G*inp.cfPole*(d_in/12)*dzs;
+      st.FId=0.00256*Kzs*inp.Kzt*inp.Kd*inp.Vice*inp.Vice*inp.G*inp.cfPole*((d_in+2*td)/12)*dzs;
+      Fd+=st.Fd; Md+=st.Fd*z; FdI+=st.FId; MdI+=st.FId*z;
+    }
+    strips.push(st);
     Fpole+=F; Mpole+=F*z; FpoleI+=FI; MpoleI+=FI*z;
   }
   // mast ice weight: basis 'design' keeps the former mean-diameter form (identical results for old saves); basis 'map'
@@ -1713,7 +1733,19 @@ function poleWindNominal(inp){
   // ice weight above height z (lb)
   const iceAbove=z=> iceMap ? strips.reduce((a,st)=>a+(st.z>z?st.Wi:0),0) : wIceMast*(inp.H-z);
   return {Wpole:Fpole, Mpole, Fpole, FpoleI, MpoleI, strips, NSTRIP, zF:Fpole>0?Mpole/Fpole:inp.H/2,
+          ...(rectDir?{rectDir, Fd, Md, FdI, MdI, zFd:Fd>0?Md/Fd:inp.H/2}:{}),   // LPH2: rectangular pole, wind on the depth face
           WiceMast, wIceMast, iceAbove, tdTop:iceTd(inp,lppZg(inp,inp.H)), Apole, ApoleI, Davg, Davg_in, qzTop, qzMid, qzMidI, KzTop, KzMid};
+}
+
+// LPH2 (2026-11-07, review H2): mast wind of a rectangular pole for the wind azimuth φ (deg): projected strip width
+// |cos φ|·B + |sin φ|·depth (as the LRFDLTS engine's windForces), i.e. the force |cos φ|·F_B + |sin φ|·F_depth (both are
+// linear in the width). Round and square poles, and sign posts: the B values, unchanged. cos/sin below 1e-12 are taken as 0
+// so that the four axis directions use exactly B or the depth.
+function lppPoleWindDir(pw, phi){
+  if(!pw.rectDir) return {Wpole:pw.Wpole, Mpole:pw.Mpole, FpoleI:pw.FpoleI, MpoleI:pw.MpoleI, sF:st=>st.F, sFI:st=>st.FI};
+  let c=Math.abs(Math.cos(phi*RAD)), s=Math.abs(Math.sin(phi*RAD)); if(c<1e-12) c=0; if(s<1e-12) s=0;
+  return {Wpole:c*pw.Wpole+s*pw.Fd, Mpole:c*pw.Mpole+s*pw.Md, FpoleI:c*pw.FpoleI+s*pw.FdI, MpoleI:c*pw.MpoleI+s*pw.MdI,
+          sF:st=>c*st.F+s*st.Fd, sFI:st=>c*st.FI+s*st.FId};
 }
 
 // ================= ASCE 7-22 Ch.29 SOLID SIGN WIND (Fig 29.3-1) =================
@@ -2372,11 +2404,14 @@ function evalComboDir(key,inp,comps,fxs,pw,phi){
   });
 
   // ---------- mast ----------
-  const poleWind = f.W*pw.Wpole + f.Wi*pw.FpoleI;       // lb
-  const poleWindM= f.W*pw.Mpole + f.Wi*pw.MpoleI;       // lb-ft
+  const pwd=lppPoleWindDir(pw, phi);                    // LPH2: rectangular pole, width by direction (B / depth)
+  const poleWind = f.W*pwd.Wpole + f.Wi*pwd.FpoleI;     // lb
+  const poleWindM= f.W*pwd.Mpole + f.Wi*pwd.MpoleI;     // lb-ft
   Vx+=poleWind*cw; Vy+=poleWind*sw;
   Mx+=poleWindM*cw; My+=poleWindM*sw;
-  N += f.D*(inp.DLtotal!==undefined?inp.DLtotal:inp.DL) + f.Di*pw.WiceMast;
+  // LPH3 (2026-11-07): the fixture weights are already in N (Wg above), so the mast term takes misc + pole self-weight only
+  // (inp.DLaxial, pole mode). Before: inp.DLtotal, which also held ΣW_fixtures, so the fixtures were counted twice.
+  N += f.D*(inp.DLaxial!==undefined?inp.DLaxial:(inp.DLtotal!==undefined?inp.DLtotal:inp.DL)) + f.Di*pw.WiceMast;
 
   const P=Math.hypot(Vx,Vy);                 // resultant base shear
   const M=Math.hypot(Mx,My);                 // resultant base moment
@@ -2758,7 +2793,7 @@ manPart("p2","2. Input Reference",[
 manPart("p3","3. Output Reference",[
 {h:"3.1 Summary tab"},
 {p:"The Summary is the answer sheet. Every number on it is read from the same result objects the discipline tabs consume, so it cannot disagree with them."},
-{p:"<b>Check summary panel</b> (2026-11-03): a short list of every check, one line each \u2014 name, D/C (or the failing condition where the ratio is not what fails) and status, with a count of NG / REVIEW items. NG and REVIEW lines open to show the result and the reference; \u25b8 opens any line, and a click on a line opens the card where that check is worked. On screens 1500 px and wider it is a column on the left (\u00ab shrinks it to a strip); on narrower screens it sits above the output tabs (Hide / Show checks). It lists the same checks as this tab (IBC mode) or the LRFDLTS summary (LRFDLTS mode), shows the input errors instead when there are any, and is not printed."},
+{p:"<b>Check summary panel</b> (2026-11-03): a short list of every check, one line each \u2014 name, D/C (or the failing condition where the ratio is not what fails) and status, with a count of NG / REVIEW items. NG and REVIEW lines open to show the result and the reference; \u25b8 opens any line, and a click on a line opens the card where that check is worked. On screens 1200 px and wider it is a column on the left (\u00ab shrinks it to a strip); on narrower screens it sits above the output tabs (Hide / Show checks). It lists the same checks as this tab (IBC mode) or the LRFDLTS summary (LRFDLTS mode), shows the input errors instead when there are any, and is not printed."},
 
 {h3:"3.1.1 Verdict banner and strip"},
 {p:"The banner states either <b>ALL CHECKS PASS</b>, naming the governing utilisation, or <b>N CHECKS FAIL</b>, naming each failure. Below it, one chip per check gives a green tick or a red cross. In two-post sign mode each chip is labelled P1 or P2, so a failure is attributed to the post that has it."},
@@ -3488,7 +3523,8 @@ function poleStress(inp,poleSeg,comps,fxs,pw,gov){
   // cable reactions: along-cable pull (Hx,Hy) + transverse wind reaction Hw along the wind direction
   const cList=gov.per.map(r=>({hc:r.cp.c.hc, Hx:r.Hx+(r.Hw||0)*cw, Hy:r.Hy+(r.Hw||0)*sw, Vc:r.Vc}));
   // mast wind: the factored strips of poleWindNominal (same distribution as the base moment)
-  const sList=(pw.strips||[]).map(st=>({z:st.z, F:f.W*st.F + f.Wi*st.FI}));
+  const pwd=lppPoleWindDir(pw, phi);   // LPH2: rectangular pole, strip width by direction
+  const sList=(pw.strips||[]).map(st=>({z:st.z, F:f.W*pwd.sF(st) + f.Wi*pwd.sFI(st)}));
 
   // first-order section forces at height z (everything above the cut)
   const secForces=(z)=>{
@@ -4864,6 +4900,7 @@ function lppCalcIbc(){
   // total service dead = misc + pole self-weight + sum of fixture weights
   const fixW=fixtures.reduce((s,x)=>s+x.W,0);
   inp.DLtotal=inp.DL+poleSeg.totalW+fixW;
+  inp.DLaxial=inp.DL+poleSeg.totalW;                 // LPH3 (2026-11-07): axial in evalComboDir (fixtures are added there one by one)
 
   // build components + evaluate every combination across four wind directions
   // When the catenary system is disabled, no cable components are built, so every
@@ -5801,6 +5838,10 @@ function windWorkedHTML(pw, inp){
   H+=`<p class="eq-why">Reference only (not used for the force): the design pressure at mid-height and the single resultant it would give:</p>`;
   H+=g(`p(H/2) = q_z\\,G\\,C_f = ${fmt(pw.qzMid,1)}(${fmt(inp.G,2)})(${fmt(inp.cfPole,2)}) = ${fmt(pw.qzMid*inp.G*inp.cfPole,1)}\\ \\text{psf}\\qquad p(H/2)\\,A_{pole} = ${fmt(pw.qzMid*inp.G*inp.cfPole*pw.Apole,0)}\\ \\text{lb}`);
   H+=g(`F_{pole} = \\sum_i q_z(z_i)\\,G\\,C_f\\,D(z_i)\\,\\Delta z = ${fmt(pw.Fpole,0)}\\ \\text{lb}\\qquad M_{pole} = \\sum_i F_i\\,z_i = ${fmt(pw.Mpole,0)}\\ \\text{lb}{\\cdot}\\text{ft}\\qquad \\bar z_F = \\frac{M_{pole}}{F_{pole}} = ${fmt(pw.zF,2)}\\ \\text{ft}`);
+  if(pw.rectDir){   // LPH2 (2026-11-07): rectangular pole, wind on the depth face
+    H+=`<p class="eq-why">Rectangular pole: the values above are for wind toward 0° / 180° on the width B = ${fmt(inp.poleDiaTop,2)} in face. Wind toward 90° / 270° acts on the depth face (${fmt(inp.poleDepthTop,2)} in), and between the axes the projected strip width is |cos φ|·B + |sin φ|·depth (as in the LRFDLTS mode). C<sub>f</sub> stays the least-dimension value.</p>`;
+    H+=g(`F_{pole,90} = \\sum_i q_z(z_i)\\,G\\,C_f\\,d(z_i)\\,\\Delta z = ${fmt(pw.Fd,0)}\\ \\text{lb}\\qquad M_{pole,90} = ${fmt(pw.Md,0)}\\ \\text{lb}{\\cdot}\\text{ft}\\qquad F_{pole}(\\varphi) = |\\cos\\varphi|\\,F_{pole} + |\\sin\\varphi|\\,F_{pole,90}`);
+  }
   H+=iceWorkedHTML(inp,pw,null);
   H+=natGfWorkedHTML(inp);
   H+=`<p class="eq-result">Mast wind F_pole = ${fmt(pw.Fpole,0)} lb, resultant at z = ${fmt(pw.zF,2)} ft (H/2 = ${fmt(inp.H/2,2)} ft), giving base moment ${fmt(pw.Mpole,0)} lb·ft. Fixture and cable wind (tabulated above) use the same q_z form at their own heights.</p>`;
@@ -6062,7 +6103,7 @@ document.addEventListener('click',ev=>{ const a=ev.target.closest&&ev.target.clo
    On screens >= 1500 px the box is moved into the left column #lppDashCol; below that it sits on top of the output panel.
    Collapse state: per-browser UI key lpp_dashCollapsed_v1 ('1' = collapsed, '0' or absent = open); not in the project, the
    autosave or the export. The Summary tab, the Report and printing are unchanged. */
-const LPDC={key:'lpp_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1500px)'):null,open:new Map(),coll:false};
+const LPDC={key:'lpp_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1200px)')/* LPLB: was 1500px */:null,open:new Map(),coll:false};
 try{LPDC.coll=localStorage.getItem(LPDC.key)==='1';}catch(e){}
 const LPDC_ST={pass:'OK',fail:'NG',warn:'REVIEW',na:'INFO'};
 function lppDashDC(r){ return (r==null||isNaN(r))?'':'D/C '+(isFinite(r)?fmt(r,2):'∞'); }
@@ -6302,7 +6343,7 @@ function buildReport(inp,allCombos,gov,embed,struct){
     'Wind force on the pole shaft',
     `The distributed wind on the shaft is integrated over ${pw.NSTRIP} strips of height Δz = H/${pw.NSTRIP}: each strip uses q_z at its own centroid height z_i and its own width D(z_i), and acts at z_i (ASCE 7 §29.4.1 per strip). C_f is the drag coefficient for a round section (≈0.7). For reference, the single mid-height resultant would be q<sub>z,mid</sub>·G·C<sub>f</sub>·A<sub>pole</sub> = ${n(pw.qzMid*inp.G*inp.cfPole*pw.Apole,0)} lb at H/2.`,
     `F_{pole}=\\sum_i q_z(z_i)\\,G\\,C_f\\,D(z_i)\\,\\Delta z=${n(pw.Fpole,0)}\\ \\text{lb}`,
-    `Base moment M<sub>pole</sub> = Σ F_i·z_i = ${n(pw.Mpole,0)} lb·ft (resultant at z = ${n(pw.zF,2)} ft), combined with fixture and cable moments in each load combination (${lppSecRef('4')}).`);
+    `Base moment M<sub>pole</sub> = Σ F_i·z_i = ${n(pw.Mpole,0)} lb·ft (resultant at z = ${n(pw.zF,2)} ft), combined with fixture and cable moments in each load combination (${lppSecRef('4')}).`+(pw.rectDir?` Rectangular pole: these values are for wind toward 0° / 180° (width B); wind toward 90° / 270° acts on the depth face, F<sub>pole,90</sub> = ${n(pw.Fd,0)} lb, M<sub>pole,90</sub> = ${n(pw.Md,0)} lb·ft; between the axes the strip width is |cos φ|·B + |sin φ|·depth.`:''));
   H+=`</div></details>`;
 
   // ---- 2b. Fixture loads ----
@@ -6978,7 +7019,9 @@ function lprModel(){
         {title:'Wind on the mast',ref:'ASCE 7-22 §29.4 (strip integration)',steps:[
           S({id:'Fp',label:'Mast wind ('+pw.NSTRIP+' strips)',sym:'F_{pole}',eq:'\\sum q_{z}(z_{i})K_{d}G\\,C_{f}\\,D(z_{i})\\,\\Delta z',sub:'',value:pw.Fpole,unit:'lb',d:0}),
           S({id:'Mp',label:'Mast wind moment at the base',sym:'M_{pole}',eq:'\\sum F_{i}z_{i}',sub:'',value:pw.Mpole,unit:'lb-ft',d:0}),
-          S({id:'zF',label:'Height of the resultant',sym:'\\bar{z}_{F}',eq:'\\frac{M_{pole}}{F_{pole}}',sub:'\\frac{'+N(pw.Mpole,0)+'}{'+N(pw.Fpole,0)+'}',value:pw.zF,unit:'ft'})]},
+          S({id:'zF',label:'Height of the resultant',sym:'\\bar{z}_{F}',eq:'\\frac{M_{pole}}{F_{pole}}',sub:'\\frac{'+N(pw.Mpole,0)+'}{'+N(pw.Fpole,0)+'}',value:pw.zF,unit:'ft'})].concat(pw.rectDir?[   // LPH2: rectangular pole, depth face
+          S({id:'Fpd',label:'Mast wind on the depth face (wind toward 90° / 270°)',sym:'F_{pole,90}',eq:'\\sum q_{z}(z_{i})K_{d}G\\,C_{f}\\,d(z_{i})\\,\\Delta z',sub:'',value:pw.Fd,unit:'lb',d:0}),
+          S({id:'Mpd',label:'Its moment at the base (any azimuth: |cos φ|·M_pole + |sin φ|·M_pole,90)',sym:'M_{pole,90}',eq:'\\sum F_{i}z_{i}',sub:'',value:pw.Md,unit:'lb-ft',d:0})]:[])},
         {title:'Design ice thickness',ref:'ASCE 7-22 §10.4.6',steps:[
           S({id:'td',label:inp.iceBasis==='map'?'Design ice at the top (t_d = t f_z K_zt^0.35 I_i; cables use t)':'Uniform design ice (as entered)',sym:'t_{d}(H)',eq:inp.iceBasis==='map'?'t\\,f_{z}K_{zt}^{0.35}I_{i}':'t',sub:'',value:pw.tdTop,unit:'in',d:3}),
           S({id:'Wim',label:'Ice on the mast',sym:'W_{ice,mast}',eq:'\\sum \\gamma_{ice}A_{ring}(t_{d})\\Delta z',sub:'',value:pw.WiceMast,unit:'lb',d:1})]}])]});
