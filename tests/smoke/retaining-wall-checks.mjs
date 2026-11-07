@@ -277,6 +277,11 @@ const AUD = [
     ['/all \\d+ passed/.test(document.getElementById("rwSelf").innerText)', 'self-consistency panel passes']]],
   ['RW2H4 AASHTO default η = 1.00 unchanged', { design_basis: 'AASHTO' }, [
     ['Math.abs(R.Mu_stem_lbft - 32274) < 0.5 && Math.abs(R.aashtoR.sliding_dcr - 1.41488) < 0.0001 && Math.abs(R.Mu_heel_net - 27579.9) < 0.5 && !/Load modifier η on the Strength I/.test(T.stem)', 'unchanged']]],
+  ['RW2H1 ACI default k_h 0.10: bearing and e for the static case and the 1.0E case; static governs: q 1402 → 1466 psf, e −0.219', { kh: 0.1 }, [
+    ['R.brgAlt && R.brgAlt.gov === "static" && Math.abs(R.q_max - 1466.0) < 0.5 && Math.abs(R.e + 0.2189) < 0.0005 && Math.abs(R.brgAlt.q_max - 1402.2) < 0.5 && Math.abs(R.brgAlt.e - 0.1188) < 0.0005', 'static governs'],
+    ['/Earthquake included/.test(T.stability) && /static case \\(governs\\)/.test(T.stability)', 'Stability Step 6'], ['/static case \\(governs/.test(P)', 'Report Step 6'],
+    ['/all \\d+ passed/.test(document.getElementById("rwSelf").innerText)', 'self-consistency panel passes']]],
+  ['RW2H1 ACI without seismic: one case, unchanged', {}, [['R.brgAlt === null && Math.abs(R.q_max - 1466.0) < 0.5 && !/Earthquake included/.test(T.stability)', 'unchanged']]],
   ['RWEC AASHTO unchanged by the ACI select', { design_basis: 'AASHTO', aci_ecc_limit: 'b6' }, [['R.ecc_lim_aci === null && /e=1\\.43/.test(R.checks.ecc.val)', 'AASHTO e check as before']]],
 ];
 for (const [name, set, tests, opt] of AUD.filter(x => !process.env.RW_AUD || x[0].startsWith(process.env.RW_AUD))) {

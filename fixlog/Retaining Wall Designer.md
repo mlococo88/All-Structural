@@ -5630,3 +5630,69 @@ Second-pass review finding H4 (2026-11-07). Code sites are tagged `RW2H4`.
 
 ### Saved data
 - No input or format change.
+
+## 2026-11-07 — PR: claude/rw2-h1-aci-static-brg — ACI/IBC with earthquake: the service bearing and the eccentricity are checked for the static case (E = 0) and for the case with 1.0·ΔP_E; the larger governs (RW2H1; calculation change, k_h > 0 only) (PR #1137: https://github.com/mlococo88/All-Structural/pull/1137)
+
+Second-pass review finding H1 (2026-11-07), the open item of RWIB (#953). Code sites are tagged `RW2H1`.
+
+### RW2H1-1. Problem
+- `calcAll` took `x_R = (Ms − Mo)/SumV` with `Mo` including `Mo_seis` = 1.0·ΔP_E·0.6H. So `q_toe`, `q_heel`, `q_max`, `bearing_ok` and `ecc_ok_aci` were checked for the 1.0E case only.
+- Where the static resultant is on the heel side (e < 0, the default wall), adding E moves it toward the centre, and the checked pressure was lower than the static one.
+- IBC 2018 §1807.2.3 and ASCE 7-16 §2.4.1: the allowable-stress combinations without E must be satisfied on their own. FS_OT and FS_SL were already split (RWIB).
+
+### RW2H1-2. Fix (`calcAll`, anchor `RW2H1`, service bearing block)
+Before:
+```js
+  const x_R = SumV > 0 ? (Ms - Mo) / SumV : B / 2;
+```
+After:
+```js
+  const xR_E = SumV > 0 ? (Ms - Mo) / SumV : B / 2, e_E = B / 2 - xR_E;
+  const xR_S = SumV > 0 ? (Ms - Mo_st) / SumV : B / 2, e_S = B / 2 - xR_S;
+  const brg_static = !isAASHTO && hasSeismic && Math.abs(e_S) > Math.abs(e_E);
+  const Mo_brg = brg_static ? Mo_st : Mo;
+  const x_R = brg_static ? xR_S : xR_E;
+```
+- `x_R`, `e`, `q_toe`, `q_heel` and `q_max` are now the governing case, so the bearing, eccentricity, drawings and diagrams follow it. ΣV is the same in both cases, so the larger |e| also gives the larger q_max.
+- New results:
+  - `Mo_brg`: the overturning moment used;
+  - `brgAlt`: `{gov, other, Mo, x_R, e, q_max}` of the other case.
+- The E case stays at 1.0·ΔP_E (as before; more severe than 0.7E).
+- Display:
+  - Stability Step 6: a note, both cases worked (x̄, e, q_max), "… governs", and x̄ with M_OT of the governing case.
+  - Report Step 6: x̄ with the governing case and the other case quoted.
+  - The self-consistency x̄ check uses the governing M_OT.
+- Not changed: ACI without seismic, AASHTO mode (Extreme Event I does its own checks), and pile mode (its own combinations).
+
+### Check case (ACI default wall, k_h = 0.10)
+- SumV = 16582.5 lb/ft, M_s = 123673, M_o,st = 3645(4.5) = 16402.5, M_o,E = ΔP_E(0.6H) = 691.3(8.10) = 5599.8.
+- **Static case:**
+  - x̄ = (123673 − 16402.5)/16582.5 = 6.4689 ft, so e = −0.2189 ft;
+  - q_heel = 1326.6(1 + 6(0.2189)/12.5) = **1466.0 psf**.
+- **Seismic case:**
+  - x̄ = (123673 − 22002.2)/16582.5 = 6.1312 ft, so e = +0.1188 ft;
+  - q_toe = 1326.6(1 + 6(0.1188)/12.5) = 1402.2 psf.
+- Static governs: q_max 1402.2 → **1466.0 psf** (≤ 3000, PASS); e 0.119 → **0.219 ft** (≤ B/6 2.083, D/C 0.105).
+- Other walls that move (main vs branch):
+
+| Wall | q_max (psf) | e (ft) |
+|---|---|---|
+| k_h 0.20, L_t 5, L_h 5 | 1303.5 → 1352.3 | 0.470 → −0.560 |
+| k_h 0.10, β 15° | 1702.4 → 1715.9 | 0.227 → −0.246 |
+
+- The review variant (k_h 0.20, β 15°, water): the seismic case governs, so there is no change.
+
+### How verified
+- Headless probe, H4 branch vs this branch, on 24 walls. Only the ACI walls with k_h > 0 where the static |e| is larger move, and only in x̄, e, q and the bearing / eccentricity values. 0 console errors.
+- At k_h 0.10: self-consistency all passed.
+- Tests:
+  - check-syntax;
+  - smoke/retaining-wall-checks (new `AUD` rows RW2H1);
+  - phone-layout rwall; project-library retwall; dxf-print-sheets rw;
+  - retwall-pile-handoff; engine handoffs, pile-group.
+
+### Decision (pending engineer review)
+- The E case keeps 1.0·ΔP_E, as the tool did before; ASCE 7-16 ASD combinations 5/8 would allow 0.7E. Bearing and e take the more severe of the static case and 1.0E. The FS checks keep 0.7E with FS ≥ 1.1 (RWIB).
+
+### Saved data
+- No input or format change.
