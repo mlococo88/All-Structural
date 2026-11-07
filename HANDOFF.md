@@ -529,7 +529,8 @@ Pole / sign-post anchorage designed in the Base Plate & Anchor Bolt Designer ins
   hrt, padL, padW, D, A, shape, nBrgPerGird:1, pass, govDC }
 ```
 
-- The abutment reads `G`, `hrt`, `padL`/`padW` or `D`/`A`; the new fields are for information. A `G` coming back in `INIT` that equals the G the module sends for its current inputs is not taken as a new specified G (round trip).
+- Added 2026-11-07 (L8, L11): `Gmult` (1, 2 or 4: the low-temperature design option of AASHTO 14.7.5.2; `Hbu` includes it, `G` does not, because the abutment validates G ≤ 0.30 ksi). No `PAD` is sent while the module shows an input error, and `pass` is false when one stands.
+- The abutment reads `G`, `hrt`, `padL`/`padW` or `D`/`A`; the new fields are for information. The abutment does not apply `Gmult` yet (open item for a cross-tool change); the module warns when it is above 1. A `G` coming back in `INIT` that equals the G the module sends for its current inputs is not taken as a new specified G (round trip).
 
 ## 5. Shared helper (copy into each tool that sends or receives)
 
