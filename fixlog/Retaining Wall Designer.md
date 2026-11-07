@@ -4745,3 +4745,105 @@ Review Phase 8, PR 8d. Code sites are tagged `RWPL`. Spread-footing results are 
 +      subs.push(sub('Pile cap — punching around the piles', [rwrItem('ppn', [{ title: 'Two-way shear at the pile heads', ref: isA ? AA('Art. 5.12.8.6') : 'ACI 318-19 §22.6', steps: PS }]), onTab('ftgPunch')]));
 +    }
 ```
+
+## 2026-11-07 — PR: claude/rw-pile-8e-drawings — Pile-supported footing, Phase 8e: Drawings show the pile reactions and the bottom mat on the pile heads; no soil-bearing graphics on piles (RWPL; display only) (PR #966: https://github.com/mlococo88/All-Structural/pull/966)
+
+Review Phase 8, PR 8e. This PR changes no computed value.
+### RWPL-9. Drawings (`RWDW_SUPPORT.piles.loads`, `rwdwBars`, the loads sheet notes)
+- `RWDW_SUPPORT.piles.loads(c)`: the loads sheet now shows the pile reactions per row (kip per pile) as upward arrows under the footing, drawn to their own scale. Uplift is drawn as a downward arrow marked "(UPLIFT)".
+  - It draws the governing compression combination, with P_max against the capacity and H/N.
+  - It then draws the combination with the smallest pile load, with P_min and, under uplift, the capacity T.
+  - Before (8b): one line, "PILE REACTIONS WITH THE PILE ANALYSIS (NOT YET IN THIS VERSION)".
+- `rwdwBars`: `cb = r.cov_bot` (8d; it equals c_c on soil). F2 is drawn at `cb + d_b/2` and the stem hook at `cb + …`, so on piles the bottom mat sits above the pile heads. On soil the drawing is unchanged.
+- Loads sheet notes in pile mode:
+  - "soil bearing, sliding and overturning not applicable";
+  - N, x̄ and I;
+  - compression, uplift and lateral, each with its capacity;
+  - punching.
+  - These replace the soil FOS / q / eccentricity lines.
+### RWPL-10. Section views
+- `buildCrossSection` (Analysis diagram): the bearing layer is hidden on piles (`data-layer="bearing"` with `display:none`).
+- `buildOverviewSVG`: the bearing block is skipped on piles (`tog.bearing && !r.pile`).
+### Check case
+- Default wall, t_f 36 in, 2 rows at 1.5 / 11.0 ft, s = 6 ft, ACI. Sheet 3 shows:
+  - D + H + L: 59.7 and 56.6 kip per pile, "P_MAX = 59.7 KIP <= 100.0 KIP; H/N = 13.50 KIP/PILE";
+  - 0.6D + H: 41.5 and 28.3 kip.
+  - These are the Stability tab, Pile Step 2 values.
+- Sheet 1 shows the bottom mat 15 in above the base.
+### How verified
+- origin/main vs branch, the 12 spread walls: `_R`, Export JSON, autosave, Report, tab texts and DXF are identical.
+- Pile mode: the sheets were screenshotted and checked, with no console errors.
+- Also run: `dxf-print-sheets.mjs --tool rw`, `check-syntax`.
+### Open items
+- The 3D view's bearing layer and its "Show" combination selector still offer the soil base reaction on piles. The pile reactions in 3D are to come with the Pile Designer link (8f) or a later display PR.
+- No pile schedule table: the piles are described in the general notes (8b).
+
+### Before / after (code, `git diff -U0` of `Retaining Wall Designer.html` against main after 8d)
+```diff
+-  s += `<g data-layer="bearing">`;
++  s += `<g data-layer="bearing"${r.pile ? ' style="display:none"' : ''}>`;   // RWPL (8e): no soil bearing under a pile-supported footing
+-  if (tog.bearing) {
++  if (tog.bearing && !r.pile) {   // RWPL (8e): no soil bearing under a pile-supported footing
+-  const yHook = cf + db(f2) + db(f3) + db(s1) / 2;                   // the hook bears on the bottom mat
++  const cb = r.cov_bot != null ? r.cov_bot : cf;                      // RWPL (8e): on piles the bottom mat sits above the pile heads (cov_bot = c_c on soil)
++  const yHook = cb + db(f2) + db(f3) + db(s1) / 2;                   // the hook bears on the bottom mat
+-    F2: { s: f2, x0: cf, x1: Math.min(G.B - cf, G.xf + r.ld_toe), y: cf + db(f2) / 2, hook: r.toe_hook ? 12 * db(f2) : 0 },   // RWDS: 90° hook up at the toe end when ticked
++    F2: { s: f2, x0: cf, x1: Math.min(G.B - cf, G.xf + r.ld_toe), y: cb + db(f2) / 2, hook: r.toe_hook ? 12 * db(f2) : 0 },   // RWDS: 90° hook up at the toe end when ticked
+-    loads(c) { const { L, G, k, T } = c; let y0 = c.y0 != null ? c.y0 : -G.dk - 0.35 * k;
+-      T(L.lt, G.B / 2, y0 - 0.2 * k, 0.085 * k, 'PILE-SUPPORTED FOOTING: PILE REACTIONS WITH THE PILE ANALYSIS (NOT YET IN THIS VERSION)', 1); return y0 - 0.6 * k; },
++    /* RWPL (8e): the pile reactions per row (kip per pile) of the governing compression combination, as upward arrows under the
++       footing, with the governing uplift / minimum combination below them; values from r.pile (Stability tab, Pile Step 2) */
++    loads(c) {
++      const { D, L, G, k, T, r } = c, P = r.pile, h = 0.085 * k; let y0 = c.y0 != null ? c.y0 : -G.dk - 0.35 * k;
++      if (!P || P.err) { T(L.lt, G.B / 2, y0 - 0.2 * k, h, 'PILE-SUPPORTED FOOTING: NO PILE RESULTS (INPUT ERROR)', 1); return y0 - 0.6 * k; }
++      const one = (cmb, title) => {
++        const Pm = Math.max(...cmb.L.rows.map(x => Math.abs(x.P)), 1e-9), sc = 0.55 * k / Pm;
++        D.line(L.load, 0, y0, G.B, y0);
++        cmb.L.rows.forEach(x => { const xi = x.x * 12, len = Math.abs(x.P) * sc, yt = y0 - Math.max(len, 0.08 * k);
++          if (x.P >= 0) arrowV(D, L.load, xi, yt, y0, k); else arrowV(D, L.load, xi, y0, yt, k);
++          T(L.lt, xi, yt - 0.14 * k, h, rwdwN(x.P, 1) + ' KIP/PILE' + (x.P < 0 ? ' (UPLIFT)' : ''), 1); });
++        const yl = y0 - 0.55 * k - 0.4 * k; T(L.lt, G.B / 2, yl, h, title, 1); y0 = yl - 0.3 * k;
++      };
++      one(P.govC, 'PILE REACTIONS, ' + P.govC.label.toUpperCase() + ': P_MAX = ' + rwdwN(P.govC.L.Pmax, 1) + ' KIP ' + (r.checks.pileComp.ok ? '<=' : '>') + ' ' + rwdwN(P.govC.cap.c, 1) + ' KIP; H/N = ' + rwdwN(P.govH.L.rows[0].h, 2) + ' KIP/PILE');
++      const mn = P.comb.reduce((b, x) => (!b || x.L.Pmin < b.L.Pmin) ? x : b, null);
++      if (mn && mn !== P.govC) one(mn, 'PILE REACTIONS, ' + mn.label.toUpperCase() + ' (SMALLEST PILE LOAD): P_MIN = ' + rwdwN(mn.L.Pmin, 1) + ' KIP' + (mn.L.Pmin < 0 ? ' (UPLIFT, T <= ' + rwdwN(mn.cap.t, 1) + ' KIP)' : ''));
++      return y0;
++    },
++    if (r.pile && !r.pile.err) {   // RWPL (8e): on piles the soil checks do not apply; the pile results instead
++      const pc = r.pile;
++      foot = ['PILE-SUPPORTED FOOTING: SOIL BEARING, SLIDING AND OVERTURNING NOT APPLICABLE (STABILITY TAB, PILE STEP 2)',
++        'PILE GROUP PER FT: N = ' + F(pc.g.N, 4) + ' /FT, X_BAR = ' + F(pc.g.xbar, 3) + ' FT, I = ' + F(pc.g.I, 4) + ' FT2/FT',
++        'COMPRESSION: P_MAX = ' + F(pc.govC.L.Pmax, 1) + ' KIP <= ' + F(pc.govC.cap.c, 1) + ' (' + pc.govC.label.toUpperCase() + ')',
++        'UPLIFT: ' + (pc.govT.L.Pmin < 0 ? F(-pc.govT.L.Pmin, 1) + ' KIP VS ' + F(pc.govT.cap.t, 1) : 'NONE'),
++        'LATERAL: H/N = ' + F(pc.govH.L.rows[0].h, 2) + ' KIP/PILE VS ' + F(pc.govH.cap.h, 1) + ' KIP',
++        ...(r.pilePunch ? ['PUNCHING AT THE PILES: P_U = ' + F(r.pilePunch.gov.Pu / 1000, 1) + ' KIP VS PHI V_C = ' + F(r.pilePunch.gov.phiVc / 1000, 1) + ' KIP (FOOTING DESIGN TAB)'] : [])];
++    }
+```
+## 2026-11-07 — PR: claude/rw-left-summary — Check summary in the left panel exactly as Spread Footing's Summary Dashboard: rows styled as SF's chips (RWDL; display only, no result change) (PR #959: https://github.com/mlococo88/All-Structural/pull/959)
+
+### RWDL. Check summary rows styled as Spread Footing's dashboard chips; position and breakpoints confirmed against SF   [display only]
+- **Request (engineer, 2026-11-07):** "the summary cards should be on the left panel" — RW's check summary panel (RWDC, #926) to sit in the left column exactly like Spread Footing's Summary Dashboard (SFDC #737 / SFDF #740) and Light Pole's panel (LPDC #747): same position, breakpoints, collapse behaviour and card styling.
+- **Study of SF (origin/main, `Spread Footing.html`):** `SFDC.mq = matchMedia('screen and (min-width:1500px)')`; at 1500 px and wider `sfdDashPlace()` moves `#sfdDashBox` into `#sfdDashCol`, the first child of `.main`, i.e. a left column (280 px + 12 px gap) to the LEFT of the input panel, own scroll, sticky head, «/» collapses it to a 42 px strip; below 1500 px the box sits on top of the output panel above the output tabs, chips in a `minmax(min(250px,100%),1fr)` grid, "▾ Hide checks / ▸ Show checks". RW (RWDC) already does the same: same 1500 px query, `#rwDashCol` first child of `#app` (left of the inputs, 292 px incl. padding), own scroll, sticky head, «/» → 42 px strip, below 1500 px above the output tabs with the same grid and the same Hide / Show checks button, same key behaviour (`retaincalcpro.dashCollapsed.v1`, unchanged). Screenshots of both tools at 1280, 1400, 1920 and 390 px confirm the same placement. The one visible difference was the row ("card") styling: SF chips have a 1 px border in the status colour on a tinted background and a bold check name; RW rows had a 4 px coloured left stripe on white with a regular-weight name.
+- **Where:** CSS, block `/* RWDC (2026-11-06): check summary panel …`, after the line anchor `.rwdCh.pass { border-left-color: var(--pass); } .rwdCh.fail { border-left-color: var(--fail); background: #FEF2F2; } .rwdCh.warn { border-left-color: var(--warn); background: #FFFBEB; }`.
+  - Before: (nothing after that line)
+  - After (added):
+```css
+/* RWDL (2026-11-07, engineer: "the summary cards should be on the left panel" as in Spread Footing): each row is styled as
+   Spread Footing's dashboard chip (SFDC): a 1 px border in the status colour on a tinted background, the check name in bold.
+   Display only. */
+.rwdCh { border-left-width: 1px; }
+.rwdCh.pass { border-color: var(--pass); background: #ECFDF5; } .rwdCh.fail { border-color: var(--fail); background: #FEF2F2; }
+.rwdCh.warn { border-color: var(--warn); background: #FFFBEB; } .rwdCh.na { border-color: var(--slate-400); background: var(--slate-50); }
+.rwdCh.pass:hover { background: #D1FAE5; } .rwdCh.fail:hover { background: #FEE2E2; } .rwdCh.warn:hover { background: #FEF3C7; } .rwdCh.na:hover { background: var(--slate-100); }
+.rwdCh .rwdN { font-weight: 700; color: var(--slate-900); }
+```
+- **Decisions (pending engineer review):**
+  1. Breakpoint kept at 1500 px, the same as Spread Footing and Light Pole (as asked: "same breakpoints"). Below 1500 px (e.g. 1280 and 1400 px windows, or a 1920 px screen at 150 % Windows scaling = 1280 CSS px) both tools show the summary above the output tabs, not as a left column. If the engineer's screen is below 1500 px and the left column is wanted there, the breakpoint would need lowering in SF, LP and RW together (a separate change).
+  2. RW's own fonts and colour tokens are kept (sans-serif UI, `--pass` / `--fail` / `--warn`); only the chip shape (border + tint + bold name) follows SF. The RW title "CHECK SUMMARY" and the count badges are unchanged.
+  3. The Overview "Wall section works / governing D/C" card stays at the top of the Overview tab (SF has no equivalent card; its dashboard is the only summary). The self-consistency line stays under the check list (in the left column at ≥ 1500 px), as RWSC placed it.
+  4. Phone (≤ 900 px): RW's "results first / Show inputs" behaviour is kept (SF shows inputs first with a "Jump to the results" link); only the row styling changes there.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Saved data (§5):** no key or format changed; no new key.
+- **Check case:** default ACI wall (H_s 12 ft, q_a 3000 psf): 23 rows, all PASS, green bordered rows (D/C 0.20 … 1.00), "all pass · 23 checks"; H_s 22 ft, q_a 2500 psf: "5 FAIL", red bordered rows open (Sliding D/C 1.62, Bearing 1.66, Stem Shear 1.12, Stem Hook ℓdh 1.91, Toe Shear 2.39).
+- **How verified:** origin/main (after #957) vs branch, headless Chromium at 1920 px, three walls (ACI default; AASHTO default; ACI H_s 22 / q_a 2500 with 5 FAIL): `window._R`, Export JSON fields (`snapshotFields()`), every localStorage key and value, the Report tab text and the four-sheet DXF **identical**; 0 console errors. No sideways page scroll at 390, 768, 1280, 1400 and 1920 px. Screenshots before / after at 1280, 1400, 1920 and 390 px (deviceScaleFactor 2) next to Spread Footing at the same widths, and the FAIL wall at 1920 and 1400 px, looked at. Tests: check-syntax; smoke/retaining-wall-checks; phone-layout rwall 390/768; project-library retwall.
+- **Other copies:** none.
