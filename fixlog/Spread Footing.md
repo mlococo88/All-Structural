@@ -6488,7 +6488,7 @@ index 50f3837..c2d5000 100644
 - **Cases that move:** only projects with both Wx and Wy (and windSim on) or with E entered. SF harness def / sey: no result change (new `loads.E` and `present.E` fields only).
 - **Saved data:** new fields `peds[].loads.E`, `stab.windSim`, `stab.SDS`, with a migration that keeps older saves' results (E = 0, windSim off, S_DS = 0).
 
-## 2026-11-07 — PR: claude/sf-low-citations (SFLW: review LOW items: citations, contact display, Report Include row wrap, roughening drawing note, AASHTO-based labels; d_q and the water term per AASHTO 10th; CALCULATION CHANGE only for the depth-factor option and a water table within D_f + 1.5B′)
+## 2026-11-07 — PR: claude/sf-low-citations (PR #1062: https://github.com/mlococo88/All-Structural/pull/1062) (SFLW: review LOW items: citations, contact display, Report Include row wrap, roughening drawing note, AASHTO-based labels; d_q and the water term per AASHTO 10th; CALCULATION CHANGE only for the depth-factor option and a water table within D_f + 1.5B′)
 
 - **L1, citation:** dashboard / summary "Flexure (footing)" cited A_s,min §7.6.1.1. For a combined footing it now cites §13.3.4.1 → §8.6.1.1 (as the Report already did, SFPR). The value is unchanged (0.0018A_g).
 - **L2, citation:** self-weight cards cited "ACI 318-19 5.3 dead load" (5.3 is the load factors). They now cite "dead load D: ASCE 7-16 3.1, IBC 2021 1606".
