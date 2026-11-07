@@ -6707,6 +6707,105 @@ index 50f3837..c2d5000 100644
 - **How verified:** headless Chromium, origin/main c04e74f vs the branch, pinned libraries; deep diff of `R`, `P2`, the dashboard text and the Report text on 15 cases (10 harness cases, 5 wall cases: `w769`, `w769h`, `wTall`, `wAll` both elements walls, `wSel` Wall with ℓ_w/t ≤ 3). `R` / `P2`: **0 differences** in all 15; dashboard text identical in all 15; Report text identical in the 11 cases without a wall, and in the wall cases differs only by the new "Wall design" section, the § numbers after it, and the links / tab names listed above. 0 console errors, 0 KaTeX errors. Tests: see the PR.
 - **Other copies:** none.
 
+## 2026-11-07 — PR: claude/sf-wall-oop (PR #1163: https://github.com/mlococo88/All-Structural/pull/1163) (SFWD-2: wall out-of-plane design per ACI 318-19 Chapter 11 — axial + flexure per ft with slenderness, out-of-plane shear, ties 11.7.4.1, 11.5.3 / 11.3.1.1 for information; the pedestal stand-in checks of a wall replaced; wall notes as short items; CALCULATION CHANGE for Wall elements only)
+
+### SFWD-2. Wall out-of-plane design   [CALCULATION CHANGE, Wall elements only; CLAUDE.md §4, §5]
+- **Request (engineer, 2026-11-07):** "Then I want to do the structural checks for that wall as well." This is part (b): the out-of-plane P–M, the shear and the slenderness. Part (c) adds the in-plane P–M; until then the biaxial P–M of the whole section stays as the in-plane stand-in. Display request (engineer, same day, phone screenshot of the wall note): "split this up into a numbered list or bullets … so it's not just a text that will likely get overlooked". Every wall note on the Wall Design tab is now short items with bold lead words. The "Input needed: horizontal bars" warning sits at the top of the card. The stand-in wording ("Not computed by this tool … the pedestal checks above stand in") is removed. Every fact and citation is kept.
+- **Provisions read in the ACI 318-19 PDF (printed page + 2 = PDF page; paraphrased):**
+  - pp. 165–174: 11.1–11.8.
+    - 11.4.1.3: slenderness by 6.6.4, 6.7 or 6.8, or 11.8 where its conditions hold.
+    - 11.4.2.1: P_u ≤ φP_n,max per 22.4.2.1, with φ compression-controlled.
+    - 11.5.1.1: φS_n ≥ U, with P–M interaction considered.
+    - 11.5.2.1: a bearing wall's P_n and M_n by 22.4; 11.5.3 is permitted as an alternative.
+    - 11.5.3.1 (Eq. 11.5.3.1, e ≤ h/6), Table 11.5.3.2 (k = 0.8 / 1.0 braced, 2.0 not braced against lateral translation), 11.5.3.3.
+    - 11.5.5.1: out-of-plane V_n by 22.5.
+    - 11.3.1.1 / Table 11.3.1.1: note [1] says the bearing and the exterior basement / foundation minimums apply only to walls designed by 11.5.3.
+    - 11.7.4.1: ties where the longitudinal bars are required for compression and A_st > 0.01A_g.
+    - 11.8.1.1 (a)–(e), 11.8.2.1: the alternative method models a simply supported wall with midheight moments and service deflections.
+  - pp. 68–81:
+    - 6.2.5.1(a) kℓ_u/r ≤ 22 (not braced), 6.2.5.1(b) ≤ 34 + 12M₁/M₂ and ≤ 40 (braced);
+    - 6.2.5.2(b) r = 0.30 × the dimension in the direction considered;
+    - 6.2.5.3: second-order moment ≤ 1.4 × first-order;
+    - Table 6.6.3.1.1(a) (walls, cracked 0.35I_g), Table 6.6.3.1.1(b) (columns and walls: 0.35I_g ≤ I ≤ 0.875I_g);
+    - 6.6.4.4.2 (P_c), 6.6.4.4.3, 6.6.4.4.4(a)–(c) ("for columns");
+    - 6.6.4.5.1–6.6.4.5.4 (δ, C_m, M_2,min = P_u(0.6 + 0.03h));
+    - 6.6.4.6.1, 6.6.4.6.2(b) (δ_s).
+  - pp. 402–405: 22.5.1.2, Table 22.5.5.1 (row (c) for A_v < A_v,min, with N_u/(6A_g)), 22.5.5.1.1 (V_c ≤ 5λ√f′c b_w d), 22.5.5.1.2, 22.5.5.1.3 (λ_s).
+  - p. 395–396: 21.2.4 (the shear φ for special systems; not applicable here).
+  - Errata (ACI 318-19 errata 2022): nothing on Chapter 11, 6.6.4 or 22.4. The 22.5.1.11 "≤ → >" erratum is already reflected in SFVP.
+- **Method (where: new `sfwSec`, `sfwRatio`, `sfdWallOOP`; anchor `/* ---- SFWD-2 (2026-11-07, engineer: "do the structural checks for that wall")`; `computePhase2` adds `wallD`):**
+  1. **Section per ft:** a 12-in strip, thickness t, two curtains of vertical bars, A_s = 12A_b/s_v each at d′ = c + d_b/2 from each face. The cage's end bars are not counted (conservative). Strain compatibility (22.2: ε_cu 0.003, 0.85f′c over β₁c, bars ±f_y, displaced concrete deducted), φ by ε_t (21.2.2, SFPY). P₀ = 0.85f′c(A_g − A_st) + f_y A_st, φP_n,max = 0.65·0.80P₀, φP_n,t = −0.90f_y A_st.
+  2. **Demand per ft, every LRFD combination:**
+     - M_u,out: the base moment about the wall's long axis (M_uy for a wall along y; includes V h and P·e), magnified if slender (below), divided by ℓ_w.
+     - Axial force at each end: N = P_u/ℓ_w ± 6M_u,in/ℓ_w².
+     - Ratio = M/φM_n(N) at each end; the larger governs. Above φP_n,max the ratio is N/φP_n,max; below φP_n,t it is N/φP_n,t.
+  3. **Slenderness:**
+     - r = 0.3t; ℓ_u = input, blank = max(h, h_w); k = input, blank = 2.0 (free top) or 1.0 (braced top).
+     - Limit 22 (free) or 34 (braced, M₁/M₂ = 0).
+     - Above the limit, as SFSL on the whole wall: (EI)_eff = 0.35E_cI_g/(1 + β).
+       - Free top: δ_s (k) and δ (k = 1).
+       - Braced top: δ (k), C_m = 1.0.
+       - M_2,min = P_u(0.6 + 0.03t).
+     - NG where unstable or δ_sδ (δ) > 1.4.
+  4. **11.5.3** (information, where every e = M_u/P_u ≤ t/6): φP_n = 0.65·0.55f′c(12t)[1 − (kℓ_u/32t)²] per ft against N_max.
+  5. **Out-of-plane shear per ft:**
+     - V_c = [8λ_sλρ_w^(1/3)√f′c + N_u/(6A_g)]·12d, with 0 ≤ V_c ≤ 5λ√f′c·12d.
+     - ρ_w is one curtain; N_u is the net tension per ft at the less compressed end only.
+     - √f′c ≤ 100 psi, φ = 0.75.
+     - V_u = the out-of-plane shear (V_x for a wall along y) / ℓ_w.
+  6. **Ties (11.7.4.1):** required where ρ_g = A_st/A_g > 0.01. Then the tie spacing / size (25.7.2.1, 25.7.2.2) and crossties (25.7.2.3, REVIEW) of the section apply. The bar clear spacing 25.2.3 is kept. 11.3.1.1: information (N/A).
+- **What replaces what (Wall elements, ℓ_w/t > 3, only):**
+
+  | Before (pedestal stand-in) | After (wall) |
+  |---|---|
+  | "Pedestal design" chip: axial DCR (22.4.2.1), ρ 1–8 % (10.6.1.1, column rule where h > 3t), n ≥ 4, bar fit, ties 25.7.2, slender limit | Removed for walls. The axial cap is in the per-ft P–M (11.4.2.1). 11.6 governs the wall minimum (Wall reinforcement). Ties: 11.7.4.1. Bar fit: "Wall ties and bar fit". |
+  | "Pedestal shear" chip (22.5, both directions on the whole section, the in-plane direction included) | Removed for walls. Out of plane: "Wall out-of-plane shear (11.5.5)". In plane: 11.5.4 (unchanged chip). |
+  | "Pedestal crossties" chip (25.7.2.3, REVIEW) | Only where 11.7.4.1 requires ties ("Wall ties and bar fit"). |
+  | Slenderness: k = 2, ℓ_u = h, r = 0.3t, (EI) = 0.4E_cI_g/(1 + β), magnification in the biaxial P–M | Out-of-plane per ft, with k / ℓ_u / brace inputs (defaults: k 2.0, ℓ_u = max(h, h_w)), 0.35E_cI_g/(1 + β). |
+  | "Pedestal P–M (biaxial)" | Kept for walls in this PR as the in-plane stand-in (part (c) replaces it). |
+  | — | New chips: "Wall out-of-plane P–M (11.5.2)", "Wall out-of-plane shear (11.5.5)", "Wall ties and bar fit (11.7.4.1, 25.2.3)", "Wall minimum thickness (11.3.1.1)" (N/A, information). The "Wall checks" REVIEW chip now lists only what is not checked. |
+- **Before / after (harness, origin/main 950f2a7 vs the branch):**
+  - `w769h` (default project, direct mode, Ped 1 1.5 × 6 × 2 ft Wall, V_y = 120 k, horizontal #5 @ 12):
+    - Pedestal shear: **FAIL 1.01** → walls removed: Ped 2 alone gives **PASS 0.30**. The 1.01 was 22.5 one-way shear in the in-plane direction on b_w 18 × d 69.5 in. The wall's in-plane shear is 11.5.4: φV_n = 351.82 k, ratio 0.341 PASS (unchanged).
+    - Crossties: REVIEW → PASS (ρ_g 0.0049 ≤ 0.01: 11.7.4.1 ties not required).
+    - New: out-of-plane P–M 0.11 PASS; out-of-plane shear 0.19 PASS.
+  - `wTall` (Ped 1 1 × 6 × 12 ft Wall, 14 #5 (2 × 7), D 60, L 30, Wx V_x 3, Wy V_y 20 k):
+    - Pedestal design: **FAIL** ("ρ outside 1–8 %; ties": ρ 0.50 % < 1 % column rule, h 144 > 3·12) → **PASS 0.42** (Ped 2 only).
+    - Crossties: REVIEW → PASS (11.7.4.1 not required).
+    - New out-of-plane P–M **0.62** PASS. This is higher than the stand-in biaxial ratio 0.30, because the strip at the end in tension governs.
+    - New out-of-plane shear 0.087 PASS.
+  - `wOOP` and `wAll`: the same pattern. The Pedestal design FAIL (ρ < 1 %) goes; the out-of-plane P–M is 0.21 / 0.22.
+  - Pedestal-only cases (10 harness cases and `wSel`): R and the dashboard are unchanged (only the new field `P2.wallD` = `[{applied:false}, …]`). The Report text is identical except, in `wSel` (Wall with ℓ_w/t ≤ 3), the reworded wall note.
+  - **Decision (pending engineer review): three statuses become less conservative** for walls only: the 1 % column minimum (10.6.1.1), 22.5 shear in the in-plane direction, and ties / crossties with ρ_g ≤ 1 %. These are column / pedestal provisions that ACI 318-19 replaces for walls with 11.6, 11.5.4 and 11.7.4.1, all checked. The brief asked that old saves not become less conservative; that rule is met for every new input default (below). It cannot be met for these three replacements without keeping provisions that do not apply to walls. Engineer to confirm.
+- **Check case 1 (axial + out-of-plane moment; `wTall`, 0.9D + 1.0(0.75(+Wx + Wy)), f′c 4000, f_y 60 000):**
+  - Inputs: t = 12, ℓ_w = 72 in (L = 6 ft), h = 12 ft, free top, k = 2.0, ℓ_u = 144 in. #5: d′ = 2 + 0.3125 = 2.3125, d = 9.6875 in, s_v = (72 − 4 − 0.625)/6 = 11.229 in, A_s = 12·0.31/11.229 = 0.3313 in²/ft each face.
+  - Per ft: P₀ = 0.85·4(144 − 0.6626) + 60·0.6626 = 527.10, φP_n,max = 274.09, φP_n,t = −35.78 kip/ft.
+  - Slenderness: r = 3.60, kℓ_u/r = 2·144/3.6 = 80.0 > 22: slender.
+    - P_u = 63.72 k, β_dns = 1.0 (all dead), β_ds = 0 (wind moment).
+    - E_c = 57√4000 = 3605 ksi, I_g = 72·12³/12 = 10 368 in⁴.
+    - P_c,s = π²(0.35·3605·10 368/1)/(2·144)² = 1556.6 k, δ_s = 1/(1 − 63.72/(0.75·1556.6)) = 1.058.
+    - P_c,ns = π²(0.35·3605·10 368/2)/144² = 3113 k, δ = 1.028.
+    - M_2,min = 63.72(0.6 + 0.36)/12 = 5.10 k-ft. M_c = 1.028·max(1.058·27.0, 5.10) = 29.36 k-ft, δ_sδ = 1.087 ≤ 1.4.
+  - Demand: N = 63.72/6 ± 6·180/6² = 10.62 ± 30.00 = 40.62 / −19.38 kip/ft; M = 29.36/6 = 4.89 k-ft/ft.
+  - Capacity at N = −19.38 (both curtains yield in tension):
+    - C_c = −19.38/0.9 + 2·0.3313·60 = −21.53 + 39.75 = 18.22 k, a = 18.22/(0.85·4·12) = 0.447 in, c = 0.525 in, ε_t = 0.0523, φ = 0.90.
+    - M_n = 18.22(6 − 0.223) = 105.2 k-in = 8.77 k-ft, φM_n = 7.89 k-ft/ft.
+  - **Ratio 4.89/7.89 = 0.620** (more compressed end, N = 40.62: 0.157). Before: the wall had no per-ft check; the stand-in biaxial ratio was 0.30, Pedestal design FAIL (ρ < 1 %).
+- **Check case 2 (out-of-plane shear; same wall and combination):**
+  - λ_s = √(2/(1 + 0.96875)) = 1.008 → 1.0. ρ_w = 0.3313/(12·9.6875) = 0.002850. 8·1·1·0.002850^(1/3)·63.25 = 71.73 psi.
+  - N_u/(6A_g) = −19 380/(6·144) = −22.43 psi; v_c = 49.30 psi. V_c = 49.30·12·9.6875/1000 = 5.731 kip/ft, φV_c = 4.299.
+  - V_u = 0.75·3.0/6 = 0.375 kip/ft → **0.087**.
+  - Before (pedestal 22.5, whole section, both directions): 0.252 (governed by the in-plane V_y direction; that direction is now 11.5.4, 0.08).
+- **Inputs / saved data (§5):** new fields `peds[i].wallIn.brace` ('unbraced' / 'braced'), `.k`, `.lu` (Pedestals card, Wall only). `newPed`: `brace:'unbraced',k:'',lu:''`. `migrateState` (anchor `/* SFWD-2 (2026-11-07): out-of-plane slenderness inputs`): absent → 'unbraced', '' and ''. So an old save keeps k = 2.0, as the stand-in used, with ℓ_u = max(h, h_w) ≥ h and 0.35 < 0.4 in EI: the slenderness defaults are never less conservative than before. No key or format change.
+- **Display:**
+  - Wall card (`sfdWallCard`, anchor `/* SFWD-2: a wall's card on the Wall Design tab`): input-needed warning first, the wall statement as items (`sfdWallItems` / `sfdWallTxt`), then: section per ft; slenderness and magnification; the governing P–M worked (N, M, c, a, C_c, bar stresses, ε_t, φ, φM_n, ratio) with every combination at both ends in a table; 11.5.3; out-of-plane shear; the in-plane stand-in; the 11.6 / 11.5.4 / 11.7 blocks (`sfdWallRhoBlocks`, notes now items via `sfwUl`); ties / bar fit / cover; 11.3.1.1; "Not checked" list (`SFWD_NOT_L`); the connection to the footing.
+  - 6W.1: the items list and a wall summary table (`sfdWallSumTable`).
+  - Report: `sfrWallSub` (anchor `/* SFWD-2 (2026-11-07): a wall's subsection of the Report`) builds the `S-wd<i>` subsection. The 11.6 / 11.5.4 / 11.7 topics moved unchanged into `sfrWallMinTopics` (the step ids `w.*`, scope `pd<i>`, so `[[pd<i>/w.rl2]]` still resolves). Summary rows link the new chips to `S-wd<i>`.
+  - `sfdChCond`: "slender limit", "ties" / "bars do not fit" / "crossties to detail".
+- **How verified:**
+  - Harness: 17 cases (10 + `w769`, `w769h`, `wTall`, `wTallBr` braced top, `wAll`, `wOOP`, `wSel`) on origin/main vs the branch. 0 console errors, 0 KaTeX errors. Values as above.
+  - Section routine checked in Node at N = 0 (both curtains yield: C_c = 39.75 k, M_n = 18.26 k-ft) and at the case-1 point.
+  - Tests: see the PR. Screenshots, including 390 px for the wrapped items.
 ## 2026-11-07 — PR: claude/sf-notes-split (PR #PRA) (SFNL-1: long notes as a bold lead and a list — input tabs, Schematic, Load Combinations, Bearing, LRFD reference boxes, 3D View, Drawings; display only, no result change)
 
 ### SFNL-1. Long notes split into a lead line and a list   [display only] [no result change]
