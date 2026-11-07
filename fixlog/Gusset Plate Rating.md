@@ -3102,7 +3102,7 @@ From the code-compliance review of 2026-11-07 (finding H2). Engineer asleep, mer
 - **Other copies:** none.
 - **Open items:** the engineer to confirm the reversal of C4.4 and the K to pair with the average if `lmidAvg` = 1 (FHWA-IF-09-014 / MBE not in references).
 
-## 2026-11-07 — PR: claude/gusset-m1-rp-rupture — Shear rupture on the shear planes includes R<sub>p</sub> (LRFD 10th Ed. Eq. 6.13.5.3-2) (M1; §4, results go down for punched holes)
+## 2026-11-07 — PR: claude/gusset-m1-rp-rupture (PR #1036: https://github.com/mlococo88/All-Structural/pull/1036) — Shear rupture on the shear planes includes R<sub>p</sub> (LRFD 10th Ed. Eq. 6.13.5.3-2) (M1; §4, results go down for punched holes)
 
 From the code-compliance review of 2026-11-07 (finding M1). Engineer asleep, merge-as-you-go approved.
 
