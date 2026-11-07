@@ -4898,7 +4898,7 @@ Open item raised in #960 (RWUP). Engineer instruction relayed 2026-11-07 (no que
 ### Saved data
 - No input or format change.
 
-## 2026-11-07 — PR: claude/rw-pile-schedule — Pile-supported footing: pile schedule (Drawings sheet 5 with a pile layout plan, Report table); the stale Phase 8b warning removed (RWPL; display only, no result change)
+## 2026-11-07 — PR: claude/rw-pile-schedule — Pile-supported footing: pile schedule (Drawings sheet 5 with a pile layout plan, Report table); the stale Phase 8b warning removed (RWPL; display only, no result change) (PR #981: https://github.com/mlococo88/All-Structural/pull/981)
 
 Review Phase 8, pile schedule (the open item of 8e). Code sites are tagged `RWPL`. No computed value changes; spread-footing walls are byte-identical.
 ### RWPL-11. `rwPileSchedule(r)` (new, after `rwPileAnalysis`)
