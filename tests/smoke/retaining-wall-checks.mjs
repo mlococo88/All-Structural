@@ -257,7 +257,7 @@ const AUD = [
     ['Math.abs(R.pileFtg.cmax.rows[0].q - 12896.05) < 0.1 && Math.abs(R.Mu_toe_net - 17521.58) < 0.1 && Math.abs(R.Vu_toe - 11681.05) < 0.1 && Math.abs(R.d_toe - 20.625) < 1e-9', 'toe from the pile row, d over the pile heads'],
     ['R.heel_min_governs && Math.abs(R.Mu_heel_up - 44434.60) < 0.1 && Math.abs(R.Mu_heel_net - 9997.40) < 0.1', 'heel'],
     ['Math.abs(R.pilePunch.dp - 20.25) < 1e-9 && Math.abs(R.pilePunch.rows[0].bo - 129) < 1e-9 && Math.abs(R.pilePunch.rows[0].phiVc - 403012.3) < 1 && R.checks.pilePunch.ok && R.checks.pileCapD.ok', 'punching, cap depth'],
-    ['/Pile Cap — Punching around the Piles/.test(T.footing) && /Factored pile reactions under the toe/.test(T.footing) && /Pile cap — punching around the piles/.test(P)', 'Footing tab and Report']]],
+    ['/Pile Cap — Punching around the Piles/i.test(T.footing) && /Factored pile reactions under the toe/i.test(T.footing) && /Pile cap — punching around the piles/.test(P)', 'Footing tab and Report']]],
   ['RWPL 8d AASHTO t_f 36 in on piles: punching φV_n = 0.90(0.126)√f\'c b_o d_v', { fnd_type: 'pile', tf: 36, design_basis: 'AASHTO' }, [
     ['R.pilePunch && Math.abs(R.pilePunch.rows[0].phiVc - 0.9 * 0.126 * Math.sqrt(4) * R.pilePunch.rows[0].bo * R.pilePunch.dvp * 1000) < 1 && !R.checks.pileCapD', 'AASHTO two-way shear; no ACI cap-depth row']]],
   ['RWPL spread footing unchanged: no pile results', {}, [['!R.pile && !(\'pile\' in R) && R.checks.bearing && R.checks.ot', 'spread footing checks, no pile field in the results']]],

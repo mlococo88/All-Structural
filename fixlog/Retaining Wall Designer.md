@@ -4645,7 +4645,7 @@ Review Phase 8, PR 8d. Code sites are tagged `RWPL`. Spread-footing results are 
 +    `M_{up} = \\sum q_i a_i = ${r.heelPile.rows.length ? r.heelPile.rows.map(rw => `(${F(rw.q,1)})(${F(rw.a,3)})`).join(' + ') : '0'} = \\boxed{${F(r.Mu_heel_up,1)}\\ \\text{lb·ft/ft}}`,'',
 +    [{sym:'M_{up}', desc:'pile-reaction moment at face', val:F(r.Mu_heel_up,1), unit:'lb·ft/ft'}]) : eq('Moment from upward bearing about back face (trapezoid: ∫q(x)·x dx)',
 -    `M_{u,A} = M_{down} - M_{up} = ${Fk(r.Mu_heel_std)}\\ \\text{kip·ft/ft}, \\quad V_{u,A} = \\left| w_u L_h - ${upHs ? 'F_{up}' : '\\tfrac{q_0+q_L}{2}L_h'} \\right| = ${Fk(r.Vu_heel_std)}\\ \\text{kip/ft}`,'');
-+    `M_{u,A} = M_{down} - M_{up} = ${Fk(r.Mu_heel_std)}\ \text{kip·ft/ft}, \quad V_{u,A} = ${r.heelPile ? '\left| w_u L_h - \sum q_i \right|' : '\left| w_u L_h - ' + (upHs ? 'F_{up}' : '\tfrac{q_0+q_L}{2}L_h') + ' \right|'} = ${Fk(r.Vu_heel_std)}\ \text{kip/ft}`,'');
++    `M_{u,A} = M_{down} - M_{up} = ${Fk(r.Mu_heel_std)}\\ \\text{kip·ft/ft}, \\quad V_{u,A} = ${r.heelPile ? '\\left| w_u L_h - \\sum q_i \\right|' : '\\left| w_u L_h - ' + (upHs ? 'F_{up}' : '\\tfrac{q_0+q_L}{2}L_h') + ' \\right|'} = ${Fk(r.Vu_heel_std)}\\ \\text{kip/ft}`,'');
 +  if (r.toePile) {   // RWPL 8d: pile rows in front of the front face
 +    const tp = r.toePile;
 +    h += eq('Factored pile reactions under the toe (' + tp.label + '; line loads q_i = P_i/s_i)',
