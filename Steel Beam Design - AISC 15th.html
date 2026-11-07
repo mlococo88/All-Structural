@@ -2181,6 +2181,7 @@ function designAll(A){
   const anyTu=A.combos.some(cb=>manOf(cb.id).Tu!==0);
   D.flexY=(anyMuy||true)?flexFor(p,'y',0,1):null;
   D.shearX=(p._kind==='P')?null:shearMajor(p,null,S.design.stiff);           /* round is per-combo (Lv) */
+  const tfa0=(p._kind==='I'&&D.shearX)?shearTFA(p,S.design.stiff,D.shearX):null;if(tfa0)D.tfa=tfa0;   /* TFA option (G2.2), default off */
   D.shearY=shearMinor(p);
   const dsn=S.design||{};
   const Ltot=totalL();
@@ -2229,6 +2230,16 @@ function designAll(A){
     }else C.shearX=D.shearX;
     C.Vu=Math.abs(cb.Vabs.v);C.VuX=cb.Vabs.x;
     C.dcrVx=C.Vu/(C.shearX.phi*C.shearX.Vn);
+    /* TFA: end panels (within a of a support or a member end) keep G2.1; interior panels may use max(G2.1, G2.2) */
+    if(D.tfa&&D.tfa.applies){
+      const aFt=D.tfa.a/12,ends=A.nX.filter((x,j)=>S.geom.nodes[j].t!=='free').concat([0,Ltot]);
+      let ve=0,xe=0,vi=0,xi=null;
+      A.stations.forEach((x,i)=>{const v=Math.abs(cb.V[i]);const end=ends.some(e=>Math.abs(x-e)<=aFt+1e-9);
+        if(end){if(v>ve){ve=v;xe=x;}}else if(v>vi){vi=v;xi=x;}});
+      const cE=C.shearX.phi*C.shearX.Vn,cI=D.tfa.phi*D.tfa.Vn,dE=ve/cE,dI=xi!=null?vi/cI:0;
+      C.tfa={VuEnd:ve,xEnd:xe,VuInt:vi,xInt:xi,capEnd:cE,capInt:cI,dcrEnd:dE,dcrInt:dI};
+      C.dcrVx=Math.max(dE,dI);C.tfa.gov=dI>dE?'int':'end';
+    }
     if(man.Vuy&&D.shearY)C.dcrVy=Math.abs(man.Vuy)/(D.shearY.phi*D.shearY.Vn);
     /* minor flexure */
     if(man.Muy&&D.flexY){
@@ -2326,8 +2337,11 @@ function buildDesignChecks(D,A){
     detail:D.member?('L_b = '+fmt(fGov.c.flexGov.LbFt,1)+' ft, C_b = '+fmt(fGov.c.flexGov.Cb,2)):
       ('region '+fmt(fGov.c.flexGov.x1,1)+'\u2013'+fmt(fGov.c.flexGov.x2,1)+' ft, '+fGov.c.flexGov.flange+' flange')});
   const vGov=gv(c=>({d:c.dcrVx,c}));
-  if(vGov)D.checks.push({label:'Shear V\u2093',ref:vGov.c.shearX.route,dcr:vGov.d,combo:vGov.c.name,tab:'tabVx',
-    dem:vGov.c.Vu,cap:vGov.c.shearX.phi*vGov.c.shearX.Vn,unit:'kip',capSym:'\u03C6V\u2099'});
+  if(vGov){const t=vGov.c.tfa,ti=!!(t&&t.gov==='int');   /* TFA: the governing panel's demand and strength */
+    const ck={label:'Shear V\u2093',ref:ti?'G2.2 ('+D.tfa.eq+')':vGov.c.shearX.route,dcr:vGov.d,combo:vGov.c.name,tab:'tabVx',
+      dem:t?(ti?t.VuInt:t.VuEnd):vGov.c.Vu,cap:t?(ti?t.capInt:t.capEnd):vGov.c.shearX.phi*vGov.c.shearX.Vn,unit:'kip',capSym:'\u03C6V\u2099'};
+    if(t)ck.detail=ti?'interior panel, x = '+fmt(t.xInt,2)+' ft (tension field)':'end panel, x = '+fmt(t.xEnd,2)+' ft (G2.1)';
+    D.checks.push(ck);}
   const myGov=gv(c=>c.dcrMy!=null?{d:c.dcrMy,c}:null);
   D.checks.push(myGov?{label:'Flexure M\u1D67',ref:D.flexY?D.flexY.route:'F6',dcr:myGov.d,combo:myGov.c.name,tab:'tabMy',
     dem:Math.abs(myGov.c.man.Muy),cap:myGov.c.phiMny,unit:'kip\u00B7ft',capSym:'\u03C6M\u2099'}:
@@ -5337,6 +5351,7 @@ function buildVxTab(pg){
     else{
       stiffBlock(body,p,D.shearX,D);
       shearBlock(body,p,D.shearX,'Shear per '+D.shearX.route);
+      if(D.tfa)tfaBlock(body,p,D.tfa,D.shearX);   /* TFA option */
     }
   },pg);
   if(D.sw)mkSection('vxSw','Self-Weight Contribution',body=>{
@@ -5345,6 +5360,12 @@ function buildVxTab(pg){
   },pg);
   perComboSections(pg,'vx_',isMember()?'Case ':'Combination ',(body,C)=>{
     if(p._kind==='P'&&!isMember())shearBlock(body,p,C.shearX,'Shear capacity at this combination\u2019s L\u1D65');
+    if(C.tfa){const t=C.tfa;   /* TFA: end panels G2.1, interior panels max(G2.1, G2.2) */
+      body.appendChild(eqBlock({title:'Shear by panel type (tension field action on)',ref:'\u00A7G2.1 / \u00A7G2.2',
+        lines:['\\text{End panels (within }a='+fmt(D.tfa.a,1)+'\\text{ in of a support or end): }\\tfrac{V_u}{\\phi V_n}=\\tfrac{'+fmt(t.VuEnd,1)+'}{'+fmt(t.capEnd,1)+'}='+fmt(t.dcrEnd,3)+'\\ (x='+fmt(t.xEnd,2)+'\\ \\text{ft, G2.1})',
+          t.xInt!=null?'\\text{Interior panels: }\\tfrac{V_u}{\\phi V_n}=\\tfrac{'+fmt(t.VuInt,1)+'}{'+fmt(t.capInt,1)+'}='+fmt(t.dcrInt,3)+'\\ (x='+fmt(t.xInt,2)+'\\ \\text{ft, }'+(D.tfa.usesTFA?'G2.2':'G2.1')+')':'\\text{No interior panel (every station within }a\\text{ of a support or end)}',
+          '\\text{DCR}=\\mathbf{'+fmt(C.dcrVx,3)+'}'+(C.dcrVx>1?'\\ \\color{#B42318}{\\text{FAIL}}':'\\ \\checkmark')]}));
+    }else
     dcrLine(body,'Major-axis shear DCR',C.shearX.route,' V',C.Vu,C.shearX.phi*C.shearX.Vn,C.dcrVx,
       isMember()?null:'V_u\\ \\text{at }x='+fmt(C.VuX,2)+'\\ \\text{ft}');
     if(!isMember())sbdWorkedIn(body,[['tabAnalysis','anC_'+C.id,'Combination '+C.name,'V\u1D64']]);   /* D11 links */
@@ -5734,6 +5755,34 @@ function f13Prop(p){
   L.forEach(x=>x.r=x.v/x.lim);
   const g=L.reduce((m,x)=>x.r>m.r?x:m,L[0]);
   return{L,g,dcr:g.r,lamR,slender,stiffened,ah,h};
+}
+function tfaBlock(body,p,t,sh){
+  if(!t.applies){body.appendChild(el('div','note','Tension field action requested: '+t.note+'; §G2.1 is used in every panel.'));return;}
+  const lines=['\\tfrac{a}{h}='+fmt(t.ah,3)+'\\le 3.0,\\quad 1.10\\sqrt{k_vE/F_y}='+fmt(t.lim,1)+'\\ \\text{vs}\\ h/t_w='+fmt(p.htw,1)];
+  if(t.eq!=='G2-6')lines.push('C_{v2}='+fmt(t.Cv2,4)+'\\ \\text{(Eq. '+t.cv2reg+')},\\quad \\tfrac{2A_w}{A_{fc}+A_{ft}}='+fmt(t.rA,3)+',\\ \\tfrac{h}{b_f}='+fmt(t.rB,2)+'\\ \\Rightarrow\\ \\text{Eq. '+t.eq+'}');
+  lines.push(t.eq==='G2-6'?'V_n=0.6F_yA_w=0.6\\times '+p.mat.Fy+'\\times '+fmt(t.Aw,3)+'='+fmt(t.VnTFA,1)+'\\ \\text{kip}':
+    t.eq==='G2-7'?'V_n=0.6F_yA_w\\left[C_{v2}+\\tfrac{1-C_{v2}}{1.15\\sqrt{1+(a/h)^2}}\\right]=0.6\\times '+p.mat.Fy+'\\times '+fmt(t.Aw,3)+'\\left['+fmt(t.Cv2,4)+'+\\tfrac{1-'+fmt(t.Cv2,4)+'}{1.15\\sqrt{1+'+fmt(t.ah,3)+'^2}}\\right]='+fmt(t.VnTFA,1)+'\\ \\text{kip}':
+    'V_n=0.6F_yA_w\\left[C_{v2}+\\tfrac{1-C_{v2}}{1.15\\left(a/h+\\sqrt{1+(a/h)^2}\\right)}\\right]='+fmt(t.VnTFA,1)+'\\ \\text{kip}');
+  lines.push('\\phi V_n=0.90\\times\\max(V_{n,G2.1}='+fmt(sh.Vn,1)+',\\ V_{n,G2.2}='+fmt(t.VnTFA,1)+')=\\mathbf{'+fmt(0.9*t.Vn,1)+'\\ \\text{kip}}\\quad\\text{(interior panels)}');
+  body.appendChild(eqBlock({title:'Interior panels with tension field action (option on)',ref:'§G2.2, Eq. '+t.eq,lines}));
+  body.appendChild(el('div','hint','Panels within a = '+fmt(t.a,1)+' in of a support or member end are end panels and keep §G2.1. The stiffener requirement above is shown on the §G2.1 basis (Vᶜ₁ of G2.1), which gives the larger ρᵥ.'));
+}
+/* TFA (2026-11-07, option, default off): AISC 360-16 Sec. G2.2, interior web panels with a/h <= 3 of I-shapes:
+   h/t_w <= 1.10 sqrt(k_v E/F_y): V_n = 0.6 F_y A_w (G2-6); otherwise V_n = 0.6 F_y A_w [C_v2 + (1 - C_v2)/(1.15 sqrt(1 + (a/h)^2))]
+   (G2-7) when 2A_w/(A_fc + A_ft) <= 2.5 and h/b_f <= 6.0, else G2-8 [.. /(1.15 (a/h + sqrt(1 + (a/h)^2)))]. A_w = d t_w.
+   V_n is the larger of G2.1 and G2.2 (permitted by Sec. G2.2). End panels are not covered: they keep G2.1. */
+function shearTFA(p,stiff,sh){
+  if(!stiff||!stiff.on||!stiff.tfa||!(stiff.a>0)||p._kind!=='I'||!sh||!(sh.Vn>0))return null;
+  const h=webH(p),ah=stiff.a/h,Fy=p.mat.Fy,E=EKSI;
+  if(!(ah<=3.0))return{applies:false,ah,note:'a/h = '+fmt(ah,2)+' > 3.0: §G2.2 does not apply'};
+  const kv=sh.kv,Aw=p.d*p.tw,lim=1.10*SQ(kv*E/Fy),cv=cv2Of(p.htw,kv,Fy),Af=p.bf*p.tf;
+  const rA=2*Aw/(2*Af),rB=h/p.bf,simple=rA<=2.5&&rB<=6.0;
+  let Vn,eq;
+  if(p.htw<=lim){Vn=0.6*Fy*Aw;eq='G2-6';}
+  else if(simple){Vn=0.6*Fy*Aw*(cv.Cv2+(1-cv.Cv2)/(1.15*SQ(1+ah*ah)));eq='G2-7';}
+  else{Vn=0.6*Fy*Aw*(cv.Cv2+(1-cv.Cv2)/(1.15*(ah+SQ(1+ah*ah))));eq='G2-8';}
+  const VnUse=Math.max(Vn,sh.Vn);
+  return{applies:true,ah,kv,Aw,lim,Cv2:cv.Cv2,cv2reg:cv.reg,rA,rB,simple,VnTFA:Vn,eq,Vn:VnUse,phi:0.90,usesTFA:Vn>sh.Vn,a:stiff.a};
 }
 /* M1 (2026-11-07): AISC 360-16 Sec. G2.3(e), Eq. G2-13: I_st >= I_st2 + (I_st1 - I_st2) rho_w, with
    I_st1 = h^4 rho_st^1.3/40 (F_yw/E)^1.5 (G2-14), I_st2 = [2.5/(a/h)^2 - 2] b_p t_w^3 >= 0.5 b_p t_w^3 (G2-15),
@@ -6524,6 +6573,9 @@ function secStiffeners(P){
     }
     fRow(body,'Stiffener spacing  a',numInput(()=>S.design.stiff.a,v=>{S.design.stiff.a=v;},1,'stfA'),'in',
       'clear spacing between transverse stiffeners');
+    /* TFA option (new field design.stiff.tfa; absent = off) */
+    if(!isMember())fRow(body,'Tension field action (\u00A7G2.2)',chkInput(()=>!!S.design.stiff.tfa,v=>{S.design.stiff.tfa=v;},'stfTFA'),'',
+      'Interior panels with a/h \u2264 3 of I-shapes may use the larger of \u00A7G2.1 and \u00A7G2.2; panels within a of a support or member end keep \u00A7G2.1. Off by default: the engineer chooses.');
     const pk=AN&&AN.sect?AN.sect:null;
     if(pk&&!(pk._kind==='I'||pk._kind==='C'))
       body.appendChild(el('div','warnBox','Stiffener spacing affects k\u1D65 only for I-shapes and channels (\u00A7G2). It has no effect on the current section type.'));
