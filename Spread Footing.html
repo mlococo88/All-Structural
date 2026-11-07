@@ -447,11 +447,11 @@ a.wkA:hover{text-decoration:underline}
  <div class="row"><label>Overturning FS gates result</label><select data-path="stab.otGate"><option value="off">No &mdash; report only (default)</option><option value="on">Yes &mdash; PASS/FAIL on the target</option></select><span class="hint">IBC/ASCE 7 set no numeric FS for a building spread footing; the margin is in 0.6D / 0.9D. IBC 1807.2.3 does require 1.5 for retaining walls.</span></div>
  <div class="row"><label>Eccentricity limit</label><select data-path="stab.eccMode">
   <option value="kern">Middle third (kern), 6eₓ/B + 6eᵧ/L &le; 1 &mdash; full contact (service)</option>
-  <option value="a_soil">AASHTO strength, soil: e &le; B/3</option>
-  <option value="a_soil4">AASHTO strength, soil (pre-2014 / agency): e &le; B/4</option>
-  <option value="a_rock">AASHTO strength, rock: e &le; 0.45B</option>
-  <option value="a_ee0">AASHTO Extreme Event I, &gamma;<sub>EQ</sub>=0: e &le; 0.33B</option>
-  <option value="a_ee1">AASHTO Extreme Event I, &gamma;<sub>EQ</sub>=1.0: e &le; 0.40B</option>
+  <option value="a_soil">AASHTO-based (limit of 10.6.3.3 on the ASCE 7 combinations, not the AASHTO load factors), soil: e &le; B/3</option>
+  <option value="a_soil4">AASHTO-based, soil (pre-2014 / agency): e &le; B/4</option>
+  <option value="a_rock">AASHTO-based, rock: e &le; 0.45B</option>
+  <option value="a_ee0">AASHTO-based Extreme Event I, &gamma;<sub>EQ</sub>=0: e &le; 0.33B</option>
+  <option value="a_ee1">AASHTO-based Extreme Event I, &gamma;<sub>EQ</sub>=1.0: e &le; 0.40B</option>
   <option value="custom">Custom fraction of B, L</option>
   <option value="none">No eccentricity limit (IBC 2021 / ACI 318-19) &mdash; e reported for information</option>
  </select><span class="hint">Replaces the ASD overturning FS in LRFD practice.</span></div>
@@ -659,6 +659,7 @@ a.wkA:hover{text-decoration:underline}
 /* ================= helpers ================= */
 const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
 function f3(x){if(x===null||x===undefined||!isFinite(x))return '\u2013';return Number(x).toFixed(3);}
+function sfdPct(fr){const v=fr*100;return (fr<1-1e-12&&v.toFixed(2)==='100.00')?'99.99+ (< 100; '+v.toFixed(4)+')':f2(v);}   /* SFLW: contact below 100 % never shown as 100.00 */
 function f2(x){if(x===Infinity)return '\u221E';if(x===-Infinity)return '\u2212\u221E';if(x===null||isNaN(x))return '\u2013';
  if(Math.abs(x)>=1000)return x.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
  return x.toFixed(2);}
@@ -1433,12 +1434,12 @@ function vesicCapacity(ctx,V,H,ex,ey,thetaH){
  const Nc=phi>1e-6?(Nq-1)/tphi:5.14;
  const Ng=2*(Nq+1)*tphi;
  const sc=1+(Beff/Leff)*(Nq/Nc), sq=1+(Beff/Leff)*tphi, sg=1-0.4*(Beff/Leff);
- const kk=(Df/Beff<=1)?Df/Beff:Math.atan(Df/Beff);
+ const kk=Math.atan(Df/Beff);   /* SFLW (2026-11-07): AASHTO LRFD 10th Eq. 10.6.3.1.2a-10 uses arctan(D_f/B) at every D_f/B (before: D_f/B for D_f/B <= 1, larger) */
  /* depth factors only when the "use depth factors" option is on (soil.sfdDepthF):
     AASHTO LRFD 10.6.3.1.2a - use them only where the soil above the base is as
     competent as the bearing soil and will not be removed; otherwise d = 1.0. */
  const useD=(ctx.useD===true);
- const dq=useD?1+2*tphi*Math.pow(1-Math.sin(phi),2)*kk:1;
+ const dq=useD?Math.min(1+2*tphi*Math.pow(1-Math.sin(phi),2)*kk,1.4):1;   /* SFLW: d_q <= 1.4 (AASHTO 10.6.3.1.2a) */
  const dc=useD?(phi>1e-6?(dq-(1-dq)/(Nc*tphi)):(1+0.4*kk)):1;
  const dg=1;
  /* inclination exponent on the effective footing B' x L' (AASHTO LRFD 10.6.3.1.2a);
@@ -1455,7 +1456,7 @@ function vesicCapacity(ctx,V,H,ex,ey,thetaH){
  }
  let q_sur,g_eff,gwCase;
  if(dw<=Df){q_sur=gs*Math.max(Math.min(dw,Df),0)+(gs-gw)*Math.max(Df-Math.max(dw,0),0);g_eff=gs-gw;gwCase=1;}
- else if(dw<=Df+Beff){q_sur=gs*Df;g_eff=(gs-gw)+gw*(dw-Df)/Beff;gwCase=2;}
+ else if(dw<=Df+1.5*Beff){q_sur=gs*Df;g_eff=(gs-gw)+gw*(dw-Df)/(1.5*Beff);gwCase=2;}   /* SFLW (2026-11-07): the water effect on the N_gamma term reaches zero at D_f + 1.5B (AASHTO LRFD 10th Table 10.6.3.1.2a-2; before D_f + B') */
  else{q_sur=gs*Df;g_eff=gs;gwCase=3;}
  const T1=c*Nc*sc*dc*ic, T2=q_sur*Nq*sq*dq*iq, T3=0.5*g_eff*Beff*Ng*sg*dg*ig;
  const qult=T1+T2+T3, qall=qult/FSb, qeff=V/Ae;
@@ -1757,7 +1758,7 @@ function computeAll(){
   rigid:lam*lx<=Math.PI/4&&lam*ly<=Math.PI/4};
  if(unstable.length)W.push({lvl:'err',design:true,msg:'Bearing FAIL: '+unstable.length+' combination'+(unstable.length===1?'':'s')+' with no bearing solution (bearing D/C = \u221e): '+unstable.map(a=>'"'+a.cb.name+'": '+sfdBearWhy(a,B,L)).join('; ')+'.'});   /* SFNB-3 */
  if(!rig.rigid)W.push({lvl:'warn',msg:'Rigidity check: \u03bb\u00b7\u2113 exceeds \u03c0/4 in at least one direction. The rigid-footing (linear pressure) assumption may not apply; pressures and Phase 2 strip design should be reviewed.'});
- if(minContact<1-1e-6)W.push({lvl:'warn',msg:'Partial bearing contact (uplift of the footing edge) occurs in at least one service combination. Minimum contact = '+f2(minContact*100)+'% of the footing area.'});
+ if(minContact<1-1e-6)W.push({lvl:'warn',msg:'Partial bearing contact (uplift of the footing edge) occurs in at least one service combination. Minimum contact = '+sfdPct(minContact)+'% of the footing area.'});
  unstable.forEach(a=>W.push({lvl:'err',msg:'Combination "'+a.cb.name+'": resultant falls outside the footing or net vertical load is not downward \u2014 footing is unstable under this combination.'}));
  asd.filter(a=>a.DCR===Infinity&&unstable.indexOf(a)<0).forEach(a=>W.push({lvl:'err',design:true,msg:'Bearing FAIL, combination "'+a.cb.name+'": '+sfdBearWhy(a,B,L)+' \u2014 bearing D/C = \u221e.'}));   /* SFNB-2 */
  if(state.soil.mode==='vesic'&&govBear&&govBear.cap&&!govBear.cap.fail&&govBear.cap.iq<0.3)
@@ -1940,7 +1941,7 @@ function renderDashboard(){
  const ctN=R.asd.length, ctOff=R.asd.filter(a=>a.r.P>1e-9&&a.bear.mode==='unstable').length, ctUp=R.asd.filter(a=>!(a.r.P>1e-9)).length,
   ctIn=R.asd.filter(a=>a.r.P>1e-9&&a.bear.mode!=='unstable'), ctMin=ctIn.reduce((m,a)=>Math.min(m,a.bear.contactFrac!==undefined?a.bear.contactFrac:1),1),
   ctNo=[ctOff?'resultant off the footing ('+ctOff+' of '+ctN+' combination'+(ctN===1?'':'s')+')':'',ctUp?'net load not downward ('+ctUp+' of '+ctN+')':''].filter(Boolean).join('; ');
- d.appendChild(chip('Contact area',!ctIn.length?ctNo:'min '+f2((ctNo?ctMin:R.minContact)*100)+'% of footing'+(ctNo?' (of the '+ctIn.length+' combination'+(ctIn.length===1?'':'s')+' in contact) \u2014 '+ctNo:(anyUnstable?' \u2014 resultant off the footing in at least one combination':'')),(anyUnstable||R.minContact<=0)?'fail':(R.minContact>=1-1e-6?'pass':'warn'),undefined,{tab:'tab-bearing',sec:'o-br-press'}));
+ d.appendChild(chip('Contact area',!ctIn.length?ctNo:'min '+sfdPct(ctNo?ctMin:R.minContact)+'% of footing'+(ctNo?' (of the '+ctIn.length+' combination'+(ctIn.length===1?'':'s')+' in contact) \u2014 '+ctNo:(anyUnstable?' \u2014 resultant off the footing in at least one combination':'')),(anyUnstable||R.minContact<=0)?'fail':(R.minContact>=1-1e-6?'pass':'warn'),undefined,{tab:'tab-bearing',sec:'o-br-press'}));
  d.appendChild(chip('Rigidity (rigid method)','\u03bb\u2113 = '+f2(Math.max(R.rig.vx,R.rig.vy))+' vs \u03c0/4 = '+f2(R.rig.limit),R.rig.rigid?'pass':'fail',undefined,{tab:'tab-stab',sec:'o-st-rig'}));
  /* Only INPUT errors belong in the input-validation chip. A design failure (eccentricity
     limit, off-footing resultant) is an error, but it has its own chip and should not be
@@ -2395,11 +2396,11 @@ function renderCombos(){
  /* ---- 2.2 dedicated weights subsection ---- */
  const wt=secPanel(T,'o-cb-weights','2.2  Self-Weights, Soil Overburden & Buoyancy');
  wt.appendChild(el('p','note','Permanent gravity actions computed by the tool and carried into every combination at the dead-load factor of that combination (1.4 / 1.2 / 0.9 for LRFD; 1.0 / 0.6 for ASD). Buoyancy U, when present, is applied at 1.0. Concrete unit weight \u03b3_c = '+f2(R.gc)+' kcf; overburden \u03b3_EV = '+f2(R.gev)+' kcf.'));
- wt.appendChild(eqBlock('Footing self-weight','ACI 318-19 5.3 dead load',
+ wt.appendChild(eqBlock('Footing self-weight','dead load D: ASCE 7-16 3.1, IBC 2021 1606',   /* SFLW: before "ACI 318-19 5.3 dead load" (5.3 is the load factors) */
   'W_f = B \\cdot L \\cdot t \\cdot \\gamma_c',
   'W_f = '+f2(R.B)+' \\cdot '+f2(R.L)+' \\cdot '+f2(R.t)+' \\cdot '+f2(R.gc)+'\\;\\mathrm{kcf}',
   'W_f = '+f2(R.WfAuto)+'\\;\\mathrm{kips}'+(state.mat.swMode==='user'?'\\;\\;(\\text{user override applied: }'+f2(R.Wf)+'\\;\\mathrm{kips})':'\\;\\;(\\text{acts at footing centroid})')));
- R.peds.forEach((p,i)=>{wt.appendChild(eqBlock('Pedestal self-weight \u2014 '+p.label,'ACI 318-19 5.3 dead load',
+ R.peds.forEach((p,i)=>{wt.appendChild(eqBlock('Pedestal self-weight \u2014 '+p.label,'dead load D: ASCE 7-16 3.1, IBC 2021 1606',
   'W_{p,'+(i+1)+'} = b_x\\,b_y\\,h\\,\\gamma_c',
   'W_{p,'+(i+1)+'} = '+f2(p.bx)+' \\cdot '+f2(p.by)+' \\cdot '+f2(p.h)+' \\cdot '+f2(R.gc),
   'W_{p,'+(i+1)+'} = '+f2(R.Wpeds[i])+'\\;\\mathrm{kips}\\;\\;(\\text{acts at }('+f2(p.x)+','+f2(p.y)+')\\;\\mathrm{ft})'));});
@@ -3066,17 +3067,17 @@ function renderBearing(){
    'd_q = d_c = d_\\gamma = 1',null,
    'd_q = 1.00,\\quad d_c = 1.00,\\quad d_\\gamma = 1.00'));
   else b2.appendChild(eqBlock('Depth factors','Vesi\u0107 (k = Df/B\u2032 \u2264 1, else arctan); option on \u2014 soil above the base taken as competent and permanent (use condition: AASHTO LRFD 10.6.3.1.2a). Not AASHTO LRFD 10th Ed. Eq. 10.6.3.1.2a-10, which takes arctan(Df/B) at every depth, caps dq at 1.4 and has no dc',
-   'k = '+ (R.Df/v.Beff<=1?'D_f/B_{eff}':'\\arctan(D_f/B_{eff})')+',\\quad d_q = 1+2\\tan\\varphi(1-\\sin\\varphi)^2 k,\\quad d_c = d_q-\\frac{1-d_q}{N_c\\tan\\varphi},\\quad d_\\gamma = 1',
-   'k = '+(R.Df/v.Beff<=1?f2(R.Df)+'/'+f2(v.Beff):'\\arctan('+f2(R.Df)+'/'+f2(v.Beff)+')')+' = '+f2(v.kk)+',\\quad d_q = 1+2\\tan '+f2(R.phiBdeg)+'^\\circ(1-\\sin '+f2(R.phiBdeg)+'^\\circ)^2\\cdot'+f2(v.kk)+',\\quad d_c = '+f2(v.dq)+'-\\frac{1-'+f2(v.dq)+'}{'+f2(v.Nc)+'\\cdot'+f2(v.tphi)+'}',
+   'k = \\arctan(D_f/B_{eff}),\\quad d_q = 1+2\\tan\\varphi(1-\\sin\\varphi)^2 k \\le 1.4,\\quad d_c = d_q-\\frac{1-d_q}{N_c\\tan\\varphi},\\quad d_\\gamma = 1',
+   'k = \\arctan('+f2(R.Df)+'/'+f2(v.Beff)+') = '+f2(v.kk)+',\\quad d_q = 1+2\\tan '+f2(R.phiBdeg)+'^\\circ(1-\\sin '+f2(R.phiBdeg)+'^\\circ)^2\\cdot'+f2(v.kk)+',\\quad d_c = '+f2(v.dq)+'-\\frac{1-'+f2(v.dq)+'}{'+f2(v.Nc)+'\\cdot'+f2(v.tphi)+'}',
    'd_q = '+f2(v.dq)+',\\quad d_c = '+f2(v.dc)+',\\quad d_\\gamma = 1.00'));
   b2.appendChild(eqBlock('Load inclination factors','Vesi\u0107 (m interpolated by load direction, on B\u2032/L\u2032 \u2014 AASHTO LRFD 10.6.3.1.2a)',
    "m_x=\\tfrac{2+B'/L'}{1+B'/L'},\\; m_y=\\tfrac{2+L'/B'}{1+L'/B'},"+'\\; m = m_x\\cos^2\\theta + m_y\\sin^2\\theta,\\quad i_q = \\left(1-\\tfrac{H}{V+A_e c\\cot\\varphi}\\right)^m,\\; i_\\gamma = (\\;\\cdot\\;)^{m+1},\\; i_c = i_q-\\tfrac{1-i_q}{N_c\\tan\\varphi}',
    "B'/L'="+f2(v.Bp)+'/'+f2(v.Lp)+',\\; m_x='+f2(v.mxm)+',\\; m_y='+f2(v.mym)+'\\Rightarrow m='+f2(v.m)+';\\quad i_q = \\left(1-\\frac{'+f2(v.H)+'}{'+f2(v.V)+'+'+f2(v.Ae)+'\\cdot'+f2(R.c)+'\\cot '+f2(R.phiBdeg)+'^\\circ}\\right)^{'+f2(v.m)+'}'+(v.denom!==null?'=\\left(1-\\frac{'+f2(v.H)+'}{'+f2(v.denom)+'}\\right)^{'+f2(v.m)+'}':''),
    'i_q = '+f2(v.iq)+',\\quad i_\\gamma = '+f2(v.ig)+',\\quad i_c = '+f2(v.ic)));
-  const gwtxt=['','\\text{WT at/above base: } q = \\gamma d_w + \\gamma\'(D_f-d_w),\\; \\gamma_{eff} = \\gamma\'','\\text{WT within B below base: } q = \\gamma D_f,\\; \\gamma_{eff} = \\gamma\' + \\gamma_w\\frac{d_w-D_f}{B_{eff}}','\\text{WT deeper than } D_f+B_{eff}: \\text{ no correction}'][v.gwCase];
+  const gwtxt=['','\\text{WT at/above base: } q = \\gamma d_w + \\gamma\'(D_f-d_w),\\; \\gamma_{eff} = \\gamma\'','\\text{WT within 1.5B below base: } q = \\gamma D_f,\\; \\gamma_{eff} = \\gamma\' + \\gamma_w\\frac{d_w-D_f}{1.5B_{eff}}','\\text{WT deeper than } D_f+1.5B_{eff}: \\text{ no correction}'][v.gwCase];
   const gwsub=[''
    ,'q = '+f2(R.gs)+'\\cdot d_{dry} + ('+f2(R.gs)+'-'+f2(R.gw)+')\\cdot d_{sub},\\quad \\gamma_{eff} = '+f2(R.gs)+'-'+f2(R.gw)
-   ,'q = '+f2(R.gs)+'\\cdot'+f2(R.Df)+',\\quad \\gamma_{eff} = ('+f2(R.gs)+'-'+f2(R.gw)+') + '+f2(R.gw)+'\\cdot\\frac{d_w-'+f2(R.Df)+'}{'+f2(v.Beff)+'}'
+   ,'q = '+f2(R.gs)+'\\cdot'+f2(R.Df)+',\\quad \\gamma_{eff} = ('+f2(R.gs)+'-'+f2(R.gw)+') + '+f2(R.gw)+'\\cdot\\frac{d_w-'+f2(R.Df)+'}{1.5\\cdot'+f2(v.Beff)+'}'
    ,'q = '+f2(R.gs)+'\\cdot'+f2(R.Df)+',\\quad \\gamma_{eff} = '+f2(R.gs)][v.gwCase];
   b2.appendChild(eqBlock('Surcharge and effective unit weight (groundwater case '+v.gwCase+')','\u2014',
    gwtxt,
@@ -3653,7 +3654,7 @@ function sfdResultRows(){
   'Contact area':()=>['no-tension soil, rigid footing',null,['o-br-press']],
   'Rigidity (rigid method)':()=>['Bowles: λℓ ≤ π/4; D/C = λℓ/(π/4)',Math.max(R.rig.vx,R.rig.vy)/R.rig.limit,['o-st-rig']],
   'Input validation':()=>['input checks',null,[]],
-  'Flexure (footing)':()=>['ACI 318-19 §22.3; A<sub>s,min</sub> §7.6.1.1 / §24.4.3.2; s<sub>max</sub> §8.7.2.2',
+  'Flexure (footing)':()=>['ACI 318-19 §22.3; A<sub>s,min</sub> '+(sfrCombined()?'§13.3.4.1 → §8.6.1.1':'§7.6.1.1')+' / §24.4.3.2; s<sub>max</sub> §8.7.2.2',   /* SFLW: combined footing, Chapter 8 */
    Math.max(P2.desX.dcrBot,P2.desY.dcrBot,...[P2.desX.dcrTop,P2.desY.dcrTop].filter(v=>v!=null)),['o-fd-x','o-fd-y']],
   'One-way shear':()=>[(state.mat.vcMode==='a'?'override 2λ√f′<sub>c</sub> (not ACI 318-19 Table 22.5.5.1(c))':'ACI 318-19 Table 22.5.5.1(c), size effect §22.5.5.1.3')+(state.mat.lamsFtg==='on'?'; λ<sub>s</sub> neglected, §13.2.6.2':''),
    (P2.desX.oneWayOutside&&P2.desY.oneWayOutside)?null:Math.max(P2.desX.dcrV,P2.desY.dcrV),['o-fd-x','o-fd-y']],
@@ -3917,7 +3918,7 @@ function sfrModel(){
     S({id:'sc',label:'Shape factor s_c',sym:'s_{c}',eq:'1 + \\frac{B_{eff}}{L_{eff}}\\frac{N_{q}}{N_{c}}',sub:'1 + '+sfrN(bl,3)+'\\cdot\\frac{'+sfrN(c.Nq,3)+'}{'+sfrN(c.Nc,3)+'}',value:c.sc,unit:'',d:3}),
     S({id:'sq',label:'Shape factor s_q',sym:'s_{q}',eq:'1 + \\frac{B_{eff}}{L_{eff}}\\tan\\phi',sub:'1 + '+sfrN(bl,3)+'\\cdot'+sfrN(c.tphi,4),value:c.sq,unit:'',d:3}),
     S({id:'sg',label:'Shape factor s_γ',sym:'s_{\\gamma}',eq:'1 \\minus 0.4\\frac{B_{eff}}{L_{eff}}',sub:'1 \\minus 0.4\\cdot'+sfrN(bl,3),value:c.sg,unit:'',d:3}),
-    S({id:'dq',label:'Depth factor d_q'+(c.useD?'':' (option off: d = 1)'),sym:'d_{q}',eq:c.useD?'1 + 2\\tan\\phi(1 \\minus \\sin\\phi)^{2} k':'1',sub:c.useD?'k = '+sfrN(c.kk,3):'',value:c.dq,unit:'',d:3}),
+    S({id:'dq',label:'Depth factor d_q'+(c.useD?'':' (option off: d = 1)'),sym:'d_{q}',eq:c.useD?'1 + 2\\tan\\phi(1 \\minus \\sin\\phi)^{2} k \\le 1.4,\\; k = \\tan^{-1}(D_{f}/B_{eff})':'1',sub:c.useD?'k = '+sfrN(c.kk,3):'',ref:'AASHTO LRFD 10th Eq. 10.6.3.1.2a-10',value:c.dq,unit:'',d:3}),
     S({id:'dc',label:'Depth factor d_c',sym:'d_{c}',eq:c.useD?'d_{q} \\minus \\frac{1 \\minus d_{q}}{N_{c}\\tan\\phi}':'1',sub:'',value:c.dc,unit:'',d:3}),
     S({id:'m',label:'Inclination exponent (by load direction θ)',sym:'m',eq:'m_{x}\\cos^{2}\\theta + m_{y}\\sin^{2}\\theta',sub:'m_{x} = '+sfrN(c.mxm,3)+',\\; m_{y} = '+sfrN(c.mym,3),value:c.m,unit:'',d:3}),
     S({id:'iq',label:'Inclination factor i_q',sym:'i_{q}',eq:'\\left(1 \\minus \\frac{H}{V + A^{\\prime} c / \\tan\\phi}\\right)^{m}',sub:'H = '+sfrN(c.H)+',\\; V = '+sfrN(c.V),value:c.iq,unit:'',d:3}),
@@ -4149,7 +4150,7 @@ function sfrModel(){
    {const FT=[],ftab=[];(P2.shearFr||[]).forEach(z=>{if(z.isPatch||!z.gov)return;const g=z.gov,q='f'+z.idx+'.',dw=P2.dowels&&P2.dowels[z.idx];
     FT.push({title:z.label+': governing '+g.name,ref:'ACI 318-19 22.9',steps:[
      S({id:q+'Vu',label:'Factored shear at the interface (resultant of both directions)',sym:'V_{u}',eq:'\\sqrt{V_{ux}^{2} + V_{uy}^{2}}',sub:'\\sqrt{'+sfrP(g.Vx)+'^{2} + '+sfrP(g.Vy)+'^{2}}',value:g.Vu,unit:'kip'}),
-     S({id:q+'mu',label:'Friction coefficient ('+(z.rough?'intentionally roughened to about 1/4 in':'not intentionally roughened')+'; Table 22.9.4.2)',sym:'\\mu',eq:(z.rough?'1.0':'0.6')+'\\lambda',sub:(z.rough?'1.0':'0.6')+'\\cdot'+sfrN(P2.lam),value:z.mu,unit:''}),
+     S({id:q+'mu',label:'Friction coefficient ('+(z.rough?'intentionally roughened to about 1/4 in: specify the 1/4 in amplitude on the drawings':'not intentionally roughened')+'; Table 22.9.4.2)',sym:'\\mu',eq:(z.rough?'1.0':'0.6')+'\\lambda',sub:(z.rough?'1.0':'0.6')+'\\cdot'+sfrN(P2.lam),value:z.mu,unit:''}),
      S({id:q+'AvfN',label:'Dowels less the area needed for tension at the interface (22.9.4.6; A_s,req: Dowels, largest of all combinations)',sym:'A_{s,dow} \\minus A_{s,req,ten}',eq:'',sub:sfrN(z.AsProv)+' \\minus '+(isFinite(z.AsReqT)?sfrN(z.AsReqT):'\\infty'),value:z.AvfNom,unit:'in^{2}',note:'A_s,req: §p'+z.idx+'.AsGov'}),   /* SFLK */
      S({id:q+'dev',label:'Dowels developed in tension on both sides of the joint (ACI 318-19 22.9.5.1): footing '+(dw?(dw.hook==='hook90'?'ℓ_dh ':'ℓ_d ')+sfrN(dw.LftgReq)+(dw.sfDevFtg?' ≤ ':' > ')+sfrN(dw.availEmb)+' in':'—')+'; pedestal '+(dw?(dw.cont?'continuous longitudinal bars, developed by definition':dw.full?'full height ℓ_d '+sfrN(dw.ld.Ld)+(dw.sfDevPed?' ≤ ':' > ')+sfrN(dw.hAvail)+' in':'Class B lap ℓ_st '+sfrN(dw.lst)+(dw.sfDevPed?' ≤ ':' > ')+'projection '+sfrN(dw.Lprov)+' in')+'':'—'),sym:'',eq:'',sub:'',value:z.dev?'yes':'no',note:(z.dev?'':'Not fully developed: proportional credit below. ')+(dw&&dw.ld?'Footing side worked in §p'+z.idx+'.Lftg':'')}),   /* SFLK */
      ...(dw&&dw.ld&&!z.dev?[S({id:q+'fr',label:'Development credit (engineering assumption: proportional development credit), the smaller side governs: footing '+sfrN(dw.availEmb)+'/'+sfrN(dw.LftgReq)+' = '+sfrN(dw.sfFrFtg,3)+'; pedestal '+(dw.cont?'1 (continuous bars)':dw.full?sfrN(dw.hAvail)+'/'+sfrN(dw.ld.Ld)+' = '+sfrN(dw.sfFrPed,3):sfrN(dw.Lprov)+'/'+sfrN(dw.lst)+' = '+sfrN(dw.sfFrPed,3)),sym:'\\eta_{dev}',eq:'\\min\\left(1,\\; \\frac{\\ell_{avail,ftg}}{\\ell_{req,ftg}},\\; \\frac{\\ell_{avail,ped}}{\\ell_{req,ped}}\\right)',sub:'\\min(1,\\;'+sfrN(dw.sfFrFtg,3)+',\\;'+sfrN(dw.sfFrPed,3)+')',value:z.devFr,unit:'',d:3})]:[]),   /* SFPD */
@@ -4844,7 +4845,7 @@ function sfovReport(M){
  return M;
 }
 /* the report bar's Include box: the manual (state.manPrint, the same field as the Manual tab's "Include this manual" box) */
-function sfxControls(){return '<span class="sfx-inc" style="display:inline-flex;gap:2px 10px;font-size:9pt;align-items:center"><b>Include:</b> <label style="white-space:nowrap"><input type="checkbox" data-sfx="man"'+(state.manPrint?' checked':'')+'> User manual</label> <label style="white-space:nowrap"><input type="checkbox" data-sfx="lr"'+(state.lrRefRpt!==false?' checked':'')+'> LRFD reference tables (bearing, stability)</label> <label style="white-space:nowrap"><input type="checkbox" data-sfx="pcb"'+(state.pedCbRpt!==false?' checked':'')+'> Pedestal loads by combination</label> <label style="white-space:nowrap"><input type="checkbox" data-sfx="ov"'+(state.ovRpt!==false?' checked':'')+'> Overview figures</label></span>';}   /* SFPC */
+function sfxControls(){return '<span class="sfx-inc" style="display:inline-flex;flex-wrap:wrap;gap:2px 10px;font-size:9pt;align-items:center"><b>Include:</b> <label style="white-space:nowrap"><input type="checkbox" data-sfx="man"'+(state.manPrint?' checked':'')+'> User manual</label> <label style="white-space:nowrap"><input type="checkbox" data-sfx="lr"'+(state.lrRefRpt!==false?' checked':'')+'> LRFD reference tables (bearing, stability)</label> <label style="white-space:nowrap"><input type="checkbox" data-sfx="pcb"'+(state.pedCbRpt!==false?' checked':'')+'> Pedestal loads by combination</label> <label style="white-space:nowrap"><input type="checkbox" data-sfx="ov"'+(state.ovRpt!==false?' checked':'')+'> Overview figures</label></span>';}   /* SFPC */
 function sfxWire(T){T.querySelectorAll('input[data-sfx="ov"]').forEach(x=>x.addEventListener('change',()=>{state.ovRpt=x.checked;saveAuto();renderReport();}));   /* SFOV */
  T.querySelectorAll('input[data-sfx="pcb"]').forEach(x=>x.addEventListener('change',()=>{state.pedCbRpt=x.checked;saveAuto();renderReport();}));   /* SFPC */
  T.querySelectorAll('input[data-sfx="lr"]').forEach(x=>x.addEventListener('change',()=>{state.lrRefRpt=x.checked;saveAuto();renderReport();}));   /* SFLR */
@@ -7473,6 +7474,7 @@ function sfsfRender(bb){
   tt.innerHTML='<tr><th>Combination</th><th>V_ux</th><th>V_uy</th><th>V_u (k)</th><th>P_u</th><th>N_u (k)</th><th>\u03c6V_n (k)</th><th>DCR</th></tr>';
   z.rows.forEach(q=>{const tr=document.createElement('tr');[q.name,f2(q.Vx),f2(q.Vy),f2(q.Vu),f2(q.Pu),f2(q.Nu),f2(q.phiVn),isFinite(q.ratio)?f3(q.ratio):'\u221e'].forEach((x,k)=>{const td=document.createElement('td');td.textContent=x;if(k===7)td.style.color=q.ratio<=1?'#1b5e20':'#b71c1c';tr.appendChild(td);});if(q===g)tr.style.fontWeight='bold';tt.appendChild(tr);});
   bb.appendChild(tt);});
+ if((P2.shearFr||[]).some(z=>!z.isPatch&&z.rough))bb.appendChild(el('div','warnbox','<b>Drawing note required:</b> \u03bc = 1.0\u03bb (Table 22.9.4.2) needs the top of the footing under the pedestal intentionally roughened to a full amplitude of about 1/4 in. Show it on the drawings, or set the joint to "not intentionally roughened" (0.6\u03bb).'));   /* SFLW */
  bb.appendChild(el('div','note','Shear plane = the pedestal footprint A<sub>c</sub> = b<sub>x</sub>b<sub>y</sub> at the top of the footing. \u03bc: Table 22.9.4.2, set per pedestal on the Reinforcement tab ("Joint surface"; default intentionally roughened, 1.0\u03bb; "not intentionally roughened", 0.6\u03bb, as an override). A<sub>vf</sub>: the dowels less the area needed for tension at the interface (Dowels (2) above, the largest of all combinations; 22.9.4.6), in full where the dowels are developed in tension on both sides of the joint (footing \u2113<sub>d</sub> / \u2113<sub>dh</sub>; pedestal Class B lap within the projection or full-height \u2113<sub>d</sub>; ACI 318-19 22.9.5.1); otherwise in proportion to the development available, min(1, available / required) on each side, the smaller side governing (engineering assumption: proportional development credit). Where \u03c6\u03bcN<sub>u</sub> alone does not carry V<sub>u</sub>, the dowels are checked in tension in Dowels (2c)\u2013(3). N<sub>u</sub>: permanent net compression only, 0.9 \u00d7 (dead load + pedestal self-weight) in every combination (0.9 \u00d7 self-weight in direct mode), not more than P<sub>u</sub> (22.9.4.5; AASHTO LRFD 10th Ed. 5.7.4.3, P<sub>c</sub>). V<sub>n,max</sub>: 22.9.4.4 ('+(S[0].nw?'normalweight':'lightweight: \u201cother cases\u201d row')+').'));
 }
 /* SFDO: Dowels topic per pedestal in 5.6 (worked) */
