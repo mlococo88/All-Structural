@@ -2436,7 +2436,7 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 - **Formulas, factors, units, code references:** none (§4 does not apply). **Saved data:** unchanged.
 - **How verified:** `node tests/lightpole-compare.mjs --a origin/main`: ALL CASES IDENTICAL (23 cases; it does not read the Manual tab); the only diff is the one sentence; check-syntax passes.
 
-## 2026-11-07 — PR: claude/lp-h4-lts-shaft-checks (LPH4 + LPM7: the drilled-shaft checks in the LRFDLTS Summary / check panel / report; the manual-cage tie size and shear spacing in the IBC Summary)   [pass/fail reporting; no computed value changes; cable values identical]
+## 2026-11-07 — PR: claude/lp-h4-lts-shaft-checks (PR #1002: https://github.com/mlococo88/All-Structural/pull/1002) (LPH4 + LPM7: the drilled-shaft checks in the LRFDLTS Summary / check panel / report; the manual-cage tie size and shear spacing in the IBC Summary)   [pass/fail reporting; no computed value changes; cable values identical]
 - **Problem (review H4, M7, 2026-11-07):**
   - H4: in LRFDLTS mode the Summary card (`ltsCalc()`, "LRFDLTS summary"), the check panel (`lppDashItems()`, LTS branch) and the LTS report listed the member, deflection, base plate, weld, Broms L, anchors, fatigue and breakaway, but **no** shaft reinforcement check (ACI 318-19 P–M, shear, min / max steel, clear spacing, ties) and no torsion threshold. A failing shaft was visible only on the Shaft tab.
   - M7: in IBC check mode (manual cage), the Summary's "Tie spacing" compared s with the §25.7.2.1 limit only; the §25.7.2.2 tie size and the shear / A_v,min spacing (`T.checks.sizeMin`, `T.checks.shear`, already computed and shown on the Shaft tab) were not in `collectChecks`.
