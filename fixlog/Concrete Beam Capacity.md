@@ -4855,3 +4855,310 @@ function buildDrawingsTab(pg){
 - **How verified:** main vs branch per tab (#capacity / #asd / #dev, read in the frame): every localStorage key (3), page text (10,629 / 3,329 / 12,377 chars), Export JSON (1,423 / 1,026 / 851 chars) and the printed text (print media, 5,436 / 2,050 / 6,664 chars) identical (clock times normalised); 0 console errors; header at 1280 / 1400 / 1920 / 390 px (390: no sideways scroll), screenshots looked at. `node tests/check-syntax.mjs "Concrete Beam Capacity.html"` (the three srcdoc pages decoded and checked), `project-library.mjs --tool cbc`, `--tool asd`, `--tool rebar`, `github-sync-tools.mjs --tool cbc,asd,rebar`, `home-projects.mjs --tool cbc,asd,rebar`, `rebar-redirect.mjs`, `phone-layout.mjs --tool cbc,aci`: pass. Line endings: 9 CRLF lines added, no other line changed (CRLF count main 10,675 → branch 10,684; LF-only lines 4 → 4).
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
+
+## 2026-11-07 — PR: claude/cbc-aci-comp-lap-fy, PR #969: https://github.com/mlococo88/All-Structural/pull/969 (CBH2: ACI compression lap splice for f_y > 80,000 psi is the longer of (0.0009f_y − 24)d_b and l_st, per 25.5.5.1(c); CALCULATION CHANGE, Development & Splice tab, ACI mode, f_y > 80 ksi only; less conservative before)
+
+Frame: Development & Splice (`suite-frame-dev`, srcdoc of `Concrete Beam Capacity.html`; decoded/encoded with a byte-exact srcdoc helper, CRLF kept). Found in the in-depth review of 2026-11-07 (item H2).
+
+### CBH2. Compression lap splice, f_y > 80,000 psi   [CALCULATION CHANGE]
+- **Governing provision (checked in the rendered PDF, printed p. 492):** ACI 318-19 25.5.5.1. (a) f_y ≤ 60,000 psi and (b) 60,000 < f_y ≤ 80,000 psi are as coded. (c) f_y > 80,000 psi: l_sc is the longer of (0.0009f_y − 24)d_b and l_st calculated per 25.5.2.1. The one-third increase for f′c < 3000 psi follows the three cases. The 2022 errata were not found to change 25.5.5.1. AASHTO 5.10.8.4.5a (10th Ed.) has no such case and is unchanged.
+- **Where:** `calcCompSplice()`, anchor `function calcCompSplice(inp,f){`, ACI branch.
+  - Before:
+    ```js
+    function calcCompSplice(inp,f){
+      let lsc_calc;
+      ...
+      } else {
+        if(inp.fy<=60000) lsc_calc = 0.0005*inp.fy*f.db;
+        else lsc_calc = (0.0009*inp.fy-24)*f.db;
+        if(inp.fc<3000) lsc_calc *= (4/3);
+      }
+      const lsc = Math.max(lsc_calc, 12);
+      return {lsc_calc, lsc, lowFc: inp.fc<3000};
+    ```
+  - After:
+    ```js
+    function calcCompSplice(inp,f){
+      let lsc_calc, hiFy = null;
+      ...
+      } else {
+        if(inp.fy<=60000) lsc_calc = 0.0005*inp.fy*f.db;
+        else lsc_calc = (0.0009*inp.fy-24)*f.db;
+        // CBH2: ... (comment)
+        if(inp.fy>80000){
+          const e = classAEligible(inp,f);
+          const cls = (inp.tensClass==="A" && e.known && e.eligible) ? "A" : "B";
+          const inpC = Object.assign({},inp,{tensClass:cls});
+          const ts = calcTensSplice(inpC,f,calcTension(inp,f));
+          hiFy = {term:lsc_calc, lst:ts.lst, ldBase:ts.ldBase, factor:ts.factor, cls, gov: ts.lst>lsc_calc?"lst":"term"};
+          lsc_calc = Math.max(lsc_calc, ts.lst);
+        }
+        if(inp.fc<3000) lsc_calc *= (4/3);
+      }
+      const lsc = Math.max(lsc_calc, 12);
+      return {lsc_calc, lsc, lowFc: inp.fc<3000, hiFy};
+    ```
+  - l_st is the tool's own `calcTensSplice` value: factor (1.0 Class A, 1.3 Class B) × l_d without the excess-reinforcement factor, 12 in minimum.
+  - Everything that shows l_sc follows: the Comp. Splice tab, the Checks panel row, the Bar Schedule (each bar size), the Report steps and table, and the Summary row.
+- **Decisions (pending engineer review):**
+  1. Class of l_st: Class B (1.3 l_d) unless Class A is selected in Splices and shown eligible (A_s,prov ≥ 2A_s,req entered and ≤ 50 % spliced). With Class A selected but not shown eligible, Class B is used (conservative).
+  2. f′c < 3000 psi: the one-third increase is applied to the longer of the two terms (the increase is written after (a)–(c) and applies to l_sc). This is the conservative reading.
+- **Display:**
+  - Comp. Splice tab (ACI): a commentary line for f_y > 80,000 psi ("This applies to your input" when it does); the first equation block ends at (0.0009f_y − 24)d_b = value; a new block "f_y > 80,000 psi: longer of the above and l_st (Class …)", §25.5.5.1(c), §25.5.2.1, worked as max[term, max(factor × l_d, 12) = l_st], with a "Worked in: l_d … → Tension Splice · Base Development Length" link.
+  - Report (`rbrCSplice`): for f_y > 80,000 psi the step l_sc,calc is replaced by three steps: `lscterm` (the expression), `lscst` (l_st with the class, note "see §ldBase", which links to the Tension lap splice section) and `lsccalc` (the longer, ×4/3 when f′c < 3000 psi). The cs steps topic got `see:'ts'` so the note resolves to the tension splice's step.
+- **Check case:** ACI, #8 bar (d_b 1.000 in), f′c 4000 psi, f_y 100,000 psi, c_b + K_tr limited ratio 1.5, ψ_t = ψ_e = ψ_s = 1.0, ψ_g = 1.3 (Grade 100), normalweight, Class B selected.
+
+  | Quantity | Before | After | Hand check |
+  |---|---|---|---|
+  | (0.0009f_y − 24)d_b | 66.00 in | 66.00 in | (90 − 24) × 1.000 = 66.0 |
+  | l_d (splice base) | — | 102.77 in | 3/40 × 100000/(1.0 × 63.25) × 1.3/1.5 × 1.000 = 102.77 |
+  | l_st (Class B) | — | 133.61 in | 1.3 × 102.77 = 133.61 |
+  | **l_sc** | **66.00 in** | **133.61 in** | max(66.0, 133.61) |
+
+  Other cases (in the page):
+  - Class A selected without A_s,req/A_s,prov entered: 133.61 in (Class B used).
+  - Class A selected and eligible (A_s,req 0.5, A_s,prov 1.0 in², 50 % spliced): 102.77 in.
+  - f′c 2500 psi, Class B: before 66.0 × 4/3 = 88.0 in; after l_d 130.0, l_st 169.0, l_sc 169.0 × 4/3 = 225.3 in.
+  - #6, f′c 6000, f_y 100 ksi: term 49.5 in governs over l_st 49.09 in, so l_sc unchanged at 49.5 in.
+  - f_y 80,000 psi (case (b)) and every f_y ≤ 80 ksi: unchanged. AASHTO mode: unchanged.
+- **Conservatism:** before, ACI f_y > 80 ksi laps could be short by up to half (66.0 vs 133.6 in in the check case).
+- **How verified:**
+  - Headless Chromium, origin/main vs branch, review probe cases (Beam Capacity: default, aciD, aasT, aasMinNeg, aciFy100, aciDeep, aa100; Dev: aciDefault, aasLWcomp, aasNWcomp, aasFy100, aciFy80): identical. Moved: only the ACI f_y 100 ksi Dev cases above.
+  - Full dump of all frames and the Report (default project), main vs branch: values identical; differences are only the new commentary line and the topic's `see` key.
+  - The Report step list for the check case was dumped from `rbrModel()`.
+  - `check-syntax` (all), `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass; 0 console errors. Screenshot of the Comp. Splice tab looked at.
+- **Saved data:** no key or format change.
+- **Other copies:** none (the standalone rebar page is a redirect since RBRT).
+- **Open items:** in cases (a)/(b) with f′c < 3000 psi the tool applies ×4/3 before the 12 in floor (max(4/3·calc, 12)), not after; not changed here (raise with the engineer).
+
+## 2026-11-07 — PR: claude/cbc-aashto-ldc-lambda, PR #972: https://github.com/mlococo88/All-Structural/pull/972 (CBH3: AASHTO compression development length divided by λ per Eq. 5.10.8.2.2a-1; CALCULATION CHANGE, Development & Splice tab, AASHTO mode, lightweight concrete only; less conservative before)
+
+Frame: Development & Splice (`suite-frame-dev`). Found in the in-depth review of 2026-11-07 (item H3); it was listed in the tool as an open item.
+
+### CBH3. λ in the AASHTO compression development length   [CALCULATION CHANGE]
+- **Governing provision (checked in the rendered PDF, p. 5-192):** AASHTO LRFD 10th Ed. (2024) Eq. 5.10.8.2.2a-1: the modified compression development length is l_db times λ_er times λ_rc, divided by λ (the concrete density modification factor of 5.4.2.8); l_db from Eqs. 5.10.8.2.2a-2/-3; not less than 8.0 in.
+- **Where:** `calcComp()`, anchor `const ldc_calc = base*f.excess`, AASHTO branch.
+  - Before: `const ldc_calc = base*f.excess;   // excess reinf factor applies` (comment: "The tool applies λer only (λrc = 1.0, λ not applied; open item).")
+  - After: `const ldc_calc = base*f.excess/f.lambda;   // excess reinf factor λer applies; divided by λ` (comment updated, CBH3).
+  - `f.lambda` in AASHTO mode is the entered λ (0.75–1.0) for lightweight concrete and 1.0 for normalweight (`computeFactors`, unchanged). λ_rc stays 1.0 (no reduction for spirals or hoops taken, conservative, unchanged).
+  - The ACI branch is unchanged (λ is already inside 25.4.9.2(a)).
+- **Display:**
+  - `tabCompAASHTO`: the narrative now says λ_er and λ are applied; a λ row was added to the variable table; the "Governing length" block reads l_dc = max[max(l_dc,a, l_dc,b) (× A_s,req/A_s,prov) / λ, 8 in] when λ ≠ 1 (unchanged form for λ = 1).
+  - Report (`rbrComp`): AASHTO "Governing expressions" gets a step `lam` (note "see §lam"); the step `ldccalc` shows "/ λ" in AASHTO mode.
+  - Removed the AASHTO validation notice that said λ was not applied to compression development (anchor "divides the compression development length by λ; this tool does not apply"), and the Hook & Comp. hint now says λ divides the compression development length.
+- **Check case:** AASHTO, #8 (d_b 1.000 in), f_y 60 ksi, f′c 4.0 ksi, lightweight, λ = 0.75, no excess factor.
+
+  | Quantity | Before | After | Hand check |
+  |---|---|---|---|
+  | l_dc,a = 0.63 d_b f_y/√f′c | 18.90 in | 18.90 in | 0.63 × 1.000 × 60/2.000 |
+  | l_dc,b = 0.3 d_b f_y | 18.00 in | 18.00 in | |
+  | **l_dc** | **18.90 in** | **25.20 in** | 18.90/0.75 |
+
+  Also: λ 0.85 with A_s,req/A_s,prov = 0.8: 15.12 → 17.79 in (18.90 × 0.8/0.85). Normalweight (λ = 1.0) and all ACI cases unchanged.
+- **Conservatism:** before, lightweight AASHTO compression development lengths were short by the factor λ (up to 25 %).
+- **How verified:** headless main vs branch with the review probe cases (all Beam Capacity cases and every Dev case except the two lightweight AASHTO ones identical); full dumps of the default project (identical) and the AASHTO excess case (values identical, only the new λ step/row and narrative); screenshot of the Compression l_dc tab looked at; `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
+- **Saved data:** no key or format change.
+- **Open items:** none.
+
+## 2026-11-07 — PR: claude/cbc-aci-asmin-fy80, PR #975: https://github.com/mlococo88/All-Structural/pull/975 (CBH4: ACI A_s,min with f_y limited to 80,000 psi per 9.6.1.2; CALCULATION CHANGE, Beam Capacity tab, ACI mode, f_y > 80 ksi only; less conservative before)
+
+Frame: Beam Capacity (`suite-frame-capacity`). Found in the in-depth review of 2026-11-07 (item H4).
+
+### CBH4. A_s,min, f_y limit   [CALCULATION CHANGE]
+- **Governing provision (checked in the rendered PDF, printed p. 135):** ACI 318-19 9.6.1.2: A_s,min is the larger of (a) 3√f′c/f_y · b_w d and (b) 200/f_y · b_w d, with f_y limited to a maximum of 80,000 psi. No 2022 erratum on 9.6.1.2.
+- **Where:** `detailing()`, anchor `/* minimum flexural steel */`, check `dAsMin`.
+  - Before:
+    ```js
+    const t1=3*rt/(fy*1000)*bw*F.dCent, t2=200/(fy*1000)*bw*F.dCent;
+    ```
+    and the substituted line printed `${fmt(fy*1000,0)}` in both denominators, with an empty note.
+  - After:
+    ```js
+    /* CBH4 (2026-11-07): ACI 318-19 9.6.1.2 limits f_y to 80,000 psi in (a) and (b) */
+    const fyA=Math.min(fy,80);
+    const t1=3*rt/(fyA*1000)*bw*F.dCent, t2=200/(fyA*1000)*bw*F.dCent;
+    ```
+    and the substituted line prints `${fmt(fyA*1000,0)}`, with the note "f_y = … psi is limited to 80,000 psi here (9.6.1.2)." when f_y > 80 ksi.
+  - Follows: the Detailing card, the Summary row, the Report step, and the A_s,req passed to the Development & Splice tab by "From Beam Capacity" (CBAR-1 uses the dAsMin value), which can only grow.
+- **Check case `aciFy100`:** ACI, 12 × 24 in, f′c 4 ksi, f_y 100 ksi, 2 #6 (A_s 0.88 in²), d = 21.125 in.
+  - (a) 3√4000/80,000 · 12 · 21.125 = 0.601 in²; (b) 200/80,000 · 12 · 21.125 = 0.634 in² (governs).
+  - **A_s,min: before 0.507 in² (200/100,000 · 12 · 21.125) → after 0.634 in²**; D/C 0.576 → 0.720 (still passes).
+  - Same with 2 #5 (A_s 0.62 in², d 21.19 in): before 0.509 in², PASS (D/C 0.82) → after 0.636 in², **FAIL** (D/C 1.03).
+  - f_y ≤ 80 ksi (e.g. the same section at f_y 80 ksi) and AASHTO mode: unchanged.
+- **Conservatism:** before, A_s,min was low by the factor 80/f_y for f_y > 80 ksi (20 % at 100 ksi).
+- **How verified:** headless main vs branch, review probe cases: only `aciFy100` and `aciFy100n5` moved (values above), all others (default, aciD, aasT, aasMinNeg, aciDeep, aa100, aciFy80, every Dev case) identical; full dump of the default project identical; `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
+- **Saved data:** no key or format change.
+- **Open items:** none (the flange-in-tension b_w of 9.6.1.2 is M4, a separate change).
+
+## 2026-11-07 — PR: claude/cbc-aci-asmin-flange, PR #979: https://github.com/mlococo88/All-Structural/pull/979 (CBM4: ACI A_s,min of a T-section with the flange in tension uses b_w = min(b_f, 2b_w) for a statically determinate beam, per 9.6.1.2; new input "Beam (for A_s,min, flange in tension)", default statically determinate; CALCULATION CHANGE, Beam Capacity tab, ACI, T-section in negative bending only; less conservative before)
+
+Frame: Beam Capacity (`suite-frame-capacity`). Found in the in-depth review of 2026-11-07 (item M4).
+
+### CBM4. A_s,min with the flange in tension   [CALCULATION CHANGE]
+- **Governing provision (checked in the rendered PDF, printed p. 135):** ACI 318-19 9.6.1.2: for a statically determinate beam with a flange in tension, b_w in (a) and (b) is the smaller of b_f and 2b_w (R9.6.1.2 explains why: cantilevers and other determinate beams cannot redistribute moment). No 2022 erratum.
+- **Where:** `detailing()`, anchor `/* minimum flexural steel */`, check `dAsMin` (after CBH4).
+  - Before: `const t1=3*rt/(fyA*1000)*bw*F.dCent, t2=200/(fyA*1000)*bw*F.dCent;` with `(${fmt(bw)})` in the substituted line.
+  - After:
+    ```js
+    const flgT=(S.sec.type==='tee' && neg), detm=(S.sec.asminSupport!=='indeterminate');
+    const bwA=(flgT && detm) ? Math.min(S.sec.bf,2*bw) : bw;
+    const t1=3*rt/(fyA*1000)*bwA*F.dCent, t2=200/(fyA*1000)*bwA*F.dCent;
+    ```
+    with `(${fmt(bwA)})` in the substituted line, and its note says which b_w is used ("Flange in tension, statically determinate beam: b_w = min(b_f, 2b_w) = min(…) = … in (9.6.1.2)." or "… marked statically indeterminate (continuous): b_w = … in").
+  - The tool places the flange at the top, so "flange in tension" is a T-section under negative M_u (`neg`), as the crack-control check already assumes (`flangeTension`).
+- **New input (Section Geometry, T-beam, ACI mode only):** "Beam (for A_s,min, flange in tension)": "Statically determinate (cantilever, simple span)" / "Statically indeterminate (continuous)", saved as `S.sec.asminSupport` ("determinate" / "indeterminate"), with a hint. Listed in the Inputs table on screen and in the Report inputs.
+- **Decision (pending engineer review):** the default is **statically determinate** (the conservative choice): the reduced b_w is applied whenever the flange is in tension unless the user marks the beam continuous. Saved projects have no such field; `mergeState` fills the default, so a saved ACI T-section in negative bending now gets the larger A_s,min. No migration keeps the old behaviour, because the old result was unconservative for determinate beams; a continuous beam is restored by choosing "indeterminate". Rectangular sections, positive bending and AASHTO mode are unaffected.
+- **Check case `aciTeeCant`:** ACI, T-section b_w 12, h 30, b_f 48, h_f 6 in, f′c 4 ksi, f_y 60 ksi; top 4 #6 (1.76 in², d 27.125 in), bottom 3 #7; S1 M_u = −150 k-ft.
+  - b_w = min(48, 2·12) = 24 in.
+  - (a) 3√4000/60,000 · 24 · 27.125 = 2.059 in²; (b) 200/60,000 · 24 · 27.125 = 2.170 in² (governs).
+  - **A_s,min: before 1.085 in² (b_w 12), PASS (D/C 0.62) → after 2.170 in², FAIL (D/C 1.23).**
+  - Same section marked indeterminate (`aciTeeCont`): 1.085 in², PASS (unchanged). Positive combination S2: 1.083 in², unchanged. AASHTO (`aasTeeNeg`): unchanged.
+- **How verified:** headless main vs branch with the review probe cases plus the three tee cases: only `aciTeeCant` moved; all other cases identical. Full dump of the default project identical. Screenshot of the Section Geometry input and the Detailing card looked at. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar` (save round trip with the new field), `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
+- **Saved data:** one new field `sec.asminSupport` (additive; old saves read with the default, see the decision). No key change.
+- **Open items:** none.
+
+## 2026-11-07 — PR: claude/cbc-aashto-min-every-combo, PR #985: https://github.com/mlococo88/All-Structural/pull/985 (CBM1: AASHTO 5.6.3.3 minimum reinforcement checked for every combination, each in its own sense of bending, and enveloped; CALCULATION CHANGE (pass/fail logic), Beam Capacity tab, AASHTO mode; less conservative before)
+
+Frame: Beam Capacity (`suite-frame-capacity`) and the suite shell's Report summary. Found in the in-depth review of 2026-11-07 (item M1).
+
+### CBM1. 5.6.3.3 for every combination   [CALCULATION CHANGE: check logic]
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 5.6.3.3: at any section of a flexural component the factored resistance M_r is at least the lesser of M_cr (Eq. 5.6.3.3-1, γ_3(γ_1 f_r)S_c, γ_1 = 1.6, γ_3 by bar specification) and 1.33 M_u for the strength combinations. The requirement applies in each sense of bending (top steel under negative moment as well). Formula unchanged; only which combinations are checked changes.
+- **Before:** `allChecks()`, anchor `/* serviceability: min reinforcement */`:
+  ```js
+  if(S.code==='AASHTO'){
+    const need=Math.min((S.mat.gamma3||0.67)*1.6*g.svc.Mcr,Math.abs(g.Mu)>0?1.33*Math.abs(g.Mu):Infinity);
+    out.push({label:"Minimum reinforcement","ref":"AASHTO 5.6.3.3",
+      dcr:g.phiMn>0?need/g.phiMn:null,combo:g.name,na:false,tab:"tabServ",ci:g.ci});
+  }
+  ```
+  with `g=CC.govRow` (the overall governing combination only).
+- **After:**
+  - New `cbcMin5633(svc,Mu,phiMn)` (before `function computeAll(){`): returns {g1, g3, McrF = g3·g1·M_cr, M133 = 1.33|M_u| (Infinity when M_u = 0, as before), need = min(McrF, M133), dcr = need/φM_n (Infinity when φM_n = 0), ok}.
+  - `computeAll()` row: `const mr=(S.code==='AASHTO')?cbcMin5633(svc,c.Mu,phiMn):null;`, returned as `mr` in AASHTO mode only (`...(mr?{mr}:{})`, so ACI rows are unchanged) (svc = `servicecalc(F,neg)`, so M_cr uses y_t to the tension face of that combination's sense).
+  - `allChecks()`: `env("Minimum reinforcement","AASHTO 5.6.3.3",r=>r.mr?{dcr:r.mr.dcr,na:false}:{na:true},"tabServ");` (the largest ratio over every combination).
+  - Edge: φM_n = 0 now gives D/C ∞ (FAIL) instead of a null ratio.
+- **Display:**
+  - Serviceability tab: new card "Minimum Reinforcement — Every Combination" (`svcMinAll`, AASHTO only): a table (combination, sense, y_t, M_cr (γ), 1.33|M_u|, required, φM_n, D/C, status) and, per combination, the worked lines M_cr = γ_3(γ_1 f_r) I_g/y_t, min(M_cr, 1.33M_u), φM_n vs required with D/C, and a "Worked in: φM_n → Flexure · Combination i" link. The existing card stays (governing combination) and its PASS/FAIL line now names that combination and points to the new card.
+  - `cbcCheckCard`: the Summary's Minimum reinforcement row links to `svcMinAll` in AASHTO mode.
+  - Report: new subsection "Minimum reinforcement, every combination (AASHTO 5.6.3.3)" (scope `svm`, steps `McrF<ci>`, `need<ci>`, `minr<ci>`) with a note linking each combination's φM_n ([[fx<ci>/phiMn]]). The chapter Summary key and the suite shell's Report summary key (`Concrete Beam Capacity.html` shell, anchor `else if(c.tab==='tabServ') ks=`) now point to `svm/minr<ci>` of the governing combination (shell falls back to `sv/minr`).
+- **Check case `aasMinNeg45`:** AASHTO, 14 × 30 in, f′c 5 ksi, f_y 60 ksi, γ_3 0.67; bottom 4 #9, top 2 #4; S1 M_u +450, S2 M_u −45 k-ft.
+  - f_r = 0.24√5 = 0.537 ksi; I_g = 31,500 in⁴; y_t = 15 in; M_cr = 0.537 · 31,500/15/12 = 93.9 k-ft; γ_3γ_1M_cr = 0.67 · 1.6 · 93.9 = 100.7 k-ft.
+  - S2: min(100.7, 1.33 · 45 = 59.85) = 59.85 k-ft; φM_n⁻ = 58.27 k-ft → D/C 1.027 **FAIL**.
+  - **Summary: before 0.219 PASS (S1 only) → after 1.03 FAIL (S2).** Same section with S2 = −40 k-ft: 0.219 → 0.913 (S2), PASS.
+- **How verified:** headless main vs branch, review probe cases: only `aasMinNeg` and `aasMinNeg45` moved (values above); default, aciD, aasT, aciFy100, aciDeep, aa100, the tee cases and every Dev case identical. Full dumps: default project identical; `aa100` values identical, only the new card/subsection and link targets differ. Screenshot of the Serviceability tab looked at; Report summary link checked (§7.2). `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
+- **Saved data:** no key or format change.
+- **Open items:** CBAR-1 (A_s,req passed to Development & Splice) still takes the 5.6.3.3 minimum of the flexure-governing combination; unchanged.
+
+## 2026-11-07 — PR: claude/cbc-aashto-torsion-threshold, PR #987: https://github.com/mlococo88/All-Structural/pull/987 (CBH1a: AASHTO mode checks the 5.7.2.1 torsion threshold for every combination; above it the combination FAILs "torsion must be considered" (AASHTO torsion design not implemented); T_u column shown in AASHTO mode; CALCULATION CHANGE (new check), Beam Capacity tab, AASHTO mode; less conservative before)
+
+Frame: Beam Capacity (`suite-frame-capacity`) and the suite shell's Report summary. Found in the in-depth review of 2026-11-07 (item H1, first part: the quick blocker). The full AASHTO 5.7.3.6 torsion design is NOT in this change (see Open items).
+
+### CBH1a. AASHTO torsion threshold   [CALCULATION CHANGE: new FAIL check]
+- **Problem:** in AASHTO mode `torsion()` returns null, the T_u column was hidden, and any T_u (entered earlier or in a saved project) was ignored without a FAIL: only a Validation note said the torsion module is ACI-only.
+- **Governing provisions (10th Ed. text checked):** AASHTO LRFD 10th Ed. (2024) 5.7.2.1: torsion is investigated where T_u > 0.25φT_cr (Eq. 5.7.2.1-3); solid sections T_cr = 0.126Kλ√f′c A_cp²/p_c (Eq. 5.7.2.1-4), K from Eq. 5.7.2.1-6 (1.0 without prestress); f′c not over 10 ksi for torsion; φ = 0.90 for torsion in reinforced concrete (5.5.4.2).
+- **Where / what (all new, anchors `CBH1`):**
+  - `cbcTorA(Tu_kft)` (before `function computeAll(){`): A_cp = b_w h, p_c = 2(b_w + h), T_cr, threshold 0.25φT_cr (kip-in), D/C = T_u/threshold, `consider` when T_u exceeds it.
+  - `computeAll()` row: `torA` (AASHTO mode only).
+  - `allChecks()` (after the shear row): `env("Torsion threshold, T_u ≤ 0.25φT_cr (above: torsion must be considered; not designed by this tool)","AASHTO 5.7.2.1", …,"tabShear")` with id `torA`; N/A where T_u = 0. A ratio above 1 is FAIL.
+  - Shear tab: new first card "Torsion Threshold (AASHTO 5.7.2.1)" (`shTorA`): A_cp, p_c, T_cr, 0.25φT_cr worked, then each combination's comparison and, where exceeded, a FAIL box saying torsion must be considered and that the shear, longitudinal-steel and flexure results ignore it. `cbcCheckCard` links the Summary row there.
+  - Loads input: the T_u column is shown in AASHTO mode (before: ACI with torsion ticked only).
+  - Validation: the Scope note ("torsion module … hidden while AASHTO is selected") is replaced by a note on the threshold check; a warning lists the combinations above the threshold.
+  - Report: new section "Torsion threshold (AASHTO 5.7.2.1)" (scope `tth`: steps Acp, pc, Tcr, thr, Tu<ci>); the chapter Summary and the suite shell's Report summary (anchor `else if(c.id==='torA') ks=`) link to `tth/Tu<ci>`.
+- **Decisions (pending engineer review):**
+  1. A_cp and p_c from the web b_w × h, flange ignored (as the ACI module): smaller T_cr, so the threshold is lower (conservative).
+  2. The threshold is checked whatever the ACI "Check torsion" tick (which is hidden in AASHTO mode): any T_u entered counts. Saved AASHTO projects that carry a T_u from ACI use (e.g. the 13.5 k-ft of the default project's first combination) now show it and may FAIL; the user zeroes it if it does not apply.
+  3. Compatibility torsion (5.7.2.1 allows T_u to be reduced to φT_cr with redistribution) is not taken into account here: the reduced value is still above 0.25φT_cr, so the result is the same.
+- **Check cases:**
+  - `aa100` (AASHTO 12 × 18 in, f′c 4 ksi, T_u 5 k-ft): A_cp 216 in², p_c 60 in, T_cr = 0.126 · 1 · 1 · 2 · 216²/60 = 195.9 k-in, 0.25 · 0.90 · 195.9 = 44.1 k-in = 3.67 k-ft; T_u 60 k-in → **D/C 1.36 FAIL (before: no torsion row, no FAIL).**
+  - `aasT` (12 × 36 in tee, f′c 12 ksi → 10 ksi for torsion, T_u 25 k-ft): A_cp 432 in², p_c 96 in, T_cr = 0.126√10 · 432²/96 = 774.6 k-in; threshold 174.3 k-in (14.52 k-ft); T_u 300 k-in → **D/C 1.72 FAIL.** (The review's 848 k-in used f′c 12 ksi; 5.7.2.1 limits it to 10 ksi.)
+  - Combinations with T_u = 0: N/A. ACI mode: unchanged (no `torA` field, no new row).
+- **How verified:** headless main vs branch, review probe cases: ACI cases and every Dev case identical; every AASHTO case gains only the threshold row (N/A where T_u = 0), the new note and, for aa100 and aasT, the warning; no other value moved. Screenshot of the Shear tab (aasT) looked at. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
+- **Saved data:** no key or format change (T_u was already saved per combination).
+- **Open items:** full AASHTO torsion design (5.7.3.4.2 V_eff in ε_s, 5.7.3.6.1/-.2 transverse, 5.7.3.6.3 longitudinal, Summary interaction) is not implemented yet; until then a combination above the threshold stays FAIL.
+
+## 2026-11-07 — PR: claude/cbc-aashto-long-reinf, PR #992: https://github.com/mlococo88/All-Structural/pull/992 (CBM2: AASHTO 5.7.3.5 longitudinal reinforcement for moment and shear checked for every combination; CALCULATION CHANGE (new check), Beam Capacity tab, AASHTO mode; less conservative before)
+
+Frame: Beam Capacity (`suite-frame-capacity`) and the suite shell's Report summary. Found in the in-depth review of 2026-11-07 (item M2).
+
+### CBM2. 5.7.3.5 longitudinal reinforcement   [CALCULATION CHANGE: new check]
+- **Governing provision (10th Ed. text checked):** AASHTO LRFD 10th Ed. (2024) 5.7.3.5, Eq. 5.7.3.5-1: the tensile capacity of the longitudinal reinforcement on the flexural tension side is at least |M_u|/(d_v φ_f) + 0.5N_u/φ_c + (|V_u/φ_v − V_p| − 0.5V_s) cot θ, with V_s (Eq. 5.7.3.3-4) not greater than V_u/φ_v; φ from 5.5.4.2; θ from 5.7.3.4. With torsion, 5.7.3.6.3 amends it.
+- **Where / what (all new, anchors `CBM2`):**
+  - `cbcLonA(F,sh,pf,Mu,Vu)` (before `function computeAll(){`): demand = |M_u|·12/(d_v φ_f) + max(0, |V_u|/φ_v − 0.5 min(V_s, |V_u|/φ_v)) cot θ (kip); capacity A_s f_y (A_s = tension steel of the combination's sense, `F.As`; f_y as in flexure); D/C = demand/capacity. No prestress (A_ps, V_p = 0) and N_u = 0 (the tool has no axial input). φ_f = the combination's flexural φ, φ_v, d_v, θ and V_s from `shear()`.
+  - `computeAll()` row: `lonA` (AASHTO only).
+  - `allChecks()`: `env("Longitudinal reinforcement for moment and shear","AASHTO 5.7.3.5", …,"tabShear")`, id `lonA`; N/A where M_u = V_u = 0.
+  - Shear tab: new card "Longitudinal Reinforcement (AASHTO 5.7.3.5)" (`shLonA`) with the worked lines per combination and links to that combination's Shear (d_v, θ, V_s) and Flexure (φ_f) cards; `cbcCheckCard` links the Summary row there.
+  - Report: new section "Longitudinal reinforcement (AASHTO 5.7.3.5)" (scope `lon`, steps Vs/dem/cap/dc per combination); chapter Summary key and suite shell Report summary (anchor `else if(c.id==='lonA') ks=`) → `lon/dc<ci>`; Report filter maps the section to the Shear tab.
+- **Decisions (pending engineer review):**
+  1. All tension steel of the sense is taken as fully developed at the section (the tool has no location or anchorage input; 5.7.3.5 says lack of full development shall be accounted for). Stated in the card and the Report.
+  2. The end-support form (Eq. 5.7.3.5-2) is not separate: with M_u = 0, Eq. 5.7.3.5-1 gives the same shear term.
+  3. Torsion (5.7.3.6.3) is not included; combinations above the 5.7.2.1 threshold already FAIL (CBH1a).
+- **Check case `aasT`:** AASHTO tee 12 × 36 in, f′c 12 ksi, f_y 80 ksi, 6 #10 (7.62 in²), #4 @ 10 in, M_u 900 k-ft, V_u 120 kip.
+  - d_v 31.18 in, θ 36.39°, V_s 101.54 kip, φ_f 0.90, φ_v 0.90.
+  - V_s = min(101.54, 120/0.9 = 133.33) = 101.54 kip.
+  - 10,800/(31.18 · 0.90) + (133.33 − 50.77) cot 36.39° = 384.9 + 112.0 = 496.9 kip.
+  - A_s f_y = 7.62 · 80 = 609.6 kip → **D/C 0.815 PASS (before: no check).**
+  - Other moved cases (new row only): `aasMinNeg` 1.13 FAIL (S2, top 2 #4); `aasMinNeg45` 1.22 FAIL; `aa100` 2.57 FAIL (its flexure D/C is already 1.92); `aasTeeNeg` 0.88 PASS. ACI: unchanged (no new field or row).
+- **How verified:** headless main vs branch, review probe cases: ACI and Dev cases identical; AASHTO cases gain only the new row (values above). Screenshot of the Shear tab card (aasT) looked at; Report section §8 and summary link checked. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
+- **Saved data:** no key or format change.
+- **Open items:** torsion in the longitudinal demand (5.7.3.6.3) with the full AASHTO torsion design.
+
+## 2026-11-07 — PR: claude/cbc-skin-reinf, PR #1001: https://github.com/mlococo88/All-Structural/pull/1001 (CBM3: skin reinforcement checked where required — ACI 318-19 9.7.2.3 (h > 36 in) and AASHTO 5.6.7 (d_ℓ > 36 in); new input "Skin bars (each side face)", blank = none entered → FAIL where required; CALCULATION CHANGE (new checks), Beam Capacity tab; less conservative before)
+
+Frame: Beam Capacity (`suite-frame-capacity`). Found in the in-depth review of 2026-11-07 (item M3).
+
+### CBM3. Skin reinforcement   [CALCULATION CHANGE: new checks]
+- **Governing provisions:**
+  - ACI 318-19 9.7.2.3 (rendered PDF, printed p. 139; no 2022 erratum): where h exceeds 36 in, longitudinal skin reinforcement is distributed on both side faces for a distance h/2 from the tension face, with spacing not more than s of 24.3.2, c_c being the clear cover from the skin reinforcement to the side face. Table 24.3.2 / 24.3.2.1: s = min(15(40,000/f_s) − 2.5c_c, 12(40,000/f_s)), f_s may be 2/3 f_y.
+  - AASHTO LRFD 10th Ed. (2024) 5.6.7 (text checked): where d_ℓ of nonprestressed members exceeds 3.0 ft, skin reinforcement on both side faces over d_ℓ/2 nearest the flexural tension reinforcement, A_sk ≥ 0.012(d_ℓ − 30) in²/ft of height on each face (Eq. 5.6.7-3); total per face need not exceed one-fourth of the required flexural tensile reinforcement; spacing not more than d_ℓ/6 or 12.0 in.
+- **New input** (Transverse Reinforcement section): "Skin bars (each side face)": None / bar size, and "Skin bar spacing" (in), saved as `S.skin = {size, s}` (default `{size:"", s:0}`; `mergeState` now merges `skin` like the other groups). Shown in the Input Echo and the Report inputs note.
+- **Where:** `detailing()`, new block before `/* maximum steel via net tensile strain */` (anchor `CBM3`); rows are added only where skin bars are required, so other projects are unchanged.
+  - ACI, h > 36 in: `dSkin` "Skin reinforcement spacing (h > 36 in)": s_skin ≤ s_max with f_s = 2/3 f_y and c_c = cover + stirrup diameter; no bars entered → FAIL (provided "—").
+  - AASHTO, d_ℓ > 36 in (d_ℓ = d of the outermost tension layer of the combination's sense): `dSkinA` A_sk = A_b·12/s ≥ min(0.012(d_ℓ − 30), (A_s/4)/(d_ℓ/24)); `dSkinS` s ≤ min(d_ℓ/6, 12 in); no bars entered → both FAIL.
+  - `CBDC_COND` gets the conditions of the three new ids.
+- **Decisions (pending engineer review):**
+  1. ACI f_s = 2/3 f_y for the skin spacing (24.3.2.1 default), whatever crack-control basis is selected.
+  2. ACI c_c to the side face = clear cover + stirrup diameter (skin bars inside the stirrup).
+  3. AASHTO one-fourth cap computed with A_s provided (A_s required is not known to the tool): a larger cap, so the requirement is not reduced below what the code allows (conservative).
+  4. Blank skin input = "not provided" → FAIL where required (the brief's rule).
+- **Check cases:**
+  - `aciDeep` (ACI 16 × 48 in, 4 #10, cover 2 in, #4 stirrups, f_y 60 ksi): f_s 40,000 psi, c_c 2.5 in, s_max = min(15 − 6.25, 12) = 8.75 in. **Before: no row (all PASS). After: no skin bars → FAIL;** with #4 @ 10 in → 10/8.75 = 1.14 FAIL; #4 @ 8 in → PASS.
+  - `aasDeep` (same section, AASHTO): d_ℓ = 48 − 2 − 0.5 − 0.635 = 44.87 in; A_sk,req = 0.012(14.87) = 0.178 in²/ft (cap (5.08/4)/(44.87/24) = 0.679); s_max = min(7.48, 12) = 7.48 in. No bars → both FAIL; #4 @ 8 in → A_sk 0.30 in²/ft PASS (0.59), spacing 8/7.48 = 1.07 FAIL.
+  - Sections with h ≤ 36 in (ACI) or d_ℓ ≤ 36 in (AASHTO): unchanged (no row).
+- **How verified:** headless main vs branch, review probe cases: only aciDeep (and the new deep cases) moved; all other Beam Capacity and Dev cases identical. Screenshot of the Detailing tab (aasDeep) looked at. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar` (save round trip with the new field), `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
+- **Saved data:** one new additive field `skin` (old saves read with the default "none"; no key change).
+- **Open items:** the skin bars are not drawn in the section figure or the DXF sheets.
+
+## 2026-11-07 — PR: claude/cbc-low-items, PR #1005: https://github.com/mlococo88/All-Structural/pull/1005 (CBL: review LOW items — L1 AASHTO γ_3 list per 5.6.3.3, L2 AASHTO-mode citations and ACI-only notes, L3 9.7.6.2.2 disclosure (reading kept), L4 h ≤ 10 in A_v,min exemption only where V_u ≤ φV_c, L6 AASHTO cover preset labels, L7 AASHTO w_c per Table 3.5.1-1; CALCULATION CHANGES in L4 (ACI, more conservative) and L7 (AASHTO f′c > 5 ksi, computed f_ss); L1 adds a γ_3 value)
+
+Frame: Beam Capacity (`suite-frame-capacity`). Found in the in-depth review of 2026-11-07 (items L1–L7). L5 (C4, l_st from l_d after its 12 in floor) is left as is (conservative), as the brief says.
+
+### CBL1. γ_3 by bar specification   [value set / labels]
+- **Provision (10th Ed. text checked):** AASHTO LRFD 10th Ed. (2024) 5.6.3.3, γ_3: 0.67 A615 Gr 60; 0.75 A615 Gr 75; 0.76 A615 Gr 80; 0.75 A706 Gr 60; 0.80 A706 Gr 80; 0.67 A1035 Gr 100.
+- **Before:** select `["0.67","0.75","0.76"]` labelled "0.67 — A615 Gr 60", "0.75 — A706 Gr 60", "0.76 — A615 Gr 75" (the 0.76 label was wrong: Gr 75 is 0.75, Gr 80 is 0.76; A706 Gr 80 = 0.80 was missing, so a user with A706 Gr 80 had to pick a lower, unconservative value).
+- **After:** `G3_SPECS` (six rows above) and `cbcG3Key()` (anchor `CBL1`); the select lists the six rows; `S.mat.gamma3` still holds the number (saved format unchanged) and the new additive `S.mat.g3spec` remembers the row where two rows share a value. Old saves: 0.67 → "A615 Gr 60", 0.75 → "A615 Gr 75", 0.76 → "A615 Gr 80" (same numbers, no result change).
+- **Check:** picking "0.80 — A706 Gr 80" in `aasMinNeg45` gives γ_3γ_1M_cr = 0.80 · 1.6 · 93.9 = 120.2 k-ft (the 1.33M_u term still governs S2).
+
+### CBL2. AASHTO-mode citations   [wording]
+- `allChecks()`: "Flexural capacity" cites "AASHTO 5.6.3.2 / 5.5.4.2" in AASHTO mode (before: "ACI 9.3.3 / 22.2" in both).
+- `validate()`: the "Method" note (A_oh, p_h to the stirrup centreline, an ACI torsion item) and the "ACI 9.6.1.3" note are shown in ACI mode only (before: also in AASHTO mode).
+
+### CBL3. ACI 9.7.6.2.2 reading   [disclosure only; no result change]
+- The tool keeps triggering the d/4 limit from V_s required (V_u/φ − V_c). **Decision (pending engineer review):** kept as common practice; it avoids a spacing limit that depends on the spacing chosen. The Validation note now says so and states that under the literal reading (V_s provided) the limit applies wherever V_s,provided > 4√f′c b_w d, which can be tighter (for the default project: V_s,prov 60.75 > 46.10 kip, so s_max would be d/4 = 3.80 in).
+
+### CBL4. Table 9.6.3.1 exemption for h ≤ 10 in   [CALCULATION CHANGE, ACI, more conservative]
+- **Provision (rendered PDF, printed p. 136):** ACI 318-19 9.6.3.1: A_v,min where V_u > φλ√f′c b_w d, except the cases of Table 9.6.3.1 (h ≤ 10 in among them); for these cases A_v,min is still required where V_u > φV_c.
+- **Before:** `} else if(smallH){` → "Exempt" (N/A) whenever h ≤ 10 in.
+- **After:** `} else if(smallH && VuA<=sh.phi*sh.Vc+1e-9){` (exempt text now states V_u ≤ φV_c); otherwise the FAIL row, with a first line explaining that the exemption does not apply because V_u > φV_c.
+- **Check:** ACI 12 × 10 in, 3 #5, f′c 4 ksi, no stirrups, d ≈ 7.69 in: V_c = 2√4000 · 12 · 7.69/1000 = 11.67 kip, φV_c = 8.75 kip. V_u = 6 kip → exempt (unchanged). **V_u = 9 kip → before "Exempt" (N/A), after A_v,min required: FAIL** (the shear-capacity row already failed: φV_n = φV_c < V_u).
+
+### CBL6. AASHTO cover presets   [labels; one added preset]
+- **Provision:** AASHTO LRFD 10th Ed. Table 5.10.1-1 lists "exposure to deicing salts" (2.5 in) and "exterior other than above" (2.0 in) as separate rows.
+- **Before:** `{v:'exposed',label:'Exposed to weather / deicing',c:2.5}`. **After:** `{v:'exposed',label:'Exposure to deicing salts',c:2.5}` and a new `{v:'exterior',label:'Exterior, other than above',c:2.0}`. Saved projects keep 'exposed' = 2.5 in (no result change); the default AASHTO preset is still 'exposed'.
+
+### CBL7. AASHTO E_c unit weight   [CALCULATION CHANGE, AASHTO, f′c > 5 ksi, computed f_ss only]
+- **Provisions (text checked):** AASHTO LRFD 10th Ed. Eq. 5.4.2.4-1, E_c = 120,000K_1w_c^2.0f′c^0.33, w_c per Table 3.5.1-1 or C5.4.2.4; Table 3.5.1-1: normal weight 0.145 kcf for f′c ≤ 5.0 ksi, 0.140 + 0.001f′c for 5.0 < f′c ≤ 15.0 ksi.
+- **Before:** `const fc=S.mat.fc, wc=0.145;` in `concreteE()`. **After:** `const wc=fc<=5?0.145:0.140+0.001*fc;` and the worked expression names w_c and Table 3.5.1-1. Used only for the cracked-section service stress f_ss (crack control with "computed" f_s) in AASHTO mode.
+- **Check `aasT`** (f′c 12 ksi): w_c = 0.152 kcf; E_c = 120,000 · 0.152² · 12^0.33 = 6,297 ksi (before 5,730 ksi); n = 4.61 (before 5.06). Crack-control s_max 10.51 → 10.57 in (D/C 0.272 → 0.271). Lightweight concrete (λ < 1): the normal-weight table value is used as before (open item).
+- **How verified (all LOW items):** headless main vs branch, review probe cases: ACI cases differ only in the 9.7.6.2.2 note text, except the new `aciShallowHi` (exempt → FAIL); AASHTO cases differ in the flexure citation and the removed ACI-only notes, and `aasT` in the crack s_max above; all Dev cases identical. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
+- **Saved data:** additive field `mat.g3spec`; new cover preset key 'exterior'; no key change.
+- **Open items:** L5 left (conservative); lightweight w_c for E_c.

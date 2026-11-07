@@ -6216,6 +6216,153 @@ index 50f3837..c2d5000 100644
   - check-syntax, spread-footing-scroll, phone-layout --tool sf, project-library --tool spreadfooting, start-chooser. Screenshots checked.
 - **Saved data:** none. **Other copies:** none.
 
+## 2026-11-07 — PR: claude/sf-h2-phi-fy (PR #967: https://github.com/mlococo88/All-Structural/pull/967) (SFPY: φ by net tensile strain uses ε_ty = f_y/E_s, ACI 318-19 Table 21.2.2 and 21.2.2.1; CALCULATION CHANGE for f_y > 60,000 psi only; Grade 60 and below unchanged)
+
+- **Problem:** `phiFlexure` used fixed strain limits, 0.002 (compression-controlled) and 0.005 (tension-controlled), for every f_y. ACI 318-19 Table 21.2.2 sets the limits at ε_ty and ε_ty + 0.003, with ε_ty = f_y/E_s (21.2.2.1); 0.002 is permitted only for Grade 60. For Grade 80 or 100 bars in the transition zone the old φ was too high (unconservative): pedestal P–M (strain compatibility, `pmContour.phiOf`), dowel interface tension (through `sfpmRatios`) and footing flexure (`flexCap`) all used it.
+- **Where / exact code (`Spread Footing.html`, Phase 2 engine, anchor `/* SFPY (2026-11-07)`):**
+  - Before: `function phiFlexure(eps_t){ … if(eps_t>=0.005)return 0.90; if(eps_t<=0.002)return 0.65; return 0.65+0.25*(eps_t-0.002)/0.003;}`
+  - After: new `function sfdEty(fy){return (fy>60000)?fy/29000000:0.002;}` and `function phiFlexure(eps_t,fy){ const ety=sfdEty(fy); if(eps_t>=ety+0.003)return 0.90; if(eps_t<=ety)return 0.65; return 0.65+0.25*(eps_t-ety)/0.003;}`
+  - `flexCap`: `const phi=phiFlexure(eps_t,fy);` (before `phiFlexure(eps_t)`).
+  - `pmContour` → `phiOf`: `return phiFlexure(et,fy);` (before `phiFlexure(et)`). `fy` is already a parameter of `pmContour`.
+  - Report, footing flexure step `phi`: the label now states ε_ty and the tension-controlled limit (display only).
+- **Governing provision:** ACI 318-19 Table 21.2.2 (rows (b), (d), (f): "Other" transverse reinforcement), 21.2.2.1 (ε_ty = f_y/E_s; 0.002 permitted for Grade 60), 20.2.2.2 (E_s = 29,000,000 psi). Checked on the printed pages (PDF pp. 394–395).
+- **Decision (pending engineer review):** for f_y < 60,000 psi the tool keeps ε_ty = 0.002. The code value f_y/E_s is smaller (Grade 40: 0.00138), which would give a higher φ; keeping 0.002 never raises φ above the previous value (conservative).
+- **Check case 1 (the function, Grade 80, ε_t = 0.0040):** ε_ty = 80,000/29,000,000 = 0.002759; tension-controlled at 0.005759.
+  - Before: φ = 0.65 + 0.25(0.0040 − 0.002)/0.003 = **0.817**.
+  - After: φ = 0.65 + 0.25(0.0040 − 0.002759)/0.003 = **0.753**.
+  - Grade 60, ε_t = 0.0040: 0.817 before and after (ε_ty = 0.002). Grade 80, ε_t = 0.0058: 0.900 (≥ 0.005759).
+- **Check case 2 (default project, f_y = 80,000 psi, harness case `fy80`):** pedestal P–M (biaxial), governing combination 1.2D + 1.0(+Wx) + L + 0.5S:
+  - Ped 1 ratio 0.0581 → **0.0647**; Ped 2 0.0636 → **0.0682** (capacity at P_u = 204.8 k: |φM_n| 251.55 → 234.65 kip-ft).
+  - Footing flexure unchanged: ε_t = 0.0285 / 0.0297 ≥ 0.005759, φ = 0.90.
+- **Grade 60 unchanged (proof):** with f_y = 60,000 psi, `sfdEty` returns 0.002 and 0.002 + 0.003 === 0.005 in IEEE arithmetic, so both branches and the interpolation are the same expressions as before. SF harness (16 cases: def, rev, sfe, sfe5, dir, sfe9, revEx, thin, revHook, edgeHook, slender, devsec, sey = Seymour as saved, wt, seyW, fy80), origin/main vs branch: `R` and `P2` 0 differences in every Grade 60 case (15 of 16); only `fy80` moves (52 values, all P–M ratios and capacities). Dashboard text identical in the Grade 60 cases; the Report differs only in the φ label. 0 console / KaTeX errors.
+- **How verified:** SF harness as above; `phiFlexure` evaluated in Node at the check points; check-syntax, spread-footing-scroll, phone-layout --tool sf, project-library --tool spreadfooting, start-chooser, spread-footing-nobear.
+- **Saved data:** none. **Other copies:** none (the φ function is local to this tool).
+
+## 2026-11-07 — PR: claude/sf-h1-slender (PR #974: https://github.com/mlococo88/All-Structural/pull/974) (SFSL: slender pedestal: P–M check with moment magnification, ACI 318-19 6.6.4; fails where unstable or beyond 1.4× first order, 6.2.5.3; CALCULATION CHANGE for slender pedestals only)
+
+- **Problem:** when k ℓ_u/r > 22 (6.2.5.1(a), k = 2.0 since SFKS), the tool showed a "slender" flag but the P–M ratio used the first-order base moments, so the pedestal could PASS silently.
+- **Where / exact code (`Spread Footing.html`):**
+  - `netResultant` (anchor `/* SFSL: factored sustained axial and pedestal-base moments */`): each `pl` entry gets `sus:{P,mx,my}`, the factored dead share (pedestal self-weight plus the D load type: P, and the base moments `mx + P e_y + V_y h`, `my + P e_x + V_x h`). In direct factored mode it is `null` (no dead / live split).
+  - New `sfslMag(pt,g)` (anchor `/* ---- SFSL (2026-11-07): moment magnification of a slender pedestal`). Per combination and per axis:
+    - E_c = 57√f′c ksi; (EI)_eff = 0.4E_cI_g/(1 + β).
+    - P_c,s = π²(EI)_eff/(2h)², with β_ds.
+    - δ_s = 1/(1 − P_u/(0.75P_c,s)) ≥ 1.
+    - P_c,ns = π²(EI)_eff/h², with β_dns; δ = C_m/(1 − P_u/(0.75P_c,ns)) ≥ 1, C_m = 1.0.
+    - M_2,min = P_u(0.6 + 0.03b)/12.
+    - M_c = δ·max(δ_s|M_u|, M_2,min).
+    - The minimum is applied about one axis at a time: point A uses the minimum about x, point B the minimum about y.
+    - `unstable` when 1 − P_u/(0.75P_c) ≤ 0; `over14` when δ_sδ > 1.4 on an axis with a non-zero first-order moment.
+  - `pedDes`:
+    - Before: `const pmRat=isPatch?[]:sfpmRatios(pmBars,bx,by,fc,fy,pmPts,phiPn_max);`
+    - After: `pmRat1` = that first-order result (kept). When `slenderFlag`, `pmRat` = per combination the worse of `sfpmRatios` on the A and B points (mode `'unstable'`, ratio ∞, where unstable). `pmPts` become the magnified points (the P–M plot), plus `slm`, `slGov`, `slFail`.
+  - Displays:
+    - Dashboard "Pedestal design": a fail reason when `slFail`. "Pedestal P–M (biaxial)": "slender: moments magnified … δ_sδ up to …".
+    - Report: Ties and slenderness step `sl` (ok = !slFail) and a new topic "Moment magnification, slender pedestal" worked for the governing combination. A P–M branch for mode `'unstable'`.
+    - Pedestal tab: an eqBlock after the slenderness screen, plus a failbox. Pedestal table: "YES (magnified)" / "YES (NG)". 3D pick table: MAGNIFIED / NG with δ_sδ.
+- **Governing provisions (ACI 318-19, printed pages checked):**
+  - 6.2.5.1(a) slenderness limit; 6.2.5.3 (second-order M_u ≤ 1.4 × first order).
+  - 6.6.4.4.2 (P_c), 6.6.4.4.3 (k ≥ 1 for sway), 6.6.4.4.4(a) ((EI)_eff).
+  - 6.6.4.6.1 / 6.6.4.6.2(b) (δ_s, with β_ds in place of β_dns); 6.6.4.6.4 → 6.6.4.5.1–6.6.4.5.4 (along the length; C_m; M_2,min).
+  - 19.2.2.1(b) (E_c).
+- **Decisions (pending engineer review), all conservative:**
+  - The pedestal is a sway cantilever (fixed at the footing, free at the top).
+  - All of the first-order base moment is treated as a sway moment (M_2ns = 0).
+  - δ_s is computed for this pedestal alone (no story averaging).
+  - C_m = 1.0.
+  - β_ds = |dead-load share of M_u| / |M_u| about each axis; β_dns = factored dead axial / P_u. Both are 1.0 in direct factored mode.
+  - Both axes are magnified whenever the pedestal is slender about its weaker axis.
+  - M_2,min about one axis is combined with the actual (magnified) moment about the other. This is "each axis separately" in the sense of R6.6.4.5.4: the minimum is never applied about both axes at once.
+- **Check case (harness `slender`: default project, both pedestals h = 8 ft, 18 × 18 in, Ped 2 Wx V_x = 20 k; k ℓ_u/r = 2·96/5.4 = 35.6 > 22).** Ped 2, combination 1.2D + 1.0(+Wx) + L + 0.5S, P_u = 273.24 k, M_uy = 160.0 kip-ft, M_ux = 0:
+  - I_g = 18⁴/12 = 8748 in⁴; E_c = 57√4000 = 3605 ksi; (EI)_eff,s = 0.4·3605·8748 = 12.61 × 10⁶ kip-in² (β_ds = 0).
+  - P_c,s = π²·12.61e6/192² = 3377.3 k; δ_s = 1/(1 − 273.24/(0.75·3377.3)) = **1.121**.
+  - β_dns = 183.24/273.24 = 0.671 (1.2·(150 + 2.70)); (EI)_eff,ns = 12.61e6/1.671 = 7.55e6; P_c,ns = π²·7.55e6/96² = 8086 k; δ = 1/(1 − 273.24/6065) = **1.047**.
+  - About y: M_c = 1.047·1.121·160.0 = **187.8** kip-ft. About x: M_2,min = 273.24·(0.6 + 0.03·18)/12 = 25.96 → M_c = 1.047·25.96 = **27.2** kip-ft.
+  - δ_sδ = 1.174 ≤ 1.4.
+  - **Before:** P–M ratio **0.649** (160.0 / 246.56), PASS, and the slender flag only.
+  - **After:** **0.864** (point A: M_ux = 27.2 with M_uy = 187.8). Without the minimum about x (point B) it is 0.762. With δ_s alone (the review's estimate) it is ≈ 0.72.
+  - Ped 1: 0.255 → 0.347 (governing combination now 1.2D + 1.0(−Wx) + L + 0.5S).
+- **Cases that move:** only `slender`. The other 15 harness cases are not slender. Their only differences are the new `sus` fields on `combos[].nr.pl` (data, no result).
+- **Saved data:** none. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/sf-h3-transverse-strip (PR #982: https://github.com/mlococo88/All-Structural/pull/982) (SFTX: combined footing, transverse strip under each pedestal (width c + d) checked alongside the full width; governing bottom D/C = the larger; CALCULATION CHANGE for footings with two or more pedestals)
+
+- **Problem:** in a combined footing the transverse bars were checked on the full footing width, i.e. the transverse moment was spread uniformly. Under a plate the transverse moment concentrates under the pedestals. In the default project the y-bars showed D/C 0.302 where a strip under Ped 2 gives 0.465 (unconservative).
+- **Where / exact code (`Spread Footing.html`, `computePhase2`):**
+  - New `sfdStrip(dir,dBot,AsBot,fc,fy)` before `const desX=directionDesign('x')` (anchor `/* SFTX (2026-11-07): transverse strip`).
+    - Applies with two or more pedestals, in the transverse direction(s): direction x is transverse when the spread of the pedestal centres in x is ≤ 0.25 × their spread in y, and the reverse for y. With neither (a 2-D layout), both directions are transverse.
+    - For each pedestal: strip width b_s = c + d, centred on the pedestal (c = pedestal side across the strip, d = d_bot of the bars spanning the strip, d/2 each side, clipped at the footing edges).
+    - Loads on the strip: the pedestals whose centres lie in it (P_u and the moment in the strip direction at the footing base). They are balanced by a linear no-tension soil pressure over the strip length.
+    - The moment at each face (cantilever to the edge, minus the pedestals beyond the face) is integrated numerically (400 points); the largest over the LRFD combinations is used.
+    - φM_n = `flexCap(b_s, d, A_s/ft·b_s)`. A strip whose resultant falls outside its length has D/C = ∞ (NG).
+  - `directionDesign` return:
+    - Before: `dcrBot:capBot.phiMn>0?(MuPos*12)/capBot.phiMn:(MuPos>0?Infinity:0),`
+    - After: `dcrBotFull:` the same expression, and `strip:sfdStrip(dir,dBot,AsBot,fc,fy)`.
+    - After both directions: `[desX,desY].forEach(z=>{z.dcrBot=Math.max(z.dcrBotFull,z.strip&&z.strip.applies?z.strip.dcr:0);});`
+  - `dcrBot` (dashboard flexure chip, summary table, 3D pick) is now the governing value. The full-width displays (card 5.2 / 5.3 eqBlock, flexure SVG label, Report step `DCRb`) show `dcrBotFull`. A new eqBlock and note on the card, and a Report topic "Transverse strip under each pedestal" (b_s, M_u,strip, A_s,strip, φM_n,strip, D/C per pedestal).
+- **Governing provisions:** ACI 318-19 13.3.4.1 (combined footings designed by Chapter 8), 13.3.4.3 (distribution of bearing pressure consistent with established principles), 22.3 (flexural strength). The code fixes no strip width; ACI 336.2R and textbook combined-footing practice design a transverse beam under each column.
+- **Decision (pending engineer review):** strip width c + d. Alternatives: c + 1.5d (less conservative), or the full width alone (as before).
+- **Check case (default project, y-bars, Ped 2, 1.2D + 1.6L + 0.5S):** P_u = 318.81 k on L = 8 ft gives w = 39.85 k/ft; cantilever 4.00 − 0.75 = 3.25 ft.
+  - M = 39.85·3.25²/2 = **210.46** kip-ft.
+  - b_s = 18 + 26.5 = 44.5 in; A_s = 1.0533·3.708 = 3.906 in²; a = 3.906·60/(0.85·4·44.5) = 1.549 in.
+  - φM_n = 0.9·3.906·60·(26.5 − 0.775)/12 = **452.2** kip-ft; D/C = **0.465**.
+  - Before: y-bars bottom D/C **0.302** (full width). After: **0.465** (strip governs). Ped 1 strip: 158.97 kip-ft, 0.352. x-direction (longitudinal): no strip, unchanged 0.057.
+- **Seymour:** pedestals in line along y, so x is transverse.
+  - Strips: Ped 1 20.21 kip-ft on b_s = 127.9 in, D/C 0.025; Ped 2 8.67 kip-ft on b_s = 47.9 in, D/C **0.028** (x full width 0.025).
+  - The governing flexure (y, 0.687) is unchanged.
+- **Saved data:** none. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/sf-left-breakpoint (PR #988: https://github.com/mlococo88/All-Structural/pull/988) — Summary dashboard as a left column from 1200 px (was 1500 px); 240 px wide from 1200 to 1499 px (SFLB; display only, no result change)
+
+### SFLB. The summary dashboard is on the left at common laptop widths   [display only]
+- **Decision (pending engineer review):** the engineer asked (2026-11-07, for the Retaining Wall Designer) for "the summary cards … on the left panel", most likely at a laptop width below 1500 px, where SFDC (#737) put the dashboard above the output tabs. The left column now starts at **1200 px** in Spread Footing, Retaining Wall Designer (RWLB, #984) and Light Pole and Sign Post alike. From 1200 to 1499 px it is **240 px** wide; at 1500 px and wider 280 px as before (layout and panel widths unchanged there). Below 1200 px nothing changes (dashboard above the output tabs; phone stacking, SFPH). Same collapse button (« / » → 42 px strip) and key `sfd_dashCollapsed_v1`.
+- **Output panel at 1200–1499 px with the column open:** 508–748 px wide (the input panel keeps its 400 px minimum), as the output panel already is at 950–1190 px without the column. At those widths the Load Combinations, Pedestal Design, Stability, Footing Design and Report pages are wider than the panel and were cut off at its edge (`.out{overflow-x:hidden}`, an existing condition below 1200 px). With the column open from 1200 to 1499 px, each tab page now scrolls sideways inside itself (`overflow-x:auto`, as on tablets and phones, SFPH), so nothing is cut off and the page itself never scrolls sideways. Measured (main → branch): at 1280 px nothing was cut; now Load Combinations scrolls 161 px, Pedestal Design 92 px, Report 189 px inside their tab page. « (collapse) gives the width back.
+- **Where:**
+  - CSS: `@media screen and (min-width:1500px){` (the SFDC block, anchor `.wrap{max-width:1892px}`) → `@media screen and (min-width:1200px){` with a comment `/* SFLB … */` above; after that block, added:
+```css
+@media screen and (min-width:1200px) and (max-width:1499.98px){   /* SFLB */
+ body.sfdDashWide #sfdDashCol{flex-basis:240px;width:240px}
+ body.sfdDashWide .inp{width:calc((100% - 252px)*.33)}
+ body.sfdDashWide.sfdDashColl #sfdDashCol{flex-basis:42px;width:42px}
+ body.sfdDashWide.sfdDashColl .inp{width:calc((100% - 54px)*.33)}
+ /* … a wide table, plot or Report page scrolls sideways inside its tab page … */
+ body.sfdDashWide:not(.sfdDashColl) .tabpage{overflow-x:auto}
+}
+```
+  - JS: `const SFDC={key:'sfd_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1500px)'):null,…` → `'screen and (min-width:1200px)'` (comment `/* SFLB: was 1500px */`).
+  - `tests/smoke/spread-footing-scroll.mjs`: the dashboard-column assertion `vw >= 1500` → `vw >= 1200` (its 1280 and 1366 px sizes now expect the column) and its comments.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data (§5):** no key or format changed.
+- **How verified:** origin/main vs branch at 1920, 1280 and 1200 px, three projects (default, 2 NG; Direct load mode, 3 NG; B 7 × L 6 ft with water table at 2 ft, 6 NG): `R`, `P2`, `state` (Export JSON), the dashboard text, the Report text (Plotly / SVG figures removed: their tick labels follow the plot width) and every localStorage key and value (the `at` time stamp of `bridgeSuite.v1.projectsUI.spread-footing.start` masked) **identical**; 0 console errors. No sideways page scroll at 390, 768, 1200, 1280, 1400, 1920 px (and no output cut off on any of the ten tabs at 1200, 1280, 1400). Screenshots before / after at 1200, 1280, 1400 and after at 1920, 768, 390 looked at. Tests: check-syntax; spread-footing-scroll; phone-layout sf 390/768; project-library spreadfooting.
+
+## 2026-11-07 — PR: claude/sf-manual-1200 (PR #997: https://github.com/mlococo88/All-Structural/pull/997) — User Manual: the summary dashboard column starts at 1200 px (SFLB follow-up; text only, no result change)
+- **Why:** after SFLB (#988) the User Manual still said the dashboard is a left column on screens 1500 px and wider.
+- **Where (User Manual, three sentences):**
+  - §0 paragraph `The screen is split into an <b>input panel</b> …`: before `On screens 1500&nbsp;px and wider it is a left column`; after `On screens 1200&nbsp;px and wider it is a left column`.
+  - next paragraph: before `(under the dashboard on screens narrower than 1500&nbsp;px)`; after `(under the dashboard on screens narrower than 1200&nbsp;px)`.
+  - §3.1 `One chip per check family, on one line: …`: before `On screens 1500&nbsp;px and wider the dashboard is a left column`; after `On screens 1200&nbsp;px and wider the dashboard is a left column`.
+- **Formulas, factors, units, code references:** none (§4 does not apply). **Saved data:** unchanged.
+- **How verified:** origin/main vs branch at 1920 px, three projects (default; Direct mode; B 7 × L 6 ft with water at 2 ft): `R`, `P2`, `state`, dashboard, Report text and localStorage identical (the Manual is not in the Report unless "Include this manual when printing" is ticked); check-syntax passes.
+
+## 2026-11-07 — PR: claude/sf-m3m4-depth-strain (PR #989: https://github.com/mlococo88/All-Structural/pull/989) (SFMD: footing depth d ≥ 6 in, ACI 318-19 13.3.1.2; SFET: footing mats tension-controlled, ACI 318-19 7.3.3.1 / 8.3.3.1; CALCULATION CHANGE, pass / fail logic: two new checks)
+
+- **Problem:** two code limits were not checked.
+  - The depth of the bottom reinforcement must be at least 6 in (13.3.1.2).
+  - Nonprestressed slabs must be tension-controlled. Footings reach this through 13.3.2.1 (one-way → Chapter 7), 13.3.3.1 (two-way isolated → Chapters 7 and 8) and 13.3.4.1 (combined → Chapter 8).
+  - Before, ε_t only lowered φ.
+- **Provision verified on the printed pages:** ACI 318-19 7.3.3.1 and 8.3.3.1 require the slab to be **tension-controlled per Table 21.2.2**, i.e. ε_t ≥ ε_ty + 0.003 (0.005 for Grade 60). The "ε_t ≥ 0.004" of the review is the ACI 318-14 limit (9.3.3.1, beams); the 2019 limit is stricter and is used here.
+- **Where / exact code (`Spread Footing.html`, `computePhase2`, after the SFTX line `[desX,desY].forEach(z=>{z.dcrBot=…})`; anchor `/* SFET (2026-11-07)`):**
+  - `const epsTC=sfdEty(fy)+0.003;` For each direction: `tcBotOK` (bottom mat, `capBot.eps_t`), `tcStripOK` (every SFTX strip, `r.cap.eps_t`) and `tcTopOK` (top mat where it is a flexural mat).
+  - `const minDepth={d:Math.min(dBotX,dBotY),min:6}; minDepth.ok=minDepth.d>=6-1e-9;`, returned as `P2.minDepth`.
+  - Dashboard "Flexure (footing)": FAIL with "not tension-controlled, ε_t < ε_ty + 0.003 (…)" and / or "d = … in < 6 in (ACI 318-19 13.3.1.2)". Summary reason tags as well.
+  - Report: steps `dmin` (Design basis), `tcB` / `tcT` (Flexure) and `st<i>tc` (strip). Card 5.1: a minimum-depth eqBlock and failbox. Cards 5.2 / 5.3: a tension-controlled eqBlock. New helper `sfdF5` (5-decimal strains).
+- **Check case M3 (default project, t = 9 in):**
+  - d_y = 9 − 3 − 1.0/2 = 5.50 in (outer layer); d_x = 9 − 3 − 1.0 − 0.5 = **4.50 in < 6** → NG.
+  - Before: flexure FAIL for A_s,min (top x) only, no depth check. After: the reasons also include "d = 4.50 in < 6 in" and "not tension-controlled (bottom x)", since ε_t = 0.00441 < 0.005.
+- **Check case M4 (default project, t = 12 in, bottom x #11 @ 4 in):**
+  - A_s = 1.56·12/4 = 4.68 in²/ft; d_x = 12 − 3 − 1.0 − 1.41/2 = 7.295 in.
+  - a = 4.68·60/(0.85·4·12) = 6.88 in; c = 6.88/0.85 = 8.10 in > d.
+  - ε_t = 0.003(7.295 − 8.10)/8.10 = **−0.0003 < 0.005** → NG (before: not checked).
+- **Cases that move:** none of the SF harness cases changes a value. def, sey, rev, slender: new fields only, all checks OK (default ε_t = 0.039 / 0.041, d_min = 25.5 in). thin and m3 / m4 add the new reasons to flexure that was already FAIL.
+
 ## 2026-11-07 — PR: claude/sf-m2-dev-faces (SFDE: footing bar development checked at every pedestal face with moment of that sign, ACI 318-19 13.2.8.3 / 13.2.7.1; CALCULATION CHANGE, pass / fail logic)
 
 - **Problem:** `sfdDevAll` checked ℓ_d / ℓ_dh only at the governing-moment section (`des.govMloc` / `govNegLoc`). ACI 318-19 13.2.8.3 requires the reinforcement to be developed at every critical section of 13.2.7.1, i.e. at each pedestal face. A short cantilever at another pedestal could PASS unseen.

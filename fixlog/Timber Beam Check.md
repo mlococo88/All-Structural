@@ -1908,3 +1908,119 @@ index 2f29ed5..c3246e1 100644
 - **How verified:** main vs branch on the default project: every localStorage key (1), page text (7773 chars), Export JSON (2002 chars identical) and the printed report text (print media, 22204 chars) identical (clock times normalised); 0 console errors; chip click → card on screen, no dialog; Ctrl+S / Ctrl+Shift+S → Save as; header at 1280 / 1400 / 1920 / 390 px (390: no sideways scroll), screenshots looked at. `node tests/check-syntax.mjs "Timber Beam Check.html"`; `node tests/smoke/project-library.mjs --tool timber`; `node tests/smoke/github-sync-tools.mjs --tool timber`; `node tests/smoke/home-projects.mjs --tool timber`: pass.
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
+
+## 2026-11-07 — PR: claude/timber-kcr (PR #1008: https://github.com/mlococo88/All-Structural/pull/1008) (TBK1: creep factor K<sub>cr</sub> = 2.0 in wet service)   [calc change] [MORE conservative]
+
+Line numbers are approximate; search for the anchor text. Code sites are tagged `TBK1`.
+
+### TBK1. K<sub>cr</sub> follows the service condition (review finding H2)
+
+- **Where:** `tbcRun`, deflection block. Anchor: `const KcrIn = num(dz.creep) > 0 ? dz.creep : 0;` (replaces `const Kcr = num(dz.creep) > 0 ? dz.creep : 1.5;`). Also: the K<sub>cr</sub> input hint (`fRow(body, 'Creep factor K<sub>cr</sub>'`), the Deflection card's "where" row (`'NDS 3.5.2 (1.5 seasoned, dry; 2.0 wet or unseasoned) '`), the "Creep factor" rows of the Design values input table and of the Report's input table (`['Creep factor K<sub>cr</sub>', R.ok && dz.moisture === 'Wet' && R.Kcr !== dz.creep ?` and `['Creep factor K_cr', R.ok && dz.moisture === 'Wet' && …`), and a new Validation group "7. TBK1" (4 benchmarks; 102 → 106, all match).
+- **Problem:** K<sub>cr</sub> was the user value (default 1.5) whatever the service condition. Ticking Wet service reduced E by C<sub>M</sub> but kept K<sub>cr</sub> = 1.5, so the total (long-term) deflection was unconservative by 0.5 Δ<sub>D</sub> in wet service.
+- **Governing provision:** NDS 2018 3.5.2 (Eq. 3.5-1): K<sub>cr</sub> = 1.5 for seasoned lumber, glulam and SCL in dry service, 2.0 for unseasoned lumber and for wet service. **Verify against NDS 2018 (not in references).** IBC 2018 Table 1604.3 footnote d (checked in `2018_IBC.pdf`) agrees in substance: for members not dry at installation or not used in dry conditions, the creep component is estimated as the immediate D deflection (i.e. K<sub>cr</sub> − 1 = 1.0).
+- **Before:**
+  ```js
+    const Kcr = num(dz.creep) > 0 ? dz.creep : 1.5;
+  ```
+- **After:**
+  ```js
+    const KcrIn = num(dz.creep) > 0 ? dz.creep : 0;
+    const Kcr = wet && (KcrIn === 0 || KcrIn === 1.5) ? 2.0 : (KcrIn || 1.5);
+    if (wet && KcrIn === 1.5) adv.push('Wet service: creep factor K_cr = 2.0 used (NDS 3.5.2, verify against NDS 2018 (not in references); IBC 2018 Table 1604.3 footnote d). The K_cr input holds 1.5, the dry-service default used for wet service too before 2026-11-07; enter another value to override.');
+    if (!wet && cat === 'timber' && KcrIn !== 2.0) adv.push('Timbers (5 in. and thicker) are often surfaced green: if this member is unseasoned (not dry at installation), NDS 3.5.2 gives K_cr = 2.0. Enter 2.0 in the creep factor if so.');
+  ```
+  (`wet` is the existing `const wet = dz.moisture === 'Wet';`.) Input hint before: "…(NDS 3.5.2: 1.5 for seasoned lumber in dry service). 0 or blank = 1.5." After: states 1.5 dry / 2.0 wet or unseasoned, "0 or blank = by service condition", and that 1.5 with Wet ticked is read as the old default.
+- **Decision (pending engineer review):** every saved file stores `creep: 1.5` (the old default), so an entered 1.5 cannot be told apart from the default. With Wet service ticked, 1.5 (or blank / 0) is therefore read as the default and 2.0 is used, with the one-line note above (conservative). Any other value is used as entered (override kept). Consequence: a user who really wants 1.5 in wet service cannot enter it (NDS 3.5.2 does not give 1.5 for wet service). No saved key or format changed (§5): `creep` keeps its stored value; nothing is rewritten. Dry service is unchanged. Unseasoned timbers in dry service: advisory only (no seasoned / unseasoned input added), no result change.
+- **Check case 1 (default joist, Wet ticked):** DF-L No.2 2x10 @ 16 in., 16 ft, D 15 / L 40 psf, self-weight 34 pcf. E′ = 1,600,000 × 0.9 = 1,440,000 psi; Δ<sub>D</sub> = 0.2409 in., Δ<sub>L</sub> = 0.5520 in., limit 192/240 = 0.800 in.
+  - Before: Δ<sub>T</sub> = 1.5 × 0.2409 + 0.5520 = 0.9134 in., ratio **1.142**.
+  - After: Δ<sub>T</sub> = 2.0 × 0.2409 + 0.5520 = 1.0338 in., ratio **1.292**.
+- **Check case 2 (glulam, wet):** 24F-1.8E DF, 5-1/8 × 18 in., 24 ft, trib. 8 ft, D 15 / L 40 psf, top edge braced at the supports. E′ = 1,800,000 × 0.833 = 1,499,400 psi; Δ<sub>D</sub> = 0.2847 in., Δ<sub>L</sub> = 0.6396 in., limit 288/240 = 1.200 in.
+  - Before: Δ<sub>T</sub> = 1.0667 in., ratio **0.889** (OK). After: Δ<sub>T</sub> = 1.2090 in., ratio **1.007** (NG).
+- **How verified:** `tbcRun` on 33 review cases, origin/main vs branch, headless Chromium from `file://`: only the wet cases moved (dTL and K<sub>cr</sub> only; bending, shear, bearing and live-load deflection identical). Moved: default wet 1.1418 → 1.2923, wet glulam 0.8889 → 1.0075, wet LRFD joist 1.1418 → 1.2923, wet incised 125–150 °F joist 1.3354 → 1.5115, wet with K<sub>cr</sub> blank 1.1418 → 1.2923. Wet with K<sub>cr</sub> 2.0 or 1.8 entered: unchanged. Validation 106/106 match (the 102 existing unchanged). Every output tab at 1400 px (Summary and Report at 400 px) without NaN / undefined / KaTeX errors; save → open round trip identical; no console errors; no horizontal scroll at 400 px. `node tests/check-syntax.mjs` passes.
+- **Other copies:** none.
+- **Open items:** a seasoned / unseasoned input for sawn lumber (K<sub>cr</sub> 2.0 for unseasoned in dry service) was not added; advisory for timbers only.
+
+## 2026-11-07 — PR: claude/timber-eymin (PR #1011: https://github.com/mlococo88/All-Structural/pull/1011) (TBE1: glulam beam stability F<sub>bE</sub> with E<sub>y,min</sub>)   [calc change] [MORE conservative]
+
+Line numbers are approximate; search for the anchor text. Code sites are tagged `TBE1`.
+
+### TBE1. Glulam F<sub>bE</sub> uses E<sub>y,min</sub>, not E<sub>x,min</sub> (review finding H1)
+
+- **Where:**
+  - `GLULAM_5A` (anchor `const GLULAM_5A = {`): an 8th value, E<sub>y,min</sub>, is added to each `v` array. A new constant `GL_EYMIN_RATIO` follows the table.
+  - `tbcRun`: the glulam `ref` objects get `Eymin`. Custom glulam: the block after `errors.push('Enter all glulam reference design values`. Stability: anchor `const EminStab = isGL ? ref.Eymin : ref.Emin;`. `EminStab` is added to the result object.
+  - `tbcDefaultModel` and `tbcSanitize`: `custom: { … Eymin: null … }` and `Eymin: nb(glc.Eymin, null)`.
+  - Custom-glulam inputs: a new row `['Eymin', 'E<sub>y,min</sub> (beam stability)', 'psi']`.
+  - Displays: `refLineHTML` (`Ey,min`), the Reference Values Table 5A (new column "E<sub>y,min</sub> (stability)"), the Design Values "Stiffness" card and the Report step `dv.Emin` (base value E<sub>y,min</sub> for glulam), and the Bending card's E′<sub>min</sub> row.
+- **Problem:** for glulam bent about x–x, lateral-torsional buckling is weak-axis behaviour. NDS uses E′<sub>y,min</sub> in F<sub>bE</sub>, but the tool used E<sub>x,min</sub>, so C<sub>L</sub> came out too high whenever stability governed. This was unconservative.
+- **Governing provision:** NDS 2018 3.3.3.8 (F<sub>bE</sub> = 1.20 E′<sub>min</sub>/R<sub>B</sub>²). For glulam, E′<sub>min</sub> is E<sub>y,min</sub> per NDS Supplement 2018 Table 5A / 5A Expanded and its footnote on beam stability. **Verify against NDS 2018 (not in references).** E<sub>x</sub> is still used for deflection (NDS 5.3, Table 5A).
+- **E<sub>y,min</sub> values added (psi), as best known. Verify against NDS 2018 Supplement Table 5A / 5A Expanded (not in references):**
+
+  | Combination | E<sub>y,min</sub> (psi) |
+  |---|---|
+  | 20F-1.5E | 630,000 |
+  | 24F-1.7E | 690,000 |
+  | 24F-1.8E | 850,000 |
+  | 24F-V4 DF | 850,000 |
+  | 24F-V8 DF | 850,000 |
+  | 24F-V3 SP | 850,000 |
+  | 24F-V5 SP | 790,000 |
+
+  The Southern Pine values have the lowest confidence.
+- **Before:**
+  ```js
+    const Emin_p = ref.Emin * CM.E * Ct.E * Ci.E * KF.Emin * PHI.Emin;
+  ```
+  The table rows had 7 values, e.g. `'24F-1.8E': { table: '5A', grp: null, v: [2400, 1450, 650, 650, 265, 1800000, 950000] },`
+- **After:**
+  ```js
+    const EminStab = isGL ? ref.Eymin : ref.Emin;
+    const Emin_p = EminStab * CM.E * Ct.E * Ci.E * KF.Emin * PHI.Emin;
+  ```
+  - Table row: `'24F-1.8E': { table: '5A', grp: null, v: [2400, 1450, 650, 650, 265, 1800000, 950000, 850000] },` (and likewise for the other rows).
+  - New constant: `const GL_EYMIN_RATIO = Math.min(...Object.values(GLULAM_5A).map(s => s.v[7] / s.v[6]));` gives 690,000/900,000 = 0.76667.
+  - Custom glulam:
+    ```js
+            else if (!(ref.Eymin > 0)) {   // TBE1: never an optimistic default for Ey,min
+                ref.Eymin = ref.Emin * GL_EYMIN_RATIO; ref.EyminAssumed = true;
+                adv.push(`REVIEW: custom glulam has no Ey,min … Assumed Ey,min = Ex,min × ${GL_EYMIN_RATIO.toFixed(4)} … Enter Ey,min from NDS Supplement Table 5A or the manufacturer.`);
+            }
+    ```
+- **Saved data (§5):** no key was renamed and nothing was discarded. Custom glulam gains an optional `Eymin`, which is `null` in files saved before this change.
+  - **Decision (pending engineer review):** a custom glulam with no E<sub>y,min</sub> (every file saved before this change) uses E<sub>x,min</sub> × 0.7667, the lowest E<sub>y,min</sub>/E<sub>x,min</sub> ratio in the built-in table, and shows a REVIEW note. This is conservative, never a silent optimistic default. A blocking error was not chosen, because it would hide every result of an old file.
+  - Opening and saving such a file adds only `"Eymin": null`, and its results are identical before and after the round trip.
+- **Check case:** 24F-1.8E DF, 5-1/8 × 18 in., simple span 24 ft, trib. 8 ft, D 15 / L 40 psf, top edge braced at the supports only. This is the Validation glulam case. l<sub>e</sub> = 523.44 in., R<sub>B</sub> = 18.940, F<sub>b</sub>* = 2400 psi (ASD), f<sub>b</sub> = 1443.7 psi.
+
+  | Quantity | ASD before | ASD after | LRFD before | LRFD after |
+  |---|---|---|---|---|
+  | E′<sub>min</sub> (psi) | 950,000 | 850,000 | 950,000 × 1.76 × 0.85 = 1,421,200 | 1,271,600 |
+  | F<sub>bE</sub> (psi) | 3178.0 | 2843.5 | 4754 | 4253.8 |
+  | C<sub>L</sub> | 0.9031 | 0.8759 | 0.8663 | 0.8276 |
+  | F′<sub>b</sub> (psi) | 2167.5 | 2102.0 | 3591.0 | 3430.6 |
+  | Ratio | **0.666** | **0.687** | **0.594** | **0.6215** |
+
+  LRFD: F<sub>b</sub>* = 2400 × 0.8 × 2.54 × 0.85 = 4145.3 psi, f<sub>b</sub> = 2132.0 psi.
+- **Benchmarks:**
+  - Validation group 3, glulam "C<sub>L</sub> governs": its 4 values were intentionally changed to the E<sub>y,min</sub> values above. The labels give the old values.
+  - New group 8 (TBE1) adds 5 benchmarks: LRFD E′<sub>min</sub>, F<sub>bE</sub>, ratio; custom glulam with no E<sub>y,min</sub>: assumed value and REVIEW note.
+  - Total 106 → 111, all match.
+- **How verified:** 35 review cases were run on origin/main and on the branch (headless Chromium, `file://`). Only glulam cases with stability moved, and only the bending ratio and E′<sub>min</sub>:
+
+  | Case | Before | After |
+  |---|---|---|
+  | 24F-1.8E ASD | 0.6660 | 0.6868 |
+  | LRFD | 0.5937 | 0.6215 |
+  | Wet | 0.8252 | 0.8480 |
+  | 20F-1.5E | 0.7996 | 0.8617 |
+  | Cantilevered glulam | 0.2838 | 0.2881 |
+  | Custom glulam with E<sub>y,min</sub> 850,000 entered | 0.6660 | 0.6868 |
+  | Custom glulam with none | 0.6660 | 0.7306 (assumed 728,333 psi) |
+
+  - Glulam with continuous top-edge bracing: E′<sub>min</sub> is shown changed, and every ratio is unchanged.
+  - Sawn lumber, SCL and timbers: identical.
+  - Every output tab: no NaN, no undefined, no KaTeX errors.
+  - Save → open: identical results.
+  - No console errors. At 400 px there is no horizontal scroll.
+  - `node tests/check-syntax.mjs` passes.
+- **Other copies:** none.
+- **Open items:** the E<sub>y,min</sub> values need checking against the printed Supplement (engineer).
