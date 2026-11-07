@@ -1510,3 +1510,21 @@ Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.6.1 and C14.7.6.1 (Method A for ste
 ### Verification
 - `node tests/check-syntax.mjs elastomeric_design_module.html` pass. Headless main-vs-branch probe (18 scenarios): only the items above move; saved state differs only by `tog.hsMin`; Report tab renders; 0 console errors. Screenshot of the Method A panel checked.
 - **Saved data:** additive `tog.hsMin` (0.1196 for old saves). **Other copies:** none.
+
+## 2026-11-07 — PR: claude/edm-m3-deflection (M3, review 2026-11-07) — compressive deflection: Method A check 0.09 h_ri; Method B δ_L, δ_d, δ_lt reported (checked against entered limits)   [new check]
+
+Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.5.3.6 (Eqs. 14.7.5.3.6-1 to -3; C14.7.5.3.6, Eq. C14.7.5.3.6-1), Art. 14.7.6.3.3 / C14.7.6.3.3 (Method A: LL + initial DL deflection of an internal layer or PEP ≤ 0.09 h_ri; PEP ≈ 3 × the steel-reinforced value), Table 14.7.6.2-1 (a_cr 0.25 / 0.35 / 0.45). No owner limit found in MassDOT Part I §3.5.7 or CTDOT BDM §9.2.1.
+
+- **Before:** no compressive deflection anywhere.
+- **Where / after:**
+  - `defaultState`: `tog.dLLmax:0, tog.dLTmax:0` (Method B limits, in; 0 = report only), `coef.acr:0.35` (60 durometer ≈ 0.160 ksi). Inputs in I-5 / I-6. Older saves get these values through migrate() (no result change for Method B).
+  - `computeEDM`, after `R.edge=…`: `R.defl={Gd,f,k,eL,eD,eTL,hEl,dL,dD,acr,dLT,dcA,dLLmax,dLTmax}` with k = 4.8·G·S², G = G_min (Method B, H1) or GminA (Method A / plain), f = 3 for a plain pad (PEP), ε = f·σ/k, h_el = n·h_ri (plain: t), δ_L = ε_L·h_el, δ_d = ε_d·h_el, δ_lt = δ_d + a_cr·δ_d, dcA = ε_(DL+LL)/0.09.
+  - Dashboard: `deflA` (Method A) and `deflP` (plain): D/C pass/fail. Method B: `deflL` / `deflLT` when a limit is entered, else the INFO item `deflI` with the three values.
+  - Worked block `deflEq(R)` (card `defl`) in all three panels; Report tab topic "Compressive deflection".
+- **Check cases:**
+  - Default Method B (G_min 0.136, S 8): k = 4.8·0.136·64 = 41.78 ksi; ε_L = 0.2735/41.78 = 0.00655, δ_L = 0.00655·3.0 = **0.0196 in**; ε_d = 0.00952, δ_d = **0.0286 in**; δ_lt = 0.0286·1.35 = **0.0386 in**. INFO (no limit). With limits 0.125 / 0.03 in: 0.157 PASS / 1.286 FAIL.
+  - Default Method A (G 0.130): k = 39.94; ε = 0.6714/39.94 = 0.0168 → D/C 0.187 PASS.
+  - Plain 5 × 20 × 1, P 15 + 15 (S 2.0, σ 0.300 ksi): ε = 3·0.300/(4.8·0.130·4) = 0.361 → D/C **4.01 FAIL** (the stress check already fails, 1.154).
+- **Decisions (pending engineer review):** layer strain by the linear Eq. C14.7.5.3.6-1 (Figure C14.7.6.3.3-1 may give less at low S — it decides the plain-pad result); cover layers not counted in δ; Method B limits default to 0 (report only) because no owner value was found; a_cr default 0.35.
+- **How verified:** check-syntax pass; headless main-vs-branch probe (19 scenarios): only the new items are added (Method B default: one INFO item; Method A: deflA; plain: deflP FAIL, nFail +1); every other value identical; 0 console errors; worked block screenshot checked.
+- **Saved data:** additive `tog.dLLmax`, `tog.dLTmax`, `coef.acr`. **Other copies:** none.
