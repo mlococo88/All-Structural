@@ -1145,12 +1145,15 @@ function detailing(F,sh,neg,govMu,Vu,tor){
 
   /* minimum flexural steel */
   if(code==='ACI'){
-    const t1=3*rt/(fy*1000)*bw*F.dCent, t2=200/(fy*1000)*bw*F.dCent;
+    /* CBH4 (2026-11-07): ACI 318-19 9.6.1.2 limits f_y to 80,000 psi in (a) and (b) */
+    const fyA=Math.min(fy,80);
+    const t1=3*rt/(fyA*1000)*bw*F.dCent, t2=200/(fyA*1000)*bw*F.dCent;
     const AsMin=Math.max(t1,t2);
     add(&quot;dAsMin&quot;,&quot;Minimum flexural reinforcement&quot;,&quot;ACI 9.6.1.2&quot;,
       F.As,AsMin,&quot;\\ge&quot;,&quot;in²&quot;,F.As>=AsMin-1e-9,
       [[&quot;A_{s,min}=\\max\\left(\\dfrac{3\\sqrt{f'_c}}{f_y}b_w d,\\;\\dfrac{200}{f_y}b_w d\\right)&quot;,
-        `\\max\\left(\\dfrac{3\\sqrt{${fmt(fc*1000,0)}}}{${fmt(fy*1000,0)}}(${fmt(bw)})(${fmt(F.dCent)}),\\;\\dfrac{200}{${fmt(fy*1000,0)}}(${fmt(bw)})(${fmt(F.dCent)})\\right)`,&quot;&quot;],
+        `\\max\\left(\\dfrac{3\\sqrt{${fmt(fc*1000,0)}}}{${fmt(fyA*1000,0)}}(${fmt(bw)})(${fmt(F.dCent)}),\\;\\dfrac{200}{${fmt(fyA*1000,0)}}(${fmt(bw)})(${fmt(F.dCent)})\\right)`,
+        fy>80?`f_y = ${fmt(fy*1000,0)} psi is limited to 80,000 psi here (9.6.1.2).`:&quot;&quot;],
        [&quot;A_{s,min}=\\max(&quot;+fmt(t1,3)+&quot;,\\;&quot;+fmt(t2,3)+&quot;)=&quot;+fmt(AsMin,3)+&quot;\\text{ in}^2&quot;,&quot;&quot;,
         t1>=t2?&quot;3√f′c/f_y term governs&quot;:&quot;200/f_y term governs&quot;]]);
   }
