@@ -16478,7 +16478,7 @@ index ead16a0..e48ecac 100644
 ### How verified
 - `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`; the headless comparison listed in the PR.
 
-## 2026-11-07 — PR: claude/abut-pile-bottom-mat (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Pile-supported footing: the bottom mat stays at the footing cover c_F, between the pile heads (was lifted onto the pile heads, cover = embedment + clear); punching keeps the depth over the pile heads; named input error for a footing too thin over the pile heads (ABPB; calculation change, pile mode only)
+## 2026-11-07 — PR: claude/abut-pile-bottom-mat (PR #1158: https://github.com/mlococo88/All-Structural/pull/1158) — Pile-supported footing: the bottom mat stays at the footing cover c_F, between the pile heads (was lifted onto the pile heads, cover = embedment + clear); punching keeps the depth over the pile heads; named input error for a footing too thin over the pile heads (ABPB; calculation change, pile mode only)
 
 Engineer instruction (2026-11-07, paraphrased): "same deal for the abutment" as the Retaining Wall Designer (RWPB, #1149): on piles the bottom footing bars stay at the normal bottom cover and run between the pile heads; they are not lifted onto the pile heads. Every project, old saves included, no option. Depths that start at the pile head (punching) stay as they are. Code sites are tagged `ABPB`.
 
@@ -16543,7 +16543,7 @@ Engineer instruction (2026-11-07, paraphrased): "same deal for the abutment" as 
 ### How verified
 - Headless, origin/main vs branch, default project switched to piles, the variant, t_f 18 / 16.8 / 12 in, spread default: only the toe (d and what follows), the toe shear section, the dowel, the bottom-cover row, the dashboard and the new warning / input error change; spread identical; punching, pile reactions and the Pile Designer hand-off unchanged. Every tab and the Report rendered on piles and thin: 0 console errors, 0 KaTeX errors.
 - abutment-pile-group-parity: case 0 (spread) identical; the 13 pile cases differ only in `checks.toeFlex.*`, `toeDem.{Vu,dvT,xCr,VsUp,VswDn,vRows,lblV}`, `vm.toe.peakV`, `checks.dowel.{cBot,lAv,dc}`, `checks.cover.rows[0]`, `dash`, `nFail`.
-- Tests: check-syntax; project-library --tool abutment (all pass); engine handoffs, pile-group.
+- Tests: check-syntax; project-library --tool abutment (all pass); engine handoffs (10 passed), pile-group (9 passed).
 
 ### Decisions (pending engineer review)
 - Punching keeps d_e = t_f − e_pile − c_top − d_b (the C-13 rule), conservative now that the bars are below the pile heads; the clear-cover input "Clear cover, pile top to bottom mat" keeps its label and is used for that depth only.
