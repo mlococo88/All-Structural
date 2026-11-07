@@ -739,6 +739,7 @@ function defaultState(){
       epsCRSH:0.0002,                          // combined long-term creep+shrinkage strain (in/in)
       brLoadedLen:80.0, roadwayW:40.0 },       // braking: lane-load loaded length (ft), clear roadway width (ft) → design lanes
     seismic:{ on:false, As:0.15, khR:0.5, kv:0.0, hEQr:0.6,       // EE-I: site accel coeff, kh = khR·As (walls free to displace), ΔPAE at hEQr·H
+      khRAuto:true,                                               // ABM2 (2026-11-07): k_h ratio set from the foundation (abutKhAuto: 1.0 on piles or rock, 0.5 on a spread footing on soil) [11.6.5.2.2]; false = the entered khR
       gEHEQ:1.00, gEQll:0.0,                                      // γEH at EE-I (used only with gEHEQmode "agency"); γEQ on live load (project-specific)
       gEHEQmode:"gp",                                             // EE-I γEH: "gp" = per Table 3.4.1-1 (10th Ed.: 1.00, EEP; the stored value is kept); "agency" = fixed gEHEQ
       phiTauEQ:1.00, phiBEQ:0.80, phiCEQ:1.00, eFracEQ:0.3333,    // extreme-event resistance factors [11.5.8: 1.0; bearing 0.8 for semigravity walls; 10.5.5.3.3]; e/B (used only with eLimEQmode "user")
@@ -1681,7 +1682,7 @@ function migrate(){
   if(S.piles.dd===undefined){ S.piles.dd=0; S.piles.gDD=1.10; }
   // EE-I γEH mode: a project that stores gEHEQ keeps that fixed value ("agency"); one without it gets the γp default
   if(S.seismic && S.seismic.gEHEQmode===undefined) S.seismic.gEHEQmode=(S.seismic.gEHEQ!==undefined)?"agency":"gp";
-  if(!S.seismic) S.seismic={on:false,As:0.15,khR:0.5,kv:0.0,hEQr:0.6,gEHEQ:1.00,gEHEQmode:"gp",gEQll:0.0,phiTauEQ:1.00,phiBEQ:0.80,phiCEQ:1.00,eFracEQ:0.3333,eLimEQmode:"aashto",zone:1};
+  if(!S.seismic) S.seismic={on:false,As:0.15,khR:0.5,khRAuto:true,kv:0.0,hEQr:0.6,gEHEQ:1.00,gEHEQmode:"gp",gEQll:0.0,phiTauEQ:1.00,phiBEQ:0.80,phiCEQ:1.00,eFracEQ:0.3333,eLimEQmode:"aashto",zone:1};
   if(!S.meta) S.meta={revs:[]};
   // OWNA (2026-10-20): owner field. A project saved before it opens as "AASHTO" (no owner rule; identical results). The I-6
   // "Floating (MassDOT default)" restraint model is this tool's general default (every project has it), so it does not mark a
@@ -1707,6 +1708,7 @@ function migrate(){
     // ABR3: P_AE height mode — a saved ratio equal to the earlier default 0.6 takes the 10th Ed. "static" distribution (11.6.5.3; one-time
     // notice, defRev 10); any other saved ratio is kept ("ratio" mode, same value)
     if(S.seismic&&S.seismic.hEQmode===undefined) S.seismic.hEQmode=Math.abs((+S.seismic.hEQr||0)-0.6)<1e-9? "static" : "ratio";
+    if(S.seismic&&S.seismic.khRAuto===undefined) S.seismic.khRAuto=!(S.seismic.khR!==undefined&&S.seismic.khR!==""&&isFinite(+S.seismic.khR));   // ABM2: a saved project keeps its stored k_h ratio (khRAuto false); one without a stored ratio follows the foundation
     if(S.seismic) fill(S.seismic,T.seismic,["siteClass","bwStop","bwW","nonConc","shEQt"]);   // ABR1: bwStop false, bwW 0 (MassDOT: owner default below); ABR3: nonConc, shEQt
     if(!S.bwLL||typeof S.bwLL!=="object") S.bwLL=clone(T.bwLL); }
   if(S.own.dv===2){   // CLMB (2026-10-20): new owner defaults (MassDOT Coulomb, RIDOT at-rest rule) for a project saved with the earlier defaults
@@ -1883,7 +1885,14 @@ function migrate(){
       DEFAULTS_NOTICE=(DEFAULTS_NOTICE||[]).concat(add); }
     S.meta.defRev=11;
   }
+  if(S.seismic&&S.seismic.khRAuto===true) S.seismic.khR=abutKhAuto();   // ABM2: the k_h ratio follows the foundation while it is set automatically
 }
+/* ABM2 (2026-11-07): k_h ratio from the foundation [AASHTO LRFD 10th Ed. 11.6.5.2.2]: k_h may be reduced to 0.5k_h0 only for a wall free to
+   displace 1–2 in that the Owner accepts; an abutment on piles or founded on rock is restrained (1.0, no reduction). MassDOT: its own rule
+   (Part I 3.4.6.3: 0.5 on spread footings, 1.0 on piles). */
+function abutKhAuto(){ const pile=S.fnd&&S.fnd.branch==="pile", rock=S.fnd&&S.fnd.matl==="rock";
+  if(abutOwner()==="MassDOT") return pile?1.0:0.5;
+  return (pile||rock)?1.0:0.5; }
 /* WING: a saved state merged over the defaults keeps "no wing data" (→ wingwalls off in migrate), not the new-project default */
 function abutMergeState(o){ const st=Object.assign(defaultState(),o); if(!o||typeof o!=="object"||!o.wing) delete st.wing; if(!o||typeof o!=="object"||!o.apSlab) delete st.apSlab; return st; }   // APS: "no slab data" → migrate()
 function seedExampleReactions(){
@@ -2349,7 +2358,9 @@ function buildInputs(){
       ${inpRow("Site acceleration coefficient A<sub>s</sub> (S<sub>a</sub> at T = 0 s)","seismic.As","g",{title:"Risk-targeted design acceleration coefficient at T = 0 s for the site class, from the AASHTO-USGS Seismic Design Ground Motion Database or the geotech report [3.10.4.1]; k_h0 = A_s at the wall base [11.6.5.2.1]."})}
       ${S.geom.HsupMode==="single"?"":selRow("Site class at the wall base [T.3.10.3.1-1]","seismic.siteClass",[["","— not selected (k<sub>h0</sub> = A<sub>s</sub>)"],["A","A"],["B","B"],["B/C","B/C"],["C","C"],["C/D","C/D"],["D","D"],["D/E","D/E"],["E","E"],["F","F"]])}
       ${S.geom.HsupMode==="single"?"":`<div class="in-note">k<sub>h0</sub> = A<sub>s</sub>, or 1.2·A<sub>s</sub> for a wall founded on Site Class A, B or B/C [11.6.5.2.1] (worked in Tab 3 §3.6a). The SubLoads hand-off sends A<sub>s</sub> only; select the site class here.</div>`}
-      ${inpRow("k<sub>h</sub> ratio (k<sub>h</sub> = ratio × k<sub>h0</sub>)","seismic.khR","–",{title:"0.5 for walls free to displace 1–2 in; 1.0 for restrained walls. [11.6.5.2.2]"})}
+      <div class="chk-row"><input type="checkbox" id="chkKhAuto" data-path="seismic.khRAuto" ${sq.khRAuto===true?"checked":""}>
+      <label for="chkKhAuto">k<sub>h</sub> ratio from the foundation: 1.0 on piles or rock (restrained), 0.5 on a spread footing on soil (free to displace 1–2 in, Owner-accepted) [11.6.5.2.2]${abutOwner()==="MassDOT"?"; MassDOT 3.4.6.3: 0.5 spread, 1.0 piles":""}</label></div>
+      ${inpRow("k<sub>h</sub> ratio (k<sub>h</sub> = ratio × k<sub>h0</sub>)","seismic.khR","–",{title:"0.5 only for a wall free to displace 1–2 in whose movement the Owner accepts; 1.0 for restrained walls (piles, rock, superstructure restraint). Typing a value turns the automatic setting off. [11.6.5.2.2]"})}
       ${inpRow("Vertical coefficient k<sub>v</sub>","seismic.kv","–")}
       ${selRow("Height of the seismic earth pressure P<sub>AE</sub>","seismic.hEQmode",[["static","Distributed as the static pressure, resultant ≥ H/3 [11.6.5.3]"],["ratio","Increment at an entered ratio × H"]],{rebuild:true})}
       ${sq.hEQmode==="ratio"?inpRow("&nbsp;&nbsp;ΔP<sub>AE</sub> application height ratio (× H)","seismic.hEQr","–",{title:"Dynamic increment applied at this fraction of H (e.g. 0.6H, Seed–Whitman); the static part stays at its own resultant. AASHTO LRFD 10th Ed. 11.6.5.3 distributes P_AE as the static pressure (the other option)."}):""}
@@ -3303,6 +3314,7 @@ function computeAll(){
     // ABCHK: k_h0 = A_s at the wall base, 1.2·A_s for a wall founded on Site Class A, B or B/C [11.6.5.2.1]; k_h = ratio × k_h0 [11.6.5.2.2]
     const sc=String(S.seismic.siteClass||""), kh0f=["A","B","B/C"].includes(sc)?1.2:1.0, kh0=kh0f*(+S.seismic.As);
     const kh=(+S.seismic.khR)*kh0, kv=+S.seismic.kv;
+    if(+S.seismic.khR<1-1e-9&&abutKhAuto()>=1-1e-9) warnFor("conv",`REVIEW — Seismic: k_h = ${fmt(+S.seismic.khR,2)}·k_h0 is entered (panel I-11), but the abutment is ${S.fnd.branch==="pile"?"on piles":"founded on rock"}. The reduction below k_h0 applies only to a wall free to displace 1–2 in whose movement the Owner accepts [11.6.5.2.2]; a pile- or rock-founded abutment is generally restrained (k_h = k_h0). Confirm, or tick "k_h ratio from the foundation".`);   // ABM2
     if(!sc) warn("Seismic: site class not selected (panel I-11) — k_h0 = A_s is used. For a wall founded on Site Class A, B or B/C, k_h0 = 1.2·A_s [11.6.5.2.1].");
     const th=Math.atan(kh/(1-kv)), thd=th*180/Math.PI;
     const dMO=S.soil.method==="coulomb"?deg2rad(KA.iota):0;   // CLMB: the δ of the static Coulomb case (β for a long heel)
@@ -4984,7 +4996,7 @@ function computeAll(){
     { const T=defaultState(), dropDef=(o,t,keys)=>{ if(o) keys.forEach(k=>{ if(JSON.stringify(o[k])===JSON.stringify(t[k])) delete o[k]; }); };   // ABCHK: new inputs at their default
       dropDef(fpS.mat,T.mat,["coverExp","coverCat","coverWcm","rebar"]); dropDef(fpS.fnd,T.fnd,["qnMode","qnC","qnPhi","qnGam","qnDw","qnIncl","qnDepth"]);
       dropDef(fpS.piles,T.piles,["strSec","Fy","drive","pipeT","PrUser","orient","headFix","MuPy","fixSoil","Su","DfUser","Lu","nhUser","DfMode"]); dropDef(fpS.reinf,T.reinf,["dwlEnd","dwlLap","dwlPct"]);
-      dropDef(fpS.seismic,T.seismic,["siteClass","bwStop","bwW"]); if(fpS.bwLL&&fpS.bwLL.mode==="wheel") delete fpS.bwLL;
+      dropDef(fpS.seismic,T.seismic,["siteClass","bwStop","bwW"]); if(fpS.seismic) delete fpS.seismic.khRAuto; if(fpS.bwLL&&fpS.bwLL.mode==="wheel") delete fpS.bwLL;   // ABM2: khRAuto left out (the k_h ratio itself is in the Input ID)
       if(fpS.iab) dropDef(fpS.iab,iabDefault(),["KpE","Rn","phiC","RnUp","phiUp","MuPy2"]); }   // PXR2: MuPy2   // ABR1: new inputs at their default
     const s=JSON.stringify(fpS);
     let h1=5381,h2=52711;
@@ -9984,6 +9996,8 @@ document.addEventListener("input",ev=>{
   else v=el.value;
   const ownPreN=(p==="mat.fc"&&abutOwner()==="CTDOT")? ownDefMap() : null;   // ABR3: the CTDOT γ_c owner default follows f′c (V2 3.5.1)
   setPath(S,p,v);
+  if(p==="seismic.khR"&&S.seismic.khRAuto){ S.seismic.khRAuto=false; const cb=document.getElementById("chkKhAuto"); if(cb) cb.checked=false; }   // ABM2: an entered k_h ratio is kept
+  if(p==="seismic.khRAuto"&&v===true){ migrate(); const e2=document.querySelector('[data-path="seismic.khR"]'); if(e2) e2.value=S.seismic.khR; }
   if(ownPreN){ const r=ownReapply(ownPreN); if(r.set.includes("mat.gc")){ const e2=document.querySelector('[data-path="mat.gc"]'); if(e2) e2.value=S.mat.gc; } }
   scheduleSave();
   if(el.type==="checkbox"&&(p==="fnd.usePassive"||p==="fnd.imBuried"||p==="seismic.on"||p==="seismic.bwStop"||p==="wing.on"||p==="longit.computeBR"||p==="longit.computeTU"||p==="longit.computeCRSH"||p==="apSlab.on"||p==="apSlab.des")){ buildInputs(); }   // APS: apSlab.on, apSlab.des
@@ -10010,6 +10024,7 @@ document.addEventListener("change",ev=>{
   if(ownPre){ const r=ownReapply(ownPre); OWN_LAST={owner:abutOwner(),set:r.set,kept:r.kept};
     const ss=document.getElementById("saveStatus"); if(ss&&(r.set.length||r.kept.length)) ss.textContent=(r.set.length?"owner defaults applied: "+r.set.map(ownDefLabel).join(", "):"")+(r.kept.length?(r.set.length?"; ":"")+"your values kept: "+r.kept.map(ownDefLabel).join(", "):""); }
   if(p==="piles.nRows"||p==="piles.nCols"||p==="piles.mode"){ if(S.piles.mode==="grid") S.piles.coords=gridPileCoords(); migrate(); }
+  if(S.seismic&&S.seismic.khRAuto){ migrate(); const e2=document.querySelector('[data-path="seismic.khR"]'); if(e2) e2.value=S.seismic.khR; }   // ABM2: the automatic k_h ratio follows a foundation / owner change
   if(p==="iab.type"&&raw==="semi"&&S.longit&&!S.longit.computeTU){ S.longit.computeTU=true; buildInputs();   // ABC (c): semi-integral — the bearing shear from the superstructure movement is calculated by default
     const ss=document.getElementById("saveStatus"); if(ss) ss.textContent="semi-integral: bearing shear from the superstructure movement (TU) turned on (panel I-6b)"; }
   if(p==="iab.type"&&raw==="integral"&&S.wing&&S.wing.type!=="indep"){ const Hw=(+S.iab.hc)+(+S.iab.hd);   // ABT2: switching to integral, an attached wing taller than the integral wall defaults to h_c + h_d
