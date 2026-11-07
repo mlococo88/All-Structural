@@ -672,7 +672,11 @@ function computeEDM(loadsOverride){
   // εa = σs/(3 Ba G Si²) [Eq. 14.7.5.3.3-15, Ba = 1.6, Eqs. 14.7.5.3.3-16/-17]; σs and θs = static + 1.75 × cyclic; rectangular: the larger of θs about L and θt about W
   if(S.method==="B"&&!isPlain()){ const Ba=1.6, sigS=sigDL+1.75*sigLL, epsA=sigS/(3*Ba*Gmax*Sf*Sf), thSL=thSt+1.75*thLongCyclic, thSW=isCirc()?0:thTransW, thS=Math.max(thSL,thSW), lhs=thS/n, rhs=3*epsA/Sf;
     R.res={Ba,G:Gmax,sigS,epsA,thSL,thSW,thS,lhs,rhs,dc:rhs>0?lhs/rhs:Infinity,anchored:!!tg.anchored}; } else R.res=null;   // H1: G_max (a larger G gives a smaller εa, so a smaller 3εa/Si)
-  R.edge=isPlain()?null:{ce:+g.edge,min:0.25,pass:+g.edge>=0.25-1e-9};   // edge cover of the steel laminates ≥ 1/4 in. [14.7.5.1 / 14.7.6.1]
+  R.edge=isPlain()?null:{ce:+g.edge,min:0.25,pass:+g.edge>=0.25-1e-9};
+  // H3 (2026-11-07): Method A stability [14.7.6.3.6] limits the TOTAL pad thickness: steel-reinforced h_total = h_rt + (n + 1)·h_s
+  // (covers + internal layers + steel laminates; as the FHWA steel design example); plain pad: its thickness t = h_rt (unchanged).
+  // Decision (pending engineer review): an internal load plate and the cover above it are not modelled (MassDOT §3.5.7.6 leaves them out).
+  { const hTot=isPlain()?hrt:hrt+(n+1)*(+g.tSteel), lim=(isCirc()&&!isPlain())?(+g.D)/4:Math.min(planL,planW)/3; R.stabT={hTot,lim,dc:hTot/lim}; }   // edge cover of the steel laminates ≥ 1/4 in. [14.7.5.1 / 14.7.6.1]
   // dashboard
   const dash=[]; const add=(id,name,dc,ref)=>dash.push({id,name,dc,pass:dc<=1.0001,ref});
   // anchorage item: a D/C check, or (pad anchored / doweled) an informational item with no D/C and no pass/fail, so nFail / governing D/C exclude it
@@ -704,7 +708,7 @@ function computeEDM(loadsOverride){
     add("shearA","Shear deformation [14.7.6.3.4]",(2*(+L.deltaS))/hrt,"hrt ≥ 2Δs");
     add("rotA","Compression–rotation (uplift) [14.7.6.3.5]",upliftA/sigTL,"σs ≥ Dr·GS(B/hri)²(θ/n)");
     if(!isCirc()) add("rotAW","Compression–rotation, transverse (uplift) [14.7.6.3.5]",upliftAW/sigTL,"σs ≥ Dr·GS(W/hri)²(θt/n)");
-    add("stabA","Stability thickness [14.7.6.3.6]",hrt/(isCirc()?(+g.D)/4:Math.min(planL,planW)/3),isCirc()?"hrt ≤ D/4":"hrt ≤ L/3, W/3");
+    add("stabA","Stability thickness [14.7.6.3.6]",R.stabT.dc,isCirc()?"h_total ≤ D/4":"h_total ≤ L/3, W/3");
     add("reinfA","Steel laminate thickness [14.7.6.3.7]",R.reinf.hsReq/R.reinf.tProvided,"hs ≥ max(svc,fat)");
     add("coverA","Cover layer ≤ max(0.7 hri, 5/16 in.) [14.7.6.1]",R.coverDC,"cover ≤ max(0.7 hri, 5/16 in.)");
     addEdge("edgeA","14.7.6.1");
@@ -855,8 +859,8 @@ function renderDesign(R){
       ${checkLine("Compressive stress",R.sigTL/Math.min(R.methodA.sigGS,+S.coef.sigCapPlainA),"[14.7.6.3.2]","sig")}
       ${eqB("Shear deformation","AASHTO 14.7.6.3.4",["h_{rt} \\ge 2\\Delta_s",`${fmtT(R.hrt,3)} \\ge 2(${fmtT(S.loads.deltaS,3)}) = ${fmtT(2*S.loads.deltaS,3)}\\ \\text{in}`],"","shear")}
       ${checkLine("Shear deformation",(2*(+S.loads.deltaS))/R.hrt,"[14.7.6.3.4]","shear")}
-      ${EDM_RPT?stabTEq(R,""):""}
-      ${checkLine("Stability thickness",R.hrt/(Math.min(R.planL,R.planW)/3),"hrt ≤ L/3, W/3","stabT")}
+      ${stabTEq(R,"AASHTO 14.7.6.3.6")}
+      ${checkLine("Stability thickness",R.stabT.dc,"t ≤ L/3, W/3","stabT")}
       ${ancEq(R)}`);
   }
   if(S.method==="B"){
@@ -906,8 +910,8 @@ function renderDesign(R){
       `\\sigma_s = ${fmtT(R.sigTL,3)}\\ \\text{ksi}`]),`Coefficient 0.5 for rectangular and 0.75 for circular bearings [14.7.6.3.5]. G = ${fmt(ma.GmA,3)} ksi, the highest value of the durometer range (least favourable for this check) [14.7.6.2].`,"uplift")}
     ${checkLine("Compression–rotation (uplift)",ma.upliftA/R.sigTL,"[14.7.6.3.5]","uplift")}
     ${isCirc()?"":checkLine("Compression–rotation, transverse (uplift)",ma.upliftAW/R.sigTL,"[14.7.6.3.5]")}
-    ${EDM_RPT?stabTEq(R,"AASHTO 14.7.6.3.6"):""}
-    ${checkLine("Stability thickness",R.hrt/(isCirc()?(+g.D)/4:Math.min(R.planL,R.planW)/3),isCirc()?"hrt ≤ D/4":"hrt ≤ L/3, W/3","stabT")}
+    ${stabTEq(R,"AASHTO 14.7.6.3.6")}
+    ${checkLine("Stability thickness",R.stabT.dc,isCirc()?"h_total ≤ D/4":"h_total ≤ L/3, W/3","stabT")}
     ${EDM_RPT?eqB("Steel reinforcement thickness","AASHTO 14.7.6.3.7",reinfLines(R),"","reinf"):""}
     ${checkLine("Steel laminate thickness",R.reinf.hsReq/R.reinf.tProvided,"[14.7.6.3.7]","reinf")}
     ${EDM_RPT?eqB("Cover layer","AASHTO 14.7.6.1",[coverLine()],"","cover"):""}
@@ -928,9 +932,13 @@ function reinfLines(R){ const g=S.geom,m=S.mat; return [
         `h_{s,req} = ${fmtT(R.reinf.hsReq,4)}\\ \\text{in} \\le h_{s,prov} = ${fmtT(R.reinf.tProvided,4)}\\ \\text{in}`]; }
 function coverLine(){ const g=S.geom; return `c = ${fmtT(g.cover,3)} \\le \\max(0.7\\,h_{ri},\\ 5/16) = \\max(0.7(${fmtT(g.hri,3)}),\\ 0.3125) = ${fmtT(Math.max(0.7*g.hri,5/16),3)}\\ \\text{in}`; }
 /* D11 (report only): the stability-thickness check has no worked block in the tab; this shows the comparison the check itself makes */
-function stabTEq(R,ref){ const g=S.geom, circ=isCirc();
-  return eqB("Stability thickness",ref,[circ?`h_{rt} \\le \\dfrac{D}{4} = \\dfrac{${fmtT(+g.D)}}{4} = ${fmtT((+g.D)/4,3)}\\ \\text{in}, \\quad h_{rt} = ${fmtT(R.hrt,3)}\\ \\text{in}`
-    :`h_{rt} \\le \\dfrac{\\min(L,W)}{3} = \\dfrac{\\min(${fmtT(R.planL)},\\,${fmtT(R.planW)})}{3} = ${fmtT(Math.min(R.planL,R.planW)/3,3)}\\ \\text{in}, \\quad h_{rt} = ${fmtT(R.hrt,3)}\\ \\text{in}`],"","stabT"); }
+/* H3 (2026-11-07): worked on the Design Checks tab (was report only); the total pad thickness (steel laminates included) [14.7.6.3.6] */
+function stabTEq(R,ref){ const g=S.geom, circ=isCirc()&&!isPlain(), t=R.stabT, plain=isPlain();
+  const hl=plain?`t = h_{ri} = ${fmtT(t.hTot,3)}\\ \\text{in}`:`h_{total} = h_{rt} + (n+1)\\,h_s = ${fmtT(R.hrt,3)} + (${fmtT(R.n,0)}+1)(${fmtT(+g.tSteel,4)}) = ${fmtT(t.hTot,3)}\\ \\text{in}`;
+  const hs=plain?"t":"h_{total}";
+  return eqB("Stability thickness",ref,[hl,circ?`${hs} \\le \\dfrac{D}{4} = \\dfrac{${fmtT(+g.D)}}{4} = ${fmtT(t.lim,3)}\\ \\text{in}`
+    :`${hs} \\le \\dfrac{\\min(L,W)}{3} = \\dfrac{\\min(${fmtT(R.planL)},\\,${fmtT(R.planW)})}{3} = ${fmtT(t.lim,3)}\\ \\text{in}`],
+    plain?"Plain pad: the total thickness is the single layer.":"Total thickness of the pad = elastomer (internal layers and covers, h<sub>rt</sub>) + steel laminates (n + 1). An internal load plate and the cover above it, if used, are not part of the bearing (MassDOT §3.5.7.6) and are not modelled.","stabT"); }
 function edmDashDC(R,id){ const d=R.dash.find(x=>x.id===id); return d?d.dc:NaN; }
 /* H1 (2026-11-07): Method B design shear modulus range, worked (symbolic → substituted → result) */
 function gRangeEq(R){ const r=R.Grange; if(!r||!r.mB) return "";
@@ -1220,9 +1228,10 @@ function edrModel(){
   {
     const T=[], a=R.anc, ma=R.methodA;
     const geo="Uses A [[geo/pl.A]], S [[geo/pl.S]], h_rt [[geo/ht.hrt]] and σ_s [[geo/sg.TL]]"+(plain?"":", θ_s [[rot/th.s]]")+(!circ&&!plain?", θ_t,W [[rot/th.tW]]":"")+".";
-    const stabT=(w,id,ref)=>{ const lim=circ&&!plain?(+g.D)/4:Math.min(R.planL,R.planW)/3;
-      w.add({id:"lim",label:"Stability thickness limit",sym:"h_{rt,max}",eq:circ&&!plain?"\\frac{D}{4}":"\\frac{\\min(L,\\,W)}{3}",sub:circ&&!plain?"\\frac{"+edrN(+g.D)+"}{4}":"\\frac{\\min("+edrN(R.planL)+",\\,"+edrN(R.planW)+")}{3}",value:lim,unit:"in",d:3,ref});
-      dcStep(w,id,"Stability thickness","\\frac{h_{rt}}{h_{rt,max}}","\\frac{"+edrN(R.hrt,3)+"}{"+edrN(lim,3)+"}",ref); };
+    const stabT=(w,id,ref)=>{ const lim=R.stabT.lim;
+      if(!plain) w.add({id:"ht",label:"Total pad thickness (elastomer + steel laminates)",sym:"h_{total}",eq:"h_{rt} + (n + 1)\\,h_{s}",sub:edrN(R.hrt,3)+" + ("+R.n+" + 1)\\cdot "+edrN(+g.tSteel,4),value:R.stabT.hTot,unit:"in",d:3,ref,note:"H3: the total thickness of the pad, steel laminates included; an internal load plate is not modelled"});
+      w.add({id:"lim",label:"Stability thickness limit",sym:"h_{max}",eq:circ&&!plain?"\\frac{D}{4}":"\\frac{\\min(L,\\,W)}{3}",sub:circ&&!plain?"\\frac{"+edrN(+g.D)+"}{4}":"\\frac{\\min("+edrN(R.planL)+",\\,"+edrN(R.planW)+")}{3}",value:lim,unit:"in",d:3,ref});
+      dcStep(w,id,"Stability thickness",plain?"\\frac{t}{h_{max}}":"\\frac{h_{total}}{h_{max}}","\\frac{"+edrN(R.stabT.hTot,3)+"}{"+edrN(lim,3)+"}",ref); };
     const reinf=(w,id,ref)=>{
       w.add({id:"svc",label:"Laminate thickness, service",sym:"h_{s,svc}",eq:"\\frac{3\\,h_{ri}\\,\\sigma_{s}}{F_{y}}",sub:"\\frac{3\\cdot "+edrN(+g.hri,3)+"\\cdot "+edrN(R.sigTL,3)+"}{"+edrN(+m.Fy)+"}",value:R.reinf.hsService,unit:"in",d:4,ref});
       w.add({id:"fat",label:"Laminate thickness, fatigue (Category A)",sym:"h_{s,fat}",eq:"\\frac{2.0\\,h_{ri}\\,\\sigma_{L}}{\\Delta F_{TH}}",sub:"\\frac{2.0\\cdot "+edrN(+g.hri,3)+"\\cdot "+edrN(R.sigLL,3)+"}{"+edrN(DFTH_A,1)+"}",value:R.reinf.hsFatigue,unit:"in",d:4,ref:EDR_AA+"Table 6.6.1.2.5-3 (ΔF_TH)"});
