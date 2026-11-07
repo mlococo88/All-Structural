@@ -5162,3 +5162,73 @@ Frame: Beam Capacity (`suite-frame-capacity`). Found in the in-depth review of 2
 - **How verified (all LOW items):** headless main vs branch, review probe cases: ACI cases differ only in the 9.7.6.2.2 note text, except the new `aciShallowHi` (exempt → FAIL); AASHTO cases differ in the flexure citation and the removed ACI-only notes, and `aasT` in the crack s_max above; all Dev cases identical. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
 - **Saved data:** additive field `mat.g3spec`; new cover preset key 'exterior'; no key change.
 - **Open items:** L5 left (conservative); lightweight w_c for E_c.
+
+## 2026-11-07 — PR: claude/cbc-aashto-torsion, PR #1032: https://github.com/mlococo88/All-Structural/pull/1032 (CBH1b: AASHTO torsion design of a solid section for every combination above the 5.7.2.1 threshold — V_eff in ε_s (5.7.3.4.2), T_n (5.7.3.6.2), combined shear + torsion transverse steel (5.7.3.6.1), section limit, longitudinal steel with torsion (5.7.3.6.3); the threshold row no longer FAILs; CALCULATION CHANGE, Beam Capacity tab, AASHTO mode, T_u > 0.25φT_cr only)
+
+Frame: Beam Capacity (`suite-frame-capacity`) and the suite shell's Report summary. Found in the in-depth review of 2026-11-07 (item H1, second part; the first part was CBH1a, PR #987).
+
+### CBH1b. AASHTO torsion design   [CALCULATION CHANGE]
+- **Problem:** after CBH1a a combination with T_u > 0.25φT_cr was reported FAIL ("torsion must be considered; not designed by this tool"); its shear (ε_s, β, θ), its transverse steel and its longitudinal steel ignored T_u.
+- **Governing provisions (AASHTO LRFD 10th Ed. (2024), text layer and rendered pp. 5-74, 5-80, 5-81 checked):**
+  - 5.7.2.1: torsion considered where T_u > 0.25φT_cr; f′c not over 10.0 ksi for torsion or torsion and shear; T_r = φT_n (Eq. 5.7.2.1-2), φ = 0.90 (5.5.4.2).
+  - 5.7.3.4.2: where torsion must be considered, V_u in Eq. 5.7.3.4.2-4 (ε_s) is replaced by V_eff; solid sections Eq. 5.7.3.4.2-5, V_eff = √(V_u² + (0.9p_hT_u/2A_o)²).
+  - 5.7.3.6.1: transverse reinforcement not less than the sum of that for shear (5.7.3.3) and for the concurrent torsion (5.7.2.1, 5.7.3.6.2).
+  - 5.7.3.6.2: T_n = 2A_oA_tf_y cotθ/s (Eq. 5.7.3.6.2-1, λ_duct = 1); A_t = one leg of the closed stirrup; C5.7.3.6.2: for solid sections A_o may be taken as the area enclosed by the centreline of a wall of thickness b_e = A_cp/p_c.
+  - 5.7.3.6.3: Eq. 5.7.3.6.3-1 (solid sections) replaces Eq. 5.7.3.5-1: the shear term becomes cotθ·√((|V_u/φ| − 0.5V_s)² + (0.45p_hT_u/(2A_oφ))²); a bar in each corner of the stirrups.
+  - 5.7.2.3: transverse reinforcement is required where torsion must be considered; 5.7.2.7: f_y up to 100 ksi only for flexural shear without torsion (else ≤ 60 ksi, or the 0.0035-strain stress ≤ 75 ksi).
+- **Where / what (anchors `CBH1b`):**
+  - `shear(F,Mu,Vu,sOv,tq)`: new optional `tq = {Veff, fcMax:10, fyt}` (AASHTO branch): V_eff replaces |V_u| in ε_s and in the |M_u| ≥ |V_u|d_v floor, f′c ≤ 10 ksi in V_c, V_n,max and A_v,min (Eq. 5.7.2.5-1 for the β choice), f_y of the stirrups = `fytTorA()`. Returns `fcUse`, `fytUse`, `Veff`. Before: `fc=S.mat.fc, fyt=fytDesign()` and `|Vu|` in ε_s. Without `tq` nothing changes; `a_g` is still taken 0 on the specified f′c > 10 ksi.
+  - New `fytTorA()`, `cbcTorGeoA()` (x_1, y_1, p_h, A_cp, p_c, b_e, A_o), `cbcVeffA()`, `cbcTorDesA()` (T_n, φT_n, (A_v/s)_V, (A_t/s)_T, combined ratio, section limit) before `computeAll()`.
+  - `cbcLonA(F,sh,pf,Mu,Vu,tD)`: with `tD` the shear term is cotθ·√(vTerm² + tT²), tT = 0.45p_hT_u/(2A_oφ).
+  - `computeAll()`: above the threshold `sh` is computed with `tq`, `torD` is added to the row, `dcT = max(T_u/φT_n, combined, section)`, and `share` (the torsion steel reserved first, V_s on the rest with d_v cotθ, V_n ≤ V_n,max) gives the shear D/C, as in ACI mode.
+  - `detailing(...,tor,torD)`: AASHTO s_max (5.7.2.6) with v_u from V_eff and f′c ≤ 10 ksi; without stirrups, transverse reinforcement is required where torsion must be considered (5.7.2.3).
+  - `allChecks()`: the threshold row (`torA`, FAIL above 1) is replaced by "Torsional resistance, T_u ≤ φT_n" (`torAT`), "Combined shear and torsion transverse reinforcement" (`torAC`), "Section limit with torsion" (`torAS`), N/A where T_u ≤ 0.25φT_cr; the 5.7.3.5 row reads "(and torsion)", 5.7.3.5 / 5.7.3.6.3 where a combination has torsion.
+  - Shear tab: the Torsion Threshold card shows a warning box with a link instead of the FAIL box; new card per combination "Torsion Design, Combination n (AASHTO 5.7.3.6)" (`shTorD<ci>`, `workTorA()`); the combination's shear card shows V_eff in ε_s, the torsion f_y and f′c ≤ 10 ksi, and the transverse steel shared with torsion; the Longitudinal Reinforcement card works Eq. 5.7.3.6.3-1 for those combinations.
+  - Report: section "Torsion (AASHTO 5.7.2.1, 5.7.3.6)" (threshold steps, now information, plus scope `tad`: ph/be/Ao/Veff/Tn/dcT/avV/atT/dcC/dcS per combination); shear steps show V_eff; longitudinal steps add `tT`; T_u column in the load combination table in AASHTO mode; Summary keys `tad/dcT|dcC|dcS<ci>` in the chapter and in the suite shell (anchor `c.id==='torAT'`).
+  - Validation: note and warning reworded (designed, not FAIL); warning when the 100 ksi f_yt tick is overridden by torsion.
+- **Decisions (pending engineer review):**
+  1. A_o from C5.7.3.6.2 (b_e = A_cp/p_c, web b_w × h, flange ignored as for T_cr); p_h to the stirrup centreline.
+  2. V_eff is also used in the |M_u| ≥ |V_u|d_v floor of Eq. 5.7.3.4.2-4 (its "where" list) and in v_u for the 5.7.2.6 spacing tier (5.7.3.6.2 refers to modified v and V_u): larger demand, not less conservative.
+  3. Section limit: AASHTO has no separate combined limit for solid sections; Eq. 5.7.3.3-2 is applied with V_eff ≥ V_u: V_eff ≤ φ0.25f′c b_v d_v.
+  4. T_u is used as entered: the compatibility-torsion reduction to φT_cr (5.7.2.1) and the reduction of longitudinal torsion steel in the flexural compression zone (C5.7.3.6.3) are not applied.
+  5. The stirrups are taken as closed; the corner bars of 5.7.3.6.3 are not checked (stated on screen).
+- **Check cases (hand, all intermediate values as in the tool):**
+  - `aasT` (AASHTO tee, web 12 × 36 in, f′c 12 → 10 ksi, f_y 80, f_yt 60 ksi, cover 2.0 in, #4 2-leg @ 10 in, 6 #10 (7.62 in²), M_u 900 k-ft, V_u 120 kip, T_u 25 k-ft = 300 k-in):
+    x_1 = 12 − 4 − 0.5 = 7.50, y_1 = 31.50, p_h = 78.0 in; b_e = 432/96 = 4.50 in; A_o = 7.5 · 31.5 = 236.25 in²;
+    V_eff = √(120² + (0.9 · 78 · 300/472.5)²) = √(120² + 44.57²) = 128.01 kip;
+    ε_s = (10,800/31.177 + 128.01)/(29,000 · 7.62) = 0.002147 (before 0.002111); θ = 36.51° (36.39°); β = 1.839; V_c = 0.0316 · 1.839 · √10 · 12 · 31.18 = 68.75 kip (before 76.11 with f′c 12); V_s = 0.4 · 60 · 31.18 · cot 36.51°/10 = 101.07 kip;
+    T_n = 2 · 236.25 · 0.20 · 60 · 1.3507/10 = 765.9 k-in, φT_n = 689.3, **T_u/φT_n = 0.435**;
+    (A_v/s)_V = (133.33 − 68.75)/(60 · 31.18 · 1.3507) = 0.02556, (A_t/s)_T = 300/(0.9 · 2 · 236.25 · 60 · 1.3507) = 0.00870; 0.02556 + 2 · 0.00870 = 0.04297 > 0.40/10 = 0.04000 → **combined 1.074 FAIL**;
+    shear after the torsion steel: (0.04 − 0.01741) · 60 · 31.18 · 1.3507 = 57.08 kip, φV_n = 0.9(68.75 + 57.08) = 113.25 kip → **1.060 FAIL** (before 0.751);
+    section limit 128.01/(0.9 · 0.25 · 10 · 12 · 31.18 = 841.8) = **0.152**;
+    longitudinal: 10,800/(0.9 · 31.18) + 1.3507 √(82.80² + 24.76²) = 384.9 + 116.7 = 501.6 kip vs A_s f_y 609.6 → **0.823** (before 0.815, no torsion).
+    **Before: threshold row 1.72 FAIL. After: no threshold FAIL; torsion design FAILs on the transverse steel (1.07).**
+  - `aasRT` (new, AASHTO rectangle 14 × 30 in, f′c 5, f_y = f_yt 60 ksi, cover 1.5 in, 4 #9 bottom (4.00 in²) + 2 #6 top, #4 2-leg @ 6 in; S1 M_u 300, V_u 60, T_u 20 k-ft; S2 −50, 20, 0):
+    T_cr = 0.126√5 · 420²/88 = 564.8 k-in, threshold 127.1 k-in < 240 → torsion considered;
+    p_h = 2(10.5 + 26.5) = 74.0 in, b_e = 4.773 in, A_o = 9.227 · 25.227 = 232.78 in²; V_eff = √(60² + 34.33²) = 69.13 kip;
+    ε_s = 0.001804, θ = 35.32°, β = 2.040, V_c = 51.82, V_s = 145.01 kip;
+    T_n = 2 · 232.78 · 0.20 · 60 · 1.4116/6 = 1,314.3 k-in → **0.203**; (A_v/s)_V 0.00682 + 2 · 0.00676 = 0.02035 vs 0.06667 → **0.305**; shear after torsion φV_n 150.67 → **0.398**; section **0.171**; longitudinal 155.75 + 1.4116√(33.33² + 19.07²) = 209.96 kip vs 240.0 → **0.875**.
+    **Before: threshold 1.89 FAIL. After: all PASS.**
+  - `aa100` (AASHTO default 12 × 18 in, f′c 4, f_yt 100 → 75 ksi, 3 #5, #4 @ 6 in, M_u 120, V_u 60, T_u 5 k-ft): A_o = 8.4 · 14.4 = 120.96 in², p_h 42.0 in, V_eff 60.73 kip, ε_s 0.006 (cap), θ 50°, V_c 9.43, V_s 59.75 kip; T_u/φT_n = 60/(0.9 · 507.5) = **0.131**; combined (0.06386 + 2 · 0.00438)/0.06667 = **1.089 FAIL**; shear after torsion **1.087 FAIL** (before 0.961); section **0.395**; longitudinal 2.572 (before 2.567; flexure is already 1.92 FAIL). Before: threshold 1.36 FAIL.
+  - `aasTnoV` (new, aasRT without stirrups, M_u 100, V_u 10, T_u 15 k-ft): before threshold 1.42 FAIL; after T_n = 0 → torsional resistance and combined steel FAIL (≫1), and the 5.7.2.3 minimum transverse steel row now FAILs (required because torsion must be considered).
+  - Combinations with T_u ≤ 0.25φT_cr and all ACI cases: unchanged.
+- **How verified:** headless main vs branch, review probe cases (+ aasRT, aasTnoV): every ACI and Dev case identical; AASHTO cases without torsion differ only in the reworded notes, the new N/A Summary rows and the additive `fcUse`/`fytUse` fields of `sh`; aa100, aasT, aasRT, aasTnoV move as above. Worked steps compared with an independent hand script (all values above agree to the digits shown). Report model dumped (sections 7 and 8); screenshot of the Shear tab (aasT) looked at. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
+- **Saved data:** no key or format change.
+- **Open items:** hollow sections (Eqs. 5.7.2.1-5, 5.7.3.4.2-6, 5.7.3.6.3-2) are outside the tool's section types; compatibility-torsion reduction (decision 4).
+
+## 2026-11-07 — PR: claude/cbc-aci-lap-fc-order, PR #1042: https://github.com/mlococo88/All-Structural/pull/1042 (CBH2b: ACI compression lap splice — the one-third increase for f′c < 3000 psi applied after the 12 in minimum, per 25.5.5.1; CALCULATION CHANGE, Development & Splice tab, ACI mode, f′c < 3000 psi with small bars only; less conservative before)
+
+Frame: Development & Splice (`suite-frame-dev`; byte-exact srcdoc helper, CRLF kept). Follow-up to CBH2 (#969), open item from the 2026-11-07 review.
+
+### CBH2b. Order of the ×4/3 and the 12 in floor   [CALCULATION CHANGE]
+- **Governing provision (ACI 318-19 25.5.5.1, rendered PDF printed p. 492):** (a)–(c) give l_sc as the longer of the expression (or l_st for f_y > 80,000 psi) and 12 in; then, for f′c < 3000 psi, the length of lap is increased by one-third. The increase therefore applies to the length after the 12 in minimum.
+- **Where:** `calcCompSplice()`, ACI branch (anchor `CBH2b`).
+  - Before: `if(inp.fc<3000) lsc_calc *= (4/3);` then `const lsc = Math.max(lsc_calc, 12);`
+  - After: `const lsc0 = Math.max(lsc_calc, 12);` and `lsc = inp.fc<3000 ? lsc0*(4/3) : lsc0` (returns `lsc0`; `lsc_calc` is now the expression without the ×4/3). The Comp. Splice tab and the Report show "l_sc = 4/3·max(l_sc,calc, 12 in)" when f′c < 3000 psi; the commentary lists the 12 in minimum before the one-third increase.
+- **Check cases (ACI):**
+  - #4, f_y 40,000 psi, f′c 2500 psi: 0.0005 · 40,000 · 0.5 = 10.0 in. **Before: max(10.0 · 4/3, 12) = 13.33 in. After: 4/3 · max(10.0, 12) = 16.00 in.**
+  - #3, f_y 60,000, f′c 2500: 11.25 in. **Before 15.00 in; after 4/3 · 12 = 16.00 in.**
+  - #8, f_y 60,000, f′c 2500: 30.0 in → 40.0 in before and after (expression above 12 in: no change). f′c ≥ 3000 psi: no change. f_y 100 ksi, f′c low (`aciFy100lowfc`): l_sc unchanged (169 · 4/3).
+- **AASHTO (unchanged):** 5.10.8.4.5a puts m = 1.33 for f′c < 3.0 ksi inside Eqs. 5.10.8.4.5a-1/-2 and the 12.0 in minimum outside, so the AASHTO order (factor, then floor) is as coded. Open item: the tool uses 4/3 = 1.333 where the 10th Ed. lists m = 1.33 (0.3 % conservative).
+- **How verified:** headless main vs branch, all Dev probe cases: only the f′c < 3000 psi ACI cases with expression < 12 in move (above); all Beam Capacity cases identical; screenshot of the Comp. Splice tab (#4 case) looked at. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
+- **Saved data:** no change.

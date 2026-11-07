@@ -600,6 +600,7 @@ function wingDefault(on){
     jMethod:"avg", secMode:"auto", secFr:0.3333, ehPlane:"face",      // attached junction method "avg" | "strip"; independent design section "auto" | "user" (fraction of L from the high end); EH height for the stem "face" | "heel"
     Ltoe:2.0, Lheel:6.0, tf:2.0, fdn:"spread",                         // independent footing (ft); "spread" (stability checked, panel I-4 resistances) | "pile" (not checked)
     hSize:"6", hSp:9.0, vSize:"5", vSp:12.0,
+    ftBBar:"6", ftBSp:12.0, ftTBar:"7", ftTSp:9.0,                     // ABM3: independent wing footing bars, transverse: bottom (toe) and top (heel); bar "0" = not entered
     toAb:true};                                                         // ABR2 (N-5): attached wings — apply the pair's loads to the abutment stability and footing                          // horizontal / vertical bars (attached: horizontal = junction flexure; independent: vertical = stem flexure)
 }
 /* IAB (2026-10-20): abutment type — "conv" (conventional cantilever: the tool as before, the default for new and saved projects),
@@ -705,7 +706,7 @@ function defaultState(){
       qnC:0.0, qnPhi:32.0, qnGam:0.120,   // ABCHK: bearing stratum below the base: cohesion c (ksf), φf (deg), γf (kcf); γq above the base = gammaF, D_f = Df
       qnDw:100.0,                         // ABCHK: depth of groundwater D_w below the ground surface for Table 10.6.3.1.2a-2 (ft; ≥ 1.5B + D_f = no effect; h_w > 0 overrides)
       qnIncl:true, qnDepth:false,         // (ABR3 below)
-      imBuried:true, imFrac:0, dNeg:0, SuSl:0,   // ABM5: SuSl = undrained shear strength of clay under the footing for sliding (ksf, 0 = from the bearing inputs when φ_f = 0 and c > 0, else not checked) [10.6.3.4]    // ABR4: dNeg = depth of soil in front of the footing neglected for passive (frost, scour, future excavation; ft) [10.6.3.4, 11.6.3.5]
+      imBuried:true, imFrac:0, dNeg:0, SuSl:0, settleRef:"", globalRef:"",   // ABM7: reference to the settlement / overall-stability evaluation by others ("" = REVIEW row)   // ABM5: SuSl = undrained shear strength of clay under the footing for sliding (ksf, 0 = from the bearing inputs when φ_f = 0 and c > 0, else not checked) [10.6.3.4]    // ABR4: dNeg = depth of soil in front of the footing neglected for passive (frost, scour, future excavation; ft) [10.6.3.4, 11.6.3.5]
                                           // ABR3: footing / piles entirely below ground → no IM on the girder LL reaction there [3.6.2.1]; IM share of the reaction (0 = computed)
                                           // ABCHK: load inclination factors i (Eqs. 10.6.3.1.2a-5 to -9) on; depth factor d_q (Eq. 10.6.3.1.2a-10) only if the soil above the base is as competent
     },
@@ -718,7 +719,7 @@ function defaultState(){
       colSp:[5.5,5.5,5.5,5.5,5.5,5.5,5.5], // spacing(s) along Y (transverse), nCols-1 values
       coords:[],    // [{x,y,active}] populated from grid or edited in coord mode
       offX:0.0, offY:0.0,
-      Rn:330.0, phiC:0.70, RnUp:100.0, phiUp:0.60,
+      Rn:330.0, phiC:0.70, RnUp:100.0, phiUp:0.60, etaG:0,   // ABM7: etaG = group efficiency η for 10.7.3.9 (0 = not entered: REVIEW row)
       pileSize:12.0, pileShape:"hp",  // width/diameter (in); 'square' | 'round' | 'hp' — punching perimeter
       embed:12.0, clrTop:3.0,         // pile embedment into the footing (in); clear cover from the pile top to the bottom mat (in) — punching depth [5.12.8.6]
       dd:0.0, gDD:1.10,                   // drag load DR per pile (kip) and γDR for structural strength [T.3.4.1-1 note: 1.10 structural, 0.00 geotechnical]
@@ -1704,9 +1705,9 @@ function migrate(){
   // ABCHK (2026-10-20): new optional inputs, each backfilled with its default (a project saved before keeps every stored value)
   { const T=defaultState(), fill=(o,t,keys)=>keys.forEach(k=>{ if(o[k]===undefined) o[k]=t[k]; });
     fill(S.mat,T.mat,["coverExp","coverCat","coverWcm","rebar"]);   // ABR1: rebar (A615, as before)
-    fill(S.fnd,T.fnd,["qnMode","qnC","qnPhi","qnGam","qnDw","qnIncl","qnDepth","imBuried","imFrac","dNeg","SuSl"]);   // ABM5: SuSl   // ABR4: dNeg   // ABR3: imBuried, imFrac
+    fill(S.fnd,T.fnd,["qnMode","qnC","qnPhi","qnGam","qnDw","qnIncl","qnDepth","imBuried","imFrac","dNeg","SuSl","settleRef","globalRef"]);   // ABM5: SuSl   // ABR4: dNeg   // ABR3: imBuried, imFrac
     if(S.piles.fixSoil==="user"&&S.piles.DfMode===undefined){ S.piles.DfMode="user"; S.piles.fixSoil="mediumDry"; }   // ABR3: "D_f entered" moved to its own input (the soil is still needed for the lateral solution)
-    fill(S.piles,T.piles,["strSec","Fy","drive","pipeT","PrUser","orient","headFix","MuPy","fixSoil","Su","DfUser","Lu","nhUser","DfMode"]);   // ABR2, ABR3
+    fill(S.piles,T.piles,["etaG","strSec","Fy","drive","pipeT","PrUser","orient","headFix","MuPy","fixSoil","Su","DfUser","Lu","nhUser","DfMode"]);   // ABR2, ABR3
     fill(S.reinf,T.reinf,["dwlEnd","dwlLap","dwlPct"]);
     ["stemH","bwH","ftgL"].forEach(k=>{ if(!S.reinf[k]||typeof S.reinf[k]!=="object") S.reinf[k]={size:"0", sp:12}; });   // ABM8: a saved project has no S&T bars entered (REVIEW rows until they are)
     // ABR3: P_AE height mode — a saved ratio equal to the earlier default 0.6 takes the 10th Ed. "static" distribution (11.6.5.3; one-time
@@ -1749,7 +1750,8 @@ function migrate(){
   // WING (2026-10-20): a project saved before the wingwall module has no S.wing: it opens with the wingwalls OFF (abutment results,
   // Input ID and checks unchanged); missing wing fields of a newer project take their defaults
   if(!S.wing||typeof S.wing!=="object") S.wing=wingDefault(false);
-  else{ const T=wingDefault(false); Object.keys(T).forEach(k=>{ if(S.wing[k]===undefined) S.wing[k]=T[k]; }); }
+  else{ if(S.wing.ftBBar===undefined) S.wing.ftBBar="0"; if(S.wing.ftTBar===undefined) S.wing.ftTBar="0";   // ABM3: a saved wing has no footing bars entered (REVIEW rows)
+    const T=wingDefault(false); Object.keys(T).forEach(k=>{ if(S.wing[k]===undefined) S.wing[k]=T[k]; }); }
   // IAB (2026-10-20): a project saved before the abutment-type selector has no S.iab: it opens as a conventional abutment (results and
   // Input ID unchanged); missing fields of a newer project take their defaults
   if(!S.iab||typeof S.iab!=="object") S.iab=iabDefault();
@@ -2085,6 +2087,8 @@ function buildInputs(){
   const fm=S.fnd;
   html+=panel("in-fnd","I-4","Foundation",`
     ${selRow("Foundation branch","fnd.branch",[["spread","Spread footing"],["pile","Pile-supported footing"]],{rebuild:true})}
+    <div class="in-row"><label title="Reference to the settlement / service-bearing evaluation (10.6.2.4) by the geotechnical engineer, e.g. report and section. Blank = a REVIEW row on the dashboard.">Settlement by others: reference [10.6.2.4]</label><input type="text" data-path="fnd.settleRef" value="${esc(fm.settleRef||"")}" style="grid-column:span 2;"></div>
+    <div class="in-row"><label title="Reference to the overall (global) stability evaluation (11.6.3.7, 11.6.2.3) by the geotechnical engineer. Blank = a REVIEW row on the dashboard.">Overall stability by others: reference [11.6.3.7]</label><input type="text" data-path="fnd.globalRef" value="${esc(fm.globalRef||"")}" style="grid-column:span 2;"></div>
     ${fm.branch==="spread"?`
       ${selRow("Founding material","fnd.matl",[["soil","Soil"],["rock","Rock"]],{rebuild:true})}
       ${fm.matl==="soil"?selRow("Nominal bearing resistance q<sub>n</sub>","fnd.qnMode",[["given","Given (geotechnical report)"],["soil","Compute from soil parameters [10.6.3.1.2a]"]],{rebuild:true}):""}
@@ -2265,6 +2269,7 @@ function buildInputs(){
       ${inpRow("Resistance factor φ<sub>c</sub>","piles.phiC","–")}
       ${inpRow("Nominal uplift R<sub>n,up</sub>","piles.RnUp","kip")}
       ${inpRow("Resistance factor φ<sub>up</sub>","piles.phiUp","–")}
+      ${inpRow("Group efficiency η [10.7.3.9] (0 = not entered)","piles.etaG","–",{title:"Pile group in compression [10.7.3.9]: η = 1.0 in cohesionless soil or with the cap in firm contact; 0.65 (2.5D) to 1.0 (6D) in clay with the cap not in contact and soft surface soil. The block (equivalent pier) check in clay is by the geotechnical engineer. 0 = not entered: a REVIEW row (Tab 4 §4.7)."})}
       <div class="subhead">Drag load / downdrag (DR) [3.11.8, T.3.4.1-1]</div>
       ${inpRow("Drag load per pile DR","piles.dd","kip",{title:"0 = none. Drag load from the neutral-plane analysis (geotechnical report). γDR = 0.00 for geotechnical strength: not added to the φc·Rn check. γDR (below) applies to the structural pile demand P + γDR·DR, reported in Tab 4 §4.4 for the structural pile check. Service (settlement at the neutral plane) is a geotechnical check. Excluded from uplift relief. [3.11.8, T.3.4.1-1 note]"})}
       ${inpRow("γ<sub>DR</sub> (structural strength)","piles.gDD","–",{title:"1.10 for structural strength; 0.00 for geotechnical strength (fixed) [T.3.4.1-1 note]."})}
@@ -2428,7 +2433,9 @@ function buildInputs(){
     ${att?`<div class="chk-row"><input type="checkbox" id="chkWingAb" data-path="wing.toAb" ${w.toAb!==false?"checked":""}><label for="chkWingAb">Apply the pair of wings to the abutment stability and footing (weight; in-line wings also EH and LS; Tab 9 §9.2a)</label></div>`:""}
     ${att?"":`<div class="subhead">Wing footing</div>
       ${selRow("Foundation","wing.fdn",[["spread","Spread footing — stability checked with panel I-4 resistances"],["pile","Pile-supported — stability not checked here"]],{rebuild:true})}
-      ${inpRow("Toe length","wing.Ltoe","ft")}${inpRow("Heel length","wing.Lheel","ft")}${inpRow("Footing thickness","wing.tf","ft")}`}
+      ${inpRow("Toe length","wing.Ltoe","ft")}${inpRow("Heel length","wing.Lheel","ft")}${inpRow("Footing thickness","wing.tf","ft")}
+      ${w.fdn==="pile"?"":`${selRow("Footing bottom bars (toe), transverse","wing.ftBBar",[["0","— not entered"]].concat(bo))}${inpRow("&nbsp;&nbsp;spacing","wing.ftBSp","in")}
+      ${selRow("Footing top bars (heel), transverse","wing.ftTBar",[["0","— not entered"]].concat(bo))}${inpRow("&nbsp;&nbsp;spacing","wing.ftTSp","in")}`}`}
     <div class="subhead">Reinforcement (provided)</div>
     ${selRow(att?"Horizontal bars at the junction (soil face)":"Horizontal bars (S&T, each face)","wing.hSize",bo)}${inpRow("&nbsp;&nbsp;spacing","wing.hSp","in")}
     ${selRow(att?"Vertical bars (S&T, each face)":"Vertical bars (back face, flexure)","wing.vSize",bo)}${inpRow("&nbsp;&nbsp;spacing","wing.vSp","in")}
@@ -2868,6 +2875,7 @@ function computeWing(R,X){
     const hb2=BARS[String(w.hSize)]||BARS["5"], AsH=hb2.Ab*12/(+w.hSp||12), sMaxTS=ttop*12>18? 12 : Math.min(3*ttop*12,18);
     W.ts={bar:String(w.hSize), sp:+w.hSp, As:AsH, req:c.AsST, sMax:sMaxTS, dc:Math.max(c.AsST/AsH, (+w.hSp)/sMaxTS), dir:"horizontal"};
     /* ---- simplified per-foot stability of the design section (spread footing; panel I-4 resistances) ---- */
+    if(w.fdn==="pile") W.ftg={pile:true};   // ABM3: pile-supported wing footing — not designed here (REVIEW row)
     if(w.fdn!=="pile"){
       const tf=Math.max(0.5,+w.tf||0), Lt=Math.max(0,+w.Ltoe||0), Lh=Math.max(0,+w.Lheel||0), B=Lt+tb+Lh, Hv=tf+Hs+Delta;
       const xBk=Lt+ttop, run=B-xBk;
@@ -2916,6 +2924,26 @@ function computeWing(R,X){
       const sl=worst("dcS"), ec=worst("dcE"), br=worst("dcB");
       const brOut=combos.filter(c=>c.out).reduce((b,c)=>(!b||Math.abs(c.e)>Math.abs(b.e))?c:b,null);   // ABR1 (N-2): the combination with the largest |e| beyond B/2
       W.stab={B,tf,Lt,Lh,Hv,xBk,run,G,Pa,ci,si,EH2,gp,combos,sl,ec,br,brOut,rock,qn};
+      /* ABM3 (2026-11-07): wing footing structural design per ft [5.6.3, 5.7.3, 5.6.3.3, 5.6.7; 10.6.5]: linear contact pressure (linSegs) of every
+         stability combination (Strength I, Extreme Events) and of Service I (all 1.00, for crack control). Toe: upward pressure on [0, L_t] less the
+         toe self-weight, moment at the stem front face, shear at d_v from it. Heel: footing weight, soil over the heel, the slope wedge part over the
+         heel, LS_v and the EH vertical component (at the heel end), less the upward pressure on [x_h, B]; moment and shear at the stem back face. */
+      { const xh=Lt+tb, aW=tb-ttop, gEV1=(f)=>f.EV||0;
+        const dem=(c,svc)=>{ const f=c.f, segs=linSegs(c.V,c.e,B,1); if(!segs) return null;
+          const dbB=(BARS[String(w.ftBBar)]||BARS["6"]).db, deT=tf*12-(+m.coverF)-dbB/2, dvT=Math.max(0.9*deT,0.72*tf*12)/12, x1=Math.max(0,Lt-dvT);
+          const MuT=pressMoment(segs,0,Lt,Lt)-(f.DC||0)*gc*tf*Lt*Lt/2, VuT=x1>0? pressForce(segs,0,x1)-(f.DC||0)*gc*tf*x1 : 0;
+          const wedge=run>0&&Delta>0? gam*Delta/run : 0, Fw=wedge*(Lh*Lh/2+aW*Lh), Mw=wedge*(Lh*Lh*Lh/3+aW*Lh*Lh/2);
+          const ehV=c.ls==="Extreme Event II"? EH2.v : Pa*si;
+          const Fd=(f.DC||0)*gc*tf*Lh+gEV1(f)*(gam*Lh*Hs+Fw)+(f.LSv||0)*gam*heq*Lh+(f.EH||0)*ehV;
+          const Md=(f.DC||0)*gc*tf*Lh*Lh/2+gEV1(f)*(gam*Lh*Hs*Lh/2+Mw)+(f.LSv||0)*gam*heq*Lh*Lh/2+(f.EH||0)*ehV*Lh;
+          const MuH=Md-pressMoment(segs,xh,B,xh), VuH=Fd-pressForce(segs,xh,B);
+          return {MuT, VuT, MuH, VuH, ls:c.ls, f, svc:!!svc, V:c.V, e:c.e, Fd, Md}; };
+        const ds=combos.map(c=>dem(c)).filter(Boolean), sv=dem(res("Service I",{DC:1,EV:1,EH:1,LS:1,LSv:1},false),true);
+        const mx=k=>ds.reduce((b,d)=>(!b||d[k]>b[k])?d:b,null);
+        const gT=mx("MuT"), gTv=mx("VuT"), gH=mx("MuH"), gHv=mx("VuH");
+        const sec=(nm,bar,sp,Mu,Vu,Ms,lbl,top,zs)=>String(bar)==="0"||!BARS[String(bar)]? null : X.sectionCheck({name:nm, h:tf*12, cover:+m.coverF, bar:String(bar), sp:+sp, Mu:Math.max(0,Mu), Vu:Math.max(0,Vu), Ms:Math.max(0,Ms), lbl, bST:Math.min(L,B)*12, hST:tf*12, zeroShearDist:zs*12, ...(top?{topBar:true}:{})});
+        W.ftg={toe:gT&&{Mu:gT.MuT, Vu:gTv.VuT, V:gT.V, e:gT.e, f:gT.f, ls:gT.ls, lsV:gTv.ls, Ms:sv? sv.MuT : 0, c:sec("Wing toe",w.ftBBar,w.ftBSp,gT.MuT,gTv.VuT,sv? sv.MuT:0,gT.ls,false,Lt)},
+          heel:gH&&{Mu:gH.MuH, Vu:gHv.VuH, V:gH.V, e:gH.e, Fd:gH.Fd, Md:gH.Md, f:gH.f, ls:gH.ls, lsV:gHv.ls, Ms:sv? sv.MuH : 0, c:sec("Wing heel",w.ftTBar,w.ftTSp,gH.MuH,gHv.VuH,sv? sv.MuH:0,gH.ls,true,Lh)}, xh}; }
       if(brOut) warn(`Wingwall: the factored resultant falls outside the wing footing (|e| = ${fmt(Math.abs(brOut.e),3)} ft ≥ B/2 = ${fmt(B/2,3)} ft, ${brOut.ls}) — overturning; bearing is not defined for that combination (Tab 9 §9.5).`,"err");
       if(fn.qnMode==="soil") W.notes.push("Bearing: the wing uses the q_n entered in panel I-4 (the computed q_n option applies to the abutment footing only).");
     }
@@ -3849,6 +3877,9 @@ function computeAll(){
         pile:actIndexToNo(act,gMin.iMin), RR:p.phiUp*p.RnUp, lbl:gMin.c?.lbl, ls:gMin.ls, det:gMin};
       if(uplift) warnFor("conv",`PILE UPLIFT: minimum pile reaction is ${fmt(gMin.Pmin)} kip (tension) at pile ${R.checks.pileUplift.pile} — uplift resistance (φ_up·R_n,up) and connection detailing are required.`,"err");
       R.pile.shear={Hx:gH.Hx/n, Hy:gH.Hy/n, Hres:gH.H/n, ls:gH.ls, lbl:gH.c?.lbl, n};
+      // ABM7 (2026-11-07): pile group in compression [10.7.3.9]: ΣV ≤ φ_c·η·n·R_n (η entered; else REVIEW); group uplift [10.7.3.11]: REVIEW when a pile is in tension
+      { let gV={V:-Infinity}; for(const lsName of STR_LIMITS){ const r=perLS[lsName]; if(r.best&&r.best.c&&r.best.c.V>gV.V) gV={V:r.best.c.V, ls:lsName, phiC:resFor(lsName).phiC, lbl:r.best.c.lbl}; }
+        const eta=+p.etaG||0; R.checks.pileGroup={V:gV.V, ls:gV.ls, lbl:gV.lbl, phiC:gV.phiC, eta, n, Rn:+p.Rn, ...(eta>0?{RR:gV.phiC*eta*n*(+p.Rn), dc:gV.V/(gV.phiC*eta*n*(+p.Rn))}:{})}; }
       // ABCHK: pile structural axial resistance [10.7.3.13]; the governing pile resistance is the lesser of geotechnical and structural
       const eeR=perLS["Extreme Event I"]&&perLS["Extreme Event I"].best&&isFinite(perLS["Extreme Event I"].best.Pmax)? perLS["Extreme Event I"].best : null;
       R.checks.pileStr=pileStructural(R.checks.pileComp, eeR);
@@ -5079,12 +5110,13 @@ function computeAll(){
     if(fpS.constr&&fpS.constr.gC===1.5) delete fpS.constr.gC;
     if(fpS.reinf&&fpS.reinf.coatBW===false) delete fpS.reinf.coatBW;
     if(fpS.wing&&!fpS.wing.on) delete fpS.wing;
-    if(fpS.wing&&fpS.wing.toAb===true) delete fpS.wing.toAb;   // ABR2: the new input at its default                                   // WING: wingwalls off leave the Input ID unchanged
+    if(fpS.wing&&fpS.wing.toAb===true) delete fpS.wing.toAb;
+    if(fpS.wing){ const Tw=wingDefault(false); ["ftBBar","ftBSp","ftTBar","ftTSp"].forEach(k=>{ if(fpS.wing[k]===Tw[k]) delete fpS.wing[k]; }); if(fpS.wing.ftBBar==="0") delete fpS.wing.ftBBar; if(fpS.wing.ftTBar==="0") delete fpS.wing.ftTBar; }   // ABM3   // ABR2: the new input at its default                                   // WING: wingwalls off leave the Input ID unchanged
     if(fpS.iab&&fpS.iab.type!=="integral"&&fpS.iab.type!=="semi") delete fpS.iab;  // IAB: a conventional abutment leaves the Input ID unchanged
     if(fpS.apSlab&&!fpS.apSlab.on) delete fpS.apSlab;                              // APS: no approach slab leaves the Input ID unchanged
     { const T=defaultState(), dropDef=(o,t,keys)=>{ if(o) keys.forEach(k=>{ if(JSON.stringify(o[k])===JSON.stringify(t[k])) delete o[k]; }); };   // ABCHK: new inputs at their default
-      dropDef(fpS.mat,T.mat,["coverExp","coverCat","coverWcm","rebar"]); dropDef(fpS.fnd,T.fnd,["qnMode","qnC","qnPhi","qnGam","qnDw","qnIncl","qnDepth","SuSl"]);
-      dropDef(fpS.piles,T.piles,["strSec","Fy","drive","pipeT","PrUser","orient","headFix","MuPy","fixSoil","Su","DfUser","Lu","nhUser","DfMode"]); dropDef(fpS.reinf,T.reinf,["dwlEnd","dwlLap","dwlPct","stemH","bwH","ftgL"]); ["stemH","bwH","ftgL"].forEach(k=>{ if(fpS.reinf&&fpS.reinf[k]&&String(fpS.reinf[k].size)==="0") delete fpS.reinf[k]; });   // ABM8
+      dropDef(fpS.mat,T.mat,["coverExp","coverCat","coverWcm","rebar"]); dropDef(fpS.fnd,T.fnd,["qnMode","qnC","qnPhi","qnGam","qnDw","qnIncl","qnDepth","SuSl","settleRef","globalRef"]);
+      dropDef(fpS.piles,T.piles,["etaG","strSec","Fy","drive","pipeT","PrUser","orient","headFix","MuPy","fixSoil","Su","DfUser","Lu","nhUser","DfMode"]); dropDef(fpS.reinf,T.reinf,["dwlEnd","dwlLap","dwlPct","stemH","bwH","ftgL"]); ["stemH","bwH","ftgL"].forEach(k=>{ if(fpS.reinf&&fpS.reinf[k]&&String(fpS.reinf[k].size)==="0") delete fpS.reinf[k]; });   // ABM8
       dropDef(fpS.seismic,T.seismic,["siteClass","bwStop","bwW","Wseg","EQsupL","EQsupT"]); if(fpS.seismic) delete fpS.seismic.khRAuto; if(fpS.bwLL&&fpS.bwLL.mode==="wheel") delete fpS.bwLL;   // ABM2: khRAuto left out (the k_h ratio itself is in the Input ID)
       if(fpS.iab) dropDef(fpS.iab,iabDefault(),["KpE","Rn","phiC","RnUp","phiUp","MuPy2"]); }   // PXR2: MuPy2   // ABR1: new inputs at their default
     const s=JSON.stringify(fpS);
@@ -5125,6 +5157,10 @@ function computeAll(){
     addD("pileC","Pile compression [10.7]",R.checks.pileComp.dc,"tab-found",R.checks.pileComp.ls);
     if(R.checks.pileUplift.uplift) addD("pileU","Pile uplift [10.7]",R.checks.pileUplift.dc,"tab-found",R.checks.pileUplift.ls);
     else addD("pileU","Pile uplift — none (P_min ≥ 0)",0,"tab-found",R.checks.pileUplift.ls);
+    { const G=R.checks.pileGroup;   // ABM7
+      if(G&&G.eta>0) addD("pileGrp","Pile group in compression [10.7.3.9]",G.dc,"tab-found",G.ls+": ΣV "+fmt(G.V,1)+" ≤ φ·η·n·R_n = "+fmt(G.RR,1)+" kip (η = "+fmt(G.eta,2)+")");
+      else if(G) addD("pileGrp","REVIEW — Pile group in compression [10.7.3.9]",NaN,"tab-found","η not entered (panel I-7); equivalent-pier check in clay by the geotechnical engineer",true);
+      if(R.checks.pileUplift.uplift) addD("pileGrpUp","REVIEW — Pile group uplift [10.7.3.11]",NaN,"tab-found","piles in tension: group (block) uplift resistance φ_ug·R_ug by the geotechnical engineer",true); }
     if(R.checks.punching) addD("punching","Pile punching shear [5.12.8.6]",R.checks.punching.dc,"tab-found","pile "+R.checks.punching.pile+" — "+(R.checks.punching.ls||""));
     const ps=R.checks.pileStr;   // ABCHK
     if(ps) addD("pileS","Pile structural axial [10.7.3.13]",ps.ok?ps.dc:0,"tab-found",ps.ok?(ps.sec+" — "+(ps.gov==="ee"?"Extreme Event I":(ps.PuLs||""))+(ps.DR>0?", incl. γDR·DR":"")):(ps.note||"not checked"),!ps.ok);
@@ -5173,6 +5209,14 @@ function computeAll(){
       addD("wEcc","Wing eccentricity (simplified, per ft) [11.6.3.3]",W.stab.ec.dcE,"tab-wing",W.stab.ec.ls);
       if(W.stab.brOut) addD("wBrg","Wing bearing (simplified, per ft) [10.6.3.1]",Infinity,"tab-wing",W.stab.brOut.ls+": resultant outside the base (overturning)",false,"resultant outside base — FAIL");   // ABR1 (N-2)
       else addD("wBrg","Wing bearing (simplified, per ft) [10.6.3.1]",W.stab.br.dcB,"tab-wing",W.stab.br.ls); }
+    if(W.ftg){ const F=W.ftg;   // ABM3: wing footing toe and heel
+      if(F.pile) addD("wFtg","REVIEW — Wing footing (pile-supported) toe / heel design [5.6.3, 5.7.3]",NaN,"tab-wing","not designed here: pile cap of the wing by others",true);
+      else [["Toe",F.toe],["Heel",F.heel]].forEach(([nm,q])=>{ if(!q) return; const c=q.c, id="wFt"+nm;
+        if(!c){ addD(id,"REVIEW — Wing footing "+nm.toLowerCase()+" bars [5.6.3, 5.7.3]",NaN,"tab-wing","bars not entered (panel I-13): M_u = "+fmt(q.Mu,2)+" kip-ft/ft, V_u = "+fmt(q.Vu,2)+" kip/ft",true); return; }
+        addD(id+"F","Wing footing "+nm.toLowerCase()+" flexure [5.6.3]",c.dcFlex,"tab-wing",q.ls);
+        addD(id+"V","Wing footing "+nm.toLowerCase()+" shear [5.7.3]",c.dcShear,"tab-wing",q.lsV);
+        addD(id+"Min","Wing footing "+nm.toLowerCase()+" — min. reinf. [5.6.3.3]",c.MuMin>0? c.MuMin/c.phiMn : 0,"tab-wing","φMn ≥ min(Mcr, 1.33Mu)");
+        addD(id+"Crack","Wing footing "+nm.toLowerCase()+" — crack control [5.6.7]",c.sMax>0? c.sp/c.sMax : (c.fss>0?99:0),"tab-wing","s ≤ s_max"); }); }
   }
   if(R.iab){ const Q=R.iab, sx=(id,nm,c,tab)=>{ addD(id+"F",nm+" flexure [5.6.3]",c.dcFlex,tab||"tab-iab",c.lbl); addD(id+"V",nm+" shear [5.7.3]",c.dcShear,tab||"tab-iab",c.lbl);
       addD(id+"Min",nm+" — min. reinf. [5.6.3.3]",c.MuMin>0? c.MuMin/c.phiMn : 0,tab||"tab-iab","φMn ≥ min(Mcr, 1.33Mu)");
@@ -5219,6 +5263,9 @@ function computeAll(){
       addD("apDD","Approach slab — bottom distribution reinforcement [9.7.3.2, 5.10.6]",D.dcD,tb,`${fmt(D.pct,1)} % of the main bottom steel, ≥ S&T`);
       addD("apDT","Approach slab — top S&T reinforcement [5.10.6]",D.dcT,tb,`A_s,ST = ${fmt(c.AsST,3)} in²/ft each way`);
       addD("apDV","Approach slab shear [5.7.3] — information (5.12.2.1)",c.dcShear,tb,`V_u/φV_n = ${fmt(c.dcShear,3)}: a slab designed for moment per 4.6.2.3 may be taken as satisfactory for shear`,true); } }
+  { const sR=String(fn.settleRef||"").trim(), gR=String(fn.globalRef||"").trim();   // ABM7: geotechnical checks by others
+    if(fn.branch==="spread"&&iabType()!=="integral") addD(sR?"settleRef":"settle",(sR?"":"REVIEW — ")+"Settlement / service bearing [10.6.2.4]",NaN,"tab-stab",sR? "by others: "+sR : "by the geotechnical engineer — enter the reference (panel I-4)",true);
+    addD(gR?"globalRef":"global",(gR?"":"REVIEW — ")+"Overall (global) stability [11.6.3.7]",NaN,"tab-stab",gR? "by others: "+gR : "by the geotechnical engineer — enter the reference (panel I-4)",true); }
   R.dash=dash;
   R.nFail=dash.filter(d=>d.pass===false).length;
   /* ===== C-22 Owner requirements (OWNA): checked after every result is final; they change no result ===== */
@@ -5447,6 +5494,14 @@ function renderTabWing(R){
         `\\varphi_b q_n = (${t(br.phiB,2)})(${t(St.qn,2)}) = ${t(br.phiB*St.qn,3)}\\ \\text{ksf}`])}
       ${checkLine("Wing bearing",`\\dfrac{q}{\\varphi_b q_n} = \\dfrac{${t(br.q,3)}}{${t(br.phiB*St.qn,3)}}`,br.dcB)}` : ""}
       <div class="eq-note">Combinations: Strength I with γ<sub>p</sub> max/min on DC, EV, EH and the vertical LS on/off (${St.combos.filter(c=>c.ls==="Strength I").length} cases)${W.eqOn?"; Extreme Event I at 1.00 with EQ":""}${W.CT?"; Extreme Event II with CT, DC and EV at 1.00"+(own==="MassDOT"?" and EH γ<sub>p</sub> = 0 (MassDOT 3.3.2.4)":" and EH at 1.00 [T.3.4.1-1]"):""}. Extreme events: φ<sub>τ</sub>, φ<sub>b</sub> of panel I-11, e ≤ B(1/3 + (0.4 − 1/3)γ<sub>EQ</sub>) [11.6.5.1] (γ<sub>EQ</sub> = 0 at Extreme Event II).</div>`);
+  }
+  if(W.ftg){ const F=W.ftg, t=fmtT;   // ABM3: wing footing toe and heel design (per ft)
+    if(F.pile) h+=panel("o-wing-ftg","9.6","Wing Footing — Toe and Heel",`<div class="checkline fail"><span class="flagchip warn">REVIEW</span> Pile-supported wing footing (panel I-13): the pile cap of the wing is not designed in this tool — design it with its pile reactions.</div>`);
+    else{ const St=W.stab, ftNote=(nm,q,x,bars)=>`<div class="note-box">Wing footing ${nm}, per ft at the design section (B = ${fmt(St.B,2)} ft, t<sub>f</sub> = ${fmt(St.tf,2)} ft): linear contact pressure of each stability combination (§9.5) [10.6.5, 11.6.3.2]; ${nm==="toe"?"upward pressure on the toe less the toe self-weight, moment at the stem front face (x = L<sub>toe</sub>), shear at d<sub>v</sub> from it":"footing weight, soil over the heel (with the slope wedge part), LS<sub>v</sub> and the EH vertical component at the heel end, less the upward pressure on the heel; moment and shear at the stem back face (x = "+fmt(x,2)+" ft)"}. Governing: M<sub>u</sub> = ${fmt(q.Mu,2)} kip-ft/ft (${esc(q.ls)}), V<sub>u</sub> = ${fmt(q.Vu,2)} kip/ft (${esc(q.lsV)}); Service I M<sub>s</sub> = ${fmt(q.Ms,2)} kip-ft/ft. Bars: ${bars}.</div>`;
+      [["toe",F.toe,"9.6a",Lt=>0],["heel",F.heel,"9.6b"]].forEach(([nm,q,no])=>{ if(!q) return;
+        const bars=nm==="toe"? "bottom, transverse (panel I-13)" : "top, transverse (panel I-13)";
+        if(q.c) h+=sectionHTML(q.c,ftNote(nm,q,F.xh,bars),no,"Wing Footing "+(nm==="toe"?"Toe":"Heel")+" — Flexure, Shear, Crack Control [5.6.3, 5.7.3, 5.6.7]");
+        else h+=panel("o-wing-ftg-"+nm,no,"Wing Footing "+(nm==="toe"?"Toe":"Heel"),ftNote(nm,q,F.xh,bars)+`<div class="checkline fail"><span class="flagchip warn">REVIEW</span> Wing footing ${nm} bars not entered (panel I-13).</div>`); }); }
   }
   el.innerHTML=h;
 }
@@ -5989,7 +6044,7 @@ function svgIabSection(R){
 }
 
 /* ---------------- Dashboard ---------------- */
-const DASH_ANCHOR={ts_stem:"o-ts",ts_bw:"o-ts",ts_ftg:"o-ts",   // ABM8
+const DASH_ANCHOR={pileGrp:"o-pgrp",pileGrpUp:"o-pgrp",ts_stem:"o-ts",ts_bw:"o-ts",ts_ftg:"o-ts",   // ABM8
   iabPile:"o-iab-pile",iabTip:"o-iab-pile",iabGeo:"o-iab-pile",iabUp:"o-iab-pile",iabGeoEE:"o-iab-pile",   // IAB; ABR2
   iabC1F:"o-str-Pile cap longitudinal (case 1)",iabC1V:"o-str-Pile cap longitudinal (case 1)",iabC1Min:"o-str-Pile cap longitudinal (case 1)",iabC1Crack:"o-str-Pile cap longitudinal (case 1)",
   iabC2F:"o-str-Integral wall horizontal (case 2)",iabC2V:"o-str-Integral wall horizontal (case 2)",iabC2Min:"o-str-Integral wall horizontal (case 2)",iabC2Crack:"o-str-Integral wall horizontal (case 2)",
@@ -6021,7 +6076,7 @@ function gotoPanel(tab,anchor){
    counted as passing. A required check that is n/a (an input not entered, a section outside the owner method) marks the design incomplete,
    as does a semi-integral abutment whose bearing shear from the superstructure movement is neither calculated (panel I-6b) nor entered (TU
    reactions, panel I-5). Display only: no result depends on it. */
-const DASH_INFO=new Set(["apDV","dowelLap"]);   // n/a rows that are information only (not a required check); ABT2 (engineer, 2026-10-21): the stem dowel lap with no lap entered is "lap not detailed", information only
+const DASH_INFO=new Set(["apDV","dowelLap","settleRef","globalRef"]);   // ABM7: geotechnical checks with a reference by others   // n/a rows that are information only (not a required check); ABT2 (engineer, 2026-10-21): the stem dowel lap with no lap entered is "lap not detailed", information only
 function dashStatus(R){
   const chk=R.dash.filter(d=>d.pass!==null), na=R.dash.filter(d=>d.pass===null), req=na.filter(d=>!DASH_INFO.has(d.id));
   const why=req.map(d=>({name:d.name.replace(/\s*\[.*?\]/g,""), txt:d.gov||"not checked", tab:d.tab, anchor:DASH_ANCHOR[d.id]||""}));
@@ -7021,6 +7076,13 @@ function renderTabFound(R){
       <div class="note-box">Demand is the governing factored pile reaction; the footing self-weight and soil within the critical perimeter are conservatively neglected. Where perimeters overlap, group punching and one-way (beam) shear must be checked by hand (flagged above the dashboard when triggered).</div>
     `);
   }
+  { const G=R.checks.pileGroup, U=R.checks.pileUplift;   // ABM7: pile group checks
+    if(G) h+=panel("o-pgrp","4.7","Pile Group in Compression and Group Uplift [10.7.3.9, 10.7.3.11]",
+      (G.eta>0? eqB("Group resistance in compression","AASHTO 10.7.3.9",["\\Sigma V_f \\le \\varphi_c\\,\\eta\\,n\\,R_n",
+        `\\Sigma V_f = ${fmtT(G.V)}\\ \\text{kip (${esc(G.ls)})}\\,, \\quad \\varphi_c\\eta nR_n = (${fmtT(G.phiC)})(${fmtT(G.eta)})(${G.n})(${fmtT(G.Rn,1)}) = ${fmtT(G.RR)}\\ \\text{kip}`],
+        "η entered in panel I-7. In clay the nominal group resistance is also limited by the equivalent pier (piles and the soil block), which is by the geotechnical engineer.")+checkLine("Pile group",`\\dfrac{\\Sigma V_f}{\\varphi_c\\eta nR_n} = \\dfrac{${fmtT(G.V)}}{${fmtT(G.RR)}}`,G.dc)
+      : `<div class="checkline fail"><span class="flagchip warn">REVIEW</span> Group efficiency η not entered (panel I-7): the group resistance in compression [10.7.3.9] is not checked (largest ΣV<sub>f</sub> = ${fmt(G.V,1)} kip, ${esc(G.ls)}). η = 1.0 in cohesionless soil or with the cap in firm contact; in clay with soft surface soil and the cap not in contact, 0.65 at 2.5D to 1.0 at 6D; the equivalent-pier check in clay is by the geotechnical engineer.</div>`)
+      +(U&&U.uplift? `<div class="checkline fail"><span class="flagchip warn">REVIEW</span> Piles in tension (minimum ${fmt(U.P,1)} kip, ${esc(U.ls||"")}): the group uplift resistance φ<sub>ug</sub>R<sub>ug</sub> [10.7.3.11, Eq. 10.7.3.11-1] — the lesser of the sum of the individual uplift resistances and the block — is by the geotechnical engineer (the individual check is §4.3).</div>` : `<div class="note-box">No pile in tension in any combination: group uplift [10.7.3.11] does not apply.</div>`)); }
   document.getElementById("tab-found").innerHTML=h;
 }
 
@@ -10136,7 +10198,7 @@ document.addEventListener("change",ev=>{
   const ownPre=(p==="own.owner"||p==="longit.material"||p==="iab.type"||p==="fnd.branch")?ownDefMap():null;   // OWNB: owner defaults before the change (ABR1: some depend on the abutment type and foundation)
   const raw=el.value;
   const num=Number(raw);
-  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.stemH.size","reinf.bwH.size","reinf.ftgL.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate","wing.hSize","wing.vSize","iab.capBar","iab.hBar","iab.vBar","iab.stBar","apSlab.sBar","apSlab.hBar","apSlab.aBar","apSlab.dBar","apSlab.tBar"].includes(p))?num:raw;   // APS: bar sizes stay strings
+  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.stemH.size","reinf.bwH.size","reinf.ftgL.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate","wing.hSize","wing.vSize","wing.ftBBar","wing.ftTBar","iab.capBar","iab.hBar","iab.vBar","iab.stBar","apSlab.sBar","apSlab.hBar","apSlab.aBar","apSlab.dBar","apSlab.tBar"].includes(p))?num:raw;   // APS: bar sizes stay strings
   setPath(S,p,p==="reinf.gammaE"?Number(raw):v);
   if(p==="beams.N"){ S.beams.N=+raw; }
   if(p==="piles.nRows") S.piles.nRows=+raw;
