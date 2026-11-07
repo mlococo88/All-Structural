@@ -5353,7 +5353,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Other copies:** none.
 - **Open items:** none new.
 
-## 2026-11-07 — BPM4: tension-side plate bending uses the anchor forces of the anchor checks (PR: claude/bp-m4-tension-plate)
+## 2026-11-07 — BPM4: tension-side plate bending uses the anchor forces of the anchor checks (PR: claude/bp-m4-tension-plate, PR #970: https://github.com/mlococo88/All-Structural/pull/970)
 
 ### BPM4. Tension side: largest T_i·x_i from the anchor force model   [calculation change, generally more conservative; saved data: none]
 - **Problem (review M4):** `plateBending()` took the tension-side anchor force from `combo.Tu_per`: the DG1 per-axis tensions combined by SRSS. The anchors are designed with the neutral-axis (or elastic bolt-group) model in `combo.perAnchor`. In the biaxial review case that was 17.68 kip against 22.44 kip. In a DG1 "small e" case it was 0, so the tension side was skipped although an anchor carries 1.56 kip.
