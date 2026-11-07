@@ -10,6 +10,7 @@
 // RWSC (2026-11-07): the self-consistency panel passes on representative walls, reports MISMATCH on a tampered result, hides on error.
 // RWPR (2026-11-07): the Report prints alone, with every section, the overview figures and the input echo; 0 KaTeX errors.
 // RWKX (2026-11-07): the tabs' equations are all set by KaTeX, none in error; MathJax is not loaded.
+// Audit items (2026-11-07, table AUD): the new checks of the calculation audit on their check cases (RWS13 stem S1/S3 layout, ...).
 //   node tests/smoke/retaining-wall-checks.mjs [--file <file or git ref>]
 import path from 'path';
 import { openPage, resolveFile } from '../lib.mjs';
@@ -170,6 +171,33 @@ for (const [name, set] of [['ACI water + seismic + key + passive', { Hs: 14, wt_
   console.log('KaTeX: ' + name);
   check(!o.mj, 'MathJax not loaded');
   for (const [t, x] of Object.entries(o.tabs)) check(x.eq > 10 && x.kx === x.eq && !x.err && !x.red && !x.left, `${t}: ${x.kx} of ${x.eq} equations by KaTeX, ${x.err} errors, ${x.red} red, ${x.left} $$ left`);
+  check(!errs.length, 'no console errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
+}
+// Audit items (2026-11-07): the new checks, their values on the decisions' check cases, their rows on the dashboard, tab and Report.
+// [name, inputs, [[JS expression on R (window._R) / T (tab texts) / P (Report text), label]]]
+const AUD = [
+  ['RWS13 ACI default: S3–S1 lap 14.8 in, S1 ends 7.23 ft above the joint', {}, [
+    ['R.checks.stemS3Lap.ok && R.checks.stemMAlong.ok', 'both new checks pass'], ['Math.abs(R.s13_lst - 14.80) < 0.01', 'ℓst = 14.8 in'],
+    ['Math.abs(R.z_s1_end - 7.233) < 0.01 && !R.s1_full', 'S1 ends 7.23 ft'], ['R.z_cutoff === undefined', 'no alternate-bar cut-off'],
+    ['/Mid Step 3 — S3–S1 Lap/i.test(T.stem) && !/Alternate-bar cutoff/i.test(T.stem)', 'Stem tab: Mid Step 3, no cut-off step'],
+    ['/Stem S3–S1 Lap/.test(T.overview) && /Stem M along height/.test(T.overview)', 'dashboard rows'], ['/Mid Step 3 — S3–S1 lap/.test(P)', 'Report: Mid Step 3']]],
+  ['RWS13 AASHTO default: S3 #3 / S1 #5, ℓst = max(14.78, 12.0)', { design_basis: 'AASHTO' }, [
+    ['R.s13_diff && R.s13_big === "S1" && Math.abs(R.s13_lst - 14.78) < 0.01', 'ℓst = ℓd(#5) = 14.78 in'], ['Math.abs(R.s1_ext - 13.22) < 0.01', 'extension max(d, 15d_b, L/20) = 13.22 in'],
+    ['R.checks.stemS3Lap.ok && R.checks.stemMAlong.ok', 'both new checks pass']]],
+];
+for (const [name, set, tests] of AUD.filter(x => !process.env.RW_AUD || x[0].startsWith(process.env.RW_AUD))) {
+  const { b, p, errs } = await openPage(SRC.file); await p.waitForTimeout(2500);
+  const o = await p.evaluate(async ({ set, tests }) => {
+    for (const [k, v] of Object.entries(set)) { const e = document.getElementById(k); if (e.type === 'checkbox') e.checked = !!v; else e.value = v; e.dispatchEvent(new Event('change', { bubbles: true })); }
+    if (typeof syncConditionalUI === 'function') syncConditionalUI(); if (set.design_basis) onBasisChange(); onInputChange(); await new Promise(r => setTimeout(r, 600));
+    const T = {}; for (const t of ['overview', 'stability', 'stem', 'footing', 'rebar']) { document.querySelector(`.tab-btn[data-tab="${t}"]`).click(); await new Promise(r => setTimeout(r, 300)); T[t] = document.getElementById('tab-' + t).innerText; }
+    document.querySelector('.tab-btn[data-tab="report"]').click(); await new Promise(r => setTimeout(r, 3000));
+    const P = document.getElementById('tab-report').innerText, R = window._R;
+    return tests.map(([x, l]) => { let v; try { v = !!(new Function('R', 'T', 'P', 'return (' + x + ');'))(R, T, P); } catch (e) { v = false; l += ' (' + e.message + ')'; } return [v, l]; });
+  }, { set, tests });
+  await b.close();
+  console.log('audit: ' + name);
+  for (const [v, l] of o) check(v, l);
   check(!errs.length, 'no console errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
 }
 console.log(failures ? `${failures} FAILED` : 'all ok');
