@@ -6490,7 +6490,7 @@ Every statement was checked against this file's code (anchors: `calcAll`, `rwInp
   - On a phone the Overview drawing keeps a 740 px width and scrolls inside its card. Fitting it to 364 px would put its text at about 4 px.
   - Between 700 and 1100 px of tab width the properties go under the drawing.
 
-## 2026-11-07 — PR: claude/rw-user-manual-2 — User Manual, part 2: loads, stability, seismic, collision, stem, footing, shear key, bar layout, piles and the Pile Designer hand-off, limits, and the appendix of decisions pending engineer review (RWMAN-2; display only, no result change)
+## 2026-11-07 — PR: claude/rw-user-manual-2 (PR #1157: https://github.com/mlococo88/All-Structural/pull/1157) — User Manual, part 2: loads, stability, seismic, collision, stem, footing, shear key, bar layout, piles and the Pile Designer hand-off, limits, and the appendix of decisions pending engineer review (RWMAN-2; display only, no result change)
 
 Review Phase 6a, part 2 of the User Manual (part 1: #1154). Code sites are tagged `RWMAN` (the `RWMAN_PARTS` block only).
 
