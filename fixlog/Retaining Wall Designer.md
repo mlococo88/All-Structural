@@ -2691,7 +2691,7 @@ Calculation audit, item 3. Engineer decision (2026-11-07). Code sites are tagged
 - No field or key change.
 - AASHTO projects with collision on give the new Extreme Event II results. This is the fix, by the engineer's decision.
 
-## 2026-11-07 — PR: claude/rw-aashto-ls-distance — AASHTO live-load surcharge: numeric distance to traffic, the H/2 applicability rule, traffic direction (walls / abutments table) (RWLS; calculation change)
+## 2026-11-07 — PR: claude/rw-aashto-ls-distance — AASHTO live-load surcharge: numeric distance to traffic, the H/2 applicability rule, traffic direction (walls / abutments table) (RWLS; calculation change) (PR #945: https://github.com/mlococo88/All-Structural/pull/945)
 
 Calculation audit, item 3b. Engineer decision (2026-11-07). The approach-slab option was declined. Code sites are tagged `RWLS`.
 
