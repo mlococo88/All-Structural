@@ -1870,6 +1870,9 @@ function rwHpEq(r, stem) {   // '' at h_p = 0
          {sym:'h_p', desc:'stem projection above the retained grade (input)', val:N(r.h_p,2), unit:'ft'},
          {sym:'H_{ret}', desc:'retained height, backfill surface at the stem to footing bottom: earth, water and surcharge act on it; the stem self weight is on the full H_s', val:N(r.H_ret,3), unit:'ft'}]);
 }
+// RWHP: the results seen from the retained grade, for drawing the retained side: H → H_ret, wt_d → wt_r (wt_d_top keeps the depth from the
+// top of the wall, for labels). The results object itself at h_p = 0 (drawings unchanged).
+function rwHpView(r) { return r && r.h_p > 0 ? Object.assign(Object.create(r), { H: r.H_ret, wt_d: r.wt_r, wt_d_top: r.wt_d }) : r; }
 // If a title starts with "N.N " or "Step N —", render the leading number in accent color
 function fmtEqTitle(title) {
   const m = title.match(/^(\d+(?:\.\d+)?\s+|Step\s+\d+\s*[—-]\s*|[A-Za-z]+\s+Step\s+\d+\s*[—-]\s*)(.*)$/);
@@ -8010,6 +8013,12 @@ function buildElevationSVG(r) {
   for (let xx = x0; xx < x1; xx += 26)
     s += `<line x1="${xx}" y1="${y_roadway}" x2="${xx-5}" y2="${y_roadway+5}" stroke="#2a7a2a" stroke-width="0.7" opacity="0.6"/>`;
 
+  // RWHP (2026-11-07): the retained grade behind the wall, h_p below the stem top (the collision stays at the stem top)
+  if (r.h_p > 0) {
+    const y_gr = y_roadway + r.h_p * SCy;
+    s += `<line x1="${x0-20}" y1="${y_gr}" x2="${x1+8}" y2="${y_gr}" stroke="#7a6030" stroke-width="1.2" stroke-dasharray="6,4"/>`;
+    s += `<text x="${x1-4}" y="${y_gr-4}" font-size="8" fill="#7a6030" font-weight="700" text-anchor="end">RETAINED GRADE (BEHIND)</text>`;
+  }
   // ── Impact patch ──
   const nA = Math.max(3, Math.floor(Lt_px/16));
   for (let i=0;i<nA;i++) {
@@ -8057,6 +8066,7 @@ function buildElevationSVG(r) {
   }
   s += vdim(dx1, y_roadway, y_ftgTop, `H_s=${f(inp.Hs,2)}'`);
   s += vdim(dx1, y_ftgTop,  y_ftgBot, `t_f=${f(inp.tf,0)}"`);
+  if (r.h_p > 0) s += vdim(dx0, y_roadway, y_roadway + r.h_p * SCy, `h_p=${f(r.h_p,2)}'`, '#7a6030');   // RWHP
   // Outer chain (dx2): y_CT (the governing lever arm) and overall H
   s += vdim(dx2, y_impact, y_ftgBot, `y_CT=${f(c.y_CT,2)}' (lever arm)`, '#c42121', true);
 
@@ -8476,6 +8486,9 @@ function buildCrossSection(r) {
   const y_ftop     = OY;
   const y_fbot     = OY + tf_px;
   const y_grdetoe  = OY - Df_add_px;
+  // RWHP (2026-11-07): the retained grade h_p below the stem top; the retained side (soil, water, surcharge, active pressure) is drawn
+  // from it with rS (H → H_ret, wt_d → wt_r); r and y_top unchanged at h_p = 0
+  const rS = rwHpView(r), hp_px = (r.h_p || 0) * SCALE, y_gr = y_top + hp_px, Hsr_px = Hs_px - hp_px, Hr_px = H_px - hp_px;
 
 
   // Pressure scales — RWPS: the lateral and passive diagrams are drawn by rwpsLateral / rwpsPassive (off the structure)
@@ -8512,6 +8525,7 @@ function buildCrossSection(r) {
     </marker>
   </defs>`;
 
+  { const y_top = y_gr, r = rS, Hs_px = Hsr_px;   // RWHP: retained side from the grade
   // ── Ground lines ─────────────────────────────────────────────
   s += `<line x1="${x_bbot-4}" y1="${y_top}" x2="${x_heel+4}" y2="${y_top}"
     stroke="#7a6030" stroke-width="0.9" stroke-dasharray="5,4"/>`;
@@ -8523,7 +8537,7 @@ function buildCrossSection(r) {
   s += `<g data-layer="soil">`;
   s += `<rect x="${x_bbot}" y="${y_top}" width="${Lh_px}" height="${Hs_px+tf_px}"
     fill="url(#cs-h1)" stroke="${SC}" stroke-width="0.5" stroke-opacity="0.3"
-    data-tip="<b>Retained backfill</b><br>γ = ${f(inp.gamma_s,0)} pcf · φ = ${f(inp.phi,0)}°<br>Kₐ = ${f(r.Ka,4)} · β = ${f(inp.beta,0)}°<br>Height H = ${f(r.H,2)} ft"/>`;
+    data-tip="<b>Retained backfill</b><br>γ = ${f(inp.gamma_s,0)} pcf · φ = ${f(inp.phi,0)}°<br>Kₐ = ${f(r.Ka,4)} · β = ${f(inp.beta,0)}°<br>Height ${r.h_p > 0 ? 'H_ret' : 'H'} = ${f(r.H,2)} ft"/>`;
   if (inp.beta > 0) {
     const run = Lh_px*0.6, rise = run*Math.tan(toRad(inp.beta));
     s += `<line x1="${x_bbot}" y1="${y_top}" x2="${x_bbot+run}" y2="${y_top-rise}" stroke="${SC}" stroke-width="1.3"/>`;
@@ -8535,7 +8549,7 @@ function buildCrossSection(r) {
   if (r.hasWT) {
     const wt_px = r.wt_d * SCALE;                 // depth from top of wall
     const y_wt  = y_top + wt_px;                  // y of water surface
-    const wtip = `<b>Water table</b><br>Depth = ${f(r.wt_d,2)} ft below top${inp.wt_mode==='elev'?` (El ${f(inp.el_gw,1)})`:''}<br>Water head at base h_w = ${f(r.hw,2)} ft<br>γ_sat = ${f(r.gamma_sat,0)} pcf · γ′ = ${f(r.gamma_s_sub,1)} pcf<br>F_hyd = ${f(r.F_hyd,0)} lb/ft · Uplift = ${f(r.F_uplift,0)} lb/ft`;
+    const wtip = `<b>Water table</b><br>Depth = ${f(r.wt_d_top ?? r.wt_d,2)} ft below top${inp.wt_mode==='elev'?` (El ${f(inp.el_gw,1)})`:''}<br>Water head at base h_w = ${f(r.hw,2)} ft<br>γ_sat = ${f(r.gamma_sat,0)} pcf · γ′ = ${f(r.gamma_s_sub,1)} pcf<br>F_hyd = ${f(r.F_hyd,0)} lb/ft · Uplift = ${f(r.F_uplift,0)} lb/ft`;
     s += `<g data-layer="water">`;
     // Saturated zone: from WT down to base of footing, tinted blue over the soil
     s += `<rect x="${x_bbot}" y="${y_wt}" width="${Lh_px}" height="${(y_fbot - y_wt)}"
@@ -8548,7 +8562,7 @@ function buildCrossSection(r) {
     s += `<path d="M ${tx-5} ${ty-1} L ${tx+5} ${ty-1} L ${tx} ${ty+6} Z" fill="#1f7fd6"/>`;
     s += `<line x1="${tx-7} " y1="${ty+3}" x2="${tx+7}" y2="${ty+3}" stroke="#1f7fd6" stroke-width="0.9"/>`;
     s += `<line x1="${tx-4}" y1="${ty+5}" x2="${tx+4}" y2="${ty+5}" stroke="#1f7fd6" stroke-width="0.9"/>`;
-    s += `<text x="${x_heel-14}" y="${y_wt+FS.s+3}" font-size="8" fill="#1f7fd6" font-weight="600" text-anchor="end">W.T. (${inp.wt_mode==='elev'?'El '+f(inp.el_gw,1):'−'+f(r.wt_d,1)+' ft'})</text>`;
+    s += `<text x="${x_heel-14}" y="${y_wt+FS.s+3}" font-size="8" fill="#1f7fd6" font-weight="600" text-anchor="end">W.T. (${inp.wt_mode==='elev'?'El '+f(inp.el_gw,1):'−'+f(r.wt_d_top ?? r.wt_d,1)+' ft'})</text>`;
     s += `<text x="${x_heel-14}" y="${y_wt+2*FS.s+7}" font-size="7.5" fill="#1f7fd6" text-anchor="end" opacity="0.85">saturated γ'=${f(r.gamma_s_sub,0)} pcf</text>`;
     s += `</g>`;
   }
@@ -8586,6 +8600,8 @@ function buildCrossSection(r) {
       text-anchor="middle" font-weight="700">${lbl}</text>`;
     s += `</g>`;
   }
+
+  }   // RWHP
 
   // ── Concrete footing + stem ───────────────────────────────────
   s += `<g data-layer="concrete">`;
@@ -8686,7 +8702,8 @@ function buildCrossSection(r) {
   // RWPS: lateral diagrams beyond the heel dimensions, passive in front of the toe (text at the drawing's sizes)
   const vx1 = x_heel+6+FS.d, vx2 = vx1+FS.b+10;   // RWTS-2: room for the text along each line (was x_heel+14, +30)
   const x_a0 = vx2 + 16;
-  s += rwpsLateral(r, { x0: x_a0, yTop: y_top, yBot: y_fbot, sc: SCALE, W: ACT_W, xLab: x_a0 + ACT_W + 8, fs: FS.s, mk: 'cs-ar',
+  s += rwpsLateral(rS, { x0: x_a0, yTop: y_gr, yBot: y_fbot,   // RWHP: from the retained grade (rS: H_ret, wt_r)
+    sc: SCALE, W: ACT_W, xLab: x_a0 + ACT_W + 8, fs: FS.s, mk: 'cs-ar',
     tipSoil: acttip, tipSur: striptip, tipWat: hytip });
   const PAS = r.Df > 0 ? rwpsPassive(r, { xToe: x_toe, yFbot: y_fbot, sc: SCALE, gap: PGAP, W: PP_W, fs: FS.s, mk: 'cs-ag', tip: ptip, tipKey: pktip }) : null;
   if (PAS) s += PAS.svg;
@@ -8710,6 +8727,7 @@ function buildCrossSection(r) {
   const xDf = PAS ? PAS.xMin - 14 : x_toe - 14;   // RWPS: left of the passive diagram (was through it); the key depth under D_f
   if (r.Df > 0.05) s += dV(xDf, y_grdetoe, y_fbot, `Df=${f(r.Df,2)}'`, false, FS.d);
   if (PAS && PAS.key) s += dV(xDf, y_fbot, PAS.yK, `dk=${f(inp.dk,0)}"`, false, FS.d);
+  if (hp_px > 0) s += dV(x_bbot + 6 + FS.d, y_top, y_gr, `hp=${f(r.h_p,2)}'`, false, FS.d);   // RWHP: the stem projection above the retained grade
 
   s += dL(x_ftoe, x_btop, y_top-off_d, `${f(inp.ts_top,0)}" top`, false, FS.d);
   s += `</g>`;
@@ -9249,6 +9267,7 @@ function renderOverview(r) {
                 <tr><td class="lbl">Total footing width B</td><td class="val n-blue">${f(r.B,2)}</td><td class="unit">ft</td></tr>
                 <tr><td class="lbl">Total wall height H</td><td class="val n-blue">${f(r.H,2)}</td><td class="unit">ft</td></tr>
                 <tr><td class="lbl">Stem height H<sub>s</sub></td><td class="val">${f(inp.Hs,2)}</td><td class="unit">ft</td></tr>
+                ${r.h_p > 0 ? `<tr><td class="lbl">Stem projection above retained grade h<sub>p</sub></td><td class="val">${f(r.h_p,2)}</td><td class="unit">ft</td></tr><tr><td class="lbl">Retained height H<sub>ret</sub> = H − h<sub>p</sub></td><td class="val n-blue">${f(r.H_ret,2)}</td><td class="unit">ft</td></tr>` : ''}
                 <tr><td class="lbl">Footing thickness t<sub>f</sub></td><td class="val">${f(inp.tf,0)}</td><td class="unit">in</td></tr>
                 <tr><td class="lbl">Stem width — base</td><td class="val">${f(inp.ts_bot,0)}</td><td class="unit">in</td></tr>
                 <tr><td class="lbl">Stem width — top</td><td class="val">${f(inp.ts_top,0)}</td><td class="unit">in</td></tr>
@@ -9388,6 +9407,8 @@ function buildOverviewSVG(r) {
   const y_ftop       = OY;
   const y_fbot       = OY + tf_px;
   const y_grade_toe  = OY - Df_add_px;
+  // RWHP (2026-11-07): the retained side drawn from the grade h_p below the stem top (rS: H → H_ret, wt_d → wt_r); unchanged at h_p = 0
+  const rS = rwHpView(r), hp_px = (r.h_p || 0) * SCALE, y_gr = y_top + hp_px, Hsr_px = Hs_px - hp_px, Hr_px = H_px - hp_px;
 
   // ── Vertical dim line positions (right of heel) ───────────────
   const vdim_x1 = x_heel + 14;
@@ -9464,6 +9485,7 @@ function buildOverviewSVG(r) {
   s += `<text x="${SVG_W/2}" y="48" font-size="${FS.s}" fill="#7a5a20" text-anchor="middle">
     Soil: γs=${inp.gamma_s} pcf · φ=${inp.phi}° · qa=${inp.qa} psf</text>`;
 
+  { const y_top = y_gr, r = rS, Hs_px = Hsr_px;   // RWHP
   // ── Ground lines ──────────────────────────────────────────────
   s += `<line x1="${x_bbot-4}" y1="${y_top}" x2="${x_heel+4}" y2="${y_top}"
     stroke="#7a6030" stroke-width="0.8" stroke-dasharray="5,4"/>`;
@@ -9509,6 +9531,8 @@ function buildOverviewSVG(r) {
       text-anchor="middle" font-weight="700" ${HALO}>${lbl}</text>`;
   }
 
+  }   // RWHP
+
   // ── Concrete footing ──────────────────────────────────────────
   s += `<rect data-geo="footing" x="${x_toe}" y="${y_ftop}" width="${B_px}" height="${tf_px}"
     fill="${C_CONC.fill}" stroke="${C_CONC.stroke}" stroke-width="1.5"/>`;
@@ -9520,7 +9544,7 @@ function buildOverviewSVG(r) {
   s += `<polygon points="${x_ftoe},${y_top} ${x_btop},${y_top} ${x_bbot},${y_ftop} ${x_ftoe},${y_ftop}"
     fill="url(#oc)"/>`;
   // RWTS: ground-line label inside the backfill, under the line at the heel end (was beside the heel, over the dimension lines)
-  s += `<text x="${x_heel-4}" y="${y_top+13}" font-size="${FS.s}" fill="#7a6030" text-anchor="end" ${HALO}>GL(back)</text>`;
+  s += `<text x="${x_heel-4}" y="${y_gr+13}" font-size="${FS.s}" fill="#7a6030" text-anchor="end" ${HALO}>GL(back)</text>`;
 
   // ── Barrier on top of stem (retains no soil) ──
   if (r.hasBarrier) {
@@ -9543,12 +9567,13 @@ function buildOverviewSVG(r) {
 
   // ── Water table ───────────────────────────────────────────────
   if (r.hasWT) {
-    const y_wt = y_top + r.wt_d * SCALE;
+    const y_wt = y_gr + rS.wt_d * SCALE;   // RWHP: = y_top + d_WT at h_p = 0
     s += `<line x1="${x_bbot-6}" y1="${y_wt}" x2="${x_heel+4}" y2="${y_wt}"
       stroke="#0055c4" stroke-width="1.0" stroke-dasharray="7,4"/>`;
-    s += `<text x="${x_heel-4}" y="${Math.max(y_wt+13, y_top+28)}" font-size="${FS.s}" fill="#0055c4" text-anchor="end" ${HALO}>▼ WT (${f(r.wt_d,1)} ft)</text>`;
+    s += `<text x="${x_heel-4}" y="${Math.max(y_wt+13, y_gr+28)}" font-size="${FS.s}" fill="#0055c4" text-anchor="end" ${HALO}>▼ WT (${f(r.wt_d,1)} ft)</text>`;
   }
 
+  { const y_top = y_gr, r = rS, H_px = Hr_px;   // RWHP: the pressure diagrams from the grade
   // ════════════════════════════════════════════════════════════
   //  PRESSURE DIAGRAMS
   // ════════════════════════════════════════════════════════════
@@ -9557,6 +9582,7 @@ function buildOverviewSVG(r) {
   //    on one zero line with the surcharge strip over the earth triangle and the water triangle on its base)
   s += rwpsLateral(r, { x0: act_left, yTop: y_top, yBot: y_fbot, sc: SCALE, W: ACT_W, xLab: lab_x, fs: FS.s, halo: HALO, mk: 'm-lft',
     show: { soil: !!tog.active, sur: !!tog.surcharge, wat: !!tog.hydro } });
+  }   // RWHP
 
   // ── PASSIVE — in front of the toe face (RWPS; was from the stem front face, over the toe soil and the footing) ──
   //    Grows LEFT from its zero line; arrows point RIGHT → toward the wall
@@ -9595,6 +9621,7 @@ function buildOverviewSVG(r) {
   s += ovDimV(vdim_x1, y_top,  y_ftop,  `Hs=${f(inp.Hs,1)}'`,   'rot', '#5a6a80', false, FS.d);
   s += ovDimV(vdim_x2, y_top,  y_fbot,  `H=${f(r.H,2)}'`,        'rot', '#2155c4', true, FS.b);
 
+  if (hp_px > 0) s += ovDimV(x_bbot + 8 + FS.d, y_top, y_gr, `hp=${f(r.h_p,2)}'`, 'rot', '#7a6030', false, FS.d);   // RWHP: projection above the retained grade
   // Toe embedment dim
   // RWPS: left of the passive diagram when it is drawn (was 14 in front of the toe, through the diagram); the key depth under it
   const xDf = PAS ? PAS.xMin - 14 : x_toe - 14;
@@ -9699,7 +9726,9 @@ function rwdwGeo(r) {
   G.gradeB = y0 => y0;   // placeholder
   G.bar = r.hasBarrier ? { h: r.bar_h_ft * k12, w: inp.bar_mode === 'geom' ? inp.bar_t : 0.85 * G.tst, nominalW: inp.bar_mode !== 'geom' } : null;
   if (G.bar) G.bar.xc = G.Lt + G.tst / 2 + (inp.bar_ecc || 0);
-  G.wt = r.hasWT ? G.H - r.wt_d * k12 : null;   // water level above the base
+  // RWHP (2026-11-07): the retained grade h_p below the stem top, at the back face x = G.xg (= the stem-top back edge at h_p = 0)
+  G.hp = (r.h_p || 0) * k12; G.Hg = G.H - G.hp; G.xg = G.hp > 0 ? G.xb(G.Hg) : G.xbt;
+  G.wt = r.hasWT ? G.Hg - (r.wt_r != null ? r.wt_r : r.wt_d) * k12 : null;   // water level above the base (RWHP: from the grade)
   G.Hp = (r.Hp || r.H) * k12;
   return G;
 }
@@ -10211,16 +10240,16 @@ const RW3 = { sel: 'GOV', labels: [], fac: false };   // fac: load arrows factor
 const rw3K = v => f(v / 1000, 2) + ' k/ft';
 // unfactored load cases, per ft of wall: [{ key, name, items: [{ kind:'h'|'v'|'up', P, x, y, dir, txt, col }] }]
 function rw3Cases(r) {
-  const inp = r.inp, a = r.aashtoR, A = r.isAASHTO && a, B = r.B, H = r.H, L = [];
+  const inp = r.inp, a = r.aashtoR, A = r.isAASHTO && a, B = r.B, H = r.H, Hg = r.H_ret != null ? r.H_ret : r.H, L = [];   // RWHP: Hg = the retained grade (heel loads land on it)
   const add = (key, name, items) => { const it = items.filter(o => o && o.P > 0.5); if (it.length) L.push({ key, name, items: it }); };
   const hz = (P, y, txt, col, x0, dir, tag) => ({ kind: 'h', P, x: x0 == null ? B : x0, y, dir: dir || -1, txt, col, tag });
   const vt = (P, x, yTop, txt, col, tag) => ({ kind: 'v', P, x, y: yTop, txt, col, tag });
   const yArm = (M, P) => P > 0 ? M / P : 0;
   if (A) {
     add('EH', 'EH — horizontal earth pressure', [hz(a.P_EH, a.y_EH, `EH = ${rw3K(a.P_EH)} @ y = ${f(a.y_EH, 2)} ft`, '#e05050', null, null, 'EH'),
-      r.Pa_tri_v > 0.5 ? vt(r.Pa_tri_v, B, H, `EH,v = ${rw3K(r.Pa_tri_v)} @ x = B`, '#e05050', 'EHv') : null]);
+      r.Pa_tri_v > 0.5 ? vt(r.Pa_tri_v, B, Hg, `EH,v = ${rw3K(r.Pa_tri_v)} @ x = B`, '#e05050', 'EHv') : null]);
     add('LS', 'LS — live-load surcharge (lateral' + (a.V_LS_v > 0.5 ? ', and vertical on the heel' : '') + ')', [hz(a.P_LS, a.y_LS, `LS = ${rw3K(a.P_LS)} @ y = ${f(a.y_LS, 2)} ft`, '#e0a030', null, null, 'LS'),
-      a.V_LS_v > 0.5 ? vt(a.V_LS_v, a.x_LSv, H, `LS,v = ${rw3K(a.V_LS_v)} @ x = ${f(a.x_LSv, 2)} ft`, '#e0a030', 'LSv') : null]);
+      a.V_LS_v > 0.5 ? vt(a.V_LS_v, a.x_LSv, Hg, `LS,v = ${rw3K(a.V_LS_v)} @ x = ${f(a.x_LSv, 2)} ft`, '#e0a030', 'LSv') : null]);
     add('ES', 'ES — dead-load surcharge (lateral)', [hz(a.P_ES, r.Hp / 2, `ES = ${rw3K(a.P_ES)} @ y = ${f(r.Hp / 2, 2)} ft`, '#d08a20', null, null, 'ES')]);
     add('WA', 'WA — water (hydrostatic, uplift)', [hz(a.P_hyd, r.hw / 3, `WA = ${rw3K(a.P_hyd)} @ y = ${f(r.hw / 3, 2)} ft`, '#3fa9f5', null, null, 'WA'),
       { kind: 'up', P: r.F_uplift, x: r.x_uplift, y: 0, txt: `U = ${rw3K(r.F_uplift)} (uplift) @ x = ${f(r.x_uplift, 2)} ft`, col: '#3fa9f5', tag: 'UP' }]);
@@ -10228,18 +10257,18 @@ function rw3Cases(r) {
     if (ct) add('CT', 'CT — vehicular collision (Extreme Event II)', [hz(ct.CT_h * 1000, ct.y_CT, `CT = ${f(ct.CT_h, 3)} k/ft @ y = ${f(ct.y_CT, 2)} ft`, '#ff6060', inp.Lt + r.ts_bot_ft, null, 'CT')]);
   } else {
     add('EH', 'H — earth pressure (lateral)', [hz(r.Pa_tri_h, r.y_Pa, `H (earth) = ${rw3K(r.Pa_tri_h)} @ y = ${f(r.y_Pa, 2)} ft`, '#e05050', null, null, 'EH'),
-      r.Pa_tri_v > 0.5 ? vt(r.Pa_tri_v, B, H, `P_a,v = ${rw3K(r.Pa_tri_v)} @ x = B`, '#e05050', 'EHv') : null]);
+      r.Pa_tri_v > 0.5 ? vt(r.Pa_tri_v, B, Hg, `P_a,v = ${rw3K(r.Pa_tri_v)} @ x = B`, '#e05050', 'EHv') : null]);
     add('LS', 'Surcharge (lateral)', [hz(r.Pa_sur_h, yArm(r.Mo_sur, r.Pa_sur_h), `Surcharge = ${rw3K(r.Pa_sur_h)} @ y = ${f(yArm(r.Mo_sur, r.Pa_sur_h), 2)} ft`, '#e0a030', null, null, 'ES')]);
     add('WA', 'Water (hydrostatic, uplift)', [hz(r.F_hyd, yArm(r.Mo_hyd, r.F_hyd), `Water = ${rw3K(r.F_hyd)} @ y = ${f(yArm(r.Mo_hyd, r.F_hyd), 2)} ft`, '#3fa9f5', null, null, 'WA'),
       { kind: 'up', P: r.F_uplift, x: r.x_uplift, y: 0, txt: `U = ${rw3K(r.F_uplift)} (uplift) @ x = ${f(r.x_uplift, 2)} ft`, col: '#3fa9f5', tag: 'UP' }]);
     if (r.Pe_inc > 0) add('EQ', 'E — seismic increment (Mononobe-Okabe)', [hz(r.Pe_inc, yArm(r.Mo_seis, r.Pe_inc), `ΔP_AE = ${rw3K(r.Pe_inc)} @ y = ${f(yArm(r.Mo_seis, r.Pe_inc), 2)} ft`, '#c070ff', null, null, 'EQ')]);
   }
-  add('SV', A ? 'Surcharge (vertical, on the heel)' : 'Surcharge (vertical, on the heel)', [vt(r.Wsur, yArm(r.Ms_sur, r.Wsur), H, `q·L_h = ${rw3K(r.Wsur)} @ x = ${f(yArm(r.Ms_sur, r.Wsur), 2)} ft`, '#e0a030', 'SV')]);
+  add('SV', A ? 'Surcharge (vertical, on the heel)' : 'Surcharge (vertical, on the heel)', [vt(r.Wsur, yArm(r.Ms_sur, r.Wsur), Hg, `q·L_h = ${rw3K(r.Wsur)} @ x = ${f(yArm(r.Ms_sur, r.Wsur), 2)} ft`, '#e0a030', 'SV')]);
   add('DC', A ? 'DC — concrete self-weight' : 'D — concrete self-weight', [
     vt(r.Wstem, r.x_stem, H, `Stem = ${rw3K(r.Wstem)} @ x = ${f(r.x_stem, 2)} ft`, '#aab8d8', 'DC'),
     vt(r.Wftg, r.x_ftg, r.tf_ft, `Footing = ${rw3K(r.Wftg)} @ x = ${f(r.x_ftg, 2)} ft`, '#aab8d8', 'DC'),
     r.W_bar > 0.5 ? vt(r.W_bar, r.x_bar, H + r.bar_h_ft, `Barrier = ${rw3K(r.W_bar)} @ x = ${f(r.x_bar, 2)} ft`, '#aab8d8', 'DC') : null]);
-  add('EV', A ? 'EV — soil weight on the heel' : 'D — soil weight on the heel', [vt(r.Wsoil, r.x_soil, H, `Soil = ${rw3K(r.Wsoil)} @ x = ${f(r.x_soil, 2)} ft`, '#c9a96e', 'EV')]);
+  add('EV', A ? 'EV — soil weight on the heel' : 'D — soil weight on the heel', [vt(r.Wsoil, r.x_soil, Hg, `Soil = ${rw3K(r.Wsoil)} @ x = ${f(r.x_soil, 2)} ft`, '#c9a96e', 'EV')]);
   if (r.hasCol) add('COL', 'Column / beam load (service)', [vt(r.W_col, r.x_col, H, `Column = ${rw3K(r.W_col)} @ x = ${f(r.x_col, 2)} ft`, '#ff8080', 'COL')]);
   if (r.Pp > 0.5) add('PP', 'Passive resistance (toe' + (r.Pp_key > 0.5 ? ' + key' : '') + ')', [
     hz(r.Pp_toe, r.Df / 3, `P_p,toe = ${rw3K(r.Pp_toe)} @ y = ${f(r.Df / 3, 2)} ft`, '#30c880', 0, 1, 'PP'),
@@ -10475,6 +10504,7 @@ function rw3Fac(on) { RW3.fac = !!on; if (_3d && window._R) rw3Build(window._R);
 window.rwbpOnPick = sel => { RW3.sel = sel === 'GOV' ? 'GOV' : 'C:' + sel; if (_3d && window._R && document.getElementById('c3d')) rw3Build(window._R); };   // one-way: the bearing selector sets the 3D view
 
 function buildGeometry3D(r) {
+  const r0 = r;   // RWHP
   if (!_3d) return;
   const { inp } = r;
   const G = _3d.groups;
@@ -10540,6 +10570,7 @@ function buildGeometry3D(r) {
       for (let z = rw.s / 2; z < WL - 1e-6; z += rw.s) { const m = new THREE.Mesh(geo, pm); m.position.set(rw.x, (top - Lp) / 2, z); m.castShadow = true; G.concrete.add(m); } });
   }
 
+  { const r = rwHpView(r0), H = r.H;   // RWHP (2026-11-07): the retained side to the grade (H_ret, wt_r); unchanged at h_p = 0
   // Retained soil (heel side)
   const soilH = new THREE.Mesh(new THREE.BoxGeometry(Lh, H, WL), mat(0xc9a96e, 0.40));
   soilH.position.set(Lt + ts_bot + Lh/2, H/2, WL/2);
@@ -10580,6 +10611,8 @@ function buildGeometry3D(r) {
     ]);
     G.water.add(new THREE.Line(wtLineGeo, new THREE.LineBasicMaterial({ color: 0x0a5fa8 })));
   }
+
+  }   // RWHP
 
   // ── REBAR ──
   const cyl = (rad,len,c) => new THREE.Mesh(new THREE.CylinderGeometry(rad,rad,len,8), mat(c));
@@ -10635,6 +10668,8 @@ function buildGeometry3D(r) {
     });
   }
 
+  const gap3 = Math.max(B, H) * 0.02;   // RWPS (2026-11-07): diagrams on the planes through the heel and the toe face, a gap off the concrete (RWHP: declared outside the block below, on the full H)
+  { const r = rwHpView(r0), H = r.H;   // RWHP: the pressure prisms from the grade
   // ── ACTIVE PRESSURE (triangular prism behind back face) ──
   // Y is up: max pressure at base (y=0), min/zero at top (y=H)
   // Profile breaks at the water table (slope Ka·γ above → Ka·γ' below)
@@ -10652,7 +10687,6 @@ function buildGeometry3D(r) {
   pShape.closePath();
   const pGeo = new THREE.ExtrudeGeometry(pShape, { depth: WL, bevelEnabled:false });
   const pMesh = new THREE.Mesh(pGeo, mat(0x3399ff, 0.32));
-  const gap3 = Math.max(B, H) * 0.02;   // RWPS (2026-11-07): diagrams on the planes through the heel and the toe face, a gap off the concrete
   pMesh.position.set(B + gap3, 0, 0);   // RWPS: was Lt + ts_bot (the stem back face: inside the backfill and the heel)
   G.pressure.add(pMesh);
 
@@ -10669,6 +10703,8 @@ function buildGeometry3D(r) {
     hMesh.position.set(B + gap3, 0, 0);   // RWPS: as the earth prism
     G.pressure.add(hMesh);
   }
+
+  }   // RWHP
 
   // ── PASSIVE PRESSURE (toe side) ──
   // Y is up: max pressure at base (y=0), zero at grade (y=Df)
@@ -12443,13 +12479,13 @@ function rwdwBuild(r) {
     if (G.bar) D.rect(L.conc, G.bar.xc - G.bar.w / 2, G.H, G.bar.xc + G.bar.w / 2, G.H + G.bar.h);
   }
   const gradeX1 = () => G.B + Math.max(24, 0.2 * G.Lh);
-  const gradeY = x => G.H + Math.max(0, x - G.xbt) * G.tanb;
+  const gradeY = x => G.Hg + Math.max(0, x - G.xg) * G.tanb;   // RWHP: from the retained grade at the back face
   /* grades: backfill (level or sloped from the back edge of the stem top), toe grade at the soil cover above the footing */
   function grades(P, ticks) {
     const xe = gradeX1(), xs = -Math.max(24, 0.6 * P), yt = G.tf + G.Dfa;
-    D.line(L.grade, G.xbt, G.H, xe, gradeY(xe)); D.line(L.grade, xs, yt, G.xf, yt);
+    D.line(L.grade, G.xg, G.Hg, xe, gradeY(xe)); D.line(L.grade, xs, yt, G.xf, yt);   // RWHP
     if (ticks) { const tk = (x0, x1, f) => { for (let x = x0 + 0.1 * P; x < x1 - 0.05 * P; x += 0.2 * P) { const y = f(x); D.line(L.soil, x, y, x - 0.08 * P, y - 0.08 * P); } };
-      tk(G.xbt, xe, gradeY); tk(xs, G.xf, () => yt); }
+      tk(G.xg, xe, gradeY); tk(xs, G.xf, () => yt); }
     return { xe, xs, yt };
   }
   function water(P, xe, lab) {
@@ -12513,20 +12549,21 @@ function rwdwBuild(r) {
     // surcharge arrows over the backfill
     let yTopAnn = Math.max(G.H + (G.bar ? G.bar.h : 0), gradeY(gr.xe));
     if (r.q_sur_eff > 0) {
-      const n = Math.max(3, Math.min(8, Math.floor((gr.xe - G.xbt) / (0.45 * P))));
-      for (let i = 0; i < n; i++) { const x = G.xbt + (i + 0.5) * (gr.xe - G.xbt) / n, y = gradeY(x); arrowV(D, L.sup, x, y + 0.45 * P, y, P); }
-      const yl = gradeY(gr.xe) + 0.45 * P; D.line(L.sup, G.xbt + 0.5 * (gr.xe - G.xbt) / n, gradeY(G.xbt + 0.5 * (gr.xe - G.xbt) / n) + 0.45 * P, G.xbt + (n - 0.5) * (gr.xe - G.xbt) / n, yl);
+      const n = Math.max(3, Math.min(8, Math.floor((gr.xe - G.xg) / (0.45 * P))));   // RWHP: from the grade at the back face (G.xg)
+      for (let i = 0; i < n; i++) { const x = G.xg + (i + 0.5) * (gr.xe - G.xg) / n, y = gradeY(x); arrowV(D, L.sup, x, y + 0.45 * P, y, P); }
+      const yl = gradeY(gr.xe) + 0.45 * P; D.line(L.sup, G.xg + 0.5 * (gr.xe - G.xg) / n, gradeY(G.xg + 0.5 * (gr.xe - G.xg) / n) + 0.45 * P, G.xg + (n - 0.5) * (gr.xe - G.xg) / n, yl);
       const lab = isA && r.q_ll_aashto > 0 ? (inp.q_sur > 0 ? 'SURCHARGE Q_S = ' + rwdwN(inp.q_sur, 0) + ' PSF + LS (H_EQ = ' + rwdwN(r.heq, 2) + ' FT) = ' + rwdwN(r.q_sur_eff, 0) + ' PSF' : 'LIVE-LOAD SURCHARGE LS: H_EQ = ' + rwdwN(r.heq, 2) + ' FT, Q = ' + rwdwN(r.q_ll_aashto, 0) + ' PSF') : 'SURCHARGE Q_S = ' + rwdwN(inp.q_sur, 0) + ' PSF';
-      T(L.sup, (G.xbt + gr.xe) / 2, yl + 0.12 * P, h, lab, 1); yTopAnn = Math.max(yTopAnn, yl + 0.3 * P);
+      T(L.sup, (G.xg + gr.xe) / 2, yl + 0.12 * P, h, lab, 1); yTopAnn = Math.max(yTopAnn, yl + 0.3 * P);
     }
     // labels in the soil
-    const yBF = G.wt != null && Math.abs(G.wt - (G.tf + 0.55 * G.Hs)) < 0.6 * P ? (G.wt > G.tf + 0.55 * G.Hs ? G.wt - 0.6 * P : G.wt + 0.75 * P) : G.tf + 0.55 * G.Hs;
+    const hsB = G.Hg - G.tf;   // RWHP: the backfill height on the stem (= H_s at h_p = 0)
+    const yBF = G.wt != null && Math.abs(G.wt - (G.tf + 0.55 * hsB)) < 0.6 * P ? (G.wt > G.tf + 0.55 * hsB ? G.wt - 0.6 * P : G.wt + 0.75 * P) : G.tf + 0.55 * hsB;
     T(L.txt, (G.xbb + G.B) / 2, yBF, h, 'BACKFILL', 1);
     T(L.txt, (G.xbb + G.B) / 2, yBF - 0.16 * P, hs, 'GAMMA = ' + rwdwN(inp.gamma_s, 0) + ' PCF, PHI = ' + rwdwN(inp.phi, 0) + '°', 1);
-    if (G.beta > 0) { const xm = G.xbt + 0.55 * (gr.xe - G.xbt); T(L.grade, xm, gradeY(xm) - 0.25 * P, h, 'BACKFILL SLOPE BETA = ' + rwdwN(G.beta, 1) + '°', 1, Math.atan(G.tanb) * 180 / Math.PI); }
+    if (G.beta > 0) { const xm = G.xg + 0.55 * (gr.xe - G.xg); T(L.grade, xm, gradeY(xm) - 0.25 * P, h, 'BACKFILL SLOPE BETA = ' + rwdwN(G.beta, 1) + '°', 1, Math.atan(G.tanb) * 180 / Math.PI); }
     T(L.grade, gr.xe + 0.05 * P, gradeY(gr.xe) + 0.06 * P, hs, 'FINISHED GRADE', 0);
     T(L.grade, gr.xs, gr.yt + 0.08 * P, hs, 'FINISHED GRADE (TOE)', 0);
-    if (G.wt != null) T(L.wat, gr.xe - 0.45 * P, G.wt + 0.22 * P, hs, inp.wt_mode === 'elev' ? 'EL. ' + rwdwN(inp.el_gw, 2) : rwdwFI(r.wt_d * 12) + ' BELOW TOP OF WALL', 2);
+    if (G.wt != null) T(L.wat, gr.xe - 0.45 * P, G.wt + 0.22 * P, hs, inp.wt_mode === 'elev' ? 'EL. ' + rwdwN(inp.el_gw, 2) : rwdwFI(r.wt_d * 12) + ' BELOW TOP OF WALL' + (r.h_p > 0 && r.wt_d < r.h_p ? ' (TAKEN AT THE RETAINED GRADE)' : ''), 2);
     if (G.bar) T(L.txt, G.bar.xc - G.bar.w / 2 - 0.1 * P, G.H + G.bar.h / 2, hs, 'BARRIER' + (G.bar.nominalW ? ' (WIDTH NOMINAL)' : ''), 2);
     T(L.cj, G.xbb + 0.08 * P, G.tf + 0.06 * P, 0.065 * P, 'CONST. JT.', 0);
     // bar marks (sheet 2 has the details)
@@ -12546,6 +12583,7 @@ function rwdwBuild(r) {
     const xr1 = gr.xe + 0.5 * P, xr2 = xr1 + 0.55 * P;
     dVs(0, G.tf, xr1, G.B, '<>'); D.dimV(L.dim, G.tf, G.H, xr1, G.B, 'H_S = <>'); D.dimV(L.dim, 0, G.H, xr2, G.B, 'H = <>');
     const yTop = G.H + (G.bar ? G.bar.h : 0) + 0.35 * P; dHs(G.xf, G.xbt, yTop, G.H, 'STEM TOP <>', 'left');
+    if (G.hp > 0) { D.dimV(L.dim, G.Hg, G.H, G.xf - 0.45 * P, G.xf, 'H_P = <>'); T(L.grade, G.xg + 0.08 * P, G.Hg + 0.06 * P, hs, 'RETAINED GRADE', 0); }   // RWHP: stem projection above the retained grade
     if (G.Dfa > 0) dVs(G.tf, G.tf + G.Dfa, gr.xs - 0.35 * P, G.xf, '<>', true);
     dVs(0, G.tf + G.Dfa, gr.xs - (G.Dfa > 0 ? 1.3 : 0.35) * P, 0, 'D_F = <>', true);
     if (G.dk > 0) { dVs(-G.dk, 0, G.kx + G.kw + 0.3 * P, G.kx + G.kw, '<>', false); T(L.txt, G.kx + G.kw + 0.75 * P, -G.dk / 2 - 0.03 * P, hs, 'SHEAR KEY, B_K = ' + rwdwIn(G.kw), 0); }
@@ -12732,6 +12770,7 @@ function rwdwBuild(r) {
     D.line(L.grade, -0.4 * P, yg, Lw + 0.4 * P, yg); for (let x = -0.3 * P; x < Lw + 0.3 * P; x += 0.2 * P) D.line(L.soil, x, yg, x - 0.08 * P, yg - 0.08 * P);
     T(L.grade, 0.1 * P, yg + 0.07 * P, hs, 'FINISHED GRADE (TOE)', 0);
     SUP.elev({ D, L, G, k: P, r, x0: 0, x1: Lw });
+    if (G.hp > 0) { D.line(L.grade, 0, top(0) - G.hp, Lw, top(Lw) - G.hp, D.ltype('DASHED')); T(L.grade, Lw / 2, top(Lw / 2) - G.hp - 0.12 * P, hs, 'RETAINED GRADE (BEHIND THE WALL), ' + rwdwFI(G.hp) + ' BELOW THE TOP', 1); }   // RWHP
     if (ct) [0, Lw].forEach(x => T(L.txt, x, top(x) + (G.bar ? G.bar.h : 0) + 0.12 * P, hs, 'EXP. JT.', 1));
     D.h = 0.085 * P;
     const yd = -G.dk - 0.5 * P;
@@ -12769,8 +12808,10 @@ function rwdwBuild(r) {
       '9. SLIDING: ' + (isA ? 'BASE FRICTION ' + AS(a.fric_label).toUpperCase() + ', PHI_TAU = ' + rwdwN(inp.aashto.phi_tau, 2) : 'MU = ' + rwdwN(inp.mu, 3)) + '; PASSIVE AT THE TOE ' + (inp.inclPassive ? 'INCLUDED' : 'NEGLECTED') + (G.dk > 0 ? '; SHEAR KEY ' + rwdwIn(G.dk) + ' DEEP' : '') + '.',
       '10. SEISMIC: ' + (r.hasSeismic ? (isA ? 'K_H = ' + rwdwN(inp.kh, 3) + '; EXTREME EVENT I STABILITY (AASHTO 11.6.5.1, P_AE AND WALL INERTIA) CHECKED; STEM DESIGNED FOR EXTREME EVENT I.' : 'MONONOBE-OKABE INCREMENT AT 0.6H (K_H = ' + rwdwN(inp.kh, 3) + ', K_V = ' + rwdwN(inp.kv, 3) + ') IN STABILITY (0.7E, FS 1.1) AND IN THE STEM (U = 1.2D + 1.0E + 1.6H).') : 'NONE (K_H = 0).'),
       'ASSUMPTIONS AND SCOPE',
-      '11. NOT IN THE TOOL, BY THE ENGINEER OF RECORD / GEOTECHNICAL ENGINEER: GLOBAL STABILITY, SETTLEMENT, DRAINAGE (WEEP HOLES,',
-      '    DRAINS, FILTER), JOINT LAYOUT AND WALL LENGTH, SHEAR-KEY AND FRONT-FACE REINFORCEMENT, LAP OF THE S1 DOWELS, BAR DEVELOPMENT.',
+      '11. NOT IN THE TOOL, BY THE ENGINEER OF RECORD / GEOTECHNICAL ENGINEER: GLOBAL STABILITY, SETTLEMENT, STRENGTH LIMIT STATES',
+      '    OTHER THAN STRENGTH I / IA, STRIP / LINE / POINT SURCHARGES AND COMPACTION PRESSURE, DRAINAGE (WEEP HOLES, DRAINS, FILTER),',
+      '    FROST, JOINT LAYOUT, WALL LENGTH AND WALL ENDS, PILE-TO-CAP TENSION CONNECTION AND PILE DESIGN (PILE DESIGNER), CRACK CONTROL',
+      '    OF S4, K1 AND THE HEEL BOTTOM FACE (SEE THE USER MANUAL, LIMITS).',   // RWHP-2 (2026-11-07): was "... SHEAR-KEY AND FRONT-FACE REINFORCEMENT, LAP OF THE S1 DOWELS, BAR DEVELOPMENT" (all checked since #947-#951)
       '12. BAR LENGTHS AND THE KEY WIDTH ARE NOMINAL (SHEET 2); HARDWARE OF THE BARRIER NOT SHOWN.',
       '13. VALUES ARE THE TOOL\'S RESULTS; EACH IS WORKED ON THE TAB NAMED IN THE SHEET INDEX AND IN THE CALCULATION REPORT.',
       '14. CHECKS: ' + (nA ? nA + ' OF ' + nT + ' CHECKS FAIL (' + Object.values(r.checks).filter(c2 => !c2.ok).map(c2 => AS(c2.label).toUpperCase()).join(', ') + ').' : 'ALL ' + nT + ' CHECKS PASS.'),

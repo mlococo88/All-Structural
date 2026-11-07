@@ -6530,3 +6530,45 @@ Review Phase 6a, part 2 of the User Manual (part 1: #1154). Code sites are tagge
 
 ### Saved data
 - None (text only).
+
+## 2026-11-07 — PR: claude/rw-stem-projection-gfx (PR #1155: https://github.com/mlococo88/All-Structural/pull/1155) — Stem projection h_p in the graphics: retained grade drawn h_p below the stem top, the stem continuing above it, h_p dimensioned (RWHP part 2; display only, no result change)
+
+### What changed (display only; the drawings are unchanged at h_p = 0)
+- `rwHpView(r)` (anchor `function rwHpView`): a view of the results for drawing the retained side, with H → H_ret and wt_d → wt_r (depths from the grade); `wt_d_top` keeps the depth from the top of the wall for labels. It returns `r` itself at h_p = 0.
+- **Analysis cross-section** (`buildCrossSection`, also a Report figure): the ground line, backfill hatch, slope, water, surcharge arrows and active / surcharge / hydrostatic diagrams are drawn from `y_gr = y_top + h_p·SCALE`. This is done in two blocks that shadow `y_top`, `r`, `Hs_px` / `H_px` (anchor `RWHP: retained side from the grade`). The lateral diagrams (RWPS `rwpsLateral`, #1147) are called with `rS` and `yTop = y_gr`; in the Overview they sit in the shadowing block. New dimension `hp=…` beside the stem above the grade.
+- **Overview section** (`buildOverviewSVG`, also the Report "Wall geometry" figure): the same treatment, with the GL(back) and WT label at the grade and the dimension `hp=…`. The Overview geometry table gets the h_p and H_ret rows.
+- **Collision elevation** (`buildElevationSVG`, AASHTO with CT): a dashed "RETAINED GRADE (BEHIND)" line and the `h_p=…` dimension. The roadway and collision stay at the stem top (Decision 3 of part 1).
+- **3D** (`buildGeometry3D`): the soil block, the water and the pressure prisms are drawn to H_ret. In `rw3Cases`, the heel loads (soil, surcharge, LS vertical, P_a,v) land on the grade (`Hg = H_ret`); the stem, barrier and column stay at the stem top.
+- **Drawings / DXF** (`rwdwGeo`, sheets 1, 3, 4):
+  - `G.hp`, `G.Hg`, `G.xg` (back face at the grade); the water level is now measured from the grade.
+  - The finished grade (level or sloped) starts at (G.xg, G.Hg), and the surcharge arrows and slope label follow it.
+  - The backfill label sits in the retained height.
+  - Sheet 1 has an `H_P = <>` dimension and a "RETAINED GRADE" label.
+  - Sheet 4 (elevation) has a dashed "RETAINED GRADE (BEHIND THE WALL)" line.
+  - The WT note says "(TAKEN AT THE RETAINED GRADE)" when the entered WT is above it.
+- Not changed: `buildStemPressureDiagram` and `buildStemSMDiagram`. Neither is called anywhere; the Stem tab plots were updated in part 1.
+
+### §4
+None: no computed value changes.
+
+### How verified
+- `tests/smoke/retaining-wall-checks.mjs`, new AUD rows `RWHP graphics`:
+  - At h_p = 0 there are no grade / h_p marks in the SVGs or the DXF.
+  - At h_p = 3 ft (ACI with water, slope and surcharge): h_p is dimensioned on the overview and the analysis section; the DXF has the retained grade and H_P.
+  - AASHTO with collision: the grade appears on the elevation, and the 3D soil arrow is at H_ret.
+- Screenshots checked: section, overview, 3D, Drawings sheet 1.
+- Headless main vs branch at h_p = 0: every tab text and SVG size identical.
+
+### Drawings sheet 4, general note 11 (coordinator request; display only)
+- Where: `rwdwBuild`, sheet 'notes', anchor `'11. NOT IN THE TOOL, BY THE ENGINEER OF RECORD / GEOTECHNICAL ENGINEER:`.
+- Before: `... GLOBAL STABILITY, SETTLEMENT, DRAINAGE (WEEP HOLES,` / `    DRAINS, FILTER), JOINT LAYOUT AND WALL LENGTH, SHEAR-KEY AND FRONT-FACE REINFORCEMENT, LAP OF THE S1 DOWELS, BAR DEVELOPMENT.`
+- After: lists only what the tool does not check, as the User Manual "Limits" section (#1157):
+  - global stability, settlement;
+  - strength limit states other than Strength I / Ia;
+  - strip / line / point surcharges and compaction pressure;
+  - drainage, frost, joints and wall length, wall ends;
+  - the pile-to-cap tension connection and the pile structural / lateral design (Pile Designer);
+  - crack control of S4, K1 and the heel bottom face.
+- Problem: the note still listed the shear key (K1, RWSK #947–#951), the front-face bars (S4, RWFF), the S1D / S3–S1 laps and bar development (RWDS / RWS13). All of these have been checked since 2026-11-07.
+- Check case: default ACI, Drawings sheet 4. Note 11 no longer names the key, front face, laps or development.
+- After merging #1157 and the note 11 change: dxf-print-sheets rw all ok; retaining-wall-checks (RWHP rows and every CASES row) all ok; main vs branch at h_p = 0 (ACI, AASHTO, ACI piles) identical, 0 console errors.
