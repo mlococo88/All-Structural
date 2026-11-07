@@ -6257,3 +6257,35 @@ Engineer request (2026-11-07): "there is no output tab for the piles". Code site
 ### How verified
 - Headless probe, origin/main (95d5810) vs this branch, 9 walls (ACI and AASHTO spread; ACI pile default, t_f 36 with water 2 ft (uplift), seismic 3 rows with passive; AASHTO pile default, EE I + collision 4 rows with water): `window._R` identical except the RW2M1 warning wording; Report text differs only in the section title, the new Pile Step 3 and the notes moved to the Piles tab; DXF identical except the two note lines; 0 console errors.
 - Tests: check-syntax; smoke/retaining-wall-checks (AUD rows read the Piles tab; new RWPT block: shown only on piles, after Footing design, cards, KaTeX, buttons, the chip "Pile Compression" lands on Pile Step 2, the Stability summary link, the Report section, back to Stability on spread, input-error banner; RW2L3 phone 390 px includes the Piles tab); phone-layout rwall; project-library retwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs.
+
+## 2026-11-07 — PR: claude/rw-pile-tab-2 — Piles tab, part 2: plan and section sketch, the group properties and the reaction method worked with values, every pile combination per row with P_max / P_min and D/C, governing rows marked; the Report matches (RWPT2; display only) (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM)
+
+Part 2 of the RWPT request (part 1: #1148). Code sites are tagged `RWPT2`. **Display only: no computed result changes** (§4), no saved field or key (§5).
+
+### Piles tab
+- **Pile Layout** card: + `rwptSketch(r)`. It shows the pile layout plan (Drawings sheet "piles", entities `i0..iv`) and the typical section with the pile rows (sheet "section", `i0..ic`). Both come from `rwdwBuild` through the Report's `rwovView`. They are to scale with the sheets' scale bars, and are zoomable with `SharedDxf.viewer` (height 300 px; the static SVG stays if the viewer is missing). Two columns on wide screens, one on a phone (`.rwpt-figs` grid).
+- **Pile Step 1**: + `rwptGroupSteps(r)`.
+  - Before, 1.1 and 1.2 were "N = Σ1/s_i = **result**, x̄ = Σn_i x_i/N = **result**" and "I = Σn_i(x_i − x̄)² = **result**" (no substitution).
+  - After, each is worked symbol → values → result:
+    - 1.1 N = Σ1/s_i = 1/6.00 + 1/6.00 = 0.3333 /ft;
+    - 1.2 x̄ = (1.50/6.00 + 11.00/6.00)/0.3333 = 6.250 ft;
+    - 1.3 I = (−4.750)²/6.00 + (4.750)²/6.00 = 7.5208 ft²/ft;
+    - 1.4 (new) the reaction method M = V(x_R − x̄), P_i = V/N + M(x_i − x̄)/I, h = H/N. This is shared/pile-group.js `rowLoads` = `reaction()` with n → N, Σx'² → I. Since I > 0, `unresisted()` gives none. A worked example uses the governing compression combination.
+  - Plus a note: the Pile Designer hand-off segment's `groupProps` (n = N·L, Σx'² = I·L, exact or approximate).
+  - Check (ACI default on piles, t_f 36 in, water 2 ft), row 1 of D + H + L: 10.055/0.3333 + (−17.121)(−4.750)/7.5208 = **40.98 kip** = the table value.
+- **Pile Step 2**: the combination table (`rwptCombHead` / `rwptCombRows` / `rwptCombNote`) now shows, for every `r.pile.comb`:
+  - limit state, V, x_R, M, H, P per row (the largest in bold);
+  - P_max and P_min with their rows, h = H/N;
+  - D/C for compression (`c.dcC`), uplift (`c.dcT`) and lateral (`c.dcH`);
+  - "Governs" for P.govC / P.govT / P.govH, with the row shaded.
+  - 2.1 is set on two lines (`aligned`; it ran off the card). The 2.3 combination name is set as text (it lost its spaces in math mode).
+- Only the active design basis is computed (ACI / IBC service combinations, or AASHTO Strength I, EE I, EE II); the note says so.
+
+### Report
+- Pile Step 2: the same columns as the tab (`{cells, cls: 'gov'}` on the governing rows), with the tab's note.
+- Pile data: + the pile layout plan figure (to scale, Piles tab and Drawings links).
+
+### How verified
+- Headless probe, origin/main (77d99d6) vs this branch, the same 9 walls as RWPT: `window._R` identical on all 9; DXF identical; 0 console errors.
+- Hand check above (40.98 kip). Screenshots at 1400 px and 390 px (no sideways scroll).
+- Tests: check-syntax; smoke/retaining-wall-checks (RWPT block plus the combination table rows and highlight, the zoomable sketches, the substituted N, and the Report D/C columns and plan figure); phone-layout rwall; project-library retwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs.

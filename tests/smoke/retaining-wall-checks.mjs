@@ -374,6 +374,9 @@ if (!process.env.RW_AUD || 'RWPT'.startsWith(process.env.RW_AUD)) for (const [na
     out.kx = P.querySelectorAll('.eq-math .katex-display').length; out.eq = P.querySelectorAll('.eq-math').length; out.kerr = P.querySelectorAll('.katex-error').length;
     out.btns = ['rwpxSendOpen()', 'rwpxPullOpen()'].every(f => P.querySelector(`button[onclick="${f}"]`)) && !!P.querySelector('input[type=file][onchange="rwpxImportFile(this)"]');
     out.ckRows = P.querySelectorAll('.card:nth-of-type(4) tbody tr').length;
+    out.comb = P.querySelectorAll('table.rwpt-comb tbody tr').length === window._R.pile.comb.length && P.querySelectorAll('table.rwpt-comb tr.rwpt-gov').length >= 1;   // RWPT2
+    out.fig = P.querySelectorAll('.rwpt-fig svg').length >= 2 && P.querySelectorAll('.rwpt-fig .sdx-view').length >= 2;
+    out.subst = P.textContent.includes('\\sum \\frac{1}{s_i} = \\frac{1}{');
     document.querySelector('.tab-btn[data-tab="overview"]').click(); await W(300);
     const chip = document.querySelector('.rwdCh[data-chk="pileComp"]'); if (chip) chip.click(); await W(900);
     out.chip = act() === 'piles' && inView('Pile Step 2');
@@ -382,7 +385,7 @@ if (!process.env.RW_AUD || 'RWPT'.startsWith(process.env.RW_AUD)) for (const [na
     const ln = S.querySelector('a.wkA[data-card="pileCk"]'); if (ln) ln.click(); await W(900);
     out.link = act() === 'piles' && inView('Pile Step 3');
     document.querySelector('.tab-btn[data-tab="report"]').click(); await W(3500);
-    const R = document.getElementById('tab-report').textContent; out.rep = /Piles \(pile-supported footing\)/.test(R) && /Pile Step 3 — Pile checks/.test(R) && /Piles tab · Pile Step 2/.test(R) && !/Stability tab · Pile Step/.test(R);
+    const R = document.getElementById('tab-report').textContent; out.rep = /D\/C lateral/.test(R) && /Pile layout plan, from above/.test(R) && /Piles \(pile-supported footing\)/.test(R) && /Pile Step 3 — Pile checks/.test(R) && /Piles tab · Pile Step 2/.test(R) && !/Stability tab · Pile Step/.test(R);
     document.querySelector('.tab-btn[data-tab="piles"]').click(); await W(300);
     const ft = document.getElementById('fnd_type'); ft.value = 'spread'; ft.dispatchEvent(new Event('change', { bubbles: true })); onInputChange(); await W(500);
     out.back = act() === 'stability' && getComputedStyle(btn).display === 'none';
@@ -399,6 +402,8 @@ if (!process.env.RW_AUD || 'RWPT'.startsWith(process.env.RW_AUD)) for (const [na
     check(want.every(t => o.titles.some(x => x.startsWith(t))), 'cards: ' + o.titles.join(' | '));
     check(o.eq >= 5 && o.kx === o.eq && !o.kerr, `${o.kx} of ${o.eq} equations by KaTeX, ${o.kerr} errors`);
     check(o.btns, 'hand-off buttons (send, pull, import)');
+    check(o.comb, 'RWPT2: combination table, one row per pile combination, governing rows highlighted');
+    check(o.fig && o.subst, 'RWPT2: plan and section sketches (zoomable), N worked with the spacings substituted');
     check(o.chip, 'check summary chip "Pile Compression" opens the Piles tab at Pile Step 2');
     check(o.sum && o.link, 'Stability summary card; its link opens Pile Step 3');
     check(o.rep, 'Report: section "Piles (pile-supported footing)", Pile Step 3, links name the Piles tab');

@@ -411,6 +411,12 @@ select option { background: #fff; color: var(--text); }
 .tbl .unit { font-size: 11.5px; color: var(--muted); text-align: left; width: 1%; white-space: nowrap; }
 .tbl .right { text-align: right; }
 .tbl tr.rwpt-ng td { background: var(--fail-dim); }   /* RWPT: a failing pile check */
+.tbl.rwpt-comb td, .tbl.rwpt-comb th { white-space: nowrap; }   /* RWPT2: the combination table scrolls inside its card */
+.tbl.rwpt-comb tr.rwpt-gov td { background: var(--info-dim); }
+.tbl.rwpt-comb td.rwpt-hi { font-weight: 700; }
+.rwpt-figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 10px; }
+.rwpt-fig { margin: 10px 0 4px; min-width: 0; border: 1px solid var(--border); border-radius: 6px; padding: 6px; background: #fff; }
+.rwpt-fig figcaption { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
 
 .chk-row {
   display: flex; align-items: center; justify-content: space-between;
@@ -5411,6 +5417,61 @@ function rwPileStability(r) {
    Designer hand-off record; nothing is computed here but the presentation. Cards: Pile Layout; Pile Step 1 — Pile Group and Pile
    Step 2 — Pile Reactions and Checks (moved unchanged from the Stability tab); Pile Step 3 — Pile Checks (every pile check with its
    D/C and status, and where it is worked); Pile Designer Hand-off (status and the buttons of the Foundation card). */
+/* RWPT2 (2026-11-07): Piles tab, part 2 (display only; every value from r.pile / rwPileAnalysis, nothing recomputed but the
+   substitutions shown):
+   - rwptSketch(r): the pile layout plan and the typical section of the Drawings tab (rwdwBuild, sheets "piles" and "section"; the
+     Report's overview helper rwovView), to scale with their scale bars;
+   - rwptGroupSteps(r): N, x̄, I worked symbolically → substituted → result, and the reaction method (shared/pile-group.js: rowGroup,
+     momentAbout, rowLoads = reaction() with n → N, Sxx → I; unresisted() when I = 0), with the discrete hand-off segment's
+     groupProps (n = N·L, Σx'² = I·L) as the link to Pile Designer;
+   - rwptCombHead / rwptCombRows / rwptCombNote: every pile combination of r.pile.comb with V, x_R, M, H, P per row, P_max / P_min with
+     their rows, h = H/N, and the D/C of compression, uplift and lateral; the governing combinations (P.govC, P.govT, P.govH)
+     highlighted and tagged, and in each row the largest P in bold. */
+function rwptLS(r, c) { return !r.isAASHTO ? 'Service (ASD)' : /^ee1/.test(c.key) ? 'Extreme Event I' : /^ee2/.test(c.key) ? 'Extreme Event II' : 'Strength I'; }
+function rwptCombHead(r) {
+  return ['Combination', 'Limit state', 'V (kip/ft)', 'x<sub>R</sub> (ft)', 'M about x̄ (kip-ft/ft)', 'H (kip/ft)', ...r.pile.rows.map((x, i) => `P row ${i + 1} (kip)`),
+    'P<sub>max</sub> (kip)', 'P<sub>min</sub> (kip)', 'H per pile (kip)', 'D/C comp.', 'D/C uplift', 'D/C lateral', 'Governs'];
+}
+function rwptCombRows(r) {
+  const P = r.pile, F = (v, d = 2) => (isFinite(v) ? (+v).toFixed(d) : '—');
+  return P.comb.map(c => {
+    const gv = [c === P.govC && c.dcC > 0 ? 'compression' : '', c === P.govT && c.dcT > 0 ? 'uplift' : '', c === P.govH && c.dcH > 0 ? 'lateral' : ''].filter(Boolean);
+    return `<tr${gv.length ? ' class="rwpt-gov"' : ''}><td>${c.label}</td><td>${rwptLS(r, c)}</td><td>${F(c.V, 3)}</td><td>${F(c.xR, 3)}</td><td>${F(c.M, 3)}</td><td>${F(c.H, 3)}</td>`
+      + c.L.rows.map((x, i) => `<td${i === c.L.iMax ? ' class="rwpt-hi"' : ''}>${F(x.P, 2)}</td>`).join('')
+      + `<td>${F(c.L.Pmax, 2)} (row ${c.L.iMax + 1})</td><td>${F(c.L.Pmin, 2)} (row ${c.L.iMin + 1})${c.L.Pmin < 0 ? ' uplift' : ''}</td><td>${F(c.L.rows[0].h, 2)}</td>`
+      + `<td>${F(c.dcC, 3)}</td><td>${c.dcT > 0 ? F(c.dcT, 3) : '—'}</td><td>${F(c.dcH, 3)}</td><td>${gv.length ? '<b>' + gv.join(', ') + '</b>' : ''}</td></tr>`;
+  }).join('');
+}
+function rwptCombNote(r) {
+  const P = r.pile, A = r.isAASHTO;
+  return `Every combination the wall checks on piles (${A ? 'AASHTO LRFD 10th Ed.: Strength I maximum / minimum vertical' + (P.comb.some(c => /^ee1/.test(c.key)) ? ', Extreme Event I (both Art. 11.6.5.1 cases)' : '') + (P.comb.some(c => /^ee2/.test(c.key)) ? ', Extreme Event II (collision)' : '') + '; resistances φ<sub>c</sub>R<sub>n</sub>, φ<sub>up</sub>R<sub>n,up</sub>, H<sub>r</sub> (Strength), 1.0R<sub>n</sub>, 0.80R<sub>n,up</sub>, H<sub>r</sub> (Extreme Event)'
+    : 'ACI / IBC: the service (ASD) combinations of ASCE 7-16 §2.4.1' + (P.comb.length > 2 ? ', with 0.7E' : '') + ', against P<sub>a</sub>, T<sub>a</sub>, H<sub>a</sub>'}). Only the active design basis is computed. Shaded: the combination that governs compression, uplift or lateral (D/C largest); bold: the largest pile load of each combination. P per pile = V/N + M·x'/I (Pile Step 1, 1.3); H per pile = H/N, the same on every pile${P.passive ? ', H net of the passive credit' : ''}.`;
+}
+function rwptGroupSteps(r) {
+  const P = r.pile, g = P.g, F = (v, d = 2) => (isFinite(v) ? (+v).toFixed(d) : '—'), R = P.rows;
+  const sN = R.map(q => `\\frac{1}{${F(q.s)}}`).join(' + '), sX = R.map(q => `\\frac{${F(q.x)}}{${F(q.s)}}`).join(' + '), sI = R.map(q => `\\frac{(${F(q.x - g.xbar, 3)})^2}{${F(q.s)}}`).join(' + ');
+  let h = eq('1.1 Piles per ft of wall', `N = \\sum \\frac{1}{s_i} = ${sN} = \\boxed{${F(g.N, 4)}\\ \\text{/ft}}`, 'n_i = 1/s_i')
+    + eq('1.2 Pile-group centroid from the toe', `\\bar{x} = \\frac{\\sum n_i x_i}{N} = \\frac{${sX}}{${F(g.N, 4)}} = \\boxed{${F(g.xbar, 3)}\\ \\text{ft}}`, 'from the toe')
+    + eq('1.3 Moment of inertia of the group per ft', `I = \\sum n_i (x_i - \\bar{x})^2 = ${sI} = \\boxed{${F(g.I, 4)}\\ \\text{ft}^2\\text{/ft}}`, '');
+  const c = P.govC, x0 = c.L.rows[c.L.iMax];
+  h += eq('1.4 Load on one pile of row i (rigid cap, vertical piles, pinned heads)', `M = V(x_R - \\bar{x}), \\qquad P_i = \\frac{V}{N} + \\frac{M\\,(x_i - \\bar{x})}{I}, \\qquad h = \\frac{H}{N}`, 'shared/pile-group.js: rowLoads = reaction() with n → N, Σx\'² → I',
+    [{ sym: 'V, x_R', desc: 'vertical load per ft and its resultant from the toe, per combination (Pile Step 2)', val: '', unit: '' },
+     { sym: 'M', desc: 'moment about the group centroid; I > 0, so the group resists it (unresisted(): none)', val: '', unit: '' },
+     { sym: 'P_i', desc: `e.g. ${c.label}, row ${c.L.iMax + 1}: ${F(c.V, 3)}/${F(g.N, 4)} + (${F(c.M, 3)})(${F(x0.xp, 3)})/${F(g.I, 4)}`, val: F(x0.P, 2), unit: 'kip' }]);
+  let seg = null; try { const b = typeof rwpxBuild === 'function' ? rwpxBuild(r, {}) : null; seg = b && b.Lay ? b : null; } catch (e) { seg = null; }
+  if (seg) h += `<div class="note">Discrete group of the Pile Designer hand-off (a ${F(seg.seg.L, 2)} ft segment, groupProps()): n = ${seg.Lay.n} piles = N·L = ${F(g.N * seg.seg.L, 3)}; Σx'² = ${F(seg.Lay.Sxx, 3)} ft² ${seg.seg.exact ? '= I·L = ' + F(g.I * seg.seg.L, 3) + ' ft²: reaction() on the segment gives these per-pile loads exactly' : '(≈ I·L = ' + F(g.I * seg.seg.L, 3) + ' ft²: not a common multiple of the spacings, the segment\'s loads differ slightly)'}.</div>`;
+  return h;
+}
+function rwptSketch(r) {
+  let Bd = null; try { Bd = rwdwBuild(r); } catch (e) { Bd = null; }
+  if (!Bd || typeof rwovView !== 'function') return '<div class="note">The plan and section sketch could not be drawn (shared/dxf.js not loaded); see the Drawings tab.</div>';
+  const sh = id => Bd.S.find(s => s.id === id), pl = sh('piles'), sc = sh('section'), n = s => Bd.S.indexOf(s) + 1;
+  let h = '';
+  const rows = r.pile.rows.map((q, i) => 'row ' + (i + 1) + ' at ' + (+q.x).toFixed(2) + ' ft from the toe @ ' + (+q.s).toFixed(2) + ' ft').join('; ');
+  if (pl && pl.iv) h += `<figure class="rwpt-fig"><div class="rwpt-zoom">${rwovView(Bd, pl.i0, pl.iv, '340px')}</div><figcaption>Pile layout plan, from above, toe at the bottom (${rows}), to scale with its scale bar — Drawings tab, sheet ${n(pl)} (${pl.scale}). Wheel / pinch to zoom, drag to pan.</figcaption></figure>`;
+  if (sc && sc.ic) h += `<figure class="rwpt-fig"><div class="rwpt-zoom">${rwovView(Bd, sc.i0, sc.ic, '340px')}</div><figcaption>Typical wall section with the pile rows (embedded length dashed), to scale — Drawings tab, sheet ${n(sc)} (${sc.scale}).</figcaption></figure>`;
+  return h ? `<div class="rwpt-figs">${h}</div>` : '';
+}
 const RWPT_SHAPE = { hp: 'Steel H-pile', pipe: 'Steel pipe pile', square: 'Square precast concrete', round: 'Round (timber / cast-in-place)' };
 function renderPiles(r) {
   const el = document.getElementById('tab-piles'); if (!el) return;
@@ -5430,20 +5491,20 @@ function renderPiles(r) {
   h += `<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Pile Layout</span><span class="card-ref">as entered · Wall tab, Foundation</span></div><div class="card-body">
     <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Row</th><th>x from toe (ft)</th><th>x from heel (ft)</th><th>s along wall (ft)</th><th>piles per ft (1/s)</th></tr></thead><tbody>${lay}</tbody></table></div>
     <div style="overflow-x:auto;margin-top:10px"><table class="tbl"><tbody>${dat.map(([k, v]) => `<tr><td class="lbl">${k}</td><td class="right">${v}</td></tr>`).join('')}</tbody></table></div>
-    <div class="note">Rows of identical vertical piles, each row with its own spacing along the wall; one pile type per wall; no staggering. The footing acts as a rigid cap. Plan and schedule to scale: Drawings tab, pile layout sheet.</div></div></div>`;
+    <div class="note">Rows of identical vertical piles, each row with its own spacing along the wall; one pile type per wall; no staggering. The footing acts as a rigid cap.</div>${rwptSketch(r)}</div></div>`;
   const rowsT = P.rows.map((rw, i) => { const n = 1 / rw.s, xp = rw.x - g.xbar; return `<tr><td>${i + 1}</td><td>${F(rw.x)}</td><td>${F(rw.s)}</td><td>${F(n, 4)}</td><td>${F(xp, 3)}</td><td>${F(n * xp * xp, 4)}</td></tr>`; }).join('');
   h += `<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Pile Step 1 — Pile Group (per ft of wall)</span><span class="card-ref">rigid cap · identical vertical piles · shared/pile-group.js</span></div><div class="card-body">
     <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Row</th><th>x from toe (ft)</th><th>s along wall (ft)</th><th>n = 1/s (/ft)</th><th>x' = x − x̄ (ft)</th><th>n·x'² (ft²/ft)</th></tr></thead><tbody>${rowsT}</tbody></table></div>`
-    + eq('1.1 Piles per ft and centroid', `N = \\sum \\frac{1}{s_i} = \\boxed{${F(g.N, 4)}\\ \\text{/ft}}, \\quad \\bar{x} = \\frac{\\sum n_i x_i}{N} = \\boxed{${F(g.xbar, 3)}\\ \\text{ft}}`, 'from the toe')
-    + eq('1.2 Moment of inertia of the group', `I = \\sum n_i (x_i - \\bar{x})^2 = \\boxed{${F(g.I, 4)}\\ \\text{ft}^2\\text{/ft}}`, '')
+    + rwptGroupSteps(r)
     + `<div class="note">${A ? 'AASHTO LRFD 10th Ed.: factored loads per limit state; resistances φ<sub>c</sub>R<sub>n</sub>, φ<sub>up</sub>R<sub>n,up</sub> (Art. 10.5.5.2.3), H<sub>r</sub> as entered; Extreme Event φ = 1.0, uplift 0.80 (Art. 10.5.5.3.3).' : 'ACI 318-19 / IBC 2018: service (ASD) loads, ASCE 7-16 §2.4.1, against the allowable capacities (IBC 2018 §1810.3.3.1, §1810.3.3.2). The soil under the cap carries no vertical load (§1810.3.11).'} Each pile takes H/N of the horizontal load.${P.passive ? ' Passive in front of the toe credited: ' + F(P.Hpass, 3) + ' kip/ft.' : ' No passive or base friction credited.'}</div></div></div>`;
-  const cr = P.comb.map(c => `<tr><td>${c.label}</td><td>${F(c.V, 3)}</td><td>${F(c.xR, 3)}</td><td>${F(c.M, 3)}</td><td>${F(c.H, 3)}</td>${c.L.rows.map(x => `<td>${F(x.P, 2)}</td>`).join('')}<td>${F(c.L.rows[0].h, 2)}</td></tr>`).join('');
+  const cr = rwptCombRows(r);   // RWPT2: every combination, P per row, P_max / P_min, h, D/C; governing rows highlighted
   const gc = P.govC, x0 = gc.L.rows[gc.L.iMax];
   h += `<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Pile Step 2 — Pile Reactions and Checks</span><span class="card-ref">${A ? 'AASHTO LRFD 10th Ed. Sec. 10.7' : 'IBC 2018 §1810; ASCE 7-16 §2.4.1'}</span></div><div class="card-body">
-    <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Combination</th><th>V (kip/ft)</th><th>x<sub>R</sub> (ft)</th><th>M about x̄ (kip-ft/ft)</th><th>H (kip/ft)</th>${P.rows.map((x, i) => `<th>P row ${i + 1} (kip)</th>`).join('')}<th>H per pile (kip)</th></tr></thead><tbody>${cr}</tbody></table></div>`
-    + eq('2.1 Governing pile compression (' + gc.label + ')', `M = V(x_R - \\bar{x}) = ${F(gc.V, 3)}(${F(gc.xR, 3)} - ${F(g.xbar, 3)}) = ${F(gc.M, 3)}\\ \\text{kip-ft/ft}; \\quad P = \\frac{V}{N} + \\frac{M\\,x'}{I} = \\frac{${F(gc.V, 3)}}{${F(g.N, 4)}} + \\frac{(${F(gc.M, 3)})(${F(x0.xp, 3)})}{${F(g.I, 4)}} = \\boxed{${F(x0.P, 2)}\\ \\text{kip}}`, 'row ' + (gc.L.iMax + 1))
+    <div style="overflow-x:auto"><table class="tbl rwpt-comb"><thead><tr>${rwptCombHead(r).map(t => `<th>${t}</th>`).join('')}</tr></thead><tbody>${cr}</tbody></table></div>
+    <div class="note">${rwptCombNote(r)}</div>`
+    + eq('2.1 Governing pile compression (' + gc.label + ')', `\\begin{aligned} M &= V(x_R - \\bar{x}) = ${F(gc.V, 3)}(${F(gc.xR, 3)} - ${F(g.xbar, 3)}) = ${F(gc.M, 3)}\\ \\text{kip-ft/ft} \\\\ P &= \\frac{V}{N} + \\frac{M\\,x'}{I} = \\frac{${F(gc.V, 3)}}{${F(g.N, 4)}} + \\frac{(${F(gc.M, 3)})(${F(x0.xp, 3)})}{${F(g.I, 4)}} = \\boxed{${F(x0.P, 2)}\\ \\text{kip}} \\end{aligned}`, 'row ' + (gc.L.iMax + 1))   // RWPT2: two lines (was one, too wide)
     + eqCheck('2.2 Compression', `P_{max} = ${F(gc.L.Pmax, 2)} \\le ${gc.cap.cs} = ${F(gc.cap.c, 2)}\\ \\text{kip} \\quad (D/C = ${F(gc.dcC, 3)})`, r.checks.pileComp.ok, r.checks.pileComp.ref)
-    + eqCheck('2.3 Uplift', P.govT.L.Pmin < 0 ? `-P_{min} = ${F(-P.govT.L.Pmin, 2)} \\le ${P.govT.cap.ts} = ${F(P.govT.cap.t, 2)}\\ \\text{kip} \\quad (${P.govT.label.replace(/[^A-Za-z0-9 .+()]/g, '')})` : `P_{min} = ${F(Math.min(...P.comb.map(c => c.L.Pmin)), 2)}\\ \\text{kip} \\ge 0\\ \\text{(no uplift)}`, r.checks.pileUplift.ok, r.checks.pileUplift.ref)
+    + eqCheck('2.3 Uplift', P.govT.L.Pmin < 0 ? `-P_{min} = ${F(-P.govT.L.Pmin, 2)} \\le ${P.govT.cap.ts} = ${F(P.govT.cap.t, 2)}\\ \\text{kip} \\quad \\text{(${P.govT.label.replace(/[^A-Za-z0-9 .+()]/g, '')})}` : `P_{min} = ${F(Math.min(...P.comb.map(c => c.L.Pmin)), 2)}\\ \\text{kip} \\ge 0\\ \\text{(no uplift)}`, r.checks.pileUplift.ok, r.checks.pileUplift.ref)
     + (r.checks.pileCapT ? `<div class="alert warn" style="margin:4px 0 8px;">\u26a0 <b>Pile\u2013cap tension (not designed): FAIL.</b> T = ${F(-P.govT.L.Pmin, 2)} kip per pile (${P.govT.label}); embedment ${F(P.det.embed, 1)} in. The uplift needs a designed pile-to-cap tension connection: embedded bars, strands or dowels developed into the cap and the pile's own tension capacity (${r.checks.pileCapT.ref}). Design it outside this tool (Pile Designer) and keep the record with the calculation.</div>` : '')   // RW2M3
     + eqCheck('2.4 Lateral', `h = \\frac{H}{N} = \\frac{${F(P.govH.H, 3)}}{${F(g.N, 4)}} = ${F(P.govH.L.rows[0].h, 2)} \\le ${P.govH.cap.hs} = ${F(P.govH.cap.h, 2)}\\ \\text{kip}`, r.checks.pileLat.ok, r.checks.pileLat.ref)
     + `<div class="note">Detailing: c-c spacing ${F(P.det.cc, 1)} in${P.det.ccMin ? ' (min. ' + F(P.det.ccMin, 1) + ' in)' : ''}; pile side to footing edge ${F(P.det.edge, 1)} in (min. ${F(P.det.edgeMin, 0)} in); embedment ${F(P.det.embed, 1)} in (min. ${F(P.det.embMin, 0)} in) — ${P.det.ref}.</div></div></div>`;
@@ -5456,6 +5517,8 @@ function renderPiles(r) {
     <div class="note">The pile rows of the check summary (status bar), with the values computed in Pile Step 2 and, for punching and the cap depth, on the Footing design tab (Pile Cap — Punching around the Piles).${A ? '' : ' IBC 2018 has no minimum pile spacing (group effects, §1810.2.5): no spacing row in ACI / IBC mode.'}${r.checks.pileCapT ? ' The pile–cap tension row stays FAIL until the connection is designed (Pile Designer) and recorded with the calculation.' : ''}</div></div></div>`;
   h += rwptHandoff(r);
   el.innerHTML = h;
+  // RWPT2: the two sketches with zoom and pan (the Drawings tab's viewer); the static SVG stays when the viewer is not loaded
+  if (window.SharedDxf && SharedDxf.viewer) el.querySelectorAll('.rwpt-zoom').forEach(z => { const sv = z.querySelector('svg'); if (sv) SharedDxf.viewer(z, sv.outerHTML, { height: '300px' }); });
 }
 /* RWPT: the Pile Designer hand-off card: what was sent (channel foundationLoads, copy by.retwall) and whether it matches what the wall
    sends now (content hash), what was pulled back (the saved record pile_pxr, its stale status r.pxr), the imported values with
@@ -11388,13 +11451,19 @@ function rwrModel(r) {
       ['Passive in front of the toe', P.passive ? 'credited against H: ' + N(P.Hpass, 3) + ' kip/ft' : 'not credited (no passive, no base friction)', '–']] },
       { type: 'note', text: isA ? 'AASHTO LRFD 10th Ed.: rigid cap on vertical piles; factored loads per limit state; φ_c R_n, φ_up R_n,up (Art. 10.5.5.2.3); Extreme Event φ = 1.0, uplift φ = 0.80 (Art. 10.5.5.3.3); H_r as entered. Soil bearing, base sliding and overturning are not checked.'
                                 : 'IBC 2018 §1810: service (ASD) combinations of ASCE 7-16 §2.4.1 against the allowable capacities (§1810.3.3.1, §1810.3.3.2); the soil under the cap carries no vertical load (§1810.3.11). Soil bearing, base sliding and overturning are not checked.' }]));
+    { let Bd = null; try { Bd = rwdwBuild(r); } catch (e) { Bd = null; }   // RWPT2: the pile layout plan of the Piles tab (Drawings sheet), to scale
+      const pl = Bd && Bd.S ? Bd.S.find(x => x.id === 'piles') : null;
+      if (pl && pl.iv) subs[subs.length - 1].items.push({ type: 'figure', svg: rwovView(Bd, pl.i0, pl.iv, '3.4in'), caption: 'Pile layout plan, from above, toe at the bottom, to scale with its scale bar — Piles tab[[tab:piles| ↗]] and Drawings tab, sheet ' + (Bd.S.indexOf(pl) + 1) + ' (' + pl.scale + ').' }); }
     if (r.pxr) subs[subs.length - 1].items.push({ type: 'note', warn: r.pxr.status === 'stale', text: 'Pile Designer results (Pull pile results, ' + rwpxWhen(r.pxr.producedAt) + '): ' + r.pxr.status.toUpperCase() + ' (' + r.pxr.why + '). ' + (Object.keys(r.pxr.fields).length ? 'Imported: ' + Object.entries(r.pxr.fields).map(([k, v]) => k.replace('pile_', '') + ' = ' + v).join(', ') + (r.pxr.status === 'stale' ? '; not used while stale (the values held before the import are used).' : '.') : 'No input imported (reference only).') });   // RWPX
     const st = [rwrS({ id: 'N', label: 'Piles per ft of wall', sym: 'N', eq: '\\sum \\frac{1}{s_i}', sub: P.rows.map(rw => '\\frac{1}{' + N(rw.s, 2) + '}').join(' + '), value: G.N, unit: '/ft', d: 4 }),
       rwrS({ id: 'xbar', label: 'Pile-group centroid from the toe', sym: '\\bar{x}', eq: '\\frac{\\sum x_i / s_i}{N}', sub: '\\frac{' + P.rows.map(rw => N(rw.x, 2) + '/' + N(rw.s, 2)).join(' + ') + '}{' + N(G.N, 4) + '}', value: G.xbar, unit: 'ft', d: 3 }),
       rwrS({ id: 'I', label: 'Moment of inertia of the group per ft', sym: 'I', eq: '\\sum \\frac{(x_i \\minus \\bar{x})^2}{s_i}', sub: P.rows.map(rw => '\\frac{(' + N(rw.x - G.xbar, 3) + ')^2}{' + N(rw.s, 2) + '}').join(' + '), value: G.I, unit: 'ft^{2}/ft', d: 4 })];
     subs.push(sub('Pile Step 1 — Pile group (per ft of wall)', [rwrItem('pl1', [{ title: 'Group properties', steps: st }])]));
-    const head = ['Combination', 'V (kip/ft)', 'x_R (ft)', 'M (kip-ft/ft)', 'H (kip/ft)', ...P.rows.map((x, i) => 'P row ' + (i + 1) + ' (kip)'), 'h (kip)'];
-    const rows = P.comb.map(c => [c.label, rwrCell(c.V, 3), rwrCell(c.xR, 3), rwrCell(c.M, 3), rwrCell(c.H, 3), ...c.L.rows.map(x => rwrCell(x.P, 2)), rwrCell(c.L.rows[0].h, 2)]);
+    // RWPT2 (2026-11-07): the table of the Piles tab: limit state, P_max / P_min with their rows, D/C; the governing combinations marked
+    const head = ['Combination', 'Limit state', 'V (kip/ft)', 'x_R (ft)', 'M (kip-ft/ft)', 'H (kip/ft)', ...P.rows.map((x, i) => 'P row ' + (i + 1) + ' (kip)'), 'P_max (kip)', 'P_min (kip)', 'h (kip)', 'D/C comp.', 'D/C uplift', 'D/C lateral', 'Governs'];
+    const rows = P.comb.map(c => { const gv = [c === P.govC && c.dcC > 0 ? 'compression' : '', c === P.govT && c.dcT > 0 ? 'uplift' : '', c === P.govH && c.dcH > 0 ? 'lateral' : ''].filter(Boolean);
+      return { cells: [c.label, rwptLS(r, c), rwrCell(c.V, 3), rwrCell(c.xR, 3), rwrCell(c.M, 3), rwrCell(c.H, 3), ...c.L.rows.map(x => rwrCell(x.P, 2)), rwrN(c.L.Pmax, 2) + ' (row ' + (c.L.iMax + 1) + ')', rwrN(c.L.Pmin, 2) + ' (row ' + (c.L.iMin + 1) + ')', rwrCell(c.L.rows[0].h, 2),
+        rwrCell(c.dcC, 3), c.dcT > 0 ? rwrCell(c.dcT, 3) : '—', rwrCell(c.dcH, 3), gv.join(', ')], cls: gv.length ? 'gov' : '' }; });
     const gc = P.govC, x0 = gc.L.rows[gc.L.iMax], gt = P.govT, gh = P.govH;
     const ck = [rwrS({ id: 'M', label: 'Moment about the group centroid, ' + gc.label, sym: 'M', eq: 'V(x_R \\minus \\bar{x})', sub: N(gc.V, 3) + '(' + N(gc.xR, 3) + ' \\minus ' + N(G.xbar, 3) + ')', value: gc.M, unit: 'kip-ft/ft', d: 3 }),
       rwrS({ id: 'Pmax', label: 'Largest pile load (row ' + (gc.L.iMax + 1) + ')', sym: 'P_{max}', eq: '\\frac{V}{N} + \\frac{M\\,(x_i \\minus \\bar{x})}{I}', sub: '\\frac{' + N(gc.V, 3) + '}{' + N(G.N, 4) + '} + \\frac{(' + N(gc.M, 3) + ')(' + N(x0.xp, 3) + ')}{' + N(G.I, 4) + '}', value: x0.P, unit: 'kip', d: 2 }),
@@ -11406,7 +11475,7 @@ function rwrModel(r) {
       rwrS({ id: 'latdc', label: 'Lateral check', sym: '\\frac{h}{' + gh.cap.hs + '}', eq: '', sub: '\\frac{' + N(gh.L.rows[0].h, 2) + '}{' + N(gh.cap.h, 2) + '}', value: gh.dcH, unit: '', d: 3, ok: ok('pileLat') })];
     const d = P.det, dt = [['Center-to-center spacing (along the wall and row to row)', N(d.cc, 1) + ' in', d.ccMin ? '≥ ' + N(d.ccMin, 1) + ' in' : 'no minimum (group effects: §1810.2.5)'],
       ['Pile side to the footing edge (toe / heel)', N(d.edge, 1) + ' in', '≥ ' + N(d.edgeMin, 0) + ' in'], ['Embedment into the footing', N(d.embed, 1) + ' in', '≥ ' + N(d.embMin, 0) + ' in']];
-    subs.push(sub('Pile Step 2 — Pile reactions and checks', [{ type: 'table', head, rows }, rwrItem('pl2', [{ title: 'Governing pile loads', ref: isA ? AA('Sec. 10.7') : 'IBC 2018 §1810', steps: ck }]),
+    subs.push(sub('Pile Step 2 — Pile reactions and checks', [{ type: 'table', wide: true, head, rows }, { type: 'note', text: rwrPlain(rwptCombNote(r)) }, rwrItem('pl2', [{ title: 'Governing pile loads', ref: isA ? AA('Sec. 10.7') : 'IBC 2018 §1810', steps: ck }]),
       { type: 'table', head: ['Detailing', 'Provided', 'Required (' + d.ref + ')'], rows: dt }, onTab('stabPile')]));
     // RWPL (2026-11-07, pile schedule; display only): one row per pile row; values from Pile Step 2 (rwPileSchedule)
     const PS = rwPileSchedule(r);
