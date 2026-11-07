@@ -2350,3 +2350,25 @@ function listTables() {
 - **How verified:** headless main vs branch, every combination value of every unit: default project and reviewer variant (CT off) identical; with Pier 1 CT on, only 6 values change (EE II, V_t at the three column bases, max and min). Receivers (abutment calculator, Spread Footing, Pile Designer) pulled the SubLoads hand-offs with no page errors; the foundationLoads cases at the footing are unchanged (only column base shears move). `check-syntax`, `phone-layout --tool bsl`, `project-library --tool bsl` (all pass), `engine/run.mjs handoffs` (10 / 10); 0 console errors on every tab.
 - **Saved data:** no key or format change (§5).
 - **Other copies:** none. **Open items:** the post-collision "single column missing" case (3.6.5.1) remains a suggestion.
+
+## 2026-11-07 — PR: claude/subloads-zone1-fixed (Z1F) — Zone 1 longitudinal connection force at a line of fixed bearings from the total permanent load of the segment (review H2; §4 result change)
+- **Why:** in-depth code review of 2026-11-07, finding H2.
+- **Problem:** in Seismic Zone 1, `eqLoads` gave every restrained bearing line `cf × (N + γEQ·N_LL)` with its own reaction. For each uninterrupted segment the code takes the tributary permanent load at the line of fixed bearings, for the longitudinal connection force, as the total permanent load of the segment. The fixed pier got about 40 % of the code force (**unconservative**).
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 3.10.9.2 (0.15 / 0.25 × the vertical reaction from the tributary permanent load and the live load assumed during the earthquake; at the line of fixed bearings of an uninterrupted segment, the total permanent load of the segment) and C3.10.9.2.
+- **Where / code:** `eqLoads(G, k, SM, rf)`, anchor `return rows.map(r => { let L = Z === 1 ? (r.restrL ? r.cf * Nt(r) : 0)`.
+  - Before: `return rows.map(r => { let L = Z === 1 ? (r.restrL ? r.cf * Nt(r) : 0) : …; … return { ...r, dL: L, dT: T }; });`
+  - After: `const fixL = r => ((G.sup[r.k].rows[r.ri] || {}).fx || {}).long === 'fix', segN = si => SM.rows.filter(x => x.si === si).reduce((a, x) => a + Nt(x), 0), nFix = …;`
+    `return rows.map(r => { const fx1 = Z === 1 && fixL(r), NL = fx1 ? segN(r.si) : Nt(r); let L = Z === 1 ? (r.restrL ? r.cf * NL : 0) : …; … return { ...r, dL: L, dT: T, NL, segL: fx1, nFixSeg: fx1 ? nFix(r.si) : 0 }; });`
+  - N_seg = Σ over the segment's bearing lines of (DC + DW + γEQ·LL), the same N each line used before. The γEQ live load is summed over the segment as well (conservative reading of "tributary live loads").
+  - Unchanged: transverse forces (each line's own reaction), elastomeric expansion lines (their own reaction), Zones 2–4, the single-span minimum A_s·N (3.10.9.1).
+- **Decision (pending engineer review):** with more than one line of fixed bearings in a segment, each fixed line is given the full segment force (conservative). Flagged as a warning on the Summary tab (`checks`, segment block, only in Zone 1) and in the Seismic tab note.
+- **Display (§6):** Seismic tab, design-force table: new column "N for long. (kip)" in Zone 1 ("segment total" at fixed lines); the note states the 3.10.9.2 rule and the multiple-fixed-lines check. Methods and Manual text updated.
+- **Check case:** the reviewer's variant (skew 30°, exposure B, one-way traffic, CE R = 1500 ft at 50 mph; Zone 1 site with the 22 S_a values, site class D, A_s = 0.08 ≥ 0.05 so cf = 0.25; γEQ = 0.5). One segment, Abut. 1 – Pier 1 (fixed) – Pier 2 – Abut. 2 (expansion, elastomeric).
+  - N per line (DC + DW / LL): Abut. 1 336.7 / 300.7; Pier 1 1239.3 / 586.1; Pier 2 1239.8 / 586.1; Abut. 2 337.0 / 300.7 kip.
+  - ΣN_DC+DW = 3152.8 kip; 0.5 × ΣLL = 0.5 × 1773.6 = 886.8 kip; N_seg = 4039.6 kip.
+  - **Pier 1 longitudinal connection force: before 0.25 × (1239.3 + 0.5 × 586.1) = 383.1 kip; after 0.25 × 4039.6 = 1009.9 kip.** Transverse 383.1 kip unchanged; Pier 2 and abutments unchanged (383.2, 121.8 kip).
+  - Pier 1, Extreme Event I: V_l at the top of footing max 412.0 → 954.8 kip; M_l top of footing 7820.5 → 18125.7 kip-ft; M_l bottom of footing 9468.3 → 21944.9 kip-ft.
+- **How verified:** headless main vs branch, every combination value of every unit: default project (no site) identical; reviewer variant: only Pier 1 Extreme Event I values change (112 values). Variant with Pier 2 also fixed: both piers 1009.9 kip, Summary warning and Seismic tab note shown. Receivers: abutment calculator, Spread Footing and Pile Designer pulled SubLoads' hand-offs with no page errors; only the EEI foundation cases differ from main. `check-syntax`, `phone-layout --tool bsl`, `project-library --tool bsl` (all pass), `engine/run.mjs handoffs` (10 / 10); 0 console errors on every tab.
+- **Hand-offs changed (§7):** foundationLoads Extreme Event I cases of a unit with a fixed bearing line in Zone 1; abutmentLoads `eq` of a longitudinally fixed abutment in Zone 1.
+- **Saved data:** no key or format change (§5).
+- **Other copies:** `abutment_calculator.html` has its own seismic connection force (AUDIT row "Earth-retaining / abutment"); not changed here (one tool per PR).
