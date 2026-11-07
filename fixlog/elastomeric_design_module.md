@@ -1461,7 +1461,7 @@ Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.5.3.4 (Eqs. 14.7.5.3.4-1 to -5): fo
 - **Saved data:** none changed.
 - **Other copies:** none. **Open items:** none.
 
-## 2026-11-07 — PR: claude/edm-h3-stab-total (H3, review 2026-11-07) — Method A stability uses the total pad thickness   [calc change] [MORE conservative]
+## 2026-11-07 — PR: claude/edm-h3-stab-total (PR #1081: https://github.com/mlococo88/All-Structural/pull/1081) (H3, review 2026-11-07) — Method A stability uses the total pad thickness   [calc change] [MORE conservative]
 
 Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.6.3.6: the total thickness of the pad shall not exceed the least of L/3, W/3 or D/4. FHWA LRFD Steel Bridge Design Example, Design Step 6 (Method A): total height = covers + internal layers + steel laminates.
 
