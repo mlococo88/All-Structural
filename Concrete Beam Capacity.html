@@ -1455,6 +1455,14 @@ function detailing(F,sh,neg,govMu,Vu,tor){
 /* =====================================================================
    COMPUTE DRIVER — every combination is evaluated in full (§7.1)
    ===================================================================== */
+/* CBM1 (2026-11-07): AASHTO LRFD 10th Ed. 5.6.3.3 minimum reinforcement for ONE combination, in its own sense of bending
+   (M_cr from servicecalc(F,neg): y_t to the tension face of that sense). Same expression as the governing-combination check
+   before: M_r = phi M_n >= min(gamma_3 gamma_1 f_r S_c, 1.33|M_u|); |M_u| = 0 -> the M_cr term alone (as before). */
+function cbcMin5633(svc,Mu,phiMn){
+  const g1=1.6, g3=(S.mat.gamma3||0.67), McrF=g3*g1*svc.Mcr;
+  const M133=Math.abs(Mu)>0?1.33*Math.abs(Mu):Infinity, need=Math.min(McrF,M133);
+  return {g1,g3,McrF,M133,need,dcr:phiMn>0?need/phiMn:Infinity,ok:phiMn>=need-1e-9};
+}
 function computeAll(){
   const combos=S.combos.map((c,i)=>({...c,ci:i}));
   /* Sign of the governing moment sets which face is in tension. A negative
@@ -1467,6 +1475,7 @@ function computeAll(){
     const sh=shear(F,Math.abs(c.Mu),Math.abs(c.Vu));
     const tor=torsion(F,Math.abs(c.Tu),Math.abs(c.Vu),sh);
     const svc=servicecalc(F,neg);
+    const mr=(S.code==='AASHTO')?cbcMin5633(svc,c.Mu,phiMn):null;   /* CBM1 */
     const dcM=phiMn>0?Math.abs(c.Mu)/phiMn:0;
     const dcV=sh.phiVn>0?Math.abs(c.Vu)/sh.phiVn:0;
     const dcT=tor?(tor.negligible?0:tor.dcr):0;
@@ -1503,7 +1512,7 @@ function computeAll(){
       else if(!isFinite(ratio)) detWorst=Math.max(detWorst,1.01);
     });
     const worst=Math.max(dcM,dcV_eff,dcT,detWorst);
-    return {...c,neg,F,pf,phiMn,sh,tor,svc,dcM,dcV,dcT,det,share,dcV_eff,
+    return {...c,neg,F,pf,phiMn,sh,tor,svc,...(mr?{mr}:{}),dcM,dcV,dcT,det,share,dcV_eff,
             detWorst,detFails,worst};
   });
   /* §7.2 identical-result detection: exact match on the factored action set */
@@ -1725,7 +1734,7 @@ function cbcCheckCard(c){
   if(c.tab===&quot;tabFlex&quot;) return cbcComboCard(&quot;flexC&quot;,c.ci);
   if(c.tab===&quot;tabShear&quot;) return cbcComboCard(&quot;shC&quot;,c.ci);
   if(c.tab===&quot;tabTor&quot;) return cbcComboCard(&quot;torC&quot;,c.ci);
-  if(c.tab===&quot;tabServ&quot;) return {card:&quot;svcMain&quot;,name:&quot;Cracking Moment and Minimum Reinforcement&quot;};
+  if(c.tab===&quot;tabServ&quot;) return S.code==='AASHTO'?{card:&quot;svcMinAll&quot;,name:&quot;Minimum Reinforcement \u2014 Every Combination&quot;}:{card:&quot;svcMain&quot;,name:&quot;Cracking Moment and Minimum Reinforcement&quot;};   /* CBM1 */
   if(c.tab===&quot;tabDetail&quot;&amp;&amp;c.id) return {card:&quot;det&quot;+c.id,name:c.label};
   return null;
 }
@@ -2302,9 +2311,9 @@ function allChecks(){
   const g=CC.govRow;
   if(g){
     if(S.code==='AASHTO'){
-      const need=Math.min((S.mat.gamma3||0.67)*1.6*g.svc.Mcr,Math.abs(g.Mu)>0?1.33*Math.abs(g.Mu):Infinity);
-      out.push({label:&quot;Minimum reinforcement&quot;,&quot;ref&quot;:&quot;AASHTO 5.6.3.3&quot;,
-        dcr:g.phiMn>0?need/g.phiMn:null,combo:g.name,na:false,tab:&quot;tabServ&quot;,ci:g.ci});
+      /* CBM1 (2026-11-07): enveloped over every combination, each in its own sense of bending (before: the governing
+         combination CC.govRow only, so a negative-moment combination was never checked) */
+      env(&quot;Minimum reinforcement&quot;,&quot;AASHTO 5.6.3.3&quot;,r=>r.mr?{dcr:r.mr.dcr,na:false}:{na:true},&quot;tabServ&quot;);
     }
     /* detailing rolled up individually, enveloped over every combination */
     detEnvelope().forEach(E=>{
@@ -3192,11 +3201,33 @@ function buildServTab(pg){
       }));
       const v=el(&quot;div&quot;,ok?&quot;okBox&quot;:&quot;errBox&quot;);
       v.innerHTML=&quot;<b>&quot;+(ok?&quot;PASS&quot;:&quot;FAIL&quot;)+&quot;</b> — minimum reinforcement per AASHTO 5.6.3.3.&quot;;
+      v.appendChild(document.createTextNode(&quot; Combination &quot;+(g.ci+1)+&quot; (&quot;+g.name+&quot;); every combination: see Minimum Reinforcement \u2014 Every Combination below.&quot;));   /* CBM1 */
       b.appendChild(v);
       cbcWorkedIn(b,[{tab:&quot;tabFlex&quot;,c:cbcComboCard(&quot;flexC&quot;,g.ci),txt:&quot;\u03c6M_n&quot;}]);   /* D11 link */
     }
     b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Deflection and crack-width control are not evaluated by this tool.&quot;));
   },pg);
+  if(S.code==='AASHTO'){   /* CBM1 (2026-11-07): 5.6.3.3 for every combination, each in its own sense of bending */
+    mkSection(&quot;svcMinAll&quot;,&quot;Minimum Reinforcement \u2014 Every Combination&quot;,b=>{
+      b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;AASHTO 5.6.3.3 applies at every section and in both senses of bending: each combination is checked with the cracking moment of the face it puts in tension (y_t to that face) and its own \u03c6M_n. The Summary shows the largest ratio.&quot;));
+      const tb=el(&quot;table&quot;,&quot;vt&quot;);
+      tb.innerHTML=&quot;<tr><th>Combination</th><th>Sense</th><th style='text-align:right'>y_t (in)</th><th style='text-align:right'>M_cr (\u03b3) (k-ft)</th><th style='text-align:right'>1.33|M_u| (k-ft)</th><th style='text-align:right'>Required (k-ft)</th><th style='text-align:right'>\u03c6M_n (k-ft)</th><th style='text-align:right'>D/C</th><th>Status</th></tr>&quot;;
+      CC.combos.forEach(r=>{ const m=r.mr; if(!m) return; const tr=el(&quot;tr&quot;);
+        [String(r.ci+1)+&quot;. &quot;+r.name,r.neg?&quot;negative&quot;:&quot;positive&quot;,fmt(r.svc.yt),fmt(m.McrF),isFinite(m.M133)?fmt(m.M133):&quot;n/a&quot;,fmt(m.need),fmt(r.phiMn),isFinite(m.dcr)?fmt(m.dcr,3):&quot;\u221e&quot;,m.ok?&quot;PASS&quot;:&quot;FAIL&quot;]
+          .forEach((v,i)=>{ const td=el(&quot;td&quot;,i>=2&amp;&amp;i<=7?&quot;v&quot;:null,v); tr.appendChild(td); });
+        tb.appendChild(tr); });
+      b.appendChild(tb);
+      CC.combos.forEach(r=>{ const m=r.mr; if(!m) return;
+        b.appendChild(eqBlock({
+          title:&quot;Combination &quot;+(r.ci+1)+&quot; (&quot;+r.name+&quot;), &quot;+(r.neg?&quot;negative&quot;:&quot;positive&quot;)+&quot; moment&quot;,ref:&quot;AASHTO 5.6.3.3, Eq. 5.6.3.3-1&quot;,
+          lines:[`M_{cr} = \\gamma_3\\left(\\gamma_1 f_r\\right)\\dfrac{I_g}{y_t} = ${fmt(m.g3,2)}\\left(${fmt(m.g1,2)}\\times${fmt(r.svc.fr,3)}\\right)\\dfrac{${fmt(r.svc.Ig,0)}}{${fmt(r.svc.yt)}}\\Big/12 = ${fmt(m.McrF)}\\text{ k-ft}`,
+            `\\min\\left(M_{cr},\\;1.33M_u\\right) = \\min\\left(${fmt(m.McrF)},\\;${isFinite(m.M133)?&quot;1.33(&quot;+fmt(Math.abs(r.Mu))+&quot;)=&quot;+fmt(m.M133):&quot;\\text{n/a}&quot;}\\right) = ${fmt(m.need)}\\text{ k-ft}`,
+            `\\phi M_n = ${fmt(r.phiMn)}\\text{ k-ft} \\;${m.ok?&quot;\\ge&quot;:&quot;<&quot;}\\; ${fmt(m.need)}\\text{ k-ft}\\qquad D/C = ${isFinite(m.dcr)?fmt(m.dcr,3):&quot;\\infty&quot;}`]
+        }));
+        cbcWorkedIn(b,[{tab:&quot;tabFlex&quot;,c:cbcComboCard(&quot;flexC&quot;,r.ci),txt:&quot;\u03c6M_n&quot;}]);
+      });
+    },pg);
+  }
   if(S.crack.check &amp;&amp; S.crack.fsBasis==='calc'){
     mkSection(&quot;svcFs&quot;,&quot;Service-Load Steel Stress&quot;,b=>{
       b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;ACI 24.3.2.1 allows f_s to be calculated from the unfactored &quot;+
@@ -5056,7 +5087,7 @@ function cbcRptModel(){
   { const K=allChecks(), keyOf=c=>{ if(c.na||c.ci==null) return undefined;
       if(c.tab==='tabFlex') return 'fx'+c.ci+'/DCR'; if(c.tab==='tabShear') return CC.combos[c.ci].share?'sh'+c.ci+'/DCRs':'sh'+c.ci+'/DCR';
       if(c.tab==='tabTor') return /cross/i.test(c.label)?'tq'+c.ci+'/size':(/Combined/.test(c.label)?'tq'+c.ci+'/combVT':'tq'+c.ci+'/DCR');
-      if(c.tab==='tabServ') return 'sv/minr'; if(c.tab==='tabDetail') return 'dt/'+c.id+'.cmp'; };
+      if(c.tab==='tabServ') return c.ci!=null?'svm/minr'+c.ci:'sv/minr';   /* CBM1: the combination that governs 5.6.3.3 */ if(c.tab==='tabDetail') return 'dt/'+c.id+'.cmp'; };
     const st=c=>{ if(c.na) return {t:'N/A',cls:'na'}; const ok=c.forceOK!=null?c.forceOK:(c.dcr<=1.0001); return {t:ok?'PASS':'FAIL',cls:ok?(c.dcr>=0.9&amp;&amp;c.forceOK==null?'hi':'ok'):'ng'}; };
     secs.push({title:'Summary of checks',subs:[{title:'All checks, enveloped over the load combinations',items:[{type:'table',head:['Check','Reference','D/C','Governing combination','Status'],
       rows:K.map(c=>[c.label,cRef(c.ref),{t:c.na||c.dcr==null?'—':(cbcDcZero(c)||(isFinite(c.dcr)?fmt(c.dcr,3):'≫1')),n:true,key:keyOf(c)},c.na?'—':c.combo,st(c)])},
@@ -5087,6 +5118,16 @@ function cbcRptModel(){
         cS({id:'minr',label:'Minimum reinforcement: required / M_r ('+cn(g)+')',sym:'\\dfrac{\\min(M_{cr},1.33M_u)}{\\phi M_n}',eq:'',sub:'\\dfrac{'+fmt(need)+'}{'+fmt(g.phiMn)+'}',value:g.phiMn>0?need/g.phiMn:Infinity,d:3,ok,note:'φM_n: see §phiMn'})]});
     }
     subs.push({title:'Cracking moment and minimum reinforcement ('+cn(g)+')',items:[{type:'topics',scope:'sv',see:'fx'+g.ci,title:'Worked steps',list:T},{type:'note',text:'Deflection and crack-width control are not evaluated by this tool. [[tab:tabServ|On screen: Serviceability tab]]'}]});
+    if(!ACI){   /* CBM1 (2026-11-07): 5.6.3.3 for every combination, each in its own sense of bending */
+      const L=[], fxk=r=>'fx'+(r.sameAs!==undefined?r.sameAs:r.ci)+'/phiMn';
+      CC.combos.forEach(r=>{ const m=r.mr; if(!m) return; const c='C'+(r.ci+1);
+        L.push({title:cn(r)+', '+(r.neg?'negative':'positive')+' moment',ref:'AASHTO LRFD 10th Ed. 5.6.3.3',steps:[
+          cS({id:'McrF'+r.ci,label:'Factored cracking moment, '+(r.neg?'top':'bottom')+' face in tension (y_t to that face)',sym:'M_{cr}',eq:'\\gamma_3\\left(\\gamma_1 f_r\\right)\\dfrac{I_g}{y_t}',sub:fmt(m.g3,2)+'\\left('+fmt(m.g1,2)+'\\times'+fmt(r.svc.fr,3)+'\\right)\\dfrac{'+fmt(r.svc.Ig,0)+'}{'+fmt(r.svc.yt)+'}/12',value:m.McrF,unit:'kip-ft',ref:'AASHTO LRFD 10th Ed. Eq. 5.6.3.3-1'}),
+          cS({id:'need'+r.ci,label:'Required resistance',sym:'\\min\\left(M_{cr},\\;1.33M_u\\right)',eq:'',sub:'\\min\\left('+fmt(m.McrF)+',\\;'+(isFinite(m.M133)?'1.33('+fmt(Math.abs(r.Mu))+')':'\\text{n/a}')+'\\right)',value:m.need,unit:'kip-ft'}),
+          cS({id:'minr'+r.ci,label:'Minimum reinforcement: required / M_r ('+c+'; φM_n worked in the Flexure section of this combination)',sym:'\\dfrac{\\min(M_{cr},1.33M_u)}{\\phi M_n}',eq:'',sub:'\\dfrac{'+fmt(m.need)+'}{'+fmt(r.phiMn)+'}',value:m.dcr,d:3,ok:m.ok})]}); });
+      subs.push({title:'Minimum reinforcement, every combination (AASHTO 5.6.3.3)',items:[{type:'note',text:'Each combination in its own sense of bending; the Summary shows the largest ratio. φM_n: '+CC.combos.filter(r=>r.mr).map(r=>'C'+(r.ci+1)+' [['+fxk(r)+']]').join(', ')+'.'},
+        {type:'topics',scope:'svm',title:'Worked steps',list:L},{type:'note',text:'[[tab:tabServ|On screen: Serviceability tab]]'}]});
+    }
     if(S.crack.check&amp;&amp;S.crack.fsBasis==='calc'){
       [[false,'Positive moment — bottom face in tension',Math.abs(S.crack.MsPos||0),'p'],[true,'Negative moment — top face in tension',Math.abs(S.crack.MsNeg||0),'n']].forEach(cse=>{
         const SS=serviceSteelStress(cse[0],cse[2]); if(!SS) return;
@@ -10455,7 +10496,7 @@ window.addEventListener('DOMContentLoaded',()=>{
           if(c.tab==='tabFlex') ks=['fx'+ci+'/DCR'];
           else if(c.tab==='tabShear') ks=['sh'+ci+'/DCRs','sh'+ci+'/DCR'];
           else if(c.tab==='tabTor') ks=[/cross/i.test(c.label)?'tq'+ci+'/size':(/Combined/.test(c.label)?'tq'+ci+'/combVT':'tq'+ci+'/DCR')];
-          else if(c.tab==='tabServ') ks=['sv/minr'];
+          else if(c.tab==='tabServ') ks=['svm/minr'+ci,'sv/minr'];   /* CBM1: the combination that governs 5.6.3.3 */
           else if(c.tab==='tabDetail') ks=['dt/'+c.id+'.cmp']; }
         ks=ks.map(function(k){ return 'cap:'+k; });
         ks=ks.concat(ks.length?['cap:omit-'+ks[0].slice(4).split('/')[0]]:[],c.tab?['cbro:cap:'+c.tab]:[]);
