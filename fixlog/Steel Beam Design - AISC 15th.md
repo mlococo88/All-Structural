@@ -2750,3 +2750,36 @@ From the code-compliance review of 2026-11-07 (finding M2).
   - Review built-up case (d 30, b_f 10, t_f 0.75, t_w 0.3125, unstiffened): h/t_w 91.2 ≤ 137.3 (not slender), 91.2/260 = 0.351 OK. G.8B (a = 42 in): a_w = 33 × 0.3125/(16 × 1.5) = 0.430, 0.043 OK.
 - **How verified:** origin/main vs branch on 16 scenarios + v16 engine cases: the new row appears only for built-up sections (builtup, g8, plates, f13bad); every other check identical in all scenarios. Summary, Section Properties and Report show the row; 0 console errors. Kit: check-syntax, steel-beam-builtup 11/11, project-library steelbeam, phone-layout sbeam, list-input sbeam: pass.
 - **Saved data:** none changed.
+
+## 2026-11-07 — PR: claude/steelbeam-m4-b1 — Beam mode with axial compression: M_ux amplified by B1 (Appendix 8) in the §H1 interaction (M4; calculation change)
+
+From the code-compliance review of 2026-11-07 (finding M4).
+
+### M4. B1 amplification of the analysis moment   [calculation change, more conservative]
+- **Problem:** in beam mode M_ux comes from the tool's first-order analysis and P_u is entered per combination. H1 used the first-order moment; the user cannot amplify the analysis moment, so P-δ was never included.
+- **Governing provision:** AISC 360-16 §C1 (second-order effects) and Appendix 8: Eq. A-8-3 B1 = C_m/(1 − αP_r/P_e1) ≥ 1, α = 1.0 (LRFD); §8.2.1(b) C_m = 1.0 (transverse loading between supports, conservative); Eq. A-8-5 P_e1 = π²EI*/L_c1², EI* = EI for the effective length method.
+- **Where (1):** `designAll`, per combination, block `/* interaction */`, anchor `/* M4 (2026-11-07): beam mode with axial compression`.
+- **Before:**
+```js
+    const rx=C.flexGov?C.flexGov.dcr:0;
+```
+- **After:**
+```js
+    let rx=C.flexGov?C.flexGov.dcr:0;
+    if(man.Pu>0&&C.phiPn>0&&D.Lcx>0&&p.Ix>0){
+      const Pe1=Math.PI*Math.PI*EKSI*p.Ix/(D.Lcx*D.Lcx),Cm=1.0,den=1-1.0*man.Pu/Pe1;
+      const B1=den>0?Math.max(1,Cm/den):Infinity;
+      C.B1={B1,Pe1,Cm,Lc1:D.Lcx,Pr:man.Pu,rx0:rx,Ix:p.Ix};
+      rx=rx*B1;
+      if(!isFinite(B1))D.warns.push(/* P_u >= P_e1: unstable in the plane of bending */);
+    }
+```
+  rx feeds H1-1a / H1-1b and H3-6 as before. The Mₓ flexure row is not amplified (with P_u > 0 the interaction, ≥ B1·rx, governs).
+- **Where (2):** `buildInterTab`, per combination, anchor `/* M4: worked B1 */`: P_e1 and B1 worked with values; the M_rx/M_cx ratio is shown as B1 × the governing flexure DCR.
+- **Decision (pending engineer review):** L_c1 = the compression effective length L_cx of Design Parameters (default the total beam length, × K_x): conservative where it exceeds the span. EI* = EI (effective length method, as the compression check uses K-factors). C_m = 1.0. B1 is applied to the analysis M_ux only: M_uy and member-mode moments are entered by the user and are taken as second-order already (as the User Manual says). Batch mode unchanged.
+- **Check case:** default project, W18X50 A992, 20 ft simple span; P_u = 100 kip on 1.2D + 1.6L + 0.5S; φP_n = 156.96 kip (L_cx = L_cy = 20 ft); rx = 0.1162.
+  - P_e1 = π² × 29000 × 800/240² = 3975 kip; B1 = 1.0/(1 − 100/3975) = 1.0258.
+  - **Before:** H1-1a = 100/156.96 + 8/9 × 0.1162 = 0.637 + 0.1033 = **0.7403**.
+  - **After:** 0.637 + 8/9 × (1.0258 × 0.1162) = **0.7430**.
+- **How verified:** origin/main vs branch on 16 scenarios + v16 engine cases: only the axial scenario moved (its 1.2D + 1.6L interaction, 0.7403 → 0.7430). Interaction tab renders the B1 block, 0 KaTeX errors. Kit: check-syntax, steel-beam-builtup 11/11, project-library steelbeam, phone-layout sbeam, list-input sbeam: pass; 0 console errors.
+- **Saved data:** none changed.
