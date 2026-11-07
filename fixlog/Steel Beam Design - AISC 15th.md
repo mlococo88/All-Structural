@@ -2705,3 +2705,28 @@ From the code-compliance review of 2026-11-07 (finding H2).
 - **How verified:** origin/main vs branch on the 13 earlier scenarios plus H.6 and a member-mode torsion case: only the torsion scenarios moved (torsion, plates, h6, memtor), in the §H3.3 shear values; f_n identical in every case; every other check identical; v16 engine cases identical. Torsion tab renders with 0 KaTeX errors. Kit: check-syntax, steel-beam-builtup 11/11, project-library steelbeam, phone-layout sbeam, list-input sbeam: pass; 0 console errors.
 - **Note:** for a section where the old average-shear value mixed with the flange St-Venant stress exceeded both new element sums at the same station, the new value can be lower; it is the DG 9 value per element.
 - **Saved data:** none changed.
+
+## 2026-11-07 — PR: claude/steelbeam-m1-stiffener-ist — Transverse stiffener I_st per AISC 360-16 Eq. G2-13 (with I_st1 and ρ_w) (M1; calculation change, requirement display)
+
+From the code-compliance review of 2026-11-07 (finding M1).
+
+### M1. Minimum stiffener moment of inertia   [calculation change, more conservative]
+- **Problem:** `stiffenerReq` gave I_st ≥ j b t_w³ (j = 2.5/(a/h)² − 2 ≥ 0.5) only, the AISC 360-10 form, presented as the §G2.3 requirement. AISC 360-16 §G2.3(e) requires I_st ≥ I_st2 + (I_st1 − I_st2)ρ_w, which is larger whenever V_r > V_c2. The value is a displayed requirement (no DCR uses it).
+- **Governing provision:** AISC 360-16 §G2.3(e), Eqs. G2-13, G2-14, G2-15, with V_c1 (§G2.1), V_c2 (0.6F_y A_w C_v2, C_v2 per Eqs. G2-9 to G2-11), ρ_st, ρ_w and b_p as defined there.
+- **Where (1):** `stiffenerReq`, anchor `/* M1 (2026-11-07): AISC 360-16 Sec. G2.3(e), Eq. G2-13`.
+- **Before:**
+```js
+function stiffenerReq(p,stiff){
+  ...
+  return{j,b,ah,Ist:b*Math.pow(p.tw,3)*j,btLim:0.56*SQ(EKSI/p.mat.Fy)};
+}
+```
+- **After:** `stiffenerReq(p,stiff,Vr,sh)` returns I_st2 (old value), I_st1 = h⁴ρ_st^1.3/40·(F_yw/E)^1.5, V_c1 = φV_n (the stiffened §G2.1 strength `sh`), V_c2 = φ·0.6F_y A_w C_v2 (`cv2Of` with the stiffened k_v), ρ_w = max(0, (V_r − V_c2)/(V_c1 − V_c2)), and I_st = I_st2 + (I_st1 − I_st2)ρ_w. Without a shear demand, I_st = max(I_st1, I_st2) (the User Note's conservative I_st1).
+- **Where (2):** `stiffBlock`, anchor `const Vr=(D&&D.perCombo`: V_r = the largest |V_u| of the combinations (cases in member mode); the worked block shows G2-15, G2-14, V_c2, V_c1, ρ_w and G2-13 with values.
+- **Decision (pending engineer review):** V_r is the largest V_u anywhere (one spacing is entered for the whole member, so every panel is taken at the worst shear: conservative). F_yst is taken equal to F_yw (ρ_st = 1.0), as the tool has no stiffener material input. ρ_w is not capped at 1.0 (a panel with V_r > V_c1 fails in shear anyway).
+- **Check case (AISC Design Examples v16.0, G.8B end panel):** built-up d 36, b_f 16, t_f 1.5, t_w 5/16, h 33, A572 Gr 50, a = 42 in, V_r = 210 kip.
+  - a/h = 1.273, k_v = 8.09; φV_c1 = 216.7 kip; C_v2 = 1.51 k_v E/((h/t_w)² F_y) = 0.635 (G2-11), φV_c2 = 0.9 × 0.6 × 50 × 11.25 × 0.635 = 192.9 kip; ρ_w = (210 − 192.9)/(216.7 − 192.9) = 0.719.
+  - I_st2 = 0.5 × 33 × 0.3125³ = 0.504 in⁴; I_st1 = 33⁴/40 × (50/29000)^1.5 = 2.123 in⁴.
+  - **Before:** I_st = **0.504 in⁴**. **After:** 0.504 + (2.123 − 0.504) × 0.719 = **1.667 in⁴**.
+- **How verified:** engine call on G.8B (above); V_x tab renders the block with 0 KaTeX errors. origin/main vs branch on 15 scenarios + v16 engine cases: every check identical (no DCR uses I_st). Kit: check-syntax, steel-beam-builtup 11/11, project-library steelbeam, phone-layout sbeam, list-input sbeam: pass; 0 console errors.
+- **Saved data:** none changed.
