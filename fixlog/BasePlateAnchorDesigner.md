@@ -5280,3 +5280,33 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **How verified:** `node tests/check-syntax.mjs`; `node tests/bpad-circle.mjs` (40 projects, main vs branch): every DCR identical except msa3a Breakout (V) 0.157 → 0.220; the default, C3 (45° shear) variants and the other inclined-shear projects change only by the added step text; `node tests/bpad-profis.mjs`: only msa3a's breakout values differ (and the added step on the default, struct2v1/v2, torqued); `node tests/anchor-parity.mjs` PASS; `tests/smoke/project-library.mjs --tool baseplate`, `tests/smoke/standard-save.mjs`, `tests/smoke/dxf-print-sheets.mjs --tool bp`; 0 console errors.
 - **Other copies:** none.
 - **Open items:** the per-anchor detail table of a torsion combination still shows V_res against the sweep's φV_cbg (pre-existing; the Summary uses the sweep's demand). The interaction of perpendicular and parallel components on one edge (decision 2).
+
+## 2026-11-07 — BPH2: column eccentricity e_x / e_y enters the calculation (PR: claude/bp-h2-col-ecc)
+
+### BPH2. Loads at the column centroid moved to the plate centre; plate cantilever per side   [calculation change, more conservative; saved data: none (old saves with e ≠ 0 change, which is the fix)]
+- **Problem (review H2, 2026-11-07):** `plate.exc_x` / `plate.exc_y` ("Column eccentricity ex / ey") were read only by the drawings, the 3-D view and the PROFIS export. The Manual (4A) said the loads act at the column centroid and that the eccentricity is reflected in the bending calculation; no check used it. Unconservative.
+- **Governing provision:** statics (the loads act at the column centroid); AISC Design Guide 1 (2nd Ed., as cited by the tool) §3.1 cantilevers m, n measured from the column faces, §3.3 bearing block (Eq. 3.3.14 / 3.3.15). DG1 is not in /home/user/structural_references; the cantilever rule (each side from its own column face) is the DG1 definition applied per side.
+- **Where:**
+  - new `bpColEccCombo(cb)` before `computeAll()` (anchor `/* BPH2 (2026-11-07): COLUMN ECCENTRICITY`);
+  - `computeAll()`: before `const combos=S.combos.map((cb,ci)=>{` → after `const combos=S.combos.map((cb0,ci)=>{\n    const cb=bpColEccCombo(cb0);` (so `raw`, the DG1 solves, the neutral-axis / elastic anchor forces, the torsion and every check use the moved loads);
+  - `validateInputs()` DG1 no-solution check (`(S.combos||[]).forEach(cb0=>{ const cb=bpColEccCombo(cb0);`) and the foundation-depth sensitivity table (`cb=bpColEccCombo(S.combos[gi])`), so they see the same loads;
+  - `plateBending()`: new block after `let cM=tComp(qY,Ymx,m), cN=tComp(qX,Ynx,n);` (was `const`), anchor `/* BPH2 (2026-11-07): column eccentric on the plate`; the tension-side arm: before `hx=Math.abs(pa.x);hy=Math.abs(pa.y);` → after `hx=Math.abs(pa.x-ecx);hy=Math.abs(pa.y-ecy);`; `cant` includes the per-side cantilevers; a first worked step "Column eccentric on the plate — loads moved to the plate centre, cantilever per side"; `govC` names the side;
+  - circular-plate warning text; User Manual 4A (two sentences).
+- **Before / after (expressions):**
+  - M_x: M_x → **M_x + P·e_y**; M_y: M_y → **M_y − P·e_x**; T: T → **T + e_x·V_y − e_y·V_x** (P tension-positive; +M_x tension on +y, +M_y tension on −x, as the tool's convention; T counter-clockwise).
+  - Plate compression side: one cantilever per axis, m = (N − 0.95d)/2, n = (B − 0.80b_f)/2 → **one per side**: ℓ(±y) = m ∓ e_y, ℓ(±x) = n ∓ e_x. Each side is loaded by the DG1 block of its axis (q over Y from the compressed edge, the edge given by the sign of the moved moment): M_side = q·[(ℓ − a)² − (ℓ − b)²]/2, [a, b] = the block inside that cantilever measured from that plate edge; t = √(4M_side/(φF_y)). On the compressed side a = 0, so this is Eq. 3.3.14 (Y ≥ ℓ) or 3.3.15 (Y < ℓ), as before.
+  - Plate tension side: anchor arm measured from the column centre (|x − e_x|, |y − e_y|) to the column face.
+- **e_x = e_y = 0:** `bpColEccCombo` returns the same object and the per-side block does not run, so every result is unchanged (proved below).
+- **Decisions (pending engineer review):**
+  1. The shear at the column centroid also twists the anchor group: T + e_x·V_y − e_y·V_x (conservative; this turns on the BC-3 torsion model for an eccentric column with shear).
+  2. For e ≤ N/6 the tool's DG1 solve gives the trapezoid PEAK q over the full length (Y = N). The far side is loaded by that same q (conservative; the elastic trapezoid is lower there).
+  3. The cross-axis use of the bearing (the n-side strips under the M_x block) is unchanged here; it is review item M3 (separate PR).
+  4. Circular plate: the moved loads reach the anchors and the bearing; the LRFDLTS bending line stays concentric (warning updated).
+- **Check case (review H2):** default project (18 × 18 × 1.5 plate A36, W12X65 d = 12.1, b_f = 12.0), one combination P = −300 kip (compression), e_y = 3 in.
+  - Before: plate DCR **0.669**, bearing **0.335** (same as e_y = 0).
+  - After: M_x = 0 + (−300)(3) = −900 kip-in; e = 900/300 = 3.0 = N/6 → trapezoid peak q = 300/(18 × 18) × (1 + 6 × 3/18) = 0.926 × 2 = **1.852 ksi**; bearing 1.852/2.763 = **0.670**.
+  - m = (18 − 0.95 × 12.1)/2 = 3.253 in; ℓ(−y) = 3.253 + 3 = 6.253 in (far side, block over the whole cantilever); M = 1.852 × 6.253²/2 = 36.21 kip-in/in; t = √(4 × 36.21/(0.9 × 36)) = **2.114 in → DCR 1.409** (review: ~1.41 ✓). ℓ(+y) = 0.253 in → t = 0.085 in; n sides 4.2 in, q 0.926 → 1.004 in.
+  - Shear eccentricity: e_x = 2, P = −100, V_y = 5 → M_y = +200 kip-in (compression on +x, the column side), T = 2 × 5 = 10 kip-in.
+- **How verified:** probe (default, e_y = 0 and 3, e_x = 2 with V_y); `node tests/check-syntax.mjs`; `node tests/bpad-circle.mjs` (40 projects, all e = 0): results identical to main; `node tests/bpad-profis.mjs`, `node tests/anchor-parity.mjs`; `tests/smoke/project-library.mjs --tool baseplate`, `tests/smoke/standard-save.mjs`, `tests/smoke/dxf-print-sheets.mjs --tool bp`; 0 console errors.
+- **Other copies:** none.
+- **Open items:** decisions 1–4. The PROFIS export still writes the offset as Profile OffsetX/Y (unchanged, unconfirmed mapping, ENGINEER_CHECKS A10).
