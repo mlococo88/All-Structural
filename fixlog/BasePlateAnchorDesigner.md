@@ -5373,3 +5373,28 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **How verified:** probe on main and branch; `node tests/check-syntax.mjs`; `node tests/bpad-circle.mjs` (40 projects, DCR comparison), `bpad-profis.mjs`, `anchor-parity.mjs`; `tests/smoke/project-library.mjs --tool baseplate`, `standard-save.mjs`, `dxf-print-sheets.mjs --tool bp`; 0 console errors.
 - **Other copies:** none.
 - **Open items:** b_eff = max(B, N)/2 is still the tool's assumption (review M9, DG1 edition).
+
+## 2026-11-07 — BPM3: biaxial bearing and compression-side plate bending from the rigid-plate solve (PR: claude/bp-m3-biax-bearing, PR #971: https://github.com/mlococo88/All-Structural/pull/971)
+
+### BPM3. Both moments: the larger of DG1 and the biaxial solve   [calculation change, more conservative for combinations with both M_x and M_y; saved data: none]
+- **Problem (review M3):** with M_x and M_y together, bearing and the compression side of the plate used two independent uniaxial DG1 solves (`resX`, `resY`), each with the full P and the full plate width. This understates the corner pressure: in the review case the NA peak is 1.244 ksi against a DG1 q of 0.511 ksi; in the default project's 0.9D+1.0W it is 1.017 against 0.741 ksi. DG1 does not cover biaxial moment.
+- **Governing provisions:** ACI 318-19 §22.8.3.2 / AISC 360-16 J8 (φ = 0.65 bearing; the φf_p limit is unchanged); AISC DG1 §3.1 cantilevers and the plate-strip moment t = √(4M/(φF_y)) (2nd Ed., as cited). The biaxial pressure field is statics of a rigid plate on an elastic bed: the same solve (`naAnchorForces`, inclined neutral axis, K_c = E_conc/D) that gives the anchor forces.
+- **Where:** new `bpBiaxBearing(c)` (cached in a WeakMap, so no result object changes) and `bpBiaxStrips()` before `plateBending()` (anchor `/* BPM3 (2026-11-07): BIAXIAL BEARING`). `plateBending()`: after the λn′ line, the biaxial strip thickness is a further candidate for `tReqC`, with a new step "Compression side — biaxial bearing (rigid-plate solve, both moments)". `bearingCheck()`: σ_max/φf_p of each combination with both moments is a candidate for the DCR (basis "biaxial"), one line per such combination. User Manual: one paragraph after the column-eccentricity paragraph.
+- **Applies when:** |M_x| > 0 and |M_y| > 0 (after the BPH2 transfer), rectangular plate, the plate bears (no open stand-off). The NA solve of the combination is reused when it exists; with the "elastic" force model it is run here for the bearing only. Otherwise nothing changes.
+- **Before / after:**
+  - Bearing: max over combinations and axes of the DG1 ratio → **max(DG1 ratio, σ_max/φf_p)**.
+  - Compression-side thickness: max(t_m, t_n, t_λn′) from DG1 → **max(DG1 thickness, √(4M_strip,max/(φF_y)))**. M_strip = ∫₀^ℓ σ(u)·u du along a strip perpendicular to a column face (u from the face). The strip with the largest moment on each of the four sides is used (80 strips, 200 points).
+- **Decision (pending engineer review):** the larger of the two methods (conservative), as requested. The elastic field has no stress cap, so σ_max can exceed φf_p where DG1 would redistribute plastically. That is conservative for both checks.
+- **Check cases:**
+  - **Review M3:** plate 22 × 22 × 1.5, W8X31, e 2 in, pedestal 36 × 36, P = −60, M_x = M_y = 500 kip-in.
+    - DG1 q = 0.511 ksi on both axes.
+    - Biaxial σ_max = **1.244 ksi** (review ✓). Bearing **0.185 → 0.450** (1.244/2.763).
+    - Strip moments: +x ℓ 7.8 in, 32.51 kip-in/in; −y ℓ 7.2 in, 28.06.
+    - t = √(4 × 32.51/(0.9 × 36)) = 2.003 in, so **plate DCR 0.877 → 1.336**.
+  - **Default project (changes):** 0.9D+1.0W (M_x = 180, M_y = 300 kip-in).
+    - σ_max = 1.017 ksi → bearing **0.268 → 0.368**.
+    - Strip +x (ℓ = n = 4.2 in): M = 7.99 kip-in/in (≤ σ_max ℓ²/2 = 8.97) → t = 0.993 in → plate **0.574 → 0.662**.
+    - 1.2D+1.0W: t 0.670 → 0.905 in.
+- **How verified:** probe on main and branch (KaTeX of the new steps: all typeset); `node tests/check-syntax.mjs`; `node tests/bpad-circle.mjs` (40 projects: the changes are exactly the combinations with both moments; listed in the PR), `bpad-profis.mjs`, `anchor-parity.mjs`; `tests/smoke/project-library.mjs --tool baseplate`, `standard-save.mjs`, `dxf-print-sheets.mjs --tool bp`; 0 console errors.
+- **Other copies:** none.
+- **Open items:** the λn′ inner panel still uses the DG1 q. The bedding modulus (E_conc = 3600 ksi constant, D) is the existing NA-solve setting (Anchor Bolts tab).
