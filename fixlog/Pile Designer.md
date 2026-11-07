@@ -19872,3 +19872,210 @@ index 06a42e4..b58d4e3 100644
 - **How verified:** main vs branch on the default project: every localStorage key (1), page text (60726 chars), Export JSON (5220 chars identical) and the printed report text (print media, 38024 chars) identical (clock times normalised); 0 console errors; chip click → card on screen, no dialog; Ctrl+S / Ctrl+Shift+S → Save as; header at 1280 / 1400 / 1920 / 390 px (390: no sideways scroll), screenshots looked at. `node tests/check-syntax.mjs "Pile Designer.html"`; `node tests/smoke/pile-library.mjs`; `node tests/smoke/github-sync-tools.mjs --tool pile`; `node tests/smoke/home-projects.mjs --tool pile`: pass. CRLF file: line endings kept (3 CRLF lines added). Tests: `pile-library.mjs` (header = chip · Undo · Redo · Methodology; Save by Ctrl+S and by the card's Save; the library through the chip and the card's Saved projects…; `change()` opens the Pile rail tab when the Project tab is open) and `github-sync-tools.mjs` (pile: chip, then the card's Saved projects…).
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
+
+## 2026-11-07 — PR: claude/pile-h1-comb-pr (PR #995: https://github.com/mlococo88/All-Structural/pull/995) (PDA-H1) — Module 05 micropile casing combined axial + flexure: P_r over the unsupported length   [calculation change]
+- **Problem (review H1):** Module 05 (6.9.2.2.1, casing only) took P_r = φ_c P_n at K·L_c with `L_c = 1.0 ft` hard-wired (`DEFAULT_INPUTS.Lc`, no input), whatever the stickup, design scour or Module 10. With a stickup the column over the unsupported length is much weaker, so the check was unconservative. The H-pile path already uses the Module 10 column (`const Pn_comb = Pn_axial;`).
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 10.9.3.10.2 (for a micropile above ground, through scour or weak soil, the laterally unsupported length is to be considered in the axial compression resistance; Eqs. 10.9.3.10.2a / 2b are for a length with no unsupported length); Art. 10.7.3.13.4 (effective length = unsupported length + depth to fixity); Art. 6.9.2.2.1 (P_r per 6.9.2.1 / 6.9.4.1).
+- **Where:** `computeAll`, right after the `R.buckling = { … bklLpileM: I.bklLpileM };` block (anchor `// PDA-H1 (2026-11-07): Module 05`).
+  - Before: nothing; `R.comb.Pr_col = phi_c * Pn_col` at L_c stayed the P_r of the interaction.
+  - After (micropile only; not H-pile, not integral abutment): `Pr_Lc = Pr_col`; when `Lu_free > 0` (stickup + design scour, or the entered added length) and the Module 10 column of the selected method (`selFinal`, Davisson when the selected method has no result) has P_n > 0: `prM10 = bklPhiC * selFinal.Pn`; if `prM10 < Pr_col`: `Pr_col = prM10`, `PuPr = Pu / Pr_col`, the equation branch (6.9.2.2.1-1 / -2 / -3, same rules as before), `interaction`, `interaction_ref` and `pass` recomputed. New fields `Pr_Lc`, `prM10`, `prGov` ("Lc" / "m10"), `Lu`, `m10 { Lf, Le, KL, Kb, slender, Pe, Pn, phi_c, src }`. Module 10 does not have to be switched on (its column is always computed).
+  - Display: Structural-tab / printed Calc, the Report steps (id `cb/Pr` now labelled P_r,L_c; new `cb/Pr10`, `cb/PrGov`) and the Module 05 derivation: "P_r,L_c = φ_c P_n", then "Column over the unsupported length (Module 10, method): L = L_u + L_f, KL/r, P_r,10 = φ_c P_n" and "Governing P_r = min(P_r,L_c, P_r,10)"; "Worked in" link to Module 10. The interaction-diagram point uses `Pu / Pr_col` (was `Pu / (phi_c * Pn_col)`).
+  - Load note (`mergeSavedInputs`, anchor `// PDA-H1 (2026-11-07): one-time note`): a micropile project saved before (pdaRev < 4) with stickup, scour or added length > 0 gets a one-time note that the combined check changes. `pdaRev` default 3 → 4. No input is changed; no key or format change.
+- **Check case (review H1):** default micropile, stickup 6 ft, input M_max 17.5 kip-ft, Davisson sand n_h 60, K_b 2.1.
+  - Module 10: L = 6 + 4.84 = 10.84 ft, KL = 22.77 ft, r = 2.297 in, KL/r = 118.96; P_e = π²(29000)(7.955)/118.96² = 160.9 kip; P_o = 80(7.955) = 636.4 kip, P_o/P_e = 3.96 > 2.25 → P_n = 0.877 P_e = 141.1 kip; P_r,10 = 0.80(141.1) = 112.9 kip.
+  - Before: P_r = 507.5 kip (L_c = 1 ft): 86/507.5 + 17.5/53.95 = 0.169 + 0.324 = **0.494 OK**.
+  - After: P_r = min(507.5, 112.9) = 112.9 kip: 0.762 + 0.324 = **1.086 NG** (Eq. 6.9.2.2.1-3, casing not compact). Same with Module 10 off.
+  - Default project (3 ft stickup): P_r 507.5 → 214.1 kip; App with p-y M_max 53.45: 1.160 → 1.392 NG; computeAll defaults (M 17.5): 0.494 → 0.726.
+- **How verified:** `computeAll` on 15 cases main vs branch (full R compared): only `R.comb` moved, and only where L_u > 0 (no stickup: P_r and D/C unchanged; H-pile cases identical). App and Report text main vs branch: only the Module 05 lines and the combined row change; Report 0 unresolved references, 0 duplicate keys, no NaN; autosaved inputs identical except `pdaRev` 3 → 4; old-project load note shown once; `check-syntax`: pass; `pile-library`: every library check passes, its two "page text identical" checks show the intended Module 05 text and `pdaRev`; 0 console errors.
+- **Other copies:** none.
+- **Open items:** `L_c` (1 ft) is kept as the soil-supported floor of P_r. Module 10 off: its column is still used here (H2 makes the column check itself automatic).
+
+## 2026-11-07 — PR: claude/pile-h2-buckling-auto (PR #999: https://github.com/mlococo88/All-Structural/pull/999) (PDA-H2) — Module 10 column check runs automatically when the pile has a stickup or design scour   [calculation change]
+- **Problem (review H2):** Module 10 was off by default (`bucklingEnable: false`) while the default pile has a 3 ft stickup. While it was off, a known stickup or design scour was ignored for axial: H-pile P_n = P_o (`hasStickup = !!bkl.enable && Lu_bkl > 0`), and the micropile column check was skipped (`buck_pass = !enableBuckling || …`). Flexure already used L_b = L_u, so the tool did not agree with itself.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 10.9.3.10.2 (micropiles: an unsupported length above ground, through scour or weak / liquefiable soil is to be considered in the axial compression resistance); Art. 10.7.3.13.4 (effective length = unsupported length + depth to fixity); Art. 6.9.4.1.
+- **Decision (pending engineer review):** automatic, not an NG "not checked" row. The check runs when stickup + design scour > 0 (not for integral abutments, which have their own scour path). The saved toggle `bucklingEnable` is kept as stored and still switches the check on without a stickup or scour (a void or soft layer entered as the added length). While automatic, the toggle shows on and says why; clicking it does nothing.
+- **Where:**
+  - New top-level `bklAutoOn(I)` / `bklOn(I)` before `function groupPmAutoOn(` (anchor `/* PDA-H2 (2026-11-07)`).
+  - `computeAll`: `const enableBuckling = I.bucklingEnable;` → `const enableBuckling = bklOn(I);`. `R.buckling.auto` added.
+  - p-y profile for the nonlinear ramp (anchor `const Lu_ft = bklOn(I)`): `I.bucklingEnable ?` → `bklOn(I) ?`, the same rule as `computeAll`.
+  - Display: the input panel "Buckling" (toggle `on: r.buckling.enable`, its sub-text, the K / added length / ramp-cap fields), Module 10 "inputs used", the printed "Buckling · unsupported length" inputs ("ON (automatic: unsupported length)"), and the Module 03 note. All went from `I.bucklingEnable` to `r.buckling.enable`.
+  - Load note (`mergeSavedInputs`, anchor `// PDA-H2 (2026-11-07): one-time note`): a project saved before this (pdaRev < 5) that has the toggle off and a stickup or scour gets a one-time note that its results change. `pdaRev` 4 → 5. No input is changed.
+- **Check case (review H2):** H-pile HP14×89, sand N1,60 20, toe 30 ft, STL 200 kip, M 60 kip-ft, stickup 10 ft, Module 10 off (Davisson weak axis, n_h 60, K_b 2.1).
+  - Hand: L_f = 7.30 ft, KL/r = 2.1(17.30)(12)/3.553 = 122.7. P_e = π²(29000)(25.83)/122.7² = 491 kip. P_o/P_e = 1291.5/491 = 2.63 > 2.25, so P_n = 0.877 P_e = 430.6 kip and φ_c P_n = 0.60(430.6) = 258.3 kip.
+  - Before: φ_c P_n = **774.9 kip** (P_o); interaction 200/904.05 + 60/557.0 = **0.329**.
+  - After: φ_c P_n = **258.3 kip**; P_r = 301.4 kip; interaction 200/301.4 + 60/557.0 = **0.771**. KL/r 122.7 > 120 is flagged in the H-pile slenderness note.
+  - Default micropile (3 ft stickup): the buckling row is added: φ_c P_n = 214.1 kip ≥ 86 kip, OK (D/C 0.40). No other value moves.
+- **Old projects:** a saved project with Module 10 off and a stickup or scour > 0 changes when it is opened. This is the fix. The one-time load note says so, and the stored toggle stays off.
+- **How verified:**
+  - `computeAll` main vs branch on 15 cases. Only cases with Module 10 off and L_u > 0 moved: `buckling.enable` and `stability.closedForm*`, plus the H-pile `hpileStruct` axial / combined fields in the H2 case. Cases with Module 10 already on, or without a stickup: only the new `auto` field.
+  - App and Report: the buckling row, the inputs table and section 10 were added (section numbers shift). 0 unresolved references, 0 duplicate keys, no NaN.
+  - The old H-pile project shows the note once.
+  - `check-syntax`: pass. `pile-library`: every library check passes; its two "page text identical" checks show the intended buckling text and `pdaRev`. 0 console errors.
+- **Other copies:** none.
+
+## 2026-11-07 — PR: claude/pile-m2-summary (PR #1003: https://github.com/mlococo88/All-Structural/pull/1003) (PDA-M2) — Report summary: a row for each Module G code-limit item; never "not satisfied" over an all-PASS table   [display only; no result change]
+- **Problem (review M2):** `R.allPass` includes `R.geoChecks.pass`, which covers the uncased flexure, L_b ≥ L_b,req, L_b ≥ L_b,min, the plunge, the grout cover, the geometry consistency and the casing past the active zone. The Summary-of-results rows listed only the uncased flexure and the casing past the active zone. With a failing plunge (default, input M_max 0.5), the Report said "One or more checks not satisfied" and every row read PASS.
+- **Where:**
+  - New `gcSummaryRows(r, keys)` and `sumFallbackRow(r, rows, keys)` before `function checkNoFor(` (anchor `/* PDA-M2 (2026-11-07)`).
+  - `checkNoFor`: `/^Code limit/` → "G".
+  - `rptResText`: "consistent" / "inconsistent" for the geometry row, and "see the module status" for the fallback row.
+  - Report model: after the `"Uncased flexure (below casing tip)"` row (anchor `"gc/unc"]);`), `rows.push(...gcSummaryRows(r, true))`, with report keys gc/Lb, gc/Lbmin, gc/pl, gc/cov and gc/geo (the steps already in "G Code-limit checks"). Before `const sumRows = rows.map(`: the fallback row.
+  - PrintReport `resultRows`: the same rows (no keys) after the uncased-flexure row, and the fallback after the group rows.
+- **Rows:** [name, provided, unit, required, pass, basis]:
+  - effective bond length ≥ required (10.9.3.5);
+  - effective bond length ≥ practical minimum 10 ft (FHWA);
+  - casing plunge length ≥ min(max(40 d_b, 3 ft), L_bond) (tool rule; relabelled in M3);
+  - grout cover ≥ 0.5 in;
+  - geometry consistency.
+  - D/C = required / provided.
+  - Fallback: when `allPass` is false and no row fails, "Other check not satisfied (see the module status on the Summary tab)", FAIL.
+- **Governing provision:** none changed. No formula, factor or pass/fail logic changed; the rows show existing values and flags.
+- **Check case:** default micropile, input M_max 0.5 kip-ft. The new row "Code limit — casing plunge length | 3.0 ft | 3.34 ft | D/C = 1.11 | FAIL" sits under "One or more checks not satisfied". The other four rows pass (L_b 27.0 vs 26.82 and 10 ft; cover 3.0 vs 0.5 in; geometry consistent).
+- **How verified:**
+  - `computeAll` on 15 cases: identical main vs branch.
+  - App and Report text main vs branch: only the five new summary rows differ, in both the Report and the printed tables.
+  - The fallback function was checked in the page (all-pass rows with allPass false → one FAIL row; otherwise none).
+  - `check-syntax`: pass. `pile-library`: library checks pass; the "page text identical" checks show the new rows (autosaved inputs identical). 0 console errors.
+- **Saved data:** none changed.
+- **Other copies:** none.
+
+## 2026-11-07 — PR: claude/pile-m1-uncased-pm (PR #1010: https://github.com/mlococo88/All-Structural/pull/1010) (PDA-M1) — uncased length: combined axial + flexure check (compression and tension)   [check-logic change]
+- **Problem (review M1):** below the casing tip, the bar + grout section was checked for axial (Module 03), tension (Module 09) and bar-only flexure (Module G), each on its own. There was no interaction. An uplift + lateral case (T_u 50, M 0.5) passed each check, 0.88 and 0.53, while the combined demand is 1.41.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024):
+  - Art. 10.9.3.10.1: micropile structural design per Sec. 5 for the reinforced grout section, cased and uncased lengths.
+  - Art. 5.6.6.1: in tension, the axial force is carried by the steel only.
+  - Art. 5.6.6.2: combined tension and flexure is proportioned per 5.6.2.
+  - Art. 5.6.2 / 5.6.4: compression with flexure uses the P–M interaction.
+- **Decision (pending engineer review):** an interim, conservative linear interaction with the existing bar-only φM_n (0.90 f_yb Z_bar), in both directions:
+  - compression: P_u,unc/φ_CU R_n + M_u,unc/φM_n ≤ 1;
+  - tension: (T_u − P_t)/φ_t f_yb A_b + M_u,unc/φM_n ≤ 1.
+
+  P_u,unc is taken at the casing tip, with the largest moment below the tip (both maxima together, conservative). A strain-compatibility P–M of the grout + bar section (5.6.2) would credit the grout compression block and be less conservative; that is listed as a future feature. Micropile only.
+- **Where:**
+  - `computeAll`, Module G, after `const uncasedFlex_pass = …` (anchor `// PDA-M1 (2026-11-07)`): `uncMr`, `uncPM_c` (null without compression), `uncPM_t` (null without tension demand) and `uncPM_pass`.
+  - `uncPM_pass` is added to `R.geoChecks.pass`, so it counts in Module G and `allPass`. With p-y not converged it is false, like the uncased flexure.
+  - Display:
+    - on-screen Module G: two CheckRows plus a "Worked in" link to Modules 03 and 09;
+    - printed `RptGeomChecks`: two RptChecks and a note;
+    - Report steps `gc/pmc` and `gc/pmt` in "Uncased flexure";
+    - summary rows "Uncased combined compression + flexure (D/C)" and "Uncased combined tension + flexure (D/C)" via `gcSummaryRows`, with `checkNoFor` → G.
+  - One-time load note for a micropile project saved before (pdaRev < 6); `pdaRev` 5 → 6; no input changed.
+- **Check cases:**
+  - V4 (default, STL 0, T_u 50 kip, input M_max 0.5 kip-ft): (50 − 8.2)/47.4 + 0.50/0.946 = 0.881 + 0.529 = **1.410 NG**. Before: no check; uncased flexure 0.53 OK and tension 0.88 OK.
+  - Default (p-y, M_u,unc 1.27): 76.4/119.5 + 1.27/0.946 = 0.639 + 1.338 = **1.977 NG**. Before: no check; uncased flexure alone 1.338 was already NG.
+  - V2 (`computeAll`, M_u,unc 0): compression 0.803 and tension 0.572. These are the axial ratios alone, no change of status.
+- **How verified:**
+  - `computeAll` on 15 cases main vs branch: only the new `geoChecks` fields (`uncMr`, `uncPM_*`). No other value moved. H-pile cases: null (not applied).
+  - App and Report main vs branch: the new rows, steps and note only. 0 unresolved references, 0 duplicate keys, no NaN.
+  - `check-syntax`: pass. `pile-library`: library checks pass; its page-text checks show the new check text and `pdaRev`. 0 console errors.
+- **Other copies:** none.
+
+## 2026-11-07 — PR: claude/pile-m4m5-fixity (PR #1016: https://github.com/mlococo88/All-Structural/pull/1016) (PDA-M4 / PDA-M5) — Davisson depth to fixity: E_s = 0.465 S_u in clay; group spacing reduction of the soil modulus   [calculation change]
+- **Problem (review M4):** Davisson fixity in clay (Module 10) used the p-y layer's k_h (presets 30–600, default 150 kip/ft²). Eq. C10.7.3.13.4-1 uses E_s = 0.465 S_u (ksi, S_u in ksf). A high k_h gave a short L_f, which is unconservative.
+- **Problem (review M5):** the single-pile modulus was used for a pile in a group. C10.7.3.13.4 reduces the modulus to 25 % at 3B spacing, with no effect at 8B or more, and interpolation between.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 10.7.3.13.4 and C10.7.3.13.4 (Eqs. C10.7.3.13.4-1 / -2; E_s for clays from S_u; the spacing effect after Prakash and Sharma). Micropiles reach it through 10.9.3.10.6.
+- **Where:** `computeAll`, Module 10, Davisson soil selection.
+  - M4, anchor `// PDA-M4 (2026-11-07)`: when the top layer is "clay" or "stiffclay" and has an S_u (`su` psf / 1000, or `Su` ksf; the smaller when both are entered), `bklStiff = 0.465 · S_u · 144` (kip/ft²). It replaces the layer's k_h, which is kept as `bklKhLayer` for the note. Sand, weak rock and the uniform-soil option are unchanged.
+  - M5, anchor `// PDA-M5 (2026-11-07)`, before `const T_char`: with `I.groupEnable` (not integral abutments), s/B = `groupCcSpacing(I) / groupB(I)` and f = 0.25 for s/B ≤ 3, 1.0 for s/B ≥ 8, otherwise 0.25 + 0.75 (s/B − 3)/5. Then `bklStiff = bklStiffSingle · f` (n_h or E_s / k_h).
+  - New `R.buckling` fields: `bklSu`, `bklKhLayer`, `bklStiffSingle`, `bklGrpF`, `bklGrpSB`.
+  - Display: Module 10 Davisson tab Calc "Soil modulus for the fixity depth" (E_s = 0.465 S_u (144), then the group factor), the Report step `bk/Es`, and the soil-basis text.
+  - One-time load note (pdaRev < 7) for a project with a clay top layer that has S_u, or with a group; `pdaRev` 6 → 7. No input changed.
+- **Decisions (pending engineer review):**
+  - Below 3B, the 25 % is kept: the commentary gives no value there, and holding the smallest stated value is conservative.
+  - The group reduction is always applied when the group is on; there is no opt-out.
+  - With both S_u entries of a layer, the smaller one is used.
+- **Check cases** (micropile EI 8451 kip·ft²):
+  - M4, clay S_u 1.0 ksf: E_s = 0.465(1.0)(144) = 66.96 kip/ft², so R = (8451/66.96)^0.25 = 3.352 ft and L_f = 1.4R = **4.69 ft**. Before: k_h 150 → R = 2.740 ft, L_f = **3.84 ft**. φ_c P_n (3 ft stickup): 263.7 → 221.3 kip.
+  - M5, sand n_h 60, 3×3 group at 3D: f = 0.25 → n_h = 15, so T = (8451/15)^0.2 = 3.549 ft and L_f = 1.8T = **6.39 ft**. Before: **4.84 ft**. φ_c P_n 214.1 → 150.5 kip.
+  - V3 (clay S_u 2 ksf, 3×3 at 2.5D): E_s = 133.9 kip/ft² × 0.25 = 33.5, so R = 3.986 ft and L_f = **5.58 ft**. Before: **3.84 ft**. φ_c P_n 263.7 → 180.2 kip. App Module 05 D/C 0.978 OK → **1.129 NG**.
+- **How verified:**
+  - `computeAll` on 15 cases main vs branch. Only the clay and group cases (M4, M5, V3) moved, through L_f → Module 10 and Module 05. The other cases gain only the new fields.
+  - App and Report: the new step and Calc; 0 unresolved references, 0 duplicate keys, no NaN. The load note is shown.
+  - `check-syntax`: pass. `tests/engine` handoffs and pile-group: pass. `pile-library`: see the PR. 0 console errors.
+- **Hand-off:** `pileResults.fixity.Lf` (= `R.buckling.Lf_buck`) changes with L_f for these cases. The format is unchanged.
+- **Other copies:** the integral-abutment path already uses 0.465 S_u (PDA-D2) and is unchanged.
+
+## 2026-11-07 — PR: claude/pile-m3-plunge (PR #1024: https://github.com/mlococo88/All-Structural/pull/1024) (PDA-M3) — plunge: AASHTO 10.9.3.10.5 casing-to-grout bond and bar development added; the 40 d_b / 3 ft rule kept and labelled a tool detailing rule   [check-logic change]
+- **Problem (review M3):** the "plunge develops the cased load" check was a hard fail on a tool rule, L_p ≥ max(40 d_b, 3 ft), which is not an AASHTO provision. The checks that 10.9.3.10.5 requires were missing: casing-to-grout bond, and bar development per Sec. 5.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024):
+  - Art. 10.9.3.10.5: casing-to-grout bond and bar development length are to be checked per Sec. 5.
+  - C10.9.3.10.5: typical ultimate bond is 0.15–0.25 ksi for smooth bar and pipe, 0.30–0.50 ksi for deformed bars.
+  - Art. 5.10.8.2.1a (Eqs. 5.10.8.2.1a-1, -2): tension development.
+  - Art. 5.10.8.2.2a (Eqs. 5.10.8.2.2a-1 to -3): compression development.
+- **Decisions (pending engineer review):**
+  - The plunge rule stays as a check, in the status, labelled "detailing rule (tool, not AASHTO)".
+  - (a) Casing-to-grout bond:
+    - The demand is the casing's share of the load at the top of the plunge, by axial stiffness EA_c / (EA_c + EA_b + E_g A_g) × STL. E_g = 2500 f'c^0.33 (as the CFST module). In tension, the share is A_ct/(A_ct + A_b) × T_u, used only when the joint efficiency is > 0.
+    - The resistance is φ τ π ID L_p, with τ = 0.15 ksi (the lower end of C10.9.3.10.5 for smooth pipe), the inner casing surface only, and φ = φ_CC (no factor is given in Table 10.5.5.2.5-2).
+  - (b) Bar development within L_p, for the uncased-length force with the grout neglected (compression P_u,unc, tension T_u − P_t, each at most f_yb A_b):
+    - λ_er = force / (f_yb A_b); λ_rc, λ_rl, λ_cf and λ = 1.0 (no reduction taken).
+    - Compression: ℓ_d = max(0.63 d_b f_y/√f'c, 0.3 d_b f_y) λ_er, at least 8 in.
+    - Tension: ℓ_d = 0.17 d_b [λ_er f_y / (1.97 f'c^0.25)]², at least 12 in.
+    - Note for f_yb > 100 ksi: outside the Sec. 5 bar range; confirm with the bar supplier.
+  - Micropile only, and only when L_p > 0 (with L_p = 0 the plunge rule already fails).
+- **Where:**
+  - `computeAll`, Module G, after `const cover_ok = …` (anchor `// PDA-M3 (2026-11-07)`): `R.geoChecks.cgBond`, `R.geoChecks.barDev` and `casID`. Both `.ok` flags are in `R.geoChecks.pass`.
+  - Display:
+    - on-screen Module G: the plunge note is relabelled and two CheckRows are added;
+    - printed `RptGeomChecks`: two RptChecks with notes;
+    - Report steps `gc/cgs`, `gc/cgb`, `gc/ldc`, `gc/ldt` and `gc/bdev`; the `gc/pl` label is changed;
+    - summary rows (`gcSummaryRows`): the plunge row is renamed, with basis "tool rule: max(40 d_b, 3 ft)", and there are new rows for "casing-to-grout bond in the plunge" and "bar development in the plunge";
+    - the Module 03 plunge note.
+  - One-time load note for a micropile with a plunge (pdaRev < 8); `pdaRev` 7 → 8. No input changed.
+- **Check cases:**
+  - Default (L_p 3 ft, STL 86 kip):
+    - Casing share: EA_c 29000(7.955) = 230.7e3; EA_b 22.9e3; E_g A_g 3950(28.38) = 112.1e3; share 0.631, so P_cas = 54.3 kip.
+    - Bond: φR_n = 0.75(0.15)π(6.094)(36) = **77.5 kip ≥ 54.3 OK**.
+    - Bar, compression: F = min(76.4, 59.25) = 59.25 kip, λ_er = 1; ℓ_d = max(0.63(1.003)(75)/2, 0.3(1.003)(75)) = **23.7 in ≤ 36 OK**.
+    - The tool rule stays NG (3.0 < 3.34 ft).
+  - V4 (STL 0, T_u 50): F = 41.75 kip, λ_er = 0.705; ℓ_d = 0.17(1.003)[0.705(75)/(1.97 · 4^0.25)]² = **61.4 in > 36 NG**. The bond check passes (no casing share; e_j = 0).
+  - V2 (f_yb 120, STL 150, T_u 100, e_j 50 %): P_cas = 150(0.598) = 89.8 > 77.5 kip **NG**; ℓ_d,t = 93.8 in > 36 **NG**; the f_yb > 100 ksi note is shown.
+- **How verified:**
+  - `computeAll` on 15 cases main vs branch: only the new `geoChecks` fields. The Module G and overall status do not move in these cases, because the tool plunge rule already fails at L_p = 3 ft.
+  - App and Report main vs branch: the relabelled rule, the new steps, rows and notes. 0 unresolved references, 0 duplicate keys, no NaN.
+  - `check-syntax`: pass. `pile-library`: library checks pass; its page-text checks show the new text. 0 console errors.
+- **Other copies:** none.
+
+## 2026-11-07 — PR: claude/pile-m6-uplift-cap (PR #1030: https://github.com/mlococo88/All-Structural/pull/1030) (PDA-M6) — micropile group uplift (10.9.3.8 → 10.7.3.11); review items for required checks the tool does not compute   [check-logic change]
+- **Problem (review M6):** some required micropile checks were missing:
+  - group uplift (10.9.3.8 → 10.7.3.11, φ_ug 0.50);
+  - the bar connection into the cap (10.9.3.7, 10.9.3.10.7);
+  - drag load (10.9.3.4);
+  - liquefaction (10.9.4 → 10.7.4);
+  - settlement (O6).
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024):
+  - Art. 10.9.3.8 → 10.7.3.11 (Eqs. 10.7.3.11-1, -2; Figs. 10.7.3.11-1, -2); φ_ug = 0.50 (Table 10.5.5.2.3-1, group uplift, all soils);
+  - Art. 10.9.3.7 and 10.9.3.10.7; Art. 10.9.3.4 and 3.11.8; Art. 10.9.4 → 10.7.4; Art. 10.9.2 / 10.7.2.
+- **(a) Group uplift (computed)**, anchor `// PDA-M6a (2026-11-07)` in the micropile group block (`computeAll`):
+  - It applies when the group is on, there is an uplift demand and n > 1.
+  - φR_ug = min(n φ_up R_up, 0.50 R_ug,block), with demand n T_u.
+  - Cohesive soil: R_ug = (2XZ + 2YZ) S̄_u + W_g. Cohesionless soil: R_ug = W_g, the 1H:4V block from the toe (top (X + Z/2) × (Y + Z/2), frustum volume).
+  - X, Y = the group footprint (c/c + d_h). Z = grade (or head / scour) to the toe, as the 10.7.3.9 block. S̄_u comes from `hpGroupAashto`.
+  - `R.group.upl` is part of `allPass` and of the Module 11 status.
+  - Display: Module 11 on screen (values plus a CheckRow), Report steps `grp/uW`, `grp/uS`, `grp/uB`, `grp/uI` and `grp/upl`, and the summary row "Group uplift" (Report and printed).
+  - **Decisions (pending engineer review):**
+    - W_g counts the soil only (piles and cap neglected).
+    - The buoyant unit weight γ − 62.4 pcf is used throughout, because the groundwater level is not an input.
+    - γ is the thickness-weighted layer γ over Z, or 120 pcf when missing.
+- **(b) Review items (listed, not computed, not in the status)**, anchor `// PDA-M6b`, `R.reviewItems`. They are listed in the Report summary ("Items for review", REVIEW) and in Module G on screen, under these triggers:
+  - uplift demand → bar connection into the cap (10.9.3.7, 10.9.3.10.7 → Sec. 5);
+  - a soft cohesive layer (S_u < 0.50 ksf, the ET1 definition) → drag load (10.9.3.4, 3.11.8) and service settlement (10.9.2, 10.7.2);
+  - an extreme-event load case → liquefaction (10.9.4 → 10.7.4).
+
+  **Future features:** full methods for these (a liquefiable-zone input that removes bond and scales p-y, the micropile drag-load neutral plane, settlement, and a bar anchorage check with a bearing plate).
+- **One-time load note:** micropile group with uplift, pdaRev < 9 (`pdaRev` 8 → 9).
+- **Check cases:**
+  - U1: default, 2×3 group at 3D, STL 0, T_u 40 kip.
+    - X × Y = 2.33 × 4.08 ft, Z = 36 ft; top 20.33 × 22.08 ft.
+    - V = 36/3 (9.53 + 449.0 + 65.4) = 6288 ft³; W_g = 0.0576(6288) = 362.2 kip, so the block gives 0.50(362.2) = **181.1 kip**.
+    - Σ individual = 6(74.22) = 445.3 kip.
+    - Demand 240 kip: **NG** (block governs). Before: no check.
+  - U2: as U1 with soft clay (S_u 0.40 ksf, γ 115).
+    - Side (2(2.33)(36) + 2(4.08)(36))(0.40) = 184.8 kip; W_g = 0.0526(343) = 18.0 kip.
+    - 0.50(202.8) = **101.4 kip < 240 NG**.
+    - REVIEW items: cap connection, drag load, settlement.
+- **How verified:**
+  - `computeAll` on 17 cases main vs branch: only `R.group.upl` (U1 and U2) and `R.reviewItems`; no other value moved.
+  - App and Report: the new rows, steps and table. 0 unresolved references, 0 duplicate keys, no NaN.
+  - `check-syntax`: pass. `pile-library`: library checks pass. 0 console errors.
+- **Other copies:** none. The H-pile group uplift is not added; it is listed as a future feature.
