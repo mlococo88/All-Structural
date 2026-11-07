@@ -3455,3 +3455,25 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
   - Headless probe, main vs branch: 0 value differences (40 models, all 1,660 shapes, Validation 136/136).
   - The new lines appear on the Properties and Calc detail tabs and in the Report model (rotated L6X4X1/2 with the tabulated option and a Q cut: c₂,max = 4.0739 in, and the Q note is shown).
   - 0 console errors.
+
+## 2026-11-07 — PR: claude/spc-l4-pna — SPL4: PNA in a gap reported as the gap range and its middle (review L4; PNA display value, Z unchanged)
+
+- **Problem (review L4):** when the plastic neutral axis lies in a gap with no material, any line in the gap halves the area. The bisection stopped at one end of the gap and reported it, with `flat` = false. Example: PL 12 × 1 over PL 6 × 2, 10 in apart: PNA y = 1.000. Z was correct (138 in³).
+- **Fix (`plastic()`, anchor `SPL4 (2026-11-07)`):**
+  - After the bisection, if the area above c equals A/2 within 1e-12·A, the two ends of the gap are found by bisection. `cHi` is the largest c with |A_above − A/2| ≤ tol; `cLo` is the smallest c with A_above − A/2 ≤ tol.
+  - The result is `flat` = (cHi − cLo > 1e-7 × the depth). When flat, the PNA c is the **middle** of the gap, and `cLo`, `cHi` are returned.
+  - Before: `const c = (lo + hi) / 2, …` followed by a ±1e-6 flat test (which always failed at the end of a gap).
+  - After: as above. Z is computed at c as before; for a line in the gap it is the same anywhere in the gap.
+- **Display:**
+  - Plastic tab result: "(the PNA lies in a gap with no material, anywhere from y = 1 in to 11 in; the middle of the gap is shown, and any position in the gap gives the same Z)".
+  - Report step label: "PNA at y = 6 in; middle of a gap with no material, which spans y = 1 to 11 in; any line in the gap gives the same Z". The same applies for x and the principal axes (s₁, s₂).
+- **§4 callout:** the reported PNA location changes for sections whose PNA lies in a gap, from one end of the gap to its middle. Z does not change. Basis: mechanics of materials (equal-area axis; Z = A₁d₁ + A₂d₂ is the same for any line in a region with no material).
+- **Check case:** PL 12 × 1 (centred at y = 11.5) and PL 6 × 2 (centred at y = 0).
+  - A = 24, so A/2 = 12 = the top plate.
+  - The gap spans y = 1 to 11. PNA before: 1.000; after: **6.000** (range 1–11).
+  - Z = 12 × (11.5 − 6) + 12 × (6 − 0) = 66 + 72 = **138 in³**, unchanged.
+  - 2C15X33.9 back to back with a 3/8 in gap: PNA for Z_y moves from −0.1875 to 0 (the middle of the gap); Z_y unchanged.
+- **Verified:**
+  - `check-syntax` passes; Validation 136/136.
+  - Headless probe, main vs branch, tolerance 1e-13: the only differences are the PNA location of the two gap models (gap, dblC) and the `flat` flag. Every Z and all other values are identical, including all 1,660 shapes.
+  - The new wording shows on the Plastic tab and in the Report. 0 console errors.
