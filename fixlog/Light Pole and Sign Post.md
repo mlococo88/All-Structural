@@ -2374,4 +2374,4 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 - **How verified:** `node tests/lightpole-compare.mjs --a origin/main` (21 cases): every result identical except `deep12` (emb.d, its iteration rows and d/b, the elevation drawings); only label text changed elsewhere; **cable values identical in every case**; 0 console errors. `project-library --tool lightpole`: the 4 "results identical" failures are the intended worked-step text change only (`.H`, S₁ expression); saved data opens unchanged. `check-syntax`, `phone-layout --tool lp`, `lightpole-anchor-handoff`, `lightpole-projection`, `lightpole-signviews`, `tests/engine/run.mjs lightpole` (42): pass.
 - **Saved data:** no key or format change.
 - **ENGINEER_CHECKS:** the "IBC 15× cap reading" item now says the cap applies to S₃ only.
-- **Open item:** Eq. 18-1 defines b for a square post or footing as the diagonal dimension; not reviewed here (the tool's square-shaft b is unchanged).
+- **Open item (not changed):** Eq. 18-1 defines b for a square post or footing as its diagonal; the tool uses the side for a square shaft, which gives a deeper d (conservative).
