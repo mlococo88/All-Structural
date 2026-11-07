@@ -45,7 +45,7 @@ export const CASES = {
   cable45: { cables: [{ hc: 32, th: 45, L: 80, s: 4, D: 0.75, g: 0.35 }] },
   tall: { inputs: { H: '60', poleDiaTop: '6', poleDiaBase: '12', poleTwBase: '0.3125', b: '3.5' } },
   ice: { inputs: { tIce: '1.0', Vice: '60' }, top: { anchRe: 'no' } },
-  bolts15: { inputs: { boltDia: '1.500', boltQty: '8', boltBC: '20', b: '3.5', fc: '5000' }, top: { anchRe: 'no', anchTq: 'untorqued' } },
+  bolts15: { inputs: { boltDia: '1.500', boltQty: '8', boltBC: '20', b: '3.5', fc: '5000', bpDia: '24' }, top: { anchRe: 'no', anchTq: 'untorqued' } },
   arms: { fixtures: [{ hf: 30, th: 45, a: 8, epa: 2.4, aIce: 2.4, tIce: 0.5, W: 70 }, { hf: 35, th: 200, a: 4, epa: 1.2, aIce: 1.2, tIce: 0.5, W: 40 }] },
   torsion: { fixtures: [{ hf: 30, th: 90, a: 10, epa: 3.0, aIce: 3.0, tIce: 0.5, W: 80, armD: 3.5 }], top: { cablesEnabled: false } },
   sign1: { top: { appMode: 'sign', signPosts: 1 } },
@@ -68,6 +68,12 @@ export const CASES = {
   // LRFDLTS and IBC monopost sign with an undersized manual shaft cage (added 2026-11-07, LPH4 / LPM7: the shaft checks reach the Summary)
   ltsshaftng: { inputs: { ltsV: '130', signB: '16', signS: '8', b: '2', bromsSoil: 'cohesive', bromsC: '1.0', rebarMode: 'manual', manBarN: '4', manBarSize: '#4' }, top: { codeMode: 'lts', appMode: 'sign', signPosts: 1 } },
   ibcshaftng: { inputs: { V: '130', signB: '16', signS: '8', b: '2', rebarMode: 'manual', manBarN: '4', manBarSize: '#4' }, top: { appMode: 'sign', signPosts: 1 } },
+  // base plate / anchor geometry input errors (added 2026-11-07, LPM6): bolt circle inside the pole, rods outside the plate / the shaft cage
+  bcinside: { inputs: { boltBC: '9' } },
+  bpsmall: { inputs: { bpDia: '14' } },
+  bcoutside: { inputs: { boltBC: '40', bpDia: '44' } },
+  // LRFDLTS pole with one long arm (added 2026-11-07, LPM4: the 0.35 in/ft slope is a check for a moment load application)
+  ltsarm: { inputs: { H: '40', poleDiaTop: '4.5', poleDiaBase: '8', poleTwTop: '0.1196', poleTwBase: '0.1196', bromsSoil: 'cohesive', bromsC: '1.0' }, top: { codeMode: 'lts' }, fixtures: [{ hf: 40, th: 0, a: 12, epa: 1.6, aIce: 1.6, tIce: 0.5, W: 55 }] },
   deep12: { inputs: { H: '50', poleDiaTop: '6', poleDiaBase: '12', poleTwBase: '0.3125', soilClass: 'clay', S1: '100', b: '2', V: '170' } },
 };
 

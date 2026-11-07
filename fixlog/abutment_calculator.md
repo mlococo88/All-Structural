@@ -15590,3 +15590,438 @@ index e2e321c..ce6e74c 100644
 +      `F_{conn,L} = ${fmtT(sz.lon.FconnL)}\\ \\text{kip (longitudinal)}, \\quad F_{conn,T} = ${fmtT(sz.lon.FconnT)}\\ \\text{kip (transverse, this abutment's reactions)}`]:[]),
 +      sz.lon&&isFinite(sz.Fconn)? `F_{conn} = \\max(F_{conn,L},\\,F_{conn,T}) = ${fmtT(sz.Fconn)}\\ \\text{kip per bearing line} \\quad(${fmtT(sz.perBeam)}\\ \\text{kip per beam})` :
 ```
+
+## 2026-11-07 — PR: claude/abut-m9-eqsup (PR #1007: https://github.com/mlococo88/All-Structural/pull/1007) (ABM9: superstructure seismic force from the seismic analysis for Zones 2–4 multispan bridges; REVIEW warning when it is not entered)   [calc change only when the new inputs are entered] [MORE conservative where the analysis force exceeds A_s·W]
+
+Source: code-compliance review of 2026-11-07, item M9.
+
+### ABM9. Entered superstructure seismic force
+- **Where:** `computeAll` after the EQ_sup line (anchor `const zA=Math.min(4,Math.max(1,Math.round(+S.seismic.zone||1))), anaZ=`); transverse block (anchor `const tEnt=ok&&q.anaZ&&(+S.seismic.EQsupT>0);`); panel I-11 new inputs `seismic.EQsupL`, `seismic.EQsupT` (shown in Zones 2–4, multispan) and the zone selector now rebuilds the panel; Tab 3 §3.6a lines (anchor `q.EQsupSrc==="analysis"?`, `q.EQtSrc==="analysis"?`); `migrate` back-fill and the Input ID (0 left out).
+- **Before:** EQ_sup = A_s·(ΣP_DC + ΣP_DW + W_dia + slab)·s_EQ in every zone, longitudinal and transverse; no prompt in Zones 2–4.
+- **After:** Zones 2–4 on a multispan bridge (panel I-1 not "Single-span"): an entered longitudinal / transverse force replaces the A_s estimate (the A_s value is still shown, "not used"); when either is blank the A_s estimate is kept and a REVIEW warning names the missing direction. Zone 1 and single-span bridges: unchanged (the inputs are not shown and not used).
+- **Problem:** for multispan bridges in Zones 2–4 the force at a fixed or restrained abutment comes from the seismic analysis and can reach C_sm·W (up to S_DS ≈ 2.5A_s for a stiff bridge); the tool used A_s·W silently.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 4.7.4.3 (multispan analysis requirements), 3.10.9.3 and 3.10.9.4 (Zone 2 / Zones 3–4 connection forces from the analysis); 3.10.9.1 / 3.10.9.2 unchanged for single span / Zone 1.
+- **Check case (built-in project; EE I on, A_s = 0.30, Zone 3, Site Class D, multispan; entered 400 kip longitudinal, 350 kip transverse):**
+  - Before: EQ_sup = 0.30·(510 + 72)·1.00 = **174.6 kip** at the seat (z_B = 17.0 ft → M = 2968 kip-ft); transverse 174.6 kip.
+  - After: EQ_sup = **400 kip** (M = 400·17.0 = 6800 kip-ft); transverse EQ_sup,t = 350 kip (H_y = 350 + k_hW_w = 467.5 kip). Dashboard: eccentricity D/C 0.790 → 1.264 (FAIL), bearing 0.880 → 1.515 (FAIL), stem flexure 0.403 → 0.640, toe flexure 0.337 → 0.680.
+  - Without the entered forces: results identical to before, plus the REVIEW warning.
+- **How verified:** headless origin/main vs branch, 19 scenarios: only the scenario with entered forces moves; Zones 2–3 multispan without them get the warning only (and `R.seis.anaZ`); Zone 1 with an entered value is identical. UI: the inputs appear when the zone is set to 2–4 and drive EQ_sup. Tabs and Report render, 0 console errors, self-test passes; `check-syntax`, `project-library --tool abutment` pass.
+- **Saved data:** new optional fields `seismic.EQsupL`, `seismic.EQsupT` (0). Saved projects compute as before.
+- **Decision (pending engineer review):** the entered force is taken as this abutment's share already (s_EQ / s_EQ,t are not applied to it).
+- **Other copies:** the integral / semi-integral block (`computeIAB`) reads `R.seis.EQsup`, so it uses the entered longitudinal force too.
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index ce6e74c..92a3437 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -742 +742,2 @@ function defaultState(){
+-      khRAuto:true, Wseg:0,                                       // ABM1: Wseg = segment permanent load for the longitudinal connection force at fixed bearings (kip, 0 = auto) [3.10.9.2]                                               // ABM2 (2026-11-07): k_h ratio set from the foundation (abutKhAuto: 1.0 on piles or rock, 0.5 on a spread footing on soil) [11.6.5.2.2]; false = the entered khR
++      khRAuto:true, Wseg:0, EQsupL:0, EQsupT:0,                   // ABM9: superstructure seismic force at this abutment from the seismic analysis, longitudinal / transverse (kip, 0 = not entered; Zones 2–4 multispan) [4.7.4.3, 3.10.9.3, 3.10.9.4]
++                                            // ABM1: Wseg = segment permanent load for the longitudinal connection force at fixed bearings (kip, 0 = auto) [3.10.9.2]                                               // ABM2 (2026-11-07): k_h ratio set from the foundation (abutKhAuto: 1.0 on piles or rock, 0.5 on a spread footing on soil) [11.6.5.2.2]; false = the entered khR
+@@ -1712 +1713 @@ function migrate(){
+-    if(S.seismic) fill(S.seismic,T.seismic,["siteClass","bwStop","bwW","nonConc","shEQt","Wseg"]);   // ABM1: Wseg 0   // ABR1: bwStop false, bwW 0 (MassDOT: owner default below); ABR3: nonConc, shEQt
++    if(S.seismic) fill(S.seismic,T.seismic,["siteClass","bwStop","bwW","nonConc","shEQt","Wseg","EQsupL","EQsupT"]);   // ABM9: EQsupL, EQsupT 0   // ABM1: Wseg 0   // ABR1: bwStop false, bwW 0 (MassDOT: owner default below); ABR3: nonConc, shEQt
+@@ -2369,0 +2371,2 @@ function buildInputs(){
++      ${(+sq.zone>=2&&S.geom.HsupMode!=="single")?`${inpRow("Superstructure seismic force at this abutment from the analysis, longitudinal (0 = A<sub>s</sub>·W)","seismic.EQsupL","kip",{title:"Zones 2–4, multispan: the force the superstructure delivers to this abutment's bearings / keepers in the longitudinal direction from the seismic analysis [4.7.4.3, 3.10.9.3]. Replaces A_s·(DC + DW)·share. Tab 3 §3.6a."})}
++      ${inpRow("Superstructure seismic force at this abutment from the analysis, transverse (0 = A<sub>s</sub>·W)","seismic.EQsupT","kip",{title:"Zones 2–4, multispan: the transverse force at this abutment from the seismic analysis [4.7.4.3, 3.10.9.3]. Replaces A_s·(DC + DW)·share (transverse). Tab 3 §3.6a."})}`:""}
+@@ -2382 +2385 @@ function buildInputs(){
+-    ${selRow("Seismic zone [T.3.10.6-1]","seismic.zone",[["1","Zone 1 (S_D1 ≤ 0.15)"],["2","Zone 2"],["3","Zone 3"],["4","Zone 4"]])}
++    ${selRow("Seismic zone [T.3.10.6-1]","seismic.zone",[["1","Zone 1 (S_D1 ≤ 0.15)"],["2","Zone 2"],["3","Zone 3"],["4","Zone 4"]],{rebuild:true})}
+@@ -3386 +3389,6 @@ function computeAll(){
+-  if(R.seis){ const shEQ=Math.min(100,Math.max(0,+S.seismic.shEQ))/100; R.seis.shEQ=isFinite(shEQ)?shEQ:1; R.seis.EQsup=(+S.seismic.As)*(agg.DC.P+agg.DW.P+(R.seis.Wdia||0)+apSup)*R.seis.shEQ; if(apSup) R.seis.apSup=apSup; }   // ABR2: + the end diaphragm (semi-integral); APS: + the approach slab share
++  if(R.seis){ const shEQ=Math.min(100,Math.max(0,+S.seismic.shEQ))/100; R.seis.shEQ=isFinite(shEQ)?shEQ:1; R.seis.EQsup=(+S.seismic.As)*(agg.DC.P+agg.DW.P+(R.seis.Wdia||0)+apSup)*R.seis.shEQ; if(apSup) R.seis.apSup=apSup;
++    // ABM9 (2026-11-07): Zones 2–4, multispan: the force the superstructure delivers to this abutment comes from the seismic analysis [4.7.4.3, 3.10.9.3,
++    // 3.10.9.4]; an entered value replaces A_s·(DC + DW)·s_EQ, and without one the A_s estimate is kept with a REVIEW warning (Zone 1 / single span: unchanged)
++    const zA=Math.min(4,Math.max(1,Math.round(+S.seismic.zone||1))), anaZ=zA>=2&&S.geom.HsupMode!=="single", eL=Math.max(0,+S.seismic.EQsupL||0), eT=Math.max(0,+S.seismic.EQsupT||0);
++    if(anaZ){ R.seis.anaZ=zA; if(eL>0){ R.seis.EQsupA=R.seis.EQsup; R.seis.EQsup=eL; R.seis.EQsupSrc="analysis"; }
++      if(!(eL>0)||!(eT>0)) warn(`REVIEW — Seismic Zone ${zA}, multispan bridge: the superstructure seismic force at this abutment should come from the seismic analysis [4.7.4.3, 3.10.9.3, 3.10.9.4]; ${!(eL>0)&&!(eT>0)?"none is entered":(!(eL>0)?"the longitudinal force is not entered":"the transverse force is not entered")} (panel I-11), so A_s·(DC + DW)·share is used, which can be lower than the analysis force (C_sm up to S_DS). Tab 3 §3.6a.`); } }   // ABR2: + the end diaphragm (semi-integral); APS: + the approach slab share
+@@ -3482 +3490,2 @@ function computeAll(){
+-      const tS=ok? (+S.seismic.As)*(agg.DC.P+agg.DW.P+(q.Wdia||0)+apSup)*shT : 0, tW=ok&&q.kh>0? q.WiW : 0, tWg=(R.wingAb&&ok&&q.kh>0)? q.kh*R.wingAb.nw*R.wingAb.Wt : 0;   // APS: + apSup
++      const tEnt=ok&&q.anaZ&&(+S.seismic.EQsupT>0);   // ABM9: transverse force from the seismic analysis (Zones 2–4, multispan)
++      const tS=ok? (tEnt? +S.seismic.EQsupT : (+S.seismic.As)*(agg.DC.P+agg.DW.P+(q.Wdia||0)+apSup)*shT) : 0, tW=ok&&q.kh>0? q.WiW : 0, tWg=(R.wingAb&&ok&&q.kh>0)? q.kh*R.wingAb.nw*R.wingAb.Wt : 0;   // APS: + apSup
+@@ -3485 +3494 @@ function computeAll(){
+-      if(q) Object.assign(q,{shEQt:shT, EQtSup:tS, EQtW:tW, EQtWg:tWg, EQt:Hy, MtEQt:Mt});
++      if(q) Object.assign(q,{shEQt:shT, EQtSup:tS, ...(tEnt?{EQtSrc:"analysis"}:{}), EQtW:tW, EQtWg:tWg, EQt:Hy, MtEQt:Mt});
+@@ -5011 +5020 @@ function computeAll(){
+-      dropDef(fpS.seismic,T.seismic,["siteClass","bwStop","bwW","Wseg"]); if(fpS.seismic) delete fpS.seismic.khRAuto; if(fpS.bwLL&&fpS.bwLL.mode==="wheel") delete fpS.bwLL;   // ABM2: khRAuto left out (the k_h ratio itself is in the Input ID)
++      dropDef(fpS.seismic,T.seismic,["siteClass","bwStop","bwW","Wseg","EQsupL","EQsupT"]); if(fpS.seismic) delete fpS.seismic.khRAuto; if(fpS.bwLL&&fpS.bwLL.mode==="wheel") delete fpS.bwLL;   // ABM2: khRAuto left out (the k_h ratio itself is in the Input ID)
+@@ -6672,2 +6681,2 @@ function renderTabStab(R){
+-        q.Wdia>0? "\\text{Superstructure: } EQ_{sup} = A_s\\,(\\Sigma P_{DC} + \\Sigma P_{DW} + W_{dia})\\,s_{EQ}" : "\\text{Superstructure: } EQ_{sup} = A_s\\,(\\Sigma P_{DC} + \\Sigma P_{DW})\\,s_{EQ}",
+-        `EQ_{sup} = (${fmtT(+S.seismic.As,3)})(${fmtT(R.agg.DC.P)} + ${fmtT(R.groups.DW.V)}${q.Wdia>0?` + ${fmtT(q.Wdia)}`:""})(${fmtT(q.shEQ,2)}) = ${fmtT(q.EQsup)}\\ \\text{kip at the seat}${q.Wdia>0?"\\quad(W_{dia} = \\text{end diaphragm, moves with the superstructure})":""}`],
++        q.EQsupSrc==="analysis"? "\\text{Superstructure: } EQ_{sup} = \\text{entered from the seismic analysis (Zone "+q.anaZ+", multispan; panel I-11)} \\quad [4.7.4.3,\\ 3.10.9.3]" : q.Wdia>0? "\\text{Superstructure: } EQ_{sup} = A_s\\,(\\Sigma P_{DC} + \\Sigma P_{DW} + W_{dia})\\,s_{EQ}" : "\\text{Superstructure: } EQ_{sup} = A_s\\,(\\Sigma P_{DC} + \\Sigma P_{DW})\\,s_{EQ}",
++        q.EQsupSrc==="analysis"? `EQ_{sup} = ${fmtT(q.EQsup)}\\ \\text{kip at the seat} \\quad (A_s\\text{ estimate } ${fmtT(q.EQsupA)}\\ \\text{kip, not used})` : `EQ_{sup} = (${fmtT(+S.seismic.As,3)})(${fmtT(R.agg.DC.P)} + ${fmtT(R.groups.DW.V)}${q.Wdia>0?` + ${fmtT(q.Wdia)}`:""})(${fmtT(q.shEQ,2)}) = ${fmtT(q.EQsup)}\\ \\text{kip at the seat}${q.Wdia>0?"\\quad(W_{dia} = \\text{end diaphragm, moves with the superstructure})":""}`],
+@@ -6680 +6689 @@ function renderTabStab(R){
+-        `EQ_{sup,t} = A_s(\\Sigma P_{DC} + \\Sigma P_{DW}${q.Wdia>0?" + W_{dia}":""})s_{EQ,t} = (${fmtT(+S.seismic.As,3)})(${fmtT(R.agg.DC.P)} + ${fmtT(R.groups.DW.V)}${q.Wdia>0?` + ${fmtT(q.Wdia)}`:""})(${fmtT(q.shEQt,2)}) = ${fmtT(q.EQtSup)}\\ \\text{kip at the seat}`,
++        q.EQtSrc==="analysis"? `EQ_{sup,t} = ${fmtT(q.EQtSup)}\\ \\text{kip at the seat (entered from the seismic analysis, panel I-11)}` : `EQ_{sup,t} = A_s(\\Sigma P_{DC} + \\Sigma P_{DW}${q.Wdia>0?" + W_{dia}":""})s_{EQ,t} = (${fmtT(+S.seismic.As,3)})(${fmtT(R.agg.DC.P)} + ${fmtT(R.groups.DW.V)}${q.Wdia>0?` + ${fmtT(q.Wdia)}`:""})(${fmtT(q.shEQt,2)}) = ${fmtT(q.EQtSup)}\\ \\text{kip at the seat}`,
+```
+
+## 2026-11-07 — PR: claude/abut-m4-wingstrip (PR #1013: https://github.com/mlococo88/All-Structural/pull/1013) (ABM4: attached-wing junction — the default method takes, per limit state, the larger of the total moment over H₀ and the most loaded strip; a new option keeps the averaged moment at strength with crack control on the strip)   [calc change] [MORE conservative]
+
+Source: code-compliance review of 2026-11-07, item M4 (fix log WING open item 1).
+
+### ABM4. Junction design moment
+- **Where:** `computeWing`, attached branch (anchor `const jm=w.jMethod==="strip"?"strip":(w.jMethod==="avgOnly"?"avgOnly":"env"); W.jMode=jm;`, functions `comps`, `buildLS`); panel I-13 selector `wing.jMethod` (labels; new option `avgOnly`); Tab 9 §9.2 per-foot equations and the limit-state table (method named per row); input echo (`junction method:`).
+- **Before:** `jMethod = "avg"` (default): every limit state used m = M/H₀, v = F/H₀ (total junction moment spread over the junction height); `"strip"`: the most loaded 1-ft horizontal strip.
+- **After:** `"avg"` (default, label "Larger of: total moment over H₀ and the most loaded 1-ft strip"): both are computed; in each limit state the one with the larger M_u governs (its V_u with it). `"strip"`: unchanged. New `"avgOnly"`: the averaged moment at Strength I / Extreme Events (yield-line redistribution, engineer's choice) with Service I (crack control) on the strip.
+- **Problem:** the averaged moment assumes full redistribution along the junction height. That cannot be relied on for crack control at service, and the most-loaded strip gives about twice the moment at the default geometry: unconservative.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 5.6.3 (flexural resistance), 5.6.7 (crack control at Service I), 11.6.1.5.2 (wingwall reinforcement at the junction). The method of distributing the junction moment is not specified; the strip is the elastic, conservative distribution.
+- **Check case (built-in project: wing L = 10 ft, H₀ = 19 ft, H_L = 8 ft, t = 1.5 ft, #6 @ 9 horizontal; K_a = 0.30726, γ = 0.120, h_eq = 2.1 ft; γ_EH = 1.50, γ_LS = 1.75):**
+  - Before (avg): m_EH = M_EH/H₀ = 6.929, m_LS = 2.264 kip-ft/ft → M_u = 1.5·6.929 + 1.75·2.264 = **14.36 kip-ft/ft**; flexure D/C **0.358**; Service I M_s = 9.19; crack control D/C 0.225 (s_max 40.0 in).
+  - After (strip governs, y* = 11.0 ft): m_EH = 14.712, m_LS = 3.687 → M_u = 1.5·14.712 + 1.75·3.687 = **28.52 kip-ft/ft**; flexure D/C **0.711**; shear D/C 0.143 → 0.299; minimum steel 0.476 → 0.693; Service I M_s = 18.40, crack control D/C 0.225 → 0.511 (s_max 17.6 in). All pass.
+  - Integral abutment built-in wing: flexure D/C 0.594 → **1.004 (FAIL)**.
+  - `avgOnly`: strength as before (14.36), Service I on the strip (crack D/C 0.511).
+- **Saved data:** no key or format change. Saved projects with `"avg"` (the default) get the larger of the two methods (more conservative); `"strip"` projects are unchanged.
+- **How verified:** headless origin/main vs branch, 22 scenarios. Every project with an attached wing on "avg" moves as above. The independent wing and the strip method do not move (the strip scenario only gains the new fields). `node tests/smoke/project-library.mjs --tool abutment`: the 4 main-vs-branch "results identical" checks differ by design (the default project's wing values); against this branch itself (`--a HEAD`) ALL PASS. All tabs + Report render, 0 console errors; self-test passes (its benchmark has no wing loads); `check-syntax` passes.
+- **Decision (pending engineer review):** the default is the envelope. The averaged moment at strength remains available (`avgOnly`) when the engineer accepts yield-line redistribution, but crack control always uses the strip. WING open item 1 is settled this way unless the engineer decides otherwise.
+- **Other copies:** none.
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 92a3437..edde439 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -2417 +2417 @@ function buildInputs(){
+-    ${att?selRow("Junction design moment","wing.jMethod",[["avg","Total junction moment spread over the junction height"],["strip","Most loaded 1-ft horizontal strip"]]):""}
++    ${att?selRow("Junction design moment","wing.jMethod",[["avg","Larger of: total moment over H₀ and the most loaded 1-ft strip (per limit state)"],["strip","Most loaded 1-ft horizontal strip"],["avgOnly","Total moment over H₀ at strength (yield-line redistribution); crack control on the strip"]]):""}
+@@ -2779,6 +2779,10 @@ function computeWing(R,X){
+-    const avg=w.jMethod!=="strip"; W.avg=avg;
+-    const per=(M,Fv,ms,vs)=>avg? {m:M/H0, v:Fv/H0} : {m:ms, v:vs};
+-    const sEH=per(Tst.MEH,Tst.FEH,sg.mEH,sg.vEH), sLS=per(Tst.MLS,Tst.FLS,sg.mLS,sg.vLS);
+-    const e2=W.stripEE2, eEH=per(Tee2.MEH,Tee2.FEH,e2.mEH,e2.vEH), eLS=per(Tee2.MLS,Tee2.FLS,e2.mLS,e2.vLS);
+-    const sEQ=per(TEQ.M,TEQ.F,W.stripEQ.m,W.stripEQ.v), sCT={m:MCT/H0, v:(CT?CT.F:0)/H0};
+-    const LS={};
++    /* ABM4 (2026-11-07): junction method. "avg" (the default): per limit state, the larger M_u of the total moment spread over H₀ and the most
++       loaded 1-ft strip governs (with its V_u); "strip": the strip; "avgOnly": the total moment over H₀ at the strength / extreme limit states
++       (yield-line redistribution, engineer's choice) with Service I (crack control) on the strip — redistribution does not apply at service. */
++    const jm=w.jMethod==="strip"?"strip":(w.jMethod==="avgOnly"?"avgOnly":"env"); W.jMode=jm;
++    const avg=jm!=="strip"; W.avg=avg;
++    const sCT={m:MCT/H0, v:(CT?CT.F:0)/H0};
++    const comps=useAvg=>{ const per=(M,Fv,ms,vs)=>useAvg? {m:M/H0, v:Fv/H0} : {m:ms, v:vs}, e2=W.stripEE2;
++      return {sEH:per(Tst.MEH,Tst.FEH,sg.mEH,sg.vEH), sLS:per(Tst.MLS,Tst.FLS,sg.mLS,sg.vLS), eEH:per(Tee2.MEH,Tee2.FEH,e2.mEH,e2.vEH), eLS:per(Tee2.MLS,Tee2.FLS,e2.mLS,e2.vLS),
++        sEQ:per(TEQ.M,TEQ.F,W.stripEQ.m,W.stripEQ.v), sCT}; };
++    const buildLS=(P,meth)=>{ const {sEH,sLS,eEH,eLS,sEQ}=P, LS={};
+@@ -2792 +2795,0 @@ function computeWing(R,X){
+-    W.per={sEH,sLS,eEH,eLS,sEQ,sCT}; W.LS=LS;
+@@ -2795,0 +2799,7 @@ function computeWing(R,X){
++    Object.values(LS).forEach(o=>{ o.meth=meth; }); return LS; };
++    const Pa=comps(true), Ps=comps(false), LSa=buildLS(Pa,"avg"), LSs=buildLS(Ps,"strip");
++    let LS;
++    if(jm==="strip") LS=LSs;
++    else if(jm==="avgOnly"){ LS=LSa; LS["Service I"]=LSs["Service I"]; }
++    else{ LS={}; Object.keys(LSa).forEach(k=>{ LS[k]=(LSs[k].Mu>LSa[k].Mu+1e-12)? LSs[k] : LSa[k]; }); }
++    W.per=avg? Pa : Ps; W.perS=Ps; W.LS=LS; W.LSa=LSa; W.LSs=LSs;
+@@ -2797 +2807 @@ function computeWing(R,X){
+-    W.alt=avg? {m:W.gEHst*sg.mEH+gLS1*sg.mLS, lbl:"most loaded 1-ft horizontal strip"} : {m:(W.gEHst*Tst.MEH+gLS1*Tst.MLS)/H0, lbl:"total junction moment / H₀"};
++    W.alt=avg? {m:W.gEHst*sg.mEH+gLS1*sg.mLS, lbl:"most loaded 1-ft horizontal strip"} : {m:(W.gEHst*Tst.MEH+gLS1*Tst.MLS)/H0, lbl:"total junction moment / H₀"};   // (ABM4: in "avg", the larger governs)
+@@ -5259 +5269 @@ function renderTabWing(R){
+-    Object.entries(W.LS).forEach(([k,q])=>{ tb+=`<tr><td class="lft">${esc(k)}</td><td class="lft">${esc(q.lbl)}</td><td>${fmt(q.Mu)}</td><td>${fmt(q.Vu)}</td><td>${q.svc?"—":(q.phi==="ee"?"1.00":"strain-based (≤ 0.90)")}</td></tr>`; });
++    Object.entries(W.LS).forEach(([k,q])=>{ tb+=`<tr><td class="lft">${esc(k)}</td><td class="lft">${esc(q.lbl)}${att&&q.meth?` <span class="small">(${q.meth==="strip"?"most loaded strip":"total / H₀"})</span>`:""}</td><td>${fmt(q.Mu)}</td><td>${fmt(q.Vu)}</td><td>${q.svc?"—":(q.phi==="ee"?"1.00":"strain-based (≤ 0.90)")}</td></tr>`; });
+@@ -5278 +5288 @@ function renderTabWing(R){
+-      ${eqB(W.avg?"Per foot of junction height — total moment spread over H<sub>0</sub>":"Per foot of junction height — most loaded horizontal strip","method of panel I-13",(W.avg?[
++      ${eqB(W.jMode==="env"?"Per foot of junction height — total moment over H<sub>0</sub> and the most loaded horizontal strip (the larger governs each limit state)":W.jMode==="avgOnly"?"Per foot of junction height — total moment over H<sub>0</sub> (strength); most loaded strip (Service I)":W.avg?"Per foot of junction height — total moment spread over H<sub>0</sub>":"Per foot of junction height — most loaded horizontal strip","method of panel I-13",(W.avg?[
+@@ -5280 +5290,2 @@ function renderTabWing(R){
+-        `v_{EH} = ${t(W.per.sEH.v,3)}\\,, \\ v_{LS} = ${t(W.per.sLS.v,3)}\\ \\text{kip/ft}`+(W.CT?`\\,, \\quad m_{CT} = \\tfrac{${t(W.MCT)}}{${t(W.H0)}} = ${t(W.per.sCT.m,3)}`:"")]:[
++        `v_{EH} = ${t(W.per.sEH.v,3)}\\,, \\ v_{LS} = ${t(W.per.sLS.v,3)}\\ \\text{kip/ft}`+(W.CT?`\\,, \\quad m_{CT} = \\tfrac{${t(W.MCT)}}{${t(W.H0)}} = ${t(W.per.sCT.m,3)}`:""),
++        `\\text{strip at } y^* = ${t(s.y)}\\ \\text{ft above the junction bottom, length } L_m = ${t(s.l)}\\ \\text{ft}:\\quad m_{EH} = ${t(s.mEH,3)}\\,, \\ m_{LS} = ${t(s.mLS,3)}\\,, \\ v_{EH} = ${t(s.vEH,3)}\\,, \\ v_{LS} = ${t(s.vLS,3)}`]:[
+@@ -5284 +5295,3 @@ function renderTabWing(R){
+-        (W.avg?`For information, the most loaded 1-ft horizontal strip gives m<sub>u</sub> = ${fmt(W.alt.m)} kip-ft/ft at Strength I (y* = ${fmt(W.strip.y,2)} ft, strip length ${fmt(W.strip.l,2)} ft).`:`For information, the total junction moment over H<sub>0</sub> gives m<sub>u</sub> = ${fmt(W.alt.m)} kip-ft/ft at Strength I.`)+(W.CT?" The collision moment is spread over the junction height in both methods.":"")+" Strip at y: strip length L<sub>m</sub> where the wing exists at that elevation; b<sub>T</sub> = slope of the wing top ("+fmt(W.bT,4)+").")}
++        (W.jMode==="env"?`Each limit state takes the method with the larger M<sub>u</sub> (ABM4; method named in the table below). Strength I: total / H<sub>0</sub> ${fmt(W.LSa["Strength I"].Mu)}, strip ${fmt(W.LSs["Strength I"].Mu)} kip-ft/ft (y* = ${fmt(W.strip.y,2)} ft, strip length ${fmt(W.strip.l,2)} ft; strip formula as in the strip method).`
++        :W.jMode==="avgOnly"?`Strength and extreme limit states use the total moment over H<sub>0</sub> (yield-line redistribution, panel I-13); Service I crack control uses the most loaded strip (m<sub>s</sub> = ${fmt(W.LSs["Service I"].Mu)} kip-ft/ft), since redistribution does not apply at service. The strip gives m<sub>u</sub> = ${fmt(W.alt.m)} kip-ft/ft at Strength I.`
++        :W.avg?`For information, the most loaded 1-ft horizontal strip gives m<sub>u</sub> = ${fmt(W.alt.m)} kip-ft/ft at Strength I (y* = ${fmt(W.strip.y,2)} ft, strip length ${fmt(W.strip.l,2)} ft).`:`For information, the total junction moment over H<sub>0</sub> gives m<sub>u</sub> = ${fmt(W.alt.m)} kip-ft/ft at Strength I.`)+(W.CT?" The collision moment is spread over the junction height in both methods.":"")+" Strip at y: strip length L<sub>m</sub> where the wing exists at that elevation; b<sub>T</sub> = slope of the wing top ("+fmt(W.bT,4)+").")}
+@@ -10411 +10424 @@ function inputEchoHTML(){
+-      ["Type",at?("attached, "+(w.orient==="inline"?"in-line":"U-wing")+"; junction method: "+(w.jMethod==="strip"?"most loaded horizontal strip":"total moment over H₀")):("independent, θ = "+fmt(+w.theta,1)+"°; design section "+(w.secMode==="user"?"x/L = "+fmt(+w.secFr,3):"owner / FHWA rule")+"; EH height "+(w.ehPlane==="heel"?"virtual back plane":"stem face")),""],
++      ["Type",at?("attached, "+(w.orient==="inline"?"in-line":"U-wing")+"; junction method: "+(w.jMethod==="strip"?"most loaded horizontal strip":w.jMethod==="avgOnly"?"total moment over H₀ (strength), strip (Service I)":"larger of the total moment over H₀ and the most loaded strip")):("independent, θ = "+fmt(+w.theta,1)+"°; design section "+(w.secMode==="user"?"x/L = "+fmt(+w.secFr,3):"owner / FHWA rule")+"; EH height "+(w.ehPlane==="heel"?"virtual back plane":"stem face")),""],
+```
+
+## 2026-11-07 — PR: claude/pile-group-one-row — PG1: one pile row in the moment direction is an input error (was: overturning moment silently dropped) (calculation change for Σx'² = 0 or Σy'² = 0 layouts only) (PR #996: https://github.com/mlococo88/All-Structural/pull/996)
+### Where / before / after (C-8, computeAll)
+```diff
++      /* PG1 (2026-11-07): a group with no lever arm about an axis (Σx'² = 0: one pile row in the moment direction; or Σy'² = 0)
++         cannot resist a moment about it. Before, the moment was dropped (every pile V/n); now it is an input error and the pile and
++         pile-cap checks are not computed (as with no active pile). Layouts with Σx'² > 0 and Σy'² > 0 are unchanged. */
++      for(const lsName of Object.keys(LIMITS)){   // the largest unresisted moment of every permutation
++        for(const pl of permutations(lsName,true)){ const c=comboEffects(lsName,pl.perm,pl.liveOn,false); if(c.V<=0) continue;
++          const My=c.V*((c.Mv-c.Mh)/c.V-xgcT), Mx=c.Mt-c.V*ygc, u=SharedPileGroup.unresisted(c.V,My,Mx,R.pile);
++          if(u && (!R.pile.unresisted || Math.abs(u.M)>Math.abs(R.pile.unresisted.M))) R.pile.unresisted={...u, ls:lsName, lbl:c.lbl}; } }
++      if(R.pile.unresisted){ const u=R.pile.unresisted; R.pile.nActive=n; R.pile.n=0;   // as with no active pile: no pile results, every pile view and check skipped
++        warnFor("conv",`Pile layout: ${u.axis==="y"?"a single pile row in the longitudinal direction (all active piles at one x, Σx′² = 0)":"a single pile line along the abutment (all active piles at one y, Σy′² = 0)"} cannot resist the overturning moment ${u.axis==="y"?"M_y":"M_x"} = ${fmt(u.M)} kip-ft (largest; ${u.ls}, ${u.lbl||""}) on pinned-head vertical piles. Add a pile row. The pile and pile-cap checks (pile reactions, punching, toe / heel on the piles) are not computed.`,"err"); }
++      else{
++      }   // PG1
+```
+### Problem / §4
+- Before: with all active piles at one x (Σx'² = 0), pileReaction dropped M_y: every pile got ΣV/n. Default abutment with one row: P = 386.17 kip per pile, M_y = −2980.4 kip-ft of the governing case ignored (unconservative).
+- After: C-8 scans every permutation with SharedPileGroup.unresisted; if any has an unresisted moment, an input error names the largest ("M_y = −5,410.12 kip-ft (largest; Strength I, …)", default with one row) and the pile branch is computed as with no active pile (R.pile.n = 0, R.pile.nActive = n, R.pile.unresisted): no pile reactions, pile checks, punching or pile-cap toe / heel demands. Statics of a rigid cap (AASHTO LRFD 10th Ed. Art. 10.7, no closed form).
+- Every layout with Σx'² > 0 and Σy'² > 0 is unchanged (14 layouts main vs branch identical; 2000 random reactions bit-identical).
+### Open items
+- Decision (pending engineer review): the error blocks the pile results rather than showing V/n with a warning (a single row of pinned vertical piles has no moment resistance; battered piles, 8g, would be the remedy).
+
+## 2026-11-07 — PR: claude/abut-m8-ts (PR #1019: https://github.com/mlococo88/All-Structural/pull/1019) (ABM8: provided shrinkage and temperature bars checked for the stem, backwall and footing — area and spacing per 5.10.6)   [new check] [MORE conservative]
+
+Source: code-compliance review of 2026-11-07, item M8.
+
+### ABM8. S&T bars provided
+- **Where:** `defaultState` reinf (anchor `stemH:{size:"6", sp:9}, bwH:{size:"5", sp:12}, ftgL:{size:"6", sp:12},`); `migrate` (anchor `a saved project has no S&T bars entered`); panel I-9 inputs (anchor `Shrinkage &amp; temperature bars, each face [5.10.6] (Tab 5 §5.7a)`); `computeAll` C-12b (anchor `R.checks.ts={stem:tsOf(`); dashboard rows `ts_stem`, `ts_bw`, `ts_ftg` (anchor `ABM8: S&T bars provided [5.10.6]`); Tab 5 panel §5.7a `o-ts`; Input ID (bars "0" and the defaults left out); select handler (bar sizes kept as strings).
+- **Before:** A_s,ST of Eq. 5.10.6-1 was reported (and a #5 spacing suggested in schedule row E1), but the bars actually provided were never checked except on the wingwall.
+- **After:** new inputs for the bars provided on each face: stem horizontal, backwall horizontal, and footing longitudinal (top and bottom). Check: D/C = max(A_s,ST / A_s, s / s_max), where
+  - A_s,ST is the section's Eq. 5.10.6-1 value (the b and h of its flexure check, 0.11 ≤ A_s,ST ≤ 0.60 in²/ft);
+  - s_max = 12 in for walls and footings thicker than 18 in, else min(3t, 18 in), as the existing wing check.
+  
+  Bar "0" = not entered: a REVIEW dashboard row (counted as "design incomplete").
+  - Integral abutments: not applied (the integral wall has its own bars).
+  - Semi-integral: no backwall row (the end diaphragm replaces the backwall).
+- **Problem:** a required check on the element itself (5.10.6) was missing.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 5.10.6 (Eq. 5.10.6-1, f_y ≤ 75 ksi, area limits, spacing limits).
+- **Check case (built-in project, f_y = 60 ksi):**
+  - Stem: b = min(L_ab, h_stem) = 168 in, h = 54 in, so A_s,ST = 1.30·168·54/(2·222·60) = 0.443 in²/ft. #6 @ 9 gives A_s = 0.44·12/9 = 0.587, with s_max = 12 (t = 54 in). D/C = max(0.443/0.587, 9/12) = **0.755**.
+  - Backwall: b = 60, h = 18, so A_s,ST = max(0.11, 1.30·60·18/(2·78·60)) = 0.150. #5 @ 12 gives 0.31, with s_max = min(54, 18) = 18. D/C = max(0.484, 0.667) = **0.667**.
+  - Footing: b = 156, h = 36, so A_s,ST = 0.317. #6 @ 12 gives 0.44, with s_max = 12 (t = 36 in). D/C = max(0.720, 1.000) = **1.000** (passes).
+  - #5 @ 14 on the stem: A_s = 0.266, so D/C = max(1.666, 1.167) = **1.666 FAIL**.
+- **Saved data:** no key renamed. A saved project (no fields) gets size "0" (not entered) → three REVIEW rows until the bars are entered; its other results are identical. New projects start with the defaults above (they pass).
+- **How verified:**
+  - Headless origin/main vs branch, 24 scenarios: no existing result moves; only the new `R.checks.ts` and dashboard rows are added.
+  - `project-library --tool abutment`: the main-vs-branch "results identical" checks differ by the new result fields. Against the branch itself (`--a HEAD`): ALL PASS.
+  - All tabs and the Report render with 0 console errors; the self-test passes; `check-syntax` passes.
+- **Decision (pending engineer review):**
+  - For components 18 in thick or less, s_max = min(3t, 18 in). This is the existing wing rule. The 10th Ed. wording for "other situations" reads 3t "but not less than 18 in"; the smaller value is used, which is conservative.
+  - The footing longitudinal bars use the toe section's b and h.
+- **Other copies:** the wing S&T check (`W.ts`) uses the same rule (unchanged).
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index d823b9f..fa506cf 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -769,0 +770 @@ function defaultState(){
++      stemH:{size:"6", sp:9}, bwH:{size:"5", sp:12}, ftgL:{size:"6", sp:12},   // ABM8: shrinkage & temperature bars provided, each face [5.10.6]: stem and backwall horizontal, footing longitudinal (top and bottom); size "0" = not entered
+@@ -1708,0 +1710 @@ function migrate(){
++    ["stemH","bwH","ftgL"].forEach(k=>{ if(!S.reinf[k]||typeof S.reinf[k]!=="object") S.reinf[k]={size:"0", sp:12}; });   // ABM8: a saved project has no S&T bars entered (REVIEW rows until they are)
+@@ -2329,0 +2332,4 @@ function buildInputs(){
++    ${iabType()==="integral"?"":`<div class="subhead">Shrinkage &amp; temperature bars, each face [5.10.6] (Tab 5 §5.7a)</div>
++      ${selRow("Stem — horizontal, bar","reinf.stemH.size",[["0","— not entered"]].concat(barOpts))}${inpRow("&nbsp;&nbsp;spacing","reinf.stemH.sp","in")}
++      ${iabType()==="semi"?"":`${selRow("Backwall — horizontal, bar","reinf.bwH.size",[["0","— not entered"]].concat(barOpts))}${inpRow("&nbsp;&nbsp;spacing","reinf.bwH.sp","in")}`}
++      ${selRow("Footing — longitudinal (top and bottom), bar","reinf.ftgL.size",[["0","— not entered"]].concat(barOpts))}${inpRow("&nbsp;&nbsp;spacing","reinf.ftgL.sp","in")}`}
+@@ -3769,10 +3774,0 @@ function computeAll(){
+-      /* PG1 (2026-11-07): a group with no lever arm about an axis (Σx'² = 0: one pile row in the moment direction; or Σy'² = 0)
+-         cannot resist a moment about it. Before, the moment was dropped (every pile V/n); now it is an input error and the pile and
+-         pile-cap checks are not computed (as with no active pile). Layouts with Σx'² > 0 and Σy'² > 0 are unchanged. */
+-      for(const lsName of Object.keys(LIMITS)){   // the largest unresisted moment of every permutation
+-        for(const pl of permutations(lsName,true)){ const c=comboEffects(lsName,pl.perm,pl.liveOn,false); if(c.V<=0) continue;
+-          const My=c.V*((c.Mv-c.Mh)/c.V-xgcT), Mx=c.Mt-c.V*ygc, u=SharedPileGroup.unresisted(c.V,My,Mx,R.pile);
+-          if(u && (!R.pile.unresisted || Math.abs(u.M)>Math.abs(R.pile.unresisted.M))) R.pile.unresisted={...u, ls:lsName, lbl:c.lbl}; } }
+-      if(R.pile.unresisted){ const u=R.pile.unresisted; R.pile.nActive=n; R.pile.n=0;   // as with no active pile: no pile results, every pile view and check skipped
+-        warnFor("conv",`Pile layout: ${u.axis==="y"?"a single pile row in the longitudinal direction (all active piles at one x, Σx′² = 0)":"a single pile line along the abutment (all active piles at one y, Σy′² = 0)"} cannot resist the overturning moment ${u.axis==="y"?"M_y":"M_x"} = ${fmt(u.M)} kip-ft (largest; ${u.ls}, ${u.lbl||""}) on pinned-head vertical piles. Add a pile row. The pile and pile-cap checks (pile reactions, punching, toe / heel on the piles) are not computed.`,"err"); }
+-      else{
+@@ -3827 +3822,0 @@ function computeAll(){
+-      }   // PG1
+@@ -4594,0 +4590,10 @@ function computeAll(){
++  /* ===== C-12b ABM8 (2026-11-07): shrinkage & temperature bars provided [AASHTO LRFD 10th Ed. 5.10.6] — stem and backwall horizontal, footing
++     longitudinal, each face: A_s ≥ A_s,ST of Eq. 5.10.6-1 (the section's b, h as in its flexure check; 0.11 ≤ A_s,ST ≤ 0.60 in²/ft) and the spacing
++     ≤ 12 in for walls and footings thicker than 18 in, else ≤ min(3t, 18 in) (as the wingwall check). Size "0" = not entered (REVIEW). ===== */
++  if(iabType()!=="integral"){ const tsOf=(key,name,c,tIn)=>{ const r=S.reinf[key]||{size:"0",sp:12}, ent=String(r.size)!=="0"&&BARS[String(r.size)];
++      const sMax=tIn>18+1e-9? 12 : Math.min(3*tIn,18), out={key,name,bar:String(r.size),sp:+r.sp,req:c?c.AsST:NaN,bST:c?c.bST:NaN,hST:c?c.hST:NaN,t:tIn,sMax,ent:!!ent};
++      if(ent){ out.As=BARS[String(r.size)].Ab*12/Math.max(1e-9,+r.sp); out.dcA=out.req/out.As; out.dcS=(+r.sp)/sMax; out.dc=Math.max(out.dcA,out.dcS); }
++      return out; };
++    R.checks.ts={stem:tsOf("stemH","Stem horizontal",R.checks.stemFlex,g.tsb*12), ftg:tsOf("ftgL","Footing longitudinal",R.checks.toeFlex,g.tf*12)};
++    if(iabType()!=="semi") R.checks.ts.bw=tsOf("bwH","Backwall horizontal",R.checks.bwFlex,g.tbw*12); }
++
+@@ -5040 +5045 @@ function computeAll(){
+-      dropDef(fpS.piles,T.piles,["strSec","Fy","drive","pipeT","PrUser","orient","headFix","MuPy","fixSoil","Su","DfUser","Lu","nhUser","DfMode"]); dropDef(fpS.reinf,T.reinf,["dwlEnd","dwlLap","dwlPct"]);
++      dropDef(fpS.piles,T.piles,["strSec","Fy","drive","pipeT","PrUser","orient","headFix","MuPy","fixSoil","Su","DfUser","Lu","nhUser","DfMode"]); dropDef(fpS.reinf,T.reinf,["dwlEnd","dwlLap","dwlPct","stemH","bwH","ftgL"]); ["stemH","bwH","ftgL"].forEach(k=>{ if(fpS.reinf&&fpS.reinf[k]&&String(fpS.reinf[k].size)==="0") delete fpS.reinf[k]; });   // ABM8
+@@ -5113,0 +5119,3 @@ function computeAll(){
++  if(R.checks.ts) Object.entries(R.checks.ts).forEach(([k,q])=>{   // ABM8: S&T bars provided [5.10.6]
++    if(q.ent) addD("ts_"+k,q.name+" bars — S&T [5.10.6]",q.dc,"tab-struct","#"+q.bar+" @ "+fmt(q.sp,1)+" in each face: A_s "+fmt(q.As,3)+" vs "+fmt(q.req,3)+" in²/ft, s ≤ "+fmt(q.sMax,0)+" in");
++    else addD("ts_"+k,"REVIEW — "+q.name+" bars — S&T [5.10.6]",NaN,"tab-struct","not entered (panel I-9): A_s,ST = "+fmt(q.req,3)+" in²/ft each face, s ≤ "+fmt(q.sMax,0)+" in",true); });
+@@ -5942 +5950,2 @@ function svgIabSection(R){
+-const DASH_ANCHOR={iabPile:"o-iab-pile",iabTip:"o-iab-pile",iabGeo:"o-iab-pile",iabUp:"o-iab-pile",iabGeoEE:"o-iab-pile",   // IAB; ABR2
++const DASH_ANCHOR={ts_stem:"o-ts",ts_bw:"o-ts",ts_ftg:"o-ts",   // ABM8
++  iabPile:"o-iab-pile",iabTip:"o-iab-pile",iabGeo:"o-iab-pile",iabUp:"o-iab-pile",iabGeoEE:"o-iab-pile",   // IAB; ABR2
+@@ -7348,0 +7358,10 @@ function renderTabStruct(R){
++  /* ---- 5.7a ABM8: shrinkage & temperature bars provided [5.10.6] ---- */
++  if(R.checks.ts){ const t=fmtT, rows=Object.values(R.checks.ts);
++    h+=panel("o-ts","5.7a","Shrinkage & Temperature Reinforcement Provided [AASHTO 5.10.6]",
++      eqB("Required area, each face and each direction","AASHTO 5.10.6, Eq. 5.10.6-1",["A_{s,ST} \\ge \\dfrac{1.30\\,b\\,h}{2(b+h)f_y}\\,, \\quad 0.11 \\le A_{s,ST} \\le 0.60\\ \\text{in}^2/\\text{ft}\\,; \\quad s \\le 12\\ \\text{in (walls and footings } t > 18\\ \\text{in), else } s \\le \\min(3t,\\ 18\\ \\text{in})"].concat(rows.map(q=>
++        `\\text{${q.name}: } A_{s,ST} = ${t(q.req,3)}\\ \\text{in}^2/\\text{ft}\\ (b = ${t(q.bST,1)},\\ h = ${t(q.hST,1)}\\ \\text{in, as its flexure check})`+(q.ent?`\\,, \\quad A_s = ${t(BARS[q.bar].Ab,2)}\\dfrac{12}{${t(q.sp,1)}} = ${t(q.As,3)}\\,, \\quad s_{max} = ${t(q.sMax,0)}\\ \\text{in}\\ (t = ${t(q.t,1)}\\ \\text{in})`:`\\,, \\quad \\text{bars not entered (panel I-9)}`))),
++        "Stem and backwall: horizontal bars on each face; footing: longitudinal bars (along the abutment), top and bottom. The transverse footing and the vertical wall bars are the flexural bars (§5.2–5.5).")
++      +rows.map(q=>q.ent? checkLine(q.name+" S&T (#"+q.bar+" @ "+fmt(q.sp,1)+" in)",`\\max\\left(\\dfrac{A_{s,ST}}{A_s},\\ \\dfrac{s}{s_{max}}\\right) = \\max\\left(\\dfrac{${t(q.req,3)}}{${t(q.As,3)}},\\ \\dfrac{${t(q.sp,1)}}{${t(q.sMax,0)}}\\right)`,q.dc)
++        : `<div class="checkline fail"><span class="flagchip warn">REVIEW</span> ${esc(q.name)} S&amp;T bars not entered (panel I-9): provide A<sub>s</sub> ≥ ${fmt(q.req,3)} in²/ft each face at s ≤ ${fmt(q.sMax,0)} in.</div>`).join(""));
++  }
++
+@@ -10070 +10089 @@ document.addEventListener("change",ev=>{
+-  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate","wing.hSize","wing.vSize","iab.capBar","iab.hBar","iab.vBar","iab.stBar","apSlab.sBar","apSlab.hBar","apSlab.aBar","apSlab.dBar","apSlab.tBar"].includes(p))?num:raw;   // APS: bar sizes stay strings
++  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.stemH.size","reinf.bwH.size","reinf.ftgL.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate","wing.hSize","wing.vSize","iab.capBar","iab.hBar","iab.vBar","iab.stBar","apSlab.sBar","apSlab.hBar","apSlab.aBar","apSlab.dBar","apSlab.tBar"].includes(p))?num:raw;   // APS: bar sizes stay strings
+```
+
+## 2026-11-07 — PR: claude/abut-m5-undrained (PR #1021: https://github.com/mlococo88/All-Structural/pull/1021) (ABM5: sliding of a spread footing on clay also checked undrained — the lesser of S_u·B′L and 0.5ΣV — and the lesser of the drained and undrained resistance governs)   [calc change only on clay] [MORE conservative]
+
+Source: code-compliance review of 2026-11-07, item M5.
+
+### ABM5. Undrained sliding on clay
+- **Where:** `computeAll` C-7 sliding (anchors `const SuS=fn.matl==="soil"?`, `const RnD = fn.matl==="soil"`, `const Rn = und? Math.min(RnD, und.Ru) : RnD;`); new input `fnd.SuSl` (panel I-4, before the base friction angle); Tab 3 §3.1 (the undrained lines and note); `migrate` back-fill; Input ID (0 left out).
+- **Before:** R_n = ΣV·tan δ_base on soil, always, even when the bearing stratum is entered as clay (q_n computed with φ_f = 0, c > 0).
+- **After:** S_u is taken as `fnd.SuSl` when entered, or else as the cohesion c of a φ_f = 0 bearing stratum (q_n computed). With S_u known:
+  - R_n,u = min(S_u·B′·L_ftg, 0.5·ΣV), where B′ = B − 2|e| for the permutation (uniform pressure on the effective width).
+  - R_n = min(R_n,drained, R_n,u), with φ_τ and the passive term as before.
+  
+  Without S_u: unchanged. Rock: unchanged.
+- **Problem:** on clay the friction-only resistance is not the governing provision; undrained sliding could be overstated.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 10.6.3.4: Eq. 10.6.3.4-1; footings on clay over at least 6 in of compacted granular material take the lesser of the cohesion and one-half the normal stress (Fig. 10.6.3.4-1). Table 10.5.5.2.2-1 lists φ_τ for concrete on clay.
+- **Check case (built-in project, S_u = 1.0 ksf entered; governing Strength I permutation ΣV = 1712.5 kip, ΣH = 744.2 kip, e = 2.782 ft; B = 13 ft, L_ftg = 44 ft, δ = 29°, φ_τ = 0.80):**
+  - Drained: R_n = 1712.5·tan 29° = 949.3 kip.
+  - Undrained: B′ = 13 − 2(2.782) = 7.436 ft. S_u B′L = 1.0·7.436·44 = 327.2 kip; 0.5ΣV = 856.3 kip, so R_n,u = **327.2** kip.
+  - R_R = 0.80·327.2 = 261.8 kip, so D/C = 744.2/261.8 = **2.843 FAIL**.
+  - Before: the governing case was the construction stage at D/C **1.101** (R_R = 535.1 kip, already failing).
+  - Bearing-stratum clay (q_n computed, φ_f = 0, c = 1.5 ksf): D/C 1.101 → 1.895.
+- **Decisions (pending engineer review):**
+  - When S_u is known, both resistances are checked and the lesser governs.
+  - The undrained resistance uses the Meyerhof effective width (uniform pressure) instead of the trapezoidal distribution of Fig. 10.6.3.4-1; this is conservative in contact area.
+  - φ_τ stays the panel I-4 value (default 0.80). Table 10.5.5.2.2-1 gives 0.85 on clay, so this is conservative.
+  - The cohesion of a φ_f = 0 bearing stratum is taken as S_u automatically.
+- **Saved data:** new optional field `fnd.SuSl` (0). A saved project changes only if its q_n is computed with φ_f = 0 and c > 0 (clay).
+- **How verified:** headless origin/main vs branch, 27 scenarios: only the 3 clay scenarios move. All tabs and the Report render with 0 console errors; the self-test passes; `check-syntax` passes; `project-library --tool abutment` ALL PASS (the result object of a non-clay project is unchanged).
+- **Other copies:** Spread Footing.html and Retaining Wall Designer.html have their own sliding checks (not changed; one tool per PR).
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 4cb6603..c8b38ca 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -707 +707 @@ function defaultState(){
+-      imBuried:true, imFrac:0, dNeg:0,    // ABR4: dNeg = depth of soil in front of the footing neglected for passive (frost, scour, future excavation; ft) [10.6.3.4, 11.6.3.5]
++      imBuried:true, imFrac:0, dNeg:0, SuSl:0,   // ABM5: SuSl = undrained shear strength of clay under the footing for sliding (ksf, 0 = from the bearing inputs when φ_f = 0 and c > 0, else not checked) [10.6.3.4]    // ABR4: dNeg = depth of soil in front of the footing neglected for passive (frost, scour, future excavation; ft) [10.6.3.4, 11.6.3.5]
+@@ -1706 +1706 @@ function migrate(){
+-    fill(S.fnd,T.fnd,["qnMode","qnC","qnPhi","qnGam","qnDw","qnIncl","qnDepth","imBuried","imFrac","dNeg"]);   // ABR4: dNeg   // ABR3: imBuried, imFrac
++    fill(S.fnd,T.fnd,["qnMode","qnC","qnPhi","qnGam","qnDw","qnIncl","qnDepth","imBuried","imFrac","dNeg","SuSl"]);   // ABM5: SuSl   // ABR4: dNeg   // ABR3: imBuried, imFrac
+@@ -2100,0 +2101 @@ function buildInputs(){
++        ${inpRow("Clay under the footing: undrained S<sub>u</sub> for sliding (0 = none)","fnd.SuSl","ksf",{title:"Footing on clay: the sliding resistance is also checked undrained, the lesser of S_u·B′L and 0.5·ΣV [10.6.3.4, Fig. 10.6.3.4-1]; the lesser of the drained and undrained resistance governs. 0 = the cohesion c of the bearing stratum when q_n is computed with φ_f = 0, else not checked. Tab 3 §3.1."})}
+@@ -3631,0 +3633,5 @@ function computeAll(){
++    // ABM5 (2026-11-07): footing on clay — undrained resistance R_u = min(S_u·B′·L_ftg, 0.5·ΣV) (lesser of the cohesion and half the normal stress,
++    // Fig. 10.6.3.4-1, on the Meyerhof effective width B′ = B − 2|e|). S_u entered (panel I-4) or, when 0, the cohesion c of a φ_f = 0 bearing stratum
++    // (q_n computed). When S_u is known both the drained (friction) and the undrained resistance are checked and the lesser governs (decision).
++    const SuS=fn.matl==="soil"? ((+fn.SuSl>0)? +fn.SuSl : ((fn.qnMode==="soil"&&!((+fn.qnPhi||0)>0)&&(+fn.qnC||0)>0)? +fn.qnC : 0)) : 0;
++    const SuSrc=(+fn.SuSl>0)? "entered" : "bearing";
+@@ -3638 +3644,4 @@ function computeAll(){
+-        const Rn = fn.matl==="soil" ? c.V*Math.tan(deg2rad(fn.deltaB)) : c.V*fn.muRock + fn.caRock*B*Lftg;
++        const RnD = fn.matl==="soil" ? c.V*Math.tan(deg2rad(fn.deltaB)) : c.V*fn.muRock + fn.caRock*B*Lftg;
++        let und=null;   // ABM5
++        if(SuS>0){ const xb=(c.Mv-c.Mh)/c.V, eU=Math.abs(B/2-xb), Bp=Math.max(0,B-2*eU), RuS=SuS*Bp*Lftg, RuH=0.5*c.V; und={Su:SuS, src:SuSrc, e:eU, Bp, RuS, RuH, Ru:Math.min(RuS,RuH)}; }
++        const Rn = und? Math.min(RnD, und.Ru) : RnD;
+@@ -3645 +3654 @@ function computeAll(){
+-        if(dc>slid.dc) slid={dc, D:c.Hx, Rn, RR, V:c.V, phiTau:rf.phiTau, lbl:c.lbl, ls:lsName, c, pUsed, Hy:Hyv, HxN, Hres:Math.hypot(HxN,Hyv), dcX, dcV, vec:dcV>dcX};
++        if(dc>slid.dc) slid={dc, D:c.Hx, Rn, ...(und?{RnD, und, undGov:und.Ru<RnD}:{}), RR, V:c.V, phiTau:rf.phiTau, lbl:c.lbl, ls:lsName, c, pUsed, Hy:Hyv, HxN, Hres:Math.hypot(HxN,Hyv), dcX, dcV, vec:dcV>dcX};
+@@ -5055 +5064 @@ function computeAll(){
+-      dropDef(fpS.mat,T.mat,["coverExp","coverCat","coverWcm","rebar"]); dropDef(fpS.fnd,T.fnd,["qnMode","qnC","qnPhi","qnGam","qnDw","qnIncl","qnDepth"]);
++      dropDef(fpS.mat,T.mat,["coverExp","coverCat","coverWcm","rebar"]); dropDef(fpS.fnd,T.fnd,["qnMode","qnC","qnPhi","qnGam","qnDw","qnIncl","qnDepth","SuSl"]);
+@@ -6564 +6573,4 @@ function renderTabStab(R){
+-          `R_R = \\varphi_\\tau R_n${(sl.pUsed??R.passive.on)?" + \\varphi_{ep}P_p":""} = (${fmtT(sl.phiTau??fn.phiTau)})(${fmtT(sl.Rn)})${(sl.pUsed??R.passive.on)?` + (${fmtT(fn.phiEP)})(${fmtT(R.passive.Pp)})`:""} = ${fmtT(sl.RR)}\\ \\text{kip}`])
++          ...(sl.und?[`R_{n,drained} = ${fmtT(sl.RnD)}\\ \\text{kip}\\,; \\quad \\text{undrained (clay): } R_{n,u} = \\min(S_u B'L_{ftg},\\ 0.5\\,\\Sigma V_f) = \\min((${fmtT(sl.und.Su,3)})(${fmtT(sl.und.Bp)})(${fmtT(g.Lftg)}),\\ 0.5(${fmtT(sl.V)})) = ${fmtT(sl.und.Ru)}\\ \\text{kip}`,
++            `B' = B - 2|e| = ${fmtT(geo.B)} - 2(${fmtT(sl.und.e,3)}) = ${fmtT(sl.und.Bp)}\\ \\text{ft}\\,, \\quad R_n = \\min(R_{n,drained},\\ R_{n,u}) = ${fmtT(sl.Rn)}\\ \\text{kip}\\ (${sl.undGov?"undrained governs":"drained governs"})`]:[]),
++          `R_R = \\varphi_\\tau R_n${(sl.pUsed??R.passive.on)?" + \\varphi_{ep}P_p":""} = (${fmtT(sl.phiTau??fn.phiTau)})(${fmtT(sl.Rn)})${(sl.pUsed??R.passive.on)?` + (${fmtT(fn.phiEP)})(${fmtT(R.passive.Pp)})`:""} = ${fmtT(sl.RR)}\\ \\text{kip}`],
++          sl.und?`Footing on clay: S<sub>u</sub> = ${fmt(sl.und.Su,3)} ksf (${sl.und.src==="entered"?"entered, panel I-4":"the cohesion c of the φ<sub>f</sub> = 0 bearing stratum, panel I-4"}). The undrained resistance is the lesser of the cohesion and half the normal stress on the interface (Fig. 10.6.3.4-1), taken on the effective width B′ (uniform pressure); both the drained and the undrained resistance are checked and the lesser governs. 10.6.3.4 assumes at least 6 in of compacted granular material under the footing for the 0.5σ<sub>v</sub> limit; consider the possible shrinkage gap on clay.`:"")
+```
+
+## 2026-11-07 — PR: claude/abut-m6-wa (PR #1029: https://github.com/mlococo88/All-Structural/pull/1029) (ABM6: unbalanced water WA — a water level in front of the wall; the net hydrostatic thrust acts on the abutment and the stem at γ_WA = 1.00)   [calc change only when the new input is entered] [MORE conservative]
+
+Source: code-compliance review of 2026-11-07, item M6.
+
+### ABM6. Unbalanced water
+- **Where:** `defaultState` geom (anchor `hwFr:null`); panel I-1 input `geom.hwFr` (blank = h_w; the input handler stores null for an empty `data-blank` input); `computeAll` WA group (anchor `ABM6 (2026-11-07): unbalanced water WA`); `comboEffects` (anchor `gr.cls==="WA"`) and the combination label; stem demand (anchors `const stWA=`, `if(gWA){ Mu+=gWA*stWA.M;`, `MsStem=…+(stWA? stWA.M : 0)`); Tab 1 equations after the layered earth pressure (anchor `Unbalanced water WA — net hydrostatic thrust`); water warning text; Input ID (null left out).
+- **Before:** water at h_w on both sides (balanced): buoyant unit weights, no net hydrostatic thrust, and a warning to confirm drainage.
+- **After:** with h_w,f < h_w (water lower in front), a load group WA is added:
+  - abutment: WA_h = ½γ_w(h_w² − h_w,f²)L_ab, with M_WA = γ_w(h_w³ − h_w,f³)L_ab/6 about the base, toward the toe;
+  - stem, per ft above the stem base: m = γ_w(h_b³ − h_f³)/6 and v = γ_w(h_b² − h_f²)/2, where h_b = h_w − t_f and h_f = h_w,f − t_f (both ≥ 0, ≤ H_s).
+
+  Factors: γ_WA = 1.00 (× η at the strength limit states) in every limit state. It is not applied in the construction stage (dry, as before) and is included in Service I.
+  
+  Blank / equal levels: unchanged (no new result fields). A front level above h_w is taken as balanced, with a warning.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 3.11.3 (hydrostatic pressure added where the backfill cannot drain; levels that differ on the two sides), Table 3.4.1-1 (WA at 1.00 in all the limit states used here).
+- **Check case (built-in project, h_w = 10 ft, h_w,f = 3 ft, L_ab = 44 ft, γ_w = 0.0624 kcf, t_f = 3 ft):**
+  - WA_h = ½(0.0624)(100 − 9)(44) = **124.92 kip**; M_WA = (0.0624)(1000 − 27)(44)/6 = 445.24 kip-ft, z̄ = 3.564 ft.
+  - Stem: h_b = 7, h_f = 0. m = 0.0624·343/6 = **3.567 kip-ft/ft** and v = 1.529 kip/ft. Strength I stem M_u goes from 110.42 to **113.98 kip-ft/ft**.
+  - Dashboard: eccentricity 0.781 → 0.852, bearing 0.828 → 0.862, stem shear 0.249 → 0.286; sliding is unchanged (the dry construction stage governs).
+  - Pile variant (h_w,f = 0): pile combined P-M 0.994 → **1.136 FAIL**; pile compression 0.815 → 0.844.
+- **Decisions (pending engineer review):**
+  - The uplift is kept as the buoyant weights at the level behind (uniform under the base). The relief from a lower front level, a linear uplift toward the toe, is neglected. This is conservative for sliding and overturning; for bearing it slightly lowers the vertical load.
+  - Full hydrostatic head with no seepage loss.
+  - The water thrust acts over L_ab, as the earth pressure.
+  - The heel and toe local design keep the buoyant model.
+  - Seepage and piping are left to the geotechnical engineer, as noted in Tab 1.
+- **Saved data:** new optional field `geom.hwFr` (null). Saved projects are balanced, as before.
+- **How verified:**
+  - Headless origin/main vs branch, 30 scenarios: only the two unbalanced-water scenarios move. The balanced h_w = 10 ft scenario is identical.
+  - UI script: typing a value adds WA; clearing it stores null and removes WA.
+  - All tabs and the Report render with 0 console errors; the self-test passes; `check-syntax` passes; `project-library --tool abutment` ALL PASS.
+- **Other copies:** Retaining Wall Designer.html and Spread Footing.html have their own water handling (not changed).
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index c8b38ca..86d5f78 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -680 +680,2 @@ function defaultState(){
+-      hw:0.0                        // water table height above BOTTOM of footing (ft); 0 = none
++      hw:0.0,                       // water table height above BOTTOM of footing (ft); 0 = none
++      hwFr:null                     // ABM6: water level in front of the wall, above the bottom of footing (ft); null = same as h_w (balanced, no WA) [3.11.3]
+@@ -2035,0 +2037,2 @@ function buildInputs(){
++    <div class="in-row"><label title="Water level in front of the wall (toe side), above the bottom of footing. Blank = the same as h_w (balanced groundwater, no net water pressure). Lower than h_w: the net hydrostatic thrust WA acts on the wall and stem [3.11.3] (Tab 1 §1.3a).">Water level in front h<sub>w,f</sub> (blank = h<sub>w</sub>)</label>
++      <input type="number" step="any" data-path="geom.hwFr" data-blank="1" value="${S.geom.hwFr==null||S.geom.hwFr===""?"":S.geom.hwFr}"><span class="unit">ft</span></div>
+@@ -3219 +3222 @@ function computeAll(){
+-  else if(g.hw>g.tf) warnFor("conv","Water table is above the top of footing. Buoyant unit weights are used below the water table and a balanced groundwater condition (equal water both sides, no net hydrostatic thrust) is assumed — confirm drainage details support this.");
++  else if(g.hw>g.tf) warnFor("conv","Water table is above the top of footing. Buoyant unit weights are used below the water table and a balanced groundwater condition (equal water both sides, no net hydrostatic thrust) is assumed"+((g.hwFr!==null&&g.hwFr!==undefined&&g.hwFr!=="")?" unless the water level in front (panel I-1) is lower: then the net thrust WA is added (Tab 1 §1.3)":"")+" — confirm drainage details support this.");   // ABM6
+@@ -3223 +3226 @@ function computeAll(){
+-  const hwF = Math.max(0,Math.min(g.hw,g.tf));            // submerged footing depth
++  const hwF = Math.max(0,Math.min(g.hw,g.tf));            // submerged footing depth (ABM6: the uplift stays at the level behind, h_w)
+@@ -3459,0 +3463,9 @@ function computeAll(){
++  /* ABM6 (2026-11-07): unbalanced water WA [3.11.3, Table 3.4.1-1 (γ_WA = 1.00)] — water h_w behind (on the virtual back plane, as the buoyant
++     earth pressure), h_w,f in front (toe side). Net hydrostatic thrust ½γ_w(h_w² − h_w,f²)·L_ab at its resultant, toward the toe. The uplift stays
++     as the buoyant weights at h_w (uniform under the base; the relief of a lower front level is neglected — decision). Not in the construction stage. */
++  { const hB=hwE, hFr0=(g.hwFr===null||g.hwFr===undefined||g.hwFr==="")? hB : Math.max(0,+g.hwFr||0), hFr=Math.min(hFr0,hB);
++    if(hB-hFr>1e-9) R.WA={hB, hFr, hFrIn:hFr0, on:true};   // (absent when balanced: the result object of a balanced project is unchanged)
++    if(hFr0>hB+1e-9) warnFor("conv","Water level in front (panel I-1) is above the water level behind the wall: a higher front level would push toward the backfill; it is taken as balanced (no WA).");
++    if(R.WA&&R.WA.on){ const Hw=0.5*GAMMA_W*(hB*hB-hFr*hFr)*Lab, Mw=GAMMA_W*(hB*hB*hB-hFr*hFr*hFr)/6*Lab;
++      Object.assign(R.WA,{H:Hw, M:Mw, z:Hw>0? Mw/Hw : 0});
++      groups.WA={cls:"WA", stage:"full", V:0,Mv:0, Hx:Hw, Mh:Mw, Hy:0,Mt:0, desc:"Unbalanced water WA — net hydrostatic thrust"}; } }
+@@ -3557,0 +3570 @@ function computeAll(){
++      else if(gr.cls==="WA") gamma = L.perm? eta : 1.0;   // ABM6: γ_WA = 1.00 (× η at the strength limit states) [T.3.4.1-1]
+@@ -3573,0 +3587 @@ function computeAll(){
++        +(groups.WA&&!L.noSuper?` + ${(L.perm?eta:1).toFixed(2)}·WA`:"")   // ABM6
+@@ -4331,0 +4346,4 @@ function computeAll(){
++  // ABM6: net hydrostatic pressure on the stem per ft (water h_w − t_f behind, h_w,f − t_f in front, above the stem base)
++  const stWA=(R.WA&&R.WA.on)? (()=>{ const b=Math.max(0,Math.min(R.WA.hB-g.tf,Hs)), f=Math.max(0,Math.min(R.WA.hFr-g.tf,Hs));
++    return b>f+1e-9? {b, f, M:GAMMA_W*(b*b*b-f*f*f)/6, V:GAMMA_W*(b*b-f*f)/2} : null; })() : null;
++  if(stWA) R.stemWA=stWA;
+@@ -4380,0 +4399,2 @@ function computeAll(){
++    const gWA=(stWA&&!L.noSuper)? (L.perm? eta : 1.0) : 0;   // ABM6: net water on the stem (not in the construction stage)
++    if(gWA){ Mu+=gWA*stWA.M; Vu+=gWA*stWA.V; }
+@@ -4383 +4403 @@ function computeAll(){
+-    const rec={Mu,Vu,HgirdPerFt,MeccPerFt,Pv,Meq,ls:lsName,gDCe,gDWe,llE,eccMin,gEH:gEH_ls,MCS:MCS_ls,...(se.Map!==undefined?{Map:se.Map,apL:se.apL}:{}),   // APS
++    const rec={Mu,Vu,HgirdPerFt,MeccPerFt,Pv,Meq,ls:lsName,...(gWA?{gWA}:{}),gDCe,gDWe,llE,eccMin,gEH:gEH_ls,MCS:MCS_ls,...(se.Map!==undefined?{Map:se.Map,apL:se.apL}:{}),   // APS
+@@ -4385,0 +4406 @@ function computeAll(){
++    if(gWA) rec.lbl+=` + ${gWA.toFixed(2)}·WA`;   // ABM6
+@@ -4396 +4417 @@ function computeAll(){
+-  const MsStem=Mst_EH+Mst_LS+Mst_ES+HgirdSvc*g.hstem+MeccSvc;   // Service I: EH + LS + ES + girder horizontal + eccentric vertical (as the Service I V&M diagram)
++  const MsStem=Mst_EH+Mst_LS+Mst_ES+HgirdSvc*g.hstem+MeccSvc+(stWA? stWA.M : 0);   // ABM6: + WA   // Service I: EH + LS + ES + girder horizontal + eccentric vertical (as the Service I V&M diagram)
+@@ -5054 +5075,2 @@ function computeAll(){
+-    if(fpS.soil&&fpS.soil.Kmode==="active") delete fpS.soil.Kmode;              // OWNB: new inputs at their default leave it unchanged too
++    if(fpS.soil&&fpS.soil.Kmode==="active") delete fpS.soil.Kmode;
++    if(fpS.geom&&(fpS.geom.hwFr===null||fpS.geom.hwFr===undefined||fpS.geom.hwFr==="")) delete fpS.geom.hwFr;   // ABM6: balanced water leaves the Input ID unchanged              // OWNB: new inputs at their default leave it unchanged too
+@@ -6187,0 +6210,5 @@ function renderTabLoads(R){
++    ${R.WA&&R.WA.on? eqB("Unbalanced water WA — net hydrostatic thrust (water h<sub>w</sub> behind, h<sub>w,f</sub> in front)","AASHTO 3.11.3; Table 3.4.1-1 (γ<sub>WA</sub> = 1.00)",[
++      `WA_h = \\tfrac{1}{2}\\gamma_w\\left(h_w^2 - h_{w,f}^2\\right)L_{ab} = \\tfrac{1}{2}(${fmtT(GAMMA_W,4)})\\left(${fmtT(R.WA.hB)}^2 - ${fmtT(R.WA.hFr)}^2\\right)(${fmtT(g.Lab)}) = ${fmtT(R.WA.H)}\\ \\text{kip}`,
++      `M_{WA} = \\tfrac{1}{6}\\gamma_w\\left(h_w^3 - h_{w,f}^3\\right)L_{ab} = ${fmtT(R.WA.M)}\\ \\text{kip-ft about the base}\\,, \\quad \\bar z = ${fmtT(R.WA.z)}\\ \\text{ft}`]
++      .concat(R.stemWA?[`\\text{Stem (per ft, above the stem base): } m_{WA} = \\tfrac{1}{6}\\gamma_w(h_b^3 - h_f^3) = \\tfrac{1}{6}(${fmtT(GAMMA_W,4)})(${fmtT(R.stemWA.b)}^3 - ${fmtT(R.stemWA.f)}^3) = ${fmtT(R.stemWA.M,3)}\\ \\text{kip-ft/ft}\\,, \\quad v_{WA} = \\tfrac{1}{2}\\gamma_w(h_b^2 - h_f^2) = ${fmtT(R.stemWA.V,3)}\\ \\text{kip/ft}`]:[]),
++      "Water behind on the virtual back plane (the earth pressure above already uses the buoyant unit weight below h<sub>w</sub>); water in front on the toe and stem front. WA is a load group at γ = 1.00 in every limit state except the construction stage (dry). The uplift is kept at the level behind (buoyant weights at h<sub>w</sub>, uniform under the base); the relief from the lower front level is neglected. Seepage and piping are not checked (3.11.3) — by the geotechnical engineer.") : ""}
+@@ -10089 +10116 @@ document.addEventListener("input",ev=>{
+-  else if(el.type==="number") v=el.value===""?0:Number(el.value);
++  else if(el.type==="number") v=el.value===""?(el.dataset.blank?null:0):Number(el.value);   // ABM6: data-blank inputs store null when empty
+```

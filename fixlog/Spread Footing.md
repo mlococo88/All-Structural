@@ -6341,3 +6341,48 @@ index 50f3837..c2d5000 100644
   - §3.1 `One chip per check family, on one line: …`: before `On screens 1500&nbsp;px and wider the dashboard is a left column`; after `On screens 1200&nbsp;px and wider the dashboard is a left column`.
 - **Formulas, factors, units, code references:** none (§4 does not apply). **Saved data:** unchanged.
 - **How verified:** origin/main vs branch at 1920 px, three projects (default; Direct mode; B 7 × L 6 ft with water at 2 ft): `R`, `P2`, `state`, dashboard, Report text and localStorage identical (the Manual is not in the Report unless "Include this manual when printing" is ticked); check-syntax passes.
+
+## 2026-11-07 — PR: claude/sf-m3m4-depth-strain (PR #989: https://github.com/mlococo88/All-Structural/pull/989) (SFMD: footing depth d ≥ 6 in, ACI 318-19 13.3.1.2; SFET: footing mats tension-controlled, ACI 318-19 7.3.3.1 / 8.3.3.1; CALCULATION CHANGE, pass / fail logic: two new checks)
+
+- **Problem:** two code limits were not checked.
+  - The depth of the bottom reinforcement must be at least 6 in (13.3.1.2).
+  - Nonprestressed slabs must be tension-controlled. Footings reach this through 13.3.2.1 (one-way → Chapter 7), 13.3.3.1 (two-way isolated → Chapters 7 and 8) and 13.3.4.1 (combined → Chapter 8).
+  - Before, ε_t only lowered φ.
+- **Provision verified on the printed pages:** ACI 318-19 7.3.3.1 and 8.3.3.1 require the slab to be **tension-controlled per Table 21.2.2**, i.e. ε_t ≥ ε_ty + 0.003 (0.005 for Grade 60). The "ε_t ≥ 0.004" of the review is the ACI 318-14 limit (9.3.3.1, beams); the 2019 limit is stricter and is used here.
+- **Where / exact code (`Spread Footing.html`, `computePhase2`, after the SFTX line `[desX,desY].forEach(z=>{z.dcrBot=…})`; anchor `/* SFET (2026-11-07)`):**
+  - `const epsTC=sfdEty(fy)+0.003;` For each direction: `tcBotOK` (bottom mat, `capBot.eps_t`), `tcStripOK` (every SFTX strip, `r.cap.eps_t`) and `tcTopOK` (top mat where it is a flexural mat).
+  - `const minDepth={d:Math.min(dBotX,dBotY),min:6}; minDepth.ok=minDepth.d>=6-1e-9;`, returned as `P2.minDepth`.
+  - Dashboard "Flexure (footing)": FAIL with "not tension-controlled, ε_t < ε_ty + 0.003 (…)" and / or "d = … in < 6 in (ACI 318-19 13.3.1.2)". Summary reason tags as well.
+  - Report: steps `dmin` (Design basis), `tcB` / `tcT` (Flexure) and `st<i>tc` (strip). Card 5.1: a minimum-depth eqBlock and failbox. Cards 5.2 / 5.3: a tension-controlled eqBlock. New helper `sfdF5` (5-decimal strains).
+- **Check case M3 (default project, t = 9 in):**
+  - d_y = 9 − 3 − 1.0/2 = 5.50 in (outer layer); d_x = 9 − 3 − 1.0 − 0.5 = **4.50 in < 6** → NG.
+  - Before: flexure FAIL for A_s,min (top x) only, no depth check. After: the reasons also include "d = 4.50 in < 6 in" and "not tension-controlled (bottom x)", since ε_t = 0.00441 < 0.005.
+- **Check case M4 (default project, t = 12 in, bottom x #11 @ 4 in):**
+  - A_s = 1.56·12/4 = 4.68 in²/ft; d_x = 12 − 3 − 1.0 − 1.41/2 = 7.295 in.
+  - a = 4.68·60/(0.85·4·12) = 6.88 in; c = 6.88/0.85 = 8.10 in > d.
+  - ε_t = 0.003(7.295 − 8.10)/8.10 = **−0.0003 < 0.005** → NG (before: not checked).
+- **Cases that move:** none of the SF harness cases changes a value. def, sey, rev, slender: new fields only, all checks OK (default ε_t = 0.039 / 0.041, d_min = 25.5 in). thin and m3 / m4 add the new reasons to flexure that was already FAIL.
+
+## 2026-11-07 — PR: claude/sf-m2-dev-faces (PR #1020: https://github.com/mlococo88/All-Structural/pull/1020) (SFDE: footing bar development checked at every pedestal face with moment of that sign, ACI 318-19 13.2.8.3 / 13.2.7.1; CALCULATION CHANGE, pass / fail logic)
+
+- **Problem:** `sfdDevAll` checked ℓ_d / ℓ_dh only at the governing-moment section (`des.govMloc` / `govNegLoc`). ACI 318-19 13.2.8.3 requires the reinforcement to be developed at every critical section of 13.2.7.1, i.e. at each pedestal face. A short cantilever at another pedestal could PASS unseen.
+- **Where / exact code (`Spread Footing.html`, `sfdDevAll`, anchor `/* SFDE (2026-11-07)`):**
+  - Before:
+    - `const endC=sfdEndCover(), avail=(hf-Math.abs(sec))*12-endC; if(!(avail>0))return;`
+    - `const strOK=LdUse<=avail+1e-9, hookOK=Ldh<=avail+1e-9;` (one section)
+  - After: `cand` = the governing section plus each pedestal face (`R.peds`, x ± b/2 inside the footing) where the envelope moment of that sign over the LRFD combinations (`P2.pressMomentAbout`) exceeds 0.01 kip-ft (bottom bars: sagging; top bars: hogging).
+    - Every candidate gets `avail = 12(hf − |s|) − c_end`, a straight / hook status and `dc`.
+    - The row reports the worst (fail > review > pass, then the larger dc): `sec`, `avail`, `status`, `dc`, plus `cand` and `wSec`.
+    - ℓ_d, ℓ_dh and the 25.4.10.1 option are unchanged. A_s,req stays the governing-section value at every face (conservative).
+  - Report: a "Sections checked" step listing each section (M_u, available length, status). The "available" step names the critical face. Card 5.4: a note listing the sections.
+- **Governing provisions:** ACI 318-19 13.2.8.3 (development at each critical section), 13.2.7.1 / Table 13.2.7.1 (critical sections at the face of the column or pedestal), 25.4.2.4, 25.4.3.1.
+- **Decision (pending engineer review):** every face with a non-zero moment of that sign is checked for the full ℓ_d (or ℓ_dh where hooked), also where the moment there is small. That is code-literal and conservative. Where the face is within the end cover of the edge, the available length is ≤ 0 and the check is NG. The 25.4.10.1 option (A_s,req/A_s,prov) reduces ℓ_d, using the governing-section A_s,req. Alternative, not taken: develop only the force at that face.
+- **Check case (harness `devsec`):** B = 12 ft, Ped 1 (D 20, L 10 k) at x = −4.75, Ped 2 (D 250, L 150 k) at x = 1.5, bottom x #6 @ 12 in.
+  - Ped 1 outer face x = −5.50 ft: available = 12(6 − 5.5) − 3 = **3 in**; M_u > 0; ℓ_d = 17.1 in, ℓ_dh = 12.1 in > 3 → NG.
+  - Before: bottom x-bars **PASS**, D/C 0.28 (section x = 0.75 ft, 60 in available).
+  - After: **FAIL**, D/C 4.05 (worst section x = −5.50 ft).
+- **Other cases:**
+  - `rev` (Seymour-like, Ped 1 b_y = 9.33 ft with faces 0.5 ft from the edges): bottom and top y-bars now NG at y = ±6 ft (3 in available, M_u 2.3 / −0.15 kip-ft), and bottom x-bars worst at Ped 2's face (11 in).
+  - Seymour as saved: bottom x-bars were already FAIL, D/C 1.669 → 1.672 (Ped 1 face 1.335 ft). The y-bars are unchanged (PASS).
+  - def, edgeHook, thin: no value change.
+- **Saved data:** none. **Other copies:** none.
