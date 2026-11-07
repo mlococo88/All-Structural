@@ -4746,7 +4746,7 @@ Review Phase 8, PR 8d. Code sites are tagged `RWPL`. Spread-footing results are 
 +    }
 ```
 
-## 2026-11-07 — PR: claude/rw-pile-8e-drawings — Pile-supported footing, Phase 8e: Drawings show the pile reactions and the bottom mat on the pile heads; no soil-bearing graphics on piles (RWPL; display only)
+## 2026-11-07 — PR: claude/rw-pile-8e-drawings — Pile-supported footing, Phase 8e: Drawings show the pile reactions and the bottom mat on the pile heads; no soil-bearing graphics on piles (RWPL; display only) (PR #966: https://github.com/mlococo88/All-Structural/pull/966)
 
 Review Phase 8, PR 8e. This PR changes no computed value.
 ### RWPL-9. Drawings (`RWDW_SUPPORT.piles.loads`, `rwdwBars`, the loads sheet notes)
