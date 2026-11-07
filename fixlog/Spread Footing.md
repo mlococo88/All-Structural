@@ -6554,3 +6554,69 @@ index 50f3837..c2d5000 100644
 - Default project, origin/main vs this branch, headless: the Report's rendered text (`.rp-doc` textContent) and the page text are identical.
 ### How verified
 - `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`; the headless comparison listed in the PR.
+## 2026-11-07 — PR: fix/sf-pm-exact-clip (PR #1159: https://github.com/mlococo88/All-Structural/pull/1159) (SFPX: pedestal P–M stress block clipped exactly; CALCULATION CHANGE, P–M capacities 0.5–7 % higher, ratios lower by the same, i.e. less conservative)
+### Where
+- `pmContour` → inner `analyze(cDepth, angleRad)` (Phase 2 engine). Anchor text: `/* SFPX (2026-11-07)`.
+- Before (the concrete compression, summed in strips):
+```
+  const nStrip=40;let Cc=0,Ccx=0,Ccy=0;
+  const pmin=Math.min(...projs);
+  for(let s=0;s<nStrip;s++){
+   const u=pmax-a*(s+0.5)/nStrip; // projection coordinate of strip center
+   if(u<pmin)break;
+   const du=a/nStrip;
+   const tvals=[];for(let tv=-Math.hypot(bx,by)/2;tv<=Math.hypot(bx,by)/2;tv+=Math.hypot(bx,by)/60){
+    const px=u*ca - tv*sa, py=u*sa + tv*ca;
+    if(px>=-bx/2-1e-6&&px<=bx/2+1e-6&&py>=-by/2-1e-6&&py<=by/2+1e-6)tvals.push({tv,px,py});}
+   if(!tvals.length)continue;
+   const wStrip=(tvals.length>1)?(tvals[tvals.length-1].tv-tvals[0].tv):0;
+   const cx=tvals.reduce((q,z)=>q+z.px,0)/tvals.length, cy=tvals.reduce((q,z)=>q+z.py,0)/tvals.length;
+   const dArea=wStrip*du;const f=0.85*fc;
+   Cc+=f*dArea;Ccx+=f*dArea*cx;Ccy+=f*dArea*cy;
+  }
+```
+- After (the rectangle clipped by the line proj = pmax − a; area and centroid of the clipped polygon by the shoelace formula):
+```
+  const cut=pmax-a, f=0.85*fc, poly=[];
+  for(let k=0;k<4;k++){const A=corners[k],B=corners[(k+1)%4],fa=projs[k]-cut,fb=projs[(k+1)%4]-cut;
+   if(fa>=0)poly.push(A);
+   if((fa>=0)!==(fb>=0)){const t=fa/(fa-fb);poly.push({x:A.x+t*(B.x-A.x),y:A.y+t*(B.y-A.y)});}}
+  let Ac=0,Sx=0,Sy=0;
+  for(let k=0;k<poly.length;k++){const A=poly[k],B=poly[(k+1)%poly.length],cr=A.x*B.y-B.x*A.y;Ac+=cr;Sx+=(A.x+B.x)*cr;Sy+=(A.y+B.y)*cr;}
+  Ac/=2;
+  const Cc=f*Ac, Ccx=Ac>0?f*Sx/6:0, Ccy=Ac>0?f*Sy/6:0;
+```
+### Problem
+- Each strip's width was the distance between the first and last sample points inside the section, sampled every hypot(b_x, b_y)/60 (0.424 in. on an 18 × 18 in. pedestal). That under-counts each width by up to one step (18 in. → 17.82 in.), and more at the corners of a diagonal block. The concrete force and so φM_n came out 0.5–7 % low (conservative).
+- Everything else in the routine (strain compatibility, bar stresses limited to ±f_y, displaced concrete deducted for bars inside the block, φ from ε_t at the extreme tension bar with ε_ty from f_y, the φP_n,max cap, the bisection on the neutral-axis angle to the demand direction) checked correct against an independent routine and is unchanged.
+- The near-diamond look of the load contour is correct, not a bug. On the default pedestal at P_u = 240.81 k the exact φ-contour gives φM_nx = φM_ny = 137.1 k-ft at 45° against 257.8 k-ft uniaxial (0.532; 0.516 before this fix). The nominal contour gives β = 0.62, inside the usual PCA range. The φ contour pinches because φ drops from 0.788 (uniaxial, ε_t = 0.0037) to 0.676 (45°, ε_t = 0.0023): bent diagonally, only the corner bar is at the extreme tension depth.
+- Results affected: every pedestal P–M ratio (pmRat, pmGov, and the slender-pedestal ratios), and the dowel interface-tension ratio and k / A_s,req (sfdDowelCheck, tenRat / kGov). No other value changes.
+### Governing provision
+- ACI 318-19 22.2.2.4.1 (stress 0.85 f′c uniformly over the block of depth a = β1 c bounded by the section edges and a line parallel to the neutral axis), 22.2.1 / 22.2.2.1 (strain compatibility, ε_cu = 0.003), 22.4.2.1, 21.2.2. The provisions and their values are unchanged; only the numerical integration of the block is corrected.
+### Check case (hand)
+- Default pedestal: 18 × 18 in., f′c = 4,000 psi, f_y = 60,000 psi, 8-#8 (3 per face; bar centres 2.5 in. from each face, at x = ±6.5, 0), P_u = 240.81 k, bending about y (θ = 0°).
+- β1 = 0.85. Solve φP_n = 240.81 k: c = 6.980 in., a = 5.933 in.
+- C_c = 0.85 · 4 · 18 · 5.933 = 363.10 k, arm 9 − 5.933/2 = 6.033 in.
+- Compression face bars (3 at d = 2.5 in.): f_s = 87·(6.98 − 2.5)/6.98 = 55.84 ksi, less 3.4 ksi displaced = 52.44 ksi → 124.28 k at x = +6.5.
+- Middle bars (2 at d = 9 in.): f_s = −25.18 ksi → −39.78 k at x = 0.
+- Tension face bars (3 at d = 15.5 in.): −60 ksi → −142.20 k at x = −6.5.
+- P_n = 363.10 + 124.28 − 39.78 − 142.20 = 305.41 k. ε_t = 0.003 · (15.5 − 6.98)/6.98 = 0.00366 → φ = 0.65 + 0.25 · (0.00366 − 0.002)/0.003 = 0.788, so φP_n = 240.81 k.
+- M_n = (363.10 · 6.033 + 124.28 · 6.5 + 142.20 · 6.5)/12 = 326.9 k-ft; φM_n = 257.76 k-ft.
+- Tool before: 255.61 k-ft (the strip width was 17.82 in. instead of 18 in.). After: 257.81 k-ft (0.5 k tolerance on P_u in the c search).
+- At 45° (same P_u): before |φM_n| = 186.42 k-ft, after 193.92 k-ft; the independent routine gives 193.93.
+### Before / after (harness cases, governing ratios)
+- Default, pedestal 1: 0.0639 → 0.0638. Pedestal 2: 0.0647 → 0.0641.
+- rev, pedestal 2: 0.3454 → 0.3447 (largest per-combination change 1.78 %).
+- sfe9, pedestal 1: 0.3676 → 0.3674.
+- Dowels, rev pedestal 2: k 0.2803 → 0.2795, A_s,req 3.543 → 3.533 in².
+- Rev pedestal 1: A_s,req 0.0030 → 0.0060 in². Both values sit at the bisection resolution of k (1/4096); the concrete-only ratio is just over 1.
+- On sections that are symmetric about the moment axis, the ±W combinations now differ in the last digit (1e-16), so the reported governing name may flip between the "+" and "−" combination of equal ratio (default case: "0.9D + 1.0(+Wx)" → "0.9D + 1.0(−Wx)").
+- The independent check (4 sections: 18 × 18 8-#8; 24 × 36 10-#9; 24 × 24 16-#10 with f′c 5 ksi and Gr 80; 30 × 30 12-#8; P from 0 to 1500 k; θ = 0–90°) went from −0.1 % to −7.4 % before the fix to within ±0.11 % after.
+### How verified
+- An independent strain-compatibility routine in Node (exact polygon clipping, 200-step bisection). See the PR description.
+- The SF harness, main vs branch, 10 cases: only pmRat / pmRat1 / pmGov and dowels tenRat / tenGov / kGov / kReq / AsReq change.
+- check-syntax, phone-layout --tool sf, spread-footing-nobear, start-chooser, spread-footing-scroll, project-library --tool spreadfooting.
+### Other copies
+- None. pmContour exists only in this tool.
+### Open items
+- None.
