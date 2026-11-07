@@ -1397,7 +1397,7 @@ function transDisp(w,n,c,cap){
 - **Dashboard:** "Quarter points are not nodes" (REVIEW) when the mesh in use is not a multiple of 4 (a user count). **Model tab:** a new step "Rounded up to a multiple of 4". **Input help:** the row and the manual table say so.
 - **How verified:** `check-syntax` (all pass); `phone-layout --tool arch`; `project-library --tool stonearch` (the A-vs-B identity checks differ by design; the others pass); all 14 tabs with 0 console errors; a count of 13 shows the warning.
 
-## 2026-11-07 — PR: claude/stonearch-m4-ll-worked — Live Load tab worked nodal pressure built from the solver's per-axle split (LLW; review M-4; display only)
+## 2026-11-07 — PR #1080: https://github.com/mlococo88/All-Structural/pull/1080 — Live Load tab worked nodal pressure built from the solver's per-axle split (LLW; review M-4; display only)
 
 ### LLW-1. p_i = f_i · p0 · κ from `nodalLLByAxle`   [display only, no result change]
 - **Problem (review M-4):** the worked example on the Live Load tab chose its axles by point sampling: an axle counted, in full, when |x_node − x_axle| ≤ L_s/2. The solver (`nodalLL`) loads a node with the fraction f of its extrados tributary that the footprint covers (`coverFrac`). The printed "q_j = p·b·t_j" then substituted the sampled p but printed the solver's q. In the review's EV3 case (x = −8.75 ft, node QP-L, 10 el) it printed 0.3648 × 1.0 × 4.640 = 2.1014, while 0.3648 × 4.640 = 1.693, a 19% mismatch. SU7 was off by +20%. At some positions the tab said "no axle over this node" while the solver loaded it.
