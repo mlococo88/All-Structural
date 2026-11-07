@@ -340,6 +340,15 @@ const AUD = [
     ['rwSelfChecks(R).every(c => c.ok)', 'self-consistency panel passes']]],
   ['RWHP ACI piles h_p 3 ft: pile loads from the corrected lateral loads', { fnd_type: 'pile', h_proj: 3 }, [
     ['R.pile && !R.pile.err && Math.abs(R.Fh - 2205) < 1e-6 && rwSelfChecks(R).every(c => c.ok)', 'F_h 2205 to the piles']]],
+  // RWHP part 2 (graphics): the grade drawn h_p below the stem top, the projection dimensioned; nothing new at h_p = 0
+  ['RWHP graphics h_p 0: no grade / h_p marks', {}, [
+    ['!/hp=|h_p=/.test(buildOverviewSVG(R) + buildCrossSection(R) + buildElevationSVG(R)) && !/RETAINED GRADE/.test(rwdwBuild(R).D.toDXF({ ltscale: 1, insunits: 1 }))', 'as before']]],
+  ['RWHP graphics ACI h_p 3 ft, water, slope, surcharge: grade and h_p on the section, overview, elevation, DXF', { h_proj: 3, wt_depth: 6, beta: 10, q_sur: 200 }, [
+    ['/hp=3\\.00/.test(buildOverviewSVG(R)) && /hp=3\\.00/.test(buildCrossSection(R))', 'h_p dimensioned (overview, analysis section)'],
+    ['(d => /RETAINED GRADE/.test(d) && /H_P = /.test(d) && SharedDxf.validate(d).ok !== false)(rwdwBuild(R).D.toDXF({ ltscale: 1, insunits: 1 }))', 'DXF: retained grade and H_P dimension'],
+    ['/Retained height H/.test(T.overview) && /Stem projection above retained grade/.test(T.overview)', 'Overview geometry rows']]],
+  ['RWHP graphics AASHTO h_p 3 ft + collision: elevation and 3D build', { design_basis: 'AASHTO', h_proj: 3, aashto_ct_enable: true }, [
+    ['/RETAINED GRADE \\(BEHIND\\)/.test(buildElevationSVG(R)) && /h_p=3\\.00/.test(buildElevationSVG(R)) && rw3Cases(R).find(c => c.key === "EV").items[0].y === R.H_ret', 'grade on the elevation; soil load arrow on the grade (3D)']]],
   ['RWHP an autosave without h_proj opens with h_p = 0', {}, [['document.getElementById("h_proj").value === "0" && R.h_p === 0', 'h_p = 0']], { strip: ['h_proj'] }],
   ['RWEC AASHTO unchanged by the ACI select', { design_basis: 'AASHTO', aci_ecc_limit: 'b6' }, [['R.ecc_lim_aci === null && /e=1\\.43/.test(R.checks.ecc.val)', 'AASHTO e check as before']]],
 ];
