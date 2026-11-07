@@ -6109,7 +6109,7 @@ AASHTO LRFD 10th Ed. (2024) Table 3.4.1-2 (γ_p for EH: active 1.50 / 0.90, at-r
 
 ### Saved data
 - No input or format change.
-## 2026-11-07 — PR: claude/rw-pile-bottom-mat — Pile-supported footing: the bottom mat stays at the footing cover c_c, between the pile heads (was lifted onto the pile heads, cover = embedment + clear); punching and the ACI cap depth keep the depth over the pile heads (RWPB; calculation change, pile mode only)
+## 2026-11-07 — PR: claude/rw-pile-bottom-mat (PR #1149: https://github.com/mlococo88/All-Structural/pull/1149) — Pile-supported footing: the bottom mat stays at the footing cover c_c, between the pile heads (was lifted onto the pile heads, cover = embedment + clear); punching and the ACI cap depth keep the depth over the pile heads (RWPB; calculation change, pile mode only)
 
 Engineer instruction (2026-11-07, paraphrased): on piles the bottom footing bars must stay at the normal bottom position; they are not to be lifted onto the pile heads. The bars run between and around the embedded pile heads (the usual New England detail). This applies to every project, old saves included, with no option. Depths that physically start at the pile head (punching, the pile-cap depth) stay as they are. Code sites are tagged `RWPB`.
 
