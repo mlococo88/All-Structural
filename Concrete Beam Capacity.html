@@ -5719,12 +5719,20 @@ else init();
       var F=r.F;
       if(!(F.As>0)||!(r.phiMn>0)||!isFinite(r.phiMn)) return {ok:false, why:'Beam Capacity has no tension steel or no flexural capacity (\u03c6M_n) in the governing sense.'};
       var Mu=Math.abs(r.Mu), asFlex=F.As*Mu/r.phiMn, mn;
+      /* CBM1h (2026-11-07): A_s,min from the enveloped minimum-reinforcement check (CBM1, CBM4): the combination with the largest
+         requirement among those in the same sense of bending as the flexure-governing combination (the same tension bars,
+         A_s,prov). Before: the flexure-governing combination's own value only. */
+      var same=cc.combos.filter(function(x){ return x.neg===r.neg; });
       if(S.code==='ACI'){
-        var e=(r.det||[]).find(function(x){return x.id==='dAsMin';});
-        mn={code:'ACI', ref:'ACI 318-19 9.6.1.2', as:e?e.need:0};
+        var best=null;
+        same.forEach(function(x){ var e=(x.det||[]).find(function(y){return y.id==='dAsMin';}); if(e&amp;&amp;!e.na&amp;&amp;(!best||e.need>best.e.need)) best={e:e,x:x}; });
+        mn={code:'ACI', ref:'ACI 318-19 9.6.1.2', as:best?best.e.need:0, ci:best?best.x.ci:r.ci, combo:best?best.x.name:r.name};
       } else {
-        var g3=S.mat.gamma3||0.67, McrF=g3*1.6*r.svc.Mcr, need=Math.min(McrF, Mu>0?1.33*Mu:Infinity);
-        mn={code:'AASHTO', ref:'AASHTO LRFD 10th Ed. 5.6.3.3', McrF:McrF, Mu133:1.33*Mu, need:need, as:F.As*need/r.phiMn};
+        var bx=null;
+        same.forEach(function(x){ if(x.mr&amp;&amp;(!bx||x.mr.need>bx.mr.need)) bx=x; });
+        if(!bx) bx=r;
+        var g3=S.mat.gamma3||0.67, McrF=g3*1.6*bx.svc.Mcr, Mk=Math.abs(bx.Mu), need=Math.min(McrF, Mk>0?1.33*Mk:Infinity);
+        mn={code:'AASHTO', ref:'AASHTO LRFD 10th Ed. 5.6.3.3', McrF:McrF, Mu133:Mk>0?1.33*Mk:null, need:need, as:F.As*need/r.phiMn, ci:bx.ci, combo:bx.name};
       }
       var asReq=Math.max(asFlex, mn.as), T=(F.T||[]);
       var sizes=T.map(function(L){return String(L.size);}).filter(function(v,i,a){return a.indexOf(v)===i;});
@@ -5735,7 +5743,7 @@ else init();
               fc:S.mat.fc, fy:S.mat.fy,
               links:{flex:fc?{tab:'tabFlex', card:fc.card, name:fc.name}:null,
                      min:S.code==='ACI'?{tab:'tabDetail', card:'detdAsMin', name:'Minimum flexural reinforcement'}
-                                       :{tab:'tabServ', card:'svcMain', name:'Cracking Moment and Minimum Reinforcement'}}};
+                                       :{tab:'tabServ', card:'svcMinAll', name:'Minimum Reinforcement \u2014 Every Combination'}}};   /* CBM1h: the enveloped card (CBM1) */
     }catch(err){ return {ok:false, why:'Beam Capacity results are not available.'}; }
   }
   function emit(){
@@ -10277,9 +10285,10 @@ function rbCapNote(){
   if(!F){ n.style.display=RBCAP.msg?'':'none'; n.innerHTML=RBCAP.msg; return; }
   const d=F.d, aci=d.code==='ACI', sub=s=>s.replace(/A_s,(\w+)/g,'A<sub>s,$1</sub>').replace(/M_(u|n|cr)\b/g,'M<sub>$1</sub>');
   const sense=d.sense==='neg'?'negative moment, top bars':'positive moment, bottom bars';
+  const minC=(d.min&amp;&amp;d.min.ci!=null&amp;&amp;d.min.ci!==d.ci)?` (combination ${d.min.ci+1} &quot;${escHTML(d.min.combo)}&quot;: the largest minimum in this sense, as the enveloped check)`:'';   /* CBM1h */
   const minTxt=aci
-    ? `A_s,min = ${fmt(d.asMin,3)} in² (${d.min.ref})`
-    : `A_s,min = A_s,prov·min(M_cr, 1.33M_u)/φM_n = ${fmt(d.asProv,2)} × min(${fmt(d.min.McrF,1)}, ${d.Mu>0?fmt(d.min.Mu133,1):'n/a'})/${fmt(d.phiMn,1)} = ${fmt(d.asMin,3)} in² (${d.min.ref})`;
+    ? `A_s,min = ${fmt(d.asMin,3)} in² (${d.min.ref})${minC}`
+    : `A_s,min = A_s,prov·min(M_cr, 1.33M_u)/φM_n = ${fmt(d.asProv,2)} × min(${fmt(d.min.McrF,1)}, ${(d.min.Mu133>0)?fmt(d.min.Mu133,1):'n/a'})/${fmt(d.phiMn,1)} = ${fmt(d.asMin,3)} in² (${d.min.ref})${minC}`;
   const g=document.getElementById('asReq'), p=document.getElementById('asProv');
   const edited=!g||!p||Math.abs(parseFloat(g.value)-F.asReq)>1e-9||Math.abs(parseFloat(p.value)-F.asProv)>1e-9;
   const L=RBCAP.last, stale=L&amp;&amp;L.ok&amp;&amp;(rbCapUp2(L.asReq)!==F.asReq||rbCapDn2(L.asProv)!==F.asProv);
