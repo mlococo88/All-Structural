@@ -5266,3 +5266,16 @@ Frames: Beam Capacity (`suite-frame-capacity`, the shared-inputs block) and Deve
   - All review probe cases (ACI and AASHTO): the hand-off is unchanged (the flexure-governing combination already had the largest requirement in its sense).
 - **How verified:** headless main vs branch, the hand-off object (`RBCAP.last` in the Dev frame) for all probe cases + aasPos2 and aasMinNegTop: only aasPos2 moves. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
 - **Saved data:** no change.
+
+## 2026-11-07 — PR: claude/cbc-skin-draw (CBM3d: skin bars drawn in the section figure and on the DXF / drawing sheets — section, elevation, bar schedule; display and export only, no result change)
+
+Frame: Beam Capacity (`suite-frame-capacity`). Open item of CBM3 (#1001), review item M3.
+
+### CBM3d. Skin bars in the drawings   [display / export only]
+- **Where (anchors `CBM3d`):** new `cbcSkinBars(neg)` (before `svgSection`): positions of the entered skin bars (`S.skin`): both side faces, inside the stirrup, x = ±(b_w/2 − c_c − d_s − d_b/2); the first bar at s from the outermost tension layer toward the compression face, then every s, within the zone of the code (ACI 318-19 9.7.2.3: h/2 from the tension face; AASHTO LRFD 10th Ed. 5.6.7: d_ℓ/2 nearest the flexural tension reinforcement, d_ℓ = d of the outermost tension layer). Nothing when no skin bars are entered.
+  - `svgSection(neg)`: teal dots at those positions (screen section, Visuals, Report overview), in the drawn sense.
+  - `cbdwBuild()`: sheet 1 (section) — true-size circles on CB-REBAR, leader and callout "#n SKIN BARS @ s O.C., EACH SIDE FACE (k PER FACE)" with the zone rule; sheet 2 (elevation) — the skin bars as continuous lines with a callout; sheet 3 (schedule) — row "SK". The DXF uses the governing combination's sense (top face for a negative governing moment).
+- **Decision (pending engineer review):** the bars are drawn only over the code zone, starting one spacing from the outermost tension layer (the checks of CBM3 test the spacing, not the positions).
+- **Check:** `aasDeepSkin` (AASHTO 16 × 48 in, cover 2 in, #4 stirrups, 4 #10, skin #4 @ 8 in): d_ℓ = 44.865 in, zone d_ℓ/2 = 22.43 in → bars at 8 and 16 in above the tension layer (y from the top 36.87 and 28.87 in), x = ±(8 − 2 − 0.5 − 0.25) = ±5.25 in: 2 per face. `aciDeepSkin` (ACI, skin #4 @ 10 in): zone h/2 − (h − d) = 24 − 3.135 = 20.87 in → 10 and 20 in: 2 per face. DXF structure check passes; screenshots of the Visuals section and the DXF sheet 1 preview looked at.
+- **How verified:** headless main vs branch, all probe cases: every computed result identical. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
+- **Saved data:** no change.
