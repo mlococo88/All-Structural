@@ -6368,6 +6368,86 @@ Unchanged: passive side (D_f), stem weight `W_stem` and its arm, the barrier, co
 - Headless main vs branch probe at h_p = 0: every numeric result, every tab text and SVG size identical (default ACI, AASHTO, water, slope + seismic + collision, ACI seismic + surcharge, ACI and AASHTO piles); 0 console errors.
 - `tests/smoke/retaining-wall-checks.mjs`: new CASES (h_p too large, negative, beyond H_low) and AUD rows `RWHP` (the hand checks above, water/seismic/slope/collision, piles, self-checks, old autosave).
 - Tests (after merging origin/main): check-syntax; smoke/retaining-wall-checks (all ok); phone-layout rwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs: all pass. project-library retwall: against origin/main the results differ only by the new keys (`inp.h_proj`, `h_p`, `H_ret`, `Hs_ret`, `t_g`, `wt_r`, `Hs_mid_r`, all 0 or equal to the old values), as intended; with `--a HEAD` (same calculation both sides) ALL PASS.
+## 2026-11-07 — PR: claude/rw-user-manual (PR #1154: https://github.com/mlococo88/All-Structural/pull/1154) — User Manual tab, part 1: the Manual tab, printing (alone or as a Report appendix) and the parts on scope, screen, code modes, inputs, projects, drawings and the Report (RWMAN; display only, no result change)
+
+Review Phase 6a (rwreview plan): the User Manual tab, asked for by the engineer. This first PR holds the tab, the printing and the descriptive parts; the calculation parts (loads, stability, seismic, collision, stem, footing, key, bar layout, piles), the limits and the appendix of pending decisions follow in part 2. Code sites are tagged `RWMAN`.
+
+### What was added
+- Tab button **Manual** after Report, and panel `#tab-manual`. The panel is built on first open by `rwmanRender()` from one source, `RWMAN_PARTS`: parts with `{ id, title, go: [[target, label]], blocks: [{p} | {ul} | {h} | {table}] }`.
+- Link markup `[[go:<target>|text]]`, where the target is `tab:<tab>`, `card:<RW_CARDS key>`, `inp:<input id>` or `man:<part id>`.
+  - On screen, `rwmanGo` handles the link. A card opens with `rwGoto`, or falls back to its tab when the card is not shown in the current mode. An input opens with `rwIeGoto`. A part scrolls into view.
+  - In the Report, the link becomes `[[tab:…|text]]` (plain text in print), or "text (§n.m)" for a manual part.
+  - Every part card carries "On screen:" links to the tab, card or input it describes (CLAUDE.md §6).
+- Printing:
+  - **Print the manual** prints the manual alone. It builds a report with `SharedReport.build` and prints it with `SharedReport.print`.
+  - **Include the user manual**: a checkbox on the Manual tab, and the same box in the Report bar (`opt.controls`). It appends the manual as the section "User manual (2026-11-07)" under Appendices (`rwmanAdd(M)` before `SharedReport.mount`). The Report then prints it with every other section.
+  - `@media print`: `#tab-manual` is hidden. The manual prints only through the two paths above.
+- `rwrGoto` (the Report's `[[tab:…]]` handler): `card:` and `inp:` go through `rwmanGo`. Before, `card:` called `rwGoto` alone, so a card not shown in the mode did nothing; it now opens the tab.
+- CSS: `.rwman-*` (bar, part cards, headings, tables, contents in two columns).
+
+### Content (part 1)
+1. About this manual (links, printing, units).
+2. Scope and wall types.
+3. The screen: input tabs, Find an input, input errors and REVIEW, the result tabs, "Worked in" links, the check summary (left column from 1200 px; 240 / 292 px; collapse), the self-consistency checks, phone and tablet (900 px, Show inputs).
+4. The two code modes (table: earth pressure, stability, seismic, collision, load factors, concrete checks, piles).
+5. Inputs, units and defaults: every input group of the Project, Wall, Soil, Loads, Traffic, Design and Rebar tabs, with the defaults read from a fresh page (headless dump, both modes).
+6. Saving, opening, cloud sync (GitHub), Export / Import JSON, Back up all, undo / redo, storage keys.
+7. Drawings (five sheets, Print sheet / Print all, DXF layers), the Rebar schedule marks, the 3D model and the Analysis diagram.
+8. The Report and printing.
+
+Every statement was checked against this file's code (anchors: `calcAll`, `rwInputErrors`, `RWDC`, the RWPL / STDS / GHS blocks, `rwdw*`, `rwrModel`), the HANDOFF.md §4.1, and docs/github-sync-setup.md. Provisions are cited by article and paraphrased.
+
+- Merged with RWHP part 1 (#1150): the Wall-tab inputs list the stem projection h_p, and Scope mentions it.
+- Merged with RWPT (#1148, the Piles output tab): the result-tab table lists the Piles tab (pile-supported footing only) and the Stability row says the pile checks moved there.
+
+### Storage (CLAUDE.md §5)
+- New per-browser UI key `retaincalcpro.manualInReport.v1`: '1' = include the manual in the Report; absent = do not. It is tool-prefixed and is not part of any project, Export JSON or autosave.
+- No saved format changes.
+
+### How verified
+- No computed value changes: headless, origin/main vs branch, `calcAll` on the 32 review walls plus the at-rest walls: identical. 0 console errors.
+- Manual tab at 1400 px, screenshot looked at. Links tested:
+  - `tab:stability` opens the Stability tab;
+  - `inp:qa` focuses q_a;
+  - with the box ticked, the Report gains "User manual (2026-11-07)" with no unresolved references.
+- Tests: check-syntax; smoke/retaining-wall-checks; phone-layout rwall (18 views at 390 / 768 px, no sideways scroll); project-library retwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs, pile-group.
+
+### Decisions (pending engineer review)
+- The manual is a tab with its own print, and an optional Report appendix (as Spread Footing's "Include this manual"). The include choice is per browser, not per project, so no project format changes.
+- The input tables are written out (checked against a fresh page). They are not generated from the page at run time, so a new input needs a manual edit (CLAUDE.md §6 keeps the manual in the same file).
+## 2026-11-07 — PR: claude/rw-gfx-rebar (PR #1152: https://github.com/mlococo88/All-Structural/pull/1152) (RWRB) — Analysis diagram: the reinforcement drawn from the Drawings' bar model (bars in the section as lines at their extents, bars along the wall as dots), labels in columns with leaders   [display only; no result change]
+- **Why:** engineer, 2026-11-07: "The analysis diagram tab doesn't show the rebar correctly, please review."
+- **Before (`buildCrossSection`, block `// ── REINFORCING BARS`):**
+  - the orientation was reversed: F1 (heel top) and F2 (toe bottom), which run in the plane of the section, were rows of dots;
+  - S1 was four dots plus a hook, with a "lap 1.3ℓd" box (the lap is ℓ_st since RWDS) and an "S1 ends" dashed line across the stem;
+  - S2 was three dots per face; F3 was two dots per mat under the stem only;
+  - S3 (upper back face), S4 (AASHTO front face) and K1 (key bars) were not drawn;
+  - the labels sat on the bars and the lines ("F1 …" on the F1 dots, "lap 1.3ℓd" across the lap box, "std 90° hook" in the heel, "F2 …" on the toe top).
+- **After:**
+  - new `rwrbBarsSVG(r, o)` (before the RWPS helpers) draws the bars from `rwdwGeo` / `rwdwBars`, the model behind Drawings sheets 1–2 and the bar schedule (same marks, sizes, spacings, covers and extents):
+    - S1 line from the joint to its end (`BR.S1.to`: mid-height + the S3–S1 lap, or the top cover);
+    - S1D dowel line from the lap top (joint + ℓ_st) down to the bottom mat, with the 90° hook (bend radius from the inside diameter 6 / 8 / 10 d_b, ACI 318-19 Table 25.3.2 / AASHTO 10th Ed. Table 5.10.2.3-1) and the 12 d_b tail as on the sheets;
+    - S3 line from mid-height to the top cover, inside S1; S4 line at the front face (when designed);
+    - S2 dots at their spacing on each face, inside the verticals;
+    - F1 line at the top of the heel into the toe by ℓ_d past the stem back face; F2 line at the bottom of the toe into the heel by ℓ_d past the front face, with its hook when ticked;
+    - F3 dots at their spacing on both mats;
+    - K1 hooked bars at the key's toe face (when the key is reinforced);
+    - brackets beside the back face marking the S1D–S1 lap and the S3–S1 lap;
+  - labels with size @ spacing in four columns (backfill side of the stem, toe side above grade, inside the heel between the mats, beside the key), spaced so they do not overlap, with leaders to the bars; the tooltips are kept, with new ones for S1D, S3, S4 and K1;
+  - the "key" tag is replaced by the K1 label when the key is reinforced;
+  - `rwdwGeo`, `rwdwBarOf` and `rwdwBars` move unchanged from the Drawings script to the first script, because the Analysis diagram is drawn on load before the later scripts are parsed;
+  - the unused `cov_s_px`, `cov_f_px` and `bar_r` are removed.
+- **Checked against the design (default ACI wall):**
+  - S1 ends z = 7.23 ft above the joint = H_s/2 (6.00) + ℓ_st,S3–S1 (14.8 in = 1.23 ft). Both are marked.
+  - Covers: back face and front face c_stem, top and bottom c_ftg (on piles, `r.cov_bot`, as on the sheets).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). The bend size is drawing detail, as in RWTS-2.
+- **Saved data (§5):** none.
+- **How verified:** see the PR (main vs branch probe of `_R`, localStorage keys, every tab's text and the Report text with SVG removed, DXF of every sheet; screenshots).
+- **Other copies:** the Report figure is the same function. The Overview section draws no reinforcement.
+- **Decisions (pending engineer review):**
+  - Bars are drawn at their real positions with a minimum line width of 1.5 px and a minimum dot radius of 2.2 px (the note says bar symbols are not to scale).
+  - No transverse bars are drawn at the heel bottom or the toe top: the design has none (only F3 longitudinal on both mats), the same as the Drawings and the bar schedule. The engineer asked about them; adding them would be a design change.
+  - In pile mode the bottom mat is drawn where the model puts it (`r.cov_bot`). The pile-mode bottom-bar position is another PR's fix, and this figure follows it.
 
 ## 2026-11-07 — PR: claude/rw-stem-projection-gfx (PR #1155: https://github.com/mlococo88/All-Structural/pull/1155) — Stem projection h_p in the graphics: retained grade drawn h_p below the stem top, the stem continuing above it, h_p dimensioned (RWHP part 2; display only, no result change)
 

@@ -632,10 +632,17 @@ a.wkA:hover { text-decoration: underline; }
   .tab-panel { display: block !important; max-width: none; }
   #tab-report:not(.active) { display: none !important; }   /* RWRP: the Report tab prints itself; not part of the page printout */
   #tab-drawings { display: none !important; }   /* RWDW: the sheets print through Print sheet / Print all sheets only */
+  #tab-manual { display: none !important; }   /* RWMAN: the manual prints through Print the manual, or as the Report's appendix */
   .card, .eq-block, .sc { box-shadow: none; break-inside: avoid; }
 }
 
 .proj-box.hidden { display: none; }
+/* RWMAN (2026-11-07): the User Manual tab */
+.rwman-bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 4px 0 12px; font-size: 13px; }
+.rwman-part { margin-bottom: 14px; } .rwman-part .card-body { font-size: 13.5px; line-height: 1.5; }
+.rwman-part p { margin: 0 0 8px; } .rwman-part ul { margin: 0 0 8px 18px; padding: 0; } .rwman-part li { margin: 2px 0; }
+.rwman-h { margin: 12px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-dim); }
+.rwman-tbl td, .rwman-tbl th { vertical-align: top; text-align: left; } .rwman-toc { margin: 0 0 0 18px; columns: 2 260px; }
 /* RWDW (2026-11-06): the Drawings tab */
 .rwdwBar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 8px; font-size: 13px; }
 .rwdwBar select { width: auto; max-width: 100%; height: 34px; font-size: 13px; }
@@ -1710,6 +1717,7 @@ body.rwDashColl #rwDash { display: none; }
     <button class="tab-btn" data-tab="threed">3D model</button>
     <button class="tab-btn" data-tab="drawings">Drawings</button>
     <button class="tab-btn" data-tab="report">Report</button>
+    <button class="tab-btn" data-tab="manual">Manual</button><!-- RWMAN (2026-11-07): the User Manual tab -->
   </nav>
   <div class="tab-panels">
     <div class="tab-panel active" id="tab-overview"></div>
@@ -1722,6 +1730,7 @@ body.rwDashColl #rwDash { display: none; }
     <div class="tab-panel" id="tab-threed"><div class="pending">Building 3D model…</div></div>
     <div class="tab-panel" id="tab-drawings"><div class="pending">Drawing sheets…</div></div>
     <div class="tab-panel tex2jax_ignore" id="tab-report"></div>
+    <div class="tab-panel" id="tab-manual"></div>
   </div>
 </main>
 </div>
@@ -8465,9 +8474,6 @@ function buildCrossSection(r) {
   // from it with rS (H → H_ret, wt_d → wt_r); r and y_top unchanged at h_p = 0
   const rS = rwHpView(r), hp_px = (r.h_p || 0) * SCALE, y_gr = y_top + hp_px, Hsr_px = Hs_px - hp_px, Hr_px = H_px - hp_px;
 
-  const cov_s_px = (inp.cov_stem / 12) * SCALE;
-  const cov_f_px = (inp.cov_ftg  / 12) * SCALE;
-  const bar_r    = Math.max(2.5, SCALE * 0.038);
 
   // Pressure scales — RWPS: the lateral and passive diagrams are drawn by rwpsLateral / rwpsPassive (off the structure)
   const p_pass_base = r.Kp * inp.gamma_s * r.Df;
@@ -8604,10 +8610,11 @@ function buildCrossSection(r) {
   // Shear key
   if (inp.useShearKey && dk_px > 0) {
     const skw = (inp.key_bk || 12) / 12 * SCALE, skx = x_ftoe + tsbot_px / 2 - skw / 2;   // RWSK: width b_k (was 0.36 t_s,base), centred under the stem as before
+    // RWRB: the K1 label's inch mark (") ended the data-tip attribute, and the rest of the drawing (piles, …) fell into the key's rect; written ″
     s += `<rect x="${skx}" y="${y_fbot}" width="${skw}" height="${dk_px}"
       fill="${CC.fill}" stroke="${CC.stroke}" stroke-width="1.2"
-      data-tip="<b>Shear key</b><br>Depth d_k = ${f(inp.dk,0)} in · width b_k = ${f(inp.key_bk||12,0)} in<br>${r.keyR ? (r.keyR.plain ? 'Plain concrete (ACI Ch. 14)' : 'Reinforced: K1 ' + r.keyR.rf.sel.label) + '<br>' : ''}Added passive P_p,key = ${f(r.Pp_key,0)} lb/ft"/>`;
-    s += `<text x="${skx+skw+3}" y="${y_fbot+dk_px/2+4}" font-size="7" fill="#2155c4">key</text>`;   // RWPS: beside the key (was under it, on the bearing diagram)
+      data-tip="<b>Shear key</b><br>Depth d_k = ${f(inp.dk,0)} in · width b_k = ${f(inp.key_bk||12,0)} in<br>${r.keyR ? (r.keyR.plain ? 'Plain concrete (ACI Ch. 14)' : 'Reinforced: K1 ' + String(r.keyR.rf.sel.label).replace(/"/g, '″')) + '<br>' : ''}Added passive P_p,key = ${f(r.Pp_key,0)} lb/ft"/>`;
+    if (!(r.keyR && r.keyR.rf)) s += `<text x="${skx+skw+3}" y="${y_fbot+dk_px/2+4}" font-size="7" fill="#2155c4">key</text>`;   // RWRB: with K1 bars, the K1 label names the key   // RWPS: beside the key (was under it, on the bearing diagram)
   }
   s += rwPileSVG(r, x_toe, y_fbot, SCALE, '#3d4650');   // RWPL: pile rows (pile-supported footing only)
   s += `</g>`;
@@ -8624,91 +8631,17 @@ function buildCrossSection(r) {
       text-anchor="middle" font-weight="700">P=${f(inp.col_DL+inp.col_LL+inp.col_SL,1)}k</text>`;
   }
 
-  // ── REINFORCING BARS ─────────────────────────────────────────
-  const RC = '#c42121', GC = '#0f7a5a';
-  s += `<g data-layer="rebar">`;
-
-  // S1 — Stem vertical (back face)
-  const s1_x = x_bbot - cov_s_px - bar_r;
+  // ── REINFORCING BARS ── RWRB (2026-11-07): drawn after the text scaling below by rwrbBarsSVG from the Drawings' bar model
+  //    (bars in the section plane as lines at their extents, bars along the wall as dots); the tooltips are kept.
   const s1tip = `<b>S1 — stem vertical (back face)</b><br>#${r.sel_stem.bar.num} @ ${r.sel_stem.spacing}″ o.c.${r.sel_stem.overridden?' <i>(override)</i>':''}<br>A_s prov = ${f(r.sel_stem.As_prov,4)} in²/ft ≥ ${f(r.As_stem_des,4)} req<br>d = ${f(r.d_stem,2)}″ · cover = ${f(inp.cov_stem,2)}″<br>ℓ_d = ${f(r.ld_stem,1)}″ · M_u = ${f(r.Mu_stem_lbft/1000,2)} kip·ft/ft`;
-  [0.12, 0.38, 0.65, 0.88].forEach(t => {
-    s += `<circle cx="${s1_x}" cy="${y_top + t*Hs_px}" r="${bar_r}" fill="${RC}" data-tip="${s1tip}"/>`;
-  });
-  s += `<text x="${s1_x-4}" y="${y_top+Hs_px*0.12-5}" font-size="7.5" fill="${RC}" text-anchor="end">
-    S1 #${r.sel_stem.bar.num}@${r.sel_stem.spacing}''${r.sel_stem.overridden?' ★':''}</text>`;
-
-  // ── S1 DETAILING: standard hook into footing, bar-cutoff elevation, splice zone ──
-  // Standard 90° hook at S1 base: extends down into the footing then toward the toe.
-  // RWTS-2 (2026-11-06): drawn to scale (was schematic: elbow at 0.62 t_f, tail max(10 px, 0.9 t_f)): the bar goes down to
-  // the top of the bottom mat (cover + F2 bar), bends at the standard bend (centreline radius = inside diameter/2 + d_b/2;
-  // inside diameter 6 d_b for #3–#8, 8 d_b for #9–#11, 10 d_b for #14–#18: ACI 318-19 Table 25.3.2 / AASHTO LRFD 10th
-  // Ed. Table 5.10.2.3-1) and runs 12 d_b toward the toe (ACI 318-19 Table 25.3.1 / AASHTO 5.10.2.1). Display only.
-  {
-    const db1 = r.sel_stem.bar.db / 12, n1 = r.sel_stem.bar.num;
-    const dbT = (inp.Lt > 0.4 ? r.sel_toe.bar.db : 0) / 12;
-    const rb  = ((n1 <= 8 ? 6 : n1 <= 11 ? 8 : 10) / 2 + 0.5) * db1 * SCALE;      // bend radius to the bar centreline
-    const hook_y  = y_fbot - cov_f_px - (dbT + db1 / 2) * SCALE;                    // tail centreline, on the bottom mat
-    const tail    = 12 * db1 * SCALE;
-    s += `<path d="M ${s1_x} ${y_ftop} L ${s1_x} ${hook_y-rb} Q ${s1_x} ${hook_y} ${s1_x-rb} ${hook_y} L ${s1_x-rb-tail} ${hook_y}"
-      fill="none" stroke="${RC}" stroke-width="1.6"
-      data-tip="<b>S1 standard hook</b><br>90° hook into footing (ACI §25.3)<br>ℓ_dh development into footing<br>Tail extends toward toe<br>Drawn to scale: bend ${n1 <= 8 ? 6 : n1 <= 11 ? 8 : 10}d_b inside diameter, 12d_b tail, on the bottom mat"/>`;
-    s += `<text x="${s1_x+4}" y="${y_ftop+tf_px*0.55}" font-size="6.5" fill="${RC}">std 90° hook</text>`;
-  }
-  // RWS13 (2026-11-07): end of S1 (S3–S1 lap above mid-height); the alternate-bar cut-off is removed
-  if (!r.s1_full) {
-    const y_cut = y_top + (inp.Hs - r.z_s1_end) * SCALE, y_mid = y_top + (inp.Hs / 2) * SCALE;
-    s += `<line x1="${x_ftoe-14}" y1="${y_cut}" x2="${x_bbot+14}" y2="${y_cut}"
-      stroke="${RC}" stroke-width="0.9" stroke-dasharray="6,3"
-      data-tip="<b>End of S1</b><br>S1 ends ${f(r.z_s1_end,2)} ft above the joint<br>S3 from mid-height (${f(inp.Hs/2,2)} ft); S3–S1 Class B lap ℓ_st = ${f(r.s13_lst,1)}″<br>S1 extends ${f(r.s1_ext,1)}″ past z_req = ${f(r.z_req,2)} ft"/>`;
-    s += `<rect x="${s1_x-3.5}" y="${y_cut}" width="7" height="${y_mid-y_cut}" fill="rgba(196,33,33,0.10)" stroke="${RC}" stroke-width="0.5" stroke-dasharray="2,2"/>`;
-    s += `<text x="${x_bbot+16}" y="${y_cut+3}" font-size="6.8" fill="${RC}">S1 ends ${f(r.z_s1_end,1)}' (S3 lap)</text>`;
-  }
-  // Lap splice zone just above the footing (construction joint)
-  {
-    const y_spl0 = y_ftop - Math.min(Hs_px, (r.lst_stem/12)*SCALE);   // RWDS: the computed lap ℓst (was 1.3 ℓ_d; RWTS-2: true length)
-    s += `<rect x="${s1_x-3.5}" y="${y_spl0}" width="7" height="${y_ftop-y_spl0}"
-      fill="rgba(196,33,33,0.13)" stroke="${RC}" stroke-width="0.6" stroke-dasharray="2,2"
-      data-tip="<b>Lap splice zone</b><br>Dowels from footing lap with S1 above the construction joint<br>Class ${r.lap_classA?'A':'B'} tension lap ℓ_st = ${f(r.lst_stem,1)}″ (Stem design Step 5)"/>`;
-    s += `<text x="${s1_x+7}" y="${(y_spl0+y_ftop)/2+2}" font-size="6.3" fill="${RC}">lap 1.3ℓd</text>`;
-  }
-
-  // S2 — Stem horizontal T&S (both faces)
-  const s2off = (inp.cov_stem/12+0.04)*SCALE;
   const s2tip = `<b>S2 — stem horizontal (T&amp;S)</b><br>#${r.sel_temp.bar.num} @ ${r.sel_temp.spacing}″ o.c.${r.sel_temp.overridden?' <i>(override)</i>':''}<br>A_s prov = ${f(r.sel_temp.As_prov,4)} in²/ft ≥ ${f(r.As_temp_stem,4)} req<br>${r.isAASHTO ? 'AASHTO §5.10.6 (per face)' : '0.0018·b·t (ACI §24.4.3.2) · both faces'}`;
-  [0.2, 0.5, 0.8].forEach(t => {
-    const cy = y_top+t*Hs_px;
-    const x_back_at_t = x_btop + (x_bbot-x_btop)*t;
-    s += `<circle cx="${x_ftoe+s2off+bar_r}" cy="${cy}" r="${bar_r*0.75}" fill="${RC}" fill-opacity="0.5" data-tip="${s2tip}"/>`;
-    s += `<circle cx="${x_back_at_t-s2off-bar_r}" cy="${cy}" r="${bar_r*0.75}" fill="${RC}" fill-opacity="0.5" data-tip="${s2tip}"/>`;
-  });
-
-  // F1 — Heel top bars
-  const f1_y = y_ftop + (2.0/12)*SCALE + bar_r;
-  const sp1   = (r.sel_heel.spacing/12)*SCALE;
   const f1tip = `<b>F1 — heel transverse (top)</b><br>#${r.sel_heel.bar.num} @ ${r.sel_heel.spacing}″ o.c.${r.sel_heel.overridden?' <i>(override)</i>':''}<br>A_s prov = ${f(r.sel_heel.As_prov,4)} in²/ft ≥ ${f(r.As_heel_des,4)} req<br>d = ${f(r.d_heel,2)}″ · ℓ_d = ${f(r.ld_heel,1)}″ (ψt=1.3 top bars)<br>M_u = ${f(Math.abs(r.Mu_heel_net)/1000,2)} kip·ft/ft · V_u = ${f(r.Vu_heel/1000,2)} kip/ft`;
-  for (let xi = x_bbot+sp1/2; xi < x_heel-2; xi += sp1)
-    s += `<circle cx="${xi}" cy="${f1_y}" r="${bar_r}" fill="${RC}" data-tip="${f1tip}"/>`;
-  s += `<text x="${(x_bbot+x_heel)/2}" y="${f1_y-5}" font-size="7.5" fill="${RC}"
-    text-anchor="middle">F1 #${r.sel_heel.bar.num}@${r.sel_heel.spacing}'' TOP${r.sel_heel.overridden?' ★':''}</text>`;
-
-  // F2 — Toe bottom bars
-  const f2_y = y_fbot - cov_f_px - bar_r;
-  if (inp.Lt > 0.4) {
-    const sp2 = (r.sel_toe.spacing/12)*SCALE;
-    const f2tip = `<b>F2 — toe transverse (bottom)</b><br>#${r.sel_toe.bar.num} @ ${r.sel_toe.spacing}″ o.c.${r.sel_toe.overridden?' <i>(override)</i>':''}<br>A_s prov = ${f(r.sel_toe.As_prov,4)} in²/ft ≥ ${f(r.As_toe_des,4)} req<br>d = ${f(r.d_toe,2)}″ · cover = ${f(inp.cov_ftg,2)}″ · ℓ_d = ${f(r.ld_toe,1)}″<br>M_u = ${f(Math.max(0,r.Mu_toe_net)/1000,2)} kip·ft/ft · V_u = ${f(r.Vu_toe/1000,2)} kip/ft`;
-    for (let xi = x_toe+sp2/2; xi < x_ftoe-2; xi += sp2)
-      s += `<circle cx="${xi}" cy="${f2_y}" r="${bar_r}" fill="${GC}" data-tip="${f2tip}"/>`;
-    s += `<text x="${(x_toe+x_ftoe)/2}" y="${y_ftop+FS.m+3}" font-size="7.5" fill="${GC}"
-      text-anchor="middle">F2 #${r.sel_toe.bar.num}@${r.sel_toe.spacing}'' BOT${r.sel_toe.overridden?' ★':''}</text>`;
-  }
-
-  // F3 — Longitudinal (2 dots per face)
+  const f2tip = `<b>F2 — toe transverse (bottom)</b><br>#${r.sel_toe.bar.num} @ ${r.sel_toe.spacing}″ o.c.${r.sel_toe.overridden?' <i>(override)</i>':''}<br>A_s prov = ${f(r.sel_toe.As_prov,4)} in²/ft ≥ ${f(r.As_toe_des,4)} req<br>d = ${f(r.d_toe,2)}″ · cover = ${f(inp.cov_ftg,2)}″ · ℓ_d = ${f(r.ld_toe,1)}″<br>M_u = ${f(Math.max(0,r.Mu_toe_net)/1000,2)} kip·ft/ft · V_u = ${f(r.Vu_toe/1000,2)} kip/ft`;
   const f3tip = `<b>F3 — footing longitudinal (T&amp;S)</b><br>#${r.sel_ftg_long.bar.num} @ ${r.sel_ftg_long.spacing}″ o.c.${r.sel_ftg_long.overridden?' <i>(override)</i>':''}<br>A_s prov = ${f(r.sel_ftg_long.As_prov,4)} in²/ft ≥ ${f(r.As_ftg_long,4)} req<br>Runs parallel to wall · both faces`;
-  [0.25, 0.75].forEach(xf => {
-    s += `<circle cx="${x_ftoe+tsbot_px*xf}" cy="${f1_y}" r="${bar_r*0.7}" fill="#0055a8" fill-opacity="0.8" data-tip="${f3tip}"/>`;
-    s += `<circle cx="${x_ftoe+tsbot_px*xf}" cy="${f2_y}" r="${bar_r*0.7}" fill="#0055a8" fill-opacity="0.8" data-tip="${f3tip}"/>`;
-  });
-  s += `</g>`;
+  const s3tip = r.sel_stemT ? `<b>S3 — stem vertical, upper half (back face)</b><br>#${r.sel_stemT.bar.num} @ ${r.sel_stemT.spacing}″ o.c.<br>From mid-height to the top cover; S3–S1 Class B lap ℓ_st = ${f(r.s13_lst,1)}″` : '';
+  const s1dtip = `<b>S1D — stem dowel</b><br>#${r.sel_stem.bar.num} @ ${r.sel_stem.spacing}″ o.c. (as S1)<br>90° standard hook on the bottom mat, 12d_b tail; ℓ_dh = ${f(r.ldh_stem,1)}″<br>Class ${r.lap_classA?'A':'B'} tension lap with S1: ℓ_st = ${f(r.lst_stem,1)}″ (Stem design Step 5)`;
+  const s4tip = r.sel_ff ? `<b>S4 — stem vertical, front face (T&amp;S)</b><br>#${r.sel_ff.bar.num} @ ${r.sel_ff.spacing}″ o.c.` : '';
+  const k1tip = (r.keyR && r.keyR.rf) ? `<b>K1 — shear key</b><br>#${r.keyR.rf.sel.bar.num} @ ${r.keyR.rf.sel.spacing}″ o.c., toe face, hooked into the footing` : '';
 
   // ── ACTIVE / SURCHARGE / WATER and PASSIVE: RWPS, drawn after the text scaling below (rwpsLateral / rwpsPassive) ──
   const acttip = `<b>Active earth pressure</b><br>Kₐ = ${f(r.Ka,4)} (${inp.beta>0?'sloped backfill':'Rankine, level'})<br>P_a = ${f(r.Pa_tri,0)} lb/ft at H/3 = ${f(r.H/3,2)} ft<br>p at base = ${f(r.p_ftg_base,0)} psf${r.p_top > 0 ? ` (incl. Kₐ·q_s = ${f(r.p_top,0)} psf, drawn as the surcharge band)` : ''}${r.hasWT?`<br>Breaks at W.T.: γ above → γ′ = ${f(r.gamma_s_sub,1)} pcf below`:''}<br>M_OT = ${f(r.Mo/1000,1)} kip·ft/ft`;
@@ -8757,6 +8690,9 @@ function buildCrossSection(r) {
     tipSoil: acttip, tipSur: striptip, tipWat: hytip });
   const PAS = r.Df > 0 ? rwpsPassive(r, { xToe: x_toe, yFbot: y_fbot, sc: SCALE, gap: PGAP, W: PP_W, fs: FS.s, mk: 'cs-ag', tip: ptip, tipKey: pktip }) : null;
   if (PAS) s += PAS.svg;
+  // RWRB: reinforcement from the Drawings' bar model (inches from the toe and from the footing base), labels in columns
+  s += rwrbBarsSVG(r, { X: xin => x_toe + xin / 12 * SCALE, Y: yin => y_fbot - yin / 12 * SCALE, k: SCALE / 12, fs: FS.s,
+    tips: { S1: s1tip, S1D: s1dtip, S3: s3tip, S4: s4tip, S2: s2tip, F1: f1tip, F2: f2tip, F3: f3tip, K1: k1tip } });
 
   // ── DIMENSION LINES ──────────────────────────────────────────
   const dim_y1   = y_fbot + dimOff1;   // RWTS-2: rows placed under the key and the bearing labels
@@ -9758,6 +9694,141 @@ function rwtsScaleBar(x, y, sc, fs, note, noteBelow) {   // RWTS-2: noteBelow = 
   return t + '</g>';
 }
 
+// RWRB (2026-11-07): moved here unchanged from the Drawings script (they are used by the Analysis diagram on load)
+/* the model geometry in inches (x from the toe, y up from the footing base) */
+function rwdwGeo(r) {
+  const inp = r.inp, k12 = 12;
+  const G = { B: r.B * k12, tf: inp.tf, Hs: inp.Hs * k12, H: r.H * k12, Lt: inp.Lt * k12, Lh: inp.Lh * k12, tsb: inp.ts_bot, tst: inp.ts_top,
+    Dfa: inp.Df_add * k12, dk: inp.useShearKey ? inp.dk : 0, beta: inp.beta, dH: (r.dH_slope || 0) * k12 };
+  G.xf = G.Lt; G.xbb = G.Lt + G.tsb; G.xbt = G.Lt + G.tst;
+  G.xb = y => G.xbb + (G.xbt - G.xbb) * Math.max(0, Math.min(1, (y - G.tf) / Math.max(G.Hs, 1e-9)));   // back face at height y
+  // shear key: width b_k (input, RWSK; before 2026-11-07 drawn nominal 0.36 t_s,base wide), centred under the stem
+  G.kw = inp.key_bk || 12; G.kx = G.xf + G.tsb / 2 - G.kw / 2;   // RWSK (2026-11-07): key width = the input b_k (was 0.36 t_s,base, drawn nominal), centred under the stem as before
+  G.tanb = Math.tan(G.beta * Math.PI / 180);
+  G.gradeB = y0 => y0;   // placeholder
+  G.bar = r.hasBarrier ? { h: r.bar_h_ft * k12, w: inp.bar_mode === 'geom' ? inp.bar_t : 0.85 * G.tst, nominalW: inp.bar_mode !== 'geom' } : null;
+  if (G.bar) G.bar.xc = G.Lt + G.tst / 2 + (inp.bar_ecc || 0);
+  // RWHP (2026-11-07): the retained grade h_p below the stem top, at the back face x = G.xg (= the stem-top back edge at h_p = 0)
+  G.hp = (r.h_p || 0) * k12; G.Hg = G.H - G.hp; G.xg = G.hp > 0 ? G.xb(G.Hg) : G.xbt;
+  G.wt = r.hasWT ? G.Hg - (r.wt_r != null ? r.wt_r : r.wt_d) * k12 : null;   // water level above the base (RWHP: from the grade)
+  G.Hp = (r.Hp || r.H) * k12;
+  return G;
+}
+const rwdwBarOf = n => BARS.find(b => b.num === n) || { num: n, db: n / 8, Ab: 0 };
+/* the bars as modelled (sizes, spacings, d), with the nominal lengths the model does not give (labelled rules) */
+function rwdwBars(r, G) {
+  const inp = r.inp, cs = inp.cov_stem, cf = inp.cov_ftg;
+  const s1 = r.sel_stem, s3 = r.sel_stemT, s2 = r.sel_temp, f1 = r.sel_heel, f2 = r.sel_toe, f3 = r.sel_ftg_long;
+  const db = s => s.bar.db;
+  const hook = 12 * db(s1);                                         // 90° standard hook tail 12 d_b
+  const cb = r.cov_bot != null ? r.cov_bot : cf;                      // RWPL (8e); RWPB (2026-11-07): cov_bot = c_c on piles too, the mat at the bottom between the pile heads
+  const yHook = cb + db(f2) + db(f3) + db(s1) / 2;                   // the hook bears on the bottom mat
+  const lap = r.lst_stem;                                            // RWDS (2026-11-07): the computed tension lap ℓst (Stem design Step 5); was 1.3 × ℓd (with its 12-in minimum)
+  const yS1 = r.s1_full ? null : G.tf + r.z_s1_end * 12;           // RWS13 (2026-11-07): S1 ends at mid-height + the S3–S1 lap (was full height + alternate-bar cut-off)
+  const yCut = null;
+  const yTop = G.H - cs;
+  const B = {
+    S1: { s: s1, len: (yS1 === null ? yTop : yS1) - G.tf, from: G.tf, to: yS1 === null ? yTop : yS1 },
+    S1D: { s: s1, hook, yHook, lap, len: (G.tf - yHook) + lap + hook },
+    S3: { s: s3, from: G.tf + G.Hs / 2, to: yTop, len: yTop - (G.tf + G.Hs / 2) },
+    S2: { s: s2 }, F3: { s: f3 },
+    S4: r.sel_ff ? { s: r.sel_ff, len: G.H - cs - G.tf } : null,   // RWFF
+    K1: (r.keyR && r.keyR.rf && G.dk > 0) ? (() => { const s = r.keyR.rf.sel, x = G.kx + cf + s.bar.db / 2, y0 = -G.dk + cf, y1 = G.tf - cf - f1.bar.db - s.bar.db / 2, hk = 12 * s.bar.db, hb = r.keyR.rf.hook_bot ? Math.min(12 * s.bar.db, G.kw - 2 * cf) : 0; return { s, x, y0, y1, hk, hb, len: (y1 - y0) + hk + hb }; })() : null,   // RWSK: toe face of the key, 90° hook toward the heel under the top mat
+    F1: { s: f1, x0: Math.max(cf, G.xbb - r.ld_heel), x1: G.B - cf, y: G.tf - cf - db(f1) / 2 },
+    F2: { s: f2, x0: cf, x1: Math.min(G.B - cf, G.xf + r.ld_toe), y: cb + db(f2) / 2, hook: r.toe_hook ? 12 * db(f2) : 0 },   // RWDS: 90° hook up at the toe end when ticked
+    yCut, cs, cf,
+  };
+  B.F1.len = B.F1.x1 - B.F1.x0; B.F2.len = B.F2.x1 - B.F2.x0 + B.F2.hook;
+  B.nF3 = Math.floor((G.B - 2 * cf) / f3.spacing + 1e-9) + 1;
+  return B;
+}
+
+// RWRB (2026-11-07): the reinforcement of the Analysis diagram cross-section drawn from the Drawings' bar model (rwdwGeo /
+// rwdwBars: the same marks, sizes, spacings, covers and extents as sheets 1–2 and the bar schedule). In a section across the
+// wall, bars in the plane of the section are LINES at their real extents (S1, S1D with its 90° hook, S3, S4, F1, F2 with its
+// hook, K1) and bars along the wall are DOTS at their spacing (S2 each face, F3 top and bottom). Labels sit in columns clear
+// of the concrete edges, the bars and each other, with leaders. Display only.
+// o: { X(in) → px, Y(in) → px, k (px per in), fs, tips: {S1, S2, F1, F2, F3, K1}, xHeelEnd }
+function rwrbBarsSVG(r, o) {
+  const G = rwdwGeo(r), BR = rwdwBars(r, G), X = o.X, Y = o.Y, k = o.k, fs = o.fs, inp = r.inp;
+  const C = { S1: '#c42121', S1D: '#e0662a', S3: '#9c2a6e', S4: '#b0455a', S2: '#c42121', F1: '#c42121', F2: '#0f7a5a', F3: '#0055a8', K1: '#7a3db8' };
+  const sw = db => Math.max(1.5, db * k).toFixed(2), dotR = db => Math.max(db / 2 * k, 2.2);
+  const tip = t => t ? ` data-tip="${t}"` : '';
+  const bl = s => `#${s.bar.num}@${s.spacing}"${s.overridden ? ' ★' : ''}`;
+  const s1 = BR.S1.s, d1 = s1.bar.db, off = Math.max(d1, 2.6 / k);              // dowel / S3 drawn just inside S1 (≥ 2.6 px apart)
+  const s1Pt = y => G.xb(y) - BR.cs - d1 / 2;                                     // S1 centreline at height y (parallel to the back face)
+  const L = (x1, y1, x2, y2, c, db, t) => `<line x1="${X(x1)}" y1="${Y(y1)}" x2="${X(x2)}" y2="${Y(y2)}" stroke="${c}" stroke-width="${sw(db)}" stroke-linecap="round"${tip(t)}/>`;
+  let t = '<g data-layer="rebar">';
+  const lab = [];   // [column, desired y (px), bar point x, y (px), text, colour]
+  // S1 — back face, from the joint to its end (mid-height + the S3–S1 lap, or the top cover)
+  t += L(s1Pt(G.tf), G.tf, s1Pt(BR.S1.to), BR.S1.to, C.S1, d1, o.tips.S1);
+  // S1D — dowel: 90° hook on the bottom mat (bend: inside diameter 6 / 8 / 10 d_b, ACI 318-19 Table 25.3.2 / AASHTO 5.10.2.3), 12 d_b tail, up by the lap ℓ_st
+  const xd = s1Pt(G.tf) - off, yl = Math.min(G.tf + BR.S1D.lap, G.H - BR.cs), yh = BR.S1D.yHook, n1 = s1.bar.num;
+  const rb = Math.min(((n1 <= 8 ? 6 : n1 <= 11 ? 8 : 10) / 2 + 0.5) * d1, BR.S1D.hook * 0.6);
+  t += `<path d="M ${X(xd)} ${Y(yl)} L ${X(xd)} ${Y(yh + rb)} Q ${X(xd)} ${Y(yh)} ${X(xd - rb)} ${Y(yh)} L ${X(xd - BR.S1D.hook)} ${Y(yh)}" fill="none" stroke="${C.S1D}" stroke-width="${sw(d1)}" stroke-linecap="round"${tip(o.tips.S1D)}/>`;
+  // S3 — back face, upper half (inside S1)
+  if (r.sel_stemT && BR.S3.to > BR.S3.from) t += L(s1Pt(BR.S3.from) - off, BR.S3.from, s1Pt(BR.S3.to) - off, BR.S3.to, C.S3, r.sel_stemT.bar.db, o.tips.S3);
+  // S4 — front face verticals (AASHTO T&S), from the joint to the top cover
+  if (BR.S4) { const x4 = G.xf + BR.cs + BR.S4.s.bar.db / 2; t += L(x4, G.tf, x4, G.H - BR.cs, C.S4, BR.S4.s.bar.db, o.tips.S4); }
+  // S2 — horizontal T&S dots, each face, inside the verticals
+  const s2 = BR.S2.s, r2 = dotR(s2.bar.db);
+  for (let y = G.tf + s2.spacing / 2; y < G.H - BR.cs; y += s2.spacing) {
+    const xb = s1Pt(y) - d1 / 2 - s2.bar.db / 2 - (BR.S3 && r.sel_stemT && y >= BR.S3.from ? off : 0);
+    const xf = G.xf + BR.cs + (BR.S4 ? BR.S4.s.bar.db : 0) + s2.bar.db / 2;
+    t += `<circle cx="${X(xb)}" cy="${Y(y)}" r="${r2}" fill="${C.S2}" fill-opacity="0.75"${tip(o.tips.S2)}/><circle cx="${X(xf)}" cy="${Y(y)}" r="${r2}" fill="${C.S2}" fill-opacity="0.75"${tip(o.tips.S2)}/>`;
+  }
+  // K1 — shear key bars (toe face of the key), hooked into the footing
+  if (BR.K1) t += `<polyline points="${[...(BR.K1.hb ? [[BR.K1.x + BR.K1.hb, BR.K1.y0]] : []), [BR.K1.x, BR.K1.y0], [BR.K1.x, BR.K1.y1], [BR.K1.x + BR.K1.hk, BR.K1.y1]].map(([x, y]) => X(x) + ',' + Y(y)).join(' ')}" fill="none" stroke="${C.K1}" stroke-width="${sw(BR.K1.s.bar.db)}"${tip(o.tips.K1)}/>`;
+  // F1 top (heel, into the toe by ℓ_d past the stem back face), F2 bottom (toe, into the heel by ℓ_d past the front face; hook when ticked)
+  t += L(BR.F1.x0, BR.F1.y, BR.F1.x1, BR.F1.y, C.F1, BR.F1.s.bar.db, o.tips.F1);
+  t += L(BR.F2.x0, BR.F2.y, BR.F2.x1, BR.F2.y, C.F2, BR.F2.s.bar.db, o.tips.F2);
+  if (BR.F2.hook) t += L(BR.F2.x0, BR.F2.y, BR.F2.x0, BR.F2.y + BR.F2.hook, C.F2, BR.F2.s.bar.db, o.tips.F2);
+  // F3 — longitudinal T&S dots on both mats, at the spacing
+  const f3 = BR.F3.s, r3 = dotR(f3.bar.db), yT3 = BR.F1.y - BR.F1.s.bar.db / 2 - f3.bar.db / 2, yB3 = BR.F2.y + BR.F2.s.bar.db / 2 + f3.bar.db / 2;
+  for (let x = BR.cf; x <= G.B - BR.cf + 1e-6; x += f3.spacing) t += `<circle cx="${X(x)}" cy="${Y(yT3)}" r="${r3}" fill="${C.F3}" fill-opacity="0.85"${tip(o.tips.F3)}/><circle cx="${X(x)}" cy="${Y(yB3)}" r="${r3}" fill="${C.F3}" fill-opacity="0.85"${tip(o.tips.F3)}/>`;
+  // lap marks (brackets beside the back face): S1D–S1 at the joint, S3–S1 at mid-height
+  const xBr = X(G.xbb) + 7, brk = (ya, yb, c) => `<path d="M ${xBr - 3} ${Y(ya)} L ${xBr} ${Y(ya)} L ${xBr} ${Y(yb)} L ${xBr - 3} ${Y(yb)}" fill="none" stroke="${c}" stroke-width="1"/>`;
+  t += brk(G.tf, yl, C.S1D);
+  if (!r.s1_full && r.sel_stemT) t += brk(BR.S3.from, BR.S1.to, C.S3);
+  t += '</g>';
+  // ── labels ──
+  const ymid = (a, b) => (Y(a) + Y(b)) / 2;
+  if (r.sel_stemT && BR.S3.to > BR.S3.from) lab.push(['R', ymid(Math.max(BR.S3.from, BR.S1.to), BR.S3.to), X(s1Pt((BR.S3.to + Math.max(BR.S3.from, BR.S1.to)) / 2) - off), ymid(Math.max(BR.S3.from, BR.S1.to), BR.S3.to), `S3 ${bl(r.sel_stemT)} back, upper`, C.S3]);
+  if (!r.s1_full && r.sel_stemT) {
+    lab.push(['R', ymid(BR.S3.from, BR.S1.to), xBr, ymid(BR.S3.from, BR.S1.to), `S3–S1 lap ℓst = ${f(r.s13_lst,1)}"`, C.S3]);
+    lab.push(['R', Y(BR.S1.to) + 0.35 * fs, X(s1Pt(BR.S1.to)), Y(BR.S1.to), `S1 ends ${f(r.z_s1_end,2)}' above joint`, C.S1]);
+  }
+  lab.push(['R', ymid(yl, Math.min(BR.S1.to, BR.S3.from)), X(s1Pt((yl + Math.min(BR.S1.to, BR.S3.from)) / 2)), ymid(yl, Math.min(BR.S1.to, BR.S3.from)), `S1 ${bl(s1)} back face`, C.S1]);
+  lab.push(['R', ymid(G.tf, yl), xBr, ymid(G.tf, yl), `S1D dowel, lap ℓst = ${f(r.lst_stem,1)}" (${r.lap_classA ? 'A' : 'B'})`, C.S1D]);
+  lab.push(['R', Y(G.H - BR.cs) + 2.2 * fs, X(s1Pt(G.H - BR.cs - s2.spacing)), Y(G.H - BR.cs - s2.spacing), `S2 ${bl(s2)} horiz. EF (dots)`, C.S2]);
+  if (BR.S4) lab.push(['L', ymid(G.tf + G.Dfa, G.H), X(G.xf + BR.cs + BR.S4.s.bar.db / 2), ymid(G.tf + G.Dfa, G.H), `S4 ${bl(BR.S4.s)} front face`, C.S4]);
+  lab.push(['R', Y(G.tf) - 6, X(Math.min(BR.F1.x1, G.xbb + 0.55 * (G.B - G.xbb))), Y(BR.F1.y), `F1 ${bl(BR.F1.s)} top, heel`, C.F1]);
+  lab.push(['L', Y(G.tf + G.Dfa) - 1.4 * fs - 6, X((BR.F2.x0 + Math.min(BR.F2.x1, G.xf)) / 2), Y(BR.F2.y), `F2 ${bl(BR.F2.s)} bottom, toe`, C.F2]);
+  // inside the heel between the two mats when there is room for one or two lines, else above the footing
+  const room = (Y(yB3) - r3) - (Y(yT3) + r3), yc = (Y(yT3) + Y(yB3)) / 2 + 0.35 * fs;
+  const nIn = room >= 2.7 * fs ? 2 : room >= 1.4 * fs ? 1 : 0;
+  lab.push([nIn >= 1 ? 'H' : 'R', nIn === 2 ? yc - 0.65 * fs : nIn === 1 ? yc : Y(G.tf) - 6, X(G.B - BR.cf - f3.spacing), Y(yT3), `F3 ${bl(f3)} long. T&amp;B (dots)`, C.F3]);
+  lab.push([nIn === 2 ? 'H' : 'R', nIn === 2 ? yc + 0.65 * fs : Y(G.tf) - 6, X(xd - BR.S1D.hook * 0.5), Y(yh), `S1D 90° hook, 12d_b`, C.S1D]);
+  if (BR.K1) lab.push(['K', Y(-G.dk / 2) + 0.35 * fs, X(BR.K1.x), Y((BR.K1.y0 + BR.K1.y1) / 2), `key: K1 ${bl(BR.K1.s)}`, C.K1]);
+  const col = {
+    R: { x: X(G.xbb) + 16, a: 'start', y0: Y(G.H) + 1.2 * fs, y1: Y(G.tf) - 6 },
+    L: { x: X(G.xf) - 10, a: 'end', y0: Y(G.H) + 1.2 * fs, y1: Y(G.tf + G.Dfa) - 1.4 * fs - 6 },   // clear of the GL (toe) label
+    H: { x: X(G.B) - 6, a: 'end', y0: Y(yT3) + r3 + fs, y1: Y(yB3) - r3 - 0.3 * fs },
+    K: { x: X(G.kx + G.kw) + 4, a: 'start', y0: -1e9, y1: 1e9 },
+  };
+  let out = '';
+  Object.entries(col).forEach(([c, d]) => {
+    const it = lab.filter(l => l[0] === c).sort((a, b) => a[1] - b[1]);
+    let prev = -1e9; it.forEach(l => { l[1] = Math.max(l[1], prev + 1.3 * fs); prev = l[1]; });
+    if (it.length && it[it.length - 1][1] > d.y1) { let nxt = d.y1; for (let i = it.length - 1; i >= 0; i--) { it[i][1] = Math.min(it[i][1], nxt); nxt = it[i][1] - 1.3 * fs; } }
+    it.forEach(([, y, bx, by, txt, cl]) => {
+      const lx = d.a === 'start' ? d.x - 3 : d.x + 3, ly = y - 0.35 * fs;
+      if (Math.hypot(lx - bx, ly - by) > 6) out += `<line x1="${lx}" y1="${ly}" x2="${bx}" y2="${by}" stroke="${cl}" stroke-width="0.7" opacity="0.8"/><circle cx="${bx}" cy="${by}" r="1.4" fill="${cl}"/>`;
+      out += `<text x="${d.x}" y="${y}" font-size="${fs}" fill="${cl}" text-anchor="${d.a}">${txt}</text>`;
+    });
+  });
+  return t + '<g data-layer="rebar">' + out + '</g>';   // the labels go with the Rebar layer toggle
+}
 // RWPS (2026-11-07): pressure diagrams drawn OFF the structure (engineer: "the passive pressure triangle is overlapping the
 // structure, it should be drawn off to the side"). Display only: every ordinate and label is a value the analysis already has.
 //  • rwpsPassive: passive on the vertical plane of the toe face, its zero line `gap` in front of the toe; the shear-key block
@@ -11534,7 +11605,8 @@ function renderRwReport() {
   rwrAddNotes(M, RWRP.notes);
   rwovAdd(M, r);   // RWOV: the overview figures after the Design summary
   rwaxAdd(M, r);   // RWAX: the Analysis diagram figures in their sections; the appendix of tab figures
-  RWRP.api = SharedReport.mount(T, M, { closed: RWRP.closed, onGoto: rwrGoto });
+  rwmanAdd(M);   // RWMAN (2026-11-07): the user manual as an appendix when "Include the user manual" is ticked (display only)
+  RWRP.api = SharedReport.mount(T, M, { closed: RWRP.closed, onGoto: rwrGoto, controls: '<label class="rwman-inc" style="font-size:12px;white-space:nowrap"><input type="checkbox" data-rwman-inc' + (rwmanInc() ? ' checked' : '') + '> Include the user manual</label>' });
   RWRP.doc = RWRP.api.doc;
 }
 /* RWOV (2026-11-07): "Overview of the wall" right after the Design summary (as Spread Footing SFOV #780, CBC #795): a 3D snapshot
@@ -11724,11 +11796,12 @@ async function rwrPrintAny() {
 window.addEventListener('afterprint', () => { if (RWRP_BACK) { const b = document.querySelector(`.tab-btn[data-tab="${RWRP_BACK}"]`); RWRP_BACK = null; if (b) b.click(); } });
 /* [[tab:…]] links of the report: a result tab, or "card:<key>" (the card on its tab, as the D11 "Worked in" links) */
 function rwrGoto(name) {
-  if (name.indexOf('card:') === 0) { rwGoto(name.slice(5)); return; }
+  if (name.indexOf('card:') === 0 || name.indexOf('inp:') === 0) { rwmanGo(name); return; }   // RWMAN: a card falls back to its tab when it is not shown in this mode; inp: an input field
   const b = document.querySelector(`.tab-btn[data-tab="${name}"]`); if (b) b.click();
   const P = document.querySelector('.tab-panels'); if (P) P.scrollTop = 0;
 }
 document.querySelector('.tab-btn[data-tab="report"]').addEventListener('click', renderRwReport);
+document.querySelector('.tab-btn[data-tab="manual"]').addEventListener('click', () => rwmanRender());   // RWMAN
 /* Ctrl+P while the Report tab is shown prints the report alone (shared/report.js print layout and running header);
    from any other tab the page prints as before (the Report panel is hidden in print, see the RWRP rule in @media print) */
 window.addEventListener('beforeprint', () => {
@@ -11738,6 +11811,239 @@ window.addEventListener('beforeprint', () => {
   box.innerHTML = '<div class="rp"><article class="rp-doc">' + SharedReport.html(RWRP.doc, { lazy: false }) + '</article></div>';
   document.body.classList.add('rp-printing');
 });
+</script>
+<script>
+/* =====================================================================
+   RWMAN (2026-11-07, review Phase 6a): the User Manual tab. Display only: nothing here reads or changes a computed value.
+   One source (RWMAN_PARTS) for the Manual tab, the Report appendix ("Include the user manual" in the Report bar) and
+   "Print the manual". Link markup in the text: [[go:<target>|text]], target = tab:<tab> | card:<RW_CARDS key> | inp:<input id>
+   | man:<part id>. On screen a link opens that tab / card / input (the card falls back to its tab when the card is not shown in
+   the current code mode); in the Report it is the shared viewer's [[tab:…]] link (plain text in print) or a §-reference to the
+   manual part. **x** is bold on screen. Statements are checked against the code of this file (2026-11-07); provisions are cited
+   and paraphrased, never quoted. The per-viewer choice "include in the Report" is the UI key retaincalcpro.manualInReport.v1
+   ('1' = include; absent = not), not part of any project. */
+const RWMAN_DATE = '2026-11-07';
+const RWMAN_PARTS = [
+{ id: 'use', title: 'About this manual', go: [['tab:overview', 'Overview tab']], blocks: [
+  { p: 'This manual describes what Retaining Wall Designer computes and checks, which inputs it uses and which code provisions it follows, in the order you meet them on screen. Each part links to the tab, card or input it describes: click a link to go there. Provisions are cited by article and paraphrased; the code text itself is not reproduced. Where this manual and the program disagree, the disagreement is a defect: report it and trust neither until it is resolved.' },
+  { p: 'Printing: **Print the manual** (top of this tab) prints the manual alone. To hand it out with a calculation, tick **Include the user manual** in the Report bar ([[go:tab:report|Report tab]]); it is then printed as an appendix of the Report by the header **Print** button, Ctrl+P or the Report’s own Print. The choice is kept in this browser only (it is not part of a project).' },
+  { p: 'Units are US customary throughout (ft, in, lb, kip, psf, pcf, psi). Every result is per foot of wall (a 12-in design strip) unless it says otherwise.' } ] },
+
+{ id: 'scope', title: 'Scope and wall types', go: [['tab:overview', 'Overview tab'], ['inp:Hs', 'Wall input tab']], blocks: [
+  { p: 'The tool designs a **cantilever reinforced-concrete retaining wall**: a stem fixed into a footing with a toe in front and a heel behind, analysed per foot of wall.' },
+  { ul: [
+    'Stem: height H_s, base width and top width (the front face is vertical, the back face is battered when the two widths differ); the stem may project h_p above the retained grade.',
+    'Footing: thickness t_f, toe length L_t and heel length L_h (either may be 0 for an L-shaped wall), soil cover over the toe D_f,add.',
+    'Optional shear key under the stem (depth d_k, width b_k).',
+    'Foundation: a **spread footing on soil** (default) or a **pile-supported footing** with 2 to 4 rows of vertical piles.',
+    'Optional column / beam line loads on the stem, a traffic barrier on top of the stem (AASHTO mode), and a variable-height wall segment (MassDOT rule, both modes).',
+    'Two code modes: **ACI 318-19 / IBC 2018** (allowable-stress stability, strength design of the concrete) and **AASHTO LRFD 10th Ed. (2024)** (limit states throughout). The mode is chosen with the Code switch at the top of the input panel and is kept with the project.' ] },
+  { p: 'The design strip is one foot of a long wall: end effects, wall corners, joints and the wall length are not modelled (the collision load and the pile schedule use the joint spacing only to spread or count). Counterfort, gravity, MSE, sheet-pile and soldier-pile walls are outside the scope.' } ] },
+
+{ id: 'screen', title: 'The screen: inputs, results, check summary, phone', go: [['tab:overview', 'Overview tab']], blocks: [
+  { h: 'Input panel' },
+  { ul: [
+    'The left panel holds the inputs in input tabs: **Project, Wall, Soil, Loads, Traffic** (AASHTO mode only), **Design** and **Rebar**. Each tab has collapsible cards; **Next** at the bottom of a tab opens the next one. The input tab last used is remembered in this browser.',
+    '**Find an input…** (top of the panel) filters the cards to the inputs whose label matches a word or a symbol.',
+    'Every change recalculates the whole wall and redraws the open result tab. Inputs that cannot be used are outlined in red with the reason under the field; the result tabs then show the banner **Input error: no results** with a link to each field. A few unusual but valid inputs (for example a backfill sloping down from the wall) are marked **REVIEW** instead and still give results.' ] },
+  { h: 'Result tabs' },
+  { table: { head: ['Tab', 'What it shows'], rows: [
+    ['[[go:tab:overview|Overview]]', 'The governing D/C per family (stability or piles, structural), the wall section to scale with its pressure diagram, the properties, and the check summary.'],
+    ['[[go:tab:stability|Stability]]', 'Earth pressures, loads and moments, overturning / sliding / bearing / eccentricity, seismic and collision cases, AASHTO interface shear and Service I crack control, with the bearing pressure per combination. On piles the soil checks are for information and a pile summary links to the Piles tab.'],
+    ['[[go:tab:stem|Stem design]]', 'Base section (Steps 1–6) and mid-height section (Mid Steps 1–3), with the pressure and shear / moment diagrams.'],
+    ['[[go:tab:footing|Footing design]]', 'Factored loads on the footing, heel Steps 1–4, toe Steps 1–4, temperature and shrinkage, the extreme-event footing check (AASHTO), the shear key and, on piles, punching.'],
+    ['[[go:tab:piles|Piles]] (pile-supported footing only)', 'Pile layout, Pile Steps 1–3 (pile group, reactions per combination, every pile check) and the Pile Designer hand-off.'],
+    ['[[go:tab:rebar|Rebar schedule]]', 'Bar schedule per foot of wall (S1, S1D, S3, S2, S4, F1, F2, F3, K1), bar notes, detailing requirements, quantities.'],
+    ['[[go:tab:diagram|Analysis diagram]]', 'The cross-section with the reinforcement and the service-load pressure diagrams, to scale; the collision elevation in AASHTO mode.'],
+    ['[[go:tab:threed|3D model]]', 'An interactive model with load arrows per load case or combination (unfactored or factored), the base reaction or the pile reactions, and a section cut.'],
+    ['[[go:tab:drawings|Drawings]]', 'Four 11 × 17 sheets (five on piles), Print sheet / Print all sheets, Download DXF ([[go:man:drawings|drawings part]]).'],
+    ['[[go:tab:report|Report]]', 'The calculation report: every worked step, numbered §n.m, with a navigation tree and search ([[go:man:report|report part]]).'] ] } },
+  { h: 'Worked steps and links' },
+  { p: 'Every computed value is worked where it is computed: the equation, the values substituted, the result, and the provision. Where a value is used away from that card, a **Worked in** link goes back to it; in the Report the same link is a §-reference.' },
+  { h: 'Check summary (left column) and self-consistency checks' },
+  { ul: [
+    'The **check summary** lists every check with its value, D/C and PASS / FAIL; a click opens the card where the check is worked. Checks are pass / fail only.',
+    'On screens **1200 px and wider** it is a column left of the input panel: 240 px wide from 1200 to 1499 px and 292 px from 1500 px. The « / » button collapses it to a narrow strip (remembered in this browser). Below 1200 px it sits above the result tabs.',
+    'Under it, **Self-consistency checks** recompute key results a second way (for example ΣM about the toe, x̄, the stem moment from its parts) and flag any mismatch. The panel is closed when all pass and opens on a mismatch. It is not part of the Report.' ] },
+  { h: 'Phone and tablet' },
+  { p: 'At 900 px and narrower the results come first: the input panel is closed and **Show inputs / Hide inputs** in the header opens it as a drawer. Wide tables and drawings scroll sideways inside their card; the page itself does not.' } ] },
+
+{ id: 'modes', title: 'The two code modes', go: [['inp:design_basis', 'Code switch / Design basis']], blocks: [
+  { p: 'The mode decides the load combinations, the resistance factors, the stability criteria and the concrete provisions. One earth-pressure coefficient is used for stability and for the stem in each mode.' },
+  { table: { head: ['', 'ACI 318-19 / IBC 2018', 'AASHTO LRFD 10th Ed. (2024)'], rows: [
+    ['Earth pressure', 'Rankine active (sloping backfill by Rankine).', 'Coulomb (default) or Rankine; active, or at-rest K₀ (Jaky with OCR) (Art. 3.11.5).'],
+    ['Stability', 'Service (unfactored) loads: overturning and sliding FS ≥ 1.5, bearing q_max ≤ q_a, eccentricity limit as chosen (IBC 2018 §1807.2.3).', 'Strength I / Ia: sliding (Art. 10.6.3.4), eccentricity (Art. 11.6.3.3), bearing with φ_b (Art. 10.6.3.1); no overturning FS (AASHTO uses the eccentricity limit instead).'],
+    ['Seismic', 'Mononobe-Okabe increment ΔP_E at 0.6H′; FS ≥ 1.1 with 0.7ΔP_E (IBC §1807.2.3 exception); stem U = 1.2D + 1.0E + 1.6H.', 'Extreme Event I per Art. 11.6.5.1 (two load cases, φ 1.0 sliding, 0.8 bearing); stem designed for EE I.'],
+    ['Collision', '—', 'Extreme Event II (vehicular collision CT, MassDOT Table 3.3.2-1 test levels); optional barrier yield-line check (Art. A13.3.1).'],
+    ['Concrete load factors', 'ACI 318-19 §5.3: stem U = 1.6H; footing envelope U = 1.2D + 1.6H and 0.9D + 1.6H; water uplift split γ_U 1.6 toe / 0.9 heel (§5.3.8).', 'Tables 3.4.1-1/-2: DC 1.25/0.90, EV 1.35/1.00, EH 1.50/0.90 (at-rest 1.35), ES 1.50/0.75, LS 1.75, WA 1.00; η and 1/η (Art. 1.3.2.1).'],
+    ['Concrete checks', 'Flexure, one-way shear (λ_s), development / hooks / laps (Ch. 25), crack control (§24.3.2), T&S (§24.4.3), shear friction at the joint (§22.9).', 'Flexure, shear (β = 2 or the general procedure), minimum reinforcement (Art. 5.6.3.3), crack control Service I (Art. 5.6.7), T&S each face (Art. 5.10.6), development (Art. 5.10.8), optional interface shear (Art. 5.7.4).'],
+    ['Piles (when chosen)', 'Allowable P_a, T_a, H_a against the ASD combinations (ASCE 7-16 §2.4.1; IBC 2018 §1810).', 'Factored resistances φR_n, φR_n,up, H_r against every limit state (Art. 10.7).'] ] } },
+  ] },
+
+{ id: 'inputs', title: 'Inputs, units and defaults', go: [['inp:proj_name', 'Project input tab']], blocks: [
+  { p: 'The defaults below are those of a new project (New, or this file opened for the first time). A blank load-type input (loads, cohesion, surcharge, seismic, water depth) counts as 0; geometry, materials and q_a must be entered. Inputs marked (AASHTO) are shown in AASHTO mode only; (pile) only with a pile-supported footing.' },
+  { h: 'Project tab' },
+  { table: { head: ['Input', 'Unit', 'Default', 'Notes'], rows: [
+    ['[[go:inp:proj_name|Project Name, Project Number, Engineer of Record, Checked By, Notes]]', '—', 'blank', 'Title block of the Report and the drawing sheets.'],
+    ['Date, Checked Date', '—', 'blank (optional)', 'Printed in the title blocks when filled.'],
+    ['Use shared project info / Share project info', '—', '—', 'Exchange the project name, number, engineer, checker and date with the other tools of this suite (HANDOFF.md §4.1).'],
+    ['[[go:inp:design_basis|Design basis]]', '—', 'ACI 318-19 / IBC 2018', 'The code mode (same as the Code switch).'] ] } },
+  { h: 'Wall tab' },
+  { table: { head: ['Input', 'Unit', 'Default', 'Notes'], rows: [
+    ['[[go:inp:Hs|Stem height H_s]]', 'ft', '12', 'Locked when a variable-height wall is ticked (the box shows why).'],
+    ['[[go:inp:tf|Footing thickness t_f]]', 'in', '18', 'Must exceed the bottom cover + 2 in; on piles, embedment + clear + 2 in.'],
+    ['Stem width at the base / at the top', 'in', '18 / 12', 'Front face vertical, back face battered.'],
+    ['Toe length L_t / heel length L_h', 'ft', '3 / 8', 'From the stem faces. B = L_t + t_stem + L_h.'],
+    ['Soil cover over the toe D_f,add', 'ft', '0', 'Toe embedment D_f = t_f + D_f,add (passive at the toe).'],
+    ['[[go:inp:h_proj|Stem projection above the retained grade h_p]]', 'ft', '0', 'The stem rises h_p above the backfill: earth, water and surcharge act on the retained height H_ret = H − h_p; the stem weight, barrier and collision stay on the full stem. h_p ≤ H_s − 1.0 ft. The water-table depth is still measured from the top of the wall.'],
+    ['[[go:inp:fnd_type|Foundation type]]', '—', 'Spread footing on soil', 'Or pile-supported footing.'],
+    ['Number of pile rows; per row x from the toe and spacing along the wall (pile)', '— / ft', '2; 1.5 and 11 ft; 6 ft', 'Rows 3 and 4 default to x = 6 and 9 ft at 6 ft.'],
+    ['Pile type, designation, width / diameter D (pile)', '— / in', 'Steel H-pile, blank, 12', 'H, pipe, square precast, round.'],
+    ['Embedment into the footing; clear, pile top to the bottom bars (pile)', 'in', '12; 3', 'Used for the depth over the pile heads (punching, ACI cap depth).'],
+    ['Allowable P_a / T_a / H_a per pile (pile, ACI)', 'kip', '100 / 25 / 8', 'Placeholders until the geotechnical values are entered.'],
+    ['Nominal R_n, φ_c, R_n,up, φ_up, factored H_r per pile (pile, AASHTO)', 'kip / —', '300, 0.65, 100, 0.50, 20', 'Placeholders until entered or pulled from Pile Designer.'],
+    ['Credit passive in front of the footing (pile)', '—', 'off', 'Toe passive against the lateral load on the piles.'],
+    ['[[go:inp:vh_enable|Wall varies in height]]; low-end / high-end stem height', '— / ft', 'off; 8 / 16', 'MassDOT §3.3.2.2 (paraphrased): design height = H_low + 0.75(H_high − H_low); applied in both modes when ticked.'],
+    ['[[go:inp:fc|f′c]] / f_y', 'psi', '4000 / 60000', ''],
+    ['Cover, stem back face / footing', 'in', '2 / 3', 'The footing cover is used top and bottom (and for the bottom bars on piles).'],
+    ['Concrete unit weight γ_c', 'pcf', '150', ''] ] } },
+  { h: 'Soil tab' },
+  { table: { head: ['Input', 'Unit', 'Default', 'Notes'], rows: [
+    ['[[go:inp:gamma_s|Soil unit weight γ_s]] / friction angle φ / cohesion c', 'pcf / ° / psf', '120 / 30 / 0', 'Cohesion is shown and printed but not used in any calculation.'],
+    ['[[go:inp:qa|Allowable bearing q_a]]', 'psf', '3000', 'ACI bearing check. In AASHTO mode it gives q_n = 3q_a when that source is chosen, and the reference line of the bearing chart.'],
+    ['[[go:inp:aci_ecc_limit|Eccentricity limit (service)]] (ACI)', '—', 'Middle third (e ≤ B/6)', 'Or e ≤ B/4, or no limit (information only). Saves made before this input open with "no limit".'],
+    ['Heel / toe one-way shear: neglect λ_s (ACI)', '—', 'off', 'ACI 318-19 §13.2.6.2; spread footings only.'],
+    ['Backfill slope β / surcharge q_s / saturated unit weight γ_sat', '° / psf / pcf', '0 / 0 / 130', 'β < 0 is marked REVIEW; β ≥ φ is an error.'],
+    ['[[go:inp:wt_mode|Water table input mode]]; depth from the top of wall, or top-of-wall and groundwater elevations', '— / ft', 'Depth; 0 (no water); 100 / 90', 'A water table at or below the footing base is ignored.'],
+    ['γ_w; include hydrostatic pressure and uplift; uplift distribution', 'pcf / — / —', '62.4; on; uniform', 'Uniform: full head across B. Triangular: full head at the heel to 0 at the toe.'],
+    ['[[go:inp:aashto_ep_method|Earth pressure method]], pressure condition, wall friction δ, wall batter θ, OCR (AASHTO)', '— / ° / —', 'Coulomb, active, 0, 0, 1', 'At-rest K₀ = (1 − sin φ)OCR^(sin φ) (Art. 3.11.5.2).'] ] } },
+  { h: 'Loads tab' },
+  { table: { head: ['Input', 'Unit', 'Default', 'Notes'], rows: [
+    ['[[go:inp:col_DL|Column / beam loads P_DL, P_LL, P_SL, P_WL]]; distribution length; position', 'kip / ft / —', '0; 1; centreline of stem', 'Line load per ft = P / L_dist at the front face, centreline or back face of the stem.'],
+    ['[[go:inp:kh|Seismic k_h]] / k_v / M-O wall friction δ', '— / — / °', '0 / 0 / 0', 'k_h > 0 turns the seismic checks on.'],
+    ['γ_EQ on live load / LS (AASHTO)', '—', '0', 'Extreme Event I; also sets the EE I eccentricity limit.'] ] } },
+  { h: 'Traffic tab (AASHTO)' },
+  { table: { head: ['Input', 'Unit', 'Default', 'Notes'], rows: [
+    ['[[go:inp:aashto_ll_surcharge|Live-load surcharge]]; h_eq source; traffic direction; distance back face to traffic; h_eq (manual)', '— / ft', 'on; auto; wall parallel; 0; 2.0', 'Tables 3.11.6.4.1-1 / -2; not applied when the traffic is farther than H/2 (a manual h_eq overrides).'],
+    ['[[go:inp:aashto_ct_enable|Vehicular collision CT]]; test level; F_t, h_CT, L_t; joint spacing; distribution; EH during collision; φ; eccentricity limit B/n', '— / kip / in / ft', 'off; TL-4 (28 kip, 30 in, 5 ft); 41 ft; full section between joints; γ_EH = 0; 1.00; 3', 'MassDOT LRFD Bridge Manual §3.3.2.4, Table 3.3.2-1 (edition: verify).'],
+    ['[[go:inp:bar_enable|Barrier on top of the stem]]; height; weight input; weight or width; centroid offset', 'ft / plf / in', 'off; 3.0; weight; 450 plf (or 12 in); 0', 'The barrier weight is added as DC.'],
+    ['Barrier yield-line check; impact location; M_b, M_w, M_c', '— / k·ft, k·ft/ft', 'off; interior; 0, 18, 16', 'R_w ≥ F_t (Art. A13.3.1).'] ] } },
+  { h: 'Design tab' },
+  { table: { head: ['Input', 'Unit', 'Default', 'Notes'], rows: [
+    ['[[go:inp:mu_method|Base friction method]] (ACI); custom μ', '— / —', 'tan(⅔φ); 0.45', 'Or tan φ, or a custom μ.'],
+    ['[[go:inp:use_shear_key|Shear key]]; depth d_k; width b_k', '— / in', 'off; 12; 12', 'Centred under the stem.'],
+    ['[[go:inp:heel_basis|Heel design basis]]', '—', 'Standard (down minus bearing)', 'Or no upward relief, or the envelope of the two.'],
+    ['[[go:inp:incl_passive|Include passive resistance]]', '—', 'off', 'Toe (and key) passive in sliding, toe passive moment in overturning.'],
+    ['[[go:inp:aashto_eta|Load modifier η]], φ_τ, base friction, δ_b, eccentricity limit, φ_ep, φ_b, q_n source, φ_b q_n (AASHTO)', '— / ° / psf', '1.0, 1.00, tan(⅔φ), 0, e ≤ B/4, 0.50, 0.55, from geotech report, 4950', 'q_n may be estimated as 3q_a instead (a warning says this is unconservative if q_a is settlement-controlled).'],
+    ['[[go:inp:aashto_gamma_e1|Exposure γ_e]] footing / stem; shear method; aggregate a_g; at-rest K₀ for Service (AASHTO)', '— / in', '1.0 / 0.75; auto; 1.5; off', 'Art. 5.6.7; Art. 5.7.3.4.'] ] } },
+  { h: 'Rebar tab' },
+  { table: { head: ['Input', 'Unit', 'Default', 'Notes'], rows: [
+    ['[[go:inp:ovr_bar_s1|Bar overrides]] S1, S3, S2, S4, F1, F2, F3: bar # and spacing', '— / in', '0 (automatic)', 'A bar and spacing replace the tool’s choice for that mark; the checks then use them.'],
+    ['Toe bars F2 hooked at the toe end', '—', 'off', 'Standard 90° hook checked with ℓ_dh.'],
+    ['[[go:inp:massdot_ftg|MassDOT heel top-steel rule]] (AASHTO)', '—', 'off', 'MassDOT §3.3.2.2: dead load only, no upward relief.'],
+    ['[[go:inp:aashto_ish_enable|Interface shear]]; c, μ, K₁, K₂, sub-footing f′c, dowel bar and spacing (AASHTO)', 'ksi / — / psi / in', 'off; 0.075, 0.6, 0.2, 0.8; 3000; #6 @ 48', 'Art. 5.7.4.3.'] ] } } ] },
+
+{ id: 'projects', title: 'Saving, opening, cloud sync, Export / Import JSON', go: [['inp:proj_name', 'Project tab, Save and open card']], blocks: [
+  { ul: [
+    '**Autosave.** The inputs are kept in this browser as you type and come back when the file is opened again.',
+    '**Save and open** card (Project tab, first card): **Save** (Ctrl+S) keeps the project in this browser’s list under its name; **Save as** (Ctrl+Shift+S) asks for a name and where to save; **Saved projects…** lists them with Open, Rename, Duplicate, Export and Delete; **New** starts from the defaults. Open asks first when the project on screen has unsaved changes. The header chip shows the project name and saved / unsaved; a click on it opens this card.',
+    '**Undo / Redo** in the header (Ctrl+Z, Ctrl+Y or Ctrl+Shift+Z) step through input changes; changing tabs or views is not a step.',
+    '**Export JSON** writes the project as a .json file (format RetainCalcPro.project); **Import JSON** reads one project or a back-up file; **Back up all** writes every project of this browser to one file.',
+    '**Cloud sync (GitHub)**, from the Saved projects dialog: when set up, each named project is also copied to the engineer’s private GitHub repository and appears on every device with sync. Autosave is not synced. Nothing is deleted or overwritten on GitHub silently: a project changed on two devices is kept twice ("conflict" copy). Setup: docs/github-sync-setup.md.',
+    'Opening a project never changes a stored value. Inputs added after a project was saved take their documented defaults, except the ACI eccentricity limit (saves without it open with "no limit", as they were designed).',
+    'Files opened from file:// in Chrome / Edge share one browser storage with the other tools of the suite; this tool’s own keys start with retaincalcpro. or rcp_, and the cross-tool hand-offs use bridgeSuite.v1.*.' ] } ] },
+
+{ id: 'drawings', title: 'Drawings, DXF, bar schedule, 3D model and analysis diagram', go: [['tab:drawings', 'Drawings tab'], ['tab:rebar', 'Rebar schedule tab']], blocks: [
+  { h: 'Drawing sheets' },
+  { ul: [
+    '**1. Typical wall section** (to scale, dimensioned), **2. Reinforcement details and bar schedule**, **3. Loads and bearing pressure diagram**, **4. Elevation and general notes**, and on piles **5. Pile layout plan and pile schedule**.',
+    'Each sheet is 11 × 17 landscape at its plot scale with a title block from the Project tab. **Print sheet** / **Print all sheets** print through the browser (Tabloid, landscape, margins none, scale 100 %). **Download DXF** writes one AutoCAD R12 file with every sheet side by side, full size in inches, on named layers (RW-CONC, RW-REBAR, RW-DIMS, …).',
+    'Bars, sizes, spacings and the loads are the tool’s results. Bar lengths that the model does not give (lap and hook tails, nominal extensions) are labelled as nominal on sheet 2. On piles the bottom mat is drawn at the footing cover with the pile heads projecting through it.' ] },
+  { h: 'Rebar schedule tab' },
+  { p: 'One row per bar mark with bar size, spacing, A_s required and provided, ratio, ℓ_d (or ℓ_dh for hooked bars) and status, bar notes, the general detailing requirements of the mode and approximate quantities per foot of wall. The marks: S1 stem back-face verticals from the joint to mid-height plus the lap; S1D the hooked dowel into the footing, lapped with S1; S3 back-face verticals of the upper half; S2 horizontal temperature and shrinkage bars (both faces); S4 front-face verticals (AASHTO); F1 heel top bars; F2 toe bottom bars; F3 longitudinal footing bars (both faces); K1 shear-key bars when the key is reinforced.' },
+  { h: '3D model and analysis diagram' },
+  { p: 'The [[go:tab:threed|3D model]] shows one load case or one combination at a time (the governing bearing or pile combination by default); in a combination view the arrows can be unfactored or factored, and the base reaction (or the pile reactions) is the combination’s. The [[go:tab:diagram|Analysis diagram]] shows the section with the service-load pressure diagrams to scale. Both are display only.' } ] },
+
+{ id: 'report', title: 'The Report and printing', go: [['tab:report', 'Report tab']], blocks: [
+  { ul: [
+    'The Report holds the design summary (every check with its D/C, basis and a § link to where it is worked), an overview of the wall, the inputs, and the stability, stem, footing, pile (when present) and reinforcement sections with every worked step, then assumptions and warnings, references and the figure appendix.',
+    'Navigation tree, search, **Expand all / Collapse all**; links marked ↗ go to the tab on screen.',
+    '**Print** in the header, Ctrl+P, or the Report’s Print prints the whole Report (every section open, running header and page numbers) from any tab. Drawing sheets print from the Drawings tab only.',
+    '**Include the user manual** in the Report bar adds this manual as an appendix (this browser’s choice, not saved with a project).',
+    'Nothing is computed in the Report: it shows the values of the tabs.' ] } ] },
+];
+/* ---- rendering ---- */
+function rwmanEsc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function rwmanIdx() { const m = {}; RWMAN_PARTS.forEach((p, i) => { m[p.id] = i + 1; }); return m; }
+function rwmanHTML(s) {   // the Manual tab: links and bold
+  const IX = rwmanIdx();
+  return rwmanEsc(s).replace(/\[\[go:([^|\]]+)\|([^\]]+)\]\]/g, (m, t, x) => t.indexOf('man:') === 0
+      ? `<a href="#rwman-${t.slice(4)}" class="rwmanA" data-rwman="${t}">${x} (§${IX[t.slice(4)] || '?'})</a>`
+      : `<a href="#" class="rwmanA" data-rwman="${t}">${x}</a>`)
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+}
+function rwmanPlainLinks(s) {   // the Report: [[tab:…]] links (plain text in print), §-references to the manual parts
+  return String(s).replace(/\[\[go:([^|\]]+)\|([^\]]+)\]\]/g, (m, t, x) => t.indexOf('man:') === 0 ? x + ' ([[man-' + t.slice(4) + ']])'
+      : '[[tab:' + (t.indexOf('tab:') === 0 ? t.slice(4) : t) + '|' + x + ']]').replace(/\*\*([^*]+)\*\*/g, '$1');
+}
+function rwmanGo(t) {
+  if (t.indexOf('man:') === 0) { const e = document.getElementById('rwman-' + t.slice(4)); if (e) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+  if (t.indexOf('inp:') === 0) { rwIeGoto(t.slice(4)); return; }
+  if (t.indexOf('card:') === 0) { const k = t.slice(5), c = RW_CARDS[k], r = window._R;
+    if (c && r && !r.fatal && rwCardTitle(k, r.isAASHTO)) { rwGoto(k); return; }
+    t = 'tab:' + (c ? c[0] : 'overview'); }
+  const b = document.querySelector(`.tab-btn[data-tab="${t.replace(/^tab:/, '')}"]`); if (b) b.click();
+  const P = document.querySelector('.tab-panels'); if (P) P.scrollTop = 0;
+}
+function rwmanBlockHTML(b) {
+  if (b.h) return `<h4 class="rwman-h">${rwmanHTML(b.h)}</h4>`;
+  if (b.p) return `<p>${rwmanHTML(b.p)}</p>`;
+  if (b.ul) return `<ul>${b.ul.map(x => `<li>${rwmanHTML(x)}</li>`).join('')}</ul>`;
+  if (b.table) return `<div style="overflow-x:auto"><table class="tbl rwman-tbl"><thead><tr>${b.table.head.map(x => `<th>${rwmanHTML(x)}</th>`).join('')}</tr></thead><tbody>${b.table.rows.map(r => `<tr>${r.map(x => `<td>${rwmanHTML(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  return '';
+}
+function rwmanInc() { try { return localStorage.getItem('retaincalcpro.manualInReport.v1') === '1'; } catch (e) { return false; } }
+function rwmanSetInc(on) { try { if (on) localStorage.setItem('retaincalcpro.manualInReport.v1', '1'); else localStorage.removeItem('retaincalcpro.manualInReport.v1'); } catch (e) { /* not kept */ }
+  document.querySelectorAll('input[data-rwman-inc]').forEach(x => { x.checked = on; }); }
+function rwmanRender() {
+  const T = document.getElementById('tab-manual'); if (!T) return;
+  if (T.dataset.built) { T.querySelectorAll('input[data-rwman-inc]').forEach(x => { x.checked = rwmanInc(); }); return; }
+  T.dataset.built = '1';
+  let h = `<div class="sec-heading">User Manual — Retaining Wall Designer · ${RWMAN_DATE}</div>`
+    + `<div class="rwman-bar"><button type="button" class="btn" id="rwman-print">Print the manual</button>`
+    + `<label class="rwman-inc"><input type="checkbox" data-rwman-inc${rwmanInc() ? ' checked' : ''}> Include the user manual in the Report (printed as an appendix)</label></div>`
+    + `<div class="card rwman-part"><div class="card-hd"><span class="card-title">Contents</span></div><div class="card-body"><ol class="rwman-toc">${RWMAN_PARTS.map(p => `<li><a href="#rwman-${p.id}" class="rwmanA" data-rwman="man:${p.id}">${rwmanEsc(p.title)}</a></li>`).join('')}</ol></div></div>`;
+  RWMAN_PARTS.forEach((p, i) => {
+    h += `<div class="card rwman-part" id="rwman-${p.id}"><div class="card-hd"><span class="card-title">${i + 1}. ${rwmanEsc(p.title)}</span>`
+      + (p.go && p.go.length ? `<span class="card-ref">On screen: ${p.go.map(([t, x]) => `<a href="#" class="rwmanA" data-rwman="${t}">${rwmanEsc(x)}</a>`).join(' · ')}</span>` : '')
+      + `</div><div class="card-body">${p.blocks.map(rwmanBlockHTML).join('')}</div></div>`;
+  });
+  T.innerHTML = h;
+  T.addEventListener('click', e => { const a = e.target.closest && e.target.closest('a.rwmanA'); if (!a) return; e.preventDefault(); rwmanGo(a.dataset.rwman); });
+  T.querySelector('#rwman-print').addEventListener('click', rwmanPrint);
+}
+document.addEventListener('change', e => { const x = e.target; if (!x || !x.matches || !x.matches('input[data-rwman-inc]')) return;
+  rwmanSetInc(x.checked); if (document.getElementById('tab-report') && document.getElementById('tab-report').classList.contains('active')) renderRwReport(); });
+/* the manual as report sections (the Report appendix, and "Print the manual") */
+function rwmanSection() {
+  const subs = RWMAN_PARTS.map(p => { const items = []; let topic = null;
+    const push = it => { if (topic) { it.topic = { title: topic }; topic = null; } items.push(it); };
+    p.blocks.forEach(b => {
+      if (b.h) topic = rwmanPlainLinks(b.h);
+      else if (b.p) push({ type: 'note', text: rwmanPlainLinks(b.p) });
+      else if (b.ul) b.ul.forEach(x => push({ type: 'note', text: '• ' + rwmanPlainLinks(x) }));
+      else if (b.table) push({ type: 'table', wide: true, head: b.table.head.map(rwmanPlainLinks), rows: b.table.rows.map(r => r.map(rwmanPlainLinks)) });
+    });
+    if (p.go && p.go.length) items.push({ type: 'note', text: 'On screen: ' + p.go.map(([t, x]) => '[[tab:' + (t.indexOf('tab:') === 0 ? t.slice(4) : t) + '|' + x + ']]').join(' · ') });
+    return { title: p.title, key: 'man-' + p.id, items }; });
+  return { title: 'User manual (' + RWMAN_DATE + ')', key: 'man', part: 'Appendices', subs };
+}
+function rwmanAdd(M) { if (M && M.sections && rwmanInc()) M.sections.push(rwmanSection()); return M; }
+function rwmanPrint() {
+  if (!window.SharedReport) { window.print(); return; }
+  const s = rwmanSection(); delete s.part;
+  SharedReport.print(SharedReport.build({ title: 'Retaining Wall Designer', subtitle: 'User manual', code: 'ACI 318-19 / IBC 2018 and AASHTO LRFD 10th Ed. (2024)', info: [], sections: [s] }));
+}
 </script>
 
 <script>
@@ -11769,54 +12075,8 @@ const rwdwFI = v => SharedDxf.fmtFtIn(v);
 const rwdwIn = v => SharedDxf.fmtIn(v);
 const rwdwN = (v, d) => (isFinite(v) ? (+v).toFixed(d == null ? 2 : d) : '-');
 const rwdwK = (lb, d) => rwdwN(lb / 1000, d == null ? 2 : d);   // lb -> kip text
-/* the model geometry in inches (x from the toe, y up from the footing base) */
-function rwdwGeo(r) {
-  const inp = r.inp, k12 = 12;
-  const G = { B: r.B * k12, tf: inp.tf, Hs: inp.Hs * k12, H: r.H * k12, Lt: inp.Lt * k12, Lh: inp.Lh * k12, tsb: inp.ts_bot, tst: inp.ts_top,
-    Dfa: inp.Df_add * k12, dk: inp.useShearKey ? inp.dk : 0, beta: inp.beta, dH: (r.dH_slope || 0) * k12 };
-  G.xf = G.Lt; G.xbb = G.Lt + G.tsb; G.xbt = G.Lt + G.tst;
-  G.xb = y => G.xbb + (G.xbt - G.xbb) * Math.max(0, Math.min(1, (y - G.tf) / Math.max(G.Hs, 1e-9)));   // back face at height y
-  // shear key: width b_k (input, RWSK; before 2026-11-07 drawn nominal 0.36 t_s,base wide), centred under the stem
-  G.kw = inp.key_bk || 12; G.kx = G.xf + G.tsb / 2 - G.kw / 2;   // RWSK (2026-11-07): key width = the input b_k (was 0.36 t_s,base, drawn nominal), centred under the stem as before
-  G.tanb = Math.tan(G.beta * Math.PI / 180);
-  G.gradeB = y0 => y0;   // placeholder
-  G.bar = r.hasBarrier ? { h: r.bar_h_ft * k12, w: inp.bar_mode === 'geom' ? inp.bar_t : 0.85 * G.tst, nominalW: inp.bar_mode !== 'geom' } : null;
-  if (G.bar) G.bar.xc = G.Lt + G.tst / 2 + (inp.bar_ecc || 0);
-  // RWHP (2026-11-07): the retained grade h_p below the stem top, at the back face x = G.xg (= the stem-top back edge at h_p = 0)
-  G.hp = (r.h_p || 0) * k12; G.Hg = G.H - G.hp; G.xg = G.hp > 0 ? G.xb(G.Hg) : G.xbt;
-  G.wt = r.hasWT ? G.Hg - (r.wt_r != null ? r.wt_r : r.wt_d) * k12 : null;   // water level above the base (RWHP: from the grade)
-  G.Hp = (r.Hp || r.H) * k12;
-  return G;
-}
-const rwdwBarOf = n => BARS.find(b => b.num === n) || { num: n, db: n / 8, Ab: 0 };
-/* the bars as modelled (sizes, spacings, d), with the nominal lengths the model does not give (labelled rules) */
-function rwdwBars(r, G) {
-  const inp = r.inp, cs = inp.cov_stem, cf = inp.cov_ftg;
-  const s1 = r.sel_stem, s3 = r.sel_stemT, s2 = r.sel_temp, f1 = r.sel_heel, f2 = r.sel_toe, f3 = r.sel_ftg_long;
-  const db = s => s.bar.db;
-  const hook = 12 * db(s1);                                         // 90° standard hook tail 12 d_b
-  const cb = r.cov_bot != null ? r.cov_bot : cf;                      // RWPL (8e); RWPB (2026-11-07): cov_bot = c_c on piles too, the mat at the bottom between the pile heads
-  const yHook = cb + db(f2) + db(f3) + db(s1) / 2;                   // the hook bears on the bottom mat
-  const lap = r.lst_stem;                                            // RWDS (2026-11-07): the computed tension lap ℓst (Stem design Step 5); was 1.3 × ℓd (with its 12-in minimum)
-  const yS1 = r.s1_full ? null : G.tf + r.z_s1_end * 12;           // RWS13 (2026-11-07): S1 ends at mid-height + the S3–S1 lap (was full height + alternate-bar cut-off)
-  const yCut = null;
-  const yTop = G.H - cs;
-  const B = {
-    S1: { s: s1, len: (yS1 === null ? yTop : yS1) - G.tf, from: G.tf, to: yS1 === null ? yTop : yS1 },
-    S1D: { s: s1, hook, yHook, lap, len: (G.tf - yHook) + lap + hook },
-    S3: { s: s3, from: G.tf + G.Hs / 2, to: yTop, len: yTop - (G.tf + G.Hs / 2) },
-    S2: { s: s2 }, F3: { s: f3 },
-    S4: r.sel_ff ? { s: r.sel_ff, len: G.H - cs - G.tf } : null,   // RWFF
-    K1: (r.keyR && r.keyR.rf && G.dk > 0) ? (() => { const s = r.keyR.rf.sel, x = G.kx + cf + s.bar.db / 2, y0 = -G.dk + cf, y1 = G.tf - cf - f1.bar.db - s.bar.db / 2, hk = 12 * s.bar.db, hb = r.keyR.rf.hook_bot ? Math.min(12 * s.bar.db, G.kw - 2 * cf) : 0; return { s, x, y0, y1, hk, hb, len: (y1 - y0) + hk + hb }; })() : null,   // RWSK: toe face of the key, 90° hook toward the heel under the top mat
-    F1: { s: f1, x0: Math.max(cf, G.xbb - r.ld_heel), x1: G.B - cf, y: G.tf - cf - db(f1) / 2 },
-    F2: { s: f2, x0: cf, x1: Math.min(G.B - cf, G.xf + r.ld_toe), y: cb + db(f2) / 2, hook: r.toe_hook ? 12 * db(f2) : 0 },   // RWDS: 90° hook up at the toe end when ticked
-    yCut, cs, cf,
-  };
-  B.F1.len = B.F1.x1 - B.F1.x0; B.F2.len = B.F2.x1 - B.F2.x0 + B.F2.hook;
-  B.nF3 = Math.floor((G.B - 2 * cf) / f3.spacing + 1e-9) + 1;
-  return B;
-}
-
+/* rwdwGeo, rwdwBarOf, rwdwBars: moved unchanged to the first script, before rwrbBarsSVG (RWRB, 2026-11-07: the Analysis diagram,
+   drawn on load, uses the same bar model) */
 /* ---------------- footing support layer (soil today; piles in a planned phase) ---------------- */
 const RWDW_SUPPORT = {
   soil: {
