@@ -2414,7 +2414,7 @@ function buildInputs(){
     ${att?"":selRow("Earth pressure height for the stem","wing.ehPlane",[["face","Retained height at the stem face (as the abutment stem)"],["heel","Virtual back plane at the heel end (FHWA DS 7.6)"]])}
     ${inpRow("Back face of wing to the edge of traffic","wing.dTr","ft",{title:"Live-load surcharge applies when traffic is within H/2 of the back face [3.11.6.4.1]; h_eq from Table 3.11.6.4.1-2 (0 ft / ≥ 1.0 ft columns)."})}
     ${selRow("Barrier on the wing (Extreme Event II)","wing.barrier",tlO)}
-    ${att?selRow("Junction design moment","wing.jMethod",[["avg","Total junction moment spread over the junction height"],["strip","Most loaded 1-ft horizontal strip"]]):""}
+    ${att?selRow("Junction design moment","wing.jMethod",[["avg","Larger of: total moment over H₀ and the most loaded 1-ft strip (per limit state)"],["strip","Most loaded 1-ft horizontal strip"],["avgOnly","Total moment over H₀ at strength (yield-line redistribution); crack control on the strip"]]):""}
     ${att?`<div class="chk-row"><input type="checkbox" id="chkWingAb" data-path="wing.toAb" ${w.toAb!==false?"checked":""}><label for="chkWingAb">Apply the pair of wings to the abutment stability and footing (weight; in-line wings also EH and LS; Tab 9 §9.2a)</label></div>`:""}
     ${att?"":`<div class="subhead">Wing footing</div>
       ${selRow("Foundation","wing.fdn",[["spread","Spread footing — stability checked with panel I-4 resistances"],["pile","Pile-supported — stability not checked here"]],{rebuild:true})}
@@ -2776,12 +2776,16 @@ function computeWing(R,X){
     for(let i=0;i<=400;i++){ const y=a*i/400, s=strip(y,Kst), mu=W.gEHst*s.mEH+gLS1*s.mLS; if(!sg||mu>sg.mu+1e-12) sg=Object.assign(s,{mu}); }
     W.strip=sg; W.stripEQ=stripEQ(sg.y); W.stripEE2=strip(sg.y,Kee2);
     // per-ft demands at the junction for each limit state
-    const avg=w.jMethod!=="strip"; W.avg=avg;
-    const per=(M,Fv,ms,vs)=>avg? {m:M/H0, v:Fv/H0} : {m:ms, v:vs};
-    const sEH=per(Tst.MEH,Tst.FEH,sg.mEH,sg.vEH), sLS=per(Tst.MLS,Tst.FLS,sg.mLS,sg.vLS);
-    const e2=W.stripEE2, eEH=per(Tee2.MEH,Tee2.FEH,e2.mEH,e2.vEH), eLS=per(Tee2.MLS,Tee2.FLS,e2.mLS,e2.vLS);
-    const sEQ=per(TEQ.M,TEQ.F,W.stripEQ.m,W.stripEQ.v), sCT={m:MCT/H0, v:(CT?CT.F:0)/H0};
-    const LS={};
+    /* ABM4 (2026-11-07): junction method. "avg" (the default): per limit state, the larger M_u of the total moment spread over H₀ and the most
+       loaded 1-ft strip governs (with its V_u); "strip": the strip; "avgOnly": the total moment over H₀ at the strength / extreme limit states
+       (yield-line redistribution, engineer's choice) with Service I (crack control) on the strip — redistribution does not apply at service. */
+    const jm=w.jMethod==="strip"?"strip":(w.jMethod==="avgOnly"?"avgOnly":"env"); W.jMode=jm;
+    const avg=jm!=="strip"; W.avg=avg;
+    const sCT={m:MCT/H0, v:(CT?CT.F:0)/H0};
+    const comps=useAvg=>{ const per=(M,Fv,ms,vs)=>useAvg? {m:M/H0, v:Fv/H0} : {m:ms, v:vs}, e2=W.stripEE2;
+      return {sEH:per(Tst.MEH,Tst.FEH,sg.mEH,sg.vEH), sLS:per(Tst.MLS,Tst.FLS,sg.mLS,sg.vLS), eEH:per(Tee2.MEH,Tee2.FEH,e2.mEH,e2.vEH), eLS:per(Tee2.MLS,Tee2.FLS,e2.mLS,e2.vLS),
+        sEQ:per(TEQ.M,TEQ.F,W.stripEQ.m,W.stripEQ.v), sCT}; };
+    const buildLS=(P,meth)=>{ const {sEH,sLS,eEH,eLS,sEQ}=P, LS={};
     LS["Strength I"]={Mu:W.gEHst*sEH.m+gLS1*sLS.m, Vu:W.gEHst*sEH.v+gLS1*sLS.v, phi:"str", lbl:`${f2(W.gEHst)}·EH + ${f2(gLS1)}·LS`};
     LS["Service I"]={Mu:sEH.m+sLS.m, Vu:sEH.v+sLS.v, svc:true, lbl:"1.00·EH + 1.00·LS"};
     if(eqOn) LS["Extreme Event I"]={Mu:gEH1*sEH.m+sEQ.m+gEQll*sLS.m, Vu:gEH1*sEH.v+sEQ.v+gEQll*sLS.v, phi:"ee", lbl:`${f2(gEH1)}·EH + 1.00·EQ + ${f2(gEQll)}·LS`};
@@ -2789,12 +2793,18 @@ function computeWing(R,X){
     // MassDOT integral U-wing (abutment type Integral): 1.5 on the active pressure, the basis of MassDOT 3.10.9 (owner rule kept)
     if(CT){ const gE2=(own==="MassDOT"&&iabType()==="integral")? 1.5 : 1.0; W.gEH2=gE2;
       LS["Extreme Event II"]={Mu:gE2*eEH.m+0.5*eLS.m+sCT.m, Vu:gE2*eEH.v+0.5*eLS.v+sCT.v, phi:"ee", lbl:`${f2(gE2)}·EH${Kee2.eff!==Kst.eff?" (K = "+(Kee2.eff==="atrest"?"K₀":"K_a")+")":""} + 0.50·LS + 1.00·CT`}; }
-    W.per={sEH,sLS,eEH,eLS,sEQ,sCT}; W.LS=LS;
     LS["Strength I"].tm=[[W.gEHst,sEH.m,sEH.v,"EH"],[gLS1,sLS.m,sLS.v,"LS"]]; LS["Service I"].tm=[[1,sEH.m,sEH.v,"EH"],[1,sLS.m,sLS.v,"LS"]];
     if(LS["Extreme Event I"]) LS["Extreme Event I"].tm=[[gEH1,sEH.m,sEH.v,"EH"],[1,sEQ.m,sEQ.v,"EQ"],[gEQll,sLS.m,sLS.v,"LS"]];
     if(LS["Extreme Event II"]) LS["Extreme Event II"].tm=[[W.gEH2,eEH.m,eEH.v,"EH"],[0.5,eLS.m,eLS.v,"LS"],[1,sCT.m,sCT.v,"CT"]];
+    Object.values(LS).forEach(o=>{ o.meth=meth; }); return LS; };
+    const Pa=comps(true), Ps=comps(false), LSa=buildLS(Pa,"avg"), LSs=buildLS(Ps,"strip");
+    let LS;
+    if(jm==="strip") LS=LSs;
+    else if(jm==="avgOnly"){ LS=LSa; LS["Service I"]=LSs["Service I"]; }
+    else{ LS={}; Object.keys(LSa).forEach(k=>{ LS[k]=(LSs[k].Mu>LSa[k].Mu+1e-12)? LSs[k] : LSa[k]; }); }
+    W.per=avg? Pa : Ps; W.perS=Ps; W.LS=LS; W.LSa=LSa; W.LSs=LSs;
     // the other method, for information
-    W.alt=avg? {m:W.gEHst*sg.mEH+gLS1*sg.mLS, lbl:"most loaded 1-ft horizontal strip"} : {m:(W.gEHst*Tst.MEH+gLS1*Tst.MLS)/H0, lbl:"total junction moment / H₀"};
+    W.alt=avg? {m:W.gEHst*sg.mEH+gLS1*sg.mLS, lbl:"most loaded 1-ft horizontal strip"} : {m:(W.gEHst*Tst.MEH+gLS1*Tst.MLS)/H0, lbl:"total junction moment / H₀"};   // (ABM4: in "avg", the larger governs)
     const gov=LS["Strength I"];
     const c=X.sectionCheck({name:"Wing junction", h:tb*12, cover:+m.coverT, bar:String(w.hSize), sp:+w.hSp, Mu:gov.Mu, Vu:gov.Vu, Ms:LS["Service I"].Mu,
       lbl:gov.lbl+" (Strength I)", bST:H0*12, hST:tb*12, betaMode:tb*12<16?"simple":"general"});
@@ -5256,7 +5266,7 @@ function renderTabWing(R){
     ${figBox("wingPress",R)}`);
   /* ---- 9.2 demands ---- */
   const lsTbl=()=>{ let tb=`<table class="rtbl"><tr><th>Limit state</th><th>Combination</th><th>M<sub>u</sub> (kip-ft/ft)</th><th>V<sub>u</sub> (kip/ft)</th><th>φ</th></tr>`;
-    Object.entries(W.LS).forEach(([k,q])=>{ tb+=`<tr><td class="lft">${esc(k)}</td><td class="lft">${esc(q.lbl)}</td><td>${fmt(q.Mu)}</td><td>${fmt(q.Vu)}</td><td>${q.svc?"—":(q.phi==="ee"?"1.00":"strain-based (≤ 0.90)")}</td></tr>`; });
+    Object.entries(W.LS).forEach(([k,q])=>{ tb+=`<tr><td class="lft">${esc(k)}</td><td class="lft">${esc(q.lbl)}${att&&q.meth?` <span class="small">(${q.meth==="strip"?"most loaded strip":"total / H₀"})</span>`:""}</td><td>${fmt(q.Mu)}</td><td>${fmt(q.Vu)}</td><td>${q.svc?"—":(q.phi==="ee"?"1.00":"strain-based (≤ 0.90)")}</td></tr>`; });
     tb+=`</table>`+eqB("Factored demands (per ft)","AASHTO 3.4.1 (Tables 3.4.1-1, 3.4.1-2)",Object.entries(W.LS).map(([k,q])=>{ const tm=(q.tm||[]).filter(x=>x[0]);
       return `\\text{${k}:}\\ M_u = ${tm.map(x=>`${t(x[0])}(${t(x[1],3)})`).join(" + ")} = ${t(q.Mu)}\\,, \\quad V_u =${tm.map(x=>`${t(x[0])}(${t(x[2],3)})`).join(" + ")} = ${t(q.Vu)}`; }),
       "Terms in the order of the combination column (EH, EQ, LS, CT); unfactored values from the equations above.");
@@ -5275,13 +5285,16 @@ function renderTabWing(R){
           return [`F_{EQ} = ${nc?"f_P":""}\\tfrac{\\Delta K_h\\gamma}{2}I_2 + ${nc?"f_I\\,":""}k_h\\gamma_c t\\,I_1 = ${fp}(${t(W.dP,4)})(${t(W.I2,2)}) + ${fi}(${t(W.wI,4)})(${t(W.I1,2)}) = ${t(Q.F)}\\ \\text{kip}\\,, \\quad M_{EQ} = ${fp}(${t(W.dP,4)})(${t(W.J2,2)}) + ${fi}(${t(W.wI,4)})(${t(W.J1,2)}) = ${t(Q.M)}\\ \\text{kip-ft}${nc?`\\quad(\\text{11.6.5.1 case ${Q.nc}})`:""}`]; })():[])
         .concat(W.CT?[`x_{CT} = \\max(L/2,\\ L - L_t/2) = ${t(W.xct)}\\ \\text{ft}\\,, \\quad M_{CT} = F\\,x_{CT} = (${t(W.CT.F,1)})(${t(W.xct)}) = ${t(W.MCT)}\\ \\text{kip-ft}`]:[]),
         `Each vertical slice of the wing carries its earth pressure resultant k<sub>h</sub>γh²/2 (and LS k<sub>h</sub>γh<sub>eq</sub>h) to the junction at the arm x. ${W.CT?"The collision is placed at the free end (largest arm), its force over L<sub>t</sub>. ":""}${W.EQ?"Seismic: the M–O increment ½ΔK<sub>h</sub>γh² per slice and the wing inertia k<sub>h</sub>γ<sub>c</sub>t per unit area. ":""}`)}
-      ${eqB(W.avg?"Per foot of junction height — total moment spread over H<sub>0</sub>":"Per foot of junction height — most loaded horizontal strip","method of panel I-13",(W.avg?[
+      ${eqB(W.jMode==="env"?"Per foot of junction height — total moment over H<sub>0</sub> and the most loaded horizontal strip (the larger governs each limit state)":W.jMode==="avgOnly"?"Per foot of junction height — total moment over H<sub>0</sub> (strength); most loaded strip (Service I)":W.avg?"Per foot of junction height — total moment spread over H<sub>0</sub>":"Per foot of junction height — most loaded horizontal strip","method of panel I-13",(W.avg?[
         `m = \\dfrac{M}{H_0}\\,, \\ v = \\dfrac{F}{H_0}:\\quad m_{EH} = \\tfrac{${t(T.MEH)}}{${t(W.H0)}} = ${t(W.per.sEH.m,3)}\\,, \\ m_{LS} = \\tfrac{${t(T.MLS)}}{${t(W.H0)}} = ${t(W.per.sLS.m,3)}\\ \\text{kip-ft/ft}`,
-        `v_{EH} = ${t(W.per.sEH.v,3)}\\,, \\ v_{LS} = ${t(W.per.sLS.v,3)}\\ \\text{kip/ft}`+(W.CT?`\\,, \\quad m_{CT} = \\tfrac{${t(W.MCT)}}{${t(W.H0)}} = ${t(W.per.sCT.m,3)}`:"")]:[
+        `v_{EH} = ${t(W.per.sEH.v,3)}\\,, \\ v_{LS} = ${t(W.per.sLS.v,3)}\\ \\text{kip/ft}`+(W.CT?`\\,, \\quad m_{CT} = \\tfrac{${t(W.MCT)}}{${t(W.H0)}} = ${t(W.per.sCT.m,3)}`:""),
+        `\\text{strip at } y^* = ${t(s.y)}\\ \\text{ft above the junction bottom, length } L_m = ${t(s.l)}\\ \\text{ft}:\\quad m_{EH} = ${t(s.mEH,3)}\\,, \\ m_{LS} = ${t(s.mLS,3)}\\,, \\ v_{EH} = ${t(s.vEH,3)}\\,, \\ v_{LS} = ${t(s.vLS,3)}`]:[
         `\\text{strip at } y^* = ${t(s.y)}\\ \\text{ft above the junction bottom, length } L_m = ${t(s.l)}\\ \\text{ft}`,
         `m_{EH} = k_h\\gamma\\left[(a-y^*)\\tfrac{L_m^2}{2} + b_T\\tfrac{L_m^3}{3}\\right] = (${t(kS,4)})(${t(gam,3)})\\left[(${t(W.a)}-${t(s.y)})\\tfrac{${t(s.l)}^2}{2} + (${t(W.bT,4)})\\tfrac{${t(s.l)}^3}{3}\\right] = ${t(s.mEH,3)}\\ \\text{kip-ft/ft}`,
         `m_{LS} = k_h\\gamma h_{eq}\\tfrac{L_m^2}{2} = ${t(s.mLS,3)}\\,, \\quad v_{EH} = ${t(s.vEH,3)}\\,, \\ v_{LS} = ${t(s.vLS,3)}\\ \\text{kip/ft}`+(W.CT?`\\,, \\quad m_{CT} = M_{CT}/H_0 = ${t(W.per.sCT.m,3)}`:"")]),
-        (W.avg?`For information, the most loaded 1-ft horizontal strip gives m<sub>u</sub> = ${fmt(W.alt.m)} kip-ft/ft at Strength I (y* = ${fmt(W.strip.y,2)} ft, strip length ${fmt(W.strip.l,2)} ft).`:`For information, the total junction moment over H<sub>0</sub> gives m<sub>u</sub> = ${fmt(W.alt.m)} kip-ft/ft at Strength I.`)+(W.CT?" The collision moment is spread over the junction height in both methods.":"")+" Strip at y: strip length L<sub>m</sub> where the wing exists at that elevation; b<sub>T</sub> = slope of the wing top ("+fmt(W.bT,4)+").")}
+        (W.jMode==="env"?`Each limit state takes the method with the larger M<sub>u</sub> (ABM4; method named in the table below). Strength I: total / H<sub>0</sub> ${fmt(W.LSa["Strength I"].Mu)}, strip ${fmt(W.LSs["Strength I"].Mu)} kip-ft/ft (y* = ${fmt(W.strip.y,2)} ft, strip length ${fmt(W.strip.l,2)} ft; strip formula as in the strip method).`
+        :W.jMode==="avgOnly"?`Strength and extreme limit states use the total moment over H<sub>0</sub> (yield-line redistribution, panel I-13); Service I crack control uses the most loaded strip (m<sub>s</sub> = ${fmt(W.LSs["Service I"].Mu)} kip-ft/ft), since redistribution does not apply at service. The strip gives m<sub>u</sub> = ${fmt(W.alt.m)} kip-ft/ft at Strength I.`
+        :W.avg?`For information, the most loaded 1-ft horizontal strip gives m<sub>u</sub> = ${fmt(W.alt.m)} kip-ft/ft at Strength I (y* = ${fmt(W.strip.y,2)} ft, strip length ${fmt(W.strip.l,2)} ft).`:`For information, the total junction moment over H<sub>0</sub> gives m<sub>u</sub> = ${fmt(W.alt.m)} kip-ft/ft at Strength I.`)+(W.CT?" The collision moment is spread over the junction height in both methods.":"")+" Strip at y: strip length L<sub>m</sub> where the wing exists at that elevation; b<sub>T</sub> = slope of the wing top ("+fmt(W.bT,4)+").")}
       ${lsTbl()}`);
     const A=W.toAbut;
     const AB=R.wingAb;   // ABR2 (N-5)
@@ -10408,7 +10421,7 @@ function inputEchoHTML(){
     ["Bearing-seat mat","#"+S.bearing.seatBar+" @ "+fmt(+S.bearing.seatSp,1)+" in each way",""]]);
   if(S.wing&&S.wing.on){ const w=S.wing, at=w.type!=="indep";   // WING
     h+="<h3>Wingwalls (panel I-13)</h3>"+echoRows([
-      ["Type",at?("attached, "+(w.orient==="inline"?"in-line":"U-wing")+"; junction method: "+(w.jMethod==="strip"?"most loaded horizontal strip":"total moment over H₀")):("independent, θ = "+fmt(+w.theta,1)+"°; design section "+(w.secMode==="user"?"x/L = "+fmt(+w.secFr,3):"owner / FHWA rule")+"; EH height "+(w.ehPlane==="heel"?"virtual back plane":"stem face")),""],
+      ["Type",at?("attached, "+(w.orient==="inline"?"in-line":"U-wing")+"; junction method: "+(w.jMethod==="strip"?"most loaded horizontal strip":w.jMethod==="avgOnly"?"total moment over H₀ (strength), strip (Service I)":"larger of the total moment over H₀ and the most loaded strip")):("independent, θ = "+fmt(+w.theta,1)+"°; design section "+(w.secMode==="user"?"x/L = "+fmt(+w.secFr,3):"owner / FHWA rule")+"; EH height "+(w.ehPlane==="heel"?"virtual back plane":"stem face")),""],
       ["Length L; height H₀ / H_L",fmt(+w.L)+"; "+fmt(+w.H0)+" / "+fmt(+w.HL)+(at?" ("+(w.taper==="top"?"top sloped":"bottom tapered")+")":""),"ft"],
       [at?"Thickness t":"Top thickness / back-face batter",at?fmt(+w.t):fmt(+w.ttop)+" ft / "+fmt(+w.bat,2)+" in/ft",at?"ft":""],
       ["Backfill slope β_w; back face to traffic",fmt(+w.beta,1)+"°; "+fmt(+w.dTr),"deg; ft"],
