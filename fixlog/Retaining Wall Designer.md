@@ -5918,7 +5918,7 @@ Second-pass review finding M3 (2026-11-07). Code sites are tagged `RW2M3`.
 ### Saved data
 - No input or format change.
 
-## 2026-11-07 — PR: claude/rw2-m1-ee-footing — AASHTO heel and toe checked for Extreme Event I (both cases) and Extreme Event II (collision), φ = 1.0, with the Strength I bars; pile mode: a note (RW2M1; check added, AASHTO with EE I or EE II only)
+## 2026-11-07 — PR: claude/rw2-m1-ee-footing — AASHTO heel and toe checked for Extreme Event I (both cases) and Extreme Event II (collision), φ = 1.0, with the Strength I bars; pile mode: a note (RW2M1; check added, AASHTO with EE I or EE II only) (PR #1143: https://github.com/mlococo88/All-Structural/pull/1143)
 
 Second-pass review finding M1 (2026-11-07). Code sites are tagged `RW2M1`.
 
@@ -5959,7 +5959,7 @@ Second-pass review finding M1 (2026-11-07). Code sites are tagged `RW2M1`.
 - **Review variant, AASHTO** (β 15°, water, k_h 0.20): heel 53.8 ≤ 82.1, toe 14.0 ≤ 28.9 kip-ft/ft. PASS.
 
 ### How verified
-- Headless probe, M3 branch vs this branch, 28 walls. Only AASHTO walls with EE I or EE II gain the two rows. The AASHTO pile walls with EE gain the note. No other value changes. 0 console errors.
+- Headless probe, origin/main (after #1142) vs this branch, 28 walls. Only AASHTO walls with EE I or EE II gain the two rows. The AASHTO pile walls with EE gain the note. No other value changes. 0 console errors.
 - Tests: check-syntax; smoke/retaining-wall-checks (new `AUD` rows RW2M1); phone-layout rwall; project-library retwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs, pile-group.
 
 ### Decisions (pending engineer review)
