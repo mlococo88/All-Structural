@@ -6836,3 +6836,34 @@ index 50f3837..c2d5000 100644
   - Same wall distributed (`wHCd`): b_eff = 118 in, base 0.063 (= before), top 0.064, shear 0.071. Spacing s = 48 in (`wHCs`): b_eff = 48 / 48 in, 0.123 (top), shear 0.175. Load 3.5 ft off centre (`wHCe`): a₂ = 59 − 42 = 17 in, b_eff,base = 30 + 17 = 47 in, 0.181.
 - **How verified:** harness origin/main 8ebbbd0 vs the branch: 10 pedestal cases: R, P2, dashboard and Report text identical. `wSel` (Wall with ℓ_w/t ≤ 3): only the not-checked text. Wall cases as above; `wTall`, `wTallBr`, `wAll`, `wOOP` unchanged (b_eff,base = ℓ_w: h ≥ ℓ_w/2). Migration check: a save without the fields → 'env', the select shows it, 0 errors. 0 console errors, 0 KaTeX errors. Tests: see the PR.
 - **Other copies:** none.
+
+## 2026-11-07 — PR: claude/sf-torsion (PR #1164: https://github.com/mlococo88/All-Structural/pull/1164) (SFTQ: pedestal torsion threshold check per ACI 318-19 §22.7.1.1 / Table 22.7.4.1(a)(c), new optional input T_u; "not checked" note where T_u = 0; NEW CHECK, no existing result changes)
+
+### SFTQ. Pedestal torsion: threshold check and note   [NEW CHECK; CLAUDE.md §4, §5]
+- **Request (engineer, 2026-11-07):** "I think we just note that torsion is not checked, unless it's an easy check to add." Decision: add the easy part, the ACI 318-19 threshold check (torsion may be neglected where T_u < φT_th), plus a note. Torsion design (22.7.6, Chapter 9) is not built.
+- **Provisions read in the ACI 318-19 PDF (printed page + 2 = PDF page; paraphrased):**
+  - p. 421: 22.7.1.1: 22.7 applies where T_u ≥ φT_th; below it torsional effects may be neglected. 22.7.1.3: λ per 19.2.4.
+  - p. 421: 22.7.2.1: √f′c used for T_th and T_cr is limited to 100 psi.
+  - p. 423: 22.7.4.1: T_th from Table 22.7.4.1(a) (solid) or (b) (hollow); N_u positive in compression, negative in tension.
+  - p. 424: Table 22.7.4.1(a) row (c), nonprestressed member with axial force: T_th = λ√f′c (A_cp²/p_cp) √(1 + N_u/(4A_g λ√f′c)).
+  - p. 391: Table 21.2.1 row (c): torsion φ = 0.75.
+  - p. 157: 10.5.4.1: columns: where T_u ≥ φT_th, torsion is considered per Chapter 9. p. 133: 9.5.4.1 (neglect below φT_th; otherwise the minimum of 9.6.4 and the detailing of 9.7.5 and 9.7.6.3 apply).
+  - Errata (as of July 7, 2022): no item on 21.2, 22.7, 10.5.4 or 9.5.4.
+- **Input / saved data (§5):** new field `peds[i].Tu` (k-ft, factored), Pedestals card, row "Factored torsion T_u" after the load table (both load modes). It is a **direct factored value used as entered in every LRFD combination** (it is not added to the load-type table: that would need a T column in every load type and in the combination engine). `newPed`: `Tu:0`. `migrateState` (anchor `/* SFTQ (2026-11-07): factored torsion T_u; saves without the field`): absent / null / '' → 0. No key or format change; old saves open with torsion not checked, as before.
+- **Calculation (new function `sfdPedTorsion`, anchor `/* ---- SFTQ (2026-11-07, engineer:`; called in the P2 assembly after `sfdCrossties`, result `P2.pedTor`):**
+  ```js
+  const sq=Math.min(Math.sqrt(fc),100), Acp=pd.bx*pd.by, pcp=2*(pd.bx+pd.by), Ag=Acp, base=lam*sq*Acp*Acp/pcp;   // lb-in
+  // per LRFD combination: N = pl.Pa (factored applied axial at the pedestal top, kip; + compression)
+  const arg=1+N*1000/(4*Ag*lam*sq), Tth=arg>0?base*Math.sqrt(arg)/12000:0, phiTth=0.75*Tth;   // k-ft
+  ratio=phiTth>0?Tu/phiTth:Infinity; ok=Tu<phiTth;
+  ```
+  Governing = the largest ratio (smallest φT_th). Solid section, A_cp = A_g = b_x b_y, p_cp = 2(b_x + b_y). N_u = the same axial the pedestal shear uses (pedestal self-weight not counted: conservative in compression). Net tension with 1 + N_u/(4A_gλ√f′c) ≤ 0: T_th = 0 (NG for any T_u > 0). Wall elements and patch loads: not checked (walls are on the Wall Design tab).
+- **Before / after:** before, torsion was not mentioned. After: T_u = 0 or blank → a note only ("Torsion: not checked (no T_u entered) …", bold-lead items on the Pedestal Design tab, "• Lead: text." in the Report); no dashboard row. T_u > 0 → worked block on the pedestal card (symbolic → substituted → result), "Pedestal torsion" chip in the Check Summary (D/C = T_u/φT_th; PASS "torsion may be neglected" / FAIL "torsion exceeds the threshold: torsion design per §22.7 / closed ties per §9.5.4 required — not performed by this tool"), Report topic "Torsion threshold" with a per-combination table, and the Report summary row.
+- **Check case (default project; 18 × 18 in pedestals, f′c = 4000 psi, λ = 1.0; Ped 1 T_u = 5 k-ft, Ped 2 T_u = 40 k-ft; governing 0.9D + 1.0(+Wx)):**
+  - √f′c = 63.246 psi, A_cp = 324 in², p_cp = 72 in, A_cp²/p_cp = 1458 in³, λ√f′c A_cp²/p_cp = 92 212 lb-in.
+  - Ped 1: N_u = 0.9 · 120 = 108 k. 108 000/(4 · 324 · 1.0 · 63.246) = 1.3176; √2.3176 = 1.5224. T_th = 92 212 · 1.5224/12 000 = **11.70 k-ft**, φT_th = **8.77 k-ft**. D/C = 5/8.77 = **0.570 PASS**.
+  - Ped 2: N_u = 0.9 · 150 = 135 k. 1 + 135 000/81 967 = 2.6470; √ = 1.6270. T_th = **12.50 k-ft**, φT_th = **9.38 k-ft**. D/C = 40/9.38 = **4.266 FAIL**.
+  - Before: not checked (no value).
+- **How verified:** SF harness (19 existing cases + `tq` above + `tqDir`, direct mode, Ped 1 T_u = −6 → |T_u| = 6, N_u = 264 k: φT_th = 11.84, D/C 0.507) on origin/main vs the branch: with T_u = 0 every R and P2 value identical (only the new `P2.pedTor` key), dashboard text identical, Report adds only the note; 0 console errors, 0 KaTeX errors. Old save without `Tu` migrates to 0; entering 40 in the input gives D/C 4.266. Tests: see the PR.
+- **Other copies:** none.
+- **Open items:** torsion design (22.7.6, A_t/s, A_ℓ, 9.6.4, 9.7.5) not performed; hollow sections (Table 22.7.4.1(b)) not offered (pedestals are solid).

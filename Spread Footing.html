@@ -773,7 +773,7 @@ const SFTC_EXP={
 function sftcMin(exp,tieSize){const e=SFTC_EXP[exp]||SFTC_EXP.weather;return e[2](tieSize||0);}
 function newPed(n){return {label:'Ped '+n,elemType:'pedestal',wallIn:{hw:'',hSize:'',hSpc:'',ex2:false,brace:'unbraced',k:'',lu:'',load:'conc',bw:'',sLoad:''},x:0,y:0,bx:1.5,by:1.5,h:2,loadEx:0,loadEy:0,
  loads:TYPES.reduce((o,t)=>{o[t]={P:0,Vx:0,Vy:0,Mx:0,My:0};return o;},{}),
- direct:{P:0,Vx:0,Vy:0,Mx:0,My:0},
+ direct:{P:0,Vx:0,Vy:0,Mx:0,My:0},Tu:0,   /* SFTQ: factored torsion T_u (k-ft), every LRFD combination */
  reinf:{longSize:8,nx:3,ny:3,longMode:'faces',tieSize:3,tieSpc:12,cover:2,dowelSize:8,dowelN:8,exposure:'weather',dowelHook:'hook90',dowelProj:'',sfJoint:'rough',dowelLong:true}};}   /* SFDB: new pedestals: the longitudinal bars act as the dowels, hooked in the footing */
 function defaultState(){
  const p1=newPed(1);p1.x=-3;p1.loads.D.P=120;p1.loads.L.P=60;p1.loads.Wx.Vx=8;p1.direct={P:264,Vx:8,Vy:0,Mx:0,My:0};
@@ -836,6 +836,7 @@ function migrateState(){
   if(p.reinf.dowelLong!==true&&p.reinf.dowelLong!==false)p.reinf.dowelLong=false;   /* SFDB: saves without the field keep their separate dowels */
   if(p.reinf.sfJoint!=='smooth'&&p.reinf.sfJoint!=='rough')p.reinf.sfJoint='rough';   /* SFSR: interface surface; a stored choice is kept, saves without the field (before #568): intentionally roughened, the default */
   if(p.reinf.dowelProj===undefined||p.reinf.dowelProj===null)p.reinf.dowelProj='';   /* SFDO: blank = the required projection */
+  if(p.Tu===undefined||p.Tu===null||p.Tu==='')p.Tu=0;   /* SFTQ (2026-11-07): factored torsion T_u; saves without the field: 0 (torsion not checked, as before) */
   if(p.loadEx===undefined)p.loadEx=0;   /* SFLO: load offset on the pedestal (ft); older saves: centred */
   if(p.loadEy===undefined)p.loadEy=0;
   if(p.elemType!=='wall')p.elemType='pedestal';   /* SFWL: element type; saves without the field: pedestal (as before) */
@@ -992,6 +993,9 @@ function buildPedCards(){
     t.appendChild(tr);});
    b.appendChild(t);
   }
+  /* SFTQ (2026-11-07): factored torsion T_u, a direct factored value used in every LRFD combination (both load modes); 0 / blank = not checked */
+  {const r=el('div','row','<label>Factored torsion T<sub>u</sub></label><input type="number" step="any" data-path="peds.'+i+'.Tu" data-num placeholder="0"><span class="unit">k-ft</span><span class="hint">Pedestal only: factored (LRFD) torsion about the vertical axis, used as entered in every strength combination; checked against the ACI 318-19 22.7 threshold \u03c6T<sub>th</sub>. Blank / 0 = not checked</span>');b.appendChild(r);
+   r.querySelector('input').value=num(p.Tu)?p.Tu:'';}
   const rb=el('div','pedbody sfdPedRb');rb.dataset.ped=i;   /* SFDB: moved from the pedestal card to the Reinforcement tab */
   const rh=el('div','sfdPedRbH',' <b style="font-size:11px">'+sfEsc(p.label)+'</b>');rh.style.marginTop='6px';rb.appendChild(rh);
   const rt=document.createElement('table');rt.className='tbl';rt.style.fontSize='11px';
@@ -2134,6 +2138,9 @@ function renderDashboard(){
   /* SFVP: pedestal one-way shear */
   {const Vs=(P2.pedShear||[]).filter(z=>!z.isPatch&&z.gov&&!sfdIsWallEl(z.idx));   /* SFWD-2 */if(Vs.length){const gv=Vs.reduce((a,z)=>(!a||z.gov.ratio>a.gov.ratio)?z:a,null),bad=Vs.filter(z=>!z.ok);
    d.appendChild(chip('Pedestal shear',bad.length?bad.map(z=>z.label+(z.avFail?' A_v < A_v,min where V_u > 0.5\u03c6V_c':'')+' ratio '+f2(z.gov.ratio)).join('; '):'max ratio '+f2(gv.gov.ratio)+' \u2014 '+gv.label+', '+gv.gov.name,bad.length?'fail':'pass',undefined,sfdElNav(gv.idx)));}}
+  /* SFTQ: pedestal torsion threshold (only where a T_u is entered; T_u = 0: no row, a note on the Pedestal Design tab) */
+  {const Q=(P2.pedTor||[]).filter(z=>z.on&&!z.isPatch&&z.gov&&!sfdIsWallEl(z.idx));if(Q.length){const gv=Q.reduce((a,z)=>(!a||z.gov.ratio>a.gov.ratio)?z:a,null),bad=Q.filter(z=>!z.ok);
+   d.appendChild(chip('Pedestal torsion',bad.length?bad.map(z=>z.label+' T_u/\u03c6T_th '+(isFinite(z.gov.ratio)?f2(z.gov.ratio):'\u221e')+' ('+z.gov.name+')').join('; ')+': torsion exceeds the threshold: torsion design per \u00a722.7 / closed ties per \u00a79.5.4 required \u2014 not performed by this tool':'max T_u/\u03c6T_th '+f2(gv.gov.ratio)+' \u2014 '+gv.label+', '+gv.gov.name+': torsion may be neglected',bad.length?'fail':'pass',undefined,sfdElNav(gv.idx)));}}
   /* SFXT: crossties, 25.7.2.3 */
   {const Xt=(P2.xties||[]).map((z,i)=>Object.assign({i,label:P2.pedDes[i].label},z)).filter(z=>!z.isPatch&&!sfdIsWallEl(z.i));if(Xt.length){const need=Xt.filter(z=>z.status==='review');
    d.appendChild(chip('Pedestal crossties',need.length?need.map(z=>z.label+': '+z.nXt+' crosstie(s) per tie set (bars to support: '+z.reqX+' on each b_x face, '+z.reqY+' on each b_y face)').join('; '):'perimeter tie supports every bar (25.7.2.3)',need.length?'warn':'pass',undefined,sfdElNav(need.length?need[0].i:Xt[0].i)));}}
@@ -2211,6 +2218,7 @@ function sfdChCond(name){
   case 'Pedestal P–M (biaxial)':add(!realPeds.filter(z=>!sfdIsWallEl(z.idx)).some(z=>z.pmGov&&!isNaN(z.pmGov.ratio)),'not computed');break;
   case 'Wall in-plane P–M (ACI 318-19 11.5.2)':add((P2.wallD||[]).some(o=>o&&o.applied&&o.ip&&o.ip.slFail),'slender limit');break;   /* SFWD-3 */
   case 'Footing bar development':add(!!(P2.dev&&P2.dev.rows.some(z=>z.status==='review')),'straight ℓ_d > avail');break;
+  case 'Pedestal torsion':add((P2.pedTor||[]).some(z=>z.on&&!z.isPatch&&!z.ok&&!sfdIsWallEl(z.idx)),'T_u \u2265 \u03c6T_th');break;   /* SFTQ */
   case 'Pedestal shear':add((P2.pedShear||[]).some(z=>!z.isPatch&&z.gov&&z.avFail&&!sfdIsWallEl(z.idx)),'A_v < A_v,min');break;
   case 'Wall out-of-plane P–M (ACI 318-19 11.5.2)':add((P2.wallD||[]).some(o=>o&&o.applied&&o.slFail),'slender limit');add((P2.wallD||[]).some(o=>o&&o.applied&&o.env),'load application: input needed');break;   /* SFWD-2; SFWD-3 */
   case 'Wall ties and bar fit (ACI 318-19 11.7.4.1, 25.2.3)':(P2.wallD||[]).forEach((o,i)=>{if(!o||!o.applied)return;add(!o.tieOK,'ties');add(!o.fitOK,'bars do not fit');add(o.tieReq&&P2.xties&&P2.xties[i]&&P2.xties[i].nXt>0,'crossties to detail');});break;
@@ -3828,6 +3836,7 @@ function sfdResultRows(){
   'Concrete cover':()=>['ACI 318-19 Table 20.5.1.3.1; D/C = c<sub>min</sub>/c',mx([...(P2.covChk?P2.covChk.rows.filter(z=>z.applies).map(z=>z.c>0?z.min/z.c:Infinity):[]),...P2.pedDes.filter(z=>!z.isPatch).map(z=>z.cov>0?z.vertCovMin/z.cov:Infinity)]),['o-fd-basis']],
   'Footing bar development':()=>['ACI 318-19 §25.4.2.4 (straight), §25.4.3.1 / Table 25.4.3.2 (standard hook)'+(state.mat.ldExcess==='on'?', §25.4.10.1 (excess A<sub>s</sub>, straight bars; A<sub>s,req</sub> = max(flexure, A<sub>s,min</sub>), R8.6.1.1)':'')+'; D/C = ℓ<sub>d</sub> (or ℓ<sub>dh</sub> where hooked)/available',mx(((P2&&P2.dev)?P2.dev.rows:[]).map(z=>z.dc)),['o-fd-dev']],
   'Pedestal shear':()=>['ACI 318-19 Table 22.5.5.1, §22.5.1.10–22.5.1.11 (biaxial), §10.6.2; D/C = V<sub>u</sub>/φV<sub>c</sub>',mx((P2.pedShear||[]).filter(z=>!z.isPatch&&z.gov&&!sfdIsWallEl(z.idx)).map(z=>z.gov.ratio)),P2.pedDes.map((z,i)=>z.isPatch?null:sfdElCard(i).id).filter(Boolean)],
+  'Pedestal torsion':()=>['ACI 318-19 §22.7.1.1, §22.7.4.1, Table 22.7.4.1(a)(c), §10.5.4.1; φ = 0.75 (Table 21.2.1); D/C = T<sub>u</sub>/φT<sub>th</sub>, torsion may be neglected where T<sub>u</sub> &lt; φT<sub>th</sub>',mx((P2.pedTor||[]).filter(z=>z.on&&!z.isPatch&&z.gov&&!sfdIsWallEl(z.idx)).map(z=>z.gov.ratio)),(P2.pedTor||[]).filter(z=>z.on&&!z.isPatch&&!sfdIsWallEl(z.idx)).map(z=>sfdElCard(z.idx).id)],   /* SFTQ */
   'Pedestal crossties':()=>['ACI 318-19 §25.7.2.3 (every corner and alternate bar supported; none more than 6 in clear from a supported bar)',null,P2.pedDes.map((z,i)=>z.isPatch?null:sfdElCard(i).id).filter(Boolean)],
   'Wall reinforcement (ACI 318-19 11.6)':()=>{const wa=real.filter(z=>z.wall&&z.wall.applied);return ['ACI 318-19 §11.6.1, Table 11.6.1 and §11.6.2, Eq. 11.6.2, the larger governing (engineer, 2026-11-06); D/C = max(ρ<sub>ℓ,min</sub>/ρ<sub>ℓ</sub>, ρ<sub>t,min</sub>/ρ<sub>t</sub>)',mx(wa.map(z=>Math.max(z.wall.v.rho>0?z.wall.rlMin/z.wall.v.rho:Infinity,z.wall.hz.need?0:(z.wall.hz.rho>0?z.wall.rtMin/z.wall.hz.rho:Infinity)))),wa.map(z=>'o-wd-'+z.idx)];},   /* SFWC; SFWH: rho_t input needed: its part left out of the D/C */
   'Wall in-plane shear (ACI 318-19 11.5.4)':()=>{const wa=real.filter(z=>z.wall&&z.wall.applied);return ['ACI 318-19 §11.5.4.2, §11.5.4.3 (Eq. 11.5.4.3), §11.5.4.4; D/C = V<sub>u</sub>/φV<sub>n</sub>',(wa.every(z=>z.wall.vOK==null)?null:mx(wa.map(z=>z.wall.vGov&&z.wall.vGov.vr!=null?z.wall.vGov.vr:0))),wa.map(z=>'o-wd-'+z.idx)];},   /* SFWC-2; SFWH: V_n input needed -> D/C n/a */
@@ -4405,13 +4414,25 @@ function sfrModel(){
     T.push({title:'Shear (governing: '+g.name+')',ref:'ACI 318-19 22.5, 10.6.2',steps:[...q('X','x'),...q('Y','y'),
      S({id:'vr',label:g.biax?'Both ratios exceed 0.5: biaxial interaction (r_x + r_y)/1.5 ≤ 1':'Biaxial interaction may be neglected (a ratio ≤ 0.5)',chk:'pedestal shear',sym:'ratio',eq:g.biax?'\\max(r_{x},\\,r_{y},\\,\\frac{r_{x} + r_{y}}{1.5})':'\\max(r_{x},\\,r_{y})',sub:g.biax?'\\max('+sfrN(g.rx,3)+',\\,'+sfrN(g.ry,3)+',\\,\\frac{'+sfrN(g.rx,3)+' + '+sfrN(g.ry,3)+'}{1.5})':'\\max('+sfrN(g.rx,3)+',\\,'+sfrN(g.ry,3)+')',value:g.ratio,unit:'',d:3,ok:g.ratio<=1+1e-9,ref:'ACI 318-19 22.5.1.10, 22.5.1.11'}),
      ...(V.avFail?[S({id:'vav',label:'A_v,min is required (V_u > 0.5φV_c in '+V.rows.filter(z=>z.avFail).map(z=>z.name).join(', ')+') but the tie legs give less',chk:'pedestal A_v,min',sym:'',eq:'',sub:'',value:'NG',ok:false,ref:'ACI 318-19 10.6.2.1'})]:[])]});}}
+   const Q=P2.pedTor&&P2.pedTor[i], tqItems=[];   /* SFTQ: torsion threshold (ACI 318-19 22.7.1.1, 22.7.4.1, 10.5.4.1) */
+   if(Q&&!Q.isPatch&&Q.on&&Q.gov){const g=Q.gov,fin=isFinite(g.ratio);
+    T.push({title:'Torsion threshold (governing: '+g.name+')',ref:'ACI 318-19 22.7.1.1, 22.7.4.1, Table 22.7.4.1(a)(c), 10.5.4.1',steps:[
+     S({id:'tq.Acp',label:'Area enclosed by the outside perimeter (solid section; = A_g)',sym:'A_{cp}',eq:'b_{x} b_{y}',sub:sfrN(pd.bx,1)+'\\cdot'+sfrN(pd.by,1),value:Q.Acp,unit:'in^{2}',d:1,ref:'ACI 318-19 2.2'}),
+     S({id:'tq.pcp',label:'Outside perimeter of the section',sym:'p_{cp}',eq:'2(b_{x} + b_{y})',sub:'2('+sfrN(pd.bx,1)+' + '+sfrN(pd.by,1)+')',value:Q.pcp,unit:'in',d:1}),
+     S({id:'tq.Nu',label:'Factored axial load at the top of the pedestal (+ compression, − tension; pedestal self-weight not counted)',sym:'N_{u}',eq:'',sub:'',value:g.N,unit:'kip',note:g.name}),
+     S({id:'tq.Tth',label:'Threshold torsion, nonprestressed solid section with axial force (√f′c = '+sfrN(Q.sq)+' psi ≤ 100, 22.7.2.1; λ = '+sfrN(Q.lam)+', 19.2.4)'+(g.arg>0?'':'; 1 + N_u/(4A_gλ√f′c) ≤ 0 under net tension: T_th = 0'),sym:'T_{th}',eq:'\\lambda\\sqrt{'+SFR_FC+'}\\,\\frac{A_{cp}^{2}}{p_{cp}}\\sqrt{1 + \\frac{N_{u}}{4A_{g}\\lambda\\sqrt{'+SFR_FC+'}}}',sub:sfrN(Q.lam)+'\\cdot'+sfrN(Q.sq)+'\\cdot\\frac{'+sfrN(Q.Acp,1)+'^{2}}{'+sfrN(Q.pcp,1)+'}\\cdot\\sqrt{1 + \\frac{'+sfrP(g.N*1000,0)+'}{4\\cdot'+sfrN(Q.Ag,1)+'\\cdot'+sfrN(Q.lam)+'\\cdot'+sfrN(Q.sq)+'}}/12000',value:g.Tth,unit:'kip-ft',ref:'ACI 318-19 Table 22.7.4.1(a)(c)'}),
+     S({id:'tq.phi',label:'Design threshold (φ = 0.75 for torsion)',sym:'\\phi T_{th}',eq:'0.75\\,T_{th}',sub:'0.75\\cdot'+sfrN(g.Tth),value:g.phiTth,unit:'kip-ft',ref:'ACI 318-19 Table 21.2.1(c)'}),
+     S({id:'tq.r',label:Q.ok?'T_u < φT_th: torsion may be neglected':'T_u ≥ φT_th: torsion exceeds the threshold: torsion design per §22.7 / closed ties per §9.5.4 required — not performed by this tool',chk:'pedestal torsion',sym:'D/C',eq:'\\frac{T_{u}}{\\phi T_{th}}',sub:'\\frac{'+sfrN(Q.Tu)+'}{'+sfrN(g.phiTth)+'}',value:fin?g.ratio:'∞',unit:'',d:3,ok:Q.ok,ref:'ACI 318-19 22.7.1.1, 10.5.4.1'})]});
+    tqItems.push({type:'table',wide:true,head:['Combination','N_u (kip)','T_th (kip-ft)','φT_th (kip-ft)','T_u (kip-ft)','D/C'],rows:Q.rows.map(z=>({cells:[z.name,sfrCell(z.N),sfrCell(z.Tth),sfrCell(z.phiTth),sfrCell(Q.Tu),sfrDC(z.ratio)],cls:z===g?'gov':''}))},
+     {type:'note',text:'Torsion: T_u = '+sfrN(Q.Tu)+' kip-ft as entered on the Pedestals card (factored), used in every LRFD combination; each combination at its own N_u (worked for the governing row, the smallest φT_th, above). Torsion design (22.7.6, Chapter 9) is not performed'+(Q.ok?'.':': the NG rows need it (§10.5.4.1; minimum and detailing §9.6.4, §9.7.5, §9.7.6.3).')});}
+   else if(Q&&!Q.isPatch&&!Q.on)tqItems.push({type:'note',text:SFTQ_NOTE.map(([a,t])=>'• '+sfrPlain(a)+': '+sfrPlain(t)+'.').join(' ')});
    const wI=P2.bearing[i]&&P2.bearing[i].wall;let wNote='';   /* SFWL; SFWC */
    /* SFWD-2: the wall topics of 11.6 / 11.5.4 / 11.7 are in sfrWallMinTopics (a wall returns above) */
    (wI&&wI.applied?wsubs:subs).push({key:(wI&&wI.applied?'S-wd':'S-pd')+i,title:pd.label+' ('+(wI&&wI.applied?'wall':(pd.isPedestal?'pedestal':'column'))+', '+sfrN(pd.bx,1)+' × '+sfrN(pd.by,1)+' × '+sfrN(pd.h,1)+' in)',items:[...(wI&&wI.sel?[{type:'note',warn:true,text:sfdWallTxt(wI,false)+' Dowel minimum worked in [[cbr/cb'+i+'.dow]].'}]:[]),sfrTopics('pd'+i,T),
     ...(pd.pmRat&&pd.pmRat.length?[{type:'table',wide:true,head:['Combination','P_u (kip)','M_ux (kip-ft)','M_uy (kip-ft)','|M_u| (kip-ft)','|φM_n|_θ (kip-ft)','ratio'],   /* SFPM */
      rows:pd.pmRat.map(z=>({cells:[z.name+(z.mode==='radial'?'':' ('+sfpmModeTxt(z)+')'),sfrCell(z.P),sfrCell(z.Mx),sfrCell(z.My),sfrCell(z.Md),z.Rc==null?sfrCell('—'):sfrCell(z.Rc),isNaN(z.ratio)?sfrCell('n/a'):sfrDC(z.ratio)],cls:z===pd.pmGov?'gov':''}))},
      {type:'note',text:'Each combination is checked on the contour at its own P_u, in the direction of its moment (same procedure as the governing row, worked above). Combination with no moment: ratio 0 (axial: see Axial strength).'}]:[]),
-    {type:'note',text:'Every LRFD combination is plotted against the biaxial capacity contour on the '+(wI&&wI.applied?'Wall Design tab[[tab:walldes| ↗]]':'Pedestal Design tab[[tab:peddes| ↗]]')+'. Combination actions: [[S-lrfd]]; dowels and bearing on the footing: [[cbr/cb'+i+'.DCR]].'},...(wNote?[{type:'note',text:wNote}]:[])]});
+    {type:'note',text:'Every LRFD combination is plotted against the biaxial capacity contour on the '+(wI&&wI.applied?'Wall Design tab[[tab:walldes| ↗]]':'Pedestal Design tab[[tab:peddes| ↗]]')+'. Combination actions: [[S-lrfd]]; dowels and bearing on the footing: [[cbr/cb'+i+'.DCR]].'},...(wNote?[{type:'note',text:wNote}]:[]),...tqItems]});
   });
   if(!subs.length&&wsubs.length)subs.push({title:'No pedestals',items:[{type:'note',text:'Every element of this footing is a wall (element type Wall, ℓ_w/t > 3, ACI 318-19 2.3): see [[S-wd]].'}]});   /* SFWD */
   secs.push({title:'Pedestal design',key:'S-pd',subs});
@@ -6052,6 +6073,27 @@ function sfdPedShear(i,p,pd,combos,fc,fy,lam){
  o.ok=(!o.gov||o.gov.ratio<=1+1e-9)&&!o.avFail;
  return o;
 }
+/* ---- SFTQ (2026-11-07, engineer: "note that torsion is not checked, unless it's an easy check to add"): torsion threshold of a
+   pedestal, ACI 318-19 22.7.1.1 / 10.5.4.1: torsion may be neglected where T_u < phi T_th. Solid section, nonprestressed, with
+   axial force: Table 22.7.4.1(a) row (c), T_th = lambda sqrt(f'c) (A_cp^2/p_cp) sqrt(1 + N_u/(4 A_g lambda sqrt(f'c))) (psi, in, lb);
+   A_cp = A_g = b_x b_y, p_cp = 2(b_x + b_y); sqrt(f'c) <= 100 psi (22.7.2.1); lambda per 19.2.4 (22.7.1.3: the material lambda input);
+   phi = 0.75 (Table 21.2.1(c)). N_u (22.7.4.1: + compression, - tension) = the factored applied axial load at the top of the
+   pedestal of each LRFD combination (pl.Pa, as the pedestal shear; pedestal self-weight not counted: conservative in compression).
+   Under net tension with 1 + N_u/(...) <= 0, T_th = 0. T_u = the per-pedestal input, a direct factored value used in every LRFD
+   combination (both load modes). Torsion design (22.7.6, Chapter 9) is not performed: T_u >= phi T_th is NG. New check: no other
+   result reads it; T_u = 0 -> not checked (note only). */
+function sfdPedTorsion(i,p,pd,combos,fc,lam){
+ const Tu=Math.abs(num((state.peds[i]||{}).Tu)), o={idx:i,label:p.label,isPatch:!!pd.isPatch,Tu,on:Tu>0};
+ if(pd.isPatch||!o.on)return o;
+ const sq=Math.min(Math.sqrt(fc),100), Acp=pd.bx*pd.by, pcp=2*(pd.bx+pd.by), Ag=Acp, base=lam*sq*Acp*Acp/pcp;   // lb-in
+ Object.assign(o,{sq,lam,Acp,pcp,Ag,base});
+ o.rows=combos.map(c=>{const pl=c.nr.pl.find(z=>z.idx===i);if(!pl)return null;
+  const N=pl.Pa, arg=1+N*1000/(4*Ag*lam*sq), Tth=arg>0?base*Math.sqrt(arg)/12000:0, phiTth=0.75*Tth;
+  return {name:c.cb.name,N,arg,Tth,phiTth,ratio:phiTth>0?Tu/phiTth:Infinity,ok:Tu<phiTth};}).filter(Boolean);
+ o.gov=o.rows.reduce((a,z)=>(!a||z.ratio>a.ratio)?z:a,null);
+ o.ok=o.rows.every(z=>z.ok);
+ return o;
+}
 /* ---- SFXT (2026-11-03, engineer; review C4): lateral support of the pedestal vertical bars by the ties, ACI 318-19 25.7.2.3 ----
    (a) every corner and alternate longitudinal bar is supported by a tie corner (included angle <= 135 deg); (b) no unsupported bar
    more than 6 in clear on each side along the tie from a supported bar. Per face with n bars at clear spacing s_clear (the bar-fit
@@ -7323,8 +7365,9 @@ function computePhase2(R){
  const shearFr=peds.map((p,i)=>sfdShearFriction(i,p,R.Wpeds[i],pedDes[i],dowels[i],combos,fc,fy,lam));   /* SFSF */
  const pedShear=peds.map((p,i)=>sfdPedShear(i,p,pedDes[i],combos,fc,fy,lam));   /* SFVP */
  const xties=pedDes.map(pd=>sfdCrossties(pd));   /* SFXT */
+ const pedTor=peds.map((p,i)=>sfdPedTorsion(i,p,pedDes[i],combos,fc,lam));   /* SFTQ */
  const wallD=peds.map((p,i)=>sfdWallOOP(i,p,pedDes[i],bearing[i]&&bearing[i].wall,combos,fc,fy,lam));   /* SFWD-2: wall out-of-plane design (Wall elements only) */
- return{minDepth,bandChk,offFooting,dBotX,dBotY,botXOut,dTopX,dTopY,dAvg,fc,fy,lam,combos,desX,desY,punch,punchWarn,punchGroup,bearing,pedDes,dowels,shearFr,pedShear,xties,wallD,covChk,pressMomentAbout,pressShearBeyond,pressResultant,
+ return{minDepth,bandChk,offFooting,dBotX,dBotY,botXOut,dTopX,dTopY,dAvg,fc,fy,lam,combos,desX,desY,punch,punchWarn,punchGroup,bearing,pedDes,dowels,shearFr,pedShear,xties,wallD,pedTor,covChk,pressMomentAbout,pressShearBeyond,pressResultant,
   beamDiagram,pressurePlane,netResultant};
 }
 /* ---- SFSL (2026-11-07): moment magnification of a slender pedestal (ACI 318-19 6.6.4) ----
@@ -8294,6 +8337,8 @@ function sfdWallConn(b,i){
  t.appendChild(tr);b.appendChild(t);
  b.appendChild(el('div','note','Concrete bearing (16.3.3.4, Table 22.8.3.2: the lesser of the footing and the wall), the dowel minimum ρ<sub>ℓ</sub>A<sub>g</sub> (16.3.4.2, above) and ℓ<sub>dc</sub> (25.4.9.2, where 16.3.1.2(a) requires it) are listed with the other elements in '+sfdLink('o-fd-bear','',['tab-footdes','5.6 Concrete Bearing & Dowels'])+'; the dowels and the shear friction of this wall are worked below.'));
  sfdoRender(b,i);sfsfRender(b,i);}
+/* SFTQ (2026-11-07): the note where no T_u is entered (bold lead words, as the wall notes) */
+const SFTQ_NOTE=[['Torsion','not checked (no T<sub>u</sub> entered)'],['If the pedestal carries torsion (eccentric brackets, skewed beams)','enter T<sub>u</sub> on the Pedestals card to check the ACI 318-19 \u00a722.7 threshold'],['Torsion design','not performed']];
 function renderPedestalDesign(){
  const T=$('#tab-peddes');T.innerHTML='';
  const TW=$('#tab-walldes');TW.innerHTML='';sfdWallTabShow();   /* SFWD: the walls' cards go to 6W. Wall Design */
@@ -8429,6 +8474,15 @@ function renderPedestalDesign(){
     'x:\\;b_w = '+f2(V.X.bw)+',\\;d = '+f2(V.X.d)+',\\;\\phi V_c = '+f2(g.phx)+'\\;\\mathrm{k},\\;V_{ux} = '+f2(Math.abs(g.Vx))+',\\;r_x = '+f3(g.rx)+';\\quad y:\\;b_w = '+f2(V.Y.bw)+',\\;d = '+f2(V.Y.d)+',\\;\\phi V_c = '+f2(g.phy)+'\\;\\mathrm{k},\\;V_{uy} = '+f2(Math.abs(g.Vy))+',\\;r_y = '+f3(g.ry),
     '\\text{ratio} = \\mathbf{'+f3(g.ratio)+'}'+(V.ok?'\\;\\checkmark':'\\;\\text{NG}'+(V.avFail?'\\;(A_v < A_{v,min}\\text{ where }V_u>0.5\\phi V_c)':''))));
    b.appendChild(el('div','note','A<sub>v</sub> = 2 legs of the tie = '+f3(V.Av)+' in\u00b2 against A<sub>v,min</sub> = '+f3(V.X.AvMin)+' (x) / '+f3(V.Y.AvMin)+' (y) in\u00b2 (10.6.2.2): row '+(V.X.rowA?'(a)':'(c)')+' / '+(V.Y.rowA?'(a)':'(c)')+' of Table 22.5.5.1. N<sub>u</sub>: net tension only (compression not counted); V<sub>s</sub> of the ties not counted. Every combination in the Report.'));}}
+  {const Q=P2.pedTor&&P2.pedTor[i];if(Q&&!Q.isPatch){   /* SFTQ: torsion threshold (ACI 318-19 22.7.1.1, 22.7.4.1, 10.5.4.1) */
+   if(Q.on&&Q.gov){const g=Q.gov, tn=x=>String(x).replace(/[\\{}$&#%_^~]/g,'');
+    b.appendChild(eqBlock('Torsion threshold \u2014 governing: '+g.name,'ACI 318-19 22.7.1.1, 22.7.4.1, Table 22.7.4.1(a)(c), 22.7.2.1, Table 21.2.1(c), 10.5.4.1',
+     'A_{cp} = b_x b_y,\\;p_{cp} = 2(b_x + b_y),\\quad T_{th} = \\lambda\\sqrt{f\'_c}\\,\\frac{A_{cp}^2}{p_{cp}}\\sqrt{1 + \\frac{N_u}{4A_g\\lambda\\sqrt{f\'_c}}},\\quad \\phi = 0.75:\\;\\text{torsion may be neglected if } T_u < \\phi T_{th}',
+     'A_{cp} = '+f2(pd.bx)+'\\cdot'+f2(pd.by)+' = '+f2(Q.Acp)+'\\;\\mathrm{in^2},\\;p_{cp} = 2('+f2(pd.bx)+' + '+f2(pd.by)+') = '+f2(Q.pcp)+'\\;\\mathrm{in},\\;\\lambda\\sqrt{f\'_c} = '+f2(Q.lam)+'\\cdot'+f2(Q.sq)+'\\;\\mathrm{psi}\\\\ \\text{'+tn(g.name)+'}:\\;N_u = '+f2(g.N)+'\\;\\mathrm{k},\\;T_{th} = '+f2(Q.lam)+'\\cdot'+f2(Q.sq)+'\\cdot\\frac{'+f2(Q.Acp)+'^2}{'+f2(Q.pcp)+'}\\sqrt{1 + \\frac{'+f2(g.N*1000)+'}{4\\cdot'+f2(Q.Ag)+'\\cdot'+f2(Q.lam)+'\\cdot'+f2(Q.sq)+'}}\\Big/12000 = '+f2(g.Tth)+'\\;\\mathrm{k\\text{-}ft}',
+     '\\phi T_{th} = 0.75\\cdot'+f2(g.Tth)+' = '+f2(g.phiTth)+'\\;\\mathrm{k\\text{-}ft},\\quad \\mathrm{D/C} = \\frac{T_u}{\\phi T_{th}} = \\frac{'+f2(Q.Tu)+'}{'+f2(g.phiTth)+'} = \\mathbf{'+(isFinite(g.ratio)?f3(g.ratio):'\\infty')+'}'+(Q.ok?'\\;\\checkmark\\;\\text{torsion may be neglected}':'\\;\\text{NG}')));
+    if(!Q.ok)b.appendChild(el('div','failbox','<b>NG \u2014 torsion exceeds the threshold:</b> torsion design per ACI 318-19 \u00a722.7 / closed ties per \u00a79.5.4 required (\u00a710.5.4.1; minimum and detailing \u00a79.6.4, \u00a79.7.5, \u00a79.7.6.3) \u2014 not performed by this tool.'));
+    b.appendChild(sfwUl([['T<sub>u</sub>','the factored torsion entered on the Pedestals card ('+f2(Q.Tu)+' k-ft), used as entered in every LRFD combination'],['N<sub>u</sub>','the factored axial load at the top of the pedestal in each combination (+ compression, \u2212 tension; pedestal self-weight not counted); the governing combination has the smallest \u03c6T<sub>th</sub>; under net tension with 1 + N<sub>u</sub>/(4A<sub>g</sub>\u03bb\u221af\u2032<sub>c</sub>) \u2264 0, T<sub>th</sub> = 0'],['Section','solid, nonprestressed; \u221af\u2032<sub>c</sub> \u2264 100 psi (22.7.2.1)'],['Torsion design','not performed (22.7.6, Chapter 9); every combination in the Report']]));}
+   else b.appendChild(sfwUl(SFTQ_NOTE));}}
   if(!pd.tieSizeOK)b.appendChild(el('div','warnbox','Tie bar too small: #3 min for \u2264#10 longitudinal, #4 for \u2265#11 (ACI 318-19 25.7.2.2).'));
   if(!pd.isPatch){   /* SFTC */
    b.appendChild(eqBlock('Clear cover to the ties','ACI 318-19 20.5.1.3, Table 20.5.1.3.1 ('+SFTC_EXP[pd.exposure][1]+')',
