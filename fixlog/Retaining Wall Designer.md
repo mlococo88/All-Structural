@@ -6573,7 +6573,7 @@ None: no computed value changes.
 - Check case: default ACI, Drawings sheet 4. Note 11 no longer names the key, front face, laps or development.
 - After merging #1157 and the note 11 change: dxf-print-sheets rw all ok; retaining-wall-checks (RWHP rows and every CASES row) all ok; main vs branch at h_p = 0 (ACI, AASHTO, ACI piles) identical, 0 console errors.
 
-## 2026-11-07 — PR: fix/rwall-display-pa-wdl (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — ACI Stability Step 2: P_a and P_a,sur worked on H′ with the H′ = H(_ret) + L·tanβ step (sloped backfill); MassDOT §3.3.2.2 heel w_DL shown as computed, with the water table and the slope wedge (RWPA, RWMW; display only, no result change)
+## 2026-11-07 — PR: fix/rwall-display-pa-wdl (PR #1160: https://github.com/mlococo88/All-Structural/pull/1160) — ACI Stability Step 2: P_a and P_a,sur worked on H′ with the H′ = H(_ret) + L·tanβ step (sloped backfill); MassDOT §3.3.2.2 heel w_DL shown as computed, with the water table and the slope wedge (RWPA, RWMW; display only, no result change)
 
 ### 1. ACI Stability Step 2, sloped backfill (RWPA)
 - Problem: with β > 0 the analysis puts the active thrust on the vertical plane through the heel end, `Hp = H_ret + dH_slope`, `dH_slope = (L_h + t_bot − t_g)·tanβ` (`computeAll`, anchor `const Hp      = H_ret + dH_slope;`), and `Pa_tri = ½K_aγ_sH′²` (dry), `Pa_sur_h = K_a·q_s·H′`. The worked steps showed ½K_aγ_sH² and K_a·q_s·H with H (or H_ret, #1150) substituted, so the substituted values did not give the boxed P_a / P_a,sur.
