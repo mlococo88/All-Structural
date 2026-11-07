@@ -636,13 +636,16 @@ function computeEDM(loadsOverride){
   const limit=tg.exteriorCheck?5.0:(+tg.combLimit);
   R.strain={Da,ga_st,ga_cy,gr_st,gr_cy,gs_st,gs_cy,combined,limit,thSt,thCy:thLongCyclic,combinedL,grW_st,combinedW,gaStLimit:3.0};
   // stability (14.7.5.3.4); circular bearings checked as a square with W = L = 0.8D
-  let Lp=planL,Wp=planW; if(isCirc()){const aeq=0.8*(+g.D);Lp=aeq;Wp=aeq;}
-  const Ac=1.92*(hrt/Lp)/Math.sqrt(1+2*Lp/Wp);
-  const Bc=2.67/((Sf+2.0)*(1+Lp/(4*Wp)));
-  const stable=(2*Ac<=Bc);
-  const denom=tg.fixedShear?(Ac-Bc):(2*Ac-Bc);
-  const sigLim=(denom>0)?Gmin*Sf/denom:Infinity;   // H1: G_min
-  R.stab={Ac,Bc,stable,sigLim,denom,Lp,Wp};
+  // H2 (2026-11-07): a rectangular bearing is also investigated with L and W interchanged [14.7.5.3.4]; the orientation with the lower
+  // stress limit (larger D/C) governs. Both orientations are kept for the worked steps (R.stab.alt = the other one).
+  const stabOf=(Lp,Wp)=>{ const Ac=1.92*(hrt/Lp)/Math.sqrt(1+2*Lp/Wp), Bc=2.67/((Sf+2.0)*(1+Lp/(4*Wp))), stable=(2*Ac<=Bc), denom=tg.fixedShear?(Ac-Bc):(2*Ac-Bc);
+    return {Ac,Bc,stable,sigLim:(denom>0)?Gmin*Sf/denom:Infinity,denom,Lp,Wp}; };   // H1: G_min
+  let stab;
+  if(isCirc()){ const aeq=0.8*(+g.D); stab=stabOf(aeq,aeq); stab.swapped=false; stab.alt=null; }
+  else { const s1=stabOf(planL,planW), s2=stabOf(planW,planL), sw=(s2.sigLim<s1.sigLim);
+    stab=Object.assign({},sw?s2:s1,{swapped:sw,alt:sw?s1:s2}); }
+  const {Ac,Bc,stable,sigLim,denom}=stab;
+  R.stab=stab;
   // reinforcement (14.7.5.3.5)
   const hsService=3*hri*sigTL/(+m.Fy), hsFatigue=2.0*hri*sigLL/DFTH_A;
   R.reinf={hsService,hsFatigue,hsReq:Math.max(hsService,hsFatigue),tProvided:+g.tSteel};
@@ -874,9 +877,10 @@ function renderDesign(R){
         `Limit = ${fmt(st.limit)} (${S.tog.exteriorCheck?"exterior check":"MassDOT first-interior 4.75 / AASHTO 5.0"}).`,"comb")}
       ${checkLine("Combined shear strain",st.combined/st.limit,"[14.7.5.3.3]","comb")}
       ${eqB("Stability","AASHTO 14.7.5.3.4",[
-        `A = \\dfrac{1.92\\,h_{rt}/L}{\\sqrt{1+2L/W}} = ${fmtT(R.stab.Ac,4)}, \\quad B = \\dfrac{2.67}{(S+2)(1+L/4W)} = ${fmtT(R.stab.Bc,4)}`,
-        R.stab.stable?`2A = ${fmtT(2*R.stab.Ac,4)} \\le B = ${fmtT(R.stab.Bc,4)} \\Rightarrow \\text{stable, no stress limit}`:R.stab.denom<=0?`\\text{fixed: } A = ${fmtT(R.stab.Ac,4)} \\le B = ${fmtT(R.stab.Bc,4)} \\Rightarrow \\text{stable, no stress limit}`:`\\sigma_s \\le \\dfrac{G_{min} S}{${S.tog.fixedShear?"A-B":"2A-B"}} = \\dfrac{(${fmtT(R.Grange.Gmin,3)})(${fmtT(R.S)})}{${fmtT(R.stab.denom,4)}} = ${fmtT(R.stab.sigLim,3)}\\ \\text{ksi}, \\quad \\sigma_s = ${fmtT(R.sigTL,3)}`],
-        isCirc()?`Circular bearing checked as a square with W = L = 0.8D = ${fmt(R.stab.Lp)} in [14.7.5.3.4].`:"","stab")}
+        `A = \\dfrac{1.92\\,h_{rt}/L}{\\sqrt{1+2L/W}}, \\quad B = \\dfrac{2.67}{(S+2)(1+L/4W)}`].concat(stabAltLines(R)).concat([
+        `${R.stab.swapped?"\\text{governing (L, W interchanged): }":""}A = \\dfrac{1.92(${fmtT(R.hrt,3)})/${fmtT(R.stab.Lp)}}{\\sqrt{1+2(${fmtT(R.stab.Lp)})/${fmtT(R.stab.Wp)}}} = ${fmtT(R.stab.Ac,4)}, \\quad B = \\dfrac{2.67}{(${fmtT(R.S)}+2)(1+${fmtT(R.stab.Lp)}/(4\\cdot ${fmtT(R.stab.Wp)}))} = ${fmtT(R.stab.Bc,4)}`,
+        R.stab.stable?`2A = ${fmtT(2*R.stab.Ac,4)} \\le B = ${fmtT(R.stab.Bc,4)} \\Rightarrow \\text{stable, no stress limit}`:R.stab.denom<=0?`\\text{fixed: } A = ${fmtT(R.stab.Ac,4)} \\le B = ${fmtT(R.stab.Bc,4)} \\Rightarrow \\text{stable, no stress limit}`:`\\sigma_s \\le \\dfrac{G_{min} S}{${S.tog.fixedShear?"A-B":"2A-B"}} = \\dfrac{(${fmtT(R.Grange.Gmin,3)})(${fmtT(R.S)})}{${fmtT(R.stab.denom,4)}} = ${fmtT(R.stab.sigLim,3)}\\ \\text{ksi}, \\quad \\sigma_s = ${fmtT(R.sigTL,3)}`]),
+        isCirc()?`Circular bearing checked as a square with W = L = 0.8D = ${fmt(R.stab.Lp)} in [14.7.5.3.4].`:`Rectangular bearing: investigated with L and W as entered and with L and W interchanged [14.7.5.3.4]; the orientation with the lower stress limit governs (${R.stab.swapped?"interchanged: L = "+fmt(R.stab.Lp)+", W = "+fmt(R.stab.Wp)+" in":"as entered: L = "+fmt(R.stab.Lp)+", W = "+fmt(R.stab.Wp)+" in"}).`,"stab")}
       ${R.stab.stable?checkLine("Stability (2A ≤ B)",0,"[14.7.5.3.4]","stab"):R.stab.denom<=0?checkLine("Stability (fixed, A ≤ B)",0,"[14.7.5.3.4]","stab"):checkLine("Stability",R.sigTL/R.stab.sigLim,"[14.7.5.3.4]","stab")}
       ${eqB("Steel reinforcement thickness","AASHTO 14.7.5.3.5",reinfLines(R),"","reinf")}
       ${checkLine("Steel laminate thickness",R.reinf.hsReq/R.reinf.tProvided,"[14.7.5.3.5]","reinf")}
@@ -912,6 +916,10 @@ function renderDesign(R){
     ${ancEq(R)}
     ${hbuEq(R)}`);
 }
+/* H2: the non-governing orientation of a rectangular bearing's stability check (worked, for comparison) */
+function stabAltLines(R){ const a=R.stab&&R.stab.alt; if(!a) return [];
+  const lim=a.stable||a.denom<=0?"\\Rightarrow \\text{stable, no stress limit}":`\\Rightarrow \\sigma_{lim} = \\dfrac{(${fmtT(R.Grange.Gmin,3)})(${fmtT(R.S)})}{${fmtT(a.denom,4)}} = ${fmtT(a.sigLim,3)}\\ \\text{ksi}`;
+  return [`\\text{${R.stab.swapped?"as entered":"interchanged"} } (L = ${fmtT(a.Lp)},\\ W = ${fmtT(a.Wp)}):\\ A = ${fmtT(a.Ac,4)},\\ B = ${fmtT(a.Bc,4)} ${lim}`]; }
 function thTWtex(R){ const r=R.rot; return r.tolW>0?`\\theta_t = ${fmtT(r.thTrans,4)}+${fmtT(r.tolW,3)} = ${fmtT(r.thTransW,4)}`:`\\theta_t = ${fmtT(r.thTransW,4)}`; }   // transverse rotation used about W (incl. the AASHTO tolerance)
 /* D11: worked lines shared by the Method B block and the report's Method A blocks (same values as the checks) */
 function reinfLines(R){ const g=S.geom,m=S.mat; return [
@@ -1270,7 +1278,12 @@ function edrModel(){
       dcStep(w,"comb","Combined shear strain (limit "+edrN(st.limit)+(tg.exteriorCheck?", exterior check":", MassDOT first interior 4.75 / AASHTO 5.0")+")","\\frac{\\gamma_{comb}}{"+edrN(st.limit)+"}","\\frac{"+edrN(st.combined,3)+"}{"+edrN(st.limit)+"}",EDR_AA+"Art. 14.7.5.3.3");
       SUB="Stability"; w=topic(T,"stab","Stability",EDR_AA+"Art. 14.7.5.3.4");
       const sb=R.stab;
-      w.add({id:"A",label:"Stability coefficient A"+(circ?" (square with W = L = 0.8D)":""),sym:"A",eq:"\\frac{1.92\\,h_{rt}/L}{\\sqrt{1 + 2L/W}}",sub:"\\frac{1.92\\cdot "+edrN(R.hrt,3)+"/"+edrN(sb.Lp)+"}{\\sqrt{1 + 2\\cdot "+edrN(sb.Lp)+"/"+edrN(sb.Wp)+"}}",value:sb.Ac,unit:"",d:4,ref:EDR_AA+"Art. 14.7.5.3.4"});
+      if(sb.alt){ const a=sb.alt, al=sb.swapped?"as entered":"L and W interchanged";   /* H2: the other orientation, then the governing one */
+        w.add({id:"A2",label:"Stability coefficient A, "+al+" (L = "+edrN(a.Lp)+", W = "+edrN(a.Wp)+")",sym:"A'",eq:"\\frac{1.92\\,h_{rt}/L}{\\sqrt{1 + 2L/W}}",sub:"\\frac{1.92\\cdot "+edrN(R.hrt,3)+"/"+edrN(a.Lp)+"}{\\sqrt{1 + 2\\cdot "+edrN(a.Lp)+"/"+edrN(a.Wp)+"}}",value:a.Ac,unit:"",d:4,ref:EDR_AA+"Art. 14.7.5.3.4"});
+        w.add({id:"B2",label:"Stability coefficient B, "+al,sym:"B'",eq:"\\frac{2.67}{(S + 2)(1 + L/(4W))}",sub:"\\frac{2.67}{("+edrN(R.S)+" + 2)(1 + "+edrN(a.Lp)+"/(4\\cdot "+edrN(a.Wp)+"))}",value:a.Bc,unit:"",d:4});
+        if(!(a.stable||a.denom<=0)) w.add({id:"lim2",label:"Stress limit, "+al,sym:"\\sigma_{lim}'",eq:"\\frac{G_{min}\\,S}{"+(tg.fixedShear?"A' \\minus B'":"2A' \\minus B'")+"}",sub:"\\frac{"+edrN(R.Grange.Gmin,3)+"\\cdot "+edrN(R.S)+"}{"+edrN(a.denom,4)+"}",value:a.sigLim,unit:"ksi",d:3,
+          note:"the orientation with the lower stress limit governs; governing: "+(sb.swapped?"L and W interchanged":"as entered")}); }
+      w.add({id:"A",label:"Stability coefficient A"+(circ?" (square with W = L = 0.8D)":sb.swapped?", governing: L and W interchanged (L = "+edrN(sb.Lp)+", W = "+edrN(sb.Wp)+")":", governing: as entered"),sym:"A",eq:"\\frac{1.92\\,h_{rt}/L}{\\sqrt{1 + 2L/W}}",sub:"\\frac{1.92\\cdot "+edrN(R.hrt,3)+"/"+edrN(sb.Lp)+"}{\\sqrt{1 + 2\\cdot "+edrN(sb.Lp)+"/"+edrN(sb.Wp)+"}}",value:sb.Ac,unit:"",d:4,ref:EDR_AA+"Art. 14.7.5.3.4"});
       w.add({id:"B",label:"Stability coefficient B",sym:"B",eq:"\\frac{2.67}{(S + 2)(1 + L/(4W))}",sub:"\\frac{2.67}{("+edrN(R.S)+" + 2)(1 + "+edrN(sb.Lp)+"/(4\\cdot "+edrN(sb.Wp)+"))}",value:sb.Bc,unit:"",d:4});
       if(sb.stable||sb.denom<=0){ KEY.stab="chk/stab.ok";
         w.add({id:"ok",label:sb.stable?"2A ≤ B: stable, no stress limit":"Fixed against shear translation, A ≤ B: stable, no stress limit",sym:sb.stable?"2A":"A",eq:"",sub:"",value:sb.stable?edrN(2*sb.Ac,4)+" ≤ "+edrN(sb.Bc,4):edrN(sb.Ac,4)+" ≤ "+edrN(sb.Bc,4),unit:"",ok:DS("stab").pass!==false,ref:EDR_AA+"Art. 14.7.5.3.4"}); }
