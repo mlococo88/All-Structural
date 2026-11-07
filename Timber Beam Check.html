@@ -938,7 +938,17 @@ function tbcRun(m) {
     if (hasNotch && dn <= 0) { errors.push('Notch depth must be less than the member depth.'); return base; }
     const notchLim = isGL ? Math.min(dep / 10, 3) : dep / 4;
     if (hasNotch && notch > notchLim) fails.push(isGL ? `End notch ${notch} in. exceeds the lesser of d/10 = ${(dep / 10).toFixed(2)} in. and 3 in. (NDS 5.4.4.1). Not permitted.` : `End notch ${notch} in. exceeds d/4 = ${(dep / 4).toFixed(2)} in. (NDS 4.4.3.2). Not permitted.`);
-    const Cn = hasNotch ? Math.pow(dn / dep, 2) : 1.0;
+    // TBN1: notch face. 'tension' (absent = tension; as before): Eq. 3.4-3, Cn = (dn/d)^2. 'comp': end notch on the compression face,
+    // V'r = (2/3) F'v b [d - ((d - dn)/dn) e] (NDS 3.4.3.2, compression-face notch, as recalled: verify), written as fvn <= F'v Cn with
+    // Cn = de/dn; e blank = dn (largest permitted, conservative). 'interior': not permitted / not checked (input error).
+    const notchFace = ['comp', 'interior'].includes(mt.notchFace) ? mt.notchFace : 'tension';
+    const notchEIn = (mt.notchE === undefined || mt.notchE === null || mt.notchE === '') ? null : num(mt.notchE);
+    if (hasNotch && notchFace === 'interior') { errors.push('Interior notch: not permitted by this tool and not checked (NDS 4.4.3.1 / 5.4.4.1 restrict interior notches; conservative, fix log TBN1). Remove the notch, or check it by hand.'); return base; }
+    if (hasNotch && notchFace === 'comp' && notchEIn !== null && !(notchEIn >= 0 && notchEIn <= dn)) { errors.push(`Compression-face notch: e (distance the notch extends past the inner edge of the support) must be between 0 and d_n = ${dn.toFixed(3)} in.`); return base; }
+    const notchE = hasNotch && notchFace === 'comp' ? (notchEIn === null ? dn : notchEIn) : null;
+    const notchDe = notchE === null ? null : dep - ((dep - dn) / dn) * notchE;
+    const Cn = hasNotch ? (notchFace === 'comp' ? notchDe / dn : Math.pow(dn / dep, 2)) : 1.0;
+    if (hasNotch && notchFace === 'comp') adv.push('Compression-face end notch: checked with V′r = (2/3) F′v b [d − ((d − d_n)/d_n) e] (NDS 3.4.3.2, compression-face notch; verify against NDS 2018 (not in references))' + (notchEIn === null ? '; e not entered, e = d_n assumed (conservative).' : '.') + ' The notch-depth limit of the tension face is kept (conservative).');
     const notchJ = [0, nS].filter(j => types[j] !== 'free');   // supports at the member ends
     if (types.some(t => t === 'fixed')) adv.push('Fixed support: bearing is checked with the vertical reaction only (uniform Fc⊥ stress over the bearing length). The effect of the fixing moment on the bearing stress, and the connection that provides the fixity, are not checked (fix log R1-i).');
     if (hasNotch && notchJ.length < 2 && !simple) adv.push(notchJ.length ? `End notch: applied at end support ${notchJ.map(j => TBC_NODE[j]).join(', ')} only (the other end is a cantilever tip).` : 'End notch: neither member end is supported (both ends cantilever); the notch input is not used.');
@@ -1243,7 +1253,7 @@ function tbcRun(m) {
     return {
         ...base, ok: true, bw, dep, A, S, I, thick4, cfIncluded,
         CF, CFnote, CM, Ct, Ci, Cr, Cfu, CfuE, Cb, lb, lu, luD, le, leRule, RB, stabilityApplies, Emin_p, EminStab, E_p, FbE,
-        notch, hasNotch, dn, Cn, trib, w_self, wu, combos, gov,
+        notch, hasNotch, dn, Cn, notchFace, notchE, notchEIn, notchDe, trib, w_self, wu, combos, gov,
         defl: defl_,
         diag: { key: dc.key, name: dc.name, shearData, momentData, maxV, maxM },
         dcr, ctrlName: ctrl[0], dcrMax: ctrl[1],
@@ -1353,6 +1363,9 @@ function tbcSanitize(d) {
         Fb: nb(sc.Fb, null), Fv: nb(sc.Fv, null), Fcp: nb(sc.Fcp, null), E: nb(sc.E, null), Emin: nb(sc.Emin, null),
         n: nb(sc.n, null), dref: nb(sc.dref, dsc.dref), cvMax: nb(sc.cvMax, dsc.cvMax), dens: nb(sc.dens, null),
     };
+    // TBN1: notch face (absent = tension face) and e of a compression-face notch; kept only when set
+    if (['comp', 'interior'].includes(mt.notchFace)) m.material.notchFace = mt.notchFace;
+    if (typeof mt.notchE === 'number' && isFinite(mt.notchE)) m.material.notchE = mt.notchE;
     m.design = {
         method: st(dz.method, 'ASD', TBC_METHODS.map(t => t[0])), moisture: st(dz.moisture, 'Dry', ['Dry', 'Wet']),
         temp: dz.temp === 'High' ? '125-150' : st(dz.temp, 'Normal', ['Normal', '100-125', '125-150']),
@@ -2012,7 +2025,13 @@ function buildMaterialPane(P) {
     fRow(body, 'Notch depth at end supports', numIn(() => mt.notch, v => { mt.notch = v; }, 'notch'), 'in',
       (mt.type === 'glulam' ? 'Notch on the tension face at the end supports (NDS 3.4.3.2(a), with C<sub>vr</sub> = 0.72, NDS 5.3.10); limited to the lesser of d/10 and 3 in. (NDS 5.4.4.1). 0 = no notch.'
         : mt.type === 'scl' ? 'SCL: notches are governed by the manufacturer’s literature and are not checked here; keep 0.'
-        : 'Notch on the tension face at the end supports (NDS 3.4.3.2(a)); limited to d/4 (NDS 4.4.3.2). 0 = no notch.') + (mt.type === 'scl' ? '' : ' The same depth is used at both end supports. Interior notches and notches on the compression face are not checked (fix log O8).'));
+        : 'Notch on the tension face at the end supports (NDS 3.4.3.2(a)); limited to d/4 (NDS 4.4.3.2). 0 = no notch.').replace('Notch on the tension face at the end supports (NDS 3.4.3.2(a)', mt.notchFace === 'comp' ? 'Notch on the compression face at the end supports (checked as set below' : '$&') + (mt.type === 'scl' ? '' : ' The same depth is used at both end supports.'));
+    if (mt.type !== 'scl') {   // TBN1: notch face
+      fRow(body, 'Notch location', selIn([['tension', 'Tension face, end supports'], ['comp', 'Compression face, end supports'], ['interior', 'Interior (not checked)']], () => mt.notchFace || 'tension',
+        v => { if (v === 'tension') delete mt.notchFace; else mt.notchFace = v; }, 'notchFace'), '',
+        'Tension face: NDS 3.4.3.2(a), Eq. 3.4-3. Compression face: V′<sub>r</sub> = (2/3) F′<sub>v</sub> b [d − ((d − d<sub>n</sub>)/d<sub>n</sub>) e] (NDS 3.4.3.2, compression-face notch ' + VFY + '). Interior notches are not permitted / not checked: the tool stops with an input error (fix log TBN1).');
+      if (mt.notchFace === 'comp') fRow(body, 'e (notch length past the inner edge of the support)', numIn(() => mt.notchE, v => { if (v === null) delete mt.notchE; else mt.notchE = v; }, 'notchE'), 'in', 'e ≤ d<sub>n</sub>. Blank: e = d<sub>n</sub> (the largest permitted; conservative).');
+    }
   }, { noNum: true });
   mkSec(P, 'inCost', 'Cost estimate', body => {
     fRow(body, 'Cost', numIn(() => mt.costPerBF, v => { mt.costPerBF = v; }, 'cost'), '$/BF');
@@ -2326,7 +2345,7 @@ function buildSchem(pg) {
     rows.push(
       ['Reference values', R.ref ? refLineHTML() : '—'],
       ['Orientation', dz.flatUse ? 'Flat (load on the wide face)' : 'Edgewise'], ['Wet service', dz.moisture === 'Wet' ? 'yes' : 'no'], ['Temperature', { Normal: 'T ≤ 100 °F', '100-125': '100–125 °F', '125-150': '125–150 °F' }[dz.temp] || dz.temp],
-      ['Incised', dz.incising ? 'yes' : 'no'], ['Repetitive member', dz.repetitive ? 'yes' : 'no'], ['End notch', (mt.notch || 0) > 0 ? g4(mt.notch) + ' in.' : 'none'], ['Point loads within d of a support (shear)', dz.shearXd ? 'times x/d (NDS 3.4.3.1(b))' : 'full value'],
+      ['Incised', dz.incising ? 'yes' : 'no'], ['Repetitive member', dz.repetitive ? 'yes' : 'no'], ['End notch', (mt.notch || 0) > 0 ? g4(mt.notch) + ' in.' + (mt.notchFace === 'comp' ? ', compression face' + (typeof mt.notchE === 'number' ? ', e = ' + g4(mt.notchE) + ' in.' : '') : mt.notchFace === 'interior' ? ', interior' : '') : 'none'], ['Point loads within d of a support (shear)', dz.shearXd ? 'times x/d (NDS 3.4.3.1(b))' : 'full value'],
       ['Lateral support, top edge', dz.latTop === 'Supports' ? `at supports only, l<sub>u</sub> = ${dz.luTop > 0 ? g4(dz.luTop) + ' ft' : 'span length'}` : 'continuous'],
       ['Lateral support, bottom edge', dz.latBot === 'same' ? 'same as top edge (earlier tool versions)' : dz.latBot === 'Supports' ? `at supports only, l<sub>u</sub> = ${dz.luBot > 0 ? g4(dz.luBot) + ' ft' : 'span length'}` : 'continuous'],
       ['Creep factor K<sub>cr</sub>', R.ok && dz.moisture === 'Wet' && R.Kcr !== dz.creep ? g4(R.Kcr) + ' used (' + (dz.creep > 0 ? g4(dz.creep) + ' entered; ' : 'blank; ') + 'wet service, NDS 3.5.2)' : g4(dz.creep)], ['Deflection limits', `L/${g4(dz.deflLL)} live/snow, L/${g4(dz.deflTL)} total`], ['Design method', dz.method === 'LRFD' ? `LRFD (NDS 2018 Appendix N; floor live load from ${dz.lrfdLive === 'storage' ? 'storage, λ = 0.7' : 'occupancy, λ = 0.8'})` : 'ASD (NDS 2018)']);
@@ -2616,7 +2635,20 @@ function buildShear(pg) {
     calc(body, { title: 'Shear check (unnotched section)', ref: 'NDS 3.4.1', status: stCls(c.r_v1),
       lines: [T`\frac{f_v}{F'_v} = \frac{${f1(c.fv)}}{${f1(c.Fv_p)}} = ${f3(c.r_v1)}`], result: `Shear ratio ${f3(c.r_v1)}` });
   });
-  if (R.hasNotch) mkSec(pg, 'sNotch', 'Notched ends (tension face at the end supports)', body => {
+  if (R.hasNotch && R.notchFace === 'comp') mkSec(pg, 'sNotch', 'Notched ends (compression face at the end supports)', body => {   // TBN1
+    calc(body, { title: 'Notch factor and shear at the notched end', ref: 'NDS 3.4.3.2 (compression-face notch)' + (R.isGL ? '; C_vr NDS 5.3.10; notch limit NDS 5.4.4.1' : '; notch limit NDS 4.4.3.2'), status: stCls(c.r_vn),
+      lines: [T`d_n = d - n = ${g4(R.dep)} - ${g4(R.notch)} = ${f3(R.dn)}\ \text{in.}\quad (n ${R.notch > R.notchLim ? '>' : '\\le'} ${R.isGL ? '\\min(d/10,\\ 3\\ \\text{in.})' : 'd/4'} = ${f2(R.notchLim)}\ \text{in.})`,
+        T`d_e = d - \frac{d - d_n}{d_n}\,e = ${g4(R.dep)} - \frac{${g4(R.dep)} - ${f3(R.dn)}}{${f3(R.dn)}} \times ${f3(R.notchE)} = ${f3(R.notchDe)}\ \text{in.}`,
+        T`C_n = \frac{d_e}{d_n} = \frac{${f3(R.notchDe)}}{${f3(R.dn)}} = ${f3(R.Cn)}`,
+        T`f_{v,n} = \frac{3R}{2\,b\,d_n} = \frac{1.5 \times ${f0(c.Rmax)}}{${g4(R.bw)} \times ${f3(R.dn)}} = ${f1(c.fvn)}\ \text{psi}`,
+        R.isGL ? T`\frac{f_{v,n}}{F'_v\,C_n\,C_{vr}} = \frac{${f1(c.fvn)}}{${f1(c.Fv_p)} \times ${f3(R.Cn)} \times ${R.Cvr}} = ${f3(c.r_vn)}` : T`\frac{f_{v,n}}{F'_v\,C_n} = \frac{${f1(c.fvn)}}{${f1(c.Fv_p)} \times ${f3(R.Cn)}} = ${f3(c.r_vn)}`],
+      where: [['R', 'largest |reaction| at a notched end support (full reaction, not V at d), ' + esc(c.name), f0(c.Rmax), 'lb', tbcLink('anaReac', 'Analysis Results tab')], ['n', 'notch depth', g4(R.notch), 'in.', 'input'],
+        ['e', 'distance the notch extends past the inner edge of the support', f3(R.notchE), 'in.', R.notchEIn === null ? 'not entered: e = d<sub>n</sub> (conservative)' : 'input'],
+        ['', 'f<sub>v,n</sub> ≤ F′<sub>v</sub> C<sub>n</sub> is V ≤ V′<sub>r</sub> = (2/3) F′<sub>v</sub> b d<sub>e</sub> written as a stress on b d<sub>n</sub>', '', '', VFY],
+        ...(R.isGL ? [['C_{vr}', 'shear reduction factor at notches (glulam; kept for compression-face notches, conservative)', String(R.Cvr), '', 'NDS 5.3.10 ' + VFY]] : [])],
+      result: `Notched-end ratio ${f3(c.r_vn)}` });
+  });
+  else if (R.hasNotch) mkSec(pg, 'sNotch', 'Notched ends (tension face at the end supports)', body => {
     calc(body, { title: 'Notch factor and shear at the notched end', ref: R.isGL ? 'NDS 3.4.3.2(a), Eq. 3.4-3; C_vr NDS 5.3.10; notch limit NDS 5.4.4.1' : 'NDS 3.4.3.2(a), Eq. 3.4-3; notch limit NDS 4.4.3.2', status: stCls(c.r_vn),
       lines: [R.isGL ? T`d_n = d - n = ${g4(R.dep)} - ${g4(R.notch)} = ${f3(R.dn)}\ \text{in.}\quad (n ${R.notch > R.notchLim ? '>' : '\\le'} \min(d/10,\ 3\ \text{in.}) = ${f2(R.notchLim)}\ \text{in.})` : T`d_n = d - n = ${g4(R.dep)} - ${g4(R.notch)} = ${f3(R.dn)}\ \text{in.}\quad (n ${R.notch > R.dep / 4 ? '>' : '\\le'} d/4 = ${f2(R.dep / 4)}\ \text{in.})`,
         T`C_n = \left(\frac{d_n}{d}\right)^2 = \left(\frac{${f3(R.dn)}}{${g4(R.dep)}}\right)^2 = ${f3(R.Cn)}`,
@@ -2951,6 +2983,11 @@ function runBenchmarks() {
       add(g, 'f_c⊥ = 612.9/(1.5 × 3.5) (psi)', 116.73, k.gcX.fcp, 'psi', 1e-4); add(g, 'plate: 116.73/405 (beam alone: 0.187)', 0.2882, q.dcr.c, '', 1e-3); add(g, 'beam alone (unchanged)', 0.18678, k.r_cB, '', 1e-4); }
     { const q = p2(m => { m.loads.points = [{ mag: 1500, loc: 8, type: 'D', lb: 3.5 }, { mag: 3000, loc: 8, type: 'L', lb: 5.5 }]; }), k = comb(q, 'D+L'); const g = 'Default joist, 1500 lb D + 3000 lb L at midspan on a 3.5 in. bearing (fix log TBB1)';
       add(g, 'C_b = (3.5 + 0.375)/3.5', 1.10714, k.gcX.Cb, '', 1e-5); add(g, 'f_c⊥ = 4500/(1.5 × 3.5) (psi)', 857.14, k.gcX.fcp, 'psi', 1e-4); add(g, "ratio = 857.14/(625 × 1.10714)", 1.2387, q.dcr.c, '', 1e-3); }
+    // 11. TBN1 (2026-11-07): end notch on the compression face (NDS 3.4.3.2, compression-face notch; verify)
+    { const q = p2(m => { m.material.notch = 2; m.geom.spans = [{ L: 14 }]; m.loads.D = 10; m.material.notchFace = 'comp'; m.material.notchE = 3; }), k = comb(q, 'D+L');
+      const g = 'Fix-log joist (2x10, 14 ft, D 10 / L 40 psf), 2 in. end notch on the compression face, e = 3 in. (fix log TBN1)';
+      add(g, 'd_e = 9.25 − (2/7.25) × 3 (in.)', 8.42241, q.notchDe, 'in', 1e-5); add(g, 'C_n = d_e/d_n = 8.42241/7.25', 1.16171, q.Cn, '', 1e-5);
+      add(g, 'f_v,n/(F′v C_n) = (1.5 × 489.6/(1.5 × 7.25))/(180 × 1.16171) (tension face: 0.611)', 0.32295, k.r_vn, '', 1e-3); }
   } catch (e) { out.push({ grp: 'error', what: 'Benchmark failed to run: ' + e.message, hand: NaN, tool: NaN, unit: '', diff: NaN, ok: false }); }
   return out;
 }
@@ -3004,7 +3041,7 @@ function buildManual(pg) {
     '<b>Shared project info</b> (bridgeSuite.v1.projectMeta): Project, Client, Job #, Designer, Checked by and Date are shared and received (shared fields <code>projectName</code>, <code>client</code>, <code>jobNo</code>, <code>preparedBy</code>, <code>checkedBy</code>, <code>date</code>; Project, Checked by and Date added in fix log R5). Member / mark and Notes stay in this tool.']);
   H('Limitations and open items');
   UL(['Built-in reference values and factors must be verified against the printed NDS Supplement (Reference Values tab).',
-    'No axial load, no torsion, no lateral load on the weak axis; no interior or compression-face notches, one notch depth at both ends (O8); x/d shear reduction only when ticked (O4); no sustained live load in creep (O7).',
+    'No axial load, no torsion, no lateral load on the weak axis; interior notches are not checked (input error) and compression-face end notches use the compression-face expression of NDS 3.4.3.2 (fix log TBN1), one notch depth at both ends (O8); x/d shear reduction only when ticked (O4); no sustained live load in creep (O7).',
     'Glulam: straight prismatic members bending about x–x only (no flat use, curvature, taper or balanced-layup option for the stress classes; use custom values). SCL: no product values built in.',
     'Equation numbers are quoted from NDS 2018 as recalled; verify them against the printed standard.',
     'Continuous beams: one section for all spans; no pattern loading; no support settlement.']);
@@ -3132,7 +3169,7 @@ function tbrModel() {
       : mt.type === 'scl' ? [['Material type', tyName], ['Product', (SCL_KINDS[mt.scl.kind] || mt.scl.kind) + (mt.scl.name ? ' — ' + mt.scl.name : '')], ['Section', 'b = ' + g4(mt.scl.b) + ' in., d = ' + g4(mt.scl.d) + ' in.'], ['Size factor', 'C_V = (' + g4(mt.scl.dref) + '/d)^' + g4(mt.scl.n) + ' ≤ ' + g4(mt.scl.cvMax) + ' (manufacturer)']]
       : [['Material type', tyName], ['Size', mt.size === 'Custom' ? 'Custom b = ' + g4(mt.customB) + ' in., d = ' + g4(mt.customD) + ' in.' : mt.size], ['Species / grade', mt.manual ? 'Manual reference values' : (mt.customMaterials || {})[mt.species] ? 'Custom species "' + mt.species + '"' : mt.species + ' (' + ((DEFAULT_SPECIES[mt.species] || {}).name || '?') + '), ' + ((GRADES_DB[mt.grade] || {}).name || mt.grade)]];
     mrows.push(['Reference values', tbrPlain(R.src)], ['Orientation', dz.flatUse ? 'Flat (load on the wide face)' : 'Edgewise'], ['Wet service', dz.moisture === 'Wet' ? 'yes' : 'no'], ['Temperature', { Normal: 'T ≤ 100 °F', '100-125': '100–125 °F', '125-150': '125–150 °F' }[dz.temp] || dz.temp],
-      ['Incised', dz.incising ? 'yes' : 'no'], ['Repetitive member', dz.repetitive ? 'yes' : 'no'], ['End notch', (mt.notch || 0) > 0 ? g4(mt.notch) + ' in.' : 'none'],
+      ['Incised', dz.incising ? 'yes' : 'no'], ['Repetitive member', dz.repetitive ? 'yes' : 'no'], ['End notch', (mt.notch || 0) > 0 ? g4(mt.notch) + ' in.' + (mt.notchFace === 'comp' ? ', compression face' + (typeof mt.notchE === 'number' ? ', e = ' + g4(mt.notchE) + ' in.' : '') : mt.notchFace === 'interior' ? ', interior' : '') : 'none'],
       ['Lateral support, top edge', dz.latTop === 'Supports' ? 'at supports only, l_u = ' + (dz.luTop > 0 ? g4(dz.luTop) + ' ft' : 'span length') : 'continuous'],
       ['Lateral support, bottom edge', dz.latBot === 'same' ? 'same as top edge (earlier tool versions)' : dz.latBot === 'Supports' ? 'at supports only, l_u = ' + (dz.luBot > 0 ? g4(dz.luBot) + ' ft' : 'span length') : 'continuous'],
       ['Creep factor K_cr', R.ok && dz.moisture === 'Wet' && R.Kcr !== dz.creep ? g4(R.Kcr) + ' used (' + (dz.creep > 0 ? g4(dz.creep) + ' entered; ' : 'blank; ') + 'wet service, NDS 3.5.2)' : g4(dz.creep)], ['Deflection limits', 'L/' + g4(dz.deflLL) + ' live/snow, L/' + g4(dz.deflTL) + ' total'], ['Design method', dz.method === 'LRFD' ? 'LRFD (NDS 2018 Appendix N; floor live load from ' + (dz.lrfdLive === 'storage' ? 'storage, λ = 0.7' : 'occupancy, λ = 0.8') + ')' : 'ASD (NDS 2018)']);
@@ -3243,11 +3280,14 @@ function tbrModel() {
     T.push({ title: 'Adjusted shear design value and check', ref: tbrTbl(), steps: [
       tbrS({ id: 'sh.Fvp', label: 'Adjusted shear design value (' + c.name + ', ' + tfP(c) + ')', sym: 'F^{\\prime}_{v}', eq: fv.eq, sub: fv.sub, value: c.Fv_p, unit: 'psi', d: 1, ref: tbrTbl() }),
       tbrS({ id: 'sh.r', label: 'Shear check (unnotched section)', sym: '\\frac{f_{v}}{F^{\\prime}_{v}}', eq: '', sub: '\\frac{' + f1(c.fv) + '}{' + f1(c.Fv_p) + '}', value: c.r_v1, unit: '', d: 3, ref: TB_NDS + '3.4.1', ok: c.r_v1 <= 1 })] });
-    if (R.hasNotch) T.push({ title: 'Notched ends (tension face at the end supports)', ref: TB_NDS + '3.4.3.2(a)' + (R.isGL ? '; 5.3.10; 5.4.4.1' : '; 4.4.3.2'), steps: [
+    const nc = R.notchFace === 'comp';   // TBN1
+    if (R.hasNotch) T.push({ title: nc ? 'Notched ends (compression face at the end supports)' : 'Notched ends (tension face at the end supports)', ref: TB_NDS + (nc ? '3.4.3.2 (compression-face notch)' : '3.4.3.2(a)') + (R.isGL ? '; 5.3.10; 5.4.4.1' : '; 4.4.3.2'), steps: [
       tbrS({ id: 'sh.dn', label: 'Depth at the notch (n = ' + g4(R.notch) + ' in.; limit ' + (R.isGL ? 'min(d/10, 3 in.)' : 'd/4') + ' = ' + f2(R.notchLim) + ' in.' + (R.notch > R.notchLim ? ': exceeded, NG' : '') + ')', sym: 'd_{n}', eq: 'd - n', sub: g4(R.dep) + ' - ' + g4(R.notch), value: R.dn, unit: 'in', d: 3, ref: R.isGL ? TB_NDS + '5.4.4.1' : TB_NDS + '4.4.3.2' }),
-      tbrS({ id: 'sh.Cn', label: 'Notch factor', sym: 'C_{n}', eq: '\\left(\\frac{d_{n}}{d}\\right)^{2}', sub: '\\left(\\frac{' + f3(R.dn) + '}{' + g4(R.dep) + '}\\right)^{2}', value: R.Cn, unit: '', d: 3, ref: TB_NDS + 'Eq. 3.4-3' }),
+      ...(nc ? [tbrS({ id: 'sh.de', label: 'Effective depth of the compression-face notch (e = ' + f3(R.notchE) + ' in.' + (R.notchEIn === null ? ', not entered: e = d_n, conservative' : '') + ')', sym: 'd_{e}', eq: 'd - \\frac{d - d_{n}}{d_{n}}\\,e', sub: g4(R.dep) + ' - \\frac{' + g4(R.dep) + ' - ' + f3(R.dn) + '}{' + f3(R.dn) + '} \\times ' + f3(R.notchE), value: R.notchDe, unit: 'in', d: 3, ref: TB_NDS + '3.4.3.2' }),
+        tbrS({ id: 'sh.Cn', label: 'Notch factor (V′r = (2/3) F′v b d_e written on b d_n)', sym: 'C_{n}', eq: '\\frac{d_{e}}{d_{n}}', sub: '\\frac{' + f3(R.notchDe) + '}{' + f3(R.dn) + '}', value: R.Cn, unit: '', d: 3, ref: TB_NDS + '3.4.3.2' })]
+      : [tbrS({ id: 'sh.Cn', label: 'Notch factor', sym: 'C_{n}', eq: '\\left(\\frac{d_{n}}{d}\\right)^{2}', sub: '\\left(\\frac{' + f3(R.dn) + '}{' + g4(R.dep) + '}\\right)^{2}', value: R.Cn, unit: '', d: 3, ref: TB_NDS + 'Eq. 3.4-3' })]),
       tbrS({ id: 'sh.fvn', label: 'Shear stress at the notched end (R = largest |reaction| at a notched end support, ' + c.name + ')', sym: 'f_{v,n}', eq: '\\frac{3R}{2\\,b\\,d_{n}}', sub: '\\frac{1.5 \\times ' + f0(c.Rmax) + '}{' + g4(R.bw) + ' \\times ' + f3(R.dn) + '}', value: c.fvn, unit: 'psi', d: 1, ref: TB_NDS + 'Eq. 3.4-3' }),
-      tbrS({ id: 'sh.rn', label: 'Notched-end check', sym: R.isGL ? '\\frac{f_{v,n}}{F^{\\prime}_{v}\\,C_{n}\\,C_{vr}}' : '\\frac{f_{v,n}}{F^{\\prime}_{v}\\,C_{n}}', eq: '', sub: R.isGL ? '\\frac{' + f1(c.fvn) + '}{' + f1(c.Fv_p) + ' \\times ' + f3(R.Cn) + ' \\times ' + R.Cvr + '}' : '\\frac{' + f1(c.fvn) + '}{' + f1(c.Fv_p) + ' \\times ' + f3(R.Cn) + '}', value: c.r_vn, unit: '', d: 3, ref: TB_NDS + '3.4.3.2(a)', ok: c.r_vn <= 1 })] });
+      tbrS({ id: 'sh.rn', label: 'Notched-end check', sym: R.isGL ? '\\frac{f_{v,n}}{F^{\\prime}_{v}\\,C_{n}\\,C_{vr}}' : '\\frac{f_{v,n}}{F^{\\prime}_{v}\\,C_{n}}', eq: '', sub: R.isGL ? '\\frac{' + f1(c.fvn) + '}{' + f1(c.Fv_p) + ' \\times ' + f3(R.Cn) + ' \\times ' + R.Cvr + '}' : '\\frac{' + f1(c.fvn) + '}{' + f1(c.Fv_p) + ' \\times ' + f3(R.Cn) + '}', value: c.r_vn, unit: '', d: 3, ref: TB_NDS + (nc ? '3.4.3.2' : '3.4.3.2(a)'), ok: c.r_vn <= 1 })] });
     secs.push({ title: 'Shear', subs: [{ title: 'Shear check (governing combination ' + c.name + ')', items: [tbrTopics(T), { type: 'note', text: 'Shear ratio of the combination = the larger of the unnotched and notched-end ratios = ' + f3(c.r_v) + '. The same steps are on the Shear tab[[tab:shear| ↗]].' }] },
       { title: 'Shear ratio by combination', items: [{ type: 'table', wide: true, head: ['Combination', tfHead().replace(/<sub>(.*?)<\/sub>/, '_$1'), 'V (lb)', 'x (ft)', 'f_v (psi)', 'F′_v (psi)', 'f_v/F′_v', ...(R.hasNotch ? ['R notch (lb)', 'f_v,n/(F′_v C_n)'] : []), 'Ratio'],
         rows: R.combos.map(k => ({ cls: k === c ? 'gov' : '', cells: [k.name, String(k.TF), tbrCell(k.Vd, 0), tbrCell(k.xV, 2), tbrCell(k.fv, 1), tbrCell(k.Fv_p, 1), tbrCell(k.r_v1, 3), ...(R.hasNotch ? [tbrCell(k.Rmax, 0), tbrCell(k.r_vn, 3)] : []), tbrDC(k.r_v)] })) }] }] });

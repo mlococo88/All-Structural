@@ -600,6 +600,7 @@ function wingDefault(on){
     jMethod:"avg", secMode:"auto", secFr:0.3333, ehPlane:"face",      // attached junction method "avg" | "strip"; independent design section "auto" | "user" (fraction of L from the high end); EH height for the stem "face" | "heel"
     Ltoe:2.0, Lheel:6.0, tf:2.0, fdn:"spread",                         // independent footing (ft); "spread" (stability checked, panel I-4 resistances) | "pile" (not checked)
     hSize:"6", hSp:9.0, vSize:"5", vSp:12.0,
+    ftBBar:"6", ftBSp:12.0, ftTBar:"7", ftTSp:9.0,                     // ABM3: independent wing footing bars, transverse: bottom (toe) and top (heel); bar "0" = not entered
     toAb:true};                                                         // ABR2 (N-5): attached wings — apply the pair's loads to the abutment stability and footing                          // horizontal / vertical bars (attached: horizontal = junction flexure; independent: vertical = stem flexure)
 }
 /* IAB (2026-10-20): abutment type — "conv" (conventional cantilever: the tool as before, the default for new and saved projects),
@@ -677,7 +678,8 @@ function defaultState(){
       soilH:19.00,                  // soil height over heel, from top of footing (ft)
       beta:0.0,                     // backfill slope (deg)
       spanL:80.0, skew:0.0,         // span length & skew (for min support length)
-      hw:0.0                        // water table height above BOTTOM of footing (ft); 0 = none
+      hw:0.0,                       // water table height above BOTTOM of footing (ft); 0 = none
+      hwFr:null                     // ABM6: water level in front of the wall, above the bottom of footing (ft); null = same as h_w (balanced, no WA) [3.11.3]
     },
     mat:{fc:4.0, gc:0.150, fy:60.0, coverF:3.0, coverT:2.0, ag:0.75, // ksi, kcf, ksi, in (footing / wall+top), max aggregate size (in) for the 5.7.3.4.2 s_xe
       coverExp:"deicing", coverCat:"A", coverWcm:1.0,               // ABCHK: cover advisory [T.5.10.1-1]: wall exposure, reinforcing material category, W/CM factor (0.8 / 1.0 / 1.2)
@@ -1748,7 +1750,8 @@ function migrate(){
   // WING (2026-10-20): a project saved before the wingwall module has no S.wing: it opens with the wingwalls OFF (abutment results,
   // Input ID and checks unchanged); missing wing fields of a newer project take their defaults
   if(!S.wing||typeof S.wing!=="object") S.wing=wingDefault(false);
-  else{ const T=wingDefault(false); Object.keys(T).forEach(k=>{ if(S.wing[k]===undefined) S.wing[k]=T[k]; }); }
+  else{ if(S.wing.ftBBar===undefined) S.wing.ftBBar="0"; if(S.wing.ftTBar===undefined) S.wing.ftTBar="0";   // ABM3: a saved wing has no footing bars entered (REVIEW rows)
+    const T=wingDefault(false); Object.keys(T).forEach(k=>{ if(S.wing[k]===undefined) S.wing[k]=T[k]; }); }
   // IAB (2026-10-20): a project saved before the abutment-type selector has no S.iab: it opens as a conventional abutment (results and
   // Input ID unchanged); missing fields of a newer project take their defaults
   if(!S.iab||typeof S.iab!=="object") S.iab=iabDefault();
@@ -2033,6 +2036,8 @@ function buildInputs(){
     ${inpRow("Soil height over heel (above top of footing)","geom.soilH","ft")}
     ${inpRow("Backfill slope β","geom.beta","deg")}
     ${inpRow("Water table above bottom of footing h<sub>w</sub>","geom.hw","ft",{title:"0 = water table at or below the bottom of footing (no buoyancy)."})}
+    <div class="in-row"><label title="Water level in front of the wall (toe side), above the bottom of footing. Blank = the same as h_w (balanced groundwater, no net water pressure). Lower than h_w: the net hydrostatic thrust WA acts on the wall and stem [3.11.3] (Tab 1 §1.3a).">Water level in front h<sub>w,f</sub> (blank = h<sub>w</sub>)</label>
+      <input type="number" step="any" data-path="geom.hwFr" data-blank="1" value="${S.geom.hwFr==null||S.geom.hwFr===""?"":S.geom.hwFr}"><span class="unit">ft</span></div>
     <div class="subhead">Bridge (for minimum support length)</div>
     ${inpRow("Span length L","geom.spanL","ft")}
     ${inpRow("Skew angle S","geom.skew","deg")}
@@ -2425,7 +2430,9 @@ function buildInputs(){
     ${att?`<div class="chk-row"><input type="checkbox" id="chkWingAb" data-path="wing.toAb" ${w.toAb!==false?"checked":""}><label for="chkWingAb">Apply the pair of wings to the abutment stability and footing (weight; in-line wings also EH and LS; Tab 9 §9.2a)</label></div>`:""}
     ${att?"":`<div class="subhead">Wing footing</div>
       ${selRow("Foundation","wing.fdn",[["spread","Spread footing — stability checked with panel I-4 resistances"],["pile","Pile-supported — stability not checked here"]],{rebuild:true})}
-      ${inpRow("Toe length","wing.Ltoe","ft")}${inpRow("Heel length","wing.Lheel","ft")}${inpRow("Footing thickness","wing.tf","ft")}`}
+      ${inpRow("Toe length","wing.Ltoe","ft")}${inpRow("Heel length","wing.Lheel","ft")}${inpRow("Footing thickness","wing.tf","ft")}
+      ${w.fdn==="pile"?"":`${selRow("Footing bottom bars (toe), transverse","wing.ftBBar",[["0","— not entered"]].concat(bo))}${inpRow("&nbsp;&nbsp;spacing","wing.ftBSp","in")}
+      ${selRow("Footing top bars (heel), transverse","wing.ftTBar",[["0","— not entered"]].concat(bo))}${inpRow("&nbsp;&nbsp;spacing","wing.ftTSp","in")}`}`}
     <div class="subhead">Reinforcement (provided)</div>
     ${selRow(att?"Horizontal bars at the junction (soil face)":"Horizontal bars (S&T, each face)","wing.hSize",bo)}${inpRow("&nbsp;&nbsp;spacing","wing.hSp","in")}
     ${selRow(att?"Vertical bars (S&T, each face)":"Vertical bars (back face, flexure)","wing.vSize",bo)}${inpRow("&nbsp;&nbsp;spacing","wing.vSp","in")}
@@ -2865,6 +2872,7 @@ function computeWing(R,X){
     const hb2=BARS[String(w.hSize)]||BARS["5"], AsH=hb2.Ab*12/(+w.hSp||12), sMaxTS=ttop*12>18? 12 : Math.min(3*ttop*12,18);
     W.ts={bar:String(w.hSize), sp:+w.hSp, As:AsH, req:c.AsST, sMax:sMaxTS, dc:Math.max(c.AsST/AsH, (+w.hSp)/sMaxTS), dir:"horizontal"};
     /* ---- simplified per-foot stability of the design section (spread footing; panel I-4 resistances) ---- */
+    if(w.fdn==="pile") W.ftg={pile:true};   // ABM3: pile-supported wing footing — not designed here (REVIEW row)
     if(w.fdn!=="pile"){
       const tf=Math.max(0.5,+w.tf||0), Lt=Math.max(0,+w.Ltoe||0), Lh=Math.max(0,+w.Lheel||0), B=Lt+tb+Lh, Hv=tf+Hs+Delta;
       const xBk=Lt+ttop, run=B-xBk;
@@ -2913,6 +2921,26 @@ function computeWing(R,X){
       const sl=worst("dcS"), ec=worst("dcE"), br=worst("dcB");
       const brOut=combos.filter(c=>c.out).reduce((b,c)=>(!b||Math.abs(c.e)>Math.abs(b.e))?c:b,null);   // ABR1 (N-2): the combination with the largest |e| beyond B/2
       W.stab={B,tf,Lt,Lh,Hv,xBk,run,G,Pa,ci,si,EH2,gp,combos,sl,ec,br,brOut,rock,qn};
+      /* ABM3 (2026-11-07): wing footing structural design per ft [5.6.3, 5.7.3, 5.6.3.3, 5.6.7; 10.6.5]: linear contact pressure (linSegs) of every
+         stability combination (Strength I, Extreme Events) and of Service I (all 1.00, for crack control). Toe: upward pressure on [0, L_t] less the
+         toe self-weight, moment at the stem front face, shear at d_v from it. Heel: footing weight, soil over the heel, the slope wedge part over the
+         heel, LS_v and the EH vertical component (at the heel end), less the upward pressure on [x_h, B]; moment and shear at the stem back face. */
+      { const xh=Lt+tb, aW=tb-ttop, gEV1=(f)=>f.EV||0;
+        const dem=(c,svc)=>{ const f=c.f, segs=linSegs(c.V,c.e,B,1); if(!segs) return null;
+          const dbB=(BARS[String(w.ftBBar)]||BARS["6"]).db, deT=tf*12-(+m.coverF)-dbB/2, dvT=Math.max(0.9*deT,0.72*tf*12)/12, x1=Math.max(0,Lt-dvT);
+          const MuT=pressMoment(segs,0,Lt,Lt)-(f.DC||0)*gc*tf*Lt*Lt/2, VuT=x1>0? pressForce(segs,0,x1)-(f.DC||0)*gc*tf*x1 : 0;
+          const wedge=run>0&&Delta>0? gam*Delta/run : 0, Fw=wedge*(Lh*Lh/2+aW*Lh), Mw=wedge*(Lh*Lh*Lh/3+aW*Lh*Lh/2);
+          const ehV=c.ls==="Extreme Event II"? EH2.v : Pa*si;
+          const Fd=(f.DC||0)*gc*tf*Lh+gEV1(f)*(gam*Lh*Hs+Fw)+(f.LSv||0)*gam*heq*Lh+(f.EH||0)*ehV;
+          const Md=(f.DC||0)*gc*tf*Lh*Lh/2+gEV1(f)*(gam*Lh*Hs*Lh/2+Mw)+(f.LSv||0)*gam*heq*Lh*Lh/2+(f.EH||0)*ehV*Lh;
+          const MuH=Md-pressMoment(segs,xh,B,xh), VuH=Fd-pressForce(segs,xh,B);
+          return {MuT, VuT, MuH, VuH, ls:c.ls, f, svc:!!svc, V:c.V, e:c.e, Fd, Md}; };
+        const ds=combos.map(c=>dem(c)).filter(Boolean), sv=dem(res("Service I",{DC:1,EV:1,EH:1,LS:1,LSv:1},false),true);
+        const mx=k=>ds.reduce((b,d)=>(!b||d[k]>b[k])?d:b,null);
+        const gT=mx("MuT"), gTv=mx("VuT"), gH=mx("MuH"), gHv=mx("VuH");
+        const sec=(nm,bar,sp,Mu,Vu,Ms,lbl,top,zs)=>String(bar)==="0"||!BARS[String(bar)]? null : X.sectionCheck({name:nm, h:tf*12, cover:+m.coverF, bar:String(bar), sp:+sp, Mu:Math.max(0,Mu), Vu:Math.max(0,Vu), Ms:Math.max(0,Ms), lbl, bST:Math.min(L,B)*12, hST:tf*12, zeroShearDist:zs*12, ...(top?{topBar:true}:{})});
+        W.ftg={toe:gT&&{Mu:gT.MuT, Vu:gTv.VuT, V:gT.V, e:gT.e, f:gT.f, ls:gT.ls, lsV:gTv.ls, Ms:sv? sv.MuT : 0, c:sec("Wing toe",w.ftBBar,w.ftBSp,gT.MuT,gTv.VuT,sv? sv.MuT:0,gT.ls,false,Lt)},
+          heel:gH&&{Mu:gH.MuH, Vu:gHv.VuH, V:gH.V, e:gH.e, Fd:gH.Fd, Md:gH.Md, f:gH.f, ls:gH.ls, lsV:gHv.ls, Ms:sv? sv.MuH : 0, c:sec("Wing heel",w.ftTBar,w.ftTSp,gH.MuH,gHv.VuH,sv? sv.MuH:0,gH.ls,true,Lh)}, xh}; }
       if(brOut) warn(`Wingwall: the factored resultant falls outside the wing footing (|e| = ${fmt(Math.abs(brOut.e),3)} ft ≥ B/2 = ${fmt(B/2,3)} ft, ${brOut.ls}) — overturning; bearing is not defined for that combination (Tab 9 §9.5).`,"err");
       if(fn.qnMode==="soil") W.notes.push("Bearing: the wing uses the q_n entered in panel I-4 (the computed q_n option applies to the abutment footing only).");
     }
@@ -3216,11 +3244,11 @@ function computeAll(){
   if(g.tst>g.tsb) warnFor("conv","Stem top thickness exceeds bottom thickness (negative front batter) — verify intent.");
   if(Math.abs(g.soilH-(g.hstem+g.hbw))>0.01) warnFor("conv",`Soil height over heel (${fmt(g.soilH)} ft) differs from stem + backwall height (${fmt(g.hstem+g.hbw)} ft). The tool uses the entered value; confirm the grading assumption.`);
   if(g.hw>H) warnFor("conv","Water table is above the retained soil surface — outside the tool's applicability (submerged backfill with ponded water is not modeled).","err");
-  else if(g.hw>g.tf) warnFor("conv","Water table is above the top of footing. Buoyant unit weights are used below the water table and a balanced groundwater condition (equal water both sides, no net hydrostatic thrust) is assumed — confirm drainage details support this.");
+  else if(g.hw>g.tf) warnFor("conv","Water table is above the top of footing. Buoyant unit weights are used below the water table and a balanced groundwater condition (equal water both sides, no net hydrostatic thrust) is assumed"+((g.hwFr!==null&&g.hwFr!==undefined&&g.hwFr!=="")?" unless the water level in front (panel I-1) is lower: then the net thrust WA is added (Tab 1 §1.3)":"")+" — confirm drainage details support this.");   // ABM6
 
   /* ===== C-2 Self-weights & centroids (per component, TOTAL kips) ===== */
   const gcSub = m.gc, Lab=g.Lab, Lftg=(+g.Lftg||g.Lab);
-  const hwF = Math.max(0,Math.min(g.hw,g.tf));            // submerged footing depth
+  const hwF = Math.max(0,Math.min(g.hw,g.tf));            // submerged footing depth (ABM6: the uplift stays at the level behind, h_w)
   const hwS = Math.max(0,Math.min(g.hw-g.tf,g.hstem));    // submerged stem height
   const hwSoil = Math.max(0,Math.min(g.hw-g.tf,g.soilH)); // submerged soil height over heel
   const parts=[];
@@ -3457,6 +3485,15 @@ function computeAll(){
     if(A.orient==="inline"){
       groups.WGh={cls:"EH", V:0,Mv:0, Hx:nw*A.FEH, Mh:nw*A.FEH*A.zEH, Hy:0,Mt:0, desc:"In-line wingwalls (pair) — earth pressure"};
       groups.WGls={cls:"LL", V:0,Mv:0, Hx:nw*A.FLS, Mh:nw*A.FLS*A.zLS, Hy:0,Mt:0, desc:"In-line wingwalls (pair) — live-load surcharge"}; } }
+  /* ABM6 (2026-11-07): unbalanced water WA [3.11.3, Table 3.4.1-1 (γ_WA = 1.00)] — water h_w behind (on the virtual back plane, as the buoyant
+     earth pressure), h_w,f in front (toe side). Net hydrostatic thrust ½γ_w(h_w² − h_w,f²)·L_ab at its resultant, toward the toe. The uplift stays
+     as the buoyant weights at h_w (uniform under the base; the relief of a lower front level is neglected — decision). Not in the construction stage. */
+  { const hB=hwE, hFr0=(g.hwFr===null||g.hwFr===undefined||g.hwFr==="")? hB : Math.max(0,+g.hwFr||0), hFr=Math.min(hFr0,hB);
+    if(hB-hFr>1e-9) R.WA={hB, hFr, hFrIn:hFr0, on:true};   // (absent when balanced: the result object of a balanced project is unchanged)
+    if(hFr0>hB+1e-9) warnFor("conv","Water level in front (panel I-1) is above the water level behind the wall: a higher front level would push toward the backfill; it is taken as balanced (no WA).");
+    if(R.WA&&R.WA.on){ const Hw=0.5*GAMMA_W*(hB*hB-hFr*hFr)*Lab, Mw=GAMMA_W*(hB*hB*hB-hFr*hFr*hFr)/6*Lab;
+      Object.assign(R.WA,{H:Hw, M:Mw, z:Hw>0? Mw/Hw : 0});
+      groups.WA={cls:"WA", stage:"full", V:0,Mv:0, Hx:Hw, Mh:Mw, Hy:0,Mt:0, desc:"Unbalanced water WA — net hydrostatic thrust"}; } }
   // permanent earth surcharge ES (uniform behind wall)
   { const es=+S.soil.esQ||0;
     const hES=hCut>0? H-hCut : H;   // IAB2: semi-integral — below the seat only
@@ -3555,6 +3592,7 @@ function computeAll(){
       else if(gr.cls==="EQ"){ gamma = L.EQ||0;   // ABR3: 11.6.5.1 cases (f_P on ΔP_AE, f_I on the wall / soil / wing inertia) and 100/30 [3.10.8]
         if(perm.nc){ if(k==="EQd") gamma*=perm.fP; else if(k==="EQiW"||k==="EQiS"||k==="WGeq"||k==="EQap") gamma*=perm.fI; }   // APS: EQap
         if(perm.dir) gamma*=((k==="EQt")===(perm.dir==="T"))? 1 : 0.3; }
+      else if(gr.cls==="WA") gamma = L.perm? eta : 1.0;   // ABM6: γ_WA = 1.00 (× η at the strength limit states) [T.3.4.1-1]
       else gamma = L[gr.cls]; // TU, CR, WS, WL
       if(gr.cls==="DC" && L.perm && L.dcMax && (perm.DC??1)===1) gamma = L.dcMax;   // Strength IV γDC max
       if(k==="LSv" && exclLSv) gamma=0;
@@ -3571,6 +3609,7 @@ function computeAll(){
     const lbl = (L.perm||L.eq)
       ? `${(L.perm&&perm.DC===1&&L.dcMax?L.dcMax:gq("DC",perm.DC)).toFixed(2)}·DC + ${gq("DW",perm.DW).toFixed(2)}·DW + ${gq("EV",perm.EV).toFixed(2)}·EV + ${((L.eq&&eqEHfixed()!==null)?eqEHfixed():gq("EH",perm.EH)).toFixed(2)}·EH`
         +(esOn?` + ${gq("ES",perm.ES??1).toFixed(2)}·ES`:"")
+        +(groups.WA&&!L.noSuper?` + ${(L.perm?eta:1).toFixed(2)}·WA`:"")   // ABM6
         +(liveOn&&L.LL?(L.mLL&&L.mLL!==1&&!L.noSuper?(liveOn===2?` + ${L.LL.toFixed(2)}·LS + ${(L.LL*L.mLL).toFixed(2)}·BR, LL reaction off`:` + ${(L.LL*L.mLL).toFixed(2)}·(LL,BR) + ${L.LL.toFixed(2)}·LS`):(liveOn===2?` + ${L.LL.toFixed(2)}·(BR,LS), LL reaction off`:` + ${L.LL.toFixed(2)}·(LL,BR,LS)`)):"")
         +(L.WS?` + ${L.WS.toFixed(2)}·WS`:"")+(L.WL?` + ${L.WL.toFixed(2)}·WL`:"")
         +(L.TU&&(groups.TU.Hx||groups.CRSH.Hx)&&!L.noSuper?` + ${L.TU.toFixed(2)}·TU/CR/SH`:"")
@@ -4329,6 +4368,10 @@ function computeAll(){
       if(!r||Mecc>r.Mecc+1e-12) r={Mecc,Pv,gDC,gDW,llOn,...(apSG?{Map,apL}:{})}; }
     return r; }
   R.stemEcc=stemEcc;
+  // ABM6: net hydrostatic pressure on the stem per ft (water h_w − t_f behind, h_w,f − t_f in front, above the stem base)
+  const stWA=(R.WA&&R.WA.on)? (()=>{ const b=Math.max(0,Math.min(R.WA.hB-g.tf,Hs)), f=Math.max(0,Math.min(R.WA.hFr-g.tf,Hs));
+    return b>f+1e-9? {b, f, M:GAMMA_W*(b*b*b-f*f*f)/6, V:GAMMA_W*(b*b-f*f)/2} : null; })() : null;
+  if(stWA) R.stemWA=stWA;
   let stemGov=null; const stemRecs=[];   // ABR1: every limit state's stem-base demand (the shear check takes each one's own V_u, below)
   for(const lsName of STR_LIMITS){
     const L=LIMITS[lsName], ns=L.noSuper?0:1;
@@ -4378,11 +4421,14 @@ function computeAll(){
     }
     let Mu=gEH_ls*MEH_ls+(L.LL?L.LL*MLS_ls:0)+gES_ls*MES_ls+HgirdPerFt*g.hstem + MeccPerFt + Meq;
     let Vu=gEH_ls*VEH_ls+(L.LL?L.LL*VLS_ls:0)+gES_ls*VES_ls+HgirdPerFt + Veq;
+    const gWA=(stWA&&!L.noSuper)? (L.perm? eta : 1.0) : 0;   // ABM6: net water on the stem (not in the construction stage)
+    if(gWA){ Mu+=gWA*stWA.M; Vu+=gWA*stWA.V; }
     if(qCl>0){ Mu+=MCS_ls; Vu+=VCS_ls; }
     const eccMin=(gDCe!==gDCmx||gDWe!==(L.perm?GP.DW[1]:1.0)||llE!==!!L.LL);   // a minimum-factor / no-LL permutation governs M_ecc
-    const rec={Mu,Vu,HgirdPerFt,MeccPerFt,Pv,Meq,ls:lsName,gDCe,gDWe,llE,eccMin,gEH:gEH_ls,MCS:MCS_ls,...(se.Map!==undefined?{Map:se.Map,apL:se.apL}:{}),   // APS
+    const rec={Mu,Vu,HgirdPerFt,MeccPerFt,Pv,Meq,ls:lsName,...(gWA?{gWA}:{}),gDCe,gDWe,llE,eccMin,gEH:gEH_ls,MCS:MCS_ls,...(se.Map!==undefined?{Map:se.Map,apL:se.apL}:{}),   // APS
       Veq,eqT,cL,hwL,MEH:MEH_ls,VEH:VEH_ls,MLS:MLS_ls,VLS:VLS_ls,MES:MES_ls,VES:VES_ls,VCS:VCS_ls,gES:gES_ls,gLL:L.LL||0,HsL:Hs_ls,heqL:heq_ls,   // ABSW: worked terms (display only)
       lbl:`${gEH_ls.toFixed(2)}·EH${esQ>0?` + ${gES_ls.toFixed(2)}·ES`:""}${L.LL?(L.mLL&&L.mLL!==1&&!L.noSuper?` + ${L.LL.toFixed(2)}·LS + ${(L.LL*L.mLL).toFixed(2)}·BR`:` + ${L.LL.toFixed(2)}·(LS,BR)`):""}${qCl>0?` + ${L.CL.toFixed(2)}·CS`:""}${L.WS?` + ${L.WS.toFixed(2)}·WS`:""}${L.TU?` + ${L.TU.toFixed(2)}·TU/CR/SH`:""}${L.eq?" + 1.00·EQ"+(eqT&&eqT.nc?` (11.6.5.1 case ${eqT.nc})`:""):""} + P·e_brg`+(eccMin?` [${gDCe.toFixed(2)}·DC, ${gDWe.toFixed(2)}·DW${L.LL?(llE?", LL reaction on":", no LL reaction"):""}]`:"")+(se.Map!==undefined&&L.LL&&!se.apL?" [approach-slab LL off]":"")+` (${lsName})`};
+    if(gWA) rec.lbl+=` + ${gWA.toFixed(2)}·WA`;   // ABM6
     stemRecs.push(rec);
     // ABR3: the other 11.6.5.1 case of Extreme Event I, for the shear check (its M_u is the smaller one)
     if(eqT&&eqT.alt) eqT.alt.forEach(x=>stemRecs.push(Object.assign({},rec,{Mu:Mu-Meq+x.Meq, Vu:Vu-Veq+x.Veq, Meq:x.Meq, Veq:x.Veq,
@@ -4393,7 +4439,7 @@ function computeAll(){
   const HgirdSvc=(groups.BR.Hx*(LIMITS["Service I"].mLL||1)+groups.TU.Hx+groups.CRSH.Hx+wsFsv*groups.WS.Hx+groups.WL.Hx)/Lab;   // OWNB: m on BR (Service I)
   // Service I: LL reaction on or off, whichever gives the larger back-face moment (LS and BR stay on)
   const seSvc=stemEcc(LIMITS["Service I"],1), PvSvc=seSvc.Pv, MeccSvc=seSvc.Mecc, svcNoLL=!seSvc.llOn;
-  const MsStem=Mst_EH+Mst_LS+Mst_ES+HgirdSvc*g.hstem+MeccSvc;   // Service I: EH + LS + ES + girder horizontal + eccentric vertical (as the Service I V&M diagram)
+  const MsStem=Mst_EH+Mst_LS+Mst_ES+HgirdSvc*g.hstem+MeccSvc+(stWA? stWA.M : 0);   // ABM6: + WA   // Service I: EH + LS + ES + girder horizontal + eccentric vertical (as the Service I V&M diagram)
   R.stemDem={Hs,heqS,cS,Mst_EH,Vst_EH,Mst_LS,Vst_LS,Mst_ES,...stemGov,MsStem,HgirdSvc,eBrg:R.geo.eBrg,MselfEccTot,MeccSvc,svcNoLL};
   R.stemRecs=stemRecs;
   if(g.hw>g.tf) warnFor("conv","Water table above the top of footing: the stem earth pressure uses the buoyant unit weight below the water level, as the stability (balanced groundwater, no net hydrostatic thrust); the backwall and wingwalls use the moist unit weight.");
@@ -5051,13 +5097,15 @@ function computeAll(){
   /* ===== C-21 Input fingerprint (identifies this exact input set) ===== */
   {
     const fpS=JSON.parse(JSON.stringify(Object.assign({},S,{ui:undefined, own:abutOwner()==="AASHTO"?undefined:S.own})));   // OWNA: owner AASHTO leaves the Input ID unchanged
-    if(fpS.soil&&fpS.soil.Kmode==="active") delete fpS.soil.Kmode;              // OWNB: new inputs at their default leave it unchanged too
+    if(fpS.soil&&fpS.soil.Kmode==="active") delete fpS.soil.Kmode;
+    if(fpS.geom&&(fpS.geom.hwFr===null||fpS.geom.hwFr===undefined||fpS.geom.hwFr==="")) delete fpS.geom.hwFr;   // ABM6: balanced water leaves the Input ID unchanged              // OWNB: new inputs at their default leave it unchanged too
     if(fpS.factors&&fpS.factors.gpEHmaxR===1.35) delete fpS.factors.gpEHmaxR;
     if(fpS.constr&&fpS.constr.qC===0) delete fpS.constr.qC;
     if(fpS.constr&&fpS.constr.gC===1.5) delete fpS.constr.gC;
     if(fpS.reinf&&fpS.reinf.coatBW===false) delete fpS.reinf.coatBW;
     if(fpS.wing&&!fpS.wing.on) delete fpS.wing;
-    if(fpS.wing&&fpS.wing.toAb===true) delete fpS.wing.toAb;   // ABR2: the new input at its default                                   // WING: wingwalls off leave the Input ID unchanged
+    if(fpS.wing&&fpS.wing.toAb===true) delete fpS.wing.toAb;
+    if(fpS.wing){ const Tw=wingDefault(false); ["ftBBar","ftBSp","ftTBar","ftTSp"].forEach(k=>{ if(fpS.wing[k]===Tw[k]) delete fpS.wing[k]; }); if(fpS.wing.ftBBar==="0") delete fpS.wing.ftBBar; if(fpS.wing.ftTBar==="0") delete fpS.wing.ftTBar; }   // ABM3   // ABR2: the new input at its default                                   // WING: wingwalls off leave the Input ID unchanged
     if(fpS.iab&&fpS.iab.type!=="integral"&&fpS.iab.type!=="semi") delete fpS.iab;  // IAB: a conventional abutment leaves the Input ID unchanged
     if(fpS.apSlab&&!fpS.apSlab.on) delete fpS.apSlab;                              // APS: no approach slab leaves the Input ID unchanged
     { const T=defaultState(), dropDef=(o,t,keys)=>{ if(o) keys.forEach(k=>{ if(JSON.stringify(o[k])===JSON.stringify(t[k])) delete o[k]; }); };   // ABCHK: new inputs at their default
@@ -5151,6 +5199,14 @@ function computeAll(){
       addD("wEcc","Wing eccentricity (simplified, per ft) [11.6.3.3]",W.stab.ec.dcE,"tab-wing",W.stab.ec.ls);
       if(W.stab.brOut) addD("wBrg","Wing bearing (simplified, per ft) [10.6.3.1]",Infinity,"tab-wing",W.stab.brOut.ls+": resultant outside the base (overturning)",false,"resultant outside base — FAIL");   // ABR1 (N-2)
       else addD("wBrg","Wing bearing (simplified, per ft) [10.6.3.1]",W.stab.br.dcB,"tab-wing",W.stab.br.ls); }
+    if(W.ftg){ const F=W.ftg;   // ABM3: wing footing toe and heel
+      if(F.pile) addD("wFtg","REVIEW — Wing footing (pile-supported) toe / heel design [5.6.3, 5.7.3]",NaN,"tab-wing","not designed here: pile cap of the wing by others",true);
+      else [["Toe",F.toe],["Heel",F.heel]].forEach(([nm,q])=>{ if(!q) return; const c=q.c, id="wFt"+nm;
+        if(!c){ addD(id,"REVIEW — Wing footing "+nm.toLowerCase()+" bars [5.6.3, 5.7.3]",NaN,"tab-wing","bars not entered (panel I-13): M_u = "+fmt(q.Mu,2)+" kip-ft/ft, V_u = "+fmt(q.Vu,2)+" kip/ft",true); return; }
+        addD(id+"F","Wing footing "+nm.toLowerCase()+" flexure [5.6.3]",c.dcFlex,"tab-wing",q.ls);
+        addD(id+"V","Wing footing "+nm.toLowerCase()+" shear [5.7.3]",c.dcShear,"tab-wing",q.lsV);
+        addD(id+"Min","Wing footing "+nm.toLowerCase()+" — min. reinf. [5.6.3.3]",c.MuMin>0? c.MuMin/c.phiMn : 0,"tab-wing","φMn ≥ min(Mcr, 1.33Mu)");
+        addD(id+"Crack","Wing footing "+nm.toLowerCase()+" — crack control [5.6.7]",c.sMax>0? c.sp/c.sMax : (c.fss>0?99:0),"tab-wing","s ≤ s_max"); }); }
   }
   if(R.iab){ const Q=R.iab, sx=(id,nm,c,tab)=>{ addD(id+"F",nm+" flexure [5.6.3]",c.dcFlex,tab||"tab-iab",c.lbl); addD(id+"V",nm+" shear [5.7.3]",c.dcShear,tab||"tab-iab",c.lbl);
       addD(id+"Min",nm+" — min. reinf. [5.6.3.3]",c.MuMin>0? c.MuMin/c.phiMn : 0,tab||"tab-iab","φMn ≥ min(Mcr, 1.33Mu)");
@@ -5425,6 +5481,14 @@ function renderTabWing(R){
         `\\varphi_b q_n = (${t(br.phiB,2)})(${t(St.qn,2)}) = ${t(br.phiB*St.qn,3)}\\ \\text{ksf}`])}
       ${checkLine("Wing bearing",`\\dfrac{q}{\\varphi_b q_n} = \\dfrac{${t(br.q,3)}}{${t(br.phiB*St.qn,3)}}`,br.dcB)}` : ""}
       <div class="eq-note">Combinations: Strength I with γ<sub>p</sub> max/min on DC, EV, EH and the vertical LS on/off (${St.combos.filter(c=>c.ls==="Strength I").length} cases)${W.eqOn?"; Extreme Event I at 1.00 with EQ":""}${W.CT?"; Extreme Event II with CT, DC and EV at 1.00"+(own==="MassDOT"?" and EH γ<sub>p</sub> = 0 (MassDOT 3.3.2.4)":" and EH at 1.00 [T.3.4.1-1]"):""}. Extreme events: φ<sub>τ</sub>, φ<sub>b</sub> of panel I-11, e ≤ B(1/3 + (0.4 − 1/3)γ<sub>EQ</sub>) [11.6.5.1] (γ<sub>EQ</sub> = 0 at Extreme Event II).</div>`);
+  }
+  if(W.ftg){ const F=W.ftg, t=fmtT;   // ABM3: wing footing toe and heel design (per ft)
+    if(F.pile) h+=panel("o-wing-ftg","9.6","Wing Footing — Toe and Heel",`<div class="checkline fail"><span class="flagchip warn">REVIEW</span> Pile-supported wing footing (panel I-13): the pile cap of the wing is not designed in this tool — design it with its pile reactions.</div>`);
+    else{ const St=W.stab, ftNote=(nm,q,x,bars)=>`<div class="note-box">Wing footing ${nm}, per ft at the design section (B = ${fmt(St.B,2)} ft, t<sub>f</sub> = ${fmt(St.tf,2)} ft): linear contact pressure of each stability combination (§9.5) [10.6.5, 11.6.3.2]; ${nm==="toe"?"upward pressure on the toe less the toe self-weight, moment at the stem front face (x = L<sub>toe</sub>), shear at d<sub>v</sub> from it":"footing weight, soil over the heel (with the slope wedge part), LS<sub>v</sub> and the EH vertical component at the heel end, less the upward pressure on the heel; moment and shear at the stem back face (x = "+fmt(x,2)+" ft)"}. Governing: M<sub>u</sub> = ${fmt(q.Mu,2)} kip-ft/ft (${esc(q.ls)}), V<sub>u</sub> = ${fmt(q.Vu,2)} kip/ft (${esc(q.lsV)}); Service I M<sub>s</sub> = ${fmt(q.Ms,2)} kip-ft/ft. Bars: ${bars}.</div>`;
+      [["toe",F.toe,"9.6a",Lt=>0],["heel",F.heel,"9.6b"]].forEach(([nm,q,no])=>{ if(!q) return;
+        const bars=nm==="toe"? "bottom, transverse (panel I-13)" : "top, transverse (panel I-13)";
+        if(q.c) h+=sectionHTML(q.c,ftNote(nm,q,F.xh,bars),no,"Wing Footing "+(nm==="toe"?"Toe":"Heel")+" — Flexure, Shear, Crack Control [5.6.3, 5.7.3, 5.6.7]");
+        else h+=panel("o-wing-ftg-"+nm,no,"Wing Footing "+(nm==="toe"?"Toe":"Heel"),ftNote(nm,q,F.xh,bars)+`<div class="checkline fail"><span class="flagchip warn">REVIEW</span> Wing footing ${nm} bars not entered (panel I-13).</div>`); }); }
   }
   el.innerHTML=h;
 }
@@ -6185,6 +6249,11 @@ function renderTabLoads(R){
       ["H","Retained height (t_f + h_{soil})",geo.H,"ft"]])}
     ${kSelEq}
     ${ehLayers}
+    ${R.WA&&R.WA.on? eqB("Unbalanced water WA — net hydrostatic thrust (water h<sub>w</sub> behind, h<sub>w,f</sub> in front)","AASHTO 3.11.3; Table 3.4.1-1 (γ<sub>WA</sub> = 1.00)",[
+      `WA_h = \\tfrac{1}{2}\\gamma_w\\left(h_w^2 - h_{w,f}^2\\right)L_{ab} = \\tfrac{1}{2}(${fmtT(GAMMA_W,4)})\\left(${fmtT(R.WA.hB)}^2 - ${fmtT(R.WA.hFr)}^2\\right)(${fmtT(g.Lab)}) = ${fmtT(R.WA.H)}\\ \\text{kip}`,
+      `M_{WA} = \\tfrac{1}{6}\\gamma_w\\left(h_w^3 - h_{w,f}^3\\right)L_{ab} = ${fmtT(R.WA.M)}\\ \\text{kip-ft about the base}\\,, \\quad \\bar z = ${fmtT(R.WA.z)}\\ \\text{ft}`]
+      .concat(R.stemWA?[`\\text{Stem (per ft, above the stem base): } m_{WA} = \\tfrac{1}{6}\\gamma_w(h_b^3 - h_f^3) = \\tfrac{1}{6}(${fmtT(GAMMA_W,4)})(${fmtT(R.stemWA.b)}^3 - ${fmtT(R.stemWA.f)}^3) = ${fmtT(R.stemWA.M,3)}\\ \\text{kip-ft/ft}\\,, \\quad v_{WA} = \\tfrac{1}{2}\\gamma_w(h_b^2 - h_f^2) = ${fmtT(R.stemWA.V,3)}\\ \\text{kip/ft}`]:[]),
+      "Water behind on the virtual back plane (the earth pressure above already uses the buoyant unit weight below h<sub>w</sub>); water in front on the toe and stem front. WA is a load group at γ = 1.00 in every limit state except the construction stage (dry). The uplift is kept at the level behind (buoyant weights at h<sub>w</sub>, uniform under the base); the relief from the lower front level is neglected. Seepage and piping are not checked (3.11.3) — by the geotechnical engineer.") : ""}
     ${eqB(`Resolution into components (resultant inclined at ${s.method==="rankine"?"β":"δ"} = ${fmt(R.iota,1)}°) and totals`,"AASHTO 3.11.5.3",[
       `EH_h = P_a\\cos${s.method==="rankine"?"\\beta":"\\delta"}\\,L_{ab} = (${fmtT(E.PaSum)})(${fmtT(E.ci,4)})(${fmtT(g.Lab)}) = ${fmtT(E.EHh)}\\ \\text{kip}`,
       `EH_v = P_a\\sin${s.method==="rankine"?"\\beta":"\\delta"}\\,L_{ab} = (${fmtT(E.PaSum)})(${fmtT(E.si,4)})(${fmtT(g.Lab)}) = ${fmtT(E.EHv)}\\ \\text{kip}`,
@@ -10086,7 +10155,7 @@ document.addEventListener("input",ev=>{
   pushUndo(p);
   let v;
   if(el.type==="checkbox") v=el.checked;
-  else if(el.type==="number") v=el.value===""?0:Number(el.value);
+  else if(el.type==="number") v=el.value===""?(el.dataset.blank?null:0):Number(el.value);   // ABM6: data-blank inputs store null when empty
   else v=el.value;
   const ownPreN=(p==="mat.fc"&&abutOwner()==="CTDOT")? ownDefMap() : null;   // ABR3: the CTDOT γ_c owner default follows f′c (V2 3.5.1)
   setPath(S,p,v);
@@ -10109,7 +10178,7 @@ document.addEventListener("change",ev=>{
   const ownPre=(p==="own.owner"||p==="longit.material"||p==="iab.type"||p==="fnd.branch")?ownDefMap():null;   // OWNB: owner defaults before the change (ABR1: some depend on the abutment type and foundation)
   const raw=el.value;
   const num=Number(raw);
-  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.stemH.size","reinf.bwH.size","reinf.ftgL.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate","wing.hSize","wing.vSize","iab.capBar","iab.hBar","iab.vBar","iab.stBar","apSlab.sBar","apSlab.hBar","apSlab.aBar","apSlab.dBar","apSlab.tBar"].includes(p))?num:raw;   // APS: bar sizes stay strings
+  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.stemH.size","reinf.bwH.size","reinf.ftgL.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate","wing.hSize","wing.vSize","wing.ftBBar","wing.ftTBar","iab.capBar","iab.hBar","iab.vBar","iab.stBar","apSlab.sBar","apSlab.hBar","apSlab.aBar","apSlab.dBar","apSlab.tBar"].includes(p))?num:raw;   // APS: bar sizes stay strings
   setPath(S,p,p==="reinf.gammaE"?Number(raw):v);
   if(p==="beams.N"){ S.beams.N=+raw; }
   if(p==="piles.nRows") S.piles.nRows=+raw;

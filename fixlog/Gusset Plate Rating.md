@@ -3066,3 +3066,67 @@ From the code-compliance review of 2026-11-07 (finding H1). Engineer asleep, mer
 - **Saved data:** no key or format change.
 - **Other copies:** none.
 - **Open items:** C14.7-1 (MBE wording of the splice equations, φ<sub>cs</sub>) stays with the engineer: verify (MBE not in references).
+
+## 2026-11-07 — PR: claude/gusset-h2-lmid (PR #1031: https://github.com/mlococo88/All-Structural/pull/1031) — LRFR Whitmore buckling: L<sub>mid</sub> from the middle of the Whitmore section (LRFD 10th Ed. 6.14.2.8.4) by default; the average of three kept as an option (H2; §4, reverses C4.4, decision pending engineer review)
+
+From the code-compliance review of 2026-11-07 (finding H2). Engineer asleep, merge-as-you-go approved; no questions asked.
+
+### H2. L<sub>mid</sub> for LRFR = the length from the middle of the Whitmore section   [§4: definition of L<sub>mid</sub>; new code parameter `lmidAvg`]
+- **Where:** `compute()`, Whitmore block, anchor `W.LmidAuto = (W.L3[0].L + W.L3[1].L + W.L3[2].L) / 3` (old) / `W.LmidMid = W.L3[1].L` (new); `capWB()` (first line and the L<sub>mid</sub> row); `PARAMS` (rows `K` and the new `lmidAvg`); the C8 warning (`W.LmidAlt`); Summary "Whitmore sections and L<sub>mid</sub>" table; Method tab item "L<sub>mid</sub>"; `HAND` label of the L<sub>mid</sub> row.
+- **Problem:** LRFR Whitmore buckling used L<sub>mid</sub> = the average of the three lengths from the two ends and the middle of the Whitmore section, with K = 0.5. LRFD 10th Ed. 6.14.2.8.4 defines L<sub>mid</sub> as the distance from the **middle** of the Whitmore section to the nearest member fastener line in the member direction, and its Eq. 6.14.2.8.4-2 (factor 3.29 = π²/(0.5² × 12)) builds in K = 0.5 (C6.14.2.8.4). The three-length average is the FHWA-IF-09-014 method, which pairs it with K = 1.2 (FHWA not in references: verify). The engineer confirmed the average on 2026-10-05 (C4.4) without the specification at hand; this change reverses that confirmation.
+- **Decision (pending engineer review):**
+  1. LRFR default: the middle length L<sub>2</sub> (LRFD 10th Ed. 6.14.2.8.4) with K = 0.5.
+  2. The previous rule stays selectable: code parameter `lmidAvg` = 1 ("average of the lengths from the two ends and the middle", labelled FHWA-IF-09-014, pairs with K = 1.2, verify). Choosing it does not change K; the note tells the user to set K to the value it pairs with.
+  3. LFR unchanged: the average with K<sub>LFR</sub> = 1.2.
+  4. An L<sub>mid</sub> override still replaces the value for both methods, as before.
+  5. **Saved data:** no migration. Projects saved before this change have no `lmidAvg` in `code` and open with the LRFD middle length. Reason: the old LRFR rule is not the LRFD 10th Ed. definition, and keeping it silently would hide the change; a project can return to it with `lmidAvg` = 1. No key or format change.
+- **Before:**
+```js
+        W.LmidAuto = (W.L3[0].L + W.L3[1].L + W.L3[2].L) / 3; W.ovL = ovr(m.ovr.lmid); W.Lmid = W.ovL ?? W.LmidAuto;
+    function capWB(g, meth) { const lrfr = meth === 'lrfr', W = g.W, K = lrfr ? p.K : p.KL, phi = lrfr ? p.phiC : p.phiCL, E = p.E, L = W.Lmid; let Pn = 0; const per = [];
+```
+- **After:**
+```js
+        W.LmidAvg = (W.L3[0].L + W.L3[1].L + W.L3[2].L) / 3; W.LmidMid = W.L3[1].L; W.avgL = p.lmidAvg >= 0.5;
+        W.LmidAuto = W.avgL ? W.LmidAvg : W.LmidMid; W.ovL = ovr(m.ovr.lmid); W.Lmid = W.ovL ?? W.LmidAuto; W.LmidF = W.ovL ?? W.LmidAvg;
+    function capWB(g, meth) { const lrfr = meth === 'lrfr', W = g.W, K = lrfr ? p.K : p.KL, phi = lrfr ? p.phiC : p.phiCL, E = p.E, L = lrfr ? W.Lmid : W.LmidF, avg = !lrfr || W.avgL; let Pn = 0; const per = [];
+```
+  New `PARAMS` row after `K`: `['lmidAvg', 'lrfr', 'LRFR plate resistances', 'L_{mid}', 'L_mid for LRFR Whitmore buckling: 0 = from the middle … ; 1 = average …', 0, '', 'LRFD 10th Ed. 6.14.2.8.4; FHWA-IF-09-014 (verify)', 1, …]`.
+- **Governing provision:** AASHTO LRFD BDS 10th Ed. (2024) Art. 6.14.2.8.4, Eq. 6.14.2.8.4-2 and C6.14.2.8.4 (K = 0.5). MBE 3rd Ed. 6A.6.12.6.8: verify (MBE not in references).
+- **Check case** (default project, L2-U1, LRFR Inventory HL-93): L<sub>1</sub> / L<sub>2</sub> / L<sub>3</sub> = 5.533 / 19.112 / 8.384 in; per plate A<sub>g</sub> = 25.570 × 0.5 = 12.785 in², r = 0.5/√12 = 0.14434 in.
+  - **Before:** L<sub>mid</sub> = (5.533 + 19.112 + 8.384)/3 = 11.010 in; KL/r = 38.14; P<sub>e</sub> = 2515.5, P<sub>o</sub> = 460.26, P<sub>n</sub> = 426.3 kip per plate; φP<sub>n</sub> = 0.90 × 2 × 426.3 = **767.4 kip**; RF = (767.4 − 187.5 − 36.0)/262.5 = **2.072**.
+  - **After:** L<sub>mid</sub> = **19.112 in**; KL/r = 0.5 × 19.112/0.14434 = 66.21; P<sub>e</sub> = π² × 29000 × 12.785/66.21² = 834.8 kip; P<sub>e</sub>/P<sub>o</sub> = 1.814 ≥ 0.44; P<sub>n</sub> = 0.658<sup>1/1.814</sup> × 460.26 = 365.4 kip per plate; φP<sub>n</sub> = 0.90 × 2 × 365.4 = **657.8 kip**; RF = (657.8 − 187.5 − 36.0)/262.5 = **1.654**. Governing LRFR stays L2-U1-FS 1.172. LFR WB 576.3 kip, RF 1.403: unchanged.
+- **RFs that moved (main vs branch, 18 review cases):** only LRFR WB capacities and RFs. Governing value changed in: review §2.3 variant (Inventory SP1-Y 1.231 → L2-U1-WB 1.082; Legal 1.857 → 1.632), 1 in A325 bolts (SP1-Y 1.762 → L2-U1-WB 1.654), A502 Gr. 1 rivets (L2-U1-FS 1.700 → L2-U1-WB 1.654), 3/8 in plates (SP1-Y 1.109 → L2-U1-WB 0.719). Spliced validation models: CL/CR-WB 463.3 / 508.1 → 403.1 kip. With `lmidAvg` = 1 every value equals main. Every LFR value is unchanged in every case.
+- **Validation tab:** 17 of 17 match. The L<sub>mid</sub> row keeps its hand value 20.000 in (in that model the middle length and the average are equal); only its label now names the middle length (intentional, follows the definition).
+- **How verified:** headless Chromium, file://, `GPR.compute` main vs branch on the review cases; every tab rendered (calc sheet included), 0 console errors; `node tests/check-syntax.mjs`, `tests/smoke/project-library.mjs --tool gusset`, `tests/smoke/phone-layout.mjs --tool gusset`: pass.
+- **Other copies:** none.
+- **Open items:** the engineer to confirm the reversal of C4.4 and the K to pair with the average if `lmidAvg` = 1 (FHWA-IF-09-014 / MBE not in references).
+
+## 2026-11-07 — PR: claude/gusset-m1-rp-rupture (PR #1036: https://github.com/mlococo88/All-Structural/pull/1036) — Shear rupture on the shear planes includes R<sub>p</sub> (LRFD 10th Ed. Eq. 6.13.5.3-2) (M1; §4, results go down for punched holes)
+
+From the code-compliance review of 2026-11-07 (finding M1). Engineer asleep, merge-as-you-go approved.
+
+### M1. SPn-U: φ<sub>vu</sub> 0.58 R<sub>p</sub> F<sub>u</sub> A<sub>vn</sub>   [§4: formula]
+- **Where:** `capPV(pl, meth, kind)`, the shear-rupture branch after `if (kind === 'pvy') { … }`; `ref.pvu`.
+- **Problem:** LRFD 10th Ed. 6.14.2.8.3 rates shear rupture of a gusset plane by Eq. 6.13.5.3-2, which includes the hole reduction factor R<sub>p</sub> (6.13.4: 1.0 drilled / subpunched and reamed, 0.90 punched full size). The tool left R<sub>p</sub> out (it already used it in block shear, `capBS`). 10 % unconservative for punched holes; drilled holes (the default) unchanged.
+- **Before:**
+```js
+      const phi = lrfr ? p.phiVU : p.phiVUL, An = pl.Ln * sumT, C = phi * 0.58 * Fu * An;
+```
+- **After:**
+```js
+      const hsP = [...pl.cross, ...(pl.stag && pl.stag.used ? (pl.stag.chain || []).map(z => z && z.h).filter(Boolean) : [])], pun = hsP.some(h => P.members[h.m] && P.members[h.m].fast.prep === 'punched'),
+        Rp = hsP.length ? Math.min(...hsP.map(h => P.members[h.m] && P.members[h.m].fast.prep === 'punched' ? p.RpP : p.RpD)) : p.RpD, RpK = pun && p.RpP <= p.RpD ? 'RpP' : 'RpD';
+      const phi = lrfr ? p.phiVU : p.phiVUL, An = pl.Ln * sumT, C = phi * 0.58 * Rp * Fu * An;
+```
+  plus an R<sub>p</sub> row in the calculation, `R_p` in the equation, and the R<sub>p</sub> key (`RpP` / `RpD`) in `keys`.
+- **Decisions (pending engineer review):**
+  1. A plane through holes of members with different hole preparation takes the **lowest** R<sub>p</sub> of the holes on it (the straight-line holes, plus the holes of a staggered chain when that chain governs). A plane with no holes takes R<sub>p</sub> for drilled holes (1.0).
+  2. R<sub>p</sub> is applied to LFR shear rupture too, as the tool already does for LFR block shear (FHWA-IF-09-014 not in references: verify).
+- **Governing provision:** AASHTO LRFD BDS 10th Ed. (2024) Art. 6.14.2.8.3 → Eq. 6.13.5.3-2; R<sub>p</sub> per Art. 6.13.4. MBE 3rd Ed. 6A.6.12.6.6: verify (MBE not in references).
+- **Check case** (review §2.3 variant: plate 1 loses 1/16 in, Σt = 0.9375 in; A325 7/8 in bolts, threads included, punched holes; SP1 net length 36.000 in):
+  - **Before:** SP1-U = 0.80 × 0.58 × 58 × 36.000 × 0.9375 = **908.3 kip**; RF LRFR Inventory **1.436**.
+  - **After:** 0.80 × 0.58 × **0.90** × 58 × 36.000 × 0.9375 = **817.5 kip**; RF LRFR Inventory = (0.85 × 817.45 − 287.33)/337.46 = **1.208** (Operating 1.862 → 1.565; Legal 2.167 → 1.822; LFR Inventory 1.925 → 1.642).
+  - Default project with punched holes: SP1-U 968.8 → 871.9 kip, RF LRFR Inv 2.020 → 1.732.
+- **How verified:** main vs branch on 20 review cases: only SPn-U moved, and only in the cases with punched holes (all punched; only L2-L3 punched, whose chord holes lie on SP1; the §2.3 variant; the validation model with punched holes). Drilled cases identical. Validation tab 17 of 17 (drilled holes; unchanged). `check-syntax`, `phone-layout --tool gusset` pass; `project-library --tool gusset` passes except its four "identical to main" checks, which differ only in the SPn-U equation text (now shows R<sub>p</sub>) on the default (drilled) project. 0 console errors.
+- **Saved data:** no change. **Other copies:** none.
