@@ -8205,9 +8205,6 @@ function buildCrossSection(r) {
   const y_fbot     = OY + tf_px;
   const y_grdetoe  = OY - Df_add_px;
 
-  const cov_s_px = (inp.cov_stem / 12) * SCALE;
-  const cov_f_px = (inp.cov_ftg  / 12) * SCALE;
-  const bar_r    = Math.max(2.5, SCALE * 0.038);
 
   // Pressure scales — RWPS: the lateral and passive diagrams are drawn by rwpsLateral / rwpsPassive (off the structure)
   const p_pass_base = r.Kp * inp.gamma_s * r.Df;
@@ -8344,7 +8341,7 @@ function buildCrossSection(r) {
     s += `<rect x="${skx}" y="${y_fbot}" width="${skw}" height="${dk_px}"
       fill="${CC.fill}" stroke="${CC.stroke}" stroke-width="1.2"
       data-tip="<b>Shear key</b><br>Depth d_k = ${f(inp.dk,0)} in · width b_k = ${f(inp.key_bk||12,0)} in<br>${r.keyR ? (r.keyR.plain ? 'Plain concrete (ACI Ch. 14)' : 'Reinforced: K1 ' + r.keyR.rf.sel.label) + '<br>' : ''}Added passive P_p,key = ${f(r.Pp_key,0)} lb/ft"/>`;
-    s += `<text x="${skx+skw+3}" y="${y_fbot+dk_px/2+4}" font-size="7" fill="#2155c4">key</text>`;   // RWPS: beside the key (was under it, on the bearing diagram)
+    if (!(r.keyR && r.keyR.rf)) s += `<text x="${skx+skw+3}" y="${y_fbot+dk_px/2+4}" font-size="7" fill="#2155c4">key</text>`;   // RWRB: with K1 bars, the K1 label names the key   // RWPS: beside the key (was under it, on the bearing diagram)
   }
   s += rwPileSVG(r, x_toe, y_fbot, SCALE, '#3d4650');   // RWPL: pile rows (pile-supported footing only)
   s += `</g>`;
@@ -8361,91 +8358,17 @@ function buildCrossSection(r) {
       text-anchor="middle" font-weight="700">P=${f(inp.col_DL+inp.col_LL+inp.col_SL,1)}k</text>`;
   }
 
-  // ── REINFORCING BARS ─────────────────────────────────────────
-  const RC = '#c42121', GC = '#0f7a5a';
-  s += `<g data-layer="rebar">`;
-
-  // S1 — Stem vertical (back face)
-  const s1_x = x_bbot - cov_s_px - bar_r;
+  // ── REINFORCING BARS ── RWRB (2026-11-07): drawn after the text scaling below by rwrbBarsSVG from the Drawings' bar model
+  //    (bars in the section plane as lines at their extents, bars along the wall as dots); the tooltips are kept.
   const s1tip = `<b>S1 — stem vertical (back face)</b><br>#${r.sel_stem.bar.num} @ ${r.sel_stem.spacing}″ o.c.${r.sel_stem.overridden?' <i>(override)</i>':''}<br>A_s prov = ${f(r.sel_stem.As_prov,4)} in²/ft ≥ ${f(r.As_stem_des,4)} req<br>d = ${f(r.d_stem,2)}″ · cover = ${f(inp.cov_stem,2)}″<br>ℓ_d = ${f(r.ld_stem,1)}″ · M_u = ${f(r.Mu_stem_lbft/1000,2)} kip·ft/ft`;
-  [0.12, 0.38, 0.65, 0.88].forEach(t => {
-    s += `<circle cx="${s1_x}" cy="${y_top + t*Hs_px}" r="${bar_r}" fill="${RC}" data-tip="${s1tip}"/>`;
-  });
-  s += `<text x="${s1_x-4}" y="${y_top+Hs_px*0.12-5}" font-size="7.5" fill="${RC}" text-anchor="end">
-    S1 #${r.sel_stem.bar.num}@${r.sel_stem.spacing}''${r.sel_stem.overridden?' ★':''}</text>`;
-
-  // ── S1 DETAILING: standard hook into footing, bar-cutoff elevation, splice zone ──
-  // Standard 90° hook at S1 base: extends down into the footing then toward the toe.
-  // RWTS-2 (2026-11-06): drawn to scale (was schematic: elbow at 0.62 t_f, tail max(10 px, 0.9 t_f)): the bar goes down to
-  // the top of the bottom mat (cover + F2 bar), bends at the standard bend (centreline radius = inside diameter/2 + d_b/2;
-  // inside diameter 6 d_b for #3–#8, 8 d_b for #9–#11, 10 d_b for #14–#18: ACI 318-19 Table 25.3.2 / AASHTO LRFD 10th
-  // Ed. Table 5.10.2.3-1) and runs 12 d_b toward the toe (ACI 318-19 Table 25.3.1 / AASHTO 5.10.2.1). Display only.
-  {
-    const db1 = r.sel_stem.bar.db / 12, n1 = r.sel_stem.bar.num;
-    const dbT = (inp.Lt > 0.4 ? r.sel_toe.bar.db : 0) / 12;
-    const rb  = ((n1 <= 8 ? 6 : n1 <= 11 ? 8 : 10) / 2 + 0.5) * db1 * SCALE;      // bend radius to the bar centreline
-    const hook_y  = y_fbot - cov_f_px - (dbT + db1 / 2) * SCALE;                    // tail centreline, on the bottom mat
-    const tail    = 12 * db1 * SCALE;
-    s += `<path d="M ${s1_x} ${y_ftop} L ${s1_x} ${hook_y-rb} Q ${s1_x} ${hook_y} ${s1_x-rb} ${hook_y} L ${s1_x-rb-tail} ${hook_y}"
-      fill="none" stroke="${RC}" stroke-width="1.6"
-      data-tip="<b>S1 standard hook</b><br>90° hook into footing (ACI §25.3)<br>ℓ_dh development into footing<br>Tail extends toward toe<br>Drawn to scale: bend ${n1 <= 8 ? 6 : n1 <= 11 ? 8 : 10}d_b inside diameter, 12d_b tail, on the bottom mat"/>`;
-    s += `<text x="${s1_x+4}" y="${y_ftop+tf_px*0.55}" font-size="6.5" fill="${RC}">std 90° hook</text>`;
-  }
-  // RWS13 (2026-11-07): end of S1 (S3–S1 lap above mid-height); the alternate-bar cut-off is removed
-  if (!r.s1_full) {
-    const y_cut = y_top + (inp.Hs - r.z_s1_end) * SCALE, y_mid = y_top + (inp.Hs / 2) * SCALE;
-    s += `<line x1="${x_ftoe-14}" y1="${y_cut}" x2="${x_bbot+14}" y2="${y_cut}"
-      stroke="${RC}" stroke-width="0.9" stroke-dasharray="6,3"
-      data-tip="<b>End of S1</b><br>S1 ends ${f(r.z_s1_end,2)} ft above the joint<br>S3 from mid-height (${f(inp.Hs/2,2)} ft); S3–S1 Class B lap ℓ_st = ${f(r.s13_lst,1)}″<br>S1 extends ${f(r.s1_ext,1)}″ past z_req = ${f(r.z_req,2)} ft"/>`;
-    s += `<rect x="${s1_x-3.5}" y="${y_cut}" width="7" height="${y_mid-y_cut}" fill="rgba(196,33,33,0.10)" stroke="${RC}" stroke-width="0.5" stroke-dasharray="2,2"/>`;
-    s += `<text x="${x_bbot+16}" y="${y_cut+3}" font-size="6.8" fill="${RC}">S1 ends ${f(r.z_s1_end,1)}' (S3 lap)</text>`;
-  }
-  // Lap splice zone just above the footing (construction joint)
-  {
-    const y_spl0 = y_ftop - Math.min(Hs_px, (r.lst_stem/12)*SCALE);   // RWDS: the computed lap ℓst (was 1.3 ℓ_d; RWTS-2: true length)
-    s += `<rect x="${s1_x-3.5}" y="${y_spl0}" width="7" height="${y_ftop-y_spl0}"
-      fill="rgba(196,33,33,0.13)" stroke="${RC}" stroke-width="0.6" stroke-dasharray="2,2"
-      data-tip="<b>Lap splice zone</b><br>Dowels from footing lap with S1 above the construction joint<br>Class ${r.lap_classA?'A':'B'} tension lap ℓ_st = ${f(r.lst_stem,1)}″ (Stem design Step 5)"/>`;
-    s += `<text x="${s1_x+7}" y="${(y_spl0+y_ftop)/2+2}" font-size="6.3" fill="${RC}">lap 1.3ℓd</text>`;
-  }
-
-  // S2 — Stem horizontal T&S (both faces)
-  const s2off = (inp.cov_stem/12+0.04)*SCALE;
   const s2tip = `<b>S2 — stem horizontal (T&amp;S)</b><br>#${r.sel_temp.bar.num} @ ${r.sel_temp.spacing}″ o.c.${r.sel_temp.overridden?' <i>(override)</i>':''}<br>A_s prov = ${f(r.sel_temp.As_prov,4)} in²/ft ≥ ${f(r.As_temp_stem,4)} req<br>${r.isAASHTO ? 'AASHTO §5.10.6 (per face)' : '0.0018·b·t (ACI §24.4.3.2) · both faces'}`;
-  [0.2, 0.5, 0.8].forEach(t => {
-    const cy = y_top+t*Hs_px;
-    const x_back_at_t = x_btop + (x_bbot-x_btop)*t;
-    s += `<circle cx="${x_ftoe+s2off+bar_r}" cy="${cy}" r="${bar_r*0.75}" fill="${RC}" fill-opacity="0.5" data-tip="${s2tip}"/>`;
-    s += `<circle cx="${x_back_at_t-s2off-bar_r}" cy="${cy}" r="${bar_r*0.75}" fill="${RC}" fill-opacity="0.5" data-tip="${s2tip}"/>`;
-  });
-
-  // F1 — Heel top bars
-  const f1_y = y_ftop + (2.0/12)*SCALE + bar_r;
-  const sp1   = (r.sel_heel.spacing/12)*SCALE;
   const f1tip = `<b>F1 — heel transverse (top)</b><br>#${r.sel_heel.bar.num} @ ${r.sel_heel.spacing}″ o.c.${r.sel_heel.overridden?' <i>(override)</i>':''}<br>A_s prov = ${f(r.sel_heel.As_prov,4)} in²/ft ≥ ${f(r.As_heel_des,4)} req<br>d = ${f(r.d_heel,2)}″ · ℓ_d = ${f(r.ld_heel,1)}″ (ψt=1.3 top bars)<br>M_u = ${f(Math.abs(r.Mu_heel_net)/1000,2)} kip·ft/ft · V_u = ${f(r.Vu_heel/1000,2)} kip/ft`;
-  for (let xi = x_bbot+sp1/2; xi < x_heel-2; xi += sp1)
-    s += `<circle cx="${xi}" cy="${f1_y}" r="${bar_r}" fill="${RC}" data-tip="${f1tip}"/>`;
-  s += `<text x="${(x_bbot+x_heel)/2}" y="${f1_y-5}" font-size="7.5" fill="${RC}"
-    text-anchor="middle">F1 #${r.sel_heel.bar.num}@${r.sel_heel.spacing}'' TOP${r.sel_heel.overridden?' ★':''}</text>`;
-
-  // F2 — Toe bottom bars
-  const f2_y = y_fbot - cov_f_px - bar_r;
-  if (inp.Lt > 0.4) {
-    const sp2 = (r.sel_toe.spacing/12)*SCALE;
-    const f2tip = `<b>F2 — toe transverse (bottom)</b><br>#${r.sel_toe.bar.num} @ ${r.sel_toe.spacing}″ o.c.${r.sel_toe.overridden?' <i>(override)</i>':''}<br>A_s prov = ${f(r.sel_toe.As_prov,4)} in²/ft ≥ ${f(r.As_toe_des,4)} req<br>d = ${f(r.d_toe,2)}″ · cover = ${f(inp.cov_ftg,2)}″ · ℓ_d = ${f(r.ld_toe,1)}″<br>M_u = ${f(Math.max(0,r.Mu_toe_net)/1000,2)} kip·ft/ft · V_u = ${f(r.Vu_toe/1000,2)} kip/ft`;
-    for (let xi = x_toe+sp2/2; xi < x_ftoe-2; xi += sp2)
-      s += `<circle cx="${xi}" cy="${f2_y}" r="${bar_r}" fill="${GC}" data-tip="${f2tip}"/>`;
-    s += `<text x="${(x_toe+x_ftoe)/2}" y="${y_ftop+FS.m+3}" font-size="7.5" fill="${GC}"
-      text-anchor="middle">F2 #${r.sel_toe.bar.num}@${r.sel_toe.spacing}'' BOT${r.sel_toe.overridden?' ★':''}</text>`;
-  }
-
-  // F3 — Longitudinal (2 dots per face)
+  const f2tip = `<b>F2 — toe transverse (bottom)</b><br>#${r.sel_toe.bar.num} @ ${r.sel_toe.spacing}″ o.c.${r.sel_toe.overridden?' <i>(override)</i>':''}<br>A_s prov = ${f(r.sel_toe.As_prov,4)} in²/ft ≥ ${f(r.As_toe_des,4)} req<br>d = ${f(r.d_toe,2)}″ · cover = ${f(inp.cov_ftg,2)}″ · ℓ_d = ${f(r.ld_toe,1)}″<br>M_u = ${f(Math.max(0,r.Mu_toe_net)/1000,2)} kip·ft/ft · V_u = ${f(r.Vu_toe/1000,2)} kip/ft`;
   const f3tip = `<b>F3 — footing longitudinal (T&amp;S)</b><br>#${r.sel_ftg_long.bar.num} @ ${r.sel_ftg_long.spacing}″ o.c.${r.sel_ftg_long.overridden?' <i>(override)</i>':''}<br>A_s prov = ${f(r.sel_ftg_long.As_prov,4)} in²/ft ≥ ${f(r.As_ftg_long,4)} req<br>Runs parallel to wall · both faces`;
-  [0.25, 0.75].forEach(xf => {
-    s += `<circle cx="${x_ftoe+tsbot_px*xf}" cy="${f1_y}" r="${bar_r*0.7}" fill="#0055a8" fill-opacity="0.8" data-tip="${f3tip}"/>`;
-    s += `<circle cx="${x_ftoe+tsbot_px*xf}" cy="${f2_y}" r="${bar_r*0.7}" fill="#0055a8" fill-opacity="0.8" data-tip="${f3tip}"/>`;
-  });
-  s += `</g>`;
+  const s3tip = r.sel_stemT ? `<b>S3 — stem vertical, upper half (back face)</b><br>#${r.sel_stemT.bar.num} @ ${r.sel_stemT.spacing}″ o.c.<br>From mid-height to the top cover; S3–S1 Class B lap ℓ_st = ${f(r.s13_lst,1)}″` : '';
+  const s1dtip = `<b>S1D — stem dowel</b><br>#${r.sel_stem.bar.num} @ ${r.sel_stem.spacing}″ o.c. (as S1)<br>90° standard hook on the bottom mat, 12d_b tail; ℓ_dh = ${f(r.ldh_stem,1)}″<br>Class ${r.lap_classA?'A':'B'} tension lap with S1: ℓ_st = ${f(r.lst_stem,1)}″ (Stem design Step 5)`;
+  const s4tip = r.sel_ff ? `<b>S4 — stem vertical, front face (T&amp;S)</b><br>#${r.sel_ff.bar.num} @ ${r.sel_ff.spacing}″ o.c.` : '';
+  const k1tip = (r.keyR && r.keyR.rf) ? `<b>K1 — shear key</b><br>#${r.keyR.rf.sel.bar.num} @ ${r.keyR.rf.sel.spacing}″ o.c., toe face, hooked into the footing` : '';
 
   // ── ACTIVE / SURCHARGE / WATER and PASSIVE: RWPS, drawn after the text scaling below (rwpsLateral / rwpsPassive) ──
   const acttip = `<b>Active earth pressure</b><br>Kₐ = ${f(r.Ka,4)} (${inp.beta>0?'sloped backfill':'Rankine, level'})<br>P_a = ${f(r.Pa_tri,0)} lb/ft at H/3 = ${f(r.H/3,2)} ft<br>p at base = ${f(r.p_ftg_base,0)} psf${r.p_top > 0 ? ` (incl. Kₐ·q_s = ${f(r.p_top,0)} psf, drawn as the surcharge band)` : ''}${r.hasWT?`<br>Breaks at W.T.: γ above → γ′ = ${f(r.gamma_s_sub,1)} pcf below`:''}<br>M_OT = ${f(r.Mo/1000,1)} kip·ft/ft`;
@@ -8493,6 +8416,9 @@ function buildCrossSection(r) {
     tipSoil: acttip, tipSur: striptip, tipWat: hytip });
   const PAS = r.Df > 0 ? rwpsPassive(r, { xToe: x_toe, yFbot: y_fbot, sc: SCALE, gap: PGAP, W: PP_W, fs: FS.s, mk: 'cs-ag', tip: ptip, tipKey: pktip }) : null;
   if (PAS) s += PAS.svg;
+  // RWRB: reinforcement from the Drawings' bar model (inches from the toe and from the footing base), labels in columns
+  s += rwrbBarsSVG(r, { X: xin => x_toe + xin / 12 * SCALE, Y: yin => y_fbot - yin / 12 * SCALE, k: SCALE / 12, fs: FS.s,
+    tips: { S1: s1tip, S1D: s1dtip, S3: s3tip, S4: s4tip, S2: s2tip, F1: f1tip, F2: f2tip, F3: f3tip, K1: k1tip } });
 
   // ── DIMENSION LINES ──────────────────────────────────────────
   const dim_y1   = y_fbot + dimOff1;   // RWTS-2: rows placed under the key and the bearing labels
@@ -9484,6 +9410,139 @@ function rwtsScaleBar(x, y, sc, fs, note, noteBelow) {   // RWTS-2: noteBelow = 
   return t + '</g>';
 }
 
+// RWRB (2026-11-07): moved here unchanged from the Drawings script (they are used by the Analysis diagram on load)
+/* the model geometry in inches (x from the toe, y up from the footing base) */
+function rwdwGeo(r) {
+  const inp = r.inp, k12 = 12;
+  const G = { B: r.B * k12, tf: inp.tf, Hs: inp.Hs * k12, H: r.H * k12, Lt: inp.Lt * k12, Lh: inp.Lh * k12, tsb: inp.ts_bot, tst: inp.ts_top,
+    Dfa: inp.Df_add * k12, dk: inp.useShearKey ? inp.dk : 0, beta: inp.beta, dH: (r.dH_slope || 0) * k12 };
+  G.xf = G.Lt; G.xbb = G.Lt + G.tsb; G.xbt = G.Lt + G.tst;
+  G.xb = y => G.xbb + (G.xbt - G.xbb) * Math.max(0, Math.min(1, (y - G.tf) / Math.max(G.Hs, 1e-9)));   // back face at height y
+  // shear key: width b_k (input, RWSK; before 2026-11-07 drawn nominal 0.36 t_s,base wide), centred under the stem
+  G.kw = inp.key_bk || 12; G.kx = G.xf + G.tsb / 2 - G.kw / 2;   // RWSK (2026-11-07): key width = the input b_k (was 0.36 t_s,base, drawn nominal), centred under the stem as before
+  G.tanb = Math.tan(G.beta * Math.PI / 180);
+  G.gradeB = y0 => y0;   // placeholder
+  G.bar = r.hasBarrier ? { h: r.bar_h_ft * k12, w: inp.bar_mode === 'geom' ? inp.bar_t : 0.85 * G.tst, nominalW: inp.bar_mode !== 'geom' } : null;
+  if (G.bar) G.bar.xc = G.Lt + G.tst / 2 + (inp.bar_ecc || 0);
+  G.wt = r.hasWT ? G.H - r.wt_d * k12 : null;   // water level above the base
+  G.Hp = (r.Hp || r.H) * k12;
+  return G;
+}
+const rwdwBarOf = n => BARS.find(b => b.num === n) || { num: n, db: n / 8, Ab: 0 };
+/* the bars as modelled (sizes, spacings, d), with the nominal lengths the model does not give (labelled rules) */
+function rwdwBars(r, G) {
+  const inp = r.inp, cs = inp.cov_stem, cf = inp.cov_ftg;
+  const s1 = r.sel_stem, s3 = r.sel_stemT, s2 = r.sel_temp, f1 = r.sel_heel, f2 = r.sel_toe, f3 = r.sel_ftg_long;
+  const db = s => s.bar.db;
+  const hook = 12 * db(s1);                                         // 90° standard hook tail 12 d_b
+  const cb = r.cov_bot != null ? r.cov_bot : cf;                      // RWPL (8e): on piles the bottom mat sits above the pile heads (cov_bot = c_c on soil)
+  const yHook = cb + db(f2) + db(f3) + db(s1) / 2;                   // the hook bears on the bottom mat
+  const lap = r.lst_stem;                                            // RWDS (2026-11-07): the computed tension lap ℓst (Stem design Step 5); was 1.3 × ℓd (with its 12-in minimum)
+  const yS1 = r.s1_full ? null : G.tf + r.z_s1_end * 12;           // RWS13 (2026-11-07): S1 ends at mid-height + the S3–S1 lap (was full height + alternate-bar cut-off)
+  const yCut = null;
+  const yTop = G.H - cs;
+  const B = {
+    S1: { s: s1, len: (yS1 === null ? yTop : yS1) - G.tf, from: G.tf, to: yS1 === null ? yTop : yS1 },
+    S1D: { s: s1, hook, yHook, lap, len: (G.tf - yHook) + lap + hook },
+    S3: { s: s3, from: G.tf + G.Hs / 2, to: yTop, len: yTop - (G.tf + G.Hs / 2) },
+    S2: { s: s2 }, F3: { s: f3 },
+    S4: r.sel_ff ? { s: r.sel_ff, len: G.H - cs - G.tf } : null,   // RWFF
+    K1: (r.keyR && r.keyR.rf && G.dk > 0) ? (() => { const s = r.keyR.rf.sel, x = G.kx + cf + s.bar.db / 2, y0 = -G.dk + cf, y1 = G.tf - cf - f1.bar.db - s.bar.db / 2, hk = 12 * s.bar.db, hb = r.keyR.rf.hook_bot ? Math.min(12 * s.bar.db, G.kw - 2 * cf) : 0; return { s, x, y0, y1, hk, hb, len: (y1 - y0) + hk + hb }; })() : null,   // RWSK: toe face of the key, 90° hook toward the heel under the top mat
+    F1: { s: f1, x0: Math.max(cf, G.xbb - r.ld_heel), x1: G.B - cf, y: G.tf - cf - db(f1) / 2 },
+    F2: { s: f2, x0: cf, x1: Math.min(G.B - cf, G.xf + r.ld_toe), y: cb + db(f2) / 2, hook: r.toe_hook ? 12 * db(f2) : 0 },   // RWDS: 90° hook up at the toe end when ticked
+    yCut, cs, cf,
+  };
+  B.F1.len = B.F1.x1 - B.F1.x0; B.F2.len = B.F2.x1 - B.F2.x0 + B.F2.hook;
+  B.nF3 = Math.floor((G.B - 2 * cf) / f3.spacing + 1e-9) + 1;
+  return B;
+}
+
+// RWRB (2026-11-07): the reinforcement of the Analysis diagram cross-section drawn from the Drawings' bar model (rwdwGeo /
+// rwdwBars: the same marks, sizes, spacings, covers and extents as sheets 1–2 and the bar schedule). In a section across the
+// wall, bars in the plane of the section are LINES at their real extents (S1, S1D with its 90° hook, S3, S4, F1, F2 with its
+// hook, K1) and bars along the wall are DOTS at their spacing (S2 each face, F3 top and bottom). Labels sit in columns clear
+// of the concrete edges, the bars and each other, with leaders. Display only.
+// o: { X(in) → px, Y(in) → px, k (px per in), fs, tips: {S1, S2, F1, F2, F3, K1}, xHeelEnd }
+function rwrbBarsSVG(r, o) {
+  const G = rwdwGeo(r), BR = rwdwBars(r, G), X = o.X, Y = o.Y, k = o.k, fs = o.fs, inp = r.inp;
+  const C = { S1: '#c42121', S1D: '#e0662a', S3: '#9c2a6e', S4: '#b0455a', S2: '#c42121', F1: '#c42121', F2: '#0f7a5a', F3: '#0055a8', K1: '#7a3db8' };
+  const sw = db => Math.max(1.5, db * k).toFixed(2), dotR = db => Math.max(db / 2 * k, 2.2);
+  const tip = t => t ? ` data-tip="${t}"` : '';
+  const bl = s => `#${s.bar.num}@${s.spacing}"${s.overridden ? ' ★' : ''}`;
+  const s1 = BR.S1.s, d1 = s1.bar.db, off = Math.max(d1, 2.6 / k);              // dowel / S3 drawn just inside S1 (≥ 2.6 px apart)
+  const s1Pt = y => G.xb(y) - BR.cs - d1 / 2;                                     // S1 centreline at height y (parallel to the back face)
+  const L = (x1, y1, x2, y2, c, db, t) => `<line x1="${X(x1)}" y1="${Y(y1)}" x2="${X(x2)}" y2="${Y(y2)}" stroke="${c}" stroke-width="${sw(db)}" stroke-linecap="round"${tip(t)}/>`;
+  let t = '<g data-layer="rebar">';
+  const lab = [];   // [column, desired y (px), bar point x, y (px), text, colour]
+  // S1 — back face, from the joint to its end (mid-height + the S3–S1 lap, or the top cover)
+  t += L(s1Pt(G.tf), G.tf, s1Pt(BR.S1.to), BR.S1.to, C.S1, d1, o.tips.S1);
+  // S1D — dowel: 90° hook on the bottom mat (bend: inside diameter 6 / 8 / 10 d_b, ACI 318-19 Table 25.3.2 / AASHTO 5.10.2.3), 12 d_b tail, up by the lap ℓ_st
+  const xd = s1Pt(G.tf) - off, yl = Math.min(G.tf + BR.S1D.lap, G.H - BR.cs), yh = BR.S1D.yHook, n1 = s1.bar.num;
+  const rb = Math.min(((n1 <= 8 ? 6 : n1 <= 11 ? 8 : 10) / 2 + 0.5) * d1, BR.S1D.hook * 0.6);
+  t += `<path d="M ${X(xd)} ${Y(yl)} L ${X(xd)} ${Y(yh + rb)} Q ${X(xd)} ${Y(yh)} ${X(xd - rb)} ${Y(yh)} L ${X(xd - BR.S1D.hook)} ${Y(yh)}" fill="none" stroke="${C.S1D}" stroke-width="${sw(d1)}" stroke-linecap="round"${tip(o.tips.S1D)}/>`;
+  // S3 — back face, upper half (inside S1)
+  if (r.sel_stemT && BR.S3.to > BR.S3.from) t += L(s1Pt(BR.S3.from) - off, BR.S3.from, s1Pt(BR.S3.to) - off, BR.S3.to, C.S3, r.sel_stemT.bar.db, o.tips.S3);
+  // S4 — front face verticals (AASHTO T&S), from the joint to the top cover
+  if (BR.S4) { const x4 = G.xf + BR.cs + BR.S4.s.bar.db / 2; t += L(x4, G.tf, x4, G.H - BR.cs, C.S4, BR.S4.s.bar.db, o.tips.S4); }
+  // S2 — horizontal T&S dots, each face, inside the verticals
+  const s2 = BR.S2.s, r2 = dotR(s2.bar.db);
+  for (let y = G.tf + s2.spacing / 2; y < G.H - BR.cs; y += s2.spacing) {
+    const xb = s1Pt(y) - d1 / 2 - s2.bar.db / 2 - (BR.S3 && r.sel_stemT && y >= BR.S3.from ? off : 0);
+    const xf = G.xf + BR.cs + (BR.S4 ? BR.S4.s.bar.db : 0) + s2.bar.db / 2;
+    t += `<circle cx="${X(xb)}" cy="${Y(y)}" r="${r2}" fill="${C.S2}" fill-opacity="0.75"${tip(o.tips.S2)}/><circle cx="${X(xf)}" cy="${Y(y)}" r="${r2}" fill="${C.S2}" fill-opacity="0.75"${tip(o.tips.S2)}/>`;
+  }
+  // K1 — shear key bars (toe face of the key), hooked into the footing
+  if (BR.K1) t += `<polyline points="${[...(BR.K1.hb ? [[BR.K1.x + BR.K1.hb, BR.K1.y0]] : []), [BR.K1.x, BR.K1.y0], [BR.K1.x, BR.K1.y1], [BR.K1.x + BR.K1.hk, BR.K1.y1]].map(([x, y]) => X(x) + ',' + Y(y)).join(' ')}" fill="none" stroke="${C.K1}" stroke-width="${sw(BR.K1.s.bar.db)}"${tip(o.tips.K1)}/>`;
+  // F1 top (heel, into the toe by ℓ_d past the stem back face), F2 bottom (toe, into the heel by ℓ_d past the front face; hook when ticked)
+  t += L(BR.F1.x0, BR.F1.y, BR.F1.x1, BR.F1.y, C.F1, BR.F1.s.bar.db, o.tips.F1);
+  t += L(BR.F2.x0, BR.F2.y, BR.F2.x1, BR.F2.y, C.F2, BR.F2.s.bar.db, o.tips.F2);
+  if (BR.F2.hook) t += L(BR.F2.x0, BR.F2.y, BR.F2.x0, BR.F2.y + BR.F2.hook, C.F2, BR.F2.s.bar.db, o.tips.F2);
+  // F3 — longitudinal T&S dots on both mats, at the spacing
+  const f3 = BR.F3.s, r3 = dotR(f3.bar.db), yT3 = BR.F1.y - BR.F1.s.bar.db / 2 - f3.bar.db / 2, yB3 = BR.F2.y + BR.F2.s.bar.db / 2 + f3.bar.db / 2;
+  for (let x = BR.cf; x <= G.B - BR.cf + 1e-6; x += f3.spacing) t += `<circle cx="${X(x)}" cy="${Y(yT3)}" r="${r3}" fill="${C.F3}" fill-opacity="0.85"${tip(o.tips.F3)}/><circle cx="${X(x)}" cy="${Y(yB3)}" r="${r3}" fill="${C.F3}" fill-opacity="0.85"${tip(o.tips.F3)}/>`;
+  // lap marks (brackets beside the back face): S1D–S1 at the joint, S3–S1 at mid-height
+  const xBr = X(G.xbb) + 7, brk = (ya, yb, c) => `<path d="M ${xBr - 3} ${Y(ya)} L ${xBr} ${Y(ya)} L ${xBr} ${Y(yb)} L ${xBr - 3} ${Y(yb)}" fill="none" stroke="${c}" stroke-width="1"/>`;
+  t += brk(G.tf, yl, C.S1D);
+  if (!r.s1_full && r.sel_stemT) t += brk(BR.S3.from, BR.S1.to, C.S3);
+  t += '</g>';
+  // ── labels ──
+  const ymid = (a, b) => (Y(a) + Y(b)) / 2;
+  if (r.sel_stemT && BR.S3.to > BR.S3.from) lab.push(['R', ymid(Math.max(BR.S3.from, BR.S1.to), BR.S3.to), X(s1Pt((BR.S3.to + Math.max(BR.S3.from, BR.S1.to)) / 2) - off), ymid(Math.max(BR.S3.from, BR.S1.to), BR.S3.to), `S3 ${bl(r.sel_stemT)} back, upper`, C.S3]);
+  if (!r.s1_full && r.sel_stemT) {
+    lab.push(['R', ymid(BR.S3.from, BR.S1.to), xBr, ymid(BR.S3.from, BR.S1.to), `S3–S1 lap ℓst = ${f(r.s13_lst,1)}"`, C.S3]);
+    lab.push(['R', Y(BR.S1.to) + 0.35 * fs, X(s1Pt(BR.S1.to)), Y(BR.S1.to), `S1 ends ${f(r.z_s1_end,2)}' above joint`, C.S1]);
+  }
+  lab.push(['R', ymid(yl, Math.min(BR.S1.to, BR.S3.from)), X(s1Pt((yl + Math.min(BR.S1.to, BR.S3.from)) / 2)), ymid(yl, Math.min(BR.S1.to, BR.S3.from)), `S1 ${bl(s1)} back face`, C.S1]);
+  lab.push(['R', ymid(G.tf, yl), xBr, ymid(G.tf, yl), `S1D dowel, lap ℓst = ${f(r.lst_stem,1)}" (${r.lap_classA ? 'A' : 'B'})`, C.S1D]);
+  lab.push(['R', Y(G.H - BR.cs) + 2.2 * fs, X(s1Pt(G.H - BR.cs - s2.spacing)), Y(G.H - BR.cs - s2.spacing), `S2 ${bl(s2)} horiz. EF (dots)`, C.S2]);
+  if (BR.S4) lab.push(['L', ymid(G.tf + G.Dfa, G.H), X(G.xf + BR.cs + BR.S4.s.bar.db / 2), ymid(G.tf + G.Dfa, G.H), `S4 ${bl(BR.S4.s)} front face`, C.S4]);
+  lab.push(['R', Y(G.tf) - 6, X(Math.min(BR.F1.x1, G.xbb + 0.55 * (G.B - G.xbb))), Y(BR.F1.y), `F1 ${bl(BR.F1.s)} top, heel`, C.F1]);
+  lab.push(['L', Y(G.tf + G.Dfa) - 1.4 * fs - 6, X((BR.F2.x0 + Math.min(BR.F2.x1, G.xf)) / 2), Y(BR.F2.y), `F2 ${bl(BR.F2.s)} bottom, toe`, C.F2]);
+  // inside the heel between the two mats when there is room for one or two lines, else above the footing
+  const room = (Y(yB3) - r3) - (Y(yT3) + r3), yc = (Y(yT3) + Y(yB3)) / 2 + 0.35 * fs;
+  const nIn = room >= 2.7 * fs ? 2 : room >= 1.4 * fs ? 1 : 0;
+  lab.push([nIn >= 1 ? 'H' : 'R', nIn === 2 ? yc - 0.65 * fs : nIn === 1 ? yc : Y(G.tf) - 6, X(G.B - BR.cf - f3.spacing), Y(yT3), `F3 ${bl(f3)} long. T&amp;B (dots)`, C.F3]);
+  lab.push([nIn === 2 ? 'H' : 'R', nIn === 2 ? yc + 0.65 * fs : Y(G.tf) - 6, X(xd - BR.S1D.hook * 0.5), Y(yh), `S1D 90° hook, 12d_b`, C.S1D]);
+  if (BR.K1) lab.push(['K', Y(-G.dk / 2) + 0.35 * fs, X(BR.K1.x), Y((BR.K1.y0 + BR.K1.y1) / 2), `key: K1 ${bl(BR.K1.s)}`, C.K1]);
+  const col = {
+    R: { x: X(G.xbb) + 16, a: 'start', y0: Y(G.H) + 1.2 * fs, y1: Y(G.tf) - 6 },
+    L: { x: X(G.xf) - 10, a: 'end', y0: Y(G.H) + 1.2 * fs, y1: Y(G.tf + G.Dfa) - 1.4 * fs - 6 },   // clear of the GL (toe) label
+    H: { x: X(G.B) - 6, a: 'end', y0: Y(yT3) + r3 + fs, y1: Y(yB3) - r3 - 0.3 * fs },
+    K: { x: X(G.kx + G.kw) + 4, a: 'start', y0: -1e9, y1: 1e9 },
+  };
+  let out = '';
+  Object.entries(col).forEach(([c, d]) => {
+    const it = lab.filter(l => l[0] === c).sort((a, b) => a[1] - b[1]);
+    let prev = -1e9; it.forEach(l => { l[1] = Math.max(l[1], prev + 1.3 * fs); prev = l[1]; });
+    if (it.length && it[it.length - 1][1] > d.y1) { let nxt = d.y1; for (let i = it.length - 1; i >= 0; i--) { it[i][1] = Math.min(it[i][1], nxt); nxt = it[i][1] - 1.3 * fs; } }
+    it.forEach(([, y, bx, by, txt, cl]) => {
+      const lx = d.a === 'start' ? d.x - 3 : d.x + 3, ly = y - 0.35 * fs;
+      if (Math.hypot(lx - bx, ly - by) > 6) out += `<line x1="${lx}" y1="${ly}" x2="${bx}" y2="${by}" stroke="${cl}" stroke-width="0.7" opacity="0.8"/><circle cx="${bx}" cy="${by}" r="1.4" fill="${cl}"/>`;
+      out += `<text x="${d.x}" y="${y}" font-size="${fs}" fill="${cl}" text-anchor="${d.a}">${txt}</text>`;
+    });
+  });
+  return t + '<g data-layer="rebar-labels">' + out + '</g>';
+}
 // RWPS (2026-11-07): pressure diagrams drawn OFF the structure (engineer: "the passive pressure triangle is overlapping the
 // structure, it should be drawn off to the side"). Display only: every ordinate and label is a value the analysis already has.
 //  • rwpsPassive: passive on the vertical plane of the toe face, its zero line `gap` in front of the toe; the shear-key block
@@ -11471,52 +11530,8 @@ const rwdwFI = v => SharedDxf.fmtFtIn(v);
 const rwdwIn = v => SharedDxf.fmtIn(v);
 const rwdwN = (v, d) => (isFinite(v) ? (+v).toFixed(d == null ? 2 : d) : '-');
 const rwdwK = (lb, d) => rwdwN(lb / 1000, d == null ? 2 : d);   // lb -> kip text
-/* the model geometry in inches (x from the toe, y up from the footing base) */
-function rwdwGeo(r) {
-  const inp = r.inp, k12 = 12;
-  const G = { B: r.B * k12, tf: inp.tf, Hs: inp.Hs * k12, H: r.H * k12, Lt: inp.Lt * k12, Lh: inp.Lh * k12, tsb: inp.ts_bot, tst: inp.ts_top,
-    Dfa: inp.Df_add * k12, dk: inp.useShearKey ? inp.dk : 0, beta: inp.beta, dH: (r.dH_slope || 0) * k12 };
-  G.xf = G.Lt; G.xbb = G.Lt + G.tsb; G.xbt = G.Lt + G.tst;
-  G.xb = y => G.xbb + (G.xbt - G.xbb) * Math.max(0, Math.min(1, (y - G.tf) / Math.max(G.Hs, 1e-9)));   // back face at height y
-  // shear key: width b_k (input, RWSK; before 2026-11-07 drawn nominal 0.36 t_s,base wide), centred under the stem
-  G.kw = inp.key_bk || 12; G.kx = G.xf + G.tsb / 2 - G.kw / 2;   // RWSK (2026-11-07): key width = the input b_k (was 0.36 t_s,base, drawn nominal), centred under the stem as before
-  G.tanb = Math.tan(G.beta * Math.PI / 180);
-  G.gradeB = y0 => y0;   // placeholder
-  G.bar = r.hasBarrier ? { h: r.bar_h_ft * k12, w: inp.bar_mode === 'geom' ? inp.bar_t : 0.85 * G.tst, nominalW: inp.bar_mode !== 'geom' } : null;
-  if (G.bar) G.bar.xc = G.Lt + G.tst / 2 + (inp.bar_ecc || 0);
-  G.wt = r.hasWT ? G.H - r.wt_d * k12 : null;   // water level above the base
-  G.Hp = (r.Hp || r.H) * k12;
-  return G;
-}
-const rwdwBarOf = n => BARS.find(b => b.num === n) || { num: n, db: n / 8, Ab: 0 };
-/* the bars as modelled (sizes, spacings, d), with the nominal lengths the model does not give (labelled rules) */
-function rwdwBars(r, G) {
-  const inp = r.inp, cs = inp.cov_stem, cf = inp.cov_ftg;
-  const s1 = r.sel_stem, s3 = r.sel_stemT, s2 = r.sel_temp, f1 = r.sel_heel, f2 = r.sel_toe, f3 = r.sel_ftg_long;
-  const db = s => s.bar.db;
-  const hook = 12 * db(s1);                                         // 90° standard hook tail 12 d_b
-  const cb = r.cov_bot != null ? r.cov_bot : cf;                      // RWPL (8e): on piles the bottom mat sits above the pile heads (cov_bot = c_c on soil)
-  const yHook = cb + db(f2) + db(f3) + db(s1) / 2;                   // the hook bears on the bottom mat
-  const lap = r.lst_stem;                                            // RWDS (2026-11-07): the computed tension lap ℓst (Stem design Step 5); was 1.3 × ℓd (with its 12-in minimum)
-  const yS1 = r.s1_full ? null : G.tf + r.z_s1_end * 12;           // RWS13 (2026-11-07): S1 ends at mid-height + the S3–S1 lap (was full height + alternate-bar cut-off)
-  const yCut = null;
-  const yTop = G.H - cs;
-  const B = {
-    S1: { s: s1, len: (yS1 === null ? yTop : yS1) - G.tf, from: G.tf, to: yS1 === null ? yTop : yS1 },
-    S1D: { s: s1, hook, yHook, lap, len: (G.tf - yHook) + lap + hook },
-    S3: { s: s3, from: G.tf + G.Hs / 2, to: yTop, len: yTop - (G.tf + G.Hs / 2) },
-    S2: { s: s2 }, F3: { s: f3 },
-    S4: r.sel_ff ? { s: r.sel_ff, len: G.H - cs - G.tf } : null,   // RWFF
-    K1: (r.keyR && r.keyR.rf && G.dk > 0) ? (() => { const s = r.keyR.rf.sel, x = G.kx + cf + s.bar.db / 2, y0 = -G.dk + cf, y1 = G.tf - cf - f1.bar.db - s.bar.db / 2, hk = 12 * s.bar.db, hb = r.keyR.rf.hook_bot ? Math.min(12 * s.bar.db, G.kw - 2 * cf) : 0; return { s, x, y0, y1, hk, hb, len: (y1 - y0) + hk + hb }; })() : null,   // RWSK: toe face of the key, 90° hook toward the heel under the top mat
-    F1: { s: f1, x0: Math.max(cf, G.xbb - r.ld_heel), x1: G.B - cf, y: G.tf - cf - db(f1) / 2 },
-    F2: { s: f2, x0: cf, x1: Math.min(G.B - cf, G.xf + r.ld_toe), y: cb + db(f2) / 2, hook: r.toe_hook ? 12 * db(f2) : 0 },   // RWDS: 90° hook up at the toe end when ticked
-    yCut, cs, cf,
-  };
-  B.F1.len = B.F1.x1 - B.F1.x0; B.F2.len = B.F2.x1 - B.F2.x0 + B.F2.hook;
-  B.nF3 = Math.floor((G.B - 2 * cf) / f3.spacing + 1e-9) + 1;
-  return B;
-}
-
+/* rwdwGeo, rwdwBarOf, rwdwBars: moved unchanged to the first script, before rwrbBarsSVG (RWRB, 2026-11-07: the Analysis diagram,
+   drawn on load, uses the same bar model) */
 /* ---------------- footing support layer (soil today; piles in a planned phase) ---------------- */
 const RWDW_SUPPORT = {
   soil: {
