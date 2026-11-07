@@ -2870,3 +2870,139 @@ Calculation audit, item 4. Engineer decision (2026-11-07): offer the variable-he
 
 ### Saved data
 None. No field or key changed.
+
+## 2026-11-07 — PR: claude/rw-dev-splice-checks — Development and splice checks: stem dowel tension lap, heel F1 and toe F2 ℓd vs length available, optional hooked toe bars (RWDS; new checks) (PR #947: https://github.com/mlococo88/All-Structural/pull/947)
+
+Calculation audit, item 5 (PR 5a). Engineer decision (2026-11-07). Code sites are tagged `RWDS`. The S1 / S3 layout and the alternate-bar cut-off are PR 5b (not here).
+
+### RWDS-1. `devLength` split (pure refactor)
+- `devLength(...)` now returns `Math.max(12, devLengthACIRaw(...))`.
+- The new `devLengthACIRaw` is the same Eq. 25.4.2.4a expression without the 12-in minimum.
+- Same value as before for every input (the ACI ℓd values of all walls compared below are identical).
+
+### RWDS-2. New checks in `calcAll` (after the toe ℓd)   [§4: new checks; no existing value changes]
+- **Provisions** (verified for the audit briefing; cited and paraphrased):
+  - ACI 318-19 Table 25.5.2.1 and AASHTO LRFD 10th Ed. 5.10.8.4.3a, tension lap splices: Class A (1.0ℓd) only if A_s,prov/A_s,req ≥ 2 over the lap length and no more than 50 % of A_s is spliced within the lap length; otherwise Class B (1.3ℓd); ℓst ≥ 12 in.
+  - In ACI, ℓd is from 25.4.2.1(a), i.e. before its 12-in minimum.
+  - Development: ACI 318-19 §25.4.2 / §25.4.3.1 and AASHTO 5.10.8.2.1a / 5.10.8.2.4a.
+- **(1) Stem dowel lap `stemLap`:**
+  - `lap_ld_a` is ℓd before the 12-in minimum: ACI `devLengthACIRaw`; AASHTO ℓdb·λrl·λcf·λrc.
+  - `lap_ratio` = S1 A_s,prov / A_s,des at the base.
+  - `lap_pct` = 100, because every S1 bar laps its dowel at the joint. So the lap is always Class B.
+  - `lst_stem` = max(12, 1.3·ℓd).
+  - Check: ℓst ≤ H_s (the lap fits in the stem).
+  - The drawings use `lst_stem` for the S1D lap. Before, they used 1.3 × ℓd including its 12-in minimum, labelled "as drawn by the tool (not checked)".
+- **(2) Heel bars `heelDev`:** ℓd(F1) ≤ min(L_h·12 − c_c, L_t·12 + t_s − c_c). These are the lengths available on each side of the stem back face.
+- **(3) Toe bars `toeDev`:**
+  - Straight bars: ℓd(F2) ≤ L_t·12 − c_c past the stem front face.
+  - Hooked bars (new input **"Toe bars F2 hooked at the toe end"**, `toe_hook`): ℓdh(F2) ≤ L_t·12 − c_c instead.
+  - ℓdh is from `hookDevLength`: ACI ψr 1.6, ψo 1.0, ψc; AASHTO with λrc of the straight bar.
+  - Also ℓd ≤ t_s + L_h·12 − c_c into the stem and the heel.
+  - NG gives a warning and a red note on the tab.
+- **Before / after** (`git diff -U0`, calculation, inputs and drawing geometry):
+```diff
+@@ -1943,0 +1945,4 @@ function devLength(db, fy, fc, psi_t, psi_e, cover_to_ctr, lambda=1.0, spacing=I
++  return Math.max(12, devLengthACIRaw(db, fy, fc, psi_t, psi_e, cover_to_ctr, lambda, spacing));   // min 12 in per ACI 25.4.2.1 (RWDS: same value as before)
++}
++// RWDS (2026-11-07): ℓd of ACI 318-19 §25.4.2.1(a) / Eq. 25.4.2.4a before its 12-in minimum (the lap length ℓst is based on it, Table 25.5.2.1)
++function devLengthACIRaw(db, fy, fc, psi_t, psi_e, cover_to_ctr, lambda=1.0, spacing=Infinity) {
+@@ -1953 +1958 @@ function devLength(db, fy, fc, psi_t, psi_e, cover_to_ctr, lambda=1.0, spacing=I
+-  return Math.max(12, ld);                  // min 12 in per ACI 25.4.2.1
++  return ld;
+@@ -3229,0 +3235,30 @@ function calcAll(inp) {
++  // ── RWDS (2026-11-07): development and splice checks (engineer decision, audit item 5a) ──
++  // ℓd before the 12-in minimum: ACI 318-19 §25.4.2.1(a) (Eq. 25.4.2.4a); AASHTO 10th §5.10.8.2.1a (ℓdb·λrl·λcf·λrc)
++  const ldRaw = (bar, spacing, cov, top) => isAASHTO
++    ? (p => p.ldb * p.lam_rl * p.lam_rc)(devLengthAASHTOParts(bar.db, inp.fy, inp.fc, top, cov + bar.db / 2, spacing))
++    : devLengthACIRaw(bar.db, inp.fy, inp.fc, top ? 1.3 : 1.0, 1.0, cov + bar.db / 2, 1.0, spacing);
++  // (1) stem dowel (S1D) tension lap with S1 at the construction joint — ACI Table 25.5.2.1 / AASHTO 5.10.8.4.3a:
++  //     Class A (1.0ℓd) only if A_s,prov/A_s,req ≥ 2 over the lap AND ≤ 50 % of A_s spliced; else Class B (1.3ℓd); ℓst ≥ 12 in.
++  //     Every S1 bar is lapped with its dowel at the joint → 100 % spliced → Class B.
++  const lap_ld_a   = ldRaw(sel_stem.bar, sel_stem.spacing, inp.cov_stem, false);
++  const lap_ratio  = sel_stem.As_prov / Math.max(As_stem_des, 1e-9);
++  const lap_pct    = 100;
++  const lap_classA = lap_ratio >= 2 && lap_pct <= 50;
++  const lst_stem   = Math.max(12, (lap_classA ? 1.0 : 1.3) * lap_ld_a);
++  const lap_avail  = inp.Hs * 12;                                  // the lap must fit in the stem above the joint
++  const lap_ok     = lst_stem <= lap_avail;
++  // (2) heel bars F1: ℓd each side of the critical section at the stem back face
++  const f1_av_heel = inp.Lh * 12 - inp.cov_ftg;                     // to the heel end
++  const f1_av_toe  = inp.Lt * 12 + inp.ts_bot - inp.cov_ftg;        // past the stem back face, through the stem and toe
++  const heel_dev_ok = ld_heel <= Math.min(f1_av_heel, f1_av_toe);
++  // (3) toe bars F2: ℓd (or ℓdh if hooked at the toe end) past the stem front face
++  const toe_hook   = !!inp.toe_hook;
++  const ldA_toe    = isAASHTO ? devLengthAASHTOParts(sel_toe.bar.db, inp.fy, inp.fc, false, inp.cov_ftg + sel_toe.bar.db / 2, sel_toe.spacing) : null;
++  const ldh_toe    = hookDevLength(sel_toe.bar.db, inp.fy, inp.fc, isAASHTO, sel_toe.bar, ldA_toe ? ldA_toe.lam_rc : 1.0);
++  const f2_av_toe  = inp.Lt * 12 - inp.cov_ftg;                     // to the toe end
++  const f2_av_heel = inp.ts_bot + inp.Lh * 12 - inp.cov_ftg;        // past the front face, into the stem and heel
++  const f2_need    = toe_hook ? ldh_toe : ld_toe;
++  const toe_dev_ok = f2_need <= f2_av_toe && ld_toe <= f2_av_heel;
++  if (!toe_dev_ok) warnings.push(`Toe bars F2: ${toe_hook ? 'ℓdh' : 'ℓd'} = ${f(f2_need,1)}" > ${f(f2_av_toe,1)}" available to the toe end — ${toe_hook ? 'use a smaller bar or lengthen the toe' : 'hook the bars at the toe end, use a smaller bar or lengthen the toe'}.`);
++  if (!heel_dev_ok) warnings.push(`Heel bars F1: ℓd = ${f(ld_heel,1)}" exceeds the length available (${f(Math.min(f1_av_heel, f1_av_toe),1)}").`);
++
+@@ -3392,0 +3428,3 @@ function calcAll(inp) {
++    stemLap:   { ok: lap_ok,                       label: 'Stem Dowel Lap', val: `ℓst=${f(lst_stem,1)}" Class ${lap_classA ? 'A' : 'B'}` },   // RWDS
++    heelDev:   { ok: heel_dev_ok,                  label: 'Heel F1 ℓd', val: `${f(ld_heel,1)}${heel_dev_ok ? '≤' : '>'}${f(Math.min(f1_av_heel, f1_av_toe),1)}"` },   // RWDS
++    toeDev:    { ok: toe_dev_ok,                   label: 'Toe F2 ' + (toe_hook ? 'ℓdh' : 'ℓd'), val: `${f(f2_need,1)}${f2_need <= f2_av_toe ? '≤' : '>'}${f(f2_av_toe,1)}"` },   // RWDS
+@@ -3545,0 +3586 @@ function getInputs() {
++    ...(b('toe_hook') ? { toe_hook: true } : {}),   // RWDS (2026-11-07): F2 hooked at the toe end; absent = straight (as before)
+@@ -10084 +10158 @@ function rwdwBars(r, G) {
+-  const lap = 1.3 * r.ld_stem;                                       // as drawn by the tool (Class B 1.3 l_d), not checked
++  const lap = r.lst_stem;                                            // RWDS (2026-11-07): the computed tension lap ℓst (Stem design Step 5); was 1.3 × ℓd (with its 12-in minimum)
+@@ -10093 +10167 @@ function rwdwBars(r, G) {
+-    F2: { s: f2, x0: cf, x1: Math.min(G.B - cf, G.xf + r.ld_toe), y: cf + db(f2) / 2 },
++    F2: { s: f2, x0: cf, x1: Math.min(G.B - cf, G.xf + r.ld_toe), y: cf + db(f2) / 2, hook: r.toe_hook ? 12 * db(f2) : 0 },   // RWDS: 90° hook up at the toe end when ticked
+@@ -10096 +10170 @@ function rwdwBars(r, G) {
+-  B.F1.len = B.F1.x1 - B.F1.x0; B.F2.len = B.F2.x1 - B.F2.x0;
++  B.F1.len = B.F1.x1 - B.F1.x0; B.F2.len = B.F2.x1 - B.F2.x0 + B.F2.hook;
+```
+
+### RWDS-3. Display
+- **Stem design, Step 5:** the lap is worked: class conditions, ℓst = max(1.3ℓd, 12), and ℓst ≤ H_s.
+- **Footing design:**
+  - Heel Step 4: F1 both sides.
+  - Toe Step 4: the hook ℓdh when ticked, the F2 check, and an NG note when it fails.
+- **Report:** steps `stb/s5.lap`, `heel/h4.dev`, `toe/t4.dev` (and `t4.ldh`).
+- **Dashboard rows:** "Stem Dowel Lap", "Heel F1 ℓd", "Toe F2 ℓd / ℓdh", with D/C and links to their cards.
+- **Rebar schedule tab:** an "S1D dowel lap ℓst" row, and "Toe F2 hook ℓdh" when ticked.
+- **Cross-section tooltip:** shows the lap.
+- **Drawings:**
+  - S1D lap = ℓst, labelled "CLASS B TENSION LAP L_ST = … (CHECKED)".
+  - F2 gets a 90° hook leg (12 d_b) at the toe end when ticked, with its label.
+  - Bar schedule: F2 bend "90° HOOK", length includes the hook, ℓd / ℓdh.
+- **Saved data:** `toe_hook` is additive and saved only when ticked. A save without it opens unticked (`RWLS_DEF` reset).
+
+### Check cases (re-run with the tool's `calcAll` and in the browser)
+- **ACI default:**
+  - S1 #4@6: A_s,prov/A_s,req = 0.400/0.3888 = 1.03 < 2, and 100 % is spliced, so **Class B**.
+  - ℓd(a) = 3·60000·0.8/(40·63.25·2.5)·0.5 = **11.38 in**, so ℓst = max(1.3·11.38, 12) = **14.8 in** (drawn before: 1.3·12 = 15.6 in).
+  - F1 ℓd 14.8 ≤ min(93, 51) in, OK.
+  - F2 ℓd 12.0 ≤ 33 in, OK.
+- **AASHTO default:**
+  - S1 #5@7: ratio 1.14, **Class B**, ℓst = 1.3·14.78 = **19.2 in** (drawn before: 19.2).
+  - F1 ℓd 19.2 ≤ min(93, 51), OK.
+  - F2 12.0 ≤ 33, OK.
+- **ACI variant, L_t 1.5 ft, L_h 9.5 ft:** available to the toe end = 18 − 3 = **15 in**.
+  - Toe override #6@12, straight: ℓd = **17.08 > 15, NG** (new FAIL).
+  - Toe override #6@12, hooked: ℓdh = **15.54 > 15, NG**.
+  - Toe override #5@12, hooked: ℓdh = **11.8 ≤ 15, OK**.
+  - F1: ℓd 14.8 ≤ min(111, 33), OK.
+- **AASHTO, same variant, #6 hooked:** ℓdh = 14.53 ≤ 15, OK. (Straight would be ℓd = 17.74.)
+
+### How verified
+- `calcAll` in Node, branch, for the cases above. Every value matches the audit briefing.
+- **origin/main vs branch, headless Chromium, eleven walls** (the eight audit walls, plus the short-toe variant, plus AASHTO q_s 250 + water + collision ± "full"):
+  - every pre-existing `_R` value is identical;
+  - `_R` gains only the new fields and the three `checks` entries (20 paths), plus one new warning in the short-toe variant;
+  - Export JSON and every localStorage key are identical;
+  - tab and Report text differ by the new steps and rows.
+- **Tests:**
+  - project-library retwall: its step 1 ("results identical", which compares `_R` strictly) reports exactly the 20 added items (17 fields + 3 checks) and nothing else; all its other steps pass.
+  - check-syntax, smoke/retaining-wall-checks, phone-layout rwall 390/768, dxf-print-sheets rw: pass.
+- **Screenshots looked at:** Toe Step 4 hooked #6 (FAIL), the drawings with a hooked #5.
+
+### Saved data and old projects
+- `toe_hook` is additive; there is no other change.
+- Old projects keep every value. They gain three check rows.
+- A wall whose toe is too short for straight F2 bars now shows a FAIL that was not checked before.
+- The S1D lap drawn in ACI mode changes where ℓd < 12 in (e.g. 15.6 → 14.8 in at the default).

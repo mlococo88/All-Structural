@@ -1504,6 +1504,7 @@ body.rwDashColl #rwDash { display: none; }
         <div class="ig"><label for="ovr_bar_f2">Bar #</label><div class="iw"><input type="number" id="ovr_bar_f2" value="0" min="0" max="10" step="1"></div></div>
         <div class="ig"><label for="ovr_spc_f2">Spacing</label><div class="iw"><input type="number" id="ovr_spc_f2" value="0" min="0" max="18" step="1"><span class="iw-unit">in</span></div></div>
       </div>
+      <div class="ck-row"><input type="checkbox" id="toe_hook" onchange="onInputChange()"><label for="toe_hook">Toe bars F2 hooked at the toe end (standard 90° hook; checked with ℓ<sub>dh</sub>)</label></div><!-- RWDS (2026-11-07): additive field, saved only when ticked; absent = straight -->
     </div>
 
     <div class="ig full bar-ovr">
@@ -1730,7 +1731,7 @@ const RW_CARDS = {
 };
 // r.checks key → card where the check is worked (ACI crack control has no card in the tabs; the report adds one)
 const RW_CHECK_CARD = { ot:'stabOT', sliding:'stabSlide', bearing:'stabBrg', ecc:'stabEcc',
-  stemFlex:'stemFlex', stemShear:'stemShear', stemMidShear:'stemMid', stemHook:'stemDev', stemMidFlex:'stemMid',
+  stemFlex:'stemFlex', stemShear:'stemShear', stemMidShear:'stemMid', stemHook:'stemDev', stemMidFlex:'stemMid', stemLap:'stemDev', heelDev:'heelShear', toeDev:'toeShear',
   heelFlex:'heelFlex', heelShear:'heelShear', toeFlex:'toeFlex', toeShear:'toeShear', colAxial:'stabCol',
   ishFtg:'stabISH', ishStem:'stabISH', tsStem:'stemTS', tsFtg:'ftgTS', ctSliding:'stabCT', ctEcc:'stabCT', ctBearing:'stabCT', ctYield:'stabYL',
   crackStem:'stabServ', minRfStem:'stabServ', crackHeel:'stabServ', minRfHeel:'stabServ', crackToe:'stabServ', minRfToe:'stabServ' };
@@ -1941,6 +1942,10 @@ function selectBar(As_req, max_s=18) {
 // db, cover_to_bar_ctr in inches; fy, fc in psi → ld in inches
 // ================================================================
 function devLength(db, fy, fc, psi_t, psi_e, cover_to_ctr, lambda=1.0, spacing=Infinity) {
+  return Math.max(12, devLengthACIRaw(db, fy, fc, psi_t, psi_e, cover_to_ctr, lambda, spacing));   // min 12 in per ACI 25.4.2.1 (RWDS: same value as before)
+}
+// RWDS (2026-11-07): ℓd of ACI 318-19 §25.4.2.1(a) / Eq. 25.4.2.4a before its 12-in minimum (the lap length ℓst is based on it, Table 25.5.2.1)
+function devLengthACIRaw(db, fy, fc, psi_t, psi_e, cover_to_ctr, lambda=1.0, spacing=Infinity) {
   const psi_s = db <= 0.75 ? 0.8 : 1.0;   // ACI Table 25.5.2.1
   const psi_g = fy <= 60000 ? 1.0 : (fy <= 80000 ? 1.15 : 1.3);  // ACI Table 25.4.2.5: Gr 40/60, 80, 100
   const Ktr   = 0;                          // no transverse rebar, conservative
@@ -1950,7 +1955,7 @@ function devLength(db, fy, fc, psi_t, psi_e, cover_to_ctr, lambda=1.0, spacing=I
   const sqfc  = Math.min(100, Math.sqrt(fc));    // ACI 25.4.1.4: √f'c ≤ 100 psi
   const ld    = (3 * fy * psi_te * psi_s * psi_g)
               / (40 * lambda * sqfc * ratio) * db;
-  return Math.max(12, ld);                  // min 12 in per ACI 25.4.2.1
+  return ld;
 }
 
 // AASHTO LRFD 10th Ed. (2024) §5.10.8.2.1a — tension development length (in); same form as ACI Rebar Development Length.html
@@ -3227,6 +3232,36 @@ function calcAll(inp) {
   const epst_toe = epsT(a_toe, d_toe);
   if (epst_toe < 0.005) warnings.push(`Toe is not tension-controlled (εt = ${f(epst_toe,4)} < 0.005).`);
 
+  // ── RWDS (2026-11-07): development and splice checks (engineer decision, audit item 5a) ──
+  // ℓd before the 12-in minimum: ACI 318-19 §25.4.2.1(a) (Eq. 25.4.2.4a); AASHTO 10th §5.10.8.2.1a (ℓdb·λrl·λcf·λrc)
+  const ldRaw = (bar, spacing, cov, top) => isAASHTO
+    ? (p => p.ldb * p.lam_rl * p.lam_rc)(devLengthAASHTOParts(bar.db, inp.fy, inp.fc, top, cov + bar.db / 2, spacing))
+    : devLengthACIRaw(bar.db, inp.fy, inp.fc, top ? 1.3 : 1.0, 1.0, cov + bar.db / 2, 1.0, spacing);
+  // (1) stem dowel (S1D) tension lap with S1 at the construction joint — ACI Table 25.5.2.1 / AASHTO 5.10.8.4.3a:
+  //     Class A (1.0ℓd) only if A_s,prov/A_s,req ≥ 2 over the lap AND ≤ 50 % of A_s spliced; else Class B (1.3ℓd); ℓst ≥ 12 in.
+  //     Every S1 bar is lapped with its dowel at the joint → 100 % spliced → Class B.
+  const lap_ld_a   = ldRaw(sel_stem.bar, sel_stem.spacing, inp.cov_stem, false);
+  const lap_ratio  = sel_stem.As_prov / Math.max(As_stem_des, 1e-9);
+  const lap_pct    = 100;
+  const lap_classA = lap_ratio >= 2 && lap_pct <= 50;
+  const lst_stem   = Math.max(12, (lap_classA ? 1.0 : 1.3) * lap_ld_a);
+  const lap_avail  = inp.Hs * 12;                                  // the lap must fit in the stem above the joint
+  const lap_ok     = lst_stem <= lap_avail;
+  // (2) heel bars F1: ℓd each side of the critical section at the stem back face
+  const f1_av_heel = inp.Lh * 12 - inp.cov_ftg;                     // to the heel end
+  const f1_av_toe  = inp.Lt * 12 + inp.ts_bot - inp.cov_ftg;        // past the stem back face, through the stem and toe
+  const heel_dev_ok = ld_heel <= Math.min(f1_av_heel, f1_av_toe);
+  // (3) toe bars F2: ℓd (or ℓdh if hooked at the toe end) past the stem front face
+  const toe_hook   = !!inp.toe_hook;
+  const ldA_toe    = isAASHTO ? devLengthAASHTOParts(sel_toe.bar.db, inp.fy, inp.fc, false, inp.cov_ftg + sel_toe.bar.db / 2, sel_toe.spacing) : null;
+  const ldh_toe    = hookDevLength(sel_toe.bar.db, inp.fy, inp.fc, isAASHTO, sel_toe.bar, ldA_toe ? ldA_toe.lam_rc : 1.0);
+  const f2_av_toe  = inp.Lt * 12 - inp.cov_ftg;                     // to the toe end
+  const f2_av_heel = inp.ts_bot + inp.Lh * 12 - inp.cov_ftg;        // past the front face, into the stem and heel
+  const f2_need    = toe_hook ? ldh_toe : ld_toe;
+  const toe_dev_ok = f2_need <= f2_av_toe && ld_toe <= f2_av_heel;
+  if (!toe_dev_ok) warnings.push(`Toe bars F2: ${toe_hook ? 'ℓdh' : 'ℓd'} = ${f(f2_need,1)}" > ${f(f2_av_toe,1)}" available to the toe end — ${toe_hook ? 'use a smaller bar or lengthen the toe' : 'hook the bars at the toe end, use a smaller bar or lengthen the toe'}.`);
+  if (!heel_dev_ok) warnings.push(`Heel bars F1: ℓd = ${f(ld_heel,1)}" exceeds the length available (${f(Math.min(f1_av_heel, f1_av_toe),1)}").`);
+
   // ── ACI 318-19 §24.3.2 crack-control spacing (ACI basis; AASHTO uses §5.6.7 below) ──
   //   s ≤ min(15(40,000/fs) − 2.5cc, 12(40,000/fs)),  fs = ⅔fy
   const aciCrack = (cc, spacing) => {
@@ -3390,6 +3425,9 @@ function calcAll(inp) {
     stemShear: { ok: stem_shear_ok,                label: 'Stem Shear' },
     stemMidShear: { ok: stemT_shear_ok,            label: 'Stem Mid Shear' },
     stemHook:  { ok: hook_ok,                      label: 'Stem Hook ℓdh', val: `${f(ldh_stem,1)}≤${f(ldh_avail,1)}"` },
+    stemLap:   { ok: lap_ok,                       label: 'Stem Dowel Lap', val: `ℓst=${f(lst_stem,1)}" Class ${lap_classA ? 'A' : 'B'}` },   // RWDS
+    heelDev:   { ok: heel_dev_ok,                  label: 'Heel F1 ℓd', val: `${f(ld_heel,1)}${heel_dev_ok ? '≤' : '>'}${f(Math.min(f1_av_heel, f1_av_toe),1)}"` },   // RWDS
+    toeDev:    { ok: toe_dev_ok,                   label: 'Toe F2 ' + (toe_hook ? 'ℓdh' : 'ℓd'), val: `${f(f2_need,1)}${f2_need <= f2_av_toe ? '≤' : '>'}${f(f2_av_toe,1)}"` },   // RWDS
     stemMidFlex: { ok: !stemT_overstressed && sel_stemT.As_prov >= As_stemT_des - 0.001,
                  label: 'Stem Mid Flex', val: stemT_ee2_governs ? 'EE-II governs' : undefined },
     heelFlex:  { ok: !heel_overstressed && sel_heel.As_prov >= As_heel_des - 0.001,
@@ -3502,6 +3540,8 @@ function calcAll(inp) {
     Mu_toe_net, Mu_toe_in, Vu_toe,
     Rn_toe, As_toe_req, As_t_min, As_toe_des,
     Vc_toe, phiVc_toe, toe_shear_ok, toe_overstressed, sel_toe, ld_toe,
+    lap_ld_a, lap_ratio, lap_pct, lap_classA, lst_stem, lap_avail, lap_ok, f1_av_heel, f1_av_toe, heel_dev_ok,   // RWDS
+    toe_hook, ldA_toe, ldh_toe, f2_av_toe, f2_av_heel, f2_need, toe_dev_ok,
     a_toe, phiMn_toe,
     // Longitudinal
     As_ftg_long, sel_ftg_long,
@@ -3543,6 +3583,7 @@ function getInputs() {
     tf: n('tf'), ts_bot: n('ts_bot'), ts_top: n('ts_top'),
     // MassDOT footing rules + variable-height
     massdot_ftg: b('massdot_ftg'),
+    ...(b('toe_hook') ? { toe_hook: true } : {}),   // RWDS (2026-11-07): F2 hooked at the toe end; absent = straight (as before)
     vh_enable: b('vh_enable'), vh_hlo: n('vh_hlo'), vh_hhi: n('vh_hhi'),
     Lt: n('Lt'), Lh: n('Lh'), Df_add: n('Df_add'),
     gamma_s: n('gamma_s'), phi, coh: n('coh'), qa: n('qa'),
@@ -5224,6 +5265,13 @@ function renderStem(r) {
     `\\ell_{dh} = ${F(r.ldh_stem,1)}\\ \\text{in} \\leq t_f - c_{c} = ${F(r.ldh_avail,1)}\\ \\text{in}`, r.hook_ok,
     r.isAASHTO ? '\u00a75.10.8.2.4a' : 'ACI 25.4.3.1',
     [{sym:'\\ell_{dh}', desc: r.isAASHTO ? 'hook development ℓdh = ℓd + R + d_b/2 (10th Ed.), no tie reduction' : 'hook development, ψr = 1.6, ψc = f\'c/15000+0.6', val:F(r.ldh_stem,1), unit:'in'}]);
+  // RWDS (2026-11-07): dowel S1D – S1 tension lap at the construction joint
+  h += eqCheck('Stem dowel lap with S1 at the construction joint — Class ' + (r.lap_classA ? 'A' : 'B') + ' (A_s,prov/A_s,req = ' + F(r.lap_ratio,2) + (r.lap_ratio >= 2 ? ' ≥ 2' : ' < 2') + '; ' + r.lap_pct + ' % of the bars spliced at one level' + (r.lap_pct > 50 ? ' > 50 %' : '') + ')',
+    `\\ell_{st} = \\max(${r.lap_classA ? '1.0' : '1.3'}\\,\\ell_d,\\; 12) = \\max(${r.lap_classA ? '1.0' : '1.3'}(${F(r.lap_ld_a,2)}),\\; 12) = \\boxed{${F(r.lst_stem,1)}\\ \\text{in}} ${r.lap_ok ? '\\leq' : '>'} H_s = ${F(r.lap_avail,0)}\\ \\text{in}`, r.lap_ok,
+    r.isAASHTO ? '\u00a75.10.8.4.3a' : 'ACI Table 25.5.2.1',
+    [{sym:'\\ell_d', desc: (r.isAASHTO ? 'ℓdb·λrl·λcf·λrc (§5.10.8.2.1a)' : 'Eq. 25.4.2.4a (§25.4.2.1(a))') + ', before the 12-in minimum', val:F(r.lap_ld_a,2), unit:'in'},
+     {sym:'A_{s,prov}/A_{s,req}', desc:'S1 provided / required at the base (Class A needs ≥ 2 and ≤ 50 % spliced)', val:F(r.lap_ratio,2), unit:''},
+     {sym:'\\ell_{st}', desc:'tension lap length (used by the drawings)', val:F(r.lst_stem,1), unit:'in'}]);
   if (r.z_cutoff !== null)
     h += eq('Alternate-bar cutoff — half the S1 bars (#' + r.sel_stem.bar.num + ' @ ' + r.s_rem + '") carry M_u above z_th; terminated bars extend max(d, 12d_b) past it',
       `z_{th} = ${F(r.z_cut_theory,2)}\\ \\text{ft},\\quad z_{cut} = z_{th} - ${F(r.cut_ext,2)} = ${F(r.z_cutoff,2)}\\ \\text{ft from top} \\ \\Rightarrow\\ \\text{full S1 bars up to } ${F(r.z_cutoff_from_base,2)}\\ \\text{ft above base}`, r.isAASHTO ? '\u00a75.10.8.1.2' : 'ACI 9.7.3.3',
@@ -5499,6 +5547,11 @@ function renderFooting(r) {
   h += eq('Development length (ψt = 1.3 for top bars with >12 in fresh concrete below)',
     `\\ell_d = \\boxed{${F(r.ld_heel,1)}\\ \\text{in}} = ${F(r.ld_heel/12,2)}\\ \\text{ft}`,r.isAASHTO?'AASHTO 5.10.8.2.1a (as Step 5, λrl = 1.3)':'ACI 25.4.2',
     [{sym:'\\ell_d', desc:'tension development length (top bars)', val:F(r.ld_heel,1), unit:'in'}]);
+  h += eqCheck('F1 development each side of the stem back face',   // RWDS (2026-11-07)
+    `\\ell_d = ${F(r.ld_heel,1)} ${r.heel_dev_ok ? '\\leq' : '>'} \\min(L_h - c_c,\\; L_t + t_s - c_c) = \\min(${F(r.f1_av_heel,1)},\\; ${F(r.f1_av_toe,1)})\\ \\text{in}`, r.heel_dev_ok,
+    r.isAASHTO ? '\u00a75.10.8.2.1a' : 'ACI 25.4.2',
+    [{sym:'L_h - c_c', desc:'to the heel end', val:F(r.f1_av_heel,1), unit:'in'},
+     {sym:'L_t + t_s - c_c', desc:'past the stem back face, through the stem and the toe', val:F(r.f1_av_toe,1), unit:'in'}]);
   h += `</div></div>`;
 
   h += `<div class="card" style="margin-bottom:16px;">
@@ -5573,6 +5626,15 @@ function renderFooting(r) {
   h += eq('Development length into stem',
     `\\ell_d = \\boxed{${F(r.ld_toe,1)}\\ \\text{in}} = ${F(r.ld_toe/12,2)}\\ \\text{ft}`,r.isAASHTO?'AASHTO 5.10.8.2.1a (as Step 5)':'ACI 25.4.2',
     [{sym:'\\ell_d', desc:'tension development length', val:F(r.ld_toe,1), unit:'in'}]);
+  if (r.toe_hook) h += eq('Standard 90° hook at the toe end' + (r.isAASHTO ? ' (λrc as the straight bar, no tie reduction)' : ' (ψr = 1.6, ψo = 1.0, ψc = f\'c/15000 + 0.6)'),
+    `\\ell_{dh} = \\boxed{${F(r.ldh_toe,1)}\\ \\text{in}}`, r.isAASHTO ? '\u00a75.10.8.2.4a' : 'ACI 25.4.3.1',
+    [{sym:'\\ell_{dh}', desc:'hook development length of F2', val:F(r.ldh_toe,1), unit:'in'}]);
+  h += eqCheck('F2 development past the stem front face — ' + (r.toe_hook ? 'hooked at the toe end' : 'straight'),   // RWDS (2026-11-07)
+    `${r.toe_hook ? '\\ell_{dh}' : '\\ell_d'} = ${F(r.f2_need,1)} ${r.f2_need <= r.f2_av_toe ? '\\leq' : '>'} L_t - c_c = ${F(r.f2_av_toe,1)}\\ \\text{in}; \\quad \\ell_d = ${F(r.ld_toe,1)} ${r.ld_toe <= r.f2_av_heel ? '\\leq' : '>'} t_s + L_h - c_c = ${F(r.f2_av_heel,1)}\\ \\text{in}`, r.toe_dev_ok,
+    r.toe_hook ? (r.isAASHTO ? '\u00a75.10.8.2.4a' : 'ACI 25.4.3.1') : (r.isAASHTO ? '\u00a75.10.8.2.1a' : 'ACI 25.4.2'),
+    [{sym:'L_t - c_c', desc:'to the toe end', val:F(r.f2_av_toe,1), unit:'in'},
+     {sym:'t_s + L_h - c_c', desc:'past the front face, into the stem and the heel', val:F(r.f2_av_heel,1), unit:'in'}]);
+  if (!r.toe_dev_ok) h += `<div class="alert fail" style="margin:4px 0 8px;">\u2717 F2 does not develop ${r.toe_hook ? 'with the hook' : 'straight'} in the toe: ${r.toe_hook ? 'use a smaller bar or a longer toe' : 'tick "Toe bars F2 hooked at the toe end" (Rebar pane), use a smaller bar or a longer toe'}.</div>`;
   h += `</div></div>`;
 
   h += `<div class="card" style="margin-bottom:16px;">
@@ -5717,7 +5779,7 @@ const LS_OK = _lsAvailable();
 
 // Snapshot every form field by id → plain object
 const RWTB_FIELDS = ['proj_date', 'proj_chkdate'];   // RWTB (2026-11-06): the optional title-block dates (Project tab)
-const RWLS_DEF = { aashto_traffic_dir: 'parallel' };   // RWLS (2026-11-07): saved only when not the default; absent → the default
+const RWLS_DEF = { aashto_traffic_dir: 'parallel', toe_hook: false };   // RWLS (2026-11-07) / RWDS (toe_hook): saved only when not the default; absent → the default
 function snapshotFields() {
   const out = {};
   document.querySelectorAll('.sidebar input, .sidebar select, .sidebar textarea').forEach(el => {
@@ -5736,7 +5798,7 @@ function restoreFields(fields) {
   /* RWTB (2026-11-06): a project or autosave saved before the title-block dates (or with them blank) has no such field: they open
      blank (not the value of the project open before) */
   RWTB_FIELDS.forEach(id => { if (!(id in fields)) { const el = document.getElementById(id); if (el) el.value = ''; } });
-  Object.entries(RWLS_DEF).forEach(([id, d]) => { if (!(id in fields)) { const el = document.getElementById(id); if (el) el.value = d; } });   // RWLS
+  Object.entries(RWLS_DEF).forEach(([id, d]) => { if (!(id in fields)) { const el = document.getElementById(id); if (el) { if (el.type === 'checkbox') el.checked = !!d; else el.value = d; } } });   // RWLS / RWDS
   Object.entries(fields).forEach(([id, val]) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -6302,6 +6364,8 @@ function renderRebar(r) {
           <div class="chk-row"><span class="chk-label">Stem S1 dev. into ftg</span><span class="chk-val">${f(r.ld_stem,1)}" (${f(r.ld_stem/12,2)} ft)</span></div>
           <div class="chk-row"><span class="chk-label">Heel F1 dev. at stem</span><span class="chk-val">${f(r.ld_heel,1)}" (${f(r.ld_heel/12,2)} ft)</span></div>
           <div class="chk-row"><span class="chk-label">Toe F2 dev. at stem</span><span class="chk-val">${f(r.ld_toe,1)}" (${f(r.ld_toe/12,2)} ft)</span></div>
+          <div class="chk-row"><span class="chk-label">S1D dowel lap ℓst (Class ${r.lap_classA?'A':'B'})</span><span class="chk-val">${f(r.lst_stem,1)}" (${f(r.lst_stem/12,2)} ft)</span></div>${r.toe_hook ? `
+          <div class="chk-row"><span class="chk-label">Toe F2 hook ℓdh at toe end</span><span class="chk-val">${f(r.ldh_toe,1)}" ≤ ${f(r.f2_av_toe,1)}"</span></div>` : ''}<!-- RWDS -->
         </div>
       </div>
     </div>
@@ -7147,10 +7211,10 @@ function buildCrossSection(r) {
   }
   // Lap splice zone just above the footing (construction joint)
   {
-    const y_spl0 = y_ftop - Math.min(Hs_px, (r.ld_stem*1.3/12)*SCALE);   // RWTS-2: true length 1.3 ℓ_d (was capped at 0.16 H_s)
+    const y_spl0 = y_ftop - Math.min(Hs_px, (r.lst_stem/12)*SCALE);   // RWDS: the computed lap ℓst (was 1.3 ℓ_d; RWTS-2: true length)
     s += `<rect x="${s1_x-3.5}" y="${y_spl0}" width="7" height="${y_ftop-y_spl0}"
       fill="rgba(196,33,33,0.13)" stroke="${RC}" stroke-width="0.6" stroke-dasharray="2,2"
-      data-tip="<b>Lap splice zone</b><br>Dowels from footing lap with S1 above the construction joint<br>Class B lap = 1.3·ℓ_d ≈ ${f(1.3*r.ld_stem,0)}″"/>`;
+      data-tip="<b>Lap splice zone</b><br>Dowels from footing lap with S1 above the construction joint<br>Class ${r.lap_classA?'A':'B'} tension lap ℓ_st = ${f(r.lst_stem,1)}″ (Stem design Step 5)"/>`;
     s += `<text x="${s1_x+7}" y="${(y_spl0+y_ftop)/2+2}" font-size="6.3" fill="${RC}">lap 1.3ℓd</text>`;
   }
 
@@ -8473,6 +8537,9 @@ function rwResultRows(r) {
     stemShear:    () => [A ? AA('5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', r.Vu_stem / r.phiVc_stem],
     stemMidShear: () => [A ? AA('5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', r.Vu_stemT / r.phiVc_stemT],
     stemHook:     () => [A ? AA('5.10.8.2.4a') : 'ACI 318-19 §25.4.3.1', r.ldh_stem / r.ldh_avail],
+    stemLap:      () => [(A ? AA('5.10.8.4.3a') : 'ACI 318-19 Table 25.5.2.1') + '; Class ' + (r.lap_classA ? 'A' : 'B') + ', ℓ<sub>st</sub> = ' + f(r.lst_stem, 1) + ' in vs stem height', r.lst_stem / r.lap_avail],
+    heelDev:      () => [(A ? AA('5.10.8.2.1a') : 'ACI 318-19 §25.4.2') + '; ℓ<sub>d</sub> both sides of the stem back face', r.ld_heel / Math.min(r.f1_av_heel, r.f1_av_toe)],
+    toeDev:       () => [r.toe_hook ? (A ? AA('5.10.8.2.4a') : 'ACI 318-19 §25.4.3.1') + '; hooked at the toe end' : (A ? AA('5.10.8.2.1a') : 'ACI 318-19 §25.4.2') + '; straight', Math.max(r.f2_need / r.f2_av_toe, r.ld_toe / r.f2_av_heel)],
     stemMidFlex:  () => [A ? AA('5.6.3') : 'ACI 318-19 §9.5 / §22.2', r.As_stemT_des / r.sel_stemT.As_prov,
                          r.stemT_overstressed ? 'section over-stressed' : (r.stemT_ee2_governs ? 'Extreme Event II governs' : '')],
     heelFlex:     () => [A ? AA('5.6.3') : 'ACI 318-19 §9.5 / §22.2', r.As_heel_des / r.sel_heel.As_prov,
@@ -9669,6 +9736,8 @@ function rwrModel(r) {
     }
     T5.push(rwrS({ id: 'hook', label: 'Stem bar standard hook into the footing: ℓ_dh ≤ t_f − c_c = ' + rwrN(r.ldh_avail, 1) + ' in', sym: '\\frac{\\ell_{dh}}{t_{f} \\minus c_{c}}', eq: '', sub: '\\frac{' + rwrN(r.ldh_stem, 1) + '}{' + rwrN(r.ldh_avail, 1) + '}', value: dcv('stemHook'), unit: '', d: 3, ok: ok('stemHook'), ref: isA ? AA('Art. 5.10.8.2.4a') : 'ACI 318-19 §25.4.3.1' }));
     CK.stemHook = 'stb/s5.hook';
+    T5.push(rwrS({ id: 'lap', label: 'Stem dowel lap with S1 at the joint: Class ' + (r.lap_classA ? 'A' : 'B') + ' (A_s,prov/A_s,req = ' + rwrN(r.lap_ratio, 2) + ', ' + r.lap_pct + ' % spliced at one level; Class A needs ≥ 2 and ≤ 50 %); ℓ_d before the 12-in minimum = ' + rwrN(r.lap_ld_a, 2) + ' in; ℓ_st ≤ H_s = ' + rwrN(r.lap_avail, 0) + ' in', sym: '\\ell_{st}', eq: '\\max(' + (r.lap_classA ? '1.0' : '1.3') + '\\,\\ell_{d},\\; 12)', sub: '\\max(' + (r.lap_classA ? '1.0' : '1.3') + '(' + rwrN(r.lap_ld_a, 2) + '),\\; 12)', value: r.lst_stem, unit: 'in', d: 1, ok: ok('stemLap'), ref: isA ? AA('Art. 5.10.8.4.3a') : 'ACI 318-19 Table 25.5.2.1' }));   // RWDS
+    CK.stemLap = 'stb/s5.lap';
     if (r.z_cutoff !== null) T5.push(rwrS({ id: 'zcut', label: 'Alternate-bar cutoff: half the S1 bars (#' + ss.bar.num + ' at ' + r.s_rem + ' in) carry M_u above z_th = ' + rwrN(r.z_cut_theory, 2) + ' ft; terminated bars extend max(d, 12d_b) past it', sym: 'z_{cut}', eq: 'z_{th} \\minus ' + rwrN(r.cut_ext, 2), sub: rwrN(r.z_cut_theory, 2) + ' \\minus ' + rwrN(r.cut_ext, 2), value: r.z_cutoff, unit: 'ft', d: 2, ref: isA ? AA('Art. 5.10.8.1.2') : 'ACI 318-19 §9.7.3.3', note: 'full S1 bars up to ' + rwrN(r.z_cutoff_from_base, 2) + ' ft above the base' }));
     const T6 = [isA ? rwrS({ id: 'As', label: 'Required temperature and shrinkage steel, per face (b = stem height ' + rwrN(r.b_TS_stem, 0) + ' in)', sym: 'A_{s,TS}', eq: '\\frac{1.30\\,b\\,h}{2(b + h)f_{y}},\\; 0.11 \\le A_{s} \\le 0.60', sub: '\\frac{1.30(' + rwrN(r.b_TS_stem, 0) + ')(' + rwrN(inp.ts_bot, 1) + ')}{2(' + rwrN(r.b_TS_stem, 0) + ' + ' + rwrN(inp.ts_bot, 1) + ')(' + rwrN(inp.fy / 1000, 0) + ')}', value: r.As_temp_stem, unit: 'in^{2}/ft', d: 4, ref: AA('Eq. 5.10.6-1') })
       : rwrS({ id: 'As', label: 'Required temperature and shrinkage steel (0.0018 gross area)', sym: 'A_{s,TS}', eq: '0.0018\\,b\\,t_{s,bot}', sub: '0.0018(12)(' + rwrN(inp.ts_bot, 1) + ')', value: r.As_temp_stem, unit: 'in^{2}/ft', d: 4, ref: 'ACI 318-19 §24.4.3.2' }),
@@ -9724,7 +9793,9 @@ function rwrModel(r) {
     const H4 = vcF(r.shearHeel, r.Vc_heel, r.d_heel).concat([
       rwrS({ id: 'phiVc', label: 'Design shear resistance', sym: '\\phi V_{c}', eq: phiF + '\\,V_{c}', sub: phiF + '(' + rwrN(r.Vc_heel, 0) + ')', value: r.phiVc_heel, unit: 'lb/ft', d: 0 }),
       rwrS({ id: 'dc', label: 'One-way shear at the face of the stem: V_u ≤ φV_c', sym: '\\frac{V_{u}}{\\phi V_{c}}', eq: '', sub: '\\frac{' + rwrN(r.Vu_heel, 0) + '}{' + rwrN(r.phiVc_heel, 0) + '}', value: dcv('heelShear'), unit: '', d: 3, ok: ok('heelShear') }),
-      rwrS({ id: 'ld', label: 'Development length, top bars (' + (isA ? 'λ_rl = 1.3' : 'ψ_t = 1.3') + ')', sym: '\\ell_{d}', eq: '', sub: '', value: r.ld_heel, unit: 'in', d: 1, ref: isA ? AA('Art. 5.10.8.2.1a') : 'ACI 318-19 §25.4.2' })]);
+      rwrS({ id: 'ld', label: 'Development length, top bars (' + (isA ? 'λ_rl = 1.3' : 'ψ_t = 1.3') + ')', sym: '\\ell_{d}', eq: '', sub: '', value: r.ld_heel, unit: 'in', d: 1, ref: isA ? AA('Art. 5.10.8.2.1a') : 'ACI 318-19 §25.4.2' }),
+      rwrS({ id: 'dev', label: 'F1 development each side of the stem back face: ℓ_d ≤ min(L_h − c_c, L_t + t_s − c_c)', sym: '\\frac{\\ell_{d}}{\\min(\\ldots)}', eq: '', sub: '\\frac{' + rwrN(r.ld_heel, 1) + '}{\\min(' + rwrN(r.f1_av_heel, 1) + ',\\; ' + rwrN(r.f1_av_toe, 1) + ')}', value: dcv('heelDev'), unit: '', d: 3, ok: ok('heelDev') })]);   // RWDS
+    CK.heelDev = 'heel/h4.dev';
     const pre = (p, L) => L.map(s => Object.assign({}, s, { id: p + '.' + s.id }));
     CK.heelFlex = 'heel/h3.F1'; CK.heelShear = 'heel/h4.dc';
     subs.push(sub('Heel: cantilever from the back face (L_h = ' + rwrN(inp.Lh, 2) + ' ft)', [rwrItem('heel', [
@@ -9742,7 +9813,10 @@ function rwrModel(r) {
     const T4 = vcF(r.shearToe, r.Vc_toe, r.d_toe).concat([
       rwrS({ id: 'phiVc', label: 'Design shear resistance', sym: '\\phi V_{c}', eq: phiF + '\\,V_{c}', sub: phiF + '(' + rwrN(r.Vc_toe, 0) + ')', value: r.phiVc_toe, unit: 'lb/ft', d: 0 }),
       rwrS({ id: 'dc', label: 'One-way shear at the front face: V_u ≤ φV_c', sym: '\\frac{V_{u}}{\\phi V_{c}}', eq: '', sub: '\\frac{' + rwrN(r.Vu_toe, 0) + '}{' + rwrN(r.phiVc_toe, 0) + '}', value: dcv('toeShear'), unit: '', d: 3, ok: ok('toeShear') }),
-      rwrS({ id: 'ld', label: 'Development length into the stem', sym: '\\ell_{d}', eq: '', sub: '', value: r.ld_toe, unit: 'in', d: 1, ref: isA ? AA('Art. 5.10.8.2.1a') : 'ACI 318-19 §25.4.2' })]);
+      rwrS({ id: 'ld', label: 'Development length into the stem', sym: '\\ell_{d}', eq: '', sub: '', value: r.ld_toe, unit: 'in', d: 1, ref: isA ? AA('Art. 5.10.8.2.1a') : 'ACI 318-19 §25.4.2' }),
+      ...(r.toe_hook ? [rwrS({ id: 'ldh', label: 'Standard 90° hook at the toe end', sym: '\\ell_{dh}', eq: '', sub: '', value: r.ldh_toe, unit: 'in', d: 1, ref: isA ? AA('Art. 5.10.8.2.4a') : 'ACI 318-19 §25.4.3.1' })] : []),
+      rwrS({ id: 'dev', label: 'F2 development past the stem front face, ' + (r.toe_hook ? 'hooked: ℓ_dh' : 'straight: ℓ_d') + ' ≤ L_t − c_c = ' + rwrN(r.f2_av_toe, 1) + ' in (and ℓ_d ≤ t_s + L_h − c_c = ' + rwrN(r.f2_av_heel, 1) + ' in)', sym: '\\frac{' + (r.toe_hook ? '\\ell_{dh}' : '\\ell_{d}') + '}{L_{t} \\minus c_{c}}', eq: '', sub: '\\frac{' + rwrN(r.f2_need, 1) + '}{' + rwrN(r.f2_av_toe, 1) + '}', value: dcv('toeDev'), unit: '', d: 3, ok: ok('toeDev') })]);   // RWDS
+    CK.toeDev = 'toe/t4.dev';
     CK.toeFlex = 'toe/t3.F2'; CK.toeShear = 'toe/t4.dc';
     subs.push(sub('Toe: cantilever from the front face (L_t = ' + rwrN(inp.Lt, 2) + ' ft)', [rwrItem('toe', [
       { title: 'Toe Step 1 — Net upward load', steps: pre('t1', T1) }, { title: 'Toe Step 2 — Design moment and shear at the front face', steps: pre('t2', T2) },
@@ -10081,7 +10155,7 @@ function rwdwBars(r, G) {
   const db = s => s.bar.db;
   const hook = 12 * db(s1);                                         // 90° standard hook tail 12 d_b
   const yHook = cf + db(f2) + db(f3) + db(s1) / 2;                   // the hook bears on the bottom mat
-  const lap = 1.3 * r.ld_stem;                                       // as drawn by the tool (Class B 1.3 l_d), not checked
+  const lap = r.lst_stem;                                            // RWDS (2026-11-07): the computed tension lap ℓst (Stem design Step 5); was 1.3 × ℓd (with its 12-in minimum)
   const yCut = r.z_cutoff !== null ? G.tf + r.z_cutoff_from_base * 12 : null;
   const yTop = G.H - cs;
   const B = {
@@ -10090,10 +10164,10 @@ function rwdwBars(r, G) {
     S3: { s: s3, from: G.tf + G.Hs / 2, to: yTop, len: yTop - (G.tf + G.Hs / 2) },
     S2: { s: s2 }, F3: { s: f3 },
     F1: { s: f1, x0: Math.max(cf, G.xbb - r.ld_heel), x1: G.B - cf, y: G.tf - cf - db(f1) / 2 },
-    F2: { s: f2, x0: cf, x1: Math.min(G.B - cf, G.xf + r.ld_toe), y: cf + db(f2) / 2 },
+    F2: { s: f2, x0: cf, x1: Math.min(G.B - cf, G.xf + r.ld_toe), y: cf + db(f2) / 2, hook: r.toe_hook ? 12 * db(f2) : 0 },   // RWDS: 90° hook up at the toe end when ticked
     yCut, cs, cf,
   };
-  B.F1.len = B.F1.x1 - B.F1.x0; B.F2.len = B.F2.x1 - B.F2.x0;
+  B.F1.len = B.F1.x1 - B.F1.x0; B.F2.len = B.F2.x1 - B.F2.x0 + B.F2.hook;
   B.S1cut = yCut !== null ? { len: yCut - G.tf } : null;
   B.nF3 = Math.floor((G.B - 2 * cf) / f3.spacing + 1e-9) + 1;
   return B;
@@ -10291,6 +10365,7 @@ function rwdwBuild(r) {
       D.circle(L.bar, G.xf + BR.cs + r2, y, r2); }
     // F1 top (heel), F2 bottom (toe), F3 dots on both mats
     D.line(L.bar, BR.F1.x0, BR.F1.y, BR.F1.x1, BR.F1.y); D.line(L.bar, BR.F2.x0, BR.F2.y, BR.F2.x1, BR.F2.y);
+    if (BR.F2.hook) D.line(L.bar, BR.F2.x0, BR.F2.y, BR.F2.x0, BR.F2.y + BR.F2.hook);   // RWDS: hooked F2
     const f3 = BR.F3.s, r3 = dotR(f3.bar.db, P), yT3 = BR.F1.y - BR.F1.s.bar.db / 2 - r3, yB3 = BR.F2.y + BR.F2.s.bar.db / 2 + r3;
     for (let x = BR.cf; x <= G.B - BR.cf + 1e-6; x += f3.spacing) { D.circle(L.bar, x, yT3, r3); D.circle(L.bar, x, yB3, r3); }
     // cutoff of the alternate S1 bars
@@ -10359,12 +10434,12 @@ function rwdwBuild(r) {
     lab.push([s1Pt(G.tf + 0.8 * G.Hs), G.tf + 0.8 * G.Hs, 'S1 ' + bl(s1) + ' BACK FACE' + (BR.yCut !== null ? '\nALTERNATE BARS END AT THE CUTOFF' : ''), 'R']);
     if (r.sel_stemT) lab.push([s1Pt(G.tf + 0.62 * G.Hs) - s1.bar.db, G.tf + 0.62 * G.Hs, 'S3 ' + bl(r.sel_stemT) + ' UPPER HALF\nFROM MID-HEIGHT, SPLICE NOT IN THE MODEL', 'R']);
     if (BR.yCut !== null) lab.push([s1Pt(BR.yCut), BR.yCut, 'CUTOFF OF ALT. S1 BARS\n' + rwdwFI(BR.yCut - G.tf) + ' ABOVE THE JOINT (Z_CUT = ' + rwdwN(r.z_cutoff, 2) + ' FT FROM TOP)', 'R']);
-    lab.push([q.xd, (G.tf + q.yl) / 2, 'S1D DOWEL ' + bl(s1) + ', LAP ' + rwdwIn(Math.round(BR.S1D.lap)) + '\n= 1.3 L_D AS DRAWN BY THE TOOL (NOT CHECKED)', 'R']);
+    lab.push([q.xd, (G.tf + q.yl) / 2, 'S1D DOWEL ' + bl(s1) + ', LAP ' + rwdwIn(Math.round(BR.S1D.lap)) + '\nCLASS ' + (r.lap_classA ? 'A' : 'B') + ' TENSION LAP L_ST = ' + rwdwN(r.lst_stem, 1) + '" (CHECKED)', 'R']);   // RWDS
     lab.push([BR.F1.x1 - 0.3 * P, BR.F1.y, 'F1 ' + bl(r.sel_heel) + ' TOP (HEEL)\nL_D = ' + rwdwN(r.ld_heel, 1) + '" PAST THE STEM BACK FACE', 'R']);
     lab.push([BR.F3.s ? G.B - BR.cf - 0.0 : 0, q.yT3, 'F3 ' + bl(r.sel_ftg_long) + ' T&B, LONGITUDINAL', 'R']);
     lab.push([G.xf + BR.cs, G.tf + 0.45 * G.Hs, 'S2 ' + bl(r.sel_temp) + ' HORIZ., BOTH FACES', 'L']);
     lab.push([q.xd - BR.S1D.hook * 0.6, BR.S1D.yHook, 'STD. 90° HOOK, 12 D_B = ' + rwdwIn(BR.S1D.hook) + '\nL_DH = ' + rwdwN(r.ldh_stem, 1) + '", ' + rwdwN(r.ldh_avail, 1) + '" AVAILABLE', 'L']);
-    lab.push([BR.F2.x0 + 0.3 * P, BR.F2.y, 'F2 ' + bl(r.sel_toe) + ' BOT. (TOE)\nL_D = ' + rwdwN(r.ld_toe, 1) + '" PAST THE STEM FRONT FACE', 'L']);
+    lab.push([BR.F2.x0 + 0.3 * P, BR.F2.y, 'F2 ' + bl(r.sel_toe) + ' BOT. (TOE)' + (r.toe_hook ? ', 90° HOOK AT THE TOE END (L_DH = ' + rwdwN(r.ldh_toe, 1) + '")' : '') + '\nL_D = ' + rwdwN(r.ld_toe, 1) + '" PAST THE STEM FRONT FACE', 'L']);
     lab.push([G.xf, G.H - 0.15 * G.Hs, 'FRONT-FACE VERTICALS:\nNOT IN THE MODEL (BY THE ENGINEER)', 'L']);
     // place labels in two stacks without overlap: sorted by height, at least 0.2 in apart
     ['R', 'L'].forEach(side => {
@@ -10385,7 +10460,7 @@ function rwdwBuild(r) {
       ['S3', '#' + r.sel_stemT.bar.num, r.sel_stemT.spacing + '"', 'STEM VERT., BACK, UPPER HALF', 'STRAIGHT', len(BR.S3.len), rwdwN(r.sel_stemT.As_prov, 3), '-'],
       ['S2', '#' + r.sel_temp.bar.num, r.sel_temp.spacing + '"', 'STEM HORIZ. T&S, EACH FACE', 'STRAIGHT', 'CONT.', rwdwN(r.sel_temp.As_prov, 3), '-'],
       ['F1', '#' + r.sel_heel.bar.num, r.sel_heel.spacing + '"', 'HEEL, TRANSVERSE, TOP', 'STRAIGHT', len(BR.F1.len), rwdwN(r.sel_heel.As_prov, 3), rwdwN(r.ld_heel, 1)],
-      ['F2', '#' + r.sel_toe.bar.num, r.sel_toe.spacing + '"', 'TOE, TRANSVERSE, BOTTOM', 'STRAIGHT', len(BR.F2.len), rwdwN(r.sel_toe.As_prov, 3), rwdwN(r.ld_toe, 1)],
+      ['F2', '#' + r.sel_toe.bar.num, r.sel_toe.spacing + '"', 'TOE, TRANSVERSE, BOTTOM', r.toe_hook ? '90° HOOK' : 'STRAIGHT', len(BR.F2.len), rwdwN(r.sel_toe.As_prov, 3), rwdwN(r.ld_toe, 1) + (r.toe_hook ? ' / ' + rwdwN(r.ldh_toe, 1) : '')],   // RWDS
       ['F3', '#' + r.sel_ftg_long.bar.num, r.sel_ftg_long.spacing + '"', 'FOOTING LONGIT. T&S, T&B (' + BR.nF3 + ' EA. FACE)', 'STRAIGHT', 'CONT.', rwdwN(r.sel_ftg_long.As_prov, 3), '-'],
       ...((isA && a && a.ish && a.ish.dowel_needed) ? [['D1', '#' + inp.aashto.dowel_bar, inp.aashto.dowel_spc + '"', 'FOOTING TO SUB-FOOTING DOWELS', '-', 'BY DETAILER', rwdwN(a.ish.Avf_dowel, 3), '-']] : []),
       ...SUP.schedule(r),
