@@ -6415,6 +6415,80 @@ Every statement was checked against this file's code (anchors: `calcAll`, `rwInp
 ### Decisions (pending engineer review)
 - The manual is a tab with its own print, and an optional Report appendix (as Spread Footing's "Include this manual"). The include choice is per browser, not per project, so no project format changes.
 - The input tables are written out (checked against a fresh page). They are not generated from the page at run time, so a new input needs a manual edit (CLAUDE.md §6 keeps the manual in the same file).
+## 2026-11-07 — PR: claude/rw-gfx-rebar (PR #1152: https://github.com/mlococo88/All-Structural/pull/1152) (RWRB) — Analysis diagram: the reinforcement drawn from the Drawings' bar model (bars in the section as lines at their extents, bars along the wall as dots), labels in columns with leaders   [display only; no result change]
+- **Why:** engineer, 2026-11-07: "The analysis diagram tab doesn't show the rebar correctly, please review."
+- **Before (`buildCrossSection`, block `// ── REINFORCING BARS`):**
+  - the orientation was reversed: F1 (heel top) and F2 (toe bottom), which run in the plane of the section, were rows of dots;
+  - S1 was four dots plus a hook, with a "lap 1.3ℓd" box (the lap is ℓ_st since RWDS) and an "S1 ends" dashed line across the stem;
+  - S2 was three dots per face; F3 was two dots per mat under the stem only;
+  - S3 (upper back face), S4 (AASHTO front face) and K1 (key bars) were not drawn;
+  - the labels sat on the bars and the lines ("F1 …" on the F1 dots, "lap 1.3ℓd" across the lap box, "std 90° hook" in the heel, "F2 …" on the toe top).
+- **After:**
+  - new `rwrbBarsSVG(r, o)` (before the RWPS helpers) draws the bars from `rwdwGeo` / `rwdwBars`, the model behind Drawings sheets 1–2 and the bar schedule (same marks, sizes, spacings, covers and extents):
+    - S1 line from the joint to its end (`BR.S1.to`: mid-height + the S3–S1 lap, or the top cover);
+    - S1D dowel line from the lap top (joint + ℓ_st) down to the bottom mat, with the 90° hook (bend radius from the inside diameter 6 / 8 / 10 d_b, ACI 318-19 Table 25.3.2 / AASHTO 10th Ed. Table 5.10.2.3-1) and the 12 d_b tail as on the sheets;
+    - S3 line from mid-height to the top cover, inside S1; S4 line at the front face (when designed);
+    - S2 dots at their spacing on each face, inside the verticals;
+    - F1 line at the top of the heel into the toe by ℓ_d past the stem back face; F2 line at the bottom of the toe into the heel by ℓ_d past the front face, with its hook when ticked;
+    - F3 dots at their spacing on both mats;
+    - K1 hooked bars at the key's toe face (when the key is reinforced);
+    - brackets beside the back face marking the S1D–S1 lap and the S3–S1 lap;
+  - labels with size @ spacing in four columns (backfill side of the stem, toe side above grade, inside the heel between the mats, beside the key), spaced so they do not overlap, with leaders to the bars; the tooltips are kept, with new ones for S1D, S3, S4 and K1;
+  - the "key" tag is replaced by the K1 label when the key is reinforced;
+  - `rwdwGeo`, `rwdwBarOf` and `rwdwBars` move unchanged from the Drawings script to the first script, because the Analysis diagram is drawn on load before the later scripts are parsed;
+  - the unused `cov_s_px`, `cov_f_px` and `bar_r` are removed.
+- **Checked against the design (default ACI wall):**
+  - S1 ends z = 7.23 ft above the joint = H_s/2 (6.00) + ℓ_st,S3–S1 (14.8 in = 1.23 ft). Both are marked.
+  - Covers: back face and front face c_stem, top and bottom c_ftg (on piles, `r.cov_bot`, as on the sheets).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). The bend size is drawing detail, as in RWTS-2.
+- **Saved data (§5):** none.
+- **How verified:** see the PR (main vs branch probe of `_R`, localStorage keys, every tab's text and the Report text with SVG removed, DXF of every sheet; screenshots).
+- **Other copies:** the Report figure is the same function. The Overview section draws no reinforcement.
+- **Decisions (pending engineer review):**
+  - Bars are drawn at their real positions with a minimum line width of 1.5 px and a minimum dot radius of 2.2 px (the note says bar symbols are not to scale).
+  - No transverse bars are drawn at the heel bottom or the toe top: the design has none (only F3 longitudinal on both mats), the same as the Drawings and the bar schedule. The engineer asked about them; adding them would be a design change.
+  - In pile mode the bottom mat is drawn where the model puts it (`r.cov_bot`). The pile-mode bottom-bar position is another PR's fix, and this figure follows it.
+
+
+## 2026-11-07 — PR: claude/rw-gfx-review (PR #1156: https://github.com/mlococo88/All-Structural/pull/1156) (RWGR) — graphics review: Overview drawing fits its card, Overview Check Summary D/C values, sheet viewer sized to the sheet, bearing figure with the shear key, q values off the q_a line, loads-sheet labels   [display only; no result change]
+- **Why:** engineer, 2026-11-07: full graphics review after RWPS / RWRB. The coordinator's screenshots and this review (every figure at 1920 / 1440 / 1280 / 1200 / 390 px, ACI and AASHTO, spread and pile, key, β, water, surcharge, seismic, tall / short wall, wide / narrow footing) found the items below.
+- **Overview drawing clipped** (`#tab-overview`, CSS after `.rw-dwg-wrap > svg.rw-dwg.rw-dwg-wide`):
+  - At 1440 px with the check summary column open, the drawing column was about 420 px wide. The SVG kept its 620 px minimum and scrolled sideways inside its card, with the scroll bar easy to miss, so the title, the heel, the backfill and the pressure diagrams were out of view.
+  - New `#tab-overview { container-type: inline-size; }`, and `@container (max-width: 1100px)` puts the properties under the drawing (one column).
+  - The Overview SVG gets the class `rw-dwg-ov` with `min-width: 0` (it fits its card) except `@media screen and (max-width: 700px)` (740 px, scrolls inside its card, text ≥ 9 px).
+  - Measured, card / SVG width in px:
+    - 1200: 530 / 510;
+    - 1280: 610 / 590;
+    - 1440: 770 / 750;
+    - 1920: 904 / 884 (two columns);
+    - 390: 364 / 740 (scrolls);
+    - no sideways page scroll at any width.
+- **Overview Check Summary:** the value column was empty for the checks whose `r.checks[k].val` is undefined (Stem Flex, Stem Shear, Stem Mid Shear / Flex, Heel / Toe Flex and Shear, both T&S rows). New `rwovDC(r, i)` (before `function rwResultRows`) shows "D/C n.nn" from `rwResultRows(r)[i].dc`, the same D/C as the check summary panel (`rwDashItems`); it is cached per result in a WeakMap (nothing is added to `_R`).
+- **Drawings sheet viewer:** the box was 62vh tall whatever the width, so in a tall window the 17 × 11 sheet sat in the middle of a large empty band. New CSS: `.rwdwBox > .sdx-view { height: auto !important; aspect-ratio: 17 / 11; max-height: 62vh; }`. The box takes the sheet's proportions at its width, so the sheet fills it when the tab opens and on resize (`xMidYMid meet` centres it). `shared/dxf.js` is unchanged.
+- **Stability bearing figure (`rwbpSVG`, also in the AASHTO Report):**
+  - The shear key was not drawn. It is now drawn to scale (b_k × d_k, centred under the stem as on the other figures).
+  - The pressure block's zero line `yB0` is d_k + 8 under the footing base when there is a key, with dashed leaders from the base corners.
+  - The kern ticks and "middle third" are on that line.
+- **q values on the q_a line** (Overview and Analysis diagram): when a q_toe / q_heel value would sit on the q_a line, it moves under it (`qy`).
+- **Drawings sheet 3:**
+  - The two surcharge bands' labels (ES / LS, Q_S / LS) were at the same height and overlapped; they are now on two rows (+0.13 in).
+  - "N PSF AT W.T." sat over the bands; it is now left of the pressure plane, under the water line.
+- **Analysis diagram layer toggles:** the label column of the lateral diagrams (RWPS) was outside the layer groups, so "Active pressure", "Surcharge" and "Water" off left their labels on screen. Each label now sits in its diagram's layer (`rwpsLateral`, `rows` carry the layer).
+- **Checked and found correct:**
+  - the arrows (toward the wall for earth / surcharge / water, toward the heel for passive, upward for the base reaction);
+  - the legend chips of the Overview against their colours;
+  - the 3D prisms (RWPS);
+  - the scale bars against the drawn footing (RWTS);
+  - the elevation (AASHTO CT).
+- **Found, not changed (engineer to decide):**
+  - The Analysis diagram draws bearing in green (its layer chip is green), the same green as passive. The Overview draws it in blue.
+  - On Drawings sheet 3 the resultant arrows (P_EH, P_ES, P_LS, P_WA, ΔP_E) cross the pressure diagrams to the plane through the heel, as in the drafting convention. They are left as they are.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Saved data (§5):** none (no storage key; the WeakMap is in memory).
+- **How verified:** see the PR (main vs branch probe of `_R`, localStorage keys, tab and Report text with SVG removed, DXF sheets; in-page widths above; screenshots).
+- **Decisions (pending engineer review):**
+  - On a phone the Overview drawing keeps a 740 px width and scrolls inside its card. Fitting it to 364 px would put its text at about 4 px.
+  - Between 700 and 1100 px of tab width the properties go under the drawing.
 
 ## 2026-11-07 — PR: claude/rw-user-manual-2 — User Manual, part 2: loads, stability, seismic, collision, stem, footing, shear key, bar layout, piles and the Pile Designer hand-off, limits, and the appendix of decisions pending engineer review (RWMAN-2; display only, no result change)
 
