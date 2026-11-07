@@ -4331,3 +4331,98 @@ Review Phase 8, PR 8c. Engineer decisions 2026-11-07 (review Q11–Q15, taken as
 +    if (iS >= 0) secs[iS].subs.unshift(sub('Pile-supported footing: soil checks not applicable', [{ type: 'note', text: 'The footing is on piles. The overturning, sliding, eccentricity and soil-bearing steps of this section are shown for information only and are not checks; the piles carry the wall (next section). The earth pressures and the factored loads of this section are used.' }]));
 +  }
 ```
+
+## 2026-11-07 — PR: claude/rw-pile-8d-footing — Pile-supported footing, Phase 8d: heel and toe designed from the factored pile-row reactions, bottom cover over the pile heads, punching around the piles, ACI cap depth (RWPL; calculation change in pile mode only)
+
+Review Phase 8, PR 8d. Code sites are tagged `RWPL`. Spread-footing results are unchanged: `cov_bot` = c_c, and the pile paths run only when `pile` exists.
+
+### RWPL-7. `calcAll` — the footing on piles   [§4]
+- **Order:** the pile analysis (8c) is now computed before the footing design (anchor `// RWPL (2026-11-07): the pile analysis (8c), computed here`). It was in the checks block; the values are the same.
+- **`pileFtg`:** the factored pile-row reactions of the two footing sets, as the bearing trapezoids use them.
+  - ACI:
+    - U = 1.2D + 1.6H (+1.0E): ΣV_u at x̄_u.
+    - U = 0.9D + 1.6H: ΣV_u,min at x̄_u,min.
+  - AASHTO:
+    - Strength I max: V_str,max,tot at x_R,tot.
+    - Strength Ia: V_str,min,tot at B/2 − e_Ia.
+  - Formulas: P_i = V/N + M x'_i/I, with line loads q_i = P_i/s_i (shared/pile-group.js).
+- **`heelCase(…, pc)`:** the rows behind the stem back face (by the pile centre) give
+  - M_up = Σq_i a_i, with a_i = x_i − x_back;
+  - V_u,A = |w_u L_h + wedge − Σq_i|.
+  - The downward load, the wedge, the no-relief case B, MassDOT §3.3.2.2 and the heel-basis choice are as before.
+- **`toeCase(…, pc)`:** the rows in front of the front face give
+  - M_u = Σq_i a_i − w_sw L_t²/2, with a_i = x_front − x_i;
+  - V_u = Σq_i − w_sw L_t (at the face, as before).
+  - The envelope of the two sets is as before.
+- **`cov_bot`:** on piles, the bottom cover is max(c_c, embedment + clear). It is used for:
+  - d_toe;
+  - the toe ℓ_d cover;
+  - the toe crack control (ACI §24.3.2 / AASHTO Art. 5.6.7);
+  - the stem-hook length available (t_f − cov_bot; the hook bears on the bottom mat above the pile heads).
+- **`pilePunch`:** two-way shear at each pile row.
+  - Critical section at d/2 (ACI 318-19 §22.6.4.1) or d_v/2 (AASHTO Art. 5.12.8.6.1, verified) from the pile face. The pile is taken as the square of equal area (round / pipe: 0.886D).
+  - The section side is a = D_eq + d.
+  - b_o:
+    - interior: 4a;
+    - cut by the toe or heel edge (e < a/2): a + 2(e + a/2);
+    - neighbouring piles of the row overlapping (s ≤ a): the sides across the wall drop out.
+  - Depth over the pile heads: d_p = t_f − cov_bot − d_b. This is the abutment's C-13 rule.
+  - ACI 318-19 Table 22.6.5.2: v_c = min(4, 2 + 4/β, 2 + α_s d/b_o)λ_sλ√f'c, with:
+    - λ_s = √(2/(1 + d/10)) ≤ 1;
+    - β = 1;
+    - α_s = 40 (interior) or 30 (edge / strip);
+    - φ = 0.75.
+  - AASHTO Art. 5.12.8.6.3 (verified): V_n = (0.063 + 0.126/β_c)λ√f'c b_o d_v ≤ 0.126λ√f'c b_o d_v (ksi), with β_c = 1, d_v = max(0.9d_p, 0.72t_f) and φ_v = 0.90.
+  - Demand P_u = the larger factored reaction of the row in the two footing sets, with no deduction for the cap weight inside the perimeter.
+- **New checks** (pile mode): `pilePunch` (both modes) and `pileCapD` (ACI: d_p ≥ 12 in, ACI 318-19 §13.3.1.2).
+- **Warnings:**
+  - The 8c note "heel and toe still from soil" is replaced by "designed from the factored pile reactions".
+  - New: with cov_bot > 6 in, the toe crack-control check uses that cover and fails for large covers. The remedy is a bar mat below the pile heads, or the engineer's judgement.
+- **Returned:** `pileFtg`, `cov_bot`, `pilePunch`, `heelPile`, `toePile`.
+### RWPL-8. Display / Report
+- Footing tab:
+  - Heel Step 1 / Toe Step 1: the pile-row line loads instead of the bearing pressures (link to Pile Step 2).
+  - Heel Step 2: M_up = Σq_i a_i.
+  - Toe Step 2: M_u = Σq_i a_i − w_sw L_t²/2 and V_u = Σq_i − w_sw L_t.
+  - Toe Step 3: d with cov_bot.
+  - New card "Pile Cap — Punching around the Piles" (`RW_CARDS.ftgPunch`).
+  - "Factored loads on footing" plot: the pile rows drawn as spikes in place of the bearing trapezoid.
+  - The heel / toe shear and moment plots and SVG diagrams use the pile rows.
+- Report, footing section: the heel / toe steps above, the toe d with cov_bot, and the new sub "Pile cap — punching around the piles" (summary links ppn/dc and ppn/cap).
+### Check case: default wall, t_f 36 in, 2 rows at 1.5 / 11.0 ft, s 6 ft, ACI
+- Group: N = 1/3, x̄ = 6.25, I = 7.5208.
+- **U = 1.2D + 1.6H:**
+  - ΣV_u = 23274 lb/ft at x̄_u = 5.7361 ft, so M = 23274(5.7361 − 6.25) = −11961.
+  - P_toe = 69822 + 11961(4.75)/7.5208 = **77376 lb**, so q_toe = 77376/6 = 12896 lb/ft.
+- **Toe:**
+  - w_sw = 0.9(150)(3.0) = 405 psf.
+  - M_u = 12896(1.5) − 405(3²)/2 = **17521.6 lb-ft/ft**.
+  - V_u = 12896 − 405(3) = **11681 lb/ft** > φV_c 11584 (D/C 1.008, toe shear FAIL, section at the face).
+  - d = 36 − 15 − 0.375 = 20.625 in.
+  - Before (the bearing trapezoid of the same wall on soil): M_u from q_u,front / q_u,toe.
+- **Heel:** U = 0.9D + 1.6H governs.
+  - w_u = 0.9(1440 + 450) = 1701 psf.
+  - M_down = 1701(8²)/2 = 54432.
+  - M_up = 6836.1(6.5) = 44434.6.
+  - M_u = **9997.4 lb-ft/ft**.
+- **Punching:**
+  - d_p = 36 − 15 − 0.75 = 20.25 in; a = 12 + 20.25 = 32.25 in; b_o = 4a = 129 in (interior: e = 18 in > a/2).
+  - λ_s = √(2/3.025) = 0.813.
+  - v_c = min(4, 6, 2 + 40(20.25)/129 = 8.28)(0.813)√4000 = 205.7 psi.
+  - φV_c = 0.75(205.7)(129)(20.25) = **403.0 kip** ≥ P_u 77.38 kip (D/C 0.19).
+- Cap depth: d_p = 20.25 ≥ 12 in.
+### How verified
+- origin/main vs branch, headless Chromium, the 12 walls in spread mode: identical (pile fields aside).
+- Pile mode: the case above in ACI and AASHTO; no console errors; screenshots of the Footing tab.
+- `tests/smoke/retaining-wall-checks.mjs`: + two 8d cases (the numbers above; AASHTO φV_n formula).
+- Also run: `node tests/check-syntax.mjs`; phone layout rwall 390/768; project library retwall; DXF sheets rw.
+### Other copies
+- Two-way shear around piles: `abutment_calculator.html` C-13 (its own perimeter rules). It is a candidate for `shared/pile-group.js` with the abutment move (PR 8h).
+### Open items / decisions (pending engineer review)
+- **Decision (pending engineer review):** one-way shear stays at the stem face, with every pile row in front of or behind the face counted in full. This is conservative. ACI's partial count of piles near the critical section (and d from the face) is not applied.
+- **Decision (pending engineer review):** a pile row is assigned to the heel or the toe by its centre. A row under the stem is carried by neither cantilever.
+- **Decision (pending engineer review):** round and pipe piles are punched as the square of equal area. b_o is cut by the toe / heel edges and by the overlapping neighbours along the wall. Corner piles at the wall ends are not modelled (per ft of wall). No cap weight is deducted inside the perimeter.
+- **Decision (pending engineer review):** the bottom cover on piles is max(c_c, embedment + clear) for the toe d, ℓ_d, crack control and the stem hook. Crack control then fails for typical caps (warning).
+- **Decision (pending engineer review):** the ACI 318-19 Table 22.6.5.2 and §13.3.1.2 citations are from the standard; the ACI PDF text was not readable in this session. AASHTO 5.12.8.6.1 / 5.12.8.6.3 were verified.
+- **Decision (pending engineer review):** the heel bottom bars when piles lift the heel (M_u < 0) follow the existing heel logic (bars for |M_u|, the face shown on the tab). The Drawings still draw F1 at the top. This is to be detailed in 8e.
+- Next steps: 8e (Drawings loads sheet with the pile reactions, bottom mat above the pile heads in the sheets, pile schedule), 8f (Pile Designer hand-off).
