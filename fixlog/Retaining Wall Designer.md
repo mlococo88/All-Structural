@@ -2830,3 +2830,43 @@ Calculation audit, item 3b. Engineer decision (2026-11-07). The approach-slab op
 - `aashto_heq_dist` keeps its id and its values; old "0" / "1" give the same h_eq.
 - `aashto_traffic_dir` is additive and saved only when "perpendicular".
 - A project whose real traffic edge is beyond H/2 changes only once the user enters the real distance. Old saves hold 0 or 1 ft and keep their results.
+
+## 2026-11-07 — PR: claude/rw-varheight-both-modes — Variable-height wall offered in both modes; the locked Stem Height box shows why (RWVH; display only, no result change) (PR #946: https://github.com/mlococo88/All-Structural/pull/946)
+
+Calculation audit, item 4. Engineer decision (2026-11-07): offer the variable-height wall in both modes. Code sites are tagged `RWVH`.
+
+### RWVH. Variable-height card, Stem Height lock, drawings   [display only]
+- **Problem:** `getInputs` applied the variable height in **both** modes (`Hs = vh_enable ? H_lo + 0.75(H_hi − H_lo) : Hs`). The card (`sec-vh`) was `.aashto-only`, so it was hidden in ACI mode. An ACI project with the box ticked (ticked while in AASHTO mode) used a design height the user could not see. The Stem Height box was also locked with no reason given.
+- **Changes:**
+  - The card header and body (`sec-vh`) are no longer `.aashto-only`. The tag reads "MassDOT".
+  - The card's note gains a sentence shown in ACI mode only (`.aci-only`): this is a MassDOT owner rule for variable-height segments (paraphrased), not an ACI 318 provision, and in ACI mode it is applied because it is ticked.
+  - New line `hint_hs_vh` under the Stem Height / Footing Thickness row, shown while the box is ticked. It reads "Set by Variable-height wall below: design H_s = H_lo + 0.75(H_hi − H_lo) = … ft (MassDOT §3.3.2.2). This box is not used while it is ticked." The box also gets a title.
+  - The line is filled by the new `rwVhHint()`, called from `onVHChange`, `syncConditionalUI` and `onInputChange`.
+  - Drawings, "Wall elevation and general notes" sheet: `const vh = isA && inp.vh_enable` → `const vh = !!inp.vh_enable`. The elevation draws the sloping top and "VARIABLE HEIGHT" in ACI mode too.
+  - The Report's overview figure caption for the elevation: `r.isAASHTO && r.inp.vh_enable` → `r.inp.vh_enable`.
+  - The Report input echo (Stem height with "(variable height: H_lo + 0.75(H_hi − H_lo), MassDOT §3.3.2.2)") and the RWIE validation were already not gated by mode. They are unchanged.
+- **Where the 0.75 rule comes from (verified):** MassDOT Bridge Manual (Hundredth Anniversary Ed.) 3.3.2.2, cantilever walls. Variable-height segments are designed, stem plus footing, for the low-end height plus 75 % of the difference between the low and high ends.
+  - It is an owner (MassDOT) rule; neither ACI 318-19 nor AASHTO LRFD has it.
+  - The manual states it on the total wall height. The tool applies it to the stem height. With a constant footing thickness this is the same, because t_f cancels in H_lo + 0.75(H_hi − H_lo).
+- **Provision changed:** none. No formula, factor or default changed.
+
+### Check case
+- ACI default with variable height ticked, H_lo 8 ft / H_hi 16 ft: design H_s = 8 + 0.75·8 = 14.0 ft.
+- Results are the same on main and the branch: FS_SL 1.43 FAIL, stem flexure D/C 0.91.
+- The only difference is that the card, the reason line and the elevation are now visible in ACI mode.
+
+### How verified
+- origin/main vs branch in headless Chromium, ten walls: the eight audit walls, ACI with variable height ticked (8 / 16 ft), and AASHTO with variable height (10 / 18 ft) + collision.
+  - `_R`, Export JSON and every localStorage key are **identical** in all ten.
+  - Tab text is identical in all ten.
+  - Report text is identical in nine. In the ACI variable-height wall it differs only in the overview elevation figure (now drawn with the sloping top) and its caption (", variable height (design H_s at 0.75 L)").
+  - 0 console errors.
+- ACI + variable height in the browser:
+  - the card shows and is editable;
+  - the reason line reads "… = 14.00 ft";
+  - the Drawings elevation sheet shows "VARIABLE HEIGHT".
+  - Screenshots were looked at.
+- Tests: check-syntax, smoke/retaining-wall-checks, phone-layout rwall 390/768, project-library retwall, dxf-print-sheets rw.
+
+### Saved data
+None. No field or key changed.
