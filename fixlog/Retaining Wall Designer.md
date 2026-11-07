@@ -6397,6 +6397,7 @@ Review Phase 6a (rwreview plan): the User Manual tab, asked for by the engineer.
 
 Every statement was checked against this file's code (anchors: `calcAll`, `rwInputErrors`, `RWDC`, the RWPL / STDS / GHS blocks, `rwdw*`, `rwrModel`), the HANDOFF.md §4.1, and docs/github-sync-setup.md. Provisions are cited by article and paraphrased.
 
+- Merged with RWHP part 1 (#1150): the Wall-tab inputs list the stem projection h_p, and Scope mentions it.
 - Merged with RWPT (#1148, the Piles output tab): the result-tab table lists the Piles tab (pile-supported footing only) and the Stability row says the pile checks moved there.
 
 ### Storage (CLAUDE.md §5)

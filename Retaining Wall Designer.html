@@ -11736,7 +11736,7 @@ const RWMAN_PARTS = [
 { id: 'scope', title: 'Scope and wall types', go: [['tab:overview', 'Overview tab'], ['inp:Hs', 'Wall input tab']], blocks: [
   { p: 'The tool designs a **cantilever reinforced-concrete retaining wall**: a stem fixed into a footing with a toe in front and a heel behind, analysed per foot of wall.' },
   { ul: [
-    'Stem: height H_s, base width and top width (the front face is vertical, the back face is battered when the two widths differ).',
+    'Stem: height H_s, base width and top width (the front face is vertical, the back face is battered when the two widths differ); the stem may project h_p above the retained grade.',
     'Footing: thickness t_f, toe length L_t and heel length L_h (either may be 0 for an L-shaped wall), soil cover over the toe D_f,add.',
     'Optional shear key under the stem (depth d_k, width b_k).',
     'Foundation: a **spread footing on soil** (default) or a **pile-supported footing** with 2 to 4 rows of vertical piles.',
@@ -11799,6 +11799,7 @@ const RWMAN_PARTS = [
     ['Stem width at the base / at the top', 'in', '18 / 12', 'Front face vertical, back face battered.'],
     ['Toe length L_t / heel length L_h', 'ft', '3 / 8', 'From the stem faces. B = L_t + t_stem + L_h.'],
     ['Soil cover over the toe D_f,add', 'ft', '0', 'Toe embedment D_f = t_f + D_f,add (passive at the toe).'],
+    ['[[go:inp:h_proj|Stem projection above the retained grade h_p]]', 'ft', '0', 'The stem rises h_p above the backfill: earth, water and surcharge act on the retained height H_ret = H − h_p; the stem weight, barrier and collision stay on the full stem. h_p ≤ H_s − 1.0 ft. The water-table depth is still measured from the top of the wall.'],
     ['[[go:inp:fnd_type|Foundation type]]', '—', 'Spread footing on soil', 'Or pile-supported footing.'],
     ['Number of pile rows; per row x from the toe and spacing along the wall (pile)', '— / ft', '2; 1.5 and 11 ft; 6 ft', 'Rows 3 and 4 default to x = 6 and 9 ft at 6 ft.'],
     ['Pile type, designation, width / diameter D (pile)', '— / in', 'Steel H-pile, blank, 12', 'H, pipe, square precast, round.'],
