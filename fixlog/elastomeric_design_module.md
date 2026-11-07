@@ -1478,3 +1478,70 @@ Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.6.3.6: the total thickness of the p
 - **How verified:** `node tests/check-syntax.mjs elastomeric_design_module.html` pass; headless main-vs-branch probe (15 scenarios): only Method A stabA moves (default 0.875 → 1.084 FAIL, nFail 1 → 2); Method B and plain identical; 0 console errors.
 - **Decision (pending engineer review):** "total thickness" read as covers + internal layers + all n + 1 steel laminates (the plain text and the FHWA example both include the steel). An internal load plate and the cover above it (MassDOT §3.5.7.6: not part of the bearing) are not modelled. Before, the check used h_rt.
 - **Saved data:** none changed. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/edm-m1-m4-m5 (PR #1085: https://github.com/mlococo88/All-Structural/pull/1085) (M1, M4, M5, review 2026-11-07) — Method A applicability S²/n, no-liftoff check informational; MassDOT resultant rotation for rectangular pads; minimum laminate a pass/fail check   [calc change]
+
+Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.6.1 and C14.7.6.1 (Method A for steel-reinforced bearings with S_i²/n < 22; commentary 20 for n ≥ 3, 16 circular or nearly square), C14.7.6.3.5a (no-liftoff provisions removed from Method A), Art. 14.7.5.3.5 (h_s ≥ 0.0747 in); MassDOT Bridge Manual Part I §3.5.7.3 (2009 interims removed the Method A lift-off check), §3.5.7.5 (11 ga = 0.1196 in), §3.5.7.6 (design rotation = vector sum, 0.03 rad applied to the resultant).
+
+### M5. Minimum steel laminate thickness   [MORE conservative]
+- **Before:** `if(+g.tSteel<0.1196 && !isPlain()) warn("Steel laminate < 0.1196 in (11 ga) — below the MassDOT minimum [§3.5.7.5].","err");` — a warning only: the dashboard and the PAD hand-off stayed PASS.
+- **After:** new toggle `tog.hsMin` (I-5 select, 0.1196 MassDOT default | 0.0747 AASHTO; older saves get 0.1196 via migrate). `R.reinf` gains `hsMin, hsGov, dc, minPass, minRatio`; new dashboard items `hsmin` (Method B) / `hsminA` (Method A): pass/fail, no D/C (counts in nFail, so the PAD `pass` follows). Worked lines in `reinfLines` (h_s,min and h_s,prov ≥ h_s,min) and `hsMinLine`; Report tab step `prov`. The warning now names the selected minimum.
+- **Decision (pending engineer review):** the minimum is a pass/fail item without a D/C (as the edge cover, E10-7): h_s,min/h_s would read 1.00 for every 11 ga pad and become every design's governing D/C. The strength D/C stays h_s,req/h_s. The ratio is shown in the item name when it fails.
+- **Check case:** default pad with h_s = 0.06 in: strength 0.0280/0.06 = 0.47 PASS (unchanged); minimum: 0.06 < 0.1196 → **FAIL** (ratio 1.99); with the AASHTO minimum 0.0747 → FAIL (ratio 1.25). Before: all PASS. Default h_s = 0.1196: PASS, nothing else moves.
+
+### M1. Method A applicability and the obsolete no-liftoff check
+- **Before:** `add("rotA","Compression–rotation (uplift) [14.7.6.3.5]",upliftA/sigTL,…)` and `rotAW` were pass/fail (default Method A D/C 13.42 FAIL); no S²/n check.
+- **After:**
+  - New `R.appA={S2n,lim,sq,dc,why}` (Method A steel-reinforced): limit 16 circular or nearly square (max/min ≤ 1.1), 20 for n ≥ 3, else 22; dashboard `appA` "Method A applicability S²/n < lim [14.7.6.1]" (pass when S²/n < lim); worked block `appAEq`; Report topic `appA`.
+  - `rotA` / `rotAW` are informational (dc null, pass null), named with σ_up/σ_s for reference; the worked block is kept, titled "pre-2009 no-liftoff, informational", with an INFO line citing C14.7.6.3.5a, C14.7.6.1 and MassDOT §3.5.7.3.
+  - New warning when Method A has θt > 0 (14.7.6.1: primary rotation about the axis perpendicular to the beam centreline).
+  - Method A steel-laminate and cover-layer blocks are now worked on the tab (they were report-only).
+- **Decisions (pending engineer review):** the commentary limits (16 / 20) are used rather than the 22 of the article (more conservative); "nearly square" = L/W within 1.1; the no-liftoff check is kept as information rather than removed (removing it is the 10th Ed. position; keeping a pass/fail would be more conservative than the code).
+- **Check cases:**
+  - Default pad, Method A: S²/n = 64/6 = 10.67 < 16 → 0.667 PASS; uplift 13.42 FAIL → INFO. nFail 2 → 1 (the H3 stability FAIL remains).
+  - D 20, h_ri 0.375, n 4: S = 13.33, S²/n = 44.4 ≥ 16 → **2.78 FAIL** (Method A not applicable); before only the uplift failed (145.6).
+  - Rect 14 × 24, n 2: S²/n = 39.1 ≥ 22 → 1.78 FAIL.
+
+### M4. Rectangular pads with the MassDOT 0.03 rad: resultant rotation   [MORE conservative]
+- **Before:** `const thSt=isCirc()?Math.hypot(thLongStatic,thTrans)+(+tg.rotTol):thLongStatic+(+tg.rotTol);`
+- **After:** `const resL=isCirc()||(!isPlain()&&Math.abs(+tg.rotTol-0.03)<1e-9); R.rot.resL=resL&&!isCirc(); const thSt=resL?Math.hypot(thLongStatic,thTrans)+(+tg.rotTol):thLongStatic+(+tg.rotTol);` The separate transverse check about W is kept. The restraint θs (built on θst) follows. Notes on the tab and in the Report updated.
+- **Check case:** rect 14 × 24, h_ri 0.5, n 6, θ_long,st = 0.010, θt = 0.012, MassDOT: θst = √(0.010² + 0.012²) + 0.03 = 0.04562 (was 0.040); γr,st = 0.5(14/0.5)²(0.04562/6) = 2.981 (2.613); combined (G_min, H1) 3.781 → 4.149, D/C 0.796 → **0.873**; restraint 3.04 → 3.40 (FAIL both). (The review's 0.777 → 0.854 used the specified G, before H1.) AASHTO tolerance: unchanged.
+
+### Verification
+- `node tests/check-syntax.mjs elastomeric_design_module.html` pass. Headless main-vs-branch probe (18 scenarios): only the items above move; saved state differs only by `tog.hsMin`; Report tab renders; 0 console errors. Screenshot of the Method A panel checked.
+- **Saved data:** additive `tog.hsMin` (0.1196 for old saves). **Other copies:** none.
+
+## 2026-11-07 — PR: claude/edm-m3-deflection (PR #1089: https://github.com/mlococo88/All-Structural/pull/1089) (M3, review 2026-11-07) — compressive deflection: Method A check 0.09 h_ri; Method B δ_L, δ_d, δ_lt reported (checked against entered limits)   [new check]
+
+Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.5.3.6 (Eqs. 14.7.5.3.6-1 to -3; C14.7.5.3.6, Eq. C14.7.5.3.6-1), Art. 14.7.6.3.3 / C14.7.6.3.3 (Method A: LL + initial DL deflection of an internal layer or PEP ≤ 0.09 h_ri; PEP ≈ 3 × the steel-reinforced value), Table 14.7.6.2-1 (a_cr 0.25 / 0.35 / 0.45). No owner limit found in MassDOT Part I §3.5.7 or CTDOT BDM §9.2.1.
+
+- **Before:** no compressive deflection anywhere.
+- **Where / after:**
+  - `defaultState`: `tog.dLLmax:0, tog.dLTmax:0` (Method B limits, in; 0 = report only), `coef.acr:0.35` (60 durometer ≈ 0.160 ksi). Inputs in I-5 / I-6. Older saves get these values through migrate() (no result change for Method B).
+  - `computeEDM`, after `R.edge=…`: `R.defl={Gd,f,k,eL,eD,eTL,hEl,dL,dD,acr,dLT,dcA,dLLmax,dLTmax}` with k = 4.8·G·S², G = G_min (Method B, H1) or GminA (Method A / plain), f = 3 for a plain pad (PEP), ε = f·σ/k, h_el = n·h_ri (plain: t), δ_L = ε_L·h_el, δ_d = ε_d·h_el, δ_lt = δ_d + a_cr·δ_d, dcA = ε_(DL+LL)/0.09.
+  - Dashboard: `deflA` (Method A) and `deflP` (plain): D/C pass/fail. Method B: `deflL` / `deflLT` when a limit is entered, else the INFO item `deflI` with the three values.
+  - Worked block `deflEq(R)` (card `defl`) in all three panels; Report tab topic "Compressive deflection".
+- **Check cases:**
+  - Default Method B (G_min 0.136, S 8): k = 4.8·0.136·64 = 41.78 ksi; ε_L = 0.2735/41.78 = 0.00655, δ_L = 0.00655·3.0 = **0.0196 in**; ε_d = 0.00952, δ_d = **0.0286 in**; δ_lt = 0.0286·1.35 = **0.0386 in**. INFO (no limit). With limits 0.125 / 0.03 in: 0.157 PASS / 1.286 FAIL.
+  - Default Method A (G 0.130): k = 39.94; ε = 0.6714/39.94 = 0.0168 → D/C 0.187 PASS.
+  - Plain 5 × 20 × 1, P 15 + 15 (S 2.0, σ 0.300 ksi): ε = 3·0.300/(4.8·0.130·4) = 0.361 → D/C **4.01 FAIL** (the stress check already fails, 1.154).
+- **Decisions (pending engineer review):** layer strain by the linear Eq. C14.7.5.3.6-1 (Figure C14.7.6.3.3-1 may give less at low S — it decides the plain-pad result); cover layers not counted in δ; Method B limits default to 0 (report only) because no owner value was found; a_cr default 0.35.
+- **How verified:** check-syntax pass; headless main-vs-branch probe (19 scenarios): only the new items are added (Method B default: one INFO item; Method A: deflA; plain: deflP FAIL, nFail +1); every other value identical; 0 console errors; worked block screenshot checked.
+- **Saved data:** additive `tog.dLLmax`, `tog.dLTmax`, `coef.acr`. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/edm-m2-hydrostatic (PR #1090: https://github.com/mlococo88/All-Structural/pull/1090) (M2, review 2026-11-07) — bonded external plates toggle and hydrostatic tension check   [new check, off by default]
+
+Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.5.3.3, Eqs. 14.7.5.3.3-11 to -17 and C14.7.5.3.3 (bearings with external steel plates bonded top and bottom: peak hydrostatic stress ≤ 2.25G; satisfied automatically for α > 1/3). Practice: CTDOT BDM §9.2.1 (top vulcanized to a steel plate on steel beams; bottom plate vulcanized and anchored when H exceeds 20 % of P_min).
+
+- **Before:** no hydrostatic check; the "anchored / doweled" toggle only turned the slip and restraint items into INFO.
+- **After:**
+  - `defaultState().tog.bonded=false` (older saves off through migrate()); I-5 checkbox "External steel plates bonded (vulcanized) to the top and bottom of the pad".
+  - `computeEDM`, after `R.res=…`: when Method B (steel-reinforced) and `tog.bonded`: α = εa·n/(Si·θs); Cα = (4/3)[(α² + 1/3)^1.5 − α(1 − α²)]; σhyd = 3·G·Si³·(θs/n)·Cα; limit 2.25G; `R.hyd={al,auto,Ca,sh,lim,G,dc}` (auto = α > 1/3 → D/C 0). εa and θs are those of the restraint test (static + 1.75 × cyclic; rectangular: the larger of the rotations about L and W). G = G_max: the ratio σhyd/(2.25G) depends on G only through α, and a larger G gives a smaller εa, α and a larger Cα.
+  - Dashboard item `hyd` (pass/fail D/C); worked block `hydEq` after the restraint block; Report tab topic "Hydrostatic tension".
+- **Check cases (bonded ticked):**
+  - Default pad: εa = 0.01551 (G_max 0.184), θs = 0.047, n 6, S 8 → α = 0.01551·6/(8·0.047) = 0.2475; Cα = (4/3)[(0.06126 + 0.3333)^1.5 − 0.2475(0.9387)] = (4/3)(0.2479 − 0.2323) = 0.0207; σhyd = 3·0.184·512·(0.047/6)·0.0207 = 0.0459 ksi ≤ 2.25·0.184 = 0.414 → **D/C 0.111 PASS**. (The review's 0.013 used the specified G and α 0.285, before H1.)
+  - Light load P 20 + 10 kip, same pad: α = 0.0527, Cα = 0.190, σhyd = 0.420 ksi → **D/C 1.015 FAIL**.
+  - Toggle off (default and every older save): no change.
+- **Decisions (pending engineer review):** the restraint test (14.7.5.4, for bearings *without* bonded plates) is left as it is when "bonded" is ticked (conservative; the engineer may tick "anchored / doweled" for the 14.8.3.1 anchorage); the construction case of C14.7.5.3.3 (light load, camber rotation, cyclic 0) is not modelled.
+- **How verified:** check-syntax pass; headless main-vs-branch probe (22 scenarios): only the 3 bonded scenarios gain the `hyd` item, values as above; everything else identical; 0 console errors.
+- **Saved data:** additive `tog.bonded`. **Other copies:** none.

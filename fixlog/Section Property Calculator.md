@@ -3195,3 +3195,166 @@ index 56a8a3f..13f8372 100644
 | Pipe | +3.4 / −3.3 % | +3.2 / −2.9 % | (= I_x) | (= S_x: +3.4 / −2.5 %) | (= Z_x: +3.2 / −2.8 %) | — | +3.2 / −2.9 % |
 
 Bold: positive (overstated, unconservative) for every shape of the family. ST, WT, MT and L: S_y, Z_y not in the stored data (—); r_y = √(I_y/A) of the table. Values from the production engine (`SPC.analyze`, one part, n = 1) against the stored v16.0 rows, all 1,660 shapes. Also corrects the C1 note "the thin-wall J is lower (conservative …)": J is higher than the table for the heaviest W and WT shapes (W14X730 +9.1 %, WT7X436.5 +11.1 %); see the M3 entry.
+
+## 2026-11-07 — PR: claude/spc-h1-geom — SPH2: S, C, MC and ST shapes modelled with the flange slope, root fillets and toe radii (review H1; §4 result change; PR #1086: https://github.com/mlococo88/All-Structural/pull/1086)
+
+- **Problem (review H1):** the plate model of S, C, MC and ST shapes (average t_f over the full b_f, no fillets) overstated the minor-axis properties of **every** shape in these families: I_y +5 to +34 %, S_y up to +34 %, Z_y up to +16 % and r_y up to +14 % over the AISC v16.0 tables (SPH1 table above). This is unconservative, e.g. Fe about y of built-up channels.
+- **Fix (engine, `buildGeom`):** for these four families the material polygon is now the outline with the sloped inner flange faces, root fillets and toe radii. The thin-wall torsion elements, the tabulated-option data (`tab`), `refPts` and the snap points are unchanged.
+  - New helpers before `buildGeom` (anchor `const SLOPED = { S: 'I', C: 'C', MC: 'C', ST: 'T' };`): `arcPts` (rounds a corner with an arc of 8 chords), `slopedPts` (the outline), `slopedIy`, `slopedFit` (finds the slope and radii, cached per shape).
+  - In the I, C and T branches of `buildGeom`, after `tab = {…}`:
+    - before: (nothing; `prims` = the 12- / 8-vertex outline with the average t_f)
+    - after: `if (SLOPED[p.fam]) { outline = prims[0].pts; slope = slopedFit(p.fam, r); prims = [{ k: 'poly', s: 1, pts: slope.P }]; }`
+  - Centring:
+    - before: `const m = primsMoments(prims); if (m.A > 0) c = [m.Sy / m.A, m.Sx / m.A];`
+    - after: `const m = outline ? polyM(outline) : primsMoments(prims); …`
+    - So the part's own frame (its reference point for x, y, rotation and flips) stays at the centroid of the d, b_f, t_f, t_w outline, exactly as before.
+  - Snaps:
+    - before: `prims.forEach(pr => {`
+    - after: `(outline ? [{ k: 'poly', s: 1, pts: outline }] : prims).forEach(pr => {`
+    - The snap points are the same as before (outline corners and edge midpoints).
+  - Return value: `slope: { s, r, r1, how }` is added to the geometry.
+  - Removed: the SPH1 interim warning `slopedFlangeWarn` and its call. It is no longer true. The subscript display in the warning box is kept.
+- **How the slope and radii are found (`slopedFit`).** AISC v16.0 gives d, b_f, t_f (average flange thickness), t_w, A and I_y, but not the slope or the radii.
+  1. Slope s = 2 : 12 (16.67 %). t_f is taken at the middle of the flange outstand: (b_f − t_w)/2 from the toe for C and MC, (b_f − t_w)/4 for S and ST. So t_toe = t_f − s·e and t_root = t_toe + s·(outstand).
+  2. Root fillet r (tangent to the web face and the sloped flange face): found by bisection so that the model A equals the tabulated A (0 ≤ r ≤ 0.75 × min(outstand, web clear length)).
+  3. Toe radius r1 (inner corner of the flange tip): found by bisection so that the model I_y equals the tabulated I_y (0 ≤ r1 ≤ 0.9 t_toe; r is refitted to A at every step).
+  4. If, with s = 2 : 12 and r1 = 0, the model I_y is already **below** the table (36 of the 40 MC shapes: their flanges slope less than 2 : 12), s is found instead from I_y (0 ≤ s ≤ 2 : 12, r1 = 0, r refitted to A). The fitted MC slopes are about 0.6–1.5 : 12 (MC13: 1.9 : 12). MC12X14.3, MC12X10.6, MC10X8.4 and MC8X8.5 take 2 : 12 with a toe radius.
+  - Code (exact):
+```js
+  const SLOPED = { S: 'I', C: 'C', MC: 'C', ST: 'T' };
+  const _slopeFit = new Map();
+  function arcPts(Cn, u1, u2, r, N) { // round the corner Cn (edges along u1 and u2 from Cn) with radius r: points from the u1 edge to the u2 edge
+    if (!(r > 1e-9)) return [Cn];
+    const nz = v => mul(v, 1 / len(v)); u1 = nz(u1); u2 = nz(u2);
+    const th = Math.acos(Math.max(-1, Math.min(1, dot(u1, u2)))), L = r / Math.tan(th / 2), h = r / Math.sin(th / 2);
+    const O = add(Cn, mul(nz(add(u1, u2)), h)), T1 = add(Cn, mul(u1, L)), T2 = add(Cn, mul(u2, L));
+    const a1 = Math.atan2(T1[1] - O[1], T1[0] - O[0]); let da = Math.atan2(T2[1] - O[1], T2[0] - O[0]) - a1;
+    while (da > PI) da -= 2 * PI; while (da < -PI) da += 2 * PI;
+    const o = []; for (let i = 0; i <= N; i++) { const a = a1 + da * i / N; o.push([O[0] + r * Math.cos(a), O[1] + r * Math.sin(a)]); }
+    return o;
+  }
+  // outline of a sloped-flange shape in the plate-model frame (I: centred; C: back of web at x = 0; T: stem end at y = 0, flange on top)
+  function slopedPts(k, d, bf, tf, tw, s, r, r1) {
+    const N = 8, xw = k === 'C' ? tw : tw / 2, xt = k === 'C' ? bf : bf / 2, yo = k === 'T' ? d : d / 2;
+    const e = k === 'C' ? (bf - tw) / 2 : (bf - tw) / 4, out = xt - xw, ttoe = tf - s * e, troot = ttoe + s * out;
+    // top-right corner chain: from the web face, round the root fillet, along the sloped face, round the toe, to the outer corner
+    const TR = arcPts([xw, yo - troot], [0, -1], [1, s], r, N).concat(arcPts([xt, yo - ttoe], [-1, -s], [0, 1], r1, N), [[xt, yo]]);
+    const mx = q => [-q[0], q[1]], my = q => [q[0], -q[1]];
+    if (k === 'I') return TR.concat(TR.map(mx).reverse(), TR.map(q => [-q[0], -q[1]]), TR.map(my).reverse());
+    if (k === 'C') return TR.concat([[0, yo], [0, -yo]], TR.map(my).reverse());
+    return TR.concat(TR.map(mx).reverse(), [[-tw / 2, 0], [tw / 2, 0]]);
+  }
+  function slopedIy(P) { const m = polyM(P); return m.Iyy - m.Sy * m.Sy / m.A; }
+  function slopedFit(fam, rec) {
+    const key = fam + ' ' + rec.lbl; if (_slopeFit.has(key)) return _slopeFit.get(key);
+    const k = SLOPED[fam], { d, bf, tf, tw, A, Iy } = rec, e = k === 'C' ? (bf - tw) / 2 : (bf - tw) / 4;
+    const out = k === 'C' ? bf - tw : (bf - tw) / 2, web = k === 'T' ? d - tf : d / 2 - tf;   // flange outstand; web clear length (I, C: half)
+    const S0 = 1 / 6, pts = (s, r, r1) => slopedPts(k, d, bf, tf, tw, s, r, r1), Am = (s, r, r1) => polyM(pts(s, r, r1)).A;
+    const rMax = () => 0.75 * Math.min(web, out), bis = (lo, hi, f) => { for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (f(m)) lo = m; else hi = m; } return (lo + hi) / 2; };
+    const fitR = (s, r1) => { const hi = rMax(); if (Am(s, 0, r1) >= A) return 0; if (Am(s, hi, r1) < A) return hi; return bis(0, hi, x => Am(s, x, r1) < A); };
+    const IyAt = (s, r1) => slopedIy(pts(s, fitR(s, r1), r1));
+    let s = S0, r1 = 0, how;
+    if (IyAt(S0, 0) >= Iy) {
+      const r1max = 0.9 * (tf - S0 * e);
+      r1 = IyAt(S0, r1max) > Iy ? r1max : bis(0, r1max, x => IyAt(S0, x) > Iy); how = 'slope 2 : 12; r from A, r1 from I_y';
+    } else { s = IyAt(0, 0) < Iy ? 0 : bis(0, S0, x => IyAt(x, 0) > Iy); how = 'slope from I_y (less than 2 : 12), r from A, no toe radius'; }
+    const r = fitR(s, r1), P = pts(s, r, r1), m = polyM(P);
+    const o = { s, r, r1, how, P, A: m.A, Iy: slopedIy(P), ttoe: tf - s * e, troot: tf - s * e + s * out };
+    _slopeFit.set(key, o); return o;
+  }
+```
+- **UI (display, same PR):**
+  - Part properties:
+    - Hint: before "Plate model: d = …. Fillets / corner radii neglected." → after "Model: d = …; inner flange slope 2 : 12, root fillet r = …, toe radius r1 = … (…found so that A and I_y equal the AISC table; see the Method tab)."
+    - **Centroid x / y** fields of these parts now show and set the true centroid: reference point + `cenOff(pt)`, a new UI helper. The rotation hint says that rotation is about the outline centroid (the reference point).
+  - Canvas tooltip: shows the true centroid.
+  - Single-shape AISC comparison hint and Validation hint: reworded.
+  - Method tab: new paragraph describing the model.
+  - Part geometry table (Calc detail and Report): the model reads "… with flange slope and fillets", followed by the fitted slope, r and r1.
+- **§4 callout (section properties of S, C, MC, ST parts; all results that use them: A, I, S, Z, r, Q, stresses, kern, weight, coating, r̄o, H, r_ts, the principal values):**
+  - Governing basis: mechanics of materials (exact polygon integrals); AISC Shapes Database v16.0 (tabulated A, I_y are the fit targets); ASTM A6 / AISC profile convention of a 2 : 12 inner flange slope for S and C shapes, with t_f as the average thickness. No load or resistance factor, unit or code provision changed.
+  - **Unchanged:** J, C_w, the shear centre (e_o from the back of the web) and the Wagner coefficient (thin-wall centre-line model with the average t_f, as before). The shapes of all other families are unchanged.
+- **Check cases (before → after; AISC v16.0 in brackets):**
+  - **C15X33.9 alone.** Fitted s = 2 : 12, r = 0.654 in, r1 = 0.300 in.
+
+    | | A | I_x | I_y | S_y (min) | Z_y | r_y | Z_x | x̄ |
+    |---|---|---|---|---|---|---|---|---|
+    | before | 9.900 | 313.41 | 9.836 | 3.887 | 6.977 | 0.9968 | 50.48 | 0.870 |
+    | after | 10.000 | 316.54 | 8.070 | 3.084 | 6.170 | 0.8983 | 51.05 | 0.784 |
+    | AISC | 10.0 | 315 | 8.07 | 3.09 | 6.19 | 0.901 | 50.8 | 0.788 |
+    | after vs AISC | 0 | +0.5 % | 0 | −0.2 % | −0.3 % | −0.3 % | +0.5 % | −0.5 % |
+
+    J 0.892 (unchanged; AISC 1.01).
+  - **2C15X33.9 back to back, 3/8 in gap** (reference points at ±(0.1875 + 0.8697)): I_y 41.80 → **35.00 in⁴**, r_y 1.453 → 1.323 in. Hand check: 2[I_y + A(x̄ + 3/16)²] = 2[8.07 + 10.0 × (0.7837 + 0.1875)²] = 2[8.07 + 9.432] = **35.00**. With the AISC x̄ = 0.788: 35.17 (−0.5 %).
+  - **S12X31.8:** A 9.259 → 9.310 (9.31); I_y 11.37 → 9.33 (9.33); S_y 4.549 → 3.732 (3.73); Z_y 7.134 → 6.383 (6.44, −0.9 %); r_y 1.108 → 1.001 (1.00); Z_x 41.58 → 41.77 (41.8).
+  - **MC12X31** (fitted s = 0.65 : 12): A 9.06 → 9.12 (9.12); I_y 11.87 → 11.30 (11.3); S_y 4.655 → 4.365 (4.37); Z_y 8.439 → 8.120 (8.15); r_y 1.144 → 1.113 (1.11); x̄ 1.121 → 1.081 (1.08).
+  - **ST6X15.9:** A 4.630 → 4.650 (4.65); I_x 14.90 → 14.84 (14.8); I_y 5.686 → 4.660 (4.66); r_y 1.108 → 1.001.
+  - **Default project** (W21X62 + C15X33.9 cap): A 27.943 → 28.043 in²; I_x 1963.78 → 1977.34 in⁴; I_y 370.86 → 373.99 in⁴; Z_x 187.70 → 188.04 in³; Z_y 72.15 → 72.72 in³. The C15X33.9 cap sits exactly where it was, back of web on the W flange. J 4.6664 and C_w 12,658 are unchanged (torsion model unchanged; contacts unchanged).
+- **All shapes, after (model ÷ table − 1, max / min over the family):**
+
+  | Family | A | I_x | I_y | S_x | S_y | Z_x | Z_y | r_y | x̄ / y | J (thin-wall, unchanged) |
+  |---|---|---|---|---|---|---|---|---|---|---|
+  | S (28) | 0.0 / −0.0 % | +0.6 / −0.4 % | +0.1 / −0.0 % | +0.4 / −0.7 % | +0.3 / −0.3 % | +0.4 / −0.6 % | +0.1 / −1.7 % | +0.5 / −0.2 % | — | −14.3 / −26.9 % |
+  | C (32) | 0.0 / −0.0 % | +0.7 / −0.5 % | +1.1 / −0.0 % | +0.5 / −0.7 % | +0.8 / −0.8 % | +0.5 / −0.7 % | +0.5 / −1.2 % | +0.8 / −0.3 % | +0.4 / −1.3 % | −8.1 / −19.5 % |
+  | MC (40) | +0.1 / −0.0 % | +0.6 / −0.6 % | +0.1 / −0.0 % | +0.8 / −0.3 % | +0.3 / −1.0 % | +0.5 / −0.4 % | +0.0 / −2.2 % | +0.4 / −0.5 % | +0.1 / −2.2 % | −1.2 / −15.8 % |
+  | ST (28) | 0.0 / −0.0 % | +3.4 (ST1.5X2.85) / −0.1 % | +0.1 / −0.0 % | — | — | — | — | +0.0 / −0.0 % | y +0.8 / −0.2 % | −14.1 / −26.5 % |
+
+  C3X3.5, C3X4.1 and C3X5: r1 reaches its 0.9 t_toe limit, so I_y stays +1.0 to +1.1 %. A and I_y are exact (fitted) for all others, within the chord and bisection tolerance.
+- **Saved data:** no key or format change. Parts keep their saved x, y, rotation and mirror, and these place the outline exactly as before. Results of saved projects with S, C, MC or ST parts change as above when they are opened (intended).
+- **Verified:**
+  - `node tests/check-syntax.mjs` passes.
+  - Validation tab: 136/136. The new group 20 has 15 checks against AISC v16.0 and the 2C hand check; the 121 existing checks all still pass, including C15X50 r̄o 5.489 vs 5.49 (before 5.519) and H 0.9366 vs 0.937 (before 0.9321).
+  - Headless probe, main vs branch: 40 models and all 1,660 shapes. Only S, C, MC and ST shapes (and the models containing them) changed: A, I, S, Z, r, Q, coating, r̄o, H, r_ts. J and C_w are unchanged everywhere. W, M, HP, L, WT, MT, HSS, pipe, plates and polygons are identical. 0 console errors on every tab.
+  - `project-library --tool spc`: the only differences are the default project's C15X33.9 results (intended); B's own save / open round trips are ok. `dxf-print-sheets --tool spc`: all ok.
+  - Screenshot of the canvas (default project) checked: the fillets and toes are drawn, and the cap channel is still on the W flange.
+- **Decisions (pending engineer review):**
+  - D-SPH2-1. The slope and radii are **fitted to the tabulated A and I_y** (the "AISC tabulated-property route"). AISC v16.0 publishes neither the fillet nor the toe radius. The independent checks are I_x, S, Z, r_y, x̄ and ST I_x, all within −2.2 to +0.8 % (ST1.5X2.85 I_x +3.4 %).
+  - D-SPH2-2. **MC slope:** 2 : 12 where that gives at least the tabulated I_y. Otherwise the slope is found from I_y (no toe radius). The MC flange slopes vary by shape, so this was the conservative reading of "MC slopes per AISC tables".
+  - D-SPH2-3. **Reference point kept** at the outline centroid. This keeps every saved project, library section and template in place without a migration. The Centroid x / y fields and the tooltip show the true centroid. Rotation and flips act about the reference point, which is 0.004–0.09 in from the true centroid.
+  - D-SPH2-4. **Torsion unchanged** (J, C_w, shear centre from the centre-line model with the average t_f). A fillet-and-taper J was trialled: tapered ∫t³dx/3 plus El Darwish & Johnston (1965) junction terms αD⁴ minus the toe end corrections. It gave C −3.6 / +3.8 %, MC −5.1 / +1.0 % and S +1.3 / **+13.7 %** (unconservative) against the table. It was not adopted, because it would also change J of every built-up section with these shapes. J therefore stays below the table (−1 to −27 %): conservative for torsional stiffness and torsional shear stress. The tabulated J stays beside it for a single shape. **The ~2–3 % J target of the task is not met; this is open for the engineer.**
+
+## 2026-11-07 — PR: claude/spc-hole-n — SPM1: a hole takes the modulus ratio n of the part it lies in (review M1; §4 result change; PR #1088: https://github.com/mlococo88/All-Structural/pull/1088)
+
+- **Problem (review M1):** a hole's modulus ratio n was its own input, which defaults to 1, and was not tied to the part it cuts. A hole left at n = 1 in a concrete part (n = 1/8) removed 8 times too much transformed area, with no warning. The only guidance was the hint "Give it the same n as the part it is in". Example: concrete 10 × 10 at n = 1/8 with a Ø2 hole at n = 1 gave A = 9.358 instead of 12.107 (−23 %). The weight already charged a hole at its host's density (`weight()`).
+- **Fix (engine):** new `holeHostN(R)` (anchor `function holeHostN(R) {`, just before `analyze`), called in `analyze()` right after the per-part loop (`if (R.errors.length) return R;` → `holeHostN(R);`).
+  - It finds each hole's host the same way `weight()` does: the solid part with the largest exact overlap (`novShape` / `novInter`).
+  - It sets the hole's `q.n = host.n` and `q.host`. Every later use (parallel-axis rows, the weighted primitives for plastic, Q and fibres, `anyN`) then uses the host's n.
+  - When the hole's own n differs from the host's, it adds a warning: "Hole H1 has n = 1 but lies in PL1 (n = 0.125): it uses n = 0.125, the n of the material it removes."
+  - A hole that overlaps no solid part keeps its own n. That case is reported by `overlapChecks` (see SPM2).
+  - Before: `const n = pt.n …; R.parts.push({ pt, n, ...pp });` with nothing after it. After: the same, then `holeHostN(R);`.
+- **UI:** the Hole checkbox hint changes from "A hole removes area from whatever it covers. Give it the same n as the part it is in." to "A hole removes area from the part it lies in and takes that part's modulus ratio n (its own n is not used)."
+- **§4 callout:** transformed-section area with holes, A = Σ n_i A_i with n_hole = n_host. Governing basis: mechanics of materials (transformed section: a void in material i removes n_i·A_hole). No code provision.
+- **Check case:** concrete PL 10 × 10, n = 1/8, Ø2 hole at y = +2, hole n left at 1.
+  - Before: A = 9.358 in², I_x = 86.60 in⁴, Z_x = 22.99 in³ (and the Ø4 variant: "net area is not positive" error).
+  - After: A = (100 − π)/8 = **12.107 in²**. ȳ = −(π × 2)/(100 − π) = −0.0649 in. I_x = [833.33 − (0.7854 + π × 2²)]/8 − 12.107 × 0.0649² = 102.50 − 0.051 = **102.45 in⁴**. Z_x = 30.43 in³. The new warning is shown.
+- **Saved data:** no change. A hole's saved n is kept, and it is simply not used while the hole lies in a part.
+- **Verified:**
+  - `check-syntax` passes; Validation 136/136.
+  - Headless probe, main vs branch: only the models whose hole n differed from the host's changed (concHole_n1, concHole_n1b). Holes with a matching n (concHole_n8, holeMulti with two hosts of n = 1 and 0.5, barHole, plHole) are identical, as are all 1,660 shapes and the default project.
+  - `project-library --tool spc`: ALL PASS. 0 console errors.
+
+## 2026-11-07 — PR: claude/spc-hole-outside — SPM2: a hole partly outside the material is an error that blocks the results (review M2; §4 check logic; PR #1091: https://github.com/mlococo88/All-Structural/pull/1091)
+
+- **Problem (review M2):** a hole that was not inside material still gave results, with only a warning. Example: a 10 × 2 plate with a 2 × 2 hole straddling its top edge gave A = 16 (the true net area is 19), I_x = −5.92 in⁴ and S_x < 0. This can happen with Prevent overlap off, an imported file or a typed position.
+- **Fix (engine, conservative):** new `holeCoverCheck(R)` (anchor `function holeCoverCheck(R) {`), called in `analyze()` before `holeHostN`.
+  - Before: `if (R.errors.length) return R;` was followed directly by `holeHostN(R);`.
+  - After: `if (R.errors.length) return R;` → `holeCoverCheck(R); if (R.errors.length) return R;` → `holeHostN(R);`.
+  - For each hole, the covered area is Σ |`novInter`(hole, solid part)| over the solid parts. This is the exact overlap with the material; tube voids are not material.
+  - When hole area − covered area > max(1e-6 × hole area, `novTol`), an **error** is added: "Hole H1 lies partly outside the material: about 3 in² of its 4 in² is not inside any solid part, so it would remove area that does not exist. Move or resize it so that it lies wholly inside the material (the tool does not clip holes)." No results are shown ("NO RESULT" strip).
+  - A hole across the joint of two touching parts is covered, so it is allowed. It still gets the existing "not entirely inside one material part" warning and takes the n of the part it overlaps most (SPM1).
+  - A hole inside the void of a tube is not covered, so it is an error.
+- **§4 callout (check logic):**
+  - Before: warning only, and the results were computed with the full hole area removed.
+  - After: error, no results.
+  - Basis: mechanics of materials (a void can only remove existing material).
+  - The alternative, clipping the hole to the material, was not chosen. **Decision (pending engineer review):** blocking is the conservative choice, because it never shows a result built on an assumed geometry. Clipping, as AutoCAD SUBTRACT does in the DXF note, could be added on request.
+- **Check case:** PL 10 × 2 centred at 0, hole 2 × 2 centred at y = +1.5.
+  - Hole area 4 in²; area inside the plate = 2 × 0.5 = 1 in², so 3 in² is outside.
+  - Before: A = 16, I_x = −5.92 in⁴, warning only.
+  - After: the error above, no results.
+  - Hole 1 × 1 across the joint of two touching PL 10 × 1 (one above y = 0, one below): A = 20 − 1 = 19 in², unchanged, no error.
+- **Saved data:** no change. A saved project with such a hole opens and shows the error until the hole is moved.
+- **Verified:**
+  - `check-syntax` passes; Validation 136/136.
+  - Headless probe, main vs branch: only holeEdge, holeEdgeTiny and holeInTube changed, all to the error. Every other model (holes inside one part, across a joint, round holes, concrete holes) is identical, as are all 1,660 shapes.
+  - `project-library --tool spc`: ALL PASS. 0 console errors.

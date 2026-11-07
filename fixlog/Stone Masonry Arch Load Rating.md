@@ -1438,3 +1438,25 @@ function transDisp(w,n,c,cap){
   - Σp = 0.5679;
   - q = 0.5679 × 3.717 = 2.111 k/ft = the solver's 2.1111.
 - **How verified:** `check-syntax`; `phone-layout --tool arch`; `project-library --tool stonearch` (results identical A vs B); all 14 tabs with 0 console errors; ratings unchanged (main vs branch, default).
+
+## 2026-11-07 — PR #1087: https://github.com/mlococo88/All-Structural/pull/1087 — MS18 tonnage and MS equivalent for Items 64 / 66 (MS18; review M-2; reporting only)
+
+### MS18-1. Summary panel "MassDOT Items 64 / 66 — MS18 (Allowable Stress Rating)"   [new reported value; no rating change]
+- **Problem (review M-2):** MassDOT §7.1.7.2B requires, for stone masonry, the HS20 gross tonnage converted to MS18 with the factor 0.9, and an MS equivalent = MS18 / 1.8, for Items 64 and 66. The Summary of Bridge Rating table header is noted as Allowable Stress Rating. The tool reported only the HS20 tons.
+- **Where:** `buildOutput`, right after the `o_dash` panel, anchor `UI.pnl("o_ms18"`.
+- **Before:** no such panel.
+- **After:** highway mode with HS20 selected shows three worked steps and an Items table:
+  - T_HS20 = RF_HS20 × 36;
+  - T_MS18 = 0.9 · T_HS20;
+  - MS = T_MS18 / 1.8;
+  - the table gives Items 64 and 66 the same values, as §7.2.7.11B requires (Inventory only);
+  - a reporting note on the Allowable Stress Rating header, and a Worked-in link to the HS20 rating panel.
+  The panel reaches the Report through the Summary tab.
+- **Governing provision:** MassDOT BM Pt. I §7.1.7.2B (factor 0.9 instead of 0.907185; MS equivalent ÷ 1.8; Allowable Stress Rating header for timber and stone masonry), §7.2.4.2B (MS18 for Items 64/66) and §7.2.7.11B (Inventory only; the same values for both Items). Checked in the MassDOT PDF.
+- **Check case:** current default.
+  - Inputs: HS20 RF = 0.6765 (shown as 0.677).
+  - T_HS20 = 24.35 tons.
+  - MS18 = 0.9 × 24.35 = 21.92 t.
+  - MS = 21.92 / 1.8 = 12.18.
+  - Review's example (old default 22.53 t): 20.28 t and 11.27.
+- **How verified:** `check-syntax`; `phone-layout --tool arch`; `project-library --tool stonearch` (only the Summary text differs, by the new panel; the model and ratings are identical); all 14 tabs with 0 console errors; the panel appears in the Report.
