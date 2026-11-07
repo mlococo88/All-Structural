@@ -5814,7 +5814,7 @@ function buildProps(pg) {
     body.appendChild(tblEl(['Property', 'Value', 'Unit', 'Note'], [
       ['I<sub>1</sub> (major)', nf(R.I1, 'I'), un('I'), ''], ['I<sub>2</sub> (minor)', nf(R.I2, 'I'), un('I'), ''],
       ['θ<sub>p</sub>', ang(R.thp), '', 'angle from +x to axis 1, counter-clockwise'],
-      ['S<sub>1</sub> = I<sub>1</sub>/c<sub>2,max</sub>', nf(R.S1, 'S'), un('S'), 'c measured perpendicular to axis 1'], ['S<sub>2</sub> = I<sub>2</sub>/c<sub>1,max</sub>', nf(R.S2, 'S'), un('S'), ''],
+      ['S<sub>1</sub> = I<sub>1</sub>/c<sub>2,max</sub>', nf(R.S1, 'S'), un('S'), 'c<sub>2,max</sub> = ' + esc(nu(R.c1, 'L')) + ', measured perpendicular to axis 1'], ['S<sub>2</sub> = I<sub>2</sub>/c<sub>1,max</sub>', nf(R.S2, 'S'), un('S'), 'c<sub>1,max</sub> = ' + esc(nu(R.c2, 'L')) + ', measured perpendicular to axis 2'],
       ['r<sub>1</sub>', nf(R.r1, 'L'), un('L'), ''], ['r<sub>2</sub> = r<sub>min</sub>', nf(R.r2, 'L'), un('L'), 'least radius of gyration'],
       ['Z<sub>1</sub>, Z<sub>2</sub> (plastic, principal)', nf(R.Z1, 'S') + ', ' + nf(R.Z2, 'S'), un('S'), 'see the Plastic tab']
     ].map(r => r.map((c, i) => i === 0 || i === 3 ? { h: c } : c)), { left: [0, 3] }));
@@ -5888,7 +5888,9 @@ function buildCalc(pg) {
       TX`I_{1,2}=\frac{I_x+I_y}{2}\pm\sqrt{\left(\frac{I_x-I_y}{2}\right)^2+I_{xy}^2}=${nt((R.Ix + R.Iy) / 2, 'I')}\pm${nt(Math.hypot((R.Ix - R.Iy) / 2, R.Ixy), 'I')}`,
       TX`I_1=${nt(R.I1, 'I')},\quad I_2=${nt(R.I2, 'I')}\ \text{${I}}`,
       TX`\theta_p=\tfrac{1}{2}\,\mathrm{atan2}\!\left(-2I_{xy},\ I_x-I_y\right)=${fix0((R.thp * 180 / Math.PI).toFixed(4))}^{\circ}`,
-      TX`r_{min}=\sqrt{I_2/A}=${nt(R.r2, 'L')}\ \text{${L}}`], result: 'θp: angle from +x to the major axis 1, counter-clockwise. Rotated-axis check: I(θp) = (Ix+Iy)/2 + (Ix−Iy)/2·cos2θp − Ixy·sin2θp = ' + nf((R.Ix + R.Iy) / 2 + (R.Ix - R.Iy) / 2 * Math.cos(2 * R.thp) - R.Ixy * Math.sin(2 * R.thp), 'I') + ' ' + I });
+      TX`r_{min}=\sqrt{I_2/A}=${nt(R.r2, 'L')}\ \text{${L}}`,
+      TX`c_{2,max}=${nt(R.c1, 'L')},\quad c_{1,max}=${nt(R.c2, 'L')}\ \text{${L}}`,
+      TX`S_1=\frac{I_1}{c_{2,max}}=\frac{${nt(R.I1, 'I')}}{${nt(R.c1, 'L')}}=${nt(R.S1, 'S')},\quad S_2=\frac{I_2}{c_{1,max}}=\frac{${nt(R.I2, 'I')}}{${nt(R.c2, 'L')}}=${nt(R.S2, 'S')}\ \text{${un('S')}}`], result: 'c₂,max: largest distance from the centroid to the material measured perpendicular to axis 1 (along axis 2); c₁,max: perpendicular to axis 2. θp: angle from +x to the major axis 1, counter-clockwise. Rotated-axis check: I(θp) = (Ix+Iy)/2 + (Ix−Iy)/2·cos2θp − Ixy·sin2θp = ' + nf((R.Ix + R.Iy) / 2 + (R.Ix - R.Iy) / 2 * Math.cos(2 * R.thp) - R.Ixy * Math.sin(2 * R.thp), 'I') + ' ' + I });
   });
   mkSec(pg, 'cG', 'Part geometry (plate model)', body => {
     body.appendChild(PRMODE && PRMODE.parts ? el('div', 'hint', 'Listed in the Inputs section of this report (part dimensions: ' + spcLink('inDims', '→ Inputs') + ').') : partGeomTable());   // print: the table once (D11)
@@ -6009,6 +6011,7 @@ function buildQ(pg) {
     calc(body, { title: `Q of the part ${hv ? 'to the right of' : 'above'} the cut, about the centroidal ${ax} axis`, ref: 'Q = A′·ȳ′', lines: [
       hv ? TX`Q_y=A'\left(\bar{x}'-\bar{x}\right)=${nt(Qr.Aup, 'A')}\times${nt(Qr.Aup ? Qr.Qy / Qr.Aup : 0, 'L')}=${nt(Qr.Qy, 'S')}\ \text{${un('S')}}` : TX`Q_x=A'\left(\bar{y}'-\bar{y}\right)=${nt(Qr.Aup, 'A')}\times${nt(Qr.Aup ? Qr.Qx / Qr.Aup : 0, 'L')}=${nt(Qr.Qx, 'S')}\ \text{${un('S')}}`],
       result: `Q = ${nu(Qr.Q, 'S')}; material width on the cut b = ${nu(Qr.b, 'L')}` + (R.anyN ? ' (n-weighted area)' : '') });
+    if (R.anyTab) body.appendChild(el('div', 'note', '<b>AISC tabulated parts:</b> Q is the first moment of the model geometry (plate model / outline of each part) on one side of the cut, taken about the section centroid ȳ, which uses the tabulated A and I of those parts. The model area and centroid of a rolled shape differ slightly from the tabulated ones (fillets), so Q and the I it is divided by are not exactly consistent (e.g. an angle: Δȳ ≈ 0.007 in). The difference is not corrected.'));
     if (isNum(Qr.q)) {
       // a cut through a gap (no material on the line, b = 0): τavg is not defined (no division by 0 shown)
       const noB = !(Qr.b > 1e-12), noBtxt = 'τ_avg not defined — the cut line crosses no material (b = 0)';
@@ -7479,8 +7482,10 @@ function sprModel() {
     sprS('pa.I1', 'Major principal moment of inertia', 'I_{1}', '\\frac{I_{x} + I_{y}}{2} + \\sqrt{\\left(\\frac{I_{x} - I_{y}}{2}\\right)^{2} + I_{xy}^{2}}', nt((R.Ix + R.Iy) / 2, 'I') + ' + ' + nt(Math.hypot((R.Ix - R.Iy) / 2, R.Ixy), 'I'), R.I1, 'I'),
     sprS('pa.I2', 'Minor principal moment of inertia', 'I_{2}', '\\frac{I_{x} + I_{y}}{2} - \\sqrt{\\left(\\frac{I_{x} - I_{y}}{2}\\right)^{2} + I_{xy}^{2}}', nt((R.Ix + R.Iy) / 2, 'I') + ' - ' + nt(Math.hypot((R.Ix - R.Iy) / 2, R.Ixy), 'I'), R.I2, 'I'),
     SharedSteps.step({ id: 'pa.th', label: 'Angle from +x to the major axis 1, counter-clockwise', sym: '\\theta_{p}', eq: '\\frac{1}{2} \\text{atan2}(-2 I_{xy}, I_{x} - I_{y})', sub: '', value: R.thp * 180 / Math.PI, unit: 'deg', d: 3 }),
-    sprS('pa.S1', 'Section modulus about axis 1 (c perpendicular to axis 1)', 'S_{1}', '\\frac{I_{1}}{c_{2,max}}', '', R.S1, 'S'),
-    sprS('pa.S2', 'Section modulus about axis 2', 'S_{2}', '\\frac{I_{2}}{c_{1,max}}', '', R.S2, 'S'),
+    sprS('pa.c2', 'Largest distance from the centroid to the material, perpendicular to axis 1', 'c_{2,max}', '', '', R.c1, 'L'),
+    sprS('pa.c1', 'Largest distance from the centroid to the material, perpendicular to axis 2', 'c_{1,max}', '', '', R.c2, 'L'),
+    sprS('pa.S1', 'Section modulus about axis 1 (c perpendicular to axis 1)', 'S_{1}', '\\frac{I_{1}}{c_{2,max}}', '\\frac{' + nt(R.I1, 'I') + '}{' + nt(R.c1, 'L') + '}', R.S1, 'S'),
+    sprS('pa.S2', 'Section modulus about axis 2', 'S_{2}', '\\frac{I_{2}}{c_{1,max}}', '\\frac{' + nt(R.I2, 'I') + '}{' + nt(R.c2, 'L') + '}', R.S2, 'S'),
     sprS('pa.r1', 'Radius of gyration about axis 1', 'r_{1}', '\\sqrt{\\frac{I_{1}}{A}}', '\\sqrt{\\frac{' + nt(R.I1, 'I') + '}{' + nt(R.A, 'A') + '}}', R.r1, 'L'),
     sprS('pa.r2', 'Least radius of gyration', 'r_{min}', '\\sqrt{\\frac{I_{2}}{A}}', '\\sqrt{\\frac{' + nt(R.I2, 'I') + '}{' + nt(R.A, 'A') + '}}', R.r2, 'L')] }];
   /* ---------- 5. Plastic ---------- */
