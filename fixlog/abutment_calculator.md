@@ -15427,3 +15427,43 @@ index 839ae53..97bd06f 100644
 +        if(pu.rnd) w.add({id:"b0",label:"Critical perimeter at d_v/2 from the round pile (circle of diameter D + d_v; "+abrN(100*pu.arcF,0)+" % inside the footing)",sym:"b_{0}",eq:"\\pi\\,(D + d_{v})\\,f_{arc}",sub:"\\pi\\cdot ("+abrN(pu.sPile,1)+" + "+abrN(pu.dv,2)+")\\cdot "+abrN(pu.arcF,3),value:pu.b0,unit:"in",d:1});   // ABH1
 +        else w.add({id:"b0",label:"Critical perimeter at d_v/2 from the pile ("+pu.sides+" sides inside the footing)",sym:"b_{0}",eq:"",sub:"",value:pu.b0,unit:"in",d:1});
 ```
+## 2026-11-07 — PR: claude/abut-shared-pile-group — 8h: pileReaction and the C-8 pile-group properties from shared/pile-group.js (refactor; results bit-identical) (PR #990: https://github.com/mlococo88/All-Structural/pull/990)
+
+Review Phase 8, PR 8h (planned move into `shared/`, CLAUDE.md §3). No computed result changes.
+### Where / before / after
+```diff
++<script src="shared/pile-group.js"></script>   <!-- 8h (2026-11-07): rigid-cap pile-group statics (pileReaction, C-8 group properties), shared with the Retaining Wall Designer -->
+-function pileReaction(V,My,Mx,xi,yi,pi){
+-  const {n,Sxx,Syy}=pi, Sxy=pi.Sxy||0, D=Sxx*Syy-Sxy*Sxy;
+-  if(Math.abs(Sxy)>1e-9*Math.max(1,Sxx+Syy) && D>1e-9) return V/n+((My*Syy-Mx*Sxy)*xi+(Mx*Sxx-My*Sxy)*yi)/D;
+-  return V/n + (Sxx>1e-9? My*xi/Sxx:0) + (Syy>1e-9? Mx*yi/Syy:0);
+-}
++/* 8h (2026-11-07): the expression now lives once in shared/pile-group.js (SharedPileGroup.reaction: the same expression and operation
++   order as the code it replaces, bit-identical; tests/engine/pile-group.test.mjs). */
++function pileReaction(V,My,Mx,xi,yi,pi){ return SharedPileGroup.reaction(V,My,Mx,xi,yi,pi); }
+-      const xgc=act.reduce((a,c)=>a+c.x,0)/n;         // from footing CL
+-      const ygc=act.reduce((a,c)=>a+c.y,0)/n;         // from abutment CL
++      // 8h (2026-11-07): group properties by shared/pile-group.js (SharedPileGroup.groupProps: the same reductions, bit-identical)
++      const gp=SharedPileGroup.groupProps(act);
++      const xgc=gp.xgc;         // from footing CL
++      const ygc=gp.ygc;         // from abutment CL
+-      const Sxx=act.reduce((a,c)=>a+Math.pow(c.x-xgc,2),0); // Σ(x−xgc)² — longitudinal
+-      const Syy=act.reduce((a,c)=>a+Math.pow(c.y-ygc,2),0); // Σ(y−ygc)² — transverse
+-      const Sxy=act.reduce((a,c)=>a+(c.x-xgc)*(c.y-ygc),0); // ABPX2: Σ(x−xgc)(y−ygc) — product of inertia (0 for a symmetric layout)
++      const Sxx=gp.Sxx; // Σ(x−xgc)² — longitudinal
++      const Syy=gp.Syy; // Σ(y−ygc)² — transverse
++      const Sxy=gp.Sxy; // ABPX2: Σ(x−xgc)(y−ygc) — product of inertia (0 for a symmetric layout)
+```
+### Problem
+- The rigid-cap reaction (ABPX2) and the C-8 group properties existed twice: here and in `shared/pile-group.js` (SharedPileGroup.reaction / groupProps, written with the same expression and operation order, #955). Now one copy, in shared/.
+- C-13 (punching at the piles): **not moved.** Decision (pending engineer review): the shared file holds statics only; the abutment's C-13 perimeter (interior / edge / corner piles of a 2-D grid, AASHTO 5.12.8.6) and the wall's (rows across a strip, cut by the toe / heel edge, overlap along the wall; RWPL 8d) are different rules with different inputs. Sharing them would change one tool's result or need a new general function; left for a planned PR.
+### Governing provision
+- None changed (statics of a rigid cap on vertical piles).
+### Check case / how verified
+- `tests/engine/pile-group.test.mjs`: the abutment's former code, frozen verbatim in the test, vs SharedPileGroup: bit-identical (Object.is) on 2000 random reactions (Σx'y' = 0 and ≠ 0) and identical group properties (full grid, omitted pile); the file is checked to delegate.
+- `tests/smoke/abutment-pile-group-parity.mjs` (new): origin/main vs branch, the abutment's whole LAST_R as JSON on the default project, the pile branch, and 12 random pile layouts (offsets, row / column spacings, 1–2 omitted piles): 14/14 identical, no console errors.
+- `project-library --tool abutment,retwall,pile`, `check-syntax`, `tests/engine/run.mjs pile-group handoffs`.
+### Consumers of shared/pile-group.js (CLAUDE.md §3)
+- `Retaining Wall Designer.html` (since 8c) and `abutment_calculator.html` (this PR). The shared file itself is unchanged.
+### Open items
+- C-13 punching perimeter: see above.
