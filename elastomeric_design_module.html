@@ -328,7 +328,8 @@ function defaultState(){
       includeIM:false,       // MassDOT excludes dynamic load allowance from bearings
       fixedShear:false,      // bearing fixed against shear translation (affects Method A stress & stability form)
       exteriorCheck:false,   // exterior-beam check → uses 5.0 limit regardless
-      anchored:false         // pad anchored / doweled against horizontal movement → anchorage check is informational (design the anchorage for H)
+      anchored:false,        // pad anchored / doweled against horizontal movement → anchorage check is informational (design the anchorage for H)
+      hsMin:0.1196           // M5 (2026-11-07): minimum steel laminate thickness, a pass/fail check: 0.1196 in (11 ga) MassDOT §3.5.7.5 | 0.0747 in AASHTO 14.7.5.3.5; older saves get 0.1196 (migrate)
     },
     // editable code coefficients (EOR confirms against governing edition)
     coef:{ Da:1.4, DrRect:0.5, DrCirc:0.375, sigCapReinA:1.25, sigCapPlainA:0.80, GmethodA:0.150, DaCirc:1.0, GminA:0.130, GSplainA:1.00, upliftCircA:0.75, GmaxA:0.200, GvarB:0.15 },   // GvarB (H1, 2026-11-07): Method B tolerance on the specified G, ±15 % [14.7.5.2; MassDOT §3.5.7.4]; older saves get 0.15 (migrate)
@@ -449,6 +450,7 @@ function buildInputs(){
     ${selRow("Combined shear-strain limit","tog.combLimit",[[4.75,"4.75 — MassDOT (first interior) [§3.5.7.6]"],[5.0,"5.0 — AASHTO / exterior check"]])}
     ${selRow("Construction rotation tolerance","tog.rotTol",[[0.03,"0.03 rad — MassDOT [§3.5.7.3]"],[0.005,"0.005 rad — AASHTO"]])}
     ${selRow("Thermal movement factor","tog.thermalFactor",[[1.2,"×1.2 — MassDOT explicit [§3.5.7.6]"],[1.0,"×1.0 — none"]])}
+    ${selRow("Minimum steel laminate thickness","tog.hsMin",[[0.1196,"0.1196 in (11 ga) — MassDOT [§3.5.7.5]"],[0.0747,"0.0747 in — AASHTO [14.7.5.3.5]"]])}
     <div class="chk-row"><input type="checkbox" data-path="tog.fixedShear"${tg.fixedShear?" checked":""}><label>Bearing fixed against shear translation</label></div>
     <div class="chk-row"><input type="checkbox" data-path="tog.exteriorCheck"${tg.exteriorCheck?" checked":""}><label>Exterior-beam check (forces the 5.0 limit)</label></div>
     <div class="chk-row"><input type="checkbox" data-path="tog.anchored"${tg.anchored?" checked":""}><label>Pad anchored / doweled against horizontal movement (slip and restraint checks become "design the anchorage for H")</label></div>`);
@@ -578,7 +580,7 @@ function edmInputTabMarks(){
     if(m)mark(byPath(m[1]));
     else if(/^Input error: total service load/.test(w.msg)){ mark(byPath("loads.Pdl")); }
     else if(/^Δs = .*> 2\.5 in/.test(w.msg))mark(byPath("loads.deltaS"));
-    else if(/^Steel laminate < 0\.1196/.test(w.msg))mark(byPath("geom.tSteel"));
+    else if(/^Steel laminate < /.test(w.msg))mark(byPath("geom.tSteel"));
   });
   EDM_IN_TABS.forEach(([k])=>{
     const b=document.getElementById("edmInTab_"+k); if(!b)return;
@@ -624,7 +626,9 @@ function computeEDM(loadsOverride){
   const Da=isCirc()?+cf.DaCirc:+cf.Da;
   const ga_st=Da*sigDL/(Gmin*Sf), ga_cy=Da*sigLL/(Gmin*Sf);   // H1: G_min
   // rotation used in γr: circular = resultant of long. + trans. static rotation (+tol); rectangular = long. about L, plus a separate trans. check about W
-  const thSt=isCirc()?Math.hypot(thLongStatic,thTrans)+(+tg.rotTol):thLongStatic+(+tg.rotTol);
+  // M4 (2026-11-07): rectangular with the MassDOT 0.03 rad: the design rotation is the vector sum of longitudinal and transverse, with the 0.03 added once to the resultant [MassDOT §3.5.7.6]
+  const resL=isCirc()||(!isPlain()&&Math.abs(+tg.rotTol-0.03)<1e-9); R.rot.resL=resL&&!isCirc();
+  const thSt=resL?Math.hypot(thLongStatic,thTrans)+(+tg.rotTol):thLongStatic+(+tg.rotTol);
   const gr_st=Dr*Math.pow(Bdim/hri,2)*(thSt/n);
   const gr_cy=Dr*Math.pow(Bdim/hri,2)*(thLongCyclic/n);
   const gs_st=(+L.deltaS)/hrt, gs_cy=0;
@@ -648,7 +652,11 @@ function computeEDM(loadsOverride){
   R.stab=stab;
   // reinforcement (14.7.5.3.5)
   const hsService=3*hri*sigTL/(+m.Fy), hsFatigue=2.0*hri*sigLL/DFTH_A;
-  R.reinf={hsService,hsFatigue,hsReq:Math.max(hsService,hsFatigue),tProvided:+g.tSteel};
+  // M5 (2026-11-07): the minimum laminate thickness is part of the check (was a warning only): h_s,gov = max(h_s,svc, h_s,fat, h_s,min) [14.7.5.3.5; MassDOT §3.5.7.5]
+  { const hsReq=Math.max(hsService,hsFatigue), hsMin=+tg.hsMin>0?+tg.hsMin:0.1196, hsGov=Math.max(hsReq,hsMin);
+    R.reinf={hsService,hsFatigue,hsReq,tProvided:+g.tSteel,hsMin,hsGov,dc:hsReq/(+g.tSteel),minPass:(+g.tSteel)>=hsMin-1e-9,minRatio:hsMin/(+g.tSteel)}; }
+  // Decision (pending engineer review): the minimum is its own pass/fail item without a D/C (as the edge cover): a D/C of h_s,min/h_s would read 1.00 for
+  // every 11 ga pad and become the governing D/C of every design; the strength D/C keeps h_s,req/h_s.
   // Method A limits (14.7.6)
   const GmA=+cf.GmaxA, GminA=+cf.GminA;   // least favourable G of the durometer range [14.7.6.2]: GminA (lowest) for the G·S stress limit, GmA = GmaxA (highest) for the uplift check
   const sigGS=(isPlain()?+cf.GSplainA:1.25)*GminA*Sf;   // steel-reinforced: σs ≤ 1.25GS and ≤ 1.25 ksi; plain: σs ≤ c·GS and ≤ 0.80 ksi [14.7.6.3.2]
@@ -657,6 +665,10 @@ function computeEDM(loadsOverride){
   const upliftA=DrA*GmA*Sf*Math.pow(Bdim/hri,2)*(thTotal/n);
   const upliftAW=(!isCirc()&&!isPlain())?DrA*GmA*Sf*Math.pow(planW/hri,2)*(thTransW/n):0;   // rectangular: transverse rotation about W (+0.005 with the AASHTO tolerance)
   R.methodA={GmA,GminA,sigGS,sigCap,upliftA,upliftAW,DrA};
+  // M1 (2026-11-07): Method A applies to steel-reinforced bearings with S_i²/n < 22 [14.7.6.1]; C14.7.6.1: consider 20 for n ≥ 3 and 16 for circular
+  // or nearly square pads. Decision (pending engineer review): the commentary values are used (circular, or rectangular with max/min ≤ 1.1: 16; n ≥ 3: 20; else 22).
+  if(S.method==="A"&&!isPlain()){ const S2n=Sf*Sf/n, sq=!isCirc()&&Math.max(planL,planW)/Math.min(planL,planW)<=1.1, lim=(isCirc()||sq)?16:(n>=3?20:22);
+    R.appA={S2n,lim,sq,dc:S2n/lim,why:isCirc()?"circular":sq?"nearly square (L/W ≤ 1.1)":n>=3?"rectangular, n ≥ 3":"rectangular, n < 3"}; } else R.appA=null;
   // cover layer ≤ max(0.7 h_ri, 5/16 in.) [14.7.5.1 / 14.7.6.1, 10th Ed.]; horizontal force H_bu = G A Δu / h_rt [14.6.3.1] (report only)
   R.coverMax=Math.max(0.7*hri,5/16);
   R.coverDC=isPlain()?null:(+g.cover)/R.coverMax;
@@ -686,6 +698,7 @@ function computeEDM(loadsOverride){
   const addRes=()=>{ if(R.res.anchored) dash.push({id:"res",name:"Restraint [14.7.5.4] — anchored/doweled: restraint provided",dc:null,pass:null,ref:"info"});
     else add("res","Restraint θs/n < 3εa/Si [14.7.5.4]",R.res.dc,"θs/n < 3εa/Si"); };
   // edge cover: pass/fail against the 1/4 in. minimum, no D/C (it is a detailing minimum, so it does not enter the governing D/C)
+  const addHsMin=id=>dash.push({id,name:"Steel laminate ≥ minimum "+fmt(R.reinf.hsMin,4)+" in"+(R.reinf.minPass?"":" (h_s,min/h_s = "+fmt(R.reinf.minRatio)+")")+" ["+(R.reinf.hsMin>=0.1196-1e-9?"MassDOT §3.5.7.5":"14.7.5.3.5")+"]",dc:null,pass:R.reinf.minPass,ref:"hs ≥ hs,min"});   // M5
   const addEdge=(id,ref)=>dash.push({id,name:"Edge cover ≥ 0.25 in ["+ref+"]",dc:null,pass:R.edge.pass,ref:"ce ≥ 0.25 in"});
   if(isPlain()){
     add("sigP","Compressive stress — plain [14.7.6.3.2]",sigTL/Math.min(sigGS,+cf.sigCapPlainA),"σs ≤ min("+fmt(+cf.GSplainA)+"GS, "+fmt(+cf.sigCapPlainA)+" ksi)");
@@ -698,7 +711,8 @@ function computeEDM(loadsOverride){
     if(denom>0) add("stab","Stability [14.7.5.3.4]",sigTL/sigLim,"σs ≤ GS/("+(tg.fixedShear?"A−B":"2A−B")+")");
     else dash.push({id:"stab",name:"Stability [14.7.5.3.4] — "+(tg.fixedShear?"A ≤ B (fixed)":"2A ≤ B")+", stable",dc:0,pass:true,ref:tg.fixedShear?"A ≤ B":"2A ≤ B"});
     add("shearB","Shear deformation [14.7.5.3.2]",(+L.deltaS)/(0.5*hrt),"γs ≤ 0.50");
-    add("reinf","Steel laminate thickness [14.7.5.3.5]",R.reinf.hsReq/R.reinf.tProvided,"hs ≥ max(svc,fat)");
+    add("reinf","Steel laminate thickness [14.7.5.3.5]",R.reinf.dc,"hs ≥ max(svc,fat)");
+    addHsMin("hsmin");
     add("cover","Cover layer ≤ max(0.7 hri, 5/16 in.) [14.7.5.1]",R.coverDC,"cover ≤ max(0.7 hri, 5/16 in.)");
     addEdge("edge","14.7.5.1");
     addAnc("anc");
@@ -706,10 +720,14 @@ function computeEDM(loadsOverride){
   } else {
     add("sigA","Compressive stress [14.7.6.3.2]",sigTL/Math.min(sigGS,sigCap),"σs ≤ min(1.25GS, cap)");
     add("shearA","Shear deformation [14.7.6.3.4]",(2*(+L.deltaS))/hrt,"hrt ≥ 2Δs");
-    add("rotA","Compression–rotation (uplift) [14.7.6.3.5]",upliftA/sigTL,"σs ≥ Dr·GS(B/hri)²(θ/n)");
-    if(!isCirc()) add("rotAW","Compression–rotation, transverse (uplift) [14.7.6.3.5]",upliftAW/sigTL,"σs ≥ Dr·GS(W/hri)²(θt/n)");
+    // M1 (2026-11-07): Method A applicability for a steel-reinforced bearing, S_i²/n below the limit [14.7.6.1; C14.7.6.1]
+    { const ap=R.appA; dash.push({id:"appA",name:"Method A applicability S²/n < "+fmt(ap.lim,0)+" [14.7.6.1]",dc:ap.dc,pass:ap.dc<1,ref:"S²/n < "+fmt(ap.lim,0)}); }
+    // M1: the pre-2009 no-liftoff ("uplift") check is no longer an AASHTO requirement [C14.7.6.3.5a; MassDOT §3.5.7.3]: informational, no pass/fail
+    dash.push({id:"rotA",name:"Compression–rotation, pre-2009 no-liftoff (informational, σ_up/σ_s = "+fmt(upliftA/sigTL)+") [C14.7.6.3.5a]",dc:null,pass:null,ref:"info"});
+    if(!isCirc()) dash.push({id:"rotAW",name:"Compression–rotation, transverse, pre-2009 no-liftoff (informational, σ_up/σ_s = "+fmt(upliftAW/sigTL)+") [C14.7.6.3.5a]",dc:null,pass:null,ref:"info"});
     add("stabA","Stability thickness [14.7.6.3.6]",R.stabT.dc,isCirc()?"h_total ≤ D/4":"h_total ≤ L/3, W/3");
-    add("reinfA","Steel laminate thickness [14.7.6.3.7]",R.reinf.hsReq/R.reinf.tProvided,"hs ≥ max(svc,fat)");
+    add("reinfA","Steel laminate thickness [14.7.6.3.7]",R.reinf.dc,"hs ≥ max(svc,fat)");
+    addHsMin("hsminA");
     add("coverA","Cover layer ≤ max(0.7 hri, 5/16 in.) [14.7.6.1]",R.coverDC,"cover ≤ max(0.7 hri, 5/16 in.)");
     addEdge("edgeA","14.7.6.1");
     addAnc("ancA");
@@ -720,9 +738,10 @@ function computeEDM(loadsOverride){
   if(R.res&&!R.res.anchored&&R.res.dc>1.0001) warn("Restraint: θs/n = "+fmt(R.res.lhs,5)+" ≥ 3εa/Si = "+fmt(R.res.rhs,5)+" — a restraint system is required for a bearing without bonded external plates [AASHTO 14.7.5.4].");
   if(sigDL<0.2) warn("Dead-load stress σ_DL = "+fmt(sigDL)+" ksi < 0.20 ksi — risk of bearing walking/creep; increase DL or reduce pad area.");
   if((+L.deltaS)>2.5) warn("Δs = "+fmt(+L.deltaS)+" in > 2.5 in — a PTFE sliding bearing is required [MassDOT §3.5.7.10].","err");
-  if(+g.tSteel<0.1196 && !isPlain()) warn("Steel laminate < 0.1196 in (11 ga) — below the MassDOT minimum [§3.5.7.5].","err");
+  if(+g.tSteel<R.reinf.hsMin-1e-9 && !isPlain()) warn("Steel laminate < "+fmt(R.reinf.hsMin,4)+" in — below the minimum "+(R.reinf.hsMin>=0.1196-1e-9?"(11 ga) [MassDOT §3.5.7.5]":"[AASHTO 14.7.5.3.5]")+"; the laminate thickness check fails.","err");   // M5: the check fails too
   if(!isCirc()&&!isPlain()) warn("Rectangular steel-reinforced bearings require State Bridge Engineer approval; MassDOT default is circular [§3.5.7.9].");
   if(S.method==="A"&&!isPlain()) warn("Method A requires State Bridge Engineer approval in lieu of the preferred Method B [MassDOT §3.5.7.2].");
+  if(S.method==="A"&&!isPlain()&&thTrans>0) warn("Method A applies to steel-reinforced bearings whose primary rotation is about the horizontal axis perpendicular to the beam centreline [14.7.6.1]; a transverse rotation θ<sub>t</sub> = "+fmt(thTrans,4)+" rad is entered — confirm it is secondary, or use Method B.");   // M1
   // input ranges from the VALID table: outside the hard range (incl. blank = 0) → error, outside the typical range → advisory
   let nInErr=0;
   Object.keys(VALID).forEach(p=>{
@@ -773,10 +792,10 @@ const EDM_CARDS={"o-geom":["tab-in","Plan Geometry & Shape Factor"],"o-rot":["ta
   sig:["tab-des","Compressive stress"],shear:["tab-des","Shear deformation"],gast:["tab-des","Axial shear strain"],rot:["tab-des","Rotational shear strain"],
   gs:["tab-des","Shear strain from movement"],comb:["tab-des","Combined static + cyclic limit"],stab:["tab-des","Stability"],stabT:["tab-des","Stability thickness"],
   uplift:["tab-des","Combined compression & rotation (uplift)"],reinf:["tab-des","Steel reinforcement thickness"],cover:["tab-des","Cover layer"],
-  anc:["tab-des","Anchorage"],res:["tab-des","Restraint"],grange:["tab-des","Design shear modulus range"],edge:["tab-des","Edge cover"],hbu:["tab-des","Horizontal force"]};
+  anc:["tab-des","Anchorage"],res:["tab-des","Restraint"],appA:["tab-des","Method A applicability"],grange:["tab-des","Design shear modulus range"],edge:["tab-des","Edge cover"],hbu:["tab-des","Horizontal force"]};
 // dashboard item id -> the check block (data-chk) where it is worked
 const EDM_DASH2CHK={gast:"gast",comb:"comb",stab:"stab",shearB:"gs",reinf:"reinf",cover:"cover",anc:"anc",ancA:"anc",ancP:"anc",
-  sigP:"sig",sigA:"sig",shearP:"shear",shearA:"shear",stabP:"stabT",stabA:"stabT",rotA:"uplift",rotAW:"uplift",reinfA:"reinf",coverA:"cover",res:"res",edge:"edge",edgeA:"edge"};
+  sigP:"sig",sigA:"sig",shearP:"shear",shearA:"shear",stabP:"stabT",stabA:"stabT",rotA:"uplift",rotAW:"uplift",appA:"appA",hsmin:"reinf",hsminA:"reinf",reinfA:"reinf",coverA:"cover",res:"res",edge:"edge",edgeA:"edge"};
 function edmLink(card,txt){ const cd=EDM_CARDS[card]; if(!cd)return "";
   return `<a href="#" class="wkA" data-tab="${cd[0]}" data-card="${card}"${txt?` data-txt="${esc(txt)}"`:""}>${txt?esc(txt)+" ":""}→ ${EDM_TABNAME[cd[0]]} · ${cd[1]}</a>`; }
 function edmWorkedIn(items){   /* items: [[card, txt]] */
@@ -872,7 +891,7 @@ function renderDesign(R){
         `\\gamma_{a,st} = ${fmtT(st.ga_st,3)} \\le 3.0`],`D<sub>a</sub> = 1.0 for circular and 1.4 for rectangular bearings [14.7.5.3.3].`,"gast")}
       ${checkLine("Static axial strain γa,st ≤ 3.0",st.ga_st/3.0,"[14.7.5.3.3]","gast")}
       ${eqB("Rotational shear strain","AASHTO 14.7.5.3.3-6",[`\\gamma_{r} = D_r\\left(\\dfrac{${isCirc()?"D":"L"}}{h_{ri}}\\right)^2\\dfrac{\\theta}{n}`,`\\gamma_{r,st} = ${fmtT(st.gr_st,3)}, \\quad \\gamma_{r,cy} = ${fmtT(st.gr_cy,3)}`].concat(isCirc()?[]:[`\\text{transverse: } \\gamma_{r,st,W} = D_r\\left(\\dfrac{W}{h_{ri}}\\right)^2\\dfrac{\\theta_t}{n} = ${fmtT(st.grW_st,3)}, \\quad ${thTWtex(R)}`]),
-        isCirc()?`Circular: θ<sub>st</sub> = √(θ<sub>long,st</sub>² + θ<sub>t</sub>²) + tolerance (rotation about any axis gives the same strain).`:`Rectangular: longitudinal rotation about L (with the construction tolerance) and transverse rotation θ<sub>t</sub> about W are checked separately; the larger combined strain governs. With the AASHTO 0.005-rad tolerance it is also added to θ<sub>t</sub> [14.4.2.1]; the MassDOT 0.03 rad is applied once, to the longitudinal rotation [§3.5.7.6].`,"rot")}
+        isCirc()?`Circular: θ<sub>st</sub> = √(θ<sub>long,st</sub>² + θ<sub>t</sub>²) + tolerance (rotation about any axis gives the same strain).`:(R.rot.resL?`Rectangular, MassDOT 0.03 rad: θ<sub>st</sub> about L = √(θ<sub>long,st</sub>² + θ<sub>t</sub>²) + 0.03 (the resultant, with the 0.03 added once to it) = ${fmt(st.thSt,4)} rad [MassDOT §3.5.7.6]; the transverse rotation θ<sub>t</sub> about W is also checked separately; the larger combined strain governs.`:`Rectangular: longitudinal rotation about L (with the construction tolerance) and transverse rotation θ<sub>t</sub> about W are checked separately; the larger combined strain governs. With the AASHTO 0.005-rad tolerance it is also added to θ<sub>t</sub> [14.4.2.1].`),"rot")}
       ${eqB("Shear strain from movement","AASHTO 14.7.5.3.2",[`\\gamma_{s} = \\dfrac{\\Delta_s}{h_{rt}} = \\dfrac{${fmtT(S.loads.deltaS,3)}}{${fmtT(R.hrt,3)}} = ${fmtT(st.gs_st,3)}`].concat(EDM_RPT?[`\\gamma_{s} = ${fmtT(st.gs_st,3)} \\le 0.50`]:[]),"","gs")}
       ${EDM_RPT?checkLine("Shear deformation γs ≤ 0.50",edmDashDC(R,"shearB"),"[14.7.5.3.2]"):""}
       ${eqB("Combined static + cyclic limit","AASHTO 14.7.5.3.3-1 / MassDOT §3.5.7.6",[
@@ -887,7 +906,8 @@ function renderDesign(R){
         isCirc()?`Circular bearing checked as a square with W = L = 0.8D = ${fmt(R.stab.Lp)} in [14.7.5.3.4].`:`Rectangular bearing: investigated with L and W as entered and with L and W interchanged [14.7.5.3.4]; the orientation with the lower stress limit governs (${R.stab.swapped?"interchanged: L = "+fmt(R.stab.Lp)+", W = "+fmt(R.stab.Wp)+" in":"as entered: L = "+fmt(R.stab.Lp)+", W = "+fmt(R.stab.Wp)+" in"}).`,"stab")}
       ${R.stab.stable?checkLine("Stability (2A ≤ B)",0,"[14.7.5.3.4]","stab"):R.stab.denom<=0?checkLine("Stability (fixed, A ≤ B)",0,"[14.7.5.3.4]","stab"):checkLine("Stability",R.sigTL/R.stab.sigLim,"[14.7.5.3.4]","stab")}
       ${eqB("Steel reinforcement thickness","AASHTO 14.7.5.3.5",reinfLines(R),"","reinf")}
-      ${checkLine("Steel laminate thickness",R.reinf.hsReq/R.reinf.tProvided,"[14.7.5.3.5]","reinf")}
+      ${checkLine("Steel laminate thickness",R.reinf.dc,"[14.7.5.3.5]","reinf")}
+      ${hsMinLine(R)}
       ${eqB("Cover layer","AASHTO 14.7.5.1",[coverLine()],"","cover")}
       ${checkLine("Cover layer ≤ max(0.7 hri, 5/16 in.)",R.coverDC,"[14.7.5.1]","cover")}
       ${edgeEq(R,"14.7.5.1")}
@@ -905,16 +925,17 @@ function renderDesign(R){
     ${checkLine("Compressive stress",R.sigTL/Math.min(ma.sigGS,ma.sigCap),"[14.7.6.3.2]","sig")}
     ${eqB("Shear deformation","AASHTO 14.7.6.3.4",[`h_{rt} \\ge 2\\Delta_s = 2(${fmtT(S.loads.deltaS,3)}) = ${fmtT(2*S.loads.deltaS,3)}\\ \\text{in}, \\quad h_{rt}=${fmtT(R.hrt,3)}`],"","shear")}
     ${checkLine("Shear deformation",(2*(+S.loads.deltaS))/R.hrt,"[14.7.6.3.4]","shear")}
-    ${eqB("Combined compression & rotation (uplift)","AASHTO 14.7.6.3.5",[
+    ${appAEq(R)}
+    ${eqB("Combined compression & rotation (pre-2009 no-liftoff, informational)","AASHTO 9th Ed. and earlier 14.7.6.3.5 form; C14.7.6.3.5a",[
       `\\sigma_s \\ge ${fmtT(ma.DrA,3)}\\,G\\,S\\left(\\dfrac{${isCirc()?"D":"L"}}{h_{ri}}\\right)^2\\dfrac{\\theta_s}{n} = ${fmtT(ma.upliftA,3)}\\ \\text{ksi}`].concat(isCirc()?[]:[`\\text{transverse: } \\sigma_s \\ge ${fmtT(ma.DrA,3)}\\,G\\,S\\left(\\dfrac{W}{h_{ri}}\\right)^2\\dfrac{\\theta_t}{n} = ${fmtT(ma.upliftAW,3)}\\ \\text{ksi}, \\quad ${thTWtex(R)}`]).concat([
       `\\sigma_s = ${fmtT(R.sigTL,3)}\\ \\text{ksi}`]),`Coefficient 0.5 for rectangular and 0.75 for circular bearings [14.7.6.3.5]. G = ${fmt(ma.GmA,3)} ksi, the highest value of the durometer range (least favourable for this check) [14.7.6.2].`,"uplift")}
-    ${checkLine("Compression–rotation (uplift)",ma.upliftA/R.sigTL,"[14.7.6.3.5]","uplift")}
-    ${isCirc()?"":checkLine("Compression–rotation, transverse (uplift)",ma.upliftAW/R.sigTL,"[14.7.6.3.5]")}
+    ${infoLine("Compression–rotation, pre-2009 no-liftoff: σ<sub>up</sub>/σ<sub>s</sub> = "+fmt(ma.upliftA/R.sigTL)+(isCirc()?"":"; transverse "+fmt(ma.upliftAW/R.sigTL))+" for reference — not a pass/fail check: the 10th Ed. removed the no-liftoff provisions from Method A, rotation being implicit in its geometric and stress limits (C14.7.6.3.5a, C14.7.6.1; MassDOT §3.5.7.3). Decision (pending engineer review): kept as information.","C14.7.6.3.5a","uplift")}
     ${stabTEq(R,"AASHTO 14.7.6.3.6")}
     ${checkLine("Stability thickness",R.stabT.dc,isCirc()?"h_total ≤ D/4":"h_total ≤ L/3, W/3","stabT")}
-    ${EDM_RPT?eqB("Steel reinforcement thickness","AASHTO 14.7.6.3.7",reinfLines(R),"","reinf"):""}
-    ${checkLine("Steel laminate thickness",R.reinf.hsReq/R.reinf.tProvided,"[14.7.6.3.7]","reinf")}
-    ${EDM_RPT?eqB("Cover layer","AASHTO 14.7.6.1",[coverLine()],"","cover"):""}
+    ${eqB("Steel reinforcement thickness","AASHTO 14.7.6.3.7 / 14.7.5.3.5",reinfLines(R),"","reinf")}
+    ${checkLine("Steel laminate thickness",R.reinf.dc,"[14.7.6.3.7]","reinf")}
+    ${hsMinLine(R)}
+    ${eqB("Cover layer","AASHTO 14.7.6.1",[coverLine()],"","cover")}
     ${checkLine("Cover layer ≤ max(0.7 hri, 5/16 in.)",R.coverDC,"[14.7.6.1]","cover")}
     ${edgeEq(R,"14.7.6.1")}
     ${ancEq(R)}
@@ -929,7 +950,19 @@ function thTWtex(R){ const r=R.rot; return r.tolW>0?`\\theta_t = ${fmtT(r.thTran
 function reinfLines(R){ const g=S.geom,m=S.mat; return [
         `h_s \\ge \\dfrac{3\\,h_{ri}\\,\\sigma_s}{F_y} = \\dfrac{3(${fmtT(g.hri,3)})(${fmtT(R.sigTL,3)})}{${fmtT(m.Fy)}} = ${fmtT(R.reinf.hsService,4)}\\ \\text{in (service)}`,
         `h_s \\ge \\dfrac{2.0\\,h_{ri}\\,\\sigma_L}{\\Delta F_{TH}} = \\dfrac{2.0(${fmtT(g.hri,3)})(${fmtT(R.sigLL,3)})}{${DFTH_A}} = ${fmtT(R.reinf.hsFatigue,4)}\\ \\text{in (fatigue, Cat. A)}`,
-        `h_{s,req} = ${fmtT(R.reinf.hsReq,4)}\\ \\text{in} \\le h_{s,prov} = ${fmtT(R.reinf.tProvided,4)}\\ \\text{in}`]; }
+        `h_{s,min} = ${fmtT(R.reinf.hsMin,4)}\\ \\text{in}\\ (${R.reinf.hsMin>=0.1196-1e-9?"\\text{MassDOT §3.5.7.5, 11 ga}":"\\text{AASHTO 14.7.5.3.5}"})`,
+        `h_{s,req} = \\max(${fmtT(R.reinf.hsService,4)},\\ ${fmtT(R.reinf.hsFatigue,4)}) = ${fmtT(R.reinf.hsReq,4)}\\ \\text{in} ${R.reinf.dc<=1.0001?"\\le":">"} h_{s,prov} = ${fmtT(R.reinf.tProvided,4)}\\ \\text{in}`,
+        `h_{s,prov} = ${fmtT(R.reinf.tProvided,4)}\\ \\text{in} ${R.reinf.minPass?"\\ge":"<"} h_{s,min} = ${fmtT(R.reinf.hsMin,4)}\\ \\text{in}`]; }
+/* M5: pass/fail line of the minimum laminate thickness */
+function hsMinLine(R){ const r=R.reinf, ok=r.minPass, ref=r.hsMin>=0.1196-1e-9?"MassDOT §3.5.7.5":"14.7.5.3.5";
+  return `<div class="checkline" data-chk="reinf"><span class="verdict ${ok?"ok":"bad"}">${ok?"PASS":"FAIL"}</span><span style="flex:1">Steel laminate h<sub>s</sub> = ${fmt(r.tProvided,4)} in ${ok?"≥":"&lt;"} minimum ${fmt(r.hsMin,4)} in${ok?"":" (h<sub>s,min</sub>/h<sub>s</sub> = "+fmt(r.minRatio)+")"} <span class="eqref">[${ref}]</span></span></div>`; }
+/* M1 (2026-11-07): an INFO result line (no pass/fail) */
+function infoLine(txt,ref,key){ return `<div class="checkline"${key?` data-chk="${key}"`:""}><span class="verdict" style="background:#888">INFO</span><span style="flex:1">${txt} <span class="eqref">[${ref}]</span></span></div>`; }
+/* M1: Method A applicability S_i²/n, worked */
+function appAEq(R){ const a=R.appA; if(!a) return "";
+  return eqB("Method A applicability","AASHTO 14.7.6.1 / C14.7.6.1",[`\\dfrac{S_i^2}{n} = \\dfrac{${fmtT(R.S,3)}^2}{${fmtT(R.n,0)}} = ${fmtT(a.S2n,2)} \\; ${a.dc<1?"<":"\\ge"} \\; ${fmtT(a.lim,0)}`],
+    `Method A applies to steel-reinforced bearings with S<sub>i</sub>²/n &lt; 22 [14.7.6.1]; the commentary suggests 20 when n ≥ 3 and 16 for circular or nearly square pads [C14.7.6.1]. Limit used: ${fmt(a.lim,0)} (${a.why}). Decision (pending engineer review): the commentary values are used. When this fails, design by Method B.`,"appA")
+  +`<div class="checkline" data-chk="appA"><span class="verdict ${a.dc<1?"ok":"bad"}">${a.dc<1?"PASS":"FAIL"}</span><span style="flex:1">Method A applicability S²/n &lt; ${fmt(a.lim,0)} — D/C = <b>${fmt(a.dc)}</b> <span class="eqref">[14.7.6.1]</span></span></div>`; }
 function coverLine(){ const g=S.geom; return `c = ${fmtT(g.cover,3)} \\le \\max(0.7\\,h_{ri},\\ 5/16) = \\max(0.7(${fmtT(g.hri,3)}),\\ 0.3125) = ${fmtT(Math.max(0.7*g.hri,5/16),3)}\\ \\text{in}`; }
 /* D11 (report only): the stability-thickness check has no worked block in the tab; this shows the comparison the check itself makes */
 /* H3 (2026-11-07): worked on the Design Checks tab (was report only); the total pad thickness (steel laminates included) [14.7.6.3.6] */
@@ -1235,8 +1268,11 @@ function edrModel(){
     const reinf=(w,id,ref)=>{
       w.add({id:"svc",label:"Laminate thickness, service",sym:"h_{s,svc}",eq:"\\frac{3\\,h_{ri}\\,\\sigma_{s}}{F_{y}}",sub:"\\frac{3\\cdot "+edrN(+g.hri,3)+"\\cdot "+edrN(R.sigTL,3)+"}{"+edrN(+m.Fy)+"}",value:R.reinf.hsService,unit:"in",d:4,ref});
       w.add({id:"fat",label:"Laminate thickness, fatigue (Category A)",sym:"h_{s,fat}",eq:"\\frac{2.0\\,h_{ri}\\,\\sigma_{L}}{\\Delta F_{TH}}",sub:"\\frac{2.0\\cdot "+edrN(+g.hri,3)+"\\cdot "+edrN(R.sigLL,3)+"}{"+edrN(DFTH_A,1)+"}",value:R.reinf.hsFatigue,unit:"in",d:4,ref:EDR_AA+"Table 6.6.1.2.5-3 (ΔF_TH)"});
+      w.add({id:"min",label:"Minimum laminate thickness ("+(R.reinf.hsMin>=0.1196-1e-9?"MassDOT §3.5.7.5, 11 ga":"AASHTO Art. 14.7.5.3.5")+"; panel I-5)",sym:"h_{s,min}",eq:"",sub:"",value:R.reinf.hsMin,unit:"in",d:4,ref:R.reinf.hsMin>=0.1196-1e-9?EDR_MD+"§3.5.7.5":EDR_AA+"Art. 14.7.5.3.5"});   /* M5 */
       w.add({id:"req",label:"Required laminate thickness",sym:"h_{s,req}",eq:"\\max(h_{s,svc},\\,h_{s,fat})",sub:"\\max("+edrN(R.reinf.hsService,4)+",\\,"+edrN(R.reinf.hsFatigue,4)+")",value:R.reinf.hsReq,unit:"in",d:4});
-      dcStep(w,id,"Steel laminate thickness","\\frac{h_{s,req}}{h_{s,prov}}","\\frac{"+edrN(R.reinf.hsReq,4)+"}{"+edrN(R.reinf.tProvided,4)+"}",ref); };
+      dcStep(w,id,"Steel laminate thickness","\\frac{h_{s,req}}{h_{s,prov}}","\\frac{"+edrN(R.reinf.hsReq,4)+"}{"+edrN(R.reinf.tProvided,4)+"}",ref);
+      const mid=id==="reinfA"?"hsminA":"hsmin"; KEY[mid]="chk/"+w.key+".prov";   /* M5: pass/fail against the minimum (no D/C) */
+      w.add({id:"prov",label:"Provided laminate thickness, at least h_s,min",sym:"h_{s,prov}",eq:"",sub:"",value:R.reinf.tProvided,unit:"in",d:4,ok:R.reinf.minPass,note:"minimum "+edrN(R.reinf.hsMin,4)+" in"}); };
     const cover=(w,id,ref)=>{
       w.add({id:"max",label:"Largest cover layer",sym:"c_{max}",eq:"\\max(0.7\\,h_{ri},\\,5/16)",sub:"\\max(0.7\\cdot "+edrN(+g.hri,3)+",\\,0.3125)",value:R.coverMax,unit:"in",d:3,ref});
       dcStep(w,id,"Cover layer","\\frac{c}{c_{max}}","\\frac{"+edrN(+g.cover,3)+"}{"+edrN(R.coverMax,3)+"}",ref); };
@@ -1269,9 +1305,10 @@ function edrModel(){
       w.add({id:"cy",label:"Axial shear strain, cyclic",sym:"\\gamma_{a,cy}",eq:"\\frac{D_{a}\\,\\sigma_{LL}}{G_{min}\\,S}",sub:"\\frac{"+edrN(st.Da)+"\\cdot "+edrN(R.sigLL,3)+"}{"+edrN(R.Grange.Gmin,3)+"\\cdot "+edrN(R.S)+"}",value:st.ga_cy,unit:"",d:3});
       dcStep(w,"gast","Static axial strain: γ_a,st ≤ 3.0","\\frac{\\gamma_{a,st}}{3.0}","\\frac{"+edrN(st.ga_st,3)+"}{3.0}",EDR_AA+"Art. 14.7.5.3.3");
       w=topic(T,"rot","Rotational shear strain",EDR_AA+"Eq. 14.7.5.3.3-6");
-      w.add({id:"th",label:circ?"Static rotation (resultant of longitudinal and transverse + tolerance)":"Static longitudinal rotation (+ tolerance)",sym:"\\theta_{st}",eq:circ?"\\sqrt{\\theta_{long,st}^{2} + \\theta_{t}^{2}} + \\theta_{tol}":"\\theta_{long,st} + \\theta_{tol}",
-        sub:circ?"\\sqrt{"+edrN(R.rot.thLongStatic,4)+"^{2} + "+edrN(R.rot.thTrans,4)+"^{2}} + "+edrN(R.rot.tol,3):edrN(R.rot.thLongStatic,4)+" + "+edrN(R.rot.tol,3),value:st.thSt,unit:"rad",d:4,
-        note:circ?"Circular: rotation about any axis gives the same strain.":"Rectangular: longitudinal rotation about L (with the construction tolerance) and transverse rotation θ_t about W are checked separately; the larger combined strain governs. With the AASHTO 0.005-rad tolerance it is also added to θ_t [14.4.2.1]; the MassDOT 0.03 rad is applied once, to the longitudinal rotation [§3.5.7.6]."});   /* EDRX: note of the retired print report */
+      const resL=circ||R.rot.resL;   /* M4 */
+      w.add({id:"th",label:resL?"Static rotation (resultant of longitudinal and transverse + tolerance)":"Static longitudinal rotation (+ tolerance)",sym:"\\theta_{st}",eq:resL?"\\sqrt{\\theta_{long,st}^{2} + \\theta_{t}^{2}} + \\theta_{tol}":"\\theta_{long,st} + \\theta_{tol}",
+        sub:resL?"\\sqrt{"+edrN(R.rot.thLongStatic,4)+"^{2} + "+edrN(R.rot.thTrans,4)+"^{2}} + "+edrN(R.rot.tol,3):edrN(R.rot.thLongStatic,4)+" + "+edrN(R.rot.tol,3),value:st.thSt,unit:"rad",d:4,
+        note:circ?"Circular: rotation about any axis gives the same strain.":R.rot.resL?"Rectangular, MassDOT 0.03 rad: the resultant of longitudinal and transverse rotation with the 0.03 added once is used about L [MassDOT §3.5.7.6]; the transverse rotation θ_t about W is also checked separately; the larger combined strain governs.":"Rectangular: longitudinal rotation about L (with the construction tolerance) and transverse rotation θ_t about W are checked separately; the larger combined strain governs. With the AASHTO 0.005-rad tolerance it is also added to θ_t [14.4.2.1]."});   /* EDRX: note of the retired print report */
       w.add({id:"st",label:"Rotational shear strain, static",sym:"\\gamma_{r,st}",eq:"D_{r}\\left(\\frac{"+B+"}{h_{ri}}\\right)^{2}\\frac{\\theta_{st}}{n}",sub:edrN(R.DrUsed,3)+"\\left(\\frac{"+edrN(R.Bdim)+"}{"+edrN(+g.hri,3)+"}\\right)^{2}\\frac{"+edrN(st.thSt,4)+"}{"+R.n+"}",value:st.gr_st,unit:"",d:3,ref:EDR_AA+"Eq. 14.7.5.3.3-6"});
       w.add({id:"cy",label:"Rotational shear strain, cyclic",sym:"\\gamma_{r,cy}",eq:"D_{r}\\left(\\frac{"+B+"}{h_{ri}}\\right)^{2}\\frac{\\theta_{cy}}{n}",sub:edrN(R.DrUsed,3)+"\\left(\\frac{"+edrN(R.Bdim)+"}{"+edrN(+g.hri,3)+"}\\right)^{2}\\frac{"+edrN(st.thCy,4)+"}{"+R.n+"}",value:st.gr_cy,unit:"",d:3});
       if(!circ) w.add({id:"W",label:"Rotational shear strain, transverse rotation about W",sym:"\\gamma_{r,st,W}",eq:"D_{r}\\left(\\frac{W}{h_{ri}}\\right)^{2}\\frac{\\theta_{t,W}}{n}",sub:edrN(R.DrUsed,3)+"\\left(\\frac{"+edrN(R.planW)+"}{"+edrN(+g.hri,3)+"}\\right)^{2}\\frac{"+edrN(R.rot.thTransW,4)+"}{"+R.n+"}",value:st.grW_st,unit:"",d:3});
@@ -1322,12 +1359,15 @@ function edrModel(){
       dcStep(w,"sigA","Compressive stress","\\frac{\\sigma_{s}}{\\min(\\sigma_{GS},\\,\\sigma_{cap})}","\\frac{"+edrN(R.sigTL,3)+"}{\\min("+edrN(ma.sigGS,3)+",\\,"+edrN(ma.sigCap)+")}",EDR_AA+"Art. 14.7.6.3.2");
       w=topic(T,"shear","Shear deformation",EDR_AA+"Art. 14.7.6.3.4");
       dcStep(w,"shearA","Shear deformation: h_rt ≥ 2Δ_s","\\frac{2\\,\\Delta_{s}}{h_{rt}}","\\frac{2\\cdot "+edrN(+L.deltaS,3)+"}{"+edrN(R.hrt,3)+"}",EDR_AA+"Art. 14.7.6.3.4");
-      SUB="Compression and rotation (uplift)"; w=topic(T,"uplift","Combined compression and rotation (uplift)",EDR_AA+"Art. 14.7.6.3.5");
+      if(R.appA){ const ap=R.appA; SUB="Method A applicability"; w=topic(T,"appA","Method A applicability",EDR_AA+"Art. 14.7.6.1 / C14.7.6.1");   /* M1 */
+        w.add({id:"s2n",label:"S_i²/n",sym:"\\frac{S_{i}^{2}}{n}",eq:"",sub:"\\frac{"+edrN(R.S,3)+"^{2}}{"+R.n+"}",value:ap.S2n,unit:"",d:2});
+        dcStep(w,"appA","Method A applicability: S_i²/n < "+edrN(ap.lim,0)+" ("+ap.why+"; 22 in Art. 14.7.6.1, 20 / 16 per C14.7.6.1; decision pending engineer review)","\\frac{S_{i}^{2}/n}{"+edrN(ap.lim,0)+"}","\\frac{"+edrN(ap.S2n,2)+"}{"+edrN(ap.lim,0)+"}",EDR_AA+"Art. 14.7.6.1"); }
+      SUB="Compression and rotation (pre-2009 no-liftoff, informational)"; w=topic(T,"uplift","Combined compression and rotation (pre-2009 no-liftoff, informational)",EDR_AA+"Art. C14.7.6.3.5a");
       w.add({id:"L",label:"Least stress to avoid uplift (G = "+edrN(ma.GmA,3)+" ksi, highest of the durometer range)",sym:"\\sigma_{up}",eq:edrN(ma.DrA,3)+"\\,G\\,S\\left(\\frac{"+B+"}{h_{ri}}\\right)^{2}\\frac{\\theta_{s}}{n}",sub:edrN(ma.DrA,3)+"\\cdot "+edrN(ma.GmA,3)+"\\cdot "+edrN(R.S)+"\\left(\\frac{"+edrN(R.Bdim)+"}{"+edrN(+g.hri,3)+"}\\right)^{2}\\frac{"+edrN(R.rot.thTotal,4)+"}{"+R.n+"}",value:ma.upliftA,unit:"ksi",d:3,ref:EDR_AA+"Art. 14.7.6.3.5"});
-      dcStep(w,"rotA","Compression–rotation (uplift)","\\frac{\\sigma_{up}}{\\sigma_{s}}","\\frac{"+edrN(ma.upliftA,3)+"}{"+edrN(R.sigTL,3)+"}",EDR_AA+"Art. 14.7.6.3.5");
-      if(!circ){ w=topic(T,"upliftW","Combined compression and rotation, transverse (uplift)",EDR_AA+"Art. 14.7.6.3.5");
+      KEY.rotA="chk/uplift.info"; w.add({id:"info",label:"Pre-2009 no-liftoff check, informational (not a 10th Ed. requirement: C14.7.6.3.5a, C14.7.6.1; MassDOT §3.5.7.3); σ_up / σ_s = "+edrN(ma.upliftA/R.sigTL)+" for reference",sym:"",eq:"",sub:"",value:"information only",unit:"",ref:EDR_AA+"Art. C14.7.6.3.5a"});   /* M1 */
+      if(!circ){ w=topic(T,"upliftW","Combined compression and rotation, transverse (pre-2009 no-liftoff, informational)",EDR_AA+"Art. C14.7.6.3.5a");
         w.add({id:"W",label:"Least stress to avoid uplift, transverse rotation about W",sym:"\\sigma_{up,W}",eq:edrN(ma.DrA,3)+"\\,G\\,S\\left(\\frac{W}{h_{ri}}\\right)^{2}\\frac{\\theta_{t,W}}{n}",sub:edrN(ma.DrA,3)+"\\cdot "+edrN(ma.GmA,3)+"\\cdot "+edrN(R.S)+"\\left(\\frac{"+edrN(R.planW)+"}{"+edrN(+g.hri,3)+"}\\right)^{2}\\frac{"+edrN(R.rot.thTransW,4)+"}{"+R.n+"}",value:ma.upliftAW,unit:"ksi",d:3});
-        dcStep(w,"rotAW","Compression–rotation, transverse (uplift)","\\frac{\\sigma_{up,W}}{\\sigma_{s}}","\\frac{"+edrN(ma.upliftAW,3)+"}{"+edrN(R.sigTL,3)+"}",EDR_AA+"Art. 14.7.6.3.5"); }
+        KEY.rotAW="chk/upliftW.info"; w.add({id:"info",label:"Transverse, informational; σ_up,W / σ_s = "+edrN(ma.upliftAW/R.sigTL)+" for reference",sym:"",eq:"",sub:"",value:"information only",unit:"",ref:EDR_AA+"Art. C14.7.6.3.5a"}); }
       SUB="Stability"; w=topic(T,"stabT","Stability thickness",EDR_AA+"Art. 14.7.6.3.6"); stabT(w,"stabA",EDR_AA+"Art. 14.7.6.3.6");
       SUB="Steel laminates and covers"; w=topic(T,"reinf","Steel reinforcement thickness",EDR_AA+"Art. 14.7.6.3.7"); reinf(w,"reinfA",EDR_AA+"Art. 14.7.6.3.7");
       w=topic(T,"cover","Cover layer",EDR_AA+"Art. 14.7.6.1"); cover(w,"coverA",EDR_AA+"Art. 14.7.6.1");
