@@ -3441,7 +3441,7 @@ Calculation audit, item 6 (a) and (b). Engineer decision (2026-11-07). Code site
 ### Saved data
 - `key_bk` is additive (saved only when not 12 in; absent = 12 in). No other change.
 
-## 2026-11-07 — PR: claude/rw-aashto-ee1 — AASHTO Extreme Event I (seismic) stability per Art. 11.6.5.1: P_AE + 0.5P_IR and max(0.5P_AE, P_A) + P_IR; φ 1.0 sliding, 0.8 bearing; e limit B/3 to 0.4B by γ_EQ (RWE1; calculation change: new checks)
+## 2026-11-07 — PR: claude/rw-aashto-ee1 — AASHTO Extreme Event I (seismic) stability per Art. 11.6.5.1: P_AE + 0.5P_IR and max(0.5P_AE, P_A) + P_IR; φ 1.0 sliding, 0.8 bearing; e limit B/3 to 0.4B by γ_EQ (RWE1; calculation change: new checks) (PR #952: https://github.com/mlococo88/All-Structural/pull/952)
 
 Calculation audit, item 9 (1). Engineer decision (2026-11-07). Code sites are tagged `RWE1`. ACI mode is unchanged (item 9 (2) follows).
 
