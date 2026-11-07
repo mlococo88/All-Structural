@@ -1462,7 +1462,7 @@ Basis: ASCE/SEI 7-16 Fig. 29.3-1 (Cases A, B, C; Case C table and the (1.8 − s
 ### How verified
 - Headless Chromium main vs branch, 23 cases including 6 elements: `R` identical except the element fields above (`cf/p/F` for the small pipe only; new `caseB`, `caseC`, `Dsq`, messages); rendered text of all tabs and the Report (0 console / KaTeX errors); Excel built; `check-syntax`, `project-library --tool asce7` (ALL PASS), `phone-layout --tool asce7`, `engine handoffs`.
 
-## 2026-11-07 — PR: claude/asce7-partial-snow — A7P1: Sec. 7.5 partial loading reported as a load pattern (review M6 backlog)
+## 2026-11-07 — PR: claude/asce7-partial-snow — A7P1: Sec. 7.5 partial loading reported as a load pattern (review M6 backlog; PR #1100: https://github.com/mlococo88/All-Structural/pull/1100)
 
 ### A7P1. Partial loading   [new output] [no existing result changed]
 - **Where:** `solve()` snow block after `sn.balanced=…` (anchor `A7P1 (2026-11-07): Sec. 7.5 partial loading`): `sn.partial={full:sn.ps, half:0.5*sn.ps, gableExempt:(Gable && θ ≥ 2.38°)}`; `renderSnow` new panel `o-snpl` "Partial Loading" before "Design Snow Summary"; Excel snow section rows `psPL`, `phPL = 0.5*psPL` and a note row (replacing the "partial loading … not generated" row).
