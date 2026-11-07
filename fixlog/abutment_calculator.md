@@ -15427,3 +15427,62 @@ index 839ae53..97bd06f 100644
 +        if(pu.rnd) w.add({id:"b0",label:"Critical perimeter at d_v/2 from the round pile (circle of diameter D + d_v; "+abrN(100*pu.arcF,0)+" % inside the footing)",sym:"b_{0}",eq:"\\pi\\,(D + d_{v})\\,f_{arc}",sub:"\\pi\\cdot ("+abrN(pu.sPile,1)+" + "+abrN(pu.dv,2)+")\\cdot "+abrN(pu.arcF,3),value:pu.b0,unit:"in",d:1});   // ABH1
 +        else w.add({id:"b0",label:"Critical perimeter at d_v/2 from the pile ("+pu.sides+" sides inside the footing)",sym:"b_{0}",eq:"",sub:"",value:pu.b0,unit:"in",d:1});
 ```
+
+## 2026-11-07 — PR: claude/abut-m2-kh (ABM2: seismic k_h ratio follows the foundation for new projects — 1.0·k_h0 on piles or rock, 0.5·k_h0 on a spread footing on soil; saved projects keep their stored ratio, with a REVIEW warning)   [calc change: new-project default] [MORE conservative]
+
+Source: code-compliance review of 2026-11-07, item M2.
+
+### ABM2. k_h ratio default
+- **Where:** `defaultState` seismic (anchor `khRAuto:true,`); new function `abutKhAuto()` (after `migrate`); end of `migrate` (anchor `S.seismic.khR=abutKhAuto();`); `migrate` back-fill (anchor `S.seismic.khRAuto=!(S.seismic.khR!==undefined`); panel I-11 checkbox `chkKhAuto`; input handler (anchor `if(p==="seismic.khR"&&S.seismic.khRAuto)`); select handler (anchor `the automatic k_h ratio follows a foundation / owner change`); C-21 Input ID (`delete fpS.seismic.khRAuto`); REVIEW warning in the seismic block of `computeAll` (anchor `REVIEW — Seismic: k_h =`).
+- **Before:** k_h = 0.5·k_h0 for every new project (input `seismic.khR` = 0.5), whatever the foundation. MassDOT: owner default 1.0 on piles, applied when the owner or foundation was changed in the inputs.
+- **After:** new field `seismic.khRAuto` (true for a new project): while on, `khR` = 1.0 when the abutment is on piles or a spread footing on rock, 0.5 on a spread footing on soil; MassDOT keeps its own rule (Part I 3.4.6.3: 1.0 on piles, 0.5 on spread footings). Typing a ratio turns it off (the entered value is kept); ticking it again re-applies the rule. A REVIEW warning is raised when the ratio is below 1.0 on piles or rock.
+- **Problem:** 11.6.5.2.2 permits k_h = 0.5k_h0 only for a wall free to displace 1–2 in whose movement the Owner accepts; a pile- or rock-founded abutment is restrained (and 11.6.5.5 says not to reduce k_h for displacement of a nonyielding wall). The 0.5 default was unconservative for those.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 11.6.5.2.2 (reduction to 0.5k_h0 for walls able to displace 1–2 in, Owner acceptance), 11.6.5.5 (restrained walls: no reduction for displacement); MassDOT Bridge Manual Part I 3.4.6.3 (owner rule, unchanged).
+- **Check case (review §2.2 variant: 24 HP piles, EE I on, A_s = 0.20, Site Class D → k_h0 = 0.20; φ = 32°, γ = 0.120, H = 22 ft, L = 44 ft):**
+  - Before: k_h = 0.10, K_AE = 0.3678; ΔP_AE·L = (½·0.12·22²·(0.3678 − 0.30726))·44 = (10.682 − 8.923)·44 = **77.4 kip**; P_IR wall 72.3 kip, soil 50.2 kip.
+  - After: k_h = 0.20, K_AE = 0.4408; ΔP_AE·L = ½·0.12·484·(0.4408 − 0.30726)·44 = 3.878·44 = **170.6 kip**; P_IR wall **144.5** kip, soil **100.3** kip. Dashboard: pile uplift D/C 0 → 0.265 (min pile −15.9 kip), heel flexure 0.201 → 0.263, heel shear 0.307 → 0.392; pile compression unchanged (0.870, Strength I governs).
+  - Same footing on rock (spread): eccentricity D/C 0.589 → 0.746.
+- **Saved data:** no key renamed. Every saved project stores `seismic.khR`, so it opens with `khRAuto = false` and its stored ratio (identical results); a saved project without a stored ratio gets the automatic rule (the conservative choice). The Input ID leaves `khRAuto` out (the ratio itself is in it).
+- **How verified:** headless origin/main vs branch, 13 scenarios: new projects on piles / rock / MassDOT piles with EE I move as above; default, spread + EQ, fixed, Coulomb, integral, semi-integral and a project saved without `khRAuto` (piles, 0.5 stored: identical, plus the REVIEW warning) do not move. UI: checkbox, typed value, foundation and owner switches follow the rule; all tabs and the Report render with 0 console errors; self-test passes; `node tests/check-syntax.mjs abutment_calculator.html` and `node tests/smoke/project-library.mjs --tool abutment` pass.
+- **Decision (pending engineer review):** spread footing on rock under MassDOT stays 0.5 (MassDOT 3.4.6.3 states 0.5 for spread footings); under the other owners rock takes 1.0.
+- **Other copies:** none.
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 97bd06f..5b6163d 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -740,0 +741 @@ function defaultState(){
++      khRAuto:true,                                               // ABM2 (2026-11-07): k_h ratio set from the foundation (abutKhAuto: 1.0 on piles or rock, 0.5 on a spread footing on soil) [11.6.5.2.2]; false = the entered khR
+@@ -1685 +1686 @@ function migrate(){
+-  if(!S.seismic) S.seismic={on:false,As:0.15,khR:0.5,kv:0.0,hEQr:0.6,gEHEQ:1.00,gEHEQmode:"gp",gEQll:0.0,phiTauEQ:1.00,phiBEQ:0.80,phiCEQ:1.00,eFracEQ:0.3333,eLimEQmode:"aashto",zone:1};
++  if(!S.seismic) S.seismic={on:false,As:0.15,khR:0.5,khRAuto:true,kv:0.0,hEQr:0.6,gEHEQ:1.00,gEHEQmode:"gp",gEQll:0.0,phiTauEQ:1.00,phiBEQ:0.80,phiCEQ:1.00,eFracEQ:0.3333,eLimEQmode:"aashto",zone:1};
+@@ -1710,0 +1712 @@ function migrate(){
++    if(S.seismic&&S.seismic.khRAuto===undefined) S.seismic.khRAuto=!(S.seismic.khR!==undefined&&S.seismic.khR!==""&&isFinite(+S.seismic.khR));   // ABM2: a saved project keeps its stored k_h ratio (khRAuto false); one without a stored ratio follows the foundation
+@@ -1886,0 +1889 @@ function migrate(){
++  if(S.seismic&&S.seismic.khRAuto===true) S.seismic.khR=abutKhAuto();   // ABM2: the k_h ratio follows the foundation while it is set automatically
+@@ -1887,0 +1891,6 @@ function migrate(){
++/* ABM2 (2026-11-07): k_h ratio from the foundation [AASHTO LRFD 10th Ed. 11.6.5.2.2]: k_h may be reduced to 0.5k_h0 only for a wall free to
++   displace 1–2 in that the Owner accepts; an abutment on piles or founded on rock is restrained (1.0, no reduction). MassDOT: its own rule
++   (Part I 3.4.6.3: 0.5 on spread footings, 1.0 on piles). */
++function abutKhAuto(){ const pile=S.fnd&&S.fnd.branch==="pile", rock=S.fnd&&S.fnd.matl==="rock";
++  if(abutOwner()==="MassDOT") return pile?1.0:0.5;
++  return (pile||rock)?1.0:0.5; }
+@@ -2353 +2362,3 @@ function buildInputs(){
+-      ${inpRow("k<sub>h</sub> ratio (k<sub>h</sub> = ratio × k<sub>h0</sub>)","seismic.khR","–",{title:"0.5 for walls free to displace 1–2 in; 1.0 for restrained walls. [11.6.5.2.2]"})}
++      <div class="chk-row"><input type="checkbox" id="chkKhAuto" data-path="seismic.khRAuto" ${sq.khRAuto===true?"checked":""}>
++      <label for="chkKhAuto">k<sub>h</sub> ratio from the foundation: 1.0 on piles or rock (restrained), 0.5 on a spread footing on soil (free to displace 1–2 in, Owner-accepted) [11.6.5.2.2]${abutOwner()==="MassDOT"?"; MassDOT 3.4.6.3: 0.5 spread, 1.0 piles":""}</label></div>
++      ${inpRow("k<sub>h</sub> ratio (k<sub>h</sub> = ratio × k<sub>h0</sub>)","seismic.khR","–",{title:"0.5 only for a wall free to displace 1–2 in whose movement the Owner accepts; 1.0 for restrained walls (piles, rock, superstructure restraint). Typing a value turns the automatic setting off. [11.6.5.2.2]"})}
+@@ -3306,0 +3318 @@ function computeAll(){
++    if(+S.seismic.khR<1-1e-9&&abutKhAuto()>=1-1e-9) warnFor("conv",`REVIEW — Seismic: k_h = ${fmt(+S.seismic.khR,2)}·k_h0 is entered (panel I-11), but the abutment is ${S.fnd.branch==="pile"?"on piles":"founded on rock"}. The reduction below k_h0 applies only to a wall free to displace 1–2 in whose movement the Owner accepts [11.6.5.2.2]; a pile- or rock-founded abutment is generally restrained (k_h = k_h0). Confirm, or tick "k_h ratio from the foundation".`);   // ABM2
+@@ -4986 +4998 @@ function computeAll(){
+-      dropDef(fpS.seismic,T.seismic,["siteClass","bwStop","bwW"]); if(fpS.bwLL&&fpS.bwLL.mode==="wheel") delete fpS.bwLL;
++      dropDef(fpS.seismic,T.seismic,["siteClass","bwStop","bwW"]); if(fpS.seismic) delete fpS.seismic.khRAuto; if(fpS.bwLL&&fpS.bwLL.mode==="wheel") delete fpS.bwLL;   // ABM2: khRAuto left out (the k_h ratio itself is in the Input ID)
+@@ -9985,0 +9998,2 @@ document.addEventListener("input",ev=>{
++  if(p==="seismic.khR"&&S.seismic.khRAuto){ S.seismic.khRAuto=false; const cb=document.getElementById("chkKhAuto"); if(cb) cb.checked=false; }   // ABM2: an entered k_h ratio is kept
++  if(p==="seismic.khRAuto"&&v===true){ migrate(); const e2=document.querySelector('[data-path="seismic.khR"]'); if(e2) e2.value=S.seismic.khR; }
+@@ -10011,0 +10026 @@ document.addEventListener("change",ev=>{
++  if(S.seismic&&S.seismic.khRAuto){ migrate(); const e2=document.querySelector('[data-path="seismic.khR"]'); if(e2) e2.value=S.seismic.khR; }   // ABM2: the automatic k_h ratio follows a foundation / owner change
+```
