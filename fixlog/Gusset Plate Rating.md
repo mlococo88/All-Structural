@@ -3251,7 +3251,7 @@ From the code-compliance review of 2026-11-07 (finding M7).
 - **How verified:** main vs branch on 23 review cases: every value identical (the check is off by default; with it on, only the advisory list grows). `check-syntax`, `phone-layout --tool gusset` pass; `project-library --tool gusset` passes except its four "identical to main" checks (only differences: the new field `P.slip` and `R.adv.slip = null`). 0 console errors; the item renders in Summary, Checks and the Report.
 - **Saved data:** new field `slip` (default off). No key change.
 
-## 2026-11-07 — PR: claude/gusset-low-calc — Chord splice K = 0.50 and t<sub>g</sub> (L1), standard holes d + 1/8 for bolts d ≥ 1 in (L2), per-fastener bearing / shear (L8) (§4)
+## 2026-11-07 — PR: claude/gusset-low-calc (PR #1063: https://github.com/mlococo88/All-Structural/pull/1063) — Chord splice K = 0.50 and t<sub>g</sub> (L1), standard holes d + 1/8 for bolts d ≥ 1 in (L2), per-fastener bearing / shear (L8) (§4)
 
 From the code-compliance review of 2026-11-07 (LOW findings L1, L2, L8). Engineer asleep; decisions pending engineer review.
 
