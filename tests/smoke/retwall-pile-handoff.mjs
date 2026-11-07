@@ -39,7 +39,6 @@ const pd = await o.ctx.newPage(); const pdErr = []; pd.on('pageerror', e => pdEr
 await pd.goto('file://' + path.join(ROOT, 'Pile Designer.html')); await pd.waitForTimeout(4000);
 const clickT = t => pd.evaluate(t => { const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim().startsWith(t)); if (!b) return false; b.click(); return true; }, t);
 await clickT('Loads & group'); await pd.waitForTimeout(500);
-console.log(await pd.evaluate(() => [...document.querySelectorAll('button')].map(x => JSON.stringify(x.textContent.trim().slice(0,30))).filter(t => /Pull|Loads/.test(t)).join(' ')));
 check(await clickT('Pull from Abutment / SubLoads'), 'Pile Designer: "Pull from Abutment / SubLoads" found'); await pd.waitForSelector('#pfxGo', { timeout: 15000 });
 const dlg = await pd.evaluate(() => document.body.innerText);
 check(/Retaining Wall Designer/.test(dlg), 'Pile Designer dialog lists the wall\'s payload');
