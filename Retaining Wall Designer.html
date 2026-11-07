@@ -1087,6 +1087,7 @@ body.rwDashColl #rwDash { display: none; }
       <div class="iw"><input type="number" id="Hs" value="12" min="2" max="40" step="0.5"><span class="iw-unit">ft</span></div></div>
     <div class="ig"><label for="tf">Ftg Thickness t<sub>f</sub></label>
       <div class="iw"><input type="number" id="tf" value="18" min="12" max="60" step="1"><span class="iw-unit">in</span></div></div>
+    <div class="hint" id="hint_hs_vh" style="display:none;grid-column:1/-1"></div><!-- RWVH: why the Stem Height box is locked -->
     <div class="ig"><label for="ts_bot">Stem Width — Base</label>
       <div class="iw"><input type="number" id="ts_bot" value="18" min="8" max="72" step="1"><span class="iw-unit">in</span></div></div>
     <div class="ig"><label for="ts_top">Stem Width — Top</label>
@@ -1098,8 +1099,9 @@ body.rwDashColl #rwDash { display: none; }
     <div class="ig full"><label for="Df_add">Soil Cover — Toe (above ftg top)</label>
       <div class="iw"><input type="number" id="Df_add" value="0" min="0" max="10" step="0.25"><span class="iw-unit">ft</span></div></div>
   </div>
-<button type="button" class="sec-hd aashto-only" data-target="sec-vh" style="display:none" aria-expanded="true"><span class="sec-hd-label">Variable-height wall <span class="sec-tag">AASHTO</span></span><svg class="sec-hd-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-<div class="sec-body aashto-only" id="sec-vh" style="display:none">
+<!-- RWVH (2026-11-07): offered in both modes (getInputs applies it in both; it was hidden in ACI mode) -->
+<button type="button" class="sec-hd" data-target="sec-vh" aria-expanded="true"><span class="sec-hd-label">Variable-height wall <span class="sec-tag">MassDOT</span></span><svg class="sec-hd-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+<div class="sec-body" id="sec-vh">
     <div class="ck-row">
       <input type="checkbox" id="vh_enable" onchange="onVHChange()">
       <label for="vh_enable">Wall varies in height along its length</label>
@@ -1111,6 +1113,7 @@ body.rwDashColl #rwDash { display: none; }
     <div class="note" id="grp_vh_note" style="display:none">
         MassDOT §3.3.2.2: design height = <b>H<sub>low</sub> + 0.75·(H<sub>high</sub> − H<sub>low</sub>)</b>.
         This overrides the Stem Height input above and drives the whole design.
+        <span class="aci-only">This is a MassDOT owner rule for variable-height wall segments (paraphrased), not an ACI 318 provision; in ACI mode it is applied because it is ticked here.</span>
       </div>
 
     </div>
@@ -3657,6 +3660,16 @@ function onCtTLChange() {
   }
   onInputChange();
 }
+// RWVH (2026-11-07): the visible reason the Stem Height box is locked, with the design height getInputs uses (display only)
+function rwVhHint() {
+  const el = document.getElementById('hint_hs_vh'), hs = document.getElementById('Hs'); if (!el) return;
+  const on = !!document.getElementById('vh_enable')?.checked;
+  el.style.display = on ? '' : 'none';
+  if (hs) hs.title = on ? 'Set by Variable-height wall (Wall pane)' : '';
+  if (!on) { el.textContent = ''; return; }
+  const lo = parseFloat(document.getElementById('vh_hlo').value) || 0, hi = parseFloat(document.getElementById('vh_hhi').value) || 0;
+  el.innerHTML = `Set by <b>Variable-height wall</b> below: design H<sub>s</sub> = ${f(lo, 2)} + 0.75(${f(hi, 2)} − ${f(lo, 2)}) = <b>${f(lo + 0.75 * Math.max(0, hi - lo), 2)} ft</b> (MassDOT §3.3.2.2). This box is not used while it is ticked.`;
+}
 function onVHChange() {
   const on = document.getElementById('vh_enable')?.checked;
   ['grp_vh_lo','grp_vh_hi','grp_vh_note'].forEach(id => {
@@ -3665,6 +3678,7 @@ function onVHChange() {
   });
   const hs = document.getElementById('Hs');
   if (hs) { hs.readOnly = !!on; hs.style.opacity = on ? '0.6' : '1'; }
+  rwVhHint();   // RWVH
   onInputChange();
 }
 
@@ -5790,6 +5804,7 @@ function syncConditionalUI() {
   setDisp('grp_vh_note', vh);
   const hsEl = document.getElementById('Hs');
   if (hsEl) { hsEl.readOnly = vh; hsEl.style.opacity = vh ? '0.6' : '1'; }
+  rwVhHint();   // RWVH
   // CT test-level lock
   if (typeof onCtTLChange === 'function') {
     const tl = val('aashto_ct_tl'), manual = tl === 'manual';
@@ -6116,6 +6131,7 @@ document.addEventListener('click', e => { const a = e.target.closest && e.target
 
 function onInputChange() {
   updateHints();
+  rwVhHint();   // RWVH: the locked-box reason follows H_lo / H_hi
   const IE = rwInputErrors();   // RWIE: clear and redo the input marks before the older highlights below
   rwInputMarks({ E: [], R: [] });
   const inp = getInputs();
@@ -9868,7 +9884,7 @@ function rwovAdd(M, r) {
   const cap = (s, t) => t + ' — Drawings tab[[tab:drawings| ↗]], sheet ' + (Bd.S.indexOf(s) + 1) + ' (' + s.title.toLowerCase() + '), drawn at ' + s.scale + ' on the 11 × 17 sheet and reduced here: use the scale bar or the dimensions.';
   const sc = sh('section'), el = sh('notes');
   if (sc && sc.ic) fi(rwovView(Bd, sc.i0, sc.ic, '4.6in'), cap(sc, 'Typical wall section: stem, footing' + (r.inp.useShearKey ? ', shear key' : '') + ', grades, bars and dimensions'));
-  if (el && el.iv) fi(rwovView(Bd, el.i0, el.iv, '2.4in'), cap(el, 'Wall elevation from the front' + (r.isAASHTO && r.inp.vh_enable ? ', variable height (design H_s at 0.75 L)' : '')));
+  if (el && el.iv) fi(rwovView(Bd, el.i0, el.iv, '2.4in'), cap(el, 'Wall elevation from the front' + (r.inp.vh_enable ? ', variable height (design H_s at 0.75 L)' : '')));   // RWVH: both modes
   if (!Bd) items.push({ type: 'note', text: 'Section and elevation not included: the drawing sheets could not be built.' });
   const i = M.sections.findIndex(x => x.title === 'Design summary');
   M.sections.splice(i >= 0 ? i + 1 : 0, 0, { title: 'Overview of the wall', key: 'ov', subs: [{ title: '3D view, typical section and elevation', items }] });
@@ -10478,7 +10494,7 @@ function rwdwBuild(r) {
   /* ================= 4. ELEVATION AND GENERAL NOTES ================= */
   sheet('notes', 'WALL ELEVATION AND GENERAL NOTES', P => {
     const iS = D.mark(), h = 0.085 * P, hs = 0.072 * P;
-    const vh = isA && inp.vh_enable, ct = isA && inp.aashto.ct_enable && inp.aashto.ct_ljoint > 0;
+    const vh = !!inp.vh_enable, ct = isA && inp.aashto.ct_enable && inp.aashto.ct_ljoint > 0;
     const Lknown = ct ? inp.aashto.ct_ljoint * 12 : null;
     const Lw = Lknown || Math.max(2 * G.H, 240);
     const hLo = vh ? inp.vh_hlo * 12 : G.Hs, hHi = vh ? inp.vh_hhi * 12 : G.Hs;
