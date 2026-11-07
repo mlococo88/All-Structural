@@ -2650,7 +2650,7 @@ function calcAll(inp) {
       // ── EXTREME EVENT II LIMIT STATE (full stability suite) ──
       const gEH_ct  = (A.ct_eh === 'full') ? 1.00 : 0.00;   // MassDOT: 0
       const gLS_ct  = 0.50;    // reduced live load in extreme events
-      const CMB_EE2 = { CT: 1.00, DC: 1.00, EV: 1.00, EH: gEH_ct, LS: gLS_ct, WA: 1.00, ES: gEH_ct, ESv: 1.00 };   // Extreme Event II factors (RW3F)
+      const CMB_EE2 = { CT: 1.00, DC: 1.00, EV: 1.00, EH: gEH_ct, EHv: gEH_ct, LS: gLS_ct, WA: 1.00, ES: gEH_ct, ESv: 1.00 };   // Extreme Event II factors (RW3F); RWCV (2026-11-07): EHv = the vertical earth-thrust component follows the EH choice
       // RWCT (2026-11-07): water (P_hyd, U) at WA = 1.00 always; lateral ES follows the EH choice (ES = γ_EH,CT);
       // ES vertical q_s·L_h is permanent at γp = 1.00 (Table 3.4.1-1 EE II); LS vertical q_LL·L_h at γ_LS = 0.50 on the bearing side only.
       const phi_ct  = A.ct_phi;                              // φ = 1.0 (extreme event)
@@ -2662,7 +2662,7 @@ function calcAll(inp) {
                        + gLS_ct * P_LS;
       // Resisting vertical: unfactored DC + EV (γ = 1.0 in extreme events).
       // Barrier weight is DC and is included via SumV.
-      const V_ct_min = CMB_EE2.DC*(Wftg + Wstem + W_bar) + CMB_EE2.EV*(Wsoil + Pa_tri_v) + CMB_EE2.ESv*V_ES_v - CMB_EE2.WA*F_uplift;   // RWCT: + 1.00 ES vertical
+      const V_ct_min = CMB_EE2.DC*(Wftg + Wstem + W_bar) + CMB_EE2.EV*Wsoil + CMB_EE2.EHv*Pa_tri_v + CMB_EE2.ESv*V_ES_v - CMB_EE2.WA*F_uplift;   // RWCT: + 1.00 ES vertical; RWCV: P_a,V at γ_EH,CT (was 1.00 as EV)
       const V_ct_max = V_ct_min + gLS_ct * V_LS_v;   // RWCT: + 0.50 LS vertical (was 0.50·W_sur, the dead surcharge)
 
       // Sliding
@@ -2676,7 +2676,7 @@ function calcAll(inp) {
       const Mo_ct = CMB_EE2.CT*M_CT
                   + gEH_ct * P_EH*y_EH + CMB_EE2.WA * P_hyd*(hw/3) + CMB_EE2.ES * P_ES*y_ES   // RWCT: as H_drive_ct
                   + gLS_ct * (P_LS*y_LS);
-      const Mr_ct = CMB_EE2.DC*(Ms_ftg + Ms_stem + Ms_bar) + CMB_EE2.EV*(Ms_soil + Ms_Pv) + CMB_EE2.ESv*V_ES_v*xESv + CMB_EE2.WA*Ms_uplift;   // RWCT: + 1.00 ES vertical
+      const Mr_ct = CMB_EE2.DC*(Ms_ftg + Ms_stem + Ms_bar) + CMB_EE2.EV*Ms_soil + CMB_EE2.EHv*Ms_Pv + CMB_EE2.ESv*V_ES_v*xESv + CMB_EE2.WA*Ms_uplift;   // RWCT: + 1.00 ES vertical; RWCV: P_a,V at γ_EH,CT
       const x_R_ct = V_ct_min > 0 ? (Mr_ct - Mo_ct) / V_ct_min : B/2;
       const e_ct   = B/2 - x_R_ct;
       const e_lim_ct = B / eccDiv;
@@ -4580,6 +4580,7 @@ function renderStabilityAASHTO(r) {
       h += `<div class="alert warn" style="margin-bottom:10px;">
         \u26a0 <b>Earth pressure dropped (\u03b3_EH = 0)</b> \u2014 MassDOT \u00a73.3.2.4 (paraphrased): for stability the wall is taken to move away
         from the backfill during the impact, so the retained soil's lateral pressure (EH, and the dead surcharge ES with it) is not applied.
+        The vertical component of the earth thrust P_a,V (sloped backfill or wall friction \u03b4 &gt; 0) is dropped with it: one load, one factor (AASHTO Table 3.4.1-1).
         Water (hydrostatic force and uplift) stays at \u03b3_WA = 1.0, and the vertical dead loads, ES vertical included, at \u03b3p = 1.0.
         Switch to \u03b3_EH = 1.0 in the AASHTO options for the generic (conservative) AASHTO reading.</div>`;   // RWCT (2026-11-07): water and ES as AASHTO Table 3.4.1-1 EE II
     } else {
@@ -4593,12 +4594,13 @@ function renderStabilityAASHTO(r) {
        ...(a.P_hyd>0 ? [{sym:'P_{WA}', desc:'hydrostatic force (WA, \u03b3 = 1.0)', val:F(a.P_hyd,0), unit:'lb/ft'}] : []),
        {sym:'P_{LS}', desc:'live-load surcharge (\u03b3 = 0.50)', val:F(a.P_LS,0), unit:'lb/ft'},
        {sym:'\\sum\\gamma Q', desc:'total factored driving force', val:F(E.H_drive_ct,0), unit:'lb/ft'}]);
-    h += eq('Resisting vertical load (DC + EV at \u03b3 = 1.0)',
-      `V = 1.0(W_{ftg}+W_{stem}${r.hasBarrier?'+W_{bar}':''}) + 1.0(W_{soil}+P_{a,V})${a.V_ES_v>0?' + 1.0\\,V_{ES}':''}${a.V_up>0?' - 1.0\\,U':''} = \\boxed{${F(E.V_ct_min,0)}\\ \\text{lb/ft}}`,'',
+    h += eq('Resisting vertical load (DC + EV at \u03b3 = 1.0' + (r.Pa_tri_v>0 ? '; vertical earth thrust P_a,V at \u03b3_EH,CT = ' + F(E.gEH_ct,2) : '') + ')',   // RWCV (2026-11-07): P_a,V follows the EH choice
+      `V = 1.0(W_{ftg}+W_{stem}${r.hasBarrier?'+W_{bar}':''}) + 1.0\\,W_{soil}${r.Pa_tri_v>0?' + '+F(E.gEH_ct,1)+'\\,P_{a,V}':''}${a.V_ES_v>0?' + 1.0\\,V_{ES}':''}${a.V_up>0?' - 1.0\\,U':''} = 1.0(${F(r.Wftg,0)}+${F(r.Wstem,0)}${r.hasBarrier?'+'+F(r.W_bar,0):''}) + 1.0(${F(r.Wsoil,0)})${r.Pa_tri_v>0?' + '+F(E.gEH_ct,1)+'('+F(r.Pa_tri_v,0)+')':''}${a.V_ES_v>0?' + 1.0('+F(a.V_ES_v,0)+')':''}${a.V_up>0?' - 1.0('+F(a.V_up,0)+')':''} = \\boxed{${F(E.V_ct_min,0)}\\ \\text{lb/ft}}`,'',
       [{sym:'W_{ftg}', desc:'footing self-weight', val:F(r.Wftg,0), unit:'lb/ft'},
        {sym:'W_{stem}', desc:'stem self-weight', val:F(r.Wstem,0), unit:'lb/ft'},
        ...(r.hasBarrier ? [{sym:'W_{bar}', desc:'barrier weight (DC)', val:F(r.W_bar,0), unit:'lb/ft'}] : []),
        {sym:'W_{soil}', desc:'soil on heel (EV)', val:F(r.Wsoil,0), unit:'lb/ft'},
+       ...(r.Pa_tri_v>0 ? [{sym:'P_{a,V}', desc:'vertical component of the earth thrust (EH): \u03b3 = \u03b3_EH,CT = ' + F(E.gEH_ct,2) + (E.ehDropped ? ', dropped with the horizontal thrust (MassDOT option)' : ''), val:F(r.Pa_tri_v,0), unit:'lb/ft'}] : []),   // RWCV
        ...(a.V_ES_v>0 ? [{sym:'V_{ES}', desc:'dead-load surcharge on the heel q_s·L_h (ES, \u03b3p = 1.0)', val:F(a.V_ES_v,0), unit:'lb/ft'}] : []),   // RWCT
        ...(a.V_up>0 ? [{sym:'U', desc:'water uplift (WA, \u03b3 = 1.0)', val:F(a.V_up,0), unit:'lb/ft'}] : []),
        {sym:'V', desc:'resisting vertical load', val:F(E.V_ct_min,0), unit:'lb/ft'}]);
@@ -4608,6 +4610,14 @@ function renderStabilityAASHTO(r) {
       [{sym:'\\phi', desc:'resistance factor (extreme event)', val:F(E.phi_ct,2), unit:''},
        {sym:'\\tan\\delta', desc:'base friction', val:F(a.tanDelta,3), unit:''},
        {sym:'DCR', desc:'demand / capacity', val:F(E.sliding_dcr_ct,2), unit:''}]);
+    h += eq('Resisting moment about the toe (same factors as V)',   // RWCV (2026-11-07): worked (was quoted only)
+      `M_r = 1.0(M_{ftg}+M_{stem}${r.hasBarrier?'+M_{bar}':''}) + 1.0\\,M_{soil}${r.Pa_tri_v>0?' + '+F(E.gEH_ct,1)+'\\,P_{a,V}B':''}${a.V_ES_v>0?' + 1.0\\,V_{ES}x_{ES}':''}${a.V_up>0?' - 1.0\\,U x_U':''} = 1.0(${F(r.Ms_ftg,0)}+${F(r.Ms_stem,0)}${r.hasBarrier?'+'+F(r.Ms_bar,0):''}) + 1.0(${F(r.Ms_soil,0)})${r.Pa_tri_v>0?' + '+F(E.gEH_ct,1)+'('+F(r.Pa_tri_v,0)+')('+F(r.B,2)+')':''}${a.V_ES_v>0?' + 1.0('+F(a.V_ES_v,0)+')('+F(a.x_ESv,2)+')':''}${a.V_up>0?' - 1.0('+F(-r.Ms_uplift,0)+')':''} = \\boxed{${F(E.Mr_ct,0)}\\ \\text{lb·ft/ft}}`,'',
+      [{sym:'M_{ftg}', desc:'footing: W_ftg·x = ' + F(r.Wftg,0) + ' × ' + F(r.x_ftg,3) + ' ft', val:F(r.Ms_ftg,0), unit:'lb·ft/ft'},
+       {sym:'M_{stem}', desc:'stem: W_stem·x = ' + F(r.Wstem,0) + ' × ' + F(r.x_stem,3) + ' ft', val:F(r.Ms_stem,0), unit:'lb·ft/ft'},
+       ...(r.hasBarrier ? [{sym:'M_{bar}', desc:'barrier: W_bar·x = ' + F(r.W_bar,0) + ' × ' + F(r.x_bar,3) + ' ft', val:F(r.Ms_bar,0), unit:'lb·ft/ft'}] : []),
+       {sym:'M_{soil}', desc:'soil on the heel: W_soil·x = ' + F(r.Wsoil,0) + ' × ' + F(r.x_soil,3) + ' ft', val:F(r.Ms_soil,0), unit:'lb·ft/ft'},
+       ...(r.Pa_tri_v>0 ? [{sym:'P_{a,V}B', desc:'vertical earth thrust at the heel end, \u03b3 = ' + F(E.gEH_ct,2), val:F(r.Ms_Pv,0), unit:'lb·ft/ft'}] : []),
+       {sym:'M_r', desc:'resisting moment', val:F(E.Mr_ct,0), unit:'lb·ft/ft'}]);
     h += eq('Resultant location and eccentricity',
       `\\bar{x} = \\frac{M_r - M_o}{V} = \\frac{${F(E.Mr_ct,0)} - ${F(E.Mo_ct,0)}}{${F(E.V_ct_min,0)}} = ${F(E.x_R_ct,3)}\\ \\text{ft} \\;\\Rightarrow\\; e = \\boxed{${F(E.e_ct,3)}\\ \\text{ft}}`,'',
       [{sym:'M_o', desc:'overturning moment (incl. collision)', val:F(E.Mo_ct,0), unit:'lb·ft/ft'},
@@ -9177,7 +9187,7 @@ function rw3Factors(r, key) {
   if (key === 's1a' || key === 's1at') return { def: 'Strength Ia (minimum vertical)', eta: et, f: { ...lat, EHv: I.EH, LSv: 0, SV: I.ES, DC: I.DC, EV: I.EV, UP: key === 's1a' ? S.WA : 0 },
     col: r.hasCol ? { v: 0 } : null };
   const E = a.ct && a.ct.ee2 && a.ct.ee2.CMB_EE2;
-  if (key === 'ee2' && E) return { def: 'Extreme Event II', f: { CT: E.CT, EH: E.EH, WA: E.WA, LS: E.LS, ES: E.ES, EHv: E.EV, LSv: E.LS, SV: E.ESv, DC: E.DC, EV: E.EV, UP: E.WA, PP: 0 },   // RWCT
+  if (key === 'ee2' && E) return { def: 'Extreme Event II', f: { CT: E.CT, EH: E.EH, WA: E.WA, LS: E.LS, ES: E.ES, EHv: E.EHv, LSv: E.LS, SV: E.ESv, DC: E.DC, EV: E.EV, UP: E.WA, PP: 0 },   // RWCT
     col: r.hasCol ? { v: 0 } : null };
   return null;
 }
@@ -10003,8 +10013,9 @@ function rwrModel(r) {
         rwrS({ id: 'yCT', label: 'Lever arm above the base of the footing (roadway at the top of the stem)', sym: 'y_{CT}', eq: 'H + h_{CT}', sub: rwrN(r.H, 2) + ' + ' + rwrN(A.ct_h_app / 12, 2), value: c.y_CT, unit: 'ft', d: 2 }),
         rwrS({ id: 'MCT', label: 'Collision overturning moment about the toe', sym: 'M_{CT}', eq: 'CT\\cdot y_{CT}', sub: '(' + rwrN(c.CT_h, 3) + ')(' + rwrN(c.y_CT, 2) + ')', value: c.M_CT / 1000, unit: 'kip-ft/ft', d: 2 })] }])]));
       const sb = [rwrS({ id: 'Q', label: 'Factored driving force' + (E.ehDropped ? ' (γ_EH = 0, MassDOT §3.3.2.4: the wall pulls away from the backfill)' : ' (γ_EH = 1.0, earth pressure concurrent)'), sym: '\\sum\\gamma Q', eq: '1.0\\,CT' + (E.ehDropped ? '' : ' + 1.0\\,P_{EH}') + (!E.ehDropped && a.P_ES > 0 ? ' + 1.0\\,P_{ES}' : '') + (a.P_hyd > 0 ? ' + 1.0\\,P_{WA}' : '') + ' + ' + rwrN(E.gLS_ct, 2) + '\\,P_{LS}', sub: rwrN(c.CT_h * 1000, 0) + (E.ehDropped ? '' : ' + ' + rwrN(a.P_EH, 0)) + (!E.ehDropped && a.P_ES > 0 ? ' + ' + rwrN(a.P_ES, 0) : '') + (a.P_hyd > 0 ? ' + ' + rwrN(a.P_hyd, 0) : '') + ' + ' + rwrN(E.gLS_ct, 2) + '\\cdot' + rwrN(a.P_LS, 0), value: E.H_drive_ct, unit: 'lb/ft', d: 0 }),
-        rwrS({ id: 'V', label: 'Resisting vertical load (DC + EV' + (a.V_ES_v > 0 ? ' + ES' : '') + ' at γ = 1.0' + (a.V_up > 0 ? ', less the uplift U at γ_WA = 1.0' : '') + ')', sym: 'V', eq: '1.0(W_{ftg} + W_{stem}' + (r.hasBarrier ? ' + W_{bar}' : '') + ') + 1.0(W_{soil} + P_{a,V})' + (a.V_ES_v > 0 ? ' + 1.0\\,V_{ES}' : '') + (a.V_up > 0 ? ' \\minus 1.0\\,U' : ''), sub: '', value: E.V_ct_min, unit: 'lb/ft', d: 0 }),
+        rwrS({ id: 'V', label: 'Resisting vertical load (DC + EV' + (a.V_ES_v > 0 ? ' + ES' : '') + ' at γ = 1.0' + (r.Pa_tri_v > 0 ? '; vertical earth thrust P_a,V at γ_EH,CT = ' + rwrN(E.gEH_ct, 2) : '') + (a.V_up > 0 ? ', less the uplift U at γ_WA = 1.0' : '') + ')', sym: 'V', eq: '1.0(W_{ftg} + W_{stem}' + (r.hasBarrier ? ' + W_{bar}' : '') + ') + 1.0\\,W_{soil}' + (r.Pa_tri_v > 0 ? ' + ' + rwrN(E.gEH_ct, 1) + '\\,P_{a,V}' : '') + (a.V_ES_v > 0 ? ' + 1.0\\,V_{ES}' : '') + (a.V_up > 0 ? ' \\minus 1.0\\,U' : ''), sub: '1.0(' + rwrN(r.Wftg, 0) + ' + ' + rwrN(r.Wstem, 0) + (r.hasBarrier ? ' + ' + rwrN(r.W_bar, 0) : '') + ') + 1.0(' + rwrN(r.Wsoil, 0) + ')' + (r.Pa_tri_v > 0 ? ' + ' + rwrN(E.gEH_ct, 1) + '(' + rwrN(r.Pa_tri_v, 0) + ')' : '') + (a.V_ES_v > 0 ? ' + 1.0(' + rwrN(a.V_ES_v, 0) + ')' : '') + (a.V_up > 0 ? ' \\minus 1.0(' + rwrN(a.V_up, 0) + ')' : ''), value: E.V_ct_min, unit: 'lb/ft', d: 0, note: E.ehDropped && r.Pa_tri_v > 0 ? 'P_a,V = ' + rwrN(r.Pa_tri_v, 0) + ' lb/ft is dropped with the horizontal earth thrust (one load, one factor: AASHTO Table 3.4.1-1).' : '' }),   // RWCV: values substituted
         rwrS({ id: 'sl', label: 'Sliding under collision', sym: 'DCR', eq: '\\frac{\\sum\\gamma Q}{\\phi(V\\tan\\delta + P_{p})}', sub: '\\frac{' + rwrN(E.H_drive_ct, 0) + '}{' + rwrN(E.R_ct, 0) + '}', value: E.sliding_dcr_ct, unit: '', d: 3, ok: ok('ctSliding'), note: 'φ = ' + rwrN(E.phi_ct, 2) + ', tan δ = ' + rwrN(a.tanDelta, 3) }),
+        rwrS({ id: 'Mr', label: 'Resisting moment about the toe (same factors as V)', sym: 'M_{r}', eq: '1.0(M_{ftg} + M_{stem}' + (r.hasBarrier ? ' + M_{bar}' : '') + ') + 1.0\\,M_{soil}' + (r.Pa_tri_v > 0 ? ' + ' + rwrN(E.gEH_ct, 1) + '\\,P_{a,V}B' : '') + (a.V_ES_v > 0 ? ' + 1.0\\,V_{ES}x_{ES}' : '') + (a.V_up > 0 ? ' \\minus 1.0\\,U x_{U}' : ''), sub: '1.0(' + rwrN(r.Ms_ftg, 0) + ' + ' + rwrN(r.Ms_stem, 0) + (r.hasBarrier ? ' + ' + rwrN(r.Ms_bar, 0) : '') + ') + 1.0(' + rwrN(r.Ms_soil, 0) + ')' + (r.Pa_tri_v > 0 ? ' + ' + rwrN(E.gEH_ct, 1) + '(' + rwrN(r.Pa_tri_v, 0) + ')(' + rwrN(r.B, 2) + ')' : '') + (a.V_ES_v > 0 ? ' + 1.0(' + rwrN(a.V_ES_v, 0) + ')(' + rwrN(a.x_ESv, 2) + ')' : '') + (a.V_up > 0 ? ' \\minus 1.0(' + rwrN(-r.Ms_uplift, 0) + ')' : ''), value: E.Mr_ct, unit: 'lb-ft/ft', d: 0 }),   // RWCV (2026-11-07): worked (was quoted only)
         rwrS({ id: 'e', label: 'Resultant location and eccentricity', sym: 'e', eq: '\\frac{B}{2} \\minus \\frac{M_{r} \\minus M_{o}}{V}', sub: '\\frac{' + rwrN(r.B, 2) + '}{2} \\minus \\frac{' + rwrN(E.Mr_ct, 0) + ' \\minus ' + rwrN(E.Mo_ct, 0) + '}{' + rwrN(E.V_ct_min, 0) + '}', value: E.e_ct, unit: 'ft', d: 3, note: 'x̄ = (M_r − M_o)/V = ' + rwrN(E.x_R_ct, 3) + ' ft from the toe' }),
         rwrS({ id: 'ec', label: 'Eccentricity limit under collision: |e| ≤ B/' + rwrN(E.eccDiv, 0) + ' = ' + rwrN(E.e_lim_ct, 3) + ' ft', sym: '\\frac{|e|}{e_{lim}}', eq: '', sub: '\\frac{' + rwrN(Math.abs(E.e_ct), 3) + '}{' + rwrN(E.e_lim_ct, 3) + '}', value: dcv('ctEcc'), unit: '', d: 3, ok: ok('ctEcc') }),
         rwrS({ id: 'Vmax', label: 'Vertical load for bearing: V plus the live-load surcharge on the heel at γ_LS = ' + rwrN(E.gLS_ct, 2) + ' (V_LS = q_LL L_h = ' + rwrN(a.V_LS_v, 0) + ' lb/ft)', sym: 'V_{max}', eq: 'V + ' + rwrN(E.gLS_ct, 2) + '\\,V_{LS}', sub: rwrN(E.V_ct_min, 0) + ' + ' + rwrN(E.gLS_ct, 2) + '(' + rwrN(a.V_LS_v, 0) + ')', value: E.V_ct_max, unit: 'lb/ft', d: 0, ref: AA('Table 3.4.1-1') }),   // RWCT
@@ -10012,7 +10023,7 @@ function rwrModel(r) {
           : rwrS({ id: 'qu', label: "Effective width B' = B − 2|e| = " + rwrN(E.B_eff_ct, 3) + ' ft and bearing pressure (Meyerhof)', sym: 'q_{u}', eq: '\\frac{V_{max}}{B^{\\prime}}', sub: '\\frac{' + rwrN(E.V_ct_max, 0) + '}{' + rwrN(E.B_eff_ct, 3) + '}\\frac{1}{1000}', value: E.q_ult_ct / 1000, unit: 'ksf', d: 2 }),
         rwrS({ id: 'br', label: 'Bearing under collision: q_u ≤ q_R = φ q_n = ' + rwrN(E.q_R_ct / 1000, 2) + ' ksf', sym: '\\frac{q_{u}}{q_{R}}', eq: '', sub: '\\frac{' + rwrN(E.q_ult_ct / 1000, 2) + '}{' + rwrN(E.q_R_ct / 1000, 2) + '}', value: dcv('ctBearing'), unit: '', d: 3, ok: ok('ctBearing') })];
       CK.ctSliding = 'sa7b/sl'; CK.ctEcc = 'sa7b/ec'; CK.ctBearing = 'sa7b/br';
-      subs.push(sub('Step 7b — Stability under collision (Extreme Event II)', [rwrItem('sa7b', [{ title: 'Sliding', steps: sb.slice(0, 3) }, { title: 'Eccentricity', steps: sb.slice(3, 5) }, { title: 'Bearing', steps: sb.slice(5) }]), onTab('stabCT')]));
+      subs.push(sub('Step 7b — Stability under collision (Extreme Event II)', [rwrItem('sa7b', [{ title: 'Sliding', steps: sb.slice(0, 3) }, { title: 'Eccentricity', steps: sb.slice(3, 6) }, { title: 'Bearing', steps: sb.slice(6) }]), onTab('stabCT')]));
       if (c.yl) { const y = c.yl, k8 = y.isEnd ? '' : '8';
         subs.push(sub('Step 7c — Barrier yield-line capacity (' + (y.isEnd ? 'end' : 'interior') + ' segment)', [rwrItem('sa7c', [{ title: 'Yield line', ref: AA('Art. A13.3.1'), steps: [
           rwrS({ id: 'Lc', label: 'Critical length of the yield-line pattern', sym: 'L_{c}', eq: '\\frac{L_{t}}{2} + \\sqrt{\\left(\\frac{L_{t}}{2}\\right)^{2} + \\frac{' + k8 + 'H(M_{b} + M_{w})}{M_{c}}}', sub: '\\frac{' + rwrN(y.Lt_c, 1) + '}{2} + \\sqrt{\\left(\\frac{' + rwrN(y.Lt_c, 1) + '}{2}\\right)^{2} + \\frac{' + k8 + '(' + rwrN(y.Hb, 2) + ')(' + rwrN(y.Mb, 1) + ' + ' + rwrN(y.Mw, 1) + ')}{' + rwrN(y.Mc, 1) + '}}', value: y.Lc, unit: 'ft', d: 2, ref: AA('Art. A13.3.1') }),
