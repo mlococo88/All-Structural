@@ -1127,11 +1127,20 @@ function solve(S){
     sq.CsMinS1=(site.S1>=0.6)?0.5*site.S1/(sq.R/sq.Ie):null;
     sq.Cs=Math.max(Math.min(sq.CsBase,sq.CsMax), sq.CsMin);
     if(sq.CsMinS1!==null) sq.Cs=Math.max(sq.Cs,sq.CsMinS1);
-    sq.Wt=S.seisW;
+    /* A7M5 (2026-11-07): Sec. 12.7.2 item 4: where the flat roof snow load exceeds 30 psf, W includes 20 % of the uniform
+       design snow load. Trigger on p_f,des (with the 780 CMR minimum), amount 0.2 x the balanced design snow x the plan
+       area (conservative; Decision pending engineer review). Added to W and to the highest level's weight, unless the
+       user ticks that the entered weights already include it. */
+    const snW=R.snow, pfT=snW?snW.pfDes:0;
+    if(snW && pfT>30 && !S.snowInW){
+      sq.snowW={pf:pfT, ps:snW.balanced, A:g.planArea, W:0.2*snW.balanced*g.planArea/1000, Win:S.seisW};
+    } else if(snW && pfT>30) sq.snowWincl={pf:pfT};
+    sq.Wt=S.seisW+(sq.snowW?sq.snowW.W:0);
     sq.Vbase=sq.Cs*sq.Wt;
     sq.k=(sq.Tused<=0.5)?1:(sq.Tused>=2.5?2:1+(sq.Tused-0.5)/2);
     /* levels are worked from the top down, which is the order the story shear accumulates */
     const lv=S.levels.filter(l=>l.w>0).slice().sort((a,b)=>b.h-a.h);
+    if(sq.snowW && lv.length){ lv[0]={...lv[0], w:lv[0].w+sq.snowW.W, wIn:lv[0].w, wSnow:sq.snowW.W}; sq.snowW.level=lv[0].name; }   /* A7M5: snow at the roof level */
     /* Eq. 12.8-12: h_x is the height above the base, not the level elevation on the grade datum */
     const sumWH=lv.reduce((t,l)=>t+l.w*Math.pow(Math.max(0,l.h-S.baseElev),sq.k),0);
     sq.levels=lv.map(l=>{const hx=Math.max(0,l.h-S.baseElev), whk=l.w*Math.pow(hx,sq.k);
@@ -1490,6 +1499,7 @@ const DEF={
  Goverride:false, Gval:0.85, windFlow:"Clear", tblMode:"interp",
  siteClass:"D", seisSysType:"All other structural systems", sfrs:"Steel systems not specifically detailed for seismic resistance",
  hn:36, TL:6, seisW:1200, useTa:true, rho:1.0, baseElev:0, siteDefaultD:false, siteBnoVs:false,
+ snowInW:false,  /* A7M5 (2026-11-07): true = the entered W and level weights already include 20 % of the snow (Sec. 12.7.2) */
  irreg:"none",   /* A7M4 (2026-11-07): structural irregularities for the Table 12.6-1 ELF check; saves without it read "none" */
  levels:[{name:"Roof",h:36,w:600},{name:"Level 2",h:18,w:600}],
  elems:[],
@@ -2008,6 +2018,8 @@ function buildInputs(){
   selWide(b,"Structural irregularities (Tables 12.3-1, 12.3-2), for the Table 12.6-1 ELF check","irreg",["none","limited","other"],
     ["None","Only horizontal types 2, 3, 4, 5 and/or vertical types 4, 5a, 5b","Any other irregularity"]);
   b.appendChild(chk("useTa","Use T = T\u2090 rather than C\u1d64T\u2090"));
+  b.appendChild(chk("snowInW","W and the level weights already include 20 % of the design snow load (Sec. 12.7.2, where the flat roof snow load exceeds 30 psf)"));
+  b.appendChild(el("div","hint","Unticked: where the flat roof snow load exceeds 30 psf the tool adds 0.2 \u00D7 the balanced design snow \u00D7 the plan area to W and to the highest level."));
   b.appendChild(el("div","hint","T\u2090 is the conservative choice; C\u1d64T\u2090 requires a substantiated analysis of the computed period."));
 
   b=panel(host,"i-lev",++n+".","Story Schedule","ASCE 7-16 Sec. 12.8.3 / 12.8.4");
@@ -3125,6 +3137,16 @@ function renderSeis(host){
     "C_s = \\min\\!\\left("+RN(q.CsBase,4)+",\\ "+(isFinite(q.CsMax)?RN(q.CsMax,4):"\\infty")+"\\right),\\ \\ge "+RN(q.CsMin,4),"C_s = "+RN(q.Cs,4));
 
   b=panel(host,"o-se5",++n+".","Base Shear and Vertical Distribution","ASCE 7-16 Sec. 12.8.1 / 12.8.3");
+  if(q.snowW){   /* A7M5 */
+    const z=q.snowW;
+    eq(b,"Snow in the effective seismic weight (flat roof snow "+R2(z.pf)+" psf > 30 psf)","ASCE 7-16 Sec. 12.7.2",
+      "W_s = 0.2\\,p_s\\,A_{plan},\\qquad W = W_{entered} + W_s",
+      "W_s = 0.2("+R2(z.ps)+")("+R2(z.A)+")/1000 = "+R2(z.W)+"\\ \\text{kip},\\quad W = "+R2(z.Win)+" + "+R2(z.W),
+      "W = "+R2(q.Wt)+"\\ \\text{kip}");
+    note(b,"Sec. 12.7.2: where the flat roof snow load exceeds 30 psf, 20 % of the uniform design snow load is part of W. It is taken here as 0.2 \u00D7 the balanced design snow p\u209b = "+R2(z.ps)+
+      " psf (with the minimum and rain-on-snow where they apply) over the plan area, and added to W and to the weight of the highest level"+(z.level?" ("+esc(z.level)+")":"")+
+      ". If the entered W already includes it, tick the box on the Seismic input tab.","w");
+  } else if(q.snowWincl) note(b,"Flat roof snow load "+R2(q.snowWincl.pf)+" psf > 30 psf: the entered W and level weights are stated to include 20 % of the design snow load (Sec. 12.7.2).","k");
   eq(b,"Seismic base shear","ASCE 7-16 Eq. 12.8-1","V = C_s\\,W",
     "V = "+RN(q.Cs,4)+"("+R2(q.Wt)+")","V = "+R2(q.Vbase)+"\\ \\text{kip}");
   eq(b,"Distribution exponent","ASCE 7-16 Sec. 12.8.3",
@@ -5982,7 +6004,13 @@ function buildWorkbook(S,R,ExcelJS,tb){
     inp("hn","Structural height","h_n", q.hn, NF.f,"input");
     inp("Rr","Response modification coefficient","R", q.R, NF.n2,"Table 12.2-1");
     inp("TL","Long-period transition period","T_L", q.TL, NF.s,"Fig. 22-14 to 22-17");
-    inp("Wt","Effective seismic weight","W", q.Wt, NF.k,"Sec. 12.7.2");
+    if(q.snowW){   /* A7M5 */
+      inp("Win","Effective seismic weight entered","W_{in}", q.snowW.Win, NF.k,"input");
+      inp("psW","Balanced design snow load (p_f > 30 psf)","p_s", q.snowW.ps, NF.p,"Sec. 7.3, 7.4");
+      inp("ApW","Roof plan area","A", q.snowW.A, NF.a,"geometry");
+      out("WsW","Snow in W, 20 % of the design snow","W_s",{formula:"0.2*"+A("psW")+"*"+A("ApW")+"/1000",result:q.snowW.W},NF.k,"Sec. 12.7.2");
+      out("Wt","Effective seismic weight","W",{formula:A("Win")+"+"+A("WsW"),result:q.Wt},NF.k,"Sec. 12.7.2");
+    } else inp("Wt","Effective seismic weight","W", q.Wt, NF.k,"Sec. 12.7.2");
     inp("rho","Redundancy factor","\u03C1", S.rho, NF.n2,"Sec. 12.3.4");
     out("Ta","Approximate fundamental period","T_a",
       {formula:A("Ctp")+"*"+A("hn")+"^"+A("xexp"),result:q.Ta},NF.s,"Eq. 12.8-7");
