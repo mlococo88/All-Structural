@@ -2373,6 +2373,14 @@ function calcAll(inp) {
     errors.push(`Footing too thin (${inp.tf}") for cover + rebar. Increase t_f.`);
   if (inp.ts_bot <= inp.cov_stem + 2)
     errors.push(`Stem too thin (${inp.ts_bot}") for cover + rebar. Increase t_s.`);
+  // RWTE (2026-11-07): pile-supported footing: the depth over the pile heads d_p = t_f − embedment − clear − d_b (punching, the ACI
+  // cap depth) must be positive; the same 2-in allowance for the bar as the spread-footing rule above. Was not checked here: t_f at or
+  // below embedment + clear threw (sel_toe null) or gave a negative d_p, and the page showed no named limit.
+  if (inp.fnd && inp.fnd.type === 'pile') {
+    const em = +inp.fnd.embed || 0, cl = +inp.fnd.clr || 0, lim = em + cl + 2;
+    if (inp.tf <= lim)
+      errors.push(`Footing too thin over the pile heads: t_f = ${inp.tf} in must exceed embedment ${em} in + clear ${cl} in + 2 in for the bars = ${lim} in (depth over the pile heads d_p = t_f − embedment − clear − d_b > 0). Increase t_f or reduce the pile embedment.`);
+  }
   if (errors.length) return { errors, warnings, fatal: true };
 
   // ── Earth pressure coefficients ──────────────────────────────
@@ -3579,6 +3587,7 @@ function calcAll(inp) {
     d_heel = inp.tf - inp.cov_ftg - sel_heel.bar.db / 2;
   }
   if (d_heel <= 0) errors.push('Heel: d ≤ 0. Increase t_f or reduce cover.');
+  if (!sel_heel) return { errors: [`Heel: d ≤ 0 (t_f = ${inp.tf} in, cover ${inp.cov_ftg} in). Increase t_f or reduce cover.`], warnings, fatal: true };   // RWTE: a named input error, never a throw
   if (heel_overstressed) warnings.push('Footing heel over-stressed. Increase t_f or reduce L_h.');
   const a_heel     = sel_heel ? sel_heel.As_prov * inp.fy / (0.85 * inp.fc * bw) : 0;
   const phiMn_heel = sel_heel ? phiF_heel * sel_heel.As_prov * inp.fy * (d_heel - a_heel / 2) : 0; // lb-in/ft
@@ -3652,6 +3661,7 @@ function calcAll(inp) {
     sel_toe = applyOvr('f2', As_toe_des, selectBar(As_toe_des, max_s_ftg));
     d_toe = inp.tf - cov_bot - sel_toe.bar.db / 2;
   }
+  if (!sel_toe) return { errors: [`Toe: d ≤ 0 (t_f = ${inp.tf} in, bottom cover ${cov_bot} in). Increase t_f or reduce cover.`], warnings, fatal: true };   // RWTE: a named input error, never a throw
   if (toe_overstressed) warnings.push('Footing toe over-stressed. Increase t_f or reduce L_t.');
   const a_toe     = sel_toe ? sel_toe.As_prov * inp.fy / (0.85 * inp.fc * bw) : 0;
   const phiMn_toe = sel_toe ? 0.9 * sel_toe.As_prov * inp.fy * (d_toe - a_toe / 2) : 0; // lb-in/ft
@@ -7259,7 +7269,7 @@ function rwInputErrors() {
     const D = need('pile_size', gt0), em = need('pile_embed', ge0), cl = need('pile_clr', ge0);
     if (D && nr) for (let k = 1; k <= nr; k++) { const xi = val('pile_x' + k), r2 = val('pile_size') / 24;
       if (isFinite(xi) && (xi < r2 - 1e-9 || xi > Bft - r2 + 1e-9)) R.push(['pile_x' + k, `${lab('pile_x' + k)} = ${raw('pile_x' + k)} ft: the pile (D = ${raw('pile_size')} in) extends past the footing edge. Confirm the edge distance.`]); }
-    if (tfOk && em && cl && val('pile_embed') + val('pile_clr') >= val('tf')) err('pile_embed', `${lab('pile_embed')} ${raw('pile_embed')} in + clear ${raw('pile_clr')} in is not less than the footing thickness t_f = ${raw('tf')} in.`);
+    if (tfOk && em && cl && val('pile_embed') + val('pile_clr') + 2 >= val('tf')) err('pile_embed', `${lab('pile_embed')} ${raw('pile_embed')} in + clear ${raw('pile_clr')} in + 2 in for the bars = ${f(val('pile_embed') + val('pile_clr') + 2, 2)} in is not less than the footing thickness t_f = ${raw('tf')} in: the depth over the pile heads would be ≤ 0. Increase t_f to more than ${f(val('pile_embed') + val('pile_clr') + 2, 2)} in or reduce the embedment.`);   // RWTE: + 2 in, as calcAll (was embedment + clear ≥ t_f)
     if (isA) { need('pile_Rn', gt0); need('pile_Rnup', ge0); need('pile_Hr', ge0);
       const phi = Object.assign(v => v > 0 && v <= 1, { msg: 'must be greater than 0 and not more than 1' }); need('pile_phic', phi); need('pile_phiup', phi); }
     else { need('pile_Pa', gt0); need('pile_Ta', ge0); need('pile_Ha', ge0); }
@@ -7315,7 +7325,7 @@ function rwInputErrors() {
 // the field ids of the analysis' own fatal messages (calcAll), so they get a link too
 function rwIeIdOf(msg) {
   const T = [[/f'c/, 'fc'], [/f_y/, 'fy'], [/q_a/, 'qa'], [/η/, 'aashto_eta'], [/φ_b/, 'aashto_phi_b'], [/γ_e/, 'aashto_gamma_e1'],
-    [/Backfill slope/, 'beta'], [/Footing too thin/, 'tf'], [/Stem too thin/, 'ts_bot'], [/^Seismic/, 'kh'], [/Stem: d/, 'ts_bot'], [/Heel: d/, 'tf']];
+    [/Backfill slope/, 'beta'], [/Footing too thin/, 'tf'], [/Stem too thin/, 'ts_bot'], [/^Seismic/, 'kh'], [/Stem: d/, 'ts_bot'], [/Heel: d/, 'tf'], [/Toe: d/, 'tf'], [/^Calculation error/, null]];   // RWTE: Toe
   const t = T.find(([re]) => re.test(msg)); return t ? t[1] : null;
 }
 function rwInputMarks(IE) {
@@ -7363,7 +7373,9 @@ function onInputChange() {
   document.getElementById('tf').classList.toggle('err',     inp.tf <= inp.cov_ftg + 2);
 
   rwInputMarks(IE);
-  const r = IE.E.length ? { inp, errors: IE.E.map(e => e[1]), warnings: [], fatal: true, inputErrors: IE.E } : (typeof rwpxCheck === 'function' ? rwpxCheck(inp, calcAll(inp)) : calcAll(inp));   // RWIE: no results while an input is in error   // RWPX: the Pile Designer stale check
+  let r;
+  try { r = IE.E.length ? { inp, errors: IE.E.map(e => e[1]), warnings: [], fatal: true, inputErrors: IE.E } : (typeof rwpxCheck === 'function' ? rwpxCheck(inp, calcAll(inp)) : calcAll(inp)); }
+  catch (e) { console.warn(e); r = { inp, errors: ['Calculation error: ' + String(e && e.message || e) + '. No results for these inputs; check the inputs (thicknesses, covers, embedment) or report this case.'], warnings: [], fatal: true }; }   // RWTE (2026-11-07): never crash the page   // RWIE: no results while an input is in error   // RWPX: the Pile Designer stale check
   if (r.fatal && !r.inputErrors) rwInputMarks({ E: (r.errors || []).map(m => [rwIeIdOf(m), m]).filter(x => x[0]), R: IE.R });   // RWIE: the analysis' own input errors marked on their fields too
   window._R = r;
   if (typeof rwpxPaint === 'function') rwpxPaint(r);   // RWPX
