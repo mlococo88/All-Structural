@@ -19970,7 +19970,7 @@ index 06a42e4..b58d4e3 100644
   - `check-syntax`: pass. `pile-library`: library checks pass; its page-text checks show the new check text and `pdaRev`. 0 console errors.
 - **Other copies:** none.
 
-## 2026-11-07 — PR: claude/pile-m4m5-fixity (PDA-M4 / PDA-M5) — Davisson depth to fixity: E_s = 0.465 S_u in clay; group spacing reduction of the soil modulus   [calculation change]
+## 2026-11-07 — PR: claude/pile-m4m5-fixity (PR #1016: https://github.com/mlococo88/All-Structural/pull/1016) (PDA-M4 / PDA-M5) — Davisson depth to fixity: E_s = 0.465 S_u in clay; group spacing reduction of the soil modulus   [calculation change]
 - **Problem (review M4):** Davisson fixity in clay (Module 10) used the p-y layer's k_h (presets 30–600, default 150 kip/ft²). Eq. C10.7.3.13.4-1 uses E_s = 0.465 S_u (ksi, S_u in ksf). A high k_h gave a short L_f, which is unconservative.
 - **Problem (review M5):** the single-pile modulus was used for a pile in a group. C10.7.3.13.4 reduces the modulus to 25 % at 3B spacing, with no effect at 8B or more, and interpolation between.
 - **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 10.7.3.13.4 and C10.7.3.13.4 (Eqs. C10.7.3.13.4-1 / -2; E_s for clays from S_u; the spacing effect after Prakash and Sharma). Micropiles reach it through 10.9.3.10.6.
