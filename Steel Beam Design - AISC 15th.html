@@ -2123,10 +2123,15 @@ function designAll(A){
     const locs=[];
     const nX=nodeXs();
     S.geom.nodes.forEach((nd2,j)=>{if(nd2.t!=='free')locs.push({kind:'support',label:'support '+NN[j],x:nX[j],node:j,lb:dsn.lbSup});});
+    /* H1 (J10 demand): point loads at the same x (any load case, either span at a shared node) form ONE location;
+       its demand per combination is the total factored force there, R_u = \u03A3 \u03B3\u00B7P (AISC 360-16 \u00A7J10.2, \u00A7J10.3) */
     S.loads.forEach(ld=>{
       if(ld.off||ld.type!=='point')return;
       const si=Math.min(ld.si||0,S.geom.spans.length-1);
-      locs.push({kind:'load',label:'point load '+(ld.nm||''),x:nX[si]+Math.max(0,Math.min(S.geom.spans[si].L,ld.pos||0)),load:ld,lb:dsn.lbPt});
+      const x=nX[si]+Math.max(0,Math.min(S.geom.spans[si].L,ld.pos||0));
+      const g=locs.find(l=>l.kind==='load'&&Math.abs(l.x-x)<=1e-6);
+      if(g){g.loads.push(ld);g.label='point loads '+g.loads.map(q=>q.nm||q.lc).join(' + ')+' (x = '+fmt(x,2)+' ft)';}
+      else locs.push({kind:'load',label:'point load '+(ld.nm||''),x,load:ld,loads:[ld],lb:dsn.lbPt});
     });
     locs.forEach(lo=>{lo.endDist=Math.min(lo.x,Ltot-lo.x)*12;
       if(lo.lb!=null&&lo.lb>0){lo.wly=j10WLY(p,lo.lb,lo.endDist);lo.wlc=j10WLC(p,lo.lb,lo.endDist);}});
@@ -2184,8 +2189,11 @@ function designAll(A){
       C.j10=D.j10.locs.map(lo=>{
         let dem=null;
         if(lo.kind==='support'){const R=cb.R[lo.node].v;dem=R>0?R:null;}
-        else{const fk=cb.f[lo.load.lc]||0;const P=lo.load.mag*fk;dem=P>0?P:null;}
+        let terms=null;
+        if(lo.kind==='load'){terms=lo.loads.map(q=>({nm:q.nm||'',lc:q.lc,f:cb.f[q.lc]||0,mag:q.mag||0})).filter(t=>t.f&&t.mag);
+          const P=terms.reduce((s,t)=>s+t.f*t.mag,0);dem=P>0?P:null;}
         const r={label:lo.label,x:lo.x,dem,lb:lo.lb,endDist:lo.endDist};
+        if(terms&&lo.loads.length>1)r.terms=terms;
         if(dem!=null&&lo.wly){r.dcrWLY=dem/(lo.wly.phi*lo.wly.Rn);r.dcrWLC=dem/(lo.wlc.phi*lo.wlc.Rn);
           r.wly=lo.wly;r.wlc=lo.wlc;}
         return r;
@@ -5360,6 +5368,11 @@ function buildJ10Tab(pg){
       t.appendChild(tr);
     });
     body.appendChild(t);
+    /* H1: worked demand where several point loads act at one location */
+    C.j10.forEach(r=>{if(!r.terms||r.dcrWLY==null)return;
+      body.appendChild(el('div','hint','R\u1D64 at '+r.label+' = \u03A3 \u03B3\u00B7P = '+
+        r.terms.map(q=>fmt(q.f,2)+'\u00B7'+fmt(q.mag,2)+(q.nm?' ('+q.nm+', '+q.lc+')':' ('+q.lc+')')).join(' + ')+' = <b>'+fmt(r.dem,2)+' kip</b> '+
+        '(the total factored concentrated force at the location, AISC 360-16 \u00A7J10.2 / \u00A7J10.3)'));});
     if(!isMember()&&D.j10.locs.some(l=>l.kind==='support'&&l.lb!=null))sbdWorkedIn(body,[['tabAnalysis','anC_'+C.id,'Combination '+C.name,'Support reactions']]);   /* D11 links */
     if(C.j10.some(r=>r.dcrWLY>1||r.dcrWLC>1))
       body.appendChild(el('div','errBox','DCR > 1 at a bearing location \u2014 provide bearing stiffeners (\u00A7J10.8) or increase the bearing length.'));
