@@ -207,6 +207,8 @@
       <div style="overflow-x:auto;"><table class="subtbl" id="elem_tbl"></table></div>
       <button class="sm ghost" id="elem_add" style="margin-top:8px;">+ Element</button>
       <div class="note" id="elem_warn" style="color:var(--oxide); margin-top:6px;"></div>
+      <!-- BGX7 (2026-11-07, review M2): curve and spiral elements, a report only -->
+      <details id="elem_rep_box" style="margin-top:8px;"><summary class="note" style="cursor:pointer;">Curve and spiral elements (report: T, E, M, LC, PI, D; θs, Xs, Ys, p, k, LT, ST)</summary><div id="elem_rep" style="overflow-x:auto;"></div></details>
     </fieldset>
 
     <h2 class="sec">Vertical Profile</h2>
@@ -1558,6 +1560,7 @@ function compute(){
   if(gErr.length){ if(_autosaveArmed) autosave(); return; }
   ENG=buildEngine();
   showGeomWarnings(geometryWarnings());
+  buildElemReport();   // BGX7 (report only)
   renderXsInfo();   // BGX6
   { const R=sectionStaRange();
     if(ACTIVE_STA===null||ACTIVE_STA<R.s0-1e-6||ACTIVE_STA>R.s1+1e-6) ACTIVE_STA=(R.s0+R.s1)/2; }
@@ -1802,6 +1805,42 @@ function drawPlan(svgId){
   PLANVIEWXF={s0,s1};
 }
 function elemType(i){ return (ELEMS[i]&&ELEMS[i].type)||'tan'; }
+/* BGX7 (review M2): curve and spiral elements, computed from the engine's own element end points and bearings (a report:
+   nothing reads it). Circular curve: Δ = L/R, T = R tan(Δ/2), E = R(sec(Δ/2) − 1), M = R(1 − cos(Δ/2)), LC = 2R sin(Δ/2),
+   PI = PC + T·(PC tangent), D (arc, 100 ft) = 18000/(πR) deg, D (chord, 100 ft) = 2 asin(50/R). Spiral from / to a tangent
+   (curvature 0 at one end, radius Rc at the other): θs = Ls/(2Rc); Xs, Ys = the far end in the frame of the tangent end;
+   p = Ys − Rc(1 − cos θs), k = Xs − Rc sin θs, LT = Xs − Ys/tan θs, ST = Ys/sin θs. A symmetric spiral–curve–spiral also gets
+   its total Δ, Ts = (R + p) tan(Δ/2) + k and Es = (R + p) sec(Δ/2) − R. */
+function buildElemReport(){
+  const box=document.getElementById('elem_rep'); if(!box||!ENG) return;
+  const els=ENG.align.elems; if(els.length!==ELEMS.length){ box.innerHTML=''; return; }
+  const F=(v,d)=>(isFinite(v)?v.toFixed(d==null?3:d):'—'), NE=p=>`N ${F(p.y)}, E ${F(p.x)}`, dms=r=>{ const d=Math.abs(r/DEG); let D=Math.floor(d), m=Math.floor((d-D)*60), sec=((d-D)*60-m)*60; if(sec>=59.995){ sec=0; m++; } if(m>=60){ m=0; D++; } return `${D}°${String(m).padStart(2,'0')}'${sec.toFixed(2).padStart(5,'0')}"`; };
+  const azq=b=>azimuthToQuadrant(((b/DEG)%360+360)%360);
+  const rows=[]; const spi=[];
+  els.forEach((el,i)=>{ const t=elemType(i), a=el.at(el.staStart), b=el.at(el.staEnd), L=el.staEnd-el.staStart;
+    if(t==='crv'){ const R=Math.abs(+ELEMS[i].R), D=L/R, T=R*Math.tan(D/2), PI={x:a.x+Math.sin(a.brg)*T, y:a.y+Math.cos(a.brg)*T};
+      rows.push(`<tr><td class="lbl">${i+1}</td><td class="lbl">Curve ${(+ELEMS[i].R)>=0?'right':'left'}</td><td class="lbl" style="text-align:left;white-space:normal">`+
+        `R ${F(R,2)} · Δ ${dms(D)} · L ${F(L)} · T ${F(T)} · E ${F(R*(1/Math.cos(D/2)-1))} · M ${F(R*(1-Math.cos(D/2)))} · LC ${F(2*R*Math.sin(D/2))} (brg ${azq((a.brg+b.brg)/2)}) · `+
+        `D (arc, 100 ft) ${dms(18000/(Math.PI*R)*DEG)} · D (chord, 100 ft) ${R>50?dms(2*Math.asin(50/R)):'—'}<br>`+
+        `PC Sta ${formatStation(el.staStart)} (${NE(a)}) · PI (${NE(PI)}) · PT Sta ${formatStation(el.staEnd)} (${NE(b)})</td></tr>`);
+      spi[i]={t:'crv',R,D}; return; }
+    if(t==='spi'){ const Rin=+ELEMS[i].Rin, Rout=+ELEMS[i].Rout, dTh=Math.abs(b.brg-a.brg);
+      if((Rin===0)!==(Rout===0)){ const Rc=Math.abs(Rin===0?Rout:Rin), th=L/(2*Rc), into=(Rin===0);
+        const O=into?a:b, u=into?{x:Math.sin(a.brg),y:Math.cos(a.brg)}:{x:-Math.sin(b.brg),y:-Math.cos(b.brg)}, P=into?b:a, dx=P.x-O.x, dy=P.y-O.y;
+        const Xs=dx*u.x+dy*u.y, Ys=Math.abs(dx*u.y-dy*u.x), p=Ys-Rc*(1-Math.cos(th)), k=Xs-Rc*Math.sin(th);
+        rows.push(`<tr><td class="lbl">${i+1}</td><td class="lbl">Spiral ${into?'in':'out'}</td><td class="lbl" style="text-align:left;white-space:normal">`+
+          `Ls ${F(L)} · Rc ${F(Rc,2)} · θs ${dms(th)} · Xs ${F(Xs)} · Ys ${F(Ys)} · p ${F(p)} · k ${F(k)} · LT ${F(Xs-Ys/Math.tan(th))} · ST ${F(Ys/Math.sin(th))}<br>`+
+          `${into?'TS':'CS'} Sta ${formatStation(el.staStart)} (${NE(a)}) · ${into?'SC':'ST'} Sta ${formatStation(el.staEnd)} (${NE(b)})</td></tr>`);
+        spi[i]={t:'spi',into,Rc,L,th,p,k}; return; }
+      rows.push(`<tr><td class="lbl">${i+1}</td><td class="lbl">Spiral (compound)</td><td class="lbl" style="text-align:left;white-space:normal">L ${F(L)} · R ${F(Rin,2)} → ${F(Rout,2)} · change of bearing ${dms(dTh)}<br>Sta ${formatStation(el.staStart)} (${NE(a)}) → Sta ${formatStation(el.staEnd)} (${NE(b)})</td></tr>`); return; }
+  });
+  // symmetric spiral–curve–spiral groups
+  for(let i=0;i+2<els.length;i++){ const A=spi[i], C=spi[i+1], B=spi[i+2];
+    if(A&&C&&B&&A.t==='spi'&&A.into&&C.t==='crv'&&B.t==='spi'&&!B.into&&Math.abs(A.Rc-C.R)<1e-6&&Math.abs(B.Rc-C.R)<1e-6&&Math.abs(A.L-B.L)<1e-6){
+      const D=C.D+A.th+B.th, R=C.R; rows.push(`<tr><td class="lbl">${i+1}–${i+3}</td><td class="lbl">Spiral–curve–spiral</td><td class="lbl" style="text-align:left;white-space:normal">total Δ ${dms(D)} · Ts ${F((R+A.p)*Math.tan(D/2)+A.k)} · Es ${F((R+A.p)/Math.cos(D/2)-R)} · Δc ${dms(C.D)}</td></tr>`); } }
+  box.innerHTML=rows.length?`<table class="wide" style="font-size:11px;margin-top:6px"><thead><tr><th class="lbl">#</th><th class="lbl">Element</th><th class="lbl" style="text-align:left">elements (ft, deg; coordinates as entered at the POB)</th></tr></thead><tbody>${rows.join('')}</tbody></table>`+
+    `<p class="note" style="margin:4px 0 0">Report only. Curves: arc definition (the tool's curves are arcs); D for a 100 ft arc and a 100 ft chord. Spirals: clothoid, offsets measured from the tangent at the TS / ST.</p>`:'<p class="note">No curve or spiral.</p>';
+}
 let PLANVIEWXF=null;
 
 /* ===== PROFILE ===== */
