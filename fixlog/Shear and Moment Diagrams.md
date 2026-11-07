@@ -1585,3 +1585,23 @@ const uxCtl=SharedListInput.bindInput(g('iUX'),{label:'Custom x stations',events
 - **How verified:** headless main vs branch on the 27 review cases (each in single-combination and envelope mode) and 14 extra cases: computed results identical except the new-project cases with snow load (above, and a 3-span mixed case whose end reactions now come from the combination 3 rows); old saves identical apart from the note; 0 console errors. `node tests/check-syntax.mjs "Shear and Moment Diagrams.html"`, `node tests/smoke/phone-layout.mjs --tool smd`, `node tests/smoke/project-library.mjs --tool smd`: pass.
 - **Decision (pending engineer review):** the note is shown only for an LRFD-type list (a 1.2D row) with snow load, since without snow load the added rows reduce to 1.2D + 1.6L, 1.2D + 1.0L and 1.2D + 0.5W, which the other rows bound for loads of one sign. An ASD list gets no note (the ASD preset already has D + S, D + 0.75L + 0.75S and so on).
 - **Other copies:** none (Steel Beam Design has its own list, not changed). **Open items:** none from this change.
+
+## 2026-11-07 — PR: claude/sm-pattern-warn (PATW: warning that pattern live load is not generated; review H2, interim)   [display only; no result change]
+- **Why:** review finding H2: the envelope applies each load case to all of its spans at once. For a continuous beam this under-reports the positive span moments and the end reactions (two 15 ft spans, D = 1, L = 2 kip/ft: tool M⁺ = 69.61 kip·ft and R_A = 24.75 kip; with L on span 1 only, 87.50 and 27.75). This is the quick interim warning. Pattern generation follows in a separate PR.
+- **Governing provision:** 2018 IBC Sec. 1607.12 (floor live load placed on the spans that give the greatest effect) and ASCE 7-16 Sec. 4.3.3 (partial loading). Cited and paraphrased only.
+- **Where:**
+  1. **New, before `function smdCmbNoteTxt(m){`:**
+     - `smdPatWarn()` returns true when `spans.length>1` and there is an enabled load in case `LL`.
+     - `SMD_PATW_TXT` holds the warning text.
+  2. **`updStats()`, before the CMB3 note (anchor `{const mc=smdCmbMissing();if(mc.length&&!smdCmb3Hide)`):** a full-width amber note `.smd-patw`, shown in every view mode.
+  3. **`smrModel()`:**
+     - the "Load cases and combinations" items: `.concat(smdPatWarn()?[{type:'note',warn:true,text:SMD_PATW_TXT}]:[])` is added after the CMB3 note;
+     - the Summary: the same warn note is added before "Verify all results independently…" (not when the beam is unstable).
+- **Before / after:** before, no note. After, the note. No computed value changes.
+- **Check case:** two 15 ft spans, pin / roller / roller, DL = 1 and LL = 2 kip/ft on both spans. The note shows on the cards and in the Report (Summary and §2). A single-span beam, or a beam with no LL load, shows no note.
+- **How verified:**
+  - Headless main vs branch on the 27 review cases (single-combination and envelope mode) and 14 extra cases: every computed result identical (0 differences). The statsRow text differs only on the 5 multi-span cases with LL, by the note.
+  - 0 console errors.
+  - `node tests/check-syntax.mjs "Shear and Moment Diagrams.html"`, `node tests/smoke/phone-layout.mjs --tool smd` and `node tests/smoke/project-library.mjs --tool smd` pass.
+- **Decision (pending engineer review):** only case `LL` is treated as live load. User cases (for example L1, L2) are taken as the user's own pattern and are not warned about.
+- **Saved data:** none changed. **Other copies:** none.

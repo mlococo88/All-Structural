@@ -786,6 +786,7 @@ function updStats(){
     return;}
   let h='';
   if(secOn&&!(Ev>0&&Iv>0))h+=`<div style="grid-column:1/-1;background:#fff1f2;border:1.5px solid #fda4af;border-radius:9px;padding:10px 14px;color:#9f1239;font-weight:700;font-size:12px">⚠ Section properties: ${!(Ev>0)?'E':''}${!(Ev>0)&&!(Iv>0)?' and ':''}${!(Iv>0)?'I':''} must be greater than 0 (blank, zero or negative entered). Deflection is not computed until this is fixed.</div>`;
+  if(smdPatWarn())h+=`<div class="smd-patw" style="grid-column:1/-1;background:#fffbeb;border:1.5px solid #fcd34d;border-radius:9px;padding:10px 14px;color:#92400e;font-size:12px">⚠ <b>Live load patterns:</b> ${SMD_PATW_TXT}</div>`;   /* PATW */
   {const mc=smdCmbMissing();if(mc.length&&!smdCmb3Hide)h+=`<div class="smd-cmb3" style="grid-column:1/-1;background:#fffbeb;border:1.5px solid #fcd34d;border-radius:9px;padding:10px 14px;color:#92400e;font-size:12px">⚠ <b>Load combinations:</b> ${smdCmbNoteTxt(mc)} <button class="btn btn-s" onclick="smdCmbAddMissing()">Add the missing rows</button> <button class="btn btn-s" onclick="smdCmb3Hide=true;updStats()">Hide</button></div>`;}   /* CMB3 */
   nodes.forEach((nd2,j)=>{if(nd2.t==='free')return;const cl=CLRS[j%CLRS.length];
     if(envOn){const Rj=env.R[j],up=Rj.mn<-1e-9;h+=`<div class="sc ${cl}"><div class="sc-l">R_${NN[j]} max / min</div><div class="sc-v">${Rj.mx.toFixed(3)}</div><div class="sc-u">${fu} · ${COMBOS[Rj.mc].name}<br><span style="${up?'color:#b91c1c;font-weight:700':''}">min ${Rj.mn.toFixed(3)}${up?' UPLIFT':''} · ${COMBOS[Rj.mnc]?COMBOS[Rj.mnc].name:''}</span></div></div>`;}
@@ -2050,6 +2051,10 @@ function smdCmbAddMissing(){
   const m=smdCmbMissing();if(!m.length)return;
   m.forEach(r=>{let id=r.id,n=2;while(combosArr.some(c=>c.id===id))id=r.id+'_'+(n++);combosArr.push({id,f:{...r.f},on:true});});
   afterCmbChange();toast(`${m.length} combination${m.length>1?'s':''} added (Ctrl+Z undoes)`);}
+/* PATW (2026-11-07): pattern (skip-span) live load is not generated: a warning when the beam has more than one span and an
+   enabled load in case LL (IBC 2018 Sec. 1607.12, ASCE 7-16 Sec. 4.3.3). Display only. */
+function smdPatWarn(){return spans.length>1&&loads.some(ld=>!ld.off&&ld.lc==='LL');}
+const SMD_PATW_TXT='Pattern live load is not generated: each combination applies LL to every span it is entered on at once. IBC 2018 Sec. 1607.12 and ASCE 7-16 Sec. 4.3.3 require the live load on the spans that give the greatest effect at each location (skip-span patterns), which can govern the positive span moments and the end reactions. Enter LL per span as separate load cases (for example L1, L2) with matching combinations, or check the patterns by hand.';
 function smdCmbNoteTxt(m){return`This project's saved combination list has no ${m.map(r=>r.nm).join(', ')}. ASCE 7-16 Sec. 2.3.1 combination 3 (1.2D + 1.6S + L or 0.5W) and the case with snow set to zero (IBC 2018 Sec. 1605.1) can govern a beam with snow load. New projects include these rows; saved lists are kept as saved.`;}
 g('psLRFD').onclick=()=>loadCmbPreset('LRFD');
 g('psASD').onclick=()=>loadCmbPreset('ASD');
@@ -2157,7 +2162,7 @@ function smrModel(){
     {type:'note',text:`${ns}-span beam, ${ns+1} nodes, total length ${totL.toFixed(3)} ${lu}. Units: ${fu}, ${lu}.`}]});
   mSubs.push({title:'Applied loads (unfactored)',items:loads.length?[{type:'table',head:['#','Name','Type','Case','Location','Magnitude','Status'],rows:loads.map((ld,i)=>[String(i+1),ld.nm||'',typeLabel(ld.type),ld.lc,ld.allSpans?'Entire beam':`Span ${Math.min(ld.si||0,ns-1)+1}`,ldTxt(ld),ld.off?'EXCLUDED':'Included'])}].concat(loads.some(l=>l.off)?[{type:'note',warn:true,text:`${loads.filter(l=>l.off).length} load(s) are excluded and contribute nothing to the results.`}]:[]):[{type:'note',text:'No loads entered.'}]});
   mSubs.push({title:'Load cases and combinations',items:[{type:'table',head:['Combination',...CASES.map(c=>c.id),'Envelope'],rows:combosArr.map(c=>({cls:!envOn&&!caseView&&c.id===cid?'gov':'',cells:[COMBOS[c.id].name,...CASES.map(cs=>c.f[cs.id]?fmtF(c.f[cs.id]):'—'),c.on!==false?'yes':'no']}))},
-    {type:'note',text:`Analysed: ${curName()}. ${CASES.map(c=>c.id+' = '+c.name).join(', ')}. Factors as entered in the combination table (presets: ASCE 7-16 Sec. 2.3.1 / 2.4.1 basic combinations).`}].concat(smdCmbMissing().length?[{type:'note',warn:true,text:smdCmbNoteTxt(smdCmbMissing())+' Use “Add the missing rows” on the Analysis view.'}]:[])});   /* CMB3 */
+    {type:'note',text:`Analysed: ${curName()}. ${CASES.map(c=>c.id+' = '+c.name).join(', ')}. Factors as entered in the combination table (presets: ASCE 7-16 Sec. 2.3.1 / 2.4.1 basic combinations).`}].concat(smdCmbMissing().length?[{type:'note',warn:true,text:smdCmbNoteTxt(smdCmbMissing())+' Use “Add the missing rows” on the Analysis view.'}]:[]).concat(smdPatWarn()?[{type:'note',warn:true,text:SMD_PATW_TXT}]:[])});   /* CMB3, PATW */
   if(secOn)mSubs.push({title:'Section properties',items:[{type:'table',head:['Quantity','Value','Unit'],rows:[['E',smrC(Ev,0),`${fu}/${lu}²`],['I',smrC(Iv,6),`${lu}⁴`],['c',smrC(cv,4),lu],['A',smrC(Av,5),`${lu}²`],['Shape',shpW?shpW.nm:'custom section','—'],['Deflection limit',defLim>0?'L/'+defLim:'off','—'],['Allowable stress σ_allow',Fbv>0?String(Fbv):'off',`${fu}/${lu}²`]]}]});
   /* ---------- 3. Analysis ---------- */
   const aSubs=[],res=[];   // res: summary rows [quantity, value cell, limit, ratio cell]
@@ -2249,6 +2254,7 @@ function smrModel(){
   const sItems=[{type:'kv',rows:[['Analysis',curName()],['Spans',`${ns} (total length ${totL.toFixed(3)} ${lu})`],['Units',`${fu}, ${lu}`],['Method','Direct stiffness method, Euler-Bernoulli beam elements (2 DOF/node), Gaussian elimination with partial pivoting; internal forces by left-segment statics; deflection by double numerical integration of M/EI anchored at the first and last supports']]}];   /* SMRX: the method wording of the retired 📄 Report */
   if(res.length)sItems.push({type:'table',head:['Quantity','Value','Limit','D/C'],rows:res},{type:'note',text:'Each value links to the step where it is taken. The deflection limit L/x and σ_allow are user inputs; the analysis (statics, beam theory) cites no design code.'});
   else if(window.unstable)sItems.push({type:'note',warn:true,text:'UNSTABLE STRUCTURE: results suppressed.'});
+  if(smdPatWarn()&&!window.unstable)sItems.push({type:'note',warn:true,text:SMD_PATW_TXT});   /* PATW */
   sItems.push({type:'note',text:'Verify all results independently before use in design.'});   /* SMRX: the retired 📄 Report's footer line */
   secs.push({title:'Summary',subs:[{title:'Results',items:sItems}]});
   secs.push({title:'Model, loads and combinations',subs:mSubs});
