@@ -6879,7 +6879,7 @@ index 50f3837..c2d5000 100644
   - 11.5.4.4 (Eq. 11.5.4.4): with net axial tension, α_c = 2(1 + N_u/(500A_g)) ≥ 0, N_u negative in tension.
   - 11.5.2.1 / 22.4: P_n, M_n by 22.4; 11.4.2.1 axial cap. Errata 2022: nothing on Chapter 11.
 - **In-plane shear (11.5.4): verified against the text, no change.** `sfdWallInfo`: α_c from h_w/ℓ_w, Eq. 11.5.4.4 for net tension, V_c + V_s capped at 8√f′c A_cv (no λ in the cap, as printed), f_yt ≤ 60 000 psi (Table 20.2.2.4(a)), φ = 0.75, A_cv = tℓ_w, ρ_t provided; ρ_ℓ enters through 11.6.2 (Wall reinforcement). Check (`w769h`): h_w/ℓ_w = 24/72 = 0.333 → α_c = 3; φV_n = 0.75·469.10 = 351.82 k; V_u = 120 k → 0.341 (unchanged).
-- **In-plane axial + flexure (new; `sfdWallOOP`, anchor `/* SFWD-3 (2026-11-07): in-plane axial and flexure of the whole wall` — the block tag is the WIP name, kept):**
+- **In-plane axial + flexure (new; `sfdWallOOP`, anchor `/* SFWD-4 (2026-11-07): in-plane axial and flexure of the whole wall`):**
   - Section t × ℓ_w with every vertical bar of the cage at its position along ℓ_w (`pd.pmBars`, both curtains and the end bars), `sfwSec` (22.2: ε_cu = 0.003, 0.85f′c over β₁c, bars ±f_y, displaced concrete deducted), φ by ε_t of the farthest bar (21.2.2), φP_n,max = 0.65·0.80P₀ (11.4.2.1, 22.4.2.1).
   - Demand: every LRFD combination, P_u (with self-weight) and M_u,in at the wall base (M_ux for a wall along y; V h and P e included). Ratio = M_c/φM_n(P_u); P_u/φP_n,max above the cap; P_u/φP_n,t below the tension capacity.
   - In-plane slenderness: r = 0.3ℓ_w, I_g = tℓ_w³/12, M_2,min = P_u(0.6 + 0.03ℓ_w), magnified as out of plane where kℓ_u/r exceeds the limit. **Decision (pending engineer review):** k, ℓ_u and the top bracing are the out-of-plane inputs.
