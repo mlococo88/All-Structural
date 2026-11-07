@@ -6620,7 +6620,7 @@ index 50f3837..c2d5000 100644
 - None. pmContour exists only in this tool.
 ### Open items
 - None.
-## 2026-11-07 — PR: feat/sf-pedestal-pm-views (PR #PRNUM: PRURL) (SFPV: pedestal P–M views: uniaxial P–M_x / P–M_y diagrams (default), the load contour, P–M along θ_gov, 3D surface; DISPLAY ONLY, no computed value changes)
+## 2026-11-07 — PR: feat/sf-pedestal-pm-views (PR #1161: https://github.com/mlococo88/All-Structural/pull/1161) (SFPV: pedestal P–M views: uniaxial P–M_x / P–M_y diagrams (default), the load contour, P–M along θ_gov, 3D surface; DISPLAY ONLY, no computed value changes)
 ### Where
 - Phase 2 engine, `pmContour`. Anchor text: `/* SFPV (2026-11-07): the section analysis of pmContour, hoisted`.
   - Before: `function analyze(cDepth,angleRad){…}` and `function phiOf(cDepth,angleRad){…}` were nested in `pmContour`.
