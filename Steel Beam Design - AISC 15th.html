@@ -2618,7 +2618,9 @@ function rebuildInputs(){
     fRow(body,'Material',selInput(mats.map(m=>m.id),()=>S.section.grade,v=>{S.section.grade=v;},
       id=>{const m=matOf(id);return m.name+' (Fy='+m.Fy+')';},null,'grade'),'');
     const m=matOf(S.section.grade);
-    body.appendChild(el('div','hint','F<sub>y</sub> = '+m.Fy+' ksi, F<sub>u</sub> = '+m.Fu+' ksi, E = 29,000 ksi'+(m.tRule==='nom'?' \u2014 A1085: design wall = nominal wall':'')+'. '+DBVER+'.'));
+    body.appendChild(el('div','hint','F<sub>y</sub> = '+m.Fy+' ksi, F<sub>u</sub> = '+m.Fu+' ksi, E = 29,000 ksi'+(m.tRule==='nom'?' \u2014 A1085: design wall = nominal wall':'')+'. '+DBVER+'.'+
+      /* L3 (2026-11-07): material edition note, no value changed */
+      (m.id==='A500C_P'?' A500 Gr. C round: F<sub>y</sub> = 46 ksi is the ASTM A500-13 value referenced by AISC 360-16 (Table C-A3.1). Later A500 editions, used by the AISC Manual 16th Ed. and the v16.0 Design Examples, give 50 ksi; 46 ksi is kept (conservative).':'')));
     /* overrides */
     const p=resolveSection();
     if(p){
