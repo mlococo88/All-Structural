@@ -3193,3 +3193,19 @@ From the code-compliance review of 2026-11-07 (finding M5). Engineer asleep; no 
   - Default spliced, RIDOT: SPL-TY 502.0 → 383.9 kip (×0.65/0.85), governing LRFR Inv L1-L2-FS −0.519 → SPL-TY −0.632.
 - **How verified:** main vs branch on 20 review cases: every AASHTO case identical; only the two RIDOT cases moved (values above). UI: choosing RIDOT in the Owner select changes the note, the Code parameters show 0.75 (Default "0.75 (RIDOT; AASHTO 0.9)"), typing 0.90 there is kept as a change and restores 657.8 kip. Validation 17 of 17 (owner AASHTO). `check-syntax`, `phone-layout --tool gusset` pass; `project-library --tool gusset` passes except its four "identical to main" checks, whose only difference is the new field `P.owner = ''`. 0 console errors.
 - **Saved data:** new field `owner` (default `''`, AASHTO): older saves open as AASHTO, unchanged; no key change. An older copy of the tool ignores the field.
+
+## 2026-11-07 — PR: claude/gusset-m6-lfr-rivet — LFR rivets of unknown origin: φF<sub>v</sub> 30 → 23.8 ksi, consistent with LRFR (M6; §4, conservative, verify)
+
+From the code-compliance review of 2026-11-07 (finding M6).
+
+### M6. Default `FvR0L`   [§4: fastener strength default]
+- **Where:** `PARAMS`, row `['FvR0L', 'lfr', 'LFR fastener strengths', …]`.
+- **Problem:** LFR rated rivets "built before 1936 or of unknown origin" with the A502 Grade 1 value (30 ksi), while LRFR distinguishes them (MBE Table 6A.6.12.5.1-1: 23 vs 29 ksi, −21 %). Likely unconservative for old rivets, and it matters for MassDOT (Bridge Manual 7.2.2.3B requires LFR gusset ratings of ASD/LFD trusses). The FHWA-IF-09-014 / MBE 6B value could not be checked (not in references).
+- **Before:** `…, 'Rivet design shear strength: built before 1936 or of unknown origin', 30, 'ksi', 'FHWA-IF-09-014; AASHTO Std. Spec. 17th Ed. Table 10.56A', 1, 'Taken equal to A502 Grade 1. Some owners require a lower value for old rivets.'],`
+- **After:** `…, 'Rivet design shear strength: built before 1936 or of unknown origin', 23.8, 'ksi', 'Judgment, consistent with MBE 3rd Ed. Table 6A.6.12.5.1-1 (verify FHWA-IF-09-014 / MBE 6B; not in references)', 1, '<note: 30 × 23/29 = 23.8; 30 restores the former value>'],`
+- **Decision (pending engineer review):** 23.8 ksi = 30 × 23/29 (the LRFR ratio of unknown-origin to Grade 1 rivet strength), flagged "least certain" / verify. **Saved data:** no migration: projects that never changed `FvR0L` take the new, lower default (conservative); a project that entered a value keeps it. No key or format change.
+- **Check case** (default project, L2-U1, 48 shear planes, A = 0.6013 in², LFR Inventory HS20, A<sub>1</sub>D = 1.3 × 174 = 226.2, A<sub>2</sub>L = 2.17 × 115 = 249.55):
+  - **Before:** C = 48 × 30 × 0.6013 = **865.9 kip**, RF = (865.9 − 226.2)/249.55 = **2.563**.
+  - **After:** C = 48 × 23.8 × 0.6013 = **686.9 kip**, RF = (686.9 − 226.2)/249.55 = **1.846**.
+  - Governing LFR Inventory stays L2-U1-WB 1.403. Default spliced: governing LFR Inv L1-L2-FS −0.205 → −0.402.
+- **How verified:** main vs branch on 20 review cases: only LFR fastener-shear values of unknown-origin rivets (r0) moved; Grade 1 rivet and bolt cases (validation model, r1, bolts, variant) identical. Validation 17 of 17 (Grade 1). `check-syntax`, `phone-layout --tool gusset` pass; `project-library --tool gusset`: its four "identical to main" checks show exactly this change; all other checks pass. 0 console errors.
