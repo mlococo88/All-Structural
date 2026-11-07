@@ -5339,8 +5339,8 @@ function renderFooting(r) {
   // ── Load diagram ──
   h += `<div class="card" style="margin-bottom:16px;">
     <div class="card-hd"><span class="card-title">Factored Loads on Footing</span><span class="card-ref">bearing from ${r.isAASHTO ? 'Step 7 of Stability tab' : '<a class="wkA" href="#" data-card="stabFactBrg" data-intext="1">Step 7 of Stability tab</a>'}</span></div>
-    <div class="card-body"><div id="plt-ftg-loads"></div></div>
-  </div>`;
+    <div class="card-body"><div id="plt-ftg-loads"></div>${!r.isAASHTO && r.F_uplift > 0 ? `<div class="alert info" style="margin:8px 0 0;">Water uplift: in U = 1.2D + 1.6H and U = 0.9D + 1.6H the factored base pressure q<sub>u</sub> is the total contact pressure on the footing underside (soil + water). The uplift U is part of that reaction, so it is not subtracted from ΣV<sub>u</sub> and is already in the heel and toe design (the same as splitting it out while the base is in full contact; the AASHTO mode also uses the total pressure).</div>` : ''}</div>
+  </div>`;   // RWUPN (2026-11-07): ACI uplift note, display only
 
   // ════ HEEL ════
   h += `<div class="sec-heading" style="margin-top:6px;">Heel — Cantilever from Back Face (L_h = ${F(inp.Lh,2)} ft)</div>`;
