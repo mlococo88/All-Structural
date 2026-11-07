@@ -6620,3 +6620,67 @@ index 50f3837..c2d5000 100644
 - None. pmContour exists only in this tool.
 ### Open items
 - None.
+## 2026-11-07 — PR: feat/sf-pedestal-pm-views (PR #1161: https://github.com/mlococo88/All-Structural/pull/1161) (SFPV: pedestal P–M views: uniaxial P–M_x / P–M_y diagrams (default), the load contour, P–M along θ_gov, 3D surface; DISPLAY ONLY, no computed value changes)
+### Where
+- Phase 2 engine, `pmContour`. Anchor text: `/* SFPV (2026-11-07): the section analysis of pmContour, hoisted`.
+  - Before: `function analyze(cDepth,angleRad){…}` and `function phiOf(cDepth,angleRad){…}` were nested in `pmContour`.
+  - After: the same bodies, unchanged, as `function sfpmAnalyze(bars,bx,by,fc,fy,cDepth,angleRad){ const Es=29000000,ecu=0.003,b1=beta1(fc); …}` and `function sfpmPhi(bars,bx,by,fy,cDepth,angleRad){ const ecu=0.003; …}`.
+  - `pmContour` now starts with:
+    ```
+     const analyze=(cDepth,angleRad)=>sfpmAnalyze(bars,bx,by,fc,fy,cDepth,angleRad);   // SFPV
+     const phiOf=(cDepth,angleRad)=>sfpmPhi(bars,bx,by,fy,cDepth,angleRad);
+    ```
+- New display-only generators after `sfpmRatios`. Anchor text: `/* ---- SFPV (2026-11-07, engineer: "it doesn't look like the typical P–M curve")`.
+  - `sfpmSec(bars,bx,by,fc,fy,phiPnMax,label)`: the section object.
+  - `sfpmAxisCurve(S,ang)`: c is swept from 0.001D to 30D, plus the pure-tension point (−A_st f_y) and the pure-compression point (P_0). Design points are (φM_n, min(φP_n, φP_n,max)).
+  - `sfpmBalanced(S,ang)`: c_b = 0.003 d_t/(0.003 + ε_ty), with ε_ty from `sfdEty`.
+  - `sfpmThetaCurve(S,θ,n)`: `sfpmRatios` at n axial levels with a unit demand along θ.
+  - `sfpmSurface(S,nP,nA)`: `pmContour` at nP levels; a level whose contour does not close within 1 kip is left out. Flat bottom (design tension) and flat top (φP_n,max).
+- New plot helpers after `sfpPlot`. Anchor text: `/* ---- SFPV (2026-11-07): P–M plot helpers, display only.`
+  - Plots: `sfpmPlotAxis(id,S,pts,ax,o)`, `sfpmPlotTheta(id,S,g,o)`, `sfpmPlot3D(id,S,pts,o)`.
+  - View selector: `sfpmShow(i,v)` and `sfpmApply(w,v)`, with `SFPMV` holding the session-only view per pedestal.
+  - Pedestal glue: `sfpmPedSec(pd)`, `sfpmPedPts(pd)`, `sfpmDraw3D(i)`.
+  - These are reusable for any rectangular section: a section object plus demand points `{name,P,Mx,My,ratio,mode}`.
+- `renderPlots`, the pedestal loop. Anchor text: `/* SFPV: the added views (display only) */`.
+  - Draws `plot-pmx-i`, `plot-pmy-i` and `plot-pmt-i` after the existing contour.
+  - Draws `plot-pm3-i` only while the 3D view is shown.
+- Pedestal card. Anchor text: `/* SFPV (2026-11-07, engineer): four views of the same P–M check`.
+  - Before: `const pmDiv=el('div','plot');pmDiv.id='plot-pm-'+i;…b.appendChild(pmDiv);` followed by the "Biaxial load contour" note.
+  - After:
+    - an eqBlock "Balanced points of the uniaxial P–M diagrams", not for patches;
+    - a `.sfpmViews#sfpm-views-i` wrapper holding a `.sfpmSel.noprint` button group and four `data-sfpmv` panes;
+    - `ux`: the P–M_x and P–M_y plots side by side (`.sfpmPair`, they wrap on a phone) and a note;
+    - `pc`: the existing contour plot `#plot-pm-i` with its existing note unchanged, plus a note on the contour shape;
+    - `th` (`.noprint`) and `3d` (`.noprint`), each with a note.
+- CSS after `.plot{…}`: `.sfpmSel`, `.sfpmSel button(.on)`, `.sfpmPair`.
+### Problem
+- The engineer said the pedestal plot (the biaxial load contour at P) "doesn't look like the typical P–M curve" and asked about a 3D graphic.
+- Decision: add views and keep the contour, which is the check. The uniaxial view is the default.
+- The Report gets the uniaxial diagrams and the contour (static SVG, labelled without hover). The θ_gov and 3D views are screen-only.
+- The colour of each combination is its biaxial ratio, the check. Its position on a uniaxial diagram is (|M_u| about that axis, P_u).
+- Decision (pending engineer review): the balanced point is marked at ε_t = ε_ty with ε_ty as the tool's φ uses it (0.002 for Grade 60 and below, f_y/E_s above; SFPY). This is the compression-controlled limit of Table 21.2.2. A textbook balanced point at f_y/E_s = 0.00207 for Grade 60 would sit slightly lower.
+- Decision (pending engineer review): the uniaxial diagrams show M ≥ 0 only, because the bar layouts are doubly symmetric. Demands are plotted at |M|.
+### Governing provision
+- None changed. The plots use the check's own routine: ACI 318-19 22.2 (strain compatibility), 21.2.2 (φ), 22.4.2.1 (φP_n,max).
+### Check case
+- Default project, pedestal 1 (18 × 18 in., 8-#8, f′c 4 ksi, Gr 60).
+- Balanced point about x: d_t = 15.5 in., c_b = 0.003/(0.003 + 0.002) · 15.5 = 9.30 in. → P_b = 484.90 k (worked in the new block). φP_b = 0.65 P_b.
+- φP_n,max = 758.84 k (the cap line), as already worked in the "Maximum nominal axial capacity" block.
+- The θ_gov view shows the governing 0.9D + 1.0(−Wx): |M_u| = 16.00, |φM_n|_θ = 250.66, ratio = 0.064, as in the governing-ratio block.
+### How verified
+- SF harness, main vs branch, 15 cases: R and P2 identical (0 diffs). The Report text adds only the new figures, the balanced-point block and the notes.
+- Screenshots of each view at 1400 and 390 px, and the Report figures rendered standalone. No horizontal overflow at 390 px. No console errors.
+- Tests:
+  - check-syntax: pass.
+  - phone-layout `--tool sf`: pass.
+  - spread-footing-nobear: pass.
+  - spread-footing-scroll: PASS.
+  - project-library `--tool spreadfooting`: ALL PASS.
+  - start-chooser: 68/68 when run alone. In a parallel run under load, 2 recent-list order checks failed; that is the known load flakiness, and the app's storage is untouched.
+- Plotly 2.35.2 (already loaded, full bundle) includes surface and scatter3d. No library added or changed.
+### Saved data
+- None. The view choice is kept in memory only (`SFPMV`).
+### Other copies
+- None.
+### Open items
+- None.
