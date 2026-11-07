@@ -2368,7 +2368,7 @@ function renderStatus(r) {
   - No Include box. If you want one, a new prefixed key or project field is needed: ask.
   - The snapshot has a white background (the screen has a dark one) for print.
 
-## 2026-11-07 — PR: claude/rw-report-appendix (RWAX) — Report: the Analysis diagram figures in their sections; appendix "Figures of the result tabs"   [display only; no result change]
+## 2026-11-07 — PR: claude/rw-report-appendix (PR #939: https://github.com/mlococo88/All-Structural/pull/939) (RWAX) — Report: the Analysis diagram figures in their sections; appendix "Figures of the result tabs"   [display only; no result change]
 - **Why:** engineer-approved 2026-11-06 (task 5, review Phase 5a: figures in their sections and an appendix of the tab figures, as SF SFRF #779 and CBC #798). Before, the Analysis diagram tab's figures were not in the Report, and nothing listed where each tab figure is.
 - **What:**
   - **Figures in their sections:**
