@@ -287,6 +287,11 @@ const AUD = [
     ['Math.abs(R.Mu_stem_eq - 50218.2) < 1', 'stem seismic M_u unchanged (ΔP_E,s = ΔP_E(H_s/H′)²)'],
     ['/0\\.6H′/.test(T.stability) && /P_AE − P_a,MO|P_\\{AE\\} \\\\minus P_\\{a,MO\\}|PAE−Pa,MO/.test(P + T.stability)', 'Stability and Report at H′']]],
   ['RW2H2 ACI k_h 0.10 level backfill unchanged', { kh: 0.1 }, [['Math.abs(R.Pe_inc - 691.33) < 0.05 && Math.abs(R.FOS_OT_E - 6.0856) < 0.0005', 'unchanged']]],
+  ['RW2H3 ACI on piles, t_f 36, water 6 ft: piles take V − γ_U U, uplift on the heel (0.9): heel M_u 15633 → 19992; toe unchanged (total routing)', { fnd_type: 'pile', tf: 36, wt_depth: 6 }, [
+    ['Math.abs(R.Mu_heel_up - 36167.6) < 1 && Math.abs(R.Mu_heel_net - 19992.4) < 1 && R.heelPile.water && R.heelPile.water.g === 0.9 && !R.toePile.water && Math.abs(R.Mu_toe_net - 19128.2) < 1 && Math.abs(R.heelPile.water.M - 16174.1) < 0.5', 'heel M_up 36168 (piles + water 16174), M_u 19992'],
+    ['/Water uplift on the heel underside/.test(T.footing) && /Water uplift on the heel underside/.test(P) && /Factored pile-row reactions behind the back face/.test(P)', 'Footing tab and Report (heel pile steps now in the Report)']]],
+  ['RW2H3 AASHTO on piles, water 6 ft: heel M_u 24996 → 29840 (γ_WA 1.0)', { design_basis: 'AASHTO', fnd_type: 'pile', tf: 36, wt_depth: 6 }, [
+    ['Math.abs(R.Mu_heel_net - 29840.1) < 1 && R.heelPile.water.g === 1', 'heel M_u 29840']]],
   ['RWEC AASHTO unchanged by the ACI select', { design_basis: 'AASHTO', aci_ecc_limit: 'b6' }, [['R.ecc_lim_aci === null && /e=1\\.43/.test(R.checks.ecc.val)', 'AASHTO e check as before']]],
 ];
 for (const [name, set, tests, opt] of AUD.filter(x => !process.env.RW_AUD || x[0].startsWith(process.env.RW_AUD))) {

@@ -5753,3 +5753,56 @@ After:
 
 ### Saved data
 - No input or format change. ACI pile walls with β > 0 and k_h > 0 send larger s2 / s4 loads in the Pile Designer hand-off (foundationLoads). The Pile Designer then shows a stale flag, as for any changed load.
+
+## 2026-11-07 — PR: claude/rw2-h3-pile-water — Pile-supported footing with water: the piles take V − γ_U·U and the uplift acts on the heel underside (the #960 split; the toe keeps the total routing, conservative); the Report's heel pile steps fixed (RW2H3; calculation change, pile mode with water only) (PR #1140: https://github.com/mlococo88/All-Structural/pull/1140)
+
+Second-pass review finding H3 (2026-11-07). Code sites are tagged `RW2H3`.
+
+### RW2H3-1. Problem
+- `pileFtg` built the pile-row line loads for the heel and toe design (Phase 8d) from the total factored vertical load: ACI `SumVu` / `SumVu_min`; AASHTO `V_str_max_tot` / `V_str_min_tot`, with the uplift added back. No water pressure acted on the cap underside, and the RWUP split (`upS`) is off on piles.
+- The piles carry V − U, and the water pushes up on the footing. Routing U through the heel pile row (arm 6.5 ft) instead of spreading it over the heel (centroid L_h/2 = 4 ft) overstated the heel relief, so the heel was **unconservative**.
+- Report, pile mode: Heel Step 1–2 still showed the bearing-trapezoid steps ("q_u(L_h) = — psf"). The pile substitution was applied to `H1` / `H2` after `pre()` had already copied them. This is display only; the Footing tab was right.
+
+### RW2H3-2. Fix (`calcAll`, `pileFtg`, anchor `RW2H3`)
+- Each pile set gets a heel version `wsplit(c, γ_U, x_back, B)` (the original is unchanged without water):
+  - V_p = V − γ_U U and x̄_p = (V x̄ − γ_U U x_U)/V_p feed the pile rows;
+  - `water = { g, u_a, u_b, L, F = (u_a + u_b)L/2, M = L²(u_a + 2u_b)/6 }`, with u(x) = γ_U γ_w h_w (uniform, or x/B for triangular uplift).
+- Factors:
+  - ACI: heel γ_U = 0.9 (`heelMax`, `heelMin`), as RWUP (ACI 318-19 §5.3.8, engineer decision of #960);
+  - AASHTO: γ_WA = 1.0.
+- The toe keeps `cmax` / `cmin` (the total routing). The split would lower it (see the Decision below).
+- `heelCase` (pile branch): M_up = Σq_i a_i + M_w and V_up = Σq_i + F_w. The pile-row parts are kept as `Mpl`, `Vpl`. `toeCase` has the same code path, which is inactive while the toe has no `water`.
+- `cmax` / `cmin` (total) are kept for punching (conservative, as the review suggested) and for the Footing tab's net-load chart, which now plots the heel set.
+- The shear and moment diagrams (Plotly and SVG) add the water beyond the section (`rwPileWaterBeyond`).
+- Display:
+  - Footing tab Heel Step 1: a new step "Water uplift on the heel underside" (V_piles = V_tot − γ_U U, u, F_w, M_w), and Heel Step 2 with M_up = Σq_i a_i + M_w and V_u = |w_u L_h − Σq_i − F_w|.
+  - Report: the same step; the heel pile substitution moved before the heel section is built.
+- Not changed:
+  - spread footings;
+  - piles without water;
+  - the pile analysis itself (`rwPileAnalysis`, Pile Step 1–2, the pile checks);
+  - the Pile Designer hand-off (foundationLoads). It is built from `r.pile`, which is unchanged: the hand-off test passes and the probe shows identical pile combinations.
+
+### Check case (default wall, t_f 36 in, rows 1.5 / 11.0 ft at s 6 ft, water 6 ft below the top: h_w 9 ft, U = 62.4·9·12.5 = 7020 lb/ft, uniform)
+- ACI heel, U = 0.9D + 1.6H governs: M_d = 56160.
+  - Water on the heel: u = 0.9 × 561.6 = 505.4 psf, M_w = 505.4(8²)/2 = 16174.
+  - Pile row at 11.0 ft (a = 6.5 ft) from V_p = 17888 − 0.9(7020) = 11570: Σq a = 19994.
+  - M_up = 36168 (was 40527); M_u = 56160 − 36168 = **19992** (was **15633**). F1 unchanged (#4 @ 6, minimum).
+- AASHTO heel, γ_WA 1.0: M_up 35964 → 31120; M_u 24996 → **29840**; F1 #4 @ 10 → **#4 @ 8**.
+- Toes: unchanged (ACI 19128, AASHTO 24384).
+- Other walls: ACI pile variant heel 69429 → 73788; AASHTO pile variant heel 66612 → 71456 (#5 @ 6 → #6 @ 8); triangular uplift heel 15633 → 17679.
+- Without water: identical.
+
+### How verified
+- Headless probe, origin/main (after #1139) vs this branch, 28 walls. Only pile walls with water move, as above. Pile combinations (`r.pile.comb`) are identical. 0 console errors.
+- Self-consistency passes; 0 KaTeX errors.
+- Tests: check-syntax; smoke/retaining-wall-checks (new `AUD` rows RW2H3; RWPL 8d rows unchanged); phone-layout rwall; project-library retwall; dxf-print-sheets rw; **retwall-pile-handoff** and engine **handoffs, pile-group** (the Pile Designer hand-off values do not change).
+
+### Decisions (pending engineer review)
+- **Toe:** keeps the total routing, which is conservative. With the split (ACI γ_U 1.6, AASHTO 1.0) the toe M_u would go **down**, e.g. ACI 19128 → 14748 (water 2 ft: 22057 → 15730, and the toe shear would pass) and AASHTO 24384 → 21646. The engineer may adopt the split for the toe too.
+- **ACI heel factor:** γ_U = 0.9, the RWUP heel rule, also on piles.
+- **AASHTO factor:** γ_WA = 1.0 on both members, with no η (the review's case is at η 1.00). With η ≠ 1, the AASHTO total sets keep their RW2H4 factors.
+- **Punching:** keeps the total pile reactions (conservative).
+
+### Saved data
+- No input or format change.
