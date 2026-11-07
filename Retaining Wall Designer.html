@@ -8255,7 +8255,7 @@ function buildCrossSection(r) {
   // RWTS-2: the PASS/FAIL colour styles inside data-tip (here and in the passive tip) quote with &#39; (an apostrophe): their double quotes
   // ended the attribute, and the rest of the drawing (bearing labels, critical sections, dimensions) fell out of the SVG
   const brgtip = `<b>Bearing pressure (service)</b><br>q_toe = ${f(r.q_toe,0)} psf · q_heel = ${f(r.q_heel,0)} psf<br>q_max = ${f(r.q_max,0)} psf vs q_a = ${f(inp.qa,0)} psf<br>e = ${f(r.e,3)} ft · B/6 = ${f(r.B/6,3)} ft<br>${r.tension_zone?'<b style=&#39;color:#ff9090&#39;>Resultant OUTSIDE kern</b> — triangular':'Resultant within kern — trapezoidal'}<br>${r.bearing_ok?'<b style=&#39;color:#7fd6a8&#39;>PASS</b>':'<b style=&#39;color:#ff9090&#39;>FAIL</b>'}`;
-  s += `<g data-layer="bearing">`;
+  s += `<g data-layer="bearing"${r.pile ? ' style="display:none"' : ''}>`;   // RWPL (8e): no soil bearing under a pile-supported footing
   s += `<polygon points="${x_toe},${y_fbot} ${x_toe},${yt} ${x_heel},${yh} ${x_heel},${y_fbot}"
     fill="rgba(15,122,90,0.09)" stroke="#0f7a5a" stroke-width="1.2" data-tip="${brgtip}"/>`;
   const y_qa = yBrg(inp.qa);
@@ -9244,7 +9244,7 @@ function buildOverviewSVG(r) {
   }
 
   // ── BEARING — below footing ────────────────────────────────────
-  if (tog.bearing) {
+  if (tog.bearing && !r.pile) {   // RWPL (8e): no soil bearing under a pile-supported footing
     const yt = yBrg(r.q_toe), yh = yBrg(r.q_heel);
     s += `<polygon points="${x_toe},${y_fbot} ${x_toe},${yt} ${x_heel},${yh} ${x_heel},${y_fbot}"
       fill="rgba(33,85,196,0.08)" stroke="#2155c4" stroke-width="1.1"/>`;
@@ -11191,7 +11191,8 @@ function rwdwBars(r, G) {
   const s1 = r.sel_stem, s3 = r.sel_stemT, s2 = r.sel_temp, f1 = r.sel_heel, f2 = r.sel_toe, f3 = r.sel_ftg_long;
   const db = s => s.bar.db;
   const hook = 12 * db(s1);                                         // 90° standard hook tail 12 d_b
-  const yHook = cf + db(f2) + db(f3) + db(s1) / 2;                   // the hook bears on the bottom mat
+  const cb = r.cov_bot != null ? r.cov_bot : cf;                      // RWPL (8e): on piles the bottom mat sits above the pile heads (cov_bot = c_c on soil)
+  const yHook = cb + db(f2) + db(f3) + db(s1) / 2;                   // the hook bears on the bottom mat
   const lap = r.lst_stem;                                            // RWDS (2026-11-07): the computed tension lap ℓst (Stem design Step 5); was 1.3 × ℓd (with its 12-in minimum)
   const yS1 = r.s1_full ? null : G.tf + r.z_s1_end * 12;           // RWS13 (2026-11-07): S1 ends at mid-height + the S3–S1 lap (was full height + alternate-bar cut-off)
   const yCut = null;
@@ -11204,7 +11205,7 @@ function rwdwBars(r, G) {
     S4: r.sel_ff ? { s: r.sel_ff, len: G.H - cs - G.tf } : null,   // RWFF
     K1: (r.keyR && r.keyR.rf && G.dk > 0) ? (() => { const s = r.keyR.rf.sel, x = G.kx + cf + s.bar.db / 2, y0 = -G.dk + cf, y1 = G.tf - cf - f1.bar.db - s.bar.db / 2, hk = 12 * s.bar.db, hb = r.keyR.rf.hook_bot ? Math.min(12 * s.bar.db, G.kw - 2 * cf) : 0; return { s, x, y0, y1, hk, hb, len: (y1 - y0) + hk + hb }; })() : null,   // RWSK: toe face of the key, 90° hook toward the heel under the top mat
     F1: { s: f1, x0: Math.max(cf, G.xbb - r.ld_heel), x1: G.B - cf, y: G.tf - cf - db(f1) / 2 },
-    F2: { s: f2, x0: cf, x1: Math.min(G.B - cf, G.xf + r.ld_toe), y: cf + db(f2) / 2, hook: r.toe_hook ? 12 * db(f2) : 0 },   // RWDS: 90° hook up at the toe end when ticked
+    F2: { s: f2, x0: cf, x1: Math.min(G.B - cf, G.xf + r.ld_toe), y: cb + db(f2) / 2, hook: r.toe_hook ? 12 * db(f2) : 0 },   // RWDS: 90° hook up at the toe end when ticked
     yCut, cs, cf,
   };
   B.F1.len = B.F1.x1 - B.F1.x0; B.F2.len = B.F2.x1 - B.F2.x0 + B.F2.hook;
@@ -11257,8 +11258,24 @@ const RWDW_SUPPORT = {
         for (let x = x0 + s / 2; x < x1 - 1e-6; x += s) { const lt = j ? hid : undefined, l = j ? L.hid : L.conc;
           D.line(l, x - d / 2, 0, x - d / 2, yb, lt); D.line(l, x + d / 2, 0, x + d / 2, yb, lt); } });
     },
-    loads(c) { const { L, G, k, T } = c; let y0 = c.y0 != null ? c.y0 : -G.dk - 0.35 * k;
-      T(L.lt, G.B / 2, y0 - 0.2 * k, 0.085 * k, 'PILE-SUPPORTED FOOTING: PILE REACTIONS WITH THE PILE ANALYSIS (NOT YET IN THIS VERSION)', 1); return y0 - 0.6 * k; },
+    /* RWPL (8e): the pile reactions per row (kip per pile) of the governing compression combination, as upward arrows under the
+       footing, with the governing uplift / minimum combination below them; values from r.pile (Stability tab, Pile Step 2) */
+    loads(c) {
+      const { D, L, G, k, T, r } = c, P = r.pile, h = 0.085 * k; let y0 = c.y0 != null ? c.y0 : -G.dk - 0.35 * k;
+      if (!P || P.err) { T(L.lt, G.B / 2, y0 - 0.2 * k, h, 'PILE-SUPPORTED FOOTING: NO PILE RESULTS (INPUT ERROR)', 1); return y0 - 0.6 * k; }
+      const one = (cmb, title) => {
+        const Pm = Math.max(...cmb.L.rows.map(x => Math.abs(x.P)), 1e-9), sc = 0.55 * k / Pm;
+        D.line(L.load, 0, y0, G.B, y0);
+        cmb.L.rows.forEach(x => { const xi = x.x * 12, len = Math.abs(x.P) * sc, yt = y0 - Math.max(len, 0.08 * k);
+          if (x.P >= 0) arrowV(D, L.load, xi, yt, y0, k); else arrowV(D, L.load, xi, y0, yt, k);
+          T(L.lt, xi, yt - 0.14 * k, h, rwdwN(x.P, 1) + ' KIP/PILE' + (x.P < 0 ? ' (UPLIFT)' : ''), 1); });
+        const yl = y0 - 0.55 * k - 0.4 * k; T(L.lt, G.B / 2, yl, h, title, 1); y0 = yl - 0.3 * k;
+      };
+      one(P.govC, 'PILE REACTIONS, ' + P.govC.label.toUpperCase() + ': P_MAX = ' + rwdwN(P.govC.L.Pmax, 1) + ' KIP ' + (r.checks.pileComp.ok ? '<=' : '>') + ' ' + rwdwN(P.govC.cap.c, 1) + ' KIP; H/N = ' + rwdwN(P.govH.L.rows[0].h, 2) + ' KIP/PILE');
+      const mn = P.comb.reduce((b, x) => (!b || x.L.Pmin < b.L.Pmin) ? x : b, null);
+      if (mn && mn !== P.govC) one(mn, 'PILE REACTIONS, ' + mn.label.toUpperCase() + ' (SMALLEST PILE LOAD): P_MIN = ' + rwdwN(mn.L.Pmin, 1) + ' KIP' + (mn.L.Pmin < 0 ? ' (UPLIFT, T <= ' + rwdwN(mn.cap.t, 1) + ' KIP)' : ''));
+      return y0;
+    },
     notes(r) {
       const P = r.inp.fnd, isA = r.isAASHTO, sh = { hp: 'STEEL H-PILES', pipe: 'STEEL PIPE PILES', square: 'SQUARE PRECAST CONCRETE PILES', round: 'ROUND PILES' }[P.shape] || 'PILES';
       return ['PILE-SUPPORTED FOOTING: ' + P.rows.length + ' ROWS OF VERTICAL ' + sh + (P.desig ? ' (' + P.desig + ')' : '') + ', D = ' + rwdwIn(P.D) + ', EMBEDDED ' + rwdwIn(P.embed) + ' INTO THE FOOTING; ROWS AT '
@@ -11630,6 +11647,15 @@ function rwdwBuild(r) {
         'FOOTING DESIGN, STRENGTH I: Q_U = ' + rwdwK(a.quA_toe) + ' / ' + rwdwK(a.quA_heel) + ' KSF (TOE / HEEL)',
         ...(a.ee1 ? ['EXTREME EVENT I (K_H = ' + rwdwN(inp.kh, 3) + '): SLIDING DCR ' + rwdwN(a.ee1.sliding_dcr, 2) + ', E = ' + rwdwN(Math.abs(a.ee1.e_gov), 2) + ' FT, Q = ' + rwdwK(a.ee1.q_gov) + ' KSF (STABILITY TAB, STEP 7A)'] : []),   // RWE1
         ...(a.ct ? ['VEHICULAR COLLISION (EXTREME EVENT II): STABILITY TAB, STEP 7B'] : [])];
+    }
+    if (r.pile && !r.pile.err) {   // RWPL (8e): on piles the soil checks do not apply; the pile results instead
+      const pc = r.pile;
+      foot = ['PILE-SUPPORTED FOOTING: SOIL BEARING, SLIDING AND OVERTURNING NOT APPLICABLE (STABILITY TAB, PILE STEP 2)',
+        'PILE GROUP PER FT: N = ' + F(pc.g.N, 4) + ' /FT, X_BAR = ' + F(pc.g.xbar, 3) + ' FT, I = ' + F(pc.g.I, 4) + ' FT2/FT',
+        'COMPRESSION: P_MAX = ' + F(pc.govC.L.Pmax, 1) + ' KIP <= ' + F(pc.govC.cap.c, 1) + ' (' + pc.govC.label.toUpperCase() + ')',
+        'UPLIFT: ' + (pc.govT.L.Pmin < 0 ? F(-pc.govT.L.Pmin, 1) + ' KIP VS ' + F(pc.govT.cap.t, 1) : 'NONE'),
+        'LATERAL: H/N = ' + F(pc.govH.L.rows[0].h, 2) + ' KIP/PILE VS ' + F(pc.govH.cap.h, 1) + ' KIP',
+        ...(r.pilePunch ? ['PUNCHING AT THE PILES: P_U = ' + F(r.pilePunch.gov.Pu / 1000, 1) + ' KIP VS PHI V_C = ' + F(r.pilePunch.gov.phiVc / 1000, 1) + ' KIP (FOOTING DESIGN TAB)'] : [])];
     }
     const tx = vb[0] - 0.35 * P; let y = vb[3];
     const head = isA ? ['LOAD', 'K/FT', 'ARM (FT)', 'GAMMA'] : ['LOAD', 'K/FT', 'ARM (FT)', 'M (K-FT/FT)'];
