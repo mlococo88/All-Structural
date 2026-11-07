@@ -2181,6 +2181,32 @@ function rwPileAnalysis(ctx) {
   out.det.grp3 = cc < 3 * Din; out.det.grp8 = minRowDx < 8 * Din;
   return out;
 }
+/* RWPL (2026-11-07, Phase 8 pile schedule; display only): the pile schedule of the Drawings (sheet 5) and the Report, one row per
+   pile row. Every number is read from r.pile (Stability tab, Pile Step 2); nothing is computed here but the selection:
+   - compression: the combination with the largest P_i / capacity for that row (P_i > 0), with its P_i and capacity;
+   - uplift: the combination with the largest −P_i / uplift capacity for that row (P_i < 0), or none;
+   - lateral: h = H/N, the same on every pile, of the governing lateral combination (P.govH);
+   - count: piles of the row in one joint segment (AASHTO collision input L_joint, the only wall length in the model), placed as
+     in the elevation and the 3D view: the first pile s/2 from the joint, then every s. With no length: piles per ft only.
+   Combinations are numbered in r.pile.comb order (the order of the Pile Step 2 table). */
+function rwPileSchedule(r) {
+  const P = r && r.pile; if (!P || P.err || !P.comb || !P.comb.length || !P.g) return null;
+  const inp = r.inp, isA = r.isAASHTO, A = inp.aashto || {};
+  const Lseg = (isA && A.ct_enable && A.ct_ljoint > 0) ? A.ct_ljoint : null;
+  const nIn = (L, s) => (L > s / 2 ? Math.ceil((L - s / 2) / s - 1e-9) : 0);
+  const num = c => P.comb.indexOf(c) + 1;
+  const rows = P.rows.map((rw, i) => {
+    let c = null, t = null;
+    P.comb.forEach(cb => { const x = cb.L.rows[i]; if (!x || !isFinite(x.P)) return;
+      const dc = x.P > 0 ? x.P / Math.max(cb.cap.c, 1e-9) : 0, dt = x.P < 0 ? -x.P / Math.max(cb.cap.t, 1e-9) : 0;
+      if (x.P > 0 && (!c || dc > c.dc)) c = { P: x.P, cap: cb.cap.c, cs: cb.cap.cs, dc, label: cb.label, n: num(cb) };
+      if (x.P < 0 && (!t || dt > t.dc)) t = { P: -x.P, cap: cb.cap.t, ts: cb.cap.ts, dc: dt, label: cb.label, n: num(cb) }; });
+    return { row: i + 1, x: rw.x, s: rw.s, n: 1 / rw.s, count: Lseg ? nIn(Lseg, rw.s) : null, c, t };
+  });
+  const gh = P.govH, h = gh && gh.L.rows.length ? { h: gh.L.rows[0].h, cap: gh.cap.h, hs: gh.cap.hs, dc: gh.dcH, label: gh.label, n: num(gh) } : null;
+  const shape = { hp: 'steel H-pile', pipe: 'steel pipe pile', square: 'square precast concrete', round: 'round (timber / cast-in-place)' }[P.shape] || P.shape;
+  return { rows, h, Lseg, shape, desig: P.desig || '', D: P.D, embed: P.embed, isA, combs: P.comb.map((c, j) => ({ n: j + 1, label: c.label })) };
+}
 function calcAll(inp) {
   const errors = [], warnings = [];
 
@@ -2198,8 +2224,7 @@ function calcAll(inp) {
   // ── Seismic: Mononobe-Okabe with Seed & Whitman increment location ──
   //    (ASCE 7-22 §11.8.3 requires the geotech report to give this pressure; method per M-O)
   const hasSeismic = inp.kh > 0;
-  // RWPL (2026-11-07, Phase 8b): pile-supported footing selected: inputs and drawings only in this version
-  if (inp.fnd && inp.fnd.type === 'pile') warnings.push('Pile-supported footing selected: the piles are drawn, but the pile analysis is not in this version yet (Phase 8c). The stability and footing results shown are still those of a spread footing on soil.');
+  // RWPL (2026-11-07): the Phase 8b warning "pile analysis not in this version yet" is removed (stale since 8c / 8d: the piles are analysed)
   let Pae = 0, Pe_inc = 0, Mo_seis = 0, Kae = 0;
   if (hasSeismic) {
     const kh = inp.kh, kv = inp.kv;
@@ -10900,6 +10925,18 @@ function rwrModel(r) {
       ['Pile side to the footing edge (toe / heel)', N(d.edge, 1) + ' in', '≥ ' + N(d.edgeMin, 0) + ' in'], ['Embedment into the footing', N(d.embed, 1) + ' in', '≥ ' + N(d.embMin, 0) + ' in']];
     subs.push(sub('Pile Step 2 — Pile reactions and checks', [{ type: 'table', head, rows }, rwrItem('pl2', [{ title: 'Governing pile loads', ref: isA ? AA('Sec. 10.7') : 'IBC 2018 §1810', steps: ck }]),
       { type: 'table', head: ['Detailing', 'Provided', 'Required (' + d.ref + ')'], rows: dt }, onTab('stabPile')]));
+    // RWPL (2026-11-07, pile schedule; display only): one row per pile row; values from Pile Step 2 (rwPileSchedule)
+    const PS = rwPileSchedule(r);
+    if (PS) {
+      const cmb = q => q ? N(q.P, 2) + ' / ' + N(q.cap, 2) + ' (' + q.n + ')' : 'none';
+      const prow = PS.rows.map(q => ['Row ' + q.row, N(q.x, 2), N(q.s, 2), N(q.n, 4), q.count == null ? '–' : String(q.count), PS.shape + (PS.desig ? ', ' + PS.desig : '') + ', D = ' + N(PS.D, 1) + ' in', N(PS.embed, 1),
+        cmb(q.c), cmb(q.t), PS.h ? N(PS.h.h, 2) + ' / ' + N(PS.h.cap, 2) + ' (' + PS.h.n + ')' : '–']);
+      const cap = isA ? 'factored resistance' : 'allowable';
+      subs.push(sub('Pile schedule', [{ type: 'table', wide: true, caption: 'Pile schedule (per pile row; loads per pile, kip)', head: ['Row', 'x from the toe (ft)', 'Spacing s (ft)', 'Piles per ft', PS.Lseg ? 'Piles in ' + N(PS.Lseg, 1) + ' ft' : 'Piles per segment', 'Pile', 'Embedment (in)', 'Compression P / ' + cap + ' (comb.)', 'Uplift T / ' + cap + ' (comb.)', 'Lateral h / ' + cap + ' (comb.)'], rows: prow },
+        { type: 'note', text: 'Combinations: ' + PS.combs.map(c => '(' + c.n + ') ' + c.label).join('; ') + '. For each row the combination with the largest load-to-capacity ratio is shown; the lateral load h = H/N is the same on every pile. Every value is worked in Pile Step 2 (above; on screen: Stability tab, Pile Step 2).' },
+        { type: 'note', text: PS.Lseg ? 'Piles per segment: one joint segment of ' + N(PS.Lseg, 1) + ' ft (the collision input), the first pile s/2 from the joint, then every s (as drawn on the Drawings, sheet 5).' : 'The wall length is not in the model: piles per ft only; the Drawings (sheet 5) show a typical segment at a nominal length.' },
+        { type: 'note', text: '[[tab:drawings|On screen: Drawings tab, sheet 5 (pile layout plan and pile schedule)]]' }]));
+    }
     CK.pileComp = 'pl2/comp'; CK.pileUplift = 'pl2/upl'; CK.pileLat = 'pl2/latdc';
     const iS = secs.findIndex(x => x.key === 'stab');
     secs.splice(iS + 1, 0, { title: 'Pile-supported footing', subs, key: 'pile' });
@@ -11739,6 +11776,54 @@ function rwdwBuild(r) {
     D.move(i1, vb2[0] - 0.6 * P - nb[2], vb2[3] - nb[3]);
     return { known: sbK, iv: ivE };
   }, [12, 16, 24, 32, 48, 64, 96, 192], [['stabKa', 'K_a'], ['stemFlex', 'materials']]);
+
+  /* ================= 5. PILE LAYOUT AND PILE SCHEDULE (pile-supported footing only; RWPL, display only) ================= */
+  const PS = rwPileSchedule(r);
+  if (PS) sheet('piles', 'PILE LAYOUT PLAN AND PILE SCHEDULE', P => {
+    const h = 0.085 * P, hs = 0.072 * P, F = inp.fnd, d = F.D, round = F.shape === 'pipe' || F.shape === 'round';
+    const Lknown = PS.Lseg ? PS.Lseg * 12 : null, Lw = Lknown || Math.max(2 * G.H, 240);
+    // plan: x along the wall, y from the toe (toe at the bottom); the footing, the stem faces, the piles (hidden: under the footing)
+    D.rect(L.conc, 0, 0, Lw, G.B);
+    D.line(L.conc, 0, G.xf, Lw, G.xf); D.line(L.conc, 0, G.xbt, Lw, G.xbt); if (Math.abs(G.xbb - G.xbt) > 1e-6) D.line(L.hid, 0, G.xbb, Lw, G.xbb);
+    const freeY = (y0, y1) => { const ys = [y0, ...F.rows.map(rw => rw.x * 12).filter(y => y > y0 && y < y1), y1].sort((p1, p2) => p1 - p2);   // the middle of the widest gap between rows
+      let best = [y0, y1], w = -1; ys.slice(1).forEach((y, j) => { if (y - ys[j] > w) { w = y - ys[j]; best = [ys[j], y]; } }); return (best[0] + best[1]) / 2; };
+    T(L.txt, Lw / 2, (G.xf + G.xbt) / 2 - 0.035 * P, hs, 'STEM', 1);
+    T(L.txt, Lw / 2, freeY(0, G.xf) - 0.035 * P, hs, 'TOE', 1); T(L.txt, Lw / 2, freeY(Math.max(G.xbb, G.xbt), G.B) - 0.035 * P, hs, 'HEEL', 1);
+    const ord = F.rows.map((rw, i) => ({ rw, i })).sort((p1, p2) => p1.rw.x - p2.rw.x);
+    ord.forEach(({ rw, i }) => { const s = rw.s * 12, y = rw.x * 12; if (!(s > 0)) return; const xs = [];
+      for (let x = s / 2; x < Lw - 1e-6; x += s) { xs.push(x); if (round) D.circle(L.hid, x, y, d / 2); else D.rect(L.hid, x - d / 2, y - d / 2, x + d / 2, y + d / 2); }
+      D.line(L.hid, -0.1 * P, y, Lw + 0.1 * P, y, D.ltype('DASHED'));   // row line
+      if (xs.length > 1) D.dimH(L.dim, xs[0], xs[1], y + d / 2 + 0.22 * P, y + d / 2, '<>');
+      T(L.txt, Lw + 0.18 * P, y - 0.035 * P, h, 'ROW ' + (i + 1) + ' @ ' + rwdwFI(s) + ' O.C.', 0); });
+    D.h = 0.085 * P;
+    D.chainV(L.dim, [0, ...ord.map(o => o.rw.x * 12)], -0.45 * P, 0);
+    D.dimV(L.dim, 0, G.B, -0.9 * P, 0, 'B = <>');
+    T(L.txt, -1.05 * P, G.B / 2, hs, 'FROM THE TOE', 1, 90);
+    const yd = -0.5 * P;
+    if (Lknown) D.dimH(L.dim, 0, Lw, yd, 0, 'JOINT SPACING <> (COLLISION INPUT)');
+    else T(L.txt, Lw / 2, yd, hs, 'WALL LENGTH NOT IN THE MODEL: TYPICAL SEGMENT AT A NOMINAL LENGTH; FIRST PILE S/2 FROM THE SEGMENT END', 1);
+    const sbK = scaleBar(Lw / 2, yd - 0.45 * P, P, 'PILE LAYOUT PLAN (FROM ABOVE, TOE AT THE BOTTOM)  ·  SCALE ' + rwdwScName(P));
+    const ivP = D.mark();
+    // the schedule below the plan, at paper size
+    const yT = yd - 1.3 * P, th = 0.068 * P, pile = (PS.desig || ({ hp: 'H-PILE', pipe: 'PIPE', square: 'SQ. PRECAST', round: 'ROUND' }[F.shape] || 'PILE')) + ', D = ' + rwdwIn(PS.D);
+    const capS = isA ? 'RESIST.' : 'ALLOW.';
+    const rows = PS.rows.map(q => [String(q.row), rwdwFI(q.x * 12), rwdwFI(q.s * 12), rwdwN(q.n, 4), q.count == null ? '-' : String(q.count), pile, rwdwIn(PS.embed),
+      q.c ? rwdwN(q.c.P, 1) : '-', q.c ? rwdwN(q.c.cap, 1) : '-', q.c ? '(' + q.c.n + ')' : '-',
+      q.t ? rwdwN(q.t.P, 1) : 'NONE', q.t ? rwdwN(q.t.cap, 1) : '-', q.t ? '(' + q.t.n + ')' : '-',
+      PS.h ? rwdwN(PS.h.h, 2) : '-', PS.h ? rwdwN(PS.h.cap, 1) : '-', PS.h ? '(' + PS.h.n + ')' : '-']);
+    D.text(L.txt, 0, yT, 0.12 * P, 'PILE SCHEDULE (' + ({ hp: 'STEEL H-PILES', pipe: 'STEEL PIPE PILES', square: 'SQUARE PRECAST CONCRETE PILES', round: 'ROUND PILES' }[F.shape] || 'PILES') + ', VERTICAL)', 0);
+    const t = table(0, yT - 0.12 * P, ['ROW', 'X FROM TOE', 'SPACING', 'PILES/FT', PS.Lseg ? 'NO. IN ' + rwdwFI(PS.Lseg * 12) : 'NO./SEGMENT', 'PILE', 'EMBED.', 'P_MAX (KIP)', capS + ' (KIP)', 'COMB.', 'UPLIFT (KIP)', capS + ' (KIP)', 'COMB.', 'H/N (KIP)', capS + ' (KIP)', 'COMB.'], rows, th, [1, 2, 3, 4, 7, 8, 10, 11, 13, 14]);
+    const comb = PS.combs.map(c => '(' + c.n + ') ' + c.label.toUpperCase()).join('; ');
+    const notes = ['COMBINATIONS: ' + comb + '.',
+      'PER PILE, FROM THE PILE ANALYSIS (STABILITY TAB, PILE STEP 2): P_MAX = THE COMPRESSION OF THE COMBINATION WITH THE LARGEST P / CAPACITY FOR THE ROW; UPLIFT LIKEWISE;',
+      'H/N = THE LATERAL LOAD PER PILE (EQUAL SHARE)' + (F.passive ? ', NET OF THE PASSIVE CREDIT' : '') + '. ' + (isA ? 'RESISTANCES: PHI_C R_N, PHI_UP R_N,UP (STRENGTH), 1.0 R_N, 0.80 R_N,UP (EXTREME EVENT), H_R AS ENTERED.' : 'ALLOWABLE CAPACITIES (SERVICE LOADS) AS ENTERED: P_A, T_A, H_A.'),
+      'NO. IN SEGMENT: PILES OF THE ROW IN ONE SEGMENT, FIRST PILE S/2 FROM THE SEGMENT END (AS DRAWN); ' + (PS.Lseg ? 'SEGMENT = THE JOINT SPACING OF THE COLLISION INPUT.' : 'THE WALL LENGTH IS NOT IN THE MODEL: PILES PER FT ONLY.'),
+      'PILE LENGTH, TIP ELEVATION AND DRIVING CRITERIA: BY THE GEOTECHNICAL ENGINEER (NOT IN THE TOOL).'];
+    const wrap = (s0, n) => { const out = []; let line = ''; String(s0).split(/\s+/).forEach(w => { if (line && (line + ' ' + w).length > n) { out.push(line); line = '   ' + w; } else line = line ? line + ' ' + w : w; }); if (line) out.push(line); return out; };
+    const nl = []; notes.forEach(s0 => wrap(s0, 170).forEach(q => nl.push(q)));
+    nl.forEach((s2, j) => D.text(L.txt, 0, yT - 0.3 * P - t.h - 0.115 * j * P, 0.062 * P, s2, 0));
+    return { known: sbK, iv: ivP };
+  }, [8, 12, 16, 24, 32, 48, 64, 96, 192], [['stabPile', 'pile reactions'], ['ftgPunch', 'punching']]);
 
   SH.forEach((s, j) => { s.sheetEnt.s = SharedDxf.str((j + 1) + ' OF ' + SH.length); });
   return { D, S: SH };
