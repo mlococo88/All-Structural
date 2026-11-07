@@ -1972,3 +1972,65 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
     - project-library --tool bgeo: old autosave and old saved project differ only in the Bridge tab text (the Derived table rows and the new setting), so their results are identical. "On load" differs by the new-project default.
 - **Saved data (§5):** additive scalar `skew_datum`. Migration: `BG_OLD_DEFAULTS.skew_datum='chord'` (applied before the saved scalars); `BG_NEW_DEFAULTS.skew_datum='align'`. No key changed. Hand-off payload shape unchanged (HANDOFF §4.2); the receiver is not changed.
 - **Other copies:** none.
+
+## 2026-11-07 — PR: claude/bg-h5-seat-stack (PR #1122: https://github.com/mlococo88/All-Structural/pull/1122) (BGX5, review H5 + M6, engineer item Q-BG3 / O3: optional seat terms, net camber, midspan haunch check, worked seat derivation)   [calc change: new option] [saved data: additive fields with migration]
+
+- **Why:** review 2026-11-07 H5. The seat stack had no vertical-curve ordinate and no cross slope × b_f/2. Camber was undefined (gross or net). Nothing checked the minimum haunch along the span. Review sag case: −2 % / +2 %, VC 400 centred on a 100 ft span, min haunch 1.5 in, camber 0. The midspan haunch was 0 in, and the low flange edge was a further 0.48 in short at 6 % with b_f = 16 in. M6: the seat sections showed values only (§6, show the work).
+- **Owner practice (read in the manuals, paraphrased):**
+  - MassDOT Bridge Manual Part I (Hundredth Anniversary Ed.) 3.5.6.3: prestressed beam cambers are considered with the profile's vertical curvature when seat elevations are calculated, so the roadway matches the profile and the deck is not thinned by a negative haunch.
+  - CTDOT BDM (02/24) 7.2.11.1 item 5: a member within a crest vertical curve gets the ordinate as camber; on a sag curve the ordinate goes in the haunch, not the camber table.
+  - CTDOT 8.1.2.4: minimum haunch measured from the top of the top flange to the bottom of the slab; a deeper haunch may be needed where the flange is wider than 1.33 ft because of the cross slope.
+  - RIDOT BDM (2026) 9.4.6: a 2 in minimum nominal haunch at the girder centerline; deeper when the top flange is wider than 16 in on a cross slope; cross slope, profile, camber and seat all considered.
+- **Decision (pending engineer review):**
+  - A new option **Seat terms: sag ordinate + cross slope × b_f/2** (checkbox `#seat_terms`) and **Top flange width b_f** (`#d_bf`, in, global, 0 = not used), on the Bridge tab under the depth inputs. New projects: on, b_f 0 (the cross-slope term starts when b_f is entered). Projects saved without them (all existing saves, files, the 5 examples): off. Their seats are unchanged, and the working and the haunch check are shown with a note.
+  - **m_sag** = (TD_A + TD_B)/2 − TD_mid, measured along each girder on the deck surface between its two bearings. This includes the vertical-curve ordinate and also any warp from cross slope / superelevation change or from the chord's offset on a curve. A sag (> 0) is added to the haunch at the bearings. A crest (< 0) is not used (CTDOT: crest ordinates go in the camber) and is reported. A single bearing line at a pier takes the larger sag of its two spans; a back / ahead line takes its own span.
+  - **Δ_cs** = TD(w) − min(TD(w − b_f/2), TD(w + b_f/2)), the fall of the deck across the top flange at the bearing (a crown inside the flange counts the steeper side). The minimum haunch is then kept at the low flange edge. This is CTDOT's measure from the top of flange, and is conservative against RIDOT's centerline nominal.
+  - **Camber** is the **net camber at deck placement** (camber − dead-load deflection of the deck and haunch): label "Net camber (default)" and its tooltip, the panel note and the seat tab note. The value is used as before.
+  - **Midspan haunch check** (always shown): the girder is taken straight between its two seats, rising by the net camber at midspan. Haunch CL = TD_mid − t_s − TOG_mid, with TOG_mid = (TOG_A + TOG_B)/2 + c and TOG = seat + bearing + beam depth. Haunch at the low edge = haunch CL − Δ_cs(mid). OK when the edge haunch ≥ h_min.
+- **Where (anchors):**
+  - `buildEngine()`: block `/* BGX5 (review H5` (`SEAT_TERMS`, `BF`, `supT`, `spanBrgs`, `girderSag`, `crossDrop`, `brgSpans`) and the rewritten `beamSeatAtSupport` (returns `parts`). `beamSeatAtXY` also returns `drop`. Exports `girderSag`, `crossDrop`, `spanBrgs`, `supT`, `seatTerms`.
+  - `bearingLinesFor`: `role:'back'|'ahead'|'cl'`.
+  - `seatData()`: `parts`. `buildSeatTable()`: each seat cell's tooltip is its working.
+  - New `seatWorkText()` and `buildSeatWork()` (called from `compute()` after `buildSeatTable()`), drawing into the new `#seat_work_wrap` under the seat table (heading "Seat working · midspan haunch check").
+  - `buildSeatSections()`: the working of each girder under every bearing-line section, with a link to the table.
+- **Before:**
+```js
+  function beamSeatAtSupport(bl, off, ctx){
+    if(!CH) return getBeamSeat(staOnBearing(bl.sta,bl.skew,off), off, ctx);
+    if(PS){ const w=off-bridgeCL(); return beamSeatCW(psSupT(bl,w),w,ctx); }
+    const w=off-bridgeCL(); const t=supportChordT(bl.sta)+w*Math.tan(effSkew(bl)*DEG);   // BGX4: effSkew
+    return beamSeatCW(t,w,ctx);
+  }
+```
+- **After:**
+```js
+  function beamSeatAtSupport(bl, off, ctx){
+    if(!CH) return getBeamSeat(staOnBearing(bl.sta,bl.skew,off), off, ctx);
+    const w=off-bridgeCL(), t=supT(bl,w);
+    const base=beamSeatCW(t,w,ctx);
+    … P = { td, slab, hmin, camber, beam, bearing, sag, sagSpan, sagRaw, cross:crossDrop(t,w), on:SEAT_TERMS } …
+    P.sag=Math.max(0, P.sagRaw||0);
+    const extra=SEAT_TERMS ? (P.sag+P.cross) : 0;
+    return { ...base, z:base.z-extra, parts:P };
+  }
+```
+  (`supT(bl,w)` is exactly the old t: `psSupT(bl,w)` with per-span chords, else `supportChordT(bl.sta)+w*tan(effSkew)`.)
+- **Governing provision:** owner practice as above (no AASHTO formula changes). Seat formula: seat = TD − t_s − (h_min + c + m_sag + Δ_cs) − d − t_brg; with the option off, m_sag = Δ_cs = 0 (as before).
+- **Check case (review sag case):**
+  - Inputs: tangent; profile 0+00 EL 100 → PVI 5+00 EL 90, VC 400 → 10+00 EL 100; abutments at 4+50 and 5+50 (100 ft span); girders ±6 ft; super +6 %; t_s 8, h_min 1.5, c 0, d 36, t_brg 3 in; b_f 16 in.
+  - TD at 4+50, G1: BVC 3+00 EL 94.00, x = 150: 94 − 0.02(150) + 0.04(150²)/800 = 92.125; at −6 ft: 92.125 − 0.36 = **91.765**.
+  - m_sag = (91.765 + 91.765)/2 − 91.640 = **0.125 ft** (= (A/2L)(L_s/2)² = (0.04/800)(50²)). Δ_cs = 0.06 × 8/12 = **0.040 ft**.
+  - Seat: before 91.765 − 0.667 − 0.125 − 3.000 − 0.250 = **87.723**; after 91.765 − 0.667 − (0.125 + 0 + 0.125 + 0.040) − 3.000 − 0.250 = **87.558** (−0.165 ft).
+  - Midspan check: before: haunch CL 0.00 in, edge 0.00 in → "LOW by 1.50 in". After: CL 1.98 in, Δ_cs 0.48 in, edge **1.50 in → OK**.
+- **Default demo (new project) after:**
+  - Span 1 is on the crest VC (m = −13 to −20 in, not used). Span 2: m = +0.37 / +3.33 / +3.41 in for G2–G4 (the chord's offset on the curve with the crown). So Pier 1 brg-ahead G2–G4 102.92 / 102.89 / 102.61 → **102.89 / 102.61 / 102.33**, and Abut 2 G2–G4 99.04 / 99.04 / 98.80 → **99.01 / 98.76 / 98.51**.
+  - All midspan checks OK.
+- **How verified:**
+  - Headless probe origin/main vs branch: variant and Examples 1–5 as saved (option off): every seat, table, DXF and hand-off payload identical. Only the seat-section text (the working lines) and Export JSON (`seat_terms:false, d_bf:'0'`) differ. Demo: the seats above; DXF 6 lines (those seat labels).
+  - The sag case above, with the option on and off. 0 console errors. Screenshot of the Beam Seat tab looked at.
+  - Tests:
+    - pass: check-syntax, bgeo-examples, dxf-print-sheets --tool bg, home-projects --tool bgeo, tests/engine/run.mjs handoffs lldf list-input.
+    - project-library --tool bgeo: old saves differ only in the Seat and Bridge tab text (notes, working); their seat values are identical.
+- **Not changed:** the "beam seat" surface of the Top-of-Deck grid rows (`beamSeatCW` at grid stations; not at bearings) has no seat terms. Per-beam b_f is not supported (global only).
+- **Saved data (§5):** additive scalars `seat_terms`, `d_bf`. Migration: `BG_OLD_DEFAULTS` `{seat_terms:false, d_bf:'0'}`; `BG_NEW_DEFAULTS` `{seat_terms:true, d_bf:'0'}`. No key changed.
+- **Other copies:** none.
