@@ -2374,6 +2374,27 @@ const SPC = (function () {
     const use = !!(pt.useTab && tab);
     return { G, geo, tab, use, P: use ? tab : geo };
   }
+  /* SPH1 (2026-11-07): S, C, MC and ST shapes have sloped inner flange faces (S, C: 2 : 12) and root fillets that the plate
+     model (average t_f over the full b_f, no fillets) does not have. Their minor-axis properties are then overstated
+     (I_y +5 to +34 %, Z_y up to +16 %, r_y up to +14 % over the v16.0 tables). Warn, per part, with the plate-model values
+     against the AISC tabulated ones (the part's own frame; same for a rotated part). Display only: no result changes. */
+  const SLOPED_FAMS = { S: 1, C: 1, MC: 1, ST: 1 };
+  function slopedFlangeWarn(R) {
+    R.parts.forEach(q => {
+      const pt = q.pt, fam = pt.type === 'shape' && pt.p ? pt.p.fam : null;
+      if (!fam || !SLOPED_FAMS[fam] || pt.hole) return;
+      const r = shapeRec(fam, pt.p.name); if (!r || !(r.A > 0) || !(r.Iy > 0)) return;
+      const g = q.G.g, m = primsMoments(g.prims); if (!(m.A > 0)) return;
+      const Iyp = m.Iyy - m.Sy * m.Sy / m.A, ryp = Math.sqrt(Iyp / m.A), ryt = r.ry > 0 ? r.ry : Math.sqrt(r.Iy / r.A);
+      const f = v => String(+v.toPrecision(4)), pc = (a, b) => (a >= b ? '+' : '−') + Math.abs(100 * (a / b - 1)).toFixed(1) + ' %';
+      let zy = '', Zyp = 0;
+      if (r.Zy > 0) { const W1 = g.prims.map(pr => ({ pr, w: 1 })); Zyp = plastic(W1, [1, 0], { A: m.A, Sx: m.Sx, Sy: m.Sy }).Z; zy = `, Z_y ${f(Zyp)} vs ${f(r.Zy)} in³ (${pc(Zyp, r.Zy)})`; }
+      if (!(Iyp > r.Iy) && !(Zyp > r.Zy)) return;   // not overstated: nothing to warn about
+      const lab = (pt.lbl || pt.id) + ' (' + g.desc + ')';
+      if (!q.use) R.warnings.push(`${lab}: the plate model uses the average flange thickness over the full flange width, without the sloped flange faces or the root fillets, so its minor-axis properties are overstated (unconservative): I_y ${f(Iyp)} vs AISC ${f(r.Iy)} in⁴ (${pc(Iyp, r.Iy)}), r_y ${f(ryp)} vs ${f(ryt)} in (${pc(ryp, ryt)})${zy}. Tick "Use AISC tabulated" (Part properties) for the tabulated A, I_x, I_y, or check minor-axis results against the Manual.`);
+      else R.warnings.push(`${lab}: the AISC tabulated A, I_x, I_y are used, but the plastic moduli, Q, the extreme fibres and the torsion constants are still from the plate model (average flange thickness, no flange slope or fillets), which overstates the minor-axis properties${zy ? ' (plate model' + zy.slice(1) + ')' : ''}. Check minor-axis plastic results against the Manual.`);
+    });
+  }
   function analyze(model) {
     const parts = model.parts || [], settings = model.settings || {}, tol = pos(settings.tol) ? settings.tol : 0.001;
     const R = { ok: false, errors: [], warnings: [], notes: [], rows: [], parts: [] };
@@ -2392,6 +2413,7 @@ const SPC = (function () {
       R.parts.push({ pt, n, ...pp });
     });
     if (R.errors.length) return R;
+    slopedFlangeWarn(R);
     const W = []; // weighted primitives (geometry) for plastic, Q, extreme fibres
     let A = 0, Sx = 0, Sy = 0;
     R.parts.forEach(q => { const P = q.P; A += q.n * P.A; Sx += q.n * P.A * P.c[1]; Sy += q.n * P.A * P.c[0]; q.G.prims.forEach(pr => W.push({ pr, w: q.n * pr.s, part: q })); });
@@ -5617,7 +5639,7 @@ function warnPanel(parent) {
   const box = el('div', 'warnBox', '<b>Check the model</b>'), ul = el('ul'); box.appendChild(ul);
   const ovs = R.overlaps || [];
   w.forEach(m => {
-    const li = el('li', null, esc(m)), o = ovs.find(q => m.startsWith(`${q.la} and ${q.lb} overlap`));
+    const li = el('li', null, esc(m).replace(/\b([IZSr])_([xy])\b/g, '$1<sub>$2</sub>')), o = ovs.find(q => m.startsWith(`${q.la} and ${q.lb} overlap`));
     if (o) { const b = btn('Fix: move apart', 'sm ovFix', () => fixOverlap(o), 'Moves the smaller part of the pair to the nearest position where it touches but does not overlap any part'); b.style.marginLeft = '6px'; li.appendChild(b); }
     ul.appendChild(li);
   });
@@ -5677,7 +5699,7 @@ function aisCompare(q) {
   const h = rows.map(([lab, a, b, kk]) => `<tr><td class="lft">${lab}</td><td>${esc(nf(a, kk))}</td><td>${b === null || b === undefined ? '—' : esc(nf(b, kk))}</td><td>${esc(pctS(pctd(a, b)))}</td><td class="lft">${esc(un(kk))}</td></tr>`).join('');
   const box = el('div', 'sec');
   box.innerHTML = `<div class="secHead" style="cursor:default"><h2 class="secTitle">Single rolled shape ${esc(name)}: plate model vs AISC Shapes Database v16.0</h2></div><div class="secBody"><div class="tscroll"><table class="tbl"><tr><th class="lft">Property</th><th>This tool (plate model)</th><th>AISC tabulated</th><th>Diff.</th><th class="lft">Unit</th></tr>${h}</table></div>
-  <div class="hint">The plate model neglects the root fillets (W, M, S, HP, C, MC, L, tees), the toe radii and the sloped inner flange faces of S, C and MC shapes (average t<sub>f</sub> used), so A and I are a little different (HSS: rounded corners are modelled). AISC J and C<sub>w</sub> include fillet effects (C<sub>w</sub> of angles and tees includes the plate-thickness term that thin-wall theory drops). ${q.use ? '<b>This part uses the AISC tabulated A and I</b> (elastic results).' : 'Tick "Use AISC tabulated" on the Part properties tab to use the tabulated A, I instead.'} Z and the torsion constants are from the plate model in either case. L, WT, MT, ST data: see the Method tab.</div></div>`;
+  <div class="hint">The plate model neglects the root fillets (W, M, S, HP, C, MC, L, tees), the toe radii and the sloped inner flange faces of S, C and MC shapes (average t<sub>f</sub> used), so A and I<sub>x</sub> differ from the table by a few percent (HSS: rounded corners are modelled). <b>For S, C, MC and ST shapes the minor-axis I<sub>y</sub>, S<sub>y</sub>, Z<sub>y</sub> and r<sub>y</sub> of the plate model are overstated</b> (up to about +34 %, +34 %, +16 % and +14 % over the v16.0 tables; unconservative). AISC J and C<sub>w</sub> include fillet effects (C<sub>w</sub> of angles and tees includes the plate-thickness term that thin-wall theory drops). ${q.use ? '<b>This part uses the AISC tabulated A and I</b> (elastic results).' : 'Tick "Use AISC tabulated" on the Part properties tab to use the tabulated A, I instead.'} Z and the torsion constants are from the plate model in either case. L, WT, MT, ST data: see the Method tab.</div></div>`;
   return box;
 }
 const nt = (v, k, sig) => nf(v, k, sig).replace(/,/g, '{,}');
