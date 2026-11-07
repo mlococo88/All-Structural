@@ -5417,3 +5417,73 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **How verified:** probe on main and branch (KaTeX of the steps: all typeset); `node tests/check-syntax.mjs`; `node tests/bpad-circle.mjs` (40 projects), `bpad-profis.mjs`, `anchor-parity.mjs` (torsion cases T = 6 kip·ft); `tests/smoke/project-library.mjs --tool baseplate`, `standard-save.mjs`, `dxf-print-sheets.mjs --tool bp`; 0 console errors.
 - **Other copies:** none.
 - **Open items:** without torsion, ψ_ec,V stays 1.0: the elastic plate gives equal shares to the row anchors.
+
+## 2026-11-07 — BPM5: Seismic Design Category input and ACI 318-19 §17.10 (PR: claude/bp-m5-seismic, PR #976: https://github.com/mlococo88/All-Structural/pull/976)
+
+### BPM5. SDC A–F; with C–F: 0.75 on concrete-governed tension, the §17.10.5.3 / §17.10.6.3 options, ductility check   [calculation change only when SDC C–F is picked; saved data: three optional fields]
+- **Problem (review M5):** §17.10 was not implemented. The banner (F14) fired only when the generator's seismic / Ω₀ boxes were ticked, not for E combinations typed in or imported.
+- **Governing provisions (read in the PDF, printed pp. 272–276):**
+  - §17.10.1: anchors in SDC C–F meet §17.10. R17.10.1 says this applies whether or not E is in the controlling combination.
+  - §17.10.5.1: tension 20 % exemption. §17.10.5.3: options (a)–(d). §17.10.5.4: (a) φN_sa; (b) 0.75φN_cbg; (c) 0.75φN_pn; (d) 0.75φN_sbg; concrete assumed cracked unless shown otherwise. §17.10.5.5: no further reduction with anchor reinforcement.
+  - §17.10.6: shear. §17.10.6.1: 20 % exemption. §17.10.6.2: strength per §17.7. §17.10.6.3: options (a)–(c).
+- **What:**
+  - **Input → 10. Load Combinations:**
+    - "Seismic Design Category" (A or B / C / D / E / F).
+    - With C–F, also "§17.10.5.3 tension option" ((a)–(d), default **(d)**, E with E_h × Ω₀) and "§17.10.6.3 shear option" ((a)–(c), default **(c)**, E with E_h × Ω₀).
+  - **Helpers** (anchor `/* BPM5 (2026-11-07): SEISMIC DESIGN CATEGORY`): `bpSeis()`, `bpComboHasE()`, `bpSeisEPresent()`, `bpSeisScale()`, `bpSeisDuct()`, `bpSeisBannerText()`, `bpSeisBanner()`.
+  - **`comboCapacities()`:**
+    - Before: `const po = pullout(); …`, `const tb = tensionBreakoutGroup(…)`, `const sfb = …`, `let pry = pryout(nV, tb);`.
+    - After: `po` / `tb` / `sfb` = `bpSeisScale(…)` of the unchanged objects: × 0.75 on φN_pn, φN_cbg, φN_sbg, with a worked step "Seismic Design Category X — 0.75 …". Pryout takes the unreduced `tb0`. With option (a), `sdu` is the ductility check, worked as a step under Steel tension.
+  - **`allChecks()`:** a "Seismic Ductility (§17.10.5.3(a))" row with option (a).
+  - **Summary banner and validation message:**
+    - **SDC C–F:** a warning box stating what is applied and what the engineer must supply.
+    - **E combinations with SDC A/B:** an error box asking for the category. E is detected from the generator's seismic / Ω₀ boxes OR any combination name containing E, Eh, Ev, EQ, Ω or "seismic", so typed and imported combinations count.
+  - **Also:** the PROFIS export note and the User Manual seismic paragraph.
+- **Before / after:**
+  - SDC A/B (default; every older save): **unchanged**.
+  - SDC C–F: φN_pn, φN_cbg, φN_sbg → **0.75×** in every combination. φN_sa, φV (all shear modes), anchor reinforcement and pryout are unchanged.
+  - Option (a): DCR = (largest of ΣT/N_cbg, T_max/N_pn, ΣT_edge/N_sbg) / (T_max/(1.2N_sa)), all nominal.
+- **Decisions (pending engineer review):**
+  1. Default options are (d) for tension and (c) for shear, the Ω₀ load options (conservative). The tool cannot amplify the E part of a typed combination, so the banner tells the engineer the entered combinations must be those loads.
+  2. The 20 % exemptions (§17.10.5.1, §17.10.6.1) are not taken (conservative): E cannot be separated from a typed combination.
+  3. 0.75 is applied to every combination under C–F (R17.10.1).
+  4. §17.10.5.3(a)(iii)–(vi) detailing and §17.10.4 (deformed anchor reinforcement) are stated, not checked.
+- **Check case (default project, SDC D, 0.9D+1.0W):**
+  - Breakout: φN_cbg = 20.16 → 0.75 × 20.16 = **15.12 kip**; DCR 5.328/15.12 = **0.352** (was 0.264).
+  - Pullout: φN_pn = 33.62 → 25.22 kip; DCR 3.827/25.22 = **0.152** (was 0.114).
+  - Interaction 1.328 → 1.395.
+  - Option (a):
+    - T_max/(1.2N_sa) = 3.827/(1.2 × 0.606 × 58 = 42.18) = 0.0907.
+    - Breakout ΣT/N_cbg = 5.328/(20.16/0.70 = 28.80) = 0.185; pullout 3.827/48.03 = 0.080.
+    - DCR = 0.185/0.0907 = **2.04 → FAIL**: the concrete governs before the steel yields, so option (a) cannot be used; choose (b)–(d).
+- **Saved data (§5):** `serviceLoads.sdc`, `serviceLoads.seisT`, `serviceLoads.seisV` are stored only once picked; they are not in `defaultState()`. A save without them reads A/B: no change. Keys and other fields are unchanged.
+- **How verified:** probe (default, SDC D, SDC D + (a), a typed "1.2D+1.0E+L" combination → error banner; KaTeX of the new steps OK); `node tests/check-syntax.mjs`; `node tests/bpad-circle.mjs`, `bpad-profis.mjs`, `anchor-parity.mjs` (all A/B: identical); `tests/smoke/project-library.mjs --tool baseplate`, `standard-save.mjs`, `dxf-print-sheets.mjs --tool bp`; 0 console errors.
+- **Other copies:** none.
+- **Open items:** decisions 1–4. Post-installed anchors (§17.10.3) do not arise (cast-in only).
+
+## 2026-11-07 — BPL2 / BPL3 / BPL5 / BPL6: review LOW items (PR: claude/bp-low-items, PR #978: https://github.com/mlococo88/All-Structural/pull/978)
+
+### BPL2. Interaction: the §17.8.2 cut-offs before either form   [calculation change, LESS conservative only where the code permits; saved data: none]
+- **Problem (review L2):** `interaction()` applied the 0.2 cut-offs to the trilinear form only and then took max(parabolic, trilinear). So (β_N, β_V) = (1.0, 0.2) read 1.068 FAIL, although §17.8.2(b) permits neglecting the interaction there.
+- **Governing provision:** ACI 318-19 §17.8.1–§17.8.3 (read in the PDF, printed p. 270). The interaction may be neglected if N_ua/φN_n ≤ 0.2 (Eq. 17.8.2a) or V_ua/φV_n ≤ 0.2 (Eq. 17.8.2b). Eq. (17.8.3) applies when both exceed 0.2. The 5/3 parabolic form is commentary R17.8, permitted through §17.5.2.3.
+- **Where:** `interaction()`.
+  - Before: `const dcr=Math.max(para,triDCR);`.
+  - After: `const dcr=(rV<=0.2)? rN : (rN<=0.2)? rV : Math.max(para,triDCR);`. `governingForm` reads "§17.8.2 (interaction neglected)" below a cut-off, `formsDisagree` is false there, and the interaction note states the cut-off.
+- **Check:** (1.0, 0.2) **1.068 → 1.000**; (0.2, 1.0) 1.068 → 1.000; (0.6, 0.6) 1.000 unchanged; (1.0, 0.21) 1.074 unchanged.
+- **Effect:** less conservative only below a 0.2 cut-off, exactly where §17.8.2 permits it.
+
+### BPL3. "Small edge distance" warning tests all four edges   [warning only]
+- `validateInputs()`: before `if(g.ca_x_pos<1.5*A.dia||g.ca_y_pos<1.5*A.dia)` → after `if(Math.min(g.ca_x_pos,g.ca_x_neg,g.ca_y_pos,g.ca_y_neg)<1.5*A.dia)`.
+
+### BPL5. Stand-off lever-arm citation   [text only]
+- `levelingNutCheck` Step 6 `ref`: before "ACI 318-19 Table 17.5.2; φ = 0.65" → after "lever-arm method of EN 1992-4 / ETAG 001 Annex C as used by Hilti PROFIS (not an ACI 318 equation); φ = 0.65 per ACI 318-19 Table 17.5.3 (steel, shear)". The method (M⁰_s = 1.2W_el f_u, α_M, ℓ_b) is PROFIS's, not ACI's. EN 1992-4 and ETAG are not in /home/user/structural_references, so the source is named as PROFIS uses it.
+
+### BPL6. Validation tab: an explanation for each amber / red row   [text only]
+- `VALIDATION_CASES`: new optional `rowNotes` on msa3a, struct2v1 and struct2v2. The case section prints them under its table ("Why these rows differ").
+- msa3a: the shear row explains BPH1 (+y edge 9,109 lb, +14 %) and BPM2 (Case 1 on the y component, so the resultant's Case 2, 18,057 lb, governs).
+- struct2v1 / v2: the shear row is the tool's Case 2 against PROFIS's front row. The tension breakout row is the reconstructed pedestal outline. The lever-arm, anchor-force, compression and e′_N rows are the BP-C1 open-stand-off model.
+- Each note is marked "probable cause, not confirmed" where it was not checked against the PROFIS settings.
+
+- **How verified (all four):** probe of `interaction()`; `node tests/check-syntax.mjs`; `node tests/bpad-circle.mjs` (40 projects), `bpad-profis.mjs`, `anchor-parity.mjs`; `tests/smoke/project-library.mjs --tool baseplate`, `standard-save.mjs`, `dxf-print-sheets.mjs --tool bp`; 0 console errors.
+- **Other copies:** none.
+- **Open items:** L1, L4, L7 of the review are not changed (L1 conservative; L4 reading stated in the step; L7 = open item N1).

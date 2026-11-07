@@ -648,7 +648,7 @@ function defaultState(){
           by:&quot;M. Lococo&quot;,date:new Date().toISOString().slice(0,10),
           chk:&quot;&quot;,chkDate:&quot;&quot;,sheet:&quot;S-1&quot;},
     code:&quot;ACI&quot;,
-    sec:{type:&quot;rect&quot;,bw:12,h:18,bf:36,hf:6},
+    sec:{type:&quot;rect&quot;,bw:12,h:18,bf:36,hf:6,asminSupport:&quot;determinate&quot;},   /* asminSupport: CBM4, ACI 9.6.1.2 flange in tension */
     mat:{fc:4,fy:60,fyt:60,dagg:1.0,lambda:1.0,gamma3:0.67,fyt100:false},
     cover:{cc:2.0,exposure:&quot;exposed&quot;,req:2.0,userEdited:false},
     layers:[{n:3,size:'5',face:'tension',dMan:null},
@@ -1145,12 +1145,21 @@ function detailing(F,sh,neg,govMu,Vu,tor){
 
   /* minimum flexural steel */
   if(code==='ACI'){
-    const t1=3*rt/(fy*1000)*bw*F.dCent, t2=200/(fy*1000)*bw*F.dCent;
+    /* CBH4 (2026-11-07): ACI 318-19 9.6.1.2 limits f_y to 80,000 psi in (a) and (b) */
+    const fyA=Math.min(fy,80);
+    /* CBM4 (2026-11-07): 9.6.1.2, statically determinate beam with the flange in tension (T-section in negative bending):
+       b_w is the smaller of b_f and 2b_w. Applied unless the beam is marked statically indeterminate (continuous). */
+    const flgT=(S.sec.type==='tee' &amp;&amp; neg), detm=(S.sec.asminSupport!=='indeterminate');
+    const bwA=(flgT &amp;&amp; detm) ? Math.min(S.sec.bf,2*bw) : bw;
+    const t1=3*rt/(fyA*1000)*bwA*F.dCent, t2=200/(fyA*1000)*bwA*F.dCent;
     const AsMin=Math.max(t1,t2);
     add(&quot;dAsMin&quot;,&quot;Minimum flexural reinforcement&quot;,&quot;ACI 9.6.1.2&quot;,
       F.As,AsMin,&quot;\\ge&quot;,&quot;in²&quot;,F.As>=AsMin-1e-9,
       [[&quot;A_{s,min}=\\max\\left(\\dfrac{3\\sqrt{f'_c}}{f_y}b_w d,\\;\\dfrac{200}{f_y}b_w d\\right)&quot;,
-        `\\max\\left(\\dfrac{3\\sqrt{${fmt(fc*1000,0)}}}{${fmt(fy*1000,0)}}(${fmt(bw)})(${fmt(F.dCent)}),\\;\\dfrac{200}{${fmt(fy*1000,0)}}(${fmt(bw)})(${fmt(F.dCent)})\\right)`,&quot;&quot;],
+        `\\max\\left(\\dfrac{3\\sqrt{${fmt(fc*1000,0)}}}{${fmt(fyA*1000,0)}}(${fmt(bwA)})(${fmt(F.dCent)}),\\;\\dfrac{200}{${fmt(fyA*1000,0)}}(${fmt(bwA)})(${fmt(F.dCent)})\\right)`,
+        [fy>80?`f_y = ${fmt(fy*1000,0)} psi is limited to 80,000 psi here (9.6.1.2).`:&quot;&quot;,
+         flgT?(detm?`Flange in tension, statically determinate beam: b_w = min(b_f, 2b_w) = min(${fmt(S.sec.bf)}, ${fmt(2*bw)}) = ${fmt(bwA)} in (9.6.1.2).`
+                   :`Flange in tension, beam marked statically indeterminate (continuous): b_w = ${fmt(bw)} in (9.6.1.2).`):&quot;&quot;].filter(Boolean).join(&quot; &quot;)],
        [&quot;A_{s,min}=\\max(&quot;+fmt(t1,3)+&quot;,\\;&quot;+fmt(t2,3)+&quot;)=&quot;+fmt(AsMin,3)+&quot;\\text{ in}^2&quot;,&quot;&quot;,
         t1>=t2?&quot;3√f′c/f_y term governs&quot;:&quot;200/f_y term governs&quot;]]);
   }
@@ -1876,6 +1885,11 @@ function buildInput(){
     if(S.sec.type===&quot;tee&quot;){
       fRow(b,&quot;Flange width, b_f&quot;,numIn(()=>S.sec.bf,v=>S.sec.bf=v,&quot;1&quot;,&quot;bf&quot;),&quot;in&quot;);
       fRow(b,&quot;Flange thickness, h_f&quot;,numIn(()=>S.sec.hf,v=>S.sec.hf=v,&quot;0.5&quot;,&quot;hf&quot;),&quot;in&quot;);
+      if(S.code==='ACI'){   /* CBM4: ACI 318-19 9.6.1.2, b_w of A_s,min with the flange in tension */
+        fRow(b,&quot;Beam (for A_s,min, flange in tension)&quot;,selIn([&quot;determinate&quot;,&quot;indeterminate&quot;],()=>S.sec.asminSupport||&quot;determinate&quot;,v=>{S.sec.asminSupport=v;},
+          o=>o===&quot;determinate&quot;?&quot;Statically determinate (cantilever, simple span)&quot;:&quot;Statically indeterminate (continuous)&quot;,o=>o,&quot;asminSupport&quot;),&quot;&quot;);
+        b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;ACI 9.6.1.2: for a statically determinate beam with the flange in tension (negative M_u), A_s,min uses b_w = min(b_f, 2b_w). Choose \u201cindeterminate\u201d only for a continuous beam.&quot;));
+      }
     }
     b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;The sign of M_u in each load combination sets which face is in tension. A T-section in negative bending is analysed with the web in compression, since the flange cracks.&quot;));
   },P);
@@ -3372,7 +3386,8 @@ function buildInputEchoTab(pg){
     row(&quot;Web width, b_w&quot;,fmt(S.sec.bw),&quot;in&quot;);
     row(&quot;Overall depth, h&quot;,fmt(S.sec.h),&quot;in&quot;);
     if(S.sec.type==='tee'){ row(&quot;Flange width, b_f&quot;,fmt(S.sec.bf),&quot;in&quot;);
-      row(&quot;Flange thickness, h_f&quot;,fmt(S.sec.hf),&quot;in&quot;); }
+      row(&quot;Flange thickness, h_f&quot;,fmt(S.sec.hf),&quot;in&quot;);
+      if(S.code==='ACI') row(&quot;Beam (A_s,min, flange in tension, 9.6.1.2)&quot;,S.sec.asminSupport==='indeterminate'?&quot;statically indeterminate&quot;:&quot;statically determinate&quot;,&quot;&quot;); }
     row(&quot;f\u2032_c&quot;,fmt(S.mat.fc),&quot;ksi&quot;);
     row(&quot;f_y&quot;,fmt(S.mat.fy),&quot;ksi&quot;);
     row(&quot;f_yt&quot;,fmt(S.mat.fyt),&quot;ksi&quot;);
@@ -5027,7 +5042,7 @@ function cbcRptModel(){
   { const G=layerGeom(CC.govRow?CC.govRow.neg:false), subs=[];
     subs.push({title:'Section and materials',items:[{type:'table',head:['Item','Value','Unit'],rows:[
       ['Design code',codeName,''],['Section type',S.sec.type==='tee'?'T-beam':'Rectangular',''],['Web width $b_{w}$',{t:fmt(S.sec.bw),n:true},'in'],['Overall depth h',{t:fmt(S.sec.h),n:true},'in'],
-      ...(S.sec.type==='tee'?[['Flange width $b_{f}$',{t:fmt(S.sec.bf),n:true},'in'],['Flange thickness $h_{f}$',{t:fmt(S.sec.hf),n:true},'in']]:[]),
+      ...(S.sec.type==='tee'?[['Flange width $b_{f}$',{t:fmt(S.sec.bf),n:true},'in'],['Flange thickness $h_{f}$',{t:fmt(S.sec.hf),n:true},'in']].concat(S.code==='ACI'?[['Beam for $A_{s,min}$, flange in tension (9.6.1.2)',S.sec.asminSupport==='indeterminate'?'statically indeterminate':'statically determinate','']]:[]):[]),
       [&quot;$f^{\\prime}_{c}$&quot;,{t:fmt(S.mat.fc),n:true},'ksi'],['$f_{y}$',{t:fmt(S.mat.fy),n:true},'ksi'],['$f_{yt}$',{t:fmt(S.mat.fyt),n:true},'ksi'],...(S.code==='AASHTO'?[['$f_{yt}$ up to 100 ksi (5.4.3.3, no torsion; 5.7.2.7)',S.mat.fyt100?'yes':'no','']]:[]),['$\\lambda$',{t:fmt(S.mat.lambda,2),n:true},''],
       ['Aggregate size',{t:fmt(S.mat.dagg),n:true},'in'],['Clear cover provided / required',fmt(S.cover.cc)+' / '+fmt(S.cover.req),'in']]}]});
     subs.push({title:'Reinforcement',items:[{type:'table',head:['Layer','Bars','Size','$A_{s}$ (in²)','Face','d (in)','Source'],rows:G.map((L,i)=>[L.side+(i+1),String(L.n),'#'+L.size,{t:fmt(L.As),n:true},L.face==='tension'?'Tension':'Compression',{t:fmt(L.d),n:true},L.manual?'manual override':'auto-stacked'])},
