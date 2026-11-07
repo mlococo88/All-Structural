@@ -2871,7 +2871,7 @@ Calculation audit, item 4. Engineer decision (2026-11-07): offer the variable-he
 ### Saved data
 None. No field or key changed.
 
-## 2026-11-07 — PR: claude/rw-dev-splice-checks — Development and splice checks: stem dowel tension lap, heel F1 and toe F2 ℓd vs length available, optional hooked toe bars (RWDS; new checks)
+## 2026-11-07 — PR: claude/rw-dev-splice-checks — Development and splice checks: stem dowel tension lap, heel F1 and toe F2 ℓd vs length available, optional hooked toe bars (RWDS; new checks) (PR #947: https://github.com/mlococo88/All-Structural/pull/947)
 
 Calculation audit, item 5 (PR 5a). Engineer decision (2026-11-07). Code sites are tagged `RWDS`. The S1 / S3 layout and the alternate-bar cut-off are PR 5b (not here).
 
