@@ -15591,7 +15591,7 @@ index e2e321c..ce6e74c 100644
 +      sz.lon&&isFinite(sz.Fconn)? `F_{conn} = \\max(F_{conn,L},\\,F_{conn,T}) = ${fmtT(sz.Fconn)}\\ \\text{kip per bearing line} \\quad(${fmtT(sz.perBeam)}\\ \\text{kip per beam})` :
 ```
 
-## 2026-11-07 — PR: claude/abut-m9-eqsup (ABM9: superstructure seismic force from the seismic analysis for Zones 2–4 multispan bridges; REVIEW warning when it is not entered)   [calc change only when the new inputs are entered] [MORE conservative where the analysis force exceeds A_s·W]
+## 2026-11-07 — PR: claude/abut-m9-eqsup (PR #1007: https://github.com/mlococo88/All-Structural/pull/1007) (ABM9: superstructure seismic force from the seismic analysis for Zones 2–4 multispan bridges; REVIEW warning when it is not entered)   [calc change only when the new inputs are entered] [MORE conservative where the analysis force exceeds A_s·W]
 
 Source: code-compliance review of 2026-11-07, item M9.
 
