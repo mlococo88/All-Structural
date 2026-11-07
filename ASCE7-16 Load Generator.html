@@ -1404,6 +1404,43 @@ function solve(S){
         "force-resisting system per AISC 341 Sec. D1.4a; K-braced frames not permitted; V and inverted-V braced frame beams continuous, designed for gravity without the braces, "+
         "and flanges braced for 2 % of F\u1d67b\u1d63t\u1d63 at the brace intersection. This tool does not apply the factor of 2; carry it into the connection design.");
   }
+  /* A7M3 + A7M4 (2026-11-07): is the equivalent lateral force procedure permitted?
+     Sec. 11.4.8 Exception 3: Site Class E with S1 >= 0.2 without a site-specific ground motion analysis only where
+     T <= T_s (and the ELF procedure is used). Table 12.6-1: in SDC D, E, F the ELF procedure is permitted for Risk Category
+     I / II buildings of at most two stories above the base, light-frame construction, regular structures up to 160 ft,
+     regular structures above 160 ft with T < 3.5 T_s, and structures up to 160 ft with only horizontal irregularities 2-5
+     or vertical 4, 5a, 5b. T is taken as the larger of T_used and C_u T_a (conservative; Decision pending engineer review). */
+  if(sq.Fa!==null && sq.SDS>0){
+    const Ts=sq.SD1/sq.SDS, Tc=Math.max(sq.Tused, sq.T||0);
+    sq.elf={Ts:Ts, T:Tc, ok:true, rows:[]};
+    if(S.siteClass==="E" && site.S1>=0.2){
+      const ok=Tc<=Ts+1e-9;
+      sq.elf.siteE={ok:ok};
+      if(!ok){ sq.elf.ok=false;
+        xc("err","ELF not permitted: Site Class E with S\u2081 \u2265 0.2 (Sec. 11.4.8)",
+          "Site Class E with S\u2081 = "+RN(site.S1,3)+" \u2265 0.2: without a site-specific ground motion analysis, Sec. 11.4.8 Exception 3 permits the equivalent lateral force procedure only where T \u2264 T\u209b. T = "+
+          RN(Tc,3)+" s > T\u209b = "+RN(Ts,3)+" s. A site-specific ground motion analysis (Sec. 21) is required; the base shear shown is not admissible.","s-seis"); }
+    }
+    if(sq.SDC==="D"||sq.SDC==="E"||sq.SDC==="F"){
+      const nSt=S.levels.filter(l=>l.w>0).length, light=/Light-frame/.test(S.sfrs), irr=S.irreg||"none";
+      const R1=(S.risk==="I"||S.risk==="II") && nSt<=2, R2v=light, R3=irr==="none" && S.hn<=160, R4=irr==="none" && S.hn>160 && Tc<3.5*Ts,
+            R5=irr==="limited" && S.hn<=160;
+      sq.elf.rows=[
+        {t:"Risk Category I or II building not exceeding two stories above the base",ok:R1,v:"Risk "+S.risk+", "+nSt+" level(s)"},
+        {t:"Structure of light-frame construction",ok:R2v,v:light?"yes":"no"},
+        {t:"No structural irregularities, h\u2099 \u2264 160 ft",ok:R3,v:"irregularities: "+irr+", h\u2099 = "+R2(S.hn)+" ft"},
+        {t:"No structural irregularities, h\u2099 > 160 ft and T < 3.5T\u209b",ok:R4,v:"T = "+RN(Tc,3)+" s, 3.5T\u209b = "+RN(3.5*Ts,3)+" s"},
+        {t:"h\u2099 \u2264 160 ft with only horizontal irregularities 2\u20135 or vertical 4, 5a, 5b",ok:R5,v:"irregularities: "+irr}];
+      const ok=R1||R2v||R3||R4||R5;
+      sq.elf.t1261=ok;
+      if(!ok){ sq.elf.ok=false;
+        xc("err","ELF not permitted in SDC "+sq.SDC+" (Table 12.6-1)",
+          "Table 12.6-1: none of the conditions that permit the equivalent lateral force procedure in Seismic Design Category "+sq.SDC+" is met ("+
+          (irr==="other"?"an irregularity outside those listed is present":(S.hn>160?"h\u2099 = "+R2(S.hn)+" ft > 160 ft with T = "+RN(Tc,3)+" s \u2265 3.5T\u209b = "+RN(3.5*Ts,3)+" s":"h\u2099 = "+R2(S.hn)+" ft"))+
+          "). A modal response spectrum or response history analysis is required; the base shear shown is not admissible.","s-seis"); }
+    }
+    if(!sq.elf.siteE && !sq.elf.rows.length) delete sq.elf;   /* nothing to check (SDC B / C, not Site E): R unchanged */
+  }
   /* manually entered hazard data */
   if(S.jur!=="MA"){
     if(site.V<85||site.V>200) xc("warn","Wind speed out of range","V = "+R2(site.V)+
@@ -1453,6 +1490,7 @@ const DEF={
  Goverride:false, Gval:0.85, windFlow:"Clear", tblMode:"interp",
  siteClass:"D", seisSysType:"All other structural systems", sfrs:"Steel systems not specifically detailed for seismic resistance",
  hn:36, TL:6, seisW:1200, useTa:true, rho:1.0, baseElev:0, siteDefaultD:false, siteBnoVs:false,
+ irreg:"none",   /* A7M4 (2026-11-07): structural irregularities for the Table 12.6-1 ELF check; saves without it read "none" */
  levels:[{name:"Roof",h:36,w:600},{name:"Level 2",h:18,w:600}],
  elems:[],
  drifts:[],
@@ -1967,6 +2005,8 @@ function buildInputs(){
   inRow(b,"Long-period transition period","T<sub>L</sub>","s",num("TL"));
   inRow(b,"Effective seismic weight","W","kip",num("seisW"));
   inRow(b,"Redundancy factor","\u03C1","",num("rho","0.1"));
+  selWide(b,"Structural irregularities (Tables 12.3-1, 12.3-2), for the Table 12.6-1 ELF check","irreg",["none","limited","other"],
+    ["None","Only horizontal types 2, 3, 4, 5 and/or vertical types 4, 5a, 5b","Any other irregularity"]);
   b.appendChild(chk("useTa","Use T = T\u2090 rather than C\u1d64T\u2090"));
   b.appendChild(el("div","hint","T\u2090 is the conservative choice; C\u1d64T\u2090 requires a substantiated analysis of the computed period."));
 
@@ -3047,6 +3087,19 @@ function renderSeis(host){
     else note(b,"The system is permitted in Seismic Design Category "+q.SDC+
       (typeof lim==="number"?" up to "+lim+" ft; h\u2099 = "+R2(S.hn)+" ft.":" with no height limit."),"k");
   }
+  if(q.elf && (q.elf.siteE || q.elf.rows.length)){   /* A7M3, A7M4 */
+    const fx=x=>"T = \\max(T_{used},\\ C_uT_a) = "+RN(q.elf.T,3)+"\\ \\text{s},\\quad T_s = S_{D1}/S_{DS} = "+RN(q.elf.Ts,3)+"\\ \\text{s}";
+    eq(b,"Period used for the ELF permission checks","ASCE 7-16 Sec. 11.4.6, 12.6","T_s = S_{D1}/S_{DS}",fx(),"T_s = "+RN(q.elf.Ts,3)+"\\ \\text{s}");
+    if(q.elf.siteE) note(b,"<b>Sec. 11.4.8 Exception 3</b> (Site Class E, S\u2081 \u2265 0.2, no site-specific analysis): the equivalent lateral force procedure is permitted only where T \u2264 T\u209b. "+
+      "T = "+RN(q.elf.T,3)+" s "+(q.elf.siteE.ok?"\u2264":">")+" T\u209b = "+RN(q.elf.Ts,3)+" s: "+(q.elf.siteE.ok?"<b>permitted</b>.":"<b>not permitted</b>; a site-specific ground motion analysis is required."),q.elf.siteE.ok?"k":"e");
+    if(q.elf.rows.length){
+      dtable(b,"Table 12.6-1 \u2014 equivalent lateral force procedure, Seismic Design Category "+q.SDC,["Condition that permits ELF","Project","Met"],
+        q.elf.rows.map(r=>[{v:r.t},{v:r.v},{v:r.ok?"yes":"no",cls:r.ok?"hl":""}]),
+        "ELF is permitted when any one condition is met. Irregularities are as entered on the Seismic input tab (Tables 12.3-1, 12.3-2); this tool does not evaluate them.");
+      note(b,q.elf.t1261?"Table 12.6-1: the equivalent lateral force procedure is <b>permitted</b>.":
+        "<b>Table 12.6-1: the equivalent lateral force procedure is not permitted.</b> A modal response spectrum analysis (Sec. 12.9.1) or a response history analysis is required; the base shear below is arithmetically correct and not admissible.",q.elf.t1261?"k":"e");
+    }
+  }
   eq(b,"Base value","ASCE 7-16 Eq. 12.8-2","C_s = \\dfrac{S_{DS}}{R/I_e}",
     "C_s = \\dfrac{"+RN(q.SDS,4)+"}{"+R2(q.R)+"/"+R2(q.Ie)+"}","C_s = "+RN(q.CsBase,4));
   if(q.exc1148){
@@ -3128,8 +3181,8 @@ function renderSeis(host){
   note(b,"Horizontal distribution and accidental torsion (Sec. 12.8.4), drift and P-delta (Sec. 12.8.6, 12.9), irregularity "+
     "checks (Sec. 12.3.2), nonstructural components (Ch. 13), nonbuilding structures (Ch. 15), and modal response spectrum "+
     "analysis (Sec. 12.9) are <b>not</b> performed. The vertical seismic effect E\u1d65 (Sec. 12.4.2.2) <i>is</i> computed and "+
-    "carried into the combinations with both signs; the redundancy factor \u03C1 is applied as entered but Sec. 12.3.4.2 is not evaluated. Sec. 12.6 must also be checked to confirm that the equivalent lateral force procedure is permitted for "+
-    "this structure in Seismic Design Category "+q.SDC+".","w");
+    "carried into the combinations with both signs; the redundancy factor \u03C1 is applied as entered but Sec. 12.3.4.2 is not evaluated. Sec. 12.6: the equivalent lateral force procedure is "+
+    "permitted in Seismic Design Categories B and C; in D, E and F the Table 12.6-1 check relies on the irregularities entered on the input tab, which this tool does not evaluate.","w");
 }
 
 /* ---------------- Combinations ---------------- */
@@ -4271,8 +4324,12 @@ within w of the obstruction.</p>
 {t:"8. Methodology: Seismic",h:`
 <h3>8.1 Scope</h3>
 <p>Sec. 12.8, the equivalent lateral force procedure, taken as far as the story shears and overturning moments. Whether the ELF
-procedure is <i>permitted</i> for a given structure and seismic design category is governed by Table 12.6-1, and that check is
-not performed here.</p>
+procedure is <i>permitted</i> for a given structure and seismic design category is governed by Table 12.6-1. The app checks it
+in Seismic Design Categories D, E and F from the risk category, the number of levels, a light-frame system, h<sub>n</sub>,
+T against 3.5T<sub>s</sub> and the irregularities you enter (it does not evaluate irregularities), with T taken as the larger of
+the period used and C<sub>u</sub>T<sub>a</sub>. For Site Class E with S<sub>1</sub> &ge; 0.2 it applies Sec. 11.4.8 Exception 3:
+without a site-specific analysis the ELF procedure is permitted only where T &le; T<sub>s</sub>. Either failure is a blocking
+check (A7M3, A7M4, 2026-11-07).</p>
 <h3>8.2 Site coefficients and the site-specific triggers</h3>
 <p>F<sub>a</sub> and F<sub>v</sub> are interpolated from Tables 11.4-1 and 11.4-2. Three conditions force a site-specific
 ground motion analysis under Sec. 11.4.8 and each raises a Review flag: Site Class F under any condition, Site Class E with
@@ -5915,6 +5972,10 @@ function buildWorkbook(S,R,ExcelJS,tb){
     const sdcF='IF('+A("S1")+'>=0.75,"'+(iv?"F":"E")+'",IF(CODE('+A("sdcS")+')>=CODE('+A("sdc1")+'),'+A("sdcS")+','+A("sdc1")+'))';
     out("SDC","Governing seismic design category"+(S.jur==="MA"?" (780 CMR 1613.1: A is assigned B)":""),"SDC",
       {formula:S.jur==="MA"?'IF('+sdcF+'="A","B",'+sdcF+')':sdcF,result:q.SDC},null,S.jur==="MA"?"Sec. 11.6; 780 CMR 1613.1":"Sec. 11.6");
+    if(q.elf && (q.elf.siteE || q.elf.rows.length)){   /* A7M3, A7M4 */
+      if(q.elf.siteE) statusRow("Sec. 11.4.8 Exception 3, Site Class E with S_1 >= 0.2: T = "+RN(q.elf.T,3)+" s vs T_s = "+RN(q.elf.Ts,3)+" s", q.elf.siteE.ok?"ELF PERMITTED":"ELF NOT PERMITTED", q.elf.siteE.ok);
+      if(q.elf.rows.length) statusRow("Table 12.6-1, SDC "+q.SDC+" (irregularities as entered: "+(S.irreg||"none")+")", q.elf.t1261?"ELF PERMITTED":"ELF NOT PERMITTED", q.elf.t1261);
+    }
     noteRow("Both Table 11.6-1 and Table 11.6-2 are evaluated and the more severe category governs, as Sec. 11.6 requires. S_1 \u2265 0.75 forces category E, or F for Risk Category IV, regardless of both tables.");
     inp("Ctp","Period coefficient","C_t", q.Ct, NF.n3,"Table 12.8-2");
     inp("xexp","Period exponent","x", q.x, NF.n2,"Table 12.8-2");
