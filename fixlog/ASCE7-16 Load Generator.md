@@ -1230,7 +1230,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
 
-## 2026-11-07 — PR: claude/asce7-h1-roof-lateral — A7H1: MWFRS lateral force, roof term normal to the ridge and the end wall parallel to the ridge (review H1; §4)
+## 2026-11-07 — PR: claude/asce7-h1-roof-lateral — A7H1: MWFRS lateral force, roof term normal to the ridge and the end wall parallel to the ridge (review H1; §4; PR #1061: https://github.com/mlococo88/All-Structural/pull/1061)
 
 Basis: ASCE/SEI 7-16 Fig. 27.3-1 and Sec. 27.1.5 (**verify (ASCE 7-16 PDF unreadable)**: the coefficients are the ones already in the tool; the 16 psf wall / 8 psf roof split of 27.1.5 is applied to the projected wall area, which here now includes the end wall above the eave). Code site tag `A7H1`.
 
