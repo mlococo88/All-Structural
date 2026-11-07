@@ -3332,3 +3332,29 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
   - `check-syntax` passes; Validation 136/136.
   - Headless probe, main vs branch: only the models whose hole n differed from the host's changed (concHole_n1, concHole_n1b). Holes with a matching n (concHole_n8, holeMulti with two hosts of n = 1 and 0.5, barHole, plHole) are identical, as are all 1,660 shapes and the default project.
   - `project-library --tool spc`: ALL PASS. 0 console errors.
+
+## 2026-11-07 — PR: claude/spc-hole-outside — SPM2: a hole partly outside the material is an error that blocks the results (review M2; §4 check logic; PR #1091: https://github.com/mlococo88/All-Structural/pull/1091)
+
+- **Problem (review M2):** a hole that was not inside material still gave results, with only a warning. Example: a 10 × 2 plate with a 2 × 2 hole straddling its top edge gave A = 16 (the true net area is 19), I_x = −5.92 in⁴ and S_x < 0. This can happen with Prevent overlap off, an imported file or a typed position.
+- **Fix (engine, conservative):** new `holeCoverCheck(R)` (anchor `function holeCoverCheck(R) {`), called in `analyze()` before `holeHostN`.
+  - Before: `if (R.errors.length) return R;` was followed directly by `holeHostN(R);`.
+  - After: `if (R.errors.length) return R;` → `holeCoverCheck(R); if (R.errors.length) return R;` → `holeHostN(R);`.
+  - For each hole, the covered area is Σ |`novInter`(hole, solid part)| over the solid parts. This is the exact overlap with the material; tube voids are not material.
+  - When hole area − covered area > max(1e-6 × hole area, `novTol`), an **error** is added: "Hole H1 lies partly outside the material: about 3 in² of its 4 in² is not inside any solid part, so it would remove area that does not exist. Move or resize it so that it lies wholly inside the material (the tool does not clip holes)." No results are shown ("NO RESULT" strip).
+  - A hole across the joint of two touching parts is covered, so it is allowed. It still gets the existing "not entirely inside one material part" warning and takes the n of the part it overlaps most (SPM1).
+  - A hole inside the void of a tube is not covered, so it is an error.
+- **§4 callout (check logic):**
+  - Before: warning only, and the results were computed with the full hole area removed.
+  - After: error, no results.
+  - Basis: mechanics of materials (a void can only remove existing material).
+  - The alternative, clipping the hole to the material, was not chosen. **Decision (pending engineer review):** blocking is the conservative choice, because it never shows a result built on an assumed geometry. Clipping, as AutoCAD SUBTRACT does in the DXF note, could be added on request.
+- **Check case:** PL 10 × 2 centred at 0, hole 2 × 2 centred at y = +1.5.
+  - Hole area 4 in²; area inside the plate = 2 × 0.5 = 1 in², so 3 in² is outside.
+  - Before: A = 16, I_x = −5.92 in⁴, warning only.
+  - After: the error above, no results.
+  - Hole 1 × 1 across the joint of two touching PL 10 × 1 (one above y = 0, one below): A = 20 − 1 = 19 in², unchanged, no error.
+- **Saved data:** no change. A saved project with such a hole opens and shows the error until the hole is moved.
+- **Verified:**
+  - `check-syntax` passes; Validation 136/136.
+  - Headless probe, main vs branch: only holeEdge, holeEdgeTiny and holeInTube changed, all to the error. Every other model (holes inside one part, across a joint, round holes, concrete holes) is identical, as are all 1,660 shapes.
+  - `project-library --tool spc`: ALL PASS. 0 console errors.
