@@ -19873,7 +19873,7 @@ index 06a42e4..b58d4e3 100644
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
 
-## 2026-11-07 — PR: claude/pile-h1-comb-pr (PDA-H1) — Module 05 micropile casing combined axial + flexure: P_r over the unsupported length   [calculation change]
+## 2026-11-07 — PR: claude/pile-h1-comb-pr (PR #995: https://github.com/mlococo88/All-Structural/pull/995) (PDA-H1) — Module 05 micropile casing combined axial + flexure: P_r over the unsupported length   [calculation change]
 - **Problem (review H1):** Module 05 (6.9.2.2.1, casing only) took P_r = φ_c P_n at K·L_c with `L_c = 1.0 ft` hard-wired (`DEFAULT_INPUTS.Lc`, no input), whatever the stickup, design scour or Module 10. With a stickup the column over the unsupported length is much weaker, so the check was unconservative. The H-pile path already uses the Module 10 column (`const Pn_comb = Pn_axial;`).
 - **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 10.9.3.10.2 (for a micropile above ground, through scour or weak soil, the laterally unsupported length is to be considered in the axial compression resistance; Eqs. 10.9.3.10.2a / 2b are for a length with no unsupported length); Art. 10.7.3.13.4 (effective length = unsupported length + depth to fixity); Art. 6.9.2.2.1 (P_r per 6.9.2.1 / 6.9.4.1).
 - **Where:** `computeAll`, right after the `R.buckling = { … bklLpileM: I.bklLpileM };` block (anchor `// PDA-H1 (2026-11-07): Module 05`).
