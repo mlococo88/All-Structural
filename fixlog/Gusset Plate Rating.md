@@ -3210,7 +3210,7 @@ From the code-compliance review of 2026-11-07 (finding M6).
   - Governing LFR Inventory stays L2-U1-WB 1.403. Default spliced: governing LFR Inv L1-L2-FS −0.205 → −0.402.
 - **How verified:** main vs branch on 20 review cases: only LFR fastener-shear values of unknown-origin rivets (r0) moved; Grade 1 rivet and bolt cases (validation model, r1, bolts, variant) identical. Validation 17 of 17 (Grade 1). `check-syntax`, `phone-layout --tool gusset` pass; `project-library --tool gusset`: its four "identical to main" checks show exactly this change; all other checks pass. 0 console errors.
 
-## 2026-11-07 — PR: claude/gusset-m3-partial-planes — Partial shear planes around compression members (LRFD 10th Ed. 6.14.2.8.3): automatic planes, and user planes as segments with a loaded member (M3; §4, new check)
+## 2026-11-07 — PR: claude/gusset-m3-partial-planes (PR #1057: https://github.com/mlococo88/All-Structural/pull/1057) — Partial shear planes around compression members (LRFD 10th Ed. 6.14.2.8.3): automatic planes, and user planes as segments with a loaded member (M3; §4, new check)
 
 From the code-compliance review of 2026-11-07 (finding M3). Engineer asleep; decisions pending engineer review.
 
