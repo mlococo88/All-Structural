@@ -2645,7 +2645,7 @@ From the code-compliance review of 2026-11-07 (finding H3, the plate-girder buil
 
 ### H3-2. "Plate girder: every property from the plates"   [new option; no result change unless ticked]
 - **Problem:** after H3-1, a built-up section still took A, I_x, S_x, Z_x, r_x, k, Q_f, Q_w, W_no, S_w1 and Wt from the parent rolled shape unless each was typed in (flagged by the H3-1 warning).
-- **Governing provision:** section properties of three welded plates (doubly symmetric; welds neglected): AISC 360-16 Table B4.1b note on h; §F2.2 Eq. F2-7; §J10.2 (k for welded sections = flange face to weld toe); AISC Design Guide 9 (2nd Ed.) Appendix C forms for W_no = b_f h_o/4 and S_w1 = t_f b_f² h_o/16.
+- **Governing provision:** section properties of three welded plates (doubly symmetric; welds neglected): AISC 360-16 Table B4.1b note on h; §F2.2 Eq. F2-7; §J10.2 (k for welded sections = flange face to weld toe); AISC Design Guide 9 (1997), torsional properties of a doubly symmetric I-shape: W_no = b_f h_o/4, S_w1 = t_f b_f² h_o/16.
 - **Where (1):** `resolveSection`, inside the H3-1 block, anchor `/* H3-2 (2026-11-07): plate-girder input (S.section.plates)`. When `S.section.plates` is true (new field), every property not entered is computed:
 ```js
       if(S.section.plates){
