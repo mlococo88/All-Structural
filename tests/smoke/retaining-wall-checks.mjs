@@ -10,7 +10,7 @@
 // RWSC (2026-11-07): the self-consistency panel passes on representative walls, reports MISMATCH on a tampered result, hides on error.
 // RWPR (2026-11-07): the Report prints alone, with every section, the overview figures and the input echo; 0 KaTeX errors.
 // RWKX (2026-11-07): the tabs' equations are all set by KaTeX, none in error; MathJax is not loaded.
-// Audit items (2026-11-07, table AUD): the new checks of the calculation audit on their check cases (RWS13 stem S1/S3 layout, RWEC ACI eccentricity limit, RWFF front-face T&S, RWSK shear key, RWE1 AASHTO Extreme Event I, RWIB ACI/IBC 0.7E, ...).
+// Audit items (2026-11-07, table AUD): the new checks of the calculation audit on their check cases (RWS13 stem S1/S3 layout, RWEC ACI eccentricity limit, RWFF front-face T&S, RWSK shear key, RWE1 AASHTO Extreme Event I, RWIB ACI/IBC 0.7E, RWSQ stem seismic, ...).
 //   node tests/smoke/retaining-wall-checks.mjs [--file <file or git ref>]
 import path from 'path';
 import { openPage, resolveFile } from '../lib.mjs';
@@ -219,6 +219,12 @@ const AUD = [
     ['Math.abs(R.FOS_OT - 7.54) < 0.005 && Math.abs(R.FOS_SL - 1.656) < 0.001 && Math.abs(R.FOS_OT_E - 6.086) < 0.001 && Math.abs(R.FOS_SL_E - 1.462) < 0.001', 'static and 0.7E factors of safety'],
     ['R.checks.sliding.ok && R.checks.slidingE.ok && R.checks.otE.ok', 'all pass (sliding failed before: 1.392 < 1.5)'],
     ['/0\\.7 × ΔP_E, FOS ≥ 1\\.1/.test(T.stability) && /Sliding \\(0\\.7E\\)/.test(T.overview) && /IBC 2018 §1807\\.2\\.3 Exception/.test(P) && !/IBC 2021/.test(P + T.stability)', 'tab, dashboard, Report; IBC 2018 cited']]],
+  ['RWSQ ACI k_h 0.10: stem M_u 18432 → 22365 (U = 1.2D + 1.0E + 1.6H governs)', { kh: 0.10 }, [
+    ['Math.abs(R.Mu_stem_eq - 22365) < 1 && R.stem_eq_governs && Math.abs(R.Mu_stem_lbft - 22365) < 1', 'M_u 22365, seismic governs'],
+    ['/Seismic combination U = 1\\.2D \\+ 1\\.0E \\+ 1\\.6H/.test(T.stem) && /Seismic combination U = 1\\.2D/.test(P)', 'Stem Step 1 and Report']]],
+  ['RWSQ AASHTO k_h 0.10: stem Extreme Event I 14335 < Strength I 32274', { design_basis: 'AASHTO', kh: 0.10 }, [
+    ['Math.abs(R.Mu_stem_eq - 14335) < 1 && !R.stem_eq_governs && Math.abs(R.Mu_stem_lbft - 32274) < 1', 'EE I computed, does not govern'],
+    ['/Extreme Event I at the stem base/.test(T.stem)', 'Stem Step 1']]],
   ['RWEC AASHTO unchanged by the ACI select', { design_basis: 'AASHTO', aci_ecc_limit: 'b6' }, [['R.ecc_lim_aci === null && /e=1\\.43/.test(R.checks.ecc.val)', 'AASHTO e check as before']]],
 ];
 for (const [name, set, tests, opt] of AUD.filter(x => !process.env.RW_AUD || x[0].startsWith(process.env.RW_AUD))) {
