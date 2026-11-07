@@ -3006,3 +3006,175 @@ Calculation audit, item 5 (PR 5a). Engineer decision (2026-11-07). Code sites ar
 - Old projects keep every value. They gain three check rows.
 - A wall whose toe is too short for straight F2 bars now shows a FAIL that was not checked before.
 - The S1D lap drawn in ACI mode changes where ℓd < 12 in (e.g. 15.6 → 14.8 in at the default).
+
+## 2026-11-07 — PR: claude/rw-stem-s1s3 — Stem back-face layout: S1 to mid-height + the S3–S1 lap, S3 above; alternate-bar cut-off removed; S1 end and moment along the height checked (RWS13; calculation and detailing change)
+
+Calculation audit, item 5b. Engineer decision (2026-11-07). Code sites are tagged `RWS13`.
+
+### RWS13-1. `calcAll`: the alternate-bar cut-off removed; new S1/S3 block after the F1 development check   [§4]
+- **Before:** S1 ran full height; half of S1 was cut off at `z_cutoff` (extension max(d, 12d_b) in both modes); S3 ran from mid-height to the top with no splice with S1 ("not in the model"); a warning asked to confirm ACI 9.7.3.5 at the cut-off.
+- **After (engineer's model):**
+  - S1 (lapped with the S1D dowels at the joint) runs from the footing to mid-height + the S3–S1 lap; S3 from mid-height to the top. No alternate-bar cut-off.
+  - **S3–S1 tension lap:** all S3 bars lap S1 at one level (100 % spliced) → Class B, ℓst = max(1.3ℓd, 12 in), ℓd before its 12-in minimum (ACI 318-19 Table 25.5.2.1 / §25.5.2.1; AASHTO LRFD 10th Ed. 5.10.8.4.3a). Bars of different size: ℓst = the greater of ℓd of the larger bar and ℓst of the smaller bar (ACI 318-19 §25.5.2.2), used in both modes (AASHTO: adopted from ACI by the engineer). Same size: the larger of the two ℓst (they differ only by spacing).
+  - **Extension of S1 past z_req** (the height above which S3 alone carries M_u): ACI 318-19 §7.7.3.3 (one-way slab rules apply to the stem by §13.3.6.1; §9.7.3.3 has the same rule for beams): max(d, 12d_b). AASHTO 10th 5.10.8.1.2a: max(d, 15d_b, L/20), L = clear span = H_s.
+  - **End of S1:** z_S1 = max(H_s/2 + ℓst/12, z_req + ℓ_ext/12); S1 runs full height when z_S1 reaches the top cover.
+  - **Moment along the height** (ACI 318-19 §13.3.6.3): 240 sections plus the bar ends; φM_n of the bars present, each set's stress in proportion to its embedment beyond the section up to ℓd (S1 above its end, S3 above mid-height); demand = the same envelope the cut-off used (Strength I / U = 1.6H, φ 0.90; AASHTO Extreme Event II, φ 1.00). New check rows `stemS3Lap` ("Stem S3–S1 Lap") and `stemMAlong` ("Stem M along height").
+- **Decisions (pending engineer review):**
+  - ℓd of the larger bar in the §25.5.2.2 rule is taken with its 12-in minimum (conservative).
+  - The S1 end is a lap splice with S3 (continuous reinforcement), not a bar termination: ACI §7.7.3.5 (tension-zone termination) and the AASHTO 5.10.8.1.2a "no more than 50 % terminated at a section" rule are not applied to it.
+  - L in L/20 = H_s (the stem is a cantilever from the joint).
+  - The vertical bars are taken as anchored at the stem top (no development ramp at the top end).
+- **Before / after** (`git diff -U0`, calculation):
+```diff
+@@ -2996,44 +2997,2 @@ function calcAll(inp) {
+-  // ── Bar cutoff: alternate S1 bars terminated (ACI 318-19 §9.7.3 / AASHTO 5.10.8.1.2) ──
+-  // Remaining bars = half of S1 at twice the spacing. Find the depth z_th (from top) at
+-  // which φMn of the remaining bars equals the factored demand envelope (Strength +
+-  // EE-II), using the tapered stem thickness. The terminated bars must then extend
+-  // PAST that point toward the top by max(d, 12db) [ACI 9.7.3.3 / AASHTO 5.10.8.1.2a],
+-  // and be developed (ℓd) from the base where they are fully stressed.
+-  let z_cutoff = null, z_cut_theory = null, cut_ext = 0, As_rem = 0, s_rem = 0;
+-  {
+-    As_rem = sel_stem.As_prov / 2;
+-    s_rem  = sel_stem.spacing * 2;
+-    const db = sel_stem.bar.db;
+-    const ctArmTop = ctR ? (ctR.y_CT - tf_ft - inp.Hs) : 0;   // collision height above stem top
+-    const MuAt = z => {                         // factored demand at depth z below stem top (lb·ft/ft)
+-      const sd = stemDemand(z);
+-      const mS = gEH*sd.M_soil + gWA*sd.M_hyd + gES*(Ka*inp.q_sur*z*z/2) + gLS*(Ka*q_ll_stem*z*z/2);
+-      const mE = ctR ? (sd.M_soil + sd.M_hyd + Ka*inp.q_sur*z*z/2 + 0.5*Ka*q_ll_stem*z*z/2
+-                        + ctR.CT_h*1000*(ctArmTop + z)) : 0;
+-      return Math.max(mS, mE);
+-    };
+-    const dAt = z => (inp.ts_top + (inp.ts_bot - inp.ts_top) * z / inp.Hs) - inp.cov_stem - db/2;
+-    const phiMnRem = z => { const d = dAt(z), a = As_rem*inp.fy/(0.85*inp.fc*bw);
+-                            return 0.9 * As_rem * inp.fy * (d - a/2) / 12; };
+-    if (s_rem > max_s_stem) {
+-      z_cutoff = null;                          // remaining spacing would violate max spacing
+-    } else if (MuAt(inp.Hs) <= phiMnRem(inp.Hs)) {
+-      z_cut_theory = inp.Hs;                    // half the bars suffice full height
+-    } else {
+-      let lo = 0, hi = inp.Hs;
+-      for (let k = 0; k < 50; k++) {
+-        const mid = (lo + hi) / 2;
+-        if (MuAt(mid) <= phiMnRem(mid)) lo = mid; else hi = mid;
+-      }
+-      z_cut_theory = lo;
+-    }
+-    if (z_cut_theory !== null) {
+-      cut_ext = Math.max(dAt(z_cut_theory), 12 * db) / 12;          // ft
+-      // Extend toward the TOP; also no shorter than ℓd measured from the base
+-      z_cutoff = Math.min(z_cut_theory - cut_ext, inp.Hs - ld_stem / 12);
+-      if (z_cutoff <= 0.5) z_cutoff = null;     // cutoff would be at/near the top — run bars full height
+-    }
+-  }
+-  const z_cutoff_from_base = z_cutoff === null ? inp.Hs : Math.max(0, inp.Hs - z_cutoff); // full bars up to here
+-  if (z_cutoff !== null)
+-    warnings.push(`S1 alternate-bar cutoff is in a flexural tension zone — confirm ACI 9.7.3.5 / AASHTO 5.10.8.1.2 shear/steel conditions at the cutoff.`);
++  // RWS13 (2026-11-07): the alternate-bar cut-off of S1 (z_cutoff) is removed (engineer decision, audit item 5b).
++  // S1 runs from the footing to mid-height + the S3–S1 lap; see "RWS13" after the development checks below.
+@@ -3264,0 +3224,71 @@ function calcAll(inp) {
++  // ── RWS13 (2026-11-07): stem back-face layout S1 / S3 (engineer decision, audit item 5b) ──
++  // S1 (lapped with the dowels S1D at the joint) runs from the footing up to mid-height + the S3–S1 lap ℓst;
++  // S3 runs from mid-height to the top. No alternate-bar cut-off.
++  // (a) S3–S1 tension lap: all S3 bars lap S1 at one level (100 % spliced) → Class B (ACI Table 25.5.2.1 /
++  //     AASHTO 5.10.8.4.3a). Bars of different size: ℓst = max(ℓd of the larger bar, ℓst of the smaller bar)
++  //     (ACI 318-19 §25.5.2.2; used in AASHTO mode too, adopted from ACI by the engineer). Same size: the larger ℓst.
++  const ld_S3      = isAASHTO
++    ? devLengthAASHTO(sel_stemT.bar.db, inp.fy, inp.fc, false, inp.cov_stem + sel_stemT.bar.db / 2, sel_stemT.spacing)
++    : devLength(sel_stemT.bar.db, inp.fy, inp.fc, 1.0, 1.0, inp.cov_stem + sel_stemT.bar.db / 2, 1.0, sel_stemT.spacing);
++  const s13_ld_a1  = lap_ld_a;                                                    // S1, before the 12-in minimum
++  const s13_ld_a3  = ldRaw(sel_stemT.bar, sel_stemT.spacing, inp.cov_stem, false); // S3, before the 12-in minimum
++  const s13_lst1   = Math.max(12, 1.3 * s13_ld_a1), s13_lst3 = Math.max(12, 1.3 * s13_ld_a3);
++  const s13_ratio  = sel_stemT.As_prov / Math.max(As_stemT_des, 1e-9);            // over the lap (S3 at mid-height); 100 % spliced → Class B anyway
++  const s13_diff   = sel_stem.bar.num !== sel_stemT.bar.num;
++  const s13_big    = sel_stem.bar.num >= sel_stemT.bar.num ? 'S1' : 'S3';
++  const s13_ld_big = s13_big === 'S1' ? ld_stem : ld_S3;                          // ℓd of the larger bar (with its 12-in minimum)
++  const s13_lst_sm = s13_big === 'S1' ? s13_lst3 : s13_lst1;                      // ℓst of the smaller bar
++  const s13_lst    = s13_diff ? Math.max(s13_ld_big, s13_lst_sm) : Math.max(s13_lst1, s13_lst3);
++  // (b) S1 extension past the point where it is no longer required (S3 alone carries the demand above z_req):
++  //     ACI 318-19 §7.7.3.3 (one-way slab, §13.3.6.1; same rule as §9.7.3.3): max(d, 12d_b);
++  //     AASHTO 10th §5.10.8.1.2a: max(d, 15d_b, L/20), L = clear span of the cantilever stem = H_s.
++  const tAt  = zb => inp.ts_bot - (inp.ts_bot - inp.ts_top) * zb / inp.Hs;           // stem thickness at zb ft above the joint (in)
++  const ctArmTop = ctR ? (ctR.y_CT - tf_ft - inp.Hs) : 0;                              // collision height above the stem top
++  const MuS = zb => { const z = inp.Hs - zb, sd = stemDemand(z);                       // Strength I / U = 1.6H at zb (lb·ft/ft)
++    return gEH*sd.M_soil + gWA*sd.M_hyd + gES*(Ka*inp.q_sur*z*z/2) + gLS*(Ka*q_ll_stem*z*z/2); };
++  const MuE = zb => { if (!ctR) return 0; const z = inp.Hs - zb, sd = stemDemand(z);  // AASHTO Extreme Event II at zb
++    return sd.M_soil + sd.M_hyd + Ka*inp.q_sur*z*z/2 + 0.5*Ka*q_ll_stem*z*z/2 + ctR.CT_h*1000*(ctArmTop + z); };
++  const phiE = isAASHTO ? 1.00 : 0.90;
++  const MnOf = (sets, zb) => {                                                          // nominal moment of the effective bars (lb·ft/ft)
++    const T = sets.reduce((a, q) => a + q.A, 0); if (T <= 0) return 0;
++    const a = T * inp.fy / (0.85 * inp.fc * bw);
++    return sets.reduce((m, q) => m + q.A * inp.fy * (tAt(zb) - inp.cov_stem - q.db / 2 - a / 2), 0) / 12; };
++  const dcAt = (sets, zb) => { const Mn = MnOf(sets, zb), mS = MuS(zb), mE = MuE(zb);
++    if (mS <= 1e-6 && mE <= 1e-6) return 0; if (Mn <= 0) return Infinity;
++    return Math.max(mS / (0.90 * Mn), mE / (phiE * Mn)); };
++  const NZ = 240, s3only = zb => [{ A: sel_stemT.As_prov, db: sel_stemT.bar.db }];
++  let z_req = 0;                                                                      // S1 is required below z_req
++  for (let i = NZ; i >= 0; i--) { const zb = inp.Hs * i / NZ;
++    if (dcAt(s3only(zb), zb) > 1) { let lo = zb, hi = Math.min(inp.Hs, zb + inp.Hs / NZ);
++      for (let k = 0; k < 40; k++) { const m = (lo + hi) / 2; if (dcAt(s3only(m), m) > 1) lo = m; else hi = m; }
++      z_req = hi; break; } }
++  const s1_ext_d   = tAt(z_req) - inp.cov_stem - sel_stem.bar.db / 2;
++  const s1_ext_db  = (isAASHTO ? 15 : 12) * sel_stem.bar.db;
++  const s1_ext_L   = isAASHTO ? inp.Hs * 12 / 20 : 0;
++  const s1_ext     = Math.max(s1_ext_d, s1_ext_db, s1_ext_L);                           // in
++  const z_s1_lap   = Hs_mid + s13_lst / 12;                                              // ft above the joint
++  const z_s1_ext   = z_req + s1_ext / 12;
++  const z_s1_need  = Math.max(z_s1_lap, z_s1_ext);
++  const s1_full    = z_s1_need >= inp.Hs - inp.cov_stem / 12;                            // S1 runs to the top
++  const z_s1_end   = s1_full ? inp.Hs : z_s1_need;
++  const s13_lap_prov = (z_s1_end - Hs_mid) * 12;                                         // lap provided (in)
++  const s13_lap_ok = s1_full || s13_lap_prov >= s13_lst - 1e-6;
++  const s1_end_ok  = s1_full || z_s1_end >= z_s1_ext - 1e-9;
++  // (c) moment capacity along the height (ACI 13.3.6.3: investigate along the height): φMn of the bars present at each
++  //     height, each set's stress taken in proportion to its embedment beyond the section up to ℓd (S1 above its end
++  //     at z_s1_end, S3 above its start at mid-height); the bars are taken as anchored at the stem top.
++  const setsAt = zb => {
++    const q = [];
++    const e1 = s1_full ? 1 : Math.min(1, Math.max(0, (z_s1_end - zb) * 12 / ld_stem));
++    if (e1 > 0) q.push({ A: sel_stem.As_prov * e1, db: sel_stem.bar.db });
++    const e3 = zb <= Hs_mid ? 0 : Math.min(1, (zb - Hs_mid) * 12 / ld_S3);
++    if (e3 > 0) q.push({ A: sel_stemT.As_prov * e3, db: sel_stemT.bar.db });
++    return q; };
++  const zKey = [0, Hs_mid, Hs_mid + ld_S3 / 12, z_s1_end - ld_stem / 12, z_s1_end].filter(z => z >= 0 && z <= inp.Hs);
++  let s13_dc = 0, s13_dc_z = 0;
++  for (const zb of [...Array(NZ + 1).keys()].map(i => inp.Hs * i / NZ).concat(zKey)) {
++    const dc = dcAt(setsAt(zb), zb); if (dc > s13_dc) { s13_dc = dc; s13_dc_z = zb; } }
++  const s13_Mu_at  = Math.max(MuS(s13_dc_z), MuE(s13_dc_z)), s13_Mn_at = MnOf(setsAt(s13_dc_z), s13_dc_z);
++  const s13_ok     = s13_dc <= 1 + 1e-9;
++  if (!s13_ok) warnings.push(`Stem back-face bars: M_u exceeds φM_n of the bars present at ${f(s13_dc_z,2)} ft above the joint (D/C ${f(s13_dc,2)}) — increase S3 or extend S1.`);
++
+@@ -3432,0 +3463,2 @@ function calcAll(inp) {
++    stemS3Lap:  { ok: s13_lap_ok && s1_end_ok,   label: 'Stem S3–S1 Lap', val: s1_full ? 'S1 full height' : `S1 to ${f(z_s1_end,2)}ft` },   // RWS13
++    stemMAlong: { ok: s13_ok,                     label: 'Stem M along height', val: `D/C ${f(s13_dc,2)} @ ${f(s13_dc_z,1)}ft` },   // RWS13
+@@ -3516 +3547,0 @@ function calcAll(inp) {
+-    z_cut_theory, cut_ext, As_rem, s_rem,
+@@ -3519 +3550,3 @@ function calcAll(inp) {
+-    z_cutoff, z_cutoff_from_base,
++    ld_S3, s13_ld_a1, s13_ld_a3, s13_lst1, s13_lst3, s13_ratio, s13_diff, s13_big, s13_ld_big, s13_lst_sm, s13_lst,   // RWS13
++    z_req, s1_ext_d, s1_ext_db, s1_ext_L, s1_ext, z_s1_lap, z_s1_ext, z_s1_need, s1_full, z_s1_end, s13_lap_prov, s13_lap_ok, s1_end_ok,
++    s13_dc, s13_dc_z, s13_Mu_at, s13_Mn_at, s13_ok,
+```
+
+### RWS13-2. Display
+- **Stem design tab:** Step 5 renamed "Development Length & Dowel Lap" (the cut-off equation removed); new card **Mid Step 3 — S3–S1 Lap, End of S1 & Moment along the Height** (lap of each bar, the §25.5.2.2 rule, z_req, extension, z_S1, max M_u/φM_n with its location). The V/M plot and the stem moment diagram show the end of S1 instead of the cut-off; the cross-section shows the S1 end and the lap zone.
+- **Dashboard rows** "Stem S3–S1 Lap" (D/C = ℓst / lap provided, 1.00 by construction) and "Stem M along height", linked to Mid Step 3.
+- **Report:** Mid Step 3 (`stm/m3.*`) in the mid-height section; the cut-off step `stb/s5.zcut` removed; Step 5 title; references (ACI §7.7.3.3, §13.3.6.3, §25.5.2; AASHTO 5.10.8).
+- **Rebar schedule tab:** S1 and S3 notes give the S1 end and the lap; S3 shows its ℓd.
+- **Drawings:** S1 drawn to z_S1; S3 label "CLASS B TENSION LAP WITH S1 L_ST = … (CHECKED)" (was "SPLICE NOT IN THE MODEL"); the cut-off mark and label removed; bar schedule: one S1 row (lower, to mid-height + lap; was full-height + cut-off rows), S3 with ℓd and lap; notes updated.
+
+### Check cases (`calcAll` in Node and in the browser)
+- **ACI default:** S1 #4@6, S3 #4@7 (same size). ℓd(a) = 11.38 in both (spacing changes c_b only through s/2 ≥ cover) → ℓst = max(1.3·11.38, 12) = **14.8 in**. z_req = 0 (S3 alone carries M_u = 18432 at the base: φM_n = 0.9·0.343·60000·(15.75 − 0.5·0.504)/12 = 23 900 ≥ 18432 lb·ft/ft). ℓ_ext = max(15.75, 6.0) = 15.75 in → z_S1 = max(6.0 + 1.23, 0 + 1.31) = **7.23 ft** above the joint (before: full height 12 ft, half the bars cut at 2.44 ft above the base, z_cut 9.56 ft from the top). Max M_u/φM_n = 0.663 at the base.
+- **AASHTO default:** S1 #5@7, S3 #3@9. ℓd #5 = 14.78 in; ℓst #3 = max(1.3·8.87, 12) = 12.0 → ℓst = max(14.78, 12.0) = **14.8 in** (§25.5.2.2 rule). z_req = 4.93 ft; ℓ_ext = max(13.22, 15·0.625 = 9.38, 144/20 = 7.20) = 13.22 in → z_S1 = max(7.23, 6.03) = **7.23 ft** (before: full height + half cut at 3.93 ft above the base). Max D/C 0.882 at the base.
+- **AASHTO + collision (TL-4):** z_req 4.06 ft, ℓ_ext 13.66 in, z_S1 7.23 ft; D/C 0.882.
+- **ACI tall wall** (H_s 28, t 30/14, t_f 36, L_t 6, L_h 16): S1 #10@7, S3 #5@7: ℓst = max(ℓd #10 = 43.55, ℓst #5 = 18.50) = 43.55 in; z_req 11.28 ft; z_S1 = max(17.63, 13.02) = 17.63 ft; D/C 0.928 (base).
+- **ACI tall wall with S3 override #4@18:** z_req 18.09 ft → z_S1 = z_req + ℓ_ext = 19.51 ft (the extension governs over mid-height + lap).
+
+### How verified
+- origin/main vs branch, headless Chromium, the twelve audit walls (ACI default, water uniform / triangular, mix (water + seismic + column + β + q_s + key), short toe; AASHTO collision, water + column + η + at-rest, rock + collision + water + β, variable height + collision, q_s 250 + water + collision ± "full"; ACI tall + seismic + water): `_R` differs only by the six removed cut-off fields, the removed cut-off warning (later warnings shift by one index), the 31 new fields and the two new `checks` entries; Export JSON and every localStorage key identical; tab and Report text differ by the new card, rows and steps. 0 console errors.
+- Tests: check-syntax; smoke/retaining-wall-checks (new table `AUD`: the RWS13 check cases); phone-layout rwall 390/768; project-library retwall (its strict "results identical" step lists only the removed and added `_R` items above); dxf-print-sheets rw.
+- Screenshots looked at: Stem design Mid Step 3 (AASHTO), Drawings sheet 2 (AASHTO).
+
+### Saved data
+- No input added; no key or format change. Old projects open with the new layout (S1 shorter, no cut-off) and two new check rows.
