@@ -1722,6 +1722,7 @@ const RW_CARDS = {
   stemDev:     ['stem', 'Step 5 — Development Length', 'Step 5 — Development Length'],
   stemTS:      ['stem', 'Step 6 — Horizontal Temperature', 'Step 6 — Horizontal Temperature'],
   stemMid:     ['stem', 'Mid Step 2 — Flexural Reinforcement', 'Mid Step 2 — Flexural Reinforcement'],
+  stemS13:     ['stem', 'Mid Step 3 — S3–S1 Lap', 'Mid Step 3 — S3–S1 Lap'],   // RWS13
   heelFlex:    ['footing', 'Heel Step 3 — Flexural Steel', 'Heel Step 3 — Flexural Steel'],
   heelShear:   ['footing', 'Heel Step 4 — Shear', 'Heel Step 4 — Shear'],
   toeFlex:     ['footing', 'Toe Step 3 — Flexural Steel', 'Toe Step 3 — Flexural Steel'],
@@ -1731,7 +1732,7 @@ const RW_CARDS = {
 };
 // r.checks key → card where the check is worked (ACI crack control has no card in the tabs; the report adds one)
 const RW_CHECK_CARD = { ot:'stabOT', sliding:'stabSlide', bearing:'stabBrg', ecc:'stabEcc',
-  stemFlex:'stemFlex', stemShear:'stemShear', stemMidShear:'stemMid', stemHook:'stemDev', stemMidFlex:'stemMid', stemLap:'stemDev', heelDev:'heelShear', toeDev:'toeShear',
+  stemFlex:'stemFlex', stemShear:'stemShear', stemMidShear:'stemMid', stemHook:'stemDev', stemMidFlex:'stemMid', stemLap:'stemDev', heelDev:'heelShear', toeDev:'toeShear', stemS3Lap:'stemS13', stemMAlong:'stemS13',
   heelFlex:'heelFlex', heelShear:'heelShear', toeFlex:'toeFlex', toeShear:'toeShear', colAxial:'stabCol',
   ishFtg:'stabISH', ishStem:'stabISH', tsStem:'stemTS', tsFtg:'ftgTS', ctSliding:'stabCT', ctEcc:'stabCT', ctBearing:'stabCT', ctYield:'stabYL',
   crackStem:'stabServ', minRfStem:'stabServ', crackHeel:'stabServ', minRfHeel:'stabServ', crackToe:'stabServ', minRfToe:'stabServ' };
@@ -2993,50 +2994,8 @@ function calcAll(inp) {
   const phiVc_stemT = phiV_T * Vc_stemT;
   const stemT_shear_ok = phiVc_stemT >= Vu_stemT;
 
-  // ── Bar cutoff: alternate S1 bars terminated (ACI 318-19 §9.7.3 / AASHTO 5.10.8.1.2) ──
-  // Remaining bars = half of S1 at twice the spacing. Find the depth z_th (from top) at
-  // which φMn of the remaining bars equals the factored demand envelope (Strength +
-  // EE-II), using the tapered stem thickness. The terminated bars must then extend
-  // PAST that point toward the top by max(d, 12db) [ACI 9.7.3.3 / AASHTO 5.10.8.1.2a],
-  // and be developed (ℓd) from the base where they are fully stressed.
-  let z_cutoff = null, z_cut_theory = null, cut_ext = 0, As_rem = 0, s_rem = 0;
-  {
-    As_rem = sel_stem.As_prov / 2;
-    s_rem  = sel_stem.spacing * 2;
-    const db = sel_stem.bar.db;
-    const ctArmTop = ctR ? (ctR.y_CT - tf_ft - inp.Hs) : 0;   // collision height above stem top
-    const MuAt = z => {                         // factored demand at depth z below stem top (lb·ft/ft)
-      const sd = stemDemand(z);
-      const mS = gEH*sd.M_soil + gWA*sd.M_hyd + gES*(Ka*inp.q_sur*z*z/2) + gLS*(Ka*q_ll_stem*z*z/2);
-      const mE = ctR ? (sd.M_soil + sd.M_hyd + Ka*inp.q_sur*z*z/2 + 0.5*Ka*q_ll_stem*z*z/2
-                        + ctR.CT_h*1000*(ctArmTop + z)) : 0;
-      return Math.max(mS, mE);
-    };
-    const dAt = z => (inp.ts_top + (inp.ts_bot - inp.ts_top) * z / inp.Hs) - inp.cov_stem - db/2;
-    const phiMnRem = z => { const d = dAt(z), a = As_rem*inp.fy/(0.85*inp.fc*bw);
-                            return 0.9 * As_rem * inp.fy * (d - a/2) / 12; };
-    if (s_rem > max_s_stem) {
-      z_cutoff = null;                          // remaining spacing would violate max spacing
-    } else if (MuAt(inp.Hs) <= phiMnRem(inp.Hs)) {
-      z_cut_theory = inp.Hs;                    // half the bars suffice full height
-    } else {
-      let lo = 0, hi = inp.Hs;
-      for (let k = 0; k < 50; k++) {
-        const mid = (lo + hi) / 2;
-        if (MuAt(mid) <= phiMnRem(mid)) lo = mid; else hi = mid;
-      }
-      z_cut_theory = lo;
-    }
-    if (z_cut_theory !== null) {
-      cut_ext = Math.max(dAt(z_cut_theory), 12 * db) / 12;          // ft
-      // Extend toward the TOP; also no shorter than ℓd measured from the base
-      z_cutoff = Math.min(z_cut_theory - cut_ext, inp.Hs - ld_stem / 12);
-      if (z_cutoff <= 0.5) z_cutoff = null;     // cutoff would be at/near the top — run bars full height
-    }
-  }
-  const z_cutoff_from_base = z_cutoff === null ? inp.Hs : Math.max(0, inp.Hs - z_cutoff); // full bars up to here
-  if (z_cutoff !== null)
-    warnings.push(`S1 alternate-bar cutoff is in a flexural tension zone — confirm ACI 9.7.3.5 / AASHTO 5.10.8.1.2 shear/steel conditions at the cutoff.`);
+  // RWS13 (2026-11-07): the alternate-bar cut-off of S1 (z_cutoff) is removed (engineer decision, audit item 5b).
+  // S1 runs from the footing to mid-height + the S3–S1 lap; see "RWS13" after the development checks below.
 
   // ================================================================
   // FOOTING HEEL DESIGN  (ACI 318-19)
@@ -3262,6 +3221,77 @@ function calcAll(inp) {
   if (!toe_dev_ok) warnings.push(`Toe bars F2: ${toe_hook ? 'ℓdh' : 'ℓd'} = ${f(f2_need,1)}" > ${f(f2_av_toe,1)}" available to the toe end — ${toe_hook ? 'use a smaller bar or lengthen the toe' : 'hook the bars at the toe end, use a smaller bar or lengthen the toe'}.`);
   if (!heel_dev_ok) warnings.push(`Heel bars F1: ℓd = ${f(ld_heel,1)}" exceeds the length available (${f(Math.min(f1_av_heel, f1_av_toe),1)}").`);
 
+  // ── RWS13 (2026-11-07): stem back-face layout S1 / S3 (engineer decision, audit item 5b) ──
+  // S1 (lapped with the dowels S1D at the joint) runs from the footing up to mid-height + the S3–S1 lap ℓst;
+  // S3 runs from mid-height to the top. No alternate-bar cut-off.
+  // (a) S3–S1 tension lap: all S3 bars lap S1 at one level (100 % spliced) → Class B (ACI Table 25.5.2.1 /
+  //     AASHTO 5.10.8.4.3a). Bars of different size: ℓst = max(ℓd of the larger bar, ℓst of the smaller bar)
+  //     (ACI 318-19 §25.5.2.2; used in AASHTO mode too, adopted from ACI by the engineer). Same size: the larger ℓst.
+  const ld_S3      = isAASHTO
+    ? devLengthAASHTO(sel_stemT.bar.db, inp.fy, inp.fc, false, inp.cov_stem + sel_stemT.bar.db / 2, sel_stemT.spacing)
+    : devLength(sel_stemT.bar.db, inp.fy, inp.fc, 1.0, 1.0, inp.cov_stem + sel_stemT.bar.db / 2, 1.0, sel_stemT.spacing);
+  const s13_ld_a1  = lap_ld_a;                                                    // S1, before the 12-in minimum
+  const s13_ld_a3  = ldRaw(sel_stemT.bar, sel_stemT.spacing, inp.cov_stem, false); // S3, before the 12-in minimum
+  const s13_lst1   = Math.max(12, 1.3 * s13_ld_a1), s13_lst3 = Math.max(12, 1.3 * s13_ld_a3);
+  const s13_ratio  = sel_stemT.As_prov / Math.max(As_stemT_des, 1e-9);            // over the lap (S3 at mid-height); 100 % spliced → Class B anyway
+  const s13_diff   = sel_stem.bar.num !== sel_stemT.bar.num;
+  const s13_big    = sel_stem.bar.num >= sel_stemT.bar.num ? 'S1' : 'S3';
+  const s13_ld_big = s13_big === 'S1' ? ld_stem : ld_S3;                          // ℓd of the larger bar (with its 12-in minimum)
+  const s13_lst_sm = s13_big === 'S1' ? s13_lst3 : s13_lst1;                      // ℓst of the smaller bar
+  const s13_lst    = s13_diff ? Math.max(s13_ld_big, s13_lst_sm) : Math.max(s13_lst1, s13_lst3);
+  // (b) S1 extension past the point where it is no longer required (S3 alone carries the demand above z_req):
+  //     ACI 318-19 §7.7.3.3 (one-way slab, §13.3.6.1; same rule as §9.7.3.3): max(d, 12d_b);
+  //     AASHTO 10th §5.10.8.1.2a: max(d, 15d_b, L/20), L = clear span of the cantilever stem = H_s.
+  const tAt  = zb => inp.ts_bot - (inp.ts_bot - inp.ts_top) * zb / inp.Hs;           // stem thickness at zb ft above the joint (in)
+  const ctArmTop = ctR ? (ctR.y_CT - tf_ft - inp.Hs) : 0;                              // collision height above the stem top
+  const MuS = zb => { const z = inp.Hs - zb, sd = stemDemand(z);                       // Strength I / U = 1.6H at zb (lb·ft/ft)
+    return gEH*sd.M_soil + gWA*sd.M_hyd + gES*(Ka*inp.q_sur*z*z/2) + gLS*(Ka*q_ll_stem*z*z/2); };
+  const MuE = zb => { if (!ctR) return 0; const z = inp.Hs - zb, sd = stemDemand(z);  // AASHTO Extreme Event II at zb
+    return sd.M_soil + sd.M_hyd + Ka*inp.q_sur*z*z/2 + 0.5*Ka*q_ll_stem*z*z/2 + ctR.CT_h*1000*(ctArmTop + z); };
+  const phiE = isAASHTO ? 1.00 : 0.90;
+  const MnOf = (sets, zb) => {                                                          // nominal moment of the effective bars (lb·ft/ft)
+    const T = sets.reduce((a, q) => a + q.A, 0); if (T <= 0) return 0;
+    const a = T * inp.fy / (0.85 * inp.fc * bw);
+    return sets.reduce((m, q) => m + q.A * inp.fy * (tAt(zb) - inp.cov_stem - q.db / 2 - a / 2), 0) / 12; };
+  const dcAt = (sets, zb) => { const Mn = MnOf(sets, zb), mS = MuS(zb), mE = MuE(zb);
+    if (mS <= 1e-6 && mE <= 1e-6) return 0; if (Mn <= 0) return Infinity;
+    return Math.max(mS / (0.90 * Mn), mE / (phiE * Mn)); };
+  const NZ = 240, s3only = zb => [{ A: sel_stemT.As_prov, db: sel_stemT.bar.db }];
+  let z_req = 0;                                                                      // S1 is required below z_req
+  for (let i = NZ; i >= 0; i--) { const zb = inp.Hs * i / NZ;
+    if (dcAt(s3only(zb), zb) > 1) { let lo = zb, hi = Math.min(inp.Hs, zb + inp.Hs / NZ);
+      for (let k = 0; k < 40; k++) { const m = (lo + hi) / 2; if (dcAt(s3only(m), m) > 1) lo = m; else hi = m; }
+      z_req = hi; break; } }
+  const s1_ext_d   = tAt(z_req) - inp.cov_stem - sel_stem.bar.db / 2;
+  const s1_ext_db  = (isAASHTO ? 15 : 12) * sel_stem.bar.db;
+  const s1_ext_L   = isAASHTO ? inp.Hs * 12 / 20 : 0;
+  const s1_ext     = Math.max(s1_ext_d, s1_ext_db, s1_ext_L);                           // in
+  const z_s1_lap   = Hs_mid + s13_lst / 12;                                              // ft above the joint
+  const z_s1_ext   = z_req + s1_ext / 12;
+  const z_s1_need  = Math.max(z_s1_lap, z_s1_ext);
+  const s1_full    = z_s1_need >= inp.Hs - inp.cov_stem / 12;                            // S1 runs to the top
+  const z_s1_end   = s1_full ? inp.Hs : z_s1_need;
+  const s13_lap_prov = (z_s1_end - Hs_mid) * 12;                                         // lap provided (in)
+  const s13_lap_ok = s1_full || s13_lap_prov >= s13_lst - 1e-6;
+  const s1_end_ok  = s1_full || z_s1_end >= z_s1_ext - 1e-9;
+  // (c) moment capacity along the height (ACI 13.3.6.3: investigate along the height): φMn of the bars present at each
+  //     height, each set's stress taken in proportion to its embedment beyond the section up to ℓd (S1 above its end
+  //     at z_s1_end, S3 above its start at mid-height); the bars are taken as anchored at the stem top.
+  const setsAt = zb => {
+    const q = [];
+    const e1 = s1_full ? 1 : Math.min(1, Math.max(0, (z_s1_end - zb) * 12 / ld_stem));
+    if (e1 > 0) q.push({ A: sel_stem.As_prov * e1, db: sel_stem.bar.db });
+    const e3 = zb <= Hs_mid ? 0 : Math.min(1, (zb - Hs_mid) * 12 / ld_S3);
+    if (e3 > 0) q.push({ A: sel_stemT.As_prov * e3, db: sel_stemT.bar.db });
+    return q; };
+  const zKey = [0, Hs_mid, Hs_mid + ld_S3 / 12, z_s1_end - ld_stem / 12, z_s1_end].filter(z => z >= 0 && z <= inp.Hs);
+  let s13_dc = 0, s13_dc_z = 0;
+  for (const zb of [...Array(NZ + 1).keys()].map(i => inp.Hs * i / NZ).concat(zKey)) {
+    const dc = dcAt(setsAt(zb), zb); if (dc > s13_dc) { s13_dc = dc; s13_dc_z = zb; } }
+  const s13_Mu_at  = Math.max(MuS(s13_dc_z), MuE(s13_dc_z)), s13_Mn_at = MnOf(setsAt(s13_dc_z), s13_dc_z);
+  const s13_ok     = s13_dc <= 1 + 1e-9;
+  if (!s13_ok) warnings.push(`Stem back-face bars: M_u exceeds φM_n of the bars present at ${f(s13_dc_z,2)} ft above the joint (D/C ${f(s13_dc,2)}) — increase S3 or extend S1.`);
+
   // ── ACI 318-19 §24.3.2 crack-control spacing (ACI basis; AASHTO uses §5.6.7 below) ──
   //   s ≤ min(15(40,000/fs) − 2.5cc, 12(40,000/fs)),  fs = ⅔fy
   const aciCrack = (cc, spacing) => {
@@ -3430,6 +3460,8 @@ function calcAll(inp) {
     toeDev:    { ok: toe_dev_ok,                   label: 'Toe F2 ' + (toe_hook ? 'ℓdh' : 'ℓd'), val: `${f(f2_need,1)}${f2_need <= f2_av_toe ? '≤' : '>'}${f(f2_av_toe,1)}"` },   // RWDS
     stemMidFlex: { ok: !stemT_overstressed && sel_stemT.As_prov >= As_stemT_des - 0.001,
                  label: 'Stem Mid Flex', val: stemT_ee2_governs ? 'EE-II governs' : undefined },
+    stemS3Lap:  { ok: s13_lap_ok && s1_end_ok,   label: 'Stem S3–S1 Lap', val: s1_full ? 'S1 full height' : `S1 to ${f(z_s1_end,2)}ft` },   // RWS13
+    stemMAlong: { ok: s13_ok,                     label: 'Stem M along height', val: `D/C ${f(s13_dc,2)} @ ${f(s13_dc_z,1)}ft` },   // RWS13
     heelFlex:  { ok: !heel_overstressed && sel_heel.As_prov >= As_heel_des - 0.001,
                  label: 'Heel Flex', val: heel_md_governs ? 'MassDOT governs' : (heel_case === 'norelief' ? 'no-relief basis' : undefined) },
     heelShear: { ok: heel_shear_ok,                label: 'Heel Shear' },
@@ -3513,10 +3545,11 @@ function calcAll(inp) {
     Vc_stem, phiVc_stem, stem_shear_ok, stem_overstressed,
     a_stem, phiMn_stem, shearStem, shearStemT, shearHeel, shearToe,
     ldh_stem, ldh_avail, hook_ok, ldA_stem, ldhA_stem, epst_stem, epst_heel, epst_toe, aciCr,
-    z_cut_theory, cut_ext, As_rem, s_rem,
     Hp, dH_slope, y_Pa, heelLongForRankine, coulombDeltaWarn, Wwedge, Wsoil_rect, w_soil_col, wt_at_surface, M_wedge_heel,
     sel_stem, sel_temp, ld_stem, rho_min, b_TS_stem, b_TS_ftg,
-    z_cutoff, z_cutoff_from_base,
+    ld_S3, s13_ld_a1, s13_ld_a3, s13_lst1, s13_lst3, s13_ratio, s13_diff, s13_big, s13_ld_big, s13_lst_sm, s13_lst,   // RWS13
+    z_req, s1_ext_d, s1_ext_db, s1_ext_L, s1_ext, z_s1_lap, z_s1_ext, z_s1_need, s1_full, z_s1_end, s13_lap_prov, s13_lap_ok, s1_end_ok,
+    s13_dc, s13_dc_z, s13_Mu_at, s13_Mn_at, s13_ok,
     // Stem mid-height (top-half) section
     Hs_mid, ts_mid, Mu_stemT_lbft, Mu_stemT_soil, Mu_stemT_ct, Vu_stemT,
     // Barrier
@@ -3904,7 +3937,7 @@ function plotStemSM(r) {
     Vs.push(1.6*(0.5*r.Ka*inp.gamma_s*z*z + r.Ka*inp.q_sur*z)/1000);
     Ms.push(1.6*(r.Ka*inp.gamma_s*z**3/6 + r.Ka*inp.q_sur*z*z/2)/1000);
   }
-  const cut = r.z_cutoff;
+  const cut = r.s1_full ? null : inp.Hs - r.z_s1_end;   // RWS13: depth from the top where S1 ends (S3–S1 lap above mid-height); was the alternate-bar cut-off
   Plotly.react(el, [
     { x: Ms, y: zs, name: 'M(z)', xaxis:'x1', yaxis:'y1', mode:'lines',
       line:{ color: PLT.fail, width: 2.5 }, fill:'tozerox', fillcolor: PLT.failFill,
@@ -3930,7 +3963,7 @@ function plotStemSM(r) {
         line:{ color: PLT.info, width: 1.6, dash:'dashdot' } },
     ] : [],
     annotations: (cut > 0 && cut < inp.Hs) ? [
-      { xref:'paper', x:0.02, y:cut, yref:'y1', text:`bar cutoff ${f(cut,1)} ft`,
+      { xref:'paper', x:0.02, y:cut, yref:'y1', text:`S1 ends ${f(cut,1)} ft below top`,
         showarrow:false, yshift:-9, font:{ size:10, color: PLT.info } },
     ] : [],
   }), PLT_CFG);
@@ -5248,7 +5281,7 @@ function renderStem(r) {
 
   // ════ STEP 5 — DEVELOPMENT & CUTOFF ════
   h += `<div class="card" style="margin-bottom:16px;">
-    <div class="card-hd"><span class="card-title">Step 5 — Development Length &amp; Bar Cutoff</span><span class="card-ref">${r.isAASHTO?'AASHTO §5.10.8.2.1a / §5.10.8.2.4a / §5.10.8.1.2':'ACI 318-19 §25.4.2.4 / §25.4.3 / §9.7.3'}</span></div>
+    <div class="card-hd"><span class="card-title">Step 5 — Development Length &amp; Dowel Lap</span><span class="card-ref">${r.isAASHTO?'AASHTO §5.10.8.2.1a / §5.10.8.2.4a / §5.10.8.4.3a':'ACI 318-19 §25.4.2.4 / §25.4.3 / §25.5.2'}</span></div>
     <div class="card-body">`;
   h += r.isAASHTO
    ? eq('Development length (λrl = 1.0, λcf = 1.0, λrc = d_b/c_b with β_t = 0, k_tr = 0)',
@@ -5272,13 +5305,6 @@ function renderStem(r) {
     [{sym:'\\ell_d', desc: (r.isAASHTO ? 'ℓdb·λrl·λcf·λrc (§5.10.8.2.1a)' : 'Eq. 25.4.2.4a (§25.4.2.1(a))') + ', before the 12-in minimum', val:F(r.lap_ld_a,2), unit:'in'},
      {sym:'A_{s,prov}/A_{s,req}', desc:'S1 provided / required at the base (Class A needs ≥ 2 and ≤ 50 % spliced)', val:F(r.lap_ratio,2), unit:''},
      {sym:'\\ell_{st}', desc:'tension lap length (used by the drawings)', val:F(r.lst_stem,1), unit:'in'}]);
-  if (r.z_cutoff !== null)
-    h += eq('Alternate-bar cutoff — half the S1 bars (#' + r.sel_stem.bar.num + ' @ ' + r.s_rem + '") carry M_u above z_th; terminated bars extend max(d, 12d_b) past it',
-      `z_{th} = ${F(r.z_cut_theory,2)}\\ \\text{ft},\\quad z_{cut} = z_{th} - ${F(r.cut_ext,2)} = ${F(r.z_cutoff,2)}\\ \\text{ft from top} \\ \\Rightarrow\\ \\text{full S1 bars up to } ${F(r.z_cutoff_from_base,2)}\\ \\text{ft above base}`, r.isAASHTO ? '\u00a75.10.8.1.2' : 'ACI 9.7.3.3',
-      [{sym:'z_{th}', desc:'depth below top where φMn(½A_s) = M_u envelope', val:F(r.z_cut_theory,2), unit:'ft'},
-       {sym:'z_{cut}', desc:'cutoff depth from top of stem (also ≥ ℓd above base)', val:F(r.z_cutoff,2), unit:'ft'}]);
-  else
-    h += `<div class="alert info">ℹ No alternate-bar cutoff: S1 bars run full height (half the bars would not carry the demand far enough up, or 2s would exceed the maximum spacing).</div>`;
   h += `</div></div>`;
 
   // ════ STEP 6 — TEMPERATURE & SHRINKAGE ════
@@ -5337,7 +5363,29 @@ function renderStem(r) {
     !r.stemT_overstressed && r.sel_stemT.As_prov >= r.As_stemT_des - 0.001);
   h += eqCheck('One-way shear at mid-height — ' + r.shearStemT.method,
     `\\phi V_c = ${Fk(r.phiVc_stemT)}\\ \\text{kip/ft} \\geq V_u = ${Fk(r.Vu_stemT)}\\ \\text{kip/ft}`, r.stemT_shear_ok);
-  h += `<div class="alert info" style="margin-top:8px;">ℹ The mid-height bars can often be a smaller size or wider spacing than the base (S1) bars, allowing the S1 bars to be cut off above the mid-point per the development/cutoff check.</div>`;
+  h += `</div></div>`;
+
+  // RWS13 (2026-11-07): Mid Step 3 — S3–S1 lap, end of S1, moment capacity along the height (no alternate-bar cut-off)
+  h += `<div class="card" style="margin-bottom:16px;">
+    <div class="card-hd"><span class="card-title">Mid Step 3 — S3–S1 Lap, End of S1 &amp; Moment along the Height</span><span class="card-ref">${r.isAASHTO?'AASHTO §5.10.8.4.3a / §5.10.8.1.2a; ACI 318-19 §25.5.2.2 (adopted)':'ACI 318-19 §25.5.2 / §7.7.3.3 / §13.3.6.3'}</span></div>
+    <div class="card-body">`;
+  h += `<div class="alert info" style="margin-bottom:8px;">Layout: S1 (lapped with the S1D dowels at the joint) runs from the footing to mid-height + the S3–S1 lap${r.s1_full ? ' — here that reaches the top, so S1 runs full height' : ''}; S3 runs from mid-height (${F(r.Hs_mid,2)} ft) to the top. All S3 bars lap S1 at one level, so the lap is Class B. No alternate-bar cut-off.</div>`;
+  h += eq('Lap length of each bar alone — Class B, ℓ_d before the 12-in minimum' + (r.isAASHTO ? ' (§5.10.8.2.1a)' : ' (§25.4.2.1(a))'),
+    `\\ell_{st,S1} = \\max(1.3(${F(r.s13_ld_a1,2)}),\;12) = ${F(r.s13_lst1,1)}\\ \\text{in};\\quad \\ell_{st,S3} = \\max(1.3(${F(r.s13_ld_a3,2)}),\;12) = ${F(r.s13_lst3,1)}\\ \\text{in}`, r.isAASHTO ? '§5.10.8.4.3a' : 'Table 25.5.2.1');
+  h += eqCheck(r.s13_diff ? 'S3–S1 lap, bars of different size (#' + r.sel_stem.bar.num + ' / #' + r.sel_stemT.bar.num + '): the greater of ℓ_d of the larger bar (' + r.s13_big + ') and ℓ_st of the smaller' + (r.isAASHTO ? ' — ACI 318-19 §25.5.2.2, adopted by the engineer for AASHTO mode' : '') : 'S3–S1 lap, bars of the same size: the larger ℓ_st',
+    (r.s13_diff ? `\\ell_{st} = \\max(\\ell_{d,${r.s13_big}},\;\\ell_{st,${r.s13_big === 'S1' ? 'S3' : 'S1'}}) = \\max(${F(r.s13_ld_big,1)},\;${F(r.s13_lst_sm,1)})` : `\\ell_{st} = \\max(${F(r.s13_lst1,1)},\;${F(r.s13_lst3,1)})`)
+      + ` = \\boxed{${F(r.s13_lst,1)}\\ \\text{in}}` + (r.s1_full ? `;\\quad \\text{S1 runs full height}` : `\;\\le\; \\text{lap provided} = (z_{S1} - h_s/2)(12) = (${F(r.z_s1_end,2)} - ${F(r.Hs_mid,2)})(12) = ${F(r.s13_lap_prov,1)}\\ \\text{in}`),
+    r.s13_lap_ok, r.isAASHTO ? 'ACI §25.5.2.2 (adopted)' : 'ACI 25.5.2.2');
+  h += eq('Height above which S3 alone carries the factored moment (S1 no longer required)',
+    `z_{req} = \\boxed{${F(r.z_req,2)}\\ \\text{ft}}\\ \\text{above the joint}`, '',
+    [{sym:'z_{req}', desc:'highest section where φM_n of S3 alone (#' + r.sel_stemT.bar.num + ' @ ' + r.sel_stemT.spacing + '″, tapered d) < M_u' + (r.aashtoR && r.aashtoR.ct ? ' (Strength I φ 0.90 and Extreme Event II φ 1.00)' : ''), val:F(r.z_req,2), unit:'ft'}]);
+  h += eqCheck('End of S1: S1 extends past z_req by ' + (r.isAASHTO ? 'max(d, 15d_b, L/20), L = H_s' : 'max(d, 12d_b)') + ', and past mid-height by the lap',
+    `\\ell_{ext} = \\max(${F(r.s1_ext_d,2)},\;${F(r.s1_ext_db,2)}${r.isAASHTO ? `,\;${F(r.s1_ext_L,2)}` : ''}) = ${F(r.s1_ext,2)}\\ \\text{in};\\quad z_{S1} = \\max\\!\\left(\\tfrac{h_s}{2} + \\tfrac{\\ell_{st}}{12},\; z_{req} + \\tfrac{\\ell_{ext}}{12}\\right) = \\max(${F(r.z_s1_lap,2)},\;${F(r.z_s1_ext,2)}) = \\boxed{${F(r.z_s1_need,2)}\\ \\text{ft}}` + (r.s1_full ? `\;\\Rightarrow\;\\text{S1 full height}` : ''),
+    r.s1_end_ok, r.isAASHTO ? '§5.10.8.1.2a' : 'ACI 7.7.3.3 (§13.3.6.1)');
+  h += eqCheck('Moment capacity along the height (ACI 13.3.6.3): bars present at each section, each set’s stress in proportion to its embedment beyond the section up to ℓ_d (S1 ℓ_d = ' + F(r.ld_stem,1) + '″, S3 ℓ_d = ' + F(r.ld_S3,1) + '″)',
+    `\\max_z \\frac{M_u(z)}{\\phi M_n(z)} = \\frac{${F(r.s13_Mu_at,0)}}{\\phi(${F(r.s13_Mn_at,0)})}\\ \\text{at } z = ${F(r.s13_dc_z,2)}\\ \\text{ft} \\Rightarrow \\boxed{${F(r.s13_dc,3)}} \\le 1.0`,
+    r.s13_ok, r.isAASHTO ? '§5.6.3' : 'ACI 13.3.6.3');
+  h += `</div></div>`;
   h += `</div></div>`;
 
   // ── Loading + S&M diagrams ──
@@ -5348,7 +5396,7 @@ function renderStem(r) {
   </div>
   <div class="card" style="margin-bottom:16px;">
     <div class="card-hd"><span class="card-title">Factored Shear &amp; Moment Diagrams — V(z), M(z)</span>
-      <span class="card-ref">vertical orientation matches structure · blue dashes = bar cutoff</span></div>
+      <span class="card-ref">vertical orientation matches structure · blue dashes = end of S1 (S3–S1 lap)</span></div>
     <div class="card-body"><div id="plt-stem-sm"></div></div>
   </div>`;
 
@@ -6239,14 +6287,14 @@ function renderRebar(r) {
       mark:'S1', location:'Stem — vertical (back face)', zone:'Stem',
       bar:r.sel_stem.bar.num, spacing:r.sel_stem.spacing,
       As_req:r.As_stem_des, As_prov:r.sel_stem.As_prov,
-      ld:r.ld_stem, face:'Back', note:'Full height + ℓd into footing',
+      ld:r.ld_stem, face:'Back', note: r.s1_full ? 'Full height; dowel S1D into footing' : `Joint to ${f(r.z_s1_end,2)} ft (mid-height + S3–S1 lap ${f(r.s13_lst,1)}″); dowel S1D into footing`,   // RWS13
       overridden: r.sel_stem.overridden, os: r.stem_overstressed
     },
     {
       mark:'S3', location:'Stem — vertical mid-height (top half)', zone:'Stem',
       bar:r.sel_stemT.bar.num, spacing:r.sel_stemT.spacing,
       As_req:r.As_stemT_des, As_prov:r.sel_stemT.As_prov,
-      ld:null, face:'Back', note:'Upper half; S1 may cut off above mid-point',
+      ld:r.ld_S3, face:'Back', note:`Mid-height to top; Class B lap with S1 ℓst = ${f(r.s13_lst,1)}″`,   // RWS13
       overridden: r.sel_stemT.overridden, os: r.stemT_overstressed
     },
     {
@@ -7201,13 +7249,14 @@ function buildCrossSection(r) {
       data-tip="<b>S1 standard hook</b><br>90° hook into footing (ACI §25.3)<br>ℓ_dh development into footing<br>Tail extends toward toe<br>Drawn to scale: bend ${n1 <= 8 ? 6 : n1 <= 11 ? 8 : 10}d_b inside diameter, 12d_b tail, on the bottom mat"/>`;
     s += `<text x="${s1_x+4}" y="${y_ftop+tf_px*0.55}" font-size="6.5" fill="${RC}">std 90° hook</text>`;
   }
-  // Bar cutoff: alternate bars terminate at z_cutoff from top (incl. ℓd extension)
-  if (r.z_cutoff !== null && r.z_cutoff > 0.5 && r.z_cutoff < inp.Hs - 0.5) {
-    const y_cut = y_top + r.z_cutoff * SCALE;
+  // RWS13 (2026-11-07): end of S1 (S3–S1 lap above mid-height); the alternate-bar cut-off is removed
+  if (!r.s1_full) {
+    const y_cut = y_top + (inp.Hs - r.z_s1_end) * SCALE, y_mid = y_top + (inp.Hs / 2) * SCALE;
     s += `<line x1="${x_ftoe-14}" y1="${y_cut}" x2="${x_bbot+14}" y2="${y_cut}"
       stroke="${RC}" stroke-width="0.9" stroke-dasharray="6,3"
-      data-tip="<b>S1 bar cutoff</b><br>Alternate bars may terminate ${f(r.z_cutoff,2)} ft below top of stem<br>(theoretical point z_th = ${f(r.z_cut_theory,2)} ft, extended ${f(r.cut_ext*12,1)}″ = max(d, 12d_b) toward top)<br>Remaining bars: #${r.sel_stem.bar.num} @ ${r.s_rem}″"/>`;
-    s += `<text x="${x_bbot+16}" y="${y_cut+3}" font-size="6.8" fill="${RC}">cutoff ${f(r.z_cutoff,1)}' (alt. bars)</text>`;
+      data-tip="<b>End of S1</b><br>S1 ends ${f(r.z_s1_end,2)} ft above the joint<br>S3 from mid-height (${f(inp.Hs/2,2)} ft); S3–S1 Class B lap ℓ_st = ${f(r.s13_lst,1)}″<br>S1 extends ${f(r.s1_ext,1)}″ past z_req = ${f(r.z_req,2)} ft"/>`;
+    s += `<rect x="${s1_x-3.5}" y="${y_cut}" width="7" height="${y_mid-y_cut}" fill="rgba(196,33,33,0.10)" stroke="${RC}" stroke-width="0.5" stroke-dasharray="2,2"/>`;
+    s += `<text x="${x_bbot+16}" y="${y_cut+3}" font-size="6.8" fill="${RC}">S1 ends ${f(r.z_s1_end,1)}' (S3 lap)</text>`;
   }
   // Lap splice zone just above the footing (construction joint)
   {
@@ -7686,17 +7735,17 @@ function buildStemSMDiagram(r) {
   s += `<text x="${(PAD_L+S_ref+PANEL_W)/2}" y="${SVG_H-6}" font-size="8" fill="#b96400"
     text-anchor="middle" font-weight="700">▲ FIXED BASE — Critical Section</text>`;
 
-  // ── Bar cutoff elevation line ─────────────────────────────────
-  const t_cut = r.z_cutoff / inp.Hs;  // t from top (0=top, 1=base)
+  // ── RWS13 (2026-11-07): end of S1 (S3 above mid-height, lapped); was the alternate-bar cut-off ──
+  const t_cut = r.s1_full ? -1 : (inp.Hs - r.z_s1_end) / inp.Hs;  // t from top (0=top, 1=base)
   if (t_cut > 0 && t_cut < 1) {
     const y_cut = yp(t_cut);
     s += `<line x1="${PAD_L}" y1="${y_cut}" x2="${S_ref+PANEL_W}" y2="${y_cut}"
       stroke="#0055a8" stroke-width="1.2" stroke-dasharray="6,3"/>`;
     s += `<text x="${PAD_L-3}" y="${y_cut-3}" font-size="7" fill="#0055a8" text-anchor="end">
-      Cut ${f(r.z_cutoff,1)}ft</text>`;
+      S1 end ${f(inp.Hs - r.z_s1_end,1)}ft</text>`;
     s += `<rect x="${PAD_L}" y="${PAD_T}" width="4" height="${y_cut-PAD_T}"
       fill="rgba(0,85,168,0.10)" rx="1"/>`;
-    s += `<text x="${PAD_L+6}" y="${PAD_T+10}" font-size="6.5" fill="#0055a8">above cutoff: As_min</text>`;
+    s += `<text x="${PAD_L+6}" y="${PAD_T+10}" font-size="6.5" fill="#0055a8">above: S3 (lapped with S1)</text>`;
   }
 
   // Seismic note if active
@@ -8474,14 +8523,14 @@ function leader(x1, y1, x2, y2, color) {
 // ================================================================
 const RW_REFS = {
   ACI: [
-    ['ACI 318-19', 'Building Code Requirements for Structural Concrete — §5.3 (load factors), §7.6.1.1 / §13.3.7 (minimum flexural steel), §9.5 / §22.2 (flexure), Table 22.5.5.1(c) (one-way shear), §22.4 (stem axial), §24.3.2 (crack control), §24.4.3 (temperature &amp; shrinkage), §25.4.2 / §25.4.3 (development, hooks), §9.7.3 (bar cutoff)'],
+    ['ACI 318-19', 'Building Code Requirements for Structural Concrete — §5.3 (load factors), §7.6.1.1 / §13.3.7 (minimum flexural steel), §9.5 / §22.2 (flexure), Table 22.5.5.1(c) (one-way shear), §22.4 (stem axial), §24.3.2 (crack control), §24.4.3 (temperature &amp; shrinkage), §25.4.2 / §25.4.3 (development, hooks), §7.7.3.3 (extension of S1 past where it is no longer required), §13.3.6.3 (stem investigated along the height), §25.5.2 (lap splices)'],
     ['IBC 2021', 'International Building Code — §1807.2.3 (retaining-wall stability, FOS ≥ 1.5)'],
     ['ASCE 7-22', 'Minimum Design Loads — §2.3.1 (strength combinations for column / beam loads), §11.8 (seismic lateral earth pressure)'],
     ['Rankine (1857)', 'Active / passive earth pressure coefficients'],
     ['Seed &amp; Whitman (1970)', 'Simplified Mononobe-Okabe seismic increment (when k<sub>h</sub> &gt; 0)'],
   ],
   AASHTO: [
-    ['AASHTO LRFD', 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) — Tables 3.4.1-1/-2 (load factors), Art. 3.11.5 / 3.11.6.4.1 and Tables 3.11.6.4.1-1 / -2 (earth pressure, live-load surcharge), 5.6.3 / 5.6.3.3 (flexure, minimum reinforcement), 5.6.7 (crack control), 5.7.2.8 / 5.7.3 (shear), 5.7.4.3 (interface shear), 5.10.6 (temperature &amp; shrinkage), 5.10.8 (development, hooks, cutoff), 10.6.3.1 / 10.6.3.4 / 10.6.5 (bearing, sliding, rock), 11.5.6 and Table 11.5.7-1 (resistance factors), 11.6.3.2 / 11.6.3.3 (bearing on rock, eccentricity), A13.3.1 (barrier yield line)'],
+    ['AASHTO LRFD', 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) — Tables 3.4.1-1/-2 (load factors), Art. 3.11.5 / 3.11.6.4.1 and Tables 3.11.6.4.1-1 / -2 (earth pressure, live-load surcharge), 5.6.3 / 5.6.3.3 (flexure, minimum reinforcement), 5.6.7 (crack control), 5.7.2.8 / 5.7.3 (shear), 5.7.4.3 (interface shear), 5.10.6 (temperature &amp; shrinkage), 5.10.8 (development, hooks, laps, extension of S1), 10.6.3.1 / 10.6.3.4 / 10.6.5 (bearing, sliding, rock), 11.5.6 and Table 11.5.7-1 (resistance factors), 11.6.3.2 / 11.6.3.3 (bearing on rock, eccentricity), A13.3.1 (barrier yield line)'],
     ['MassDOT LRFD Bridge Manual', 'Part I §3.3.2.2 (heel top steel, variable-height wall), §3.3.2.4 and Table 3.3.2-1 (vehicular collision on walls), when selected; edition: verify'],
     ['ACI 318-19', '§25.4.2 (development length of the footing bars, as cited in the footing tab)'],
     ['ASCE 7-22', '§2.3.1 (strength combinations for column / beam loads, when entered)'],
@@ -8538,6 +8587,9 @@ function rwResultRows(r) {
     stemMidShear: () => [A ? AA('5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', r.Vu_stemT / r.phiVc_stemT],
     stemHook:     () => [A ? AA('5.10.8.2.4a') : 'ACI 318-19 §25.4.3.1', r.ldh_stem / r.ldh_avail],
     stemLap:      () => [(A ? AA('5.10.8.4.3a') : 'ACI 318-19 Table 25.5.2.1') + '; Class ' + (r.lap_classA ? 'A' : 'B') + ', ℓ<sub>st</sub> = ' + f(r.lst_stem, 1) + ' in vs stem height', r.lst_stem / r.lap_avail],
+    stemS3Lap:    () => [(A ? AA('5.10.8.4.3a') + ' / ' + AA('5.10.8.1.2a') + '; ACI 318-19 §25.5.2.2 adopted' : 'ACI 318-19 §25.5.2.2 / §7.7.3.3') + '; S3–S1 Class B lap ℓ<sub>st</sub> = ' + f(r.s13_lst, 1) + ' in, ' + (r.s1_full ? 'S1 full height' : 'S1 to ' + f(r.z_s1_end, 2) + ' ft'),
+                         r.s1_full ? 0 : Math.max(r.s13_lst / Math.max(r.s13_lap_prov, 1e-9), (r.z_s1_ext) / Math.max(r.z_s1_end, 1e-9))],   // RWS13
+    stemMAlong:   () => [(A ? AA('5.6.3') : 'ACI 318-19 §13.3.6.3') + '; M<sub>u</sub>/φM<sub>n</sub> of the bars present, worst at ' + f(r.s13_dc_z, 2) + ' ft above the joint', r.s13_dc],   // RWS13
     heelDev:      () => [(A ? AA('5.10.8.2.1a') : 'ACI 318-19 §25.4.2') + '; ℓ<sub>d</sub> both sides of the stem back face', r.ld_heel / Math.min(r.f1_av_heel, r.f1_av_toe)],
     toeDev:       () => [r.toe_hook ? (A ? AA('5.10.8.2.4a') : 'ACI 318-19 §25.4.3.1') + '; hooked at the toe end' : (A ? AA('5.10.8.2.1a') : 'ACI 318-19 §25.4.2') + '; straight', Math.max(r.f2_need / r.f2_av_toe, r.ld_toe / r.f2_av_heel)],
     stemMidFlex:  () => [A ? AA('5.6.3') : 'ACI 318-19 §9.5 / §22.2', r.As_stemT_des / r.sel_stemT.As_prov,
@@ -9738,7 +9790,6 @@ function rwrModel(r) {
     CK.stemHook = 'stb/s5.hook';
     T5.push(rwrS({ id: 'lap', label: 'Stem dowel lap with S1 at the joint: Class ' + (r.lap_classA ? 'A' : 'B') + ' (A_s,prov/A_s,req = ' + rwrN(r.lap_ratio, 2) + ', ' + r.lap_pct + ' % spliced at one level; Class A needs ≥ 2 and ≤ 50 %); ℓ_d before the 12-in minimum = ' + rwrN(r.lap_ld_a, 2) + ' in; ℓ_st ≤ H_s = ' + rwrN(r.lap_avail, 0) + ' in', sym: '\\ell_{st}', eq: '\\max(' + (r.lap_classA ? '1.0' : '1.3') + '\\,\\ell_{d},\\; 12)', sub: '\\max(' + (r.lap_classA ? '1.0' : '1.3') + '(' + rwrN(r.lap_ld_a, 2) + '),\\; 12)', value: r.lst_stem, unit: 'in', d: 1, ok: ok('stemLap'), ref: isA ? AA('Art. 5.10.8.4.3a') : 'ACI 318-19 Table 25.5.2.1' }));   // RWDS
     CK.stemLap = 'stb/s5.lap';
-    if (r.z_cutoff !== null) T5.push(rwrS({ id: 'zcut', label: 'Alternate-bar cutoff: half the S1 bars (#' + ss.bar.num + ' at ' + r.s_rem + ' in) carry M_u above z_th = ' + rwrN(r.z_cut_theory, 2) + ' ft; terminated bars extend max(d, 12d_b) past it', sym: 'z_{cut}', eq: 'z_{th} \\minus ' + rwrN(r.cut_ext, 2), sub: rwrN(r.z_cut_theory, 2) + ' \\minus ' + rwrN(r.cut_ext, 2), value: r.z_cutoff, unit: 'ft', d: 2, ref: isA ? AA('Art. 5.10.8.1.2') : 'ACI 318-19 §9.7.3.3', note: 'full S1 bars up to ' + rwrN(r.z_cutoff_from_base, 2) + ' ft above the base' }));
     const T6 = [isA ? rwrS({ id: 'As', label: 'Required temperature and shrinkage steel, per face (b = stem height ' + rwrN(r.b_TS_stem, 0) + ' in)', sym: 'A_{s,TS}', eq: '\\frac{1.30\\,b\\,h}{2(b + h)f_{y}},\\; 0.11 \\le A_{s} \\le 0.60', sub: '\\frac{1.30(' + rwrN(r.b_TS_stem, 0) + ')(' + rwrN(inp.ts_bot, 1) + ')}{2(' + rwrN(r.b_TS_stem, 0) + ' + ' + rwrN(inp.ts_bot, 1) + ')(' + rwrN(inp.fy / 1000, 0) + ')}', value: r.As_temp_stem, unit: 'in^{2}/ft', d: 4, ref: AA('Eq. 5.10.6-1') })
       : rwrS({ id: 'As', label: 'Required temperature and shrinkage steel (0.0018 gross area)', sym: 'A_{s,TS}', eq: '0.0018\\,b\\,t_{s,bot}', sub: '0.0018(12)(' + rwrN(inp.ts_bot, 1) + ')', value: r.As_temp_stem, unit: 'in^{2}/ft', d: 4, ref: 'ACI 318-19 §24.4.3.2' }),
       rwrS({ id: 'S2', label: 'Bar selection S2 (horizontal): #' + r.sel_temp.bar.num + ' at ' + r.sel_temp.spacing + ' in' + (r.sel_temp.overridden ? ' (user override)' : ''), sym: 'A_{s,prov}', eq: '', sub: rwrN(r.sel_temp.As_prov, 4) + ' \\ge ' + rwrN(r.As_temp_stem, 4), value: r.sel_temp.As_prov, unit: 'in^{2}/ft', d: 4, ok: ok('tsStem') })];
@@ -9748,7 +9799,7 @@ function rwrModel(r) {
       { title: 'Step 1 — Factored demands at the base of the stem', ref: isA ? AA('Table 3.4.1-1, Strength I: 1.50EH + 1.75LS') : 'ACI 318-19 §5.3, U = 1.6H', steps: pre('s1', T1) },
       { title: 'Step 2 — Effective depth', steps: pre('s2', T2) }, { title: 'Step 3 — Flexural reinforcement (φ = 0.90)', ref: isA ? AA('Art. 5.6.3') : 'ACI 318-19 §9.5 / §22.2', steps: pre('s3', T3) },
       { title: 'Step 4 — One-way shear check (φ = ' + phiS + ')', ref: isA ? AA('Art. 5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', steps: pre('s4', T4) },
-      { title: 'Step 5 — Development length and bar cutoff', ref: isA ? AA('Art. 5.10.8') : 'ACI 318-19 §25.4 / §9.7.3', steps: pre('s5', T5) },
+      { title: 'Step 5 — Development length and dowel lap', ref: isA ? AA('Art. 5.10.8') : 'ACI 318-19 §25.4 / §25.5', steps: pre('s5', T5) },
       { title: 'Step 6 — Horizontal temperature and shrinkage steel', ref: isA ? AA('Art. 5.10.6') : 'ACI 318-19 §24.4.3.2', steps: pre('s6', T6) }], { title: 'Stem, base section (b = 12 in strip, cantilever fixed at the footing)' }),
       { type: 'note', text: 'K_a: ' + (isA ? '[[sa1/K]]' : '[[st1/Ka]]') + (isA && qll > 0 ? '; q_LS: [[sa2/qLS]]' : '') + '.' },
       { type: 'note', text: 'Critical section at the top of the footing.' }, onTab('stemFlex', 'Stem design tab (pressure and V(z), M(z) diagrams)')]));
@@ -9760,7 +9811,16 @@ function rwrModel(r) {
       rwrS({ id: 'S3', label: 'Bar selection S3 (mid-height vertical): #' + st.bar.num + ' at ' + st.spacing + ' in' + (st.overridden ? ' (user override)' : '') + (r.stemT_overstressed ? '; section over-stressed' : ''), sym: 'A_{s,prov}', eq: '', sub: rwrN(st.As_prov, 4) + ' \\ge ' + rwrN(r.As_stemT_des, 4), value: st.As_prov, unit: 'in^{2}/ft', d: 4, ok: ok('stemMidFlex') }),
       rwrS({ id: 'dc', label: 'One-way shear at mid-height (' + rwrPlain(r.shearStemT.method) + '): V_u ≤ φV_c', sym: '\\frac{V_{u}}{\\phi V_{c}}', eq: '', sub: '\\frac{' + rwrN(r.Vu_stemT, 0) + '}{' + rwrN(r.phiVc_stemT, 0) + '}', value: dcv('stemMidShear'), unit: '', d: 3, ok: ok('stemMidShear') })];
     CK.stemMidFlex = 'stm/m2.S3'; CK.stemMidShear = 'stm/m2.dc';
-    subs.push(sub('Mid-height (top-half) section', [rwrItem('stm', [{ title: 'Mid Step 1 — Factored demands at mid-height', steps: pre('m1', M) }, { title: 'Mid Step 2 — Flexural reinforcement and shear', steps: pre('m2', M2) }], { title: 'Stem, mid-height section (h_s/2 = ' + rwrN(r.Hs_mid, 2) + ' ft above the base)' }),
+    // RWS13 (2026-11-07): Mid Step 3 — S3–S1 lap, end of S1, moment along the height
+    const M3 = [rwrS({ id: 'lst1', label: 'Class B lap length of S1 alone (#' + r.sel_stem.bar.num + '), ℓ_d before the 12-in minimum = ' + rwrN(r.s13_ld_a1, 2) + ' in', sym: '\\ell_{st,S1}', eq: '\\max(1.3\\,\\ell_{d},\; 12)', sub: '\\max(1.3(' + rwrN(r.s13_ld_a1, 2) + '),\; 12)', value: r.s13_lst1, unit: 'in', d: 1, ref: isA ? AA('Art. 5.10.8.4.3a') : 'ACI 318-19 Table 25.5.2.1' }),
+      rwrS({ id: 'lst3', label: 'Class B lap length of S3 alone (#' + st.bar.num + '), ℓ_d before the 12-in minimum = ' + rwrN(r.s13_ld_a3, 2) + ' in', sym: '\\ell_{st,S3}', eq: '\\max(1.3\\,\\ell_{d},\; 12)', sub: '\\max(1.3(' + rwrN(r.s13_ld_a3, 2) + '),\; 12)', value: r.s13_lst3, unit: 'in', d: 1 }),
+      rwrS({ id: 'lap', label: r.s13_diff ? 'S3–S1 lap, bars of different size: the greater of ℓ_d of the larger bar (' + r.s13_big + ') and ℓ_st of the smaller' + (isA ? ' (ACI 318-19 §25.5.2.2, adopted by the engineer)' : '') : 'S3–S1 lap, bars of the same size: the larger ℓ_st', sym: '\\ell_{st}', eq: r.s13_diff ? '\\max(\\ell_{d,large},\; \\ell_{st,small})' : '\\max(\\ell_{st,S1},\; \\ell_{st,S3})', sub: r.s13_diff ? '\\max(' + rwrN(r.s13_ld_big, 1) + ',\; ' + rwrN(r.s13_lst_sm, 1) + ')' : '\\max(' + rwrN(r.s13_lst1, 1) + ',\; ' + rwrN(r.s13_lst3, 1) + ')', value: r.s13_lst, unit: 'in', d: 1, ok: r.s13_lap_ok, ref: 'ACI 318-19 §25.5.2.2', note: r.s1_full ? 'S1 runs full height' : 'lap provided (z_S1 − h_s/2)·12 = ' + rwrN(r.s13_lap_prov, 1) + ' in' }),
+      rwrS({ id: 'zreq', label: 'Height above which S3 alone carries the factored moment (S1 no longer required)', sym: 'z_{req}', eq: '', sub: '', value: r.z_req, unit: 'ft', d: 2 }),
+      rwrS({ id: 'ext', label: 'Extension of S1 past z_req' + (isA ? ' (L = H_s, the cantilever clear span)' : ''), sym: '\\ell_{ext}', eq: isA ? '\\max(d,\; 15d_{b},\; L/20)' : '\\max(d,\; 12d_{b})', sub: '\\max(' + rwrN(r.s1_ext_d, 2) + ',\; ' + rwrN(r.s1_ext_db, 2) + (isA ? ',\; ' + rwrN(r.s1_ext_L, 2) : '') + ')', value: r.s1_ext, unit: 'in', d: 2, ref: isA ? AA('Art. 5.10.8.1.2a') : 'ACI 318-19 §7.7.3.3 (§13.3.6.1)' }),
+      rwrS({ id: 'zS1', label: 'End of S1 above the joint' + (r.s1_full ? ': reaches the top, S1 runs full height' : ''), sym: 'z_{S1}', eq: '\\max\\left(\\frac{h_{s}}{2} + \\frac{\\ell_{st}}{12},\; z_{req} + \\frac{\\ell_{ext}}{12}\\right)', sub: '\\max(' + rwrN(r.z_s1_lap, 2) + ',\; ' + rwrN(r.z_s1_ext, 2) + ')', value: r.z_s1_need, unit: 'ft', d: 2, ok: ok('stemS3Lap') }),
+      rwrS({ id: 'dc', label: 'Moment capacity along the height (ACI 13.3.6.3): bars present at each section, each set’s stress in proportion to its embedment beyond the section up to ℓ_d (S1 ' + rwrN(r.ld_stem, 1) + ' in, S3 ' + rwrN(r.ld_S3, 1) + ' in); worst at z = ' + rwrN(r.s13_dc_z, 2) + ' ft', sym: '\\frac{M_{u}}{\\phi M_{n}}', eq: '', sub: '\\frac{' + rwrN(r.s13_Mu_at, 0) + '}{\\phi(' + rwrN(r.s13_Mn_at, 0) + ')}', value: r.s13_dc, unit: '', d: 3, ok: ok('stemMAlong'), ref: isA ? AA('Art. 5.6.3') : 'ACI 318-19 §13.3.6.3' })];
+    CK.stemS3Lap = 'stm/m3.zS1'; CK.stemMAlong = 'stm/m3.dc';
+    subs.push(sub('Mid-height (top-half) section', [rwrItem('stm', [{ title: 'Mid Step 1 — Factored demands at mid-height', steps: pre('m1', M) }, { title: 'Mid Step 2 — Flexural reinforcement and shear', steps: pre('m2', M2) }, { title: 'Mid Step 3 — S3–S1 lap, end of S1 and moment along the height (no alternate-bar cut-off)', ref: isA ? AA('Art. 5.10.8.4.3a / 5.10.8.1.2a') : 'ACI 318-19 §25.5.2 / §7.7.3.3 / §13.3.6.3', steps: pre('m3', M3) }], { title: 'Stem, mid-height section (h_s/2 = ' + rwrN(r.Hs_mid, 2) + ' ft above the base)' }),
       { type: 'note', text: 'The section at mid-height is designed as a cantilever fixed at mid-height.' }, onTab('stemMid', 'Stem design tab, Mid Step 2')]));
     secs.push({ title: 'Stem design', subs });
   }
@@ -10156,10 +10216,11 @@ function rwdwBars(r, G) {
   const hook = 12 * db(s1);                                         // 90° standard hook tail 12 d_b
   const yHook = cf + db(f2) + db(f3) + db(s1) / 2;                   // the hook bears on the bottom mat
   const lap = r.lst_stem;                                            // RWDS (2026-11-07): the computed tension lap ℓst (Stem design Step 5); was 1.3 × ℓd (with its 12-in minimum)
-  const yCut = r.z_cutoff !== null ? G.tf + r.z_cutoff_from_base * 12 : null;
+  const yS1 = r.s1_full ? null : G.tf + r.z_s1_end * 12;           // RWS13 (2026-11-07): S1 ends at mid-height + the S3–S1 lap (was full height + alternate-bar cut-off)
+  const yCut = null;
   const yTop = G.H - cs;
   const B = {
-    S1: { s: s1, len: yTop - G.tf, from: G.tf, to: yTop },
+    S1: { s: s1, len: (yS1 === null ? yTop : yS1) - G.tf, from: G.tf, to: yS1 === null ? yTop : yS1 },
     S1D: { s: s1, hook, yHook, lap, len: (G.tf - yHook) + lap + hook },
     S3: { s: s3, from: G.tf + G.Hs / 2, to: yTop, len: yTop - (G.tf + G.Hs / 2) },
     S2: { s: s2 }, F3: { s: f3 },
@@ -10168,7 +10229,6 @@ function rwdwBars(r, G) {
     yCut, cs, cf,
   };
   B.F1.len = B.F1.x1 - B.F1.x0; B.F2.len = B.F2.x1 - B.F2.x0 + B.F2.hook;
-  B.S1cut = yCut !== null ? { len: yCut - G.tf } : null;
   B.nF3 = Math.floor((G.B - 2 * cf) / f3.spacing + 1e-9) + 1;
   return B;
 }
@@ -10348,7 +10408,7 @@ function rwdwBuild(r) {
   const bl = s => '#' + s.bar.num + ' @ ' + s.spacing + '"';
   const s1Pt = y => G.xb(y) - BR.cs - BR.S1.s.bar.db / 2;      // S1 centreline at height y (parallel to the back face)
   const dotR = (db, P) => Math.max(db / 2, 0.018 * P);
-  /* the reinforcement in section; detail = sheet 2 (hooks, lap, cutoff labelled) */
+  /* the reinforcement in section; detail = sheet 2 (hooks, laps labelled) */
   function bars(P, detail) {
     const s1 = BR.S1.s, dbs1 = s1.bar.db;
     // S1 (vertical, back face) from the joint to the top cover
@@ -10368,8 +10428,6 @@ function rwdwBuild(r) {
     if (BR.F2.hook) D.line(L.bar, BR.F2.x0, BR.F2.y, BR.F2.x0, BR.F2.y + BR.F2.hook);   // RWDS: hooked F2
     const f3 = BR.F3.s, r3 = dotR(f3.bar.db, P), yT3 = BR.F1.y - BR.F1.s.bar.db / 2 - r3, yB3 = BR.F2.y + BR.F2.s.bar.db / 2 + r3;
     for (let x = BR.cf; x <= G.B - BR.cf + 1e-6; x += f3.spacing) { D.circle(L.bar, x, yT3, r3); D.circle(L.bar, x, yB3, r3); }
-    // cutoff of the alternate S1 bars
-    if (BR.yCut !== null) { const xc = s1Pt(BR.yCut); D.line(L.bar, xc - 0.12 * P, BR.yCut, xc + 0.12 * P, BR.yCut); }
     return { xd, yl, yT3, yB3 };
   }
 
@@ -10431,9 +10489,8 @@ function rwdwBuild(r) {
     // labels with leaders, on the left (stem front side) and right
     const xL = -0.5 * P, xR = gradeX1() + 0.3 * P;
     const lab = [];
-    lab.push([s1Pt(G.tf + 0.8 * G.Hs), G.tf + 0.8 * G.Hs, 'S1 ' + bl(s1) + ' BACK FACE' + (BR.yCut !== null ? '\nALTERNATE BARS END AT THE CUTOFF' : ''), 'R']);
-    if (r.sel_stemT) lab.push([s1Pt(G.tf + 0.62 * G.Hs) - s1.bar.db, G.tf + 0.62 * G.Hs, 'S3 ' + bl(r.sel_stemT) + ' UPPER HALF\nFROM MID-HEIGHT, SPLICE NOT IN THE MODEL', 'R']);
-    if (BR.yCut !== null) lab.push([s1Pt(BR.yCut), BR.yCut, 'CUTOFF OF ALT. S1 BARS\n' + rwdwFI(BR.yCut - G.tf) + ' ABOVE THE JOINT (Z_CUT = ' + rwdwN(r.z_cutoff, 2) + ' FT FROM TOP)', 'R']);
+    lab.push([s1Pt(G.tf + 0.3 * G.Hs), G.tf + 0.3 * G.Hs, 'S1 ' + bl(s1) + ' BACK FACE' + (r.s1_full ? ', FULL HEIGHT' : '\nENDS ' + rwdwFI(BR.S1.to - G.tf) + ' ABOVE THE JOINT'), 'R']);
+    if (r.sel_stemT) lab.push([s1Pt(G.tf + 0.62 * G.Hs) - s1.bar.db, G.tf + 0.62 * G.Hs, 'S3 ' + bl(r.sel_stemT) + ' UPPER HALF, FROM MID-HEIGHT\nCLASS B TENSION LAP WITH S1 L_ST = ' + rwdwN(r.s13_lst, 1) + '\" (CHECKED)', 'R']);
     lab.push([q.xd, (G.tf + q.yl) / 2, 'S1D DOWEL ' + bl(s1) + ', LAP ' + rwdwIn(Math.round(BR.S1D.lap)) + '\nCLASS ' + (r.lap_classA ? 'A' : 'B') + ' TENSION LAP L_ST = ' + rwdwN(r.lst_stem, 1) + '" (CHECKED)', 'R']);   // RWDS
     lab.push([BR.F1.x1 - 0.3 * P, BR.F1.y, 'F1 ' + bl(r.sel_heel) + ' TOP (HEEL)\nL_D = ' + rwdwN(r.ld_heel, 1) + '" PAST THE STEM BACK FACE', 'R']);
     lab.push([BR.F3.s ? G.B - BR.cf - 0.0 : 0, q.yT3, 'F3 ' + bl(r.sel_ftg_long) + ' T&B, LONGITUDINAL', 'R']);
@@ -10454,10 +10511,8 @@ function rwdwBuild(r) {
     const len = v => rwdwFI(Math.ceil(v));
     const rows = [
       ['S1D', '#' + s1.bar.num, s1.spacing + '"', 'STEM DOWEL, BACK FACE', '90° HOOK', len(BR.S1D.len), rwdwN(s1.As_prov, 3), rwdwN(r.ld_stem, 1) + ' / ' + rwdwN(r.ldh_stem, 1)],
-      ...(BR.S1cut ? [['S1', '#' + s1.bar.num, (2 * s1.spacing) + '"', 'STEM VERT., BACK, FULL HEIGHT', 'STRAIGHT', len(BR.S1.len), rwdwN(s1.As_prov / 2, 3), rwdwN(r.ld_stem, 1)],
-        ['S1', '#' + s1.bar.num, (2 * s1.spacing) + '" ALT.', 'STEM VERT., BACK, CUT OFF', 'STRAIGHT', len(BR.S1cut.len), rwdwN(s1.As_prov / 2, 3), rwdwN(r.ld_stem, 1)]]
-        : [['S1', '#' + s1.bar.num, s1.spacing + '"', 'STEM VERT., BACK, FULL HEIGHT', 'STRAIGHT', len(BR.S1.len), rwdwN(s1.As_prov, 3), rwdwN(r.ld_stem, 1)]]),
-      ['S3', '#' + r.sel_stemT.bar.num, r.sel_stemT.spacing + '"', 'STEM VERT., BACK, UPPER HALF', 'STRAIGHT', len(BR.S3.len), rwdwN(r.sel_stemT.As_prov, 3), '-'],
+      ['S1', '#' + s1.bar.num, s1.spacing + '"', r.s1_full ? 'STEM VERT., BACK, FULL HEIGHT' : 'STEM VERT., BACK, LOWER (TO MID-HT + LAP)', 'STRAIGHT', len(BR.S1.len), rwdwN(s1.As_prov, 3), rwdwN(r.ld_stem, 1)],   // RWS13
+      ['S3', '#' + r.sel_stemT.bar.num, r.sel_stemT.spacing + '"', 'STEM VERT., BACK, UPPER HALF', 'STRAIGHT', len(BR.S3.len), rwdwN(r.sel_stemT.As_prov, 3), rwdwN(r.ld_S3, 1) + ' (LAP ' + rwdwN(r.s13_lst, 1) + ')'],
       ['S2', '#' + r.sel_temp.bar.num, r.sel_temp.spacing + '"', 'STEM HORIZ. T&S, EACH FACE', 'STRAIGHT', 'CONT.', rwdwN(r.sel_temp.As_prov, 3), '-'],
       ['F1', '#' + r.sel_heel.bar.num, r.sel_heel.spacing + '"', 'HEEL, TRANSVERSE, TOP', 'STRAIGHT', len(BR.F1.len), rwdwN(r.sel_heel.As_prov, 3), rwdwN(r.ld_heel, 1)],
       ['F2', '#' + r.sel_toe.bar.num, r.sel_toe.spacing + '"', 'TOE, TRANSVERSE, BOTTOM', r.toe_hook ? '90° HOOK' : 'STRAIGHT', len(BR.F2.len), rwdwN(r.sel_toe.As_prov, 3), rwdwN(r.ld_toe, 1) + (r.toe_hook ? ' / ' + rwdwN(r.ldh_toe, 1) : '')],   // RWDS
@@ -10467,9 +10522,9 @@ function rwdwBuild(r) {
     ];
     D.text(L.txt, 0, yT, 0.12 * P, 'BAR SCHEDULE (PER FOOT OF WALL)', 0);
     const t = table(0, yT - 0.12 * P, ['MARK', 'SIZE', 'SPACING', 'LOCATION', 'SHAPE', 'LENGTH', 'AS,PROV (IN2/FT)', 'L_D / L_DH (IN, TOOL)'], rows, th, [6, 7]);
-    const notes = ['LENGTHS (NOMINAL RULES, NOT IN THE MODEL; DETAILER TO CONFIRM): S1D = EMBEDMENT TO THE BOTTOM MAT + LAP 1.3 L_D + 12 D_B HOOK;',
-      'S1 FROM THE JOINT TO ' + rwdwIn(BR.cs) + ' BELOW THE TOP; CUT-OFF BARS TO THE CUTOFF ELEVATION; S3 FROM MID-HEIGHT TO THE TOP (ITS SPLICE WITH S1 IS',
-      'NOT IN THE MODEL); F1 = HEEL - COVER + L_D PAST THE STEM BACK FACE, F2 = TOE - COVER + L_D PAST THE STEM FRONT FACE (BOTH CAPPED AT THE FOOTING);',
+    const notes = ['LENGTHS (NOMINAL RULES, NOT IN THE MODEL; DETAILER TO CONFIRM): S1D = EMBEDMENT TO THE BOTTOM MAT + LAP L_ST + 12 D_B HOOK;',
+      (r.s1_full ? 'S1 FROM THE JOINT TO ' + rwdwIn(BR.cs) + ' BELOW THE TOP' : 'S1 FROM THE JOINT TO MID-HEIGHT + THE S3-S1 LAP (CHECKED, STEM DESIGN MID STEP 3)') + '; S3 FROM MID-HEIGHT TO ' + rwdwIn(BR.cs) + ' BELOW THE TOP;',
+      'NO ALTERNATE-BAR CUT-OFF; F1 = HEEL - COVER + L_D PAST THE STEM BACK FACE, F2 = TOE - COVER + L_D PAST THE STEM FRONT FACE (BOTH CAPPED AT THE FOOTING);',
       'BEND ALLOWANCES NOT ADDED; LENGTHS ROUNDED UP TO 1 IN. S2, F3: CONTINUOUS ALONG THE WALL, LAP SPLICES BY THE DETAILER. A_S AND L_D: THE TOOL\'S RESULTS',
       '(STEM DESIGN AND FOOTING DESIGN TABS). S1D IS THE DOWEL OF THE S1 BARS (SAME SIZE AND SPACING); MARK ADDED ON THE DRAWINGS.'];
     notes.forEach((s2, j) => D.text(L.txt, 0, yT - 0.3 * P - t.h - 0.115 * j * P, 0.062 * P, s2, 0));
