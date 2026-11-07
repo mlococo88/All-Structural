@@ -2673,6 +2673,7 @@ Calculation audit, item 3. Engineer decision (2026-11-07). Code sites are tagged
   - e 1.320 → 1.354 ft;
   - q 1169 → 1395 psf.
 - **Stem M_u:** unchanged in all cases (32274 / 42577 lb·ft/ft).
+- **Pass / fail change seen in the comparison walls:** AASHTO rock + collision (MassDOT) + water 4 ft below the top + β 10°. The water now drives at 1.0 (P_hyd = 2816 lb/ft): H 1683 → 4499 lb/ft against R = 3850, so the Extreme Event II sliding D/C goes 0.437 → **1.169 (PASS → FAIL)**. e goes −0.535 → 0.308 ft and q 1063 → 962 psf.
 
 ### Open item (not changed; for the engineer)
 - With the MassDOT option, the vertical component of the earth thrust P_a,V (sloped backfill or Coulomb δ > 0) is still credited at 1.00 in V_ct,min, while the horizontal component is dropped. This is unconservative where P_a,V > 0. Should P_a,V follow γ_EH,CT?
