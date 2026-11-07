@@ -19889,3 +19889,83 @@ index 06a42e4..b58d4e3 100644
 - **How verified:** `computeAll` on 15 cases main vs branch (full R compared): only `R.comb` moved, and only where L_u > 0 (no stickup: P_r and D/C unchanged; H-pile cases identical). App and Report text main vs branch: only the Module 05 lines and the combined row change; Report 0 unresolved references, 0 duplicate keys, no NaN; autosaved inputs identical except `pdaRev` 3 → 4; old-project load note shown once; `check-syntax`: pass; `pile-library`: every library check passes, its two "page text identical" checks show the intended Module 05 text and `pdaRev`; 0 console errors.
 - **Other copies:** none.
 - **Open items:** `L_c` (1 ft) is kept as the soil-supported floor of P_r. Module 10 off: its column is still used here (H2 makes the column check itself automatic).
+
+## 2026-11-07 — PR: claude/pile-h2-buckling-auto (PR #999: https://github.com/mlococo88/All-Structural/pull/999) (PDA-H2) — Module 10 column check runs automatically when the pile has a stickup or design scour   [calculation change]
+- **Problem (review H2):** Module 10 was off by default (`bucklingEnable: false`) while the default pile has a 3 ft stickup. While it was off, a known stickup or design scour was ignored for axial: H-pile P_n = P_o (`hasStickup = !!bkl.enable && Lu_bkl > 0`), and the micropile column check was skipped (`buck_pass = !enableBuckling || …`). Flexure already used L_b = L_u, so the tool did not agree with itself.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 10.9.3.10.2 (micropiles: an unsupported length above ground, through scour or weak / liquefiable soil is to be considered in the axial compression resistance); Art. 10.7.3.13.4 (effective length = unsupported length + depth to fixity); Art. 6.9.4.1.
+- **Decision (pending engineer review):** automatic, not an NG "not checked" row. The check runs when stickup + design scour > 0 (not for integral abutments, which have their own scour path). The saved toggle `bucklingEnable` is kept as stored and still switches the check on without a stickup or scour (a void or soft layer entered as the added length). While automatic, the toggle shows on and says why; clicking it does nothing.
+- **Where:**
+  - New top-level `bklAutoOn(I)` / `bklOn(I)` before `function groupPmAutoOn(` (anchor `/* PDA-H2 (2026-11-07)`).
+  - `computeAll`: `const enableBuckling = I.bucklingEnable;` → `const enableBuckling = bklOn(I);`. `R.buckling.auto` added.
+  - p-y profile for the nonlinear ramp (anchor `const Lu_ft = bklOn(I)`): `I.bucklingEnable ?` → `bklOn(I) ?`, the same rule as `computeAll`.
+  - Display: the input panel "Buckling" (toggle `on: r.buckling.enable`, its sub-text, the K / added length / ramp-cap fields), Module 10 "inputs used", the printed "Buckling · unsupported length" inputs ("ON (automatic: unsupported length)"), and the Module 03 note. All went from `I.bucklingEnable` to `r.buckling.enable`.
+  - Load note (`mergeSavedInputs`, anchor `// PDA-H2 (2026-11-07): one-time note`): a project saved before this (pdaRev < 5) that has the toggle off and a stickup or scour gets a one-time note that its results change. `pdaRev` 4 → 5. No input is changed.
+- **Check case (review H2):** H-pile HP14×89, sand N1,60 20, toe 30 ft, STL 200 kip, M 60 kip-ft, stickup 10 ft, Module 10 off (Davisson weak axis, n_h 60, K_b 2.1).
+  - Hand: L_f = 7.30 ft, KL/r = 2.1(17.30)(12)/3.553 = 122.7. P_e = π²(29000)(25.83)/122.7² = 491 kip. P_o/P_e = 1291.5/491 = 2.63 > 2.25, so P_n = 0.877 P_e = 430.6 kip and φ_c P_n = 0.60(430.6) = 258.3 kip.
+  - Before: φ_c P_n = **774.9 kip** (P_o); interaction 200/904.05 + 60/557.0 = **0.329**.
+  - After: φ_c P_n = **258.3 kip**; P_r = 301.4 kip; interaction 200/301.4 + 60/557.0 = **0.771**. KL/r 122.7 > 120 is flagged in the H-pile slenderness note.
+  - Default micropile (3 ft stickup): the buckling row is added: φ_c P_n = 214.1 kip ≥ 86 kip, OK (D/C 0.40). No other value moves.
+- **Old projects:** a saved project with Module 10 off and a stickup or scour > 0 changes when it is opened. This is the fix. The one-time load note says so, and the stored toggle stays off.
+- **How verified:**
+  - `computeAll` main vs branch on 15 cases. Only cases with Module 10 off and L_u > 0 moved: `buckling.enable` and `stability.closedForm*`, plus the H-pile `hpileStruct` axial / combined fields in the H2 case. Cases with Module 10 already on, or without a stickup: only the new `auto` field.
+  - App and Report: the buckling row, the inputs table and section 10 were added (section numbers shift). 0 unresolved references, 0 duplicate keys, no NaN.
+  - The old H-pile project shows the note once.
+  - `check-syntax`: pass. `pile-library`: every library check passes; its two "page text identical" checks show the intended buckling text and `pdaRev`. 0 console errors.
+- **Other copies:** none.
+
+## 2026-11-07 — PR: claude/pile-m2-summary (PR #1003: https://github.com/mlococo88/All-Structural/pull/1003) (PDA-M2) — Report summary: a row for each Module G code-limit item; never "not satisfied" over an all-PASS table   [display only; no result change]
+- **Problem (review M2):** `R.allPass` includes `R.geoChecks.pass`, which covers the uncased flexure, L_b ≥ L_b,req, L_b ≥ L_b,min, the plunge, the grout cover, the geometry consistency and the casing past the active zone. The Summary-of-results rows listed only the uncased flexure and the casing past the active zone. With a failing plunge (default, input M_max 0.5), the Report said "One or more checks not satisfied" and every row read PASS.
+- **Where:**
+  - New `gcSummaryRows(r, keys)` and `sumFallbackRow(r, rows, keys)` before `function checkNoFor(` (anchor `/* PDA-M2 (2026-11-07)`).
+  - `checkNoFor`: `/^Code limit/` → "G".
+  - `rptResText`: "consistent" / "inconsistent" for the geometry row, and "see the module status" for the fallback row.
+  - Report model: after the `"Uncased flexure (below casing tip)"` row (anchor `"gc/unc"]);`), `rows.push(...gcSummaryRows(r, true))`, with report keys gc/Lb, gc/Lbmin, gc/pl, gc/cov and gc/geo (the steps already in "G Code-limit checks"). Before `const sumRows = rows.map(`: the fallback row.
+  - PrintReport `resultRows`: the same rows (no keys) after the uncased-flexure row, and the fallback after the group rows.
+- **Rows:** [name, provided, unit, required, pass, basis]:
+  - effective bond length ≥ required (10.9.3.5);
+  - effective bond length ≥ practical minimum 10 ft (FHWA);
+  - casing plunge length ≥ min(max(40 d_b, 3 ft), L_bond) (tool rule; relabelled in M3);
+  - grout cover ≥ 0.5 in;
+  - geometry consistency.
+  - D/C = required / provided.
+  - Fallback: when `allPass` is false and no row fails, "Other check not satisfied (see the module status on the Summary tab)", FAIL.
+- **Governing provision:** none changed. No formula, factor or pass/fail logic changed; the rows show existing values and flags.
+- **Check case:** default micropile, input M_max 0.5 kip-ft. The new row "Code limit — casing plunge length | 3.0 ft | 3.34 ft | D/C = 1.11 | FAIL" sits under "One or more checks not satisfied". The other four rows pass (L_b 27.0 vs 26.82 and 10 ft; cover 3.0 vs 0.5 in; geometry consistent).
+- **How verified:**
+  - `computeAll` on 15 cases: identical main vs branch.
+  - App and Report text main vs branch: only the five new summary rows differ, in both the Report and the printed tables.
+  - The fallback function was checked in the page (all-pass rows with allPass false → one FAIL row; otherwise none).
+  - `check-syntax`: pass. `pile-library`: library checks pass; the "page text identical" checks show the new rows (autosaved inputs identical). 0 console errors.
+- **Saved data:** none changed.
+- **Other copies:** none.
+
+## 2026-11-07 — PR: claude/pile-m1-uncased-pm (PR #1010: https://github.com/mlococo88/All-Structural/pull/1010) (PDA-M1) — uncased length: combined axial + flexure check (compression and tension)   [check-logic change]
+- **Problem (review M1):** below the casing tip, the bar + grout section was checked for axial (Module 03), tension (Module 09) and bar-only flexure (Module G), each on its own. There was no interaction. An uplift + lateral case (T_u 50, M 0.5) passed each check, 0.88 and 0.53, while the combined demand is 1.41.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024):
+  - Art. 10.9.3.10.1: micropile structural design per Sec. 5 for the reinforced grout section, cased and uncased lengths.
+  - Art. 5.6.6.1: in tension, the axial force is carried by the steel only.
+  - Art. 5.6.6.2: combined tension and flexure is proportioned per 5.6.2.
+  - Art. 5.6.2 / 5.6.4: compression with flexure uses the P–M interaction.
+- **Decision (pending engineer review):** an interim, conservative linear interaction with the existing bar-only φM_n (0.90 f_yb Z_bar), in both directions:
+  - compression: P_u,unc/φ_CU R_n + M_u,unc/φM_n ≤ 1;
+  - tension: (T_u − P_t)/φ_t f_yb A_b + M_u,unc/φM_n ≤ 1.
+
+  P_u,unc is taken at the casing tip, with the largest moment below the tip (both maxima together, conservative). A strain-compatibility P–M of the grout + bar section (5.6.2) would credit the grout compression block and be less conservative; that is listed as a future feature. Micropile only.
+- **Where:**
+  - `computeAll`, Module G, after `const uncasedFlex_pass = …` (anchor `// PDA-M1 (2026-11-07)`): `uncMr`, `uncPM_c` (null without compression), `uncPM_t` (null without tension demand) and `uncPM_pass`.
+  - `uncPM_pass` is added to `R.geoChecks.pass`, so it counts in Module G and `allPass`. With p-y not converged it is false, like the uncased flexure.
+  - Display:
+    - on-screen Module G: two CheckRows plus a "Worked in" link to Modules 03 and 09;
+    - printed `RptGeomChecks`: two RptChecks and a note;
+    - Report steps `gc/pmc` and `gc/pmt` in "Uncased flexure";
+    - summary rows "Uncased combined compression + flexure (D/C)" and "Uncased combined tension + flexure (D/C)" via `gcSummaryRows`, with `checkNoFor` → G.
+  - One-time load note for a micropile project saved before (pdaRev < 6); `pdaRev` 5 → 6; no input changed.
+- **Check cases:**
+  - V4 (default, STL 0, T_u 50 kip, input M_max 0.5 kip-ft): (50 − 8.2)/47.4 + 0.50/0.946 = 0.881 + 0.529 = **1.410 NG**. Before: no check; uncased flexure 0.53 OK and tension 0.88 OK.
+  - Default (p-y, M_u,unc 1.27): 76.4/119.5 + 1.27/0.946 = 0.639 + 1.338 = **1.977 NG**. Before: no check; uncased flexure alone 1.338 was already NG.
+  - V2 (`computeAll`, M_u,unc 0): compression 0.803 and tension 0.572. These are the axial ratios alone, no change of status.
+- **How verified:**
+  - `computeAll` on 15 cases main vs branch: only the new `geoChecks` fields (`uncMr`, `uncPM_*`). No other value moved. H-pile cases: null (not applied).
+  - App and Report main vs branch: the new rows, steps and note only. 0 unresolved references, 0 duplicate keys, no NaN.
+  - `check-syntax`: pass. `pile-library`: library checks pass; its page-text checks show the new check text and `pdaRev`. 0 console errors.
+- **Other copies:** none.

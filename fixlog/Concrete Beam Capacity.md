@@ -5101,3 +5101,64 @@ Frame: Beam Capacity (`suite-frame-capacity`) and the suite shell's Report summa
 - **How verified:** headless main vs branch, review probe cases: ACI and Dev cases identical; AASHTO cases gain only the new row (values above). Screenshot of the Shear tab card (aasT) looked at; Report section §8 and summary link checked. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
 - **Saved data:** no key or format change.
 - **Open items:** torsion in the longitudinal demand (5.7.3.6.3) with the full AASHTO torsion design.
+
+## 2026-11-07 — PR: claude/cbc-skin-reinf, PR #1001: https://github.com/mlococo88/All-Structural/pull/1001 (CBM3: skin reinforcement checked where required — ACI 318-19 9.7.2.3 (h > 36 in) and AASHTO 5.6.7 (d_ℓ > 36 in); new input "Skin bars (each side face)", blank = none entered → FAIL where required; CALCULATION CHANGE (new checks), Beam Capacity tab; less conservative before)
+
+Frame: Beam Capacity (`suite-frame-capacity`). Found in the in-depth review of 2026-11-07 (item M3).
+
+### CBM3. Skin reinforcement   [CALCULATION CHANGE: new checks]
+- **Governing provisions:**
+  - ACI 318-19 9.7.2.3 (rendered PDF, printed p. 139; no 2022 erratum): where h exceeds 36 in, longitudinal skin reinforcement is distributed on both side faces for a distance h/2 from the tension face, with spacing not more than s of 24.3.2, c_c being the clear cover from the skin reinforcement to the side face. Table 24.3.2 / 24.3.2.1: s = min(15(40,000/f_s) − 2.5c_c, 12(40,000/f_s)), f_s may be 2/3 f_y.
+  - AASHTO LRFD 10th Ed. (2024) 5.6.7 (text checked): where d_ℓ of nonprestressed members exceeds 3.0 ft, skin reinforcement on both side faces over d_ℓ/2 nearest the flexural tension reinforcement, A_sk ≥ 0.012(d_ℓ − 30) in²/ft of height on each face (Eq. 5.6.7-3); total per face need not exceed one-fourth of the required flexural tensile reinforcement; spacing not more than d_ℓ/6 or 12.0 in.
+- **New input** (Transverse Reinforcement section): "Skin bars (each side face)": None / bar size, and "Skin bar spacing" (in), saved as `S.skin = {size, s}` (default `{size:"", s:0}`; `mergeState` now merges `skin` like the other groups). Shown in the Input Echo and the Report inputs note.
+- **Where:** `detailing()`, new block before `/* maximum steel via net tensile strain */` (anchor `CBM3`); rows are added only where skin bars are required, so other projects are unchanged.
+  - ACI, h > 36 in: `dSkin` "Skin reinforcement spacing (h > 36 in)": s_skin ≤ s_max with f_s = 2/3 f_y and c_c = cover + stirrup diameter; no bars entered → FAIL (provided "—").
+  - AASHTO, d_ℓ > 36 in (d_ℓ = d of the outermost tension layer of the combination's sense): `dSkinA` A_sk = A_b·12/s ≥ min(0.012(d_ℓ − 30), (A_s/4)/(d_ℓ/24)); `dSkinS` s ≤ min(d_ℓ/6, 12 in); no bars entered → both FAIL.
+  - `CBDC_COND` gets the conditions of the three new ids.
+- **Decisions (pending engineer review):**
+  1. ACI f_s = 2/3 f_y for the skin spacing (24.3.2.1 default), whatever crack-control basis is selected.
+  2. ACI c_c to the side face = clear cover + stirrup diameter (skin bars inside the stirrup).
+  3. AASHTO one-fourth cap computed with A_s provided (A_s required is not known to the tool): a larger cap, so the requirement is not reduced below what the code allows (conservative).
+  4. Blank skin input = "not provided" → FAIL where required (the brief's rule).
+- **Check cases:**
+  - `aciDeep` (ACI 16 × 48 in, 4 #10, cover 2 in, #4 stirrups, f_y 60 ksi): f_s 40,000 psi, c_c 2.5 in, s_max = min(15 − 6.25, 12) = 8.75 in. **Before: no row (all PASS). After: no skin bars → FAIL;** with #4 @ 10 in → 10/8.75 = 1.14 FAIL; #4 @ 8 in → PASS.
+  - `aasDeep` (same section, AASHTO): d_ℓ = 48 − 2 − 0.5 − 0.635 = 44.87 in; A_sk,req = 0.012(14.87) = 0.178 in²/ft (cap (5.08/4)/(44.87/24) = 0.679); s_max = min(7.48, 12) = 7.48 in. No bars → both FAIL; #4 @ 8 in → A_sk 0.30 in²/ft PASS (0.59), spacing 8/7.48 = 1.07 FAIL.
+  - Sections with h ≤ 36 in (ACI) or d_ℓ ≤ 36 in (AASHTO): unchanged (no row).
+- **How verified:** headless main vs branch, review probe cases: only aciDeep (and the new deep cases) moved; all other Beam Capacity and Dev cases identical. Screenshot of the Detailing tab (aasDeep) looked at. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar` (save round trip with the new field), `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
+- **Saved data:** one new additive field `skin` (old saves read with the default "none"; no key change).
+- **Open items:** the skin bars are not drawn in the section figure or the DXF sheets.
+
+## 2026-11-07 — PR: claude/cbc-low-items, PR #1005: https://github.com/mlococo88/All-Structural/pull/1005 (CBL: review LOW items — L1 AASHTO γ_3 list per 5.6.3.3, L2 AASHTO-mode citations and ACI-only notes, L3 9.7.6.2.2 disclosure (reading kept), L4 h ≤ 10 in A_v,min exemption only where V_u ≤ φV_c, L6 AASHTO cover preset labels, L7 AASHTO w_c per Table 3.5.1-1; CALCULATION CHANGES in L4 (ACI, more conservative) and L7 (AASHTO f′c > 5 ksi, computed f_ss); L1 adds a γ_3 value)
+
+Frame: Beam Capacity (`suite-frame-capacity`). Found in the in-depth review of 2026-11-07 (items L1–L7). L5 (C4, l_st from l_d after its 12 in floor) is left as is (conservative), as the brief says.
+
+### CBL1. γ_3 by bar specification   [value set / labels]
+- **Provision (10th Ed. text checked):** AASHTO LRFD 10th Ed. (2024) 5.6.3.3, γ_3: 0.67 A615 Gr 60; 0.75 A615 Gr 75; 0.76 A615 Gr 80; 0.75 A706 Gr 60; 0.80 A706 Gr 80; 0.67 A1035 Gr 100.
+- **Before:** select `["0.67","0.75","0.76"]` labelled "0.67 — A615 Gr 60", "0.75 — A706 Gr 60", "0.76 — A615 Gr 75" (the 0.76 label was wrong: Gr 75 is 0.75, Gr 80 is 0.76; A706 Gr 80 = 0.80 was missing, so a user with A706 Gr 80 had to pick a lower, unconservative value).
+- **After:** `G3_SPECS` (six rows above) and `cbcG3Key()` (anchor `CBL1`); the select lists the six rows; `S.mat.gamma3` still holds the number (saved format unchanged) and the new additive `S.mat.g3spec` remembers the row where two rows share a value. Old saves: 0.67 → "A615 Gr 60", 0.75 → "A615 Gr 75", 0.76 → "A615 Gr 80" (same numbers, no result change).
+- **Check:** picking "0.80 — A706 Gr 80" in `aasMinNeg45` gives γ_3γ_1M_cr = 0.80 · 1.6 · 93.9 = 120.2 k-ft (the 1.33M_u term still governs S2).
+
+### CBL2. AASHTO-mode citations   [wording]
+- `allChecks()`: "Flexural capacity" cites "AASHTO 5.6.3.2 / 5.5.4.2" in AASHTO mode (before: "ACI 9.3.3 / 22.2" in both).
+- `validate()`: the "Method" note (A_oh, p_h to the stirrup centreline, an ACI torsion item) and the "ACI 9.6.1.3" note are shown in ACI mode only (before: also in AASHTO mode).
+
+### CBL3. ACI 9.7.6.2.2 reading   [disclosure only; no result change]
+- The tool keeps triggering the d/4 limit from V_s required (V_u/φ − V_c). **Decision (pending engineer review):** kept as common practice; it avoids a spacing limit that depends on the spacing chosen. The Validation note now says so and states that under the literal reading (V_s provided) the limit applies wherever V_s,provided > 4√f′c b_w d, which can be tighter (for the default project: V_s,prov 60.75 > 46.10 kip, so s_max would be d/4 = 3.80 in).
+
+### CBL4. Table 9.6.3.1 exemption for h ≤ 10 in   [CALCULATION CHANGE, ACI, more conservative]
+- **Provision (rendered PDF, printed p. 136):** ACI 318-19 9.6.3.1: A_v,min where V_u > φλ√f′c b_w d, except the cases of Table 9.6.3.1 (h ≤ 10 in among them); for these cases A_v,min is still required where V_u > φV_c.
+- **Before:** `} else if(smallH){` → "Exempt" (N/A) whenever h ≤ 10 in.
+- **After:** `} else if(smallH && VuA<=sh.phi*sh.Vc+1e-9){` (exempt text now states V_u ≤ φV_c); otherwise the FAIL row, with a first line explaining that the exemption does not apply because V_u > φV_c.
+- **Check:** ACI 12 × 10 in, 3 #5, f′c 4 ksi, no stirrups, d ≈ 7.69 in: V_c = 2√4000 · 12 · 7.69/1000 = 11.67 kip, φV_c = 8.75 kip. V_u = 6 kip → exempt (unchanged). **V_u = 9 kip → before "Exempt" (N/A), after A_v,min required: FAIL** (the shear-capacity row already failed: φV_n = φV_c < V_u).
+
+### CBL6. AASHTO cover presets   [labels; one added preset]
+- **Provision:** AASHTO LRFD 10th Ed. Table 5.10.1-1 lists "exposure to deicing salts" (2.5 in) and "exterior other than above" (2.0 in) as separate rows.
+- **Before:** `{v:'exposed',label:'Exposed to weather / deicing',c:2.5}`. **After:** `{v:'exposed',label:'Exposure to deicing salts',c:2.5}` and a new `{v:'exterior',label:'Exterior, other than above',c:2.0}`. Saved projects keep 'exposed' = 2.5 in (no result change); the default AASHTO preset is still 'exposed'.
+
+### CBL7. AASHTO E_c unit weight   [CALCULATION CHANGE, AASHTO, f′c > 5 ksi, computed f_ss only]
+- **Provisions (text checked):** AASHTO LRFD 10th Ed. Eq. 5.4.2.4-1, E_c = 120,000K_1w_c^2.0f′c^0.33, w_c per Table 3.5.1-1 or C5.4.2.4; Table 3.5.1-1: normal weight 0.145 kcf for f′c ≤ 5.0 ksi, 0.140 + 0.001f′c for 5.0 < f′c ≤ 15.0 ksi.
+- **Before:** `const fc=S.mat.fc, wc=0.145;` in `concreteE()`. **After:** `const wc=fc<=5?0.145:0.140+0.001*fc;` and the worked expression names w_c and Table 3.5.1-1. Used only for the cracked-section service stress f_ss (crack control with "computed" f_s) in AASHTO mode.
+- **Check `aasT`** (f′c 12 ksi): w_c = 0.152 kcf; E_c = 120,000 · 0.152² · 12^0.33 = 6,297 ksi (before 5,730 ksi); n = 4.61 (before 5.06). Crack-control s_max 10.51 → 10.57 in (D/C 0.272 → 0.271). Lightweight concrete (λ < 1): the normal-weight table value is used as before (open item).
+- **How verified (all LOW items):** headless main vs branch, review probe cases: ACI cases differ only in the 9.7.6.2.2 note text, except the new `aciShallowHi` (exempt → FAIL); AASHTO cases differ in the flexure citation and the removed ACI-only notes, and `aasT` in the crack s_max above; all Dev cases identical. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
+- **Saved data:** additive field `mat.g3spec`; new cover preset key 'exterior'; no key change.
+- **Open items:** L5 left (conservative); lightweight w_c for E_c.

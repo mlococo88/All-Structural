@@ -1938,6 +1938,9 @@ function renderDashboard(){
    flexTxt=(flexMax>1?'DCR '+f2(flexMax)+'; ':'DCR '+f2(flexMax)+' OK, but ')+'A_s < A_s,min ('+asMinFails.join(', ')+')';}
   if(spcFails.length){flexState='fail';
    flexTxt+='; s > s_max ('+spcFails.join(', ')+')';}
+  {const tc=[];[['x',P2.desX],['y',P2.desY]].forEach(([dd,z])=>{if(!z.tcBotOK)tc.push('bottom '+dd);if(!z.tcStripOK)tc.push('strip '+dd);if(!z.tcTopOK)tc.push('top '+dd);});   /* SFET */
+   if(tc.length){flexState='fail';flexTxt+='; not tension-controlled, \u03b5_t < \u03b5_ty + 0.003 ('+tc.join(', ')+')';}
+   if(P2.minDepth&&!P2.minDepth.ok){flexState='fail';flexTxt+='; d = '+f2(P2.minDepth.d)+' in < 6 in (ACI 318-19 13.3.1.2)';}}   /* SFMD */
   d.appendChild(chip('Flexure (footing)',flexTxt,flexState,undefined,{tab:'tab-footdes',sec:'o-fd-x'}));
   const owBoth=P2.desX.oneWayOutside&&P2.desY.oneWayOutside;
   const vmax=Math.max(P2.desX.dcrV,P2.desY.dcrV);
@@ -2091,7 +2094,8 @@ function sfdChCond(name){
   case 'Flexure (footing)':
    {const asMin=XY.some(z=>!z.asMinBotOK||!z.asMinTopOK);
     add(asMin,'A_s < A_s,min');add(XY.some(z=>!z.spcBotOK||!z.spcTopOK),'s > s_max');
-    add(!asMin&&XY.some(z=>z.topNeeded&&!z.topProvided),'top steel required');}break;   /* as the chip text: A_s,min replaces "top steel required" */
+    add(!asMin&&XY.some(z=>z.topNeeded&&!z.topProvided),'top steel required');
+    add(XY.some(z=>!z.tcBotOK||!z.tcStripOK||!z.tcTopOK),'ε_t < ε_ty + 0.003');add(!!(P2.minDepth&&!P2.minDepth.ok),'d < 6 in');}break;   /* SFET, SFMD */   /* as the chip text: A_s,min replaces "top steel required" */
   case 'Punching shear':add(!!(P2.punchWarn&&P2.punchWarn.length),'perimeters overlap');break;
   case 'Pedestal design':realPeds.forEach(z=>{add(!z.rhoOK,'ρ outside 1–8%');add(!z.nBarsOK,'<4 bars');add(!z.barFitOK,'bars do not fit');add(!z.tieOK||!z.tieSizeOK,'ties');add(!!z.slFail,'slender limit');});break;
   case 'Dowels (tension, laps)':(P2.dowels||[]).filter(z=>!z.isPatch).forEach(z=>{
@@ -3948,6 +3952,7 @@ function sfrModel(){
    S({id:'dy',label:'Effective depth, bottom y-bars (inner layer, on top of the x-bars)',sym:'d_{y}',eq:'12 t \\minus c_{bot} \\minus d_{b,x} \\minus \\frac{d_{b,y}}{2}',sub:sfrN(tin)+' \\minus '+sfrN(cvB)+' \\minus '+sfrN(dbx,3)+' \\minus '+sfrN(dby/2,3),value:P2.dBotY,unit:'in',d:3})]:[
    S({id:'dx',label:'Effective depth, bottom x-bars (on top of the y-bars)',sym:'d_{x}',eq:'12 t \\minus c_{bot} \\minus \\frac{d_{b,x}}{2} \\minus d_{b,y}',sub:sfrN(tin)+' \\minus '+sfrN(cvB)+' \\minus '+sfrN(dbx/2,3)+' \\minus '+sfrN(dby,3),value:P2.dBotX,unit:'in',d:3}),
    S({id:'dy',label:'Effective depth, bottom y-bars',sym:'d_{y}',eq:'12 t \\minus c_{bot} \\minus \\frac{d_{b,y}}{2}',sub:sfrN(tin)+' \\minus '+sfrN(cvB)+' \\minus '+sfrN(dby/2,3),value:P2.dBotY,unit:'in',d:3})]),
+   S({id:'dmin',label:'Minimum effective depth of the bottom reinforcement',chk:'minimum depth',sym:'\\min(d_{x}, d_{y})',eq:'\\ge 6',sub:'\\min('+sfrN(P2.dBotX,3)+',\\,'+sfrN(P2.dBotY,3)+')'+(P2.minDepth.ok?' \\ge ':' \\lt ')+'6',value:P2.minDepth.d,unit:'in',d:3,ok:!!P2.minDepth.ok,ref:'ACI 318-19 13.3.1.2'}),   /* SFMD */
    S({id:'davg',label:'Average depth (two-way shear)',sym:'d_{avg}',eq:'\\frac{d_{x} + d_{y}}{2}',sub:'\\frac{'+sfrN(P2.dBotX,3)+' + '+sfrN(P2.dBotY,3)+'}{2}',value:P2.dAvg,unit:'in',d:3}),
    ...(state.freinf.topX.size?[S({id:'dtx',label:'Effective depth, top x-bars (outer layer)',sym:'d_{top,x}',eq:'12 t \\minus c_{top} \\minus \\frac{d_{b,top,x}}{2}',sub:sfrN(tin)+' \\minus '+sfrN(cvT)+' \\minus '+sfrN(BAR_DIA[state.freinf.topX.size]/2,3),value:P2.dTopX,unit:'in',d:3})]:[]),   /* SFTD */
    ...(state.freinf.topY.size?[S({id:'dty',label:'Effective depth, top y-bars (inner layer, under the top x-bars)',sym:'d_{top,y}',eq:'12 t \\minus c_{top} \\minus d_{b,top,x} \\minus \\frac{d_{b,top,y}}{2}',sub:sfrN(tin)+' \\minus '+sfrN(cvT)+' \\minus '+sfrN(BAR_DIA[state.freinf.topX.size||0]||0,3)+' \\minus '+sfrN(BAR_DIA[state.freinf.topY.size]/2,3),value:P2.dTopY,unit:'in',d:3})]:[])]},
@@ -3960,10 +3965,12 @@ function sfrModel(){
     S({id:'a',label:'Depth of the stress block',sym:'a',eq:'\\frac{A_{s} f_{y}}{0.85 '+SFR_FC+' b}',sub:'\\frac{'+sfrN(cb.As,3)+'\\cdot'+sfrN(P2.fy,0)+'}{0.85\\cdot'+sfrN(P2.fc,0)+'\\cdot'+sfrN(des.wperp*12,1)+'}',value:cb.a,unit:'in',d:3}),
     S({id:'phi',label:'Strength reduction factor (by ε_t = '+sfrN(cb.eps_t,4)+'; ε_ty = '+(P2.fy>60000?'f_y/E_s = '+sfrN(sfdEty(P2.fy),5):'0.002')+', tension-controlled at ε_t ≥ ε_ty + 0.003)',sym:'\\phi',eq:'',sub:'',value:cb.phi,unit:'',d:3,ref:'ACI 318-19 Table 21.2.2'}),
     S({id:'phiMn',label:'Design flexural strength',sym:'\\phi M_{n}',eq:'\\phi A_{s} f_{y} (d \\minus a/2)',sub:sfrN(cb.phi,3)+'\\cdot'+sfrN(cb.As,3)+'\\cdot'+sfrN(P2.fy/1000,0)+'\\cdot('+sfrN(des.dBot,3)+' \\minus '+sfrN(cb.a/2,3)+')/12',value:cb.phiMn/12,unit:'kip-ft',ref:'ACI 318-19 22.3'}),
-    S({id:'DCRb',label:'Flexure, bottom: demand / capacity'+(des.strip&&des.strip.applies?' (full width; the strip check under each pedestal follows)':''),sym:'DCR',eq:'\\frac{M_{u}}{\\phi M_{n}}',sub:'\\frac{'+sfrN(des.MuPos)+'}{'+sfrN(cb.phiMn/12)+'}',value:des.dcrBotFull,unit:'',d:3,ok:des.dcrBotFull<=1+1e-9})];   /* SFTX */
+    S({id:'DCRb',label:'Flexure, bottom: demand / capacity'+(des.strip&&des.strip.applies?' (full width; the strip check under each pedestal follows)':''),sym:'DCR',eq:'\\frac{M_{u}}{\\phi M_{n}}',sub:'\\frac{'+sfrN(des.MuPos)+'}{'+sfrN(cb.phiMn/12)+'}',value:des.dcrBotFull,unit:'',d:3,ok:des.dcrBotFull<=1+1e-9}),
+    S({id:'tcB',label:'Bottom bars tension-controlled (nonprestressed slab; ε_ty = '+sfrN(des.epsTC-0.003,5)+')',chk:'tension-controlled',sym:'\\epsilon_{t}',eq:'0.003\\,\\frac{d \\minus c}{c} \\ge \\epsilon_{ty} + 0.003',sub:'0.003\\cdot\\frac{'+sfrN(des.dBot,3)+' \\minus '+sfrN(cb.a/beta1(P2.fc),3)+'}{'+sfrN(cb.a/beta1(P2.fc),3)+'} = '+sfrN(cb.eps_t,5)+(des.tcBotOK?' \\ge ':' \\lt ')+sfrN(des.epsTC,5),value:cb.eps_t,unit:'',d:5,ok:!!des.tcBotOK,ref:'ACI 318-19 7.3.3.1, 8.3.3.1, Table 21.2.2 (via 13.3.2.1, 13.3.3.1, 13.3.4.1)'})];   /* SFTX; SFET */
     if(des.MuNeg>0.01){
      fl.push(S({id:'MuN',label:'Factored moment, top (hogging)',sym:'M_{u}^{\\minus}',eq:'',sub:'',value:des.MuNeg,unit:'kip-ft',note:des.govNeg?'governing combination: '+des.govNeg.cb.name:''}));
      if(des.topProvided)fl.push(S({id:'phiMnT',label:'Design flexural strength, top (d = d_top,'+dir+')',sym:'\\phi M_{n,top}',eq:'\\phi A_{s} f_{y} (d \\minus a/2)',sub:sfrN(des.capTop.phi,3)+'\\cdot'+sfrN(des.capTop.As,3)+'\\cdot'+sfrN(P2.fy/1000,0)+'\\cdot('+sfrN(des.dTop,3)+' \\minus '+sfrN(des.capTop.a/2,3)+')/12',value:des.capTop.phiMn/12,unit:'kip-ft',ref:'ACI 318-19 22.3'}));   /* SFTD */
+     if(des.topProvided)fl.push(S({id:'tcT',label:'Top bars tension-controlled',chk:'tension-controlled',sym:'\\epsilon_{t}',eq:'\\ge \\epsilon_{ty} + 0.003',sub:sfrN(des.capTop.eps_t,5)+(des.tcTopOK?' \\ge ':' \\lt ')+sfrN(des.epsTC,5),value:des.capTop.eps_t,unit:'',d:5,ok:!!des.tcTopOK,ref:'ACI 318-19 7.3.3.1, 8.3.3.1'}));   /* SFET */
      if(des.topProvided)fl.push(S({id:'DCRt',label:'Flexure, top: demand / capacity',sym:'DCR',eq:'\\frac{M_{u}^{\\minus}}{\\phi M_{n,top}}',sub:'\\frac{'+sfrN(des.MuNeg)+'}{'+sfrN(des.capTop.phiMn/12)+'}',value:des.dcrTop,unit:'',d:3,ok:des.dcrTop<=1+1e-9}));
      else fl.push(S({id:'AsTreq',label:'Top steel required (no top mat entered: provide top bars)',sym:'A_{s,top,req}',eq:'',sub:'',value:Math.max(des.reqTop,des.AsMinPerFt),unit:'in^{2}/ft',d:3,note:'A_s,req for M_u⁻ = '+sfrN(des.reqTop,3)+' in²/ft, not less than A_s,min'}));
     }
@@ -3976,7 +3983,8 @@ function sfrModel(){
       S({id:k+'M',label:r.label+': strip moment at the face '+dir+' = '+sfrN(r.face,3)+' ft ('+r.cb+'; strip loads '+r.band.join(', ')+', ΣP_u = '+sfrN(r.Ps)+' kip at e = '+sfrN(r.es,3)+' ft; linear no-tension soil pressure over the strip length '+sfrN(st.W)+' ft; cantilever '+sfrN(r.cant,3)+' ft)',sym:'M_{u,strip}',eq:'\\int_{face}^{edge} w(s)\\,(s \\minus s_{f})\\,ds \\minus \\sum P_{u,j}\\,(s_{j} \\minus s_{f})',sub:'',value:r.M,unit:'kip-ft'}),
       S({id:k+'As',label:r.label+': bottom '+dir+'-bars in the strip',sym:'A_{s,strip}',eq:'A_{s}/\\text{ft} \\cdot b_{s}',sub:sfrN(des.AsBot,3)+'\\cdot'+sfrN(r.bs,3),value:r.As,unit:'in^{2}',d:3}),
       S({id:k+'phiMn',label:r.label+': design flexural strength of the strip',sym:'\\phi M_{n,strip}',eq:'\\phi A_{s} f_{y} (d \\minus a/2),\\; a = \\frac{A_{s} f_{y}}{0.85 '+SFR_FC+' b_{s}}',sub:sfrN(r.cap.phi,3)+'\\cdot'+sfrN(r.As,3)+'\\cdot'+sfrN(P2.fy/1000,0)+'\\cdot('+sfrN(des.dBot,3)+' \\minus '+sfrN(r.cap.a/2,3)+')/12',value:r.cap.phiMn/12,unit:'kip-ft',ref:'ACI 318-19 22.3'}),
-      S({id:k+'dcr',label:r.label+': strip flexure demand / capacity',sym:'DCR',eq:'\\frac{M_{u,strip}}{\\phi M_{n,strip}}',sub:'\\frac{'+sfrN(r.M)+'}{'+sfrN(r.cap.phiMn/12)+'}',value:r.dcr,unit:'',d:3,ok:r.dcr<=1+1e-9})];})});}
+      S({id:k+'dcr',label:r.label+': strip flexure demand / capacity',sym:'DCR',eq:'\\frac{M_{u,strip}}{\\phi M_{n,strip}}',sub:'\\frac{'+sfrN(r.M)+'}{'+sfrN(r.cap.phiMn/12)+'}',value:r.dcr,unit:'',d:3,ok:r.dcr<=1+1e-9}),
+      S({id:k+'tc',label:r.label+': strip bars tension-controlled',chk:'tension-controlled',sym:'\\epsilon_{t}',eq:'\\ge \\epsilon_{ty} + 0.003',sub:sfrN(r.cap.eps_t,5)+(r.cap.eps_t>=des.epsTC-1e-12?' \\ge ':' \\lt ')+sfrN(des.epsTC,5),value:r.cap.eps_t,unit:'',d:5,ok:r.cap.eps_t>=des.epsTC-1e-12,ref:'ACI 318-19 7.3.3.1, 8.3.3.1'})];})});}   /* SFET */
    T.push({title:'Minimum steel',ref:sfrCombined()?'ACI 318-19 13.3.4.1, 8.6.1.1, 24.4.3.2':'ACI 318-19 7.6.1.1, 24.4.3.2',steps:[   /* SFPR: combined footing, Chapter 8 */
     S({id:'Asmin',label:'Shrinkage and temperature minimum',sym:'A_{s,min}',eq:'0.0018 \\cdot 12 h',sub:'0.0018\\cdot 12\\cdot'+sfrN(tin),value:des.AsMinPerFt,unit:'in^{2}/ft',d:3}),
     S({id:'Asprov',label:'Provided, bottom (per ft)',sym:'A_{s,prov}',eq:'\\ge A_{s,min}',sub:sfrN(des.AsBot,3)+(des.asMinBotOK?' \\ge ':' \\lt ')+sfrN(des.AsMinPerFt,3),value:des.AsBot,unit:'in^{2}/ft',d:3,ok:!!des.asMinBotOK}),
@@ -5480,6 +5488,7 @@ function barAreaPerFt(size,spc){if(!size||!spc||spc<=0)return 0;return BAR_AREA[
    Grade 60 (f_y = 60,000 psi) keeps eps_ty = 0.002 as 21.2.2.1 permits, so its limits stay 0.002 / 0.005 (unchanged results).
    Decision (pending engineer review): below Grade 60 the tool keeps 0.002 too (larger than f_y/E_s, so phi is never higher
    than before: conservative). Before SFPY the limits were 0.002 / 0.005 for every f_y (unconservative above Grade 60). */
+function sfdF5(v){return isFinite(v)?v.toFixed(5):'\\infty';}   /* SFET: strain display */
 function sfdEty(fy){return (fy>60000)?fy/29000000:0.002;}
 function phiFlexure(eps_t,fy){ // tension-controlled 0.90, transition to 0.65
  const ety=sfdEty(fy);
@@ -6464,6 +6473,16 @@ function computePhase2(R){
  }
  const desX=directionDesign('x'), desY=directionDesign('y');
  [desX,desY].forEach(z=>{z.dcrBot=Math.max(z.dcrBotFull,z.strip&&z.strip.applies?z.strip.dcr:0);});   /* SFTX: governing bottom D/C */
+ /* SFET (2026-11-07): ACI 318-19 7.3.3.1 / 8.3.3.1 (footings reach Chapters 7 and 8 through 13.3.2.1, 13.3.3.1, 13.3.4.1):
+    nonprestressed slabs shall be tension-controlled (Table 21.2.2: eps_t >= eps_ty + 0.003, eps_ty per SFPY). Checked for the
+    bottom mat of each direction and for a top mat where it is a flexural mat (hogging, top bars entered); the strip check
+    (SFTX) uses the same bars and d with a narrower width, so it is checked too. Before: not checked (phi alone followed eps_t).
+    SFMD (2026-11-07): ACI 318-19 13.3.1.2: effective depth of the bottom reinforcement at least 6 in (the smaller of d_x, d_y). */
+ const epsTC=sfdEty(fy)+0.003;
+ [desX,desY].forEach(z=>{z.epsTC=epsTC;z.tcBotOK=!(z.AsBot>0)||z.capBot.eps_t>=epsTC-1e-12;
+  z.tcStripOK=!(z.strip&&z.strip.applies)||z.strip.rows.every(r=>!(r.As>0)||r.cap.eps_t>=epsTC-1e-12);
+  z.tcTopOK=!(z.topProvided&&z.MuNeg>0.01)||z.capTop.eps_t>=epsTC-1e-12;});
+ const minDepth={d:Math.min(dBotX,dBotY),min:6};minDepth.ok=minDepth.d>=6-1e-9;
  /* ACI 318-19 13.3.3.3 - banded reinforcement in the short direction of a two-way rectangular
     footing.  A fraction gamma_s of the short-direction steel must sit in a band of width equal
     to the SHORT side, centred on the column; the remainder is spread over the rest.  Reported
@@ -6833,7 +6852,7 @@ function computePhase2(R){
  const shearFr=peds.map((p,i)=>sfdShearFriction(i,p,R.Wpeds[i],pedDes[i],dowels[i],combos,fc,fy,lam));   /* SFSF */
  const pedShear=peds.map((p,i)=>sfdPedShear(i,p,pedDes[i],combos,fc,fy,lam));   /* SFVP */
  const xties=pedDes.map(pd=>sfdCrossties(pd));   /* SFXT */
- return{bandChk,offFooting,dBotX,dBotY,botXOut,dTopX,dTopY,dAvg,fc,fy,lam,combos,desX,desY,punch,punchWarn,punchGroup,bearing,pedDes,dowels,shearFr,pedShear,xties,covChk,pressMomentAbout,pressShearBeyond,pressResultant,
+ return{minDepth,bandChk,offFooting,dBotX,dBotY,botXOut,dTopX,dTopY,dAvg,fc,fy,lam,combos,desX,desY,punch,punchWarn,punchGroup,bearing,pedDes,dowels,shearFr,pedShear,xties,covChk,pressMomentAbout,pressShearBeyond,pressResultant,
   beamDiagram,pressurePlane,netResultant};
 }
 /* ---- SFSL (2026-11-07): moment magnification of a slender pedestal (ACI 318-19 6.6.4) ----
@@ -7170,6 +7189,10 @@ function renderFootingDesign(){
   ['d_{bot,x}','Eff. depth, bottom x-bars'+(P2.botXOut?' (outer layer)':''),P2.dBotX,'in'],['d_{bot,y}','Eff. depth, bottom y-bars'+(P2.botXOut?' (inner layer)':''),P2.dBotY,'in'],   /* SFBO */
   ...(state.freinf.topX.size?[['d_{top,x}','Eff. depth, top x-bars (outer layer)',P2.dTopX,'in']]:[]),...(state.freinf.topY.size?[['d_{top,y}','Eff. depth, top y-bars (inner layer)',P2.dTopY,'in']]:[]),   /* SFTD */
   ['d_{avg}','Average d (two-way shear)',P2.dAvg,'in']]));
+ if(P2.minDepth){const m=P2.minDepth;   /* SFMD */
+  intro.appendChild(eqBlock('Minimum depth of the footing','ACI 318-19 13.3.1.2','\\min(d_{bot,x},\\;d_{bot,y}) \\ge 6\\;\\mathrm{in}',
+   '\\min('+f3(P2.dBotX)+',\\;'+f3(P2.dBotY)+') = '+f3(m.d)+'\\;\\mathrm{in}',m.ok?'\\text{OK}\\;\\checkmark':'\\text{NG: increase the thickness}'));
+  if(!m.ok)intro.appendChild(el('div','failbox','<b>NG \u2014 footing depth.</b> The effective depth of the bottom reinforcement is '+f3(m.d)+' in, less than the 6 in of ACI 318-19 13.3.1.2.'));}
  if(P2.covChk){const cc=P2.covChk.rows.filter(z=>z.applies);   /* SFCV */
   intro.appendChild(eqBlock('Concrete cover, footing','ACI 318-19 20.5.1.3, Table 20.5.1.3.1',
    'c \\ge c_{min}\\;\\text{(cast against earth 3 in; in contact with ground: No. 6+ 2 in, No. 5 and smaller 1.5 in)}',
@@ -7185,6 +7208,10 @@ function renderFootingDesign(){
    'M_u = '+f2(des.MuPos)+'\\;\\mathrm{k\\text{-}ft}\\;(\\text{total}),\\quad \\phi M_n = \\phi A_s f_y (d-a/2)',
    'a = \\frac{A_s f_y}{0.85 f\'_c b} = '+f2(des.capBot.a)+'\\;\\mathrm{in}',
    '\\phi M_n = '+f2(des.capBot.phiMn/12)+'\\;\\mathrm{k\\text{-}ft}\\;(\\phi='+f2(des.capBot.phi)+',\\;\\varepsilon_t='+f2(des.capBot.eps_t)+'),\\quad \\mathrm{DCR}=\\mathbf{'+f2(des.dcrBotFull)+'}'+(des.dcrBotFull<=1?'\\;\\checkmark':'\\;\\text{NG}')));
+  b.appendChild(eqBlock('Tension-controlled section (nonprestressed slab)','ACI 318-19 7.3.3.1, 8.3.3.1, Table 21.2.2',   /* SFET */
+   '\\varepsilon_t \\ge \\varepsilon_{ty} + 0.003 = '+sfdF5(des.epsTC),
+   '\\text{bottom}: \\varepsilon_t = '+sfdF5(des.capBot.eps_t)+(des.strip&&des.strip.applies?',\\;\\text{strips}: '+des.strip.rows.map(r=>sfdF5(r.cap.eps_t)).join(',\\;'):'')+(des.topProvided&&des.MuNeg>0.01?',\\;\\text{top}: '+sfdF5(des.capTop.eps_t):''),
+   (des.tcBotOK&&des.tcStripOK&&des.tcTopOK)?'\\text{tension-controlled}\\;\\checkmark':'\\text{NG: not tension-controlled (reduce } A_s\\text{ or increase } d)'));
   if(des.strip&&des.strip.applies){const st=des.strip;   /* SFTX */
    b.appendChild(eqBlock('Transverse strip under each pedestal (combined footing)','ACI 318-19 13.3.4.1, 13.3.4.3, 22.3; strip width c + d centred on the pedestal (engineer review pending)',
     'b_s = c + d,\\quad M_{u,strip} = \\int_{face}^{edge} w(s)(s-s_f)\\,ds - \\sum P_{u,j}(s_j-s_f),\\quad \\phi M_{n,strip} = \\phi A_s b_s f_y (d-a/2)',
@@ -8509,8 +8536,8 @@ manPart("p0","0. Read This First",[
 /* ===== PART 1 — USING THE PROGRAM ===== */
 manPart("p1","1. Using the Program",[
 {h:"1.1 Layout"},
-{p:"The screen is split into an <b>input panel</b> (left) and an <b>output report</b> (right) organised in numbered tabs: 1&nbsp;Schematic &amp; Input Echo, 2&nbsp;Load Combinations, 3&nbsp;Bearing, 4&nbsp;Stability, 5&nbsp;Footing Design, 6&nbsp;Pedestal Design, 7&nbsp;3D View, and this manual. Every input change recalculates the entire report (debounced ~0.3 s). The <b>summary dashboard</b> shows a pass/fail chip for each check family (one line each; expanded, a chip names its governing combination). On screens 1500&nbsp;px and wider it is a left column beside the input and output panels; on narrower screens it sits at the top of the output panel, above the tabs (&sect;3.1)."},
-{p:"Report sections are collapsible; the open/closed state persists with your session. The <b>self-consistency panel</b> at the top of the output panel (under the dashboard on screens narrower than 1500&nbsp;px) should read six green checks at all times \u2014 see &sect;0.1."},
+{p:"The screen is split into an <b>input panel</b> (left) and an <b>output report</b> (right) organised in numbered tabs: 1&nbsp;Schematic &amp; Input Echo, 2&nbsp;Load Combinations, 3&nbsp;Bearing, 4&nbsp;Stability, 5&nbsp;Footing Design, 6&nbsp;Pedestal Design, 7&nbsp;3D View, and this manual. Every input change recalculates the entire report (debounced ~0.3 s). The <b>summary dashboard</b> shows a pass/fail chip for each check family (one line each; expanded, a chip names its governing combination). On screens 1200&nbsp;px and wider it is a left column beside the input and output panels; on narrower screens it sits at the top of the output panel, above the tabs (&sect;3.1)."},
+{p:"Report sections are collapsible; the open/closed state persists with your session. The <b>self-consistency panel</b> at the top of the output panel (under the dashboard on screens narrower than 1200&nbsp;px) should read six green checks at all times \u2014 see &sect;0.1."},
 {h:"1.2 Load input modes"},
 {p:"<b>By load type</b> (default): enter unfactored D, L, Lr, S, Wx, Wy loads per pedestal. The program generates the full ASCE 7-16 &sect;2.4.1 service sweep for bearing/stability and the &sect;2.3.1 strength sweep for structural design, brackets dead load (1.0/0.6 service, 1.2/0.9/1.4 strength), and sweeps wind &plusmn;x and &plusmn;y."},
 {p:"<b>Direct factored</b>: enter one already-factored envelope per pedestal. Use when the frame analysis has already produced governing factored reactions. Read &sect;0.3.6 for what this mode gives up."},
@@ -8587,7 +8614,7 @@ manPart("p2","2. Input Reference",[
 /* ===== PART 3 — OUTPUT REFERENCE ===== */
 manPart("p3","3. Output Reference",[
 {h:"3.1 Summary dashboard"},
-{p:"One chip per check family, on one line: the check, a short value and the status. On screens 1500&nbsp;px and wider the dashboard is a left column beside the input and output panels and scrolls on its own; on narrower screens it sits at the top of the output panel, above the tabs. &laquo; / &raquo; (or Hide / Show checks) collapses it; the choice is remembered in this browser. The short value is the D/C (FS<sub>target</sub>/FS for a factor-of-safety check; the FS itself where overturning is reported, not gated). Where a chip is NG or REVIEW for a reason other than its D/C, the short value is that condition instead (e.g. <i>A_s &lt; A_s,min</i> while the moment D/C is within its limit, or <i>straight &#8467;_d &gt; avail</i>), and the D/C shows when the chip is expanded. &#9656; expands a chip to the governing value, its threshold, the governing combination and the reference (NG and REVIEW chips open expanded); clicking a chip goes to its worked section. "},
+{p:"One chip per check family, on one line: the check, a short value and the status. On screens 1200&nbsp;px and wider the dashboard is a left column beside the input and output panels and scrolls on its own; on narrower screens it sits at the top of the output panel, above the tabs. &laquo; / &raquo; (or Hide / Show checks) collapses it; the choice is remembered in this browser. The short value is the D/C (FS<sub>target</sub>/FS for a factor-of-safety check; the FS itself where overturning is reported, not gated). Where a chip is NG or REVIEW for a reason other than its D/C, the short value is that condition instead (e.g. <i>A_s &lt; A_s,min</i> while the moment D/C is within its limit, or <i>straight &#8467;_d &gt; avail</i>), and the D/C shows when the chip is expanded. &#9656; expands a chip to the governing value, its threshold, the governing combination and the reference (NG and REVIEW chips open expanded); clicking a chip goes to its worked section. "},
 {p:"<b>PASS/FAIL</b> is strictly the printed criterion; <b>REVIEW</b> marks detailing items (e.g. dowel area below 0.005A<sub>g</sub>) that are not strength failures; <b>N/A</b> marks checks that do not apply (e.g. flotation with no water table)."},
 {tbl:{head:["Chip","Criterion"],rows:[
  ["Bearing (service)","max over service combos of qmax/qallow (direct) or qeff/qallow (Vesi\u0107) \u2264 1"],
