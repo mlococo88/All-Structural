@@ -5216,7 +5216,7 @@ Frame: Beam Capacity (`suite-frame-capacity`) and the suite shell's Report summa
 - **Saved data:** no key or format change.
 - **Open items:** hollow sections (Eqs. 5.7.2.1-5, 5.7.3.4.2-6, 5.7.3.6.3-2) are outside the tool's section types; compatibility-torsion reduction (decision 4).
 
-## 2026-11-07 — PR: claude/cbc-aci-lap-fc-order (CBH2b: ACI compression lap splice — the one-third increase for f′c < 3000 psi applied after the 12 in minimum, per 25.5.5.1; CALCULATION CHANGE, Development & Splice tab, ACI mode, f′c < 3000 psi with small bars only; less conservative before)
+## 2026-11-07 — PR: claude/cbc-aci-lap-fc-order, PR #1042: https://github.com/mlococo88/All-Structural/pull/1042 (CBH2b: ACI compression lap splice — the one-third increase for f′c < 3000 psi applied after the 12 in minimum, per 25.5.5.1; CALCULATION CHANGE, Development & Splice tab, ACI mode, f′c < 3000 psi with small bars only; less conservative before)
 
 Frame: Development & Splice (`suite-frame-dev`; byte-exact srcdoc helper, CRLF kept). Follow-up to CBH2 (#969), open item from the 2026-11-07 review.
 
