@@ -1269,11 +1269,11 @@ Basis: ASCE/SEI 7-16 Fig. 27.3-1 and Sec. 27.1.5 (**verify (ASCE 7-16 PDF unread
 - **Hip 6:12**, same plan: +Y C_net = 0.105 + 0.600 = 0.705 (was 0.600); F 161,316 → 164,770 lbf. ±X unchanged (M8).
 - **Monoslope 4:12**: ±X end wall A_end = 416.7 ft²: F 58,673 → 60,635, F_min 32,133 → 35,467; +Y (from the low eave) unchanged 182,775 (floor governs, 0.726); −Y (from the high side) C_net = 0.8 + 0.593 = 1.393: F 182,775 → 220,036 lbf.
 - **Review variant B (Adams, gable 4:12, 100 × 60)**: ±X end wall 300 ft²: F 63,778 → 66,367, F_min 25,440 → 27,840; ±Y unchanged 120,614 (floor 0.569 governs; C_p,ww,pos − C_p,lw = 0.526).
-- **Default (flat), seismic variant C, Chatham, Site E, Adams flat:** no computed value moved (only the new fields `Atri`, `FwwTri`, `roofNet`).
+- **Default (flat), seismic variant C, Chatham, Site E, Adams flat:** `R` identical (the new fields `Atri`, `FwwTri`, `roofNet` are set only where they apply). The display gains a second worked derivation (direction with the largest design force).
 
 ### How verified
 - Headless Chromium, `solve()` on main and branch for 9 cases (default, gable 12:12, hip 6:12, monoslope 4:12, variant B, variant C, Chatham Site B, Site E manual, Adams flat): leaf diff of `R` and of the hand-off payload. Moved: only `cases[].{Awall, Aroof, Fww, Flw, Froof, Ftot, Fmin, scale, Fdes, pEquivWall, CpRoofUsed}` and the combination lateral force columns (`items[].F`, `lat`, `latMax`, `gov*.F/lat`) on the sloped cases; hand-off identical.
 - Rendered text of every output tab and the Report for the 9 cases: 0 console errors, 0 KaTeX errors; differences only in the Minimum Design Wind Load panel and the Combinations lateral column.
 - Excel workbook built for all 9 cases (`buildWorkbook` + `writeBuffer`, no error).
-- `node tests/check-syntax.mjs`, `tests/smoke/project-library.mjs --tool asce7`, `tests/smoke/phone-layout.mjs --tool asce7`, `tests/engine/run.mjs handoffs`.
+- `node tests/check-syntax.mjs` (95 files pass), `tests/smoke/project-library.mjs --tool asce7` (ALL PASS), `tests/smoke/phone-layout.mjs --tool asce7` (390 / 768 px pass), `tests/engine/run.mjs handoffs` (10 passed).
 - **Other copies:** none.

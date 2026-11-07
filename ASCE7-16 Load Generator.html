@@ -904,7 +904,6 @@ function solve(S){
     /* A7H1 (2026-11-07): wind parallel to the ridge of a gable or monoslope: the silhouette above the eave is the
        end wall (gable-end triangle), not roof. It takes the wall coefficients (windward 0.8 with q_z integrated
        over its height and width, leeward C_p(L/B) at q_h) and counts as wall area at 16 psf in Sec. 27.1.5. */
-    c.Atri=0; c.FwwTri=0;
     if(!c.normalToRidge && c.Aroof>0 && (S.roofType==="Gable"||S.roofType==="Monoslope")){
       const zTop=g.hRidge, nq=48, Qc=[0];               /* Qc[i] = integral of 0.8 G q_z dz from h_e to z_i */
       const zq=z=>qAt(z,w.kdMWFRS).q*w.G*c.CpWW;
@@ -920,7 +919,6 @@ function solve(S){
        largest roof |C_p| on the projected area, is kept as a floor (windward-slope suction is not credited as relief;
        Decision pending engineer review). Other roof cases
        (parallel to the ridge on a hip, theta < 10 deg) keep the largest roof |C_p| on the projected area. */
-    c.roofNet=null;
     if(c.Aroof>0 && c.roofMode==="normal" && c.roofRows){
       const cw=[c.CpWWroofPos,c.CpWWroofNeg], cl=c.CpLWroof;
       const floor={v:Math.max(...c.roofRows.map(r=>Math.abs(r.Cp))), t:"\\max|C_p|", a:null, b:null, floor:true};
