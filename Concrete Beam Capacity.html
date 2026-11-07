@@ -656,7 +656,7 @@ function defaultState(){
           chk:&quot;&quot;,chkDate:&quot;&quot;,sheet:&quot;S-1&quot;},
     code:&quot;ACI&quot;,
     sec:{type:&quot;rect&quot;,bw:12,h:18,bf:36,hf:6,asminSupport:&quot;determinate&quot;},   /* asminSupport: CBM4, ACI 9.6.1.2 flange in tension */
-    mat:{fc:4,fy:60,fyt:60,dagg:1.0,lambda:1.0,gamma3:0.67,fyt100:false},
+    mat:{fc:4,fy:60,fyt:60,dagg:1.0,lambda:1.0,gamma3:0.67,fyt100:false,wc:0},   /* wc: CBL7b, AASHTO unit weight (kcf), 0 = not entered */
     cover:{cc:2.0,exposure:&quot;exposed&quot;,req:2.0,userEdited:false},
     layers:[{n:3,size:'5',face:'tension',dMan:null},
             {n:3,size:'5',face:'compression',dMan:null}],
@@ -1005,10 +1005,16 @@ function concreteE(){
   const fc=S.mat.fc;
   /* CBL7 (2026-11-07): w_c of normal weight concrete per AASHTO Table 3.5.1-1 (5.4.2.4 refers to it): 0.145 kcf for
      f'c <= 5.0 ksi, 0.140 + 0.001 f'c above (before: 0.145 at every f'c). */
-  const wc=fc<=5?0.145:0.140+0.001*fc;
+  /* CBL7b (2026-11-07): w_c entered by the user (S.mat.wc > 0, kcf) is used as entered; lightweight concrete (lambda < 1)
+     without an entered w_c takes 0.110 kcf, the low end of the Table 3.5.1-1 lightweight range (0.110 to 0.135 kcf): the
+     lowest E_c and largest n, so the larger computed f_ss (Decision, pending engineer review). Before: the normal weight
+     value at any lambda. Normal weight without an entry: Table 3.5.1-1 as CBL7. */
+  const wcU=S.mat.wc>0?S.mat.wc:0, lw=(S.mat.lambda<1);
+  const wc=wcU>0?wcU:(lw?0.110:(fc<=5?0.145:0.140+0.001*fc));
+  const wcTx=wcU>0?&quot;\\text{ kcf (entered)}&quot;:(lw?&quot;\\text{ kcf (lightweight, low end of Table 3.5.1-1)}&quot;:&quot;\\text{ kcf (Table 3.5.1-1)}&quot;);
   if(S.code==='AASHTO')
     return {Ec:120000*1.0*Math.pow(wc,2.0)*Math.pow(fc,0.33), ref:&quot;AASHTO Eq. 5.4.2.4-1, Table 3.5.1-1&quot;,   /* K1 = 1.0 */
-            expr:`E_c = 120{,}000\\,K_1 w_c^{2.0}f'^{\\,0.33}_c = 120{,}000(1.0)(${fmt(wc,3)})^{2.0}(${fmt(fc)})^{0.33},\\quad w_c = ${fc<=5?&quot;0.145&quot;:&quot;0.140+0.001f'_c&quot;}\\text{ kcf (Table 3.5.1-1)}`};
+            wc, expr:`E_c = 120{,}000\\,K_1 w_c^{2.0}f'^{\\,0.33}_c = 120{,}000(1.0)(${fmt(wc,3)})^{2.0}(${fmt(fc)})^{0.33},\\quad w_c = ${(wcU>0||lw)?fmt(wc,3):(fc<=5?&quot;0.145&quot;:&quot;0.140+0.001f'_c&quot;)}${wcTx}`};
   return {Ec:57000*Math.sqrt(fc*1000)/1000, ref:&quot;ACI 19.2.2.1&quot;,
           expr:`E_c = 57{,}000\\sqrt{f'_c} = 57{,}000\\sqrt{${fmt(fc*1000,0)}\\text{ psi}}`};
 }
@@ -1752,6 +1758,8 @@ function validate(){
   if(S.code==='ACI') N.push({code:&quot;Method&quot;,msg:&quot;Torsional section properties A_oh and p_h are taken to the centreline of the outermost closed stirrup. This is slightly conservative relative to the common (b−2c)(h−2c) approximation.&quot;});
   if(S.sec.type==='tee')
     N.push({code:&quot;ACI 22.7.6.1&quot;,msg:&quot;The flange contribution permitted for A_cp and p_cp is not taken; the web-only value is used. This is conservative.&quot;});
+  if(S.code==='AASHTO' &amp;&amp; S.crack.check &amp;&amp; S.crack.fsBasis==='calc' &amp;&amp; S.mat.lambda<1 &amp;&amp; !(S.mat.wc>0))   /* CBL7b */
+    W.push({code:&quot;AASHTO 5.4.2.4&quot;,msg:&quot;Lightweight concrete (\u03bb < 1) with no unit weight entered: E_c for the computed f_ss uses w_c = 0.110 kcf, the low end of the Table 3.5.1-1 lightweight range (conservative). Enter w_c under Materials if known.&quot;});
   if(S.crack.check &amp;&amp; S.crack.fsBasis==='calc'){
     const needPos=S.combos.some(c=>c.Mu>0), needNeg=S.combos.some(c=>c.Mu<0);
     if(needPos &amp;&amp; !(S.crack.MsPos>0))
@@ -2046,6 +2054,8 @@ function buildInput(){
       r.appendChild(el(&quot;label&quot;,null,&quot;Element of 5.4.3.3, flexural shear without torsion: f_yt up to 100 ksi (5.7.2.7; otherwise 60 ksi, or 75 ksi above 60)&quot;)); b.appendChild(r); }
     fRow(b,&quot;Aggregate size&quot;,numIn(()=>S.mat.dagg,v=>S.mat.dagg=v,&quot;0.25&quot;,&quot;dagg&quot;),&quot;in&quot;);
     fRow(b,&quot;λ (lightweight)&quot;,numIn(()=>S.mat.lambda,v=>S.mat.lambda=v,&quot;0.05&quot;,&quot;lam&quot;),&quot;&quot;);
+    if(S.code==='AASHTO'){ fRow(b,&quot;Unit weight w_c (for E_c; blank = Table 3.5.1-1)&quot;,numIn(()=>S.mat.wc>0?S.mat.wc:&quot;&quot;,v=>S.mat.wc=Math.max(0,v),&quot;0.005&quot;,&quot;wc&quot;),&quot;kcf&quot;);   /* CBL7b */
+      b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;w_c enters E_c (Eq. 5.4.2.4-1), used for the computed service steel stress f_ss. Blank: normal weight per Table 3.5.1-1&quot;+(S.mat.lambda<1?&quot;; lightweight (λ < 1): 0.110 kcf, the low end of the Table 3.5.1-1 range (conservative). Enter the specified unit weight if known.&quot;:&quot;.&quot;))); }
     if(S.code==='AASHTO') fRow(b,&quot;γ₃ (bar spec., 5.6.3.3)&quot;,selIn(G3_SPECS.map(o=>o.k),()=>cbcG3Key(),v=>{ const o=G3_SPECS.find(x=>x.k===v); if(o){ S.mat.gamma3=o.g; S.mat.g3spec=o.k; } },
       k=>{ const o=G3_SPECS.find(x=>x.k===k); return o.g.toFixed(2)+&quot; — &quot;+o.lab; },o=>o,&quot;gamma3&quot;),&quot;&quot;);   /* CBL1 */
     b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;E_s = 29,000 ksi and ε_cu = 0.003 are fixed by code.&quot;));
@@ -5312,7 +5322,7 @@ function cbcRptModel(){
     subs.push({title:'Section and materials',items:[{type:'table',head:['Item','Value','Unit'],rows:[
       ['Design code',codeName,''],['Section type',S.sec.type==='tee'?'T-beam':'Rectangular',''],['Web width $b_{w}$',{t:fmt(S.sec.bw),n:true},'in'],['Overall depth h',{t:fmt(S.sec.h),n:true},'in'],
       ...(S.sec.type==='tee'?[['Flange width $b_{f}$',{t:fmt(S.sec.bf),n:true},'in'],['Flange thickness $h_{f}$',{t:fmt(S.sec.hf),n:true},'in']].concat(S.code==='ACI'?[['Beam for $A_{s,min}$, flange in tension (9.6.1.2)',S.sec.asminSupport==='indeterminate'?'statically indeterminate':'statically determinate','']]:[]):[]),
-      [&quot;$f^{\\prime}_{c}$&quot;,{t:fmt(S.mat.fc),n:true},'ksi'],['$f_{y}$',{t:fmt(S.mat.fy),n:true},'ksi'],['$f_{yt}$',{t:fmt(S.mat.fyt),n:true},'ksi'],...(S.code==='AASHTO'?[['$f_{yt}$ up to 100 ksi (5.4.3.3, no torsion; 5.7.2.7)',S.mat.fyt100?'yes':'no','']]:[]),['$\\lambda$',{t:fmt(S.mat.lambda,2),n:true},''],
+      [&quot;$f^{\\prime}_{c}$&quot;,{t:fmt(S.mat.fc),n:true},'ksi'],['$f_{y}$',{t:fmt(S.mat.fy),n:true},'ksi'],['$f_{yt}$',{t:fmt(S.mat.fyt),n:true},'ksi'],...(S.code==='AASHTO'?[['$f_{yt}$ up to 100 ksi (5.4.3.3, no torsion; 5.7.2.7)',S.mat.fyt100?'yes':'no','']]:[]),['$\\lambda$',{t:fmt(S.mat.lambda,2),n:true},''],...(S.code==='AASHTO'?[['Unit weight $w_{c}$ for $E_{c}$',S.mat.wc>0?{t:fmt(S.mat.wc,3),n:true}:(S.mat.lambda<1?'0.110 (lightweight, not entered)':'Table 3.5.1-1'),'kcf']]:[]),
       ['Aggregate size',{t:fmt(S.mat.dagg),n:true},'in'],['Clear cover provided / required',fmt(S.cover.cc)+' / '+fmt(S.cover.req),'in']]}]});
     subs.push({title:'Reinforcement',items:[{type:'table',head:['Layer','Bars','Size','$A_{s}$ (in²)','Face','d (in)','Source'],rows:G.map((L,i)=>[L.side+(i+1),String(L.n),'#'+L.size,{t:fmt(L.As),n:true},L.face==='tension'?'Tension':'Compression',{t:fmt(L.d),n:true},L.manual?'manual override':'auto-stacked'])},
       {type:'note',text:(S.stir.present?'Transverse: '+S.stir.legs+'-leg #'+S.stir.size+' closed stirrup at '+fmt(S.stir.s)+' in. ($A_{v}$ = '+fmt(S.stir.legs*REBAR[S.stir.size].a)+' in²).':'No transverse reinforcement specified.')+(S.tor.present&amp;&amp;ACI?' Torsion: '+(S.tor.kind==='compatibility'?'compatibility':'equilibrium')+' torsion, θ = '+fmt(S.tor.theta,0)+'°, $A_{\\ell}$ = '+fmt(S.tor.Al)+' in².':'')+(S.skin&amp;&amp;S.skin.size&amp;&amp;S.skin.s>0?' Skin bars: #'+S.skin.size+' at '+fmt(S.skin.s)+' in on each side face.':' Skin bars: none entered.')+' Clear spacing between layers: '+fmt(S.layerClear)+' in.'}]});   /* CBM3: skin bars */
