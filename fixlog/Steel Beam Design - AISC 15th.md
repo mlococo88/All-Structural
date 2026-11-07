@@ -2751,7 +2751,7 @@ From the code-compliance review of 2026-11-07 (finding M2).
 - **How verified:** origin/main vs branch on 16 scenarios + v16 engine cases: the new row appears only for built-up sections (builtup, g8, plates, f13bad); every other check identical in all scenarios. Summary, Section Properties and Report show the row; 0 console errors. Kit: check-syntax, steel-beam-builtup 11/11, project-library steelbeam, phone-layout sbeam, list-input sbeam: pass.
 - **Saved data:** none changed.
 
-## 2026-11-07 — PR: claude/steelbeam-m4-b1 — Beam mode with axial compression: M_ux amplified by B1 (Appendix 8) in the §H1 interaction (M4; calculation change)
+## 2026-11-07 — PR: claude/steelbeam-m4-b1 (PR #1045: https://github.com/mlococo88/All-Structural/pull/1045) — Beam mode with axial compression: M_ux amplified by B1 (Appendix 8) in the §H1 interaction (M4; calculation change)
 
 From the code-compliance review of 2026-11-07 (finding M4).
 
