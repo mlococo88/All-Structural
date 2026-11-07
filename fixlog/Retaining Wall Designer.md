@@ -3784,3 +3784,214 @@ Calculation audit, item 9 (3). Engineer decision (2026-11-07). Code sites are ta
 
 ### Saved data
 - No input or format change. Old projects with k_h > 0 get the stem seismic combination; their stem results can change (ACI).
+
+## 2026-11-07 — PR: claude/rw-pile-8b-inputs — Pile-supported footing, Phase 8b: foundation type and pile-row inputs, piles in the Analysis diagram, Overview, 3D and Drawings (RWPL; inputs and display only, no result change)
+
+Review Phase 8 (pile-supported footing), PR 8b. Engineer decisions 2026-11-07 (review Q11–Q18, taken as recommended): pile mode follows the code mode; one pile type per wall; spacing per row; vertical piles; no staggering. Code sites are tagged `RWPL`.
+
+### RWPL-1. Inputs (Wall tab, new "Foundation" card after Geometry)
+- `fnd_type`: "Spread footing on soil" (default) or "Pile-supported footing (rows of vertical piles)".
+- Pile mode only:
+  - `pile_nrows` (2, 3 or 4 rows);
+  - `pile_x1..4`: the row position from the toe (ft);
+  - `pile_s1..4`: the pile spacing along the wall (ft);
+  - `pile_shape` (H-pile / pipe / square precast / round), `pile_desig` (text, optional), `pile_size` D (in);
+  - `pile_embed`: embedment into the footing (in); `pile_clr`: clear distance from the pile top to the bottom bars (in);
+  - ACI / IBC mode (`aci-only`): allowable `pile_Pa` (compression), `pile_Ta` (uplift) and `pile_Ha` (lateral), kip per pile, service loads;
+  - AASHTO mode (`aashto-only`): `pile_Rn` with `pile_phic`, `pile_Rnup` with `pile_phiup`, and the factored lateral resistance `pile_Hr`, kip per pile;
+  - `pile_passive`: an opt-in passive credit against H (off by default; used from 8c).
+- `rwPileInputs()` returns `inp.fnd` = {type, rows:[{x, s}], shape, desig, D, embed, clr, Pa, Ta, Ha, Rn, phic, Rnup, phiup, Hr, passive}.
+  `getInputs()` adds `fnd: rwPileInputs()` (anchor `key_bk: n('key_bk') > 0`).
+- `rwPileUI()` shows the pile fields for the foundation type, the row count and the mode. It is called from `onBasisChange` (after the
+  aci-only / aashto-only toggles), `syncConditionalUI` and `onInputChange`.
+- Input checks (`rwInputErrors`, block `// ── RWPL (2026-11-07): pile-supported footing ──`), pile mode only:
+  - each row x within 0..B and no two rows at the same x;
+  - s > 0, D > 0, embedment ≥ 0, clear ≥ 0, and embedment + clear < t_f;
+  - capacities > 0 (uplift and lateral ≥ 0); φ in (0, 1];
+  - REVIEW (not an error) when a pile of width D extends past the footing edge.
+### RWPL-2. Saved data (§5)
+- `RWPL_DEF` (the default of every pile field) is merged into `RWLS_DEF` (anchor `Object.assign(RWLS_DEF, RWPL_DEF);`).
+  - A field equal to its default is not saved.
+  - A save without the field restores the default.
+- So a spread-footing project saves, autosaves and exports byte-identical to before. Every project saved before opens as a spread footing.
+- No key changes.
+### RWPL-3. Display
+- `rwPileSVG(r, x_toe, y_fbot, SCALE, stroke)` (new, before `buildCrossSection`): each row is drawn as a pile of width D. The
+  embedded length is dashed inside the footing, and a stub below the footing ends in a break line. The tooltip gives x, s, D and the embedment.
+  It is called in `buildCrossSection` (Analysis diagram) and `buildOverviewSVG` (after the shear key).
+- 3D (`buildGeometry3D`, before `// Retained soil (heel side)`): piles at s/2 + k·s along the wall in every row, drawn to a nominal length of max(4 ft, 0.6H).
+- Drawings: `RWDW_SUPPORT.piles` (section: pile rows with embedment, break lines and "ROW i @ s O.C."; elevation: piles along the
+  wall, the toe row solid and the others hidden; notes: the rows, type, D, embedment and the capacities as entered; loads: a line
+  saying the pile reactions come with the pile analysis; schedule: none yet). `rwdwSupport(r)` returns it when `r.inp.fnd.type === 'pile'`.
+- `calcAll`: in pile mode, one warning says the pile analysis is not in this version yet, so the results are still those of a spread footing.
+### Problem
+- None. This is new input and display. Spread-footing results are unchanged.
+### Governing provision
+- None in this PR (no calculation). The analysis (8c) cites AASHTO LRFD 10th Ed. (2024) Sec. 10.7 / 11.6 and IBC 2018 §1810 with ACI 318-19 Ch. 13.
+### Check case
+- Default wall with "Pile-supported", 2 rows: x = 1.5 ft and 11.0 ft from the toe (B = 12.5 ft), s = 6 ft, HP 12 in, embedment 12 in.
+  The section shows the two piles 1.5 ft from each footing edge with "ROW 1 @ 6'-0" O.C." and "ROW 2 @ 6'-0" O.C.". Every result is as for the spread footing, plus the warning.
+### How verified
+- origin/main vs branch, headless Chromium, 12 walls (all in spread mode). Every `_R` value (`inp.fnd` aside), the Export JSON,
+  the autosave, the Report text, the tab texts and the DXF are identical:
+  - ACI: default; water uniform / triangular; mix (water, k_h, column, β, q_s, key, passive, D_f); short toe; k_h 0.10.
+  - AASHTO: default; collision + barrier; water + column + η 1.05 + at-rest; rock + collision + water; k_h 0.10 + q_s + key; variable height + interface shear.
+- `node tests/check-syntax.mjs`;
+- `tests/smoke/retaining-wall-checks.mjs`, `phone-layout.mjs --tool rwall --w 390,768`, `project-library.mjs --tool retwall`, `dxf-print-sheets.mjs --tool rw`;
+- screenshots of pile mode (inputs, section sheet, 3D).
+### Other copies
+- None.
+### Open items
+- 8c (pile analysis and checks, soil checks replaced), 8d (footing from the pile reactions, punching), 8e (Report / Drawings / schedule), 8f (Pile Designer hand-off).
+- **Decision (pending engineer review):** 2 to 4 rows (a single row of pinned vertical piles cannot take the wall moment).
+- **Decision (pending engineer review):** placeholder capacities until the geotechnical values are entered (ACI P_a 100 / T_a 25 / H_a 8 kip; AASHTO R_n 300 kip with φ_c 0.65, R_n,up 100 kip with φ_up 0.50, H_r 20 kip). They are only used in pile mode.
+
+### Before / after (code, `git diff -U0` of `Retaining Wall Designer.html`, HTML card abbreviated to its field ids above)
+```diff
++<!-- RWPL (2026-11-07): Phase 8b, foundation type and pile rows (pile-supported footing). Spread footing is the default; every field
++     below is saved only when it differs from its default, so a spread-footing project saves and opens exactly as before. -->
++<button type="button" class="sec-hd" data-target="sec-fnd" aria-expanded="true"><span class="sec-hd-label">Foundation</span><svg class="sec-hd-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
++<div class="sec-body" id="sec-fnd">
++    <div class="ig full"><label for="fnd_type">Foundation type</label>
++      <select id="fnd_type">
++        <option value="spread">Spread footing on soil</option>
++        <option value="pile">Pile-supported footing (rows of vertical piles)</option>
++      </select></div>
++    <div class="note pile-only" id="note_pile" style="display:none">Rows of identical vertical piles across the footing, each with its own spacing along the wall; one pile type per wall; no staggering. The footing acts as a rigid cap (Phase 8). <span class="aci-only">ACI / IBC mode: allowable pile capacities (service loads).</span><span class="aashto-only" style="display:none">AASHTO mode: nominal resistances with their φ, factored lateral resistance.</span></div>
++    <div class="ig full pile-only" style="display:none"><label for="pile_nrows">Number of pile rows</label>
++      <select id="pile_nrows">
++        <option value="2" selected>2</option>
++        <option value="3">3</option>
++        <option value="4">4</option>
++      </select></div>
++    <div class="ig full pile-only" style="display:none"><label for="pile_shape">Pile type</label>
++      <select id="pile_shape">
++        <option value="hp">Steel H-pile</option>
++        <option value="pipe">Steel pipe pile</option>
++        <option value="square">Square precast concrete</option>
++        <option value="round">Round (timber / cast-in-place)</option>
++      </select></div>
++      <input type="text" id="pile_desig" placeholder="e.g. HP 12×53"></div>
++    <div class="ck-row pile-only" style="display:none">
++      <input type="checkbox" id="pile_passive">
++      <label for="pile_passive">Credit passive in front of the footing against the lateral load (pile mode)</label>
++    </div>
++    <div class="hint pile-only" id="hint_pile_cap" style="display:none">Enter the capacities from the geotechnical report or from Pile Designer. The defaults are placeholders.</div>
++  </div>
++  // RWPL (2026-11-07, Phase 8b): pile-supported footing selected: inputs and drawings only in this version
++  if (inp.fnd && inp.fnd.type === 'pile') warnings.push('Pile-supported footing selected: the piles are drawn, but the pile analysis is not in this version yet (Phase 8c). The stability and footing results shown are still those of a spread footing on soil.');
++/* RWPL (2026-11-07): Phase 8 pile-supported footing. The inputs (Wall tab, Foundation card): foundation type, 2 to 4 rows of identical
++   vertical piles (x from the toe, spacing along the wall), pile type and width, embedment and clear cover over the pile heads,
++   capacities per mode (ACI / IBC: allowable P_a, T_a, H_a; AASHTO: R_n with φ_c, R_n,up with φ_up, factored H_r), and the opt-in
++   passive credit. type 'spread' (the default, and every project saved before) is the spread footing on soil, unchanged. */
++const RWPL_DEF = { fnd_type: 'spread', pile_nrows: '2', pile_x1: '1.5', pile_s1: '6', pile_x2: '11', pile_s2: '6', pile_x3: '6', pile_s3: '6', pile_x4: '9', pile_s4: '6',
++  pile_shape: 'hp', pile_desig: '', pile_size: '12', pile_embed: '12', pile_clr: '3', pile_Pa: '100', pile_Ta: '25', pile_Ha: '8',
++  pile_Rn: '300', pile_phic: '0.65', pile_Rnup: '100', pile_phiup: '0.5', pile_Hr: '20', pile_passive: false };
++function rwPileInputs() {
++  const el = id => document.getElementById(id), v = id => { const e = el(id); return e ? parseFloat(e.value) : NaN; };
++  const type = (el('fnd_type') || {}).value === 'pile' ? 'pile' : 'spread';
++  const nr = Math.max(2, Math.min(4, parseInt((el('pile_nrows') || {}).value, 10) || 2));
++  const rows = []; for (let k = 1; k <= nr; k++) rows.push({ x: v('pile_x' + k), s: v('pile_s' + k) });
++  return { type, rows, shape: (el('pile_shape') || {}).value || 'hp', desig: ((el('pile_desig') || {}).value || '').trim(),
++    D: v('pile_size'), embed: v('pile_embed'), clr: v('pile_clr'),
++    Pa: v('pile_Pa'), Ta: v('pile_Ta'), Ha: v('pile_Ha'), Rn: v('pile_Rn'), phic: v('pile_phic'), Rnup: v('pile_Rnup'), phiup: v('pile_phiup'), Hr: v('pile_Hr'),
++    passive: !!(el('pile_passive') && el('pile_passive').checked) };
++}
++function rwPileUI() {
++  const el = id => document.getElementById(id);
++  const pile = el('fnd_type') && el('fnd_type').value === 'pile', isA = el('design_basis') && el('design_basis').value === 'AASHTO';
++  const nr = parseInt((el('pile_nrows') || {}).value, 10) || 2;
++  document.querySelectorAll('.pile-only').forEach(e => {
++    const m = /pile-row-(\d)/.exec(e.className), show = pile && !(e.classList.contains('aci-only') && isA) && !(e.classList.contains('aashto-only') && !isA) && !(m && +m[1] > nr);
++    e.style.display = show ? '' : 'none';
++  });
++}
++    fnd: rwPileInputs(),   // RWPL (2026-11-07): foundation type and pile rows (Phase 8); type 'spread' = as before
++  rwPileUI();   // RWPL: the pile fields follow the foundation type, the row count and the mode
++Object.assign(RWLS_DEF, RWPL_DEF);   // RWPL (2026-11-07): the pile fields are saved only when changed; old saves open as a spread footing
++  rwPileUI();   // RWPL
++  // ── RWPL (2026-11-07): pile-supported footing ──
++  if (sel('fnd_type') === 'pile') {
++    const nr = Math.max(2, Math.min(4, parseInt(sel('pile_nrows'), 10) || 2));
++    const Bft = (val('Lt') || 0) + (val('ts_bot') || 0) / 12 + (val('Lh') || 0), xs = [];
++    for (let k = 1; k <= nr; k++) {
++      const xi = 'pile_x' + k, si = 'pile_s' + k;
++      if (need(xi, Object.assign(v => v >= 0 && v <= Bft + 1e-9, { msg: `must be within the footing, 0 to B = ${f(Bft, 2)} ft from the toe` }))) {
++        if (xs.some(x => Math.abs(x - val(xi)) < 1e-6)) err(xi, `${lab(xi)} = ${raw(xi)} ft: two rows at the same x; give each row its own position.`);
++        xs.push(val(xi));
++      }
++      need(si, gt0);
++    }
++    const D = need('pile_size', gt0), em = need('pile_embed', ge0), cl = need('pile_clr', ge0);
++    if (D && nr) for (let k = 1; k <= nr; k++) { const xi = val('pile_x' + k), r2 = val('pile_size') / 24;
++      if (isFinite(xi) && (xi < r2 - 1e-9 || xi > Bft - r2 + 1e-9)) R.push(['pile_x' + k, `${lab('pile_x' + k)} = ${raw('pile_x' + k)} ft: the pile (D = ${raw('pile_size')} in) extends past the footing edge. Confirm the edge distance.`]); }
++    if (tfOk && em && cl && val('pile_embed') + val('pile_clr') >= val('tf')) err('pile_embed', `${lab('pile_embed')} ${raw('pile_embed')} in + clear ${raw('pile_clr')} in is not less than the footing thickness t_f = ${raw('tf')} in.`);
++    if (isA) { need('pile_Rn', gt0); need('pile_Rnup', ge0); need('pile_Hr', ge0);
++      const phi = Object.assign(v => v > 0 && v <= 1, { msg: 'must be greater than 0 and not more than 1' }); need('pile_phic', phi); need('pile_phiup', phi); }
++    else { need('pile_Pa', gt0); need('pile_Ta', ge0); need('pile_Ha', ge0); }
++  }
++  rwPileUI();   // RWPL: pile fields follow the foundation type and the row count
++/* RWPL (2026-11-07): the pile rows under the footing in an elevation-style SVG (Analysis diagram, Overview): each row drawn as a pile of
++   width D, its embedded length dashed inside the footing, a stub below with a break line. Display only. */
++function rwPileSVG(r, x_toe, y_fbot, SCALE, stroke) {
++  const P = r.inp && r.inp.fnd; if (!P || P.type !== 'pile') return '';
++  const d = Math.max(3, P.D / 12 * SCALE), em = P.embed / 12 * SCALE, L = Math.max(28, 1.6 * SCALE);
++  let o = '<g class="rw-piles">';
++  P.rows.forEach((rw, i) => {
++    const xc = x_toe + rw.x * SCALE, x0 = xc - d / 2, x1 = xc + d / 2, yb = y_fbot + L, h = Math.min(5, d / 3);
++    o += `<rect x="${x0}" y="${y_fbot - em}" width="${d}" height="${em}" fill="none" stroke="${stroke}" stroke-width="0.9" stroke-dasharray="3 2"/>`;
++    o += `<path d="M${x0},${y_fbot} L${x0},${yb} L${xc - d / 4},${yb - h} L${xc + d / 4},${yb + h} L${x1},${yb} L${x1},${y_fbot} Z" fill="rgba(90,100,110,0.18)" stroke="${stroke}" stroke-width="1.1"`
++      + ` data-tip="<b>Pile row ${i + 1}</b><br>x = ${f(rw.x, 2)} ft from the toe · spacing ${f(rw.s, 2)} ft along the wall<br>D = ${f(P.D, 1)} in · embedment ${f(P.embed, 1)} in${P.desig ? '<br>' + P.desig.replace(/[<>&"]/g, '') : ''}"/>`;
++  });
++  return o + '</g>';
++}
++  s += rwPileSVG(r, x_toe, y_fbot, SCALE, '#3d4650');   // RWPL: pile rows (pile-supported footing only)
++  s += rwPileSVG(r, x_toe, y_fbot, SCALE, '#3d4650');   // RWPL: pile rows (pile-supported footing only)
++  // RWPL (2026-11-07): pile rows under a pile-supported footing (display; length drawn nominal, 0.6 H, at least 4 ft)
++  if (inp.fnd && inp.fnd.type === 'pile') {
++    const P = inp.fnd, d = P.D / 12, top = P.embed / 12, Lp = Math.max(4, 0.6 * H), steel = P.shape === 'hp' || P.shape === 'pipe';
++    const geo = (P.shape === 'pipe' || P.shape === 'round') ? new THREE.CylinderGeometry(d / 2, d / 2, top + Lp, 16) : new THREE.BoxGeometry(d, top + Lp, d);
++    const pm = mat(steel ? 0x5a6470 : 0x8a8f96);
++    P.rows.forEach(rw => { if (!(rw.s > 0)) return;
++      for (let z = rw.s / 2; z < WL - 1e-6; z += rw.s) { const m = new THREE.Mesh(geo, pm); m.position.set(rw.x, (top - Lp) / 2, z); m.castShadow = true; G.concrete.add(m); } });
++  }
++
+-  // piles: { section, elev, loads, notes, schedule }   planned (pile rows across the footing: plan / section / schedule)
++  /* RWPL (2026-11-07): pile-supported footing (Phase 8b): pile rows in the section and the elevation, the pile notes. The pile
++     reactions on the loads sheet and the pile schedule follow with the pile analysis (8c / 8e). */
++  piles: {
++    label: 'PILE-SUPPORTED FOOTING',
++    section(c) {
++      const { D, L, G, k, r } = c, P = r.inp.fnd, d = P.D, em = P.embed, yb = -1.6 * k, hid = D.ltype('HIDDEN');
++      if (G.dk > 0) { D.line(L.soil, -0.15 * k, 0, G.kx, 0); D.line(L.soil, G.kx + G.kw, 0, G.B + 0.15 * k, 0); } else D.line(L.soil, -0.15 * k, 0, G.B + 0.15 * k, 0);
++      P.rows.forEach((rw, i) => {
++        const x = rw.x * 12, x0 = x - d / 2, x1 = x + d / 2;
++        D.line(L.hid, x0, 0, x0, em, hid); D.line(L.hid, x1, 0, x1, em, hid); D.line(L.hid, x0, em, x1, em, hid);   // embedded length
++        D.line(L.conc, x0, 0, x0, yb); D.line(L.conc, x1, 0, x1, yb);
++        const m = (x0 + x1) / 2, h = 0.06 * k;   // break line
++        D.pline(L.conc, [[x0 - 0.03 * k, yb], [m - h / 2, yb], [m - h / 4, yb + h], [m + h / 4, yb - h], [m + h / 2, yb], [x1 + 0.03 * k, yb]], false);
++        D.text(L.txt, x, yb - 0.18 * k, 0.085 * k, 'ROW ' + (i + 1) + ' @ ' + rwdwFI(rw.s * 12) + ' O.C.', 1);
++      });
++    },
++    elev(c) {
++      const { D, L, k, r, x0, x1 } = c, P = r.inp.fnd, d = P.D, yb = -1.4 * k, hid = D.ltype('HIDDEN');
++      D.line(L.soil, x0, 0, x1, 0);
++      const order = P.rows.map((rw, i) => ({ rw, i })).sort((a, b) => a.rw.x - b.rw.x);   // the toe row is nearest the viewer
++      order.forEach(({ rw }, j) => { const s = rw.s * 12; if (!(s > 0)) return;
++        for (let x = x0 + s / 2; x < x1 - 1e-6; x += s) { const lt = j ? hid : undefined, l = j ? L.hid : L.conc;
++          D.line(l, x - d / 2, 0, x - d / 2, yb, lt); D.line(l, x + d / 2, 0, x + d / 2, yb, lt); } });
++    },
++    loads(c) { const { L, G, k, T } = c; let y0 = c.y0 != null ? c.y0 : -G.dk - 0.35 * k;
++      T(L.lt, G.B / 2, y0 - 0.2 * k, 0.085 * k, 'PILE-SUPPORTED FOOTING: PILE REACTIONS WITH THE PILE ANALYSIS (NOT YET IN THIS VERSION)', 1); return y0 - 0.6 * k; },
++    notes(r) {
++      const P = r.inp.fnd, isA = r.isAASHTO, sh = { hp: 'STEEL H-PILES', pipe: 'STEEL PIPE PILES', square: 'SQUARE PRECAST CONCRETE PILES', round: 'ROUND PILES' }[P.shape] || 'PILES';
++      return ['PILE-SUPPORTED FOOTING: ' + P.rows.length + ' ROWS OF VERTICAL ' + sh + (P.desig ? ' (' + P.desig + ')' : '') + ', D = ' + rwdwIn(P.D) + ', EMBEDDED ' + rwdwIn(P.embed) + ' INTO THE FOOTING; ROWS AT '
++        + P.rows.map(rw => rwdwFI(rw.x * 12) + ' FROM THE TOE @ ' + rwdwFI(rw.s * 12)).join(', ') + '.',
++        isA ? 'PILE RESISTANCES (AS ENTERED): R_N = ' + rwdwN(P.Rn, 0) + ' KIP (PHI_C = ' + rwdwN(P.phic, 2) + '), R_N,UP = ' + rwdwN(P.Rnup, 0) + ' KIP (PHI_UP = ' + rwdwN(P.phiup, 2) + '), H_R = ' + rwdwN(P.Hr, 1) + ' KIP (FACTORED), PER THE GEOTECHNICAL ENGINEER.'
++            : 'ALLOWABLE PILE CAPACITIES (SERVICE LOADS, AS ENTERED): P_A = ' + rwdwN(P.Pa, 0) + ' KIP, T_A = ' + rwdwN(P.Ta, 0) + ' KIP (UPLIFT), H_A = ' + rwdwN(P.Ha, 1) + ' KIP (LATERAL), PER THE GEOTECHNICAL ENGINEER.'];
++    },
++    schedule() { return []; },
++  },
+-const rwdwSupport = r => RWDW_SUPPORT.soil;   // the foundation type of the model; spread footing only today
++const rwdwSupport = r => (r && r.inp && r.inp.fnd && r.inp.fnd.type === 'pile') ? RWDW_SUPPORT.piles : RWDW_SUPPORT.soil;   // RWPL: the foundation type of the model
+```
