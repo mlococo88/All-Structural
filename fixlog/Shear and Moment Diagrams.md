@@ -1662,3 +1662,30 @@ const uxCtl=SharedListInput.bindInput(g('iUX'),{label:'Custom x stations',events
   - UI: an old save shows the warning; Enable gives 87.507 / 27.750; Ctrl+Z gives 69.609 again; Export holds `patLL:true`.
   - `node tests/check-syntax.mjs "Shear and Moment Diagrams.html"`, `node tests/smoke/phone-layout.mjs --tool smd` and `node tests/smoke/project-library.mjs --tool smd` pass.
 - **Other copies:** none. Steel Beam Design has its own engine and no pattern loading; not changed.
+
+## 2026-11-07 — PR: claude/sm-case-warn (CZF + WPM: warning for a load case with no factor in any combination; one-direction wind note; review M2, M3)   [display only; no result change]
+### CZF (review M2). A load case with no factor in any combination is flagged
+- **Problem:** `addCase()` creates a case with no factor in any combination, so loads put in it are multiplied by `fac[ld.lc]||0` = 0 everywhere. Every combination and the envelope ignored them without a message. Check: one UDL in a new case EQ, envelope: R = M = 0.
+- **Where:**
+  1. **New `smdZeroCases()` and `smdZeroTxt()`, before `function smdCmbNoteTxt(m){`:**
+     - `smdZeroCases()` returns the cases that carry an enabled load but have a factor of 0 or blank in every enabled combination (every combination when none is ticked);
+     - `smdZeroTxt()` gives the warning text.
+  2. **`updStats()`, before the PATW / PATL block (anchor `if(smdPatWarn()){   /* PATW;`):** a full-width red note `.smd-czf`, shown in every view mode.
+  3. **`smrModel()`:** the same warn note in the Summary (after the PATW / PATL note) and in §2 "Load cases and combinations".
+- **Governing provision:** none (input completeness); no formula, factor or result changes.
+- **Check case:** a 20 ft simple span, DL = 1 and EQ = 1 kip/ft, default combinations, envelope. Results are unchanged (|M| = 70.0 from 1.4D), and the note names EQ.
+
+### WPM (review M3). Wind in one direction per case
+- **Problem:** one WL case has one sign in every combination. 0.9D + 1.0W needs uplift and 1.2D + 1.0W + … needs downward wind, and the hint said nothing about direction.
+- **Where:**
+  1. **The hint under the combinations table, anchor `may edit the L factor to 0.5. Verify preset factors`:** one sentence on two wind cases (for example WL downward, WU uplift entered negative) with the matching combinations, and one sentence on the CZF warning.
+  2. **`SMD_WPM_TXT`:** an information note in Report §2 when a WL load exists.
+- **Governing provision:** ASCE 7-16 Sec. 2.3.1 (combinations 3, 4 and 6 with W); cited only.
+- **Decision (pending engineer review):** no "±" flag on load cases. It would change the saved case format and double the solves; the hint and the note are the conservative minimum asked for. Recorded as an open option.
+
+### How verified
+- Headless main vs branch on the 27 review cases (single and envelope) and 16 extras: every computed result identical (0 differences). The card text changes only on the EQ case (the note).
+- Report model: CZF note ×2 (Summary and §2), WPM note ×1 when WL loads exist; the Report view shows them.
+- 0 console errors.
+- `node tests/check-syntax.mjs "Shear and Moment Diagrams.html"`, `node tests/smoke/phone-layout.mjs --tool smd` and `node tests/smoke/project-library.mjs --tool smd` pass.
+- **Saved data:** none changed. **Other copies:** none.
