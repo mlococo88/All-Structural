@@ -5172,7 +5172,7 @@ function computeAll(){
     else addD("pileU","Pile uplift — none (P_min ≥ 0)",0,"tab-found",R.checks.pileUplift.ls);
     { const G=R.checks.pileGroup;   // ABM7
       if(G&&G.eta>0) addD("pileGrp","Pile group in compression [10.7.3.9]",G.dc,"tab-found",G.ls+": ΣV "+fmt(G.V,1)+" ≤ φ·η·n·R_n = "+fmt(G.RR,1)+" kip (η = "+fmt(G.eta,2)+")");
-      else if(G) addD("pileGrp","REVIEW — Pile group in compression [10.7.3.9]",NaN,"tab-found","η not entered (panel I-7); equivalent-pier check in clay by the geotechnical engineer",true);
+      else if(G) addD("pileGrp","REVIEW — Pile group in compression [10.7.3.9]",NaN,"tab-found","η not entered (panel I-7; η = 1.0 when R_n already carries Pile Designer's group reduction); equivalent-pier check in clay by the geotechnical engineer",true);
       if(R.checks.pileUplift.uplift) addD("pileGrpUp","REVIEW — Pile group uplift [10.7.3.11]",NaN,"tab-found","piles in tension: group (block) uplift resistance φ_ug·R_ug by the geotechnical engineer",true); }
     if(R.checks.punching) addD("punching","Pile punching shear [5.12.8.6]",R.checks.punching.dc,"tab-found","pile "+R.checks.punching.pile+" — "+(R.checks.punching.ls||""));
     const ps=R.checks.pileStr;   // ABCHK
