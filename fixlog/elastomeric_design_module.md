@@ -1397,3 +1397,37 @@ index 13f0165..656e0f1 100644
 - **How verified:** main vs branch on the default project: every localStorage key (1), page text (9158 chars), Export JSON (1672 chars identical) and the printed report text (print media, 16826 chars) identical (clock times normalised); 0 console errors; chip click → card on screen, no dialog; Ctrl+S / Ctrl+Shift+S → Save as; header at 1280 / 1400 / 1920 / 390 px (390: no sideways scroll), screenshots looked at. `node tests/check-syntax.mjs "elastomeric_design_module.html"`; `node tests/smoke/project-library.mjs --tool edm`; `node tests/smoke/github-sync-tools.mjs --tool edm`; `node tests/smoke/home-projects.mjs --tool edm`: pass.
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
+
+## 2026-11-07 — PR: claude/edm-h1-g-range (H1, review 2026-11-07) — Method B design G = least favourable of the specified G ±15 %   [calc change] [MORE conservative]
+
+Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.5.2 (G within the M 251 acceptance of ±15 %; design takes the least favourable value of the range); MassDOT LRFD Bridge Manual Part I §3.5.7.4 (specified 0.160 ksi, design range 0.136 to 0.184 ksi); Art. 14.6.3.1 (H_bu); Art. 14.7.5.4 / Eq. 14.7.5.3.3-15 (restraint); C14.8.3.1 (slip). Closes O12(b) ("Method B uses the specified G").
+
+### H1. G_min / G_max in Method B
+- **Problem:** Method B used the specified G = 0.160 ksi in every check. The least favourable end of the ±15 % range is required (14.7.5.2), and MassDOT §3.5.7.4 states the range 0.136 / 0.184 ksi. Unconservative for the strains and stability (a lower G gives larger strains and a lower buckling stress) and for the shear force, slip and restraint (a higher G gives a larger H and a smaller εa).
+- **Where (anchor texts):**
+  - `defaultState().coef`: new `GvarB:0.15` (migrate() gives older saves 0.15: their Method B results change on open, as intended).
+  - `VALID["coef.GvarB"]` (hard 0–0.5, typical 0.15; checked for Method B only); I-6 input "Method-B G tolerance ±"; I-3 G tooltip.
+  - `computeEDM`, after `const Pdl=+L.Pdl,Pll=+L.Pll,G=+m.G;`:
+    `const mB=(S.method==="B"&&!isPlain()), Gv=mB?Math.max(0,+cf.GvarB||0):0, Gmin=G*(1-Gv), Gmax=G*(1+Gv); R.Grange={G,Gv,Gmin,Gmax,mB};`
+  - `const ga_st=Da*sigDL/(G*Sf), ga_cy=Da*sigLL/(G*Sf);` → `(Gmin*Sf)` both.
+  - `const sigLim=(denom>0)?G*Sf/denom:Infinity;` → `Gmin*Sf/denom`.
+  - `R.Hbu=G*A*(+L.deltaS)/hrt;` → `R.Hbu=(mB?Gmax:GmA)*A*(+L.deltaS)/hrt;`
+  - `const GAnc=(S.method==="B"&&!isPlain())?G:GmA;` → `const GAnc=mB?Gmax:GmA;`
+  - restraint: `epsA=sigS/(3*Ba*G*Sf*Sf)` → `epsA=sigS/(3*Ba*Gmax*Sf*Sf)`; `R.res` carries `G:Gmax`.
+  - Worked blocks (Design Checks tab): new "Design shear modulus range" block (`gRangeEq`, card `grange`); the variables table shows G, G_min, G_max; the axial strain, stability (now with substituted values), restraint and H_bu blocks show G_min / G_max; slip note.
+  - Report tab (`edrModel`): new topic "Design shear modulus range (Method B)" in §3 (`geo/gr.min`, `geo/gr.max`); γa, σ_lim, εa, H_bu steps use G_min / G_max; tolerance in the coefficient table.
+- **Method A and plain pads (same finding, least favourable G):** `R.Hbu` now uses the highest G of the durometer range (`coef.GmaxA`, 0.200), as the slip check already did; before it used the input G. Default pad under Method A: H_bu 3.22 → 4.02 kip. No pass/fail check uses H_bu.
+- **Hand-off (PAD message to the abutment, HANDOFF.md §4.13):** `G` is now the G of the shear force (`R.anc.G`: Method B G_max; Method A / plain GmaxA) — before `+S.mat.G`. New additive fields `Gspec`, `Gmin`, `Gmax`, `H`, `Hbu`. The abutment reads only `G` (unchanged receiver): its pad shear force F = G·A·Δ/h_rt now uses G_max.
+  - Round trip: the abutment sends its G back in INIT. New `edmIsOwnG(g)`: a G equal (±0.0005) to the G this module sends for its current inputs is its own value coming back and does not replace the specified G (`applyHandoff`: `if(p.bearing.G)S.mat.G=+p.bearing.G;` → `if(p.bearing.G&&!edmIsOwnG(+p.bearing.G))S.mat.G=+p.bearing.G;`). Without it a 0.184 would become the new specified G. This also keeps 0.160 when a MassDOT abutment (owner default 0.184 = G_max) opens the module.
+- **Check case (default project: circular D = 16, h_ri 0.5, n 6, S 8.00, σDL 0.3979, σLL 0.2735 ksi, G 0.160 → G_min 0.136, G_max 0.184):**
+  - γa,st = 1.0·0.3979/(0.136·8) = 0.3657 (was 0.3108); γa,cy = 0.2514 (0.2137). Combined = (0.3657 + 2.560 + 0.100) + 1.75(0.2514 + 0.256) = 3.914 → D/C 3.914/4.75 = **0.824** (was 3.793 → 0.799).
+  - Stability: A = 0.3031, B = 0.2136, 2A − B = 0.3926; σ_lim = 0.136·8/0.3926 = 2.771 ksi → 0.6714/2.771 = **0.242** (was 3.260 → 0.206).
+  - Slip: H = 0.184·201.06·0.35/3.5 = **3.70 kip** (3.22); /(80/5 = 16) = **0.231** (0.201). H_bu = 3.70 kip (3.22).
+  - Restraint: εa = 0.8766/(3·1.6·0.184·64) = 0.01551; 3εa/S = 0.00582; θs/n = 0.047/6 = 0.00783 → **1.347** FAIL (1.171 FAIL).
+  - γa,st ≤ 3.0: 0.3657/3 = 0.122 (0.104).
+  - Rectangular 20 × 10 (L > W), n 10, P 100 + 50, AASHTO tolerance: stability 0.188 → 0.221 (H2, the next PR, adds the L/W interchange).
+- **How verified:** `node tests/check-syntax.mjs elastomeric_design_module.html` pass. Headless main-vs-branch probe (13 scenarios: default, Method A, plain 5×20×1, rect 20×10, rect 14×24 θt, rect 18×24 AASHTO, Method A D20, Method A rect, anchored, h_s 0.06, AASHTO tolerance, input error, girder run): only the values above move (Method B strains, σ_lim, H, H_bu, εa and their D/C; Method A / plain only H_bu and PAD.G); saved state differs only by `coef.GvarB: 0.15`; Report tab and all tabs render; 0 console errors. Abutment → module → abutment round trip in one browser (abutment default G 0.130): main returns 0.130; branch returns 0.1495 (= 1.15·0.130) to the abutment, and re-opening the module keeps the specified 0.130. `tests/smoke/project-library.mjs --tool edm`: every storage / dialog check passes; its 4 "results identical to main" checks differ by the intended values only. `tests/compare.mjs --tool page`: text and the autosave differ by the new block and `GvarB`.
+- **Decisions (pending engineer review):**
+  - Method A / plain H_bu and PAD.G use the highest G of the durometer range (GmaxA), as the slip check (least favourable for a force).
+  - The abutment's G in INIT is still taken as the specified G unless it equals the module's own sent G (echo); an abutment G that is neither (e.g. 0.184 with a specified G other than 0.160) becomes the specified G as before.
+- **Other copies:** none. `abutment_calculator.html` unchanged (it reads `G` only).
