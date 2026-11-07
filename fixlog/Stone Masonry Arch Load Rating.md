@@ -1461,7 +1461,7 @@ function transDisp(w,n,c,cap){
   - Review's example (old default 22.53 t): 20.28 t and 11.27.
 - **How verified:** `check-syntax`; `phone-layout --tool arch`; `project-library --tool stonearch` (only the Summary text differs, by the new panel; the model and ratings are identical); all 14 tabs with 0 console errors; the panel appears in the Report.
 
-## 2026-11-07 — PR: claude/stonearch-m1-lane-load — H vehicles at 12 tons or less also rated with the lane loading (HLN; review M-1)
+## 2026-11-07 — PR #1101: https://github.com/mlococo88/All-Structural/pull/1101 — H vehicles at 12 tons or less also rated with the lane loading (HLN; review M-1)
 
 ### HLN-1. Lane loading check, MassDOT §7.2.4.2B   [§4: new check; can only lower a reported rating]
 - **Problem (review M-1):** MassDOT §7.2.4.2B (checked in the MassDOT PDF): lane loadings are not used for H20 / HS20 on spans under 200 ft, except that a component rated for an H vehicle at 12 tons or less must also be rated with the lane loading. The same paragraph says to use the Std. Spec. standard lane loading for H20 and HS20. The tool had no lane loading.
