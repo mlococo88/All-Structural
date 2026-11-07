@@ -3237,6 +3237,20 @@ function naAnchorForces(g, cb, S_){
           Econc, D, Ka, Kc};
 }
 
+/* BPH2 (2026-11-07): COLUMN ECCENTRICITY. The loads of a combination act at the column centroid, which sits at
+   (exc_x, exc_y) from the plate centre (User Manual 4A). Moved to the plate centre (the origin of every check):
+     M_x,eff = M_x + P·e_y      (P tension-positive; +M_x puts tension on the +y face)
+     M_y,eff = M_y − P·e_x      (+M_y puts tension on the −x face)
+     T_eff   = T + e_x·V_y − e_y·V_x   (shear at the column centroid twists the anchor group; + counter-clockwise)
+   e_x = e_y = 0 (the default and every save without an eccentricity): the combination object itself is returned, so every
+   result is unchanged. Before BPH2 the inputs were read only by the drawings, the 3-D view and the PROFIS export. */
+function bpColEccCombo(cb){
+  const P=S.plate, ex=+P.exc_x||0, ey=+P.exc_y||0;
+  if(!cb || (Math.abs(ex)<1e-12 && Math.abs(ey)<1e-12)) return cb;
+  const N=+cb.P||0, Vx=+cb.Vx||0, Vy=+cb.Vy||0, Mx0=+cb.Mx||0, My0=+cb.My||0, T0=+cb.T||0;
+  return Object.assign({},cb,{Mx:Mx0+N*ey, My:My0-N*ex, T:T0+ex*Vy-ey*Vx,
+    colEcc:{ex,ey,P:N,Vx,Vy,Mx0,My0,T0,dMx:N*ey,dMy:-N*ex,dT:ex*Vy-ey*Vx}});
+}
 function computeAll(){
   const P=S.plate, A=S.anchor, C=S.conc, G=S.grout;
   const g=anchorGeom();
@@ -3244,7 +3258,8 @@ function computeAll(){
   const nTot=g.pts.length;
   const sp=anchorSpec(A.dia);
 
-  const combos=S.combos.map((cb,ci)=>{
+  const combos=S.combos.map((cb0,ci)=>{
+    const cb=bpColEccCombo(cb0);   /* BPH2: loads moved from the column centroid to the plate centre */
     /* resolve the two uniaxial problems then SRSS at the demand level */
     const Pc = -cb.P;   /* compression positive */
     /* effective bearing width per direction = plate perp dimension (rigid) */
@@ -3725,6 +3740,45 @@ function comboCapacities(cc, combo){
     }
     pryDem=combo.tors.sumV;
   }
+  /* BPH1 (2026-11-07): INCLINED SHEAR — each edge for its own component (ACI 318-19 §17.7.2.1(c), (d) and
+     R17.7.2.1: anchors near a corner with shear components normal to each edge are checked for each component
+     independently). Rectangular pedestal, no torsion (the torsion sweep above already includes the axis directions),
+     V_x ≠ 0 and V_y ≠ 0: the x component alone and the y component alone are each run through the full Fig.
+     R17.7.2.1b case logic (shearCases: Case 1 / 2 / 3 toward the edge that component pushes toward, plus the
+     §17.7.2.1(c) parallel check of that component on the two side edges, ψ_ed,V = 1.0 and 2V_cbg). The resultant
+     check above stays a candidate (decision pending engineer review: kept, conservative). The worst ratio governs;
+     its demand is the component (the same basis as the resultant check: the full V of that check). Axis-aligned
+     shear: nothing here runs, so every result is unchanged. */
+  let sbkComp=null;
+  if(!combo.tors && !bpCircPier()){
+    const vx0=+combo.raw.Vx||0, vy0=+combo.raw.Vy||0;
+    if(Math.abs(vx0)>1e-9 && Math.abs(vy0)>1e-9){
+      const baseD=sbk.phiVcbg>1e-9? combo.Vres/sbk.phiVcbg : Infinity;
+      const comps=[{ax:"x",V:vx0},{ax:"y",V:vy0}].map(o=>{
+        const vc=shearCases(o.ax==="x"? {Vx:o.V,Vy:0,Vres:Math.abs(o.V)} : {Vx:0,Vy:o.V,Vres:Math.abs(o.V)}, condAV);
+        if(!vc.applicable || !vc.used) return null;
+        const sb=vc.used.sb, dem=Math.abs(o.V);
+        return {ax:o.ax, V:o.V, dem, sb, caseId:vc.used.id, edge:vc.edgeName, dcr:sb.phiVcbg>1e-9? dem/sb.phiVcbg : Infinity};
+      }).filter(Boolean);
+      const worst=comps.reduce((m,x)=>(!m || x.dcr>m.dcr)? x : m, null);
+      const govC=(worst && worst.dcr>baseD+1e-12)? worst : null;
+      const caseTxt=o=>(o.caseId==="single"? "single row" : "Case "+o.caseId);
+      const stp={title:"Inclined shear — each edge for its own component",ref:"ACI 318-19 §17.7.2.1(c), (d); R17.7.2.1",
+        lines:["V_x="+fmt(vx0,3)+",\\ V_y="+fmt(vy0,3)+",\\ V_{res}="+fmt(combo.Vres,3)+"\\ \\text{kip}",
+          "\\text{resultant: }"+fmt(combo.Vres,3)+"/"+fmt(sbk.phiVcbg,3)+"="+fmt(baseD,3)+"\\ \\text{(edge "+sbk.govEdge+")}"]
+          .concat(comps.map(o=>"V_"+o.ax+"\\text{ alone (toward "+o.edge+", "+caseTxt(o)+"; edge "+o.sb.govEdge+"): }"+fmt(o.dem,3)+"/"+fmt(o.sb.phiVcbg,3)+"="+fmt(o.dcr,3)))
+          .concat(["\\text{governing: }"+(govC? "V_"+govC.ax+"\\text{ alone}" : "\\text{the resultant}")]),
+        vars:[["rule","","each shear component is checked toward the edge it pushes toward (Fig. R17.7.2.1b cases) and parallel to the two side edges (§17.7.2.1(c)); the resultant check is kept as a further candidate; the largest ratio governs"]]};
+      sbkComp={baseD, comps, gov:govC? govC.ax : "res"};
+      if(govC){
+        sbkUse=Object.assign({},govC.sb,{component:{ax:govC.ax,V:govC.V,dem:govC.dem,caseId:govC.caseId,dcr:govC.dcr,baseD}});
+        sbkUse.steps=[stp].concat(govC.sb.steps||[]);
+        sbkDem=govC.dem;
+      } else {
+        sbkUse=Object.assign({},sbk); sbkUse.steps=[stp].concat(sbk.steps||[]);
+      }
+    }
+  }
   /* Shear bases mirror the tension ones: steel rupture and stand-off bending are
      per-bolt; breakout and pryout envelop the group. */
   let shearModes=[ {label:"Steel (φVsa)", ref:"§17.7.1", per:"anchor",
@@ -3777,7 +3831,7 @@ function comboCapacities(cc, combo){
   const govTfor=(c)=> tensionModes.reduce((m,x)=> tDCR(c,x)>tDCR(c,m)?x:m, tensionModes[0]);
   const govVfor=(c)=> shearModes.reduce((m,x)=> vDCR(c,x)>vDCR(c,m)?x:m, shearModes[0]);
 
-  return {nT,nV,st,po,tb,sfb,sv,sbk:sbkUse,pry,la,tensionModes,shearModes,sbkDem,pryDem,
+  return {nT,nV,st,po,tb,sfb,sv,sbk:sbkUse,pry,la,tensionModes,shearModes,sbkDem,pryDem,sbkComp:sbkComp||undefined,   /* BPH1 */
     cageT:cageT||undefined, cageV:cageV||undefined, cageTSub:cageTSub||undefined, cageVSub:cageVSub||undefined,   /* BC-5 (circular pier only) */
     tDemand,vDemand,tDCR,vDCR,govTfor,govVfor,
     Tu_group:combo.Tu_group, Vu_group:combo.Vres};
@@ -3939,19 +3993,55 @@ function plateBending(combo, cc){
       return {t:cant*Math.sqrt(2*q/(phi*Fy)), branch:"Y ≥ ℓ (Eq. 3.3.14)"};
     return {t:Math.sqrt(4*q*Y*(cant-Y/2)/(phi*Fy)), branch:"Y < ℓ (Eq. 3.3.15)"};
   }
-  const cM=tComp(qY,Ymx,m), cN=tComp(qX,Ynx,n);
+  let cM=tComp(qY,Ymx,m), cN=tComp(qX,Ynx,n);
+  /* BPH2 (2026-11-07): column eccentric on the plate — a cantilever PER SIDE, measured from that side's column face:
+     along N: ℓ(+y) = m − e_y, ℓ(−y) = m + e_y; along B: ℓ(+x) = n − e_x, ℓ(−x) = n + e_x. The DG1 bearing block of that
+     axis (q over Y from the compressed edge; compressed edge from the sign of the moment at the plate centre, M_x > 0 →
+     −y, M_y > 0 → +x) loads each side over the part of the block that lies beyond that side's critical section:
+     M_side = q·[(ℓ − a)² − (ℓ − b)²]/2, with [a, b] the block within the cantilever (distances from that plate edge);
+     t = √(4M_side/(φF_y)). The compressed side with a = 0 is Eq. 3.3.14 (Y ≥ ℓ) or 3.3.15 (Y < ℓ) exactly as before.
+     e_x = e_y = 0: the code above is used unchanged. */
+  const ecx=+P.exc_x||0, ecy=+P.exc_y||0, eccOn=(Math.abs(ecx)>1e-12||Math.abs(ecy)>1e-12);
+  let eccSides=null;
+  if(eccOn){
+    const rawC=combo.raw||{};
+    const side=(q,Y,L,ell,comp)=>{ if(q<=0||ell<=0) return {t:0,M:0,a:0,b:0};
+      const Yb=(Y>0&&Y<L)? Y : L, a=comp? 0 : Math.max(0,L-Yb), b=comp? Math.min(Yb,ell) : ell;
+      const M=(b>a)? q*((ell-a)*(ell-a)-(ell-b)*(ell-b))/2 : 0;
+      return {t:Math.sqrt(4*M/(phi*Fy)),M,a,b}; };
+    const compNeg=(+rawC.Mx||0)>0, compPosX=(+rawC.My||0)>0;   /* compressed edge: −y when M_x > 0, +x when M_y > 0 */
+    const sd=[
+      {ax:"N",nm:"+y",ell:m-ecy,comp:!compNeg,q:qY,Y:Ymx,L:P.N},{ax:"N",nm:"-y",ell:m+ecy,comp:compNeg,q:qY,Y:Ymx,L:P.N},
+      {ax:"B",nm:"+x",ell:n-ecx,comp:compPosX,q:qX,Y:Ynx,L:P.B},{ax:"B",nm:"-x",ell:n+ecx,comp:!compPosX,q:qX,Y:Ynx,L:P.B}];
+    sd.forEach(o=>Object.assign(o,side(o.q,o.Y,o.L,o.ell,o.comp)));
+    const best=ax=>sd.filter(o=>o.ax===ax).reduce((mx,o)=>o.t>mx.t?o:mx);
+    const bN=best("N"), bB=best("B");
+    cM={t:bN.t, branch:"side "+bN.nm+", ℓ = "+fmt(bN.ell,2)+"″, block "+fmt(bN.a,2)+"–"+fmt(bN.b,2)+"″"};
+    cN={t:bB.t, branch:"side "+bB.nm+", ℓ = "+fmt(bB.ell,2)+"″, block "+fmt(bB.a,2)+"–"+fmt(bB.b,2)+"″"};
+    eccSides=sd;
+  }
   const fp=Math.max(qX,qY);
   const cL=(lam_nprime>0)? {t:lam_nprime*Math.sqrt(2*fp/(phi*Fy)), branch:"λn′ (axial panel)"} : {t:0,branch:"—"};
-  let tReqC=cM.t, govC="m = "+fmt(m,2)+"″, "+cM.branch;
-  if(cN.t>tReqC){ tReqC=cN.t; govC="n = "+fmt(n,2)+"″, "+cN.branch; }
+  let tReqC=cM.t, govC=(eccOn? "m "+cM.branch : "m = "+fmt(m,2)+"″, "+cM.branch);   /* BPH2: per side */
+  if(cN.t>tReqC){ tReqC=cN.t; govC=(eccOn? "n "+cN.branch : "n = "+fmt(n,2)+"″, "+cN.branch); }
   if(cL.t>tReqC){ tReqC=cL.t; govC="λn′ = "+fmt(lam_nprime,2)+"″, "+cL.branch; }
-  const cant=Math.max(m,n,lam_nprime);
+  const cant=Math.max(m,n,lam_nprime,...(eccSides? eccSides.map(o=>o.ell) : []));   /* BPH2: the longest side */
+  /* BPH2: worked step for an eccentric column (moment transfer and the cantilever per side) */
+  let eccStep=null;
+  if(eccSides){ const ce=(combo.raw&&combo.raw.colEcc)||{ex:ecx,ey:ecy,P:0,Mx0:0,My0:0,dMx:0,dMy:0,dT:0,T0:0};
+    eccStep={title:"Column eccentric on the plate — loads moved to the plate centre, cantilever per side",ref:"AISC DG1 §3.1 / §3.3 (column face per side); statics",
+      lines:["e_x="+fmt(ecx,3)+",\ e_y="+fmt(ecy,3)+"\ \text{in (column centroid from the plate centre)}",
+        "M_{x}=M_{x,0}+P\,e_y="+fmt(ce.Mx0,2)+"+("+fmt(ce.P,2)+")("+fmt(ecy,3)+")="+fmt(ce.Mx0+ce.dMx,2)+"\ \text{kip-in}",
+        "M_{y}=M_{y,0}-P\,e_x="+fmt(ce.My0,2)+"-("+fmt(ce.P,2)+")("+fmt(ecx,3)+")="+fmt(ce.My0+ce.dMy,2)+"\ \text{kip-in}",
+        "T=T_0+e_xV_y-e_yV_x="+fmt(ce.T0,2)+"+"+fmt(ce.dT,2)+"="+fmt(ce.T0+ce.dT,2)+"\ \text{kip-in}"]
+        .concat(eccSides.map(o=>"\ell("+o.nm+")="+(o.ax==="N"? "m"+(o.nm==="+y"?"-e_y":"+e_y") : "n"+(o.nm==="+x"?"-e_x":"+e_x"))+"="+fmt(o.ell,3)+"\ \text{in};\ "+(o.comp?"\text{compressed edge}":"\text{far edge}")+",\ q="+fmt(o.q,3)+"\ \text{ksi on }"+fmt(o.a,2)+"\text{–}"+fmt(o.b,2)+"\ \text{in}:\ M="+fmt(o.M,3)+"\ \text{kip-in/in},\ t=\sqrt{4M/(\phi F_y)}="+fmt(o.t,3)+"\ \text{in}")),
+      vars:[["P","tension +","axial load at the column centroid"],["M_{side}","q[(ℓ−a)² − (ℓ−b)²]/2","bearing block of that axis beyond the side's critical section ([a, b] measured from that plate edge)"]]}; }
 
   /* tension side — arm to the nearest DG1 critical section */
   const Tu_per=combo.Tu_per;
   const faceY=fM*dcol/2, faceX=fN*bcol/2;
   let hx=0,hy=0,ht=-1;
-  (combo.perAnchor||[]).forEach(pa=>{ if(pa.t>ht){ht=pa.t;hx=Math.abs(pa.x);hy=Math.abs(pa.y);} });
+  (combo.perAnchor||[]).forEach(pa=>{ if(pa.t>ht){ht=pa.t;hx=Math.abs(pa.x-ecx);hy=Math.abs(pa.y-ecy);} });   /* BPH2: from the column centre */
   const armCands=[];
   if(hy-faceY>1e-9) armCands.push(hy-faceY);
   if(hx-faceX>1e-9) armCands.push(hx-faceX);
@@ -3965,10 +4055,10 @@ function plateBending(combo, cc){
   const tReqT=Math.sqrt(4*Mu_t/(phi*Fy*beff));
   const tReq=Math.max(tReqC,tReqT);
   const dcr=tReq/P.t;
-  return {phi,Fy,m,n,cant,fp,tReqC,govC,cM,cN,cL,lam,Xr,nprime,lam_nprime,isW,
+  return {phi,Fy,m,n,cant,fp,tReqC,govC,cM,cN,cL,lam,Xr,nprime,lam_nprime,isW,eccSides:eccSides||undefined,
     Ym:Ymx,Yn:Ynx,qX,qY,
     Tu_per,armT,armNote,beff,Mu_t,tReqT,tReq,tp:P.t,dcr,
-    steps:[
+    steps:(eccStep? [eccStep] : []).concat([
       {title:"Cantilever dimensions (DG1)",ref:"AISC DG1 §3.1",
        lines:[(isRound
           ? "m=\\frac{N-0.80D}{2}="+fmt(m,2)+"\\ \\text{in}\\quad n=\\frac{B-0.80D}{2}="+fmt(n,2)+"\\ \\text{in}\\quad\\text{(round HSS/pipe)}"
@@ -3993,7 +4083,7 @@ function plateBending(combo, cc){
        lines:["\\text{DCR}=\\frac{t_{p,req}}{t_p}=\\frac{"+fmt(tReq,3)+"}{"+fmt(P.t,2)+"}="+fmt(dcr,2)],
        vars:[["t_{p,req}",fmt(tReq,3)+" in","governing of compression & tension side"],
              ["t_p",fmt(P.t,2)+" in","provided plate thickness"]]}
-    ]};
+    ])};
 }
 
 /* AISC DG1 (2nd Ed.) Table 2.3 / AISC Manual Table 14-2: recommended anchor-rod
@@ -9560,7 +9650,7 @@ function openAnchorDetail(p, c, cap){
     if(!cap.sfb.na) grows.push(["Side-face blowout","§17.6.4", sfbEdgeDemand(c, (typeof CC!=="undefined"&&CC)?CC.g:anchorGeom()), cap.sfb.phiNsb]);
   }
   grows.push(["Pryout","§17.7.3", c.Vres, cap.pry.phiVcpg]);
-  if(!S.vRebar.present) grows.push(["Concrete breakout (shear)","§17.7.2", c.Vres, cap.sbk.phiVcbg]);
+  if(!S.vRebar.present) grows.push(["Concrete breakout (shear)","§17.7.2", (cap.sbkComp && cap.sbkDem!==undefined)? cap.sbkDem : c.Vres, cap.sbk.phiVcbg]);   /* BPH1 */
 
   const gt=el("table","tbl");
   {const tr=el("tr");["Limit state","Ref","Group demand ("+Fu+")","φ Capacity ("+Fu+")","DCR","Status"]
@@ -10659,7 +10749,7 @@ function profisResultsTable(body, c, cap, which){
     rows.push({mode:"Pryout Strength", basis:"group",
       loadA:Vanc, capA:cap.pry.phiVcpg/nV, loadG:Vgrp, capG:cap.pry.phiVcpg});
     rows.push({mode:"Concrete edge failure ("+(cap.sbk.govEdge||"—")+")", basis:"group",
-      loadA:Vanc, capA:cap.sbk.phiVcbg/nV, loadG:Vgrp, capG:cap.sbk.phiVcbg});
+      loadA:Vanc, capA:cap.sbk.phiVcbg/nV, loadG:(cap.sbkComp && cap.sbkDem!==undefined)? cap.sbkDem : Vgrp, capG:cap.sbk.phiVcbg});   /* BPH1: a governing component check's demand */
   }
 
   const t=el("table","tbl");
@@ -12984,7 +13074,8 @@ function validateInputs(){
     if(!bad.length){
       const soV0=standoffParams();
       const bcV=bearingCap(), noSol=[];
-      (S.combos||[]).forEach(cb=>{
+      (S.combos||[]).forEach(cb0=>{
+        const cb=bpColEccCombo(cb0);   /* BPH2 */
         const Pc=-(cb.P||0);
         const fxV=bpCircPattern()? Math.max(g.xmax,-g.xmin) : P.B/2-A.edx, fyV=bpCircPattern()? Math.max(g.ymax,-g.ymin) : P.N/2-A.edy;   /* BC-1: as computeAll */
         const rX=dg1Uniaxial(Math.max(Pc,0), Math.abs(cb.My||0), P.B, P.N, bcV.phiFp, fxV);
@@ -13042,7 +13133,7 @@ function validateInputs(){
     if(bpCircPlate() && !(soC.hasStandoff && !soC.groutFilled)) errs.push({block:true, code:"model", msg:"A circular base plate is modelled as a double-nut (leveling-nut) pole base: the rods carry tension and compression, there is no bearing block. Select the stand-off type “with clamping” (double nut) or “without clamping”."});
     if(bpCircPlate()){ const cd=colDims(); const Dp=(!S.col.custom && S.col.shapeType!=="W" && hssOf(S.col.shape).kind==="HSSround")? cd.b : Math.min(cd.b,cd.d);
       if(bpCircPattern() && Dp>=(+A.BC||0)) errs.push({block:true, code:"geometry", msg:"The pole ("+fmt(Dp,2)+"″) is not inside the bolt circle (BC = "+fmt(A.BC,2)+"″): the bending line at the pole face needs BC > D_pole."});
-      if(Math.abs(P.exc_x||0)>1e-9 || Math.abs(P.exc_y||0)>1e-9) warns.push("Column eccentricity on a circular plate is not used by the bending-line check (the pole is taken concentric with the bolt circle).");
+      if(Math.abs(P.exc_x||0)>1e-9 || Math.abs(P.exc_y||0)>1e-9) warns.push("Column eccentricity on a circular plate: the moment P·e (and the torsion from the shear) is carried to the anchors and the bearing, but the bending-line check of the plate takes the pole concentric with the bolt circle.");   /* BPH2 */
       if(S.col.custom || S.col.shapeType==="W" || hssOf(S.col.shape).kind!=="HSSround") warns.push("Circular plate: the pole is not a round HSS; the bending line uses D_pole = the smaller of the column width and depth.");
     }
     if(S.tRebar.present || S.vRebar.present) errs.push({block:true, code:"model", msg:"Anchor reinforcement (tension or shear rebar) is not available with the bolt-circle layout in this version: the rebar layouts are built on anchor rows of a rectangular grid. Turn off Tension / Shear Reinforcement (concrete breakout is then checked as plain concrete, Condition B)."});
@@ -14580,7 +14671,7 @@ function buildValidationTab(pg){
 
     /* live sensitivity around the current basis */
     try{
-      const gi=governingComboIndex(), cb=S.combos[gi], g=anchorGeom();
+      const gi=governingComboIndex(), cb=bpColEccCombo(S.combos[gi]), g=anchorGeom();   /* BPH2 */
       const st=el("table","tbl"); const h2=el("tr");
       ["D (in)","D / h_ef","T_max (kip)","ΣT (kip)","Δ T_max","Δ ΣT"]
         .forEach(h=>h2.appendChild(el("th",null,h))); st.appendChild(h2);
@@ -16667,7 +16758,7 @@ manPart("p0","0. Read This First",[
  ["Moment about y","M<sub>y</sub>","Right-hand rule about the y axis; produces tension on the +x anchors"],
  ["Anchor tension","T<sub>i</sub>","Tension positive, compression negative (matches the PROFIS anchor-force table)"]
 ]}},
-{p:"The origin is at the <b>plate centroid</b>, with x to the right and y up in plan view. Loads are applied at the column centroid. If the column is eccentric on the plate, that eccentricity is entered separately in the geometry inputs and the program shifts the column footprint accordingly."},
+{p:"The origin is at the <b>plate centroid</b>, with x to the right and y up in plan view. Loads are applied at the column centroid. If the column is eccentric on the plate, that eccentricity is entered separately in the geometry inputs; the program shifts the column footprint and adds the moments P·e (and the torsion from the shear) when it moves the loads to the plate centre."},
 
 {h:"0.6 How to read a result"},
 {p:"Every check produces a <b>demand–capacity ratio (DCR)</b>, the factored demand divided by the design capacity:"},
@@ -16792,7 +16883,7 @@ manPart("p2","2. Input Reference",[
 
 {h:"2.3 Section-by-section notes"},
 {h3:"Plate and column"},
-{p:"The column footprint sets the cantilever dimensions <i>m</i> and <i>n</i>. Selecting a rolled shape fills <i>d</i> and <i>b<sub>f</sub></i> automatically; a custom section takes them directly. Column eccentricity on the plate shifts the footprint and is reflected in the drawings and in the bending calculation."},
+{p:"The column footprint sets the cantilever dimensions <i>m</i> and <i>n</i>. Selecting a rolled shape fills <i>d</i> and <i>b<sub>f</sub></i> automatically; a custom section takes them directly. Column eccentricity on the plate shifts the footprint. The loads act at the column centroid, so the program moves them to the plate centre: M<sub>x</sub> + P·e<sub>y</sub>, M<sub>y</sub> − P·e<sub>x</sub> (P positive in tension) and a torsion e<sub>x</sub>V<sub>y</sub> − e<sub>y</sub>V<sub>x</sub>; these enter the anchor forces, the bearing and every anchor check. Plate bending then takes a cantilever on each side from that side's column face (m − e<sub>y</sub> and m + e<sub>y</sub>, n − e<sub>x</sub> and n + e<sub>x</sub>), loaded by the part of that axis's bearing block beyond the face; the tension side measures the anchor arm from the column centre. The first step of the plate-bending work shows the transfer."},
 {h3:"Anchors"},
 {p:"Diameter and grade set every steel property. Embedment feeds tension breakout and pryout, and also caps the shear load-bearing length at min(h<sub>ef</sub>, 8d<sub>a</sub>). Head type sets the bearing area for pullout &mdash; heavy hex gives more capacity than a standard nut, and a plain rod gives none, which removes the pullout check and raises a warning."},
 {h3:"Concrete"},
@@ -17124,6 +17215,8 @@ manPart("p4c","4C. Shear & Interaction",[
 
 {h3:"4C.3.5 Shear parallel to an edge"},
 {p:"When the shear runs <b>parallel</b> to a nearby edge rather than toward it, the edge can still break out sideways. ACI 318-19 §17.7.2.1(c) covers this: evaluate V<sub>cbg</sub> as if the shear acted perpendicular toward that edge with &psi;<sub>ed,V</sub> = 1.0, and <b>twice</b> that value is permitted. The program includes every parallel edge as a candidate alongside the toward-edge, and the governing (lowest) capacity wins; a parallel case is labelled explicitly in the output, e.g. &ldquo;+y (parallel)&rdquo;. Skipping parallel edges is a common software omission and is unconservative whenever a side edge is much closer than the edge the shear points at."},
+{h3:"4C.3.6 Inclined shear: each edge for its own component"},
+{p:"When the shear has both an x and a y component (and no torsion), each component is also checked on its own, as ACI 318-19 R17.7.2.1 advises for anchors near a corner with shear components normal to each edge (§17.7.2.1(c) and (d)). The x component alone is run through the Fig. R17.7.2.1b cases toward the edge it pushes toward, plus the parallel check on the two side edges; the y component the same way. The check of the resultant described above stays a candidate. The largest ratio governs, and its demand is that component. The Breakout (V) steps list all three ratios. A rectangular pedestal only: a circular pier uses the tangent-edge model, and with torsion the direction sweep already includes the x and y directions."},
 {h:"4C.4 Pryout"},
 {p:"Pryout is the mirror image of edge breakout. A short, stiff anchor loaded in shear rotates about a point near its head, and the <b>back</b> of the anchor kicks out a wedge of concrete on the side <i>opposite</i> the applied load. It governs when the anchor is short and far from any edge — precisely the case where edge breakout is not a concern."},
 {eqn:["V_{cpg} = k_{cp}\\,N_{cbg}",
