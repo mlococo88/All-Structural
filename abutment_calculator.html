@@ -25,6 +25,7 @@
      beforeprint listener, so the Report is shown when that listener sets the running header (abrPrintPrep: abutment_calculator.html). -->
 <script>window.addEventListener("beforeprint",()=>{ try{ if(typeof abrPrintPrep==="function") abrPrintPrep(); }catch(e){} });</script>
 <script src="shared/steps.js"></script>
+<script src="shared/pile-group.js"></script>   <!-- 8h (2026-11-07): rigid-cap pile-group statics (pileReaction, C-8 group properties), shared with the Retaining Wall Designer -->
 <script src="shared/report.js"></script>
 <!-- PLIB (2026-11-02): saved-project rename / duplicate, Redo and Ctrl+Z / Ctrl+Y, shared with the other tools -->
 <script src="shared/projects.js"></script>
@@ -738,6 +739,7 @@ function defaultState(){
       epsCRSH:0.0002,                          // combined long-term creep+shrinkage strain (in/in)
       brLoadedLen:80.0, roadwayW:40.0 },       // braking: lane-load loaded length (ft), clear roadway width (ft) → design lanes
     seismic:{ on:false, As:0.15, khR:0.5, kv:0.0, hEQr:0.6,       // EE-I: site accel coeff, kh = khR·As (walls free to displace), ΔPAE at hEQr·H
+      khRAuto:true,                                               // ABM2 (2026-11-07): k_h ratio set from the foundation (abutKhAuto: 1.0 on piles or rock, 0.5 on a spread footing on soil) [11.6.5.2.2]; false = the entered khR
       gEHEQ:1.00, gEQll:0.0,                                      // γEH at EE-I (used only with gEHEQmode "agency"); γEQ on live load (project-specific)
       gEHEQmode:"gp",                                             // EE-I γEH: "gp" = per Table 3.4.1-1 (10th Ed.: 1.00, EEP; the stored value is kept); "agency" = fixed gEHEQ
       phiTauEQ:1.00, phiBEQ:0.80, phiCEQ:1.00, eFracEQ:0.3333,    // extreme-event resistance factors [11.5.8: 1.0; bearing 0.8 for semigravity walls; 10.5.5.3.3]; e/B (used only with eLimEQmode "user")
@@ -1625,11 +1627,9 @@ function activePiles(){ return S.piles.coords.filter(c=>c.active); }
    (x' + toward the heel, M_y + toward the heel; y' and M_x + toward +y). With Σx'y' = 0 (every doubly symmetric layout,
    e.g. a full grid) it is evaluated as before, ΣV/n + M_y·x'/Σx'² + M_x·y'/Σy'², so those results are unchanged to the bit.
    pi = {n, Sxx, Syy, Sxy}. */
-function pileReaction(V,My,Mx,xi,yi,pi){
-  const {n,Sxx,Syy}=pi, Sxy=pi.Sxy||0, D=Sxx*Syy-Sxy*Sxy;
-  if(Math.abs(Sxy)>1e-9*Math.max(1,Sxx+Syy) && D>1e-9) return V/n+((My*Syy-Mx*Sxy)*xi+(Mx*Sxx-My*Sxy)*yi)/D;
-  return V/n + (Sxx>1e-9? My*xi/Sxx:0) + (Syy>1e-9? Mx*yi/Syy:0);
-}
+/* 8h (2026-11-07): the expression now lives once in shared/pile-group.js (SharedPileGroup.reaction: the same expression and operation
+   order as the code it replaces, bit-identical; tests/engine/pile-group.test.mjs). */
+function pileReaction(V,My,Mx,xi,yi,pi){ return SharedPileGroup.reaction(V,My,Mx,xi,yi,pi); }
 
 /* ---------- state migration / resizing of dynamic arrays ---------- */
 function migrate(){
@@ -1682,7 +1682,7 @@ function migrate(){
   if(S.piles.dd===undefined){ S.piles.dd=0; S.piles.gDD=1.10; }
   // EE-I γEH mode: a project that stores gEHEQ keeps that fixed value ("agency"); one without it gets the γp default
   if(S.seismic && S.seismic.gEHEQmode===undefined) S.seismic.gEHEQmode=(S.seismic.gEHEQ!==undefined)?"agency":"gp";
-  if(!S.seismic) S.seismic={on:false,As:0.15,khR:0.5,kv:0.0,hEQr:0.6,gEHEQ:1.00,gEHEQmode:"gp",gEQll:0.0,phiTauEQ:1.00,phiBEQ:0.80,phiCEQ:1.00,eFracEQ:0.3333,eLimEQmode:"aashto",zone:1};
+  if(!S.seismic) S.seismic={on:false,As:0.15,khR:0.5,khRAuto:true,kv:0.0,hEQr:0.6,gEHEQ:1.00,gEHEQmode:"gp",gEQll:0.0,phiTauEQ:1.00,phiBEQ:0.80,phiCEQ:1.00,eFracEQ:0.3333,eLimEQmode:"aashto",zone:1};
   if(!S.meta) S.meta={revs:[]};
   // OWNA (2026-10-20): owner field. A project saved before it opens as "AASHTO" (no owner rule; identical results). The I-6
   // "Floating (MassDOT default)" restraint model is this tool's general default (every project has it), so it does not mark a
@@ -1708,6 +1708,7 @@ function migrate(){
     // ABR3: P_AE height mode — a saved ratio equal to the earlier default 0.6 takes the 10th Ed. "static" distribution (11.6.5.3; one-time
     // notice, defRev 10); any other saved ratio is kept ("ratio" mode, same value)
     if(S.seismic&&S.seismic.hEQmode===undefined) S.seismic.hEQmode=Math.abs((+S.seismic.hEQr||0)-0.6)<1e-9? "static" : "ratio";
+    if(S.seismic&&S.seismic.khRAuto===undefined) S.seismic.khRAuto=!(S.seismic.khR!==undefined&&S.seismic.khR!==""&&isFinite(+S.seismic.khR));   // ABM2: a saved project keeps its stored k_h ratio (khRAuto false); one without a stored ratio follows the foundation
     if(S.seismic) fill(S.seismic,T.seismic,["siteClass","bwStop","bwW","nonConc","shEQt"]);   // ABR1: bwStop false, bwW 0 (MassDOT: owner default below); ABR3: nonConc, shEQt
     if(!S.bwLL||typeof S.bwLL!=="object") S.bwLL=clone(T.bwLL); }
   if(S.own.dv===2){   // CLMB (2026-10-20): new owner defaults (MassDOT Coulomb, RIDOT at-rest rule) for a project saved with the earlier defaults
@@ -1884,7 +1885,14 @@ function migrate(){
       DEFAULTS_NOTICE=(DEFAULTS_NOTICE||[]).concat(add); }
     S.meta.defRev=11;
   }
+  if(S.seismic&&S.seismic.khRAuto===true) S.seismic.khR=abutKhAuto();   // ABM2: the k_h ratio follows the foundation while it is set automatically
 }
+/* ABM2 (2026-11-07): k_h ratio from the foundation [AASHTO LRFD 10th Ed. 11.6.5.2.2]: k_h may be reduced to 0.5k_h0 only for a wall free to
+   displace 1–2 in that the Owner accepts; an abutment on piles or founded on rock is restrained (1.0, no reduction). MassDOT: its own rule
+   (Part I 3.4.6.3: 0.5 on spread footings, 1.0 on piles). */
+function abutKhAuto(){ const pile=S.fnd&&S.fnd.branch==="pile", rock=S.fnd&&S.fnd.matl==="rock";
+  if(abutOwner()==="MassDOT") return pile?1.0:0.5;
+  return (pile||rock)?1.0:0.5; }
 /* WING: a saved state merged over the defaults keeps "no wing data" (→ wingwalls off in migrate), not the new-project default */
 function abutMergeState(o){ const st=Object.assign(defaultState(),o); if(!o||typeof o!=="object"||!o.wing) delete st.wing; if(!o||typeof o!=="object"||!o.apSlab) delete st.apSlab; return st; }   // APS: "no slab data" → migrate()
 function seedExampleReactions(){
@@ -2350,7 +2358,9 @@ function buildInputs(){
       ${inpRow("Site acceleration coefficient A<sub>s</sub> (S<sub>a</sub> at T = 0 s)","seismic.As","g",{title:"Risk-targeted design acceleration coefficient at T = 0 s for the site class, from the AASHTO-USGS Seismic Design Ground Motion Database or the geotech report [3.10.4.1]; k_h0 = A_s at the wall base [11.6.5.2.1]."})}
       ${S.geom.HsupMode==="single"?"":selRow("Site class at the wall base [T.3.10.3.1-1]","seismic.siteClass",[["","— not selected (k<sub>h0</sub> = A<sub>s</sub>)"],["A","A"],["B","B"],["B/C","B/C"],["C","C"],["C/D","C/D"],["D","D"],["D/E","D/E"],["E","E"],["F","F"]])}
       ${S.geom.HsupMode==="single"?"":`<div class="in-note">k<sub>h0</sub> = A<sub>s</sub>, or 1.2·A<sub>s</sub> for a wall founded on Site Class A, B or B/C [11.6.5.2.1] (worked in Tab 3 §3.6a). The SubLoads hand-off sends A<sub>s</sub> only; select the site class here.</div>`}
-      ${inpRow("k<sub>h</sub> ratio (k<sub>h</sub> = ratio × k<sub>h0</sub>)","seismic.khR","–",{title:"0.5 for walls free to displace 1–2 in; 1.0 for restrained walls. [11.6.5.2.2]"})}
+      <div class="chk-row"><input type="checkbox" id="chkKhAuto" data-path="seismic.khRAuto" ${sq.khRAuto===true?"checked":""}>
+      <label for="chkKhAuto">k<sub>h</sub> ratio from the foundation: 1.0 on piles or rock (restrained), 0.5 on a spread footing on soil (free to displace 1–2 in, Owner-accepted) [11.6.5.2.2]${abutOwner()==="MassDOT"?"; MassDOT 3.4.6.3: 0.5 spread, 1.0 piles":""}</label></div>
+      ${inpRow("k<sub>h</sub> ratio (k<sub>h</sub> = ratio × k<sub>h0</sub>)","seismic.khR","–",{title:"0.5 only for a wall free to displace 1–2 in whose movement the Owner accepts; 1.0 for restrained walls (piles, rock, superstructure restraint). Typing a value turns the automatic setting off. [11.6.5.2.2]"})}
       ${inpRow("Vertical coefficient k<sub>v</sub>","seismic.kv","–")}
       ${selRow("Height of the seismic earth pressure P<sub>AE</sub>","seismic.hEQmode",[["static","Distributed as the static pressure, resultant ≥ H/3 [11.6.5.3]"],["ratio","Increment at an entered ratio × H"]],{rebuild:true})}
       ${sq.hEQmode==="ratio"?inpRow("&nbsp;&nbsp;ΔP<sub>AE</sub> application height ratio (× H)","seismic.hEQr","–",{title:"Dynamic increment applied at this fraction of H (e.g. 0.6H, Seed–Whitman); the static part stays at its own resultant. AASHTO LRFD 10th Ed. 11.6.5.3 distributes P_AE as the static pressure (the other option)."}):""}
@@ -3304,6 +3314,7 @@ function computeAll(){
     // ABCHK: k_h0 = A_s at the wall base, 1.2·A_s for a wall founded on Site Class A, B or B/C [11.6.5.2.1]; k_h = ratio × k_h0 [11.6.5.2.2]
     const sc=String(S.seismic.siteClass||""), kh0f=["A","B","B/C"].includes(sc)?1.2:1.0, kh0=kh0f*(+S.seismic.As);
     const kh=(+S.seismic.khR)*kh0, kv=+S.seismic.kv;
+    if(+S.seismic.khR<1-1e-9&&abutKhAuto()>=1-1e-9) warnFor("conv",`REVIEW — Seismic: k_h = ${fmt(+S.seismic.khR,2)}·k_h0 is entered (panel I-11), but the abutment is ${S.fnd.branch==="pile"?"on piles":"founded on rock"}. The reduction below k_h0 applies only to a wall free to displace 1–2 in whose movement the Owner accepts [11.6.5.2.2]; a pile- or rock-founded abutment is generally restrained (k_h = k_h0). Confirm, or tick "k_h ratio from the foundation".`);   // ABM2
     if(!sc) warn("Seismic: site class not selected (panel I-11) — k_h0 = A_s is used. For a wall founded on Site Class A, B or B/C, k_h0 = 1.2·A_s [11.6.5.2.1].");
     const th=Math.atan(kh/(1-kv)), thd=th*180/Math.PI;
     const dMO=S.soil.method==="coulomb"?deg2rad(KA.iota):0;   // CLMB: the δ of the static Coulomb case (β for a long heel)
@@ -3719,12 +3730,14 @@ function computeAll(){
     if(n<1){ warnFor("conv","No active piles — activate at least one pile.","err"); }
     else{
       // group centroid (x from footing CL → convert to x-from-toe)
-      const xgc=act.reduce((a,c)=>a+c.x,0)/n;         // from footing CL
-      const ygc=act.reduce((a,c)=>a+c.y,0)/n;         // from abutment CL
+      // 8h (2026-11-07): group properties by shared/pile-group.js (SharedPileGroup.groupProps: the same reductions, bit-identical)
+      const gp=SharedPileGroup.groupProps(act);
+      const xgc=gp.xgc;         // from footing CL
+      const ygc=gp.ygc;         // from abutment CL
       const xgcT=B/2+xgc;
-      const Sxx=act.reduce((a,c)=>a+Math.pow(c.x-xgc,2),0); // Σ(x−xgc)² — longitudinal
-      const Syy=act.reduce((a,c)=>a+Math.pow(c.y-ygc,2),0); // Σ(y−ygc)² — transverse
-      const Sxy=act.reduce((a,c)=>a+(c.x-xgc)*(c.y-ygc),0); // ABPX2: Σ(x−xgc)(y−ygc) — product of inertia (0 for a symmetric layout)
+      const Sxx=gp.Sxx; // Σ(x−xgc)² — longitudinal
+      const Syy=gp.Syy; // Σ(y−ygc)² — transverse
+      const Sxy=gp.Sxy; // ABPX2: Σ(x−xgc)(y−ygc) — product of inertia (0 for a symmetric layout)
       R.pile={n,xgc,ygc,xgcT,Sxx,Syy,Sxy};
       if(Math.abs(xgc)>0.01||Math.abs(ygc)>0.01)
         warnFor("conv",`Pile-group centroid is offset from the footing centroid by Δx = ${fmt(xgc)} ft (long.) and Δy = ${fmt(ygc)} ft (trans.) — verify this is intended; the offset is included in the pile-load computation.`);
@@ -4548,7 +4561,8 @@ function computeAll(){
     const deF=hP-clrP-dbF;                               // footing effective depth over the pile heads, in
     const dvF=Math.max(0.9*deF,0.72*hP);                 // in
     if(!(deF>0)) warnFor("conv",`Punching shear: no effective depth above the pile heads (t_f − embedment − clear cover − d_b = ${fmt(deF,1)} in) — check panel I-7.`,"err");
-    const sPile=+p.pileSize;                             // square-envelope side (round treated as square envelope), in
+    const sPile=+p.pileSize;                             // H-pile / square: square-envelope side; round: diameter D (in)
+    const rnd=p.pileShape==="round";                     // ABH1 (2026-11-07): round / pipe / drilled pile: circular critical section of diameter D + d_v [5.12.8.6.1]
     const betaC=1.0;                                     // reaction area long/short ratio (≈1)
     const vnCoef=Math.min(0.063+0.126/betaC,0.126);      // ksi coefficient
     const det=R.checks.pileComp.det, loads=det.loads||[];
@@ -4559,20 +4573,27 @@ function computeAll(){
       const yc=c.y;                                      // from abutment CL, ft
       const spanX=Math.min(B,xt+e2)-Math.max(0,xt-e2);
       const spanY=Math.min(Lftg/2,yc+e2)-Math.max(-Lftg/2,yc-e2);
-      let b0=0;                                          // ft
+      let b0=0, arcF=1;                                  // ft; arcF = share of the circular perimeter inside the footing (round piles)
+      if(rnd){                                           // ABH1: circle of radius e2 about the pile centre; only the arc inside the footing plan counts (C5.12.8.6.3), by 0.1° steps
+        const NS=3600; let nin=0;
+        for(let k=0;k<NS;k++){ const t=(k+0.5)*2*Math.PI/NS, xx=xt+e2*Math.cos(t), yy=yc+e2*Math.sin(t);
+          if(xx>=-1e-6&&xx<=B+1e-6&&yy>=-Lftg/2-1e-6&&yy<=Lftg/2+1e-6) nin++; }
+        arcF=nin/NS; b0=2*Math.PI*e2*arcF;
+      }else{
       if(xt-e2>=-1e-6) b0+=spanY;                        // left face inside footing
       if(xt+e2<=B+1e-6) b0+=spanY;                       // right face
       if(yc-e2>=-Lftg/2-1e-6) b0+=spanX;                 // bottom face
       if(yc+e2<=Lftg/2+1e-6) b0+=spanX;                  // top face
+      }
       const b0in=b0*12;                                  // in
       const Vn=vnCoef*Math.sqrt(m.fc)*b0in*dvF;          // kips
       const Vu=loads[i]||0;                              // governing max-compression case pile load
       const dc=Vu/(0.9*Vn);
       const sides=(xt-e2>=-1e-6)+(xt+e2<=B+1e-6)+(yc-e2>=-Lftg/2-1e-6)+(yc+e2<=Lftg/2+1e-6);
       if(dc>gov.dc){ let no=0,t=c; for(const cc of S.piles.coords){no++; if(cc===t)break;}
-        gov={dc, Vu, Vn, b0:b0in, dv:dvF, de:deF, pile:no, sides, spanX:spanX*12, spanY:spanY*12}; }
+        gov={dc, Vu, Vn, b0:b0in, dv:dvF, de:deF, pile:no, sides, spanX:spanX*12, spanY:spanY*12, arcF}; }
     });
-    R.checks.punching={...gov, sPile, betaC, vnCoef, embed:embP, clrTop:clrP, hP, db:dbF, ls:R.checks.pileComp.ls, lbl:det.c?.lbl};
+    R.checks.punching={...gov, sPile, betaC, vnCoef, embed:embP, clrTop:clrP, hP, db:dbF, ls:R.checks.pileComp.ls, lbl:det.c?.lbl, rnd};
     // overlapping-perimeter flag (group punching / beam shear governs — hand check)
     let minSp=Infinity;
     for(let i=0;i<act.length;i++)for(let j=i+1;j<act.length;j++){
@@ -4975,7 +4996,7 @@ function computeAll(){
     { const T=defaultState(), dropDef=(o,t,keys)=>{ if(o) keys.forEach(k=>{ if(JSON.stringify(o[k])===JSON.stringify(t[k])) delete o[k]; }); };   // ABCHK: new inputs at their default
       dropDef(fpS.mat,T.mat,["coverExp","coverCat","coverWcm","rebar"]); dropDef(fpS.fnd,T.fnd,["qnMode","qnC","qnPhi","qnGam","qnDw","qnIncl","qnDepth"]);
       dropDef(fpS.piles,T.piles,["strSec","Fy","drive","pipeT","PrUser","orient","headFix","MuPy","fixSoil","Su","DfUser","Lu","nhUser","DfMode"]); dropDef(fpS.reinf,T.reinf,["dwlEnd","dwlLap","dwlPct"]);
-      dropDef(fpS.seismic,T.seismic,["siteClass","bwStop","bwW"]); if(fpS.bwLL&&fpS.bwLL.mode==="wheel") delete fpS.bwLL;
+      dropDef(fpS.seismic,T.seismic,["siteClass","bwStop","bwW"]); if(fpS.seismic) delete fpS.seismic.khRAuto; if(fpS.bwLL&&fpS.bwLL.mode==="wheel") delete fpS.bwLL;   // ABM2: khRAuto left out (the k_h ratio itself is in the Input ID)
       if(fpS.iab) dropDef(fpS.iab,iabDefault(),["KpE","Rn","phiC","RnUp","phiUp","MuPy2"]); }   // PXR2: MuPy2   // ABR1: new inputs at their default
     const s=JSON.stringify(fpS);
     let h1=5381,h2=52711;
@@ -6866,21 +6887,24 @@ function renderTabFound(R){
   const pnc=R.checks.punching;
   if(pnc){
     h+=panel("o-punch","4.6","Two-Way (Punching) Shear at Piles [AASHTO 5.12.8.6]",`
-      ${govNote((pnc.lbl||"")+" — "+(pnc.ls||"")+" (governing pile "+pnc.pile+", "+pnc.sides+"-sided critical section)")}
+      ${govNote((pnc.lbl||"")+" — "+(pnc.ls||"")+" (governing pile "+pnc.pile+", "+(pnc.rnd? fmt(100*pnc.arcF,0)+" % of the circular critical section inside the footing)" : pnc.sides+"-sided critical section)"))}
       ${abutWorkedIn([["tab-found","o-pileform","4.2 Axial Pile Reactions","V_u (pile reaction)"]])}
       ${eqB("Footing effective depth & shear depth over the pile heads","AASHTO 5.12.8.6, 5.7.2.8",[
         `h_p = t_f - e_{pile} = ${fmtT(g.tf*12,1)} - ${fmtT(pnc.embed,1)} = ${fmtT(pnc.hP,1)}\\ \\text{in}`,
         `d_e = h_p - c_{top} - d_b = ${fmtT(pnc.hP,1)} - ${fmtT(pnc.clrTop,2)} - ${fmtT(pnc.db,3)} = ${fmtT(pnc.de)}\\ \\text{in}`,
         `d_v = \\max(0.9d_e,\\,0.72h_p) = \\max(0.9(${fmtT(pnc.de)}),\\,0.72(${fmtT(pnc.hP,1)})) = ${fmtT(pnc.dv)}\\ \\text{in}`],
         "e_pile = pile embedment into the footing; c_top = clear cover from the pile top to the bottom mat (panel I-7). The bottom mat sits above the pile heads; d_e is measured from the top of the footing to the mat centroid (two orthogonal layers, centroid d_b above the bottom of the mat), and h_p is the footing thickness above the pile heads.")}
-      ${eqB("Critical perimeter at d_v/2 from the pile face (square envelope, edge-truncated)","AASHTO 5.12.8.6.3",[
+      ${pnc.rnd? eqB("Critical perimeter at d_v/2 from the pile face (round pile: circle of diameter D + d_v, edge-truncated)","AASHTO 5.12.8.6.1, 5.12.8.6.3",[
+        `b_0 = \\pi\\,(D+d_v)\\,f_{arc} = \\pi\\,(${fmtT(pnc.sPile,1)}+${fmtT(pnc.dv)})\\,(${fmtT(pnc.arcF,3)}) = ${fmtT(pnc.b0,1)}\\ \\text{in}`],
+        "D = pile diameter (panel I-7). The critical section is the circle at d_v/2 from the pile face (the minimum perimeter not closer than 0.5d_v, 5.12.8.6.1). f_arc = share of that circle inside the footing plan (1.0 for an interior pile); the part beyond a footing edge is not counted (C5.12.8.6.3).")
+      : eqB("Critical perimeter at d_v/2 from the pile face (square envelope, edge-truncated)","AASHTO 5.12.8.6.3",[
         `\\text{pile size} = ${fmtT(pnc.sPile,1)}\\ \\text{in}, \\quad \\text{critical section side} = ${fmtT(pnc.sPile,1)}+${fmtT(pnc.dv)} = ${fmtT(pnc.sPile+pnc.dv,1)}\\ \\text{in}`,
         `b_0 = ${fmtT(pnc.b0,1)}\\ \\text{in} \\quad(${pnc.sides}\\text{ faces inside the footing for the governing pile})`])}
       ${eqB("Nominal & factored two-way shear resistance","AASHTO 5.12.8.6.3, Eq. 5.12.8.6.3-1",[
         "V_n = \\left(0.063+\\dfrac{0.126}{\\beta_c}\\right)\\sqrt{f'_c}\\,b_0 d_v \\le 0.126\\sqrt{f'_c}\\,b_0 d_v",
         `V_n = ${fmtT(pnc.vnCoef,3)}\\sqrt{${fmtT(S.mat.fc,1)}}\\,(${fmtT(pnc.b0,1)})(${fmtT(pnc.dv)}) = ${fmtT(pnc.Vn)}\\ \\text{kip} \\quad(\\beta_c=${fmtT(pnc.betaC,1)})`,
         `\\varphi V_n = 0.90(${fmtT(pnc.Vn)}) = ${fmtT(0.9*pnc.Vn)}\\ \\text{kip}`],
-        "β_c = ratio of long to short side of the reaction area (≈ 1.0 for square/round piles). Round/H-piles are treated with a square envelope of side = pile size (conservative).")}
+        "β_c = ratio of long to short side of the reaction area (≈ 1.0 for square/round piles). H-piles are treated with a square envelope of side = pile size; round piles with the circular section above (ABH1).")}
       ${checkLine("Pile punching (pile "+pnc.pile+")",`\\dfrac{V_u}{\\varphi V_n} = \\dfrac{${fmtT(pnc.Vu)}}{${fmtT(0.9*pnc.Vn)}}`,pnc.dc,
         `<span class="small">V_u = governing max-compression pile load</span>`)}
       <div class="note-box">Demand is the governing factored pile reaction; the footing self-weight and soil within the critical perimeter are conservatively neglected. Where perimeters overlap, group punching and one-way (beam) shear must be checked by hand (flagged above the dashboard when triggered).</div>
@@ -8250,8 +8274,9 @@ function pilePlanSVG(R){   // ABINT: the plan as a string (drawPilePlan on scree
   // ABSW: punching critical perimeters (pile size + d_v, square envelope, §4.6) and per-pile shear arrows (H/n, §4.5)
   if(R&&R.checks&&R.checks.punching){ const pn=R.checks.punching, sd=(pn.sPile+pn.dv)/12;
     S.piles.coords.forEach(c=>{ if(!c.active) return;
-      s+=`<rect x="${Xc(c.y)-sd/2*sc}" y="${Yc(c.x)-sd/2*sc}" width="${sd*sc}" height="${sd*sc}" fill="none" stroke="#7a2020" stroke-width="0.9" stroke-dasharray="3 2"/>`; });
-    s+=`<text x="${Xc(Lft/2)}" y="${Yc(B/2)+44}" text-anchor="end" font-size="9.5" font-family="Times New Roman" fill="#7a2020">dashed squares: punching perimeter, side = pile + d_v = ${fmt(pn.sPile+pn.dv,1)} in (§4.6)</text>`; }
+      s+=pn.rnd? `<circle cx="${Xc(c.y)}" cy="${Yc(c.x)}" r="${sd/2*sc}" fill="none" stroke="#7a2020" stroke-width="0.9" stroke-dasharray="3 2"/>`
+        : `<rect x="${Xc(c.y)-sd/2*sc}" y="${Yc(c.x)-sd/2*sc}" width="${sd*sc}" height="${sd*sc}" fill="none" stroke="#7a2020" stroke-width="0.9" stroke-dasharray="3 2"/>`; });
+    s+=`<text x="${Xc(Lft/2)}" y="${Yc(B/2)+44}" text-anchor="end" font-size="9.5" font-family="Times New Roman" fill="#7a2020">dashed ${pn.rnd?"circles":"squares"}: punching perimeter, ${pn.rnd?"diameter":"side"} = pile + d_v = ${fmt(pn.sPile+pn.dv,1)} in (§4.6)</text>`; }
   if(R&&R.pile&&R.pile.shear&&R.pile.shear.Hres>1e-6){ const sh=R.pile.shear, len=18, ux=sh.Hy/sh.Hres, uy=-sh.Hx/sh.Hres;
     S.piles.coords.forEach(c=>{ if(!c.active) return; const cx=Xc(c.y), cy=Yc(c.x);
       s+=`<line x1="${cx}" y1="${cy}" x2="${cx+ux*len}" y2="${cy+uy*len}" stroke="#555" stroke-width="1.2" marker-end="url(#arr)"/>`; });
@@ -9688,7 +9713,8 @@ function abrModel(){
       const pu=C.punching; if(pu&&has("punching")){ const w=topic(T,"pun","Punching shear at the governing pile (pile "+pu.pile+")",ABR_AA+"Art. 5.12.8.6");
         w.add({id:"de",label:"Effective depth over the pile heads (h_p = "+abrN(pu.hP,1)+" in, clear cover "+abrN(pu.clrTop,1)+" in, two layers of d_b)",sym:"d_{e}",eq:"h_{p} \\minus c \\minus d_{b}",sub:abrN(pu.hP,1)+" \\minus "+abrN(pu.clrTop,1)+" \\minus "+abrN(pu.db,3),value:pu.de,unit:"in",d:2});
         w.add({id:"dv",label:"Effective shear depth",sym:"d_{v}",eq:"\\max(0.9 d_{e},\\,0.72 h_{p})",sub:"\\max(0.9\\cdot "+abrN(pu.de)+",\\,0.72\\cdot "+abrN(pu.hP,1)+")",value:pu.dv,unit:"in",d:2,ref:ABR_AA+"Art. 5.7.2.8"});
-        w.add({id:"b0",label:"Critical perimeter at d_v/2 from the pile ("+pu.sides+" sides inside the footing)",sym:"b_{0}",eq:"",sub:"",value:pu.b0,unit:"in",d:1});
+        if(pu.rnd) w.add({id:"b0",label:"Critical perimeter at d_v/2 from the round pile (circle of diameter D + d_v; "+abrN(100*pu.arcF,0)+" % inside the footing)",sym:"b_{0}",eq:"\\pi\\,(D + d_{v})\\,f_{arc}",sub:"\\pi\\cdot ("+abrN(pu.sPile,1)+" + "+abrN(pu.dv,2)+")\\cdot "+abrN(pu.arcF,3),value:pu.b0,unit:"in",d:1});   // ABH1
+        else w.add({id:"b0",label:"Critical perimeter at d_v/2 from the pile ("+pu.sides+" sides inside the footing)",sym:"b_{0}",eq:"",sub:"",value:pu.b0,unit:"in",d:1});
         w.add({id:"Vn",label:"Nominal two-way shear resistance (β_c = "+abrN(pu.betaC,1)+")",sym:"V_{n}",eq:"\\left(0.063 + \\frac{0.126}{\\beta_{c}}\\right)\\sqrt{f^{\\prime}_{c}}\\,b_{0} d_{v} \\le 0.126\\sqrt{f^{\\prime}_{c}}\\,b_{0} d_{v}",sub:abrN(pu.vnCoef,3)+"\\cdot "+sq(fc)+"\\cdot "+abrN(pu.b0,1)+"\\cdot "+abrN(pu.dv),value:pu.Vn,unit:"kip",d:1,ref:ABR_AA+"Eq. 5.12.8.6.3-1"});
         w.add({id:"Vu",label:"Pile reaction ("+(pu.ls||"")+")",sym:"V_{u}",eq:"",sub:"",value:pu.Vu,unit:"kip",d:1});
         dcStep(w,"fd","punching","Punching shear","\\frac{V_{u}}{0.9 V_{n}}","\\frac{"+abrN(pu.Vu,1)+"}{0.9\\cdot "+abrN(pu.Vn,1)+"}",ABR_AA+"Art. 5.12.8.6"); }
@@ -9970,6 +9996,8 @@ document.addEventListener("input",ev=>{
   else v=el.value;
   const ownPreN=(p==="mat.fc"&&abutOwner()==="CTDOT")? ownDefMap() : null;   // ABR3: the CTDOT γ_c owner default follows f′c (V2 3.5.1)
   setPath(S,p,v);
+  if(p==="seismic.khR"&&S.seismic.khRAuto){ S.seismic.khRAuto=false; const cb=document.getElementById("chkKhAuto"); if(cb) cb.checked=false; }   // ABM2: an entered k_h ratio is kept
+  if(p==="seismic.khRAuto"&&v===true){ migrate(); const e2=document.querySelector('[data-path="seismic.khR"]'); if(e2) e2.value=S.seismic.khR; }
   if(ownPreN){ const r=ownReapply(ownPreN); if(r.set.includes("mat.gc")){ const e2=document.querySelector('[data-path="mat.gc"]'); if(e2) e2.value=S.mat.gc; } }
   scheduleSave();
   if(el.type==="checkbox"&&(p==="fnd.usePassive"||p==="fnd.imBuried"||p==="seismic.on"||p==="seismic.bwStop"||p==="wing.on"||p==="longit.computeBR"||p==="longit.computeTU"||p==="longit.computeCRSH"||p==="apSlab.on"||p==="apSlab.des")){ buildInputs(); }   // APS: apSlab.on, apSlab.des
@@ -9996,6 +10024,7 @@ document.addEventListener("change",ev=>{
   if(ownPre){ const r=ownReapply(ownPre); OWN_LAST={owner:abutOwner(),set:r.set,kept:r.kept};
     const ss=document.getElementById("saveStatus"); if(ss&&(r.set.length||r.kept.length)) ss.textContent=(r.set.length?"owner defaults applied: "+r.set.map(ownDefLabel).join(", "):"")+(r.kept.length?(r.set.length?"; ":"")+"your values kept: "+r.kept.map(ownDefLabel).join(", "):""); }
   if(p==="piles.nRows"||p==="piles.nCols"||p==="piles.mode"){ if(S.piles.mode==="grid") S.piles.coords=gridPileCoords(); migrate(); }
+  if(S.seismic&&S.seismic.khRAuto){ migrate(); const e2=document.querySelector('[data-path="seismic.khR"]'); if(e2) e2.value=S.seismic.khR; }   // ABM2: the automatic k_h ratio follows a foundation / owner change
   if(p==="iab.type"&&raw==="semi"&&S.longit&&!S.longit.computeTU){ S.longit.computeTU=true; buildInputs();   // ABC (c): semi-integral — the bearing shear from the superstructure movement is calculated by default
     const ss=document.getElementById("saveStatus"); if(ss) ss.textContent="semi-integral: bearing shear from the superstructure movement (TU) turned on (panel I-6b)"; }
   if(p==="iab.type"&&raw==="integral"&&S.wing&&S.wing.type!=="indep"){ const Hw=(+S.iab.hc)+(+S.iab.hd);   // ABT2: switching to integral, an attached wing taller than the integral wall defaults to h_c + h_d
