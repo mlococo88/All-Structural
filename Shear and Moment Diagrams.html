@@ -228,6 +228,58 @@ a.wkA:hover{text-decoration:underline}
 .main.smd-rpt>*:not(#smdViewTabs):not(#smdRpt){display:none!important}
 .main:not(.smd-rpt)>#smdRpt{display:none}
 @media print{#smdViewTabs{display:none!important}}
+/* SMLS (2026-11-07, engineer: the summary cards in a left summary panel, as Retaining Wall, Spread Footing and Light Pole —
+   RWDL #959, RWLB #984, SFLB #988, LPLB #991): on screens 1200 px and wider the result cards (#statsRow .sc) show as one line
+   per value in a left column (#smdDashCol, 240 px up to 1499 px, 280 px from 1500 px), styled as those tools' chips; a click
+   opens the Engineering Calculations card that works the value. Warnings stay above the loads. « shrinks the column to a
+   42 px strip and puts the cards back above the loads. Below 1200 px nothing changes. Screen only (the Report prints). */
+#smdDashCol{display:none}
+@media print{#smdDashCol{display:none!important}}
+@media screen and (min-width:1200px){
+ body.smdDashWide #smdDashCol{display:block;flex:0 0 280px;width:280px;min-width:0;overflow-y:auto;overflow-x:hidden;background:var(--sf);border-right:1px solid var(--bd);padding:0 8px 24px;overscroll-behavior:contain}
+ body.smdDashWide .main{min-width:0}
+ body.smdDashWide:not(.smdDashColl) #statsRow>.sc,body.smdDashWide:not(.smdDashColl) #statsRow>.wkLink{display:none}
+ body.smdDashWide:not(.smdDashColl) #statsRow:not(:has(>:not(.sc):not(.wkLink))){display:none}
+ #smdDashHead{position:sticky;top:0;z-index:3;background:var(--sf);display:flex;align-items:center;gap:4px 8px;flex-wrap:wrap;padding:8px 0 4px}
+ #smdDashTtl{margin:0;font-size:10px;font-weight:700;color:var(--fa);text-transform:uppercase;letter-spacing:.08em}
+ #smdDashTgl{margin:0;padding:1px 7px;font-size:11px;border:1px solid var(--bd);background:var(--bg);border-radius:5px;cursor:pointer;color:#475569}
+ #smdDashCnt{display:inline-flex;gap:4px;flex-wrap:wrap}
+ #smdDashCnt span{font-size:10px;font-weight:700;padding:1px 5px;border:1px solid;border-radius:3px;white-space:nowrap}
+ #smdDashCnt .smdCf{color:#991b1b;background:#fef2f2;border-color:var(--rd)}
+ #smdDashCnt .smdCw{color:#92400e;background:#fffbeb;border-color:var(--am)}
+ #smdDashCnt .smdCp{color:#065f46;background:#ecfdf5;border-color:var(--gn)}
+ #smdDashSub{font-size:10.5px;color:var(--mu);margin:0 0 6px;overflow-wrap:anywhere}
+ #smdDash{display:grid;grid-template-columns:minmax(0,1fr);gap:3px;align-items:start}
+ .smdCh{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;column-gap:5px;padding:3px 6px 3px 2px;min-width:0;
+   border:1px solid #94a3b8;border-radius:3px;background:#f8fafc;font-size:11.5px;line-height:1.35;cursor:pointer}
+ .smdCh:focus-visible{outline:2px solid var(--bl);outline-offset:-1px}
+ .smdCh.pass{border-color:var(--gn);background:#ecfdf5}.smdCh.fail{border-color:var(--rd);background:#fef2f2}.smdCh.warn{border-color:var(--am);background:#fffbeb}
+ .smdCh.na:hover{background:#f1f5f9}.smdCh.pass:hover{background:#d1fae5}.smdCh.fail:hover{background:#fee2e2}.smdCh.warn:hover{background:#fef3c7}
+ .smdCh .smdChX{grid-row:1;grid-column:1;margin:0;padding:0 3px;border:none;background:transparent;font-size:9px;color:#334155;line-height:1.2;cursor:pointer}
+ .smdCh .smdChX:disabled{visibility:hidden}
+ .smdCh .smdChN{grid-row:1;grid-column:2;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .smdCh .smdChR{grid-row:1;grid-column:3;white-space:nowrap;color:#1e40af;font-weight:600;font-variant-numeric:tabular-nums}
+ .smdCh .smdChS{grid-row:1;grid-column:4;font-size:10px;font-weight:700;white-space:nowrap}
+ .smdCh.pass .smdChS{color:var(--gn)}.smdCh.fail .smdChS{color:var(--rd)}.smdCh.warn .smdChS{color:var(--am)}
+ .smdCh .smdChV,.smdCh .smdChRef{grid-column:1/-1;display:none;padding-left:16px;font-size:10.5px;color:#475569;overflow-wrap:anywhere}
+ .smdCh .smdChRef{font-style:italic;color:var(--mu)}
+ .smdCh.smdOpen .smdChV,.smdCh.smdOpen .smdChRef{display:block}
+ .smdCh.smdOpen .smdChN{white-space:normal}
+ .smdDMsg{font-size:11.5px;padding:6px 8px;border:1px solid #fda4af;background:#fff1f2;color:#9f1239;border-radius:3px}
+ .smdDMsg.none{border-color:var(--bd);background:#f8fafc;color:var(--mu)}
+ body.smdDashWide.smdDashColl #smdDashCol{flex-basis:42px;width:42px;padding:0}
+ body.smdDashWide.smdDashColl #smdDash,body.smdDashWide.smdDashColl #smdDashSub{display:none}
+ body.smdDashWide.smdDashColl #smdDashHead{flex-direction:column;align-items:center}
+ body.smdDashWide.smdDashColl #smdDashTtl{writing-mode:vertical-rl;transform:rotate(180deg);margin:4px 0;white-space:nowrap}
+ body.smdDashWide.smdDashColl #smdDashCnt{flex-direction:column;align-items:center}
+ body.smdDashWide.smdDashColl #smdDashCnt span{font-size:9px;padding:1px 2px;white-space:normal;text-align:center;width:36px}
+ body.smdDashWide #smdDashCol::-webkit-scrollbar{width:7px}
+ body.smdDashWide #smdDashCol::-webkit-scrollbar-thumb{background:#c2ccd6;border-radius:4px}
+}
+@media screen and (min-width:1200px) and (max-width:1499.98px){   /* SMLS: as RWLB / SFLB / LPLB */
+ body.smdDashWide #smdDashCol{flex-basis:240px;width:240px}
+ body.smdDashWide.smdDashColl #smdDashCol{flex-basis:42px;width:42px}
+}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-thumb{background:#e2e8f0;border-radius:99px}
 </style>
@@ -245,6 +297,11 @@ a.wkA:hover{text-decoration:underline}
 </header>
 
 <div class="layout">
+ <aside id="smdDashCol" class="noprint" aria-label="Results summary"><!-- SMLS (2026-11-07): the result cards as a left column on screens 1200 px and wider -->
+  <div id="smdDashHead"><button type="button" id="smdDashTgl" aria-controls="smdDash" aria-expanded="true">&laquo;</button><h2 id="smdDashTtl">Results summary</h2><span id="smdDashCnt"></span></div>
+  <div id="smdDashSub"></div>
+  <div id="smdDash"></div>
+ </aside>
  <div class="sb">
   <div>
     <div class="slbl">Spans &amp; Supports</div>
@@ -846,6 +903,57 @@ function smdGoto(card){
 }
 document.addEventListener('click',e=>{const a=e.target.closest&&e.target.closest('a.wkA[data-card]');
   if(a){e.preventDefault();smdGoto(a.dataset.card);}});   /* SMRX: the #repView report (whose links were skipped here) is retired */
+/* SMLS (2026-11-07, engineer: the summary cards in a left summary panel, as Retaining Wall / Spread Footing / Light Pole; RWDL,
+   RWLB, SFLB, LPLB): on screens >= 1200 px the result cards of updStats show as one line each in #smdDashCol (name, value,
+   status where a limit is set; the expand button shows the card's other lines, e.g. the governing combinations). A line click
+   opens the Engineering Calculations card that works the value (smdGoto, the D11 "Worked in" target). The lines are written by
+   updStats from the same expressions as the cards: no new calculation. Collapse state: per-browser UI key smd_dashCollapsed_v1
+   ('1' = collapsed, '0' or absent = open); not in the project, the autosave or the export. Below 1200 px nothing changes. */
+const SMDD={key:'smd_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1200px)'):null,open:new Map(),coll:false,wide:null};
+try{SMDD.coll=localStorage.getItem(SMDD.key)==='1';}catch(e){}
+function smdDashRender(items,msg){
+  const box=g('smdDash'),cnt=g('smdDashCnt'),sub=g('smdDashSub');if(!box)return;
+  box.innerHTML='';
+  if(!items){box.innerHTML=`<div class="smdDMsg">${msg||'No results.'}</div>`;if(cnt)cnt.innerHTML='';if(sub)sub.textContent='';return;}
+  if(sub)sub.textContent=(envOn?'':'Combination: ')+curName();
+  const n={pass:0,fail:0,warn:0},ST={pass:'OK',fail:'NG',warn:'',na:''};
+  const plain=h=>{const t=document.createElement('div');t.innerHTML=h||'';return t.textContent;};
+  items.forEach(it=>{
+    if(n[it.st]!=null)n[it.st]++;
+    const c=document.createElement('div');c.className='smdCh '+it.st;c.tabIndex=0;c.setAttribute('role','button');
+    const key=plain(it.n);
+    c.innerHTML=`<button type="button" class="smdChX" title="Show the card's other lines and where the value is worked"${it.d||it.c?'':' disabled'}></button><span class="smdChN">${it.n}</span>`
+      +`<span class="smdChR">${it.v}</span><span class="smdChS">${it.s!=null?it.s:ST[it.st]}</span>`
+      +(it.d?`<div class="smdChV">${it.d}</div>`:'')+(it.c?`<div class="smdChRef">→ Engineering Calculations · ${it.c}</div>`:'');
+    c.title=key+': '+plain(it.v)+(it.d?'\n'+plain(it.d.replace(/<br>/g,'\n')):'')+(it.c?'\nClick: → Engineering Calculations · '+it.c:'');
+    const x=c.querySelector('.smdChX');
+    const setOpen=o=>{c.classList.toggle('smdOpen',o);x.setAttribute('aria-expanded',o?'true':'false');x.textContent=it.d||it.c?(o?'▾':'▸'):'';};
+    setOpen(SMDD.open.has(key)?SMDD.open.get(key):(it.st==='fail'||it.st==='warn'));   /* NG / UPLIFT lines open by default, as in the other tools */
+    x.addEventListener('click',ev=>{ev.preventDefault();ev.stopPropagation();const o=!c.classList.contains('smdOpen');SMDD.open.set(key,o);setOpen(o);});
+    if(it.c){const go=()=>{if(typeof SMRP!=='undefined'&&SMRP.on){smrView(false);setTimeout(()=>smdGoto(it.c),150);}else smdGoto(it.c);};   /* from the Report view: the Analysis view first (its diagrams are re-laid out before the scroll) */
+      c.addEventListener('click',go);c.addEventListener('keydown',ev=>{if(ev.target!==c)return;if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();go();}});}
+    box.appendChild(c);
+  });
+  if(cnt)cnt.innerHTML=(n.fail?`<span class="smdCf">${n.fail} NG</span>`:'')+(n.warn?`<span class="smdCw">${n.warn} uplift</span>`:'')+(n.pass&&!n.fail?'<span class="smdCp">no NG</span>':'');
+}
+function smdDashPlace(){
+  const wide=!!(SMDD.mq&&SMDD.mq.matches),ch=SMDD.wide!==null&&SMDD.wide!==wide;SMDD.wide=wide;
+  document.body.classList.toggle('smdDashWide',wide);
+  smdDashColl(SMDD.coll,false,ch);
+}
+function smdDashColl(v,save,redraw){
+  SMDD.coll=!!v;document.body.classList.toggle('smdDashColl',SMDD.coll);
+  const t=g('smdDashTgl');
+  if(t){t.setAttribute('aria-expanded',SMDD.coll?'false':'true');t.innerHTML=SMDD.coll?'&raquo;':'&laquo;';
+    t.title=SMDD.coll?'Show the results summary column (remembered in this browser)':'Shrink the results summary column; the result cards show above the loads (remembered in this browser)';}
+  if(save){try{localStorage.setItem(SMDD.key,SMDD.coll?'1':'0');}catch(e){}}
+  if(save||redraw)requestAnimationFrame(()=>window.dispatchEvent(new Event('resize')));   /* the output column changed width: the diagrams are redrawn (resize handler) */
+}
+(function(){
+  const t=g('smdDashTgl');if(t)t.addEventListener('click',()=>smdDashColl(!SMDD.coll,true));
+  if(SMDD.mq){if(SMDD.mq.addEventListener)SMDD.mq.addEventListener('change',smdDashPlace);else if(SMDD.mq.addListener)SMDD.mq.addListener(smdDashPlace);}
+  smdDashPlace();
+})();
 /* Max shear stress: W-shape preset → average web shear V/(d·tw) (AISC Spec. G2.1, Aw = d·tw);
    custom section → 1.5V/A (solid rectangle). */
 function tauOf(v){
@@ -860,12 +968,13 @@ function updStats(){
   if(!window._rkW){window._rkW=1;const _rk=renderKaTeX;renderKaTeX=function(){
     if(window.unstable){g('cOut').innerHTML=window.smdBad?`<div class="empty">⚠ ${window.smdBad}</div>`:'<div class="empty">⚠ Structure is unstable — adjust supports to generate calculations.</div>';return;}
     _rk();};}
-  if(window.unstable&&window.smdBad){g('statsRow').innerHTML=`<div style="grid-column:1/-1;background:#fff1f2;border:1.5px solid #fda4af;border-radius:9px;padding:12px 14px;color:#9f1239;font-weight:700;font-size:12.5px">⚠ ${window.smdBad}</div>`;g('pkV').textContent='';g('pkM').textContent='';if(g('pkD'))g('pkD').textContent='';return;}   /* LV */
+  if(window.unstable&&window.smdBad){g('statsRow').innerHTML=`<div style="grid-column:1/-1;background:#fff1f2;border:1.5px solid #fda4af;border-radius:9px;padding:12px 14px;color:#9f1239;font-weight:700;font-size:12.5px">⚠ ${window.smdBad}</div>`;g('pkV').textContent='';g('pkM').textContent='';if(g('pkD'))g('pkD').textContent='';smdDashRender(null,'No results: input error. See the message above the loads.');return;}   /* LV; SMLS */
   if(window.unstable){
     g('statsRow').innerHTML=`<div style="grid-column:1/-1;background:#fff1f2;border:1.5px solid #fda4af;border-radius:9px;padding:12px 14px;color:#9f1239;font-weight:700;font-size:12.5px">⚠ UNSTABLE STRUCTURE — this support configuration is a mechanism (it can move as a rigid body). Provide at least one <u>fixed</u> support, or at least <u>two pinned</u> nodes. Results are suppressed until the model is stable.</div>`;
     g('pkV').textContent='';g('pkM').textContent='';if(g('pkD'))g('pkD').textContent='';
+    smdDashRender(null,'No results: the structure is unstable. See the message above the loads.');   /* SMLS */
     return;}
-  let h='';
+  let h='';const dI=[],wk=smdWkCards();   /* SMLS: the same values, one line each, for the left summary column (smdDashRender) */
   if(smdLoadFlags.length)h+=`<div class="smd-lv" style="grid-column:1/-1;background:#fffbeb;border:1.5px solid #fcd34d;border-radius:9px;padding:10px 14px;color:#92400e;font-size:12px">⚠ <b>Load input adjusted for the analysis</b> (the entered values are kept as entered):<br>${smdLoadFlags.map(s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')).join('<br>')}</div>`;   /* LV */
   if(secOn&&!(Ev>0&&Iv>0))h+=`<div style="grid-column:1/-1;background:#fff1f2;border:1.5px solid #fda4af;border-radius:9px;padding:10px 14px;color:#9f1239;font-weight:700;font-size:12px">⚠ Section properties: ${!(Ev>0)?'E':''}${!(Ev>0)&&!(Iv>0)?' and ':''}${!(Iv>0)?'I':''} must be greater than 0 (blank, zero or negative entered). Deflection is not computed until this is fixed.</div>`;
   {const z=smdZeroCases();if(z.length)h+=`<div class="smd-czf" style="grid-column:1/-1;background:#fff1f2;border:1.5px solid #fda4af;border-radius:9px;padding:10px 14px;color:#9f1239;font-size:12px">⚠ <b>Load cases not combined:</b> ${smdZeroTxt(z)}</div>`;}   /* CZF */
@@ -875,33 +984,35 @@ function updStats(){
     else h+=`<div class="smd-patw" style="grid-column:1/-1;background:#fffbeb;border:1.5px solid #fcd34d;border-radius:9px;padding:10px 14px;color:#92400e;font-size:12px">⚠ <b>Live load patterns:</b> this single-combination view applies LL to every span it is entered on. The envelope view includes the pattern live load (IBC 2018 Sec. 1607.12, ASCE 7-16 Sec. 4.3.3).</div>`;}
   {const mc=smdCmbMissing();if(mc.length&&!smdCmb3Hide)h+=`<div class="smd-cmb3" style="grid-column:1/-1;background:#fffbeb;border:1.5px solid #fcd34d;border-radius:9px;padding:10px 14px;color:#92400e;font-size:12px">⚠ <b>Load combinations:</b> ${smdCmbNoteTxt(mc)} <button class="btn btn-s" onclick="smdCmbAddMissing()">Add the missing rows</button> <button class="btn btn-s" onclick="smdCmb3Hide=true;updStats()">Hide</button></div>`;}   /* CMB3 */
   nodes.forEach((nd2,j)=>{if(nd2.t==='free')return;const cl=CLRS[j%CLRS.length];
-    if(envOn){const Rj=env.R[j],up=Rj.mn<-1e-9;h+=`<div class="sc ${cl}"><div class="sc-l">R_${NN[j]} max / min</div><div class="sc-v">${Rj.mx.toFixed(3)}</div><div class="sc-u">${fu} · ${COMBOS[Rj.mc].name}<br><span style="${up?'color:#b91c1c;font-weight:700':''}">min ${Rj.mn.toFixed(3)}${up?' UPLIFT':''} · ${COMBOS[Rj.mnc]?COMBOS[Rj.mnc].name:''}</span>${nd2.t==='fixed'?`<br>M<sub>R</sub> max ${Rj.mmx.toFixed(3)} · ${COMBOS[Rj.mmc]?COMBOS[Rj.mmc].name:''}<br>M<sub>R</sub> min ${Rj.mmn.toFixed(3)} · ${COMBOS[Rj.mmnc]?COMBOS[Rj.mmnc].name:''} (${fu}·${lu}, +CCW)`:''}</div></div>`;}   /* MRE */
-    else h+=`<div class="sc ${cl}"><div class="sc-l">R_${NN[j]}</div><div class="sc-v">${nodeR[j].v.toFixed(3)}</div><div class="sc-u">${fu}↑</div></div>`;});
+    if(envOn){const Rj=env.R[j],up=Rj.mn<-1e-9;h+=`<div class="sc ${cl}"><div class="sc-l">R_${NN[j]} max / min</div><div class="sc-v">${Rj.mx.toFixed(3)}</div><div class="sc-u">${fu} · ${COMBOS[Rj.mc].name}<br><span style="${up?'color:#b91c1c;font-weight:700':''}">min ${Rj.mn.toFixed(3)}${up?' UPLIFT':''} · ${COMBOS[Rj.mnc]?COMBOS[Rj.mnc].name:''}</span>${nd2.t==='fixed'?`<br>M<sub>R</sub> max ${Rj.mmx.toFixed(3)} · ${COMBOS[Rj.mmc]?COMBOS[Rj.mmc].name:''}<br>M<sub>R</sub> min ${Rj.mmn.toFixed(3)} · ${COMBOS[Rj.mmnc]?COMBOS[Rj.mmnc].name:''} (${fu}·${lu}, +CCW)`:''}</div></div>`;
+      dI.push({n:`R<sub>${NN[j]}</sub> max / min`,v:`${Rj.mx.toFixed(3)} ${fu}`,st:up?'warn':'na',s:up?'UPLIFT':'',d:`max ${Rj.mx.toFixed(3)} · ${COMBOS[Rj.mc].name}<br>min ${Rj.mn.toFixed(3)}${up?' UPLIFT':''} · ${COMBOS[Rj.mnc]?COMBOS[Rj.mnc].name:''}${nd2.t==='fixed'?`<br>M<sub>R</sub> max ${Rj.mmx.toFixed(3)} · ${COMBOS[Rj.mmc]?COMBOS[Rj.mmc].name:''}<br>M<sub>R</sub> min ${Rj.mmn.toFixed(3)} · ${COMBOS[Rj.mmnc]?COMBOS[Rj.mmnc].name:''} (${fu}·${lu}, +CCW)`:''}`,c:(wk[0]||[])[1]});}   /* MRE; SMLS */
+    else h+=`<div class="sc ${cl}"><div class="sc-l">R_${NN[j]}</div><div class="sc-v">${nodeR[j].v.toFixed(3)}</div><div class="sc-u">${fu}↑</div></div>`,dI.push({n:`R<sub>${NN[j]}</sub>`,v:`${nodeR[j].v.toFixed(3)} ${fu}↑`,st:'na',d:'',c:(wk[0]||[])[1]});});   /* SMLS */
   if(envOn){
     const vm=Math.max(...env.V.mx.map(p=>Math.abs(p.y)),...env.V.mn.map(p=>Math.abs(p.y)));
     const mm=Math.max(...env.M.mx.map(p=>Math.abs(p.y)),...env.M.mn.map(p=>Math.abs(p.y)));
-    h+=`<div class="sc crd"><div class="sc-l">|V| env</div><div class="sc-v">${vm.toFixed(3)}</div><div class="sc-u">${fu}</div></div>`;
-    h+=`<div class="sc cgn"><div class="sc-l">|M| env</div><div class="sc-v">${mm.toFixed(3)}</div><div class="sc-u">${fu}·${lu}${smdMixedEnv()?'<br>mixed service / factored':''}</div></div>`;   /* SMD8 */
+    h+=`<div class="sc crd"><div class="sc-l">|V| env</div><div class="sc-v">${vm.toFixed(3)}</div><div class="sc-u">${fu}</div></div>`;dI.push({n:'|V| env',v:`${vm.toFixed(3)} ${fu}`,st:'na',d:'',c:(wk[1]||[])[1]});   /* SMLS */
+    h+=`<div class="sc cgn"><div class="sc-l">|M| env</div><div class="sc-v">${mm.toFixed(3)}</div><div class="sc-u">${fu}·${lu}${smdMixedEnv()?'<br>mixed service / factored':''}</div></div>`;dI.push({n:'|M| env',v:`${mm.toFixed(3)} ${fu}·${lu}`,st:'na',d:smdMixedEnv()?'mixed service / factored':'',c:(wk[1]||[])[1]});   /* SMD8; SMLS */
     if(secOn&&Iv>0&&cv>0){const sg=mm*cv/Iv,ok=Fbv<=0||sg<=Fbv;
-      h+=`<div class="sc ${ok?'ctm':'crd'}"><div class="sc-l"><span style="text-transform:none">σ</span> env</div><div class="sc-v">${sg.toFixed(2)}</div><div class="sc-u">${fu}/${lu}²${smdStrAlt(sg)}${Fbv>0?` / ${Fbv} ${ok?'✓':'✗'}`:''}</div></div>`;}   /* SMD8 */
+      h+=`<div class="sc ${ok?'ctm':'crd'}"><div class="sc-l"><span style="text-transform:none">σ</span> env</div><div class="sc-v">${sg.toFixed(2)}</div><div class="sc-u">${fu}/${lu}²${smdStrAlt(sg)}${Fbv>0?` / ${Fbv} ${ok?'✓':'✗'}`:''}</div></div>`;dI.push({n:'σ env',v:`${sg.toFixed(2)} ${fu}/${lu}²`,st:Fbv>0?(ok?'pass':'fail'):'na',d:`${fu}/${lu}²${smdStrAlt(sg)}${Fbv>0?` / ${Fbv} ${ok?'✓':'✗'}`:''}`,c:(wk[1]||[])[1]});}   /* SMD8; SMLS */
     if(deD.length){const dm=Math.max(...deD.map(p=>Math.abs(p.y)));
       let lim='',ok=true;
       if(defLim>0){const gv=deflGov();ok=deflSpans().every(s2=>s2.ok);lim=` / span ${gv.i+1}: L/${defLim}=${gv.allow.toFixed(4)} ${ok?'✓':'✗'}`;}
-      h+=`<div class="sc ${ok?'cam':'crd'}"><div class="sc-l">|<span style="text-transform:none">δ</span>| env</div><div class="sc-v">${dm.toFixed(4)}</div><div class="sc-u">${lu}${lim}</div></div>`;}
+      h+=`<div class="sc ${ok?'cam':'crd'}"><div class="sc-l">|<span style="text-transform:none">δ</span>| env</div><div class="sc-v">${dm.toFixed(4)}</div><div class="sc-u">${lu}${lim}</div></div>`;dI.push({n:'|δ| env',v:`${dm.toFixed(4)} ${lu}`,st:defLim>0?(ok?'pass':'fail'):'na',d:lim?lim.replace(/^ \/ /,''):'',c:(wk[1]||[])[1]});}   /* SMLS */
   } else {
     const mv=shD.length?Math.max(...shD.map(p=>Math.abs(p.y))):0;
     const mm=moD.length?Math.max(...moD.map(p=>Math.abs(p.y))):0;
-    h+=`<div class="sc crd"><div class="sc-l">|V| max</div><div class="sc-v">${mv.toFixed(3)}</div><div class="sc-u">${fu}</div></div>`;
-    h+=`<div class="sc cgn"><div class="sc-l">|M| max</div><div class="sc-v">${mm.toFixed(3)}</div><div class="sc-u">${fu}·${lu}</div></div>`;
+    h+=`<div class="sc crd"><div class="sc-l">|V| max</div><div class="sc-v">${mv.toFixed(3)}</div><div class="sc-u">${fu}</div></div>`;dI.push({n:'|V| max',v:`${mv.toFixed(3)} ${fu}`,st:'na',d:'',c:(wk[1]||[])[1]});   /* SMLS */
+    h+=`<div class="sc cgn"><div class="sc-l">|M| max</div><div class="sc-v">${mm.toFixed(3)}</div><div class="sc-u">${fu}·${lu}</div></div>`;dI.push({n:'|M| max',v:`${mm.toFixed(3)} ${fu}·${lu}`,st:'na',d:'',c:(wk[1]||[])[1]});   /* SMLS */
     if(secOn&&Iv>0&&cv>0){const sg=mm*cv/Iv,ok=Fbv<=0||sg<=Fbv;
-      h+=`<div class="sc ${ok?'ctm':'crd'}"><div class="sc-l"><span style="text-transform:none">σ</span> max</div><div class="sc-v">${sg.toFixed(2)}</div><div class="sc-u">${fu}/${lu}²${smdStrAlt(sg)}${Fbv>0?` / ${Fbv} ${ok?'✓':'✗'}`:''}</div></div>`;}   /* SMD8 */
+      h+=`<div class="sc ${ok?'ctm':'crd'}"><div class="sc-l"><span style="text-transform:none">σ</span> max</div><div class="sc-v">${sg.toFixed(2)}</div><div class="sc-u">${fu}/${lu}²${smdStrAlt(sg)}${Fbv>0?` / ${Fbv} ${ok?'✓':'✗'}`:''}</div></div>`;dI.push({n:'σ max',v:`${sg.toFixed(2)} ${fu}/${lu}²`,st:Fbv>0?(ok?'pass':'fail'):'na',d:`${fu}/${lu}²${smdStrAlt(sg)}${Fbv>0?` / ${Fbv} ${ok?'✓':'✗'}`:''}`,c:(wk[2]||[])[1]});}   /* SMD8; SMLS */
     if(deD.length){const dm=Math.max(...deD.map(p=>Math.abs(p.y)));
       let lim='',ok=true;
       if(defLim>0){const gv=deflGov();ok=deflSpans().every(s2=>s2.ok);lim=` / span ${gv.i+1}: L/${defLim}=${gv.allow.toFixed(4)} ${ok?'✓':'✗'}`;}
-      h+=`<div class="sc ${ok?'cam':'crd'}"><div class="sc-l"><span style="text-transform:none">δ</span> max</div><div class="sc-v">${dm.toFixed(4)}</div><div class="sc-u">${lu}${lim}<br>${curName().replace(/[<>&]/g,'')}</div></div>`;}   /* SMDL: the analysed combination; SMD8: δ not upper-cased */
+      h+=`<div class="sc ${ok?'cam':'crd'}"><div class="sc-l"><span style="text-transform:none">δ</span> max</div><div class="sc-v">${dm.toFixed(4)}</div><div class="sc-u">${lu}${lim}<br>${curName().replace(/[<>&]/g,'')}</div></div>`;dI.push({n:'δ max',v:`${dm.toFixed(4)} ${lu}`,st:defLim>0?(ok?'pass':'fail'):'na',d:(lim?lim.replace(/^ \/ /,'')+'<br>':'')+curName().replace(/[<>&]/g,''),c:(wk[2]||[])[1]});}   /* SMLS */   /* SMDL: the analysed combination; SMD8: δ not upper-cased */
   }
   h+=smdWorkedIn();   /* D11 links */
   g('statsRow').innerHTML=h;
+  smdDashRender(dI);   /* SMLS */
   if(envOn){g('pkV').textContent='envelope';g('pkM').textContent='envelope';if(g('pkD'))g('pkD').textContent=deD.length?`|δ|max:${Math.max(...deD.map(p=>Math.abs(p.y))).toFixed(4)} ${lu} (envelope)`:'';}
   else{
     if(shD.length){const sv=shD.length>1?shD.slice(0,-1):shD,mx=Math.max(...sv.map(p=>p.y)),mn=Math.min(...sv.map(p=>p.y));g('pkV').textContent=   /* ZSR: the closing value after the last reaction is not a shear peak */`Max:${mx.toFixed(2)} Min:${mn.toFixed(2)} ${fu}`;}

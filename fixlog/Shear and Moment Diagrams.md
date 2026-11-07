@@ -1850,3 +1850,54 @@ Review of 2026-11-07, LOW findings. L7 (closed-form FER) is a separate PR. Every
 - **Open items (pending the engineer; not changed by this series):**
   - **O3:** the cantilever deflection limit uses l = the overhang length. The IBC 2018 Table 1604.3 footnote (l = 2 × the cantilever length) would be less conservative.
   - **O9:** the Report has no Project No. / Computed by / Checked by fields.
+
+## 2026-11-07 — PR: claude/sm-left-summary (PR #1130: https://github.com/mlococo88/All-Structural/pull/1130) (SMLS: the result cards in a left summary column from 1200 px, as Retaining Wall / Spread Footing / Light Pole)   [display only; no result change]
+
+### SMLS. Results summary column on the left at 1200 px and wider   [display only]
+- **Request (engineer, 2026-11-07):** the summary / result cards should move into a left summary panel, as in Retaining Wall Designer (RWDL #959, RWLB #984), Spread Footing (SFLB #988) and Light Pole and Sign Post (LPLB #991).
+- **What changed (screen only):**
+  - At **1200 px and wider** a new left column `#smdDashCol` (left of the inputs sidebar; **240 px** from 1200 to 1499 px, **280 px** from 1500 px, as SFLB / RWLB / LPLB) holds the "Results summary": one line per result card of `updStats` — R_A, R_B, … (or R max / min in the envelope), |V| max / env, |M| max / env, σ max / env, δ max / |δ| env — styled as the other tools' chips (RWDL / SFDC: 1 px border in the status colour on a tinted background, bold name): expand button, name, value with unit, status. Status: σ and δ **OK / NG** where the allowable σ or the deflection limit is set; an envelope reaction with uplift **UPLIFT** (amber); other values no status. Head: « button, title, count badges ("n NG", "n uplift", or "no NG" where a σ / δ limit passes), and the analysed combination ("Combination: …" or "Envelope (all enabled combos …)", `curName()`).
+  - The expand button (▸ / ▾) shows the card's other lines (the governing combinations of the envelope reactions and M_R, σ in ksi and the limit, the deflection limit and span, the combination) and "→ Engineering Calculations · <card>". NG and UPLIFT lines start expanded, as in the other tools.
+  - **Click a line (or Enter / Space):** opens the Engineering Calculations card that works the value (`smdGoto`, the D11 "Worked in" targets of `smdWkCards`: Support Reactions / Critical Points / Section Analysis, or the two envelope cards), scrolls it to the top of the output column and flashes it (CLAUDE.md §6). From the Report view the Analysis view opens first.
+  - With the column open, the result cards and the "Worked in" line above Applied Loads are hidden (the column has them); the warnings in `#statsRow` (load input adjusted, section properties, load cases not combined, live load patterns, missing combinations, unstable structure) **stay above the loads**. An unstable structure / input error shows "No results: … See the message above the loads." in the column.
+  - « shrinks the column to a 42 px strip (vertical title and the count badges); the result cards then show above the loads again. » opens it. The diagrams are redrawn when the output column changes width (collapse, or crossing 1200 px).
+  - **Below 1200 px nothing changes** (cards above Applied Loads; tablet and phone layouts as before). Print / PDF prints the Report, which is unchanged (the column is `noprint` and hidden in print).
+- **Where (`Shear and Moment Diagrams.html`):**
+  - CSS: after `@media print{#smdViewTabs{display:none!important}}`, the block starting `/* SMLS (2026-11-07, engineer: the summary cards in a left summary panel` (rules `#smdDashCol{display:none}`, `@media screen and (min-width:1200px){ body.smdDashWide #smdDashCol{display:block;flex:0 0 280px;width:280px;…}` … `}` and `@media screen and (min-width:1200px) and (max-width:1499.98px){ body.smdDashWide #smdDashCol{flex-basis:240px;width:240px} … }`). The rules that hide the cards there:
+```css
+ body.smdDashWide:not(.smdDashColl) #statsRow>.sc,body.smdDashWide:not(.smdDashColl) #statsRow>.wkLink{display:none}
+ body.smdDashWide:not(.smdDashColl) #statsRow:not(:has(>:not(.sc):not(.wkLink))){display:none}
+```
+  - HTML: before `<div class="layout">\n <div class="sb">` → after: the `<div class="layout">` line, then
+```html
+ <aside id="smdDashCol" class="noprint" aria-label="Results summary"><!-- SMLS (2026-11-07): the result cards as a left column on screens 1200 px and wider -->
+  <div id="smdDashHead"><button type="button" id="smdDashTgl" aria-controls="smdDash" aria-expanded="true">&laquo;</button><h2 id="smdDashTtl">Results summary</h2><span id="smdDashCnt"></span></div>
+  <div id="smdDashSub"></div>
+  <div id="smdDash"></div>
+ </aside>
+```
+  - JS, after the `a.wkA[data-card]` click handler (anchor `/* SMRX: the #repView report (whose links were skipped here) is retired */`): new block `/* SMLS … */` with `const SMDD={key:'smd_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1200px)'):null,…}`, `smdDashRender(items,msg)`, `smdDashPlace()`, `smdDashColl(v,save,redraw)` and a start-up IIFE (as `lppDashPlace` / `lppDashColl`, LPDC).
+  - JS, `updStats()`:
+    - before `  let h='';` → after `  let h='';const dI=[],wk=smdWkCards();   /* SMLS … */`;
+    - after each card's `h+=…` an item is pushed from the **same expressions** as the card, e.g. after `<div class="sc-v">${mv.toFixed(3)}</div><div class="sc-u">${fu}</div></div>`;` → `dI.push({n:'|V| max',v:`${mv.toFixed(3)} ${fu}`,st:'na',d:'',c:(wk[1]||[])[1]});   /* SMLS */` (likewise R / R max / min with `st:up?'warn':'na',s:up?'UPLIFT':''`, |V| env, |M| max / env, σ with `st:Fbv>0?(ok?'pass':'fail'):'na'`, δ with `st:defLim>0?(ok?'pass':'fail'):'na'`);
+    - after `  g('statsRow').innerHTML=h;` → added `  smdDashRender(dI);   /* SMLS */`;
+    - the two unstable / input-error early returns call `smdDashRender(null,'No results: …')` before `return`.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). The column shows values `updStats` already computes for the cards, with the same rounding.
+- **Saved data (§5):** no key or format changed. New per-browser UI key **`smd_dashCollapsed_v1`** ('1' = column shrunk; absent or '0' = open), tool-prefixed; it is written only when « / » is clicked and is not in the project, the autosave or the export (as `sfd_dashCollapsed_v1`, `lpp_dashCollapsed_v1`).
+- **Decisions (pending engineer review):**
+  1. Breakpoints and widths as RWLB / SFLB / LPLB: column from 1200 px, 240 px to 1499 px, 280 px from 1500 px (SF's width; RW and LP use 292 px there).
+  2. The warnings stay in the output column above the loads (as Spread Footing keeps its warnings out of the dashboard): they are long and some carry buttons. The column names them only for an unstable structure / input error.
+  3. Shrinking the column (« → 42 px strip) puts the result cards back above the loads, so the results are never hidden (in SF / LP / RW the strip hides the list).
+  4. Values with no limit (reactions, |V|, |M|, σ / δ without a limit) show no status word (LP shows "INFO"); an envelope reaction with uplift shows UPLIFT in amber (not a failure; the card showed it in red text).
+  5. The column lists what the cards list; no new values (e.g. +M and −M separately are not added: they are in the diagram peak labels and the Engineering Calculations cards).
+  6. Phone (≤ 860 px) and tablet are unchanged: the inputs sidebar first, then the output column with the result cards at its top, as before this change (no "results first / Show inputs" reordering as in Retaining Wall: that would be a separate layout change).
+- **Check case (default units kip / ft, section on: E 4176000 kip/ft², I 0.02 ft⁴, c 0.5 ft):**
+  - Single span 30 ft pin–roller, DL 3 kip/ft uniform, Unfactored, allowable σ 1000 kip/ft², L/360: column lines R_A 45.000 kip↑, R_B 45.000 kip↑, |V| max 45.000 kip, |M| max 337.500 kip·ft (= 3·30²/8), σ max 8437.50 kip/ft² **NG** (= 337.5·0.5/0.02; 58.594 ksi / 1000 ✗), δ max 0.3788 ft **NG** (L/360 = 0.0833 ✗); badge "2 NG" — the same numbers as the cards on main.
+  - Envelope, spans 20 / 25 / 8 ft, nodes fixed–roller–roller–free, DL 1.5 + LL 2 kip/ft all spans, WL −30 kip at 4 ft on span 3, σ_allow 3000: R_A 43.252, R_B 123.114, R_C 98.634 kip **UPLIFT** (min −9.669, 0.9DL+1.0WL), |V| env 66.366 kip, |M| env 256.641 kip·ft, σ env 6416.02 kip/ft² **NG**, |δ| env 0.1387 ft **NG** (span 3: L/360 = 0.0222); badges "2 NG", "1 uplift".
+- **How verified:**
+  - origin/main vs branch, headless Chromium at **1920, 1280 and 1024 px**, four projects (default; the envelope case above; the single-span case above; an unstable roller–free beam): `nodeR`, `shD`, `moD`, `deD`, `env` (R, M, V), `gatherProject()`, `#statsRow` `textContent` (hidden cards included), the tabular results, the Engineering Calculations text, the Report text (Report view) and every localStorage key and value (autosave time stamp masked) **identical**; 0 console errors.
+  - Layout at 1920, 1440, 1280, 1024, 390 px (main and branch): no sideways page scroll; at ≥ 1200 px the column (280 / 240 / 240 px) ends at or left of the inputs sidebar, the sidebar at or left of the output column, the Applied Loads card inside the output column (nothing overlaps), the cards hidden there; at 1024 and 390 px no column and the 7 cards above the loads as on main.
+  - Click |V| env at 1280 px: the "Envelope Results — All Combinations" card at the top of the output column and flashed; click R_A from the Report view: the Analysis view opens and scrolls to "Support Reactions — Envelope Max / Min". « → 42 px strip, cards back above the loads, `smd_dashCollapsed_v1` = '1'; resizing 1280 → 1024 → 1440 turns the column off and on (240 px) and redraws the diagrams.
+  - Screenshots before / after at 1920, 1440, 1280, 1024, 390 px (and the collapsed strip and a clicked line at 1280) looked at.
+  - Tests: `tests/check-syntax.mjs`; `tests/smd-verify.mjs` (ALL PASS; its `#statsRow` warning checks still read the warnings, which stay there); `tests/smoke/phone-layout.mjs --tool smd` (390 / 768); `tests/smoke/project-library.mjs --tool smd`.
+- **Other copies:** none (the pattern follows LPDC / SFDC; no shared code).
