@@ -1471,3 +1471,18 @@ Basis: ASCE/SEI 7-16 Fig. 29.3-1 (Cases A, B, C; Case C table and the (1.8 − s
 - **Decision (pending engineer review):** reported as a pattern (full p_s / 0.5 p_s, without the p_m minimum and without the rain-on-snow surcharge) for the member analysis; not carried into the combinations or the `buildingLoads` hand-off (HANDOFF §4.7 `S` stays the balanced load).
 - **Check cases:** Melrose default: p_s = 28.00 psf, half 14.00 psf. Variant B (gable 4:12): p_s = 45.44, half 22.72 psf; gable exemption noted (θ = 18.43° ≥ 2.38°).
 - **How verified:** headless Chromium main vs branch, 20 cases: `R` identical except the new `snow.partial`; hand-off identical; rendered text of all tabs and the Report: only the new panel, the text above and the Report section numbering after Snow (9.7 → 9.8 for Design Snow Summary); 0 console / KaTeX errors; Excel built. `check-syntax`; `project-library --tool asce7` against main differs only by `R.snow.partial` (intended), and with `--a HEAD` (same calculation) passes; `phone-layout --tool asce7`; `engine handoffs`.
+## 2026-11-07 — PR: fix/report-plaintext-tex (PR #1138: https://github.com/mlococo88/All-Structural/pull/1138) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
+### Where
+- `a7xInline` (plain text of a KaTeX node in the Report harvest). Anchor text: `legacy` next to the call below.
+- Before: `{ const t=a7xTeX(n); s+=rich?"$"+a7xLite(t)+"$":SharedSteps.toText(a7xLite(t)); return; }`
+- After: `{ const t=a7xTeX(n); s+=rich?"$"+a7xLite(t)+"$":SharedSteps.toText(a7xLite(t),{legacy:true}); return; }`
+### Problem
+- shared/steps.js `toText` (and so `SharedReport.text`) now writes TeX outside the notation subset as readable text (TXP, `fixlog/shared-steps.md`).
+  This tool uses that plain text internally (to decide what to copy into its Report, or as a label / note / sheet text); `{ legacy: true }`
+  keeps that text exactly as before, so the Report, the labels and the sheets stay as they were.
+### Governing provision
+- None (display only; no computed value changes).
+### Check case
+- Default project, origin/main vs this branch, headless: the Report's rendered text (`.rp-doc` textContent) and the page text are identical.
+### How verified
+- `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`; the headless comparison listed in the PR.

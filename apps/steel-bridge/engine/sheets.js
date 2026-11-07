@@ -41,7 +41,7 @@
   const ED = 'AASHTO LRFD 10TH ED.';
   const supName = (k, n) => k === 0 ? 'ABUT. 1' : k === n - 1 ? 'ABUT. 2' : `PIER ${k}`;
   /* TeX of a check title as plain text (SharedSteps.toText; $ removed) */
-  const plain = s => { const S = window.SharedSteps, t = S && S.toText ? String(s || '').replace(/\$([^$]*)\$/g, (m, q) => S.toText(q)) : String(s || ''); return t.replace(/\$/g, ''); };
+  const plain = s => { const S = window.SharedSteps, t = S && S.toText ? String(s || '').replace(/\$([^$]*)\$/g, (m, q) => S.toText(q, { legacy: true })) : String(s || ''); return t.replace(/\$/g, ''); };
 
   /* ---------- results the sheets read (the same functions as the tabs) ---------- */
   /* results(P, G): per plate girder used by a girder line (G.girders[i].pg): { B (report/data.js compute: an, spl, fat, cn, shear, flex,

@@ -221,3 +221,12 @@ Loaded by: `apps/steel-bridge/index.html` (Report tab, `ui/report.js`). Tests: `
   - Every text cell of the origin/main report is found in the branch PDF, apart from time stamps and paragraphs broken across pages.
   - Ctrl+P with every section collapsed gives the same pages as the button (134, 144), and the sections stay collapsed.
   - BSL pp. 67–68 and Stone Arch pp. 15 and 43 were checked by eye.
+
+## 2026-11-07 — PR: fix/report-plaintext-tex (PR #1138: https://github.com/mlococo88/All-Structural/pull/1138) — `text(doc, opt)`: readable equation notation (TXP; display only)
+- `text(doc)` → `text(doc, o)`; `rich(doc, s, html)` → `rich(doc, s, html, o)`; `noteOf(doc, it, t, html)` → `noteOf(doc, it, t, html, o)`;
+  in `rich`: `ST().toText(p.slice(1, -1))` → `ST().toText(p.slice(1, -1), o)`; in `text`: `ST().line(st, false)` → `ST().line(st, false, o)`,
+  `ST().summary(t, false)` → `SM(t)` (`SM = t => ST().summary(t, false, o)`). The HTML path is unchanged.
+- `text()` now gets SharedSteps' readable plain text (TXP, `fixlog/shared-steps.md`): e.g. Spread Footing "W_f = 30.00 mathrmkips" →
+  "W_f = 30.00 kips". `text(doc, { legacy: true })`: exactly as before (used by the tools that compare it with their tabs).
+- Verified: `node tests/engine/run.mjs` (steps-totext: a model through `text()` with and without `legacy`); headless comparison of every
+  consumer (PR).

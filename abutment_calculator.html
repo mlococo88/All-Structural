@@ -9440,7 +9440,7 @@ function abxInline(e,rich){
   e.childNodes.forEach(n=>{
     if(n.nodeType===3){ s+=n.textContent.replace(/\$/g,""); return; }
     if(n.nodeType!==1||n.matches(ABX_SKIP)) return;
-    if(n.matches(".ktx")){ const t=n.dataset.tex||n.textContent; s+=rich?"$"+abxLite(t)+"$":SharedSteps.toText(abxLite(t)); return; }
+    if(n.matches(".ktx")){ const t=n.dataset.tex||n.textContent; s+=rich?"$"+abxLite(t)+"$":SharedSteps.toText(abxLite(t),{legacy:true}); return; }
     if(n.matches(".xlink[data-jump]")){ s+=rich?"\u0001"+n.dataset.jump+"\u0001"+(n.classList.contains("wk")?"w":n.dataset.rpt?"r":"t")+"\u0001"+(n.dataset.txt||"")+"\u0001"+abxInline(n,false).replace(/[\u0001\u0002]/g,"")+"\u0002":abxInline(n,false); return; }
     if(n.tagName==="SELECT"){ const o=n.options[n.selectedIndex]; s+=o?o.textContent:""; return; }
     if(n.tagName==="SUB"){ const t=abxInline(n,false); s+=rich?"$_{"+abxLite(t).replace(/[{}]/g,"")+"}$":"_"+t; return; }

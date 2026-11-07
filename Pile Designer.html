@@ -16410,7 +16410,7 @@ function pdrExtras(root, M, imgs) {
 function pdrRest(root, M, grpOf, capBox) {
   const numsOf = t => (String(t).replace(/\u2212/g, "-").replace(/(\d),(?=\d{3})/g, "$1").match(/-?\d+(?:\.\d+)?/g) || []);
   const nrm = x => String(x).toLowerCase().replace(/[^a-z0-9]+/g, "");
-  let txt = ""; try { txt = SharedReport.text(SharedReport.build(M)); } catch (e) { txt = JSON.stringify(M); }
+  let txt = ""; try { txt = SharedReport.text(SharedReport.build(M), { legacy: true }); } catch (e) { txt = JSON.stringify(M); }
   const have = new Set(numsOf(txt)), all = nrm(txt);
   const fresh = t => { const ss = String(t).split(/(?<=[.;:])\s+/).map(nrm).filter(x => x.length > 15); return ss.length ? ss.some(x => !all.includes(x)) : false; };
   const put = (g, it, title) => { const s = M.sections.find(x => x.grp === g) || M.sections.find(x => x.grp) || M.sections[0]; if (!s) return;

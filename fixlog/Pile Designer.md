@@ -20151,3 +20151,19 @@ Cross-tool PR with the Retaining Wall Designer (Phase 8f, HANDOFF.md §4.6 / §4
   - `tests/smoke/retwall-pile-handoff.mjs`: all passed.
   - `check-syntax` for the three tools: pass. 0 console errors.
 - **Saved data:** no key or format change on the sender. The receivers' records keep their format (the imported values are smaller).
+
+## 2026-11-07 — PR: fix/report-plaintext-tex (PR #1138: https://github.com/mlococo88/All-Structural/pull/1138) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
+### Where
+- `pdrRest` (the hidden PrintReport harvest: which tables / notes are added to the Report). Anchor text: `legacy` next to the call below.
+- Before: `let txt = ""; try { txt = SharedReport.text(SharedReport.build(M)); } catch (e) { txt = JSON.stringify(M); }`
+- After: `let txt = ""; try { txt = SharedReport.text(SharedReport.build(M), { legacy: true }); } catch (e) { txt = JSON.stringify(M); }`
+### Problem
+- shared/steps.js `toText` (and so `SharedReport.text`) now writes TeX outside the notation subset as readable text (TXP, `fixlog/shared-steps.md`).
+  This tool uses that plain text internally (to decide what to copy into its Report); `{ legacy: true }` keeps that text exactly as
+  before, so the Report stays as it was.
+### Governing provision
+- None (display only; no computed value changes).
+### Check case
+- Default project, origin/main vs this branch, headless: the Report's rendered text (`.rp-doc` textContent) and the page text are identical.
+### How verified
+- `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`; the headless comparison listed in the PR.

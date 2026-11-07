@@ -3292,3 +3292,19 @@ From the code-compliance review of 2026-11-07 (LOW findings L3 to L7).
 - **Governing provision / check case:** none (no formula, factor, value or citation in the tool changed).
 - **How verified:** `node tests/check-syntax.mjs` passes; no tool HTML file changed (`git diff --stat`: `ENGINEER_CHECKS.md`, `tools.html`, this log).
 - **Saved data:** no change.
+
+## 2026-11-07 — PR: fix/report-plaintext-tex (PR #1138: https://github.com/mlococo88/All-Structural/pull/1138) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
+### Where
+- the worked-equation step labels of the shared Report (`$…$` in a label as text). Anchor text: `legacy` next to the call below.
+- Before: `id(lab), label: (lab.replace(/\$[^$]*\$/g, m => SharedSteps.toText(m.slice(1, -1))) || 'Equation') + (lines.length > 1 ? ` (${k + 1} of ${lines.length})` : ''), sym: tx, eq: '', sub: '', value: null, unit: '', ref: k ? '' : ref })`
+- After: `id(lab), label: (lab.replace(/\$[^$]*\$/g, m => SharedSteps.toText(m.slice(1, -1), { legacy: true })) || 'Equation') + (lines.length > 1 ? ` (${k + 1} of ${lines.length})` : ''), sym: tx, eq: '', sub: '', value: null, unit: '', re`
+### Problem
+- shared/steps.js `toText` (and so `SharedReport.text`) now writes TeX outside the notation subset as readable text (TXP, `fixlog/shared-steps.md`).
+  This tool uses that plain text internally (to decide what to copy into its Report, or as a label / note / sheet text); `{ legacy: true }`
+  keeps that text exactly as before, so the Report, the labels and the sheets stay as they were.
+### Governing provision
+- None (display only; no computed value changes).
+### Check case
+- Default project, origin/main vs this branch, headless: the Report's rendered text (`.rp-doc` textContent) and the page text are identical.
+### How verified
+- `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`; the headless comparison listed in the PR.

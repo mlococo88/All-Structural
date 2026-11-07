@@ -5279,3 +5279,24 @@ Frame: Beam Capacity (`suite-frame-capacity`). Open item of CBM3 (#1001), review
 - **Check:** `aasDeepSkin` (AASHTO 16 × 48 in, cover 2 in, #4 stirrups, 4 #10, skin #4 @ 8 in): d_ℓ = 44.865 in, zone d_ℓ/2 = 22.43 in → bars at 8 and 16 in above the tension layer (y from the top 36.87 and 28.87 in), x = ±(8 − 2 − 0.5 − 0.25) = ±5.25 in: 2 per face. `aciDeepSkin` (ACI, skin #4 @ 10 in): zone h/2 − (h − d) = 24 − 3.135 = 20.87 in → 10 and 20 in: 2 per face. DXF structure check passes; screenshots of the Visuals section and the DXF sheet 1 preview looked at.
 - **How verified:** headless main vs branch, all probe cases: every computed result identical. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
 - **Saved data:** no change.
+
+## 2026-11-07 — PR: fix/report-plaintext-tex (PR #1138: https://github.com/mlococo88/All-Structural/pull/1138) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
+### Where
+- `rxRest` and the CBRF move (which tab content is added to the combined Report). Anchor text: `legacy` next to the call below.
+- Before: `var txt=''; try{ txt=SharedReport.text(SharedReport.build(M)); }catch(e){ return; }`
+- After: `var txt=''; try{ txt=SharedReport.text(SharedReport.build(M),{legacy:true}); }catch(e){ return; }`
+- Before: `var txt=''; try{ txt=SharedReport.text(SharedReport.build({title:M.title,sections:M.sections.map(function(s){ return {title:s.title,note:s.note,subs:(s.subs||[]).filter(function(q){ return !q`
+-   (end of that call): `filter(function(q){ return !q._rx; })}; })})); }catch(e){ return; }`
+- After: `var txt=''; try{ txt=SharedReport.text(SharedReport.build({title:M.title,sections:M.sections.map(function(s){ return {title:s.title,note:s.note,subs:(s.subs||[]).filter(function(q){ return !q`
+-   (end of that call): `filter(function(q){ return !q._rx; })}; })}),{legacy:true}); }catch(e){ return; }`
+### Problem
+- shared/steps.js `toText` (and so `SharedReport.text`) now writes TeX outside the notation subset as readable text (TXP, `fixlog/shared-steps.md`).
+  This tool uses that plain text internally (to decide what to copy into its Report); `{ legacy: true }` keeps that text exactly as
+  before, so the Report stays as it was (without it, the default project's Report lost the copied "1. Elastic Section Properties"
+  equation line, because "\dfrac{3}{8}" is now "3/8" in the text and its numbers no longer counted as new).
+### Governing provision
+- None (display only; no computed value changes).
+### Check case
+- Default project, origin/main vs this branch, headless: the Report's rendered text (`.rp-doc` textContent) and the page text are identical.
+### How verified
+- `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`; the headless comparison listed in the PR.

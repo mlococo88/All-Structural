@@ -7354,7 +7354,7 @@ const spxNums = t => (String(t).replace(/\{,\}/g, ',').replace(/[−–]/g, '-')
 const spxNrm = x => String(x).toLowerCase().replace(/[^a-z0-9]+/g, '');
 function spxRest(model, sel) {
   const secs = model.sections;
-  let txt = ''; try { txt = SharedReport.text(SharedReport.build(model)); } catch (e) { return; }
+  let txt = ''; try { txt = SharedReport.text(SharedReport.build(model), { legacy: true }); } catch (e) { return; }
   const have = new Set(); let all = spxNrm(txt);
   const addNum = x => { have.add(x); const v = parseFloat(x), d = (x.split('.')[1] || '').length; for (let i = 0; i < d; i++) have.add(String(parseFloat(v.toFixed(i)))); };
   spxNums(txt).forEach(addNum);

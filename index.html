@@ -20036,7 +20036,7 @@ function ixxDoc(html){ try{ return new DOMParser().parseFromString(html,'text/ht
 /* the Report model (idxrModel) + one section per retired report, before "Notes and references" */
 function ixxApply(M,c){
   const secs=M.sections; let rep='';
-  try{ rep=SharedReport.text(SharedReport.build(M)); }catch(e){ return M; }
+  try{ rep=SharedReport.text(SharedReport.build(M),{legacy:true}); }catch(e){ return M; }
   const have=new Set(); let all=ixxNrm(rep);
   const addNum=x=>{ have.add(x); const v=parseFloat(x), d=(x.split('.')[1]||'').length; for(let i=0;i<d;i++) have.add(String(parseFloat(v.toFixed(i)))); };
   ixxNums(rep).forEach(addNum);

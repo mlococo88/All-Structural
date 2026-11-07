@@ -4528,7 +4528,7 @@ function sfxResults(tab){
 }
 function sfxApply(model){
  const secs=model.sections;
- let txt='';try{txt=SharedReport.text(SharedReport.build(model));}catch(e){return model;}
+ let txt='';try{txt=SharedReport.text(SharedReport.build(model),{legacy:true});}catch(e){return model;}
  const have=new Set();let all=sfxNrm(txt);const rep0=all;   /* the Report's own text */
  const addNum=x=>{have.add(x);const v=parseFloat(x),d=(x.split('.')[1]||'').length;for(let i=0;i<d;i++)have.add(String(parseFloat(v.toFixed(i))));};
  sfxNums(txt).forEach(addNum);
@@ -4696,7 +4696,7 @@ function sfrfTarget(ti,c){
 function sfrfMove(ap,secs){
  if(!ap.subs.length)return [];
  /* the report's own text (everything but the copies): numbers (with the roundings sfxApply accepts) and normalised text */
- let txt='';try{txt=SharedReport.text(SharedReport.build({sections:secs}));}catch(e){return [];}
+ let txt='';try{txt=SharedReport.text(SharedReport.build({sections:secs}),{legacy:true});}catch(e){return [];}
  const have=new Set(),all=sfxNrm(txt);
  sfxNums(txt).forEach(x=>{have.add(x);const v=parseFloat(x),d=(x.split('.')[1]||'').length;for(let i=0;i<d;i++)have.add(String(parseFloat(v.toFixed(i))));});
  const cellT=c=>(c&&typeof c==='object')?String(c.t==null?'':c.t):String(c==null?'':c);

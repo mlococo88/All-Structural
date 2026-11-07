@@ -63,7 +63,24 @@
     lt: '<', gt: '>', ne: '≠', pm: '±', minus: '−', prime: '′', infty: '∞', to: '→', approx: '≈', ldots: '…', max: 'max', min: 'min',
     ell: 'ℓ', tan: 'tan', circ: '°' };   // ell, tan, circ: added 2026-10-29 (the engines' \ell, \tan θ, 30^{\circ}); before, the words "ell", "tan", "circ"
   const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  function render(src, html) {
+  /* TXP (2026-11-07): the plain-text path only (toText, render(…, false)): the TeX the tools write beyond the subset above
+     (\mathrm{kips}, \tfrac, \qquad, \varphi, \checkmark, \begin{cases}, …) as readable text instead of the command names
+     ("mathrmkips", "tfrac", "qquad"). The HTML path (toHTML without KaTeX, the report's inline notation) is unchanged. Display only. */
+  const TSYM = { varphi: 'φ', vartheta: 'θ', varepsilon: 'ε', varrho: 'ρ', varsigma: 'σ', kappa: 'κ', nu: 'ν', xi: 'ξ', zeta: 'ζ', iota: 'ι',
+    upsilon: 'υ', Gamma: 'Γ', Theta: 'Θ', Lambda: 'Λ', Xi: 'Ξ', Pi: 'Π', Phi: 'Φ', Psi: 'Ψ', Omega: 'Ω', Upsilon: 'Υ',
+    leq: '≤', geq: '≥', leqslant: '≤', geqslant: '≥', neq: '≠', mp: '∓', div: '÷', ast: '*', star: '*', bullet: '•', checkmark: '✓',
+    Rightarrow: '⇒', rightarrow: '→', Leftarrow: '⇐', leftarrow: '←', Leftrightarrow: '⇔', leftrightarrow: '↔', implies: '⇒', iff: '⇔',
+    uparrow: '↑', downarrow: '↓', Uparrow: '⇑', Downarrow: '⇓', mapsto: '↦', perp: '⊥', parallel: '∥', sim: '~', simeq: '≃', cong: '≅',
+    equiv: '≡', propto: '∝', in: '∈', notin: '∉', subset: '⊂', cup: '∪', cap: '∩', forall: '∀', exists: '∃', partial: '∂', nabla: '∇',
+    int: '∫', iint: '∬', oint: '∮', prod: 'Π', cdots: '⋯', dots: '…', dotsb: '⋯', dotsc: '…', vdots: '⋮', angle: '∠', deg: '°',
+    lfloor: '⌊', rfloor: '⌋', lceil: '⌈', rceil: '⌉', langle: '⟨', rangle: '⟩', vert: '|', Vert: '‖', mid: '|', lvert: '|', rvert: '|',
+    lbrack: '[', rbrack: ']', lbrace: '{', rbrace: '}', backslash: '\\', '|': '‖', colon: ':', ll: '≪', gg: '≫', triangle: '△', square: '□', degree: '°' };
+  const TFRAC = /^(dfrac|tfrac|cfrac)$/;
+  const TWRAP = /^(mathrm|mathbf|mathit|mathsf|mathtt|mathnormal|mathcal|mathbb|mathscr|textrm|textbf|textit|textsf|texttt|textup|textnormal|emph|operatorname|boldsymbol|bm|boxed|mathrel|mathbin|mathop|mathord|mathopen|mathclose|mathpunct|overbrace|underbrace|underline|hbox|mbox|fbox)$/;
+  const TDROP = /^(displaystyle|textstyle|scriptstyle|scriptscriptstyle|limits|nolimits|relax|big|Big|bigg|Bigg|bigl|bigr|Bigl|Bigr|biggl|biggr|Biggl|Biggr|middle|nonumber|notag|centering|small|tiny|large|Large|normalsize|footnotesize)$/;
+  const TOPS = /^(sin|cos|cot|sec|csc|arcsin|arccos|arctan|sinh|cosh|tanh|coth|log|ln|lg|exp|lim|det|arg|sgn)$/;
+  const TACC = { hat: '\u0302', widehat: '\u0302', tilde: '\u0303', widetilde: '\u0303', vec: '\u20D7', dot: '\u0307', ddot: '\u0308', overline: '\u0304', check: '\u030C', breve: '\u0306', acute: '\u0301', grave: '\u0300' };
+  function render(src, html, rd) {   // rd (TXP): plain text, readable (toText default); false: the plain text as before TXP (opt.legacy)
     let i = 0;
     const group = () => {   // the next {…} group or single character / command
       while (src[i] === ' ') i++;
@@ -74,14 +91,41 @@
     };
     const atom = s => /^[\p{L}\p{N}_.′\u0304]*$/u.test(s.replace(/<[^>]+>/g, ''));
     let out = '';
+    /* TXP: one command of the plain-text path (true: handled); the subset's own commands fall through to the shared code below */
+    const txt = cmd => {
+      if (TFRAC.test(cmd)) { const a = render(group(), false, true), b = render(group(), false, true); out += `${atom(a) ? a : '(' + a + ')'}/${atom(b) ? b : '(' + b + ')'}`; return true; }
+      if (TWRAP.test(cmd)) { out += render(group(), false, true); return true; }
+      if (TDROP.test(cmd)) { while (src[i] === ' ') i++; return true; }
+      if (cmd === 'textcolor' || cmd === 'colorbox') { group(); out += render(group(), false, true); return true; }
+      if (cmd === 'color' || cmd === 'phantom' || cmd === 'hphantom' || cmd === 'vphantom' || cmd === 'label') { group(); return true; }
+      if (cmd === 'stackrel' || cmd === 'overset' || cmd === 'underset') { group(); out += render(group(), false, true); return true; }
+      if (cmd === 'quad') { out += ' '; return true; }
+      if (cmd === 'qquad') { out += '  '; return true; }
+      if (cmd === '!' || cmd === 'negthinspace' || cmd === 'allowbreak') return true;
+      if (cmd === ':' || cmd === '>' || cmd === 'thinspace' || cmd === 'medspace' || cmd === 'thickspace' || cmd === 'enspace') { out += ' '; return true; }
+      if (/^(kern|mkern|hskip|mskip|hspace|vspace)$/.test(cmd)) { const m = /^\s*(\{[^}]*\}|-?[\d.]+\s*[a-z]{2})/.exec(src.slice(i)); if (m) i += m[0].length; return true; }
+      if (cmd === '\\') { out += '; '; return true; }   // a line break (cases, aligned)
+      if (cmd === '&' || cmd === '#' || cmd === '$') { out += cmd; return true; }
+      if (cmd === 'begin') { const env = group(); if (/^cases/.test(env)) out += '{ '; else if (/^[a-z]*matrix/.test(env) || env === 'array') { if (env === 'array') group(); out += '['; } return true; }
+      if (cmd === 'end') { const env = group(); if (/^[a-z]*matrix/.test(env) || env === 'array') out += ']'; return true; }
+      if (cmd === 'left' || cmd === 'right') { if (src[i] === '.') i++; return true; }   // \left. / \right. (no bracket): nothing; any other bracket follows as is
+      if (cmd === 'sqrt' && src[i] === '[') { const j = src.indexOf(']', i); const n = render(src.slice(i + 1, j), false, true); i = j + 1; out += n + '√(' + render(group(), false, true) + ')'; return true; }
+      if (cmd === 'tag') { out += ' (' + render(group(), false, true) + ')'; return true; }
+      if (TACC[cmd] != null) { const a = render(group(), false, true); out += [...a].length === 1 ? (a + TACC[cmd]).normalize('NFC') : cmd.replace(/^wide/, '') + '(' + a + ')'; return true; }
+      if (cmd === 'not') { const a = render(group(), false, true); out += a === '=' ? '≠' : a + '\u0338'; return true; }
+      if (TOPS.test(cmd)) { out += (/[\p{L}\p{N})]$/u.test(out) ? ' ' : '') + cmd; if (/^[A-Za-z\\{]/.test(src.slice(i))) out += ' '; return true; }   // \cos\theta -> 'cos θ' (as \tan)
+      if (TSYM[cmd] != null) { out += TSYM[cmd]; return true; }
+      return false;
+    };
     while (i < src.length) {
       const c = src[i];
       if (c === '\\') {
         const m = /^\\([A-Za-z]+|.)/.exec(src.slice(i)); i += m[0].length; const cmd = m[1];
-        if (cmd === 'frac') { const a = render(group(), html), b = render(group(), html);
+        if (!html && rd && txt(cmd)) continue;   // TXP: plain text only
+        if (cmd === 'frac') { const a = render(group(), html, rd), b = render(group(), html, rd);
           out += html ? `<span class="st-frac"><span class="st-num">${a}</span><span class="st-den">${b}</span></span>` : `${atom(a) ? a : '(' + a + ')'}/${atom(b) ? b : '(' + b + ')'}`; }
-        else if (cmd === 'bar') { const a = render(group(), html); out += html ? `<span class="st-bar">${a}</span>` : a.length === 1 ? (a + '\u0304').normalize('NFC') : 'bar(' + a + ')'; }   // HTML: an overline (CSS .st-bar), whatever the font has
-        else if (cmd === 'sqrt') { const a = render(group(), html); out += '√' + (html ? `<span class="st-bar">${a}</span>` : '(' + a + ')'); }
+        else if (cmd === 'bar') { const a = render(group(), html, rd); out += html ? `<span class="st-bar">${a}</span>` : a.length === 1 ? (a + '\u0304').normalize('NFC') : 'bar(' + a + ')'; }   // HTML: an overline (CSS .st-bar), whatever the font has
+        else if (cmd === 'sqrt') { const a = render(group(), html, rd); out += '√' + (html ? `<span class="st-bar">${a}</span>` : '(' + a + ')'); }
         else if (cmd === 'text') { const a = group(); out += html ? esc(a) : a; }
         else if (cmd === ',' || cmd === ' ' || cmd === ';') out += html ? '&thinsp;' : ' ';
         else if (cmd === '{' || cmd === '}' || cmd === '%' || cmd === '_') out += cmd;
@@ -89,10 +133,12 @@
         else if (cmd === 'tan') { out += SYM.tan; if (/^[A-Za-z\\{]/.test(src.slice(i))) out += html ? '&thinsp;' : ' '; }   // \tan\theta -> 'tan θ' (as KaTeX spaces an operator)
         else out += SYM[cmd] != null ? SYM[cmd] : cmd;
       } else if (c === '_' || c === '^') {
-        i++; const a = render(group(), html);
+        i++; const a = render(group(), html, rd);
         if (c === '^' && a === '°') { out += '°'; continue; }   // 30^{\circ} -> '30°' (a degree sign, not a raised '°')
         out += html ? (c === '_' ? `<sub>${a}</sub>` : `<sup>${a}</sup>`) : (c === '_' ? '_' : '^') + (a.length > 1 ? '(' + a + ')' : a);
-      } else if (c === '{' ) { out += render(group(), html); }
+      } else if (c === '{' ) { out += render(group(), html, rd); }
+      else if (c === '&' && !html && rd) { out += ' '; i++; }   // TXP: an alignment tab (cases, aligned) in plain text
+      else if (c === '~' && !html && rd) { out += ' '; i++; }   // TXP: a non-breaking space in plain text
       else { out += html ? esc(c) : c; i++; }
     }
     return out;
@@ -106,13 +152,15 @@
      renderer shows units as typed, so this is used for KaTeX only. */
   const unitTeX = u => String(u == null ? '' : u).replace(/[A-Za-z][A-Za-z\-\/. ]*/g, (m, at, all) => at > 0 && all[at - 1] === '\\' ? m : `\\text{${m}}`);
   const toHTML = s => { const t = String(s == null ? '' : s), K = kx(); return K && t ? K.renderToString(t, KATEX_OPT) : render(t, true); };
-  const toText = s => render(String(s == null ? '' : s), false);
+  /* toText(s, opt): plain text. opt.legacy (TXP, 2026-11-07): the output as before TXP (commands outside the subset by name), for the
+     tools that compare a report's text with their tabs' text to decide what to copy into the report (so that choice stays as it was) */
+  const toText = (s, o) => render(String(s == null ? '' : s), false, !(o && o.legacy));
   /* line(step, html): the one-line rendering  sym = eq = sub = value unit
      With KaTeX, sym, eq and sub are set in display style (full-size fractions) and a numeric value with its unit is set by
      KaTeX too (same digits as fmt), so the whole line is in one typeface; a string value stays as it is. */
-  function line(s, html) {
+  function line(s, html, o) {   // o: toText's options (plain text only)
     const K = html ? kx() : null, D = t => K.renderToString('\\displaystyle ' + t, KATEX_OPT);
-    const R = K ? D : html ? toHTML : toText, parts = [];
+    const R = K ? D : html ? toHTML : t => toText(t, o), parts = [];
     if (s.sym) parts.push(R(s.sym));
     if (s.eq) parts.push(R(s.eq));
     if (s.sub && s.sub !== s.eq) parts.push(R(s.sub));
@@ -156,9 +204,9 @@
     });
   }
   /* summary: inline notation (not display style), so the line stays one line high */
-  function summary(t, html) {
+  function summary(t, html, o) {   // o: toText's options (plain text only)
     const s = t.res; if (!s) return '';
-    const R = html ? toHTML : toText, lab = html ? esc(s.label) : s.label, sym = s.sym ? R(s.sym) : '';
+    const R = html ? toHTML : x => toText(x, o), lab = html ? esc(s.label) : s.label, sym = s.sym ? R(s.sym) : '';
     if (isRatio(s)) return `${lab}${sym ? ': ' + sym : ''}`;
     const v = typeof s.value === 'number' ? R(fmt(s.value, s.d) + (s.unit ? (html ? '\\;' : ' ') + (html ? unitTeX(s.unit) : s.unit) : '')) : s.value == null ? '' : html ? esc(String(s.value)) : String(s.value);
     return `${lab}${v ? ': ' + (sym && typeof s.value === 'number' ? sym + ' = ' : '') + v : ''}`;

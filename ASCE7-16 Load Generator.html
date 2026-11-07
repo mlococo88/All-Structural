@@ -4895,7 +4895,7 @@ function a7xInline(e,rich){
   e.childNodes.forEach(n=>{
     if(n.nodeType===3){ s+=n.textContent.replace(/\$/g,""); return; }
     if(n.nodeType!==1||n.matches(A7X_SKIP)) return;
-    if(n.matches(".ke,.katex,.kx")){ const t=a7xTeX(n); s+=rich?"$"+a7xLite(t)+"$":SharedSteps.toText(a7xLite(t)); return; }
+    if(n.matches(".ke,.katex,.kx")){ const t=a7xTeX(n); s+=rich?"$"+a7xLite(t)+"$":SharedSteps.toText(a7xLite(t),{legacy:true}); return; }
     if(n.matches("a.wkA")){ const m=/a7Goto\('([^']*)'/.exec(n.getAttribute("onclick")||""), lab=n.textContent.replace(/^→\s*/,"");
       s+=rich?"\u0001"+(n.dataset.wk||"")+"\u0001"+(m?m[1]:"")+"\u0001"+lab+"\u0002":lab; return; }
     if(n.tagName==="SUB"){ const t=a7xInline(n,false); s+=rich?"$_{"+a7xLite(t).replace(/[{}]/g,"")+"}$":"_"+t; return; }

@@ -9848,7 +9848,7 @@ function sbrStep(eb,id){
     if(m){value=parseFloat(m[1]);d=(m[1].split('.')[1]||'').length;ok=value<=1.0;}
   }
   const eq=!window.katex?lines.map(sbrLite).join(' ; '):lines.length>1?'\\begin{gathered}'+lines.join(' \\\\ ')+'\\end{gathered}':(lines[0]||'');   /* SBRX: the built-in renderer has no gathered */
-  const s={id,label:title||'Worked equation',sym:'',eq,sub:'',value,unit:unit.replace(/\u00B2/g,'^{2}').replace(/\u00B3/g,'^{3}').replace(/\u2074/g,'^{4}').replace(/\u00B7/g,'-'),d,ref:r?sbrRef(r.textContent):'',note:vars.length?('where '+vars.join('; ').replace(/\$([^$]+)\$/g,(m,t)=>SharedSteps.toText(t))).replace(/\u00A7(?=[A-Za-z])/g,'\u00A7\u2060'):''};   /* a code section "§G2.1" is not a step reference (shared/report.js reads "§<id>" in notes) */
+  const s={id,label:title||'Worked equation',sym:'',eq,sub:'',value,unit:unit.replace(/\u00B2/g,'^{2}').replace(/\u00B3/g,'^{3}').replace(/\u2074/g,'^{4}').replace(/\u00B7/g,'-'),d,ref:r?sbrRef(r.textContent):'',note:vars.length?('where '+vars.join('; ').replace(/\$([^$]+)\$/g,(m,t)=>SharedSteps.toText(t,{legacy:true}))).replace(/\u00A7(?=[A-Za-z])/g,'\u00A7\u2060'):''};   /* a code section "§G2.1" is not a step reference (shared/report.js reads "§<id>" in notes) */
   if(ok!==undefined)s.ok=ok;
   return s;
 }

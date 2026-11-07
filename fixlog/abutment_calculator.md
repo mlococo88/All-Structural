@@ -16462,3 +16462,18 @@ index ead16a0..e48ecac 100644
 @@ -10869,0 +10876 @@ document.addEventListener("DOMContentLoaded",init);
 +        if(d.model==="fixed"&&String((S.seismic||{}).fixSeg||"")!=="yes") lk.push(one("seismic.fixSeg","yes","Longitudinally fixed bearings at this abutment — keeps the 3.10.9.2 segment rule for the seismic connection force"));   // Z1S
 ```
+## 2026-11-07 — PR: fix/report-plaintext-tex (PR #1138: https://github.com/mlococo88/All-Structural/pull/1138) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
+### Where
+- `abxInline` (plain text of a KaTeX node in the Report harvest). Anchor text: `legacy` next to the call below.
+- Before: `.tex||n.textContent; s+=rich?"$"+abxLite(t)+"$":SharedSteps.toText(abxLite(t)); return; }`
+- After: `.tex||n.textContent; s+=rich?"$"+abxLite(t)+"$":SharedSteps.toText(abxLite(t),{legacy:true}); return; }`
+### Problem
+- shared/steps.js `toText` (and so `SharedReport.text`) now writes TeX outside the notation subset as readable text (TXP, `fixlog/shared-steps.md`).
+  This tool uses that plain text internally (to decide what to copy into its Report, or as a label / note / sheet text); `{ legacy: true }`
+  keeps that text exactly as before, so the Report, the labels and the sheets stay as they were.
+### Governing provision
+- None (display only; no computed value changes).
+### Check case
+- Default project, origin/main vs this branch, headless: the Report's rendered text (`.rp-doc` textContent) and the page text are identical.
+### How verified
+- `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`; the headless comparison listed in the PR.
