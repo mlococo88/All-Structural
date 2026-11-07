@@ -4855,3 +4855,164 @@ function buildDrawingsTab(pg){
 - **How verified:** main vs branch per tab (#capacity / #asd / #dev, read in the frame): every localStorage key (3), page text (10,629 / 3,329 / 12,377 chars), Export JSON (1,423 / 1,026 / 851 chars) and the printed text (print media, 5,436 / 2,050 / 6,664 chars) identical (clock times normalised); 0 console errors; header at 1280 / 1400 / 1920 / 390 px (390: no sideways scroll), screenshots looked at. `node tests/check-syntax.mjs "Concrete Beam Capacity.html"` (the three srcdoc pages decoded and checked), `project-library.mjs --tool cbc`, `--tool asd`, `--tool rebar`, `github-sync-tools.mjs --tool cbc,asd,rebar`, `home-projects.mjs --tool cbc,asd,rebar`, `rebar-redirect.mjs`, `phone-layout.mjs --tool cbc,aci`: pass. Line endings: 9 CRLF lines added, no other line changed (CRLF count main 10,675 → branch 10,684; LF-only lines 4 → 4).
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
+
+## 2026-11-07 — PR: claude/cbc-aci-comp-lap-fy, PR #969: https://github.com/mlococo88/All-Structural/pull/969 (CBH2: ACI compression lap splice for f_y > 80,000 psi is the longer of (0.0009f_y − 24)d_b and l_st, per 25.5.5.1(c); CALCULATION CHANGE, Development & Splice tab, ACI mode, f_y > 80 ksi only; less conservative before)
+
+Frame: Development & Splice (`suite-frame-dev`, srcdoc of `Concrete Beam Capacity.html`; decoded/encoded with a byte-exact srcdoc helper, CRLF kept). Found in the in-depth review of 2026-11-07 (item H2).
+
+### CBH2. Compression lap splice, f_y > 80,000 psi   [CALCULATION CHANGE]
+- **Governing provision (checked in the rendered PDF, printed p. 492):** ACI 318-19 25.5.5.1. (a) f_y ≤ 60,000 psi and (b) 60,000 < f_y ≤ 80,000 psi are as coded. (c) f_y > 80,000 psi: l_sc is the longer of (0.0009f_y − 24)d_b and l_st calculated per 25.5.2.1. The one-third increase for f′c < 3000 psi follows the three cases. The 2022 errata were not found to change 25.5.5.1. AASHTO 5.10.8.4.5a (10th Ed.) has no such case and is unchanged.
+- **Where:** `calcCompSplice()`, anchor `function calcCompSplice(inp,f){`, ACI branch.
+  - Before:
+    ```js
+    function calcCompSplice(inp,f){
+      let lsc_calc;
+      ...
+      } else {
+        if(inp.fy<=60000) lsc_calc = 0.0005*inp.fy*f.db;
+        else lsc_calc = (0.0009*inp.fy-24)*f.db;
+        if(inp.fc<3000) lsc_calc *= (4/3);
+      }
+      const lsc = Math.max(lsc_calc, 12);
+      return {lsc_calc, lsc, lowFc: inp.fc<3000};
+    ```
+  - After:
+    ```js
+    function calcCompSplice(inp,f){
+      let lsc_calc, hiFy = null;
+      ...
+      } else {
+        if(inp.fy<=60000) lsc_calc = 0.0005*inp.fy*f.db;
+        else lsc_calc = (0.0009*inp.fy-24)*f.db;
+        // CBH2: ... (comment)
+        if(inp.fy>80000){
+          const e = classAEligible(inp,f);
+          const cls = (inp.tensClass==="A" && e.known && e.eligible) ? "A" : "B";
+          const inpC = Object.assign({},inp,{tensClass:cls});
+          const ts = calcTensSplice(inpC,f,calcTension(inp,f));
+          hiFy = {term:lsc_calc, lst:ts.lst, ldBase:ts.ldBase, factor:ts.factor, cls, gov: ts.lst>lsc_calc?"lst":"term"};
+          lsc_calc = Math.max(lsc_calc, ts.lst);
+        }
+        if(inp.fc<3000) lsc_calc *= (4/3);
+      }
+      const lsc = Math.max(lsc_calc, 12);
+      return {lsc_calc, lsc, lowFc: inp.fc<3000, hiFy};
+    ```
+  - l_st is the tool's own `calcTensSplice` value: factor (1.0 Class A, 1.3 Class B) × l_d without the excess-reinforcement factor, 12 in minimum.
+  - Everything that shows l_sc follows: the Comp. Splice tab, the Checks panel row, the Bar Schedule (each bar size), the Report steps and table, and the Summary row.
+- **Decisions (pending engineer review):**
+  1. Class of l_st: Class B (1.3 l_d) unless Class A is selected in Splices and shown eligible (A_s,prov ≥ 2A_s,req entered and ≤ 50 % spliced). With Class A selected but not shown eligible, Class B is used (conservative).
+  2. f′c < 3000 psi: the one-third increase is applied to the longer of the two terms (the increase is written after (a)–(c) and applies to l_sc). This is the conservative reading.
+- **Display:**
+  - Comp. Splice tab (ACI): a commentary line for f_y > 80,000 psi ("This applies to your input" when it does); the first equation block ends at (0.0009f_y − 24)d_b = value; a new block "f_y > 80,000 psi: longer of the above and l_st (Class …)", §25.5.5.1(c), §25.5.2.1, worked as max[term, max(factor × l_d, 12) = l_st], with a "Worked in: l_d … → Tension Splice · Base Development Length" link.
+  - Report (`rbrCSplice`): for f_y > 80,000 psi the step l_sc,calc is replaced by three steps: `lscterm` (the expression), `lscst` (l_st with the class, note "see §ldBase", which links to the Tension lap splice section) and `lsccalc` (the longer, ×4/3 when f′c < 3000 psi). The cs steps topic got `see:'ts'` so the note resolves to the tension splice's step.
+- **Check case:** ACI, #8 bar (d_b 1.000 in), f′c 4000 psi, f_y 100,000 psi, c_b + K_tr limited ratio 1.5, ψ_t = ψ_e = ψ_s = 1.0, ψ_g = 1.3 (Grade 100), normalweight, Class B selected.
+
+  | Quantity | Before | After | Hand check |
+  |---|---|---|---|
+  | (0.0009f_y − 24)d_b | 66.00 in | 66.00 in | (90 − 24) × 1.000 = 66.0 |
+  | l_d (splice base) | — | 102.77 in | 3/40 × 100000/(1.0 × 63.25) × 1.3/1.5 × 1.000 = 102.77 |
+  | l_st (Class B) | — | 133.61 in | 1.3 × 102.77 = 133.61 |
+  | **l_sc** | **66.00 in** | **133.61 in** | max(66.0, 133.61) |
+
+  Other cases (in the page):
+  - Class A selected without A_s,req/A_s,prov entered: 133.61 in (Class B used).
+  - Class A selected and eligible (A_s,req 0.5, A_s,prov 1.0 in², 50 % spliced): 102.77 in.
+  - f′c 2500 psi, Class B: before 66.0 × 4/3 = 88.0 in; after l_d 130.0, l_st 169.0, l_sc 169.0 × 4/3 = 225.3 in.
+  - #6, f′c 6000, f_y 100 ksi: term 49.5 in governs over l_st 49.09 in, so l_sc unchanged at 49.5 in.
+  - f_y 80,000 psi (case (b)) and every f_y ≤ 80 ksi: unchanged. AASHTO mode: unchanged.
+- **Conservatism:** before, ACI f_y > 80 ksi laps could be short by up to half (66.0 vs 133.6 in in the check case).
+- **How verified:**
+  - Headless Chromium, origin/main vs branch, review probe cases (Beam Capacity: default, aciD, aasT, aasMinNeg, aciFy100, aciDeep, aa100; Dev: aciDefault, aasLWcomp, aasNWcomp, aasFy100, aciFy80): identical. Moved: only the ACI f_y 100 ksi Dev cases above.
+  - Full dump of all frames and the Report (default project), main vs branch: values identical; differences are only the new commentary line and the topic's `see` key.
+  - The Report step list for the check case was dumped from `rbrModel()`.
+  - `check-syntax` (all), `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass; 0 console errors. Screenshot of the Comp. Splice tab looked at.
+- **Saved data:** no key or format change.
+- **Other copies:** none (the standalone rebar page is a redirect since RBRT).
+- **Open items:** in cases (a)/(b) with f′c < 3000 psi the tool applies ×4/3 before the 12 in floor (max(4/3·calc, 12)), not after; not changed here (raise with the engineer).
+
+## 2026-11-07 — PR: claude/cbc-aashto-ldc-lambda, PR #972: https://github.com/mlococo88/All-Structural/pull/972 (CBH3: AASHTO compression development length divided by λ per Eq. 5.10.8.2.2a-1; CALCULATION CHANGE, Development & Splice tab, AASHTO mode, lightweight concrete only; less conservative before)
+
+Frame: Development & Splice (`suite-frame-dev`). Found in the in-depth review of 2026-11-07 (item H3); it was listed in the tool as an open item.
+
+### CBH3. λ in the AASHTO compression development length   [CALCULATION CHANGE]
+- **Governing provision (checked in the rendered PDF, p. 5-192):** AASHTO LRFD 10th Ed. (2024) Eq. 5.10.8.2.2a-1: the modified compression development length is l_db times λ_er times λ_rc, divided by λ (the concrete density modification factor of 5.4.2.8); l_db from Eqs. 5.10.8.2.2a-2/-3; not less than 8.0 in.
+- **Where:** `calcComp()`, anchor `const ldc_calc = base*f.excess`, AASHTO branch.
+  - Before: `const ldc_calc = base*f.excess;   // excess reinf factor applies` (comment: "The tool applies λer only (λrc = 1.0, λ not applied; open item).")
+  - After: `const ldc_calc = base*f.excess/f.lambda;   // excess reinf factor λer applies; divided by λ` (comment updated, CBH3).
+  - `f.lambda` in AASHTO mode is the entered λ (0.75–1.0) for lightweight concrete and 1.0 for normalweight (`computeFactors`, unchanged). λ_rc stays 1.0 (no reduction for spirals or hoops taken, conservative, unchanged).
+  - The ACI branch is unchanged (λ is already inside 25.4.9.2(a)).
+- **Display:**
+  - `tabCompAASHTO`: the narrative now says λ_er and λ are applied; a λ row was added to the variable table; the "Governing length" block reads l_dc = max[max(l_dc,a, l_dc,b) (× A_s,req/A_s,prov) / λ, 8 in] when λ ≠ 1 (unchanged form for λ = 1).
+  - Report (`rbrComp`): AASHTO "Governing expressions" gets a step `lam` (note "see §lam"); the step `ldccalc` shows "/ λ" in AASHTO mode.
+  - Removed the AASHTO validation notice that said λ was not applied to compression development (anchor "divides the compression development length by λ; this tool does not apply"), and the Hook & Comp. hint now says λ divides the compression development length.
+- **Check case:** AASHTO, #8 (d_b 1.000 in), f_y 60 ksi, f′c 4.0 ksi, lightweight, λ = 0.75, no excess factor.
+
+  | Quantity | Before | After | Hand check |
+  |---|---|---|---|
+  | l_dc,a = 0.63 d_b f_y/√f′c | 18.90 in | 18.90 in | 0.63 × 1.000 × 60/2.000 |
+  | l_dc,b = 0.3 d_b f_y | 18.00 in | 18.00 in | |
+  | **l_dc** | **18.90 in** | **25.20 in** | 18.90/0.75 |
+
+  Also: λ 0.85 with A_s,req/A_s,prov = 0.8: 15.12 → 17.79 in (18.90 × 0.8/0.85). Normalweight (λ = 1.0) and all ACI cases unchanged.
+- **Conservatism:** before, lightweight AASHTO compression development lengths were short by the factor λ (up to 25 %).
+- **How verified:** headless main vs branch with the review probe cases (all Beam Capacity cases and every Dev case except the two lightweight AASHTO ones identical); full dumps of the default project (identical) and the AASHTO excess case (values identical, only the new λ step/row and narrative); screenshot of the Compression l_dc tab looked at; `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
+- **Saved data:** no key or format change.
+- **Open items:** none.
+
+## 2026-11-07 — PR: claude/cbc-aci-asmin-fy80, PR #975: https://github.com/mlococo88/All-Structural/pull/975 (CBH4: ACI A_s,min with f_y limited to 80,000 psi per 9.6.1.2; CALCULATION CHANGE, Beam Capacity tab, ACI mode, f_y > 80 ksi only; less conservative before)
+
+Frame: Beam Capacity (`suite-frame-capacity`). Found in the in-depth review of 2026-11-07 (item H4).
+
+### CBH4. A_s,min, f_y limit   [CALCULATION CHANGE]
+- **Governing provision (checked in the rendered PDF, printed p. 135):** ACI 318-19 9.6.1.2: A_s,min is the larger of (a) 3√f′c/f_y · b_w d and (b) 200/f_y · b_w d, with f_y limited to a maximum of 80,000 psi. No 2022 erratum on 9.6.1.2.
+- **Where:** `detailing()`, anchor `/* minimum flexural steel */`, check `dAsMin`.
+  - Before:
+    ```js
+    const t1=3*rt/(fy*1000)*bw*F.dCent, t2=200/(fy*1000)*bw*F.dCent;
+    ```
+    and the substituted line printed `${fmt(fy*1000,0)}` in both denominators, with an empty note.
+  - After:
+    ```js
+    /* CBH4 (2026-11-07): ACI 318-19 9.6.1.2 limits f_y to 80,000 psi in (a) and (b) */
+    const fyA=Math.min(fy,80);
+    const t1=3*rt/(fyA*1000)*bw*F.dCent, t2=200/(fyA*1000)*bw*F.dCent;
+    ```
+    and the substituted line prints `${fmt(fyA*1000,0)}`, with the note "f_y = … psi is limited to 80,000 psi here (9.6.1.2)." when f_y > 80 ksi.
+  - Follows: the Detailing card, the Summary row, the Report step, and the A_s,req passed to the Development & Splice tab by "From Beam Capacity" (CBAR-1 uses the dAsMin value), which can only grow.
+- **Check case `aciFy100`:** ACI, 12 × 24 in, f′c 4 ksi, f_y 100 ksi, 2 #6 (A_s 0.88 in²), d = 21.125 in.
+  - (a) 3√4000/80,000 · 12 · 21.125 = 0.601 in²; (b) 200/80,000 · 12 · 21.125 = 0.634 in² (governs).
+  - **A_s,min: before 0.507 in² (200/100,000 · 12 · 21.125) → after 0.634 in²**; D/C 0.576 → 0.720 (still passes).
+  - Same with 2 #5 (A_s 0.62 in², d 21.19 in): before 0.509 in², PASS (D/C 0.82) → after 0.636 in², **FAIL** (D/C 1.03).
+  - f_y ≤ 80 ksi (e.g. the same section at f_y 80 ksi) and AASHTO mode: unchanged.
+- **Conservatism:** before, A_s,min was low by the factor 80/f_y for f_y > 80 ksi (20 % at 100 ksi).
+- **How verified:** headless main vs branch, review probe cases: only `aciFy100` and `aciFy100n5` moved (values above), all others (default, aciD, aasT, aasMinNeg, aciDeep, aa100, aciFy80, every Dev case) identical; full dump of the default project identical; `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
+- **Saved data:** no key or format change.
+- **Open items:** none (the flange-in-tension b_w of 9.6.1.2 is M4, a separate change).
+
+## 2026-11-07 — PR: claude/cbc-aci-asmin-flange, PR #979: https://github.com/mlococo88/All-Structural/pull/979 (CBM4: ACI A_s,min of a T-section with the flange in tension uses b_w = min(b_f, 2b_w) for a statically determinate beam, per 9.6.1.2; new input "Beam (for A_s,min, flange in tension)", default statically determinate; CALCULATION CHANGE, Beam Capacity tab, ACI, T-section in negative bending only; less conservative before)
+
+Frame: Beam Capacity (`suite-frame-capacity`). Found in the in-depth review of 2026-11-07 (item M4).
+
+### CBM4. A_s,min with the flange in tension   [CALCULATION CHANGE]
+- **Governing provision (checked in the rendered PDF, printed p. 135):** ACI 318-19 9.6.1.2: for a statically determinate beam with a flange in tension, b_w in (a) and (b) is the smaller of b_f and 2b_w (R9.6.1.2 explains why: cantilevers and other determinate beams cannot redistribute moment). No 2022 erratum.
+- **Where:** `detailing()`, anchor `/* minimum flexural steel */`, check `dAsMin` (after CBH4).
+  - Before: `const t1=3*rt/(fyA*1000)*bw*F.dCent, t2=200/(fyA*1000)*bw*F.dCent;` with `(${fmt(bw)})` in the substituted line.
+  - After:
+    ```js
+    const flgT=(S.sec.type==='tee' && neg), detm=(S.sec.asminSupport!=='indeterminate');
+    const bwA=(flgT && detm) ? Math.min(S.sec.bf,2*bw) : bw;
+    const t1=3*rt/(fyA*1000)*bwA*F.dCent, t2=200/(fyA*1000)*bwA*F.dCent;
+    ```
+    with `(${fmt(bwA)})` in the substituted line, and its note says which b_w is used ("Flange in tension, statically determinate beam: b_w = min(b_f, 2b_w) = min(…) = … in (9.6.1.2)." or "… marked statically indeterminate (continuous): b_w = … in").
+  - The tool places the flange at the top, so "flange in tension" is a T-section under negative M_u (`neg`), as the crack-control check already assumes (`flangeTension`).
+- **New input (Section Geometry, T-beam, ACI mode only):** "Beam (for A_s,min, flange in tension)": "Statically determinate (cantilever, simple span)" / "Statically indeterminate (continuous)", saved as `S.sec.asminSupport` ("determinate" / "indeterminate"), with a hint. Listed in the Inputs table on screen and in the Report inputs.
+- **Decision (pending engineer review):** the default is **statically determinate** (the conservative choice): the reduced b_w is applied whenever the flange is in tension unless the user marks the beam continuous. Saved projects have no such field; `mergeState` fills the default, so a saved ACI T-section in negative bending now gets the larger A_s,min. No migration keeps the old behaviour, because the old result was unconservative for determinate beams; a continuous beam is restored by choosing "indeterminate". Rectangular sections, positive bending and AASHTO mode are unaffected.
+- **Check case `aciTeeCant`:** ACI, T-section b_w 12, h 30, b_f 48, h_f 6 in, f′c 4 ksi, f_y 60 ksi; top 4 #6 (1.76 in², d 27.125 in), bottom 3 #7; S1 M_u = −150 k-ft.
+  - b_w = min(48, 2·12) = 24 in.
+  - (a) 3√4000/60,000 · 24 · 27.125 = 2.059 in²; (b) 200/60,000 · 24 · 27.125 = 2.170 in² (governs).
+  - **A_s,min: before 1.085 in² (b_w 12), PASS (D/C 0.62) → after 2.170 in², FAIL (D/C 1.23).**
+  - Same section marked indeterminate (`aciTeeCont`): 1.085 in², PASS (unchanged). Positive combination S2: 1.083 in², unchanged. AASHTO (`aasTeeNeg`): unchanged.
+- **How verified:** headless main vs branch with the review probe cases plus the three tee cases: only `aciTeeCant` moved; all other cases identical. Full dump of the default project identical. Screenshot of the Section Geometry input and the Detailing card looked at. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar` (save round trip with the new field), `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
+- **Saved data:** one new field `sec.asminSupport` (additive; old saves read with the default, see the decision). No key change.
+- **Open items:** none.
