@@ -1153,7 +1153,13 @@ function tbcRun(m) {
         if (simple) dType[t] = xs.map(x => defl(wu[t], P, x));
         else { const sol = beamG(wu[t], P); dType[t] = xs.map((x, k) => deflG(wu[t], P, sol, Math.min(spanIdx[k], nS - 1), x)); }
     });
-    const Kcr = num(dz.creep) > 0 ? dz.creep : 1.5;
+    // Creep factor (NDS 3.5.2; IBC 2018 Table 1604.3 footnote d): 1.5 seasoned / dry service, 2.0 wet service (TBK1, 2026-11-07).
+    // Blank / 0 = by service condition. With Wet service, an entered 1.5 (the dry default, stored in every saved file) is read as
+    // that default and 2.0 is used, with a note (decision pending engineer review: conservative). Any other entered value is used as entered.
+    const KcrIn = num(dz.creep) > 0 ? dz.creep : 0;
+    const Kcr = wet && (KcrIn === 0 || KcrIn === 1.5) ? 2.0 : (KcrIn || 1.5);
+    if (wet && KcrIn === 1.5) adv.push('Wet service: creep factor K_cr = 2.0 used (NDS 3.5.2, verify against NDS 2018 (not in references); IBC 2018 Table 1604.3 footnote d). The K_cr input holds 1.5, the dry-service default used for wet service too before 2026-11-07; enter another value to override.');
+    if (!wet && cat === 'timber' && KcrIn !== 2.0) adv.push('Timbers (5 in. and thicker) are often surfaced green: if this member is unseasoned (not dry at installation), NDS 3.5.2 gives K_cr = 2.0. Enter 2.0 in the creep factor if so.');
     const maxAbs = (arr) => arr.reduce((mx, v) => Math.max(mx, Math.abs(v)), 0);
     // per span: limits use the span length; a cantilever uses twice its length (IBC Table 1604.3 footnote h)
     const dSpan = Ls.map((Li, i) => {
@@ -1987,7 +1993,7 @@ function buildFactorsPane(P) {
     body.appendChild(el('div', 'hint', 'Negative moment occurs over interior supports, on cantilevers and under net uplift; its compression edge is the bottom edge. An inflection point is not a brace point. Files from the earlier (pre-2026-10-10) version of this tool open with the bottom edge "At supports only" (engineer\'s decision, fix log R2); "Same as top edge" is how that version worked and can still be chosen.'));
   }, { noNum: true });
   mkSec(P, 'inDefl', 'Deflection', body => {
-    fRow(body, 'Creep factor K<sub>cr</sub>', numIn(() => dz.creep, v => { dz.creep = v; }, 'creep'), '', 'Applied to the dead-load deflection (NDS 3.5.2: 1.5 for seasoned lumber in dry service). 0 or blank = 1.5.');
+    fRow(body, 'Creep factor K<sub>cr</sub>', numIn(() => dz.creep, v => { dz.creep = v; }, 'creep'), '', 'Applied to the dead-load deflection (NDS 3.5.2: 1.5 for seasoned lumber, glulam and SCL in dry service; 2.0 for unseasoned lumber or wet service). 0 or blank = by service condition (1.5 dry, 2.0 wet). With Wet service ticked, 1.5 is read as the old default and 2.0 is used; any other value is used as entered.');
     fRow(body, 'Live/snow limit L /', numIn(() => dz.deflLL, v => { dz.deflLL = v; }, 'deflLL'), '');
     fRow(body, 'Total limit L /', numIn(() => dz.deflTL, v => { dz.deflTL = v; }, 'deflTL'), '', 'IBC Table 1604.3 (user-editable). For a cantilever, L = twice the cantilever length (IBC Table 1604.3, footnote h).');
   }, { noNum: true });
@@ -2264,7 +2270,7 @@ function buildSchem(pg) {
       ['Incised', dz.incising ? 'yes' : 'no'], ['Repetitive member', dz.repetitive ? 'yes' : 'no'], ['End notch', (mt.notch || 0) > 0 ? g4(mt.notch) + ' in.' : 'none'], ['Point loads within d of a support (shear)', dz.shearXd ? 'times x/d (NDS 3.4.3.1(b))' : 'full value'],
       ['Lateral support, top edge', dz.latTop === 'Supports' ? `at supports only, l<sub>u</sub> = ${dz.luTop > 0 ? g4(dz.luTop) + ' ft' : 'span length'}` : 'continuous'],
       ['Lateral support, bottom edge', dz.latBot === 'same' ? 'same as top edge (earlier tool versions)' : dz.latBot === 'Supports' ? `at supports only, l<sub>u</sub> = ${dz.luBot > 0 ? g4(dz.luBot) + ' ft' : 'span length'}` : 'continuous'],
-      ['Creep factor K<sub>cr</sub>', g4(dz.creep)], ['Deflection limits', `L/${g4(dz.deflLL)} live/snow, L/${g4(dz.deflTL)} total`], ['Design method', dz.method === 'LRFD' ? `LRFD (NDS 2018 Appendix N; floor live load from ${dz.lrfdLive === 'storage' ? 'storage, λ = 0.7' : 'occupancy, λ = 0.8'})` : 'ASD (NDS 2018)']);
+      ['Creep factor K<sub>cr</sub>', R.ok && dz.moisture === 'Wet' && R.Kcr !== dz.creep ? g4(R.Kcr) + ' used (' + (dz.creep > 0 ? g4(dz.creep) + ' entered; ' : 'blank; ') + 'wet service, NDS 3.5.2)' : g4(dz.creep)], ['Deflection limits', `L/${g4(dz.deflLL)} live/snow, L/${g4(dz.deflTL)} total`], ['Design method', dz.method === 'LRFD' ? `LRFD (NDS 2018 Appendix N; floor live load from ${dz.lrfdLive === 'storage' ? 'storage, λ = 0.7' : 'occupancy, λ = 0.8'})` : 'ASD (NDS 2018)']);
     body.appendChild(tblEl(['Item', 'Value'], rows.map(r => [r[0], { h: r[1] }]).map(r => [{ h: r[0] }, r[1]]), { left: [0, 1] }));
   });
 }
@@ -2614,7 +2620,7 @@ function buildDefl(pg) {
       where: [['L', d.perSpan[d.spanLL].cant ? 'twice the cantilever length (IBC Table 1604.3 footnote h)' : 'span length', f1(d.perSpan[d.spanLL].Lref), 'in.', 'IBC Table 1604.3 ' + VFY]], result: `Live/snow deflection ratio ${f3(d.r_dLL)} (L/${f0(d.perSpan[d.spanLL].Lref / d.Dtr)})` });
     calc(body, { title: 'Total deflection with creep' + (R.nS > 1 ? ' (' + spanLab(d.spanTL) + ')' : ''), ref: 'NDS 3.5.2, Eq. 3.5-1; IBC Table 1604.3', status: stCls(d.r_dTL),
       lines: [T`\Delta_T = K_{cr}\,\Delta_D + \Delta_{LL} = ${g4(d.Kcr)}\,\Delta_D + \Delta(${d.totName}) = ${f3(d.Dtot)}\ \text{in.}`, T`\frac{\Delta_T}{L/${g4(d.TLdiv)}} = \frac{${f3(d.Dtot)}}{${f3(d.TLlim)}} = ${f3(d.r_dTL)}`],
-      where: [['K_{cr}', 'creep factor on the dead-load deflection', g4(d.Kcr), '', 'NDS 3.5.2 (1.5 seasoned, dry) ' + VFY], ['\\Delta_D', 'dead-load deflection (largest, whole beam)', f3(d.dD), 'in.', '']],
+      where: [['K_{cr}', 'creep factor on the dead-load deflection', g4(d.Kcr), '', 'NDS 3.5.2 (1.5 seasoned, dry; 2.0 wet or unseasoned) ' + VFY], ['\\Delta_D', 'dead-load deflection (largest, whole beam)', f3(d.dD), 'in.', '']],
       result: `Total deflection ratio ${f3(d.r_dTL)} (L/${f0(d.perSpan[d.spanTL].Lref / d.Dtot)})` });
     body.appendChild(el('div', 'hint', 'The total check uses K<sub>cr</sub>·Δ<sub>D</sub> + Δ<sub>LL</sub> against the total limit (fix log F10, O7: K<sub>cr</sub> applies to dead load only; no sustained live load).'));
   });
@@ -2836,6 +2842,10 @@ function runBenchmarks() {
       add(g, "x/d ticked: P′ = 1000 × 0.5/0.7708 (lb)", 648.65, kx.Pv[0].mag, 'lb', 1e-5);
       add(g, "x/d ticked: V = 69.94 × 7 + 648.65 × 13.5/14 − 69.94 × 0.7708 (lb)", 1061.17, kx.Vd, 'lb', 1e-5);
       add(g, 'x/d ticked: fv/F′v = (1.5 × 1061.17/13.875)/180', 0.6373, kx.r_v, '', 1e-3); }
+    // 7. TBK1 (2026-11-07): creep factor K_cr = 2.0 in wet service (NDS 3.5.2; IBC 2018 Table 1604.3 footnote d)
+    { const q = p2(m => { m.design.moisture = 'Wet'; }); const g = 'Wet service, default joist (fix log TBK1): DF-L No.2 2x10 @ 16 in., 16 ft, D 15 / L 40 psf, K_cr input 1.5 (old default)';
+      add(g, 'K_cr used (wet service, NDS 3.5.2)', 2.0, q.defl.Kcr, '', 1e-12); add(g, "E' = 1,600,000 × C_M 0.9 (psi)", 1440000, q.E_p, 'psi', 1e-9);
+      add(g, 'Δ_T = 2.0 × 0.2409 + 0.5520 (in.; K_cr 1.5: 0.9134)', 1.0338, q.defl.Dtot, 'in.', 2e-4); add(g, 'Δ_T/(192/240) (K_cr 1.5: 1.142)', 1.2923, q.defl.r_dTL, '', 1e-3); }
   } catch (e) { out.push({ grp: 'error', what: 'Benchmark failed to run: ' + e.message, hand: NaN, tool: NaN, unit: '', diff: NaN, ok: false }); }
   return out;
 }
@@ -3005,7 +3015,7 @@ function tbrModel() {
       ['Incised', dz.incising ? 'yes' : 'no'], ['Repetitive member', dz.repetitive ? 'yes' : 'no'], ['End notch', (mt.notch || 0) > 0 ? g4(mt.notch) + ' in.' : 'none'],
       ['Lateral support, top edge', dz.latTop === 'Supports' ? 'at supports only, l_u = ' + (dz.luTop > 0 ? g4(dz.luTop) + ' ft' : 'span length') : 'continuous'],
       ['Lateral support, bottom edge', dz.latBot === 'same' ? 'same as top edge (earlier tool versions)' : dz.latBot === 'Supports' ? 'at supports only, l_u = ' + (dz.luBot > 0 ? g4(dz.luBot) + ' ft' : 'span length') : 'continuous'],
-      ['Creep factor K_cr', g4(dz.creep)], ['Deflection limits', 'L/' + g4(dz.deflLL) + ' live/snow, L/' + g4(dz.deflTL) + ' total'], ['Design method', dz.method === 'LRFD' ? 'LRFD (NDS 2018 Appendix N; floor live load from ' + (dz.lrfdLive === 'storage' ? 'storage, λ = 0.7' : 'occupancy, λ = 0.8') + ')' : 'ASD (NDS 2018)']);
+      ['Creep factor K_cr', R.ok && dz.moisture === 'Wet' && R.Kcr !== dz.creep ? g4(R.Kcr) + ' used (' + (dz.creep > 0 ? g4(dz.creep) + ' entered; ' : 'blank; ') + 'wet service, NDS 3.5.2)' : g4(dz.creep)], ['Deflection limits', 'L/' + g4(dz.deflLL) + ' live/snow, L/' + g4(dz.deflTL) + ' total'], ['Design method', dz.method === 'LRFD' ? 'LRFD (NDS 2018 Appendix N; floor live load from ' + (dz.lrfdLive === 'storage' ? 'storage, λ = 0.7' : 'occupancy, λ = 0.8') + ')' : 'ASD (NDS 2018)']);
     subs.push({ title: 'Section, material and design settings', items: [{ type: 'table', head: ['Item', 'Value'], rows: mrows }] });
     secs.push({ title: 'Project and inputs', subs });
   }
