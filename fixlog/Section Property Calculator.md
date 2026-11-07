@@ -3379,7 +3379,7 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
   - Headless probe, main vs branch: the only differences are the new torsion warnings on W14X730 and WT7X436.5. All values are identical, including all 1,660 shapes and the default project. 0 console errors.
   - Sweep of all shapes: 155 of 155 shapes with thin-wall J above the table are flagged. The other shapes with J slightly above the table are not W/M/HP/WT/MT: L ≤ +0.4 %, HSS ≤ +1.7 % and pipe ≤ +3.2 %, which come from data rounding and t_des and are documented in the SPH1 table.
 
-## 2026-11-07 — PR: claude/spc-j-n — SPM4: J with modulus ratios is reported as the transformed Σ n·J and labelled (review M4; §4 result change)
+## 2026-11-07 — PR: claude/spc-j-n — SPM4: J with modulus ratios is reported as the transformed Σ n·J and labelled (review M4; §4 result change; PR #1098: https://github.com/mlococo88/All-Structural/pull/1098)
 
 - **Problem (review M4):** J of a section with modulus ratios n ≠ 1 was geometric. The headline showed it next to the transformed A and I, and only a Torsion-tab note said that n is not applied. Example: the FHWA girder with its slab (n = 1/8) showed J = 16,561 in⁴, of which 16,548 is the 102 × 8 slab. The transformed value is about 2,082.
 - **Fix (engine, `torsion()`):** anchor `SPM4 (2026-11-07)`.
