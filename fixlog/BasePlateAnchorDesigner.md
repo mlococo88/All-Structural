@@ -5260,7 +5260,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Other copies:** none.
 - **Open items:** (1) the washer rule for a custom hole (round F436 up to the J3.3 oversized size, plate washer above) is a drawing convention chosen here: engineer to confirm or give another limit; (2) ASTM F436 ODs entered from the standard's dimension table without a copy in /home/user/structural_references (spot-check one size); the DG1 Table 2.3 values are the existing `DG1_HOLE` / `BPHW_WASH` rows (no DG1 copy here either); (3) slotted holes left out (see above); (4) the shear distribution choice ("Front row only" for oversized holes, §4.9) is not tied to the hole type: unchanged, engineer's choice.
 
-## 2026-11-07 — BPH1: concrete breakout in shear, inclined shear checked for each component (PR: claude/bp-h1-shear-edges)
+## 2026-11-07 — BPH1: concrete breakout in shear, inclined shear checked for each component (PR: claude/bp-h1-shear-edges, PR #962: https://github.com/mlococo88/All-Structural/pull/962)
 
 ### BPH1. Inclined shear: every edge that receives a shear component is checked   [calculation change, more conservative; saved data: none]
 - **Problem (review H1, 2026-11-07):** with both V_x and V_y, `shearBreakout()` checked only the edge the resultant points at most directly plus the edges exactly parallel to V. An edge that takes the other component was never checked, so adding a component could LOWER the breakout ratio (1.932 for V_y = 8 alone, 0.905 for V_x = 10 and V_y = 8 together). Unconservative.
