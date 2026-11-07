@@ -25,6 +25,7 @@
      beforeprint listener, so the Report is shown when that listener sets the running header (abrPrintPrep: abutment_calculator.html). -->
 <script>window.addEventListener("beforeprint",()=>{ try{ if(typeof abrPrintPrep==="function") abrPrintPrep(); }catch(e){} });</script>
 <script src="shared/steps.js"></script>
+<script src="shared/pile-group.js"></script>   <!-- 8h (2026-11-07): rigid-cap pile-group statics (pileReaction, C-8 group properties), shared with the Retaining Wall Designer -->
 <script src="shared/report.js"></script>
 <!-- PLIB (2026-11-02): saved-project rename / duplicate, Redo and Ctrl+Z / Ctrl+Y, shared with the other tools -->
 <script src="shared/projects.js"></script>
@@ -1626,11 +1627,9 @@ function activePiles(){ return S.piles.coords.filter(c=>c.active); }
    (x' + toward the heel, M_y + toward the heel; y' and M_x + toward +y). With Σx'y' = 0 (every doubly symmetric layout,
    e.g. a full grid) it is evaluated as before, ΣV/n + M_y·x'/Σx'² + M_x·y'/Σy'², so those results are unchanged to the bit.
    pi = {n, Sxx, Syy, Sxy}. */
-function pileReaction(V,My,Mx,xi,yi,pi){
-  const {n,Sxx,Syy}=pi, Sxy=pi.Sxy||0, D=Sxx*Syy-Sxy*Sxy;
-  if(Math.abs(Sxy)>1e-9*Math.max(1,Sxx+Syy) && D>1e-9) return V/n+((My*Syy-Mx*Sxy)*xi+(Mx*Sxx-My*Sxy)*yi)/D;
-  return V/n + (Sxx>1e-9? My*xi/Sxx:0) + (Syy>1e-9? Mx*yi/Syy:0);
-}
+/* 8h (2026-11-07): the expression now lives once in shared/pile-group.js (SharedPileGroup.reaction: the same expression and operation
+   order as the code it replaces, bit-identical; tests/engine/pile-group.test.mjs). */
+function pileReaction(V,My,Mx,xi,yi,pi){ return SharedPileGroup.reaction(V,My,Mx,xi,yi,pi); }
 
 /* ---------- state migration / resizing of dynamic arrays ---------- */
 function migrate(){
@@ -3731,12 +3730,14 @@ function computeAll(){
     if(n<1){ warnFor("conv","No active piles — activate at least one pile.","err"); }
     else{
       // group centroid (x from footing CL → convert to x-from-toe)
-      const xgc=act.reduce((a,c)=>a+c.x,0)/n;         // from footing CL
-      const ygc=act.reduce((a,c)=>a+c.y,0)/n;         // from abutment CL
+      // 8h (2026-11-07): group properties by shared/pile-group.js (SharedPileGroup.groupProps: the same reductions, bit-identical)
+      const gp=SharedPileGroup.groupProps(act);
+      const xgc=gp.xgc;         // from footing CL
+      const ygc=gp.ygc;         // from abutment CL
       const xgcT=B/2+xgc;
-      const Sxx=act.reduce((a,c)=>a+Math.pow(c.x-xgc,2),0); // Σ(x−xgc)² — longitudinal
-      const Syy=act.reduce((a,c)=>a+Math.pow(c.y-ygc,2),0); // Σ(y−ygc)² — transverse
-      const Sxy=act.reduce((a,c)=>a+(c.x-xgc)*(c.y-ygc),0); // ABPX2: Σ(x−xgc)(y−ygc) — product of inertia (0 for a symmetric layout)
+      const Sxx=gp.Sxx; // Σ(x−xgc)² — longitudinal
+      const Syy=gp.Syy; // Σ(y−ygc)² — transverse
+      const Sxy=gp.Sxy; // ABPX2: Σ(x−xgc)(y−ygc) — product of inertia (0 for a symmetric layout)
       R.pile={n,xgc,ygc,xgcT,Sxx,Syy,Sxy};
       if(Math.abs(xgc)>0.01||Math.abs(ygc)>0.01)
         warnFor("conv",`Pile-group centroid is offset from the footing centroid by Δx = ${fmt(xgc)} ft (long.) and Δy = ${fmt(ygc)} ft (trans.) — verify this is intended; the offset is included in the pile-load computation.`);

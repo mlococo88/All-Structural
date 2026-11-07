@@ -10,17 +10,33 @@ import { test, loadShared, ROOT } from './harness.mjs';
 const G = loadShared('pile-group.js').SharedPileGroup;
 const near = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg}: ${a} vs ${b}`);
 
-// The abutment calculator's pileReaction and its C-8 group-property lines, evaluated as written in the file.
+// The abutment calculator's pileReaction and its C-8 group-property lines AS THEY WERE before 8h (2026-11-07), frozen here verbatim
+// (abutment_calculator.html at main 2c7d4b6, ABPX2): since 8h the abutment calls SharedPileGroup.reaction / groupProps, so these tests
+// prove the shared code equals the abutment's former code bit for bit, and that the file now delegates to it.
 const ABUT = fs.readFileSync(path.join(ROOT, 'abutment_calculator.html'), 'utf8');
+const ABUT_BEFORE_REACTION = `function pileReaction(V,My,Mx,xi,yi,pi){
+  const {n,Sxx,Syy}=pi, Sxy=pi.Sxy||0, D=Sxx*Syy-Sxy*Sxy;
+  if(Math.abs(Sxy)>1e-9*Math.max(1,Sxx+Syy) && D>1e-9) return V/n+((My*Syy-Mx*Sxy)*xi+(Mx*Sxx-My*Sxy)*yi)/D;
+  return V/n + (Sxx>1e-9? My*xi/Sxx:0) + (Syy>1e-9? Mx*yi/Syy:0);
+}`;
+const ABUT_BEFORE_GROUP = `const xgc=act.reduce((a,c)=>a+c.x,0)/n;         // from footing CL
+      const ygc=act.reduce((a,c)=>a+c.y,0)/n;         // from abutment CL
+      const xgcT=B/2+xgc;
+      const Sxx=act.reduce((a,c)=>a+Math.pow(c.x-xgc,2),0); // Σ(x−xgc)² — longitudinal
+      const Syy=act.reduce((a,c)=>a+Math.pow(c.y-ygc,2),0); // Σ(y−ygc)² — transverse
+      const Sxy=act.reduce((a,c)=>a+(c.x-xgc)*(c.y-ygc),0); // ABPX2: Σ(x−xgc)(y−ygc) — product of inertia (0 for a symmetric layout)
+      R.pile={n,xgc,ygc,xgcT,Sxx,Syy,Sxy};`;
 function abutCode() {
-  const f = ABUT.match(/function pileReaction\(V,My,Mx,xi,yi,pi\)\{[\s\S]*?\n\}/);
-  assert.ok(f, 'pileReaction found in abutment_calculator.html');
-  const g = ABUT.match(/const xgc=act\.reduce[\s\S]*?R\.pile=\{n,xgc,ygc,xgcT,Sxx,Syy,Sxy\};/);
-  assert.ok(g, 'C-8 group properties found in abutment_calculator.html');
   const ctx = {}; vm.createContext(ctx);
-  vm.runInContext(f[0] + '\nfunction abutGroup(act,B){ const n=act.length, R={}; ' + g[0] + ' return R.pile; }', ctx);
+  vm.runInContext(ABUT_BEFORE_REACTION + '\nfunction abutGroup(act,B){ const n=act.length, R={}; ' + ABUT_BEFORE_GROUP + ' return R.pile; }', ctx);
   return ctx;
 }
+test('8h: the abutment calculator loads shared/pile-group.js and delegates pileReaction and the C-8 group properties to it', () => {
+  assert.ok(/<script src="shared\/pile-group\.js"><\/script>/.test(ABUT), 'script tag');
+  assert.ok(/function pileReaction\(V,My,Mx,xi,yi,pi\)\{ return SharedPileGroup\.reaction\(V,My,Mx,xi,yi,pi\); \}/.test(ABUT), 'pileReaction delegates');
+  assert.ok(/const gp=SharedPileGroup\.groupProps\(act\);[\s\S]{0,400}R\.pile=\{n,xgc,ygc,xgcT,Sxx,Syy,Sxy\};/.test(ABUT), 'C-8 uses groupProps');
+  assert.ok(!/const Sxy=act\.reduce/.test(ABUT), 'the former reductions are gone (one copy, in shared/)');
+});
 
 test('hand case: 2 rows (toe x = 1.5 ft, heel x = 8.5 ft), s = 6 ft, V = 20 kip/ft at x_R = 4.0 ft', () => {
   const g = G.rowGroup([{ x: 1.5, s: 6 }, { x: 8.5, s: 6 }]);
@@ -59,7 +75,7 @@ test('uplift and one-row cases', () => {
   assert.equal(G.rowGroup([]).ok, false); assert.equal(G.rowGroup([{ x: 1, s: 0 }]).ok, false);
 });
 
-test('reaction() is the abutment calculator pileReaction: bit-identical on 2000 random inputs (Σx\'y\' = 0 and ≠ 0)', () => {
+test('reaction() is the abutment calculator\'s former pileReaction: bit-identical on 2000 random inputs (Σx\'y\' = 0 and ≠ 0)', () => {
   const A = abutCode();
   let seed = 12345; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
   for (let k = 0; k < 2000; k++) {
