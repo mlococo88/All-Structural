@@ -3164,3 +3164,34 @@ index 56a8a3f..13f8372 100644
 - **How verified:** main vs branch on the default project: every localStorage key (1), page text (17036 chars), Export JSON (1352 chars identical; part ids normalised) and the printed report text (print media, 51171 chars) identical (clock times normalised); 0 console errors; chip click → card on screen, no dialog; Ctrl+S / Ctrl+Shift+S → Save as; header at 1280 / 1400 / 1920 / 390 px (390: no sideways scroll), screenshots looked at. `node tests/check-syntax.mjs "Section Property Calculator.html"`; `node tests/smoke/project-library.mjs --tool spc`; `node tests/smoke/github-sync-tools.mjs --tool spc`; `node tests/smoke/home-projects.mjs --tool spc`: pass. Part ids (time-based, new on every load) normalised.
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
+
+## 2026-11-07 — PR: claude/spc-h1-warn — SPH1: warning for sloped-flange shapes (S, C, MC, ST) in the plate model; plate-model table extended to I_y, S_y, Z_y, r_y (review H1, interim; display only, no result change); PR #1070: https://github.com/mlococo88/All-Structural/pull/1070
+
+- **Problem (review H1):** the plate model of S, C, MC and ST shapes (average t_f over the full b_f, no flange slope, no root fillets) overstates the minor-axis properties for **every** shape of these families (I_y +5 to +34 %, S_y up to +34 %, Z_y up to +16 %, r_y up to +14 % over the AISC v16.0 tables). The plate model is the default, the C1 table listed only A, I_x and J, and the shape hint called the difference "a little different". Unconservative for, e.g., column buckling about y of built-up channels.
+- **Fix (display only):**
+  - New `slopedFlangeWarn(R)` (engine, before `analyze()`; anchor `const SLOPED_FAMS = { S: 1, C: 1, MC: 1, ST: 1 };`), called in `analyze()` right after the per-part loop (`if (R.errors.length) return R;` → `slopedFlangeWarn(R);`). For each S, C, MC or ST part it compares the part's own plate-model I_y, r_y and Z_y (its own frame, about its own centroid, so a rotated part gives the same values) with the tabulated I_y, r_y, Z_y, and adds a warning to `R.warnings` (shown in "Check the model", in the Report notes). Parts with "Use AISC tabulated" get a shorter warning: the plastic moduli, Q, the extreme fibres and torsion are still from the plate model (with the plate-model Z_y against the table). No warning when the plate model is not larger than the table.
+  - `buildWarnBox` (anchor `const li = el('li', null, esc(m)`): after escaping, `I_x`, `I_y`, `Z_y`, `r_y`, … are shown with subscripts (`.replace(/\b([IZSr])_([xy])\b/g, '$1<sub>$2</sub>')`). The Report already does this for notes.
+  - AISC comparison hint (Properties tab, single rolled shape): before "…(average t<sub>f</sub> used), so A and I are a little different (HSS: rounded corners are modelled)." → after "…so A and I<sub>x</sub> differ from the table by a few percent (HSS: rounded corners are modelled). **For S, C, MC and ST shapes the minor-axis I<sub>y</sub>, S<sub>y</sub>, Z<sub>y</sub> and r<sub>y</sub> of the plate model are overstated** (up to about +34 %, +34 %, +16 % and +14 % over the v16.0 tables; unconservative)."
+- **Governing basis:** mechanics of materials; AISC Shapes Database v16.0 tabulated I_y, S_y, Z_y, r_y (comparison only). No formula, factor or unit changed.
+- **Check case (default project, C1 = C15X33.9, plate model):** I_y = 9.836 in⁴ vs AISC 8.07 (+21.9 %); r_y = √(9.836 / 9.900) = 0.9968 in vs 0.901 (+10.6 %); Z_y = 6.976 in³ vs 6.19 (+12.7 %). Warning shown: "C1 (C15X33.9): … I_y 9.836 vs AISC 8.07 in⁴ (+21.9 %), r_y 0.9968 vs 0.901 in (+10.6 %), Z_y 6.976 vs 6.19 in³ (+12.7 %) …".
+- **Verified:** `node tests/check-syntax.mjs` passes; headless probe main vs branch over 40 models and all 1,660 shapes: every computed value identical, the only differences are the new warnings (S 28, C 32, MC 40, ST 28 shapes, i.e. all of them; and the default project); Validation tab 121/121; 0 console errors. `project-library --tool spc`: the only differences reported are `warnings.length` 0 → 1 (the new warning on the default project); `dxf-print-sheets --tool spc` all ok.
+
+#### Plate model vs AISC tables, all columns (worst over each family; extends the C1 table; max / min of plate ÷ table − 1)
+
+| Family | A | I_x | I_y | S_y | Z_y | r_y | J |
+|---|---|---|---|---|---|---|---|
+| W | +0.5 / −2.7 % | +0.7 / −4.1 % | +1.4 / −1.3 % | +1.2 / −0.9 % | +0.9 / −1.3 % | +1.4 / −0.2 % | +9.1 (W14X730) / −18.7 % |
+| M | −1.2 / −9.0 % | −1.6 / −9.3 % | +0.7 / −1.0 % | +0.2 / −0.7 % | +0.1 / −2.7 % | +4.6 / +0.5 % | −7.9 / −49.5 % |
+| **S** | −0.0 / −1.9 % | −0.1 / −1.1 % | **+23.6 / +15.3 %** | **+23.5 / +15.4 %** | **+11.2 / +7.1 %** | **+11.9 / +7.5 %** | −14.3 / −26.9 % |
+| HP | −0.8 / −4.5 % | −0.7 / −5.1 % | +0.7 / −1.3 % | +0.6 / −1.0 % | +0.0 / −1.1 % | +2.2 / +0.4 % | −6.3 / −29.8 % |
+| **C** | −0.3 / −1.7 % | +0.2 / −0.8 % | **+26.0 / +18.7 %** | **+31.3 / +23.1 %** | **+16.0 / +9.5 %** | **+12.4 / +9.4 %** | −8.1 / −19.5 % |
+| **MC** | +0.1 / −1.7 % | +0.1 / −1.6 % | **+30.3 / +5.0 %** | **+33.7 / +6.1 %** | **+16.1 / +2.3 %** | **+14.3 / +2.7 %** | −1.2 / −15.8 % |
+| L | +0.4 / −1.6 % | +2.2 / −0.7 % | +2.2 / −0.4 % | — | — | +1.2 / −0.0 % | +0.4 / −13.9 % (I_z +5.7 / −1.1 %) |
+| WT | +0.5 / −2.7 % | +1.2 / −1.7 % | +1.6 / −1.3 % | — | — | +1.5 / −0.3 % | +11.1 (WT7X436.5) / −18.3 % |
+| MT | −1.3 / −4.7 % | −0.0 / −0.9 % | +0.5 / −0.6 % | — | — | +2.4 / +0.4 % | −7.6 / −29.0 % |
+| **ST** | −0.3 / −1.9 % | +3.8 / −0.0 % | **+23.6 / +15.3 %** | — | — | **+12.0 / +7.6 %** | −14.1 / −26.5 % |
+| HSS rect | +0.4 / −0.4 % | +0.4 / −1.0 % | +0.4 / −1.0 % | +0.5 / −0.8 % | +0.5 / −0.4 % | +0.5 / −0.5 % | +0.5 / −0.5 % |
+| HSS round | +0.7 / −0.3 % | +1.9 / −0.3 % | (= I_x) | (= S_x: +1.2 / −0.4 %) | (= Z_x: +1.3 / −0.4 %) | — | +1.7 / −0.3 % |
+| Pipe | +3.4 / −3.3 % | +3.2 / −2.9 % | (= I_x) | (= S_x: +3.4 / −2.5 %) | (= Z_x: +3.2 / −2.8 %) | — | +3.2 / −2.9 % |
+
+Bold: positive (overstated, unconservative) for every shape of the family. ST, WT, MT and L: S_y, Z_y not in the stored data (—); r_y = √(I_y/A) of the table. Values from the production engine (`SPC.analyze`, one part, n = 1) against the stored v16.0 rows, all 1,660 shapes. Also corrects the C1 note "the thin-wall J is lower (conservative …)": J is higher than the table for the heaviest W and WT shapes (W14X730 +9.1 %, WT7X436.5 +11.1 %); see the M3 entry.
