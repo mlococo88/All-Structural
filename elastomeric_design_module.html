@@ -329,10 +329,12 @@ function defaultState(){
       fixedShear:false,      // bearing fixed against shear translation (affects Method A stress & stability form)
       exteriorCheck:false,   // exterior-beam check → uses 5.0 limit regardless
       anchored:false,        // pad anchored / doweled against horizontal movement → anchorage check is informational (design the anchorage for H)
+      dLLmax:0, dLTmax:0,    // M3 (2026-11-07): Method B compressive-deflection limits entered by the engineer (in): instantaneous LL δ_L and long-term DL δ_lt; 0 = report only (no owner value in MassDOT §3.5.7 / CTDOT §9.2.1; C14.7.5.3.6 suggests 0.125 in relative LL deflection across a joint)
       hsMin:0.1196           // M5 (2026-11-07): minimum steel laminate thickness, a pass/fail check: 0.1196 in (11 ga) MassDOT §3.5.7.5 | 0.0747 in AASHTO 14.7.5.3.5; older saves get 0.1196 (migrate)
     },
     // editable code coefficients (EOR confirms against governing edition)
-    coef:{ Da:1.4, DrRect:0.5, DrCirc:0.375, sigCapReinA:1.25, sigCapPlainA:0.80, GmethodA:0.150, DaCirc:1.0, GminA:0.130, GSplainA:1.00, upliftCircA:0.75, GmaxA:0.200, GvarB:0.15 },   // GvarB (H1, 2026-11-07): Method B tolerance on the specified G, ±15 % [14.7.5.2; MassDOT §3.5.7.4]; older saves get 0.15 (migrate)
+    coef:{ Da:1.4, DrRect:0.5, DrCirc:0.375, sigCapReinA:1.25, sigCapPlainA:0.80, GmethodA:0.150, DaCirc:1.0, GminA:0.130, GSplainA:1.00, upliftCircA:0.75, GmaxA:0.200, GvarB:0.15, acr:0.35 },   // acr (M3): creep / initial DL deflection, Table 14.7.6.2-1 (0.25 / 0.35 / 0.45 for 50 / 60 / 70 durometer; 0.160 ksi is 60 durometer)
+      // GvarB (H1, 2026-11-07): Method B tolerance on the specified G, ±15 % [14.7.5.2; MassDOT §3.5.7.4]; older saves get 0.15 (migrate)
     assumptions:"1. Design shear movement Δs is the largest one-way thermal + creep/shrinkage movement from the superstructure, factored ×1.2 [MassDOT §3.5.7.6].\n2. Live load rotation approximated from midspan deflection as θ ≈ 3.2·Δ_LL/L per MassDOT Figs 3.5.7-2..4.\n3. Elastomer cover layers are 0.25 in; tapered internal layers are not used [MassDOT §3.5.7.8].\n4. The same bearing is used for all girders in the line and at both supports; design governs across girders.",
     ui:{ tab:"tab-in", collapse:{} }
   };
@@ -450,6 +452,8 @@ function buildInputs(){
     ${selRow("Combined shear-strain limit","tog.combLimit",[[4.75,"4.75 — MassDOT (first interior) [§3.5.7.6]"],[5.0,"5.0 — AASHTO / exterior check"]])}
     ${selRow("Construction rotation tolerance","tog.rotTol",[[0.03,"0.03 rad — MassDOT [§3.5.7.3]"],[0.005,"0.005 rad — AASHTO"]])}
     ${selRow("Thermal movement factor","tog.thermalFactor",[[1.2,"×1.2 — MassDOT explicit [§3.5.7.6]"],[1.0,"×1.0 — none"]])}
+    ${inpRow("Method B LL compressive deflection limit δ<sub>L</sub> (0 = report only)","tog.dLLmax","in",{title:"Instantaneous live-load compressive deflection limit [14.7.5.3.6]; C14.7.5.3.6 suggests 0.125 in relative LL deflection across a deck joint. 0 = reported, no check."})}
+    ${inpRow("Method B long-term DL deflection limit δ<sub>lt</sub> (0 = report only)","tog.dLTmax","in",{title:"Long-term dead-load compressive deflection δlt = δd(1 + a_cr) limit [14.7.5.3.6]. 0 = reported, no check."})}
     ${selRow("Minimum steel laminate thickness","tog.hsMin",[[0.1196,"0.1196 in (11 ga) — MassDOT [§3.5.7.5]"],[0.0747,"0.0747 in — AASHTO [14.7.5.3.5]"]])}
     <div class="chk-row"><input type="checkbox" data-path="tog.fixedShear"${tg.fixedShear?" checked":""}><label>Bearing fixed against shear translation</label></div>
     <div class="chk-row"><input type="checkbox" data-path="tog.exteriorCheck"${tg.exteriorCheck?" checked":""}><label>Exterior-beam check (forces the 5.0 limit)</label></div>
@@ -461,6 +465,7 @@ function buildInputs(){
     ${inpRow("Axial-strain coeff. D<sub>a</sub> (circ.)","coef.DaCirc","",{title:"1.0 for circular bearings [14.7.5.3.3]"})}
     ${inpRow("Rotation coeff. D<sub>r</sub> (rect.)","coef.DrRect","")}
     ${inpRow("Rotation coeff. D<sub>r</sub> (circ.)","coef.DrCirc","")}
+    ${inpRow("Creep ratio a<sub>cr</sub> (creep / initial DL deflection)","coef.acr","",{title:"Table 14.7.6.2-1: 0.25 (50 durometer), 0.35 (60), 0.45 (70); used in δlt = δd(1 + a_cr) [14.7.5.3.6]"})}
     ${inpRow("Method-B G tolerance ± (fraction of the specified G)","coef.GvarB","",{title:"AASHTO M 251 acceptance ±15 % (0.15); design takes the least favourable G of the range: G(1 − tol) for the axial strains and the stability limit, G(1 + tol) for the shear force H (slip check, H_bu, the pad sent to the Abutment app) and the restraint test [14.7.5.2; MassDOT §3.5.7.4]"})}
     ${inpRow("Method-A stress cap (reinf.)","coef.sigCapReinA","ksi")}
     ${inpRow("Method-A stress cap (plain)","coef.sigCapPlainA","ksi")}
@@ -685,6 +690,12 @@ function computeEDM(loadsOverride){
   if(S.method==="B"&&!isPlain()){ const Ba=1.6, sigS=sigDL+1.75*sigLL, epsA=sigS/(3*Ba*Gmax*Sf*Sf), thSL=thSt+1.75*thLongCyclic, thSW=isCirc()?0:thTransW, thS=Math.max(thSL,thSW), lhs=thS/n, rhs=3*epsA/Sf;
     R.res={Ba,G:Gmax,sigS,epsA,thSL,thSW,thS,lhs,rhs,dc:rhs>0?lhs/rhs:Infinity,anchored:!!tg.anchored}; } else R.res=null;   // H1: G_max (a larger G gives a smaller εa, so a smaller 3εa/Si)
   R.edge=isPlain()?null:{ce:+g.edge,min:0.25,pass:+g.edge>=0.25-1e-9};
+  // M3 (2026-11-07): compressive deflection [14.7.5.3.6, 14.7.6.3.3]: layer strain ε = σ/(4.8·G·S²) (Eq. C14.7.5.3.6-1, linear approximation), G = the low design G
+  // (Method B G_min; Method A / plain GminA); PEP × 3 [C14.7.6.3.3]; δ = Σ ε·h_ri over the internal layers (the cover layers are not counted);
+  // δ_lt = δ_d + a_cr·δ_d [Eq. 14.7.5.3.6-3]. Method A / plain: ε(DL + LL) ≤ 0.09 per layer (δ ≤ 0.09 h_ri) [14.7.6.3.3]; Method B: reported, checked against the limits entered in I-5.
+  { const Gd=mB?Gmin:GminA, f=isPlain()?3:1, k=4.8*Gd*Sf*Sf, eL=f*sigLL/k, eD=f*sigDL/k, eTL=f*sigTL/k, hEl=isPlain()?hri:n*hri, acr=Math.max(0,+cf.acr||0);
+    const dL=eL*hEl, dD=eD*hEl, dLT=dD+acr*dD;
+    R.defl={Gd,f,k,eL,eD,eTL,hEl,dL,dD,acr,dLT,dcA:eTL/0.09,dLLmax:Math.max(0,+tg.dLLmax||0),dLTmax:Math.max(0,+tg.dLTmax||0)}; }
   // H3 (2026-11-07): Method A stability [14.7.6.3.6] limits the TOTAL pad thickness: steel-reinforced h_total = h_rt + (n + 1)·h_s
   // (covers + internal layers + steel laminates; as the FHWA steel design example); plain pad: its thickness t = h_rt (unchanged).
   // Decision (pending engineer review): an internal load plate and the cover above it are not modelled (MassDOT §3.5.7.6 leaves them out).
@@ -698,12 +709,17 @@ function computeEDM(loadsOverride){
   const addRes=()=>{ if(R.res.anchored) dash.push({id:"res",name:"Restraint [14.7.5.4] — anchored/doweled: restraint provided",dc:null,pass:null,ref:"info"});
     else add("res","Restraint θs/n < 3εa/Si [14.7.5.4]",R.res.dc,"θs/n < 3εa/Si"); };
   // edge cover: pass/fail against the 1/4 in. minimum, no D/C (it is a detailing minimum, so it does not enter the governing D/C)
+  const addDeflB=()=>{ const d=R.defl, any=d.dLLmax>0||d.dLTmax>0;   // M3: Method B, a check only against an entered limit
+    if(d.dLLmax>0) add("deflL","LL compressive deflection δ_L ≤ "+fmt(d.dLLmax,3)+" in [14.7.5.3.6]",d.dL/d.dLLmax,"δ_L ≤ limit");
+    if(d.dLTmax>0) add("deflLT","Long-term DL deflection δ_lt ≤ "+fmt(d.dLTmax,3)+" in [14.7.5.3.6]",d.dLT/d.dLTmax,"δ_lt ≤ limit");
+    if(!any) dash.push({id:"deflI",name:"Compressive deflection (report): δ_L = "+fmt(d.dL,3)+", δ_d = "+fmt(d.dD,3)+", δ_lt = "+fmt(d.dLT,3)+" in [14.7.5.3.6]",dc:null,pass:null,ref:"info"}); };
   const addHsMin=id=>dash.push({id,name:"Steel laminate ≥ minimum "+fmt(R.reinf.hsMin,4)+" in"+(R.reinf.minPass?"":" (h_s,min/h_s = "+fmt(R.reinf.minRatio)+")")+" ["+(R.reinf.hsMin>=0.1196-1e-9?"MassDOT §3.5.7.5":"14.7.5.3.5")+"]",dc:null,pass:R.reinf.minPass,ref:"hs ≥ hs,min"});   // M5
   const addEdge=(id,ref)=>dash.push({id,name:"Edge cover ≥ 0.25 in ["+ref+"]",dc:null,pass:R.edge.pass,ref:"ce ≥ 0.25 in"});
   if(isPlain()){
     add("sigP","Compressive stress — plain [14.7.6.3.2]",sigTL/Math.min(sigGS,+cf.sigCapPlainA),"σs ≤ min("+fmt(+cf.GSplainA)+"GS, "+fmt(+cf.sigCapPlainA)+" ksi)");
     add("shearP","Shear deformation [14.7.6.3.4]",(2*(+L.deltaS))/hrt,"hrt ≥ 2Δs");
     add("stabP","Stability thickness",hrt/(Math.min(planL,planW)/3),"hrt ≤ L/3, W/3");
+    add("deflP","Compressive deflection ≤ 0.09 t (PEP ×3) [14.7.6.3.3]",R.defl.dcA,"3ε ≤ 0.09");   // M3
     addAnc("ancP");
   } else if(S.method==="B"){
     add("gast","Static axial strain γa,st ≤ 3.0 [14.7.5.3.3]",ga_st/3.0,"γa,st ≤ 3.0");
@@ -717,6 +733,7 @@ function computeEDM(loadsOverride){
     addEdge("edge","14.7.5.1");
     addAnc("anc");
     addRes();
+    addDeflB();   // M3
   } else {
     add("sigA","Compressive stress [14.7.6.3.2]",sigTL/Math.min(sigGS,sigCap),"σs ≤ min(1.25GS, cap)");
     add("shearA","Shear deformation [14.7.6.3.4]",(2*(+L.deltaS))/hrt,"hrt ≥ 2Δs");
@@ -730,6 +747,7 @@ function computeEDM(loadsOverride){
     addHsMin("hsminA");
     add("coverA","Cover layer ≤ max(0.7 hri, 5/16 in.) [14.7.6.1]",R.coverDC,"cover ≤ max(0.7 hri, 5/16 in.)");
     addEdge("edgeA","14.7.6.1");
+    add("deflA","Compressive deflection ≤ 0.09 h_ri [14.7.6.3.3]",R.defl.dcA,"ε ≤ 0.09");   // M3
     addAnc("ancA");
   }
   R.dash=dash; R.nFail=dash.filter(d=>d.pass===false).length;
@@ -792,10 +810,10 @@ const EDM_CARDS={"o-geom":["tab-in","Plan Geometry & Shape Factor"],"o-rot":["ta
   sig:["tab-des","Compressive stress"],shear:["tab-des","Shear deformation"],gast:["tab-des","Axial shear strain"],rot:["tab-des","Rotational shear strain"],
   gs:["tab-des","Shear strain from movement"],comb:["tab-des","Combined static + cyclic limit"],stab:["tab-des","Stability"],stabT:["tab-des","Stability thickness"],
   uplift:["tab-des","Combined compression & rotation (uplift)"],reinf:["tab-des","Steel reinforcement thickness"],cover:["tab-des","Cover layer"],
-  anc:["tab-des","Anchorage"],res:["tab-des","Restraint"],appA:["tab-des","Method A applicability"],grange:["tab-des","Design shear modulus range"],edge:["tab-des","Edge cover"],hbu:["tab-des","Horizontal force"]};
+  anc:["tab-des","Anchorage"],res:["tab-des","Restraint"],appA:["tab-des","Method A applicability"],defl:["tab-des","Compressive deflection"],grange:["tab-des","Design shear modulus range"],edge:["tab-des","Edge cover"],hbu:["tab-des","Horizontal force"]};
 // dashboard item id -> the check block (data-chk) where it is worked
 const EDM_DASH2CHK={gast:"gast",comb:"comb",stab:"stab",shearB:"gs",reinf:"reinf",cover:"cover",anc:"anc",ancA:"anc",ancP:"anc",
-  sigP:"sig",sigA:"sig",shearP:"shear",shearA:"shear",stabP:"stabT",stabA:"stabT",rotA:"uplift",rotAW:"uplift",appA:"appA",hsmin:"reinf",hsminA:"reinf",reinfA:"reinf",coverA:"cover",res:"res",edge:"edge",edgeA:"edge"};
+  sigP:"sig",sigA:"sig",shearP:"shear",shearA:"shear",stabP:"stabT",stabA:"stabT",rotA:"uplift",rotAW:"uplift",appA:"appA",deflP:"defl",deflA:"defl",deflL:"defl",deflLT:"defl",deflI:"defl",hsmin:"reinf",hsminA:"reinf",reinfA:"reinf",coverA:"cover",res:"res",edge:"edge",edgeA:"edge"};
 function edmLink(card,txt){ const cd=EDM_CARDS[card]; if(!cd)return "";
   return `<a href="#" class="wkA" data-tab="${cd[0]}" data-card="${card}"${txt?` data-txt="${esc(txt)}"`:""}>${txt?esc(txt)+" ":""}→ ${EDM_TABNAME[cd[0]]} · ${cd[1]}</a>`; }
 function edmWorkedIn(items){   /* items: [[card, txt]] */
@@ -880,6 +898,7 @@ function renderDesign(R){
       ${checkLine("Shear deformation",(2*(+S.loads.deltaS))/R.hrt,"[14.7.6.3.4]","shear")}
       ${stabTEq(R,"AASHTO 14.7.6.3.6")}
       ${checkLine("Stability thickness",R.stabT.dc,"t ≤ L/3, W/3","stabT")}
+      ${deflEq(R)}
       ${ancEq(R)}`);
   }
   if(S.method==="B"){
@@ -911,6 +930,7 @@ function renderDesign(R){
       ${eqB("Cover layer","AASHTO 14.7.5.1",[coverLine()],"","cover")}
       ${checkLine("Cover layer ≤ max(0.7 hri, 5/16 in.)",R.coverDC,"[14.7.5.1]","cover")}
       ${edgeEq(R,"14.7.5.1")}
+      ${deflEq(R)}
       ${ancEq(R)}
       ${resEq(R)}
       ${hbuEq(R)}`);
@@ -938,6 +958,7 @@ function renderDesign(R){
     ${eqB("Cover layer","AASHTO 14.7.6.1",[coverLine()],"","cover")}
     ${checkLine("Cover layer ≤ max(0.7 hri, 5/16 in.)",R.coverDC,"[14.7.6.1]","cover")}
     ${edgeEq(R,"14.7.6.1")}
+    ${deflEq(R)}
     ${ancEq(R)}
     ${hbuEq(R)}`);
 }
@@ -956,6 +977,23 @@ function reinfLines(R){ const g=S.geom,m=S.mat; return [
 /* M5: pass/fail line of the minimum laminate thickness */
 function hsMinLine(R){ const r=R.reinf, ok=r.minPass, ref=r.hsMin>=0.1196-1e-9?"MassDOT §3.5.7.5":"14.7.5.3.5";
   return `<div class="checkline" data-chk="reinf"><span class="verdict ${ok?"ok":"bad"}">${ok?"PASS":"FAIL"}</span><span style="flex:1">Steel laminate h<sub>s</sub> = ${fmt(r.tProvided,4)} in ${ok?"≥":"&lt;"} minimum ${fmt(r.hsMin,4)} in${ok?"":" (h<sub>s,min</sub>/h<sub>s</sub> = "+fmt(r.minRatio)+")"} <span class="eqref">[${ref}]</span></span></div>`; }
+/* M3 (2026-11-07): compressive deflection, worked (symbolic → substituted → result) */
+function deflEq(R){ const d=R.defl, mBd=S.method==="B"&&!isPlain(), pep=isPlain(), Gs=mBd?"G_{min}":"G";
+  const fx=pep?"3\\,":"", fxv=pep?"3":"";
+  const L=[`\\varepsilon = \\dfrac{${fx}\\sigma}{4.8\\,${Gs}\\,S^2}, \\quad 4.8\\,${Gs}\\,S^2 = 4.8(${fmtT(d.Gd,3)})(${fmtT(R.S,3)})^2 = ${fmtT(d.k,2)}\\ \\text{ksi}`,
+    `\\varepsilon_L = \\dfrac{${fxv}${fxv?"(":""}${fmtT(R.sigLL,4)}${fxv?")":""}}{${fmtT(d.k,2)}} = ${fmtT(d.eL,5)}, \\quad \\varepsilon_d = \\dfrac{${fxv}${fxv?"(":""}${fmtT(R.sigDL,4)}${fxv?")":""}}{${fmtT(d.k,2)}} = ${fmtT(d.eD,5)}`,
+    `\\delta_L = \\varepsilon_L\\,${pep?"t":"n\\,h_{ri}"} = (${fmtT(d.eL,5)})(${fmtT(d.hEl,3)}) = ${fmtT(d.dL,4)}\\ \\text{in}, \\quad \\delta_d = (${fmtT(d.eD,5)})(${fmtT(d.hEl,3)}) = ${fmtT(d.dD,4)}\\ \\text{in}`,
+    `\\delta_{lt} = \\delta_d + a_{cr}\\,\\delta_d = ${fmtT(d.dD,4)} + ${fmtT(d.acr,2)}(${fmtT(d.dD,4)}) = ${fmtT(d.dLT,4)}\\ \\text{in}`];
+  if(!mBd) L.push(`\\varepsilon_{DL+LL} = \\dfrac{${fxv}${fxv?"(":""}${fmtT(R.sigTL,4)}${fxv?")":""}}{${fmtT(d.k,2)}} = ${fmtT(d.eTL,4)} \\;${d.dcA<=1.0001?"\\le":">"}\\; 0.09 \\quad (\\delta \\le 0.09\\,h_{ri}\\ \\text{per layer})`);
+  const note=(mBd?"Eqs. 14.7.5.3.6-1 to -3 with the layer strain of Eq. C14.7.5.3.6-1 (a linear approximation; Figure C14.7.6.3.3-1 may be used instead, and the two diverge for S above about 6), G = G<sub>min</sub> (H1). Reported; checked only against the limits entered in I-5 (none in the owner manuals; C14.7.5.3.6 suggests 0.125 in relative LL deflection across a joint).":
+    "Instantaneous LL plus initial DL deflection of "+(pep?"a plain pad (PEP, ×3 the steel-reinforced value of the same shape factor, C14.7.6.3.3)":"an internal layer")+" ≤ 0.09 h<sub>ri</sub> [14.7.6.3.3]; layer strain by Eq. C14.7.5.3.6-1 (linear approximation; Figure C14.7.6.3.3-1 may give less at low S), G = the lowest of the durometer range. Decision (pending engineer review): the linear equation is used.")
+    +` δ = Σ ε·h<sub>ri</sub> over the internal layers (cover layers not counted). a<sub>cr</sub> from Table 14.7.6.2-1 (panel I-6).`;
+  let chk="";
+  if(!mBd) chk=checkLine("Compressive deflection ≤ 0.09 h_ri",d.dcA,"[14.7.6.3.3]","defl");
+  else { if(d.dLLmax>0) chk+=checkLine("LL compressive deflection δ_L ≤ "+fmt(d.dLLmax,3)+" in",d.dL/d.dLLmax,"[14.7.5.3.6]","defl");
+    if(d.dLTmax>0) chk+=checkLine("Long-term DL deflection δ_lt ≤ "+fmt(d.dLTmax,3)+" in",d.dLT/d.dLTmax,"[14.7.5.3.6]","defl");
+    if(!chk) chk=infoLine("Compressive deflection reported: δ<sub>L</sub> = "+fmt(d.dL,3)+" in, δ<sub>d</sub> = "+fmt(d.dD,3)+" in, δ<sub>lt</sub> = "+fmt(d.dLT,3)+" in (no limit entered in I-5)","14.7.5.3.6","defl"); }
+  return eqB("Compressive deflection",mBd?"AASHTO 14.7.5.3.6":"AASHTO 14.7.6.3.3 / 14.7.5.3.6",L,note,"defl")+chk; }
 /* M1 (2026-11-07): an INFO result line (no pass/fail) */
 function infoLine(txt,ref,key){ return `<div class="checkline"${key?` data-chk="${key}"`:""}><span class="verdict" style="background:#888">INFO</span><span style="flex:1">${txt} <span class="eqref">[${ref}]</span></span></div>`; }
 /* M1: Method A applicability S_i²/n, worked */
@@ -1213,7 +1251,7 @@ function edrModel(){
       ["Bearing fixed against shear translation",tg.fixedShear?"yes":"no"],["Exterior-beam check",tg.exteriorCheck?"yes":"no"],["Pad anchored / doweled",tg.anchored?"yes":"no"]]},
       {type:"table",head:["Coefficient","Value"],rows:[["D_a rectangular / circular",edrN(+cf.Da)+" / "+edrN(+cf.DaCirc)],["D_r rectangular / circular",edrN(+cf.DrRect,3)+" / "+edrN(+cf.DrCirc,3)],
        ["Method A stress cap, reinforced / plain (ksi)",edrN(+cf.sigCapReinA)+" / "+edrN(+cf.sigCapPlainA)],["Method A G, highest / lowest of the durometer range (ksi)",edrN(+cf.GmaxA,3)+" / "+edrN(+cf.GminA,3)],
-       ["Method A G·S coefficient, plain pad",edrN(+cf.GSplainA)],["Method B G tolerance ± (fraction of the specified G)",edrN(+cf.GvarB,2)],["Method A rotation coefficient, circular",edrN(+cf.upliftCircA)],["ΔF_TH, Category A (ksi)",edrN(DFTH_A,1)]]},
+       ["Method A G·S coefficient, plain pad",edrN(+cf.GSplainA)],["Method B G tolerance ± (fraction of the specified G)",edrN(+cf.GvarB,2)],["Creep ratio a_cr (Table 14.7.6.2-1)",edrN(+cf.acr,2)],["Method B deflection limits δ_L / δ_lt (in; 0 = report only)",edrN(+tg.dLLmax,3)+" / "+edrN(+tg.dLTmax,3)],["Method A rotation coefficient, circular",edrN(+cf.upliftCircA)],["ΔF_TH, Category A (ksi)",edrN(DFTH_A,1)]]},
       {type:"note",text:"Set on the input tabs (panels I-1 to I-6)."}]});
     const sv=document.getElementById("padSvg"), svg=sv&&sv.querySelector("svg")?sv.querySelector("svg").outerHTML:"";
     if(svg) subs.push({title:"Pad schematic",items:[{type:"figure",svg,caption:"Elastomer layers (amber) with steel laminates (grey); dimensions to scale (Geometry & Schematic tab [[tab:in:o-geom|open]])."}]});
@@ -1285,6 +1323,19 @@ function edrModel(){
         note:"friction coefficient 0.2 between elastomer and clean concrete or steel (C14.8.3.1); Δ_s taken as the factored shear deformation; P_min = minimum vertical force due to permanent loads"+(a.PminFromDL?" (taken as P_DL; enter P_min in I-4 if lower)":"")});   /* EDRX: note of the retired print report */
       if(a.anchored){ KEY[id]="chk/"+w.key+".info"; w.add({id:"info",label:"Pad anchored / doweled (panel I-5): design the anchorage for H; H / (P_min/5) = "+edrN(a.dc)+" for reference",sym:"",eq:"",sub:"",value:"anchorage designed for H",unit:"",ref:EDR_AA+"Art. "+a.ref}); }
       else dcStep(w,id,"Slip: H ≤ P_min/5","\\frac{H}{P_{min}/5}","\\frac{"+edrN(a.H,2)+"}{"+edrN(a.Pmin/5,2)+"}",EDR_AA+"Art. "+a.ref); };
+    const defl=()=>{ const d=R.defl, mBd=!plain&&S.method==="B", w=topic(T,"defl","Compressive deflection",mBd?EDR_AA+"Art. 14.7.5.3.6":EDR_AA+"Art. 14.7.6.3.3 / 14.7.5.3.6");   /* M3 */
+      const f=plain?"3\\cdot ":"";
+      w.add({id:"k",label:"Layer compressive modulus term (G = "+(mBd?"G_min":"lowest of the durometer range")+")",sym:"4.8\\,G\\,S^{2}",eq:"",sub:"4.8\\cdot "+edrN(d.Gd,3)+"\\cdot "+edrN(R.S,3)+"^{2}",value:d.k,unit:"ksi",d:2,ref:EDR_AA+"Eq. C14.7.5.3.6-1"});
+      w.add({id:"eL",label:"LL layer strain"+(plain?" (PEP ×3, C14.7.6.3.3)":""),sym:"\\epsilon_{L}",eq:(plain?"\\frac{3\\,\\sigma_{LL}}{4.8\\,G\\,S^{2}}":"\\frac{\\sigma_{LL}}{4.8\\,G\\,S^{2}}"),sub:"\\frac{"+f+edrN(R.sigLL,4)+"}{"+edrN(d.k,2)+"}",value:d.eL,unit:"",d:5});
+      w.add({id:"eD",label:"DL layer strain",sym:"\\epsilon_{d}",eq:(plain?"\\frac{3\\,\\sigma_{DL}}{4.8\\,G\\,S^{2}}":"\\frac{\\sigma_{DL}}{4.8\\,G\\,S^{2}}"),sub:"\\frac{"+f+edrN(R.sigDL,4)+"}{"+edrN(d.k,2)+"}",value:d.eD,unit:"",d:5});
+      w.add({id:"dL",label:"Instantaneous LL deflection",sym:"\\delta_{L}",eq:"\\sum \\epsilon_{L}\\,h_{ri}",sub:edrN(d.eL,5)+"\\cdot "+edrN(d.hEl,3),value:d.dL,unit:"in",d:4,ref:EDR_AA+"Eq. 14.7.5.3.6-1"});
+      w.add({id:"dD",label:"Initial DL deflection",sym:"\\delta_{d}",eq:"\\sum \\epsilon_{d}\\,h_{ri}",sub:edrN(d.eD,5)+"\\cdot "+edrN(d.hEl,3),value:d.dD,unit:"in",d:4,ref:EDR_AA+"Eq. 14.7.5.3.6-2"});
+      w.add({id:"dLT",label:"Long-term DL deflection (a_cr = "+edrN(d.acr,2)+", Table 14.7.6.2-1)",sym:"\\delta_{lt}",eq:"\\delta_{d} + a_{cr}\\,\\delta_{d}",sub:edrN(d.dD,4)+" + "+edrN(d.acr,2)+"\\cdot "+edrN(d.dD,4),value:d.dLT,unit:"in",d:4,ref:EDR_AA+"Eq. 14.7.5.3.6-3",note:"cover layers not counted; linear strain estimate (Eq. C14.7.5.3.6-1)"});
+      if(!mBd){ w.add({id:"eTL",label:"Layer strain under DL + LL",sym:"\\epsilon_{DL+LL}",eq:"",sub:"\\frac{"+f+edrN(R.sigTL,4)+"}{"+edrN(d.k,2)+"}",value:d.eTL,unit:"",d:4});
+        dcStep(w,plain?"deflP":"deflA","Compressive deflection ≤ 0.09 h_ri","\\frac{\\epsilon_{DL+LL}}{0.09}","\\frac{"+edrN(d.eTL,4)+"}{0.09}",EDR_AA+"Art. 14.7.6.3.3"); }
+      else { if(d.dLLmax>0) dcStep(w,"deflL","LL compressive deflection ≤ entered limit","\\frac{\\delta_{L}}{\\delta_{L,max}}","\\frac{"+edrN(d.dL,4)+"}{"+edrN(d.dLLmax,3)+"}",EDR_AA+"Art. 14.7.5.3.6");
+        if(d.dLTmax>0){ KEY.deflLT="chk/defl.dcLT"; w.add({id:"dcLT",label:"Long-term DL deflection ≤ entered limit",sym:"D/C",eq:"\\frac{\\delta_{lt}}{\\delta_{lt,max}}",sub:"\\frac{"+edrN(d.dLT,4)+"}{"+edrN(d.dLTmax,3)+"}",value:d.dLT/d.dLTmax,unit:"",d:3,ok:d.dLT<=d.dLTmax*1.0001}); }
+        if(!(d.dLLmax>0||d.dLTmax>0)) KEY.deflI="chk/defl.dLT"; } };
     const hbu=()=>{ const w=topic(T,"hbu","Horizontal force for substructure design (report only)",EDR_AA+"Art. 14.6.3.1");
       w.add({id:"H",label:"Horizontal force per bearing (G_max, Δ_u = Δ_s)",sym:"H_{bu}",eq:"\\frac{G_{max}\\,A\\,\\Delta_{u}}{h_{rt}}",sub:"\\frac{"+edrN(a.G,3)+"\\cdot "+edrN(R.A,1)+"\\cdot "+edrN(+L.deltaS,3)+"}{"+edrN(R.hrt,3)+"}",value:R.Hbu,unit:"kip",d:2,ref:EDR_AA+"Art. 14.6.3.1",note:(R.Grange.mB?"G_max = (1 + t_G)·G, the upper end of the specified range (Art. 14.7.5.2; MassDOT §3.5.7.4)":"G_max = the highest G of the durometer range, panel I-6 (Art. 14.7.6.2)")+"; this G and H are sent to the Abutment app"});   /* H1 */ };   /* EDRX: note of the retired print report */
     let w, intro;
@@ -1297,6 +1348,7 @@ function edrModel(){
       w=topic(T,"shear","Shear deformation",EDR_AA+"Art. 14.7.6.3.4");
       dcStep(w,"shearP","Shear deformation: h_rt ≥ 2Δ_s","\\frac{2\\,\\Delta_{s}}{h_{rt}}","\\frac{2\\cdot "+edrN(+L.deltaS,3)+"}{"+edrN(R.hrt,3)+"}",EDR_AA+"Art. 14.7.6.3.4");
       SUB="Stability"; w=topic(T,"stabT","Stability thickness",""); stabT(w,"stabP","");
+      SUB="Compressive deflection"; defl(); /* M3 */
       SUB="Anchorage"; w=topic(T,"anc","Anchorage: slip check, friction coefficient 0.2",EDR_AA+"Art. 14.8.3.1 / C14.8.3.1"); anc(w,"ancP");
     } else if(S.method==="B"){
       intro="Method B, combined shear strain [14.7.5.3].";
@@ -1339,6 +1391,7 @@ function edrModel(){
       SUB="Steel laminates and covers"; w=topic(T,"reinf","Steel reinforcement thickness",EDR_AA+"Art. 14.7.5.3.5"); reinf(w,"reinf",EDR_AA+"Art. 14.7.5.3.5");
       w=topic(T,"cover","Cover layer",EDR_AA+"Art. 14.7.5.1"); cover(w,"cover",EDR_AA+"Art. 14.7.5.1");
       w=topic(T,"edge","Edge cover of the steel laminates",EDR_AA+"Art. 14.7.5.1"); edge(w,"edge",EDR_AA+"Art. 14.7.5.1");
+      SUB="Compressive deflection"; defl(); /* M3 */
       SUB="Anchorage, restraint and horizontal force"; w=topic(T,"anc","Anchorage: slip check, friction coefficient 0.2",EDR_AA+"Art. 14.8.3.1 / C14.8.3.1"); anc(w,"anc");
       if(R.res){ const r=R.res; w=topic(T,"res","Restraint of a bearing without bonded external plates",EDR_AA+"Eq. 14.7.5.4-1");
         w.add({id:"sig",label:"Stress, static + 1.75 × cyclic",sym:"\\sigma_{s}",eq:"\\sigma_{DL} + 1.75\\,\\sigma_{LL}",sub:edrN(R.sigDL,4)+" + 1.75\\cdot "+edrN(R.sigLL,4),value:r.sigS,unit:"ksi",d:4});
@@ -1372,6 +1425,7 @@ function edrModel(){
       SUB="Steel laminates and covers"; w=topic(T,"reinf","Steel reinforcement thickness",EDR_AA+"Art. 14.7.6.3.7"); reinf(w,"reinfA",EDR_AA+"Art. 14.7.6.3.7");
       w=topic(T,"cover","Cover layer",EDR_AA+"Art. 14.7.6.1"); cover(w,"coverA",EDR_AA+"Art. 14.7.6.1");
       w=topic(T,"edge","Edge cover of the steel laminates",EDR_AA+"Art. 14.7.6.1"); edge(w,"edgeA",EDR_AA+"Art. 14.7.6.1");
+      SUB="Compressive deflection"; defl(); /* M3 */
       SUB="Anchorage and horizontal force"; w=topic(T,"anc","Anchorage: slip check, friction coefficient 0.2",EDR_AA+"Art. 14.8.3.1 / C14.8.3.1"); anc(w,"ancA");
       hbu();
     }
