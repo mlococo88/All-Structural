@@ -196,3 +196,55 @@ Loaded by: `Moving Load Generator.html` (does not call `staticAnalysis`; its res
 - None. Moving Load Generator uses `analyze`, which has its own mesh (influence lines, loads at nodes) and is not affected.
 ### Open items
 - SB2-X1 closed (fixlog/steel-bridge.md).
+
+## 2026-11-07 — PR: claude/ml-h1-axle-on-section (PR #1106: https://github.com/mlococo88/All-Structural/pull/1106) (H1: each axle placed exactly on each moment section; results can only rise; §4)
+Loaded by: `Moving Load Generator.html` and `apps/steel-bridge/index.html` (engine `apps/steel-bridge/engine/analysis.js`,
+`autodesign.js` call `SharedMovingLoad.analyze`).
+### Problem (review 2026-11-07, finding H1; slightly unconservative)
+- `analyze` swept the lead axle at `m.step` (default 1 ft) for each rear-axle spacing (`m.hStep`, default 2 ft), then refined
+  spacing (0.5 ft) and position (0.1 ft) only around the coarse winner.
+- At a moment section that is not on the 1 ft grid (e.g. x = 82.5 ft), no axle of the s = 14 ft truck can stand on the section,
+  while the s = 14.5 ft truck can. s = 14.5 won the coarse sweep and s = 14 was never revisited. The +M envelope was low by up
+  to about 0.8 %. Shear already had a forced "axle exactly at the cut" pass; moment did not.
+### Where
+- `analyze` → `sweep(cfg)`, right after the shear pass (anchor `// Shear: also place each axle exactly at the cut`).
+- Before: nothing after the shear pass's `for(let a=0;a<nA;a++)refineAt(cfg,xc+dir*cfg.offs[a],dir,[[ei,dMax,dMin]]);}`.
+- After (added, before the closing `}` of `sweep`):
+  ```
+  if(opt.axleOnM!==false)for(const dir of m.dirs)for(const [ei,dMax,dMin,,cutEl] of act){if(cutEl>=0||effs[ei].t!=='M')continue;const xs=effs[ei].x;
+    for(let a=0;a<nA;a++)refineAt(cfg,xs+dir*cfg.offs[a],dir,[[ei,dMax,dMin]]);}
+  ```
+  For every swept configuration (each spacing, the secondary vehicle, each two-truck headway, and the spacing / headway
+  refinements, which also go through `sweep`), each axle `a` is put exactly on each moment section (lead axle at
+  x_section + dir·offset_a). The grid sweep and both refinements are kept. `refineAt` only replaces an envelope value that it
+  exceeds, so no result can go down.
+- `opt.axleOnM === false` leaves the new positions out (the engine before H1). Only the parity tests use it. Header comment updated.
+### Governing provision
+- AASHTO LRFD 10th Ed. (2024) Art. 3.6.1.3.1: the truck (rear spacing 14–30 ft, Art. 3.6.1.2.2) is placed to produce the extreme
+  force effect. No formula, factor or unit changed; the search now finds positions it could miss.
+### Check case (per lane, with IM 1.33, HL-93 truck + lane, DF 1, LLF 1, step 1 ft, spacing step 2 ft)
+| Spans | Section | Before | After | Grid at 0.25 / 0.5 ft (before H1) |
+|---|---|---|---|---|
+| 60/90/90/60 | span 2, 0.25L (x = 82.5 ft) +M | 878.68 (s = 14.5) | 884.35 (s = 14) | 884.35 |
+| 110/130 | span 2, 0.15L (x = 129.5 ft) +M | 757.35 (s = 14.5) | 763.68 (s = 14) | 763.68 |
+| 90/90 | span 1, 0.65L (x = 58.5 ft) +M | 1517.76 (s = 14.5) | 1524.25 (s = 14) | 1524.25 |
+- Hand check of the first row: the governing truck after the fix has its middle 32 k axle on the section (x = 82.5), the 8 k
+  front and the 32 k rear axles 14 ft either side (68.5 and 96.5 ft). The independent force-method solver of the review gives
+  884.22; the 0.13 difference is the engine's linear interpolation of the influence line between mesh nodes (Lt/240), the same
+  as for every other section.
+- Spans whose twentieth points are on whole feet (100/100, 100/120, 80/100/80): every section bit-identical.
+### How verified
+- `node tests/engine/run.mjs moving-load`: the 35 recorded parity cases hash identically with `axleOnM:false` (nothing else in
+  the engine changed); new test "H1": the three check cases above, the middle axle on the section, and for 100/100, 100/120,
+  80/100/80, 60/90/90/60, 82.5/82.5 (HL-93), 95/95 (fatigue), 75/75 (E80) every maximum ≥ before and every minimum ≤ before,
+  identical on the whole-foot spans.
+- Headless page (origin/main vs branch, default project with spans 100/100, 100/120, 80/100/80, 60/90/90/60, 110/130): no
+  section lower; 0 / 0 / 0 / 8 / 4 sections higher (worst +0.65 %, x = 217.5 ft of 60/90/90/60, the mirror of 82.5); the
+  factored result cards unchanged; 0 console errors.
+- Run time of the 35 cases: 92.9 s before, 94.7 s after (noise level).
+- Steel Bridge (`apps/steel-bridge`, on hold, not changed): see the PR for its test results.
+### Other copies
+- None.
+### Open items
+- Reactions were checked (82.5/82.5 ft, support off the grid): unchanged, the position refinement already finds them, so no
+  reaction pass was added.

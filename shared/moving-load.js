@@ -19,6 +19,9 @@
                            influence-line total (none in simple spans) and interior reactions (3.6.1.3.1).
                            m.negX: optional [[x0,x1],…] (ft): M sections in these ranges also take the multi-vehicle
                            case for the minimum (added 2026-10-29 for Steel Bridge: GirderDetail's LL5 region).
+                           Positions (H1, 2026-11-07): the lead axle is swept at m.step, and each axle is also placed
+                           exactly at every shear cut and on every moment section. opt.axleOnM===false leaves out the
+                           moment-section placements (the engine before H1; used only by the parity tests).
    deflection(R, opt)      LL deflection envelope at the 1/20 points from analyze() result R.
                            opt: {mode:'lrfd'|'veh', DF, useIM, neglect}. neglect (optional, added 2026-10-29; default off):
                            axles that do not add to the deflection sought are left out (3.6.1.3.1).
@@ -226,6 +229,11 @@ function analyze(m,opt){
     // Shear: also place each axle exactly at the cut (the IL jump), so the limit from either side is always evaluated
     for(const dir of m.dirs)for(const [ei,dMax,dMin,,cutEl,cutL] of act){if(cutEl<0)continue;const xc=x[cutL?cutEl:cutEl+1];
       for(let a=0;a<nA;a++)refineAt(cfg,xc+dir*cfg.offs[a],dir,[[ei,dMax,dMin]]);}
+    // Moment (H1, 2026-11-07): also place each axle exactly on each moment section, for every spacing and headway swept.
+    // The M influence line has its peak (kink) at the section, so a section off the position grid could miss the governing
+    // configuration. These positions are added to the grid; results can only rise. opt.axleOnM===false: the earlier grid only (tests).
+    if(opt.axleOnM!==false)for(const dir of m.dirs)for(const [ei,dMax,dMin,,cutEl] of act){if(cutEl>=0||effs[ei].t!=='M')continue;const xs=effs[ei].x;
+      for(let a=0;a<nA;a++)refineAt(cfg,xs+dir*cfg.offs[a],dir,[[ei,dMax,dMin]]);}
   }
   const gov=(cfg,p,dir,on)=>({lab:cfg.lab,p,dir,pos:cfg.offs.map(o=>p-dir*o).filter((_,a)=>on[a])});
   const mk=(ax,vk,sv)=>{const offs=[0],loads=[ax[0][0]];for(let i=1;i<ax.length;i++){offs.push(offs[i-1]+(i+1===vk&&sv!=null?sv:ax[i][1]));loads.push(ax[i][0]);}return {offs,loads};};
