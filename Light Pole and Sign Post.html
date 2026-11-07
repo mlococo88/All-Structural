@@ -6181,6 +6181,8 @@ function lppDashItems(){
       :{name:'Drilled shaft',dc:null,st:'warn',cond:['select the Broms soil model'],text:'select the Broms soil model',ref:'Art. 13.6.1.1'},card('shaft','ltsFndCard',post+' foundation — drilled shaft')));
     if(X.fd) ltsShaftChecks(X.fd).forEach(c=>out.push(Object.assign({name:c.name,dc:c.ratio,st:c.ok?'pass':'fail',cond:[],   // LPH4
       text:lppChkVal(c)+` (utilization ${fmt(100*c.ratio,0)}%)`,ref:c.code+' (shaft reinforcement per ACI 318-19, Q-C4)'},card('shaft','ltsFndCard',post+' foundation — drilled shaft'))));
+    if(X.fd&&X.fd.gov&&X.fd.Tu>0) out.push(Object.assign({name:'Shaft — soil torsion resistance',dc:null,st:'warn',none:'not computed',cond:['not computed: check per Art. 13.6'],   // LPM2 (2026-11-07)
+      text:`T_u = ${fmt(X.fd.Tu,0)} lb·ft: the soil's torsional resistance around the shaft is not computed — check per LRFDLTS Art. 13.6 (geotechnical engineer).`,ref:'LRFDLTS Art. 13.6 (shall resist the applied torsion; no method given)'},card('shaft','ltsFndCard',post+' foundation — drilled shaft')));
     anch();
     out.push(Object.assign({name:'Anchorage ductility',dc:null,st:'na',none:'verify in the Anchorage app',cond:[],   // LPM3
       text:'Required (Art. 5.16.3): the rods must reach their steel strength before the concrete fails — verify in the Anchorage app (not checked here).',ref:'LRFDLTS Art. 5.16.3, C5.16.3'},card('anchors','ltsBpCard',post+' base plate and base weld')));
@@ -6204,6 +6206,9 @@ function lppDashItems(){
       out.push({name:c.name+(c.label?' · '+c.label:''),dc:c.ratio,st:c.ok?'pass':'fail',cond,
         text:`${fmt(c.demand,d)} ${c.unit} vs ${c.capTxt!==undefined?c.capTxt:fmt(c.cap,d)+' '+c.unit} (utilization ${fmt(100*c.ratio,0)}%)`,ref:c.code,go:()=>lppGoto(k,si),where:lppTgt(k,si)});
     });
+    if(s.found&&s.found.Tu>0)   // LPM2 (2026-11-07): no silent pass on the soil torsion (the Summary's warning, also in the check panel)
+      out.push({name:'Shaft — soil torsion resistance'+(s.label?' · '+s.label:''),dc:null,st:'warn',cond:['not computed: verify'],
+        text:`T_u = ${fmt(s.found.Tu,0)} lb·ft: the soil's torsional resistance around the shaft is not computed — verify with the geotechnical engineer.`,ref:'not checked by this tool (open item N2)',go:()=>lppGoto('torsion',si),where:lppTgt('torsion',si)});
     if(s.pstress&&s.pstress.lim&&s.pstress.lim.e7Slender)
       out.push({name:'Slender wall (§E7 not applied)'+(s.label?' · '+s.label:''),dc:null,st:'warn',cond:['verify'],
         text:'λ > λ_r (Table B4.1a): the §E7 effective-area reduction is not applied, so the axial capacity is unconservative — verify.',ref:'AISC 360-16 §E7, Table B4.1a',go:()=>lppGoto('post',si),where:lppTgt('post',si)});
@@ -8125,6 +8130,7 @@ function ltsCalc(){
     +`${lppLtsLast&&lppLtsLast.wd?`<tr><td>Base weld</td><td>${lppLtsLast.wd.type==='cjp'?'CJP: base metal governs':`<b>${lppLtsLast.wd.ok?'OK':'NOT OK'}</b>, ratio ${fmt(lppLtsLast.wd.ratio,3)}`}</td><td>Art. 5.14 → AWS D1.1 / AISC 360-16 §J2</td></tr>`:''}`
     +`${lppLtsLast&&lppLtsLast.fd?(lppLtsLast.fd.gov?`<tr><td>Drilled shaft embedment (Broms)</td><td>L = <b>${fmt(lppLtsLast.fd.gov.br.L,2)} ft</b> required; shaft moment ${fmt(lppLtsLast.fd.gm.br.Mu,2)} kip-ft</td><td>Art. 13.6.1.1, C13.6.1.1 (pp. 13-3, 13-4)</td></tr>`:`<tr><td>Drilled shaft</td><td><b>select the Broms soil model</b></td><td>Art. 13.6.1.1</td></tr>`):''}`
     +`${lppLtsLast&&lppLtsLast.fd?ltsShaftChecks(lppLtsLast.fd).map(c=>`<tr><td>${lppEsc(c.name)}</td><td><b>${c.ok?'OK':'NOT OK'}</b>, ${lppChkVal(c)} (${fmt(c.ratio,3)})</td><td>${lppEsc(c.code)}${c.name.startsWith('Shaft torsion')&&!c.ok?'; torsion reinforcement required (not designed here)':''}</td></tr>`).join(''):''}`   // LPH4
+    +`${lppLtsLast&&lppLtsLast.fd&&lppLtsLast.fd.gov&&lppLtsLast.fd.Tu>0?`<tr><td>Shaft — soil torsion resistance</td><td><b>REVIEW — not computed</b>: T<sub>u</sub> = ${fmt(lppLtsLast.fd.Tu,0)} lb·ft at the groundline; check the soil's torsional resistance around the shaft (geotechnical engineer)</td><td>Art. 13.6 (p. 13-2): drilled shafts shall resist the applied torsion; no method given (open item N2)</td></tr>`:''}`   // LPM2
     +`${lppLtsLast&&lppLtsLast.mc?`<tr><td>Anchorage ductility</td><td><b>required — verify in the Anchorage app</b>: concrete-governed tension strengths &gt; rod steel strength N<sub>sa</sub> (or anchor reinforcement); not checked by this tool</td><td>Art. 5.16.3, C5.16.3 (p. 5-37)</td></tr>`:''}`   // LPM3
     +`${lppLtsLast&&typeof lppAnchorChipHTML==='function'&&LPP_ANCH?`<tr><td>Anchors — Anchorage app</td><td>${LPP_ANCH.groups.map(gg=>`${lppEsc(gg.label)}: ${lppAnchorChipHTML(gg.id)}`).join('<br>')}</td><td>LRFDLTS combinations sent from the Anchorage tab (HANDOFF.md §4.11)</td></tr>`:''}`
     +`${lppLtsLast&&lppLtsLast.fat?`<tr><td>Fatigue</td><td>${lppLtsLast.fat.required?'<b>REQUIRED — outside this tool (high-mast tower)</b>':'not required'}</td><td>Arts. 11.4, 11.7.2 (pp. 11-3, 11-10, 2017)</td></tr>`:''}`
@@ -8208,6 +8214,7 @@ function ltsReportModel(){
   // 6. Foundation
   if(X.fd){ const it=[{type:'note',text:'Broms (Art. 13.6.1.1, C13.6.1.1) with the factored groundline actions (M × B); shaft reinforcement per ACI 318-19 (engineer, Q-C4); LRFDLTS Art. 13.6.2 refers to the AASHTO LRFD BDS — not applied.'}];
     if(X.fd.gov){ it.push(steps('lts.f',X.fdSteps)); it.push({type:'kv',rows:[['Required embedment L',N(X.fd.gov.br.L,2)+' ft'],['Largest shaft moment',N(X.fd.gm.br.Mu,2)+' kip-ft'],['Shaft reinforcement (ACI 318-19)',X.fd.reo?'('+X.fd.reo.long.n+') '+X.fd.reo.long.bar.n+'; ties '+X.fd.reo.tie.bar.n+' @ '+N(X.fd.reo.tie.s,0)+' in':'—'],['Torsion',`T_u = ${N(X.fd.Tu,0)} lb·ft; φT_th = ${N(X.fd.tor.phiTth,0)} lb·ft (ACI 318-19 §22.7.1.1); soil torsion not checked (Art. 13.6 gives no method; open item N2)`]]});
+      if(X.fd.Tu>0) flags.push(`REVIEW: soil torsion resistance not computed — T_u = ${N(X.fd.Tu,0)} lb·ft; check per LRFDLTS Art. 13.6 (drilled shafts shall resist the applied torsion).`);   // LPM2
       { const SC=ltsShaftChecks(X.fd);   // LPH4: the shaft checks as on the Summary tab
         if(SC.length){ const nf=SC.filter(c=>!c.ok);
           if(nf.length) flags.push('Drilled shaft (ACI 318-19): '+nf.map(c=>c.name).join(', ')+' NOT OK.');
