@@ -2188,8 +2188,8 @@ function calcAll(inp) {
     warnings.push(`Coulomb with wall friction δ = ${A.delta}° is applied to STABILITY on a ${heelLongForRankine ? 'LONG' : 'short'} heel — `
       + `stability pressure acts on the soil-on-soil plane through the heel end, where wall friction does not exist (use Rankine or δ = β). See the Earth Pressure card.`);
   if (hasSeismic) {
-    warnings.push(isAASHTO ? 'Seismic: Extreme Event I stability is checked (Art. 11.6.5.1: P_AE and wall inertia P_IR, Stability Step 7a); the stem and footing are NOT designed for the seismic case.'   // RWE1
-                           : 'Seismic: stem and footing are NOT designed for the seismic case — the increment is applied to stability only, and wall/soil inertia (AASHTO 11.6.5.1 P_IR) is not included.');
+    warnings.push(isAASHTO ? 'Seismic: Extreme Event I stability is checked (Art. 11.6.5.1: P_AE and wall inertia P_IR, Stability Step 7a) and the stem is designed for Extreme Event I; the footing is NOT designed for the seismic case.'   // RWE1 / RWSQ
+                           : 'Seismic: the stem is designed for U = 1.2D + 1.0E + 1.6H (ΔP_E at 0.6H); the footing uses the factored bearing with 1.0·ΔP_E; wall/soil inertia (AASHTO 11.6.5.1 P_IR) is not included in ACI mode.');   // RWSQ
   }
 
   // AASHTO live-load surcharge → equivalent soil height heq (converted to psf: γ·heq)
@@ -2860,11 +2860,41 @@ function calcAll(inp) {
                 + ctR.CT_h * 1000;
   }
 
-  // Governing stem demand = envelope of Strength I and Extreme Event II
-  const stem_ee2_governs = Mu_stem_ee2 > Mu_stem_strI;
-  const Mu_stem_lbft = Math.max(Mu_stem_strI, Mu_stem_ee2);
+  // ── RWSQ (2026-11-07): stem seismic load combination (engineer decision, audit item 9(3)) ──
+  //  ACI 318-19 Eq. 5.3.1e with H per §5.3.8: U = 1.2D + 1.0E + 1.6H — the static stem load at 1.6 plus 1.0·ΔP_E over the stem
+  //    (ΔP_E,s = ΔP_E·(z/H)², at 0.6z, the stability assumption); no D effect on the stem moment.
+  //  AASHTO Extreme Event I (Art. 11.6.5.1; Section 5 for the structure, φ = 1.0): the stability cases applied to the stem above the
+  //    section: (1) P_AE,s + 0.5P_IR,s, (2) max(0.5P_AE,s, P_A,s) + P_IR,s; P_IR,s = k_h(stem above the section + barrier); ES and
+  //    water at 1.0, LS at γ_EQ.
+  const eeQ = isAASHTO && aashtoR && aashtoR.ee1 ? aashtoR.ee1 : null;
+  const stemSeis = z => {   // factored seismic-combination M (lb·ft/ft) and V (lb/ft) at depth z below the stem top; null without seismic
+    if (!hasSeismic || !(z > 0)) return null;
+    const sd = stemDemand(z);
+    if (!isAASHTO) {
+      const Pe = Pe_inc * (z / H) ** 2;
+      return { M: gEH*sd.M_soil + gWA*sd.M_hyd + gES*Ka*inp.q_sur*z*z/2 + gLS*Ka*q_ll_stem*z*z/2 + Pe*0.6*z,
+               V: gEH*sd.V_soil + gWA*sd.V_hyd + gES*Ka*inp.q_sur*z + gLS*Ka*q_ll_stem*z + Pe, Pe };
+    }
+    if (!eeQ) return null;
+    const PAE = 0.5 * Kae * inp.gamma_s * z * z * (1 - inp.kv), MAE = PAE * z / 3;
+    let WI = 0, MI = 0; const n = 24;
+    for (let i = 0; i < n; i++) { const zz = (i + 0.5) * z / n, w = inp.gamma_c * (inp.ts_top + (inp.ts_bot - inp.ts_top) * zz / inp.Hs) / 12 * z / n; WI += w; MI += w * (z - zz); }
+    WI += W_bar; MI += W_bar * (z + bar_h_ft / 2);
+    const PIR = inp.kh * WI, MIR = inp.kh * MI;
+    const oM = Ka*inp.q_sur*z*z/2 + sd.M_hyd + eeQ.gEQ*Ka*q_ll_stem*z*z/2, oV = Ka*inp.q_sur*z + sd.V_hyd + eeQ.gEQ*Ka*q_ll_stem*z;
+    const useAE = 0.5 * PAE > sd.V_soil;
+    const c1 = { M: MAE + 0.5*MIR + oM, V: PAE + 0.5*PIR + oV };
+    const c2 = { M: (useAE ? 0.5*MAE : sd.M_soil) + MIR + oM, V: (useAE ? 0.5*PAE : sd.V_soil) + PIR + oV };
+    return { M: Math.max(c1.M, c2.M), V: Math.max(c1.V, c2.V), PAE, MAE, PIR, MIR, WI, c1, c2, useAE };
+  };
+  const sq_base = stemSeis(inp.Hs);
+  const Mu_stem_eq = sq_base ? sq_base.M : 0, Vu_stem_eq = sq_base ? sq_base.V : 0;
+  // Governing stem demand = envelope of Strength I, Extreme Event II and (RWSQ) the seismic combination
+  const stem_eq_governs  = Mu_stem_eq > Math.max(Mu_stem_strI, Mu_stem_ee2);
+  const stem_ee2_governs = !stem_eq_governs && Mu_stem_ee2 > Mu_stem_strI;
+  const Mu_stem_lbft = Math.max(Mu_stem_strI, Mu_stem_ee2, Mu_stem_eq);
   const Mu_stem_in   = Mu_stem_lbft * 12;   // lb-in/ft
-  const Vu_stem      = Math.max(Vu_stem_strI, Vu_stem_ee2);
+  const Vu_stem      = Math.max(Vu_stem_strI, Vu_stem_ee2, Vu_stem_eq);
 
   // Max primary spacing: AASHTO 5.10.3.2 walls/slabs ≤ min(1.5h, 18 in); ACI 7.7.2.3 ≤ min(3h, 18 in)
   const max_s_stem = isAASHTO ? Math.min(1.5 * inp.ts_bot, 18) : Math.min(3 * inp.ts_bot, 18);
@@ -2941,7 +2971,7 @@ function calcAll(inp) {
   // Flexural design — φ = 0.90 (Strength I) or 1.00 (Extreme Event II per MassDOT)
   // Two-pass: assume #6 for d, select bar, then recompute d with the ACTUAL bar
   // diameter and re-derive As (matches hand-calc practice; d reflects the bar used).
-  const phiF_stem = (isAASHTO && stem_ee2_governs) ? 1.00 : 0.90;
+  const phiF_stem = (isAASHTO && (stem_ee2_governs || stem_eq_governs)) ? 1.00 : 0.90;   // RWSQ: extreme events φ = 1.0
   const rho_min     = Math.max(3 * Math.sqrt(inp.fc) / inp.fy, 200 / inp.fy);   // (legacy beam value — display only)
   // T&S: AASHTO 5.10.6-1 (0.11 ≤ As ≤ 0.60 per ft per face) vs ACI 24.4.3 (0.0018·b·h)
   //   AASHTO b = LEAST WIDTH OF THE COMPONENT (in), h = least thickness — NOT the 12-in design
@@ -2976,7 +3006,7 @@ function calcAll(inp) {
   const phiMn_stem = sel_stem ? phiF_stem * sel_stem.As_prov * inp.fy * (d_stem - a_stem / 2) : 0; // lb-in/ft
 
   // Shear check (final d) — see shearVc(); φ = 0.75 ACI, 0.90 AASHTO, 1.0 Extreme Event II
-  const phiV     = isAASHTO ? (stem_ee2_governs ? 1.00 : 0.90) : 0.75;
+  const phiV     = isAASHTO ? ((stem_ee2_governs || stem_eq_governs) ? 1.00 : 0.90) : 0.75;   // RWSQ
   const shearStem = shearVc(d_stem, inp.ts_bot, sel_stem.As_prov, Mu_stem_lbft, Vu_stem, inp.Hs);
   const dv_stem  = shearStem.dv;
   const Vc_stem    = shearStem.Vc;
@@ -3046,13 +3076,16 @@ function calcAll(inp) {
                   + ctR.CT_h * 1000;
   }
 
-  const stemT_ee2_governs = Mu_stemT_ee2 > Mu_stemT_strI;
-  const Mu_stemT_lbft = Math.max(Mu_stemT_strI, Mu_stemT_ee2);
+  const sq_mid = stemSeis(Hs_mid);   // RWSQ
+  const Mu_stemT_eq = sq_mid ? sq_mid.M : 0, Vu_stemT_eq = sq_mid ? sq_mid.V : 0;
+  const stemT_eq_governs  = Mu_stemT_eq > Math.max(Mu_stemT_strI, Mu_stemT_ee2);
+  const stemT_ee2_governs = !stemT_eq_governs && Mu_stemT_ee2 > Mu_stemT_strI;
+  const Mu_stemT_lbft = Math.max(Mu_stemT_strI, Mu_stemT_ee2, Mu_stemT_eq);
   const Mu_stemT_soil = Mu_stemT_strI;   // reported component
   const Mu_stemT_in   = Mu_stemT_lbft * 12;
-  const Vu_stemT      = Math.max(Vu_stemT_strI, Vu_stemT_ee2);
+  const Vu_stemT      = Math.max(Vu_stemT_strI, Vu_stemT_ee2, Vu_stemT_eq);   // RWSQ
 
-  const phiF_stemT = (isAASHTO && stemT_ee2_governs) ? 1.00 : 0.90;
+  const phiF_stemT = (isAASHTO && (stemT_ee2_governs || stemT_eq_governs)) ? 1.00 : 0.90;   // RWSQ
   let d_stemT = ts_mid - inp.cov_stem - 0.375;
   let Rn_stemT = 0, As_stemT_req = 0, As_sT_min = 0, As_stemT_des = 0,
       stemT_overstressed = false, sel_stemT = null;
@@ -3069,7 +3102,7 @@ function calcAll(inp) {
   }
   if (stemT_overstressed) warnings.push('Stem (mid-height) over-stressed in flexure. Increase ts_top.');
 
-  const phiV_T = isAASHTO ? (stemT_ee2_governs ? 1.00 : 0.90) : 0.75;
+  const phiV_T = isAASHTO ? ((stemT_ee2_governs || stemT_eq_governs) ? 1.00 : 0.90) : 0.75;   // RWSQ
   const shearStemT = shearVc(d_stemT, ts_mid, sel_stemT.As_prov, Mu_stemT_lbft, Vu_stemT, Hs_mid);
   const dv_stemT = shearStemT.dv;
   const Vc_stemT = shearStemT.Vc;
@@ -3335,9 +3368,10 @@ function calcAll(inp) {
     const T = sets.reduce((a, q) => a + q.A, 0); if (T <= 0) return 0;
     const a = T * inp.fy / (0.85 * inp.fc * bw);
     return sets.reduce((m, q) => m + q.A * inp.fy * (tAt(zb) - inp.cov_stem - q.db / 2 - a / 2), 0) / 12; };
-  const dcAt = (sets, zb) => { const Mn = MnOf(sets, zb), mS = MuS(zb), mE = MuE(zb);
-    if (mS <= 1e-6 && mE <= 1e-6) return 0; if (Mn <= 0) return Infinity;
-    return Math.max(mS / (0.90 * Mn), mE / (phiE * Mn)); };
+  const MuQ = zb => { const q = stemSeis(inp.Hs - zb); return q ? q.M : 0; }, phiQ = isAASHTO ? 1.00 : 0.90;   // RWSQ: seismic combination
+  const dcAt = (sets, zb) => { const Mn = MnOf(sets, zb), mS = MuS(zb), mE = MuE(zb), mQ = MuQ(zb);
+    if (mS <= 1e-6 && mE <= 1e-6 && mQ <= 1e-6) return 0; if (Mn <= 0) return Infinity;
+    return Math.max(mS / (0.90 * Mn), mE / (phiE * Mn), mQ / (phiQ * Mn)); };
   const NZ = 240, s3only = zb => [{ A: sel_stemT.As_prov, db: sel_stemT.bar.db }];
   let z_req = 0;                                                                      // S1 is required below z_req
   for (let i = NZ; i >= 0; i--) { const zb = inp.Hs * i / NZ;
@@ -3370,7 +3404,7 @@ function calcAll(inp) {
   let s13_dc = 0, s13_dc_z = 0;
   for (const zb of [...Array(NZ + 1).keys()].map(i => inp.Hs * i / NZ).concat(zKey)) {
     const dc = dcAt(setsAt(zb), zb); if (dc > s13_dc) { s13_dc = dc; s13_dc_z = zb; } }
-  const s13_Mu_at  = Math.max(MuS(s13_dc_z), MuE(s13_dc_z)), s13_Mn_at = MnOf(setsAt(s13_dc_z), s13_dc_z);
+  const s13_Mu_at  = Math.max(MuS(s13_dc_z), MuE(s13_dc_z), MuQ(s13_dc_z)), s13_Mn_at = MnOf(setsAt(s13_dc_z), s13_dc_z);
   const s13_ok     = s13_dc <= 1 + 1e-9;
   if (!s13_ok) warnings.push(`Stem back-face bars: M_u exceeds φM_n of the bars present at ${f(s13_dc_z,2)} ft above the joint (D/C ${f(s13_dc,2)}) — increase S3 or extend S1.`);
 
@@ -3586,7 +3620,7 @@ function calcAll(inp) {
   const checks = {
     ...stabChecks,
     stemFlex:  { ok: !stem_overstressed && sel_stem.As_prov >= As_stem_des - 0.001,
-                 label: 'Stem Flex', val: stem_ee2_governs ? 'EE-II governs' : undefined },
+                 label: 'Stem Flex', val: stem_eq_governs ? (isAASHTO ? 'EE-I governs' : 'seismic U governs') : stem_ee2_governs ? 'EE-II governs' : undefined },
     stemShear: { ok: stem_shear_ok,                label: 'Stem Shear' },
     stemMidShear: { ok: stemT_shear_ok,            label: 'Stem Mid Shear' },
     stemHook:  { ok: hook_ok,                      label: 'Stem Hook ℓdh', val: `${f(ldh_stem,1)}≤${f(ldh_avail,1)}"` },
@@ -3594,7 +3628,7 @@ function calcAll(inp) {
     heelDev:   { ok: heel_dev_ok,                  label: 'Heel F1 ℓd', val: `${f(ld_heel,1)}${heel_dev_ok ? '≤' : '>'}${f(Math.min(f1_av_heel, f1_av_toe),1)}"` },   // RWDS
     toeDev:    { ok: toe_dev_ok,                   label: 'Toe F2 ' + (toe_hook ? 'ℓdh' : 'ℓd'), val: `${f(f2_need,1)}${f2_need <= f2_av_toe ? '≤' : '>'}${f(f2_av_toe,1)}"` },   // RWDS
     stemMidFlex: { ok: !stemT_overstressed && sel_stemT.As_prov >= As_stemT_des - 0.001,
-                 label: 'Stem Mid Flex', val: stemT_ee2_governs ? 'EE-II governs' : undefined },
+                 label: 'Stem Mid Flex', val: stemT_eq_governs ? (isAASHTO ? 'EE-I governs' : 'seismic U governs') : stemT_ee2_governs ? 'EE-II governs' : undefined },
     stemS3Lap:  { ok: s13_lap_ok && s1_end_ok,   label: 'Stem S3–S1 Lap', val: s1_full ? 'S1 full height' : `S1 to ${f(z_s1_end,2)}ft` },   // RWS13
     stemMAlong: { ok: s13_ok,                     label: 'Stem M along height', val: `D/C ${f(s13_dc,2)} @ ${f(s13_dc_z,1)}ft` },   // RWS13
     heelFlex:  { ok: !heel_overstressed && sel_heel.As_prov >= As_heel_des - 0.001,
@@ -3704,6 +3738,7 @@ function calcAll(inp) {
     useMassDOTFtg, heel_md_governs, Mu_heel_md, Mu_heel_std, phiF_heel,
     // Extreme Event II governance flags
     stem_ee2_governs, stemT_ee2_governs, Mu_stem_strI, Mu_stem_ee2, phiF_stem,
+    sq_base, Mu_stem_eq, Vu_stem_eq, stem_eq_governs, sq_mid, Mu_stemT_eq, stemT_eq_governs,   // RWSQ
     stem_water, sd_base_Mhyd: sd_base.M_hyd, sd_base_Msoil: sd_base.M_soil,
     d_stemT, As_stemT_des, sel_stemT, stemT_overstressed, stemT_shear_ok,
     phiVc_stemT,
@@ -5374,7 +5409,7 @@ function renderStem(r) {
 
   // ════ STEP 1 — FACTORED DEMANDS ════
   h += `<div class="card" style="margin-bottom:16px;">
-    <div class="card-hd"><span class="card-title">Step 1 — Factored Demands at Base of Stem</span><span class="card-ref">${r.isAASHTO?'Strength I: 1.50EH + 1.75LS · AASHTO §3.4.1':'U = 1.6H · ACI 318-19 §5.3'} · H_s = ${F(inp.Hs,2)} ft</span></div>
+    <div class="card-hd"><span class="card-title">Step 1 — Factored Demands at Base of Stem</span><span class="card-ref">${r.isAASHTO?'Strength I: 1.50EH + 1.75LS' + (r.sq_base ? ' / Extreme Event I' : '') + ' · AASHTO §3.4.1':'U = 1.6H' + (r.sq_base ? ' / 1.2D + 1.0E + 1.6H' : '') + ' · ACI 318-19 §5.3'} · H_s = ${F(inp.Hs,2)} ft</span></div>
     <div class="card-body">`;
   h += eq('Factored moment — triangular soil pressure component (γ'+(r.isAASHTO?'_{EH}=1.50':'=1.6')+')',
     `M_{u,soil} = ${gEH}\\cdot\\frac{K_a\\gamma_s H_s^3}{6} = ${gEH}\\cdot\\frac{(${F(r.Ka,4)})(${F(inp.gamma_s,0)})(${F(inp.Hs,2)})^3}{6} = \\boxed{${F(gEH*r.Ka*inp.gamma_s*inp.Hs**3/6,1)}\\ \\text{lb·ft/ft}}`,'',
@@ -5400,11 +5435,24 @@ function renderStem(r) {
        {sym:"\\gamma'", desc:'buoyant unit weight used below WT', val:F(r.gamma_s_sub,1), unit:'pcf'},
        {sym:'M_{u,hyd}', desc:'factored hydrostatic moment on stem', val:F((r.isAASHTO?1.0:1.6)*r.sd_base_Mhyd,1), unit:'lb·ft/ft'}]);
   }
-  h += eq('Total factored design moment' + (r.stem_ee2_governs ? ' — EXTREME EVENT II GOVERNS' : ''),
+  // RWSQ (2026-11-07): seismic stem combination
+  if (r.sq_base) {
+    const q = r.sq_base;
+    h += r.isAASHTO
+      ? eq('Extreme Event I at the stem base (φ = 1.0): case 1 P_AE,s + 0.5P_IR,s, case 2 max(0.5P_AE,s, P_A,s) + P_IR,s; ES and water at 1.0' + (q_ll_stem > 0 ? ', LS at γ_EQ' : ''),
+          `P_{AE,s} = \\tfrac{1}{2}K_{AE}\\gamma_s H_s^2(1-k_v) = ${F(q.PAE,0)}\\ \\text{at } \\tfrac{H_s}{3};\\quad P_{IR,s} = k_h W_{s} = ${F(inp.kh,3)}(${F(q.WI,0)}) = ${F(q.PIR,0)};\\quad M_{u,EQ} = \\max(${F(q.c1.M,0)},\; ${F(q.c2.M,0)}) = \\boxed{${F(q.M,0)}\\ \\text{lb·ft/ft}}`, '\u00a711.6.5.1',
+          [{sym:'W_s', desc:'stem (and barrier) weight above the section', val:F(q.WI,0), unit:'lb/ft'},
+           {sym:'M_{u,EQ,1}', desc:'case 1: P_AE,s·H_s/3 + 0.5·M_IR + other', val:F(q.c1.M,0), unit:'lb·ft/ft'},
+           {sym:'M_{u,EQ,2}', desc:'case 2: ' + (q.useAE ? '0.5·P_AE,s·H_s/3' : 'M_A,s (static soil)') + ' + M_IR + other', val:F(q.c2.M,0), unit:'lb·ft/ft'}])
+      : eq('Seismic combination U = 1.2D + 1.0E + 1.6H (ACI 318-19 Eq. 5.3.1e, H per §5.3.8)',
+          `\\Delta P_{E,s} = \\Delta P_E\\left(\\tfrac{H_s}{H}\\right)^2 = ${F(r.Pe_inc,1)}\\left(\\tfrac{${F(inp.Hs,2)}}{${F(r.H,2)}}\\right)^2 = ${F(q.Pe,1)};\\quad M_{u,E} = M_{u,1.6H} + 1.0\\,\\Delta P_{E,s}(0.6H_s) = ${F(r.Mu_stem_strI,0)} + ${F(q.Pe,1)}(${F(0.6*inp.Hs,2)}) = \\boxed{${F(q.M,0)}\\ \\text{lb·ft/ft}}`, 'ACI 5.3.1e');
+  }
+  h += eq('Total factored design moment' + (r.stem_eq_governs ? (r.isAASHTO ? ' — EXTREME EVENT I GOVERNS' : ' — SEISMIC COMBINATION GOVERNS') : r.stem_ee2_governs ? ' — EXTREME EVENT II GOVERNS' : ''),
     `M_u = \\boxed{${F(r.Mu_stem_lbft,1)}\\ \\text{lb·ft/ft}} = ${Fk(r.Mu_stem_lbft)}\\ \\text{kip·ft/ft} = ${F(r.Mu_stem_in,0)}\\ \\text{lb·in/ft}`,'',
     [{sym:'K_a', desc:'active/at-rest coefficient', val:F(r.Ka,4), unit:''},
      {sym:'\\gamma_s', desc:'soil unit weight', val:F(inp.gamma_s,0), unit:'pcf'},
      {sym:'H_s', desc:'stem height (cantilever)', val:F(inp.Hs,2), unit:'ft'},
+     ...(r.sq_base ? [{sym:'M_{u,EQ}', desc: r.isAASHTO ? 'Extreme Event I (seismic) demand' : 'U = 1.2D + 1.0E + 1.6H demand', val:F(r.Mu_stem_eq,1), unit:'lb·ft/ft'}] : []),   // RWSQ
      ...(r.stem_ee2_governs ? [
        {sym:'M_{u,StrI}', desc:'Strength I demand', val:F(r.Mu_stem_strI,1), unit:'lb·ft/ft'},
        {sym:'M_{u,EE2}', desc:'Extreme Event II (earth γ=1.0 + collision)', val:F(r.Mu_stem_ee2,1), unit:'lb·ft/ft'}] : []),
@@ -5415,7 +5463,7 @@ function renderStem(r) {
   h += rwWorkedIn(r, [['stabKa','K<sub>a</sub>'], ...(q_ll_stem > 0 ? [['stabLS','q<sub>LS</sub>']] : [])]);
   h += `<div class="alert info">ℹ ${r.stem_water
       ? '<strong>Water-aware:</strong> stem demands use the 3-block effective-stress profile (moist above WT, buoyant γ′ below) plus the full hydrostatic triangle. '
-      : 'Stem demands use static earth pressure. '}${r.stem_ee2_governs?'<strong>Extreme Event II governs</strong> (collision + earth at γ=1.0, φ=1.0). ':''}${r.hasSeismic?'<strong>Seismic active:</strong> ΔPE is not included in stem flexure — add per ASCE 7 §11.8 load combos if required. ':''}Critical section at top of footing.</div>`;
+      : 'Stem demands use static earth pressure. '}${r.stem_ee2_governs?'<strong>Extreme Event II governs</strong> (collision + earth at γ=1.0, φ=1.0). ':''}${r.hasSeismic?(r.isAASHTO?'<strong>Seismic:</strong> the stem is designed for Extreme Event I as well (above). ':'<strong>Seismic:</strong> the stem is designed for U = 1.2D + 1.0E + 1.6H as well (above). '):''}Critical section at top of footing.</div>`;
   h += `</div></div>`;
 
   // ════ STEP 2 — EFFECTIVE DEPTH ════
@@ -5461,7 +5509,7 @@ function renderStem(r) {
 
   // ════ STEP 4 — SHEAR ════
   h += `<div class="card" style="margin-bottom:16px;">
-    <div class="card-hd"><span class="card-title">Step 4 — One-Way Shear Check</span><span class="card-ref">${r.isAASHTO?'AASHTO §5.7.3 · φ = '+(r.stem_ee2_governs?'1.00':'0.90')+' · '+r.shearStem.method:'ACI 318-19 Table 22.5.5.1(c) · φ = 0.75 · no stirrups'}</span></div>
+    <div class="card-hd"><span class="card-title">Step 4 — One-Way Shear Check</span><span class="card-ref">${r.isAASHTO?'AASHTO §5.7.3 · φ = '+((r.stem_ee2_governs||r.stem_eq_governs)?'1.00':'0.90')+' · '+r.shearStem.method:'ACI 318-19 Table 22.5.5.1(c) · φ = 0.75 · no stirrups'}</span></div>
     <div class="card-body">`;
   if (r.isAASHTO)
     h += eq('Effective shear depth',
@@ -5475,7 +5523,7 @@ function renderStem(r) {
          {sym:'\\rho_w', desc:'longitudinal steel ratio A_s/(b d)', val:F(r.shearStem.rho,5), unit:''},
          {sym:'V_c', desc:'nominal concrete shear', val:F(r.Vc_stem,0), unit:'lb/ft'}]);
   h += eqCheck('Design shear check',
-    `\\phi V_c = ${r.isAASHTO?(r.stem_ee2_governs?'1.00':'0.90'):'0.75'}\\,V_c = ${Fk(r.phiVc_stem)}\\ \\text{kip/ft} \\geq V_u = ${Fk(r.Vu_stem)}\\ \\text{kip/ft}`, r.stem_shear_ok);
+    `\\phi V_c = ${r.isAASHTO?((r.stem_ee2_governs||r.stem_eq_governs)?'1.00':'0.90'):'0.75'}\\,V_c = ${Fk(r.phiVc_stem)}\\ \\text{kip/ft} \\geq V_u = ${Fk(r.Vu_stem)}\\ \\text{kip/ft}`, r.stem_shear_ok);
   h += `</div></div>`;
 
   // ════ STEP 5 — DEVELOPMENT & CUTOFF ════
@@ -5538,7 +5586,7 @@ function renderStem(r) {
   h += `<div class="sec-heading">Stem — Mid-Height (Top-Half) Section</div>`;
   h += `<div class="alert info" style="margin-bottom:12px;">The tapered stem's upper bars are governed by the section at mid-height (h_s/2 = ${F(r.Hs_mid,2)} ft above base), where the wall is thinner (t = ${F(r.ts_mid,2)} in) but still retains significant soil${r.aashtoR&&r.aashtoR.ct?' and the collision force still applies':''}. This section is designed as a cantilever fixed at mid-height.</div>`;
   h += `<div class="card" style="margin-bottom:16px;">
-    <div class="card-hd"><span class="card-title">Mid Step 1 — Factored Demands at Mid-Height</span><span class="card-ref">${r.isAASHTO?'Strength I / Extreme Event II':'U = 1.6H'} · h = ${F(r.Hs_mid,2)} ft</span></div>
+    <div class="card-hd"><span class="card-title">Mid Step 1 — Factored Demands at Mid-Height</span><span class="card-ref">${r.isAASHTO?'Strength I / Extreme Event II' + (r.sq_mid ? ' / Extreme Event I' : ''):'U = 1.6H' + (r.sq_mid ? ' / 1.2D + 1.0E + 1.6H' : '')} · h = ${F(r.Hs_mid,2)} ft</span></div>
     <div class="card-body">`;
   h += eq('Factored moment — soil + surcharge over top half',
     `M_{u,soil} = \\boxed{${F(r.Mu_stemT_soil,1)}\\ \\text{lb·ft/ft}}`,'',
@@ -5549,6 +5597,8 @@ function renderStem(r) {
       `M_{u,CT} = CT_h(h/2 + h_{CT}) = \\boxed{${F(r.Mu_stemT_ct,1)}\\ \\text{lb·ft/ft}}`,'AASHTO §3.6.5',
       [{sym:'CT_h', desc:'horizontal collision force per ft', val:F(r.aashtoR?.ct?.CT_h||0,3), unit:'kip/ft'},
        {sym:'M_{u,CT}', desc:'collision moment at mid-section', val:F(r.Mu_stemT_ct,1), unit:'lb·ft/ft'}]);
+  if (r.sq_mid) h += eq('Seismic combination at mid-height (' + (r.isAASHTO ? 'Extreme Event I, φ = 1.0' : 'U = 1.2D + 1.0E + 1.6H') + ')' + (r.stemT_eq_governs ? ' — GOVERNS' : ''),   // RWSQ
+    `M_{u,EQ} = \\boxed{${F(r.Mu_stemT_eq,1)}\\ \\text{lb·ft/ft}}`, '');
   h += eq('Total factored design moment at mid-height',
     `M_u = \\boxed{${F(r.Mu_stemT_lbft,1)}\\ \\text{lb·ft/ft}} = ${Fk(r.Mu_stemT_lbft)}\\ \\text{kip·ft/ft}`,'',
     [{sym:'M_u', desc:'total factored moment at mid-section', val:F(r.Mu_stemT_lbft,1), unit:'lb·ft/ft'}]);
@@ -8840,7 +8890,7 @@ function rwResultRows(r) {
     bearing:      () => A ? [AA(a.onRock ? '10.6.5' : '10.6.3.1') + '; Strength I / Ia', a.q_ult_gov / a.q_R_A] : ['service loads; q<sub>max</sub> ≤ q<sub>a</sub>', r.q_max / r.inp.qa],
     ecc:          () => A ? [AA('11.6.3.3') + '; e ≤ ' + a.e_limit_label, Math.abs(a.e_A) / a.e_limit] : ['service loads; e ≤ ' + (r.aci_ecc_limit === 'b6' ? 'B/6 (middle third)' : 'B/4') + ', the engineer\u2019s limit (no limit in ACI 318-19 §13.2.6.1 / IBC 2018 §1807.2.1)', Math.abs(r.e) / r.ecc_lim_aci],   // RWEC
     stemFlex:     () => [A ? AA('5.6.3') : 'ACI 318-19 §9.5 / §22.2', r.As_stem_des / r.sel_stem.As_prov,
-                         r.stem_overstressed ? 'section over-stressed' : (r.stem_ee2_governs ? 'Extreme Event II governs' : '')],
+                         r.stem_overstressed ? 'section over-stressed' : (r.stem_eq_governs ? (A ? 'Extreme Event I governs' : 'U = 1.2D + 1.0E + 1.6H governs') : r.stem_ee2_governs ? 'Extreme Event II governs' : '')],
     stemShear:    () => [A ? AA('5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', r.Vu_stem / r.phiVc_stem],
     stemMidShear: () => [A ? AA('5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', r.Vu_stemT / r.phiVc_stemT],
     stemHook:     () => [A ? AA('5.10.8.2.4a') : 'ACI 318-19 §25.4.3.1', r.ldh_stem / r.ldh_avail],
@@ -10034,8 +10084,10 @@ function rwrModel(r) {
     if (inp.q_sur > 0) T1.push(rwrS({ id: 'MES', label: 'Factored moment, dead surcharge (γ' + (isA ? '_ES = 1.50' : ' = 1.6') + ')', sym: 'M_{u,ES}', eq: gES + '\\cdot\\frac{K_{a} q_{s} H_{s}^{2}}{2}', sub: gES + '\\cdot\\frac{(' + rwrN(r.Ka, 4) + ')(' + rwrN(inp.q_sur, 0) + ')(' + rwrN(inp.Hs, 2) + ')^{2}}{2}', value: gES * r.Ka * inp.q_sur * inp.Hs ** 2 / 2, unit: 'lb-ft/ft', d: 1 }));
     if (isA && qll > 0) T1.push(rwrS({ id: 'MLS', label: 'Factored moment, live-load surcharge (γ_LS = 1.75)', sym: 'M_{u,LS}', eq: '1.75\\cdot\\frac{K_{a}\\gamma_{s}h_{eq}H_{s}^{2}}{2}', sub: '1.75\\cdot\\frac{(' + rwrN(r.Ka, 4) + ')(' + rwrN(qll, 0) + ')(' + rwrN(inp.Hs, 2) + ')^{2}}{2}', value: gLS * r.Ka * qll * inp.Hs ** 2 / 2, unit: 'lb-ft/ft', d: 1}));
     if (r.stem_water) T1.push(rwrS({ id: 'Mhyd', label: 'Water-table adjustment: buoyant soil below the water table + hydrostatic (h_2 = ' + rwrN(Math.max(0, inp.Hs - r.wt_d), 2) + ' ft)', sym: 'M_{u,hyd}', eq: (isA ? '\\gamma_{WA}' : '\\gamma') + '\\cdot\\frac{1}{2}\\gamma_{w} h_{2}^{2}\\cdot\\frac{h_{2}}{3}', sub: '', value: (isA ? 1.0 : 1.6) * r.sd_base_Mhyd, unit: 'lb-ft/ft', d: 1, ref: isA ? AA('Table 3.4.1-1, γ_WA = 1.0') : 'γ = 1.6 (ACI H)' }));
-    T1.push(rwrS({ id: 'Mu', label: 'Total factored design moment' + (r.stem_ee2_governs ? ' (Extreme Event II governs)' : ''), sym: 'M_{u}', eq: r.stem_ee2_governs ? '\\max(M_{u,StrI},\\, M_{u,EE2})' : '\\sum M_{u,i}', sub: r.stem_ee2_governs ? '\\max(' + rwrN(r.Mu_stem_strI, 1) + ',\\, ' + rwrN(r.Mu_stem_ee2, 1) + ')' : '', value: r.Mu_stem_lbft, unit: 'lb-ft/ft', d: 1, note: r.stem_water ? 'water-aware: the 3-block effective-stress profile plus the hydrostatic triangle' : '' }));
-    T1.push(rwrS({ id: 'Vu', label: 'Factored shear at the base', sym: 'V_{u}', eq: '', sub: '', value: r.Vu_stem, unit: 'lb/ft', d: 1, note: r.hasSeismic ? 'ΔP_E is not included in the stem design (as the tab)' : '' }));
+    if (r.sq_base) T1.push(isA ? rwrS({ id: 'MuEQ', label: 'Extreme Event I at the stem base (φ = 1.0): case 1 P_AE,s + 0.5P_IR,s, case 2 max(0.5P_AE,s, P_A,s) + P_IR,s (P_AE,s = ' + rwrN(r.sq_base.PAE, 0) + ' at H_s/3, P_IR,s = ' + rwrN(r.sq_base.PIR, 0) + ' lb/ft)', sym: 'M_{u,EQ}', eq: '\\max(M_{1},\\, M_{2})', sub: '\\max(' + rwrN(r.sq_base.c1.M, 0) + ',\\, ' + rwrN(r.sq_base.c2.M, 0) + ')', value: r.Mu_stem_eq, unit: 'lb-ft/ft', d: 0, ref: AA('Art. 11.6.5.1') })
+      : rwrS({ id: 'MuEQ', label: 'Seismic combination U = 1.2D + 1.0E + 1.6H: ΔP_E,s = ΔP_E(H_s/H)² = ' + rwrN(r.sq_base.Pe, 1) + ' lb/ft at 0.6H_s', sym: 'M_{u,E}', eq: 'M_{u,1.6H} + 1.0\\,\\Delta P_{E,s}(0.6H_{s})', sub: rwrN(r.Mu_stem_strI, 0) + ' + ' + rwrN(r.sq_base.Pe, 1) + '(' + rwrN(0.6 * inp.Hs, 2) + ')', value: r.Mu_stem_eq, unit: 'lb-ft/ft', d: 0, ref: 'ACI 318-19 Eq. 5.3.1e' }));   // RWSQ
+    T1.push(rwrS({ id: 'Mu', label: 'Total factored design moment' + (r.stem_eq_governs ? (isA ? ' (Extreme Event I governs)' : ' (seismic combination governs)') : r.stem_ee2_governs ? ' (Extreme Event II governs)' : ''), sym: 'M_{u}', eq: r.sq_base ? '\\max(M_{u,StrI},\\, ' + (r.Mu_stem_ee2 > 0 ? 'M_{u,EE2},\\, ' : '') + 'M_{u,EQ})' : r.stem_ee2_governs ? '\\max(M_{u,StrI},\\, M_{u,EE2})' : '\\sum M_{u,i}', sub: r.sq_base ? '\\max(' + rwrN(r.Mu_stem_strI, 1) + ',\\, ' + (r.Mu_stem_ee2 > 0 ? rwrN(r.Mu_stem_ee2, 1) + ',\\, ' : '') + rwrN(r.Mu_stem_eq, 1) + ')' : r.stem_ee2_governs ? '\\max(' + rwrN(r.Mu_stem_strI, 1) + ',\\, ' + rwrN(r.Mu_stem_ee2, 1) + ')' : '', value: r.Mu_stem_lbft, unit: 'lb-ft/ft', d: 1, note: r.stem_water ? 'water-aware: the 3-block effective-stress profile plus the hydrostatic triangle' : '' }));
+    T1.push(rwrS({ id: 'Vu', label: 'Factored shear at the base', sym: 'V_{u}', eq: '', sub: '', value: r.Vu_stem, unit: 'lb/ft', d: 1, note: r.sq_base ? 'includes the seismic combination (' + rwrN(r.Vu_stem_eq, 0) + ' lb/ft)' : '' }));   // RWSQ
     const T2 = [rwrS({ id: 'd', label: 'Effective depth (S1 bar #' + ss.bar.num + ', d_b = ' + rwrN(ss.bar.db, 3) + ' in; tension on the back face)', sym: 'd', eq: 't_{s,bot} \\minus c_{c} \\minus \\frac{d_{b}}{2}', sub: rwrN(inp.ts_bot, 1) + ' \\minus ' + rwrN(inp.cov_stem, 2) + ' \\minus ' + rwrN(ss.bar.db / 2, 4), value: r.d_stem, unit: 'in', d: 3 })];
     const flex = (pre, Mu_in, d, Rn, Asr, Asm, Asd, h, sel, mark, okk, osd) => [
       rwrS({ id: 'Rn', label: 'Required flexural resistance factor', sym: 'R_{n}', eq: '\\frac{M_{u}}{\\phi\\,b\\,d^{2}}', sub: '\\frac{' + rwrN(Mu_in, 0) + '}{(0.90)(12)(' + rwrN(d, 3) + ')^{2}}', value: Rn, unit: 'psi', d: 2 }),
@@ -10052,7 +10104,7 @@ function rwrModel(r) {
       : [rwrS({ id: 'lams', label: 'Size-effect factor', sym: '\\lambda_{s}', eq: '\\sqrt{\\frac{2}{1 + d/10}} \\le 1', sub: '\\sqrt{\\frac{2}{1 + ' + rwrN(d, 2) + '/10}}', value: sh.lam_s, unit: '', d: 3 }),
          rwrS({ id: 'rho', label: 'Longitudinal steel ratio', sym: '\\rho_{w}', eq: '\\frac{A_{s}}{b\\,d}', sub: '', value: sh.rho, unit: '', d: 5 }),
          rwrS({ id: 'Vc', label: 'Nominal concrete shear, members without shear reinforcement (≤ 5λ√f′c b d)', sym: 'V_{c}', eq: '8\\lambda_{s}\\lambda\\,\\rho_{w}^{1/3}\\sqrt{' + RWR_FC + '}\\,b\\,d', sub: '8(' + rwrN(sh.lam_s, 3) + ')(1.0)(' + rwrN(sh.rho, 5) + ')^{1/3}\\sqrt{' + rwrN(inp.fc, 0) + '}(12)(' + rwrN(d, 2) + ')', value: Vc, unit: 'lb/ft', d: 0, ref: 'ACI 318-19 Table 22.5.5.1(c)' })];
-    const phiS = isA ? (r.stem_ee2_governs ? '1.00' : '0.90') : '0.75';
+    const phiS = isA ? ((r.stem_ee2_governs || r.stem_eq_governs) ? '1.00' : '0.90') : '0.75';   // RWSQ
     const T4 = vc(r.shearStem, r.Vc_stem, r.d_stem, inp.ts_bot).concat([
       rwrS({ id: 'phiVc', label: 'Design shear resistance', sym: '\\phi V_{c}', eq: phiS + '\\,V_{c}', sub: phiS + '(' + rwrN(r.Vc_stem, 0) + ')', value: r.phiVc_stem, unit: 'lb/ft', d: 0 }),
       rwrS({ id: 'dc', label: 'One-way shear check: V_u ≤ φV_c', sym: '\\frac{V_{u}}{\\phi V_{c}}', eq: '', sub: '\\frac{' + rwrN(r.Vu_stem, 0) + '}{' + rwrN(r.phiVc_stem, 0) + '}', value: dcv('stemShear'), unit: '', d: 3, ok: ok('stemShear') })]);
@@ -10987,7 +11039,7 @@ function rwdwBuild(r) {
       '7. BACKFILL: GAMMA = ' + rwdwN(inp.gamma_s, 0) + ' PCF, PHI = ' + rwdwN(inp.phi, 0) + '°, SLOPE BETA = ' + rwdwN(inp.beta, 1) + '°' + (inp.q_sur > 0 ? '; SURCHARGE Q_S = ' + rwdwN(inp.q_sur, 0) + ' PSF' : '') + (isA && r.q_ll_aashto > 0 ? '; LS H_EQ = ' + rwdwN(r.heq, 2) + ' FT' : '') + '.',
       '8. WATER: ' + (r.hasWT ? 'WATER TABLE ' + rwdwN(r.wt_d, 2) + ' FT BELOW THE TOP OF WALL, GAMMA_SAT = ' + rwdwN(r.gamma_sat, 0) + ' PCF, ' + (inp.uplift_mode === 'triangular' ? 'TRIANGULAR' : 'UNIFORM') + ' UPLIFT.' : 'NO WATER TABLE IN THE DESIGN (DRAINED BACKFILL ASSUMED).'),
       '9. SLIDING: ' + (isA ? 'BASE FRICTION ' + AS(a.fric_label).toUpperCase() + ', PHI_TAU = ' + rwdwN(inp.aashto.phi_tau, 2) : 'MU = ' + rwdwN(inp.mu, 3)) + '; PASSIVE AT THE TOE ' + (inp.inclPassive ? 'INCLUDED' : 'NEGLECTED') + (G.dk > 0 ? '; SHEAR KEY ' + rwdwIn(G.dk) + ' DEEP' : '') + '.',
-      '10. SEISMIC: ' + (r.hasSeismic ? (isA ? 'K_H = ' + rwdwN(inp.kh, 3) + '; EXTREME EVENT I STABILITY (AASHTO 11.6.5.1, P_AE AND WALL INERTIA) CHECKED; NOT IN THE STEM DESIGN.' : 'MONONOBE-OKABE INCREMENT AT 0.6H (K_H = ' + rwdwN(inp.kh, 3) + ', K_V = ' + rwdwN(inp.kv, 3) + ') IN STABILITY; NOT IN THE STEM DESIGN.') : 'NONE (K_H = 0).'),
+      '10. SEISMIC: ' + (r.hasSeismic ? (isA ? 'K_H = ' + rwdwN(inp.kh, 3) + '; EXTREME EVENT I STABILITY (AASHTO 11.6.5.1, P_AE AND WALL INERTIA) CHECKED; STEM DESIGNED FOR EXTREME EVENT I.' : 'MONONOBE-OKABE INCREMENT AT 0.6H (K_H = ' + rwdwN(inp.kh, 3) + ', K_V = ' + rwdwN(inp.kv, 3) + ') IN STABILITY (0.7E, FS 1.1) AND IN THE STEM (U = 1.2D + 1.0E + 1.6H).') : 'NONE (K_H = 0).'),
       'ASSUMPTIONS AND SCOPE',
       '11. NOT IN THE TOOL, BY THE ENGINEER OF RECORD / GEOTECHNICAL ENGINEER: GLOBAL STABILITY, SETTLEMENT, DRAINAGE (WEEP HOLES,',
       '    DRAINS, FILTER), JOINT LAYOUT AND WALL LENGTH, SHEAR-KEY AND FRONT-FACE REINFORCEMENT, LAP OF THE S1 DOWELS, BAR DEVELOPMENT.',
