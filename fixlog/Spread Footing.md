@@ -6215,3 +6215,26 @@ index 50f3837..c2d5000 100644
   - A renderer sweep over 38 inputs (selector picks included): no renderer error, no Out-of-date banner, no Report error.
   - check-syntax, spread-footing-scroll, phone-layout --tool sf, project-library --tool spreadfooting, start-chooser. Screenshots checked.
 - **Saved data:** none. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/sf-m7-vesic-local (SFVL: Vesić bearing option "Local / punching shear" with c* = 0.67c, φ* = tan⁻¹(0.67 tan φ), AASHTO LRFD 10th 10.6.3.1.2b; warning when φ < 30° in general shear; option default "general": results unchanged)
+
+- **Problem:** Vesić mode had no local or punching shear failure mode. AASHTO LRFD 10th Ed. 10.6.3.1.2b requires reduced strength parameters where such a failure is possible (loose or compressible soils, weak soils under slow loading, dense sand under deep footings with high loads; Fig. C10.6.3.1.2b-1).
+- **Where / exact code (`Spread Footing.html`):**
+  - Input: Soil, "Shear failure mode" `soil.sfdShearMode` ('general' default / 'local'). `defaultState` adds `sfdShearMode:'general'`. `migrateState`: any value other than 'local' becomes 'general' (older saves: as before).
+  - `computeAll` (anchor `/* SFVL (2026-11-07)`):
+    - Before: `const ctx={B,L,Df,phi,c,gs,gw,…};`
+    - After: `phiB = lpMode ? atan(0.67 tan φ) : φ`, `cB = lpMode ? 0.67c : c`, and `ctx={…,phi:phiB,c:cB,…}`.
+    - `R.lpMode`, `R.phiB`, `R.phiBdeg` and `R.cB` are returned.
+    - Sliding (μ = tan(2φ/3)) and passive (K_p) keep φ.
+  - Warning: Vesić with general shear and φ < 30° → "local or punching shear failure is possible …".
+  - Displays:
+    - Bearing tab: an eqBlock for c*, φ*. The factor blocks show φ* (`R.phiBdeg`).
+    - Report: a topic "Local / punching shear: reduced strength parameters", and the factor steps use φ*.
+    - Inputs echo: "Shear failure mode".
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 10.6.3.1.2b, Eqs. 10.6.3.1.2b-1 (c* = 0.67c) and 10.6.3.1.2b-2 (φ* = tan⁻¹(0.67 tan φ_f)). Text read in the 10th Ed. PDF.
+- **Decision (pending engineer review):** whether local / punching shear governs is a geotechnical judgement, so the default stays "general" (saved projects unchanged). A warning prompts the choice when φ < 30° (conservative screening; the AASHTO figure uses relative density and D_f/B, which the tool does not take as input).
+- **Check case (default project, φ = 28°, option Local / punching):**
+  - φ* = tan⁻¹(0.67·tan 28°) = tan⁻¹(0.3562) = **19.61°**; c* = 0.
+  - q_ult 15.11 → **5.31 ksf**; governing D + 0.75L + 0.45(+Wx) + 0.75S bearing D/C **1.196 → 3.404**.
+  - With the option at "general" nothing changes. The default project (φ = 32°) shows no warning.
+- **Saved data:** new field `soil.sfdShearMode`. Older saves read as 'general' (no result change).
