@@ -3945,7 +3945,7 @@ function sfrModel(){
    const fl=[S({id:'Mu',label:'Factored moment, bottom (envelope; total over the width '+sfrN(des.wperp)+' ft)',sym:'M_{u}',eq:'',sub:'',value:des.MuPos,unit:'kip-ft',note:des.govPos?'governing combination: '+des.govPos.cb.name+' at '+dir+' = '+sfrN(des.govMloc,3)+' ft':''}),
     S({id:'As',label:'Bottom steel across the width',sym:'A_{s}',eq:'A_{s}/\\text{ft} \\cdot w',sub:sfrN(des.AsBot,3)+'\\cdot'+sfrN(des.wperp),value:cb.As,unit:'in^{2}',d:3}),
     S({id:'a',label:'Depth of the stress block',sym:'a',eq:'\\frac{A_{s} f_{y}}{0.85 '+SFR_FC+' b}',sub:'\\frac{'+sfrN(cb.As,3)+'\\cdot'+sfrN(P2.fy,0)+'}{0.85\\cdot'+sfrN(P2.fc,0)+'\\cdot'+sfrN(des.wperp*12,1)+'}',value:cb.a,unit:'in',d:3}),
-    S({id:'phi',label:'Strength reduction factor (by ε_t = '+sfrN(cb.eps_t,4)+')',sym:'\\phi',eq:'',sub:'',value:cb.phi,unit:'',d:3,ref:'ACI 318-19 Table 21.2.2'}),
+    S({id:'phi',label:'Strength reduction factor (by ε_t = '+sfrN(cb.eps_t,4)+'; ε_ty = '+(P2.fy>60000?'f_y/E_s = '+sfrN(sfdEty(P2.fy),5):'0.002')+', tension-controlled at ε_t ≥ ε_ty + 0.003)',sym:'\\phi',eq:'',sub:'',value:cb.phi,unit:'',d:3,ref:'ACI 318-19 Table 21.2.2'}),
     S({id:'phiMn',label:'Design flexural strength',sym:'\\phi M_{n}',eq:'\\phi A_{s} f_{y} (d \\minus a/2)',sub:sfrN(cb.phi,3)+'\\cdot'+sfrN(cb.As,3)+'\\cdot'+sfrN(P2.fy/1000,0)+'\\cdot('+sfrN(des.dBot,3)+' \\minus '+sfrN(cb.a/2,3)+')/12',value:cb.phiMn/12,unit:'kip-ft',ref:'ACI 318-19 22.3'}),
     S({id:'DCRb',label:'Flexure, bottom: demand / capacity',sym:'DCR',eq:'\\frac{M_{u}}{\\phi M_{n}}',sub:'\\frac{'+sfrN(des.MuPos)+'}{'+sfrN(cb.phiMn/12)+'}',value:des.dcrBot,unit:'',d:3,ok:des.dcrBot<=1+1e-9})];
     if(des.MuNeg>0.01){
@@ -5438,8 +5438,15 @@ $('#btnPrint').addEventListener('click',()=>sfxPrintAny());   /* SFRX: the Repor
 <script>
 /* ================= PHASE 2: structural design engine (LRFD / ACI 318-19) ================= */
 function barAreaPerFt(size,spc){if(!size||!spc||spc<=0)return 0;return BAR_AREA[size]*12/spc;}
-function phiFlexure(eps_t){ // tension-controlled 0.90, transition to 0.65
- if(eps_t>=0.005)return 0.90; if(eps_t<=0.002)return 0.65; return 0.65+0.25*(eps_t-0.002)/0.003;}
+/* SFPY (2026-11-07): phi by net tensile strain per ACI 318-19 Table 21.2.2 with eps_ty from 21.2.2.1: eps_ty = f_y/E_s
+   (E_s = 29,000,000 psi, 20.2.2.2); compression-controlled at eps_t <= eps_ty, tension-controlled at eps_t >= eps_ty + 0.003.
+   Grade 60 (f_y = 60,000 psi) keeps eps_ty = 0.002 as 21.2.2.1 permits, so its limits stay 0.002 / 0.005 (unchanged results).
+   Decision (pending engineer review): below Grade 60 the tool keeps 0.002 too (larger than f_y/E_s, so phi is never higher
+   than before: conservative). Before SFPY the limits were 0.002 / 0.005 for every f_y (unconservative above Grade 60). */
+function sfdEty(fy){return (fy>60000)?fy/29000000:0.002;}
+function phiFlexure(eps_t,fy){ // tension-controlled 0.90, transition to 0.65
+ const ety=sfdEty(fy);
+ if(eps_t>=ety+0.003)return 0.90; if(eps_t<=ety)return 0.65; return 0.65+0.25*(eps_t-ety)/0.003;}
 function beta1(fc){if(fc<=4000)return 0.85;if(fc>=8000)return 0.65;return 0.85-0.05*(fc-4000)/1000;}
 /* flexural capacity of a strip: b (in), d (in), As (in^2), returns {phiMn (k-in), a, eps_t, phi} */
 function flexCap(b,d,As,fc,fy){
@@ -5447,7 +5454,7 @@ function flexCap(b,d,As,fc,fy){
  const a=As*fy/(0.85*fc*b);
  const b1=beta1(fc),cc=a/b1;
  const eps_t=cc>0?0.003*(d-cc)/cc:0.005;
- const phi=phiFlexure(eps_t);
+ const phi=phiFlexure(eps_t,fy);   /* SFPY */
  const Mn=As*fy*(d-a/2); // lb-in
  return{phiMn:phi*Mn/1000,a,eps_t,phi,As,Mn:Mn/1000};
 }
@@ -6805,7 +6812,7 @@ function pmContour(bars,bx,by,fc,fy,Pu_target,nAngles,angList){   // SFPM: angLi
   const pmax=Math.max(...corners.map(proj));
   let dt=0;bars.forEach(bar=>{dt=Math.max(dt,pmax-proj(bar));});
   const et=ecu*(dt-cDepth)/cDepth;
-  return phiFlexure(et);
+  return phiFlexure(et,fy);   /* SFPY: eps_ty from f_y */
  }
  const pts=[];
  const angs=nAngles||24;
