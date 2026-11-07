@@ -2731,7 +2731,7 @@ function stiffenerReq(p,stiff){
 - **How verified:** engine call on G.8B (above); V_x tab renders the block with 0 KaTeX errors. origin/main vs branch on 15 scenarios + v16 engine cases: every check identical (no DCR uses I_st). Kit: check-syntax, steel-beam-builtup 11/11, project-library steelbeam, phone-layout sbeam, list-input sbeam: pass; 0 console errors.
 - **Saved data:** none changed.
 
-## 2026-11-07 — PR: claude/steelbeam-m2-f13-proportions — §F13.2 proportioning limits checked for built-up I-shapes and slender webs (M2; new check)
+## 2026-11-07 — PR: claude/steelbeam-m2-f13-proportions (PR #1039: https://github.com/mlococo88/All-Structural/pull/1039) — §F13.2 proportioning limits checked for built-up I-shapes and slender webs (M2; new check)
 
 From the code-compliance review of 2026-11-07 (finding M2).
 
