@@ -3844,7 +3844,7 @@ Follow-up to item 3 (#944). Engineer answer (2026-11-07): the vertical component
 
 ### Saved data
 - No input or format change.
-## 2026-11-07 — PR: claude/rw-pile-8b-inputs — Pile-supported footing, Phase 8b: foundation type and pile-row inputs, piles in the Analysis diagram, Overview, 3D and Drawings (RWPL; inputs and display only, no result change)
+## 2026-11-07 — PR: claude/rw-pile-8b-inputs — Pile-supported footing, Phase 8b: foundation type and pile-row inputs, piles in the Analysis diagram, Overview, 3D and Drawings (RWPL; inputs and display only, no result change) (PR #957: https://github.com/mlococo88/All-Structural/pull/957)
 
 Review Phase 8 (pile-supported footing), PR 8b. Engineer decisions 2026-11-07 (review Q11–Q18, taken as recommended): pile mode follows the code mode; one pile type per wall; spacing per row; vertical piles; no staggering. Code sites are tagged `RWPL`.
 
