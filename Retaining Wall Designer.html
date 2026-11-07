@@ -2045,7 +2045,7 @@ function devLength(db, fy, fc, psi_t, psi_e, cover_to_ctr, lambda=1.0, spacing=I
 }
 // RWDS (2026-11-07): ℓd of ACI 318-19 §25.4.2.1(a) / Eq. 25.4.2.4a before its 12-in minimum (the lap length ℓst is based on it, Table 25.5.2.1)
 function devLengthACIRaw(db, fy, fc, psi_t, psi_e, cover_to_ctr, lambda=1.0, spacing=Infinity) {
-  const psi_s = db <= 0.75 ? 0.8 : 1.0;   // ACI Table 25.5.2.1
+  const psi_s = db <= 0.75 ? 0.8 : 1.0;   // ACI Table 25.4.2.5 (RWBK 2026-11-07: comment cited Table 25.5.2.1, the lap table)
   const psi_g = fy <= 60000 ? 1.0 : (fy <= 80000 ? 1.15 : 1.3);  // ACI Table 25.4.2.5: Gr 40/60, 80, 100
   const Ktr   = 0;                          // no transverse rebar, conservative
   const cb    = Math.min(cover_to_ctr, (spacing > 0 ? spacing : Infinity) / 2);  // 25.4.2.4: cover to ctr or s/2
@@ -2637,6 +2637,8 @@ function calcAll(inp) {
     const CMB_S1 = { DC: 1.25, EV: 1.35, EH: gEH_max, LS: 1.75, ES: 1.50, WA: 1.00 };   // Strength I, maximum factors (RW3F)
     const H_drive_str = eta * (CMB_S1.EH*P_EH + CMB_S1.LS*P_LS + CMB_S1.ES*P_ES + CMB_S1.WA*P_hyd);
     // Vertical component of the earth thrust is EH (Table 3.4.1-2: γEH max/min), not EV.
+    // RWBK (2026-11-07): the minimum 0.90 on the vertical component (sliding, eccentricity) is the engineer's choice, kept as the
+    // more conservative reading; AASHTO Fig. C11.5.6-2 shows the EH max factor on both components there.
     const gEH_min = 0.90;
     const CMB_S1A = { DC: 0.90, EV: 1.00, EH: gEH_min, ES: 0.75 };   // Strength Ia, minimum vertical factors (RW3F); ES min 0.75 (RWES)
     const V_resist_min = CMB_S1A.DC*(V_DC + W_bar) + CMB_S1A.EV*Wsoil + CMB_S1A.EH*Pa_tri_v + CMB_S1A.ES*V_ES_v + 0*V_LS_v - V_up;   // min vertical for sliding (net of uplift); RWES: + 0.75 ES
@@ -3057,7 +3059,7 @@ function calcAll(inp) {
     return disc > 0 ? (0.85 * inp.fc / inp.fy) * (1 - Math.sqrt(disc)) * bw * d : 1e9;
   }
   function asMin(d, h, Mu_lbin, phi) {
-    if (!isAASHTO) return 0.0018 * bw * h;   // ACI 318-19 7.6.1.1 / Table 24.4.3.2: 0.0018Ag, all grades
+    if (!isAASHTO) return 0.0018 * bw * h;   // ACI 318-19 §7.6.1.1 / §24.4.3.2: 0.0018Ag, all grades (RWBK 2026-11-07: §24.4.3.2 is a paragraph in 318-19, not a table)
     const Mcr = 0.67 * 1.6 * fr_mr * bw * h * h / 6;          // lb-in/ft
     return asForMoment(Math.min(Mcr, 1.33 * Math.abs(Mu_lbin)), d, phi);
   }
@@ -4689,7 +4691,7 @@ function renderStabilityAASHTO(r) {
     `V_{DC} = W_{ftg}+W_{stem}${r.W_bar>0?'+W_{bar}':''}, \\quad V_{EV} = W_{soil}${r.Pa_tri_v>0?', \\quad V_{EH,v} = P_{a,V}':''}${a.V_ES_v>0?', \\quad V_{ES} = q_s L_h':''}${a.V_up>0?', \\quad U = \\gamma_w h_w B':''}`,'',
     [{sym:'V_{DC}', desc:'structural dead load (concrete)', val:F((r.Wftg+r.Wstem+r.W_bar)/1000,2), unit:'k/ft'},
      {sym:'V_{EV}', desc: r.Wwedge>0 ? 'vertical earth load (soil on heel + slope wedge)' : 'vertical earth load (soil on heel)', val:F(r.Wsoil/1000,2), unit:'k/ft'},
-     ...(r.Pa_tri_v>0 ? [{sym:'V_{EH,v}', desc:'vertical component of the earth thrust — factored as EH (γ_EH max/min), not EV', val:F(r.Pa_tri_v/1000,2), unit:'k/ft'}] : []),
+     ...(r.Pa_tri_v>0 ? [{sym:'V_{EH,v}', desc:'vertical component of the earth thrust — factored as EH (γ_EH max/min), not EV; the 0.90 minimum in sliding and eccentricity is the engineer’s choice (more conservative than AASHTO Fig. C11.5.6-2, which shows the EH max factor on both components)', val:F(r.Pa_tri_v/1000,2), unit:'k/ft'}] : []),
      ...(a.V_ES_v>0 ? [{sym:'V_{ES}', desc:'dead-load surcharge on the heel, q_s·L_h (ES, permanent: γ_ES 1.50 max / 0.75 min, Table 3.4.1-2)', val:F(a.V_ES_v/1000,2), unit:'k/ft'}] : []),   // RWES
      ...(a.V_up>0 ? [{sym:'U', desc:'water uplift on base (WA, γ = 1.0) — subtracted', val:F(a.V_up/1000,2), unit:'k/ft'}] : [])]);
   h += `</div></div>`;
@@ -10378,7 +10380,7 @@ function rwrModel(r) {
       if (a.ls_on) st.push(rwrS({ id: 'PLS', label: "Live-load surcharge horizontal LS (at y = H'/2 = " + rwrN(a.y_LS, 2) + ' ft)', sym: 'P_{LS}', eq: 'K_{a}\\,q_{LS}\\,H^{\\prime}', sub: '(' + rwrN(r.Ka, 4) + ')(' + rwrN(a.q_ll_aashto, 0) + ')(' + rwrN(r.Hp, 2) + ')', value: a.P_LS, unit: 'lb/ft', d: 0, ref: AA('Art. 3.11.6.4') }));
       st.push(rwrS({ id: 'VDC', label: 'Vertical dead load of the structure DC', sym: 'V_{DC}', eq: 'W_{ftg} + W_{stem}' + (r.W_bar > 0 ? ' + W_{bar}' : ''), sub: rwrN(r.Wftg, 0) + ' + ' + rwrN(r.Wstem, 0) + (r.W_bar > 0 ? ' + ' + rwrN(r.W_bar, 0) : ''), value: r.Wftg + r.Wstem + r.W_bar, unit: 'lb/ft', d: 0 }));
       st.push(rwrS({ id: 'VEV', label: 'Vertical earth load EV' + (r.Wwedge > 0 ? ' (soil on the heel + slope wedge)' : ' (soil on the heel)'), sym: 'V_{EV}', eq: 'W_{soil}', sub: '', value: r.Wsoil, unit: 'lb/ft', d: 0 }));
-      if (r.Pa_tri_v > 0) st.push(rwrS({ id: 'VEHv', label: 'Vertical component of the earth thrust (factored as EH, not EV)', sym: 'V_{EH,v}', eq: 'P_{a,V}', sub: '', value: r.Pa_tri_v, unit: 'lb/ft', d: 0 }));
+      if (r.Pa_tri_v > 0) st.push(rwrS({ id: 'VEHv', label: 'Vertical component of the earth thrust (factored as EH, not EV; the 0.90 minimum in sliding and eccentricity is the engineer’s choice, more conservative than AASHTO Fig. C11.5.6-2)', sym: 'V_{EH,v}', eq: 'P_{a,V}', sub: '', value: r.Pa_tri_v, unit: 'lb/ft', d: 0 }));
       if (a.V_ES_v > 0) st.push(rwrS({ id: 'VES', label: 'Dead-load surcharge on the heel ES (permanent; γ_ES = 1.50 maximum, 0.75 minimum; arm x = ' + rwrN(a.x_ESv, 3) + ' ft)', sym: 'V_{ES}', eq: 'q_{s} L_{h}', sub: '(' + rwrN(inp.q_sur, 0) + ')(' + rwrN(inp.Lh, 2) + ')', value: a.V_ES_v, unit: 'lb/ft', d: 0, ref: AA('Table 3.4.1-2') }));   // RWES
       if (a.V_up > 0) st.push(rwrS({ id: 'U', label: 'Water uplift on the base (WA, γ = 1.0), subtracted', sym: 'U', eq: '\\gamma_{w} h_{w} B', sub: '', value: a.V_up, unit: 'lb/ft', d: 0 }));
       subs.push(sub('Step 3 — Unfactored load components (per ft of wall)', [rwrItem('sa3', [{ title: 'Loads', steps: st }])])); }
