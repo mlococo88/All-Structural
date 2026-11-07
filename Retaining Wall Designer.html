@@ -5674,6 +5674,16 @@ function renderStabilitySoil(r) {
     <div class="card-hd"><span class="card-title">Step 2 — Lateral Driving Forces</span><span class="card-ref">per foot of wall · ${rwHu(r)} = ${F(r.H_ret,3)} ft</span></div>
     <div class="card-body">`;
   h += rwHpEq(r);   // RWHP
+  // RWPA (2026-11-07, display only): with a sloped backfill the thrust acts on H′ through the heel end (r.Hp), as computed
+  const slp = r.Hp > r.H_ret + 1e-9, HPt = slp ? "H'" : rwHt(r), HPu = slp ? 'H\u2032' : rwHu(r);
+  const HPd = slp ? 'pressure-plane height through the heel end' : (r.h_p > 0 ? 'retained height H − h_p' : 'total wall height');
+  if (slp) { const Lr = inp.Lh + r.ts_bot_ft - r.t_g / 12;
+    h += eq('Pressure-plane height — sloped backfill (vertical plane through the heel end)',
+      `H' = ${rwHt(r)} + L\\tan\\beta = ${F(r.H_ret,3)} + (${F(Lr,3)})\\tan(${F(inp.beta,1)}°) = ${F(r.H_ret,3)} + ${F(r.dH_slope,3)} = \\boxed{${F(r.Hp,3)}\\ \\text{ft}}`,'Rankine',
+      [{sym:rwHt(r), desc: r.h_p > 0 ? 'retained height H − h_p' : 'total wall height', val:F(r.H_ret,3), unit:'ft'},
+       {sym:'L', desc:'stem back face at the grade to the heel end: L_h + t_bot − t_g' + (r.h_p > 0 ? ' (t_g = stem thickness at the grade)' : ' (t_g = t_top)'), val:F(Lr,3), unit:'ft'},
+       {sym:'\\beta', desc:'backfill slope angle', val:F(inp.beta,1), unit:'°'},
+       {sym:"H'", desc:'pressure-plane height: earth and surcharge pressure act on it', val:F(r.Hp,3), unit:'ft'}]); }
   if (r.hasWT) {
     h += eq('Active force — above water table (moist soil)',
       `P_{a,1} = \\tfrac{1}{2} K_a \\gamma_s h_1^2 = \\tfrac{1}{2}(${F(r.Ka,4)})(${F(inp.gamma_s,0)})(${F(r.h_above,2)})^2 = \\boxed{${F(0.5*r.Ka*inp.gamma_s*r.h_above**2,1)}\\ \\text{lb/ft}}`,'',
@@ -5702,10 +5712,10 @@ function renderStabilitySoil(r) {
        {sym:'F_{hyd}', desc:'hydrostatic resultant', val:F(r.F_hyd,1), unit:'lb/ft'}]);
   } else {
     h += eq('Active soil resultant (triangular distribution)',
-      `P_a = \\tfrac{1}{2} K_a \\gamma_s ${rwHt(r)}^2 = \\tfrac{1}{2}(${F(r.Ka,4)})(${F(inp.gamma_s,0)})(${F(r.H_ret,3)})^2 = \\boxed{${F(r.Pa_tri,1)}\\ \\text{lb/ft}}`,'',
+      `P_a = \\tfrac{1}{2} K_a \\gamma_s ${HPt}^2 = \\tfrac{1}{2}(${F(r.Ka,4)})(${F(inp.gamma_s,0)})(${F(r.Hp,3)})^2 = \\boxed{${F(r.Pa_tri,1)}\\ \\text{lb/ft}}`,'',   // RWPA: on H′ (was shown on H_ret)
       [{sym:'K_a', desc:'active coefficient', val:F(r.Ka,4), unit:''},
        {sym:'\\gamma_s', desc:'soil unit weight', val:F(inp.gamma_s,0), unit:'pcf'},
-       {sym:rwHt(r), desc: r.h_p > 0 ? 'retained height H − h_p' : 'total wall height', val:F(r.H_ret,3), unit:'ft'},
+       {sym:HPt, desc:HPd, val:F(r.Hp,3), unit:'ft'},
        {sym:'P_a', desc:'active soil resultant', val:F(r.Pa_tri,1), unit:'lb/ft'}]);
   }
   if (r.Pa_incl_deg > 0) {
@@ -5719,10 +5729,10 @@ function renderStabilitySoil(r) {
       `P_{a,V} = P_a\\sin${iSym} = ${F(r.Pa_tri,1)}\\sin(${F(r.Pa_incl_deg,1)}°) = \\boxed{${F(r.Pa_tri_v,1)}\\ \\text{lb/ft}}`,'',
       [{sym:'P_{a,V}', desc:'vertical component (stabilizing)', val:F(r.Pa_tri_v,1), unit:'lb/ft'}]);
   }
-  h += eq('Surcharge lateral force (uniform over ' + rwHu(r) + ')',
-    `P_{a,sur} = K_a q_s ${rwHt(r)} = (${F(r.Ka,4)})(${F(inp.q_sur,0)})(${F(r.H_ret,3)}) = \\boxed{${F(r.Pa_sur_h,1)}\\ \\text{lb/ft}}`,'',
+  h += eq('Surcharge lateral force (uniform over ' + HPu + ')',
+    `P_{a,sur} = K_a q_s ${HPt} = (${F(r.Ka,4)})(${F(inp.q_sur,0)})(${F(r.Hp,3)}) = \\boxed{${F(r.Pa_sur_h,1)}\\ \\text{lb/ft}}`,'',   // RWPA: on H′
     [{sym:'q_s', desc:'surcharge pressure', val:F(inp.q_sur,0), unit:'psf'},
-     {sym:rwHt(r), desc: r.h_p > 0 ? 'retained height H − h_p' : 'total wall height', val:F(r.H_ret,3), unit:'ft'},
+     {sym:HPt, desc:HPd, val:F(r.Hp,3), unit:'ft'},
      {sym:'P_{a,sur}', desc:'lateral surcharge force', val:F(r.Pa_sur_h,1), unit:'lb/ft'}]);
   if (r.hasSeismic) {
     h += eq('Seismic increment — Mononobe-Okabe (kh = '+F(inp.kh,3)+', kv = '+F(inp.kv,3)+')',
@@ -6801,10 +6811,15 @@ function renderFooting(r) {
      {sym:'V_u', desc:'heel design shear at stem face', val:F(r.Vu_heel,1), unit:'lb/ft'}]);
   h += `<div class="alert info" style="margin:4px 0 8px;">${HINTS.heel_basis[r.heelBasis] || ''}<br><span style="opacity:.85">Change the basis under <b>Design Options → Heel flexure/shear design basis</b>. Serviceability (crack control) always uses the unfactored no-relief moment.</span></div>`;
   if (r.useMassDOTFtg) {
+    // RWMW (2026-11-07, display only): w_DL as computed: the soil column w_soil_col (γ_sat below the water table) + γ_c·t_f; + the slope wedge
+    const hSat = r.hasWT ? Math.max(0, r.Hs_ret - r.wt_r) : 0, wDL = r.w_soil_col + inp.gamma_c*r.tf_ft, mW = r.M_wedge_heel > 0;
     h += eq('MassDOT §3.3.2.2 — heel top steel (DL only, no upward relief)',
-      `M_{u,MD} = \\frac{w_{DL} L_h^2}{2} = \\boxed{${F(r.Mu_heel_md,1)}\\ \\text{lb·ft/ft}} \\quad (\\gamma = \\phi = 1.0)`,'MassDOT §3.3.2.2',
-      [{sym:'w_{DL}', desc:'DL of soil above heel + heel self-weight (γ = 1.0, NO live load)',
-        val:F(inp.gamma_s*r.Hs_ret + inp.gamma_c*r.tf_ft,1), unit:'psf'},   // RWHP: soil height H_s,ret
+      `M_{u,MD} = \\frac{w_{DL} L_h^2}{2}${mW ? ' + M_{wedge}' : ''} = \\frac{(${F(wDL,1)})(${F(inp.Lh,2)})^2}{2}${mW ? ` + ${F(r.M_wedge_heel,1)}` : ''} = \\boxed{${F(r.Mu_heel_md,1)}\\ \\text{lb·ft/ft}} \\quad (\\gamma = \\phi = 1.0)`,'MassDOT §3.3.2.2',
+      [{sym:'w_{DL}', desc:'DL of soil above heel + heel self-weight (γ = 1.0, NO live load): ' + (hSat > 0
+          ? `γ_s(H_s,ret − h_sat) + γ_sat·h_sat + γ_c·t_f = ${F(inp.gamma_s,0)}(${F(r.Hs_ret-hSat,2)}) + ${F(r.gamma_sat,1)}(${F(hSat,2)}) + ${F(inp.gamma_c,0)}(${F(r.tf_ft,3)}); h_sat = soil height on the heel below the water table (saturated, total weight; uplift not credited)`
+          : `γ_s·${rwHsu(r)} + γ_c·t_f = ${F(inp.gamma_s,0)}(${F(r.Hs_ret,2)}) + ${F(inp.gamma_c,0)}(${F(r.tf_ft,3)})`),
+        val:F(wDL,1), unit:'psf'},   // RWHP: soil height H_s,ret; RWMW: water table as computed
+       ...(mW ? [{sym:'M_{wedge}', desc:`sloped-backfill wedge above the heel: γ_s·tanβ·(Δt·L_h²/2 + L_h³/3), Δt = t_bot − t_top = ${F(r.ts_bot_ft-r.ts_top_ft,3)} ft, β = ${F(inp.beta,1)}°`, val:F(r.M_wedge_heel,1), unit:'lb·ft/ft'}] : []),
        {sym:'M_{u,MD}', desc:'MassDOT heel design moment (upward pressure NOT credited)',
         val:F(r.Mu_heel_md,1), unit:'lb·ft/ft'}]);
     h += `<div class="alert ${r.heel_md_governs?'warn':'info'}" style="margin-top:8px;">
@@ -11046,18 +11061,22 @@ function rwrModel(r) {
       st.push(rwrS({ id: 'Kp', label: 'Passive coefficient', sym: 'K_{p}', eq: '\\tan^{2}\\left(45' + RWR_DEG + ' + \\frac{\\phi}{2}\\right)', sub: '\\tan^{2}\\left(45' + RWR_DEG + ' + \\frac{' + rwrN(inp.phi, 0) + RWR_DEG + '}{2}\\right)', value: r.Kp, unit: '', d: 4, ref: 'Rankine' }));
       subs.push(sub('Step 1 — Earth pressure coefficients', [rwrItem('st1', [{ title: 'Coefficients', steps: st }]), onTab('stabKa')])); }
     { const T = [], s1 = hpH(), Ka = rwrN(r.Ka, 4), gs = rwrN(inp.gamma_s, 0);   // RWHP: + H_ret
+      // RWPA (2026-11-07, display only): with a sloped backfill P_a and P_a,sur act on H′ through the heel end (r.Hp), as computed
+      const slp = r.Hp > r.H_ret + 1e-9, HPt = slp ? "H'" : HT, HPu = slp ? 'H′' : rwHu(r);
+      if (slp) { const Lr = inp.Lh + r.ts_bot_ft - r.t_g / 12;
+        s1.push(rwrS({ id: 'Hp', label: 'Pressure-plane height, sloped backfill: the vertical plane through the heel end (L = L_h + t_bot − t_g, from the stem back face at the grade to the heel end)', sym: 'H^{\\prime}', eq: HT + ' + L\\tan\\beta', sub: rwrN(r.H_ret, 3) + ' + (' + rwrN(Lr, 3) + ')\\tan(' + rwrN(inp.beta, 1) + RWR_DEG + ')', value: r.Hp, unit: 'ft', d: 3, ref: 'Rankine' })); }
       if (r.hasWT) {
         s1.push(rwrS({ id: 'Pa1', label: 'Active force above the water table (moist soil)', sym: 'P_{a,1}', eq: '\\frac{1}{2} K_{a} \\gamma_{s} h_{1}^{2}', sub: '\\frac{1}{2}(' + Ka + ')(' + gs + ')(' + rwrN(r.h_above, 2) + ')^{2}', value: 0.5 * r.Ka * inp.gamma_s * r.h_above ** 2, unit: 'lb/ft', d: 1 }));
         s1.push(rwrS({ id: 'Pa2', label: 'Active force below the water table, rectangular block from the soil above', sym: 'P_{a,2}', eq: 'K_{a} \\gamma_{s} h_{1} h_{2}', sub: '(' + Ka + ')(' + gs + ')(' + rwrN(r.h_above, 2) + ')(' + rwrN(r.h_below, 2) + ')', value: r.Ka * inp.gamma_s * r.h_above * r.h_below, unit: 'lb/ft', d: 1 }));
         s1.push(rwrS({ id: 'Pa3', label: 'Active force below the water table, buoyant soil', sym: 'P_{a,3}', eq: '\\frac{1}{2} K_{a} \\gamma^{\\prime} h_{2}^{2}', sub: '\\frac{1}{2}(' + Ka + ')(' + rwrN(r.gamma_s_sub, 1) + ')(' + rwrN(r.h_below, 2) + ')^{2}', value: 0.5 * r.Ka * r.gamma_s_sub * r.h_below ** 2, unit: 'lb/ft', d: 1, note: 'γ′ = γ_sat − γ_w = ' + rwrN(r.gamma_sat, 1) + ' − ' + rwrN(r.gamma_w, 1) + ' pcf' }));
         s1.push(rwrS({ id: 'Pa', label: 'Total active soil resultant', sym: 'P_{a}', eq: 'P_{a,1} + P_{a,2} + P_{a,3}', sub: '', value: r.Pa_tri, unit: 'lb/ft', d: 1 }));
         s1.push(rwrS({ id: 'Fhyd', label: 'Hydrostatic force (water column)', sym: 'F_{hyd}', eq: '\\frac{1}{2}\\gamma_{w} h_{w}^{2}', sub: '\\frac{1}{2}(' + rwrN(r.gamma_w, 1) + ')(' + rwrN(r.hw, 2) + ')^{2}', value: r.F_hyd, unit: 'lb/ft', d: 1 }));
-      } else s1.push(rwrS({ id: 'Pa', label: 'Active soil resultant (triangular distribution)', sym: 'P_{a}', eq: '\\frac{1}{2} K_{a} \\gamma_{s} ' + HT + '^{2}', sub: '\\frac{1}{2}(' + Ka + ')(' + gs + ')(' + rwrN(r.H_ret, 3) + ')^{2}', value: r.Pa_tri, unit: 'lb/ft', d: 1 }));
+      } else s1.push(rwrS({ id: 'Pa', label: 'Active soil resultant (triangular distribution)', sym: 'P_{a}', eq: '\\frac{1}{2} K_{a} \\gamma_{s} ' + HPt + '^{2}', sub: '\\frac{1}{2}(' + Ka + ')(' + gs + ')(' + rwrN(r.Hp, 3) + ')^{2}', value: r.Pa_tri, unit: 'lb/ft', d: 1 }));
       if (r.Pa_incl_deg > 0) { const iS = r.coulombThrust ? '(\\delta + \\omega)' : '\\beta';
         s1.push(rwrS({ id: 'PaH', label: 'Horizontal component' + (r.coulombThrust ? ' (Coulomb: inclined at δ + ω)' : ' (inclined at β)'), sym: 'P_{a,H}', eq: 'P_{a}\\cos' + iS, sub: rwrN(r.Pa_tri, 1) + '\\cos(' + rwrN(r.Pa_incl_deg, 1) + RWR_DEG + ')', value: r.Pa_tri_h, unit: 'lb/ft', d: 1 }));
         s1.push(rwrS({ id: 'PaV', label: 'Vertical component (acts downward at the heel, stabilizing)', sym: 'P_{a,V}', eq: 'P_{a}\\sin' + iS, sub: rwrN(r.Pa_tri, 1) + '\\sin(' + rwrN(r.Pa_incl_deg, 1) + RWR_DEG + ')', value: r.Pa_tri_v, unit: 'lb/ft', d: 1 })); }
       T.push({ title: 'Active earth pressure' + (r.hasWT ? ' and water' : ''), steps: s1 });
-      const s2 = [rwrS({ id: 'Pasur', label: 'Surcharge lateral force (uniform over ' + rwHu(r) + ')', sym: 'P_{a,sur}', eq: 'K_{a} q_{s} ' + HT, sub: '(' + Ka + ')(' + rwrN(inp.q_sur, 0) + ')(' + rwrN(r.H_ret, 3) + ')', value: r.Pa_sur_h, unit: 'lb/ft', d: 1 })];
+      const s2 = [rwrS({ id: 'Pasur', label: 'Surcharge lateral force (uniform over ' + HPu + ')', sym: 'P_{a,sur}', eq: 'K_{a} q_{s} ' + HPt, sub: '(' + Ka + ')(' + rwrN(inp.q_sur, 0) + ')(' + rwrN(r.Hp, 3) + ')', value: r.Pa_sur_h, unit: 'lb/ft', d: 1 })];
       if (r.hasSeismic) s2.push(rwrS({ id: 'dPE', label: 'Seismic increment, Mononobe-Okabe (acts at 0.6' + (r.Hp > r.H_ret + 1e-9 ? 'H′' : rwHu(r)) + ')', sym: '\\Delta P_{E}', eq: 'P_{AE} \\minus P_{a,MO}', sub: rwrN(r.Pae, 1) + ' \\minus ' + rwrN(r.Pa_MO, 1), value: r.Pe_inc, unit: 'lb/ft', d: 1, ref: 'ASCE 7-22 §11.8', note: 'k_h = ' + rwrN(inp.kh, 3) + ', k_v = ' + rwrN(inp.kv, 3) }));
       s2.push(rwrS({ id: 'Fh', label: 'Total horizontal driving force', sym: 'F_{h}', eq: 'P_{a,H} + P_{a,sur}' + (r.hasWT ? ' + F_{hyd}' : ''), sub: rwrN(r.Pa_tri_h, 1) + ' + ' + rwrN(r.Pa_sur_h, 1) + (r.hasWT ? ' + ' + rwrN(r.F_hyd, 1) : ''), value: r.Fh, unit: 'lb/ft', d: 1 }));
       T.push({ title: 'Surcharge' + (r.hasSeismic ? ', seismic' : '') + ' and total thrust', steps: s2 });
@@ -11393,7 +11412,7 @@ function rwrModel(r) {
       ...(upHr ? [] : [rwrS({ id: 'Mup', label: 'Moment of the upward bearing about the back face (trapezoid)', sym: 'M_{up}', eq: '\\frac{q_{0} L_{h}^{2}}{2} + \\frac{(q_{L} \\minus q_{0})L_{h}^{2}}{3}', sub: '\\frac{(' + rwrN(r.q0h, 1) + ')(' + rwrN(inp.Lh, 2) + ')^{2}}{2} + \\frac{(' + rwrN(r.qLh, 1) + ' \\minus ' + rwrN(r.q0h, 1) + ')(' + rwrN(inp.Lh, 2) + ')^{2}}{3}', value: r.Mu_heel_up, unit: 'lb-ft/ft', d: 1 })]),
       rwrS({ id: 'MA', label: 'Case A, standard: net moment (upward relief credited)', sym: 'M_{u,A}', eq: 'M_{down} \\minus M_{up}', sub: rwrN(r.Md_heel, 1) + ' \\minus ' + rwrN(r.Mu_heel_up, 1), value: r.Mu_heel_std / 1000, unit: 'kip-ft/ft', d: 3, note: 'V_u,A = |w_u L_h − ' + (upHr ? 'F_up' : '(q_0 + q_L)/2 · L_h') + '| = ' + fk(r.Vu_heel_std) + ' kip/ft' + (upHr ? ' (larger of the two combinations)' : '') }),
       rwrS({ id: 'MB', label: 'Case B, no upward relief: full factored downward cantilever', sym: 'M_{u,B}', eq: 'M_{down}', sub: '', value: r.Mu_heel_nr / 1000, unit: 'kip-ft/ft', d: 3, note: 'V_u,B = w_u L_h = ' + fk(r.Vu_heel_nr) + ' kip/ft' })];
-    if (r.useMassDOTFtg) H2.push(rwrS({ id: 'MMD', label: 'MassDOT §3.3.2.2 heel top steel: DL only, no upward relief (γ = φ = 1.0)' + (r.heel_md_governs ? ', governs' : ', does not govern'), sym: 'M_{u,MD}', eq: '\\frac{w_{DL} L_{h}^{2}}{2}', sub: '\\frac{(' + rwrN(inp.gamma_s * inp.Hs + inp.gamma_c * r.tf_ft, 1) + ')(' + rwrN(inp.Lh, 2) + ')^{2}}{2}', value: r.Mu_heel_md, unit: 'lb-ft/ft', d: 1, ref: 'MassDOT LRFD Bridge Manual §3.3.2.2' }));
+    if (r.useMassDOTFtg) H2.push(rwrS({ id: 'MMD', label: 'MassDOT §3.3.2.2 heel top steel: DL only, no upward relief (γ = φ = 1.0)' + (r.heel_md_governs ? ', governs' : ', does not govern'), sym: 'M_{u,MD}', eq: '\\frac{w_{DL} L_{h}^{2}}{2}' + (r.M_wedge_heel > 0 ? ' + M_{wedge}' : ''), sub: '\\frac{(' + rwrN(r.w_soil_col + inp.gamma_c * r.tf_ft, 1) + ')(' + rwrN(inp.Lh, 2) + ')^{2}}{2}' + (r.M_wedge_heel > 0 ? ' + ' + rwrN(r.M_wedge_heel, 1) : ''), value: r.Mu_heel_md, unit: 'lb-ft/ft', d: 1, ref: 'MassDOT LRFD Bridge Manual §3.3.2.2' }));
     H2.push(rwrS({ id: 'Mu', label: 'Design moment at the stem face, basis ' + ({ std: 'standard', norelief: 'no upward relief', envelope: 'envelope' }[r.heelBasis] || 'standard') + (r.heel_md_governs ? ' (MassDOT governs)' : '') + ' (' + (down ? 'top' : 'bottom') + ' bars)', sym: 'M_{u}', eq: '', sub: '', value: r.Mu_heel_net, unit: 'lb-ft/ft', d: 1 }),
       rwrS({ id: 'Vu', label: 'Design shear at the stem face', sym: 'V_{u}', eq: '', sub: '', value: r.Vu_heel, unit: 'lb/ft', d: 1 }));
     const sh = r.sel_heel, H3 = [rwrS({ id: 'd', label: 'Effective depth', sym: 'd', eq: 't_{f} \\minus c_{c} \\minus \\frac{d_{b}}{2}', sub: rwrN(inp.tf, 1) + ' \\minus ' + rwrN(inp.cov_ftg, 2) + ' \\minus ' + rwrN(sh.bar.db / 2, 4), value: r.d_heel, unit: 'in', d: 3 })];

@@ -6572,3 +6572,46 @@ None: no computed value changes.
 - Problem: the note still listed the shear key (K1, RWSK #947–#951), the front-face bars (S4, RWFF), the S1D / S3–S1 laps and bar development (RWDS / RWS13). All of these have been checked since 2026-11-07.
 - Check case: default ACI, Drawings sheet 4. Note 11 no longer names the key, front face, laps or development.
 - After merging #1157 and the note 11 change: dxf-print-sheets rw all ok; retaining-wall-checks (RWHP rows and every CASES row) all ok; main vs branch at h_p = 0 (ACI, AASHTO, ACI piles) identical, 0 console errors.
+
+## 2026-11-07 — PR: fix/rwall-display-pa-wdl (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — ACI Stability Step 2: P_a and P_a,sur worked on H′ with the H′ = H(_ret) + L·tanβ step (sloped backfill); MassDOT §3.3.2.2 heel w_DL shown as computed, with the water table and the slope wedge (RWPA, RWMW; display only, no result change)
+
+### 1. ACI Stability Step 2, sloped backfill (RWPA)
+- Problem: with β > 0 the analysis puts the active thrust on the vertical plane through the heel end, `Hp = H_ret + dH_slope`, `dH_slope = (L_h + t_bot − t_g)·tanβ` (`computeAll`, anchor `const Hp      = H_ret + dH_slope;`), and `Pa_tri = ½K_aγ_sH′²` (dry), `Pa_sur_h = K_a·q_s·H′`. The worked steps showed ½K_aγ_sH² and K_a·q_s·H with H (or H_ret, #1150) substituted, so the substituted values did not give the boxed P_a / P_a,sur.
+- Where (tab): `renderStabilitySoil`, Step 2, anchor `h += rwHpEq(r);   // RWHP` followed by `if (r.hasWT) {`.
+  - Added (after `rwHpEq`): `const slp = r.Hp > r.H_ret + 1e-9, HPt = slp ? "H'" : rwHt(r), HPu = slp ? 'H′' : rwHu(r);`, `HPd` (description), and, when `slp`, a new eq "Pressure-plane height — sloped backfill": `H' = H(_ret) + L\tanβ = <H_ret> + (<L>)\tan(<β>°) = <H_ret> + <dH_slope> = [<Hp>] ft`, with `L = inp.Lh + r.ts_bot_ft − r.t_g/12`.
+  - P_a (dry branch), before: `P_a = \tfrac{1}{2} K_a \gamma_s ${rwHt(r)}^2 = \tfrac{1}{2}(Ka)(γs)(${F(r.H_ret,3)})^2`; after: `... ${HPt}^2 = \tfrac{1}{2}(Ka)(γs)(${F(r.Hp,3)})^2`; its table row `{sym:HPt, desc:HPd, val:F(r.Hp,3)}`.
+  - P_a,sur, before: `'Surcharge lateral force (uniform over ' + rwHu(r) + ')'`, `K_a q_s ${rwHt(r)} = (Ka)(q_s)(${F(r.H_ret,3)})`; after: `... over ' + HPu + ')'`, `K_a q_s ${HPt} = (Ka)(q_s)(${F(r.Hp,3)})`; row `{sym:HPt, desc:HPd, val:F(r.Hp,3)}`.
+  - With water the three blocks already use h_1, h_2 measured on H′ (unchanged); the H′ step now shows where they come from.
+- Where (Report): `rwrBuild` §4 Stability, Step 2, anchor `{ const T = [], s1 = hpH(), Ka = rwrN(r.Ka, 4), gs = rwrN(inp.gamma_s, 0);   // RWHP: + H_ret`.
+  - Added `slp`, `HPt` (`"H'"` or `HT`), `HPu`, and when `slp` the step `id: 'Hp'` (`H^{\prime} = HT + L\tan\beta`, sub `<H_ret> + (<L>)\tan(<β>°)`, value `r.Hp`).
+  - P_a step `id: 'Pa'` (dry): `HT` → `HPt`, `rwrN(r.H_ret, 3)` → `rwrN(r.Hp, 3)`; P_a,sur step `id: 'Pasur'`: `rwHu(r)` → `HPu`, `HT` → `HPt`, `rwrN(r.H_ret, 3)` → `rwrN(r.Hp, 3)`.
+- At β = 0, `Hp = H_ret` exactly, so the text is unchanged (main vs branch identical for level backfill, with and without h_p).
+- Governing provision (unchanged, display only): Rankine active pressure on the vertical plane through the heel end for a sloping backfill (IBC 2018 §1807.2.3; as computed since RWHP #1150).
+- Check case 1 (ACI default, β = 15°, q_s = 0): H = 13.500 ft, L = 8.00 + 0.50 = 8.500 ft, dH = 8.500·tan15° = 2.278 ft, H′ = 15.778 ft, K_a = 0.3729.
+  - Before: P_a = ½(0.3729)(120)(13.500)² shown = 5570.3 (the substitution gives 4077.7).
+  - After: P_a = ½(0.3729)(120)(15.778)² = 5570.3 lb/ft (hand: 22.374 × 248.95 = 5570).
+- Check case 2 (β = 15°, h_p = 2 ft, q_s = 250 psf): H_ret = 11.500, L = 8.417 ft (t_g at the grade), H′ = 11.500 + 2.255 = 13.755 ft.
+  - P_a: before ½(0.3729)(120)(11.500)² = 4233.9 shown (substitution 2959.0); after ½(0.3729)(120)(13.755)² = 4233.9 lb/ft.
+  - P_a,sur: before (0.3729)(250)(11.500) = 1282.5 shown (substitution 1072.1); after (0.3729)(250)(13.755) = 1282.5 lb/ft.
+
+### 2. MassDOT §3.3.2.2 heel top steel, w_DL (RWMW)
+- Finding: the calculation already accounts for the water table. `computeAll`, anchor `const w_dl_heel = 1.00 * w_soil_col`: `w_soil_col = γ_s(H_s,ret − h_sat) + γ_sat·h_sat`, h_sat = max(0, H_s,ret − wt_r) (anchor `const w_soil_col = inp.gamma_s * (Hs_ret - h_sat_heel)`), and `Mu_heel_md = w_dl_heel·L_h²/2 + M_wedge_heel`. Only the display ignored the water (and the slope wedge; the Report also ignored h_p).
+- Where (tab): footing tab, anchor `if (r.useMassDOTFtg) {` / `'MassDOT §3.3.2.2 — heel top steel (DL only, no upward relief)'`.
+  - Before: `M_{u,MD} = \frac{w_{DL} L_h^2}{2} = [Mu]`, row w_DL `val:F(inp.gamma_s*r.Hs_ret + inp.gamma_c*r.tf_ft,1)`.
+  - After: `wDL = r.w_soil_col + inp.gamma_c*r.tf_ft`; `M_{u,MD} = \frac{w_{DL} L_h^2}{2} [+ M_{wedge}] = \frac{(wDL)(L_h)^2}{2} [+ M_wedge] = [Mu]`; row w_DL `val:F(wDL,1)` with its breakdown (γ_s(H_s,ret − h_sat) + γ_sat·h_sat + γ_c·t_f with water, γ_s·H_s(,ret) + γ_c·t_f without); a row M_wedge (`r.M_wedge_heel`, γ_s·tanβ·(Δt·L_h²/2 + L_h³/3)) when β > 0.
+- Where (Report): `rwrBuild` §6 Heel Step 2, step `id: 'MMD'`. Before: eq `\frac{w_{DL} L_{h}^{2}}{2}`, sub `rwrN(inp.gamma_s * inp.Hs + inp.gamma_c * r.tf_ft, 1)`. After: eq `+ M_{wedge}` when `r.M_wedge_heel > 0`, sub `rwrN(r.w_soil_col + inp.gamma_c * r.tf_ft, 1)` (+ `rwrN(r.M_wedge_heel, 1)`).
+- Governing provision (unchanged): MassDOT LRFD Bridge Manual §3.3.2.2 (DL of all materials above the heel, γ = φ = 1.0, no upward relief).
+- Check case 3 (AASHTO, MassDOT footing rules, WT depth 6 ft from the top, H_s = 12, t_f = 1.5 ft, L_h = 8 ft, γ_sat = 130 pcf): h_sat = 6.00 ft.
+  - Before: w_DL shown 1665.0 psf (120·12 + 150·1.5), M_u,MD shown 55 200.0 lb·ft/ft (the substitution gives 53 280).
+  - After: w_DL = 120(6.00) + 130.0(6.00) + 150(1.500) = 1725.0 psf; M_u,MD = (1725.0)(8.00)²/2 = 55 200.0 lb·ft/ft.
+- Check case 4 (as 3 with β = 10°, h_p = 2 ft): w_DL = 120(4.00) + 130.0(6.00) + 150(1.500) = 1485.0 psf (before shown 1425.0); M_u,MD = 1485.0·64/2 + 3949.7 = 51 469.7 lb·ft/ft (unchanged).
+
+### §4
+None: no computed value changes. Only worked-step text (tab and Report).
+
+### How verified
+- Headless main vs branch, 11 cases (ACI default; β = 15°; β + h_p; β + WT; β + h_p + q_s + k_h; h_p only; AASHTO default; AASHTO MassDOT; MassDOT + WT; MassDOT + WT + β + h_p; ACI MassDOT + WT): `window._R` JSON identical in every case; tab text differs only in the Stability Step 2 (β > 0) and MassDOT heel steps above; Report steps read in the opened worked-step items; 0 console errors, 0 KaTeX errors.
+- `tests/check-syntax.mjs`, `tests/smoke/retaining-wall-checks.mjs`, `tests/smoke/phone-layout.mjs --tool rwall`, `tests/smoke/project-library.mjs --tool retwall`: all pass, 0 console errors.
+
+### Open items (not changed; for the engineer)
+- `M_wedge_heel` / `V_wedge_heel` (anchor `const M_wedge_heel = inp.beta > 0 ? inp.gamma_s * tanB * (dT_ft`) use Δt = t_bot − t_top, while the stability wedge uses L from the stem back face at the grade (t_bot − t_g, RWHP). With h_p > 0 and β > 0 the heel wedge is taken from the stem top thickness rather than the thickness at the grade (slightly larger heel load). Decision needed: use t_g in the heel wedge as in the stability analysis?
