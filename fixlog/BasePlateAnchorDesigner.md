@@ -5352,3 +5352,24 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **How verified:** probe; `node tests/check-syntax.mjs`; `node tests/bpad-circle.mjs`, `bpad-profis.mjs`, `anchor-parity.mjs`; `tests/smoke/project-library.mjs --tool baseplate`, `standard-save.mjs`, `dxf-print-sheets.mjs --tool bp`; 0 console errors (results in the PR).
 - **Other copies:** none.
 - **Open items:** none new.
+
+## 2026-11-07 — BPM4: tension-side plate bending uses the anchor forces of the anchor checks (PR: claude/bp-m4-tension-plate, PR #970: https://github.com/mlococo88/All-Structural/pull/970)
+
+### BPM4. Tension side: largest T_i·x_i from the anchor force model   [calculation change, generally more conservative; saved data: none]
+- **Problem (review M4):** `plateBending()` took the tension-side anchor force from `combo.Tu_per`: the DG1 per-axis tensions combined by SRSS. The anchors are designed with the neutral-axis (or elastic bolt-group) model in `combo.perAnchor`. In the biaxial review case that was 17.68 kip against 22.44 kip. In a DG1 "small e" case it was 0, so the tension side was skipped although an anchor carries 1.56 kip.
+- **Governing provision:** AISC Design Guide 1 (2nd Ed., as the tool cites) §3.4.3: the tension-side plate is checked for the anchor pull times its lever arm to the critical section. The equation t = √(4M_u/(φF_y b_eff)) is unchanged. DG1 is not in /home/user/structural_references.
+- **Where:** `plateBending()`, the tension-side block (anchor `/* BPM4 (2026-11-07): the anchor forces of the SAME force model`).
+  - **Before:** `const Tu_per=combo.Tu_per;`, the arm of the highest-tension anchor, `Mu_t=Tu_per*armT`.
+  - **After:** for every anchor in tension in `combo.perAnchor`, x_i = its arm to the nearest DG1 critical section (the same rule as before, from the column centre; an anchor inside the column footprint falls back to the edge distance as before), M_i = T_i·x_i. The anchor with the largest M_i governs: `Tu_per` = its T_i, `armT` = its x_i, `Mu_t` = M_i. No anchor in tension → M_u = 0 (the note says so).
+- **Check cases (review M4):**
+  - Plate 22 × 22, W8X31, e = 2 in, pedestal 36 × 36, P = −10, M_x = M_y = 600 kip-in.
+    - T: 17.68 → **22.44 kip**; arm 5.2 in; t_T = √(4 × 22.44 × 5.2/(0.9 × 36 × 11)) = **1.144 in** (was 1.016).
+    - The compression side (1.215 in) still governs the plate DCR.
+  - Plate 24 × 24, W8X31, P = −40, M_y = 400 (DG1 small e).
+    - T: 0 → **1.556 kip** (anchor 1); arm = 9 − 0.95 × 8.0/2 = 5.2 in.
+    - t_T = √(4 × 1.556 × 5.2/(0.9 × 36 × 12)) = **0.289 in** (was 0). The compression side governs.
+  - Default project: the tension-side t is now 0.059 in (1.2D+1.0W) and 0.115 in (0.9D+1.0W), against 0 before. The compression side governs, so the plate DCR is unchanged.
+- **Decision (pending engineer review):** the new force replaces the old one; it is not the larger of the two, as the request specified ("not the 1-axis DG1 SRSS force"). Where the DG1 SRSS force was larger than every anchor force, the tension-side demand is now lower. In the 40 test projects no plate DCR decreased (see How verified).
+- **How verified:** probe on main and branch; `node tests/check-syntax.mjs`; `node tests/bpad-circle.mjs` (40 projects, DCR comparison), `bpad-profis.mjs`, `anchor-parity.mjs`; `tests/smoke/project-library.mjs --tool baseplate`, `standard-save.mjs`, `dxf-print-sheets.mjs --tool bp`; 0 console errors.
+- **Other copies:** none.
+- **Open items:** b_eff = max(B, N)/2 is still the tool's assumption (review M9, DG1 edition).
