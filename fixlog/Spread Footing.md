@@ -6215,3 +6215,27 @@ index 50f3837..c2d5000 100644
   - A renderer sweep over 38 inputs (selector picks included): no renderer error, no Out-of-date banner, no Report error.
   - check-syntax, spread-footing-scroll, phone-layout --tool sf, project-library --tool spreadfooting, start-chooser. Screenshots checked.
 - **Saved data:** none. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/sf-low-citations (SFLW: review LOW items: citations, contact display, Report Include row wrap, roughening drawing note, AASHTO-based labels; d_q and the water term per AASHTO 10th; CALCULATION CHANGE only for the depth-factor option and a water table within D_f + 1.5B′)
+
+- **L1, citation:** dashboard / summary "Flexure (footing)" cited A_s,min §7.6.1.1. For a combined footing it now cites §13.3.4.1 → §8.6.1.1 (as the Report already did, SFPR). The value is unchanged (0.0018A_g).
+- **L2, citation:** self-weight cards cited "ACI 318-19 5.3 dead load" (5.3 is the load factors). They now cite "dead load D: ASCE 7-16 3.1, IBC 2021 1606".
+- **L3, display:** a minimum contact below 100 % that rounds to "100.00" now reads "99.99+ (< 100; 99.9995)". New helper `sfdPct`, used in the partial-contact warning and the Contact chip.
+- **L12, display:** the Report "Include:" row (`sfxControls`, `.sfx-inc`) gains `flex-wrap:wrap`, so it wraps at 390 px instead of scrolling sideways.
+- **L11, drawing note:** where a pedestal joint uses μ = 1.0λ (intentionally roughened), card 5.6 shows a "Drawing note required" box: about 1/4 in amplitude, Table 22.9.4.2. The Report μ step says to specify the amplitude on the drawings.
+- **L8, labels:** the eccentricity options named "AASHTO …" now read "AASHTO-based (limit of 10.6.3.3 on the ASCE 7 combinations, not the AASHTO load factors) …". The limits are unchanged.
+- **L6, CALCULATION CHANGE (depth-factor option only, default off):** `vesicCapacity`.
+  - Before: `const kk=(Df/Beff<=1)?Df/Beff:Math.atan(Df/Beff);` and `dq=1+2·tanφ(1−sinφ)²·kk`.
+  - After: `kk=Math.atan(Df/Beff)` at every D_f/B, and `dq=Math.min(…,1.4)`. AASHTO LRFD 10th Eq. 10.6.3.1.2a-10 uses arctan(D_f/B) and caps d_q at 1.4 (text read). d_c keeps the Vesić form with the new d_q.
+  - This is smaller (conservative) for D_f/B ≤ 1. The tab and Report formulas are updated.
+- **L7, CALCULATION CHANGE (water table between D_f and D_f + 1.5B′):** `vesicCapacity`.
+  - Before: `else if(dw<=Df+Beff){… g_eff=(gs-gw)+gw*(dw-Df)/Beff …}`
+  - After: `else if(dw<=Df+1.5*Beff){… g_eff=(gs-gw)+gw*(dw-Df)/(1.5*Beff) …}`
+  - The water effect on the N_γ term now vanishes at D_f + 1.5B, as in AASHTO LRFD 10th Table 10.6.3.1.2a-2 (more conservative). The γ′ form at d_w ≤ D_f is unchanged. Tab texts are updated.
+- **Check case (default project, depth factors on, d_w = 6 ft; D_f = 4 ft, B_eff = 8 ft, φ = 32°):**
+  - k: D_f/B = 0.500 → arctan 0.500 = **0.464**; d_q = 1 + 0.2761k: 1.138 → **1.128**.
+  - γ_eff = 0.0576 + 0.0624·(6 − 4)/8 = 0.0732 → 0.0576 + 0.0624·2/12 = **0.0680** kcf.
+  - q_ult 24.68 → 24.12 ksf; governing bearing D/C **0.732 → 0.749**.
+  - Default project (depth factors off, no water table): no result change (only the stored k). Seymour: no change.
+- **Not done (left for later):** the plain-text Report export still prints KaTeX command names such as "mathrm" (L12). That conversion is in the shared `shared/report.js` / `shared/steps.js`, which 20+ tools load, so it needs its own shared-file PR.
+- **Saved data:** none. **Other copies:** none.
