@@ -97,6 +97,7 @@ table.ldtbl input{width:58px;font-family:inherit;font-size:11px;border:1px solid
 .tabbar{margin:8px 0 0 0;border-bottom:2px solid #7a8aa0}
 .tabbar button{border:1px solid #7a8aa0;border-bottom:none;margin:0 2px -2px 0;background:#e2e8ef;font-size:12px;padding:5px 12px}
 .tabbar button.active{background:#fff;border-bottom:2px solid #fff;font-weight:bold}
+.tabbar button[hidden]{display:none}
 .tabpage{display:none;background:#fff;border:1px solid #7a8aa0;border-top:none;padding:10px}
 .tabpage.active{display:block}
 /* SFAC: Auto-calculate off and inputs changed since the last analysis: every result display is marked out of date */
@@ -521,6 +522,7 @@ a.wkA:hover{text-decoration:underline}
   <button data-tab="tab-stab">4. Stability</button>
   <button data-tab="tab-footdes">5. Footing Design</button>
   <button data-tab="tab-peddes">6. Pedestal Design</button>
+  <button data-tab="tab-walldes" hidden>6W. Wall Design</button>
   <button data-tab="tab-3d">7. 3D View</button>
   <button data-tab="tab-manual">8. User Manual</button>
   <button data-tab="tab-report">9. Report</button>
@@ -532,6 +534,7 @@ a.wkA:hover{text-decoration:underline}
  <div class="tabpage" id="tab-stab"></div>
  <div class="tabpage" id="tab-footdes"></div>
  <div class="tabpage" id="tab-peddes"></div>
+ <div class="tabpage" id="tab-walldes"></div>
  <div class="tabpage" id="tab-3d"></div>
  <div class="tabpage" id="tab-manual"><div id="manualHost"></div></div>
  <div class="tabpage" id="tab-report"></div>
@@ -714,7 +717,26 @@ const SFD_LINKS={'o-cb-weights':['tab-combos','2.2 Self-Weights, Soil Overburden
  'o-cb-asd':['tab-combos','2.3 Combination resultants'],'o-cb-ped':['tab-combos','2.6 Pedestal loads by combination'],
  'o-br-press':['tab-bearing','3.2 Base Pressure Distribution'],'o-br-cap':['tab-bearing','3.3 Bearing Check'],
  'o-st-slide':['tab-stab','4.2 Sliding'],'o-st-ot':['tab-stab','4.3 Overturning']};
-const SFD_TABNAME={'tab-schem':'Schematic','tab-combos':'Load Combinations','tab-bearing':'Bearing','tab-stab':'Stability','tab-footdes':'Footing Design','tab-peddes':'Pedestal Design'};
+const SFD_TABNAME={'tab-schem':'Schematic','tab-combos':'Load Combinations','tab-bearing':'Bearing','tab-stab':'Stability','tab-footdes':'Footing Design','tab-peddes':'Pedestal Design','tab-walldes':'Wall Design'};
+/* SFWD (2026-11-07, engineer: "an output tab for walls when a wall is used, I don't want it to be simply categorized as a pedestal"):
+   tab 6W. Wall Design, after 6. Pedestal Design, shown only while at least one element is a wall by ACI 318-19 2.3 (element type
+   Wall and l_w/t > 3: sfdWallInfo applied; a Wall with l_w/t <= 3 stays a pedestal, as before). A wall's card is 6W.n (id o-wd-<i>);
+   a pedestal's card stays 6.n (id o-pd-<i>), numbered 6.2, 6.3, ... in input order among the elements on its tab (unchanged where
+   there is no wall). Display only. */
+function sfdIsWallEl(i){const b=P2&&P2.bearing&&P2.bearing[i];return !!(b&&b.wall&&b.wall.applied);}
+function sfdElCard(i){
+ const n=(P2&&P2.pedDes)?P2.pedDes.length:0, w=sfdIsWallEl(i);let k=0;
+ for(let j=0;j<i&&j<n;j++)if(sfdIsWallEl(j)===w)k++;
+ const lab=(P2&&P2.pedDes&&P2.pedDes[i])?P2.pedDes[i].label:((state.peds[i]||{}).label||'');
+ return w?{tab:'tab-walldes',id:'o-wd-'+i,no:'6W.'+(k+2),title:lab+' — Wall Design',wall:true}
+  :{tab:'tab-peddes',id:'o-pd-'+i,no:'6.'+(k+2),title:lab+' — Detailed Checks',wall:false};}
+function sfdElLink(i,txt){const C=sfdElCard(i);return sfdLink(C.id,txt||'',[C.tab,C.no+' '+C.title]);}
+function sfdElNav(i){const C=sfdElCard(i);return {tab:C.tab,sec:C.id};}
+function sfdWallTabShow(){
+ const b=document.querySelector('#tabbar button[data-tab="tab-walldes"]');if(!b)return;
+ const has=!!(R&&!R.fatal&&P2&&!P2.noCombo&&P2.bearing&&P2.bearing.some(z=>z.wall&&z.wall.applied));
+ b.hidden=!has;
+ if(!has&&b.classList.contains('active')){const p=document.querySelector('#tabbar button[data-tab="tab-peddes"]');if(p)p.click();}}
 function sfdLink(card,txt,lab){   /* lab: card label when the card is not in SFD_LINKS ([tab, label]) */
  const c=lab||SFD_LINKS[card];if(!c)return '';
  return '<a class="wkA" href="#'+card+'" data-card="'+card+'"><span class="wkScr">'+(txt?txt+' → ':'')+SFD_TABNAME[c[0]]+' · '+c[1]+'</span>'+
@@ -1242,7 +1264,7 @@ function sfdPedBarInfo(){
    (b.mode==='spacing'?' Bars per face = ceil(L<sub>c</sub>/s) + 1.':b.mode==='total'?' Split so the two faces have spacings as equal as possible.':'')+
    (DB.fromLong?' Dowels: the '+DB.n+' #'+DB.size+' longitudinal bars, continuous into the footing.':'')+
    (P2&&P2.dowels&&P2.dowels[i]&&!P2.dowels[i].isPatch?' Dowels and shear friction worked in: '+sfdLink('o-fd-bear','',['tab-footdes','5.6 Concrete Bearing & Dowels'])+'.':'')+   /* SFLK */
-   (P2&&P2.pedDes&&P2.pedDes[i]&&!P2.pedDes[i].isPatch?' '+sftcTxt(P2.pedDes[i])+' Worked in: '+sfdLink('o-pd-'+i,'',['tab-peddes','6.'+(i+2)+' '+P2.pedDes[i].label+' \u2014 Detailed Checks']):'');});
+   (P2&&P2.pedDes&&P2.pedDes[i]&&!P2.pedDes[i].isPatch?' '+sftcTxt(P2.pedDes[i])+' Worked in: '+sfdElLink(i):'');});   /* SFWD */
 }
 /* SFTC: one line for the clear cover to the ties */
 function sftcTxt(pd){return 'Clear cover to the vertical bars c = '+f2(pd.cov)+' in '+(pd.vertCovOK?'\u2265':'<')+' '+f2(pd.vertCovMin)+' in min'+(pd.vertCovOK?'':' \u2014 NG')+'. Clear cover to the ties c \u2212 d<sub>b,tie</sub> = '+f2(pd.cov)+' \u2212 '+f3(pd.tieDb)+' = '+f3(pd.tieCov)+' in '+(pd.tieCovOK?'\u2265':'<')+' '+f2(pd.tieCovMin)+' in min ('+SFTC_EXP[pd.exposure][1]+', ACI 318-19 Table 20.5.1.3.1)'+(pd.tieCovOK?'.':' \u2014 NG.');
@@ -2015,11 +2037,11 @@ function renderDashboard(){
    const st3=(bad,nd)=>bad.length?'fail':(nd.length?'warn':'pass'), IN=' input needed (horizontal bars)';
    if(wA.length){const bad=wA.filter(z=>z.wall.rlOK===false||z.wall.rtOK===false), nd=wA.filter(z=>z.wall.rtOK==null);
     {const vb=wA.filter(z=>z.wall.vOK===false), vn=wA.filter(z=>z.wall.vOK==null);   /* SFWC-2: in-plane shear, ACI 318-19 11.5.4 */
-     d.appendChild(chip('Wall in-plane shear (ACI 318-19 11.5.4)',wA.map(z=>z.label+': V_u '+f2(z.wall.vGov?z.wall.vGov.Vin:0)+' vs \u03c6V_n '+(z.wall.vOK==null?'\u2014'+IN:f2(z.wall.vGov?z.wall.vGov.phiVn:0)+' k')+(z.wall.vGov?' ('+z.wall.vGov.name+')':'')).join('; '),st3(vb,vn),undefined,{tab:'tab-peddes',sec:'o-pd-'+(vb.length?vb:vn.length?vn:wA)[0].idx}));}
-    d.appendChild(chip('Wall reinforcement (ACI 318-19 11.6)',wA.map(z=>z.label+': \u03c1_l '+sfdRhoTxt(z.wall.v.rho)+(z.wall.rlOK?' \u2265 ':' < ')+sfdRhoTxt(z.wall.rlMin)+', \u03c1_t '+(z.wall.rtOK==null?'\u2014'+IN+' \u2265 ':sfdRhoTxt(z.wall.hz.rho)+(z.wall.rtOK?' \u2265 ':' < '))+sfdRhoTxt(z.wall.rtMin)+' (larger of Table 11.6.1 and 11.6.2; '+(z.wall.t1161?'code case 11.6.1':'code case 11.6.2')+')').join('; '),st3(bad,nd),undefined,{tab:'tab-peddes',sec:'o-pd-'+(bad.length?bad:nd.length?nd:wA)[0].idx}));}}
+     d.appendChild(chip('Wall in-plane shear (ACI 318-19 11.5.4)',wA.map(z=>z.label+': V_u '+f2(z.wall.vGov?z.wall.vGov.Vin:0)+' vs \u03c6V_n '+(z.wall.vOK==null?'\u2014'+IN:f2(z.wall.vGov?z.wall.vGov.phiVn:0)+' k')+(z.wall.vGov?' ('+z.wall.vGov.name+')':'')).join('; '),st3(vb,vn),undefined,{tab:'tab-walldes',sec:'o-wd-'+(vb.length?vb:vn.length?vn:wA)[0].idx}));}
+    d.appendChild(chip('Wall reinforcement (ACI 318-19 11.6)',wA.map(z=>z.label+': \u03c1_l '+sfdRhoTxt(z.wall.v.rho)+(z.wall.rlOK?' \u2265 ':' < ')+sfdRhoTxt(z.wall.rlMin)+', \u03c1_t '+(z.wall.rtOK==null?'\u2014'+IN+' \u2265 ':sfdRhoTxt(z.wall.hz.rho)+(z.wall.rtOK?' \u2265 ':' < '))+sfdRhoTxt(z.wall.rtMin)+' (larger of Table 11.6.1 and 11.6.2; '+(z.wall.t1161?'code case 11.6.1':'code case 11.6.2')+')').join('; '),st3(bad,nd),undefined,{tab:'tab-walldes',sec:'o-wd-'+(bad.length?bad:nd.length?nd:wA)[0].idx}));}}
   {const wA=wSel.filter(z=>z.wall.applied);if(wA.length){const bad=wA.filter(z=>z.wall.detOK===false), nd=wA.filter(z=>z.wall.detOK==null), IN=' input needed (horizontal bars)';   /* SFWC-3: spacing and layers, ACI 318-19 11.7 */
-   d.appendChild(chip('Wall bar spacing and layers (ACI 318-19 11.7)',wA.map(z=>z.label+': s_v '+f2(z.wall.v.s)+(z.wall.sVOK?' \u2264 ':' > ')+f2(z.wall.sMaxV)+', s_h '+(z.wall.sHOK==null?'\u2014'+IN:f2(z.wall.hz.s)+(z.wall.sHOK?' \u2264 ':' > ')+f2(z.wall.sMaxH)+' in')+', '+(z.wall.layOK==null?'layers: horizontal'+IN:z.wall.nC+' layers'+(z.wall.layOK?'':' (two required)'))).join('; '),bad.length?'fail':(nd.length?'warn':'pass'),undefined,{tab:'tab-peddes',sec:'o-pd-'+(bad.length?bad:nd.length?nd:wA)[0].idx}));}}
-  if(wSel.length)d.appendChild(chip('Wall checks (ACI 318-19 Ch. 11)',wSel.map(z=>z.label+': '+(z.wall.applied?'out-of-plane design by the pedestal checks (stand-in for 11.5.2 / 11.5.3 / 11.5.5.1, ties 11.7.4.1); strut-and-tie (11.5.4.1) not used':'l_w/t '+f2(z.wall.lt)+' \u2264 3, checked as a pedestal')).join('; '),'warn',undefined,{tab:'tab-peddes',sec:'o-pd-'+wSel[0].idx}));
+   d.appendChild(chip('Wall bar spacing and layers (ACI 318-19 11.7)',wA.map(z=>z.label+': s_v '+f2(z.wall.v.s)+(z.wall.sVOK?' \u2264 ':' > ')+f2(z.wall.sMaxV)+', s_h '+(z.wall.sHOK==null?'\u2014'+IN:f2(z.wall.hz.s)+(z.wall.sHOK?' \u2264 ':' > ')+f2(z.wall.sMaxH)+' in')+', '+(z.wall.layOK==null?'layers: horizontal'+IN:z.wall.nC+' layers'+(z.wall.layOK?'':' (two required)'))).join('; '),bad.length?'fail':(nd.length?'warn':'pass'),undefined,{tab:'tab-walldes',sec:'o-wd-'+(bad.length?bad:nd.length?nd:wA)[0].idx}));}}
+  if(wSel.length)d.appendChild(chip('Wall checks (ACI 318-19 Ch. 11)',wSel.map(z=>z.label+': '+(z.wall.applied?'out-of-plane design by the pedestal checks (stand-in for 11.5.2 / 11.5.3 / 11.5.5.1, ties 11.7.4.1); strut-and-tie (11.5.4.1) not used':'l_w/t '+f2(z.wall.lt)+' \u2264 3, checked as a pedestal')).join('; '),'warn',undefined,sfdElNav(wSel[0].idx)));   /* SFWD */
   { const rl=P2.bearing.filter(z=>!z.isPatch), nr=rl.filter(z=>!z.ldcReq), rq=rl.filter(z=>z.ldcReq), op=rl.filter(z=>z.ldcByOpt);   /* SFBC: 16.3.1.2(a); SFLA: op = required by the option only */
   d.appendChild(chip('Dowel development (\u2113dc)',(ldcBad.length?('\u2113dc > available: '+ldcBad.map(z=>z.label).join(', ')):
    (!rl.length||rq.length?'\u2113dc \u2264 available'+(nr.length?' ('+rq.map(z=>z.label).join(', ')+')':''):'')+(nr.length?(rq.length?'; ':'')+'not required: concrete bearing carries P_u (16.3.1.2(a))'+(rq.length?': '+nr.map(z=>z.label).join(', '):''):''))
@@ -2057,7 +2079,7 @@ function renderDashboard(){
   if(realPeds.length){const gv=realPeds.filter(z=>z.pmGov&&!isNaN(z.pmGov.ratio)).reduce((a,z)=>(!a||z.pmGov.ratio>a.pmGov.ratio)?z:a,null), nr=realPeds.filter(z=>z.pmRange&&z.pmRange.length);
    const sl=realPeds.filter(z=>z.slm), txt=(gv?('max ratio '+f2(gv.pmGov.ratio)+' \u2014 '+gv.label+', '+gv.pmGov.name+' (at its own P_u)'):'not computed')+(sl.length?'; slender: moments magnified, ACI 318-19 6.6.4 ('+sl.map(z=>z.label+' \u03b4_s\u03b4 up to '+f2(z.slGov.amp)).join(', ')+')':'');   /* SFSL */
    d.appendChild(chip('Pedestal P\u2013M (biaxial)',txt+(nr.length?'; P_u below the section\u2019s tension capacity in some combinations ('+nr.map(z=>z.label).join(', ')+'): NG':''),
-    (gv&&gv.pmGov.ratio>1)||nr.length?'fail':(!gv?'warn':'pass'),undefined,{tab:'tab-peddes',sec:gv?'o-pd-'+P2.pedDes.indexOf(gv):'o-pd-intro'}));}
+    (gv&&gv.pmGov.ratio>1)||nr.length?'fail':(!gv?'warn':'pass'),undefined,gv?sfdElNav(P2.pedDes.indexOf(gv)):{tab:'tab-peddes',sec:'o-pd-intro'}));}
   /* SFCV: concrete cover, footing and pedestal vertical bars (ACI 318-19 Table 20.5.1.3.1) */
   {const bad=[];(P2.covChk?P2.covChk.rows:[]).filter(z=>z.applies&&!z.ok).forEach(z=>bad.push('footing '+z.k+' '+f2(z.c)+' < '+f2(z.min)+' in'));
    realPeds.filter(z=>!z.vertCovOK).forEach(z=>bad.push(z.label+' vertical bars '+f2(z.cov)+' < '+f2(z.vertCovMin)+' in'));
@@ -2065,17 +2087,17 @@ function renderDashboard(){
   /* SFTC: clear cover to the ties (ACI 318-19 Table 20.5.1.3.1) */
   if(realPeds.length){const tcBad=realPeds.filter(z=>!z.tieCovOK), tcGov=realPeds.reduce((a,z)=>(!a||z.tieCov-z.tieCovMin<a.tieCov-a.tieCovMin)?z:a,null);
    d.appendChild(chip('Pedestal tie cover',tcBad.length?tcBad.map(z=>z.label+' '+f3(z.tieCov)+' < '+f2(z.tieCovMin)+' in').join('; '):'min '+f3(tcGov.tieCov)+' \u2265 '+f2(tcGov.tieCovMin)+' in ('+tcGov.label+')',
-    tcBad.length?'fail':'pass',undefined,{tab:'tab-peddes',sec:'o-pd-'+P2.pedDes.indexOf(tcGov)}));}
+    tcBad.length?'fail':'pass',undefined,sfdElNav(P2.pedDes.indexOf(tcGov))));}
   /* SFDV: development of the footing mats (straight / hooked, excess-reinforcement option) */
   if(P2.dev&&P2.dev.rows.length){const Dv=P2.dev.rows, nb=Dv.filter(z=>z.status!=='pass');
    d.appendChild(chip('Footing bar development',nb.length?nb.map(z=>z.lab+': '+(z.status==='fail'?'\u2113d '+f2(z.LdUse)+' and \u2113dh '+f2(z.Ldh)+' > '+f2(z.avail)+' in':'straight \u2113d '+f2(z.LdUse)+' > '+f2(z.avail)+' in; hook the bars (\u2113dh '+f2(z.Ldh)+')')).join('; '):'straight \u2113d \u2264 available'+(P2.dev.exOn?' (A_s,req/A_s,prov taken)':''),
     P2.dev.status==='fail'?'fail':(P2.dev.status==='review'?'warn':'pass'),undefined,{tab:'tab-footdes',sec:'o-fd-dev'}));}
   /* SFVP: pedestal one-way shear */
   {const Vs=(P2.pedShear||[]).filter(z=>!z.isPatch&&z.gov);if(Vs.length){const gv=Vs.reduce((a,z)=>(!a||z.gov.ratio>a.gov.ratio)?z:a,null),bad=Vs.filter(z=>!z.ok);
-   d.appendChild(chip('Pedestal shear',bad.length?bad.map(z=>z.label+(z.avFail?' A_v < A_v,min where V_u > 0.5\u03c6V_c':'')+' ratio '+f2(z.gov.ratio)).join('; '):'max ratio '+f2(gv.gov.ratio)+' \u2014 '+gv.label+', '+gv.gov.name,bad.length?'fail':'pass',undefined,{tab:'tab-peddes',sec:'o-pd-'+gv.idx}));}}
+   d.appendChild(chip('Pedestal shear',bad.length?bad.map(z=>z.label+(z.avFail?' A_v < A_v,min where V_u > 0.5\u03c6V_c':'')+' ratio '+f2(z.gov.ratio)).join('; '):'max ratio '+f2(gv.gov.ratio)+' \u2014 '+gv.label+', '+gv.gov.name,bad.length?'fail':'pass',undefined,sfdElNav(gv.idx)));}}
   /* SFXT: crossties, 25.7.2.3 */
   {const Xt=(P2.xties||[]).map((z,i)=>Object.assign({i,label:P2.pedDes[i].label},z)).filter(z=>!z.isPatch);if(Xt.length){const need=Xt.filter(z=>z.status==='review');
-   d.appendChild(chip('Pedestal crossties',need.length?need.map(z=>z.label+': '+z.nXt+' crosstie(s) per tie set (bars to support: '+z.reqX+' on each b_x face, '+z.reqY+' on each b_y face)').join('; '):'perimeter tie supports every bar (25.7.2.3)',need.length?'warn':'pass',undefined,{tab:'tab-peddes',sec:'o-pd-'+(need.length?need[0].i:Xt[0].i)}));}}
+   d.appendChild(chip('Pedestal crossties',need.length?need.map(z=>z.label+': '+z.nXt+' crosstie(s) per tie set (bars to support: '+z.reqX+' on each b_x face, '+z.reqY+' on each b_y face)').join('; '):'perimeter tie supports every bar (25.7.2.3)',need.length?'warn':'pass',undefined,sfdElNav(need.length?need[0].i:Xt[0].i)));}}
  }else if(P2&&P2.noCombo){
   d.appendChild(chip('Structural design','No valid LRFD combo','na',undefined,{tab:'tab-footdes'}));
  }
@@ -3675,20 +3697,20 @@ function sfdResultRows(){
   'Dowel steel (min 0.005A_g)':()=>['ACI 318-19 §16.3.4.1'+(real.some(z=>z.wall&&z.wall.applied)?'; walls §16.3.4.2 → the larger of §11.6.1, Table 11.6.1 and §11.6.2':'')+'; D/C = A<sub>s,min</sub>/A<sub>s,prov</sub>',mx(real.map(z=>z.AsDowProv>0?z.AsDowMin/z.AsDowProv:Infinity)),['o-fd-bear']],
   'Dowel development (ℓdc)':()=>['ACI 318-19 §25.4.9.2; '+(state.mat.ldcAlways==='on'?'required for every pedestal / wall by the engineer’s option (detailing practice); §16.3.1.2(a) alone requires it only where P<sub>u</sub> exceeds the concrete bearing strength':'required only where P<sub>u</sub> exceeds the concrete bearing strength, §16.3.1.2(a)')+'; D/C = ℓ<sub>dc</sub>/available',real.some(z=>z.ldcReq)?mx(real.filter(z=>z.ldcReq).map(z=>z.availEmb>0?z.Ldc/z.availEmb:Infinity)):null,['o-fd-bear']],   /* SFBC */
   'Pedestal design':()=>['ACI 318-19 §22.4.2.1 (axial; D/C shown); §10.6.1.1, §10.7.3.1, §25.7.2',
-   mx(P2.pedDes.filter(z=>!z.isPatch).map(z=>z.dcrAxial)),P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)],
+   mx(P2.pedDes.filter(z=>!z.isPatch).map(z=>z.dcrAxial)),P2.pedDes.map((z,i)=>z.isPatch?null:sfdElCard(i).id).filter(Boolean)],
   'Footing bar clear spacing':()=>['ACI 318-19 §25.2.1; D/C = s<sub>clr,min</sub>/(s − d<sub>b</sub>)',mx([P2.desX,P2.desY].flatMap(z=>[z.AsBot>0?z.clrMinB/z.clrB:0,z.AsTop>0?z.clrMinT/z.clrT:0])),['o-fd-x','o-fd-y']],
   'Interface shear friction':()=>['ACI 318-19 §22.9.4.2, Table 22.9.4.2, §22.9.4.4–22.9.4.6; D/C = V<sub>u</sub>/φV<sub>n</sub>',mx((P2.shearFr||[]).filter(z=>!z.isPatch&&z.gov).map(z=>z.gov.ratio)),['o-fd-bear']],
   'Dowels (tension, laps)':()=>['ACI 318-19 §16.3.1.1, §16.3.3, §22.4 (interface tension), §25.4.2 / §25.4.3 (tension development), §25.5.2 / §25.5.5 (laps); §16.3.4.1 (minimum); D/C = A<sub>s,gov</sub>/A<sub>s,prov</sub>, A<sub>s,gov</sub> = max(0.005A<sub>g</sub>, A<sub>s,req</sub>)',mx((P2.dowels||[]).filter(z=>!z.isPatch).map(z=>z.dcAs)),['o-fd-bear']],
-  'Pedestal P\u2013M (biaxial)':()=>['ACI 318-19 §22.4, §22.2; D/C = |M<sub>u</sub>|/|φM<sub>n</sub>|<sub>θ</sub> on the contour at each combination’s own P<sub>u</sub> (P<sub>u</sub>/φP<sub>n,max</sub> above the axial cap)'+(P2.pedDes.some(z=>z.slm)?'; slender pedestal: magnified moments, §6.6.4.6, §6.6.4.5, §6.2.5.3':''),mx(P2.pedDes.filter(z=>!z.isPatch&&z.pmGov).map(z=>z.pmRange&&z.pmRange.length?Infinity:(isNaN(z.pmGov.ratio)?0:z.pmGov.ratio))),P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)],
+  'Pedestal P\u2013M (biaxial)':()=>['ACI 318-19 §22.4, §22.2; D/C = |M<sub>u</sub>|/|φM<sub>n</sub>|<sub>θ</sub> on the contour at each combination’s own P<sub>u</sub> (P<sub>u</sub>/φP<sub>n,max</sub> above the axial cap)'+(P2.pedDes.some(z=>z.slm)?'; slender pedestal: magnified moments, §6.6.4.6, §6.6.4.5, §6.2.5.3':''),mx(P2.pedDes.filter(z=>!z.isPatch&&z.pmGov).map(z=>z.pmRange&&z.pmRange.length?Infinity:(isNaN(z.pmGov.ratio)?0:z.pmGov.ratio))),P2.pedDes.map((z,i)=>z.isPatch?null:sfdElCard(i).id).filter(Boolean)],
   'Concrete cover':()=>['ACI 318-19 Table 20.5.1.3.1; D/C = c<sub>min</sub>/c',mx([...(P2.covChk?P2.covChk.rows.filter(z=>z.applies).map(z=>z.c>0?z.min/z.c:Infinity):[]),...P2.pedDes.filter(z=>!z.isPatch).map(z=>z.cov>0?z.vertCovMin/z.cov:Infinity)]),['o-fd-basis']],
   'Footing bar development':()=>['ACI 318-19 §25.4.2.4 (straight), §25.4.3.1 / Table 25.4.3.2 (standard hook)'+(state.mat.ldExcess==='on'?', §25.4.10.1 (excess A<sub>s</sub>, straight bars; A<sub>s,req</sub> = max(flexure, A<sub>s,min</sub>), R8.6.1.1)':'')+'; D/C = ℓ<sub>d</sub> (or ℓ<sub>dh</sub> where hooked)/available',mx(((P2&&P2.dev)?P2.dev.rows:[]).map(z=>z.dc)),['o-fd-dev']],
-  'Pedestal shear':()=>['ACI 318-19 Table 22.5.5.1, §22.5.1.10–22.5.1.11 (biaxial), §10.6.2; D/C = V<sub>u</sub>/φV<sub>c</sub>',mx((P2.pedShear||[]).filter(z=>!z.isPatch&&z.gov).map(z=>z.gov.ratio)),P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)],
-  'Pedestal crossties':()=>['ACI 318-19 §25.7.2.3 (every corner and alternate bar supported; none more than 6 in clear from a supported bar)',null,P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)],
-  'Wall reinforcement (ACI 318-19 11.6)':()=>{const wa=real.filter(z=>z.wall&&z.wall.applied);return ['ACI 318-19 §11.6.1, Table 11.6.1 and §11.6.2, Eq. 11.6.2, the larger governing (engineer, 2026-11-06); D/C = max(ρ<sub>ℓ,min</sub>/ρ<sub>ℓ</sub>, ρ<sub>t,min</sub>/ρ<sub>t</sub>)',mx(wa.map(z=>Math.max(z.wall.v.rho>0?z.wall.rlMin/z.wall.v.rho:Infinity,z.wall.hz.need?0:(z.wall.hz.rho>0?z.wall.rtMin/z.wall.hz.rho:Infinity)))),wa.map(z=>'o-pd-'+z.idx)];},   /* SFWC; SFWH: rho_t input needed: its part left out of the D/C */
-  'Wall in-plane shear (ACI 318-19 11.5.4)':()=>{const wa=real.filter(z=>z.wall&&z.wall.applied);return ['ACI 318-19 §11.5.4.2, §11.5.4.3 (Eq. 11.5.4.3), §11.5.4.4; D/C = V<sub>u</sub>/φV<sub>n</sub>',(wa.every(z=>z.wall.vOK==null)?null:mx(wa.map(z=>z.wall.vGov&&z.wall.vGov.vr!=null?z.wall.vGov.vr:0))),wa.map(z=>'o-pd-'+z.idx)];},   /* SFWC-2; SFWH: V_n input needed -> D/C n/a */
-  'Wall bar spacing and layers (ACI 318-19 11.7)':()=>{const wa=real.filter(z=>z.wall&&z.wall.applied);return ['ACI 318-19 §11.7.2.1, §11.7.3.1, §11.7.2.3; D/C = max(s<sub>v</sub>/s<sub>v,max</sub>, s<sub>h</sub>/s<sub>h,max</sub>)',mx(wa.map(z=>Math.max(z.wall.v.s/z.wall.sMaxV,z.wall.hz.need?0:(z.wall.hz.s>0?z.wall.hz.s/z.wall.sMaxH:Infinity)))),wa.map(z=>'o-pd-'+z.idx)];},   /* SFWC-3; SFWH: s_h input needed: left out of the D/C */
-  'Wall checks (ACI 318-19 Ch. 11)':()=>['ACI 318-19 §2.3 (wall); out-of-plane §11.5.2, §11.5.3, §11.5.5.1 and ties §11.7.4.1 by the pedestal checks (stand-in); strut-and-tie §11.5.4.1 not used',null,real.filter(z=>z.wall&&z.wall.sel).map(z=>'o-pd-'+z.idx)],   /* SFWL */
-  'Pedestal tie cover':()=>['ACI 318-19 Table 20.5.1.3.1; D/C = c<sub>min</sub>/(c \u2212 d<sub>b,tie</sub>)',mx(P2.pedDes.filter(z=>!z.isPatch).map(z=>z.tieCov>0?z.tieCovMin/z.tieCov:Infinity)),P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)]};
+  'Pedestal shear':()=>['ACI 318-19 Table 22.5.5.1, §22.5.1.10–22.5.1.11 (biaxial), §10.6.2; D/C = V<sub>u</sub>/φV<sub>c</sub>',mx((P2.pedShear||[]).filter(z=>!z.isPatch&&z.gov).map(z=>z.gov.ratio)),P2.pedDes.map((z,i)=>z.isPatch?null:sfdElCard(i).id).filter(Boolean)],
+  'Pedestal crossties':()=>['ACI 318-19 §25.7.2.3 (every corner and alternate bar supported; none more than 6 in clear from a supported bar)',null,P2.pedDes.map((z,i)=>z.isPatch?null:sfdElCard(i).id).filter(Boolean)],
+  'Wall reinforcement (ACI 318-19 11.6)':()=>{const wa=real.filter(z=>z.wall&&z.wall.applied);return ['ACI 318-19 §11.6.1, Table 11.6.1 and §11.6.2, Eq. 11.6.2, the larger governing (engineer, 2026-11-06); D/C = max(ρ<sub>ℓ,min</sub>/ρ<sub>ℓ</sub>, ρ<sub>t,min</sub>/ρ<sub>t</sub>)',mx(wa.map(z=>Math.max(z.wall.v.rho>0?z.wall.rlMin/z.wall.v.rho:Infinity,z.wall.hz.need?0:(z.wall.hz.rho>0?z.wall.rtMin/z.wall.hz.rho:Infinity)))),wa.map(z=>'o-wd-'+z.idx)];},   /* SFWC; SFWH: rho_t input needed: its part left out of the D/C */
+  'Wall in-plane shear (ACI 318-19 11.5.4)':()=>{const wa=real.filter(z=>z.wall&&z.wall.applied);return ['ACI 318-19 §11.5.4.2, §11.5.4.3 (Eq. 11.5.4.3), §11.5.4.4; D/C = V<sub>u</sub>/φV<sub>n</sub>',(wa.every(z=>z.wall.vOK==null)?null:mx(wa.map(z=>z.wall.vGov&&z.wall.vGov.vr!=null?z.wall.vGov.vr:0))),wa.map(z=>'o-wd-'+z.idx)];},   /* SFWC-2; SFWH: V_n input needed -> D/C n/a */
+  'Wall bar spacing and layers (ACI 318-19 11.7)':()=>{const wa=real.filter(z=>z.wall&&z.wall.applied);return ['ACI 318-19 §11.7.2.1, §11.7.3.1, §11.7.2.3; D/C = max(s<sub>v</sub>/s<sub>v,max</sub>, s<sub>h</sub>/s<sub>h,max</sub>)',mx(wa.map(z=>Math.max(z.wall.v.s/z.wall.sMaxV,z.wall.hz.need?0:(z.wall.hz.s>0?z.wall.hz.s/z.wall.sMaxH:Infinity)))),wa.map(z=>'o-wd-'+z.idx)];},   /* SFWC-3; SFWH: s_h input needed: left out of the D/C */
+  'Wall checks (ACI 318-19 Ch. 11)':()=>['ACI 318-19 §2.3 (wall); out-of-plane §11.5.2, §11.5.3, §11.5.5.1 and ties §11.7.4.1 by the pedestal checks (stand-in); strut-and-tie §11.5.4.1 not used',null,real.filter(z=>z.wall&&z.wall.sel).map(z=>sfdElCard(z.idx).id)],   /* SFWL */
+  'Pedestal tie cover':()=>['ACI 318-19 Table 20.5.1.3.1; D/C = c<sub>min</sub>/(c \u2212 d<sub>b,tie</sub>)',mx(P2.pedDes.filter(z=>!z.isPatch).map(z=>z.tieCov>0?z.tieCovMin/z.tieCov:Infinity)),P2.pedDes.map((z,i)=>z.isPatch?null:sfdElCard(i).id).filter(Boolean)]};
  return $$('#dashboard .chip').map(c=>{
   const name=c.querySelector('.cn').textContent, val=c.querySelector('.cv').textContent;
   const st=['pass','fail','warn','na'].find(k=>c.classList.contains(k))||'na';
@@ -3780,7 +3802,7 @@ function sfrModel(){
    ['Load input',R.directMode?'Direct factored (LRFD envelope) per pedestal'+(R.aashtoDirect?'; imported AASHTO case "'+R.aashtoDirect.caseName+'" ('+R.aashtoDirect.ls+')':''):'By load type (D, L, Lr, S, Wx, Wy); ASCE 7-16 combinations generated'],
    ['Codes','ACI 318-19 (concrete'+(sfrCombined()?'; combined footing, 13.3.4 with Chapter 8':'; isolated footing, 13.3.3')+'); ASCE 7-16 §2.3.1 / §2.4.1 (combinations); IBC 2021'+(state.soil.mode==='vesic'?'; bearing capacity per Vesić / Meyerhof':'; allowable bearing q_a (geotechnical input)')+' (see [[S-ref]])'],
    ...hand.map(h=>['Hand-off source',h])]},
-   {type:'note',text:'Units: kip, ft, ksf unless noted; bar sizes and covers in in, f′c and f_y in psi. Every value in this report is the value the tool computes on its result tabs (Schematic[[tab:schem| ↗]], Load Combinations[[tab:combos| ↗]], Bearing[[tab:bearing| ↗]], Stability[[tab:stab| ↗]], Footing Design[[tab:footdes| ↗]], Pedestal Design[[tab:peddes| ↗]]).'}]});
+   {type:'note',text:'Units: kip, ft, ksf unless noted; bar sizes and covers in in, f′c and f_y in psi. Every value in this report is the value the tool computes on its result tabs (Schematic[[tab:schem| ↗]], Load Combinations[[tab:combos| ↗]], Bearing[[tab:bearing| ↗]], Stability[[tab:stab| ↗]], Footing Design[[tab:footdes| ↗]], Pedestal Design[[tab:peddes| ↗]]'+((P2&&P2.bearing&&P2.bearing.some(z=>z.wall&&z.wall.applied))?', Wall Design[[tab:walldes| ↗]]':'')+').'}]});
   subs.push({title:'Geometry and materials',items:[{type:'table',head:['Quantity','Value','Unit'],rows:[
    ['Footing width B (x)',sfrCell(R.B),'ft'],['Footing length L (y)',sfrCell(R.L),'ft'],['Footing thickness t',sfrCell(R.t),'ft'],['Embedment D_f (grade to bearing)',sfrCell(R.Df),'ft'],
    ['Concrete unit weight γ_c',sfrCell(R.gc*1000,0),'pcf'],["Concrete f′c",sfrCell(fc,0),'psi'],['Steel f_y',sfrCell(fy,0),'psi'],['Lightweight factor λ',sfrCell(num(state.mat.lambda)),'–'],
@@ -3850,7 +3872,7 @@ function sfrModel(){
   subs.push({title:R.directMode?'Factored envelope (service checks)':'Service (ASD) combinations',key:'S-asd',items:[{type:'table',wide:true,head:hd,rows:R.asd.map(a=>row(a,R.govBear))},
    {type:'note',text:(R.directMode?'Direct factored mode: one user envelope with dead-load brackets; bearing is checked with factored loads against the allowable bearing (conservative), stability is indicative.':'ASCE 7-16 §2.4.1 / IBC 2021 §1605.1: bearing and stability.')+' Bold: the governing bearing combination, worked in [[S-res]]. Each row is the same sum as [[S-res]].'}]});
   subs.push({title:R.directMode?'Factored envelope (structural design)':'Strength (LRFD) combinations',key:'S-lrfd',items:[{type:'table',wide:true,head:hd,rows:R.lrfd.map(a=>row(a,null))},
-   {type:'note',text:'ASCE 7-16 §2.3.1 / ACI 318-19 §5.3: footing and pedestal design ([[S-fd]], [[S-pd]]).'}]});
+   {type:'note',text:'ASCE 7-16 §2.3.1 / ACI 318-19 §5.3: footing and pedestal design ([[S-fd]], [[S-pd]]'+((P2&&P2.bearing&&P2.bearing.some(z=>z.wall&&z.wall.applied))?', [[S-wd]]':'')+').'}]});
   /* resultant of the governing bearing combination */
   const G=R.govBear;
   if(!G)subs.push(sfrNoBear('Resultant of the governing bearing combination','S-res'));   /* SFNB: none governs */
@@ -4147,7 +4169,7 @@ function sfrModel(){
    }
    else st.push(S({id:'p'+z.idx+'.sig',label:'Interface tension: none (no uplift, every resultant within the kern): compression by bearing only',sym:'',eq:'',sub:'',value:'none'}));
    if(z.sfNeed&&!z.tension)st.push(S({id:'p'+z.idx+'.sfn',label:'Shear friction relies on the dowels (φμN_u alone: DCR '+sfrN(z.sfNeedDCR,3)+' > 1), so they must be developed in tension on both sides of the joint (ACI 318-19 22.9.5.1)',sym:'',eq:'',sub:'',value:'—'}));
-   st.push(S({id:'p'+z.idx+'.AsMin',label:'Minimum dowel area (A_g = b_x b_y = '+sfrN(z.Ag,1)+' in²)'+(z.wall?' — wall: ρ_l of '+(z.w1162?'11.6.2 (worked under the wall\'s Pedestal design, Wall reinforcement)':'Table 11.6.1 (worked under Concrete bearing and dowels, '+z.label+')'):''),sym:'A_{s,min}',eq:z.wall?'\\rho_{\\ell}\\,A_{g}':'0.005\\,A_{g}',sub:(z.wall?sfdRhoTxt(z.rhoMin):'0.005')+'\\cdot'+sfrN(z.Ag,1),value:z.AsMin,unit:'in^{2}',ref:z.wall?(z.w1162?'ACI 318-19 16.3.4.2, 11.6.2':'ACI 318-19 16.3.4.2, Table 11.6.1'):'ACI 318-19 16.3.4.1'}),   /* SFWL */   /* SFDC */
+   st.push(S({id:'p'+z.idx+'.AsMin',label:'Minimum dowel area (A_g = b_x b_y = '+sfrN(z.Ag,1)+' in²)'+(z.wall?' — wall: ρ_l of '+(z.w1162?'11.6.2 (worked under the wall\'s Wall design, Wall reinforcement)':'Table 11.6.1 (worked under Concrete bearing and dowels, '+z.label+')'):''),sym:'A_{s,min}',eq:z.wall?'\\rho_{\\ell}\\,A_{g}':'0.005\\,A_{g}',sub:(z.wall?sfdRhoTxt(z.rhoMin):'0.005')+'\\cdot'+sfrN(z.Ag,1),value:z.AsMin,unit:'in^{2}',ref:z.wall?(z.w1162?'ACI 318-19 16.3.4.2, 11.6.2':'ACI 318-19 16.3.4.2, Table 11.6.1'):'ACI 318-19 16.3.4.1'}),   /* SFWL */   /* SFDC */
     S({id:'p'+z.idx+'.AsGov',chk:'dowel area',label:'Governing dowel area vs provided ('+z.nD+' #'+z.ds+'): demand / capacity A_s,gov / A_s,prov = '+(isFinite(z.dcAs)?sfrN(z.dcAs,3):'∞'),sym:'A_{s,gov}',eq:'\\max(A_{s,min},\\,A_{s,req})',sub:'\\max('+sfrN(z.AsMin)+',\\,'+(isFinite(z.AsReq)?sfrN(z.AsReq||0):'\\infty')+')',value:isFinite(z.AsGov)?z.AsGov:'∞',unit:'in^{2}',ok:!!z.asOK,note:(z.asOK?'≤':'>')+' A_s,prov = '+z.nD+' × '+sfrN(z.Ab)+' = '+sfrN(z.AsProv)+' in²'}));
    if(!z.cont)st.push(S({id:'p'+z.idx+'.cnt',chk:'dowel count',rev:z.countDiff?'dowels '+z.nD+' vs vertical bars '+z.nPos:'',label:'Dowels against the vertical bars they lap with (separate dowels): '+z.nD+' dowels, '+z.nPos+' vertical bars'+(z.countDiff?': REVIEW, each vertical bar needs a dowel to lap with; the interface check spreads A_s,dow = '+sfrN(z.AsProv)+' in² over the '+z.nPos+' bar positions':': one dowel per bar'),sym:'',eq:'',sub:'',value:z.countDiff?'differ':'equal'}));   /* SFDN */
    if(z.ld)st.push(S({id:'p'+z.idx+'.Lftg',rev:(z.sfNeed&&!z.tension&&!z.ftgOK)?'dowel development for shear friction short (proportional credit)':'',chk:'dowel tension development into the footing',label:'Footing side: tension development into the footing ('+(z.hook==='hook90'?'standard 90° hook, ℓ_dh, 25.4.3.1':'straight, ℓ_d, 25.4.2.4')+') vs available t − c_bot − d_b,x − d_b,y'+(z.devTen?'':' (not required here: no interface tension and shear friction not relying on the dowels)'),sym:z.hook==='hook90'?'\\ell_{dh}':'\\ell_{d}',eq:z.hook==='hook90'?'\\max(\\frac{f_{y}\\psi_{e}\\psi_{r}\\psi_{o}\\psi_{c}}{55\\lambda\\sqrt{'+SFR_FC+'}}d_{b}^{1.5},\\,8d_{b},\\,6)':'\\frac{3}{40}\\frac{f_{y}}{\\lambda\\sqrt{'+SFR_FC+'}}\\frac{\\psi_{t}\\psi_{e}\\psi_{s}\\psi_{g}}{(c_{b}+K_{tr})/d_{b}}d_{b} \\ge 12',
@@ -4185,7 +4207,7 @@ function sfrModel(){
  }else secs.push({title:'Footing design',key:'S-fd',subs:[{title:'Not computed',items:[{type:'note',warn:true,text:'No valid strength combination produced downward load for the structural design.'}]}]});
  /* ---------- 6. Pedestal design ---------- */
  if(P2&&!P2.noCombo){
-  const subs=[], S=sfrS;
+  const subs=[], wsubs=[], S=sfrS;   /* SFWD: wsubs = the walls (section Wall design) */
   P2.pedDes.forEach((pd,i)=>{
    const rf=state.peds[i].reinf, T=[];
    if(pd.isPatch){subs.push({key:'S-pd'+i,title:pd.label+' (bearing patch, h = 0)',items:[{type:'note',text:'A zero-height element is a bearing patch, not a member: no member checks (Chapter 10). Its load and bearing are in [[S-fd]].'}]});return;}
@@ -4283,13 +4305,15 @@ function sfrModel(){
      w.hz.need?sfrNeed({id:'w.sh',chk:'wall horizontal spacing',label:'Horizontal bar spacing: s_h,max = min(3t, 18'+(w.shReq?', ℓ_w/5':'')+') = '+sfrN(w.sMaxH)+' in',sym:'s_{h}',ref:'ACI 318-19 11.7.3.1'}):S({id:'w.sh',chk:'wall horizontal spacing',label:'Horizontal bar spacing',sym:'s_{h}',eq:'\\le \\min(3t,\\; 18'+(w.shReq?',\\; \\ell_{w}/5':'')+')',sub:sfrN(w.hz.s)+(w.sHOK?' \\le ':' \\gt ')+'\\min('+sfrN(3*w.tw)+',\\; 18'+(w.shReq?',\\; '+sfrN(w.lw/5):'')+') = '+sfrN(w.sMaxH),value:w.hz.s,unit:'in',ok:!!w.sHOK,ref:'ACI 318-19 11.7.3.1'}),
      (w.hz.need?sfrNeed:S)({id:'w.lay',chk:'wall layers',label:(w.hz.need?'Layers of distributed reinforcement, horizontal direction not known (bars not entered); vertical: ':'Layers of distributed reinforcement: ')+w.nC+' (perimeter cage, one near each face); '+(w.req2?'two required (t = '+sfrN(w.tw)+' in > 10 in)':w.ex2?'exempt by input (single-story basement or cantilever retaining wall)':'t ≤ 10 in: one permitted'),sym:'n_{layers}',eq:'\\ge '+(w.req2?'2':'1'),sub:'',...(w.hz.need?{}:{value:w.nC+' layers',unit:'',ok:!!w.layOK}),ref:'ACI 318-19 11.7.2.3'})]});
     wNote='Wall reinforcement: the 11.6.1 condition (in-plane V_u vs 0.5φα_cλ√f′c A_cv) is worked in [[cbr/cb'+i+'.wthr]]; the dowel minimum ρ_l A_g in [[cbr/cb'+i+'.dow]].';}
-   subs.push({key:'S-pd'+i,title:pd.label+' ('+(wI&&wI.applied?'wall':(pd.isPedestal?'pedestal':'column'))+', '+sfrN(pd.bx,1)+' × '+sfrN(pd.by,1)+' × '+sfrN(pd.h,1)+' in)',items:[...(wI&&wI.sel?[{type:'note',warn:true,text:sfdWallTxt(wI,false)+' Dowel minimum worked in [[cbr/cb'+i+'.dow]].'}]:[]),sfrTopics('pd'+i,T),
+   (wI&&wI.applied?wsubs:subs).push({key:(wI&&wI.applied?'S-wd':'S-pd')+i,title:pd.label+' ('+(wI&&wI.applied?'wall':(pd.isPedestal?'pedestal':'column'))+', '+sfrN(pd.bx,1)+' × '+sfrN(pd.by,1)+' × '+sfrN(pd.h,1)+' in)',items:[...(wI&&wI.sel?[{type:'note',warn:true,text:sfdWallTxt(wI,false)+' Dowel minimum worked in [[cbr/cb'+i+'.dow]].'}]:[]),sfrTopics('pd'+i,T),
     ...(pd.pmRat&&pd.pmRat.length?[{type:'table',wide:true,head:['Combination','P_u (kip)','M_ux (kip-ft)','M_uy (kip-ft)','|M_u| (kip-ft)','|φM_n|_θ (kip-ft)','ratio'],   /* SFPM */
      rows:pd.pmRat.map(z=>({cells:[z.name+(z.mode==='radial'?'':' ('+sfpmModeTxt(z)+')'),sfrCell(z.P),sfrCell(z.Mx),sfrCell(z.My),sfrCell(z.Md),z.Rc==null?sfrCell('—'):sfrCell(z.Rc),isNaN(z.ratio)?sfrCell('n/a'):sfrDC(z.ratio)],cls:z===pd.pmGov?'gov':''}))},
      {type:'note',text:'Each combination is checked on the contour at its own P_u, in the direction of its moment (same procedure as the governing row, worked above). Combination with no moment: ratio 0 (axial: see Axial strength).'}]:[]),
-    {type:'note',text:'Every LRFD combination is plotted against the biaxial capacity contour on the Pedestal Design tab[[tab:peddes| ↗]]. Combination actions: [[S-lrfd]]; dowels and bearing on the footing: [[cbr/cb'+i+'.DCR]].'},...(wNote?[{type:'note',text:wNote}]:[])]});
+    {type:'note',text:'Every LRFD combination is plotted against the biaxial capacity contour on the '+(wI&&wI.applied?'Wall Design tab[[tab:walldes| ↗]]':'Pedestal Design tab[[tab:peddes| ↗]]')+'. Combination actions: [[S-lrfd]]; dowels and bearing on the footing: [[cbr/cb'+i+'.DCR]].'},...(wNote?[{type:'note',text:wNote}]:[])]});
   });
+  if(!subs.length&&wsubs.length)subs.push({title:'No pedestals',items:[{type:'note',text:'Every element of this footing is a wall (element type Wall, ℓ_w/t > 3, ACI 318-19 2.3): see [[S-wd]].'}]});   /* SFWD */
   secs.push({title:'Pedestal design',key:'S-pd',subs});
+  if(wsubs.length)secs.push({title:'Wall design',key:'S-wd',subs:wsubs});   /* SFWD */
  }else secs.push({title:'Pedestal design',key:'S-pd',subs:[{title:'Not computed',items:[{type:'note',warn:true,text:'No valid strength combination for the pedestal design.'}]}]});   /* SFLK: keeps the section numbers and [[S-pd]] */
  /* ---------- 7. Assumptions ---------- */
  {
@@ -4311,14 +4335,14 @@ function sfrModel(){
  secs.push({title:'References',key:'S-ref',subs:[{title:'Codes and references cited',items:[{type:'table',head:['Reference','Provisions used'],rows:sfrRefs().map(([a,b])=>[sfrPlain(a),sfrPlain(b)])}]}]});
  /* SFLK (2026-11-02): summary of results, one row per dashboard check, each linked to the section that works it */
  {const have=new Set();secs.forEach(x=>{if(x.key)have.add(x.key);(x.subs||[]).forEach(q=>{if(q.key)have.add(q.key);});});
-  const pd=((P2&&P2.pedDes)||[]).map((z,i)=>'S-pd'+i), xy=['S-fdx','S-fdy'];
+  const pd=((P2&&P2.pedDes)||[]).map((z,i)=>(sfdIsWallEl(i)?'S-wd':'S-pd')+i), xy=['S-fdx','S-fdy'];   /* SFWD */
   const W={'Bearing (service)':['S-qa','S-bp'],'Overturning':['S-st'],'Eccentricity limit':['S-ecc'],'Eccentricity (information)':['S-ecc'],'Sliding, x':['S-st'],'Sliding, y':['S-st'],'Sliding, resultant \u221a(Hx\u00b2+Hy\u00b2)':['S-st'],
    'Flotation':['S-st'],'Contact area':['S-bp'],'Rigidity (rigid method)':['S-st'],'Flexure (footing)':xy,'One-way shear':xy,'Footing bar clear spacing':xy,'Punching shear':['S-pun'],
    'Concrete bearing':['S-cbr'],'Dowel steel (min 0.005A_g)':['S-cbr','S-dow'],'Dowel development (\u2113dc)':['S-cbr','S-dow'],'Interface shear friction':['S-sf'],'Dowels (tension, laps)':['S-dow'],
-   'Pedestal design':pd,'Pedestal P\u2013M (biaxial)':pd,'Pedestal tie cover':pd,'Footing bar development':xy,'Pedestal shear':pd,'Pedestal crossties':pd,'Concrete cover':['S-cov',...pd],'Wall checks (ACI 318-19 Ch. 11)':((P2&&P2.bearing)||[]).filter(z=>z.wall&&z.wall.sel).map(z=>'S-pd'+z.idx),
-   'Wall reinforcement (ACI 318-19 11.6)':((P2&&P2.bearing)||[]).filter(z=>z.wall&&z.wall.applied).map(z=>'S-pd'+z.idx),   /* SFWC */
-   'Wall in-plane shear (ACI 318-19 11.5.4)':((P2&&P2.bearing)||[]).filter(z=>z.wall&&z.wall.applied).map(z=>'S-pd'+z.idx),   /* SFWC-2 */
-   'Wall bar spacing and layers (ACI 318-19 11.7)':((P2&&P2.bearing)||[]).filter(z=>z.wall&&z.wall.applied).map(z=>'S-pd'+z.idx)};   /* SFWC-3 */
+   'Pedestal design':pd,'Pedestal P\u2013M (biaxial)':pd,'Pedestal tie cover':pd,'Footing bar development':xy,'Pedestal shear':pd,'Pedestal crossties':pd,'Concrete cover':['S-cov',...pd],'Wall checks (ACI 318-19 Ch. 11)':((P2&&P2.bearing)||[]).filter(z=>z.wall&&z.wall.sel).map(z=>(z.wall.applied?'S-wd':'S-pd')+z.idx),
+   'Wall reinforcement (ACI 318-19 11.6)':((P2&&P2.bearing)||[]).filter(z=>z.wall&&z.wall.applied).map(z=>'S-wd'+z.idx),   /* SFWC */
+   'Wall in-plane shear (ACI 318-19 11.5.4)':((P2&&P2.bearing)||[]).filter(z=>z.wall&&z.wall.applied).map(z=>'S-wd'+z.idx),   /* SFWC-2 */
+   'Wall bar spacing and layers (ACI 318-19 11.7)':((P2&&P2.bearing)||[]).filter(z=>z.wall&&z.wall.applied).map(z=>'S-wd'+z.idx)};   /* SFWC-3 */
   const ST={pass:'PASS',fail:'FAIL',warn:'REVIEW',na:'N/A'};
   const RR=(typeof sfdResultRows==='function'?sfdResultRows():[]);
   const rows=RR.map(x=>{const ks=(W[sfdChipKey(x.name)]||[]).filter(k=>have.has(k));
@@ -4390,7 +4414,7 @@ window.addEventListener('beforeprint',()=>{
    tab's checks (sfdResultRows: same D/C, reference and status). The manual is an Include box (the same saved field state.manPrint).
    Nothing is computed here: every value is the tab's own text. */
 const SFX={back:null};
-const SFX_TABS=[['dash','Summary of results'],['tab-schem','Project and inputs'],['tab-combos','Loads and combinations'],['tab-bearing','Bearing'],['tab-stab','Stability'],['tab-footdes','Footing design'],['tab-peddes','Pedestal design']];
+const SFX_TABS=[['dash','Summary of results'],['tab-schem','Project and inputs'],['tab-combos','Loads and combinations'],['tab-bearing','Bearing'],['tab-stab','Stability'],['tab-footdes','Footing design'],['tab-peddes','Pedestal design'],['tab-walldes','Wall design']];   /* SFWD */
 const sfxNums=t=>(String(t).replace(/\{,\}/g,',').replace(/[−–]/g,'-').replace(/(\d),(?=\d{3})/g,'$1').match(/\d+(?:\.\d+)?(?:e[-+]?\d+)?/gi)||[]).map(x=>String(parseFloat(x)));
 const sfxNrm=x=>String(x).toLowerCase().replace(/[^a-z0-9]+/g,'');
 /* TeX of a KaTeX formula in the subset of the built-in renderer used for $…$ in report text (display only: same symbols and numbers) */
@@ -4485,7 +4509,7 @@ function sfxWalk(root,scope,T){
   if(rows.length&&(T.newNum(all)||rows.some(r=>T.fresh(r[2]))))push({type:'table',head:['Check','Result','Detail','Status'],rows,wide:true});T.seen(all);};
  const visit=e=>{
   if(e.nodeType!==1)return;
-  if(e.matches('summary')){const t0=txt(e),m0=t0.match(/^(\d+(?:\.\d+)*[a-z]?)\s+/);if(m0)cno=m0[1];topic=t0.replace(/^\d+(\.\d+)*[a-z]?\s+/,'');card=topic;nfig=0;return;}
+  if(e.matches('summary')){const t0=txt(e),m0=t0.match(/^(\d+W?(?:\.\d+)*[a-z]?)\s+/);if(m0)cno=m0[1];topic=t0.replace(/^\d+W?(\.\d+)*[a-z]?\s+/,'');card=topic;nfig=0;return;}
   if(e.matches('h1,h2,h3,h4,.manH,.manH3')){topic=txt(e);card=topic;nfig=0;return;}
   if(e.matches('.sfp-na')){nfig++;const cap=(card||'Chart')+(nfig>1?' ('+nfig+')':''),key=sfxNrm(cap);if(!T.figs.has(key)){T.figs.add(key);push({type:'note',text:cap+': '+SFP_NA+'.'});}return;}   /* SFPN */
   if(e.matches('.js-plotly-plot')){const s=sfxPlotSvg(e);nfig++;const cap=(card||'Chart')+(nfig>1?' ('+nfig+')':''),key=sfxNrm(cap);if(s&&!T.figs.has(key)){T.figs.add(key);push({type:'figure',svg:s,caption:cap});}return;}
@@ -4678,7 +4702,7 @@ function sfroCards(items,have){
    worked steps), under a heading with the card's title and "<tab> tab, card x.y". Figures keep their caption, which gains the
    "(<tab> tab, card x.y)". What stays in the appendix: the notes and equation lines of the copies, and tables whose numbers and text
    the report already has. A copy left with nothing is dropped (listed in the fixlog as a true duplicate). Display only. */
-const SFRF_TAB=['Dashboard','Schematic & Input Echo','Load Combinations','Bearing','Stability','Footing Design','Pedestal Design'];
+const SFRF_TAB=['Dashboard','Schematic & Input Echo','Load Combinations','Bearing','Stability','Footing Design','Pedestal Design','Wall Design'];   /* SFWD */
 /* the subsection a copied card belongs to: [key] or [section, title prefix] */
 function sfrfTarget(ti,c){
  const n=c.no||'',t=c.title||'';
@@ -4691,6 +4715,7 @@ function sfrfTarget(ti,c){
  if(ti===5){if(n==='5.6')return /^Dowels/.test(t)?['S-dow','S-cbr']:/^Shear friction/.test(t)?['S-sf','S-cbr']:['S-cbr'];
   return {'5.1':[null,'Design basis'],'5.2':['S-fdx'],'5.3':['S-fdy'],'5.4':['S-fdy'],'5.5':['S-pun'],'5.7':[null,'Short-direction band','S-fdy']}[n]||null;}
  if(ti===6){const m=t.match(/^(.*?) — Detailed Checks/);return m?[null,'#ped:'+m[1],'S-pd0']:['S-pd0'];}
+ if(ti===7){const m=t.match(/^(.*?) — Wall Design/);return m?[null,'#wall:'+m[1]]:null;}   /* SFWD */
  return null;
 }
 function sfrfMove(ap,secs){
@@ -4705,6 +4730,7 @@ function sfrfMove(ap,secs){
  const subs=[].concat(...secs.map(x=>x.subs||[]));
  const find=tg=>{if(!tg)return null;for(const k of tg){if(!k)continue;let q=null;   /* in the order given: a key, a pedestal label, a title prefix */
    if(k.indexOf('#ped:')===0){const l=k.slice(5);q=subs.find(z=>z.key&&/^S-pd\d/.test(z.key)&&z.title.indexOf(l+' (')===0);}
+   else if(k.indexOf('#wall:')===0){const l=k.slice(6);q=subs.find(z=>z.key&&/^S-wd\d/.test(z.key)&&z.title.indexOf(l+' (')===0);}   /* SFWD */
    else if(/^S-/.test(k))q=subs.find(z=>z.key===k);else q=subs.find(z=>z.title.indexOf(k)===0);
    if(q)return q;}return null;};
  const dropped=[];
@@ -4730,11 +4756,11 @@ function sfroOrder(M){
  if(!M||!M.sections)return M;
  const S=M.sections, take=t=>{const i=S.findIndex(x=>x.title===t);return i<0?null:S.splice(i,1)[0];};
  const sum=take('Summary of results'),inp=take('Project and inputs'),asm=take('Assumptions and warnings'),lds=take('Loads and combinations'),
-  brg=take('Bearing'),stb=take('Stability'),fd=take('Footing design'),pd=take('Pedestal design'),man=take('User manual'),ref=take('References');
+  brg=take('Bearing'),stb=take('Stability'),fd=take('Footing design'),pd=take('Pedestal design'),wd=take('Wall design'),man=take('User manual'),ref=take('References');
  const rest=S.splice(0);   /* none today: a section added later keeps its place before the summary */
  const pull=(sec,pred)=>{if(!sec)return [];const out=sec.subs.filter(pred);sec.subs=sec.subs.filter(q=>!pred(q));return out;};
  const tabs=[[sum,'Summary of results (dashboard)'],[inp,'Project and inputs (Schematic & Input Echo tab)'],[lds,'Loads and combinations (Load Combinations tab)'],[brg,'Bearing (Bearing tab)'],
-  [stb,'Stability (Stability tab)'],[fd,'Footing design and pedestal–footing interface (Footing Design tab)'],[pd,'Pedestal design (Pedestal Design tab)']];
+  [stb,'Stability (Stability tab)'],[fd,'Footing design and pedestal–footing interface (Footing Design tab)'],[pd,'Pedestal design (Pedestal Design tab)'],[wd,'Wall design (Wall Design tab)']];   /* SFWD: index 7 = SFX_TABS / SFRF_TAB */
  const ap={title:'Appendix: the result tabs as printed',key:'S-axP',part:'Appendices',note:'The dashboard and each result tab as rendered: the tables, equations, notes and figures this report does not already show, under the tab’s card titles. Card numbers (for example 3.2a, 4.3a) are the tabs’ screen numbering, not this report’s §; where a card is worked in this report it is linked.',subs:[]};
  const ptr={};
  tabs.forEach(([sec,lab],i)=>{pull(sec,q=>q.title===SFRO_AP).forEach(q=>{q.title=lab;q.key='S-axP'+i;ap.subs.push(q);ptr[i]=q.key;});});
@@ -4750,16 +4776,16 @@ function sfroOrder(M){
     fd.subs.splice(ri,1,...(a.length?[mk(a,q.title)]:[]));
     if(b.length)ifc.subs.push(mk(b,'Results — Pedestal–footing interface'));}}}
  if(!ifc.subs.length)ifc.subs.push({title:'Not computed',items:[{type:'note',warn:true,text:'No pedestal–footing interface checks in this run (no valid strength combination produced downward load for the structural design).'}]});
- const have=new Set(),keys=()=>{have.clear();[...S,inp,asm,lds,brg,stb,fd,ifc,pd,...rest,sum,ref,ap,lr,man].forEach(x=>{if(!x)return;if(x.key)have.add(x.key);(x.subs||[]).forEach(q=>{if(q.key)have.add(q.key);});});};keys();
+ const have=new Set(),keys=()=>{have.clear();[...S,inp,asm,lds,brg,stb,fd,ifc,pd,wd,...rest,sum,ref,ap,lr,man].forEach(x=>{if(!x)return;if(x.key)have.add(x.key);(x.subs||[]).forEach(q=>{if(q.key)have.add(q.key);});});};keys();
  ap.subs.forEach(q=>sfroCards(q.items,have));
- sfrfMove(ap,[...S,sum,inp,asm,lds,brg,stb,fd,ifc,pd,...rest,ref,lr].filter(Boolean));   /* SFRF: figures and unique tables back into their sections */
+ sfrfMove(ap,[...S,sum,inp,asm,lds,brg,stb,fd,ifc,pd,wd,...rest,ref,lr].filter(Boolean));   /* SFRF: figures and unique tables back into their sections */
  Object.keys(ptr).forEach(i=>{if(!ap.subs.some(q=>q.key===ptr[i]))delete ptr[i];});
  if(ap.subs.length)ap.note='The notes and equation lines of the dashboard and each result tab as rendered, and the tables whose values this report already shows, under the tab’s card titles. The figures and the other tables are in the sections that work them. Card numbers (for example 3.2a, 4.3a) are the tabs’ screen numbering, not this report’s §; where a card is worked in this report it is linked.';
  keys();   /* SFRF: a copy left empty is gone */
  /* a one-line note at the head of each section whose tab copy or LRFD tables moved to the appendix */
  const say=(sec,keys)=>{const k=keys.filter(x=>x&&have.has(x));if(sec&&k.length)sec.note=(sec.note?sec.note+' ':'')+'Moved to the appendices: '+k.map(x=>x.indexOf('S-axP')===0?'the tab’s other notes, equation lines and tables, as printed, in [['+x+']]':'the LRFD reference tables (reference only), in [['+x+']]').join('; ')+'.';};
- say(sum,[ptr[0]]);say(inp,[ptr[1]]);say(lds,[ptr[2]]);say(brg,[ptr[3],'S-brLR']);say(stb,[ptr[4],'S-stLR']);say(fd,[ptr[5]]);say(ifc,[ptr[5]]);say(pd,[ptr[6]]);
- M.sections=[sum,inp,asm,lds,brg,stb,fd,ifc,pd,...rest,ref].filter(Boolean);   /* SFRF (engineer): the summary first */
+ say(sum,[ptr[0]]);say(inp,[ptr[1]]);say(lds,[ptr[2]]);say(brg,[ptr[3],'S-brLR']);say(stb,[ptr[4],'S-stLR']);say(fd,[ptr[5]]);say(ifc,[ptr[5]]);say(pd,[ptr[6]]);say(wd,[ptr[7]]);
+ M.sections=[sum,inp,asm,lds,brg,stb,fd,ifc,pd,wd,...rest,ref].filter(Boolean);   /* SFWD: Wall design after Pedestal design */   /* SFRF (engineer): the summary first */
  const apx=[ap,lr].filter(x=>x.subs.length);if(man)apx.push(man);
  if(apx.length){apx[0].part='Appendices';apx.slice(1).forEach(x=>{delete x.part;});}
  M.sections.push(...apx);
@@ -5249,8 +5275,8 @@ function renderDrawings(){
  SFDW.B=B;
  let want=SFDW.cur;if(!want){try{want=localStorage.getItem(SFDW.key)||'';}catch(e){want='';}}
  const cur=B.S.find(s=>s.id===want)||B.S[0];SFDW.cur=cur.id;
- const SRC={plan:['schem','Schematic'],secA:['footdes','Footing Design'],secB:['footdes','Footing Design'],sched:['footdes','Footing Design / Pedestal Design'],notes:['report','Report']};
- const src=id=>SRC[id]||(/^ped/.test(id)?['peddes','Pedestal Design']:null);
+ const SRC={plan:['schem','Schematic'],secA:['footdes','Footing Design'],secB:['footdes','Footing Design'],sched:['footdes','Footing Design / Pedestal Design'+((P2&&P2.bearing&&P2.bearing.some(z=>z.wall&&z.wall.applied))?' / Wall Design':'')],notes:['report','Report']};
+ const src=id=>SRC[id]||(/^ped/.test(id)?(sfdIsWallEl(+id.slice(3))?['walldes','Wall Design']:['peddes','Pedestal Design']):null);   /* SFWD */
  const scName=k=>k===1?'NTS (paper inches)':((SFDW_SCALES.find(q=>q[0]===k)||[0,'1:'+k])[1]);
  T.innerHTML='<div class="sfdwBar"><label>Sheet <select id="sfdwSheet">'+B.S.map((s,j)=>'<option value="'+s.id+'"'+(s===cur?' selected':'')+'>'+(j+1)+'. '+sfEsc(s.title)+'</option>').join('')+'</select></label>'+
   '<button type="button" id="sfdwDxf">Download DXF ('+B.S.length+' sheets)</button>'+
@@ -5412,13 +5438,13 @@ function sfdRunAll(list){
  ran.forEach(id=>sfdMarkOod(id,[...SFD_OOD].some(k=>k.startsWith(id+'|'))));}
 function recalc(){
  clearTimeout(rcTimer);sfdSetStale(false);   /* SFAC */
- const ALL=['dashboard','warnings','tab-schem','tab-combos','tab-bearing','tab-stab','tab-footdes','tab-peddes','tab-3d','tab-report','tab-drawings'];
+ const ALL=['dashboard','warnings','tab-schem','tab-combos','tab-bearing','tab-stab','tab-footdes','tab-peddes','tab-walldes','tab-3d','tab-report','tab-drawings'];   /* SFWD: tab-walldes */
  ALL.forEach(id=>SFD_OOD.delete(id+'|computeAll'));
  if(!sfdRun(ALL,'computeAll',()=>{R=computeAll();P2=R.fatal?null:computePhase2(R);if(P2&&!P2.noCombo)P2.dev=sfdDevAll();})){ALL.forEach(id=>sfdMarkOod(id,true));return;}   /* SFDV */
  const L=[[['dashboard'],'renderDashboard',()=>{renderDashboard();sfdDashDecorate();}],[['warnings'],'renderWarnings',()=>{renderWarnings();renderConsistency();}]];   /* SFDC */
  if(!R.fatal){L.push([['tab-schem'],'renderSchematic',renderSchematic],[['tab-combos'],'renderCombos',renderCombos],[['tab-bearing'],'renderBearing',renderBearing],[['tab-stab'],'renderStability',renderStability],
-  [['tab-footdes'],'renderFootingDesign',renderFootingDesign],[['tab-peddes'],'renderPedestalDesign',renderPedestalDesign],[sfdPlotTabs,'renderPlots',renderPlots]);}
- else{['tab-schem','tab-combos','tab-bearing','tab-stab','tab-footdes','tab-peddes'].forEach(id=>{$('#'+id).innerHTML='';sfdMarkOod(id,false);});}
+  [['tab-footdes'],'renderFootingDesign',renderFootingDesign],[['tab-peddes','tab-walldes'],'renderPedestalDesign',renderPedestalDesign],[sfdPlotTabs,'renderPlots',renderPlots]);}
+ else{['tab-schem','tab-combos','tab-bearing','tab-stab','tab-footdes','tab-peddes','tab-walldes'].forEach(id=>{$('#'+id).innerHTML='';sfdMarkOod(id,false);});sfdWallTabShow();}
  if($('#tab-3d').classList.contains('active')||$('#v3dwrap'))L.push([['tab-3d'],'renderView3D',renderView3D]);
  if($('#tab-report').classList.contains('active'))L.push([['tab-report'],'renderReport',renderReport]);   /* SFRP */
  if($('#tab-drawings').classList.contains('active'))L.push([['tab-drawings'],'renderDrawings',renderDrawings]);   /* SFDW */
@@ -5881,7 +5907,7 @@ function sfdWallTxt(w,html){
   'Bar spacing and layers (11.7.2.1, 11.7.3.1, 11.7.2.3) are checked under Wall bar spacing and layers. '+
   b('Not computed by this tool (engineer):')+' the out-of-plane design by Chapter 11 (11.5.2 / 11.5.3, 11.5.5.1) and 11.7.4.1, for which the pedestal checks above stand in; the strut-and-tie alternative of 11.5.4.1.';
 }
-/* SFWC (2026-11-06): the wall's own reinforcement ratios (ACI 318-19 11.6), worked on the Pedestal Design tab (display) */
+/* SFWC (2026-11-06): the wall's own reinforcement ratios (ACI 318-19 11.6), worked on the Wall Design tab (SFWD; display) */
 function sfdWallRhoBlocks(b,w){
  if(!w||!w.applied)return;
  const r5=sfdRhoTxt, v=w.v, h=w.hz, ck=(ok)=>ok?'\\;\\checkmark':'\\;\\text{NG}';
@@ -7402,7 +7428,7 @@ function renderFootingDesign(){
   bt.appendChild(tr);});
  bb.appendChild(bt);
  bb.appendChild(el('div','note',sfdBearLegend(seen)));   /* SFML: only the statuses in the table, each element's dowel-minimum basis */
- P2.bearing.filter(z=>z.wall&&z.wall.sel).forEach(z=>bb.appendChild(el('div',z.wall.applied?'note':'warnbox','<b>'+sfEsc(z.label)+':</b> '+sfdWallTxt(z.wall,true)+(z.wall.applied?' Dowel minimum: '+(!z.wall.dow1162?'\u03c1<sub>\u2113</sub> A<sub>g</sub> = '+z.wall.rhoL+' \u00b7 '+f2(z.wall.Ag)+' = '+f2(z.wall.AsMinWall):'\u03c1<sub>\u2113</sub> A<sub>g</sub> = '+sfdRhoTxt(z.wall.rhoDow)+' \u00b7 '+f2(z.wall.Ag)+' = '+f2(z.wall.AsMinWall)+' (\u03c1<sub>\u2113</sub> by 11.6.2, worked in '+sfdLink('o-pd-'+z.idx,'',['tab-peddes','6.'+(z.idx+2)+' '+z.label+' \u2014 Detailed Checks'])+')')+' in\u00b2 (the A<sub>s,dow</sub> min column above).':''))));   /* SFWL */
+ P2.bearing.filter(z=>z.wall&&z.wall.sel).forEach(z=>bb.appendChild(el('div',z.wall.applied?'note':'warnbox','<b>'+sfEsc(z.label)+':</b> '+sfdWallTxt(z.wall,true)+(z.wall.applied?' Dowel minimum: '+(!z.wall.dow1162?'\u03c1<sub>\u2113</sub> A<sub>g</sub> = '+z.wall.rhoL+' \u00b7 '+f2(z.wall.Ag)+' = '+f2(z.wall.AsMinWall):'\u03c1<sub>\u2113</sub> A<sub>g</sub> = '+sfdRhoTxt(z.wall.rhoDow)+' \u00b7 '+f2(z.wall.Ag)+' = '+f2(z.wall.AsMinWall)+' (\u03c1<sub>\u2113</sub> by 11.6.2, worked in '+sfdElLink(z.idx)+')')+' in\u00b2 (the A<sub>s,dow</sub> min column above).':''))));   /* SFWL */
  { const bad=P2.bearing.filter(z=>!z.isPatch&&!z.ldcOK);
    if(bad.length)bb.appendChild(el('div','warnbox','<b>Dowel compression development not satisfied:</b> '+bad.map(z=>z.label+' (#'+z.dSize+', L<sub>dc</sub> = '+f2(z.Ldc)+' in vs '+f2(z.availEmb)+' in available)').join('; ')+'. Available depth = t \u2212 bottom cover \u2212 both bottom mat layers. <b>ACI 318-19 25.4.1.2 does not permit a hook to develop a bar in compression</b>, so this cannot be detailed away with a bend \u2014 thicken the footing, use smaller or more dowels, or use a mechanical device.'));
    const opq=P2.bearing.filter(z=>z.ldcByOpt);   /* SFLA */
@@ -7441,6 +7467,7 @@ function renderFootingDesign(){
   ...(ldcT=>sfdDowMinKinds().has('wall')?[sfdDowMinTex(),ldcT]:[sfdDowMinTex()+',\\quad '+ldcT,null])('L_{dc} = (0.02 f_y/\\lambda\\sqrt{f\'_c})d_b \\ge 0.0003 f_y d_b,\\;\\sqrt{f\'_c}\\le100\\;\\mathrm{psi}')));   /* SFML: with a wall, the minimum on its own line */
  sfdoRender(bb);   /* SFDO */
  sfsfRender(bb);   /* SFSF */
+ {const wl=P2.bearing.filter(z=>z.wall&&z.wall.applied);if(wl.length)bb.appendChild(el('div','note','<b>Walls:</b> the dowels and the shear friction of '+wl.map(z=>sfEsc(z.label)).join(', ')+' are worked in '+(wl.length>1?'their cards':'its card')+' on the Wall Design tab: '+wl.map(z=>sfdElLink(z.idx)).join(' · ')+' (their rows are in the tables above).'));}   /* SFWD */
 }
 /* SFML (2026-11-05, engineer): card 5.6 legend and formula line follow each element's dowel-minimum basis (display only).
    'col' = column / pedestal rule 0.005A_g (16.3.4.1), also a Wall where 11.6.1 does not apply or l_w/t <= 3;
@@ -7469,15 +7496,15 @@ function sfdBearLegend(seen){
  return 'Status: one per element, the first check not met in the order bearing, L<sub>dc</sub>, dowel area (each check has its own columns).'+(seen.some(q=>!q[1].isPatch&&!q[1].ldcReq)?' L<sub>dc</sub> (not req.) = the dowels need not develop in compression: P<sub>u</sub> \u2264 the lesser concrete bearing strength (footing \u03c6P<sub>nb</sub>, pedestal 0.65\u00b70.85f\u2032<sub>c</sub>A\u2081) in every combination, so concrete bearing carries P<sub>u</sub> (ACI 318-19 16.3.1.2(a), 16.3.3.4).':'')+   /* SFBC */(mins.length?' Dowel minimum: '+mins.join('; ')+'.':'')+' In this table: '+L.join('; ')+'.';
 }
 /* SFSF: shear friction at the pedestal / footing interface (worked) */
-function sfsfRender(bb){
- if(!P2||!P2.shearFr)return;const S=P2.shearFr.filter(z=>!z.isPatch&&z.gov);if(!S.length)return;
+function sfsfRender(bb,only){   /* SFWD: only = an element index (a wall's card): its row and its worked block; none (5.6): every row, worked blocks of the non-walls */
+ if(!P2||!P2.shearFr)return;const S=P2.shearFr.filter(z=>!z.isPatch&&z.gov&&(only==null||z.idx===only));if(!S.length)return;
  bb.appendChild(el('h3','','Shear friction across the pedestal\u2013footing interface'));
  const st=document.createElement('table');st.className='tbl';
  st.innerHTML='<tr><th>Pedestal</th><th>Joint</th><th>\u03bc</th><th>A<sub>vf</sub> (in\u00b2)</th><th>Governing combination</th><th>V<sub>u</sub> (k)</th><th>N<sub>u</sub> (k)</th><th>\u03c6V<sub>n</sub> (k)</th><th>DCR</th></tr>';
  S.forEach(z=>{const g=z.gov,tr=document.createElement('tr');
   [z.label,z.rough?'roughened':'not roughened',f2(z.mu),f2(z.Avf),g.name,f2(g.Vu),f2(g.Nu),f2(g.phiVn)+(g.limGov?' (limit)':''),f3(g.ratio)].forEach((x,k)=>{const td=document.createElement('td');td.textContent=x;if(k===8)td.style.color=g.ratio<=1?'#1b5e20':'#b71c1c';tr.appendChild(td);});st.appendChild(tr);});
  bb.appendChild(st);
- S.forEach(z=>{const g=z.gov;
+ S.filter(z=>only!=null||!sfdIsWallEl(z.idx)).forEach(z=>{const g=z.gov;   /* SFWD */
   bb.appendChild(eqBlock(z.label+' \u2014 shear friction, governing: '+g.name,'ACI 318-19 22.9.4.2, Table 22.9.4.2, 22.9.4.4, 22.9.4.5, 22.9.4.6, 20.2.2.4; \u03c6 = 0.75 (Table 21.2.1)',
    'V_u = \\sqrt{V_{ux}^2+V_{uy}^2},\\quad \\phi V_n = 0.75\\,\\min\\big(\\mu (A_{vf} f_y + N_u),\\;V_{n,max}\\big),\\quad A_{vf} = \\eta_{dev}(A_{s,dow} - A_{s,req,ten}),\\;\\eta_{dev} = \\min(1,\\ell_{avail}/\\ell_{req})\\;\\text{each side, smaller governs (proportional development credit, engineering assumption)},\\quad N_u = \\min(0.9(P_D + W_{ped}),\\,P_u),\\quad f_y \\le 60\\;\\mathrm{ksi}',
    'V_u = \\sqrt{'+f2(g.Vx)+'^2+'+f2(g.Vy)+'^2} = '+f2(g.Vu)+'\\;\\mathrm{k};\\;\\mu = '+(z.rough?'1.0':'0.6')+'\\cdot'+f2(P2.lam)+' = '+f2(z.mu)+';\\;A_{vf} = '+(z.dev?'':f3(z.devFr)+'\\cdot(')+f2(z.AsProv)+' - '+(isFinite(z.AsReqT)?f2(z.AsReqT):'\\infty')+(z.dev?'':')')+' = '+f2(z.Avf)+'\\;\\mathrm{in^2}'+(z.dev?'':'\\;(\\text{not fully developed: footing '+f3((P2.dowels[z.idx]||{}).sfFrFtg||0)+', pedestal '+f3((P2.dowels[z.idx]||{}).sfFrPed||0)+'})')+';\\;N_u = \\min(0.9\\cdot'+f2(g.Pperm/0.9)+',\\,'+f2(g.Pu)+') = '+f2(g.Nu)+'\\;\\mathrm{k}',
@@ -7490,8 +7517,8 @@ function sfsfRender(bb){
  bb.appendChild(el('div','note','Shear plane = the pedestal footprint A<sub>c</sub> = b<sub>x</sub>b<sub>y</sub> at the top of the footing. \u03bc: Table 22.9.4.2, set per pedestal on the Reinforcement tab ("Joint surface"; default intentionally roughened, 1.0\u03bb; "not intentionally roughened", 0.6\u03bb, as an override). A<sub>vf</sub>: the dowels less the area needed for tension at the interface (Dowels (2) above, the largest of all combinations; 22.9.4.6), in full where the dowels are developed in tension on both sides of the joint (footing \u2113<sub>d</sub> / \u2113<sub>dh</sub>; pedestal Class B lap within the projection or full-height \u2113<sub>d</sub>; ACI 318-19 22.9.5.1); otherwise in proportion to the development available, min(1, available / required) on each side, the smaller side governing (engineering assumption: proportional development credit). Where \u03c6\u03bcN<sub>u</sub> alone does not carry V<sub>u</sub>, the dowels are checked in tension in Dowels (2c)\u2013(3). N<sub>u</sub>: permanent net compression only, 0.9 \u00d7 (dead load + pedestal self-weight) in every combination (0.9 \u00d7 self-weight in direct mode), not more than P<sub>u</sub> (22.9.4.5; AASHTO LRFD 10th Ed. 5.7.4.3, P<sub>c</sub>). V<sub>n,max</sub>: 22.9.4.4 ('+(S[0].nw?'normalweight':'lightweight: \u201cother cases\u201d row')+').'));
 }
 /* SFDO: Dowels topic per pedestal in 5.6 (worked) */
-function sfdoRender(bb){
- if(!P2||!P2.dowels)return;const D=P2.dowels.filter(z=>!z.isPatch);if(!D.length)return;
+function sfdoRender(bb,only){   /* SFWD: as sfsfRender */
+ if(!P2||!P2.dowels)return;const D=P2.dowels.filter(z=>!z.isPatch&&(only==null||z.idx===only));if(!D.length)return;
  const fp=x=>x<0?'('+f2(x)+')':f2(x);
  bb.appendChild(el('h3','','Dowels \u2014 compression development, tension at the interface, laps and projection'));
  const st=document.createElement('table');st.className='tbl';
@@ -7503,7 +7530,7 @@ function sfdoRender(bb){
   st.appendChild(tr);});
  bb.appendChild(st);
  const fyk=f2(P2.fy/1000), lamS=f2(P2.lam);
- D.forEach(z=>{const bz=P2.bearing[z.idx];
+ D.filter(z=>only!=null||!sfdIsWallEl(z.idx)).forEach(z=>{const bz=P2.bearing[z.idx];   /* SFWD */
   bb.appendChild(el('div','note','<b>'+sfEsc(z.label)+' \u2014 dowels '+z.nD+' #'+z.ds+' (d<sub>b</sub> = '+f3(z.db)+' in, A<sub>s,dow</sub> = '+f2(z.AsProv)+' in\u00b2), '+(z.hook==='hook90'?'90\u00b0 hook':'straight')+' in the footing; vertical bars #'+z.sl+'.</b>'));
   /* (1) */
   const T=['0.02 d_b f_y/(\\lambda\\sqrt{f\'_c})','0.0003 d_b f_y','8\\;\\mathrm{in}'];
@@ -7716,14 +7743,30 @@ function renderPunching(parent){
   b.appendChild(el('div','note','J_c and the extreme fibre are built from the critical faces that actually close within the footing (parallel-axis assembly of the thin-wall segments); for an untruncated interior perimeter this reduces identically to the closed form of ACI R8.4.4.2.3. The two eccentric-shear stresses are superposed at the governing corner (conservative). The pressure-relief area is the exact integral of the no-tension pressure solid over the clipped critical area. Edge and corner conditions additionally reduce \u03b1_s (30 / 20) and the flexural-transfer band \u2014 see the checks below.fers from the interior form \u2014 verify governing cases and the \u03b3_f flexural transfer by hand.'));
  }
 }
+/* SFWD (2026-11-07): the wall tab's summary note and each wall's connection to the footing (display only) */
+const SFWD_INTRO='Each element on this tab is a <b>wall</b> by ACI 318-19 2.3 (element type Wall on the Pedestals card, horizontal length-to-thickness ratio ℓ<sub>w</sub>/t &gt; 3). Its card works the Chapter 11 wall checks the tool computes (minimum reinforcement 11.6, in-plane shear 11.5.4, bar spacing and layers 11.7) and its connection to the footing (16.3: bearing, dowels, shear friction). For the out-of-plane design (11.5.2 / 11.5.3, 11.5.5.1) and the ties of 11.7.4.1 the card shows the checks of the section as a pedestal (P–M, axial cap, ties, one-way shear, slenderness), kept as a conservative stand-in as before.';
+function sfdWallConn(b,i){
+ if(!b||!P2||!P2.bearing||!P2.bearing[i])return;const bz=P2.bearing[i];
+ b.appendChild(el('h3','','Connection to the footing (ACI 318-19 11.2.2.2, 16.3)'));
+ const t=document.createElement('table');t.className='tbl';
+ t.innerHTML='<tr><th>A₁ (in²)</th><th>√(A₂/A₁)</th><th>governed by</th><th>φB<sub>n</sub> (k)</th><th>P<sub>u</sub> (k)</th><th>Bearing DCR</th><th>A<sub>s,dow</sub> min / prov (in²)</th><th>ℓ<sub>dc</sub> / avail (in)</th></tr>';
+ const tr=document.createElement('tr');
+ [f2(bz.A1),f2(bz.conf),bz.confGov,f2(bz.phiPn)+(bz.brgGov==='pedestal'?' (wall)':bz.brgGov==='footing'?' (footing)':' (equal)'),f2(bz.PuMax),f2(bz.dcr)+(bz.excess?' (dowels: '+f2(bz.dcrEff)+')':''),f2(bz.AsDowMin)+' / '+f2(bz.AsDowProv),f2(bz.Ldc)+(bz.ldcByOpt?' (option)':bz.ldcReq?'':' (not req.)')+' / '+f2(bz.availEmb)]
+  .forEach((x,k)=>{const td=document.createElement('td');td.textContent=x;if(k===5)td.style.color=bz.dcrEff<=1?'#1b5e20':'#b71c1c';if(k===6)td.style.color=bz.dowelOK?'#1b5e20':'#b71c1c';if(k===7&&!bz.ldcOK)td.style.color='#b71c1c';tr.appendChild(td);});
+ t.appendChild(tr);b.appendChild(t);
+ b.appendChild(el('div','note','Concrete bearing (16.3.3.4, Table 22.8.3.2: the lesser of the footing and the wall), the dowel minimum ρ<sub>ℓ</sub>A<sub>g</sub> (16.3.4.2, above) and ℓ<sub>dc</sub> (25.4.9.2, where 16.3.1.2(a) requires it) are listed with the other elements in '+sfdLink('o-fd-bear','',['tab-footdes','5.6 Concrete Bearing & Dowels'])+'; the dowels and the shear friction of this wall are worked below.'));
+ sfdoRender(b,i);sfsfRender(b,i);}
 function renderPedestalDesign(){
  const T=$('#tab-peddes');T.innerHTML='';
+ const TW=$('#tab-walldes');TW.innerHTML='';sfdWallTabShow();   /* SFWD: the walls' cards go to 6W. Wall Design */
  if(R.fatal){return;}
  if(!P2||P2.noCombo){T.appendChild(el('div','errbox','No valid strength combination for pedestal design.'));return;}
+ const wIdx=P2.pedDes.map((z,i)=>i).filter(sfdIsWallEl), pIdx=P2.pedDes.map((z,i)=>i).filter(i=>!sfdIsWallEl(i)), cards={};   /* SFWD */
  const intro=secPanel(T,'o-pd-intro','6.1  Classification & Reinforcement Summary');
  intro.appendChild(el('p','note','Each pedestal is classified as a pedestal (height \u2264 3\u00d7 least plan dimension) or a column, and checked against axial\u2013moment demand, tie provisions (ACI 318-19 25.7.2), longitudinal steel limits (1\u20138% A_g, min 4 bars), and slenderness. Biaxial interaction is reported via the axial demand ratio with the Bresler framework; moment magnification for slender pedestals is deferred to v2 (flagged).'));
  const t=document.createElement('table');t.className='tbl';
  t.innerHTML='<tr><th>Pedestal</th><th>Class</th><th>b\u2093\u00d7b\u1D67\u00d7h (in)</th><th>n bars</th><th>A_st (in\u00b2)</th><th>\u03c1 (%)</th><th>\u03c6P_n,max (k)</th><th>P_u (k)</th><th>Axial DCR</th><th>P\u2013M ratio (own P_u)</th><th>Ties</th><th>Tie cover (in)</th><th>Slender?</th></tr>';
+ const tw=t.cloneNode(true);tw.querySelector('th').textContent='Wall';   /* SFWD */
  P2.pedDes.forEach(pd=>{const tr=document.createElement('tr');
   const tiesTxt=(pd.tieOK&&pd.tieSizeOK)?'OK':'CHECK';
   const wA=P2.bearing[pd.idx]&&P2.bearing[pd.idx].wall&&P2.bearing[pd.idx].wall.applied;   /* SFWL */
@@ -7733,11 +7776,15 @@ function renderPedestalDesign(){
    if(k===9&&pd.pmGov&&!pd.isPatch)td.style.color=pd.pmGov.ratio<=1?'#1b5e20':'#b71c1c';   /* SFPM */
    if(k===10)td.style.color=tiesTxt==='OK'?'#1b5e20':'#b71c1c';
    if(k===11&&!pd.isPatch)td.style.color=pd.tieCovOK?'#1b5e20':'#b71c1c';tr.appendChild(td);});
-  if(!pd.rhoOK||!pd.nBarsOK||!pd.barFitOK)tr.style.background='#fff8e1';t.appendChild(tr);});
- intro.appendChild(t);
- intro.appendChild(sfdWorkedIn(P2.pedDes.map((pd,i)=>['o-pd-'+i,pd.label,['tab-peddes','6.'+(i+2)+' '+pd.label+' \u2014 Detailed Checks']])));   /* D11 links */
+  if(!pd.rhoOK||!pd.nBarsOK||!pd.barFitOK)tr.style.background='#fff8e1';(sfdIsWallEl(pd.idx)?tw:t).appendChild(tr);});   /* SFWD */
+ const wkl=L=>sfdWorkedIn(L.map(i=>{const C=sfdElCard(i);return [C.id,P2.pedDes[i].label,[C.tab,C.no+' '+C.title]];}));
+ if(pIdx.length){intro.appendChild(t);intro.appendChild(wkl(pIdx));}   /* D11 links; SFWD: the pedestals only */
+ else intro.appendChild(el('div','note','<b>No pedestals:</b> every element of this footing is a wall (element type Wall, ℓ<sub>w</sub>/t &gt; 3, ACI 318-19 2.3), designed on the Wall Design tab: '+sfdLink('o-wd-intro','',['tab-walldes','6W.1 Wall Summary'])+'.'));
+ if(wIdx.length&&pIdx.length)intro.appendChild(el('div','note','Walls ('+wIdx.map(i=>sfEsc(P2.pedDes[i].label)).join(', ')+') are designed on the Wall Design tab: '+wIdx.map(i=>sfdElLink(i)).join(' · ')+'.'));
+ if(wIdx.length){const wi=secPanel(TW,'o-wd-intro','6W.1  Wall Summary');
+  wi.appendChild(el('p','note',SFWD_INTRO));wi.appendChild(tw);wi.appendChild(wkl(wIdx));}
  P2.pedDes.forEach((pd,i)=>{
-  const b=secPanel(T,'o-pd-'+i,'6.'+(i+2)+'  '+pd.label+' \u2014 Detailed Checks',false);
+  const C=sfdElCard(i), b=secPanel(C.wall?TW:T,C.id,C.no+'  '+C.title,false);cards[i]=b;   /* SFWD */
   {const w=P2.bearing[i]&&P2.bearing[i].wall;if(w&&w.sel)b.appendChild(el('div','warnbox',sfdWallTxt(w,true)));sfdWallRhoBlocks(b,w);}   /* SFWL; SFWC */
   b.appendChild(el('div','note','Longitudinal bars: '+sfEsc(sfdPedBarTxt(i))+'.'));   /* SFRQ: as entered and as laid out */
   if(!pd.barFitOK)b.appendChild(el('div','warnbox','Longitudinal bars do not fit: clear spacing '+f2(Math.min(pd.clrX,pd.clrY))+' in is below the ACI 318-19 25.2.3 minimum max(1.5d<sub>b</sub>, 1.5 in, 4/3 d<sub>agg</sub>) = '+f2(pd.clrMin)+' in for the entered bar count \u2014 check nx/ny.'));
@@ -7838,6 +7885,7 @@ function renderPedestalDesign(){
     z.unstable?'P_u \\ge 0.75P_c\\Rightarrow\\textbf{unstable: NG}':(z.over14?'\\delta_s\\delta = '+f2(z.amp)+' > 1.4\\Rightarrow\\textbf{NG (6.2.5.3)}':'\\delta_s\\delta = '+f2(z.amp)+' \\le 1.4\\;\\checkmark;\\;\\text{the P\\text{-}M ratio uses } M_c')));
    if(pd.slFail)b.appendChild(el('div','failbox','<b>NG \u2014 slender pedestal.</b> '+(pd.slm.some(q=>q.unstable)?'P<sub>u</sub> \u2265 0.75P<sub>c</sub> in at least one combination (the moment magnifier is unbounded).':'The second-order moment exceeds 1.4 \u00d7 the first-order moment ('+f2(pd.slGov.amp)+', '+pd.slGov.name+'; ACI 318-19 6.2.5.3).')+' Increase the section or reduce the height.'));}
  });
+ wIdx.forEach(i=>sfdWallConn(cards[i],i));   /* SFWD: each wall's connection to the footing, in its card */
 }
 </script>
 <script>
@@ -8472,7 +8520,7 @@ function showInspect(i){
   '<tr><td class="cls">Ties</td><td>'+bd((pd.tieOK&&pd.tieSizeOK)?'OK':'CHK',pd.tieOK&&pd.tieSizeOK)+' s\u2264'+f2(pd.tieMax)+'"</td></tr>'+
   '<tr><td class="cls">Slenderness</td><td>'+bd(pd.slenderFlag?(pd.slFail?'NG':'MAGNIFIED'):'OK',!pd.slFail)+' kl/r='+f2(pd.klu_r)+(pd.slGov?' \u03b4<sub>s</sub>\u03b4='+f2(pd.slGov.amp):'')+'</td></tr>'+
   '</table>'+
-  '<div style="margin-top:4px">'+jump('tab-peddes','Pedestal design')+' &middot; '+jump('tab-footdes','Footing design')+'</div>';
+  '<div style="margin-top:4px">'+(bz&&bz.wall&&bz.wall.applied?jump('tab-walldes','Wall design'):jump('tab-peddes','Pedestal design'))+' &middot; '+jump('tab-footdes','Footing design')+'</div>';
  box.style.display='block';wireJumps(box);
 }
 </script>
@@ -8628,7 +8676,7 @@ manPart("p0","0. Read This First",[
 /* ===== PART 1 — USING THE PROGRAM ===== */
 manPart("p1","1. Using the Program",[
 {h:"1.1 Layout"},
-{p:"The screen is split into an <b>input panel</b> (left) and an <b>output report</b> (right) organised in numbered tabs: 1&nbsp;Schematic &amp; Input Echo, 2&nbsp;Load Combinations, 3&nbsp;Bearing, 4&nbsp;Stability, 5&nbsp;Footing Design, 6&nbsp;Pedestal Design, 7&nbsp;3D View, and this manual. Every input change recalculates the entire report (debounced ~0.3 s). The <b>summary dashboard</b> shows a pass/fail chip for each check family (one line each; expanded, a chip names its governing combination). On screens 1200&nbsp;px and wider it is a left column beside the input and output panels; on narrower screens it sits at the top of the output panel, above the tabs (&sect;3.1)."},
+{p:"The screen is split into an <b>input panel</b> (left) and an <b>output report</b> (right) organised in numbered tabs: 1&nbsp;Schematic &amp; Input Echo, 2&nbsp;Load Combinations, 3&nbsp;Bearing, 4&nbsp;Stability, 5&nbsp;Footing Design, 6&nbsp;Pedestal Design, 6W&nbsp;Wall Design (shown only when an element is a wall: element type Wall with &ell;<sub>w</sub>/t &gt; 3), 7&nbsp;3D View, and this manual. Every input change recalculates the entire report (debounced ~0.3 s). The <b>summary dashboard</b> shows a pass/fail chip for each check family (one line each; expanded, a chip names its governing combination). On screens 1200&nbsp;px and wider it is a left column beside the input and output panels; on narrower screens it sits at the top of the output panel, above the tabs (&sect;3.1)."},
 {p:"Report sections are collapsible; the open/closed state persists with your session. The <b>self-consistency panel</b> at the top of the output panel (under the dashboard on screens narrower than 1200&nbsp;px) should read six green checks at all times \u2014 see &sect;0.1."},
 {h:"1.2 Load input modes"},
 {p:"<b>By load type</b> (default): enter unfactored D, L, Lr, S, Wx, Wy loads per pedestal. The program generates the full ASCE 7-16 &sect;2.4.1 service sweep for bearing/stability and the &sect;2.3.1 strength sweep for structural design, brackets dead load (1.0/0.6 service, 1.2/0.9/1.4 strength), and sweeps wind &plusmn;x and &plusmn;y."},
