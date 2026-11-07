@@ -15527,3 +15527,133 @@ index 97bd06f..5b6163d 100644
 @@ -10011,0 +10026 @@ document.addEventListener("change",ev=>{
 +  if(S.seismic&&S.seismic.khRAuto){ migrate(); const e2=document.querySelector('[data-path="seismic.khR"]'); if(e2) e2.value=S.seismic.khR; }   // ABM2: the automatic k_h ratio follows a foundation / owner change
 ```
+
+## 2026-11-07 — PR: claude/abut-m1-conn (PR #1004: https://github.com/mlococo88/All-Structural/pull/1004) (ABM1: longitudinal seismic connection force at fixed bearings from the segment's total permanent load; new input W_seg)   [calc change: design note] [MORE conservative]
+
+Source: code-compliance review of 2026-11-07, item M1.
+
+### ABM1. Connection force, longitudinal, fixed bearings
+- **Where:** `computeAll` C-9 (anchor `const fixL=S.dist&&S.dist.model==="fixed"`; `R.seismic.lon`); new input `seismic.Wseg` (panel I-11, anchor `Segment permanent load for the longitudinal connection force`); Tab 3 §3.6 lines (anchor `sz.lon&&isFinite(sz.lon.FconnL)`); `migrate` back-fill and the Input ID (`Wseg` at its default 0 left out).
+- **Before:** F_conn = c·(ΣP_DC + W_dia + ΣP_DW + γ_EQ·ΣP_LL) of this abutment (Zone 1), and ≥ A_s × this abutment's permanent reaction for a single span, in every restrained direction.
+- **After:** with panel I-6 "Defined fixed bearing" (fixed here) the longitudinal force uses W_seg = the entered segment permanent load, or when 0, 2(ΣP_DC + W_dia + ΣP_DW)·L_tot/L (L_tot from panel I-0, else the span: the whole bridge, conservative; single span = both ends' reactions). F_conn,L = c·(W_seg + γ_EQ·ΣP_LL), and for a single span ≥ A_s·W_seg. F_conn,T (transverse) = the earlier value. F_conn shown = max(F_conn,L, F_conn,T). Floating and manual restraint models: unchanged. REVIEW warning for a multispan fixed abutment with neither W_seg nor L_tot entered.
+- **Problem:** 3.10.9.2 takes, at a line of fixed bearings, the total permanent load of the uninterrupted segment as the tributary load for the longitudinal force; the tool used one abutment's reactions (half a simple span) — unconservative for keeper / anchor-bolt design.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 3.10.9.2 (0.15 / 0.25 of the tributary permanent + live reaction; segment rule at fixed bearings), 3.10.9.1 (single-span minimum A_s × tributary permanent load).
+- **Check case (built-in project, 6 girders, ΣP_DC = 510, ΣP_DW = 72 → 582 kip; fixed here; single span; Zone 1, A_s = 0.15 → c = 0.25; γ_EQ = 0):**
+  - Before: F_conn = 0.25·582 = **145.5 kip** (24.25 kip per beam).
+  - After: W_seg = 2·582·80/80 = 1164 kip; F_conn,L = 0.25·1164 = **291.0 kip** (48.5 per beam); F_1span,L = 0.15·1164 = 174.6; transverse F_conn,T = 145.5 kip.
+  - Multispan, L_tot = 240 ft: W_seg = 2·582·240/80 = 3492 kip; F_conn,L = 873 kip.
+- **Decision (pending engineer review):** the single-span 3.10.9.1 minimum also takes W_seg longitudinally at fixed bearings (conservative; 3.10.9.1 says "tributary permanent load"); the tributary live load stays this abutment's; the auto W_seg assumes the whole bridge length is one segment.
+- **How verified:** headless origin/main vs branch, 16 scenarios: only fixed-bearing Zone 1 / single-span projects change (Fconn, perBeam, the new `R.seismic.lon`); all others identical (no new result fields). Tabs and Report render, 0 console errors, self-test passes; `check-syntax`, `project-library --tool abutment` pass.
+- **Saved data:** new optional field `seismic.Wseg` (0). A saved fixed-bearing project shows the larger connection force on open (design note only; no dashboard check uses it).
+- **Other copies:** the MassDOT backwall-stop check already used 2(DC + DW)·L_tot/L (unchanged).
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index e2e321c..ce6e74c 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -742 +742 @@ function defaultState(){
+-      khRAuto:true,                                               // ABM2 (2026-11-07): k_h ratio set from the foundation (abutKhAuto: 1.0 on piles or rock, 0.5 on a spread footing on soil) [11.6.5.2.2]; false = the entered khR
++      khRAuto:true, Wseg:0,                                       // ABM1: Wseg = segment permanent load for the longitudinal connection force at fixed bearings (kip, 0 = auto) [3.10.9.2]                                               // ABM2 (2026-11-07): k_h ratio set from the foundation (abutKhAuto: 1.0 on piles or rock, 0.5 on a spread footing on soil) [11.6.5.2.2]; false = the entered khR
+@@ -1712 +1712 @@ function migrate(){
+-    if(S.seismic) fill(S.seismic,T.seismic,["siteClass","bwStop","bwW","nonConc","shEQt"]);   // ABR1: bwStop false, bwW 0 (MassDOT: owner default below); ABR3: nonConc, shEQt
++    if(S.seismic) fill(S.seismic,T.seismic,["siteClass","bwStop","bwW","nonConc","shEQt","Wseg"]);   // ABM1: Wseg 0   // ABR1: bwStop false, bwW 0 (MassDOT: owner default below); ABR3: nonConc, shEQt
+@@ -2369,0 +2370 @@ function buildInputs(){
++      ${inpRow("Segment permanent load for the longitudinal connection force (0 = auto)","seismic.Wseg","kip",{title:"Total permanent load (DC + DW) of the uninterrupted superstructure segment held longitudinally by fixed bearings at this abutment [3.10.9.2]. Used only with panel I-6 'Defined fixed bearing'. 0 = 2(ΣP_DC + ΣP_DW)·L_tot/L (whole bridge length; single span: both ends' reactions). Tab 3 §3.6."})}
+@@ -3992,2 +3993,13 @@ function computeAll(){
+-  const Fconn=zone===1? (single? Math.max(F1,F0) : F1) : (single? F0 : NaN);
+-  R.seismic={Fconn, perBeam:Fconn/Math.max(1,S.beams.N), trib:Wperm, Wtrib, zone, As:AsC, gEQ:gEQc, cZ1, F1, F0, single, LL:agg.LL.P};
++  const FconnT=zone===1? (single? Math.max(F1,F0) : F1) : (single? F0 : NaN);   // ABM1: transverse (and longitudinal where not fixed here): this abutment's reactions
++  // ABM1 (2026-11-07): longitudinal force at a line of fixed bearings (panel I-6 "Defined fixed bearing"): the tributary permanent load is the total
++  // permanent load of the uninterrupted segment [3.10.9.2]; W_seg entered (panel I-11) or, when 0, 2(ΣP_DC + W_dia + ΣP_DW)·L_tot/L (the whole bridge
++  // length, conservative; single span: both ends' permanent reactions). The single-span minimum A_s × permanent load [3.10.9.1] uses the same load
++  // longitudinally (decision: conservative). Tributary live load stays this abutment's.
++  const fixL=S.dist&&S.dist.model==="fixed", WsegIn=Math.max(0,+S.seismic.Wseg||0), LtotC=(+S.own.Ltot>0)? +S.own.Ltot : +g.spanL;
++  const WsegAuto=2*Wperm*LtotC/Math.max(1e-9,+g.spanL), Wseg=fixL? (WsegIn>0? WsegIn : WsegAuto) : Wperm;
++  const F1L=zone===1? cZ1*(Wseg+gEQc*agg.LL.P) : 0, F0L=AsC*Wseg;
++  const FconnL=zone===1? (single? Math.max(F1L,F0L) : F1L) : (single? F0L : NaN);
++  const Fconn=fixL? Math.max(FconnL,FconnT) : FconnT;
++  R.seismic={Fconn, perBeam:Fconn/Math.max(1,S.beams.N), trib:Wperm, Wtrib, zone, As:AsC, gEQ:gEQc, cZ1, F1, F0, single, LL:agg.LL.P,
++    ...(fixL?{lon:{Wseg, WsegIn, WsegAuto, LtotC, F1L, F0L, FconnL, FconnT}}:{})};   // ABM1: only with fixed bearings here (other projects: R.seismic as before)
++  if(fixL&&!single&&!(WsegIn>0)&&!(+S.own.Ltot>0)) warn("REVIEW — Seismic connection force: bearings fixed at this abutment on a multispan bridge, but neither the segment permanent load W_seg (panel I-11) nor the total bridge length (panel I-0) is entered; W_seg = 2(DC + DW) is used (one span). Enter the total permanent load of the uninterrupted segment [3.10.9.2] (Tab 3 §3.6).");
+@@ -4999 +5011 @@ function computeAll(){
+-      dropDef(fpS.seismic,T.seismic,["siteClass","bwStop","bwW"]); if(fpS.seismic) delete fpS.seismic.khRAuto; if(fpS.bwLL&&fpS.bwLL.mode==="wheel") delete fpS.bwLL;   // ABM2: khRAuto left out (the k_h ratio itself is in the Input ID)
++      dropDef(fpS.seismic,T.seismic,["siteClass","bwStop","bwW","Wseg"]); if(fpS.seismic) delete fpS.seismic.khRAuto; if(fpS.bwLL&&fpS.bwLL.mode==="wheel") delete fpS.bwLL;   // ABM2: khRAuto left out (the k_h ratio itself is in the Input ID)
+@@ -6683,0 +6696,7 @@ function renderTabStab(R){
++      ...(sz.lon&&isFinite(sz.lon.FconnL)?[
++      "\\text{Longitudinal, fixed bearings here: } W_{seg} = "+(sz.lon.WsegIn>0?"\\text{entered (panel I-11)}":"2\\,(\\Sigma P_{DC} + \\Sigma P_{DW})\\,L_{tot}/L")+" \\quad [3.10.9.2:\\ \\text{total permanent load of the segment}]",
++      sz.lon.WsegIn>0?`W_{seg} = ${fmtT(sz.lon.Wseg)}\\ \\text{kip}`:`W_{seg} = 2\\,(${fmtT(sz.trib)})(${fmtT(sz.lon.LtotC,1)}/${fmtT(+S.geom.spanL,1)}) = ${fmtT(sz.lon.Wseg)}\\ \\text{kip}`,
++      ...(sz.zone===1?[`F_{Z1,L} = ${fmtT(sz.cZ1)}\\,(${fmtT(sz.lon.Wseg)} + (${fmtT(sz.gEQ)})(${fmtT(sz.LL)})) = ${fmtT(sz.lon.F1L)}\\ \\text{kip}`]:[]),
++      ...(sz.single?[`F_{1span,L} = (${fmtT(sz.As,3)})(${fmtT(sz.lon.Wseg)}) = ${fmtT(sz.lon.F0L)}\\ \\text{kip}`]:[]),
++      `F_{conn,L} = ${fmtT(sz.lon.FconnL)}\\ \\text{kip (longitudinal)}, \\quad F_{conn,T} = ${fmtT(sz.lon.FconnT)}\\ \\text{kip (transverse, this abutment's reactions)}`]:[]),
++      sz.lon&&isFinite(sz.Fconn)? `F_{conn} = \\max(F_{conn,L},\\,F_{conn,T}) = ${fmtT(sz.Fconn)}\\ \\text{kip per bearing line} \\quad(${fmtT(sz.perBeam)}\\ \\text{kip per beam})` :
+```
+
+## 2026-11-07 — PR: claude/abut-m9-eqsup (PR #1007: https://github.com/mlococo88/All-Structural/pull/1007) (ABM9: superstructure seismic force from the seismic analysis for Zones 2–4 multispan bridges; REVIEW warning when it is not entered)   [calc change only when the new inputs are entered] [MORE conservative where the analysis force exceeds A_s·W]
+
+Source: code-compliance review of 2026-11-07, item M9.
+
+### ABM9. Entered superstructure seismic force
+- **Where:** `computeAll` after the EQ_sup line (anchor `const zA=Math.min(4,Math.max(1,Math.round(+S.seismic.zone||1))), anaZ=`); transverse block (anchor `const tEnt=ok&&q.anaZ&&(+S.seismic.EQsupT>0);`); panel I-11 new inputs `seismic.EQsupL`, `seismic.EQsupT` (shown in Zones 2–4, multispan) and the zone selector now rebuilds the panel; Tab 3 §3.6a lines (anchor `q.EQsupSrc==="analysis"?`, `q.EQtSrc==="analysis"?`); `migrate` back-fill and the Input ID (0 left out).
+- **Before:** EQ_sup = A_s·(ΣP_DC + ΣP_DW + W_dia + slab)·s_EQ in every zone, longitudinal and transverse; no prompt in Zones 2–4.
+- **After:** Zones 2–4 on a multispan bridge (panel I-1 not "Single-span"): an entered longitudinal / transverse force replaces the A_s estimate (the A_s value is still shown, "not used"); when either is blank the A_s estimate is kept and a REVIEW warning names the missing direction. Zone 1 and single-span bridges: unchanged (the inputs are not shown and not used).
+- **Problem:** for multispan bridges in Zones 2–4 the force at a fixed or restrained abutment comes from the seismic analysis and can reach C_sm·W (up to S_DS ≈ 2.5A_s for a stiff bridge); the tool used A_s·W silently.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 4.7.4.3 (multispan analysis requirements), 3.10.9.3 and 3.10.9.4 (Zone 2 / Zones 3–4 connection forces from the analysis); 3.10.9.1 / 3.10.9.2 unchanged for single span / Zone 1.
+- **Check case (built-in project; EE I on, A_s = 0.30, Zone 3, Site Class D, multispan; entered 400 kip longitudinal, 350 kip transverse):**
+  - Before: EQ_sup = 0.30·(510 + 72)·1.00 = **174.6 kip** at the seat (z_B = 17.0 ft → M = 2968 kip-ft); transverse 174.6 kip.
+  - After: EQ_sup = **400 kip** (M = 400·17.0 = 6800 kip-ft); transverse EQ_sup,t = 350 kip (H_y = 350 + k_hW_w = 467.5 kip). Dashboard: eccentricity D/C 0.790 → 1.264 (FAIL), bearing 0.880 → 1.515 (FAIL), stem flexure 0.403 → 0.640, toe flexure 0.337 → 0.680.
+  - Without the entered forces: results identical to before, plus the REVIEW warning.
+- **How verified:** headless origin/main vs branch, 19 scenarios: only the scenario with entered forces moves; Zones 2–3 multispan without them get the warning only (and `R.seis.anaZ`); Zone 1 with an entered value is identical. UI: the inputs appear when the zone is set to 2–4 and drive EQ_sup. Tabs and Report render, 0 console errors, self-test passes; `check-syntax`, `project-library --tool abutment` pass.
+- **Saved data:** new optional fields `seismic.EQsupL`, `seismic.EQsupT` (0). Saved projects compute as before.
+- **Decision (pending engineer review):** the entered force is taken as this abutment's share already (s_EQ / s_EQ,t are not applied to it).
+- **Other copies:** the integral / semi-integral block (`computeIAB`) reads `R.seis.EQsup`, so it uses the entered longitudinal force too.
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index ce6e74c..92a3437 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -742 +742,2 @@ function defaultState(){
+-      khRAuto:true, Wseg:0,                                       // ABM1: Wseg = segment permanent load for the longitudinal connection force at fixed bearings (kip, 0 = auto) [3.10.9.2]                                               // ABM2 (2026-11-07): k_h ratio set from the foundation (abutKhAuto: 1.0 on piles or rock, 0.5 on a spread footing on soil) [11.6.5.2.2]; false = the entered khR
++      khRAuto:true, Wseg:0, EQsupL:0, EQsupT:0,                   // ABM9: superstructure seismic force at this abutment from the seismic analysis, longitudinal / transverse (kip, 0 = not entered; Zones 2–4 multispan) [4.7.4.3, 3.10.9.3, 3.10.9.4]
++                                            // ABM1: Wseg = segment permanent load for the longitudinal connection force at fixed bearings (kip, 0 = auto) [3.10.9.2]                                               // ABM2 (2026-11-07): k_h ratio set from the foundation (abutKhAuto: 1.0 on piles or rock, 0.5 on a spread footing on soil) [11.6.5.2.2]; false = the entered khR
+@@ -1712 +1713 @@ function migrate(){
+-    if(S.seismic) fill(S.seismic,T.seismic,["siteClass","bwStop","bwW","nonConc","shEQt","Wseg"]);   // ABM1: Wseg 0   // ABR1: bwStop false, bwW 0 (MassDOT: owner default below); ABR3: nonConc, shEQt
++    if(S.seismic) fill(S.seismic,T.seismic,["siteClass","bwStop","bwW","nonConc","shEQt","Wseg","EQsupL","EQsupT"]);   // ABM9: EQsupL, EQsupT 0   // ABM1: Wseg 0   // ABR1: bwStop false, bwW 0 (MassDOT: owner default below); ABR3: nonConc, shEQt
+@@ -2369,0 +2371,2 @@ function buildInputs(){
++      ${(+sq.zone>=2&&S.geom.HsupMode!=="single")?`${inpRow("Superstructure seismic force at this abutment from the analysis, longitudinal (0 = A<sub>s</sub>·W)","seismic.EQsupL","kip",{title:"Zones 2–4, multispan: the force the superstructure delivers to this abutment's bearings / keepers in the longitudinal direction from the seismic analysis [4.7.4.3, 3.10.9.3]. Replaces A_s·(DC + DW)·share. Tab 3 §3.6a."})}
++      ${inpRow("Superstructure seismic force at this abutment from the analysis, transverse (0 = A<sub>s</sub>·W)","seismic.EQsupT","kip",{title:"Zones 2–4, multispan: the transverse force at this abutment from the seismic analysis [4.7.4.3, 3.10.9.3]. Replaces A_s·(DC + DW)·share (transverse). Tab 3 §3.6a."})}`:""}
+@@ -2382 +2385 @@ function buildInputs(){
+-    ${selRow("Seismic zone [T.3.10.6-1]","seismic.zone",[["1","Zone 1 (S_D1 ≤ 0.15)"],["2","Zone 2"],["3","Zone 3"],["4","Zone 4"]])}
++    ${selRow("Seismic zone [T.3.10.6-1]","seismic.zone",[["1","Zone 1 (S_D1 ≤ 0.15)"],["2","Zone 2"],["3","Zone 3"],["4","Zone 4"]],{rebuild:true})}
+@@ -3386 +3389,6 @@ function computeAll(){
+-  if(R.seis){ const shEQ=Math.min(100,Math.max(0,+S.seismic.shEQ))/100; R.seis.shEQ=isFinite(shEQ)?shEQ:1; R.seis.EQsup=(+S.seismic.As)*(agg.DC.P+agg.DW.P+(R.seis.Wdia||0)+apSup)*R.seis.shEQ; if(apSup) R.seis.apSup=apSup; }   // ABR2: + the end diaphragm (semi-integral); APS: + the approach slab share
++  if(R.seis){ const shEQ=Math.min(100,Math.max(0,+S.seismic.shEQ))/100; R.seis.shEQ=isFinite(shEQ)?shEQ:1; R.seis.EQsup=(+S.seismic.As)*(agg.DC.P+agg.DW.P+(R.seis.Wdia||0)+apSup)*R.seis.shEQ; if(apSup) R.seis.apSup=apSup;
++    // ABM9 (2026-11-07): Zones 2–4, multispan: the force the superstructure delivers to this abutment comes from the seismic analysis [4.7.4.3, 3.10.9.3,
++    // 3.10.9.4]; an entered value replaces A_s·(DC + DW)·s_EQ, and without one the A_s estimate is kept with a REVIEW warning (Zone 1 / single span: unchanged)
++    const zA=Math.min(4,Math.max(1,Math.round(+S.seismic.zone||1))), anaZ=zA>=2&&S.geom.HsupMode!=="single", eL=Math.max(0,+S.seismic.EQsupL||0), eT=Math.max(0,+S.seismic.EQsupT||0);
++    if(anaZ){ R.seis.anaZ=zA; if(eL>0){ R.seis.EQsupA=R.seis.EQsup; R.seis.EQsup=eL; R.seis.EQsupSrc="analysis"; }
++      if(!(eL>0)||!(eT>0)) warn(`REVIEW — Seismic Zone ${zA}, multispan bridge: the superstructure seismic force at this abutment should come from the seismic analysis [4.7.4.3, 3.10.9.3, 3.10.9.4]; ${!(eL>0)&&!(eT>0)?"none is entered":(!(eL>0)?"the longitudinal force is not entered":"the transverse force is not entered")} (panel I-11), so A_s·(DC + DW)·share is used, which can be lower than the analysis force (C_sm up to S_DS). Tab 3 §3.6a.`); } }   // ABR2: + the end diaphragm (semi-integral); APS: + the approach slab share
+@@ -3482 +3490,2 @@ function computeAll(){
+-      const tS=ok? (+S.seismic.As)*(agg.DC.P+agg.DW.P+(q.Wdia||0)+apSup)*shT : 0, tW=ok&&q.kh>0? q.WiW : 0, tWg=(R.wingAb&&ok&&q.kh>0)? q.kh*R.wingAb.nw*R.wingAb.Wt : 0;   // APS: + apSup
++      const tEnt=ok&&q.anaZ&&(+S.seismic.EQsupT>0);   // ABM9: transverse force from the seismic analysis (Zones 2–4, multispan)
++      const tS=ok? (tEnt? +S.seismic.EQsupT : (+S.seismic.As)*(agg.DC.P+agg.DW.P+(q.Wdia||0)+apSup)*shT) : 0, tW=ok&&q.kh>0? q.WiW : 0, tWg=(R.wingAb&&ok&&q.kh>0)? q.kh*R.wingAb.nw*R.wingAb.Wt : 0;   // APS: + apSup
+@@ -3485 +3494 @@ function computeAll(){
+-      if(q) Object.assign(q,{shEQt:shT, EQtSup:tS, EQtW:tW, EQtWg:tWg, EQt:Hy, MtEQt:Mt});
++      if(q) Object.assign(q,{shEQt:shT, EQtSup:tS, ...(tEnt?{EQtSrc:"analysis"}:{}), EQtW:tW, EQtWg:tWg, EQt:Hy, MtEQt:Mt});
+@@ -5011 +5020 @@ function computeAll(){
+-      dropDef(fpS.seismic,T.seismic,["siteClass","bwStop","bwW","Wseg"]); if(fpS.seismic) delete fpS.seismic.khRAuto; if(fpS.bwLL&&fpS.bwLL.mode==="wheel") delete fpS.bwLL;   // ABM2: khRAuto left out (the k_h ratio itself is in the Input ID)
++      dropDef(fpS.seismic,T.seismic,["siteClass","bwStop","bwW","Wseg","EQsupL","EQsupT"]); if(fpS.seismic) delete fpS.seismic.khRAuto; if(fpS.bwLL&&fpS.bwLL.mode==="wheel") delete fpS.bwLL;   // ABM2: khRAuto left out (the k_h ratio itself is in the Input ID)
+@@ -6672,2 +6681,2 @@ function renderTabStab(R){
+-        q.Wdia>0? "\\text{Superstructure: } EQ_{sup} = A_s\\,(\\Sigma P_{DC} + \\Sigma P_{DW} + W_{dia})\\,s_{EQ}" : "\\text{Superstructure: } EQ_{sup} = A_s\\,(\\Sigma P_{DC} + \\Sigma P_{DW})\\,s_{EQ}",
+-        `EQ_{sup} = (${fmtT(+S.seismic.As,3)})(${fmtT(R.agg.DC.P)} + ${fmtT(R.groups.DW.V)}${q.Wdia>0?` + ${fmtT(q.Wdia)}`:""})(${fmtT(q.shEQ,2)}) = ${fmtT(q.EQsup)}\\ \\text{kip at the seat}${q.Wdia>0?"\\quad(W_{dia} = \\text{end diaphragm, moves with the superstructure})":""}`],
++        q.EQsupSrc==="analysis"? "\\text{Superstructure: } EQ_{sup} = \\text{entered from the seismic analysis (Zone "+q.anaZ+", multispan; panel I-11)} \\quad [4.7.4.3,\\ 3.10.9.3]" : q.Wdia>0? "\\text{Superstructure: } EQ_{sup} = A_s\\,(\\Sigma P_{DC} + \\Sigma P_{DW} + W_{dia})\\,s_{EQ}" : "\\text{Superstructure: } EQ_{sup} = A_s\\,(\\Sigma P_{DC} + \\Sigma P_{DW})\\,s_{EQ}",
++        q.EQsupSrc==="analysis"? `EQ_{sup} = ${fmtT(q.EQsup)}\\ \\text{kip at the seat} \\quad (A_s\\text{ estimate } ${fmtT(q.EQsupA)}\\ \\text{kip, not used})` : `EQ_{sup} = (${fmtT(+S.seismic.As,3)})(${fmtT(R.agg.DC.P)} + ${fmtT(R.groups.DW.V)}${q.Wdia>0?` + ${fmtT(q.Wdia)}`:""})(${fmtT(q.shEQ,2)}) = ${fmtT(q.EQsup)}\\ \\text{kip at the seat}${q.Wdia>0?"\\quad(W_{dia} = \\text{end diaphragm, moves with the superstructure})":""}`],
+@@ -6680 +6689 @@ function renderTabStab(R){
+-        `EQ_{sup,t} = A_s(\\Sigma P_{DC} + \\Sigma P_{DW}${q.Wdia>0?" + W_{dia}":""})s_{EQ,t} = (${fmtT(+S.seismic.As,3)})(${fmtT(R.agg.DC.P)} + ${fmtT(R.groups.DW.V)}${q.Wdia>0?` + ${fmtT(q.Wdia)}`:""})(${fmtT(q.shEQt,2)}) = ${fmtT(q.EQtSup)}\\ \\text{kip at the seat}`,
++        q.EQtSrc==="analysis"? `EQ_{sup,t} = ${fmtT(q.EQtSup)}\\ \\text{kip at the seat (entered from the seismic analysis, panel I-11)}` : `EQ_{sup,t} = A_s(\\Sigma P_{DC} + \\Sigma P_{DW}${q.Wdia>0?" + W_{dia}":""})s_{EQ,t} = (${fmtT(+S.seismic.As,3)})(${fmtT(R.agg.DC.P)} + ${fmtT(R.groups.DW.V)}${q.Wdia>0?` + ${fmtT(q.Wdia)}`:""})(${fmtT(q.shEQt,2)}) = ${fmtT(q.EQtSup)}\\ \\text{kip at the seat}`,
+```
