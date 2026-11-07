@@ -1317,7 +1317,7 @@ Basis: 780 CMR 10th Ed. (Massachusetts amendments to IBC 2021), Ch. 16: 1613.1 a
   ```
   The seismic tab shows the note (ASCE gives A, B is used; V unchanged); the report step adds "780 CMR 1613.1"; the Excel SDC cell becomes `IF(<old formula>="A","B",<old formula>)` under MA.
 - **Provision:** 780 CMR 1613.1 (10th Ed.): SDC A shall not be used in the Commonwealth; a structure that could satisfy SDC A is assigned SDC B.
-- **Check case:** Chatham, Site B (S_s = 0.140, S_1 = 0.046, F_a = F_v = 0.9 per Supplement 1 tables as coded): S_DS = 0.084 < 0.167 → A; S_D1 = 0.0276 < 0.067 → A. Before: SDC **A** (dashboard, seismic tab, hand-off `seismic.SDC = "A"`). After: SDC **B**, hand-off "B". C_s = 0.0278, V = 33.39 k unchanged (no SDC-dependent term in the ELF here).
+- **Check case:** Chatham, Site B (S_s = 0.140, S_1 = 0.046, F_a = 0.9, F_v = 0.8 as coded): S_DS = ⅔·0.9·0.140 = 0.084 < 0.167 → A; S_D1 = ⅔·0.8·0.046 = 0.0245 < 0.067 → A. Before: SDC **A** (dashboard, seismic tab, hand-off `seismic.SDC = "A"`). After: SDC **B**, hand-off "B". C_s = 0.0278, V = 33.39 k unchanged (no SDC-dependent term in the ELF here).
 
 ### A7M2. 780 CMR amendments to Table 12.2-1 in the system screen   [check logic change] [more conservative]
 - **Where:** new `SFRS_MA` table and `sfrsLimits(S)` after `const SFRS=[...]` (anchor `/* A7M2 (2026-11-07): 780 CMR 10th Ed.`); `solve()` screen anchor `/* Table 12.2-1 screening: is the system permitted`; seismic tab panel `o-se4` screening table (anchor `const SLE=sfrsLimits(S)`).
@@ -1332,7 +1332,7 @@ Basis: 780 CMR 10th Ed. (Massachusetts amendments to IBC 2021), Ch. 16: 1613.1 a
   The error messages name "Table 12.2-1 as amended by 780 CMR (Massachusetts, row …)". For H in SDC B or C under MA an advisory notice (`R.warn`) and a seismic-tab note state Note 2 (connections, including to foundations, for 2× the seismic forces with the stated caps; AISC 341 D1.4a columns; no K-bracing; V / inverted-V beam rules); the tool does not apply the factor 2. The screening table shows the ASCE row and the amended row (used).
 - **Not covered (rows not offered by the tool):** A.3, A.4, A.9, A.10, A.11, A.13, A.14, A.17, B.6, B.7, B.18–B.20, B.24, E.3, F; Note 1 (A.17, B.24); the Table 12.14-1 amendments (the tool does not use 12.14). Note p wording change has no effect here.
 - **Check cases:**
-  - Methuen (S_s 0.372, S_1 0.078), Site D, system H, h_n = 70 ft: S_DS = 0.373 → SDC C. Before: "permitted, no height limit". After: **error** "limits … to 65 ft in SDC C; h_n = 70.00 ft" (calculation blocked).
+  - Methuen (S_s 0.372, S_1 0.078), Site D, system H, h_n = 70 ft: F_a = 1.502, S_DS = 0.373 → SDC C (S_D1 = 0.125 → B). Before: "permitted, no height limit". After: **error** "limits … to 65 ft in SDC C; h_n = 70.00 ft" (calculation blocked).
   - Melrose default with Ordinary RC moment frame, SDC B. Before: permitted. After: **error** NP (row C.7).
   - Default project (system H, SDC B, h_n = 36 ft): permitted up to 100 ft; Note 2 advisory added; every computed number identical.
   - The same Methuen numbers entered under "Other" jurisdiction: unchanged (NL).
