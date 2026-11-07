@@ -2193,6 +2193,8 @@ function calcAll(inp) {
   // ── Seismic: Mononobe-Okabe with Seed & Whitman increment location ──
   //    (ASCE 7-22 §11.8.3 requires the geotech report to give this pressure; method per M-O)
   const hasSeismic = inp.kh > 0;
+  // RWPL (2026-11-07, Phase 8b): pile-supported footing selected: inputs and drawings only in this version
+  if (inp.fnd && inp.fnd.type === 'pile') warnings.push('Pile-supported footing selected: the piles are drawn, but the pile analysis is not in this version yet (Phase 8c). The stability and footing results shown are still those of a spread footing on soil.');
   let Pae = 0, Pe_inc = 0, Mo_seis = 0, Kae = 0;
   if (hasSeismic) {
     const kh = inp.kh, kv = inp.kv;
