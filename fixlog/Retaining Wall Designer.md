@@ -6221,3 +6221,48 @@ Follow-up A2 of the second-pass fix round. Code sites are tagged `RWTE`.
 
 ### Saved data
 - No input or format change. A saved pile project with embedment + clear < t_f ≤ embedment + clear + 2 in now opens with the input error, and its inputs are kept.
+
+## 2026-11-07 — PR: claude/rw-user-manual — User Manual tab, part 1: the Manual tab, printing (alone or as a Report appendix) and the parts on scope, screen, code modes, inputs, projects, drawings and the Report (RWMAN; display only, no result change)
+
+Review Phase 6a (rwreview plan): the User Manual tab, asked for by the engineer. This first PR holds the tab, the printing and the descriptive parts; the calculation parts (loads, stability, seismic, collision, stem, footing, key, bar layout, piles), the limits and the appendix of pending decisions follow in part 2. Code sites are tagged `RWMAN`.
+
+### What was added
+- Tab button **Manual** after Report, and panel `#tab-manual`. The panel is built on first open by `rwmanRender()` from one source, `RWMAN_PARTS`: parts with `{ id, title, go: [[target, label]], blocks: [{p} | {ul} | {h} | {table}] }`.
+- Link markup `[[go:<target>|text]]`, where the target is `tab:<tab>`, `card:<RW_CARDS key>`, `inp:<input id>` or `man:<part id>`.
+  - On screen, `rwmanGo` handles the link. A card opens with `rwGoto`, or falls back to its tab when the card is not shown in the current mode. An input opens with `rwIeGoto`. A part scrolls into view.
+  - In the Report, the link becomes `[[tab:…|text]]` (plain text in print), or "text (§n.m)" for a manual part.
+  - Every part card carries "On screen:" links to the tab, card or input it describes (CLAUDE.md §6).
+- Printing:
+  - **Print the manual** prints the manual alone. It builds a report with `SharedReport.build` and prints it with `SharedReport.print`.
+  - **Include the user manual**: a checkbox on the Manual tab, and the same box in the Report bar (`opt.controls`). It appends the manual as the section "User manual (2026-11-07)" under Appendices (`rwmanAdd(M)` before `SharedReport.mount`). The Report then prints it with every other section.
+  - `@media print`: `#tab-manual` is hidden. The manual prints only through the two paths above.
+- `rwrGoto` (the Report's `[[tab:…]]` handler): `card:` and `inp:` go through `rwmanGo`. Before, `card:` called `rwGoto` alone, so a card not shown in the mode did nothing; it now opens the tab.
+- CSS: `.rwman-*` (bar, part cards, headings, tables, contents in two columns).
+
+### Content (part 1)
+1. About this manual (links, printing, units).
+2. Scope and wall types.
+3. The screen: input tabs, Find an input, input errors and REVIEW, the result tabs, "Worked in" links, the check summary (left column from 1200 px; 240 / 292 px; collapse), the self-consistency checks, phone and tablet (900 px, Show inputs).
+4. The two code modes (table: earth pressure, stability, seismic, collision, load factors, concrete checks, piles).
+5. Inputs, units and defaults: every input group of the Project, Wall, Soil, Loads, Traffic, Design and Rebar tabs, with the defaults read from a fresh page (headless dump, both modes).
+6. Saving, opening, cloud sync (GitHub), Export / Import JSON, Back up all, undo / redo, storage keys.
+7. Drawings (five sheets, Print sheet / Print all, DXF layers), the Rebar schedule marks, the 3D model and the Analysis diagram.
+8. The Report and printing.
+
+Every statement was checked against this file's code (anchors: `calcAll`, `rwInputErrors`, `RWDC`, the RWPL / STDS / GHS blocks, `rwdw*`, `rwrModel`), the HANDOFF.md §4.1, and docs/github-sync-setup.md. Provisions are cited by article and paraphrased.
+
+### Storage (CLAUDE.md §5)
+- New per-browser UI key `retaincalcpro.manualInReport.v1`: '1' = include the manual in the Report; absent = do not. It is tool-prefixed and is not part of any project, Export JSON or autosave.
+- No saved format changes.
+
+### How verified
+- No computed value changes: headless, origin/main vs branch, `calcAll` on the 32 review walls plus the at-rest walls: identical. 0 console errors.
+- Manual tab at 1400 px, screenshot looked at. Links tested:
+  - `tab:stability` opens the Stability tab;
+  - `inp:qa` focuses q_a;
+  - with the box ticked, the Report gains "User manual (2026-11-07)" with no unresolved references.
+- Tests: check-syntax; smoke/retaining-wall-checks; phone-layout rwall (18 views at 390 / 768 px, no sideways scroll); project-library retwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs, pile-group.
+
+### Decisions (pending engineer review)
+- The manual is a tab with its own print, and an optional Report appendix (as Spread Footing's "Include this manual"). The include choice is per browser, not per project, so no project format changes.
+- The input tables are written out (checked against a fresh page). They are not generated from the page at run time, so a new input needs a manual edit (CLAUDE.md §6 keeps the manual in the same file).

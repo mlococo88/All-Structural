@@ -625,10 +625,17 @@ a.wkA:hover { text-decoration: underline; }
   .tab-panel { display: block !important; max-width: none; }
   #tab-report:not(.active) { display: none !important; }   /* RWRP: the Report tab prints itself; not part of the page printout */
   #tab-drawings { display: none !important; }   /* RWDW: the sheets print through Print sheet / Print all sheets only */
+  #tab-manual { display: none !important; }   /* RWMAN: the manual prints through Print the manual, or as the Report's appendix */
   .card, .eq-block, .sc { box-shadow: none; break-inside: avoid; }
 }
 
 .proj-box.hidden { display: none; }
+/* RWMAN (2026-11-07): the User Manual tab */
+.rwman-bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 4px 0 12px; font-size: 13px; }
+.rwman-part { margin-bottom: 14px; } .rwman-part .card-body { font-size: 13.5px; line-height: 1.5; }
+.rwman-part p { margin: 0 0 8px; } .rwman-part ul { margin: 0 0 8px 18px; padding: 0; } .rwman-part li { margin: 2px 0; }
+.rwman-h { margin: 12px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-dim); }
+.rwman-tbl td, .rwman-tbl th { vertical-align: top; text-align: left; } .rwman-toc { margin: 0 0 0 18px; columns: 2 260px; }
 /* RWDW (2026-11-06): the Drawings tab */
 .rwdwBar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 8px; font-size: 13px; }
 .rwdwBar select { width: auto; max-width: 100%; height: 34px; font-size: 13px; }
@@ -1699,6 +1706,7 @@ body.rwDashColl #rwDash { display: none; }
     <button class="tab-btn" data-tab="threed">3D model</button>
     <button class="tab-btn" data-tab="drawings">Drawings</button>
     <button class="tab-btn" data-tab="report">Report</button>
+    <button class="tab-btn" data-tab="manual">Manual</button><!-- RWMAN (2026-11-07): the User Manual tab -->
   </nav>
   <div class="tab-panels">
     <div class="tab-panel active" id="tab-overview"></div>
@@ -1710,6 +1718,7 @@ body.rwDashColl #rwDash { display: none; }
     <div class="tab-panel" id="tab-threed"><div class="pending">Building 3D model…</div></div>
     <div class="tab-panel" id="tab-drawings"><div class="pending">Drawing sheets…</div></div>
     <div class="tab-panel tex2jax_ignore" id="tab-report"></div>
+    <div class="tab-panel" id="tab-manual"></div>
   </div>
 </main>
 </div>
@@ -11353,7 +11362,8 @@ function renderRwReport() {
   rwrAddNotes(M, RWRP.notes);
   rwovAdd(M, r);   // RWOV: the overview figures after the Design summary
   rwaxAdd(M, r);   // RWAX: the Analysis diagram figures in their sections; the appendix of tab figures
-  RWRP.api = SharedReport.mount(T, M, { closed: RWRP.closed, onGoto: rwrGoto });
+  rwmanAdd(M);   // RWMAN (2026-11-07): the user manual as an appendix when "Include the user manual" is ticked (display only)
+  RWRP.api = SharedReport.mount(T, M, { closed: RWRP.closed, onGoto: rwrGoto, controls: '<label class="rwman-inc" style="font-size:12px;white-space:nowrap"><input type="checkbox" data-rwman-inc' + (rwmanInc() ? ' checked' : '') + '> Include the user manual</label>' });
   RWRP.doc = RWRP.api.doc;
 }
 /* RWOV (2026-11-07): "Overview of the wall" right after the Design summary (as Spread Footing SFOV #780, CBC #795): a 3D snapshot
@@ -11542,11 +11552,12 @@ async function rwrPrintAny() {
 window.addEventListener('afterprint', () => { if (RWRP_BACK) { const b = document.querySelector(`.tab-btn[data-tab="${RWRP_BACK}"]`); RWRP_BACK = null; if (b) b.click(); } });
 /* [[tab:…]] links of the report: a result tab, or "card:<key>" (the card on its tab, as the D11 "Worked in" links) */
 function rwrGoto(name) {
-  if (name.indexOf('card:') === 0) { rwGoto(name.slice(5)); return; }
+  if (name.indexOf('card:') === 0 || name.indexOf('inp:') === 0) { rwmanGo(name); return; }   // RWMAN: a card falls back to its tab when it is not shown in this mode; inp: an input field
   const b = document.querySelector(`.tab-btn[data-tab="${name}"]`); if (b) b.click();
   const P = document.querySelector('.tab-panels'); if (P) P.scrollTop = 0;
 }
 document.querySelector('.tab-btn[data-tab="report"]').addEventListener('click', renderRwReport);
+document.querySelector('.tab-btn[data-tab="manual"]').addEventListener('click', () => rwmanRender());   // RWMAN
 /* Ctrl+P while the Report tab is shown prints the report alone (shared/report.js print layout and running header);
    from any other tab the page prints as before (the Report panel is hidden in print, see the RWRP rule in @media print) */
 window.addEventListener('beforeprint', () => {
@@ -11556,6 +11567,237 @@ window.addEventListener('beforeprint', () => {
   box.innerHTML = '<div class="rp"><article class="rp-doc">' + SharedReport.html(RWRP.doc, { lazy: false }) + '</article></div>';
   document.body.classList.add('rp-printing');
 });
+</script>
+<script>
+/* =====================================================================
+   RWMAN (2026-11-07, review Phase 6a): the User Manual tab. Display only: nothing here reads or changes a computed value.
+   One source (RWMAN_PARTS) for the Manual tab, the Report appendix ("Include the user manual" in the Report bar) and
+   "Print the manual". Link markup in the text: [[go:<target>|text]], target = tab:<tab> | card:<RW_CARDS key> | inp:<input id>
+   | man:<part id>. On screen a link opens that tab / card / input (the card falls back to its tab when the card is not shown in
+   the current code mode); in the Report it is the shared viewer's [[tab:…]] link (plain text in print) or a §-reference to the
+   manual part. **x** is bold on screen. Statements are checked against the code of this file (2026-11-07); provisions are cited
+   and paraphrased, never quoted. The per-viewer choice "include in the Report" is the UI key retaincalcpro.manualInReport.v1
+   ('1' = include; absent = not), not part of any project. */
+const RWMAN_DATE = '2026-11-07';
+const RWMAN_PARTS = [
+{ id: 'use', title: 'About this manual', go: [['tab:overview', 'Overview tab']], blocks: [
+  { p: 'This manual describes what Retaining Wall Designer computes and checks, which inputs it uses and which code provisions it follows, in the order you meet them on screen. Each part links to the tab, card or input it describes: click a link to go there. Provisions are cited by article and paraphrased; the code text itself is not reproduced. Where this manual and the program disagree, the disagreement is a defect: report it and trust neither until it is resolved.' },
+  { p: 'Printing: **Print the manual** (top of this tab) prints the manual alone. To hand it out with a calculation, tick **Include the user manual** in the Report bar ([[go:tab:report|Report tab]]); it is then printed as an appendix of the Report by the header **Print** button, Ctrl+P or the Report’s own Print. The choice is kept in this browser only (it is not part of a project).' },
+  { p: 'Units are US customary throughout (ft, in, lb, kip, psf, pcf, psi). Every result is per foot of wall (a 12-in design strip) unless it says otherwise.' } ] },
+
+{ id: 'scope', title: 'Scope and wall types', go: [['tab:overview', 'Overview tab'], ['inp:Hs', 'Wall input tab']], blocks: [
+  { p: 'The tool designs a **cantilever reinforced-concrete retaining wall**: a stem fixed into a footing with a toe in front and a heel behind, analysed per foot of wall.' },
+  { ul: [
+    'Stem: height H_s, base width and top width (the front face is vertical, the back face is battered when the two widths differ).',
+    'Footing: thickness t_f, toe length L_t and heel length L_h (either may be 0 for an L-shaped wall), soil cover over the toe D_f,add.',
+    'Optional shear key under the stem (depth d_k, width b_k).',
+    'Foundation: a **spread footing on soil** (default) or a **pile-supported footing** with 2 to 4 rows of vertical piles.',
+    'Optional column / beam line loads on the stem, a traffic barrier on top of the stem (AASHTO mode), and a variable-height wall segment (MassDOT rule, both modes).',
+    'Two code modes: **ACI 318-19 / IBC 2018** (allowable-stress stability, strength design of the concrete) and **AASHTO LRFD 10th Ed. (2024)** (limit states throughout). The mode is chosen with the Code switch at the top of the input panel and is kept with the project.' ] },
+  { p: 'The design strip is one foot of a long wall: end effects, wall corners, joints and the wall length are not modelled (the collision load and the pile schedule use the joint spacing only to spread or count). Counterfort, gravity, MSE, sheet-pile and soldier-pile walls are outside the scope.' } ] },
+
+{ id: 'screen', title: 'The screen: inputs, results, check summary, phone', go: [['tab:overview', 'Overview tab']], blocks: [
+  { h: 'Input panel' },
+  { ul: [
+    'The left panel holds the inputs in input tabs: **Project, Wall, Soil, Loads, Traffic** (AASHTO mode only), **Design** and **Rebar**. Each tab has collapsible cards; **Next** at the bottom of a tab opens the next one. The input tab last used is remembered in this browser.',
+    '**Find an input…** (top of the panel) filters the cards to the inputs whose label matches a word or a symbol.',
+    'Every change recalculates the whole wall and redraws the open result tab. Inputs that cannot be used are outlined in red with the reason under the field; the result tabs then show the banner **Input error: no results** with a link to each field. A few unusual but valid inputs (for example a backfill sloping down from the wall) are marked **REVIEW** instead and still give results.' ] },
+  { h: 'Result tabs' },
+  { table: { head: ['Tab', 'What it shows'], rows: [
+    ['[[go:tab:overview|Overview]]', 'The governing D/C per family (stability or piles, structural), the wall section to scale with its pressure diagram, the properties, and the check summary.'],
+    ['[[go:tab:stability|Stability]]', 'Earth pressures, loads and moments, overturning / sliding / bearing / eccentricity (or the pile checks), seismic and collision cases, AASHTO interface shear and Service I crack control, with the bearing pressure per combination.'],
+    ['[[go:tab:stem|Stem design]]', 'Base section (Steps 1–6) and mid-height section (Mid Steps 1–3), with the pressure and shear / moment diagrams.'],
+    ['[[go:tab:footing|Footing design]]', 'Factored loads on the footing, heel Steps 1–4, toe Steps 1–4, temperature and shrinkage, the extreme-event footing check (AASHTO), the shear key and, on piles, punching.'],
+    ['[[go:tab:rebar|Rebar schedule]]', 'Bar schedule per foot of wall (S1, S1D, S3, S2, S4, F1, F2, F3, K1), bar notes, detailing requirements, quantities.'],
+    ['[[go:tab:diagram|Analysis diagram]]', 'The cross-section with the reinforcement and the service-load pressure diagrams, to scale; the collision elevation in AASHTO mode.'],
+    ['[[go:tab:threed|3D model]]', 'An interactive model with load arrows per load case or combination (unfactored or factored), the base reaction or the pile reactions, and a section cut.'],
+    ['[[go:tab:drawings|Drawings]]', 'Four 11 × 17 sheets (five on piles), Print sheet / Print all sheets, Download DXF ([[go:man:drawings|drawings part]]).'],
+    ['[[go:tab:report|Report]]', 'The calculation report: every worked step, numbered §n.m, with a navigation tree and search ([[go:man:report|report part]]).'] ] } },
+  { h: 'Worked steps and links' },
+  { p: 'Every computed value is worked where it is computed: the equation, the values substituted, the result, and the provision. Where a value is used away from that card, a **Worked in** link goes back to it; in the Report the same link is a §-reference.' },
+  { h: 'Check summary (left column) and self-consistency checks' },
+  { ul: [
+    'The **check summary** lists every check with its value, D/C and PASS / FAIL; a click opens the card where the check is worked. Checks are pass / fail only.',
+    'On screens **1200 px and wider** it is a column left of the input panel: 240 px wide from 1200 to 1499 px and 292 px from 1500 px. The « / » button collapses it to a narrow strip (remembered in this browser). Below 1200 px it sits above the result tabs.',
+    'Under it, **Self-consistency checks** recompute key results a second way (for example ΣM about the toe, x̄, the stem moment from its parts) and flag any mismatch. The panel is closed when all pass and opens on a mismatch. It is not part of the Report.' ] },
+  { h: 'Phone and tablet' },
+  { p: 'At 900 px and narrower the results come first: the input panel is closed and **Show inputs / Hide inputs** in the header opens it as a drawer. Wide tables and drawings scroll sideways inside their card; the page itself does not.' } ] },
+
+{ id: 'modes', title: 'The two code modes', go: [['inp:design_basis', 'Code switch / Design basis']], blocks: [
+  { p: 'The mode decides the load combinations, the resistance factors, the stability criteria and the concrete provisions. One earth-pressure coefficient is used for stability and for the stem in each mode.' },
+  { table: { head: ['', 'ACI 318-19 / IBC 2018', 'AASHTO LRFD 10th Ed. (2024)'], rows: [
+    ['Earth pressure', 'Rankine active (sloping backfill by Rankine).', 'Coulomb (default) or Rankine; active, or at-rest K₀ (Jaky with OCR) (Art. 3.11.5).'],
+    ['Stability', 'Service (unfactored) loads: overturning and sliding FS ≥ 1.5, bearing q_max ≤ q_a, eccentricity limit as chosen (IBC 2018 §1807.2.3).', 'Strength I / Ia: sliding (Art. 10.6.3.4), eccentricity (Art. 11.6.3.3), bearing with φ_b (Art. 10.6.3.1); no overturning FS (AASHTO uses the eccentricity limit instead).'],
+    ['Seismic', 'Mononobe-Okabe increment ΔP_E at 0.6H′; FS ≥ 1.1 with 0.7ΔP_E (IBC §1807.2.3 exception); stem U = 1.2D + 1.0E + 1.6H.', 'Extreme Event I per Art. 11.6.5.1 (two load cases, φ 1.0 sliding, 0.8 bearing); stem designed for EE I.'],
+    ['Collision', '—', 'Extreme Event II (vehicular collision CT, MassDOT Table 3.3.2-1 test levels); optional barrier yield-line check (Art. A13.3.1).'],
+    ['Concrete load factors', 'ACI 318-19 §5.3: stem U = 1.6H; footing envelope U = 1.2D + 1.6H and 0.9D + 1.6H; water uplift split γ_U 1.6 toe / 0.9 heel (§5.3.8).', 'Tables 3.4.1-1/-2: DC 1.25/0.90, EV 1.35/1.00, EH 1.50/0.90 (at-rest 1.35), ES 1.50/0.75, LS 1.75, WA 1.00; η and 1/η (Art. 1.3.2.1).'],
+    ['Concrete checks', 'Flexure, one-way shear (λ_s), development / hooks / laps (Ch. 25), crack control (§24.3.2), T&S (§24.4.3), shear friction at the joint (§22.9).', 'Flexure, shear (β = 2 or the general procedure), minimum reinforcement (Art. 5.6.3.3), crack control Service I (Art. 5.6.7), T&S each face (Art. 5.10.6), development (Art. 5.10.8), optional interface shear (Art. 5.7.4).'],
+    ['Piles (when chosen)', 'Allowable P_a, T_a, H_a against the ASD combinations (ASCE 7-16 §2.4.1; IBC 2018 §1810).', 'Factored resistances φR_n, φR_n,up, H_r against every limit state (Art. 10.7).'] ] } },
+  ] },
+
+{ id: 'inputs', title: 'Inputs, units and defaults', go: [['inp:proj_name', 'Project input tab']], blocks: [
+  { p: 'The defaults below are those of a new project (New, or this file opened for the first time). A blank load-type input (loads, cohesion, surcharge, seismic, water depth) counts as 0; geometry, materials and q_a must be entered. Inputs marked (AASHTO) are shown in AASHTO mode only; (pile) only with a pile-supported footing.' },
+  { h: 'Project tab' },
+  { table: { head: ['Input', 'Unit', 'Default', 'Notes'], rows: [
+    ['[[go:inp:proj_name|Project Name, Project Number, Engineer of Record, Checked By, Notes]]', '—', 'blank', 'Title block of the Report and the drawing sheets.'],
+    ['Date, Checked Date', '—', 'blank (optional)', 'Printed in the title blocks when filled.'],
+    ['Use shared project info / Share project info', '—', '—', 'Exchange the project name, number, engineer, checker and date with the other tools of this suite (HANDOFF.md §4.1).'],
+    ['[[go:inp:design_basis|Design basis]]', '—', 'ACI 318-19 / IBC 2018', 'The code mode (same as the Code switch).'] ] } },
+  { h: 'Wall tab' },
+  { table: { head: ['Input', 'Unit', 'Default', 'Notes'], rows: [
+    ['[[go:inp:Hs|Stem height H_s]]', 'ft', '12', 'Locked when a variable-height wall is ticked (the box shows why).'],
+    ['[[go:inp:tf|Footing thickness t_f]]', 'in', '18', 'Must exceed the bottom cover + 2 in; on piles, embedment + clear + 2 in.'],
+    ['Stem width at the base / at the top', 'in', '18 / 12', 'Front face vertical, back face battered.'],
+    ['Toe length L_t / heel length L_h', 'ft', '3 / 8', 'From the stem faces. B = L_t + t_stem + L_h.'],
+    ['Soil cover over the toe D_f,add', 'ft', '0', 'Toe embedment D_f = t_f + D_f,add (passive at the toe).'],
+    ['[[go:inp:fnd_type|Foundation type]]', '—', 'Spread footing on soil', 'Or pile-supported footing.'],
+    ['Number of pile rows; per row x from the toe and spacing along the wall (pile)', '— / ft', '2; 1.5 and 11 ft; 6 ft', 'Rows 3 and 4 default to x = 6 and 9 ft at 6 ft.'],
+    ['Pile type, designation, width / diameter D (pile)', '— / in', 'Steel H-pile, blank, 12', 'H, pipe, square precast, round.'],
+    ['Embedment into the footing; clear, pile top to the bottom bars (pile)', 'in', '12; 3', 'Used for the depth over the pile heads (punching, ACI cap depth).'],
+    ['Allowable P_a / T_a / H_a per pile (pile, ACI)', 'kip', '100 / 25 / 8', 'Placeholders until the geotechnical values are entered.'],
+    ['Nominal R_n, φ_c, R_n,up, φ_up, factored H_r per pile (pile, AASHTO)', 'kip / —', '300, 0.65, 100, 0.50, 20', 'Placeholders until entered or pulled from Pile Designer.'],
+    ['Credit passive in front of the footing (pile)', '—', 'off', 'Toe passive against the lateral load on the piles.'],
+    ['[[go:inp:vh_enable|Wall varies in height]]; low-end / high-end stem height', '— / ft', 'off; 8 / 16', 'MassDOT §3.3.2.2 (paraphrased): design height = H_low + 0.75(H_high − H_low); applied in both modes when ticked.'],
+    ['[[go:inp:fc|f′c]] / f_y', 'psi', '4000 / 60000', ''],
+    ['Cover, stem back face / footing', 'in', '2 / 3', 'The footing cover is used top and bottom (and for the bottom bars on piles).'],
+    ['Concrete unit weight γ_c', 'pcf', '150', ''] ] } },
+  { h: 'Soil tab' },
+  { table: { head: ['Input', 'Unit', 'Default', 'Notes'], rows: [
+    ['[[go:inp:gamma_s|Soil unit weight γ_s]] / friction angle φ / cohesion c', 'pcf / ° / psf', '120 / 30 / 0', 'Cohesion is shown and printed but not used in any calculation.'],
+    ['[[go:inp:qa|Allowable bearing q_a]]', 'psf', '3000', 'ACI bearing check. In AASHTO mode it gives q_n = 3q_a when that source is chosen, and the reference line of the bearing chart.'],
+    ['[[go:inp:aci_ecc_limit|Eccentricity limit (service)]] (ACI)', '—', 'Middle third (e ≤ B/6)', 'Or e ≤ B/4, or no limit (information only). Saves made before this input open with "no limit".'],
+    ['Heel / toe one-way shear: neglect λ_s (ACI)', '—', 'off', 'ACI 318-19 §13.2.6.2; spread footings only.'],
+    ['Backfill slope β / surcharge q_s / saturated unit weight γ_sat', '° / psf / pcf', '0 / 0 / 130', 'β < 0 is marked REVIEW; β ≥ φ is an error.'],
+    ['[[go:inp:wt_mode|Water table input mode]]; depth from the top of wall, or top-of-wall and groundwater elevations', '— / ft', 'Depth; 0 (no water); 100 / 90', 'A water table at or below the footing base is ignored.'],
+    ['γ_w; include hydrostatic pressure and uplift; uplift distribution', 'pcf / — / —', '62.4; on; uniform', 'Uniform: full head across B. Triangular: full head at the heel to 0 at the toe.'],
+    ['[[go:inp:aashto_ep_method|Earth pressure method]], pressure condition, wall friction δ, wall batter θ, OCR (AASHTO)', '— / ° / —', 'Coulomb, active, 0, 0, 1', 'At-rest K₀ = (1 − sin φ)OCR^(sin φ) (Art. 3.11.5.2).'] ] } },
+  { h: 'Loads tab' },
+  { table: { head: ['Input', 'Unit', 'Default', 'Notes'], rows: [
+    ['[[go:inp:col_DL|Column / beam loads P_DL, P_LL, P_SL, P_WL]]; distribution length; position', 'kip / ft / —', '0; 1; centreline of stem', 'Line load per ft = P / L_dist at the front face, centreline or back face of the stem.'],
+    ['[[go:inp:kh|Seismic k_h]] / k_v / M-O wall friction δ', '— / — / °', '0 / 0 / 0', 'k_h > 0 turns the seismic checks on.'],
+    ['γ_EQ on live load / LS (AASHTO)', '—', '0', 'Extreme Event I; also sets the EE I eccentricity limit.'] ] } },
+  { h: 'Traffic tab (AASHTO)' },
+  { table: { head: ['Input', 'Unit', 'Default', 'Notes'], rows: [
+    ['[[go:inp:aashto_ll_surcharge|Live-load surcharge]]; h_eq source; traffic direction; distance back face to traffic; h_eq (manual)', '— / ft', 'on; auto; wall parallel; 0; 2.0', 'Tables 3.11.6.4.1-1 / -2; not applied when the traffic is farther than H/2 (a manual h_eq overrides).'],
+    ['[[go:inp:aashto_ct_enable|Vehicular collision CT]]; test level; F_t, h_CT, L_t; joint spacing; distribution; EH during collision; φ; eccentricity limit B/n', '— / kip / in / ft', 'off; TL-4 (28 kip, 30 in, 5 ft); 41 ft; full section between joints; γ_EH = 0; 1.00; 3', 'MassDOT LRFD Bridge Manual §3.3.2.4, Table 3.3.2-1 (edition: verify).'],
+    ['[[go:inp:bar_enable|Barrier on top of the stem]]; height; weight input; weight or width; centroid offset', 'ft / plf / in', 'off; 3.0; weight; 450 plf (or 12 in); 0', 'The barrier weight is added as DC.'],
+    ['Barrier yield-line check; impact location; M_b, M_w, M_c', '— / k·ft, k·ft/ft', 'off; interior; 0, 18, 16', 'R_w ≥ F_t (Art. A13.3.1).'] ] } },
+  { h: 'Design tab' },
+  { table: { head: ['Input', 'Unit', 'Default', 'Notes'], rows: [
+    ['[[go:inp:mu_method|Base friction method]] (ACI); custom μ', '— / —', 'tan(⅔φ); 0.45', 'Or tan φ, or a custom μ.'],
+    ['[[go:inp:use_shear_key|Shear key]]; depth d_k; width b_k', '— / in', 'off; 12; 12', 'Centred under the stem.'],
+    ['[[go:inp:heel_basis|Heel design basis]]', '—', 'Standard (down minus bearing)', 'Or no upward relief, or the envelope of the two.'],
+    ['[[go:inp:incl_passive|Include passive resistance]]', '—', 'off', 'Toe (and key) passive in sliding, toe passive moment in overturning.'],
+    ['[[go:inp:aashto_eta|Load modifier η]], φ_τ, base friction, δ_b, eccentricity limit, φ_ep, φ_b, q_n source, φ_b q_n (AASHTO)', '— / ° / psf', '1.0, 1.00, tan(⅔φ), 0, e ≤ B/4, 0.50, 0.55, from geotech report, 4950', 'q_n may be estimated as 3q_a instead (a warning says this is unconservative if q_a is settlement-controlled).'],
+    ['[[go:inp:aashto_gamma_e1|Exposure γ_e]] footing / stem; shear method; aggregate a_g; at-rest K₀ for Service (AASHTO)', '— / in', '1.0 / 0.75; auto; 1.5; off', 'Art. 5.6.7; Art. 5.7.3.4.'] ] } },
+  { h: 'Rebar tab' },
+  { table: { head: ['Input', 'Unit', 'Default', 'Notes'], rows: [
+    ['[[go:inp:ovr_bar_s1|Bar overrides]] S1, S3, S2, S4, F1, F2, F3: bar # and spacing', '— / in', '0 (automatic)', 'A bar and spacing replace the tool’s choice for that mark; the checks then use them.'],
+    ['Toe bars F2 hooked at the toe end', '—', 'off', 'Standard 90° hook checked with ℓ_dh.'],
+    ['[[go:inp:massdot_ftg|MassDOT heel top-steel rule]] (AASHTO)', '—', 'off', 'MassDOT §3.3.2.2: dead load only, no upward relief.'],
+    ['[[go:inp:aashto_ish_enable|Interface shear]]; c, μ, K₁, K₂, sub-footing f′c, dowel bar and spacing (AASHTO)', 'ksi / — / psi / in', 'off; 0.075, 0.6, 0.2, 0.8; 3000; #6 @ 48', 'Art. 5.7.4.3.'] ] } } ] },
+
+{ id: 'projects', title: 'Saving, opening, cloud sync, Export / Import JSON', go: [['inp:proj_name', 'Project tab, Save and open card']], blocks: [
+  { ul: [
+    '**Autosave.** The inputs are kept in this browser as you type and come back when the file is opened again.',
+    '**Save and open** card (Project tab, first card): **Save** (Ctrl+S) keeps the project in this browser’s list under its name; **Save as** (Ctrl+Shift+S) asks for a name and where to save; **Saved projects…** lists them with Open, Rename, Duplicate, Export and Delete; **New** starts from the defaults. Open asks first when the project on screen has unsaved changes. The header chip shows the project name and saved / unsaved; a click on it opens this card.',
+    '**Undo / Redo** in the header (Ctrl+Z, Ctrl+Y or Ctrl+Shift+Z) step through input changes; changing tabs or views is not a step.',
+    '**Export JSON** writes the project as a .json file (format RetainCalcPro.project); **Import JSON** reads one project or a back-up file; **Back up all** writes every project of this browser to one file.',
+    '**Cloud sync (GitHub)**, from the Saved projects dialog: when set up, each named project is also copied to the engineer’s private GitHub repository and appears on every device with sync. Autosave is not synced. Nothing is deleted or overwritten on GitHub silently: a project changed on two devices is kept twice ("conflict" copy). Setup: docs/github-sync-setup.md.',
+    'Opening a project never changes a stored value. Inputs added after a project was saved take their documented defaults, except the ACI eccentricity limit (saves without it open with "no limit", as they were designed).',
+    'Files opened from file:// in Chrome / Edge share one browser storage with the other tools of the suite; this tool’s own keys start with retaincalcpro. or rcp_, and the cross-tool hand-offs use bridgeSuite.v1.*.' ] } ] },
+
+{ id: 'drawings', title: 'Drawings, DXF, bar schedule, 3D model and analysis diagram', go: [['tab:drawings', 'Drawings tab'], ['tab:rebar', 'Rebar schedule tab']], blocks: [
+  { h: 'Drawing sheets' },
+  { ul: [
+    '**1. Typical wall section** (to scale, dimensioned), **2. Reinforcement details and bar schedule**, **3. Loads and bearing pressure diagram**, **4. Elevation and general notes**, and on piles **5. Pile layout plan and pile schedule**.',
+    'Each sheet is 11 × 17 landscape at its plot scale with a title block from the Project tab. **Print sheet** / **Print all sheets** print through the browser (Tabloid, landscape, margins none, scale 100 %). **Download DXF** writes one AutoCAD R12 file with every sheet side by side, full size in inches, on named layers (RW-CONC, RW-REBAR, RW-DIMS, …).',
+    'Bars, sizes, spacings and the loads are the tool’s results. Bar lengths that the model does not give (lap and hook tails, nominal extensions) are labelled as nominal on sheet 2. On piles the bottom mat is drawn at the footing cover with the pile heads projecting through it.' ] },
+  { h: 'Rebar schedule tab' },
+  { p: 'One row per bar mark with bar size, spacing, A_s required and provided, ratio, ℓ_d (or ℓ_dh for hooked bars) and status, bar notes, the general detailing requirements of the mode and approximate quantities per foot of wall. The marks: S1 stem back-face verticals from the joint to mid-height plus the lap; S1D the hooked dowel into the footing, lapped with S1; S3 back-face verticals of the upper half; S2 horizontal temperature and shrinkage bars (both faces); S4 front-face verticals (AASHTO); F1 heel top bars; F2 toe bottom bars; F3 longitudinal footing bars (both faces); K1 shear-key bars when the key is reinforced.' },
+  { h: '3D model and analysis diagram' },
+  { p: 'The [[go:tab:threed|3D model]] shows one load case or one combination at a time (the governing bearing or pile combination by default); in a combination view the arrows can be unfactored or factored, and the base reaction (or the pile reactions) is the combination’s. The [[go:tab:diagram|Analysis diagram]] shows the section with the service-load pressure diagrams to scale. Both are display only.' } ] },
+
+{ id: 'report', title: 'The Report and printing', go: [['tab:report', 'Report tab']], blocks: [
+  { ul: [
+    'The Report holds the design summary (every check with its D/C, basis and a § link to where it is worked), an overview of the wall, the inputs, and the stability, stem, footing, pile (when present) and reinforcement sections with every worked step, then assumptions and warnings, references and the figure appendix.',
+    'Navigation tree, search, **Expand all / Collapse all**; links marked ↗ go to the tab on screen.',
+    '**Print** in the header, Ctrl+P, or the Report’s Print prints the whole Report (every section open, running header and page numbers) from any tab. Drawing sheets print from the Drawings tab only.',
+    '**Include the user manual** in the Report bar adds this manual as an appendix (this browser’s choice, not saved with a project).',
+    'Nothing is computed in the Report: it shows the values of the tabs.' ] } ] },
+];
+/* ---- rendering ---- */
+function rwmanEsc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function rwmanIdx() { const m = {}; RWMAN_PARTS.forEach((p, i) => { m[p.id] = i + 1; }); return m; }
+function rwmanHTML(s) {   // the Manual tab: links and bold
+  const IX = rwmanIdx();
+  return rwmanEsc(s).replace(/\[\[go:([^|\]]+)\|([^\]]+)\]\]/g, (m, t, x) => t.indexOf('man:') === 0
+      ? `<a href="#rwman-${t.slice(4)}" class="rwmanA" data-rwman="${t}">${x} (§${IX[t.slice(4)] || '?'})</a>`
+      : `<a href="#" class="rwmanA" data-rwman="${t}">${x}</a>`)
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+}
+function rwmanPlainLinks(s) {   // the Report: [[tab:…]] links (plain text in print), §-references to the manual parts
+  return String(s).replace(/\[\[go:([^|\]]+)\|([^\]]+)\]\]/g, (m, t, x) => t.indexOf('man:') === 0 ? x + ' ([[man-' + t.slice(4) + ']])'
+      : '[[tab:' + (t.indexOf('tab:') === 0 ? t.slice(4) : t) + '|' + x + ']]').replace(/\*\*([^*]+)\*\*/g, '$1');
+}
+function rwmanGo(t) {
+  if (t.indexOf('man:') === 0) { const e = document.getElementById('rwman-' + t.slice(4)); if (e) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+  if (t.indexOf('inp:') === 0) { rwIeGoto(t.slice(4)); return; }
+  if (t.indexOf('card:') === 0) { const k = t.slice(5), c = RW_CARDS[k], r = window._R;
+    if (c && r && !r.fatal && rwCardTitle(k, r.isAASHTO)) { rwGoto(k); return; }
+    t = 'tab:' + (c ? c[0] : 'overview'); }
+  const b = document.querySelector(`.tab-btn[data-tab="${t.replace(/^tab:/, '')}"]`); if (b) b.click();
+  const P = document.querySelector('.tab-panels'); if (P) P.scrollTop = 0;
+}
+function rwmanBlockHTML(b) {
+  if (b.h) return `<h4 class="rwman-h">${rwmanHTML(b.h)}</h4>`;
+  if (b.p) return `<p>${rwmanHTML(b.p)}</p>`;
+  if (b.ul) return `<ul>${b.ul.map(x => `<li>${rwmanHTML(x)}</li>`).join('')}</ul>`;
+  if (b.table) return `<div style="overflow-x:auto"><table class="tbl rwman-tbl"><thead><tr>${b.table.head.map(x => `<th>${rwmanHTML(x)}</th>`).join('')}</tr></thead><tbody>${b.table.rows.map(r => `<tr>${r.map(x => `<td>${rwmanHTML(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  return '';
+}
+function rwmanInc() { try { return localStorage.getItem('retaincalcpro.manualInReport.v1') === '1'; } catch (e) { return false; } }
+function rwmanSetInc(on) { try { if (on) localStorage.setItem('retaincalcpro.manualInReport.v1', '1'); else localStorage.removeItem('retaincalcpro.manualInReport.v1'); } catch (e) { /* not kept */ }
+  document.querySelectorAll('input[data-rwman-inc]').forEach(x => { x.checked = on; }); }
+function rwmanRender() {
+  const T = document.getElementById('tab-manual'); if (!T) return;
+  if (T.dataset.built) { T.querySelectorAll('input[data-rwman-inc]').forEach(x => { x.checked = rwmanInc(); }); return; }
+  T.dataset.built = '1';
+  let h = `<div class="sec-heading">User Manual — Retaining Wall Designer · ${RWMAN_DATE}</div>`
+    + `<div class="rwman-bar"><button type="button" class="btn" id="rwman-print">Print the manual</button>`
+    + `<label class="rwman-inc"><input type="checkbox" data-rwman-inc${rwmanInc() ? ' checked' : ''}> Include the user manual in the Report (printed as an appendix)</label></div>`
+    + `<div class="card rwman-part"><div class="card-hd"><span class="card-title">Contents</span></div><div class="card-body"><ol class="rwman-toc">${RWMAN_PARTS.map(p => `<li><a href="#rwman-${p.id}" class="rwmanA" data-rwman="man:${p.id}">${rwmanEsc(p.title)}</a></li>`).join('')}</ol></div></div>`;
+  RWMAN_PARTS.forEach((p, i) => {
+    h += `<div class="card rwman-part" id="rwman-${p.id}"><div class="card-hd"><span class="card-title">${i + 1}. ${rwmanEsc(p.title)}</span>`
+      + (p.go && p.go.length ? `<span class="card-ref">On screen: ${p.go.map(([t, x]) => `<a href="#" class="rwmanA" data-rwman="${t}">${rwmanEsc(x)}</a>`).join(' · ')}</span>` : '')
+      + `</div><div class="card-body">${p.blocks.map(rwmanBlockHTML).join('')}</div></div>`;
+  });
+  T.innerHTML = h;
+  T.addEventListener('click', e => { const a = e.target.closest && e.target.closest('a.rwmanA'); if (!a) return; e.preventDefault(); rwmanGo(a.dataset.rwman); });
+  T.querySelector('#rwman-print').addEventListener('click', rwmanPrint);
+}
+document.addEventListener('change', e => { const x = e.target; if (!x || !x.matches || !x.matches('input[data-rwman-inc]')) return;
+  rwmanSetInc(x.checked); if (document.getElementById('tab-report') && document.getElementById('tab-report').classList.contains('active')) renderRwReport(); });
+/* the manual as report sections (the Report appendix, and "Print the manual") */
+function rwmanSection() {
+  const subs = RWMAN_PARTS.map(p => { const items = []; let topic = null;
+    const push = it => { if (topic) { it.topic = { title: topic }; topic = null; } items.push(it); };
+    p.blocks.forEach(b => {
+      if (b.h) topic = rwmanPlainLinks(b.h);
+      else if (b.p) push({ type: 'note', text: rwmanPlainLinks(b.p) });
+      else if (b.ul) b.ul.forEach(x => push({ type: 'note', text: '• ' + rwmanPlainLinks(x) }));
+      else if (b.table) push({ type: 'table', wide: true, head: b.table.head.map(rwmanPlainLinks), rows: b.table.rows.map(r => r.map(rwmanPlainLinks)) });
+    });
+    if (p.go && p.go.length) items.push({ type: 'note', text: 'On screen: ' + p.go.map(([t, x]) => '[[tab:' + (t.indexOf('tab:') === 0 ? t.slice(4) : t) + '|' + x + ']]').join(' · ') });
+    return { title: p.title, key: 'man-' + p.id, items }; });
+  return { title: 'User manual (' + RWMAN_DATE + ')', key: 'man', part: 'Appendices', subs };
+}
+function rwmanAdd(M) { if (M && M.sections && rwmanInc()) M.sections.push(rwmanSection()); return M; }
+function rwmanPrint() {
+  if (!window.SharedReport) { window.print(); return; }
+  const s = rwmanSection(); delete s.part;
+  SharedReport.print(SharedReport.build({ title: 'Retaining Wall Designer', subtitle: 'User manual', code: 'ACI 318-19 / IBC 2018 and AASHTO LRFD 10th Ed. (2024)', info: [], sections: [s] }));
+}
 </script>
 
 <script>
