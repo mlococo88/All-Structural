@@ -4855,3 +4855,78 @@ function buildDrawingsTab(pg){
 - **How verified:** main vs branch per tab (#capacity / #asd / #dev, read in the frame): every localStorage key (3), page text (10,629 / 3,329 / 12,377 chars), Export JSON (1,423 / 1,026 / 851 chars) and the printed text (print media, 5,436 / 2,050 / 6,664 chars) identical (clock times normalised); 0 console errors; header at 1280 / 1400 / 1920 / 390 px (390: no sideways scroll), screenshots looked at. `node tests/check-syntax.mjs "Concrete Beam Capacity.html"` (the three srcdoc pages decoded and checked), `project-library.mjs --tool cbc`, `--tool asd`, `--tool rebar`, `github-sync-tools.mjs --tool cbc,asd,rebar`, `home-projects.mjs --tool cbc,asd,rebar`, `rebar-redirect.mjs`, `phone-layout.mjs --tool cbc,aci`: pass. Line endings: 9 CRLF lines added, no other line changed (CRLF count main 10,675 → branch 10,684; LF-only lines 4 → 4).
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
+
+## 2026-11-07 — PR: claude/cbc-aci-comp-lap-fy, PR #969: https://github.com/mlococo88/All-Structural/pull/969 (CBH2: ACI compression lap splice for f_y > 80,000 psi is the longer of (0.0009f_y − 24)d_b and l_st, per 25.5.5.1(c); CALCULATION CHANGE, Development & Splice tab, ACI mode, f_y > 80 ksi only; less conservative before)
+
+Frame: Development & Splice (`suite-frame-dev`, srcdoc of `Concrete Beam Capacity.html`; decoded/encoded with a byte-exact srcdoc helper, CRLF kept). Found in the in-depth review of 2026-11-07 (item H2).
+
+### CBH2. Compression lap splice, f_y > 80,000 psi   [CALCULATION CHANGE]
+- **Governing provision (checked in the rendered PDF, printed p. 492):** ACI 318-19 25.5.5.1. (a) f_y ≤ 60,000 psi and (b) 60,000 < f_y ≤ 80,000 psi are as coded. (c) f_y > 80,000 psi: l_sc is the longer of (0.0009f_y − 24)d_b and l_st calculated per 25.5.2.1. The one-third increase for f′c < 3000 psi follows the three cases. The 2022 errata were not found to change 25.5.5.1. AASHTO 5.10.8.4.5a (10th Ed.) has no such case and is unchanged.
+- **Where:** `calcCompSplice()`, anchor `function calcCompSplice(inp,f){`, ACI branch.
+  - Before:
+    ```js
+    function calcCompSplice(inp,f){
+      let lsc_calc;
+      ...
+      } else {
+        if(inp.fy<=60000) lsc_calc = 0.0005*inp.fy*f.db;
+        else lsc_calc = (0.0009*inp.fy-24)*f.db;
+        if(inp.fc<3000) lsc_calc *= (4/3);
+      }
+      const lsc = Math.max(lsc_calc, 12);
+      return {lsc_calc, lsc, lowFc: inp.fc<3000};
+    ```
+  - After:
+    ```js
+    function calcCompSplice(inp,f){
+      let lsc_calc, hiFy = null;
+      ...
+      } else {
+        if(inp.fy<=60000) lsc_calc = 0.0005*inp.fy*f.db;
+        else lsc_calc = (0.0009*inp.fy-24)*f.db;
+        // CBH2: ... (comment)
+        if(inp.fy>80000){
+          const e = classAEligible(inp,f);
+          const cls = (inp.tensClass==="A" && e.known && e.eligible) ? "A" : "B";
+          const inpC = Object.assign({},inp,{tensClass:cls});
+          const ts = calcTensSplice(inpC,f,calcTension(inp,f));
+          hiFy = {term:lsc_calc, lst:ts.lst, ldBase:ts.ldBase, factor:ts.factor, cls, gov: ts.lst>lsc_calc?"lst":"term"};
+          lsc_calc = Math.max(lsc_calc, ts.lst);
+        }
+        if(inp.fc<3000) lsc_calc *= (4/3);
+      }
+      const lsc = Math.max(lsc_calc, 12);
+      return {lsc_calc, lsc, lowFc: inp.fc<3000, hiFy};
+    ```
+  - l_st is the tool's own `calcTensSplice` value: factor (1.0 Class A, 1.3 Class B) × l_d without the excess-reinforcement factor, 12 in minimum.
+  - Everything that shows l_sc follows: the Comp. Splice tab, the Checks panel row, the Bar Schedule (each bar size), the Report steps and table, and the Summary row.
+- **Decisions (pending engineer review):**
+  1. Class of l_st: Class B (1.3 l_d) unless Class A is selected in Splices and shown eligible (A_s,prov ≥ 2A_s,req entered and ≤ 50 % spliced). With Class A selected but not shown eligible, Class B is used (conservative).
+  2. f′c < 3000 psi: the one-third increase is applied to the longer of the two terms (the increase is written after (a)–(c) and applies to l_sc). This is the conservative reading.
+- **Display:**
+  - Comp. Splice tab (ACI): a commentary line for f_y > 80,000 psi ("This applies to your input" when it does); the first equation block ends at (0.0009f_y − 24)d_b = value; a new block "f_y > 80,000 psi: longer of the above and l_st (Class …)", §25.5.5.1(c), §25.5.2.1, worked as max[term, max(factor × l_d, 12) = l_st], with a "Worked in: l_d … → Tension Splice · Base Development Length" link.
+  - Report (`rbrCSplice`): for f_y > 80,000 psi the step l_sc,calc is replaced by three steps: `lscterm` (the expression), `lscst` (l_st with the class, note "see §ldBase", which links to the Tension lap splice section) and `lsccalc` (the longer, ×4/3 when f′c < 3000 psi). The cs steps topic got `see:'ts'` so the note resolves to the tension splice's step.
+- **Check case:** ACI, #8 bar (d_b 1.000 in), f′c 4000 psi, f_y 100,000 psi, c_b + K_tr limited ratio 1.5, ψ_t = ψ_e = ψ_s = 1.0, ψ_g = 1.3 (Grade 100), normalweight, Class B selected.
+
+  | Quantity | Before | After | Hand check |
+  |---|---|---|---|
+  | (0.0009f_y − 24)d_b | 66.00 in | 66.00 in | (90 − 24) × 1.000 = 66.0 |
+  | l_d (splice base) | — | 102.77 in | 3/40 × 100000/(1.0 × 63.25) × 1.3/1.5 × 1.000 = 102.77 |
+  | l_st (Class B) | — | 133.61 in | 1.3 × 102.77 = 133.61 |
+  | **l_sc** | **66.00 in** | **133.61 in** | max(66.0, 133.61) |
+
+  Other cases (in the page):
+  - Class A selected without A_s,req/A_s,prov entered: 133.61 in (Class B used).
+  - Class A selected and eligible (A_s,req 0.5, A_s,prov 1.0 in², 50 % spliced): 102.77 in.
+  - f′c 2500 psi, Class B: before 66.0 × 4/3 = 88.0 in; after l_d 130.0, l_st 169.0, l_sc 169.0 × 4/3 = 225.3 in.
+  - #6, f′c 6000, f_y 100 ksi: term 49.5 in governs over l_st 49.09 in, so l_sc unchanged at 49.5 in.
+  - f_y 80,000 psi (case (b)) and every f_y ≤ 80 ksi: unchanged. AASHTO mode: unchanged.
+- **Conservatism:** before, ACI f_y > 80 ksi laps could be short by up to half (66.0 vs 133.6 in in the check case).
+- **How verified:**
+  - Headless Chromium, origin/main vs branch, review probe cases (Beam Capacity: default, aciD, aasT, aasMinNeg, aciFy100, aciDeep, aa100; Dev: aciDefault, aasLWcomp, aasNWcomp, aasFy100, aciFy80): identical. Moved: only the ACI f_y 100 ksi Dev cases above.
+  - Full dump of all frames and the Report (default project), main vs branch: values identical; differences are only the new commentary line and the topic's `see` key.
+  - The Report step list for the check case was dumped from `rbrModel()`.
+  - `check-syntax` (all), `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass; 0 console errors. Screenshot of the Comp. Splice tab looked at.
+- **Saved data:** no key or format change.
+- **Other copies:** none (the standalone rebar page is a redirect since RBRT).
+- **Open items:** in cases (a)/(b) with f′c < 3000 psi the tool applies ×4/3 before the 12 in floor (max(4/3·calc, 12)), not after; not changed here (raise with the engineer).
