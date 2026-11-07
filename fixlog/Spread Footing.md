@@ -6455,7 +6455,7 @@ index 50f3837..c2d5000 100644
 - **Cases that move:** only cases with P_u > φB_n. None of the other SF harness cases does. def and sey: no change.
 - **Saved data:** none. **Other copies:** none.
 
-## 2026-11-07 — PR: claude/sf-m6-loadcases (SFW3: simultaneous wind 0.75(±Wx ±Wy); SFEQ: seismic load type E with the ASCE 7-16 2.3.6 / 2.4.5 combinations; CALCULATION CHANGE only where both Wx and Wy, or E, are entered; old saves unchanged)
+## 2026-11-07 — PR: claude/sf-m6-loadcases (PR #1054: https://github.com/mlococo88/All-Structural/pull/1054) (SFW3: simultaneous wind 0.75(±Wx ±Wy); SFEQ: seismic load type E with the ASCE 7-16 2.3.6 / 2.4.5 combinations; CALCULATION CHANGE only where both Wx and Wy, or E, are entered; old saves unchanged)
 
 - **Problem:** only Wx or Wy entered a combination, never both at once. MWFRS load Case 3 (ASCE 7-16 27.3.5, Fig. 27.3-8) applies 75 % of the wind in both directions simultaneously, and biaxial corner pressure under it can govern a footing. There was also no seismic load type.
 - **Where / exact code (`Spread Footing.html`):**
