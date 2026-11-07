@@ -5281,7 +5281,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Other copies:** none.
 - **Open items:** the per-anchor detail table of a torsion combination still shows V_res against the sweep's φV_cbg (pre-existing; the Summary uses the sweep's demand). The interaction of perpendicular and parallel components on one edge (decision 2).
 
-## 2026-11-07 — BPH2: column eccentricity e_x / e_y enters the calculation (PR: claude/bp-h2-col-ecc)
+## 2026-11-07 — BPH2: column eccentricity e_x / e_y enters the calculation (PR: claude/bp-h2-col-ecc, PR #964: https://github.com/mlococo88/All-Structural/pull/964)
 
 ### BPH2. Loads at the column centroid moved to the plate centre; plate cantilever per side   [calculation change, more conservative; saved data: none (old saves with e ≠ 0 change, which is the fix)]
 - **Problem (review H2, 2026-11-07):** `plate.exc_x` / `plate.exc_y` ("Column eccentricity ex / ey") were read only by the drawings, the 3-D view and the PROFIS export. The Manual (4A) said the loads act at the column centroid and that the eccentricity is reflected in the bending calculation; no check used it. Unconservative.
