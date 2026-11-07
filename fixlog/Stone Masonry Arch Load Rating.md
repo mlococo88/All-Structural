@@ -1396,3 +1396,45 @@ function transDisp(w,n,c,cap){
 - **After:** SL-L and SL-R always; CR only when n is even; QP-L / QP-R only when n is a multiple of 4. Any other node is "N<i>".
 - **Dashboard:** "Quarter points are not nodes" (REVIEW) when the mesh in use is not a multiple of 4 (a user count). **Model tab:** a new step "Rounded up to a multiple of 4". **Input help:** the row and the manual table say so.
 - **How verified:** `check-syntax` (all pass); `phone-layout --tool arch`; `project-library --tool stonearch` (the A-vs-B identity checks differ by design; the others pass); all 14 tabs with 0 console errors; a count of 13 shows the warning.
+
+## 2026-11-07 — PR: claude/stonearch-m4-ll-worked — Live Load tab worked nodal pressure built from the solver's per-axle split (LLW; review M-4; display only)
+
+### LLW-1. p_i = f_i · p0 · κ from `nodalLLByAxle`   [display only, no result change]
+- **Problem (review M-4):** the worked example on the Live Load tab chose its axles by point sampling: an axle counted, in full, when |x_node − x_axle| ≤ L_s/2. The solver (`nodalLL`) loads a node with the fraction f of its extrados tributary that the footprint covers (`coverFrac`). The printed "q_j = p·b·t_j" then substituted the sampled p but printed the solver's q. In the review's EV3 case (x = −8.75 ft, node QP-L, 10 el) it printed 0.3648 × 1.0 × 4.640 = 2.1014, while 0.3648 × 4.640 = 1.693, a 19% mismatch. SU7 was off by +20%. At some positions the tab said "no axle over this node" while the solver loaded it.
+- **Where:** `liveLoadSection()`, contribution loop, anchor `const BA=ARCH.nodalLLByAxle(M,veh,pos,dir), TJ=ARCH.tribSpan(M,jm);`.
+- **Before:**
+```js
+  for(const ax of veh.axles){
+    const xa=(dir>0)?pos+ax.x:pos+maxOff-ax.x;
+    const reg=ARCH.llRegime(M,xa);
+    if(reg.conc){
+      ...
+    }else if(Math.abs(nd.x-xa)<=Ls/2)contrib.push({ax,xa,
+      p:(merged?ax.P/((ARCH.GAGE+wt)*Ls):(ax.P/2)/(wt*Ls))*kW});
+  }
+```
+- **After:**
+```js
+  const BA=ARCH.nodalLLByAxle(M,veh,pos,dir), TJ=ARCH.tribSpan(M,jm);
+  for(const [ai,ax] of veh.axles.entries()){
+    const xa=(dir>0)?pos+ax.x:pos+maxOff-ax.x;
+    const reg=ARCH.llRegime(M,xa);
+    if(reg.conc&&!(reg.r>0)){
+      ... (concentrated 6.4.1 branch unchanged)
+    }else{
+      const cr=(reg.conc&&reg.r>0);
+      const LsA=cr?ARCH.TIRE_L+reg.r*H:Ls, wtA=cr?ARCH.TIRE_W+reg.r*H:wt, mgA=(wtA>=ARCH.GAGE);
+      const kA=cr?ARCH.sideBySide(p,wtA,false).kappa:kW;
+      const f=ARCH.coverFrac(TJ,xa-LsA/2,xa+LsA/2), pp=BA.axP[ai][jm];
+      if(pp>0)contrib.push({ax,xa,f,p:pp,Ls:LsA,wt:wtA,merged:mgA,kap:kA,cr,r:reg.r});
+    }
+  }
+```
+  The step now reads p_i = f_i · P/((s_g + w_t)L_s) · κ (or the separate-wheel form), with f_i substituted and the tributary limits in a note. An axle on the credited 6.4.1 spread (rate r > 0) is now worked as the spread it is in the solver, not as an interpolated concentrated load.
+- **Governing provision:** unchanged (Std. Spec. 6.4.1 / 6.4.2, verify; MassDOT §7.2.7.7B). CLAUDE.md §6: the worked value must reproduce the computed one.
+- **Check case (default after #1064 / #1072 / #1075, HS20 at its governing position, node QP-R, 12 el):**
+  - p_1 = 0.9942 × 31/((6 + 9.071) × 9.071) × 1.2559 = 0.2831 ksf;
+  - p_2 = 1.0000 × … = 0.2848 ksf;
+  - Σp = 0.5679;
+  - q = 0.5679 × 3.717 = 2.111 k/ft = the solver's 2.1111.
+- **How verified:** `check-syntax`; `phone-layout --tool arch`; `project-library --tool stonearch` (results identical A vs B); all 14 tabs with 0 console errors; ratings unchanged (main vs branch, default).
