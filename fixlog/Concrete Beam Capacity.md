@@ -4931,7 +4931,7 @@ Frame: Development & Splice (`suite-frame-dev`, srcdoc of `Concrete Beam Capacit
 - **Other copies:** none (the standalone rebar page is a redirect since RBRT).
 - **Open items:** in cases (a)/(b) with f′c < 3000 psi the tool applies ×4/3 before the 12 in floor (max(4/3·calc, 12)), not after; not changed here (raise with the engineer).
 
-## 2026-11-07 — PR: claude/cbc-aashto-ldc-lambda (CBH3: AASHTO compression development length divided by λ per Eq. 5.10.8.2.2a-1; CALCULATION CHANGE, Development & Splice tab, AASHTO mode, lightweight concrete only; less conservative before)
+## 2026-11-07 — PR: claude/cbc-aashto-ldc-lambda, PR #972: https://github.com/mlococo88/All-Structural/pull/972 (CBH3: AASHTO compression development length divided by λ per Eq. 5.10.8.2.2a-1; CALCULATION CHANGE, Development & Splice tab, AASHTO mode, lightweight concrete only; less conservative before)
 
 Frame: Development & Splice (`suite-frame-dev`). Found in the in-depth review of 2026-11-07 (item H3); it was listed in the tool as an open item.
 
