@@ -4990,7 +4990,7 @@ Frame: Beam Capacity (`suite-frame-capacity`). Found in the in-depth review of 2
 - **Saved data:** no key or format change.
 - **Open items:** none (the flange-in-tension b_w of 9.6.1.2 is M4, a separate change).
 
-## 2026-11-07 — PR: claude/cbc-aci-asmin-flange (CBM4: ACI A_s,min of a T-section with the flange in tension uses b_w = min(b_f, 2b_w) for a statically determinate beam, per 9.6.1.2; new input "Beam (for A_s,min, flange in tension)", default statically determinate; CALCULATION CHANGE, Beam Capacity tab, ACI, T-section in negative bending only; less conservative before)
+## 2026-11-07 — PR: claude/cbc-aci-asmin-flange, PR #979: https://github.com/mlococo88/All-Structural/pull/979 (CBM4: ACI A_s,min of a T-section with the flange in tension uses b_w = min(b_f, 2b_w) for a statically determinate beam, per 9.6.1.2; new input "Beam (for A_s,min, flange in tension)", default statically determinate; CALCULATION CHANGE, Beam Capacity tab, ACI, T-section in negative bending only; less conservative before)
 
 Frame: Beam Capacity (`suite-frame-capacity`). Found in the in-depth review of 2026-11-07 (item M4).
 
