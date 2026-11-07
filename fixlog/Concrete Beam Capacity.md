@@ -5016,3 +5016,35 @@ Frame: Beam Capacity (`suite-frame-capacity`). Found in the in-depth review of 2
 - **How verified:** headless main vs branch with the review probe cases plus the three tee cases: only `aciTeeCant` moved; all other cases identical. Full dump of the default project identical. Screenshot of the Section Geometry input and the Detailing card looked at. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar` (save round trip with the new field), `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
 - **Saved data:** one new field `sec.asminSupport` (additive; old saves read with the default, see the decision). No key change.
 - **Open items:** none.
+
+## 2026-11-07 — PR: claude/cbc-aashto-min-every-combo (CBM1: AASHTO 5.6.3.3 minimum reinforcement checked for every combination, each in its own sense of bending, and enveloped; CALCULATION CHANGE (pass/fail logic), Beam Capacity tab, AASHTO mode; less conservative before)
+
+Frame: Beam Capacity (`suite-frame-capacity`) and the suite shell's Report summary. Found in the in-depth review of 2026-11-07 (item M1).
+
+### CBM1. 5.6.3.3 for every combination   [CALCULATION CHANGE: check logic]
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 5.6.3.3: at any section of a flexural component the factored resistance M_r is at least the lesser of M_cr (Eq. 5.6.3.3-1, γ_3(γ_1 f_r)S_c, γ_1 = 1.6, γ_3 by bar specification) and 1.33 M_u for the strength combinations. The requirement applies in each sense of bending (top steel under negative moment as well). Formula unchanged; only which combinations are checked changes.
+- **Before:** `allChecks()`, anchor `/* serviceability: min reinforcement */`:
+  ```js
+  if(S.code==='AASHTO'){
+    const need=Math.min((S.mat.gamma3||0.67)*1.6*g.svc.Mcr,Math.abs(g.Mu)>0?1.33*Math.abs(g.Mu):Infinity);
+    out.push({label:"Minimum reinforcement","ref":"AASHTO 5.6.3.3",
+      dcr:g.phiMn>0?need/g.phiMn:null,combo:g.name,na:false,tab:"tabServ",ci:g.ci});
+  }
+  ```
+  with `g=CC.govRow` (the overall governing combination only).
+- **After:**
+  - New `cbcMin5633(svc,Mu,phiMn)` (before `function computeAll(){`): returns {g1, g3, McrF = g3·g1·M_cr, M133 = 1.33|M_u| (Infinity when M_u = 0, as before), need = min(McrF, M133), dcr = need/φM_n (Infinity when φM_n = 0), ok}.
+  - `computeAll()` row: `const mr=(S.code==='AASHTO')?cbcMin5633(svc,c.Mu,phiMn):null;`, returned as `mr` (svc = `servicecalc(F,neg)`, so M_cr uses y_t to the tension face of that combination's sense).
+  - `allChecks()`: `env("Minimum reinforcement","AASHTO 5.6.3.3",r=>r.mr?{dcr:r.mr.dcr,na:false}:{na:true},"tabServ");` (the largest ratio over every combination).
+  - Edge: φM_n = 0 now gives D/C ∞ (FAIL) instead of a null ratio.
+- **Display:**
+  - Serviceability tab: new card "Minimum Reinforcement — Every Combination" (`svcMinAll`, AASHTO only): a table (combination, sense, y_t, M_cr (γ), 1.33|M_u|, required, φM_n, D/C, status) and, per combination, the worked lines M_cr = γ_3(γ_1 f_r) I_g/y_t, min(M_cr, 1.33M_u), φM_n vs required with D/C, and a "Worked in: φM_n → Flexure · Combination i" link. The existing card stays (governing combination) and its PASS/FAIL line now names that combination and points to the new card.
+  - `cbcCheckCard`: the Summary's Minimum reinforcement row links to `svcMinAll` in AASHTO mode.
+  - Report: new subsection "Minimum reinforcement, every combination (AASHTO 5.6.3.3)" (scope `svm`, steps `McrF<ci>`, `need<ci>`, `minr<ci>`) with a note linking each combination's φM_n ([[fx<ci>/phiMn]]). The chapter Summary key and the suite shell's Report summary key (`Concrete Beam Capacity.html` shell, anchor `else if(c.tab==='tabServ') ks=`) now point to `svm/minr<ci>` of the governing combination (shell falls back to `sv/minr`).
+- **Check case `aasMinNeg45`:** AASHTO, 14 × 30 in, f′c 5 ksi, f_y 60 ksi, γ_3 0.67; bottom 4 #9, top 2 #4; S1 M_u +450, S2 M_u −45 k-ft.
+  - f_r = 0.24√5 = 0.537 ksi; I_g = 31,500 in⁴; y_t = 15 in; M_cr = 0.537 · 31,500/15/12 = 93.9 k-ft; γ_3γ_1M_cr = 0.67 · 1.6 · 93.9 = 100.7 k-ft.
+  - S2: min(100.7, 1.33 · 45 = 59.85) = 59.85 k-ft; φM_n⁻ = 58.27 k-ft → D/C 1.027 **FAIL**.
+  - **Summary: before 0.219 PASS (S1 only) → after 1.03 FAIL (S2).** Same section with S2 = −40 k-ft: 0.219 → 0.913 (S2), PASS.
+- **How verified:** headless main vs branch, review probe cases: only `aasMinNeg` and `aasMinNeg45` moved (values above); default, aciD, aasT, aciFy100, aciDeep, aa100, the tee cases and every Dev case identical. Full dumps: default project identical apart from the new null `mr` field; `aa100` values identical, only the new card/subsection and link targets differ. Screenshot of the Serviceability tab looked at; Report summary link checked (§7.2). `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
+- **Saved data:** no key or format change.
+- **Open items:** CBAR-1 (A_s,req passed to Development & Splice) still takes the 5.6.3.3 minimum of the flexure-governing combination; unchanged.
