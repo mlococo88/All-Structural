@@ -4955,9 +4955,13 @@ function memberDesignAll(A){
   D.j10=null;
   if((p._kind==='I'||p._kind==='C')&&S.member.j10.lb>0){
     const end=S.member.j10.loc==='end';
-    const endDist=end?0:1e6;
-    D.j10={locs:[{kind:'user',label:'concentrated force ('+S.member.j10.loc+')',x:null,lb:S.member.j10.lb,endDist,
-      wly:j10WLY(p,S.member.j10.lb,end?0:1e6),wlc:j10WLC(p,S.member.j10.lb,end?0:1e6)}],
+    /* L7 (2026-11-07): an entered distance from the member end (new field member.j10.dist, in) sets the end criteria of
+       J10.2 (<= d -> Eq. J10-3) and J10.3 (< d/2 -> Eq. J10-5) separately, so a force between d/2 and d uses J10-3 for
+       yielding and J10-4 for crippling. Blank: as before ('end' = 0, 'interior' = far from the end). */
+    const dIn=S.member.j10.dist,hasD=dIn!=null&&dIn!==''&&isFinite(dIn)&&+dIn>=0;
+    const endDist=hasD?+dIn:(end?0:1e6);
+    D.j10={locs:[{kind:'user',label:'concentrated force ('+(hasD?fmt(+dIn,2)+' in from the end':S.member.j10.loc)+')',x:null,lb:S.member.j10.lb,endDist,
+      wly:j10WLY(p,S.member.j10.lb,endDist),wlc:j10WLC(p,S.member.j10.lb,endDist)}],
       lbSup:S.member.j10.lb,lbPt:S.member.j10.lb};
   }
   rows.forEach(r=>{
@@ -6517,6 +6521,9 @@ function secJ10(P){
       fRow(body,'Bearing length  l\u1D47',numInput(()=>S.member.j10.lb,v=>{S.member.j10.lb=v;},0.5,'memJlb'),'in');
       fRow(body,'Location',selInput(['interior','end'],()=>S.member.j10.loc,v=>{S.member.j10.loc=v;},
         o=>o==='interior'?'Interior (away from member end)':'At or near member end',null,'memJloc'),'');
+      /* L7: optional distance from the member end */
+      fRow(body,'Distance from member end',numInput(()=>S.member.j10.dist,v=>{S.member.j10.dist=v;},0.5,'memJdist'),'in',
+        'Optional. Sets the J10.2 (\u2264 d) and J10.3 (< d/2) end criteria separately; blank uses Location');
     }else{
       fRow(body,'Bearing length at supports',numInput(()=>S.design.lbSup,v=>{S.design.lbSup=v;},0.5,'lbSup'),'in');
       fRow(body,'Bearing length at point loads',numInput(()=>S.design.lbPt,v=>{S.design.lbPt=v;},0.5,'lbPt'),'in');
