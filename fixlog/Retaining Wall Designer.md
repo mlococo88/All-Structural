@@ -4055,7 +4055,7 @@ Review Phase 8 (pile-supported footing), PR 8b. Engineer decisions 2026-11-07 (r
 +const rwdwSupport = r => (r && r.inp && r.inp.fnd && r.inp.fnd.type === 'pile') ? RWDW_SUPPORT.piles : RWDW_SUPPORT.soil;   // RWPL: the foundation type of the model
 ```
 
-## 2026-11-07 — PR: claude/rw-pile-8c-analysis — Pile-supported footing, Phase 8c: rigid-cap pile reactions per combination, pile compression / uplift / lateral and detailing checks; soil bearing, sliding and overturning replaced in pile mode (RWPL; calculation change in pile mode only)
+## 2026-11-07 — PR: claude/rw-pile-8c-analysis — Pile-supported footing, Phase 8c: rigid-cap pile reactions per combination, pile compression / uplift / lateral and detailing checks; soil bearing, sliding and overturning replaced in pile mode (RWPL; calculation change in pile mode only) (PR #958: https://github.com/mlococo88/All-Structural/pull/958)
 
 Review Phase 8, PR 8c. Engineer decisions 2026-11-07 (review Q11–Q15, taken as recommended) and the decisions listed under Open items. Code sites are tagged `RWPL`. Spread-footing results are unchanged.
 
