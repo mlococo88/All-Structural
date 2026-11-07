@@ -20101,7 +20101,7 @@ Cross-tool PR with the Retaining Wall Designer (Phase 8f, HANDOFF.md §4.6 / §4
 ### Open items
 - The per-pile check message and the "Pull from Abutment / SubLoads" label still name the abutment; wording only.
 
-## 2026-11-07 — PR: claude/pile-low-fixes (PDA-L1 to L6) — review low items: outer-0.85 note, Report table numbers, tension D/C, stale comment, ENGINEER_CHECKS, pile self-weight in the bond demand   [L6 and L3: result change; the rest display / text]
+## 2026-11-07 — PR: claude/pile-low-fixes (PR #1041: https://github.com/mlococo88/All-Structural/pull/1041) (PDA-L1 to L6) — review low items: outer-0.85 note, Report table numbers, tension D/C, stale comment, ENGINEER_CHECKS, pile self-weight in the bond demand   [L6 and L3: result change; the rest display / text]
 - **L1 (text; closes open item O1):**
   - Problem: the note "outer 0.85 factor and f_y = min(f_yc, f_yb) … conservative deviation from AASHTO 10.9.3.10.2 / FHWA Eq. 5-13; neither has the outer 0.85" was wrong.
   - Provision: 10th Ed. Eqs. 10.9.3.10.2a-2 and 2b-2 contain the outer 0.85. Since PDA-D9, f_y = min(f_yb, f_yc, 0.003E) for the cased length and min(f_yb, 0.003E) for the uncased length.
