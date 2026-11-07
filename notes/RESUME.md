@@ -182,3 +182,9 @@ Rules: conservative choices, §4 callouts, "Decision (pending engineer review)",
 Running at start: RW audit finish (RWCV, uplift §5.3.9, item 10), RW summary panel left, RW piles (8a–8f). Then: RW manual (Phase 6) last.
 Plan: rotating in-depth code-compliance reviews (read-only) → fix PRs for clear bugs (conservative) → judgment list for the morning.
 - 11-07 07:10 UTC check-in: reviews done (scratchpad/reviews/): spread-footing, baseplate, concrete-beam, light-pole, pile-designer, abutment. Fixes: BP all merged #962–#978; RW audit done #942–#963, #980; RW piles #955 #957 #958 #961 #966 (8f/schedule/3D/8h + shared H2 running); RW summary left ≥1200 #959 + RWLB; SF/CBC/LP/Pile/Abutment fix agents running. Steel Beam review started. Next reviews: Timber, Gusset, Stone Arch, SecProp, ASCE7, MLG, EDM, SubLoads, SMD, BGeo. Then RW manual.
+
+## Check-in 2026-11-07 08:38 UTC (3:38 AM ET)
+- Merged since last: CBC torsion set #1032/#1042/#1048/#1055/#1059 (done); ASCE7 H1 #1061, H2 #1066; Stone Arch mesh convergence #1064; Gusset #1026–#1063; Steel Beam #1017–#1065; SF #1020–#1054; LP #1018–#1060.
+- Reviews done: section-property (H1 channel/S flange slope I_y +15–34%), moving-load (H1 axle-on-section, +M up to 0.8% low). Fix agents dispatched for both.
+- Running: fixes SF, LP, Steel Beam, Gusset, ASCE7, Stone Arch, Section Property, Moving Load; review Elastomeric.
+- Next reviews: Substructure Loading, Shear & Moment, Bridge Geometry. Then RW User Manual (Phase 6).
