@@ -15658,7 +15658,7 @@ index ce6e74c..92a3437 100644
 +        q.EQtSrc==="analysis"? `EQ_{sup,t} = ${fmtT(q.EQtSup)}\\ \\text{kip at the seat (entered from the seismic analysis, panel I-11)}` : `EQ_{sup,t} = A_s(\\Sigma P_{DC} + \\Sigma P_{DW}${q.Wdia>0?" + W_{dia}":""})s_{EQ,t} = (${fmtT(+S.seismic.As,3)})(${fmtT(R.agg.DC.P)} + ${fmtT(R.groups.DW.V)}${q.Wdia>0?` + ${fmtT(q.Wdia)}`:""})(${fmtT(q.shEQt,2)}) = ${fmtT(q.EQtSup)}\\ \\text{kip at the seat}`,
 ```
 
-## 2026-11-07 — PR: claude/abut-m4-wingstrip (ABM4: attached-wing junction — the default method takes, per limit state, the larger of the total moment over H₀ and the most loaded strip; a new option keeps the averaged moment at strength with crack control on the strip)   [calc change] [MORE conservative]
+## 2026-11-07 — PR: claude/abut-m4-wingstrip (PR #1013: https://github.com/mlococo88/All-Structural/pull/1013) (ABM4: attached-wing junction — the default method takes, per limit state, the larger of the total moment over H₀ and the most loaded strip; a new option keeps the averaged moment at strength with crack control on the strip)   [calc change] [MORE conservative]
 
 Source: code-compliance review of 2026-11-07, item M4 (fix log WING open item 1).
 
