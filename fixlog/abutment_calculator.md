@@ -16382,3 +16382,25 @@ index 2547b26..432d945 100644
 ```
 
 - **Note added after merging main (PDA-M7, #1050):** `Pull pile results` now imports R_n already times Pile Designer's group reduction. The ABM7 η text says to enter η = 1.0 in that case, so the reduction is not applied twice. Text only (anchor `η = 1.0 when R_n already carries Pile Designer's group reduction`).
+
+## 2026-11-07 — PR: claude/abut-pad-gmult (PR #1113: https://github.com/mlococo88/All-Structural/pull/1113) (EGM: the elastomeric module's low-temperature multiplier `Gmult` applied to the TU and CR·SH pad forces; cross-tool with `elastomeric_design_module.html`)   [calc change: new input, default ×1 = no change] [MORE conservative with ×2 / ×4]
+
+Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.6.3.1 (pad shear force H = G·A·Δ/h_rt), Art. 14.7.5.2 and Table 14.7.5.2-1 (low-temperature design option: special force provisions, ×2 with a low-friction slider, ×4 without).
+
+- **Problem:** since PR #1095 the module sends `PAD.Gmult` (1, 2 or 4) and multiplies its H_bu, but the abutment ignored it, so its TU and CR·SH pad forces stayed at the 14.6.3.1 force (unconservative by ×2 or ×4 when the option is chosen). The multiplier cannot ride in G (the abutment refuses G > 0.30 ksi).
+- **State:** new `S.bearing.Gmult` (default 1 in `defaultState()`; `migrate()`: `if(S.bearing.Gmult===undefined)S.bearing.Gmult=1;`, and in the `if(!S.bearing)` default object). Input ID: `dropDef(fpS.bearing,T.bearing,["Gmult"]);` (×1 leaves the Input ID unchanged). New helper before `function eqZr(){`:
+  `function bearingMLT(){ const m=+(S.bearing&&S.bearing.Gmult); return [1,2,4].includes(m)? m : 1; }`
+- **computeLongitudinal** (anchor `const fPer=G*A*delta/hrt, total=fPer*nb;`, two places, TU and CR·SH):
+  - Before: `const fPer=G*A*delta/hrt, total=fPer*nb;`
+  - After: `const mLT=bearingMLT();` (after `G=+brg.G||0;`) and `const fPer=mLT*G*A*delta/hrt, total=fPer*nb;` in both blocks.
+- **PAD receiver** (`window.addEventListener("message"`, anchor `if(p.G) S.bearing.G=+p.G;`): `const gmIn=(p.Gmult==null)? 1 : +p.Gmult; S.bearing.Gmult=[1,2,4].includes(gmIn)? gmIn : 1;` and a status note (`gmNote`). A PAD without `Gmult` (older module) sets ×1.
+- **Input:** panel I-6b, "Elastomeric pad shear parameters": select `bearing.Gmult` "Low-temperature force multiplier m_LT [14.7.5.2]" (×1 / ×2 / ×4) and a note.
+- **Worked steps (Tab 1 §1.7 TU, §1.8 CR·SH; the Report takes them from the tab):** with m_LT ≠ 1 the variables table gains m_LT, the equation reads `H = m_{LT}·G·A·Δ/h_rt·N` with the value substituted, the reference adds 14.7.5.2 and the pad note names the design option. With m_LT = 1 the steps are as before. Report input echo "Bearings & seat": a row "Low-temperature force multiplier m_LT … (worked in §1.7 / §1.8)" when m_LT > 1.
+- **Check case** (default abutment, TU and CR·SH on; pad from the default module: G = 0.1495 ksi, h_rt = 3.50 in, A = 18 × 24 = 432 in², N = 6, Δ_TU = 0.21216 in, Δ_CR·SH = 0.0960 in):
+  - ×1: F_TU = 0.1495·432·0.21216/3.50 = 3.915 kip/bearing, H_TU = 23.49 kip; F_CR·SH = 1.771, H_CR·SH = 10.63 kip (before and after).
+  - ×2: before 23.49 / 10.63 kip (multiplier ignored); after H_TU = 2·3.915·6 = **46.98 kip**, H_CR·SH = **21.26 kip**.
+  - ×4: after **93.96 / 42.51 kip**.
+- **Decision (pending engineer review):** m_LT also multiplies the CR·SH pad force (the module's 14.7.5.2 note asked for both TU and CR·SH); it is an abutment input as well (so it is seen, saved and can be reset); a `Gmult` other than 1, 2 or 4 is taken as 1 with a status note; the abutment does not send m_LT back in INIT (the module keeps its own option).
+- **How verified:** check-syntax; tests/engine/run.mjs handoffs; project-library abutment and edm (results identical to main on load, after an input change and on main's saves); abutment-pile-group-parity 14/14 identical; headless round trip abutment → module (×1, ×2, ×4, ×1) → abutment, plus a PAD without `Gmult`: forces as in the check case, Report model shows m_LT in §1.7 / §1.8 and the echo, 0 KaTeX errors, 0 console errors, no alerts.
+- **Saved data:** additive field `bearing.Gmult` (older projects get 1, the force as before). HANDOFF.md §4.13 updated.
+- **Other copies:** none. Sender side: `fixlog/elastomeric_design_module.md` (same PR).

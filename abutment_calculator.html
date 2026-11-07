@@ -731,7 +731,8 @@ function defaultState(){
     },
     joint:{ prep:"roughened" },       // stem-footing construction joint: 'monolithic'|'roughened'|'smooth' [5.7.4.4]
     bearing:{ padL:18.0, padW:24.0, seatBar:"5", seatSp:6.0, // bearing pad plan L(long)×W(trans) in; provided seat mat
-      G:0.130, hrt:2.0, nBrgPerGird:1 }, // elastomer shear modulus (ksi), total shear-elastomer thickness (in), bearings per girder line
+      G:0.130, hrt:2.0, nBrgPerGird:1, Gmult:1 }, // elastomer shear modulus (ksi), total shear-elastomer thickness (in), bearings per girder line;
+                                       // EGM (2026-11-07): Gmult = low-temperature force multiplier on the pad shear force (1, 2 or 4, AASHTO LRFD 10th Ed. 14.7.5.2; from the EDM PAD)
     longit:{                           // calculated longitudinal loads (BR / TU / CR·SH); all toggles default OFF (self-test invariance)
       computeBR:false, computeTU:false, computeCRSH:false,
       material:"steel", climate:"moderate",   // → CTE + Procedure A temperature range
@@ -1670,10 +1671,11 @@ function migrate(){
   if(p.pileSize===undefined) p.pileSize=12.0;
   if(p.pileShape===undefined) p.pileShape="hp";
   if(!S.joint) S.joint={prep:"roughened"};
-  if(!S.bearing) S.bearing={padL:18.0,padW:24.0,seatBar:"5",seatSp:6.0,G:0.130,hrt:2.0,nBrgPerGird:1};
+  if(!S.bearing) S.bearing={padL:18.0,padW:24.0,seatBar:"5",seatSp:6.0,G:0.130,hrt:2.0,nBrgPerGird:1,Gmult:1};
   else{ if(S.bearing.padL===undefined)S.bearing.padL=18.0; if(S.bearing.padW===undefined)S.bearing.padW=24.0;
         if(S.bearing.seatBar===undefined)S.bearing.seatBar="5"; if(S.bearing.seatSp===undefined)S.bearing.seatSp=6.0;
-        if(S.bearing.G===undefined)S.bearing.G=0.130; if(S.bearing.hrt===undefined)S.bearing.hrt=2.0; if(S.bearing.nBrgPerGird===undefined)S.bearing.nBrgPerGird=1; }
+        if(S.bearing.G===undefined)S.bearing.G=0.130; if(S.bearing.hrt===undefined)S.bearing.hrt=2.0; if(S.bearing.nBrgPerGird===undefined)S.bearing.nBrgPerGird=1;
+        if(S.bearing.Gmult===undefined)S.bearing.Gmult=1; }   // EGM: older projects / JSON have no multiplier (×1 = the force as before)
   if(!S.longit) S.longit={computeBR:false,computeTU:false,computeCRSH:false,material:"steel",climate:"moderate",
       cte:6.5e-6,dTrise:52.0,dTfall:68.0,Lexp:(+S.geom.spanL||80)/2,epsCRSH:0.0002,brLoadedLen:(+S.geom.spanL||80),roadwayW:40.0};
   else ["computeBR","computeTU","computeCRSH","material","climate","cte","dTrise","dTfall","Lexp","epsCRSH","brLoadedLen","roadwayW"].forEach(k=>{
@@ -2231,6 +2233,8 @@ function buildInputs(){
       <div class="subhead">Elastomeric pad shear parameters [14.6.3.1]</div>
       ${inpRow("Shear modulus G","bearing.G","ksi",{title:"AASHTO 14.7.6.2 — 50-durometer nominal ≈0.095–0.200 ksi. Use the low-temperature value for cold-climate thermal force."})}
       ${inpRow("Total elastomer thickness h<sub>rt</sub>","bearing.hrt","in",{title:"Σ of the interior elastomer layer thicknesses subject to shear."})}
+      ${selRow("Low-temperature force multiplier m<sub>LT</sub> [14.7.5.2]","bearing.Gmult",[["1","× 1 (force per 14.6.3.1)"],["2","× 2 (special force provisions, low-friction slider)"],["4","× 4 (special force provisions, no slider)"]])}
+      <div class="in-note">m<sub>LT</sub> multiplies the TU and CR·SH pad shear forces (Table 14.7.5.2-1 design option of the Elastomeric Bearing Design module; set by "Send Pad to Abutment").</div>
       <div class="in-note">Bearings per girder line n = ${fmt(+S.bearing.nBrgPerGird,0)} (panel I-10).</div>
       <div class="in-note">Pad plan area A = padL × padW = ${fmt(S.bearing.padL)} × ${fmt(S.bearing.padW)} in (from panel I-10).</div>
     `:""}
@@ -2625,16 +2629,19 @@ function computeLongitudinal(agg){
     Object.assign(br,{L,Wlane,branchA,branchB,perLane,govBranch,nLanes,mpf,total});
     if(Lg.computeBR){ agg.BR.Vx=total*csk; agg.BR.Vy=total*snk; } }
   const A=(+brg.padL||0)*(+brg.padW||0), nb=N*(+brg.nBrgPerGird||1), hrt=Math.max(1e-9,+brg.hrt||0), G=+brg.G||0;
+  // EGM (2026-11-07): low-temperature design option [14.7.5.2, Table 14.7.5.2-1]: the pad shear force is m_LT × G·A·Δ/h_rt (m_LT = 1, 2 or 4,
+  // sent by the elastomeric module as PAD.Gmult; 1 when absent, i.e. the force as before)
+  const mLT=bearingMLT();
   const Lexp_in=(+Lg.Lexp||0)*12;
   // ---- Uniform temperature TU [3.12.2] via pad shear [14.6.3.1] ----
   { const dT=Math.max(+Lg.dTrise||0,+Lg.dTfall||0);
     const delta=(+Lg.cte||0)*dT*Lexp_in;              // movement Δ = α·ΔT·L (in)
-    const fPer=G*A*delta/hrt, total=fPer*nb;          // F = G·A·Δ/h_rt per bearing, ×N bearings
+    const fPer=mLT*G*A*delta/hrt, total=fPer*nb;      // F = m_LT·G·A·Δ/h_rt per bearing, ×N bearings (EGM: m_LT, was G·A·Δ/h_rt)
     Object.assign(tu,{dT,delta,A,nb,fPer,total});
     if(Lg.computeTU){ agg.TU.Vx=total*csk; agg.TU.Vy=total*snk; } }
   // ---- Creep + shrinkage CR·SH via same pad relation ----
   { const delta=(+Lg.epsCRSH||0)*Lexp_in;             // Δ = ε·L (in)
-    const fPer=G*A*delta/hrt, total=fPer*nb;
+    const fPer=mLT*G*A*delta/hrt, total=fPer*nb;      // EGM: m_LT as for TU (the module's 14.7.5.2 force); was G·A·Δ/h_rt
     Object.assign(crsh,{delta,A,nb,fPer,total});
     if(Lg.computeCRSH){ agg.CRSH.Vx=total*csk; agg.CRSH.Vy=total*snk; } }
   return {on:{BR:!!Lg.computeBR,TU:!!Lg.computeTU,CRSH:!!Lg.computeCRSH}, br, tu, crsh, skew:skD, csk, snk};
@@ -2646,6 +2653,8 @@ function computeLongitudinal(agg){
    eqNC(fB): the two cases of 11.6.5.1 with P_AE and the wall inertia P_IR not concurrent — A: P_AE + 0.5·P_IR; B: max(0.5·P_AE, P_A) + P_IR —
    as factors f_P on the increment over the active static pressure and f_I on the wall / soil inertia; one case (1, 1) when turned off.
    eqFB(dK,kA): f_P of case B from the coefficients: max(0, ½(ΔK + K_A) − K_A)/ΔK. */
+/* EGM (2026-11-07): low-temperature force multiplier m_LT on the pad shear force [AASHTO LRFD 10th Ed. 14.7.5.2, Table 14.7.5.2-1]: 1, 2 or 4 (any other value: 1) */
+function bearingMLT(){ const m=+(S.bearing&&S.bearing.Gmult); return [1,2,4].includes(m)? m : 1; }
 function eqZr(){ return S.seismic.hEQmode==="ratio"? (+S.seismic.hEQr||0) : 1/3; }
 function eqNC(fB){ return S.seismic.nonConc===false? [{c:"", fP:1, fI:1}] : [{c:"A", fP:1, fI:0.5},{c:"B", fP:Math.max(0,fB||0), fI:1}]; }
 function eqFB(dK,kA){ return dK>1e-12? Math.max(0,0.5*(dK+kA)-kA)/dK : 0; }
@@ -5130,6 +5139,7 @@ function computeAll(){
     { const T=defaultState(), dropDef=(o,t,keys)=>{ if(o) keys.forEach(k=>{ if(JSON.stringify(o[k])===JSON.stringify(t[k])) delete o[k]; }); };   // ABCHK: new inputs at their default
       dropDef(fpS.mat,T.mat,["coverExp","coverCat","coverWcm","rebar"]); dropDef(fpS.fnd,T.fnd,["qnMode","qnC","qnPhi","qnGam","qnDw","qnIncl","qnDepth","SuSl","settleRef","globalRef"]);
       dropDef(fpS.piles,T.piles,["etaG","strSec","Fy","drive","pipeT","PrUser","orient","headFix","MuPy","fixSoil","Su","DfUser","Lu","nhUser","DfMode"]); dropDef(fpS.reinf,T.reinf,["dwlEnd","dwlLap","dwlPct","stemH","bwH","ftgL"]); ["stemH","bwH","ftgL"].forEach(k=>{ if(fpS.reinf&&fpS.reinf[k]&&String(fpS.reinf[k].size)==="0") delete fpS.reinf[k]; });   // ABM8
+      dropDef(fpS.bearing,T.bearing,["Gmult"]);   // EGM: m_LT = 1 leaves the Input ID unchanged
       dropDef(fpS.seismic,T.seismic,["siteClass","bwStop","bwW","Wseg","EQsupL","EQsupT","SD1"]); if(fpS.seismic) delete fpS.seismic.khRAuto; if(fpS.bwLL&&fpS.bwLL.mode==="wheel") delete fpS.bwLL;   // ABM2: khRAuto left out (the k_h ratio itself is in the Input ID)
       if(fpS.iab) dropDef(fpS.iab,iabDefault(),["KpE","Rn","phiC","RnUp","phiUp","MuPy2"]); }   // PXR2: MuPy2   // ABR1: new inputs at their default
     const s=JSON.stringify(fpS);
@@ -6352,18 +6362,19 @@ function renderTabLoads(R){
     `);
   }
   if(LG&&(LG.on.TU||LG.on.CRSH)){
-    const padNote=`Pad shear stiffness uses A = padL·padW = ${fmt(S.bearing.padL)}·${fmt(S.bearing.padW)} = ${fmt((+S.bearing.padL)*(+S.bearing.padW),0)} in², G = ${fmt(S.bearing.G,3)} ksi, h_{rt} = ${fmt(S.bearing.hrt)} in, over N = ${fmt(LG.tu&&LG.tu.nb||LG.crsh.nb,0)} bearings (${S.beams.N} girders × ${S.bearing.nBrgPerGird}).`;
+    const mLT=bearingMLT(), mT=mLT!==1;   // EGM: low-temperature multiplier [14.7.5.2] shown when it is not 1 (×1: the step as before)
+    const padNote=`Pad shear stiffness uses A = padL·padW = ${fmt(S.bearing.padL)}·${fmt(S.bearing.padW)} = ${fmt((+S.bearing.padL)*(+S.bearing.padW),0)} in², G = ${fmt(S.bearing.G,3)} ksi, h_{rt} = ${fmt(S.bearing.hrt)} in, over N = ${fmt(LG.tu&&LG.tu.nb||LG.crsh.nb,0)} bearings (${S.beams.N} girders × ${S.bearing.nBrgPerGird}).`+(mT?` Low-temperature design option [14.7.5.2, Table 14.7.5.2-1]: m<sub>LT</sub> = ${fmt(mLT,0)} × the 14.6.3.1 force (panel I-6b; from the Elastomeric Bearing Design module).`:"");
     if(LG.on.TU){ const t=LG.tu;
       h+=panel("o-longit-tu","1.7","Uniform Temperature (TU) [3.12.2] — elastomeric pad shear [14.6.3.1]",`
         ${varsTbl([["\\alpha","Coeff. thermal expansion",S.longit.cte,"/°F",7],["\\Delta T","Design range (max of rise/fall)",t.dT,"°F",0],
           ["L_{exp}","Expansion length to this abutment",S.longit.Lexp,"ft"],["G","Elastomer shear modulus",S.bearing.G,"ksi",3],
-          ["A","Pad plan area",t.A,"in²",0],["h_{rt}","Total elastomer thickness",S.bearing.hrt,"in"],["N","Bearings",t.nb,"–",0]])}
+          ["A","Pad plan area",t.A,"in²",0],["h_{rt}","Total elastomer thickness",S.bearing.hrt,"in"],["N","Bearings",t.nb,"–",0]].concat(mT?[["m_{LT}","Low-temperature force multiplier [14.7.5.2]",mLT,"–",0]]:[]))}
         ${eqB("Thermal movement at the bearing","AASHTO 3.12.2",[
           "\\Delta = \\alpha\\,\\Delta T\\,L_{exp}",
           `\\Delta = (${fmtT(S.longit.cte,7)})(${fmtT(t.dT,0)})(${fmtT(S.longit.Lexp)}\\cdot12) = ${fmtT(t.delta,4)}\\ \\text{in}`])}
-        ${eqB("Longitudinal force from pad shear (summed over all bearings)","AASHTO 14.6.3.1",[
-          "H_{TU} = \\dfrac{G\\,A\\,\\Delta}{h_{rt}}\\,N",
-          `H_{TU} = \\dfrac{(${fmtT(S.bearing.G,3)})(${fmtT(t.A,0)})(${fmtT(t.delta,4)})}{${fmtT(S.bearing.hrt)}}(${fmtT(t.nb,0)}) = ${fmtT(t.total)}\\ \\text{kip}`],
+        ${eqB("Longitudinal force from pad shear (summed over all bearings)","AASHTO 14.6.3.1"+(mT?", 14.7.5.2":""),[
+          mT?"H_{TU} = m_{LT}\\,\\dfrac{G\\,A\\,\\Delta}{h_{rt}}\\,N":"H_{TU} = \\dfrac{G\\,A\\,\\Delta}{h_{rt}}\\,N",
+          `H_{TU} = ${mT?fmtT(mLT,0)+"\\cdot":""}\\dfrac{(${fmtT(S.bearing.G,3)})(${fmtT(t.A,0)})(${fmtT(t.delta,4)})}{${fmtT(S.bearing.hrt)}}(${fmtT(t.nb,0)}) = ${fmtT(t.total)}\\ \\text{kip}`],
           `${padNote} Self-determined by this abutment's pads → longitudinal share forced to 100%. Applied at the bearing seat, adverse (driving) direction.`)}
         ${skB(t.total,"TU")}
       `);
@@ -6371,13 +6382,13 @@ function renderTabLoads(R){
     if(LG.on.CRSH){ const c=LG.crsh;
       h+=panel("o-longit-crsh","1.8","Creep &amp; Shrinkage (CR·SH) — elastomeric pad shear [14.6.3.1]",`
         ${varsTbl([["\\varepsilon","Combined creep+shrinkage strain",S.longit.epsCRSH,"in/in",6],["L_{exp}","Expansion length",S.longit.Lexp,"ft"],
-          ["G","Elastomer shear modulus",S.bearing.G,"ksi",3],["A","Pad plan area",c.A,"in²",0],["h_{rt}","Total elastomer thickness",S.bearing.hrt,"in"],["N","Bearings",c.nb,"–",0]])}
+          ["G","Elastomer shear modulus",S.bearing.G,"ksi",3],["A","Pad plan area",c.A,"in²",0],["h_{rt}","Total elastomer thickness",S.bearing.hrt,"in"],["N","Bearings",c.nb,"–",0]].concat(mT?[["m_{LT}","Low-temperature force multiplier [14.7.5.2]",mLT,"–",0]]:[]))}
         ${eqB("Creep + shrinkage movement","AASHTO 5.4.2.3",[
           "\\Delta = \\varepsilon_{cr+sh}\\,L_{exp}",
           `\\Delta = (${fmtT(S.longit.epsCRSH,6)})(${fmtT(S.longit.Lexp)}\\cdot12) = ${fmtT(c.delta,4)}\\ \\text{in}`])}
-        ${eqB("Longitudinal force from pad shear","AASHTO 14.6.3.1",[
-          "H_{CR·SH} = \\dfrac{G\\,A\\,\\Delta}{h_{rt}}\\,N",
-          `H_{CR·SH} = \\dfrac{(${fmtT(S.bearing.G,3)})(${fmtT(c.A,0)})(${fmtT(c.delta,4)})}{${fmtT(S.bearing.hrt)}}(${fmtT(c.nb,0)}) = ${fmtT(c.total)}\\ \\text{kip}`],
+        ${eqB("Longitudinal force from pad shear","AASHTO 14.6.3.1"+(mT?", 14.7.5.2":""),[
+          mT?"H_{CR·SH} = m_{LT}\\,\\dfrac{G\\,A\\,\\Delta}{h_{rt}}\\,N":"H_{CR·SH} = \\dfrac{G\\,A\\,\\Delta}{h_{rt}}\\,N",
+          `H_{CR·SH} = ${mT?fmtT(mLT,0)+"\\cdot":""}\\dfrac{(${fmtT(S.bearing.G,3)})(${fmtT(c.A,0)})(${fmtT(c.delta,4)})}{${fmtT(S.bearing.hrt)}}(${fmtT(c.nb,0)}) = ${fmtT(c.total)}\\ \\text{kip}`],
           `${padNote} Longitudinal share forced to 100%. Carries the γ<sub>CR/SH</sub> load factor (default 0.50, panel I-8).`)}
         ${skB(c.total,"CR·SH")}
       `);
@@ -10463,6 +10474,9 @@ window.addEventListener("message",ev=>{
   if(d.type==="EDM_READY"){ try{ (ev.source||EDM_WIN).postMessage(edmPayload(),"*"); const nB=Math.max(1,Math.round(+S.bearing.nBrgPerGird||1)); document.getElementById("saveStatus").textContent="inputs handed off to EDM"+(nB>1?" (load per bearing = girder reaction / "+nB+")":""); }catch(e){} }
   if(d.type==="PAD"){ const p=d.payload||{};
     if(p.G) S.bearing.G=+p.G; if(p.hrt) S.bearing.hrt=+p.hrt;
+    // EGM (2026-11-07): PAD.Gmult = the module's low-temperature multiplier [14.7.5.2] (1, 2 or 4); a pad without it (older module) is × 1
+    const gmIn=(p.Gmult==null)? 1 : +p.Gmult; S.bearing.Gmult=[1,2,4].includes(gmIn)? gmIn : 1;
+    const gmNote=S.bearing.Gmult>1?` · low-temperature multiplier × ${S.bearing.Gmult} [14.7.5.2] applied to the TU and CR·SH pad forces`:(gmIn!==1?` · Gmult = ${esc(String(p.Gmult))} not 1, 2 or 4: × 1 used`:"");
     let circNote="";
     if(p.padL) S.bearing.padL=+p.padL; if(p.padW) S.bearing.padW=+p.padW;
     if(!p.padL && !p.padW && +p.D>0){   // circular pad: L = D along the span, W = A/D so that L·W = πD²/4 (equal area for the pad shear force and seat bearing)
@@ -10473,7 +10487,7 @@ window.addEventListener("message",ev=>{
     // bearings per girder: the EDM has no count input (its PAD message always carries 1), so the abutment keeps its own I-10 value
     const nbNote=(p.nBrgPerGird!=null&&+p.nBrgPerGird!==+S.bearing.nBrgPerGird)?` · bearings per girder kept at ${+S.bearing.nBrgPerGird} (abutment input; the module sends no count)`:"";
     buildInputs(); recalcAll(); scheduleSave();
-    document.getElementById("saveStatus").textContent="pad received from EDM — thermal/creep force updated"+(p.govDC?` (D/C ${(+p.govDC).toFixed(2)})`:"")+circNote+nbNote;
+    document.getElementById("saveStatus").textContent="pad received from EDM — thermal/creep force updated"+(p.govDC?` (D/C ${(+p.govDC).toFixed(2)})`:"")+circNote+nbNote+gmNote;
   }
 });
 
@@ -10573,6 +10587,7 @@ function inputEchoHTML(){
   if(!itg) h+="<h3>Bearings & seat</h3>"+echoRows([
     ["Bearing pad (L × W)",fmt(S.bearing.padL,1)+" × "+fmt(S.bearing.padW,1),"in"],
     ["Bearings per girder line",fmt(+S.bearing.nBrgPerGird,0),""],
+    ...(+S.bearing.Gmult>1?[["Low-temperature force multiplier m_LT on the pad shear force [14.7.5.2] (worked in §1.7 / §1.8)","× "+fmt(+S.bearing.Gmult,0),""]]:[]),   // EGM: listed when not 1
     ["Bearing-seat mat","#"+S.bearing.seatBar+" @ "+fmt(+S.bearing.seatSp,1)+" in each way",""]]);
   if(S.wing&&S.wing.on){ const w=S.wing, at=w.type!=="indep";   // WING
     h+="<h3>Wingwalls (panel I-13)</h3>"+echoRows([
