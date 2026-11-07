@@ -6554,7 +6554,7 @@ index 50f3837..c2d5000 100644
 - Default project, origin/main vs this branch, headless: the Report's rendered text (`.rp-doc` textContent) and the page text are identical.
 ### How verified
 - `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`; the headless comparison listed in the PR.
-## 2026-11-07 — PR: fix/sf-pm-exact-clip (PR #PRNUM: PRURL) (SFPX: pedestal P–M stress block clipped exactly; CALCULATION CHANGE, P–M capacities 0.5–7 % higher, ratios lower by the same, i.e. less conservative)
+## 2026-11-07 — PR: fix/sf-pm-exact-clip (PR #1159: https://github.com/mlococo88/All-Structural/pull/1159) (SFPX: pedestal P–M stress block clipped exactly; CALCULATION CHANGE, P–M capacities 0.5–7 % higher, ratios lower by the same, i.e. less conservative)
 ### Where
 - `pmContour` → inner `analyze(cDepth, angleRad)` (Phase 2 engine). Anchor text: `/* SFPX (2026-11-07)`.
 - Before (the concrete compression, summed in strips):
