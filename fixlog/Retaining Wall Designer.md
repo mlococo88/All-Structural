@@ -5697,7 +5697,7 @@ After:
 ### Saved data
 - No input or format change.
 
-## 2026-11-07 — PR: claude/rw2-h2-aci-dpe-hprime — Mononobe-Okabe P_AE and ΔP_E on the pressure-plane height H′ (sloped backfill), applied at 0.6H′, as the static thrust and AASHTO Extreme Event I (RW2H2; calculation change, k_h > 0 with β > 0 only)
+## 2026-11-07 — PR: claude/rw2-h2-aci-dpe-hprime — Mononobe-Okabe P_AE and ΔP_E on the pressure-plane height H′ (sloped backfill), applied at 0.6H′, as the static thrust and AASHTO Extreme Event I (RW2H2; calculation change, k_h > 0 with β > 0 only) (PR #1139: https://github.com/mlococo88/All-Structural/pull/1139)
 
 Second-pass review finding H2 (2026-11-07). Code sites are tagged `RW2H2`.
 
