@@ -15738,6 +15738,28 @@ index 92a3437..edde439 100644
 +      ["Type",at?("attached, "+(w.orient==="inline"?"in-line":"U-wing")+"; junction method: "+(w.jMethod==="strip"?"most loaded horizontal strip":w.jMethod==="avgOnly"?"total moment over H₀ (strength), strip (Service I)":"larger of the total moment over H₀ and the most loaded strip")):("independent, θ = "+fmt(+w.theta,1)+"°; design section "+(w.secMode==="user"?"x/L = "+fmt(+w.secFr,3):"owner / FHWA rule")+"; EH height "+(w.ehPlane==="heel"?"virtual back plane":"stem face")),""],
 ```
 
+## 2026-11-07 — PR: claude/pile-group-one-row — PG1: one pile row in the moment direction is an input error (was: overturning moment silently dropped) (calculation change for Σx'² = 0 or Σy'² = 0 layouts only) (PR #996: https://github.com/mlococo88/All-Structural/pull/996)
+### Where / before / after (C-8, computeAll)
+```diff
++      /* PG1 (2026-11-07): a group with no lever arm about an axis (Σx'² = 0: one pile row in the moment direction; or Σy'² = 0)
++         cannot resist a moment about it. Before, the moment was dropped (every pile V/n); now it is an input error and the pile and
++         pile-cap checks are not computed (as with no active pile). Layouts with Σx'² > 0 and Σy'² > 0 are unchanged. */
++      for(const lsName of Object.keys(LIMITS)){   // the largest unresisted moment of every permutation
++        for(const pl of permutations(lsName,true)){ const c=comboEffects(lsName,pl.perm,pl.liveOn,false); if(c.V<=0) continue;
++          const My=c.V*((c.Mv-c.Mh)/c.V-xgcT), Mx=c.Mt-c.V*ygc, u=SharedPileGroup.unresisted(c.V,My,Mx,R.pile);
++          if(u && (!R.pile.unresisted || Math.abs(u.M)>Math.abs(R.pile.unresisted.M))) R.pile.unresisted={...u, ls:lsName, lbl:c.lbl}; } }
++      if(R.pile.unresisted){ const u=R.pile.unresisted; R.pile.nActive=n; R.pile.n=0;   // as with no active pile: no pile results, every pile view and check skipped
++        warnFor("conv",`Pile layout: ${u.axis==="y"?"a single pile row in the longitudinal direction (all active piles at one x, Σx′² = 0)":"a single pile line along the abutment (all active piles at one y, Σy′² = 0)"} cannot resist the overturning moment ${u.axis==="y"?"M_y":"M_x"} = ${fmt(u.M)} kip-ft (largest; ${u.ls}, ${u.lbl||""}) on pinned-head vertical piles. Add a pile row. The pile and pile-cap checks (pile reactions, punching, toe / heel on the piles) are not computed.`,"err"); }
++      else{
++      }   // PG1
+```
+### Problem / §4
+- Before: with all active piles at one x (Σx'² = 0), pileReaction dropped M_y: every pile got ΣV/n. Default abutment with one row: P = 386.17 kip per pile, M_y = −2980.4 kip-ft of the governing case ignored (unconservative).
+- After: C-8 scans every permutation with SharedPileGroup.unresisted; if any has an unresisted moment, an input error names the largest ("M_y = −5,410.12 kip-ft (largest; Strength I, …)", default with one row) and the pile branch is computed as with no active pile (R.pile.n = 0, R.pile.nActive = n, R.pile.unresisted): no pile reactions, pile checks, punching or pile-cap toe / heel demands. Statics of a rigid cap (AASHTO LRFD 10th Ed. Art. 10.7, no closed form).
+- Every layout with Σx'² > 0 and Σy'² > 0 is unchanged (14 layouts main vs branch identical; 2000 random reactions bit-identical).
+### Open items
+- Decision (pending engineer review): the error blocks the pile results rather than showing V/n with a warning (a single row of pinned vertical piles has no moment resistance; battered piles, 8g, would be the remedy).
+
 ## 2026-11-07 — PR: claude/abut-m8-ts (ABM8: provided shrinkage and temperature bars checked for the stem, backwall and footing — area and spacing per 5.10.6)   [new check] [MORE conservative]
 
 Source: code-compliance review of 2026-11-07, item M8.

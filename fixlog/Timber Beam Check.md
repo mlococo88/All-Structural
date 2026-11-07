@@ -2024,3 +2024,62 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
   - `node tests/check-syntax.mjs` passes.
 - **Other copies:** none.
 - **Open items:** the E<sub>y,min</sub> values need checking against the printed Supplement (engineer).
+
+## 2026-11-07 — PR: claude/timber-flat-e (PR #1014: https://github.com/mlococo88/All-Structural/pull/1014) (TBF1: Table 4D flat use of Beams and Stringers, E and E<sub>min</sub> factor)   [calc change] [MORE conservative]
+
+Line numbers are approximate; search for the anchor text. Code sites are tagged `TBF1`.
+
+### TBF1. Flat-use factor on E and E<sub>min</sub> for Beams and Stringers (review finding H3)
+
+- **Where:**
+  - New constant `T4D_FLAT_E`, after `const T4D_FLAT_FB = {`.
+  - `tbcRun`: `const CfuE = …` after the `const Cfu =` line; the `const Emin_p =` and `const E_p =` lines; and `CfuE` added to the result object.
+  - Displays:
+    - `eFacs`, which shows `C_{fu,E}` when it is not 1;
+    - the Design Values factor table row `'C<sub>fu</sub> flat use'` (E column);
+    - the Reference Values Table 4D hint;
+    - the comment above `T4D_FLAT_FB`.
+  - Validation: new group 9 (3 benchmarks; 111 → 114, all match).
+- **Problem:** for Beams and Stringers used flat (load on the wide face), the Table 4D footnote factors E and E<sub>min</sub> as well as F<sub>b</sub>. The tool applied only the F<sub>b</sub> factor, so for No.1 the deflection came out about 11 % low (unconservative). Beam stability does not apply in flat use, so only deflection moves.
+- **Governing provision:** NDS Supplement 2018, Table 4D footnote (flat-use factors for Beams and Stringers).
+  - Values as best known: F<sub>b</sub> 0.86 / 0.74 / 1.00 and E, E<sub>min</sub> 1.00 / 0.90 / 1.00 (SS / No.1 / No.2).
+  - **Verify against NDS 2018 (not in references).** Confidence is medium.
+  - Applied to the same members as the F<sub>b</sub> factor: Table 4D timbers that are not Posts and Timbers, including Southern Pine timbers (conservative, as before), and not when manual or custom values are used.
+- **Before:**
+  ```js
+    const Emin_p = EminStab * CM.E * Ct.E * Ci.E * KF.Emin * PHI.Emin;
+    const E_p = ref.E * CM.E * Ct.E * Ci.E;
+  ```
+- **After:**
+  ```js
+  const T4D_FLAT_E = { 'SS': 1.00, 'No.1': 0.90, 'No.2': 1.00 };
+  ...
+    const CfuE = (flat && cat === 'timber' && !userVals && cls4D !== 'PT') ? (T4D_FLAT_E[mt.grade] || 1.0) : 1.0;   // TBF1: E, Emin (Table 4D footnote)
+  ...
+    const Emin_p = EminStab * CM.E * Ct.E * Ci.E * CfuE * KF.Emin * PHI.Emin;
+    const E_p = ref.E * CM.E * Ct.E * Ci.E * CfuE;
+  ```
+- **Check case:** 6x12 DF-L No.1 used flat, 16 ft simple span, spacing 48 in., D 15 / L 40 psf, self-weight on.
+
+  | | Before | After |
+  |---|---|---|
+  | E′ (psi) | 1,600,000 | 1,600,000 × 0.90 = 1,440,000 |
+  | Live-load deflection ratio | 1.734 | **1.927** (= 1.734 / 0.90) |
+  | Total deflection ratio | 1.968 | **2.187** |
+
+  Bending is unchanged at 1.558 (F′<sub>b</sub> = 1350 × 0.74 = 999 psi).
+- **How verified:** 37 review cases were run on origin/main and on the branch (headless Chromium, `file://`). Only the two No.1 Beams and Stringers flat cases moved:
+
+  | Case | Live-load deflection ratio | Total deflection ratio |
+  |---|---|---|
+  | DF-L 6x12 No.1 flat | 1.7340 → 1.9267 | 1.9681 → 2.1868 |
+  | SP 6x12 No.1 flat | 1.8496 → 2.0552 | 2.1095 → 2.3439 |
+
+  - SS and No.2 flat, Posts and Timbers flat, dimension lumber flat and every edgewise case are identical.
+  - Validation: 114/114 match.
+  - Output tabs: no NaN, undefined or KaTeX errors.
+  - Save → open: identical.
+  - No console errors; no horizontal scroll at 400 px.
+  - `node tests/check-syntax.mjs`: passes.
+- **Other copies:** none.
+- **Saved data:** no change.

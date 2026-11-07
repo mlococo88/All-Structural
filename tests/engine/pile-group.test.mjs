@@ -83,6 +83,7 @@ test('reaction() is the abutment calculator\'s former pileReaction: bit-identica
     if (k % 7 === 0) pi.Sxx = 0; if (k % 11 === 0) pi.Syy = 0;
     const args = [(rnd() - 0.2) * 3000, (rnd() - 0.5) * 8000, (rnd() - 0.5) * 8000, (rnd() - 0.5) * 20, (rnd() - 0.5) * 60];
     const a = A.pileReaction(...args, pi), b = G.reaction(...args, pi);
+    if (G.unresisted(args[0], args[1], args[2], pi)) { assert.ok(Number.isNaN(b) && Number.isFinite(a), `case ${k}: PG1 flags the moment the former code dropped`); continue; }   // PG1 (2026-11-07): the intended change
     assert.ok(Object.is(a, b), `case ${k}: ${a} vs ${b}`);
   }
 });
@@ -112,5 +113,29 @@ test('rows per ft = the discrete group over a wall length (abutment pileReaction
       const pD = A.pileReaction(V * Lw, V * Lw * (xR - d.xgc), 0, r.x - d.xgc, 0, d);
       near(L.rows[i].P, pD, 1e-9 * Math.max(1, Math.abs(pD)), `row ${i} V=${V}`);
     });
+  }
+});
+
+// PG1 (2026-11-07): a moment the group has no lever arm for is flagged, not dropped.
+test('PG1: one pile row in the moment direction (Σx\'² = 0) with M_y ≠ 0 → unresisted() names it and reaction() is NaN', () => {
+  const piles = [0, 6, 12, 18].map(y => ({ x: 0, y })), gp = G.groupProps(piles);
+  assert.equal(gp.Sxx, 0); assert.ok(gp.Syy > 0);
+  // the abutment default with one row: V/n was returned for every pile, M_y = −2980 kip-ft ignored; now flagged
+  const u = G.unresisted(3089.4, -2980.42, 0, gp); assert.equal(u.axis, 'y'); assert.equal(u.M, -2980.42);
+  assert.ok(Number.isNaN(G.reaction(3089.4, -2980.42, 0, 0, 9 - gp.ygc, gp)));
+  assert.equal(G.unresisted(3089.4, 0, 120, gp), null, 'M_x with Σy\'² > 0 is resisted');
+  assert.equal(G.reaction(100, 0, 120, 0, 9, gp), 100 / 4 + 120 * 9 / gp.Syy, 'no M_y: as before');
+  assert.equal(G.unresisted(100, 1e-7, 0, gp), null, 'round-off moment (≤ 1e-6·V) is not flagged');
+  const col = [0, 5, 10].map(x => ({ x, y: 2 })), gc = G.groupProps(col);
+  assert.equal(G.unresisted(50, 10, 3, gc).axis, 'x', 'Σy\'² = 0 with M_x ≠ 0');
+  // rows per ft: one row cannot take the wall moment (rowLoads flags it, as before)
+  const g1 = G.rowGroup([{ x: 3, s: 6 }]); const L1 = G.rowLoads(g1, 10, 4, 2); assert.equal(L1.unstable, true); assert.ok(Number.isNaN(L1.Pmax));
+});
+test('PG1: every layout with Σx\'² > 0 and Σy\'² > 0 gives the former result bit for bit (2000 random cases)', () => {
+  const A = abutCode(); let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let k = 0; k < 2000; k++) {
+    const pi = { n: 2 + Math.floor(rnd() * 20), Sxx: 0.5 + rnd() * 300, Syy: 0.5 + rnd() * 900, Sxy: k % 2 ? (rnd() - 0.5) * 50 : 0 };
+    const args = [rnd() * 4000 - 500, rnd() * 6000 - 3000, rnd() * 3000 - 1500, rnd() * 20 - 10, rnd() * 40 - 20];
+    assert.ok(Object.is(A.pileReaction(...args, pi), G.reaction(...args, pi)), 'case ' + k);
   }
 });

@@ -38,3 +38,36 @@
 ## 2026-11-07 — PR: claude/abut-shared-pile-group — 8h: the abutment calculator now loads this file (no change to the file) (PR #990: https://github.com/mlococo88/All-Structural/pull/990)
 - `abutment_calculator.html` `pileReaction` calls `SharedPileGroup.reaction`, and its C-8 group properties come from `SharedPileGroup.groupProps`. Consumers: Retaining Wall Designer, abutment calculator.
 - Proof: tests/engine/pile-group.test.mjs (the abutment's former code frozen in the test, bit-identical on 2000 random inputs; the file delegates) and tests/smoke/abutment-pile-group-parity.mjs (main vs branch LAST_R identical on 14 cases). See fixlog/abutment_calculator.md.
+
+## 2026-11-07 — PR: claude/pile-group-one-row — PG1: a moment the pile group has no lever arm for is flagged, not dropped (calculation change for those layouts only) (PR #996: https://github.com/mlococo88/All-Structural/pull/996)
+### Where / before / after
+```diff
+-      (a zero Sxx or Syy drops that term). pi = {n, Sxx, Syy, Sxy}. Same expression and operation order as the abutment
++      (a zero Sxx or Syy with a non-zero moment about that axis gives NaN since PG1, 2026-11-07: unresisted(V, My, Mx, pi) names the moment; a zero Sxx or Syy with no moment drops the term). pi = {n, Sxx, Syy, Sxy}. Same expression and operation order as the abutment
++  /* PG1 (2026-11-07): a moment about an axis the group has no lever arm for (Σx'² = 0 with M_y ≠ 0: one row of piles in the
++     moment direction; or Σy'² = 0 with M_x ≠ 0) cannot be resisted by vertical piles on a pinned-head rigid cap. Before, that term
++     was dropped (every pile got V/n plus the other term); now reaction() returns NaN for it and unresisted() says which moment.
++     |M| ≤ 1e-6·max(1, |V|) counts as zero (round-off). Any layout with Σx'² > 0 and Σy'² > 0 is evaluated exactly as before. */
++  function unresisted(V, My, Mx, pi) {
++    const Sxx = pi.Sxx, Syy = pi.Syy, Sxy = pi.Sxy || 0, D = Sxx * Syy - Sxy * Sxy, tol = 1e-6 * Math.max(1, Math.abs(+V || 0));
++    if (Math.abs(Sxy) > 1e-9 * Math.max(1, Sxx + Syy) && D > 1e-9) return null;
++    if (!(Sxx > 1e-9) && Math.abs(My) > tol) return { axis: 'y', M: My, S: 'Sxx' };
++    if (!(Syy > 1e-9) && Math.abs(Mx) > tol) return { axis: 'x', M: Mx, S: 'Syy' };
++    return null;
++  }
++    if (unresisted(V, My, Mx, pi)) return NaN;   // PG1: no silent drop of an unresisted moment
+-  window.SharedPileGroup = { reaction, groupProps, rowGroup, rowLoads, momentAbout };
++  window.SharedPileGroup = { reaction, unresisted, groupProps, rowGroup, rowLoads, momentAbout };
+```
+### Problem
+- `reaction()` dropped the M_y term when Σx'² = 0 (one pile row in the moment direction) and the M_x term when Σy'² = 0: every pile got V/n, the overturning moment silently ignored (unconservative: such a group cannot resist the moment on pinned-head vertical piles). Found by the abutment review.
+- Now `unresisted(V, My, Mx, pi)` returns {axis, M, S} for such a moment (|M| > 1e-6·max(1, |V|)) and `reaction()` returns NaN for it. Any layout with Σx'² > 0 and Σy'² > 0, or a zero sum with no moment about that axis, is evaluated by the same expression as before.
+### Governing provision
+- Statics of a rigid cap on vertical pinned-head piles (no code provision changed). AASHTO LRFD 10th Ed. Art. 10.7 has no closed form; the group needs a lever arm to resist a moment.
+### Check case
+- Abutment default, pile branch, one row (8 piles, Σx'² = 0): before, P = V/n = 386.17 kip on every pile with M_y = −2980.4 kip-ft (Strength I, governing pile case) ignored; after: input error "a single pile row … cannot resist the overturning moment M_y = −5,410.12 kip-ft (largest; Strength I …)", no pile results.
+- Retaining Wall Designer: no change. Its pile mode needs 2 to 4 rows at different x (input error otherwise) and `rowLoads` already flagged a one-row group (`unstable`, P = NaN, rwPileAnalysis error "the rows must be at two or more different positions").
+### How verified
+- tests/engine/pile-group.test.mjs: new PG1 tests (flag, NaN, round-off tolerance, Σy'² = 0, rows per ft); 2000 random layouts with Σx'² > 0 and Σy'² > 0 bit-identical to the former code; in the existing random test the cases with a zero sum and a moment are the only ones that change (NaN where the former code dropped the term).
+- tests/smoke/abutment-pile-group-parity.mjs (main vs branch, LAST_R JSON, 14 layouts with Σx'² > 0): identical.
+- Consumers (CLAUDE.md §3): abutment_calculator.html, Retaining Wall Designer.html — retaining-wall-checks, project-library (abutment, retwall, pile), check-syntax, engine pile-group / handoffs.
