@@ -2398,7 +2398,7 @@ function listTables() {
 - **Saved data:** no key or format change (§5); nothing is saved for the new case.
 - **Other copies:** none. **Open items:** an Owner-specified low-water level with its own stream pressure is not offered (the envelope above bounds it for buoyancy and soil weight).
 
-## 2026-11-07 — PR: claude/subloads-seismic-skew (GEQ, SMA, CSH, SKC) — γEQ default 0.5 for new projects; seismic analysis-method flags; Zones 3/4 column shear labelled with the R = 1 shear; skew correction of bearing LL at the obtuse corner (review M4, M2, M3, M1; §4 result changes for new projects)
+## 2026-11-07 — PR: claude/subloads-seismic-skew (PR #1123: https://github.com/mlococo88/All-Structural/pull/1123) (GEQ, SMA, CSH, SKC) — γEQ default 0.5 for new projects; seismic analysis-method flags; Zones 3/4 column shear labelled with the R = 1 shear; skew correction of bearing LL at the obtuse corner (review M4, M2, M3, M1; §4 result changes for new projects)
 - **Why:** in-depth code review of 2026-11-07, findings M1–M4.
 
 ### GEQ (M4). γEQ default 0.5 for new projects   [default change, §4]
