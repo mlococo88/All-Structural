@@ -3312,3 +3312,105 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
   - D-SPH2-2. **MC slope:** 2 : 12 where that gives at least the tabulated I_y. Otherwise the slope is found from I_y (no toe radius). The MC flange slopes vary by shape, so this was the conservative reading of "MC slopes per AISC tables".
   - D-SPH2-3. **Reference point kept** at the outline centroid. This keeps every saved project, library section and template in place without a migration. The Centroid x / y fields and the tooltip show the true centroid. Rotation and flips act about the reference point, which is 0.004–0.09 in from the true centroid.
   - D-SPH2-4. **Torsion unchanged** (J, C_w, shear centre from the centre-line model with the average t_f). A fillet-and-taper J was trialled: tapered ∫t³dx/3 plus El Darwish & Johnston (1965) junction terms αD⁴ minus the toe end corrections. It gave C −3.6 / +3.8 %, MC −5.1 / +1.0 % and S +1.3 / **+13.7 %** (unconservative) against the table. It was not adopted, because it would also change J of every built-up section with these shapes. J therefore stays below the table (−1 to −27 %): conservative for torsional stiffness and torsional shear stress. The tabulated J stays beside it for a single shape. **The ~2–3 % J target of the task is not met; this is open for the engineer.**
+
+## 2026-11-07 — PR: claude/spc-hole-n — SPM1: a hole takes the modulus ratio n of the part it lies in (review M1; §4 result change; PR #1088: https://github.com/mlococo88/All-Structural/pull/1088)
+
+- **Problem (review M1):** a hole's modulus ratio n was its own input, which defaults to 1, and was not tied to the part it cuts. A hole left at n = 1 in a concrete part (n = 1/8) removed 8 times too much transformed area, with no warning. The only guidance was the hint "Give it the same n as the part it is in". Example: concrete 10 × 10 at n = 1/8 with a Ø2 hole at n = 1 gave A = 9.358 instead of 12.107 (−23 %). The weight already charged a hole at its host's density (`weight()`).
+- **Fix (engine):** new `holeHostN(R)` (anchor `function holeHostN(R) {`, just before `analyze`), called in `analyze()` right after the per-part loop (`if (R.errors.length) return R;` → `holeHostN(R);`).
+  - It finds each hole's host the same way `weight()` does: the solid part with the largest exact overlap (`novShape` / `novInter`).
+  - It sets the hole's `q.n = host.n` and `q.host`. Every later use (parallel-axis rows, the weighted primitives for plastic, Q and fibres, `anyN`) then uses the host's n.
+  - When the hole's own n differs from the host's, it adds a warning: "Hole H1 has n = 1 but lies in PL1 (n = 0.125): it uses n = 0.125, the n of the material it removes."
+  - A hole that overlaps no solid part keeps its own n. That case is reported by `overlapChecks` (see SPM2).
+  - Before: `const n = pt.n …; R.parts.push({ pt, n, ...pp });` with nothing after it. After: the same, then `holeHostN(R);`.
+- **UI:** the Hole checkbox hint changes from "A hole removes area from whatever it covers. Give it the same n as the part it is in." to "A hole removes area from the part it lies in and takes that part's modulus ratio n (its own n is not used)."
+- **§4 callout:** transformed-section area with holes, A = Σ n_i A_i with n_hole = n_host. Governing basis: mechanics of materials (transformed section: a void in material i removes n_i·A_hole). No code provision.
+- **Check case:** concrete PL 10 × 10, n = 1/8, Ø2 hole at y = +2, hole n left at 1.
+  - Before: A = 9.358 in², I_x = 86.60 in⁴, Z_x = 22.99 in³ (and the Ø4 variant: "net area is not positive" error).
+  - After: A = (100 − π)/8 = **12.107 in²**. ȳ = −(π × 2)/(100 − π) = −0.0649 in. I_x = [833.33 − (0.7854 + π × 2²)]/8 − 12.107 × 0.0649² = 102.50 − 0.051 = **102.45 in⁴**. Z_x = 30.43 in³. The new warning is shown.
+- **Saved data:** no change. A hole's saved n is kept, and it is simply not used while the hole lies in a part.
+- **Verified:**
+  - `check-syntax` passes; Validation 136/136.
+  - Headless probe, main vs branch: only the models whose hole n differed from the host's changed (concHole_n1, concHole_n1b). Holes with a matching n (concHole_n8, holeMulti with two hosts of n = 1 and 0.5, barHole, plHole) are identical, as are all 1,660 shapes and the default project.
+  - `project-library --tool spc`: ALL PASS. 0 console errors.
+
+## 2026-11-07 — PR: claude/spc-hole-outside — SPM2: a hole partly outside the material is an error that blocks the results (review M2; §4 check logic; PR #1091: https://github.com/mlococo88/All-Structural/pull/1091)
+
+- **Problem (review M2):** a hole that was not inside material still gave results, with only a warning. Example: a 10 × 2 plate with a 2 × 2 hole straddling its top edge gave A = 16 (the true net area is 19), I_x = −5.92 in⁴ and S_x < 0. This can happen with Prevent overlap off, an imported file or a typed position.
+- **Fix (engine, conservative):** new `holeCoverCheck(R)` (anchor `function holeCoverCheck(R) {`), called in `analyze()` before `holeHostN`.
+  - Before: `if (R.errors.length) return R;` was followed directly by `holeHostN(R);`.
+  - After: `if (R.errors.length) return R;` → `holeCoverCheck(R); if (R.errors.length) return R;` → `holeHostN(R);`.
+  - For each hole, the covered area is Σ |`novInter`(hole, solid part)| over the solid parts. This is the exact overlap with the material; tube voids are not material.
+  - When hole area − covered area > max(1e-6 × hole area, `novTol`), an **error** is added: "Hole H1 lies partly outside the material: about 3 in² of its 4 in² is not inside any solid part, so it would remove area that does not exist. Move or resize it so that it lies wholly inside the material (the tool does not clip holes)." No results are shown ("NO RESULT" strip).
+  - A hole across the joint of two touching parts is covered, so it is allowed. It still gets the existing "not entirely inside one material part" warning and takes the n of the part it overlaps most (SPM1).
+  - A hole inside the void of a tube is not covered, so it is an error.
+- **§4 callout (check logic):**
+  - Before: warning only, and the results were computed with the full hole area removed.
+  - After: error, no results.
+  - Basis: mechanics of materials (a void can only remove existing material).
+  - The alternative, clipping the hole to the material, was not chosen. **Decision (pending engineer review):** blocking is the conservative choice, because it never shows a result built on an assumed geometry. Clipping, as AutoCAD SUBTRACT does in the DXF note, could be added on request.
+- **Check case:** PL 10 × 2 centred at 0, hole 2 × 2 centred at y = +1.5.
+  - Hole area 4 in²; area inside the plate = 2 × 0.5 = 1 in², so 3 in² is outside.
+  - Before: A = 16, I_x = −5.92 in⁴, warning only.
+  - After: the error above, no results.
+  - Hole 1 × 1 across the joint of two touching PL 10 × 1 (one above y = 0, one below): A = 20 − 1 = 19 in², unchanged, no error.
+- **Saved data:** no change. A saved project with such a hole opens and shows the error until the hole is moved.
+- **Verified:**
+  - `check-syntax` passes; Validation 136/136.
+  - Headless probe, main vs branch: only holeEdge, holeEdgeTiny and holeInTube changed, all to the error. Every other model (holes inside one part, across a joint, round holes, concrete holes) is identical, as are all 1,660 shapes.
+  - `project-library --tool spc`: ALL PASS. 0 console errors.
+
+## 2026-11-07 — PR: claude/spc-j-thick — SPM3: J statement corrected; thin-wall J flagged for thick-flanged W, M, HP, WT, MT shapes (review M3; display only, no value change; PR #1094: https://github.com/mlococo88/All-Structural/pull/1094)
+
+- **Problem (review M3):** the C1 entry ("Plate model vs AISC tables") said that the thin-wall J is lower than the AISC J and therefore conservative for torsional stiffness. That is true for light shapes and false for heavy ones. The thin-wall J of **155** W, WT, HP, M and MT shapes is above the table, for example W14X730 +9.1 % and WT7X436.5 +11.1 %. Σbt³/3 overestimates J of stocky flange elements, and for these shapes that outweighs the neglected fillets. All 155 have b_f/2t_f ≤ 5.33.
+- **Correction of the C1 statement (old entry not rewritten):** the thin-wall J is **not** always lower than the AISC J. It is lower for light shapes and for all S, C, MC and ST shapes (−1 to −27 %). It is higher for heavy W, M, HP, WT and MT shapes, by up to +11 %. In that case it is unconservative wherever J resists torsion (torsional stiffness, LTB terms).
+- **Fix (display only):**
+  - In `torsion()` (anchor `const thick = parts.filter(`), a W, M, HP, WT or MT part with b_f/2t_f ≤ 5.5 sets `T.jHigh` and adds a torsion warning. The warning is shown on the Torsion tab and in the Report notes: "Thick flanges (b_f/2t_f ≤ 5.5: W1 W14X730 1.82): the thin-wall J (Σ b t³/3) can be higher than the true J for such stocky flanges (up to +11 % over the AISC tables for the heaviest W and WT shapes), which is unconservative where J resists torsion. Use the AISC tabulated J of the shape, or check J by another method."
+  - Properties tile label: before `'J (thin-wall)'` → after `'J (thin-wall; may be high, see Torsion)'` when flagged.
+  - Single-shape AISC comparison hint and Method list: they now say that the thin-wall J can be above the AISC J for heavy shapes, and that such values are flagged.
+  - The single-shape comparison already shows the AISC J beside the computed J. No change there.
+- **Threshold:** 5.5 is just above the largest b_f/2t_f of the shapes over the table (5.33). It flags all 155 of them (296 shapes flagged in total; the extra 141 have J within the table or below). S and ST shapes are excluded, because their thin-wall J is always 14–27 % below the table.
+- **§4:** no computed value changes. This is a flag and wording only. Governing basis: AISC Design Guide 9 (thin-walled open sections, Σbt³/3) against the AISC Shapes Database v16.0 J.
+- **Check case:** W14X730 (b_f 17.9, t_f 4.91, t_w 3.07, d 22.4).
+  - b_f/2t_f = 17.9/9.82 = 1.82 ≤ 5.5, so J is flagged.
+  - Thin-wall J = [2 × 17.9 × 4.91³ + (22.4 − 4.91) × 3.07³]/3 = (4237.4 + 506.1)/3 = 1581 in⁴. AISC 1450 (+9.1 %).
+  - W21X62 (default project): b_f/2t_f = 6.70, not flagged.
+- **Verified:**
+  - `check-syntax` passes; Validation 136/136.
+  - Headless probe, main vs branch: the only differences are the new torsion warnings on W14X730 and WT7X436.5. All values are identical, including all 1,660 shapes and the default project. 0 console errors.
+  - Sweep of all shapes: 155 of 155 shapes with thin-wall J above the table are flagged. The other shapes with J slightly above the table are not W/M/HP/WT/MT: L ≤ +0.4 %, HSS ≤ +1.7 % and pipe ≤ +3.2 %, which come from data rounding and t_des and are documented in the SPH1 table.
+
+## 2026-11-07 — PR: claude/spc-j-n — SPM4: J with modulus ratios is reported as the transformed Σ n·J and labelled (review M4; §4 result change; PR #1098: https://github.com/mlococo88/All-Structural/pull/1098)
+
+- **Problem (review M4):** J of a section with modulus ratios n ≠ 1 was geometric. The headline showed it next to the transformed A and I, and only a Torsion-tab note said that n is not applied. Example: the FHWA girder with its slab (n = 1/8) showed J = 16,561 in⁴, of which 16,548 is the 102 × 8 slab. The transformed value is about 2,082.
+- **Fix (engine, `torsion()`):** anchor `SPM4 (2026-11-07)`.
+  - Each piece C (connected parts) gets `C.n` = the smallest n of its parts and `C.nMix` (true when its parts have different n). A piece with mixed n adds a warning: "PL1, PL2 are connected but have different modulus ratios n (1, 0.5): the J of this piece is taken with the smallest n = 0.5 (conservative; a mixed-material thin-wall piece is not modelled)."
+  - Before: `T.J = allOk ? Jsum : null;` with Jsum = Σ J_c.
+  - After: `T.Jgeo = allOk ? Jsum : null; T.Jn = !!R.anyN; T.J = allOk ? (R.anyN ? JnSum : Jsum) : null;` with JnSum = Σ n_c·J_c.
+  - When every n = 1, the result is identical to before.
+  - Torsion note, before: "Torsion properties are geometric: the modulus ratios n are not applied." After: "J is transformed to the reference material: J = Σ n_i·J_i over the pieces (n taken as the shear-modulus ratio G_i/G_ref, equal to E_i/E_ref for the same Poisson ratio). C_w, the shear centre and β_x are geometric (n not applied)."
+- **Labels and show-work (§6):**
+  - Torsion tab: new calc block "Transformed J (modulus ratios n)": J = Σ n_i J_i = n₁ × J₁ + … = value, with the geometric Σ J given in the result line.
+  - J label, when any n ≠ 1:
+    - Properties tile: "J (transformed Σ n·J, thin-wall)".
+    - Properties table row: "J (transformed, Σ n·J)", with the geometric Σ J in the note.
+    - Report step to.J: "St. Venant torsion constant, transformed (Σ n·J …)", with the substitution and the geometric Σ J in its note.
+    - Summary and DXF sheet table: the same label.
+  - Method tab: the item "Not modelled in torsion: … the modulus ratio n" is reworded.
+- **§4 callout:**
+  - J is transformed when n ≠ 1.
+  - Before: J = Σ J_i (geometric). After: J = Σ n_i·J_i (n_c = smallest n of a connected piece).
+  - Governing basis: mechanics of materials. A transformed section scales each material's stiffness by its modulus ratio, and G_iJ_i = (G_i/G_ref)·G_ref·J_i. G_i/G_ref = E_i/E_ref only when ν is the same. For concrete (ν = 0.2) on steel (ν = 0.3), G_c/G_s = 1.083 n, so using n underestimates the slab J by about 8 % (conservative).
+  - C_w, the shear centre and β_x are not changed (geometric).
+- **Check case:** FHWA Steel Design Example, Section 1, with the slab. Steel: PL 16 × 1¼, web 42 × 7/16, PL 14 × ¾ (one piece). Slab: 102 × 8, n = 1/8, a separate piece across the 1.25 in gap.
+  - J_steel = 13.48 in⁴ (thin-wall, unchanged). J_slab = 102 × 8³[1/3 − 0.21(8/102)(1 − (8/102)⁴/12)] = 16,547.9 in⁴ (Roark).
+  - Before: J = 13.48 + 16,547.9 = 16,561.4 in⁴.
+  - After: J = 1 × 13.48 + 0.125 × 16,547.9 = **2,082.1 in⁴**. With 3n = 24: 13.48 + 16,547.9/24 = **703.1 in⁴**.
+  - Concrete 10 × 10 at n = 1/8: 1408.33 → 176.04 in⁴.
+  - Two face-contact PL 10 × 1 with n = 1 and 0.5 (one piece): 26.67 → 13.33 in⁴, with the mixed-n warning.
+- **Decision (pending engineer review):** a connected piece made of parts with different n takes the **smallest** n (conservative) and is flagged. A mixed-material thin-wall model (e.g. Bredt with n·t walls) is not attempted.
+- **Saved data:** no change.
+- **Verified:**
+  - `check-syntax` passes; Validation 136/136.
+  - Headless probe, main vs branch: only J of the models with n ≠ 1 changed (FHWA_n/3n/mp, the concrete-hole models, holeMulti, mixN). All other values are identical, including every model with all n = 1, all 1,660 shapes and the default project.
+  - Every output tab built with the FHWA model: new labels shown, 0 console errors.
+  - `project-library --tool spc`: the only differences are the 4 new fields `tors.comps[i].n`, `.nMix`, `tors.Jgeo` and `tors.Jn`. They are new keys in the results object; every value that existed before is identical. Save and open are ok.

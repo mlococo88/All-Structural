@@ -62,7 +62,9 @@ async function wheelBack(p, vw, vh) {   // wheel both panels back up to the top,
   for (const sel of ['#inputPanel', '#outputPanel']) {
     const r = await p.$eval(sel, e => { const b = e.getBoundingClientRect(); return { x: b.left + 4, y: b.top + b.height / 2 }; });
     await p.mouse.move(r.x, r.y);
-    for (let k = 0; k < 40; k++) await p.mouse.wheel(0, -2000);
+    // SFST (2026-11-07): wheel until the panel is back at 0 (at most 240 notches), not a fixed 40: the Report renders its sections as they
+    // come into view, so the panel grows while it is wheeled up (52 000 -> 145 000 px at 1280 px) and 40 notches were not always enough
+    for (let k = 0; k < 240; k++) { await p.mouse.wheel(0, -2000); if (k % 10 === 9 && await p.$eval(sel, e => e.scrollTop === 0)) break; }
   }
   await p.waitForTimeout(300);
 }
@@ -119,9 +121,12 @@ for (const [vw, vh] of [[1280, 800], [1366, 768], [1920, 1080]]) {
     const nCh = await p.$$eval('#dashboard .chip[data-sec]', c => c.length);
     for (const i of [0, Math.floor(nCh / 2), nCh - 1]) {
       const sec = await p.evaluate(i => { document.getElementById('outputPanel').scrollTop = 0; const c = document.querySelectorAll('#dashboard .chip[data-sec]')[i]; c.click(); return c.dataset.sec; }, i);
-      await p.waitForTimeout(900);
-      const vis = await p.evaluate(id => { const e = document.getElementById(id), o = document.getElementById('outputPanel').getBoundingClientRect(), r = e.getBoundingClientRect();
-        return r.top >= o.top - 2 && r.top < o.bottom; }, sec);
+      // SFST (2026-11-07): wait for the smooth scroll to reach the section (up to 6 s), not a fixed 900 ms: its duration grows with the
+      // distance (card 5.6, Concrete Bearing & Dowels, is ~7 000 px down Footing Design at 1280 px) and with the machine load
+      let vis = false;
+      for (let t = 0; t < 30 && !vis; t++) { await p.waitForTimeout(200);
+        vis = await p.evaluate(id => { const e = document.getElementById(id), o = document.getElementById('outputPanel').getBoundingClientRect(), r = e.getBoundingClientRect();
+          return r.top >= o.top - 2 && r.top < o.bottom; }, sec); }
       check(vis, `dashboard chip ${i} (${sec}): its section is not shown in the output panel`);
       await afterAction(p, vw, vh, `dashboard chip ${i}`);
     }

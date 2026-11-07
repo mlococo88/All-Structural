@@ -2430,6 +2430,35 @@ const SPC = (function () {
     const use = !!(pt.useTab && tab);
     return { G, geo, tab, use, P: use ? tab : geo };
   }
+  /* SPM1 (2026-11-07): a hole removes the material it lies in, so it takes the modulus ratio n of that part (the host: the solid
+     part it overlaps most, as for its weight). A hole's own n is not used; when it differs from the host's, a warning says so.
+     A hole that overlaps no solid part keeps its own n (it is reported by overlapChecks). */
+  /* SPM2 (2026-11-07): a hole must lie inside material. A hole partly (or wholly) outside the solid parts would remove area
+     that does not exist (e.g. A too small, negative I, S < 0), so it is an error that blocks the results (conservative; the
+     tool does not clip holes). Covered area = Σ exact overlap of the hole with each solid part (material only: tube voids
+     excluded). Touching parts together cover a hole that spans their joint. */
+  function holeCoverCheck(R) {
+    const sol = R.parts.filter(q => !q.pt.hole).map(q => novShape(q.pt));
+    R.parts.forEach(q => {
+      if (!q.pt.hole) return;
+      const h = novShape(q.pt), Ah = Math.abs(h.A); let cov = 0;
+      sol.forEach(S => { if (bbHit(h.bbox, S.bbox)) cov += Math.abs(novInter(h, S)); });
+      const out = Ah - cov;
+      if (out > Math.max(1e-6 * Ah, novTol(h))) R.errors.push(`Hole ${q.pt.lbl || q.pt.id} lies partly outside the material: about ${+out.toPrecision(3)} in² of its ${+Ah.toPrecision(4)} in² is not inside any solid part, so it would remove area that does not exist. Move or resize it so that it lies wholly inside the material (the tool does not clip holes).`);
+    });
+  }
+  function holeHostN(R) {
+    const sol = R.parts.filter(q => !q.pt.hole).map(q => ({ q, S: novShape(q.pt) }));
+    R.parts.forEach(q => {
+      if (!q.pt.hole) return;
+      const h = novShape(q.pt); let best = 0, host = null;
+      sol.forEach(s => { const a = bbHit(h.bbox, s.S.bbox) ? novInter(h, s.S) : 0; if (a > best) { best = a; host = s.q; } });
+      if (!host) return;
+      q.host = host.pt.lbl || host.pt.id;
+      if (Math.abs(q.n - host.n) > 1e-12 * Math.max(1, Math.abs(host.n))) R.warnings.push(`Hole ${q.pt.lbl || q.pt.id} has n = ${+q.n.toPrecision(6)} but lies in ${q.host} (n = ${+host.n.toPrecision(6)}): it uses n = ${+host.n.toPrecision(6)}, the n of the material it removes.`);
+      q.n = host.n;
+    });
+  }
   function analyze(model) {
     const parts = model.parts || [], settings = model.settings || {}, tol = pos(settings.tol) ? settings.tol : 0.001;
     const R = { ok: false, errors: [], warnings: [], notes: [], rows: [], parts: [] };
@@ -2448,6 +2477,8 @@ const SPC = (function () {
       R.parts.push({ pt, n, ...pp });
     });
     if (R.errors.length) return R;
+    holeCoverCheck(R); if (R.errors.length) return R;
+    holeHostN(R);
     const W = []; // weighted primitives (geometry) for plastic, Q, extreme fibres
     let A = 0, Sx = 0, Sy = 0;
     R.parts.forEach(q => { const P = q.P; A += q.n * P.A; Sx += q.n * P.A * P.c[1]; Sy += q.n * P.A * P.c[0]; q.G.prims.forEach(pr => W.push({ pr, w: q.n * pr.s, part: q })); });
@@ -2746,7 +2777,12 @@ const SPC = (function () {
     const T = { ok: true, J: null, comps: [], contacts: [], notes: [], warn: [], Cw: null, sc: null, cwWhy: '' };
     const parts = R.parts.filter(q => !q.pt.hole);
     if (R.anyHole) T.warn.push('Holes and cut-outs are ignored in the torsion model (gross section).');
-    if (R.anyN) T.notes.push('Torsion properties are geometric: the modulus ratios n are not applied.');
+    if (R.anyN) T.notes.push('J is transformed to the reference material: J = Σ n_i·J_i over the pieces (n taken as the shear-modulus ratio G_i/G_ref, equal to E_i/E_ref for the same Poisson ratio). C_w, the shear centre and β_x are geometric (n not applied).');
+    /* SPM3 (2026-11-07): Σ b t³/3 overestimates J of stocky flange elements, and for heavy rolled shapes this outweighs the
+       neglected fillets: the thin-wall J of 155 W, WT, HP, M, MT shapes is above the AISC J (W14X730 +9.1 %, WT7X436.5 +11.1 %),
+       all with b_f/2t_f ≤ 5.33. Flag J (unconservative where J resists torsion) for a W, M, HP, WT or MT part with b_f/2t_f ≤ 5.5. */
+    const thick = parts.filter(q => q.pt.type === 'shape' && q.pt.p && { W: 1, M: 1, HP: 1, WT: 1, MT: 1 }[q.pt.p.fam] && q.G.g.dims && q.G.g.dims.bf / (2 * q.G.g.dims.tf) <= 5.5);   // S, ST: thin-wall J always 14–27 % below the table
+    if (thick.length) { T.jHigh = true; T.warn.push(`Thick flanges (b_f/2t_f ≤ 5.5: ${thick.map(q => (q.pt.lbl || q.pt.id) + ' ' + q.G.g.desc + ' ' + (+(q.G.g.dims.bf / (2 * q.G.g.dims.tf)).toFixed(2))).join(', ')}): the thin-wall J (Σ b t³/3) can be higher than the true J for such stocky flanges (up to +11 % over the AISC tables for the heaviest W and WT shapes), which is unconservative where J resists torsion. Use the AISC tabulated J of the shape, or check J by another method.`); }
     if (R.anyTab) T.notes.push('Parts set to "use AISC tabulated" still use their plate model here (except a single shape on its own, see the comparison).');
     T.contacts = contactPairs(R, tol, off);
     // part-level groups (allowed contacts)
@@ -2754,7 +2790,7 @@ const SPC = (function () {
     const uf = parts.map((_, i) => i), fd = i => uf[i] === i ? i : (uf[i] = fd(uf[i]));
     T.contacts.forEach(c => { if (c.on) uf[fd(id2i[c.a])] = fd(id2i[c.b]); });
     const groups = {}; parts.forEach((q, i) => { (groups[fd(i)] = groups[fd(i)] || []).push(q); });
-    let Jsum = 0, allOk = true;
+    let Jsum = 0, JnSum = 0, allOk = true;
     Object.values(groups).forEach(gp => {
       const C = { parts: gp.map(q => q.pt.lbl), J: null, method: '', why: '', elems: [], cells: [], open: [], graph: null };
       if (gp.length === 1) {
@@ -2769,10 +2805,15 @@ const SPC = (function () {
         if (badp.length) C.why = badp.map(q => q.pt.lbl).join(', ') + ' (round bar / custom polygon) is connected to other parts: not in the thin-wall model';
         else thinWall(C, gp, tol, off);
       }
-      if (C.J === null) allOk = false; else Jsum += C.J;
+      /* SPM4 (2026-11-07): with modulus ratios, J is transformed like A and I: J = Σ n_c·J_c over the pieces. A piece that
+         connects parts of different n takes the smallest of them (conservative; a mixed-material thin-wall piece is not modelled). */
+      const ns = gp.map(q => q.n); C.n = Math.min(...ns); C.nMix = ns.some(v => Math.abs(v - C.n) > 1e-12 * Math.max(1, C.n));
+      if (C.nMix) T.warn.push(`${C.parts.join(', ')} are connected but have different modulus ratios n (${[...new Set(ns.map(v => +v.toPrecision(4)))].join(', ')}): the J of this piece is taken with the smallest n = ${+C.n.toPrecision(4)} (conservative; a mixed-material thin-wall piece is not modelled).`);
+      if (C.J === null) allOk = false; else { Jsum += C.J; JnSum += C.n * C.J; }
       T.comps.push(C);
     });
-    T.J = allOk ? Jsum : null;
+    T.Jgeo = allOk ? Jsum : null; T.Jn = !!R.anyN;
+    T.J = allOk ? (R.anyN ? JnSum : Jsum) : null;
     if (!allOk) T.why = T.comps.filter(c => c.J === null).map(c => c.why).join('; ');
     // warping constant and shear centre: one connected open thin-wall member only
     if (T.comps.length !== 1) { T.cwWhy = 'the section has ' + T.comps.length + ' separate pieces (not connected for torsion)'; }
@@ -4323,7 +4364,7 @@ function buildPartPane(P) {
       fRow(body, 'Density ρ', numIn(() => SPC.partRho(pt), v => { pt.rho = v; }, 'pp_rho', { k: 'rho', min: 0, geo: true }), un('rho'), 'For the weight per length only (Properties → Weight). n does not change the weight.');
       fRow(body, 'Density preset', selIn(RHO_PRESETS(), () => '', v => { if (v) { pushUndo(); pt.rho = +v; } }, 'pp_rhoP', false), '', 'Typical values — use the actual material density where it matters.');
     } else body.appendChild(el('div', 'hint', 'A hole removes weight at the density of the solid part it lies in.'));
-    if (SPC.TYPES[pt.type].hole) chkRow(body, 'Hole / cut-out (negative area)', chkIn(() => pt.hole, v => { pt.hole = v; }, 'pp_hole', true, true, GD), 'A hole removes area from whatever it covers. Give it the same n as the part it is in.');
+    if (SPC.TYPES[pt.type].hole) chkRow(body, 'Hole / cut-out (negative area)', chkIn(() => pt.hole, v => { pt.hole = v; }, 'pp_hole', true, true, GD), 'A hole removes area from the part it lies in and takes that part\'s modulus ratio n (its own n is not used).');
   });
   mkSec(P, 'ppProps', 'This part\'s own properties', body => {
     const s = el('div'); s.setAttribute('data-live', 'part'); body.appendChild(s);
@@ -5710,7 +5751,7 @@ function buildSecSummary(s) {
     tile('I<sub>1</sub> (major)', R.I1, 'I'), tile('I<sub>2</sub> (minor)', R.I2, 'I'), `<div class="t"><div class="k">θ<sub>p</sub> (x → axis 1, CCW)</div><div class="v">${ang(R.thp)}</div></div>`,
     tile('S<sub>x</sub> top', R.Sxt, 'S'), tile('S<sub>x</sub> bottom', R.Sxb, 'S'), tile('S<sub>y</sub> left / right', Math.min(R.Syl, R.Syr), 'S', { title: 'smaller of the two' }),
     tile('Z<sub>x</sub>', R.Zx, 'S'), tile('Z<sub>y</sub>', R.Zy, 'S'), tile('r<sub>x</sub>', R.rx, 'L'),
-    tile('r<sub>y</sub>', R.ry, 'L'), tile('r<sub>min</sub> (principal)', R.r2, 'L'), tile('J ' + (T.J !== null ? '(thin-wall)' : ''), T.J, 'I', { na: 'n/a', title: T.why || '' }),
+    tile('r<sub>y</sub>', R.ry, 'L'), tile('r<sub>min</sub> (principal)', R.r2, 'L'), tile('J ' + (T.J !== null ? (T.Jn ? '(transformed Σ n·J, thin-wall' + (T.jHigh ? '; may be high, see Torsion)' : ')') : T.jHigh ? '(thin-wall; may be high, see Torsion)' : '(thin-wall)') : ''), T.J, 'I', { na: 'n/a', title: T.why || '' }),
     tile('C<sub>w</sub>', T.Cw, 'W', { na: 'n/a', title: T.cwWhy || '' }), tile('Shear centre x<sub>o</sub> (from centroid)', T.sc ? T.xo : null, 'L', { na: 'n/a' }), tile('Shear centre y<sub>o</sub> (from centroid)', T.sc ? T.yo : null, 'L', { na: 'n/a' })
   ].join('')));
   s.appendChild(spcWorkedIn([['cTab', 'A'], ['cCen', 'x̄, ȳ'], ['cI', 'I<sub>x</sub>, I<sub>y</sub>, I<sub>xy</sub>, S, r<sub>x</sub>, r<sub>y</sub>'], ['cP', 'I<sub>1</sub>, I<sub>2</sub>, θ<sub>p</sub>, r<sub>min</sub>'], ['plZx', 'Z<sub>x</sub>'], ['plZy', 'Z<sub>y</sub>'], ['tJ', 'J'], ['tCw', 'C<sub>w</sub>, x<sub>o</sub>, y<sub>o</sub>']].concat(Q && M.q.on ? [['qRes', 'Q cut']] : [])));   // D11 links
@@ -5736,7 +5777,7 @@ function aisCompare(q) {
   const h = rows.map(([lab, a, b, kk]) => `<tr><td class="lft">${lab}</td><td>${esc(nf(a, kk))}</td><td>${b === null || b === undefined ? '—' : esc(nf(b, kk))}</td><td>${esc(pctS(pctd(a, b)))}</td><td class="lft">${esc(un(kk))}</td></tr>`).join('');
   const box = el('div', 'sec');
   box.innerHTML = `<div class="secHead" style="cursor:default"><h2 class="secTitle">Single rolled shape ${esc(name)}: plate model vs AISC Shapes Database v16.0</h2></div><div class="secBody"><div class="tscroll"><table class="tbl"><tr><th class="lft">Property</th><th>This tool (plate model)</th><th>AISC tabulated</th><th>Diff.</th><th class="lft">Unit</th></tr>${h}</table></div>
-  <div class="hint">The plate model of W, M, HP, L, WT and MT shapes neglects the root fillets and toe radii, so A and I differ from the table by a few percent (HSS: rounded corners are modelled). S, C, MC and ST shapes are modelled with the sloped inner flange faces, root fillets and toe radii, found so that A and I<sub>y</sub> equal the table (Method tab); their other values (I<sub>x</sub>, S, Z, x̄) agree with the table within about 1–3 %. Torsion (J, C<sub>w</sub>, shear centre) uses the thin-wall centre-line model with the average t<sub>f</sub> for every shape. AISC J and C<sub>w</sub> include fillet effects (C<sub>w</sub> of angles and tees includes the plate-thickness term that thin-wall theory drops). ${q.use ? '<b>This part uses the AISC tabulated A and I</b> (elastic results).' : 'Tick "Use AISC tabulated" on the Part properties tab to use the tabulated A, I instead.'} Z and the torsion constants are from the plate model in either case. L, WT, MT, ST data: see the Method tab.</div></div>`;
+  <div class="hint">The plate model of W, M, HP, L, WT and MT shapes neglects the root fillets and toe radii, so A and I differ from the table by a few percent (HSS: rounded corners are modelled). S, C, MC and ST shapes are modelled with the sloped inner flange faces, root fillets and toe radii, found so that A and I<sub>y</sub> equal the table (Method tab); their other values (I<sub>x</sub>, S, Z, x̄) agree with the table within about 1–3 %. Torsion (J, C<sub>w</sub>, shear centre) uses the thin-wall centre-line model with the average t<sub>f</sub> for every shape. AISC J and C<sub>w</sub> include fillet effects (C<sub>w</sub> of angles and tees includes the plate-thickness term that thin-wall theory drops). The thin-wall J is usually below the AISC J (fillets neglected), but for heavy W, M, HP, WT and MT shapes with thick flanges (b<sub>f</sub>/2t<sub>f</sub> ≤ 5.5) it can be above it (W14X730 +9 %, WT7X436.5 +11 %): Σbt³/3 overestimates J of stocky plates. Such J values are flagged. ${q.use ? '<b>This part uses the AISC tabulated A and I</b> (elastic results).' : 'Tick "Use AISC tabulated" on the Part properties tab to use the tabulated A, I instead.'} Z and the torsion constants are from the plate model in either case. L, WT, MT, ST data: see the Method tab.</div></div>`;
   return box;
 }
 const nt = (v, k, sig) => nf(v, k, sig).replace(/,/g, '{,}');
@@ -5788,7 +5829,7 @@ function buildProps(pg) {
   });
   mkSec(pg, 'pTo', 'Torsion and warping (thin-wall approximation)', body => {
     body.appendChild(tblEl(['Property', 'Value', 'Unit', 'Note'], [
-      ['J', isNum(T.J) ? nf(T.J, 'I') : 'n/a', un('I'), { h: isNum(T.J) ? VFY : esc(T.why || '') }],
+      [T.Jn ? 'J (transformed, Σ n·J)' : 'J', isNum(T.J) ? nf(T.J, 'I') : 'n/a', un('I'), { h: isNum(T.J) ? VFY + (T.Jn ? ' geometric Σ J = ' + esc(nf(T.Jgeo, 'I')) : '') : esc(T.why || '') }],
       ['C<sub>w</sub>', isNum(T.Cw) ? nf(T.Cw, 'W') : 'n/a', un('W'), { h: isNum(T.Cw) ? VFY : esc(T.cwWhy || '') }],
       ['Shear centre (x, y) from the origin', T.sc ? nf(T.sc[0], 'L') + ', ' + nf(T.sc[1], 'L') : 'n/a', un('L'), ''],
       ['x<sub>o</sub>, y<sub>o</sub> (shear centre from the centroid)', T.sc ? nf(T.xo, 'L') + ', ' + nf(T.yo, 'L') : 'n/a', un('L'), ''],
@@ -5925,7 +5966,8 @@ function buildTors(pg) {
         calc(body, { title: 'J of this piece', ref: '', lines: [TX`J=J_{closed}+J_{open}=${nt(C.Jc || 0, 'I')}+${nt(C.Jo || 0, 'I')}=${nt(C.J, 'I')}\ \text{${I}}`], result: 'J = ' + nu(C.J, 'I'), badge: VFY });
       }
     });
-    if (T.comps.length > 1) body.appendChild(el('div', T.J === null ? 'errBox' : 'okBox', T.J === null ? 'J = n/a (see above)' : 'J = Σ of the separate pieces = ' + esc(nu(T.J, 'I')) + ' (pieces not connected twist independently)'));
+    if (T.Jn && T.J !== null) calc(body, { title: 'Transformed J (modulus ratios n)', ref: 'transformed section: G_i J_i = n_i G_ref J_i', lines: [TX`J=\Sigma\,n_i\,J_i=${T.comps.map(C => nt(C.n, 'n') + '\times' + nt(C.J, 'I')).join('+')}=${nt(T.J, 'I')}\ \text{${un('I')}}`], result: 'J = ' + nu(T.J, 'I') + ' (geometric Σ J_i = ' + nu(T.Jgeo, 'I') + ')', badge: VFY });
+    else if (T.comps.length > 1) body.appendChild(el('div', T.J === null ? 'errBox' : 'okBox', T.J === null ? 'J = n/a (see above)' : 'J = Σ of the separate pieces = ' + esc(nu(T.J, 'I')) + ' (pieces not connected twist independently)'));
   });
   mkSec(pg, 'tCw', 'Shear centre and warping constant C<sub>w</sub>', body => {
     if (!isNum(T.Cw)) { body.appendChild(el('div', 'note', 'C<sub>w</sub> and the shear centre: n/a — ' + esc(T.cwWhy || 'not computed'))); return; }
@@ -6777,7 +6819,7 @@ function buildManual(pg) {
     '<b>J, closed cells:</b> closed cells are found automatically as the faces of the planar centre-line graph that enclose a void (a hole in the material). At a junction of plates in face contact the centre lines can form a small loop lying inside solid material (e.g. angle heels against a web and a flange plate): it is not a cell, and its nodes are merged into one junction node at the intersection of the centre lines of the elements that meet there. One cell: Bredt J = 4A<sub>m</sub>²/∮ds/t; several cells: the shear flows q<sub>i</sub> from ∮<sub>i</sub>q ds/t = 2A<sub>m,i</sub>, J = 2ΣA<sub>m,i</sub>q<sub>i</sub>. Open branches add Σ b·t³/3; the b·t³/3 of the cell walls is not added.',
     '<b>Pieces not connected</b> twist independently: J = Σ J of the pieces (e.g. double angles with a gap, laced columns).',
     '<b>Shear centre and C<sub>w</sub></b> (open sections only, one connected piece): sectorial coordinates ω over the centre-line model (Vlasov; Design Guide 9 App. C), x<sub>o</sub> = (I<sub>y</sub>I<sub>ωx</sub> − I<sub>xy</sub>I<sub>ωy</sub>)/(I<sub>x</sub>I<sub>y</sub> − I<sub>xy</sub>²), y<sub>o</sub> = (I<sub>xy</sub>I<sub>ωx</sub> − I<sub>x</sub>I<sub>ωy</sub>)/(…), C<sub>w</sub> = ∫ω<sub>n</sub>²t ds. Closed sections, separate pieces, custom polygons and round bars connected to other parts: "n/a — not computed".',
-    'Not modelled in torsion: holes (gross section used; a note says so), custom polygons, the modulus ratio n.']);
+    'Not modelled in torsion: holes (gross section used; a note says so), custom polygons. Modulus ratios n: J is transformed as J = Σ n<sub>i</sub>·J<sub>i</sub> over the separate pieces (a piece that connects parts of different n takes the smallest n, with a warning); C<sub>w</sub> and the shear centre are geometric.']);
   H('Q and shear flow');
   UL(['Q = first moment, about the centroidal axis, of the area on one side of a straight cut right across the section (above a horizontal cut, right of a vertical cut). q = V·Q/I for symmetric sections; with I<sub>xy</sub> ≠ 0 the general formula q = V<sub>y</sub>(I<sub>y</sub>Q<sub>x</sub> − I<sub>xy</sub>Q<sub>y</sub>)/(I<sub>x</sub>I<sub>y</sub> − I<sub>xy</sub>²). τ<sub>avg</sub> = q/b with b = material length on the cut.']);
   H('Shear flow at the connections (Phase 2b)');
@@ -6805,7 +6847,7 @@ function buildManual(pg) {
     `<b>This browser:</b> autosave <code>${LS_AUTO}</code>, named projects <code>${LS_PROJ}</code>, selected input tab <code>${LS_INTAB}</code>, DXF export options <code>${LS_DXF}</code>. All keys start with <code>spc_</code>.`,
     '<b>Shared project info</b> (bridgeSuite.v1.projectMeta): Project, Job #, Client, Prepared by, Checked by and Date are shared and received. No other hand-offs in Phase 1.']);
   H('Limitations');
-  UL(['Thin-wall torsion is approximate: verify J and C<sub>w</sub> for thick or unusual sections. Stocky elements (b/t &lt; 10) are flagged.', 'Rolled shapes: plate model (see above).', 'No local buckling, slenderness or design checks.']);
+  UL(['Thin-wall torsion is approximate: verify J and C<sub>w</sub> for thick or unusual sections. Stocky elements (b/t &lt; 10) are flagged. The thin-wall J is not always lower than the true J: for W, M, HP, WT and MT shapes with b<sub>f</sub>/2t<sub>f</sub> ≤ 5.5 it can be up to about 11 % higher than the AISC J (the stocky flanges outweigh the neglected fillets), and J is then flagged.', 'Rolled shapes: plate model (see above).', 'No local buckling, slenderness or design checks.']);
 }
 
 /* =====================================================================
@@ -7046,7 +7088,7 @@ function spdwBuild() {
     ['I1 (MAJOR)', V(R.I1, 'I'), Un('I'), wk('cP')], ['I2 (MINOR)', V(R.I2, 'I'), Un('I'), wk('cP')], ['THETA_P (X TO AXIS 1, CCW)', ang(R.thp), '', wk('cP')],
     ['Sx TOP', V(R.Sxt, 'S'), Un('S'), wk('cI')], ['Sx BOTTOM', V(R.Sxb, 'S'), Un('S'), wk('cI')], ['Sy LEFT', V(R.Syl, 'S'), Un('S'), wk('cI')], ['Sy RIGHT', V(R.Syr, 'S'), Un('S'), wk('cI')],
     ['Zx', V(R.Zx, 'S'), Un('S'), wk('plZx')], ['Zy', V(R.Zy, 'S'), Un('S'), wk('plZy')], ['rx', V(R.rx, 'L'), Un('L'), wk('cI')], ['ry', V(R.ry, 'L'), Un('L'), wk('cI')], ['r_MIN (PRINCIPAL)', V(R.r2, 'L'), Un('L'), wk('cP')],
-    ['J' + (isNum(T.J) ? ' (THIN-WALL, VERIFY)' : ''), V(T.J, 'I'), Un('I'), wk('tJ')], ['Cw' + (isNum(T.Cw) ? ' (THIN-WALL, VERIFY)' : ''), V(T.Cw, 'W'), Un('W'), wk('tCw')],
+    ['J' + (isNum(T.J) ? (T.Jn ? ' (TRANSFORMED SUM N·J, THIN-WALL, VERIFY)' : ' (THIN-WALL, VERIFY)') : ''), V(T.J, 'I'), Un('I'), wk('tJ')], ['Cw' + (isNum(T.Cw) ? ' (THIN-WALL, VERIFY)' : ''), V(T.Cw, 'W'), Un('W'), wk('tCw')],
     ['SHEAR CENTRE xo (FROM CENTROID)', T.sc ? V(T.xo, 'L') : 'N/A', Un('L'), wk('tCw')], ['SHEAR CENTRE yo (FROM CENTROID)', T.sc ? V(T.yo, 'L') : 'N/A', Un('L'), wk('tCw')]];
   const toM = v => [v[0] * f, v[1] * f];
 
@@ -7326,7 +7368,7 @@ function spxResults(keys) {
     ['I_1 (major)', R.I1, 'I', 'pa.I1'], ['I_2 (minor)', R.I2, 'I', 'pa.I2'], ['θ_p (x → axis 1, CCW)', null, 'ang', 'pa.th'],
     ['S_x top', R.Sxt, 'S', 'sm.Sxt'], ['S_x bottom', R.Sxb, 'S', 'sm.Sxb'], ['S_y left / right (smaller of the two)', Math.min(R.Syl, R.Syr), 'S', R.Syl <= R.Syr ? 'sm.Syl' : 'sm.Syr'],
     ['Z_x', R.Zx, 'S', 'pl.Zx'], ['Z_y', R.Zy, 'S', 'pl.Zy'], ['r_x', R.rx, 'L', 'sm.rx'], ['r_y', R.ry, 'L', 'sm.ry'], ['r_min (principal)', R.r2, 'L', 'pa.r2'],
-    ['J' + (T.J !== null ? ' (thin-wall)' : ''), T.J, 'I', 'to.J'], ['C_w', T.Cw, 'W', 'to.Cw'],
+    ['J' + (T.J !== null ? (T.Jn ? ' (transformed Σ n·J, thin-wall)' : ' (thin-wall)') : ''), T.J, 'I', 'to.J'], ['C_w', T.Cw, 'W', 'to.Cw'],
     ['Shear centre x_o (from centroid)', T.sc ? T.xo : null, 'L', 'to.xo'], ['Shear centre y_o (from centroid)', T.sc ? T.yo : null, 'L', 'to.yo']];
   const notes = [];
   if (T.J !== null && T.J !== undefined) notes.push('J, $C_{w}$ and the shear centre are thin-wall approximations (verify).');
@@ -7449,7 +7491,8 @@ function sprModel() {
       SharedSteps.step({ id: 'pl.SFy', label: 'Shape factor about y', sym: '\\frac{Z_{y}}{S_{y,min}}', eq: '', sub: '\\frac{' + nt(R.Zy, 'S') + '}{' + nt(Math.min(R.Syl, R.Syr), 'S') + '}', value: R.SFy, unit: '', d: 4 })] }];
   /* ---------- 6. Torsion, buckling parameters, weight ---------- */
   const tor = [];
-  if (isNum(T.J)) tor.push(sprS('to.J', 'St. Venant torsion constant (thin-wall approximation' + (T.comps && T.comps.length > 1 ? ', Σ of ' + T.comps.length + ' separate pieces' : '') + ')', 'J', T.comps && T.comps.length === 1 && T.comps[0].Jc != null && T.comps[0].Jo != null ? 'J_{closed} + J_{open}' : '', T.comps && T.comps.length === 1 && T.comps[0].Jc != null && T.comps[0].Jo != null ? nt(T.comps[0].Jc || 0, 'I') + ' + ' + nt(T.comps[0].Jo || 0, 'I') : '', T.J, 'I', 'AISC Design Guide 9', (T.comps || []).map(C => C.method).filter(Boolean).join('; ')));
+  if (isNum(T.J) && T.Jn) tor.push(sprS('to.J', 'St. Venant torsion constant, transformed (Σ n·J over ' + T.comps.length + ' piece' + (T.comps.length > 1 ? 's' : '') + '; thin-wall approximation)', 'J', '\\Sigma\\, n_{i} J_{i}', T.comps.map(C => nt(C.n, 'n') + ' \\times ' + nt(C.J, 'I')).join(' + '), T.J, 'I', 'AISC Design Guide 9; transformed section', 'Geometric Σ J = ' + nf(T.Jgeo, 'I') + ' ' + un('I') + '.'));
+  else if (isNum(T.J)) tor.push(sprS('to.J', 'St. Venant torsion constant (thin-wall approximation' + (T.comps && T.comps.length > 1 ? ', Σ of ' + T.comps.length + ' separate pieces' : '') + ')', 'J', T.comps && T.comps.length === 1 && T.comps[0].Jc != null && T.comps[0].Jo != null ? 'J_{closed} + J_{open}' : '', T.comps && T.comps.length === 1 && T.comps[0].Jc != null && T.comps[0].Jo != null ? nt(T.comps[0].Jc || 0, 'I') + ' + ' + nt(T.comps[0].Jo || 0, 'I') : '', T.J, 'I', 'AISC Design Guide 9', (T.comps || []).map(C => C.method).filter(Boolean).join('; ')));
   if (isNum(T.Cw)) tor.push(sprS('to.Cw', 'Warping constant (thin-wall approximation)', 'C_{w}', '\\int \\omega_{n}^{2}\\,t\\,ds', '', T.Cw, 'W', 'AISC Design Guide 9 App. C; Vlasov', T.cwMethod || ''));
   if (T.sc) tor.push(sprS('to.xo', 'Shear centre from the centroid, x (shear centre at x = ' + nf(T.sc[0], 'L') + ' ' + un('L') + ' from the origin)', 'x_{o}', '', '', T.xo, 'L'), sprS('to.yo', 'Shear centre from the centroid, y (at y = ' + nf(T.sc[1], 'L') + ' ' + un('L') + ' from the origin)', 'y_{o}', '', '', T.yo, 'L'));
   if (bk.sc) tor.push(sprS('bk.ro', 'Polar radius of gyration about the shear centre', '\\bar{r}_{o}', '\\sqrt{x_{o}^{2} + y_{o}^{2} + \\frac{I_{x} + I_{y}}{A}}', '\\sqrt{' + nt(T.xo, 'L') + '^{2} + ' + nt(T.yo, 'L') + '^{2} + \\frac{' + nt(R.Ix + R.Iy, 'I') + '}{' + nt(R.A, 'A') + '}}', bk.ro, 'L', 'AISC 360-16 Eq. E4-9 (equation number: verify)'),
@@ -7465,7 +7508,7 @@ function sprModel() {
       ['θ_p (x → axis 1, CCW)', { t: ang(R.thp), n: true, key: 'sp/pa.th' }, '°'],
       krow('S_x,top', R.Sxt, 'S', 'sp/sm.Sxt'), krow('S_x,bottom', R.Sxb, 'S', 'sp/sm.Sxb'), krow('S_y,left', R.Syl, 'S', 'sp/sm.Syl'), krow('S_y,right', R.Syr, 'S', 'sp/sm.Syr'),
       krow('Z_x', R.Zx, 'S', 'sp/pl.Zx'), krow('Z_y', R.Zy, 'S', 'sp/pl.Zy'), krow('r_x', R.rx, 'L', 'sp/sm.rx'), krow('r_y', R.ry, 'L', 'sp/sm.ry'), krow('r_min', R.r2, 'L', 'sp/pa.r2'),
-      krow('J (thin-wall)', T.J, 'I', 'sp/to.J'), krow('C_w (thin-wall)', T.Cw, 'W', 'sp/to.Cw'), ...(Wt && isNum(Wt.w) ? [krow('Weight per length', Wt.w, 'wt', 'sp/wt.w')] : [])] },
+      krow(T.Jn ? 'J (transformed Σ n·J, thin-wall)' : 'J (thin-wall)', T.J, 'I', 'sp/to.J'), krow('C_w (thin-wall)', T.Cw, 'W', 'sp/to.Cw'), ...(Wt && isNum(Wt.w) ? [krow('Weight per length', Wt.w, 'wt', 'sp/wt.w')] : [])] },
     { type: 'note', text: 'Each value links to the step where it is worked; the same values are on the Properties tab[[tab:props| ↗]].' + (R.anyN ? ' Transformed section: A, I, S, Z are in units of the reference material (n = 1).' : '') }].concat(R.warnings.length ? [{ type: 'note', warn: true, text: 'Check the model: ' + R.warnings.join(' ') }] : []) }] });
   /* ---------- 2. Inputs ---------- */
   const partsRows = R.rows.map(r => { const q = partById(r.id); return [r.lbl, partDesc(q), sprC(r.x, 'L'), sprC(r.y, 'L'), (+(+q.rot || 0).toFixed(3)) + '°', q.mir ? 'yes' : '', String(+(r.n).toPrecision(4)), sprC(r.A, 'A'), r.tab ? 'AISC tab.' : (q.type === 'shape' ? 'plate model' : 'geometry')]; });
