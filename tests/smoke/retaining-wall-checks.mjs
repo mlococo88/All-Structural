@@ -43,6 +43,8 @@ const CASES = [
   ['RWPL pile row outside the footing', { fnd_type: 'pile', pile_x2: 20 }, 'pile_x2', 'e'],
   ['RWPL two pile rows at the same x', { fnd_type: 'pile', pile_x2: 1.5 }, 'pile_x2', 'e'],
   ['RWPL embedment + clear ≥ t_f', { fnd_type: 'pile', pile_embed: 16 }, 'pile_embed', 'e'],
+  ['RWTE pile t_f 8 in ≤ embedment + clear + 2 (was a throw)', { fnd_type: 'pile', tf: 8 }, 'pile_embed', 'e'],
+  ['RWTE pile t_f 17 in = embedment 12 + clear 3 + 2 (d_p ≤ 0)', { fnd_type: 'pile', tf: 17 }, 'pile_embed', 'e'],
   ['RWPL AASHTO φ_c > 1', { fnd_type: 'pile', design_basis: 'AASHTO', pile_phic: 1.2 }, 'pile_phic', 'e'],
   ['RWHP stem projection leaves < 1 ft retained (H_s 12, h_p 11.5)', { h_proj: 11.5 }, 'h_proj', 'e'],
   ['RWHP stem projection negative', { h_proj: -1 }, 'h_proj', 'e'],
