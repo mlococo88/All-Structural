@@ -1858,7 +1858,7 @@ const RW_CARDS = {
   ftgPunch:    ['footing', 'Pile Cap — Punching around the Piles', 'Pile Cap — Punching around the Piles'],   // RWPL 8d
 };
 // r.checks key → card where the check is worked (ACI crack control has no card in the tabs; the report adds one)
-const RW_CHECK_CARD = { pilePunch:'ftgPunch', pileCapD:'ftgPunch', pileComp:'stabPile', pileUplift:'stabPile', pileLat:'stabPile', pileSpacing:'stabPile', pileEdge:'stabPile', pileEmbed:'stabPile', ot:'stabOT', otE:'stabOT', sliding:'stabSlide', slidingE:'stabSlide', bearing:'stabBrg', ecc:'stabEcc',
+const RW_CHECK_CARD = { pilePunch:'ftgPunch', pileCapD:'ftgPunch', pileComp:'stabPile', pileUplift:'stabPile', pileCapT:'stabPile', pileLat:'stabPile', pileSpacing:'stabPile', pileEdge:'stabPile', pileEmbed:'stabPile', ot:'stabOT', otE:'stabOT', sliding:'stabSlide', slidingE:'stabSlide', bearing:'stabBrg', ecc:'stabEcc',
   stemFlex:'stemFlex', stemShear:'stemShear', stemMidShear:'stemMid', stemHook:'stemDev', stemMidFlex:'stemMid', stemLap:'stemDev', heelDev:'heelShear', toeDev:'toeShear', stemS3Lap:'stemS13', stemMAlong:'stemS13',
   heelFlex:'heelFlex', heelShear:'heelShear', toeFlex:'toeFlex', toeShear:'toeShear', colAxial:'stabCol',
   ishFtg:'stabISH', ishStem:'stabISH', tsStem:'stemTS', tsFF:'stemTS', tsFtg:'ftgTS', keyFlex:'ftgKey', keyShear:'ftgKey', keyDev:'ftgKey', eeSliding:'stabEE1', eeEcc:'stabEE1', eeBearing:'stabEE1', ctSliding:'stabCT', ctEcc:'stabCT', ctBearing:'stabCT', ctYield:'stabYL',
@@ -4052,8 +4052,14 @@ function calcAll(inp) {
                       ref: (isAASHTO ? 'AASHTO LRFD 10th Ed. Art. 5.12.8.6.3, φ 0.90' : 'ACI 318-19 Table 22.6.5.2, φ 0.75') + '; row ' + (pilePunch.gov.i + 1) + ', ' + pilePunch.gov.loc + ', b<sub>o</sub> = ' + f(pilePunch.gov.bo,1) + ' in' } } : {}),
         ...(pilePunch && !isAASHTO ? { pileCapD: { ok: pilePunch.dp >= 12 - 1e-9, label: 'Cap Depth over Bars', val: `${f(pilePunch.dp,2)}${pilePunch.dp >= 12 - 1e-9 ? '≥' : '<'}12"`, dc: 12 / Math.max(pilePunch.dp, 1e-9),
                       ref: 'ACI 318-19 §13.3.1.2; depth above the bottom bars, footings on piles' } } : {}),
+        // RW2M3 (2026-11-07): a pile in tension needs a designed pile-to-cap tension connection (AASHTO LRFD 10th Art. 10.7.1.2: the
+        // reduced projection only with bars or strands anchored per Art. 5.12.9.1; IBC 2018 §1810.3.11 / §1810.3.3.1.5: the uplift load
+        // path designed). Not designed in this tool: FAIL with the tension and the embedment until the engineer designs it (conservative).
+        ...(pc.govT.L.Pmin < 0 ? { pileCapT: { ok: false, label: 'Pile–Cap Tension', val: `T=${f(-pc.govT.L.Pmin,1)}k, embed ${f(d.embed,1)}": not designed`, dc: undefined,
+                      ref: (isAASHTO ? 'AASHTO LRFD 10th Ed. Art. 10.7.1.2 / 5.12.9.1' : 'IBC 2018 §1810.3.11 / §1810.3.3.1.5') + '; pile-to-cap tension connection (anchorage) not designed in this tool: by the engineer (Pile Designer)', note: pc.govT.label } } : {}),
         pileEmbed:  { ok: d.embed >= d.embMin - 1e-9, label: 'Pile Embedment', val: `${f(d.embed,1)}${d.embed >= d.embMin - 1e-9 ? '≥' : '<'}${f(d.embMin,0)}"`, dc: d.embMin / Math.max(d.embed, 1e-9), ref: d.ref + '; pile top into the footing' },
       };
+      if (pc.govT.L.Pmin < 0) warnings.push(`Pile uplift: P_min = −${f(-pc.govT.L.Pmin,1)} kip per pile (${pc.govT.label}). The pile-to-cap tension connection is not checked here: with a ${f(d.embed,1)}-in embedment, provide and design the anchorage (embedded bars, strands or dowels developed into the cap, ${isAASHTO ? 'AASHTO LRFD 10th Ed. Art. 10.7.1.2 / 5.12.9.1' : 'IBC 2018 §1810.3.11 / §1810.3.3.1.5'}) and the pile's own tension capacity (Pile Designer). Marked FAIL until then.`);   // RW2M3
       if (d.grp3) warnings.push(`Pile spacing ${f(d.cc,1)} in < 3D = ${f(3 * pc.D,1)} in: axial group effects apply (IBC 2018 §1810.2.5; AASHTO Art. 10.7.2.4 / 10.7.3.9). The capacities entered must include them.`);
       if (d.grp8) warnings.push(`Row-to-row spacing ${f(d.minRowDx,1)} in < 8D = ${f(8 * pc.D,1)} in in the direction of the lateral load: lateral group effects apply (IBC 2018 §1810.2.5; AASHTO Art. 10.7.2.4). The lateral capacity entered must include them.`);
       for (let i = warnings.length - 1; i >= 0; i--) if (/^AASHTO bearing|tension zone in soil/.test(warnings[i])) warnings.splice(i, 1);   // soil-bearing notes do not apply
@@ -5297,6 +5303,7 @@ function rwPileStability(r) {
     + eq('2.1 Governing pile compression (' + gc.label + ')', `M = V(x_R - \\bar{x}) = ${F(gc.V, 3)}(${F(gc.xR, 3)} - ${F(g.xbar, 3)}) = ${F(gc.M, 3)}\\ \\text{kip-ft/ft}; \\quad P = \\frac{V}{N} + \\frac{M\\,x'}{I} = \\frac{${F(gc.V, 3)}}{${F(g.N, 4)}} + \\frac{(${F(gc.M, 3)})(${F(x0.xp, 3)})}{${F(g.I, 4)}} = \\boxed{${F(x0.P, 2)}\\ \\text{kip}}`, 'row ' + (gc.L.iMax + 1))
     + eqCheck('2.2 Compression', `P_{max} = ${F(gc.L.Pmax, 2)} \\le ${gc.cap.cs} = ${F(gc.cap.c, 2)}\\ \\text{kip} \\quad (D/C = ${F(gc.dcC, 3)})`, r.checks.pileComp.ok, r.checks.pileComp.ref)
     + eqCheck('2.3 Uplift', P.govT.L.Pmin < 0 ? `-P_{min} = ${F(-P.govT.L.Pmin, 2)} \\le ${P.govT.cap.ts} = ${F(P.govT.cap.t, 2)}\\ \\text{kip} \\quad (${P.govT.label.replace(/[^A-Za-z0-9 .+()]/g, '')})` : `P_{min} = ${F(Math.min(...P.comb.map(c => c.L.Pmin)), 2)}\\ \\text{kip} \\ge 0\\ \\text{(no uplift)}`, r.checks.pileUplift.ok, r.checks.pileUplift.ref)
+    + (r.checks.pileCapT ? `<div class="alert warn" style="margin:4px 0 8px;">\u26a0 <b>Pile\u2013cap tension (not designed): FAIL.</b> T = ${F(-P.govT.L.Pmin, 2)} kip per pile (${P.govT.label}); embedment ${F(P.det.embed, 1)} in. The uplift needs a designed pile-to-cap tension connection: embedded bars, strands or dowels developed into the cap and the pile's own tension capacity (${r.checks.pileCapT.ref}). Design it outside this tool (Pile Designer) and keep the record with the calculation.</div>` : '')   // RW2M3
     + eqCheck('2.4 Lateral', `h = \\frac{H}{N} = \\frac{${F(P.govH.H, 3)}}{${F(g.N, 4)}} = ${F(P.govH.L.rows[0].h, 2)} \\le ${P.govH.cap.hs} = ${F(P.govH.cap.h, 2)}\\ \\text{kip}`, r.checks.pileLat.ok, r.checks.pileLat.ref)
     + `<div class="note">Detailing: c-c spacing ${F(P.det.cc, 1)} in${P.det.ccMin ? ' (min. ' + F(P.det.ccMin, 1) + ' in)' : ''}; pile side to footing edge ${F(P.det.edge, 1)} in (min. ${F(P.det.edgeMin, 0)} in); embedment ${F(P.det.embed, 1)} in (min. ${F(P.det.embMin, 0)} in) — ${P.det.ref}.</div></div></div>`;
   el.insertAdjacentHTML('afterbegin', h);
@@ -11160,6 +11167,7 @@ function rwrModel(r) {
       rwrS({ id: 'comp', label: 'Compression check', sym: '\\frac{P_{max}}{' + gc.cap.cs + '}', eq: '', sub: '\\frac{' + N(gc.L.Pmax, 2) + '}{' + N(gc.cap.c, 2) + '}', value: P.govC.dcC, unit: '', d: 3, ok: ok('pileComp') }),
       gt.L.Pmin < 0 ? rwrS({ id: 'upl', label: 'Uplift check (' + gt.label + ')', sym: '\\frac{\\minus P_{min}}{' + gt.cap.ts + '}', eq: '', sub: '\\frac{' + N(-gt.L.Pmin, 2) + '}{' + N(gt.cap.t, 2) + '}', value: gt.dcT, unit: '', d: 3, ok: ok('pileUplift') })
                     : rwrS({ id: 'upl', label: 'Uplift: the smallest pile load of all combinations is not negative', sym: 'P_{min}', eq: '', sub: '', value: Math.min(...P.comb.map(c => c.L.Pmin)), unit: 'kip', d: 2, ok: ok('pileUplift') }),
+      ...(r.checks.pileCapT ? [rwrS({ id: 'capT', label: 'Pile–cap tension connection for T = ' + N(-gt.L.Pmin, 2) + ' kip per pile (embedment ' + N(P.det.embed, 1) + ' in): not designed in this tool (' + r.checks.pileCapT.ref + ')', sym: 'T', eq: '\\minus P_{min}', sub: '', value: -gt.L.Pmin, unit: 'kip', d: 2, ok: ok('pileCapT') })] : []),   // RW2M3
       rwrS({ id: 'lat', label: 'Lateral load per pile (' + gh.label + ')', sym: 'h', eq: '\\frac{H}{N}', sub: '\\frac{' + N(gh.H, 3) + '}{' + N(G.N, 4) + '}', value: gh.L.rows[0].h, unit: 'kip', d: 2 }),
       rwrS({ id: 'latdc', label: 'Lateral check', sym: '\\frac{h}{' + gh.cap.hs + '}', eq: '', sub: '\\frac{' + N(gh.L.rows[0].h, 2) + '}{' + N(gh.cap.h, 2) + '}', value: gh.dcH, unit: '', d: 3, ok: ok('pileLat') })];
     const d = P.det, dt = [['Center-to-center spacing (along the wall and row to row)', N(d.cc, 1) + ' in', d.ccMin ? '≥ ' + N(d.ccMin, 1) + ' in' : 'no minimum (group effects: §1810.2.5)'],
@@ -11178,7 +11186,7 @@ function rwrModel(r) {
         { type: 'note', text: PS.Lseg ? 'Piles per segment: one joint segment of ' + N(PS.Lseg, 1) + ' ft (the collision input), the first pile s/2 from the joint, then every s (as drawn on the Drawings, sheet 5).' : 'The wall length is not in the model: piles per ft only; the Drawings (sheet 5) show a typical segment at a nominal length.' },
         { type: 'note', text: '[[tab:drawings|On screen: Drawings tab, sheet 5 (pile layout plan and pile schedule)]]' }]));
     }
-    CK.pileComp = 'pl2/comp'; CK.pileUplift = 'pl2/upl'; CK.pileLat = 'pl2/latdc';
+    CK.pileComp = 'pl2/comp'; CK.pileUplift = 'pl2/upl'; CK.pileCapT = 'pl2/capT'; CK.pileLat = 'pl2/latdc';
     const iS = secs.findIndex(x => x.key === 'stab');
     secs.splice(iS + 1, 0, { title: 'Pile-supported footing', subs, key: 'pile' });
     if (iS >= 0) secs[iS].subs.unshift(sub('Pile-supported footing: soil checks not applicable', [{ type: 'note', text: 'The footing is on piles. The overturning, sliding, eccentricity and soil-bearing steps of this section are shown for information only and are not checks; the piles carry the wall (next section). The earth pressures and the factored loads of this section are used.' }]));

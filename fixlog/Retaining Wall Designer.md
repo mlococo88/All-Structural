@@ -5876,3 +5876,44 @@ Other walls (heel M_s, before → after):
 
 ### Saved data
 - No input or format change.
+
+## 2026-11-07 — PR: claude/rw2-m3-pile-cap-tension — Piles in uplift: a "Pile–Cap Tension" FAIL row with the tension and the embedment, and a warning; the connection is designed by the engineer (RW2M3; check added, pile mode with uplift only)
+
+Second-pass review finding M3 (2026-11-07). Code sites are tagged `RW2M3`.
+
+### RW2M3-1. Problem
+- A pile in tension (P_min < 0) was checked only against the geotechnical uplift capacity (T_a or φR_n,up).
+- No pile-to-cap tension connection (anchorage) was checked or flagged.
+- AASHTO LRFD 10th Ed. Art. 10.7.1.2 (paraphrased) allows the reduced projection into the cap only with embedded bars or strands anchored per Art. 5.12.9.1.
+- IBC 2018 §1810.3.11 / §1810.3.3.1.5 (paraphrased): the uplift load path is to be designed.
+- Example: the review's ACI pile variant has P = −17.1 kip (−24.6 kip after RW2H2) with a 12-in embedment, and no flag.
+
+### RW2M3-2. Fix (`calcAll`, `pileChecks`; Stability Pile Step 2; Report Pile Step 2)
+- When `pile.govT.L.Pmin < 0`:
+  - new check row `pileCapT` (ok: false, label "Pile–Cap Tension", value `T=…k, embed …": not designed`, D/C n/a, with the reference);
+  - a warning "Pile uplift: P_min = −… kip per pile (combination) … provide and design the anchorage … Marked FAIL until then";
+  - a warn alert after "2.3 Uplift" on the Stability tab;
+  - a Report step "Pile–cap tension connection for T = … kip per pile (embedment … in): not designed in this tool".
+- `RW_CHECK_CARD.pileCapT = 'stabPile'`.
+- No row when no pile is in tension.
+- The pile results, capacities and the Pile Designer hand-off are unchanged.
+
+### Check cases
+- **ACI, t_f 36 in, rows 1.5 / 11.0 ft, water 2 ft below the top:** P_min = −10.4 kip, so **FAIL**, "T=10.4k, embed 12.0": not designed".
+- **ACI pile variant** (β 15°, q_s 250, water 6 ft, key, passive, k_h 0.20): T = 24.6 kip (0.6D + 0.7E + H), so FAIL.
+- **AASHTO pile variant:** T = 15.2 kip, so FAIL.
+- **Default pile walls (no uplift):** no row (unchanged).
+
+### How verified
+- Headless probe, M2 branch vs this branch, 28 walls:
+  - only the three uplift walls change, by the new row and warning;
+  - every number is identical;
+  - 0 console errors.
+- Tests: check-syntax; smoke/retaining-wall-checks (new `AUD` rows RW2M3); phone-layout rwall; project-library retwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs, pile-group.
+
+### Decisions (pending engineer review)
+- **No in-tool connection design.** Embedment bond of H-piles, and pipe or precast dowels, depend on the pile type and the owner's details. The row FAILs, which is conservative, and names the tension and the embedment.
+- **Possible follow-up:** a "connection designed by the engineer" input that turns the row to REVIEW, or an anchorage check for dowels (ℓ_d into the cap).
+
+### Saved data
+- No input or format change.
