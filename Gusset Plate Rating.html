@@ -1495,6 +1495,7 @@ const GPR = (function () {
         memberDef({ id: 'L2-U2', role: 'web', ang: 90, sec: { type: 'H', w: 10, d2: 10, desc: 'Built-up H' }, cut: 12.5, fast: { nR: 5, nL: 2, p: 3.5, g: '5', e: 14, off: 0 }, F: { DC: 40, DW: 6, LL: [55, 40] } })
       ],
       ll: [{ name: 'HL-93', kind: 'design', use: 'lrfr', gL: 1.75 }, { name: 'HS20', kind: 'design', use: 'lfr', gL: 1.3 }],
+      autoPartial: true,
       planes: [{ kind: 'above', name: 'Horizontal plane through the top line of chord fasteners', on: true, side: 'auto', Lg: '', Ln: '' },
         { kind: 'below', name: 'Horizontal plane through the bottom line of chord fasteners', on: true, side: 'auto', Lg: '', Ln: '' }],
       fac: { phiC: 1.0, phiS: 1.0 },
@@ -1835,7 +1836,8 @@ const GPR = (function () {
     (P.planes || []).forEach((q, qi) => { if (q.on === false) return; let a, e, nm = q.name;
       if (q.kind === 'above' || q.kind === 'below') { if (!chordHoles.length) { warn.push(`${nm}: there are no chord members, so this plane is not defined.`); return; } const y = q.kind === 'above' ? Math.max(...chordHoles.map(h => h.y)) : Math.min(...chordHoles.map(h => h.y)); a = [0, y]; e = [1, 0]; }
       else { const p1 = [num(q.x1), num(q.y1)], p2 = [num(q.x2), num(q.y2)]; a = p1; e = mul(sub(p2, p1), 1 / vlen(sub(p2, p1))); }
-      const iv = lineIntervals(a, e, poly); if (!iv.length) { warn.push(`${nm}: the line does not cross the plate.`); return; }
+      const segL = q.kind === 'user' && q.seg ? vlen(sub([num(q.x2), num(q.y2)], [num(q.x1), num(q.y1)])) : null;   // M3: a user plane may be the segment point 1 → point 2 only
+      const iv = lineIntervals(a, e, poly).map(([t0, t1]) => segL == null ? [t0, t1] : [Math.max(t0, 0), Math.min(t1, segL)]).filter(([t0, t1]) => t1 - t0 > 1e-9); if (!iv.length) { warn.push(`${nm}: the ${segL == null ? 'line' : 'segment'} does not cross the plate.`); return; }
       const LgAuto = iv.reduce((s, [t0, t1]) => s + t1 - t0, 0), segs = iv.map(([t0, t1]) => [add(a, mul(e, t0)), add(a, mul(e, t1))]);
       const cross = holes.filter(h => segs.some(([A, B]) => distSeg([h.x, h.y], A, B) < h.dh / 2 - 1e-9)); let LnAuto = LgAuto - cross.reduce((s, h) => s + h.dn, 0), stag = null;
       // C10: with custom patterns in the joint, staggered chains (s²/4g) along each part of the line inside the plate, through the holes on the line and the
@@ -1850,13 +1852,35 @@ const GPR = (function () {
       const sd = c => crs(e, sub(c, a)); let sign;
       if (q.kind === 'above') sign = 1; else if (q.kind === 'below') sign = -1;
       else if (q.side === 'left') sign = 1; else if (q.side === 'right') sign = -1; else { const w = sd([0, 0]); sign = Math.abs(w) < 1e-9 ? 1 : -Math.sign(w); }
-      const mem = P.members.map((m, i) => sign * sd(G[i].centroid) > 1e-6 ? i : -1).filter(i => i >= 0);
+      const ldI = q.kind === 'user' && q.loaded ? P.members.findIndex(m => m.id === q.loaded) : -1;   // M3: loaded member: the demand is that member's force component along the plane
+      if (q.kind === 'user' && q.loaded && ldI < 0) warn.push(`${nm}: the loaded member "${q.loaded}" is not a member of the joint; the loaded side is used instead.`);
+      const mem = ldI >= 0 ? [ldI] : P.members.map((m, i) => sign * sd(G[i].centroid) > 1e-6 ? i : -1).filter(i => i >= 0);
       const straddle = P.members.map((m, i) => { const s = G[i].holes.map(h => sign * sd([h.x, h.y])); return s.some(x => x > 1e-6) && s.some(x => x < -1e-6) ? m.id : null; }).filter(Boolean);
       if (straddle.length) warn.push(`${nm}: the fastener group of ${straddle.join(', ')} straddles the plane; each member is assigned to the side of its fastener centroid.`);
-      const dem = { DC: 0, DW: 0, LL: P.ll.map(() => 0) }, comp = mem.map(i => ({ i, c: dot(G[i].u, e) }));
+      const dem = { DC: 0, DW: 0, LL: P.ll.map(() => 0) }, comp = mem.map(i => ({ i, c: ldI >= 0 ? Math.abs(dot(G[i].u, e)) : dot(G[i].u, e) }));
       comp.forEach(({ i, c }) => { const m = P.members[i]; dem.DC += num(m.F.DC) * c; dem.DW += num(m.F.DW) * c; m.F.LL.forEach((x, k) => dem.LL[k] += num(x) * c); });
-      planes.push({ qi, nm, kind: q.kind, a, e, iv, segs, LgAuto, LnAuto, Lg, Ln, ovG, ovN, cross, mem, comp, dem, sign, stag });
+      planes.push({ qi, nm, kind: q.kind, a, e, iv, segs, LgAuto, LnAuto, Lg, Ln, ovG, ovN, cross, mem, comp, dem, sign, stag, ...(ldI >= 0 ? { part: { i: ldI, user: true } } : {}) });
     });
+    /* M3 (LRFD 10th Ed. 6.14.2.8.3): automatic partial shear planes around each web member that can be in compression (DC + DW < 0 or any LL < 0).
+       For each other member j: the line along j's fastener line nearest to the compression member i (outermost gage line of j on i's side), from the plate edge
+       to the first fastener line of another member (fastener-field strips extended toward the work point, not past it; i and j excluded), taking the part of the
+       line that contains the projection of i's fastener centroid. Demand = i's force × |u_i · e| (rated with i in compression). Shear yielding only (Eq. 6.14.2.8.3-1).
+       Every candidate is checked (the lowest governs), which covers the governing plane of the three bullets of 6.14.2.8.3 (conservative). */
+    if (P.autoPartial !== false) P.members.forEach((mi, i) => { if (mi.role === 'chord' || !G[i].holes.length) return; const F = mi.F, canC = num(F.DC) + num(F.DW) < 0 || F.LL.some(x => num(x) < 0); if (!canC) return;
+      const angOf = k => ((num(P.members[k].ang) % 360) + 360) % 360, others = P.members.map((m, k) => k).filter(k => k !== i && G[k].holes.length).sort((x, y) => ((angOf(x) - angOf(i) + 360) % 360) - ((angOf(y) - angOf(i) + 360) % 360));
+      const adj = others.length ? [...new Set([others[0], others[others.length - 1]])] : [];   // the adjoining members: next to i in angle on each side
+      P.members.forEach((mj, j) => { if (!adj.includes(j)) return;
+        const uj = G[j].u, nj = [-uj[1], uj[0]], si = Math.sign(crs(uj, G[i].centroid)) || 1;
+        const hsJ = P.chord === 'continuous' && mj.role === 'chord' ? chordHoles : G[j].holes, dsJ = hsJ.map(h => crs(uj, [h.x, h.y]) * si), dJ = Math.max(...dsJ), aJ = mul(nj, dJ * si), e = uj;
+        const ti = dot(sub(G[i].centroid, aJ), e), ivAll = lineIntervals(aJ, e, poly), ivi = ivAll.find(([t0, t1]) => ti >= t0 - 1e-9 && ti <= t1 + 1e-9) || ivAll.slice().sort((x, y) => Math.min(Math.abs(x[0] - ti), Math.abs(x[1] - ti)) - Math.min(Math.abs(y[0] - ti), Math.abs(y[1] - ti)))[0];
+        if (!ivi) return; let t0 = ivi[0], t1 = ivi[1];
+        P.members.forEach((mk, k) => { if (k === i || k === j || !G[k].holes.length || (P.chord === 'continuous' && chordIdx.includes(k) && chordIdx.includes(j))) return; const uk = G[k].u, cs = G[k].holes.map(h => crs(uk, [h.x, h.y])), c0 = Math.min(...cs), c1 = Math.max(...cs), den = crs(uk, e);
+          const hit = c => { if (Math.abs(den) < 1e-9) return null; const t = (c - crs(uk, aJ)) / den, pt = add(aJ, mul(e, t)); return dot(pt, uk) >= -1e-9 ? t : null; };   // the strip of k's fastener lines, from the WP outward
+          [hit(c0), hit(c1)].filter(t => t != null).forEach(t => { if (t <= ti && t > t0) t0 = t; if (t >= ti && t < t1) t1 = t; }); });
+        if (t1 - t0 < 0.5) return; if (planes.some(q => q.part && q.part.auto && q.part.i === i && Math.abs(Math.abs(dot(q.e, e)) - 1) < 1e-9 && Math.abs(crs(e, sub(q.a, aJ))) < 1e-6)) return;   // same line already (continuous chord)
+        const A = add(aJ, mul(e, t0)), B = add(aJ, mul(e, t1)), Lg0 = t1 - t0, c = Math.abs(dot(G[i].u, e)), dem = { DC: num(F.DC) * c, DW: num(F.DW) * c, LL: F.LL.map(x => num(x) * c) };
+        const cross = holes.filter(h => distSeg([h.x, h.y], A, B) < h.dh / 2 - 1e-9), Ln0 = Lg0 - cross.reduce((s2, h) => s2 + h.dn, 0);
+        planes.push({ qi: null, nm: `Partial plane around ${mi.id} along the fastener line of ${P.members[j].role === 'chord' && P.chord === 'continuous' ? 'the chord' : mj.id}`, kind: 'partial', a: A, e, iv: [[0, Lg0]], segs: [[A, B]], LgAuto: Lg0, LnAuto: Ln0, Lg: Lg0, Ln: Ln0, ovG: null, ovN: null, cross, mem: [i], comp: [{ i, c }], dem, sign: 1, stag: null, part: { i, j, auto: true } }); }); });
 
     /* ----- C14-C17 helpers. A section along a line (coordinate y along the line) is a set of strips { y0, y1, w (width across the line), Fy, Fu }:
        area, centroid, moment of inertia, extreme fibres, yield force, plastic neutral axis (equal yield force each side) and plastic moment. ----- */
@@ -1993,6 +2017,9 @@ const GPR = (function () {
         mk({ ...base, id: 'SPL-TY', ls: 'spy', dirs: '+', title: `${spl.lbl}: splice in tension, gross section yielding`, cap: { lrfr: { '+': capSPY() } } });
         mk({ ...base, id: 'SPL-TF', ls: 'spf', dirs: '+', title: `${spl.lbl}: splice in tension, net section fracture`, cap: { lrfr: { '+': capSPF() } } }); } }
     planes.forEach((pl, k) => { const id = `SP${k + 1}`;
+      if (pl.part) { const y = { lrfr: capPV(pl, 'lrfr', 'pvy'), lfr: capPV(pl, 'lfr', 'pvy') }, mid = P.members[pl.part.i].id;   // M3: partial plane around a compression member
+        mk({ id: id + '-Y', ls: 'pvy', grp: 'Partial shear plane', plane: k, who: pl.nm, title: `${pl.nm}: shear yielding (gross), ${mid} in compression`, dirs: '-', dem: pl.dem, cap: { lrfr: { '-': y.lrfr }, lfr: { '-': y.lfr } } });
+        mk({ id: id + '-U', ls: 'pvu', grp: 'Partial shear plane', plane: k, who: pl.nm, title: `${pl.nm}: shear fracture (net)`, dirs: 'any', dem: pl.dem, na: 'Not checked on a partial shear plane: LRFD 10th Ed. 6.14.2.8.3 applies only Eq. 6.14.2.8.3-1 (shear yielding) to partial planes.', cap: {} }); return; }
       if (!pl.mem.length) { mk({ id: id + '-Y', ls: 'pvy', grp: 'Partial shear plane', plane: k, who: pl.nm, title: `${pl.nm}: shear yielding`, dirs: 'any', dem: pl.dem, na: 'No member fastener group lies on the loaded side of this plane.', cap: {} }); return; }
       const y = { lrfr: capPV(pl, 'lrfr', 'pvy'), lfr: capPV(pl, 'lfr', 'pvy') }, u = { lrfr: capPV(pl, 'lrfr', 'pvu'), lfr: capPV(pl, 'lfr', 'pvu') };
       mk({ id: id + '-Y', ls: 'pvy', grp: 'Partial shear plane', plane: k, who: pl.nm, title: `${pl.nm}: shear yielding (gross)`, dirs: 'any', dem: pl.dem, cap: { lrfr: { '+': y.lrfr, '-': y.lrfr }, lfr: { '+': y.lfr, '-': y.lfr } } });
@@ -2042,7 +2069,7 @@ const GPR = (function () {
         return { j, n, v, m, qn, qv, qm, r16: qv * qv + qn * qn, r1: qm + qn * qn + qv * qv * qv * qv }; });
       const mx = k => rows.reduce((a, r) => !a || r[k] > a[k] ? r : a, null);
       pint.push({ key, nm, S, N, V, M, res, rows, hasN, g16: hasN ? mx('r16') : null, g1: mx('r1'), note }); }
-    planes.forEach((pl, k) => { if (!pl.mem.length) return; const nOut = mul([-pl.e[1], pl.e[0]], pl.sign), N = zeroD(), V = zeroD(), M = zeroD();
+    planes.forEach((pl, k) => { if (!pl.mem.length || pl.part) return; const nOut = mul([-pl.e[1], pl.e[0]], pl.sign), N = zeroD(), V = zeroD(), M = zeroD();
       const els = pl.iv.map(([a, b]) => ({ y0: a, y1: b, w: sumT, Fy, Fu })), S0 = secProps(els), Cpt = add(pl.a, mul(pl.e, S0.yb));
       pl.mem.forEach(i => { const m = P.members[i]; accD(N, m, dot(G[i].u, nOut)); accD(V, m, dot(G[i].u, pl.e)); accD(M, m, crs(mul(Cpt, -1), G[i].u)); });
       const vr = meth => Math.min(capPV(pl, meth, 'pvy').C, capPV(pl, meth, 'pvu').C);
@@ -3025,7 +3052,7 @@ function panePlates() {
   const vt = P.plates.poly.map((q, i) => `<tr><td class="an">${i + 1}</td><td>${cell(`plates.poly.${i}.0`, 'num', 'x')}</td><td>${cell(`plates.poly.${i}.1`, 'num', 'y')}</td><td class="ax"><button type="button" class="x-btn" data-act="delVtx" data-i="${i}" title="Delete vertex ${i + 1}">×</button></td></tr>`).join('');
   const planes = P.planes.map((q, i) => `<div class="row-blk"><div class="row-hd"><span>${q.kind === 'user' ? 'User plane' : q.kind === 'above' ? 'Auto: above chord fasteners' : 'Auto: below chord fasteners'}</span>${q.kind === 'user' ? `<button type="button" class="x-btn" data-act="delPlane" data-i="${i}" title="Delete plane">×</button>` : ''}</div>
       <div class="sec-body" style="padding:0 0 6px">${fld('Name', `planes.${i}.name`, '', 'text', { full: true })}${fld('Include this plane', `planes.${i}.on`, '', 'bool')}
-      ${q.kind === 'user' ? `${fld('Point 1, x', `planes.${i}.x1`, 'in')}${fld('Point 1, y', `planes.${i}.y1`, 'in')}${fld('Point 2, x', `planes.${i}.x2`, 'in')}${fld('Point 2, y', `planes.${i}.y2`, 'in')}${fld('Loaded side (members whose fasteners lie there)', `planes.${i}.side`, '', 'sel', { full: true, options: [['auto', 'Side away from the work point'], ['left', 'Left of point 1 → point 2'], ['right', 'Right of point 1 → point 2']] })}` : ''}
+      ${q.kind === 'user' ? `${fld('Point 1, x', `planes.${i}.x1`, 'in')}${fld('Point 1, y', `planes.${i}.y1`, 'in')}${fld('Point 2, x', `planes.${i}.x2`, 'in')}${fld('Point 2, y', `planes.${i}.y2`, 'in')}${fld('Loaded side (members whose fasteners lie there)', `planes.${i}.side`, '', 'sel', { full: true, options: [['auto', 'Side away from the work point'], ['left', 'Left of point 1 → point 2'], ['right', 'Right of point 1 → point 2']] })}${fld('Segment only (point 1 to point 2, not the whole line)', `planes.${i}.seg`, '', 'bool')}${fld('Loaded member (partial plane around a compression member)', `planes.${i}.loaded`, '', 'sel', { full: true, options: [['', 'None: members on the loaded side'], ...P.members.map(m => [m.id, m.id])] })}` : ''}
       ${fld('Gross length override', `planes.${i}.Lg`, 'in', 'ovr', { auto: `pl.${i}.Lg` })}${fld('Net length override', `planes.${i}.Ln`, 'in', 'ovr', { auto: `pl.${i}.Ln` })}</div></div>`).join('');
   return `
   ${secHd('sec-plt', 'Gusset plates')}
@@ -3050,7 +3077,7 @@ function panePlates() {
       ${fld('Offset of centroid from chord work line', `splice.plates.${i}.y`, 'in', 'dim')}${fld('Holes across one plate', `splice.plates.${i}.nh`, '', 'num', { note: 'first fastener line' })}</div></div>`).join('')}
     <div class="arr-foot"><button type="button" class="proj-btn" data-act="addSplice">Add a splice plate</button></div></div>
   ${secHd('sec-planes', 'Partial shear planes')}
-  <div class="sec-body one-col" id="sec-planes"><p class="note">The demand on a plane is the component along the plane of the resultant of the forces of the members whose fastener groups lie on the loaded side. Automatic planes run through the top (and bottom) line of chord fasteners; the loaded side is above (below).</p>${planes}
+  <div class="sec-body one-col" id="sec-planes"><p class="note">The demand on a plane is the component along the plane of the resultant of the forces of the members whose fastener groups lie on the loaded side. Automatic planes run through the top (and bottom) line of chord fasteners; the loaded side is above (below). A user plane with a loaded member is a partial plane: its demand is that member's force component along the plane, rated with the member in compression, shear yielding only (LRFD 10th Ed. 6.14.2.8.3).</p>${fld('Automatic partial planes around compression web members (LRFD 10th Ed. 6.14.2.8.3)', 'autoPartial', '', 'bool', { full: true })}${planes}
     <div class="arr-foot"><button type="button" class="proj-btn" data-act="addPlane">Add a plane (two points)</button></div></div>`;
 }
 
