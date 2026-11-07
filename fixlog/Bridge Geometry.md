@@ -2034,3 +2034,36 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **Not changed:** the "beam seat" surface of the Top-of-Deck grid rows (`beamSeatCW` at grid stations; not at bearings) has no seat terms. Per-beam b_f is not supported (global only).
 - **Saved data (§5):** additive scalars `seat_terms`, `d_bf`. Migration: `BG_OLD_DEFAULTS` `{seat_terms:false, d_bf:'0'}`; `BG_NEW_DEFAULTS` `{seat_terms:true, d_bf:'0'}`. No key changed.
 - **Other copies:** none.
+
+## 2026-11-07 — PR: claude/bg-h3-super-table (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (BGX6, review H3, engineer item O2 / BG-O2: optional superelevation transition table)   [calc change: new option, default = existing behaviour] [saved data: additive field]
+
+- **Why:** review 2026-11-07, H3. Cross-slope controls can only sit at substructure stations, and each side's slope is interpolated linearly between them, so a transition cannot be tied to the TS/SC stations or follow the Green Book method. Green Book method (*A Policy on Geometric Design*, 7th Ed. 2018, Sec. 3.3.8; not in the references folder, **verify**): the outside lane rotates first, the inside lane stays at normal crown until reverse crown, and full super is reached at the SC.
+- **Decision (pending engineer review):**
+  - New optional **Superelevation transition table** on the Bridge tab, in the cross-slope fieldset: rows of station, left %, right %. Slopes are entered **outward from the crown** (− = falls away), the usual way super diagrams are given. Normal crown 2 % = −2 / −2; full 6 % banked to the right = +6 / −6.
+  - When the table has a complete row, it replaces the global mode / rate and the per-support controls. Each side is interpolated linearly in station between rows and held beyond the first / last row. The deck rotates about the crown line (as before).
+  - Green Book transitions are entered as their own stations (normal crown, level crown, reverse crown, full super).
+  - Empty table (every saved project and every new one): exactly the existing behaviour.
+  - Under the table: the relative gradient of each deck edge to the PGL between rows, as 1:x, to compare with Green Book Table 3-15 (verify). No limit is applied.
+- **Where (anchors):**
+  - HTML: block `<!-- BGX6 (2026-11-07): optional superelevation transition table` before the cross-slope fieldset's `</fieldset>` (`#xs_tbl`, `#xs_add`, `#xs_info`).
+  - State and UI: `let XSLOPES = [];`, `xsRows()`, `renderXsTable()`, `renderXsInfo()` (after `let HVALPTS = [];`), and the `#xs_add` listener before the `ovr_toggle` listener.
+  - Engine: `buildCrossSection(globalMode, globalRate, controls, pgl, crown, table)`, which adds `tableAt()`; `slopesAt` returns `tableAt(s)` when the table has rows. `buildEngine` passes `xsRows()`.
+  - `serializeProject` writes `XSLOPES`; `applyProject` reads it (absent = []). `freshDefaults` empties it. `compute` calls `renderXsInfo()`.
+- **Before:** `function slopesAt(s){ if(cps.length===0) return sidesOf(globalMode, globalRate); …`
+- **After:** `function slopesAt(s){ if(xt.length) return tableAt(s); if(cps.length===0) return sidesOf(globalMode, globalRate); …` with `tableAt` converting outward % to the engine's dz per ft (+ = rising to the right): L = −left/100, R = +right/100.
+- **Governing provision:** AASHTO Green Book 7th Ed. Sec. 3.3.8 and Table 3-15 (verify; not in the references). No design-code formula.
+- **Check case (the review's):**
+  - Inputs: tangent, flat profile EL 100, span 1+00 → 2+00, deck edges ±24 ft about the PGL, no overlay. Crown 2 % at Abut 1 → super 6 % banked right at Abut 2 (per-support controls).
+  - Inside (right) edge dz at 1+25 / 1+50 / 1+75:
+    - before (per-side linear): −0.72 / −0.96 / −1.20 ft;
+    - after, with the table 1+00 (−2, −2), 1+50 (+2, −2), 2+00 (+6, −6): **−0.48 / −0.48 / −0.96 ft** (right slope −2, −2, −4 % × 24 ft).
+  - Outside (left) edge identical: 0.00 / +0.48 / +0.96 ft.
+  - Relative gradient shown: left edge 1:52 in both intervals, right edge 0 then 1:52.
+- **How verified:**
+  - Headless probe origin/main vs branch: demo, variant and Examples 1–5 identical in every table, the hand-off payload and DXF. Export JSON gains `XSLOPES: []`.
+  - The check case above, and its round trip through Export JSON (the rows come back as entered). 0 console errors.
+  - Tests:
+    - pass: check-syntax, bgeo-examples, dxf-print-sheets --tool bg, home-projects --tool bgeo, tests/engine/run.mjs handoffs lldf list-input.
+    - project-library --tool bgeo: the only difference is the Bridge tab text (the new table's note), so the results are identical.
+- **Saved data (§5):** additive top-level `XSLOPES` (array of {staStr, L, R}); absent = empty = old behaviour. No key changed.
+- **Other copies:** none.

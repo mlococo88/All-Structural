@@ -288,6 +288,14 @@
           <input type="hidden" id="bcl_off" value="0">
           <input type="hidden" id="crown_off" value="0">
           <p class="note">The <strong>PGL = baseline = reference line</strong>, fixed at offset 0 — the deck elevation equals the vertical profile elevation here. The <strong>construction reference line</strong> is a straight chord between its offset at each abutment — the line the plans dimension the superstructure from. It need not be the deck centerline. Girders, edges, and curbs are built parallel to it. The <strong>crown</strong> reference (dropdown) sets what the crown offset is measured from: choose <em>PGL</em> and the crown follows the alignment curve at that offset (offset 0 = on the PGL); choose <em>construction ref line</em> and the crown is a straight line offset from the reference-line chord. This drives both the drawn crown line and the cross-slope pivot in the elevations.</p>
+          <!-- BGX6 (2026-11-07): optional superelevation transition table (review H3, engineer item O2) -->
+          <div style="margin-top:10px; border-top:1px dashed var(--rule, #ccc); padding-top:8px;">
+            <label style="margin:0 0 4px;">Superelevation transition table <span class="unit">(optional)</span></label>
+            <p class="note" style="margin:0 0 6px;">Leave empty to use the global mode / rate and the per-support cross-slope controls (as before). With one or more rows, the deck's left and right cross slopes come from this table instead: each side is interpolated linearly in station between rows and held beyond the first / last row. Slopes are entered in % <b>outward from the crown</b> (− = falls away from the crown): normal crown 2 % is left −2, right −2; full super 6 % banked down to the right is left +6, right −6. For the Green Book method (AASHTO <i>A Policy on Geometric Design</i>, 7th Ed. Sec. 3.3.8, verify) enter its stations: normal crown, level crown (end of tangent runout), reverse crown, full super (end of runoff, e.g. at the SC). The deck rotates about the crown line.</p>
+            <div style="overflow-x:auto;"><table class="subtbl" id="xs_tbl"></table></div>
+            <button class="sm ghost" id="xs_add" type="button" style="margin-top:6px;">+ Row</button>
+            <div class="note" id="xs_info" style="margin-top:4px;"></div>
+          </div>
         </fieldset>
 
         <h2 class="sec">Girders &amp; Deck Edges</h2>
@@ -827,7 +835,7 @@ function buildProfile(pviText){
 }
 
 /* ===== CROSS SECTION (crown/super, per-unit override, linear rate interp) ===== */
-function buildCrossSection(globalMode, globalRate, controls, pgl, crown){
+function buildCrossSection(globalMode, globalRate, controls, pgl, crown, table){
   // pgl  = transverse offset of the Profile Grade Line (deck elevation = profile elevation here; dz=0)
   // crown= transverse offset of the crown high point (crown mode). Defaults to pgl when not separately set.
   const cps = controls.slice().sort((a,b)=>a.sta-b.sta);
@@ -849,7 +857,15 @@ function buildCrossSection(globalMode, globalRate, controls, pgl, crown){
   // deck rotates linearly and no edge jumps. (The mode used to flip at the midpoint between controls,
   // e.g. 0.96 ft at an edge 12 ft out between crown 2% and super 6% 100 ft apart.) At the controls,
   // and wherever both controls have the same mode and sign, the result is unchanged.
+  // BGX6: a transition table (rows {sta, L, R}, % outward from the crown) replaces everything else; each side linear in station
+  const xt=(table||[]).slice().sort((a,b)=>a.sta-b.sta);
+  function tableAt(s){ const k=v=>({L:-v.L/100, R:v.R/100});   // outward % -> dz per ft of offset (+ = rising toward the right)
+    if(s<=xt[0].sta) return k(xt[0]); const n=xt.length-1; if(s>=xt[n].sta) return k(xt[n]);
+    for(let i=0;i<n;i++){ if(s>=xt[i].sta&&s<=xt[i+1].sta){ const d=xt[i+1].sta-xt[i].sta, f=d>0?(s-xt[i].sta)/d:0;
+      return k({L:xt[i].L+(xt[i+1].L-xt[i].L)*f, R:xt[i].R+(xt[i+1].R-xt[i].R)*f}); } }
+    return k(xt[n]); }
   function slopesAt(s){
+    if(xt.length) return tableAt(s);
     if(cps.length===0) return sidesOf(globalMode, globalRate);
     if(s<=cps[0].sta) return sidesOf(cps[0].mode, cps[0].rate);
     const n=cps.length-1;
@@ -868,7 +884,7 @@ function buildCrossSection(globalMode, globalRate, controls, pgl, crown){
   // Anchored so dz=0 at the PGL (offset 0). When a station is given, uses the per-unit
   // cross-slope controls (rateAt) like dz(); otherwise falls back to the global mode/rate.
   function dzAbout(off, crownO, s){
-    const sl = (s!=null) ? slopesAt(s) : sidesOf(globalMode, globalRate);
+    const sl = (s!=null) ? slopesAt(s) : (xt.length ? tableAt(xt[0].sta) : sidesOf(globalMode, globalRate));
     return shapeAbout(sl,off,crownO) - shapeAbout(sl,pgl,crownO);
   }
   return { rateAt, slopesAt, dz, dzAbout, controls:cps, pgl, crown:crownOff };
@@ -1120,7 +1136,7 @@ function buildEngine(){
   const {gMode,gRate,ctrls}=crossControls();
   // PGL = Baseline = Reference = offset 0 (always). Crown is an offset from the PGL.
   const crownOff=+(document.getElementById('crown_off')?.value||0);
-  const xsec=buildCrossSection(gMode,gRate,ctrls,0,crownOff);
+  const xsec=buildCrossSection(gMode,gRate,ctrls,0,crownOff,xsRows());   // BGX6: the transition table, when it has rows
   // Superstructure depth inputs are entered in INCHES; convert to feet for the engine.
   const IN2FT=1/12;
   const depths={slab:+cfg.d_slab*IN2FT, minHaunch:+cfg.d_haunch*IN2FT, beam:+cfg.d_beam*IN2FT,
@@ -1542,6 +1558,7 @@ function compute(){
   if(gErr.length){ if(_autosaveArmed) autosave(); return; }
   ENG=buildEngine();
   showGeomWarnings(geometryWarnings());
+  renderXsInfo();   // BGX6
   { const R=sectionStaRange();
     if(ACTIVE_STA===null||ACTIVE_STA<R.s0-1e-6||ACTIVE_STA>R.s1+1e-6) ACTIVE_STA=(R.s0+R.s1)/2; }
   drawPlan('svg_plan_a'); drawProfile('svg_prof_a');
@@ -3199,6 +3216,34 @@ function runValidation(){
 //  A known Northing/Easting is projected back onto the alignment; the resulting station and offset
 //  are compared with what you expect. Offsets follow the same datum choice as the elevation checks.
 let HVALPTS = [];
+/* BGX6 (review H3, engineer item O2; Decision pending engineer review): optional superelevation transition table,
+   rows {staStr, L, R}: station and the left / right cross slopes in % OUTWARD from the crown (− = falls away). Empty (every saved
+   project and a new one): the per-support controls as before. */
+let XSLOPES = [];
+function xsRows(){ return XSLOPES.map(r=>({sta:parseStation(r.staStr), L:+r.L, R:+r.R})).filter(r=>isFinite(r.sta)&&isFinite(r.L)&&isFinite(r.R)).sort((a,b)=>a.sta-b.sta); }
+function renderXsTable(){
+  const t=document.getElementById('xs_tbl'); if(!t) return;
+  const esc=v=>String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  let h='<thead><tr><th>#</th><th title="Station of this row (NNN+NN.NN).">Station</th><th title="Left side cross slope, % outward from the crown (− = falls away from the crown).">Left (%)</th><th title="Right side cross slope, % outward from the crown (− = falls away from the crown).">Right (%)</th><th></th></tr></thead><tbody>';
+  XSLOPES.forEach((r,i)=>{ h+=`<tr><td class="lbl">${i+1}</td><td><input type="text" data-xi="${i}" data-xf="staStr" value="${esc(r.staStr)}" placeholder="10+00.00" style="width:96px"></td>`+
+    `<td><input type="number" data-xi="${i}" data-xf="L" value="${esc(r.L)}" step="0.1" style="width:76px"></td><td><input type="number" data-xi="${i}" data-xf="R" value="${esc(r.R)}" step="0.1" style="width:76px"></td>`+
+    `<td><button class="sm ghost" data-xrm="${i}" type="button" title="Remove this row">✕</button></td></tr>`; });
+  h+='</tbody>'; t.innerHTML=h;
+  t.querySelectorAll('input').forEach(el=>el.addEventListener('change',ev=>{ const i=+ev.target.dataset.xi, f=ev.target.dataset.xf;
+    XSLOPES[i][f]=(f==='staStr')?ev.target.value:(ev.target.value===''?'':+ev.target.value); if(ENG) compute(); markDirty(); }));
+  t.querySelectorAll('[data-xrm]').forEach(b=>b.addEventListener('click',ev=>{ XSLOPES.splice(+ev.currentTarget.dataset.xrm,1); renderXsTable(); if(ENG) compute(); markDirty(); }));
+  renderXsInfo();
+}
+// what the table does, and the relative gradient of each deck edge to the PGL between rows (Green Book Table 3-15, verify)
+function renderXsInfo(){ const box=document.getElementById('xs_info'); if(!box) return; const rows=xsRows();
+  if(!rows.length){ box.innerHTML=XSLOPES.length?'<span style="color:var(--oxide)">No complete row (station, left, right): the table is not used.</span>':''; return; }
+  const su=sortedUnits(), sp=Math.max(1,Math.min(su.length-1,1)), ed=edgesForSpan(sp), wl=Math.abs(ed.l), wr=Math.abs(ed.r);
+  const g=[]; for(let i=1;i<rows.length;i++){ const a=rows[i-1], b=rows[i], ds=b.sta-a.sta; if(!(ds>0)) continue;
+    const rl=Math.abs(b.L-a.L)/100*wl/ds, rr=Math.abs(b.R-a.R)/100*wr/ds;
+    g.push(`${formatStation(a.sta)}–${formatStation(b.sta)}: left edge ${rl>0?'1:'+Math.round(1/rl):'0'}, right edge ${rr>0?'1:'+Math.round(1/rr):'0'}`); }
+  box.innerHTML=`<b>Used:</b> ${rows.length} row(s) replace the global mode / rate and the per-support controls. `+
+    (g.length?`Relative gradient of the deck edges to the PGL (edge offsets ${wl.toFixed(1)} / ${wr.toFixed(1)} ft): ${g.join('; ')}. Compare with the maximum relative gradient for the design speed (Green Book Table 3-15, verify).`:'');
+}
 function renderHValTable(){
   const t=document.getElementById('hval_tbl'); if(!t) return;
   let h='<thead><tr><th>#</th><th title="Optional label, e.g. the plan point name.">Label</th>'+
@@ -4518,6 +4563,11 @@ window.addEventListener('resize',()=>{ clearTimeout(_heatResizeT); _heatResizeT=
   const el=document.getElementById(id); if(el) el.addEventListener('change',()=>{ if(ENG) drawHeatmap(); }); });
 ['x_mode_global','x_rate_global','crown_ref','girder_frame','skew_datum','seat_terms','d_bf','crown_off','crown_off_a1','crown_off_a2','bcl_off','bcl_off_a1','bcl_off_a2','edge_l','edge_r','curb_l','curb_r','d_slab','d_haunch','d_beam','d_bearing','d_camber','d_hma'].forEach(id=>
   document.getElementById(id).addEventListener('change',()=>{ renderOvrGrid(); renderSpanTable(); if(ENG) compute(); }));
+document.getElementById('xs_add').addEventListener('click',()=>{   // BGX6: a new row after the last (or at the first support)
+  const rows=xsRows(), su=sortedUnits(); const last=XSLOPES[XSLOPES.length-1];
+  XSLOPES.push(last?{staStr:formatStation((rows.length?rows[rows.length-1].sta:0)+50), L:last.L, R:last.R}:{staStr:formatStation(su.length?su[0].sta:0), L:-2, R:-2});
+  renderXsTable(); if(ENG) compute(); markDirty(); });
+renderXsTable();
 document.getElementById('ovr_toggle').addEventListener('click',()=>{
   const p=document.getElementById('ovr_panel'); const open=p.style.display!=='none';
   p.style.display=open?'none':'block';
@@ -4638,6 +4688,7 @@ function serializeProject(){
     // as it clears each array before re-reading it. Copying removes that trap entirely.
     ELEMS:ELEMS.slice(), GIRDERS:GIRDERS.slice(), UNITS:UNITS.slice(), SPAN_OV:JSON.parse(JSON.stringify(SPAN_OV)),
     VPIS:VPIS.slice(), PERBEAM, PERBEAMSPAN, VALPTS:VALPTS.slice(), HVALPTS:HVALPTS.slice(),
+    XSLOPES:XSLOPES.map(r=>({staStr:r.staStr, L:r.L, R:r.R})),   // BGX6 (additive; absent = empty)
     scalars, activeSta:ACTIVE_STA,
     overlays: serializeOverlays(),
     pickPoints: (typeof PICKPTS!=='undefined'?PICKPTS:[]).map(p=>({label:p.label, lat:p.lat, lng:p.lng})) };
@@ -4650,6 +4701,7 @@ function applyProject(p){
   PERBEAMSPAN = p.PERBEAMSPAN || {camber:{},beam:{},bearing:{}};
   if(p.VALPTS){ VALPTS.length=0; p.VALPTS.forEach(v=>VALPTS.push(v)); }
   HVALPTS.length=0; (p.HVALPTS||[]).forEach(v=>HVALPTS.push(v));
+  XSLOPES=(Array.isArray(p.XSLOPES)?p.XSLOPES:[]).map(r=>({staStr:String(r.staStr==null?'':r.staStr), L:r.L, R:r.R}));   // BGX6: saves without it: no table (as before)
   ['camber','beam','bearing'].forEach(q=>{ if(!PERBEAM[q])PERBEAM[q]={}; if(!PERBEAMSPAN[q])PERBEAMSPAN[q]={}; });
   UNITS.length=0; (p.UNITS||[]).forEach(e=>UNITS.push(e));
   for(const k in SPAN_OV) delete SPAN_OV[k];
@@ -4674,7 +4726,7 @@ function applyProject(p){
     else el.value=(id==='map_datum' && MAP_EPSG_OLD[p.scalars[id]]) ? MAP_EPSG_OLD[p.scalars[id]] : p.scalars[id]; } }
   ACTIVE_STA = (typeof p.activeSta==='number') ? p.activeSta : null;
   renderVDatum();
-  renderElemTable(); renderVProfTable(); renderGirderTable(); renderSubTable(); renderSpanTable(); renderOvrGrid(); renderValTable(); renderHValTable();
+  renderElemTable(); renderVProfTable(); renderGirderTable(); renderSubTable(); renderSpanTable(); renderOvrGrid(); renderValTable(); renderHValTable(); renderXsTable();
   compute();
   // restore Site Map plan overlays (base64 images + control points). Safe if map libs aren't up yet.
   restoreOverlays(p.overlays||[]);
@@ -4980,7 +5032,7 @@ function bgOldDefaults(){ for(const id in BG_OLD_DEFAULTS){ const el=document.ge
 function bgNewDefaults(){ for(const id in BG_NEW_DEFAULTS){ const el=document.getElementById(id); if(el){ if(el.type==='checkbox') el.checked=!!BG_NEW_DEFAULTS[id]; else el.value=BG_NEW_DEFAULTS[id]; } } }
 function freshDefaults(){
   // the demo bridge (only used when there's nothing to restore and user hits New/reset)
-  bgNewDefaults();
+  bgNewDefaults(); XSLOPES=[]; renderXsTable();   // BGX6
   ELEMS.length=0; [{type:'tan',L:200},{type:'spi',L:150,Rin:0,Rout:800},{type:'crv',R:800,L:300},
     {type:'spi',L:150,Rin:800,Rout:0},{type:'tan',L:200}].forEach(e=>ELEMS.push(e));
   VPIS.length=0; [{sta:0,elev:100.00,L:0},{sta:400,elev:108.00,L:300},{sta:900,elev:104.00,L:0}].forEach(r=>VPIS.push(r));
