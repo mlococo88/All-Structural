@@ -16134,7 +16134,7 @@ index 86d5f78..9d50d7b 100644
 +  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.stemH.size","reinf.bwH.size","reinf.ftgL.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate","wing.hSize","wing.vSize","wing.ftBBar","wing.ftTBar","iab.capBar","iab.hBar","iab.vBar","iab.stBar","apSlab.sBar","apSlab.hBar","apSlab.aBar","apSlab.dBar","apSlab.tBar"].includes(p))?num:raw;   // APS: bar sizes stay strings
 ```
 
-## 2026-11-07 — PR: claude/abut-m7-review (ABM7: geotechnical checks not computed are no longer silent — REVIEW rows for settlement, overall stability, pile-group compression and group uplift, with references by others; pile-group compression checked when η is entered)   [check-logic change: new rows] [MORE conservative]
+## 2026-11-07 — PR: claude/abut-m7-review (PR #1043: https://github.com/mlococo88/All-Structural/pull/1043) (ABM7: geotechnical checks not computed are no longer silent — REVIEW rows for settlement, overall stability, pile-group compression and group uplift, with references by others; pile-group compression checked when η is entered)   [check-logic change: new rows] [MORE conservative]
 
 Source: code-compliance review of 2026-11-07, item M7.
 
