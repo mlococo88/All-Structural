@@ -1364,3 +1364,24 @@ Basis: 780 CMR 10th Ed. (Massachusetts amendments to IBC 2021), Ch. 16: 1613.1 a
 - **How verified:** headless Chromium main vs branch, 16 cases, leaf diff of `R` + hand-off (moved only as above; the hand-off gains a note line where a check fails); rendered text of every tab and the Report (0 console / KaTeX errors); Excel built in all cases; `check-syntax`, `project-library --tool asce7`, `phone-layout --tool asce7`, `engine handoffs`.
 - **Saved data:** one new optional field `irreg` in the project / autosave JSON (`asce7bldg.*`); older saves open with `none`. No key or existing field changed.
 - **Correction to the A7M1/M2 entry above:** its check case says the Table 12.2-1 error "blocks the calculation". It shows as a blocking check ("Blocked" on the dashboard); like every `xc("err",…)` check it does not stop the other results. Nothing was changed for this.
+
+## 2026-11-07 — PR: claude/asce7-m5-snow-in-w — A7M5: 20 % of the design snow in the effective seismic weight where p_f > 30 psf (review M5; §4)
+
+### A7M5. Snow in W, Sec. 12.7.2   [calc change] [more conservative]
+- **Where:** `solve()` seismic block, anchor `sq.Wt=S.seisW;` (now preceded by the `A7M5` block) and the level list just after `const lv=S.levels.filter(l=>l.w>0)`; seismic tab panel `o-se5` (new first step); Excel seismic section, the `inp("Wt",…)` row; new input `S.snowInW` (DEF, Seismic input tab, "Weight and Period" panel).
+- **Before:**
+  ```js
+    sq.Wt=S.seisW;
+    sq.Vbase=sq.Cs*sq.Wt;
+  ```
+  W was the entered value only; nothing added snow where p_f > 30 psf.
+- **After:** where `R.snow.pfDes > 30` and `S.snowInW` is false: `W_s = 0.2 × R.snow.balanced × plan area / 1000` (kip); `W = S.seisW + W_s`; W_s is also added to the highest level with weight (its `w`, with `wIn` / `wSnow` recorded), so C_vx and F_x include it. Worked step "Snow in the effective seismic weight" with a note; Excel rows W_in, p_s, A, `W_s = 0.2·p_s·A/1000`, `W = W_in + W_s` (live formulas). With the box ticked, a note states that the entered weights include it.
+- **Decisions (pending engineer review):** trigger on the design flat roof snow p_f,des (with the 780 CMR Table 1604.11 minimum), amount on the balanced design snow (with the minimum and rain-on-snow where they apply) over the full plan area, all of it at the highest level; the default adds it (old saves have no `snowInW` and so get it added: the §4 change). A project whose W already includes snow should tick the new box.
+- **Provision:** ASCE/SEI 7-16 Sec. 12.7.2, item 4 (**verify (ASCE 7-16 PDF unreadable)**).
+- **Check cases (main → branch):**
+  - Variant B (Adams, p_f = 45.44 psf, 100 × 60 ft, W = 1200 k, one level): W_s = 0.2·45.44·6000/1000 = 54.52 k; W = 1254.52 k; C_s = 0.0747; **V = 89.60 → 93.67 k**; M_base 2150.40 → 2248.11 k-ft.
+  - Variant C (manual p_g 40, Risk IV: p_f = 0.7·1.2·40 = 33.6 psf): W_s = 0.2·33.6·6000/1000 = 40.32 k; W = 5040.32 k; **V = 0.204·5040.32 = 1028.23 k (was 1020.00)**; roof F_x 348.77 → 360.79 k.
+  - Adams flat (p_f,des = 40 psf): W_s = 48 k; V = 71.68 → 74.55 k.
+  - Default Melrose (p_f,des = 30.00, not > 30): unchanged; likewise gable/hip/monoslope Melrose, Chatham, Site E cases.
+- **How verified:** headless Chromium, main vs branch, 16 cases: leaf diff of `R` + hand-off (moved: W, V, level forces, story shears and moments, the seismic lateral column of the combinations; hand-off unchanged); rendered text of every tab and the Report (0 console / KaTeX errors); Excel built in all cases; `check-syntax`, `project-library --tool asce7`, `phone-layout --tool asce7`, `engine handoffs`.
+- **Saved data:** new optional field `snowInW` (default false); no key or existing field changed.
