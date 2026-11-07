@@ -2328,6 +2328,8 @@ const COMBOS={
   A3:{name:'D + 0.7Di',fam:'ASD',D:1.0,W:0,Di:0.7,Wi:0},
   A4:{name:'0.6D + 0.6W',fam:'ASD',D:0.6,W:0.6,Di:0,Wi:0},
   A5:{name:'0.6D + 0.7Di + 0.7Wi',fam:'ASD',D:0.6,W:0,Di:0.7,Wi:0.7},
+  // LPL3 (2026-11-07, review L3): ASCE 7-16 §2.3.1 combination 1, 1.4D (LRFD). Added last so that the existing combinations keep their order.
+  L6:{name:'1.4D',fam:'LRFD',D:1.4,W:0,Di:0,Wi:0},
 };
 const COMBO_KEYS=Object.keys(COMBOS);
 
