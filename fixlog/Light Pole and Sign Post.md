@@ -2389,3 +2389,49 @@ Engineer's answers to the two open items of PR #671 (LTSV).
   - Shaft φM_n (12 #6, P–M at P_u): 353,377 → 353,244 lb·ft; soil bearing q 0.156 → 0.141 ksf; base plate t_req 0.842 → 0.841 in. Embedment d and the pole member checks: unchanged.
 - **How verified:** `node tests/lightpole-compare.mjs --a origin/main` (21 cases): every pole-mode case moves only in the axial-dependent values (asd/lrfd axial, found.Pu, bolts, bearing, shaft P–M, the IBC text rows that show them); the sign cases, the LTS sign cases and `poleStress` / `found.d` are identical; `ltspole` / `ltspoleb` move only in the IBC objects the page also computes in LRFDLTS mode (the LTS engine does not call `evalComboDir`; `apps/light-pole/lts-engine.js` unchanged); **cable values identical in every case**; 0 console errors. `project-library --tool lightpole`: the 4 "results identical" failures are this intended axial change only (first diffs `.inp.DLaxial`, `.allCombos[0].axial`); saved projects open. `check-syntax`, `phone-layout --tool lp`, `lightpole-anchor-handoff`, `lightpole-projection`, `lightpole-signviews`, `tests/engine/run.mjs lightpole` (42): pass.
 - **Saved data:** none (DLaxial is computed, not saved).
+
+## 2026-11-07 — PR: claude/lp-h2-rect-wind (PR #986: https://github.com/mlococo88/All-Structural/pull/986) (LPH2: IBC rectangular pole — mast wind strip width by wind direction)   [§4: rectangular poles only; round / square poles, sign posts and LRFDLTS identical; cable values identical]
+- **Problem (review H2, 2026-11-07):** in IBC pole mode, `poleWindNominal()` integrated the mast wind on the width B (`poleDiaTop/Base`) for all four azimuths. A rectangular pole has its depth along x and its width B along y (input label "Depth — into-wind dimension"; drawings, `poleStress` with I_x / I_y). Wind toward 90° / 270° therefore acts on the depth face, but used B. For a 6 in wide × 10 in deep pole, the wind on the 10 in face was 40 % low (member, foundation, base plate, hand-off). The LRFDLTS engine (`windForces`) already takes B for x and the depth for y.
+- **Where:**
+  - `poleWindNominal()`: new `rectDir = inp.poleShape==='rect' && inp.mode!=='sign' && inp.poleDepthTop>0`; when set, each strip also gets `Fd` / `FId` (same q_z, G, C_f, Δz; width = local depth d(z), iced d + 2t_d), summed to `Fd, Md, FdI, MdI`; returned only when `rectDir` (anchor `...(rectDir?{rectDir, Fd, Md`).
+  - New `lppPoleWindDir(pw, phi)` (before `// ================= ASCE 7-22 Ch.29 SOLID SIGN WIND`): returns the mast wind for azimuth φ as |cos φ|·(B values) + |sin φ|·(depth values); |cos|, |sin| < 1e-12 → 0; non-rect → the B values unchanged.
+  - `evalComboDir()`, anchor `const poleWind = f.W*`: before `f.W*pw.Wpole + f.Wi*pw.FpoleI` / `f.W*pw.Mpole + f.Wi*pw.MpoleI`; after the same with `pwd = lppPoleWindDir(pw, phi)`.
+  - `poleStress()`, anchor `const sList=(pw.strips`: before `F:f.W*st.F + f.Wi*st.FI`; after `F:f.W*pwd.sF(st) + f.Wi*pwd.sFI(st)` (section forces up the pole and the B₂ drift use the same strips).
+  - Worked steps (Loading tab step 3, Report "Wind force on the pole shaft", structured steps "Wind on the mast"): for a rectangular pole, F_pole,90 / M_pole,90 and the |cos φ|·B + |sin φ|·depth rule are shown.
+  - C_f: unchanged (Fig. 29.4-1 square row at the least dimension). Ice weight on the mast: unchanged (round-equivalent on B; open item).
+- **Governing provision:** ASCE 7 §29.4 (F = q_z G C_f A_f, A_f = area projected normal to the wind). The edition labels are unchanged (M1 is a separate item).
+- **Check case** (harness cases `rect610` and `rect106`: default project, rectangular HSS, t 0.25 in, cables off, no fixtures; V 115, Exp. C):
+  - `rect610` (B 6 in along y, depth 10 in along x): LRFD 1.2D + 1.0W base M by azimuth 0/90/180/270°: before 14,799 / 14,799 / 14,799 / 14,799; after 14,799 / **24,664** / 14,799 / **24,664** lb·ft (= 14,799 × 10/6). AISC H1 ratio 0.348 → **0.553**; ASD embedment d 5.80 → 6.99 ft; base plate t_req 1.232 → 1.492 in (> 1.25 in provided: the Summary now shows "Base plate thickness" NG).
+  - `rect106` (B 10 in, depth 6 in): 0° / 180° unchanged at 24,664 lb·ft; 90° / 270° 24,664 → 14,799. Ratio 0.553, d 6.99 ft unchanged (0° governs). Both orientations now give 24,664 lb·ft for a wind on the 10 in face.
+  - Existing `nocable` case (8 in wide × 6 in deep, fixtures, V 140): max LRFD M 37,926 (90°) → 34,041 lb·ft (0°/180°); member ratio 0.699 unchanged; d 5.67 → 5.47 ft. The anchor rod T_max 16,820 → 17,772 lb and t_req 1.423 → 1.462 in **rise**, because each combination's anchors are checked at its own max-moment azimuth, which moved from 90° to 180° (bolt pattern orientation). Not changed here (existing method).
+- **How verified:** `node tests/lightpole-compare.mjs --a origin/main` (23 cases): identical except `nocable`, `rect610`, `rect106` (the rectangular pole cases); sign and LRFDLTS cases identical; **cable values identical in every case**; 0 console errors. `check-syntax`, `phone-layout --tool lp`, `project-library --tool lightpole`, `lightpole-anchor-handoff`, `lightpole-projection`, `lightpole-signviews`, `tests/engine/run.mjs lightpole` (42): pass.
+- **Saved data:** none.
+- **Open items (not changed):** (1) IBC sign mode, rectangular post: the post drag (`signWind`, exposed clearance height) uses B for every azimuth; at edge-on wind (90°/270°, panel force 0) the depth face is loaded. Decision (pending engineer review): left as is in this PR (small, edge-on post drag only). (2) Mast ice weight on a rectangular pole uses a round of diameter B.
+
+## 2026-11-07 — PR: claude/lp-left-breakpoint (PR #991: https://github.com/mlococo88/All-Structural/pull/991) — Check summary panel as a left column from 1200 px (was 1500 px); 240 px wide from 1200 to 1499 px (LPLB; display only, no result change)
+
+### LPLB. The check summary is on the left at common laptop widths   [display only]
+- **Decision (pending engineer review):** the engineer asked (2026-11-07, for the Retaining Wall Designer) for "the summary cards … on the left panel", most likely at a laptop width below 1500 px, where LPDC (#747) put the panel above the output tabs. The left column now starts at **1200 px** in Light Pole and Sign Post, Retaining Wall Designer (RWLB, #984) and Spread Footing (SFLB, #988) alike. From 1200 to 1499 px it is **240 px** wide and the input panel is 33 % of the rest; at 1500 px and wider 292 px as before (layout and panel widths unchanged there). Below 1200 px nothing changes (panel above the output tabs; phone layout). Same collapse button (« / » → 42 px strip) and key `lpp_dashCollapsed_v1`.
+- **Output panel with the column open:** 643 px at 1200 px, 697 at 1280, 777 at 1400 (the tool already works at 670 px, a 1000 px window): no output tab is cut off or scrolls the page sideways (measured on all nine tabs at 1200, 1280, 1400).
+- **Where:**
+  - CSS: `  @media screen and (min-width:1500px){` (anchor `.wrap{max-width:1792px}`) → `  @media screen and (min-width:1200px){` with a comment `/* LPLB … */` above; after that block, added:
+```css
+  @media screen and (min-width:1200px) and (max-width:1499.98px){   /* LPLB */
+    body.lppDashWide #lppDashCol{flex-basis:240px;width:240px}
+    body.lppDashWide .grid2 .col-in{flex-basis:calc((100% - 240px)*.33);max-width:calc((100% - 240px)*.33)}
+    body.lppDashWide.lppDashColl #lppDashCol{flex-basis:42px;width:42px}
+    body.lppDashWide.lppDashColl .grid2 .col-in{flex-basis:calc((100% - 42px)*.33);max-width:calc((100% - 42px)*.33)}
+  }
+```
+  - JS: `const LPDC={key:'lpp_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1500px)'):null,…` → `'screen and (min-width:1200px)'` (comment `/* LPLB: was 1500px */`).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data (§5):** no key or format changed.
+- **How verified:** `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: all cases identical (results, cable values, every output tab's text, drawings; 0 console errors); its readouts are taken at 1280 px, where the column is now open. No sideways page scroll at 390, 768, 1200, 1280, 1400, 1920 px. Screenshots before / after at 1200, 1280, 1400 and after at 1920, 768, 390 looked at. Tests: check-syntax; phone-layout lp 390/768; project-library lightpole.
+- **Open item:** the User Manual's "Check summary panel" paragraph still says "On screens 1500 px and wider it is a column on the left"; left unchanged so the Manual tab text stays identical in the comparison. A one-line wording update can follow.
+
+## 2026-11-07 — PR: claude/lp-manual-1200 (PR #994: https://github.com/mlococo88/All-Structural/pull/994) — User Manual: the check summary column starts at 1200 px (LPLB follow-up; text only, no result change)
+- **Why:** open item of LPLB (#991): the Manual still said the column starts at 1500 px.
+- **Where:** User Manual, paragraph `<b>Check summary panel</b> (2026-11-03): …` (anchor `On screens 1500 px and wider it is a column on the left`).
+  - Before: `On screens 1500 px and wider it is a column on the left (« shrinks it to a strip)`
+  - After: `On screens 1200 px and wider it is a column on the left (« shrinks it to a strip)`
+- **Formulas, factors, units, code references:** none (§4 does not apply). **Saved data:** unchanged.
+- **How verified:** `node tests/lightpole-compare.mjs --a origin/main`: ALL CASES IDENTICAL (23 cases; it does not read the Manual tab); the only diff is the one sentence; check-syntax passes.

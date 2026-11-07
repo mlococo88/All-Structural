@@ -12,7 +12,7 @@
 //      panels can be wheeled back to 0; the title row stays on screen;
 //   4. 3D tab: after a drag on the canvas, the wheel beside the canvas still scrolls the panel;
 //   5. touch: finger swipes scroll the output panel down and, after a Worked-in link, back up to 0; the document stays at 0;
-//   5b. the dashboard chips (left column from 1500 px wide, SFDC) jump to their worked section and leave the document at 0;
+//   5b. the dashboard chips (left column from 1200 px wide, SFDC / SFLB) jump to their worked section and leave the document at 0;
 //   6. below the 900 px breakpoint (single-column layout) the page still scrolls normally (the reset is not active).
 // A hidden absolutely positioned span (like KaTeX's MathML) is added at the bottom of each panel, so the check also holds when
 // the CDN libraries are not available offline. Since 2026-11-03 tests/libs has the versions this tool pins (KaTeX 0.16.11,
@@ -111,11 +111,11 @@ for (const [vw, vh] of [[1280, 800], [1366, 768], [1920, 1080]]) {
     await p.evaluate(() => { const e = document.querySelector('#outputPanel .sfscProbe'); e.scrollIntoView({ block: 'start' }); }); await afterAction(p, vw, vh, 'scrollIntoView of the panel bottom');
     await p.evaluate(() => { const e = [...document.querySelectorAll('#inputPanel input')].pop(); e.focus(); }); await afterAction(p, vw, vh, 'focus() on the last input');
     await p.evaluate(() => window.scrollTo(0, 400)); await afterAction(p, vw, vh, 'window.scrollTo(0,400)');
-    // SFDC (2026-11-03): dashboard chips (a left column from 1500 px wide, on top of the outputs below): a click jumps to the worked
-    // section without scrolling the page; at 1500 px and wider the column holds the dashboard and scrolls on its own
+    // SFDC (2026-11-03): dashboard chips (a left column from 1200 px wide since SFLB 2026-11-07, 1500 px before; on top of the outputs below): a click jumps to the worked
+    // section without scrolling the page; at 1200 px and wider the column holds the dashboard and scrolls on its own
     const col = await p.evaluate(() => { const c = document.getElementById('sfdDashCol'), d = document.getElementById('dashboard');
       return { inCol: c.contains(d), shown: c.offsetWidth > 0, oy: getComputedStyle(c).overflowY }; });
-    check(vw >= 1500 ? col.inCol && col.shown && col.oy === 'auto' : !col.inCol && !col.shown, `dashboard column at ${vw} px: ${JSON.stringify(col)}`);
+    check(vw >= 1200 ? col.inCol && col.shown && col.oy === 'auto' : !col.inCol && !col.shown, `dashboard column at ${vw} px: ${JSON.stringify(col)}`);
     const nCh = await p.$$eval('#dashboard .chip[data-sec]', c => c.length);
     for (const i of [0, Math.floor(nCh / 2), nCh - 1]) {
       const sec = await p.evaluate(i => { document.getElementById('outputPanel').scrollTop = 0; const c = document.querySelectorAll('#dashboard .chip[data-sec]')[i]; c.click(); return c.dataset.sec; }, i);
