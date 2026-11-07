@@ -6051,7 +6051,7 @@ Second-pass review LOW findings (2026-11-07). Code sites are tagged `RW2L1` … 
 - AASHTO mode already has the optional interface-shear check (Art. 5.7.4).
 
 ### How verified
-- Headless probe, M1 branch vs this branch, 32 walls. The only differences are:
+- Headless probe, origin/main (after #1143) vs this branch, 32 walls. The only differences are:
   - the new rows (`crackStemT`, `ishAci`, `ftgDepth`), all PASS on the review walls except the t_f 8 in case;
   - the merged pile EE I row;
   - the L5 / L6 cases above.
