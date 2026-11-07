@@ -586,7 +586,9 @@ function solve(S){
   /* ---------- E.3 Wall schedule and enclosure ---------- */
   /* --- Sec. 26.12.3 wind-borne debris region --- */
   const dbr={};
-  dbr.Vbasis = (S.risk==="IV") ? "III" : (S.risk==="I" ? "I" : "II");
+  /* A7L4 (2026-11-07): Risk Category III health care facilities use the Risk Category III speed (Sec. 26.2; 2018 IBC Ch. 2
+     "wind-borne debris region"), like Risk Category IV; other Risk Category III buildings use the Risk Category II speed. */
+  dbr.Vbasis = (S.risk==="IV" || (S.risk==="III" && S.healthCare)) ? "III" : (S.risk==="I" ? "I" : "II");
   dbr.Vdbr = (S.jur==="MA" && MA_TOWNS.find(r=>r[0]===S.town))
     ? (function(t){return {I:t[3],II:t[4],III:t[5],IV:t[6]}[dbr.Vbasis];})(MA_TOWNS.find(r=>r[0]===S.town))
     : site.V;
@@ -1075,7 +1077,8 @@ function solve(S){
   if(faRow&&fvRow){
     const fa=cleanInterp(FA_TAB.Ss,faRow,site.Ss), fv=cleanInterp(FV_TAB.S1,fvRow,site.S1);
     if(fa===null||fv===null){ sq.Fa=null; sq.Fv=null; sq.noCoef=true; sq.siteSpecific=true;
-      sq.ssReason.push("Table 11.4-1 or 11.4-2 marks this combination of site class and mapped acceleration as requiring a site response analysis per Sec. 11.4.8; no coefficient is tabulated."); }
+      sq.ssReason.push("Table 11.4-1 or 11.4-2 marks this combination of site class and mapped acceleration as requiring a site response analysis per Sec. 11.4.8; no coefficient is tabulated."+
+        (S.siteClass==="E"&&site.Ss>0.75&&site.Ss<1.0?" (Site Class E with 0.75 < S\u209b < 1.0: ASCE 7-16 Supplement No. 3 tabulates F\u2090 = 1.2 at S\u209b \u2265 1.0 for T\u209b, the SDC, interpolation and the Sec. 11.4.8 exceptions; this tool does not use it and stays blocked, which is conservative. Enter a site-specific F\u2090 basis or a site class from measured data.)":"")); }
     else { sq.Fa=fa.v; sq.Fv=fv.v; sq.faTrace=fa; sq.fvTrace=fv;
       sq.FaTab=fa.v; sq.FvTab=fv.v; sq.siteRule=null;
       /* Sec. 11.4.3 site coefficient rules, both opt-in (default off reproduces the tabulated values) */
@@ -1127,11 +1130,20 @@ function solve(S){
     sq.CsMinS1=(site.S1>=0.6)?0.5*site.S1/(sq.R/sq.Ie):null;
     sq.Cs=Math.max(Math.min(sq.CsBase,sq.CsMax), sq.CsMin);
     if(sq.CsMinS1!==null) sq.Cs=Math.max(sq.Cs,sq.CsMinS1);
-    sq.Wt=S.seisW;
+    /* A7M5 (2026-11-07): Sec. 12.7.2 item 4: where the flat roof snow load exceeds 30 psf, W includes 20 % of the uniform
+       design snow load. Trigger on p_f,des (with the 780 CMR minimum), amount 0.2 x the balanced design snow x the plan
+       area (conservative; Decision pending engineer review). Added to W and to the highest level's weight, unless the
+       user ticks that the entered weights already include it. */
+    const snW=R.snow, pfT=snW?snW.pfDes:0;
+    if(snW && pfT>30 && !S.snowInW){
+      sq.snowW={pf:pfT, ps:snW.balanced, A:g.planArea, W:0.2*snW.balanced*g.planArea/1000, Win:S.seisW};
+    } else if(snW && pfT>30) sq.snowWincl={pf:pfT};
+    sq.Wt=S.seisW+(sq.snowW?sq.snowW.W:0);
     sq.Vbase=sq.Cs*sq.Wt;
     sq.k=(sq.Tused<=0.5)?1:(sq.Tused>=2.5?2:1+(sq.Tused-0.5)/2);
     /* levels are worked from the top down, which is the order the story shear accumulates */
     const lv=S.levels.filter(l=>l.w>0).slice().sort((a,b)=>b.h-a.h);
+    if(sq.snowW && lv.length){ lv[0]={...lv[0], w:lv[0].w+sq.snowW.W, wIn:lv[0].w, wSnow:sq.snowW.W}; sq.snowW.level=lv[0].name; }   /* A7M5: snow at the roof level */
     /* Eq. 12.8-12: h_x is the height above the base, not the level elevation on the grade datum */
     const sumWH=lv.reduce((t,l)=>t+l.w*Math.pow(Math.max(0,l.h-S.baseElev),sq.k),0);
     sq.levels=lv.map(l=>{const hx=Math.max(0,l.h-S.baseElev), whk=l.w*Math.pow(hx,sq.k);
@@ -1486,10 +1498,12 @@ const DEF={
  gl1:0, gl2:0, gl3:0, gl4:0, glazProt:false, coastal:false, dbrOverride:"Auto",
  expCat:"C", roofExp:"partial", thermal:"All structures except as indicated below",
  slippery:false, simplySupported:false,
+ healthCare:false,   /* A7L4 (2026-11-07): Risk Category III health care facility, wind-borne debris basis */
  topoType:"None", topoH:20, topoLh:60, topoX:25,
  Goverride:false, Gval:0.85, windFlow:"Clear", tblMode:"interp",
  siteClass:"D", seisSysType:"All other structural systems", sfrs:"Steel systems not specifically detailed for seismic resistance",
  hn:36, TL:6, seisW:1200, useTa:true, rho:1.0, baseElev:0, siteDefaultD:false, siteBnoVs:false,
+ snowInW:false,  /* A7M5 (2026-11-07): true = the entered W and level weights already include 20 % of the snow (Sec. 12.7.2) */
  irreg:"none",   /* A7M4 (2026-11-07): structural irregularities for the Table 12.6-1 ELF check; saves without it read "none" */
  levels:[{name:"Roof",h:36,w:600},{name:"Level 2",h:18,w:600}],
  elems:[],
@@ -1881,6 +1895,7 @@ function buildInputs(){
   inRow(b,"Wall 4 glazed area","A<sub>gl,4</sub>","ft\u00B2",num("gl4"));
   b.appendChild(chk("glazProt","Glazing is impact-protected per Sec. 26.12.3.2",true));
   b.appendChild(chk("coastal","Site is within 1 mile of the coastal mean high water line",true));
+  if(S.risk==="III") b.appendChild(chk("healthCare","Risk Category III health care facility (debris region tested on the Risk Category III speed)",true));
   selWide(b,"Wind-borne debris region","dbrOverride",["Auto","Yes","No"]);
   b.appendChild(el("div","hint","Unprotected glazing in a debris region is counted as opening area, which can move the building from Enclosed to Partially Enclosed."));
 
@@ -1899,6 +1914,7 @@ function buildInputs(){
   ts.value=S.thermal; ts.onchange=()=>{S.thermal=ts.value;recalc();};
   const tr=el("div","row wide"); tr.innerHTML='<label>Thermal condition</label>'; tr.appendChild(ts); b.appendChild(tr);
   b.appendChild(chk("slippery","Unobstructed slippery surface (Fig. 7.4-1)"));
+  b.appendChild(el("div","hint","Fig. 7.4-1 (verify): the slippery-surface curve needs an unobstructed slippery roof surface (for example metal, slate, glass or a smooth membrane; a membrane with embedded aggregate or mineral granules is not slippery) that lets snow slide off the eaves; for a warm roof (C\u209c \u2264 1.0) it also needs R \u2265 30 ft\u00B2\u00B7h\u00B7\u00B0F/Btu if unventilated or R \u2265 20 if ventilated. Otherwise leave it unticked."));
   b.appendChild(el("div","hint","Slippery moves the C\u209b breakpoint to a much shallower angle and therefore reduces the design snow load. It applies only where the roof is unobstructed and sufficiently insulated."));
   if(S.roofType==="Gable"||S.roofType==="Hip")
     b.appendChild(chk("simplySupported","Simply supported prismatic members span eave to ridge (Sec. 7.6.1 exception)"));
@@ -1998,7 +2014,7 @@ function buildInputs(){
   SFRS.forEach(r=>{const o=el("option");o.value=r[0];o.textContent=r[0]+"  (R = "+r[1]+")";fs.appendChild(o);});
   fs.value=S.sfrs; fs.onchange=()=>{S.sfrs=fs.value;recalc();};
   const fr=el("div","row wide"); fr.innerHTML='<label>Seismic force-resisting system (Table 12.2-1)</label>'; fr.appendChild(fs); b.appendChild(fr);
-  b.appendChild(el("div","hint","This tool does not check that the system is permitted in the resulting design category, nor any height limit."));
+  b.appendChild(el("div","hint","The system is screened against Table 12.2-1 (with the 780 CMR amendments under Massachusetts) for the resulting design category and height limit; the footnote exceptions are not evaluated."));
 
   b=panel(host,"i-seis2",++n+".","Weight and Period","ASCE 7-16 Sec. 12.7 / 12.8");
   inRow(b,"Structural height","h<sub>n</sub>","ft",num("hn"));
@@ -2008,6 +2024,8 @@ function buildInputs(){
   selWide(b,"Structural irregularities (Tables 12.3-1, 12.3-2), for the Table 12.6-1 ELF check","irreg",["none","limited","other"],
     ["None","Only horizontal types 2, 3, 4, 5 and/or vertical types 4, 5a, 5b","Any other irregularity"]);
   b.appendChild(chk("useTa","Use T = T\u2090 rather than C\u1d64T\u2090"));
+  b.appendChild(chk("snowInW","W and the level weights already include 20 % of the design snow load (Sec. 12.7.2, where the flat roof snow load exceeds 30 psf)"));
+  b.appendChild(el("div","hint","Unticked: where the flat roof snow load exceeds 30 psf the tool adds 0.2 \u00D7 the balanced design snow \u00D7 the plan area to W and to the highest level."));
   b.appendChild(el("div","hint","T\u2090 is the conservative choice; C\u1d64T\u2090 requires a substantiated analysis of the computed period."));
 
   b=panel(host,"i-lev",++n+".","Story Schedule","ASCE 7-16 Sec. 12.8.3 / 12.8.4");
@@ -2549,7 +2567,7 @@ function renderSnow(host){
     "p_{s,des} = \\max\\!\\left(p_s + p_{ros},\\ p_{m,gov}\\right)",
     "p_{s,des} = \\max\\!\\left("+R2(sn.ps)+" + "+R2(sn.ros)+",\\ "+R2(sn.minApplies?sn.pmGov:0)+"\\right)",
     "p_{s,des} = "+R2(sn.balanced)+"\\ \\text{psf}");
-  note(b,"Drift against parapets, adjacent higher roofs and projections (Sec. 7.7, 7.8), sliding snow (Sec. 7.9), "+
+  note(b,"Sliding snow (Sec. 7.9), "+
     "partial loading (Sec. 7.5), ponding (Sec. 7.11), and curved and sawtooth roof cases (Sec. 7.6.2, 7.6.3) are <b>not</b> "+
     "generated by this version and must be evaluated separately where they apply.","w");
 }
@@ -2574,7 +2592,7 @@ function renderWindP(host){
   b=panel(host,"o-wp2",++n+".","Topographic Factor","ASCE 7-16 Sec. 26.8");
   if(kz.none) note(b,"No abrupt change in topography was declared, so K\u1d22\u209c = 1.0 per Sec. 26.8.2.","k");
   else{
-    dtable(b,"Table 26.8-1 \u2014 topographic multipliers",
+    dtable(b,"Fig. 26.8-1 \u2014 topographic multipliers",
       ["Feature","K\u2081/(H/L\u2095) B","C","D","\u03B3","\u03BC up","\u03BC down"],
       Object.keys(TOPO_TAB).map(k=>{const t=TOPO_TAB[k],h=k===S.topoType?"hl":"";
         return [{v:k,cls:h},{v:t.K1.B.toFixed(2),cls:h},{v:t.K1.C.toFixed(2),cls:h},{v:t.K1.D.toFixed(2),cls:h},
@@ -3125,6 +3143,16 @@ function renderSeis(host){
     "C_s = \\min\\!\\left("+RN(q.CsBase,4)+",\\ "+(isFinite(q.CsMax)?RN(q.CsMax,4):"\\infty")+"\\right),\\ \\ge "+RN(q.CsMin,4),"C_s = "+RN(q.Cs,4));
 
   b=panel(host,"o-se5",++n+".","Base Shear and Vertical Distribution","ASCE 7-16 Sec. 12.8.1 / 12.8.3");
+  if(q.snowW){   /* A7M5 */
+    const z=q.snowW;
+    eq(b,"Snow in the effective seismic weight (flat roof snow "+R2(z.pf)+" psf > 30 psf)","ASCE 7-16 Sec. 12.7.2",
+      "W_s = 0.2\\,p_s\\,A_{plan},\\qquad W = W_{entered} + W_s",
+      "W_s = 0.2("+R2(z.ps)+")("+R2(z.A)+")/1000 = "+R2(z.W)+"\\ \\text{kip},\\quad W = "+R2(z.Win)+" + "+R2(z.W),
+      "W = "+R2(q.Wt)+"\\ \\text{kip}");
+    note(b,"Sec. 12.7.2: where the flat roof snow load exceeds 30 psf, 20 % of the uniform design snow load is part of W. It is taken here as 0.2 \u00D7 the balanced design snow p\u209b = "+R2(z.ps)+
+      " psf (with the minimum and rain-on-snow where they apply) over the plan area, and added to W and to the weight of the highest level"+(z.level?" ("+esc(z.level)+")":"")+
+      ". If the entered W already includes it, tick the box on the Seismic input tab.","w");
+  } else if(q.snowWincl) note(b,"Flat roof snow load "+R2(q.snowWincl.pf)+" psf > 30 psf: the entered W and level weights are stated to include 20 % of the design snow load (Sec. 12.7.2).","k");
   eq(b,"Seismic base shear","ASCE 7-16 Eq. 12.8-1","V = C_s\\,W",
     "V = "+RN(q.Cs,4)+"("+R2(q.Wt)+")","V = "+R2(q.Vbase)+"\\ \\text{kip}");
   eq(b,"Distribution exponent","ASCE 7-16 Sec. 12.8.3",
@@ -4924,7 +4952,7 @@ function a7xAdd(M){
     "demand-to-capacity ratios. Units: ft, psf, lbf, kip, mph, s and g as labelled."}]},
     {title:"Disclaimer",items:[{type:"note",text:"This calculation was produced by the "+A7_TOOL+", "+APP_VERSION+". The program is an engineering aid and is not a "+
     "substitute for engineering judgment. It generates design loads only; it performs no structural analysis, no member or connection design, "+
-    "and no code capacity check. Snow drift and sliding snow, partial loading, components and cladding, torsional wind cases, and the seismic "+
+    "and no code capacity check. Sliding snow, partial loading, components and cladding, torsional wind cases, and the seismic "+
     "provisions beyond base shear, its vertical distribution and the vertical load effect are outside its scope. The engineer of record is responsible for the suitability of every value reproduced here. Refer to the User Manual, Part 1, "+
     "for the complete statement of scope, exclusions, assumptions and known limitations."}]});
   if(hv.refs) M.refs=hv.refs;
@@ -5982,7 +6010,13 @@ function buildWorkbook(S,R,ExcelJS,tb){
     inp("hn","Structural height","h_n", q.hn, NF.f,"input");
     inp("Rr","Response modification coefficient","R", q.R, NF.n2,"Table 12.2-1");
     inp("TL","Long-period transition period","T_L", q.TL, NF.s,"Fig. 22-14 to 22-17");
-    inp("Wt","Effective seismic weight","W", q.Wt, NF.k,"Sec. 12.7.2");
+    if(q.snowW){   /* A7M5 */
+      inp("Win","Effective seismic weight entered","W_{in}", q.snowW.Win, NF.k,"input");
+      inp("psW","Balanced design snow load (p_f > 30 psf)","p_s", q.snowW.ps, NF.p,"Sec. 7.3, 7.4");
+      inp("ApW","Roof plan area","A", q.snowW.A, NF.a,"geometry");
+      out("WsW","Snow in W, 20 % of the design snow","W_s",{formula:"0.2*"+A("psW")+"*"+A("ApW")+"/1000",result:q.snowW.W},NF.k,"Sec. 12.7.2");
+      out("Wt","Effective seismic weight","W",{formula:A("Win")+"+"+A("WsW"),result:q.Wt},NF.k,"Sec. 12.7.2");
+    } else inp("Wt","Effective seismic weight","W", q.Wt, NF.k,"Sec. 12.7.2");
     inp("rho","Redundancy factor","\u03C1", S.rho, NF.n2,"Sec. 12.3.4");
     out("Ta","Approximate fundamental period","T_a",
       {formula:A("Ctp")+"*"+A("hn")+"^"+A("xexp"),result:q.Ta},NF.s,"Eq. 12.8-7");
@@ -6051,7 +6085,7 @@ function buildWorkbook(S,R,ExcelJS,tb){
     "The structure is assumed rigid per Sec. 26.2; the natural frequency is not computed and G is taken as 0.85.",
     "q_i is taken as q_h for all enclosure classifications, which is the simpler and generally more conservative reading of Sec. 27.3.1.",
     "Chapter 30 components and cladding, the Chapter 28 envelope procedure, torsional cases 2 through 4 of Fig. 27.3-8, roof overhangs and parapets are not addressed.",
-    "Snow drift, sliding snow, partial loading and ponding are not addressed.",
+    "Sliding snow, partial loading and ponding are not addressed (drifts at parapets, projections, lower and adjacent roofs are in the Snow section).",
     "Seismic is taken to base shear and its vertical distribution only. The redundancy factor is entered, not evaluated.",
     "Sec. 26.12.3 exemptions for glazing above 60 ft are not adjudicated by this calculation.",
     "ASCE 7-16 only. Coefficients are not interchangeable with ASCE 7-10 or 7-22."
