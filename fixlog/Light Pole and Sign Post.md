@@ -2455,7 +2455,7 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 - **Saved data:** none.
 - **Open item (not changed):** the Shaft tab's design line in check mode reads "Provide (4) #4 … φM_n = 40,070 lb·ft ≥ M_u = 111,341 lb·ft" even when φM_n < M_u (the check-mode table above it shows NG correctly).
 
-## 2026-11-07 — PR: claude/lp-m6-bp-geometry (LPM6: base plate / anchor geometry input errors)   [behaviour: impossible geometry is now an input error; valid inputs identical; cable values identical]
+## 2026-11-07 — PR: claude/lp-m6-bp-geometry (PR #1009: https://github.com/mlococo88/All-Structural/pull/1009) (LPM6: base plate / anchor geometry input errors)   [behaviour: impossible geometry is now an input error; valid inputs identical; cable values identical]
 - **Problem (review M6, 2026-11-07):** `lppInputErrors()` validated only the square plate (LPAS). Reproduced on main: bolt circle 9 in inside a 10 in pole → m = (BC − D)/2 < 0, **t_req 0.000 in "OK"**; round plate Ø14 in with BC 16 in (rods outside the plate) → "OK"; BC 40 in in a 36 in shaft (rods outside the concrete) → no error.
 - **Where:** `lppInputErrors()`, after the LPAS square-plate block (anchor `// LPM6 (2026-11-07, review M6)`). Before: nothing. After, when BC > 0 and n ≥ 1 (both code modes, pole and sign):
   1. every rod clear of the pole / post: R − d_rod/2 > the outline at the rod's azimuth (round D/2; square / rect.: the rectangle with the depth along x and the width along y, distance min(h_x/|cos a|, h_y/|sin a|));
