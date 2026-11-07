@@ -2253,7 +2253,7 @@ function calcAll(inp) {
   //    (ASCE 7-22 §11.8.3 requires the geotech report to give this pressure; method per M-O)
   const hasSeismic = inp.kh > 0;
   // RWPL (2026-11-07): the Phase 8b warning "pile analysis not in this version yet" is removed (stale since 8c / 8d: the piles are analysed)
-  let Pae = 0, Pe_inc = 0, Mo_seis = 0, Kae = 0;
+  let Pae = 0, Pe_inc = 0, Mo_seis = 0, Kae = 0, Pa_MO = 0;
   if (hasSeismic) {
     const kh = inp.kh, kv = inp.kv;
     const phi_r = toRad(inp.phi), delta_r = toRad(inp.delta_mo);
@@ -2279,14 +2279,18 @@ function calcAll(inp) {
     const Ka_static_MO = (B0 > 0 && C0 > 0)
       ? Math.cos(phi_r) ** 2 / (C0 * (1 + Math.sqrt((A * B0) / (C0 * D))) ** 2)
       : calcKa(inp.phi, inp.beta);
-    // Total M-O active force: Pae = ½·Kae·γ·H²·(1−kv)
+    // RW2H2 (2026-11-07): on the pressure-plane height H′ = H + (L_h + t_bot − t_top)·tanβ (the height of the static thrust and of the
+    // AASHTO Extreme Event I P_AE; = H for a level backfill). Was H: ΔP_E understated by (H′/H)² with a sloped backfill.
+    const Hq = H + (inp.beta > 0 ? (inp.Lh + ts_bot_ft - ts_top_ft) * Math.tan(beta_r) : 0);
+    // Total M-O active force: Pae = ½·Kae·γ·H′²·(1−kv)
     Kae    = KaeMO;
-    Pae    = 0.5 * KaeMO * inp.gamma_s * H * H * (1 - kv);
-    // Seismic increment above static
-    Pe_inc = Math.max(0, Pae - 0.5 * Ka_static_MO * inp.gamma_s * H * H);
-    // Acts at 0.6H from base (Seed & Whitman / ASCE 7 commentary)
-    Mo_seis = Pe_inc * (0.6 * H);
-    if (inp.basis !== 'AASHTO') warnings.push(`Seismic: ΔPe = ${f(Pe_inc/1000,3)} k/ft acting at 0.6H = ${f(0.6*H,2)} ft. Add to O.T. check. Verify with geotechnical engineer.`);   // RWE1: ACI branch only (AASHTO: Extreme Event I)
+    Pae    = 0.5 * KaeMO * inp.gamma_s * Hq * Hq * (1 - kv);
+    // Seismic increment above static (static M-O baseline on the same H′)
+    Pa_MO  = 0.5 * Ka_static_MO * inp.gamma_s * Hq * Hq;
+    Pe_inc = Math.max(0, Pae - Pa_MO);
+    // Acts at 0.6H′ from base (Seed & Whitman / ASCE 7 commentary)
+    Mo_seis = Pe_inc * (0.6 * Hq);
+    if (inp.basis !== 'AASHTO') warnings.push(`Seismic: ΔPe = ${f(Pe_inc/1000,3)} k/ft acting at 0.6H${Hq > H + 1e-9 ? '′' : ''} = ${f(0.6*Hq,2)} ft. Add to O.T. check. Verify with geotechnical engineer.`);   // RWE1: ACI branch only (AASHTO: Extreme Event I)
   }
 
   // ── Column / beam loads (per linear foot of wall) ─────────────
@@ -3103,7 +3107,7 @@ function calcAll(inp) {
     if (!hasSeismic || !(z > 0)) return null;
     const sd = stemDemand(z);
     if (!isAASHTO) {
-      const Pe = Pe_inc * (z / H) ** 2;
+      const Pe = Pe_inc * (z / Hp) ** 2;   // RW2H2: ΔP_E is on H′ now (was (z/H)² with ΔP_E on H: same value)
       return { M: gEH*sd.M_soil + gWA*sd.M_hyd + gES*Ka*inp.q_sur*z*z/2 + gLS*Ka*q_ll_stem*z*z/2 + Pe*0.6*z,
                V: gEH*sd.V_soil + gWA*sd.V_hyd + gES*Ka*inp.q_sur*z + gLS*Ka*q_ll_stem*z + Pe, Pe };
     }
@@ -4091,7 +4095,7 @@ function calcAll(inp) {
     // Water table
     hasWT, wt_d, hw, gamma_w, gamma_sat, gamma_s_sub, wt_depth_eff, inclHydro, F_hyd, F_uplift,
     // Seismic
-    hasSeismic, Pae, Pe_inc, Mo_seis, Kae, Mo_st, FOS_OT_E, FOS_SL_E,   // RWIB
+    hasSeismic, Pae, Pe_inc, Mo_seis, Kae, Mo_st, FOS_OT_E, FOS_SL_E, Pa_MO,   // RWIB; RW2H2: + Pa_MO
     // Earth pressure
     Ka, Kp, Pa_tri, Pa_tri_h, Pa_tri_v, Pa_sur_h, Fh, Pp, Pp_full, Pp_toe, Pp_key,
     p_top, p_stem_base, p_ftg_base, p_hyd_base, p_wt,
@@ -5318,7 +5322,7 @@ function renderStabilitySoil(r) {
      {sym:'P_{a,sur}', desc:'lateral surcharge force', val:F(r.Pa_sur_h,1), unit:'lb/ft'}]);
   if (r.hasSeismic) {
     h += eq('Seismic increment — Mononobe-Okabe (kh = '+F(inp.kh,3)+', kv = '+F(inp.kv,3)+')',
-      `\\Delta P_E = P_{AE} - P_a = ${F(r.Pae,1)} - ${F(r.Pa_tri,1)} = \\boxed{${F(r.Pe_inc,1)}\\ \\text{lb/ft}} \\quad \\text{(at } 0.6H \\text{)}`,'ASCE 7-22 §11.8',
+      `\\Delta P_E = P_{AE} - \\tfrac{1}{2}K_{A,MO}\\gamma_s ${r.Hp > r.H + 1e-9 ? "H'" : 'H'}^2 = ${F(r.Pae,1)} - ${F(r.Pa_MO,1)} = \\boxed{${F(r.Pe_inc,1)}\\ \\text{lb/ft}} \\quad \\text{(at } 0.6${r.Hp > r.H + 1e-9 ? "H'" : 'H'} \\text{)}`,'ASCE 7-22 §11.8',   // RW2H2: the static M-O baseline as computed (was labelled P_a with the Rankine/Coulomb thrust)
       [{sym:'k_h', desc:'horizontal seismic coefficient', val:F(inp.kh,3), unit:''},
        {sym:'k_v', desc:'vertical seismic coefficient', val:F(inp.kv,3), unit:''},
        {sym:'P_{AE}', desc:'total seismic active force', val:F(r.Pae,1), unit:'lb/ft'},
@@ -5421,8 +5425,8 @@ function renderStabilitySoil(r) {
        {sym:'h_w', desc:'water head at base', val:F(r.hw,2), unit:'ft'},
        {sym:'M_{o,w}', desc:'hydrostatic overturning moment', val:F(r.Mo_hyd,1), unit:'lb·ft/ft'}]);
   if (r.hasSeismic)
-    h += eq('Overturning moment — seismic increment (at 0.6H)',
-      `M_{o,E} = \\Delta P_E \\cdot 0.6H = (${F(r.Pe_inc,1)})(${F(0.6*r.H,2)}) = \\boxed{${F(r.Mo_seis,1)}\\ \\text{lb·ft/ft}}`,'',
+    h += eq('Overturning moment — seismic increment (at 0.6H' + (r.Hp > r.H + 1e-9 ? '\u2032' : '') + ')',
+      `M_{o,E} = \\Delta P_E \\cdot 0.6${r.Hp > r.H + 1e-9 ? "H'" : 'H'} = (${F(r.Pe_inc,1)})(${F(0.6*r.Hp,2)}) = \\boxed{${F(r.Mo_seis,1)}\\ \\text{lb·ft/ft}}`,'',
       [{sym:'\\Delta P_E', desc:'seismic force increment', val:F(r.Pe_inc,1), unit:'lb/ft'},
        {sym:'M_{o,E}', desc:'seismic overturning moment', val:F(r.Mo_seis,1), unit:'lb·ft/ft'}]);
   h += eq('Total overturning moment',
@@ -5599,13 +5603,13 @@ function renderStabilitySoil(r) {
        {sym:'\\theta', desc:'seismic inertia angle', val:F(th,2), unit:'°'},
        {sym:'K_{AE}', desc:'seismic active pressure coefficient', val:F(r.Kae,4), unit:''}]);
     h += eq('Total seismic-active force',
-      `P_{AE} = \\tfrac{1}{2}K_{AE}\\gamma_s H^2(1-k_v) = \\boxed{${F(r.Pae,1)}\\ \\text{lb/ft}}`,'',
+      `P_{AE} = \\tfrac{1}{2}K_{AE}\\gamma_s ${r.Hp > r.H + 1e-9 ? "H'" : 'H'}^2(1-k_v) = \\tfrac{1}{2}(${F(r.Kae,4)})(${F(inp.gamma_s,0)})(${F(r.Hp,3)})^2(1-${F(inp.kv,3)}) = \\boxed{${F(r.Pae,1)}\\ \\text{lb/ft}}`,'',
       [{sym:'K_{AE}', desc:'seismic active coefficient', val:F(r.Kae,4), unit:''},
-       {sym:'H', desc:'total wall height', val:F(r.H,3), unit:'ft'},
+       {sym: r.Hp > r.H + 1e-9 ? "H'" : 'H', desc: r.Hp > r.H + 1e-9 ? 'pressure-plane height through the heel end (as the static thrust)' : 'total wall height', val:F(r.Hp,3), unit:'ft'},   // RW2H2
        {sym:'P_{AE}', desc:'total seismic active force', val:F(r.Pae,1), unit:'lb/ft'}]);
     h += eq('Seismic increment and application point',
-      `\\Delta P_E = P_{AE} - P_a = \\boxed{${F(r.Pe_inc,1)}\\ \\text{lb/ft}} \\text{ at } 0.6H = ${F(0.6*r.H,2)}\\ \\text{ft above base}`,'',
-      [{sym:'P_a', desc:'static active force', val:F(r.Pa_tri,1), unit:'lb/ft'},
+      `\\Delta P_E = P_{AE} - P_{a,MO} = ${F(r.Pae,1)} - ${F(r.Pa_MO,1)} = \\boxed{${F(r.Pe_inc,1)}\\ \\text{lb/ft}} \\text{ at } 0.6${r.Hp > r.H + 1e-9 ? "H'" : 'H'} = ${F(0.6*r.Hp,2)}\\ \\text{ft above base}`,'',
+      [{sym:'P_{a,MO}', desc:'static active force, the same M-O expression at \u03b8 = 0: \u00bdK_A,MO\u03b3_s' + (r.Hp > r.H + 1e-9 ? 'H\u2032\u00b2' : 'H\u00b2'), val:F(r.Pa_MO,1), unit:'lb/ft'},   // RW2H2
        {sym:'\\Delta P_E', desc:'seismic force increment', val:F(r.Pe_inc,1), unit:'lb/ft'}]);
     h += `<div class="alert warn">⚠ Simplified M-O per Seed &amp; Whitman (1970). Verify with the project geotechnical engineer; sites with liquefaction potential require site-specific study (IBC §1803.5.12). Seismic FOS acceptance criteria may be reduced to 1.1 per local practice — confirm with AHJ.</div>`;
     h += `</div></div>`;
@@ -5954,7 +5958,7 @@ function renderStem(r) {
            {sym:'M_{u,EQ,1}', desc:'case 1: P_AE,s·H_s/3 + 0.5·M_IR + other', val:F(q.c1.M,0), unit:'lb·ft/ft'},
            {sym:'M_{u,EQ,2}', desc:'case 2: ' + (q.useAE ? '0.5·P_AE,s·H_s/3' : 'M_A,s (static soil)') + ' + M_IR + other', val:F(q.c2.M,0), unit:'lb·ft/ft'}])
       : eq('Seismic combination U = 1.2D + 1.0E + 1.6H (ACI 318-19 Eq. 5.3.1e, H per §5.3.8)',
-          `\\Delta P_{E,s} = \\Delta P_E\\left(\\tfrac{H_s}{H}\\right)^2 = ${F(r.Pe_inc,1)}\\left(\\tfrac{${F(inp.Hs,2)}}{${F(r.H,2)}}\\right)^2 = ${F(q.Pe,1)};\\quad M_{u,E} = M_{u,1.6H} + 1.0\\,\\Delta P_{E,s}(0.6H_s) = ${F(r.Mu_stem_strI,0)} + ${F(q.Pe,1)}(${F(0.6*inp.Hs,2)}) = \\boxed{${F(q.M,0)}\\ \\text{lb·ft/ft}}`, 'ACI 5.3.1e');
+          `\\Delta P_{E,s} = \\Delta P_E\\left(\\tfrac{H_s}{${r.Hp > r.H + 1e-9 ? "H'" : 'H'}}\\right)^2 = ${F(r.Pe_inc,1)}\\left(\\tfrac{${F(inp.Hs,2)}}{${F(r.Hp,2)}}\\right)^2 = ${F(q.Pe,1)};\\quad M_{u,E} = M_{u,1.6H} + 1.0\\,\\Delta P_{E,s}(0.6H_s) = ${F(r.Mu_stem_strI,0)} + ${F(q.Pe,1)}(${F(0.6*inp.Hs,2)}) = \\boxed{${F(q.M,0)}\\ \\text{lb·ft/ft}}`, 'ACI 5.3.1e');
   }
   if (r.isAASHTO && r.etaMx !== 1)   // RW2H4
     h += eq('Load modifier \u03b7 on the Strength I demand (AASHTO Art. 1.3.2.1, Eq. 1.3.2.1-2)',
@@ -10583,7 +10587,7 @@ function rwrModel(r) {
         s1.push(rwrS({ id: 'PaV', label: 'Vertical component (acts downward at the heel, stabilizing)', sym: 'P_{a,V}', eq: 'P_{a}\\sin' + iS, sub: rwrN(r.Pa_tri, 1) + '\\sin(' + rwrN(r.Pa_incl_deg, 1) + RWR_DEG + ')', value: r.Pa_tri_v, unit: 'lb/ft', d: 1 })); }
       T.push({ title: 'Active earth pressure' + (r.hasWT ? ' and water' : ''), steps: s1 });
       const s2 = [rwrS({ id: 'Pasur', label: 'Surcharge lateral force (uniform over H)', sym: 'P_{a,sur}', eq: 'K_{a} q_{s} H', sub: '(' + Ka + ')(' + rwrN(inp.q_sur, 0) + ')(' + rwrN(r.H, 3) + ')', value: r.Pa_sur_h, unit: 'lb/ft', d: 1 })];
-      if (r.hasSeismic) s2.push(rwrS({ id: 'dPE', label: 'Seismic increment, Mononobe-Okabe (acts at 0.6H)', sym: '\\Delta P_{E}', eq: 'P_{AE} \\minus P_{a}', sub: rwrN(r.Pae, 1) + ' \\minus ' + rwrN(r.Pa_tri, 1), value: r.Pe_inc, unit: 'lb/ft', d: 1, ref: 'ASCE 7-22 §11.8', note: 'k_h = ' + rwrN(inp.kh, 3) + ', k_v = ' + rwrN(inp.kv, 3) }));
+      if (r.hasSeismic) s2.push(rwrS({ id: 'dPE', label: 'Seismic increment, Mononobe-Okabe (acts at 0.6H)', sym: '\\Delta P_{E}', eq: 'P_{AE} \\minus P_{a,MO}', sub: rwrN(r.Pae, 1) + ' \\minus ' + rwrN(r.Pa_MO, 1), value: r.Pe_inc, unit: 'lb/ft', d: 1, ref: 'ASCE 7-22 §11.8', note: 'k_h = ' + rwrN(inp.kh, 3) + ', k_v = ' + rwrN(inp.kv, 3) }));
       s2.push(rwrS({ id: 'Fh', label: 'Total horizontal driving force', sym: 'F_{h}', eq: 'P_{a,H} + P_{a,sur}' + (r.hasWT ? ' + F_{hyd}' : ''), sub: rwrN(r.Pa_tri_h, 1) + ' + ' + rwrN(r.Pa_sur_h, 1) + (r.hasWT ? ' + ' + rwrN(r.F_hyd, 1) : ''), value: r.Fh, unit: 'lb/ft', d: 1 }));
       T.push({ title: 'Surcharge' + (r.hasSeismic ? ', seismic' : '') + ' and total thrust', steps: s2 });
       const s3 = [rwrS({ id: 'Pp', label: 'Passive resistance at the toe (embedment D_f = ' + rwrN(r.Df, 2) + ' ft)', sym: 'P_{p}', eq: '\\frac{1}{2} K_{p} \\gamma_{s} D_{f}^{2}', sub: '\\frac{1}{2}(' + rwrN(r.Kp, 4) + ')(' + gs + ')(' + rwrN(r.Df, 3) + ')^{2}', value: r.Pp_toe, unit: 'lb/ft', d: 1,
@@ -10606,7 +10610,7 @@ function rwrModel(r) {
       s1.push(rwrS({ id: 'Moa', label: 'Overturning moment, active soil (resultant height y_a)', sym: 'M_{o,a}', eq: 'P_{a,H}\\,y_{a}', sub: '(' + rwrN(r.Pa_tri_h, 1) + ')(' + rwrN(r.y_Pa, 3) + ')', value: r.Mo_tri, unit: 'lb-ft/ft', d: 1 }));
       s1.push(rwrS({ id: 'Mos', label: "Overturning moment, surcharge (resultant at H'/2)", sym: 'M_{o,s}', eq: "P_{a,sur}\\frac{H^{\\prime}}{2}", sub: '(' + rwrN(r.Pa_sur_h, 1) + ')\\frac{' + rwrN(r.Hp, 3) + '}{2}', value: r.Mo_sur, unit: 'lb-ft/ft', d: 1 }));
       if (r.hasWT) s1.push(rwrS({ id: 'Mow', label: 'Overturning moment, hydrostatic (resultant at h_w/3)', sym: 'M_{o,w}', eq: 'F_{hyd}\\frac{h_{w}}{3}', sub: '(' + rwrN(r.F_hyd, 1) + ')\\frac{' + rwrN(r.hw, 2) + '}{3}', value: r.Mo_hyd, unit: 'lb-ft/ft', d: 1 }));
-      if (r.hasSeismic) s1.push(rwrS({ id: 'MoE', label: 'Overturning moment, seismic increment (at 0.6H)', sym: 'M_{o,E}', eq: '\\Delta P_{E}\\cdot 0.6H', sub: '(' + rwrN(r.Pe_inc, 1) + ')(' + rwrN(0.6 * r.H, 2) + ')', value: r.Mo_seis, unit: 'lb-ft/ft', d: 1 }));
+      if (r.hasSeismic) s1.push(rwrS({ id: 'MoE', label: 'Overturning moment, seismic increment (at 0.6' + (r.Hp > r.H + 1e-9 ? 'H′' : 'H') + ')', sym: 'M_{o,E}', eq: '\\Delta P_{E}\\cdot 0.6' + (r.Hp > r.H + 1e-9 ? "H'" : 'H'), sub: '(' + rwrN(r.Pe_inc, 1) + ')(' + rwrN(0.6 * r.Hp, 2) + ')', value: r.Mo_seis, unit: 'lb-ft/ft', d: 1 }));
       s1.push(rwrS({ id: 'Mo', label: 'Total overturning moment', sym: 'M_{OT}', eq: '\\sum M_{o}', sub: '', value: r.Mo, unit: 'lb-ft/ft', d: 1 }));
       T.push({ title: 'Overturning moments', steps: s1 });
       const s2 = [rwrS({ id: 'MsOT', label: 'Resisting moment relied on for overturning (surcharge and column live / snow excluded)', sym: 'M_{stab,OT}', eq: 'M_{stab} \\minus q_{sur}L_{h}x_{sur} \\minus (P_{LL} + P_{S})_{col}x_{col}', sub: rwrN(r.Ms, 1) + ' \\minus ' + rwrN(r.Ms_OT_excl, 1), value: r.Ms_OT, unit: 'lb-ft/ft', d: 1,
@@ -10801,8 +10805,8 @@ function rwrModel(r) {
       S.subs.push(sub('Seismic — Mononobe-Okabe detail', [rwrItem('st9', [{ title: 'Mononobe-Okabe', ref: 'ASCE 7-22 §11.8', steps: [
         rwrS({ id: 'th', label: 'Seismic inertia angle', sym: '\\theta', eq: '\\arctan\\left(\\frac{k_{h}}{1 \\minus k_{v}}\\right)', sub: '\\arctan\\left(\\frac{' + rwrN(inp.kh, 3) + '}{1 \\minus ' + rwrN(inp.kv, 3) + '}\\right)', value: th, unit: 'deg', d: 2 }),
         rwrS({ id: 'Kae', label: 'M-O combined coefficient (δ = ' + rwrN(inp.delta_mo, 0) + '°)', sym: 'K_{AE}', eq: '\\frac{\\cos^{2}(\\phi \\minus \\theta)}{\\cos\\theta\\,\\cos(\\delta + \\theta)\\left[1 + \\sqrt{\\frac{\\sin(\\phi + \\delta)\\sin(\\phi \\minus \\theta \\minus \\beta)}{\\cos(\\delta + \\theta)\\cos\\beta}}\\right]^{2}}', sub: '', value: r.Kae, unit: '', d: 4 }),
-        rwrS({ id: 'Pae', label: 'Total seismic-active force', sym: 'P_{AE}', eq: '\\frac{1}{2}K_{AE}\\gamma_{s} H^{2}(1 \\minus k_{v})', sub: '\\frac{1}{2}(' + rwrN(r.Kae, 4) + ')(' + rwrN(inp.gamma_s, 0) + ')(' + rwrN(r.H, 3) + ')^{2}(1 \\minus ' + rwrN(inp.kv, 3) + ')', value: r.Pae, unit: 'lb/ft', d: 1 }),
-        rwrS({ id: 'dPE', label: 'Seismic increment, applied at 0.6H = ' + rwrN(0.6 * r.H, 2) + ' ft above the base', sym: '\\Delta P_{E}', eq: 'P_{AE} \\minus P_{a}', sub: rwrN(r.Pae, 1) + ' \\minus ' + rwrN(r.Pa_tri, 1), value: r.Pe_inc, unit: 'lb/ft', d: 1 })] }]),
+        rwrS({ id: 'Pae', label: 'Total seismic-active force', sym: 'P_{AE}', eq: '\\frac{1}{2}K_{AE}\\gamma_{s} ' + (r.Hp > r.H + 1e-9 ? "H'" : 'H') + '^{2}(1 \\minus k_{v})', sub: '\\frac{1}{2}(' + rwrN(r.Kae, 4) + ')(' + rwrN(inp.gamma_s, 0) + ')(' + rwrN(r.Hp, 3) + ')^{2}(1 \\minus ' + rwrN(inp.kv, 3) + ')', value: r.Pae, unit: 'lb/ft', d: 1 }),
+        rwrS({ id: 'dPE', label: 'Seismic increment, applied at 0.6' + (r.Hp > r.H + 1e-9 ? 'H′' : 'H') + ' = ' + rwrN(0.6 * r.Hp, 2) + ' ft above the base', sym: '\\Delta P_{E}', eq: 'P_{AE} \\minus P_{a,MO}', sub: rwrN(r.Pae, 1) + ' \\minus ' + rwrN(r.Pa_MO, 1), value: r.Pe_inc, unit: 'lb/ft', d: 1 })] }]),
         { type: 'note', warn: true, text: 'Simplified M-O per Seed & Whitman (1970). Verify with the project geotechnical engineer; seismic FOS acceptance may be reduced to 1.1 per local practice (confirm with the AHJ).' }])); }
   }
 
@@ -10815,7 +10819,7 @@ function rwrModel(r) {
     if (isA && r.etaMx !== 1) T1.push(rwrS({ id: 'Meta', label: 'Load modifier η on the Strength I demand (sum of the factored moments above)', sym: 'M_{u,StrI}', eq: '\\eta\\sum\\gamma_{i} M_{i}', sub: rwrN(r.etaMx, 3) + '(' + rwrN(r.Mu_stem_strI / r.etaMx, 1) + ')', value: r.Mu_stem_strI, unit: 'lb-ft/ft', d: 1, ref: AA('Art. 1.3.2.1') }));   // RW2H4
     if (r.stem_water) T1.push(rwrS({ id: 'Mhyd', label: 'Water-table adjustment: buoyant soil below the water table + hydrostatic (h_2 = ' + rwrN(Math.max(0, inp.Hs - r.wt_d), 2) + ' ft)', sym: 'M_{u,hyd}', eq: (isA ? '\\gamma_{WA}' : '\\gamma') + '\\cdot\\frac{1}{2}\\gamma_{w} h_{2}^{2}\\cdot\\frac{h_{2}}{3}', sub: '', value: (isA ? 1.0 : 1.6) * r.sd_base_Mhyd, unit: 'lb-ft/ft', d: 1, ref: isA ? AA('Table 3.4.1-1, γ_WA = 1.0') : 'γ = 1.6 (ACI H)' }));
     if (r.sq_base) T1.push(isA ? rwrS({ id: 'MuEQ', label: 'Extreme Event I at the stem base (φ = 1.0): case 1 P_AE,s + 0.5P_IR,s, case 2 max(0.5P_AE,s, P_A,s) + P_IR,s (P_AE,s = ' + rwrN(r.sq_base.PAE, 0) + ' at H_s/3, P_IR,s = ' + rwrN(r.sq_base.PIR, 0) + ' lb/ft)', sym: 'M_{u,EQ}', eq: '\\max(M_{1},\\, M_{2})', sub: '\\max(' + rwrN(r.sq_base.c1.M, 0) + ',\\, ' + rwrN(r.sq_base.c2.M, 0) + ')', value: r.Mu_stem_eq, unit: 'lb-ft/ft', d: 0, ref: AA('Art. 11.6.5.1') })
-      : rwrS({ id: 'MuEQ', label: 'Seismic combination U = 1.2D + 1.0E + 1.6H: ΔP_E,s = ΔP_E(H_s/H)² = ' + rwrN(r.sq_base.Pe, 1) + ' lb/ft at 0.6H_s', sym: 'M_{u,E}', eq: 'M_{u,1.6H} + 1.0\\,\\Delta P_{E,s}(0.6H_{s})', sub: rwrN(r.Mu_stem_strI, 0) + ' + ' + rwrN(r.sq_base.Pe, 1) + '(' + rwrN(0.6 * inp.Hs, 2) + ')', value: r.Mu_stem_eq, unit: 'lb-ft/ft', d: 0, ref: 'ACI 318-19 Eq. 5.3.1e' }));   // RWSQ
+      : rwrS({ id: 'MuEQ', label: 'Seismic combination U = 1.2D + 1.0E + 1.6H: ΔP_E,s = ΔP_E(H_s/' + (r.Hp > r.H + 1e-9 ? 'H′' : 'H') + ')² = ' + rwrN(r.sq_base.Pe, 1) + ' lb/ft at 0.6H_s', sym: 'M_{u,E}', eq: 'M_{u,1.6H} + 1.0\\,\\Delta P_{E,s}(0.6H_{s})', sub: rwrN(r.Mu_stem_strI, 0) + ' + ' + rwrN(r.sq_base.Pe, 1) + '(' + rwrN(0.6 * inp.Hs, 2) + ')', value: r.Mu_stem_eq, unit: 'lb-ft/ft', d: 0, ref: 'ACI 318-19 Eq. 5.3.1e' }));   // RWSQ
     T1.push(rwrS({ id: 'Mu', label: 'Total factored design moment' + (r.stem_eq_governs ? (isA ? ' (Extreme Event I governs)' : ' (seismic combination governs)') : r.stem_ee2_governs ? ' (Extreme Event II governs)' : ''), sym: 'M_{u}', eq: r.sq_base ? '\\max(M_{u,StrI},\\, ' + (r.Mu_stem_ee2 > 0 ? 'M_{u,EE2},\\, ' : '') + 'M_{u,EQ})' : r.stem_ee2_governs ? '\\max(M_{u,StrI},\\, M_{u,EE2})' : '\\sum M_{u,i}', sub: r.sq_base ? '\\max(' + rwrN(r.Mu_stem_strI, 1) + ',\\, ' + (r.Mu_stem_ee2 > 0 ? rwrN(r.Mu_stem_ee2, 1) + ',\\, ' : '') + rwrN(r.Mu_stem_eq, 1) + ')' : r.stem_ee2_governs ? '\\max(' + rwrN(r.Mu_stem_strI, 1) + ',\\, ' + rwrN(r.Mu_stem_ee2, 1) + ')' : '', value: r.Mu_stem_lbft, unit: 'lb-ft/ft', d: 1, note: r.stem_water ? 'water-aware: the 3-block effective-stress profile plus the hydrostatic triangle' : '' }));
     T1.push(rwrS({ id: 'Vu', label: 'Factored shear at the base', sym: 'V_{u}', eq: '', sub: '', value: r.Vu_stem, unit: 'lb/ft', d: 1, note: r.sq_base ? 'includes the seismic combination (' + rwrN(r.Vu_stem_eq, 0) + ' lb/ft)' : '' }));   // RWSQ
     const T2 = [rwrS({ id: 'd', label: 'Effective depth (S1 bar #' + ss.bar.num + ', d_b = ' + rwrN(ss.bar.db, 3) + ' in; tension on the back face)', sym: 'd', eq: 't_{s,bot} \\minus c_{c} \\minus \\frac{d_{b}}{2}', sub: rwrN(inp.ts_bot, 1) + ' \\minus ' + rwrN(inp.cov_stem, 2) + ' \\minus ' + rwrN(ss.bar.db / 2, 4), value: r.d_stem, unit: 'in', d: 3 })];
@@ -11782,7 +11786,7 @@ function rwdwBuild(r) {
     const res = isA
       ? [['P_EH = ' + rwdwK(a.P_EH) + ' K/FT', a.y_EH * 12], ...(a.P_ES > 0 ? [['P_ES = ' + rwdwK(a.P_ES) + ' K/FT', Hp / 2]] : []), ...(a.P_LS > 0 ? [['P_LS = ' + rwdwK(a.P_LS) + ' K/FT', Hp / 2]] : []), ...(a.P_hyd > 0 ? [['P_WA = ' + rwdwK(a.P_hyd) + ' K/FT', r.hw * 12 / 3]] : [])]
       : [['P_A,H = ' + rwdwK(r.Pa_tri_h) + ' K/FT', r.y_Pa * 12], ...(r.Pa_sur_h > 0 ? [['P_SUR = ' + rwdwK(r.Pa_sur_h) + ' K/FT', Hp / 2]] : []), ...(r.F_hyd > 0 ? [['F_HYD = ' + rwdwK(r.F_hyd) + ' K/FT', r.hw * 12 / 3]] : []),
-        ...(r.hasSeismic ? [['DELTA P_E (SEISMIC) = ' + rwdwK(r.Pe_inc) + ' K/FT', 0.6 * G.H]] : [])];
+        ...(r.hasSeismic ? [['DELTA P_E (SEISMIC) = ' + rwdwK(r.Pe_inc) + ' K/FT', 0.6 * (r.Hp || G.H)]] : [])];   // RW2H2: at 0.6H′
     let yPrev = Infinity;
     res.sort((p1_, p2_) => p2_[1] - p1_[1]).forEach(([s, y]) => { const yl = Math.min(y, yPrev - 0.22 * P); yPrev = yl;
       arrowH(D, L.load, xA2, xA, y, P); D.line(L.ldr, xA2, y, xA2 + 0.1 * P, yl);
@@ -11815,7 +11819,7 @@ function rwdwBuild(r) {
         ...(r.Ms_Pp ? [['PASSIVE AT TOE', '-', F(r.Df / 3), F(r.Ms_Pp / 1000)]] : []),
         ['SUM V / SUM M_R', F(r.SumV / 1000), '', F(r.Ms / 1000)],
         ['P_A,H ACTIVE (OVERTURNING)', F(r.Pa_tri_h / 1000), F(r.y_Pa), F(r.Mo_tri / 1000)], ...(r.Pa_sur_h > 0 ? [['P_SUR', F(r.Pa_sur_h / 1000), F(r.Hp / 2), F(r.Mo_sur / 1000)]] : []),
-        ...(r.F_hyd > 0 ? [['F_HYD', F(r.F_hyd / 1000), F(r.hw / 3), F(r.Mo_hyd / 1000)]] : []), ...(r.hasSeismic ? [['DELTA P_E (SEISMIC)', F(r.Pe_inc / 1000), F(0.6 * r.H), F(r.Mo_seis / 1000)]] : []),
+        ...(r.F_hyd > 0 ? [['F_HYD', F(r.F_hyd / 1000), F(r.hw / 3), F(r.Mo_hyd / 1000)]] : []), ...(r.hasSeismic ? [['DELTA P_E (SEISMIC)', F(r.Pe_inc / 1000), F(0.6 * r.Hp), F(r.Mo_seis / 1000)]] : []),
         ['SUM M_O', '', '', F(r.Mo / 1000)]];
       title = 'SERVICE LOADS (STABILITY, ASD), ABOUT THE TOE';
       foot = ['FOS OVERTURNING = ' + F(r.FOS_OT) + ', SLIDING = ' + F(r.FOS_SL) + ' (>= 1.5, IBC 2018 1807.2.3)' + (r.hasSeismic ? '; WITH 0.7E: ' + F(r.FOS_OT_E) + ', ' + F(r.FOS_SL_E) + ' (>= 1.1)' : ''), 'X_R = (SUM M_R - SUM M_O) / SUM V = ' + F(r.x_R, 3) + ' FT; E = B/2 - X_R = ' + F(r.e, 3) + ' FT',
