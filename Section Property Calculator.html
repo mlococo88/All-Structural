@@ -2433,6 +2433,20 @@ const SPC = (function () {
   /* SPM1 (2026-11-07): a hole removes the material it lies in, so it takes the modulus ratio n of that part (the host: the solid
      part it overlaps most, as for its weight). A hole's own n is not used; when it differs from the host's, a warning says so.
      A hole that overlaps no solid part keeps its own n (it is reported by overlapChecks). */
+  /* SPM2 (2026-11-07): a hole must lie inside material. A hole partly (or wholly) outside the solid parts would remove area
+     that does not exist (e.g. A too small, negative I, S < 0), so it is an error that blocks the results (conservative; the
+     tool does not clip holes). Covered area = Σ exact overlap of the hole with each solid part (material only: tube voids
+     excluded). Touching parts together cover a hole that spans their joint. */
+  function holeCoverCheck(R) {
+    const sol = R.parts.filter(q => !q.pt.hole).map(q => novShape(q.pt));
+    R.parts.forEach(q => {
+      if (!q.pt.hole) return;
+      const h = novShape(q.pt), Ah = Math.abs(h.A); let cov = 0;
+      sol.forEach(S => { if (bbHit(h.bbox, S.bbox)) cov += Math.abs(novInter(h, S)); });
+      const out = Ah - cov;
+      if (out > Math.max(1e-6 * Ah, novTol(h))) R.errors.push(`Hole ${q.pt.lbl || q.pt.id} lies partly outside the material: about ${+out.toPrecision(3)} in² of its ${+Ah.toPrecision(4)} in² is not inside any solid part, so it would remove area that does not exist. Move or resize it so that it lies wholly inside the material (the tool does not clip holes).`);
+    });
+  }
   function holeHostN(R) {
     const sol = R.parts.filter(q => !q.pt.hole).map(q => ({ q, S: novShape(q.pt) }));
     R.parts.forEach(q => {
@@ -2463,6 +2477,7 @@ const SPC = (function () {
       R.parts.push({ pt, n, ...pp });
     });
     if (R.errors.length) return R;
+    holeCoverCheck(R); if (R.errors.length) return R;
     holeHostN(R);
     const W = []; // weighted primitives (geometry) for plastic, Q, extreme fibres
     let A = 0, Sx = 0, Sy = 0;
