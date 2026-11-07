@@ -3456,7 +3456,7 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
   - The new lines appear on the Properties and Calc detail tabs and in the Report model (rotated L6X4X1/2 with the tabulated option and a Q cut: c₂,max = 4.0739 in, and the Q note is shown).
   - 0 console errors.
 
-## 2026-11-07 — PR: claude/spc-l4-pna — SPL4: PNA in a gap reported as the gap range and its middle (review L4; PNA display value, Z unchanged)
+## 2026-11-07 — PR: claude/spc-l4-pna — SPL4: PNA in a gap reported as the gap range and its middle (review L4; PNA display value, Z unchanged; PR #1107: https://github.com/mlococo88/All-Structural/pull/1107)
 
 - **Problem (review L4):** when the plastic neutral axis lies in a gap with no material, any line in the gap halves the area. The bisection stopped at one end of the gap and reported it, with `flat` = false. Example: PL 12 × 1 over PL 6 × 2, 10 in apart: PNA y = 1.000. Z was correct (138 in³).
 - **Fix (`plastic()`, anchor `SPL4 (2026-11-07)`):**
