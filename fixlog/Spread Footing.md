@@ -6427,7 +6427,7 @@ index 50f3837..c2d5000 100644
   - With the option at "general" nothing changes. The default project (φ = 32°) shows no warning.
 - **Saved data:** new field `soil.sfdShearMode`. Older saves read as 'general' (no result change).
 
-## 2026-11-07 — PR: claude/sf-m1-bearing-dowels (SFBX: concrete bearing, compression beyond φB_n is carried by the dowels, ACI 318-19 16.3.1.2(a); CALCULATION CHANGE, pass / fail logic, less conservative only where the dowels suffice)
+## 2026-11-07 — PR: claude/sf-m1-bearing-dowels (PR #1047: https://github.com/mlococo88/All-Structural/pull/1047) (SFBX: concrete bearing, compression beyond φB_n is carried by the dowels, ACI 318-19 16.3.1.2(a); CALCULATION CHANGE, pass / fail logic, less conservative only where the dowels suffice)
 
 - **Problem:** concrete bearing FAILed whenever P_u > φB_n (the lesser of the footing and pedestal bearing strengths, 16.3.3.4). ACI 318-19 16.3.1.2(a) has the reinforcement carry the compression beyond that strength; R16.3.3.4 limits the transfer to concrete alone only where there are no dowels or continuing bars. The tool already required ℓ_dc in that case (SFBC), but never computed the dowel area, so valid interfaces were rejected.
 - **Where / exact code (`Spread Footing.html`, bearing map in `computePhase2`, anchor `/* SFBX (2026-11-07)`):**
