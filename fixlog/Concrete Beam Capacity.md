@@ -5017,7 +5017,7 @@ Frame: Beam Capacity (`suite-frame-capacity`). Found in the in-depth review of 2
 - **Saved data:** one new field `sec.asminSupport` (additive; old saves read with the default, see the decision). No key change.
 - **Open items:** none.
 
-## 2026-11-07 — PR: claude/cbc-aashto-min-every-combo (CBM1: AASHTO 5.6.3.3 minimum reinforcement checked for every combination, each in its own sense of bending, and enveloped; CALCULATION CHANGE (pass/fail logic), Beam Capacity tab, AASHTO mode; less conservative before)
+## 2026-11-07 — PR: claude/cbc-aashto-min-every-combo, PR #985: https://github.com/mlococo88/All-Structural/pull/985 (CBM1: AASHTO 5.6.3.3 minimum reinforcement checked for every combination, each in its own sense of bending, and enveloped; CALCULATION CHANGE (pass/fail logic), Beam Capacity tab, AASHTO mode; less conservative before)
 
 Frame: Beam Capacity (`suite-frame-capacity`) and the suite shell's Report summary. Found in the in-depth review of 2026-11-07 (item M1).
 
