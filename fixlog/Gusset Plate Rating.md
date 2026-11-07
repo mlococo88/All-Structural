@@ -3273,7 +3273,7 @@ From the code-compliance review of 2026-11-07 (LOW findings L1, L2, L8). Enginee
 - **How verified (L1, L2, L8):** main vs branch on 26 review cases: identical except the three cases that exercise these rules (A325 1 in bolts; A490 1 in bolts on 5/16 in plates; spliced validation model with l = 7 in). Riveted and 7/8 in cases (default, validation, variant …) identical. Validation 17 of 17. `check-syntax`, `phone-layout --tool gusset` pass; `project-library --tool gusset` passes except its four "identical to main" checks (only differences: `R.p.Ksp` 0.65 → 0.5 and the new `R.p.hStdL`). 0 console errors.
 - **Saved data:** no change (a project with an entered `Ksp` keeps it).
 
-## 2026-11-07 — PR: claude/gusset-low-display — Citations and flags LRFD 10th Ed. confirms (L3, L4, L5), "Shear plane" label for full-width planes (L6), "§" links in the report's Rating summary (L7)   [citations, labels and links only; no computed value changes]
+## 2026-11-07 — PR: claude/gusset-low-display (PR #1067: https://github.com/mlococo88/All-Structural/pull/1067) — Citations and flags LRFD 10th Ed. confirms (L3, L4, L5), "Shear plane" label for full-width planes (L6), "§" links in the report's Rating summary (L7)   [citations, labels and links only; no computed value changes]
 
 From the code-compliance review of 2026-11-07 (LOW findings L3 to L7).
 
