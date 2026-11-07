@@ -3432,3 +3432,26 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
   - `check-syntax` passes.
   - Headless probe, main vs branch: 0 differences in any value (40 models, all 1,660 shapes, Validation 136/136).
   - The note shows on the Plastic tab and in the Report model with n ≠ 1, and is absent with n = 1. 0 console errors.
+
+## 2026-11-07 — PR: claude/spc-l3-steps — SPL3: worked steps for S₁, S₂ (c₁,max, c₂,max shown and substituted); Q under "AISC tabulated" labelled (review L3; §6, display only)
+
+- **Problem (review L3, two §6 gaps):**
+  1. S₁ and S₂ were given as I/c, but c₁,max and c₂,max were not displayed (the open item from D11).
+  2. With "AISC tabulated", Q comes from the model geometry about the centroid that uses the tabulated A and I, and nothing said so. The mismatch is small (an angle: Δȳ = 0.007 in).
+- **Fix (display only):**
+  - Calc detail → Principal axes (`mkSec(pg, 'cP'`): two lines added after r_min:
+    - `c_{2,max} = …, c_{1,max} = …`
+    - `S_1 = I_1/c_{2,max} = I₁/c = …, S_2 = I_2/c_{1,max} = …`
+    - The result text explains which distance each c is.
+  - Properties → Principal axes table: the Note column of S₁ and S₂ now gives the value of c₂,max and c₁,max. Before: 'c measured perpendicular to axis 1' / ''.
+  - Report: new steps `pa.c2` and `pa.c1`. Steps `pa.S1` and `pa.S2` get their substitution. Before, `sub: ''`; after, `\frac{I₁}{c₂,max}` with the values.
+  - Q tab (`buildQ`): with any part on "AISC tabulated", a note says that Q is the first moment of the model geometry about the section centroid, which uses the tabulated A and I. The model and tabulated areas and centroids differ slightly (fillets), and the difference is not corrected.
+- **§4:** no computed value changes. The new lines show values that were already computed (`R.c1`, `R.c2`).
+- **Check case (default project, principal axes = x, y):**
+  - c₂,max = max(c_top, c_bottom) = max(7.2926, 14.1074) = 14.1074 in, so S₁ = 1977.34/14.1074 = **140.16 in³** (= S_x,bottom).
+  - c₁,max = 7.500 in, so S₂ = 373.99/7.500 = **49.866 in³**.
+- **Verified:**
+  - `check-syntax` passes.
+  - Headless probe, main vs branch: 0 value differences (40 models, all 1,660 shapes, Validation 136/136).
+  - The new lines appear on the Properties and Calc detail tabs and in the Report model (rotated L6X4X1/2 with the tabulated option and a Q cut: c₂,max = 4.0739 in, and the Q note is shown).
+  - 0 console errors.
