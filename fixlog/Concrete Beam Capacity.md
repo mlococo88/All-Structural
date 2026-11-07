@@ -5251,7 +5251,7 @@ Frame: Beam Capacity (`suite-frame-capacity`). Open item of CBL7 (#1005), review
 - **Saved data:** additive field `mat.wc` (old saves read 0 = not entered: normal weight saves unchanged; lightweight AASHTO saves with computed f_ss move as above).
 - **Open items:** ACI mode E_c for lightweight concrete (ACI 318-19 19.2.2.1(a), w_c^1.5·33√f′c) is not changed; the Development & Splice frame's AASHTO n_s for λ_rc still uses the normal weight E_c (higher E_c, smaller k_tr credit: conservative, as its comment states).
 
-## 2026-11-07 — PR: claude/cbc-asmin-handoff (CBM1h: the A_s,min passed to Development & Splice ("From Beam Capacity", CBAR-1) is taken from the enveloped minimum-reinforcement check — the largest requirement among the combinations in the same sense of bending as the flexure-governing combination; CALCULATION CHANGE (hand-off value), AASHTO mode with a zero-moment combination; ACI unchanged in practice)
+## 2026-11-07 — PR: claude/cbc-asmin-handoff, PR #1055: https://github.com/mlococo88/All-Structural/pull/1055 (CBM1h: the A_s,min passed to Development & Splice ("From Beam Capacity", CBAR-1) is taken from the enveloped minimum-reinforcement check — the largest requirement among the combinations in the same sense of bending as the flexure-governing combination; CALCULATION CHANGE (hand-off value), AASHTO mode with a zero-moment combination; ACI unchanged in practice)
 
 Frames: Beam Capacity (`suite-frame-capacity`, the shared-inputs block) and Development & Splice (`suite-frame-dev`, the "From Beam Capacity" note). Open item of CBM1 (#985), review item M1.
 
