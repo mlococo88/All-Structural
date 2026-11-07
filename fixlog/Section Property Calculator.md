@@ -3415,7 +3415,7 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
   - Every output tab built with the FHWA model: new labels shown, 0 console errors.
   - `project-library --tool spc`: the only differences are the 4 new fields `tors.comps[i].n`, `.nMix`, `tors.Jgeo` and `tors.Jn`. They are new keys in the results object; every value that existed before is identical. Save and open are ok.
 
-## 2026-11-07 — PR: claude/spc-l1-note — SPL1: plastic note with modulus ratios: concrete in tension is counted; composite Mp per AASHTO D6.1 / AISC I3.2a (review L1; wording only)
+## 2026-11-07 — PR: claude/spc-l1-note — SPL1: plastic note with modulus ratios: concrete in tension is counted; composite Mp per AASHTO D6.1 / AISC I3.2a (review L1; wording only; PR #1102: https://github.com/mlococo88/All-Structural/pull/1102)
 
 - **Problem (review L1):** with n ≠ 1 the Plastic tab already said that the n-weighted PNA balance is meaningful only for yield-strength ratios. It did not say that concrete below or beside the PNA still counts in tension. For a slab of the FHWA girder geometry:
   - with n = 0.85f′c/F_y = 0.068: Z·F_y = 6,469 k-ft against 6,462 k-ft by AASHTO D6.1 (+0.1 %);
