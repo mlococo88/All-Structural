@@ -6450,7 +6450,7 @@ Every statement was checked against this file's code (anchors: `calcAll`, `rwInp
   - In pile mode the bottom mat is drawn where the model puts it (`r.cov_bot`). The pile-mode bottom-bar position is another PR's fix, and this figure follows it.
 
 
-## 2026-11-07 — PR: claude/rw-gfx-review (PR #__PR3__: https://github.com/mlococo88/All-Structural/pull/__PR3__) (RWGR) — graphics review: Overview drawing fits its card, Overview Check Summary D/C values, sheet viewer sized to the sheet, bearing figure with the shear key, q values off the q_a line, loads-sheet labels   [display only; no result change]
+## 2026-11-07 — PR: claude/rw-gfx-review (PR #1156: https://github.com/mlococo88/All-Structural/pull/1156) (RWGR) — graphics review: Overview drawing fits its card, Overview Check Summary D/C values, sheet viewer sized to the sheet, bearing figure with the shear key, q values off the q_a line, loads-sheet labels   [display only; no result change]
 - **Why:** engineer, 2026-11-07: full graphics review after RWPS / RWRB. The coordinator's screenshots and this review (every figure at 1920 / 1440 / 1280 / 1200 / 390 px, ACI and AASHTO, spread and pile, key, β, water, surcharge, seismic, tall / short wall, wide / narrow footing) found the items below.
 - **Overview drawing clipped** (`#tab-overview`, CSS after `.rw-dwg-wrap > svg.rw-dwg.rw-dwg-wide`):
   - At 1440 px with the check summary column open, the drawing column was about 420 px wide. The SVG kept its 620 px minimum and scrolled sideways inside its card, with the scroll bar easy to miss, so the title, the heel, the backfill and the pressure diagrams were out of view.
