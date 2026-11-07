@@ -585,13 +585,20 @@ const REBAR={
  '7':{d:0.875,a:0.60},'8':{d:1.000,a:0.79},'9':{d:1.128,a:1.00},'10':{d:1.270,a:1.27},
  '11':{d:1.410,a:1.56},'14':{d:1.693,a:2.25},'18':{d:2.257,a:4.00}};
 const BAR_SIZES=Object.keys(REBAR);
+/* CBL1 (2026-11-07): gamma_3 by bar specification, AASHTO LRFD 10th Ed. 5.6.3.3 (six rows). S.mat.gamma3 keeps the number
+   (saved format unchanged); S.mat.g3spec (additive) remembers which row was picked where two rows share a value. */
+const G3_SPECS=[{k:&quot;a615-60&quot;,g:0.67,lab:&quot;A615 Gr 60&quot;},{k:&quot;a615-75&quot;,g:0.75,lab:&quot;A615 Gr 75&quot;},{k:&quot;a615-80&quot;,g:0.76,lab:&quot;A615 Gr 80&quot;},
+  {k:&quot;a706-60&quot;,g:0.75,lab:&quot;A706 Gr 60&quot;},{k:&quot;a706-80&quot;,g:0.80,lab:&quot;A706 Gr 80&quot;},{k:&quot;a1035-100&quot;,g:0.67,lab:&quot;A1035 Gr 100&quot;}];
+function cbcG3Key(){ const g=+S.mat.gamma3||0.67, k=S.mat.g3spec, o=G3_SPECS.find(x=>x.k===k&amp;&amp;Math.abs(x.g-g)<1e-9);
+  if(o) return o.k; const m=G3_SPECS.find(x=>Math.abs(x.g-g)<1e-9); return m?m.k:&quot;a615-60&quot;; }
 const COVER_PRESETS={
   ACI:[{v:'cast',label:'Cast against earth',c:3.0},
        {v:'exposed',label:'Exposed to earth/weather (#6+)',c:2.0},
        {v:'exposed_s',label:'Exposed to earth/weather (#5-)',c:1.5},
        {v:'interior',label:'Not exposed — beams/columns',c:1.5}],
   AASHTO:[{v:'cast',label:'Cast against earth',c:3.0},
-       {v:'exposed',label:'Exposed to weather / deicing',c:2.5},
+       {v:'exposed',label:'Exposure to deicing salts',c:2.5},   /* CBL6: label (Table 5.10.1-1 row); value unchanged */
+       {v:'exterior',label:'Exterior, other than above',c:2.0},   /* CBL6: added row of Table 5.10.1-1 */
        {v:'interior',label:'Interior, not exposed',c:1.5},
        {v:'deck_top',label:'Deck top, deicing salts',c:2.5}]};
 
@@ -655,6 +662,7 @@ function defaultState(){
             {n:3,size:'5',face:'compression',dMan:null}],
     layerClear:1.0,
     stir:{present:true,size:'4',legs:2,s:6},
+    skin:{size:&quot;&quot;,s:0},   /* CBM3: skin bars on each side face (&quot;&quot; = none entered) */
     tor:{present:true,Al:0,theta:45,kind:&quot;equilibrium&quot;},
     crack:{check:true,fsBasis:&quot;code&quot;,fs:40,gammaE:1.0,MsPos:0,MsNeg:0},
     combos:[
@@ -679,7 +687,7 @@ function mergeState(st){
   if(!st||typeof st!==&quot;object&quot;) return;
   const d=defaultState();
   S={...d,...st};
-  [&quot;proj&quot;,&quot;sec&quot;,&quot;mat&quot;,&quot;cover&quot;,&quot;stir&quot;,&quot;tor&quot;,&quot;crack&quot;,&quot;ui&quot;].forEach(k=>{ S[k]={...d[k],...(st[k]||{})}; });
+  [&quot;proj&quot;,&quot;sec&quot;,&quot;mat&quot;,&quot;cover&quot;,&quot;stir&quot;,&quot;skin&quot;,&quot;tor&quot;,&quot;crack&quot;,&quot;ui&quot;].forEach(k=>{ S[k]={...d[k],...(st[k]||{})}; });
   if(!Array.isArray(S.layers)||!S.layers.length) S.layers=d.layers;
   S.layers=S.layers.map(L=>({n:+L.n||1,size:String(L.size||'5'),
     face:(L.face==='compression'?'compression':'tension'),
@@ -989,10 +997,13 @@ function alAvailable(){
    steel by (n-1) to allow for the concrete it displaces.
    ===================================================================== */
 function concreteE(){
-  const fc=S.mat.fc, wc=0.145;
+  const fc=S.mat.fc;
+  /* CBL7 (2026-11-07): w_c of normal weight concrete per AASHTO Table 3.5.1-1 (5.4.2.4 refers to it): 0.145 kcf for
+     f'c <= 5.0 ksi, 0.140 + 0.001 f'c above (before: 0.145 at every f'c). */
+  const wc=fc<=5?0.145:0.140+0.001*fc;
   if(S.code==='AASHTO')
-    return {Ec:120000*1.0*Math.pow(wc,2.0)*Math.pow(fc,0.33), ref:&quot;AASHTO Eq. 5.4.2.4-1&quot;,   /* K1 = 1.0 */
-            expr:`E_c = 120{,}000\\,K_1 w_c^{2.0}f'^{\\,0.33}_c = 120{,}000(1.0)(${fmt(wc,3)})^{2.0}(${fmt(fc)})^{0.33}`};
+    return {Ec:120000*1.0*Math.pow(wc,2.0)*Math.pow(fc,0.33), ref:&quot;AASHTO Eq. 5.4.2.4-1, Table 3.5.1-1&quot;,   /* K1 = 1.0 */
+            expr:`E_c = 120{,}000\\,K_1 w_c^{2.0}f'^{\\,0.33}_c = 120{,}000(1.0)(${fmt(wc,3)})^{2.0}(${fmt(fc)})^{0.33},\\quad w_c = ${fc<=5?&quot;0.145&quot;:&quot;0.140+0.001f'_c&quot;}\\text{ kcf (Table 3.5.1-1)}`};
   return {Ec:57000*Math.sqrt(fc*1000)/1000, ref:&quot;ACI 19.2.2.1&quot;,
           expr:`E_c = 57{,}000\\sqrt{f'_c} = 57{,}000\\sqrt{${fmt(fc*1000,0)}\\text{ psi}}`};
 }
@@ -1164,6 +1175,42 @@ function detailing(F,sh,neg,govMu,Vu,tor){
         t1>=t2?&quot;3√f′c/f_y term governs&quot;:&quot;200/f_y term governs&quot;]]);
   }
 
+  /* CBM3 (2026-11-07): skin reinforcement. ACI 318-19 9.7.2.3: h > 36 in -> skin bars on both side faces over h/2 from
+     the tension face, spacing s per 24.3.2 with c_c = clear cover from the skin bar to the side face (taken as cover +
+     stirrup, the bars inside the stirrup) and f_s = 2/3 f_y (24.3.2.1). AASHTO LRFD 10th Ed. 5.6.7: d_l > 3.0 ft ->
+     A_sk >= 0.012(d_l - 30) in^2/ft on each side face over d_l/2 (Eq. 5.6.7-3), total per face not more than A_s/4
+     (A_s provided used, conservative), spacing <= min(d_l/6, 12 in). Rows only where skin bars are required. */
+  if(outer){
+    const skSz=S.skin&amp;&amp;S.skin.size?String(S.skin.size):&quot;&quot;, skS=+(S.skin&amp;&amp;S.skin.s)||0, skOn=!!(skSz&amp;&amp;REBAR[skSz]&amp;&amp;skS>0);
+    const noSk=&quot;No skin reinforcement entered (Transverse Reinforcement input): it is required here.&quot;;
+    if(code==='ACI' &amp;&amp; h>36){
+      const fsk=(2/3)*fy*1000, cck=cc+ds;
+      const k1=15*(40000/fsk)-2.5*cck, k2=12*(40000/fsk), skMax=Math.min(k1,k2);
+      add(&quot;dSkin&quot;,&quot;Skin reinforcement spacing (h > 36 in)&quot;,&quot;ACI 9.7.2.3, 24.3.2&quot;,
+        skOn?skS:Infinity,skMax,&quot;\\le&quot;,&quot;in&quot;,skOn&amp;&amp;skS<=skMax+1e-9,
+        [[`h = ${fmt(h)}\\text{ in} > 36\\text{ in}`,&quot;&quot;,`Skin bars required on both side faces for h/2 = ${fmt(h/2)} in from the tension face (9.7.2.3).`],
+         [`f_s = \\tfrac{2}{3}f_y = ${fmt(fsk,0)}\\text{ psi},\\qquad c_c = ${fmt(cc)}+${fmt(ds,3)} = ${fmt(cck)}\\text{ in}`,&quot;&quot;,&quot;c_c: clear cover from the skin bar to the side face, the skin bars taken inside the stirrup.&quot;],
+         [&quot;s_{max} = \\min\\left(15\\dfrac{40{,}000}{f_s}-2.5c_c,\\;12\\dfrac{40{,}000}{f_s}\\right)&quot;,
+          `\\min(${fmt(k1)},\\;${fmt(k2)}) = ${fmt(skMax)}\\text{ in}`,&quot;&quot;],
+         [skOn?`s_{skin} = ${fmt(skS)}\\text{ in (\\#${skSz})}`:&quot;\\text{skin bars: none}&quot;,&quot;&quot;,skOn?&quot;&quot;:noSk]]);
+    }
+    const dl=outer.d;
+    if(code==='AASHTO' &amp;&amp; dl>36){
+      const Ab=skOn?REBAR[skSz].a:0, have=skOn?Ab*12/skS:0;
+      const req0=0.012*(dl-30), cap=(F.As/4)/(dl/2/12), req=Math.min(req0,cap);
+      add(&quot;dSkinA&quot;,&quot;Skin reinforcement area per side face (d_\u2113 > 36 in)&quot;,&quot;AASHTO 5.6.7, Eq. 5.6.7-3&quot;,
+        have,req,&quot;\\ge&quot;,&quot;in\u00b2/ft&quot;,have>=req-1e-9,
+        [[`d_\\ell = ${fmt(dl)}\\text{ in} > 36\\text{ in}`,&quot;&quot;,`Skin bars required on both side faces over d_\u2113/2 = ${fmt(dl/2)} in nearest the flexural tension reinforcement.`],
+         [&quot;A_{sk} \\ge 0.012(d_\\ell-30)&quot;,`0.012(${fmt(dl)}-30) = ${fmt(req0,3)}\\text{ in}^2/\\text{ft}`,&quot;&quot;],
+         [&quot;\\text{per face} \\le \\tfrac{A_s}{4}\\text{ over } \\tfrac{d_\\ell}{2}&quot;,`\\dfrac{${fmt(F.As,3)}/4}{${fmt(dl/2)}/12} = ${fmt(cap,3)}\\text{ in}^2/\\text{ft}`,&quot;Need not exceed one-fourth of the flexural tension reinforcement per face (A_s provided used: conservative).&quot;],
+         [`A_{sk,req} = ${fmt(req,3)}\\text{ in}^2/\\text{ft}`,skOn?`A_{sk} = \\dfrac{${fmt(Ab,2)}(12)}{${fmt(skS)}} = ${fmt(have,3)}\\text{ in}^2/\\text{ft}`:&quot;&quot;,skOn?`#${skSz} at ${fmt(skS)} in on each side face.`:noSk]]);
+      const sMx=Math.min(dl/6,12);
+      add(&quot;dSkinS&quot;,&quot;Skin reinforcement spacing (d_\u2113 > 36 in)&quot;,&quot;AASHTO 5.6.7&quot;,
+        skOn?skS:Infinity,sMx,&quot;\\le&quot;,&quot;in&quot;,skOn&amp;&amp;skS<=sMx+1e-9,
+        [[&quot;s_{max} = \\min(d_\\ell/6,\\;12\\text{ in})&quot;,`\\min(${fmt(dl/6)},\\;12) = ${fmt(sMx)}\\text{ in}`,skOn?&quot;&quot;:noSk]]);
+    }
+  }
+
   /* maximum steel via net tensile strain */
   /* ACI 9.3.3.1 beam minimum strain. AASHTO LRFD has no minimum net tensile strain for nonprestressed
      members (ductility is handled through phi, 5.5.4.2), so for AASHTO this is ADVISORY only (N/A in pass/fail). */
@@ -1293,14 +1340,15 @@ function detailing(F,sh,neg,govMu,Vu,tor){
         &quot;Not required. &quot;+trigTx+&quot;, so &quot;+trigRef+&quot; does not call for minimum shear reinforcement &quot;+
         &quot;in this member. (Note this is a demand check — it is evaluated for every combination, &quot;+
         &quot;and reads N/A only where no combination triggers it.)&quot;);
-    } else if(smallH){
+    } else if(smallH &amp;&amp; VuA<=sh.phi*sh.Vc+1e-9){   /* CBL4: Table 9.6.3.1 applies only where V_u <= phi V_c */
       add(&quot;dAvMin&quot;,&quot;Minimum shear reinforcement&quot;,trigRef,0,avMin0,&quot;\\ge&quot;,&quot;in²/in&quot;,true,[],true,
         &quot;Exempt. &quot;+trigTx+&quot;, so ACI 9.6.3.1 would otherwise require A_v,min ≥ &quot;+fmt(avMin0,4)+
-        &quot; in²/in and none is provided — but Table 9.6.3.1(d) exempts members with h ≤ 10 in, &quot;+
-        &quot;and h = &quot;+fmt(h)+&quot; in here. One-way slabs, footings and joists are exempt at any depth. &quot;+
+        &quot; in²/in and none is provided — but Table 9.6.3.1 exempts members with h ≤ 10 in where V_u ≤ \u03c6V_c, &quot;+
+        &quot;and h = &quot;+fmt(h)+&quot; in, V_u = &quot;+fmt(VuA)+&quot; kip ≤ \u03c6V_c = &quot;+fmt(sh.phi*sh.Vc)+&quot; kip here. One-way slabs, footings and joists are exempt at any depth. &quot;+
         &quot;Confirm the exemption being relied on is the right one for this member.&quot;);
     } else {
-      add(&quot;dAvMin&quot;,&quot;Minimum shear reinforcement&quot;,trigRef,0,avMin0,&quot;\\ge&quot;,&quot;in²/in&quot;,false,dvA);
+      add(&quot;dAvMin&quot;,&quot;Minimum shear reinforcement&quot;,trigRef,0,avMin0,&quot;\\ge&quot;,&quot;in²/in&quot;,false,
+        smallH?[[&quot;h \\le 10\\text{ in but } V_u > \\phi V_c&quot;,`${fmt(VuA)}\\text{ kip} > ${fmt(sh.phi*sh.Vc)}\\text{ kip}`,&quot;The h \u2264 10 in exemption of Table 9.6.3.1 applies only where V_u \u2264 \u03c6V_c (9.6.3.1), so A_v,min is required.&quot;]].concat(dvA):dvA);   /* CBL4 */
     }
   }
   /* ---- torsion detailing (ACI 9.7.6.3) — mandatory limits, listed as checks ---- */
@@ -1476,6 +1524,17 @@ function cbcTorA(Tu_kft){
   const Tu=Math.abs(Tu_kft||0)*12;                   /* kip-in */
   return {bw,h,fcT,lam,K,phi,Acp,pc,Tcr,thr,Tu,consider:Tu>thr+1e-9,dcr:thr>0?Tu/thr:(Tu>0?Infinity:0)};
 }
+/* CBM2 (2026-11-07): AASHTO LRFD 10th Ed. 5.7.3.5 longitudinal reinforcement, Eq. 5.7.3.5-1 (no prestress, N_u = 0):
+   A_s f_y >= |M_u|/(d_v phi_f) + (|V_u|/phi_v - 0.5 V_s) cot(theta), V_s not over |V_u|/phi_v. A_s = tension steel of the
+   combination's sense (all of it taken as fully developed at the section), phi_f = the combination's flexural phi,
+   d_v, theta, V_s and phi_v from shear(). Sections with torsion: 5.7.3.6.3 (not implemented; the 5.7.2.1 check FAILs). */
+function cbcLonA(F,sh,pf,Mu,Vu){
+  const fy=S.mat.fy, phif=pf.phi, phiv=sh.phi, dv=sh.dv, th=sh.theta, cot=1/Math.tan(th*Math.PI/180);
+  const M=Math.abs(Mu)*12, V=Math.abs(Vu), VsCap=V/phiv, VsUse=Math.min(sh.Vs,VsCap);
+  const tM=(dv>0&amp;&amp;phif>0)?M/(dv*phif):0, tV=Math.max(0,V/phiv-0.5*VsUse)*cot;
+  const dem=tM+tV, cap=F.As*fy;
+  return {fy,phif,phiv,dv,th,cot,M,V,Vs:sh.Vs,VsCap,VsUse,tM,tV,dem,As:F.As,cap,dcr:cap>0?dem/cap:(dem>0?Infinity:0)};
+}
 function computeAll(){
   const combos=S.combos.map((c,i)=>({...c,ci:i}));
   /* Sign of the governing moment sets which face is in tension. A negative
@@ -1488,6 +1547,7 @@ function computeAll(){
     const sh=shear(F,Math.abs(c.Mu),Math.abs(c.Vu));
     const tor=torsion(F,Math.abs(c.Tu),Math.abs(c.Vu),sh);
     const svc=servicecalc(F,neg);
+    const lonA=(S.code==='AASHTO')?cbcLonA(F,sh,pf,c.Mu,c.Vu):null;   /* CBM2 */
     const torA=(S.code==='AASHTO')?cbcTorA(c.Tu):null;   /* CBH1 */
     const mr=(S.code==='AASHTO')?cbcMin5633(svc,c.Mu,phiMn):null;   /* CBM1 */
     const dcM=phiMn>0?Math.abs(c.Mu)/phiMn:0;
@@ -1526,7 +1586,7 @@ function computeAll(){
       else if(!isFinite(ratio)) detWorst=Math.max(detWorst,1.01);
     });
     const worst=Math.max(dcM,dcV_eff,dcT,detWorst);
-    return {...c,neg,F,pf,phiMn,sh,tor,svc,...(torA?{torA}:{}),...(mr?{mr}:{}),dcM,dcV,dcT,det,share,dcV_eff,
+    return {...c,neg,F,pf,phiMn,sh,tor,svc,...(lonA?{lonA}:{}),...(torA?{torA}:{}),...(mr?{mr}:{}),dcM,dcV,dcT,det,share,dcV_eff,
             detWorst,detFails,worst};
   });
   /* §7.2 identical-result detection: exact match on the factored action set */
@@ -1634,7 +1694,7 @@ function validate(){
   if(S.tor.present &amp;&amp; !S.stir.present)
     W.push({code:&quot;ACI 9.7.6.3&quot;,msg:&quot;Torsion requires closed transverse reinforcement. No stirrups are specified, so the transverse torsional capacity is zero.&quot;});
   /* method disclosure (§8 disclose conservatism) */
-  N.push({code:&quot;Method&quot;,msg:&quot;Torsional section properties A_oh and p_h are taken to the centreline of the outermost closed stirrup. This is slightly conservative relative to the common (b−2c)(h−2c) approximation.&quot;});
+  if(S.code==='ACI') N.push({code:&quot;Method&quot;,msg:&quot;Torsional section properties A_oh and p_h are taken to the centreline of the outermost closed stirrup. This is slightly conservative relative to the common (b−2c)(h−2c) approximation.&quot;});
   if(S.sec.type==='tee')
     N.push({code:&quot;ACI 22.7.6.1&quot;,msg:&quot;The flange contribution permitted for A_cp and p_cp is not taken; the web-only value is used. This is conservative.&quot;});
   if(S.crack.check &amp;&amp; S.crack.fsBasis==='calc'){
@@ -1652,10 +1712,10 @@ function validate(){
   if(S.tor.present &amp;&amp; S.code==='ACI' &amp;&amp; S.stir.present)
     N.push({code:&quot;ACI 22.7.6.1&quot;,msg:&quot;Shear and torsion share the same closed stirrup. The Shear tab reserves the transverse steel required for torsion and reports \u03c6V_n on the remainder; the \u03c6V_n that ignores torsion is also shown for reference but is not used in any demand/capacity ratio.&quot;});
   if(S.code==='ACI' &amp;&amp; S.stir.present)
-    N.push({code:&quot;ACI 9.7.6.2.2&quot;,msg:&quot;The tighter d/4 spacing limit is triggered from V_s REQUIRED (V_u/\u03c6 \u2212 V_c) rather than the V_s the detailed stirrups could provide. The provision exists to control diagonal crack width where stirrups work hard in shear; stirrups placed for torsion or minimum area are not. Both values are shown in the Detailing derivation so the alternative reading can be checked.&quot;});
+    N.push({code:&quot;ACI 9.7.6.2.2&quot;,msg:&quot;The tighter d/4 spacing limit is triggered from V_s REQUIRED (V_u/\u03c6 \u2212 V_c) rather than the V_s the detailed stirrups could provide. The provision exists to control diagonal crack width where stirrups work hard in shear; stirrups placed for torsion or minimum area are not. Both values are shown in the Detailing derivation so the alternative reading can be checked. Decision (pending engineer review, 2026-11-07): this V_s-required reading is kept as common practice (it avoids the circularity of a spacing limit that depends on the spacing chosen); under the literal reading (V_s = the strength provided by the stirrups) the d/4 limit applies wherever V_s,provided > 4\u221af\u2032c b_w d, which can be tighter.&quot;});
   if(S.tor.present &amp;&amp; S.code==='ACI')
     N.push({code:&quot;ACI 9.7.5.1&quot;,msg:&quot;Longitudinal torsion steel is entered as a total area, so the requirement for a bar at every corner of the closed stirrup and a maximum 12 in spacing around p_h cannot be verified automatically. That check is reported N/A and must be confirmed by inspection.&quot;});
-  N.push({code:&quot;ACI 9.6.1.3&quot;,msg:&quot;The exception allowing A_{s,min} to be waived where A_s provided is at least 4/3 of A_s required is NOT applied; the full 9.6.1.2 minimum is always enforced. This is conservative.&quot;});
+  if(S.code==='ACI') N.push({code:&quot;ACI 9.6.1.3&quot;,msg:&quot;The exception allowing A_{s,min} to be waived where A_s provided is at least 4/3 of A_s required is NOT applied; the full 9.6.1.2 minimum is always enforced. This is conservative.&quot;});
   N.push({code:&quot;Scope&quot;,msg:&quot;Deflection, development length, bar cut-offs, fatigue and strut-and-tie are not evaluated. Crack control is checked as a bar-spacing limit; explicit crack-width prediction is not performed.&quot;});
   return {blockers:B,warnings:W,notes:N};
 }
@@ -1750,6 +1810,7 @@ function cbcCheckCard(c){
   if(!c||c.na) return null;
   if(c.tab===&quot;tabFlex&quot;) return cbcComboCard(&quot;flexC&quot;,c.ci);
   if(c.id===&quot;torA&quot;) return {card:&quot;shTorA&quot;,name:&quot;Torsion Threshold (AASHTO 5.7.2.1)&quot;};   /* CBH1 */
+  if(c.id===&quot;lonA&quot;) return {card:&quot;shLonA&quot;,name:&quot;Longitudinal Reinforcement (AASHTO 5.7.3.5)&quot;};   /* CBM2 */
   if(c.tab===&quot;tabShear&quot;) return cbcComboCard(&quot;shC&quot;,c.ci);
   if(c.tab===&quot;tabTor&quot;) return cbcComboCard(&quot;torC&quot;,c.ci);
   if(c.tab===&quot;tabServ&quot;) return S.code==='AASHTO'?{card:&quot;svcMinAll&quot;,name:&quot;Minimum Reinforcement \u2014 Every Combination&quot;}:{card:&quot;svcMain&quot;,name:&quot;Cracking Moment and Minimum Reinforcement&quot;};   /* CBM1 */
@@ -1929,8 +1990,8 @@ function buildInput(){
       r.appendChild(el(&quot;label&quot;,null,&quot;Element of 5.4.3.3, flexural shear without torsion: f_yt up to 100 ksi (5.7.2.7; otherwise 60 ksi, or 75 ksi above 60)&quot;)); b.appendChild(r); }
     fRow(b,&quot;Aggregate size&quot;,numIn(()=>S.mat.dagg,v=>S.mat.dagg=v,&quot;0.25&quot;,&quot;dagg&quot;),&quot;in&quot;);
     fRow(b,&quot;λ (lightweight)&quot;,numIn(()=>S.mat.lambda,v=>S.mat.lambda=v,&quot;0.05&quot;,&quot;lam&quot;),&quot;&quot;);
-    if(S.code==='AASHTO') fRow(b,&quot;γ₃ (bar spec., 5.6.3.3)&quot;,selIn([&quot;0.67&quot;,&quot;0.75&quot;,&quot;0.76&quot;],()=>String(S.mat.gamma3),v=>S.mat.gamma3=+v,
-      o=>o===&quot;0.67&quot;?&quot;0.67 — A615 Gr 60&quot;:(o===&quot;0.75&quot;?&quot;0.75 — A706 Gr 60&quot;:&quot;0.76 — A615 Gr 75&quot;),o=>o,&quot;gamma3&quot;),&quot;&quot;);
+    if(S.code==='AASHTO') fRow(b,&quot;γ₃ (bar spec., 5.6.3.3)&quot;,selIn(G3_SPECS.map(o=>o.k),()=>cbcG3Key(),v=>{ const o=G3_SPECS.find(x=>x.k===v); if(o){ S.mat.gamma3=o.g; S.mat.g3spec=o.k; } },
+      k=>{ const o=G3_SPECS.find(x=>x.k===k); return o.g.toFixed(2)+&quot; — &quot;+o.lab; },o=>o,&quot;gamma3&quot;),&quot;&quot;);   /* CBL1 */
     b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;E_s = 29,000 ksi and ε_cu = 0.003 are fixed by code.&quot;));
   },P);
 
@@ -1993,6 +2054,10 @@ function buildInput(){
       fRow(b,&quot;Legs&quot;,numIn(()=>S.stir.legs,v=>S.stir.legs=Math.max(2,Math.round(v)),&quot;1&quot;,&quot;sl&quot;),&quot;&quot;);
       fRow(b,&quot;Spacing, s&quot;,numIn(()=>S.stir.s,v=>S.stir.s=v,&quot;0.5&quot;,&quot;sp&quot;),&quot;in&quot;);
     }
+    /* CBM3: skin reinforcement on each side face */
+    fRow(b,&quot;Skin bars (each side face)&quot;,selIn([&quot;&quot;].concat(BAR_SIZES),()=>(S.skin&amp;&amp;S.skin.size)||&quot;&quot;,v=>{S.skin=Object.assign({size:&quot;&quot;,s:0},S.skin,{size:v});},o=>o?&quot;#&quot;+o:&quot;None&quot;,o=>o,&quot;skz&quot;),&quot;&quot;);
+    if(S.skin&amp;&amp;S.skin.size) fRow(b,&quot;Skin bar spacing&quot;,numIn(()=>S.skin.s,v=>{S.skin.s=v;},&quot;0.5&quot;,&quot;sks&quot;),&quot;in&quot;);
+    b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Skin reinforcement is required on both side faces where h > 36 in (ACI 9.7.2.3) or d_\u2113 > 36 in (AASHTO 5.6.7); it is checked in Detailing only then.&quot;));
   },P);
 
   if(S.code==='ACI'){
@@ -2309,7 +2374,7 @@ function allChecks(){
       if(v.dcr>best.dcr) best={dcr:v.dcr,combo:r.name,na:false,ci:r.ci}; });
     out.push({label,ref,dcr:best.na?null:best.dcr,combo:best.combo,na:best.na,tab,ci:best.ci});   /* ci: D11 link target only */
   };
-  env(&quot;Flexural capacity&quot;,&quot;ACI 9.3.3 / 22.2&quot;,r=>({dcr:r.dcM,na:Math.abs(r.Mu)<1e-9}),&quot;tabFlex&quot;);
+  env(&quot;Flexural capacity&quot;,S.code==='ACI'?&quot;ACI 9.3.3 / 22.2&quot;:&quot;AASHTO 5.6.3.2 / 5.5.4.2&quot;,r=>({dcr:r.dcM,na:Math.abs(r.Mu)<1e-9}),&quot;tabFlex&quot;);
   env(&quot;Shear capacity&quot;+(CC.combos.some(r=>r.share)?&quot; (after torsion demand)&quot;:&quot;&quot;),
     S.code==='ACI'?&quot;ACI 22.5&quot;:&quot;AASHTO 5.7.3&quot;,
     r=>({dcr:r.dcV_eff,na:Math.abs(r.Vu)<1e-9}),&quot;tabShear&quot;);
@@ -2317,6 +2382,10 @@ function allChecks(){
     env(&quot;Torsion threshold, T_u \u2264 0.25\u03c6T_cr (above: torsion must be considered; not designed by this tool)&quot;,&quot;AASHTO 5.7.2.1&quot;,
       r=>(r.torA&amp;&amp;r.torA.Tu>0)?{dcr:r.torA.dcr,na:false}:{na:true},&quot;tabShear&quot;);
     out[out.length-1].id=&quot;torA&quot;;
+    /* CBM2: 5.7.3.5 longitudinal reinforcement (shear-moment interaction), every combination */
+    env(&quot;Longitudinal reinforcement for moment and shear&quot;,&quot;AASHTO 5.7.3.5&quot;,
+      r=>(r.lonA&amp;&amp;(Math.abs(r.Mu)>1e-9||Math.abs(r.Vu)>1e-9))?{dcr:r.lonA.dcr,na:false}:{na:true},&quot;tabShear&quot;);
+    out[out.length-1].id=&quot;lonA&quot;;
   }
   if(S.tor.present&amp;&amp;S.code==='ACI'){
     env(&quot;Torsional capacity&quot;,&quot;ACI 22.7.6.1&quot;,r=>{
@@ -2772,6 +2841,18 @@ function buildShearTab(pg){
           b.appendChild(w); }
       });
       if(!any) b.appendChild(el(&quot;div&quot;,&quot;okBox&quot;,&quot;No combination exceeds the threshold: torsion may be neglected (5.7.2.1).&quot;));
+    },pg);
+    /* CBM2 (2026-11-07): AASHTO 5.7.3.5 longitudinal reinforcement, every combination */
+    mkSection(&quot;shLonA&quot;,&quot;Longitudinal Reinforcement (AASHTO 5.7.3.5)&quot;,b=>{
+      b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Shear adds tension in the longitudinal reinforcement on the flexural tension side (Eq. 5.7.3.5-1, no prestress, N_u = 0). A_s is the tension steel of the combination's sense, taken as fully developed at the section; V_s is not taken greater than V_u/\u03c6_v. With torsion, 5.7.3.6.3 applies instead (not implemented: see Torsion Threshold).&quot;));
+      CC.combos.forEach(r=>{ const L=r.lonA; if(!L) return;
+        b.appendChild(eqBlock({title:&quot;Combination &quot;+(r.ci+1)+&quot; (&quot;+r.name+&quot;)&quot;,ref:&quot;AASHTO 5.7.3.5, Eq. 5.7.3.5-1&quot;,
+          lines:[`A_s f_y \\ge \\dfrac{|M_u|}{d_v\\phi_f} + \\left(\\dfrac{|V_u|}{\\phi_v} - 0.5V_s\\right)\\cot\\theta,\\qquad V_s \\le \\dfrac{|V_u|}{\\phi_v}`,
+            `V_s = \\min(${fmt(L.Vs)},\\;${fmt(L.V)}/${fmt(L.phiv,2)} = ${fmt(L.VsCap)}) = ${fmt(L.VsUse)}\\text{ kip}`,
+            `\\dfrac{${fmt(L.M,1)}}{(${fmt(L.dv)})(${fmt(L.phif,3)})} + \\left(${fmt(L.VsCap)} - 0.5(${fmt(L.VsUse)})\\right)\\cot(${fmt(L.th,2)}^\\circ) = ${fmt(L.tM,1)} + ${fmt(L.tV,1)} = ${fmt(L.dem,1)}\\text{ kip}`,
+            `A_s f_y = (${fmt(L.As,3)})(${fmt(L.fy)}) = ${fmt(L.cap,1)}\\text{ kip} \\;${L.dcr<=1?&quot;\\ge&quot;:&quot;<&quot;}\\; ${fmt(L.dem,1)}\\text{ kip}\\qquad D/C = ${isFinite(L.dcr)?fmt(L.dcr,3):&quot;\\infty&quot;}`]}));
+        cbcWorkedIn(b,[{tab:&quot;tabShear&quot;,c:cbcComboCard(&quot;shC&quot;,r.ci),txt:&quot;d_v, \u03b8, V_s&quot;},{tab:&quot;tabFlex&quot;,c:cbcComboCard(&quot;flexC&quot;,r.ci),txt:&quot;\u03c6_f&quot;}]);
+      });
     },pg);
   }
   mkSection(&quot;shAll&quot;,&quot;Shear Results — All Combinations&quot;,b=>{
@@ -3507,6 +3588,7 @@ function buildInputEchoTab(pg){
         &quot; closed stirrup at &quot;+fmt(S.stir.s)+&quot; in centres (A_v = &quot;+
         fmt(S.stir.legs*REBAR[S.stir.size].a)+&quot; in\u00b2).&quot;));
     } else b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;No transverse reinforcement specified.&quot;));
+    b.appendChild(el(&quot;div&quot;,&quot;note&quot;,S.skin&amp;&amp;S.skin.size&amp;&amp;S.skin.s>0?&quot;Skin bars: #&quot;+S.skin.size+&quot; at &quot;+fmt(S.skin.s)+&quot; in on each side face.&quot;:&quot;Skin bars: none entered.&quot;));   /* CBM3 */
   },pg);
   mkSection(&quot;ieLoads&quot;,&quot;Load Combinations&quot;,b=>{
     const t=el(&quot;table&quot;,&quot;rt&quot;);
@@ -5122,7 +5204,7 @@ function cbcRptModel(){
       [&quot;$f^{\\prime}_{c}$&quot;,{t:fmt(S.mat.fc),n:true},'ksi'],['$f_{y}$',{t:fmt(S.mat.fy),n:true},'ksi'],['$f_{yt}$',{t:fmt(S.mat.fyt),n:true},'ksi'],...(S.code==='AASHTO'?[['$f_{yt}$ up to 100 ksi (5.4.3.3, no torsion; 5.7.2.7)',S.mat.fyt100?'yes':'no','']]:[]),['$\\lambda$',{t:fmt(S.mat.lambda,2),n:true},''],
       ['Aggregate size',{t:fmt(S.mat.dagg),n:true},'in'],['Clear cover provided / required',fmt(S.cover.cc)+' / '+fmt(S.cover.req),'in']]}]});
     subs.push({title:'Reinforcement',items:[{type:'table',head:['Layer','Bars','Size','$A_{s}$ (in²)','Face','d (in)','Source'],rows:G.map((L,i)=>[L.side+(i+1),String(L.n),'#'+L.size,{t:fmt(L.As),n:true},L.face==='tension'?'Tension':'Compression',{t:fmt(L.d),n:true},L.manual?'manual override':'auto-stacked'])},
-      {type:'note',text:(S.stir.present?'Transverse: '+S.stir.legs+'-leg #'+S.stir.size+' closed stirrup at '+fmt(S.stir.s)+' in. ($A_{v}$ = '+fmt(S.stir.legs*REBAR[S.stir.size].a)+' in²).':'No transverse reinforcement specified.')+(S.tor.present&amp;&amp;ACI?' Torsion: '+(S.tor.kind==='compatibility'?'compatibility':'equilibrium')+' torsion, θ = '+fmt(S.tor.theta,0)+'°, $A_{\\ell}$ = '+fmt(S.tor.Al)+' in².':'')+' Clear spacing between layers: '+fmt(S.layerClear)+' in.'}]});
+      {type:'note',text:(S.stir.present?'Transverse: '+S.stir.legs+'-leg #'+S.stir.size+' closed stirrup at '+fmt(S.stir.s)+' in. ($A_{v}$ = '+fmt(S.stir.legs*REBAR[S.stir.size].a)+' in²).':'No transverse reinforcement specified.')+(S.tor.present&amp;&amp;ACI?' Torsion: '+(S.tor.kind==='compatibility'?'compatibility':'equilibrium')+' torsion, θ = '+fmt(S.tor.theta,0)+'°, $A_{\\ell}$ = '+fmt(S.tor.Al)+' in².':'')+(S.skin&amp;&amp;S.skin.size&amp;&amp;S.skin.s>0?' Skin bars: #'+S.skin.size+' at '+fmt(S.skin.s)+' in on each side face.':' Skin bars: none entered.')+' Clear spacing between layers: '+fmt(S.layerClear)+' in.'}]});   /* CBM3: skin bars */
     const hasT=S.tor.present&amp;&amp;ACI;
     subs.push({title:'Load combinations',items:[{type:'table',head:['#','Combination','$M_{u}$ (kip-ft)','$V_{u}$ (kip)'].concat(hasT?['$T_{u}$ (kip-ft)']:[]),rows:CC.combos.map(r=>[String(r.ci+1),r.name,{t:fmt(r.Mu),n:true},{t:fmt(r.Vu),n:true}].concat(hasT?[{t:fmt(r.Tu),n:true}]:[]))}]});
     if(String(S.assumptions||'').trim()) subs.push({title:'Assumptions',items:[{type:'note',text:String(S.assumptions).trim()}]});
@@ -5130,7 +5212,7 @@ function cbcRptModel(){
   }
   /* 2. summary of checks */
   { const K=allChecks(), keyOf=c=>{ if(c.na||c.ci==null) return undefined;
-      if(c.tab==='tabFlex') return 'fx'+c.ci+'/DCR'; if(c.id==='torA') return 'tth/Tu'+c.ci; if(c.tab==='tabShear') return CC.combos[c.ci].share?'sh'+c.ci+'/DCRs':'sh'+c.ci+'/DCR';
+      if(c.tab==='tabFlex') return 'fx'+c.ci+'/DCR'; if(c.id==='torA') return 'tth/Tu'+c.ci; if(c.id==='lonA') return 'lon/dc'+c.ci; if(c.tab==='tabShear') return CC.combos[c.ci].share?'sh'+c.ci+'/DCRs':'sh'+c.ci+'/DCR';
       if(c.tab==='tabTor') return /cross/i.test(c.label)?'tq'+c.ci+'/size':(/Combined/.test(c.label)?'tq'+c.ci+'/combVT':'tq'+c.ci+'/DCR');
       if(c.tab==='tabServ') return c.ci!=null?'svm/minr'+c.ci:'sv/minr';   /* CBM1: the combination that governs 5.6.3.3 */ if(c.tab==='tabDetail') return 'dt/'+c.id+'.cmp'; };
     const st=c=>{ if(c.na) return {t:'N/A',cls:'na'}; const ok=c.forceOK!=null?c.forceOK:(c.dcr<=1.0001); return {t:ok?'PASS':'FAIL',cls:ok?(c.dcr>=0.9&amp;&amp;c.forceOK==null?'hi':'ok'):'ng'}; };
@@ -5157,6 +5239,17 @@ function cbcRptModel(){
       st.push(cS({id:'Tu'+r.ci,label:cn(r)+': T_u against the threshold'+(T.consider?' — torsion must be considered; AASHTO torsion design is not implemented by this tool':''),sym:'T_{u}/(0.25\\phi T_{cr})',eq:'\\le 1',sub:'\\dfrac{'+fmt(T.Tu,1)+'}{'+fmt(T.thr,1)+'}',value:T.dcr,d:3,ok:!T.consider})); });
     secs.push({title:'Torsion threshold (AASHTO 5.7.2.1)',subs:[{title:'Torsion threshold, every combination',items:[{type:'topics',scope:'tth',title:'Worked steps',list:[{title:'Torsion threshold',ref:'AASHTO LRFD 10th Ed. 5.7.2.1',steps:st}]},
       {type:'note',text:'Torsion design to AASHTO 5.7.3.6 is not implemented: a combination above the threshold is reported FAIL. [[tab:tabShear|On screen: Shear tab]]'}]}]});
+    /* CBM2 (2026-11-07): AASHTO 5.7.3.5 longitudinal reinforcement */
+    const lst=[];
+    CC.combos.forEach(r=>{ const L=r.lonA; if(!L) return;
+      lst.push({title:cn(r),ref:'AASHTO LRFD 10th Ed. 5.7.3.5',steps:[
+        cS({id:'Vs'+r.ci,label:'V_s, not greater than |V_u|/φ_v',sym:'V_{s}',eq:'\\min(V_s,\\;|V_u|/\\phi_v)',sub:'\\min('+fmt(L.Vs)+',\\;'+fmt(L.V)+'/'+fmt(L.phiv,2)+')',value:L.VsUse,unit:'kip'}),
+        cS({id:'dem'+r.ci,label:'Tension demand on the longitudinal reinforcement (d_v, θ, V_s: Shear; φ_f: Flexure, this combination)',sym:'T_{req}',eq:'\\dfrac{|M_u|}{d_v\\phi_f} + \\left(\\dfrac{|V_u|}{\\phi_v} - 0.5V_s\\right)\\cot\\theta',
+          sub:'\\dfrac{'+fmt(L.M,1)+'}{('+fmt(L.dv)+')('+fmt(L.phif,3)+')} + ('+fmt(L.VsCap)+' - 0.5('+fmt(L.VsUse)+'))\\cot('+fmt(L.th,2)+'^\\circ)',value:L.dem,unit:'kip',d:1,ref:'AASHTO LRFD 10th Ed. Eq. 5.7.3.5-1'}),
+        cS({id:'cap'+r.ci,label:'Tensile capacity of the tension steel',sym:'A_{s}f_{y}',eq:'',sub:'('+fmt(L.As,3)+')('+fmt(L.fy)+')',value:L.cap,unit:'kip',d:1}),
+        cS({id:'dc'+r.ci,label:'Longitudinal reinforcement: demand / capacity',sym:'T_{req}/(A_s f_y)',eq:'\\le 1',sub:'\\dfrac{'+fmt(L.dem,1)+'}{'+fmt(L.cap,1)+'}',value:L.dcr,d:3,ok:L.dcr<=1+1e-9})]}); });
+    secs.push({title:'Longitudinal reinforcement (AASHTO 5.7.3.5)',subs:[{title:'Longitudinal reinforcement for moment and shear, every combination',items:[{type:'topics',scope:'lon',title:'Worked steps',list:lst},
+      {type:'note',text:'A_s taken as fully developed at the section; with torsion, 5.7.3.6.3 applies (not implemented). [[tab:tabShear|On screen: Shear tab]]'}]}]});
   }
   if(S.tor.present&amp;&amp;ACI) per('Torsion','tq',r=>r.tor?cbcRptTor(r):[{type:'note',text:'Torsion is not enabled.'}],'tabTor',CC.govTorIndex);
   /* 6. serviceability (governing combination, as the tab) */
@@ -5211,7 +5304,7 @@ function cbcRptModel(){
   { const W=[].concat((V.blockers||[]).map(x=>({warn:true,text:'Blocker ('+x.code+'): '+x.msg})),(V.warnings||[]).map(x=>({warn:true,text:'Warning ('+x.code+'): '+x.msg})),(V.notes||[]).map(x=>({text:(x.code?x.code+': ':'')+x.msg})));
     if(W.length) secs.push({title:'Validation notices',subs:[{title:'Notices',items:W.map(w=>Object.assign({type:'note'},w,{text:String(w.text).replace(/<[^>]+>/g,'')}))}]});
   }
-  const keep=cbcRxFilter(secs,RX,{'Inputs':'tabInputEcho','Summary of checks':'tabSummary','Flexure':'tabFlex','Shear':'tabShear','Torsion threshold (AASHTO 5.7.2.1)':'tabShear','Torsion':'tabTor','Serviceability':'tabServ','Detailing':'tabDetail','Validation notices':'tabValid'},RXO);   /* CBRX */
+  const keep=cbcRxFilter(secs,RX,{'Inputs':'tabInputEcho','Summary of checks':'tabSummary','Flexure':'tabFlex','Shear':'tabShear','Torsion threshold (AASHTO 5.7.2.1)':'tabShear','Longitudinal reinforcement (AASHTO 5.7.3.5)':'tabShear','Torsion':'tabTor','Serviceability':'tabServ','Detailing':'tabDetail','Validation notices':'tabValid'},RXO);   /* CBRX */
   return {title:'Beam Capacity',code:codeName,proj:P,refs:cbcRefs(document.getElementById('pageBody')||document.body),sections:keep};
 }
 
@@ -5229,7 +5322,7 @@ const CBDC_ST={pass:'PASS',fail:'FAIL',na:'N/A'};
 /* the condition a detailing check (or the torsion cross-section limit) states when it is not satisfied */
 const CBDC_COND={dCover:'c_c < c_c,req',dSpace:'s_clear < s_min',dLayer:'layer gap < 1 in',dAsMin:'A_s < A_s,min',
   dEpsMin:'ε_t < ε_ty + 0.003',dStirS:'s > s_max',dAvMin:'A_v/s < (A_v/s)_min',dTorS:'s > s_max (torsion)',
-  dTorAl:'A_ℓ < A_ℓ,min',dTorAlReq:'A_ℓ < A_ℓ,req',dTorAts:'A_t/s < 25b_w/f_yt',dTorAlDist:'spacing > 12 in',dCrack:'s > s_max (crack)'};
+  dTorAl:'A_ℓ < A_ℓ,min',dTorAlReq:'A_ℓ < A_ℓ,req',dTorAts:'A_t/s < 25b_w/f_yt',dTorAlDist:'spacing > 12 in',dCrack:'s > s_max (crack)',dSkin:'s > s_max (skin)',dSkinA:'A_sk < A_sk,req',dSkinS:'s > s_max (skin)'};   /* CBM3 */
 function cbcDashDC(c){   /* the D/C as the Summary tab prints it (heatTD, CBAZ) */
   if(c.na||c.dcr==null) return '';
   const z=cbcDcZero(c); if(z) return 'D/C '+z;
@@ -10551,6 +10644,7 @@ window.addEventListener('DOMContentLoaded',()=>{
         if(!c.na&&c.ci!=null){ var ci=c.ci;
           if(c.tab==='tabFlex') ks=['fx'+ci+'/DCR'];
           else if(c.id==='torA') ks=['tth/Tu'+ci];   /* CBH1 */
+          else if(c.id==='lonA') ks=['lon/dc'+ci];   /* CBM2 */
           else if(c.tab==='tabShear') ks=['sh'+ci+'/DCRs','sh'+ci+'/DCR'];
           else if(c.tab==='tabTor') ks=[/cross/i.test(c.label)?'tq'+ci+'/size':(/Combined/.test(c.label)?'tq'+ci+'/combVT':'tq'+ci+'/DCR')];
           else if(c.tab==='tabServ') ks=['svm/minr'+ci,'sv/minr'];   /* CBM1: the combination that governs 5.6.3.3 */

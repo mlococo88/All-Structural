@@ -2546,3 +2546,95 @@ function sectionFor(fam,label,gradeId){
 - **Why:** #891 took Save and Saved projects… out of the header; `steel-beam-builtup.mjs` opened saved projects through the header's Saved projects… (`[data-sp=hlib]`).
 - **What:** `openP()` clicks the chip (Project tab) and then the card's Saved projects… (`#sbSaveCard [data-sp=lib]`). Nothing else changed.
 - **How verified:** `node tests/smoke/steel-beam-builtup.mjs`: 11 checks passed. **Saved data / formulas:** none (test file only).
+
+## 2026-11-07 — PR: claude/steelbeam-h1-j10-sum (PR #1006: https://github.com/mlococo88/All-Structural/pull/1006) — J10 demand at a point load is the total factored force at that location (H1; calculation change)
+
+From the code-compliance review of 2026-11-07 (finding H1). Engineer-approved overnight job, merge-as-you-go.
+
+### H1. Point loads at one location are one J10 location; R_u = Σ γ·P   [calculation change, more conservative]
+- **Problem:** `designAll` made one J10 location per point-load entry. A load entry carries one load case, so a dead and a live point load at the same place were two locations, each checked with its own factored load only. In a combination the web sees their sum. Unconservative wherever two or more point loads share an x.
+- **Governing provision:** AISC 360-16 §J10.2 (web local yielding) and §J10.3 (web local crippling): R_u is the required strength of the concentrated force at the location (Specification §B3.1 with the ASCE 7-16 §2.3.1 combination, so the factored sum of every load acting there).
+- **Where (1):** `designAll`, block `/* J10 locations (I & C only) */`, anchor `locs.push({kind:'load',label:'point load '+(ld.nm||'')`.
+- **Before:**
+```js
+    S.loads.forEach(ld=>{
+      if(ld.off||ld.type!=='point')return;
+      const si=Math.min(ld.si||0,S.geom.spans.length-1);
+      locs.push({kind:'load',label:'point load '+(ld.nm||''),x:nX[si]+Math.max(0,Math.min(S.geom.spans[si].L,ld.pos||0)),load:ld,lb:dsn.lbPt});
+    });
+```
+- **After:** point loads whose global x agree within 1e-6 ft (any load case; loads in the two spans at a shared node too) join one location; the label of a grouped location names every load and the x.
+```js
+    S.loads.forEach(ld=>{
+      if(ld.off||ld.type!=='point')return;
+      const si=Math.min(ld.si||0,S.geom.spans.length-1);
+      const x=nX[si]+Math.max(0,Math.min(S.geom.spans[si].L,ld.pos||0));
+      const g=locs.find(l=>l.kind==='load'&&Math.abs(l.x-x)<=1e-6);
+      if(g){g.loads.push(ld);g.label='point loads '+g.loads.map(q=>q.nm||q.lc).join(' + ')+' (x = '+fmt(x,2)+' ft)';}
+      else locs.push({kind:'load',label:'point load '+(ld.nm||''),x,load:ld,loads:[ld],lb:dsn.lbPt});
+    });
+```
+- **Where (2):** `designAll`, block `/* J10 demands */`, anchor `let terms=null;` (was `const fk=cb.f[lo.load.lc]||0;`).
+- **Before:**
+```js
+        else{const fk=cb.f[lo.load.lc]||0;const P=lo.load.mag*fk;dem=P>0?P:null;}
+        const r={label:lo.label,x:lo.x,dem,lb:lo.lb,endDist:lo.endDist};
+```
+- **After:**
+```js
+        let terms=null;
+        if(lo.kind==='load'){terms=lo.loads.map(q=>({nm:q.nm||'',lc:q.lc,f:cb.f[q.lc]||0,mag:q.mag||0})).filter(t=>t.f&&t.mag);
+          const P=terms.reduce((s,t)=>s+t.f*t.mag,0);dem=P>0?P:null;}
+        const r={label:lo.label,x:lo.x,dem,lb:lo.lb,endDist:lo.endDist};
+        if(terms&&lo.loads.length>1)r.terms=terms;
+```
+  A location with one load gives exactly the old demand (one term, same product). A net upward sum still gives no demand (as before for one upward load).
+- **Where (3), display (§6 show the work):** `buildJ10Tab`, per-combination section, after `body.appendChild(t);`, anchor `/* H1: worked demand where several point loads act at one location */`. For a grouped location the tab adds the line R_u at <location> = Σ γ·P = γ₁·P₁ (name, case) + … = R_u kip.
+- **Check case (AISC Design Examples v16.0, Example J.7 geometry):** W24X55 A992, 20 ft simple span, no tributary load, P_D = 15 kip and P_L = 30 kip both at 8 ft, l_b = 7.5 in at the point load, combination 1.2D + 1.6L + 0.5S.
+  - R_n WLY (J10-2, interior) = F_y t_w (5k + l_b) = 50 × 0.395 × (5 × 1.01 + 7.5) = 247.9 kip, φ = 1.00.
+  - R_n WLC (J10-4) = 282.0 kip, φR_n = 0.75 × 282.0 = 211.5 kip.
+  - **Before:** two locations; governing demand 1.6 × 30 = 48 kip; WLY DCR 48/247.9 = **0.194**, WLC DCR 48/211.5 = **0.227**.
+  - **After:** one location; R_u = 1.2 × 15 + 1.6 × 30 = 66 kip (Example J.7 uses 66 kip); WLY DCR 66/247.9 = **0.266**, WLC DCR 66/211.5 = **0.312**.
+- **How verified:** headless Chromium, `file://`, origin/main vs this branch on 11 scenarios (default, 2-span W16X26, J.7 two loads at one x, J.7 loads at different x, built-up, G.8B, W8X67 torsion, axial, cantilever, HSS, member mode) and the v16 engine cases: only the J.7 two-loads scenario moved (its point-load row, every combination; supports unchanged). Kit: check-syntax, steel-beam-builtup (11/11), project-library steelbeam, phone-layout sbeam, list-input sbeam: all pass; 0 console errors.
+- **Saved data:** none changed (no key, no field; the grouping is computed).
+- **Other copies:** batch mode and member mode take a user-entered R (unchanged).
+
+## 2026-11-07 — PR: claude/steelbeam-h3-builtup-h (PR #1012: https://github.com/mlococo88/All-Structural/pull/1012) — Built-up I-shape: h = d − 2t_f and the minor-axis / torsion constants from the plates; warning for every property still the parent shape's (H3 part 1; calculation change)
+
+From the code-compliance review of 2026-11-07 (finding H3). The plate-girder input mode (every property from the plates) is a separate PR.
+
+### H3-1. Built-up: plate-derived defaults for properties not entered   [calculation change, more conservative in the check case]
+- **Problem:** with **Built-up** ticked and the plate geometry entered as overrides, every property not entered kept the parent rolled shape's value, with no warning. The clear web height h stayed the rolled T-distance (backed out of the tabulated h/t_w), so h/t_w, the web class, k_c, C_v1, a_w, R_pg and R_pc used the wrong h. J, C_w, r_ts, r_y, I_y, h_o, S_y, Z_y also stayed the parent's, so LTB, E4 and minor-axis flexure were for another section.
+- **Governing provision:** AISC 360-16 Table B4.1b (note on h: for built-up sections, the clear distance between flanges, h = d − 2t_f for welded plates); §G2.1(b); §F4, §F5; §F2.2 Eq. F2-7 and its User Note (C_w = I_y h_o²/4 for doubly symmetric I-shapes).
+- **Where (1):** `resolveSection`, Tier 2 block, after anchor `if(src.hClear!=='ovr')p.hClear=hDb;`.
+- **Before:**
+```js
+    if(src.hClear!=='ovr')p.hClear=hDb;
+    p.htw=(p.hClear!=null&&p.tw)?p.hClear/p.tw:db.htw;
+```
+- **After:** (I-shapes with `S.section.builtUp`; any value the user entered is kept)
+```js
+    if(src.hClear!=='ovr')p.hClear=hDb;
+    if(kind==='I'&&p._built&&p.d>0&&p.bf>0&&p.tf>0&&p.tw>0){
+      const hw=p.d-2*p.tf,Apl=2*p.bf*p.tf+hw*p.tw,pl={};
+      pl.hClear=hw;pl.ho=p.d-p.tf;
+      pl.Iy=2*p.tf*Math.pow(p.bf,3)/12+hw*Math.pow(p.tw,3)/12;
+      pl.Sy=pl.Iy/(p.bf/2);pl.Zy=p.bf*p.bf*p.tf/2+hw*p.tw*p.tw/4;
+      pl.ry=Math.sqrt(pl.Iy/(src.A==='ovr'?p.A:Apl));
+      pl.J=(2*p.bf*Math.pow(p.tf,3)+hw*Math.pow(p.tw,3))/3;
+      pl.Cw=pl.Iy*pl.ho*pl.ho/4;
+      ['hClear','ho','Iy','Sy','Zy','ry','J','Cw'].forEach(k=>{if(src[k]!=='ovr'){p[k]=pl[k];src[k]='plates';}});
+      if(src.rts!=='ovr'&&p.Sx>0){p.rts=Math.sqrt(Math.sqrt(p.Iy*p.Cw)/p.Sx);src.rts='plates';}
+    }
+    p.htw=(p.hClear!=null&&p.tw)?p.hClear/p.tw:db.htw;
+```
+- **Where (2):** `sectionWarnings`, after the Z_x consistency check, anchor `/* H3: a built-up section whose plate geometry was entered`. When Built-up is ticked and any of d, b_f, t_f, t_w is entered, a warning lists every property still taken from the parent shape (A, I_x, S_x, Z_x, r_x, k_des, Q_f, Q_w, W_no, S_w1, Wt), with the plate value beside A, I_x, S_x, Z_x and r_x.
+- **Where (3), display:** `buildSectionTab`: source column "built-up: from the plates", and a worked block (equation → values → result) for each property computed from the plates, anchor `/* H3: worked plate properties of a built-up I-shape`.
+- **Check case:** base W24X55, Built-up ticked, A572 Gr. 50; entered d 30, b_f 10, t_f 0.75, t_w 0.3125, A 22.97, I_x 3480, S_x 232, Z_x 282.8; 20 ft simple span, default loads with LL 80 psf.
+  - **Before:** h = 21.57 in (from W24X55), h/t_w = 69.0 (web compact, F2), C_v1 = 1.10√(5.34 × 29000/50)/69.0 = 0.887, **φV_n = 224.5 kip**; φM_n = 1060.5 kip-ft (F2); r_y 1.34, J 1.18, C_w 3870 (W24X55).
+  - **After:** h = 30 − 2(0.75) = 28.5 in, h/t_w = 91.2 > λ_p 90.55 (web noncompact, F4); C_v1 = 1.10 × 55.65/91.2 = 0.671; **φV_n = 0.9 × 0.6 × 50 × (30 × 0.3125) × 0.671 = 169.9 kip**; φM_n = 1057.9 kip-ft (F4); I_y = 2(0.75)(10³)/12 + 28.5(0.3125³)/12 = 125.07 in⁴, r_y = √(125.07/22.97) = 2.334 in, J = (2 × 10 × 0.75³ + 28.5 × 0.3125³)/3 = 3.10 in⁴, h_o = 29.25 in, C_w = 125.07 × 29.25²/4 = 26 752 in⁶, r_ts = √(√(125.07 × 26 752)/232) = 2.808 in.
+  - The warning lists r_x 9.11 (plates 12.63), k_des, Q_f, Q_w, W_no, S_w1 and Wt 55 lb/ft as parent values.
+- **How verified:** headless Chromium, `file://`, origin/main vs branch, the 11 scenarios of H1 plus the v16 engine cases: only the built-up scenario moved (shear 224.5 → 169.9, flexure 1060.5 → 1057.9 F2 → F4, interaction). The v16 built-up cases (E.2, E.3, F.14, G.8A/B) enter h and their properties, so they are unchanged. Kit: check-syntax, steel-beam-builtup 11/11, project-library steelbeam, phone-layout sbeam, list-input sbeam: pass; 0 console errors.
+- **Saved data:** no key or field changed. A saved project with Built-up ticked now opens with the plate-derived h and constants for the properties it did not enter; its entered values are untouched.
+- **Decision (pending engineer review):** no migration that keeps the old (parent-shape) values for saved built-up projects: the old values were the wrong section and unconservative in the check case. The properties listed in the warning (A, I_x, S_x, Z_x, r_x, k, Q, W_no, S_w1, Wt) are not replaced, only flagged, because the user may have entered the welded values on purpose elsewhere; the plate-girder input mode (next PR) computes all of them.
+- **Open items:** singly symmetric built-up girders are not modelled (top and bottom flanges are the same plates here).

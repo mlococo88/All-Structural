@@ -2407,3 +2407,63 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 - **How verified:** `node tests/lightpole-compare.mjs --a origin/main` (23 cases): identical except `nocable`, `rect610`, `rect106` (the rectangular pole cases); sign and LRFDLTS cases identical; **cable values identical in every case**; 0 console errors. `check-syntax`, `phone-layout --tool lp`, `project-library --tool lightpole`, `lightpole-anchor-handoff`, `lightpole-projection`, `lightpole-signviews`, `tests/engine/run.mjs lightpole` (42): pass.
 - **Saved data:** none.
 - **Open items (not changed):** (1) IBC sign mode, rectangular post: the post drag (`signWind`, exposed clearance height) uses B for every azimuth; at edge-on wind (90°/270°, panel force 0) the depth face is loaded. Decision (pending engineer review): left as is in this PR (small, edge-on post drag only). (2) Mast ice weight on a rectangular pole uses a round of diameter B.
+
+## 2026-11-07 — PR: claude/lp-left-breakpoint (PR #991: https://github.com/mlococo88/All-Structural/pull/991) — Check summary panel as a left column from 1200 px (was 1500 px); 240 px wide from 1200 to 1499 px (LPLB; display only, no result change)
+
+### LPLB. The check summary is on the left at common laptop widths   [display only]
+- **Decision (pending engineer review):** the engineer asked (2026-11-07, for the Retaining Wall Designer) for "the summary cards … on the left panel", most likely at a laptop width below 1500 px, where LPDC (#747) put the panel above the output tabs. The left column now starts at **1200 px** in Light Pole and Sign Post, Retaining Wall Designer (RWLB, #984) and Spread Footing (SFLB, #988) alike. From 1200 to 1499 px it is **240 px** wide and the input panel is 33 % of the rest; at 1500 px and wider 292 px as before (layout and panel widths unchanged there). Below 1200 px nothing changes (panel above the output tabs; phone layout). Same collapse button (« / » → 42 px strip) and key `lpp_dashCollapsed_v1`.
+- **Output panel with the column open:** 643 px at 1200 px, 697 at 1280, 777 at 1400 (the tool already works at 670 px, a 1000 px window): no output tab is cut off or scrolls the page sideways (measured on all nine tabs at 1200, 1280, 1400).
+- **Where:**
+  - CSS: `  @media screen and (min-width:1500px){` (anchor `.wrap{max-width:1792px}`) → `  @media screen and (min-width:1200px){` with a comment `/* LPLB … */` above; after that block, added:
+```css
+  @media screen and (min-width:1200px) and (max-width:1499.98px){   /* LPLB */
+    body.lppDashWide #lppDashCol{flex-basis:240px;width:240px}
+    body.lppDashWide .grid2 .col-in{flex-basis:calc((100% - 240px)*.33);max-width:calc((100% - 240px)*.33)}
+    body.lppDashWide.lppDashColl #lppDashCol{flex-basis:42px;width:42px}
+    body.lppDashWide.lppDashColl .grid2 .col-in{flex-basis:calc((100% - 42px)*.33);max-width:calc((100% - 42px)*.33)}
+  }
+```
+  - JS: `const LPDC={key:'lpp_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1500px)'):null,…` → `'screen and (min-width:1200px)'` (comment `/* LPLB: was 1500px */`).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data (§5):** no key or format changed.
+- **How verified:** `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: all cases identical (results, cable values, every output tab's text, drawings; 0 console errors); its readouts are taken at 1280 px, where the column is now open. No sideways page scroll at 390, 768, 1200, 1280, 1400, 1920 px. Screenshots before / after at 1200, 1280, 1400 and after at 1920, 768, 390 looked at. Tests: check-syntax; phone-layout lp 390/768; project-library lightpole.
+- **Open item:** the User Manual's "Check summary panel" paragraph still says "On screens 1500 px and wider it is a column on the left"; left unchanged so the Manual tab text stays identical in the comparison. A one-line wording update can follow.
+
+## 2026-11-07 — PR: claude/lp-manual-1200 (PR #994: https://github.com/mlococo88/All-Structural/pull/994) — User Manual: the check summary column starts at 1200 px (LPLB follow-up; text only, no result change)
+- **Why:** open item of LPLB (#991): the Manual still said the column starts at 1500 px.
+- **Where:** User Manual, paragraph `<b>Check summary panel</b> (2026-11-03): …` (anchor `On screens 1500 px and wider it is a column on the left`).
+  - Before: `On screens 1500 px and wider it is a column on the left (« shrinks it to a strip)`
+  - After: `On screens 1200 px and wider it is a column on the left (« shrinks it to a strip)`
+- **Formulas, factors, units, code references:** none (§4 does not apply). **Saved data:** unchanged.
+- **How verified:** `node tests/lightpole-compare.mjs --a origin/main`: ALL CASES IDENTICAL (23 cases; it does not read the Manual tab); the only diff is the one sentence; check-syntax passes.
+
+## 2026-11-07 — PR: claude/lp-h4-lts-shaft-checks (PR #1002: https://github.com/mlococo88/All-Structural/pull/1002) (LPH4 + LPM7: the drilled-shaft checks in the LRFDLTS Summary / check panel / report; the manual-cage tie size and shear spacing in the IBC Summary)   [pass/fail reporting; no computed value changes; cable values identical]
+- **Problem (review H4, M7, 2026-11-07):**
+  - H4: in LRFDLTS mode the Summary card (`ltsCalc()`, "LRFDLTS summary"), the check panel (`lppDashItems()`, LTS branch) and the LTS report listed the member, deflection, base plate, weld, Broms L, anchors, fatigue and breakaway, but **no** shaft reinforcement check (ACI 318-19 P–M, shear, min / max steel, clear spacing, ties) and no torsion threshold. A failing shaft was visible only on the Shaft tab.
+  - M7: in IBC check mode (manual cage), the Summary's "Tie spacing" compared s with the §25.7.2.1 limit only; the §25.7.2.2 tie size and the shear / A_v,min spacing (`T.checks.sizeMin`, `T.checks.shear`, already computed and shown on the Shaft tab) were not in `collectChecks`.
+- **Where:**
+  - New `lppShaftRows(push, reo, Mu, Vu)` (before `function collectChecks(ctx)`): the six existing shaft rows of `collectChecks` (moved unchanged, same order, same arguments) + for a manual cage (`reo.tie.checks`): **"Tie size"** (ACI 318-19 §25.7.2.2, required d_tie ÷ provided, ok = `T.checks.sizeMin`) and **"Tie spacing, shear"** (§22.5, §10.6.2; s ÷ min(s_shear, s_Av,min), ok = `T.checks.shear`; when V_u ≤ ½φV_c the capacity cell reads "not required (V_u ≤ ½φV_c)", ratio 0).
+  - `collectChecks()`: the six shaft `push` lines replaced by `lppShaftRows(push, reo, found.Mu, found.Vu);` (`push` now returns the row). IBC rows and order are unchanged apart from the two manual-cage rows after "Tie spacing".
+  - New `ltsShaftChecks(fd)` (after `ltsFoundation`): the same rows from the LTS foundation (`fd.reo`, M_u of the governing P–M pair `reo.long.govDem`, `fd.Vu`), plus "Shaft torsion ≤ φT_th (neglect)" (§22.7.1.1) when T_u > 0. `lppChkVal(c)` formats "demand / capacity".
+  - LTS Summary card: one row per shaft check (OK / NOT OK, demand / capacity, ratio, code; "torsion reinforcement required (not designed here)" when T_u > φT_th). `lppDashItems()` LTS branch: one item per shaft check (link to the Shaft tab foundation card). `ltsReportModel()` Foundation section: a check table, and failing shaft checks are listed in the report's assumptions / flags.
+  - `LPP_CHK2K`: "Tie size", "Tie spacing, shear" → `ties` (Shaft tab link). Summary / dashboard / IBC report: a row's `capTxt` replaces "ERR" when the capacity is not a number.
+  - **L12 (part):** Shaft tab, check-mode table, row "Tie spacing, shear": the limit is now min(s_shear, s_Av,min), the value the check uses (before: s_shear only, shown as "ERR in" when V_s = 0); "not limiting (V_s = 0)" when infinite.
+- **Governing provision:** ACI 318-19 §22.4, §22.5, §10.6.1.1, §25.2.3, §25.7.2.1, §25.7.2.2, §10.6.2, §22.7.1.1 (as already used on the Shaft tab); LRFDLTS Art. 13.6.2 (structural design of the shaft; ACI 318-19 per decision Q-C4). No formula, factor or limit changed: this changes which checks are reported as NG.
+- **Check case** (harness cases `ltsshaftng`, `ibcshaftng`: monopost sign 16 × 8 ft, V = 130 mph, b = 2 ft, manual cage (4) #4, #3 ties @ 12 in; LTS with Broms cohesive c = 1.0 ksf):
+  - LRFDLTS, before: Summary and check panel show no shaft row. After: "Shaft flexure (P–M) NOT OK, 111,341 / 40,070 lb·ft (2.779)"; "Longitudinal steel, min NOT OK, 2.26 / 0.80 in²"; "Tie spacing NOT OK, 12 / 8 in"; "Tie spacing, shear NOT OK, 12.0 / 11.0 in (1.091)"; "Shaft torsion ≤ φT_th NOT OK, 14,666 / 10,729 lb·ft (1.367); torsion reinforcement required"; check panel 8 NG. Values are the Shaft tab's (φM_n 40,070 lb·ft vs M_u 111,341 lb·ft there).
+  - IBC, before: 6 checks fail; after: 7 ("Tie spacing, shear" 12.0 in > 11.0 in, NG), plus "Tie size OK".
+- **How verified:** `node tests/lightpole-compare.mjs --a origin/main` (25 cases): **results identical in every case**, **cable values identical**, 0 console errors; text differences only in the Summary of `sqshaft` (manual cage: + Tie size, + Tie spacing, shear), `ltspoleb`, `ltssign2b`, `ltsshaftng` (+ the shaft rows) and `ibcshaftng`, and the Shaft-tab tie row of the two new cases. Probe: LTS `lppDashItems()` and `ltsReportModel()` list the same rows. `check-syntax`, `phone-layout --tool lp`, `project-library --tool lightpole`, `lightpole-anchor-handoff`, `lightpole-projection`, `lightpole-signviews`, `tests/engine/run.mjs lightpole` (42): pass.
+- **Saved data:** none.
+- **Open item (not changed):** the Shaft tab's design line in check mode reads "Provide (4) #4 … φM_n = 40,070 lb·ft ≥ M_u = 111,341 lb·ft" even when φM_n < M_u (the check-mode table above it shows NG correctly).
+
+## 2026-11-07 — PR: claude/lp-m6-bp-geometry (PR #1009: https://github.com/mlococo88/All-Structural/pull/1009) (LPM6: base plate / anchor geometry input errors)   [behaviour: impossible geometry is now an input error; valid inputs identical; cable values identical]
+- **Problem (review M6, 2026-11-07):** `lppInputErrors()` validated only the square plate (LPAS). Reproduced on main: bolt circle 9 in inside a 10 in pole → m = (BC − D)/2 < 0, **t_req 0.000 in "OK"**; round plate Ø14 in with BC 16 in (rods outside the plate) → "OK"; BC 40 in in a 36 in shaft (rods outside the concrete) → no error.
+- **Where:** `lppInputErrors()`, after the LPAS square-plate block (anchor `// LPM6 (2026-11-07, review M6)`). Before: nothing. After, when BC > 0 and n ≥ 1 (both code modes, pole and sign):
+  1. every rod clear of the pole / post: R − d_rod/2 > the outline at the rod's azimuth (round D/2; square / rect.: the rectangle with the depth along x and the width along y, distance min(h_x/|cos a|, h_y/|sin a|));
+  2. round plate (Ø > 0): R + d_rod/2 < Ø/2;
+  3. rods within the shaft cage: BC + d_rod ≤ 12b − 2·cover.
+  Each failure is a blocking input error (the existing input-error box; no results shown), with the numbers and the fix in the message.
+- **Governing provision:** none (geometry). Item 3 is a detailing choice: Decision (pending engineer review): the rods are required inside the cage (b − 2·cover) rather than merely inside the concrete, the conservative reading of the review's recommendation.
+- **Check cases** (harness cases added): `bcinside` (BC 9 in, default Ø10 in pole base): before t_req 0.000 in OK; after "Bolt circle BC 9.00 in: a rod is not clear of the pole (rod inner edge at 4.00 in from the centre, pole face at 5.00 in)…". `bpsmall` (plate Ø14 in, BC 16 in, rod 1 in): "the rods (BC 16.00 in + rod 1.000 in = 17.00 in) are not inside the plate". `bcoutside` (BC 40 in, plate Ø44 in, b 3 ft, cover 3 in): "41.00 in is outside the shaft cage (b − 2·cover = 36.0 − 2·3.00 = 30.00 in)". In these three blocked cases the harness reports the cable readout as differing because B shows no results; the cable model is not touched.
+- **Harness:** case `bolts15` (1.5 in rods on BC 20 in) had the default Ø20 in plate, i.e. the rods outside the plate (now an error); it gets `bpDia: '24'` so that it keeps testing the large-rod path (applied to both sides).
+- **How verified:** `node tests/lightpole-compare.mjs --a origin/main` (28 cases): every valid case **results identical, cable values identical**, 0 console errors; the three new cases are blocked on the branch as intended. `check-syntax`, `phone-layout --tool lp`, `project-library --tool lightpole`, `lightpole-anchor-handoff`, `lightpole-projection`, `lightpole-signviews`, `tests/engine/run.mjs lightpole` (42): pass.
+- **Saved data:** keys and format unchanged. A saved project with such a geometry now opens with the input error (its data is kept; correcting BC, the plate or the shaft restores the results).
