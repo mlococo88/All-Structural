@@ -5971,7 +5971,7 @@ Second-pass review finding M1 (2026-11-07). Code sites are tagged `RW2M1`.
 ### Saved data
 - No input or format change.
 
-## 2026-11-07 — PR: claude/rw2-low-items — Second-pass review LOW items L1–L8: citations and the 6-in rule, AASHTO Rebar labels and schedule, phone overflow on piles, S3 crack control, AASHTO auto shear, ACI §13.2.6.2 option, EE I duplicate rows, ACI joint shear friction (RW2L1–L8; small calculation changes and checks added, §4 where noted)
+## 2026-11-07 — PR: claude/rw2-low-items — Second-pass review LOW items L1–L8: citations and the 6-in rule, AASHTO Rebar labels and schedule, phone overflow on piles, S3 crack control, AASHTO auto shear, ACI §13.2.6.2 option, EE I duplicate rows, ACI joint shear friction (RW2L1–L8; small calculation changes and checks added, §4 where noted) (PR #1144: https://github.com/mlococo88/All-Structural/pull/1144)
 
 Second-pass review LOW findings (2026-11-07). Code sites are tagged `RW2L1` … `RW2L8`.
 
