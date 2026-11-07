@@ -9657,7 +9657,7 @@ function rwrbBarsSVG(r, o) {
       out += `<text x="${d.x}" y="${y}" font-size="${fs}" fill="${cl}" text-anchor="${d.a}">${txt}</text>`;
     });
   });
-  return t + '<g data-layer="rebar-labels">' + out + '</g>';
+  return t + '<g data-layer="rebar">' + out + '</g>';   // the labels go with the Rebar layer toggle
 }
 // RWPS (2026-11-07): pressure diagrams drawn OFF the structure (engineer: "the passive pressure triangle is overlapping the
 // structure, it should be drawn off to the side"). Display only: every ordinate and label is a value the analysis already has.
