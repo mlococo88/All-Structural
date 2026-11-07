@@ -2257,7 +2257,7 @@ function renderStatus(r) {
 - **Other copies:** none.
 - **Decisions (pending engineer review):** only the governing combination is drawn (the tab's selector shows the others); Extreme Event II keeps its worked steps without a figure.
 
-## 2026-11-07 — PR: claude/rw-input-errors (RWIE) — required inputs: "Input error: no results" banner with links, fields marked with their reason, one validation pass by code mode   [behaviour change for blank / invalid input only; valid inputs: no result change]
+## 2026-11-07 — PR: claude/rw-input-errors (PR #936: https://github.com/mlococo88/All-Structural/pull/936) (RWIE) — required inputs: "Input error: no results" banner with links, fields marked with their reason, one validation pass by code mode   [behaviour change for blank / invalid input only; valid inputs: no result change]
 - **Why:** engineer-approved 2026-11-06 (task 3, review Phase 4a; as CBC #794, LP #744, SF). Before, only f′c, f_y, q_a, η, φ_b, γ_e and a few geometry cases (β ≥ φ, members too thin for cover) stopped the run. Every other blank box was read as 0 by `getInputs` (`parseFloat(…) || 0`), and some invalid values fell back silently: an out-of-range bar override fell back to automatic; a blank distribution length became 0.5 ft (`Math.max(0.5, …)`); a manual δ_b of 0 fell back to ⅔φ; a blank barrier height switched the barrier off.
 - **What:**
   - `rwInputErrors()`: one pass over the values as typed. Blank boxes are told apart from 0. It runs by code mode, and conditional fields only when their option is on.
