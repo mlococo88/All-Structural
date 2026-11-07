@@ -1479,7 +1479,7 @@ Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.6.3.6: the total thickness of the p
 - **Decision (pending engineer review):** "total thickness" read as covers + internal layers + all n + 1 steel laminates (the plain text and the FHWA example both include the steel). An internal load plate and the cover above it (MassDOT §3.5.7.6: not part of the bearing) are not modelled. Before, the check used h_rt.
 - **Saved data:** none changed. **Other copies:** none.
 
-## 2026-11-07 — PR: claude/edm-m1-m4-m5 (M1, M4, M5, review 2026-11-07) — Method A applicability S²/n, no-liftoff check informational; MassDOT resultant rotation for rectangular pads; minimum laminate a pass/fail check   [calc change]
+## 2026-11-07 — PR: claude/edm-m1-m4-m5 (PR #1085: https://github.com/mlococo88/All-Structural/pull/1085) (M1, M4, M5, review 2026-11-07) — Method A applicability S²/n, no-liftoff check informational; MassDOT resultant rotation for rectangular pads; minimum laminate a pass/fail check   [calc change]
 
 Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.6.1 and C14.7.6.1 (Method A for steel-reinforced bearings with S_i²/n < 22; commentary 20 for n ≥ 3, 16 circular or nearly square), C14.7.6.3.5a (no-liftoff provisions removed from Method A), Art. 14.7.5.3.5 (h_s ≥ 0.0747 in); MassDOT Bridge Manual Part I §3.5.7.3 (2009 interims removed the Method A lift-off check), §3.5.7.5 (11 ga = 0.1196 in), §3.5.7.6 (design rotation = vector sum, 0.03 rad applied to the resultant).
 
