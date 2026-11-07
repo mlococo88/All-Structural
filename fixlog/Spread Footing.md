@@ -6283,3 +6283,52 @@ index 50f3837..c2d5000 100644
   - Ped 1: 0.255 → 0.347 (governing combination now 1.2D + 1.0(−Wx) + L + 0.5S).
 - **Cases that move:** only `slender`. The other 15 harness cases are not slender. Their only differences are the new `sus` fields on `combos[].nr.pl` (data, no result).
 - **Saved data:** none. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/sf-h3-transverse-strip (PR #982: https://github.com/mlococo88/All-Structural/pull/982) (SFTX: combined footing, transverse strip under each pedestal (width c + d) checked alongside the full width; governing bottom D/C = the larger; CALCULATION CHANGE for footings with two or more pedestals)
+
+- **Problem:** in a combined footing the transverse bars were checked on the full footing width, i.e. the transverse moment was spread uniformly. Under a plate the transverse moment concentrates under the pedestals. In the default project the y-bars showed D/C 0.302 where a strip under Ped 2 gives 0.465 (unconservative).
+- **Where / exact code (`Spread Footing.html`, `computePhase2`):**
+  - New `sfdStrip(dir,dBot,AsBot,fc,fy)` before `const desX=directionDesign('x')` (anchor `/* SFTX (2026-11-07): transverse strip`).
+    - Applies with two or more pedestals, in the transverse direction(s): direction x is transverse when the spread of the pedestal centres in x is ≤ 0.25 × their spread in y, and the reverse for y. With neither (a 2-D layout), both directions are transverse.
+    - For each pedestal: strip width b_s = c + d, centred on the pedestal (c = pedestal side across the strip, d = d_bot of the bars spanning the strip, d/2 each side, clipped at the footing edges).
+    - Loads on the strip: the pedestals whose centres lie in it (P_u and the moment in the strip direction at the footing base). They are balanced by a linear no-tension soil pressure over the strip length.
+    - The moment at each face (cantilever to the edge, minus the pedestals beyond the face) is integrated numerically (400 points); the largest over the LRFD combinations is used.
+    - φM_n = `flexCap(b_s, d, A_s/ft·b_s)`. A strip whose resultant falls outside its length has D/C = ∞ (NG).
+  - `directionDesign` return:
+    - Before: `dcrBot:capBot.phiMn>0?(MuPos*12)/capBot.phiMn:(MuPos>0?Infinity:0),`
+    - After: `dcrBotFull:` the same expression, and `strip:sfdStrip(dir,dBot,AsBot,fc,fy)`.
+    - After both directions: `[desX,desY].forEach(z=>{z.dcrBot=Math.max(z.dcrBotFull,z.strip&&z.strip.applies?z.strip.dcr:0);});`
+  - `dcrBot` (dashboard flexure chip, summary table, 3D pick) is now the governing value. The full-width displays (card 5.2 / 5.3 eqBlock, flexure SVG label, Report step `DCRb`) show `dcrBotFull`. A new eqBlock and note on the card, and a Report topic "Transverse strip under each pedestal" (b_s, M_u,strip, A_s,strip, φM_n,strip, D/C per pedestal).
+- **Governing provisions:** ACI 318-19 13.3.4.1 (combined footings designed by Chapter 8), 13.3.4.3 (distribution of bearing pressure consistent with established principles), 22.3 (flexural strength). The code fixes no strip width; ACI 336.2R and textbook combined-footing practice design a transverse beam under each column.
+- **Decision (pending engineer review):** strip width c + d. Alternatives: c + 1.5d (less conservative), or the full width alone (as before).
+- **Check case (default project, y-bars, Ped 2, 1.2D + 1.6L + 0.5S):** P_u = 318.81 k on L = 8 ft gives w = 39.85 k/ft; cantilever 4.00 − 0.75 = 3.25 ft.
+  - M = 39.85·3.25²/2 = **210.46** kip-ft.
+  - b_s = 18 + 26.5 = 44.5 in; A_s = 1.0533·3.708 = 3.906 in²; a = 3.906·60/(0.85·4·44.5) = 1.549 in.
+  - φM_n = 0.9·3.906·60·(26.5 − 0.775)/12 = **452.2** kip-ft; D/C = **0.465**.
+  - Before: y-bars bottom D/C **0.302** (full width). After: **0.465** (strip governs). Ped 1 strip: 158.97 kip-ft, 0.352. x-direction (longitudinal): no strip, unchanged 0.057.
+- **Seymour:** pedestals in line along y, so x is transverse.
+  - Strips: Ped 1 20.21 kip-ft on b_s = 127.9 in, D/C 0.025; Ped 2 8.67 kip-ft on b_s = 47.9 in, D/C **0.028** (x full width 0.025).
+  - The governing flexure (y, 0.687) is unchanged.
+- **Saved data:** none. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/sf-left-breakpoint (PR #988: https://github.com/mlococo88/All-Structural/pull/988) — Summary dashboard as a left column from 1200 px (was 1500 px); 240 px wide from 1200 to 1499 px (SFLB; display only, no result change)
+
+### SFLB. The summary dashboard is on the left at common laptop widths   [display only]
+- **Decision (pending engineer review):** the engineer asked (2026-11-07, for the Retaining Wall Designer) for "the summary cards … on the left panel", most likely at a laptop width below 1500 px, where SFDC (#737) put the dashboard above the output tabs. The left column now starts at **1200 px** in Spread Footing, Retaining Wall Designer (RWLB, #984) and Light Pole and Sign Post alike. From 1200 to 1499 px it is **240 px** wide; at 1500 px and wider 280 px as before (layout and panel widths unchanged there). Below 1200 px nothing changes (dashboard above the output tabs; phone stacking, SFPH). Same collapse button (« / » → 42 px strip) and key `sfd_dashCollapsed_v1`.
+- **Output panel at 1200–1499 px with the column open:** 508–748 px wide (the input panel keeps its 400 px minimum), as the output panel already is at 950–1190 px without the column. At those widths the Load Combinations, Pedestal Design, Stability, Footing Design and Report pages are wider than the panel and were cut off at its edge (`.out{overflow-x:hidden}`, an existing condition below 1200 px). With the column open from 1200 to 1499 px, each tab page now scrolls sideways inside itself (`overflow-x:auto`, as on tablets and phones, SFPH), so nothing is cut off and the page itself never scrolls sideways. Measured (main → branch): at 1280 px nothing was cut; now Load Combinations scrolls 161 px, Pedestal Design 92 px, Report 189 px inside their tab page. « (collapse) gives the width back.
+- **Where:**
+  - CSS: `@media screen and (min-width:1500px){` (the SFDC block, anchor `.wrap{max-width:1892px}`) → `@media screen and (min-width:1200px){` with a comment `/* SFLB … */` above; after that block, added:
+```css
+@media screen and (min-width:1200px) and (max-width:1499.98px){   /* SFLB */
+ body.sfdDashWide #sfdDashCol{flex-basis:240px;width:240px}
+ body.sfdDashWide .inp{width:calc((100% - 252px)*.33)}
+ body.sfdDashWide.sfdDashColl #sfdDashCol{flex-basis:42px;width:42px}
+ body.sfdDashWide.sfdDashColl .inp{width:calc((100% - 54px)*.33)}
+ /* … a wide table, plot or Report page scrolls sideways inside its tab page … */
+ body.sfdDashWide:not(.sfdDashColl) .tabpage{overflow-x:auto}
+}
+```
+  - JS: `const SFDC={key:'sfd_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1500px)'):null,…` → `'screen and (min-width:1200px)'` (comment `/* SFLB: was 1500px */`).
+  - `tests/smoke/spread-footing-scroll.mjs`: the dashboard-column assertion `vw >= 1500` → `vw >= 1200` (its 1280 and 1366 px sizes now expect the column) and its comments.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data (§5):** no key or format changed.
+- **How verified:** origin/main vs branch at 1920, 1280 and 1200 px, three projects (default, 2 NG; Direct load mode, 3 NG; B 7 × L 6 ft with water table at 2 ft, 6 NG): `R`, `P2`, `state` (Export JSON), the dashboard text, the Report text (Plotly / SVG figures removed: their tick labels follow the plot width) and every localStorage key and value (the `at` time stamp of `bridgeSuite.v1.projectsUI.spread-footing.start` masked) **identical**; 0 console errors. No sideways page scroll at 390, 768, 1200, 1280, 1400, 1920 px (and no output cut off on any of the ten tabs at 1200, 1280, 1400). Screenshots before / after at 1200, 1280, 1400 and after at 1920, 768, 390 looked at. Tests: check-syntax; spread-footing-scroll; phone-layout sf 390/768; project-library spreadfooting.
