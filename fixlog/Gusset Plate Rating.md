@@ -3130,3 +3130,48 @@ From the code-compliance review of 2026-11-07 (finding M1). Engineer asleep, mer
   - Default project with punched holes: SP1-U 968.8 → 871.9 kip, RF LRFR Inv 2.020 → 1.732.
 - **How verified:** main vs branch on 20 review cases: only SPn-U moved, and only in the cases with punched holes (all punched; only L2-L3 punched, whose chord holes lie on SP1; the §2.3 variant; the validation model with punched holes). Drilled cases identical. Validation tab 17 of 17 (drilled holes; unchanged). `check-syntax`, `phone-layout --tool gusset` pass; `project-library --tool gusset` passes except its four "identical to main" checks, which differ only in the SPn-U equation text (now shows R<sub>p</sub>) on the default (drilled) project. 0 console errors.
 - **Saved data:** no change. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/gusset-m2-splice-demand (PR #1040: https://github.com/mlococo88/All-Structural/pull/1040) — Chord-splice demand: the larger of the resolved forces on the two sides (LRFD 10th Ed. C6.14.2.8.6) (M2; §4)
+
+From the code-compliance review of 2026-11-07 (finding M2; answers open item C14.7-3).
+
+### M2. Splice demand N = larger magnitude of the right- and left-hand free bodies, per load column   [§4: demand definition]
+- **Where:** `compute()`, chord-splice block, anchor `const N = zeroD(), V = zeroD(), M = zeroD(), Cpt = mul(nrm, S.yb), right = [], strad = [];` and the lines after the straddle warning; `demandHtml()` (splice text); Method tab "Demand" item.
+- **Problem:** the splice demand was the right-hand free body only. C6.14.2.8.6 says the splice is investigated for the larger of the two resolved forces on either side; they differ with envelope (non-concurrent) forces. With envelope inputs the right-hand side could be the smaller one (unconservative).
+- **Before:**
+```js
+        const N = zeroD(), V = zeroD(), M = zeroD(), Cpt = mul(nrm, S.yb), right = [], strad = [];
+        P.members.forEach((m, j) => { if (dot(G[j].centroid, axis) > 1e-6) { right.push(j); accD(N, m, dot(G[j].u, axis)); accD(V, m, dot(G[j].u, nrm)); accD(M, m, crs(mul(Cpt, -1), G[j].u)); }
+```
+- **After:**
+```js
+        const N = zeroD(), NL = zeroD(), V = zeroD(), M = zeroD(), Cpt = mul(nrm, S.yb), right = [], strad = [];
+        P.members.forEach((m, j) => { if (dot(G[j].centroid, axis) > 1e-6) { right.push(j); accD(N, m, dot(G[j].u, axis)); accD(V, m, dot(G[j].u, nrm)); accD(M, m, crs(mul(Cpt, -1), G[j].u)); }
+          else accD(NL, m, -dot(G[j].u, axis));
+        …
+        const NR = { DC: N.DC, DW: N.DW, LL: N.LL.slice() }, pick = (a, b) => Math.abs(b) > Math.abs(a) + 1e-9 ? b : a, difL = [];
+        N.DC = pick(NR.DC, NL.DC); N.DW = pick(NR.DW, NL.DW); N.LL = NR.LL.map((x, k) => pick(x, NL.LL[k]));
+```
+  plus a warning when the two sides differ by more than max(0.5 kip, 0.5 %).
+- **Decisions (pending engineer review):** the larger magnitude is chosen per load column (DC, DW, each LL column), keeping that side's sign. V and M (used only by the advisory combined check on the splice line) stay from the right-hand side; the advisory N uses the governing N.
+- **Governing provision:** AASHTO LRFD BDS 10th Ed. (2024) Art. 6.14.2.8.6 and C6.14.2.8.6.
+- **Check case** (validation model spliced, CL DC −200 / DW −20 / LL −130, CR −200 / −20 / −100, diagonal 0; SPL-C φP<sub>n</sub> = 382.5 kip):
+  - **Before:** N<sub>LL</sub> = −100 (right side); RF LRFR Inv = (382.5 − 250 − 30)/(1.75 × 100) = **0.586**.
+  - **After:** N<sub>LL</sub> = −130 (left side); RF = (382.5 − 280)/(1.75 × 130) = **0.451** (Operating 0.759 → 0.584). New warning names the HL-93 column, −100.0 (right) / −130.0 (left).
+- **RFs that moved (main vs branch, 20 review cases):** the non-concurrent case above; the default project spliced moves in the 4th decimal only (its entered forces are rounded: DW right 94.527, left 94.573 kip; SPL-TY Operating −0.6299 → −0.6300). All other cases identical. Validation 17 of 17 (continuous chord).
+- **How verified:** as above; `check-syntax`, `project-library --tool gusset` (all pass), `phone-layout --tool gusset`; 0 console errors.
+- **Saved data:** no change. **Open items:** C14.7-3 answered by LRFD 10th Ed.; engineer to confirm.
+
+## 2026-11-07 — PR: claude/gusset-m4-dead-load (PR #1044: https://github.com/mlococo88/All-Structural/pull/1044) — Warning when the factored dead load alone exceeds a resistance in a direction the live load does not act (M4; pass/fail display, no RF changes)
+
+From the code-compliance review of 2026-11-07 (finding M4).
+
+### M4. Dead-load-only overstress is reported   [§4: pass/fail logic of the verdicts; no rating factor changes]
+- **Where:** `compute()`, after `const incomplete = …` (new `deadOver` list and warnings; `deadOver` added to the returned object); new functions `dlL()`, `dlN()`, `dlNote()` before `renderSummary()`; the verdict in `renderStatus()` (anchor `t: 'All rating factors ≥ 1.00'`) and the Summary heading (anchor `'All rating factors are at least 1.00'`).
+- **Problem:** a rating factor is formed only in the live-load direction. A check overstressed by the factored dead load in the other direction (or with zero live load in that column) showed "—", and the joint could still read "All rating factors are at least 1.00". Review run: vertical L2-U2 with DC −700, DW −50, LL +55: factored compression 1.25 × 700 + 1.5 × 50 = 950 kip against L2-U2-WB 658.6 kip, but the summary said all RF ≥ 1.
+- **Before:** verdict `nFail ? … : { cls: 'pass', ico: '✓', t: 'All rating factors ≥ 1.00' }`; Summary heading `nFail ? … : low.length ? 'All rating factors are at least 1.00' : 'No rating cases'`.
+- **After:** for every check, rating case and direction with a resistance: LRFR D = γ<sub>DC</sub>DC + γ<sub>DW</sub>DW (minimum factors where that load acts against the direction), compared with φ<sub>c</sub>φ<sub>s</sub>C; LFR A<sub>1</sub>D (A<sub>1,min</sub> where D < 0) compared with C. Where D > 0 and D > resistance, and that case has no rating factor in that direction (live load opposite or zero), a warning per check lists the cases with D, the resistance and D/C. The verdict and the Summary heading then read "Dead load alone exceeds the resistance in n checks (ids)" (fail), or append it to "n rating cases below 1.00". Where the RF is already formed in that direction it is negative and already shows the failure, so no extra warning is given.
+- **Decision (pending engineer review):** reported as a warning and a failed verdict; no rating factor value (e.g. −∞) is invented. The dead load factors are those the rating uses (MBE 3rd Ed. Table 6A.4.2.2-1 / 6B.4.3; verify, MBE not in references).
+- **Check case** (default project, L2-U2 forces DC −700, DW −50, LL +55 / +40): L2-U2-WB φP<sub>n</sub> = 658.6 kip; LRFR D = 1.25 × 700 + 1.50 × 50 = 950.0 kip > 658.6 kip (D/C 1.44); LFR D = 1.3 × 750 = 975.0 kip > 557.6 kip (D/C 1.75). Also L2-U2-FS (950.0 > 221.3 kip) and L2-U2-BR (LFR 975.0 > 913.5 kip). **Before:** "All rating factors are at least 1.00", governing 1.172. **After:** "Dead load alone exceeds the resistance in 3 checks (L2-U2-FS, L2-U2-BR, L2-U2-WB)", 3 warnings; every RF unchanged.
+- **How verified:** main vs branch on 20 review cases: every capacity and RF identical; only the warning count moved, in the dead-load case above and in two spliced validation models whose LFR live load columns are zero (CL-WB LFR D 286.0 > 242.4 kip). Validation 17 of 17. `check-syntax`, `project-library --tool gusset`, `phone-layout --tool gusset` pass; 0 console errors.
+- **Saved data:** no change.
