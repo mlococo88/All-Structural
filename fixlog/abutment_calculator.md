@@ -16477,3 +16477,78 @@ index ead16a0..e48ecac 100644
 - Default project, origin/main vs this branch, headless: the Report's rendered text (`.rp-doc` textContent) and the page text are identical.
 ### How verified
 - `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`; the headless comparison listed in the PR.
+
+## 2026-11-07 — PR: claude/abut-pile-bottom-mat (PR #1158: https://github.com/mlococo88/All-Structural/pull/1158) — Pile-supported footing: the bottom mat stays at the footing cover c_F, between the pile heads (was lifted onto the pile heads, cover = embedment + clear); punching keeps the depth over the pile heads; named input error for a footing too thin over the pile heads (ABPB; calculation change, pile mode only)
+
+Engineer instruction (2026-11-07, paraphrased): "same deal for the abutment" as the Retaining Wall Designer (RWPB, #1149): on piles the bottom footing bars stay at the normal bottom cover and run between the pile heads; they are not lifted onto the pile heads. Every project, old saves included, no option. Depths that start at the pile head (punching) stay as they are. Code sites are tagged `ABPB`.
+
+### ABPB-1. Problem
+- Since defRev 4 (2026-10-20, F45) a pile footing took the toe d from the top of the footing to a bottom mat sitting c_top above the pile heads: d = t_f − e_pile − c_top − d_b, h_p = t_f − e_pile for d_v and β_s, d_c = c_top + d_b. The stem-dowel embedment, the bottom-cover advisory row and the figures used e_pile + c_top as the bottom cover.
+- At the defaults (t_f 36 in, e_pile 12, c_top 3, #8 toe bars) the toe d was 12.5 in short and the stem-dowel hook failed (ℓ_dh 20.72 in > 19.0 in available, D/C 1.091).
+
+### ABPB-2. Fix (`computeAll`)
+- Toe flexure / shear / crack control / ℓ_d. Before (anchor `pile-supported footing: the toe (bottom) mat sits above the pile heads`):
+  ```js
+  const toePileD=fn.branch==="pile"? {embP:Math.max(0,+S.piles.embed||0), clrP:Math.max(0,+S.piles.clrTop||0)} : null;
+  if(toePileD){ toePileD.hP=g.tf*12-toePileD.embP; }
+  R.checks.toeFlex=sectionCheck({name:"Toe", h:g.tf*12, cover:m.coverF, ...
+    ...(toePileD? {hEff:toePileD.hP, coverEff:toePileD.clrP+BARS[S.reinf.toe.size].db/2, pileMat:toePileD} : {})});
+  ```
+  After (anchor `ABPB (2026-11-07, engineer instruction): on a pile-supported footing the toe`):
+  ```js
+  const toePileB=fn.branch==="pile"? {cF:+m.coverF, embP:Math.max(0,+S.piles.embed||0), clrP:Math.max(0,+S.piles.clrTop||0)} : null;
+  R.checks.toeFlex=sectionCheck({name:"Toe", h:g.tf*12, cover:m.coverF, ...
+    ...(toePileB? {pileBot:toePileB} : {})});   // pileBot: display only
+  ```
+  So on piles, as on a spread footing: d = t_f − c_F − d_b/2, d_v = max(0.9d, 0.72t_f), d_c = c_F + d_b/2, β_s with h = t_f, c_b for λ_rc with c_F. The "Toe: no effective depth above the pile heads" error is removed (the toe no longer depends on the pile heads).
+- Toe one-way shear section (`toePile`, anchor `one-way shear [5.12.8.6.1, 5.7.3.2]: critical section at d_v from the stem front face`). Before: `const hPv=g.tf*12-Math.max(0,+S.piles.embed||0), dTv=hPv-Math.max(0,+S.piles.clrTop||0)-BARS[S.reinf.toe.size].db;` After: `const hPv=g.tf*12, dTv=hPv-(+m.coverF)-BARS[S.reinf.toe.size].db/2;` (the same d_v as the resistance; the internal mismatch check stays).
+- Stem dowels (anchor `available straight embedment below the top of footing`). Before: `const cBot=fn.branch==="pile"? Math.max(0,+S.piles.embed||0)+Math.max(0,+S.piles.clrTop||0) : +m.coverF;` After: `const cBot=+m.coverF;` (ℓ_avail = 12t_f − c_F − 2d_b,toe).
+- Cover advisory row "Footing — bottom" (Table 5.10.1-1): `prov` e_pile + c_top → c_F; its text "c_F (panel I-2; bottom mat between the pile heads)".
+- Punching (C-13) unchanged: d_e = t_f − e_pile − c_top − d_b, h_p = t_f − e_pile (conservative now that the bars are below the pile heads).
+- New warning (pile mode, conventional / semi-integral), replacing nothing (the abutment had no "large cover" warning): "Pile cap: the bottom bars are at the footing cover c_F = … in and pass between the pile heads, which project … in into the footing. Detail the bars to clear the piles (bar spacing against the pile width D = … in; field adjustment of bars at a pile). Punching uses the depth over the pile heads, t_f − … in − d_b (Tab 4 §4.6)."
+
+### ABPB-3. Thin footing (input error)
+- New `pileCapThin()` (before `collectInputWarnings`): pile footing, not integral, t_f·12 ≤ e_pile + c_top + 2 in. `collectInputWarnings` adds the named error "Input error — Footing too thin over the pile heads: t_f = … in must exceed the pile embedment … in + clear cover … in + 2 in for the bars = … in (depth over the pile heads d_e = t_f − embedment − clear − d_b > 0, Tab 4 §4.6). Increase t_f (panel I-1) or reduce the pile embedment (panel I-7); the punching and toe results below are not valid." `markFieldValidity` marks t_f, embedment and clear cover red. The 2-in bar allowance is the RW #1151 rule. The calculation never threw before or after (checked down to t_f 12 in); the punching "no effective depth" error stays.
+
+### ABPB-4. Display
+- Tab 5 §5.3 Toe: the h_p / c_top lines are gone; d = h − c_cl − d_b/2 as for a spread footing, with a note (the mat at c_F between the pile heads, e_pile, link to Tab 4 §4.6). The pile toe one-way shear note no longer says "over the pile heads". §5.2a dowels: ℓ_avail = 12t_f − c_F − 2d_b,toe on piles too.
+- Tab 4 §4.6 punching note: d_e is to a notional mat c_top + d_b above the pile heads, a conservative depth; the mat itself is at c_F.
+- Input tooltips of the pile embedment and the clear cover (labels unchanged; the clear cover is now used for the punching depth only).
+- Figures: the placement sketch and the dimensioned section draw the bottom mat (C1, A1 hook) at c_F with the pile heads (dashed, semi-transparent) projecting e_pile into the footing through it; the section's note reads "bottom mat at c_F, between the pile heads (emb. … in)" (was "bottom mat on … (pile emb. + clear)"). The abutment has no DXF; the schedule had no pile-specific cover.
+
+### Governing provisions
+- Engineer instruction 2026-11-07 (detailing basis).
+- AASHTO LRFD 10th Ed. (2024): Art. 5.10.1 (cover, the footing cover input, unchanged); Art. 5.6.3.2 (d), 5.7.2.8 (d_v), 5.7.3.3 (V_c), 5.12.8.6.1 (toe one-way shear section), 5.6.7 (crack control, d_c, β_s), 5.10.8.2.1 (ℓ_d, λ_rc), 5.10.8.2.4a (stem-dowel hook); punching 5.12.8.6.3 unchanged.
+
+### Check cases (f′c 4 ksi, f_y 60 ksi, γ_e 0.75; toe #8 @ 9 in, A_s = 0.79·12/9 = 1.053 in²/ft, a = 1.053·60/(0.85·4·12) = 1.549 in)
+**Default project switched to piles** (t_f 36 in, c_F 3, e_pile 12, c_top 3; M_u 43.19 kip-ft/ft, M_s 29.05 kip-ft/ft):
+- d: before 36 − 12 − 3 − 1.0 = 20.0 in; after 36 − 3 − 0.5 = **32.5 in**.
+- φM_n = 0.9·1.053·60·(d − 0.775)/12: before 91.13 kip-ft/ft (D/C 0.474); after **150.38** (D/C **0.287**).
+- Shear: before d_v = max(18.0, 0.72·24) = 18.0 in, x_cr = 3.5 − 1.5 = 2.0 ft, pile row at 2.25 ft (D 1 ft): f = (2.0 − 1.75)/1 = 0.25, V_u = 0.25·36.54 − 0.9·0.15·3·2.0 = 8.33 kip/ft, φV_c = 0.9·0.0316·2·√4·12·18 = 24.57 (D/C 0.339). After d_v = max(29.25, 25.92) = 29.25 in, x_cr = 3.5 − 2.4375 = 1.0625 ft < 1.75 ft, f = 0, **V_u = 0**; φV_c = **39.93** kip/ft (D/C **0**).
+- Crack control: before d_c = 3 + 1.0 = 4.0, β_s = 1 + 4/(0.7·20) = 1.286, f_ss 17.88 ksi, s_max = 700·0.75/(1.286·17.88) − 8 = 14.84 in; after d_c 3.5, β_s = 1 + 3.5/(0.7·32.5) = 1.154, f_ss 10.83 ksi, s_max = 525/(1.154·10.83) − 7 = **35.01 in** (s 9 in, PASS both).
+- Stem dowel: ℓ_avail 36 − 15 − 2 = 19.0 → 36 − 3 − 2 = **31.0 in**; ℓ_dh 20.72 in: D/C 1.091 FAIL → **0.669 PASS**.
+- Bottom cover row: 15 → 3 in (required 3.0, PASS both).
+- Punching unchanged: d_e = 24 − 3 − 1.0 = 20.0 in, d_v 18.0, V_u 200.97 kip, V_n 544.32 kip, D/C 0.410.
+- Heel unchanged (top bars): d 32.5 in, φM_n 150.38, D/C 0.185.
+
+**Pile variant** (t_f 42 in, e_pile 18, c_top 4; M_u 44.56, M_s 29.84 kip-ft/ft):
+- d 42 − 18 − 4 − 1.0 = 19.0 → 42 − 3 − 0.5 = **38.5 in**; φM_n 86.39 → **178.82** kip-ft/ft (D/C 0.516 → **0.249**).
+- Shear: d_v 17.28 → 34.65 in; φV_c 23.59 → **47.30** kip/ft; V_u 10.79 → **0** (the pile row is inside d_v of the stem face); D/C 0.458 → 0.
+- Crack control: f_ss 19.36 → 9.35 ksi; s_max 9.71 → **42.71 in**.
+- Stem dowel: ℓ_avail 18.0 → **37.0 in**; D/C 1.151 FAIL → **0.560 PASS**.
+- New: toe skin-reinforcement note (d = 38.5 in > 36 in, 5.6.7). Punching unchanged (d_e 19.0, D/C 0.455).
+
+**Thin footing** (defaults, e_pile 12 + c_top 3 + 2 = 17 in): t_f 16.8 in → the named input error, t_f / embedment / clear marked; t_f 18 in → results (punching d_e 2.0 in, D/C 2.80 FAIL, as before). t_f 12 in: before, toe d −4 in, φM_n negative; now the input error, and no throw either way.
+
+### How verified
+- Headless, origin/main vs branch, default project switched to piles, the variant, t_f 18 / 16.8 / 12 in, spread default: only the toe (d and what follows), the toe shear section, the dowel, the bottom-cover row, the dashboard and the new warning / input error change; spread identical; punching, pile reactions and the Pile Designer hand-off unchanged. Every tab and the Report rendered on piles and thin: 0 console errors, 0 KaTeX errors.
+- abutment-pile-group-parity: case 0 (spread) identical; the 13 pile cases differ only in `checks.toeFlex.*`, `toeDem.{Vu,dvT,xCr,VsUp,VswDn,vRows,lblV}`, `vm.toe.peakV`, `checks.dowel.{cBot,lAv,dc}`, `checks.cover.rows[0]`, `dash`, `nFail`.
+- Tests: check-syntax; project-library --tool abutment (all pass); engine handoffs (10 passed), pile-group (9 passed).
+
+### Decisions (pending engineer review)
+- Punching keeps d_e = t_f − e_pile − c_top − d_b (the C-13 rule), conservative now that the bars are below the pile heads; the clear-cover input "Clear cover, pile top to bottom mat" keeps its label and is used for that depth only.
+- No in-tool check of bar clearance to the piles; the warning asks for it.
+- No one-time saved-project notice (a defRev bump would change every project's Input ID); the always-on pile warning says where the mat is.
+
+### Saved data
+- No input, key or format change; `meta.defRev` unchanged. Old pile saves open with the mat at c_F (engineer instruction: no option); Input IDs unchanged.
