@@ -1533,3 +1533,15 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **How verified:** main vs branch on the default project: every localStorage key (1), page text (15604 chars), Export JSON (1425 chars identical) and the printed report text (print media, 12854 chars) identical (clock times normalised); 0 console errors; chip click → card on screen, no dialog; Ctrl+S / Ctrl+Shift+S → Save as; header at 1280 / 1400 / 1920 / 390 px (390: no sideways scroll), screenshots looked at. `node tests/check-syntax.mjs "Moving Load Generator.html"`; `node tests/smoke/project-library.mjs --tool mlg`; `node tests/smoke/github-sync-tools.mjs --tool mlg`; `node tests/smoke/home-projects.mjs --tool mlg`; `node tests/smoke/phone-layout.mjs --tool mlg`: pass. The "Solved in N ms" timing normalised.
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
+
+## 2026-11-07 — PR: claude/ml-h1-axle-on-section (H1: engine places each axle on each moment section; page text only here)
+- **Engine change:** `shared/moving-load.js` `analyze` (see `fixlog/shared-moving-load.md`, same date): +M at sections off the 1 ft
+  position grid could be up to about 0.8 % low; now each axle is also placed exactly on each moment section. Results can only rise
+  (60/90/90/60, span 2 at 0.25L, +M per lane with IM: 878.68 → 884.35). §4 callout in the PR.
+- **Where (page):** after the Position step / Spacing step inputs (anchor `id="hStep"`), new hint `<p class="hint" id="mlgStepNote">`
+  stating that every axle is also placed on each moment section and at each shear cut. Report "Analysis" row (`reportHTML`, anchor
+  `['Analysis',`): `…, both travel directions` → `…, both travel directions; each axle also placed exactly on every moment section
+  and at every shear cut`.
+- **Saved data:** none changed (no new field; the hint is not an input).
+- **How verified:** headless origin/main vs branch (see the shared fix log); `check-syntax`, `phone-layout --tool mlg`,
+  `project-library --tool mlg`: pass; 0 console errors.

@@ -163,6 +163,7 @@ tr.pier td{background:#f8fafc;font-weight:600}
       <div class="f"><label>Position step (ft)</label><input id="step" type="number" value="1" step="0.25"></div>
       <div class="f"><label>Spacing / headway step (ft)</label><input id="hStep" type="number" value="2" step="0.5"></div>
     </div>
+    <p class="hint" id="mlgStepNote">Besides the position grid, every axle is also placed exactly on each moment section and at each shear cut, for every spacing and headway (H1, 2026-11-07), so a section off the grid does not miss its governing position.</p>
     <p class="hint" id="mlgBasis">Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024): HL-93 and fatigue truck (Art. 3.6.1.2–3.6.1.4), load factors (Table 3.4.1-1), IM (Art. 3.6.2). HS20 / H20: AASHTO Standard Specifications for Highway Bridges, 17th Ed. (2002), Art. 3.7, 3.8, 3.11. Rail: AREMA Manual Ch. 8 / 15 (edition per owner).</p>
   </div></details>
 </aside>
@@ -809,7 +810,7 @@ function reportHTML(out,o,base,dk){
     ['E',`${base.E} ksi`],['Live load factor',base.llf],
     ['Distribution factors',base.spans.map((_,k)=>`Span ${k+1}: moment ${base.dfM[k]}, shear ${base.dfV[k]}`).join(' · ')+(base.dfNeg>0?` · negative moment ${base.dfNeg}`:'')],
     ['AREMA impact inputs (rail presets)',`S = ${base.imp.S} ft${base.imp.bal?', ballasted deck (90%)':''}, L basis: ${$('aLb')?$('aLb').selectedOptions[0].text:'span'}`],
-    ['Analysis',`Position step ${base.step} ft, spacing/headway step ${base.hStep} ft, ${base.dirs.length>1?'both travel directions':'one travel direction'}`],
+    ['Analysis',`Position step ${base.step} ft, spacing/headway step ${base.hStep} ft, ${base.dirs.length>1?'both travel directions':'one travel direction'}; each axle also placed exactly on every moment section and at every shear cut`],
     ['Results basis',unit],['Code basis',esc($('mlgBasis').textContent.replace(/^Basis: /,''))]];
   {const fm=num('fDFm',0),fv=num('fDFv',0),fn=num('fDFn',0);if(fm>0||fv>0||fn>0)inp.splice(5,0,['LRFD fatigue truck DFs (fatigue truck only)',`moment ${fm>0?fm:'= highway span DFs'}, shear ${fv>0?fv:'= highway span DFs'}, negative moment ${fn>0?fn:fm>0?fm:'= highway DF'}`]);}
   if(o.defl)inp.push(['Deflection',`${$('dCase').selectedOptions[0].text}; DF ${num('dDF',1)}; ${$('dIM').checked?'with':'without'} impact; limit L/${N}`]);

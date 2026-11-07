@@ -26,7 +26,7 @@ const SEGS_IO = [{ ...SEG0, len: 40, Io: 30000 }, { ...SEG0, len: 0, Io: 0 }];
 const VEHICLES = ['HL93-Truck', 'HL93-Tandem', 'HS20', 'H20', 'E80', 'E80-Alt', 'F40PH', 'HSP46', '286K', '315K', 'ES44AC', 'Fatigue'];
 
 // A model as the page's readModel() builds it after applyPreset(key) (with applyFam's DFs).
-function modelFrom(P, props, key, o = {}) {
+export function modelFrom(P, props, key, o = {}) {
   const p = P[key], spans = o.spans || [100, 120], segs = o.segs || [SEG0];
   const sl = p.stdLane || { on: false, w: 0.64, PM: 18, PV: 26 };
   const rail = !['HL93-Truck', 'HL93-Tandem', 'HS20', 'H20', 'Fatigue'].includes(key);
@@ -114,7 +114,7 @@ export function sharedEngine() {
   const P = V.presets; P.Fatigue = V.fatigue;               // as the page does
   return {
     P, props: S.props,
-    analyze: (m, env) => S.analyze(m, { Lb: env.Lb || 'span', aL: env.aL != null ? env.aL : 100, refine: env.refine !== false, vehicles: P }),
+    analyze: (m, env) => S.analyze(m, { Lb: env.Lb || 'span', aL: env.aL != null ? env.aL : 100, refine: env.refine !== false, vehicles: P, ...(env.axleOnM === false ? { axleOnM: false } : {}) }),
     deflection: S.deflection, absScan: S.absScan,
   };
 }
@@ -510,6 +510,10 @@ export const EXPECTED = {
 // END EXPECTED
 
 // ---------- tests ----------
+// H1 (2026-11-07): analyze() now also places each axle exactly on each moment section. The recorded hashes and the live
+// comparison below are of the engine as extracted, so they run with opt.axleOnM = false (the earlier position grid only);
+// the H1 test further down checks what the added positions change.
+const PRE_H1 = c => [c[0], c[1], c[2], { ...c[3], axleOnM: false }];
 test('vehicle presets: same keys, order and values as the original page', () => {
   let O; try { O = originalEngine(); } catch (e) { return; }   // no git history: covered by the hashes below
   const S = sharedEngine();
@@ -520,7 +524,7 @@ test(`${CASES.length} cases: shared engine output hash = the original's (recorde
   const S = sharedEngine(), bad = [];
   assert.equal(Object.keys(EXPECTED).length, CASES.length, 'EXPECTED is not recorded for every case');
   for (const c of CASES) {
-    const out = runCase(S, c), h = sha(canon(out)), e = EXPECTED[c[0]];
+    const out = runCase(S, PRE_H1(c)), h = sha(canon(out)), e = EXPECTED[c[0]];
     if (!e || h !== e.sha256) bad.push(`${c[0]}: ${h} vs ${e && e.sha256}`);
     else assert.deepEqual(keyValues(out), e.key);
   }
@@ -531,7 +535,7 @@ test('live comparison with the original inline functions (git history)', () => {
   let O; try { O = originalEngine(); } catch (e) { console.log('       (skipped: ' + e.message.split('\n')[0] + ')'); return; }
   const S = sharedEngine();
   for (const c of [CASES[0], CASES[13], CASES[17], CASES[24]]) {   // a sample; the hash test covers every case
-    assert.equal(canon(runCase(S, c)), canon(runCase(O, c)), c[0]);
+    assert.equal(canon(runCase(S, PRE_H1(c))), canon(runCase(O, c)), c[0]);
   }
 });
 
@@ -549,4 +553,28 @@ test('deflection opt.neglect (added 2026-10-29, Steel Bridge SB2-A4): default un
   assert.ok(more > 0, 'neglect matters on short continuous spans');
   const mx = (D) => Math.max(...D.res.map(r => -r.dn));
   console.log(`       20 + 20 + 20 ft, HL-93 truck per lane with IM: largest downward Δ ${mx(a).toFixed(5)} in (all axles) → ${mx(b).toFixed(5)} in (axles that add); ${more} of ${a.res.length} sections larger`);
+});
+
+test('H1 (2026-11-07): each axle placed exactly on each moment section; results only rise; review check cases', () => {
+  const S = sharedEngine();
+  const run = (spans, axleOnM, key = 'HL93-Truck', mo = {}) => S.analyze(modelFrom(S.P, S.props, key, { spans, m: { dfM: spans.map(() => 1), dfV: spans.map(() => 1), ...mo } }),
+    axleOnM === false ? { axleOnM: false } : {});
+  const at = (R, k, f) => { const x = R.sup[k - 1] + f * (R.sup[k] - R.sup[k - 1]), i = R.effs.findIndex(e => e.t === 'M' && Math.abs(e.x - x) < 1e-6); assert.ok(i >= 0); return { ...R.res[i], x }; };
+  // [spans, span, fraction, before (grid only), after]: +M per lane with IM, HL-93 truck + lane, step 1 ft, spacing step 2 ft
+  for (const [sp, k, f, before, after] of [[[60, 90, 90, 60], 2, 0.25, 878.68, 884.35], [[110, 130], 2, 0.15, 757.35, 763.68], [[90, 90], 1, 0.65, 1517.76, 1524.25]]) {
+    const a = at(run(sp, false), k, f), b = at(run(sp), k, f), c = at(run(sp, false, 'HL93-Truck', { step: 0.25, hStep: 0.5 }), k, f);
+    assert.ok(Math.abs(a.max - before) < 0.01, `${sp} before ${a.max}`);
+    assert.ok(Math.abs(b.max - after) < 0.01, `${sp} after ${b.max}`);
+    assert.ok(Math.abs(b.max - c.max) < 0.01, `${sp}: equals the fine grid (${c.max})`);
+    assert.match(b.maxG.lab, / s=14$/);
+    assert.ok(Math.abs(b.maxG.pos[1] - b.x) < 1e-6, 'middle 32 k axle on the section');
+  }
+  // every effect: never lower for the maximum, never higher for the minimum; spans on whole-foot twentieth points unchanged
+  for (const [sp, key, same] of [[[100, 100], 'HL93-Truck', true], [[100, 120], 'HL93-Truck', true], [[80, 100, 80], 'HL93-Truck', true], [[60, 90, 90, 60], 'HL93-Truck', false], [[82.5, 82.5], 'HL93-Truck', false], [[95, 95], 'Fatigue', false], [[75, 75], 'E80', false]]) {
+    const A = run(sp, false, key), B = run(sp, undefined, key);
+    A.res.forEach((r, i) => {
+      assert.ok(B.res[i].max >= r.max - 1e-9 && B.res[i].min <= r.min + 1e-9, `${sp} ${key} effect ${i}`);
+      if (same) assert.ok(Math.abs(B.res[i].max - r.max) < 1e-9 && Math.abs(B.res[i].min - r.min) < 1e-9, `${sp} unchanged at effect ${i}`);
+    });
+  }
 });
