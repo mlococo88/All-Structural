@@ -1909,7 +1909,7 @@ index 2f29ed5..c3246e1 100644
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
 
-## 2026-11-07 — PR: claude/timber-kcr (TBK1: creep factor K<sub>cr</sub> = 2.0 in wet service)   [calc change] [MORE conservative]
+## 2026-11-07 — PR: claude/timber-kcr (PR #1008: https://github.com/mlococo88/All-Structural/pull/1008) (TBK1: creep factor K<sub>cr</sub> = 2.0 in wet service)   [calc change] [MORE conservative]
 
 Line numbers are approximate; search for the anchor text. Code sites are tagged `TBK1`.
 
