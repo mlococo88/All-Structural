@@ -1460,3 +1460,53 @@ Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.5.3.4 (Eqs. 14.7.5.3.4-1 to -5): fo
 - **How verified:** `node tests/check-syntax.mjs elastomeric_design_module.html` pass; headless main-vs-branch probe, 15 scenarios: only the rectangular L > W stability values move (rect 20×10: stab 0.221 → 1.009, nFail 0 → 1, PAD pass/govDC; rect 20×10 fixed: 0.025 → 0.391); every other value identical; Report tab renders; 0 console errors. Screenshot of the worked block checked.
 - **Saved data:** none changed.
 - **Other copies:** none. **Open items:** none.
+
+## 2026-11-07 — PR: claude/edm-h3-stab-total (PR #1081: https://github.com/mlococo88/All-Structural/pull/1081) (H3, review 2026-11-07) — Method A stability uses the total pad thickness   [calc change] [MORE conservative]
+
+Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.6.3.6: the total thickness of the pad shall not exceed the least of L/3, W/3 or D/4. FHWA LRFD Steel Bridge Design Example, Design Step 6 (Method A): total height = covers + internal layers + steel laminates.
+
+- **Problem:** the check compared h_rt (elastomer only) with the limit; the steel laminates were left out. Unconservative.
+- **Where:**
+  - `computeEDM`, after `R.edge=…`: new `R.stabT={hTot,lim,dc}` with `hTot = isPlain() ? hrt : hrt + (n+1)·tSteel`, `lim = circular ? D/4 : min(L,W)/3`.
+  - Dashboard: `add("stabA","Stability thickness [14.7.6.3.6]",hrt/(isCirc()?(+g.D)/4:Math.min(planL,planW)/3),isCirc()?"hrt ≤ D/4":"hrt ≤ L/3, W/3");` → `add("stabA","Stability thickness [14.7.6.3.6]",R.stabT.dc,isCirc()?"h_total ≤ D/4":"h_total ≤ L/3, W/3");`
+  - Method A and plain panels: the check line uses `R.stabT.dc` and the worked block `stabTEq` is now shown on the Design Checks tab (before: only in the retired print report, so §6 "show the work" was open for this check). `stabTEq` shows h_total = h_rt + (n + 1)h_s substituted.
+  - Report tab `stabT`: new step h_total; D/C = h_total/h_max.
+  - Plain pads: value unchanged (t = h_rt), the dashboard item `stabP` untouched.
+- **Check case (default pad under Method A: D 16, h_ri 0.5, n 6, covers 0.25, h_s 0.1196):** h_total = 3.500 + 7 × 0.1196 = 4.337 in; D/4 = 4.000 in → D/C **1.084 FAIL** (was 3.500/4.000 = 0.875 PASS).
+  - Method A D 20, h_ri 0.375, n 4: (2.000 + 5 × 0.1196)/5.000 = 0.520 (was 0.400).
+  - Method A rect 14 × 24 (default layers): 4.337/(14/3) = 0.929 (was 0.750).
+- **How verified:** `node tests/check-syntax.mjs elastomeric_design_module.html` pass; headless main-vs-branch probe (15 scenarios): only Method A stabA moves (default 0.875 → 1.084 FAIL, nFail 1 → 2); Method B and plain identical; 0 console errors.
+- **Decision (pending engineer review):** "total thickness" read as covers + internal layers + all n + 1 steel laminates (the plain text and the FHWA example both include the steel). An internal load plate and the cover above it (MassDOT §3.5.7.6: not part of the bearing) are not modelled. Before, the check used h_rt.
+- **Saved data:** none changed. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/edm-m1-m4-m5 (PR #1085: https://github.com/mlococo88/All-Structural/pull/1085) (M1, M4, M5, review 2026-11-07) — Method A applicability S²/n, no-liftoff check informational; MassDOT resultant rotation for rectangular pads; minimum laminate a pass/fail check   [calc change]
+
+Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.6.1 and C14.7.6.1 (Method A for steel-reinforced bearings with S_i²/n < 22; commentary 20 for n ≥ 3, 16 circular or nearly square), C14.7.6.3.5a (no-liftoff provisions removed from Method A), Art. 14.7.5.3.5 (h_s ≥ 0.0747 in); MassDOT Bridge Manual Part I §3.5.7.3 (2009 interims removed the Method A lift-off check), §3.5.7.5 (11 ga = 0.1196 in), §3.5.7.6 (design rotation = vector sum, 0.03 rad applied to the resultant).
+
+### M5. Minimum steel laminate thickness   [MORE conservative]
+- **Before:** `if(+g.tSteel<0.1196 && !isPlain()) warn("Steel laminate < 0.1196 in (11 ga) — below the MassDOT minimum [§3.5.7.5].","err");` — a warning only: the dashboard and the PAD hand-off stayed PASS.
+- **After:** new toggle `tog.hsMin` (I-5 select, 0.1196 MassDOT default | 0.0747 AASHTO; older saves get 0.1196 via migrate). `R.reinf` gains `hsMin, hsGov, dc, minPass, minRatio`; new dashboard items `hsmin` (Method B) / `hsminA` (Method A): pass/fail, no D/C (counts in nFail, so the PAD `pass` follows). Worked lines in `reinfLines` (h_s,min and h_s,prov ≥ h_s,min) and `hsMinLine`; Report tab step `prov`. The warning now names the selected minimum.
+- **Decision (pending engineer review):** the minimum is a pass/fail item without a D/C (as the edge cover, E10-7): h_s,min/h_s would read 1.00 for every 11 ga pad and become every design's governing D/C. The strength D/C stays h_s,req/h_s. The ratio is shown in the item name when it fails.
+- **Check case:** default pad with h_s = 0.06 in: strength 0.0280/0.06 = 0.47 PASS (unchanged); minimum: 0.06 < 0.1196 → **FAIL** (ratio 1.99); with the AASHTO minimum 0.0747 → FAIL (ratio 1.25). Before: all PASS. Default h_s = 0.1196: PASS, nothing else moves.
+
+### M1. Method A applicability and the obsolete no-liftoff check
+- **Before:** `add("rotA","Compression–rotation (uplift) [14.7.6.3.5]",upliftA/sigTL,…)` and `rotAW` were pass/fail (default Method A D/C 13.42 FAIL); no S²/n check.
+- **After:**
+  - New `R.appA={S2n,lim,sq,dc,why}` (Method A steel-reinforced): limit 16 circular or nearly square (max/min ≤ 1.1), 20 for n ≥ 3, else 22; dashboard `appA` "Method A applicability S²/n < lim [14.7.6.1]" (pass when S²/n < lim); worked block `appAEq`; Report topic `appA`.
+  - `rotA` / `rotAW` are informational (dc null, pass null), named with σ_up/σ_s for reference; the worked block is kept, titled "pre-2009 no-liftoff, informational", with an INFO line citing C14.7.6.3.5a, C14.7.6.1 and MassDOT §3.5.7.3.
+  - New warning when Method A has θt > 0 (14.7.6.1: primary rotation about the axis perpendicular to the beam centreline).
+  - Method A steel-laminate and cover-layer blocks are now worked on the tab (they were report-only).
+- **Decisions (pending engineer review):** the commentary limits (16 / 20) are used rather than the 22 of the article (more conservative); "nearly square" = L/W within 1.1; the no-liftoff check is kept as information rather than removed (removing it is the 10th Ed. position; keeping a pass/fail would be more conservative than the code).
+- **Check cases:**
+  - Default pad, Method A: S²/n = 64/6 = 10.67 < 16 → 0.667 PASS; uplift 13.42 FAIL → INFO. nFail 2 → 1 (the H3 stability FAIL remains).
+  - D 20, h_ri 0.375, n 4: S = 13.33, S²/n = 44.4 ≥ 16 → **2.78 FAIL** (Method A not applicable); before only the uplift failed (145.6).
+  - Rect 14 × 24, n 2: S²/n = 39.1 ≥ 22 → 1.78 FAIL.
+
+### M4. Rectangular pads with the MassDOT 0.03 rad: resultant rotation   [MORE conservative]
+- **Before:** `const thSt=isCirc()?Math.hypot(thLongStatic,thTrans)+(+tg.rotTol):thLongStatic+(+tg.rotTol);`
+- **After:** `const resL=isCirc()||(!isPlain()&&Math.abs(+tg.rotTol-0.03)<1e-9); R.rot.resL=resL&&!isCirc(); const thSt=resL?Math.hypot(thLongStatic,thTrans)+(+tg.rotTol):thLongStatic+(+tg.rotTol);` The separate transverse check about W is kept. The restraint θs (built on θst) follows. Notes on the tab and in the Report updated.
+- **Check case:** rect 14 × 24, h_ri 0.5, n 6, θ_long,st = 0.010, θt = 0.012, MassDOT: θst = √(0.010² + 0.012²) + 0.03 = 0.04562 (was 0.040); γr,st = 0.5(14/0.5)²(0.04562/6) = 2.981 (2.613); combined (G_min, H1) 3.781 → 4.149, D/C 0.796 → **0.873**; restraint 3.04 → 3.40 (FAIL both). (The review's 0.777 → 0.854 used the specified G, before H1.) AASHTO tolerance: unchanged.
+
+### Verification
+- `node tests/check-syntax.mjs elastomeric_design_module.html` pass. Headless main-vs-branch probe (18 scenarios): only the items above move; saved state differs only by `tog.hsMin`; Report tab renders; 0 console errors. Screenshot of the Method A panel checked.
+- **Saved data:** additive `tog.hsMin` (0.1196 for old saves). **Other copies:** none.

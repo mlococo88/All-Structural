@@ -785,13 +785,10 @@ function solve(S){
       pPos:r.q*w.G*c.CpWW - w.qi*gp, pNeg:r.q*w.G*c.CpWW - w.qi*gn}));
     c.pLW={pPos:w.qh.q*w.G*c.CpLW-w.qi*gp, pNeg:w.qh.q*w.G*c.CpLW-w.qi*gn};
     c.pSide={pPos:w.qh.q*w.G*c.CpSide-w.qi*gp, pNeg:w.qh.q*w.G*c.CpSide-w.qi*gn};
-    /* roof */
-    if(g.free){ c.roofMode="free"; }
-    else if(c.normalToRidge && g.theta>=10 && (S.roofType==="Gable"||S.roofType==="Hip"||S.roofType==="Monoslope")){
-      c.roofMode="normal";
+    /* A7M8 (2026-11-07): the Fig. 27.3-1 normal-to-ridge roof coefficients for this direction's h/L, as a function so
+       the hip-end planes (wind parallel to the ridge of a hip roof) use the same lookup. */
+    const normCp=()=>{
       const Tn=CP_ROOF_NORM, keys=[0.25,0.5,1.0], grp=["<=0.25","0.5",">=1.0"];
-      c.hLBand=hLBand(c.hL);
-      c.hLInterp=(c.hL>0.25&&c.hL<1.0&&Math.abs(c.hL-0.5)>1e-9);
       /* step 1: coefficient at theta within each h/L row group; step 2: across h/L.
          A7H2 (2026-11-07): Fig. 27.3-1 note: interpolation only between values of the same sign, with 0.0 assumed
          where no value of that sign is given. When the two bracketing values of a step differ in sign, the value of
@@ -818,6 +815,15 @@ function solve(S){
       const wn=across(k=>at60(Tn.ww[k].neg,0.0),-1), wp=across(k=>at60(Tn.ww[k].pos,0.6),+1);
       const lw=(function(){const per=grp.map(k=>tblPick(Tn.lw.thetas,Tn.lw[k],g.theta,S.tblMode).v);
         const r=tblPick(keys,per,c.hL,S.tblMode); return {v:r.v,per:per,i0:r.i0,i1:r.i1,f:r.f};})();
+      return {wn,wp,lw,keys};
+    };
+    /* roof */
+    if(g.free){ c.roofMode="free"; }
+    else if(c.normalToRidge && g.theta>=10 && (S.roofType==="Gable"||S.roofType==="Hip"||S.roofType==="Monoslope")){
+      c.roofMode="normal";
+      c.hLBand=hLBand(c.hL);
+      c.hLInterp=(c.hL>0.25&&c.hL<1.0&&Math.abs(c.hL-0.5)>1e-9);
+      const {wn,wp,lw,keys}=normCp();
       c.CpWWroofNeg=wn.v; c.CpWWroofPos=wp.v; c.CpLWroof=lw.v;
       c.hlTrace={wn,wp,lw,keys};
       if(g.theta>=60){ c.CpWWroofPos=0.01*g.theta; c.CpWWroofNeg=0.01*g.theta; c.theta60=true; }
@@ -836,6 +842,19 @@ function solve(S){
         const r=tblPick(keys,per,c.hL,S.tblMode);
         return {label:b,Cp:r.v,CpMax:CP_ROOF_PAR.pos,per:per,f:r.f};
       });
+      /* A7M8 (2026-11-07): hip roof, wind parallel to the ridge. The two hip-end planes face the wind (windward) and
+         away from it (leeward); they take the normal-to-ridge coefficients of Fig. 27.3-1 at the roof slope theta and
+         this direction's h/L, both windward values (C27.3 practice; Decision pending engineer review, verify). The
+         side slopes keep the distance-band values above. */
+      if(S.roofType==="Hip" && !c.normalToRidge && g.theta>=10){
+        const hc=normCp(); let neg=hc.wn.v, pos=hc.wp.v; const lwv=hc.lw.v;
+        if(g.theta>=60){ pos=0.01*g.theta; neg=0.01*g.theta; }
+        c.hipEnd={neg:neg,pos:pos,lw:lwv,trace:{wn:hc.wn,wp:hc.wp,lw:hc.lw,keys:hc.keys}};
+        c.roofRows=c.roofRows.concat([
+          {label:"Windward hip end, negative C\u209a",Cp:neg,hip:true},
+          {label:"Windward hip end, positive C\u209a",Cp:pos,hip:true},
+          {label:"Leeward hip end",Cp:lwv,hip:true}]);
+      }
     }
     if(c.roofRows) c.roofRows.forEach(r=>{
       r.pPos=w.qh.q*w.G*r.Cp-w.qi*gp; r.pNeg=w.qh.q*w.G*r.Cp-w.qi*gn;
@@ -948,8 +967,8 @@ function solve(S){
        largest roof |C_p| on the projected area, is kept as a floor (windward-slope suction is not credited as relief;
        Decision pending engineer review). Other roof cases
        (parallel to the ridge on a hip, theta < 10 deg) keep the largest roof |C_p| on the projected area. */
-    if(c.Aroof>0 && c.roofMode==="normal" && c.roofRows){
-      const cw=[c.CpWWroofPos,c.CpWWroofNeg], cl=c.CpLWroof;
+    if(c.Aroof>0 && (c.roofMode==="normal" || c.hipEnd) && c.roofRows){   /* A7M8: hip ends parallel to the ridge as well */
+      const cw=c.hipEnd?[c.hipEnd.pos,c.hipEnd.neg]:[c.CpWWroofPos,c.CpWWroofNeg], cl=c.hipEnd?c.hipEnd.lw:c.CpLWroof;
       const floor={v:Math.max(...c.roofRows.map(r=>Math.abs(r.Cp))), t:"\\max|C_p|", a:null, b:null, floor:true};
       if(S.roofType==="Monoslope"){
         /* a monoslope roof is one plane: wind from the low eave meets it as a windward roof with the high wall strip
@@ -2761,8 +2780,9 @@ function renderWalls(host){
   if(cg.Aroof>0 && cg.roofNet){
     const rn=cg.roofNet, mx=RN(Math.max(...cg.roofRows.map(r=>Math.abs(r.Cp))),3), cands=cg.roofNet.mono
       ? (rn.fromHigh ? "0.8 - ("+RN(cg.CpLWroof,3)+"),\\ "+mx : RN(cg.CpWWroofPos,3)+" - ("+RN(cg.CpLW,3)+"),\\ "+RN(cg.CpWWroofNeg,3)+" - ("+RN(cg.CpLW,3)+"),\\ |"+RN(cg.CpLW,3)+"|,\\ "+mx)
-      : RN(cg.CpWWroofPos,3)+" - ("+RN(cg.CpLWroof,3)+"),\\ "+RN(cg.CpWWroofNeg,3)+" - ("+RN(cg.CpLWroof,3)+"),\\ "+mx;
-    eq(sb,"Net roof coefficient, wind normal to the ridge","ASCE 7-16 Fig. 27.3-1",
+      : (cg.hipEnd ? RN(cg.hipEnd.pos,3)+" - ("+RN(cg.hipEnd.lw,3)+"),\\ "+RN(cg.hipEnd.neg,3)+" - ("+RN(cg.hipEnd.lw,3)+"),\\ "+mx
+                   : RN(cg.CpWWroofPos,3)+" - ("+RN(cg.CpLWroof,3)+"),\\ "+RN(cg.CpWWroofNeg,3)+" - ("+RN(cg.CpLWroof,3)+"),\\ "+mx);
+    eq(sb,cg.hipEnd?"Net roof coefficient, hip-end planes, wind parallel to the ridge":"Net roof coefficient, wind normal to the ridge","ASCE 7-16 Fig. 27.3-1",
       rn.mono&&rn.fromHigh ? "C_{net} = \\max(0.8 - C_{p,lw},\\ \\max|C_p|)"
         : (rn.mono ? "C_{net} = \\max(C_{p,ww,pos} - C_{p,L,wall},\\ C_{p,ww,neg} - C_{p,L,wall},\\ |C_{p,L,wall}|,\\ \\max|C_p|)"
                    : "C_{net} = \\max(C_{p,ww,pos} - C_{p,lw},\\ C_{p,ww,neg} - C_{p,lw},\\ \\max|C_p|)"),
@@ -2770,7 +2790,7 @@ function renderWalls(host){
     note(sb,rn.mono
       ? (rn.fromHigh ? "Monoslope, wind from the high side: the wall strip above the eave is a windward wall (0.8, taken at q<sub>h</sub>) and the roof is a leeward roof whose suction also pushes downwind."
                      : "Monoslope, wind from the low eave: the roof is a windward roof and the wall strip above the high eave is a leeward wall (C<sub>p</sub>(L/B)). Windward-roof suction is not credited as relief: |C<sub>p,L,wall</sub>| and the largest roof |C<sub>p</sub>| (the earlier method) are floors.")
-      : "Windward-slope pressure and leeward-slope suction both push downwind, so the net horizontal coefficient on the projected roof area is the windward minus the leeward C<sub>p</sub>, for both windward values of Fig. 27.3-1. Windward-slope suction is not credited as relief: the largest roof |C<sub>p</sub>| (the earlier method) is the floor.");
+      : (cg.hipEnd?"Hip roof, wind parallel to the ridge: the projected roof area is the hip-end planes, which take the normal-to-ridge coefficients of Fig. 27.3-1 at the roof slope (A7M8). ":"")+"Windward-slope pressure and leeward-slope suction both push downwind, so the net horizontal coefficient on the projected roof area is the windward minus the leeward C<sub>p</sub>, for both windward values of Fig. 27.3-1. Windward-slope suction is not credited as relief: the largest roof |C<sub>p</sub>| (the earlier method) is the floor.");
     eq(sb,"Roof contribution on the projected area",null,"F_{roof} = q_h\\,G\\,C_{net}\\,A_{roof}",
       "F_{roof} = "+R2(R.wind.qh.q)+"("+R2(R.wind.G)+")("+RN(cg.CpRoofUsed,3)+")\\,("+R2(cg.Aroof)+")","F_{roof} = "+R2(cg.Froof)+"\\ \\text{lbf}");
   } else if(cg.Aroof>0) eq(sb,"Roof contribution on the projected area",null,"F_{roof} = |q_h\\,G\\,C_p|\\,A_{roof}",
@@ -2889,6 +2909,17 @@ function renderRoof(host){
           return [{v:k,cls:hit?"hl":""}].concat(CP_ROOF_PAR[k].map(v=>({v:v.toFixed(2),cls:hit?"hl":""})))
             .concat([{v:CP_ROOF_PAR.pos.toFixed(2),cls:hit?"hl":""}]);}),
         "The positive value of \u22120.18 applies over the whole roof as an alternative case, not in addition to the negative values.");
+    }
+    if(c.hipEnd){   /* A7M8 */
+      const t=c.hipEnd.trace;
+      dtable(cb,"Hip-end planes \u2014 Fig. 27.3-1 normal-to-ridge coefficients at \u03B8 = "+R2(g.theta)+"\u00B0, h/L = "+RN(c.hL,3),
+        ["Coefficient","at h/L = 0.25","at h/L = 0.5","at h/L = 1.0","used"],[
+        [{v:"Windward hip end, negative C\u209a"}].concat(t.wn.per.map(v=>({v:RN(v,3)}))).concat([{v:RN(c.hipEnd.neg,3),cls:"hl"}]),
+        [{v:"Windward hip end, positive C\u209a"}].concat(t.wp.per.map(v=>({v:RN(v,3)}))).concat([{v:RN(c.hipEnd.pos,3),cls:"hl"}]),
+        [{v:"Leeward hip end"}].concat(t.lw.per.map(v=>({v:RN(v,3)}))).concat([{v:RN(c.hipEnd.lw,3),cls:"hl"}])],
+        "The hip-end planes face along the ridge, so for wind parallel to the ridge they are windward and leeward roof surfaces at the roof slope; they take the "+
+        "Fig. 27.3-1 normal-to-ridge coefficients (both windward values, same-sign interpolation). The side slopes keep the distance-band values. "+
+        "Decision pending engineer review (common practice and the Commentary, verify).");
     }
     dtable(cb,"Design roof pressures",
       ["Surface / band","C\u209a","p with +GC\u209a\u1d62 (psf)","p with \u2212GC\u209a\u1d62 (psf)"],
@@ -3857,7 +3888,7 @@ function roofDiagram(c){
           {d0:L/2,d1:L,label:"leeward slope",p:P(lw),cp:lw}];
   } else {
     const h=g.h, bnds=[[0,h/2],[h/2,h],[h,2*h],[2*h,L]];
-    segs=c.roofRows.map((r,i)=>({d0:Math.min(bnds[i][0],L),d1:Math.min(bnds[i][1],L),
+    segs=c.roofRows.filter(r=>!r.hip).map((r,i)=>({d0:Math.min(bnds[i][0],L),d1:Math.min(bnds[i][1],L),
       label:r.label,p:(S.v2d&&S.v2d.sign==="pos")?r.pPos:r.pNeg,cp:r.Cp}))
       .filter(s=>s.d1>s.d0);
   }
