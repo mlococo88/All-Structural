@@ -1546,7 +1546,7 @@ Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.5.3.3, Eqs. 14.7.5.3.3-11 to -17 an
 - **How verified:** check-syntax pass; headless main-vs-branch probe (22 scenarios): only the 3 bonded scenarios gain the `hyd` item, values as above; everything else identical; 0 console errors.
 - **Saved data:** additive `tog.bonded`. **Other copies:** none.
 
-## 2026-11-07 — PR: claude/edm-low-calc (L2, L3, L4, L8, L11, review 2026-11-07) — LOW items with a result or hand-off effect   [calc change]
+## 2026-11-07 — PR: claude/edm-low-calc (PR #1095: https://github.com/mlococo88/All-Structural/pull/1095) (L2, L3, L4, L8, L11, review 2026-11-07) — LOW items with a result or hand-off effect   [calc change]
 
 Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.4.2.1 (L2), C14.8.3.1 (L3), 14.7.5.3.3 / C14.7.5.3.2 (L4), 14.7.5.2 and Table 14.7.5.2-1, C14.6.3.1 (L11); MassDOT §3.5.7.6 (L2).
 
