@@ -6571,3 +6571,4 @@ None: no computed value changes.
   - crack control of S4, K1 and the heel bottom face.
 - Problem: the note still listed the shear key (K1, RWSK #947–#951), the front-face bars (S4, RWFF), the S1D / S3–S1 laps and bar development (RWDS / RWS13). All of these have been checked since 2026-11-07.
 - Check case: default ACI, Drawings sheet 4. Note 11 no longer names the key, front face, laps or development.
+- After merging #1157 and the note 11 change: dxf-print-sheets rw all ok; retaining-wall-checks (RWHP rows and every CASES row) all ok; main vs branch at h_p = 0 (ACI, AASHTO, ACI piles) identical, 0 console errors.
