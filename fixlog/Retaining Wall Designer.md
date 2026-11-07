@@ -4819,6 +4819,84 @@ Review Phase 8, PR 8e. This PR changes no computed value.
 +        ...(r.pilePunch ? ['PUNCHING AT THE PILES: P_U = ' + F(r.pilePunch.gov.Pu / 1000, 1) + ' KIP VS PHI V_C = ' + F(r.pilePunch.gov.phiVc / 1000, 1) + ' KIP (FOOTING DESIGN TAB)'] : [])];
 +    }
 ```
+## 2026-11-07 — PR: claude/rw-left-summary — Check summary in the left panel exactly as Spread Footing's Summary Dashboard: rows styled as SF's chips (RWDL; display only, no result change) (PR #959: https://github.com/mlococo88/All-Structural/pull/959)
+
+### RWDL. Check summary rows styled as Spread Footing's dashboard chips; position and breakpoints confirmed against SF   [display only]
+- **Request (engineer, 2026-11-07):** "the summary cards should be on the left panel" — RW's check summary panel (RWDC, #926) to sit in the left column exactly like Spread Footing's Summary Dashboard (SFDC #737 / SFDF #740) and Light Pole's panel (LPDC #747): same position, breakpoints, collapse behaviour and card styling.
+- **Study of SF (origin/main, `Spread Footing.html`):** `SFDC.mq = matchMedia('screen and (min-width:1500px)')`; at 1500 px and wider `sfdDashPlace()` moves `#sfdDashBox` into `#sfdDashCol`, the first child of `.main`, i.e. a left column (280 px + 12 px gap) to the LEFT of the input panel, own scroll, sticky head, «/» collapses it to a 42 px strip; below 1500 px the box sits on top of the output panel above the output tabs, chips in a `minmax(min(250px,100%),1fr)` grid, "▾ Hide checks / ▸ Show checks". RW (RWDC) already does the same: same 1500 px query, `#rwDashCol` first child of `#app` (left of the inputs, 292 px incl. padding), own scroll, sticky head, «/» → 42 px strip, below 1500 px above the output tabs with the same grid and the same Hide / Show checks button, same key behaviour (`retaincalcpro.dashCollapsed.v1`, unchanged). Screenshots of both tools at 1280, 1400, 1920 and 390 px confirm the same placement. The one visible difference was the row ("card") styling: SF chips have a 1 px border in the status colour on a tinted background and a bold check name; RW rows had a 4 px coloured left stripe on white with a regular-weight name.
+- **Where:** CSS, block `/* RWDC (2026-11-06): check summary panel …`, after the line anchor `.rwdCh.pass { border-left-color: var(--pass); } .rwdCh.fail { border-left-color: var(--fail); background: #FEF2F2; } .rwdCh.warn { border-left-color: var(--warn); background: #FFFBEB; }`.
+  - Before: (nothing after that line)
+  - After (added):
+```css
+/* RWDL (2026-11-07, engineer: "the summary cards should be on the left panel" as in Spread Footing): each row is styled as
+   Spread Footing's dashboard chip (SFDC): a 1 px border in the status colour on a tinted background, the check name in bold.
+   Display only. */
+.rwdCh { border-left-width: 1px; }
+.rwdCh.pass { border-color: var(--pass); background: #ECFDF5; } .rwdCh.fail { border-color: var(--fail); background: #FEF2F2; }
+.rwdCh.warn { border-color: var(--warn); background: #FFFBEB; } .rwdCh.na { border-color: var(--slate-400); background: var(--slate-50); }
+.rwdCh.pass:hover { background: #D1FAE5; } .rwdCh.fail:hover { background: #FEE2E2; } .rwdCh.warn:hover { background: #FEF3C7; } .rwdCh.na:hover { background: var(--slate-100); }
+.rwdCh .rwdN { font-weight: 700; color: var(--slate-900); }
+```
+- **Decisions (pending engineer review):**
+  1. Breakpoint kept at 1500 px, the same as Spread Footing and Light Pole (as asked: "same breakpoints"). Below 1500 px (e.g. 1280 and 1400 px windows, or a 1920 px screen at 150 % Windows scaling = 1280 CSS px) both tools show the summary above the output tabs, not as a left column. If the engineer's screen is below 1500 px and the left column is wanted there, the breakpoint would need lowering in SF, LP and RW together (a separate change).
+  2. RW's own fonts and colour tokens are kept (sans-serif UI, `--pass` / `--fail` / `--warn`); only the chip shape (border + tint + bold name) follows SF. The RW title "CHECK SUMMARY" and the count badges are unchanged.
+  3. The Overview "Wall section works / governing D/C" card stays at the top of the Overview tab (SF has no equivalent card; its dashboard is the only summary). The self-consistency line stays under the check list (in the left column at ≥ 1500 px), as RWSC placed it.
+  4. Phone (≤ 900 px): RW's "results first / Show inputs" behaviour is kept (SF shows inputs first with a "Jump to the results" link); only the row styling changes there.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Saved data (§5):** no key or format changed; no new key.
+- **Check case:** default ACI wall (H_s 12 ft, q_a 3000 psf): 23 rows, all PASS, green bordered rows (D/C 0.20 … 1.00), "all pass · 23 checks"; H_s 22 ft, q_a 2500 psf: "5 FAIL", red bordered rows open (Sliding D/C 1.62, Bearing 1.66, Stem Shear 1.12, Stem Hook ℓdh 1.91, Toe Shear 2.39).
+- **How verified:** origin/main (after #957) vs branch, headless Chromium at 1920 px, three walls (ACI default; AASHTO default; ACI H_s 22 / q_a 2500 with 5 FAIL): `window._R`, Export JSON fields (`snapshotFields()`), every localStorage key and value, the Report tab text and the four-sheet DXF **identical**; 0 console errors. No sideways page scroll at 390, 768, 1280, 1400 and 1920 px. Screenshots before / after at 1280, 1400, 1920 and 390 px (deviceScaleFactor 2) next to Spread Footing at the same widths, and the FAIL wall at 1920 and 1400 px, looked at. Tests: check-syntax; smoke/retaining-wall-checks; phone-layout rwall 390/768; project-library retwall.
+- **Other copies:** none.
+
+## 2026-11-07 — PR: claude/rw-partial-contact — Footing design in partial contact: the factored soil reaction is the triangular block of length 3x̄, not the whole-base interpolation (ACI without water and AASHTO Strength I / Ia) (RWPC; calculation change) (PR #980: https://github.com/mlococo88/All-Structural/pull/980)
+
+Open item raised in #960 (RWUP). Engineer instruction relayed 2026-11-07 (no questions; conservative choice). Code sites are tagged `RWPC`.
+
+### RWPC-1. Problem
+- When a factored resultant lies outside the kern (|e| > B/6), the trapezoid becomes a triangle of length 3x̄ from the toe (q_toe = 2V/(3x̄)) or 3(B − x̄) from the heel end. The face pressures q_u,front / q_u,back (ACI 1.2D + 1.6H and 0.9D + 1.6H; AASHTO Strength I `quA_*` and Strength Ia `quIa_*`) were interpolated linearly from q_toe at x = 0 to 0 at x = B, i.e. a triangle of length B. That distribution is not in equilibrium (its area q_toe·B/2 exceeds V).
+  - Heel: upward relief overstated → heel M_u **unconservative**.
+  - Toe: upward pressure overstated → toe M_u and V_u conservative, sometimes grossly.
+- ACI walls with water were already done statically in #960 (RWUP); they are not changed here.
+
+### RWPC-2. Fix (`calcAll`)
+- New `q_blk(x, qt, qh, e, xR)` next to `q_at`: full contact → `q_at` (same arithmetic, bit-identical); partial contact → the block. Used for `quf_front`, `quf_back`, `quf_front_min`, `quf_back_min`, `quA_front`, `quA_back`, `quIa_front`, `quIa_back` (were `q_at` / the same linear expression).
+- Members: a combination with |e| > B/6 and no water split loads the heel and toe with the RWUP pieces at γ_U = 0 (`rwUpSplit(V, M, 0, …)`, `rwUpMember`), so a block that ends inside a member is integrated exactly: `pcS` after the RWUP block; `heelCase` / `toeCase` get `pcS[0]` (ACI 1.2D + 1.6H / AASHTO Strength I) and `pcS[1]` (ACI 0.9D + 1.6H / AASHTO Strength Ia). AASHTO returns `M_net_tot`, `M_net_Ia`, `x_R_Ia` for this.
+- Pile-supported footings (RWPL, #961) design the heel and toe from the pile-row reactions and are not affected (`pcS` is skipped in pile mode).
+- A resultant outside the base (x̄ ≤ 0 or ≥ B) is handled as in RWUP (warning "Footing (partial contact)"; V at the toe tip for the toe, no relief on the heel). Before, the toe pressure became 0 there.
+- **Basis:** statics of a rigid footing on soil that takes no tension (the linear distribution the tool already uses for the stability and rock-bearing checks, cf. AASHTO LRFD 10th Ed. Eqs. 11.6.3.2-2/-3). No code formula, load factor or resistance factor changes.
+
+### RWPC-3. Display
+- Footing tab Heel/Toe Step 1–2 (via `rwUpSteps`, new "no water split" branch): ΣV_u (or V_u), x̄ = M_u/V, e, L_c, peak pressure, q(0), q(L), M_soil = M_up. Stability Step 7 (ACI) title says "partial contact: triangular block" when it applies; Report `rwrTrap` face values use the block formula. The §5.3.8 reference and the "uplift split" notes stay only with water.
+
+### Check cases
+- **ACI, L_t 2, L_h 3, t_f 24 in (B = 6.5 ft), no water** (hand check):
+  - Toe, U = 0.9D + 1.6H governs: ΣV_u = 7668 lb/ft, M_u = 1207 lb-ft/ft → x̄ = 0.157 ft, e = 3.093 > B/6 = 1.083; L_c = 0.472 ft, q_toe = 2(7668)/0.472 = 32478 psf. The block lies inside the toe: M_up = V(L_t − L_c/3) = 7668(2 − 0.157) = 14129; M_u = 14129 − 270(2²)/2 = **13589** (was **57755**: face pressure 22487 psf from the whole-base line, upward force on the toe 54,965 lb/ft > V = 7668). V_u 54424 → 8046. F2 #6 @ 8 → **#5 @ 7**.
+  - Heel, U = 1.2D + 1.6H governs: ΣV_u = 10224, x̄ = 1.112, L_c = 3.335 ft < x_back = 3.5 ft → no soil under the heel: M_u = M_down = 2088(3²)/2 = **9396** (was **5151** = 9396 − 2830(3²)/6). F1 #5 @ 7 unchanged. Heel and toe shear checks, which failed on the old (non-equilibrium) pressure, now pass.
+- **AASHTO, Rankine β 20°** (hand check): Strength Ia V = 19761, x̄ = 3.730, e = 2.520 > 2.083; L_c = 11.189 ft, q_toe = 3532.1; at the back face q = 3532.1(1 − 4.5/11.189) = 2111.6, contact ends 6.689 ft into the heel. M_up = 6.689²/6 (2111.6) = 15747 (was 2260.5(8²)/6 = 24112); M_u = 60713 − 15747 = **44966** (was **36600**); F1 #5 @ 6 → **#6 @ 7**.
+- **Audit walls that move** (main vs branch):
+
+| Wall | Before | After |
+|---|---|---|
+| `aashto_water_col_eta` | heel M_u 33125, F1 #5 @ 7 | **43381, #6 @ 7** |
+| `aashto_rock_ct_water` | heel 43557 (Strength I) | **45189** (Strength Ia governs); bars unchanged |
+| `aashto_vh_ct` | heel 49416 (Strength I) | **51291** (Strength Ia governs); bars unchanged |
+| `aci_mix`, `aci_tall_seis` (water: RWUP) | — | design unchanged; only the informational `quf_front_min` / `quf_back_min` (Stability Step 7) change |
+
+- **Extra walls:** ACI `aci_mix` without water: heel 10147 → **23021** (#4 @ 6 unchanged). AASHTO L_t 2, L_h 3, t_f 24: heel 7695 → 13176 (#3 @ 12 → #3 @ 7), toe 31166 → 18989 (#5 @ 8 → #4 @ 8). AASHTO L_t 4, L_h 4: toe 22204 → 19501 (#5 @ 8 → #5 @ 9).
+- **Full contact unchanged:** `aci_default`, `aci_water_uni`, `aci_water_tri`, `aci_shorttoe` identical in every part (`_R`, export, tabs, Report); `aashto_ct`, `aashto_qs250_water_ct(_full)` differ only by the new fields `M_net_tot`, `M_net_Ia`, `x_R_Ia`.
+
+### How verified
+- origin/main vs branch, headless Chromium (`_R`, Export JSON, localStorage, tabs, Report): the twelve audit walls + 5 partial-contact walls (above). 0 console errors.
+- Hand checks above reproduced with the tool's `calcAll` in Node.
+- Tests: check-syntax; smoke/retaining-wall-checks (table `AUD`: RWPC ACI L_t 2 / L_h 3, AASHTO β 20°, default full contact); phone-layout rwall 390/768; project-library retwall; dxf-print-sheets rw.
+
+### Decisions (pending engineer review)
+- The block is applied to toes too, so toe M_u / V_u / bars can go **down** where the old line overstated the pressure (statics; e.g. L_t 2 / L_h 3: toe #6 @ 8 → #5 @ 7). No envelope with the old non-equilibrium distribution.
+- Resultant outside the base: toe takes V at its tip (upper bound), heel no relief, with a warning (was zero pressure).
+- AASHTO on rock: the footing-design trapezoid is treated the same way (linear distribution with no tension, as Eqs. 11.6.3.2-2/-3).
+
+### Saved data
+- No input or format change.
 
 ## 2026-11-07 — PR: claude/rw-pile-schedule — Pile-supported footing: pile schedule (Drawings sheet 5 with a pile layout plan, Report table); the stale Phase 8b warning removed (RWPL; display only, no result change)
 

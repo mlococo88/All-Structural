@@ -5352,3 +5352,138 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **How verified:** probe; `node tests/check-syntax.mjs`; `node tests/bpad-circle.mjs`, `bpad-profis.mjs`, `anchor-parity.mjs`; `tests/smoke/project-library.mjs --tool baseplate`, `standard-save.mjs`, `dxf-print-sheets.mjs --tool bp`; 0 console errors (results in the PR).
 - **Other copies:** none.
 - **Open items:** none new.
+
+## 2026-11-07 — BPM4: tension-side plate bending uses the anchor forces of the anchor checks (PR: claude/bp-m4-tension-plate, PR #970: https://github.com/mlococo88/All-Structural/pull/970)
+
+### BPM4. Tension side: largest T_i·x_i from the anchor force model   [calculation change, generally more conservative; saved data: none]
+- **Problem (review M4):** `plateBending()` took the tension-side anchor force from `combo.Tu_per`: the DG1 per-axis tensions combined by SRSS. The anchors are designed with the neutral-axis (or elastic bolt-group) model in `combo.perAnchor`. In the biaxial review case that was 17.68 kip against 22.44 kip. In a DG1 "small e" case it was 0, so the tension side was skipped although an anchor carries 1.56 kip.
+- **Governing provision:** AISC Design Guide 1 (2nd Ed., as the tool cites) §3.4.3: the tension-side plate is checked for the anchor pull times its lever arm to the critical section. The equation t = √(4M_u/(φF_y b_eff)) is unchanged. DG1 is not in /home/user/structural_references.
+- **Where:** `plateBending()`, the tension-side block (anchor `/* BPM4 (2026-11-07): the anchor forces of the SAME force model`).
+  - **Before:** `const Tu_per=combo.Tu_per;`, the arm of the highest-tension anchor, `Mu_t=Tu_per*armT`.
+  - **After:** for every anchor in tension in `combo.perAnchor`, x_i = its arm to the nearest DG1 critical section (the same rule as before, from the column centre; an anchor inside the column footprint falls back to the edge distance as before), M_i = T_i·x_i. The anchor with the largest M_i governs: `Tu_per` = its T_i, `armT` = its x_i, `Mu_t` = M_i. No anchor in tension → M_u = 0 (the note says so).
+- **Check cases (review M4):**
+  - Plate 22 × 22, W8X31, e = 2 in, pedestal 36 × 36, P = −10, M_x = M_y = 600 kip-in.
+    - T: 17.68 → **22.44 kip**; arm 5.2 in; t_T = √(4 × 22.44 × 5.2/(0.9 × 36 × 11)) = **1.144 in** (was 1.016).
+    - The compression side (1.215 in) still governs the plate DCR.
+  - Plate 24 × 24, W8X31, P = −40, M_y = 400 (DG1 small e).
+    - T: 0 → **1.556 kip** (anchor 1); arm = 9 − 0.95 × 8.0/2 = 5.2 in.
+    - t_T = √(4 × 1.556 × 5.2/(0.9 × 36 × 12)) = **0.289 in** (was 0). The compression side governs.
+  - Default project: the tension-side t is now 0.059 in (1.2D+1.0W) and 0.115 in (0.9D+1.0W), against 0 before. The compression side governs, so the plate DCR is unchanged.
+- **Decision (pending engineer review):** the new force replaces the old one; it is not the larger of the two, as the request specified ("not the 1-axis DG1 SRSS force"). Where the DG1 SRSS force was larger than every anchor force, the tension-side demand is now lower. In the 40 test projects no plate DCR decreased (see How verified).
+- **How verified:** probe on main and branch; `node tests/check-syntax.mjs`; `node tests/bpad-circle.mjs` (40 projects, DCR comparison), `bpad-profis.mjs`, `anchor-parity.mjs`; `tests/smoke/project-library.mjs --tool baseplate`, `standard-save.mjs`, `dxf-print-sheets.mjs --tool bp`; 0 console errors.
+- **Other copies:** none.
+- **Open items:** b_eff = max(B, N)/2 is still the tool's assumption (review M9, DG1 edition).
+
+## 2026-11-07 — BPM3: biaxial bearing and compression-side plate bending from the rigid-plate solve (PR: claude/bp-m3-biax-bearing, PR #971: https://github.com/mlococo88/All-Structural/pull/971)
+
+### BPM3. Both moments: the larger of DG1 and the biaxial solve   [calculation change, more conservative for combinations with both M_x and M_y; saved data: none]
+- **Problem (review M3):** with M_x and M_y together, bearing and the compression side of the plate used two independent uniaxial DG1 solves (`resX`, `resY`), each with the full P and the full plate width. This understates the corner pressure: in the review case the NA peak is 1.244 ksi against a DG1 q of 0.511 ksi; in the default project's 0.9D+1.0W it is 1.017 against 0.741 ksi. DG1 does not cover biaxial moment.
+- **Governing provisions:** ACI 318-19 §22.8.3.2 / AISC 360-16 J8 (φ = 0.65 bearing; the φf_p limit is unchanged); AISC DG1 §3.1 cantilevers and the plate-strip moment t = √(4M/(φF_y)) (2nd Ed., as cited). The biaxial pressure field is statics of a rigid plate on an elastic bed: the same solve (`naAnchorForces`, inclined neutral axis, K_c = E_conc/D) that gives the anchor forces.
+- **Where:** new `bpBiaxBearing(c)` (cached in a WeakMap, so no result object changes) and `bpBiaxStrips()` before `plateBending()` (anchor `/* BPM3 (2026-11-07): BIAXIAL BEARING`). `plateBending()`: after the λn′ line, the biaxial strip thickness is a further candidate for `tReqC`, with a new step "Compression side — biaxial bearing (rigid-plate solve, both moments)". `bearingCheck()`: σ_max/φf_p of each combination with both moments is a candidate for the DCR (basis "biaxial"), one line per such combination. User Manual: one paragraph after the column-eccentricity paragraph.
+- **Applies when:** |M_x| > 0 and |M_y| > 0 (after the BPH2 transfer), rectangular plate, the plate bears (no open stand-off). The NA solve of the combination is reused when it exists; with the "elastic" force model it is run here for the bearing only. Otherwise nothing changes.
+- **Before / after:**
+  - Bearing: max over combinations and axes of the DG1 ratio → **max(DG1 ratio, σ_max/φf_p)**.
+  - Compression-side thickness: max(t_m, t_n, t_λn′) from DG1 → **max(DG1 thickness, √(4M_strip,max/(φF_y)))**. M_strip = ∫₀^ℓ σ(u)·u du along a strip perpendicular to a column face (u from the face). The strip with the largest moment on each of the four sides is used (80 strips, 200 points).
+- **Decision (pending engineer review):** the larger of the two methods (conservative), as requested. The elastic field has no stress cap, so σ_max can exceed φf_p where DG1 would redistribute plastically. That is conservative for both checks.
+- **Check cases:**
+  - **Review M3:** plate 22 × 22 × 1.5, W8X31, e 2 in, pedestal 36 × 36, P = −60, M_x = M_y = 500 kip-in.
+    - DG1 q = 0.511 ksi on both axes.
+    - Biaxial σ_max = **1.244 ksi** (review ✓). Bearing **0.185 → 0.450** (1.244/2.763).
+    - Strip moments: +x ℓ 7.8 in, 32.51 kip-in/in; −y ℓ 7.2 in, 28.06.
+    - t = √(4 × 32.51/(0.9 × 36)) = 2.003 in, so **plate DCR 0.877 → 1.336**.
+  - **Default project (changes):** 0.9D+1.0W (M_x = 180, M_y = 300 kip-in).
+    - σ_max = 1.017 ksi → bearing **0.268 → 0.368**.
+    - Strip +x (ℓ = n = 4.2 in): M = 7.99 kip-in/in (≤ σ_max ℓ²/2 = 8.97) → t = 0.993 in → plate **0.574 → 0.662**.
+    - 1.2D+1.0W: t 0.670 → 0.905 in.
+- **How verified:** probe on main and branch (KaTeX of the new steps: all typeset); `node tests/check-syntax.mjs`; `node tests/bpad-circle.mjs` (40 projects: the changes are exactly the combinations with both moments; listed in the PR), `bpad-profis.mjs`, `anchor-parity.mjs`; `tests/smoke/project-library.mjs --tool baseplate`, `standard-save.mjs`, `dxf-print-sheets.mjs --tool bp`; 0 console errors.
+- **Other copies:** none.
+- **Open items:** the λn′ inner panel still uses the DG1 q. The bedding modulus (E_conc = 3600 ksi constant, D) is the existing NA-solve setting (Anchor Bolts tab).
+
+## 2026-11-07 — BPM7: ψ_ec,V applied in the torsion breakout sweep (PR: claude/bp-m7-torsion-psiec, PR #973: https://github.com/mlococo88/All-Structural/pull/973)
+
+### BPM7. Torsion: eccentric shear on the critical row   [calculation change, more conservative with torsion; saved data: none]
+- **Problem (review M7):** the BC-3 torsion sweep checked shear breakout in every direction û with the Fig. R17.7.2.1b case logic, but with ψ_ec,V = 1.0. Torsion makes the shear on the critical row unequal (more on one end), so the row's shear resultant is eccentric along the edge.
+- **Governing provision:** ACI 318-19 §17.7.2.3.1, Eq. (17.7.2.3.1): ψ_ec,V = 1/(1 + e′_V/(1.5c_a1)) ≤ 1.0. §17.7.2.3.2: only the anchors in shear in the same direction count for e′_V. Read in the PDF, printed p. 268.
+- **Where:** `comboCapacities()`, torsion sweep (anchor `/* BPM7 (2026-11-07): ψ_ec,V`).
+  - **Before:** `const sb=vc.used.sb, dcr=…vc.used.V/sb.phiVcbg`.
+  - **After:** for the case's critical-row anchors with V_i·û > 0: t_i = their coordinate along the edge (t̂ ⊥ û), f_i = V_i·û. Then e′_V = |Σf_i t_i/Σf_i − mean(t_i)|, ψ = 1/(1 + e′_V/(1.5c_a1)), and V_cbg, φV_cbg of that direction are multiplied by ψ before the ratio. Fewer than two loaded row anchors → ψ = 1.
+  - `sbk.torsion` carries `eV` and `psi_ecV`. A line in the torsion step works ψ_ec,V; the inner Step 4 of the breakout still prints the concentric factors, and the torsion line states that φV_cbg includes ψ_ec,V.
+- **Check case (review M7):** default project (2 × 2 at ±6 in, pedestal 30 × 30), V_x = 5 kip, T = 120 kip-in, P = −20.
+  - V_i = (3.75, ∓2.5) at x = +6 and (−1.25, ∓2.5) at x = −6.
+  - **Before:** 0° governs, Case 2, D = 7.5, φV_cbg = 14.346, DCR **0.523**.
+  - **After:** 330° governs, Case 2, D = 6.663 kip, c_a1 = 21 in, e′_V = 4.823 in.
+    - ψ = 1/(1 + 4.823/31.5) = 0.8672.
+    - φV_cbg = 12.441 kip, DCR **0.536**.
+- **How verified:** probe on main and branch (KaTeX of the steps: all typeset); `node tests/check-syntax.mjs`; `node tests/bpad-circle.mjs` (40 projects), `bpad-profis.mjs`, `anchor-parity.mjs` (torsion cases T = 6 kip·ft); `tests/smoke/project-library.mjs --tool baseplate`, `standard-save.mjs`, `dxf-print-sheets.mjs --tool bp`; 0 console errors.
+- **Other copies:** none.
+- **Open items:** without torsion, ψ_ec,V stays 1.0: the elastic plate gives equal shares to the row anchors.
+
+## 2026-11-07 — BPM5: Seismic Design Category input and ACI 318-19 §17.10 (PR: claude/bp-m5-seismic, PR #976: https://github.com/mlococo88/All-Structural/pull/976)
+
+### BPM5. SDC A–F; with C–F: 0.75 on concrete-governed tension, the §17.10.5.3 / §17.10.6.3 options, ductility check   [calculation change only when SDC C–F is picked; saved data: three optional fields]
+- **Problem (review M5):** §17.10 was not implemented. The banner (F14) fired only when the generator's seismic / Ω₀ boxes were ticked, not for E combinations typed in or imported.
+- **Governing provisions (read in the PDF, printed pp. 272–276):**
+  - §17.10.1: anchors in SDC C–F meet §17.10. R17.10.1 says this applies whether or not E is in the controlling combination.
+  - §17.10.5.1: tension 20 % exemption. §17.10.5.3: options (a)–(d). §17.10.5.4: (a) φN_sa; (b) 0.75φN_cbg; (c) 0.75φN_pn; (d) 0.75φN_sbg; concrete assumed cracked unless shown otherwise. §17.10.5.5: no further reduction with anchor reinforcement.
+  - §17.10.6: shear. §17.10.6.1: 20 % exemption. §17.10.6.2: strength per §17.7. §17.10.6.3: options (a)–(c).
+- **What:**
+  - **Input → 10. Load Combinations:**
+    - "Seismic Design Category" (A or B / C / D / E / F).
+    - With C–F, also "§17.10.5.3 tension option" ((a)–(d), default **(d)**, E with E_h × Ω₀) and "§17.10.6.3 shear option" ((a)–(c), default **(c)**, E with E_h × Ω₀).
+  - **Helpers** (anchor `/* BPM5 (2026-11-07): SEISMIC DESIGN CATEGORY`): `bpSeis()`, `bpComboHasE()`, `bpSeisEPresent()`, `bpSeisScale()`, `bpSeisDuct()`, `bpSeisBannerText()`, `bpSeisBanner()`.
+  - **`comboCapacities()`:**
+    - Before: `const po = pullout(); …`, `const tb = tensionBreakoutGroup(…)`, `const sfb = …`, `let pry = pryout(nV, tb);`.
+    - After: `po` / `tb` / `sfb` = `bpSeisScale(…)` of the unchanged objects: × 0.75 on φN_pn, φN_cbg, φN_sbg, with a worked step "Seismic Design Category X — 0.75 …". Pryout takes the unreduced `tb0`. With option (a), `sdu` is the ductility check, worked as a step under Steel tension.
+  - **`allChecks()`:** a "Seismic Ductility (§17.10.5.3(a))" row with option (a).
+  - **Summary banner and validation message:**
+    - **SDC C–F:** a warning box stating what is applied and what the engineer must supply.
+    - **E combinations with SDC A/B:** an error box asking for the category. E is detected from the generator's seismic / Ω₀ boxes OR any combination name containing E, Eh, Ev, EQ, Ω or "seismic", so typed and imported combinations count.
+  - **Also:** the PROFIS export note and the User Manual seismic paragraph.
+- **Before / after:**
+  - SDC A/B (default; every older save): **unchanged**.
+  - SDC C–F: φN_pn, φN_cbg, φN_sbg → **0.75×** in every combination. φN_sa, φV (all shear modes), anchor reinforcement and pryout are unchanged.
+  - Option (a): DCR = (largest of ΣT/N_cbg, T_max/N_pn, ΣT_edge/N_sbg) / (T_max/(1.2N_sa)), all nominal.
+- **Decisions (pending engineer review):**
+  1. Default options are (d) for tension and (c) for shear, the Ω₀ load options (conservative). The tool cannot amplify the E part of a typed combination, so the banner tells the engineer the entered combinations must be those loads.
+  2. The 20 % exemptions (§17.10.5.1, §17.10.6.1) are not taken (conservative): E cannot be separated from a typed combination.
+  3. 0.75 is applied to every combination under C–F (R17.10.1).
+  4. §17.10.5.3(a)(iii)–(vi) detailing and §17.10.4 (deformed anchor reinforcement) are stated, not checked.
+- **Check case (default project, SDC D, 0.9D+1.0W):**
+  - Breakout: φN_cbg = 20.16 → 0.75 × 20.16 = **15.12 kip**; DCR 5.328/15.12 = **0.352** (was 0.264).
+  - Pullout: φN_pn = 33.62 → 25.22 kip; DCR 3.827/25.22 = **0.152** (was 0.114).
+  - Interaction 1.328 → 1.395.
+  - Option (a):
+    - T_max/(1.2N_sa) = 3.827/(1.2 × 0.606 × 58 = 42.18) = 0.0907.
+    - Breakout ΣT/N_cbg = 5.328/(20.16/0.70 = 28.80) = 0.185; pullout 3.827/48.03 = 0.080.
+    - DCR = 0.185/0.0907 = **2.04 → FAIL**: the concrete governs before the steel yields, so option (a) cannot be used; choose (b)–(d).
+- **Saved data (§5):** `serviceLoads.sdc`, `serviceLoads.seisT`, `serviceLoads.seisV` are stored only once picked; they are not in `defaultState()`. A save without them reads A/B: no change. Keys and other fields are unchanged.
+- **How verified:** probe (default, SDC D, SDC D + (a), a typed "1.2D+1.0E+L" combination → error banner; KaTeX of the new steps OK); `node tests/check-syntax.mjs`; `node tests/bpad-circle.mjs`, `bpad-profis.mjs`, `anchor-parity.mjs` (all A/B: identical); `tests/smoke/project-library.mjs --tool baseplate`, `standard-save.mjs`, `dxf-print-sheets.mjs --tool bp`; 0 console errors.
+- **Other copies:** none.
+- **Open items:** decisions 1–4. Post-installed anchors (§17.10.3) do not arise (cast-in only).
+
+## 2026-11-07 — BPL2 / BPL3 / BPL5 / BPL6: review LOW items (PR: claude/bp-low-items, PR #978: https://github.com/mlococo88/All-Structural/pull/978)
+
+### BPL2. Interaction: the §17.8.2 cut-offs before either form   [calculation change, LESS conservative only where the code permits; saved data: none]
+- **Problem (review L2):** `interaction()` applied the 0.2 cut-offs to the trilinear form only and then took max(parabolic, trilinear). So (β_N, β_V) = (1.0, 0.2) read 1.068 FAIL, although §17.8.2(b) permits neglecting the interaction there.
+- **Governing provision:** ACI 318-19 §17.8.1–§17.8.3 (read in the PDF, printed p. 270). The interaction may be neglected if N_ua/φN_n ≤ 0.2 (Eq. 17.8.2a) or V_ua/φV_n ≤ 0.2 (Eq. 17.8.2b). Eq. (17.8.3) applies when both exceed 0.2. The 5/3 parabolic form is commentary R17.8, permitted through §17.5.2.3.
+- **Where:** `interaction()`.
+  - Before: `const dcr=Math.max(para,triDCR);`.
+  - After: `const dcr=(rV<=0.2)? rN : (rN<=0.2)? rV : Math.max(para,triDCR);`. `governingForm` reads "§17.8.2 (interaction neglected)" below a cut-off, `formsDisagree` is false there, and the interaction note states the cut-off.
+- **Check:** (1.0, 0.2) **1.068 → 1.000**; (0.2, 1.0) 1.068 → 1.000; (0.6, 0.6) 1.000 unchanged; (1.0, 0.21) 1.074 unchanged.
+- **Effect:** less conservative only below a 0.2 cut-off, exactly where §17.8.2 permits it.
+
+### BPL3. "Small edge distance" warning tests all four edges   [warning only]
+- `validateInputs()`: before `if(g.ca_x_pos<1.5*A.dia||g.ca_y_pos<1.5*A.dia)` → after `if(Math.min(g.ca_x_pos,g.ca_x_neg,g.ca_y_pos,g.ca_y_neg)<1.5*A.dia)`.
+
+### BPL5. Stand-off lever-arm citation   [text only]
+- `levelingNutCheck` Step 6 `ref`: before "ACI 318-19 Table 17.5.2; φ = 0.65" → after "lever-arm method of EN 1992-4 / ETAG 001 Annex C as used by Hilti PROFIS (not an ACI 318 equation); φ = 0.65 per ACI 318-19 Table 17.5.3 (steel, shear)". The method (M⁰_s = 1.2W_el f_u, α_M, ℓ_b) is PROFIS's, not ACI's. EN 1992-4 and ETAG are not in /home/user/structural_references, so the source is named as PROFIS uses it.
+
+### BPL6. Validation tab: an explanation for each amber / red row   [text only]
+- `VALIDATION_CASES`: new optional `rowNotes` on msa3a, struct2v1 and struct2v2. The case section prints them under its table ("Why these rows differ").
+- msa3a: the shear row explains BPH1 (+y edge 9,109 lb, +14 %) and BPM2 (Case 1 on the y component, so the resultant's Case 2, 18,057 lb, governs).
+- struct2v1 / v2: the shear row is the tool's Case 2 against PROFIS's front row. The tension breakout row is the reconstructed pedestal outline. The lever-arm, anchor-force, compression and e′_N rows are the BP-C1 open-stand-off model.
+- Each note is marked "probable cause, not confirmed" where it was not checked against the PROFIS settings.
+
+- **How verified (all four):** probe of `interaction()`; `node tests/check-syntax.mjs`; `node tests/bpad-circle.mjs` (40 projects), `bpad-profis.mjs`, `anchor-parity.mjs`; `tests/smoke/project-library.mjs --tool baseplate`, `standard-save.mjs`, `dxf-print-sheets.mjs --tool bp`; 0 console errors.
+- **Other copies:** none.
+- **Open items:** L1, L4, L7 of the review are not changed (L1 conservative; L4 reading stated in the step; L7 = open item N1).
