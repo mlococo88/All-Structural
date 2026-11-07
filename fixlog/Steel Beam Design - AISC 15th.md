@@ -2903,3 +2903,32 @@ From the code-compliance review of 2026-11-07 (LOW findings). One commit per ite
 - project-library steelbeam and list-input sbeam report only the case label of the minor-axis flange class (10 → 13, L2) and the intended page-text changes (Validation note, hints). Computed results and saved data are identical.
 - 0 console errors.
 - **Saved data:** new optional field `member.j10.dist` (absent = old behaviour). No key changed.
+
+## 2026-11-07 — PR: claude/steelbeam-tfa-option (PR #1073: https://github.com/mlococo88/All-Structural/pull/1073) — Tension field action option per §G2.2, interior panels only (TFA; new option, default off)
+
+From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field action).
+
+### TFA. Optional §G2.2 shear strength for interior web panels   [new option; no result change unless ticked]
+- **Problem:** the tool used §G2.1 only (conservative). AISC 360-16 §G2.2 permits tension field action in interior web panels with a/h ≤ 3; Example G.8B panel 2 depends on it (G2.1 gives 181.5 kip, below V_u = 184 kip).
+- **Governing provision:** AISC 360-16 §G2.2.
+  - Eq. G2-6: V_n = 0.6F_yA_w when h/t_w ≤ 1.10√(k_vE/F_y).
+  - Eq. G2-7 when 2A_w/(A_fc + A_ft) ≤ 2.5, h/b_fc ≤ 6.0 and h/b_ft ≤ 6.0: V_n = 0.6F_yA_w[C_v2 + (1 − C_v2)/(1.15√(1 + (a/h)²))].
+  - Eq. G2-8 otherwise.
+  - C_v2 per Eqs. G2-9 to G2-11. V_n may be taken as the larger of G2.1 and G2.2. G2.2 covers interior panels only.
+- **Where:**
+  - new `shearTFA(p,stiff,sh)` and `tfaBlock` before `stiffenerReq` (anchor `/* TFA (2026-11-07, option, default off)`);
+  - `designAll`: `D.tfa`, and per combination the split into end and interior panels (anchor `/* TFA: end panels (within a of a support or a member end) keep G2.1`);
+  - `buildDesignChecks` Shear Vₓ row: the governing panel's demand, strength and reference (anchor `/* TFA: the governing panel's demand and strength */`);
+  - V_x tab: the worked G2.2 block and a per-combination "Shear by panel type" block;
+  - input "Tension field action (§G2.2)" under Web Stiffeners (beam mode).
+- **Behaviour with the option on (I-shapes with stiffeners, a/h ≤ 3):**
+  - Stations within a of a support or a member end are end panels: §G2.1.
+  - Other stations: φ × max(V_n,G2.1, V_n,G2.2).
+  - DCR = the larger of the two panel DCRs.
+- **Decision (pending engineer review):** off by default (the engineer chooses per project). End panels are taken as every panel within a of any support (interior supports of continuous beams included; conservative) or of a member end. One stiffener spacing applies to the whole member, as before. The §G2.3 stiffener requirement stays on the §G2.1 basis (smaller V_c1, larger ρ_w: conservative). Member and batch modes unchanged.
+- **Check case (AISC Design Examples v16.0, G.8B panel 2):** built-up d 36, b_f 16, t_f 1.5, t_w 5/16, h 33, A572 Gr 50, a = 90 in.
+  - a/h = 2.727, k_v = 5 + 5/2.727² = 5.672; h/t_w = 105.6 > 1.10√(5.672 × 29000/50) = 63.1; 1.37√(k_vE/F_y) = 78.6 < 105.6 → C_v2 = 1.51 × 5.672 × 29000/(105.6² × 50) = 0.4455 (G2-11).
+  - 2A_w/(A_fc + A_ft) = 2 × 11.25/48 = 0.469 ≤ 2.5 and h/b_f = 2.06 ≤ 6 → G2-7: V_n = 0.6 × 50 × 11.25 × [0.4455 + 0.5545/(1.15 × √(1 + 2.727²))] = 206.4 kip.
+  - **Before (G2.1 only):** φV_n = **181.5 kip**. **After (option on, interior panel):** φV_n = 0.9 × 206.4 = **185.7 kip** (G.8B: 185).
+- **How verified:** engine call (above); origin/main vs branch on 18 scenarios + v16 engine cases: identical (option off). With the option on (60 ft built-up girder, a = 90 in, UDL) the end panel governs and the Shear Vₓ value is unchanged; only its detail (end panel, x) is added. V_x tab: 0 KaTeX errors. Kit: check-syntax, steel-beam-builtup 11/11, project-library steelbeam, phone-layout sbeam: pass. list-input sbeam: its differences are those already merged earlier today (minor-axis case label, J10.4 and Validation text); nothing from this change. 0 console errors.
+- **Saved data:** new optional field `design.stiff.tfa` (absent = off). No key changed.
