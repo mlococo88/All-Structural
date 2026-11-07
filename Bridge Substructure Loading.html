@@ -1472,7 +1472,35 @@ function unitRes(k) {
   try { out.UM = unitModel(G, UG, k); } catch (e) { out.err = e.message; return (C[k] = out); }
   try { out.DL = dlUnit(G, UG, k, out.UM); } catch (e) { out.errDL = e.message; }
   try { if (!MODEL.LLL) MODEL.LLL = llLong(G); if (!MODEL.share) MODEL.share = makeShares(G); out.LL = llUnit(G, UG, k, out.UM, MODEL.LLL); } catch (e) { out.errLL = e.message; }
+  try { if (out.LL) out.LL.skew = skewCorrLL(G, k, out.UM, out.LL); } catch (e) { out.errLL = 'Skew correction: ' + e.message; }
   return (C[k] = out);
+}
+/* SKC (2026-11-07): skew correction of the live load reaction at the obtuse corner, AASHTO LRFD 10th Ed. Table 4.6.2.2.3c-1 (concrete deck on
+   steel or concrete beams, cross-sections (a), (e), (k)): f = 1.0 + 0.20 (12.0 L t_s³ / K_g)^0.3 tan θ; range of applicability 0 ≤ θ ≤ 60°,
+   3.5 ≤ S ≤ 16.0 ft, 20 ≤ L ≤ 240 ft, N_b ≥ 4. Applied to the bearing LL + IM maximum of the exterior and first interior girders on both sides
+   of every support line (Decision, pending engineer review: both sides, as the obtuse corner of one of the adjacent spans is at each side of a
+   pier); L = the longer adjacent span; K_g blank = (12 L t_s³ / K_g)^0.3 taken as 1.0 (the preliminary-design simplification of 4.6.2.2.1).
+   The reaction totals, the cap, columns and foundations keep the line-model live load (the correction redistributes girder shear). */
+function skewInfo(G, k, ri) {
+  const b = P.br, th = Math.abs(nz((b.skews || [])[k])), S = G.sup[k], row = S.rows[ri] || S.rows[0];
+  const Ls = S.joint ? [row.side === 'back' ? G.spans[k - 1] : G.spans[k]] : [G.spans[k - 1], G.spans[k]].filter(x => x > 0), L = Math.max(...Ls);
+  const ts = nz(b.ts), Ke = skewKgEst(), Kin = num(b.skKg), Kg = Kin > 0 ? Kin : Ke ? Ke.Kg : NaN, term = Kg > 0 ? Math.pow(12 * L * ts ** 3 / Kg, 0.3) : 1, f = 1 + 0.20 * term * Math.tan(rad(Math.min(th, 89)));
+  const sp = G.bays && G.bays.length ? G.bays.map(Number) : [], Smin = sp.length ? Math.min(...sp) : 0, Smax = sp.length ? Math.max(...sp) : 0, out = [];
+  if (th > 60) out.push(`θ = ${f1(th)}° > 60°`); if (sp.length && (Smin < 3.5 || Smax > 16)) out.push(`S = ${f2(Smin)} to ${f2(Smax)} ft outside 3.5 to 16.0 ft`);
+  if (L < 20 || L > 240) out.push(`L = ${f1(L)} ft outside 20 to 240 ft`); if (G.nb < 4) out.push(`N_b = ${G.nb} < 4`);
+  return { th, L, ts, Kg: Kg > 0 ? Kg : null, est: !(Kin > 0) && Ke ? Ke : null, term, f, range: out };
+}
+function skewKgEst() {   // SKC: K_g = n(I + A e_g²) of the steel girder shape on the Bridge tab (4.6.2.2.1); n = E_s / E_c, E_c of the deck by Eq. 5.4.2.4-1 (K_1 = 1, w_c of the Summary tab)
+  const b = P.br, d = nz(b.d), bf = nz(b.bf), tf = nz(b.tf), tw = nz(b.tw); if (!(d > 2 * tf && bf > 0 && tf > 0 && tw > 0)) return null;
+  const hw = d - 2 * tf, I = tw * hw ** 3 / 12 + 2 * (bf * tf ** 3 / 12 + bf * tf * ((d - tf) / 2) ** 2), A = 2 * bf * tf + tw * hw, eg = d / 2 + nz(b.haunch) + nz(b.ts) / 2;
+  const fc = nz(b.deckFc) || 4, wc = nz(b.wc) || 0.150, Ec = 120000 * wc * wc * Math.pow(fc, 0.33), n = 29000 / Ec;
+  return { I, A, eg, Ec, n, Kg: n * (I + A * eg * eg) };
+}
+function skewCorrLL(G, k, UM, LL) {
+  if (P.br.skCorr !== 'yes') return null; const nb = G.nb, js = nb < 4 ? [...Array(nb).keys()] : [0, 1, nb - 2, nb - 1], rows = [];
+  G.sup[k].rows.forEach((row, ri) => { const I = skewInfo(G, k, ri); if (!(I.th > 0) || !(I.f > 1)) return; rows.push({ ri, ...I, js });
+    UM.defs.forEach((d, q) => { if (d.lat || !d.brg || d.brg[0] !== ri || !js.includes(d.brg[1])) return; const a = LL.best[q].max; if (!(a.v > 0)) return; a.v0 = a.v; a.v *= I.f; if (a.conc) a.conc[q] *= I.f; }); });
+  return rows.length ? { rows, js } : null;
 }
 const fv = (v, u) => !isFinite(v) ? '—' : Math.abs(v) < 0.005 ? '0.0' : u === 'kip-ft' ? f0(v) : f1(v);
 function unitChips() { return `<div class="dwg-row">${P.units.map((x, i) => `<button type="button" class="btn btn-sm${i === P.ui.sel ? ' btn-primary' : ''}" data-unit="${i}">${esc(x.name)}</button>`).join('')}</div>`; }
@@ -1538,7 +1566,16 @@ function llHtml() {
   const a = B[sel.q][sel.key], dd = defs[sel.q];
   h += `<div class="card"><div class="card-h"><h2>Governing arrangement</h2><span class="sub">${dd.grp}: ${dd.label}, ${sel.key === 'max' ? 'maximum' : 'minimum'} ${fv(a.v, dd.u)} ${dd.u}</span></div><div class="card-b">${svgOf(llDwg(G, MODEL.UG, k, a), { h: 560 })}
     <h3 style="font-family:var(--cond);margin:12px 0 4px">Concurrent effects of this arrangement</h3>${respTable(defs, [{ t: 'Value' }], (d, q) => `<td class="val">${fv(a.conc[q], d.u)}</td>`, { skip: d => d.grp === 'Bearings' && S.rows[0].brg.length > 6 })}</div></div>`;
+  h += skewCardHtml(G, k, r);
   return h;
+}
+function skewCardHtml(G, k, r) {   // SKC: the skew correction worked for this unit
+  const th = Math.abs(nz((P.br.skews || [])[k])); if (!(th > 0)) return '';
+  if (P.br.skCorr !== 'yes') return `<div class="card"><div class="card-h"><h2>Skew correction at the obtuse corner (4.6.2.2.3c)</h2></div><div class="card-b"><p class="note" style="padding:0">Skew ${f1(th)}°: the correction of Table 4.6.2.2.3c-1 is <b>not applied</b> (Live load, "Skew correction of bearing LL" on the Bridge tab). The bearing live loads above are the line-model values.</p></div></div>`;
+  const sk = r.LL && r.LL.skew; if (!sk) return '';
+  const nb = G.nb, gn = sk.js.map(j => 'G' + (j + 1)).join(', ');
+  return `<div class="card"><div class="card-h"><h2>Skew correction at the obtuse corner (4.6.2.2.3c)</h2><span class="sub">Table 4.6.2.2.3c-1, concrete deck on beams</span></div><div class="card-b">${sk.rows.map(I => `<p style="margin:0 0 6px">${G.sup[k].joint ? esc(G.sup[k].rows[I.ri].side) + ' row: ' : ''}f = 1.0 + 0.20 (12.0 L t<sub>s</sub>³ / K<sub>g</sub>)<sup>0.3</sup> tan θ = 1.0 + 0.20 × ${I.Kg ? `(12.0 × ${f1(I.L)} × ${f2(I.ts)}³ / ${f0(I.Kg)})<sup>0.3</sup>` : '1.0'} × tan ${f1(I.th)}° = 1.0 + 0.20 × ${f3(I.term)} × ${f3(Math.tan(rad(I.th)))} = <b>${f3(I.f)}</b></p>${I.range.length ? `<p class="note" style="padding:0 0 6px;color:var(--warn)">Outside the range of applicability: ${esc(I.range.join('; '))}. The factor is applied as computed; verify it.</p>` : ''}`).join('')}
+    <p class="note" style="padding:0">Applied to the maximum bearing LL + IM of ${esc(gn)} (exterior and first interior girders on both sides${nb < 4 ? '; fewer than 4 girders: all' : ''}), L = the longer adjacent span, ${sk.rows[0].est ? (E => `K<sub>g</sub> estimated from the steel girder shape on the Bridge tab: I = ${f0(E.I)} in⁴, A = ${f2(E.A)} in², e<sub>g</sub> = d/2 + haunch + t<sub>s</sub>/2 = ${f2(E.eg)} in, E<sub>c</sub> = 120,000 w<sub>c</sub>² f′<sub>c</sub><sup>0.33</sup> = ${f0(E.Ec)} ksi (Eq. 5.4.2.4-1), n = 29,000 / E<sub>c</sub> = ${f2(E.n)}, K<sub>g</sub> = n(I + A e<sub>g</sub>²) = ${f0(E.Kg)} in⁴ (Eq. 4.6.2.2.1-1); enter K<sub>g</sub> for other girders`)(sk.rows[0].est) : sk.rows[0].Kg ? 'K<sub>g</sub> as entered' : 'K<sub>g</sub> not known: (12.0 L t<sub>s</sub>³ / K<sub>g</sub>)<sup>0.3</sup> taken as 1.0 (4.6.2.2.1, preliminary design)'}. Totals, cap, columns and foundations keep the line-model live load. The Bearings rows above include the factor.</p></div></div>`;
 }
 
 /* ---------- hook into the existing interface ---------- */
@@ -1556,7 +1593,8 @@ function llHtml() {
     if (a) h = h.replace('<div class="sec-h">Elevations', `${sec('Bent model', a)}<p class="note">Only the relative stiffness of the cap and ${u.type === 'pile' ? 'piles' : 'columns'} matters for dead and live load; gross sections are used.</p><div class="sec-h">Elevations`);
     if (u.type === 'mcb' && u.ftg.type === 'none') h = h.replace('>Top of footing<', '>Point of fixity (shafts)<');
     return h; };
-  const pb = paneBridge; paneBridge = function () { return pb() + sec('Live load', fld('Dynamic load allowance IM', 'br.IM', '%') + fld('Deck to girders', 'br.deck', '', 'sel', { options: [['lever', 'Lever rule'], ['cont', 'Continuous deck']] })) + `<p class="note">IM applies to the truck and tandem only and is dropped for footings below ground (3.6.2.1). The pedestrian load is not included yet.</p>`; };
+  const pb = paneBridge; paneBridge = function () { return pb() + sec('Live load', fld('Dynamic load allowance IM', 'br.IM', '%') + fld('Deck to girders', 'br.deck', '', 'sel', { options: [['lever', 'Lever rule'], ['cont', 'Continuous deck']] })
+      + fld('Skew correction of bearing LL (4.6.2.2.3c)', 'br.skCorr', '', 'sel', { options: [['yes', 'Apply at the obtuse corners'], ['no', 'Not applied']] }) + fld('Girder K<sub>g</sub> for the skew correction', 'br.skKg', 'in⁴', 'num', { title: 'K_g = n(I + A e_g²) of the girder (4.6.2.2.1); blank: estimated from the steel girder shape on the Bridge tab' })) + `<p class="note">IM applies to the truck and tandem only and is dropped for footings below ground (3.6.2.1). The pedestrian load is not included yet. Skew correction (Table 4.6.2.2.3c-1): the maximum bearing LL + IM of the exterior and first interior girders is multiplied by 1.0 + 0.20 (12.0 L t<sub>s</sub>³/K<sub>g</sub>)<sup>0.3</sup> tan θ; K<sub>g</sub> blank: estimated from the girder shape above (worked on the Live load tab). Projects saved before 2026-11-07 open with it off.</p>`; };
   const pr = paneRx; paneRx = function () { let h = pr(); const G = MODEL.G; if (!G || G.E.length) return h;
     G.sup.forEach((S, k) => { if (!S.joint) return; const row = (P.rx.data || [])[k]; if (!row) return; const nm = esc(P.units[k].name);
       const tb = `<div class="sec-h">${nm} <small>expansion joint: back and ahead rows</small></div><div class="sec-body one"><table class="mini-t"><thead><tr><th>Girder</th><th>DC1 bk</th><th>DC2 bk</th><th>DW bk</th><th>DC1 ah</th><th>DC2 ah</th><th>DW ah</th></tr></thead><tbody>${row.map((r, j) => `<tr><td class="lbl">G${j + 1}</td>${['dc1', 'dc2', 'dw', 'dc1a', 'dc2a', 'dwa'].map(c => `<td><input data-k="rx.data.${k}.${j}.${c}" data-kind="num" value="${esc(r[c] == null ? 0 : r[c])}"></td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
@@ -1781,7 +1819,7 @@ function comboHtml() {
   TABS.forEach(t => { if (t !== '|' && ['brce', 'wind', 'dist', 'combo'].includes(t[0])) t.length = 2; });
   const rt = renderTab; renderTab = function () { const id = P.ui.tab, el = document.getElementById('tab-' + id), f = { brce: brceHtml, wind: windHtml, dist: distHtml, combo: comboHtml }[id]; if (f && el) { el.innerHTML = f(); return; } rt(); };
   const rc = recompute; recompute = function () { MODEL.cache3 = null; MODEL.dist = null; MODEL.share = null; rc(); };
-  const dp = defP; defP = function () { const p = dp(); Object.assign(p.br, { traffic: 'two', nBR: '', Rc: '', Vd: '', curveDir: 'left', V: 130, exp: 'C', Gf: 1.0, CDsup: 1.3, CDsub: 1.6, barSolid: 'yes', Ifac: 1.0 }); return p; };
+  const dp = defP; defP = function () { const p = dp(); Object.assign(p.br, { skCorr: 'yes', skKg: '', traffic: 'two', nBR: '', Rc: '', Vd: '', curveDir: 'left', V: 130, exp: 'C', Gf: 1.0, CDsup: 1.3, CDsub: 1.6, barSolid: 'yes', Ifac: 1.0 }); return p; };
   const pb = paneBridge; paneBridge = function () { const G = MODEL.G, BL = G && !G.E.length ? brLanes(G) : null;
     return pb() + sec('Braking and centrifugal', fld('Traffic', 'br.traffic', '', 'sel', { full: true, options: [['two', 'Two-way'], ['one', 'One-way'], ['future', 'Two-way, may become one-way']] }) + fld('Lanes in one direction (BR)', 'br.nBR', 'lanes') + `<div class="fld"><label>Suggested</label><div class="in"><input readonly tabindex="-1" value="${BL ? BL.sug + ' lane' + (BL.sug > 1 ? 's' : '') : '—'}"></div></div>`
       + fld('Curve radius (blank if straight)', 'br.Rc', 'ft') + fld('Design speed', 'br.Vd', 'mph') + fld('Center of curve', 'br.curveDir', '', 'sel', { options: [['left', 'To the left'], ['right', 'To the right']] }))
@@ -2135,9 +2173,38 @@ function phase5(k) {
       out.compR = { L: L.map(q => ({ ri: q.ri, fL: cr.fdn(q.RL.R), fT: cr.fdn(q.RT.R), cL: cr.con(q.RL.R), cT: cr.con(q.RT.R) })) }; }
     if (isMass() && SM.site.zone === 1 && (P.units[k].type === 'abut' || SM.site.As < 0.05)) { vL.fill(0); vT.fill(0); out.massExempt = P.units[k].type === 'abut' ? 'MassDOT 3.4.4.3: abutments in SDC A are not designed for seismic forces; only the connections are.' : 'MassDOT 3.4.4.4: in a \u201cLow\u201d SDC A site (A<sub>s</sub> < 0.05) substructures are not designed for seismic forces; only the connections are.'; }
     out.EQ = []; [[1, 0.3], [0.3, 1]].forEach(([a, b]) => [1, -1].forEach(sL => [1, -1].forEach(sT => out.EQ.push(vL.map((x, q) => sL * a * x + sT * b * vT[q])))));
+    if (SM.site.zone >= 3 && P.units[k].type !== 'abut') {   // CSH (2026-11-07): Zones 3 and 4, the elastic (R = 1) effects, shown next to the column shear (display only; plastic hinging forces of 3.10.9.4.3 are not computed)
+      const L1 = eqLoads(G, k, SM, () => 1), m1 = (fL, fT) => { const lc = { rows: S.rows.map(() => ({ Hn: 0, Ht: 0 })) }; L1.forEach(q => { const FL = fL * q.dL, FT = fT * q.dT; lc.rows[q.ri].Hn += FL * S.c - FT * S.s; lc.rows[q.ri].Ht += FL * S.s + FT * S.c; }); return lc; };
+      const eL = UMe.evalCase(m1(1, 0)), eT = UMe.evalCase(m1(0, 1)); out.EQ1 = []; [[1, 0.3], [0.3, 1]].forEach(([a, b]) => [1, -1].forEach(sL => [1, -1].forEach(sT => out.EQ1.push(eL.map((x, q) => sL * a * x + sT * b * eT[q]))))); }
   } catch (e) { out.err = e.message; }
   return (C[k] = out);
 }
+/* SMA (2026-11-07): seismic analysis method (Tables 4.7.4.3.1-1 and -2), γEQ and skew correction notes on the Summary tab */
+function seisMethod(G, UG, S0) {
+  const n = G.spans.length, Z = S0.zone, op = eqOpCat(), out = { n, iss: [] }; if (!(Z >= 2) || n < 2) return out;
+  const lim = { 2: [3, null], 3: [2, 4], 4: [2, 4], 5: [1.5, 3], 6: [1.5, 2] }[n];
+  if (!lim) out.iss.push(`${n} spans (regular bridges have 2 to 6)`);
+  else { let sr = 1; for (let i = 1; i < n; i++) sr = Math.max(sr, Math.max(G.spans[i], G.spans[i - 1]) / Math.min(G.spans[i], G.spans[i - 1]));
+    out.sr = sr; if (sr > lim[0] + 1e-9) out.iss.push(`span length ratio ${f2(sr)} > ${lim[0]}`);
+    if (lim[1]) { const ks = []; P.units.forEach((u, k) => { if (u.type !== 'abut') ks.push(unitLongK(G, UG, k, 'eq').k); }); let kr = 1;
+      for (let i = 1; i < ks.length; i++) { const a = ks[i], b = ks[i - 1]; if (a > 0 && b > 0 && isFinite(a) && isFinite(b)) kr = Math.max(kr, Math.max(a, b) / Math.min(a, b)); }
+      out.kr = kr; if (kr > lim[1] + 1e-9) out.iss.push(`pier stiffness ratio ${f2(kr)} > ${lim[1]} (longitudinal 3EI/h³ of adjacent piers)`); } }
+  const Rc = nz(P.br.Rc); if (Rc > 0) { const ang = G.L / Rc * 180 / Math.PI; out.ang = ang; if (ang > 90) out.iss.push(`subtended angle ${f0(ang)}° > 90°`); }
+  out.regular = !out.iss.length;
+  const T = { ordinary: [['SM/UL', 'SM'], ['SM/UL', 'MM'], ['SM/UL', 'MM']], recovery: [['SM/UL', 'MM'], ['MM', 'MM'], ['MM', 'MM']], critical: [['MM', 'MM'], ['MM', 'TH'], ['TH', 'TH']] };
+  out.req = T[op][Z - 2][out.regular ? 0 : 1]; out.ok = out.req === 'SM/UL'; return out;
+}
+{ const ck = checks; checks = function (G, UG) {
+    const C = ck(G, UG); if (G.E && G.E.length) return C; let S0 = null; try { S0 = eqSite(); } catch (e) { }
+    if (S0 && S0.ok) { try { const M = seisMethod(G, UG, S0), nm = { SM: 'the single-mode method', MM: 'a multimode analysis', TH: 'a time-history analysis' };
+        if (S0.zone >= 2 && M.n >= 2) C.push([M.ok ? 'pass' : 'warn', 'Seismic', `Analysis method (Tables 4.7.4.3.1-1 and -2): ${M.regular ? 'regular bridge' : 'irregular bridge (' + M.iss.join('; ') + ')'}, ${OPC_NAME[eqOpCat()]}, Zone ${S0.zone}: minimum ${M.req}. ${M.ok ? 'The uniform load method used here satisfies it.' : 'This app uses the uniform load method only; ' + nm[M.req] + ' is required. Use these seismic results as preliminary.'}`]);
+        if (S0.zone >= 3 && eqOpCat() === 'critical') C.push(['warn', 'Seismic', `Critical bridge in Zone ${S0.zone}: the minimum analysis is ${M.req === 'TH' ? 'time-history' : 'multimode'} (Table 4.7.4.3.1-1), and the column shear is governed by plastic hinging (3.10.9.4.3), which this app does not compute.`]);
+        if (!isMass() && gEQv() === 0) C.push(['info', 'Seismic', 'γ<sub>EQ</sub> = 0: no live load in Extreme Event I. γ<sub>EQ</sub> is project-specific (3.4.1); C3.4.1 notes 0.5 as reasonable for a wide range of ADTT. Confirm the value.']); } catch (e) { } }
+    try { const sk = (P.br.skews || []).some(x => Math.abs(nz(x)) > 0);
+      if (sk && P.br.skCorr !== 'yes') C.push(['warn', 'Live load', `Skewed supports: the skew correction of the bearing live load at the obtuse corner (Table 4.6.2.2.3c-1) is not applied${P.br.skOld ? ' (the project was saved before the correction existed)' : ''}. Set "Skew correction of bearing LL" on the Bridge tab to apply it.`]);
+      if (sk && P.br.skCorr === 'yes') { const bad = []; G.sup.forEach((S, k) => { if (!(Math.abs(nz(P.br.skews[k])) > 0)) return; const I = skewInfo(G, k, 0); if (I.range.length) bad.push(`${P.units[k].name}: ${I.range.join(', ')}`); });
+        if (bad.length) C.push(['warn', 'Live load', `Skew correction (Table 4.6.2.2.3c-1) outside its range of applicability, applied as computed: ${esc(bad.join('; '))}.`]); } } catch (e) { }
+    return C; }; }
 function supportLength(G, UG, SM) {   // 4.7.4.4
   const Z = SM.site.zone, As = SM.site.As, pct = Z === 1 ? (As < 0.05 ? 75 : 100) : 150, D = MODEL.dist, out = [];
   D.rows.filter(r => r.end).forEach(r => { const sg = D.segs[r.si], u = P.units[r.k], Ls = r.Ls;
@@ -2194,7 +2261,11 @@ function eqHtml() {
     ${N.map(n => `<tr><td class="lbl">${esc(P.units[n.k].name)}${G.sup[n.k].joint ? ', ' + G.sup[n.k].rows[n.ri].side : ''}</td><td class="val">${f1(n.Ls)}</td><td class="val">${f1(n.H)}</td><td class="val">${f1(n.Sk)}</td><td class="val">${f1(n.N)}</td><td class="val"><b>${f1(n.Nreq)}</b></td></tr>`).join('')}</tbody></table>
     <p class="note" style="padding:8px 0 0">L is the length of the deck to the adjacent expansion joint or the end of the bridge; H is the pier height, or for an abutment the average height of the piers to the next joint.</p></div></div>`;
   const defs = unitRes(k).UM.defs;
-  h += mxNote + `<div class="card"><div class="card-h"><h2>Effects at ${esc(u.name)}</h2><span class="sub">Design EQ, envelope of the 100/30 cases, unfactored (γ<sub>EQ</sub> = 1.0)</span></div><div class="card-b">${unitChips()}${respTable(defs, [{ t: 'EQ max' }, { t: 'EQ min' }], (d, q) => envRow(p5.EQ.map(v => v[q]), d), { skip: d => d.grp === 'Bearings' && !d.lat })}<p class="note" style="padding:8px 0 0">${SIGNS}</p></div></div>`;
+  h += mxNote + `<div class="card"><div class="card-h"><h2>Effects at ${esc(u.name)}</h2><span class="sub">Design EQ, envelope of the 100/30 cases, unfactored (γ<sub>EQ</sub> = 1.0)</span></div><div class="card-b">${unitChips()}${respTable(defs, [{ t: 'EQ max' }, { t: 'EQ min' }], (d, q) => envRow(p5.EQ.map(v => v[q]), d), { skip: d => d.grp === 'Bearings' && !d.lat })}<p class="note" style="padding:8px 0 0">${SIGNS}${S0.zone >= 3 ? ' Zones 3 and 4: the column, pile and wall shears here are elastic / R, <b>not capacity design</b>; see below.' : ''}</p></div></div>`;
+  if (S0.zone >= 3 && p5.EQ1) { const rows = defs.map((d, q) => ({ d, q })).filter(({ d }) => /^(Column|Pile)( \d+)?$|^Wall$/.test(d.grp) && /^V<sub>[tl]<\/sub>/.test(d.label));
+    const mxa = (arr, q) => Math.max(...arr.map(v => Math.abs(v[q])));
+    if (rows.length) h += `<div class="card"><div class="card-h"><h2>Column shear in Zones 3 and 4: not capacity design</h2><span class="sub">3.10.9.4.3: the shear from plastic hinging governs the column shear design; it is not computed by this app</span></div><div class="card-b tscroll"><table class="tbl"><thead><tr><th>Effect</th><th class="right">Design EQ, elastic / R (kip)</th><th class="right">Elastic, R = 1 (kip)</th></tr></thead><tbody>${rows.map(({ d, q }) => `<tr><td class="lbl">${esc(d.grp)}: ${d.label}</td><td class="val">${f1(mxa(p5.EQ, q))}</td><td class="val"><b>${f1(mxa(p5.EQ1, q))}</b></td></tr>`).join('')}</tbody></table>
+      <p class="note" style="padding:8px 0 0">Largest magnitude of the 100/30 cases, unfactored. The design column shear in Zones 3 and 4 is the lesser of the elastic (R = 1) shear and the shear from the plastic hinging forces (3.10.9.4.2, 3.10.9.4.3); until the overstrength moment capacity is checked, the R = 1 value is the bound to design for. The combinations use elastic / R.</p></div></div>`; }
   return h;
 }
 
@@ -2238,10 +2309,11 @@ function eqZoneCard(S0) {
   TABS.forEach(t => { if (t !== '|' && t[0] === 'eq') t.length = 2; });
   const rt = renderTab; renderTab = function () { const id = P.ui.tab, el = document.getElementById('tab-' + id); if (id === 'eq' && el) { el.innerHTML = eqHtml(); return; } rt(); };
   const rc = recompute; recompute = function () { MODEL.cache5 = null; MODEL.seis = null; rc(); };
-  const dp = defP; defP = function () { const p = dp(); Object.assign(p.br, { lat: '', lon: '', siteClass: 'D', pga: '', ss: '', s1: '', Fpga: '', Fa: '', Fv: '', opClass: 'other', gEQ: 0, usgs: null,
+  const dp = defP; defP = function () { const p = dp(); Object.assign(p.br, { lat: '', lon: '', siteClass: 'D', pga: '', ss: '', s1: '', Fpga: '', Fa: '', Fv: '', opClass: 'other', gEQ: 0.5, usgs: null,
     eqSa: SA_T.map(() => ''), eqSiteClass: '', eqVs: 'auto', eqOpCat: 'ordinary' }); return p; };   // 10th Ed. (2026-10-19): eqSa / eqSiteClass / eqVs / eqOpCat; the AASHTO-2009 keys stay for older files
   /* files saved before the 10th Ed. ground motion (no br.eqSa): the AASHTO-2009 values stay stored and are not converted (the table starts
      blank, so no earthquake load until it is entered); the operational class is renamed: essential → recovery, other → ordinary (same R) */
+  { const m1 = migEHEQ; migEHEQ = function (j) { m1(j); if (j && j.br) { if (j.br.gEQ === undefined) j.br.gEQ = 0; if (j.br.skCorr === undefined) { j.br.skCorr = 'no'; j.br.skOld = 1; } } return j; }; }   // GEQ / SKC (2026-11-07): a save without γEQ keeps the old default 0; a save from before the skew correction opens with it off (flagged)
   const m0 = migEHEQ; migEHEQ = function (j) { m0(j); if (j && j.br && j.br.eqSa === undefined) Object.assign(j.br, { eqSa: SA_T.map(() => ''), eqSiteClass: '', eqVs: 'auto', eqOpCat: OPC_OLD[j.br.opClass] || 'ordinary' }); return j; };
   const pb = paneBridge; paneBridge = function () { const b = P.br, S0 = eqSite(), sa = b.eqSa || [];
     const half = Math.ceil(SA_T.length / 2), cell = i => i < SA_T.length ? `<td class="lbl">${SA_T[i]}</td><td><input data-k="br.eqSa.${i}" data-kind="num" value="${esc(sa[i] == null ? '' : sa[i])}" aria-label="Sa at T = ${SA_T[i]} s"></td>` : '<td></td><td></td>';
@@ -2252,7 +2324,7 @@ function eqZoneCard(S0) {
       + `<div class="fld full"><label for="eq-paste">Paste the AASHTO-USGS S<sub>a</sub> table for the site (22 periods, 0 to 10 s)</label><div class="in"><textarea id="eq-paste" placeholder="0&#9;0.180&#10;0.01&#9;0.182&#10;…&#10;10&#9;0.011"></textarea></div></div>
       <div class="fld full" style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn btn-sm" id="eq-parse">Read pasted table</button><button type="button" class="btn btn-sm" id="eq-clear">Clear table</button></div>`
       + tab
-      + fld('Operational category (3.10.5)', 'br.eqOpCat', '', 'sel', { options: [['ordinary', 'Ordinary'], ['recovery', 'Recovery'], ['critical', 'Critical']] }) + fld('γ<sub>EQ</sub> on live load', 'br.gEQ')
+      + fld('Operational category (3.10.5)', 'br.eqOpCat', '', 'sel', { options: [['ordinary', 'Ordinary'], ['recovery', 'Recovery'], ['critical', 'Critical']] }) + fld('γ<sub>EQ</sub> on live load', 'br.gEQ', '', 'num', { title: 'Project-specific (3.4.1); C3.4.1 notes 0.5 as reasonable for a wide range of ADTT. New projects: 0.5. MassDOT: 0 (3.4.3.3).' })
       + fld('R for pier foundations and bearings, Zones 2 to 4', 'br.eqCompR', '', 'sel', { full: true, title: 'By component: pier foundations R/2, not less than 1.0, in Zone 2 (3.10.9.3) and R = 1.0 in Zones 3 and 4 (3.10.9.4.2); pier bearings R = 0.8 (Table 3.10.7.1-2). Unit R: the R of Table 3.10.7.1-1 for every effect.', options: [['code', 'By component (code)'], ['unit', 'Unit R for every effect']] }))
       + `<p class="note">S<sub>a</sub> values from the AASHTO-USGS Seismic Design Ground Motion Database for the site class (3.10.4.1, <a href="https://doi.org/10.5066/F7NK3C76" target="_blank" rel="noopener">database</a>): paste them (period and value per line, tab, comma or space separated, or the 22 values in period order) or type them in the table. ${S0.ok ? `A<sub>s</sub> = ${f3(S0.As)}, S<sub>D1</sub> = ${f3(S0.SD1)}: Zone ${S0.zone} (${eqLnk('worked on the Seismic tab')}).` : `${S0.nOk} of 22 values entered${S0.sc ? '' : '; select the site class'}${S0.sc === 'F' && S0.vsAuto ? '; site class F: choose the v<sub>s</sub> range' : ''}. No earthquake load until the table is complete.`} ${S0.legacy ? `<b>Older AASHTO-2009 input kept, not used:</b> PGA ${esc(b.pga)}, S<sub>s</sub> ${esc(b.ss)}, S<sub>1</sub> ${esc(b.s1)}, site class ${esc(b.siteClass || '—')}${b.opClass ? `, operational class ${esc(b.opClass)} (now ${esc(OPC_NAME[eqOpCat()])})` : ''}.` : ''} γ<sub>EQ</sub> is 0.0 unless the owner sets it (3.4.1).</p>`; };
   const mh = manualHtml; manualHtml = function () { return mh().replace('<h3>Drawings and DXF</h3>', `<h3>Seismic (Phase 5)</h3><ul>
@@ -3934,6 +4006,7 @@ function slrModel() {
         fam('DW', 'DW, wearing surface and utilities', SLR_AA + 'Art. 3.5.1', 'girder DW reactions of the Reactions tab', [{ v: D.DW }]);
         if (D.UF) fam('UF', 'Future utility allowance', 'MassDOT LRFD Bridge Manual', 'Dead load tab', [{ v: D.UF }]); }
       if (LLr) { const w = slrTopic(LT, 'LL', 'LL + IM (HL-93, lanes stepped across the roadway, multiple presence)', SLR_AA + 'Art. 3.6.1');
+        if (LLr.skew) LLr.skew.rows.forEach((I, i) => w.add({ id: 'skf' + i, label: 'Skew correction of the bearing LL + IM at the obtuse corner (G' + LLr.skew.js.map(j => j + 1).join(', G') + '), θ = ' + slrN(I.th, 1) + '°, L = ' + slrN(I.L, 1) + ' ft' + (I.range.length ? '; outside the range of applicability: ' + I.range.join(', ') : ''), sym: 'f_{skew}', eq: '1.0 + 0.20\\left(\\frac{12.0 L t_{s}^{3}}{K_{g}}\\right)^{0.3}\\tan\\theta', sub: '1.0 + 0.20\\cdot ' + slrN(I.term, 3) + '\\cdot ' + slrN(Math.tan(rad(I.th)), 3), value: I.f, unit: '', d: 3, ref: SLR_AA + 'Table 4.6.2.2.3c-1', note: (I.est ? 'K_g = ' + slrN(I.Kg, 0) + ' in⁴ estimated from the girder shape (n = ' + slrN(I.est.n, 2) + ')' : I.Kg ? 'K_g = ' + slrN(I.Kg, 0) + ' in⁴ entered' : 'K_g unknown: bracket taken as 1.0') + '; worked on the ' + slrTab('ll', k) }));
         qs.forEach(([nm, sym, q]) => { const d = defs[q], dd = d.u === 'kip-ft' ? 0 : 1, b = LLr.best[q], base = sym.replace(/_\{([^}]*)\}$/, '_{$1,LL}').replace(/^P$/, 'P_{LL}');
           [['max', 'largest'], ['min', 'smallest']].forEach(([s, t]) => { const a = b[s]; w.add({ id: nm + s, label: slrPlain(d.label) + ', ' + t + ': ' + a.m + ' lane(s) loaded, m = ' + slrN(MPF(a.m || 1), 2) + (d.noIM ? ', no IM' : ', IM ' + slrN(nz(P.br.IM), 0) + ' %'), sym: base, eq: '', sub: '', value: a.v, unit: d.u, d: dd, note: 'influence lines on the line model of the spans; ' + LLr.pSteps + ' lane positions × ' + LLr.eSteps + ' load positions in each lane (Live load tab)' }); }); }); }
       if (p3 && !p3.err) { fam('BR', 'Braking BR', SLR_AA + 'Art. 3.6.4', 'Braking and centrifugal tab; segment force × the unit share f_L of the Force distribution tab, 6 ft above the deck', p3.BR.map((v, i) => ({ v, nm: i ? 'toward back' : 'toward ahead' })));
