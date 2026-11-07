@@ -6404,7 +6404,7 @@ index 50f3837..c2d5000 100644
   - `seyW` (Seymour, d_w = 1 ft): 6.72 → 6.18. Seymour as saved (no water table): not applicable, unchanged.
 - **Saved data:** none. **Other copies:** none.
 
-## 2026-11-07 — PR: claude/sf-m7-vesic-local (SFVL: Vesić bearing option "Local / punching shear" with c* = 0.67c, φ* = tan⁻¹(0.67 tan φ), AASHTO LRFD 10th 10.6.3.1.2b; warning when φ < 30° in general shear; option default "general": results unchanged)
+## 2026-11-07 — PR: claude/sf-m7-vesic-local (PR #1033: https://github.com/mlococo88/All-Structural/pull/1033) (SFVL: Vesić bearing option "Local / punching shear" with c* = 0.67c, φ* = tan⁻¹(0.67 tan φ), AASHTO LRFD 10th 10.6.3.1.2b; warning when φ < 30° in general shear; option default "general": results unchanged)
 
 - **Problem:** Vesić mode had no local or punching shear failure mode. AASHTO LRFD 10th Ed. 10.6.3.1.2b requires reduced strength parameters where such a failure is possible (loose or compressible soils, weak soils under slow loading, dense sand under deep footings with high loads; Fig. C10.6.3.1.2b-1).
 - **Where / exact code (`Spread Footing.html`):**
