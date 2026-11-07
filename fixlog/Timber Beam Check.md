@@ -2025,7 +2025,7 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
 - **Other copies:** none.
 - **Open items:** the E<sub>y,min</sub> values need checking against the printed Supplement (engineer).
 
-## 2026-11-07 — PR: claude/timber-flat-e (TBF1: Table 4D flat use of Beams and Stringers, E and E<sub>min</sub> factor)   [calc change] [MORE conservative]
+## 2026-11-07 — PR: claude/timber-flat-e (PR #1014: https://github.com/mlococo88/All-Structural/pull/1014) (TBF1: Table 4D flat use of Beams and Stringers, E and E<sub>min</sub> factor)   [calc change] [MORE conservative]
 
 Line numbers are approximate; search for the anchor text. Code sites are tagged `TBF1`.
 
