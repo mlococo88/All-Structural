@@ -4406,7 +4406,6 @@ Review Phase 8, PR 8c. Engineer decisions 2026-11-07 (review Q11–Q15, taken as
 +    if (iS >= 0) secs[iS].subs.unshift(sub('Pile-supported footing: soil checks not applicable', [{ type: 'note', text: 'The footing is on piles. The overturning, sliding, eccentricity and soil-bearing steps of this section are shown for information only and are not checks; the piles carry the wall (next section). The earth pressures and the factored loads of this section are used.' }]));
 +  }
 ```
-<<<<<<< HEAD
 
 ## 2026-11-07 — PR: claude/rw-pile-8d-footing — Pile-supported footing, Phase 8d: heel and toe designed from the factored pile-row reactions, bottom cover over the pile heads, punching around the piles, ACI cap depth (RWPL; calculation change in pile mode only)
 
@@ -4502,8 +4501,6 @@ Review Phase 8, PR 8d. Code sites are tagged `RWPL`. Spread-footing results are 
 - **Decision (pending engineer review):** the ACI 318-19 Table 22.6.5.2 and §13.3.1.2 citations are from the standard; the ACI PDF text was not readable in this session. AASHTO 5.12.8.6.1 / 5.12.8.6.3 were verified.
 - **Decision (pending engineer review):** the heel bottom bars when piles lift the heel (M_u < 0) follow the existing heel logic (bars for |M_u|, the face shown on the tab). The Drawings still draw F1 at the top. This is to be detailed in 8e.
 - Next steps: 8e (Drawings loads sheet with the pile reactions, bottom mat above the pile heads in the sheets, pile schedule), 8f (Pile Designer hand-off).
-=======
->>>>>>> origin/main
 
 ### Before / after (code, `git diff -U0` of `Retaining Wall Designer.html` against main after 8c)
 ```diff
