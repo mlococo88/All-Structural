@@ -772,7 +772,7 @@ function computeEDM(loadsOverride){
   // applicability warnings
   if(!R.anc.anchored&&isFinite(ancDC)&&ancDC>1.0001) warn("Anchorage: H = "+fmt(Hanc)+" kip > P_min/5 = "+fmt(PminUsed/5)+" kip — slip check: the pad must be secured against horizontal movement [AASHTO "+R.anc.ref+"].");
   if(R.res&&!R.res.anchored&&R.res.dc>1.0001) warn("Restraint: θs/n = "+fmt(R.res.lhs,5)+" ≥ 3εa/Si = "+fmt(R.res.rhs,5)+" — a restraint system is required for a bearing without bonded external plates [AASHTO 14.7.5.4].");
-  if(ltMult>1) warn("Low-temperature design option (14.7.5.2): H<sub>bu</sub> = "+ltMult+" × the 14.6.3.1 force. The pad sent to the Abutment app carries this factor as Gmult; the Abutment app does not apply it — multiply its pad shear forces by "+ltMult+".");   // L11
+  // L11: the "Abutment app does not apply Gmult" warning removed 2026-11-07 (EGM): the Abutment app applies PAD.Gmult to its TU and CR·SH pad forces
   if(gs_cy>0.10+1e-9) warn("Cyclic shear movement Δ<sub>s,cy</sub> = "+fmt(+L.deltaScy,3)+" in exceeds 0.10 h<sub>rt</sub> = "+fmt(0.10*hrt,3)+" in — high-cycle shear above about ±0.10 h<sub>rt</sub> is not recommended [C14.7.5.3.2].");   // L4
   if(sigDL<0.2) warn("Practice guidance (not an AASHTO or MassDOT limit): dead-load stress σ_DL = "+fmt(sigDL)+" ksi < 0.20 ksi — a lightly loaded pad may walk; consider a smaller pad or securing it.");   // L7: relabelled as guidance
   // L1 (2026-11-07): inclination of the underside of the girder under full permanent load above 0.01 rad → tapered (beveled) plate [14.8.2; MassDOT §3.5.7.6 / .8: 1 % bevel threshold]
@@ -1568,11 +1568,10 @@ function applyHandoff(p){ if(!p)return;
 function edmIsOwnG(g){ try{ const c=S.coef, mB=(S.method==="B"&&!isPlain()), lm=1, own=lm*(mB?(+S.mat.G)*(1+Math.max(0,+c.GvarB||0)):+c.GmaxA); return isFinite(own)&&Math.abs(g-own)<5e-4; }catch(e){ return false; } }
 /* L8 (2026-11-07): no pad is sent while an input error stands (the results are not valid); PAD.pass also requires no input error.
    L11: PAD.G stays the 14.6.3.1 G (the abutment validates G ≤ 0.30 ksi, so a G × 2 or × 4 would be refused there); the new field Gmult carries the
-   14.7.5.2 multiplier and Hbu includes it. The abutment does not apply Gmult yet (open item): a warning says so when it is above 1. */
+   14.7.5.2 multiplier and Hbu includes it. EGM (2026-11-07): the abutment applies Gmult to its TU and CR·SH pad forces (the warning and the alert on send removed). */
 function sendPadBack(){ const R=LAST;
   if(R&&R.nInErr){ alert("Not sent: "+R.nInErr+" input error(s) — the results are not valid. Correct the inputs (see Warnings & Assumptions) and send again."); document.getElementById("saveStatus").textContent="pad not sent (input errors)"; return; }
   const payload={app:"abutment-edm",type:"PAD",payload:{G:R.anc.G,Gmult:R.lowT.mult,Gspec:+S.mat.G,Gmin:R.Grange.mB?R.Grange.Gmin:+S.coef.GminA,Gmax:R.anc.G,H:R.anc.H,Hbu:R.Hbu,hrt:R.hrt,padL:isCirc()?null:+S.geom.L,padW:isCirc()?null:+S.geom.W,D:isCirc()?+S.geom.D:null,A:R.A,shape:isCirc()?"circular":"rectangular",nBrgPerGird:1,pass:R.nFail===0&&!R.nInErr,govDC:Math.max(...R.dash.map(d=>d.dc||0))}};   // circular: D and plan area A = πD²/4
-  if(R.lowT.mult>1) alert("Low-temperature design option (14.7.5.2): the substructure shear force is "+R.lowT.mult+" × the 14.6.3.1 force (H_bu = "+fmt(R.Hbu)+" kip per bearing). The Abutment app computes its pad force from G alone and does not apply this factor: multiply its TU and CR·SH pad forces by "+R.lowT.mult+".");
   if(window.opener&&!window.opener.closed){ window.opener.postMessage(payload,"*"); document.getElementById("saveStatus").textContent="pad sent to Abutment"; }
   else if(window.__abutSource){ window.__abutSource.postMessage(payload,"*"); document.getElementById("saveStatus").textContent="pad sent to Abutment"; }
   else { const blob=new Blob([JSON.stringify(payload.payload,null,2)],{type:"application/json"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="edm_pad_result.json"; a.click(); URL.revokeObjectURL(a.href); document.getElementById("saveStatus").textContent="no linked window — pad exported as JSON"; }

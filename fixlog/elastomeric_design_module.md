@@ -1586,3 +1586,14 @@ Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.4.2.1 (L2), C14.8.3.1 (L3), 14.7.5.3.
 - **L10:** `tog.fixedShear` comment corrected (it affects only the Method B stability equation; the old comment said Method A stress); the label reads "Bridge deck fixed against horizontal translation (Method B stability, Eq. 14.7.5.3.4-5)" with a tooltip paraphrasing C14.7.5.3.4 (a bearing restrained elsewhere on the bridge counts as fixed). Same wording in the Report settings table.
 - **How verified:** check-syntax pass; headless main-vs-branch probe (27 scenarios): every computed value and dashboard item identical; only the warning texts above change; 0 console errors. `tests/smoke/project-library.mjs --tool edm`: ALL PASS. `tests/compare.mjs --tool page`: text only.
 - **Saved data:** none changed. **§4:** no formula, factor or result change (labels and warnings only).
+
+## 2026-11-07 — PR: claude/abut-pad-gmult (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (EGM, closes the L11 open item of #1095: the Abutment app applies `Gmult`)   [warning / alert text only; no computed value changes in this tool]
+
+- **Problem:** the L11 warning and the alert on "↩ Send Pad to Abutment" said the Abutment app does not apply `Gmult`. The abutment now multiplies its TU and CR·SH pad forces by `PAD.Gmult` (see `fixlog/abutment_calculator.md`, same PR; AASHTO LRFD 10th Ed. Art. 14.7.5.2, Table 14.7.5.2-1).
+- **computeEDM** (applicability warnings), before:
+  `if(ltMult>1) warn("Low-temperature design option (14.7.5.2): H<sub>bu</sub> = "+ltMult+" × the 14.6.3.1 force. The pad sent to the Abutment app carries this factor as Gmult; the Abutment app does not apply it — multiply its pad shear forces by "+ltMult+".");   // L11`
+  After: removed (a comment line `// L11: the "Abutment app does not apply Gmult" warning removed 2026-11-07 (EGM) …` in its place). The H_bu block still shows the multiplier (lowTNote, hbuEq).
+- **sendPadBack**, before: `if(R.lowT.mult>1) alert("Low-temperature design option (14.7.5.2): the substructure shear force is "+…+" × the 14.6.3.1 force … multiply its TU and CR·SH pad forces by "+R.lowT.mult+".");` After: removed. The PAD payload (`Gmult:R.lowT.mult`) is unchanged; the L8/L11 comment above `sendPadBack` updated.
+- **Check case:** default pad, low-temperature option "no slider" (×4): before, one warning about the Abutment app and an alert on send; after, neither; H_bu unchanged (sent pad: G = 0.1495 ksi, h_rt = 3.50 in; H_bu = 6.83 kip ×1, 13.65 kip ×2, 27.31 kip ×4); the abutment receives Gmult = 4 and its H_TU becomes 4 × 23.49 = 93.96 kip.
+- **How verified:** check-syntax; project-library edm ALL PASS; headless round trip (×1, ×2, ×4): no warning naming the Abutment app, no dialogs, 0 console errors.
+- **Saved data:** none changed.
