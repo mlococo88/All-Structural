@@ -3784,3 +3784,81 @@ Calculation audit, item 9 (3). Engineer decision (2026-11-07). Code sites are ta
 
 ### Saved data
 - No input or format change. Old projects with k_h > 0 get the stem seismic combination; their stem results can change (ACI).
+
+## 2026-11-07 — PR: claude/rw-aci-uplift-split — ACI footing design with water: the uplift is split out of the factored base pressure, γ_U = 1.6 for the toe and 0.9 for the heel (ACI 318-19 §5.3.8) (RWUP; calculation change)
+
+Calculation audit, item 1 follow-up (#942 added a display note, RWUPN). Engineer answer (2026-11-07): split the uplift out, 1.6 where it adds to the effect (toe), 0.9 where it is permanent and counteracts (heel downward load), in U = 1.2D + 1.6H and 0.9D + 1.6H. Code sites are tagged `RWUP`.
+
+**Provision checked in the PDF:** the load-factor rule for H is ACI 318-19 **§5.3.8** (a) 1.6 where H adds to the primary effect, (b) 0.9 where it is permanent and counteracts, (c) 0 where it is not permanent and counteracts; R5.3.8 says H covers water in soil. §5.3.9 (named in the request) is the flood-load provision, so §5.3.8 is cited.
+
+### RWUP-1. `calcAll`, footing heel and toe (ACI with water only)   [§4]
+- **Where:** after `const bqm_back  = isAASHTO ? aashtoR.quIa_back  : quf_back_min;` — new `upS`, `rwUpSplit(V, M, g, lbl)`, `rwUpSoilAt(sp, x)`, `rwUpMember(sp, xf, xt)`; `heelCase(..., up)` and `toeCase(q0, qL, up)` take the split; return adds `upS, hcG_up, tcG_up`.
+- **Before:** heel and toe were designed for the total factored base-pressure trapezoid of each combination (soil + water together, built from ΣV_u with no −U), with the edge pressures interpolated linearly between the toe and the heel end.
+- **After (only when `!isAASHTO && F_uplift > 0`):** for each combination (ΣV_u, M_u = M_s,u − M_o,u about the toe, as before):
+  - soil reaction V_s = ΣV_u − γ_U·U, x̄_s = (M_u − γ_U·U·x_U)/V_s, e_s = B/2 − x̄_s;
+  - soil pressure: full contact when |e_s| ≤ B/6 (q = V_s/B(1 ± 6e_s/B)); otherwise a triangular block of length L_c = 3x̄_s from the toe (or 3(B − x̄_s) from the heel end), peak 2V_s/L_c;
+  - water pressure on the member: γ_U·γ_w·h_w (uniform) or γ_U·γ_w·h_w·x/B (triangular);
+  - member force and moment about the stem face from the linear pieces: F = (q_a + q_b)(s₂ − s₁)/2, M = (s₂ − s₁)[q_a(2s₁ + s₂) + q_b(s₁ + 2s₂)]/6;
+  - **toe γ_U = 1.6** (§5.3.8(a)); **heel γ_U = 0.9** (§5.3.8(b)); the two combinations are enveloped as before; heel M_u = M_down − M_up, V_u = |w_u L_h − F_up|; toe M_u = M_up − w_sw L_t²/2, V_u = F_up − w_sw L_t.
+  - V_s ≤ 0, or the soil resultant outside the base: a warning; the soil reaction is taken at the toe tip (toe) or as zero on the member (heel, and the toe when the resultant is beyond the heel end).
+- In full contact the split gives the same pressure as before (results equal to round-off, ≤ 1e-11). AASHTO mode and walls without water: unchanged.
+- **Before / after (core):**
+```diff
+-  const hcMax = heelCase(gEV, gDC, gES, gLS, bq_back, bq_heel);
++  const hcMax = heelCase(gEV, gDC, gES, gLS, bq_back, bq_heel, upS ? upS.heelMax : null);   // RWUP
+-                         : heelCase(0.9, 0.9, 0, 0, bqm_back, bqm_heel);
++                         : heelCase(0.9, 0.9, 0, 0, bqm_back, bqm_heel, upS ? upS.heelMin : null);
+-    const Mup = q0 * inp.Lh ** 2 / 2 + (qL - q0) * inp.Lh ** 2 / 3;
++    if (up) { q0 = up.q0; qL = up.qL; }
++    const Mup = up ? up.M : q0 * inp.Lh ** 2 / 2 + (qL - q0) * inp.Lh ** 2 / 3;
++    const Fup = up ? up.F : ((q0 + qL) / 2) * inp.Lh;
+-             Vstd: Math.abs(wu * inp.Lh + gEVc * V_wedge_heel - ((q0 + qL) / 2) * inp.Lh),
++             Vstd: Math.abs(wu * inp.Lh + gEVc * V_wedge_heel - Fup),
+-  const tcMax = toeCase(bq_front, bq_toe), tcMin = toeCase(bqm_front, bqm_toe);
++  const tcMax = toeCase(bq_front, bq_toe, upS ? upS.toeMax : null), tcMin = toeCase(bqm_front, bqm_toe, upS ? upS.toeMin : null);   // RWUP
+-             M: n0 * inp.Lt ** 2 / 2 + (nL - n0) * inp.Lt ** 2 / 3,
+-             V: Math.max(0, n0 * inp.Lt + (nL - n0) * inp.Lt / 2) };
++             M: up ? up.M - wu_toe_down * inp.Lt ** 2 / 2 : n0 * inp.Lt ** 2 / 2 + (nL - n0) * inp.Lt ** 2 / 3,
++             V: Math.max(0, up ? up.F - wu_toe_down * inp.Lt : n0 * inp.Lt + (nL - n0) * inp.Lt / 2) };
+```
+  (`rwUpSplit` / `rwUpMember` are new code; see the file at the `RWUP` tag.)
+
+### RWUP-2. Display
+- Footing tab: the RWUPN note on "Factored Loads on Footing" is rewritten (the uplift is now split out; γ_U 1.6 toe / 0.9 heel). Heel Step 1 / Toe Step 1: V_s, x̄_s, e_s, soil pressure (or L_c and peak), water pressure, q(0) and q(L) = soil + water. Heel Step 2 / Toe Step 2: M_soil, M_water, M_up worked, then M_u and V_u. New helpers `rwUpSteps(r, up, mem)` and `rwUpTabEq(st)` (one step list for the tab and the Report).
+- Stability Step 7 (ACI): a note that these are total pressures and the uplift is split for the heel and toe, with links (new card keys `ftgHeelUp`, `ftgToeUp`).
+- Report: Heel Step 1–2 and Toe Step 1–2 carry the same steps (ids `u*`); the Step 7 note; the heel/toe "q_u from" notes point to ΣV_u.
+- Heel / toe shear and moment charts (`plotHeelSM`, `plotToeSM`): use the pieces (`rwUpBeyond`). The schematic SVG diagrams in the Analysis tab still draw the end pressures linearly (annotated values are the design values).
+
+### Check cases (ACI default wall: H_s 12, t_f 1.5 ft, L_t 3, L_h 8, B 12.5 ft)
+- **Water 6 ft below the top (default water case), uniform or triangular:** unchanged. Toe M_u 7325, heel 19032 lb-ft/ft (full contact: split = total).
+- **Water 2 ft below the top, triangular uplift** (h_w = 11.5 ft, U = ½(62.4)(11.5)(12.5) = 4485 lb/ft at x_U = 8.333 ft):
+  - Toe, U = 0.9D + 1.6H governs: V_s = 15644 − 1.6(4485) = 8468; x̄_s = (72958 − 1.6(4485)(8.333))/8468 = 1.554 ft; e_s = 4.696 > B/6 = 2.083 → L_c = 4.662 ft, q_s,toe = 2(8468)/4.662 = 3633.2 psf; at the stem face q_s = 1295.0. Water 1.6(62.4)(11.5) = 1148.2 psf at the heel end → 275.6 psf at the face, 0 at the tip.
+    M_soil = 3²/6 (1295.0 + 2·3633.2) = 12842; M_water = 3²/6 (275.6) = 413; M_up = 13256; M_u = 13256 − 202.5(3²)/2 = **12344** (was **9250**, 1.2D + 1.6H total trapezoid). V_u 5998 → 7198. F2 stays #4 @ 6.
+  - Heel, U = 0.9D + 1.6H governs: V_s = 15644 − 0.9(4485) = 11608; x̄_s = 3.387; e_s = 2.863 → L_c = 10.162, peak 2284.5; at the back face 1272.9 psf, contact ends 5.662 ft into the heel. Water 0.9(62.4)(11.5) = 645.8 psf at the heel end → 232.5 at the face.
+    M_soil = 5.662²/6 (1272.9) = 6802; M_water = 8²/6 (232.5 + 2·645.8) = 16258; M_up = 23060; M_down = 50832; M_u = **27772** (was **28267**). F1 stays #5 @ 8.
+- **Water 2 ft, uniform uplift:** toe 9250 → 9377 (the 0.9D + 1.6H toe case has no soil equilibrium at γ_U 1.6 → warning, V_s at the toe tip, does not govern); heel 28267 → 27431.
+- **Audit wall `aci_mix`** (water 6 ft, k_h 0.15, column, β 10°, q_s 250, key 18 in, passive): heel M_u 10254 → **25412** (F1 #4 @ 6 unchanged; A_s,req 0.389 → 0.390); toe 41177 → 41228. Most of the heel change is the soil block: e_u,min = 2.576 > B/6, and the total trapezoid used before spread the triangle over the whole base (see open item).
+
+- **Audit wall `aci_tall_seis`** (H_s 28 ft, water 10 ft below the top, k_h 0.15): in U = 0.9D + 1.6H the soil resultant at γ_U = 1.6 falls beyond the toe (warning), so V_s is taken at the toe tip: toe M_u 103657 → **129214**, F2 #6 @ 6 → **#7 @ 7**; heel 353922 → 352930 (F1 unchanged); heel V_u 33949 → 38264 (the wall already failed heel and toe shear).
+- **Water 4 ft, uniform:** toe 8089 → 8939 (0.9D + 1.6H now governs), heel 22687 unchanged to round-off.
+
+### How verified
+- origin/main vs branch, headless Chromium (`_R`, Export JSON, localStorage, tabs, Report): the twelve audit walls + water 2 ft triangular / uniform + water 4 ft uniform.
+  - Walls without water and AASHTO walls: `_R` differs only by the new `upS` / `hcG_up` / `tcG_up` (null); tabs and Report identical.
+  - `aci_water_uni` (6 ft): values equal to round-off (≤ 1e-11); text differs by the new worked steps.
+  - `aci_water_tri`, `aci_mix`, 2 ft / 4 ft walls: only the heel and toe design values move, as above. Stability is unchanged.
+  - 0 console errors.
+- Hand check above reproduced in Node with the tool's own `calcAll`.
+- Tests: check-syntax; smoke/retaining-wall-checks (table `AUD`: RWUP 2 ft triangular, 6 ft, no water, AASHTO); phone-layout rwall 390/768; project-library retwall; dxf-print-sheets rw.
+
+### Decisions (pending engineer review)
+- §5.3.8 cited (the request named §5.3.9, which is the flood provision).
+- When the soil reaction alone leaves the middle third, the split uses the statically consistent triangular block (L_c = 3x̄_s). The total trapezoid that is still used without water interpolates the edge pressures over the whole base B, which overstates the upward pressure under the heel (unconservative heel, slightly conservative toe). Not changed for walls without water (open item below).
+- No envelope with the old total-pressure method: the heel at γ_U = 0.9 can come out slightly lower than before in partial contact (2 ft triangular: 28267 → 27772), as the engineer's factors give.
+- No equilibrium under a combination (V_s ≤ 0, or soil resultant outside the base): warning; the toe takes V_s at its tip (upper bound), the heel takes no soil relief.
+
+### Open item (raised, not changed)
+- ACI factored trapezoids without water (`qu_toe`/`qu_heel`, `qu_toe_min`/`qu_heel_min`) and the edge values `quf_front`/`quf_back`: with e_u > B/6 the pressure at the stem faces is interpolated linearly from the toe to the heel end, not over the contact length 3x̄_u. Unconservative for the heel (e.g. `aci_mix` with the water removed). Fix to the same block as RWUP?
+
+### Saved data
+- No input or format change.
