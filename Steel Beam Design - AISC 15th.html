@@ -1367,6 +1367,10 @@ function evalVM(X,R,fac){
   });
   return{V,M};
 }
+/* L6 (2026-11-07): IBC 2018 Table 1604.3 footnote i: for a cantilever member the length l in the deflection limit is
+   twice the cantilever length. A span with a free end node is a cantilever. Before: l = the cantilever length (2x stricter). */
+function cantSpanF(i){const nd=S.geom.nodes,n=S.geom.spans.length;
+  return(i===0&&nd[0]&&nd[0].t==='free')||(i===n-1&&nd[n]&&nd[n].t==='free');}
 /* Station list (Seam B): union of uniform grid, node points, load points ±ε
    (so shear discontinuities are captured exactly, fixing the grid-clipping
    defect of the predecessor app), distributed-load ends, and user stations. */
@@ -1527,8 +1531,8 @@ function computeAll(){
         const xa=res.nX[i],xb=res.nX[i+1];
         let dm=0,dx=xa;
         dc.xs.forEach((x,k)=>{if(x>=xa-1e-9&&x<=xb+1e-9&&Math.abs(dc.d[k])>Math.abs(dm)){dm=dc.d[k];dx=x;}});
-        const lim=c.den>0?sp.L/c.den:null;   /* ft — per-span length (defect fix) */
-        perSpan.push({span:i,dmax:dm,x:dx,lim,ratio:lim?Math.abs(dm)/lim:null,
+        const cant=cantSpanF(i),lim=c.den>0?(cant?2:1)*sp.L/c.den:null;   /* ft — per-span length (defect fix); L6: 2L for a cantilever */
+        perSpan.push({span:i,dmax:dm,x:dx,lim,cant,ratio:lim?Math.abs(dm)/lim:null,
           pass:lim?Math.abs(dm)<=lim*1.0001:null});
       });
     }
@@ -5893,7 +5897,8 @@ function buildMemDeflSection(pg){
         ['1728','ft\u00B3/in\u00B3','unit conversion (w in kip/ft, L in ft)']]}));
     if(r.lim!=null){
       body.appendChild(eqBlock({title:'Limit and demand/capacity ratio',ref:'IBC Table 1604.3 convention',
-        lines:['\\Delta_{allow}=\\tfrac{L}{'+r.den+'}=\\tfrac{'+fmt(r.L,2)+'\\times 12}{'+r.den+'}='+fmt(r.lim,4)+'\\ \\text{in}',
+        lines:[r.cant?'\\Delta_{allow}=\\tfrac{2L}{'+r.den+'}=\\tfrac{2\\times '+fmt(r.L,2)+'\\times 12}{'+r.den+'}='+fmt(r.lim,4)+'\\ \\text{in}\\quad\\text{(cantilever: IBC 2018 Table 1604.3 footnote i)}':
+          '\\Delta_{allow}=\\tfrac{L}{'+r.den+'}=\\tfrac{'+fmt(r.L,2)+'\\times 12}{'+r.den+'}='+fmt(r.lim,4)+'\\ \\text{in}',
           '\\text{DCR}=\\tfrac{\\Delta}{\\Delta_{allow}}=\\tfrac{'+fmt(r.d,4)+'}{'+fmt(r.lim,4)+'}=\\mathbf{'+fmt(r.dcr,3)+'}'+
             (r.dcr>1?'\\ \\color{#B42318}{\\text{FAIL}}':'\\ \\checkmark')]}));
     }else body.appendChild(el('div','note','No limit denominator set \u2014 the deflection is reported without a check.'));
@@ -9630,8 +9635,8 @@ function applyCompositeDeflection(A){
       const xa=A.nX[i],xb=A.nX[i+1];
       let dm=0,dx=xa;
       sp.xs.forEach((x,k)=>{if(x>=xa-1e-9&&x<=xb+1e-9&&Math.abs(sp.d[k])>Math.abs(dm)){dm=sp.d[k];dx=x;}});
-      const lim=c.den>0?s2.L/c.den:null;
-      sc.perSpan.push({span:i,dmax:dm,x:dx,lim,ratio:lim?Math.abs(dm)/lim:null,
+      const cant=cantSpanF(i),lim=c.den>0?(cant?2:1)*s2.L/c.den:null;   /* L6: 2L for a cantilever */
+      sc.perSpan.push({span:i,dmax:dm,x:dx,lim,cant,ratio:lim?Math.abs(dm)/lim:null,
         pass:lim?Math.abs(dm)<=lim*1.0001:null});
     });
   });
@@ -10074,8 +10079,9 @@ function memberDefl(p){
   const d=pt? c*df.w*Math.pow(L*12,3)/(EKSI*I)
             : c*df.w*1728*Math.pow(L,4)/(EKSI*I);
   const den=(df.den==null||df.den==='')?360:df.den;   /* blank defaults; 0 means report only */
-  const lim=den>0?L*12/den:null;
-  return{d,lim,den,c,I,pt,cfgLab:cfg.lab,L,w:df.w,
+  const cant=(df.cfg==='cant'||df.cfg==='cantP');   /* L6: IBC 2018 Table 1604.3 footnote i, l = 2 x cantilever length */
+  const lim=den>0?(cant?2:1)*L*12/den:null;
+  return{d,lim,den,c,I,pt,cant,cfgLab:cfg.lab,L,w:df.w,
     dcr:lim!=null?d/lim:null,pass:lim!=null?d<=lim*1.0001:null};
 }
 function openTorsionFor(A){
@@ -10485,6 +10491,7 @@ function buildServiceTab(pg){
           t.appendChild(tr);
         });
         body.appendChild(t);
+        sc.perSpan.filter(ps=>ps.cant&&ps.lim!=null).forEach(ps=>body.appendChild(el('div','note','Span '+(ps.span+1)+' is a cantilever: \u03B4\u2090\u2097\u2097\u2092\u02B7 = 2L/'+sc.den+' = 2\u00B7'+fmt(S.geom.spans[ps.span].L,2)+'\u00B712/'+sc.den+' = '+fmt(ps.lim*12,3)+' in (IBC 2018 Table 1604.3, footnote i: l = twice the cantilever length).')));
       },pg);
     });
   }
