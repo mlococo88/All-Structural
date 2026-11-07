@@ -2304,7 +2304,7 @@ function listTables() {
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
 
-## 2026-11-07 — PR: claude/subloads-kz-strv (KZG) — K_Z and G taken as 1.0 for Strength V and Service I wind, superstructure and substructure (review H1 + L6; §4 result change)
+## 2026-11-07 — PR: claude/subloads-kz-strv (PR #1093: https://github.com/mlococo88/All-Structural/pull/1093) (KZG) — K_Z and G taken as 1.0 for Strength V and Service I wind, superstructure and substructure (review H1 + L6; §4 result change)
 - **Why:** in-depth code review of 2026-11-07 (`reviews/substructure-loading.md`), findings H1 and L6.
 - **Problem:** `windSuper` and `subWindPts` applied the pressure exposure and elevation coefficient K_z (Eqs. 3.8.1.2.1-2 to -4) and the entered gust effect factor G to every limit state. The code defines K_z and G that way for Strength III and Service IV only and takes both as 1.0 for the other combinations; the commentary says Strength V and Service I use constant wind speeds that do not depend on height or exposure. Exposure B (K_z = 0.709 for Z ≤ 33 ft): Strength V and Service I wind was 29 % low (**unconservative**). Exposure C/D with Z > 33 ft: K_z > 1 made it conservative. A G ≠ 1 also moved Strength V / Service I (L6).
 - **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 3.8.1.2.1 (definitions of K_Z and G under Eq. 3.8.1.2.1-1) and C3.8.1.2.1.
