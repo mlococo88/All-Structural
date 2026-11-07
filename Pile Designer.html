@@ -3992,10 +3992,8 @@ function computeAll(I, opts = {}) {
   // Required bond length (geotechnical): STL / (dh*pi*beta*phi)
   const perFt_bond = dh * PI * beta_ksi * 12; // kip per ft of bond (nominal)
   const Lb_req = STL / (perFt_bond * phi_geo); // ft, required EFFECTIVE bond below the tip
-  // Grout-to-ground bond develops only BELOW the casing tip: over the plunge length
-  // the permanent casing occupies the hole, so the grout there transfers load to the
-  // bar/casing (structural overlap), not to the ground. The effective bond length
-  // credited for geotechnical capacity therefore excludes the plunge.
+  // Grout-to-ground bond: since PDA-D8 the plunge length is included (it transfers load to the ground,
+  // 10.9.3.10.4); the effective bond length below is L_bond less any bond above the design scour line.   (PDA-L4: comment only)
   const Lb_total = L_bond;                       // total drilled bond zone (entered)
   // PDA-D12 (2026-10-20): design scour depth (AASHTO LRFD 10th Ed. 10.7.3.6): bond above the scour line gives no
   // resistance. Scour line from the head = stickup (signed) + scour depth below grade. 0 (default): unchanged.
