@@ -3638,10 +3638,11 @@ function computeAll(){
     // ABL7 (2026-11-07): BR and TU act in either direction (braking both ways; temperature rise pushes toward the backfill): each permutation is also
     // run with them reversed when they are present (CR/SH shortening acts toward the span only)
     const revs=(!L.noSuper&&((groups.BR&&Math.abs(groups.BR.Hx)>1e-9)||(groups.TU&&Math.abs(groups.TU.Hx)>1e-9)))? [false,true] : [false];
+    for(const rv of revs){   // the reversed permutations follow the usual ones (whose order is unchanged)
     if(!L.perm){ const xs=L.eq? eqSubCases() : [{}];   // ABR3: Extreme Event I — the 11.6.5.1 cases × the two directions of 3.10.8
-      for(const lv of lives) for(const x of xs) for(const rv of revs) yield {perm:Object.assign({DC:0,DW:0,EV:0,EH:0,ES:1},x,rv?{rev:true}:{}), liveOn:lv}; return; }
+      for(const lv of lives) for(const x of xs) yield {perm:Object.assign({DC:0,DW:0,EV:0,EH:0,ES:1},x,rv?{rev:true}:{}), liveOn:lv}; continue; }
     for(const dc of [0,1]) for(const dw of [0,1]) for(const ev of [0,1]) for(const eh of [0,1]) for(const es of esB)
-      for(const lv of lives) for(const rv of revs) yield {perm:Object.assign({DC:dc,DW:dw,EV:ev,EH:eh,ES:es},rv?{rev:true}:{}), liveOn:lv};
+      for(const lv of lives) yield {perm:Object.assign({DC:dc,DW:dw,EV:ev,EH:eh,ES:es},rv?{rev:true}:{}), liveOn:lv}; }
   }
   // ABR3: Extreme Event I sub-cases: nonconcurrent P_AE / P_IR (11.6.5.1; when there is an M–O increment) and, when there is a transverse
   // seismic force, 100 % longitudinal + 30 % transverse and 30 % + 100 % [3.10.8]
