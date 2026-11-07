@@ -6808,7 +6808,7 @@ index 50f3837..c2d5000 100644
   - Tests: see the PR. Screenshots, including 390 px for the wrapped items.
 - **Other copies:** none.
 
-## 2026-11-07 — PR: claude/sf-torsion (PR #TBD) (SFTQ: pedestal torsion threshold check per ACI 318-19 §22.7.1.1 / Table 22.7.4.1(a)(c), new optional input T_u; "not checked" note where T_u = 0; NEW CHECK, no existing result changes)
+## 2026-11-07 — PR: claude/sf-torsion (PR #1164: https://github.com/mlococo88/All-Structural/pull/1164) (SFTQ: pedestal torsion threshold check per ACI 318-19 §22.7.1.1 / Table 22.7.4.1(a)(c), new optional input T_u; "not checked" note where T_u = 0; NEW CHECK, no existing result changes)
 
 ### SFTQ. Pedestal torsion: threshold check and note   [NEW CHECK; CLAUDE.md §4, §5]
 - **Request (engineer, 2026-11-07):** "I think we just note that torsion is not checked, unless it's an easy check to add." Decision: add the easy part, the ACI 318-19 threshold check (torsion may be neglected where T_u < φT_th), plus a note. Torsion design (22.7.6, Chapter 9) is not built.
