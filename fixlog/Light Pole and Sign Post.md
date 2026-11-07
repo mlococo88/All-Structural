@@ -2427,3 +2427,11 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 - **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data (§5):** no key or format changed.
 - **How verified:** `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: all cases identical (results, cable values, every output tab's text, drawings; 0 console errors); its readouts are taken at 1280 px, where the column is now open. No sideways page scroll at 390, 768, 1200, 1280, 1400, 1920 px. Screenshots before / after at 1200, 1280, 1400 and after at 1920, 768, 390 looked at. Tests: check-syntax; phone-layout lp 390/768; project-library lightpole.
 - **Open item:** the User Manual's "Check summary panel" paragraph still says "On screens 1500 px and wider it is a column on the left"; left unchanged so the Manual tab text stays identical in the comparison. A one-line wording update can follow.
+
+## 2026-11-07 — PR: claude/lp-manual-1200 — User Manual: the check summary column starts at 1200 px (LPLB follow-up; text only, no result change)
+- **Why:** open item of LPLB (#991): the Manual still said the column starts at 1500 px.
+- **Where:** User Manual, paragraph `<b>Check summary panel</b> (2026-11-03): …` (anchor `On screens 1500 px and wider it is a column on the left`).
+  - Before: `On screens 1500 px and wider it is a column on the left (« shrinks it to a strip)`
+  - After: `On screens 1200 px and wider it is a column on the left (« shrinks it to a strip)`
+- **Formulas, factors, units, code references:** none (§4 does not apply). **Saved data:** unchanged.
+- **How verified:** `node tests/lightpole-compare.mjs --a origin/main`: ALL CASES IDENTICAL (23 cases; it does not read the Manual tab); the only diff is the one sentence; check-syntax passes.
