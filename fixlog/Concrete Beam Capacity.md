@@ -5232,3 +5232,21 @@ Frame: Development & Splice (`suite-frame-dev`; byte-exact srcdoc helper, CRLF k
 - **AASHTO (unchanged):** 5.10.8.4.5a puts m = 1.33 for f′c < 3.0 ksi inside Eqs. 5.10.8.4.5a-1/-2 and the 12.0 in minimum outside, so the AASHTO order (factor, then floor) is as coded. Open item: the tool uses 4/3 = 1.333 where the 10th Ed. lists m = 1.33 (0.3 % conservative).
 - **How verified:** headless main vs branch, all Dev probe cases: only the f′c < 3000 psi ACI cases with expression < 12 in move (above); all Beam Capacity cases identical; screenshot of the Comp. Splice tab (#4 case) looked at. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
 - **Saved data:** no change.
+
+## 2026-11-07 — PR: claude/cbc-lw-unit-weight, PR #1048: https://github.com/mlococo88/All-Structural/pull/1048 (CBL7b: AASHTO E_c for the computed f_ss uses an entered unit weight w_c, or 0.110 kcf for lightweight concrete (λ < 1) when none is entered; new optional input "Unit weight w_c"; CALCULATION CHANGE, Beam Capacity tab, AASHTO mode, lightweight concrete or an entered w_c, computed f_ss only; less conservative before for lightweight concrete)
+
+Frame: Beam Capacity (`suite-frame-capacity`). Open item of CBL7 (#1005), review item L7.
+
+### CBL7b. Lightweight / entered unit weight in E_c   [CALCULATION CHANGE]
+- **Provisions (10th Ed. text checked):** AASHTO LRFD 10th Ed. Eq. 5.4.2.4-1, E_c = 120,000K_1w_c^2.0f′c^0.33, w_c from Table 3.5.1-1 or C5.4.2.4; Table 3.5.1-1 (Ch. 3): lightweight concrete 0.110 to 0.135 kcf, normal weight 0.145 kcf (f′c ≤ 5.0 ksi) or 0.140 + 0.001f′c (5.0 < f′c ≤ 15.0 ksi); 5.4.2.8 (Eq. 5.4.2.8-2) relates λ to w_c for lightweight concrete.
+- **Before:** `const wc=fc<=5?0.145:0.140+0.001*fc;` in `concreteE()` at any λ (lightweight concrete got the normal weight E_c: E_c too high, n too low, f_ss too low, so the crack-control spacing too large).
+- **After (`concreteE()`, anchor `CBL7b`):** `wc = S.mat.wc>0 ? S.mat.wc : (S.mat.lambda<1 ? 0.110 : table value)`; the worked E_c line says which (entered / lightweight low end / Table 3.5.1-1). New input under Materials (AASHTO mode), "Unit weight w_c (for E_c; blank = Table 3.5.1-1)" (`S.mat.wc`, kcf, default 0 = not entered), shown in the Report inputs table; a Validation warning when λ < 1, f_ss is computed and no w_c is entered. ACI mode is unchanged (E_c = 57,000√f′c).
+- **Decision (pending engineer review):** lightweight without an entered w_c → 0.110 kcf, the low end of the Table 3.5.1-1 range: the smallest E_c and largest n, hence the larger computed f_ss and the smaller spacing limit (checked: aasTlw s_max 10.39 → 10.02 in).
+- **Check case `aasTlw`** (aasT with f′c 6 ksi, λ 0.85, M_s 500 k-ft, f_ss computed):
+  - Before: w_c = 0.140 + 0.006 = 0.146 kcf, E_c = 120,000 · 0.146² · 6^0.33 = 4,620 ksi, n = 6.28; crack-control s_max 10.39 in (D/C 0.276).
+  - After: w_c = 0.110 kcf, E_c = 120,000 · 0.110² · 6^0.33 = 2,623 ksi, n = 11.06; **s_max 10.02 in (D/C 0.286).**
+  - With w_c = 0.125 kcf entered (`aasTlwWc`): E_c = 3,387 ksi; s_max 10.20 in (D/C 0.281). Normal weight with w_c = 0.150 entered (`aasTwc`, f′c 12): E_c 6,130 ksi (Table 0.152 → 6,297); s_max 10.57 → 10.55 in.
+  - Normal weight without an entry, and ACI mode: unchanged.
+- **How verified:** headless main vs branch, all probe cases: only the three cases above move (crack-control row); all other Beam Capacity and Dev cases identical. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar` (save round trip with the new field), `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
+- **Saved data:** additive field `mat.wc` (old saves read 0 = not entered: normal weight saves unchanged; lightweight AASHTO saves with computed f_ss move as above).
+- **Open items:** ACI mode E_c for lightweight concrete (ACI 318-19 19.2.2.1(a), w_c^1.5·33√f′c) is not changed; the Development & Splice frame's AASHTO n_s for λ_rc still uses the normal weight E_c (higher E_c, smaller k_tr credit: conservative, as its comment states).
