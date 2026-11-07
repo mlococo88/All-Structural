@@ -11859,8 +11859,8 @@ const RWMAN_PARTS = [
   { ul: [
     'Stem: height H_s, base width and top width (the front face is vertical, the back face is battered when the two widths differ); the stem may project h_p above the retained grade.',
     'Footing: thickness t_f, toe length L_t and heel length L_h (either may be 0 for an L-shaped wall), soil cover over the toe D_f,add.',
-    'Optional shear key under the stem (depth d_k, width b_k).',
-    'Foundation: a **spread footing on soil** (default) or a **pile-supported footing** with 2 to 4 rows of vertical piles.',
+    'Optional shear key under the stem (depth d_k, width b_k) ([[go:man:key|shear key part]]).',
+    'Foundation: a **spread footing on soil** (default) or a **pile-supported footing** with 2 to 4 rows of vertical piles ([[go:man:piles|piles part]]).',
     'Optional column / beam line loads on the stem, a traffic barrier on top of the stem (AASHTO mode), and a variable-height wall segment (MassDOT rule, both modes).',
     'Two code modes: **ACI 318-19 / IBC 2018** (allowable-stress stability, strength design of the concrete) and **AASHTO LRFD 10th Ed. (2024)** (limit states throughout). The mode is chosen with the Code switch at the top of the input panel and is kept with the project.' ] },
   { p: 'The design strip is one foot of a long wall: end effects, wall corners, joints and the wall length are not modelled (the collision load and the pile schedule use the joint spacing only to spread or count). Counterfort, gravity, MSE, sheet-pile and soldier-pile walls are outside the scope.' } ] },
@@ -11903,7 +11903,7 @@ const RWMAN_PARTS = [
     ['Concrete load factors', 'ACI 318-19 §5.3: stem U = 1.6H; footing envelope U = 1.2D + 1.6H and 0.9D + 1.6H; water uplift split γ_U 1.6 toe / 0.9 heel (§5.3.8).', 'Tables 3.4.1-1/-2: DC 1.25/0.90, EV 1.35/1.00, EH 1.50/0.90 (at-rest 1.35), ES 1.50/0.75, LS 1.75, WA 1.00; η and 1/η (Art. 1.3.2.1).'],
     ['Concrete checks', 'Flexure, one-way shear (λ_s), development / hooks / laps (Ch. 25), crack control (§24.3.2), T&S (§24.4.3), shear friction at the joint (§22.9).', 'Flexure, shear (β = 2 or the general procedure), minimum reinforcement (Art. 5.6.3.3), crack control Service I (Art. 5.6.7), T&S each face (Art. 5.10.6), development (Art. 5.10.8), optional interface shear (Art. 5.7.4).'],
     ['Piles (when chosen)', 'Allowable P_a, T_a, H_a against the ASD combinations (ASCE 7-16 §2.4.1; IBC 2018 §1810).', 'Factored resistances φR_n, φR_n,up, H_r against every limit state (Art. 10.7).'] ] } },
-  ] },
+  { p: 'Each family is detailed after the inputs: [[go:man:loads|loads]], [[go:man:stability|stability]], [[go:man:seismic|seismic]], [[go:man:collision|collision]], [[go:man:stem|stem]], [[go:man:footing|footing]], [[go:man:key|shear key]], [[go:man:bars|bar layout]], [[go:man:piles|piles]]; what is not checked is listed in [[go:man:limits|Limits]].' } ] },
 
 { id: 'inputs', title: 'Inputs, units and defaults', go: [['inp:proj_name', 'Project input tab']], blocks: [
   { p: 'The defaults below are those of a new project (New, or this file opened for the first time). A blank load-type input (loads, cohesion, surcharge, seismic, water depth) counts as 0; geometry, materials and q_a must be entered. Inputs marked (AASHTO) are shown in AASHTO mode only; (pile) only with a pile-supported footing.' },
@@ -11968,6 +11968,143 @@ const RWMAN_PARTS = [
     ['[[go:inp:massdot_ftg|MassDOT heel top-steel rule]] (AASHTO)', '—', 'off', 'MassDOT §3.3.2.2: dead load only, no upward relief.'],
     ['[[go:inp:aashto_ish_enable|Interface shear]]; c, μ, K₁, K₂, sub-footing f′c, dowel bar and spacing (AASHTO)', 'ksi / — / psi / in', 'off; 0.075, 0.6, 0.2, 0.8; 3000; #6 @ 48', 'Art. 5.7.4.3.'] ] } } ] },
 
+{ id: 'loads', title: 'Loads: earth pressure, surcharges, water, column loads', go: [['card:stabKa', 'Stability, Step 1'], ['tab:diagram', 'Analysis diagram']], blocks: [
+  { h: 'Earth pressure' },
+  { ul: [
+    'ACI mode: Rankine active K_a (with the backfill slope β) and Rankine passive K_p. AASHTO mode: Coulomb (with δ, β and the batter θ) or Rankine, active or at-rest K₀ = (1 − sin φ)OCR^(sin φ) (Art. 3.11.5.2, 3.11.5.3). One K is used for the stability and for the stem.',
+    'The static thrust acts on the vertical plane through the heel end: with a sloping backfill its height is H′ = H_ret + (L_h + t_base − t_g)·tan β, where H_ret = H_s + t_f − h_p is the retained height and t_g the stem thickness at the grade (H_ret = H and t_g = t_top when the stem does not project). P_a = ½K_aγH′² at H′/3, inclined at δ + θ (Coulomb, active) or at β (Rankine, at-rest); its vertical component P_a,V acts at the heel end.',
+    'AASHTO factors the vertical earth-thrust component as EH (γ_EH max, 0.90 min); the 0.90 minimum in sliding and eccentricity is the engineer’s choice.' ] },
+  { h: 'Surcharges' },
+  { ul: [
+    '**Uniform surcharge q_s** (both modes): lateral K_a·q_s over H′, and q_s·L_h on the heel. ACI factors it as H (1.6) in the structure; for stability it is left out of the overturning and sliding resistance (not certain to be present) but counted for bearing. AASHTO treats it as a permanent earth surcharge ES: lateral ES 1.50, vertical q_s·L_h at 1.50 where it adds load and 0.75 where it resists.',
+    '**Live-load surcharge LS** (AASHTO, [[go:card:stabLS|Step 2]]): h_eq from Table 3.11.6.4.1-2 (wall parallel to traffic) or -1 (abutment, traffic perpendicular) by the retained height H_ret and the distance d from the back face to the edge of traffic; for the parallel table d ≥ 1 ft takes the 1-ft column and 0 < d < 1 ft is interpolated (engineer decision). No LS when the traffic is farther than H_ret/2 behind the wall (Art. 3.11.6.4.1); a manual h_eq overrides. LS is factored 1.75 (Strength I) and also loads the heel.',
+    'Strip, line and point surcharges are not modelled.' ] },
+  { h: 'Water' },
+  { ul: [
+    'A water table above the footing base adds the hydrostatic thrust γ_w h_w²/2 at h_w/3, makes the backfill buoyant below it (moist above, γ_sat − γ_w below), and adds uplift on the footing base: uniform (full head across B, at B/2) or triangular (full head at the heel to 0 at the toe, at 2B/3 from the toe). The service stability includes the uplift in ΣV.',
+    'ACI footing design: the factored uplift is split from the soil reaction, γ_U = 1.6 for the toe and 0.9 for the heel (ACI 318-19 §5.3.8, engineer decision). AASHTO: WA = 1.00; the footing is designed for the total (soil + water) base reaction.',
+    'The stem takes the effective-stress soil pressure plus the full hydrostatic triangle below the water table.' ] },
+  { h: 'Column / beam loads and barrier' },
+  { ul: [
+    'P_DL, P_LL, P_SL, P_WL (kip) spread over L_dist (ft) act on the stem at the chosen position. Stability: D always, L and S not in the overturning and sliding resistance. ACI factored downward load: the worst of ASCE 7-22 §2.3.1 combinations 2, 3 and 4 (1.2D + 1.6L + 0.5S, 1.2D + 1.6S + 1.0L, 1.2D + 1.0W + 1.0L + 0.5S), uplift 0.9D + 1.0W; AASHTO: η(1.25DL + 1.75(LL + S)). The stem axial capacity is checked ([[go:card:stabCol|Col. Axial]], ACI 318-19 §22.4).',
+    'Barrier (AASHTO): its weight is DC on the stem top; it does not change the collision lever arm.' ] } ] },
+
+{ id: 'stability', title: 'Stability: overturning, sliding, bearing, eccentricity, passive', go: [['tab:stability', 'Stability tab']], blocks: [
+  { h: 'ACI 318-19 / IBC 2018 mode (service loads)' },
+  { table: { head: ['Check', 'Criterion', 'Where'], rows: [
+    ['Overturning', 'FS = M_resisting / M_overturning about the toe ≥ 1.5 (IBC 2018 §1807.2.3). M_r excludes the surcharge over the heel and the column L and S.', '[[go:card:stabOT|Step 4]]'],
+    ['Sliding', 'FS = (ΣV·μ + P_p) / ΣH ≥ 1.5 (IBC 2018 §1807.2.3); ΣV without the heel surcharge and the column L, S. μ = tan(⅔φ) (default), tan φ or custom.', '[[go:card:stabSlide|Step 5]]'],
+    ['Bearing', 'q_max ≤ q_a with the service resultant x̄ = (M_s − M_o)/ΣV: trapezoid for |e| ≤ B/6, triangle 2ΣV/(3x̄) beyond.', '[[go:card:stabBrg|Step 6]]'],
+    ['Eccentricity', 'As selected: e ≤ B/6 (default) or B/4, or no limit (information only). Neither ACI 318-19 nor IBC 2018 sets one; the limit is the engineer’s.', '[[go:card:stabEcc|Step 6]]'] ] } },
+  { h: 'AASHTO LRFD mode (Strength I / Ia)' },
+  { table: { head: ['Check', 'Criterion', 'Where'], rows: [
+    ['Sliding', 'R_R = φ_τ·V_min·tan δ_b + φ_ep·P_p ≥ ΣγH (Art. 10.6.3.4); V_min at the minimum factors (and 1/η), less ηU; δ_b from the base-friction choice.', '[[go:card:stabSlide|Step 4]]'],
+    ['Eccentricity', 'e of the minimum-vertical (Ia) resultant ≤ the chosen limit: B/6, B/4 (default), B/3 (soil, Art. 11.6.3.3) or 0.45B (rock).', '[[go:card:stabEcc|Step 5]]'],
+    ['Bearing', 'q = V/(B − 2e) (uniform over the effective width, Art. 10.6.3.1 / 11.6.3.2) for Strength I and Ia ≤ φ_b q_n, q_n from the geotechnical report (default) or 3q_a; on rock (0.45B limit) a linear distribution.', '[[go:card:stabBrg|Step 6]]'],
+    ['Overturning', 'No factor of safety: AASHTO controls overturning through the eccentricity limit.', '—'] ] } },
+  { p: 'The Stability tab also gives the factored base pressures used by the footing design ([[go:card:stabFactBrg|ACI Step 7]]; AASHTO Strength I / Ia) and the bearing pressure of each combination with a to-scale diagram (selector on the tab).' },
+  { h: 'Passive resistance and shear key' },
+  { ul: [
+    'Passive pressure in front of the toe over D_f = t_f + D_f,add, P_p = ½K_pγD_f² (moist γ_s), and with a shear key down to D_f + d_k. **Neglected by default** (the toe soil may be excavated or scoured); tick Include passive resistance to credit it: ACI in sliding (and the toe passive moment in overturning), AASHTO with φ_ep (default 0.50).',
+    'Without passive the key gives no sliding credit (a note says so) but it is still designed structurally ([[go:man:key|shear key part]]).' ] } ] },
+
+{ id: 'seismic', title: 'Seismic: ACI / IBC 2018 §1807.2.3 and AASHTO Extreme Event I', go: [['tab:stability', 'Stability tab'], ['card:stabEE1', 'Step 7a (AASHTO)']], blocks: [
+  { p: 'k_h > 0 turns the seismic checks on. The Mononobe-Okabe coefficient K_AE uses θ = arctan(k_h/(1 − k_v)), the M-O wall friction δ and β; P_AE acts on the pressure-plane height H′.' },
+  { h: 'ACI / IBC 2018' },
+  { ul: [
+    'ΔP_E = P_AE − ½K_A,MO γH′² (the M-O expression at θ = 0), applied at 0.6H′ (Seed & Whitman, as cited on the tab).',
+    'Overturning and sliding: FS ≥ 1.5 with the earthquake set to zero, and FS ≥ 1.1 with 0.7ΔP_E (IBC 2018 §1807.2.3 and its exception).',
+    'Bearing and eccentricity: the larger |e| of the static case and the case with 1.0ΔP_E governs (both are worked in Step 6).',
+    'Stem: U = 1.2D + 1.0E + 1.6H (ACI 318-19 Eq. 5.3.1e, H per §5.3.8), ΔP_E,s = ΔP_E(H_s/H′)² at 0.6H_s, also at mid-height and along the height. Footing: U = 1.2D + 1.6H + 1.0E with the 0.9D + 1.6H case.' ] },
+  { h: 'AASHTO Extreme Event I (Art. 11.6.5.1)' },
+  { ul: [
+    'Two cases: P_AE + 0.5P_IR, and max(0.5P_AE, P_A) + P_IR, with the wall inertia P_IR = k_h(W_wall + W_soil over the heel). LS at γ_EQ; water and ES at 1.0; vertical components of P_AE and P_A neglected; η = 1.0.',
+    'Sliding φ = 1.0; bearing φ_b = 0.8 (Art. 11.5.8) on q = V/(B − 2e); eccentricity e ≤ B/3 at γ_EQ = 0 rising linearly to 0.4B at γ_EQ = 1.0.',
+    'The stem is designed for both cases (φ = 1.0) and the heel and toe are checked for them ([[go:man:footing|footing part]]).' ] } ] },
+
+{ id: 'collision', title: 'Vehicular collision: AASHTO Extreme Event II and the barrier', go: [['card:stabCT', 'Step 7b'], ['card:stabYL', 'Step 7c']], blocks: [
+  { ul: [
+    'Test level per the MassDOT LRFD Bridge Manual Table 3.3.2-1 (edition: verify): TL-2/3 23 kip, L_t 4 ft, h_CT 24 in; TL-4 28 kip, 5 ft, 30 in (default); TL-5 80 kip, 10 ft, 34 in; or manual.',
+    'The force acts h_CT above the roadway (the top of the stem), distributed over the full section between joints (MassDOT §3.3.2.4, default) or over a 45° spread min(L_joint, L_t + 2H_s); the [[go:tab:diagram|Analysis diagram]] draws the elevation.',
+    'Stability (Extreme Event II): γ_CT = 1.0, DC and EV 1.0, water 1.0, LS 0.50; the horizontal earth pressure at γ_EH = 0 (MassDOT: the wall moves away from the backfill, default) or 1.0, and the vertical earth-thrust component with the same factor. Sliding with φ (input, default 1.00), bearing with φ_b = min(0.80, φ) (Art. 11.5.8), eccentricity e ≤ B/n (default B/3).',
+    'Stem: earth (γ = 1.0), water, ES 1.0, LS 0.50 plus the collision moment, φ = 1.0; it governs the stem when larger than Strength I. Heel and toe are checked for Extreme Event II.',
+    'Barrier yield-line capacity R_w ≥ F_t (Art. A13.3.1) from M_b, M_w, M_c and the impact location (optional). The barrier itself and its anchorage are not designed.' ] } ] },
+
+{ id: 'stem', title: 'Stem design: flexure, shear, crack control, T&S, development and laps', go: [['tab:stem', 'Stem design tab']], blocks: [
+  { p: 'The stem is a cantilever fixed at the top of the footing, designed at the base (Steps 1–6) and at mid-height (Mid Steps 1–3), b = 12 in.' },
+  { table: { head: ['Step', 'ACI 318-19', 'AASHTO LRFD 10th Ed.'], rows: [
+    ['[[go:tab:stem|1 Demands]]', 'U = 1.6H (earth, water, surcharge), and 1.2D + 1.0E + 1.6H with k_h.', 'Strength I η(γ_EH EH + 1.75LS + 1.50ES + 1.00WA), γ_EH 1.50 active / 1.35 at-rest; Extreme Event I and II when present; the largest governs.'],
+    ['2 Effective depth', 'd = t_stem − cover − d_b/2 (back-face cover input).', 'Same.'],
+    ['[[go:card:stemFlex|3 Flexure]]', 'φ = 0.90; A_s ≥ the minimum (ACI 318-19 §7.6.1.1 / §13.3.7); bars chosen at ≤ 18 in.', 'φ = 0.90 (tension-controlled check); minimum reinforcement Art. 5.6.3.3 (M_cr or 1.33M_u).'],
+    ['[[go:card:stemShear|4 Shear]]', 'V_c = 8λ_sρ_w^⅓√f′c·b·d (Table 22.5.5.1(c)), φ 0.75; shear friction at the stem–footing joint (§22.9, μ 0.6, A_vf = S1D dowels).', 'β = 2.0 where Art. 5.7.3.4.1 permits (h < 16 in; the 3d_v rule for footings only), else the general procedure (Art. 5.7.3.4.2); option for either everywhere. Optional interface shear Art. 5.7.4.3.'],
+    ['[[go:card:stemDev|5 Development, dowel lap]]', 'ℓ_d of S1 (§25.4.2); the S1D dowel’s 90° hook ℓ_dh ≤ t_f − bottom cover (§25.4.3.1); Class B lap ℓ_st = 1.3ℓ_d of S1D with S1 (Table 25.5.2.1).', 'ℓ_d Art. 5.10.8.2.1a with λ_rc; hook Art. 5.10.8.2.4a; Class B lap Art. 5.10.8.4.3a.'],
+    ['[[go:card:stemTS|6 T&S]]', 'S2 horizontal, both faces (§24.4.3.2).', 'S2 horizontal and S4 front-face vertical, each face A_s ≥ 1.30bh/(2(b + h)f_y) within the article’s bounds, f_y ≤ 75 ksi (Art. 5.10.6).'],
+    ['[[go:card:stemMid|Mid 1–2]]', 'Demands at mid-height, S3 flexure and shear.', 'Same, with EE I / II.'],
+    ['[[go:card:stemS13|Mid 3]]', 'S3–S1 Class B lap (§25.5.2.2); S1 runs from the joint to mid-height plus the lap, and its end is checked beyond the point where S3 alone suffices (§7.7.3.3); M_u ≤ φM_n of the bars present along the height (§13.3.6.3).', 'Same rules (ACI §25.5.2.2 adopted with Art. 5.10.8.4.3a / 5.10.8.1.2a).'] ] } },
+  { h: 'Crack control' },
+  { ul: [
+    'ACI 318-19 §24.3.2: s ≤ min(15(40000/f_s) − 2.5c_c, 12(40000/f_s)) with f_s = ⅔f_y, for S1, S3, F1 and F2.',
+    'AASHTO Art. 5.6.7: s ≤ 700γ_e/(β_s f_ss) − 2d_c with f_ss ≤ 0.6f_y from Service I moments (optionally with K₀ for the service earth pressure); S1 at the base, S3 at mid-height, F1 and F2 from the Service I base reaction ([[go:card:stabServ|Step 9]]).',
+    'S4, K1 and the bottom face of the heel are not checked for crack control (decision pending).' ] } ] },
+
+{ id: 'footing', title: 'Footing design: heel, toe, extreme events, T&S', go: [['tab:footing', 'Footing design tab']], blocks: [
+  { ul: [
+    '**Base reaction.** ACI: U = 1.2D + 1.6H (+ 1.0E) and 0.9D + 1.6H; AASHTO: Strength I (maximum) and Ia (minimum vertical, 1/η). The reaction is a trapezoid while the resultant is in the middle third, and the statically consistent triangle of length 3x̄ (from the toe or the heel) beyond. With water, ACI splits the uplift out (γ_U 1.6 toe, 0.9 heel) ([[go:card:ftgLoads|Factored loads]]).',
+    '**Heel** ([[go:card:heelFlex|Heel Steps 1–4]]): cantilever from the back face of the stem; down = soil, footing, surcharge, LS and the backfill wedge over the heel; up = the base reaction. Design basis: standard (down minus up, default), no upward relief, or the envelope. MassDOT §3.3.2.2 (AASHTO option): dead load only, no relief, γ = φ = 1.0. M_u and V_u at the face; F1 top bars (bottom bars when the net load is upward).',
+    '**Toe** ([[go:card:toeFlex|Toe Steps 1–4]]): base reaction up, footing weight down (the soil over the toe is not credited); M_u and V_u at the front face (conservative); F2 bottom bars, straight or hooked at the toe end.',
+    'Flexure φ 0.90, the minimum steel of each mode; one-way shear ACI Table 22.5.5.1(c) with λ_s (option: λ_s = 1 for spread footings, §13.2.6.2) or AASHTO β = 2 (3d_v rule) or the general procedure; ACI footing d ≥ 6 in (§13.3.1.2).',
+    'F1 and F2 development: ℓ_d both sides of the stem face, against the length available (ACI §25.4.2 / AASHTO Art. 5.10.8.2.1a).',
+    '**AASHTO extreme events** ([[go:card:ftgEE|Heel and toe — EE I / II]]): heel and toe checked for both EE I cases and EE II (maximum and minimum vertical), γ = 1.0, φ = 1.0, with the Strength I bars (a check, not a redesign). Not on piles: a note asks for a hand check.',
+    '**F3** longitudinal T&S, both faces ([[go:card:ftgTS|T&S card]]; ACI §24.4.3.2, AASHTO Art. 5.10.6).' ] } ] },
+
+{ id: 'key', title: 'Shear key', go: [['card:ftgKey', 'Shear key card']], blocks: [
+  { ul: [
+    'The key is centred under the stem, depth d_k below the footing, width b_k. Its load is the passive pressure on its face, between D_f and D_f + d_k, factored as H 1.6 (ACI) or EH 1.50 (AASHTO; no key-specific article, Section 5 applied).',
+    'ACI: plain concrete first (ACI 318-19 Ch. 14, φ 0.60, h = b_k − 2 in for concrete cast against soil); if that fails, reinforced with K1 bars. AASHTO: reinforced (K1), flexure Art. 5.6.3 and shear Art. 5.7.3.',
+    'K1 is hooked into the footing and, when a straight bar does not fit, hooked at the key bottom; both are checked with ℓ_dh / ℓ_d.',
+    'Water on the key face is not considered.' ] } ] },
+
+{ id: 'bars', title: 'Bar layout: S1, S1D, S3, S2, S4, F1, F2, F3, K1', go: [['tab:rebar', 'Rebar schedule'], ['tab:drawings', 'Drawings, sheet 2']], blocks: [
+  { table: { head: ['Mark', 'Bar', 'Designed for'], rows: [
+    ['S1', 'Stem back-face verticals from the joint to mid-height plus the S3–S1 lap.', 'Base moment and shear (Step 3–4); end of S1 (Mid Step 3).'],
+    ['S1D', 'Dowel at the S1 spacing: 90° standard hook on the bottom mat, up through the joint, Class B lap with S1.', 'ℓ_dh into the footing, lap ℓ_st; A_vf for the ACI joint shear friction.'],
+    ['S3', 'Stem back-face verticals from mid-height to the top.', 'Mid-height moment and shear; lap with S1.'],
+    ['S2', 'Stem horizontals, both faces.', 'Temperature and shrinkage.'],
+    ['S4', 'Stem front-face verticals (AASHTO mode).', 'Art. 5.10.6, each face and each direction. ACI mode: not designed (a note says so).'],
+    ['F1', 'Heel transverse top bars (bottom when the heel load is net upward).', 'Heel moment and shear; ℓ_d past the stem back face.'],
+    ['F2', 'Toe transverse bottom bars, through the stem into the heel.', 'Toe moment and shear; ℓ_d past the front face; optional hook at the toe end.'],
+    ['F3', 'Footing longitudinal bars, both faces.', 'Temperature and shrinkage.'],
+    ['K1', 'Shear-key bars on the toe face (when reinforced).', 'Key flexure and shear; hooks into the footing and the key.'] ] } },
+  { p: 'Bar overrides (Rebar input tab) replace the automatic size and spacing of a mark; every check then uses the override. Lengths not given by the model (hook tails, nominal extensions) are labelled nominal on the drawings.' } ] },
+
+{ id: 'piles', title: 'Pile-supported footing and the Pile Designer hand-off', go: [['tab:piles', 'Piles tab'], ['card:pileCk', 'Pile Step 3'], ['card:ftgPunch', 'Pile cap punching'], ['inp:fnd_type', 'Foundation card']], blocks: [
+  { h: 'Model' },
+  { ul: [
+    '2 to 4 rows of vertical piles, each row at x from the toe with its own spacing s along the wall; one pile type per wall. Batter piles are not modelled.',
+    'Rigid cap, per foot of wall: n_i = 1/s_i piles per ft, N = Σn_i, centroid x̄ = Σn_i x_i / N, I = Σn_i x′²; the load per pile of row i is P_i = ΣV/N + M·x′_i/I with M about x̄. Lateral load H/N per pile (passive in front of the toe may be credited).',
+    'Combinations: ACI / IBC service (ASD, ASCE 7-16 §2.4.1): D + H + L, D + H + L + 0.7E, 0.6D + H (minimum vertical), 0.6D + 0.7E + H. AASHTO: Strength I maximum and minimum vertical, Extreme Event I and II.',
+    'Soil bearing, base sliding and overturning are **not** checked on piles (shown for information); the pile checks replace them.' ] },
+  { p: 'On piles the [[go:tab:piles|Piles]] tab shows the layout ([[go:card:pileLay|Pile Layout]]), the group ([[go:card:pileGrp|Pile Step 1]]), the reactions per combination ([[go:card:stabPile|Pile Step 2]]), every pile check ([[go:card:pileCk|Pile Step 3]]) and the [[go:card:pilePD|Pile Designer hand-off]]; the Stability tab keeps a summary.' },
+  { h: 'Checks' },
+  { table: { head: ['Check', 'ACI / IBC 2018', 'AASHTO LRFD 10th Ed.'], rows: [
+    ['Compression', 'P ≤ P_a (IBC §1810.3.3.1)', 'P ≤ φ_c R_n (Art. 10.5.5.2.3, 10.7.3.9); φ 1.0 in extreme events'],
+    ['Uplift', 'T ≤ T_a (IBC §1810.3.3.1.5)', 'T ≤ φ_up R_n,up (Art. 10.7.3.10); φ 0.80 in extreme events'],
+    ['Lateral', 'H/N ≤ H_a (IBC §1810.3.3.2)', 'H/N ≤ H_r (Art. 10.7.3.12)'],
+    ['Spacing / edge / embedment', 'edge ≥ 4 in, embedment ≥ 3 in (IBC §1810.3.11)', 'c-c ≥ max(30 in, 2.5D), edge ≥ 9 in, embedment ≥ 12 in (Art. 10.7.1.2)'],
+    ['Pile–cap tension', 'FAIL whenever a pile is in tension: the anchorage is not designed in the tool (IBC §1810.3.11 / §1810.3.3.1.5)', 'Same (Art. 10.7.1.2 / 5.12.9.1)'],
+    ['Punching', 'v_c = min(4, 2 + 4/β, 2 + α_s d/b_o)λ_sλ√f′c, φ 0.75 (§22.6.4.1, Table 22.6.5.2)', '0.126λ√f′c b_o d_v, φ_v 0.90 (Art. 5.12.8.6.1 / .3)'],
+    ['Cap depth', 'd over the pile heads ≥ 12 in (§13.4.6.1)', '—'] ] } },
+  { h: 'Footing on piles' },
+  { ul: [
+    'Heel and toe are designed from the factored pile-row reactions as line loads (a row belongs to the heel or the toe by its centre); with water the piles take V − γ_U·U and the uplift acts on the heel underside; the toe keeps the total (conservative).',
+    'The bottom bars stay at the footing cover and pass between the pile heads (engineer instruction 2026-11-07); detail them clear of the piles. The depth over the pile heads d_p = t_f − embedment − clear − d_b is used for punching and the ACI cap depth; t_f must exceed embedment + clear + 2 in.',
+    'Punching around each pile: the pile as the square of equal area (round: 0.886D), the critical section at d/2 (d_v/2) cut by the toe or heel edge and merged with the neighbours along the wall.',
+    'Pile schedule: Drawings sheet 5 and a Report table (per row, the combination with the largest load-to-capacity ratio).' ] },
+  { h: 'Pile Designer hand-off (HANDOFF.md §4.6 / §4.10)' },
+  { ul: [
+    '**Send to Pile Designer** (Foundation card and the Piles tab) publishes the wall’s pile combinations as a wall segment whose length gives every row a whole number of piles, the pile layout and the per-pile governing loads (channel foundationLoads, copy by.retwall); **Export hand-off (JSON)** writes the same as a file.',
+    '**Pull pile results** reads Pile Designer’s results (channel pileResults) and, in AASHTO mode, sets R_n, φ_c, R_n,up and φ_up (static values, with the group reduction when below 1); H_r is not set. ACI mode imports nothing (the LRFD values are listed for reference). The record is kept with the project; it is re-checked after every change and marked **STALE** when the wall’s loads have changed since, and the values held before the import are used while it is stale.' ] } ] },
+
 { id: 'projects', title: 'Saving, opening, cloud sync, Export / Import JSON', go: [['inp:proj_name', 'Project tab, Save and open card']], blocks: [
   { ul: [
     '**Autosave.** The inputs are kept in this browser as you type and come back when the file is opened again.',
@@ -11985,7 +12122,7 @@ const RWMAN_PARTS = [
     'Each sheet is 11 × 17 landscape at its plot scale with a title block from the Project tab. **Print sheet** / **Print all sheets** print through the browser (Tabloid, landscape, margins none, scale 100 %). **Download DXF** writes one AutoCAD R12 file with every sheet side by side, full size in inches, on named layers (RW-CONC, RW-REBAR, RW-DIMS, …).',
     'Bars, sizes, spacings and the loads are the tool’s results. Bar lengths that the model does not give (lap and hook tails, nominal extensions) are labelled as nominal on sheet 2. On piles the bottom mat is drawn at the footing cover with the pile heads projecting through it.' ] },
   { h: 'Rebar schedule tab' },
-  { p: 'One row per bar mark with bar size, spacing, A_s required and provided, ratio, ℓ_d (or ℓ_dh for hooked bars) and status, bar notes, the general detailing requirements of the mode and approximate quantities per foot of wall. The marks: S1 stem back-face verticals from the joint to mid-height plus the lap; S1D the hooked dowel into the footing, lapped with S1; S3 back-face verticals of the upper half; S2 horizontal temperature and shrinkage bars (both faces); S4 front-face verticals (AASHTO); F1 heel top bars; F2 toe bottom bars; F3 longitudinal footing bars (both faces); K1 shear-key bars when the key is reinforced.' },
+  { p: 'One row per bar mark with bar size, spacing, A_s required and provided, ratio, ℓ_d (or ℓ_dh for hooked bars) and status, bar notes, the general detailing requirements of the mode and approximate quantities per foot of wall. The marks: S1 stem back-face verticals from the joint to mid-height plus the lap; S1D the hooked dowel into the footing, lapped with S1; S3 back-face verticals of the upper half; S2 horizontal temperature and shrinkage bars (both faces); S4 front-face verticals (AASHTO); F1 heel top bars; F2 toe bottom bars; F3 longitudinal footing bars (both faces); K1 shear-key bars when the key is reinforced ([[go:man:bars|bar layout part]]).' },
   { h: '3D model and analysis diagram' },
   { p: 'The [[go:tab:threed|3D model]] shows one load case or one combination at a time (the governing bearing or pile combination by default); in a combination view the arrows can be unfactored or factored, and the base reaction (or the pile reactions) is the combination’s. The [[go:tab:diagram|Analysis diagram]] shows the section with the service-load pressure diagrams to scale. Both are display only.' } ] },
 
@@ -11996,6 +12133,56 @@ const RWMAN_PARTS = [
     '**Print** in the header, Ctrl+P, or the Report’s Print prints the whole Report (every section open, running header and page numbers) from any tab. Drawing sheets print from the Drawings tab only.',
     '**Include the user manual** in the Report bar adds this manual as an appendix (this browser’s choice, not saved with a project).',
     'Nothing is computed in the Report: it shows the values of the tabs.' ] } ] },
+{ id: 'limits', title: 'Limits: what the tool does not check', go: [['tab:report', 'Report, Assumptions and warnings']], blocks: [
+  { p: 'These are outside the tool and remain with the engineer of record and the geotechnical engineer. The Drawings general notes repeat the main ones.' },
+  { ul: [
+    '**Global (overall) stability**: deep-seated or slope failure, static or seismic.',
+    '**Settlement**, differential settlement and tilt (Service I foundation checks); the bearing check is a strength / allowable-pressure check only.',
+    '**AASHTO Strength IV** (DC 1.50, no live load) and the other strength limit states: only Strength I / Ia, Service I, Extreme Event I and Extreme Event II are evaluated. η is not applied in the extreme events.',
+    '**Strip, line and point surcharges** (Art. 3.11.6.2), compaction pressure, and hydrodynamic water pressure under seismic loading; the seismic increment uses the moist unit weight with static water.',
+    '**Battered piles**, pile groups in 3-D (corner and end piles), pile structural capacity, pile lateral analysis (p-y) and drag load in the tool itself: use Pile Designer for those. The **pile-to-cap tension connection** (anchorage) is not designed: a pile in tension is marked FAIL until the engineer designs it. Bar clearance to the pile heads is not checked.',
+    '**The footing on piles under Extreme Event I / II** (the EE pile reactions are not applied to the heel and toe; a note asks for a hand check).',
+    'Crack control of S4 (front face), K1 (key) and the heel bottom face; S4 is not designed in ACI mode.',
+    'Cohesion (input shown only), frost depth, drainage (weep holes, drains, filters), joints and the wall length, corners and wall ends, construction stages, durability (exposure classes and cover requirements beyond the input covers), the barrier and its anchorage (only its yield-line capacity is checked).',
+    'Counterfort, gravity, MSE, sheet-pile and soldier-pile walls; SI units.',
+    'The MassDOT provisions used (variable-height rule, collision on walls, heel top-steel rule) are cited by section; the manual edition is to be verified by the engineer.' ] } ] },
+
+{ id: 'decisions', title: 'Appendix: decisions pending engineer review', go: [], blocks: [
+  { p: 'Judgments recorded in the fix log (fixlog/Retaining Wall Designer.md) as "Decision (pending engineer review)", in the order they were made. Codes are the fix-log tags. Items since overtaken by a later change are marked so; the rest are open.' },
+  { table: { head: ['Tag', 'Subject', 'Decision (paraphrased)'], rows: [
+    ['STDS', 'Save as / New', 'Save as does not write the name into Project Name; New loads the page defaults; Back up all kept.'],
+    ['RWTH', 'Look', 'Masthead byline; result values in Times; RW’s label-above input layout kept.'],
+    ['RWDC', 'Check summary', 'PASS / FAIL only (no REVIEW or N/A rows).'],
+    ['RWTS', 'Drawings to scale', 'Phone: the section keeps a 620 px minimum width and scrolls; the analysis diagram opens fitted with larger text on tall walls; the S1 hook drawn on the bottom mat; bar dots are symbols; the collision elevation at one scale, plan strip schematic.'],
+    ['RWBP', 'Bearing per combination', 'One combination at a time (governing by default); AASHTO soil bearing drawn as the uniform block over B′; service distribution as reference.'],
+    ['RW3L / RW3F', '3D view', 'Combination views: arrows unfactored or factored, reaction and pressure the combination’s; η inside γ for AASHTO Strength; view state per session.'],
+    ['RWRB', 'Report bearing figure', 'Only the governing combination is drawn; EE II without a figure.'],
+    ['RWIE', 'Input errors', 'Blank load-type inputs count as 0; REVIEW only for β < 0 and φ > 1. Observation: the variable-height rule applies whenever ticked, ACI included.'],
+    ['RWSC', 'Self-consistency panel', 'Collapsed when all pass; not in the Report.'],
+    ['RWOV', 'Report overview', 'No Include box; white background for the 3D snapshot.'],
+    ['RWAX', 'Report appendix', 'A list with links, not a second print of every figure; Drawings sheets 2–3 on screen only.'],
+    ['RWS13', 'S1 / S3 layout', 'ℓ_d of the larger bar with its 12-in minimum; the S1 end is a lap, not a termination (ACI §7.7.3.5 / AASHTO 50 % rule not applied); L = H_s; bars anchored at the stem top.'],
+    ['RWSK', 'Shear key', 'Designed whether or not passive is counted; AASHTO Section 5 with passive as EH 1.50; K1 hooked at the key bottom when needed; key centred; no water on the key face.'],
+    ['RWE1', 'AASHTO EE I', 'Vertical components of P_AE, P_A neglected; P_AE with the moist γ_s and static water; P_AE on H′; η = 1.0; global stability not computed.'],
+    ['RWCV', 'EE II vertical thrust', 'The γ_EH,CT factor on P_a,V applies to all EE II checks.'],
+    ['RWUP', 'ACI water uplift split', '§5.3.8 cited; the statically consistent block in partial contact; no envelope with the old method; no-equilibrium cases warned.'],
+    ['RWPL 8b–8c', 'Piles: model and combinations', '2–4 rows; placeholder capacities; ACI uplift 0.6D + H (0.6 on P_a,V, water 1.0, no surcharge or column L/S); ACI with E: D + H + L + 0.7E; AASHTO EE uplift φ 0.80, compression φ 1.0, H_r for every limit state; toe passive only; row-to-row spacing by Δx.'],
+    ['RWPL 8d', 'Piles: footing', 'One-way shear at the stem face with every row in full; a row assigned by its centre; round piles punched as the square of equal area, no corner piles; heel bottom bars by the heel logic. Bottom cover max(c_c, embedment + clear): **overtaken by RWPB** (bars at c_c). ACI Ch. 13 citations: **overtaken by RW2L1** (verified).'],
+    ['RWPL schedule / 3D', 'Pile schedule', 'Per row the combination with the largest load / capacity; count with the first pile s/2 from the joint; EE pile combinations with unfactored arrows only.'],
+    ['RWPX', 'Pile Designer hand-off', 'ACI sends service cases and imports nothing; H_r not imported; the static R_n and φ imported (not the field-method value).'],
+    ['RWPC', 'Partial contact', 'The 3x̄ block applies to toes too (toe results may go down); resultant outside the base: toe takes V at its tip, heel no relief; AASHTO on rock treated the same way.'],
+    ['RWDL / RWLB', 'Summary column', 'Left column from 1200 px (240 px to 1499 px, 292 px above); RW’s own fonts and colours kept. The 1500-px breakpoint of RWDL is **overtaken by RWLB**.'],
+    ['RW2H5', 'EE II bearing', 'φ_b = min(0.80, φ input).'],
+    ['RW2H4', 'Load modifier η', 'Water uplift takes η where it reduces resistance and 1/η where it relieves bearing; η not applied in EE I / II; piles follow the Strength sets.'],
+    ['RW2H1', 'ACI seismic bearing', 'The E case keeps 1.0ΔP_E for bearing and e; the FS checks keep 0.7E.'],
+    ['RW2H3', 'Piles with water', 'Toe keeps the total routing (conservative); ACI heel γ_U 0.9; AASHTO WA 1.0 with no η; punching with the total reactions.'],
+    ['RW2M2', 'AASHTO Service I footing moments', 'One Service I set for heel and toe (column LL and LS included); net upward heel not checked in tension. The pile-toe negative s_max note: **overtaken by RWPB**.'],
+    ['RW2M3', 'Pile–cap tension', 'No in-tool connection design; the row FAILs and names T and the embedment.'],
+    ['RW2M1', 'AASHTO EE footing check', 'A check with the Strength I bars, not a redesign; γ = 1.0 (toe self-weight 1.0); key, development and crack control not checked for EE; piles: note only.'],
+    ['RW2L4', 'Crack control', 'S4 and K1 not checked.'],
+    ['RW2L8', 'ACI joint shear friction', 'μ = 0.6 (not roughened); permanent compression across the joint not added.'],
+    ['RWPB', 'Pile bottom mat', 'Punching keeps the abutment’s depth over the pile heads (t_f − embedment − clear − d_b); no bar-to-pile clearance check; the abutment calculator still lifts its mat.'],
+    ['RWTE', 'Pile cap thickness', 'Input limit t_f > embedment + clear + 2 in; the ACI d_p ≥ 12 in stays a check row.'] ] } } ] },
 ];
 /* ---- rendering ---- */
 function rwmanEsc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -12621,8 +12808,10 @@ function rwdwBuild(r) {
       '9. SLIDING: ' + (isA ? 'BASE FRICTION ' + AS(a.fric_label).toUpperCase() + ', PHI_TAU = ' + rwdwN(inp.aashto.phi_tau, 2) : 'MU = ' + rwdwN(inp.mu, 3)) + '; PASSIVE AT THE TOE ' + (inp.inclPassive ? 'INCLUDED' : 'NEGLECTED') + (G.dk > 0 ? '; SHEAR KEY ' + rwdwIn(G.dk) + ' DEEP' : '') + '.',
       '10. SEISMIC: ' + (r.hasSeismic ? (isA ? 'K_H = ' + rwdwN(inp.kh, 3) + '; EXTREME EVENT I STABILITY (AASHTO 11.6.5.1, P_AE AND WALL INERTIA) CHECKED; STEM DESIGNED FOR EXTREME EVENT I.' : 'MONONOBE-OKABE INCREMENT AT 0.6H (K_H = ' + rwdwN(inp.kh, 3) + ', K_V = ' + rwdwN(inp.kv, 3) + ') IN STABILITY (0.7E, FS 1.1) AND IN THE STEM (U = 1.2D + 1.0E + 1.6H).') : 'NONE (K_H = 0).'),
       'ASSUMPTIONS AND SCOPE',
-      '11. NOT IN THE TOOL, BY THE ENGINEER OF RECORD / GEOTECHNICAL ENGINEER: GLOBAL STABILITY, SETTLEMENT, DRAINAGE (WEEP HOLES,',
-      '    DRAINS, FILTER), JOINT LAYOUT AND WALL LENGTH, SHEAR-KEY AND FRONT-FACE REINFORCEMENT, LAP OF THE S1 DOWELS, BAR DEVELOPMENT.',
+      '11. NOT IN THE TOOL, BY THE ENGINEER OF RECORD / GEOTECHNICAL ENGINEER: GLOBAL STABILITY, SETTLEMENT, STRENGTH LIMIT STATES',
+      '    OTHER THAN STRENGTH I / IA, STRIP / LINE / POINT SURCHARGES AND COMPACTION PRESSURE, DRAINAGE (WEEP HOLES, DRAINS, FILTER),',
+      '    FROST, JOINT LAYOUT, WALL LENGTH AND WALL ENDS, PILE-TO-CAP TENSION CONNECTION AND PILE DESIGN (PILE DESIGNER), CRACK CONTROL',
+      '    OF S4, K1 AND THE HEEL BOTTOM FACE (SEE THE USER MANUAL, LIMITS).',   // RWHP-2 (2026-11-07): was "... SHEAR-KEY AND FRONT-FACE REINFORCEMENT, LAP OF THE S1 DOWELS, BAR DEVELOPMENT" (all checked since #947-#951)
       '12. BAR LENGTHS AND THE KEY WIDTH ARE NOMINAL (SHEET 2); HARDWARE OF THE BARRIER NOT SHOWN.',
       '13. VALUES ARE THE TOOL\'S RESULTS; EACH IS WORKED ON THE TAB NAMED IN THE SHEET INDEX AND IN THE CALCULATION REPORT.',
       '14. CHECKS: ' + (nA ? nA + ' OF ' + nT + ' CHECKS FAIL (' + Object.values(r.checks).filter(c2 => !c2.ok).map(c2 => AS(c2.label).toUpperCase()).join(', ') + ').' : 'ALL ' + nT + ' CHECKS PASS.'),
