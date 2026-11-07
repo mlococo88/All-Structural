@@ -776,17 +776,30 @@ function solve(S){
       const Tn=CP_ROOF_NORM, keys=[0.25,0.5,1.0], grp=["<=0.25","0.5",">=1.0"];
       c.hLBand=hLBand(c.hL);
       c.hLInterp=(c.hL>0.25&&c.hL<1.0&&Math.abs(c.hL-0.5)>1e-9);
-      /* step 1: coefficient at theta within each h/L row group; step 2: across h/L */
-      const across=(pull)=>{
-        const per=grp.map(k=>tblPick(Tn.theta,pull(k),g.theta,S.tblMode).v);
-        const r=tblPick(keys,per,c.hL,S.tblMode);
-        return {v:r.v, per:per, i0:r.i0, i1:r.i1, f:r.f};
+      /* step 1: coefficient at theta within each h/L row group; step 2: across h/L.
+         A7H2 (2026-11-07): Fig. 27.3-1 note: interpolation only between values of the same sign, with 0.0 assumed
+         where no value of that sign is given. When the two bracketing values of a step differ in sign, the value of
+         the other sign is replaced by 0.0 for that step (sign = +1: the positive set; -1: the negative set). */
+      const sameSign=(ks,vs,x,sign)=>{
+        const r=tblPick(ks,vs,x,S.tblMode);
+        if(r.i0===r.i1) return {r:r,sub:[]};
+        const nn=[]; ks.forEach((k,i)=>{ if(vs[i]!==null&&vs[i]!==undefined) nn.push(i); });   /* tblPick indices skip nulls */
+        const a=vs[nn[r.i0]], b=vs[nn[r.i1]];
+        if(!(a*b<0)) return {r:r,sub:[]};
+        const sub=[], v2=vs.map((v,i)=>{ if((i===nn[r.i0]||i===nn[r.i1]) && v*sign<0){ sub.push(i); return 0.0; } return v; });
+        return {r:tblPick(ks,v2,x,S.tblMode),sub:sub};
+      };
+      const across=(pull,sign)=>{
+        const per=grp.map(k=>sameSign(Tn.theta,pull(k),g.theta,sign).r.v);
+        const q=sameSign(keys,per,c.hL,sign), r=q.r;
+        const o={v:r.v, per:per, i0:r.i0, i1:r.i1, f:r.f}; if(q.sub.length) o.sub=q.sub;   /* sub: per[] entries taken as 0.0 */
+        return o;
       };
       /* Fig. 27.3-1: at theta = 60 deg the windward coefficient is 0.01*theta = 0.6 (positive). Interpolation is
          between values of the same sign only, with 0.0 assumed where none is given (note 3), so the 60 deg
          column is 0.6 for the positive row and 0.0 for the negative row when interpolating 45 to 60 deg. */
       const at60=(arr,v)=>arr.map((x,j)=>Tn.theta[j]>=60?v:x);
-      const wn=across(k=>at60(Tn.ww[k].neg,0.0)), wp=across(k=>at60(Tn.ww[k].pos,0.6));
+      const wn=across(k=>at60(Tn.ww[k].neg,0.0),-1), wp=across(k=>at60(Tn.ww[k].pos,0.6),+1);
       const lw=(function(){const per=grp.map(k=>tblPick(Tn.lw.thetas,Tn.lw[k],g.theta,S.tblMode).v);
         const r=tblPick(keys,per,c.hL,S.tblMode); return {v:r.v,per:per,i0:r.i0,i1:r.i1,f:r.f};})();
       c.CpWWroofNeg=wn.v; c.CpWWroofPos=wp.v; c.CpLWroof=lw.v;
@@ -2760,10 +2773,11 @@ function renderRoof(host){
       if(c.hlTrace && c.hLInterp){
         dtable(cb,"Two-step interpolation on \u03B8 then on h/L",
           ["Coefficient","at h/L = 0.25","at h/L = 0.5","at h/L = 1.0","interpolated at h/L = "+RN(c.hL,3)],[
-          [{v:"Windward, negative C\u209a"}].concat(c.hlTrace.wn.per.map(v=>({v:RN(v,3)}))).concat([{v:RN(c.CpWWroofNeg,3),cls:"hl"}]),
-          [{v:"Windward, positive C\u209a"}].concat(c.hlTrace.wp.per.map(v=>({v:RN(v,3)}))).concat([{v:RN(c.CpWWroofPos,3),cls:"hl"}]),
+          [{v:"Windward, negative C\u209a"}].concat(c.hlTrace.wn.per.map((v,j)=>({v:RN(v,3)+((c.hlTrace.wn.sub||[]).indexOf(j)>=0?" \u2192 0.000\u002A":"")}))).concat([{v:RN(c.CpWWroofNeg,3),cls:"hl"}]),
+          [{v:"Windward, positive C\u209a"}].concat(c.hlTrace.wp.per.map((v,j)=>({v:RN(v,3)+((c.hlTrace.wp.sub||[]).indexOf(j)>=0?" \u2192 0.000\u002A":"")}))).concat([{v:RN(c.CpWWroofPos,3),cls:"hl"}]),
           [{v:"Leeward C\u209a"}].concat(c.hlTrace.lw.per.map(v=>({v:RN(v,3)}))).concat([{v:RN(c.CpLWroof,3),cls:"hl"}])],
-          "The middle three columns are the coefficient evaluated at \u03B8 = "+R2(g.theta)+"\u00B0 within each tabulated h/L row group.");
+          "The middle three columns are the coefficient evaluated at \u03B8 = "+R2(g.theta)+"\u00B0 within each tabulated h/L row group."+
+          ((c.hlTrace.wp.sub||c.hlTrace.wn.sub)?" \u002A The two bracketing values differ in sign. Fig. 27.3-1 permits interpolation only between values of the same sign, with 0.0 assumed where no value of that sign is given, so the value of the other sign is taken as 0.0 for the interpolation.":""));
       }
       dtable(cb,"Fig. 27.3-1 \u2014 windward roof C\u209a, wind normal to ridge",
         ["h/L","Sign"].concat(T.theta.map(t=>t>=60?"\u2265 60":t.toString())),

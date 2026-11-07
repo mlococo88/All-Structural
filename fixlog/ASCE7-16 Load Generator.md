@@ -1277,3 +1277,29 @@ Basis: ASCE/SEI 7-16 Fig. 27.3-1 and Sec. 27.1.5 (**verify (ASCE 7-16 PDF unread
 - Excel workbook built for all 9 cases (`buildWorkbook` + `writeBuffer`, no error).
 - `node tests/check-syntax.mjs` (95 files pass), `tests/smoke/project-library.mjs --tool asce7` (ALL PASS), `tests/smoke/phone-layout.mjs --tool asce7` (390 / 768 px pass), `tests/engine/run.mjs handoffs` (10 passed).
 - **Other copies:** none.
+
+## 2026-11-07 — PR: claude/asce7-h2-same-sign — A7H2: roof C_p interpolation only between values of the same sign (review H2; §4)
+
+### A7H2-1. Same-sign interpolation of the windward roof C_p, wind normal to the ridge   [calc change] [more conservative]
+- **Where:** `solve()`, Sec. E.6 roof block, anchor `const across=(pull`, and the call `const wn=across(k=>at60(Tn.ww[k].neg,0.0)`; `renderRoof` two-step interpolation table, anchor `"Windward, positive Cₚ"}].concat(c.hlTrace.wp.per`.
+- **Problem:** the windward coefficient was interpolated on θ inside each h/L row and then linearly across h/L with no sign check. Fig. 27.3-1 (note) allows interpolation only between values of the same sign, with 0.0 assumed where no value of that sign is given. For 15° < θ < 20° with 0.25 < h/L < 0.5, and 20° < θ < 25° with 0.5 < h/L < 1.0, the "positive" windward value came out negative or too small (unconservative for downward wind and, since A7H1, for the lateral roof term).
+- **Governing provision:** ASCE/SEI 7-16 Fig. 27.3-1, roof pressure coefficients, note on interpolation (**verify (ASCE 7-16 PDF unreadable)**; the existing code comment at `at60` already cites the same note for the 45°–60° step).
+- **Before:**
+  ```js
+      const across=(pull)=>{
+        const per=grp.map(k=>tblPick(Tn.theta,pull(k),g.theta,S.tblMode).v);
+        const r=tblPick(keys,per,c.hL,S.tblMode);
+        return {v:r.v, per:per, i0:r.i0, i1:r.i1, f:r.f};
+      };
+      ...
+      const wn=across(k=>at60(Tn.ww[k].neg,0.0)), wp=across(k=>at60(Tn.ww[k].pos,0.6));
+  ```
+- **After:** a helper `sameSign(ks,vs,x,sign)` picks as before (`tblPick`, both the interpolate and the conservative mode). When the two bracketing values differ in sign, the one of the other sign (sign = +1 for the positive set, −1 for the negative set) is replaced by 0.0 and the pick is redone. Both steps (θ within a row, then across h/L) use it: `across(pull,sign)`, `wn=across(...,-1)`, `wp=across(...,+1)`. The trace gains `sub` (the per-row entries taken as 0.0; only when non-empty), and the Roof tab table shows "−0.056 → 0.000*" with a footnote.
+- **Check case (review variant B):** Adams, gable 4:12 (θ = 18.43°), 100 × 60 ft, ridge X, h_e = 24 ft, h = 29 ft, wind ±Y, h/L = 0.483, q_h = 38.40 psf, GC_pi ±0.18.
+  - θ step: h/L ≤ 0.25 row 0.0 → 0.2 gives 0.137; h/L = 0.5 row −0.18 → 0.0 gives −0.056.
+  - Before: 0.137 + (−0.056 − 0.137)(0.932) = **−0.043**; p(−GC_pi) = 38.40·0.85·(−0.043) + 38.40·0.18 = **5.49 psf**.
+  - After: signs differ → −0.056 taken as 0.0: 0.137·(1 − 0.932) = **+0.009**; p(−GC_pi) = **7.21 psf**; p(+GC_pi) −8.33 → −6.61 psf.
+  - Hand-off `roofDown` 5.49 → 7.21 psf. Max net downward LRFD-3W (drift peak, local) 251.45 → 252.31 psf. A7H1 roof term C_net 0.569 (floor) → 0.009 + 0.569 = 0.578: F_roof 18,560 → 18,859 lbf, F(±Y) 120,614 → 120,913 lbf.
+  - Negative windward set unchanged (−0.485).
+- **How verified:** headless Chromium, main vs branch, 9 cases (default, gable 12:12, hip 6:12, monoslope 4:12, variant B, variant C, Chatham, Site E, Adams flat): leaf diff of `R` and the hand-off: only variant B moved (the values above, and the combinations that use them). Rendered text of all tabs and the Report: 0 console errors, 0 KaTeX errors. Excel built for all cases. `check-syntax`, `project-library --tool asce7`, `phone-layout --tool asce7`, `engine handoffs`.
+- **Other copies:** none.
