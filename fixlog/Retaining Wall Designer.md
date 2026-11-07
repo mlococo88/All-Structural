@@ -6415,3 +6415,36 @@ Every statement was checked against this file's code (anchors: `calcAll`, `rwInp
 ### Decisions (pending engineer review)
 - The manual is a tab with its own print, and an optional Report appendix (as Spread Footing's "Include this manual"). The include choice is per browser, not per project, so no project format changes.
 - The input tables are written out (checked against a fresh page). They are not generated from the page at run time, so a new input needs a manual edit (CLAUDE.md §6 keeps the manual in the same file).
+## 2026-11-07 — PR: claude/rw-gfx-rebar (PR #1152: https://github.com/mlococo88/All-Structural/pull/1152) (RWRB) — Analysis diagram: the reinforcement drawn from the Drawings' bar model (bars in the section as lines at their extents, bars along the wall as dots), labels in columns with leaders   [display only; no result change]
+- **Why:** engineer, 2026-11-07: "The analysis diagram tab doesn't show the rebar correctly, please review."
+- **Before (`buildCrossSection`, block `// ── REINFORCING BARS`):**
+  - the orientation was reversed: F1 (heel top) and F2 (toe bottom), which run in the plane of the section, were rows of dots;
+  - S1 was four dots plus a hook, with a "lap 1.3ℓd" box (the lap is ℓ_st since RWDS) and an "S1 ends" dashed line across the stem;
+  - S2 was three dots per face; F3 was two dots per mat under the stem only;
+  - S3 (upper back face), S4 (AASHTO front face) and K1 (key bars) were not drawn;
+  - the labels sat on the bars and the lines ("F1 …" on the F1 dots, "lap 1.3ℓd" across the lap box, "std 90° hook" in the heel, "F2 …" on the toe top).
+- **After:**
+  - new `rwrbBarsSVG(r, o)` (before the RWPS helpers) draws the bars from `rwdwGeo` / `rwdwBars`, the model behind Drawings sheets 1–2 and the bar schedule (same marks, sizes, spacings, covers and extents):
+    - S1 line from the joint to its end (`BR.S1.to`: mid-height + the S3–S1 lap, or the top cover);
+    - S1D dowel line from the lap top (joint + ℓ_st) down to the bottom mat, with the 90° hook (bend radius from the inside diameter 6 / 8 / 10 d_b, ACI 318-19 Table 25.3.2 / AASHTO 10th Ed. Table 5.10.2.3-1) and the 12 d_b tail as on the sheets;
+    - S3 line from mid-height to the top cover, inside S1; S4 line at the front face (when designed);
+    - S2 dots at their spacing on each face, inside the verticals;
+    - F1 line at the top of the heel into the toe by ℓ_d past the stem back face; F2 line at the bottom of the toe into the heel by ℓ_d past the front face, with its hook when ticked;
+    - F3 dots at their spacing on both mats;
+    - K1 hooked bars at the key's toe face (when the key is reinforced);
+    - brackets beside the back face marking the S1D–S1 lap and the S3–S1 lap;
+  - labels with size @ spacing in four columns (backfill side of the stem, toe side above grade, inside the heel between the mats, beside the key), spaced so they do not overlap, with leaders to the bars; the tooltips are kept, with new ones for S1D, S3, S4 and K1;
+  - the "key" tag is replaced by the K1 label when the key is reinforced;
+  - `rwdwGeo`, `rwdwBarOf` and `rwdwBars` move unchanged from the Drawings script to the first script, because the Analysis diagram is drawn on load before the later scripts are parsed;
+  - the unused `cov_s_px`, `cov_f_px` and `bar_r` are removed.
+- **Checked against the design (default ACI wall):**
+  - S1 ends z = 7.23 ft above the joint = H_s/2 (6.00) + ℓ_st,S3–S1 (14.8 in = 1.23 ft). Both are marked.
+  - Covers: back face and front face c_stem, top and bottom c_ftg (on piles, `r.cov_bot`, as on the sheets).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). The bend size is drawing detail, as in RWTS-2.
+- **Saved data (§5):** none.
+- **How verified:** see the PR (main vs branch probe of `_R`, localStorage keys, every tab's text and the Report text with SVG removed, DXF of every sheet; screenshots).
+- **Other copies:** the Report figure is the same function. The Overview section draws no reinforcement.
+- **Decisions (pending engineer review):**
+  - Bars are drawn at their real positions with a minimum line width of 1.5 px and a minimum dot radius of 2.2 px (the note says bar symbols are not to scale).
+  - No transverse bars are drawn at the heel bottom or the toe top: the design has none (only F3 longitudinal on both mats), the same as the Drawings and the bar schedule. The engineer asked about them; adding them would be a design change.
+  - In pile mode the bottom mat is drawn where the model puts it (`r.cov_bot`). The pile-mode bottom-bar position is another PR's fix, and this figure follows it.
