@@ -8468,7 +8468,8 @@ function sfdWallSketchSVG(i){
  (pd.pmBars||[]).forEach(q=>{const u=lw/2+(dir==='y'?q.y:q.x),v=(dir==='y'?q.x:q.y)/tw*tpx;E.push('<circle cx="'+X(u).toFixed(1)+'" cy="'+(yPlan+tpx/2+v).toFixed(1)+'" r="2.4" fill="#1f4e8c"/>');});
  if(conc){const a=Math.max(0,u0-b/2),c=Math.min(lw,u0+b/2);E.push('<rect x="'+X(a).toFixed(1)+'" y="'+yPlan.toFixed(1)+'" width="'+Math.max(X(c)-X(a),2).toFixed(1)+'" height="'+tpx.toFixed(1)+'" fill="rgba(198,40,40,0.18)" stroke="#c62828"/>');}
  t(W/2,yPlan-10,'Plan: t = '+f(tw)+' in'+(tpx>tw*sc*1.05?' (drawn ×'+(tpx/(tw*sc)).toFixed(1)+')':'')+', '+(pd.pmBars||[]).length+' vertical bars',{fs:11});
- t(8,Ht-12,'blue: vertical bars; green dashed: horizontal bars'+(w&&w.hz&&!w.hz.need&&w.hz.s>0?' @ '+f(w.hz.s)+' in':' (input needed)')+'; red: load and b'+(conc&&topGovB?', red dotted: b_eff,top carried to the base':'')+'; purple dashed: 45° spread; b_eff,base = the larger of b_eff,top and the spread',{a:'start',fs:10,c:'#444'});
+ t(8,Ht-26,'blue: vertical bars; green dashed: horizontal bars'+(w&&w.hz&&!w.hz.need&&w.hz.s>0?' @ '+f(w.hz.s)+' in':' (input needed)')+'; red: load and b'+(conc&&topGovB?'; red dotted: b_eff,top carried to the base':''),{a:'start',fs:10,c:'#444'});
+ if(conc)t(8,Ht-12,'purple dashed: 45° spread; b_eff,base = min(max(b_eff,top, spread), s, ℓ_w)',{a:'start',fs:10,c:'#444'});
  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+W+' '+Ht.toFixed(0)+'" style="width:100%;max-width:'+W+'px;height:auto;font-family:Times New Roman,serif" role="img" aria-label="Wall elevation and plan">'+E.join('')+'</svg>';}
 /* the wall's P-M sections and demand points (display only, from sfdWallOOP) */
 function sfdWallPMData(i){const o=P2.wallD[i],pd=P2.pedDes[i];if(!o||!o.applied)return null;

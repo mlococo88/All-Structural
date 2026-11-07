@@ -6816,7 +6816,7 @@ index 50f3837..c2d5000 100644
 - **Inputs (Pedestals card, Wall only; `buildPedCards`, anchor `/* SFWD-3 (2026-11-07): how the out-of-plane load is applied`):** `peds[i].wallIn.load` ('conc' = "Concentrated, bearing width b", 'dist' = "Distributed over the full wall length"), `.bw` (b, in; blank = t), `.sLoad` (spacing to adjacent concentrated loads, in; blank = none). `newPed`: `load:'conc',bw:'',sLoad:''` (new projects: concentrated, b = t: conservative).
 - **Saved data (§5), `migrateState` (anchor `/* SFWD-3 (2026-11-07): wall load application`):** absent `load` → `'env'`; `bw`, `sLoad` absent → ''. **Decision (pending engineer review):** an older save gets *both* choices computed and the more conservative governs, separately for the out-of-plane P–M (base, top, dowels: the larger `allMax`) and for the out-of-plane shear (the larger V_u/φV_c). The select shows a third option "Older project: the more conservative of the two (choose one)" only while the value is 'env'; the wall card shows "Input needed: wall load application" at the top with both D/C values; the Check Summary condition "load application: input needed". Why both and not simply "concentrated": concentrated is not always the larger ratio. In `w769h` (in-plane V_y 120 k, ±6M_u,in/ℓ_w² large) b_eff,base = 66 < 72 in raises N per ft and the base P–M ratio falls 0.1074 → 0.1058 while the shear rises 0.185 → 0.202; `'env'` keeps 0.1074 and 0.202. No key or format change; no field is removed.
 - **Method (`sfdWallOOP`, anchor `/* SFWD-3 (2026-11-07, engineer: "If I have an out-of-plane moment`; the per-ft part is now `run(ldc,o)`):**
-  - Concentrated: b_eff,top = min(b + 4t, s, ℓ_w) (11.2.3.1). b_eff,base = min[min(b/2 + h, a₁) + min(b/2 + h, a₂), s, ℓ_w], h = element height (load at its top), a₁, a₂ = distances from the load point (load offset e along ℓ_w, `loadEx`/`loadEy`) to the two wall ends. **Decision (pending engineer review):** the 45° spread is common practice, not a code article. b_eff,base starts from b (as specified), so for a short thick wall it can be less than b_eff,top (hand check: 60 < 118 in; conservative). b_eff,top is not cut at the wall ends (11.2.3.1 limits it only by joints, which the tool does not model).
+  - Concentrated: b_eff,top = min(b + 4t, s, ℓ_w) (11.2.3.1). b_eff,base = min[min(b/2 + h, a₁) + min(b/2 + h, a₂), s, ℓ_w], h = element height (load at its top), a₁, a₂ = distances from the load point (load offset e along ℓ_w, `loadEx`/`loadEy`) to the two wall ends. **Decision (pending engineer review):** the 45° spread is common practice, not a code article. b_eff,base starts from b (as specified), so for a short thick wall it can be less than b_eff,top (hand check: 60 < 118 in; conservative). **Superseded by SFWD-7 (engineer-approved 2026-11-07):** b_eff,base = min(max(b_eff,top, spread), s, ℓ_w); it is never less than b_eff,top. b_eff,top is not cut at the wall ends (11.2.3.1 limits it only by joints, which the tool does not model).
   - Distributed: b_eff,top = b_eff,base = ℓ_w (SFWD-2 behaviour).
   - Base section (every LRFD combination): N = P_u,a/b_eff,base + W_sw/ℓ_w ± 6M_u,in/ℓ_w² (P_u,a = factored applied load `pl.Pa`, W_sw = factored element self-weight, spread over ℓ_w: **Decision**); M = M_c/b_eff,base. Slenderness on the strip b_eff,base: P_u,strip = P_u,a + W_sw·b_eff,base/ℓ_w, I_g = b_eff,base t³/12, M_2,min = P_u,strip(0.6 + 0.03t) (δ unchanged where b_eff = ℓ_w).
   - Out-of-plane shear per ft: V_u/b_eff,base (row field `LbV`).
@@ -7096,4 +7096,47 @@ index 50f3837..c2d5000 100644
   - Report `sfrWallSub`: the wall statement `{type:'note',text:sfdWallTxt(w,false)}` → `...sfrNL('Wall statement:', items)`; "Out of plane, per ft … Not checked: <list>." → the first sentence as a note + `...sfrNL('Not checked for this wall:', SFWD_NOT_L)`.
 - **Formulas, factors, units, code references:** none changed. **Saved data:** none.
 - **How verified:** harness origin/main vs the branch, 9 cases (def, rev, dir, wTall, w769, w769h, wAll, wHCe, wSel): R, P2 0 differences, dashboard identical, the digit sequence of the Report text identical in all 9 (only the wording / splitting changed). 390-px screenshot of the wall card. 0 console errors, 0 KaTeX errors. Tests: see the PR.
+- **Other copies:** none.
+
+## 2026-11-07 — PR: sf-beff-base-max (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SFWD-7: wall b_eff,base = the larger of b_eff,top and the 45° spread, capped by s and ℓ_w; CALCULATION CHANGE for Wall elements with a concentrated load only)
+
+### SFWD-7. b_eff,base never less than b_eff,top   [CALCULATION CHANGE, Wall elements only; CLAUDE.md §4]
+- **Problem:** SFWD-3 took b_eff,base = min[min(b/2 + h, a₁) + min(b/2 + h, a₂), s, ℓ_w], starting from the bearing width b. For a short wall it came out smaller than b_eff,top (hand check `wHC`: 60 in at the base vs 118 in at the load): the load "narrowed" going down the wall, which is not physical. Over-conservative at the base for short walls (the per-ft base demand was up to ℓ_w/b_eff,base times the top demand).
+- **Decision (engineer-approved, 2026-11-07; replaces the SFWD-3 "pending" Decision "b_eff,base can be smaller than b_eff,top"):** b_eff,base = min( max(b_eff,top, b_spread), s, ℓ_w ), b_spread = min(b/2 + h, a₁) + min(b/2 + h, a₂). The 45° spread is common practice, not a code article.
+- **Decision (end distances):** a₁, a₂ limit only the spread term; they do **not** cap the b_eff,top term inside the max. ACI 318-19 §11.2.3.1 limits the effective length at the load only by the load spacing and vertical joints, and SFWD-3 left b_eff,top uncut at the wall ends; the max keeps that, so b_eff,base ≥ b_eff,top whenever s and ℓ_w allow. Effect: a load near a wall end (`wHCe`, a₂ = 17 in) gets b_eff,base = b_eff,top = 118 in (was 47 in).
+- **Governing provision:** ACI 318-19 (2019) §11.2.3.1 for b_eff,top (unchanged); b_eff,base: engineer's rule above (no article).
+- **Where / before / after:** `sfdWallOOP`, inner `run(ldc,o)`, anchor `/* SFWD-7 (2026-11-07, engineer): b_eff,base = min(max(b_eff,top, 45-degree spread)`:
+  ```js
+  // before
+  const bTop=ldc==='dist'?lw:Math.min(bw+4*tw,sL,lw), bBase=ldc==='dist'?lw:Math.min(Math.min(bw/2+hs,a1)+Math.min(bw/2+hs,a2),sL,lw);
+  const Lb=bBase/12,Lt=bTop/12,IgS=bBase*Math.pow(tw,3)/12;
+  Object.assign(o,{ldc,bTop,bBase,Lb,Lt,IgS});
+  // after
+  const bTop=ldc==='dist'?lw:Math.min(bw+4*tw,sL,lw), spr=Math.min(bw/2+hs,a1)+Math.min(bw/2+hs,a2),
+   bBase=ldc==='dist'?lw:Math.min(Math.max(bTop,spr),sL,lw), topGovB=ldc!=='dist'&&bTop>spr+1e-9;
+  const Lb=bBase/12,Lt=bTop/12,IgS=bBase*Math.pow(tw,3)/12;
+  Object.assign(o,{ldc,bTop,bBase,spr,topGovB,Lb,Lt,IgS});
+  ```
+  Older save ('env' mode): `o.env.conc` also carries `spr`, `topGovB` (`conc:{allMax:A.allMax,vr:vr(A),bTop:A.bTop,bBase:A.bBase,spr:A.spr,topGovB:A.topGovB}`). Everything downstream (base N and M per ft, slenderness strip, out-of-plane shear, dowels) already used `bBase` and is unchanged.
+- **Display:**
+  - Wall Design card, eq block "Wall: effective length for the out-of-plane load (b_eff)": symbolic b_spread = min(b/2 + h, a₁) + min(b/2 + h, a₂), b_eff,base = min[max(b_eff,top, b_spread), s, ℓ_w]; substituted with values; result with "(b_eff,top governs)" where it does. Decision item "Decision (engineer-approved 2026-11-07)" replaces "Decision (pending engineer review)".
+  - Report `sfrWallSub`: new step `wo.bs` (b_spread, symbolic → substituted → result); `wo.bb` now min[max(b_eff,top, b_spread), s, ℓ_w], label says which term governs. Figure caption: "b_eff,base (the larger of b_eff,top and the 45° spread)".
+  - Sketch `sfdWallSketchSVG`: where b_eff,top governs, b_eff,base is drawn under b_eff,top with red dotted lines down the wall from its ends; label "b_eff,base = 118.00 in (= b_eff,top; 45° spread 60.00 in)"; otherwise as before. Legend on two lines, second line "purple dashed: 45° spread; b_eff,base = min(max(b_eff,top, spread), s, ℓ_w)".
+  - "Wall checks" row "Out of plane": "(11.2.3.1 at the load; at the base the larger of that and a 45° spread)".
+- **Hand check `wHC`** (default project, L = 12 ft, Ped 1 wall t = 32, ℓ_w = 118 in along y, h = 2 ft = 24 in, 28 #6, D.P = 60 k, L.M_y = 40 k-ft, b = 12 in, no s; governing 1.2D + 1.6L + 0.5S):
+  - b_eff,top = min(12 + 4·32, ∞, 118) = **118 in** (unchanged).
+  - b_spread = min(6 + 24, 59) + min(6 + 24, 59) = 30 + 30 = 60 in.
+  - Before: b_eff,base = min(60, ∞, 118) = **60 in** (5.000 ft). After: min(max(118, 60), ∞, 118) = **118 in** (9.833 ft).
+  - M_u per ft at the base = 64.00/5.000 = **12.80** → 64.00/9.833 = **6.51 k-ft/ft**.
+  - N = 168.00/5.000 + 9.44/9.833 = 34.56 → 168.00/9.833 + 9.44/9.833 = 17.08 + 0.96 = **18.04 kip/ft**.
+  - φM_n per ft: 121.86 → 102.66 k-ft/ft; base P–M ratio **0.105 → 0.063** (12.80/121.86 → 6.51/102.66). Top unchanged 0.064, which now governs "Wall out-of-plane P–M": **0.105 → 0.064**. Dowels (vertical bars) = base: 0.105 → 0.063.
+  - Out-of-plane shear (1.2D + 1.0(+Wx) + L + 0.5S): V_u = 8.00 kip; 8.00/5.000 = 1.60 → 8.00/9.833 = 0.814 kip/ft; φV_c = 11.45 kip/ft; ratio **0.140 → 0.071**.
+  - The after values equal the distributed case `wHCd` (b_eff = ℓ_w = 118 in): 0.063 / 0.064 / 0.071.
+- **Tall wall, no change (`wTall`:** t = 12, ℓ_w = 72 in, h = 12 ft = 144 in, b = 12 in): b_eff,top = min(12 + 48, ∞, 72) = 60 in; b_spread = min(150, 36) + min(150, 36) = 72 in; b_eff,base = min(72, ∞, 72) = 72 before, min(max(60, 72), ∞, 72) = 72 after. Base P–M 0.620, shear 0.087, both unchanged.
+- **Other moved cases (harness):**
+  - `wHCe` (load 3.5 ft off centre, a₂ = 17 in): b_spread = 30 + 17 = 47 → b_eff,base 47 → 118 in; base 0.181 → 0.108; P–M (max) 0.181 → 0.111 (top); shear 0.178 → 0.083.
+  - `w769` / `w769h` (b_eff,top 72, spread 66): b_eff,base 66 → 72 in; base P–M **0.1058 → 0.1074** (rises: less axial per ft against a large ±6M_u,in/ℓ_w² term, as SFWD-3 noted); shear 0.202 → 0.185.
+  - `wHCenv` = `wHC`. `w769env` (older save, 'env': the more conservative of concentrated and distributed): P–M unchanged 0.1074 (was the distributed value, now both are 0.1074 and the tie reports 'conc'); shear 0.202 → 0.185 (the concentrated b_eff,base is now 72 in = ℓ_w).
+- **How verified:** SF harness (24 cases) origin/main 3e301df vs the branch: def, rev, sfe, sfe5, dir, sfe9, revEx, thin, revHook, edgeHook, wSel: R, P2, dashboard and Report identical. wTall, wTallBr, wTallEnv, wAll, wOOP, wHCd, wHCs (b_eff,base ≥ b_eff,top already): only the new fields `spr`, `topGovB` and the new Report step `wo.bs`; every ratio identical. Moved: wHC, wHCenv, wHCe, w769, w769h, w769env only (all had b_eff,base < b_eff,top). 0 console errors, 0 KaTeX errors. Tests: tests/check-syntax.mjs, phone-layout --tool sf, spread-footing-nobear, spread-footing-scroll, project-library --tool spreadfooting: pass.
+- **Saved data:** no key or format change; no migration (old projects recompute).
 - **Other copies:** none.
