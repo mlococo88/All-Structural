@@ -2588,3 +2588,104 @@ Calculation audit, item 2. Engineer decision (2026-11-07): in AASHTO mode the ve
     - 0 console errors.
   - **AASHTO q_s 250, and AASHTO q_s 250 + water + collision + η 1.05:** results change as above; the EE II values (`aashtoR.ct`) are unchanged.
 - Tests: check-syntax, smoke/retaining-wall-checks (self-consistency panel passes), phone-layout rwall 390/768, project-library retwall, dxf-print-sheets rw.
+
+## 2026-11-07 — PR: claude/rw-aashto-ee2-ct — AASHTO Extreme Event II (collision) stability: LS instead of the dead surcharge for bearing, ES vertical in the resisting load, water at WA = 1.0, lateral ES with the EH choice (RWCT; calculation change)
+
+Calculation audit, item 3. Engineer decision (2026-11-07). Code sites are tagged `RWCT`.
+
+### RWCT-1. `calcAll`, AASHTO collision block (`ct.ee2`)   [§4: result change when collision is on]
+- **Problems:**
+  - Bearing added 0.5 × the **dead** surcharge q_s·L_h (`gLS_ct * Wsur`, and `gLS_ct*Ms_sur` in the moment). It should be 0.5 × the live surcharge q_LL·L_h.
+  - The resisting vertical left out ES (q_s·L_h).
+  - The hydrostatic force was multiplied by γ_EH,CT, so the MassDOT option (γ_EH,CT = 0) dropped the water.
+  - The lateral ES was never in the driving force.
+- **Provision:**
+  - AASHTO LRFD 10th Ed. (2024) Table 3.4.1-1, Extreme Event II: γp = 1.00 for the permanent loads; LL / LS 0.50; WA 1.00. 3.4.1 explains the minimum for CT. C11.5.6 says WA is always 1.0.
+  - MassDOT Bridge Manual 3.3.2.4 (paraphrased): for stability under collision, the retained soil's earth pressure need not be applied, because the wall moves away from the backfill. The text speaks of earth pressure only.
+- **Engineer's choices:**
+  - (a) bearing V = V_min + 0.50·V_LS (moment + 0.50·V_LS·x_LS);
+  - (b) V_min + 1.00·V_ES (moment + V_ES·x_ES);
+  - (c) P_hyd and U at WA = 1.00 in every case. U was already at 1.00 in V_min; P_hyd changes;
+  - (d) lateral P_ES at γ_EH,CT: 0 with MassDOT, 1.00 with "full".
+  The stem's Extreme Event II case is unchanged; it was already consistent.
+- **Before / after** (`git diff -U0`):
+```diff
+@@ -2586 +2586,3 @@ function calcAll(inp) {
+-      const CMB_EE2 = { CT: 1.00, DC: 1.00, EV: 1.00, EH: gEH_ct, LS: gLS_ct, WA: 1.00 };   // Extreme Event II factors (RW3F)
++      const CMB_EE2 = { CT: 1.00, DC: 1.00, EV: 1.00, EH: gEH_ct, LS: gLS_ct, WA: 1.00, ES: gEH_ct, ESv: 1.00 };   // Extreme Event II factors (RW3F)
++      // RWCT (2026-11-07): water (P_hyd, U) at WA = 1.00 always; lateral ES follows the EH choice (ES = γ_EH,CT);
++      // ES vertical q_s·L_h is permanent at γp = 1.00 (Table 3.4.1-1 EE II); LS vertical q_LL·L_h at γ_LS = 0.50 on the bearing side only.
+@@ -2592 +2594 @@ function calcAll(inp) {
+-                       + gEH_ct * (P_EH + P_hyd)
++                       + gEH_ct * P_EH + CMB_EE2.WA * P_hyd + CMB_EE2.ES * P_ES   // RWCT: water no longer × γ_EH,CT; + ES lateral
+@@ -2596,2 +2598,2 @@ function calcAll(inp) {
+-      const V_ct_min = CMB_EE2.DC*(Wftg + Wstem + W_bar) + CMB_EE2.EV*(Wsoil + Pa_tri_v) - CMB_EE2.WA*F_uplift;
+-      const V_ct_max = V_ct_min + gLS_ct * Wsur;
++      const V_ct_min = CMB_EE2.DC*(Wftg + Wstem + W_bar) + CMB_EE2.EV*(Wsoil + Pa_tri_v) + CMB_EE2.ESv*V_ES_v - CMB_EE2.WA*F_uplift;   // RWCT: + 1.00 ES vertical
++      const V_ct_max = V_ct_min + gLS_ct * V_LS_v;   // RWCT: + 0.50 LS vertical (was 0.50·W_sur, the dead surcharge)
+@@ -2608 +2610 @@ function calcAll(inp) {
+-                  + gEH_ct * (P_EH*y_EH + P_hyd*(hw/3))
++                  + gEH_ct * P_EH*y_EH + CMB_EE2.WA * P_hyd*(hw/3) + CMB_EE2.ES * P_ES*y_ES   // RWCT: as H_drive_ct
+@@ -2610 +2612 @@ function calcAll(inp) {
+-      const Mr_ct = CMB_EE2.DC*(Ms_ftg + Ms_stem + Ms_bar) + CMB_EE2.EV*(Ms_soil + Ms_Pv) + CMB_EE2.WA*Ms_uplift;
++      const Mr_ct = CMB_EE2.DC*(Ms_ftg + Ms_stem + Ms_bar) + CMB_EE2.EV*(Ms_soil + Ms_Pv) + CMB_EE2.ESv*V_ES_v*xESv + CMB_EE2.WA*Ms_uplift;   // RWCT: + 1.00 ES vertical
+@@ -2617 +2619 @@ function calcAll(inp) {
+-      const x_R_brg_ct = V_ct_max > 0 ? (Mr_ct + gLS_ct*Ms_sur - Mo_ct) / V_ct_max : B/2;
++      const x_R_brg_ct = V_ct_max > 0 ? (Mr_ct + gLS_ct*V_LS_v*xLSv - Mo_ct) / V_ct_max : B/2;   // RWCT: 0.50 LS vertical (was 0.50·M_s,sur)
+```
+- **Uses item 2's terms:** `V_ES_v`, `xESv` (RWES), `V_LS_v`, `xLSv`, `P_ES`, `y_ES`.
+
+### RWCT-2. Display   [display]
+- **Stability tab, Step 7b:**
+  - The driving force shows `+ 1.0 P_ES` (with "full") and `+ 1.0 P_WA` when present.
+  - The resisting V shows `+ 1.0 V_ES` and `− 1.0 U` (the uplift was in the value but not shown before).
+  - A new line shows the bearing vertical: V_max = V + 0.50·V_LS.
+  - The Meyerhof line now reads q_u = V_max/B′.
+- **The MassDOT alert:** the quoted manual sentence was replaced by a paraphrase (brief: no manual text). It now also says that water stays at γ_WA = 1.0 and that the vertical dead loads, ES included, stay at 1.0. The "full" alert mentions ES and water.
+- **Report, Step 7b:**
+  - Same terms in Q and V.
+  - A new step `Vmax`.
+  - The Meyerhof substitution now uses V_ct,max. Before, it substituted V_ct,min although the value shown was q from V_ct,max: a display error, now fixed.
+- **3D view (`rw3Factors`, `ee2`):**
+  - water lateral takes WA (it was the EH factor);
+  - ES lateral takes γ_EH,CT (it was 0);
+  - LS vertical takes 0.50 (it was 0);
+  - the vertical surcharge arrow (q_s·L_h) takes 1.00 (it was 0.50).
+  So Σγ·V = V_ct,max.
+
+### Check cases (AASHTO default; collision TL-4: 28 kip over L_joint = 41 ft, so CT = 0.683 k/ft at 30 in above the top of the stem)
+- **Default (q_s = 0, no water), MassDOT γ_EH = 0.** Only bearing changes:
+  - V_LS = 357·8 = 2856 lb/ft;
+  - V_max = 16583 + 0.5·2856 = 18011 (before 16583);
+  - e = −0.383 ft (before −0.222), B′ = 11.734 ft;
+  - q = 18011/11.734 = 1535 psf (before 1375); D/C vs 9000 psf = 0.171 (before 0.153);
+  - sliding D/C 0.246 and e −0.222 ft are unchanged.
+- **q_s 250, water 6 ft below the top (P_hyd = 1755, U = 5850 lb/ft), MassDOT:**
+  - H = 1486 + 1.0·1755 = 3241 (before 1486);
+  - V_min = 11213 + 2000 = 13213 (before 11213);
+  - R = 13213·tan 20° = 4809;
+  - sliding D/C 0.364 → 0.674;
+  - M_o 16349 → 20736; M_r 91191 → 108191; e −0.425 → −0.369 ft (limit 4.167);
+  - V_max 12213 → 13213 + 0.5·2856 = 14641; q 1076 → 1285 psf.
+- **The same with γ_EH = "full":**
+  - H = 6395 → 6395 + 1125 (P_ES) = 7520;
+  - sliding D/C 1.567 → 1.564 (still FAIL);
+  - e 1.320 → 1.354 ft;
+  - q 1169 → 1395 psf.
+- **Stem M_u:** unchanged in all cases (32274 / 42577 lb·ft/ft).
+
+### Open item (not changed; for the engineer)
+- With the MassDOT option, the vertical component of the earth thrust P_a,V (sloped backfill or Coulomb δ > 0) is still credited at 1.00 in V_ct,min, while the horizontal component is dropped. This is unconservative where P_a,V > 0. Should P_a,V follow γ_EH,CT?
+
+### How verified
+- The tool's `calcAll` was run in Node, main vs branch: the three cases above, the default with "full", and q_s 250 on rock. They reproduce the audit briefing's values.
+- **origin/main vs branch, headless Chromium, ten walls** (the eight audit walls plus AASHTO q_s 250 + water + CT + η 1.05, and the same with γ_EH "full"):
+  - walls without collision: `_R`, Export JSON, every localStorage key, tab and Report text identical;
+  - walls with collision: only `aashtoR.ct.ee2` values and the Step 7b / status / Report text change, as above. The stem is unchanged.
+  - 0 console errors.
+- The self-consistency panel passes, and the 3D Σγ·V equals V_ct,max, on four collision walls (default, q_s + water MassDOT / full, rock + water + β).
+- Tests: check-syntax, smoke/retaining-wall-checks, phone-layout rwall 390/768, project-library retwall, dxf-print-sheets rw.
+
+### Saved data
+- No field or key change.
+- AASHTO projects with collision on give the new Extreme Event II results. This is the fix, by the engineer's decision.
