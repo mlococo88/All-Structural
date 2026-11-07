@@ -1976,6 +1976,7 @@ function renderDashboard(){
    if(!z.barFitOK)t.push('bars do not fit');
    if(!z.tieOK||!z.tieSizeOK)t.push('ties');
    if(z.dcrAxial>1)t.push('axial DCR '+f2(z.dcrAxial));
+   if(z.slFail)t.push(z.slm.some(q=>q.unstable)?'slender: P_u \u2265 0.75P_c (unstable)':'slender: \u03b4_s\u03b4 = '+f2(z.slGov.amp)+' > 1.4 (ACI 318-19 6.2.5.3)');   /* SFSL */
    if(t.length)why.push(z.label+': '+t.join(', '));});
   if(!realPeds.length)d.appendChild(chip('Pedestal design','no pedestals \u2014 bearing patches only','na',undefined,{tab:'tab-peddes',sec:'o-pd-intro'}));
   else d.appendChild(chip('Pedestal design',why.length?why.join('; '):'axial DCR '+f2(pedmax)+', ties and bars OK',
@@ -1994,7 +1995,7 @@ function renderDashboard(){
    d.appendChild(chip('Footing bar clear spacing',bad.length?bad.join('; '):'\u2265 max(1 in, d_b, 4/3 d_agg)'+(mn.length?' (min margin '+f2(Math.min(...mn))+' in)':''),bad.length?'fail':'pass',undefined,{tab:'tab-footdes',sec:'o-fd-x'}));}
   /* SFPM: biaxial P–M ratio of every LRFD combination at its own P_u */
   if(realPeds.length){const gv=realPeds.filter(z=>z.pmGov&&!isNaN(z.pmGov.ratio)).reduce((a,z)=>(!a||z.pmGov.ratio>a.pmGov.ratio)?z:a,null), nr=realPeds.filter(z=>z.pmRange&&z.pmRange.length);
-   const txt=gv?('max ratio '+f2(gv.pmGov.ratio)+' \u2014 '+gv.label+', '+gv.pmGov.name+' (at its own P_u)'):'not computed';
+   const sl=realPeds.filter(z=>z.slm), txt=(gv?('max ratio '+f2(gv.pmGov.ratio)+' \u2014 '+gv.label+', '+gv.pmGov.name+' (at its own P_u)'):'not computed')+(sl.length?'; slender: moments magnified, ACI 318-19 6.6.4 ('+sl.map(z=>z.label+' \u03b4_s\u03b4 up to '+f2(z.slGov.amp)).join(', ')+')':'');   /* SFSL */
    d.appendChild(chip('Pedestal P\u2013M (biaxial)',txt+(nr.length?'; P_u below the section\u2019s tension capacity in some combinations ('+nr.map(z=>z.label).join(', ')+'): NG':''),
     (gv&&gv.pmGov.ratio>1)||nr.length?'fail':(!gv?'warn':'pass'),undefined,{tab:'tab-peddes',sec:gv?'o-pd-'+P2.pedDes.indexOf(gv):'o-pd-intro'}));}
   /* SFCV: concrete cover, footing and pedestal vertical bars (ACI 318-19 Table 20.5.1.3.1) */
@@ -2080,7 +2081,7 @@ function sfdChCond(name){
     add(asMin,'A_s < A_s,min');add(XY.some(z=>!z.spcBotOK||!z.spcTopOK),'s > s_max');
     add(!asMin&&XY.some(z=>z.topNeeded&&!z.topProvided),'top steel required');}break;   /* as the chip text: A_s,min replaces "top steel required" */
   case 'Punching shear':add(!!(P2.punchWarn&&P2.punchWarn.length),'perimeters overlap');break;
-  case 'Pedestal design':realPeds.forEach(z=>{add(!z.rhoOK,'ρ outside 1–8%');add(!z.nBarsOK,'<4 bars');add(!z.barFitOK,'bars do not fit');add(!z.tieOK||!z.tieSizeOK,'ties');});break;
+  case 'Pedestal design':realPeds.forEach(z=>{add(!z.rhoOK,'ρ outside 1–8%');add(!z.nBarsOK,'<4 bars');add(!z.barFitOK,'bars do not fit');add(!z.tieOK||!z.tieSizeOK,'ties');add(!!z.slFail,'slender limit');});break;
   case 'Dowels (tension, laps)':(P2.dowels||[]).filter(z=>!z.isPatch).forEach(z=>{
    add(!z.asOK||!z.tenOK,'A_s,gov > A_s,prov');add(!z.ftgOKpf,(z.hook==='hook90'?'ℓ_dh':'ℓ_d')+' > avail');
    add(!z.projOKpf,z.full?'pedestal development short':'projection short');
@@ -3608,7 +3609,7 @@ function sfdResultRows(){
   'Footing bar clear spacing':()=>['ACI 318-19 §25.2.1; D/C = s<sub>clr,min</sub>/(s − d<sub>b</sub>)',mx([P2.desX,P2.desY].flatMap(z=>[z.AsBot>0?z.clrMinB/z.clrB:0,z.AsTop>0?z.clrMinT/z.clrT:0])),['o-fd-x','o-fd-y']],
   'Interface shear friction':()=>['ACI 318-19 §22.9.4.2, Table 22.9.4.2, §22.9.4.4–22.9.4.6; D/C = V<sub>u</sub>/φV<sub>n</sub>',mx((P2.shearFr||[]).filter(z=>!z.isPatch&&z.gov).map(z=>z.gov.ratio)),['o-fd-bear']],
   'Dowels (tension, laps)':()=>['ACI 318-19 §16.3.1.1, §16.3.3, §22.4 (interface tension), §25.4.2 / §25.4.3 (tension development), §25.5.2 / §25.5.5 (laps); §16.3.4.1 (minimum); D/C = A<sub>s,gov</sub>/A<sub>s,prov</sub>, A<sub>s,gov</sub> = max(0.005A<sub>g</sub>, A<sub>s,req</sub>)',mx((P2.dowels||[]).filter(z=>!z.isPatch).map(z=>z.dcAs)),['o-fd-bear']],
-  'Pedestal P\u2013M (biaxial)':()=>['ACI 318-19 §22.4, §22.2; D/C = |M<sub>u</sub>|/|φM<sub>n</sub>|<sub>θ</sub> on the contour at each combination’s own P<sub>u</sub> (P<sub>u</sub>/φP<sub>n,max</sub> above the axial cap)',mx(P2.pedDes.filter(z=>!z.isPatch&&z.pmGov).map(z=>z.pmRange&&z.pmRange.length?Infinity:(isNaN(z.pmGov.ratio)?0:z.pmGov.ratio))),P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)],
+  'Pedestal P\u2013M (biaxial)':()=>['ACI 318-19 §22.4, §22.2; D/C = |M<sub>u</sub>|/|φM<sub>n</sub>|<sub>θ</sub> on the contour at each combination’s own P<sub>u</sub> (P<sub>u</sub>/φP<sub>n,max</sub> above the axial cap)'+(P2.pedDes.some(z=>z.slm)?'; slender pedestal: magnified moments, §6.6.4.6, §6.6.4.5, §6.2.5.3':''),mx(P2.pedDes.filter(z=>!z.isPatch&&z.pmGov).map(z=>z.pmRange&&z.pmRange.length?Infinity:(isNaN(z.pmGov.ratio)?0:z.pmGov.ratio))),P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)],
   'Concrete cover':()=>['ACI 318-19 Table 20.5.1.3.1; D/C = c<sub>min</sub>/c',mx([...(P2.covChk?P2.covChk.rows.filter(z=>z.applies).map(z=>z.c>0?z.min/z.c:Infinity):[]),...P2.pedDes.filter(z=>!z.isPatch).map(z=>z.cov>0?z.vertCovMin/z.cov:Infinity)]),['o-fd-basis']],
   'Footing bar development':()=>['ACI 318-19 §25.4.2.4 (straight), §25.4.3.1 / Table 25.4.3.2 (standard hook)'+(state.mat.ldExcess==='on'?', §25.4.10.1 (excess A<sub>s</sub>, straight bars; A<sub>s,req</sub> = max(flexure, A<sub>s,min</sub>), R8.6.1.1)':'')+'; D/C = ℓ<sub>d</sub> (or ℓ<sub>dh</sub> where hooked)/available',mx(((P2&&P2.dev)?P2.dev.rows:[]).map(z=>z.dc)),['o-fd-dev']],
   'Pedestal shear':()=>['ACI 318-19 Table 22.5.5.1, §22.5.1.10–22.5.1.11 (biaxial), §10.6.2; D/C = V<sub>u</sub>/φV<sub>c</sub>',mx((P2.pedShear||[]).filter(z=>!z.isPatch&&z.gov).map(z=>z.gov.ratio)),P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)],
@@ -4117,6 +4118,8 @@ function sfrModel(){
      S({id:'pmCy',label:'Capacity point on the contour at θ: φM_ny',sym:'\\phi M_{ny,\\theta}',eq:'',sub:'',value:g.cMy,unit:'kip-ft'}),
      S({id:'pmRc',label:'Moment capacity in the direction of the demand',sym:'|\\phi M_{n}|_{\\theta}',eq:'\\sqrt{\\phi M_{nx,\\theta}^{2} + \\phi M_{ny,\\theta}^{2}}',sub:'\\sqrt{'+sfrP(g.cMx)+'^{2} + '+sfrP(g.cMy)+'^{2}}',value:g.Rc,unit:'kip-ft'}),
      S({id:'pmR',label:'Biaxial P–M ratio (governing combination)',sym:'ratio',eq:'\\frac{|M_{u}|}{|\\phi M_{n}|_{\\theta}}',sub:'\\frac{'+sfrN(g.Md)+'}{'+sfrN(g.Rc)+'}',value:g.ratio,unit:'',d:3,ok:g.ratio<=1+1e-9})]});}
+   else if(pd.pmGov&&pd.pmGov.mode==='unstable'){const g=pd.pmGov;   /* SFSL */
+    T.push({title:'Biaxial P–M ratio (governing: '+g.name+')',ref:'ACI 318-19 6.6.4.6.2(b), 6.6.4.5.2',steps:[S({id:'pmR',label:'Slender pedestal: P_u ≥ 0.75 P_c, the moment magnifier is unbounded (unstable)',sym:'ratio',eq:'',sub:'',value:'∞',unit:'',ok:false})]});}
    else if(pd.pmGov&&pd.pmGov.mode==='axial'){const g=pd.pmGov;
     T.push({title:'Biaxial P–M ratio (governing: '+g.name+')',ref:'ACI 318-19 22.4.2.1',steps:[S({id:'pmR',label:'P_u above the axial cap: no moment capacity at this P_u',sym:'ratio',eq:'\\frac{P_{u}}{\\phi P_{n,max}}',sub:'\\frac{'+sfrN(g.P)+'}{'+sfrN(pd.phiPn_max)+'}',value:g.ratio,unit:'',d:3,ok:g.ratio<=1+1e-9})]});}
    if(pd.pmRange&&pd.pmRange.length)T.push({title:'Combinations beyond the section’s tension capacity',ref:SFPM_REF,steps:[S({id:'pmRng',label:'P_u is below the net tension the section can carry, so no point of the contour reaches it: '+pd.pmRange.join(', '),sym:'',eq:'',sub:'',value:pd.pmRange.length+' combination(s)',ok:false})]});   /* SFPB: never skipped silently */
@@ -4131,7 +4134,20 @@ function sfrModel(){
     S({id:'vcov',label:'Clear cover to the vertical bars (#'+(rf.longSize||0)+'; min '+sfrN(pd.vertCovMin)+' in, Table 20.5.1.3.1)',sym:'c',eq:'',sub:sfrN(pd.cov)+(pd.vertCovOK?' \\ge ':' \\lt ')+sfrN(pd.vertCovMin),value:pd.cov,unit:'in',ok:!!pd.vertCovOK}),   /* SFCV */
     S({id:'tcov',label:'Clear cover to the ties (c = clear cover to the vertical bars)',sym:'c_{tie}',eq:'c \\minus d_{b,tie}',sub:sfrN(pd.cov)+' \\minus '+sfrN(pd.tieDb,3),value:pd.tieCov,unit:'in',d:3,ok:!!pd.tieCovOK,note:'≥ c_min = '+sfrN(pd.tieCovMin)+' in'}),
     S({id:'klr',label:'Slenderness (k = 2.0, ℓ_u = h, r = 0.3 b_min)',sym:'k \\ell_{u}/r',eq:'\\frac{k\\,h}{0.3 b_{min}}',sub:'\\frac{'+sfrN(pd.kSl,1)+'\\cdot'+sfrN(pd.h)+'}{0.3\\cdot'+sfrN(pd.bmin)+'}',value:pd.klu_r,unit:'',d:2,ref:'ACI 318-19 6.2.5.1(a); k: Fig. R6.2.5.1(b)',note:'Assumption: the pedestal is fixed at the footing and free at the top (cantilever, sway), k = 2.0. If the top is braced, k = 2.0 is conservative for this screen.'}),   /* SFKS */
-    S({id:'sl',label:'Slender (k ℓ_u/r > 22: moment magnification needed, not done here)?',sym:'',eq:'',sub:'',value:pd.slenderFlag?'yes':'no',ok:!pd.slenderFlag})]});
+    S({id:'sl',label:'Slender (k ℓ_u/r > 22)? If so the P–M check uses the magnified moments below (ACI 318-19 6.6.4)',sym:'',eq:'',sub:'',value:pd.slenderFlag?'yes':'no',ok:!pd.slFail})]});   /* SFSL */
+   if(pd.slm&&pd.slGov){const z=(pd.pmGov&&pd.pmGov.sl)||pd.slGov, nm=z.name;   /* SFSL: worked for the governing P–M combination */
+    const axs=[['x',z.X,'b_{y}'],['y',z.Y,'b_{x}']].flatMap(([a,A,bb])=>[
+     S({id:'sl'+a+'EI',label:'About '+a+': effective stiffness, sway (β_ds = '+sfrN(A.bds,3)+')',sym:'(EI)_{eff,s}',eq:'\\frac{0.4 E_{c} I_{g}}{1 + \\beta_{ds}}',sub:'\\frac{0.4\\cdot'+sfrN(57*Math.sqrt(pd.fc))+'\\cdot'+sfrN(A.I,0)+'}{1 + '+sfrN(A.bds,3)+'}',value:A.EIs,unit:'kip-in^{2}',d:0,ref:'ACI 318-19 6.6.4.4.4(a), 6.6.4.6.2'}),
+     S({id:'sl'+a+'Pcs',label:'About '+a+': critical load, sway (k = 2.0, ℓ_u = h)',sym:'P_{c,s}',eq:'\\frac{\\pi^{2}(EI)_{eff,s}}{(k \\ell_{u})^{2}}',sub:'\\frac{\\pi^{2}\\cdot'+sfrN(A.EIs,0)+'}{(2.0\\cdot'+sfrN(pd.h)+')^{2}}',value:A.Pcs,unit:'kip',ref:'ACI 318-19 6.6.4.4.2'}),
+     S({id:'sl'+a+'ds',label:'About '+a+': sway magnifier (this pedestal alone)',sym:'\\delta_{s}',eq:'\\frac{1}{1 \\minus P_{u}/(0.75 P_{c,s})} \\ge 1',sub:'\\frac{1}{1 \\minus '+sfrN(z.P)+'/(0.75\\cdot'+sfrN(A.Pcs)+')}',value:isFinite(A.dS)?A.dS:'∞ (unstable)',unit:'',d:3,ref:'ACI 318-19 6.6.4.6.2(b)'}),
+     S({id:'sl'+a+'Pcn',label:'About '+a+': critical load along the length (k = 1.0, β_dns = '+sfrN(z.bdns,3)+')',sym:'P_{c,ns}',eq:'\\frac{\\pi^{2}\\,0.4 E_{c} I_{g}/(1 + \\beta_{dns})}{(1.0\\,\\ell_{u})^{2}}',sub:'\\frac{\\pi^{2}\\cdot'+sfrN(A.EIn,0)+'}{'+sfrN(pd.h)+'^{2}}',value:A.Pcn,unit:'kip',ref:'ACI 318-19 6.6.4.6.4, 6.6.4.4.2'}),
+     S({id:'sl'+a+'dn',label:'About '+a+': magnifier along the length (C_m = 1.0)',sym:'\\delta',eq:'\\frac{C_{m}}{1 \\minus P_{u}/(0.75 P_{c,ns})} \\ge 1',sub:'\\frac{1.0}{1 \\minus '+sfrN(z.P)+'/(0.75\\cdot'+sfrN(A.Pcn)+')}',value:isFinite(A.dN)?A.dN:'∞ (unstable)',unit:'',d:3,ref:'ACI 318-19 6.6.4.5.2, 6.6.4.5.3(b)'}),
+     S({id:'sl'+a+'Mc',label:'About '+a+': magnified moment (M_2,min = P_u(0.6 + 0.03 '+bb.replace(/[{}_]/g,'')+')/12 = '+sfrN(A.Mmin)+' kip-ft, about this axis alone)',sym:'M_{c,'+a+'}',eq:'\\delta\\,\\max(\\delta_{s} |M_{u'+a+'}|,\\;M_{2,min})',sub:isFinite(A.Mc)?sfrN(A.dN,3)+'\\cdot\\max('+sfrN(A.dS,3)+'\\cdot'+sfrN(A.M1)+',\\;'+sfrN(A.Mmin)+')':'',value:isFinite(A.Mc)?A.McMin:'∞',unit:'kip-ft',ref:'ACI 318-19 6.6.4.6.1(b), 6.6.4.5.1, 6.6.4.5.4'})]);
+    T.push({title:'Moment magnification, slender pedestal (governing P–M combination: '+nm+')',ref:'ACI 318-19 6.6.4, 6.2.5.3',steps:[
+     S({id:'slEc',label:'Modulus of elasticity of the concrete',sym:'E_{c}',eq:'57\\sqrt{'+SFR_FC+'}',sub:'57\\cdot\\sqrt{'+sfrN(pd.fc,0)+'}',value:57*Math.sqrt(pd.fc),unit:'ksi',ref:'ACI 318-19 19.2.2.1(b)',note:'Sway cantilever (fixed at the footing, free at the top, k = 2.0). Conservative assumptions (pending engineer review): all of the first-order base moment is a sway moment (M_2ns = 0); δ_s for this pedestal alone (no story averaging); C_m = 1.0; β_ds = dead-load share of the base moment about that axis, β_dns = factored dead axial / P_u (both 1.0 in direct factored mode); M_2,min applied about each axis separately (the worse of the two is the demand point). E_c = 57,000√f′c psi (19.2.2.1(b)).'}),
+     S({id:'slPu',label:'Factored axial load of the combination',sym:'P_{u}',eq:'',sub:'',value:z.P,unit:'kip',note:nm}),
+     ...axs,
+     S({id:'slAmp',label:'Second-order / first-order moment (largest over all combinations: '+pd.slGov.name+')',sym:'\\delta_{s}\\delta',eq:'\\le 1.4',sub:'',value:isFinite(pd.slGov.amp)?pd.slGov.amp:'∞',unit:'',d:3,ok:!pd.slFail,ref:'ACI 318-19 6.2.5.3'})]});}
    {const X=P2.xties&&P2.xties[i];if(X&&!X.isPatch){   /* SFXT */
     const ln=(n,clr,r,f)=>S({id:'xt'+f,label:'b_'+f+' faces: '+n+' bars at s_clear = '+sfrN(clr)+' in ('+(n<=2?'corner bars only':(clr>6+1e-9?'> 6 in: every interior bar needs support':'≤ 6 in: alternate interior bars need support'))+')',chk:'crossties',sym:'n_{req}',eq:n<=2?'0':(clr>6+1e-9?'n \\minus 2':'(n \\minus 2)/2\\;\\text{, rounded down}'),sub:n<=2?'':(clr>6+1e-9?n+' \\minus 2':'('+n+' \\minus 2)/2'),value:r,unit:'',d:0,rev:r>0?'detail crossties':''});
     T.push({title:'Lateral support of the vertical bars (crossties)',ref:'ACI 318-19 25.7.2.3',steps:[ln(X.nx,X.clrX,X.reqX,'x'),ln(X.ny,X.clrY,X.reqY,'y'),
@@ -5935,7 +5951,7 @@ function computePhase2(R){
   let P=0,Mx=0,My=0; const pl=[];
   const fD=f.direct?(f.dead||1):(f.D||0);
   peds.forEach((p,i)=>{
-   let Pi=0,mxi=0,myi=0,mxp=0,myp=0,Pa=0;
+   let Pi=0,mxi=0,myi=0,mxp=0,myp=0,Pa=0,PdS=fD*R.Wpeds[i],mxD=0,myD=0;   /* SFSL: factored sustained axial and pedestal-base moments */
    Pi+=fD*R.Wpeds[i]; // pedestal self weight (factored dead)
    /* SFLO: a load applied at e_x, e_y from the pedestal centroid reaches the pedestal (and
       through it the footing) as P at the centroid plus the moments P*e_y (about x, +Mx) and
@@ -5953,11 +5969,12 @@ function computePhase2(R){
      const Pp=num(ld.P),vx=num(ld.Vx),vy=num(ld.Vy),mx=num(ld.Mx),my=num(ld.My);
      Pi+=ft*Pp;Pa+=ft*Pp;
      mxi+=ft*(mx+Pp*p.ley+vy*(t+p.h)*hFac2); myi+=ft*(my+Pp*p.lex+vx*(t+p.h)*hFac2);
-     mxp+=ft*(mx+Pp*p.ley+vy*p.h*hFac2);     myp+=ft*(my+Pp*p.lex+vx*p.h*hFac2);});
+     mxp+=ft*(mx+Pp*p.ley+vy*p.h*hFac2);     myp+=ft*(my+Pp*p.lex+vx*p.h*hFac2);
+     if(tp==='D'){PdS+=ft*Pp;mxD+=ft*(mx+Pp*p.ley+vy*p.h*hFac2);myD+=ft*(my+Pp*p.lex+vx*p.h*hFac2);}});   /* SFSL: sustained (dead) share */
    }
    P+=Pi; Mx+=Pi*p.y+mxi; My+=Pi*p.x+myi;
    pl.push({x:p.x,y:p.y,bx:p.bx,by:p.by,P:Pi,mx:mxi,my:myi,mxPed:mxp,myPed:myp,idx:i,
-    Pa,lex:p.lex,ley:p.ley,PeMx:Pa*p.ley,PeMy:Pa*p.lex});   // SFLO: factored applied P and its offset moments P*e_y (in mx), P*e_x (in my)
+    Pa,lex:p.lex,ley:p.ley,PeMx:Pa*p.ley,PeMy:Pa*p.lex,sus:f.direct?null:{P:PdS,mx:mxD,my:myD}});   /* SFSL: sus = null in direct mode (no dead / live split) */   // SFLO: factored applied P and its offset moments P*e_y (in mx), P*e_x (in my)
   });
   /* Footing self-weight, soil overburden and buoyancy are part of the free body.
      They were previously omitted from the Phase-2 resultant on the standard argument that a
@@ -6709,14 +6726,29 @@ function computePhase2(R){
   // per-combo demand points
   const pmPts=[];
   combos.forEach(c=>{const pl=c.nr.pl.find(z=>z.idx===i);if(!pl)return;
-   pmPts.push({name:c.cb.name,P:pl.P,Mx:pl.mxPed,My:pl.myPed});});
+   pmPts.push({name:c.cb.name,P:pl.P,Mx:pl.mxPed,My:pl.myPed,sus:pl.sus});});
   /* SFPM: interaction ratio of every combination at its own P_u; the governing one (largest ratio) */
-  const pmRat=isPatch?[]:sfpmRatios(pmBars,bx,by,fc,fy,pmPts,phiPn_max);
+  const pmPts1=pmPts.slice();   /* SFSL: first-order demand points */
+  const pmRat1=isPatch?[]:sfpmRatios(pmBars,bx,by,fc,fy,pmPts1,phiPn_max);
+  /* SFSL (2026-11-07): a slender pedestal (k l_u/r > 22, 6.2.5.1(a)) is checked with magnified moments (ACI 318-19 6.6.4.6 sway,
+     then 6.6.4.6.4 / 6.6.4.5 along the length, 6.6.4.5.4 minimum moment about each axis separately), and fails where the
+     magnifier makes the member unstable or where the second-order moment exceeds 1.4 x the first-order moment (6.2.5.3).
+     Before SFSL the slender flag was shown but the P-M ratio used the first-order moments. See sfslMag. */
+  const slm=(!isPatch&&slenderFlag)?pmPts1.map(pt=>sfslMag(pt,{bx,by,h,fc})):null;
+  let pmRat=pmRat1;
+  if(slm){
+   const stable=slm.map(z=>!z.unstable);
+   const rA=sfpmRatios(pmBars,bx,by,fc,fy,slm.map(z=>z.ptA),phiPn_max), rB=sfpmRatios(pmBars,bx,by,fc,fy,slm.map(z=>z.ptB),phiPn_max);
+   pmRat=slm.map((z,k)=>{if(!stable[k])return {name:z.name,P:z.P,Mx:pmPts1[k].Mx,My:pmPts1[k].My,Md:Math.hypot(pmPts1[k].Mx,pmPts1[k].My),mode:'unstable',ratio:Infinity,sl:z};
+    const a=rA[k],b=rB[k],w=(isNaN(a.ratio)?-1:a.ratio)>=(isNaN(b.ratio)?-1:b.ratio)?a:b;return Object.assign({},w,{sl:z,minAx:w===a?'x':'y',ratioA:a.ratio,ratioB:b.ratio});});
+   pmPts.length=0;pmRat.forEach((r,k)=>pmPts.push(r.mode==='unstable'?pmPts1[k]:{name:r.name,P:r.P,Mx:r.Mx,My:r.My,sus:pmPts1[k].sus}));}
   const pmGov=pmRat.reduce((a,z)=>(!a||(isNaN(a.ratio)&&!isNaN(z.ratio))||z.ratio>a.ratio)?z:a,null);
+  const slGov=slm?slm.reduce((a,z)=>(!a||z.amp>a.amp)?z:a,null):null;   /* SFSL: the largest magnification */
+  const slFail=!!(slm&&slm.some(z=>z.unstable||z.over14));
   const pmRange=pmRat.filter(z=>z.mode==='range').map(z=>z.name);
   return{idx:i,label:p.label,isPedestal,Ag,nBars,Ast,rho,P0:P0/1000,Pn_max,phiPn_max,
    PuMax,MuxMax,MuyMax,govMx,govMy,tieMax,tieOK,tieSizeOK,nBarsOK,rhoOK,rhoMin,rhoMax,barFitOK,clrX,clrY,clrMin,dbL,r,klu_r,slenderFlag,kSl,dcrAxial,bmin,h,bx,by,isPatch,
-   pmBars,pmPts,pmRat,pmGov,pmRange,fc,fy,PB,dPr,dX,dY,exposure,cov,tieDb,tieCov,tieCovMin,tieCovOK,vertCovMin,vertCovOK};
+   pmBars,pmPts,pmRat,pmGov,pmRange,pmPts1,pmRat1,slm,slGov,slFail,fc,fy,PB,dPr,dX,dY,exposure,cov,tieDb,tieCov,tieCovMin,tieCovOK,vertCovMin,vertCovOK};
  });
  /* ----- SFDO: full dowel checks per pedestal (new; no other result reads them) ----- */
  /* SFCV: footing covers vs ACI 318-19 Table 20.5.1.3.1: bottom cast against earth 3 in; top in contact with ground (No. 6+ 2 in,
@@ -6735,6 +6767,41 @@ function computePhase2(R){
  const xties=pedDes.map(pd=>sfdCrossties(pd));   /* SFXT */
  return{bandChk,offFooting,dBotX,dBotY,botXOut,dTopX,dTopY,dAvg,fc,fy,lam,combos,desX,desY,punch,punchWarn,punchGroup,bearing,pedDes,dowels,shearFr,pedShear,xties,covChk,pressMomentAbout,pressShearBeyond,pressResultant,
   beamDiagram,pressurePlane,netResultant};
+}
+/* ---- SFSL (2026-11-07): moment magnification of a slender pedestal (ACI 318-19 6.6.4) ----
+   The pedestal is a cantilever fixed at the footing and free at the top: a sway member (k = 2.0, SFKS). For each LRFD
+   combination and each axis:
+     E_c = 57,000 sqrt(f'c) psi (19.2.2.1(b)); I_g of the gross section; (EI)_eff = 0.4 E_c I_g / (1 + beta) (6.6.4.4.4(a));
+     sway: P_c,s = pi^2 (EI)_eff / (k l_u)^2 with k = 2.0, l_u = h and beta = beta_ds (6.6.4.6.2: beta_ds for beta_dns);
+       delta_s = 1 / (1 - P_u / (0.75 P_c,s)) >= 1 (6.6.4.6.2(b), the sum of P over this one pedestal);
+     along the length (6.6.4.6.4 -> 6.6.4.5): P_c,ns with k = 1.0 and beta = beta_dns; C_m = 1.0;
+       delta = C_m / (1 - P_u / (0.75 P_c,ns)) >= 1 (6.6.4.5.2);
+     M_2 = delta_s |M_u| (6.6.4.6.1(b)); M_2,min = P_u (0.6 + 0.03 b) / 12 k-ft (6.6.4.5.4, b in in., the section dimension
+       in the direction of bending), applied about each axis separately; M_c = delta M_2 (6.6.4.5.1).
+   Decisions (pending engineer review), all conservative:
+     - all of the first-order pedestal-base moment is treated as a sway moment (M_2ns = 0), so delta_s applies to all of it;
+     - delta_s is computed for the pedestal alone (no story averaging with the other pedestals);
+     - beta_ds = |dead-load share of M_u| / |M_u| about that axis (sustained lateral effects: dead-load shears, applied moments
+       and offsets), beta_dns = factored dead axial (pedestal self-weight included) / P_u; in direct factored mode there is
+       no dead / live split, so beta_ds = beta_dns = 1.0;
+     - C_m = 1.0 (6.6.4.5.3(b) value) instead of 0.6 - 0.4 M_1/M_2 (no top / base moment split is kept);
+     - both axes are magnified whenever the pedestal is slender about its weaker axis.
+   Fails: P_u >= 0.75 P_c (unstable, ratio = infinity), or delta_s delta > 1.4 where the first-order moment is non-zero (6.2.5.3). */
+function sfslMag(pt,g){
+ const Ec=57*Math.sqrt(g.fc), P=pt.P, sus=pt.sus;   // ksi
+ const clamp=v=>Math.min(1,Math.max(0,v));
+ const bdns=sus?(P>1e-9?clamp(sus.P/P):0):1;
+ const ax=(I,M,Md,b)=>{const bds=sus?(Math.abs(M)>1e-9?clamp(Math.abs(Md)/Math.abs(M)):0):1;
+  const EIs=0.4*Ec*I/(1+bds), EIn=0.4*Ec*I/(1+bdns);
+  const Pcs=Math.PI*Math.PI*EIs/Math.pow(2.0*g.h,2), Pcn=Math.PI*Math.PI*EIn/Math.pow(1.0*g.h,2);
+  const mag=Pc=>P<=0?1:(1-P/(0.75*Pc)>1e-9?Math.max(1,1/(1-P/(0.75*Pc))):Infinity);
+  const dS=mag(Pcs), dN=mag(Pcn), Mmin=P>0?P*(0.6+0.03*b)/12:0, M1=Math.abs(M), M2=dS*M1;
+  return {bds,EIs,EIn,Pcs,Pcn,dS,dN,Mmin,M1,M2,Mc:dN*M2,McMin:dN*Math.max(M2,Mmin),minGov:Mmin>M2,amp:dS*dN,b,I};};
+ const X=ax(g.bx*Math.pow(g.by,3)/12,pt.Mx,sus?sus.mx:0,g.by), Y=ax(g.by*Math.pow(g.bx,3)/12,pt.My,sus?sus.my:0,g.bx);
+ const sg=v=>v<0?-1:1, unstable=!isFinite(X.amp)||!isFinite(Y.amp);
+ const amp=Math.max(X.M1>1e-9?X.amp:1,Y.M1>1e-9?Y.amp:1);
+ return {name:pt.name,P,X,Y,bdns,amp,unstable,over14:!unstable&&amp>1.4+1e-9,
+  ptA:{name:pt.name,P,Mx:sg(pt.Mx)*X.McMin,My:sg(pt.My)*Y.Mc},ptB:{name:pt.name,P,Mx:sg(pt.Mx)*X.Mc,My:sg(pt.My)*Y.McMin}};
 }
 /* ---- pedestal longitudinal bar coordinates (perimeter arrangement), centered at section center ---- */
 function pedBarCoords(bx,by,coverIn,nx,ny,barArea){
@@ -6846,7 +6913,7 @@ function pmContour(bars,bx,by,fc,fy,Pu_target,nAngles,angList){   // SFPM: angLi
    moment capacity at P_u: ratio = P_u/phiP_n,max (mode 'axial'). Where the section cannot reach P_u (the c search
    does not converge, e.g. tension beyond its range) the ratio is not computed (mode 'range'). */
 const SFPM_REF='ACI 318-19 22.4 and 22.2 (strain compatibility), 21.2.2 (phi); constant-P_u radial ratio on the load contour (Bresler 1960, ACI J. 57(11))';
-function sfpmModeTxt(z){return z.mode==='axial'?'P_u > \u03c6P_n,max: axial cap governs':(z.mode==='range'?'not computed (P_u outside the section range)':'radial');}
+function sfpmModeTxt(z){return z.mode==='unstable'?'slender: P_u \u2265 0.75P_c (unstable, ACI 318-19 6.6.4.6.2(b) / 6.6.4.5.2)':z.mode==='axial'?'P_u > \u03c6P_n,max: axial cap governs':(z.mode==='range'?'not computed (P_u outside the section range)':'radial');}
 function sfpmPoint(bars,bx,by,fc,fy,P,a){const q=pmContour(bars,bx,by,fc,fy,P,0,[a])[0];return q&&Math.abs(q.phiPn-P)<=1?q:null;}
 function sfpmRatios(bars,bx,by,fc,fy,pts,phiPnMax){
  const H=Math.PI/2, TWO=2*Math.PI;
@@ -7467,7 +7534,7 @@ function renderPedestalDesign(){
  P2.pedDes.forEach(pd=>{const tr=document.createElement('tr');
   const tiesTxt=(pd.tieOK&&pd.tieSizeOK)?'OK':'CHECK';
   const wA=P2.bearing[pd.idx]&&P2.bearing[pd.idx].wall&&P2.bearing[pd.idx].wall.applied;   /* SFWL */
-  [pd.label,wA?'Wall':(pd.isPedestal?'Pedestal':'Column'),f2(pd.bx)+'\u00d7'+f2(pd.by)+'\u00d7'+f2(pd.h),pd.nBars,f2(pd.Ast),f2(pd.rho*100),f2(pd.phiPn_max),f2(pd.PuMax),f2(pd.dcrAxial),pd.isPatch||!pd.pmGov?'\u2014':(isNaN(pd.pmGov.ratio)?'n/a':f2(pd.pmGov.ratio))+(pd.pmGov&&!pd.isPatch?' ('+pd.pmGov.name+')':''),tiesTxt,pd.isPatch?'\u2014':f3(pd.tieCov)+(pd.tieCovOK?' \u2265 ':' < ')+f2(pd.tieCovMin),pd.slenderFlag?'YES':'No'].forEach((x,k)=>{
+  [pd.label,wA?'Wall':(pd.isPedestal?'Pedestal':'Column'),f2(pd.bx)+'\u00d7'+f2(pd.by)+'\u00d7'+f2(pd.h),pd.nBars,f2(pd.Ast),f2(pd.rho*100),f2(pd.phiPn_max),f2(pd.PuMax),f2(pd.dcrAxial),pd.isPatch||!pd.pmGov?'\u2014':(isNaN(pd.pmGov.ratio)?'n/a':f2(pd.pmGov.ratio))+(pd.pmGov&&!pd.isPatch?' ('+pd.pmGov.name+')':''),tiesTxt,pd.isPatch?'\u2014':f3(pd.tieCov)+(pd.tieCovOK?' \u2265 ':' < ')+f2(pd.tieCovMin),pd.slenderFlag?(pd.slFail?'YES (NG)':'YES (magnified)'):'No'].forEach((x,k)=>{
    const td=document.createElement('td');td.textContent=x;
    if(k===8&&pd.dcrAxial>1)td.style.color='#b71c1c';
    if(k===9&&pd.pmGov&&!pd.isPatch)td.style.color=pd.pmGov.ratio<=1?'#1b5e20':'#b71c1c';   /* SFPM */
@@ -7569,7 +7636,14 @@ function renderPedestalDesign(){
   b.appendChild(eqBlock('Slenderness screen','ACI 318-19 6.2.5.1(a) (k = 2.0: fixed at the footing, free at the top, assumed; l_u = h)',
    'r = 0.3 b_{min},\\quad k l_u/r \\le 22',
    'r = 0.3\\cdot'+f2(pd.bmin)+' = '+f2(pd.r)+',\\;kl_u/r = '+f2(pd.kSl)+'\\cdot'+f2(pd.h)+'/'+f2(pd.r)+' = '+f2(pd.klu_r),
-   pd.slenderFlag?'kl_u/r > 22 \\Rightarrow \\textbf{slender \u2014 magnification req. (v2); flagged}':'kl_u/r \\le 22 \\Rightarrow \\text{slenderness neglected}\\;\\checkmark'));
+   pd.slenderFlag?'kl_u/r > 22 \\Rightarrow \\textbf{slender: moments magnified (ACI 318-19 6.6.4), below}':'kl_u/r \\le 22 \\Rightarrow \\text{slenderness neglected}\\;\\checkmark'));
+  if(pd.slm&&pd.slGov){const z=(pd.pmGov&&pd.pmGov.sl)||pd.slGov, X=z.X, Y=z.Y, f0=v=>isFinite(v)?f2(v):'\\infty';   /* SFSL */
+   b.appendChild(eqBlock('Moment magnification, slender pedestal ('+z.name+')','ACI 318-19 6.6.4.4.2, 6.6.4.4.4(a), 6.6.4.6.2(b), 6.6.4.6.4, 6.6.4.5, 6.2.5.3 (sway cantilever; M_2ns = 0, C_m = 1.0, \u03b4_s for this pedestal alone: conservative)',
+    '(EI)_{eff} = \\frac{0.4E_cI_g}{1+\\beta},\\;P_c = \\frac{\\pi^2 (EI)_{eff}}{(k\\ell_u)^2},\\;\\delta = \\frac{1}{1-P_u/(0.75P_c)} \\ge 1,\\;M_c = \\delta\\,\\max(\\delta_s M_u,\\;P_u(0.6+0.03b)),\\;\\delta_s\\delta \\le 1.4',
+    'P_u = '+f2(z.P)+'\\;\\mathrm{kip},\\;E_c = 57\\sqrt{'+f2(pd.fc)+'} = '+f2(57*Math.sqrt(pd.fc))+'\\;\\mathrm{ksi},\\;\\beta_{dns} = '+f3(z.bdns)+'\\\\'+
+    [['x',X,'b_y'],['y',Y,'b_x']].map(([a,A,bb])=>'\\text{about '+a+': }I_g = '+f2(A.I)+',\\;\\beta_{ds} = '+f3(A.bds)+',\\;P_{c,s} = '+f2(A.Pcs)+'\\;(k=2),\\;\\delta_s = '+f0(A.dS)+',\\;P_{c,ns} = '+f2(A.Pcn)+'\\;(k=1),\\;\\delta = '+f0(A.dN)+',\\;|M_u| = '+f2(A.M1)+',\\;M_{2,min} = '+f2(A.Mmin)+'\\;('+bb+' = '+f2(A.b)+'),\\;M_c = '+(isFinite(A.Mc)?f2(A.McMin):'\\infty')+'\\;\\mathrm{k\\text{-}ft}').join('\\\\'),
+    z.unstable?'P_u \\ge 0.75P_c\\Rightarrow\\textbf{unstable: NG}':(z.over14?'\\delta_s\\delta = '+f2(z.amp)+' > 1.4\\Rightarrow\\textbf{NG (6.2.5.3)}':'\\delta_s\\delta = '+f2(z.amp)+' \\le 1.4\\;\\checkmark;\\;\\text{the P\\text{-}M ratio uses } M_c')));
+   if(pd.slFail)b.appendChild(el('div','failbox','<b>NG \u2014 slender pedestal.</b> '+(pd.slm.some(q=>q.unstable)?'P<sub>u</sub> \u2265 0.75P<sub>c</sub> in at least one combination (the moment magnifier is unbounded).':'The second-order moment exceeds 1.4 \u00d7 the first-order moment ('+f2(pd.slGov.amp)+', '+pd.slGov.name+'; ACI 318-19 6.2.5.3).')+' Increase the section or reduce the height.'));}
  });
 }
 </script>
@@ -8203,7 +8277,7 @@ function showInspect(i){
   '<tr><td class="cls">Bearing DCR</td><td>'+bd(f2(bz.dcr),bz.dcr<=1)+' (\u03c6P<sub>nb</sub>='+f2(bz.phiPn)+' k)</td></tr>'+
   '<tr><td class="cls">Dowels</td><td>'+bd(bz.dowelOK?'OK':'NG',bz.dowelOK)+' '+f2(bz.AsDowProv)+'/'+f2(bz.AsDowMin)+' in\u00b2, L<sub>dc</sub>='+f2(bz.Ldc)+'"</td></tr>'+
   '<tr><td class="cls">Ties</td><td>'+bd((pd.tieOK&&pd.tieSizeOK)?'OK':'CHK',pd.tieOK&&pd.tieSizeOK)+' s\u2264'+f2(pd.tieMax)+'"</td></tr>'+
-  '<tr><td class="cls">Slenderness</td><td>'+bd(pd.slenderFlag?'FLAG':'OK',!pd.slenderFlag)+' kl/r='+f2(pd.klu_r)+'</td></tr>'+
+  '<tr><td class="cls">Slenderness</td><td>'+bd(pd.slenderFlag?(pd.slFail?'NG':'MAGNIFIED'):'OK',!pd.slFail)+' kl/r='+f2(pd.klu_r)+(pd.slGov?' \u03b4<sub>s</sub>\u03b4='+f2(pd.slGov.amp):'')+'</td></tr>'+
   '</table>'+
   '<div style="margin-top:4px">'+jump('tab-peddes','Pedestal design')+' &middot; '+jump('tab-footdes','Footing design')+'</div>';
  box.style.display='block';wireJumps(box);
