@@ -274,7 +274,7 @@
           </div>
           <div class="row2">
             <div><label>Crown reference</label><select id="crown_ref" title="What the crown offset is measured from, and how the crown line runs. PGL: crown offset is from the PGL and the crown follows the horizontal alignment (curve). construction reference line: crown offset is from the construction reference line and the crown is a straight line parallel to the construction reference line chord."><option value="pgl">PGL (follows alignment curve)</option><option value="bcl">Construction ref line (straight)</option></select></div>
-            <div></div>
+            <div><label>Girder layout in plan</label><select id="girder_frame" title="How the girders, deck edges and the construction reference line run in plan. Per-span chords: straight in each span between the reference points of its two supports (on the alignment, at the reference-line offset), kinked at the piers on the bisector of the two chords. One chord: one straight line from Abut 1 to Abut 2 for the whole bridge; on a curved alignment the piers and the deck then move off the roadway. Projects saved before this setting existed open with One chord (their results are unchanged)."><option value="span">Per-span chords (straight between supports)</option><option value="single">One chord, Abut 1 to Abut 2</option></select></div><!-- BGX3 (2026-11-07): girder layout; new projects per-span, saved projects without the field one chord -->
           </div>
           <div class="row2">
             <div><label>Crown offset @ Abut 1, <span id="crown_ref_lbl1">from PGL</span> <span class="unit">(ft)</span></label><input type="number" id="crown_off_a1" value="0" step="0.1" title="Perpendicular offset (ft) of the crown high point at Abutment 1, measured from the selected crown reference. 0 = crown on that reference line there."></div>
@@ -341,7 +341,7 @@
       <div>
         <h2 class="sec">Substructure Units</h2>
         <div style="overflow-x:auto;"><table class="subtbl" id="subtbl"></table></div>
-        <p class="note">Skew is measured from the normal to the straight abutment-to-abutment chord (the construction reference line between the two abutments), not from the radial line of the PGL; 0° = support perpendicular to that chord. On a tangent alignment the two are the same. Dual bearing offset = distance back/ahead of unit station.</p>
+        <p class="note">Skew is measured from the normal to the straight abutment-to-abutment chord (the construction reference line between the two abutments), not from the radial line of the PGL; 0° = support perpendicular to that chord. With <em>Girder layout in plan</em> = per-span chords (Bridge tab): from the normal to the span chord at an abutment, and to the bisector of the two span chords at a pier. On a tangent alignment these are all the same. Dual bearing offset = distance back/ahead of unit station.</p>
 
         <h2 class="sec">Per-span girder &amp; deck-edge overrides</h2>
         <p class="note" style="margin-top:-6px;">Most bridges use the same girders and deck width everywhere &mdash; if so, you can ignore this table entirely; every span uses the global values above. Use it only when a particular span differs (e.g. a span has a different number of girders, a flared deck, or a different edge offset). Each greyed cell shows the global value it would inherit; type a value to override just that span (it turns solid), or clear it to revert.</p>
@@ -1134,7 +1134,45 @@ function buildEngine(){
   // with that chord — it is NOT a linear interpolation of the two abutment offsets. On a curved PGL
   // the two differ (about 0.29 ft at midspan on a 300 ft radius), which previously made the crown
   // line bow instead of running straight and parallel to the reference line.
+  /* ---- BGX3 (review H1, engineer item Q-BG4; Decision pending engineer review): girders CHORDED SPAN BY SPAN ----
+     'span': the construction reference line is a polyline through the reference point of EVERY support (the PGL point at the
+     support station, offset by the abutment offsets interpolated by station), not one chord from Abut 1 to Abut 2. Girders,
+     deck edges and curbs are straight within each span, parallel to that span's chord, and kink at the supports on the
+     bisector of the two chords (mitred). Frame (t, w): t = distance along the polyline, w = offset normal to the local chord;
+     inside span i a point is P_i + λ(P_i+1 − P_i) + w((1−λ) m_i + λ m_i+1), λ = (t − T_i)/L_i, m_j = the mitre vector at
+     support j (= the chord normal at the abutments). With two supports, or all reference points in line, this is exactly the
+     single chord. 'single' (saved projects without the setting): the one abutment-to-abutment chord, as before. */
+  const FRAME_SET=(document.getElementById('girder_frame')||{}).value==='span'?'span':'single';
+  const PS=(function(){ const su=sortedUnits(); if(!CH || FRAME_SET!=='span' || su.length<3) return null;
+    const P=su.map(u=>pglOffsetPoint(align, u.sta, _lerpAbut(_bclOff.a1, _bclOff.a2, u.sta)));
+    const seg=[], T=[0];
+    for(let i=0;i<P.length-1;i++){ const dx=P[i+1].x-P[i].x, dy=P[i+1].y-P[i].y, L=Math.hypot(dx,dy); if(!(L>1e-6)) return null;
+      seg.push({dx,dy,L,ux:dx/L,uy:dy/L,nx:dy/L,ny:-dx/L}); T.push(T[i]+L); }
+    const m=P.map((_,j)=>{ if(j===0) return {x:seg[0].nx,y:seg[0].ny}; if(j===P.length-1) return {x:seg[j-1].nx,y:seg[j-1].ny};
+      const a=seg[j-1], b=seg[j], d=1+a.nx*b.nx+a.ny*b.ny; return {x:(a.nx+b.nx)/d, y:(a.ny+b.ny)/d}; });
+    return {P, seg, T, m, n:seg.length, sta:su.map(u=>u.sta)}; })();
+  function psSeg(t){ let i=0; while(i<PS.n-1 && t>PS.T[i+1]) i++; return i; }   // t before 0 / beyond the end: the end spans extended
+  function psXY(t,w){ const i=psSeg(t), S=PS.seg[i], l=(t-PS.T[i])/S.L, m0=PS.m[i], m1=PS.m[i+1];
+    return { x:PS.P[i].x+l*S.dx+w*((1-l)*m0.x+l*m1.x), y:PS.P[i].y+l*S.dy+w*((1-l)*m0.y+l*m1.y) }; }
+  // (t, w) of a plan point (inverse of psXY): Newton in each span, the span whose λ is in [0, 1] (end spans extended)
+  function psInv(x,y){ let best=null;
+    for(let i=0;i<PS.n;i++){ const S=PS.seg[i], A=PS.P[i], m0=PS.m[i], m1=PS.m[i+1], dmx=m1.x-m0.x, dmy=m1.y-m0.y;
+      let l=((x-A.x)*S.ux+(y-A.y)*S.uy)/S.L, w=(x-A.x)*S.nx+(y-A.y)*S.ny;
+      for(let k=0;k<30;k++){ const fx=A.x+l*S.dx+w*(m0.x+l*dmx)-x, fy=A.y+l*S.dy+w*(m0.y+l*dmy)-y;
+        const a=S.dx+w*dmx, b=m0.x+l*dmx, c=S.dy+w*dmy, d=m0.y+l*dmy, det=a*d-b*c; if(Math.abs(det)<1e-14) break;
+        const dl=(fx*d-fy*b)/det, dw=(a*fy-c*fx)/det; l-=dl; w-=dw; if(Math.abs(dl)*S.L<1e-10&&Math.abs(dw)<1e-10) break; }
+      const inside=(l>=-1e-9||i===0)&&(l<=1+1e-9||i===PS.n-1);
+      if(inside && (!best||Math.abs(w)<Math.abs(best.w))) best={t:PS.T[i]+l*S.L, w}; }
+    return best||{t:0,w:0}; }
+  // reference-line point at PGL station s: the PGL normal at s meets the polyline (end spans extended); nearest crossing
+  function psRef(s){ const a=align.at(s), nx=Math.sin(a.brg+Math.PI/2), ny=Math.cos(a.brg+Math.PI/2); let best=null;
+    for(let i=0;i<PS.n;i++){ const S=PS.seg[i], den=nx*S.uy-ny*S.ux; if(Math.abs(den)<1e-12) continue;
+      const qx=PS.P[i].x-a.x, qy=PS.P[i].y-a.y, mu=(qx*S.uy-qy*S.ux)/den, nu=(qx*ny-qy*nx)/den;   // a + mu·n = P_i + nu·u
+      const inside=(nu>=-1e-7||i===0)&&(nu<=S.L+1e-7||i===PS.n-1);
+      if(inside && (!best||Math.abs(mu)<Math.abs(best.off))) best={off:mu, t:PS.T[i]+nu}; }
+    return best||{off:_lerpAbut(_bclOff.a1,_bclOff.a2,s), t:0}; }
   function bclOffAtSta(s){
+    if(PS) return psRef(s).off;
     if(!CH) return _lerpAbut(_bclOff.a1, _bclOff.a2, s);
     const a=align.at(s);
     const nx=Math.sin(a.brg+Math.PI/2), ny=Math.cos(a.brg+Math.PI/2);   // +right of travel
@@ -1165,6 +1203,7 @@ function buildEngine(){
   // chord-frame deck point: t = distance along chord from Abut1 (ft), w = perpendicular offset from chord (ft, +left)
   function deckPointCW(t,w){
     if(!CH) return getDeckPoint(align.staStart+t, w);   // no chord (need ≥2 supports) → legacy
+    if(PS){ const q=psXY(t,w); return deckPointAtXY(q.x,q.y); }   // BGX3: per-span chords
     const x = CH.P1.x + CH.ux*t + CH.nx*w;
     const y = CH.P1.y + CH.uy*t + CH.ny*w;
     return deckPointAtXY(x,y);
@@ -1191,6 +1230,7 @@ function buildEngine(){
     return { ...d, z:d.z-drop };
   }
   function beamSeatCW(t,w,ctx){ if(!CH) return getBeamSeat(align.staStart+t,w,ctx);
+    if(PS){ const q=psXY(t,w); return beamSeatAtXY(q.x,q.y,ctx); }   // BGX3
     const x=CH.P1.x+CH.ux*t+CH.nx*w, y=CH.P1.y+CH.uy*t+CH.ny*w; return beamSeatAtXY(x,y,ctx); }
   // ---- skewed deck ends: each end edge runs along the abutment skew line ----
   // Skew is measured from the perpendicular to the construction reference line. At offset w (perp from chord),
@@ -1202,6 +1242,10 @@ function buildEngine(){
   function chordExtent(w){
     // t at the two ends for a transverse line at offset w; skew shears the end line along the chord
     if(!CH) return {t0:0, t1:0};
+    if(PS){ /* BGX3: the deck ends are straight skewed lines through the end support points; on the end span's mitred offset line
+       x = P + w·n + u·(λL + …), so λ is solved for the point where it meets that line (one span: the single-chord formula) */
+      const S0=PS.seg[0], k0=PS.m[1].x*S0.ux+PS.m[1].y*S0.uy, Sn=PS.seg[PS.n-1], kn=PS.m[PS.n-1].x*Sn.ux+PS.m[PS.n-1].y*Sn.uy;
+      return { t0: S0.L*w*Math.tan(SK1)/(S0.L+w*k0), t1: PS.T[PS.n-1]+Sn.L*(Sn.L+w*Math.tan(SK2)-w*kn)/(Sn.L-w*kn) }; }
     return { t0: 0 + w*Math.tan(SK1), t1: CH.len + w*Math.tan(SK2) };
   }
   // chord-station t of a support at PGL station `sta`: project its Bridge-CL point onto the chord.
@@ -1211,10 +1255,12 @@ function buildEngine(){
   // (PGL offset − construction reference line offset at that station); on a curve those two frames differ.
   function chordOffsetAtXY(x,y){
     if(!CH) return (function(){ const pr=projectToPGL(align,x,y); return pr.off; })();
+    if(PS) return psInv(x,y).w;   // BGX3: offset normal to the local span chord
     return (x-CH.P1.x)*CH.nx + (y-CH.P1.y)*CH.ny;
   }
   function supportChordT(sta){
     if(!CH) return 0;
+    if(PS) return psRef(sta).t;   // BGX3: distance along the per-span polyline
     // construction reference line offset at this station: the exact intersection of the PGL normal at
     // `sta` with the straight reference-line chord (bclOffAtSta), not a linear interpolation of the two
     // abutment offsets. On a curve the two differ, which used to shift interior supports (and every
@@ -1226,32 +1272,54 @@ function buildEngine(){
   // deck point at (support bearing line, offset-from-Bridge-CL-in-PGL-coords). Chord-aware:
   // in chord mode the support is a straight skewed line; off is a PGL-coord offset (edges/girders
   // are entered from the construction reference line then converted by +bridgeCL()), so w = off - bridgeCL().
+  /* BGX3: per-span chords. A bearing line is the straight line through its reference point (psRef) whose direction is the
+     support's datum normal turned by the skew: at a pier the bisector of the two span chords (the mitre direction), at an
+     abutment its span's chord normal. Dual bearing lines are parallel to their pier's line. The girder at offset w meets it
+     where the line crosses that girder's mitred polyline; returns the frame t there. */
+  function psSupT(bl, w){
+    const R=psRef(bl.sta), Rp=psXY(R.t,0); let j=-1, sup=(bl.supSta!=null)?bl.supSta:bl.sta;
+    PS.sta.forEach((st,k)=>{ if(Math.abs(st-sup)<1e-6) j=k; });
+    let nb; if(j>=0){ const L=Math.hypot(PS.m[j].x,PS.m[j].y); nb={x:PS.m[j].x/L, y:PS.m[j].y/L}; } else { const S=PS.seg[psSeg(R.t)]; nb={x:S.nx,y:S.ny}; }
+    const tn=Math.tan((bl.skew||0)*DEG), dx=nb.x+tn*(-nb.y), dy=nb.y+tn*nb.x;   // n turned toward +u (u = (−n_y, n_x)) by the skew
+    let best=null;
+    for(let i=0;i<PS.n;i++){ const A=psXY(PS.T[i],w), B=psXY(PS.T[i+1],w), ex=B.x-A.x, ey=B.y-A.y, den=ex*dy-ey*dx; if(Math.abs(den)<1e-12) continue;
+      const qx=Rp.x-A.x, qy=Rp.y-A.y, l=(qx*dy-qy*dx)/den, inside=(l>=-1e-9||i===0)&&(l<=1+1e-9||i===PS.n-1);
+      const t=PS.T[i]+l*PS.seg[i].L, q=psXY(t,w), d=Math.hypot(q.x-Rp.x,q.y-Rp.y);
+      if(inside && (!best||d<best.d)) best={t,d}; }
+    return best?best.t:R.t; }
   function deckAtSupport(bl, off){
     if(!CH) return getDeckPoint(staOnBearing(bl.sta,bl.skew,off), off);
+    if(PS){ const w=off-bridgeCL(); return deckPointCW(psSupT(bl,w),w); }
     const w=off-bridgeCL(); const t=supportChordT(bl.sta)+w*Math.tan((bl.skew||0)*DEG);
     return deckPointCW(t,w);
   }
   function beamSeatAtSupport(bl, off, ctx){
     if(!CH) return getBeamSeat(staOnBearing(bl.sta,bl.skew,off), off, ctx);
+    if(PS){ const w=off-bridgeCL(); return beamSeatCW(psSupT(bl,w),w,ctx); }
     const w=off-bridgeCL(); const t=supportChordT(bl.sta)+w*Math.tan((bl.skew||0)*DEG);
     return beamSeatCW(t,w,ctx);
   }
+  // BGX3: the frame stations a line from t0 to t1 passes through (its ends plus the kinks at the interior supports), and
+  // the deck points there; one chord: just the two ends (unchanged drawings)
+  function cwTs(t0,t1){ if(!PS) return [t0,t1]; return [t0, ...PS.T.slice(1,-1).filter(T=>T>t0+1e-9&&T<t1-1e-9), t1]; }
+  function cwPath(t0,t1,w){ return cwTs(t0,t1).map(t=>deckPointCW(t,w)); }
   // straight girder/edge line (chord-parallel) at a PGL-coord offset: returns [ptStart, ptEnd] cut on skew
   function offsetChordLine(off){
     if(!CH){ const s0=align.staStart,s1=align.staEnd; return [getDeckPoint(s0,off), getDeckPoint(s1,off)]; }
     const w=off-bridgeCL(); const ext=chordExtent(w);
-    return [deckPointCW(ext.t0,w), deckPointCW(ext.t1,w)];
+    return cwPath(ext.t0, ext.t1, w);   // BGX3: with per-span chords, also the kink points
   }
   return { align, prof, xsec, depths, getDeckPoint, getBeamSeat,
-    chord:CH, deckPointCW, deckPointAtXY, beamSeatCW, beamSeatAtXY, chordExtent, supportChordT, deckAtSupport, beamSeatAtSupport, offsetChordLine, crownAtSta, bclOffAtSta, chordOffsetAtXY, crownRef:CROWN_REF, skews:{a1:SK1,a2:SK2},
+    chord:CH, frameInfo:()=>({ frame:(PS?'span':'single'), set:FRAME_SET, poly:PS, len:(PS?PS.T[PS.n]:(CH?CH.len:0)) }), cwTs,   // BGX3 (a function: kept out of the engine's data)
+    cwPath, deckPointCW, deckPointAtXY, beamSeatCW, beamSeatAtXY, chordExtent, supportChordT, deckAtSupport, beamSeatAtSupport, offsetChordLine, crownAtSta, bclOffAtSta, chordOffsetAtXY, crownRef:CROWN_REF, skews:{a1:SK1,a2:SK2},
     globalGirders: GIRDERS.map(g=>g+bridgeCL()) };
 }
 
 function bearingLinesFor(u){
   if(u.type==='pier' && u.bearMode==='double')
-    return [ {label:`${u.name} brg-back`, sta:u.sta-u.bearOffset, skew:u.skew},
-             {label:`${u.name} brg-ahead`, sta:u.sta+u.bearOffset, skew:u.skew} ];
-  return [ {label:`${u.name} brg`, sta:u.sta, skew:u.skew} ];
+    return [ {label:`${u.name} brg-back`, sta:u.sta-u.bearOffset, skew:u.skew, supSta:u.sta},
+             {label:`${u.name} brg-ahead`, sta:u.sta+u.bearOffset, skew:u.skew, supSta:u.sta} ];
+  return [ {label:`${u.name} brg`, sta:u.sta, skew:u.skew, supSta:u.sta} ];
 }
 /* ===== feet-inches input =====
    Plans dimension in feet and inches; the model works in decimal feet. These fields accept either,
@@ -1410,11 +1478,11 @@ function geometryWarnings(){
   // H1: one straight chord from end support to end support on a curved alignment: interior supports leave the roadway.
   // The reference line's offset from the PGL at each interior support is compared with the straight-line interpolation of the
   // two end offsets (what it is on a tangent). Tolerance: the smaller of 0.5 ft and 2 % of the deck width.
-  if(ENG.chord && su.length>2){ const {a1,a2}=abutOffsets(), S1=uF.sta, S2=uL.sta; const out=[];
+  if(ENG.chord && !ENG.frameInfo().poly && su.length>2){ const {a1,a2}=abutOffsets(), S1=uF.sta, S2=uL.sta; const out=[];
     su.slice(1,-1).forEach(u=>{ const sp=Math.max(1,Math.min(su.length-1,spanOfSta(u.sta))), ed=edgesForSpan(sp), tol=Math.min(0.5, 0.02*Math.abs(ed.r-ed.l));
       const f=(S2>S1)?(u.sta-S1)/(S2-S1):0, want=a1+(a2-a1)*f, got=ENG.bclOffAtSta(u.sta);
       if(isFinite(got) && Math.abs(got-want)>tol) out.push(`${u.name}: reference line ${got>=0?'+':''}${got.toFixed(2)} ft from the PGL (${(got-want)>=0?'+':''}${(got-want).toFixed(2)} ft off the line between the end offsets; tolerance ${tol.toFixed(2)} ft)`); });
-    if(out.length) w.push(`The alignment curves within the bridge, but the girders, deck edges and supports are laid out on ONE straight chord from ${uF.name} to ${uL.name}, so the deck leaves the roadway at the interior supports: ${out.join('; ')}. The elevations there are the cross slope extended to those offsets. Check against the plans (the girders are not chorded span by span).`); }
+    if(out.length) w.push(`The alignment curves within the bridge, but the girders, deck edges and supports are laid out on ONE straight chord from ${uF.name} to ${uL.name}, so the deck leaves the roadway at the interior supports: ${out.join('; ')}. The elevations there are the cross slope extended to those offsets. Check against the plans, or set Girder layout in plan (Bridge tab) to Per-span chords.`); }
   return w;
 }
 function showGeomWarnings(ws){
@@ -1574,7 +1642,7 @@ function planTransform(extra){
   // girders — straight chord-parallel lines, cut on the skewed ends
   const gl=ENG.globalGirders.map(off=>{
     if(CH){ const w=off-bridgeCL(); const ext=ENG.chordExtent(w);
-      const a=ENG.deckPointCW(ext.t0,w), b=ENG.deckPointCW(ext.t1,w); return [[a.x,a.y],[b.x,b.y]]; }
+      return ENG.cwPath(ext.t0,ext.t1,w).map(p=>[p.x,p.y]); }   // BGX3: through the kinks with per-span chords
     const ln=[]; for(let i=0;i<=n;i++){ const s=s0+(s1-s0)*i/n; const p=ENG.getDeckPoint(s,off); ln.push([p.x,p.y]); } return ln;
   });
   let all=cl.concat(...gl); if(extra) all=all.concat(extra);
@@ -1603,8 +1671,7 @@ function drawPlan(svgId){
     line:{color:P.graphite, width:1}, hoverinfo:'skip', name:'G'+(i+1) }));
   // construction reference line + true deck centerline
   if(ENG.chord){
-    const seg=(w)=>{ const e=ENG.chordExtent(w); const a=ENG.deckPointCW(e.t0,w), b=ENG.deckPointCW(e.t1,w);
-      return [[a.x,a.y],[b.x,b.y]]; };
+    const seg=(w)=>{ const e=ENG.chordExtent(w); return ENG.cwPath(e.t0,e.t1,w).map(p=>[p.x,p.y]); };   // BGX3
     const rl=seg(0);
     traces.push({ x:xs(rl), y:ys(rl), mode:'lines', type:'scatter',
       line:{color:P.oxide, width:1.8}, name:'Ref line',
@@ -2179,7 +2246,7 @@ function drawHeatmap(){
     const NLh=Math.max(20, (su.length-1)*divisions);
     const pierTs = su.slice(1,-1).map(u=>ENG.supportChordT(u.sta));
     for(let i=0;i<=NLh;i++){ const f=i/NLh;
-      const tMid=f*CHm.len;
+      const tMid=f*ENG.frameInfo().len;   // BGX3: the polyline length with per-span chords
       const span=Math.max(1,Math.min(su.length-1, 1+pierTs.filter(pt=>pt<tMid-1e-9).length));
       const ed=edgesForSpan(span); const samples=[];
       const evalAt=(off)=>{ const wc=off-bridgeCL(); const ext=ENG.chordExtent(wc); const t=ext.t0+f*(ext.t1-ext.t0); const p=ENG.deckPointCW(t,wc); return {off,z:p.z,x:p.x,y:p.y}; };
@@ -2344,8 +2411,8 @@ function drawHeatmap(){
 
   // ---- construction reference line (the chord; solid oxide) ----
   if(LY('ly_bcl')){ ctx.strokeStyle=OX; ctx.lineWidth=1.6; ctx.save(); ctx.setLineDash([]);
-    if(ENG.chord){ const a=ENG.deckPointCW(ENG.chordExtent(0).t0,0), b=ENG.deckPointCW(ENG.chordExtent(0).t1,0);
-      ctx.beginPath(); ctx.moveTo(TX(a.x),TY(a.y)); ctx.lineTo(TX(b.x),TY(b.y)); ctx.stroke(); }
+    if(ENG.chord){ const pp=ENG.cwPath(ENG.chordExtent(0).t0,ENG.chordExtent(0).t1,0);   // BGX3: through the kinks
+      ctx.beginPath(); pp.forEach((q,i)=>{ if(i===0) ctx.moveTo(TX(q.x),TY(q.y)); else ctx.lineTo(TX(q.x),TY(q.y)); }); ctx.stroke(); }
     else strokeOffset(bridgeCL(), s0all, s1all, 240);
     ctx.restore(); }
 
@@ -2947,7 +3014,13 @@ function buildDerived(){
        `. That is expected when the plans dimension from a line other than the deck centre &mdash; check it matches the drawing.</p>`;
   }
   // whole-bridge summary
-  if(ENG.chord){
+  if(ENG.chord && ENG.frameInfo().poly){   // BGX3: per-span chords
+    const PS=ENG.frameInfo().poly, rows=PS.seg.map((S,i)=>{ const b=Math.atan2(S.ux,S.uy)/DEG, ba=ENG.align.at(PS.sta[i]).brg/DEG; let d=b-ba; while(d>180)d-=360; while(d<-180)d+=360;
+      return `span ${i+1} (${su[i].name} &rarr; ${su[i+1].name}): <strong>${S.L.toFixed(3)} ft</strong>, bearing ${azimuthToQuadrant(b)}, ${d>=0?'+':''}${d.toFixed(3)}&deg; to the PGL tangent at ${su[i].name}`; });
+    const kinks=PS.seg.slice(1).map((S,i)=>{ const a=PS.seg[i]; let d=(Math.atan2(S.ux,S.uy)-Math.atan2(a.ux,a.uy))/DEG; while(d>180)d-=360; while(d<-180)d+=360; return `${su[i+1].name} ${d>=0?'+':''}${d.toFixed(3)}&deg;`; });
+    h+=`<p class="note" style="margin:8px 0 0">Construction reference line: <strong>chorded span by span</strong> through the reference point of each support (girders, deck edges and curbs straight in each span, kinked at the piers on the bisector of the two chords). `+
+       rows.join(' &middot; ')+`. Total along the chords <strong>${PS.T[PS.n].toFixed(3)} ft</strong>. Angle change at the piers: ${kinks.join(', ')}.</p>`;
+  } else if(ENG.chord){
     const CH=ENG.chord;
     const brgCL=Math.atan2(CH.ux,CH.uy)/DEG, brgA=(ENG.align.at(su[0].sta).brg)/DEG;
     let skewToPGL=brgCL-brgA; while(skewToPGL>180)skewToPGL-=360; while(skewToPGL<-180)skewToPGL+=360;
@@ -3498,7 +3571,7 @@ function deckSurfaceMesh(exag, ctr){
     // span for each row chosen by comparing the row's chord-t against the piers' chord-t.
     const pierTs = su.slice(1,-1).map(u=>ENG.supportChordT(u.sta));
     for(let i=0;i<=NL;i++){ const f=i/NL;
-      const tMid=f*CH.len;
+      const tMid=f*ENG.frameInfo().len;   // BGX3
       const span=Math.max(1,Math.min(su.length-1, 1+pierTs.filter(pt=>pt<tMid-1e-9).length));
       const ed=edgesForSpan(span);
       for(let j=0;j<=NW;j++){
@@ -3635,7 +3708,7 @@ function render3DSub(){
   const gLines=ENG.globalGirders.map(off=>{ const ln=[];
     if(CH){ const w=off-bridgeCL();                 // offset perpendicular from the chord
       const ext=ENG.chordExtent(w);                 // skewed t range at this offset
-      for(let i=0;i<=1;i++){ const t=ext.t0+(ext.t1-ext.t0)*i; const p=ENG.deckPointCW(t,w); ln.push([p.x,p.y,p.z]); allp.push([p.x,p.y,p.z]); }
+      ENG.cwPath(ext.t0,ext.t1,w).forEach(p=>{ ln.push([p.x,p.y,p.z]); allp.push([p.x,p.y,p.z]); });   // BGX3: through the kinks
     } else { for(let i=0;i<=120;i++){ const st=s0+(s1-s0)*i/120; const p=ENG.getDeckPoint(st,off); ln.push([p.x,p.y,p.z]); allp.push([p.x,p.y,p.z]); } }
     return ln; });
   // bearing/support lines — straight skewed lines across the deck. ENG.deckAtSupport handles the
@@ -3652,8 +3725,7 @@ function render3DSub(){
   if(LY('l3_cl')){
     ctx.scene.add(lineFrom(apts,0x1C1A17,exag,ctr));                      // PGL alignment
     if(ENG.chord){
-      const seg=(w)=>{ const e=ENG.chordExtent(w); const p0=ENG.deckPointCW(e.t0,w), p1=ENG.deckPointCW(e.t1,w);
-        return [[p0.x,p0.y,p0.z],[p1.x,p1.y,p1.z]]; };
+      const seg=(w)=>{ const e=ENG.chordExtent(w); return ENG.cwPath(e.t0,e.t1,w).map(p=>[p.x,p.y,p.z]); };   // BGX3
       ctx.scene.add(lineFrom(seg(0),0x9C3B22,exag,ctr));                   // construction reference line
       const dcl=deckCenterOffset(1);
       if(Math.abs(dcl)>1e-6) ctx.scene.add(lineFrom(seg(dcl),0x1B6E78,exag,ctr));  // true deck centerline
@@ -3804,7 +3876,7 @@ function edgeLL(side){
     const ed=edgesForSpan(span); const off=side==='l'?ed.l:ed.r; const p=ENG.getDeckPoint(st,off); pts.push(xyToLL(p.x,p.y)); }
   return pts; }
 function girderLL(off){
-  if(ENG.chord){ const seg=ENG.offsetChordLine(off); return [xyToLL(seg[0].x,seg[0].y), xyToLL(seg[1].x,seg[1].y)]; }
+  if(ENG.chord){ const seg=ENG.offsetChordLine(off); return seg.map(q=>xyToLL(q.x,q.y)); }   // BGX3: every vertex
   const s0=ENG.align.staStart, s1=ENG.align.staEnd, pts=[];
   for(let i=0;i<=200;i++){ const st=s0+(s1-s0)*i/200; const p=ENG.getDeckPoint(st,off); pts.push(xyToLL(p.x,p.y)); }
   return pts; }
@@ -3822,8 +3894,7 @@ function plotBridgeOnMap(){
     // construction reference line (solid oxide) and the true deck centerline (cyan long-dash),
     // so the plan overlay can be checked against both without guessing which line is which
     if(ENG.chord){
-      const segLL=(w)=>{ const e=ENG.chordExtent(w); const p0=ENG.deckPointCW(e.t0,w), p1=ENG.deckPointCW(e.t1,w);
-        return [xyToLL(p0.x,p0.y), xyToLL(p1.x,p1.y)]; };
+      const segLL=(w)=>{ const e=ENG.chordExtent(w); return ENG.cwPath(e.t0,e.t1,w).map(q=>xyToLL(q.x,q.y)); };   // BGX3
       if(mL('mL_ref')) add(segLL(0),{color:'#9C3B22',weight:2.5});
       const dcl=deckCenterOffset(1);
       if(mL('mL_dcl') && Math.abs(dcl)>1e-6) add(segLL(dcl),{color:'#1B6E78',weight:2,dashArray:'10 6'});
@@ -4359,7 +4430,7 @@ let _heatResizeT=null;
 window.addEventListener('resize',()=>{ clearTimeout(_heatResizeT); _heatResizeT=setTimeout(()=>{ if(ENG) drawHeatmap(); },120); });
 ['ly_fill','ly_align','ly_crown','ly_bcl','ly_dcl','ly_ov','ly_gird','ly_edge','ly_sub','ly_brg','ly_sta','ly_gpt','ly_elev','ly_cut','ly_cont'].forEach(id=>{
   const el=document.getElementById(id); if(el) el.addEventListener('change',()=>{ if(ENG) drawHeatmap(); }); });
-['x_mode_global','x_rate_global','crown_ref','crown_off','crown_off_a1','crown_off_a2','bcl_off','bcl_off_a1','bcl_off_a2','edge_l','edge_r','curb_l','curb_r','d_slab','d_haunch','d_beam','d_bearing','d_camber','d_hma'].forEach(id=>
+['x_mode_global','x_rate_global','crown_ref','girder_frame','crown_off','crown_off_a1','crown_off_a2','bcl_off','bcl_off_a1','bcl_off_a2','edge_l','edge_r','curb_l','curb_r','d_slab','d_haunch','d_beam','d_bearing','d_camber','d_hma'].forEach(id=>
   document.getElementById(id).addEventListener('change',()=>{ renderOvrGrid(); renderSpanTable(); if(ENG) compute(); }));
 document.getElementById('ovr_toggle').addEventListener('click',()=>{
   const p=document.getElementById('ovr_panel'); const open=p.style.display!=='none';
@@ -4449,7 +4520,7 @@ const STORAGE_KEY = 'bridgeGeomEngine.project.v1';
 const LIBRARY_KEY = 'bridgeGeomEngine.library.v1';
 let CURRENT_NAME = null; // name of the loaded library entry, if any
 const SCALAR_IDS = ['h_sta0','h_x0','h_y0','h_brg0','nspans','x_mode_global','x_rate_global',
-  'x_pivot','sec_cut','sec_surf','cont_int','heat_surf','crown_ref','crown_off','crown_off_a1','crown_off_a2','bcl_off','bcl_off_a1','bcl_off_a2','edge_l','edge_r','curb_l','curb_r','d_slab','d_haunch','d_beam','d_bearing','d_camber','d_hma','divs','rep_mode','rep_div','val_tol','map_datum','map_units','vdatum_sys','vdatum_txt'];
+  'x_pivot','sec_cut','sec_surf','cont_int','heat_surf','crown_ref','girder_frame','crown_off','crown_off_a1','crown_off_a2','bcl_off','bcl_off_a1','bcl_off_a2','edge_l','edge_r','curb_l','curb_r','d_slab','d_haunch','d_beam','d_bearing','d_camber','d_hma','divs','rep_mode','rep_div','val_tol','map_datum','map_units','vdatum_sys','vdatum_txt'];
 
 // Vertical datum: a label only (scalars vdatum_sys / vdatum_txt). Elevations are never converted.
 // '' = not specified (the default for new projects and for saves made before the field existed).
@@ -4511,6 +4582,8 @@ function applyProject(p){
     if(VPIS.length) VPIS[VPIS.length-1].L=0; }
   // vertical datum: saves without the field (older versions) read as "not specified"
   ['vdatum_sys','vdatum_txt'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  // §5 migration (BGX): settings added after a project was saved take the value that reproduces its old results
+  bgOldDefaults();
   if(p.scalars) for(const id in p.scalars){ const el=document.getElementById(id); if(el){ if(el.type==='checkbox') el.checked=!!p.scalars[id];
     else el.value=(id==='map_datum' && MAP_EPSG_OLD[p.scalars[id]]) ? MAP_EPSG_OLD[p.scalars[id]] : p.scalars[id]; } }
   ACTIVE_STA = (typeof p.activeSta==='number') ? p.activeSta : null;
@@ -4812,8 +4885,16 @@ function armAutosave(){
 }
 
 /* ===== INIT ===== */
+/* BGX (2026-11-07, §5): settings added by the review fixes. A project saved without one opens with the value that reproduces
+   its old results (BG_OLD_DEFAULTS, applied by applyProject before the saved scalars); a new project (the page with nothing
+   saved, New) uses BG_NEW_DEFAULTS, which are the HTML defaults. Decisions pending engineer review. */
+const BG_OLD_DEFAULTS={ girder_frame:'single' };
+const BG_NEW_DEFAULTS={ girder_frame:'span' };
+function bgOldDefaults(){ for(const id in BG_OLD_DEFAULTS){ const el=document.getElementById(id); if(el){ if(el.type==='checkbox') el.checked=!!BG_OLD_DEFAULTS[id]; else el.value=BG_OLD_DEFAULTS[id]; } } }
+function bgNewDefaults(){ for(const id in BG_NEW_DEFAULTS){ const el=document.getElementById(id); if(el){ if(el.type==='checkbox') el.checked=!!BG_NEW_DEFAULTS[id]; else el.value=BG_NEW_DEFAULTS[id]; } } }
 function freshDefaults(){
   // the demo bridge (only used when there's nothing to restore and user hits New/reset)
+  bgNewDefaults();
   ELEMS.length=0; [{type:'tan',L:200},{type:'spi',L:150,Rin:0,Rout:800},{type:'crv',R:800,L:300},
     {type:'spi',L:150,Rin:800,Rout:0},{type:'tan',L:200}].forEach(e=>ELEMS.push(e));
   VPIS.length=0; [{sta:0,elev:100.00,L:0},{sta:400,elev:108.00,L:300},{sta:900,elev:104.00,L:0}].forEach(r=>VPIS.push(r));
@@ -5110,10 +5191,12 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
 
     // ---- notes the receiver must display (HANDOFF.md §2, §4.2) ----
     notes.unshift(
-      'Spans are measured along the straight abutment-to-abutment chord (the construction reference line), between '
+      (E.frameInfo().poly?'Spans are measured along each span\'s own straight chord (girders chorded span by span: the construction reference line runs straight from support point to support point), between '
+             :'Spans are measured along the straight abutment-to-abutment chord (the construction reference line), between ')
         +(spanBasis==='brg'?'bearing lines (pier bearing offsets applied; abutments at their bearing line)':'support centerlines (the support stations)')
         +'. On a curved alignment these differ from the PGL station differences in the Bridge Geometry span summary. Rounded to 0.001 ft.',
-      'Skew is measured at each support from the normal to the construction reference line chord (0 deg = support square to the chord); the sign is dropped. '
+      (E.frameInfo().poly?'Skew is measured at each support from the normal to the reference line there (at an abutment its span chord; at a pier the bisector of the two span chords; 0 deg = square to it); the sign is dropped. '
+             :'Skew is measured at each support from the normal to the construction reference line chord (0 deg = support square to the chord); the sign is dropped. ')
         +'Per support: '+su.map((u,i)=>u.name+' '+sk[i].toFixed(2)).join(', ')+' deg. Sent: '
         +(skewRule==='moment'?('the skew for moment DFs = '+skewVal.toFixed(2)+' deg ('+(skNoRed?'0: adjacent supports differ by more than 10 deg, so AASHTO LRFD 10th Ed. (2024) Art. 4.6.2.2.2e allows no moment reduction':'the smallest |skew|')+').')
           :('the '+(skewRule==='min'?'smallest':(skewRule==='mean'?'average':'largest'))+' |skew| = '+skewVal.toFixed(2)+' deg.')),
@@ -5357,7 +5440,8 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
     const margin=Math.max(0, +o.margin||0);
     const sA=Math.max(E.align.staStart, s1-margin), sB=Math.min(E.align.staEnd, s2+margin);
     const bw=bridgeCL();
-    const lineCW=(ly,tA,tB,w)=>W.line(ly, TP(E.deckPointCW(tA,w)), TP(E.deckPointCW(tB,w)));
+    const lineCW=(ly,tA,tB,w)=>{ const ts=E.cwTs(tA,tB);   // BGX3: one line per chord (one chord: one line, as before)
+      for(let q=0;q<ts.length-1;q++) W.line(ly, TP(E.deckPointCW(ts[q],w)), TP(E.deckPointCW(ts[q+1],w))); };
     // per-span chord-parallel line at a PGL-coord offset, ends exactly as the deck plan draws them
     // (end spans run to the skewed deck end, interior ends at the support's chord station)
     function spanLine(ly, i, off){ const w=off-bw, ext=E.chordExtent(w);
@@ -5726,7 +5810,8 @@ function bgdwBuild(){
   }
   const cap=(x,y,k,t1,t2)=>{ D.text(L.txt,x,y,0.16*k,t1,1); if(t2) D.text(L.txt,x,y-0.24*k,0.09*k,t2,1); };
   /* ---------- plan geometry shared by the plan and the framing plans ---------- */
-  const lineCW=(ly,tA,tB,w,lt)=>{ const a=TP(E.deckPointCW(tA,w)), b=TP(E.deckPointCW(tB,w)); D.line(ly,a[0],a[1],b[0],b[1],lt); };
+  const lineCW=(ly,tA,tB,w,lt)=>{ const ts=E.cwTs(tA,tB);   // BGX3: one line per chord (one chord: one line, as before)
+    for(let q=0;q<ts.length-1;q++){ const a=TP(E.deckPointCW(ts[q],w)), b=TP(E.deckPointCW(ts[q+1],w)); D.line(ly,a[0],a[1],b[0],b[1],lt); } };
   const bw=bridgeCL();
   const spanT=(i,off)=>{ const w=off-bw, ext=E.chordExtent(w);
     return [(i===0)?ext.t0:E.supportChordT(su[i].sta), (i===su.length-2)?ext.t1:E.supportChordT(su[i+1].sta), w]; };

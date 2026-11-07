@@ -100,7 +100,7 @@ This matches the existing BridgeLocks "project" channel (`index.html`).
 ### 4.2 `lldfGeom` (existing; Bridge Geometry becomes a sender)
 
 - Bridge Geometry must write exactly the shape `lldf.html` already consumes. `lldf.html` is the reference: see `K_GEOM` and its reader. Span lengths, girder spacings and skew are in **feet** and **degrees**.
-- Bridge Geometry sets `producer:"Bridge Geometry"` and adds `notes` stating that the spans are measured along the abutment-to-abutment chord, and how skew is defined.
+- Bridge Geometry sets `producer:"Bridge Geometry"` and adds `notes` stating that the spans are measured along the abutment-to-abutment chord (or, with the girder layout "per-span chords", BGX3 2026-11-07, along each span's own chord between its support points), and how skew is defined. The payload shape is the same either way.
 - Shape Bridge Geometry writes (clarified when it became a sender):
 
   ```js

@@ -1868,3 +1868,68 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **Decision (pending engineer review):** H1 tolerance = the smaller of 0.5 ft and 2 % of the deck width (the review's two suggestions; the smaller warns more). The deviation is measured against the straight-line interpolation of the end offsets, so a chord reference line that is intentionally off the PGL on a tangent does not warn.
 - **Decision (pending engineer review):** no new tangent example. Examples 1 (single-span tangent) and 2 (3-span skewed overpass, tangent) already are tangent bridges; the demo (the New project) is left as it is because it is the review's check case; BGX3 (per-span chords for new projects) removes its H1 condition.
 - **Saved data:** none (§5). **Other copies:** none.
+
+## 2026-11-07 — PR: claude/bg-h1-per-span-chords (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (BGX3, review H1 full fix, engineer item Q-BG4 / O5: girders chorded span by span; new projects only)   [calc change: new option] [saved data: additive field with migration]
+
+- **Why:** review 2026-11-07 H1 and Q-BG4 (recommendation there: per-span chords). With one straight chord from Abut 1 to Abut 2, the interior supports and the deck leave the roadway on a curved alignment (demo: Pier 1 reference line 106.63 ft from the PGL).
+- **Decision (pending engineer review):** girders, deck edges, curbs and the construction reference line are **chorded span by span**: straight within each span, between the reference points of its two supports. A reference point is the PGL point at the support station, offset by the abutment reference-line offsets interpolated by station. The lines kink at the piers on the bisector of the two chords (mitred). This is a new setting, **Girder layout in plan** (Bridge tab, `#girder_frame`, the empty cell next to Crown reference): "Per-span chords" / "One chord, Abut 1 to Abut 2".
+  - New projects (the page with nothing saved; New) use per-span chords.
+  - Projects saved without the setting (every existing save, Export JSON file and the 5 built-in examples) open with One chord, with their old results and the BGX2 warning. The user opts in by changing the setting.
+- **Decision (pending engineer review):** at a pier, skew is measured from the bisector of the two span chords (the kink line). At an abutment it is measured from its span's chord normal. Dual bearing lines are parallel to their pier line, through their own reference point (PGL station ± offset, as before; M3 is a separate item). Curved girders are not modelled.
+- **Where (anchors):**
+  - `buildEngine()`: new block `/* ---- BGX3 (review H1, engineer item Q-BG4` (`FRAME_SET`, `PS`, `psSeg`, `psXY`, `psInv`, `psRef`).
+  - Per-span branches (`if(PS)`) in: `bclOffAtSta`, `deckPointCW`, `beamSeatCW`, `chordExtent`, `chordOffsetAtXY`, `supportChordT`, `deckAtSupport`, `beamSeatAtSupport`. New `psSupT`, `cwTs`, `cwPath`.
+  - `offsetChordLine` returns `cwPath(...)`.
+  - Engine export: `frameInfo:()=>({frame,set,poly,len})`, `cwTs`, `cwPath`.
+  - `bearingLinesFor`: each bearing line carries `supSta` (its support's station).
+- **Before (one chord; still the code path for `'single'`):**
+```js
+  function deckPointCW(t,w){
+    if(!CH) return getDeckPoint(align.staStart+t, w);
+    const x = CH.P1.x + CH.ux*t + CH.nx*w;
+    const y = CH.P1.y + CH.uy*t + CH.ny*w;
+    return deckPointAtXY(x,y);
+  }
+  function deckAtSupport(bl, off){ … const w=off-bridgeCL(); const t=supportChordT(bl.sta)+w*Math.tan((bl.skew||0)*DEG); return deckPointCW(t,w); }
+```
+- **After (per-span):**
+  - Reference points P_j, one per support.
+  - Span i: chord L_i, unit u_i, right normal n_i = (u_y, −u_x), cumulative T_i.
+  - Mitre m_j = (n_{j−1} + n_j)/(1 + n_{j−1}·n_j) at a pier, n at the ends.
+  - Frame point: P(t, w) = P_i + λ(P_{i+1} − P_i) + w((1 − λ) m_i + λ m_{i+1}), with λ = (t − T_i)/L_i.
+  - Elevation: as before, the point projected onto the PGL.
+  - Deck ends: t0 = L_0·w·tanθ1/(L_0 + w·k_0), t1 = T_{n−1} + L(L + w·tanθ2 − w·k_n)/(L − w·k_n), with k = m·u at the first/last pier. With one span, k = 0 gives the one-chord formulas.
+  - A bearing line is the straight line through its reference point with direction d = n_b + tanθ·u_b (n_b: bisector or chord normal). The girder point is where d crosses the girder's mitred offset polyline.
+  - Code: `deckPointCW(t,w){ … if(PS){ const q=psXY(t,w); return deckPointAtXY(q.x,q.y); } …}` and `deckAtSupport(bl,off){ … if(PS){ const w=off-bridgeCL(); return deckPointCW(psSupT(bl,w),w); } …}`. The full code is in the file at the anchors above.
+- **Drawings:** girder, edge and reference lines drawn from t0 to t1 now pass through the kinks (`cwPath` / `cwTs`). Changed in:
+  - the on-screen plan (`planTransform`, `drawPlan`);
+  - the heatmap reference line and column length (`ENG.frameInfo().len`);
+  - the 3D girders, reference line and mesh;
+  - the map (`girderLL`, `segLL`);
+  - Export DXF `lineCW`;
+  - the Drawings sheets `lineCW`.
+  With one chord, `cwTs` returns the two ends, so these drawings are unchanged. The bearing-label spreading code (BGDL #902, BGDP #910, BGDE #914) is untouched.
+- **Derived table:** with per-span chords it lists each span's chord length, its bearing and its angle to the PGL tangent, the total, and the angle change at each pier.
+- **Hand-off (HANDOFF §4.2):** payload shape unchanged. Spans are still `supportChordT` differences, which with per-span chords are the span chord lengths. The two notes name the per-span datum. HANDOFF.md line on the notes updated. The receiver (lldf.html) is not changed.
+- **Governing provision:** none (geometry; modelling decision Q-BG4).
+- **Check case (default demo, per-span chords):**
+  - Inputs: PGL points P0 (0, 0) at 0+00, P1 (497.023, −32.604) at 5+00, P2 (934.856, −270.087) at 10+00.
+  - Chords: span 1 u = (0.99786, −0.06546), L = 498.092 ft; span 2 u = (0.87902, −0.47679), L = 498.092 ft. Pier 1 bisector normal (−0.27756, −0.96071), angle change 24.723°.
+  - Pier 1 brg-back (Sta 4+97.50, skew 15°): reference point (494.471, −32.437). Girder G1 (w = −18) at (494.822, −14.421), which projects to the PGL at Sta 4+92.986, offset −16.889.
+  - TD = 105 + 0.02(242.986) − 0.028(242.986²)/600 − 0.02(16.889) = 105 + 4.8597 − 2.7553 − 0.3378 = **106.767**. Seat = 106.767 − 4.0417 = **102.73**.
+  - Before (one chord): TD 105.335, seat 101.29; the deck lay 106.6 ft off the roadway.
+  - All 16 demo seats agree with an independent per-span model (scratchpad `bgfix/ps-indep.mjs`, built on the review's `bg/indep.mjs`) to 1e-4 ft.
+  - Hand-off spans 486.544 / 486.544 → **498.092 / 498.092**.
+  - The H1 warning disappears. The BGX1/BGX2 warnings remain, now with deck points 1.57 ft past the alignment ends.
+  - Review variant set to per-span: spans 119.979 / 149.938 / 119.968 (one chord 120.063 / 148.886 / 120.014).
+  - Example 5 (tangent) set to per-span: identical to one chord.
+- **How verified:**
+  - Headless probe, origin/main vs branch: demo, variant and Examples 1–5 as saved (One chord): every table, the hand-off payload and DXF identical; only Export JSON (the new `girder_frame:'single'`) and the H1 warning text ("…or set Girder layout in plan … to Per-span chords") differ. The demo with the setting at One chord is identical to main.
+  - Screenshots of the heatmap, plan and Drawings sheets (kinked deck) were looked at. 0 console errors.
+  - Tests:
+    - pass: check-syntax, bgeo-examples, dxf-print-sheets --tool bg, home-projects --tool bgeo, tests/engine/run.mjs handoffs lldf list-input.
+    - project-library --tool bgeo: "B opened on A's autosave" and "A's saved project opened from B's dialog" differ only in the Bridge tab text (the new setting's labels), so an old save gives identical results. "On load" and "after an input change" differ by the intended new-project default (per-span demo).
+    - list-input --part bgeo: the same new-project default.
+- **Saved data (§5):** new scalar `girder_frame` in `scalars` (additive). Migration: `applyProject` calls `bgOldDefaults()` (`BG_OLD_DEFAULTS = {girder_frame:'single'}`) before reading the saved scalars, so a save without the field keeps One chord. `freshDefaults()` calls `bgNewDefaults()` (`BG_NEW_DEFAULTS = {girder_frame:'span'}`), which are also the HTML defaults. No key changed.
+- **Open item (pre-existing, not changed):** the heatmap leaves one column unfilled after each pier (it does not join columns of different spans); the same on main with one chord.
+- **Other copies:** none.
