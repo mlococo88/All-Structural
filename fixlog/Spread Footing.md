@@ -6284,7 +6284,7 @@ index 50f3837..c2d5000 100644
 - **Cases that move:** only `slender`. The other 15 harness cases are not slender. Their only differences are the new `sus` fields on `combos[].nr.pl` (data, no result).
 - **Saved data:** none. **Other copies:** none.
 
-## 2026-11-07 — PR: claude/sf-h3-transverse-strip (SFTX: combined footing, transverse strip under each pedestal (width c + d) checked alongside the full width; governing bottom D/C = the larger; CALCULATION CHANGE for footings with two or more pedestals)
+## 2026-11-07 — PR: claude/sf-h3-transverse-strip (PR #982: https://github.com/mlococo88/All-Structural/pull/982) (SFTX: combined footing, transverse strip under each pedestal (width c + d) checked alongside the full width; governing bottom D/C = the larger; CALCULATION CHANGE for footings with two or more pedestals)
 
 - **Problem:** in a combined footing the transverse bars were checked on the full footing width, i.e. the transverse moment was spread uniformly. Under a plate the transverse moment concentrates under the pedestals. In the default project the y-bars showed D/C 0.302 where a strip under Ped 2 gives 0.465 (unconservative).
 - **Where / exact code (`Spread Footing.html`, `computePhase2`):**
