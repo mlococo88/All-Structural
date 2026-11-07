@@ -2273,6 +2273,10 @@ function buildDesignChecks(D,A){
   D.checks.push(vyGov?{label:'Shear V\u1D67',ref:D.shearY.route,dcr:vyGov.d,combo:vyGov.c.name,tab:'tabVy',
     dem:Math.abs(vyGov.c.man.Vuy),cap:D.shearY.phi*D.shearY.Vn,unit:'kip',capSym:'\u03C6V\u2099'}:
     {label:'Shear V\u1D67',ref:'G6/G4',na:true,detail:'no V\u1D64\u1D67 entered',tab:'tabVy'});
+  /* M2: Sec. F13.2 proportioning limits (geometry only; no combination) */
+  const f13=f13Prop(D.p);if(f13)D.f13=f13;
+  if(f13)D.checks.push({label:'Proportioning limits',ref:'F13.2',dcr:f13.dcr,combo:'\u2014',tab:'tabSection',
+    detail:f13.g.lab,dem:f13.g.v,cap:f13.g.lim,unit:'',capSym:'limit'});
   const pGov=gv(c=>c.dcrP!=null?{d:c.dcrP,c}:null);
   if(pGov)D.checks.push({label:'Compression',ref:'E3/E4/E7',dcr:pGov.d,combo:pGov.c.name,tab:'tabComp',
     dem:pGov.c.man.Pu,cap:pGov.c.phiPn,unit:'kip',capSym:'\u03C6P\u2099'});
@@ -3362,6 +3366,22 @@ function buildSectionTab(pg){
   AN.warns.forEach(w=>pg.appendChild(el('div','warnBox',w)));
   mkSection('sctFig','Cross Section',body=>{
     xsecBlock(body,p,{id:'xsecSect',title:p.lbl+'  \u00B7  '+p.mat.name+'  \u00B7  '+fmt(p.Wt,1)+' lb/ft',height:380});
+  },pg);
+  /* M2: Sec. F13.2 proportioning limits, worked */
+  const f13=f13Prop(p);
+  if(f13)mkSection('sctF13','Proportioning Limits (\u00A7F13.2)',body=>{
+    body.appendChild(el('div','note','h/t\u1D65 = '+fmt(f13.h,3)+'/'+fmt(p.tw,4)+' = <b>'+fmt(p.htw,1)+'</b>; \u03BB\u1D63 = 5.70\u221A(E/F\u1D67) = 5.70\u221A(29000/'+p.mat.Fy+') = '+fmt(f13.lamR,1)+
+      ' \u2192 web '+(f13.slender?'<b>slender</b>: Eq. F13-3 / F13-4 apply':'not slender: Eq. F13-3 / F13-4 do not apply')+
+      '. '+(f13.stiffened?'Transverse stiffeners at a = '+fmt(S.design.stiff.a,2)+' in, a/h = '+fmt(f13.ah,3)+'.':'No transverse stiffeners (unstiffened girder).')+
+      ' \u00A7F13.2 Eq. F13-2 is for singly symmetric members (not modelled).'));
+    const t=el('table','tbl');const hd=el('tr');['Limit','Value','Limit value','Ratio','Status'].forEach(x=>hd.appendChild(el('th',null,x)));t.appendChild(hd);
+    f13.L.forEach(x=>{const tr=el('tr');[x.lab+(x.id==='F13-3'||x.id==='F13-4'?' (Eq. '+x.id+')':''),fmt(x.v,2),
+      x.id==='F13-3'?'12.0\u221A(29000/'+p.mat.Fy+') = '+fmt(x.lim,1):x.id==='F13-4'?'0.40\u00B729000/'+p.mat.Fy+' = '+fmt(x.lim,1):fmt(x.lim,0),
+      fmt(x.r,3),x.r>1?'FAIL':'OK'].forEach((v,i)=>tr.appendChild(el('td',i===0?'lft':null,v)));if(x.r>1)tr.className='gov';t.appendChild(tr);});
+    body.appendChild(t);
+    if(f13.dcr>1)body.appendChild(el('div','errBox','The section is outside the \u00A7F13.2 proportioning limits: the Chapter F and G strengths shown are not valid for it. Thicken the web, add or close up transverse stiffeners, or enlarge the compression flange.'));
+    const aw=f13.L.find(x=>x.id==='aw');
+    if(aw&&aw.v>10)body.appendChild(el('div','hint','R\u209A\u1D4D (Eq. F5-6) uses a\u1D65 capped at 10 by its definition; the limit itself is reported above.'));
   },pg);
   mkSection('sctTbl','Resolved Properties',body=>{
     const t=el('table','tbl');
@@ -5541,6 +5561,28 @@ function stiffKv(p,stiff){
     note:'a/h = '+fmt(ah,2)+' \u2264 3.0 \u2192 k\u1D65 = 5 + 5/(a/h)\u00B2'};
 }
 /* G2.3 stiffener proportioning (no tension field action) — informational */
+/* M2 (2026-11-07): AISC 360-16 Sec. F13.2 proportioning limits, for built-up I-shapes and any I-shape with a slender web
+   (h/t_w > lambda_r = 5.70 sqrt(E/F_y), Table B4.1b case 15):
+     slender web: (h/t_w)max = 12.0 sqrt(E/F_y) for a/h <= 1.5 (F13-3), 0.40E/F_y for a/h > 1.5 or no stiffeners (F13-4);
+     unstiffened girder: h/t_w <= 260;   web area / compression flange area a_w = h t_w/(b_f t_f) <= 10.
+   (Eq. F13-2 is for singly symmetric members; the tool models doubly symmetric I-shapes only.) Before: not checked; a_w > 10 was
+   capped silently in R_pg (Eq. F4-12 / F5-6). The cap stays (its definition), the limit is now a check. */
+function f13Prop(p){
+  if(!p||p._kind!=='I')return null;
+  const E=EKSI,Fy=p.mat.Fy,h=webH(p),lamR=5.70*SQ(E/Fy),slender=p.htw>lamR;
+  if(!p._built&&!slender)return null;
+  const st=S.design&&S.design.stiff,stiffened=!!(st&&st.on&&st.a>0),ah=stiffened?st.a/h:Infinity;
+  const L=[];
+  if(slender){
+    if(ah<=1.5)L.push({id:'F13-3',lab:'h/tᵥ ≤ 12.0√(E/Fᵧ) (a/h ≤ 1.5)',v:p.htw,lim:12.0*SQ(E/Fy)});
+    else L.push({id:'F13-4',lab:'h/tᵥ ≤ 0.40E/Fᵧ ('+(stiffened?'a/h > 1.5':'no stiffeners')+')',v:p.htw,lim:0.40*E/Fy});
+  }
+  if(!stiffened)L.push({id:'260',lab:'h/tᵥ ≤ 260 (unstiffened girder)',v:p.htw,lim:260});
+  L.push({id:'aw',lab:'aᵥ = h tᵥ/(bₓ tₓ) ≤ 10',v:h*p.tw/(p.bf*p.tf),lim:10});
+  L.forEach(x=>x.r=x.v/x.lim);
+  const g=L.reduce((m,x)=>x.r>m.r?x:m,L[0]);
+  return{L,g,dcr:g.r,lamR,slender,stiffened,ah,h};
+}
 /* M1 (2026-11-07): AISC 360-16 Sec. G2.3(e), Eq. G2-13: I_st >= I_st2 + (I_st1 - I_st2) rho_w, with
    I_st1 = h^4 rho_st^1.3/40 (F_yw/E)^1.5 (G2-14), I_st2 = [2.5/(a/h)^2 - 2] b_p t_w^3 >= 0.5 b_p t_w^3 (G2-15),
    rho_w = (V_r - V_c2)/(V_c1 - V_c2) >= 0 (V_c1 = phi V_n of Sec. G2.1, V_c2 = phi 0.6 F_y A_w C_v2).

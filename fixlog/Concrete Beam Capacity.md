@@ -5215,3 +5215,20 @@ Frame: Beam Capacity (`suite-frame-capacity`) and the suite shell's Report summa
 - **How verified:** headless main vs branch, review probe cases (+ aasRT, aasTnoV): every ACI and Dev case identical; AASHTO cases without torsion differ only in the reworded notes, the new N/A Summary rows and the additive `fcUse`/`fytUse` fields of `sh`; aa100, aasT, aasRT, aasTnoV move as above. Worked steps compared with an independent hand script (all values above agree to the digits shown). Report model dumped (sections 7 and 8); screenshot of the Shear tab (aasT) looked at. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
 - **Saved data:** no key or format change.
 - **Open items:** hollow sections (Eqs. 5.7.2.1-5, 5.7.3.4.2-6, 5.7.3.6.3-2) are outside the tool's section types; compatibility-torsion reduction (decision 4).
+
+## 2026-11-07 — PR: claude/cbc-aci-lap-fc-order, PR #1042: https://github.com/mlococo88/All-Structural/pull/1042 (CBH2b: ACI compression lap splice — the one-third increase for f′c < 3000 psi applied after the 12 in minimum, per 25.5.5.1; CALCULATION CHANGE, Development & Splice tab, ACI mode, f′c < 3000 psi with small bars only; less conservative before)
+
+Frame: Development & Splice (`suite-frame-dev`; byte-exact srcdoc helper, CRLF kept). Follow-up to CBH2 (#969), open item from the 2026-11-07 review.
+
+### CBH2b. Order of the ×4/3 and the 12 in floor   [CALCULATION CHANGE]
+- **Governing provision (ACI 318-19 25.5.5.1, rendered PDF printed p. 492):** (a)–(c) give l_sc as the longer of the expression (or l_st for f_y > 80,000 psi) and 12 in; then, for f′c < 3000 psi, the length of lap is increased by one-third. The increase therefore applies to the length after the 12 in minimum.
+- **Where:** `calcCompSplice()`, ACI branch (anchor `CBH2b`).
+  - Before: `if(inp.fc<3000) lsc_calc *= (4/3);` then `const lsc = Math.max(lsc_calc, 12);`
+  - After: `const lsc0 = Math.max(lsc_calc, 12);` and `lsc = inp.fc<3000 ? lsc0*(4/3) : lsc0` (returns `lsc0`; `lsc_calc` is now the expression without the ×4/3). The Comp. Splice tab and the Report show "l_sc = 4/3·max(l_sc,calc, 12 in)" when f′c < 3000 psi; the commentary lists the 12 in minimum before the one-third increase.
+- **Check cases (ACI):**
+  - #4, f_y 40,000 psi, f′c 2500 psi: 0.0005 · 40,000 · 0.5 = 10.0 in. **Before: max(10.0 · 4/3, 12) = 13.33 in. After: 4/3 · max(10.0, 12) = 16.00 in.**
+  - #3, f_y 60,000, f′c 2500: 11.25 in. **Before 15.00 in; after 4/3 · 12 = 16.00 in.**
+  - #8, f_y 60,000, f′c 2500: 30.0 in → 40.0 in before and after (expression above 12 in: no change). f′c ≥ 3000 psi: no change. f_y 100 ksi, f′c low (`aciFy100lowfc`): l_sc unchanged (169 · 4/3).
+- **AASHTO (unchanged):** 5.10.8.4.5a puts m = 1.33 for f′c < 3.0 ksi inside Eqs. 5.10.8.4.5a-1/-2 and the 12.0 in minimum outside, so the AASHTO order (factor, then floor) is as coded. Open item: the tool uses 4/3 = 1.333 where the 10th Ed. lists m = 1.33 (0.3 % conservative).
+- **How verified:** headless main vs branch, all Dev probe cases: only the f′c < 3000 psi ACI cases with expression < 12 in move (above); all Beam Capacity cases identical; screenshot of the Comp. Splice tab (#4 case) looked at. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
+- **Saved data:** no change.

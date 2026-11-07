@@ -20079,3 +20079,51 @@ index 06a42e4..b58d4e3 100644
   - App and Report: the new rows, steps and table. 0 unresolved references, 0 duplicate keys, no NaN.
   - `check-syntax`: pass. `pile-library`: library checks pass. 0 console errors.
 - **Other copies:** none. The H-pile group uplift is not added; it is listed as a future feature.
+
+## 2026-11-07 — PR: claude/rw-pile-8f — foundationLoads from the Retaining Wall Designer listed (copy by.retwall); pileResults dialog names both receivers (RWPX; no calculation change) (PR #1015: https://github.com/mlococo88/All-Structural/pull/1015)
+
+Cross-tool PR with the Retaining Wall Designer (Phase 8f, HANDOFF.md §4.6 / §4.10). Minimal change.
+### Where / before / after
+```diff
+-  var CH='foundationLoads', SCHEMA='bridge-foundation-loads', MAXV=1, RID='pileDesigner', BY=['abutment','subloads'];
++  var CH='foundationLoads', SCHEMA='bridge-foundation-loads', MAXV=1, RID='pileDesigner', BY=['abutment','subloads','retwall'];   // RWPX (2026-11-07): + the Retaining Wall Designer's copy (element.type "wall", revision 2)
+-    x+='<div style="color:#334155;margin:4px 0">Channel pileResults (receiver: abutment calculator, "Pull pile results"). '+(p.basis? 'Based on the foundation loads from <b>'+esc(p.basis.producer)+'</b>, sent '+esc(when(p.basis.producedAt))+' ('+esc(p.basis.target||'?')+' import'+(p.basis.contentHash?', content '+esc(p.basis.contentHash):'')+').' : 'No foundation-load hand-off recorded.')+'</div>';
++    x+='<div style="color:#334155;margin:4px 0">Channel pileResults (receivers: abutment calculator and Retaining Wall Designer, "Pull pile results"). '+(p.basis? 'Based on the foundation loads from <b>'+esc(p.basis.producer)+'</b>, sent '+esc(when(p.basis.producedAt))+' ('+esc(p.basis.target||'?')+' import'+(p.basis.contentHash?', content '+esc(p.basis.contentHash):'')+').' : 'No foundation-load hand-off recorded.')+'</div>';
+```
+### Problem
+- The wall sends `foundationLoads` revision 2 (element.type "wall") with a copy at `bridgeSuite.v1.foundationLoads.by.retwall`; the receiver listed only the abutment and SubLoads copies (the channel key itself was read already). The import, its checks and the targets are unchanged: a wall payload is a revision-2 payload like the abutment's (its section has no d, b_f, t_f, t_w, so it is not adopted).
+### Governing provision
+- None (data hand-off).
+### Check case
+- tests/smoke/retwall-pile-handoff.mjs: the wall's payload is listed, imported on the group target with the layout adopted; "Per-pile check: for all 2 case(s), every pile's reaction … equals … within 0.0005 kip"; Run all cases; pileResults sent with basis.contentHash = the wall's.
+### How verified
+- The smoke test above; `pile-library` smoke; `project-library --tool pile`; `check-syntax`.
+### Open items
+- The per-pile check message and the "Pull from Abutment / SubLoads" label still name the abutment; wording only.
+
+## 2026-11-07 — PR: claude/pile-low-fixes (PR #1041: https://github.com/mlococo88/All-Structural/pull/1041) (PDA-L1 to L6) — review low items: outer-0.85 note, Report table numbers, tension D/C, stale comment, ENGINEER_CHECKS, pile self-weight in the bond demand   [L6 and L3: result change; the rest display / text]
+- **L1 (text; closes open item O1):**
+  - Problem: the note "outer 0.85 factor and f_y = min(f_yc, f_yb) … conservative deviation from AASHTO 10.9.3.10.2 / FHWA Eq. 5-13; neither has the outer 0.85" was wrong.
+  - Provision: 10th Ed. Eqs. 10.9.3.10.2a-2 and 2b-2 contain the outer 0.85. Since PDA-D9, f_y = min(f_yb, f_yc, 0.003E) for the cased length and min(f_yb, 0.003E) for the uncased length.
+  - Where: Structural tab (anchor `The outer 0.85 factor is that of AASHTO Eqs. 10.9.3.10.2a-2`), Report (anchor `note("The outer 0.85 factor is that of AASHTO`), Module 03 methodology (anchor `"Outer 0.85 factor: AASHTO Eqs.`).
+  - Before / after: the deviation text was replaced by the equation citations above. No value changed.
+  - **O1 is closed:** the outer 0.85 is AASHTO.
+- **L2 (display):** the Report's "Tables as printed" carried the hidden print's section numbers ("05 · §4.5"), which differ from the Report's own.
+  - In `pdrExtras`, the table-cell text `X · §n.m` becomes `X` (the module number), using the regex `^(\S+) · §\d+(?:\.\d+)*$`.
+- **L3 (result: envelope D/C column only):** the micropile `tenR` divided the full T_u by min(φ_up R, φ_t T_n,total), while the pass logic checks the uncased bar against T_u − P_t (PDA-D8).
+  - After: `tenR = max(T_u/φ_up R_up, T_u/φT_n,cased, (T_u − P_t)/φT_n,uncased)`.
+  - Pass flags unchanged. V4: (50 − 8.25)/47.4 = 0.881 governs (before 50/47.4 = 1.055 on a passing row).
+- **L4 (comment only):** the bond-block comment said the plunge is excluded. It now says the plunge is included since PDA-D8, with scour removing bond. No code change.
+- **L5 (docs):** ENGINEER_CHECKS.md, Pile Designer line: removed "φt micropile tension 0.90 vs AASHTO 0.80 (not changed)" (fixed by PDA-D3) and "punching 0.125 vs 0.126" (fixed by PDA-D14). Tonight's pending decisions were added to that line, and as one line in the tools.html "Open engineer checks" mirror.
+- **L6 (calculation change):**
+  - Problem: the geotechnical bond demand was STL at the head. The pile self-weight was computed (Wpile) but not added.
+  - After: demand = STL + γ_DC W_pile, with γ_DC = 1.25 (Table 3.4.1-2, maximum). It feeds `R.geo.pass`, `R.geo.demand`, L_b,req (so L_b,eff ≥ L_b,req follows) and the envelope `geoR`.
+  - W_pile = 0.150 kcf × (π OD²/4 × L_cased + π d_h²/4 × (L_bond − L_p)) + (0.490 − 0.150) × (casing area × L_cased + A_b × pile length), /144.
+  - Where: `computeAll` (anchor `// PDA-L6 (2026-11-07)`); Structural tab / Module 01 check lines; Report step `geo/Wp`.
+  - **Decision (pending engineer review):** STL is taken to exclude the pile weight; uplift does not credit the weight (conservative); the group demands (η, block) still use STL.
+  - Check case (default): W_pile = 1.563 (grout) + 0.403 (steel) = 1.966 kip; demand = 86 + 1.25(1.966) = **88.46 kip**. φP_n = 86.59 kip: D/C 0.993 OK → **1.022 NG**. L_b,req 26.82 → 27.58 ft (L_b,eff 27.0: NG).
+- **How verified:**
+  - `computeAll` on 17 cases main vs branch: only `R.geo` / L_b,req moved (L6), plus the envelope tension column (L3).
+  - App and Report text: the L1 notes, the L2 table cells and the L6 lines; 0 unresolved references, 0 duplicate keys, no NaN.
+  - `check-syntax`: pass. `pile-library`: see the PR. 0 console errors.
+- **Other copies:** none.
