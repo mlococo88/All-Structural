@@ -2129,3 +2129,37 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
     - project-library --tool bgeo: old saves differ only in the Bridge tab text (the new setting), so their results are identical. "On load" differs by the new-project default (the bearing-line rows).
 - **Saved data (§5):** additive scalar `brg_off_mode`. Migration: `BG_OLD_DEFAULTS.brg_off_mode='pgl'`; `BG_NEW_DEFAULTS.brg_off_mode='chord'`. No key changed.
 - **Other copies:** none.
+
+## 2026-11-07 — PR: claude/bg-m4-m5-girder-tables (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (BGX9, review M4 + M5: grid rows explained and off-deck points marked; span lengths named; girder lengths and tenth points)   [display only; no result change]
+
+- **Why:** review 2026-11-07.
+  - M4: Top-of-Deck grid rows named "Abut 1 CL" / "Pier n CL" are square to the reference line, not on the skewed support. At skewed ends some grid points lie outside the deck.
+  - M5: two different "span lengths" were printed (PGL station differences in the span summary, heatmap and sheets; chord lengths for the girders and the LL & DL hand-off), and neither was labelled. There were no tenth points along each girder and no girder lengths.
+- **Decision (pending engineer review):**
+  - The grid rows keep their values and names.
+  - A note under the table says what the rows are, and points to Rows = bearing lines / the Beam Seat tab for values on the skewed support.
+  - Points beyond the skewed deck end are shown in grey italics with a tooltip. The cell value is unchanged, so the CSV is unchanged.
+  - Top-of-form / screed elevations with dead-load deflections are **not** added: the tool has no deflection input. The tenth-point table says so.
+- **Where (anchors):**
+  - `buildTable()` (grid mode): `TDo` (anchor `/* BGX9 (review M4)`) for edges, curbs and girders, and the footnote.
+  - `buildSpanSummary()`: anchor `/* BGX9 (review M5)`.
+  - Heatmap span label: anchor `// BGX9 (M5): both lengths, named`.
+  - Drawings sheet "SUPPORTS AND BEARING LINES": span rows and the note, which now also names the skew datum chosen in BGX4, BGX3.
+  - New `buildGirderTenths()` (before `function buildSeatWork(){`) and the block `<details id="gird10_box">` under `#tbl_wrap`; called in `compute()` after `buildSeatWork()`.
+  - Engine `girderSag`: `len` is now the plan length between the girder's two bearing points (it was |tB − tA|, which is the same value with one chord). It is used only in displays.
+- **Before / after (span summary):**
+  - Before: columns Span · From · To · Length (= the PGL station difference).
+  - After: Span · From · To · **Length, PGL stations (ft)** · **Along ref line (ft)** (supportChordT difference, the girders' span as sent to LL & DL) · **Girder brg–brg (ft)** (shortest – longest girder).
+  - Heatmap label "Span 1: 500.00 ft" → "Span 1: 500.00 ft (PGL) · 498.09 ft (ref line)".
+  - Sheet: "LENGTH (FT)" → "LENGTH, PGL STA (FT)" and "ALONG REF LINE (FT)".
+- **Governing provision:** none (display). CTDOT BDM (02/24) 8.3.2 (deck elevations at bearings and tenth points, for the haunch) is cited in the tenth-point note.
+- **Check case:**
+  - Review variant (one chord): span summary 120.00 / 150.00 / 120.00 (PGL) and 120.06 / 148.89 / 120.01 (ref line = the LL & DL spans). Girder brg–brg 117.58 / 143.92 / 117.53 (ref line less the 2.5 ft dual-bearing offsets).
+  - The variant's grid rows "Abut 1 CL" G3, G4 / Curb R / Edge R and "Abut 2 CL" Edge L … G2 are marked beyond the deck end (skew 30°).
+  - Demo (new project, per-span): spans 500.00 (PGL) / 498.09 (ref line); girder G1, span 1: 495.94 ft, TD at 0.0 … 1.0 = 99.639 … 106.766 (the Abut 1 and Pier 1 brg-back TD of the seat working).
+- **How verified:**
+  - Headless probe origin/main vs branch (demo, variant, Examples 1–5): every seat, hand-off payload, Export JSON and DXF identical. The Top-of-Deck text differs only by the added note; the span summary and the girder table are new. 0 console errors.
+  - Tests:
+    - pass: check-syntax, bgeo-examples, dxf-print-sheets --tool bg, home-projects --tool bgeo, tests/engine/run.mjs handoffs lldf list-input.
+    - project-library --tool bgeo: text-only differences (the note, the span summary columns, the haunch-check L column).
+- **Saved data:** none. **Other copies:** none.
