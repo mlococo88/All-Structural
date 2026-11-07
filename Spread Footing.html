@@ -4636,10 +4636,11 @@ function sfrWallMinTopics(i,wI,S){const T=[];let wNote='';
    11.7 topics (sfrWallMinTopics, unchanged), ties / bar fit / cover, and the in-plane P-M (SFWD-4) (display of computed values only). */
 function sfrWallSub(i,pd,S){
  const w=P2.bearing[i].wall,o=P2.wallD[i],rf=state.peds[i].reinf,T=[],fx=v=>isFinite(v)?v:'∞';
- const ob=o.env?Object.assign({},o,{ldc:'conc',bTop:o.env.conc.bTop,bBase:o.env.conc.bBase}):o;   /* SFWD-3: older save, show the concentrated b_eff */
+ const ob=o.env?Object.assign({},o,{ldc:'conc',bTop:o.env.conc.bTop,bBase:o.env.conc.bBase,spr:o.env.conc.spr,topGovB:o.env.conc.topGovB}):o;   /* SFWD-3: older save, show the concentrated b_eff */
  T.push({title:'Wall section per foot (out of plane)',ref:'ACI 318-19 11.5.2.1, 22.4, 20.5.1.3',steps:[
   S({id:'wo.bt',label:ob.ldc==='dist'?'Load distributed over the full wall length (input)':(o.env?'Project saved before the load-application input: both choices computed, the more conservative governs (P–M: '+(o.env.pm==='dist'?'distributed':'concentrated')+', shear: '+(o.env.v==='dist'?'distributed':'concentrated')+'; decision pending engineer review). ':'')+'Effective length at the load (b = '+sfrN(ob.bw)+' in'+(ob.bIn?'':' = t')+', s = '+(isFinite(ob.sL)?sfrN(ob.sL)+' in':'none')+')',sym:'b_{eff,top}',eq:ob.ldc==='dist'?'\\ell_{w}':'\\min(b + 4t,\\, s,\\, \\ell_{w})',sub:ob.ldc==='dist'?'':'\\min('+sfrN(ob.bw)+' + 4\\cdot'+sfrN(ob.tw)+',\\,'+(isFinite(ob.sL)?sfrN(ob.sL):'\\infty')+',\\,'+sfrN(ob.lw)+')',value:ob.bTop,unit:'in',ref:'ACI 318-19 11.2.3.1'}),
-  S({id:'wo.bb',label:ob.ldc==='dist'?'Load distributed over the full wall length':'Effective length at the base: 45° spread each side down h = '+sfrN(ob.hs)+' in, limited by the distances to the wall ends a_1 = '+sfrN(ob.a1)+', a_2 = '+sfrN(ob.a2)+' in, s and ℓ_w (decision pending engineer review: common practice, not a code article)',sym:'b_{eff,base}',eq:ob.ldc==='dist'?'\\ell_{w}':'\\min\\left[\\min(b/2 + h,\\, a_{1}) + \\min(b/2 + h,\\, a_{2}),\\, s,\\, \\ell_{w}\\right]',sub:ob.ldc==='dist'?'':'\\min\\left[\\min('+sfrN(ob.bw/2+ob.hs)+',\\,'+sfrN(ob.a1)+') + \\min('+sfrN(ob.bw/2+ob.hs)+',\\,'+sfrN(ob.a2)+'),\\,'+(isFinite(ob.sL)?sfrN(ob.sL):'\\infty')+',\\,'+sfrN(ob.lw)+'\\right]',value:ob.bBase,unit:'in'}),
+  ...(ob.ldc==='dist'?[]:[S({id:'wo.bs',label:'45° spread each side down h = '+sfrN(ob.hs)+' in from the bearing width b, limited by the distances to the wall ends a_1 = '+sfrN(ob.a1)+', a_2 = '+sfrN(ob.a2)+' in (common practice, not a code article)',sym:'b_{spread}',eq:'\\min(b/2 + h,\\, a_{1}) + \\min(b/2 + h,\\, a_{2})',sub:'\\min('+sfrN(ob.bw/2+ob.hs)+',\\,'+sfrN(ob.a1)+') + \\min('+sfrN(ob.bw/2+ob.hs)+',\\,'+sfrN(ob.a2)+')',value:ob.spr,unit:'in'})]),
+  S({id:'wo.bb',label:ob.ldc==='dist'?'Load distributed over the full wall length':'Effective length at the base: the larger of b_eff,top and the 45° spread, capped by s and ℓ_w (engineer-approved rule, 2026-11-07: the load does not narrow down the wall; a_1, a_2 limit the spread only)'+(ob.topGovB?': b_eff,top governs':': the spread governs'),sym:'b_{eff,base}',eq:ob.ldc==='dist'?'\\ell_{w}':'\\min\\left[\\max(b_{eff,top},\\, b_{spread}),\\, s,\\, \\ell_{w}\\right]',sub:ob.ldc==='dist'?'':'\\min\\left[\\max('+sfrN(ob.bTop)+',\\,'+sfrN(ob.spr)+'),\\,'+(isFinite(ob.sL)?sfrN(ob.sL):'\\infty')+',\\,'+sfrN(ob.lw)+'\\right]',value:ob.bBase,unit:'in'}),
   S({id:'wo.dp',label:'Face to vertical-bar centre (c = clear cover to the vertical bars)',sym:"d'",eq:'c + \\frac{d_{b}}{2}',sub:sfrN(num(rf.cover))+' + \\frac{'+sfrN(BAR_DIA[rf.longSize]||0,3)+'}{2}',value:o.dPr,unit:'in',d:3}),
   S({id:'wo.d',label:'Effective depth',sym:'d',eq:"t \\minus d'",sub:sfrN(o.tw)+' \\minus '+sfrN(o.dPr,3),value:o.d,unit:'in',d:3}),
   S({id:'wo.As',label:'Vertical bars per curtain per ft (#'+w.v.size+' at s_v = '+sfrN(w.v.s)+' in; two curtains; end bars not counted)',sym:'A_{s}',eq:'\\frac{12 A_{b}}{s_{v}}',sub:'\\frac{12\\cdot'+sfrN(w.v.Ab)+'}{'+sfrN(w.v.s)+'}',value:o.Asf,unit:'in^{2}/ft',d:3}),
@@ -4683,7 +4684,7 @@ function sfrWallSub(i,pd,S){
   S({id:'wo.vcov',label:'Clear cover to the vertical bars (min '+sfrN(pd.vertCovMin)+' in)',sym:'c',eq:'',sub:'',value:pd.cov,unit:'in',ok:!!pd.vertCovOK,ref:'ACI 318-19 Table 20.5.1.3.1'}),
   S({id:'wo.tcov',label:'Clear cover to the ties (min '+sfrN(pd.tieCovMin)+' in)',sym:'c_{tie}',eq:'c \\minus d_{b,tie}',sub:sfrN(pd.cov)+' \\minus '+sfrN(pd.tieDb,3),value:pd.tieCov,unit:'in',d:3,ok:!!pd.tieCovOK,ref:'ACI 318-19 Table 20.5.1.3.1'}),
   S({id:'wo.tmin',label:'Minimum thickness, Table 11.3.1.1 (information: applies only to a wall designed by 11.5.3; this wall is designed by 11.5.2); t = '+sfrN(o.tw)+' in',sym:'h_{min}',eq:'\\max\\left(4,\\;\\frac{\\min(\\ell_{u},\\ell_{w})}{25}\\right)',sub:'\\max(4,\\;'+sfrN(o.tmin.lc)+'/25)',value:o.tmin.v,unit:'in',ref:'ACI 318-19 11.3.1.1'})]});}
- return {key:'S-wd'+i,title:pd.label+' (wall, '+sfrN(pd.bx,1)+' × '+sfrN(pd.by,1)+' × '+sfrN(pd.h,1)+' in)',items:[...sfrNL('Wall statement:',sfdWallItems(w).map(([a,t])=>[a+':',t+'.'])),{type:'figure',svg:sfdWallSketchSVG(i),caption:pd.label+': wall elevation and plan, bars, load, b_eff,top (ACI 318-19 11.2.3.1) and b_eff,base (45° spread: decision pending engineer review)'},sfrTopics('pd'+i,T),
+ return {key:'S-wd'+i,title:pd.label+' (wall, '+sfrN(pd.bx,1)+' × '+sfrN(pd.by,1)+' × '+sfrN(pd.h,1)+' in)',items:[...sfrNL('Wall statement:',sfdWallItems(w).map(([a,t])=>[a+':',t+'.'])),{type:'figure',svg:sfdWallSketchSVG(i),caption:pd.label+': wall elevation and plan, bars, load, b_eff,top (ACI 318-19 11.2.3.1) and b_eff,base (the larger of b_eff,top and the 45° spread)'},sfrTopics('pd'+i,T),
   {type:'table',wide:true,head:['Combination','P_u (kip)','M_u,out (kip-ft)','M_u,in (kip-ft)',o.slender?'M_c (kip-ft)':'M_u (kip-ft)','N more / less (kip/ft)','M (kip-ft/ft)','φM_n at N','ratio','V_u/φV_c'],
    rows:o.rows.map(z=>({cells:[z.name,sfrCell(z.P),sfrCell(z.Mo),sfrCell(z.Mi),sfrCell(isFinite(z.Mc)?z.Mc:'∞'),sfrN(z.Nhi)+' / '+sfrN(z.Nlo),sfrCell(isFinite(z.Mft)?z.Mft:'∞'),z.q?sfrCell(z.q.phiMn):sfrCell(z.mode==='axial'?'axial cap':z.mode==='range'?'tension':'—'),sfrDC(z.ratio),sfrDC(z.vr)],cls:z===o.gov?'gov':''}))},
   {type:'note',text:'Out of plane, per ft: every LRFD combination at both ends (the same procedure as the governing row, worked above).'},...sfrNL('Not checked for this wall:',SFWD_NOT_L.map(t=>t+'.')),
@@ -6262,7 +6263,7 @@ function sfdWallItems(w){
   ['Dowel minimum','16.3.4.2: ρ_l = the larger of Table 11.6.1 (dowel bar size) '+w.rhoL+' and 11.6.2 '+sfdRhoTxt(w.e1162.rl)+sfdWallBoundTxt(w)+' = '+sfdRhoTxt(w.rhoDow)+'; ρ_l A_g = '+f2(w.AsMinWall)+' in²'],
   ['Wall minimum steel','ρ_l and ρ_t ≥ the larger of Table 11.6.1 and 11.6.2 (engineer 2026-11-06): Wall reinforcement'],
   ['Code case','in-plane V_u '+(w.t1161?'≤':'>')+' 0.5φα_cλ√f′c A_cv = '+f2(w.gov?w.gov.thr:0)+' kip: '+(w.t1161?'11.6.1 / Table 11.6.1 is the code minimum; 11.6.2 also applied by the engineer’s choice':'11.6.2 applies (the condition of 11.6.2 is printed “≤” in the engineer’s copy; the reading “above the 11.6.1 limit” is used); Table 11.6.1 also checked')],
-  ['Out of plane','per foot of the effective length b_eff (11.2.3.1 at the load, 45° spread to the base): axial and flexure by 11.5.2.1 / 22.4 with slenderness by 6.6.4 (11.4.1.3); shear by 11.5.5.1 / 22.5; ties 11.7.4.1 (11.5.3 and 11.3.1.1 for information)'],
+  ['Out of plane','per foot of the effective length b_eff (11.2.3.1 at the load; at the base the larger of that and a 45° spread): axial and flexure by 11.5.2.1 / 22.4 with slenderness by 6.6.4 (11.4.1.3); shear by 11.5.5.1 / 22.5; ties 11.7.4.1 (11.5.3 and 11.3.1.1 for information)'],
   ['In plane','shear by 11.5.4 (Wall in-plane shear); axial and flexure of the whole wall about its strong axis by 11.5.2.1 / 22.4 (Wall in-plane P–M)'],
   ['Spacing and layers','11.7.2.1, 11.7.3.1, 11.7.2.3: Wall bar spacing and layers'],
   ['Two-way shear around the wall','still checked (conservative): ACI 318-19 22.6.4.1 does not exempt walls; the footing one-way shear at d from the wall faces (13.2.7.1, Table 13.2.7.1: face of a concrete wall) is also checked'],
@@ -6471,9 +6472,10 @@ function sfdWallOOP(i,p,pd,w,combos,fc,fy,lam){
     entered as distributed over the full wall length (wallIn.load = 'dist'). Concentrated (wallIn.load = 'conc', the default):
     bearing width b = wallIn.bw (in; blank = t), spacing to adjacent concentrated loads s = wallIn.sLoad (in; blank = none).
     ACI 318-19 11.2.3.1: at the load, b_eff,top = min(b + 4t, s, l_w).
-    At the wall base: b_eff,base = min(b/2 + h, a_1) + min(b/2 + h, a_2), <= s and <= l_w, h = the height from the load (top of the
-    element) to the base, a_1, a_2 = the distances from the load point (the load offset along l_w) to the two wall ends: a 45-degree
-    spread each side down the height (decision pending engineer review; common practice, not a code article).
+    At the wall base (SFWD-7, engineer-approved 2026-11-07): b_eff,base = min(max(b_eff,top, spread), s, l_w), spread =
+    min(b/2 + h, a_1) + min(b/2 + h, a_2), h = the height from the load (top of the element) to the base, a_1, a_2 = the distances
+    from the load point (the load offset along l_w) to the two wall ends: a 45-degree spread each side down the height (common
+    practice, not a code article); never less than b_eff,top.
     b_eff,top: the top section (applied P, M at the load) per ft. b_eff,base: the base P-M, the slenderness strip, the out-of-plane
     shear and the dowels per ft. The element's self-weight is spread over l_w. In-plane checks and the footing / soil use the full
     wall and the full loads. */
@@ -6490,9 +6492,13 @@ function sfdWallOOP(i,p,pd,w,combos,fc,fy,lam){
  const eAl=(dir==='y'?num(p.ley):num(p.lex))*12,a1=Math.max(0,lw/2+eAl),a2=Math.max(0,lw/2-eAl),hs=p.h*12;
  Object.assign(o,{bw,bIn:bIn>0,sL,sIn:sIn>0,eAl,a1,a2,hs});
  const run=(ldc,o)=>{
- const bTop=ldc==='dist'?lw:Math.min(bw+4*tw,sL,lw), bBase=ldc==='dist'?lw:Math.min(Math.min(bw/2+hs,a1)+Math.min(bw/2+hs,a2),sL,lw);
+ /* SFWD-7 (2026-11-07, engineer): b_eff,base = min(max(b_eff,top, 45-degree spread), s, l_w); was min(spread, s, l_w), which
+    for a short wall came out below b_eff,top (the load narrowing down the wall). a_1, a_2 limit only the spread term:
+    b_eff,top is not cut at the wall ends (11.2.3.1 limits it by joints and the load spacing only; as SFWD-3). */
+ const bTop=ldc==='dist'?lw:Math.min(bw+4*tw,sL,lw), spr=Math.min(bw/2+hs,a1)+Math.min(bw/2+hs,a2),
+  bBase=ldc==='dist'?lw:Math.min(Math.max(bTop,spr),sL,lw), topGovB=ldc!=='dist'&&bTop>spr+1e-9;
  const Lb=bBase/12,Lt=bTop/12,IgS=bBase*Math.pow(tw,3)/12;
- Object.assign(o,{ldc,bTop,bBase,Lb,Lt,IgS});
+ Object.assign(o,{ldc,bTop,bBase,spr,topGovB,Lb,Lt,IgS});
  o.rows=(pd.pmPts1||[]).map(pt=>{
   const Mo=dir==='y'?pt.My:pt.Mx, Mi=dir==='y'?pt.Mx:pt.My, P=pt.P, sus=pt.sus, V=sh[pt.name]||{Vx:0,Vy:0,Pa:P,MxT:0,MyT:0};
   const Pa=V.Pa, Wsw=P-Pa, Ps=Pa+Wsw*bBase/lw;   /* the strip b_eff,base: the applied load and its share of the self-weight */
@@ -6541,7 +6547,7 @@ function sfdWallOOP(i,p,pd,w,combos,fc,fy,lam){
   if(sv!==pm){o.rows=pm.rows.map((z,k)=>{const y=sv.rows[k]||{},c=Object.assign({},z);['Vo','LbV','vu','Nt','nt','vc','Vc','phiVc','vr'].forEach(q=>{c[q]=y[q];});return c;});
    ['gov','topGov','dowGov','slGov'].forEach(q=>{const r=pm[q];o[q]=r?o.rows[pm.rows.indexOf(r)]:r;});
    o.vGov=o.rows.reduce((a,z)=>(!a||z.vr>a.vr)?z:a,null);o.vOK=!o.vGov||o.vGov.vr<=1+1e-9;}
-  o.env={pm:pm.ldc,v:sv.ldc,conc:{allMax:A.allMax,vr:vr(A),bTop:A.bTop,bBase:A.bBase},dist:{allMax:B.allMax,vr:vr(B)}};}
+  o.env={pm:pm.ldc,v:sv.ldc,conc:{allMax:A.allMax,vr:vr(A),bTop:A.bTop,bBase:A.bBase,spr:A.spr,topGovB:A.topGovB},dist:{allMax:B.allMax,vr:vr(B)}};}
  o.mode=mode;
  {const f=1-Math.pow(k*lu/(32*tw),2),phiPn=0.65*0.55*fc*12*tw*f/1000,g=o.rows.reduce((a,z)=>(!a||z.Nhi>a.Nhi)?z:a,null);
   const emax=o.rows.reduce((a,z)=>Math.max(a,z.e),0);
@@ -8410,8 +8416,8 @@ const SFWD_NOT=SFWD_NOT_L.join('; ');
 /* ---- SFWD-5 (2026-11-07, engineer: wall graphics): display only, no computed value changes ----
    sfdWallSketchSVG(i): wall elevation (along l_w, to scale both ways) and plan: the vertical bars at their positions (pd.pmBars), the
    horizontal bars at s_h (schematic, from the base), the load at its offset with the bearing width b, b_eff,top above the top
-   (ACI 318-19 11.2.3.1), the 45-degree spread lines from the edges of b down to the base (decision pending engineer review) and
-   b_eff,base below the base, the values from sfdWallOOP (o.bTop, o.bBase; for an older save, the concentrated values). The plan shows
+   (ACI 318-19 11.2.3.1), the 45-degree spread lines from the edges of b down to the base and b_eff,base below the base (SFWD-7: the
+   larger of b_eff,top and the spread; where b_eff,top governs, red dotted lines carry it down the wall), the values from sfdWallOOP (o.bTop, o.bBase; for an older save, the concentrated values). The plan shows
    the t x l_w section with every vertical bar. Used on the Wall Design card and as a static figure of the Report.
    sfdWallPM*: the P-M diagrams with the pedestal helpers of SFPV (sfpmSec, sfpmPlotAxis, sfpmPlot3D): out of plane, the 12-in strip
    with the two curtains (bars at +-(t/2 - d'), A_s per ft each), demand = each combination's governing end (N, M per ft over
@@ -8421,6 +8427,7 @@ function sfdWallSketchSVG(i){
  const o=P2.wallD&&P2.wallD[i],pd=P2.pedDes[i],w=P2.bearing[i]&&P2.bearing[i].wall;if(!o||!o.applied||!pd)return '';
  const lw=o.lw,tw=o.tw,H=Math.max(o.hs,1),dir=o.dir,conc=o.ldc!=='dist'||!!o.env;
  const bTop=o.env?o.env.conc.bTop:o.bTop,bBase=o.env?o.env.conc.bBase:o.bBase,b=o.bw,u0=lw/2+o.eAl;   /* load point from the left end */
+ const spr=o.env?o.env.conc.spr:o.spr,topGovB=o.env?o.env.conc.topGovB:o.topGovB;   /* SFWD-7: b_eff,base = min(max(b_eff,top, spread), s, l_w) */
  const W=600,padL=64,padR=72,padT=84,gap=70,sc=Math.min((W-padL-padR)/lw,260/H),wl=lw*sc,hh=H*sc,ft=18,tpx=Math.max(tw*sc,10);
  const x0=padL+(W-padL-padR-wl)/2,yTop=padT,yBase=yTop+hh,yPlan=yBase+ft+gap,Ht=yPlan+tpx+46;
  const X=u=>x0+u*sc,f=v=>f2(v),E=[];
@@ -8445,8 +8452,13 @@ function sfdWallSketchSVG(i){
   sp(Math.max(0,u0-b/2),-1);sp(Math.min(lw,u0+b/2),1);
   /* b_eff,top above the top: centred on the load, shifted to stay on the wall */
   let a1=u0-bTop/2;a1=Math.max(0,Math.min(lw-bTop,a1));dim(a1,a1+bTop,yTop-48,'b_eff,top = '+f(bTop)+' in (11.2.3.1)','#c62828');
-  let a2=Math.max(0,u0-b/2-H),c2=Math.min(lw,u0+b/2+H);if(c2-a2>bBase+1e-6){const m=(a2+c2)/2;a2=Math.max(0,Math.min(lw-bBase,m-bBase/2));c2=a2+bBase;}
-  dim(a2,c2,yBase+ft+16,'b_eff,base = '+f(bBase)+' in (45° spread)','#8e44ad');}
+  /* SFWD-7: where b_eff,top exceeds the spread, b_eff,base = b_eff,top (capped by s, l_w): drawn below b_eff,top, with red dotted
+     lines down the wall from its ends (the load does not narrow); otherwise the spread width, as before */
+  let a2,c2;
+  if(topGovB){a2=Math.max(0,Math.min(lw-bBase,u0-bBase/2));c2=a2+bBase;
+   ln(X(a2),yTop,X(a2),yBase,'stroke="#c62828" stroke-width="1" stroke-dasharray="2 3"');ln(X(c2),yTop,X(c2),yBase,'stroke="#c62828" stroke-width="1" stroke-dasharray="2 3"');}
+  else{a2=Math.max(0,u0-b/2-H);c2=Math.min(lw,u0+b/2+H);if(c2-a2>bBase+1e-6){const m=(a2+c2)/2;a2=Math.max(0,Math.min(lw-bBase,m-bBase/2));c2=a2+bBase;}}
+  dim(a2,c2,yBase+ft+16,'b_eff,base = '+f(bBase)+' in ('+(topGovB?'= b_eff,top; 45° spread '+f(spr)+' in':'45° spread')+')','#8e44ad');}
  else{for(let k=0;k<=8;k++){const u=lw*k/8;ln(X(u),yTop-24,X(u),yTop-4,'stroke="#c62828" stroke-width="1.4" marker-end="url(#swL)"');}
   t(X(lw/2),yTop-30,'load distributed over ℓ_w: b_eff = ℓ_w = '+f(lw)+' in',{c:'#c62828',fs:10.5});}
  t(x0+wl+6,yTop+hh/2,'h = '+f(H)+' in',{a:'start',fs:10.5});
@@ -8456,7 +8468,8 @@ function sfdWallSketchSVG(i){
  (pd.pmBars||[]).forEach(q=>{const u=lw/2+(dir==='y'?q.y:q.x),v=(dir==='y'?q.x:q.y)/tw*tpx;E.push('<circle cx="'+X(u).toFixed(1)+'" cy="'+(yPlan+tpx/2+v).toFixed(1)+'" r="2.4" fill="#1f4e8c"/>');});
  if(conc){const a=Math.max(0,u0-b/2),c=Math.min(lw,u0+b/2);E.push('<rect x="'+X(a).toFixed(1)+'" y="'+yPlan.toFixed(1)+'" width="'+Math.max(X(c)-X(a),2).toFixed(1)+'" height="'+tpx.toFixed(1)+'" fill="rgba(198,40,40,0.18)" stroke="#c62828"/>');}
  t(W/2,yPlan-10,'Plan: t = '+f(tw)+' in'+(tpx>tw*sc*1.05?' (drawn ×'+(tpx/(tw*sc)).toFixed(1)+')':'')+', '+(pd.pmBars||[]).length+' vertical bars',{fs:11});
- t(8,Ht-12,'blue: vertical bars; green dashed: horizontal bars'+(w&&w.hz&&!w.hz.need&&w.hz.s>0?' @ '+f(w.hz.s)+' in':' (input needed)')+'; red: load and b; purple dashed: 45° spread (decision pending engineer review)',{a:'start',fs:10,c:'#444'});
+ t(8,Ht-26,'blue: vertical bars; green dashed: horizontal bars'+(w&&w.hz&&!w.hz.need&&w.hz.s>0?' @ '+f(w.hz.s)+' in':' (input needed)')+'; red: load and b'+(conc&&topGovB?'; red dotted: b_eff,top carried to the base':''),{a:'start',fs:10,c:'#444'});
+ if(conc)t(8,Ht-12,'purple dashed: 45° spread; b_eff,base = min(max(b_eff,top, spread), s, ℓ_w)',{a:'start',fs:10,c:'#444'});
  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+W+' '+Ht.toFixed(0)+'" style="width:100%;max-width:'+W+'px;height:auto;font-family:Times New Roman,serif" role="img" aria-label="Wall elevation and plan">'+E.join('')+'</svg>';}
 /* the wall's P-M sections and demand points (display only, from sfdWallOOP) */
 function sfdWallPMData(i){const o=P2.wallD[i],pd=P2.pedDes[i];if(!o||!o.applied)return null;
@@ -8505,12 +8518,12 @@ function sfdWallCard(b,i){
   "d' = c + \\tfrac{d_b}{2},\\quad d = t - d',\\quad A_{s} = \\frac{12\\,A_{b}}{s_{v}}\\;\\text{per curtain per ft (two curtains)}",
   "d' = "+f2(num(rf.cover))+' + \\tfrac{'+f3(BAR_DIA[rf.longSize]||0)+'}{2} = '+f3(o.dPr)+',\\quad d = '+f2(o.tw)+' - '+f3(o.dPr)+' = '+f3(o.d)+'\\;\\mathrm{in},\\quad A_{s} = \\frac{12\\cdot '+f2(w.v.Ab)+'}{'+f2(w.v.s)+'} = '+f3(o.Asf)+'\\;\\mathrm{in^2/ft}',
   'P_0 = 0.85f\'_c(12t - 2A_s) + 2f_yA_s = '+f2(o.S.P0)+',\\quad \\phi P_{n,max} = 0.65\\cdot0.80P_0 = '+f2(o.S.phiPnMax)+',\\quad \\phi P_{n,t} = -0.90\\cdot2f_yA_s = '+f2(o.S.phiTn)+'\\;\\mathrm{kip/ft}'));
- {const o2=o.env?Object.assign({},o,{ldc:'conc',bTop:o.env.conc.bTop,bBase:o.env.conc.bBase}):o;   /* SFWD-3 */
- b.appendChild(eqBlock('Wall: effective length for the out-of-plane load (b_eff)','ACI 318-19 11.2.3.1; base: 45° spread (see below)',
-  o2.ldc==='dist'?'\\text{load distributed over the full wall length (input): } b_{eff,top} = b_{eff,base} = \\ell_w':'\\begin{gathered}b_{eff,top} = \\min(b + 4t,\\, s,\\, \\ell_w)\\\\ b_{eff,base} = \\min\\left[\\min(b/2 + h,\\, a_1) + \\min(b/2 + h,\\, a_2),\\, s,\\, \\ell_w\\right]\\end{gathered}',
+ {const o2=o.env?Object.assign({},o,{ldc:'conc',bTop:o.env.conc.bTop,bBase:o.env.conc.bBase,spr:o.env.conc.spr,topGovB:o.env.conc.topGovB}):o;   /* SFWD-3 */
+ b.appendChild(eqBlock('Wall: effective length for the out-of-plane load (b_eff)','ACI 318-19 11.2.3.1; base: the larger of b_eff,top and the 45° spread (see below)',
+  o2.ldc==='dist'?'\\text{load distributed over the full wall length (input): } b_{eff,top} = b_{eff,base} = \\ell_w':'\\begin{gathered}b_{eff,top} = \\min(b + 4t,\\, s,\\, \\ell_w)\\\\ b_{spread} = \\min(b/2 + h,\\, a_1) + \\min(b/2 + h,\\, a_2)\\\\ b_{eff,base} = \\min\\left[\\max(b_{eff,top},\\, b_{spread}),\\, s,\\, \\ell_w\\right]\\end{gathered}',
   o2.ldc==='dist'?'b_{eff} = '+f2(o2.lw)+'\\text{ in}':'b = '+f2(o2.bw)+(o2.bIn?'':'\\text{ (= t)}')+',\\quad s = '+(isFinite(o2.sL)?f2(o2.sL):'\\infty\\text{ (none)}')+',\\quad h = '+f2(o2.hs)+',\\quad a_1 = '+f2(o2.a1)+',\\quad a_2 = '+f2(o2.a2)+'\\text{ in}',
-  o2.ldc==='dist'?'\\text{per ft: force}\\times 12/\\ell_w':'\\begin{gathered}b_{eff,top} = \\min('+f2(o2.bw+4*o2.tw)+',\\,'+(isFinite(o2.sL)?f2(o2.sL):'\\infty')+',\\,'+f2(o2.lw)+') = '+f2(o2.bTop)+'\\text{ in}\\\\ b_{eff,base} = \\min\\left[\\min('+f2(o2.bw/2+o2.hs)+',\\,'+f2(o2.a1)+') + \\min('+f2(o2.bw/2+o2.hs)+',\\,'+f2(o2.a2)+'),\\,'+(isFinite(o2.sL)?f2(o2.sL):'\\infty')+',\\,'+f2(o2.lw)+'\\right] = '+f2(o2.bBase)+'\\text{ in}\\end{gathered}'));
- b.appendChild(sfwUl([['Decision (pending engineer review)','the 45° spread from the bearing width b down the element height h to the base section is common practice, not a code article; a<sub>1</sub>, a<sub>2</sub> = the distances from the load point to the two wall ends'],['Load application',o2.ldc==='dist'?'distributed over the full wall length (input)':'concentrated over a bearing width b'+(o2.bIn?' (entered)':' = the wall thickness t (default, conservative)')+(o2.sIn?', next load at s = '+f2(o2.sL)+' in':'')],['b<sub>eff,top</sub>','the top section (applied P and out-of-plane M at the load) per ft'],['b<sub>eff,base</sub>','the base P–M, the slenderness strip, the out-of-plane shear and the dowels per ft'],['Self-weight','spread over ℓ<sub>w</sub> = '+f2(o2.lw)+' in'],['Full wall','the in-plane checks, the footing and the soil use the full wall and the full loads'],['Strip','12 in, the two curtains of vertical bars (the end bars of the cage are not counted: conservative)'],['Axial force per ft','the in-plane moment adds ±6M<sub>u,in</sub>/ℓ<sub>w</sub>² at the two ends; both ends are checked (decision pending engineer review)']]));}
+  o2.ldc==='dist'?'\\text{per ft: force}\\times 12/\\ell_w':'\\begin{gathered}b_{eff,top} = \\min('+f2(o2.bw+4*o2.tw)+',\\,'+(isFinite(o2.sL)?f2(o2.sL):'\\infty')+',\\,'+f2(o2.lw)+') = '+f2(o2.bTop)+'\\text{ in}\\\\ b_{spread} = \\min('+f2(o2.bw/2+o2.hs)+',\\,'+f2(o2.a1)+') + \\min('+f2(o2.bw/2+o2.hs)+',\\,'+f2(o2.a2)+') = '+f2(o2.spr)+'\\text{ in}\\\\ b_{eff,base} = \\min\\left[\\max('+f2(o2.bTop)+',\\,'+f2(o2.spr)+'),\\,'+(isFinite(o2.sL)?f2(o2.sL):'\\infty')+',\\,'+f2(o2.lw)+'\\right] = '+f2(o2.bBase)+'\\text{ in}'+(o2.topGovB?'\\text{ (}b_{eff,top}\\text{ governs)}':'')+'\\end{gathered}'));
+ b.appendChild(sfwUl([['Decision (engineer-approved 2026-11-07)','b<sub>eff,base</sub> = the larger of b<sub>eff,top</sub> and the 45° spread from the bearing width b down the element height h, still capped by s and ℓ<sub>w</sub>: the load does not narrow down the wall. The 45° spread is common practice, not a code article; a<sub>1</sub>, a<sub>2</sub> = the distances from the load point to the two wall ends limit the spread only; b<sub>eff,top</sub> is not cut at the wall ends (11.2.3.1 limits it by joints and the load spacing only)'],['Load application',o2.ldc==='dist'?'distributed over the full wall length (input)':'concentrated over a bearing width b'+(o2.bIn?' (entered)':' = the wall thickness t (default, conservative)')+(o2.sIn?', next load at s = '+f2(o2.sL)+' in':'')],['b<sub>eff,top</sub>','the top section (applied P and out-of-plane M at the load) per ft'],['b<sub>eff,base</sub>','the base P–M, the slenderness strip, the out-of-plane shear and the dowels per ft'],['Self-weight','spread over ℓ<sub>w</sub> = '+f2(o2.lw)+' in'],['Full wall','the in-plane checks, the footing and the soil use the full wall and the full loads'],['Strip','12 in, the two curtains of vertical bars (the end bars of the cage are not counted: conservative)'],['Axial force per ft','the in-plane moment adds ±6M<sub>u,in</sub>/ℓ<sub>w</sub>² at the two ends; both ends are checked (decision pending engineer review)']]));}
  {const sv=sfdWallSketchSVG(i);if(sv){const fg=el('div','sfwFig noprint');fg.innerHTML=sv;b.appendChild(fg);b.appendChild(el('div','note noprint','Elevation and plan of the wall: the bars, the load and the effective lengths above (the Report prints the same figure at the top of the wall\u2019s section).'));}}
  /* slenderness */
  b.appendChild(eqBlock('Wall: out-of-plane slenderness','ACI 318-19 11.4.1.3, 6.2.5.1('+(o.brace==='braced'?'b':'a')+'), 6.2.5.2(b); k: Table 11.5.3.2'+(o.kIn?' (k entered)':''),
