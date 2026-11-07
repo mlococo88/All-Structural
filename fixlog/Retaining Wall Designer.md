@@ -3784,3 +3784,50 @@ Calculation audit, item 9 (3). Engineer decision (2026-11-07). Code sites are ta
 
 ### Saved data
 - No input or format change. Old projects with k_h > 0 get the stem seismic combination; their stem results can change (ACI).
+
+## 2026-11-07 — PR: claude/rw-ee2-vertical-eh — AASHTO Extreme Event II (collision): the vertical earth-thrust component P_a,V follows the EH choice (0 under MassDOT, 1.00 under "full") (RWCV; calculation change)
+
+Follow-up to item 3 (#944). Engineer answer (2026-11-07). Code sites are tagged `RWCV`.
+
+### RWCV-1. `calcAll`, Extreme Event II block   [§4]
+- **Before:** the resisting vertical load and moment counted P_a,V at 1.00 as EV, whatever the EH choice. With the MassDOT option (γ_EH,CT = 0) the horizontal earth thrust was dropped but its vertical component was still counted (unconservative with a sloped backfill or δ > 0).
+- **After:** P_a,V and its moment take γ_EH,CT. This is the new `CMB_EE2.EHv`: 0 with the MassDOT option, 1.00 with "full". The soil weight W_soil stays EV at 1.00.
+- **Provisions:**
+  - AASHTO LRFD 10th Ed. Table 3.4.1-1: one load (EH) takes one factor in all its effects.
+  - MassDOT Bridge Manual 3.3.2.4: earth pressure need not act with the collision force, γ_p = 0 (the engineer's interpretation, applied to both components).
+- **Results move** only for AASHTO collision walls with the MassDOT option and P_a,V > 0 (β > 0 or Coulomb δ > 0).
+- **Before / after** (`git diff -U0`):
+```diff
+@@ -2653 +2653 @@ function calcAll(inp) {
+-      const CMB_EE2 = { CT: 1.00, DC: 1.00, EV: 1.00, EH: gEH_ct, LS: gLS_ct, WA: 1.00, ES: gEH_ct, ESv: 1.00 };   // Extreme Event II factors (RW3F)
++      const CMB_EE2 = { CT: 1.00, DC: 1.00, EV: 1.00, EH: gEH_ct, EHv: gEH_ct, LS: gLS_ct, WA: 1.00, ES: gEH_ct, ESv: 1.00 };   // Extreme Event II factors (RW3F); RWCV (2026-11-07): EHv = the vertical earth-thrust component follows the EH choice
+@@ -2665 +2665 @@ function calcAll(inp) {
+-      const V_ct_min = CMB_EE2.DC*(Wftg + Wstem + W_bar) + CMB_EE2.EV*(Wsoil + Pa_tri_v) + CMB_EE2.ESv*V_ES_v - CMB_EE2.WA*F_uplift;   // RWCT: + 1.00 ES vertical
++      const V_ct_min = CMB_EE2.DC*(Wftg + Wstem + W_bar) + CMB_EE2.EV*Wsoil + CMB_EE2.EHv*Pa_tri_v + CMB_EE2.ESv*V_ES_v - CMB_EE2.WA*F_uplift;   // RWCT: + 1.00 ES vertical; RWCV: P_a,V at γ_EH,CT (was 1.00 as EV)
+@@ -2679 +2679 @@ function calcAll(inp) {
+-      const Mr_ct = CMB_EE2.DC*(Ms_ftg + Ms_stem + Ms_bar) + CMB_EE2.EV*(Ms_soil + Ms_Pv) + CMB_EE2.ESv*V_ES_v*xESv + CMB_EE2.WA*Ms_uplift;   // RWCT: + 1.00 ES vertical
++      const Mr_ct = CMB_EE2.DC*(Ms_ftg + Ms_stem + Ms_bar) + CMB_EE2.EV*Ms_soil + CMB_EE2.EHv*Ms_Pv + CMB_EE2.ESv*V_ES_v*xESv + CMB_EE2.WA*Ms_uplift;   // RWCT: + 1.00 ES vertical; RWCV: P_a,V at γ_EH,CT
+```
+- **Display:**
+  - Stability Step 7b: V written with γ_EH,CT·P_a,V.
+  - Report `sa7b/V`: the same, and its label.
+  - 3D view: EE II load factor of EH,v = E.EHv (was E.EV).
+- **Item 3b:** no change. The manual h_eq already overrides the H/2 rule and is noted as such on the Traffic tab (RWLS).
+
+### Check cases (`calcAll` in Node and in the browser; AASHTO default + collision TL-4)
+- **Default (P_a,V = 0):** unchanged (V 16583, sliding 0.246, e −0.222, q 1535).
+- **β 10°, Rankine, MassDOT (γ_EH,CT = 0):** P_a,V = 819.2 lb/ft, M = 819.2·12.5 = 10240.
+  - V 18166 → **17347**; M_r 141302 → 131062.
+  - Sliding D/C 0.245 → **0.256**; e −0.541 → −0.271 ft; q 1754 → 1611 psf.
+- **β 10°, Rankine, "full":** unchanged (V 18166, sliding 0.947).
+- **Coulomb δ 20°, MassDOT:** P_a,V = 1112. V 17694 → **16583**; sliding 0.217 → **0.232**; e −0.634 → −0.257.
+- **Coulomb δ 20°, "full":** unchanged.
+
+### How verified
+- origin/main vs branch, headless Chromium, the twelve audit walls + the four β / δ collision walls.
+  - Only `aashtoR.ct.ee2` values (V, M_r, e, sliding, bearing) and `CMB_EE2.EHv` change, and only on MassDOT collision walls with P_a,V > 0 (e.g. the rock + collision + water + β 10° wall).
+  - Everything else is identical.
+- Tests: check-syntax; smoke/retaining-wall-checks (table `AUD`: RWCV); phone-layout rwall 390/768; project-library retwall; dxf-print-sheets rw.
+
+### Saved data
+- No input or format change.
