@@ -3506,3 +3506,15 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
   - `check-syntax` passes.
   - Headless probe, main vs branch: 0 value differences (40 models, all 1,660 shapes, Validation 136/136).
   - Every output tab built; 0 console errors.
+
+## 2026-11-07 — PR: claude/spc-l7-pipe — SPL7: note on the accuracy of the pipe and round-HSS annulus model (review L7; wording only)
+
+- **Problem (review L7):** the annulus model of Pipe shapes (OD, t_des) differs from the v16.0 Pipe table by up to ±3.4 % in A, I, S, Z and J, in both directions (Pipe20XS +3.4 %, Pipe10STD −3.3 %, Pipe12XXS −2.9 %). Because the sign varies, it is not always conservative. The tool did not say so. The numbers are in the SPH1 table.
+- **Fix (wording only):**
+  - Single-shape AISC comparison hint (`aisCompare`): for a Pipe part, the sentence "**Pipe:** the annulus (OD, t_des) differs from the tabulated A, I, S, Z and J by up to about ±3.4 % over the v16.0 Pipe table (Pipe20XS +3.4 %, Pipe10STD −3.3 %), in both directions; for design, use the tabulated values (tick "Use AISC tabulated" for A, I) or check against the Manual." is added.
+  - Method → Rolled shapes: "round HSS/pipe as an annulus (OD, t_des)." → "… (OD, t_des; over the v16.0 tables round HSS agree within about −0.4 to +1.9 % and Pipe within about ±3.4 % in A, I, S, Z and J, both signs, so for pipe use the tabulated values for design)."
+- **§4:** no computed value changes. Basis: AISC Shapes Database v16.0 (comparison only).
+- **Verified:**
+  - `check-syntax` passes.
+  - Headless probe, main vs branch: 0 value differences.
+  - The note shows for Pipe20XS (Section and Properties tabs) and in the Method tab. 0 console errors.
