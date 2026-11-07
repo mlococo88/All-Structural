@@ -5374,7 +5374,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Other copies:** none.
 - **Open items:** b_eff = max(B, N)/2 is still the tool's assumption (review M9, DG1 edition).
 
-## 2026-11-07 — BPM3: biaxial bearing and compression-side plate bending from the rigid-plate solve (PR: claude/bp-m3-biax-bearing)
+## 2026-11-07 — BPM3: biaxial bearing and compression-side plate bending from the rigid-plate solve (PR: claude/bp-m3-biax-bearing, PR #971: https://github.com/mlococo88/All-Structural/pull/971)
 
 ### BPM3. Both moments: the larger of DG1 and the biaxial solve   [calculation change, more conservative for combinations with both M_x and M_y; saved data: none]
 - **Problem (review M3):** with M_x and M_y together, bearing and the compression side of the plate used two independent uniaxial DG1 solves (`resX`, `resY`), each with the full P and the full plate width. This understates the corner pressure: in the review case the NA peak is 1.244 ksi against a DG1 q of 0.511 ksi; in the default project's 0.9D+1.0W it is 1.017 against 0.741 ksi. DG1 does not cover biaxial moment.
