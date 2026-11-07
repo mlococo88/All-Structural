@@ -1269,7 +1269,7 @@ if(/^H[3-6]$/.test(tag)){topic(arptInline(e,ctx).replace(/\$([_^])\{\\text\{([^{
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
 
-## 2026-11-07 — PR: claude/stonearch-h1-mesh-convergence — Automatic mesh convergence: lowest RF of three meshes reported (MCV; review H-1, L-1)
+## 2026-11-07 — PR #1064: https://github.com/mlococo88/All-Structural/pull/1064 — Automatic mesh convergence: lowest RF of three meshes reported (MCV; review H-1, L-1)
 
 ### MCV-1. Every vehicle rated at n1, about 2·n1 and 4·n1 elements; the lowest RF is reported   [§4 result change]
 - **Problem (review H-1):** the rating was reported from the §7.2.7.2B minimum mesh (10 elements at 40 ft). The straight chords carry the transverse fill load as beams, which a curved ring does not, so the minimum mesh is not reliably close to the converged answer and the error goes either way. Unconservative cases: 20 ft / 4 ft rise (HS20 0.419 at 10 el, 0.391 at 40), 30 ft / 6 ft (0.318 vs 0.278), 40 ft semicircle (0.262 vs 0.000, dead load alone overstresses the springing). The study on the Verification tab ran only on demand, and the dashboard row read "Compliant" / OK.
