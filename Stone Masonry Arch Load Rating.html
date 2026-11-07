@@ -10806,6 +10806,28 @@ function buildOutput(p){
   const c1=UI.counter();
   let s="";
   s+=UI.pnl("o_dash",c1(),"Summary Dashboard — all code checks",dashboard(p),"");
+  /* MS18 (M-2, 2026-11-07): MassDOT BM Pt. I §7.1.7.2B — stone masonry: Allowable Stress Rating; HS20 gross tonnage
+     x 0.9 = MS18 (metric t), MS equivalent = MS18 / 1.8, for Items 64 and 66; §7.2.7.11B: Inventory only, the same
+     values for both Items. Display only: it converts the reported HS20 rating, nothing feeds back. */
+  {const rH=(p.loadMode!=="rail")?results.find(q=>q.id==="HS20"):null;
+   if(rH&&isFinite(rH.rf)){
+    const T=rH.tons, ms18=0.9*T, mse=ms18/1.8;
+    s+=UI.pnl("o_ms18",c1(),"MassDOT Items 64 / 66 — MS18 (Allowable Stress Rating)",
+      R.step({label:"HS20 gross tonnage (Inventory)",ref:"§7.2.7.12",sym:"T_{HS20}=RF_{HS20}\\times 36",
+        sub:`${R.num(rH.rf,3)}\\times 36`,res:R.num(T,2),units:"tons"})+
+      R.step({label:"MS18 gross tonnage",ref:"MassDOT §7.1.7.2B",sym:"T_{MS18}=0.9\\,T_{HS20}",
+        sub:`0.9\\times ${R.num(T,2)}`,res:R.num(ms18,2),units:"metric t",
+        note:"MassDOT's conversion factor 0.9 is used, not the exact 0.907185 t per short ton."})+
+      R.step({label:"MS equivalent",ref:"MassDOT §7.1.7.2B",sym:"MS=T_{MS18}/1.8",
+        sub:`${R.num(ms18,2)}/1.8`,res:R.num(mse,2),units:""})+
+      R.dtab([{k:"it",h:"NBIS Item",txt:1},{k:"t",h:"MS18 (metric t)",dp:2},{k:"m",h:"MS equivalent",dp:2}],
+        [{__i:0,it:"Item 64 (Operating)",t:ms18,m:mse},{__i:1,it:"Item 66 (Inventory)",t:ms18,m:mse}])+
+      R.msg("key","Reporting",
+        "Stone masonry arches are rated at the Inventory stress level only, and the same values are reported for "+
+        "Items 64 and 66 (MassDOT §7.2.7.11B). On the Summary of Bridge Rating, the MS18 FHWA NBIS Coding Guide "+
+        "table header is noted as <b>Allowable Stress Rating</b>, not Load Factor Rating (§7.1.7.2B).")+
+      archWorkedIn([{tab:"rate",card:"veh_HS20",txt:"RF "+nfx(rH.rf,3),lab:"Rating · HS20"}]),"§7.1.7.2B");
+   }}
   if(p.assume&&p.assume.trim())
     s+=UI.pnl("o_assume",c1(),"Engineering Assumptions (user entered)",
       `<div style="white-space:pre-wrap">${esc(p.assume)}</div>`,"");
