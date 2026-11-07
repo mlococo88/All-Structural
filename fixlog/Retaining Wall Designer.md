@@ -6369,7 +6369,7 @@ Unchanged: passive side (D_f), stem weight `W_stem` and its arm, the barrier, co
 - `tests/smoke/retaining-wall-checks.mjs`: new CASES (h_p too large, negative, beyond H_low) and AUD rows `RWHP` (the hand checks above, water/seismic/slope/collision, piles, self-checks, old autosave).
 - Tests (after merging origin/main): check-syntax; smoke/retaining-wall-checks (all ok); phone-layout rwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs: all pass. project-library retwall: against origin/main the results differ only by the new keys (`inp.h_proj`, `h_p`, `H_ret`, `Hs_ret`, `t_g`, `wt_r`, `Hs_mid_r`, all 0 or equal to the old values), as intended; with `--a HEAD` (same calculation both sides) ALL PASS.
 
-## 2026-11-07 — PR: claude/rw-stem-projection-gfx — Stem projection h_p in the graphics: retained grade drawn h_p below the stem top, the stem continuing above it, h_p dimensioned (RWHP part 2; display only, no result change)
+## 2026-11-07 — PR: claude/rw-stem-projection-gfx (PR #1155: https://github.com/mlococo88/All-Structural/pull/1155) — Stem projection h_p in the graphics: retained grade drawn h_p below the stem top, the stem continuing above it, h_p dimensioned (RWHP part 2; display only, no result change)
 
 ### What changed (display only; the drawings are unchanged at h_p = 0)
 - `rwHpView(r)` (anchor `function rwHpView`): a view of the results for drawing the retained side, with H → H_ret and wt_d → wt_r (depths from the grade); `wt_d_top` keeps the depth from the top of the wall for labels. It returns `r` itself at h_p = 0.
