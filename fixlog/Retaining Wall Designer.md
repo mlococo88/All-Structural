@@ -3240,7 +3240,7 @@ Calculation audit, item 7. Engineer decision (2026-11-07). Code sites are tagged
 - Old saves without it open with "none" (migration above), so their results and pass/fail are unchanged.
 - **Open item:** this changes pass/fail for new ACI projects (or an old project after the user picks a limit) where e > the chosen limit.
 
-## 2026-11-07 — PR: claude/rw-front-face-ts — AASHTO: stem front-face vertical T&S bars S4 (Art. 5.10.6, each face and each direction); f_y ≤ 75 ksi in Eq. 5.10.6-1 for S2, S4 and F3; ACI: note only (RWFF; calculation change)
+## 2026-11-07 — PR: claude/rw-front-face-ts — AASHTO: stem front-face vertical T&S bars S4 (Art. 5.10.6, each face and each direction); f_y ≤ 75 ksi in Eq. 5.10.6-1 for S2, S4 and F3; ACI: note only (RWFF; calculation change) (PR #950: https://github.com/mlococo88/All-Structural/pull/950)
 
 Calculation audit, item 8. Engineer decision (2026-11-07). Code sites are tagged `RWFF`.
 
