@@ -1278,7 +1278,7 @@ Basis: ASCE/SEI 7-16 Fig. 27.3-1 and Sec. 27.1.5 (**verify (ASCE 7-16 PDF unread
 - `node tests/check-syntax.mjs` (95 files pass), `tests/smoke/project-library.mjs --tool asce7` (ALL PASS), `tests/smoke/phone-layout.mjs --tool asce7` (390 / 768 px pass), `tests/engine/run.mjs handoffs` (10 passed).
 - **Other copies:** none.
 
-## 2026-11-07 — PR: claude/asce7-h2-same-sign — A7H2: roof C_p interpolation only between values of the same sign (review H2; §4)
+## 2026-11-07 — PR: claude/asce7-h2-same-sign — A7H2: roof C_p interpolation only between values of the same sign (review H2; §4; PR #1066: https://github.com/mlococo88/All-Structural/pull/1066)
 
 ### A7H2-1. Same-sign interpolation of the windward roof C_p, wind normal to the ridge   [calc change] [more conservative]
 - **Where:** `solve()`, Sec. E.6 roof block, anchor `const across=(pull`, and the call `const wn=across(k=>at60(Tn.ww[k].neg,0.0)`; `renderRoof` two-step interpolation table, anchor `"Windward, positive Cₚ"}].concat(c.hlTrace.wp.per`.
