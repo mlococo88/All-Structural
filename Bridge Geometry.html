@@ -355,8 +355,9 @@
       <div>
         <h2 class="sec">Substructure Units</h2>
         <div style="overflow-x:auto;"><table class="subtbl" id="subtbl"></table></div>
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0 0;"><label for="skew_datum" style="margin:0;">Skew measured from</label><select id="skew_datum" style="width:auto;" title="The line each support's skew angle is measured from. Alignment normal: the normal (radial line) to the PGL at the support station, as plans give skew. Chord normal: the normal to the construction reference line (the girders' chord; with per-span chords the bisector of the two span chords at a pier). On a tangent the two are the same. Projects saved before this setting existed open with Chord normal (their results are unchanged)."><option value="align">alignment normal (as on the plans)</option><option value="chord">chord normal (the girders' line)</option></select></div><!-- BGX4 (2026-11-07): skew datum; new projects alignment normal, saved projects without the field chord normal -->
-        <p class="note">Skew is measured from the datum chosen above, 0° = support square to it; the support line passes through the construction reference line point at the support station. <em>Alignment normal</em> is the normal (radial line) to the PGL at the support station, as plans give it. <em>Chord normal</em> is the normal to the straight abutment-to-abutment chord (the construction reference line), or with <em>Girder layout in plan</em> = per-span chords (Bridge tab), the span chord normal at an abutment and the bisector of the two span chords at a pier. On a tangent alignment these are all the same; the Derived table shows each support's skew from both. Dual bearing offset = distance back/ahead of unit station.</p>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0 0;"><label for="skew_datum" style="margin:0;">Skew measured from</label><select id="skew_datum" style="width:auto;" title="The line each support's skew angle is measured from. Alignment normal: the normal (radial line) to the PGL at the support station, as plans give skew. Chord normal: the normal to the construction reference line (the girders' chord; with per-span chords the bisector of the two span chords at a pier). On a tangent the two are the same. Projects saved before this setting existed open with Chord normal (their results are unchanged)."><option value="align">alignment normal (as on the plans)</option><option value="chord">chord normal (the girders' line)</option></select>
+          <label for="brg_off_mode" style="margin:0 0 0 12px;">Dual bearing offset measured</label><select id="brg_off_mode" style="width:auto;" title="How a dual-bearing pier's bearing offset is measured. Along the girders: each bearing line is the given distance from the pier line, measured along the construction reference line (the girders' chord), parallel to the pier line. Along the PGL stationing: the bearing lines are at pier station ± offset on the PGL (on a curve the distance along the girders then differs, e.g. 2.167 ft for 2.5 ft in the demo). Projects saved before this setting existed open with the PGL stationing (their results are unchanged)."><option value="chord">along the girders (reference line)</option><option value="pgl">along the PGL stationing</option></select><!-- BGX8 (2026-11-07, review M3) --></div><!-- BGX4 (2026-11-07): skew datum; new projects alignment normal, saved projects without the field chord normal -->
+        <p class="note">Skew is measured from the datum chosen above, 0° = support square to it; the support line passes through the construction reference line point at the support station. <em>Alignment normal</em> is the normal (radial line) to the PGL at the support station, as plans give it. <em>Chord normal</em> is the normal to the straight abutment-to-abutment chord (the construction reference line), or with <em>Girder layout in plan</em> = per-span chords (Bridge tab), the span chord normal at an abutment and the bisector of the two span chords at a pier. On a tangent alignment these are all the same; the Derived table shows each support's skew from both. Dual bearing offset: the distance from the pier line to each bearing line, measured as chosen above (along the girders, or back/ahead of the pier station on the PGL).</p>
 
         <h2 class="sec">Per-span girder &amp; deck-edge overrides</h2>
         <p class="note" style="margin-top:-6px;">Most bridges use the same girders and deck width everywhere &mdash; if so, you can ignore this table entirely; every span uses the global values above. Use it only when a particular span differs (e.g. a span has a different number of girders, a flared deck, or a different edge offset). Each greyed cell shows the global value it would inherit; type a value to override just that span (it turns solid), or clear it to revert.</p>
@@ -1378,10 +1379,20 @@ function buildEngine(){
     globalGirders: GIRDERS.map(g=>g+bridgeCL()) };
 }
 
+/* BGX8 (review M3; Decision pending engineer review): a dual-bearing pier's offset. 'chord' (new projects): the bearing lines are
+   the offset from the pier line measured ALONG THE REFERENCE LINE (the girders' chord; per-span chords: along the polyline),
+   parallel to the pier line; the PGL station of each line's reference point is found by solving supportChordT(sta) = t_pier ∓
+   offset. 'pgl' (saved projects without the setting): pier station ∓ offset on the PGL stationing, as before. */
+function brgOffMode(){ return (document.getElementById('brg_off_mode')||{}).value==='chord'?'chord':'pgl'; }
+function staAtChordT(tt, guess){ let s0=guess, s1=guess+1, g0=ENG.supportChordT(s0)-tt, g1=ENG.supportChordT(s1)-tt;
+  for(let k=0;k<40&&Math.abs(g1)>1e-10;k++){ const d=g1-g0; if(Math.abs(d)<1e-14) break; const s2=s1-g1*(s1-s0)/d; s0=s1; g0=g1; s1=s2; g1=ENG.supportChordT(s1)-tt; }
+  return isFinite(s1)?s1:guess; }
 function bearingLinesFor(u){
-  if(u.type==='pier' && u.bearMode==='double')
-    return [ {label:`${u.name} brg-back`, sta:u.sta-u.bearOffset, skew:u.skew, supSta:u.sta, role:'back'},
-             {label:`${u.name} brg-ahead`, sta:u.sta+u.bearOffset, skew:u.skew, supSta:u.sta, role:'ahead'} ];
+  if(u.type==='pier' && u.bearMode==='double'){
+    let sb=u.sta-u.bearOffset, sa=u.sta+u.bearOffset;
+    if(brgOffMode()==='chord' && ENG && ENG.chord && u.bearOffset){ const t0=ENG.supportChordT(u.sta); sb=staAtChordT(t0-u.bearOffset, sb); sa=staAtChordT(t0+u.bearOffset, sa); }
+    return [ {label:`${u.name} brg-back`, sta:sb, skew:u.skew, supSta:u.sta, role:'back'},
+             {label:`${u.name} brg-ahead`, sta:sa, skew:u.skew, supSta:u.sta, role:'ahead'} ]; }
   return [ {label:`${u.name} brg`, sta:u.sta, skew:u.skew, supSta:u.sta, role:'cl'} ];
 }
 /* ===== feet-inches input =====
@@ -4600,7 +4611,7 @@ let _heatResizeT=null;
 window.addEventListener('resize',()=>{ clearTimeout(_heatResizeT); _heatResizeT=setTimeout(()=>{ if(ENG) drawHeatmap(); },120); });
 ['ly_fill','ly_align','ly_crown','ly_bcl','ly_dcl','ly_ov','ly_gird','ly_edge','ly_sub','ly_brg','ly_sta','ly_gpt','ly_elev','ly_cut','ly_cont'].forEach(id=>{
   const el=document.getElementById(id); if(el) el.addEventListener('change',()=>{ if(ENG) drawHeatmap(); }); });
-['x_mode_global','x_rate_global','crown_ref','girder_frame','skew_datum','seat_terms','d_bf','crown_off','crown_off_a1','crown_off_a2','bcl_off','bcl_off_a1','bcl_off_a2','edge_l','edge_r','curb_l','curb_r','d_slab','d_haunch','d_beam','d_bearing','d_camber','d_hma'].forEach(id=>
+['x_mode_global','x_rate_global','crown_ref','girder_frame','skew_datum','seat_terms','d_bf','brg_off_mode','crown_off','crown_off_a1','crown_off_a2','bcl_off','bcl_off_a1','bcl_off_a2','edge_l','edge_r','curb_l','curb_r','d_slab','d_haunch','d_beam','d_bearing','d_camber','d_hma'].forEach(id=>
   document.getElementById(id).addEventListener('change',()=>{ renderOvrGrid(); renderSpanTable(); if(ENG) compute(); }));
 document.getElementById('xs_add').addEventListener('click',()=>{   // BGX6: a new row after the last (or at the first support)
   const rows=xsRows(), su=sortedUnits(); const last=XSLOPES[XSLOPES.length-1];
@@ -4695,7 +4706,7 @@ const STORAGE_KEY = 'bridgeGeomEngine.project.v1';
 const LIBRARY_KEY = 'bridgeGeomEngine.library.v1';
 let CURRENT_NAME = null; // name of the loaded library entry, if any
 const SCALAR_IDS = ['h_sta0','h_x0','h_y0','h_brg0','nspans','x_mode_global','x_rate_global',
-  'x_pivot','sec_cut','sec_surf','cont_int','heat_surf','crown_ref','girder_frame','skew_datum','seat_terms','d_bf','crown_off','crown_off_a1','crown_off_a2','bcl_off','bcl_off_a1','bcl_off_a2','edge_l','edge_r','curb_l','curb_r','d_slab','d_haunch','d_beam','d_bearing','d_camber','d_hma','divs','rep_mode','rep_div','val_tol','map_datum','map_units','vdatum_sys','vdatum_txt'];
+  'x_pivot','sec_cut','sec_surf','cont_int','heat_surf','crown_ref','girder_frame','skew_datum','seat_terms','d_bf','brg_off_mode','crown_off','crown_off_a1','crown_off_a2','bcl_off','bcl_off_a1','bcl_off_a2','edge_l','edge_r','curb_l','curb_r','d_slab','d_haunch','d_beam','d_bearing','d_camber','d_hma','divs','rep_mode','rep_div','val_tol','map_datum','map_units','vdatum_sys','vdatum_txt'];
 
 // Vertical datum: a label only (scalars vdatum_sys / vdatum_txt). Elevations are never converted.
 // '' = not specified (the default for new projects and for saves made before the field existed).
@@ -5065,8 +5076,8 @@ function armAutosave(){
 /* BGX (2026-11-07, §5): settings added by the review fixes. A project saved without one opens with the value that reproduces
    its old results (BG_OLD_DEFAULTS, applied by applyProject before the saved scalars); a new project (the page with nothing
    saved, New) uses BG_NEW_DEFAULTS, which are the HTML defaults. Decisions pending engineer review. */
-const BG_OLD_DEFAULTS={ girder_frame:'single', skew_datum:'chord', seat_terms:false, d_bf:'0' };
-const BG_NEW_DEFAULTS={ girder_frame:'span', skew_datum:'align', seat_terms:true, d_bf:'0' };
+const BG_OLD_DEFAULTS={ girder_frame:'single', skew_datum:'chord', seat_terms:false, d_bf:'0', brg_off_mode:'pgl' };
+const BG_NEW_DEFAULTS={ girder_frame:'span', skew_datum:'align', seat_terms:true, d_bf:'0', brg_off_mode:'chord' };
 function bgOldDefaults(){ for(const id in BG_OLD_DEFAULTS){ const el=document.getElementById(id); if(el){ if(el.type==='checkbox') el.checked=!!BG_OLD_DEFAULTS[id]; else el.value=BG_OLD_DEFAULTS[id]; } } }
 function bgNewDefaults(){ for(const id in BG_NEW_DEFAULTS){ const el=document.getElementById(id); if(el){ if(el.type==='checkbox') el.checked=!!BG_NEW_DEFAULTS[id]; else el.value=BG_NEW_DEFAULTS[id]; } } }
 function freshDefaults(){
