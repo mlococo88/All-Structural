@@ -6221,6 +6221,102 @@ Follow-up A2 of the second-pass fix round. Code sites are tagged `RWTE`.
 
 ### Saved data
 - No input or format change. A saved pile project with embedment + clear < t_f ≤ embedment + clear + 2 in now opens with the input error, and its inputs are kept.
+## 2026-11-07 — PR: claude/rw-pile-tab — Piles output tab (pile-supported footing only): the pile cards move from the Stability tab, with a layout card, a pile-checks card and the Pile Designer hand-off card; links, chips and the Report follow (RWPT; display only) (PR #1148: https://github.com/mlococo88/All-Structural/pull/1148)
+
+Engineer request (2026-11-07): "there is no output tab for the piles". Code sites are tagged `RWPT`. **Display and organisation only: no computed result changes** (§4), no saved field or key changes (§5).
+
+### Tab
+- New tab button `data-tab="piles"` ("Piles", `id="tabbtn-piles"`) after "Footing design", and panel `#tab-piles`.
+  - Anchor: `<button class="tab-btn" data-tab="piles" id="tabbtn-piles" style="display:none">Piles</button>`.
+  - Shown only for a pile-supported footing: `rwPileUI()` sets `tabbtn-piles` display with the pile-only inputs. Leaving pile mode while the tab is open opens Stability.
+- `renderPiles(r)` (new; called by `onInputChange` after `renderFooting`). Input error: the common banner (`rwInputErrHTML`). Spread footing: a one-line note. Cards:
+  1. **Pile Layout**: per row x from the toe, x from the heel (B − x), spacing, piles per ft (1/s); pile type, designation, D, embedment, clear, the bottom cover used (`r.cov_bot`, c_c since RWPB #1149) and the cover over the pile heads for punching (`r.cov_ph`), B × t_f, the capacities as entered, the passive credit.
+  2. **Pile Step 1 — Pile Group (per ft of wall)** and 3. **Pile Step 2 — Pile Reactions and Checks**: moved **unchanged** from `rwPileStability` (the same HTML, equations and the RW2M3 pile–cap tension alert).
+  4. **Pile Step 3 — Pile Checks**: every pile row of `r.checks` (pileComp, pileUplift, pileCapT, pileLat, pileSpacing, pileEdge, pileEmbed, pileCapD, pilePunch) with its value, D/C, PASS/FAIL, basis and a "worked in" link (`RW_CHECK_CARD`); failing rows shaded (`.tbl tr.rwpt-ng`).
+  5. **Pile Designer Hand-off** (`rwptHandoff(r)`): loads sent (the `bridgeSuite.v1.foundationLoads.by.retwall` copy: time, content hash, whether it equals what the wall sends now), results received (`pile_pxr` record and `r.pxr`: CURRENT / STALE / other, why), the imported inputs with Pile Designer's single-pile value and the group reduction (imported / `rec.geo`), the pulled per-combination results, and the same buttons as the Foundation card (`rwpxSendOpen`, `rwpxPullOpen`, `rwpxImportFile`, `rwpxClear`). Reads only; nothing is written.
+
+### Stability tab
+- `rwPileStability(r)`: before, it inserted the two pile cards at the top. After, it inserts **Pile-Supported Footing — Summary** (N, x̄, P_max with D/C, P_min, h = H/N with D/C, pile checks pass/fail count) with "Worked in" links to Pile Step 1, Step 2 and Step 3. The "not applicable" soil-card notes now end "(Piles tab, Pile Step 2)" (was "(Pile Step 2)").
+
+### Links
+- `RW_TABNAME`: + `piles: 'Piles'`.
+- `RW_CARDS.stabPile`: tab `'stability'` → `'piles'` (key and title kept, so every `RW_CHECK_CARD` row, `rwWorkedIn`, the check summary chips, the Overview check table, the Drawings index and the Report "On screen" note follow). New keys `pileLay`, `pileGrp`, `pileCk`, `pilePD` (Piles tab) and `stabPileSum` (Stability).
+- 3D pile-reaction label: "Worked on the Stability tab" → "Worked on the Piles tab".
+- Text: warning RW2M1 pile note "(Stability tab, Pile Step 2)" → "(Piles tab, Pile Step 2)" (wording only); Report pile-schedule note "on screen: Stability tab" → "Piles tab"; DXF notes "(STABILITY TAB, PILE STEP 2)" → "(SEE PILES TAB, PILE STEP 2)" (the same length, so the sheets keep their scales: with "(PILES TAB, …)" the loads sheet of a pile wall moved from 1/8" to 3/16" = 1'-0").
+
+### Report
+- Section "Pile-supported footing" → **"Piles (pile-supported footing)"**, as the tab.
+- New sub **Pile Step 3 — Pile checks**: the table of the tab's Pile Step 3 (value, D/C, basis, status, "see §" to the step that works it), with the on-screen link.
+- `rwTabSource` / `rwrTabNotes` / `rwrAddNotes`: + `piles`. The pile cards' alerts (RW2M3 pile–cap tension) moved with the cards: they are now in "Notes on the Piles tab" of the pile section (were in "Notes on the Stability tab").
+
+### Decision (pending engineer review)
+- The Pile Designer payload (`rwpxBuild`) is **unchanged**: its `pileLayout.distribution` text "(Stability tab, Pile Step 2)" is inside the content hash, so editing it would mark every pulled result STALE. Its notes keep the same wording.
+- The hand-off buttons stay on the Foundation card as well (the tab repeats them).
+- Spacing row: ACI / IBC has none (IBC 2018 has no minimum spacing, §1810.2.5), as before; the Pile Step 3 note says so.
+
+### How verified
+- Headless probe, origin/main (95d5810) vs this branch, 9 walls (ACI and AASHTO spread; ACI pile default, t_f 36 with water 2 ft (uplift), seismic 3 rows with passive; AASHTO pile default, EE I + collision 4 rows with water): `window._R` identical except the RW2M1 warning wording; Report text differs only in the section title, the new Pile Step 3 and the notes moved to the Piles tab; DXF identical except the two note lines; 0 console errors.
+- Tests: check-syntax; smoke/retaining-wall-checks (AUD rows read the Piles tab; new RWPT block: shown only on piles, after Footing design, cards, KaTeX, buttons, the chip "Pile Compression" lands on Pile Step 2, the Stability summary link, the Report section, back to Stability on spread, input-error banner; RW2L3 phone 390 px includes the Piles tab); phone-layout rwall; project-library retwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs.
+## 2026-11-07 — PR: claude/rw-gfx-passive (PR #1147: https://github.com/mlococo88/All-Structural/pull/1147) (RWPS) — pressure diagrams drawn off the structure: passive (and the shear-key block) in front of the toe face; earth, surcharge and water side by side beyond the heel; bearing under the footing and the key   [display only; no result change]
+- **Why:** engineer, 2026-11-07: "the passive pressure triangle is overlapping the structure, it should be drawn off to the side so they don't overlap."
+- **Before (origin/main after #1144):**
+  - Overview section and Analysis diagram: the passive triangle grew left from the **stem front face**, from toe grade to the footing base, so it lay over the toe soil hatching **and the toe of the footing**; it was squeezed to 0.65 L_t, and its value label sat on the toe (Analysis: above the F2 bars).
+  - Analysis diagram: the earth, surcharge and water diagrams grew right from the **stem back face**, over the backfill hatching, the heel of the footing, the S1 bars and the W.T. labels; the surcharge strip lay over the earth triangle and the water triangle on its base; the values sat on the lines.
+  - Overview: the surcharge strip lay over the earth triangle, the water triangle on its base; the arrow markers `m-lft` / `m-lft-grn` / `m-lft-blu` drew their heads backwards (tip at the line end, head beyond it).
+  - Both: the bearing diagram started at the footing base, so the shear key was drawn over it; with piles, the dimension rows did not leave room for the pile tips (Overview).
+  - Drawings sheet 3 (LOADS AND BEARING PRESSURE): the passive triangle and the lateral diagrams started on the toe and heel faces (sharing the concrete outline); the key passive was in the P_P text only.
+  - 3D: the active / water prisms started at the stem back face (inside the backfill and the heel), the passive prism at the stem front face (over the toe and the footing).
+- **After:**
+  - New `rwpsPassive(r, o)` and `rwpsLateral(r, o)` (before `// ── SVG helper: callout leader line`), used by `buildOverviewSVG` and `buildCrossSection`:
+    - passive: zero line (dashed) `gap` in front of the toe face (8 Overview, 10 Analysis), a dashed leader to the toe corner, triangle from toe grade (0) to the footing base (K_p γ_s D_f); with a shear key, a dashed trapezoid continues it to the key base (`r.keyR.p_bot` = K_p γ_s (D_f + d_k), the P_p,key block); largest ordinate 50 / 55 (no longer 0.65 L_t); arrows point toward the wall (toward the heel); labels under it: "Passive N psf" and "key base N psf"; the D_f dimension (and a d_k dimension under it) left of the diagram;
+    - lateral: on a zero line beyond the heel dimensions: the earth diagram (effective; `r.p_ftg_base − r.p_top` at the base and `r.p_wt − r.p_top` at the water table, i.e. without the K_a q_s share, which is the surcharge band), then the surcharge band K_a q (`r.Ka·r.q_sur_eff`), then the water triangle (`r.p_hyd_base` from the W.T. to the base), each separated by a gap; arrows on the earth diagram point toward the wall; values in a label column on the right ("N psf earth", "+N psf water", "W.T.: N psf", "γ′ = N pcf below", "Ka·q = N psf (surcharge | LS surcharge)", "Active Ka·γ·z").
+  - `buildOverviewSVG`: `SVG_W 760 → 910`, `ML 70 → 116`, `PRESS_W 160 → 264` (drawW and SCALE unchanged); `act_left = x_heel + DIM_GAP − 2`, `ACT_W 136`, label column at `act_left + 144`; toe grade line and toe soil hatching start at the toe (were 24 / 10 in front of it); GL(toe) right-aligned on the passive zero line; bearing zero line `y_b0 = y_fbot + d_k + 8` with dashed leaders from the base corners; q_toe / q_heel values inside the ends; the "Bearing" label under the q_a line; `brg_drop` with q_a, `pile_drop`, `pas_drop` in `dim_y1`; arrow markers forward-pointing (`refX 0 → 6`, `points "6 0,0 2.5,6 5" → "0 0,6 2.5,0 5"`).
+  - `buildCrossSection`: `drawW 570` fixed (as before), `ML = max(60, 10 + 55 + 16 + FS.d + 8, 10 + 9.5 FS.s + 8)`, `MR = 6 + FS.d + FS.b + 10 + 16 + 160 + 8 + 10.5 FS.s + 8`, `SVG_W = ML + drawW + MR` (was 820; K still from 820); the lateral and passive diagrams are added after the text scaling (their text is at the drawing's sizes) with their tooltips; bearing zero line under the key (`b0Off`); "key" tag beside the key; `drop0` with piles and the passive labels; D_f / d_k dimensions left of the passive diagram.
+  - Drawings sheet 3: passive zero line 0.15 in (paper) in front of the toe face, dashed, with the key trapezoid and "N PSF AT THE KEY BASE"; the lateral diagrams' plane `xp = G.B + 0.15·P` (was G.B).
+  - 3D (`buildGeometry3D`): earth and water prisms at `x = B + gap3`, passive prism at `x = −gap3` (gap3 = 0.02·max(B, H)) with the key block to −d_k.
+  - The Report shows the Overview and Analysis figures, so it follows.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). The ordinates drawn are the analysis' values; the earth diagram is now labelled without the K_a q_s share, which is drawn and labelled as the surcharge band (before, the trapezoid included it and the strip was drawn over it).
+- **Saved data (§5):** none.
+- **How verified:** see the PR (main vs branch probe of `_R`, localStorage keys, every tab's text and the Report text with SVG removed; DXF: only sheet 3 differs; screenshots before / after under the session scratchpad `rwgfx/`).
+- **Other copies:** none.
+- **Decisions (pending engineer review):**
+  - The passive diagram is drawn on the plane of the toe face, a small gap in front of it, from toe grade to the footing base, and the key block below it to the key base (the depth the analysis uses for P_p,key), not at the key's own face.
+  - The lateral diagrams are drawn separately (earth, surcharge band, water) rather than stacked, so none overlaps another; the earth values exclude the K_a q_s share, which is the band's value.
+  - The bearing diagram's zero line is drawn a small gap under the footing (under the key when there is one), tied to the base corners by dashed leaders.
+
+## 2026-11-07 — PR: claude/rw-pile-tab-2 — Piles tab, part 2: plan and section sketch, the group properties and the reaction method worked with values, every pile combination per row with P_max / P_min and D/C, governing rows marked; the Report matches (RWPT2; display only) (PR #1153: https://github.com/mlococo88/All-Structural/pull/1153)
+
+Part 2 of the RWPT request (part 1: #1148). Code sites are tagged `RWPT2`. **Display only: no computed result changes** (§4), no saved field or key (§5).
+
+### Piles tab
+- **Pile Layout** card: + `rwptSketch(r)`. It shows the pile layout plan (Drawings sheet "piles", entities `i0..iv`) and the typical section with the pile rows (sheet "section", `i0..ic`). Both come from `rwdwBuild` through the Report's `rwovView`. They are to scale with the sheets' scale bars, and are zoomable with `SharedDxf.viewer` (height 300 px; the static SVG stays if the viewer is missing). Two columns on wide screens, one on a phone (`.rwpt-figs` grid).
+- **Pile Step 1**: + `rwptGroupSteps(r)`.
+  - Before, 1.1 and 1.2 were "N = Σ1/s_i = **result**, x̄ = Σn_i x_i/N = **result**" and "I = Σn_i(x_i − x̄)² = **result**" (no substitution).
+  - After, each is worked symbol → values → result:
+    - 1.1 N = Σ1/s_i = 1/6.00 + 1/6.00 = 0.3333 /ft;
+    - 1.2 x̄ = (1.50/6.00 + 11.00/6.00)/0.3333 = 6.250 ft;
+    - 1.3 I = (−4.750)²/6.00 + (4.750)²/6.00 = 7.5208 ft²/ft;
+    - 1.4 (new) the reaction method M = V(x_R − x̄), P_i = V/N + M(x_i − x̄)/I, h = H/N. This is shared/pile-group.js `rowLoads` = `reaction()` with n → N, Σx'² → I. Since I > 0, `unresisted()` gives none. A worked example uses the governing compression combination.
+  - Plus a note: the Pile Designer hand-off segment's `groupProps` (n = N·L, Σx'² = I·L, exact or approximate).
+  - Check (ACI default on piles, t_f 36 in, water 2 ft), row 1 of D + H + L: 10.055/0.3333 + (−17.121)(−4.750)/7.5208 = **40.98 kip** = the table value.
+- **Pile Step 2**: the combination table (`rwptCombHead` / `rwptCombRows` / `rwptCombNote`) now shows, for every `r.pile.comb`:
+  - limit state, V, x_R, M, H, P per row (the largest in bold);
+  - P_max and P_min with their rows, h = H/N;
+  - D/C for compression (`c.dcC`), uplift (`c.dcT`) and lateral (`c.dcH`);
+  - "Governs" for P.govC / P.govT / P.govH, with the row shaded.
+  - 2.1 is set on two lines (`aligned`; it ran off the card). The 2.3 combination name is set as text (it lost its spaces in math mode).
+- Only the active design basis is computed (ACI / IBC service combinations, or AASHTO Strength I, EE I, EE II); the note says so.
+
+### Report
+- Pile Step 2: the same columns as the tab (`{cells, cls: 'gov'}` on the governing rows), with the tab's note.
+- Pile data: + the pile layout plan figure (to scale, Piles tab and Drawings links).
+
+### How verified
+- Headless probe, origin/main (77d99d6) vs this branch, the same 9 walls as RWPT: `window._R` identical on all 9; DXF identical; 0 console errors.
+- Hand check above (40.98 kip). Screenshots at 1400 px and 390 px (no sideways scroll).
+- Tests: check-syntax; smoke/retaining-wall-checks (RWPT block plus the combination table rows and highlight, the zoomable sketches, the substituted N, and the Report D/C columns and plan figure); phone-layout rwall; project-library retwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs.
+
+
 
 
 ## 2026-11-07 — PR: claude/rw-stem-projection (PR #1150: https://github.com/mlococo88/All-Structural/pull/1150) — Stem projection above the retained grade h_p: earth, water and surcharge on the retained height H_ret = H − h_p in both modes and both footing types; worked steps and Report show H_ret (RWHP part 1: input, loads, stability, stem, footing, piles, hand-off; §4)
