@@ -175,3 +175,9 @@ Remaining blockers after that: GS1-GS4, external demand imports (+selfWeightExcl
 - RW progress: #924-#937 merged (Phases 2–4 done; Phase 5 Report running). Engineer 11-07: User Manual (Phase 6) LAST → order: 5, 7 calc audit, 8 piles, 6 manual.
 - RW Phases 4–5 done #934-#941. Calc questions raised (for Phase 7 audit): (1) ACI U=1.2D+1.6H and 0.9D+1.6H omit water uplift though service includes it; (2) AASHTO Str I omits vertical dead surcharge q_sur·L_h in ΣV; (3) EE II adds 0.5·q_sur·L_h (dead, not LL) and factors hydrostatic by γ_EH,CT (water→0 with MassDOT); (4) getInputs applies variable-height H in ACI mode when ticked though card hidden.
 - ENGINEER 11-07: NO MORE QUESTIONS. Use judgment: conservative choice, implement, record 'Decision (pending engineer review)'; report decisions made, not questions. RW audit decisions in scratchpad/rwaudit/decisions.md; implementer running 5b,7,8,6,9 then follow-ups/item 10.
+
+## OVERNIGHT 2026-11-07 → 11-08 (engineer asleep; NO QUESTIONS; use judgment)
+Engineer: "Continue making improvements overnight until we have a professional tool with commercial-like features. Use your judgment. Perform in-depth reviews periodically to confirm we are meeting code requirements."
+Rules: conservative choices, §4 callouts, "Decision (pending engineer review)", merge as each passes. Do NOT touch Steel Bridge (new app) work or the Prestressed rebuild (on hold). Light Pole cable results must never change.
+Running at start: RW audit finish (RWCV, uplift §5.3.9, item 10), RW summary panel left, RW piles (8a–8f). Then: RW manual (Phase 6) last.
+Plan: rotating in-depth code-compliance reviews (read-only) → fix PRs for clear bugs (conservative) → judgment list for the morning.
