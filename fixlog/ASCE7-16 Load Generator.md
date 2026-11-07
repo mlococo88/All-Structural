@@ -1435,3 +1435,29 @@ Basis: 780 CMR 10th Ed. (Massachusetts amendments to IBC 2021), Ch. 16: 1613.1 a
   - Hip 4:12 Adams (variant B plan): `roofDown` 5.29 → 7.83 psf; lateral unchanged (floor 0.900).
   - All gable, monoslope, flat and seismic cases: `R` identical (the refactor into `normCp` moved no value).
 - **How verified:** headless Chromium main vs branch, 21 cases: leaf diff of `R` and hand-off (only the hip cases moved); rendered text of all tabs and the Report (0 console / KaTeX errors); Excel built; `check-syntax`, `project-library --tool asce7` (ALL PASS), `phone-layout --tool asce7`, `engine handoffs`.
+
+## 2026-11-07 — PR: claude/asce7-m9-ch29 — A7M9: Ch. 29 round sections D√q_z, signs and walls Case B and Case C computed (review M9; §4)
+
+Basis: ASCE/SEI 7-16 Fig. 29.3-1 (Cases A, B, C; Case C table and the (1.8 − s/h) reduction) and Fig. 29.4-1 (round sections, D√q_z) — **verify (ASCE 7-16 PDF unreadable)**. The Case C values are recalled from the figure (unchanged in substance since ASCE 7-05 Fig. 6-20); they must be checked against the printed 7-16 before relying on Case C.
+
+### A7M9-1. Round members: D√q_z   [calc change] [more conservative]
+- **Where:** `solve()` E.8, after `o.q=qAt(o.zRef,kd);` (anchor `A7M9: Fig. 29.4-1 round sections`); `renderElem` member branch, step after "Projected area".
+- **Before:** the C_f row was whatever the user picked; D√q_z was never computed, so "moderately smooth / rough / very rough" could be used where D√q_z ≤ 2.5.
+- **After:** for a "Round…" section, `o.Dsq = D·√q_z` (D ft, q_z psf at the reference height). If D√q_z ≤ 2.5 and the row picked is not the "D√q_z ≤ 2.5" row, `C_f = max(selected, ≤ 2.5 row)` with a message; if D√q_z > 2.5 and the ≤ 2.5 row was picked, it is kept (not smaller) with a message.
+- **Decision (pending engineer review):** the larger of the two rows rather than the ≤ 2.5 row alone (the very rough row exceeds it at h/D 1 and 7).
+- **Check case:** pipe D = 3 in (0.25 ft), 0–10 ft, moderately smooth, Melrose: q_z = 30.77 psf (K_d = 1.0), D√q_z = 0.25·√30.77 = 1.387 ≤ 2.5; h/D = 40 → h/D = 25 column: C_f 0.700 → **1.200**; F = 46 → **78 lbf**. A 48 in rough stack 0–60 ft: D√q_z = 23.9 > 2.5, unchanged.
+
+### A7M9-2. Signs / walls Case B   [new output]
+- **Where:** E.8 wall branch (`o.caseB={e:0.2*e.B}`; `o.caseB.MT=o.F*o.caseB.e` after F); `renderElem` replaces the "Case B … is not generated" note with the Case B step.
+- **After:** Case B = the Case A force with its resultant 0.2B horizontally off the geometric center; the tool reports e = 0.2B and M_T = F·e. (The old note said "0.2B from the windward edge"; corrected to "off the geometric center", verify.)
+- **Check case:** sign 40 × 10 ft, 10–20 ft above grade, Melrose: F = 16,063 lbf; e = 8.00 ft; M_T = 128,506 lbf·ft.
+
+### A7M9-3. Signs / walls Case C, B/s ≥ 2   [new output] [more conservative]
+- **Where:** new table `CF_CASEC` (anchor `/* A7M9 (2026-11-07): Fig. 29.3-1 Case C`, before the seismic tables); E.8 wall branch (anchor `A7M9: Case C for B/s >= 2`) and after F (region pressures, forces, total, resultant); `renderElem` Case C table and total step.
+- **Before:** `"B/s ≥ 2 requires Fig. 29.3-1 Case C to be investigated as well; Case C is not generated."` (warning only).
+- **After:** for 2 ≤ B/s ≤ 10: regions 0–s, s–2s, 2s–3s, 3s–10s (truncated at B), C_f interpolated on B/s (a region absent in the lower column takes the next defined column), × (1.8 − s/h) where s/h > 0.8; p_i = q_h·G·C_f,i, F_i = p_i·A_i, F_C = ΣF_i, x_R = ΣF_i·x_i/F_C. For B/s > 10 a warning says Case C must be done by hand (the B/s = 13 and ≥ 45 columns are not tabulated here).
+- **Check case:** the 40 × 10 ft sign (B/s = 4, s/h = 0.5): q = 27.79 psf, G = 0.85. C_f 2.90 / 1.90 / 1.30 / 1.10 → p = 68.50 / 44.88 / 30.71 / 25.98 psf on 100 ft² each → F_C = **17,008 lbf** (Case A 16,063 lbf), x_R = 15.83 ft from the windward edge. A 150 × 10 ft billboard (B/s = 15): warning, Case C by hand.
+- No Excel section exists for Ch. 29 elements; nothing was added there.
+
+### How verified
+- Headless Chromium main vs branch, 23 cases including 6 elements: `R` identical except the element fields above (`cf/p/F` for the small pipe only; new `caseB`, `caseC`, `Dsq`, messages); rendered text of all tabs and the Report (0 console / KaTeX errors); Excel built; `check-syntax`, `project-library --tool asce7` (ALL PASS), `phone-layout --tool asce7`, `engine handoffs`.
