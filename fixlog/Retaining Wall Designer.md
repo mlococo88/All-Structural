@@ -3179,7 +3179,7 @@ Calculation audit, item 5b. Engineer decision (2026-11-07). Code sites are tagge
 ### Saved data
 - No input added; no key or format change. Old projects open with the new layout (S1 shorter, no cut-off) and two new check rows.
 
-## 2026-11-07 — PR: claude/rw-aci-ecc — ACI mode: eccentricity limit select (middle third default, B/4, none = information only); old saves open with "none" (RWEC; calculation change: new check)
+## 2026-11-07 — PR: claude/rw-aci-ecc — ACI mode: eccentricity limit select (middle third default, B/4, none = information only); old saves open with "none" (RWEC; calculation change: new check) (PR #949: https://github.com/mlococo88/All-Structural/pull/949)
 
 Calculation audit, item 7. Engineer decision (2026-11-07). Code sites are tagged `RWEC`. AASHTO mode unchanged.
 
