@@ -6896,3 +6896,166 @@ index 50f3837..c2d5000 100644
   - `w769h` (18 × 72 in, 8 #9): P_u = 266.43 k, M_u,in = 240 k-ft, φM_n = 1672.98 k-ft → 0.143 (stand-in 0.148). `wHCe`: 0.152 (stand-in 0.156). `wAll`, `wOOP`, `wHC`: M_u,in = 0 → 0 (stand-in 0.20 / 0.20 / 0.06 came from the out-of-plane moment, now in the per-ft check: 0.22 / 0.21 / 0.105).
 - **How verified:** harness origin/main 4f458f8 vs the branch: pedestal cases (def, rev, sfe, sfe5, dir, sfe9, revEx, thin, revHook, edgeHook): R, P2, dashboard, Report identical. Wall cases: only `P2.wallD[i].ip` added and the texts above. 0 console errors, 0 KaTeX errors. Tests: see the PR.
 - **Other copies:** none.
+
+## 2026-11-07 — PR: claude/sf-notes-split (PR #1167: https://github.com/mlococo88/All-Structural/pull/1167) (SFNL-1: long notes as a bold lead and a list — input tabs, Schematic, Load Combinations, Bearing, LRFD reference boxes, 3D View, Drawings; display only, no result change)
+
+### SFNL-1. Long notes split into a lead line and a list   [display only] [no result change]
+- **Request (engineer, 2026-11-07):** "there are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Part 1 of 3 (by tab). The Wall Design tab and the wall notes are not touched (being rewritten separately).
+- **New helper** (after `function el(`), anchor `/* SFNL (2026-11-07, engineer`:
+  ```js
+  function sfNL(lead,items,o){o=o||{};const L=o.ol?'ol':'ul';
+   const li=(items||[]).filter(Boolean).map(x=>'<li>'+(Array.isArray(x)?'<b class="sfNLk">'+x[0]+'</b> '+x[1]:x)+'</li>').join('');
+   return (o.act||[]).filter(Boolean).map(a=>'<div class="warnbox sfNLa">'+a+'</div>').join('')+(lead?'<div class="sfNLl">'+lead+'</div>':'')+(li?'<'+L+' class="sfNLu">'+li+'</'+L+'>':'');}
+  ```
+  A note becomes `el('div','note sfNL',sfNL(lead,[[leadWords,text],…]))` (`'warnbox sfNL'` for a warning box). Items that are `null` are skipped (conditional facts).
+- **CSS** (after `.note{…}`), tool-scoped, no new colours (inherits the note / warnbox colours), print keeps a list item on one page:
+  ```css
+  .sfNL .sfNLl{font-weight:bold;margin:0 0 1px}
+  .sfNL .sfNLu{margin:2px 0 3px;padding-left:18px}
+  .sfNL .sfNLu>li{margin:1px 0}
+  .sfNL .sfNLa{font-style:normal;margin:2px 0 4px}
+  .sfNL.warnbox .sfNLl,.sfNL.errbox .sfNLl,.sfNL.failbox .sfNLl{font-style:normal}
+  @media print{.sfNL .sfNLu>li{break-inside:avoid}}
+  ```
+- **Report** (`sfxWalk`, before `if(leaf){const t=txt(e);`): an `.sfNL` element is kept or skipped as one note with the same test as before (`T.fresh(t)||T.newNum(t)` on the joined text of its parts), then printed as one Report line per part: the lead, then each item as "• lead words: text"; a part inside a warnbox (or an `.sfNLa` action line) keeps `warn:true`.
+  ```js
+  if(e.matches('.sfNL')){const P=[...e.querySelectorAll('.sfNLa,.sfNLl,.sfNLu>li')],t=P.map(txt).filter(Boolean).join(' '),w=e.matches('.warnbox,.errbox,.failbox');
+   if(t.length>=8&&(T.fresh(t)||T.newNum(t))){P.forEach(p=>{const x=txt(p);if(x)push({type:'note',warn:(w||p.matches('.sfNLa'))||undefined,text:(p.tagName==='LI'?'• ':'')+x});});T.seen(t);}return;}
+  ```
+- **Notes changed (anchor = the old opening text; new lead → item lead words).** Every sentence, number, citation and link of the old note is kept, in the same order; only the lead words, list-start capitals and end punctuation are new. Exact before / after: the PR diff.
+  1. Input, Soil Cover (EV): "Applied over footing plan area outside pedestal footprints." → "Soil cover (EV): a dead load, in every combination." → Acts on / Load item / Bracketing.
+  2. Input, surcharge: "Applied (dead/live) surcharge pressure acting over…" → "Surcharge: applied (dead/live) pressure…" → Examples / Dead surcharge / Live surcharge / Line of action. Also fixes the literal text "—" that was shown on screen (an escape inside HTML markup) to "—".
+  3. Input, Footing Reinforcement: "Bottom mat resists positive…" → "Four mats, each checked (not designed)." → Bottom mat / Top mat / Bar direction / Input / Omit a mat / Check-only.
+  4. Input, `#sfdRbNote` (function after `const n=document.getElementById('sfdRbNote');`): "A<sub>b</sub> from the bar table…" → "How the table columns are found:" → A_b / A_s per ft of width / With a quantity / With a spacing / Maximum spacing / Top mats / Worked in.
+  5. Input, pedestal cards `.sfdPbInfo` (`sfdPedBarInfo`): lead "Longitudinal bars: …" → Corner-bar centre span / Bars per face or Split / Dowels / Dowels and shear friction worked in / Cover (`sftcTxt`, unchanged) / Worked in.
+  6. Input, Shear failure mode hint: "AASHTO LRFD 10th Ed. 10.6.3.1.2b:" / "Applies to:" on two lines.
+  7. Input, Simultaneous wind hint: "Adds:" / "Not modelled:" / "Projects saved before this option:" on three lines.
+  8. Input, Pedestal shear couple note: Include / Exclude as two items.
+  9. Input, Axes & sign convention box: the "&bull; …<br>" lines as a real list (the last bullet used to run on after "(toggle in Stability)." with no line break); "Shear couple:" lead added to that item.
+  10. Input, `#loadModeNote` (direct mode, `refreshVis`): "Direct factored mode: enter one already-factored…" → Combinations / Self-weight and EV / Imported case / Bearing / Stability.
+  11. 1.1 legend (`legendbox`): "Legend:" → Dashed / Red ⊗ / Shaded band / Shaded tan.
+  12. 1.3 Sign Convention: "Origin at footing centroid." → Axes / P / Shears / Moments / Eccentricities.
+  13. 1.5 direct mode: "Direct factored load mode is active." → REVIEW (the engineer's confirmation, moved first) / Loads / Imported AASHTO case or Self-weight/EV / Bearing / Overturning/sliding/flotation.
+  14. 1.5 "Not considered in this version (v1 audit trail):" → one item per item not considered, then Passive resistance / Buoyancy U / Structural design.
+  15. 2.1 direct mode warnbox (`// SFAD`): "Direct factored (LRFD) mode: …" → Self-weight and EV / Bearing DCR / Stability / Full results / Imported AASHTO case.
+  16. 2.1 "Service (ASD) combinations per ASCE 7-16 §2.4.1…" → "Two combination sets:" → Service (ASD) / Strength (LRFD) / EV and self-weights / Minimum dead / Wind / Buoyancy U.
+  17. 2.2 "Permanent gravity actions computed by the tool…" → Factor / Buoyancy U / Unit weights.
+  18. 2.3 breakdown "Every action contributing to the resultant…" → Shown / ΣM includes / Eccentricity / Purpose.
+  19. 2.3 breakdown "Shear-couple lever arm:" → lead "lever = t + h (footing thickness + pedestal height)" → Shears / Datum / Lever per pedestal / Toggle.
+  20. 2.6 "Loads at the top of each pedestal for …" → Each component / Not included here / Sign convention / Used by.
+  21. 3.1 "Governing combination (maximum bearing DCR): …" → All combinations / Below / Every combination.
+  22. 3.1 direct mode warnbox "Conservative check." → lead "the reported bearing DCR is conservative" → Why / For a code-consistent geotechnical check.
+  23. 3.2a "Where the load resultant (eₓ, eᵧ) falls…" → Inside the green kern diamond / Outside it / Map / Numbers / Screen-only.
+  24. 3.3 "General bearing capacity equation (Vesić)…" → Applied to / Check / Reference / AASHTO LRFD 10th Ed. (2024) Art. 10.6.3.1.2a.
+  25. 3.4 and 4.6 LRFD reference warnboxes (`sfdLrHead(b,txt)`: `txt` is now the list items) → What / Not checked / No status / Unchanged.
+  26. 3D View title (`v3dTitle`): "3D view — showing: …" → Arrows and labels / Sign convention / Reading the arrows.
+  27. Drawings: "One DXF file (AutoCAD R12, …):" → Sheets / Layers / Preview / Values. (`SharedDxf.PRINT_NOTE`, a shared file, is not changed.)
+- **Not changed:** the warnings list (no item over ~300 characters except the passive-resistance warning, two sentences; its text is part of `R.W` and the Report's NG / REVIEW list); "Worked in" link lines; combination selectors.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none.
+- **Check case:** default project, Bearing tab, card 3.2a: before one 706-character paragraph; after the lead "Where the load resultant (eₓ, eᵧ) falls relative to the kern determines the base-contact shape." and five bullets; "½-diagonals B/6, L/6", "q = P/A(1 ± 6eₓ/B ± 6eᵧ/L)" and "contact %, q_max" unchanged. Report appendix §12: the same lead and five "• " lines.
+- **How verified:** headless Chromium, origin/main vs the branch, pinned libraries, 15 cases (10 harness cases + 5 wall cases): `R`, `P2` identical (deep compare); the digit sequence of every output tab, the dashboard, the warnings list and the Report text identical in all 15 cases. Input panel: identical except the 4 digits of the removed literal "—" (item 2). SF harness (`run.mjs` / `diff.mjs`): 0 diffs. 0 console errors, 0 KaTeX errors. Screenshots at 1400 and 390 px. Tests: see the PR.
+- **Other copies:** none.
+
+### SFNL-2. Long notes split into a lead line and a list: Stability, Footing Design, Pedestal Design, warnings, Report   [display only] [no result change]
+- **Request:** as SFNL-1 (same PR #1167). The Wall Design tab and the wall notes are not touched.
+- **Rule used:** a note is long if it is over ~300 characters, has 3 or more sentences, or carries several facts in one paragraph. It becomes a one-line lead, then a list with bold lead words (`sfNL`). Every sentence, number, citation and link is kept, in the same order. New lead words carry no digits, so the digit sequence of the page is unchanged.
+- **Report helper** (after `function sfNL(`), anchor `/* SFNL (Report): the same note as Report note items`:
+  ```js
+  function sfrNL(lead,items,o){o=o||{};const n=t=>o.warn?{type:'note',warn:true,text:t}:{type:'note',text:t};
+   return [lead?n(lead):null,...(items||[]).filter(Boolean).map(x=>n('• '+(Array.isArray(x)?x[0]+' '+x[1]:x)))].filter(Boolean);}
+  ```
+  A Report note `{type:'note',text:'A. B. C.'}` becomes `...sfrNL('A.',[['Lead:','b.'],['Lead:','c.']])`.
+- **Report appendix** (`sfxWalk`, anchor `if(e.matches('.sfNL')){`): the fresh-text test now uses the list items without their bold lead words (`tf`). The lead line and the action line are left out of the test because they are new wording. Before: `if(t.length>=8&&(T.fresh(t)||T.newNum(t)))`. After: `if(t.length>=8&&(T.fresh(tf)||T.newNum(t)))`, with
+  ```js
+  const tf=[...e.querySelectorAll('.sfNLu>li')].map(li=>{const c=li.cloneNode(true);c.querySelectorAll('.sfNLk').forEach(k=>k.remove());return txt(c);}).filter(Boolean).join(' ')||t;
+  ```
+  Without this, the long warnings, already listed in Report §1.1, were printed again in the appendix.
+- **Warnings** (`computeAll` checks and Phase 2 `offFooting`; `renderWarnings`). Each long warning keeps `msg` byte-identical, built from the same string pieces, and gains a display-only `nl:[lead,items]`. `renderWarnings` draws `sfNL(pre+x.nl[0],x.nl[1])` when `nl` is present; the Report §1.1 list and `SFD_IN_ERR` still read `msg`. Warnings changed (anchor = the `msg` opening):
+  1. "Passive resistance is credited over the full embedment".
+  2. "Vesić bearing with φ = … < 30° and general shear". Lead: "Confirm the failure mode with the geotechnical engineer."
+  3. "Depth factors d_q, d_c are applied".
+  4. "Pedestal "…": the load point (eₓ = …". Lead: "… load point outside the pedestal top — check the input and the bearing / bracket detail."
+  5. "Wx and Wy are both entered but".
+  6. "Bearing FAIL: N combination(s) with no bearing solution": one item per combination.
+  7. "Phase 2 structural design skipped for": one item per combination, then Why / Remedy.
+- **Notes changed, Stability tab** (anchor = the old opening text → new lead → item lead words):
+  1. 4.3 FS gate note, both variants:
+     - Gating: lead "… is gating … against a target of …" → Note / See.
+     - Not gated: lead "… is reported but not gated." → Why / Still fails / Gating criterion / Re-arm.
+  2. "Overturning is evaluated about each footing edge" → Resisting moment / Overturning moment / Worked case.
+  3. "Detailed breakdown per edge" → Listed / Arms / Sign convention / Applied moments and shear couples / Bucketing / Subtotal row.
+  4. 4.3a "Neither IBC nor ASCE 7 sets …" → lead "Why this tool gates an eccentricity limit, not an overturning factor of safety:" → Building spread footings / Retaining walls / LRFD bridge practice / Overturning factors of safety.
+  5. 4.3a "Limit selected on the Stability tab. Options carried:" → Middle third / AASHTO strength on soil / on rock / Extreme Event I / Intent / Agency policy varies.
+  6. 4.3a failbox "NG — eccentricity limit exceeded." → Combination "…" / Remedy.
+  7. 4.4 "ℓ is taken per direction as the larger of" → (a) / (b) / Here / Centroids, not faces.
+  8. LRFD stability reference "Mo, Mr: about the edge …" → Mo, Mr / μ = … / Bold.
+- **Notes changed, Footing Design tab:**
+  1. Intro "Structural design uses strength (LRFD) combinations" → Net soil pressure / Excluded / Analysis / Moment direction / Reinforcement convention / Drawn bar count / Other programs.
+  2. 5.2/5.3 "Bars in the x-direction resist bending …" → Moment envelope / Governing combination for flexure / Governing for one-way shear.
+  3. "Combined footing: the transverse moment …" → action line "Decision pending engineer review: the strip width c + d (alternatives below)." → Pedestal strips / Alternatives / Worked in.
+  4. "Minimum flexural steel uses the shrinkage-and-temperature ratio" → Ratio used / Not used / Basis.
+  5. "Standard hook, ACI 318-19 25.4.3.1" → ψe / ψr / ψo / ψc / No excess-reinforcement reduction.
+  6. "… As,req = As,min." → Governs / What it is.
+  7. "Sections (SFDE):" → Checked at, then one item per bar group.
+  8. "Available length is measured from the governing flexural section" → Why / cb / Ktr = 0 / λ / ψg / ψe / Not covered / Hooks.
+  9. "Dowel compression development not required" → one item per pedestal / Why / Still checked below.
+  10. "√(A₂/A₁) is built as the largest figure" → lead "How the bearing strength φPnb is found:" → √(A₂/A₁) / At a footing edge / Pedestal side / Bearing patch.
+  11. "For a rectangular two-way footing …" → "Short-direction band steel:" → Rule / This program.
+  12. Band advisory warnbox → lead "Advisory — not enforced by this program: detail it on the drawing and check it by hand." → Band / To comply.
+  13. Dowel status legend (`sfdBearLegend`, now returns `sfNL(...)`; caller class `note sfNL`) → Ldc (not req.) / Dowel minimum / one item per status. The words "In this table:" are dropped.
+  14. "Shear plane = the pedestal footprint" → "Shear friction at the pedestal–footing interface:" → Shear plane / μ / Avf / Dowels in tension / Nu / Vn,max.
+  15. "(2) Tension at the interface: none." → Why / So.
+  16. "As,req: the provided dowel area As,prov is scaled by k" → k / Result / Compared with.
+  17. "Shear friction relies on the dowels" → Why / Development / A shortfall there.
+  18. "cb from the pedestal cover" → "Development of the dowels:" → cb / Ktr = 0 / No reduction for excess reinforcement / Hook factors.
+  19. Punching warnbox "Overlapping punching perimeters" → Independent full perimeters not valid, then one item per group. New `sfdPunchGroupL(rep)` returns the list of group strings; `sfdPunchGroupTxt(rep)` = `sfdPunchGroupL(rep).join(' ')` (unchanged result for the Report).
+  20. Punching warnbox "Truncated critical perimeter" → Why / Verify.
+  21. "Mux, Muy above are taken about the centroid of the critical section" → Expression / Interior perimeter / Pedestal moments.
+  22. "J_c and the extreme fibre are built …" → J_c and the extreme fibre / Stresses / Pressure relief / Edge and corner conditions.
+- **Notes changed, Pedestal Design tab:**
+  1. Intro "Each pedestal is classified as a pedestal" → Classified / Checked against / Biaxial interaction / Slender pedestals.
+  2. "The 1% lower limit is not applied here." → Why / This element / Governing minimum / Upper limit / To design it as a column.
+  3. "Ratio of each LRFD combination at its own Pu" → Contour / Axial cap / No moment / Bold row.
+  4. "Uniaxial P–M interaction diagrams" → Routine / Curves / Shaded band / ◆ / Points / Caution.
+  5. "Biaxial load contour:" → Closed curve / Points / Contours / Colours.
+  6. "Shape of the contour:" → Pinched diagonally / Plotted contour.
+  7. "P–M interaction curve along the moment direction θ" → Capacity / Ratio / Other combinations / Screen only.
+  8. "φ failure surface (My, Mx, P)" → Built from / Markers / Drag / A horizontal cut / Screen only.
+  9. Shear "Av = 2 legs of the tie" → Av / Nu / Every combination.
+- **Report notes changed** (`sfrModel` and the appendix builders):
+  1. Reinforcement "Set on the Reinforcement input tab".
+  2. Service combinations "ASCE 7-16 §2.4.1 … Bold: …".
+  3. "No eccentricity limit is applied (input)".
+  4. Footing design "Strength (LRFD) combinations".
+  5. "Bars in the x-direction resist bending …" (per direction).
+  6. Dowels "A combination puts the interface in tension".
+  7. Band "Advisory: the tool distributes the bars uniformly".
+  8. §1.1 "NG: the check fails. REVIEW: …".
+  9. §1.2 "One row per dashboard check".
+  10. "Each result section ends with the result lines".
+  11. LRFD bearing reference.
+  12. LRFD stability reference.
+  13. Pedestal-top components "Each pedestal-top component is Σ γ_i·Q_i".
+  14. "Footing-corner pressures of …".
+- **Not changed:**
+  - `SharedDxf.PRINT_NOTE` (Drawings): a shared file.
+  - The Report appendix section note (`ap.note`, 374 characters): a section note holds one paragraph in `shared/report.js`.
+  - The User Manual: prose.
+  - Wall notes.
+  - Notes of 2 sentences under ~300 characters.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none.
+- **Check case:** default project, Footing Design intro.
+  - Before: one 1,385-character paragraph.
+  - After: the lead "Structural design uses strength (LRFD) combinations (ASCE 7-16 §2.3.1 / ACI 318-19 §5.3)." and seven bullets.
+  - "As = Ab×12/s" and "cover + db/2" are unchanged.
+  - Report: the note items in §8 now read "• Pressure: …", "• Capacities per foot of width, A_s = 12 A_b / s (§…)".
+- **How verified:**
+  - Setup: headless Chromium, pinned libraries, origin/main 4f458f8 vs the branch, 19 cases.
+  - `R` and `P2`: identical (deep compare), apart from the new `R.W[i].nl` display field.
+  - Digit sequence: identical in every output tab, the dashboard, the warnings list, the on-screen Report and `SharedReport.text`, in all 19 cases and in all 8 Pedestal P–M views.
+  - Words: no content word lost (word-count check: only joining words such as "uses", "from", "In this table" are dropped).
+  - 0 console errors, 0 KaTeX errors. SF harness: 0 diffs.
+  - Screenshots at 1400 and 390 px.
+  - Tests: check-syntax, phone-layout (sf), spread-footing-nobear, start-chooser, spread-footing-scroll, project-library (spreadfooting): pass.
+- **Other copies:** none.
+- **Open items:** the J_c note (Footing Design 5.5) contains the fragment "see the checks below.fers from the interior form — verify governing cases and the γ_f flexural transfer by hand", from an earlier edit. It is kept verbatim; the intended wording is needed from the engineer.
