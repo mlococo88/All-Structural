@@ -776,17 +776,30 @@ function solve(S){
       const Tn=CP_ROOF_NORM, keys=[0.25,0.5,1.0], grp=["<=0.25","0.5",">=1.0"];
       c.hLBand=hLBand(c.hL);
       c.hLInterp=(c.hL>0.25&&c.hL<1.0&&Math.abs(c.hL-0.5)>1e-9);
-      /* step 1: coefficient at theta within each h/L row group; step 2: across h/L */
-      const across=(pull)=>{
-        const per=grp.map(k=>tblPick(Tn.theta,pull(k),g.theta,S.tblMode).v);
-        const r=tblPick(keys,per,c.hL,S.tblMode);
-        return {v:r.v, per:per, i0:r.i0, i1:r.i1, f:r.f};
+      /* step 1: coefficient at theta within each h/L row group; step 2: across h/L.
+         A7H2 (2026-11-07): Fig. 27.3-1 note: interpolation only between values of the same sign, with 0.0 assumed
+         where no value of that sign is given. When the two bracketing values of a step differ in sign, the value of
+         the other sign is replaced by 0.0 for that step (sign = +1: the positive set; -1: the negative set). */
+      const sameSign=(ks,vs,x,sign)=>{
+        const r=tblPick(ks,vs,x,S.tblMode);
+        if(r.i0===r.i1) return {r:r,sub:[]};
+        const nn=[]; ks.forEach((k,i)=>{ if(vs[i]!==null&&vs[i]!==undefined) nn.push(i); });   /* tblPick indices skip nulls */
+        const a=vs[nn[r.i0]], b=vs[nn[r.i1]];
+        if(!(a*b<0)) return {r:r,sub:[]};
+        const sub=[], v2=vs.map((v,i)=>{ if((i===nn[r.i0]||i===nn[r.i1]) && v*sign<0){ sub.push(i); return 0.0; } return v; });
+        return {r:tblPick(ks,v2,x,S.tblMode),sub:sub};
+      };
+      const across=(pull,sign)=>{
+        const per=grp.map(k=>sameSign(Tn.theta,pull(k),g.theta,sign).r.v);
+        const q=sameSign(keys,per,c.hL,sign), r=q.r;
+        const o={v:r.v, per:per, i0:r.i0, i1:r.i1, f:r.f}; if(q.sub.length) o.sub=q.sub;   /* sub: per[] entries taken as 0.0 */
+        return o;
       };
       /* Fig. 27.3-1: at theta = 60 deg the windward coefficient is 0.01*theta = 0.6 (positive). Interpolation is
          between values of the same sign only, with 0.0 assumed where none is given (note 3), so the 60 deg
          column is 0.6 for the positive row and 0.0 for the negative row when interpolating 45 to 60 deg. */
       const at60=(arr,v)=>arr.map((x,j)=>Tn.theta[j]>=60?v:x);
-      const wn=across(k=>at60(Tn.ww[k].neg,0.0)), wp=across(k=>at60(Tn.ww[k].pos,0.6));
+      const wn=across(k=>at60(Tn.ww[k].neg,0.0),-1), wp=across(k=>at60(Tn.ww[k].pos,0.6),+1);
       const lw=(function(){const per=grp.map(k=>tblPick(Tn.lw.thetas,Tn.lw[k],g.theta,S.tblMode).v);
         const r=tblPick(keys,per,c.hL,S.tblMode); return {v:r.v,per:per,i0:r.i0,i1:r.i1,f:r.f};})();
       c.CpWWroofNeg=wn.v; c.CpWWroofPos=wp.v; c.CpLWroof=lw.v;
@@ -854,6 +867,17 @@ function solve(S){
         for(let j=0;j<=40;j++) zmax=Math.max(zmax,roofZplain(x,S.Ly*j/40)); A+=zmax*dx; } }
     return A;
   };
+  /* A7H1: the silhouette as strips {z: top of the strip, d: strip width}, for the end-wall integration */
+  function silhouetteProfile(axis){
+    const out=[];
+    if(axis==="X"){ const dy=S.Ly/NS;
+      for(let j=0;j<NS;j++){ const y=(j+0.5)*dy; let zmax=0;
+        for(let i=0;i<=40;i++) zmax=Math.max(zmax,roofZplain(S.Lx*i/40,y)); out.push({z:zmax,d:dy}); } }
+    else { const dx=S.Lx/NS;
+      for(let i=0;i<NS;i++){ const x=(i+0.5)*dx; let zmax=0;
+        for(let j=0;j<=40;j++) zmax=Math.max(zmax,roofZplain(x,S.Ly*j/40)); out.push({z:zmax,d:dx}); } }
+    return out;
+  }
   function roofZplain(x,y){
     const he=g.hEave,m=g.slope,Lx=S.Lx,Ly=S.Ly;
     switch(S.roofType){
@@ -890,10 +914,48 @@ function solve(S){
       Fww += 0.5*(zq(zs[i])+zq(zs[i+1]))*(zs[i+1]-zs[i]);
     }
     c.Fww = Fww*Bp;
+    /* A7H1 (2026-11-07): wind parallel to the ridge of a gable or monoslope: the silhouette above the eave is the
+       end wall (gable-end triangle), not roof. It takes the wall coefficients (windward 0.8 with q_z integrated
+       over its height and width, leeward C_p(L/B) at q_h) and counts as wall area at 16 psf in Sec. 27.1.5. */
+    if(!c.normalToRidge && c.Aroof>0 && (S.roofType==="Gable"||S.roofType==="Monoslope")){
+      const zTop=g.hRidge, nq=48, Qc=[0];               /* Qc[i] = integral of 0.8 G q_z dz from h_e to z_i */
+      const zq=z=>qAt(z,w.kdMWFRS).q*w.G*c.CpWW;
+      for(let i=0;i<nq;i++){ const za=he+(zTop-he)*i/nq, zb=he+(zTop-he)*(i+1)/nq; Qc.push(Qc[i]+0.5*(zq(za)+zq(zb))*(zb-za)); }
+      const Qat=z=>{ const u=Math.max(0,Math.min(nq,(z-he)/(zTop-he)*nq)), i=Math.min(nq-1,Math.floor(u)); return Qc[i]+(Qc[i+1]-Qc[i])*(u-i); };
+      const prof=silhouetteProfile(c.axis); let Ft=0;
+      prof.forEach(s=>{ if(s.z>he) Ft+=Qat(s.z)*s.d; });
+      c.Atri=c.Aroof; c.FwwTri=Ft; c.Fww+=Ft; c.Awall+=c.Atri; c.Aroof=0;
+    }
     c.Flw = Math.abs(w.qh.q*w.G*c.CpLW)*c.Awall;
-    const cpr = c.roofRows ? Math.max(...c.roofRows.map(r=>Math.abs(r.Cp))) : 0;
-    c.CpRoofUsed=cpr;
-    c.Froof = c.Aroof>0 ? Math.abs(w.qh.q*w.G*cpr)*c.Aroof : 0;
+    /* A7H1: wind normal to the ridge (theta >= 10 deg, Fig. 27.3-1): the net horizontal force on the projected roof
+       area is q_h G (C_p,windward - C_p,leeward) A_roof; both windward signs are enveloped, and the earlier value, the
+       largest roof |C_p| on the projected area, is kept as a floor (windward-slope suction is not credited as relief;
+       Decision pending engineer review). Other roof cases
+       (parallel to the ridge on a hip, theta < 10 deg) keep the largest roof |C_p| on the projected area. */
+    if(c.Aroof>0 && c.roofMode==="normal" && c.roofRows){
+      const cw=[c.CpWWroofPos,c.CpWWroofNeg], cl=c.CpLWroof;
+      const floor={v:Math.max(...c.roofRows.map(r=>Math.abs(r.Cp))), t:"\\max|C_p|", a:null, b:null, floor:true};
+      if(S.roofType==="Monoslope"){
+        /* a monoslope roof is one plane: wind from the low eave meets it as a windward roof with the high wall strip
+           above the eave leeward (wall C_p(L/B)); wind from the high side meets that strip as a windward wall
+           (0.8, at q_h: Decision pending engineer review) and the roof as a leeward roof */
+        const fromHigh = (S.ridgeDir==="X") ? (c.id==="-Y") : (c.id==="-X");
+        const opts = fromHigh
+          ? [{v:c.CpWW-cl, t:"0.8 - C_{p,lw}", a:c.CpWW, b:cl}, floor]
+          : cw.map((x,i)=>({v:x-c.CpLW, t:(i?"C_{p,ww,neg}":"C_{p,ww,pos}")+" - C_{p,L,wall}", a:x, b:c.CpLW})).concat([{v:Math.abs(c.CpLW), t:"|C_{p,L,wall}|", a:null, b:c.CpLW}, floor]);
+        c.roofNet = opts.reduce((p,q)=>q.v>p.v?q:p);
+        c.roofNet.mono=true; c.roofNet.fromHigh=fromHigh;
+      } else {
+        const opts = cw.map((x,i)=>({v:x-cl, t:(i?"C_{p,ww,neg}":"C_{p,ww,pos}")+" - C_{p,lw}", a:x, b:cl})).concat([floor]);
+        c.roofNet = opts.reduce((p,q)=>q.v>p.v?q:p);
+      }
+      c.CpRoofUsed=c.roofNet.v;
+      c.Froof = w.qh.q*w.G*c.CpRoofUsed*c.Aroof;
+    } else {
+      const cpr = c.roofRows ? Math.max(...c.roofRows.map(r=>Math.abs(r.Cp))) : 0;
+      c.CpRoofUsed=cpr;
+      c.Froof = c.Aroof>0 ? Math.abs(w.qh.q*w.G*cpr)*c.Aroof : 0;
+    }
     c.Ftot = c.Fww + c.Flw + c.Froof;
     c.Fmin = 16*c.Awall + 8*c.Aroof;
     c.minGoverns = c.Ftot < c.Fmin;
@@ -2591,18 +2653,44 @@ function renderWalls(host){
     R.cases.map(c=>[{v:c.id},{v:R2(c.Awall)},{v:R2(c.Aroof)},{v:R2(c.Fww)},{v:R2(c.Flw)},{v:R2(c.Froof)},
       {v:R2(c.Ftot),cls:c.minGoverns?"":"hl"},{v:R2(c.Fmin),cls:c.minGoverns?"hl":""},
       {v:c.minGoverns?'<span class="badge b-w">minimum</span>':'<span class="badge b-ok">computed</span>'}]),
-    "Projected areas are computed from the building silhouette normal to each wind direction: the wall term is B \u00D7 h\u2091 and the roof term is everything above the eave line.");
+    "Projected areas are computed from the building silhouette normal to each wind direction: the wall term is B \u00D7 h\u2091 (plus, for wind parallel to the ridge of a gable or monoslope, the end wall above the eave) and the roof term is the rest of the silhouette above the eave line.");
   const cg=R.cases.reduce((a,b2)=>(b2.Fmin/Math.max(b2.Ftot,1e-9))>(a.Fmin/Math.max(a.Ftot,1e-9))?b2:a);
-  const sb=panel(b,"o-minw-w",null,"Worked derivation \u2014 direction "+cg.id,"Sec. 27.1.5",true);
+  /* A7H1: the worked derivation is shown for the direction where the minimum comes closest to governing and, when
+     different, for the direction with the largest design force (the W carried into the combinations) */
+  const cW=R.cases.reduce((a,b2)=>b2.Fdes>a.Fdes?b2:a);
+  [cg].concat(cW!==cg?[cW]:[]).forEach((cg,k)=>{
+  const sb=panel(b,k?"o-minw-w2":"o-minw-w",null,"Worked derivation \u2014 direction "+cg.id+(k?" (largest design force)":""),"Sec. 27.1.5",true);
+  if(cg.Atri>0){
+    eq(sb,"Projected wall area, including the end wall above the eave",null,"A_{wall} = B\\,h_e + A_{end}","A_{wall} = "+R2(cg.B)+"\\,("+R2(R.geom.hEave)+") + "+R2(cg.Atri),"A_{wall} = "+R2(cg.Awall)+"\\ \\text{ft}^2");
+    note(sb,"Wind parallel to the ridge: the silhouette above the eave is the "+(S.roofType==="Gable"?"gable-end":"monoslope end")+" wall, A<sub>end</sub> = "+R2(cg.Atri)+" ft\u00B2. It is a wall surface, so it takes the wall coefficients of Fig. 27.3-1 (windward 0.8 with q<sub>z</sub>, leeward C<sub>p</sub>(L/B) at q<sub>h</sub>) and counts as wall area in Sec. 27.1.5.");
+  } else
   eq(sb,"Projected wall area",null,"A_{wall} = B\\,h_e","A_{wall} = "+R2(cg.B)+"\\,("+R2(R.geom.hEave)+")","A_{wall} = "+R2(cg.Awall)+"\\ \\text{ft}^2");
   eq(sb,"Projected roof area",null,"A_{roof} = A_{silhouette} - A_{wall}",
     "A_{roof} = "+R2(cg.Atot)+" - "+R2(cg.Awall),"A_{roof} = "+R2(cg.Aroof)+"\\ \\text{ft}^2");
-  eq(sb,"Windward wall force, external pressure integrated over height",null,
+  if(cg.Atri>0) eq(sb,"Windward wall force, external pressure integrated over height and over the end wall",null,
+    "F_{ww} = B\\int_0^{h_e} q_z\\,G\\,C_p\\,dz + \\int_{A_{end}} q_z\\,G\\,C_p\\,dA","C_p = "+R2(cg.CpWW)+",\\quad B = "+R2(cg.B)+"\\ \\text{ft}:\\quad "+R2(cg.Fww-cg.FwwTri)+" + "+R2(cg.FwwTri),
+    "F_{ww} = "+R2(cg.Fww)+"\\ \\text{lbf}");
+  else eq(sb,"Windward wall force, external pressure integrated over height",null,
     "F_{ww} = B\\int_0^{h_e} q_z\\,G\\,C_p\\,dz","C_p = "+R2(cg.CpWW)+",\\quad B = "+R2(cg.B)+"\\ \\text{ft}",
     "F_{ww} = "+R2(cg.Fww)+"\\ \\text{lbf}");
   eq(sb,"Leeward wall force",null,"F_{lw} = |q_h\\,G\\,C_p|\\,A_{wall}",
     "F_{lw} = |"+R2(R.wind.qh.q)+"("+R2(R.wind.G)+")("+RN(cg.CpLW,3)+")|\\,("+R2(cg.Awall)+")","F_{lw} = "+R2(cg.Flw)+"\\ \\text{lbf}");
-  if(cg.Aroof>0) eq(sb,"Roof contribution on the projected area",null,"F_{roof} = |q_h\\,G\\,C_p|\\,A_{roof}",
+  if(cg.Aroof>0 && cg.roofNet){
+    const rn=cg.roofNet, mx=RN(Math.max(...cg.roofRows.map(r=>Math.abs(r.Cp))),3), cands=cg.roofNet.mono
+      ? (rn.fromHigh ? "0.8 - ("+RN(cg.CpLWroof,3)+"),\\ "+mx : RN(cg.CpWWroofPos,3)+" - ("+RN(cg.CpLW,3)+"),\\ "+RN(cg.CpWWroofNeg,3)+" - ("+RN(cg.CpLW,3)+"),\\ |"+RN(cg.CpLW,3)+"|,\\ "+mx)
+      : RN(cg.CpWWroofPos,3)+" - ("+RN(cg.CpLWroof,3)+"),\\ "+RN(cg.CpWWroofNeg,3)+" - ("+RN(cg.CpLWroof,3)+"),\\ "+mx;
+    eq(sb,"Net roof coefficient, wind normal to the ridge","ASCE 7-16 Fig. 27.3-1",
+      rn.mono&&rn.fromHigh ? "C_{net} = \\max(0.8 - C_{p,lw},\\ \\max|C_p|)"
+        : (rn.mono ? "C_{net} = \\max(C_{p,ww,pos} - C_{p,L,wall},\\ C_{p,ww,neg} - C_{p,L,wall},\\ |C_{p,L,wall}|,\\ \\max|C_p|)"
+                   : "C_{net} = \\max(C_{p,ww,pos} - C_{p,lw},\\ C_{p,ww,neg} - C_{p,lw},\\ \\max|C_p|)"),
+      "C_{net} = \\max("+cands+")","C_{net} = "+RN(cg.CpRoofUsed,3)+"\\quad ("+rn.t+")");
+    note(sb,rn.mono
+      ? (rn.fromHigh ? "Monoslope, wind from the high side: the wall strip above the eave is a windward wall (0.8, taken at q<sub>h</sub>) and the roof is a leeward roof whose suction also pushes downwind."
+                     : "Monoslope, wind from the low eave: the roof is a windward roof and the wall strip above the high eave is a leeward wall (C<sub>p</sub>(L/B)). Windward-roof suction is not credited as relief: |C<sub>p,L,wall</sub>| and the largest roof |C<sub>p</sub>| (the earlier method) are floors.")
+      : "Windward-slope pressure and leeward-slope suction both push downwind, so the net horizontal coefficient on the projected roof area is the windward minus the leeward C<sub>p</sub>, for both windward values of Fig. 27.3-1. Windward-slope suction is not credited as relief: the largest roof |C<sub>p</sub>| (the earlier method) is the floor.");
+    eq(sb,"Roof contribution on the projected area",null,"F_{roof} = q_h\\,G\\,C_{net}\\,A_{roof}",
+      "F_{roof} = "+R2(R.wind.qh.q)+"("+R2(R.wind.G)+")("+RN(cg.CpRoofUsed,3)+")\\,("+R2(cg.Aroof)+")","F_{roof} = "+R2(cg.Froof)+"\\ \\text{lbf}");
+  } else if(cg.Aroof>0) eq(sb,"Roof contribution on the projected area",null,"F_{roof} = |q_h\\,G\\,C_p|\\,A_{roof}",
     "F_{roof} = |"+R2(R.wind.qh.q)+"("+R2(R.wind.G)+")("+RN(cg.CpRoofUsed,3)+")|\\,("+R2(cg.Aroof)+")","F_{roof} = "+R2(cg.Froof)+"\\ \\text{lbf}");
   eq(sb,"Total computed force",null,"F = F_{ww} + F_{lw} + F_{roof}",
     "F = "+R2(cg.Fww)+" + "+R2(cg.Flw)+" + "+R2(cg.Froof),"F = "+R2(cg.Ftot)+"\\ \\text{lbf}");
@@ -2610,12 +2698,14 @@ function renderWalls(host){
     "F_{min} = 16("+R2(cg.Awall)+") + 8("+R2(cg.Aroof)+")","F_{min} = "+R2(cg.Fmin)+"\\ \\text{lbf}");
   eq(sb,"Governing design force",null,"F_{des} = \\max(F,\\ F_{min})",
     "F_{des} = \\max("+R2(cg.Ftot)+",\\ "+R2(cg.Fmin)+")","F_{des} = "+R2(cg.Fdes)+"\\ \\text{lbf}");
+  });
   if(cg.minGoverns) note(b,"The minimum governs in at least one direction. Scale the computed surface pressures for that "+
     "direction by <b>"+RN(cg.scale,3)+"</b>, or apply 16 psf to the wall projection and 8 psf to the roof projection directly. "+
     "Sec. 27.1.5 applies to the MWFRS only; the Chapter 30 minimum of 16 psf on components and cladding is a separate provision.","w");
   else note(b,"The computed forces exceed the minimum in every direction, so Sec. 27.1.5 does not control.","k");
-  note(b,"Interpretation applied: the roof term uses the largest magnitude roof C\u209a for the direction acting on the "+
-    "projected roof area, and internal pressure is excluded because it cancels on the net force. Both choices are stated in the manual.");
+  note(b,"Interpretation applied: wind normal to the ridge (\u03B8 \u2265 10\u00B0), the roof term is q<sub>h</sub>G(C<sub>p,windward</sub> \u2212 C<sub>p,leeward</sub>) on the "+
+    "projected roof area, enveloped over both windward values with the largest roof |C\u209a| as a floor; wind parallel to the ridge of a gable or monoslope, the end wall above the eave is wall; "+
+    "otherwise the largest magnitude roof C\u209a for the direction acts on the projected roof area. Internal pressure is excluded because it cancels on the net force. These choices are stated in the manual.");
 
   b=panel(host,"o-watr",++n+".","Torsional Load Cases","ASCE 7-16 Fig. 27.3-8");
   note(b,"Chapter 27 Part 1 requires four load cases for buildings with a rigid diaphragm: Case 1 full windward and leeward "+
@@ -2683,10 +2773,11 @@ function renderRoof(host){
       if(c.hlTrace && c.hLInterp){
         dtable(cb,"Two-step interpolation on \u03B8 then on h/L",
           ["Coefficient","at h/L = 0.25","at h/L = 0.5","at h/L = 1.0","interpolated at h/L = "+RN(c.hL,3)],[
-          [{v:"Windward, negative C\u209a"}].concat(c.hlTrace.wn.per.map(v=>({v:RN(v,3)}))).concat([{v:RN(c.CpWWroofNeg,3),cls:"hl"}]),
-          [{v:"Windward, positive C\u209a"}].concat(c.hlTrace.wp.per.map(v=>({v:RN(v,3)}))).concat([{v:RN(c.CpWWroofPos,3),cls:"hl"}]),
+          [{v:"Windward, negative C\u209a"}].concat(c.hlTrace.wn.per.map((v,j)=>({v:RN(v,3)+((c.hlTrace.wn.sub||[]).indexOf(j)>=0?" \u2192 0.000\u002A":"")}))).concat([{v:RN(c.CpWWroofNeg,3),cls:"hl"}]),
+          [{v:"Windward, positive C\u209a"}].concat(c.hlTrace.wp.per.map((v,j)=>({v:RN(v,3)+((c.hlTrace.wp.sub||[]).indexOf(j)>=0?" \u2192 0.000\u002A":"")}))).concat([{v:RN(c.CpWWroofPos,3),cls:"hl"}]),
           [{v:"Leeward C\u209a"}].concat(c.hlTrace.lw.per.map(v=>({v:RN(v,3)}))).concat([{v:RN(c.CpLWroof,3),cls:"hl"}])],
-          "The middle three columns are the coefficient evaluated at \u03B8 = "+R2(g.theta)+"\u00B0 within each tabulated h/L row group.");
+          "The middle three columns are the coefficient evaluated at \u03B8 = "+R2(g.theta)+"\u00B0 within each tabulated h/L row group."+
+          ((c.hlTrace.wp.sub||c.hlTrace.wn.sub)?" \u002A The two bracketing values differ in sign. Fig. 27.3-1 permits interpolation only between values of the same sign, with 0.0 assumed where no value of that sign is given, so the value of the other sign is taken as 0.0 for the interpolation.":""));
       }
       dtable(cb,"Fig. 27.3-1 \u2014 windward roof C\u209a, wind normal to ridge",
         ["h/L","Sign"].concat(T.theta.map(t=>t>=60?"\u2265 60":t.toString())),
@@ -3862,8 +3953,16 @@ height input for that reason, and the velocity pressure table reports K<sub>zt</
 <p>The minimum is written as a force on projected areas, not as a pressure floor on individual surfaces. The app computes the
 projected areas from the building silhouette normal to each wind direction, takes the wall term as B &times; h<sub>e</sub> and
 the roof term as everything above the eave line, and compares the total against 16A<sub>wall</sub> + 8A<sub>roof</sub>. The
-computed force excludes internal pressure, because it acts on both faces and cancels on the net. The roof contribution uses the
-largest magnitude roof C<sub>p</sub> for that direction acting on the projected roof area, which is conservative. Where the
+computed force excludes internal pressure, because it acts on both faces and cancels on the net. For wind normal to the ridge
+(&theta; &ge; 10&deg;) the roof contribution is q<sub>h</sub>G(C<sub>p,windward</sub> &minus; C<sub>p,leeward</sub>) on the projected roof
+area, because windward-slope pressure and leeward-slope suction both push downwind; both windward values of Fig. 27.3-1 are tried,
+and the largest roof |C<sub>p</sub>| on the projected area (the method used before) is the floor: windward-slope suction is not
+credited as relief (decision pending engineer review). A monoslope is treated as one plane:
+from the low eave it is a windward roof with the wall strip above the high eave leeward; from the high side that strip is a windward
+wall (0.8 at q<sub>h</sub>) and the roof is leeward. For wind parallel to the ridge of a gable or monoslope, the silhouette above the
+eave is the end wall: it takes the wall coefficients (0.8 q<sub>z</sub> windward, C<sub>p</sub>(L/B) leeward) and counts as wall area
+at 16 psf. In the remaining cases (a hip roof parallel to its ridge, &theta; &lt; 10&deg;) the largest magnitude roof C<sub>p</sub>
+for that direction acts on the projected roof area (A7H1, 2026-11-07). Where the
 minimum governs, the app reports the scale factor rather than silently rewriting the surface pressures, so the reviewer sees
 both numbers.</p>
 <h4>1.3.7 q<sub>i</sub> is always taken as q<sub>h</sub></h4>
@@ -5683,6 +5782,14 @@ function buildWorkbook(S,R,ExcelJS,tb){
     /* Sec. 27.1.5 */
     inp("Aw"+t,"Projected wall area normal to the wind","A_{wall}", c.Awall, NF.a,"B \u00D7 h_e");
     inp("Ar"+t,"Projected roof area normal to the wind","A_{roof}", c.Aroof, NF.a,"silhouette above the eave");
+    /* A7H1: the roof term and, parallel to a gable or monoslope ridge, the end wall counted in A_wall */
+    if(c.Atri>0) inp("At"+t,"End wall above the eave, included in A_wall (wall coefficients)","A_{end}", c.Atri, NF.a,"Fig. 27.3-1");
+    if(R.geom.free) inp("Fr"+t,"Roof force, largest free-roof net pressure on A_roof","F_{roof}", c.Froof, NF.lb,"Fig. 27.3-4");
+    else if(c.Aroof>0){
+      inp("Cn"+t,c.roofNet?"Net roof coefficient, max(C_p,ww - C_p,lw over both windward values, largest roof |C_p|)":"Largest roof |C_p| for the direction","C_{roof}", c.CpRoofUsed, NF.n3,"Fig. 27.3-1");
+      out("Fr"+t,"Roof contribution on the projected roof area","F_{roof}",
+        {formula:A("qh")+"*"+A("Gf")+"*"+A("Cn"+t)+"*"+A("Ar"+t),result:c.Froof},NF.lb,"Fig. 27.3-1");
+    }
     inp("Fc"+t,"Computed total wind force","F", c.Ftot, NF.lb,"Sec. 27.3");
     out("Fm"+t,"Minimum design wind load","F_{min}",
       {formula:"16*"+A("Aw"+t)+"+8*"+A("Ar"+t),result:c.Fmin},NF.lb,"Sec. 27.1.5");
