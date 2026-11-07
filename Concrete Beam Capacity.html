@@ -1512,7 +1512,7 @@ function computeAll(){
       else if(!isFinite(ratio)) detWorst=Math.max(detWorst,1.01);
     });
     const worst=Math.max(dcM,dcV_eff,dcT,detWorst);
-    return {...c,neg,F,pf,phiMn,sh,tor,svc,mr,dcM,dcV,dcT,det,share,dcV_eff,
+    return {...c,neg,F,pf,phiMn,sh,tor,svc,...(mr?{mr}:{}),dcM,dcV,dcT,det,share,dcV_eff,
             detWorst,detFails,worst};
   });
   /* §7.2 identical-result detection: exact match on the factored action set */
