@@ -401,6 +401,20 @@ const SFRS=[
  ["Light-frame walls sheathed with wood structural panels",6.5,3.0,4.0,       {B:"NL",C:"NL",D:65,E:65,F:65}],
  ["Cantilevered column system, ordinary steel moment frame",1.25,1.25,1.25,   {B:35,C:35,D:"NP",E:"NP",F:"NP"}],
  ["Steel systems not specifically detailed for seismic resistance",3.0,3.0,3.0,{B:"NL",C:"NL",D:"NP",E:"NP",F:"NP"}]];
+/* A7M2 (2026-11-07): 780 CMR 10th Ed. Ch. 16 amendments to ASCE 7 Table 12.2-1 (limitations), for the rows this tool lists.
+   C.7 ordinary reinforced concrete moment frame: NP in SDC B. H, steel systems not specifically detailed for seismic
+   resistance: limited to 100 ft in SDC B and 65 ft in SDC C, with Note 2 (connections, including to foundations, for two
+   times the seismic forces, within the caps the note gives; columns per AISC 341 D1.4a; no K-bracing; V / inverted-V beam
+   requirements). The other amended rows (A.3, A.4, A.9-A.11, A.13, A.14, A.17, B.6, B.7, B.18-B.20, B.24, E.3, F) are
+   not offered by this tool. Applied only when the jurisdiction is Massachusetts. */
+const SFRS_MA={
+ "Ordinary reinforced concrete moment frame":{id:"C.7",lim:{B:"NP"}},
+ "Steel systems not specifically detailed for seismic resistance":{id:"H",lim:{B:100,C:65},note2:true}};
+function sfrsLimits(S){
+  const sf=SFRS.find(r=>r[0]===S.sfrs); if(!sf||!sf[4]) return null;
+  const ma=(S.jur==="MA")?SFRS_MA[S.sfrs]:null;
+  return {lim:Object.assign({},sf[4],ma?ma.lim:{}), asce:sf[4], ma:ma||null};
+}
 /* Labels used before the building-frame / bearing-wall rows were distinguished. Saved projects store the
    label, so restore() maps these to the row that carries the same R, Omega_0 and C_d as before. */
 const SFRS_OLD={"Special reinforced concrete shear wall":"Special reinforced concrete shear wall, building frame system (B.4)",
@@ -776,17 +790,30 @@ function solve(S){
       const Tn=CP_ROOF_NORM, keys=[0.25,0.5,1.0], grp=["<=0.25","0.5",">=1.0"];
       c.hLBand=hLBand(c.hL);
       c.hLInterp=(c.hL>0.25&&c.hL<1.0&&Math.abs(c.hL-0.5)>1e-9);
-      /* step 1: coefficient at theta within each h/L row group; step 2: across h/L */
-      const across=(pull)=>{
-        const per=grp.map(k=>tblPick(Tn.theta,pull(k),g.theta,S.tblMode).v);
-        const r=tblPick(keys,per,c.hL,S.tblMode);
-        return {v:r.v, per:per, i0:r.i0, i1:r.i1, f:r.f};
+      /* step 1: coefficient at theta within each h/L row group; step 2: across h/L.
+         A7H2 (2026-11-07): Fig. 27.3-1 note: interpolation only between values of the same sign, with 0.0 assumed
+         where no value of that sign is given. When the two bracketing values of a step differ in sign, the value of
+         the other sign is replaced by 0.0 for that step (sign = +1: the positive set; -1: the negative set). */
+      const sameSign=(ks,vs,x,sign)=>{
+        const r=tblPick(ks,vs,x,S.tblMode);
+        if(r.i0===r.i1) return {r:r,sub:[]};
+        const nn=[]; ks.forEach((k,i)=>{ if(vs[i]!==null&&vs[i]!==undefined) nn.push(i); });   /* tblPick indices skip nulls */
+        const a=vs[nn[r.i0]], b=vs[nn[r.i1]];
+        if(!(a*b<0)) return {r:r,sub:[]};
+        const sub=[], v2=vs.map((v,i)=>{ if((i===nn[r.i0]||i===nn[r.i1]) && v*sign<0){ sub.push(i); return 0.0; } return v; });
+        return {r:tblPick(ks,v2,x,S.tblMode),sub:sub};
+      };
+      const across=(pull,sign)=>{
+        const per=grp.map(k=>sameSign(Tn.theta,pull(k),g.theta,sign).r.v);
+        const q=sameSign(keys,per,c.hL,sign), r=q.r;
+        const o={v:r.v, per:per, i0:r.i0, i1:r.i1, f:r.f}; if(q.sub.length) o.sub=q.sub;   /* sub: per[] entries taken as 0.0 */
+        return o;
       };
       /* Fig. 27.3-1: at theta = 60 deg the windward coefficient is 0.01*theta = 0.6 (positive). Interpolation is
          between values of the same sign only, with 0.0 assumed where none is given (note 3), so the 60 deg
          column is 0.6 for the positive row and 0.0 for the negative row when interpolating 45 to 60 deg. */
       const at60=(arr,v)=>arr.map((x,j)=>Tn.theta[j]>=60?v:x);
-      const wn=across(k=>at60(Tn.ww[k].neg,0.0)), wp=across(k=>at60(Tn.ww[k].pos,0.6));
+      const wn=across(k=>at60(Tn.ww[k].neg,0.0),-1), wp=across(k=>at60(Tn.ww[k].pos,0.6),+1);
       const lw=(function(){const per=grp.map(k=>tblPick(Tn.lw.thetas,Tn.lw[k],g.theta,S.tblMode).v);
         const r=tblPick(keys,per,c.hL,S.tblMode); return {v:r.v,per:per,i0:r.i0,i1:r.i1,f:r.f};})();
       c.CpWWroofNeg=wn.v; c.CpWWroofPos=wp.v; c.CpLWroof=lw.v;
@@ -1070,6 +1097,10 @@ function solve(S){
     const ord="ABCDEF";
     sq.SDC=ord[Math.max(ord.indexOf(sq.sdcS),ord.indexOf(sq.sdc1))];
     if(site.S1>=0.75){ sq.SDC=(S.risk==="IV")?"F":"E"; sq.sdcOverride="Sec. 11.6: S\u2081 \u2265 0.75 forces Seismic Design Category "+sq.SDC+" regardless of the tables."; }
+    /* A7M1 (2026-11-07): 780 CMR 1613.1 (10th Ed.): Seismic Design Category A is not used in Massachusetts; a structure
+       that could be assigned A is assigned B. V is unchanged (no SDC-dependent term in this tool's ELF); the label, the
+       hand-off and the Table 12.2-1 screen follow B. */
+    if(S.jur==="MA" && sq.SDC==="A"){ sq.sdcASCE="A"; sq.SDC="B"; sq.sdcMA="780 CMR 1613.1 (Massachusetts amendment): Seismic Design Category A shall not be used in the Commonwealth; a structure that could be assigned A by ASCE 7 is assigned B."; }
     const cx=CT_X.find(r=>r[0]===S.seisSysType)||CT_X[3];
     sq.Ct=cx[1]; sq.x=cx[2]; sq.hn=S.hn;
     sq.Ta=sq.Ct*Math.pow(S.hn,sq.x);
@@ -1355,16 +1386,23 @@ function solve(S){
   }
   /* Table 12.2-1 screening: is the system permitted, and within its height limit */
   if(sq.SDC){
-    const sf=SFRS.find(r=>r[0]===S.sfrs);
-    const lim=sf&&sf[4]?sf[4][sq.SDC]:undefined;
+    const SL=sfrsLimits(S);   /* A7M2: with the 780 CMR amendments under MA */
+    const lim=SL?SL.lim[sq.SDC]:undefined;
+    const maHit=!!(SL&&SL.ma&&(sq.SDC in SL.ma.lim));
+    const src=maHit?"Table 12.2-1 as amended by 780 CMR (Massachusetts, row "+SL.ma.id+")":"Table 12.2-1";
     sq.sysLimit=lim;
     if(lim==="NP")
       xc("err","System not permitted in this category",
-        "Table 12.2-1 does not permit \""+S.sfrs+"\" in Seismic Design Category "+sq.SDC+".","s-seis");
+        src+" does not permit \""+S.sfrs+"\" in Seismic Design Category "+sq.SDC+".","s-seis");
     else if(typeof lim==="number" && S.hn>lim+0.01)
       xc("err","System height limit exceeded",
-        "Table 12.2-1 limits \""+S.sfrs+"\" to "+lim+" ft in Seismic Design Category "+sq.SDC+
+        src+" limits \""+S.sfrs+"\" to "+lim+" ft in Seismic Design Category "+sq.SDC+
         "; h\u2099 = "+R2(S.hn)+" ft.","s-seis");
+    if(SL&&SL.ma&&SL.ma.note2&&(sq.SDC==="B"||sq.SDC==="C"))
+      R.warn.push("780 CMR Table 12.2-1 Note 2 applies (system H). Massachusetts amendment to Table 12.2-1, Note 2: design connections, including those to foundations, for two times the computed seismic forces and moments "+
+        "(in combination with other loads), capped at the brace expected yield strength R\u1d67F\u1d67A\u1d4d or 1.1R\u1d67M\u209a of moment-frame beams; columns of the seismic "+
+        "force-resisting system per AISC 341 Sec. D1.4a; K-braced frames not permitted; V and inverted-V braced frame beams continuous, designed for gravity without the braces, "+
+        "and flanges braced for 2 % of F\u1d67b\u1d63t\u1d63 at the brace intersection. This tool does not apply the factor of 2; carry it into the connection design.");
   }
   /* manually entered hazard data */
   if(S.jur!=="MA"){
@@ -2760,10 +2798,11 @@ function renderRoof(host){
       if(c.hlTrace && c.hLInterp){
         dtable(cb,"Two-step interpolation on \u03B8 then on h/L",
           ["Coefficient","at h/L = 0.25","at h/L = 0.5","at h/L = 1.0","interpolated at h/L = "+RN(c.hL,3)],[
-          [{v:"Windward, negative C\u209a"}].concat(c.hlTrace.wn.per.map(v=>({v:RN(v,3)}))).concat([{v:RN(c.CpWWroofNeg,3),cls:"hl"}]),
-          [{v:"Windward, positive C\u209a"}].concat(c.hlTrace.wp.per.map(v=>({v:RN(v,3)}))).concat([{v:RN(c.CpWWroofPos,3),cls:"hl"}]),
+          [{v:"Windward, negative C\u209a"}].concat(c.hlTrace.wn.per.map((v,j)=>({v:RN(v,3)+((c.hlTrace.wn.sub||[]).indexOf(j)>=0?" \u2192 0.000\u002A":"")}))).concat([{v:RN(c.CpWWroofNeg,3),cls:"hl"}]),
+          [{v:"Windward, positive C\u209a"}].concat(c.hlTrace.wp.per.map((v,j)=>({v:RN(v,3)+((c.hlTrace.wp.sub||[]).indexOf(j)>=0?" \u2192 0.000\u002A":"")}))).concat([{v:RN(c.CpWWroofPos,3),cls:"hl"}]),
           [{v:"Leeward C\u209a"}].concat(c.hlTrace.lw.per.map(v=>({v:RN(v,3)}))).concat([{v:RN(c.CpLWroof,3),cls:"hl"}])],
-          "The middle three columns are the coefficient evaluated at \u03B8 = "+R2(g.theta)+"\u00B0 within each tabulated h/L row group.");
+          "The middle three columns are the coefficient evaluated at \u03B8 = "+R2(g.theta)+"\u00B0 within each tabulated h/L row group."+
+          ((c.hlTrace.wp.sub||c.hlTrace.wn.sub)?" \u002A The two bracketing values differ in sign. Fig. 27.3-1 permits interpolation only between values of the same sign, with 0.0 assumed where no value of that sign is given, so the value of the other sign is taken as 0.0 for the interpolation.":""));
       }
       dtable(cb,"Fig. 27.3-1 \u2014 windward roof C\u209a, wind normal to ridge",
         ["h/L","Sign"].concat(T.theta.map(t=>t>=60?"\u2265 60":t.toString())),
@@ -2960,6 +2999,8 @@ function renderSeis(host){
     [{v:"Table 11.6-2, from S\u2091\u2081 = "+RN(q.SD1,4)},{v:q.sdc1}],
     [{v:"Governing Seismic Design Category"},{v:"<b>"+q.SDC+"</b>",cls:"hl"}]]);
   if(q.sdcOverride) note(b,esc(q.sdcOverride),"w");
+  if(q.sdcMA) note(b,"<b>"+esc(q.sdcMA)+"</b> ASCE 7 gives "+q.sdcASCE+"; the governing category used throughout is <b>"+q.SDC+"</b>. "+
+    "The base shear is unchanged: no term of the equivalent lateral force calculation here depends on the category.","w");
 
   b=panel(host,"o-se3",++n+".","Fundamental Period","ASCE 7-16 Sec. 12.8.2");
   dtable(b,"Table 12.8-2 \u2014 approximate period parameters",["Structure type","C\u209c","x"],
@@ -2983,15 +3024,21 @@ function renderSeis(host){
           ["C\u1d48","Deflection amplification factor",R2(q.Cd),"Table 12.2-1"],
           ["I\u2091","Seismic importance factor",R2(q.Ie),"Table 1.5-2"],
           ["T\u029f","Long-period transition period",R2(q.TL)+" s","Fig. 22-14 through 22-17"]]);
-  const sfE=SFRS.find(r=>r[0]===S.sfrs), limE=sfE&&sfE[4]?sfE[4]:null;
+  const SLE=sfrsLimits(S), limE=SLE?SLE.lim:null;
   if(limE){
+    const fmtL=v=>(v==="NL"?"NL":(v==="NP"?"NP":v+" ft"));
     dtable(b,"Table 12.2-1 \u2014 structural system limitations and height limits, screening summary",
       ["Seismic Design Category","B","C","D","E","F"],
-      [[{v:esc(S.sfrs)}].concat(["B","C","D","E","F"].map(k=>
-        ({v:(limE[k]==="NL"?"NL":(limE[k]==="NP"?"NP":limE[k]+" ft")),cls:k===q.SDC?"hl":""})))],
+      (SLE.ma?[[{v:esc(S.sfrs)+" \u2014 ASCE 7-16"}].concat(["B","C","D","E","F"].map(k=>({v:fmtL(SLE.asce[k])})))]:[]).concat(
+      [[{v:esc(S.sfrs)+(SLE.ma?" \u2014 as amended by 780 CMR (row "+SLE.ma.id+"), used":"")}].concat(["B","C","D","E","F"].map(k=>
+        ({v:fmtL(limE[k]),cls:k===q.SDC?"hl":""})))]),
       "NL = not limited, NP = not permitted. The highlighted column is the governing category. This is a screen against the "+
       "main table only; the footnote exceptions of Table 12.2-1, including those that permit some systems in higher categories "+
-      "under Sec. 12.2.5, are not evaluated.");
+      "under Sec. 12.2.5, are not evaluated."+(S.jur==="MA"?" Massachusetts: the 780 CMR 10th Ed. amendments to Table 12.2-1 are applied to the rows this tool lists (C.7 and H).":""));
+    if(SLE.ma&&SLE.ma.note2&&(q.SDC==="B"||q.SDC==="C")) note(b,"<b>780 CMR amendment to Table 12.2-1, Note 2 (system H).</b> Connections, including those to foundations, are designed for "+
+      "two times the computed seismic forces and moments in combination with other loads, capped at the expected brace yield strength or 1.1 times the expected beam "+
+      "flexural capacity; columns of the seismic force-resisting system meet AISC 341 Sec. D1.4a; K-braced frames are not permitted; V and inverted-V braced frame beams "+
+      "have added requirements. The factor of 2 is not applied by this tool.","w");
     const lim=limE[q.SDC];
     if(lim==="NP") note(b,"<b>Table 12.2-1 does not permit this system in Seismic Design Category "+q.SDC+".</b> Either the "+
       "system or the category has to change; the base shear below is arithmetically correct and structurally inadmissible.","e");
@@ -4900,7 +4947,7 @@ function a7Model(){
     a7S({id:"se.SDS",label:"Design spectral response acceleration, short periods",sym:"S_{DS}",eq:"\\frac{2}{3} S_{MS}",sub:"\\frac{2}{3} \\times "+RN(q.SMS,4),value:q.SDS,unit:"g",d:4,ref:A+"Eq. 11.4-3"}),
     a7S({id:"se.SD1",label:"Design spectral response acceleration, 1 s",sym:"S_{D1}",eq:"\\frac{2}{3} S_{M1}",sub:"\\frac{2}{3} \\times "+RN(q.SM1,4),value:q.SD1,unit:"g",d:4,ref:A+"Eq. 11.4-4"})])});
   if(q.Fa!==null){
-    SE.push({title:"Seismic design category",ref:A+"Sec. 11.6",res:/SDC$/,steps:[a7S({id:"se.SDC",label:"Seismic design category: the more severe of Table 11.6-1 ("+q.sdcS+", from S_DS) and Table 11.6-2 ("+q.sdc1+", from S_D1)",sym:"SDC",value:q.SDC,unit:"",d:0,ref:A+"Tables 11.6-1, 11.6-2",note:q.sdcOverride||""})]});
+    SE.push({title:"Seismic design category",ref:A+"Sec. 11.6",res:/SDC$/,steps:[a7S({id:"se.SDC",label:"Seismic design category: the more severe of Table 11.6-1 ("+q.sdcS+", from S_DS) and Table 11.6-2 ("+q.sdc1+", from S_D1)",sym:"SDC",value:q.SDC,unit:"",d:0,ref:A+"Tables 11.6-1, 11.6-2"+(q.sdcMA?"; 780 CMR 1613.1":""),note:[q.sdcOverride||"",q.sdcMA||""].filter(Boolean).join(" ")})]});
     SE.push({title:"Fundamental period",ref:A+"Sec. 12.8.2",res:/Tused$/,steps:[
       a7S({id:"se.Ta",label:"Approximate fundamental period",sym:"T_{a}",eq:"C_{t}\\,h_{n}^{x}",sub:q.Ct+" \\times "+R2(q.hn)+"^{"+q.x+"}",value:q.Ta,unit:"s",d:4,ref:A+"Eq. 12.8-7"}),
       a7S({id:"se.CuTa",label:"Upper limit on the calculated period",sym:"C_{u} T_{a}",eq:"",sub:RN(q.Cu,3)+" \\times "+RN(q.Ta,4),value:q.T,unit:"s",d:4,ref:A+"Sec. 12.8.2"}),
@@ -5865,8 +5912,9 @@ function buildWorkbook(S,R,ExcelJS,tb){
       {formula:'IF('+A("SDS")+'<0.167,"A",IF('+A("SDS")+'<0.33,"'+(iv?"C":"B")+'",IF('+A("SDS")+'<0.5,"'+(iv?"D":"C")+'","D")))',result:q.sdcS},null,"Table 11.6-1");
     out("sdc1","SDC from Table 11.6-2, on S_D1","",
       {formula:'IF('+A("SD1")+'<0.067,"A",IF('+A("SD1")+'<0.133,"'+(iv?"C":"B")+'",IF('+A("SD1")+'<0.2,"'+(iv?"D":"C")+'","D")))',result:q.sdc1},null,"Table 11.6-2");
-    out("SDC","Governing seismic design category","SDC",
-      {formula:'IF('+A("S1")+'>=0.75,"'+(iv?"F":"E")+'",IF(CODE('+A("sdcS")+')>=CODE('+A("sdc1")+'),'+A("sdcS")+','+A("sdc1")+'))',result:q.SDC},null,"Sec. 11.6");
+    const sdcF='IF('+A("S1")+'>=0.75,"'+(iv?"F":"E")+'",IF(CODE('+A("sdcS")+')>=CODE('+A("sdc1")+'),'+A("sdcS")+','+A("sdc1")+'))';
+    out("SDC","Governing seismic design category"+(S.jur==="MA"?" (780 CMR 1613.1: A is assigned B)":""),"SDC",
+      {formula:S.jur==="MA"?'IF('+sdcF+'="A","B",'+sdcF+')':sdcF,result:q.SDC},null,S.jur==="MA"?"Sec. 11.6; 780 CMR 1613.1":"Sec. 11.6");
     noteRow("Both Table 11.6-1 and Table 11.6-2 are evaluated and the more severe category governs, as Sec. 11.6 requires. S_1 \u2265 0.75 forces category E, or F for Risk Category IV, regardless of both tables.");
     inp("Ctp","Period coefficient","C_t", q.Ct, NF.n3,"Table 12.8-2");
     inp("xexp","Period exponent","x", q.x, NF.n2,"Table 12.8-2");
