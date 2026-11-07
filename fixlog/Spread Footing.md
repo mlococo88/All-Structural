@@ -6362,4 +6362,44 @@ index 50f3837..c2d5000 100644
   - a = 4.68·60/(0.85·4·12) = 6.88 in; c = 6.88/0.85 = 8.10 in > d.
   - ε_t = 0.003(7.295 − 8.10)/8.10 = **−0.0003 < 0.005** → NG (before: not checked).
 - **Cases that move:** none of the SF harness cases changes a value. def, sey, rev, slender: new fields only, all checks OK (default ε_t = 0.039 / 0.041, d_min = 25.5 in). thin and m3 / m4 add the new reasons to flexure that was already FAIL.
+
+## 2026-11-07 — PR: claude/sf-m2-dev-faces (PR #1020: https://github.com/mlococo88/All-Structural/pull/1020) (SFDE: footing bar development checked at every pedestal face with moment of that sign, ACI 318-19 13.2.8.3 / 13.2.7.1; CALCULATION CHANGE, pass / fail logic)
+
+- **Problem:** `sfdDevAll` checked ℓ_d / ℓ_dh only at the governing-moment section (`des.govMloc` / `govNegLoc`). ACI 318-19 13.2.8.3 requires the reinforcement to be developed at every critical section of 13.2.7.1, i.e. at each pedestal face. A short cantilever at another pedestal could PASS unseen.
+- **Where / exact code (`Spread Footing.html`, `sfdDevAll`, anchor `/* SFDE (2026-11-07)`):**
+  - Before:
+    - `const endC=sfdEndCover(), avail=(hf-Math.abs(sec))*12-endC; if(!(avail>0))return;`
+    - `const strOK=LdUse<=avail+1e-9, hookOK=Ldh<=avail+1e-9;` (one section)
+  - After: `cand` = the governing section plus each pedestal face (`R.peds`, x ± b/2 inside the footing) where the envelope moment of that sign over the LRFD combinations (`P2.pressMomentAbout`) exceeds 0.01 kip-ft (bottom bars: sagging; top bars: hogging).
+    - Every candidate gets `avail = 12(hf − |s|) − c_end`, a straight / hook status and `dc`.
+    - The row reports the worst (fail > review > pass, then the larger dc): `sec`, `avail`, `status`, `dc`, plus `cand` and `wSec`.
+    - ℓ_d, ℓ_dh and the 25.4.10.1 option are unchanged. A_s,req stays the governing-section value at every face (conservative).
+  - Report: a "Sections checked" step listing each section (M_u, available length, status). The "available" step names the critical face. Card 5.4: a note listing the sections.
+- **Governing provisions:** ACI 318-19 13.2.8.3 (development at each critical section), 13.2.7.1 / Table 13.2.7.1 (critical sections at the face of the column or pedestal), 25.4.2.4, 25.4.3.1.
+- **Decision (pending engineer review):** every face with a non-zero moment of that sign is checked for the full ℓ_d (or ℓ_dh where hooked), also where the moment there is small. That is code-literal and conservative. Where the face is within the end cover of the edge, the available length is ≤ 0 and the check is NG. The 25.4.10.1 option (A_s,req/A_s,prov) reduces ℓ_d, using the governing-section A_s,req. Alternative, not taken: develop only the force at that face.
+- **Check case (harness `devsec`):** B = 12 ft, Ped 1 (D 20, L 10 k) at x = −4.75, Ped 2 (D 250, L 150 k) at x = 1.5, bottom x #6 @ 12 in.
+  - Ped 1 outer face x = −5.50 ft: available = 12(6 − 5.5) − 3 = **3 in**; M_u > 0; ℓ_d = 17.1 in, ℓ_dh = 12.1 in > 3 → NG.
+  - Before: bottom x-bars **PASS**, D/C 0.28 (section x = 0.75 ft, 60 in available).
+  - After: **FAIL**, D/C 4.05 (worst section x = −5.50 ft).
+- **Other cases:**
+  - `rev` (Seymour-like, Ped 1 b_y = 9.33 ft with faces 0.5 ft from the edges): bottom and top y-bars now NG at y = ±6 ft (3 in available, M_u 2.3 / −0.15 kip-ft), and bottom x-bars worst at Ped 2's face (11 in).
+  - Seymour as saved: bottom x-bars were already FAIL, D/C 1.669 → 1.672 (Ped 1 face 1.335 ft). The y-bars are unchanged (PASS).
+  - def, edgeHook, thin: no value change.
+
+## 2026-11-07 — PR: claude/sf-m5-flotation (PR #1022: https://github.com/mlococo88/All-Structural/pull/1022) (SFFG: flotation FS on the gross basis and on the earlier net basis, the smaller governs; CALCULATION CHANGE where water is above the base)
+
+- **Problem:** the flotation FS was (W_f + ΣW_ped + EV′)/U, with EV′ at the buoyant soil unit weight below the water table and U the buoyancy of the submerged concrete only. Subtracting the pore-water weight from both terms raises the ratio, although the net margin is the same. The usual definition compares the full uplift on the base, γ_w(D_f − d_w)·BL, with the weights at total unit weight. That is consistent with ASCE 7-16 2.3.6 / 2.4.1 and IBC 1605, which set the dead load against the full hydrostatic uplift H. The tool's ratio was therefore higher than the conventional one wherever submerged soil sits on the footing.
+- **Where / exact code (`Spread Footing.html`, `computeAll`, anchor `/* SFFG (2026-11-07)`):**
+  - Before: `const flot=(U>1e-9)?{U,R:Wf+Wpeds.reduce((a,b)=>a+b,0)+EV,FS:(Wf+Wpeds.reduce((a,b)=>a+b,0)+EV)/U}:null;`
+  - After, `flot` holds both bases:
+    - `net = {U, R: W_c + EV, FS}` (the earlier basis).
+    - `gross = {U: γ_w·max(D_f − d_w, 0)·B·L, R: W_c + γ_EV·h_cover·A_EV, FS}`.
+    - `FS = min(gross.FS, net.FS)`; `basis` = the one that governs; `U` / `R` of that basis.
+  - Card 4.4: two eqBlocks (gross, net) and the min. Report: steps `Ugr`, `EVt`, `FSgr`, `FSnet`, `FSfl`. Dashboard chip: "(gross basis; min …)". Summary reference text updated.
+- **Decision (pending engineer review):** the gross basis is the definition. The net basis is kept as a recognised alternative, and the smaller FS governs (conservative). Live and transient loads and surcharges stay excluded.
+- **Check case (harness `wt`: default project, d_w = 0.5 ft; D_f = 4 ft; B·L = 80 ft²):**
+  - Gross: U = 0.0624·(4 − 0.5)·80 = **17.47 k**; R = 30.00 + 1.35 + 0.12·1.5·75.5 = 30.00 + 1.35 + 13.59 = **44.94 k**; FS = **2.57**.
+  - Net (before): U = 12.76 k (submerged concrete), R = 40.23 k (EV′ buoyant), FS = **3.15**.
+  - **Before FS 3.15 → after 2.57** (gross governs). Target 1.25: PASS both.
+  - `seyW` (Seymour, d_w = 1 ft): 6.72 → 6.18. Seymour as saved (no water table): not applicable, unchanged.
 - **Saved data:** none. **Other copies:** none.

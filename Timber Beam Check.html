@@ -494,6 +494,8 @@ const GLULAM_GRP = {
 // Glulam wet service factors CM (Table 5A footnote) and the shear reduction factor Cvr at notches (NDS 5.3.10).
 const GLULAM_CM = { Fb: 0.8, Fv: 0.875, Fcp: 0.53, E: 0.833 };
 const GLULAM_CVR = 0.72;
+// TBB1: supporting-member Fc⊥ presets (reference values, No.2 of NDS Supplement 2018 Tables 4A / 4B as built in; Fc⊥ does not vary by grade there)
+const SUP_FCP_PRESETS = [['DF-L', 'Douglas Fir-Larch', REF_4A['DF-L']['No.2'][3]], ['HF', 'Hem-Fir', REF_4A['HF']['No.2'][3]], ['SPF', 'Spruce-Pine-Fir', REF_4A['SPF']['No.2'][3]], ['SP', 'Southern Pine', REF_4B_SP['No.2']['2-4'][3]]];
 const SCL_KINDS = { LVL: 'LVL (laminated veneer lumber)', PSL: 'PSL (parallel strand lumber)', LSL: 'LSL (laminated strand lumber)' };
 // SCL repetitive member factor on Fb (NDS 2018 8.3.7, Table 8.3.1, as recalled: verify); fix log R4
 const SCL_CR = 1.04;
@@ -810,6 +812,9 @@ function tbcRun(m) {
     // Bearing length at each support
     const lbs = supIn.map(s => num(s && s.lb));
     const cbOn = supIn.map(s => !!(s && s.cb));
+    // TBB1: reference Fc⊥ of the supporting member (plate, ledger, beam below) per support; null / absent = same as the beam (no extra check)
+    const fcsIn = supIn.map(s => (s && s.fcs !== undefined && s.fcs !== null && s.fcs !== '') ? num(s.fcs) : null);
+    fcsIn.forEach((v, j) => { if (v !== null && types[j] !== 'free' && !(v > 0)) errors.push(`Support ${TBC_NODE[j]}: supporting member Fc⊥ must be greater than zero (blank = same as the beam).`); });
     const badLb = supJ.filter(j => !(lbs[j] > 0));
     if (badLb.length) {
         if (nS <= 1) errors.push('Bearing length must be greater than zero.');
@@ -817,8 +822,10 @@ function tbcRun(m) {
     }
 
     // Point loads (positive = downward), validated against the beam length
-    const pls = (ld.points || []).map(p => ({ mag: num(p && p.mag), loc: num(p && p.loc), type: (p && LOAD_CD[p.type] !== undefined) ? p.type : 'D' }));
+    const pls = (ld.points || []).map(p => ({ mag: num(p && p.mag), loc: num(p && p.loc), type: (p && LOAD_CD[p.type] !== undefined) ? p.type : 'D',
+        lb: (p && p.lb !== undefined && p.lb !== null && p.lb !== '') ? num(p.lb) : null }));   // TBB1: bearing length under the load (null = not checked)
     pls.forEach((p, i) => {
+        if (p.lb !== null && !(p.lb > 0)) errors.push(`Point load ${i + 1}: bearing length must be greater than zero (blank = bearing not checked).`);
         if (!isFinite(p.mag)) errors.push(`Point load ${i + 1}: magnitude is not a number.`);
         if (!(p.loc >= 0 && p.loc <= L)) errors.push(`Point load ${i + 1}: location ${isFinite(p.loc) ? p.loc : '(blank)'} ft is outside the ${nS > 1 ? 'beam' : 'span'} (0 to ${L} ft).`);
     });
@@ -931,7 +938,17 @@ function tbcRun(m) {
     if (hasNotch && dn <= 0) { errors.push('Notch depth must be less than the member depth.'); return base; }
     const notchLim = isGL ? Math.min(dep / 10, 3) : dep / 4;
     if (hasNotch && notch > notchLim) fails.push(isGL ? `End notch ${notch} in. exceeds the lesser of d/10 = ${(dep / 10).toFixed(2)} in. and 3 in. (NDS 5.4.4.1). Not permitted.` : `End notch ${notch} in. exceeds d/4 = ${(dep / 4).toFixed(2)} in. (NDS 4.4.3.2). Not permitted.`);
-    const Cn = hasNotch ? Math.pow(dn / dep, 2) : 1.0;
+    // TBN1: notch face. 'tension' (absent = tension; as before): Eq. 3.4-3, Cn = (dn/d)^2. 'comp': end notch on the compression face,
+    // V'r = (2/3) F'v b [d - ((d - dn)/dn) e] (NDS 3.4.3.2, compression-face notch, as recalled: verify), written as fvn <= F'v Cn with
+    // Cn = de/dn; e blank = dn (largest permitted, conservative). 'interior': not permitted / not checked (input error).
+    const notchFace = ['comp', 'interior'].includes(mt.notchFace) ? mt.notchFace : 'tension';
+    const notchEIn = (mt.notchE === undefined || mt.notchE === null || mt.notchE === '') ? null : num(mt.notchE);
+    if (hasNotch && notchFace === 'interior') { errors.push('Interior notch: not permitted by this tool and not checked (NDS 4.4.3.1 / 5.4.4.1 restrict interior notches; conservative, fix log TBN1). Remove the notch, or check it by hand.'); return base; }
+    if (hasNotch && notchFace === 'comp' && notchEIn !== null && !(notchEIn >= 0 && notchEIn <= dn)) { errors.push(`Compression-face notch: e (distance the notch extends past the inner edge of the support) must be between 0 and d_n = ${dn.toFixed(3)} in.`); return base; }
+    const notchE = hasNotch && notchFace === 'comp' ? (notchEIn === null ? dn : notchEIn) : null;
+    const notchDe = notchE === null ? null : dep - ((dep - dn) / dn) * notchE;
+    const Cn = hasNotch ? (notchFace === 'comp' ? notchDe / dn : Math.pow(dn / dep, 2)) : 1.0;
+    if (hasNotch && notchFace === 'comp') adv.push('Compression-face end notch: checked with V′r = (2/3) F′v b [d − ((d − d_n)/d_n) e] (NDS 3.4.3.2, compression-face notch; verify against NDS 2018 (not in references))' + (notchEIn === null ? '; e not entered, e = d_n assumed (conservative).' : '.') + ' The notch-depth limit of the tension face is kept (conservative).');
     const notchJ = [0, nS].filter(j => types[j] !== 'free');   // supports at the member ends
     if (types.some(t => t === 'fixed')) adv.push('Fixed support: bearing is checked with the vertical reaction only (uniform Fc⊥ stress over the bearing length). The effect of the fixing moment on the bearing stress, and the connection that provides the fixity, are not checked (fix log R1-i).');
     if (hasNotch && notchJ.length < 2 && !simple) adv.push(notchJ.length ? `End notch: applied at end support ${notchJ.map(j => TBC_NODE[j]).join(', ')} only (the other end is a cantilever tip).` : 'End notch: neither member end is supported (both ends cantilever); the notch input is not used.');
@@ -986,7 +1003,13 @@ function tbcRun(m) {
         shearRegion = [...new Set(reg)];
     }
 
-    const legacyBear = simple && lbs[0] === lbs[1] && cbOn[0] === cbOn[1];   // pre-R1 path: one bearing length for both ends
+    // TBB1: point loads with a bearing length, grouped by location (loads at one point share one bearing; the shortest length entered is used)
+    const plBear = [];
+    pls.forEach((p, i) => { if (!(p.lb > 0) || !isFinite(p.loc)) return; const g = plBear.find(q => Math.abs(q.loc - p.loc) < 1e-9);
+        if (g) { g.idx.push(i); g.lb = Math.min(g.lb, p.lb); } else plBear.push({ loc: p.loc, idx: [i], lb: p.lb }); });
+    plBear.forEach(g => { const endDist = Math.min(g.loc, L - g.loc) * 12; g.cbOK = endDist >= 3; g.Cb = (g.cbOK && g.lb < 6) ? (g.lb + 0.375) / g.lb : 1.0; });
+    const FcpTop = isGL && ref.Fcpc !== undefined ? ref.Fcpc : ref.Fcp;   // glulam: load on the top (compression) face
+    const legacyBear = simple && lbs[0] === lbs[1] && cbOn[0] === cbOn[1] && fcsIn.every(v => v === null) && !plBear.length;   // pre-R1 path: one bearing length for both ends
     const legacyBend = simple && latBot === 'same' && !isGL;   // pre-R1 path: one CL for |M|max (glulam: Fbx+ / Fbx- by sign)
     const kLV = (CL, CV) => CV === 1 ? CL : (CV > 1 ? CL * CV : Math.min(CL, CV));   // CL and CV: lesser when CV <= 1 (NDS 5.3.6, 8.3.6)
     const lamOf = (c) => c.lam === 'L' ? (dz.lrfdLive === 'storage' ? LRFD_LAMBDA.Lsto : LRFD_LAMBDA.Locc) : LRFD_LAMBDA[c.lam];
@@ -1106,18 +1129,30 @@ function tbcRun(m) {
             const fcpj = Rb / (bw * lbs[j]);
             return { j, R: Rj, Rb, lb: lbs[j], Cb: Cbs[j], Fcp_p: Fcp_pj, fcp: fcpj, r: fcpj / Fcp_pj };
         });
-        const gc = bear.reduce((a, e) => (e.r > a.r ? e : a), bear[0]);
+        // TBB1: bearing on the supporting member (its Fc⊥, sawn wet-service factor 0.67, C_t of the beam, C_b = 1.0) and under point
+        // loads with a bearing length (beam's Fc⊥, compression face for glulam; C_b when 3 in. or more from the member ends; NDS 3.10)
+        const bearX = [];
+        supJ.forEach(j => { if (fcsIn[j] === null) return;
+            const Rb = Math.max(bm.R[j], 0), Fcp_pj = fcsIn[j] * (wet ? 0.67 : 1.0) * Ct.Fcp * KF.Fcp * PHI.Fcp, fcpj = Rb / (bw * lbs[j]);
+            bearX.push({ kind: 'sup', j, R: bm.R[j], Rb, lb: lbs[j], Cb: 1.0, Fcs: fcsIn[j], CMs: wet ? 0.67 : 1.0, Fcp_p: Fcp_pj, fcp: fcpj, r: fcpj / Fcp_pj }); });
+        plBear.forEach(g => {
+            const Pc = g.idx.reduce((sum, i) => sum + (c.f[pls[i].type] || 0) * pls[i].mag, 0), Rb = Math.max(Pc, 0);
+            const Fcp_pj = FcpTop * CM.Fcp * Ct.Fcp * Ci.Fcp * g.Cb * KF.Fcp * PHI.Fcp, fcpj = Rb / (bw * g.lb);
+            bearX.push({ kind: 'pl', j: null, loc: g.loc, idx: g.idx, R: Pc, Rb, lb: g.lb, Cb: g.Cb, Fcp_p: Fcp_pj, fcp: fcpj, r: fcpj / Fcp_pj }); });
+        const gx = bearX.length ? bearX.reduce((a, e) => (e.r > a.r ? e : a), bearX[0]) : null;
+        const gc = bear.reduce((a, e) => (e.r > a.r ? e : a), bear[0]);   // the beam at its supports (as before TBB1)
         const Rbear = legacyBear ? Math.max(bm.RL, bm.RR, 0) : gc.Rb;
         const Fcp_p = gc.Fcp_p;
         const fcp = legacyBear ? Rbear / (bw * gc.lb) : gc.fcp;
-        const r_b = legacyBend ? fb / Fb_p : gb.r, r_v1 = fv / Fv_p, r_vn = hasNotch ? fvn / (Fv_p * Cn * Cvr) : 0, r_c = legacyBear ? fcp / Fcp_p : gc.r;
+        const r_b = legacyBend ? fb / Fb_p : gb.r, r_v1 = fv / Fv_p, r_vn = hasNotch ? fvn / (Fv_p * Cn * Cvr) : 0, r_cB = legacyBear ? fcp / Fcp_p : gc.r;
+        const r_c = gx && gx.r > r_cB ? gx.r : r_cB;   // TBB1: governing bearing ratio including the supporting members and point loads
         // equilibrium check: sum of reactions = sum of applied loads
         const sumF = w * L + P.reduce((s, p) => s + p.mag, 0), sumR = bm.R.reduce((s, v) => s + v, 0);
         return { key: c.key, name: c.name, f: c.f, CD, lam, TF, CV, Fb_s, Fbn_star, w, P, bm, RL: bm.RL, RR: bm.RR, R: bm.R, Rm: bm.Rm, Mmax, xM, Vd, xV, vZone, Pv, xdUsed, Rmax, Rbear, Fb_star, CL, Fb_p, Fv_p, Fcp_p, fb, fv, fvn, fcp, r_b, r_v1, r_vn, r_v: Math.max(r_v1, r_vn), r_c,
-            bend, gbSpan: gb.span, gbSign: gb.sign, Mgov, xMgov, bear, gcJ: gc.j, sumF, sumR };
+            bend, gbSpan: gb.span, gbSign: gb.sign, Mgov, xMgov, bear, bearX, gcX: gx, r_cB, gcKind: gx && gx.r > r_cB ? gx.kind : 'beam', gcJ: gc.j, sumF, sumR };
     });
     const govBy = (k) => combos.reduce((g2, c) => (c[k] > g2[k] ? c : g2), combos[0]);
-    const gov = { b: govBy('r_b'), v: govBy('r_v'), c: govBy('r_c') };
+    const gov = { b: govBy('r_b'), v: govBy('r_v'), c: govBy('r_c'), cb: govBy('r_cB') };   // cb: the beam at its supports (TBB1)
     const upl = supJ.filter(j => combos.some(c => c.R[j] < 0));
     if (upl.length) notes.push('Net uplift reaction in at least one combination: provide an uplift connection, and check lateral bracing of the bottom (compression) edge.');
     if (nS > 1 && ['L', 'Lr', 'S'].some(t => wu[t] !== 0)) adv.push('Continuous beam: the live, roof live and snow area loads act on all spans at once. Pattern (skip) loading is not generated; alternate-span loading can give larger positive moments and adjacent-span loading larger support moments. Check pattern cases separately if they matter (for example with point loads, or one span at a time).');
@@ -1218,12 +1253,12 @@ function tbcRun(m) {
     return {
         ...base, ok: true, bw, dep, A, S, I, thick4, cfIncluded,
         CF, CFnote, CM, Ct, Ci, Cr, Cfu, CfuE, Cb, lb, lu, luD, le, leRule, RB, stabilityApplies, Emin_p, EminStab, E_p, FbE,
-        notch, hasNotch, dn, Cn, trib, w_self, wu, combos, gov,
+        notch, hasNotch, dn, Cn, notchFace, notchE, notchEIn, notchDe, trib, w_self, wu, combos, gov,
         defl: defl_,
         diag: { key: dc.key, name: dc.name, shearData, momentData, maxV, maxM },
         dcr, ctrlName: ctrl[0], dcrMax: ctrl[1],
         // multi-span additions
-        xs, Cbs, lbs, cbOn, stab, stabBot, latTop, latBot, hasPL, fn1, notchJ, Kcr, spacing, legacyBear,
+        xs, Cbs, lbs, cbOn, fcsIn, plBear, FcpTop, stab, stabBot, latTop, latBot, hasPL, fn1, notchJ, Kcr, spacing, legacyBear,
         // Phase 2 additions
         mtype, isGL, isSCL, method: lrfd ? 'LRFD' : 'ASD', lrfd, KF, PHI, cls4D, glX, glGrp, glGrpKey, CVscl, sclN, sclRef, sclMax, Cvr, notchLim, legacyBend,
         lrfdLive: dz.lrfdLive === 'storage' ? 'storage' : 'occupancy', shearXd,
@@ -1295,7 +1330,7 @@ function tbcSanitize(d) {
     const supIn = Array.isArray(g.supports) ? g.supports : [];
     m.geom = {
         spacing: nb(g.spacing, 16), spans,
-        supports: spans.concat([null]).map((_, j) => { const s = obj(supIn[j]); return { t: st(s.t, 'pin', ['pin', 'fixed', 'free']), lb: nb(s.lb, 3.5), cb: bo(s.cb, false) }; }),
+        supports: spans.concat([null]).map((_, j) => { const s = obj(supIn[j]); const o = { t: st(s.t, 'pin', ['pin', 'fixed', 'free']), lb: nb(s.lb, 3.5), cb: bo(s.cb, false) }; if (typeof s.fcs === 'number' && isFinite(s.fcs)) o.fcs = s.fcs; return o; }),
     };
     const cm = {};
     Object.entries(obj(mt.customMaterials)).forEach(([k, v]) => {
@@ -1305,7 +1340,7 @@ function tbcSanitize(d) {
     const mp = obj(mt.manualProps), dmp = D.material.manualProps;
     m.loads = {
         D: nb(l.D, 15), L: nb(l.L, 40), Lr: nb(l.Lr, 0), S: nb(l.S, 0), W: nb(l.W, 0), selfWeight: bo(l.selfWeight, true),
-        points: Array.isArray(l.points) ? l.points.filter(p => p && typeof p === 'object').map(p => ({ mag: nb(p.mag, 0), loc: nb(p.loc, 0), type: st(p.type, 'D', Object.keys(LOAD_CD)) })) : [],
+        points: Array.isArray(l.points) ? l.points.filter(p => p && typeof p === 'object').map(p => { const o = { mag: nb(p.mag, 0), loc: nb(p.loc, 0), type: st(p.type, 'D', Object.keys(LOAD_CD)) }; if (typeof p.lb === 'number' && isFinite(p.lb)) o.lb = p.lb; return o; }) : [],
     };
     m.material = {
         type: st(mt.type, 'sawn', TBC_MAT_TYPES.map(t => t[0])),
@@ -1328,6 +1363,9 @@ function tbcSanitize(d) {
         Fb: nb(sc.Fb, null), Fv: nb(sc.Fv, null), Fcp: nb(sc.Fcp, null), E: nb(sc.E, null), Emin: nb(sc.Emin, null),
         n: nb(sc.n, null), dref: nb(sc.dref, dsc.dref), cvMax: nb(sc.cvMax, dsc.cvMax), dens: nb(sc.dens, null),
     };
+    // TBN1: notch face (absent = tension face) and e of a compression-face notch; kept only when set
+    if (['comp', 'interior'].includes(mt.notchFace)) m.material.notchFace = mt.notchFace;
+    if (typeof mt.notchE === 'number' && isFinite(mt.notchE)) m.material.notchE = mt.notchE;
     m.design = {
         method: st(dz.method, 'ASD', TBC_METHODS.map(t => t[0])), moisture: st(dz.moisture, 'Dry', ['Dry', 'Wet']),
         temp: dz.temp === 'High' ? '125-150' : st(dz.temp, 'Normal', ['Normal', '100-125', '125-150']),
@@ -1718,7 +1756,9 @@ function setGeom(spans, types) {
   M.geom.spans = spans.map(L => ({ L }));
   M.geom.supports = types.map((t, j) => {
     const src = j === 0 ? oL : j === n ? oR : ((j < old.length - 1 && old[j]) || oL);
-    return { t, lb: typeof src.lb === 'number' ? src.lb : 3.5, cb: t === 'free' ? false : (j === 0 || j === n) ? !!src.cb : true };
+    const o = { t, lb: typeof src.lb === 'number' ? src.lb : 3.5, cb: t === 'free' ? false : (j === 0 || j === n) ? !!src.cb : true };
+    if (typeof src.fcs === 'number') o.fcs = src.fcs;   // TBB1: supporting member Fc⊥ kept
+    return o;
   });
 }
 function rebuildInputs() {
@@ -1755,6 +1795,7 @@ function refreshInputs() {
     else if (k === 'lb') bad = M.geom.supports[+n] && M.geom.supports[+n].t !== 'free' && !(v > 0);
     else if (k === 'ploc') bad = !(v >= 0 && v <= L);
     else if (k === 'pmag') bad = !isFinite(v);
+    else if (k === 'fcs' || k === 'plb') bad = i.value !== '' && !(v > 0);   // TBB1
     i.classList.toggle('bad', bad);
   });
   const sw = $('swVal'); if (sw) sw.textContent = (R && R.ok) ? `= ${f2(R.w_self)} plf (density ${g4(R.dens)} pcf × A ${f3(R.A)} in² / 144)` : '';
@@ -1819,13 +1860,13 @@ function buildGeomPane(P) {
       if (M.geom.spans.length >= 20) { toast('20 spans at most'); return; }
       const last = M.geom.spans[M.geom.spans.length - 1], ls = M.geom.supports[M.geom.supports.length - 1];
       M.geom.spans.push({ L: last.L });
-      M.geom.supports.push({ t: ls.t === 'free' ? 'free' : 'pin', lb: ls.lb, cb: ls.cb });
+      M.geom.supports.push({ t: ls.t === 'free' ? 'free' : 'pin', lb: ls.lb, cb: ls.cb, ...(typeof ls.fcs === 'number' ? { fcs: ls.fcs } : {}) });
       ls.t = ls.t === 'free' ? 'pin' : ls.t; ls.cb = true;   // the old end support is now an interior support (>= 3 in. from the member end)
       schedule(true);
     });
     body.appendChild(el('div', 'btnRow')).appendChild(add);
     const nt = el('table', 'cfg'); const nh = el('tr');
-    ['Support', 'x (ft)', 'Type', 'Bearing l₂ (in)', 'Cb'].forEach((h, i) => nh.appendChild(el('th', null, i === 3 ? 'Bearing length l<sub>b</sub> (in)' : h))); nt.appendChild(nh);
+    ['Support', 'x (ft)', 'Type', 'Bearing l₂ (in)', 'Cb', 'Supporting member F<sub>c⊥</sub>'].forEach((h, i) => nh.appendChild(el('th', null, i === 3 ? 'Bearing length l<sub>b</sub> (in)' : h))); nt.appendChild(nh);
     M.geom.supports.forEach((s, j) => {
       const end = j === 0 || j === M.geom.supports.length - 1;
       const tr = el('tr'); tr.appendChild(el('td', null, '<b>' + TBC_NODE[j] + '</b>'));
@@ -1835,9 +1876,17 @@ function buildGeomPane(P) {
       td.appendChild(selIn(opts, () => s.t, v => { s.t = v; }, 'node' + j)); tr.appendChild(td);
       const tl = el('td'); if (s.t !== 'free') tl.appendChild(numIn(() => s.lb, v => { s.lb = v; }, 'lb' + j, { chk: 'lb:' + j })); tr.appendChild(tl);
       const tc = el('td'); if (s.t !== 'free') { const c = chkIn(() => s.cb, v => { s.cb = v; }, 'cb' + j); c.title = 'Bearing ≥ 3 in. from the member end (bearing area factor Cb permitted, NDS 3.10.4)'; tc.appendChild(c); } tr.appendChild(tc);
+      // TBB1: reference Fc⊥ of the member the beam bears on (blank = same as the beam: no separate check)
+      const tf = el('td'); if (s.t !== 'free') {
+        const pre = SUP_FCP_PRESETS, has = typeof s.fcs === 'number', pk = has ? (pre.find(q => q[2] === s.fcs) || [null])[0] : 'same';
+        tf.appendChild(selIn([['same', 'Same as beam'], ...pre.map(q => [q[0], q[0] + ' ' + q[2]]), ['custom', 'Other (psi)']], () => pk || 'custom',
+          v => { if (v === 'same') delete s.fcs; else if (v === 'custom') s.fcs = has ? s.fcs : 400; else s.fcs = pre.find(q => q[0] === v)[2]; }, 'fcsSel' + j));
+        if (has && !pk) tf.appendChild(numIn(() => s.fcs, v => { s.fcs = v; }, 'fcs' + j, { chk: 'fcs:' + j }));
+      } tr.appendChild(tf);
       nt.appendChild(tr);
     });
     body.appendChild(nt);
+    body.appendChild(el('div', 'hint', '<b>Supporting member F<sub>c⊥</sub></b> (fix log TBB1): the reference F<sub>c⊥</sub> of the plate, ledger or beam the member bears on. Its bearing is checked too, with the same reaction and contact area, C<sub>M</sub> = 0.67 in wet service (sawn lumber), C<sub>t</sub> as the beam and C<sub>b</sub> = 1.0 (conservative). Same as beam = no separate check. Presets: No.2 values of NDS Supplement Tables 4A / 4B ' + VFY + '.'));
     body.appendChild(el('div', 'hint', '<b>Cb</b>: tick when the bearing is at least 3 in. from the end of the member (NDS 3.10.4); C<sub>b</sub> = (l<sub>b</sub> + 0.375)/l<sub>b</sub> then applies for l<sub>b</sub> &lt; 6 in. A support where the member continues past it (interior support, or a support with an overhang beyond it) normally qualifies. <b>Free</b> (ends only) makes a cantilever; pin and roller are the same in this model. Fixed supports are available for completeness (rare in timber).'));
   }, { noNum: true });
   mkSec(P, 'inSpacing', 'Member spacing', body => {
@@ -1857,12 +1906,13 @@ function buildLoadsPane(P) {
   mkSec(P, 'inPts', 'Point loads', body => {
     const pts = M.loads.points;
     if (pts.length) {
-      const t = el('table', 'cfg'); const hd = el('tr'); ['#', 'P (lb)', 'x from left end (ft)', 'Type', ''].forEach(h => hd.appendChild(el('th', null, h))); t.appendChild(hd);
+      const t = el('table', 'cfg'); const hd = el('tr'); ['#', 'P (lb)', 'x from left end (ft)', 'Type', 'Bearing l<sub>b</sub> (in)', ''].forEach(h => hd.appendChild(el('th', null, h))); t.appendChild(hd);
       pts.forEach((p, i) => {
         const tr = el('tr'); tr.appendChild(el('td', null, '<b>' + (i + 1) + '</b>'));
         const a = el('td'); a.appendChild(numIn(() => p.mag, v => { p.mag = v; }, 'pmag' + i, { chk: 'pmag:' + i })); tr.appendChild(a);
         const b = el('td'); b.appendChild(numIn(() => p.loc, v => { p.loc = v; }, 'ploc' + i, { chk: 'ploc:' + i })); tr.appendChild(b);
         const c = el('td'); c.appendChild(selIn(Object.keys(LOAD_CD).map(k => [k, k]), () => p.type || 'D', v => { p.type = v; }, 'ptype' + i, false)); tr.appendChild(c);
+        const e = el('td'); const eI = numIn(() => p.lb, v => { if (v === null) delete p.lb; else p.lb = v; }, 'plb' + i, { ph: 'none', chk: 'plb:' + i }); eI.style.width = '4.5em'; eI.title = 'Bearing length under the load (in.); blank = bearing not checked (fix log TBB1)'; e.appendChild(eI); tr.appendChild(e);   // TBB1
         const d = el('td'); const x = el('button', 'btn sm danger', '✕'); x.type = 'button'; x.title = 'Remove point load ' + (i + 1);
         x.addEventListener('click', () => { pts.splice(i, 1); schedule(true); }); d.appendChild(x); tr.appendChild(d);
         t.appendChild(tr);
@@ -1872,7 +1922,7 @@ function buildLoadsPane(P) {
     const add = el('button', 'btn sm', '+ Add point load'); add.type = 'button';
     add.addEventListener('click', () => { const L0 = M.geom.spans[0].L; pts.push({ mag: 500, loc: (L0 > 0 ? L0 : 0.1) / 2, type: 'D' }); schedule(true); });
     body.appendChild(el('div', 'btnRow')).appendChild(add);
-    body.appendChild(el('div', 'hint', 'Positive = downward. x is measured from the left end of the beam (node A). The type sets the load case (and C<sub>D</sub>). A point load within d of a support counts in the design shear at that support at full value, or times x/d with the box below (fix log O4).'));
+    body.appendChild(el('div', 'hint', 'Positive = downward. x is measured from the left end of the beam (node A). The type sets the load case (and C<sub>D</sub>). A point load within d of a support counts in the design shear at that support at full value, or times x/d with the box below (fix log O4). Bearing l<sub>b</sub> (fix log TBB1): length of the bearing (post, hanger seat, beam above) along the beam; the bearing stress of the factored load on the beam is then checked (NDS 3.10, with C<sub>b</sub> when the load is 3 in. or more from the member ends). Blank = not checked.'));
     chkRow(body, 'Reduce point loads within d of a support by x/d (shear, NDS 3.4.3.1(b))', chkIn(() => M.design.shearXd, v => { M.design.shearXd = v; }, 'shearXd'),
       'Design shear only (reactions, bearing, notch shear, moments and deflections use the full loads). Permitted only for a beam in full bearing on one face with the loads applied to the opposite face. x is measured from the support point (conservative compared with the support face). Unticked = no reduction.');
   }, { noNum: true });
@@ -1975,7 +2025,13 @@ function buildMaterialPane(P) {
     fRow(body, 'Notch depth at end supports', numIn(() => mt.notch, v => { mt.notch = v; }, 'notch'), 'in',
       (mt.type === 'glulam' ? 'Notch on the tension face at the end supports (NDS 3.4.3.2(a), with C<sub>vr</sub> = 0.72, NDS 5.3.10); limited to the lesser of d/10 and 3 in. (NDS 5.4.4.1). 0 = no notch.'
         : mt.type === 'scl' ? 'SCL: notches are governed by the manufacturer’s literature and are not checked here; keep 0.'
-        : 'Notch on the tension face at the end supports (NDS 3.4.3.2(a)); limited to d/4 (NDS 4.4.3.2). 0 = no notch.') + (mt.type === 'scl' ? '' : ' The same depth is used at both end supports. Interior notches and notches on the compression face are not checked (fix log O8).'));
+        : 'Notch on the tension face at the end supports (NDS 3.4.3.2(a)); limited to d/4 (NDS 4.4.3.2). 0 = no notch.').replace('Notch on the tension face at the end supports (NDS 3.4.3.2(a)', mt.notchFace === 'comp' ? 'Notch on the compression face at the end supports (checked as set below' : '$&') + (mt.type === 'scl' ? '' : ' The same depth is used at both end supports.'));
+    if (mt.type !== 'scl') {   // TBN1: notch face
+      fRow(body, 'Notch location', selIn([['tension', 'Tension face, end supports'], ['comp', 'Compression face, end supports'], ['interior', 'Interior (not checked)']], () => mt.notchFace || 'tension',
+        v => { if (v === 'tension') delete mt.notchFace; else mt.notchFace = v; }, 'notchFace'), '',
+        'Tension face: NDS 3.4.3.2(a), Eq. 3.4-3. Compression face: V′<sub>r</sub> = (2/3) F′<sub>v</sub> b [d − ((d − d<sub>n</sub>)/d<sub>n</sub>) e] (NDS 3.4.3.2, compression-face notch ' + VFY + '). Interior notches are not permitted / not checked: the tool stops with an input error (fix log TBN1).');
+      if (mt.notchFace === 'comp') fRow(body, 'e (notch length past the inner edge of the support)', numIn(() => mt.notchE, v => { if (v === null) delete mt.notchE; else mt.notchE = v; }, 'notchE'), 'in', 'e ≤ d<sub>n</sub>. Blank: e = d<sub>n</sub> (the largest permitted; conservative).');
+    }
   }, { noNum: true });
   mkSec(P, 'inCost', 'Cost estimate', body => {
     fRow(body, 'Cost', numIn(() => mt.costPerBF, v => { mt.costPerBF = v; }, 'cost'), '$/BF');
@@ -2139,6 +2195,13 @@ function fbFacs(c, CL, CV) {
   return f.concat(lrfdFac('Fb'));
 }
 function fvFacs(c) { const f = [tfFac(c), ['C_M', g4(R.CM.Fv)], ['C_t', g4(R.Ct.Fv)]]; if (sawnOnly()) f.push(['C_i', g4(R.Ci.Fv)]); return f.concat(lrfdFac('Fv')); }
+// TBB1: where the governing bearing check of a combination is, and its values (beam at a support / supporting member / under a point load)
+function bearLab(c) { if (c.gcKind === 'beam') return 'support ' + nodeN(c.gcJ); const e = c.gcX; return e.kind === 'sup' ? 'support ' + nodeN(e.j) + ', supporting member' : 'under the point load at x = ' + g4(e.loc) + ' ft'; }
+function bearVals(c) { return c.gcKind === 'beam' ? { fcp: c.fcp, R: c.Rbear, F: c.Fcp_p } : { fcp: c.gcX.fcp, R: c.gcX.Rb, F: c.gcX.Fcp_p }; }
+function bearXKey(e) { return e.kind === 'sup' ? 's' + e.j : 'p' + e.loc; }
+function bearXName(e) { return e.kind === 'sup' ? 'Support ' + nodeN(e.j) + ': supporting member' : 'Point load' + (e.idx.length > 1 ? 's ' : ' ') + e.idx.map(i => 'P' + (i + 1)).join(' + ') + ' at x = ' + g4(e.loc) + ' ft'; }
+// largest ratio over the combinations of each supporting-member / point-load bearing check
+function bearXBest() { const out = []; R.combos.forEach(k => k.bearX.forEach(e => { const key = bearXKey(e), o = out.find(q => q.key === key); if (!o) out.push({ key, k, e }); else if (e.r > o.e.r) { o.k = k; o.e = e; } })); return out; }
 function fcpFacs(j) { const f = [['C_M', g4(R.CM.Fcp)], ['C_t', g4(R.Ct.Fcp)]]; if (sawnOnly()) f.push(['C_i', g4(R.Ci.Fcp)]); f.push(['C_b', f3(R.Cbs[j])]); return f.concat(lrfdFac('Fcp')); }
 function eFacs(min) { const f = [['C_M', g4(R.CM.E)], ['C_t', g4(R.Ct.E)]]; if (sawnOnly()) f.push(['C_i', g4(R.Ci.E)]); if (R.CfuE !== 1) f.push(['C_{fu,E}', g4(R.CfuE)]); return min ? f.concat(lrfdFac('Emin')) : f; }
 // one TeX line: symbols = values = result
@@ -2176,7 +2239,7 @@ function buildSummary(pg) {
   const gb = R.gov.b, gv = R.gov.v, gc = R.gov.c, d = R.defl;
   chips.push(['Bending [NDS 3.3]', R.dcr.b, gb.name, 'bend']);
   chips.push(['Shear [NDS 3.4]', R.dcr.v, gv.name + (shearIsNotch(gv) ? ', notch' : ''), 'shear']);
-  chips.push(['Bearing [NDS 3.10]', R.dcr.c, gc.name + (R.supJ.length > 1 ? ', support ' + nodeN(gc.gcJ) : ''), 'bear']);
+  chips.push(['Bearing [NDS 3.10]', R.dcr.c, gc.name + (gc.gcKind !== 'beam' ? ', ' + bearLab(gc) : R.supJ.length > 1 ? ', support ' + nodeN(gc.gcJ) : ''), 'bear']);
   chips.push([`Deflection L/${g4(d.LLdiv)} (live/snow)`, d.r_dLL, d.trName + (R.nS > 1 ? ', span ' + (d.spanLL + 1) : ''), 'defl']);
   chips.push([`Deflection L/${g4(d.TLdiv)} (total)`, d.r_dTL, 'Kcr·D + ' + d.totName + (R.nS > 1 ? ', span ' + (d.spanTL + 1) : ''), 'defl']);
   const dash = el('div'); dash.id = 'dash';
@@ -2199,7 +2262,7 @@ function buildSummary(pg) {
     rows.push({ cls: R.dcr.b === R.dcrMax ? 'gov' : '', cells: ['Bending [NDS 3.3, Table ' + (R.isGL ? '5.3.1' : R.isSCL ? '8.3.1' : '4.3.1') + ']', bc.name + ` (${tfH(bc)})`, bendLoc(bc), `f<sub>b</sub> = ${f0(bc.fb)} psi (M = ${f0(bendM(bc))} ft-lb)`, `F′<sub>b</sub> = ${f0(bc.Fb_p)} psi`, f3(bc.r_b), { cls: stCls(bc.r_b), h: stTxt(bc.r_b) }].map((v, i) => i === 1 || i === 3 || i === 4 ? { h: v } : v) });
     const nt = shearIsNotch(gv);
     rows.push({ cls: R.dcr.v === R.dcrMax ? 'gov' : '', cells: [nt ? 'Shear at notched end [NDS 3.4.3.2]' : 'Shear [NDS 3.4.2, 3.4.3.1]', { h: gv.name + ` (${tfH(gv)})` }, nt ? 'end support reaction' : `x = ${f2(gv.xV)} ft`, { h: nt ? `f<sub>v,n</sub> = ${f1(gv.fvn)} psi` : `f<sub>v</sub> = ${f1(gv.fv)} psi (V = ${f0(gv.Vd)} lb)` }, { h: nt ? `F′<sub>v</sub>C<sub>n</sub>${R.isGL ? 'C<sub>vr</sub>' : ''} = ${f1(gv.Fv_p * R.Cn * R.Cvr)} psi` : `F′<sub>v</sub> = ${f0(gv.Fv_p)} psi` }, f3(gv.r_v), { cls: stCls(gv.r_v), h: stTxt(gv.r_v) }] });
-    rows.push({ cls: R.dcr.c === R.dcrMax ? 'gov' : '', cells: ['Bearing [NDS 3.10]', { h: gc.name + (isLRFD() ? ' (no λ)' : ' (no C<sub>D</sub>)') }, 'support ' + nodeN(gc.gcJ), { h: `f<sub>c⊥</sub> = ${f0(gc.fcp)} psi (R = ${f0(gc.Rbear)} lb)` }, { h: `F′<sub>c⊥</sub> = ${f0(gc.Fcp_p)} psi` }, f3(gc.r_c), { cls: stCls(gc.r_c), h: stTxt(gc.r_c) }] });
+    rows.push({ cls: R.dcr.c === R.dcrMax ? 'gov' : '', cells: ['Bearing [NDS 3.10]', { h: gc.name + (isLRFD() ? ' (no λ)' : ' (no C<sub>D</sub>)') }, bearLab(gc), { h: `f<sub>c⊥</sub> = ${f0(bearVals(gc).fcp)} psi (${gc.gcKind === 'pl' ? 'P' : 'R'} = ${f0(bearVals(gc).R)} lb)` }, { h: `F′<sub>c⊥</sub> = ${f0(bearVals(gc).F)} psi` }, f3(gc.r_c), { cls: stCls(gc.r_c), h: stTxt(gc.r_c) }] });
     rows.push({ cls: R.dcr.def === R.dcrMax && d.r_dLL >= d.r_dTL ? 'gov' : '', cells: ['Deflection, live/snow [IBC 1604.3]', d.trName, R.nS > 1 ? spanLab(d.spanLL) : 'span', `Δ = ${f3(d.Dtr)} in.`, `L/${g4(d.LLdiv)} = ${f3(d.LLlim)} in.`, f3(d.r_dLL), { cls: stCls(d.r_dLL), h: stTxt(d.r_dLL) }] });
     rows.push({ cls: R.dcr.def === R.dcrMax && d.r_dTL > d.r_dLL ? 'gov' : '', cells: ['Deflection, total [NDS 3.5.2, IBC 1604.3]', 'Kcr·D + ' + d.totName, R.nS > 1 ? spanLab(d.spanTL) : 'span', `Δ = ${f3(d.Dtot)} in.`, `L/${g4(d.TLdiv)} = ${f3(d.TLlim)} in.`, f3(d.r_dTL), { cls: stCls(d.r_dTL), h: stTxt(d.r_dTL) }] });
     body.appendChild(tblEl(['Check', 'Governing combination', 'Location', 'Demand', 'Capacity / limit', 'Ratio', 'Status'], rows, { left: [0, 1, 2] }));
@@ -2282,7 +2345,7 @@ function buildSchem(pg) {
     rows.push(
       ['Reference values', R.ref ? refLineHTML() : '—'],
       ['Orientation', dz.flatUse ? 'Flat (load on the wide face)' : 'Edgewise'], ['Wet service', dz.moisture === 'Wet' ? 'yes' : 'no'], ['Temperature', { Normal: 'T ≤ 100 °F', '100-125': '100–125 °F', '125-150': '125–150 °F' }[dz.temp] || dz.temp],
-      ['Incised', dz.incising ? 'yes' : 'no'], ['Repetitive member', dz.repetitive ? 'yes' : 'no'], ['End notch', (mt.notch || 0) > 0 ? g4(mt.notch) + ' in.' : 'none'], ['Point loads within d of a support (shear)', dz.shearXd ? 'times x/d (NDS 3.4.3.1(b))' : 'full value'],
+      ['Incised', dz.incising ? 'yes' : 'no'], ['Repetitive member', dz.repetitive ? 'yes' : 'no'], ['End notch', (mt.notch || 0) > 0 ? g4(mt.notch) + ' in.' + (mt.notchFace === 'comp' ? ', compression face' + (typeof mt.notchE === 'number' ? ', e = ' + g4(mt.notchE) + ' in.' : '') : mt.notchFace === 'interior' ? ', interior' : '') : 'none'], ['Point loads within d of a support (shear)', dz.shearXd ? 'times x/d (NDS 3.4.3.1(b))' : 'full value'],
       ['Lateral support, top edge', dz.latTop === 'Supports' ? `at supports only, l<sub>u</sub> = ${dz.luTop > 0 ? g4(dz.luTop) + ' ft' : 'span length'}` : 'continuous'],
       ['Lateral support, bottom edge', dz.latBot === 'same' ? 'same as top edge (earlier tool versions)' : dz.latBot === 'Supports' ? `at supports only, l<sub>u</sub> = ${dz.luBot > 0 ? g4(dz.luBot) + ' ft' : 'span length'}` : 'continuous'],
       ['Creep factor K<sub>cr</sub>', R.ok && dz.moisture === 'Wet' && R.Kcr !== dz.creep ? g4(R.Kcr) + ' used (' + (dz.creep > 0 ? g4(dz.creep) + ' entered; ' : 'blank; ') + 'wet service, NDS 3.5.2)' : g4(dz.creep)], ['Deflection limits', `L/${g4(dz.deflLL)} live/snow, L/${g4(dz.deflTL)} total`], ['Design method', dz.method === 'LRFD' ? `LRFD (NDS 2018 Appendix N; floor live load from ${dz.lrfdLive === 'storage' ? 'storage, λ = 0.7' : 'occupancy, λ = 0.8'})` : 'ASD (NDS 2018)']);
@@ -2440,8 +2503,9 @@ function buildDV(pg) {
       lines: facEq("F'_b", fbBase(sg), fbFacs(gb, gb.CL, gb.CV), `${f0(gb.Fb_p)}\\ \\text{psi}`), result: `F′b = ${f0(gb.Fb_p)} psi` });
     calc(body, { title: 'Shear: F′v for ' + gv.name, ref: tbl,
       lines: [facEq1("F'_v", ['F_v', g4(r.Fv)], fvFacs(gv), `${f1(gv.Fv_p)}\\ \\text{psi}`)], result: `F′v = ${f1(gv.Fv_p)} psi` });
-    calc(body, { title: 'Bearing: F′c⊥ at support ' + nodeN(gc.gcJ), ref: tbl + (isLRFD() ? ' (no λ)' : ' (no CD)'),
-      lines: [facEq1("F'_{c\\perp}", ['F_{c\\perp}', g4(r.Fcp)], fcpFacs(gc.gcJ), `${f1(gc.Fcp_p)}\\ \\text{psi}`)], result: `F′c⊥ = ${f1(gc.Fcp_p)} psi` });
+    { const gcb = R.gov.cb;   // TBB1: the beam at its supports (supporting members and point loads: Bearing tab)
+    calc(body, { title: 'Bearing: F′c⊥ at support ' + nodeN(gcb.gcJ), ref: tbl + (isLRFD() ? ' (no λ)' : ' (no CD)'),
+      lines: [facEq1("F'_{c\\perp}", ['F_{c\\perp}', g4(r.Fcp)], fcpFacs(gcb.gcJ), `${f1(gcb.Fcp_p)}\\ \\text{psi}`)], result: `F′c⊥ = ${f1(gcb.Fcp_p)} psi` }); }
     calc(body, { title: 'Stiffness: E′ and E′min', ref: tbl,
       lines: [facEq1("E'", ['E', g4(r.E)], eFacs(false), `${f0(R.E_p)}\\ \\text{psi}`), facEq1("E'_{min}", R.isGL ? ['E_{y,min}', g4(R.EminStab)] : ['E_{min}', g4(r.Emin)], eFacs(true), `${f0(R.Emin_p)}\\ \\text{psi}`)],
       result: `E′ = ${f0(R.E_p)} psi, E′min = ${f0(R.Emin_p)} psi` + (R.isGL ? ' (glulam: E′min from E<sub>y,min</sub> for beam stability, NDS 3.3.3.8 ' + VFY + '; E′ from E<sub>x</sub> for deflection)' : '') + (isLRFD() ? ' (E′min includes K<sub>F</sub> φ<sub>s</sub>; E′ for deflection at service loads)' : '') });
@@ -2571,7 +2635,20 @@ function buildShear(pg) {
     calc(body, { title: 'Shear check (unnotched section)', ref: 'NDS 3.4.1', status: stCls(c.r_v1),
       lines: [T`\frac{f_v}{F'_v} = \frac{${f1(c.fv)}}{${f1(c.Fv_p)}} = ${f3(c.r_v1)}`], result: `Shear ratio ${f3(c.r_v1)}` });
   });
-  if (R.hasNotch) mkSec(pg, 'sNotch', 'Notched ends (tension face at the end supports)', body => {
+  if (R.hasNotch && R.notchFace === 'comp') mkSec(pg, 'sNotch', 'Notched ends (compression face at the end supports)', body => {   // TBN1
+    calc(body, { title: 'Notch factor and shear at the notched end', ref: 'NDS 3.4.3.2 (compression-face notch)' + (R.isGL ? '; C_vr NDS 5.3.10; notch limit NDS 5.4.4.1' : '; notch limit NDS 4.4.3.2'), status: stCls(c.r_vn),
+      lines: [T`d_n = d - n = ${g4(R.dep)} - ${g4(R.notch)} = ${f3(R.dn)}\ \text{in.}\quad (n ${R.notch > R.notchLim ? '>' : '\\le'} ${R.isGL ? '\\min(d/10,\\ 3\\ \\text{in.})' : 'd/4'} = ${f2(R.notchLim)}\ \text{in.})`,
+        T`d_e = d - \frac{d - d_n}{d_n}\,e = ${g4(R.dep)} - \frac{${g4(R.dep)} - ${f3(R.dn)}}{${f3(R.dn)}} \times ${f3(R.notchE)} = ${f3(R.notchDe)}\ \text{in.}`,
+        T`C_n = \frac{d_e}{d_n} = \frac{${f3(R.notchDe)}}{${f3(R.dn)}} = ${f3(R.Cn)}`,
+        T`f_{v,n} = \frac{3R}{2\,b\,d_n} = \frac{1.5 \times ${f0(c.Rmax)}}{${g4(R.bw)} \times ${f3(R.dn)}} = ${f1(c.fvn)}\ \text{psi}`,
+        R.isGL ? T`\frac{f_{v,n}}{F'_v\,C_n\,C_{vr}} = \frac{${f1(c.fvn)}}{${f1(c.Fv_p)} \times ${f3(R.Cn)} \times ${R.Cvr}} = ${f3(c.r_vn)}` : T`\frac{f_{v,n}}{F'_v\,C_n} = \frac{${f1(c.fvn)}}{${f1(c.Fv_p)} \times ${f3(R.Cn)}} = ${f3(c.r_vn)}`],
+      where: [['R', 'largest |reaction| at a notched end support (full reaction, not V at d), ' + esc(c.name), f0(c.Rmax), 'lb', tbcLink('anaReac', 'Analysis Results tab')], ['n', 'notch depth', g4(R.notch), 'in.', 'input'],
+        ['e', 'distance the notch extends past the inner edge of the support', f3(R.notchE), 'in.', R.notchEIn === null ? 'not entered: e = d<sub>n</sub> (conservative)' : 'input'],
+        ['', 'f<sub>v,n</sub> ≤ F′<sub>v</sub> C<sub>n</sub> is V ≤ V′<sub>r</sub> = (2/3) F′<sub>v</sub> b d<sub>e</sub> written as a stress on b d<sub>n</sub>', '', '', VFY],
+        ...(R.isGL ? [['C_{vr}', 'shear reduction factor at notches (glulam; kept for compression-face notches, conservative)', String(R.Cvr), '', 'NDS 5.3.10 ' + VFY]] : [])],
+      result: `Notched-end ratio ${f3(c.r_vn)}` });
+  });
+  else if (R.hasNotch) mkSec(pg, 'sNotch', 'Notched ends (tension face at the end supports)', body => {
     calc(body, { title: 'Notch factor and shear at the notched end', ref: R.isGL ? 'NDS 3.4.3.2(a), Eq. 3.4-3; C_vr NDS 5.3.10; notch limit NDS 5.4.4.1' : 'NDS 3.4.3.2(a), Eq. 3.4-3; notch limit NDS 4.4.3.2', status: stCls(c.r_vn),
       lines: [R.isGL ? T`d_n = d - n = ${g4(R.dep)} - ${g4(R.notch)} = ${f3(R.dn)}\ \text{in.}\quad (n ${R.notch > R.notchLim ? '>' : '\\le'} \min(d/10,\ 3\ \text{in.}) = ${f2(R.notchLim)}\ \text{in.})` : T`d_n = d - n = ${g4(R.dep)} - ${g4(R.notch)} = ${f3(R.dn)}\ \text{in.}\quad (n ${R.notch > R.dep / 4 ? '>' : '\\le'} d/4 = ${f2(R.dep / 4)}\ \text{in.})`,
         T`C_n = \left(\frac{d_n}{d}\right)^2 = \left(\frac{${f3(R.dn)}}{${g4(R.dep)}}\right)^2 = ${f3(R.Cn)}`,
@@ -2591,8 +2668,8 @@ function buildShear(pg) {
    BEARING
    ===================================================================== */
 function buildBear(pg) {
-  const c = R.gov.c, r = R.ref; const j = c.gcJ; const lb = R.lbs[j], Cb = R.Cbs[j];
-  pg.appendChild(el('div', 'note', `Governing: <b>${esc(c.name)}</b> at support <b>${nodeN(j)}</b>. Ratio ${f3(c.r_c)}. F<sub>c⊥</sub> is not adjusted by ${isLRFD() ? 'λ (NDS Table 4.3.1, App. N)' : 'C<sub>D</sub> (NDS Table 4.3.1)'}.`));
+  const cg = R.gov.c, c = R.gov.cb, r = R.ref; const j = c.gcJ; const lb = R.lbs[j], Cb = R.Cbs[j];   // TBB1: c = the beam at its supports
+  pg.appendChild(el('div', 'note', `Governing: <b>${esc(cg.name)}</b>${cg.gcKind === 'beam' ? ` at support <b>${nodeN(cg.gcJ)}</b>` : `, <b>${bearLab(cg)}</b>`}. Ratio ${f3(cg.r_c)}. F<sub>c⊥</sub> is not adjusted by ${isLRFD() ? 'λ (NDS Table 4.3.1, App. N)' : 'C<sub>D</sub> (NDS Table 4.3.1)'}.`));
   mkSec(pg, 'brCalc', 'Bearing perpendicular to grain at support ' + nodeN(j), body => {
     calc(body, { title: 'Bearing area factor', ref: 'NDS 3.10.4, Eq. 3.10-2',
       lines: R.cbOn[j] && lb < 6 ? [T`C_b = \frac{l_b + 0.375}{l_b} = \frac{${g4(lb)} + 0.375}{${g4(lb)}} = ${f3(Cb)}`] : [T`C_b = 1.0`],
@@ -2600,10 +2677,10 @@ function buildBear(pg) {
     calc(body, { title: 'Adjusted compression perpendicular to grain', ref: 'NDS Table ' + (R.isGL ? '5.3.1' : R.isSCL ? '8.3.1' : '4.3.1') + (isLRFD() ? ', App. N' : ''),
       lines: [sawnOnly() && !isLRFD() ? T`F'_{c\perp} = F_{c\perp}\,C_M\,C_t\,C_i\,C_b = ${g4(r.Fcp)} \times ${g4(R.CM.Fcp)} \times ${g4(R.Ct.Fcp)} \times ${g4(R.Ci.Fcp)} \times ${f3(Cb)} = ${f1(c.Fcp_p)}\ \text{psi}` : facEq1("F'_{c\\perp}", [R.isGL ? 'F_{c\\perp x}' : 'F_{c\\perp}', g4(r.Fcp)], fcpFacs(j), `${f1(c.Fcp_p)}\\ \\text{psi}`)],
       where: [['F_{c\\perp}', R.isGL ? 'reference value, tension face (the face on the supports)' : 'reference value', g4(r.Fcp), 'psi', R.userVals ? 'user-entered' : esc(R.src) + ' ' + VFY], ['C_M', 'wet service', g4(R.CM.Fcp), '', 'Supplement footnotes ' + VFY], ['C_t', 'temperature', g4(R.Ct.Fcp), '', 'NDS Table 2.3.3 ' + VFY], ...(sawnOnly() ? [['C_i', 'incising (1.0 for Fc⊥)', g4(R.Ci.Fcp), '', 'NDS Table 4.3.8 ' + VFY]] : []), ...lrfdWhere('Fcp')] });
-    calc(body, { title: 'Bearing stress and check', ref: 'NDS 3.10.2', status: stCls(c.r_c),
-      lines: [T`f_{c\perp} = \frac{R}{b\,l_b} = \frac{${f0(c.Rbear)}}{${g4(R.bw)} \times ${g4(lb)}} = ${f1(c.fcp)}\ \text{psi}`, T`\frac{f_{c\perp}}{F'_{c\perp}} = \frac{${f1(c.fcp)}}{${f1(c.Fcp_p)}} = ${f3(c.r_c)}`],
+    calc(body, { title: 'Bearing stress and check' + (R.gov.c !== c || c.gcKind !== 'beam' ? ' (' + c.name + ')' : ''), ref: 'NDS 3.10.2', status: stCls(c.r_cB),
+      lines: [T`f_{c\perp} = \frac{R}{b\,l_b} = \frac{${f0(c.Rbear)}}{${g4(R.bw)} \times ${g4(lb)}} = ${f1(c.fcp)}\ \text{psi}`, T`\frac{f_{c\perp}}{F'_{c\perp}} = \frac{${f1(c.fcp)}}{${f1(c.Fcp_p)}} = ${f3(c.r_cB)}`],
       where: [['R', `reaction at support ${nodeN(j)} (downward on the support; uplift taken as 0)`, f0(c.Rbear), 'lb', tbcLink('anaReac', 'Analysis Results tab')], ['b', 'bearing width (bending width)', g4(R.bw), 'in.', ''], ['l_b', 'bearing length', g4(lb), 'in.', 'input']],
-      result: `Bearing ratio ${f3(c.r_c)}` });
+      result: `Bearing ratio ${f3(c.r_cB)}` });
   });
   mkSec(pg, 'brSup', 'All supports (largest ratio over the combinations)', body => {
     const rows = R.supJ.map(jj => {
@@ -2613,6 +2690,35 @@ function buildBear(pg) {
     });
     body.appendChild(tblEl(['Support', 'l<sub>b</sub> (in)', '≥ 3 in. from end', 'C<sub>b</sub>', 'F′<sub>c⊥</sub> (psi)', 'Governing combination', 'R (lb)', 'f<sub>c⊥</sub> (psi)', 'Ratio', 'R min (lb)'], rows, { left: [5] }));
     body.appendChild(el('div', 'hint', 'R min < 0 (red) = net uplift in at least one combination: the bearing check uses only downward reactions; provide an uplift connection (fix log O9).'));
+  });
+  buildBearX(pg);
+}
+
+/* TBB1: bearing on the supporting members and under point loads (NDS 3.10). Shown only when such inputs exist. */
+function buildBearX(pg) {
+  const B = bearXBest(); if (!B.length) return;
+  const top = B.reduce((a, o) => (o.e.r > a.e.r ? o : a), B[0]), e = top.e, k = top.k;
+  mkSec(pg, 'brX', 'Supporting members and point loads', body => {
+    if (e.kind === 'sup') {
+      calc(body, { title: 'Supporting member at support ' + nodeN(e.j) + ': adjusted F′c⊥', ref: 'NDS 3.10.1, 3.10.2; Table 4.3.1' + (isLRFD() ? ', App. N' : ''),
+        lines: [facEq1("F'_{c\\perp,s}", ['F_{c\\perp,s}', g4(e.Fcs)], [['C_M', g4(e.CMs)], ['C_t', g4(R.Ct.Fcp)], ['C_b', '1.000']].concat(lrfdFac('Fcp')), `${f1(e.Fcp_p)}\\ \\text{psi}`)],
+        where: [['F_{c\\perp,s}', 'reference F<sub>c⊥</sub> of the supporting member (input)', g4(e.Fcs), 'psi', 'input'], ['C_M', 'wet service (supporting member taken as sawn lumber: 0.67)', g4(e.CMs), '', 'Supplement Table 4A footnote ' + VFY],
+          ['C_t', 'temperature (as the beam)', g4(R.Ct.Fcp), '', 'NDS Table 2.3.3 ' + VFY], ['C_b', 'bearing area factor taken as 1.0 for the supporting member (conservative)', '1.000', '', 'NDS 3.10.4'], ...lrfdWhere('Fcp')] });
+    } else {
+      calc(body, { title: 'Under ' + bearXName(e).replace(/^Point/, 'point') + ': adjusted F′c⊥ of the beam', ref: 'NDS 3.10.4, Eq. 3.10-2; Table ' + (R.isGL ? '5.3.1' : R.isSCL ? '8.3.1' : '4.3.1') + (isLRFD() ? ', App. N' : ''),
+        lines: [e.Cb !== 1 ? T`C_b = \frac{l_b + 0.375}{l_b} = \frac{${g4(e.lb)} + 0.375}{${g4(e.lb)}} = ${f3(e.Cb)}` : T`C_b = 1.0`,
+          facEq1("F'_{c\\perp}", [R.isGL ? 'F_{c\\perp x}' : 'F_{c\\perp}', g4(R.FcpTop)], [['C_M', g4(R.CM.Fcp)], ['C_t', g4(R.Ct.Fcp)]].concat(sawnOnly() ? [['C_i', g4(R.Ci.Fcp)]] : [], [['C_b', f3(e.Cb)]], lrfdFac('Fcp')), `${f1(e.Fcp_p)}\\ \\text{psi}`)],
+        where: [[R.isGL ? 'F_{c\\perp x}' : 'F_{c\\perp}', R.isGL ? 'reference value, compression face (load on the top face)' : 'reference value', g4(R.FcpTop), 'psi', R.userVals ? 'user-entered' : esc(R.src) + ' ' + VFY],
+          ['C_b', (R.plBear.find(g => g.loc === e.loc) || {}).cbOK ? (e.lb < 6 ? 'load ≥ 3 in. from the member ends and l<sub>b</sub> < 6 in.' : 'l<sub>b</sub> ≥ 6 in.') : 'load less than 3 in. from a member end', f3(e.Cb), '', 'NDS 3.10.4 ' + VFY], ...lrfdWhere('Fcp')] });
+    }
+    calc(body, { title: 'Bearing stress and check (' + k.name + ')', ref: 'NDS 3.10.2', status: stCls(e.r),
+      lines: [T`f_{c\perp} = \frac{${e.kind === 'pl' ? 'P' : 'R'}}{b\,l_b} = \frac{${f0(e.Rb)}}{${g4(R.bw)} \times ${g4(e.lb)}} = ${f1(e.fcp)}\ \text{psi}`, T`\frac{f_{c\perp}}{F'_{c\perp}} = \frac{${f1(e.fcp)}}{${f1(e.Fcp_p)}} = ${f3(e.r)}`],
+      where: [[e.kind === 'pl' ? 'P' : 'R', e.kind === 'pl' ? 'factored point load(s) at this location (' + esc(k.name) + '; upward taken as 0)' : `reaction at support ${nodeN(e.j)} (downward; uplift taken as 0)`, f0(e.Rb), 'lb', e.kind === 'pl' ? 'input' : tbcLink('anaReac', 'Analysis Results tab')],
+        ['b', 'bearing width (bending width of the beam)', g4(R.bw), 'in.', ''], ['l_b', e.kind === 'pl' ? 'bearing length under the load (input; the shortest of the loads at this point)' : 'bearing length (input)', g4(e.lb), 'in.', 'input']],
+      result: `Bearing ratio ${f3(e.r)}` });
+    body.appendChild(tblEl(['Check', 'l<sub>b</sub> (in)', 'C<sub>b</sub>', 'F′<sub>c⊥</sub> (psi)', 'Governing combination', 'R or P (lb)', 'f<sub>c⊥</sub> (psi)', 'Ratio'],
+      B.map(o => ({ cls: o === top ? 'gov' : '', cells: [bearXName(o.e), g4(o.e.lb), f3(o.e.Cb), f1(o.e.Fcp_p), o.k.name, f0(o.e.R), f1(o.e.fcp), { cls: stCls(o.e.r), h: f3(o.e.r) }] })), { left: [0, 4] }));
+    body.appendChild(el('div', 'hint', 'Supporting member (fix log TBB1): the beam bears on a softer member (plate, ledger, beam below). Its F<sub>c⊥</sub> is the input value × C<sub>M</sub> (0.67 in wet service, sawn lumber) × C<sub>t</sub> of the beam' + (isLRFD() ? ' × K<sub>F</sub> φ<sub>c</sub>' : '') + '; C<sub>b</sub> = 1.0 (conservative). Point loads: checked on the beam where a bearing length is entered for the load. The post, hanger or member that delivers the load is not checked here.'));
   });
 }
 
@@ -2872,6 +2978,16 @@ function runBenchmarks() {
     { const q = p2(m => { m.material.size = '6x12'; m.material.grade = 'No.1'; m.geom.spacing = 48; m.design.flatUse = true; }); const g = '6x12 DF-L No.1 flat (Beams and Stringers), 16 ft, trib. 4 ft, D 15 / L 40 psf (fix log TBF1)';
       add(g, "E' = 1,600,000 × 0.90 (psi; was 1,600,000)", 1440000, q.E_p, 'psi', 1e-12); add(g, "E'min = 580,000 × 0.90 (psi)", 522000, q.Emin_p, 'psi', 1e-12);
       add(g, 'Δ_L/(192/360) (was 1.734)', 1.9267, q.defl.r_dLL, '', 1e-3); }
+    // 10. TBB1 (2026-11-07): bearing on the supporting member and under a point load (NDS 3.10)
+    { const q = p2(m => { m.geom.supports[0].fcs = 405; m.geom.supports[1].fcs = 405; }), k = comb(q, 'D+L'); const g = 'Default joist on Hem-Fir plates (F_c⊥ 405 psi; fix log TBB1)';
+      add(g, 'f_c⊥ = 612.9/(1.5 × 3.5) (psi)', 116.73, k.gcX.fcp, 'psi', 1e-4); add(g, 'plate: 116.73/405 (beam alone: 0.187)', 0.2882, q.dcr.c, '', 1e-3); add(g, 'beam alone (unchanged)', 0.18678, k.r_cB, '', 1e-4); }
+    { const q = p2(m => { m.loads.points = [{ mag: 1500, loc: 8, type: 'D', lb: 3.5 }, { mag: 3000, loc: 8, type: 'L', lb: 5.5 }]; }), k = comb(q, 'D+L'); const g = 'Default joist, 1500 lb D + 3000 lb L at midspan on a 3.5 in. bearing (fix log TBB1)';
+      add(g, 'C_b = (3.5 + 0.375)/3.5', 1.10714, k.gcX.Cb, '', 1e-5); add(g, 'f_c⊥ = 4500/(1.5 × 3.5) (psi)', 857.14, k.gcX.fcp, 'psi', 1e-4); add(g, "ratio = 857.14/(625 × 1.10714)", 1.2387, q.dcr.c, '', 1e-3); }
+    // 11. TBN1 (2026-11-07): end notch on the compression face (NDS 3.4.3.2, compression-face notch; verify)
+    { const q = p2(m => { m.material.notch = 2; m.geom.spans = [{ L: 14 }]; m.loads.D = 10; m.material.notchFace = 'comp'; m.material.notchE = 3; }), k = comb(q, 'D+L');
+      const g = 'Fix-log joist (2x10, 14 ft, D 10 / L 40 psf), 2 in. end notch on the compression face, e = 3 in. (fix log TBN1)';
+      add(g, 'd_e = 9.25 − (2/7.25) × 3 (in.)', 8.42241, q.notchDe, 'in', 1e-5); add(g, 'C_n = d_e/d_n = 8.42241/7.25', 1.16171, q.Cn, '', 1e-5);
+      add(g, 'f_v,n/(F′v C_n) = (1.5 × 489.6/(1.5 × 7.25))/(180 × 1.16171) (tension face: 0.611)', 0.32295, k.r_vn, '', 1e-3); }
   } catch (e) { out.push({ grp: 'error', what: 'Benchmark failed to run: ' + e.message, hand: NaN, tool: NaN, unit: '', diff: NaN, ok: false }); }
   return out;
 }
@@ -2925,7 +3041,7 @@ function buildManual(pg) {
     '<b>Shared project info</b> (bridgeSuite.v1.projectMeta): Project, Client, Job #, Designer, Checked by and Date are shared and received (shared fields <code>projectName</code>, <code>client</code>, <code>jobNo</code>, <code>preparedBy</code>, <code>checkedBy</code>, <code>date</code>; Project, Checked by and Date added in fix log R5). Member / mark and Notes stay in this tool.']);
   H('Limitations and open items');
   UL(['Built-in reference values and factors must be verified against the printed NDS Supplement (Reference Values tab).',
-    'No axial load, no torsion, no lateral load on the weak axis; no interior or compression-face notches, one notch depth at both ends (O8); x/d shear reduction only when ticked (O4); no sustained live load in creep (O7).',
+    'No axial load, no torsion, no lateral load on the weak axis; interior notches are not checked (input error) and compression-face end notches use the compression-face expression of NDS 3.4.3.2 (fix log TBN1), one notch depth at both ends (O8); x/d shear reduction only when ticked (O4); no sustained live load in creep (O7).',
     'Glulam: straight prismatic members bending about x–x only (no flat use, curvature, taper or balanced-layup option for the stress classes; use custom values). SCL: no product values built in.',
     'Equation numbers are quoted from NDS 2018 as recalled; verify them against the printed standard.',
     'Continuous beams: one section for all spans; no pattern loading; no support settlement.']);
@@ -2972,6 +3088,21 @@ const tbrCell = (v, d, cls) => ({ t: (typeof v === 'number') ? (isFinite(v) ? f(
 const tbrDC = (v, key) => ({ t: (typeof v === 'number' && isFinite(v)) ? f3(v) : '—', n: true, cls: (typeof v === 'number' && isFinite(v)) ? (v > 1 + 1e-12 ? 'ng' : (v >= 0.9 ? 'hi' : 'ok')) : 'na', key });
 const TB_NDS = 'NDS 2018 ';
 /* a steps item whose steps are grouped in topics (one topic per list entry, in order; SharedSteps.group sets each topic's status and result line) */
+// TBB1: report sub-section for the supporting-member and point-load bearing checks (none: no sub-section)
+function tbrBearX() {
+  const B = bearXBest(); if (!B.length) return [];
+  const top = B.reduce((a, o) => (o.e.r > a.e.r ? o : a), B[0]), e = top.e, k = top.k;
+  const fac = e.kind === 'sup' ? tbrFac(['F_{c⊥,s}', g4(e.Fcs)], [['C_M', g4(e.CMs)], ['C_t', g4(R.Ct.Fcp)], ['C_b', '1.000']].concat(lrfdFac('Fcp')))
+    : tbrFac([R.isGL ? 'F_{c⊥x}' : 'F_{c⊥}', g4(R.FcpTop)], [['C_M', g4(R.CM.Fcp)], ['C_t', g4(R.Ct.Fcp)]].concat(sawnOnly() ? [['C_i', g4(R.Ci.Fcp)]] : [], [['C_b', f3(e.Cb)]], lrfdFac('Fcp')));
+  const T = [{ title: bearXName(e), ref: TB_NDS + '3.10' + (e.kind === 'pl' ? ', 3.10.4' : ''), steps: [
+    ...(e.kind === 'pl' && e.Cb !== 1 ? [tbrS({ id: 'bx.Cb', label: 'Bearing area factor under the load (l_b = ' + g4(e.lb) + ' in.)', sym: 'C_{b}', eq: '\\frac{l_{b} + 0.375}{l_{b}}', sub: '\\frac{' + g4(e.lb) + ' + 0.375}{' + g4(e.lb) + '}', value: e.Cb, unit: '', d: 3, ref: TB_NDS + 'Eq. 3.10-2' })] : []),
+    tbrS({ id: 'bx.Fcp', label: e.kind === 'sup' ? 'Adjusted F_c⊥ of the supporting member (C_M 0.67 wet, sawn; C_b = 1.0, conservative)' : 'Adjusted F_c⊥ of the beam under the load', sym: 'F^{\\prime}_{c⊥}', eq: fac.eq, sub: fac.sub, value: e.Fcp_p, unit: 'psi', d: 1, ref: tbrTbl() }),
+    tbrS({ id: 'bx.fcp', label: 'Bearing stress (' + k.name + '; ' + (e.kind === 'pl' ? 'factored point load' : 'reaction at support ' + nodeN(e.j)) + ')', sym: 'f_{c⊥}', eq: '\\frac{' + (e.kind === 'pl' ? 'P' : 'R') + '}{b\\,l_{b}}', sub: '\\frac{' + f0(e.Rb) + '}{' + g4(R.bw) + ' \\times ' + g4(e.lb) + '}', value: e.fcp, unit: 'psi', d: 1, ref: TB_NDS + '3.10.2' }),
+    tbrS({ id: 'bx.r', label: 'Bearing check', sym: '\\frac{f_{c⊥}}{F^{\\prime}_{c⊥}}', eq: '', sub: '\\frac{' + f1(e.fcp) + '}{' + f1(e.Fcp_p) + '}', value: e.r, unit: '', d: 3, ref: TB_NDS + '3.10.2', ok: e.r <= 1 })] }];
+  return [{ title: 'Supporting members and point loads (fix log TBB1)', items: [tbrTopics(T), { type: 'table', wide: true, head: ['Check', 'l_b (in.)', 'C_b', 'F′_c⊥ (psi)', 'Governing combination', 'R or P (lb)', 'f_c⊥ (psi)', 'Ratio'],
+    rows: B.map(o => ({ cls: o === top ? 'gov' : '', cells: [bearXName(o.e), g4(o.e.lb), tbrCell(o.e.Cb, 3), tbrCell(o.e.Fcp_p, 1), o.k.name, tbrCell(o.e.R, 0), tbrCell(o.e.fcp, 1), tbrDC(o.e.r)] })) },
+    { type: 'note', text: 'The same steps are on the Bearing tab[[tab:bear| ↗]].' }] }];
+}
 function tbrTopics(list, opt) {
   const L = list.filter(t => t.steps && t.steps.length);
   const steps = [].concat(...L.map(t => t.steps));
@@ -3007,7 +3138,7 @@ function tbrModel() {
     const rows = [
       ['Bending', gb.name + ' (' + tfP(gb) + ')', bendLoc(gb), 'f_b = ' + f0(gb.fb) + ' psi', 'F′_b = ' + f0(gb.Fb_p) + ' psi', tbrDC(gb.r_b, 'tb/bd.r'), TB_NDS + '3.3'],
       [nt ? 'Shear at notched end' : 'Shear', gv.name + ' (' + tfP(gv) + ')', nt ? 'end support reaction' : 'x = ' + f2(gv.xV) + ' ft', nt ? 'f_v,n = ' + f1(gv.fvn) + ' psi' : 'f_v = ' + f1(gv.fv) + ' psi', nt ? 'F′_v C_n' + (R.isGL ? ' C_vr' : '') + ' = ' + f1(gv.Fv_p * R.Cn * R.Cvr) + ' psi' : 'F′_v = ' + f1(gv.Fv_p) + ' psi', tbrDC(gv.r_v, nt ? 'tb/sh.rn' : 'tb/sh.r'), TB_NDS + (nt ? '3.4.3.2' : '3.4.2, 3.4.3.1')],
-      ['Bearing', gc.name, 'support ' + nodeN(gc.gcJ), 'f_c⊥ = ' + f0(gc.fcp) + ' psi', 'F′_c⊥ = ' + f0(gc.Fcp_p) + ' psi', tbrDC(gc.r_c, 'tb/br.r'), TB_NDS + '3.10'],
+      ['Bearing', gc.name, bearLab(gc), 'f_c⊥ = ' + f0(bearVals(gc).fcp) + ' psi', 'F′_c⊥ = ' + f0(bearVals(gc).F) + ' psi', tbrDC(gc.r_c, 'tb/br.r'), TB_NDS + '3.10'],
       ['Deflection, live/snow', d.trName, R.nS > 1 ? spanLab(d.spanLL) : 'span', 'Δ = ' + f3(d.Dtr) + ' in.', 'L/' + g4(d.LLdiv) + ' = ' + f3(d.LLlim) + ' in.', tbrDC(d.r_dLL, 'tb/df.rLL'), 'IBC 2018 Table 1604.3'],
       ['Deflection, total', 'K_cr·D + ' + d.totName, R.nS > 1 ? spanLab(d.spanTL) : 'span', 'Δ = ' + f3(d.Dtot) + ' in.', 'L/' + g4(d.TLdiv) + ' = ' + f3(d.TLlim) + ' in.', tbrDC(d.r_dTL, 'tb/df.rTL'), TB_NDS + '3.5.2; IBC 2018 Table 1604.3']];
     const items = [{ type: 'kv', rows: [['Member', memberTxt()], ['Design method', 'NDS 2018 ' + methTxt() + (isLRFD() ? ' (Appendix N)' : '')],
@@ -3038,7 +3169,7 @@ function tbrModel() {
       : mt.type === 'scl' ? [['Material type', tyName], ['Product', (SCL_KINDS[mt.scl.kind] || mt.scl.kind) + (mt.scl.name ? ' — ' + mt.scl.name : '')], ['Section', 'b = ' + g4(mt.scl.b) + ' in., d = ' + g4(mt.scl.d) + ' in.'], ['Size factor', 'C_V = (' + g4(mt.scl.dref) + '/d)^' + g4(mt.scl.n) + ' ≤ ' + g4(mt.scl.cvMax) + ' (manufacturer)']]
       : [['Material type', tyName], ['Size', mt.size === 'Custom' ? 'Custom b = ' + g4(mt.customB) + ' in., d = ' + g4(mt.customD) + ' in.' : mt.size], ['Species / grade', mt.manual ? 'Manual reference values' : (mt.customMaterials || {})[mt.species] ? 'Custom species "' + mt.species + '"' : mt.species + ' (' + ((DEFAULT_SPECIES[mt.species] || {}).name || '?') + '), ' + ((GRADES_DB[mt.grade] || {}).name || mt.grade)]];
     mrows.push(['Reference values', tbrPlain(R.src)], ['Orientation', dz.flatUse ? 'Flat (load on the wide face)' : 'Edgewise'], ['Wet service', dz.moisture === 'Wet' ? 'yes' : 'no'], ['Temperature', { Normal: 'T ≤ 100 °F', '100-125': '100–125 °F', '125-150': '125–150 °F' }[dz.temp] || dz.temp],
-      ['Incised', dz.incising ? 'yes' : 'no'], ['Repetitive member', dz.repetitive ? 'yes' : 'no'], ['End notch', (mt.notch || 0) > 0 ? g4(mt.notch) + ' in.' : 'none'],
+      ['Incised', dz.incising ? 'yes' : 'no'], ['Repetitive member', dz.repetitive ? 'yes' : 'no'], ['End notch', (mt.notch || 0) > 0 ? g4(mt.notch) + ' in.' + (mt.notchFace === 'comp' ? ', compression face' + (typeof mt.notchE === 'number' ? ', e = ' + g4(mt.notchE) + ' in.' : '') : mt.notchFace === 'interior' ? ', interior' : '') : 'none'],
       ['Lateral support, top edge', dz.latTop === 'Supports' ? 'at supports only, l_u = ' + (dz.luTop > 0 ? g4(dz.luTop) + ' ft' : 'span length') : 'continuous'],
       ['Lateral support, bottom edge', dz.latBot === 'same' ? 'same as top edge (earlier tool versions)' : dz.latBot === 'Supports' ? 'at supports only, l_u = ' + (dz.luBot > 0 ? g4(dz.luBot) + ' ft' : 'span length') : 'continuous'],
       ['Creep factor K_cr', R.ok && dz.moisture === 'Wet' && R.Kcr !== dz.creep ? g4(R.Kcr) + ' used (' + (dz.creep > 0 ? g4(dz.creep) + ' entered; ' : 'blank; ') + 'wet service, NDS 3.5.2)' : g4(dz.creep)], ['Deflection limits', 'L/' + g4(dz.deflLL) + ' live/snow, L/' + g4(dz.deflTL) + ' total'], ['Design method', dz.method === 'LRFD' ? 'LRFD (NDS 2018 Appendix N; floor live load from ' + (dz.lrfdLive === 'storage' ? 'storage, λ = 0.7' : 'occupancy, λ = 0.8') + ')' : 'ASD (NDS 2018)']);
@@ -3068,11 +3199,11 @@ function tbrModel() {
     subs.push({ title: 'Adjustment factors (NDS 2018 Table ' + (R.isGL ? '5.3.1, glulam' : R.isSCL ? '8.3.1, SCL' : '4.3.1, sawn lumber') + ', ' + methTxt() + ')', items: [{ type: 'table', head: ['Factor', 'F_b', 'F_v', 'F_c⊥', 'E, E_min', 'Basis', 'Reference'], rows: factorRows().map(x => x.map(tbrPlain)) },
       { type: 'note', text: 'C_L is worked per span and edge in §6 ([[tb/bd.CL]]); C_b per support in §8 ([[tb/br.Cb]]).' }] });
     const sg = R.legacyBend ? 1 : gb.gbSign, T = [];
-    const fb = tbrFac(fbBase(sg), fbFacs(gb, gb.CL, gb.CV)), fv = tbrFac([R.isGL ? 'F_{vx}' : 'F_{v}', g4(r.Fv)], fvFacs(gv)), fc = tbrFac([R.isGL ? 'F_{c⊥x}' : 'F_{c⊥}', g4(r.Fcp)], fcpFacs(gc.gcJ));
+    const fb = tbrFac(fbBase(sg), fbFacs(gb, gb.CL, gb.CV)), fv = tbrFac([R.isGL ? 'F_{vx}' : 'F_{v}', g4(r.Fv)], fvFacs(gv)), fc = tbrFac([R.isGL ? 'F_{c⊥x}' : 'F_{c⊥}', g4(r.Fcp)], fcpFacs(R.gov.cb.gcJ));
     const fe = tbrFac(['E', g4(r.E)], eFacs(false)), fm = tbrFac(R.isGL ? ['E_{y,min}', g4(R.EminStab)] : ['E_{min}', g4(r.Emin)], eFacs(true));
     T.push({ title: 'Bending: F′_b for ' + gb.name, ref: tbrTbl(), steps: [tbrS({ id: 'dv.Fb', label: 'Adjusted bending design value, ' + gb.name + (R.isGL ? (sg > 0 ? ' (M > 0, F_bx^+)' : ' (M < 0, F_bx^−)') : ''), sym: 'F^{\\prime}_{b}', eq: fb.eq, sub: fb.sub, value: gb.Fb_p, unit: 'psi', d: 0, ref: tbrTbl(), note: 'C_L and C_V: §bd.CL' + (sawnOnly() ? '' : ', §bd.CV') + '.' })] });
     T.push({ title: 'Shear: F′_v for ' + gv.name, ref: tbrTbl(), steps: [tbrS({ id: 'dv.Fv', label: 'Adjusted shear design value, ' + gv.name, sym: 'F^{\\prime}_{v}', eq: fv.eq, sub: fv.sub, value: gv.Fv_p, unit: 'psi', d: 1, ref: tbrTbl() })] });
-    T.push({ title: 'Bearing: F′_c⊥ at support ' + nodeN(gc.gcJ), ref: tbrTbl() + (isLRFD() ? ' (no λ)' : ' (no C_D)'), steps: [tbrS({ id: 'dv.Fcp', label: 'Adjusted compression perpendicular to grain, support ' + nodeN(gc.gcJ), sym: 'F^{\\prime}_{c⊥}', eq: fc.eq, sub: fc.sub, value: gc.Fcp_p, unit: 'psi', d: 1, ref: tbrTbl() })] });
+    T.push({ title: 'Bearing: F′_c⊥ at support ' + nodeN(R.gov.cb.gcJ), ref: tbrTbl() + (isLRFD() ? ' (no λ)' : ' (no C_D)'), steps: [tbrS({ id: 'dv.Fcp', label: 'Adjusted compression perpendicular to grain, support ' + nodeN(R.gov.cb.gcJ), sym: 'F^{\\prime}_{c⊥}', eq: fc.eq, sub: fc.sub, value: R.gov.cb.Fcp_p, unit: 'psi', d: 1, ref: tbrTbl() })] });
     T.push({ title: 'Stiffness: E′ and E′_min', ref: tbrTbl(), res: /\.Emin$/, steps: [tbrS({ id: 'dv.E', label: 'Adjusted modulus of elasticity (deflection' + (isLRFD() ? ', service loads' : '') + ')', sym: 'E^{\\prime}', eq: fe.eq, sub: fe.sub, value: R.E_p, unit: 'psi', d: 0, ref: tbrTbl() }),
       tbrS({ id: 'dv.Emin', label: 'Adjusted E_min (beam stability' + (R.isGL ? '; glulam: from E_y,min, NDS 3.3.3.8' : '') + ')' + (isLRFD() ? ', incl. K_F φ_s' : ''), sym: 'E^{\\prime}_{min}', eq: fm.eq, sub: fm.sub, value: R.Emin_p, unit: 'psi', d: 0, ref: tbrTbl() })] });
     subs.push({ title: 'Adjusted design values (governing combinations)', items: [tbrTopics(T), { type: 'note', text: 'Each combination has its own ' + (isLRFD() ? 'λ' : 'C_D') + ': the values of every combination are in §6–§8 (tables) and on the Design Values tab[[tab:dv| ↗]].' }] });
@@ -3149,24 +3280,27 @@ function tbrModel() {
     T.push({ title: 'Adjusted shear design value and check', ref: tbrTbl(), steps: [
       tbrS({ id: 'sh.Fvp', label: 'Adjusted shear design value (' + c.name + ', ' + tfP(c) + ')', sym: 'F^{\\prime}_{v}', eq: fv.eq, sub: fv.sub, value: c.Fv_p, unit: 'psi', d: 1, ref: tbrTbl() }),
       tbrS({ id: 'sh.r', label: 'Shear check (unnotched section)', sym: '\\frac{f_{v}}{F^{\\prime}_{v}}', eq: '', sub: '\\frac{' + f1(c.fv) + '}{' + f1(c.Fv_p) + '}', value: c.r_v1, unit: '', d: 3, ref: TB_NDS + '3.4.1', ok: c.r_v1 <= 1 })] });
-    if (R.hasNotch) T.push({ title: 'Notched ends (tension face at the end supports)', ref: TB_NDS + '3.4.3.2(a)' + (R.isGL ? '; 5.3.10; 5.4.4.1' : '; 4.4.3.2'), steps: [
+    const nc = R.notchFace === 'comp';   // TBN1
+    if (R.hasNotch) T.push({ title: nc ? 'Notched ends (compression face at the end supports)' : 'Notched ends (tension face at the end supports)', ref: TB_NDS + (nc ? '3.4.3.2 (compression-face notch)' : '3.4.3.2(a)') + (R.isGL ? '; 5.3.10; 5.4.4.1' : '; 4.4.3.2'), steps: [
       tbrS({ id: 'sh.dn', label: 'Depth at the notch (n = ' + g4(R.notch) + ' in.; limit ' + (R.isGL ? 'min(d/10, 3 in.)' : 'd/4') + ' = ' + f2(R.notchLim) + ' in.' + (R.notch > R.notchLim ? ': exceeded, NG' : '') + ')', sym: 'd_{n}', eq: 'd - n', sub: g4(R.dep) + ' - ' + g4(R.notch), value: R.dn, unit: 'in', d: 3, ref: R.isGL ? TB_NDS + '5.4.4.1' : TB_NDS + '4.4.3.2' }),
-      tbrS({ id: 'sh.Cn', label: 'Notch factor', sym: 'C_{n}', eq: '\\left(\\frac{d_{n}}{d}\\right)^{2}', sub: '\\left(\\frac{' + f3(R.dn) + '}{' + g4(R.dep) + '}\\right)^{2}', value: R.Cn, unit: '', d: 3, ref: TB_NDS + 'Eq. 3.4-3' }),
+      ...(nc ? [tbrS({ id: 'sh.de', label: 'Effective depth of the compression-face notch (e = ' + f3(R.notchE) + ' in.' + (R.notchEIn === null ? ', not entered: e = d_n, conservative' : '') + ')', sym: 'd_{e}', eq: 'd - \\frac{d - d_{n}}{d_{n}}\\,e', sub: g4(R.dep) + ' - \\frac{' + g4(R.dep) + ' - ' + f3(R.dn) + '}{' + f3(R.dn) + '} \\times ' + f3(R.notchE), value: R.notchDe, unit: 'in', d: 3, ref: TB_NDS + '3.4.3.2' }),
+        tbrS({ id: 'sh.Cn', label: 'Notch factor (V′r = (2/3) F′v b d_e written on b d_n)', sym: 'C_{n}', eq: '\\frac{d_{e}}{d_{n}}', sub: '\\frac{' + f3(R.notchDe) + '}{' + f3(R.dn) + '}', value: R.Cn, unit: '', d: 3, ref: TB_NDS + '3.4.3.2' })]
+      : [tbrS({ id: 'sh.Cn', label: 'Notch factor', sym: 'C_{n}', eq: '\\left(\\frac{d_{n}}{d}\\right)^{2}', sub: '\\left(\\frac{' + f3(R.dn) + '}{' + g4(R.dep) + '}\\right)^{2}', value: R.Cn, unit: '', d: 3, ref: TB_NDS + 'Eq. 3.4-3' })]),
       tbrS({ id: 'sh.fvn', label: 'Shear stress at the notched end (R = largest |reaction| at a notched end support, ' + c.name + ')', sym: 'f_{v,n}', eq: '\\frac{3R}{2\\,b\\,d_{n}}', sub: '\\frac{1.5 \\times ' + f0(c.Rmax) + '}{' + g4(R.bw) + ' \\times ' + f3(R.dn) + '}', value: c.fvn, unit: 'psi', d: 1, ref: TB_NDS + 'Eq. 3.4-3' }),
-      tbrS({ id: 'sh.rn', label: 'Notched-end check', sym: R.isGL ? '\\frac{f_{v,n}}{F^{\\prime}_{v}\\,C_{n}\\,C_{vr}}' : '\\frac{f_{v,n}}{F^{\\prime}_{v}\\,C_{n}}', eq: '', sub: R.isGL ? '\\frac{' + f1(c.fvn) + '}{' + f1(c.Fv_p) + ' \\times ' + f3(R.Cn) + ' \\times ' + R.Cvr + '}' : '\\frac{' + f1(c.fvn) + '}{' + f1(c.Fv_p) + ' \\times ' + f3(R.Cn) + '}', value: c.r_vn, unit: '', d: 3, ref: TB_NDS + '3.4.3.2(a)', ok: c.r_vn <= 1 })] });
+      tbrS({ id: 'sh.rn', label: 'Notched-end check', sym: R.isGL ? '\\frac{f_{v,n}}{F^{\\prime}_{v}\\,C_{n}\\,C_{vr}}' : '\\frac{f_{v,n}}{F^{\\prime}_{v}\\,C_{n}}', eq: '', sub: R.isGL ? '\\frac{' + f1(c.fvn) + '}{' + f1(c.Fv_p) + ' \\times ' + f3(R.Cn) + ' \\times ' + R.Cvr + '}' : '\\frac{' + f1(c.fvn) + '}{' + f1(c.Fv_p) + ' \\times ' + f3(R.Cn) + '}', value: c.r_vn, unit: '', d: 3, ref: TB_NDS + (nc ? '3.4.3.2' : '3.4.3.2(a)'), ok: c.r_vn <= 1 })] });
     secs.push({ title: 'Shear', subs: [{ title: 'Shear check (governing combination ' + c.name + ')', items: [tbrTopics(T), { type: 'note', text: 'Shear ratio of the combination = the larger of the unnotched and notched-end ratios = ' + f3(c.r_v) + '. The same steps are on the Shear tab[[tab:shear| ↗]].' }] },
       { title: 'Shear ratio by combination', items: [{ type: 'table', wide: true, head: ['Combination', tfHead().replace(/<sub>(.*?)<\/sub>/, '_$1'), 'V (lb)', 'x (ft)', 'f_v (psi)', 'F′_v (psi)', 'f_v/F′_v', ...(R.hasNotch ? ['R notch (lb)', 'f_v,n/(F′_v C_n)'] : []), 'Ratio'],
         rows: R.combos.map(k => ({ cls: k === c ? 'gov' : '', cells: [k.name, String(k.TF), tbrCell(k.Vd, 0), tbrCell(k.xV, 2), tbrCell(k.fv, 1), tbrCell(k.Fv_p, 1), tbrCell(k.r_v1, 3), ...(R.hasNotch ? [tbrCell(k.Rmax, 0), tbrCell(k.r_vn, 3)] : []), tbrDC(k.r_v)] })) }] }] });
   }
   /* ---------- 8. Bearing ---------- */
   {
-    const c = gc, j = c.gcJ, lb = R.lbs[j], Cb = R.Cbs[j], fc = tbrFac([R.isGL ? 'F_{c⊥x}' : 'F_{c⊥}', g4(r.Fcp)], fcpFacs(j));
+    const c = R.gov.cb, j = c.gcJ, lb = R.lbs[j], Cb = R.Cbs[j], fc = tbrFac([R.isGL ? 'F_{c⊥x}' : 'F_{c⊥}', g4(r.Fcp)], fcpFacs(j));
     const T = [{ title: 'Bearing area factor', ref: TB_NDS + '3.10.4, Eq. 3.10-2', res: /\.Cb$/, steps: [tbrS({ id: 'br.Cb', label: 'Bearing area factor, support ' + nodeN(j) + ' (l_b = ' + g4(lb) + ' in.)', sym: 'C_{b}', eq: R.cbOn[j] && lb < 6 ? '\\frac{l_{b} + 0.375}{l_{b}}' : '', sub: R.cbOn[j] && lb < 6 ? '\\frac{' + g4(lb) + ' + 0.375}{' + g4(lb) + '}' : '', value: Cb, unit: '', d: 3, ref: TB_NDS + 'Eq. 3.10-2',
       note: R.cbOn[j] ? (lb < 6 ? 'Bearing ≥ 3 in. from the member end and l_b < 6 in.' : 'l_b ≥ 6 in.: C_b = 1.0.') : 'End bearing (less than 3 in. from the member end): C_b = 1.0.' })] },
       { title: 'Adjusted compression perpendicular to grain', ref: tbrTbl() + (isLRFD() ? ' (no λ)' : ' (no C_D)'), steps: [tbrS({ id: 'br.Fcp', label: 'Adjusted compression perpendicular to grain, support ' + nodeN(j), sym: 'F^{\\prime}_{c⊥}', eq: fc.eq, sub: fc.sub, value: c.Fcp_p, unit: 'psi', d: 1, ref: tbrTbl() })] },
       { title: 'Bearing stress and check', ref: TB_NDS + '3.10.2', steps: [
         tbrS({ id: 'br.fcp', label: 'Bearing stress (R = reaction at support ' + nodeN(j) + ', ' + c.name + '; uplift taken as 0)', sym: 'f_{c⊥}', eq: '\\frac{R}{b\\,l_{b}}', sub: '\\frac{' + f0(c.Rbear) + '}{' + g4(R.bw) + ' \\times ' + g4(lb) + '}', value: c.fcp, unit: 'psi', d: 1, ref: TB_NDS + '3.10.2' }),
-        tbrS({ id: 'br.r', label: 'Bearing check', sym: '\\frac{f_{c⊥}}{F^{\\prime}_{c⊥}}', eq: '', sub: '\\frac{' + f1(c.fcp) + '}{' + f1(c.Fcp_p) + '}', value: c.r_c, unit: '', d: 3, ref: TB_NDS + '3.10.2', ok: c.r_c <= 1 })] }];
+        tbrS({ id: 'br.r', label: 'Bearing check', sym: '\\frac{f_{c⊥}}{F^{\\prime}_{c⊥}}', eq: '', sub: '\\frac{' + f1(c.fcp) + '}{' + f1(c.Fcp_p) + '}', value: c.r_cB, unit: '', d: 3, ref: TB_NDS + '3.10.2', ok: c.r_cB <= 1 })] }];
     const rows = R.supJ.map(jj => {
       const best = R.combos.reduce((a, k) => { const e = k.bear.find(q => q.j === jj); return e.r > a.e.r ? { k, e } : a; }, { k: R.combos[0], e: R.combos[0].bear.find(q => q.j === jj) });
       const Rmin = Math.min(...R.combos.map(k => k.R[jj]));
@@ -3174,7 +3308,7 @@ function tbrModel() {
     });
     secs.push({ title: 'Bearing', subs: [{ title: 'Bearing perpendicular to grain at support ' + nodeN(j) + ' (' + c.name + ')', items: [tbrTopics(T), { type: 'note', text: 'F_c⊥ is not adjusted by ' + (isLRFD() ? 'λ' : 'C_D') + ' (NDS 2018 Table 4.3.1). The same steps are on the Bearing tab[[tab:bear| ↗]].' }] },
       { title: 'All supports (largest ratio over the combinations)', items: [{ type: 'table', wide: true, head: ['Support', 'l_b (in.)', '≥ 3 in. from end', 'C_b', 'F′_c⊥ (psi)', 'Governing combination', 'R (lb)', 'f_c⊥ (psi)', 'Ratio', 'R min (lb)'], rows },
-        { type: 'note', text: 'R min < 0 = net uplift in at least one combination: the bearing check uses only downward reactions; provide an uplift connection.' }] }] });
+        { type: 'note', text: 'R min < 0 = net uplift in at least one combination: the bearing check uses only downward reactions; provide an uplift connection.' }] }].concat(tbrBearX()) });
   }
   /* ---------- 9. Deflection ---------- */
   {

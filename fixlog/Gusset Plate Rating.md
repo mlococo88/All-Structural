@@ -3024,3 +3024,80 @@ function gageTables() {
 - **How verified:** main vs branch on the default project: every localStorage key (1), page text (14485 chars), Export JSON (7391 chars identical) and the printed report text (print media, 128381 chars) identical (clock times normalised); 0 console errors; chip click → card on screen, no dialog; Ctrl+S / Ctrl+Shift+S → Save as; header at 1280 / 1400 / 1920 / 390 px (390: no sideways scroll), screenshots looked at. `node tests/check-syntax.mjs "Gusset Plate Rating.html"`; `node tests/smoke/project-library.mjs --tool gusset`; `node tests/smoke/github-sync-tools.mjs --tool gusset`; `node tests/smoke/home-projects.mjs --tool gusset`; `node tests/smoke/phone-layout.mjs --tool gusset`: pass.
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
+
+## 2026-11-07 — PR: claude/gusset-h1-tension-splice (PR #1026: https://github.com/mlococo88/All-Structural/pull/1026) — Tension chord splice rated with LRFD 10th Ed. Eqs. 6.14.2.8.6-3 and -4 (H1; §4 calculation change, results go down)
+
+From the code-compliance review of 2026-11-07 (finding H1). Engineer asleep, merge-as-you-go approved; no questions asked.
+
+### H1. SPL-TY / SPL-TF: eccentric form with φ<sub>cs</sub>   [§4: formula and resistance factor]
+- **Where:** `compute()`, the chord-splice block (`if (P.chord === 'spliced' && chordIdx.length >= 2)`), the `net` map (anchor `parts.forEach(z => { z.An = capOn ? Math.min(z.An0, p.capAn * z.Ag) : z.An0; });`), and the functions `capSPY()` / `capSPF()` just before `/* ----- checks ----- */`. Also `ref.spy`, `ref.spf`, the block comment above `let spl = null;` and the Method tab item "Tension (SPL-TY, SPL-TF)".
+- **Problem:** the tension chord splice was rated concentric with the member factors: SPL-TY = φ<sub>y</sub>ΣF<sub>y</sub>A<sub>g</sub> (φ<sub>y</sub> = 0.95) and SPL-TF = φ<sub>u</sub>UΣF<sub>u</sub>A<sub>n</sub> (φ<sub>u</sub> = 0.80). LRFD 10th Ed. 6.14.2.8.6 rates the tension splice in the same eccentric form as the compression splice, with the chord-splice factor φ<sub>cs</sub>: Eq. 6.14.2.8.6-3 on the gross section (F<sub>y</sub>, S<sub>g</sub>, A<sub>g</sub>, e<sub>p</sub>) and Eq. 6.14.2.8.6-4 on the net section (F<sub>u</sub>, S<sub>n</sub>, A<sub>n</sub>, e<sub>p</sub>). The old form was unconservative (validation model: 44 % lower capacity now). Fix log C14.1 had marked the tension form "not confirmed"; LRFD 10th Ed. now settles it.
+- **Before (code):**
+```js
+          return { i, Q, segs, Lg, Ln, cross, parts, Rn: parts.reduce((s, z) => s + z.Fu * z.An, 0) * p.U }; });
+    function capSPY() { const z = spl, phi = p.phiY, Rn = z.S.Py, C = phi * Rn;
+    function capSPF() { const z = spl, phi = p.phiU, gov = z.net.reduce((a, q) => q.Rn < a.Rn ? q : a), C = phi * gov.Rn;
+```
+- **After (code, calculation lines; the display rows are new text around them):**
+```js
+        const dnS = Math.max(G[i0].dn, G[i1].dn), capOn = p.capAnOn >= 0.5, FuMin = Math.min(...els.map(q => q.Fu));
+          const kG = parts[0].An0 > 1e-12 ? parts[0].An / parts[0].An0 : 1, nst = [...ivn.map(([a, b]) => ({ w: sumT * kG, y0: a, y1: b })),
+            ...cross.map(h => { const sh = dot(sub([h.x, h.y], Q), nrm); return { w: -sumT * kG, y0: sh - h.dn / 2, y1: sh + h.dn / 2, hole: 1 }; }),
+            ...els.filter(q => q.kind !== 'gusset').map((q, k) => ({ w: q.w * (parts[k + 1].Ag > 1e-12 ? parts[k + 1].An / parts[k + 1].Ag : 0), y0: q.y0, y1: q.y1 }))];
+          (nA, nyb, nI = area, centroid, inertia of nst; nc = distance from nyb to the extreme fibre on the side of the chord force; nS = nI / nc)
+          const den = 1 / nA + (isFinite(nS) ? ne / nS : 0);
+          return { i, Q, segs, Lg, Ln, cross, parts, An: nA, yb: nyb, In: nI, cn: nc, en: ne, Sn: nS, den, Rn: p.U * FuMin / den }; });
+    function capSPY() { const z = spl, phi = p.phiCS, den = 1 / z.S.A + (isFinite(z.Se) ? z.e / z.Se : 0), Rn = z.FyMin / den, C = phi * Rn;
+    function capSPF() { const z = spl, phi = p.phiCS, gov = z.net.reduce((a, q) => q.Rn < a.Rn ? q : a), C = phi * gov.Rn;
+```
+- **Governing provision:** AASHTO LRFD BDS 10th Ed. (2024) Art. 6.14.2.8.6, Eqs. 6.14.2.8.6-3 and 6.14.2.8.6-4 (φ<sub>cs</sub> per Art. 6.5.4.2). The tool keeps φ<sub>cs</sub> = 0.85, the MBE rating value (engineer decision 2026-10-19; LRFD design value 0.65 not used). MBE 3rd Ed. 6A.6.12.6.9 equation numbers: verify (MBE not in references).
+- **Decisions (pending engineer review):**
+  1. **Net section location:** S<sub>n</sub> and A<sub>n</sub> are taken on the line through the first fastener row of each chord, perpendicular to the chord (the lines the tool already used for SPL-TF), the lower of the two governing. The holes on the gusset line are removed at their positions, so the net centroid and S<sub>n</sub> follow the holes. Splice plates enter at their own position with A<sub>n</sub>/A<sub>g</sub> (their hole positions are not entered). Where the A<sub>n</sub> ≤ 0.85 A<sub>g</sub> cap governs an element, that element is scaled uniformly (centroid kept).
+  2. **F<sub>y</sub>, F<sub>u</sub>:** the lowest of all plates crossing the line (the article names the gusset plate; lowest is conservative and matches SPL-C, which already used the lowest F<sub>y</sub>). Before, each element entered with its own F<sub>y</sub>, F<sub>u</sub>.
+  3. **U:** Eq. 6.14.2.8.6-4 has no shear-lag factor. The code parameter U (default 1.0) is kept as a further reduction if a user lowers it (conservative); with the default, the result is exactly Eq. -4.
+  4. LFR: unchanged (no splice check; FHWA-IF-09-014 not in references).
+- **Check case 1** (validation model, `chord = 'spliced'`, both chord members DC +200, DW +20, LL +100, diagonal force 0; LRFR Inventory, γ 1.25/1.50/1.75):
+  - Gross section at the splice line: gusset 20.0 in long (y −8 to +12 from the chord work line) × Σt 1.0 in: A<sub>g</sub> = 20.0 in², ȳ = e<sub>p</sub> = 2.000 in, I = 20³/12 = 666.67 in⁴, c = 2 + 8 = 10.0 in, S<sub>g</sub> = 66.667 in³. Demand N = DC 200, DW 20, LL 100 (tension).
+  - **SPL-TY before:** 0.95 × 36 × 20.0 = 684.0 kip; RF = (684.0 − 250 − 30)/175 = **2.309**.
+  - **SPL-TY after:** 0.85 × 36 / (1/20 + 2/66.667) = 30.6/0.0800 = **382.5 kip**; RF = (382.5 − 280)/175 = **0.586**.
+  - **SPL-TF line 1** (first fastener line of CR, 1.5 in from the WP): gusset line 21.5 in (y −8 to +13.5), two holes d<sub>h</sub> + 1/16 = 1.000 in at y = −5 and 0. A<sub>n0</sub> = 19.5, cap 0.85 × 21.5 = 18.275 governs (scale 0.93718). ȳ<sub>n</sub> = (21.5 × 2.75 + 5 − 0)/19.5 = 3.288 in; I<sub>n</sub> = 0.93718 × (828.17 + 6.23 − 68.78 − 10.90) = 707.3 in⁴; c = 3.288 + 8 = 11.288 in; S<sub>n</sub> = 62.66 in³. R<sub>n</sub> = 58/(1/18.275 + 3.288/62.66) = 58/0.10720 = 541.0 kip. Line 2 (CL): 582.9 kip. **After:** 0.85 × 541.0 = **459.9 kip**, RF = (459.9 − 280)/175 = **1.028**. **Before:** 0.80 × 1.0 × 58 × 15.725 (line 2) = 729.6 kip, RF **2.569**.
+- **Check case 2** (default project, `chord = 'spliced'`): A<sub>g</sub> = 46.625 in², e = 14.31 in, S<sub>g</sub> = 362.3 in³. SPL-TY 1594.6 → **502.0 kip**, RF LRFR Inv 0.861 → **−0.486** (Operating 1.116 → −0.630). SPL-TF 1838.9 → 610.1 kip, RF Inv 1.162 → −0.353. That model is already governed by L2-U1-FS at −0.519 (unchanged).
+- **How verified:** headless Chromium, file://, `GPR.compute` on 16 review cases, main vs branch: only SPL-TY / SPL-TF capacities and RFs moved, in the four spliced cases (default spliced, default spliced RIDOT, validation spliced in tension / compression / non-concurrent); every other value of every case identical (default, validation, punched holes, bolts, LRFR only, LFR only, variant of the review §2.3, …). Validation tab: 17 of 17 hand values unchanged (the validation model has a continuous chord). `node tests/check-syntax.mjs`, `tests/smoke/project-library.mjs --tool gusset`, `tests/smoke/phone-layout.mjs --tool gusset`: pass. No console errors on any tab, report included.
+- **Saved data:** no key or format change.
+- **Other copies:** none.
+- **Open items:** C14.7-1 (MBE wording of the splice equations, φ<sub>cs</sub>) stays with the engineer: verify (MBE not in references).
+
+## 2026-11-07 — PR: claude/gusset-h2-lmid (PR #1031: https://github.com/mlococo88/All-Structural/pull/1031) — LRFR Whitmore buckling: L<sub>mid</sub> from the middle of the Whitmore section (LRFD 10th Ed. 6.14.2.8.4) by default; the average of three kept as an option (H2; §4, reverses C4.4, decision pending engineer review)
+
+From the code-compliance review of 2026-11-07 (finding H2). Engineer asleep, merge-as-you-go approved; no questions asked.
+
+### H2. L<sub>mid</sub> for LRFR = the length from the middle of the Whitmore section   [§4: definition of L<sub>mid</sub>; new code parameter `lmidAvg`]
+- **Where:** `compute()`, Whitmore block, anchor `W.LmidAuto = (W.L3[0].L + W.L3[1].L + W.L3[2].L) / 3` (old) / `W.LmidMid = W.L3[1].L` (new); `capWB()` (first line and the L<sub>mid</sub> row); `PARAMS` (rows `K` and the new `lmidAvg`); the C8 warning (`W.LmidAlt`); Summary "Whitmore sections and L<sub>mid</sub>" table; Method tab item "L<sub>mid</sub>"; `HAND` label of the L<sub>mid</sub> row.
+- **Problem:** LRFR Whitmore buckling used L<sub>mid</sub> = the average of the three lengths from the two ends and the middle of the Whitmore section, with K = 0.5. LRFD 10th Ed. 6.14.2.8.4 defines L<sub>mid</sub> as the distance from the **middle** of the Whitmore section to the nearest member fastener line in the member direction, and its Eq. 6.14.2.8.4-2 (factor 3.29 = π²/(0.5² × 12)) builds in K = 0.5 (C6.14.2.8.4). The three-length average is the FHWA-IF-09-014 method, which pairs it with K = 1.2 (FHWA not in references: verify). The engineer confirmed the average on 2026-10-05 (C4.4) without the specification at hand; this change reverses that confirmation.
+- **Decision (pending engineer review):**
+  1. LRFR default: the middle length L<sub>2</sub> (LRFD 10th Ed. 6.14.2.8.4) with K = 0.5.
+  2. The previous rule stays selectable: code parameter `lmidAvg` = 1 ("average of the lengths from the two ends and the middle", labelled FHWA-IF-09-014, pairs with K = 1.2, verify). Choosing it does not change K; the note tells the user to set K to the value it pairs with.
+  3. LFR unchanged: the average with K<sub>LFR</sub> = 1.2.
+  4. An L<sub>mid</sub> override still replaces the value for both methods, as before.
+  5. **Saved data:** no migration. Projects saved before this change have no `lmidAvg` in `code` and open with the LRFD middle length. Reason: the old LRFR rule is not the LRFD 10th Ed. definition, and keeping it silently would hide the change; a project can return to it with `lmidAvg` = 1. No key or format change.
+- **Before:**
+```js
+        W.LmidAuto = (W.L3[0].L + W.L3[1].L + W.L3[2].L) / 3; W.ovL = ovr(m.ovr.lmid); W.Lmid = W.ovL ?? W.LmidAuto;
+    function capWB(g, meth) { const lrfr = meth === 'lrfr', W = g.W, K = lrfr ? p.K : p.KL, phi = lrfr ? p.phiC : p.phiCL, E = p.E, L = W.Lmid; let Pn = 0; const per = [];
+```
+- **After:**
+```js
+        W.LmidAvg = (W.L3[0].L + W.L3[1].L + W.L3[2].L) / 3; W.LmidMid = W.L3[1].L; W.avgL = p.lmidAvg >= 0.5;
+        W.LmidAuto = W.avgL ? W.LmidAvg : W.LmidMid; W.ovL = ovr(m.ovr.lmid); W.Lmid = W.ovL ?? W.LmidAuto; W.LmidF = W.ovL ?? W.LmidAvg;
+    function capWB(g, meth) { const lrfr = meth === 'lrfr', W = g.W, K = lrfr ? p.K : p.KL, phi = lrfr ? p.phiC : p.phiCL, E = p.E, L = lrfr ? W.Lmid : W.LmidF, avg = !lrfr || W.avgL; let Pn = 0; const per = [];
+```
+  New `PARAMS` row after `K`: `['lmidAvg', 'lrfr', 'LRFR plate resistances', 'L_{mid}', 'L_mid for LRFR Whitmore buckling: 0 = from the middle … ; 1 = average …', 0, '', 'LRFD 10th Ed. 6.14.2.8.4; FHWA-IF-09-014 (verify)', 1, …]`.
+- **Governing provision:** AASHTO LRFD BDS 10th Ed. (2024) Art. 6.14.2.8.4, Eq. 6.14.2.8.4-2 and C6.14.2.8.4 (K = 0.5). MBE 3rd Ed. 6A.6.12.6.8: verify (MBE not in references).
+- **Check case** (default project, L2-U1, LRFR Inventory HL-93): L<sub>1</sub> / L<sub>2</sub> / L<sub>3</sub> = 5.533 / 19.112 / 8.384 in; per plate A<sub>g</sub> = 25.570 × 0.5 = 12.785 in², r = 0.5/√12 = 0.14434 in.
+  - **Before:** L<sub>mid</sub> = (5.533 + 19.112 + 8.384)/3 = 11.010 in; KL/r = 38.14; P<sub>e</sub> = 2515.5, P<sub>o</sub> = 460.26, P<sub>n</sub> = 426.3 kip per plate; φP<sub>n</sub> = 0.90 × 2 × 426.3 = **767.4 kip**; RF = (767.4 − 187.5 − 36.0)/262.5 = **2.072**.
+  - **After:** L<sub>mid</sub> = **19.112 in**; KL/r = 0.5 × 19.112/0.14434 = 66.21; P<sub>e</sub> = π² × 29000 × 12.785/66.21² = 834.8 kip; P<sub>e</sub>/P<sub>o</sub> = 1.814 ≥ 0.44; P<sub>n</sub> = 0.658<sup>1/1.814</sup> × 460.26 = 365.4 kip per plate; φP<sub>n</sub> = 0.90 × 2 × 365.4 = **657.8 kip**; RF = (657.8 − 187.5 − 36.0)/262.5 = **1.654**. Governing LRFR stays L2-U1-FS 1.172. LFR WB 576.3 kip, RF 1.403: unchanged.
+- **RFs that moved (main vs branch, 18 review cases):** only LRFR WB capacities and RFs. Governing value changed in: review §2.3 variant (Inventory SP1-Y 1.231 → L2-U1-WB 1.082; Legal 1.857 → 1.632), 1 in A325 bolts (SP1-Y 1.762 → L2-U1-WB 1.654), A502 Gr. 1 rivets (L2-U1-FS 1.700 → L2-U1-WB 1.654), 3/8 in plates (SP1-Y 1.109 → L2-U1-WB 0.719). Spliced validation models: CL/CR-WB 463.3 / 508.1 → 403.1 kip. With `lmidAvg` = 1 every value equals main. Every LFR value is unchanged in every case.
+- **Validation tab:** 17 of 17 match. The L<sub>mid</sub> row keeps its hand value 20.000 in (in that model the middle length and the average are equal); only its label now names the middle length (intentional, follows the definition).
+- **How verified:** headless Chromium, file://, `GPR.compute` main vs branch on the review cases; every tab rendered (calc sheet included), 0 console errors; `node tests/check-syntax.mjs`, `tests/smoke/project-library.mjs --tool gusset`, `tests/smoke/phone-layout.mjs --tool gusset`: pass.
+- **Other copies:** none.
+- **Open items:** the engineer to confirm the reversal of C4.4 and the K to pair with the average if `lmidAvg` = 1 (FHWA-IF-09-014 / MBE not in references).
