@@ -3912,7 +3912,7 @@ function getInputs() {
     heel_basis: s('heel_basis') || 'std', uplift_mode: s('uplift_mode') || 'uniform',
     mu, useShearKey: b('use_shear_key'), dk: n('dk'), inclPassive: b('incl_passive'),
     key_bk: n('key_bk') > 0 ? n('key_bk') : 12,   // RWSK (2026-11-07): key width (in)
-    fnd: rwPileInputs(),   // RWPL (2026-11-07): foundation type and pile rows (Phase 8); type 'spread' = as before
+    ...(() => { const fd = rwPileInputs(); return fd.type === 'pile' ? { fnd: fd } : {}; })(),   // RWPL (2026-11-07): foundation type and pile rows (Phase 8); present only on piles, so a spread footing's inputs are as before
     // Barrier / railing on top of stem (adds weight + collision lever arm; retains NO soil)
     bar_enable: b('bar_enable'),
     bar_h:      n('bar_h'),
