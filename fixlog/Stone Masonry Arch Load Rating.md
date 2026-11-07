@@ -1309,7 +1309,7 @@ if(/^H[3-6]$/.test(tag)){topic(arptInline(e,ctx).replace(/\$([_^])\{\\text\{([^{
 - **How verified:** `node tests/check-syntax.mjs` (all pass); `tests/smoke/phone-layout.mjs --tool arch` (pass); `tests/smoke/project-library.mjs --tool stonearch`: the only differences A vs B are the dashboard row text (the model JSON is identical on the default and after the test's input change); all 14 tabs on default / 30 ft / semicircle with 0 console errors; the table appears in the Report.
 - **Saved data:** no key or format change; the study is not saved (recomputed on open).
 
-## 2026-11-07 — PR: claude/stonearch-h2-barrel-cap — Wheel-load spread capped at the barrel width (BWC; review H-2)
+## 2026-11-07 — PR #1072: https://github.com/mlococo88/All-Structural/pull/1072 — Wheel-load spread capped at the barrel width (BWC; review H-2)
 
 ### BWC-1. Merged 6.4.2 distribution width ≤ barrel width   [§4 result change, MORE conservative]
 - **Problem (review H-2; open item of 2026-10-12, "Remaining", Art. 6.4.2 slab-width limit not applied):** under deep fill the merged distribution width exceeded the barrel, so part of each axle was spread onto ground beside the arch. One truck at the springing (H = 13.1 ft): 6 + 23 = 29 ft; two trucks at node 9 of the default (H = 9.43 ft): 16 + 16.5 = 32.5 ft, against a 24 ft barrel.
