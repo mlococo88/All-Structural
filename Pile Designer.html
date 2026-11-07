@@ -6461,6 +6461,26 @@ function CheckRow({
   }));
 }
 
+/* PDA-M2 (2026-11-07): Summary-of-results rows for the Module G code-limit items that are in R.geoChecks.pass
+   (micropile), so a failing item has its own row: bond length vs required and vs the practical minimum, the casing
+   plunge, the grout cover and the geometry consistency. [name, capacity (provided), unit, demand (required), pass, basis, report key]. */
+function gcSummaryRows(r, keys) {
+  const gc = r && r.geoChecks; if (!gc) return [];
+  const k = id => keys ? "gc/" + id : undefined;
+  const o = [
+    ["Code limit — effective bond length ≥ required", gc.Lb_eff, "ft", gc.Lb_req, !!gc.Lb_geoReq_ok, "AASHTO 10.9.3.5", k("Lb")],
+    ["Code limit — effective bond length ≥ practical minimum", gc.Lb_eff, "ft", gc.Lb_min_ft, !!gc.Lb_min_ok, "FHWA NHI-05-039", k("Lbmin")],
+    ["Code limit — casing plunge length", gc.L_plunge, "ft", Math.min(gc.plungeMin_dev, gc.L_bond), !!gc.plungeDev_ok, "FHWA NHI-05-039", k("pl")],
+    ["Code limit — grout cover around the bar", gc.grout_cover_in, "in", 0.5, !!gc.cover_ok, "FHWA NHI-05-039", k("cov")],
+    ["Code limit — geometry consistency", 1, "", gc.geomValid ? 0 : 1, !!gc.geomValid, "plunge ≤ bond, cased ≥ plunge", k("geo")]];
+  return o.map(x => keys ? x : x.slice(0, 6));
+}
+/* PDA-M2: when the overall status is "not satisfied" but every summary row passes, one row says so (never all PASS under a FAIL). */
+function sumFallbackRow(r, rows, keys) {
+  if (!r || r.allPass || rows.some(x => !x[4])) return null;
+  const x = ["Other check not satisfied (see the module status on the Summary tab)", 1, "", 1, false, "—"];
+  return keys ? x.concat([null]) : x;
+}
 /* Report summary: which numbered section/module each summary row belongs to. */
 function checkNoFor(name, pileType) {
   const n = String(name);
@@ -6470,6 +6490,7 @@ function checkNoFor(name, pileType) {
   if (/stability/i.test(n)) return "02";
   if (/Casing past active/i.test(n)) return "G";
   if (/^Uncased flexure/i.test(n)) return "G";   // F40 (O23)
+  if (/^Code limit/i.test(n)) return "G";        // PDA-M2
   if (/^Group/i.test(n)) return "11";            // F40 (O52)
   if (/Head fixity/i.test(n)) return pileType === "hpile" ? "06" : "02";
   if (/uplift|tension/i.test(n)) return pileType === "hpile" && /uplift/i.test(n) ? "01" : "09";
@@ -10200,6 +10221,8 @@ function rptResText(row, I, r) {
   if (r.lateralNoConv && I.pileType !== "iab" && PY_LAT_ROW.test(name)) return "p-y did not converge";
   if (I.pileType === "iab" && name === IAB_ELIG_LBL) return iabEligText(I, pass);
   if (/stability/i.test(name)) return pass ? "stable" : "unstable";
+  if (/geometry consistency/i.test(name)) return pass ? "consistent" : "inconsistent";   // PDA-M2
+  if (/^Other check not satisfied/.test(name)) return "see the module status";   // PDA-M2
   if (/^Required pile length/.test(name)) return "L = " + fmt(dem, 0) + " " + unit + " (not a ratio)";
   if (!(cap > 0) && Math.abs(dem) > 0 && !pass) return "capacity 0";
   return "D/C = " + fmt(cap > 0 ? Math.abs(dem) / cap : 0, 2);
@@ -10756,11 +10779,13 @@ function PrintReport({
   // F40 (O23 / O52): Summary of Results rows for the Module G uncased flexure (micropile)
   // and the group efficiency / block checks (Module 11), values and pass flags as on screen
   if (I.pileType !== "iab" && I.pileType !== "hpile" && r.geoChecks) resultRows.push(["Uncased flexure (below casing tip)", r.geoChecks.phiMn_uncased, "kip·ft", r.geoChecks.M_belowTip, r.geoChecks.uncasedFlex_pass, "AASHTO 10.9 / FHWA NHI-05-039"]);
+  if (I.pileType !== "iab" && I.pileType !== "hpile" && r.geoChecks) resultRows.push(...gcSummaryRows(r, false));   // PDA-M2
   if (I.pileType !== "iab" && r.group && r.group.enable) {
     const gRef = (r.group.capBasis === "hpile" || !!r.group.aashtoMP) ? "AASHTO 10.7.3.9" : "FHWA NHI-05-039";
     resultRows.push(["Group efficiency (\u03b7)", r.group.phiPn_geo_group, "kip", I.STL, r.group.geoGroup_pass, gRef]);
     if (r.group.block_pass !== undefined && r.group.blockComputed !== false) resultRows.push(["Group block", r.group.phiGroupBond, "kip", r.group.groupDemand, r.group.block_pass, gRef]);
   }
+  { const fb = sumFallbackRow(r, resultRows, false); if (fb) resultRows.push(fb); }   // PDA-M2
   // UI: running footer on every printed sheet -- project / job / pile type at
   // left, "Sheet x of y" at right (CSS @page margin boxes; Chromium 131+,
   // ignored harmlessly by browsers without support).
@@ -15883,6 +15908,7 @@ function pdrModel(I, r, pyRes, pcr, sel) {
       return o; })()
     : [["Geotechnical bond resistance", r.geo.phiPn_geo, "kip", r.geo.demand, r.geo.pass, "AASHTO 10.9.3.5", "geo/dc"], ["Structural axial \u2014 cased", r.axial.phiRn_cased, "kip", I.STL, r.axial.cased_pass, "AASHTO 10.9.3.10.2a", "ax/cdc"], ["Structural axial \u2014 uncased", r.axial.phiRn_ucased, "kip", r.axial.Pu_unc != null ? r.axial.Pu_unc : I.STL, r.axial.ucased_pass, "AASHTO 10.9.3.10.2b", "ax/udc"], ["Casing flexure at joints", r.flex.phiMn, "kip\u00b7ft", r.flex.Mmax, r.flex.pass, "AASHTO 6.12.2.2.3", "fl/dc"], ["Combined loading (casing-only D/C)", 1.0, "", r.comb.interaction, r.comb.pass, "AASHTO 6.9.2.2.1", "cb/dc"], ...(r.cfst.enable && r.cfst.qualifies ? [["Combined loading (CFST axial)", r.cfst.Pr_cfst, "kip", r.cfst.Pu_cfst, r.cfst.cfst_axial_pass, "AASHTO 6.9.6.3.2", "cf/ax"], ["Combined loading (CFST P-M)", r.cfst.Mr_cfst, "kip\u00b7ft", r.cfst.Mmax, r.cfst.cfst_pm_pass, "AASHTO 6.9.6.3.4", "cf/pm"]] : []), ["Pile head bearing", r.bearing.phiPn, "kip", I.STL, r.bearing.pass, "AASHTO 5.6.5", "cap/brg"], ["Pile head punching shear", r.punch.phiVn, "kip", I.STL, r.punch.pass, "AASHTO 5.12.8.6.3", "pun/dc"], ...(r.tension.enable ? [["Geotechnical uplift", r.tension.phiPn_up, "kip", r.tension.Tu, r.tension.geoUp_pass, "AASHTO 10.5.5.2.5", "ten/geo"], ["Structural tension", r.tension.phiPn_tension_total, "kip", r.tension.Tu, r.tension.strUp_pass, "AASHTO 10.9.3.10.3", "ten/str"]] : []), ...(r.buckling.enable ? [["Buckling \u2014 unsupported length", r.buckling.phiPn_buck, "kip", I.STL, r.buckling.buck_pass, "AASHTO 6.9.4", "bk/dc"]] : []), ...(r.stability && r.stability.checked ? [["Combined-loading stability", r.stability.converged ? 1 : 0, "", r.stability.pass ? 0 : 1, r.stability.pass, "AASHTO 6.9.4 / p-y", null]] : []), ...(r.casingExt.checked ? [["Casing past active moment zone", r.casingExt.tipBelowGrade, "ft", r.casingExt.zDecay, r.casingExt.pass, "FHWA NHI-05-039", "lat/cx"]] : []), ...(r.headFix && r.headFix.isFixedHead ? [["Head fixity \u2014 cap embedment", r.headFix.capEmbed_in, "in", r.headFix.embedReq_in, r.headFix.develops, "AASHTO 10.9 / detailing (" + fmt(r.headFix.kFix, 1) + "\u00d7D)", null]] : []), ["Load test \u2014 verification bar", r.tests.Pt_verf, "kip", r.tests.Pn_geo, r.tests.verf_pass, "FHWA NHI-05-039", "lt/verf"], ["Load test \u2014 proof bar", r.tests.Pt_proof, "kip", r.tests.STL, r.tests.proof_pass, "FHWA NHI-05-039", "lt/proof"]];
   if (!isIAB && !isHP && r.geoChecks) rows.push(["Uncased flexure (below casing tip)", r.geoChecks.phiMn_uncased, "kip\u00b7ft", r.geoChecks.M_belowTip, r.geoChecks.uncasedFlex_pass, "AASHTO 10.9 / FHWA NHI-05-039", "gc/unc"]);
+  if (!isIAB && !isHP && r.geoChecks) rows.push(...gcSummaryRows(r, true));   // PDA-M2
   if (!isIAB && r.group && r.group.enable) { const gRef = (r.group.capBasis === "hpile" || !!r.group.aashtoMP) ? "AASHTO 10.7.3.9" : "FHWA NHI-05-039";
     rows.push(["Group efficiency (\u03b7)", r.group.phiPn_geo_group, "kip", I.STL, r.group.geoGroup_pass, gRef, "grp/etadc"]);
     if (r.group.block_pass !== undefined && r.group.blockComputed !== false) rows.push(["Group block", r.group.phiGroupBond, "kip", r.group.groupDemand, r.group.block_pass, gRef, "grp/blk"]); }
@@ -16135,6 +16161,7 @@ function pdrModel(I, r, pyRes, pcr, sel) {
   }
 
   /* ---------- summary of checks (first) and the section list ---------- */
+  { const fb = sumFallbackRow(r, rows, true); if (fb) rows.push(fb); }   // PDA-M2
   const sumRows = rows.map(rw => { const [name, cap, unit, dem, pass, ref, key] = rw;
     return { cells: [name, { t: fmt(cap, name.includes("D/C") ? 2 : 1) + (unit ? " " + unit : ""), n: true }, { t: fmt(dem, name.includes("D/C") ? 3 : 2) + (unit ? " " + unit : ""), n: true }, { t: rptResText(rw, I, r), n: true }, ref, { t: pass ? "PASS" : "FAIL", cls: pass ? "ok" : "ng" }, key ? { t: "", key } : "\u2014"], cls: pass ? "" : "gov" }; });
   add("summary", sub(r.allPass ? "All checks satisfied" : "One or more checks not satisfied", [{ type: "table", wide: true, head: ["Check", "Capacity", "Demand", "Result", "Basis", "Status", "Worked in"], rows: sumRows },
