@@ -2472,15 +2472,15 @@ function sideFaceBlowoutCirc(combo, condA){
              ["chains",String(ev.length),"edge-row anchors in tension, grouped where closer than 6c_a1"]]}]};
 }
 /* BC-1: spread along the near edge of the anchors in the row nearest it (same row and tolerance as sfbEdgeDemand) */
-function bpSfbRowSpread(g, nearIsX){
-  const pos = nearIsX? (g.ca_x_pos<=g.ca_x_neg) : (g.ca_y_pos<=g.ca_y_neg);
+function bpSfbRowSpread(g, nearIsX, posOv){
+  const pos = (posOv!==undefined)? !!posOv : (nearIsX? (g.ca_x_pos<=g.ca_x_neg) : (g.ca_y_pos<=g.ca_y_neg));   /* BPM1: a given edge */
   const cv=g.pts.map(p=>nearIsX? p.x : p.y), av=g.pts.map(p=>nearIsX? p.y : p.x);
   const lead=pos? Math.max(...cv) : Math.min(...cv);
   const tol=1e-6+0.02*Math.max(g.sx||1,g.sy||1,1);
   const row=av.filter((v,i)=>Math.abs(cv[i]-lead)<=tol);
   return row.length>1? Math.max(...row)-Math.min(...row) : 0;
 }
-function sideFaceBlowout(nT, ca1, condA){
+function sideFaceBlowout(nT, ca1, condA, edgeOv){
   const C=S.conc, A=S.anchor, sp=anchorSpec(A.dia);
   const hef=A.hef, fc=Math.min(C.fc,10);
   const applies = ca1 < 0.4*hef;   /* §17.6.4.1 trigger */
@@ -2498,10 +2498,10 @@ function sideFaceBlowout(nT, ca1, condA){
   const phi = (condA===true)?0.75:0.70;
   const g=anchorGeom();
   /* spacing along the near edge: if the near edge is an x-edge, use y-spacing (along edge), else x-spacing */
-  const nearIsX = Math.min(g.ca_x_pos,g.ca_x_neg) <= Math.min(g.ca_y_pos,g.ca_y_neg);
+  const nearIsX = edgeOv? !!edgeOv.nearIsX : (Math.min(g.ca_x_pos,g.ca_x_neg) <= Math.min(g.ca_y_pos,g.ca_y_neg));   /* BPM1: edgeOv = the edge checked */
   /* BC-1 (2026-11-01): for a bolt circle s is the spread, along the edge, of the anchor row nearest that edge (the
      anchors of sfbEdgeDemand), not the whole pattern's extent (a grid row spans the whole extent, so a grid is unchanged) */
-  const sEdge0 = bpCircPattern()? bpSfbRowSpread(g, nearIsX) : (nearIsX ? (g.sy||0) : (g.sx||0));
+  const sEdge0 = bpCircPattern()? bpSfbRowSpread(g, nearIsX, edgeOv? edgeOv.pos : undefined) : (nearIsX ? (g.sy||0) : (g.sx||0));
   const groupApplies0 = (nT>1 && sEdge0>1e-6 && sEdge0 < 6*ca1);
   /* §17.6.4.1.1 corner factor: if c_a2 < 3·c_a1, N_sb of a SINGLE headed anchor
      is multiplied by (1 + c_a2/c_a1)/4 with 1.0 ≤ c_a2/c_a1 ≤ 3.0. c_a2 = the
@@ -2542,6 +2542,45 @@ function sideFaceBlowout(nT, ca1, condA){
        vars:[["s",fmt(sEdge,2)+" in","spacing of outer anchors along the edge"],
              ["\\alpha_{group}",fmt(alphaGroup,3),groupApplies?"1 + s/(6c_{a1}), §17.6.4.2":"1.0 (single anchor or s ≥ 6c_{a1})"]]}
     ]};
+}
+
+/* BPM1 (2026-11-07): SIDE-FACE BLOWOUT AT EVERY EDGE WITHIN 0.4h_ef (ACI 318-19 §17.6.4.1, §17.6.4.2). Before, only the
+   edge with the smallest c_a1 was checked, with the tension of the anchor row at that edge; a tension row at another edge
+   that is also closer than 0.4h_ef read 0. Now every edge with c_a1 < 0.4h_ef is checked with ITS c_a1 (and its c_a2 and
+   the spacing of its row, as sideFaceBlowout takes them for the nearest edge) against the tension of the anchor row
+   nearest THAT edge (the same row and tolerance as sfbEdgeDemand). The largest ratio governs. When it is the old edge
+   (or every ratio is 0) the old object is returned with the same numbers. Rectangular pedestal only (circular pier: BC-2). */
+function sfbRowAt(combo, g, k, sgn){
+  const per=combo.perAnchor||[];
+  const cv=per.map(p=>k==="x"? p.x : p.y);
+  if(!cv.length) return {N:0,n:0};
+  const lead=sgn>0? Math.max(...cv) : Math.min(...cv), tol=1e-6+0.02*Math.max(g.sx||1,g.sy||1,1);
+  let N=0,n=0; per.forEach((p,i)=>{ if(Math.abs(cv[i]-lead)<=tol && p.t>1e-9){ N+=p.t; n++; } });
+  return {N,n};
+}
+function sideFaceBlowoutEdges(combo, nT, condA){
+  const g=anchorGeom(), hef=S.anchor.hef;
+  const ca1=Math.min(g.ca_x_pos,g.ca_x_neg,g.ca_y_pos,g.ca_y_neg);
+  const base=sideFaceBlowout(nT, ca1, condA);
+  if(base.na) return base;
+  const old=sfbEdgeDemand(combo, g);
+  const nmOf=(k,sg)=>(sg>0?"+":"-")+k;
+  const edges=[{k:"x",s:+1,c:g.ca_x_pos},{k:"x",s:-1,c:g.ca_x_neg},{k:"y",s:+1,c:g.ca_y_pos},{k:"y",s:-1,c:g.ca_y_neg}]
+    .filter(e=>e.c>0 && e.c<0.4*hef);
+  const ev=edges.map(e=>{ const r=sfbRowAt(combo,g,e.k,e.s);
+    const o=sideFaceBlowout(nT, e.c, condA, {nearIsX:e.k==="x", pos:e.s>0});
+    return {name:nmOf(e.k,e.s), c:e.c, dem:r.N, nTen:r.n, obj:o, dcr:o.phiNsb>0? r.N/o.phiNsb : 0}; });
+  const baseD=base.phiNsb>0? old/base.phiNsb : 0;
+  let gov=null; ev.forEach(o=>{ if(o.dcr>baseD+1e-12 && (!gov || o.dcr>gov.dcr)) gov=o; });
+  const out=gov? Object.assign({},gov.obj,{demand:gov.dem,sfbEdge:gov.name}) : Object.assign({},base,{demand:old});
+  out.sfbEdges=ev.map(o=>({name:o.name,c:o.c,dem:o.dem,phiNsb:o.obj.phiNsb,dcr:o.dcr}));
+  out.sfbBase={phiNsb:base.phiNsb,dem:old,dcr:baseD};
+  out.steps=[{title:"Side-face blowout — every edge closer than 0.4h_ef",ref:"ACI 318-19 §17.6.4.1, §17.6.4.2",
+    lines:["0.4h_{ef}="+fmt(0.4*hef,2)+"\ \text{in}"].concat(ev.map(o=>"\text{edge }"+o.name+":\ c_{a1}="+fmt(o.c,3)+"\ \text{in},\ N_{ua}=\sum T_{row}="+fmt(o.dem,3)+"\ \text{kip}\ ("+o.nTen+"\ \text{in tension}),\ \phi N_{sbg}="+fmt(o.obj.phiNsb,3)+"\ \text{kip}\Rightarrow "+fmt(o.dcr,3)))
+      .concat(["\text{governing: edge }"+(gov? gov.name : (ev.find(o=>Math.abs(o.c-ca1)<1e-9)||{name:"(nearest)"}).name)]),
+    vars:[["rule","","each edge within 0.4h_ef is checked with its own c_a1, c_a2 and row spacing against the tension of the anchor row nearest that edge; the largest ratio governs"]]}]
+    .concat(out.steps||[]);
+  return out;
 }
 
 /* ---- SHEAR breakout §17.7.2 (toward the governing edge) ---- */
@@ -3621,7 +3660,7 @@ function comboCapacities(cc, combo){
   const tensPts = (combo.perAnchor||[]).filter(p=>p.t>1e-9);
   const tb = tensionBreakoutGroup(nT, ca_minT, combo.eccN_x, combo.eccN_y, tensPts, condAT);
   const ca1 = Math.min(g.ca_x_pos,g.ca_x_neg,g.ca_y_pos,g.ca_y_neg);
-  const sfb = bpCircPier()? sideFaceBlowoutCirc(combo, condAT) : sideFaceBlowout(nT, ca1, condAT);   /* BC-2 */
+  const sfb = bpCircPier()? sideFaceBlowoutCirc(combo, condAT) : sideFaceBlowoutEdges(combo, nT, condAT);   /* BC-2; BPM1: every edge within 0.4h_ef */
   /* ---- enveloped tension capacity -------------------------------------------
      THE DEMAND BASIS DIFFERS BY MODE, and ACI 318-19 Table 17.5.2 separates
      "individual anchor" from "anchor group" columns precisely for this reason:
@@ -3675,8 +3714,12 @@ function comboCapacities(cc, combo){
   /* SFB-1 (2026-10-23, engineer): §17.5.2.1(a) substitutes the anchor reinforcement
      for the concrete BREAKOUT strength only; side-face blowout (§17.6.4) is a
      separate mode at the head and stays checked with or without anchor reinforcement. */
+  /* BPM1: rectangular pedestal — the envelope keeps its old basis (ΣT of the group on the nearest edge's φN_sbg) and is
+     raised to the governing edge's ratio when that is larger: phiN = the governing edge's φN_sbg, demand scaled so that
+     N/φN = max(ΣT/φN_sbg,nearest, N_row/φN_sbg,governing). Unchanged when the nearest edge governs. */
+  const sfbEnvDem = (!sfb.na && !sfb.circ && sfb.sfbBase)? Math.max((combo.Tu_group||0)*sfb.phiNsb/sfb.sfbBase.phiNsb, sfb.demand) : undefined;
   if(!sfb.na) tensionModes.push({label:"Side-face blowout (φNsb)", ref:"§17.6.4", per:"group",
-    phiN:sfb.phiNsb, obj:sfb, dem:(sfb.circ? sfb.demand : undefined),   /* BC-2: circular pier — the governing edge chain's ΣT */
+    phiN:sfb.phiNsb, obj:sfb, dem:(sfb.circ? sfb.demand : (sfb.sfbEdge? sfbEnvDem : undefined)),   /* BC-2: circular pier — the governing edge chain's ΣT; BPM1 */
     why:"Blowout is evaluated for the anchors near the edge acting together."});
   /* plain rod with no head/nut and no JUSTIFIED anchor reinforcement → no
      cast-in tension load path (a provisional substitution is no load path) */
@@ -6858,7 +6901,7 @@ function allChecks(){
     if(cap.cageT && !cap.cageT.none) push("cgT","Anchor Reinf. Tension (pier cage)","§17.5.2.1(a)",cap.cageT.dcr,"tabConc");
     if(cap.cageV && !cap.cageV.na) push("cgV","Anchor Reinf. Shear (cage ties)","§17.5.2.1(b)",cap.cageV.dcr,"tabConc");
     /* SFB-1: side-face blowout is not replaced by anchor reinforcement */
-    if(!cap.sfb.na) push("sfb","Side-Face Blowout","§17.6.4",sfbEdgeDemand(c,CC.g)/cap.sfb.phiNsb,"tabConc");
+    if(!cap.sfb.na) push("sfb","Side-Face Blowout","§17.6.4",(cap.sfb.demand!==undefined? cap.sfb.demand : sfbEdgeDemand(c,CC.g))/cap.sfb.phiNsb,"tabConc");   /* BPM1 */
     push("stV","Steel Shear","§17.7.1",c.Vu_per/(cap.sv.phi*cap.sv.Vsa1*cap.sv.groutFac),"tabAnchor");
     if(!(S.vRebar.present && _J.v.justified) && !cap.cageVSub) push("sbk","Concrete Breakout (V)","§17.7.2",(cap.sbkDem!==undefined?cap.sbkDem:c.Vres)/cap.sbk.phiVcbg,"tabConc");
     push("pry","Pryout","§17.7.3",(cap.pryDem!==undefined?cap.pryDem:c.Vres)/cap.pry.phiVcpg,"tabConc");
@@ -6903,7 +6946,7 @@ function dcrMatrix(){
     if(cap.cageT && !cap.cageT.none) put("cgT","Cage (T)","§17.5.2.1(a)", cap.cageT.dcr);   /* BC-5 */
     if(cap.cageV && !cap.cageV.na) put("cgV","Cage ties (V)","§17.5.2.1(b)", cap.cageV.dcr);
     /* SFB-1: side-face blowout is not replaced by anchor reinforcement */
-    if(!cap.sfb.na) put("sfb","Side-face blowout","§17.6.4", sfbEdgeDemand(c,CC.g)/cap.sfb.phiNsb);
+    if(!cap.sfb.na) put("sfb","Side-face blowout","§17.6.4", (cap.sfb.demand!==undefined? cap.sfb.demand : sfbEdgeDemand(c,CC.g))/cap.sfb.phiNsb);   /* BPM1 */
     put("stV","Steel shear","§17.7.1", c.Vu_per/(cap.sv.phi*cap.sv.Vsa1*cap.sv.groutFac));
     if(!(S.vRebar.present && _J.v.justified) && !cap.cageVSub) put("sbk","Breakout (V)","§17.7.2", (cap.sbkDem!==undefined?cap.sbkDem:c.Vres)/cap.sbk.phiVcbg);
     put("pry","Pryout","§17.7.3", (cap.pryDem!==undefined?cap.pryDem:c.Vres)/cap.pry.phiVcpg);
@@ -7992,6 +8035,10 @@ function buildConcTab(pg){
         {load:cap.sfb.demand*forceFactor(),cap:cap.sfb.phiNsb*forceFactor(),unit:forceUnit(),
          loadSym:"N_ua,edge",capSym:"\u03c6N_sbg",
          basis:"edge-row anchors in tension at the circular edge, chain "+cap.sfb.chain.join(", ")+" (\u00a717.6.4.2)"});
+      else if(cap.sfb.sfbEdge) dcrBox(body,cap.sfb.demand/cap.sfb.phiNsb,false,   /* BPM1: a farther edge governs */
+        {load:cap.sfb.demand*forceFactor(),cap:cap.sfb.phiNsb*forceFactor(),unit:forceUnit(),
+         loadSym:"N_ua,edge",capSym:"\u03c6N_sbg",
+         basis:"anchor row in tension nearest the "+cap.sfb.sfbEdge+" edge (\u00a717.6.4.1, \u00a717.6.4.2)"});
       else dcrBox(body,c.Tu_group/cap.sfb.phiNsb,false,
         {load:c.Tu_group*forceFactor(),cap:cap.sfb.phiNsb*forceFactor(),unit:forceUnit(),
          loadSym:"N_ua",capSym:"\u03c6N_sb",
@@ -9647,7 +9694,7 @@ function openAnchorDetail(p, c, cap){
   const grows=[];
   if(!S.tRebar.present){
     grows.push(["Concrete breakout (tension)","§17.6.2", c.Tu_group, cap.tb.phiNcbg]);
-    if(!cap.sfb.na) grows.push(["Side-face blowout","§17.6.4", sfbEdgeDemand(c, (typeof CC!=="undefined"&&CC)?CC.g:anchorGeom()), cap.sfb.phiNsb]);
+    if(!cap.sfb.na) grows.push(["Side-face blowout","§17.6.4", (cap.sfb.demand!==undefined? cap.sfb.demand : sfbEdgeDemand(c, (typeof CC!=="undefined"&&CC)?CC.g:anchorGeom())), cap.sfb.phiNsb]);   /* BPM1 */
   }
   grows.push(["Pryout","§17.7.3", c.Vres, cap.pry.phiVcpg]);
   if(!S.vRebar.present) grows.push(["Concrete breakout (shear)","§17.7.2", (cap.sbkComp && cap.sbkDem!==undefined)? cap.sbkDem : c.Vres, cap.sbk.phiVcbg]);   /* BPH1 */
@@ -10732,7 +10779,7 @@ function profisResultsTable(body, c, cap, which){
         loadA:Tmax, capA:cap.tb.phiNcbg/nT, loadG:Tgrp, capG:cap.tb.phiNcbg});
     }
     /* SFB-1: side-face blowout stays, with or without anchor reinforcement */
-    if(!cap.sfb.na){ const Nedge=sfbEdgeDemand(c, CC? CC.g : anchorGeom());
+    if(!cap.sfb.na){ const Nedge=(cap.sfb.demand!==undefined)? cap.sfb.demand : sfbEdgeDemand(c, CC? CC.g : anchorGeom());   /* BPM1 */
       rows.push({mode:"Concrete Side-Face Blowout", basis:"group",
         loadA:Tmax, capA:cap.sfb.phiNsb/nT, loadG:Nedge, capG:cap.sfb.phiNsb}); }
     if(S.tRebar.present){
