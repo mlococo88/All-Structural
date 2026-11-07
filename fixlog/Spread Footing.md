@@ -6621,7 +6621,7 @@ index 50f3837..c2d5000 100644
 ### Open items
 - None.
 
-## 2026-11-07 — PR: claude/sf-wall-tab (PR #TBD) (SFWD-1: output tab "6W. Wall Design" for Wall elements; the walls' cards, their connection to the footing, dashboard / Report / drawing links moved there; display only, no result change)
+## 2026-11-07 — PR: claude/sf-wall-tab (PR #1162: https://github.com/mlococo88/All-Structural/pull/1162) (SFWD-1: output tab "6W. Wall Design" for Wall elements; the walls' cards, their connection to the footing, dashboard / Report / drawing links moved there; display only, no result change)
 
 ### SFWD-1. Wall Design tab   [display only] [no result change]
 - **Request (engineer, 2026-11-07):** "I also want to add an output tab for walls when a wall is used, I don't want it to be simply categorized as a pedestal. Then I want to do the structural checks for that wall as well." This PR is part (a): the tab, the move of the existing wall content, and the links. Parts (b)–(d) add the wall checks and graphics.
