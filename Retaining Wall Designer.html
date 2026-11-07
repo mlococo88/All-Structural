@@ -9717,6 +9717,7 @@ function renderRwReport() {
   if (RWRP.notesFor !== r) { RWRP.notesFor = r; RWRP.notes = rwrTabNotes(r); }   // RWRX: once per result
   rwrAddNotes(M, RWRP.notes);
   rwovAdd(M, r);   // RWOV: the overview figures after the Design summary
+  rwaxAdd(M, r);   // RWAX: the Analysis diagram figures in their sections; the appendix of tab figures
   RWRP.api = SharedReport.mount(T, M, { closed: RWRP.closed, onGoto: rwrGoto });
   RWRP.doc = RWRP.api.doc;
 }
@@ -9783,6 +9784,59 @@ function rwovAdd(M, r) {
   if (!Bd) items.push({ type: 'note', text: 'Section and elevation not included: the drawing sheets could not be built.' });
   const i = M.sections.findIndex(x => x.title === 'Design summary');
   M.sections.splice(i >= 0 ? i + 1 : 0, 0, { title: 'Overview of the wall', key: 'ov', subs: [{ title: '3D view, typical section and elevation', items }] });
+  return M;
+}
+/* RWAX (2026-11-07): the Analysis diagram tab's figures into the sections they illustrate (the service cross-section with the
+   reinforcement and pressure diagrams into the lateral-forces step; the collision elevation into the collision step), and an
+   appendix "Figures of the result tabs" listing every tab figure with the tab and card it comes from and a "see §" link to where it
+   is in this report (as Spread Footing SFRF #779 / CBC #798: the figures are in the sections that work them; the appendix lists
+   them, and names those that are only on screen). Display only. */
+let RWAX_N = 0;
+/* a copy of an on-screen SVG with ids of its own (a hidden duplicate id draws no arrowhead / pattern) */
+function rwaxUniq(svg) {
+  const t = '-rp' + (++RWAX_N), ids = new Set(); String(svg).replace(/\sid="([^"]+)"/g, (m, id) => { ids.add(id); return m; });
+  let s = String(svg);
+  ids.forEach(id => { const e = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    s = s.replace(new RegExp('(\\sid=")' + e + '"', 'g'), '$1' + id + t + '"').replace(new RegExp('url\\(#' + e + '\\)', 'g'), 'url(#' + id + t + ')').replace(new RegExp('href="#' + e + '"', 'g'), 'href="#' + id + t + '"'); });
+  return s;
+}
+function rwaxAdd(M, r) {
+  if (!M || !M.sections || !r || r.fatal) return M;
+  const isA = r.isAASHTO, stab = M.sections.find(x => x.key === 'stab');
+  const put = (re, item) => { const q = stab && stab.subs.find(x => re.test(x.title)); if (q && item) { const L = q.items, k = L.length && L[L.length - 1].type === 'note' && /^\[\[tab:/.test(L[L.length - 1].text || '') ? L.length - 1 : L.length; L.splice(k, 0, item); return true; } return false; };   // before the trailing "On screen" link
+  try {
+    put(isA ? /^Step 3 — Unfactored load components/ : /^Step 2 — Lateral driving forces/, { type: 'figure', svg: rwaxUniq(buildCrossSection(r)), src: ['Analysis diagram', 'Cross-Section — Reinforcement & Pressure Diagrams (Service Loads)', 'diagram'],
+      caption: 'Cross-section with the reinforcement and the service-load pressure diagrams (earth, surcharge, water, passive, bearing) — Analysis diagram tab[[tab:diagram| ↗]], to scale with a scale bar.' });
+  } catch (e) { console.warn('report cross-section:', e); }
+  if (isA && r.aashtoR && r.aashtoR.ct) try {
+    put(/^Step 7 — Vehicular collision load/, { type: 'figure', svg: rwaxUniq(buildElevationSVG(r)), src: ['Analysis diagram', 'Elevation — Vehicular Collision Distribution', 'diagram'],
+      caption: 'Elevation: distribution of the collision load along the wall (' + (r.aashtoR.ct.distMode === 'section' ? 'MassDOT §3.3.2.4, full section' : 'AASHTO 45° spread') + ') — Analysis diagram tab[[tab:diagram| ↗]], to scale with a scale bar.' });
+  } catch (e) { console.warn('report collision elevation:', e); }
+  // the appendix: every figure of the report that comes from a result tab, with its source and its place in this report
+  const SRC = [[/^Wall section \(as on the Overview tab\)/, ['Overview', 'Dimensioned Cross-Section', 'overview']],
+    [/^Service bearing pressure|^Governing AASHTO bearing combination/, ['Stability', 'Bearing pressure per combination (diagram, governing combination)', 'stability']],
+    [/Stability tab chart/, ['Stability', 'Bearing Pressure Distribution (chart)', 'stability']],
+    [/Stem design tab chart/, ['Stem design', null, 'stem']], [/Footing design tab chart/, ['Footing design', null, 'footing']],
+    [/^3D model tab/, ['3D model', 'Wall Geometry, Reinforcement & Pressures (default view)', 'threed']],
+    [/Drawings tab\[\[tab:drawings\| ↗\]\], sheet (\d)/, ['Drawings', null, 'drawings']]];
+  const rows = []; let n = 0;
+  M.sections.forEach((s, si) => (s.subs || []).forEach((q, qi) => (q.items || []).forEach(it => {
+    if (it.type !== 'figure') return;
+    let src = it.src; if (!src) { const m = SRC.find(([re]) => re.test(it.caption || '')); if (m) src = m[1]; }
+    if (!src) return;
+    if (src[2] === 'overview' && it.svg) it.svg = rwaxUniq(it.svg);   // the Overview tab's section: its marker ids were duplicated by this copy
+    if (!q.key) q.key = 'fig' + si + '-' + qi;
+    const what = String(it.caption || '').replace(/\[\[[^\]]*\]\]/g, '').replace(/\s+—.*$/, '').replace(/\s*\((?:Stability|Stem design|Footing design) tab chart\)/, '').split(/[.;](?:\s|$)| with its /)[0].replace(/^(.{100}\S*).+$/, '$1 …');
+    const mm = /sheet (\d)/.exec(it.caption || ''), card = src[1] || (mm ? 'sheet ' + mm[1] : what);
+    rows.push([String(++n), { t: src[0] + ' tab[[tab:' + src[2] + '| ↗]]' }, card, what, { t: s.title + ' — ' + q.title, key: q.key }]);
+  })));
+  const only = [['Drawings', 'sheets 2 and 3 (reinforcement details and bar schedule; loads and bearing pressure diagram), and the full sheets with border and title block', 'drawings'],
+    ['3D model', 'other load cases and combinations, the Factored load arrows, the section cut', 'threed'],
+    ['Stability', 'the bearing pressure of the other combinations (Combination selector)', 'stability']];
+  only.forEach(([t, w, k]) => rows.push(['–', { t: t + ' tab[[tab:' + k + '| ↗]]' }, w, 'on screen only', '—']));
+  if (rows.length) M.sections.push({ title: 'Appendix: figures of the result tabs', key: 'axF', part: 'Appendices', subs: [{ title: 'Where each tab figure is in this report', items: [
+    { type: 'table', wide: true, head: ['#', 'Tab', 'Card / sheet', 'Figure', 'In this report'], rows },
+    { type: 'note', text: 'Each figure is printed once, in the section that works what it shows; this list gives its source on screen and its place here. The last rows are views that are on screen only (interactive or one of several combinations).' }] }] });
   return M;
 }
 /* RWRP2: the result tabs' Plotly charts as figures, after the subsection they belong to (images from rwPlotImages, as the Export report) */

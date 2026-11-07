@@ -2367,3 +2367,30 @@ function renderStatus(r) {
 - **Decisions (pending engineer review):**
   - No Include box. If you want one, a new prefixed key or project field is needed: ask.
   - The snapshot has a white background (the screen has a dark one) for print.
+
+## 2026-11-07 — PR: claude/rw-report-appendix (PR #939: https://github.com/mlococo88/All-Structural/pull/939) (RWAX) — Report: the Analysis diagram figures in their sections; appendix "Figures of the result tabs"   [display only; no result change]
+- **Why:** engineer-approved 2026-11-06 (task 5, review Phase 5a: figures in their sections and an appendix of the tab figures, as SF SFRF #779 and CBC #798). Before, the Analysis diagram tab's figures were not in the Report, and nothing listed where each tab figure is.
+- **What:**
+  - **Figures in their sections:**
+    - The service cross-section with the reinforcement and pressure diagrams (`buildCrossSection`, Analysis diagram tab) goes into the lateral-forces step: ACI "Step 2 — Lateral driving forces", AASHTO "Step 3 — Unfactored load components".
+    - The collision elevation (`buildElevationSVG`, AASHTO with CT) goes into "Step 7 — Vehicular collision load".
+    - Both are placed before the step's "On screen" link, with a caption and a tab link.
+  - **Appendix "Figures of the result tabs"** (last, under "Appendices"). One table row per figure of the Report that comes from a result tab:
+    - #, the tab (link), the card or sheet, the figure, and "In this report" with a § link to its subsection.
+    - Then the views that are on screen only: Drawings sheets 2–3 and the full sheets; the other 3D load cases and combinations, Factored arrows and the cut; the bearing pressure of the other combinations.
+    - Each figure is printed once, in the section that works it.
+  - Copies of on-screen SVGs get their own ids (`rwaxUniq`: id, url(#…), href="#…"). This also fixes the §3.2 wall section, whose copy duplicated the Overview tab's 8 marker ids (`oh`, `oc`, `m-dn`, …). A hidden duplicate id can leave a copy without arrowheads. After the change: 0 duplicate ids in the page.
+- **Where:**
+  - New `RWAX_N`, `rwaxUniq`, `rwaxAdd` before `/* RWRP2: the result tabs' Plotly charts…`.
+  - `renderRwReport`: `rwaxAdd(M, r);` after `rwovAdd(M, r);`.
+  - Subsections holding a tab figure get a key (`fig<s>-<q>`) when they had none, for the § links.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Saved data (§5):** none.
+- **How verified:**
+  - origin/main vs branch, eight cases: `_R`, Export JSON, every localStorage key, tab text and DXF identical. The Report differs by the two figures and the appendix.
+  - 0 `§?`, 0 console errors, 0 duplicate ids (main: 8).
+  - Screenshots of the appendix, Step 3 with the cross-section and Step 7 with the collision elevation (AASHTO + CT) looked at.
+- **Other copies:** none.
+- **Decisions (pending engineer review):**
+  - The appendix is a list with links, not a second print of every figure. The figures are in their sections, as SF #779 moved them out of its appendix.
+  - Drawings sheets 2–3 are listed as on screen only (Print sheet / Print all).
