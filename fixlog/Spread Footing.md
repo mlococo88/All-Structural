@@ -6808,6 +6808,66 @@ index 50f3837..c2d5000 100644
   - Tests: see the PR. Screenshots, including 390 px for the wrapped items.
 - **Other copies:** none.
 
+## 2026-11-07 — PR: claude/sf-wall-beff (PR #1165: https://github.com/mlococo88/All-Structural/pull/1165) (SFWD-3: wall effective length b_eff for the out-of-plane loads, ACI 318-19 11.2.3.1 at the load and a 45° spread to the base; new inputs "Wall load application", "Bearing width b", "Spacing to adjacent concentrated loads"; top-section and per-ft dowel checks; CALCULATION CHANGE for Wall elements only)
+
+### SFWD-3. Effective wall length for out-of-plane loads   [CALCULATION CHANGE, Wall elements only; CLAUDE.md §4, §5]
+- **Request (engineer, 2026-11-07):** "If I have an out-of-plane moment at the top of the wall, how much of the wall length resists that load? Is it the whole wall?" SFWD-2 divided every out-of-plane force by the full wall length ℓ_w. It no longer does unless the engineer says the load is distributed over the full length.
+- **Provision read (ACI 318-19, p. 166 = PDF p. 168; paraphrased):** 11.2.3.1: unless an analysis shows otherwise, the horizontal wall length taken as effective for each concentrated load is not more than the smaller of the centre-to-centre distance between loads and the bearing width plus four times the wall thickness; it does not extend past vertical joints unless the design transfers forces across them. Errata (2022): nothing on Chapter 11.
+- **Inputs (Pedestals card, Wall only; `buildPedCards`, anchor `/* SFWD-3 (2026-11-07): how the out-of-plane load is applied`):** `peds[i].wallIn.load` ('conc' = "Concentrated, bearing width b", 'dist' = "Distributed over the full wall length"), `.bw` (b, in; blank = t), `.sLoad` (spacing to adjacent concentrated loads, in; blank = none). `newPed`: `load:'conc',bw:'',sLoad:''` (new projects: concentrated, b = t: conservative).
+- **Saved data (§5), `migrateState` (anchor `/* SFWD-3 (2026-11-07): wall load application`):** absent `load` → `'env'`; `bw`, `sLoad` absent → ''. **Decision (pending engineer review):** an older save gets *both* choices computed and the more conservative governs, separately for the out-of-plane P–M (base, top, dowels: the larger `allMax`) and for the out-of-plane shear (the larger V_u/φV_c). The select shows a third option "Older project: the more conservative of the two (choose one)" only while the value is 'env'; the wall card shows "Input needed: wall load application" at the top with both D/C values; the Check Summary condition "load application: input needed". Why both and not simply "concentrated": concentrated is not always the larger ratio. In `w769h` (in-plane V_y 120 k, ±6M_u,in/ℓ_w² large) b_eff,base = 66 < 72 in raises N per ft and the base P–M ratio falls 0.1074 → 0.1058 while the shear rises 0.185 → 0.202; `'env'` keeps 0.1074 and 0.202. No key or format change; no field is removed.
+- **Method (`sfdWallOOP`, anchor `/* SFWD-3 (2026-11-07, engineer: "If I have an out-of-plane moment`; the per-ft part is now `run(ldc,o)`):**
+  - Concentrated: b_eff,top = min(b + 4t, s, ℓ_w) (11.2.3.1). b_eff,base = min[min(b/2 + h, a₁) + min(b/2 + h, a₂), s, ℓ_w], h = element height (load at its top), a₁, a₂ = distances from the load point (load offset e along ℓ_w, `loadEx`/`loadEy`) to the two wall ends. **Decision (pending engineer review):** the 45° spread is common practice, not a code article. b_eff,base starts from b (as specified), so for a short thick wall it can be less than b_eff,top (hand check: 60 < 118 in; conservative). b_eff,top is not cut at the wall ends (11.2.3.1 limits it only by joints, which the tool does not model).
+  - Distributed: b_eff,top = b_eff,base = ℓ_w (SFWD-2 behaviour).
+  - Base section (every LRFD combination): N = P_u,a/b_eff,base + W_sw/ℓ_w ± 6M_u,in/ℓ_w² (P_u,a = factored applied load `pl.Pa`, W_sw = factored element self-weight, spread over ℓ_w: **Decision**); M = M_c/b_eff,base. Slenderness on the strip b_eff,base: P_u,strip = P_u,a + W_sw·b_eff,base/ℓ_w, I_g = b_eff,base t³/12, M_2,min = P_u,strip(0.6 + 0.03t) (δ unchanged where b_eff = ℓ_w).
+  - Out-of-plane shear per ft: V_u/b_eff,base (row field `LbV`).
+  - New: top section at the load, first order: N_top = P_u,a/b_eff,top ± 6M_u,in,top/ℓ_w², M_top = |M_app + P_u,a e|/b_eff,top, same per-ft section (ratio `rTop`).
+  - New: dowels at the base per ft: where the dowels are separate bars, A_s,dow = (n A_b/2)·12/ℓ_w per face at the vertical-bar depths (**Decision**), same N and M as the base (ratio `rDow`); where the vertical bars are the dowels, equal to the base ratio.
+  - "Wall out-of-plane P–M" governs on max(base, top, dowels) (`allMax`). In-plane checks, the footing and the soil still use the full wall and the full loads (unchanged).
+- **Display:** card 6W.n: "Wall: effective length for the out-of-plane load (b_eff)" worked (symbolic → substituted → result), a Decision item for the 45° spread; the base N / M with b_eff,base; P–M table columns "Top", "Dowels"; "top section at the load" and "dowels at the base" blocks; shear V_u/b_eff,base. Report `S-wd<i>`: steps `wo.bt`, `wo.bb`, `wo.N`, `wo.M`, `wo.Pc`, topic "Top section at the load and dowels at the base, per ft" (`wo.top`, `wo.dow`), `wo.V`. Dashboard chip text lists base / top / dowels and b_eff. "Not checked" list: "the spread of a concentrated load over the wall length (11.2.3.1 …)" replaced by "loads applied between the top and the base of the wall"; §11.2.3.1 removed from the "Wall checks" not-checked row.
+- **§4 callout (before / after):** out-of-plane demand per ft = force/ℓ_w → force/b_eff (b_eff,top at the top, b_eff,base at the base), ACI 318-19 (2019) Art. 11.2.3.1; 45° spread: Decision, no article.
+- **Hand check (case `wHC`: default project, L = 12 ft footing, Ped 1 wall 32 × 118 in (t = 32, ℓ_w = 118 in along y), h = 2 ft, 28 #6 (14 per long face), D.P = 60 k, L.M_y = 40 k-ft (out of plane), b = 12 in, no s; governing 1.2D + 1.6L + 0.5S):**
+  - b_eff,top = min(12 + 4·32, ∞, 118) = min(140, ∞, 118) = **118 in**.
+  - b_eff,base = min[min(6 + 24, 59) + min(6 + 24, 59), ∞, 118] = **60 in** = 5.000 ft.
+  - M_u,out = 1.6·40 = 64.00 k-ft. Per ft at the base: **64.00/5.000 = 12.80 k-ft/ft**; before: 64.00/9.833 = 6.51 k-ft/ft; **×1.967 (= 118/60)**.
+  - N = 168.00/5.000 + 9.44/9.833 ± 0 = 33.60 + 0.96 = 34.56 kip/ft (before 177.44/9.833 = 18.04).
+  - Section per ft: d′ = 2.375, A_s = 12·0.44/8.71 = 0.606 in²/ft per face. At N = 34.56: c = 2.244, a = 1.908 in, C_c = 77.83 k, ε_t = 0.0366, φ = 0.90, φM_n = 121.86 k-ft/ft → **ratio 12.80/121.86 = 0.105** (before 6.51/102.66 = **0.063**).
+  - Top: N = 168.00/9.833 = 17.08 kip/ft, M = 64.00/9.833 = 6.51 k-ft/ft, φM_n = 101.54 → 0.064 (new).
+  - Shear (1.2D + 1.0(+Wx) + L + 0.5S): V_u = 8.00/5.000 = 1.60 kip/ft, φV_c = 11.45 → **0.140** (before 8.00/9.833 = 0.814 → 0.071).
+  - Same wall distributed (`wHCd`): b_eff = 118 in, base 0.063 (= before), top 0.064, shear 0.071. Spacing s = 48 in (`wHCs`): b_eff = 48 / 48 in, 0.123 (top), shear 0.175. Load 3.5 ft off centre (`wHCe`): a₂ = 59 − 42 = 17 in, b_eff,base = 30 + 17 = 47 in, 0.181.
+- **How verified:** harness origin/main 8ebbbd0 vs the branch: 10 pedestal cases: R, P2, dashboard and Report text identical. `wSel` (Wall with ℓ_w/t ≤ 3): only the not-checked text. Wall cases as above; `wTall`, `wTallBr`, `wAll`, `wOOP` unchanged (b_eff,base = ℓ_w: h ≥ ℓ_w/2). Migration check: a save without the fields → 'env', the select shows it, 0 errors. 0 console errors, 0 KaTeX errors. Tests: see the PR.
+- **Other copies:** none.
+
+## 2026-11-07 — PR: claude/sf-torsion (PR #1164: https://github.com/mlococo88/All-Structural/pull/1164) (SFTQ: pedestal torsion threshold check per ACI 318-19 §22.7.1.1 / Table 22.7.4.1(a)(c), new optional input T_u; "not checked" note where T_u = 0; NEW CHECK, no existing result changes)
+
+### SFTQ. Pedestal torsion: threshold check and note   [NEW CHECK; CLAUDE.md §4, §5]
+- **Request (engineer, 2026-11-07):** "I think we just note that torsion is not checked, unless it's an easy check to add." Decision: add the easy part, the ACI 318-19 threshold check (torsion may be neglected where T_u < φT_th), plus a note. Torsion design (22.7.6, Chapter 9) is not built.
+- **Provisions read in the ACI 318-19 PDF (printed page + 2 = PDF page; paraphrased):**
+  - p. 421: 22.7.1.1: 22.7 applies where T_u ≥ φT_th; below it torsional effects may be neglected. 22.7.1.3: λ per 19.2.4.
+  - p. 421: 22.7.2.1: √f′c used for T_th and T_cr is limited to 100 psi.
+  - p. 423: 22.7.4.1: T_th from Table 22.7.4.1(a) (solid) or (b) (hollow); N_u positive in compression, negative in tension.
+  - p. 424: Table 22.7.4.1(a) row (c), nonprestressed member with axial force: T_th = λ√f′c (A_cp²/p_cp) √(1 + N_u/(4A_g λ√f′c)).
+  - p. 391: Table 21.2.1 row (c): torsion φ = 0.75.
+  - p. 157: 10.5.4.1: columns: where T_u ≥ φT_th, torsion is considered per Chapter 9. p. 133: 9.5.4.1 (neglect below φT_th; otherwise the minimum of 9.6.4 and the detailing of 9.7.5 and 9.7.6.3 apply).
+  - Errata (as of July 7, 2022): no item on 21.2, 22.7, 10.5.4 or 9.5.4.
+- **Input / saved data (§5):** new field `peds[i].Tu` (k-ft, factored), Pedestals card, row "Factored torsion T_u" after the load table (both load modes). It is a **direct factored value used as entered in every LRFD combination** (it is not added to the load-type table: that would need a T column in every load type and in the combination engine). `newPed`: `Tu:0`. `migrateState` (anchor `/* SFTQ (2026-11-07): factored torsion T_u; saves without the field`): absent / null / '' → 0. No key or format change; old saves open with torsion not checked, as before.
+- **Calculation (new function `sfdPedTorsion`, anchor `/* ---- SFTQ (2026-11-07, engineer:`; called in the P2 assembly after `sfdCrossties`, result `P2.pedTor`):**
+  ```js
+  const sq=Math.min(Math.sqrt(fc),100), Acp=pd.bx*pd.by, pcp=2*(pd.bx+pd.by), Ag=Acp, base=lam*sq*Acp*Acp/pcp;   // lb-in
+  // per LRFD combination: N = pl.Pa (factored applied axial at the pedestal top, kip; + compression)
+  const arg=1+N*1000/(4*Ag*lam*sq), Tth=arg>0?base*Math.sqrt(arg)/12000:0, phiTth=0.75*Tth;   // k-ft
+  ratio=phiTth>0?Tu/phiTth:Infinity; ok=Tu<phiTth;
+  ```
+  Governing = the largest ratio (smallest φT_th). Solid section, A_cp = A_g = b_x b_y, p_cp = 2(b_x + b_y). N_u = the same axial the pedestal shear uses (pedestal self-weight not counted: conservative in compression). Net tension with 1 + N_u/(4A_gλ√f′c) ≤ 0: T_th = 0 (NG for any T_u > 0). Wall elements and patch loads: not checked (walls are on the Wall Design tab).
+- **Before / after:** before, torsion was not mentioned. After: T_u = 0 or blank → a note only ("Torsion: not checked (no T_u entered) …", bold-lead items on the Pedestal Design tab, "• Lead: text." in the Report); no dashboard row. T_u > 0 → worked block on the pedestal card (symbolic → substituted → result), "Pedestal torsion" chip in the Check Summary (D/C = T_u/φT_th; PASS "torsion may be neglected" / FAIL "torsion exceeds the threshold: torsion design per §22.7 / closed ties per §9.5.4 required — not performed by this tool"), Report topic "Torsion threshold" with a per-combination table, and the Report summary row.
+- **Check case (default project; 18 × 18 in pedestals, f′c = 4000 psi, λ = 1.0; Ped 1 T_u = 5 k-ft, Ped 2 T_u = 40 k-ft; governing 0.9D + 1.0(+Wx)):**
+  - √f′c = 63.246 psi, A_cp = 324 in², p_cp = 72 in, A_cp²/p_cp = 1458 in³, λ√f′c A_cp²/p_cp = 92 212 lb-in.
+  - Ped 1: N_u = 0.9 · 120 = 108 k. 108 000/(4 · 324 · 1.0 · 63.246) = 1.3176; √2.3176 = 1.5224. T_th = 92 212 · 1.5224/12 000 = **11.70 k-ft**, φT_th = **8.77 k-ft**. D/C = 5/8.77 = **0.570 PASS**.
+  - Ped 2: N_u = 0.9 · 150 = 135 k. 1 + 135 000/81 967 = 2.6470; √ = 1.6270. T_th = **12.50 k-ft**, φT_th = **9.38 k-ft**. D/C = 40/9.38 = **4.266 FAIL**.
+  - Before: not checked (no value).
+- **How verified:** SF harness (19 existing cases + `tq` above + `tqDir`, direct mode, Ped 1 T_u = −6 → |T_u| = 6, N_u = 264 k: φT_th = 11.84, D/C 0.507) on origin/main vs the branch: with T_u = 0 every R and P2 value identical (only the new `P2.pedTor` key), dashboard text identical, Report adds only the note; 0 console errors, 0 KaTeX errors. Old save without `Tu` migrates to 0; entering 40 in the input gives D/C 4.266. Tests: see the PR.
+- **Other copies:** none.
+- **Open items:** torsion design (22.7.6, A_t/s, A_ℓ, 9.6.4, 9.7.5) not performed; hollow sections (Table 22.7.4.1(b)) not offered (pedestals are solid).
+
 ## 2026-11-07 — PR: claude/sf-notes-split (PR #PRA) (SFNL-1: long notes as a bold lead and a list — input tabs, Schematic, Load Combinations, Bearing, LRFD reference boxes, 3D View, Drawings; display only, no result change)
 
 ### SFNL-1. Long notes split into a lead line and a list   [display only] [no result change]
