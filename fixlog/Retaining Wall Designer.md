@@ -2469,3 +2469,122 @@ Calculation audit, item 1. Engineer decision (2026-11-07): no calculation change
 ### How verified
 - origin/main vs branch, eight walls (ACI default; ACI water uniform; ACI water triangular at 2 ft; ACI water + k_h + column + q_s + β + key + passive; AASHTO with barrier + collision; AASHTO water + column + η 1.05 + at-rest + passive; AASHTO rock + collision (γ_EH,CT 0) + water + β; tall ACI wall with k_h and water): `_R`, Export JSON, every localStorage key and the Report model identical in all eight; the Footing design tab text and the Report text differ only by the note, in the four ACI cases with water; the four other cases identical; 0 console errors.
 - Tests: check-syntax, `tests/smoke/retaining-wall-checks.mjs`, phone-layout rwall 390 / 768, project-library retwall, dxf-print-sheets rw: all pass.
+
+## 2026-11-07 — PR: claude/rw-aashto-es-vertical — AASHTO: the dead surcharge on the heel q_s·L_h (ES vertical) enters ΣV (RWES; calculation change) (PR #943: https://github.com/mlococo88/All-Structural/pull/943)
+
+Calculation audit, item 2. Engineer decision (2026-11-07): in AASHTO mode the vertical dead surcharge on the heel is a permanent earth surcharge ES. It takes γ = 1.50 where it adds load (bearing, footing-design pressure) and γ = 0.75 where it resists (sliding, eccentricity). Code sites are tagged `RWES`.
+
+### RWES-1. `calcAll`, AASHTO block: ES vertical in Strength I / Ia   [§4: result change when q_s > 0]
+- **Problem:** `V_ES_v` was 0 (comment "surcharge vertical not on heel here"). The lateral ES (`P_ES`, 1.50) and the heel's downward load (`heelCase`, γ_ES 1.50 max / 0.75 min) included q_s, but no vertical sum did. As a result:
+  - bearing was unconservative;
+  - the heel was loaded with ES and got no matching upward pressure, so it was over-designed;
+  - the toe was slightly under-designed;
+  - sliding and eccentricity gave no credit for ES (conservative).
+  Fix log F5 had recorded this as an assumption.
+- **Provision:** AASHTO LRFD 10th Ed. (2024):
+  - Table 3.4.1-2: ES maximum 1.50, minimum 0.75.
+  - Table 3.4.1-1: one factor for every effect of one load.
+  - C11.5.6 / Figs. C11.5.6-1 and -2: permanent loads take maximum factors for bearing and minimum factors for sliding and eccentricity; only the live surcharge over the heel is left out of sliding and eccentricity.
+- **Where (anchors):**
+  - `const V_ES_v =`
+  - `const CMB_S1A =`
+  - `const V_resist_min =`
+  - `const V_str_min =`
+  - `const Mr_str_min =`
+  - `const V_str_max_tot =` and its moment line
+  - the return line `CMB_S1, CMB_S1A, V_LS_v, x_LSv: xLSv,`
+- **Before / after** (`git diff -U0`):
+```diff
+@@ -2401 +2401,2 @@ function calcAll(inp) {
+-    const V_ES_v = 0;                            // (surcharge vertical not on heel here)
++    const V_ES_v = inp.q_sur * inp.Lh;           // RWES (2026-11-07): ES dead surcharge vertical over the heel (permanent; Table 3.4.1-2 ES 1.50 / 0.75), arm x_sur
++    const xESv  = x_sur;
+@@ -2429,2 +2430,2 @@ function calcAll(inp) {
+-    const CMB_S1A = { DC: 0.90, EV: 1.00, EH: gEH_min };   // Strength Ia, minimum vertical factors (RW3F)
+-    const V_resist_min = CMB_S1A.DC*(V_DC + W_bar) + CMB_S1A.EV*Wsoil + CMB_S1A.EH*Pa_tri_v + 0*V_LS_v - V_up;   // min vertical for sliding (net of uplift)
++    const CMB_S1A = { DC: 0.90, EV: 1.00, EH: gEH_min, ES: 0.75 };   // Strength Ia, minimum vertical factors (RW3F); ES min 0.75 (RWES)
++    const V_resist_min = CMB_S1A.DC*(V_DC + W_bar) + CMB_S1A.EV*Wsoil + CMB_S1A.EH*Pa_tri_v + CMB_S1A.ES*V_ES_v + 0*V_LS_v - V_up;   // min vertical for sliding (net of uplift); RWES: + 0.75 ES
+@@ -2440,2 +2441,2 @@ function calcAll(inp) {
+-    const V_str_min = CMB_S1A.DC*(V_DC + W_bar) + CMB_S1A.EV*Wsoil + CMB_S1A.EH*Pa_tri_v - CMB_S1.WA*V_up;  // min stabilizing vertical (net of uplift)
+-    const Mr_str_min = CMB_S1A.DC*(Wftg*x_ftg + Wstem*x_stem + W_bar*x_bar) + CMB_S1A.EH*Pa_tri_v*B + CMB_S1A.EV*Wsoil*x_soil - CMB_S1.WA*M_up;
++    const V_str_min = CMB_S1A.DC*(V_DC + W_bar) + CMB_S1A.EV*Wsoil + CMB_S1A.EH*Pa_tri_v + CMB_S1A.ES*V_ES_v - CMB_S1.WA*V_up;  // min stabilizing vertical (net of uplift); RWES: + 0.75 ES
++    const Mr_str_min = CMB_S1A.DC*(Wftg*x_ftg + Wstem*x_stem + W_bar*x_bar) + CMB_S1A.EH*Pa_tri_v*B + CMB_S1A.EV*Wsoil*x_soil + CMB_S1A.ES*V_ES_v*xESv - CMB_S1.WA*M_up;   // RWES: + 0.75 ES
+@@ -2458 +2459 @@ function calcAll(inp) {
+-    const V_str_max_tot = eta * (CMB_S1.DC*V_DC + CMB_S1.EV*Wsoil + CMB_S1.EH*Pa_tri_v + CMB_S1.LS*V_LS_v + CMB_S1.DC*W_bar) + V_col;
++    const V_str_max_tot = eta * (CMB_S1.DC*V_DC + CMB_S1.EV*Wsoil + CMB_S1.EH*Pa_tri_v + CMB_S1.LS*V_LS_v + CMB_S1.ES*V_ES_v + CMB_S1.DC*W_bar) + V_col;   // RWES: + 1.50 ES
+@@ -2460 +2461 @@ function calcAll(inp) {
+-                     + CMB_S1.LS*V_LS_v*xLSv) + V_col*x_col;
++                     + CMB_S1.LS*V_LS_v*xLSv + CMB_S1.ES*V_ES_v*xESv) + V_col*x_col;   // RWES: + 1.50 ES
+@@ -2674 +2675 @@ function calcAll(inp) {
+-      CMB_S1, CMB_S1A, V_LS_v, x_LSv: xLSv,   // RW3F (2026-11-06): the combination factors and the LS vertical, returned for the 3D view (exposure only)
++      CMB_S1, CMB_S1A, V_LS_v, x_LSv: xLSv, V_ES_v, x_ESv: xESv,   // RW3F (2026-11-06): the combination factors and the LS vertical, returned for the 3D view (exposure only); RWES (2026-11-07): + the ES vertical
+```
+- **Arms:** the ES arm is `x_sur` (the heel's centre, as for the service surcharge). `η` multiplies the maximum terms (Strength I), as it does for the other loads in `V_str_max_tot`; the minimum terms take no η, as before.
+- **What follows from it:**
+  - The Strength Ia footing trapezoid (`V_str_min_tot = V_str_min + V_up`) and the Strength I one (`V_str_max_tot`) now include ES.
+  - The heel's downward ES (1.50 / 0.75, unchanged and checked) is now matched by the upward pressure.
+  - Service I crack control is unchanged in method: `M_serv_heel` already had q_s at 1.0, and `M_serv_toe = |Mu_toe|/1.5` follows the toe.
+- **Not changed:**
+  - ACI mode.
+  - Extreme Event II (`V_ct_min`, `V_ct_max` with 0.5·W_sur), which is audit item 3 and gets its own PR.
+  - The stem.
+
+### RWES-2. Display (tabs, Report, Drawings table, 3D)   [shown only when q_s > 0]
+- **Stability tab (AASHTO):**
+  - Step 3 lists `V_ES = q_s L_h` with its factors.
+  - Step 4 R_R reads `+0.75 V_ES`.
+  - Step 5 M_r label reads `+ 0.75ES`.
+  - Step 6 V_u label reads `+ 1.50ES`, and the Strength Ia label reads `+ 0.75ES`.
+- **Report:**
+  - Step 3 adds the step `VES` (q_s L_h, arm, Table 3.4.1-2).
+  - The R_R, M_r, V_u (max) and Strength Ia labels and equations show the same terms as the tab.
+  - The footing-design V_u (Strength I) and V_u (Strength Ia) equations add `+ 1.50 ES_v` / `+ 0.75 ES_v`.
+- **Drawings loads table:** the row `ES  SURCHARGE OVER HEEL (VERTICAL)`, factors 1.50 / 0.75.
+- **3D view (`rw3Factors`):**
+  - the vertical surcharge arrow `SV` takes η·1.50 in Strength I and 0.75 in Strength Ia (before: 0);
+  - the Σγ·V = R check therefore still closes;
+  - Extreme Event II is unchanged (item 3).
+
+### Check case (AASHTO default + q_s = 250 psf; B = 12.5 ft, L_h = 8 ft, η = 1)
+- **ES vertical:**
+  - V_ES = 250 · 8 = 2000 lb/ft
+  - arm x = L_t + t_s + L_h/2 = 3 + 1.5 + 4 = 8.5 ft
+- **Bearing, Strength I:**
+  - V = 26878 + 1.50 · 2000 = 29878 lb/ft
+  - M_r = 206866 + 1.50 · 2000 · 8.5 = 232366 lb·ft/ft
+  - x̄ = (232366 − 54971)/29878 = 5.937 ft, so e = 0.313 ft (before 0.599)
+  - B′ = 12.5 − 2(0.313) = 11.875 ft
+  - q_u = 29878/11.875 = 2516 psf (before 2378); D/C 0.480 → 0.508
+- **Sliding:**
+  - V_min = 16076 + 0.75 · 2000 = 17576 lb/ft
+  - R_R = 17576 · tan 20° = 6397 lb/ft (before 5851)
+  - D/C = 9966/6397 = 1.558 (before 1.703; still FAIL)
+- **Eccentricity:**
+  - M_r = 121098 + 0.75 · 2000 · 8.5 = 133848 lb·ft/ft
+  - x̄ = (133848 − 54971)/17576 = 4.488 ft
+  - e = 1.762 ft (before 2.137; limit B/4 = 3.125)
+- **Heel:**
+  - Before, the Strength I case governed: w_u = 1.35(1440) + 1.25(225) + 1.50(250) + 1.75(357) = 3225 psf; M_down = 103200, M_up = 57470 (q 2323 → 1532 psf), so M_u = 45730 lb·ft/ft, #6 @ 7.
+  - After, the Strength Ia case governs: w_u = 1.00(1440) + 0.90(225) + 0.75(250) = 1830 psf; M_down = 58560, M_up = 23173 (q 1739 → 217 psf), so M_u = 35387 lb·ft/ft, #5 @ 6.
+  - The Strength I case after: q 2491 → 2031 psf, so M_u = 33301.
+- **Toe:** M_u 11101 → 11201 lb·ft/ft (#4 @ 10 unchanged).
+- **At q_s = 0 nothing changes.**
+
+### Saved data
+- No new field and no key change.
+- AASHTO projects with q_s > 0 give the new results when opened (this is the fix; no migration, by the engineer's decision).
+
+### How verified
+- The tool's own `calcAll` was run in Node, main vs branch, for:
+  - AASHTO q_s 0 and 250;
+  - q_s 250 + water;
+  - q_s 250 + η 1.05 + rock;
+  - ACI q_s 250.
+  The numbers are above. ACI is identical. The briefing's values (audit item 2, option A) are reproduced.
+- origin/main vs branch in headless Chromium, ten walls:
+  - **The eight audit walls** (ACI default; ACI water uniform; ACI water triangular; ACI water + k_h + column + q_s 250 + β + key + passive; AASHTO barrier + collision; AASHTO water + column + η 1.05 + at-rest + passive; AASHTO rock + collision + water + β; tall ACI + k_h + water):
+    - `_R` is identical except the three added fields `aashtoR.V_ES_v`, `x_ESv`, `CMB_S1A.ES`;
+    - Export JSON, every localStorage key, tab text and Report text are identical;
+    - 0 console errors.
+  - **AASHTO q_s 250, and AASHTO q_s 250 + water + collision + η 1.05:** results change as above; the EE II values (`aashtoR.ct`) are unchanged.
+- Tests: check-syntax, smoke/retaining-wall-checks (self-consistency panel passes), phone-layout rwall 390/768, project-library retwall, dxf-print-sheets rw.
