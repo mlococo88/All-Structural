@@ -227,7 +227,10 @@ tr.sfLrSel td,tr.sfLrSel:hover td{background:#ffe9b3;box-shadow:inset 0 2px 0 #b
  .chip .sfdChDC{color:#444;font-size:10.5px}   /* SFDF */
  .chip.sfdOpen .cn{white-space:normal}
 }
-@media screen and (min-width:1500px){
+/* SFLB (2026-11-07, Decision pending engineer review: "the summary cards should be on the left panel"): the left column starts at
+   1200 px (was 1500 px), as in Retaining Wall Designer and Light Pole; from 1200 to 1499 px it is 240 px wide (rule after this block),
+   at 1500 px and wider 280 px as before */
+@media screen and (min-width:1200px){
  .wrap{max-width:1892px}   /* 1600 + 280 + 12: at 1892 px and wider the input and output panels keep their old widths */
  body.sfdDashWide #sfdDashCol{display:block;flex:0 0 280px;width:280px;height:100%;overflow-y:auto;overflow-x:hidden;position:relative;padding:0 4px 24px 0;box-sizing:border-box}
  body.sfdDashWide .inp{width:calc((100% - 292px)*.33)}
@@ -241,6 +244,15 @@ tr.sfLrSel td,tr.sfLrSel:hover td{background:#ffe9b3;box-shadow:inset 0 2px 0 #b
  body.sfdDashWide.sfdDashColl #sfdDashCnt span{font-size:9.5px;padding:1px 2px;white-space:normal;text-align:center;width:38px}
  body.sfdDashWide #sfdDashCol::-webkit-scrollbar{width:7px}
  body.sfdDashWide #sfdDashCol::-webkit-scrollbar-thumb{background:#c2ccd6;border-radius:4px}
+}
+@media screen and (min-width:1200px) and (max-width:1499.98px){   /* SFLB */
+ body.sfdDashWide #sfdDashCol{flex-basis:240px;width:240px}
+ body.sfdDashWide .inp{width:calc((100% - 252px)*.33)}
+ body.sfdDashWide.sfdDashColl #sfdDashCol{flex-basis:42px;width:42px}
+ body.sfdDashWide.sfdDashColl .inp{width:calc((100% - 54px)*.33)}
+ /* the output panel is 508-748 px wide here (as at 950-1190 px without the column): a wide table, plot or Report page scrolls
+    sideways inside its tab page (as on tablets and phones, SFPH) instead of being cut off at the panel's edge */
+ body.sfdDashWide:not(.sfdDashColl) .tabpage{overflow-x:auto}
 }
 /* ---- user manual ---- */
 .manNav{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 14px 0;border-bottom:1px solid #b9c4d0;padding-bottom:8px}
@@ -2029,7 +2041,7 @@ function renderDashboard(){
    and a short value (sfdChR: the D/C of the Report summary, sfdResultRows, or the FS shown); the full text (.cv, with the governing
    combination) and the reference (sfdChRef) show on hover (title) and when expanded (NG / REVIEW chips start expanded). Collapse button: per-browser UI key
    sfd_dashCollapsed_v1 ('1' = collapsed; absent = open); not in the project, the autosave or the export. */
-const SFDC={key:'sfd_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1500px)'):null,open:new Map(),coll:false};
+const SFDC={key:'sfd_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1200px)')/* SFLB: was 1500px */:null,open:new Map(),coll:false};
 try{SFDC.coll=localStorage.getItem(SFDC.key)==='1';}catch(e){}
 function sfdDashDecorate(){
  let rows=[];try{rows=sfdResultRows();}catch(e){rows=[];}
