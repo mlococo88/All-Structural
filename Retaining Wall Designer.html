@@ -802,6 +802,16 @@ div.fbox { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; bac
 .tab-panel [style*="grid-template-columns:1fr 330px"] > * { min-width: 0; }   /* lets the drawing's card scroll instead of widening the page */
 .rw-dwg-wrap > svg.rw-dwg { min-width: 620px; }
 .rw-dwg-wrap > svg.rw-dwg.rw-dwg-wide { min-width: 760px; }   /* RWTS-3: the collision elevation (860-unit drawing) */
+/* RWGR (2026-11-07): the Overview drawing (910 units since RWPS) gets the full tab width when the two columns would leave it less
+   than about 750 px (it was squeezed into a ~420 px column beside the properties at 1440 px with the check summary open, and scrolled
+   with its heel and pressure diagrams out of view); it fits its card (no sideways scroll) except on a phone, where it keeps 740 px
+   and scrolls inside its card (text >= 9 px) */
+#tab-overview { container-type: inline-size; }
+@container (max-width: 1100px) { #tab-overview [style*="grid-template-columns:1fr 330px"] { grid-template-columns: 1fr !important; } }
+.rw-dwg-wrap > svg.rw-dwg.rw-dwg-ov { min-width: 0; }   /* fits its card on a desktop / tablet window */
+@media screen and (max-width: 700px) { .rw-dwg-wrap > svg.rw-dwg.rw-dwg-ov { min-width: 740px; } }
+/* RWGR: the sheet viewer as tall as the 17 x 11 sheet at its width (at most 62 % of the window): no empty band above and below it */
+.rwdwBox > .sdx-view { height: auto !important; aspect-ratio: 17 / 11; max-height: 62vh; }
 @media print { .rw-dwg-wrap > svg.rw-dwg { min-width: 0; } }
 /* RWTS-2: the Analysis diagram keeps the same 620 px minimum on narrow screens and scrolls natively (touch) inside its viewport */
 @media (max-width: 700px) { #dg-viewport { overflow: auto !important; } #dg-stage { min-width: 620px; } }
@@ -5892,8 +5902,10 @@ function rwbpSVG(r, c) {
   const HALO = 'paint-order="stroke" stroke="#fff" stroke-width="3" stroke-linejoin="round"';
   const qmax = Math.max(z.q0, z.q1, c.lim || 0, 1), PS = 110 / qmax;
   const xs = x => ML + x * SC;
-  const yStem = 30, stemH = Math.min(1.6 * tf, 3) * SC, yF = yStem + stemH, yB = yF + tf * SC, yQ = q => yB + q * PS;
-  const yArrow0 = yB + 110 + 46, yDim1 = yArrow0 + 26, yDim2 = yDim1 + 30, ySB = yDim2 + 30, H = ySB + 52;
+  // RWGR (2026-11-07): the shear key is drawn (to scale) and the pressure block starts under it (it was not drawn)
+  const kd = r.inp.useShearKey && r.dk_ft > 0 ? r.dk_ft * SC : 0, kOff = kd ? kd + 8 : 0;
+  const yStem = 30, stemH = Math.min(1.6 * tf, 3) * SC, yF = yStem + stemH, yB = yF + tf * SC, yB0 = yB + kOff, yQ = q => yB0 + q * PS;
+  const yArrow0 = yB0 + 110 + 46, yDim1 = yArrow0 + 26, yDim2 = yDim1 + 30, ySB = yDim2 + 30, H = ySB + 52;
   let s = `<svg class="rw-dwg" viewBox="0 0 ${W} ${H}" data-scale="${SC}" style="width:100%;height:auto;display:block;font-family:'Public Sans',Arial,sans-serif;">`;
   s += `<defs><marker id="${mk}" markerWidth="9" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><polygon points="0 0,9 4,0 8" fill="#b8322a"/></marker></defs>`;
   // stem base (cut by a break line) and footing, to scale
@@ -5901,13 +5913,17 @@ function rwbpSVG(r, c) {
   s += `<polygon data-geo="stem" points="${xsf},${yStem} ${xsb},${yStem} ${xsb},${yF} ${xsf},${yF}" fill="rgba(33,85,196,0.10)" stroke="#2155c4" stroke-width="1.2"/>`;
   s += `<path d="M ${xsf-6} ${yStem+4} L ${(xsf+xsb)/2-4} ${yStem+4} L ${(xsf+xsb)/2} ${yStem-3} L ${(xsf+xsb)/2+4} ${yStem+8} L ${xsb+6} ${yStem+4}" fill="none" stroke="#5a6a80" stroke-width="0.9"/>`;
   s += `<rect data-geo="footing" x="${xs(0)}" y="${yF}" width="${B*SC}" height="${tf*SC}" fill="rgba(33,85,196,0.14)" stroke="#2155c4" stroke-width="1.5"/>`;
+  if (kd) { const kw = (r.inp.key_bk || 12) / 12 * SC, kx = (xsf + xsb) / 2 - kw / 2;
+    s += `<rect x="${kx}" y="${yB}" width="${kw}" height="${kd}" fill="rgba(33,85,196,0.14)" stroke="#2155c4" stroke-width="1.2"/>`;
+    s += `<text x="${kx + kw + 4}" y="${yB + kd / 2 + 4}" font-size="${FS.s}" fill="#2155c4" ${HALO}>key</text>`;
+    [0, B].forEach(x => { s += `<line x1="${xs(x)}" y1="${yB}" x2="${xs(x)}" y2="${yB0}" stroke="#2346c2" stroke-width="0.6" stroke-dasharray="2,2"/>`; }); }
   s += `<text x="${xs(0)}" y="${yF-6}" font-size="${FS.s}" fill="#5a6a80">TOE</text><text x="${xs(B)}" y="${yF-6}" font-size="${FS.s}" fill="#5a6a80" text-anchor="end">HEEL</text>`;
   // middle third (kern) ticks
-  [B / 3, 2 * B / 3].forEach(x => { s += `<line x1="${xs(x)}" y1="${yB}" x2="${xs(x)}" y2="${yB+8}" stroke="#5a6a80" stroke-width="0.9"/>`; });
-  s += `<text x="${xs(2*B/3)+4}" y="${yB+15}" font-size="${FS.s}" fill="#5a6a80" ${HALO}>middle third</text>`;
+  [B / 3, 2 * B / 3].forEach(x => { s += `<line x1="${xs(x)}" y1="${yB0}" x2="${xs(x)}" y2="${yB0+8}" stroke="#5a6a80" stroke-width="0.9"/>`; });   // RWGR: on the pressure block's zero line
+  s += `<text x="${xs(2*B/3)+4}" y="${yB0+15}" font-size="${FS.s}" fill="#5a6a80" ${HALO}>middle third</text>`;
   s += `<line x1="${xs(B/2)}" y1="${yB-8}" x2="${xs(B/2)}" y2="${yB}" stroke="#5a6a80" stroke-width="0.9"/><text x="${xs(B/2)}" y="${yB-11}" font-size="${FS.s}" fill="#5a6a80" text-anchor="middle" ${HALO}>B/2</text>`;
   // pressure block
-  s += `<polygon points="${xs(z.x0)},${yB} ${xs(z.x0)},${yQ(z.q0)} ${xs(z.x1)},${yQ(z.q1)} ${xs(z.x1)},${yB}" fill="rgba(35,70,194,0.13)" stroke="#2346c2" stroke-width="1.6"/>`;
+  s += `<polygon points="${xs(z.x0)},${yB0} ${xs(z.x0)},${yQ(z.q0)} ${xs(z.x1)},${yQ(z.q1)} ${xs(z.x1)},${yB0}" fill="rgba(35,70,194,0.13)" stroke="#2346c2" stroke-width="1.6"/>`;
   const lab = (x, q, anchor) => `<text x="${xs(x) + (anchor === 'end' ? -4 : anchor === 'start' ? 4 : 0)}" y="${yQ(q)+FS.m+3}" font-size="${FS.m}" fill="#2346c2" text-anchor="${anchor}" font-weight="600" ${HALO}>${f(q,0)} psf</text>`;
   if (c.kind === 'uni') s += Math.abs(c.xR - z.x1) > 0.25 * (z.x1 - z.x0) ? lab(z.x1, z.q0, 'end') : lab(z.x0, z.q0, 'start');   // clear of the resultant arrow
   else if (z.q0 > 0) s += lab(z.x0, z.q0, z.x0 < 0.15 * B ? 'start' : 'middle');
@@ -8391,8 +8407,9 @@ function buildCrossSection(r) {
   s += `<line x1="${x_toe}" y1="${y_qa}" x2="${x_heel}" y2="${y_qa}"
     stroke="#0f7a5a" stroke-width="0.9" stroke-dasharray="5,3"/>`;
   s += `<text x="${x_heel+3}" y="${y_qa+3}" font-size="7" fill="#0f7a5a">qa=${f(inp.qa/1000,1)} ksf</text>`;
-  s += `<text x="${x_toe}" y="${yt+FS.m+2}" font-size="7.5" fill="#0f7a5a">${f(r.q_toe,0)}</text>`;
-  s += `<text x="${x_heel}" y="${yh+FS.m+2}" font-size="7.5" fill="#0f7a5a" text-anchor="end">${f(r.q_heel,0)}</text>`;
+  const qy = y => Math.abs(y - 0.4 * FS.m - y_qa) < 0.75 * FS.m ? y_qa + FS.m + 2 : y;   // RWGR: a q value is not written on the q_a line
+  s += `<text x="${x_toe}" y="${qy(yt+FS.m+2)}" font-size="7.5" fill="#0f7a5a">${f(r.q_toe,0)}</text>`;
+  s += `<text x="${x_heel}" y="${qy(yh+FS.m+2)}" font-size="7.5" fill="#0f7a5a" text-anchor="end">${f(r.q_heel,0)}</text>`;
   s += `<text x="${x_toe+B_px*0.62}" y="${Math.max(yt,yh,y_qa)+FS.m+2}" font-size="7.5" fill="#0f7a5a"
     text-anchor="middle">Bearing (psf) — service</text>`;
   s += `</g>`;
@@ -9028,11 +9045,11 @@ function renderOverview(r) {
           <div class="card-body">
             <table class="tbl">
               <tbody>
-                ${Object.entries(r.checks).map(([k, c]) => `
+                ${Object.entries(r.checks).map(([k, c], i) => `
                   <tr>
                     <td class="lbl">${(() => { const ck = RW_CHECK_CARD[k], t = rwCardTitle(ck, r.isAASHTO);
                       return t ? `<a class="wkA" href="#" data-card="${ck}" title="Worked in: ${RW_TABNAME[RW_CARDS[ck][0]]} · ${t}">${c.label}</a>` : c.label; })()}</td>
-                    <td class="right">${c.val ? `<span class="n-dim">${c.val}</span>` : ''}</td>
+                    <td class="right">${c.val ? `<span class="n-dim">${c.val}</span>` : rwovDC(r, i)}</td>
                     <td class="right">${pf(c.ok)}</td>
                   </tr>`).join('')}
               </tbody>
@@ -9149,8 +9166,8 @@ function buildOverviewSVG(r) {
   const C_CONC = { fill: 'rgba(175,195,225,0.45)', stroke: '#3a5a96' };
   const C_SOIL = '#9a7a3a';
 
-  let s = `<svg class="rw-dwg" viewBox="0 0 ${SVG_W} ${SVG_H}" data-scale="${SCALE}"
-    style="width:100%;height:auto;font-family:'Public Sans',Arial,sans-serif;display:block;margin:0 auto;">`;
+  let s = `<svg class="rw-dwg rw-dwg-ov" viewBox="0 0 ${SVG_W} ${SVG_H}" data-scale="${SCALE}"
+    style="width:100%;height:auto;font-family:'Public Sans',Arial,sans-serif;display:block;margin:0 auto;">`;   // RWGR: rw-dwg-ov (min width 740 px)
 
   // ── Defs ─────────────────────────────────────────────────────
   s += `<defs>
@@ -9301,8 +9318,9 @@ function buildOverviewSVG(r) {
     s += `<line x1="${x_toe}" y1="${y_qa}" x2="${x_heel}" y2="${y_qa}"
       stroke="#0f7a5a" stroke-width="0.8" stroke-dasharray="4,3"/>`;
     s += `<text x="${x_heel+4}" y="${y_qa+4}" font-size="${FS.s}" fill="#0f7a5a">qa=${f(inp.qa/1000,1)} ksf</text>`;
-    s += `<text x="${x_toe+2}" y="${yt+14}" font-size="${FS.m}" fill="#2155c4" text-anchor="start" ${HALO}>${f(r.q_toe,0)}</text>`;   // RWPS: inside the ends (were centred on them, into the passive labels)
-    s += `<text x="${x_heel-2}" y="${yh+14}" font-size="${FS.m}" fill="#2155c4" text-anchor="end" ${HALO}>${f(r.q_heel,0)}</text>`;
+    const qy = y => Math.abs(y - 0.4 * FS.m - y_qa) < 0.75 * FS.m ? y_qa + FS.m + 2 : y;   // RWGR: a q value is not written on the q_a line
+    s += `<text x="${x_toe+2}" y="${qy(yt+14)}" font-size="${FS.m}" fill="#2155c4" text-anchor="start" ${HALO}>${f(r.q_toe,0)}</text>`;   // RWPS: inside the ends (were centred on them, into the passive labels)
+    s += `<text x="${x_heel-2}" y="${qy(yh+14)}" font-size="${FS.m}" fill="#2155c4" text-anchor="end" ${HALO}>${f(r.q_heel,0)}</text>`;
     s += `<text x="${x_toe+B_px/2}" y="${Math.max(yt,yh,y_qa)+16}" font-size="${FS.m}" fill="#2155c4" text-anchor="middle" ${HALO}>Bearing (psf; ordinates not to scale)</text>`;
   }
 
@@ -9599,27 +9617,27 @@ function rwpsLateral(r, o) {
     if (wet) t += `<circle cx="${x0 + sW * PS}" cy="${yWT}" r="2.2" fill="${R}"/>`;
     t += `</g>`;
     xo = x0 + sB * PS + gap;
-    rows.push([yB - 3 - (pW > 0 ? fs + 3 : 0), `${f(sB,0)} psf earth`, R, true]);
-    if (wet) { rows.push([yWT - 3, `W.T.: ${f(sW,0)} psf`, R, true]); rows.push([yWT + fs + 2, `γ′ = ${f(r.gamma_s_sub,0)} pcf below`, Lb, false]); }
+    rows.push([yB - 3 - (pW > 0 ? fs + 3 : 0), `${f(sB,0)} psf earth`, R, true, 'active']);
+    if (wet) { rows.push([yWT - 3, `W.T.: ${f(sW,0)} psf`, R, true, 'active']); rows.push([yWT + fs + 2, `γ′ = ${f(r.gamma_s_sub,0)} pcf below`, Lb, false, 'active']); }
   }
   if (pSur > 0) {
     t += `<g data-layer="surcharge"><rect x="${xo}" y="${yT}" width="${pSur * PS}" height="${yB - yT}" fill="rgba(185,100,0,0.08)" stroke="${O}" stroke-width="0.9" stroke-dasharray="3,3"${o.tipSur ? ` data-tip="${o.tipSur}"` : ''}/></g>`;
     xo += pSur * PS + gap;
-    rows.push([yT + fs, `Ka·q = ${f(pSur,0)} psf`, O, true]);
-    rows.push([yT + 2 * fs + 3, r.isAASHTO && r.q_ll_aashto > 0 ? '(LS surcharge)' : '(surcharge)', O, false]);
+    rows.push([yT + fs, `Ka·q = ${f(pSur,0)} psf`, O, true, 'surcharge']);
+    rows.push([yT + 2 * fs + 3, r.isAASHTO && r.q_ll_aashto > 0 ? '(LS surcharge)' : '(surcharge)', O, false, 'surcharge']);
   }
   if (pW > 0) {
     t += `<g data-layer="water"><polygon points="${xo},${yWT} ${xo + pW * PS},${yB} ${xo},${yB}" fill="rgba(0,85,196,0.09)" stroke="${Bl}" stroke-width="0.9"${o.tipWat ? ` data-tip="${o.tipWat}"` : ''}/></g>`;
-    rows.push([yB - 3, `+${f(pW,0)} psf water`, Bl, false]);
+    rows.push([yB - 3, `+${f(pW,0)} psf water`, Bl, false, 'water']);
   }
   if (wet && (sB > 0 || pW > 0)) t += `<line x1="${x0}" y1="${yWT}" x2="${o.xLab - 3}" y2="${yWT}" stroke="${Lb}" stroke-width="0.8" stroke-dasharray="4,3" opacity="0.9"/>`;
   if (sB > 0) {   // the earth diagram's name, at mid-height clear of the other rows
     let ym = (yT + yB) / 2;
     const busy = y => rows.some(rw => Math.abs(rw[0] - y) < 2 * fs + 2);
     for (const c of [ym, ym + 3 * fs, ym - 3 * fs, ym + 6 * fs, ym - 6 * fs]) if (!busy(c) && c > yT + 3 * fs && c < yB - 2 * fs) { ym = c; break; }
-    rows.push([ym, 'Active Ka·γ·z', R, false]);
+    rows.push([ym, 'Active Ka·γ·z', R, false, 'active']);
   }
-  rows.forEach(([y, txt, c, b]) => { t += `<text x="${o.xLab}" y="${y}" font-size="${fs}" fill="${c}"${b ? ' font-weight="600"' : ''} ${h}>${txt}</text>`; });
+  rows.forEach(([y, txt, c, b, ly]) => { t += `<g data-layer="${ly}"><text x="${o.xLab}" y="${y}" font-size="${fs}" fill="${c}"${b ? ' font-weight="600"' : ''} ${h}>${txt}</text></g>`; });   // RWGR: each label in its diagram's layer (the Analysis diagram's layer toggles)
   return t;
 }
 
@@ -9687,6 +9705,13 @@ async function rwPlotImages() {
   return out;
 }
 // one result line per check: D/C and PASS/FAIL from the tool's own values (status = the check's own flag)
+// RWGR (2026-11-07): the Overview's Check Summary shows the D/C where a check has no short value (as the check summary panel)
+const RWOV_RR = new WeakMap();
+function rwovDC(r, i) {
+  let R = RWOV_RR.get(r); if (!R) { try { R = rwResultRows(r); } catch (e) { R = []; } RWOV_RR.set(r, R); }
+  const dc = R[i] && R[i].dc;
+  return typeof dc === 'number' && !isNaN(dc) ? `<span class="n-dim">D/C ${isFinite(dc) ? f(dc, 2) : '∞'}</span>` : '';
+}
 function rwResultRows(r) {
   const A = r.isAASHTO, a = r.aashtoR, rows = [];
   const AA = s => 'AASHTO LRFD 10th Ed. Art. ' + s;
@@ -11902,10 +11927,11 @@ function rwdwBuild(r) {
     const soil = hb > 0 ? [[xp, Hp], [xp + p1 * ps, Hp - ha], [xp + p2 * ps, 0], [xp, 0]] : [[xp, Hp], [xp + p2 * ps, 0], [xp, 0]];
     D.pline(L.load, soil, true);
     T(L.lt, xp + p2 * ps / 2, 0.12 * P, hs, rwdwN(p2, 0) + ' PSF', 1);
-    if (hb > 0) T(L.lt, xp + p1 * ps + 0.06 * P, Hp - ha, hs, rwdwN(p1, 0) + ' PSF AT W.T.', 0);
+    if (hb > 0) T(L.lt, xp - 0.06 * P, Hp - ha - 0.14 * P, hs, rwdwN(p1, 0) + ' PSF AT W.T.', 2);   // RWGR: left of the plane, under the water line (was over the surcharge bands)
     let xo = xp + p2 * ps;
     // surcharges as uniform bands outside the soil diagram
-    const band = (p, nm) => { if (!(p > 0)) return; D.pline(L.sup, [[xo, 0], [xo + p * ps, 0], [xo + p * ps, Hp], [xo, Hp]], true); T(L.sup, xo + p * ps / 2, Hp + 0.08 * P, hs, nm + ' ' + rwdwN(p, 0), 1); xo += p * ps; };
+    let nb = 0;   // RWGR: the band labels on two rows (two thin bands' labels overlapped)
+    const band = (p, nm) => { if (!(p > 0)) return; D.pline(L.sup, [[xo, 0], [xo + p * ps, 0], [xo + p * ps, Hp], [xo, Hp]], true); T(L.sup, xo + p * ps / 2, Hp + (0.08 + 0.13 * nb++) * P, hs, nm + ' ' + rwdwN(p, 0), 1); xo += p * ps; };
     band(pS, isA ? 'ES' : 'Q_S'); band(pLS, 'LS');
     if (pW > 0) { D.pline(L.wat, [[xo, 0], [xo + pW * ps, 0], [xo, r.hw * 12]], true); T(L.wat, xo + pW * ps / 2, 0.12 * P, hs, 'WA ' + rwdwN(pW, 0), 1); xo += pW * ps; }
     T(L.lt, xp + 0.05 * P, -0.15 * P, hs, 'PRESSURES (PSF) ON THE PLANE THROUGH THE HEEL', 0);
