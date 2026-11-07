@@ -1761,7 +1761,12 @@ function flexMajorIC(p,Lb,Cb){
 }
 /* ---------- F6: I & C minor axis ---------- */
 function flexMinorIC(p){
-  const Fy=p.mat.Fy,E=EKSI,cls=classifyFlex(p);
+  const Fy=p.mat.Fy,E=EKSI,cls=Object.assign({},classifyFlex(p));
+  /* L2 (2026-11-07): minor-axis flexure of every I-shape and channel uses AISC 360-16 Table B4.1b case 13
+     (lambda_p = 0.38 sqrt(E/F_y), lambda_r = 1.0 sqrt(E/F_y)), Sec. F6.2. Before: built-up I-shapes used case 11
+     (lambda_r = 0.95 sqrt(k_c E/F_L), the major-axis case). Rolled shapes unchanged (case 10 has the same limits). */
+  {const rt=SQ(E/Fy),lam=cls.flange.lam,lp=0.38*rt,lr=1.0*rt;
+    cls.flange={lam,lp,lr,case:'13',cls:lam<=lp?'compact':lam<=lr?'noncompact':'slender'};}
   const Mp=Math.min(Fy*p.Zy,1.6*Fy*p.Sy);
   const out={phi:0.9,ls:[],Mp,route:'F6',cls};
   out.ls.push({name:'Yielding',clause:'F6.1 (F6-1)',Mn:Mp,applies:true,
