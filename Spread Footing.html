@@ -3960,7 +3960,7 @@ function sfrModel(){
     S({id:'a',label:'Depth of the stress block',sym:'a',eq:'\\frac{A_{s} f_{y}}{0.85 '+SFR_FC+' b}',sub:'\\frac{'+sfrN(cb.As,3)+'\\cdot'+sfrN(P2.fy,0)+'}{0.85\\cdot'+sfrN(P2.fc,0)+'\\cdot'+sfrN(des.wperp*12,1)+'}',value:cb.a,unit:'in',d:3}),
     S({id:'phi',label:'Strength reduction factor (by ε_t = '+sfrN(cb.eps_t,4)+'; ε_ty = '+(P2.fy>60000?'f_y/E_s = '+sfrN(sfdEty(P2.fy),5):'0.002')+', tension-controlled at ε_t ≥ ε_ty + 0.003)',sym:'\\phi',eq:'',sub:'',value:cb.phi,unit:'',d:3,ref:'ACI 318-19 Table 21.2.2'}),
     S({id:'phiMn',label:'Design flexural strength',sym:'\\phi M_{n}',eq:'\\phi A_{s} f_{y} (d \\minus a/2)',sub:sfrN(cb.phi,3)+'\\cdot'+sfrN(cb.As,3)+'\\cdot'+sfrN(P2.fy/1000,0)+'\\cdot('+sfrN(des.dBot,3)+' \\minus '+sfrN(cb.a/2,3)+')/12',value:cb.phiMn/12,unit:'kip-ft',ref:'ACI 318-19 22.3'}),
-    S({id:'DCRb',label:'Flexure, bottom: demand / capacity',sym:'DCR',eq:'\\frac{M_{u}}{\\phi M_{n}}',sub:'\\frac{'+sfrN(des.MuPos)+'}{'+sfrN(cb.phiMn/12)+'}',value:des.dcrBot,unit:'',d:3,ok:des.dcrBot<=1+1e-9})];
+    S({id:'DCRb',label:'Flexure, bottom: demand / capacity'+(des.strip&&des.strip.applies?' (full width; the strip check under each pedestal follows)':''),sym:'DCR',eq:'\\frac{M_{u}}{\\phi M_{n}}',sub:'\\frac{'+sfrN(des.MuPos)+'}{'+sfrN(cb.phiMn/12)+'}',value:des.dcrBotFull,unit:'',d:3,ok:des.dcrBotFull<=1+1e-9})];   /* SFTX */
     if(des.MuNeg>0.01){
      fl.push(S({id:'MuN',label:'Factored moment, top (hogging)',sym:'M_{u}^{\\minus}',eq:'',sub:'',value:des.MuNeg,unit:'kip-ft',note:des.govNeg?'governing combination: '+des.govNeg.cb.name:''}));
      if(des.topProvided)fl.push(S({id:'phiMnT',label:'Design flexural strength, top (d = d_top,'+dir+')',sym:'\\phi M_{n,top}',eq:'\\phi A_{s} f_{y} (d \\minus a/2)',sub:sfrN(des.capTop.phi,3)+'\\cdot'+sfrN(des.capTop.As,3)+'\\cdot'+sfrN(P2.fy/1000,0)+'\\cdot('+sfrN(des.dTop,3)+' \\minus '+sfrN(des.capTop.a/2,3)+')/12',value:des.capTop.phiMn/12,unit:'kip-ft',ref:'ACI 318-19 22.3'}));   /* SFTD */
@@ -3968,6 +3968,15 @@ function sfrModel(){
      else fl.push(S({id:'AsTreq',label:'Top steel required (no top mat entered: provide top bars)',sym:'A_{s,top,req}',eq:'',sub:'',value:Math.max(des.reqTop,des.AsMinPerFt),unit:'in^{2}/ft',d:3,note:'A_s,req for M_u⁻ = '+sfrN(des.reqTop,3)+' in²/ft, not less than A_s,min'}));
     }
    T.push({title:'Flexure',ref:'ACI 318-19 22.3, 21.2.2',steps:fl});
+   if(des.strip&&des.strip.applies){const st=des.strip;   /* SFTX: transverse strip under each pedestal */
+    T.push({title:'Transverse strip under each pedestal (combined footing; governing bottom D/C = the larger of the full width and the strips: '+sfrN(des.dcrBot,3)+')',ref:'ACI 318-19 13.3.4.1, 13.3.4.3, 22.3; strip width c + d (engineer review pending)',steps:st.rows.flatMap(r=>{const k='st'+r.i;
+     if(r.ns)return [S({id:k+'ns',label:r.label+': the resultant of the strip loads falls outside the strip length ('+r.cb+'): the strip cannot be balanced on its own soil pressure, D/C = ∞ (NG; conservative: revise the footing or design the transverse direction by another method)',sym:'DCR',eq:'',sub:'',value:'∞',ok:false})];
+     if(r.face==null)return [S({id:k+'na',label:r.label+': no sagging moment at the pedestal faces',sym:'M_{u,strip}',eq:'',sub:'',value:0,unit:'kip-ft'})];
+     return [S({id:k+'bs',label:r.label+': strip width (c = '+sfrN(r.c*12,1)+' in across the strip; d/2 = '+sfrN(des.dBot/2,3)+' in each side, clipped at the footing edge)',sym:'b_{s}',eq:'c + d',sub:sfrN(r.c*12,1)+' + '+sfrN(r.lo*12,3)+' + '+sfrN(r.hi*12,3),value:r.bs*12,unit:'in',d:2}),
+      S({id:k+'M',label:r.label+': strip moment at the face '+dir+' = '+sfrN(r.face,3)+' ft ('+r.cb+'; strip loads '+r.band.join(', ')+', ΣP_u = '+sfrN(r.Ps)+' kip at e = '+sfrN(r.es,3)+' ft; linear no-tension soil pressure over the strip length '+sfrN(st.W)+' ft; cantilever '+sfrN(r.cant,3)+' ft)',sym:'M_{u,strip}',eq:'\\int_{face}^{edge} w(s)\\,(s \\minus s_{f})\\,ds \\minus \\sum P_{u,j}\\,(s_{j} \\minus s_{f})',sub:'',value:r.M,unit:'kip-ft'}),
+      S({id:k+'As',label:r.label+': bottom '+dir+'-bars in the strip',sym:'A_{s,strip}',eq:'A_{s}/\\text{ft} \\cdot b_{s}',sub:sfrN(des.AsBot,3)+'\\cdot'+sfrN(r.bs,3),value:r.As,unit:'in^{2}',d:3}),
+      S({id:k+'phiMn',label:r.label+': design flexural strength of the strip',sym:'\\phi M_{n,strip}',eq:'\\phi A_{s} f_{y} (d \\minus a/2),\\; a = \\frac{A_{s} f_{y}}{0.85 '+SFR_FC+' b_{s}}',sub:sfrN(r.cap.phi,3)+'\\cdot'+sfrN(r.As,3)+'\\cdot'+sfrN(P2.fy/1000,0)+'\\cdot('+sfrN(des.dBot,3)+' \\minus '+sfrN(r.cap.a/2,3)+')/12',value:r.cap.phiMn/12,unit:'kip-ft',ref:'ACI 318-19 22.3'}),
+      S({id:k+'dcr',label:r.label+': strip flexure demand / capacity',sym:'DCR',eq:'\\frac{M_{u,strip}}{\\phi M_{n,strip}}',sub:'\\frac{'+sfrN(r.M)+'}{'+sfrN(r.cap.phiMn/12)+'}',value:r.dcr,unit:'',d:3,ok:r.dcr<=1+1e-9})];})});}
    T.push({title:'Minimum steel',ref:sfrCombined()?'ACI 318-19 13.3.4.1, 8.6.1.1, 24.4.3.2':'ACI 318-19 7.6.1.1, 24.4.3.2',steps:[   /* SFPR: combined footing, Chapter 8 */
     S({id:'Asmin',label:'Shrinkage and temperature minimum',sym:'A_{s,min}',eq:'0.0018 \\cdot 12 h',sub:'0.0018\\cdot 12\\cdot'+sfrN(tin),value:des.AsMinPerFt,unit:'in^{2}/ft',d:3}),
     S({id:'Asprov',label:'Provided, bottom (per ft)',sym:'A_{s,prov}',eq:'\\ge A_{s,min}',sub:sfrN(des.AsBot,3)+(des.asMinBotOK?' \\ge ':' \\lt ')+sfrN(des.AsMinPerFt,3),value:des.AsBot,unit:'in^{2}/ft',d:3,ok:!!des.asMinBotOK}),
@@ -6402,12 +6411,59 @@ function computePhase2(R){
   const clrMinT=Math.max(1,mT.db,4/3*dag), clrT=spcTop-mT.db, clrTopOK=!(mT.size>0&&AsTop>0)||clrT>=clrMinT-1e-9;
   return{dir,wperp,dBot,dTop,AsBot,AsTop,capBot,capTop,MuPos,MuNeg,govPos,govNeg,
    AsMinPerFt,reqBotFlex,reqBot,reqTop,topNeeded,topProvided,asMinBotOK,asMinTopReq,asMinTopOK,sMax,spcBot,spcTop,spcBotOK,spcTopOK,clrMinB,clrB,clrBotOK,clrMinT,clrT,clrTopOK,dagg:dag,dbB:mB.db,dbT:mT.db,
-   dcrBot:capBot.phiMn>0?(MuPos*12)/capBot.phiMn:(MuPos>0?Infinity:0),
+   dcrBotFull:capBot.phiMn>0?(MuPos*12)/capBot.phiMn:(MuPos>0?Infinity:0),strip:sfdStrip(dir,dBot,AsBot,fc,fy),   /* SFTX */
    dcrTop:topProvided?(capTop.phiMn>0?(MuNeg*12)/capTop.phiMn:Infinity):null,
    maxV,govV,govVloc,govMloc,govNegLoc,lam_s,lamsNeg,Vc,phiV,rhoW,vcCoef,vcOverride,vcCapped,VcCap,oneWayOutside:!anyOneWaySection,
    dcrV:(!anyOneWaySection)?0:(phiV>0?maxV/phiV:Infinity)};
  }
+ /* SFTX (2026-11-07): transverse strip under each pedestal of a combined footing (two or more pedestals).
+    The full-width check above spreads the transverse moment uniformly over the whole footing length; in a combined footing
+    the transverse moment concentrates under the pedestals (ACI 318-19 13.3.4.1 -> Chapter 8, 13.3.4.3; the usual
+    combined-footing practice of a transverse beam under each column, e.g. ACI 336.2R). Here each pedestal gets a strip of
+    width c + d centred on it (c = the pedestal side across the strip, d = the effective depth of the bars spanning the strip,
+    clipped at the footing edges), loaded by the pedestals whose centres lie in the strip (their P_u and moments in the
+    strip direction) and by the linear no-tension soil pressure that equilibrates them over the strip length. The strip
+    moment at each face of the pedestal (cantilever to the edge, the pedestals beyond it subtracted) is checked against
+    phiM_n of the bars inside the strip width. Governing bottom D/C = the larger of the full-width and the strip checks.
+    Transverse direction(s): the direction in which the pedestal centres spread least (range <= 0.25 x the range in the
+    other direction); when neither does (a 2-D layout), both directions are checked.
+    Decision (pending engineer review): strip width c + d (alternatives: c + 1.5d, or the full width as before). */
+ function sfdStrip(dir,dBot,AsBot,fc,fy){
+  if(peds.length<2)return {applies:false,why:'single pedestal (isolated footing): full width'};
+  const xs=peds.map(p=>p.x), ys=peds.map(p=>p.y), rx=Math.max(...xs)-Math.min(...xs), ry=Math.max(...ys)-Math.min(...ys);
+  const tX=rx<=0.25*ry+1e-9, tY=ry<=0.25*rx+1e-9, trans=(tX||tY)?(dir==='x'?tX:tY):true;
+  if(!trans)return {applies:false,why:'longitudinal direction (the pedestals spread along it): full width'};
+  const W=dir==='x'?B:L, Wp=dir==='x'?L:B, h2=W/2, dft=dBot/12;
+  const rows=peds.map((ped,i)=>{
+   const sP=dir==='x'?ped.x:ped.y, tP=dir==='x'?ped.y:ped.x, c=dir==='x'?ped.by:ped.bx, cs=dir==='x'?ped.bx:ped.by;
+   const lo=Math.min(dft/2,Math.max(0,(tP-c/2)+Wp/2)), hi=Math.min(dft/2,Math.max(0,Wp/2-(tP+c/2)));
+   const bs=(c+lo+hi), t0=tP-c/2-lo, t1=tP+c/2+hi;   // ft
+   const band=peds.map((q,j)=>j).filter(j=>{const t=dir==='x'?peds[j].y:peds[j].x;return t>=t0-1e-9&&t<=t1+1e-9;});
+   let best={M:0,cb:null,face:null,ns:false,Ps:0,es:0};
+   combos.forEach(cbo=>{
+    let Ps=0,Ms=0;const ld=band.map(j=>{const pl=cbo.nr.pl.find(z=>z.idx===j);const s=dir==='x'?peds[j].x:peds[j].y, m=pl?(dir==='x'?pl.my:pl.mx):0, P=pl?pl.P:0;Ps+=P;Ms+=P*s+m;return {s,m,P,j};});
+    if(!(Ps>1e-9))return;
+    const e=Ms/Ps;
+    if(Math.abs(e)>=h2-1e-9){if(!best.ns)best={M:Infinity,cb:cbo,face:null,ns:true,Ps,es:e};return;}
+    // linear pressure along the strip, w(s) per ft of strip length (kip/ft), no tension
+    let w;if(Math.abs(e)<=W/6){const a=Ps/W,b=12*Ps*e/(W*W*W);w=s=>Math.max(0,a+b*s);}
+    else{const Lc=3*(h2-Math.abs(e)),wm=2*Ps/Lc;w=e>0?(s=>s>=h2-Lc?wm*(s-(h2-Lc))/Lc:0):(s=>s<=-h2+Lc?wm*((-h2+Lc)-s)/Lc:0);}
+    [[sP+cs/2,+1],[sP-cs/2,-1]].forEach(([sf,side])=>{
+     if(Math.abs(sf)>=h2-1e-9)return;
+     const N=400,a0=side>0?sf:-h2,a1=side>0?h2:sf,ds=(a1-a0)/N;let M=0;
+     for(let k=0;k<N;k++){const s=a0+(k+0.5)*ds;M+=w(s)*Math.abs(s-sf)*ds;}
+     ld.forEach(q=>{if(q.j===i)return;if(side>0?q.s>sf:q.s<sf)M-=q.P*Math.abs(q.s-sf)+(side>0?q.m:-q.m);});
+     if(M>best.M&&!best.ns)best={M,cb:cbo,face:sf,side,ns:false,Ps,es:e};});
+   });
+   const As=AsBot*bs, cap=flexCap(bs*12,dBot,As,fc,fy);
+   const dcr=best.ns?Infinity:(cap.phiMn>0?best.M*12/cap.phiMn:(best.M>0?Infinity:0));
+   return {i,label:ped.label,c,bs,lo,hi,band:band.map(j=>peds[j].label),M:best.M,cb:best.cb?best.cb.cb.name:null,face:best.face,side:best.side,ns:best.ns,Ps:best.Ps,es:best.es,As,cap,dcr,cant:best.face==null?0:(best.side>0?h2-best.face:best.face+h2)};
+  });
+  const gov=rows.reduce((a,z)=>(!a||z.dcr>a.dcr)?z:a,null);
+  return {applies:true,W,rows,gov,dcr:gov?gov.dcr:0};
+ }
  const desX=directionDesign('x'), desY=directionDesign('y');
+ [desX,desY].forEach(z=>{z.dcrBot=Math.max(z.dcrBotFull,z.strip&&z.strip.applies?z.strip.dcr:0);});   /* SFTX: governing bottom D/C */
  /* ACI 318-19 13.3.3.3 - banded reinforcement in the short direction of a two-way rectangular
     footing.  A fraction gamma_s of the short-direction steel must sit in a band of width equal
     to the SHORT side, centred on the column; the remainder is spread over the rest.  Reported
@@ -7007,7 +7063,7 @@ function flexureSVG(des,dir){
  s+='<line x1="'+(X(-B/2)-20)+'" y1="'+Y(-other/2)+'" x2="'+(X(-B/2)-20)+'" y2="'+Y(other/2)+'" stroke="#666" marker-start="url(#fA'+dir+')" marker-end="url(#fA'+dir+')" opacity="0.6"/>';
  s+='<text x="'+(X(-B/2)-24)+'" y="'+Y(0)+'" text-anchor="middle" font-size="9" fill="#666" transform="rotate(-90 '+(X(-B/2)-24)+' '+Y(0)+')">'+(dir==='x'?'L':'B')+' = '+f2(other)+" ft</text>";
  // summary
- s+='<text x="'+padL+'" y="'+(H-8)+'" font-size="9">M\u1D64='+f2(des.MuPos)+' k-ft, \u03c6M\u2099='+f2(des.capBot.phiMn/12)+' k-ft, DCR='+f2(des.dcrBot)+(des.dcrBot<=1?' \u2713':' NG')+'</text>';
+ s+='<text x="'+padL+'" y="'+(H-8)+'" font-size="9">M\u1D64='+f2(des.MuPos)+' k-ft, \u03c6M\u2099='+f2(des.capBot.phiMn/12)+' k-ft, DCR='+f2(des.dcrBotFull)+(des.dcrBotFull<=1?' \u2713':' NG')+(des.strip&&des.strip.applies?' (full width; strip '+f2(des.strip.dcr)+')':'')+'</text>';
  s+='</svg>';
  const wrap=el('div');wrap.innerHTML=s;return wrap;
 }
@@ -7128,7 +7184,13 @@ function renderFootingDesign(){
   b.appendChild(eqBlock('Positive (bottom) flexure \u2014 demand vs capacity','ACI 318-19 22.3, \u03c6 per 21.2.2',
    'M_u = '+f2(des.MuPos)+'\\;\\mathrm{k\\text{-}ft}\\;(\\text{total}),\\quad \\phi M_n = \\phi A_s f_y (d-a/2)',
    'a = \\frac{A_s f_y}{0.85 f\'_c b} = '+f2(des.capBot.a)+'\\;\\mathrm{in}',
-   '\\phi M_n = '+f2(des.capBot.phiMn/12)+'\\;\\mathrm{k\\text{-}ft}\\;(\\phi='+f2(des.capBot.phi)+',\\;\\varepsilon_t='+f2(des.capBot.eps_t)+'),\\quad \\mathrm{DCR}=\\mathbf{'+f2(des.dcrBot)+'}'+(des.dcrBot<=1?'\\;\\checkmark':'\\;\\text{NG}')));
+   '\\phi M_n = '+f2(des.capBot.phiMn/12)+'\\;\\mathrm{k\\text{-}ft}\\;(\\phi='+f2(des.capBot.phi)+',\\;\\varepsilon_t='+f2(des.capBot.eps_t)+'),\\quad \\mathrm{DCR}=\\mathbf{'+f2(des.dcrBotFull)+'}'+(des.dcrBotFull<=1?'\\;\\checkmark':'\\;\\text{NG}')));
+  if(des.strip&&des.strip.applies){const st=des.strip;   /* SFTX */
+   b.appendChild(eqBlock('Transverse strip under each pedestal (combined footing)','ACI 318-19 13.3.4.1, 13.3.4.3, 22.3; strip width c + d centred on the pedestal (engineer review pending)',
+    'b_s = c + d,\\quad M_{u,strip} = \\int_{face}^{edge} w(s)(s-s_f)\\,ds - \\sum P_{u,j}(s_j-s_f),\\quad \\phi M_{n,strip} = \\phi A_s b_s f_y (d-a/2)',
+    st.rows.map(r=>r.ns?'\\text{'+r.label+': strip resultant outside the strip length: DCR = }\\infty\\;\\text{(NG)}':'\\text{'+r.label+'}: b_s = '+f2(r.bs*12)+'\\;\\mathrm{in},\\;M_{u} = '+f2(r.M)+'\\;\\mathrm{k\\text{-}ft}\\;(\\text{'+(r.cb||'\u2013')+'}),\\;\\phi M_n = '+f2(r.cap.phiMn/12)+',\\;\\mathrm{DCR} = '+f2(r.dcr)).join('\\\\'),
+    '\\text{governing bottom DCR} = \\max('+f2(des.dcrBotFull)+',\\;'+f2(st.dcr)+') = \\mathbf{'+f2(des.dcrBot)+'}'+(des.dcrBot<=1?'\\;\\checkmark':'\\;\\text{NG}')));
+   b.appendChild(el('p','note','Combined footing: the transverse moment concentrates under the pedestals, so besides the full-width check each pedestal gets a strip of width c + d (the pedestal side across the strip plus d/2 each side, clipped at the footing edge), loaded by the pedestals in the strip and the linear soil pressure that balances them over the strip length. Decision pending engineer review: c + d (alternatives c + 1.5d, or the full width). Worked in the Report.'));}
   b.appendChild(flexureSVG(des,dir));
   b.appendChild(varTable([
    ['A_{s,prov}','Provided bottom steel, this direction (total across the width)',des.AsBot*des.wperp,'in\u00b2'],

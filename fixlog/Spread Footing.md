@@ -6283,3 +6283,30 @@ index 50f3837..c2d5000 100644
   - Ped 1: 0.255 → 0.347 (governing combination now 1.2D + 1.0(−Wx) + L + 0.5S).
 - **Cases that move:** only `slender`. The other 15 harness cases are not slender. Their only differences are the new `sus` fields on `combos[].nr.pl` (data, no result).
 - **Saved data:** none. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/sf-h3-transverse-strip (PR #982: https://github.com/mlococo88/All-Structural/pull/982) (SFTX: combined footing, transverse strip under each pedestal (width c + d) checked alongside the full width; governing bottom D/C = the larger; CALCULATION CHANGE for footings with two or more pedestals)
+
+- **Problem:** in a combined footing the transverse bars were checked on the full footing width, i.e. the transverse moment was spread uniformly. Under a plate the transverse moment concentrates under the pedestals. In the default project the y-bars showed D/C 0.302 where a strip under Ped 2 gives 0.465 (unconservative).
+- **Where / exact code (`Spread Footing.html`, `computePhase2`):**
+  - New `sfdStrip(dir,dBot,AsBot,fc,fy)` before `const desX=directionDesign('x')` (anchor `/* SFTX (2026-11-07): transverse strip`).
+    - Applies with two or more pedestals, in the transverse direction(s): direction x is transverse when the spread of the pedestal centres in x is ≤ 0.25 × their spread in y, and the reverse for y. With neither (a 2-D layout), both directions are transverse.
+    - For each pedestal: strip width b_s = c + d, centred on the pedestal (c = pedestal side across the strip, d = d_bot of the bars spanning the strip, d/2 each side, clipped at the footing edges).
+    - Loads on the strip: the pedestals whose centres lie in it (P_u and the moment in the strip direction at the footing base). They are balanced by a linear no-tension soil pressure over the strip length.
+    - The moment at each face (cantilever to the edge, minus the pedestals beyond the face) is integrated numerically (400 points); the largest over the LRFD combinations is used.
+    - φM_n = `flexCap(b_s, d, A_s/ft·b_s)`. A strip whose resultant falls outside its length has D/C = ∞ (NG).
+  - `directionDesign` return:
+    - Before: `dcrBot:capBot.phiMn>0?(MuPos*12)/capBot.phiMn:(MuPos>0?Infinity:0),`
+    - After: `dcrBotFull:` the same expression, and `strip:sfdStrip(dir,dBot,AsBot,fc,fy)`.
+    - After both directions: `[desX,desY].forEach(z=>{z.dcrBot=Math.max(z.dcrBotFull,z.strip&&z.strip.applies?z.strip.dcr:0);});`
+  - `dcrBot` (dashboard flexure chip, summary table, 3D pick) is now the governing value. The full-width displays (card 5.2 / 5.3 eqBlock, flexure SVG label, Report step `DCRb`) show `dcrBotFull`. A new eqBlock and note on the card, and a Report topic "Transverse strip under each pedestal" (b_s, M_u,strip, A_s,strip, φM_n,strip, D/C per pedestal).
+- **Governing provisions:** ACI 318-19 13.3.4.1 (combined footings designed by Chapter 8), 13.3.4.3 (distribution of bearing pressure consistent with established principles), 22.3 (flexural strength). The code fixes no strip width; ACI 336.2R and textbook combined-footing practice design a transverse beam under each column.
+- **Decision (pending engineer review):** strip width c + d. Alternatives: c + 1.5d (less conservative), or the full width alone (as before).
+- **Check case (default project, y-bars, Ped 2, 1.2D + 1.6L + 0.5S):** P_u = 318.81 k on L = 8 ft gives w = 39.85 k/ft; cantilever 4.00 − 0.75 = 3.25 ft.
+  - M = 39.85·3.25²/2 = **210.46** kip-ft.
+  - b_s = 18 + 26.5 = 44.5 in; A_s = 1.0533·3.708 = 3.906 in²; a = 3.906·60/(0.85·4·44.5) = 1.549 in.
+  - φM_n = 0.9·3.906·60·(26.5 − 0.775)/12 = **452.2** kip-ft; D/C = **0.465**.
+  - Before: y-bars bottom D/C **0.302** (full width). After: **0.465** (strip governs). Ped 1 strip: 158.97 kip-ft, 0.352. x-direction (longitudinal): no strip, unchanged 0.057.
+- **Seymour:** pedestals in line along y, so x is transverse.
+  - Strips: Ped 1 20.21 kip-ft on b_s = 127.9 in, D/C 0.025; Ped 2 8.67 kip-ft on b_s = 47.9 in, D/C **0.028** (x full width 0.025).
+  - The governing flexure (y, 0.687) is unchanged.
+- **Saved data:** none. **Other copies:** none.

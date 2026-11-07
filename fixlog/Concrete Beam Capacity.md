@@ -4959,3 +4959,60 @@ Frame: Development & Splice (`suite-frame-dev`). Found in the in-depth review of
 - **How verified:** headless main vs branch with the review probe cases (all Beam Capacity cases and every Dev case except the two lightweight AASHTO ones identical); full dumps of the default project (identical) and the AASHTO excess case (values identical, only the new λ step/row and narrative); screenshot of the Compression l_dc tab looked at; `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
 - **Saved data:** no key or format change.
 - **Open items:** none.
+
+## 2026-11-07 — PR: claude/cbc-aci-asmin-fy80, PR #975: https://github.com/mlococo88/All-Structural/pull/975 (CBH4: ACI A_s,min with f_y limited to 80,000 psi per 9.6.1.2; CALCULATION CHANGE, Beam Capacity tab, ACI mode, f_y > 80 ksi only; less conservative before)
+
+Frame: Beam Capacity (`suite-frame-capacity`). Found in the in-depth review of 2026-11-07 (item H4).
+
+### CBH4. A_s,min, f_y limit   [CALCULATION CHANGE]
+- **Governing provision (checked in the rendered PDF, printed p. 135):** ACI 318-19 9.6.1.2: A_s,min is the larger of (a) 3√f′c/f_y · b_w d and (b) 200/f_y · b_w d, with f_y limited to a maximum of 80,000 psi. No 2022 erratum on 9.6.1.2.
+- **Where:** `detailing()`, anchor `/* minimum flexural steel */`, check `dAsMin`.
+  - Before:
+    ```js
+    const t1=3*rt/(fy*1000)*bw*F.dCent, t2=200/(fy*1000)*bw*F.dCent;
+    ```
+    and the substituted line printed `${fmt(fy*1000,0)}` in both denominators, with an empty note.
+  - After:
+    ```js
+    /* CBH4 (2026-11-07): ACI 318-19 9.6.1.2 limits f_y to 80,000 psi in (a) and (b) */
+    const fyA=Math.min(fy,80);
+    const t1=3*rt/(fyA*1000)*bw*F.dCent, t2=200/(fyA*1000)*bw*F.dCent;
+    ```
+    and the substituted line prints `${fmt(fyA*1000,0)}`, with the note "f_y = … psi is limited to 80,000 psi here (9.6.1.2)." when f_y > 80 ksi.
+  - Follows: the Detailing card, the Summary row, the Report step, and the A_s,req passed to the Development & Splice tab by "From Beam Capacity" (CBAR-1 uses the dAsMin value), which can only grow.
+- **Check case `aciFy100`:** ACI, 12 × 24 in, f′c 4 ksi, f_y 100 ksi, 2 #6 (A_s 0.88 in²), d = 21.125 in.
+  - (a) 3√4000/80,000 · 12 · 21.125 = 0.601 in²; (b) 200/80,000 · 12 · 21.125 = 0.634 in² (governs).
+  - **A_s,min: before 0.507 in² (200/100,000 · 12 · 21.125) → after 0.634 in²**; D/C 0.576 → 0.720 (still passes).
+  - Same with 2 #5 (A_s 0.62 in², d 21.19 in): before 0.509 in², PASS (D/C 0.82) → after 0.636 in², **FAIL** (D/C 1.03).
+  - f_y ≤ 80 ksi (e.g. the same section at f_y 80 ksi) and AASHTO mode: unchanged.
+- **Conservatism:** before, A_s,min was low by the factor 80/f_y for f_y > 80 ksi (20 % at 100 ksi).
+- **How verified:** headless main vs branch, review probe cases: only `aciFy100` and `aciFy100n5` moved (values above), all others (default, aciD, aasT, aasMinNeg, aciDeep, aa100, aciFy80, every Dev case) identical; full dump of the default project identical; `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
+- **Saved data:** no key or format change.
+- **Open items:** none (the flange-in-tension b_w of 9.6.1.2 is M4, a separate change).
+
+## 2026-11-07 — PR: claude/cbc-aci-asmin-flange, PR #979: https://github.com/mlococo88/All-Structural/pull/979 (CBM4: ACI A_s,min of a T-section with the flange in tension uses b_w = min(b_f, 2b_w) for a statically determinate beam, per 9.6.1.2; new input "Beam (for A_s,min, flange in tension)", default statically determinate; CALCULATION CHANGE, Beam Capacity tab, ACI, T-section in negative bending only; less conservative before)
+
+Frame: Beam Capacity (`suite-frame-capacity`). Found in the in-depth review of 2026-11-07 (item M4).
+
+### CBM4. A_s,min with the flange in tension   [CALCULATION CHANGE]
+- **Governing provision (checked in the rendered PDF, printed p. 135):** ACI 318-19 9.6.1.2: for a statically determinate beam with a flange in tension, b_w in (a) and (b) is the smaller of b_f and 2b_w (R9.6.1.2 explains why: cantilevers and other determinate beams cannot redistribute moment). No 2022 erratum.
+- **Where:** `detailing()`, anchor `/* minimum flexural steel */`, check `dAsMin` (after CBH4).
+  - Before: `const t1=3*rt/(fyA*1000)*bw*F.dCent, t2=200/(fyA*1000)*bw*F.dCent;` with `(${fmt(bw)})` in the substituted line.
+  - After:
+    ```js
+    const flgT=(S.sec.type==='tee' && neg), detm=(S.sec.asminSupport!=='indeterminate');
+    const bwA=(flgT && detm) ? Math.min(S.sec.bf,2*bw) : bw;
+    const t1=3*rt/(fyA*1000)*bwA*F.dCent, t2=200/(fyA*1000)*bwA*F.dCent;
+    ```
+    with `(${fmt(bwA)})` in the substituted line, and its note says which b_w is used ("Flange in tension, statically determinate beam: b_w = min(b_f, 2b_w) = min(…) = … in (9.6.1.2)." or "… marked statically indeterminate (continuous): b_w = … in").
+  - The tool places the flange at the top, so "flange in tension" is a T-section under negative M_u (`neg`), as the crack-control check already assumes (`flangeTension`).
+- **New input (Section Geometry, T-beam, ACI mode only):** "Beam (for A_s,min, flange in tension)": "Statically determinate (cantilever, simple span)" / "Statically indeterminate (continuous)", saved as `S.sec.asminSupport` ("determinate" / "indeterminate"), with a hint. Listed in the Inputs table on screen and in the Report inputs.
+- **Decision (pending engineer review):** the default is **statically determinate** (the conservative choice): the reduced b_w is applied whenever the flange is in tension unless the user marks the beam continuous. Saved projects have no such field; `mergeState` fills the default, so a saved ACI T-section in negative bending now gets the larger A_s,min. No migration keeps the old behaviour, because the old result was unconservative for determinate beams; a continuous beam is restored by choosing "indeterminate". Rectangular sections, positive bending and AASHTO mode are unaffected.
+- **Check case `aciTeeCant`:** ACI, T-section b_w 12, h 30, b_f 48, h_f 6 in, f′c 4 ksi, f_y 60 ksi; top 4 #6 (1.76 in², d 27.125 in), bottom 3 #7; S1 M_u = −150 k-ft.
+  - b_w = min(48, 2·12) = 24 in.
+  - (a) 3√4000/60,000 · 24 · 27.125 = 2.059 in²; (b) 200/60,000 · 24 · 27.125 = 2.170 in² (governs).
+  - **A_s,min: before 1.085 in² (b_w 12), PASS (D/C 0.62) → after 2.170 in², FAIL (D/C 1.23).**
+  - Same section marked indeterminate (`aciTeeCont`): 1.085 in², PASS (unchanged). Positive combination S2: 1.083 in², unchanged. AASHTO (`aasTeeNeg`): unchanged.
+- **How verified:** headless main vs branch with the review probe cases plus the three tee cases: only `aciTeeCant` moved; all other cases identical. Full dump of the default project identical. Screenshot of the Section Geometry input and the Detailing card looked at. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar` (save round trip with the new field), `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
+- **Saved data:** one new field `sec.asminSupport` (additive; old saves read with the default, see the decision). No key change.
+- **Open items:** none.

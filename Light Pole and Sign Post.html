@@ -2376,7 +2376,9 @@ function evalComboDir(key,inp,comps,fxs,pw,phi){
   const poleWindM= f.W*pw.Mpole + f.Wi*pw.MpoleI;       // lb-ft
   Vx+=poleWind*cw; Vy+=poleWind*sw;
   Mx+=poleWindM*cw; My+=poleWindM*sw;
-  N += f.D*(inp.DLtotal!==undefined?inp.DLtotal:inp.DL) + f.Di*pw.WiceMast;
+  // LPH3 (2026-11-07): the fixture weights are already in N (Wg above), so the mast term takes misc + pole self-weight only
+  // (inp.DLaxial, pole mode). Before: inp.DLtotal, which also held ΣW_fixtures, so the fixtures were counted twice.
+  N += f.D*(inp.DLaxial!==undefined?inp.DLaxial:(inp.DLtotal!==undefined?inp.DLtotal:inp.DL)) + f.Di*pw.WiceMast;
 
   const P=Math.hypot(Vx,Vy);                 // resultant base shear
   const M=Math.hypot(Mx,My);                 // resultant base moment
@@ -2905,7 +2907,7 @@ manPart("p4b","4B. Foundation &amp; Soil",[
 
 {h:"4B.2 Why it iterates"},
 {key:"S\u2081 is the allowable lateral bearing <b>evaluated at one-third of the embedment depth</b> \u2014 but the depth is what you are solving for. The program iterates: assume d, compute S\u2081 at d/3, solve for a new d, repeat until they agree. The iteration table in the Shaft tab shows every cycle."},
-{p:"The depth increase is capped: the lateral bearing value may be increased per foot of depth only up to 15 times the tabulated value (IBC 2021 §1806.3.3, verify), so S₁ uses min(d/3, 15 ft) and S₃ uses min(d, 15 ft). The isolated-pole doubling (§1806.3.4) multiplies the capped value."},
+{p:"The depth increase is capped. For the non-constrained formula (Eq. 18-1), d is taken as not more than 12 ft when the lateral pressure is computed (IBC §1807.3.2.1), so S₁ uses min(d, 12)/3, at most 4 times the tabulated value; the embedment d itself is not limited. For the constrained formula, S₃ uses min(d, 15 ft): the lateral bearing value may be increased per foot of depth only up to 15 times the tabulated value (IBC §1806.3.3). The isolated-pole doubling (§1806.3.4) multiplies the capped value."},
 {p:"Convergence is by successive under-relaxation and typically settles in five to ten cycles. Seeing the table is what allows a checker to confirm the answer is a converged solution rather than a first estimate."},
 
 {h:"4B.3 Presumptive soil values"},
@@ -4089,7 +4091,9 @@ function solveEmbed(P,M,h,inp){
   for(let i=0;i<60;i++){
     // IBC 2021 §1806.3.3 (verify: the tabulated value may be increased per foot of depth up to
     // 15 × the tabulated value) → the depth multiplier is capped at 15 ft (added 2026-10-12)
-    const S1=S1coef*Math.min(d/3,15);
+    // LPH1 (2026-11-07): IBC 2018/2021 §1807.3.2.1, Eq. 18-1: d is taken as not over 12 ft for computing the
+    // lateral pressure, so S₁ at min(d, 12)/3 (≤ 4 × tabulated; the 15 × cap above no longer binds). Before: min(d/3, 15).
+    const S1=S1coef*(Math.min(d,12)/3);
     const A=2.34*P/(S1*b);
     let dn;
     if(constraint==='non'){dn=0.5*A*(1+Math.sqrt(1+4.36*h/A));}
@@ -4862,6 +4866,7 @@ function lppCalcIbc(){
   // total service dead = misc + pole self-weight + sum of fixture weights
   const fixW=fixtures.reduce((s,x)=>s+x.W,0);
   inp.DLtotal=inp.DL+poleSeg.totalW+fixW;
+  inp.DLaxial=inp.DL+poleSeg.totalW;                 // LPH3 (2026-11-07): axial in evalComboDir (fixtures are added there one by one)
 
   // build components + evaluate every combination across four wind directions
   // When the catenary system is disabled, no cable components are built, so every
@@ -5223,7 +5228,7 @@ function lppCalcIbc(){
   → d = ${fmt(d,2)} ft (d/b = ${fmt(ratio,2)}), IBC §1807.3 ${constraint==='non'?'non-constrained':'constrained'}, S₁·${isoFac}× iso
 SHAFT governed by LRFD: ${govLRFD.name}
   Mu = ${fmt(Mu,0)} lb·ft   Pu = ${fmt(Pu,0)} lb   Vu = ${fmt(Vu,0)} lb`;
-  let it=`<tr><th>Iteration</th><th>Depth assumed<span class="sym">d (ft)</span></th><th>Allow. lateral bearing<span class="sym">S₁ at d/3 (psf)</span></th><th>Coefficient<span class="sym">A</span></th><th>Depth computed<span class="sym">d (ft)</span></th></tr>`;
+  let it=`<tr><th>Iteration</th><th>Depth assumed<span class="sym">d (ft)</span></th><th>Allow. lateral bearing<span class="sym">S₁ at min(d,12)/3 (psf)</span></th><th>Coefficient<span class="sym">A</span></th><th>Depth computed<span class="sym">d (ft)</span></th></tr>`;
   rows.slice(0,8).forEach(r=>it+=`<tr><td>${r.i}</td><td>${fmt(r.dA,2)}</td><td>${fmt(r.S1,0)}</td><td>${fmt(r.A,3)}</td><td>${fmt(r.dC,2)}</td></tr>`);
   $('iterTbl').innerHTML=it;
 
@@ -5392,7 +5397,7 @@ function embedWorkedHTML(embed, inp, P, M, h){
   const _sc=(typeof SOIL_CLASSES!=='undefined')?SOIL_CLASSES[inp.soilClass]:null;
   const _scTxt=_sc?`Soil class: <b>${_sc.name}</b> (${_sc.desc}) — IBC Table 1806.2 gives S₁ = ${_sc.lat} psf/ft of depth.`:`S₁ is a custom value from the project geotechnical report (supersedes the IBC presumptive table).`;
   H+=`<p class="eq-why">${_scTxt} The presumptive lateral bearing increases with depth. ${isoFac!==1?`An isolated-pole increase factor of ${fmt(isoFac,2)} is applied per §1806.3.4 (permitted for poles not adversely affected by ½-inch motion at grade).`:''} It is evaluated at ⅓ of the embedment for the non-constrained case (or at full depth for the constrained case).</p>`;
-  H+=g(`S_1 = ${fmt(inp.S1,0)}${isoFac!==1?`\\times${fmt(isoFac,2)}`:''}\\cdot\\min\\!\\left(\\tfrac{d}{3},15\\right) = ${fmt(S1c,0)}\\cdot\\min\\!\\left(\\tfrac{d}{3},15\\right)\\ \\text{psf}\\quad(\\text{IBC §1806.3.3: }\\le 15\\times\\text{tabulated})`);
+  H+=g(`S_1 = ${fmt(inp.S1,0)}${isoFac!==1?`\\times${fmt(isoFac,2)}`:''}\\cdot\\tfrac{\\min(d,\\,12)}{3} = ${fmt(S1c,0)}\\cdot\\tfrac{\\min(d,\\,12)}{3}\\ \\text{psf}\\quad(\\text{IBC §1807.3.2.1: }d \\le 12\\text{ ft for the lateral pressure})`);
 
   H+=step(`3 · Governing embedment equation ${ref(non?'§1807.3.2.1 (non-constrained)':'§1807.3.2.2 (constrained)')}`);
   if(non){
@@ -5405,7 +5410,7 @@ function embedWorkedHTML(embed, inp, P, M, h){
 
   H+=step(`4 · Iterative solution (S₁ depends on d)`);
   H+=`<p class="eq-why">Assume a depth, evaluate S₁ at that depth, recompute d, and repeat until it converges:</p>`;
-  H+=`<table class="tbl"><tr><th>Iter</th><th>d assumed<span class="sym">ft</span></th><th>S₁ at d/3<span class="sym">psf</span></th><th>A</th><th>d computed<span class="sym">ft</span></th></tr>`;
+  H+=`<table class="tbl"><tr><th>Iter</th><th>d assumed<span class="sym">ft</span></th><th>S₁ at min(d,12)/3<span class="sym">psf</span></th><th>A</th><th>d computed<span class="sym">ft</span></th></tr>`;
   const rws=embed.rows.filter((r,i)=>i<3 || i>=embed.rows.length-2 || r.i%2===0).slice(0,8);
   rws.forEach(r=>{H+=`<tr><td>${r.i}</td><td>${fmt(r.dA,3)}</td><td>${fmt(r.S1,0)}</td><td>${fmt(r.A,3)}</td><td>${fmt(r.dC,3)}</td></tr>`;});
   H+=`</table>`;
@@ -6396,7 +6401,7 @@ function buildReport(inp,allCombos,gov,embed,struct){
     H+=eqB(
       'Non-constrained embedded pier',
       `The shaft is treated as a rigid pier free to rotate at grade (no slab restraint). It resists the overturning moment purely through lateral soil pressure, which increases with depth — so the allowable lateral bearing S₁ is evaluated at one-third the embedment depth. The formula solves for the depth d at which the mobilized soil pressure balances the applied lateral load P acting at height h. Because S₁ depends on d, the solution is iterative.`,
-      `S_1=${n(S1c,0)}\\cdot\\min\\!\\left(\\tfrac{d}{3},15\\right)\\ \\text{psf}\\qquad A=\\frac{2.34\\,P}{S_1\\,b}\\qquad d=\\frac{A}{2}\\left[1+\\sqrt{1+\\frac{4.36\\,h}{A}}\\right]`,
+      `S_1=${n(S1c,0)}\\cdot\\tfrac{\\min(d,\\,12)}{3}\\ \\text{psf}\\qquad A=\\frac{2.34\\,P}{S_1\\,b}\\qquad d=\\frac{A}{2}\\left[1+\\sqrt{1+\\frac{4.36\\,h}{A}}\\right]`,
       null,
       'IBC §1807.3.2.1');
   }else{
@@ -6408,7 +6413,7 @@ function buildReport(inp,allCombos,gov,embed,struct){
       'IBC §1807.3.2.2');
   }
   H+=`<p class="eq-why">The iteration below assumes a depth, evaluates the depth-dependent soil bearing, and recomputes d until it converges:</p>`;
-  H+=`<table class="matrix"><thead><tr><th>Iteration</th><th>Depth assumed<span class="sym">d (ft)</span></th><th>Allow. lateral bearing<span class="sym">S₁ at d/3 (psf)</span></th><th>Coefficient<span class="sym">A</span></th><th>Depth computed<span class="sym">d (ft)</span></th></tr></thead><tbody>`;
+  H+=`<table class="matrix"><thead><tr><th>Iteration</th><th>Depth assumed<span class="sym">d (ft)</span></th><th>Allow. lateral bearing<span class="sym">S₁ at min(d,12)/3 (psf)</span></th><th>Coefficient<span class="sym">A</span></th><th>Depth computed<span class="sym">d (ft)</span></th></tr></thead><tbody>`;
   embed.rows.slice(0,10).forEach(r=>{H+=`<tr><td>${r.i}</td><td>${n(r.dA,3)}</td><td>${n(r.S1,0)}</td><td>${n(r.A,3)}</td><td>${n(r.dC,3)}</td></tr>`;});
   H+=`</tbody></table>`;
   H+=eqB(
@@ -6790,7 +6795,7 @@ function populateDetailStack(sfx, ctx){
   S('flags').innerHTML=f;
   // iteration
   S('stepsBox').textContent=ctx.stepsText||`P = ${fmt(asd.P,0)} lb   M = ${fmt(asd.M,0)} lb·ft   h = ${fmt(asd.h,2)} ft\nMu = ${fmt(Mu,0)} lb·ft   Vu = ${fmt(Vu,0)} lb`;
-  let it=`<tr><th>Iteration</th><th>Depth assumed<span class="sym">d (ft)</span></th><th>Allow. lateral bearing<span class="sym">S₁ at d/3 (psf)</span></th><th>Coefficient<span class="sym">A</span></th><th>Depth computed<span class="sym">d (ft)</span></th></tr>`;
+  let it=`<tr><th>Iteration</th><th>Depth assumed<span class="sym">d (ft)</span></th><th>Allow. lateral bearing<span class="sym">S₁ at min(d,12)/3 (psf)</span></th><th>Coefficient<span class="sym">A</span></th><th>Depth computed<span class="sym">d (ft)</span></th></tr>`;
   (ctx.rows||[]).slice(0,8).forEach(r=>it+=`<tr><td>${r.i}</td><td>${fmt(r.dA,2)}</td><td>${fmt(r.S1,0)}</td><td>${fmt(r.A,3)}</td><td>${fmt(r.dC,2)}</td></tr>`);
   S('iterTbl').innerHTML=it;
   // shaft

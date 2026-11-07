@@ -4847,3 +4847,74 @@ Review Phase 8, PR 8e. This PR changes no computed value.
 - **Check case:** default ACI wall (H_s 12 ft, q_a 3000 psf): 23 rows, all PASS, green bordered rows (D/C 0.20 … 1.00), "all pass · 23 checks"; H_s 22 ft, q_a 2500 psf: "5 FAIL", red bordered rows open (Sliding D/C 1.62, Bearing 1.66, Stem Shear 1.12, Stem Hook ℓdh 1.91, Toe Shear 2.39).
 - **How verified:** origin/main (after #957) vs branch, headless Chromium at 1920 px, three walls (ACI default; AASHTO default; ACI H_s 22 / q_a 2500 with 5 FAIL): `window._R`, Export JSON fields (`snapshotFields()`), every localStorage key and value, the Report tab text and the four-sheet DXF **identical**; 0 console errors. No sideways page scroll at 390, 768, 1280, 1400 and 1920 px. Screenshots before / after at 1280, 1400, 1920 and 390 px (deviceScaleFactor 2) next to Spread Footing at the same widths, and the FAIL wall at 1920 and 1400 px, looked at. Tests: check-syntax; smoke/retaining-wall-checks; phone-layout rwall 390/768; project-library retwall.
 - **Other copies:** none.
+
+## 2026-11-07 — PR: claude/rw-partial-contact — Footing design in partial contact: the factored soil reaction is the triangular block of length 3x̄, not the whole-base interpolation (ACI without water and AASHTO Strength I / Ia) (RWPC; calculation change) (PR #980: https://github.com/mlococo88/All-Structural/pull/980)
+
+Open item raised in #960 (RWUP). Engineer instruction relayed 2026-11-07 (no questions; conservative choice). Code sites are tagged `RWPC`.
+
+### RWPC-1. Problem
+- When a factored resultant lies outside the kern (|e| > B/6), the trapezoid becomes a triangle of length 3x̄ from the toe (q_toe = 2V/(3x̄)) or 3(B − x̄) from the heel end. The face pressures q_u,front / q_u,back (ACI 1.2D + 1.6H and 0.9D + 1.6H; AASHTO Strength I `quA_*` and Strength Ia `quIa_*`) were interpolated linearly from q_toe at x = 0 to 0 at x = B, i.e. a triangle of length B. That distribution is not in equilibrium (its area q_toe·B/2 exceeds V).
+  - Heel: upward relief overstated → heel M_u **unconservative**.
+  - Toe: upward pressure overstated → toe M_u and V_u conservative, sometimes grossly.
+- ACI walls with water were already done statically in #960 (RWUP); they are not changed here.
+
+### RWPC-2. Fix (`calcAll`)
+- New `q_blk(x, qt, qh, e, xR)` next to `q_at`: full contact → `q_at` (same arithmetic, bit-identical); partial contact → the block. Used for `quf_front`, `quf_back`, `quf_front_min`, `quf_back_min`, `quA_front`, `quA_back`, `quIa_front`, `quIa_back` (were `q_at` / the same linear expression).
+- Members: a combination with |e| > B/6 and no water split loads the heel and toe with the RWUP pieces at γ_U = 0 (`rwUpSplit(V, M, 0, …)`, `rwUpMember`), so a block that ends inside a member is integrated exactly: `pcS` after the RWUP block; `heelCase` / `toeCase` get `pcS[0]` (ACI 1.2D + 1.6H / AASHTO Strength I) and `pcS[1]` (ACI 0.9D + 1.6H / AASHTO Strength Ia). AASHTO returns `M_net_tot`, `M_net_Ia`, `x_R_Ia` for this.
+- Pile-supported footings (RWPL, #961) design the heel and toe from the pile-row reactions and are not affected (`pcS` is skipped in pile mode).
+- A resultant outside the base (x̄ ≤ 0 or ≥ B) is handled as in RWUP (warning "Footing (partial contact)"; V at the toe tip for the toe, no relief on the heel). Before, the toe pressure became 0 there.
+- **Basis:** statics of a rigid footing on soil that takes no tension (the linear distribution the tool already uses for the stability and rock-bearing checks, cf. AASHTO LRFD 10th Ed. Eqs. 11.6.3.2-2/-3). No code formula, load factor or resistance factor changes.
+
+### RWPC-3. Display
+- Footing tab Heel/Toe Step 1–2 (via `rwUpSteps`, new "no water split" branch): ΣV_u (or V_u), x̄ = M_u/V, e, L_c, peak pressure, q(0), q(L), M_soil = M_up. Stability Step 7 (ACI) title says "partial contact: triangular block" when it applies; Report `rwrTrap` face values use the block formula. The §5.3.8 reference and the "uplift split" notes stay only with water.
+
+### Check cases
+- **ACI, L_t 2, L_h 3, t_f 24 in (B = 6.5 ft), no water** (hand check):
+  - Toe, U = 0.9D + 1.6H governs: ΣV_u = 7668 lb/ft, M_u = 1207 lb-ft/ft → x̄ = 0.157 ft, e = 3.093 > B/6 = 1.083; L_c = 0.472 ft, q_toe = 2(7668)/0.472 = 32478 psf. The block lies inside the toe: M_up = V(L_t − L_c/3) = 7668(2 − 0.157) = 14129; M_u = 14129 − 270(2²)/2 = **13589** (was **57755**: face pressure 22487 psf from the whole-base line, upward force on the toe 54,965 lb/ft > V = 7668). V_u 54424 → 8046. F2 #6 @ 8 → **#5 @ 7**.
+  - Heel, U = 1.2D + 1.6H governs: ΣV_u = 10224, x̄ = 1.112, L_c = 3.335 ft < x_back = 3.5 ft → no soil under the heel: M_u = M_down = 2088(3²)/2 = **9396** (was **5151** = 9396 − 2830(3²)/6). F1 #5 @ 7 unchanged. Heel and toe shear checks, which failed on the old (non-equilibrium) pressure, now pass.
+- **AASHTO, Rankine β 20°** (hand check): Strength Ia V = 19761, x̄ = 3.730, e = 2.520 > 2.083; L_c = 11.189 ft, q_toe = 3532.1; at the back face q = 3532.1(1 − 4.5/11.189) = 2111.6, contact ends 6.689 ft into the heel. M_up = 6.689²/6 (2111.6) = 15747 (was 2260.5(8²)/6 = 24112); M_u = 60713 − 15747 = **44966** (was **36600**); F1 #5 @ 6 → **#6 @ 7**.
+- **Audit walls that move** (main vs branch):
+
+| Wall | Before | After |
+|---|---|---|
+| `aashto_water_col_eta` | heel M_u 33125, F1 #5 @ 7 | **43381, #6 @ 7** |
+| `aashto_rock_ct_water` | heel 43557 (Strength I) | **45189** (Strength Ia governs); bars unchanged |
+| `aashto_vh_ct` | heel 49416 (Strength I) | **51291** (Strength Ia governs); bars unchanged |
+| `aci_mix`, `aci_tall_seis` (water: RWUP) | — | design unchanged; only the informational `quf_front_min` / `quf_back_min` (Stability Step 7) change |
+
+- **Extra walls:** ACI `aci_mix` without water: heel 10147 → **23021** (#4 @ 6 unchanged). AASHTO L_t 2, L_h 3, t_f 24: heel 7695 → 13176 (#3 @ 12 → #3 @ 7), toe 31166 → 18989 (#5 @ 8 → #4 @ 8). AASHTO L_t 4, L_h 4: toe 22204 → 19501 (#5 @ 8 → #5 @ 9).
+- **Full contact unchanged:** `aci_default`, `aci_water_uni`, `aci_water_tri`, `aci_shorttoe` identical in every part (`_R`, export, tabs, Report); `aashto_ct`, `aashto_qs250_water_ct(_full)` differ only by the new fields `M_net_tot`, `M_net_Ia`, `x_R_Ia`.
+
+### How verified
+- origin/main vs branch, headless Chromium (`_R`, Export JSON, localStorage, tabs, Report): the twelve audit walls + 5 partial-contact walls (above). 0 console errors.
+- Hand checks above reproduced with the tool's `calcAll` in Node.
+- Tests: check-syntax; smoke/retaining-wall-checks (table `AUD`: RWPC ACI L_t 2 / L_h 3, AASHTO β 20°, default full contact); phone-layout rwall 390/768; project-library retwall; dxf-print-sheets rw.
+
+### Decisions (pending engineer review)
+- The block is applied to toes too, so toe M_u / V_u / bars can go **down** where the old line overstated the pressure (statics; e.g. L_t 2 / L_h 3: toe #6 @ 8 → #5 @ 7). No envelope with the old non-equilibrium distribution.
+- Resultant outside the base: toe takes V at its tip (upper bound), heel no relief, with a warning (was zero pressure).
+- AASHTO on rock: the footing-design trapezoid is treated the same way (linear distribution with no tension, as Eqs. 11.6.3.2-2/-3).
+
+### Saved data
+- No input or format change.
+## 2026-11-07 — PR: claude/rw-left-breakpoint — Check summary as a left column from 1200 px (was 1500 px); 240 px wide from 1200 to 1499 px (RWLB; display only, no result change) (PR #984: https://github.com/mlococo88/All-Structural/pull/984)
+
+### RWLB. The check summary is on the left at common laptop widths   [display only]
+- **Decision (pending engineer review):** the engineer asked (2026-11-07) for "the summary cards … on the left panel"; at 1280–1499 px (laptops, and 1920 px screens at 125–150 % scaling) RWDC / RWDL (#926, #959) still put the summary above the output tabs. The left column now starts at **1200 px** in Retaining Wall Designer, Spread Footing and Light Pole and Sign Post alike (one PR per tool). From 1200 to 1499 px the column is **240 px** wide; at 1500 px and wider it is 292 px as before (layout unchanged there). Below 1200 px (tablet, phone) nothing changes: the summary sits above the output tabs, and the phone keeps "results first / Show inputs". Same collapse button (« / » → 42 px strip) and key `retaincalcpro.dashCollapsed.v1`.
+- **Why 1200:** at 1200 px the column (240) + inputs (344) leave a 616 px output panel; every output tab fits without sideways scroll (checked on all nine tabs at 1200, 1280 and 1400 px). The Overview card's two groups (Stability / Structural) were cramped at that width (bars and values overlapping), so from 1200 to 1279 px with the column open they stack, exactly as they already do at 1100 px and below.
+- **Where:**
+  - CSS, RWDC block: before `@media screen and (min-width: 1500px) {` (the rule holding `body.rwDashWide #rwDashCol { display: block; flex: 0 0 292px; …`); after:
+```css
+/* RWLB (…): the left column starts at 1200 px (was 1500 px) … */
+@media screen and (min-width: 1200px) and (max-width: 1499.98px) { body.rwDashWide #rwDashCol { flex-basis: 240px; width: 240px; } }
+/* RWLB: … the Overview card's Stability / Structural groups stack, as they already do at 1100 px and below */
+@media screen and (min-width: 1200px) and (max-width: 1279.98px) {
+  body.rwDashWide:not(.rwDashColl) .sc-cols { grid-template-columns: 1fr; }
+  body.rwDashWide:not(.rwDashColl) .sc-group + .sc-group { border-left: 0; border-top: 1px solid var(--border); }
+  body.rwDashWide:not(.rwDashColl) .sc-gov { text-align: left; }
+}
+@media screen and (min-width: 1200px) {
+```
+  - JS: `const RWDC = { … mq: window.matchMedia ? window.matchMedia('screen and (min-width:1500px)') : null, …` → `'screen and (min-width:1200px)'` (comment `/* RWLB: was 1500px */`).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data (§5):** no key or format changed.
+- **How verified:** origin/main vs branch at 1920, 1280 and 1200 px, three walls (ACI default; AASHTO default, 1 FAIL; ACI H_s 22 ft / q_a 2500 psf, 5 FAIL): `window._R`, Export JSON fields, every localStorage key and value, the Report text (`textContent`: the Report's subsections use `content-visibility:auto`, so `innerText` drops off-screen subsections and depends on the layout) and the four-sheet DXF **identical**; 0 console errors. No sideways page scroll at 390, 768, 1200, 1280, 1400, 1920 px (every output tab at 1200 / 1280 / 1400). Screenshots before / after at 1200, 1280, 1400 (and after at 1920, 768, 390; the 5-FAIL wall at 1280) looked at. Tests: check-syntax; smoke/retaining-wall-checks; phone-layout rwall 390/768; project-library retwall.
