@@ -248,3 +248,39 @@ Loaded by: `Moving Load Generator.html` and `apps/steel-bridge/index.html` (engi
 ### Open items
 - Reactions were checked (82.5/82.5 ft, support off the grid): unchanged, the position refinement already finds them, so no
   reaction pass was added.
+
+## 2026-11-07 — PR: claude/ml-pedestrian-load (PR #1125: https://github.com/mlococo88/All-Structural/pull/1125) (M2: optional pedestrian load m.ped; absent = no change)
+Loaded by: `Moving Load Generator.html` (new optional input, default off) and `apps/steel-bridge/index.html` (never sets `m.ped`:
+results unchanged).
+### Problem (review 2026-11-07, M2)
+- No pedestrian load: LRFD 3.6.1.6 requires 0.075 ksf on sidewalks wider than 2 ft at the same time as the vehicles, and the single
+  uniform-load slot is used by the lane load.
+### Where / before → after (`analyze`)
+- New block before `const res=effs.map(()=>({max:0,maxG:null,min:0,minG:null}));`:
+  `PED = m.ped&&m.ped.w>0 ? {w, df (default 1), max, min, Ap, An, g} : null`; per effect `PED.max = w·A⁺·df`, `PED.min = w·A⁻·df`
+  (A⁺, A⁻ = the positive / negative influence-line areas already used for the patterned lane), and the envelope terms
+  `pedMax = PED.max / g⁺`, `pedMin = PED.min / g⁻` with g = `dfOf(ef, ±1)` (0 when g ≤ 0, with a warning).
+- Before: `vMax=cfg.scale*(im*axMax+uf*uMax+laneMax[ei])` (and the same for vMin) in `sweep` and `refineAt`, and
+  `vMax=imArr[ei]*(SL.w*D.lp+P1*hi)` in the Std. Spec. lane case. After: `+pedMax[ei]` / `+pedMin[ei]` added outside `cfg.scale`
+  and outside impact in all three places.
+- Return: `...(PED?{ped:PED}:{})`; a warning describes the load when it is on.
+- Why /g: the page reports γ_LL · g · (per-lane value). With PL entered per girder line and its own DF_PL, the factored PL effect is
+  γ_LL · w · A · DF_PL, independent of the vehicle DF.
+### Governing provision
+- AASHTO LRFD 10th Ed. (2024) Art. 3.6.1.6 (0.075 ksf, simultaneous with the vehicular live load), Art. 3.6.2.1 (no IM on pedestrian
+  loads); Table 3.4.1-1 (PL is part of LL, γ_LL).
+### Decisions (pending engineer review)
+- PL is patterned on the contributing parts of the influence line, like the lane load (it is a live load that may be partial).
+- PL is not reduced by the 0.90 multi-vehicle factor (3.6.1.3.1 reduces the two trucks and the lane; PL kept in full, conservative).
+- PL is added to every highway vehicle case except the fatigue truck (3.6.1.4 has no PL) and rail; not in step mode or deflection
+  (3.6.1.3.2 deflection is the vehicular load).
+### Check case (`tests/engine/moving-load.test.mjs`, "M2"; per lane, DF 1)
+- 1 span 100 ft, HL-93, w_PL = 0.075 × 6 ft = 0.45 k/ft: midspan M = 2821.6 + 0.45 × 100²/8 = 2821.6 + 562.5 = 3384.1 kip-ft. Tool:
+  before 2821.6 (no PL possible), after 3384.1. End reaction + 0.45 × 100/2 = +22.5 kips.
+- Own DF: g = 0.8, DF_PL = 0.5: factored PL contribution γ_LL × 562.5 × 0.5 (per-lane value + 562.5 × 0.5 / 0.8 = +351.56).
+- 2 × 100 ft, pier −M: PL on both spans −0.45 × 100²/8 = −562.5 (tool −562.46, mesh integration).
+### How verified
+- `node tests/engine/run.mjs moving-load`: the 35 parity cases hash identically (no `m.ped`); new test "M2" passes; `m.ped` absent
+  or w = 0 gives identical `res`.
+### Other copies
+- None.

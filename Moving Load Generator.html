@@ -113,6 +113,12 @@ tr.pier td{background:#f8fafc;font-weight:600}
       <div class="f"><label>P shear (kips)</label><input id="slPV" type="number" step="0.5" value="26"></div>
     </div>
     <p class="hint" id="stdLaneH">AASHTO Std. Spec. 17th Ed. Art. 3.7.1.1, Fig. 3.7.6B (H20 / HS20: 0.64 k/ft + 18 k for moment, 26 k for shear and reactions) and Art. 3.11.3 (negative moment in continuous spans: a second, equal P moment in one other span). The uniform load is patterned on the influence line. Enveloped with the truck (truck OR lane, not both); impact is applied to the lane case. DFs here are per lane: a Std. Spec. wheel-line DF (e.g. S/5.5) must be divided by 2.</p>
+    <label class="chk"><input type="checkbox" id="pedOn">Pedestrian load PL with the vehicles (LRFD 3.6.1.6)</label>
+    <div id="pedF" class="g2 hidden">
+      <div class="f"><label>w_PL on this girder line (k/ft)</label><input id="pedW" type="number" step="0.005" value="0.45"></div>
+      <div class="f"><label>PL distribution factor</label><input id="pedDF" type="number" step="0.01" value="1.00"></div>
+    </div>
+    <p class="hint" id="pedH">PL = 0.075 ksf on sidewalks wider than 2 ft, at the same time as the vehicles (LRFD 10th Ed. Art. 3.6.1.6); no impact (Art. 3.6.2.1). Enter w_PL = 0.075 × the sidewalk width carried by this girder line (e.g. 6 ft → 0.45 k/ft) and its own DF (1.0 when w_PL is already per girder; owner rules such as MassDOT 3.5.3.5–3.5.3.7 decide the share). Patterned like the lane load, included in every highway vehicle case without the 90 % reduction, multiplied by γ_LL; not in the fatigue truck, rail vehicles, step mode or deflection. Off by default.</p>
     <div class="lbl" style="margin-top:4px">Variable axle spacing</div>
     <div class="g3">
       <div class="f"><label>Axle # (0 = off)</label><input id="vK" type="number" min="0" step="1"></div>
@@ -338,6 +344,7 @@ function syncVis(){
   $('impAF').classList.toggle('hidden',!ar);
   $('impSF').classList.toggle('hidden',!sd);
   $('stdLaneF').classList.toggle('hidden',!$('stdLane').checked);
+  if($('pedF'))$('pedF').classList.toggle('hidden',!$('pedOn').checked);   // M2 (2026-11-07)
 }
 
 // ═══════════ SECTION PROPERTIES (uncracked, short-term n) ═══════════
@@ -588,7 +595,7 @@ function drawVehicle(){
   c.fillText(`R = ${+Rt.toFixed(2)}k @ ${CR.toFixed(2)}' from axle 1`,cx,gy-98);
   // Summary line
   const udlTxt=m.udl.mode==='none'||!(m.udl.w>0)?'No uniform load':m.udl.mode==='lane'?`Lane ${m.udl.w} k/ft, patterned on influence lines`:m.udl.mode==='full'?`Uniform ${m.udl.w} k/ft, full length`:`Trailing ${m.udl.w} k/ft, ${m.udl.gap}' behind last axle${m.udl.trunc?' (truncatable)':''}`;
-  $('vehInfo').innerHTML=`<b>${m.short==='Custom'?'Custom vehicle':(P[m.short]?P[m.short].label:m.short)}</b> · ${ax.length} axles · ΣP = ${+Rt.toFixed(2)} kips · ${udlTxt} · Impact: ${m.imp.method==='const'?m.imp.val:m.imp.method==='std'?'Std. Spec. 50/(L+125) ≤ 0.30':'AREMA formula'}${m.imp.onUdl?' (incl. uniform load)':''}${m.stdLane?` · Std. Spec. lane ${m.stdLane.w} k/ft + ${m.stdLane.PM} k / ${m.stdLane.PV} k (separate case, with impact)`:''}`+
+  $('vehInfo').innerHTML=`<b>${m.short==='Custom'?'Custom vehicle':(P[m.short]?P[m.short].label:m.short)}</b> · ${ax.length} axles · ΣP = ${+Rt.toFixed(2)} kips · ${udlTxt} · Impact: ${m.imp.method==='const'?m.imp.val:m.imp.method==='std'?'Std. Spec. 50/(L+125) ≤ 0.30':'AREMA formula'}${m.imp.onUdl?' (incl. uniform load)':''}${m.stdLane?` · Std. Spec. lane ${m.stdLane.w} k/ft + ${m.stdLane.PM} k / ${m.stdLane.PV} k (separate case, with impact)`:''}${m.ped?` · Pedestrian load ${m.ped.w} k/ft on this girder, DF ${m.ped.df}, no impact (LRFD 3.6.1.6)`:''}`+
     `${varOK?` · Axle ${m.vK} spacing varies ${m.vMin}–${m.vMax}'`:''}${m.secondary?` · Also enveloped with ${m.secondary}`:''}${m.multi&&m.spans.length>1?` · ${m.mScale}×2-vehicle case, headway ≥ ${m.mHmin}'`:''}`;
 }
 const _render2=render; render=function(){_render2();drawVehicle();};
@@ -816,6 +823,7 @@ function reportHTML(out,o,base,dk){
     ['Distribution factors',base.spans.map((_,k)=>`Span ${k+1}: moment ${base.dfM[k]}, shear ${base.dfV[k]}`).join(' · ')+(base.dfNeg>0?` · negative moment ${base.dfNeg}`:'')],
     ['AREMA impact inputs (rail presets)',`S = ${base.imp.S} ft${base.imp.bal?', ballasted deck (90%)':''}, L basis: ${$('aLb')?$('aLb').selectedOptions[0].text:'span'}`],
     ['Analysis',`Position step ${base.step} ft, spacing/headway step ${base.hStep} ft, ${base.dirs.length>1?'both travel directions':'one travel direction'}; each axle also placed exactly on every moment section and at every shear cut`],
+    ...((pd=>pd?[['Pedestrian load (LRFD 3.6.1.6)',`w_PL = ${pd.w} k/ft on this girder line, DF_PL = ${pd.df}; patterned on the contributing influence-line area A, no impact, with every highway vehicle case (not reduced in the 90 % case): factored PL effect = γ_LL × w_PL × A × DF_PL (highway vehicles only)`]]:[])(out.map(r=>r.R.ped).find(Boolean))),
     ['Results basis',unit],['Code basis',esc($('mlgBasis').textContent.replace(/^Basis: /,''))]];
   {const fm=num('fDFm',0),fv=num('fDFv',0),fn=num('fDFn',0);if(fm>0||fv>0||fn>0)inp.splice(5,0,['LRFD fatigue truck DFs (fatigue truck only)',`moment ${fm>0?fm:'= highway span DFs'}, shear ${fv>0?fv:'= highway span DFs'}, negative moment ${fn>0?fn:fm>0?fm:'= highway DF'}`]);}
   if(o.defl)inp.push(['Deflection',`${$('dCase').selectedOptions[0].text}; DF ${num('dDF',1)}; ${$('dIM').checked?'with':'without'} impact; limit L/${N}`]);
@@ -959,6 +967,8 @@ function applyFam(m,key){
       if(fm>0){m.dfM=Array(n).fill(fm);m.dfNeg=fn>0?fn:0;}else if(fn>0)m.dfNeg=fn;
       if(fv>0)m.dfV=Array(n).fill(fv);
       if(fm>0||fv>0||fn>0)m.fatDF={M:fm>0?fm:null,V:fv>0?fv:null,N:fn>0?fn:null};}}
+  // M2 (2026-11-07): pedestrian load, LRFD 3.6.1.6 (highway vehicles other than the fatigue truck; off by default)
+  if($('pedOn')&&$('pedOn').checked&&!m.rail&&key!=='Fatigue'&&num('pedW',0)>0)m.ped={w:num('pedW',0),df:num('pedDF',1)>0?num('pedDF',1):1};
   return m;
 }
 const _readModel=readModel; readModel=function(){return applyFam(_readModel(),$('preset').value);};
@@ -1302,6 +1312,8 @@ function mlgApply(d){
   renderAxles();
   if(Array.isArray(d.segs)&&d.segs.length) segs=d.segs.map(sg=>{const o={};SF.forEach(k=>o[k]=+sg[k]||0);return o;});
   Object.keys(f).forEach(id=>{const e=$(id);if(!e||id==='nSpans')return;if(e.type==='checkbox')e.checked=!!f[id];else e.value=f[id];});
+  // M2 (2026-11-07): saves made before the pedestrian load existed open with it off (their results unchanged)
+  if(!('pedOn' in f)&&$('pedOn')){$('pedOn').checked=false;$('pedW').value='0.45';$('pedDF').value='1.00';}
   renderSegs(); syncVis();
   if($('aLF')&&$('aLb'))$('aLF').classList.toggle('hidden',$('aLb').value!=='user');
 }
@@ -1847,7 +1859,7 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
     [/^E steel|^Every span length/,'spans'],
     [/^Segment lengths reach|^A segment has invalid geometry/,'girder'],
     [/^One or more axles have zero/,'vehicle'],
-    [/^Variable spacing|^The multi-vehicle case needs|^A uniform load mode is selected|^Std\. Spec\. lane loading: /,'rules'],
+    [/^Variable spacing|^The multi-vehicle case needs|^A uniform load mode is selected|^Std\. Spec\. lane loading: |^Pedestrian load/,'rules'],
     [/^The impact multiplier|^Impact is applied to the uniform load/,'impact'],
     [/^One or more distribution factors/,'factors']];
   var KEY='movingLoadGen.inputTab.v1', cur=null;
@@ -2071,7 +2083,7 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
             var gl=ef.t==='M'?(raw<0&&m.dfNeg>0?'negative-moment DF':'moment DF, '+(ef.spans.length>1?'larger of spans '+ef.spans.map(function(z){return z+1;}).join(' and '):'span '+(ef.spans[0]+1))):ef.t==='V'?'shear DF, span '+(ef.spans[0]+1):'shear DF, '+(ef.spans.length>1?'larger of spans '+ef.spans.map(function(z){return z+1;}).join(' and '):'span '+(ef.spans[0]+1));
             if(m.rail)gl+=' (rail set)'; else if(m.fatDF)gl+=' (fatigue set where entered)';
             var sym=q[0]+q[1];
-            lines.push('<div class="cr-line"><div>'+sym+' = γ<sub>LL</sub> · g · '+sym+'<sub>LL+IM</sub></div><div>= '+m.llf+' × '+(+g.toFixed(4))+' × '+fx(raw,2)+'</div><div class="cr-r"><b>'+fx(b.v,1)+'</b> '+q[4]+'</div></div><div class="cr-where">g = '+gl+'; '+sym+'<sub>LL+IM</sub> = envelope value per lane including impact at '+(ef.t==='R'?'Support '+'ABCDE'[ef.q]:'x = '+b.x.toFixed(2)+' ft')+' (influence-line envelope, '+alink(id14)+')</div>');
+            lines.push('<div class="cr-line"><div>'+sym+' = γ<sub>LL</sub> · g · '+sym+'<sub>LL+IM</sub></div><div>= '+m.llf+' × '+(+g.toFixed(4))+' × '+fx(raw,2)+'</div><div class="cr-r"><b>'+fx(b.v,1)+'</b> '+q[4]+'</div></div><div class="cr-where">g = '+gl+'; '+sym+'<sub>LL+IM</sub> = envelope value per lane including impact at '+(ef.t==='R'?'Support '+'ABCDE'[ef.q]:'x = '+b.x.toFixed(2)+' ft')+' (influence-line envelope, '+alink(id14)+')'+(R.ped?'; it includes the pedestrian load w<sub>PL</sub>·A·g<sub>PL</sub>/g = '+R.ped.w+' × '+fx(q[3]?R.ped.Ap[ei]:R.ped.An[ei],2)+' × '+R.ped.df+' / '+(+g.toFixed(4))+' = '+fx((q[3]?R.ped.max[ei]:R.ped.min[ei])/g,2)+' (A = '+(q[3]?'positive':'negative')+' influence-line area, ft·'+(ef.t==='M'?'ft':'—')+')':'')+'</div>');
           });
           kv.insertAdjacentElement('afterend',mk('div','cr-work','<p class="cr-p"><i>Factoring of the governing values</i> (γ<sub>LL</sub> and DFs: '+alink(id11)+'):</p>'+lines.join('')));
         } else kv.insertAdjacentElement('afterend',mk('p','cr-note','Values are per lane, unfactored, including impact (γ<sub>LL</sub> and DFs not applied).'));
@@ -2237,6 +2249,7 @@ function mlrModel(){
       ['Distribution factors',m.spans.map((_,k)=>`span ${k+1}: moment ${m.dfM[k]}, shear ${m.dfV[k]}`).join(' · ')+(m.dfNeg>0?` · negative moment ${m.dfNeg}`:'')],
       ['Impact',m.imp.method==='const'?`constant ${m.imp.val}`:m.imp.method==='std'?'Std. Spec. 50/(L + 125) ≤ 0.30':`AREMA formula, S = ${m.imp.S} ft${m.imp.bal?', ballasted deck (90%)':''}, L basis: ${$('aLb')?$('aLb').selectedOptions[0].text:'span'}`],
       ['Analysis',`position step ${m.step} ft, spacing / headway step ${m.hStep} ft, ${m.dirs.length>1?'both travel directions':'one travel direction'}`],
+      ...(R.ped?[['Pedestrian load (LRFD 3.6.1.6)',`w_PL = ${R.ped.w} k/ft on this girder line, DF_PL = ${R.ped.df}; patterned on the contributing influence-line area A, no impact, in every vehicle case (not reduced in the 90 % case); in the per-lane envelope as w_PL·A·DF_PL / g`]]:[]),
       ['Tables in this report',fac?`factored per girder (γ_LL ${m.llf} × DF), as the View selector`:'unfactored per lane, including impact, as the View selector'],
       ['Code basis',basis]]},
       {type:'note',text:'Set in the input panel. The results on screen: [[tab:card:cM|Results]].'}]});
@@ -2282,6 +2295,8 @@ function mlrModel(){
       const gl=ef.t==='M'?(raw<0&&m.dfNeg>0?'negative-moment DF':'moment DF, '+(ef.spans.length>1?'larger of spans '+ef.spans.map(z=>z+1).join(' and '):'span '+(ef.spans[0]+1))):'shear DF, '+(ef.spans.length>1?'larger of spans '+ef.spans.map(z=>z+1).join(' and '):'span '+(ef.spans[0]+1));
       T.push({title:lab+' — '+where,ref:'AASHTO LRFD 10th Ed. Table 3.4.1-1, Art. 3.6.2',steps:[
         SharedSteps.step({id:k+'.lane',label:'Envelope value per lane, including impact (influence-line envelope)',sym:s+sg+'_{LL+IM}',value:raw,unit:u,d:2,note:'Governing: '+G(b.g)}),
+        ...(R.ped&&g>0?[SharedSteps.step({id:k+'.pl',label:'of which pedestrian load (M2): w_PL × influence-line area × DF_PL / g',sym:s+sg+'_{PL}',eq:'w_{PL}\\, A\\, g_{PL} / g',
+          sub:mlrN(R.ped.w,3)+'\\cdot '+mlrP(isMax?R.ped.Ap[ei]:R.ped.An[ei],2)+'\\cdot '+mlrN(R.ped.df,2)+' / '+mlrN(g,4),value:(isMax?R.ped.max[ei]:R.ped.min[ei])/g,unit:u,d:2})]:[]),
         SharedSteps.step({id:k+'.g',label:'Distribution factor ('+gl+(m.rail?', rail set':'')+')',sym:'g',value:g,unit:'',d:4}),
         SharedSteps.step({id:k,label:lab+', factored per girder',sym:s+sg,eq:'\\gamma_{LL}\\, g\\, '+s+sg+'_{LL+IM}',sub:mlrN(m.llf,2)+'\\cdot '+mlrN(g,4)+'\\cdot '+mlrP(raw,2),value:b.v,unit:u,d:1})]});
     });

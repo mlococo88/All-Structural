@@ -578,3 +578,26 @@ test('H1 (2026-11-07): each axle placed exactly on each moment section; results 
     });
   }
 });
+
+test('M2 (2026-11-07): pedestrian load (LRFD 3.6.1.6): absent = unchanged; patterned, no IM, own DF; review check case', () => {
+  const S = sharedEngine();
+  const run = (spans, ped, mo = {}) => S.analyze(modelFrom(S.P, S.props, 'HL93-Truck', { spans, m: { dfM: spans.map(() => 1), dfV: spans.map(() => 1), ...(ped ? { ped } : {}), ...mo } }), {});
+  const at = (R, x, t = 'M') => R.res[R.effs.findIndex(e => e.t === t && Math.abs(e.x - x) < 1e-6)];
+  // absent or w = 0: identical results
+  const a = run([100, 120]), z = run([100, 120], { w: 0, df: 1 });
+  assert.equal(JSON.stringify(plain(a.res)), JSON.stringify(plain(z.res))); assert.ok(!a.ped && !z.ped);
+  // 1 span 100 ft, w_PL = 0.075 × 6 = 0.45 k/ft: midspan M_PL = 0.45 × 100² / 8 = 562.5, added to HL-93 2821.6 (per lane, DF 1)
+  const b1 = run([100]), p1 = run([100], { w: 0.45, df: 1 });
+  assert.ok(Math.abs(at(b1, 50).max - 2821.6) < 1e-3 && Math.abs(at(p1, 50).max - 3384.1) < 1e-3, `${at(p1, 50).max}`);
+  // end shear: + w L / 2 = 22.5 (no IM)
+  assert.ok(Math.abs(at(p1, 0, 'R').max - at(b1, 0, 'R').max - 22.5) < 1e-3);
+  // own DF: g = 0.8, DF_PL = 0.5: the per-lane value gains 562.5 × 0.5 / 0.8, so γ_LL·g·value gains γ_LL × 562.5 × 0.5
+  const g = { dfM: [0.8], dfV: [0.8] }, b2 = run([100], null, g), p2 = run([100], { w: 0.45, df: 0.5 }, g);
+  assert.ok(Math.abs((at(p2, 50).max - at(b2, 50).max) * 0.8 - 281.25) < 1e-3);
+  // 2 × 100 ft, pier −M: PL on both spans = −w L² / 8 = −562.5 (mesh area within 0.01 %); not reduced in the 90 % case
+  const b3 = run([100, 100]), p3 = run([100, 100], { w: 0.45, df: 1 });
+  assert.ok(Math.abs(at(p3, 100).min - at(b3, 100).min + 562.5) < 0.1, `${at(p3, 100).min - at(b3, 100).min}`);
+  // results only move by the PL term: every maximum rises and every minimum falls by w·A·df/g of that effect
+  p3.effs.forEach((ef, i) => { assert.ok(Math.abs(p3.res[i].max - b3.res[i].max - p3.ped.max[i]) < 1e-6 && Math.abs(p3.res[i].min - b3.res[i].min - p3.ped.min[i]) < 1e-6, `effect ${i}`); });
+  assert.ok(p3.warn.some(w => /^Pedestrian load/.test(w)));
+});
