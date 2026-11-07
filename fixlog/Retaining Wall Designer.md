@@ -3785,6 +3785,351 @@ Calculation audit, item 9 (3). Engineer decision (2026-11-07). Code sites are ta
 ### Saved data
 - No input or format change. Old projects with k_h > 0 get the stem seismic combination; their stem results can change (ACI).
 
+## 2026-11-07 — PR: claude/rw-ee2-vertical-eh — AASHTO Extreme Event II (collision): the vertical earth-thrust component P_a,V follows the EH choice (0 under MassDOT, 1.00 under "full") (RWCV; calculation change) (PR #956: https://github.com/mlococo88/All-Structural/pull/956)
+
+Follow-up to item 3 (#944). Engineer answer (2026-11-07): the vertical component of the earth thrust follows the EH choice in Extreme Event II. Code sites are tagged `RWCV`.
+
+### RWCV-1. `calcAll`, Extreme Event II block   [§4]
+- **Where:** `calcAll`, anchors `const CMB_EE2 = {`, `const V_ct_min =`, `const Mr_ct =`.
+- **Problem:** the resisting vertical load V and moment M_r counted P_a,V at 1.00 as EV, whatever the EH choice. With the MassDOT option (γ_EH,CT = 0) the horizontal earth thrust was dropped but its vertical (stabilizing) component was still counted. Unconservative for sliding, and it moved the resultant toward the heel, on walls with a sloped backfill (Rankine) or wall friction δ > 0 (Coulomb).
+- **Fix:** P_a,V and its moment P_a,V·B take γ_EH,CT, the new `CMB_EE2.EHv`: 0 with the MassDOT option, 1.00 with "full". W_soil stays EV at 1.00. V feeds sliding, e and (through V_max = V + 0.50 V_LS) bearing, so all three use the same factor.
+- **Provisions:**
+  - AASHTO LRFD 10th Ed. Table 3.4.1-1 (EE II row): γp = 1.00 for the permanent loads; one load (EH) takes one factor in all its effects.
+  - MassDOT LRFD Bridge Manual 3.3.2.4: earth pressure need not act with the collision force for stability (γp = 0). The engineer applies this to both components of the thrust.
+- **Before / after** (`git diff -U0`):
+```diff
+@@ -2653 +2653 @@ function calcAll(inp) {
+-      const CMB_EE2 = { CT: 1.00, DC: 1.00, EV: 1.00, EH: gEH_ct, LS: gLS_ct, WA: 1.00, ES: gEH_ct, ESv: 1.00 };   // Extreme Event II factors (RW3F)
++      const CMB_EE2 = { CT: 1.00, DC: 1.00, EV: 1.00, EH: gEH_ct, EHv: gEH_ct, LS: gLS_ct, WA: 1.00, ES: gEH_ct, ESv: 1.00 };   // Extreme Event II factors (RW3F); RWCV (2026-11-07): EHv = the vertical earth-thrust component follows the EH choice
+@@ -2665 +2665 @@ function calcAll(inp) {
+-      const V_ct_min = CMB_EE2.DC*(Wftg + Wstem + W_bar) + CMB_EE2.EV*(Wsoil + Pa_tri_v) + CMB_EE2.ESv*V_ES_v - CMB_EE2.WA*F_uplift;   // RWCT: + 1.00 ES vertical
++      const V_ct_min = CMB_EE2.DC*(Wftg + Wstem + W_bar) + CMB_EE2.EV*Wsoil + CMB_EE2.EHv*Pa_tri_v + CMB_EE2.ESv*V_ES_v - CMB_EE2.WA*F_uplift;   // RWCT: + 1.00 ES vertical; RWCV: P_a,V at γ_EH,CT (was 1.00 as EV)
+@@ -2679 +2679 @@ function calcAll(inp) {
+-      const Mr_ct = CMB_EE2.DC*(Ms_ftg + Ms_stem + Ms_bar) + CMB_EE2.EV*(Ms_soil + Ms_Pv) + CMB_EE2.ESv*V_ES_v*xESv + CMB_EE2.WA*Ms_uplift;   // RWCT: + 1.00 ES vertical
++      const Mr_ct = CMB_EE2.DC*(Ms_ftg + Ms_stem + Ms_bar) + CMB_EE2.EV*Ms_soil + CMB_EE2.EHv*Ms_Pv + CMB_EE2.ESv*V_ES_v*xESv + CMB_EE2.WA*Ms_uplift;   // RWCT: + 1.00 ES vertical; RWCV: P_a,V at γ_EH,CT
+```
+- **Results move** only for AASHTO walls with collision on, the MassDOT option, and P_a,V > 0 (Rankine with β > 0, or Coulomb with δ > 0). Coulomb with δ = 0 has P_a,V = 0 even with β > 0 (the thrust is inclined at δ), so those walls do not move. The stem EE II case (EH at 1.00, MassDOT 3.3.2.4) does not use P_a,V and is unchanged.
+
+### RWCV-2. Display (Stability Step 7b, Report Step 7b, 3D view)
+- `renderStabilityAASHTO`, anchor `Resisting vertical load (DC + EV at`:
+  - the title names the factor on P_a,V; the equation shows the values substituted; a P_a,V row is added to the "where" list;
+  - new step "Resisting moment about the toe (same factors as V)": M_r worked with each W·x (was quoted only in the eccentricity step);
+  - the MassDOT alert says the vertical component is dropped with the horizontal thrust.
+- `rwrModel`, Step 7b (`sa7b`): `V` gets its substituted values and, under the MassDOT option with P_a,V > 0, a note; new step `Mr` (worked); the Eccentricity group is `sb.slice(3, 6)` and Bearing `sb.slice(6)` (were 3–5 and 5).
+- `rw3Factors`, key `ee2`: the 3D view's EH,v factor is `E.EHv` (was `E.EV`).
+- Item 3b: no change. The manual h_eq already overrides the H/2 rule and is noted on the Traffic tab (RWLS).
+
+### Check cases (AASHTO default + collision TL-4: 28 kip / 41 ft = 0.683 k/ft at 30 in; `calcAll` in Node and in the browser)
+- **Default (P_a,V = 0):** unchanged. V 16583, sliding D/C 0.246, e −0.222 ft, q 1535 psf.
+- **β 10°, Rankine, MassDOT:** P_a,V = 819.2 lb/ft (Stability Step 2), moment P_a,V·B = 819.2 × 12.5 = 10240.
+  - V = 1.0(2813 + 2250) + 1.0(12284) + 0 × 819 = **17347** (was 18166).
+  - Sliding: R = 1.0 × 17347 × 0.364 = 6314; D/C = 1619 / 6314 = **0.256** (was 1619 / 6612 = 0.245).
+  - M_r 141302 → 131062; e = 6.25 − (131062 − 17944) / 17347 = **−0.271 ft** (was −0.541).
+  - Bearing: V_max 19594 → 18775; q 1754 → **1611 psf** (limit 9000).
+- **β 10°, Rankine, "full":** unchanged (V 18166, sliding 0.947, e 0.738, q 1710).
+- **Coulomb δ 20°, MassDOT:** P_a,V = 1112 lb/ft. V 17694 → **16583**; sliding 0.217 → **0.232**; e −0.634 → **−0.257 ft**; q 1740 → **1543 psf**.
+- **Coulomb δ 20°, "full":** unchanged (V 17694, sliding 0.692).
+
+### How verified
+- origin/main vs branch, headless Chromium (results `_R`, Export JSON, localStorage, tab text, Report model and text): the twelve audit walls + the four β / δ collision walls.
+  - Walls without collision (all ACI walls, `aashto_water_col_eta`): identical in every part.
+  - Collision walls with P_a,V = 0 (`aashto_ct`, `aashto_rock_ct_water` (Coulomb δ 0, β 10°), `aashto_vh_ct`, the q_s 250 + water walls) and the "full" walls: `_R` differs only by the new `CMB_EE2.EHv`; the text differs by the Step 7b display.
+  - β 10° / δ 20° MassDOT walls: only `aashtoR.ct.ee2` (V, V_max, R, D/C, M_r, x̄, e, bearing) and the `ct*` check values change, as above.
+  - 0 console errors; self-consistency panel: all passed.
+- Tests: check-syntax; smoke/retaining-wall-checks (table `AUD`: RWCV β 10° MassDOT and "full", δ 20° MassDOT); phone-layout rwall 390/768; project-library retwall; dxf-print-sheets rw.
+- Screenshot looked at: Stability Step 7b (β 10°, MassDOT).
+
+### Decisions (pending engineer review)
+- The factor on P_a,V applies to all three EE II stability checks (sliding, eccentricity, bearing), as one load takes one factor. Under the MassDOT option this lowers the bearing pressure slightly (β 10°: 1754 → 1611 psf); the alternative (keep P_a,V at 1.00 for bearing only) was not adopted because the horizontal thrust that goes with it is not applied.
+
+## 2026-11-07 — PR: claude/rw-aci-uplift-split — ACI footing design with water: the uplift is split out of the factored base pressure, γ_U = 1.6 for the toe and 0.9 for the heel (ACI 318-19 §5.3.8) (RWUP; calculation change) (PR #960: https://github.com/mlococo88/All-Structural/pull/960)
+
+Calculation audit, item 1 follow-up (#942 added a display note, RWUPN). Engineer answer (2026-11-07): split the uplift out, 1.6 where it adds to the effect (toe), 0.9 where it is permanent and counteracts (heel downward load), in U = 1.2D + 1.6H and 0.9D + 1.6H. Code sites are tagged `RWUP`.
+
+**Provision checked in the PDF:** the load-factor rule for H is ACI 318-19 **§5.3.8** (a) 1.6 where H adds to the primary effect, (b) 0.9 where it is permanent and counteracts, (c) 0 where it is not permanent and counteracts; R5.3.8 says H covers water in soil. §5.3.9 (named in the request) is the flood-load provision, so §5.3.8 is cited.
+
+### RWUP-1. `calcAll`, footing heel and toe (ACI with water only)   [§4]
+- **Where:** after `const bqm_back  = isAASHTO ? aashtoR.quIa_back  : quf_back_min;` — new `upS`, `rwUpSplit(V, M, g, lbl)`, `rwUpSoilAt(sp, x)`, `rwUpMember(sp, xf, xt)`; `heelCase(..., up)` and `toeCase(q0, qL, up)` take the split; return adds `upS, hcG_up, tcG_up`.
+- **Before:** heel and toe were designed for the total factored base-pressure trapezoid of each combination (soil + water together, built from ΣV_u with no −U), with the edge pressures interpolated linearly between the toe and the heel end.
+- **After (only when `!isAASHTO && F_uplift > 0`):** for each combination (ΣV_u, M_u = M_s,u − M_o,u about the toe, as before):
+  - soil reaction V_s = ΣV_u − γ_U·U, x̄_s = (M_u − γ_U·U·x_U)/V_s, e_s = B/2 − x̄_s;
+  - soil pressure: full contact when |e_s| ≤ B/6 (q = V_s/B(1 ± 6e_s/B)); otherwise a triangular block of length L_c = 3x̄_s from the toe (or 3(B − x̄_s) from the heel end), peak 2V_s/L_c;
+  - water pressure on the member: γ_U·γ_w·h_w (uniform) or γ_U·γ_w·h_w·x/B (triangular);
+  - member force and moment about the stem face from the linear pieces: F = (q_a + q_b)(s₂ − s₁)/2, M = (s₂ − s₁)[q_a(2s₁ + s₂) + q_b(s₁ + 2s₂)]/6;
+  - **toe γ_U = 1.6** (§5.3.8(a)); **heel γ_U = 0.9** (§5.3.8(b)); the two combinations are enveloped as before; heel M_u = M_down − M_up, V_u = |w_u L_h − F_up|; toe M_u = M_up − w_sw L_t²/2, V_u = F_up − w_sw L_t.
+  - V_s ≤ 0, or the soil resultant outside the base: a warning; the soil reaction is taken at the toe tip (toe) or as zero on the member (heel, and the toe when the resultant is beyond the heel end).
+- In full contact the split gives the same pressure as before (results equal to round-off, ≤ 1e-11). AASHTO mode and walls without water: unchanged.
+- **Before / after (core):**
+```diff
+-  const hcMax = heelCase(gEV, gDC, gES, gLS, bq_back, bq_heel);
++  const hcMax = heelCase(gEV, gDC, gES, gLS, bq_back, bq_heel, upS ? upS.heelMax : null);   // RWUP
+-                         : heelCase(0.9, 0.9, 0, 0, bqm_back, bqm_heel);
++                         : heelCase(0.9, 0.9, 0, 0, bqm_back, bqm_heel, upS ? upS.heelMin : null);
+-    const Mup = q0 * inp.Lh ** 2 / 2 + (qL - q0) * inp.Lh ** 2 / 3;
++    if (up) { q0 = up.q0; qL = up.qL; }
++    const Mup = up ? up.M : q0 * inp.Lh ** 2 / 2 + (qL - q0) * inp.Lh ** 2 / 3;
++    const Fup = up ? up.F : ((q0 + qL) / 2) * inp.Lh;
+-             Vstd: Math.abs(wu * inp.Lh + gEVc * V_wedge_heel - ((q0 + qL) / 2) * inp.Lh),
++             Vstd: Math.abs(wu * inp.Lh + gEVc * V_wedge_heel - Fup),
+-  const tcMax = toeCase(bq_front, bq_toe), tcMin = toeCase(bqm_front, bqm_toe);
++  const tcMax = toeCase(bq_front, bq_toe, upS ? upS.toeMax : null), tcMin = toeCase(bqm_front, bqm_toe, upS ? upS.toeMin : null);   // RWUP
+-             M: n0 * inp.Lt ** 2 / 2 + (nL - n0) * inp.Lt ** 2 / 3,
+-             V: Math.max(0, n0 * inp.Lt + (nL - n0) * inp.Lt / 2) };
++             M: up ? up.M - wu_toe_down * inp.Lt ** 2 / 2 : n0 * inp.Lt ** 2 / 2 + (nL - n0) * inp.Lt ** 2 / 3,
++             V: Math.max(0, up ? up.F - wu_toe_down * inp.Lt : n0 * inp.Lt + (nL - n0) * inp.Lt / 2) };
+```
+  (`rwUpSplit` / `rwUpMember` are new code; see the file at the `RWUP` tag.)
+
+### RWUP-2. Display
+- Footing tab: the RWUPN note on "Factored Loads on Footing" is rewritten (the uplift is now split out; γ_U 1.6 toe / 0.9 heel). Heel Step 1 / Toe Step 1: V_s, x̄_s, e_s, soil pressure (or L_c and peak), water pressure, q(0) and q(L) = soil + water. Heel Step 2 / Toe Step 2: M_soil, M_water, M_up worked, then M_u and V_u. New helpers `rwUpSteps(r, up, mem)` and `rwUpTabEq(st)` (one step list for the tab and the Report).
+- Stability Step 7 (ACI): a note that these are total pressures and the uplift is split for the heel and toe, with links (new card keys `ftgHeelUp`, `ftgToeUp`).
+- Report: Heel Step 1–2 and Toe Step 1–2 carry the same steps (ids `u*`); the Step 7 note; the heel/toe "q_u from" notes point to ΣV_u.
+- Heel / toe shear and moment charts (`plotHeelSM`, `plotToeSM`): use the pieces (`rwUpBeyond`). The schematic SVG diagrams in the Analysis tab still draw the end pressures linearly (annotated values are the design values).
+
+### Check cases (ACI default wall: H_s 12, t_f 1.5 ft, L_t 3, L_h 8, B 12.5 ft)
+- **Water 6 ft below the top (default water case), uniform or triangular:** unchanged. Toe M_u 7325, heel 19032 lb-ft/ft (full contact: split = total).
+- **Water 2 ft below the top, triangular uplift** (h_w = 11.5 ft, U = ½(62.4)(11.5)(12.5) = 4485 lb/ft at x_U = 8.333 ft):
+  - Toe, U = 0.9D + 1.6H governs: V_s = 15644 − 1.6(4485) = 8468; x̄_s = (72958 − 1.6(4485)(8.333))/8468 = 1.554 ft; e_s = 4.696 > B/6 = 2.083 → L_c = 4.662 ft, q_s,toe = 2(8468)/4.662 = 3633.2 psf; at the stem face q_s = 1295.0. Water 1.6(62.4)(11.5) = 1148.2 psf at the heel end → 275.6 psf at the face, 0 at the tip.
+    M_soil = 3²/6 (1295.0 + 2·3633.2) = 12842; M_water = 3²/6 (275.6) = 413; M_up = 13256; M_u = 13256 − 202.5(3²)/2 = **12344** (was **9250**, 1.2D + 1.6H total trapezoid). V_u 5998 → 7198. F2 stays #4 @ 6.
+  - Heel, U = 0.9D + 1.6H governs: V_s = 15644 − 0.9(4485) = 11608; x̄_s = 3.387; e_s = 2.863 → L_c = 10.162, peak 2284.5; at the back face 1272.9 psf, contact ends 5.662 ft into the heel. Water 0.9(62.4)(11.5) = 645.8 psf at the heel end → 232.5 at the face.
+    M_soil = 5.662²/6 (1272.9) = 6802; M_water = 8²/6 (232.5 + 2·645.8) = 16258; M_up = 23060; M_down = 50832; M_u = **27772** (was **28267**). F1 stays #5 @ 8.
+- **Water 2 ft, uniform uplift:** toe 9250 → 9377 (the 0.9D + 1.6H toe case has no soil equilibrium at γ_U 1.6 → warning, V_s at the toe tip, does not govern); heel 28267 → 27431.
+- **Audit wall `aci_mix`** (water 6 ft, k_h 0.15, column, β 10°, q_s 250, key 18 in, passive): heel M_u 10254 → **25412** (F1 #4 @ 6 unchanged; A_s,req 0.389 → 0.390); toe 41177 → 41228. Most of the heel change is the soil block: e_u,min = 2.576 > B/6, and the total trapezoid used before spread the triangle over the whole base (see open item).
+
+- **Audit wall `aci_tall_seis`** (H_s 28 ft, water 10 ft below the top, k_h 0.15): in U = 0.9D + 1.6H the soil resultant at γ_U = 1.6 falls beyond the toe (warning), so V_s is taken at the toe tip: toe M_u 103657 → **129214**, F2 #6 @ 6 → **#7 @ 7**; heel 353922 → 352930 (F1 unchanged); heel V_u 33949 → 38264 (the wall already failed heel and toe shear).
+- **Water 4 ft, uniform:** toe 8089 → 8939 (0.9D + 1.6H now governs), heel 22687 unchanged to round-off.
+
+### How verified
+- origin/main vs branch, headless Chromium (`_R`, Export JSON, localStorage, tabs, Report): the twelve audit walls + water 2 ft triangular / uniform + water 4 ft uniform.
+  - Walls without water and AASHTO walls: `_R` differs only by the new `upS` / `hcG_up` / `tcG_up` (null); tabs and Report identical.
+  - `aci_water_uni` (6 ft): values equal to round-off (≤ 1e-11); text differs by the new worked steps.
+  - `aci_water_tri`, `aci_mix`, 2 ft / 4 ft walls: only the heel and toe design values move, as above. Stability is unchanged.
+  - 0 console errors.
+- Hand check above reproduced in Node with the tool's own `calcAll`.
+- Tests: check-syntax; smoke/retaining-wall-checks (table `AUD`: RWUP 2 ft triangular, 6 ft, no water, AASHTO); phone-layout rwall 390/768; project-library retwall; dxf-print-sheets rw.
+
+### Decisions (pending engineer review)
+- §5.3.8 cited (the request named §5.3.9, which is the flood provision).
+- When the soil reaction alone leaves the middle third, the split uses the statically consistent triangular block (L_c = 3x̄_s). The total trapezoid that is still used without water interpolates the edge pressures over the whole base B, which overstates the upward pressure under the heel (unconservative heel, slightly conservative toe). Not changed for walls without water (open item below).
+- No envelope with the old total-pressure method: the heel at γ_U = 0.9 can come out slightly lower than before in partial contact (2 ft triangular: 28267 → 27772), as the engineer's factors give.
+- No equilibrium under a combination (V_s ≤ 0, or soil resultant outside the base): warning; the toe takes V_s at its tip (upper bound), the heel takes no soil relief.
+
+### Open item (raised, not changed)
+- ACI factored trapezoids without water (`qu_toe`/`qu_heel`, `qu_toe_min`/`qu_heel_min`) and the edge values `quf_front`/`quf_back`: with e_u > B/6 the pressure at the stem faces is interpolated linearly from the toe to the heel end, not over the contact length 3x̄_u. Unconservative for the heel (e.g. `aci_mix` with the water removed). Fix to the same block as RWUP?
+
+### Saved data
+- No input or format change.
+## 2026-11-07 — PR: claude/rw-pile-8b-inputs — Pile-supported footing, Phase 8b: foundation type and pile-row inputs, piles in the Analysis diagram, Overview, 3D and Drawings (RWPL; inputs and display only, no result change) (PR #957: https://github.com/mlococo88/All-Structural/pull/957)
+
+Review Phase 8 (pile-supported footing), PR 8b. Engineer decisions 2026-11-07 (review Q11–Q18, taken as recommended): pile mode follows the code mode; one pile type per wall; spacing per row; vertical piles; no staggering. Code sites are tagged `RWPL`.
+
+### RWPL-1. Inputs (Wall tab, new "Foundation" card after Geometry)
+- `fnd_type`: "Spread footing on soil" (default) or "Pile-supported footing (rows of vertical piles)".
+- Pile mode only:
+  - `pile_nrows` (2, 3 or 4 rows);
+  - `pile_x1..4`: the row position from the toe (ft);
+  - `pile_s1..4`: the pile spacing along the wall (ft);
+  - `pile_shape` (H-pile / pipe / square precast / round), `pile_desig` (text, optional), `pile_size` D (in);
+  - `pile_embed`: embedment into the footing (in); `pile_clr`: clear distance from the pile top to the bottom bars (in);
+  - ACI / IBC mode (`aci-only`): allowable `pile_Pa` (compression), `pile_Ta` (uplift) and `pile_Ha` (lateral), kip per pile, service loads;
+  - AASHTO mode (`aashto-only`): `pile_Rn` with `pile_phic`, `pile_Rnup` with `pile_phiup`, and the factored lateral resistance `pile_Hr`, kip per pile;
+  - `pile_passive`: an opt-in passive credit against H (off by default; used from 8c).
+- `rwPileInputs()` returns `inp.fnd` = {type, rows:[{x, s}], shape, desig, D, embed, clr, Pa, Ta, Ha, Rn, phic, Rnup, phiup, Hr, passive}.
+  `getInputs()` adds `fnd` only when the type is 'pile' (anchor `key_bk: n('key_bk') > 0`), so a spread footing's `inp` and results are byte-identical.
+- `rwPileUI()` shows the pile fields for the foundation type, the row count and the mode. It is called from `onBasisChange` (after the
+  aci-only / aashto-only toggles), `syncConditionalUI` and `onInputChange`.
+- Input checks (`rwInputErrors`, block `// ── RWPL (2026-11-07): pile-supported footing ──`), pile mode only:
+  - each row x within 0..B and no two rows at the same x;
+  - s > 0, D > 0, embedment ≥ 0, clear ≥ 0, and embedment + clear < t_f;
+  - capacities > 0 (uplift and lateral ≥ 0); φ in (0, 1];
+  - REVIEW (not an error) when a pile of width D extends past the footing edge.
+### RWPL-2. Saved data (§5)
+- `RWPL_DEF` (the default of every pile field) is merged into `RWLS_DEF` (anchor `Object.assign(RWLS_DEF, RWPL_DEF);`).
+  - A field equal to its default is not saved.
+  - A save without the field restores the default.
+- So a spread-footing project saves, autosaves and exports byte-identical to before. Every project saved before opens as a spread footing.
+- No key changes.
+### RWPL-3. Display
+- `rwPileSVG(r, x_toe, y_fbot, SCALE, stroke)` (new, before `buildCrossSection`): each row is drawn as a pile of width D. The
+  embedded length is dashed inside the footing, and a stub below the footing ends in a break line. The tooltip gives x, s, D and the embedment.
+  It is called in `buildCrossSection` (Analysis diagram) and `buildOverviewSVG` (after the shear key).
+- 3D (`buildGeometry3D`, before `// Retained soil (heel side)`): piles at s/2 + k·s along the wall in every row, drawn to a nominal length of max(4 ft, 0.6H).
+- Drawings: `RWDW_SUPPORT.piles` (section: pile rows with embedment, break lines and "ROW i @ s O.C."; elevation: piles along the
+  wall, the toe row solid and the others hidden; notes: the rows, type, D, embedment and the capacities as entered; loads: a line
+  saying the pile reactions come with the pile analysis; schedule: none yet). `rwdwSupport(r)` returns it when `r.inp.fnd.type === 'pile'`.
+- `calcAll`: in pile mode, one warning says the pile analysis is not in this version yet, so the results are still those of a spread footing.
+### Problem
+- None. This is new input and display. Spread-footing results are unchanged.
+### Governing provision
+- None in this PR (no calculation). The analysis (8c) cites AASHTO LRFD 10th Ed. (2024) Sec. 10.7 / 11.6 and IBC 2018 §1810 with ACI 318-19 Ch. 13.
+### Check case
+- Default wall with "Pile-supported", 2 rows: x = 1.5 ft and 11.0 ft from the toe (B = 12.5 ft), s = 6 ft, HP 12 in, embedment 12 in.
+  The section shows the two piles 1.5 ft from each footing edge with "ROW 1 @ 6'-0" O.C." and "ROW 2 @ 6'-0" O.C.". Every result is as for the spread footing, plus the warning.
+### How verified
+- origin/main vs branch, headless Chromium, 12 walls (all in spread mode). Every `_R` value (`inp.fnd` aside), the Export JSON,
+  the autosave, the Report text, the tab texts and the DXF are identical:
+  - ACI: default; water uniform / triangular; mix (water, k_h, column, β, q_s, key, passive, D_f); short toe; k_h 0.10.
+  - AASHTO: default; collision + barrier; water + column + η 1.05 + at-rest; rock + collision + water; k_h 0.10 + q_s + key; variable height + interface shear.
+- `node tests/check-syntax.mjs`;
+- `tests/smoke/retaining-wall-checks.mjs`, `phone-layout.mjs --tool rwall --w 390,768`, `project-library.mjs --tool retwall`, `dxf-print-sheets.mjs --tool rw`;
+- screenshots of pile mode (inputs, section sheet, 3D).
+### Other copies
+- None.
+### Open items
+- 8c (pile analysis and checks, soil checks replaced), 8d (footing from the pile reactions, punching), 8e (Report / Drawings / schedule), 8f (Pile Designer hand-off).
+- **Decision (pending engineer review):** 2 to 4 rows (a single row of pinned vertical piles cannot take the wall moment).
+- **Decision (pending engineer review):** placeholder capacities until the geotechnical values are entered (ACI P_a 100 / T_a 25 / H_a 8 kip; AASHTO R_n 300 kip with φ_c 0.65, R_n,up 100 kip with φ_up 0.50, H_r 20 kip). They are only used in pile mode.
+
+### Before / after (code, `git diff -U0` of `Retaining Wall Designer.html`, HTML card abbreviated to its field ids above)
+```diff
++<!-- RWPL (2026-11-07): Phase 8b, foundation type and pile rows (pile-supported footing). Spread footing is the default; every field
++     below is saved only when it differs from its default, so a spread-footing project saves and opens exactly as before. -->
++<button type="button" class="sec-hd" data-target="sec-fnd" aria-expanded="true"><span class="sec-hd-label">Foundation</span><svg class="sec-hd-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
++<div class="sec-body" id="sec-fnd">
++    <div class="ig full"><label for="fnd_type">Foundation type</label>
++      <select id="fnd_type">
++        <option value="spread">Spread footing on soil</option>
++        <option value="pile">Pile-supported footing (rows of vertical piles)</option>
++      </select></div>
++    <div class="note pile-only" id="note_pile" style="display:none">Rows of identical vertical piles across the footing, each with its own spacing along the wall; one pile type per wall; no staggering. The footing acts as a rigid cap (Phase 8). <span class="aci-only">ACI / IBC mode: allowable pile capacities (service loads).</span><span class="aashto-only" style="display:none">AASHTO mode: nominal resistances with their φ, factored lateral resistance.</span></div>
++    <div class="ig full pile-only" style="display:none"><label for="pile_nrows">Number of pile rows</label>
++      <select id="pile_nrows">
++        <option value="2" selected>2</option>
++        <option value="3">3</option>
++        <option value="4">4</option>
++      </select></div>
++    <div class="ig full pile-only" style="display:none"><label for="pile_shape">Pile type</label>
++      <select id="pile_shape">
++        <option value="hp">Steel H-pile</option>
++        <option value="pipe">Steel pipe pile</option>
++        <option value="square">Square precast concrete</option>
++        <option value="round">Round (timber / cast-in-place)</option>
++      </select></div>
++      <input type="text" id="pile_desig" placeholder="e.g. HP 12×53"></div>
++    <div class="ck-row pile-only" style="display:none">
++      <input type="checkbox" id="pile_passive">
++      <label for="pile_passive">Credit passive in front of the footing against the lateral load (pile mode)</label>
++    </div>
++    <div class="hint pile-only" id="hint_pile_cap" style="display:none">Enter the capacities from the geotechnical report or from Pile Designer. The defaults are placeholders.</div>
++  </div>
++  // RWPL (2026-11-07, Phase 8b): pile-supported footing selected: inputs and drawings only in this version
++  if (inp.fnd && inp.fnd.type === 'pile') warnings.push('Pile-supported footing selected: the piles are drawn, but the pile analysis is not in this version yet (Phase 8c). The stability and footing results shown are still those of a spread footing on soil.');
++/* RWPL (2026-11-07): Phase 8 pile-supported footing. The inputs (Wall tab, Foundation card): foundation type, 2 to 4 rows of identical
++   vertical piles (x from the toe, spacing along the wall), pile type and width, embedment and clear cover over the pile heads,
++   capacities per mode (ACI / IBC: allowable P_a, T_a, H_a; AASHTO: R_n with φ_c, R_n,up with φ_up, factored H_r), and the opt-in
++   passive credit. type 'spread' (the default, and every project saved before) is the spread footing on soil, unchanged. */
++const RWPL_DEF = { fnd_type: 'spread', pile_nrows: '2', pile_x1: '1.5', pile_s1: '6', pile_x2: '11', pile_s2: '6', pile_x3: '6', pile_s3: '6', pile_x4: '9', pile_s4: '6',
++  pile_shape: 'hp', pile_desig: '', pile_size: '12', pile_embed: '12', pile_clr: '3', pile_Pa: '100', pile_Ta: '25', pile_Ha: '8',
++  pile_Rn: '300', pile_phic: '0.65', pile_Rnup: '100', pile_phiup: '0.5', pile_Hr: '20', pile_passive: false };
++function rwPileInputs() {
++  const el = id => document.getElementById(id), v = id => { const e = el(id); return e ? parseFloat(e.value) : NaN; };
++  const type = (el('fnd_type') || {}).value === 'pile' ? 'pile' : 'spread';
++  const nr = Math.max(2, Math.min(4, parseInt((el('pile_nrows') || {}).value, 10) || 2));
++  const rows = []; for (let k = 1; k <= nr; k++) rows.push({ x: v('pile_x' + k), s: v('pile_s' + k) });
++  return { type, rows, shape: (el('pile_shape') || {}).value || 'hp', desig: ((el('pile_desig') || {}).value || '').trim(),
++    D: v('pile_size'), embed: v('pile_embed'), clr: v('pile_clr'),
++    Pa: v('pile_Pa'), Ta: v('pile_Ta'), Ha: v('pile_Ha'), Rn: v('pile_Rn'), phic: v('pile_phic'), Rnup: v('pile_Rnup'), phiup: v('pile_phiup'), Hr: v('pile_Hr'),
++    passive: !!(el('pile_passive') && el('pile_passive').checked) };
++}
++function rwPileUI() {
++  const el = id => document.getElementById(id);
++  const pile = el('fnd_type') && el('fnd_type').value === 'pile', isA = el('design_basis') && el('design_basis').value === 'AASHTO';
++  const nr = parseInt((el('pile_nrows') || {}).value, 10) || 2;
++  document.querySelectorAll('.pile-only').forEach(e => {
++    const m = /pile-row-(\d)/.exec(e.className), show = pile && !(e.classList.contains('aci-only') && isA) && !(e.classList.contains('aashto-only') && !isA) && !(m && +m[1] > nr);
++    e.style.display = show ? '' : 'none';
++  });
++}
++    ...(() => { const fd = rwPileInputs(); return fd.type === 'pile' ? { fnd: fd } : {}; })(),   // RWPL (2026-11-07): foundation type and pile rows (Phase 8); present only on piles, so a spread footing's inputs are as before
++  rwPileUI();   // RWPL: the pile fields follow the foundation type, the row count and the mode
++Object.assign(RWLS_DEF, RWPL_DEF);   // RWPL (2026-11-07): the pile fields are saved only when changed; old saves open as a spread footing
++  rwPileUI();   // RWPL
++  // ── RWPL (2026-11-07): pile-supported footing ──
++  if (sel('fnd_type') === 'pile') {
++    const nr = Math.max(2, Math.min(4, parseInt(sel('pile_nrows'), 10) || 2));
++    const Bft = (val('Lt') || 0) + (val('ts_bot') || 0) / 12 + (val('Lh') || 0), xs = [];
++    for (let k = 1; k <= nr; k++) {
++      const xi = 'pile_x' + k, si = 'pile_s' + k;
++      if (need(xi, Object.assign(v => v >= 0 && v <= Bft + 1e-9, { msg: `must be within the footing, 0 to B = ${f(Bft, 2)} ft from the toe` }))) {
++        if (xs.some(x => Math.abs(x - val(xi)) < 1e-6)) err(xi, `${lab(xi)} = ${raw(xi)} ft: two rows at the same x; give each row its own position.`);
++        xs.push(val(xi));
++      }
++      need(si, gt0);
++    }
++    const D = need('pile_size', gt0), em = need('pile_embed', ge0), cl = need('pile_clr', ge0);
++    if (D && nr) for (let k = 1; k <= nr; k++) { const xi = val('pile_x' + k), r2 = val('pile_size') / 24;
++      if (isFinite(xi) && (xi < r2 - 1e-9 || xi > Bft - r2 + 1e-9)) R.push(['pile_x' + k, `${lab('pile_x' + k)} = ${raw('pile_x' + k)} ft: the pile (D = ${raw('pile_size')} in) extends past the footing edge. Confirm the edge distance.`]); }
++    if (tfOk && em && cl && val('pile_embed') + val('pile_clr') >= val('tf')) err('pile_embed', `${lab('pile_embed')} ${raw('pile_embed')} in + clear ${raw('pile_clr')} in is not less than the footing thickness t_f = ${raw('tf')} in.`);
++    if (isA) { need('pile_Rn', gt0); need('pile_Rnup', ge0); need('pile_Hr', ge0);
++      const phi = Object.assign(v => v > 0 && v <= 1, { msg: 'must be greater than 0 and not more than 1' }); need('pile_phic', phi); need('pile_phiup', phi); }
++    else { need('pile_Pa', gt0); need('pile_Ta', ge0); need('pile_Ha', ge0); }
++  }
++  rwPileUI();   // RWPL: pile fields follow the foundation type and the row count
++/* RWPL (2026-11-07): the pile rows under the footing in an elevation-style SVG (Analysis diagram, Overview): each row drawn as a pile of
++   width D, its embedded length dashed inside the footing, a stub below with a break line. Display only. */
++function rwPileSVG(r, x_toe, y_fbot, SCALE, stroke) {
++  const P = r.inp && r.inp.fnd; if (!P || P.type !== 'pile') return '';
++  const d = Math.max(3, P.D / 12 * SCALE), em = P.embed / 12 * SCALE, L = Math.max(28, 1.6 * SCALE);
++  let o = '<g class="rw-piles">';
++  P.rows.forEach((rw, i) => {
++    const xc = x_toe + rw.x * SCALE, x0 = xc - d / 2, x1 = xc + d / 2, yb = y_fbot + L, h = Math.min(5, d / 3);
++    o += `<rect x="${x0}" y="${y_fbot - em}" width="${d}" height="${em}" fill="none" stroke="${stroke}" stroke-width="0.9" stroke-dasharray="3 2"/>`;
++    o += `<path d="M${x0},${y_fbot} L${x0},${yb} L${xc - d / 4},${yb - h} L${xc + d / 4},${yb + h} L${x1},${yb} L${x1},${y_fbot} Z" fill="rgba(90,100,110,0.18)" stroke="${stroke}" stroke-width="1.1"`
++      + ` data-tip="<b>Pile row ${i + 1}</b><br>x = ${f(rw.x, 2)} ft from the toe · spacing ${f(rw.s, 2)} ft along the wall<br>D = ${f(P.D, 1)} in · embedment ${f(P.embed, 1)} in${P.desig ? '<br>' + P.desig.replace(/[<>&"]/g, '') : ''}"/>`;
++  });
++  return o + '</g>';
++}
++  s += rwPileSVG(r, x_toe, y_fbot, SCALE, '#3d4650');   // RWPL: pile rows (pile-supported footing only)
++  s += rwPileSVG(r, x_toe, y_fbot, SCALE, '#3d4650');   // RWPL: pile rows (pile-supported footing only)
++  // RWPL (2026-11-07): pile rows under a pile-supported footing (display; length drawn nominal, 0.6 H, at least 4 ft)
++  if (inp.fnd && inp.fnd.type === 'pile') {
++    const P = inp.fnd, d = P.D / 12, top = P.embed / 12, Lp = Math.max(4, 0.6 * H), steel = P.shape === 'hp' || P.shape === 'pipe';
++    const geo = (P.shape === 'pipe' || P.shape === 'round') ? new THREE.CylinderGeometry(d / 2, d / 2, top + Lp, 16) : new THREE.BoxGeometry(d, top + Lp, d);
++    const pm = mat(steel ? 0x5a6470 : 0x8a8f96);
++    P.rows.forEach(rw => { if (!(rw.s > 0)) return;
++      for (let z = rw.s / 2; z < WL - 1e-6; z += rw.s) { const m = new THREE.Mesh(geo, pm); m.position.set(rw.x, (top - Lp) / 2, z); m.castShadow = true; G.concrete.add(m); } });
++  }
++
+-  // piles: { section, elev, loads, notes, schedule }   planned (pile rows across the footing: plan / section / schedule)
++  /* RWPL (2026-11-07): pile-supported footing (Phase 8b): pile rows in the section and the elevation, the pile notes. The pile
++     reactions on the loads sheet and the pile schedule follow with the pile analysis (8c / 8e). */
++  piles: {
++    label: 'PILE-SUPPORTED FOOTING',
++    section(c) {
++      const { D, L, G, k, r } = c, P = r.inp.fnd, d = P.D, em = P.embed, yb = -1.6 * k, hid = D.ltype('HIDDEN');
++      if (G.dk > 0) { D.line(L.soil, -0.15 * k, 0, G.kx, 0); D.line(L.soil, G.kx + G.kw, 0, G.B + 0.15 * k, 0); } else D.line(L.soil, -0.15 * k, 0, G.B + 0.15 * k, 0);
++      P.rows.forEach((rw, i) => {
++        const x = rw.x * 12, x0 = x - d / 2, x1 = x + d / 2;
++        D.line(L.hid, x0, 0, x0, em, hid); D.line(L.hid, x1, 0, x1, em, hid); D.line(L.hid, x0, em, x1, em, hid);   // embedded length
++        D.line(L.conc, x0, 0, x0, yb); D.line(L.conc, x1, 0, x1, yb);
++        const m = (x0 + x1) / 2, h = 0.06 * k;   // break line
++        D.pline(L.conc, [[x0 - 0.03 * k, yb], [m - h / 2, yb], [m - h / 4, yb + h], [m + h / 4, yb - h], [m + h / 2, yb], [x1 + 0.03 * k, yb]], false);
++        D.text(L.txt, x, yb - 0.18 * k, 0.085 * k, 'ROW ' + (i + 1) + ' @ ' + rwdwFI(rw.s * 12) + ' O.C.', 1);
++      });
++    },
++    elev(c) {
++      const { D, L, k, r, x0, x1 } = c, P = r.inp.fnd, d = P.D, yb = -1.4 * k, hid = D.ltype('HIDDEN');
++      D.line(L.soil, x0, 0, x1, 0);
++      const order = P.rows.map((rw, i) => ({ rw, i })).sort((a, b) => a.rw.x - b.rw.x);   // the toe row is nearest the viewer
++      order.forEach(({ rw }, j) => { const s = rw.s * 12; if (!(s > 0)) return;
++        for (let x = x0 + s / 2; x < x1 - 1e-6; x += s) { const lt = j ? hid : undefined, l = j ? L.hid : L.conc;
++          D.line(l, x - d / 2, 0, x - d / 2, yb, lt); D.line(l, x + d / 2, 0, x + d / 2, yb, lt); } });
++    },
++    loads(c) { const { L, G, k, T } = c; let y0 = c.y0 != null ? c.y0 : -G.dk - 0.35 * k;
++      T(L.lt, G.B / 2, y0 - 0.2 * k, 0.085 * k, 'PILE-SUPPORTED FOOTING: PILE REACTIONS WITH THE PILE ANALYSIS (NOT YET IN THIS VERSION)', 1); return y0 - 0.6 * k; },
++    notes(r) {
++      const P = r.inp.fnd, isA = r.isAASHTO, sh = { hp: 'STEEL H-PILES', pipe: 'STEEL PIPE PILES', square: 'SQUARE PRECAST CONCRETE PILES', round: 'ROUND PILES' }[P.shape] || 'PILES';
++      return ['PILE-SUPPORTED FOOTING: ' + P.rows.length + ' ROWS OF VERTICAL ' + sh + (P.desig ? ' (' + P.desig + ')' : '') + ', D = ' + rwdwIn(P.D) + ', EMBEDDED ' + rwdwIn(P.embed) + ' INTO THE FOOTING; ROWS AT '
++        + P.rows.map(rw => rwdwFI(rw.x * 12) + ' FROM THE TOE @ ' + rwdwFI(rw.s * 12)).join(', ') + '.',
++        isA ? 'PILE RESISTANCES (AS ENTERED): R_N = ' + rwdwN(P.Rn, 0) + ' KIP (PHI_C = ' + rwdwN(P.phic, 2) + '), R_N,UP = ' + rwdwN(P.Rnup, 0) + ' KIP (PHI_UP = ' + rwdwN(P.phiup, 2) + '), H_R = ' + rwdwN(P.Hr, 1) + ' KIP (FACTORED), PER THE GEOTECHNICAL ENGINEER.'
++            : 'ALLOWABLE PILE CAPACITIES (SERVICE LOADS, AS ENTERED): P_A = ' + rwdwN(P.Pa, 0) + ' KIP, T_A = ' + rwdwN(P.Ta, 0) + ' KIP (UPLIFT), H_A = ' + rwdwN(P.Ha, 1) + ' KIP (LATERAL), PER THE GEOTECHNICAL ENGINEER.'];
++    },
++    schedule() { return []; },
++  },
+-const rwdwSupport = r => RWDW_SUPPORT.soil;   // the foundation type of the model; spread footing only today
++const rwdwSupport = r => (r && r.inp && r.inp.fnd && r.inp.fnd.type === 'pile') ? RWDW_SUPPORT.piles : RWDW_SUPPORT.soil;   // RWPL: the foundation type of the model
+```
+
 ## 2026-11-07 — PR: claude/rw-audit-bookkeeping — Calculation audit item 10: bookkeeping (EH vertical 0.90 labelled as the engineer's choice; O4 and O5 closed; AUDIT.md §3.9 updated; two ACI citations in comments corrected) (RWBK; no result change)
 
 Calculation audit, item 10. Engineer answers (2026-11-07). Code sites are tagged `RWBK`. No computed value changes.
@@ -3801,7 +4146,7 @@ Calculation audit, item 10. Engineer answers (2026-11-07). Code sites are tagged
 
 ### RWBK-3. Open items O4 and O5 closed (decisions 2026-11-07)
 - **O4 (N1). AASHTO φ_τ default 1.00:** kept. AASHTO LRFD 10th Ed. Table 11.5.7-1 (semi-gravity walls) gives 1.0 for sliding; the shallow-foundation values of Table 10.5.5.2.2-1 (0.80 CIP on sand) are not used for walls. Closed; no change.
-- **O5 (N2). Collision factors:** γp = 1.00 for DC/EV in Extreme Event II is AASHTO LRFD 10th Ed. Table 3.4.1-1 (γp = 1.00 in EE I/II), not a MassDOT value; γ_EH = 0 for stability, the full-joint distribution, the test-level forces (Table 3.3.2-1) and the 0.75 variable-height rule are MassDOT Bridge Manual 3.3.2.4 / 3.3.2.2 (verified in the audit). Water, ES and the vertical earth thrust in EE II were settled in #944 (RWCT) and RWCV. Closed.
+- **O5 (N2). Collision factors:** γp = 1.00 for DC/EV in Extreme Event II is AASHTO LRFD 10th Ed. Table 3.4.1-1 (γp = 1.00 in EE I/II), not a MassDOT value; γ_EH = 0 for stability, the full-joint distribution, the test-level forces (Table 3.3.2-1) and the 0.75 variable-height rule are MassDOT Bridge Manual 3.3.2.4 / 3.3.2.2 (verified in the audit). Water, ES and the vertical earth thrust in EE II were settled in #944 (RWCT) and #956 (RWCV). Closed.
 - `ENGINEER_CHECKS.md`, Retaining Wall line: φτ and collision values removed (closed).
 
 ### RWBK-4. AUDIT.md
