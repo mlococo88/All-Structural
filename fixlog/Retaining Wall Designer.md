@@ -4897,3 +4897,24 @@ Open item raised in #960 (RWUP). Engineer instruction relayed 2026-11-07 (no que
 
 ### Saved data
 - No input or format change.
+## 2026-11-07 — PR: claude/rw-left-breakpoint — Check summary as a left column from 1200 px (was 1500 px); 240 px wide from 1200 to 1499 px (RWLB; display only, no result change) (PR #984: https://github.com/mlococo88/All-Structural/pull/984)
+
+### RWLB. The check summary is on the left at common laptop widths   [display only]
+- **Decision (pending engineer review):** the engineer asked (2026-11-07) for "the summary cards … on the left panel"; at 1280–1499 px (laptops, and 1920 px screens at 125–150 % scaling) RWDC / RWDL (#926, #959) still put the summary above the output tabs. The left column now starts at **1200 px** in Retaining Wall Designer, Spread Footing and Light Pole and Sign Post alike (one PR per tool). From 1200 to 1499 px the column is **240 px** wide; at 1500 px and wider it is 292 px as before (layout unchanged there). Below 1200 px (tablet, phone) nothing changes: the summary sits above the output tabs, and the phone keeps "results first / Show inputs". Same collapse button (« / » → 42 px strip) and key `retaincalcpro.dashCollapsed.v1`.
+- **Why 1200:** at 1200 px the column (240) + inputs (344) leave a 616 px output panel; every output tab fits without sideways scroll (checked on all nine tabs at 1200, 1280 and 1400 px). The Overview card's two groups (Stability / Structural) were cramped at that width (bars and values overlapping), so from 1200 to 1279 px with the column open they stack, exactly as they already do at 1100 px and below.
+- **Where:**
+  - CSS, RWDC block: before `@media screen and (min-width: 1500px) {` (the rule holding `body.rwDashWide #rwDashCol { display: block; flex: 0 0 292px; …`); after:
+```css
+/* RWLB (…): the left column starts at 1200 px (was 1500 px) … */
+@media screen and (min-width: 1200px) and (max-width: 1499.98px) { body.rwDashWide #rwDashCol { flex-basis: 240px; width: 240px; } }
+/* RWLB: … the Overview card's Stability / Structural groups stack, as they already do at 1100 px and below */
+@media screen and (min-width: 1200px) and (max-width: 1279.98px) {
+  body.rwDashWide:not(.rwDashColl) .sc-cols { grid-template-columns: 1fr; }
+  body.rwDashWide:not(.rwDashColl) .sc-group + .sc-group { border-left: 0; border-top: 1px solid var(--border); }
+  body.rwDashWide:not(.rwDashColl) .sc-gov { text-align: left; }
+}
+@media screen and (min-width: 1200px) {
+```
+  - JS: `const RWDC = { … mq: window.matchMedia ? window.matchMedia('screen and (min-width:1500px)') : null, …` → `'screen and (min-width:1200px)'` (comment `/* RWLB: was 1500px */`).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data (§5):** no key or format changed.
+- **How verified:** origin/main vs branch at 1920, 1280 and 1200 px, three walls (ACI default; AASHTO default, 1 FAIL; ACI H_s 22 ft / q_a 2500 psf, 5 FAIL): `window._R`, Export JSON fields, every localStorage key and value, the Report text (`textContent`: the Report's subsections use `content-visibility:auto`, so `innerText` drops off-screen subsections and depends on the layout) and the four-sheet DXF **identical**; 0 console errors. No sideways page scroll at 390, 768, 1200, 1280, 1400, 1920 px (every output tab at 1200 / 1280 / 1400). Screenshots before / after at 1200, 1280, 1400 (and after at 1920, 768, 390; the 5-FAIL wall at 1280) looked at. Tests: check-syntax; smoke/retaining-wall-checks; phone-layout rwall 390/768; project-library retwall.
