@@ -5460,3 +5460,30 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **How verified:** probe (default, SDC D, SDC D + (a), a typed "1.2D+1.0E+L" combination → error banner; KaTeX of the new steps OK); `node tests/check-syntax.mjs`; `node tests/bpad-circle.mjs`, `bpad-profis.mjs`, `anchor-parity.mjs` (all A/B: identical); `tests/smoke/project-library.mjs --tool baseplate`, `standard-save.mjs`, `dxf-print-sheets.mjs --tool bp`; 0 console errors.
 - **Other copies:** none.
 - **Open items:** decisions 1–4. Post-installed anchors (§17.10.3) do not arise (cast-in only).
+
+## 2026-11-07 — BPL2 / BPL3 / BPL5 / BPL6: review LOW items (PR: claude/bp-low-items, PR #978: https://github.com/mlococo88/All-Structural/pull/978)
+
+### BPL2. Interaction: the §17.8.2 cut-offs before either form   [calculation change, LESS conservative only where the code permits; saved data: none]
+- **Problem (review L2):** `interaction()` applied the 0.2 cut-offs to the trilinear form only and then took max(parabolic, trilinear). So (β_N, β_V) = (1.0, 0.2) read 1.068 FAIL, although §17.8.2(b) permits neglecting the interaction there.
+- **Governing provision:** ACI 318-19 §17.8.1–§17.8.3 (read in the PDF, printed p. 270). The interaction may be neglected if N_ua/φN_n ≤ 0.2 (Eq. 17.8.2a) or V_ua/φV_n ≤ 0.2 (Eq. 17.8.2b). Eq. (17.8.3) applies when both exceed 0.2. The 5/3 parabolic form is commentary R17.8, permitted through §17.5.2.3.
+- **Where:** `interaction()`.
+  - Before: `const dcr=Math.max(para,triDCR);`.
+  - After: `const dcr=(rV<=0.2)? rN : (rN<=0.2)? rV : Math.max(para,triDCR);`. `governingForm` reads "§17.8.2 (interaction neglected)" below a cut-off, `formsDisagree` is false there, and the interaction note states the cut-off.
+- **Check:** (1.0, 0.2) **1.068 → 1.000**; (0.2, 1.0) 1.068 → 1.000; (0.6, 0.6) 1.000 unchanged; (1.0, 0.21) 1.074 unchanged.
+- **Effect:** less conservative only below a 0.2 cut-off, exactly where §17.8.2 permits it.
+
+### BPL3. "Small edge distance" warning tests all four edges   [warning only]
+- `validateInputs()`: before `if(g.ca_x_pos<1.5*A.dia||g.ca_y_pos<1.5*A.dia)` → after `if(Math.min(g.ca_x_pos,g.ca_x_neg,g.ca_y_pos,g.ca_y_neg)<1.5*A.dia)`.
+
+### BPL5. Stand-off lever-arm citation   [text only]
+- `levelingNutCheck` Step 6 `ref`: before "ACI 318-19 Table 17.5.2; φ = 0.65" → after "lever-arm method of EN 1992-4 / ETAG 001 Annex C as used by Hilti PROFIS (not an ACI 318 equation); φ = 0.65 per ACI 318-19 Table 17.5.3 (steel, shear)". The method (M⁰_s = 1.2W_el f_u, α_M, ℓ_b) is PROFIS's, not ACI's. EN 1992-4 and ETAG are not in /home/user/structural_references, so the source is named as PROFIS uses it.
+
+### BPL6. Validation tab: an explanation for each amber / red row   [text only]
+- `VALIDATION_CASES`: new optional `rowNotes` on msa3a, struct2v1 and struct2v2. The case section prints them under its table ("Why these rows differ").
+- msa3a: the shear row explains BPH1 (+y edge 9,109 lb, +14 %) and BPM2 (Case 1 on the y component, so the resultant's Case 2, 18,057 lb, governs).
+- struct2v1 / v2: the shear row is the tool's Case 2 against PROFIS's front row. The tension breakout row is the reconstructed pedestal outline. The lever-arm, anchor-force, compression and e′_N rows are the BP-C1 open-stand-off model.
+- Each note is marked "probable cause, not confirmed" where it was not checked against the PROFIS settings.
+
+- **How verified (all four):** probe of `interaction()`; `node tests/check-syntax.mjs`; `node tests/bpad-circle.mjs` (40 projects), `bpad-profis.mjs`, `anchor-parity.mjs`; `tests/smoke/project-library.mjs --tool baseplate`, `standard-save.mjs`, `dxf-print-sheets.mjs --tool bp`; 0 console errors.
+- **Other copies:** none.
+- **Open items:** L1, L4, L7 of the review are not changed (L1 conservative; L4 reading stated in the step; L7 = open item N1).

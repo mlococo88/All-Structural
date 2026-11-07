@@ -3999,11 +3999,14 @@ function interaction(Nua, phiNn, Vua, phiVn){
   const trilinearSum=rN+rV;
   let triDCR;
   if(rV<=0.2) triDCR=rN; else if(rN<=0.2) triDCR=rV; else triDCR=(rN+rV)/1.2;
-  /* governing = the more conservative (higher) of the two */
-  const dcr=Math.max(para,triDCR);
-  const governingForm=(para>=triDCR)?"parabolic":"trilinear";
+  /* governing = the more conservative (higher) of the two.
+     BPL2 (2026-11-07): ACI 318-19 §17.8.2 permits the interaction to be neglected when N_ua/φN_n ≤ 0.2 (a) or
+     V_ua/φV_n ≤ 0.2 (b); §17.8.3 (and the parabolic form, R17.8) applies only when both exceed 0.2. The cut-offs now
+     come first for BOTH forms: before, the parabolic value was used even below them (e.g. (1.0, 0.2) read 1.068). */
+  const dcr=(rV<=0.2)? rN : (rN<=0.2)? rV : Math.max(para,triDCR);
+  const governingForm=(rV<=0.2||rN<=0.2)? "§17.8.2 (interaction neglected)" : ((para>=triDCR)?"parabolic":"trilinear");
   /* do the two permitted forms disagree about pass/fail? */
-  const formsDisagree=((para<=1)!==(triDCR<=1));
+  const formsDisagree=!(rV<=0.2||rN<=0.2) && ((para<=1)!==(triDCR<=1));   /* BPL2: no comparison below the §17.8.2 cut-offs */
   let mode;
   if(rV<=0.2) mode="tension governs (V ≤ 0.2φVn)";
   else if(rN<=0.2) mode="shear governs (N ≤ 0.2φNn)";
@@ -5758,7 +5761,7 @@ function levelingNutCheck(cc){
              ["n",fmt(n,2),"restraint level of the anchor plate (PROFIS default 0.5)"],
              ["\\ell_b",fmt(Lb,3)+" in","internal lever arm, adjusted for surface spalling"]]},
 
-      {title:"Step 6 — Design shear resistance from bending",ref:"ACI 318-19 Table 17.5.2; φ = 0.65",
+      {title:"Step 6 — Design shear resistance from bending",ref:"lever-arm method of EN 1992-4 / ETAG 001 Annex C as used by Hilti PROFIS (not an ACI 318 equation); φ = 0.65 per ACI 318-19 Table 17.5.3 (steel, shear)",   /* BPL5 */
        lines:[
         "V^M_s = \\frac{\\alpha_M\\,M_s}{\\ell_b} = \\frac{"+fmt(aM,1)+"\\times"+fmt(Ms,3)+"}{"+fmt(Lb,3)+"} = "+fmt(VMs,3)+"\\ \\text{kip}",
         "\\phi V^M_s = "+fmt(phi,2)+"\\times"+fmt(VMs,3)+" = "+fmt(phiVMs,3)+"\\ \\text{kip} = "+fmt(phiVMs*1000,0)+"\\ \\text{lb}"],
@@ -8091,6 +8094,7 @@ function buildAnchorTab(pg){
       "The commentary describes the trilinear as a simplification of the parabolic. "+
       "This tool reports the MORE CONSERVATIVE of the two as the governing DCR \u2014 here the "+it.governingForm+" at "+fmt(it.dcr,3)+
       " (parabolic "+fmt(it.para,3)+", trilinear "+fmt(it.triDCR,3)+")."+
+      ((it.rV<=0.2||it.rN<=0.2)? " \u00a717.8.2: "+(it.rV<=0.2? "V_ua/\u03c6V_n = "+fmt(it.rV,3)+" \u2264 0.2, so the full tension strength is used and the interaction is neglected (DCR = \u03b2N)." : "N_ua/\u03c6N_n = "+fmt(it.rN,3)+" \u2264 0.2, so the full shear strength is used and the interaction is neglected (DCR = \u03b2V).")+" The two forms above are shown for information." : "")+
       "\n\nComparing against Hilti PROFIS: PROFIS checks both and prints whichever gives the more FAVOURABLE (lower) utilization, "+
       "defaulting to the parabolic when both pass. A PROFIS report may therefore show a substantially lower interaction value on identical numbers "+
       "\u2014 e.g. \u03b2N = 2.118, \u03b2V = 0.162 gives 190% trilinear but 354% parabolic. Confirm which form a PROFIS report used before comparing.";
@@ -13346,7 +13350,7 @@ function validateInputs(){
     }
     if(S.tRebar.present || S.vRebar.present) errs.push({block:true, code:"model", msg:"Anchor reinforcement (tension or shear rebar) is not available with the bolt-circle layout in this version: the rebar layouts are built on anchor rows of a rectangular grid. Turn off Tension / Shear Reinforcement (concrete breakout is then checked as plain concrete, Condition B)."});
   }
-  if(g.ca_x_pos<1.5*A.dia||g.ca_y_pos<1.5*A.dia) warns.push("Anchor edge distance to concrete is small; splitting/blowout may govern (§17.9).");
+  if(Math.min(g.ca_x_pos,g.ca_x_neg,g.ca_y_pos,g.ca_y_neg)<1.5*A.dia) warns.push("Anchor edge distance to concrete is small; splitting/blowout may govern (§17.9).");   /* BPL3: all four edges */
   if(standoffParams().hasStandoff && standoffParams().z>8*S.anchor.dia) warns.push("Exposed stand-off length exceeds 8·d; bending may govern and lateral stability should be verified.");
   /* ---- ACI 318-19 §17.9 installation limits (cast-in), BP-T1 (2026-10-21) ----
      Spacing below 4dₐ blocks the output (torqued or not). Torqued anchors: spacing and edge
@@ -14434,6 +14438,8 @@ function bpPlibInit(){
 const VALIDATION_CASES = [
   {
     id:"msa3a",
+    /* BPL6 (2026-11-07): per-row explanations of the amber / red rows (Validation tab) */
+    rowNotes:{"Shear edge breakout φVcbg":"Inclined shear (V_x = V_y). Since BPH1 (#962) each edge that takes a shear component is checked: the +y edge (c_a1 = 6 in) gives φV_cbg = 9,109 lb (+14 % vs PROFIS 7,962 lb). Since BPM2 (#968) the breakout demand is the governing Fig. R17.7.2.1b case's V: for the y component s = 14 in ≥ c_a1,1 = 6 in, so Case 1 puts half of V_y on the front row (ratio 0.110), and the resultant's Case 2 toward +x (18,057 lb, ratio 0.157) governs; that capacity is the value shown. PROFIS appears to put the full V on the front row (a Case 3-type assumption); the tool follows the figure's Case 1 / Case 2 rule. Probable cause, not confirmed against the PROFIS settings."},
     name:"MSA3A Stair — 1\" F1554-36, 4 anchors, grouted stand-off",
     ref:"HDR / Jordan Phelps, PROFIS 3.1.34",
     setup(){
@@ -14466,6 +14472,9 @@ const VALIDATION_CASES = [
   },
   {
     id:"struct2v1",
+    rowNotes:{"Shear edge breakout φVcbg":"The tool's governing Fig. R17.7.2.1b case is Case 2 (the full V on the rear row, with its larger c_a1); PROFIS reports the front-row breakout. Both cases are worked on the Shear Distribution tab. Probable cause, not confirmed against the PROFIS settings.",
+      "Concrete breakout φNcbg (group)":"The pedestal outline is reconstructed from the PROFIS edge distances (see the box at the top); A_Nc depends on that outline. Not resolved.",
+      "Stand-off bending φV^M_s":"PROFIS 3.1.34 ran this case with bearing under the open stand-off; this tool follows PROFIS 3.1.36 (BP-C1, note above): the rods carry the compression, so the axial force in the governing rod, and with it the (1 − N/N_Rd) reduction of M_s, differs. Probable cause, not confirmed."},
     name:"CB Plaza Struct 2 (v1) — ¾\" F1554-55, 6 anchors",
     note:"PROFIS 3.1.34 run with an open (clamped) stand-off and concrete bearing under the plate, n = 0.5. This tool follows PROFIS 3.1.36 (engineer decision 2026-10-16, BP-C1): an open stand-off has no bearing, the rods carry compression (elastic bolt group) and n = 0 when clamped. Rows that depend on the anchor-force distribution are expected to differ.",
     ref:"HDR / Ilyssa Creamer, PROFIS 3.1.34",
@@ -14499,6 +14508,8 @@ const VALIDATION_CASES = [
   },
   {
     id:"struct2v2",
+    rowNotes:{"Shear edge breakout φVcbg":"As struct2v1: the tool's governing case is Case 2 (full V on the rear row); PROFIS reports the front row. Probable cause, not confirmed.",
+      "Anchor tension T @ x=+5 (each)":"Anchor forces and the compression resultant: PROFIS 3.1.34 ran with bearing under the open stand-off; this tool follows PROFIS 3.1.36 (BP-C1, note above), an elastic bolt group. The anchor-force, compression and e′_N rows differ for that reason."},
     name:"CB Plaza Struct 2 (v2) — eb=1.5, 6 anchors in tension",
     note:"PROFIS 3.1.34 run with an open (clamped) stand-off and concrete bearing under the plate, n = 0.5. This tool follows PROFIS 3.1.36 (engineer decision 2026-10-16, BP-C1): an open stand-off has no bearing, the rods carry compression (elastic bolt group) and n = 0 when clamped. Rows that depend on the anchor-force distribution are expected to differ.",
     ref:"HDR / Ilyssa Creamer, PROFIS 3.1.34",
@@ -14811,6 +14822,8 @@ function buildValidationTab(pg){
         t.appendChild(tr);
       });
       body.appendChild(t);
+      /* BPL6: per-row explanations */
+      if(vc.rowNotes){ const ul=el("div","note"); ul.innerHTML="<b>Why these rows differ:</b><br>"+Object.keys(vc.rowNotes).map(k=>"&bull; <b>"+k+"</b>: "+vc.rowNotes[k]).join("<br>"); body.appendChild(ul); }
 
       /* aux diagnostics */
       const a=ours.__aux;
