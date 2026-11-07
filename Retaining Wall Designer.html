@@ -2196,6 +2196,8 @@ function calcAll(inp) {
   // ── Seismic: Mononobe-Okabe with Seed & Whitman increment location ──
   //    (ASCE 7-22 §11.8.3 requires the geotech report to give this pressure; method per M-O)
   const hasSeismic = inp.kh > 0;
+  // RWPL (2026-11-07, Phase 8b): pile-supported footing selected: inputs and drawings only in this version
+  if (inp.fnd && inp.fnd.type === 'pile') warnings.push('Pile-supported footing selected: the piles are drawn, but the pile analysis is not in this version yet (Phase 8c). The stability and footing results shown are still those of a spread footing on soil.');
   let Pae = 0, Pe_inc = 0, Mo_seis = 0, Kae = 0;
   if (hasSeismic) {
     const kh = inp.kh, kv = inp.kv;
@@ -3924,7 +3926,7 @@ function calcAll(inp) {
   // ── Return ────────────────────────────────────────────────────
   return {
     inp, errors, warnings, fatal: false,
-    pile, pileFtg, cov_bot, pilePunch, heelPile: hcG.pile || null, toePile: tcG.pile || null,   // RWPL (2026-11-07): pile-supported footing results (null for a spread footing); 8d: factored pile reactions for the footing, bottom cover
+    ...(pile ? { pile, pileFtg, cov_bot, pilePunch, heelPile: hcG.pile || null, toePile: tcG.pile || null } : {}),   // RWPL (2026-11-07): pile-supported footing results, absent for a spread footing (its results are as before); 8d: factored pile reactions for the footing, bottom cover, punching
     basis: inp.basis, isAASHTO, aashtoR, heq, q_ll_aashto, q_sur_eff,
     // Geometry
     B, H, Df, tf_ft, ts_bot_ft, ts_top_ft, dk_ft, x_front, x_back,
@@ -6233,12 +6235,12 @@ function renderFooting(r) {
   h += `</div></div>`;
 
   h += `<div class="card" style="margin-bottom:16px;">
-    <div class="card-hd"><span class="card-title">Toe Step 3 — Flexural Steel (bottom face)</span><span class="card-ref">d = t_f − cover − d_b/2 · cover = ${F(r.cov_bot,2)} in</span></div>
+    <div class="card-hd"><span class="card-title">Toe Step 3 — Flexural Steel (bottom face)</span><span class="card-ref">d = t_f − cover − d_b/2 · cover = ${F(r.cov_bot ?? inp.cov_ftg,2)} in</span></div>
     <div class="card-body">`;
   h += eq('Effective depth',
-    `d = t_f - c_c - \\frac{d_b}{2} = ${F(inp.tf,1)} - ${F(r.cov_bot,2)} - ${F(r.sel_toe.bar.db/2,4)} = \\boxed{${F(r.d_toe,3)}\\ \\text{in}}`,'',
+    `d = t_f - c_c - \\frac{d_b}{2} = ${F(inp.tf,1)} - ${F(r.cov_bot ?? inp.cov_ftg,2)} - ${F(r.sel_toe.bar.db/2,4)} = \\boxed{${F(r.d_toe,3)}\\ \\text{in}}`,'',
     [{sym:'t_f', desc:'footing thickness', val:F(inp.tf,1), unit:'in'},
-     {sym:'c_c', desc: r.pile ? 'bottom clear cover on piles = max(cover input, embedment + clear over the pile heads)' : 'bottom clear cover', val:F(r.cov_bot,2), unit:'in'},   // RWPL
+     {sym:'c_c', desc: r.pile ? 'bottom clear cover on piles = max(cover input, embedment + clear over the pile heads)' : 'bottom clear cover', val:F(r.cov_bot ?? inp.cov_ftg,2), unit:'in'},   // RWPL
      {sym:'d_b', desc:`diameter of the selected bar (#${r.sel_toe.bar.num})`, val:F(r.sel_toe.bar.db,3), unit:'in'},   // RWDB (2026-11-02): was a fixed '#7, 0.875'
      {sym:'d', desc:'effective depth to bottom steel', val:F(r.d_toe,3), unit:'in'}]);
   h += eq('Flexural resistance factor',
@@ -10632,7 +10634,7 @@ function rwrModel(r) {
       T2.splice(0, 2, rwrS({ id: 'Mu', label: 'Design moment about the front face (tension on the bottom)', sym: 'M_{u}', eq: '\\sum q_{i} a_{i} \\minus \\frac{w_{sw} L_{t}^{2}}{2}', sub: rowsS(tp.rows) + ' \\minus \\frac{(' + rwrN(r.wu_toe_down, 1) + ')(' + rwrN(inp.Lt, 2) + ')^{2}}{2}', value: r.Mu_toe_net, unit: 'lb-ft/ft', d: 1 }),
         rwrS({ id: 'Vu', label: 'Design shear at the front face', sym: 'V_{u}', eq: '\\sum q_{i} \\minus w_{sw} L_{t}', sub: rwrN(tp.Vup, 1) + ' \\minus (' + rwrN(r.wu_toe_down, 1) + ')(' + rwrN(inp.Lt, 2) + ')', value: r.Vu_toe, unit: 'lb/ft', d: 1 }));
     }
-    const T3 = [rwrS({ id: 'd', label: 'Effective depth' + (r.pile ? ' (bottom cover on piles = max(c_c, embedment + clear))' : ''), sym: 'd', eq: 't_{f} \\minus c_{c} \\minus \\frac{d_{b}}{2}', sub: rwrN(inp.tf, 1) + ' \\minus ' + rwrN(r.cov_bot, 2) + ' \\minus ' + rwrN(sT.bar.db / 2, 4), value: r.d_toe, unit: 'in', d: 3 })]
+    const T3 = [rwrS({ id: 'd', label: 'Effective depth' + (r.pile ? ' (bottom cover on piles = max(c_c, embedment + clear))' : ''), sym: 'd', eq: 't_{f} \\minus c_{c} \\minus \\frac{d_{b}}{2}', sub: rwrN(inp.tf, 1) + ' \\minus ' + rwrN(r.cov_bot ?? inp.cov_ftg, 2) + ' \\minus ' + rwrN(sT.bar.db / 2, 4), value: r.d_toe, unit: 'in', d: 3 })]
       .concat(flexF(r.Mu_toe_in, r.d_toe, r.Rn_toe, r.As_toe_req, r.As_t_min, r.As_toe_des, sT, 'F2', ok('toeFlex'), r.toe_overstressed));
     const T4 = vcF(r.shearToe, r.Vc_toe, r.d_toe).concat([
       rwrS({ id: 'phiVc', label: 'Design shear resistance', sym: '\\phi V_{c}', eq: phiF + '\\,V_{c}', sub: phiF + '(' + rwrN(r.Vc_toe, 0) + ')', value: r.phiVc_toe, unit: 'lb/ft', d: 0 }),
@@ -10671,7 +10673,7 @@ function rwrModel(r) {
     }
     if (r.pilePunch) {   // RWPL 8d: punching around the piles
       const pp = r.pilePunch, g = pp.gov;
-      const PS = [rwrS({ id: 'dp', label: 'Depth over the pile heads', sym: 'd_{p}', eq: 't_{f} \\minus c_{bot} \\minus d_{b}', sub: rwrN(inp.tf, 1) + ' \\minus ' + rwrN(r.cov_bot, 2) + ' \\minus ' + rwrN(r.sel_toe.bar.db, 3), value: pp.dp, unit: 'in', d: 2 }),
+      const PS = [rwrS({ id: 'dp', label: 'Depth over the pile heads', sym: 'd_{p}', eq: 't_{f} \\minus c_{bot} \\minus d_{b}', sub: rwrN(inp.tf, 1) + ' \\minus ' + rwrN(r.cov_bot ?? inp.cov_ftg, 2) + ' \\minus ' + rwrN(r.sel_toe.bar.db, 3), value: pp.dp, unit: 'in', d: 2 }),
         rwrS({ id: 'a', label: 'Critical section side, pile as the square of equal area at ' + (isA ? 'd_v/2' : 'd/2') + ' from its face', sym: 'a', eq: 'D_{eq} + ' + (isA ? 'd_{v}' : 'd'), sub: rwrN(pp.Deq, 2) + ' + ' + rwrN(pp.dc, 2), value: pp.a, unit: 'in', d: 2 }),
         rwrS({ id: 'bo', label: 'Perimeter, governing row ' + (g.i + 1) + ' (' + g.loc + ')', sym: 'b_{o}', eq: g.strip ? 's' : (g.cut ? 'a + 2(e + a/2)' : '4a'), sub: g.strip ? rwrN(g.S, 1) : (g.cut ? rwrN(g.a, 2) + ' + 2(' + rwrN(g.ex, 2) + ' + ' + rwrN(g.a / 2, 2) + ')' : '4(' + rwrN(g.a, 2) + ')'), value: g.bo, unit: 'in', d: 1 }),
         isA ? rwrS({ id: 'Vc', label: 'Two-way shear resistance (Eq. 5.12.8.6.3-1, β_c = 1)', sym: '\\phi V_{n}', eq: '0.90(0.126)\\sqrt{f\'_{c}}\\,b_{o} d_{v}', sub: '0.90(0.126)\\sqrt{' + rwrN(inp.fc / 1000, 2) + '}(' + rwrN(g.bo, 1) + ')(' + rwrN(pp.dvp, 2) + ')', value: g.phiVc / 1000, unit: 'kip', d: 2 })

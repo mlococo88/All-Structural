@@ -3844,7 +3844,7 @@ Follow-up to item 3 (#944). Engineer answer (2026-11-07): the vertical component
 
 ### Saved data
 - No input or format change.
-## 2026-11-07 — PR: claude/rw-pile-8b-inputs — Pile-supported footing, Phase 8b: foundation type and pile-row inputs, piles in the Analysis diagram, Overview, 3D and Drawings (RWPL; inputs and display only, no result change)
+## 2026-11-07 — PR: claude/rw-pile-8b-inputs — Pile-supported footing, Phase 8b: foundation type and pile-row inputs, piles in the Analysis diagram, Overview, 3D and Drawings (RWPL; inputs and display only, no result change) (PR #957: https://github.com/mlococo88/All-Structural/pull/957)
 
 Review Phase 8 (pile-supported footing), PR 8b. Engineer decisions 2026-11-07 (review Q11–Q18, taken as recommended): pile mode follows the code mode; one pile type per wall; spacing per row; vertical piles; no staggering. Code sites are tagged `RWPL`.
 
@@ -4055,7 +4055,7 @@ Review Phase 8 (pile-supported footing), PR 8b. Engineer decisions 2026-11-07 (r
 +const rwdwSupport = r => (r && r.inp && r.inp.fnd && r.inp.fnd.type === 'pile') ? RWDW_SUPPORT.piles : RWDW_SUPPORT.soil;   // RWPL: the foundation type of the model
 ```
 
-## 2026-11-07 — PR: claude/rw-pile-8c-analysis — Pile-supported footing, Phase 8c: rigid-cap pile reactions per combination, pile compression / uplift / lateral and detailing checks; soil bearing, sliding and overturning replaced in pile mode (RWPL; calculation change in pile mode only)
+## 2026-11-07 — PR: claude/rw-pile-8c-analysis — Pile-supported footing, Phase 8c: rigid-cap pile reactions per combination, pile compression / uplift / lateral and detailing checks; soil bearing, sliding and overturning replaced in pile mode (RWPL; calculation change in pile mode only) (PR #958: https://github.com/mlococo88/All-Structural/pull/958)
 
 Review Phase 8, PR 8c. Engineer decisions 2026-11-07 (review Q11–Q15, taken as recommended) and the decisions listed under Open items. Code sites are tagged `RWPL`. Spread-footing results are unchanged.
 
@@ -4091,7 +4091,7 @@ Review Phase 8, PR 8c. Engineer decisions 2026-11-07 (review Q11–Q15, taken as
   - group effects;
   - the passive credit, when ticked.
 - The soil-bearing notes ("AASHTO bearing: φb·qn = 4950 psf …", "tension zone in soil") are removed in pile mode.
-- `return` gains `pile` (null for a spread footing).
+- `return` gains `pile` only in pile mode (`...(pile ? { pile } : {})`): a spread footing's results have no new field.
 ### RWPL-6. Display / Report
 - **Stability tab:** `renderStability` now calls `renderStabilitySoil` (the former body, unchanged) and, in pile mode, `rwPileStability(r)`:
   - Pile Step 1, the group table and N, x̄, I;
@@ -4251,7 +4251,7 @@ Review Phase 8, PR 8c. Engineer decisions 2026-11-07 (review Q11–Q15, taken as
 +    ...(!isPile && isAASHTO && aashtoR && aashtoR.ee1 ? {   // RWE1
 -    ...(isAASHTO && aashtoR && aashtoR.ct && aashtoR.ct.ee2 ? {
 +    ...(!isPile && isAASHTO && aashtoR && aashtoR.ct && aashtoR.ct.ee2 ? {
-+    pile,   // RWPL (2026-11-07): pile-supported footing results (null for a spread footing)
++    ...(pile ? { pile } : {}),   // RWPL (2026-11-07): pile-supported footing results (absent for a spread footing, so its results are as before)
 +/* RWPL (2026-11-07, Phase 8c): in pile mode the Stability tab opens with the pile cards (group, reactions per combination, checks);
 +   the soil cards below stay for the earth pressures and are marked "not applicable" where they check the soil. */
 +  renderStabilitySoil(r);
@@ -4378,7 +4378,7 @@ Review Phase 8, PR 8d. Code sites are tagged `RWPL`. Spread-footing results are 
 - **Warnings:**
   - The 8c note "heel and toe still from soil" is replaced by "designed from the factored pile reactions".
   - New: with cov_bot > 6 in, the toe crack-control check uses that cover and fails for large covers. The remedy is a bar mat below the pile heads, or the engineer's judgement.
-- **Returned:** `pileFtg`, `cov_bot`, `pilePunch`, `heelPile`, `toePile`.
+- **Returned (pile mode only, with `pile`):** `pileFtg`, `cov_bot`, `pilePunch`, `heelPile`, `toePile`. A spread footing's results have none of them; the displays use `r.cov_bot ?? c_c`.
 ### RWPL-8. Display / Report
 - Footing tab:
   - Heel Step 1 / Toe Step 1: the pile-row line loads instead of the bearing pressures (link to Pile Step 2).
