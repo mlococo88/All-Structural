@@ -3433,7 +3433,7 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
   - Headless probe, main vs branch: 0 differences in any value (40 models, all 1,660 shapes, Validation 136/136).
   - The note shows on the Plastic tab and in the Report model with n ≠ 1, and is absent with n = 1. 0 console errors.
 
-## 2026-11-07 — PR: claude/spc-l3-steps — SPL3: worked steps for S₁, S₂ (c₁,max, c₂,max shown and substituted); Q under "AISC tabulated" labelled (review L3; §6, display only)
+## 2026-11-07 — PR: claude/spc-l3-steps — SPL3: worked steps for S₁, S₂ (c₁,max, c₂,max shown and substituted); Q under "AISC tabulated" labelled (review L3; §6, display only; PR #1105: https://github.com/mlococo88/All-Structural/pull/1105)
 
 - **Problem (review L3, two §6 gaps):**
   1. S₁ and S₂ were given as I/c, but c₁,max and c₂,max were not displayed (the open item from D11).
