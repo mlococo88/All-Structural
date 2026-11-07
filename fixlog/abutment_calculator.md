@@ -16231,7 +16231,7 @@ index 9d50d7b..7c34a8a 100644
 - **How verified:** `AbutPileResults.plan` evaluated in the page, both payloads. `check-syntax`: pass. No console errors.
 - **Other copies:** the Retaining Wall Designer receiver gets the same rule (fixlog/Retaining Wall Designer.md, PDA-M7).
 
-## 2026-11-07 — PR: claude/abut-low (ABL: review LOW items L1 crack-control γ_e default, L2 pile φ defaults, L3 rock adhesion on the compressed area, L4 construction-stage label, L6 zone vs S_D1, L7 BR/TU in both directions)   [calc changes: new-project defaults (L1, L2), formula (L3), permutations (L7); label (L4); warning (L6)] [MORE conservative]
+## 2026-11-07 — PR: claude/abut-low (PR #1052: https://github.com/mlococo88/All-Structural/pull/1052) (ABL: review LOW items L1 crack-control γ_e default, L2 pile φ defaults, L3 rock adhesion on the compressed area, L4 construction-stage label, L6 zone vs S_D1, L7 BR/TU in both directions)   [calc changes: new-project defaults (L1, L2), formula (L3), permutations (L7); label (L4); warning (L6)] [MORE conservative]
 
 Source: code-compliance review of 2026-11-07, items L1–L4, L6, L7 (L5, the built-in project failing its own checks, is an engineer decision and is not changed).
 
