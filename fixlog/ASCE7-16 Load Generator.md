@@ -1304,7 +1304,7 @@ Basis: ASCE/SEI 7-16 Fig. 27.3-1 and Sec. 27.1.5 (**verify (ASCE 7-16 PDF unread
 - **How verified:** headless Chromium, main vs branch, 9 cases (default, gable 12:12, hip 6:12, monoslope 4:12, variant B, variant C, Chatham, Site E, Adams flat): leaf diff of `R` and the hand-off: only variant B moved (the values above, and the combinations that use them). Rendered text of all tabs and the Report: 0 console errors, 0 KaTeX errors. Excel built for all cases. `check-syntax`, `project-library --tool asce7`, `phone-layout --tool asce7`, `engine handoffs`.
 - **Other copies:** none.
 
-## 2026-11-07 — PR: claude/asce7-m1m2-ma-seismic — A7M1 + A7M2: 780 CMR 1613.1 (no SDC A in Massachusetts) and the 780 CMR amendments to Table 12.2-1 (review M1, M2; §4)
+## 2026-11-07 — PR: claude/asce7-m1m2-ma-seismic — A7M1 + A7M2: 780 CMR 1613.1 (no SDC A in Massachusetts) and the 780 CMR amendments to Table 12.2-1 (review M1, M2; §4; PR #1069: https://github.com/mlococo88/All-Structural/pull/1069)
 
 Basis: 780 CMR 10th Ed. (Massachusetts amendments to IBC 2021), Ch. 16: 1613.1 and the "ASCE 7, Table 12.2-1" limitations amendment with its Notes 1 and 2 (checked in the 10th Ed. PDF, pp. 95–97). The Table 12.2-1 row IDs used by the tool's rows (C.7, H) follow ASCE 7-16 numbering (**verify (ASCE 7-16 PDF unreadable)**).
 
