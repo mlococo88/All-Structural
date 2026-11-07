@@ -5166,7 +5166,7 @@ Review Phase 8, 3D view (open item of 8e). Code sites are tagged `RWPL`. Nothing
 +    '3D model tab[[tab:threed| ↗]] at its default view: the governing ' + (rw3IsPile(r) ? 'pile compression combination' : 'bearing combination') + (gname ? ' (' + gname + ')' : '') + (rw3IsPile(r) ? ' with its pile reactions per row' : ' with its base reaction R and bearing pressure') + ', the load cases as unfactored arrows with their values, every layer on, no section cut, the Reset-view camera. Perspective: not to scale; B = ' + rwrN(r.B, 2) + ' ft, H = ' + rwrN(r.H, 2) + ' ft, a ' + rwrN(wallLen3D(r), 0) + ' ft run of wall.');
 ```
 
-## 2026-11-07 — PR: claude/rw-pile-8f — Pile-supported footing, Phase 8f: hand-off with Pile Designer — foundationLoads revision 2 (element.type "wall") sent, pileResults read back with the stale check (RWPX; no change to a computed result unless results are pulled; cross-tool PR with Pile Designer)
+## 2026-11-07 — PR: claude/rw-pile-8f — Pile-supported footing, Phase 8f: hand-off with Pile Designer — foundationLoads revision 2 (element.type "wall") sent, pileResults read back with the stale check (RWPX; no change to a computed result unless results are pulled; cross-tool PR with Pile Designer) (PR #1015: https://github.com/mlococo88/All-Structural/pull/1015)
 
 Review Phase 8, PR 8f, following the abutment calculator's contract (HANDOFF.md §4.6 revision 2, §4.10; ABPX / PXR / PXR2). Code sites tagged `RWPX`. Cross-tool connection: Pile Designer (BY list, one label) and HANDOFF.md change in the same PR (CLAUDE.md §7 exception).
 ### RWPX-1. Engine (new `<script>` before `</body>`, between the markers `/* RWPX-ENGINE-BEGIN */` … `/* RWPX-ENGINE-END */`; run in Node by tests/engine/handoffs.test.mjs)

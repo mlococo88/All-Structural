@@ -19970,7 +19970,7 @@ index 06a42e4..b58d4e3 100644
   - `check-syntax`: pass. `pile-library`: library checks pass; its page-text checks show the new check text and `pdaRev`. 0 console errors.
 - **Other copies:** none.
 
-## 2026-11-07 — PR: claude/rw-pile-8f — foundationLoads from the Retaining Wall Designer listed (copy by.retwall); pileResults dialog names both receivers (RWPX; no calculation change)
+## 2026-11-07 — PR: claude/rw-pile-8f — foundationLoads from the Retaining Wall Designer listed (copy by.retwall); pileResults dialog names both receivers (RWPX; no calculation change) (PR #1015: https://github.com/mlococo88/All-Structural/pull/1015)
 
 Cross-tool PR with the Retaining Wall Designer (Phase 8f, HANDOFF.md §4.6 / §4.10). Minimal change.
 ### Where / before / after
