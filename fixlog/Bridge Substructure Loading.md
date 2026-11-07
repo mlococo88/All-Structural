@@ -2330,3 +2330,23 @@ function listTables() {
 - **Hand-offs changed (§7):** foundationLoads (Strength V, Service I cases) and abutmentLoads (WS.V, WS.SI) values; receivers abutment calculator, Pile Designer, Spread Footing re-run (no format change).
 - **Saved data:** no key or format change (§5).
 - **Other copies:** none. **Open items:** L3 (Z definition) is a separate item.
+
+## 2026-11-07 — PR: claude/subloads-ct-height (PR #1104: https://github.com/mlococo88/All-Structural/pull/1104) (CTH) — vehicle collision force at 2.0 to 5.0 ft above the ground, the critical height for each effect (review H4; §4 result change)
+- **Why:** in-depth code review of 2026-11-07, finding H4.
+- **Problem:** `phase6` applied the 600 kip collision force only at `z = ground + 5`. The code places it anywhere from 2.0 to 5.0 ft above the ground, whichever produces the critical effect. Column base shear is largest at the lowest height, so the tool's column base shear was 21–26 % low (**unconservative**). Moments at the footing and the column base moments in the default pier still govern at 5.0 ft and do not change.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 3.6.5.1 (600 kip equivalent static force, 0 to 15° to the edge of pavement, 2.0 to 5.0 ft above the ground, whichever is critical).
+- **Where / code:** `phase6(k)`, anchor `if (u.type !== 'abut' && u.ct.on === 'yes')`.
+  - New constant before `function phase6`: `const CT_HTS = [2, 2.5, 3, 3.5, 4, 4.5, 5];`
+  - Before: `out.ct = { prot, z, parts, angs, F: 600 }; if (!prot) { … parts.forEach(p => angs.forEach(d => { … evalCase({ pts: [{ z, ...h, … }] }) … out.ctName.push(`${p.nm}, ${d}°`); })); }`
+  - After: `const hts = CT_HTS.map(h => ({ h, z: nz(u.ground) + h, parts: hitParts(G, UG, k, nz(u.ground) + h, u.ct.hit) })); out.ct = { prot, z, parts, angs, F: 600, hts }; if (!prot) { … out.ctH = []; hts.forEach(H => H.parts.forEach(p => angs.forEach(d => { … evalCase({ pts: [{ z: H.z, ...h, … }] }) … out.ctName.push(`${p.nm}, ${d}°, ${f1(H.h)} ft above the ground`); out.ctH.push(H.h); }))); }`
+  - Every height × component × direction is a CT case; Extreme Event II already takes the extreme case per effect (the `combine` patch after `phase6` and `comboComps`), so each effect uses its critical height. `p6.ct.z` (5 ft) is kept for the 3D view's illustration (title now says it is one of the heights).
+- **Display (§6):** Vehicle collision tab: subtitle "600 kip at 2.0 to 5.0 ft above the ground (El. … to …), whichever governs"; text says the heights are scanned every 0.5 ft; new table "Governing case of each effect" (each column / pile / wall and resultant shear and moment: the largest CT value with its struck component, direction and height). Manual, Methods, Units-pane note and report CT family label say 2.0 to 5.0 ft.
+- **Check case:** default project, Pier 1 vehicle collision on (unprotected, all columns), 600 kip on Column 1 normal to the bearing line (0°). Columns fixed at both ends, top of footing El. 101.0, ground El. 104.5, cap soffit El. 114.59. Unit-model results (Column 1 / 2 / 3 base V_t, kip; Column 1 base M_t, kip-ft):
+  - 2.0 ft: 499.4 / 52.2 / 48.4 (Σ = 600.0); M_t 1909.6
+  - 3.5 ft: 449.2 / 78.4 / 72.4 (Σ = 600.0); M_t 2051.6
+  - 5.0 ft: 395.7 / 106.4 / 97.9 (Σ = 600.0); M_t 2085.5
+  - Hand check of the trend: a braced fixed-fixed column with load at a above its base has V_base = P b²(L + 2a)/L³ (b = L − a); with L = 13.59 ft it decreases from a = 5.5 ft (2 ft above ground) to a = 8.5 ft (5 ft above ground), so the lowest height governs base shear; the struck column takes more than that because the cap sways. Statics: the three column base shears sum to 600 kip at every height.
+  - **Column 1 base V_t (CT, unfactored): 395.7 → 499.4 kip (+26 %); Extreme Event II max 389.0 → 492.6 kip, min −415.0 → −518.7 kip.** Column 2: 400.5 → 501.2 kip. Column base M_t, M_l and every resultant at the footing (top and bottom): unchanged (5.0 ft governs).
+- **How verified:** headless main vs branch, every combination value of every unit: default project and reviewer variant (CT off) identical; with Pier 1 CT on, only 6 values change (EE II, V_t at the three column bases, max and min). Receivers (abutment calculator, Spread Footing, Pile Designer) pulled the SubLoads hand-offs with no page errors; the foundationLoads cases at the footing are unchanged (only column base shears move). `check-syntax`, `phone-layout --tool bsl`, `project-library --tool bsl` (all pass), `engine/run.mjs handoffs` (10 / 10); 0 console errors on every tab.
+- **Saved data:** no key or format change (§5).
+- **Other copies:** none. **Open items:** the post-collision "single column missing" case (3.6.5.1) remains a suggestion.
