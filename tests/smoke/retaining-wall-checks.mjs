@@ -9,6 +9,7 @@
 // (no crash). The default project has no banner and no mark.
 // RWSC (2026-11-07): the self-consistency panel passes on representative walls, reports MISMATCH on a tampered result, hides on error.
 // RWPR (2026-11-07): the Report prints alone, with every section, the overview figures and the input echo; 0 KaTeX errors.
+// RWKX (2026-11-07): the tabs' equations are all set by KaTeX, none in error; MathJax is not loaded.
 //   node tests/smoke/retaining-wall-checks.mjs [--file <file or git ref>]
 import path from 'path';
 import { openPage, resolveFile } from '../lib.mjs';
@@ -146,6 +147,29 @@ for (const [name, set] of [['ACI, water + column + seismic', { proj_name: 'Main 
   check(o.kerr === 0, `0 KaTeX errors (${o.kerr})`);
   check(pages >= 15, `${pages} printed pages`);
   check(back, 'the page comes back after printing');
+  check(!errs.length, 'no console errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
+}
+// RWKX (2026-11-07): the result tabs' worked steps are set by KaTeX (MathJax removed): every equation typeset, none in error or red
+// (an unsupported command), no $$ left, and MathJax not loaded
+for (const [name, set] of [['ACI water + seismic + key + passive', { Hs: 14, wt_depth: 6, incl_hydro: true, kh: 0.15, beta: 8, use_shear_key: true, incl_passive: true }],
+  ['AASHTO collision + interface shear + Coulomb + LS', { design_basis: 'AASHTO', bar_enable: true, aashto_ct_enable: true, yl_enable: true, aashto_ish_enable: true, aashto_ep_method: 'coulomb', aashto_ll_surcharge: true }]]) {
+  const { b, p, errs } = await openPage(SRC.file); await p.waitForTimeout(2500);
+  const o = await p.evaluate(async set => {
+    for (const [k, v] of Object.entries(set)) { const e = document.getElementById(k); if (e.type === 'checkbox') e.checked = !!v; else e.value = v; e.dispatchEvent(new Event('change', { bubbles: true })); }
+    if (typeof syncConditionalUI === 'function') syncConditionalUI(); onInputChange();
+    const out = { mj: !!window.MathJax || !!document.querySelector('script[src*="mathjax"]'), tabs: {} };
+    for (const t of ['stability', 'stem', 'footing']) {
+      document.querySelector(`.tab-btn[data-tab="${t}"]`).click(); await new Promise(r => setTimeout(r, 900));
+      const P = document.getElementById('tab-' + t);
+      out.tabs[t] = { eq: P.querySelectorAll('.eq-math').length, kx: P.querySelectorAll('.eq-math .katex-display').length, err: P.querySelectorAll('.katex-error').length,
+        red: [...P.querySelectorAll('.katex')].filter(k => /cc0000/i.test(k.innerHTML)).length, left: (P.innerText.match(/\$\$/g) || []).length };
+    }
+    return out;
+  }, set);
+  await b.close();
+  console.log('KaTeX: ' + name);
+  check(!o.mj, 'MathJax not loaded');
+  for (const [t, x] of Object.entries(o.tabs)) check(x.eq > 10 && x.kx === x.eq && !x.err && !x.red && !x.left, `${t}: ${x.kx} of ${x.eq} equations by KaTeX, ${x.err} errors, ${x.red} red, ${x.left} $$ left`);
   check(!errs.length, 'no console errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
 }
 console.log(failures ? `${failures} FAILED` : 'all ok');
