@@ -5461,7 +5461,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Other copies:** none.
 - **Open items:** decisions 1–4. Post-installed anchors (§17.10.3) do not arise (cast-in only).
 
-## 2026-11-07 — BPL2 / BPL3 / BPL5 / BPL6: review LOW items (PR: claude/bp-low-items)
+## 2026-11-07 — BPL2 / BPL3 / BPL5 / BPL6: review LOW items (PR: claude/bp-low-items, PR #978: https://github.com/mlococo88/All-Structural/pull/978)
 
 ### BPL2. Interaction: the §17.8.2 cut-offs before either form   [calculation change, LESS conservative only where the code permits; saved data: none]
 - **Problem (review L2):** `interaction()` applied the 0.2 cut-offs to the trilinear form only and then took max(parabolic, trilinear). So (β_N, β_V) = (1.0, 0.2) read 1.068 FAIL, although §17.8.2(b) permits neglecting the interaction there.
