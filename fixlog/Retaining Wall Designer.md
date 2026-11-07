@@ -2470,7 +2470,7 @@ Calculation audit, item 1. Engineer decision (2026-11-07): no calculation change
 - origin/main vs branch, eight walls (ACI default; ACI water uniform; ACI water triangular at 2 ft; ACI water + k_h + column + q_s + β + key + passive; AASHTO with barrier + collision; AASHTO water + column + η 1.05 + at-rest + passive; AASHTO rock + collision (γ_EH,CT 0) + water + β; tall ACI wall with k_h and water): `_R`, Export JSON, every localStorage key and the Report model identical in all eight; the Footing design tab text and the Report text differ only by the note, in the four ACI cases with water; the four other cases identical; 0 console errors.
 - Tests: check-syntax, `tests/smoke/retaining-wall-checks.mjs`, phone-layout rwall 390 / 768, project-library retwall, dxf-print-sheets rw: all pass.
 
-## 2026-11-07 — PR: claude/rw-aashto-es-vertical — AASHTO: the dead surcharge on the heel q_s·L_h (ES vertical) enters ΣV (RWES; calculation change)
+## 2026-11-07 — PR: claude/rw-aashto-es-vertical — AASHTO: the dead surcharge on the heel q_s·L_h (ES vertical) enters ΣV (RWES; calculation change) (PR #943: https://github.com/mlococo88/All-Structural/pull/943)
 
 Calculation audit, item 2. Engineer decision (2026-11-07): in AASHTO mode the vertical dead surcharge on the heel is a permanent earth surcharge ES. It takes γ = 1.50 where it adds load (bearing, footing-design pressure) and γ = 0.75 where it resists (sliding, eccentricity). Code sites are tagged `RWES`.
 
