@@ -2778,6 +2778,11 @@ const SPC = (function () {
     const parts = R.parts.filter(q => !q.pt.hole);
     if (R.anyHole) T.warn.push('Holes and cut-outs are ignored in the torsion model (gross section).');
     if (R.anyN) T.notes.push('Torsion properties are geometric: the modulus ratios n are not applied.');
+    /* SPM3 (2026-11-07): Σ b t³/3 overestimates J of stocky flange elements, and for heavy rolled shapes this outweighs the
+       neglected fillets: the thin-wall J of 155 W, WT, HP, M, MT shapes is above the AISC J (W14X730 +9.1 %, WT7X436.5 +11.1 %),
+       all with b_f/2t_f ≤ 5.33. Flag J (unconservative where J resists torsion) for a W, M, HP, WT or MT part with b_f/2t_f ≤ 5.5. */
+    const thick = parts.filter(q => q.pt.type === 'shape' && q.pt.p && { W: 1, M: 1, HP: 1, WT: 1, MT: 1 }[q.pt.p.fam] && q.G.g.dims && q.G.g.dims.bf / (2 * q.G.g.dims.tf) <= 5.5);   // S, ST: thin-wall J always 14–27 % below the table
+    if (thick.length) { T.jHigh = true; T.warn.push(`Thick flanges (b_f/2t_f ≤ 5.5: ${thick.map(q => (q.pt.lbl || q.pt.id) + ' ' + q.G.g.desc + ' ' + (+(q.G.g.dims.bf / (2 * q.G.g.dims.tf)).toFixed(2))).join(', ')}): the thin-wall J (Σ b t³/3) can be higher than the true J for such stocky flanges (up to +11 % over the AISC tables for the heaviest W and WT shapes), which is unconservative where J resists torsion. Use the AISC tabulated J of the shape, or check J by another method.`); }
     if (R.anyTab) T.notes.push('Parts set to "use AISC tabulated" still use their plate model here (except a single shape on its own, see the comparison).');
     T.contacts = contactPairs(R, tol, off);
     // part-level groups (allowed contacts)
@@ -5741,7 +5746,7 @@ function buildSecSummary(s) {
     tile('I<sub>1</sub> (major)', R.I1, 'I'), tile('I<sub>2</sub> (minor)', R.I2, 'I'), `<div class="t"><div class="k">θ<sub>p</sub> (x → axis 1, CCW)</div><div class="v">${ang(R.thp)}</div></div>`,
     tile('S<sub>x</sub> top', R.Sxt, 'S'), tile('S<sub>x</sub> bottom', R.Sxb, 'S'), tile('S<sub>y</sub> left / right', Math.min(R.Syl, R.Syr), 'S', { title: 'smaller of the two' }),
     tile('Z<sub>x</sub>', R.Zx, 'S'), tile('Z<sub>y</sub>', R.Zy, 'S'), tile('r<sub>x</sub>', R.rx, 'L'),
-    tile('r<sub>y</sub>', R.ry, 'L'), tile('r<sub>min</sub> (principal)', R.r2, 'L'), tile('J ' + (T.J !== null ? '(thin-wall)' : ''), T.J, 'I', { na: 'n/a', title: T.why || '' }),
+    tile('r<sub>y</sub>', R.ry, 'L'), tile('r<sub>min</sub> (principal)', R.r2, 'L'), tile('J ' + (T.J !== null ? (T.jHigh ? '(thin-wall; may be high, see Torsion)' : '(thin-wall)') : ''), T.J, 'I', { na: 'n/a', title: T.why || '' }),
     tile('C<sub>w</sub>', T.Cw, 'W', { na: 'n/a', title: T.cwWhy || '' }), tile('Shear centre x<sub>o</sub> (from centroid)', T.sc ? T.xo : null, 'L', { na: 'n/a' }), tile('Shear centre y<sub>o</sub> (from centroid)', T.sc ? T.yo : null, 'L', { na: 'n/a' })
   ].join('')));
   s.appendChild(spcWorkedIn([['cTab', 'A'], ['cCen', 'x̄, ȳ'], ['cI', 'I<sub>x</sub>, I<sub>y</sub>, I<sub>xy</sub>, S, r<sub>x</sub>, r<sub>y</sub>'], ['cP', 'I<sub>1</sub>, I<sub>2</sub>, θ<sub>p</sub>, r<sub>min</sub>'], ['plZx', 'Z<sub>x</sub>'], ['plZy', 'Z<sub>y</sub>'], ['tJ', 'J'], ['tCw', 'C<sub>w</sub>, x<sub>o</sub>, y<sub>o</sub>']].concat(Q && M.q.on ? [['qRes', 'Q cut']] : [])));   // D11 links
@@ -5767,7 +5772,7 @@ function aisCompare(q) {
   const h = rows.map(([lab, a, b, kk]) => `<tr><td class="lft">${lab}</td><td>${esc(nf(a, kk))}</td><td>${b === null || b === undefined ? '—' : esc(nf(b, kk))}</td><td>${esc(pctS(pctd(a, b)))}</td><td class="lft">${esc(un(kk))}</td></tr>`).join('');
   const box = el('div', 'sec');
   box.innerHTML = `<div class="secHead" style="cursor:default"><h2 class="secTitle">Single rolled shape ${esc(name)}: plate model vs AISC Shapes Database v16.0</h2></div><div class="secBody"><div class="tscroll"><table class="tbl"><tr><th class="lft">Property</th><th>This tool (plate model)</th><th>AISC tabulated</th><th>Diff.</th><th class="lft">Unit</th></tr>${h}</table></div>
-  <div class="hint">The plate model of W, M, HP, L, WT and MT shapes neglects the root fillets and toe radii, so A and I differ from the table by a few percent (HSS: rounded corners are modelled). S, C, MC and ST shapes are modelled with the sloped inner flange faces, root fillets and toe radii, found so that A and I<sub>y</sub> equal the table (Method tab); their other values (I<sub>x</sub>, S, Z, x̄) agree with the table within about 1–3 %. Torsion (J, C<sub>w</sub>, shear centre) uses the thin-wall centre-line model with the average t<sub>f</sub> for every shape. AISC J and C<sub>w</sub> include fillet effects (C<sub>w</sub> of angles and tees includes the plate-thickness term that thin-wall theory drops). ${q.use ? '<b>This part uses the AISC tabulated A and I</b> (elastic results).' : 'Tick "Use AISC tabulated" on the Part properties tab to use the tabulated A, I instead.'} Z and the torsion constants are from the plate model in either case. L, WT, MT, ST data: see the Method tab.</div></div>`;
+  <div class="hint">The plate model of W, M, HP, L, WT and MT shapes neglects the root fillets and toe radii, so A and I differ from the table by a few percent (HSS: rounded corners are modelled). S, C, MC and ST shapes are modelled with the sloped inner flange faces, root fillets and toe radii, found so that A and I<sub>y</sub> equal the table (Method tab); their other values (I<sub>x</sub>, S, Z, x̄) agree with the table within about 1–3 %. Torsion (J, C<sub>w</sub>, shear centre) uses the thin-wall centre-line model with the average t<sub>f</sub> for every shape. AISC J and C<sub>w</sub> include fillet effects (C<sub>w</sub> of angles and tees includes the plate-thickness term that thin-wall theory drops). The thin-wall J is usually below the AISC J (fillets neglected), but for heavy W, M, HP, WT and MT shapes with thick flanges (b<sub>f</sub>/2t<sub>f</sub> ≤ 5.5) it can be above it (W14X730 +9 %, WT7X436.5 +11 %): Σbt³/3 overestimates J of stocky plates. Such J values are flagged. ${q.use ? '<b>This part uses the AISC tabulated A and I</b> (elastic results).' : 'Tick "Use AISC tabulated" on the Part properties tab to use the tabulated A, I instead.'} Z and the torsion constants are from the plate model in either case. L, WT, MT, ST data: see the Method tab.</div></div>`;
   return box;
 }
 const nt = (v, k, sig) => nf(v, k, sig).replace(/,/g, '{,}');
@@ -6836,7 +6841,7 @@ function buildManual(pg) {
     `<b>This browser:</b> autosave <code>${LS_AUTO}</code>, named projects <code>${LS_PROJ}</code>, selected input tab <code>${LS_INTAB}</code>, DXF export options <code>${LS_DXF}</code>. All keys start with <code>spc_</code>.`,
     '<b>Shared project info</b> (bridgeSuite.v1.projectMeta): Project, Job #, Client, Prepared by, Checked by and Date are shared and received. No other hand-offs in Phase 1.']);
   H('Limitations');
-  UL(['Thin-wall torsion is approximate: verify J and C<sub>w</sub> for thick or unusual sections. Stocky elements (b/t &lt; 10) are flagged.', 'Rolled shapes: plate model (see above).', 'No local buckling, slenderness or design checks.']);
+  UL(['Thin-wall torsion is approximate: verify J and C<sub>w</sub> for thick or unusual sections. Stocky elements (b/t &lt; 10) are flagged. The thin-wall J is not always lower than the true J: for W, M, HP, WT and MT shapes with b<sub>f</sub>/2t<sub>f</sub> ≤ 5.5 it can be up to about 11 % higher than the AISC J (the stocky flanges outweigh the neglected fillets), and J is then flagged.', 'Rolled shapes: plate model (see above).', 'No local buckling, slenderness or design checks.']);
 }
 
 /* =====================================================================
