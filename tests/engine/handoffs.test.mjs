@@ -128,3 +128,78 @@ test('superReactions: GirderDetail\'s payload shape, reactions from the analysis
   R3.llR.forEach((q, k) => assert.ok(ll.includes(`${p.supports[k].id}: `) && ll.includes(`G3 ${q.max.toFixed(2)} / ${q.min.toFixed(2)}`), `support ${k}`));
   p.supports.forEach((s, k) => ['DC1', 'DC2', 'DW'].forEach(c => assert.equal(s.girders[2][c], Math.round(R3.st[c].R[k] * 1000) / 1000)));
 });
+
+/* RWPX (2026-11-07, Phase 8f): the Retaining Wall Designer's foundationLoads (revision 2) and pileResults engine, read from the tool's
+   file at test time (the block between the RWPX-ENGINE markers) and run with shared/pile-group.js. HANDOFF.md §4.6 / §4.10.
+   7. The segment length: the least common multiple of the row spacings (≤ 120 ft), else 120 ft rounded down to the largest spacing.
+   8. The payload on a 3-row wall (s = 6, 6, 8 ft → a 24-ft segment, 4 + 4 + 3 piles): Σ pileP = P; every pile of row i carries the
+      wall's per-ft P_i (rigid cap, exact segment); My = P·(x̄ − x_R), Mx = 0; Vx = H·L; pileDesign = the wall's P_max / P_min and h;
+      the content hash ignores the resistances and follows the loads.
+   9. pileResults plan: CURRENT / STALE / not this wall / no hash; AASHTO sets R_n, φ_c, R_n,up, φ_up; ACI sets nothing; per-combination match. */
+import fs from 'node:fs';
+import vm from 'node:vm';
+const RWW = (() => { const W = loadShared('pile-group.js'), src = fs.readFileSync(path.join(ROOT, 'Retaining Wall Designer.html'), 'utf8');
+  const m = /\/\* RWPX-ENGINE-BEGIN \*\/([\s\S]*?)\/\* RWPX-ENGINE-END \*\//.exec(src); assert.ok(m, 'RWPX engine block found'); vm.runInContext(m[1], W); return W; })();
+function rwFixture(isA, V, xR, H) {
+  const SPG = RWW.SharedPileGroup, rows = [{ x: 1.5, s: 6 }, { x: 6.0, s: 6 }, { x: 11.0, s: 8 }], g = SPG.rowGroup(rows), B = 12.5;
+  const mk = (key, label, kind, V, xR, H) => { const M = SPG.momentAbout(V, xR, g.xbar); return { key, label, kind, V, xR, H, M, L: SPG.rowLoads(g, V, M, H) }; };
+  return { B, tf_ft: 3, isAASHTO: isA, fatal: false,
+    inp: { fnd: { type: 'pile', rows, shape: 'hp', desig: 'HP 12x53', D: 12, embed: 12, clr: 3, Rn: 300, phic: 0.65, Rnup: 100, phiup: 0.5, Hr: 20, Pa: 100, Ta: 25, Ha: 8 } },
+    pile: { rows, g, comb: isA ? [mk('str_max', 'Strength I (maximum vertical)', 'max', V, xR, H), mk('str_min', 'Strength I (minimum vertical)', 'min', 0.55 * V, xR - 1.6, H)]
+                               : [mk('s1', 'D + H + L (service)', 'max', V, xR, H), mk('s3', '0.6D + H (minimum vertical)', 'min', 0.6 * V, xR - 2, H)] } };
+}
+test('RWPX segment: least common multiple of the row spacings, ≤ 120 ft', () => {
+  const S = rows => J(RWW.rwpxSegment(rows.map(s => ({ x: 0, s }))));
+  deq(S([6, 6]), { L: 6, exact: true }); deq(S([6, 8]), { L: 24, exact: true }); deq(S([6, 6, 8]), { L: 24, exact: true });
+  deq(S([7.5, 10]), { L: 30, exact: true });
+  const q = S([7.3, 11.1]); assert.equal(q.exact, false); assert.ok(Math.abs(q.L - 111) < 1e-9);   // LCM 810.3 ft > 120: 10 × 11.1
+});
+test('RWPX payload: exact segment gives the wall\'s per-ft pile loads; moments, shears, per-pile loads, content hash', () => {
+  const r = rwFixture(true, 20, 5.0, 4), b = RWW.rwpxBuild(r, { name: 'Fixture wall' }), p = b.p, g = r.pile.g;
+  assert.equal(b.seg.L, 24); assert.equal(p.pileLayout.n, 4 + 4 + 3); assert.equal(p.element.type, 'wall'); assert.equal(p.revision, 2);
+  assert.ok(Math.abs(p.pileLayout.centroid.x - (r.B / 2 - g.xbar)) < 1e-6, 'segment centroid = the per-ft x̄');
+  assert.ok(Math.abs(p.pileLayout.Sxx - g.I * 24) < 1e-5, 'Σx\'² = I·L'); assert.ok(Math.abs(p.pileLayout.centroid.y) < 1e-9 && Math.abs(p.pileLayout.Sxy) < 1e-9);
+  p.cases.forEach((c, k) => { const cb = r.pile.comb[k];
+    assert.ok(Math.abs(c.P - cb.V * 24) < 1e-3 && Math.abs(c.Vx - cb.H * 24) < 1e-3 && c.Mx === 0, c.name + ': P = V·L, Vx = H·L, Mx = 0');
+    assert.ok(Math.abs(c.My - cb.V * 24 * (g.xbar - cb.xR)) < 2e-3, c.name + ': My = P(x̄ − x_R)');
+    assert.ok(Math.abs(c.pileP.reduce((a, v) => a + v, 0) - c.P) < 0.006, c.name + ': Σ pileP = P');
+    p.pileLayout.piles.forEach((q, i) => { const row = r.pile.rows.findIndex(w => Math.abs(r.B / 2 - w.x - q.x) < 1e-6);
+      assert.ok(Math.abs(c.pileP[i] - cb.L.rows[row].P) < 1.5e-3, c.name + ': pile ' + q.no + ' = row ' + (row + 1) + ' per-ft P'); });
+    const dc = p.pileDesign.cases.find(x => x.id === cb.key + ':compression'); assert.ok(Math.abs(dc.P - cb.L.Pmax) < 6e-4 && Math.abs(dc.V - H_(cb)) < 6e-4);
+    const dm = p.pileDesign.cases.find(x => x.id === cb.key + ':' + (cb.L.Pmin < 0 ? 'uplift' : 'minimum')); assert.ok(Math.abs(dm.P - cb.L.Pmin) < 6e-4); });
+  // hand check, Strength I max: N = 1/6 + 1/6 + 1/8 = 0.45833 /ft; x̄ = (1.5/6 + 6/6 + 11/8)/N = 5.72727 ft; M = 20(5.0 − 5.72727) = −14.5455 kip-ft/ft
+  assert.ok(Math.abs(g.N - 0.458333) < 1e-6 && Math.abs(g.xbar - 5.727273) < 1e-6);
+  const h0 = p.contentHash, r2 = rwFixture(true, 20, 5.0, 4); r2.inp.fnd.Rn = 450; r2.inp.fnd.phic = 0.7;
+  assert.equal(RWW.rwpxBuild(r2, { name: 'Fixture wall' }).p.contentHash, h0, 'hash ignores the resistances');
+  assert.notEqual(RWW.rwpxBuild(rwFixture(true, 21, 5.0, 4), { name: 'Fixture wall' }).p.contentHash, h0, 'hash follows the loads');
+  assert.equal(RWW.rwpxBuild(rwFixture(false, 20, 5.0, 4), {}).p.cases[0].factored, false, 'ACI: service cases');
+});
+const H_ = cb => cb.L.rows[0].h;
+test('RWPX pileResults plan: stale check, what is set, per-combination match', () => {
+  const r = rwFixture(true, 20, 5.0, 4), p = RWW.rwpxBuild(r, {}).p, cur = p.contentHash;
+  const res = (basis, extra) => Object.assign({ _schema: 'bridge-pile-results', schemaVersion: 1, producer: 'Pile Designer', producedAt: '2026-11-07T20:00:00Z', units: { force: 'kip', moment: 'kip-ft', length: 'ft' }, basis,
+    geotechnical: { static: { Rn: 412.5, phi: 0.45, RnUp: 150, phiUp: 0.35 } },
+    cases: [{ name: 'per-pile Strength I max', source: { kind: 'perPile', caseId: 'str_max:compression' }, loads: { P: r.pile.comb[0].L.Pmax, V: H_(r.pile.comb[0]) }, py: { Mmax: 31.2, y0: 0.21 }, checks: { pass: true } }] }, extra || {});
+  const B = { producer: 'Retaining Wall Designer', producedAt: '2026-11-07T19:00:00Z', contentHash: cur };
+  let q = RWW.rwpxPlan(r, res(B), cur, null); assert.equal(q.status, 'current');
+  deq(q.set.map(s => [s.id, s.to]), [['pile_Rn', 412.5], ['pile_phic', 0.45], ['pile_Rnup', 150], ['pile_phiup', 0.35]]);
+  assert.equal(q.match[0].M, 31.2); assert.equal(q.match[0].differs, false); assert.equal(q.match[1].none, true);
+  assert.equal(RWW.rwpxPlan(r, res(B), 'deadbeef', null).status, 'stale');
+  assert.equal(RWW.rwpxPlan(r, res(Object.assign({}, B, { producer: 'Abutment Calculator' })), cur, null).status, 'other');
+  assert.equal(RWW.rwpxPlan(r, res(Object.assign({}, B, { contentHash: null })), cur, { producedAt: '2026-11-07T19:30:00Z' }).status, 'stale');
+  assert.equal(RWW.rwpxPlan(r, res(Object.assign({}, B, { contentHash: null })), cur, { producedAt: B.producedAt }).status, 'unchecked');
+  const ra = rwFixture(false, 20, 5.0, 4); assert.equal(RWW.rwpxPlan(ra, res(B), cur, null).set.length, 0, 'ACI: reference only');
+  assert.ok(RWW.rwpxPlan(r, Object.assign(res(B), { units: { force: 'lb' } }), cur, null).err);
+  assert.ok(RWW.rwpxPlan(r, Object.assign(res(B), { schemaVersion: 2 }), cur, null).err);
+});
+test('PDA-M7 pileResults group: R_n and R_n,up imported times the group reduction (Pile Designer Module 11)', () => {
+  const r = rwFixture(true, 20, 5.0, 4), p = RWW.rwpxBuild(r, {}).p, cur = p.contentHash;
+  const B = { producer: 'Retaining Wall Designer', producedAt: '2026-11-07T19:00:00Z', contentHash: cur };
+  const res = grp => ({ _schema: 'bridge-pile-results', schemaVersion: 1, producer: 'Pile Designer', units: { force: 'kip', length: 'ft' }, basis: B,
+    geotechnical: { static: { Rn: 400, phi: 0.5, RnUp: 150, phiUp: 0.35 } }, group: grp, cases: [] });
+  deq(RWW.rwpxPlan(r, res(null), cur, null).set.map(s => [s.id, s.to]), [['pile_Rn', 400], ['pile_phic', 0.5], ['pile_Rnup', 150], ['pile_phiup', 0.35]], 'no group: as before');
+  const q = RWW.rwpxPlan(r, res({ reduce: 0.8, eta: 0.8, blockGoverns: false, uplift: { reduceUp: 0.6 } }), cur, null);
+  deq(q.set.map(s => [s.id, +s.to.toFixed(6)]), [['pile_Rn', 320], ['pile_phic', 0.5], ['pile_Rnup', 90], ['pile_phiup', 0.35]]);
+  assert.equal(q.group.reduce, 0.8);
+  deq(RWW.rwpxPlan(r, res({ reduce: 1, uplift: null }), cur, null).set.map(s => s.to), [400, 0.5, 150, 0.35], 'reduce 1: unchanged');
+});

@@ -4406,3 +4406,1124 @@ Review Phase 8, PR 8c. Engineer decisions 2026-11-07 (review Q11–Q15, taken as
 +    if (iS >= 0) secs[iS].subs.unshift(sub('Pile-supported footing: soil checks not applicable', [{ type: 'note', text: 'The footing is on piles. The overturning, sliding, eccentricity and soil-bearing steps of this section are shown for information only and are not checks; the piles carry the wall (next section). The earth pressures and the factored loads of this section are used.' }]));
 +  }
 ```
+
+## 2026-11-07 — PR: claude/rw-audit-bookkeeping — Calculation audit item 10: bookkeeping (EH vertical 0.90 labelled as the engineer's choice; O4 and O5 closed; AUDIT.md §3.9 updated; two ACI citations in comments corrected) (RWBK; no result change) (PR #963: https://github.com/mlococo88/All-Structural/pull/963)
+
+Calculation audit, item 10. Engineer answers (2026-11-07). Code sites are tagged `RWBK`. No computed value changes.
+
+### RWBK-1. EH vertical minimum 0.90 kept (engineer's choice)
+- **Where:** `calcAll`, AASHTO block, anchor `const gEH_min = 0.90;` (comment added); `renderStabilityAASHTO` Step 3, anchor `{sym:'V_{EH,v}', desc:'vertical component of the earth thrust`; `rwrModel`, Report step `VEHv` (label).
+- **Before:** the comment and labels said only "factored as EH (γ_EH max/min), not EV".
+- **After:** they add that the 0.90 minimum in sliding and eccentricity is the engineer's choice, more conservative than AASHTO LRFD 10th Ed. Fig. C11.5.6-2, which shows the EH maximum factor on both components of the thrust there.
+- **Check case:** Rankine β 20° (AASHTO): sliding D/C 1.938 stays (with 1.50 on the vertical it would be 1.810). No result change.
+
+### RWBK-2. Comments citing the wrong ACI table (comments only)
+- `devLengthACIRaw`, anchor `const psi_s = db <= 0.75 ? 0.8 : 1.0;`: the comment cited "ACI Table 25.5.2.1" (the lap table); now ACI 318-19 Table 25.4.2.5.
+- `asMin`, anchor `if (!isAASHTO) return 0.0018 * bw * h;`: the comment cited "Table 24.4.3.2"; in ACI 318-19, §24.4.3.2 is a paragraph (0.0018, all grades), so it now reads §7.6.1.1 / §24.4.3.2.
+
+### RWBK-3. Open items O4 and O5 closed (decisions 2026-11-07)
+- **O4 (N1). AASHTO φ_τ default 1.00:** kept. AASHTO LRFD 10th Ed. Table 11.5.7-1 (semi-gravity walls) gives 1.0 for sliding; the shallow-foundation values of Table 10.5.5.2.2-1 (0.80 CIP on sand) are not used for walls. Closed; no change.
+- **O5 (N2). Collision factors:** γp = 1.00 for DC/EV in Extreme Event II is AASHTO LRFD 10th Ed. Table 3.4.1-1 (γp = 1.00 in EE I/II), not a MassDOT value; γ_EH = 0 for stability, the full-joint distribution, the test-level forces (Table 3.3.2-1) and the 0.75 variable-height rule are MassDOT Bridge Manual 3.3.2.4 / 3.3.2.2 (verified in the audit). Water, ES and the vertical earth thrust in EE II were settled in #944 (RWCT) and #956 (RWCV). Closed.
+- `ENGINEER_CHECKS.md`, Retaining Wall line: φτ and collision values removed (closed).
+
+### RWBK-4. AUDIT.md
+- §3.9 Retaining Wall table: every row marked with the fix that resolved it (F1/F14 SI toggle; F2 thrust at δ; F3 K_p; F4 EH vertical, 0.90 kept by the engineer; F5 Strength Ia / 0.9D; F17 q_n; F9 A_s,min; F8 ψ_g / c_b; F6 M-O; F7 key; O5 collision; F10 cohesion), plus a status line naming O4/O5 closed and the audit PRs.
+- §8 plan: A28 and A29 marked done (PR #9).
+
+### How verified
+- `_R`, Export JSON and localStorage identical main vs branch on the twelve audit walls; the tab and Report text differ only by the RWBK-1 labels.
+- Tests: check-syntax; smoke/retaining-wall-checks; phone-layout rwall 390/768; project-library retwall; dxf-print-sheets rw.
+
+### Saved data
+- No change.
+
+## 2026-11-07 — PR: claude/rw-pile-8d-footing — Pile-supported footing, Phase 8d: heel and toe designed from the factored pile-row reactions, bottom cover over the pile heads, punching around the piles, ACI cap depth (RWPL; calculation change in pile mode only) (PR #961: https://github.com/mlococo88/All-Structural/pull/961)
+
+Review Phase 8, PR 8d. Code sites are tagged `RWPL`. Spread-footing results are unchanged: `cov_bot` = c_c, and the pile paths run only when `pile` exists.
+
+### RWPL-7. `calcAll` — the footing on piles   [§4]
+- **Order:** the pile analysis (8c) is now computed before the footing design (anchor `// RWPL (2026-11-07): the pile analysis (8c), computed here`). It was in the checks block; the values are the same.
+- **`pileFtg`:** the factored pile-row reactions of the two footing sets, as the bearing trapezoids use them.
+  - ACI:
+    - U = 1.2D + 1.6H (+1.0E): ΣV_u at x̄_u.
+    - U = 0.9D + 1.6H: ΣV_u,min at x̄_u,min.
+  - AASHTO:
+    - Strength I max: V_str,max,tot at x_R,tot.
+    - Strength Ia: V_str,min,tot at B/2 − e_Ia.
+  - Formulas: P_i = V/N + M x'_i/I, with line loads q_i = P_i/s_i (shared/pile-group.js).
+- **`heelCase(…, pc)`:** the rows behind the stem back face (by the pile centre) give
+  - M_up = Σq_i a_i, with a_i = x_i − x_back;
+  - V_u,A = |w_u L_h + wedge − Σq_i|.
+  - The downward load, the wedge, the no-relief case B, MassDOT §3.3.2.2 and the heel-basis choice are as before.
+- **`toeCase(…, pc)`:** the rows in front of the front face give
+  - M_u = Σq_i a_i − w_sw L_t²/2, with a_i = x_front − x_i;
+  - V_u = Σq_i − w_sw L_t (at the face, as before).
+  - The envelope of the two sets is as before.
+- **`cov_bot`:** on piles, the bottom cover is max(c_c, embedment + clear). It is used for:
+  - d_toe;
+  - the toe ℓ_d cover;
+  - the toe crack control (ACI §24.3.2 / AASHTO Art. 5.6.7);
+  - the stem-hook length available (t_f − cov_bot; the hook bears on the bottom mat above the pile heads).
+- **`pilePunch`:** two-way shear at each pile row.
+  - Critical section at d/2 (ACI 318-19 §22.6.4.1) or d_v/2 (AASHTO Art. 5.12.8.6.1, verified) from the pile face. The pile is taken as the square of equal area (round / pipe: 0.886D).
+  - The section side is a = D_eq + d.
+  - b_o:
+    - interior: 4a;
+    - cut by the toe or heel edge (e < a/2): a + 2(e + a/2);
+    - neighbouring piles of the row overlapping (s ≤ a): the sides across the wall drop out.
+  - Depth over the pile heads: d_p = t_f − cov_bot − d_b. This is the abutment's C-13 rule.
+  - ACI 318-19 Table 22.6.5.2: v_c = min(4, 2 + 4/β, 2 + α_s d/b_o)λ_sλ√f'c, with:
+    - λ_s = √(2/(1 + d/10)) ≤ 1;
+    - β = 1;
+    - α_s = 40 (interior) or 30 (edge / strip);
+    - φ = 0.75.
+  - AASHTO Art. 5.12.8.6.3 (verified): V_n = (0.063 + 0.126/β_c)λ√f'c b_o d_v ≤ 0.126λ√f'c b_o d_v (ksi), with β_c = 1, d_v = max(0.9d_p, 0.72t_f) and φ_v = 0.90.
+  - Demand P_u = the larger factored reaction of the row in the two footing sets, with no deduction for the cap weight inside the perimeter.
+- **New checks** (pile mode): `pilePunch` (both modes) and `pileCapD` (ACI: d_p ≥ 12 in, ACI 318-19 §13.3.1.2).
+- **Warnings:**
+  - The 8c note "heel and toe still from soil" is replaced by "designed from the factored pile reactions".
+  - New: with cov_bot > 6 in, the toe crack-control check uses that cover and fails for large covers. The remedy is a bar mat below the pile heads, or the engineer's judgement.
+- **Returned (pile mode only, with `pile`):** `pileFtg`, `cov_bot`, `pilePunch`, `heelPile`, `toePile`. A spread footing's results have none of them; the displays use `r.cov_bot ?? c_c`.
+- **RWUP (#960) on piles:** the water-uplift split (`upS`) requires `!isPile`. On piles the factored vertical load, water included, goes to the pile rows. `heelCase` / `toeCase` take `(…, up, pc)`, and the pile path runs first.
+### RWPL-8. Display / Report
+- Footing tab:
+  - Heel Step 1 / Toe Step 1: the pile-row line loads instead of the bearing pressures (link to Pile Step 2).
+  - Heel Step 2: M_up = Σq_i a_i.
+  - Toe Step 2: M_u = Σq_i a_i − w_sw L_t²/2 and V_u = Σq_i − w_sw L_t.
+  - Toe Step 3: d with cov_bot.
+  - New card "Pile Cap — Punching around the Piles" (`RW_CARDS.ftgPunch`).
+  - "Factored loads on footing" plot: the pile rows drawn as spikes in place of the bearing trapezoid.
+  - The heel / toe shear and moment plots and SVG diagrams use the pile rows.
+- Report, footing section: the heel / toe steps above, the toe d with cov_bot, and the new sub "Pile cap — punching around the piles" (summary links ppn/dc and ppn/cap).
+### Check case: default wall, t_f 36 in, 2 rows at 1.5 / 11.0 ft, s 6 ft, ACI
+- Group: N = 1/3, x̄ = 6.25, I = 7.5208.
+- **U = 1.2D + 1.6H:**
+  - ΣV_u = 23274 lb/ft at x̄_u = 5.7361 ft, so M = 23274(5.7361 − 6.25) = −11961.
+  - P_toe = 69822 + 11961(4.75)/7.5208 = **77376 lb**, so q_toe = 77376/6 = 12896 lb/ft.
+- **Toe:**
+  - w_sw = 0.9(150)(3.0) = 405 psf.
+  - M_u = 12896(1.5) − 405(3²)/2 = **17521.6 lb-ft/ft**.
+  - V_u = 12896 − 405(3) = **11681 lb/ft** > φV_c 11584 (D/C 1.008, toe shear FAIL, section at the face).
+  - d = 36 − 15 − 0.375 = 20.625 in.
+  - Before (the bearing trapezoid of the same wall on soil): M_u from q_u,front / q_u,toe.
+- **Heel:** U = 0.9D + 1.6H governs.
+  - w_u = 0.9(1440 + 450) = 1701 psf.
+  - M_down = 1701(8²)/2 = 54432.
+  - M_up = 6836.1(6.5) = 44434.6.
+  - M_u = **9997.4 lb-ft/ft**.
+- **Punching:**
+  - d_p = 36 − 15 − 0.75 = 20.25 in; a = 12 + 20.25 = 32.25 in; b_o = 4a = 129 in (interior: e = 18 in > a/2).
+  - λ_s = √(2/3.025) = 0.813.
+  - v_c = min(4, 6, 2 + 40(20.25)/129 = 8.28)(0.813)√4000 = 205.7 psi.
+  - φV_c = 0.75(205.7)(129)(20.25) = **403.0 kip** ≥ P_u 77.38 kip (D/C 0.19).
+- Cap depth: d_p = 20.25 ≥ 12 in.
+### How verified
+- origin/main vs branch, headless Chromium, the 12 walls in spread mode: identical (pile fields aside).
+- Pile mode: the case above in ACI and AASHTO; no console errors; screenshots of the Footing tab.
+- `tests/smoke/retaining-wall-checks.mjs`: + two 8d cases (the numbers above; AASHTO φV_n formula).
+- Also run: `node tests/check-syntax.mjs`; phone layout rwall 390/768; project library retwall; DXF sheets rw.
+### Other copies
+- Two-way shear around piles: `abutment_calculator.html` C-13 (its own perimeter rules). It is a candidate for `shared/pile-group.js` with the abutment move (PR 8h).
+### Open items / decisions (pending engineer review)
+- **Decision (pending engineer review):** one-way shear stays at the stem face, with every pile row in front of or behind the face counted in full. This is conservative. ACI's partial count of piles near the critical section (and d from the face) is not applied.
+- **Decision (pending engineer review):** a pile row is assigned to the heel or the toe by its centre. A row under the stem is carried by neither cantilever.
+- **Decision (pending engineer review):** round and pipe piles are punched as the square of equal area. b_o is cut by the toe / heel edges and by the overlapping neighbours along the wall. Corner piles at the wall ends are not modelled (per ft of wall). No cap weight is deducted inside the perimeter.
+- **Decision (pending engineer review):** the bottom cover on piles is max(c_c, embedment + clear) for the toe d, ℓ_d, crack control and the stem hook. Crack control then fails for typical caps (warning).
+- **Decision (pending engineer review):** the ACI 318-19 Table 22.6.5.2 and §13.3.1.2 citations are from the standard; the ACI PDF text was not readable in this session. AASHTO 5.12.8.6.1 / 5.12.8.6.3 were verified.
+- **Decision (pending engineer review):** the heel bottom bars when piles lift the heel (M_u < 0) follow the existing heel logic (bars for |M_u|, the face shown on the tab). The Drawings still draw F1 at the top. This is to be detailed in 8e.
+- Next steps: 8e (Drawings loads sheet with the pile reactions, bottom mat above the pile heads in the sheets, pile schedule), 8f (Pile Designer hand-off).
+
+### Before / after (code, `git diff -U0` of `Retaining Wall Designer.html` against main after 8c)
+```diff
++  ftgPunch:    ['footing', 'Pile Cap — Punching around the Piles', 'Pile Cap — Punching around the Piles'],   // RWPL 8d
+-const RW_CHECK_CARD = { pileComp:'stabPile', pileUplift:'stabPile', pileLat:'stabPile', pileSpacing:'stabPile', pileEdge:'stabPile', pileEmbed:'stabPile', ot:'stabOT', otE:'stabOT', sliding:'stabSlide', slidingE:'stabSlide', bearing:'stabBrg', ecc:'stabEcc',
++const RW_CHECK_CARD = { pilePunch:'ftgPunch', pileCapD:'ftgPunch', pileComp:'stabPile', pileUplift:'stabPile', pileLat:'stabPile', pileSpacing:'stabPile', pileEdge:'stabPile', pileEmbed:'stabPile', ot:'stabOT', otE:'stabOT', sliding:'stabSlide', slidingE:'stabSlide', bearing:'stabBrg', ecc:'stabEcc',
++  // RWPL (2026-11-07, Phase 8d): on piles the bottom mat sits on the pile heads: bottom cover = max(c_c, embedment + clear)
++  const cov_bot = (inp.fnd && inp.fnd.type === 'pile') ? Math.max(inp.cov_ftg, (+inp.fnd.embed || 0) + (+inp.fnd.clr || 0)) : inp.cov_ftg;
+-  const ldh_avail  = inp.tf - inp.cov_ftg;                     // hook bears on the bottom mat
++  const ldh_avail  = inp.tf - cov_bot;                         // hook bears on the bottom mat (RWPL: on piles, above the pile heads)
++  // RWPL (2026-11-07): the pile analysis (8c), computed here so the footing design (8d) can use it
++  const isPile = !!(inp.fnd && inp.fnd.type === 'pile');
++  const pile = isPile ? rwPileAnalysis({ fnd: inp.fnd, isAASHTO, aashtoR, B, phi_ep: inp.aashto.phi_ep, Pp_toe,
++    SumV, Ms, Ms_Pp, Mo_st, Mo_seis, Fh, Pe_inc, hasSeismic, Wftg, Wstem, Wsoil, W_bar, pDL, pWL, x_col, Pa_tri_v, F_uplift,
++    Ms_ftg, Ms_stem, Ms_soil, Ms_bar, Ms_Pv, Ms_uplift }) : null;
++  /* RWPL (2026-11-07, Phase 8d): pile-supported footing — the heel and toe take the factored pile-row reactions (line loads
++     q_i = P_i / s_i per ft, rigid cap, shared/pile-group.js) in place of the factored bearing trapezoid. The same two factored sets:
++     ACI U = 1.2D + 1.6H (+1.0E) and U = 0.9D + 1.6H (ΣV_u, x̄_u as the bearing trapezoid); AASHTO Strength I max and Ia min (total
++     vertical, as the footing-design trapezoid: V_str,max,tot at x_R,tot; V_str,min,tot at B/2 − e_Ia). Rows behind the stem back face
++     load the heel, rows in front of the front face load the toe (by the pile centre); a row under the stem loads neither. */
++  const pileFtg = (pile && !pile.err) ? (() => {
++    const SPG = window.SharedPileGroup, g = pile.g;
++    const mk = (key, label, V, xR) => { const M = SPG.momentAbout(V, xR, g.xbar), L = SPG.rowLoads(g, V, M, 0);
++      return { key, label, V, xR, M, L, rows: L.rows.map(rw => ({ x: rw.x, s: rw.s, P: rw.P, q: rw.q })) }; };   // lb/ft, ft; P in lb per pile, q lb/ft
++    const cmax = isAASHTO ? mk('str_max', 'Strength I (maximum)', aashtoR.V_str_max_tot, aashtoR.x_R_tot) : mk('u12', 'U = 1.2D + 1.6H' + (hasSeismic ? ' + 1.0E' : ''), SumVu, x_Ru);
++    const cmin = isAASHTO ? mk('str_min', 'Strength I (minimum, Ia)', aashtoR.V_str_min_tot, B / 2 - aashtoR.e_Ia) : mk('u09', 'U = 0.9D + 1.6H', SumVu_min, x_Ru_min);
++    return { cmax, cmin };
++  })() : null;
+-  const upS = (!isAASHTO && F_uplift > 0) ? { gToe: 1.6, gHeel: 0.9 } : null;
++  const upS = (!isAASHTO && F_uplift > 0 && !isPile) ?   // RWPL: on piles the factored vertical load (water included) goes to the pile rows; no split
++    { gToe: 1.6, gHeel: 0.9 } : null;
+-  function heelCase(gEVc, gDCc, gESc, gLSc, q0, qL, up) {   // up: RWUP split (soil + water) for this combination, or null
++  function heelCase(gEVc, gDCc, gESc, gLSc, q0, qL, up, pc) {   // up: RWUP split (soil + water) for this combination, or null; pc: RWPL pile rows
++    if (pc) {   // RWPL: pile rows behind the back face, line loads q_i at a_i = x_i − x_back
++      const hr = pc.rows.filter(rw => rw.x > x_back + 1e-9).map(rw => ({ x: rw.x, q: rw.q, a: rw.x - x_back }));
++      const Mup = hr.reduce((t, rw) => t + rw.q * rw.a, 0), Vup = hr.reduce((t, rw) => t + rw.q, 0);
++      return { wu, Md, Mup, q0: NaN, qL: NaN, up: null, g: [gEVc, gDCc, gESc, gLSc], pile: { key: pc.key, label: pc.label, rows: hr, Vup },
++               Mstd: Md - Mup, Vstd: Math.abs(wu * inp.Lh + gEVc * V_wedge_heel - Vup), Vnr: wu * inp.Lh + gEVc * V_wedge_heel };
++    }
+-  const hcMax = heelCase(gEV, gDC, gES, gLS, bq_back, bq_heel, upS ? upS.heelMax : null);   // RWUP
+-  const hcMin = isAASHTO ? heelCase(1.00, 0.90, 0.75, 0, bqm_back, bqm_heel)
+-                         : heelCase(0.9, 0.9, 0, 0, bqm_back, bqm_heel, upS ? upS.heelMin : null);
++  const hcMax = heelCase(gEV, gDC, gES, gLS, bq_back, bq_heel, upS ? upS.heelMax : null, pileFtg && pileFtg.cmax);   // RWUP, RWPL
++  const hcMin = isAASHTO ? heelCase(1.00, 0.90, 0.75, 0, bqm_back, bqm_heel, null, pileFtg && pileFtg.cmin)
++                         : heelCase(0.9, 0.9, 0, 0, bqm_back, bqm_heel, upS ? upS.heelMin : null, pileFtg && pileFtg.cmin);
+-  function toeCase(q0, qL, up) {   // up: RWUP split (soil + water) for this combination, or null
++  function toeCase(q0, qL, up, pc) {   // up: RWUP split (soil + water) for this combination, or null; pc: RWPL pile rows
++    if (pc) {   // RWPL: pile rows in front of the front face, line loads q_i at a_i = x_front − x_i, less the footing weight
++      const tr = pc.rows.filter(rw => rw.x < x_front - 1e-9).map(rw => ({ x: rw.x, q: rw.q, a: x_front - rw.x }));
++      const Mup = tr.reduce((t, rw) => t + rw.q * rw.a, 0), Vup = tr.reduce((t, rw) => t + rw.q, 0);
++      return { q0: NaN, qL: NaN, n0: NaN, nL: NaN, pile: { key: pc.key, label: pc.label, rows: tr, Vup, Mup },
++               M: Mup - wu_toe_down * inp.Lt ** 2 / 2, V: Math.max(0, Vup - wu_toe_down * inp.Lt) };
++    }
+-  const tcMax = toeCase(bq_front, bq_toe, upS ? upS.toeMax : null), tcMin = toeCase(bqm_front, bqm_toe, upS ? upS.toeMin : null);   // RWUP
++  const tcMax = toeCase(bq_front, bq_toe, upS ? upS.toeMax : null, pileFtg && pileFtg.cmax), tcMin = toeCase(bqm_front, bqm_toe, upS ? upS.toeMin : null, pileFtg && pileFtg.cmin);   // RWUP, RWPL
+-  let d_toe = inp.tf - inp.cov_ftg - 0.375;   // pass 1 assumption (#6)
++  let d_toe = inp.tf - cov_bot - 0.375;   // pass 1 assumption (#6); RWPL: cov_bot = c_c for a spread footing
+-    d_toe = inp.tf - inp.cov_ftg - sel_toe.bar.db / 2;
++    d_toe = inp.tf - cov_bot - sel_toe.bar.db / 2;
+-    ? devLengthAASHTO(sel_toe.bar.db, inp.fy, inp.fc, false, inp.cov_ftg + sel_toe.bar.db / 2, sel_toe.spacing)
+-    : devLength(sel_toe.bar.db, inp.fy, inp.fc, 1.0, 1.0, inp.cov_ftg + sel_toe.bar.db / 2, 1.0, sel_toe.spacing);
++    ? devLengthAASHTO(sel_toe.bar.db, inp.fy, inp.fc, false, cov_bot + sel_toe.bar.db / 2, sel_toe.spacing)
++    : devLength(sel_toe.bar.db, inp.fy, inp.fc, 1.0, 1.0, cov_bot + sel_toe.bar.db / 2, 1.0, sel_toe.spacing);
++  // ── RWPL (2026-11-07, Phase 8d): two-way (punching) shear around each pile row ──
++  // Critical section at d/2 (ACI 318-19 §22.6.4.1) / d_v/2 (AASHTO Art. 5.12.8.6.1) from the pile face, the pile taken as the square
++  // of equal area (round / pipe: side 0.886D). b_o is cut by the toe or heel edge when the section would pass it (three sides, the two
++  // side legs running to the edge), and by the neighbouring piles of the row when s ≤ a (the sides across the wall drop out: the row
++  // then acts as a strip). Depth over the pile heads d_p = t_f − cover_bot − d_b (the abutment calculator's C-13 rule).
++  // ACI 318-19 Table 22.6.5.2: v_c = min(4, 2 + 4/β, 2 + α_s d/b_o)·λ_s·λ·√f'c, λ_s = √(2/(1 + d/10)) ≤ 1, β = 1, α_s 40 / 30 (edge), φ 0.75.
++  // AASHTO Art. 5.12.8.6.3: V_n = (0.063 + 0.126/β_c)λ√f'c b_o d_v ≤ 0.126λ√f'c b_o d_v (ksi), β_c = 1, φ_v 0.90 (Art. 5.5.4.2).
++  let pilePunch = null;
++  if (pileFtg) {
++    const Pf = inp.fnd, Deq = (Pf.shape === 'pipe' || Pf.shape === 'round') ? 0.886 * Pf.D : Pf.D;
++    const dp = inp.tf - cov_bot - sel_toe.bar.db, dvp = isAASHTO ? Math.max(0.9 * dp, 0.72 * inp.tf) : dp, dc = isAASHTO ? dvp : dp;
++    const a = Deq + dc, phiP = isAASHTO ? 0.90 : 0.75;
++    const rows = pile.rows.map((rw, i) => {
++      const S = rw.s * 12, ex = Math.min(rw.x, B - rw.x) * 12, cut = ex < a / 2, strip = S <= a;
++      const Lpar = Math.min(a, S), Lperp = cut ? ex + a / 2 : a;
++      const bo = (cut ? 1 : 2) * Lpar + (strip ? 0 : 2 * Lperp);
++      const loc = strip ? 'strip (perimeters of the row overlap)' : cut ? 'edge (cut by the ' + (rw.x * 12 < (B - rw.x) * 12 ? 'toe' : 'heel') + ' edge)' : 'interior';
++      let Vc, vc = null, lam_s = null, alpha = cut || strip ? 30 : 40, gov = '';
++      if (!isAASHTO) {
++        lam_s = Math.min(1, Math.sqrt(2 / (1 + dp / 10)));
++        const sq = Math.sqrt(inp.fc), c1 = 4, c2 = 2 + 4 / 1, c3 = 2 + alpha * dp / bo, cm = Math.min(c1, c2, c3);
++        vc = cm * lam_s * sq; Vc = vc * bo * dp; gov = cm === c3 ? '2 + α_s d/b_o' : '4';
++      } else {
++        const sq = Math.sqrt(inp.fc / 1000), k = Math.min(0.063 + 0.126 / 1, 0.126);
++        Vc = k * sq * bo * dvp * 1000; vc = k * sq * 1000;
++      }
++      const phiVc = phiP * Vc;
++      return { i, x: rw.x, s: rw.s, S, ex, cut, strip, a, Lpar, Lperp, bo, loc, Pu: Math.max(pileFtg.cmax.rows[i].P, pileFtg.cmin.rows[i].P, 0), Vc, vc, lam_s, alpha, gov, phiVc,
++        dc: Math.max(pileFtg.cmax.rows[i].P, pileFtg.cmin.rows[i].P, 0) / Math.max(phiVc, 1e-9) };
++    });
++    const g = rows.reduce((b, x) => (!b || x.dc > b.dc) ? x : b, null);
++    pilePunch = { Deq, dp, dvp, dc, a, phi: phiP, rows, gov: g, ok: g.dc <= 1 + 1e-9 };
++  }
+-  const ldA_toe    = isAASHTO ? devLengthAASHTOParts(sel_toe.bar.db, inp.fy, inp.fc, false, inp.cov_ftg + sel_toe.bar.db / 2, sel_toe.spacing) : null;
++  const ldA_toe    = isAASHTO ? devLengthAASHTOParts(sel_toe.bar.db, inp.fy, inp.fc, false, cov_bot + sel_toe.bar.db / 2, sel_toe.spacing) : null;
+-    toe:  aciCrack(inp.cov_ftg,  sel_toe.spacing),
++    toe:  aciCrack(cov_bot,  sel_toe.spacing),
+-        crack: crackSpacing(d_toe, sel_toe.bar.db, inp.cov_ftg, inp.tf,
++        crack: crackSpacing(d_toe, sel_toe.bar.db, cov_bot, inp.tf,
+-  const isPile = !!(inp.fnd && inp.fnd.type === 'pile');
+-  const pile = isPile ? rwPileAnalysis({ fnd: inp.fnd, isAASHTO, aashtoR, B, phi_ep: inp.aashto.phi_ep, Pp_toe,
+-    SumV, Ms, Ms_Pp, Mo_st, Mo_seis, Fh, Pe_inc, hasSeismic, Wftg, Wstem, Wsoil, W_bar, pDL, pWL, x_col, Pa_tri_v, F_uplift,
+-    Ms_ftg, Ms_stem, Ms_soil, Ms_bar, Ms_Pv, Ms_uplift }) : null;
++        ...(pilePunch ? { pilePunch: { ok: pilePunch.ok, label: 'Pile Punching', val: `${f(pilePunch.gov.Pu/1000,1)}${pilePunch.ok ? '≤' : '>'}${f(pilePunch.gov.phiVc/1000,1)}k`, dc: pilePunch.gov.dc,
++                      ref: (isAASHTO ? 'AASHTO LRFD 10th Ed. Art. 5.12.8.6.3, φ 0.90' : 'ACI 318-19 Table 22.6.5.2, φ 0.75') + '; row ' + (pilePunch.gov.i + 1) + ', ' + pilePunch.gov.loc + ', b<sub>o</sub> = ' + f(pilePunch.gov.bo,1) + ' in' } } : {}),
++        ...(pilePunch && !isAASHTO ? { pileCapD: { ok: pilePunch.dp >= 12 - 1e-9, label: 'Cap Depth over Bars', val: `${f(pilePunch.dp,2)}${pilePunch.dp >= 12 - 1e-9 ? '≥' : '<'}12"`, dc: 12 / Math.max(pilePunch.dp, 1e-9),
++                      ref: 'ACI 318-19 §13.3.1.2; depth above the bottom bars, footings on piles' } } : {}),
+-      warnings.push('Pile-supported footing: soil bearing, base sliding and overturning are not checked (the piles carry the wall). The heel and toe are still designed from the soil bearing pressure in this version; the design from the pile reactions follows (Phase 8d).');
++      if (cov_bot > 6) warnings.push(`Pile cap: the bottom bars sit ${f(cov_bot,2)} in above the base (embedment + clear). The toe crack-control check uses this cover (ACI 318-19 §24.3.2 / AASHTO Art. 5.6.7) and fails for large covers; a bar mat below the pile heads, or the engineer's judgement, is needed.`);
++      warnings.push('Pile-supported footing: soil bearing, base sliding and overturning are not checked (the piles carry the wall). The heel and toe are designed from the factored pile reactions (Footing design tab).');
+-    ...(pile ? { pile } : {}),   // RWPL (2026-11-07): pile-supported footing results (absent for a spread footing, so its results are as before)
++    ...(pile ? { pile, pileFtg, cov_bot, pilePunch, heelPile: hcG.pile || null, toePile: tcG.pile || null } : {}),   // RWPL (2026-11-07): pile-supported footing results, absent for a spread footing (its results are as before); 8d: factored pile reactions for the footing, bottom cover, punching
++    if (r.heelPile) {   // RWPL 8d: pile-row line loads beyond the section
++      const pr = r.heelPile.rows.filter(rw => rw.a > x + 1e-9);
++      Vs.push(Math.abs(r.wu_heel*L - pr.reduce((t2, rw) => t2 + rw.q, 0))/1000); Ms.push(Math.abs(r.wu_heel*L*L/2 - pr.reduce((t2, rw) => t2 + rw.q*(rw.a - x), 0))/1000); xs.push(x); continue;
++    }
++    if (r.toePile) {   // RWPL 8d: pile-row line loads beyond the section, less the footing weight
++      const pr = r.toePile.rows.filter(rw => rw.a > x + 1e-9), L = inp.Lt - x;
++      Vs.push(Math.max(0, pr.reduce((t2, rw) => t2 + rw.q, 0) - r.wu_toe_down*L)/1000); Ms.push(Math.max(0, pr.reduce((t2, rw) => t2 + rw.q*(rw.a - x), 0) - r.wu_toe_down*L*L/2)/1000); xs.push(x); continue;
++    }
++  // RWPL 8d: on piles the upward load is the pile rows (line loads, lb/ft per ft of wall), drawn as spikes; the bearing trapezoid is not used
++  const pf = r.pileFtg ? (r.heel_min_governs ? r.pileFtg.cmin : r.pileFtg.cmax) : null;
++    pf ? { x: [].concat(...pf.rows.map(rw => [rw.x, rw.x, null])), y: [].concat(...pf.rows.map(rw => [0, rw.q, null])), name: 'Pile-row reactions qᵢ = Pᵢ/sᵢ (up, lb/ft; ' + pf.label + ')',
++      mode:'lines+markers', line:{ color: PLT.pass, width: 4 }, marker:{ size: 7 },
++      hovertemplate:'pile row at x = %{x:.2f} ft<br>q = %{y:,.0f} lb/ft<extra></extra>' } :
+-    yaxis: { title: 'Pressure (psf)', gridcolor:'#e8edf5' },
++    yaxis: { title: pf ? 'psf (distributed) · lb/ft (pile rows)' : 'Pressure (psf)', gridcolor:'#e8edf5' },
++  if (r.heelPile) {   // RWPL (2026-11-07, Phase 8d): pile rows behind the back face instead of the bearing trapezoid
++    const hp = r.heelPile;
++    h += eq('Factored pile reactions under the heel (' + hp.label + '; line loads q_i = P_i/s_i)',
++      hp.rows.length ? hp.rows.map(rw => `q = ${F(rw.q,1)}\\ \\text{lb/ft at } a = x - x_{back} = ${F(rw.a,3)}\\ \\text{ft}`).join(';\\ ') : `\\text{no pile row behind the back face: } \\sum q = 0`, 'Pile Step 2 · rigid cap',
++      hp.rows.map((rw, j) => ({ sym: 'q_{' + (j + 1) + '}', desc: 'pile row at x = ' + F(rw.x, 2) + ' ft from the toe', val: F(rw.q, 1), unit: 'lb/ft' })));
++    h += rwWorkedIn(r, [['stabPile', 'pile reactions']]);
++  } else {
++  }
+-  else h += eq('Moment from upward bearing about back face (trapezoid: ∫q(x)·x dx)',
++  else h += r.heelPile ? eq('Moment from the pile reactions about back face',
++    `M_{up} = \\sum q_i a_i = ${r.heelPile.rows.length ? r.heelPile.rows.map(rw => `(${F(rw.q,1)})(${F(rw.a,3)})`).join(' + ') : '0'} = \\boxed{${F(r.Mu_heel_up,1)}\\ \\text{lb·ft/ft}}`,'',
++    [{sym:'M_{up}', desc:'pile-reaction moment at face', val:F(r.Mu_heel_up,1), unit:'lb·ft/ft'}]) : eq('Moment from upward bearing about back face (trapezoid: ∫q(x)·x dx)',
+-    `M_{u,A} = M_{down} - M_{up} = ${Fk(r.Mu_heel_std)}\\ \\text{kip·ft/ft}, \\quad V_{u,A} = \\left| w_u L_h - ${upHs ? 'F_{up}' : '\\tfrac{q_0+q_L}{2}L_h'} \\right| = ${Fk(r.Vu_heel_std)}\\ \\text{kip/ft}`,'');
++    `M_{u,A} = M_{down} - M_{up} = ${Fk(r.Mu_heel_std)}\\ \\text{kip·ft/ft}, \\quad V_{u,A} = ${r.heelPile ? '\\left| w_u L_h - \\sum q_i \\right|' : '\\left| w_u L_h - ' + (upHs ? 'F_{up}' : '\\tfrac{q_0+q_L}{2}L_h') + ' \\right|'} = ${Fk(r.Vu_heel_std)}\\ \\text{kip/ft}`,'');
++  if (r.toePile) {   // RWPL 8d: pile rows in front of the front face
++    const tp = r.toePile;
++    h += eq('Factored pile reactions under the toe (' + tp.label + '; line loads q_i = P_i/s_i)',
++      tp.rows.length ? tp.rows.map(rw => `q = ${F(rw.q,1)}\\ \\text{lb/ft at } a = x_{front} - x = ${F(rw.a,3)}\\ \\text{ft}`).join(';\\ ') : `\\text{no pile row in front of the front face: } \\sum q = 0`, 'Pile Step 2 · rigid cap',
++      tp.rows.map((rw, j) => ({ sym: 'q_{' + (j + 1) + '}', desc: 'pile row at x = ' + F(rw.x, 2) + ' ft from the toe', val: F(rw.q, 1), unit: 'lb/ft' })));
++    h += rwWorkedIn(r, [['stabPile', 'pile reactions']]);
++  } else {
++  }
+-  h += upTs ? eq('Design moment about front face (tension on BOTTOM)',
++  h += r.toePile ? eq('Design moment about front face (tension on BOTTOM)',
++    `M_u = \\sum q_i a_i - \\frac{w_{sw} L_t^2}{2} = ${F(r.toePile.Mup,1)} - \\frac{(${F(r.wu_toe_down,1)})(${F(inp.Lt,2)})^2}{2} = \\boxed{${F(r.Mu_toe_net,1)}\\ \\text{lb·ft/ft}}`,'',
++    [{sym:'M_u', desc:'factored design moment at face', val:F(r.Mu_toe_net,1), unit:'lb·ft/ft'}])   // RWPL 8d
++  : upTs ? eq('Design moment about front face (tension on BOTTOM)',
+-    `V_u = ${upTs ? (Math.abs(r.tcG_up.F - r.wu_toe_down*inp.Lt - r.Vu_toe) < 0.5 ? `F_{up} - w_{sw} L_t = ${F(r.tcG_up.F,1)} - (${F(r.wu_toe_down,1)})(${F(inp.Lt,2)})` : '\\max \\text{ of the two combinations}') : '\\frac{q_0+q_L}{2}\\,L_t'} = \\boxed{${F(r.Vu_toe,1)}\\ \\text{lb/ft}} = ${Fk(r.Vu_toe)}\\ \\text{kip/ft}`,'',
++    `V_u = ${r.toePile ? '\\sum q_i - w_{sw} L_t' : upTs ? (Math.abs(r.tcG_up.F - r.wu_toe_down*inp.Lt - r.Vu_toe) < 0.5 ? `F_{up} - w_{sw} L_t = ${F(r.tcG_up.F,1)} - (${F(r.wu_toe_down,1)})(${F(inp.Lt,2)})` : '\\max \\text{ of the two combinations}') : '\\frac{q_0+q_L}{2}\\,L_t'} = \\boxed{${F(r.Vu_toe,1)}\\ \\text{lb/ft}} = ${Fk(r.Vu_toe)}\\ \\text{kip/ft}`,'',
+-    <div class="card-hd"><span class="card-title">Toe Step 3 — Flexural Steel (bottom face)</span><span class="card-ref">d = t_f − cover − d_b/2 · cover = ${F(inp.cov_ftg,2)} in</span></div>
++    <div class="card-hd"><span class="card-title">Toe Step 3 — Flexural Steel (bottom face)</span><span class="card-ref">d = t_f − cover − d_b/2 · cover = ${F(r.cov_bot ?? inp.cov_ftg,2)} in</span></div>
+-    `d = t_f - c_c - \\frac{d_b}{2} = ${F(inp.tf,1)} - ${F(inp.cov_ftg,2)} - ${F(r.sel_toe.bar.db/2,4)} = \\boxed{${F(r.d_toe,3)}\\ \\text{in}}`,'',
++    `d = t_f - c_c - \\frac{d_b}{2} = ${F(inp.tf,1)} - ${F(r.cov_bot ?? inp.cov_ftg,2)} - ${F(r.sel_toe.bar.db/2,4)} = \\boxed{${F(r.d_toe,3)}\\ \\text{in}}`,'',
+-     {sym:'c_c', desc:'bottom clear cover', val:F(inp.cov_ftg,2), unit:'in'},
++     {sym:'c_c', desc: r.pile ? 'bottom clear cover on piles = max(cover input, embedment + clear over the pile heads)' : 'bottom clear cover', val:F(r.cov_bot ?? inp.cov_ftg,2), unit:'in'},   // RWPL
++  // ════ RWPL (2026-11-07, Phase 8d): PILE CAP — PUNCHING AROUND THE PILES ════
++  if (r.pilePunch) {
++    const pp = r.pilePunch, A = r.isAASHTO, g = pp.gov;
++    h += `<div class="sec-heading" style="margin-top:6px;">Pile Cap</div><div class="card" style="margin-bottom:16px;">
++      <div class="card-hd"><span class="card-title">Pile Cap — Punching around the Piles</span><span class="card-ref">${A ? 'AASHTO Art. 5.12.8.6.1 / 5.12.8.6.3 · φ<sub>v</sub> 0.90' : 'ACI 318-19 §22.6.4.1 / Table 22.6.5.2 · φ 0.75'}</span></div><div class="card-body">`;
++    h += eq('Depth over the pile heads', `d_p = t_f - c_{bot} - d_b = ${F(inp.tf,1)} - ${F(r.cov_bot,2)} - ${F(r.sel_toe.bar.db,3)} = \\boxed{${F(pp.dp,2)}\\ \\text{in}}` + (A ? `, \\quad d_v = \\max(0.9d_p,\\,0.72t_f) = ${F(pp.dvp,2)}\\ \\text{in}` : ''), 'c_bot = max(cover, embedment + clear)');
++    h += eq('Critical section side (pile as the square of equal area, at ' + (A ? 'd_v/2' : 'd/2') + ' from its face)', `a = D_{eq} + ${A ? 'd_v' : 'd'} = ${F(pp.Deq,2)} + ${F(pp.dc,2)} = \\boxed{${F(pp.a,2)}\\ \\text{in}}`, '');
++    h += `<table class="tbl"><thead><tr><th>Row</th><th>x (ft)</th><th>s (in)</th><th>edge e (in)</th><th>section</th><th>b<sub>o</sub> (in)</th><th>P<sub>u</sub> (kip)</th><th>φV<sub>c</sub> (kip)</th><th>D/C</th></tr></thead><tbody>${pp.rows.map(x => `<tr><td>${x.i + 1}</td><td>${F(x.x,2)}</td><td>${F(x.S,1)}</td><td>${F(x.ex,1)}</td><td>${x.loc}</td><td>${F(x.bo,1)}</td><td>${F(x.Pu/1000,2)}</td><td>${F(x.phiVc/1000,2)}</td><td>${F(x.dc,3)}</td></tr>`).join('')}</tbody></table>`;
++    h += eq('Perimeter, row ' + (g.i + 1) + ' (' + g.loc + ')', g.strip ? `b_o = ${g.cut ? '1' : '2'}\\,s = ${F(g.bo,1)}\\ \\text{in}\\ (s \\le a)` : (g.cut ? `b_o = a + 2(e + a/2) = ${F(g.a,2)} + 2(${F(g.ex,2)} + ${F(g.a/2,2)}) = \\boxed{${F(g.bo,1)}\\ \\text{in}}` : `b_o = 4a = 4(${F(g.a,2)}) = \\boxed{${F(g.bo,1)}\\ \\text{in}}`), '');
++    h += A ? eqCheck('Two-way shear, row ' + (g.i + 1), `\\phi V_n = 0.90\\,(0.126)\\sqrt{${F(inp.fc/1000,2)}}\\,(${F(g.bo,1)})(${F(pp.dvp,2)}) = ${F(g.phiVc/1000,2)} \\ge P_u = ${F(g.Pu/1000,2)}\\ \\text{kip}`, pp.ok, 'β_c = 1: (0.063 + 0.126/β_c) capped at 0.126')
++           : eqCheck('Two-way shear, row ' + (g.i + 1), `\\lambda_s = \\sqrt{\\tfrac{2}{1+d/10}} = ${F(g.lam_s,3)};\; v_c = \\min(4,\\,6,\\,2 + \\tfrac{${F(g.alpha,0)}(${F(pp.dp,2)})}{${F(g.bo,1)}})\\lambda_s\\sqrt{${F(inp.fc,0)}} = ${F(g.vc,1)}\\ \\text{psi};\; \\phi V_c = 0.75(${F(g.vc,1)})(${F(g.bo,1)})(${F(pp.dp,2)}) = ${F(g.phiVc/1000,2)} \\ge P_u = ${F(g.Pu/1000,2)}\\ \\text{kip}`, pp.ok, 'α_s = ' + g.alpha + (g.alpha === 40 ? ' (interior)' : ' (edge)'));
++    if (!A) h += eqCheck('Depth above the bottom bars, footings on piles', `d_p = ${F(pp.dp,2)} \\ge 12\\ \\text{in}`, pp.dp >= 12 - 1e-9, 'ACI 318-19 §13.3.1.2');
++    h += `<div class="note">P<sub>u</sub> = the larger factored pile reaction of the two footing sets (${r.pileFtg.cmax.label}; ${r.pileFtg.cmin.label}), no deduction for the cap weight inside the perimeter. Piles at the wall ends (corner piles) are not modelled (per ft of wall).</div>`;
++    h += rwWorkedIn(r, [['stabPile', 'pile reactions']]) + `</div></div>`;
++  }
++    if (r.heelPile) {   // RWPL 8d: section at x from the face, loads beyond it (downward w_u, pile-row line loads)
++      const L = inp.Lh - x, pr = r.heelPile.rows.filter(rw => rw.a > x + 1e-9);
++      pts.push({ x: 1 - t, V: Math.abs(wu*L - pr.reduce((t2, rw) => t2 + rw.q, 0)), M: Math.abs(wu*L*L/2 - pr.reduce((t2, rw) => t2 + rw.q*(rw.a - x), 0)) }); continue;
++    }
++    if (r.toePile) {   // RWPL 8d: section at x from the face, pile-row line loads beyond it less the footing weight
++      const L = inp.Lt - x, pr = r.toePile.rows.filter(rw => rw.a > x + 1e-9);
++      pts.push({ x: t, V: Math.max(0, pr.reduce((t2, rw) => t2 + rw.q, 0) - r.wu_toe_down*L), M: Math.max(0, pr.reduce((t2, rw) => t2 + rw.q*(rw.a - x), 0) - r.wu_toe_down*L*L/2) }); continue;
++    }
+-    const T3 = [rwrS({ id: 'd', label: 'Effective depth', sym: 'd', eq: 't_{f} \\minus c_{c} \\minus \\frac{d_{b}}{2}', sub: rwrN(inp.tf, 1) + ' \\minus ' + rwrN(inp.cov_ftg, 2) + ' \\minus ' + rwrN(sT.bar.db / 2, 4), value: r.d_toe, unit: 'in', d: 3 })]
++    if (r.heelPile && r.toePile) {   // RWPL (2026-11-07, Phase 8d): the factored pile-row reactions replace the bearing trapezoid
++      const rowsS = (L, sym) => L.length ? L.map(rw => '(' + rwrN(rw.q, 1) + ')(' + rwrN(rw.a, 3) + ')').join(' + ') : '0';
++      const hp = r.heelPile, tp = r.toePile;
++      H1.splice(1, 2, rwrS({ id: 'q0', label: 'Factored pile-row reactions behind the back face (' + hp.label + '), line loads q_i = P_i/s_i at a_i = x_i − x_back', sym: '\\sum q_{i}', eq: '\\sum \\frac{P_{i}}{s_{i}}', sub: hp.rows.map(rw => rwrN(rw.q, 1)).join(' + ') || '0', value: hp.Vup, unit: 'lb/ft', d: 1 }));
++      H2.splice(1, 1, rwrS({ id: 'Mup', label: 'Moment of the pile reactions about the back face', sym: 'M_{up}', eq: '\\sum q_{i} a_{i}', sub: rowsS(hp.rows), value: r.Mu_heel_up, unit: 'lb-ft/ft', d: 1 }));
++      H2.forEach(x => { if (x.id === 'MA' && x.note) x.note = x.note.replace('(q_0 + q_L)/2 · L_h', 'Σq_i'); });
++      T1.splice(1, 2, rwrS({ id: 'q0', label: 'Factored pile-row reactions in front of the front face (' + tp.label + '), line loads q_i = P_i/s_i at a_i = x_front − x_i', sym: '\\sum q_{i}', eq: '\\sum \\frac{P_{i}}{s_{i}}', sub: tp.rows.map(rw => rwrN(rw.q, 1)).join(' + ') || '0', value: tp.Vup, unit: 'lb/ft', d: 1 }));
++      T2.splice(0, 2, rwrS({ id: 'Mu', label: 'Design moment about the front face (tension on the bottom)', sym: 'M_{u}', eq: '\\sum q_{i} a_{i} \\minus \\frac{w_{sw} L_{t}^{2}}{2}', sub: rowsS(tp.rows) + ' \\minus \\frac{(' + rwrN(r.wu_toe_down, 1) + ')(' + rwrN(inp.Lt, 2) + ')^{2}}{2}', value: r.Mu_toe_net, unit: 'lb-ft/ft', d: 1 }),
++        rwrS({ id: 'Vu', label: 'Design shear at the front face', sym: 'V_{u}', eq: '\\sum q_{i} \\minus w_{sw} L_{t}', sub: rwrN(tp.Vup, 1) + ' \\minus (' + rwrN(r.wu_toe_down, 1) + ')(' + rwrN(inp.Lt, 2) + ')', value: r.Vu_toe, unit: 'lb/ft', d: 1 }));
++    }
++    const T3 = [rwrS({ id: 'd', label: 'Effective depth' + (r.pile ? ' (bottom cover on piles = max(c_c, embedment + clear))' : ''), sym: 'd', eq: 't_{f} \\minus c_{c} \\minus \\frac{d_{b}}{2}', sub: rwrN(inp.tf, 1) + ' \\minus ' + rwrN(r.cov_bot ?? inp.cov_ftg, 2) + ' \\minus ' + rwrN(sT.bar.db / 2, 4), value: r.d_toe, unit: 'in', d: 3 })]
++    if (r.pilePunch) {   // RWPL 8d: punching around the piles
++      const pp = r.pilePunch, g = pp.gov;
++      const PS = [rwrS({ id: 'dp', label: 'Depth over the pile heads', sym: 'd_{p}', eq: 't_{f} \\minus c_{bot} \\minus d_{b}', sub: rwrN(inp.tf, 1) + ' \\minus ' + rwrN(r.cov_bot ?? inp.cov_ftg, 2) + ' \\minus ' + rwrN(r.sel_toe.bar.db, 3), value: pp.dp, unit: 'in', d: 2 }),
++        rwrS({ id: 'a', label: 'Critical section side, pile as the square of equal area at ' + (isA ? 'd_v/2' : 'd/2') + ' from its face', sym: 'a', eq: 'D_{eq} + ' + (isA ? 'd_{v}' : 'd'), sub: rwrN(pp.Deq, 2) + ' + ' + rwrN(pp.dc, 2), value: pp.a, unit: 'in', d: 2 }),
++        rwrS({ id: 'bo', label: 'Perimeter, governing row ' + (g.i + 1) + ' (' + g.loc + ')', sym: 'b_{o}', eq: g.strip ? 's' : (g.cut ? 'a + 2(e + a/2)' : '4a'), sub: g.strip ? rwrN(g.S, 1) : (g.cut ? rwrN(g.a, 2) + ' + 2(' + rwrN(g.ex, 2) + ' + ' + rwrN(g.a / 2, 2) + ')' : '4(' + rwrN(g.a, 2) + ')'), value: g.bo, unit: 'in', d: 1 }),
++        isA ? rwrS({ id: 'Vc', label: 'Two-way shear resistance (Eq. 5.12.8.6.3-1, β_c = 1)', sym: '\\phi V_{n}', eq: '0.90(0.126)\\sqrt{f\'_{c}}\\,b_{o} d_{v}', sub: '0.90(0.126)\\sqrt{' + rwrN(inp.fc / 1000, 2) + '}(' + rwrN(g.bo, 1) + ')(' + rwrN(pp.dvp, 2) + ')', value: g.phiVc / 1000, unit: 'kip', d: 2 })
++            : rwrS({ id: 'Vc', label: 'Two-way shear resistance (Table 22.6.5.2, β = 1, α_s = ' + g.alpha + ', λ_s = ' + rwrN(g.lam_s, 3) + ')', sym: '\\phi V_{c}', eq: '0.75\\,v_{c} b_{o} d', sub: '0.75(' + rwrN(g.vc, 1) + ')(' + rwrN(g.bo, 1) + ')(' + rwrN(pp.dp, 2) + ')', value: g.phiVc / 1000, unit: 'kip', d: 2 }),
++        rwrS({ id: 'dc', label: 'Punching check, largest factored pile reaction of the row', sym: '\\frac{P_{u}}{\\phi V_{c}}', eq: '', sub: '\\frac{' + rwrN(g.Pu / 1000, 2) + '}{' + rwrN(g.phiVc / 1000, 2) + '}', value: g.dc, unit: '', d: 3, ok: ok('pilePunch') })];
++      if (!isA) PS.push(rwrS({ id: 'cap', label: 'Depth above the bottom bars, footing on piles (ACI 318-19 §13.3.1.2)', sym: 'd_{p}', eq: '\\ge 12\\ \\text{in}', sub: '', value: pp.dp, unit: 'in', d: 2, ok: ok('pileCapD') }));
++      CK.pilePunch = 'ppn/dc'; if (!isA) CK.pileCapD = 'ppn/cap';
++      subs.push(sub('Pile cap — punching around the piles', [rwrItem('ppn', [{ title: 'Two-way shear at the pile heads', ref: isA ? AA('Art. 5.12.8.6') : 'ACI 318-19 §22.6', steps: PS }]), onTab('ftgPunch')]));
++    }
+```
+
+## 2026-11-07 — PR: claude/rw-pile-8e-drawings — Pile-supported footing, Phase 8e: Drawings show the pile reactions and the bottom mat on the pile heads; no soil-bearing graphics on piles (RWPL; display only) (PR #966: https://github.com/mlococo88/All-Structural/pull/966)
+
+Review Phase 8, PR 8e. This PR changes no computed value.
+### RWPL-9. Drawings (`RWDW_SUPPORT.piles.loads`, `rwdwBars`, the loads sheet notes)
+- `RWDW_SUPPORT.piles.loads(c)`: the loads sheet now shows the pile reactions per row (kip per pile) as upward arrows under the footing, drawn to their own scale. Uplift is drawn as a downward arrow marked "(UPLIFT)".
+  - It draws the governing compression combination, with P_max against the capacity and H/N.
+  - It then draws the combination with the smallest pile load, with P_min and, under uplift, the capacity T.
+  - Before (8b): one line, "PILE REACTIONS WITH THE PILE ANALYSIS (NOT YET IN THIS VERSION)".
+- `rwdwBars`: `cb = r.cov_bot` (8d; it equals c_c on soil). F2 is drawn at `cb + d_b/2` and the stem hook at `cb + …`, so on piles the bottom mat sits above the pile heads. On soil the drawing is unchanged.
+- Loads sheet notes in pile mode:
+  - "soil bearing, sliding and overturning not applicable";
+  - N, x̄ and I;
+  - compression, uplift and lateral, each with its capacity;
+  - punching.
+  - These replace the soil FOS / q / eccentricity lines.
+### RWPL-10. Section views
+- `buildCrossSection` (Analysis diagram): the bearing layer is hidden on piles (`data-layer="bearing"` with `display:none`).
+- `buildOverviewSVG`: the bearing block is skipped on piles (`tog.bearing && !r.pile`).
+### Check case
+- Default wall, t_f 36 in, 2 rows at 1.5 / 11.0 ft, s = 6 ft, ACI. Sheet 3 shows:
+  - D + H + L: 59.7 and 56.6 kip per pile, "P_MAX = 59.7 KIP <= 100.0 KIP; H/N = 13.50 KIP/PILE";
+  - 0.6D + H: 41.5 and 28.3 kip.
+  - These are the Stability tab, Pile Step 2 values.
+- Sheet 1 shows the bottom mat 15 in above the base.
+### How verified
+- origin/main vs branch, the 12 spread walls: `_R`, Export JSON, autosave, Report, tab texts and DXF are identical.
+- Pile mode: the sheets were screenshotted and checked, with no console errors.
+- Also run: `dxf-print-sheets.mjs --tool rw`, `check-syntax`.
+### Open items
+- The 3D view's bearing layer and its "Show" combination selector still offer the soil base reaction on piles. The pile reactions in 3D are to come with the Pile Designer link (8f) or a later display PR.
+- No pile schedule table: the piles are described in the general notes (8b).
+
+### Before / after (code, `git diff -U0` of `Retaining Wall Designer.html` against main after 8d)
+```diff
+-  s += `<g data-layer="bearing">`;
++  s += `<g data-layer="bearing"${r.pile ? ' style="display:none"' : ''}>`;   // RWPL (8e): no soil bearing under a pile-supported footing
+-  if (tog.bearing) {
++  if (tog.bearing && !r.pile) {   // RWPL (8e): no soil bearing under a pile-supported footing
+-  const yHook = cf + db(f2) + db(f3) + db(s1) / 2;                   // the hook bears on the bottom mat
++  const cb = r.cov_bot != null ? r.cov_bot : cf;                      // RWPL (8e): on piles the bottom mat sits above the pile heads (cov_bot = c_c on soil)
++  const yHook = cb + db(f2) + db(f3) + db(s1) / 2;                   // the hook bears on the bottom mat
+-    F2: { s: f2, x0: cf, x1: Math.min(G.B - cf, G.xf + r.ld_toe), y: cf + db(f2) / 2, hook: r.toe_hook ? 12 * db(f2) : 0 },   // RWDS: 90° hook up at the toe end when ticked
++    F2: { s: f2, x0: cf, x1: Math.min(G.B - cf, G.xf + r.ld_toe), y: cb + db(f2) / 2, hook: r.toe_hook ? 12 * db(f2) : 0 },   // RWDS: 90° hook up at the toe end when ticked
+-    loads(c) { const { L, G, k, T } = c; let y0 = c.y0 != null ? c.y0 : -G.dk - 0.35 * k;
+-      T(L.lt, G.B / 2, y0 - 0.2 * k, 0.085 * k, 'PILE-SUPPORTED FOOTING: PILE REACTIONS WITH THE PILE ANALYSIS (NOT YET IN THIS VERSION)', 1); return y0 - 0.6 * k; },
++    /* RWPL (8e): the pile reactions per row (kip per pile) of the governing compression combination, as upward arrows under the
++       footing, with the governing uplift / minimum combination below them; values from r.pile (Stability tab, Pile Step 2) */
++    loads(c) {
++      const { D, L, G, k, T, r } = c, P = r.pile, h = 0.085 * k; let y0 = c.y0 != null ? c.y0 : -G.dk - 0.35 * k;
++      if (!P || P.err) { T(L.lt, G.B / 2, y0 - 0.2 * k, h, 'PILE-SUPPORTED FOOTING: NO PILE RESULTS (INPUT ERROR)', 1); return y0 - 0.6 * k; }
++      const one = (cmb, title) => {
++        const Pm = Math.max(...cmb.L.rows.map(x => Math.abs(x.P)), 1e-9), sc = 0.55 * k / Pm;
++        D.line(L.load, 0, y0, G.B, y0);
++        cmb.L.rows.forEach(x => { const xi = x.x * 12, len = Math.abs(x.P) * sc, yt = y0 - Math.max(len, 0.08 * k);
++          if (x.P >= 0) arrowV(D, L.load, xi, yt, y0, k); else arrowV(D, L.load, xi, y0, yt, k);
++          T(L.lt, xi, yt - 0.14 * k, h, rwdwN(x.P, 1) + ' KIP/PILE' + (x.P < 0 ? ' (UPLIFT)' : ''), 1); });
++        const yl = y0 - 0.55 * k - 0.4 * k; T(L.lt, G.B / 2, yl, h, title, 1); y0 = yl - 0.3 * k;
++      };
++      one(P.govC, 'PILE REACTIONS, ' + P.govC.label.toUpperCase() + ': P_MAX = ' + rwdwN(P.govC.L.Pmax, 1) + ' KIP ' + (r.checks.pileComp.ok ? '<=' : '>') + ' ' + rwdwN(P.govC.cap.c, 1) + ' KIP; H/N = ' + rwdwN(P.govH.L.rows[0].h, 2) + ' KIP/PILE');
++      const mn = P.comb.reduce((b, x) => (!b || x.L.Pmin < b.L.Pmin) ? x : b, null);
++      if (mn && mn !== P.govC) one(mn, 'PILE REACTIONS, ' + mn.label.toUpperCase() + ' (SMALLEST PILE LOAD): P_MIN = ' + rwdwN(mn.L.Pmin, 1) + ' KIP' + (mn.L.Pmin < 0 ? ' (UPLIFT, T <= ' + rwdwN(mn.cap.t, 1) + ' KIP)' : ''));
++      return y0;
++    },
++    if (r.pile && !r.pile.err) {   // RWPL (8e): on piles the soil checks do not apply; the pile results instead
++      const pc = r.pile;
++      foot = ['PILE-SUPPORTED FOOTING: SOIL BEARING, SLIDING AND OVERTURNING NOT APPLICABLE (STABILITY TAB, PILE STEP 2)',
++        'PILE GROUP PER FT: N = ' + F(pc.g.N, 4) + ' /FT, X_BAR = ' + F(pc.g.xbar, 3) + ' FT, I = ' + F(pc.g.I, 4) + ' FT2/FT',
++        'COMPRESSION: P_MAX = ' + F(pc.govC.L.Pmax, 1) + ' KIP <= ' + F(pc.govC.cap.c, 1) + ' (' + pc.govC.label.toUpperCase() + ')',
++        'UPLIFT: ' + (pc.govT.L.Pmin < 0 ? F(-pc.govT.L.Pmin, 1) + ' KIP VS ' + F(pc.govT.cap.t, 1) : 'NONE'),
++        'LATERAL: H/N = ' + F(pc.govH.L.rows[0].h, 2) + ' KIP/PILE VS ' + F(pc.govH.cap.h, 1) + ' KIP',
++        ...(r.pilePunch ? ['PUNCHING AT THE PILES: P_U = ' + F(r.pilePunch.gov.Pu / 1000, 1) + ' KIP VS PHI V_C = ' + F(r.pilePunch.gov.phiVc / 1000, 1) + ' KIP (FOOTING DESIGN TAB)'] : [])];
++    }
+```
+## 2026-11-07 — PR: claude/rw-left-summary — Check summary in the left panel exactly as Spread Footing's Summary Dashboard: rows styled as SF's chips (RWDL; display only, no result change) (PR #959: https://github.com/mlococo88/All-Structural/pull/959)
+
+### RWDL. Check summary rows styled as Spread Footing's dashboard chips; position and breakpoints confirmed against SF   [display only]
+- **Request (engineer, 2026-11-07):** "the summary cards should be on the left panel" — RW's check summary panel (RWDC, #926) to sit in the left column exactly like Spread Footing's Summary Dashboard (SFDC #737 / SFDF #740) and Light Pole's panel (LPDC #747): same position, breakpoints, collapse behaviour and card styling.
+- **Study of SF (origin/main, `Spread Footing.html`):** `SFDC.mq = matchMedia('screen and (min-width:1500px)')`; at 1500 px and wider `sfdDashPlace()` moves `#sfdDashBox` into `#sfdDashCol`, the first child of `.main`, i.e. a left column (280 px + 12 px gap) to the LEFT of the input panel, own scroll, sticky head, «/» collapses it to a 42 px strip; below 1500 px the box sits on top of the output panel above the output tabs, chips in a `minmax(min(250px,100%),1fr)` grid, "▾ Hide checks / ▸ Show checks". RW (RWDC) already does the same: same 1500 px query, `#rwDashCol` first child of `#app` (left of the inputs, 292 px incl. padding), own scroll, sticky head, «/» → 42 px strip, below 1500 px above the output tabs with the same grid and the same Hide / Show checks button, same key behaviour (`retaincalcpro.dashCollapsed.v1`, unchanged). Screenshots of both tools at 1280, 1400, 1920 and 390 px confirm the same placement. The one visible difference was the row ("card") styling: SF chips have a 1 px border in the status colour on a tinted background and a bold check name; RW rows had a 4 px coloured left stripe on white with a regular-weight name.
+- **Where:** CSS, block `/* RWDC (2026-11-06): check summary panel …`, after the line anchor `.rwdCh.pass { border-left-color: var(--pass); } .rwdCh.fail { border-left-color: var(--fail); background: #FEF2F2; } .rwdCh.warn { border-left-color: var(--warn); background: #FFFBEB; }`.
+  - Before: (nothing after that line)
+  - After (added):
+```css
+/* RWDL (2026-11-07, engineer: "the summary cards should be on the left panel" as in Spread Footing): each row is styled as
+   Spread Footing's dashboard chip (SFDC): a 1 px border in the status colour on a tinted background, the check name in bold.
+   Display only. */
+.rwdCh { border-left-width: 1px; }
+.rwdCh.pass { border-color: var(--pass); background: #ECFDF5; } .rwdCh.fail { border-color: var(--fail); background: #FEF2F2; }
+.rwdCh.warn { border-color: var(--warn); background: #FFFBEB; } .rwdCh.na { border-color: var(--slate-400); background: var(--slate-50); }
+.rwdCh.pass:hover { background: #D1FAE5; } .rwdCh.fail:hover { background: #FEE2E2; } .rwdCh.warn:hover { background: #FEF3C7; } .rwdCh.na:hover { background: var(--slate-100); }
+.rwdCh .rwdN { font-weight: 700; color: var(--slate-900); }
+```
+- **Decisions (pending engineer review):**
+  1. Breakpoint kept at 1500 px, the same as Spread Footing and Light Pole (as asked: "same breakpoints"). Below 1500 px (e.g. 1280 and 1400 px windows, or a 1920 px screen at 150 % Windows scaling = 1280 CSS px) both tools show the summary above the output tabs, not as a left column. If the engineer's screen is below 1500 px and the left column is wanted there, the breakpoint would need lowering in SF, LP and RW together (a separate change).
+  2. RW's own fonts and colour tokens are kept (sans-serif UI, `--pass` / `--fail` / `--warn`); only the chip shape (border + tint + bold name) follows SF. The RW title "CHECK SUMMARY" and the count badges are unchanged.
+  3. The Overview "Wall section works / governing D/C" card stays at the top of the Overview tab (SF has no equivalent card; its dashboard is the only summary). The self-consistency line stays under the check list (in the left column at ≥ 1500 px), as RWSC placed it.
+  4. Phone (≤ 900 px): RW's "results first / Show inputs" behaviour is kept (SF shows inputs first with a "Jump to the results" link); only the row styling changes there.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Saved data (§5):** no key or format changed; no new key.
+- **Check case:** default ACI wall (H_s 12 ft, q_a 3000 psf): 23 rows, all PASS, green bordered rows (D/C 0.20 … 1.00), "all pass · 23 checks"; H_s 22 ft, q_a 2500 psf: "5 FAIL", red bordered rows open (Sliding D/C 1.62, Bearing 1.66, Stem Shear 1.12, Stem Hook ℓdh 1.91, Toe Shear 2.39).
+- **How verified:** origin/main (after #957) vs branch, headless Chromium at 1920 px, three walls (ACI default; AASHTO default; ACI H_s 22 / q_a 2500 with 5 FAIL): `window._R`, Export JSON fields (`snapshotFields()`), every localStorage key and value, the Report tab text and the four-sheet DXF **identical**; 0 console errors. No sideways page scroll at 390, 768, 1280, 1400 and 1920 px. Screenshots before / after at 1280, 1400, 1920 and 390 px (deviceScaleFactor 2) next to Spread Footing at the same widths, and the FAIL wall at 1920 and 1400 px, looked at. Tests: check-syntax; smoke/retaining-wall-checks; phone-layout rwall 390/768; project-library retwall.
+- **Other copies:** none.
+
+## 2026-11-07 — PR: claude/rw-partial-contact — Footing design in partial contact: the factored soil reaction is the triangular block of length 3x̄, not the whole-base interpolation (ACI without water and AASHTO Strength I / Ia) (RWPC; calculation change) (PR #980: https://github.com/mlococo88/All-Structural/pull/980)
+
+Open item raised in #960 (RWUP). Engineer instruction relayed 2026-11-07 (no questions; conservative choice). Code sites are tagged `RWPC`.
+
+### RWPC-1. Problem
+- When a factored resultant lies outside the kern (|e| > B/6), the trapezoid becomes a triangle of length 3x̄ from the toe (q_toe = 2V/(3x̄)) or 3(B − x̄) from the heel end. The face pressures q_u,front / q_u,back (ACI 1.2D + 1.6H and 0.9D + 1.6H; AASHTO Strength I `quA_*` and Strength Ia `quIa_*`) were interpolated linearly from q_toe at x = 0 to 0 at x = B, i.e. a triangle of length B. That distribution is not in equilibrium (its area q_toe·B/2 exceeds V).
+  - Heel: upward relief overstated → heel M_u **unconservative**.
+  - Toe: upward pressure overstated → toe M_u and V_u conservative, sometimes grossly.
+- ACI walls with water were already done statically in #960 (RWUP); they are not changed here.
+
+### RWPC-2. Fix (`calcAll`)
+- New `q_blk(x, qt, qh, e, xR)` next to `q_at`: full contact → `q_at` (same arithmetic, bit-identical); partial contact → the block. Used for `quf_front`, `quf_back`, `quf_front_min`, `quf_back_min`, `quA_front`, `quA_back`, `quIa_front`, `quIa_back` (were `q_at` / the same linear expression).
+- Members: a combination with |e| > B/6 and no water split loads the heel and toe with the RWUP pieces at γ_U = 0 (`rwUpSplit(V, M, 0, …)`, `rwUpMember`), so a block that ends inside a member is integrated exactly: `pcS` after the RWUP block; `heelCase` / `toeCase` get `pcS[0]` (ACI 1.2D + 1.6H / AASHTO Strength I) and `pcS[1]` (ACI 0.9D + 1.6H / AASHTO Strength Ia). AASHTO returns `M_net_tot`, `M_net_Ia`, `x_R_Ia` for this.
+- Pile-supported footings (RWPL, #961) design the heel and toe from the pile-row reactions and are not affected (`pcS` is skipped in pile mode).
+- A resultant outside the base (x̄ ≤ 0 or ≥ B) is handled as in RWUP (warning "Footing (partial contact)"; V at the toe tip for the toe, no relief on the heel). Before, the toe pressure became 0 there.
+- **Basis:** statics of a rigid footing on soil that takes no tension (the linear distribution the tool already uses for the stability and rock-bearing checks, cf. AASHTO LRFD 10th Ed. Eqs. 11.6.3.2-2/-3). No code formula, load factor or resistance factor changes.
+
+### RWPC-3. Display
+- Footing tab Heel/Toe Step 1–2 (via `rwUpSteps`, new "no water split" branch): ΣV_u (or V_u), x̄ = M_u/V, e, L_c, peak pressure, q(0), q(L), M_soil = M_up. Stability Step 7 (ACI) title says "partial contact: triangular block" when it applies; Report `rwrTrap` face values use the block formula. The §5.3.8 reference and the "uplift split" notes stay only with water.
+
+### Check cases
+- **ACI, L_t 2, L_h 3, t_f 24 in (B = 6.5 ft), no water** (hand check):
+  - Toe, U = 0.9D + 1.6H governs: ΣV_u = 7668 lb/ft, M_u = 1207 lb-ft/ft → x̄ = 0.157 ft, e = 3.093 > B/6 = 1.083; L_c = 0.472 ft, q_toe = 2(7668)/0.472 = 32478 psf. The block lies inside the toe: M_up = V(L_t − L_c/3) = 7668(2 − 0.157) = 14129; M_u = 14129 − 270(2²)/2 = **13589** (was **57755**: face pressure 22487 psf from the whole-base line, upward force on the toe 54,965 lb/ft > V = 7668). V_u 54424 → 8046. F2 #6 @ 8 → **#5 @ 7**.
+  - Heel, U = 1.2D + 1.6H governs: ΣV_u = 10224, x̄ = 1.112, L_c = 3.335 ft < x_back = 3.5 ft → no soil under the heel: M_u = M_down = 2088(3²)/2 = **9396** (was **5151** = 9396 − 2830(3²)/6). F1 #5 @ 7 unchanged. Heel and toe shear checks, which failed on the old (non-equilibrium) pressure, now pass.
+- **AASHTO, Rankine β 20°** (hand check): Strength Ia V = 19761, x̄ = 3.730, e = 2.520 > 2.083; L_c = 11.189 ft, q_toe = 3532.1; at the back face q = 3532.1(1 − 4.5/11.189) = 2111.6, contact ends 6.689 ft into the heel. M_up = 6.689²/6 (2111.6) = 15747 (was 2260.5(8²)/6 = 24112); M_u = 60713 − 15747 = **44966** (was **36600**); F1 #5 @ 6 → **#6 @ 7**.
+- **Audit walls that move** (main vs branch):
+
+| Wall | Before | After |
+|---|---|---|
+| `aashto_water_col_eta` | heel M_u 33125, F1 #5 @ 7 | **43381, #6 @ 7** |
+| `aashto_rock_ct_water` | heel 43557 (Strength I) | **45189** (Strength Ia governs); bars unchanged |
+| `aashto_vh_ct` | heel 49416 (Strength I) | **51291** (Strength Ia governs); bars unchanged |
+| `aci_mix`, `aci_tall_seis` (water: RWUP) | — | design unchanged; only the informational `quf_front_min` / `quf_back_min` (Stability Step 7) change |
+
+- **Extra walls:** ACI `aci_mix` without water: heel 10147 → **23021** (#4 @ 6 unchanged). AASHTO L_t 2, L_h 3, t_f 24: heel 7695 → 13176 (#3 @ 12 → #3 @ 7), toe 31166 → 18989 (#5 @ 8 → #4 @ 8). AASHTO L_t 4, L_h 4: toe 22204 → 19501 (#5 @ 8 → #5 @ 9).
+- **Full contact unchanged:** `aci_default`, `aci_water_uni`, `aci_water_tri`, `aci_shorttoe` identical in every part (`_R`, export, tabs, Report); `aashto_ct`, `aashto_qs250_water_ct(_full)` differ only by the new fields `M_net_tot`, `M_net_Ia`, `x_R_Ia`.
+
+### How verified
+- origin/main vs branch, headless Chromium (`_R`, Export JSON, localStorage, tabs, Report): the twelve audit walls + 5 partial-contact walls (above). 0 console errors.
+- Hand checks above reproduced with the tool's `calcAll` in Node.
+- Tests: check-syntax; smoke/retaining-wall-checks (table `AUD`: RWPC ACI L_t 2 / L_h 3, AASHTO β 20°, default full contact); phone-layout rwall 390/768; project-library retwall; dxf-print-sheets rw.
+
+### Decisions (pending engineer review)
+- The block is applied to toes too, so toe M_u / V_u / bars can go **down** where the old line overstated the pressure (statics; e.g. L_t 2 / L_h 3: toe #6 @ 8 → #5 @ 7). No envelope with the old non-equilibrium distribution.
+- Resultant outside the base: toe takes V at its tip (upper bound), heel no relief, with a warning (was zero pressure).
+- AASHTO on rock: the footing-design trapezoid is treated the same way (linear distribution with no tension, as Eqs. 11.6.3.2-2/-3).
+
+### Saved data
+- No input or format change.
+## 2026-11-07 — PR: claude/rw-left-breakpoint — Check summary as a left column from 1200 px (was 1500 px); 240 px wide from 1200 to 1499 px (RWLB; display only, no result change) (PR #984: https://github.com/mlococo88/All-Structural/pull/984)
+
+### RWLB. The check summary is on the left at common laptop widths   [display only]
+- **Decision (pending engineer review):** the engineer asked (2026-11-07) for "the summary cards … on the left panel"; at 1280–1499 px (laptops, and 1920 px screens at 125–150 % scaling) RWDC / RWDL (#926, #959) still put the summary above the output tabs. The left column now starts at **1200 px** in Retaining Wall Designer, Spread Footing and Light Pole and Sign Post alike (one PR per tool). From 1200 to 1499 px the column is **240 px** wide; at 1500 px and wider it is 292 px as before (layout unchanged there). Below 1200 px (tablet, phone) nothing changes: the summary sits above the output tabs, and the phone keeps "results first / Show inputs". Same collapse button (« / » → 42 px strip) and key `retaincalcpro.dashCollapsed.v1`.
+- **Why 1200:** at 1200 px the column (240) + inputs (344) leave a 616 px output panel; every output tab fits without sideways scroll (checked on all nine tabs at 1200, 1280 and 1400 px). The Overview card's two groups (Stability / Structural) were cramped at that width (bars and values overlapping), so from 1200 to 1279 px with the column open they stack, exactly as they already do at 1100 px and below.
+- **Where:**
+  - CSS, RWDC block: before `@media screen and (min-width: 1500px) {` (the rule holding `body.rwDashWide #rwDashCol { display: block; flex: 0 0 292px; …`); after:
+```css
+/* RWLB (…): the left column starts at 1200 px (was 1500 px) … */
+@media screen and (min-width: 1200px) and (max-width: 1499.98px) { body.rwDashWide #rwDashCol { flex-basis: 240px; width: 240px; } }
+/* RWLB: … the Overview card's Stability / Structural groups stack, as they already do at 1100 px and below */
+@media screen and (min-width: 1200px) and (max-width: 1279.98px) {
+  body.rwDashWide:not(.rwDashColl) .sc-cols { grid-template-columns: 1fr; }
+  body.rwDashWide:not(.rwDashColl) .sc-group + .sc-group { border-left: 0; border-top: 1px solid var(--border); }
+  body.rwDashWide:not(.rwDashColl) .sc-gov { text-align: left; }
+}
+@media screen and (min-width: 1200px) {
+```
+  - JS: `const RWDC = { … mq: window.matchMedia ? window.matchMedia('screen and (min-width:1500px)') : null, …` → `'screen and (min-width:1200px)'` (comment `/* RWLB: was 1500px */`).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data (§5):** no key or format changed.
+- **How verified:** origin/main vs branch at 1920, 1280 and 1200 px, three walls (ACI default; AASHTO default, 1 FAIL; ACI H_s 22 ft / q_a 2500 psf, 5 FAIL): `window._R`, Export JSON fields, every localStorage key and value, the Report text (`textContent`: the Report's subsections use `content-visibility:auto`, so `innerText` drops off-screen subsections and depends on the layout) and the four-sheet DXF **identical**; 0 console errors. No sideways page scroll at 390, 768, 1200, 1280, 1400, 1920 px (every output tab at 1200 / 1280 / 1400). Screenshots before / after at 1200, 1280, 1400 (and after at 1920, 768, 390; the 5-FAIL wall at 1280) looked at. Tests: check-syntax; smoke/retaining-wall-checks; phone-layout rwall 390/768; project-library retwall.
+
+## 2026-11-07 — PR: claude/rw-pile-schedule — Pile-supported footing: pile schedule (Drawings sheet 5 with a pile layout plan, Report table); the stale Phase 8b warning removed (RWPL; display only, no result change) (PR #981: https://github.com/mlococo88/All-Structural/pull/981)
+
+Review Phase 8, pile schedule (the open item of 8e). Code sites are tagged `RWPL`. No computed value changes; spread-footing walls are byte-identical.
+### RWPL-11. `rwPileSchedule(r)` (new, after `rwPileAnalysis`)
+- One row per pile row, read from `r.pile` (Stability tab, Pile Step 2); nothing new is computed, only selected:
+  - compression: the combination with the largest P_i / capacity for that row (P_i > 0), its P_i and capacity;
+  - uplift: the combination with the largest −P_i / uplift capacity for that row (P_i < 0), else none;
+  - lateral: h = H/N of the governing lateral combination (`r.pile.govH`; the same on every pile);
+  - piles per ft = 1/s; count per joint segment when the wall length is known (AASHTO collision input L_joint, the only length in the model): the
+    first pile s/2 from the joint, then every s (the rule of the elevation and the 3D view), n = ceil((L − s/2)/s).
+- Combinations are numbered in `r.pile.comb` order (the Pile Step 2 table order).
+### RWPL-12. Drawings: sheet 5 "PILE LAYOUT PLAN AND PILE SCHEDULE" (pile mode only; block `/* ===== 5. PILE LAYOUT AND PILE SCHEDULE`)
+- Plan from above, toe at the bottom: footing B × segment length (joint spacing, or the nominal length of the elevation sheet), stem faces,
+  piles of each row (hidden: under the footing; squares, or circles for pipe / round), row lines, the first spacing of each row dimensioned,
+  "ROW i @ s O.C.", a chain of the row positions from the toe and B.
+- Pile schedule table at paper size: ROW, X FROM TOE, SPACING, PILES/FT, NO. IN L (or NO./SEGMENT "-"), PILE, EMBED., P_MAX / capacity / comb.,
+  UPLIFT / capacity / comb., H/N / capacity / comb.; notes: the combination list, the selection rule, the capacities' basis, the count rule,
+  "pile length, tip elevation and driving criteria by the geotechnical engineer".
+- The sheet is appended after sheet 4, so sheets 1–4 keep their numbers; it is drawn only when `r.pile` has results (spread footing: 4 sheets, as before).
+  It is in the DXF and the print like every sheet. Links: Pile Step 2, punching.
+### RWPL-13. Report: "Pile schedule" (last sub of the "Pile-supported footing" section)
+- The same rows (kip per pile: P / capacity (comb.)), the combination list, the count rule, a link to the Drawings tab.
+### RWPL-14. Stale warning removed
+- `calcAll`: the Phase 8b warning "Pile-supported footing selected: the piles are drawn, but the pile analysis is not in this version yet
+  (Phase 8c) …" was still pushed in pile mode (8c meant to remove it; it survived the 8b/8c merge). It contradicted the pile results shown. Removed. Display only.
+### Check case (default wall, t_f 36 in, 2 rows at 1.5 / 11.0 ft, s = 6 ft, ACI)
+- Row 1: x 1'-6", 6'-0", 0.1667 /ft, P_max 59.7 kip ≤ P_a 100 (1) D + H + L; uplift none; H/N 13.50 kip vs H_a 8.0 (1).
+- Row 2: x 11'-0", P_max 56.6 kip (1). These are the Pile Step 2 table values (and the 8e loads sheet).
+- AASHTO, collision joint 41 ft, rows 1.5 / 11.0 / 6.0 ft at s 6 / 6 / 8 ft: 7, 7 and 5 piles in the 41-ft segment (3, 9, …, 39 ft; 4, 12, …, 36 ft).
+### How verified
+- origin/main vs branch, headless Chromium, the 12 audit walls (spread): `_R`, Export JSON, autosave, Report, tab texts and DXF identical.
+- Pile mode (ACI default; AASHTO collision + k_h + 3 rows): the only differences are the warning removed, the Report sub "Pile schedule" and sheet 5 in the DXF.
+- Sheet 5 screenshotted (ACI and AASHTO); `check-syntax`; `retaining-wall-checks`; `phone-layout --tool rwall --w 390,768`; `project-library --tool retwall`; `dxf-print-sheets --tool rw`.
+### Other copies
+- None.
+### Open items
+- **Decision (pending engineer review):** the schedule shows, per row, the combination with the largest load-to-capacity ratio (not the largest load), so it matches the checks when the capacities differ by limit state (AASHTO strength vs extreme event).
+- **Decision (pending engineer review):** the count per segment uses "first pile s/2 from the joint"; the actual layout at joints is the detailer's.
+
+### Before / after (code, `git diff -U0` of `Retaining Wall Designer.html`)
+```diff
+-/* RWDL (2026-11-07, engineer: "the summary cards should be on the left panel" as in Spread Footing): each row is styled as
+-   Spread Footing's dashboard chip (SFDC): a 1 px border in the status colour on a tinted background, the check name in bold.
+-   Display only. */
+-.rwdCh { border-left-width: 1px; }
+-.rwdCh.pass { border-color: var(--pass); background: #ECFDF5; } .rwdCh.fail { border-color: var(--fail); background: #FEF2F2; }
+-.rwdCh.warn { border-color: var(--warn); background: #FFFBEB; } .rwdCh.na { border-color: var(--slate-400); background: var(--slate-50); }
+-.rwdCh.pass:hover { background: #D1FAE5; } .rwdCh.fail:hover { background: #FEE2E2; } .rwdCh.warn:hover { background: #FEF3C7; } .rwdCh.na:hover { background: var(--slate-100); }
+-.rwdCh .rwdN { font-weight: 700; color: var(--slate-900); }
++/* RWPL (2026-11-07, Phase 8 pile schedule; display only): the pile schedule of the Drawings (sheet 5) and the Report, one row per
++   pile row. Every number is read from r.pile (Stability tab, Pile Step 2); nothing is computed here but the selection:
++   - compression: the combination with the largest P_i / capacity for that row (P_i > 0), with its P_i and capacity;
++   - uplift: the combination with the largest −P_i / uplift capacity for that row (P_i < 0), or none;
++   - lateral: h = H/N, the same on every pile, of the governing lateral combination (P.govH);
++   - count: piles of the row in one joint segment (AASHTO collision input L_joint, the only wall length in the model), placed as
++     in the elevation and the 3D view: the first pile s/2 from the joint, then every s. With no length: piles per ft only.
++   Combinations are numbered in r.pile.comb order (the order of the Pile Step 2 table). */
++function rwPileSchedule(r) {
++  const P = r && r.pile; if (!P || P.err || !P.comb || !P.comb.length || !P.g) return null;
++  const inp = r.inp, isA = r.isAASHTO, A = inp.aashto || {};
++  const Lseg = (isA && A.ct_enable && A.ct_ljoint > 0) ? A.ct_ljoint : null;
++  const nIn = (L, s) => (L > s / 2 ? Math.ceil((L - s / 2) / s - 1e-9) : 0);
++  const num = c => P.comb.indexOf(c) + 1;
++  const rows = P.rows.map((rw, i) => {
++    let c = null, t = null;
++    P.comb.forEach(cb => { const x = cb.L.rows[i]; if (!x || !isFinite(x.P)) return;
++      const dc = x.P > 0 ? x.P / Math.max(cb.cap.c, 1e-9) : 0, dt = x.P < 0 ? -x.P / Math.max(cb.cap.t, 1e-9) : 0;
++      if (x.P > 0 && (!c || dc > c.dc)) c = { P: x.P, cap: cb.cap.c, cs: cb.cap.cs, dc, label: cb.label, n: num(cb) };
++      if (x.P < 0 && (!t || dt > t.dc)) t = { P: -x.P, cap: cb.cap.t, ts: cb.cap.ts, dc: dt, label: cb.label, n: num(cb) }; });
++    return { row: i + 1, x: rw.x, s: rw.s, n: 1 / rw.s, count: Lseg ? nIn(Lseg, rw.s) : null, c, t };
++  });
++  const gh = P.govH, h = gh && gh.L.rows.length ? { h: gh.L.rows[0].h, cap: gh.cap.h, hs: gh.cap.hs, dc: gh.dcH, label: gh.label, n: num(gh) } : null;
++  const shape = { hp: 'steel H-pile', pipe: 'steel pipe pile', square: 'square precast concrete', round: 'round (timber / cast-in-place)' }[P.shape] || P.shape;
++  return { rows, h, Lseg, shape, desig: P.desig || '', D: P.D, embed: P.embed, isA, combs: P.comb.map((c, j) => ({ n: j + 1, label: c.label })) };
++}
+-  // RWPL (2026-11-07, Phase 8b): pile-supported footing selected: inputs and drawings only in this version
+-  if (inp.fnd && inp.fnd.type === 'pile') warnings.push('Pile-supported footing selected: the piles are drawn, but the pile analysis is not in this version yet (Phase 8c). The stability and footing results shown are still those of a spread footing on soil.');
++  // RWPL (2026-11-07): the Phase 8b warning "pile analysis not in this version yet" is removed (stale since 8c / 8d: the piles are analysed)
++    // RWPL (2026-11-07, pile schedule; display only): one row per pile row; values from Pile Step 2 (rwPileSchedule)
++    const PS = rwPileSchedule(r);
++    if (PS) {
++      const cmb = q => q ? N(q.P, 2) + ' / ' + N(q.cap, 2) + ' (' + q.n + ')' : 'none';
++      const prow = PS.rows.map(q => ['Row ' + q.row, N(q.x, 2), N(q.s, 2), N(q.n, 4), q.count == null ? '–' : String(q.count), PS.shape + (PS.desig ? ', ' + PS.desig : '') + ', D = ' + N(PS.D, 1) + ' in', N(PS.embed, 1),
++        cmb(q.c), cmb(q.t), PS.h ? N(PS.h.h, 2) + ' / ' + N(PS.h.cap, 2) + ' (' + PS.h.n + ')' : '–']);
++      const cap = isA ? 'factored resistance' : 'allowable';
++      subs.push(sub('Pile schedule', [{ type: 'table', wide: true, caption: 'Pile schedule (per pile row; loads per pile, kip)', head: ['Row', 'x from the toe (ft)', 'Spacing s (ft)', 'Piles per ft', PS.Lseg ? 'Piles in ' + N(PS.Lseg, 1) + ' ft' : 'Piles per segment', 'Pile', 'Embedment (in)', 'Compression P / ' + cap + ' (comb.)', 'Uplift T / ' + cap + ' (comb.)', 'Lateral h / ' + cap + ' (comb.)'], rows: prow },
++        { type: 'note', text: 'Combinations: ' + PS.combs.map(c => '(' + c.n + ') ' + c.label).join('; ') + '. For each row the combination with the largest load-to-capacity ratio is shown; the lateral load h = H/N is the same on every pile. Every value is worked in Pile Step 2 (above; on screen: Stability tab, Pile Step 2).' },
++        { type: 'note', text: PS.Lseg ? 'Piles per segment: one joint segment of ' + N(PS.Lseg, 1) + ' ft (the collision input), the first pile s/2 from the joint, then every s (as drawn on the Drawings, sheet 5).' : 'The wall length is not in the model: piles per ft only; the Drawings (sheet 5) show a typical segment at a nominal length.' },
++        { type: 'note', text: '[[tab:drawings|On screen: Drawings tab, sheet 5 (pile layout plan and pile schedule)]]' }]));
++    }
++  /* ================= 5. PILE LAYOUT AND PILE SCHEDULE (pile-supported footing only; RWPL, display only) ================= */
++  const PS = rwPileSchedule(r);
++  if (PS) sheet('piles', 'PILE LAYOUT PLAN AND PILE SCHEDULE', P => {
++    const h = 0.085 * P, hs = 0.072 * P, F = inp.fnd, d = F.D, round = F.shape === 'pipe' || F.shape === 'round';
++    const Lknown = PS.Lseg ? PS.Lseg * 12 : null, Lw = Lknown || Math.max(2 * G.H, 240);
++    // plan: x along the wall, y from the toe (toe at the bottom); the footing, the stem faces, the piles (hidden: under the footing)
++    D.rect(L.conc, 0, 0, Lw, G.B);
++    D.line(L.conc, 0, G.xf, Lw, G.xf); D.line(L.conc, 0, G.xbt, Lw, G.xbt); if (Math.abs(G.xbb - G.xbt) > 1e-6) D.line(L.hid, 0, G.xbb, Lw, G.xbb);
++    const freeY = (y0, y1) => { const ys = [y0, ...F.rows.map(rw => rw.x * 12).filter(y => y > y0 && y < y1), y1].sort((p1, p2) => p1 - p2);   // the middle of the widest gap between rows
++      let best = [y0, y1], w = -1; ys.slice(1).forEach((y, j) => { if (y - ys[j] > w) { w = y - ys[j]; best = [ys[j], y]; } }); return (best[0] + best[1]) / 2; };
++    T(L.txt, Lw / 2, (G.xf + G.xbt) / 2 - 0.035 * P, hs, 'STEM', 1);
++    T(L.txt, Lw / 2, freeY(0, G.xf) - 0.035 * P, hs, 'TOE', 1); T(L.txt, Lw / 2, freeY(Math.max(G.xbb, G.xbt), G.B) - 0.035 * P, hs, 'HEEL', 1);
++    const ord = F.rows.map((rw, i) => ({ rw, i })).sort((p1, p2) => p1.rw.x - p2.rw.x);
++    ord.forEach(({ rw, i }) => { const s = rw.s * 12, y = rw.x * 12; if (!(s > 0)) return; const xs = [];
++      for (let x = s / 2; x < Lw - 1e-6; x += s) { xs.push(x); if (round) D.circle(L.hid, x, y, d / 2); else D.rect(L.hid, x - d / 2, y - d / 2, x + d / 2, y + d / 2); }
++      D.line(L.hid, -0.1 * P, y, Lw + 0.1 * P, y, D.ltype('DASHED'));   // row line
++      if (xs.length > 1) D.dimH(L.dim, xs[0], xs[1], y + d / 2 + 0.22 * P, y + d / 2, '<>');
++      T(L.txt, Lw + 0.18 * P, y - 0.035 * P, h, 'ROW ' + (i + 1) + ' @ ' + rwdwFI(s) + ' O.C.', 0); });
++    D.h = 0.085 * P;
++    D.chainV(L.dim, [0, ...ord.map(o => o.rw.x * 12)], -0.45 * P, 0);
++    D.dimV(L.dim, 0, G.B, -0.9 * P, 0, 'B = <>');
++    T(L.txt, -1.05 * P, G.B / 2, hs, 'FROM THE TOE', 1, 90);
++    const yd = -0.5 * P;
++    if (Lknown) D.dimH(L.dim, 0, Lw, yd, 0, 'JOINT SPACING <> (COLLISION INPUT)');
++    else T(L.txt, Lw / 2, yd, hs, 'WALL LENGTH NOT IN THE MODEL: TYPICAL SEGMENT AT A NOMINAL LENGTH; FIRST PILE S/2 FROM THE SEGMENT END', 1);
++    const sbK = scaleBar(Lw / 2, yd - 0.45 * P, P, 'PILE LAYOUT PLAN (FROM ABOVE, TOE AT THE BOTTOM)  ·  SCALE ' + rwdwScName(P));
++    const ivP = D.mark();
++    // the schedule below the plan, at paper size
++    const yT = yd - 1.3 * P, th = 0.068 * P, pile = (PS.desig || ({ hp: 'H-PILE', pipe: 'PIPE', square: 'SQ. PRECAST', round: 'ROUND' }[F.shape] || 'PILE')) + ', D = ' + rwdwIn(PS.D);
++    const capS = isA ? 'RESIST.' : 'ALLOW.';
++    const rows = PS.rows.map(q => [String(q.row), rwdwFI(q.x * 12), rwdwFI(q.s * 12), rwdwN(q.n, 4), q.count == null ? '-' : String(q.count), pile, rwdwIn(PS.embed),
++      q.c ? rwdwN(q.c.P, 1) : '-', q.c ? rwdwN(q.c.cap, 1) : '-', q.c ? '(' + q.c.n + ')' : '-',
++      q.t ? rwdwN(q.t.P, 1) : 'NONE', q.t ? rwdwN(q.t.cap, 1) : '-', q.t ? '(' + q.t.n + ')' : '-',
++      PS.h ? rwdwN(PS.h.h, 2) : '-', PS.h ? rwdwN(PS.h.cap, 1) : '-', PS.h ? '(' + PS.h.n + ')' : '-']);
++    D.text(L.txt, 0, yT, 0.12 * P, 'PILE SCHEDULE (' + ({ hp: 'STEEL H-PILES', pipe: 'STEEL PIPE PILES', square: 'SQUARE PRECAST CONCRETE PILES', round: 'ROUND PILES' }[F.shape] || 'PILES') + ', VERTICAL)', 0);
++    const t = table(0, yT - 0.12 * P, ['ROW', 'X FROM TOE', 'SPACING', 'PILES/FT', PS.Lseg ? 'NO. IN ' + rwdwFI(PS.Lseg * 12) : 'NO./SEGMENT', 'PILE', 'EMBED.', 'P_MAX (KIP)', capS + ' (KIP)', 'COMB.', 'UPLIFT (KIP)', capS + ' (KIP)', 'COMB.', 'H/N (KIP)', capS + ' (KIP)', 'COMB.'], rows, th, [1, 2, 3, 4, 7, 8, 10, 11, 13, 14]);
++    const comb = PS.combs.map(c => '(' + c.n + ') ' + c.label.toUpperCase()).join('; ');
++    const notes = ['COMBINATIONS: ' + comb + '.',
++      'PER PILE, FROM THE PILE ANALYSIS (STABILITY TAB, PILE STEP 2): P_MAX = THE COMPRESSION OF THE COMBINATION WITH THE LARGEST P / CAPACITY FOR THE ROW; UPLIFT LIKEWISE;',
++      'H/N = THE LATERAL LOAD PER PILE (EQUAL SHARE)' + (F.passive ? ', NET OF THE PASSIVE CREDIT' : '') + '. ' + (isA ? 'RESISTANCES: PHI_C R_N, PHI_UP R_N,UP (STRENGTH), 1.0 R_N, 0.80 R_N,UP (EXTREME EVENT), H_R AS ENTERED.' : 'ALLOWABLE CAPACITIES (SERVICE LOADS) AS ENTERED: P_A, T_A, H_A.'),
++      'NO. IN SEGMENT: PILES OF THE ROW IN ONE SEGMENT, FIRST PILE S/2 FROM THE SEGMENT END (AS DRAWN); ' + (PS.Lseg ? 'SEGMENT = THE JOINT SPACING OF THE COLLISION INPUT.' : 'THE WALL LENGTH IS NOT IN THE MODEL: PILES PER FT ONLY.'),
++      'PILE LENGTH, TIP ELEVATION AND DRIVING CRITERIA: BY THE GEOTECHNICAL ENGINEER (NOT IN THE TOOL).'];
++    const wrap = (s0, n) => { const out = []; let line = ''; String(s0).split(/\s+/).forEach(w => { if (line && (line + ' ' + w).length > n) { out.push(line); line = '   ' + w; } else line = line ? line + ' ' + w : w; }); if (line) out.push(line); return out; };
++    const nl = []; notes.forEach(s0 => wrap(s0, 170).forEach(q => nl.push(q)));
++    nl.forEach((s2, j) => D.text(L.txt, 0, yT - 0.3 * P - t.h - 0.115 * j * P, 0.062 * P, s2, 0));
++    return { known: sbK, iv: ivP };
++  }, [8, 12, 16, 24, 32, 48, 64, 96, 192], [['stabPile', 'pile reactions'], ['ftgPunch', 'punching']]);
++
+## 2026-11-07 — PR: claude/rw-pile-3d — Pile-supported footing: 3D view with the pile combinations and the pile reactions per row; no soil base reaction on piles (RWPL; display only, no result change) (PR #998: https://github.com/mlococo88/All-Structural/pull/998)
+
+Review Phase 8, 3D view (open item of 8e). Code sites are tagged `RWPL`. Nothing computed changes; on a spread footing the 3D view is as before.
+### RWPL-15. 3D "Show" list on piles (`rw3Options`, `rw3Selected`; new `rw3IsPile`, `rw3PileCombos`, `rw3PileFactors`)
+- On a pile-supported footing (`r.pile` with results) the combinations are the pile analysis' own (`r.pile.comb`, Stability tab, Pile Step 2):
+  "★ Governing pile compression combination" (`r.pile.govC`) and the group "Combinations (pile reactions per row)". The bearing combinations
+  (`rwbpCombos`) are not offered on piles. "All load cases" shows the ACI D + H + L pile reactions (AASHTO: none; every pile combination is factored).
+- Factored arrows (RW3F) on piles: the factors of a pile combination are read from the analysis' definitions:
+  - AASHTO: Strength I max = the bearing set's `CMB_S1` (same V and x_R, 8c), Strength I min = `CMB_S1A`, Extreme Event II max = `CMB_EE2`
+    (`rw3Factors` 's1', 's1a', 'ee2'). Extreme Event I and Extreme Event II min: no factor map; the arrows stay unfactored and the toggle is off.
+  - ACI / IBC (the service combinations of `rwPileAnalysis`): D + H + L all × 1.0; + 0.7E; 0.6D + H (DC, EV, P_a,V × 0.6, water uplift × 1.0,
+    no heel surcharge, column 0.6 × (D + any wind uplift)); 0.6D + 0.7E + H.
+  - The 3D title's check line (Σγ·V and Σγ·M about the toe of the arrows vs the combination's V and V·x_R) passes (✓) for every pile
+    combination of: the default wall; ACI water + k_h 0.15 + column + β 10° + q_s + key + passive (s1–s4); AASHTO collision + barrier + water +
+    column + k_h 0.10 + q_s + passive (Strength I max / min, Extreme Event II max).
+### RWPL-16. Pile reactions instead of the soil base reaction (`rw3Build`)
+- On piles: no bearing-pressure surface and no "R = ΣV" arrow. Per row an arrow at x_i under the footing (up in compression, down in uplift),
+  labelled "Row i: P = … kip/pile, q = … k/ft", and one horizontal arrow "h = H/N = … kip/pile (lateral, every pile)" toward the heel; in the
+  layer "Pile reactions" (the 'bearing' layer, relabelled on piles). Values: `r.pile.comb[k].L` (Pile Step 2).
+- Title on piles (`rw3TitlePile`): the pile combination, "pile reactions per row as the pile analysis computes them" (service / factored),
+  the arrows unfactored or factored with the check line, and a link to Pile Step 2.
+- Report overview figure caption on piles: "the governing pile compression combination (…) with its pile reactions per row".
+### Check case
+- Default wall, pile mode, ACI (2 rows 1.5 / 11.0 ft, s 6 ft): GOV = D + H + L; Row 1 P = 59.7, Row 2 P = 56.6 kip/pile; h = 13.50 kip/pile;
+  factored arrows: Σγ·V = 19395 lb/ft = V ✓, Σγ·M = 118751 = V·x_R ✓ (x_R = 6.12 ft). These are Pile Step 2's numbers.
+### How verified
+- origin/main vs branch, the 12 audit walls (spread): `_R`, Export JSON, autosave, Report, tab texts and DXF identical; the 3D title text of
+  every "Show" option, unfactored and factored, identical on an ACI and an AASHTO (collision, water, k_h) spread wall.
+- Pile mode: every option of the list run unfactored and factored, the check lines above; screenshot of the 3D view (3 rows).
+- `check-syntax`; `retaining-wall-checks`; `phone-layout --tool rwall --w 390,768`; `project-library --tool retwall`; `dxf-print-sheets --tool rw`.
+### Open items
+- **Decision (pending engineer review):** Extreme Event I and Extreme Event II (minimum vertical) pile combinations offer unfactored arrows only (no factor map in the tool for those sets); their pile reactions are shown as computed.
+
+### Before / after (code, `git diff -U0` of `Retaining Wall Designer.html`)
+```diff
++/* RWPL (2026-11-07, Phase 8 3D): on a pile-supported footing the combinations of the 3D view are the pile analysis' own
++   (r.pile.comb, Stability tab, Pile Step 2): V (lb/ft) at x_R, with the pile reactions per row; no soil base reaction. */
++const rw3IsPile = r => !!(r && r.pile && !r.pile.err && r.pile.comb && r.pile.comb.length);
++function rw3PileCombos(r) {
++  const P = r.pile;
++  return { list: P.comb.map(c => ({ key: c.key, name: c.label, kind: 'pile', V: c.V * 1000, xR: c.xR, e: r.B / 2 - c.xR, pile: c })), gov: P.govC ? P.govC.key : P.comb[0].key };
++}
++/* the load factors of a pile combination for the factored arrows (RW3F), or null (arrows unfactored only):
++   AASHTO: Strength I max / min and Extreme Event II max are the bearing sets' own V and x_R (8c), so their definitions apply
++   (rw3Factors 's1', 's1a', 'ee2'); Extreme Event I and Extreme Event II min have no factor map here.
++   ACI / IBC: the service combinations of rwPileAnalysis (ASCE 7-16 §2.4.1): D + H + L (all loads × 1.0), + 0.7E, and
++   0.6D + H (0.6 on the dead loads and on the vertical earth thrust, water uplift 1.0, no surcharge or column L / S), + 0.7E. */
++function rw3PileFactors(r, key) {
++  if (r.isAASHTO) { const m = { str_max: 's1', str_min: 's1a', ee2_max: 'ee2' }[key]; return m ? rw3Factors(r, m) : null; }
++  const E = r.hasSeismic ? 0.7 : 0, all = { EH: 1, EHv: 1, ES: 1, WA: 1, UP: 1, SV: 1, DC: 1, EV: 1, PP: 0 };
++  const min6 = { EH: 1, EHv: 0.6, ES: 1, WA: 1, UP: 1, SV: 0, DC: 0.6, EV: 0.6, PP: 0 };
++  const colMin = r.hasCol ? { v: 0.6 * (r.inp.col_DL + Math.min(0, r.inp.col_WL || 0)) * 1000 / r.inp.col_Ldist, how: '0.6 × (column dead load + any wind uplift)' } : null;
++  if (key === 's1') return { def: 'D + H + L (service)', f: { ...all, EQ: 0 }, col: r.hasCol ? { v: r.W_col, how: 'the service column load' } : null };
++  if (key === 's2') return { def: 'D + H + L + 0.7E', f: { ...all, EQ: E }, col: r.hasCol ? { v: r.W_col, how: 'the service column load' } : null };
++  if (key === 's3') return { def: '0.6D + H', f: { ...min6, EQ: 0 }, col: colMin };
++  if (key === 's4') return { def: '0.6D + 0.7E + H', f: { ...min6, EQ: E }, col: colMin };
++  return null;
++}
+-  const C = (typeof rwbpCombos === 'function') ? rwbpCombos(r) : { list: [], gov: null };
++  const pm = rw3IsPile(r);   // RWPL
++  const C = pm ? rw3PileCombos(r) : (typeof rwbpCombos === 'function') ? rwbpCombos(r) : { list: [], gov: null };
+-  const o = [['Governing', [['GOV', '★ Governing bearing combination' + (g ? ': ' + g.name.replace(/ — .*$/, '') : '')]]]];
++  const o = [['Governing', [['GOV', (pm ? '★ Governing pile compression combination' : '★ Governing bearing combination') + (g ? ': ' + g.name.replace(/ — .*$/, '') : '')]]]];
+-  o.push(['Combinations (base reaction and bearing pressure)', C.list.map(x => ['C:' + x.key, (x.key === C.gov ? '★ ' : '') + x.name])]);
++  o.push([pm ? 'Combinations (pile reactions per row)' : 'Combinations (base reaction and bearing pressure)', C.list.map(x => ['C:' + x.key, (x.key === C.gov ? '★ ' : '') + x.name])]);
+-  const svc = C.list.find(x => x.key === 'svc');
+-  if (sel === 'ALL') return { sel, cases, combo: svc || null, comboNote: 'service (unfactored)' };
++  const pm = rw3IsPile(r), svc = C.list.find(x => x.key === (pm ? 's1' : 'svc') && (!pm || !r.isAASHTO));   // RWPL: on piles, ACI D + H + L (service); AASHTO none
++  if (sel === 'ALL') return { sel, cases, combo: svc || null, comboNote: pm ? 'service combination D + H + L' : 'service (unfactored)' };
+-  const F = rw3Factors(r, k);
++  const F = pm ? rw3PileFactors(r, k) : rw3Factors(r, k);   // RWPL
++  if (rw3IsPile(r)) return rw3TitlePile(r, S, unit);   // RWPL: pile-supported footing
++/* RWPL (2026-11-07): the 3D title on a pile-supported footing (pile combinations, pile reactions per row; no soil base reaction) */
++function rw3TitlePile(r, S, unit) {
++  const sign = 'Arrows point the way each load acts on the wall: earth, surcharge, water, seismic and collision toward the toe; weights down; uplift up; passive toward the heel. Pile reactions act on the footing: up in compression, down in uplift (tension), and toward the heel against the lateral load.';
++  const c = S.combo, cmb = c ? `<b>${c.name}</b>` : '';
++  let what;
++  if (S.sel.startsWith('CASE:')) what = `<b>${S.cases[0] ? S.cases[0].name : ''}</b>: unfactored. No pile reactions are shown for a single load case.`;
++  else if (S.sel === 'ALL') what = `<b>All load cases</b>, unfactored` + (c ? `; pile reactions per row for the ${S.comboNote} (${c.name}).` : '; no pile reactions (every pile combination in AASHTO mode is factored: choose one in the list).');
++  else if (S.fac) {
++    const X = S.FX, F = S.F, tol = v => 1e-6 * Math.max(1, Math.abs(v));
++    const okV = Math.abs(X.V - c.V) <= tol(c.V), okM = Math.abs(X.M - c.V * c.xR) <= tol(c.V * c.xR) * 10;
++    what = `${S.gov ? '<b>Governing</b> pile compression combination: ' : ''}${cmb}. <b>Load arrows: factored</b>, each load case × its load factor γ in this combination, read from the analysis' definition of ${F.def}${F.eta != null && F.eta !== 1 ? ` (γ includes η = ${f(F.eta, 3)})` : ''}; pile reactions per row as the pile analysis computes them.`
++      + (X.omit.length ? ` Not in this combination's vertical resultant: ${X.omit.join(', ')}.` : '')
++      + `<div class="c3d-sign">Check: Σγ·V of the arrows = ${f(X.V, 0)} lb/ft vs V = ${f(c.V, 0)} lb/ft ${okV ? '✓' : '✗'}; Σγ·M about the toe = ${f(X.M, 0)} vs V·x_R = ${f(c.V * c.xR, 0)} lb·ft/ft ${okM ? '✓' : '✗'}.</div>`;
++  }
++  else what = `${S.gov ? '<b>Governing</b> pile compression combination: ' : ''}${cmb}: pile reactions per row (kip per pile) as the pile analysis computes them${r.isAASHTO ? ' (factored)' : ' (service loads)'}; <b>load arrows: unfactored</b>, the load cases${S.F ? ' (choose Factored to see them × this combination\'s load factors)' : ' (no factor map for this combination: the arrows stay unfactored)'}.`;
++  return `<div>${what}</div><div class="c3d-sign">${unit} ${sign} Worked on the Stability tab (<a class="wkA" href="#" data-card="stabPile">pile reactions</a>).</div>`;
++}
+-  if (c) {
++  if (c && c.kind === 'pile') {   // RWPL (2026-11-07): pile reactions per row (kip per pile) in the 'bearing' layer; no soil base reaction
++    const L = c.pile.L, Pm = Math.max(...L.rows.map(x => Math.abs(x.P)), 1e-9), gb = G.bearing;
++    L.rows.forEach((x, i) => { const len = La * (0.35 + 0.65 * Math.abs(x.P) / Pm), y0 = -0.15;
++      if (x.P >= 0) rw3Arrow(gb, V3(x.x, y0 - len), V3(x.x, y0), '#ffd040');
++      else rw3Arrow(gb, V3(x.x, y0), V3(x.x, y0 - len), '#ffd040');
++      rw3Label(gb, `Row ${i + 1}: P = ${f(x.P, 1)} kip/pile${x.P < 0 ? ' (uplift)' : ''}, q = ${f(x.q, 2)} k/ft`, V3(x.x, y0 - len), '#c0a020'); });
++    const h = L.rows.length ? L.rows[0].h : 0, xh = Math.min(...L.rows.map(x => x.x));
++    if (h > 1e-6) { rw3Arrow(gb, V3(xh - La * 0.6, 0.05), V3(xh, 0.05), '#ffd040'); rw3Label(gb, `h = H/N = ${f(h, 2)} kip/pile (lateral, every pile)`, V3(xh - La * 0.6, 0.05), '#c0a020'); }
++    S.rInfo = `V = ${rw3K(c.V)} at x_R = ${f(c.xR, 2)} ft; P_max = ${f(L.Pmax, 1)} kip, P_min = ${f(L.Pmin, 1)} kip per pile; H = ${f(c.pile.H, 3)} k/ft`;
++  } else if (c) {
+-  const t = document.getElementById('c3d-title'); if (t) t.innerHTML = rw3Title(r, S) + (S.rInfo ? `<div class="c3d-sign">Base reaction: ${S.rInfo}.</div>` : '');
++  const t = document.getElementById('c3d-title'); if (t) t.innerHTML = rw3Title(r, S) + (S.rInfo ? `<div class="c3d-sign">${c && c.kind === 'pile' ? 'Pile reactions' : 'Base reaction'}: ${S.rInfo}.</div>` : '');
++  const lb = document.querySelector('#t3d-bearing + span'); if (lb) lb.textContent = rw3IsPile(r) ? 'Pile reactions' : 'Bearing';   // RWPL: the layer holds the pile reactions on piles
+-  let gname = ''; try { const C = rwbpCombos(r), g = C.list.find(x => x.key === C.gov); gname = g ? g.name.replace(/ — .*$/, '') : ''; } catch (e) { /* none */ }
++  let gname = ''; try { const C = rw3IsPile(r) ? rw3PileCombos(r) : rwbpCombos(r), g = C.list.find(x => x.key === C.gov); gname = g ? g.name.replace(/ — .*$/, '') : ''; } catch (e) { /* none */ }   // RWPL: on piles, the governing pile combination
+-    '3D model tab[[tab:threed| ↗]] at its default view: the governing bearing combination' + (gname ? ' (' + gname + ')' : '') + ' with its base reaction R and bearing pressure, the load cases as unfactored arrows with their values, every layer on, no section cut, the Reset-view camera. Perspective: not to scale; B = ' + rwrN(r.B, 2) + ' ft, H = ' + rwrN(r.H, 2) + ' ft, a ' + rwrN(wallLen3D(r), 0) + ' ft run of wall.');
++    '3D model tab[[tab:threed| ↗]] at its default view: the governing ' + (rw3IsPile(r) ? 'pile compression combination' : 'bearing combination') + (gname ? ' (' + gname + ')' : '') + (rw3IsPile(r) ? ' with its pile reactions per row' : ' with its base reaction R and bearing pressure') + ', the load cases as unfactored arrows with their values, every layer on, no section cut, the Reset-view camera. Perspective: not to scale; B = ' + rwrN(r.B, 2) + ' ft, H = ' + rwrN(r.H, 2) + ' ft, a ' + rwrN(wallLen3D(r), 0) + ' ft run of wall.');
+```
+
+## 2026-11-07 — PR: claude/rw-pile-8f — Pile-supported footing, Phase 8f: hand-off with Pile Designer — foundationLoads revision 2 (element.type "wall") sent, pileResults read back with the stale check (RWPX; no change to a computed result unless results are pulled; cross-tool PR with Pile Designer) (PR #1015: https://github.com/mlococo88/All-Structural/pull/1015)
+
+Review Phase 8, PR 8f, following the abutment calculator's contract (HANDOFF.md §4.6 revision 2, §4.10; ABPX / PXR / PXR2). Code sites tagged `RWPX`. Cross-tool connection: Pile Designer (BY list, one label) and HANDOFF.md change in the same PR (CLAUDE.md §7 exception).
+### RWPX-1. Engine (new `<script>` before `</body>`, between the markers `/* RWPX-ENGINE-BEGIN */` … `/* RWPX-ENGINE-END */`; run in Node by tests/engine/handoffs.test.mjs)
+- `rwpxSegment(rows)`: the segment length L sent = the least common multiple of the row spacings (to 1/100 in) when ≤ 120 ft (exact: every row has L/s piles), else 120 ft rounded down to a multiple of the largest spacing.
+- `rwpxLayout(r, L)`: the piles of the segment (row i at x = B/2 − x_i, + toward the toe; y = s/2 + k·s − L/2), group properties by `SharedPileGroup.groupProps`.
+- `rwpxCases`: per pile combination (r.pile.comb): P = V·L, Vx = H·L, Vy = 0, My = P(x̄_d − x_R), Mx = −P·ȳ; `pileP` by `SharedPileGroup.reaction`.
+- `rwpxDesign`: per combination the rows with the largest and smallest per-ft pile load: P (the wall's value), h = H/N, pinned.
+- `rwpxBuild(r, meta)`: the payload (element.type "wall", revision 2, pileLayout, pileDesign, contentHash); `rwpxHash`: the abutment's FNV-1a rule.
+- `rwpxStatus(basis, cur, sent)`, `rwpxPlan(r, res, cur, sent)`: the stale check and what a pileResults payload sets (AASHTO: pile_Rn, pile_phic, pile_Rnup, pile_phiup from `geotechnical.static`; ACI: nothing) and the per-combination match (by `source.caseId` "<key>:compression", else a Group row of that name).
+### RWPX-2. UI and saved data
+- Foundation card (pile mode): "Send to Pile Designer", "Pull pile results", "Import pile results (JSON)", status line (`#pxr_status`), hidden field `pile_pxr` (the record; in `RWLS_DEF` with default '', so it is saved only when filled: every other project saves, autosaves and exports byte-identical).
+- `onInputChange`: `r = rwpxCheck(inp, calcAll(inp))`: with a record and pile results, the status is re-checked; **STALE**: every imported input still holding its imported value is computed with its `prev` value (calcAll re-run with those values in `inp.fnd`), with a warning; the inputs keep the imported values. `r.pxr` = {status, why, producedAt, fields, cases} only when a record exists.
+- Report, "Pile-supported footing" › Pile data: a source note (status, imported values; "not used while stale").
+### Check case (end-to-end smoke, AASHTO default wall on piles, t_f 36 in, 2 rows 1.5 / 11.0 ft, s 6 ft)
+- Segment 6 ft (one spacing), 2 piles; Σ pileP = P per case; each pileDesign compression P = the wall's Pile Step 2 P_max of that combination (to 0.0006 kip).
+- Pile Designer: per-pile check "every pile's reaction … equals … to within 0.0005 kip"; static R_n = 123.70 kip, φ = 0.70 sent back; content hash echoed.
+- Wall after Import: R_n = 123.70, φ_c = 0.70 used, CURRENT. Stem height + 1 ft: STALE, the calculation uses R_n = 300, φ_c = 0.65 (before the import), the input still shows 123.70. Height back: CURRENT.
+- Engine test (3 rows x = 1.5 / 6 / 11 ft, s = 6 / 6 / 8 ft): N = 0.45833 /ft, x̄ = 5.72727 ft, L = 24 ft, 11 piles; every pile = its row's per-ft P.
+### How verified
+- `node tests/engine/run.mjs handoffs pile-group` (3 new tests), `node tests/smoke/retwall-pile-handoff.mjs` (new; RW → Pile Designer → RW), `check-syntax`, `retaining-wall-checks`, `phone-layout --tool rwall --w 390,768`, `project-library --tool retwall,abutment,pile`, `dxf-print-sheets --tool rw`, `pile-library`.
+- origin/main vs branch, the 12 audit walls (spread) and 2 pile walls without a pull: `_R`, Export JSON, autosave, Report, tab texts, DXF identical.
+### Open items
+- **Decision (pending engineer review):** ACI / IBC mode sends service (ASD) cases (factored:false) and imports nothing back (Pile Designer's LRFD R_n, φ cannot be turned into allowable P_a without a factor of safety the tool does not have); the values are listed for reference.
+- **Decision (pending engineer review):** H_r is not imported (Pile Designer gives p-y results and checks per case, not a lateral resistance); its per-case M_max and pass / fail are listed in the pull dialog for reference.
+- **Decision (pending engineer review):** the static R_n and φ are imported (not the field-method R_n,req); the abutment offers the choice.
+- The H-pile section is not adopted by Pile Designer (the wall has no d, b_f, t_f, t_w).
+- 8g (battered piles): not done; suggested feature.
+
+### Before / after (code, `git diff -U0` of `Retaining Wall Designer.html`)
+```diff
++    <!-- RWPX (2026-11-07, Phase 8f): hand-off with Pile Designer (HANDOFF.md §4.6 / §4.10); pile_pxr = the pulled-results record (saved only when filled) -->
++    <div class="pile-only" style="display:none;margin-top:6px">
++      <div style="display:flex;flex-wrap:wrap;gap:6px">
++        <button type="button" class="btn" id="pxr_send" onclick="rwpxSendOpen()" title="Send the pile combinations, a wall segment of the pile rows and the per-pile governing loads to Pile Designer (channel foundationLoads)">Send to Pile Designer</button>
++        <button type="button" class="btn" id="pxr_pull" onclick="rwpxPullOpen()" title="Pull Pile Designer's results (channel pileResults): R_n and φ, and per combination its p-y results; with the stale check">Pull pile results</button>
++        <label class="btn" style="cursor:pointer" title="Import a pile-results hand-off file exported by Pile Designer">Import pile results (JSON)<input type="file" accept=".json,application/json" style="display:none" onchange="rwpxImportFile(this)"></label>
++      </div>
++      <div class="hint" id="pxr_status"></div>
++      <textarea id="pile_pxr" style="display:none" aria-hidden="true" tabindex="-1"></textarea>
++    </div>
+-  // RWPC (2026-11-07): pressure at x of a factored trapezoid with eccentricity e and resultant x̄ from the toe. Full contact
+-  // (|e| ≤ B/6): the linear q_at, unchanged. Partial contact: the triangular block of length 3x̄ from the toe (or 3(B − x̄) from
+-  // the heel end); it was interpolated linearly over the whole base B, which overstated the pressure under the heel.
+-  function q_blk(x, qt, qh, e, xR) {
+-    if (Math.abs(e) <= B / 6) return q_at(x, qt, qh);
+-    if (e > 0) { const Lc = 3 * xR; return Lc > 0 && x < Lc ? qt * (1 - x / Lc) : 0; }
+-    const Lc = 3 * (B - xR); return Lc > 0 && x > B - Lc ? qh * (1 - (B - x) / Lc) : 0;
+-  }
+-  const quf_front = q_blk(x_front, qu_toe, qu_heel, e_u, x_Ru);   // RWPC: was q_at (linear over B also in partial contact)
+-  const quf_back  = q_blk(x_back,  qu_toe, qu_heel, e_u, x_Ru);
++  const quf_front = q_at(x_front, qu_toe, qu_heel);
++  const quf_back  = q_at(x_back,  qu_toe, qu_heel);
+-  const quf_front_min = q_blk(x_front, qu_toe_min, qu_heel_min, e_u_min, x_Ru_min);   // RWPC
+-  const quf_back_min  = q_blk(x_back,  qu_toe_min, qu_heel_min, e_u_min, x_Ru_min);
++  const quf_front_min = q_at(x_front, qu_toe_min, qu_heel_min);
++  const quf_back_min  = q_at(x_back,  qu_toe_min, qu_heel_min);
+-    const quA_front = q_blk(x_front, quA_toe, quA_heel, e_tot, x_R_tot);   // RWPC: was linear over B also in partial contact
+-    const quA_back  = q_blk(x_back,  quA_toe, quA_heel, e_tot, x_R_tot);
+-    const M_net_tot = Mr_str_max_tot - Mo_str_max;                          // RWPC: net moment about the toe (for the member pieces)
++    const quA_front = quA_toe + (quA_heel - quA_toe) * (x_front / B);
++    const quA_back  = quA_toe + (quA_heel - quA_toe) * (x_back  / B);
+-    const quIa_front = q_blk(x_front, quIa_toe, quIa_heel, e_Ia, x_R_Ia);   // RWPC
+-    const quIa_back  = q_blk(x_back,  quIa_toe, quIa_heel, e_Ia, x_R_Ia);
+-    const M_net_Ia   = Mr_str_min_tot - Mo_str_max;                        // RWPC
++    const quIa_front = quIa_toe + (quIa_heel - quIa_toe) * (x_front / B);
++    const quIa_back  = quIa_toe + (quIa_heel - quIa_toe) * (x_back  / B);
+-      V_str_min_tot, e_Ia, quIa_toe, quIa_heel, quIa_front, quIa_back, M_net_tot, M_net_Ia, x_R_Ia,   // RWPC: + net moments, x̄_Ia
++      V_str_min_tot, e_Ia, quIa_toe, quIa_heel, quIa_front, quIa_back,
+-      upWarn.push(`${lbl}${g ? `, water uplift at γ_U = ${g}` : ''}: ${kind === 'none' ? 'the factored uplift exceeds the vertical load (no soil reaction)' : 'the soil resultant falls outside the base (no equilibrium with the soil in compression)'}. The footing is designed with the soil reaction ${kind === 'outToe' ? 'concentrated at the toe tip' : 'taken as zero on that member'} (conservative); review the proportions or the water level.`);
++      upWarn.push(`${lbl}, water uplift at γ_U = ${g}: ${kind === 'none' ? 'the factored uplift exceeds the vertical load (no soil reaction)' : 'the soil resultant falls outside the base (no equilibrium with the soil in compression)'}. The footing is designed with the soil reaction ${kind === 'outToe' ? 'concentrated at the toe tip' : 'taken as zero on that member'} (conservative); review the proportions or the water level.`);
+-  // RWPC (2026-11-07): without the water split (ACI without water; AASHTO Strength I / Ia), a combination whose resultant lies
+-  // beyond the kern (|e| > B/6) loads the heel and toe with the triangular soil block of length 3x̄ (γ_U = 0: no uplift taken
+-  // out), worked as RWUP pieces. Full contact keeps the linear trapezoid (unchanged).
+-  const pcV = isAASHTO ? [[aashtoR.V_str_max_tot, aashtoR.M_net_tot, aashtoR.e_tot, 'Strength I'], [aashtoR.V_str_min_tot, aashtoR.M_net_Ia, aashtoR.e_Ia, 'Strength Ia']]
+-                       : [[SumVu, Msu - Mou, e_u, 'U = 1.2D + 1.6H'], [SumVu_min, Msu_min - Mou, e_u_min, 'U = 0.9D + 1.6H']];
+-  const pcS = (upS || pileFtg) ? [null, null] : pcV.map(([V, M, e, c]) => Math.abs(e) > B / 6
+-    ? { heel: rwUpMember(rwUpSplit(V, M, 0, 'Heel, ' + c), x_back, B), toe: rwUpMember(rwUpSplit(V, M, 0, 'Toe, ' + c), x_front, 0) } : null);
+-  if (!upS) upWarn.forEach(w => warnings.push('Footing (partial contact): ' + w));
+-  const hcMax = heelCase(gEV, gDC, gES, gLS, bq_back, bq_heel, upS ? upS.heelMax : pcS[0] ? pcS[0].heel : null, pileFtg && pileFtg.cmax);   // RWUP, RWPL; RWPC
+-  const hcMin = isAASHTO ? heelCase(1.00, 0.90, 0.75, 0, bqm_back, bqm_heel, pcS[1] ? pcS[1].heel : null, pileFtg && pileFtg.cmin)
+-                         : heelCase(0.9, 0.9, 0, 0, bqm_back, bqm_heel, upS ? upS.heelMin : pcS[1] ? pcS[1].heel : null, pileFtg && pileFtg.cmin);
++  const hcMax = heelCase(gEV, gDC, gES, gLS, bq_back, bq_heel, upS ? upS.heelMax : null, pileFtg && pileFtg.cmax);   // RWUP, RWPL
++  const hcMin = isAASHTO ? heelCase(1.00, 0.90, 0.75, 0, bqm_back, bqm_heel, null, pileFtg && pileFtg.cmin)
++                         : heelCase(0.9, 0.9, 0, 0, bqm_back, bqm_heel, upS ? upS.heelMin : null, pileFtg && pileFtg.cmin);
+-  const tcMax = toeCase(bq_front, bq_toe, upS ? upS.toeMax : pcS[0] ? pcS[0].toe : null, pileFtg && pileFtg.cmax), tcMin = toeCase(bqm_front, bqm_toe, upS ? upS.toeMin : pcS[1] ? pcS[1].toe : null, pileFtg && pileFtg.cmin);   // RWUP, RWPL; RWPC
++  const tcMax = toeCase(bq_front, bq_toe, upS ? upS.toeMax : null, pileFtg && pileFtg.cmax), tcMin = toeCase(bqm_front, bqm_toe, upS ? upS.toeMin : null, pileFtg && pileFtg.cmin);   // RWUP, RWPL
+-  h += eq(Math.abs(r.e_u) > r.B / 6 ? 'Factored bearing at stem faces (partial contact: triangular block of length 3x̄ from the ' + (r.e_u > 0 ? 'toe' : 'heel end') + ')' : 'Factored bearing at stem faces (linear interpolation)',   // RWPC
++  h += eq('Factored bearing at stem faces (linear interpolation)',
+-  const nw = !(sp.g > 0);   // RWPC (2026-11-07): no water split — partial contact of the factored soil reaction only
+-  if (nw) st.push({ id: 'Vs', label: 'Factored vertical load, ' + sp.combo + ': its resultant lies outside the kern (|e| > B/6), so the soil reaction is a triangular block, not the whole-base trapezoid', sym: r.isAASHTO ? 'V_{u}' : '\\Sigma V_{u}', eq: '', sub: '', value: sp.Vs, unit: 'lb/ft', d: 0,
+-    note: 'V and its moment about the toe from the ' + sp.combo + ' trapezoid (' + (r.isAASHTO ? 'Footing design tab, factored loads' : 'Stability tab, Step 7') + ').' });
+-  else st.push({ id: 'Vs', label: 'Soil reaction without the water: ' + sp.combo + ' less the uplift at γ_U = ' + g + ' (ACI 318-19 §5.3.8(' + (isToe ? 'a): the uplift adds to the toe’s upward bending' : 'b): the uplift is permanent and counteracts the heel’s downward load') + ')',
++  st.push({ id: 'Vs', label: 'Soil reaction without the water: ' + sp.combo + ' less the uplift at γ_U = ' + g + ' (ACI 318-19 §5.3.8(' + (isToe ? 'a): the uplift adds to the toe’s upward bending' : 'b): the uplift is permanent and counteracts the heel’s downward load') + ')',
+-  if (sp.Vs > 0 && nw) st.push({ id: 'xs', label: 'Location of the resultant from the toe (M_u = resisting less overturning moment about the toe)', sym: '\\bar{x}', eq: '\\frac{M_{u}}{V_{u}}', sub: '\\frac{' + n(sp.M, 0) + '}{' + n(sp.Vs, 0) + '}', value: sp.xs, unit: 'ft', d: 3 });
+-    if (!nw) st.push({ id: 'xs', label: 'Location of the soil reaction from the toe (M_u = resisting less overturning moment about the toe)', sym: '\\bar{x}_{s}', eq: '\\frac{M_{u} \\minus \\gamma_{U} U x_{U}}{V_{s}}', sub: '\\frac{' + n(sp.M, 0) + ' \\minus ' + g + '(' + n(U, 0) + ')(' + n(r.x_uplift, 3) + ')}{' + n(sp.Vs, 0) + '}', value: sp.xs, unit: 'ft', d: 3 });
++    st.push({ id: 'xs', label: 'Location of the soil reaction from the toe (M_u = resisting less overturning moment about the toe)', sym: '\\bar{x}_{s}', eq: '\\frac{M_{u} \\minus \\gamma_{U} U x_{U}}{V_{s}}', sub: '\\frac{' + n(sp.M, 0) + ' \\minus ' + g + '(' + n(U, 0) + ')(' + n(r.x_uplift, 3) + ')}{' + n(sp.Vs, 0) + '}', value: sp.xs, unit: 'ft', d: 3 });
+-  if (!nw) st.push({ id: 'uw', label: 'Water pressure on the underside at γ_U = ' + g + (r.upliftTri ? ' (triangular: 0 at the toe, this value at the heel end)' : ' (uniform)'), sym: '\\gamma_{U}\\gamma_{w}h_{w}', eq: '', sub: g + '(' + n(r.gamma_w, 1) + ')(' + n(r.hw, 2) + ')', value: sp.uwB, unit: 'psf', d: 1 });
++  st.push({ id: 'uw', label: 'Water pressure on the underside at γ_U = ' + g + (r.upliftTri ? ' (triangular: 0 at the toe, this value at the heel end)' : ' (uniform)'), sym: '\\gamma_{U}\\gamma_{w}h_{w}', eq: '', sub: g + '(' + n(r.gamma_w, 1) + ')(' + n(r.hw, 2) + ')', value: sp.uwB, unit: 'psf', d: 1 });
+-  if (nw) st.push({ id: 'q0', label: 'Upward soil pressure at the stem face', sym: 'q(0)', eq: '', sub: '', value: up.q0, unit: 'psf', d: 1 },
+-    { id: 'qL', label: 'Upward soil pressure at the ' + (isToe ? 'toe' : 'heel') + ' tip', sym: 'q(' + Ls + ')', eq: '', sub: '', value: up.qL, unit: 'psf', d: 1 });
+-  else st.push({ id: 'q0', label: 'Upward pressure at the stem face: soil + water', sym: 'q(0)', eq: 'q_{s}(0) + \\gamma_{U}u(0)', sub: n(up.q0s, 1) + ' + ' + n(ws0, 1), value: up.q0, unit: 'psf', d: 1 });
+-  if (!nw) st.push({ id: 'qL', label: 'Upward pressure at the ' + (isToe ? 'toe' : 'heel') + ' tip: soil + water', sym: 'q(' + Ls + ')', eq: 'q_{s}(' + Ls + ') + \\gamma_{U}u(' + Ls + ')', sub: n(up.qLs, 1) + ' + ' + n(wsL, 1), value: up.qL, unit: 'psf', d: 1 });
++  st.push({ id: 'q0', label: 'Upward pressure at the stem face: soil + water', sym: 'q(0)', eq: 'q_{s}(0) + \\gamma_{U}u(0)', sub: n(up.q0s, 1) + ' + ' + n(ws0, 1), value: up.q0, unit: 'psf', d: 1 });
++  st.push({ id: 'qL', label: 'Upward pressure at the ' + (isToe ? 'toe' : 'heel') + ' tip: soil + water', sym: 'q(' + Ls + ')', eq: 'q_{s}(' + Ls + ') + \\gamma_{U}u(' + Ls + ')', sub: n(up.qLs, 1) + ' + ' + n(wsL, 1), value: up.qL, unit: 'psf', d: 1 });
+-  if (!nw) st.push({ id: 'Mw', label: 'Moment of the water pressure about the stem face (q_a = ' + n(up.water.qa, 1) + ' psf at the face, q_b = ' + n(up.water.qb, 1) + ' psf at the tip)', sym: 'M_{water}', eq: pf(up.water), sub: psub(up.water), value: up.Mw, unit: 'lb-ft/ft', d: 1, note: 'F_water = ' + n(up.Fw, 1) + ' lb/ft' });
+-  if (nw) st.push({ id: 'Mup', label: 'Moment of the upward pressure about the stem face', sym: 'M_{up}', eq: 'M_{soil}', sub: '', value: up.M, unit: 'lb-ft/ft', d: 1, note: 'F_up = ' + n(up.F, 1) + ' lb/ft' });
+-  else st.push({ id: 'Mup', label: 'Moment of the upward pressure about the stem face', sym: 'M_{up}', eq: 'M_{soil} + M_{water}', sub: n(up.Ms, 1) + ' + ' + n(up.Mw, 1), value: up.M, unit: 'lb-ft/ft', d: 1, note: 'F_up = F_soil + F_water = ' + n(up.F, 1) + ' lb/ft' });
++  st.push({ id: 'Mw', label: 'Moment of the water pressure about the stem face (q_a = ' + n(up.water.qa, 1) + ' psf at the face, q_b = ' + n(up.water.qb, 1) + ' psf at the tip)', sym: 'M_{water}', eq: pf(up.water), sub: psub(up.water), value: up.Mw, unit: 'lb-ft/ft', d: 1, note: 'F_water = ' + n(up.Fw, 1) + ' lb/ft' });
++  st.push({ id: 'Mup', label: 'Moment of the upward pressure about the stem face', sym: 'M_{up}', eq: 'M_{soil} + M_{water}', sub: n(up.Ms, 1) + ' + ' + n(up.Mw, 1), value: up.M, unit: 'lb-ft/ft', d: 1, note: 'F_up = F_soil + F_water = ' + n(up.F, 1) + ' lb/ft' });
+-  const r = IE.E.length ? { inp, errors: IE.E.map(e => e[1]), warnings: [], fatal: true, inputErrors: IE.E } : calcAll(inp);   // RWIE: no results while an input is in error
++  const r = IE.E.length ? { inp, errors: IE.E.map(e => e[1]), warnings: [], fatal: true, inputErrors: IE.E } : (typeof rwpxCheck === 'function' ? rwpxCheck(inp, calcAll(inp)) : calcAll(inp));   // RWIE: no results while an input is in error   // RWPX: the Pile Designer stale check
++  if (typeof rwpxPaint === 'function') rwpxPaint(r);   // RWPX
+-    const ip0 = x => ['q_{u,toe} + (q_{u,heel} \\minus q_{u,toe})\\frac{x}{B}', rwrN(qt, 1) + ' + (' + rwrN(qh, 1) + ' \\minus ' + rwrN(qt, 1) + ')\\frac{' + rwrN(x, 2) + '}{' + Bs + '}'];
+-    // RWPC (2026-11-07): partial contact — the face values come from the triangular block of length 3x̄ (was the whole-base interpolation)
+-    const ip = x => kern !== false ? ip0(x) : e > 0
+-      ? (x < 3 * xR ? ['q_{u,toe}\\left(1 \\minus \\frac{x}{3\\bar{x}}\\right)', rwrN(qt, 1) + '\\left(1 \\minus \\frac{' + rwrN(x, 2) + '}{3(' + rwrN(xR, 4) + ')}\\right)'] : ['0\\;(x \\ge 3\\bar{x})', ''])
+-      : (x > B - 3 * (B - xR) ? ['q_{u,heel}\\left(1 \\minus \\frac{B \\minus x}{3(B \\minus \\bar{x})}\\right)', rwrN(qh, 1) + '\\left(1 \\minus \\frac{' + Bs + ' \\minus ' + rwrN(x, 2) + '}{3(' + Bs + ' \\minus ' + rwrN(xR, 4) + ')}\\right)'] : ['0\\;(x \\le B \\minus 3(B \\minus \\bar{x}))', '']);
++    const ip = x => ['q_{u,toe} + (q_{u,heel} \\minus q_{u,toe})\\frac{x}{B}', rwrN(qt, 1) + ' + (' + rwrN(qh, 1) + ' \\minus ' + rwrN(qt, 1) + ')\\frac{' + rwrN(x, 2) + '}{' + Bs + '}'];
+-    const upR = (up, mem) => up ? rwUpSteps(r, up, mem).map(o => rwrS(Object.assign({}, o, { id: 'u' + o.id, ref: o.id === 'Vs' && r.upS ? 'ACI 318-19 §5.3.8' : '' }))) : null;   // RWUP; RWPC: no §5.3.8 without the split
++    const upR = (up, mem) => up ? rwUpSteps(r, up, mem).map(o => rwrS(Object.assign({}, o, { id: 'u' + o.id, ref: o.id === 'Vs' ? 'ACI 318-19 §5.3.8' : '' }))) : null;   // RWUP
+-      { title: 'Heel Step 4 — Shear and development', ref: isA ? AA('Art. 5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', steps: pre('h4', H4) }], { title: 'Heel' }), { type: 'note', text: (upHr && r.upS ? 'ΣV_u and its moment: [[st7/SumVu]], [[st7/SumVumin]] (the water uplift is split out in Heel Step 1, ACI 318-19 §5.3.8)' : upHr ? 'Partial contact: the soil block is worked in Heel Step 1 (RWPC)' : 'q_u,back and q_u,heel: ' + (isA ? '[[saf/quback]], [[saf/quheel]] (Strength Ia: [[saf/qubackIa]])' : '[[st7/quback]], [[st7/quheel]] (minimum-vertical case: [[st7/qubackmin]])')) + '; ' + (r.heel_min_governs ? 'the minimum-vertical case governs the heel.' : 'the maximum-vertical case governs the heel.') },
++      { title: 'Heel Step 4 — Shear and development', ref: isA ? AA('Art. 5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', steps: pre('h4', H4) }], { title: 'Heel' }), { type: 'note', text: (upHr ? 'ΣV_u and its moment: [[st7/SumVu]], [[st7/SumVumin]] (the water uplift is split out in Heel Step 1, ACI 318-19 §5.3.8)' : 'q_u,back and q_u,heel: ' + (isA ? '[[saf/quback]], [[saf/quheel]] (Strength Ia: [[saf/qubackIa]])' : '[[st7/quback]], [[st7/quheel]] (minimum-vertical case: [[st7/qubackmin]])')) + '; ' + (r.heel_min_governs ? 'the minimum-vertical case governs the heel.' : 'the maximum-vertical case governs the heel.') },
+-      { title: 'Toe Step 4 — Shear and development', ref: isA ? AA('Art. 5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', steps: pre('t4', T4) }], { title: 'Toe' }), { type: 'note', text: (upTr && r.upS ? 'ΣV_u and its moment: [[st7/SumVu]], [[st7/SumVumin]] (the water uplift is split out in Toe Step 1, ACI 318-19 §5.3.8)' : upTr ? 'Partial contact: the soil block is worked in Toe Step 1 (RWPC)' : 'q_u,front and q_u,toe: ' + (isA ? '[[saf/qufront]], [[saf/qutoe]] (Strength Ia: [[saf/qufrontIa]])' : '[[st7/qufront]], [[st7/qutoe]] (minimum-vertical case: [[st7/qufrontmin]])')) + '; ' + (r.toe_min_governs ? 'the minimum-vertical case governs the toe.' : 'the maximum-vertical case governs the toe.') },
++      { title: 'Toe Step 4 — Shear and development', ref: isA ? AA('Art. 5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', steps: pre('t4', T4) }], { title: 'Toe' }), { type: 'note', text: (upTr ? 'ΣV_u and its moment: [[st7/SumVu]], [[st7/SumVumin]] (the water uplift is split out in Toe Step 1, ACI 318-19 §5.3.8)' : 'q_u,front and q_u,toe: ' + (isA ? '[[saf/qufront]], [[saf/qutoe]] (Strength Ia: [[saf/qufrontIa]])' : '[[st7/qufront]], [[st7/qutoe]] (minimum-vertical case: [[st7/qufrontmin]])')) + '; ' + (r.toe_min_governs ? 'the minimum-vertical case governs the toe.' : 'the maximum-vertical case governs the toe.') },
++    if (r.pxr) subs[subs.length - 1].items.push({ type: 'note', warn: r.pxr.status === 'stale', text: 'Pile Designer results (Pull pile results, ' + rwpxWhen(r.pxr.producedAt) + '): ' + r.pxr.status.toUpperCase() + ' (' + r.pxr.why + '). ' + (Object.keys(r.pxr.fields).length ? 'Imported: ' + Object.entries(r.pxr.fields).map(([k, v]) => k.replace('pile_', '') + ' = ' + v).join(', ') + (r.pxr.status === 'stale' ? '; not used while stale (the values held before the import are used).' : '.') : 'No input imported (reference only).') });   // RWPX
++<script>
++/* =====================================================================
++   RWPX (2026-11-07, Phase 8f): hand-off with Pile Designer, as the abutment calculator's (HANDOFF.md §4.6 revision 2, §4.10).
++   Sends foundationLoads (copy by.retwall; element.type "wall") with a discrete wall segment of the pile rows (pileLayout), each case's
++   pile reactions (pileP) and the per-pile governing loads (pileDesign); reads pileResults back with the stale check (content hash).
++   Engine (pure, between the RWPX-ENGINE markers; tests/engine/handoffs.test.mjs runs it in Node with shared/pile-group.js):
++   - rwpxSegment(rows): the segment length L (ft) sent: the least common multiple of the row spacings (to 1/100 in), when ≤ 120 ft, so
++     every row has exactly L/s piles and the discrete group gives the per-ft results exactly (N·L piles, x̄, I·L); else 120 ft rounded
++     down to a multiple of the largest spacing ("exact": false; the receiver's distribution then differs slightly from the per-ft one).
++   - rwpxLayout(r, L): the piles of the segment: row i at x = B/2 − x_i (hand-off axes: x + toward the toe, origin at the footing centre),
++     y = s_i/2 + k·s_i − L/2 (y along the wall, origin at the segment centre); group props by SharedPileGroup.groupProps (the abutment's C-8).
++   - rwpxCases(r, Lay): per pile combination of r.pile.comb: P = V·L, Vx = H·L (+ toward the toe; H net of the passive credit as in the
++     pile check), Vy = 0, My = P·(x̄_d − x_R) (+ moves the resultant toward the toe), Mx = −P·ȳ (resultant at mid-segment), about the pile-group
++     centroid; pileP = SharedPileGroup.reaction on the segment layout (the receiver's check of its own distribution).
++   - rwpxDesign(r, Lay): per combination the row with the largest and the smallest per-ft pile load (Pile Step 2), its first pile, P (kip per
++     pile, the wall's own value), lateral share h = H/N, pinned head.
++   - rwpxBuild(r, meta): the payload; rwpxHash(p): FNV-1a of {location, reference, cases, pileLayout without resistance, pileDesign, integral}
++     (the abutment's contentHash rule).
++   - rwpxPlan(r, res, sent, mode): what a pileResults payload would set, the stale status and the per-combination match. */
++/* RWPX-ENGINE-BEGIN */
++function rwpxSegment(rows) {
++  const ss = rows.map(q => Math.round(q.s * 1200));   // spacing in 1/100 in
++  if (!ss.length || ss.some(v => !(v > 0))) return { L: 0, exact: false };
++  const gcd = (a, b) => b ? gcd(b, a % b) : a;
++  let l = ss[0]; for (let i = 1; i < ss.length && l <= 120 * 1200; i++) l = l / gcd(l, ss[i]) * ss[i];
++  if (l <= 120 * 1200) return { L: l / 1200, exact: true };
++  const smax = Math.max(...rows.map(q => q.s)); return { L: Math.max(smax, Math.floor(120 / smax) * smax), exact: false };
++}
++function rwpxLayout(r, L) {
++  const SPG = window.SharedPileGroup, B = r.B, piles = [];
++  r.pile.rows.forEach((q, i) => { for (let y = q.s / 2; y < L - 1e-6; y += q.s) piles.push({ no: piles.length + 1, row: i + 1, x: B / 2 - q.x, y: y - L / 2, active: true }); });
++  const g = SPG.groupProps(piles);
++  return { piles, n: g.n, xgc: g.xgc, ygc: g.ygc, Sxx: g.Sxx, Syy: g.Syy, Sxy: g.Sxy, L };
++}
++const rwpxR3 = v => Math.round((+v || 0) * 1000) / 1000, rwpxR6 = v => Math.round((+v || 0) * 1e6) / 1e6;
++function rwpxLS(c, isA) {
++  if (!isA) return { ls: 'Service (ASD, ASCE 7-16 2.4.1)', fac: false };
++  return { ls: /^ee1/.test(c.key) ? 'Extreme Event I' : /^ee2/.test(c.key) ? 'Extreme Event II' : 'Strength I', fac: true };
++}
++function rwpxCases(r, Lay) {
++  const SPG = window.SharedPileGroup, L = Lay.L, B = r.B, xbd = B / 2 - Lay.xgc;   // x̄ of the segment from the toe
++  return r.pile.comb.map(c => {
++    const P = c.V * L, My = P * (xbd - c.xR), Mx = -P * Lay.ygc, t = rwpxLS(c, r.isAASHTO);
++    return { id: c.key, name: c.label, limitState: t.ls, factored: t.fac, P: rwpxR3(P), Vx: rwpxR3(c.H * L), Vy: 0, Mx: rwpxR3(Mx), My: rwpxR3(My),
++      governs: c.kind === 'max' ? 'maximum vertical' : 'minimum vertical', combination: c.label,
++      pileP: Lay.piles.map(p => rwpxR3(SPG.reaction(P, My, Mx, p.x - Lay.xgc, p.y - Lay.ygc, { n: Lay.n, Sxx: Lay.Sxx, Syy: Lay.Syy, Sxy: Lay.Sxy }))) };
++  });
++}
++function rwpxDesign(r, Lay) {
++  const out = [], first = i => Lay.piles.find(p => p.row === i + 1);
++  r.pile.comb.forEach(c => { const t = rwpxLS(c, r.isAASHTO);
++    [['compression', c.L.iMax], ['uplift', c.L.iMin]].forEach(([role, i]) => { const q = c.L.rows[i], pp = first(i); if (!q || !pp || !isFinite(q.P)) return;
++      const rl = role === 'uplift' && q.P >= 0 ? 'minimum' : role;
++      out.push({ id: c.key + ':' + rl, limitState: t.ls, factored: t.fac, role: rl, pile: pp.no, row: i + 1, x: rwpxR6(pp.x), y: rwpxR6(pp.y),
++        P: rwpxR3(q.P), Vx: rwpxR3(q.h), Vy: 0, V: rwpxR3(Math.abs(q.h)), M: 0, head: 'pinned', DR: 0, gDR: 1.10, combination: c.label }); }); });
++  return out;
++}
++function rwpxHash(p) {
++  const lay = p.pileLayout ? Object.assign({}, p.pileLayout, { resistance: undefined }) : null;
++  const s = JSON.stringify({ location: p.location, reference: p.reference, cases: p.cases, pileLayout: lay, pileDesign: p.pileDesign || null, integral: p.integral || null });
++  let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return ('0000000' + h.toString(16)).slice(-8);
++}
++function rwpxBuild(r, meta) {
++  if (!r || r.fatal) return { err: 'No results: fix the input errors first.' };
++  if (!r.pile || r.pile.err || !r.pile.comb || !r.pile.comb.length) return { err: 'Not a pile-supported footing with pile results (Foundation type: pile-supported).' };
++  if (!window.SharedPileGroup) return { err: 'shared/pile-group.js is not loaded.' };
++  meta = meta || {};
++  const F = r.inp.fnd, isA = r.isAASHTO, seg = rwpxSegment(r.pile.rows), Lay = rwpxLayout(r, seg.L), B = r.B;
++  const shp = { hp: 'hp', pipe: 'round', square: 'square', round: 'round' }[F.shape] || 'hp';
++  const sec = { shape: shp, designation: F.desig || ({ hp: 'H-pile', pipe: 'steel pipe pile', square: 'square precast concrete pile', round: 'round pile' }[F.shape] || 'pile') + ', D = ' + F.D + ' in', size: +F.D || 0, wallShape: F.shape };
++  const cases = rwpxCases(r, Lay);
++  const p = { _schema: 'bridge-foundation-loads', schemaVersion: 1, producer: 'Retaining Wall Designer', producerFile: 'Retaining Wall Designer.html',
++    project: { name: meta.name || '', bridgeId: meta.bridgeId || '' }, units: { force: 'kip', moment: 'kip-ft', length: 'ft' },
++    element: { type: 'wall', label: meta.name || 'Retaining wall', wall: { perFoot: false, segmentLength: rwpxR6(seg.L), exactSegment: seg.exact } },
++    location: 'bottom of pile cap (wall footing), pile-group centroid of a ' + rwpxR3(seg.L) + ' ft wall segment (' + rwpxR3(B / 2 - Lay.xgc) + ' ft from the toe, at mid-segment)',
++    reference: { level: 'bottomOfPileCap', point: 'pileGroupCentroid', fromToe: rwpxR3(B / 2 - Lay.xgc), fromCentreline: 0 },
++    includes: { footingWeight: true, soilOverFooting: true, earthPressure: true },
++    axes: { x: 'horizontal, across the wall, + toward the toe (the direction of the earth thrust)', y: 'horizontal, along the wall, origin at mid-segment' },
++    geometry: { footingWidthB: rwpxR3(B), footingLength: rwpxR3(seg.L), footingThickness: rwpxR3(r.tf_ft) },
++    signConvention: 'P + = downward (compression on the foundation). x = across the wall, + toward the toe; y = along the wall. Vx, Vy = horizontal force on the foundation, + toward +x, +y. My = moment about the y axis, + when it moves the resultant toward +x (toward the toe), so e_x = My/P; Mx + moves it toward +y, so e_y = Mx/P. About the pile-group centroid of the segment, at the bottom of the footing.',
++    cases, revision: 2, notes: [] };
++  p.pileLayout = { units: { coordinates: 'ft', spacing: 'ft', section: 'in', Fy: 'ksi', embedment: 'in', cap: 'ft', resistance: 'kip' },
++    frame: 'the hand-off axes (x + toward the toe, y along the wall), origin at the footing centre line (B/2 from the toe) at mid-segment; the wall\'s own row positions x_i are from the toe, so x here = B/2 − x_i',
++    mode: 'coord', nRows: r.pile.rows.length, nCols: null, rows: r.pile.rows.map((q, i) => ({ row: i + 1, xFromToe: q.x, x: rwpxR6(B / 2 - q.x), spacing: q.s })),
++    piles: Lay.piles.map(q => ({ no: q.no, x: rwpxR6(q.x), y: rwpxR6(q.y), active: true })),
++    n: Lay.n, centroid: { x: rwpxR6(Lay.xgc), y: rwpxR6(Lay.ygc) }, Sxx: rwpxR6(Lay.Sxx), Syy: rwpxR6(Lay.Syy), Sxy: rwpxR6(Lay.Sxy),
++    vertical: true, batter: null, section: sec, embedment: +F.embed || 0, clearTop: +F.clr || 0,
++    cap: { widthX: rwpxR6(B), lengthY: rwpxR6(seg.L), thickness: rwpxR6(r.tf_ft), centre: { x: 0, y: 0 }, fromToeToCentre: rwpxR6(B / 2) },
++    resistance: isA ? { Rn: F.Rn, phiC: F.phic, RnUp: F.Rnup, phiUp: F.phiup, Hr: F.Hr, DR: 0, gDR: 1.10, basis: 'AASHTO LRFD, as entered in the wall' }
++                    : { Rn: null, phiC: null, RnUp: null, phiUp: null, Pa: F.Pa, Ta: F.Ta, Ha: F.Ha, DR: 0, gDR: 1.10, basis: 'allowable (ASD, service loads), as entered in the wall' },
++    distribution: 'rigid cap, identical vertical piles: P_i = P/n + [(My·Σy\'² − Mx·Σx\'y\')·x\'_i + (Mx·Σx\'² − My·Σx\'y\')·y\'_i]/(Σx\'²·Σy\'² − (Σx\'y\')²) about the group centroid; each pile takes Vx/n and Vy/n; pinned heads (no head moment). The wall works per ft of wall (Stability tab, Pile Step 2); ' + (seg.exact ? 'the segment holds exactly L/s piles of every row, so these reactions equal the wall\'s per-ft pile loads.' : 'the segment is not a common multiple of the spacings, so these reactions differ slightly from the wall\'s per-ft pile loads.'),
++    head: 'pinned' };
++  p.pileDesign = { units: { force: 'kip', moment: 'kip-ft', length: 'ft' }, lateralShare: 'equal: each pile takes H/N (per ft of wall: N = Σ1/s_i; the wall\'s assumption), net of the passive credit when ticked',
++    head: { condition: 'pinned', basis: 'the wall\'s rigid-cap distribution gives axial load and an equal shear share with no head moment' }, DR: 0, gDR: 1.10, cases: rwpxDesign(r, Lay) };
++  p.notes.push('Retaining wall on ' + r.pile.rows.length + ' rows of vertical piles, worked per ft of wall (Stability tab, Pile Step 2). Sent as a ' + rwpxR3(seg.L) + ' ft segment with ' + Lay.n + ' piles: P = V·L, Vx = H·L, My about the segment\'s pile-group centroid.');
++  p.notes.push(isA ? 'AASHTO mode: Strength I (maximum / minimum vertical), Extreme Event I and II are factored (factored:true), as the wall\'s pile check.'
++                   : 'ACI / IBC mode: the cases are service (ASD) combinations of ASCE 7-16 §2.4.1 (factored:false), checked in the wall against allowable pile capacities; Pile Designer\'s LRFD resistances are not imported back in this mode (reference only).');
++  p.notes.push('Per-pile governing loads (pileDesign): per combination the row with the largest and the smallest pile load of the wall\'s pile check, P per pile, lateral share h = H/N, pinned head. No drag load is modelled (DR = 0).');
++  p.contentHash = rwpxHash(p);
++  return { p, n: cases.length, seg, Lay };
++}
++/* the stale check of §4.10: basis = the pileResults basis (or the saved record's), cur = the hash of what the wall sends now */
++function rwpxStatus(b, cur, sent) {
++  if (!b || b.producer !== 'Retaining Wall Designer') return { status: 'other', why: 'these results are not based on loads from this wall (' + (b ? b.producer || '?' : 'no foundation-load import') + ')' };
++  if (b.contentHash) return b.contentHash === cur ? { status: 'current', why: 'content ' + cur + ' = what this wall sends now' } : { status: 'stale', why: 'the wall\'s loads or pile layout changed since they were run (content ' + b.contentHash + ' → ' + cur + ')' };
++  if (sent && sent.producedAt && b.producedAt !== sent.producedAt) return { status: 'stale', why: 'based on loads sent ' + b.producedAt + ', not the last sent (' + sent.producedAt + ')' };
++  return { status: 'unchecked', why: 'no content hash: cannot be checked' };
++}
++/* pileResults → what would change. res: the payload; sent: the wall's last sent foundationLoads (by.retwall) or null; cur: the content
++   hash of what the wall would send now. Returns { err } or { status, why, set:[{id, label, from, to}], match:[…] }. */
++function rwpxPlan(r, res, cur, sent) {
++  if (!res || res._schema !== 'bridge-pile-results') return { err: 'Not a pile-results hand-off (' + ((res && res._schema) || 'no _schema') + ').' };
++  if (!(res.schemaVersion <= 1)) return { err: 'Newer pile-results format (v' + res.schemaVersion + ') than this tool reads (v1).' };
++  const u = res.units || {}; if (u.force !== 'kip' || (u.length && u.length !== 'ft')) return { err: 'Pile results units must be kip and ft.' };
++  const { status, why } = rwpxStatus(res.basis || null, cur, sent);
++  const set = [], g = res.geotechnical && res.geotechnical.static, F = r.inp.fnd, num = v => typeof v === 'number' && isFinite(v);
++  if (r.isAASHTO && g && status !== 'other') {
++    if (num(g.Rn) && g.Rn > 0 && num(g.phi) && g.phi > 0 && g.phi <= 1) { set.push({ id: 'pile_Rn', label: 'R_n (compression)', from: F.Rn, to: g.Rn }); set.push({ id: 'pile_phic', label: 'φ_c', from: F.phic, to: g.phi }); }
++    if (num(g.RnUp) && g.RnUp > 0 && num(g.phiUp) && g.phiUp > 0 && g.phiUp <= 1) { set.push({ id: 'pile_Rnup', label: 'R_n,up (uplift)', from: F.Rnup, to: g.RnUp }); set.push({ id: 'pile_phiup', label: 'φ_up', from: F.phiup, to: g.phiUp }); }
++  }
++  const match = (r.pile && r.pile.comb || []).map(c => {
++    const q = (res.cases || []).find(x => x.source && x.source.kind === 'perPile' && x.source.caseId === c.key + ':compression')
++      || (res.cases || []).find(x => x.source && x.source.kind === 'group' && x.source.caseName === c.label && !x.source.uplift);
++    const P = c.L.Pmax, h = c.L.rows.length ? c.L.rows[0].h : 0;
++    if (!q) return { key: c.key, label: c.label, P, h, none: true };
++    const lp = q.loads || {}, py = q.py || {}, ck = q.checks || {};
++    const dP = num(lp.P) ? Math.abs(lp.P - P) : null, dV = num(lp.V) ? Math.abs(lp.V - h) : null, tol = v => 0.01 + 0.001 * Math.abs(v);
++    return { key: c.key, label: c.label, P, h, name: q.name, Ppd: lp.P, Vpd: lp.V, M: py.Mmax, y0: py.y0, pass: ck.pass, differs: (dP != null && dP > tol(P)) || (dV != null && dV > tol(h)) };
++  });
++  return { status, why, set, match, aci: !r.isAASHTO };
++}
++/* RWPX-ENGINE-END */
++</script>
++<script>
++/* RWPX (2026-11-07, Phase 8f) — the hand-off UI: Foundation card buttons, the send / pull dialogs, the saved record (hidden field
++   pile_pxr: saved with the project only when filled, so other projects save as before), and the stale check after each calculation
++   (rwpxCheck, called by onInputChange): while STALE, every imported input that still holds its imported value is computed with the value
++   it held before the import (the abutment's PXR2 rule), with a warning; the inputs keep showing the imported values. */
++RWLS_DEF.pile_pxr = '';   // saved only when filled; an older save has no field and opens with no record
++const RWPX = { NS: 'bridgeSuite.v1.', RID: 'retwall', MAP: { pile_Rn: 'Rn', pile_phic: 'phic', pile_Rnup: 'Rnup', pile_phiup: 'phiup' } };
++function rwpxRec() { try { const v = (document.getElementById('pile_pxr') || {}).value; return v ? JSON.parse(v) : null; } catch (e) { return null; } }
++function rwpxSent() { try { return JSON.parse(localStorage.getItem(RWPX.NS + 'foundationLoads.by.retwall') || 'null'); } catch (e) { return null; } }
++function rwpxMeta() { const sp = window.BridgeXfer && BridgeXfer.sharedProject ? BridgeXfer.sharedProject() : null; return { name: ((document.getElementById('proj_name') || {}).value || '').trim(), bridgeId: (sp && sp.bridgeId) || '' }; }
++const rwpxEsc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
++const rwpxWhen = iso => { const d = new Date(iso); if (isNaN(d)) return String(iso || '?'); const p = n => (n < 10 ? '0' : '') + n; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); };
++function rwpxCheck(inp, r) {
++  const rec = rwpxRec(); if (!rec || !r || r.fatal || !r.pile || r.pile.err) return r;
++  let cur = null; try { const b = rwpxBuild(r, rwpxMeta()); cur = b.p ? b.p.contentHash : null; } catch (e) { cur = null; }
++  const st = rwpxStatus(rec.basis || null, cur, rwpxSent());
++  let out = r;
++  if (st.status === 'stale') {
++    const fnd = Object.assign({}, inp.fnd), used = [];
++    Object.entries(rec.fields || {}).forEach(([id, v]) => { const el = document.getElementById(id), k = RWPX.MAP[id];
++      if (k && el && String(el.value) === String(v) && rec.prev && id in rec.prev) { fnd[k] = parseFloat(rec.prev[id]); used.push(id.replace('pile_', '') + ' = ' + rec.prev[id] + ' (imported ' + v + ' not used)'); } });
++    if (used.length) out = calcAll(Object.assign({}, inp, { fnd }));
++    out.warnings.push('Pile Designer results are STALE: ' + st.why + '. ' + (used.length ? 'The calculation uses the values held before the import: ' + used.join('; ') + '. Send the loads to Pile Designer again, run it, and pull the results.' : 'No imported value is in use.'));
++  }
++  out.pxr = { status: st.status, why: st.why, producedAt: rec.producedAt, fields: rec.fields || {}, cases: rec.cases || [] };
++  return out;
++}
++function rwpxPaint(r) {
++  const el = document.getElementById('pxr_status'); if (!el) return;
++  const rec = rwpxRec(), st = r && r.pxr;
++  el.innerHTML = rec ? 'Pile Designer results pulled ' + rwpxEsc(rwpxWhen(rec.producedAt)) + ': <b' + (st && st.status === 'stale' ? ' style="color:#b42318"' : '') + '>' + rwpxEsc(st ? st.status.toUpperCase() : '—') + '</b>' + (st ? ' (' + rwpxEsc(st.why) + ')' : '') + '. ' + (Object.keys(rec.fields || {}).length ? 'Imported: ' + Object.entries(rec.fields).map(([k, v]) => rwpxEsc(k.replace('pile_', '')) + ' = ' + rwpxEsc(v)).join(', ') + '.' : 'No input imported (reference only).') + ' <a href="#" onclick="rwpxClear();return false">Clear</a>' : '';
++}
++function rwpxModal(title, body, btns) {
++  const old = document.getElementById('rwpx-ov'); if (old) old.remove();
++  const ov = document.createElement('div'); ov.id = 'rwpx-ov'; ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 8px';
++  ov.innerHTML = '<div role="dialog" aria-label="' + rwpxEsc(title) + '" style="background:#fff;color:#1c2a42;max-width:760px;width:100%;border-radius:8px;padding:14px 16px;font-size:13px;line-height:1.45;box-shadow:0 8px 30px rgba(0,0,0,.3)"><div style="font-weight:700;font-size:15px;margin-bottom:6px">' + rwpxEsc(title) + '</div><div id="rwpx-body" style="overflow-x:auto">' + body + '</div><div id="rwpx-btns" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"></div></div>';
++  document.body.appendChild(ov);
++  const bx = ov.querySelector('#rwpx-btns'); btns.concat([['Cancel', () => ov.remove()]]).forEach(([t, fn]) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.textContent = t; b.onclick = fn; bx.appendChild(b); });
++  ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
++}
++const rwpxTbl = (head, rows) => '<table style="border-collapse:collapse;font-size:12px;margin:6px 0">' + '<tr>' + head.map(h => '<th style="border:1px solid #ccd;padding:2px 6px;text-align:left">' + h + '</th>').join('') + '</tr>' + rows.map(r => '<tr>' + r.map(c => '<td style="border:1px solid #ccd;padding:2px 6px">' + c + '</td>').join('') + '</tr>').join('') + '</table>';
++function rwpxSendOpen() {
++  const b = rwpxBuild(window._R, rwpxMeta()); if (b.err) { alert(b.err); return; }
++  const p = b.p, f = (v, d) => (+v).toFixed(d == null ? 2 : d);
++  const body = '<div>Channel foundationLoads (receiver: Pile Designer, "Pull from Abutment / SubLoads"; copy by.retwall), payload revision 2. '
++    + 'The wall is worked per ft; it is sent as a <b>' + f(b.seg.L, 2) + ' ft segment with ' + b.Lay.n + ' piles</b> (' + p.pileLayout.rows.map(q => 'row ' + q.row + ' at ' + f(q.xFromToe) + ' ft @ ' + f(q.spacing) + ' ft') .join(', ') + ')'
++    + (b.seg.exact ? ', a common multiple of the spacings, so Pile Designer\'s rigid-cap distribution gives the wall\'s pile loads.' : '. <b>Not a common multiple of the spacings</b> (over 120 ft): the receiver\'s distribution differs slightly from the wall\'s per-ft pile loads.') + '</div>'
++    + rwpxTbl(['Case', 'Limit state', 'Factored', 'P (kip)', 'Vx (kip)', 'My (kip-ft)'], p.cases.map(c => [rwpxEsc(c.name), rwpxEsc(c.limitState), c.factored ? 'yes' : 'no (service)', f(c.P, 1), f(c.Vx, 1), f(c.My, 1)]))
++    + '<div>Also sent: the pile layout (' + b.Lay.n + ' piles, ' + rwpxEsc(p.pileLayout.section.designation) + ', embedment ' + f(p.pileLayout.embedment, 1) + ' in, cap ' + f(p.pileLayout.cap.widthX) + ' × ' + f(p.pileLayout.cap.lengthY) + ' × ' + f(p.pileLayout.cap.thickness) + ' ft), each case\'s pile reactions, and '
++    + p.pileDesign.cases.length + ' per-pile governing loads (largest and smallest pile load per combination, lateral share h = H/N, pinned head). Content ' + p.contentHash + '.</div>'
++    + (r_isACI() ? '<div style="color:#8a5a00;margin-top:4px">ACI / IBC mode: the cases are service (ASD) loads; Pile Designer designs by LRFD. Its resistances are shown for reference when pulled back; the allowable capacities stay as entered.</div>' : '');
++  rwpxModal('Send foundation loads to Pile Designer', body, [
++    ['Send to other tools', () => { const res = BridgeXfer.publish('foundationLoads', p, 'Retaining Wall Designer', 'Retaining Wall Designer.html');
++      if (res.error) { alert(res.error); return; }
++      try { localStorage.setItem(RWPX.NS + 'foundationLoads.by.retwall', JSON.stringify(res.payload)); } catch (e) { /* storage full: the channel key holds it */ }
++      document.getElementById('rwpx-ov').remove(); onInputChange(); alert('Sent (' + rwpxWhen(res.payload.producedAt) + '). In Pile Designer: Loads & group tab, "Pull from Abutment / SubLoads".'); }],
++    ['Export hand-off (JSON)', () => { const q = Object.assign({}, p, { producedAt: new Date().toISOString(), notes: p.notes }); _downloadJSON(q, 'foundationLoads_retaining-wall.json'); }]]);
++}
++const r_isACI = () => !(window._R && window._R.isAASHTO);
++function rwpxPullOpen(res, via) {
++  if (!res) { const rd = window.BridgeXfer ? BridgeXfer.read('pileResults', 'bridge-pile-results', 1) : { error: 'no hand-off helper' }; if (rd.error) { alert('Pull pile results: ' + rd.error); return; } res = rd.payload; via = 'storage'; }
++  const r = window._R; if (!r || r.fatal || !r.pile || r.pile.err) { alert('Pull pile results: the wall has no pile results (pile-supported footing, no input errors).'); return; }
++  let cur = null; try { const b = rwpxBuild(r, rwpxMeta()); cur = b.p ? b.p.contentHash : null; } catch (e) { cur = null; }
++  const pl = rwpxPlan(r, res, cur, rwpxSent()); if (pl.err) { alert('Pull pile results: ' + pl.err); return; }
++  const f = (v, d) => (typeof v === 'number' && isFinite(v)) ? v.toFixed(d == null ? 2 : d) : '—';
++  const stc = pl.status === 'stale' ? '#b42318' : pl.status === 'current' ? '#067647' : '#8a5a00';
++  const body = '<div>From <b>' + rwpxEsc(res.producer) + '</b>, ' + rwpxEsc(rwpxWhen(res.producedAt)) + (res.project && res.project.name ? ', project ' + rwpxEsc(res.project.name) : '') + '. Status: <b style="color:' + stc + '">' + pl.status.toUpperCase() + '</b> (' + rwpxEsc(pl.why) + ').</div>'
++    + (pl.set.length ? '<div style="margin-top:6px"><b>Will change</b> (Foundation card):</div>' + rwpxTbl(['Input', 'Now', 'From Pile Designer'], pl.set.map(s => [rwpxEsc(s.label), f(s.from, 4), f(s.to, 4)]))
++      : '<div style="margin-top:6px">No input will change' + (pl.aci ? ' (ACI / IBC mode: the allowable capacities stay as entered; Pile Designer\'s LRFD values are kept for reference)' : pl.status === 'other' ? '' : ' (no static resistance in the results)') + '.</div>')
++    + (pl.status === 'stale' ? '<div style="color:#b42318">While STALE the calculation keeps the values held before the import (the imported values are shown but not used).</div>' : '')
++    + '<div style="margin-top:6px"><b>Per combination</b> (the wall\'s pile check vs the case Pile Designer ran; reference only: the lateral resistance H_r stays as entered):</div>'
++    + rwpxTbl(['Combination', 'P wall (kip)', 'h wall (kip)', 'Pile Designer case', 'P', 'V', 'M_max p-y (kip-ft)', 'Checks'], pl.match.map(m => [rwpxEsc(m.label), f(m.P, 1), f(m.h, 2), m.none ? '<i>not run</i>' : rwpxEsc(m.name) + (m.differs ? ' <b style="color:#b42318">(loads differ)</b>' : ''), f(m.Ppd, 1), f(m.Vpd, 2), f(m.M, 1), m.none ? '' : m.pass === true ? 'pass' : m.pass === false ? '<b style="color:#b42318">fail</b>' : '—']));
++  rwpxModal('Pull pile results from Pile Designer', body, [['Import', () => {
++    const rec = { producer: res.producer, producerFile: res.producerFile, producedAt: res.producedAt, via: via || 'storage', adoptedAt: new Date().toISOString(),
++      basis: res.basis ? { producer: res.basis.producer, producedAt: res.basis.producedAt, contentHash: res.basis.contentHash || null, target: res.basis.target || null } : null,
++      statusAtImport: pl.status, fields: {}, prev: {}, geo: (res.geotechnical && res.geotechnical.static) ? (({ Rn, phi, RnUp, phiUp, toeDepth }) => ({ Rn, phi, RnUp, phiUp, toeDepth }))(res.geotechnical.static) : null,
++      fixity: res.fixity ? { Lf: res.fixity.Lf } : null, cases: pl.match.filter(m => !m.none).map(m => ({ key: m.key, name: m.name, P: m.Ppd, V: m.Vpd, M: m.M, pass: m.pass })) };
++    pl.set.forEach(s => { const el = document.getElementById(s.id); if (!el) return; rec.prev[s.id] = el.value; el.value = String(s.to); rec.fields[s.id] = el.value; });
++    document.getElementById('pile_pxr').value = JSON.stringify(rec);
++    if (via !== 'file' && window.BridgeXfer) BridgeXfer.markAdopted('pileResults', RWPX.RID, res.producedAt);
++    document.getElementById('rwpx-ov').remove(); onInputChange(); }]]);
++}
++function rwpxImportFile(inpEl) {
++  const fl = inpEl.files && inpEl.files[0]; if (!fl) return; const rd = new FileReader();
++  rd.onload = () => { inpEl.value = ''; let p; try { p = JSON.parse(rd.result); } catch (e) { alert('Import pile results: not a JSON file.'); return; } rwpxPullOpen(p, 'file'); };
++  rd.readAsText(fl);
++}
++function rwpxClear() { const el = document.getElementById('pile_pxr'); if (!el || !el.value) return; if (!confirm('Clear the Pile Designer results record? The imported input values stay as they are.')) return; el.value = ''; onInputChange(); }
++</script>
+```
+
+## 2026-11-07 — PR: claude/pile-m7-group-handoff (PR #1050: https://github.com/mlococo88/All-Structural/pull/1050) (PDA-M7) — pile results import: Pile Designer's group reduction applied to R_n and R_n,up   [imported value change with a group]
+- **Problem (Pile Designer review M7):** `rwpxPlan` set `pile_Rn` / `pile_Rnup` to the single-pile static resistance even when Pile Designer's group efficiency or block governs.
+- **Where:** `rwpxPlan` (RWPX engine block).
+  - New `G`, `grR` (`res.group.reduce` when < 1) and `grU` (`res.group.uplift.reduceUp` when < 1).
+  - Before: `to: g.Rn` and `to: g.RnUp`. After: `to: g.Rn * grR` and `to: g.RnUp * grU`, with the labels stating the factor.
+  - The plan also returns `group: { reduce, reduceUp, eta, blockGoverns }` (or null).
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 10.7.3.9 / 10.9.3.6, 10.7.3.11 / 10.9.3.8 (through Pile Designer's Module 11). No wall formula changed.
+- **Check case** (`tests/engine/handoffs.test.mjs`, "PDA-M7 pileResults group"): static R_n 400, R_n,up 150, `reduce` 0.8, `reduceUp` 0.6.
+  - `pile_Rn` = **320**, `pile_Rnup` = **90**; φ unchanged.
+  - Without `group`, or with `reduce` 1: 400 / 150 as before.
+- **How verified:** handoffs tests 10 pass; `tests/smoke/retwall-pile-handoff.mjs` all passed; `check-syntax`: pass.

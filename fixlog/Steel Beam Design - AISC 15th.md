@@ -2546,3 +2546,240 @@ function sectionFor(fam,label,gradeId){
 - **Why:** #891 took Save and Saved projects… out of the header; `steel-beam-builtup.mjs` opened saved projects through the header's Saved projects… (`[data-sp=hlib]`).
 - **What:** `openP()` clicks the chip (Project tab) and then the card's Saved projects… (`#sbSaveCard [data-sp=lib]`). Nothing else changed.
 - **How verified:** `node tests/smoke/steel-beam-builtup.mjs`: 11 checks passed. **Saved data / formulas:** none (test file only).
+
+## 2026-11-07 — PR: claude/steelbeam-h1-j10-sum (PR #1006: https://github.com/mlococo88/All-Structural/pull/1006) — J10 demand at a point load is the total factored force at that location (H1; calculation change)
+
+From the code-compliance review of 2026-11-07 (finding H1). Engineer-approved overnight job, merge-as-you-go.
+
+### H1. Point loads at one location are one J10 location; R_u = Σ γ·P   [calculation change, more conservative]
+- **Problem:** `designAll` made one J10 location per point-load entry. A load entry carries one load case, so a dead and a live point load at the same place were two locations, each checked with its own factored load only. In a combination the web sees their sum. Unconservative wherever two or more point loads share an x.
+- **Governing provision:** AISC 360-16 §J10.2 (web local yielding) and §J10.3 (web local crippling): R_u is the required strength of the concentrated force at the location (Specification §B3.1 with the ASCE 7-16 §2.3.1 combination, so the factored sum of every load acting there).
+- **Where (1):** `designAll`, block `/* J10 locations (I & C only) */`, anchor `locs.push({kind:'load',label:'point load '+(ld.nm||'')`.
+- **Before:**
+```js
+    S.loads.forEach(ld=>{
+      if(ld.off||ld.type!=='point')return;
+      const si=Math.min(ld.si||0,S.geom.spans.length-1);
+      locs.push({kind:'load',label:'point load '+(ld.nm||''),x:nX[si]+Math.max(0,Math.min(S.geom.spans[si].L,ld.pos||0)),load:ld,lb:dsn.lbPt});
+    });
+```
+- **After:** point loads whose global x agree within 1e-6 ft (any load case; loads in the two spans at a shared node too) join one location; the label of a grouped location names every load and the x.
+```js
+    S.loads.forEach(ld=>{
+      if(ld.off||ld.type!=='point')return;
+      const si=Math.min(ld.si||0,S.geom.spans.length-1);
+      const x=nX[si]+Math.max(0,Math.min(S.geom.spans[si].L,ld.pos||0));
+      const g=locs.find(l=>l.kind==='load'&&Math.abs(l.x-x)<=1e-6);
+      if(g){g.loads.push(ld);g.label='point loads '+g.loads.map(q=>q.nm||q.lc).join(' + ')+' (x = '+fmt(x,2)+' ft)';}
+      else locs.push({kind:'load',label:'point load '+(ld.nm||''),x,load:ld,loads:[ld],lb:dsn.lbPt});
+    });
+```
+- **Where (2):** `designAll`, block `/* J10 demands */`, anchor `let terms=null;` (was `const fk=cb.f[lo.load.lc]||0;`).
+- **Before:**
+```js
+        else{const fk=cb.f[lo.load.lc]||0;const P=lo.load.mag*fk;dem=P>0?P:null;}
+        const r={label:lo.label,x:lo.x,dem,lb:lo.lb,endDist:lo.endDist};
+```
+- **After:**
+```js
+        let terms=null;
+        if(lo.kind==='load'){terms=lo.loads.map(q=>({nm:q.nm||'',lc:q.lc,f:cb.f[q.lc]||0,mag:q.mag||0})).filter(t=>t.f&&t.mag);
+          const P=terms.reduce((s,t)=>s+t.f*t.mag,0);dem=P>0?P:null;}
+        const r={label:lo.label,x:lo.x,dem,lb:lo.lb,endDist:lo.endDist};
+        if(terms&&lo.loads.length>1)r.terms=terms;
+```
+  A location with one load gives exactly the old demand (one term, same product). A net upward sum still gives no demand (as before for one upward load).
+- **Where (3), display (§6 show the work):** `buildJ10Tab`, per-combination section, after `body.appendChild(t);`, anchor `/* H1: worked demand where several point loads act at one location */`. For a grouped location the tab adds the line R_u at <location> = Σ γ·P = γ₁·P₁ (name, case) + … = R_u kip.
+- **Check case (AISC Design Examples v16.0, Example J.7 geometry):** W24X55 A992, 20 ft simple span, no tributary load, P_D = 15 kip and P_L = 30 kip both at 8 ft, l_b = 7.5 in at the point load, combination 1.2D + 1.6L + 0.5S.
+  - R_n WLY (J10-2, interior) = F_y t_w (5k + l_b) = 50 × 0.395 × (5 × 1.01 + 7.5) = 247.9 kip, φ = 1.00.
+  - R_n WLC (J10-4) = 282.0 kip, φR_n = 0.75 × 282.0 = 211.5 kip.
+  - **Before:** two locations; governing demand 1.6 × 30 = 48 kip; WLY DCR 48/247.9 = **0.194**, WLC DCR 48/211.5 = **0.227**.
+  - **After:** one location; R_u = 1.2 × 15 + 1.6 × 30 = 66 kip (Example J.7 uses 66 kip); WLY DCR 66/247.9 = **0.266**, WLC DCR 66/211.5 = **0.312**.
+- **How verified:** headless Chromium, `file://`, origin/main vs this branch on 11 scenarios (default, 2-span W16X26, J.7 two loads at one x, J.7 loads at different x, built-up, G.8B, W8X67 torsion, axial, cantilever, HSS, member mode) and the v16 engine cases: only the J.7 two-loads scenario moved (its point-load row, every combination; supports unchanged). Kit: check-syntax, steel-beam-builtup (11/11), project-library steelbeam, phone-layout sbeam, list-input sbeam: all pass; 0 console errors.
+- **Saved data:** none changed (no key, no field; the grouping is computed).
+- **Other copies:** batch mode and member mode take a user-entered R (unchanged).
+
+## 2026-11-07 — PR: claude/steelbeam-h3-builtup-h (PR #1012: https://github.com/mlococo88/All-Structural/pull/1012) — Built-up I-shape: h = d − 2t_f and the minor-axis / torsion constants from the plates; warning for every property still the parent shape's (H3 part 1; calculation change)
+
+From the code-compliance review of 2026-11-07 (finding H3). The plate-girder input mode (every property from the plates) is a separate PR.
+
+### H3-1. Built-up: plate-derived defaults for properties not entered   [calculation change, more conservative in the check case]
+- **Problem:** with **Built-up** ticked and the plate geometry entered as overrides, every property not entered kept the parent rolled shape's value, with no warning. The clear web height h stayed the rolled T-distance (backed out of the tabulated h/t_w), so h/t_w, the web class, k_c, C_v1, a_w, R_pg and R_pc used the wrong h. J, C_w, r_ts, r_y, I_y, h_o, S_y, Z_y also stayed the parent's, so LTB, E4 and minor-axis flexure were for another section.
+- **Governing provision:** AISC 360-16 Table B4.1b (note on h: for built-up sections, the clear distance between flanges, h = d − 2t_f for welded plates); §G2.1(b); §F4, §F5; §F2.2 Eq. F2-7 and its User Note (C_w = I_y h_o²/4 for doubly symmetric I-shapes).
+- **Where (1):** `resolveSection`, Tier 2 block, after anchor `if(src.hClear!=='ovr')p.hClear=hDb;`.
+- **Before:**
+```js
+    if(src.hClear!=='ovr')p.hClear=hDb;
+    p.htw=(p.hClear!=null&&p.tw)?p.hClear/p.tw:db.htw;
+```
+- **After:** (I-shapes with `S.section.builtUp`; any value the user entered is kept)
+```js
+    if(src.hClear!=='ovr')p.hClear=hDb;
+    if(kind==='I'&&p._built&&p.d>0&&p.bf>0&&p.tf>0&&p.tw>0){
+      const hw=p.d-2*p.tf,Apl=2*p.bf*p.tf+hw*p.tw,pl={};
+      pl.hClear=hw;pl.ho=p.d-p.tf;
+      pl.Iy=2*p.tf*Math.pow(p.bf,3)/12+hw*Math.pow(p.tw,3)/12;
+      pl.Sy=pl.Iy/(p.bf/2);pl.Zy=p.bf*p.bf*p.tf/2+hw*p.tw*p.tw/4;
+      pl.ry=Math.sqrt(pl.Iy/(src.A==='ovr'?p.A:Apl));
+      pl.J=(2*p.bf*Math.pow(p.tf,3)+hw*Math.pow(p.tw,3))/3;
+      pl.Cw=pl.Iy*pl.ho*pl.ho/4;
+      ['hClear','ho','Iy','Sy','Zy','ry','J','Cw'].forEach(k=>{if(src[k]!=='ovr'){p[k]=pl[k];src[k]='plates';}});
+      if(src.rts!=='ovr'&&p.Sx>0){p.rts=Math.sqrt(Math.sqrt(p.Iy*p.Cw)/p.Sx);src.rts='plates';}
+    }
+    p.htw=(p.hClear!=null&&p.tw)?p.hClear/p.tw:db.htw;
+```
+- **Where (2):** `sectionWarnings`, after the Z_x consistency check, anchor `/* H3: a built-up section whose plate geometry was entered`. When Built-up is ticked and any of d, b_f, t_f, t_w is entered, a warning lists every property still taken from the parent shape (A, I_x, S_x, Z_x, r_x, k_des, Q_f, Q_w, W_no, S_w1, Wt), with the plate value beside A, I_x, S_x, Z_x and r_x.
+- **Where (3), display:** `buildSectionTab`: source column "built-up: from the plates", and a worked block (equation → values → result) for each property computed from the plates, anchor `/* H3: worked plate properties of a built-up I-shape`.
+- **Check case:** base W24X55, Built-up ticked, A572 Gr. 50; entered d 30, b_f 10, t_f 0.75, t_w 0.3125, A 22.97, I_x 3480, S_x 232, Z_x 282.8; 20 ft simple span, default loads with LL 80 psf.
+  - **Before:** h = 21.57 in (from W24X55), h/t_w = 69.0 (web compact, F2), C_v1 = 1.10√(5.34 × 29000/50)/69.0 = 0.887, **φV_n = 224.5 kip**; φM_n = 1060.5 kip-ft (F2); r_y 1.34, J 1.18, C_w 3870 (W24X55).
+  - **After:** h = 30 − 2(0.75) = 28.5 in, h/t_w = 91.2 > λ_p 90.55 (web noncompact, F4); C_v1 = 1.10 × 55.65/91.2 = 0.671; **φV_n = 0.9 × 0.6 × 50 × (30 × 0.3125) × 0.671 = 169.9 kip**; φM_n = 1057.9 kip-ft (F4); I_y = 2(0.75)(10³)/12 + 28.5(0.3125³)/12 = 125.07 in⁴, r_y = √(125.07/22.97) = 2.334 in, J = (2 × 10 × 0.75³ + 28.5 × 0.3125³)/3 = 3.10 in⁴, h_o = 29.25 in, C_w = 125.07 × 29.25²/4 = 26 752 in⁶, r_ts = √(√(125.07 × 26 752)/232) = 2.808 in.
+  - The warning lists r_x 9.11 (plates 12.63), k_des, Q_f, Q_w, W_no, S_w1 and Wt 55 lb/ft as parent values.
+- **How verified:** headless Chromium, `file://`, origin/main vs branch, the 11 scenarios of H1 plus the v16 engine cases: only the built-up scenario moved (shear 224.5 → 169.9, flexure 1060.5 → 1057.9 F2 → F4, interaction). The v16 built-up cases (E.2, E.3, F.14, G.8A/B) enter h and their properties, so they are unchanged. Kit: check-syntax, steel-beam-builtup 11/11, project-library steelbeam, phone-layout sbeam, list-input sbeam: pass; 0 console errors.
+- **Saved data:** no key or field changed. A saved project with Built-up ticked now opens with the plate-derived h and constants for the properties it did not enter; its entered values are untouched.
+- **Decision (pending engineer review):** no migration that keeps the old (parent-shape) values for saved built-up projects: the old values were the wrong section and unconservative in the check case. The properties listed in the warning (A, I_x, S_x, Z_x, r_x, k, Q, W_no, S_w1, Wt) are not replaced, only flagged, because the user may have entered the welded values on purpose elsewhere; the plate-girder input mode (next PR) computes all of them.
+- **Open items:** singly symmetric built-up girders are not modelled (top and bottom flanges are the same plates here).
+
+## 2026-11-07 — PR: claude/steelbeam-h3-plate-girder (PR #1017: https://github.com/mlococo88/All-Structural/pull/1017) — Plate-girder input: every built-up I-shape property computed from the plates (H3 part 2; new option, default off)
+
+From the code-compliance review of 2026-11-07 (finding H3, the plate-girder builder). Follows H3 part 1 (#1012).
+
+### H3-2. "Plate girder: every property from the plates"   [new option; no result change unless ticked]
+- **Problem:** after H3-1, a built-up section still took A, I_x, S_x, Z_x, r_x, k, Q_f, Q_w, W_no, S_w1 and Wt from the parent rolled shape unless each was typed in (flagged by the H3-1 warning).
+- **Governing provision:** section properties of three welded plates (doubly symmetric; welds neglected): AISC 360-16 Table B4.1b note on h; §F2.2 Eq. F2-7; §J10.2 (k for welded sections = flange face to weld toe); AISC Design Guide 9 (1997), torsional properties of a doubly symmetric I-shape: W_no = b_f h_o/4, S_w1 = t_f b_f² h_o/16.
+- **Where (1):** `resolveSection`, inside the H3-1 block, anchor `/* H3-2 (2026-11-07): plate-girder input (S.section.plates)`. When `S.section.plates` is true (new field), every property not entered is computed:
+```js
+      if(S.section.plates){
+        const Ixp=p.bf*(Math.pow(p.d,3)-Math.pow(hw,3))/12+p.tw*Math.pow(hw,3)/12,pg={A:Apl,Ix:Ixp,Sx:Ixp/(p.d/2),
+          Zx:p.bf*p.tf*(p.d-p.tf)+p.tw*hw*hw/4,kdes:p.tf,
+          Qf:(p.bf-p.tw)/2*p.tf*(p.d-p.tf)/2,Qw:p.bf*p.tf*(p.d-p.tf)/2+p.tw*hw*hw/8,
+          Wno:p.bf*(p.d-p.tf)/4,Sw1:p.tf*p.bf*p.bf*(p.d-p.tf)/16,Wt:Apl*490/144};
+        ['A','Ix','Sx','Zx','kdes','Qf','Qw','Wno','Sw1','Wt'].forEach(k=>{if(src[k]!=='ovr'){p[k]=pg[k];src[k]='plates';}});
+        if(src.rx!=='ovr'){p.rx=Math.sqrt(p.Ix/p.A);src.rx='plates';}
+      }
+```
+  (Q_f and Q_w follow the AISC shapes database definitions: Q_f at the flange over the web face, Q_w at mid-depth; checked on W8X67: 14.53 / 34.84 vs database 14.5 / 34.8.)
+- **Where (2), UI:** Section & Material input, below Built-up (shown for I-shape families with Built-up ticked), anchor `/* H3-2: plate-girder input`. Override placeholders show the computed value for a property from the plates (anchor `/* H3: computed value shown for a built-up */`).
+- **Where (3), display:** the Section Properties worked block (H3-1) also shows A, I_x, S_x, Z_x, r_x, k, Q_f, Q_w, W_no, S_w1, Wt.
+- **Check case (AISC Design Examples v16.0, Example F.14):** Plate girder ticked, A572 Gr 50, d 66, b_f 14, t_f 2, t_w 0.5 (nothing else entered).
+  - A = 2(14)(2) + 62(0.5) = 87.0 in²; I_x = 14(66³ − 62³)/12 + 0.5(62³)/12 = 67 293 in⁴ (F.14: 67 300); S_x = 2039 in³ (2040); Z_x = 14(2)(64) + 0.5(62²)/4 = 2272.5 in³ (2270); I_y = 915.3 in⁴ (915); J = 77.25 in⁴; h_o 64; r_ts 3.79 in; Wt 296 lb/ft.
+  - φM_n (L_b 150 in, C_b 1.25, F4) = 7895.5 kip-ft (F.14: 7880, +0.2 %); φV_n (a = 298 in) = 439.9 kip (F.14: 440).
+- **Decision (pending engineer review):** k defaults to t_f (no weld leg) in plate-girder mode; it lowers R_n in J10.2 and J10.3, so it is conservative; the user enters k = t_f + weld size to count the weld. Only doubly symmetric girders (equal flanges).
+- **How verified:** origin/main vs branch, the 11 earlier scenarios and the v16 engine cases: identical (option off). A new plate-girder scenario (F.14 plates, 60 ft span) moves as expected (properties from the plates, self-weight 296 lb/ft). UI: the checkbox appears with Built-up, sets `section.plates`, worked lines shown. Kit: check-syntax, steel-beam-builtup 11/11, project-library steelbeam, phone-layout sbeam, list-input sbeam: pass; 0 console errors.
+- **Saved data:** new optional field `section.plates` in the saved state (absent = off, so every saved project opens as before). No key changed.
+
+## 2026-11-07 — PR: claude/steelbeam-h2-h33-stations (PR #1023: https://github.com/mlococo88/All-Structural/pull/1023) — §H3.3 open-section torsion checked at every station, per element (flange tip, flange, web), with V(z) and M(z); web shear by VQ/It (H2; calculation change)
+
+From the code-compliance review of 2026-11-07 (finding H2).
+
+### H2. h33Check at every torsion station   [calculation change; more conservative in the check cases]
+- **Problem:** `h33Check` took the torsional stresses at one station, `tor.crit`, picked by a torsion-only criterion (midspan for a midspan torque on fork supports, where θ′ = 0). The support, where the St-Venant shear and the flexural shear are both largest, was never checked. The web's flexural shear was the average V/(d t_w), not VQ_w/(I_x t_w), and the St-Venant shear G·max(t_f,t_w)·θ′ (the flange value) was added to it. The moment was the governing region's largest moment, not M at the station.
+- **Governing provision:** AISC 360-16 §H3.3 (stresses combined at the same point; (a) yielding under normal stress φF_y, (b) shear yielding φ0.6F_y, (c) buckling); AISC Design Guide 9 (1997) Eqs. 4.1 (τ_t = Gtθ′), 4.3a (σ_w), 4.3b (τ_w), 4.5 (M/S), 4.6 (VQ/It). Example H.6 (v16) checks midspan and support separately.
+- **Where (1):** `h33Check` replaced, anchor `/* ---- §H3.3 combination with the other member demands ----`.
+- **Before (core):**
+```js
+  const fbx=(Math.abs(dem.Mux||0)*12)/p.Sx;
+  const fvx=(Math.abs(dem.Vux||0))/(p.d*p.tw);
+  const s=tor.crit;
+  const sigW=kT*Math.abs(s.sigW),tauT=kT*Math.abs(s.tauT),tauW=kT*Math.abs(s.tauW);
+  const fn=fa+fbx+fby+sigW;
+  const fv=fvx+fvy+tauT+tauW;
+```
+- **After (core):** for every station z of `tor.st` (201 points), with {V, M} = `dem.vm(z)` (or the constant |V_ux|, |M_ux| when `vm` is absent):
+```js
+    const fbx=M*12/p.Sx,sigW=kT*Math.abs(s.sigW),fn=fa+fbx+fby+sigW;                       // flange tip, normal
+    const fbF=V*Qf/(p.Ix*p.tf),tTf=kT*Math.abs(G*p.tf*th1),tW=kT*Math.abs(s.tauW),fvF=fbF+fvy+tTf+tW;  // flange, shear
+    const fbW=V*Qw/(p.Ix*p.tw),tTw=kT*Math.abs(G*p.tw*th1),fvW=fbW+tTw;                    // web, shear
+```
+  and each is maximised over z: f_n (governing z_N), f_v = max(f_vf, f_vw) (governing z_V and element). DCR_N = f_n/(0.9F_y), DCR_V = f_v/(0.9·0.6F_y), unchanged; §H3.3(c) buckling (`h33Buckling`) uses the stresses of the governing normal station, unchanged. Q_f, Q_w from the section (database or plates); if missing, from the idealised plates.
+- **Where (2):** `designAll`, per combination, anchor `/* H2: V(z), M(z) of this combination when the torsional span is the whole analysed beam`. `vm(z) = evalVM(z/12, cb.R, cb.f)` when the torsional span equals the analysed beam length (z = x); otherwise (an entered torsional span differing from the beam, e.g. one span of a continuous beam) the combination's |V|max and |M|max act at every station (conservative envelope). Member and batch modes pass the entered V_ux, M_ux (constant at every station, as before for M).
+- **Where (3):** `buildDesignChecks`, the summary detail names the element and the governing z of the governing stress. Torsion tab: a note on the stations and Q values, the normal-stress block with its z and M(z), and a shear block with the flange and web lines each at its own z (anchor `/* H2: every station checked`). Old print-report note text updated.
+- **Decision (pending engineer review):** where the torsional span is not the analysed beam, the largest |V| and |M| of the combination are combined with the torsional stresses at every station (envelope, conservative), as no mapping of torsion z to beam x is defined.
+- **Check case 1 (review case):** W8X67 A992 (I_x 272, t_w 0.570, t_f 0.935, Q_w 34.8, Q_f 14.5), 30 ft simple span, fork supports (`conc_pp`), T_u = 10 kip-ft at midspan, 80 kip DL point loads at 1 ft and 29 ft, self-weight, combination 1.2D + 1.6L + 0.5S.
+  - **Before:** station z = 180 in; f_n = 39.78 ksi, f_v = 20.39 ksi; **DCR 0.884 PASS**.
+  - **After:** support z = 0, V = 97.21 kip, Gθ′ = 11.85 ksi/in: web f_v = 97.21 × 34.8/(272 × 0.570) + 11.85 × 0.570 = 21.82 + 6.75 = 28.57 ksi; 28.57/27.0 = **1.058 FAIL** (flange 16.63 ksi; normal 39.78 ksi at midspan, unchanged).
+  - Combination 1.4D governs: **0.961 → 1.193** (web at the support, 32.21 ksi).
+- **Check case 2 (AISC Design Examples v16.0, H.6):** W10X49 A992, 15 ft, P_u = 1.2(2.5) + 1.6(7.5) = 15 kip and T_u = 90 kip-in at midspan, fork supports, no self-weight.
+  - **Before:** f_v = 3.49 ksi at midspan.
+  - **After:** flange at the support = 0.630 + 10.07 + 0.56 = **11.26 ksi** (H.6: 11.4 ksi, chart-read θ′ = 0.28); web at the support 8.53 ksi; f_n = 40.89 ksi at midspan (H.6: 40.4, chart-read θ″), unchanged.
+- **Check case 3 (member mode):** W8X67, M_ux 100 kip-ft, V_ux 60 kip, same torsion: f_v 13.14 → 20.22 ksi (web at the support).
+- **How verified:** origin/main vs branch on the 13 earlier scenarios plus H.6 and a member-mode torsion case: only the torsion scenarios moved (torsion, plates, h6, memtor), in the §H3.3 shear values; f_n identical in every case; every other check identical; v16 engine cases identical. Torsion tab renders with 0 KaTeX errors. Kit: check-syntax, steel-beam-builtup 11/11, project-library steelbeam, phone-layout sbeam, list-input sbeam: pass; 0 console errors.
+- **Note:** for a section where the old average-shear value mixed with the flange St-Venant stress exceeded both new element sums at the same station, the new value can be lower; it is the DG 9 value per element.
+- **Saved data:** none changed.
+
+## 2026-11-07 — PR: claude/steelbeam-m1-stiffener-ist (PR #1028: https://github.com/mlococo88/All-Structural/pull/1028) — Transverse stiffener I_st per AISC 360-16 Eq. G2-13 (with I_st1 and ρ_w) (M1; calculation change, requirement display)
+
+From the code-compliance review of 2026-11-07 (finding M1).
+
+### M1. Minimum stiffener moment of inertia   [calculation change, more conservative]
+- **Problem:** `stiffenerReq` gave I_st ≥ j b t_w³ (j = 2.5/(a/h)² − 2 ≥ 0.5) only, the AISC 360-10 form, presented as the §G2.3 requirement. AISC 360-16 §G2.3(e) requires I_st ≥ I_st2 + (I_st1 − I_st2)ρ_w, which is larger whenever V_r > V_c2. The value is a displayed requirement (no DCR uses it).
+- **Governing provision:** AISC 360-16 §G2.3(e), Eqs. G2-13, G2-14, G2-15, with V_c1 (§G2.1), V_c2 (0.6F_y A_w C_v2, C_v2 per Eqs. G2-9 to G2-11), ρ_st, ρ_w and b_p as defined there.
+- **Where (1):** `stiffenerReq`, anchor `/* M1 (2026-11-07): AISC 360-16 Sec. G2.3(e), Eq. G2-13`.
+- **Before:**
+```js
+function stiffenerReq(p,stiff){
+  ...
+  return{j,b,ah,Ist:b*Math.pow(p.tw,3)*j,btLim:0.56*SQ(EKSI/p.mat.Fy)};
+}
+```
+- **After:** `stiffenerReq(p,stiff,Vr,sh)` returns I_st2 (old value), I_st1 = h⁴ρ_st^1.3/40·(F_yw/E)^1.5, V_c1 = φV_n (the stiffened §G2.1 strength `sh`), V_c2 = φ·0.6F_y A_w C_v2 (`cv2Of` with the stiffened k_v), ρ_w = max(0, (V_r − V_c2)/(V_c1 − V_c2)), and I_st = I_st2 + (I_st1 − I_st2)ρ_w. Without a shear demand, I_st = max(I_st1, I_st2) (the User Note's conservative I_st1).
+- **Where (2):** `stiffBlock`, anchor `const Vr=(D&&D.perCombo`: V_r = the largest |V_u| of the combinations (cases in member mode); the worked block shows G2-15, G2-14, V_c2, V_c1, ρ_w and G2-13 with values.
+- **Decision (pending engineer review):** V_r is the largest V_u anywhere (one spacing is entered for the whole member, so every panel is taken at the worst shear: conservative). F_yst is taken equal to F_yw (ρ_st = 1.0), as the tool has no stiffener material input. ρ_w is not capped at 1.0 (a panel with V_r > V_c1 fails in shear anyway).
+- **Check case (AISC Design Examples v16.0, G.8B end panel):** built-up d 36, b_f 16, t_f 1.5, t_w 5/16, h 33, A572 Gr 50, a = 42 in, V_r = 210 kip.
+  - a/h = 1.273, k_v = 8.09; φV_c1 = 216.7 kip; C_v2 = 1.51 k_v E/((h/t_w)² F_y) = 0.635 (G2-11), φV_c2 = 0.9 × 0.6 × 50 × 11.25 × 0.635 = 192.9 kip; ρ_w = (210 − 192.9)/(216.7 − 192.9) = 0.719.
+  - I_st2 = 0.5 × 33 × 0.3125³ = 0.504 in⁴; I_st1 = 33⁴/40 × (50/29000)^1.5 = 2.123 in⁴.
+  - **Before:** I_st = **0.504 in⁴**. **After:** 0.504 + (2.123 − 0.504) × 0.719 = **1.667 in⁴**.
+- **How verified:** engine call on G.8B (above); V_x tab renders the block with 0 KaTeX errors. origin/main vs branch on 15 scenarios + v16 engine cases: every check identical (no DCR uses I_st). Kit: check-syntax, steel-beam-builtup 11/11, project-library steelbeam, phone-layout sbeam, list-input sbeam: pass; 0 console errors.
+- **Saved data:** none changed.
+
+## 2026-11-07 — PR: claude/steelbeam-m2-f13-proportions (PR #1039: https://github.com/mlococo88/All-Structural/pull/1039) — §F13.2 proportioning limits checked for built-up I-shapes and slender webs (M2; new check)
+
+From the code-compliance review of 2026-11-07 (finding M2).
+
+### M2. Proportioning limits (§F13.2)   [new check row; more conservative]
+- **Problem:** the tool did not check the §F13.2 limits. A girder outside them (very slender web, too small a compression flange) was designed as if Chapters F and G applied. `flexMajorIC` caps a_w at 10 in R_pg without saying that a_w > 10 is outside the limits.
+- **Governing provision:** AISC 360-16 §F13.2: for slender webs (h/t_w > λ_r = 5.70√(E/F_y), Table B4.1b case 15), (h/t_w)max = 12.0√(E/F_y) for a/h ≤ 1.5 (Eq. F13-3) and 0.40E/F_y for a/h > 1.5 (Eq. F13-4); unstiffened girders h/t_w ≤ 260; web area to compression flange area ≤ 10. Eq. F13-2 (I_yc/I_y) is for singly symmetric members, which the tool does not model.
+- **Where (1):** new `f13Prop(p)`, anchor `/* M2 (2026-11-07): AISC 360-16 Sec. F13.2 proportioning limits`, just before `stiffenerReq`.
+- **Where (2):** `buildDesignChecks`, anchor `/* M2: Sec. F13.2 proportioning limits (geometry only; no combination) */`: a check row "Proportioning limits [F13.2]", DCR = the largest ratio value/limit, tab Section Properties.
+- **Where (3):** `buildSectionTab`, a section "Proportioning Limits (§F13.2)" before Resolved Properties, anchor `/* M2: Sec. F13.2 proportioning limits, worked */`: h/t_w and λ_r substituted, each limit with its value, limit, ratio and status.
+- **Before:** no check. **After:** for built-up I-shapes (any web) and any I-shape with a slender web.
+- **Decision (pending engineer review):** the 260 limit (unstiffened) and the a_w ≤ 10 limit are applied to every built-up I-shape, not only to slender webs (the paragraph that states them follows the slender-web limits; for a nonslender web they rarely govern). An unstiffened slender web is checked against Eq. F13-4 as well as 260 (no stiffeners, so a/h > 1.5).
+- **Check case:** built-up (plate girder) h = 60 in, t_w = 3/16, b_f 16, t_f 1.5, unstiffened, F_y 50.
+  - h/t_w = 60/0.1875 = 320 > λ_r = 5.70√(29000/50) = 137.3 → slender.
+  - F13-4: 0.40 × 29000/50 = 232 → 320/232 = **1.379 FAIL**; 260 limit: 320/260 = 1.231 FAIL; a_w = 60 × 0.1875/(16 × 1.5) = 0.47 OK.
+  - **Before:** no flag (the F5 / G2 results shown). **After:** Proportioning limits DCR **1.379 FAIL**.
+  - Review built-up case (d 30, b_f 10, t_f 0.75, t_w 0.3125, unstiffened): h/t_w 91.2 ≤ 137.3 (not slender), 91.2/260 = 0.351 OK. G.8B (a = 42 in): a_w = 33 × 0.3125/(16 × 1.5) = 0.430, 0.043 OK.
+- **How verified:** origin/main vs branch on 16 scenarios + v16 engine cases: the new row appears only for built-up sections (builtup, g8, plates, f13bad); every other check identical in all scenarios. Summary, Section Properties and Report show the row; 0 console errors. Kit: check-syntax, steel-beam-builtup 11/11, project-library steelbeam, phone-layout sbeam, list-input sbeam: pass.
+- **Saved data:** none changed.
+
+## 2026-11-07 — PR: claude/steelbeam-m4-b1 (PR #1045: https://github.com/mlococo88/All-Structural/pull/1045) — Beam mode with axial compression: M_ux amplified by B1 (Appendix 8) in the §H1 interaction (M4; calculation change)
+
+From the code-compliance review of 2026-11-07 (finding M4).
+
+### M4. B1 amplification of the analysis moment   [calculation change, more conservative]
+- **Problem:** in beam mode M_ux comes from the tool's first-order analysis and P_u is entered per combination. H1 used the first-order moment; the user cannot amplify the analysis moment, so P-δ was never included.
+- **Governing provision:** AISC 360-16 §C1 (second-order effects) and Appendix 8: Eq. A-8-3 B1 = C_m/(1 − αP_r/P_e1) ≥ 1, α = 1.0 (LRFD); §8.2.1(b) C_m = 1.0 (transverse loading between supports, conservative); Eq. A-8-5 P_e1 = π²EI*/L_c1², EI* = EI for the effective length method.
+- **Where (1):** `designAll`, per combination, block `/* interaction */`, anchor `/* M4 (2026-11-07): beam mode with axial compression`.
+- **Before:**
+```js
+    const rx=C.flexGov?C.flexGov.dcr:0;
+```
+- **After:**
+```js
+    let rx=C.flexGov?C.flexGov.dcr:0;
+    if(man.Pu>0&&C.phiPn>0&&D.Lcx>0&&p.Ix>0){
+      const Pe1=Math.PI*Math.PI*EKSI*p.Ix/(D.Lcx*D.Lcx),Cm=1.0,den=1-1.0*man.Pu/Pe1;
+      const B1=den>0?Math.max(1,Cm/den):Infinity;
+      C.B1={B1,Pe1,Cm,Lc1:D.Lcx,Pr:man.Pu,rx0:rx,Ix:p.Ix};
+      rx=rx*B1;
+      if(!isFinite(B1))D.warns.push(/* P_u >= P_e1: unstable in the plane of bending */);
+    }
+```
+  rx feeds H1-1a / H1-1b and H3-6 as before. The Mₓ flexure row is not amplified (with P_u > 0 the interaction, ≥ B1·rx, governs).
+- **Where (2):** `buildInterTab`, per combination, anchor `/* M4: worked B1 */`: P_e1 and B1 worked with values; the M_rx/M_cx ratio is shown as B1 × the governing flexure DCR.
+- **Decision (pending engineer review):** L_c1 = the compression effective length L_cx of Design Parameters (default the total beam length, × K_x): conservative where it exceeds the span. EI* = EI (effective length method, as the compression check uses K-factors). C_m = 1.0. B1 is applied to the analysis M_ux only: M_uy and member-mode moments are entered by the user and are taken as second-order already (as the User Manual says). Batch mode unchanged.
+- **Check case:** default project, W18X50 A992, 20 ft simple span; P_u = 100 kip on 1.2D + 1.6L + 0.5S; φP_n = 156.96 kip (L_cx = L_cy = 20 ft); rx = 0.1162.
+  - P_e1 = π² × 29000 × 800/240² = 3975 kip; B1 = 1.0/(1 − 100/3975) = 1.0258.
+  - **Before:** H1-1a = 100/156.96 + 8/9 × 0.1162 = 0.637 + 0.1033 = **0.7403**.
+  - **After:** 0.637 + 8/9 × (1.0258 × 0.1162) = **0.7430**.
+- **How verified:** origin/main vs branch on 16 scenarios + v16 engine cases: only the axial scenario moved (its 1.2D + 1.6L interaction, 0.7403 → 0.7430). Interaction tab renders the B1 block, 0 KaTeX errors. Kit: check-syntax, steel-beam-builtup 11/11, project-library steelbeam, phone-layout sbeam, list-input sbeam: pass; 0 console errors.
+- **Saved data:** none changed.

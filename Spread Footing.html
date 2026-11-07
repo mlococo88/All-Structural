@@ -227,7 +227,10 @@ tr.sfLrSel td,tr.sfLrSel:hover td{background:#ffe9b3;box-shadow:inset 0 2px 0 #b
  .chip .sfdChDC{color:#444;font-size:10.5px}   /* SFDF */
  .chip.sfdOpen .cn{white-space:normal}
 }
-@media screen and (min-width:1500px){
+/* SFLB (2026-11-07, Decision pending engineer review: "the summary cards should be on the left panel"): the left column starts at
+   1200 px (was 1500 px), as in Retaining Wall Designer and Light Pole; from 1200 to 1499 px it is 240 px wide (rule after this block),
+   at 1500 px and wider 280 px as before */
+@media screen and (min-width:1200px){
  .wrap{max-width:1892px}   /* 1600 + 280 + 12: at 1892 px and wider the input and output panels keep their old widths */
  body.sfdDashWide #sfdDashCol{display:block;flex:0 0 280px;width:280px;height:100%;overflow-y:auto;overflow-x:hidden;position:relative;padding:0 4px 24px 0;box-sizing:border-box}
  body.sfdDashWide .inp{width:calc((100% - 292px)*.33)}
@@ -241,6 +244,15 @@ tr.sfLrSel td,tr.sfLrSel:hover td{background:#ffe9b3;box-shadow:inset 0 2px 0 #b
  body.sfdDashWide.sfdDashColl #sfdDashCnt span{font-size:9.5px;padding:1px 2px;white-space:normal;text-align:center;width:38px}
  body.sfdDashWide #sfdDashCol::-webkit-scrollbar{width:7px}
  body.sfdDashWide #sfdDashCol::-webkit-scrollbar-thumb{background:#c2ccd6;border-radius:4px}
+}
+@media screen and (min-width:1200px) and (max-width:1499.98px){   /* SFLB */
+ body.sfdDashWide #sfdDashCol{flex-basis:240px;width:240px}
+ body.sfdDashWide .inp{width:calc((100% - 252px)*.33)}
+ body.sfdDashWide.sfdDashColl #sfdDashCol{flex-basis:42px;width:42px}
+ body.sfdDashWide.sfdDashColl .inp{width:calc((100% - 54px)*.33)}
+ /* the output panel is 508-748 px wide here (as at 950-1190 px without the column): a wide table, plot or Report page scrolls
+    sideways inside its tab page (as on tablets and phones, SFPH) instead of being cut off at the panel's edge */
+ body.sfdDashWide:not(.sfdDashColl) .tabpage{overflow-x:auto}
 }
 /* ---- user manual ---- */
 .manNav{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 14px 0;border-bottom:1px solid #b9c4d0;padding-bottom:8px}
@@ -2073,7 +2085,7 @@ function renderDashboard(){
    and a short value (sfdChR: the D/C of the Report summary, sfdResultRows, or the FS shown); the full text (.cv, with the governing
    combination) and the reference (sfdChRef) show on hover (title) and when expanded (NG / REVIEW chips start expanded). Collapse button: per-browser UI key
    sfd_dashCollapsed_v1 ('1' = collapsed; absent = open); not in the project, the autosave or the export. */
-const SFDC={key:'sfd_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1500px)'):null,open:new Map(),coll:false};
+const SFDC={key:'sfd_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1200px)')/* SFLB: was 1500px */:null,open:new Map(),coll:false};
 try{SFDC.coll=localStorage.getItem(SFDC.key)==='1';}catch(e){}
 function sfdDashDecorate(){
  let rows=[];try{rows=sfdResultRows();}catch(e){rows=[];}
@@ -4001,7 +4013,7 @@ function sfrModel(){
    S({id:'dy',label:'Effective depth, bottom y-bars (inner layer, on top of the x-bars)',sym:'d_{y}',eq:'12 t \\minus c_{bot} \\minus d_{b,x} \\minus \\frac{d_{b,y}}{2}',sub:sfrN(tin)+' \\minus '+sfrN(cvB)+' \\minus '+sfrN(dbx,3)+' \\minus '+sfrN(dby/2,3),value:P2.dBotY,unit:'in',d:3})]:[
    S({id:'dx',label:'Effective depth, bottom x-bars (on top of the y-bars)',sym:'d_{x}',eq:'12 t \\minus c_{bot} \\minus \\frac{d_{b,x}}{2} \\minus d_{b,y}',sub:sfrN(tin)+' \\minus '+sfrN(cvB)+' \\minus '+sfrN(dbx/2,3)+' \\minus '+sfrN(dby,3),value:P2.dBotX,unit:'in',d:3}),
    S({id:'dy',label:'Effective depth, bottom y-bars',sym:'d_{y}',eq:'12 t \\minus c_{bot} \\minus \\frac{d_{b,y}}{2}',sub:sfrN(tin)+' \\minus '+sfrN(cvB)+' \\minus '+sfrN(dby/2,3),value:P2.dBotY,unit:'in',d:3})]),
-   S({id:'dmin',label:'Minimum effective depth of the bottom reinforcement',chk:'minimum depth',sym:'\\min(d_{x}, d_{y})',eq:'\\ge 6\\;\\mathrm{in}',sub:'\\min('+sfrN(P2.dBotX,3)+',\\,'+sfrN(P2.dBotY,3)+')'+(P2.minDepth.ok?' \\ge ':' \\lt ')+'6',value:P2.minDepth.d,unit:'in',d:3,ok:!!P2.minDepth.ok,ref:'ACI 318-19 13.3.1.2'}),   /* SFMD */
+   S({id:'dmin',label:'Minimum effective depth of the bottom reinforcement',chk:'minimum depth',sym:'\\min(d_{x}, d_{y})',eq:'\\ge 6',sub:'\\min('+sfrN(P2.dBotX,3)+',\\,'+sfrN(P2.dBotY,3)+')'+(P2.minDepth.ok?' \\ge ':' \\lt ')+'6',value:P2.minDepth.d,unit:'in',d:3,ok:!!P2.minDepth.ok,ref:'ACI 318-19 13.3.1.2'}),   /* SFMD */
    S({id:'davg',label:'Average depth (two-way shear)',sym:'d_{avg}',eq:'\\frac{d_{x} + d_{y}}{2}',sub:'\\frac{'+sfrN(P2.dBotX,3)+' + '+sfrN(P2.dBotY,3)+'}{2}',value:P2.dAvg,unit:'in',d:3}),
    ...(state.freinf.topX.size?[S({id:'dtx',label:'Effective depth, top x-bars (outer layer)',sym:'d_{top,x}',eq:'12 t \\minus c_{top} \\minus \\frac{d_{b,top,x}}{2}',sub:sfrN(tin)+' \\minus '+sfrN(cvT)+' \\minus '+sfrN(BAR_DIA[state.freinf.topX.size]/2,3),value:P2.dTopX,unit:'in',d:3})]:[]),   /* SFTD */
    ...(state.freinf.topY.size?[S({id:'dty',label:'Effective depth, top y-bars (inner layer, under the top x-bars)',sym:'d_{top,y}',eq:'12 t \\minus c_{top} \\minus d_{b,top,x} \\minus \\frac{d_{b,top,y}}{2}',sub:sfrN(tin)+' \\minus '+sfrN(cvT)+' \\minus '+sfrN(BAR_DIA[state.freinf.topX.size||0]||0,3)+' \\minus '+sfrN(BAR_DIA[state.freinf.topY.size]/2,3),value:P2.dTopY,unit:'in',d:3})]:[])]},
@@ -4015,11 +4027,11 @@ function sfrModel(){
     S({id:'phi',label:'Strength reduction factor (by ε_t = '+sfrN(cb.eps_t,4)+'; ε_ty = '+(P2.fy>60000?'f_y/E_s = '+sfrN(sfdEty(P2.fy),5):'0.002')+', tension-controlled at ε_t ≥ ε_ty + 0.003)',sym:'\\phi',eq:'',sub:'',value:cb.phi,unit:'',d:3,ref:'ACI 318-19 Table 21.2.2'}),
     S({id:'phiMn',label:'Design flexural strength',sym:'\\phi M_{n}',eq:'\\phi A_{s} f_{y} (d \\minus a/2)',sub:sfrN(cb.phi,3)+'\\cdot'+sfrN(cb.As,3)+'\\cdot'+sfrN(P2.fy/1000,0)+'\\cdot('+sfrN(des.dBot,3)+' \\minus '+sfrN(cb.a/2,3)+')/12',value:cb.phiMn/12,unit:'kip-ft',ref:'ACI 318-19 22.3'}),
     S({id:'DCRb',label:'Flexure, bottom: demand / capacity'+(des.strip&&des.strip.applies?' (full width; the strip check under each pedestal follows)':''),sym:'DCR',eq:'\\frac{M_{u}}{\\phi M_{n}}',sub:'\\frac{'+sfrN(des.MuPos)+'}{'+sfrN(cb.phiMn/12)+'}',value:des.dcrBotFull,unit:'',d:3,ok:des.dcrBotFull<=1+1e-9}),
-    S({id:'tcB',label:'Bottom bars tension-controlled (nonprestressed slab; ε_ty = '+sfrN(des.epsTC-0.003,5)+')',chk:'tension-controlled',sym:'\\varepsilon_{t}',eq:'0.003\\,\\frac{d \\minus c}{c} \\ge \\varepsilon_{ty} + 0.003',sub:'0.003\\cdot\\frac{'+sfrN(des.dBot,3)+' \\minus '+sfrN(cb.a/beta1(P2.fc),3)+'}{'+sfrN(cb.a/beta1(P2.fc),3)+'} = '+sfrN(cb.eps_t,5)+(des.tcBotOK?' \\ge ':' \\lt ')+sfrN(des.epsTC,5),value:cb.eps_t,unit:'',d:5,ok:!!des.tcBotOK,ref:'ACI 318-19 7.3.3.1, 8.3.3.1, Table 21.2.2 (via 13.3.2.1, 13.3.3.1, 13.3.4.1)'})];   /* SFTX; SFET */
+    S({id:'tcB',label:'Bottom bars tension-controlled (nonprestressed slab; ε_ty = '+sfrN(des.epsTC-0.003,5)+')',chk:'tension-controlled',sym:'\\epsilon_{t}',eq:'0.003\\,\\frac{d \\minus c}{c} \\ge \\epsilon_{ty} + 0.003',sub:'0.003\\cdot\\frac{'+sfrN(des.dBot,3)+' \\minus '+sfrN(cb.a/beta1(P2.fc),3)+'}{'+sfrN(cb.a/beta1(P2.fc),3)+'} = '+sfrN(cb.eps_t,5)+(des.tcBotOK?' \\ge ':' \\lt ')+sfrN(des.epsTC,5),value:cb.eps_t,unit:'',d:5,ok:!!des.tcBotOK,ref:'ACI 318-19 7.3.3.1, 8.3.3.1, Table 21.2.2 (via 13.3.2.1, 13.3.3.1, 13.3.4.1)'})];   /* SFTX; SFET */
     if(des.MuNeg>0.01){
      fl.push(S({id:'MuN',label:'Factored moment, top (hogging)',sym:'M_{u}^{\\minus}',eq:'',sub:'',value:des.MuNeg,unit:'kip-ft',note:des.govNeg?'governing combination: '+des.govNeg.cb.name:''}));
      if(des.topProvided)fl.push(S({id:'phiMnT',label:'Design flexural strength, top (d = d_top,'+dir+')',sym:'\\phi M_{n,top}',eq:'\\phi A_{s} f_{y} (d \\minus a/2)',sub:sfrN(des.capTop.phi,3)+'\\cdot'+sfrN(des.capTop.As,3)+'\\cdot'+sfrN(P2.fy/1000,0)+'\\cdot('+sfrN(des.dTop,3)+' \\minus '+sfrN(des.capTop.a/2,3)+')/12',value:des.capTop.phiMn/12,unit:'kip-ft',ref:'ACI 318-19 22.3'}));   /* SFTD */
-     if(des.topProvided)fl.push(S({id:'tcT',label:'Top bars tension-controlled',chk:'tension-controlled',sym:'\\varepsilon_{t}',eq:'\\ge \\varepsilon_{ty} + 0.003',sub:sfrN(des.capTop.eps_t,5)+(des.tcTopOK?' \\ge ':' \\lt ')+sfrN(des.epsTC,5),value:des.capTop.eps_t,unit:'',d:5,ok:!!des.tcTopOK,ref:'ACI 318-19 7.3.3.1, 8.3.3.1'}));   /* SFET */
+     if(des.topProvided)fl.push(S({id:'tcT',label:'Top bars tension-controlled',chk:'tension-controlled',sym:'\\epsilon_{t}',eq:'\\ge \\epsilon_{ty} + 0.003',sub:sfrN(des.capTop.eps_t,5)+(des.tcTopOK?' \\ge ':' \\lt ')+sfrN(des.epsTC,5),value:des.capTop.eps_t,unit:'',d:5,ok:!!des.tcTopOK,ref:'ACI 318-19 7.3.3.1, 8.3.3.1'}));   /* SFET */
      if(des.topProvided)fl.push(S({id:'DCRt',label:'Flexure, top: demand / capacity',sym:'DCR',eq:'\\frac{M_{u}^{\\minus}}{\\phi M_{n,top}}',sub:'\\frac{'+sfrN(des.MuNeg)+'}{'+sfrN(des.capTop.phiMn/12)+'}',value:des.dcrTop,unit:'',d:3,ok:des.dcrTop<=1+1e-9}));
      else fl.push(S({id:'AsTreq',label:'Top steel required (no top mat entered: provide top bars)',sym:'A_{s,top,req}',eq:'',sub:'',value:Math.max(des.reqTop,des.AsMinPerFt),unit:'in^{2}/ft',d:3,note:'A_s,req for M_u⁻ = '+sfrN(des.reqTop,3)+' in²/ft, not less than A_s,min'}));
     }
@@ -4033,7 +4045,7 @@ function sfrModel(){
       S({id:k+'As',label:r.label+': bottom '+dir+'-bars in the strip',sym:'A_{s,strip}',eq:'A_{s}/\\text{ft} \\cdot b_{s}',sub:sfrN(des.AsBot,3)+'\\cdot'+sfrN(r.bs,3),value:r.As,unit:'in^{2}',d:3}),
       S({id:k+'phiMn',label:r.label+': design flexural strength of the strip',sym:'\\phi M_{n,strip}',eq:'\\phi A_{s} f_{y} (d \\minus a/2),\\; a = \\frac{A_{s} f_{y}}{0.85 '+SFR_FC+' b_{s}}',sub:sfrN(r.cap.phi,3)+'\\cdot'+sfrN(r.As,3)+'\\cdot'+sfrN(P2.fy/1000,0)+'\\cdot('+sfrN(des.dBot,3)+' \\minus '+sfrN(r.cap.a/2,3)+')/12',value:r.cap.phiMn/12,unit:'kip-ft',ref:'ACI 318-19 22.3'}),
       S({id:k+'dcr',label:r.label+': strip flexure demand / capacity',sym:'DCR',eq:'\\frac{M_{u,strip}}{\\phi M_{n,strip}}',sub:'\\frac{'+sfrN(r.M)+'}{'+sfrN(r.cap.phiMn/12)+'}',value:r.dcr,unit:'',d:3,ok:r.dcr<=1+1e-9}),
-      S({id:k+'tc',label:r.label+': strip bars tension-controlled',chk:'tension-controlled',sym:'\\varepsilon_{t}',eq:'\\ge \\varepsilon_{ty} + 0.003',sub:sfrN(r.cap.eps_t,5)+(r.cap.eps_t>=des.epsTC-1e-12?' \\ge ':' \\lt ')+sfrN(des.epsTC,5),value:r.cap.eps_t,unit:'',d:5,ok:r.cap.eps_t>=des.epsTC-1e-12,ref:'ACI 318-19 7.3.3.1, 8.3.3.1'})];})});}   /* SFET */
+      S({id:k+'tc',label:r.label+': strip bars tension-controlled',chk:'tension-controlled',sym:'\\epsilon_{t}',eq:'\\ge \\epsilon_{ty} + 0.003',sub:sfrN(r.cap.eps_t,5)+(r.cap.eps_t>=des.epsTC-1e-12?' \\ge ':' \\lt ')+sfrN(des.epsTC,5),value:r.cap.eps_t,unit:'',d:5,ok:r.cap.eps_t>=des.epsTC-1e-12,ref:'ACI 318-19 7.3.3.1, 8.3.3.1'})];})});}   /* SFET */
    T.push({title:'Minimum steel',ref:sfrCombined()?'ACI 318-19 13.3.4.1, 8.6.1.1, 24.4.3.2':'ACI 318-19 7.6.1.1, 24.4.3.2',steps:[   /* SFPR: combined footing, Chapter 8 */
     S({id:'Asmin',label:'Shrinkage and temperature minimum',sym:'A_{s,min}',eq:'0.0018 \\cdot 12 h',sub:'0.0018\\cdot 12\\cdot'+sfrN(tin),value:des.AsMinPerFt,unit:'in^{2}/ft',d:3}),
     S({id:'Asprov',label:'Provided, bottom (per ft)',sym:'A_{s,prov}',eq:'\\ge A_{s,min}',sub:sfrN(des.AsBot,3)+(des.asMinBotOK?' \\ge ':' \\lt ')+sfrN(des.AsMinPerFt,3),value:des.AsBot,unit:'in^{2}/ft',d:3,ok:!!des.asMinBotOK}),
@@ -8614,8 +8626,8 @@ manPart("p0","0. Read This First",[
 /* ===== PART 1 — USING THE PROGRAM ===== */
 manPart("p1","1. Using the Program",[
 {h:"1.1 Layout"},
-{p:"The screen is split into an <b>input panel</b> (left) and an <b>output report</b> (right) organised in numbered tabs: 1&nbsp;Schematic &amp; Input Echo, 2&nbsp;Load Combinations, 3&nbsp;Bearing, 4&nbsp;Stability, 5&nbsp;Footing Design, 6&nbsp;Pedestal Design, 7&nbsp;3D View, and this manual. Every input change recalculates the entire report (debounced ~0.3 s). The <b>summary dashboard</b> shows a pass/fail chip for each check family (one line each; expanded, a chip names its governing combination). On screens 1500&nbsp;px and wider it is a left column beside the input and output panels; on narrower screens it sits at the top of the output panel, above the tabs (&sect;3.1)."},
-{p:"Report sections are collapsible; the open/closed state persists with your session. The <b>self-consistency panel</b> at the top of the output panel (under the dashboard on screens narrower than 1500&nbsp;px) should read six green checks at all times \u2014 see &sect;0.1."},
+{p:"The screen is split into an <b>input panel</b> (left) and an <b>output report</b> (right) organised in numbered tabs: 1&nbsp;Schematic &amp; Input Echo, 2&nbsp;Load Combinations, 3&nbsp;Bearing, 4&nbsp;Stability, 5&nbsp;Footing Design, 6&nbsp;Pedestal Design, 7&nbsp;3D View, and this manual. Every input change recalculates the entire report (debounced ~0.3 s). The <b>summary dashboard</b> shows a pass/fail chip for each check family (one line each; expanded, a chip names its governing combination). On screens 1200&nbsp;px and wider it is a left column beside the input and output panels; on narrower screens it sits at the top of the output panel, above the tabs (&sect;3.1)."},
+{p:"Report sections are collapsible; the open/closed state persists with your session. The <b>self-consistency panel</b> at the top of the output panel (under the dashboard on screens narrower than 1200&nbsp;px) should read six green checks at all times \u2014 see &sect;0.1."},
 {h:"1.2 Load input modes"},
 {p:"<b>By load type</b> (default): enter unfactored D, L, Lr, S, Wx, Wy loads per pedestal. The program generates the full ASCE 7-16 &sect;2.4.1 service sweep for bearing/stability and the &sect;2.3.1 strength sweep for structural design, brackets dead load (1.0/0.6 service, 1.2/0.9/1.4 strength), and sweeps wind &plusmn;x and &plusmn;y."},
 {p:"<b>Direct factored</b>: enter one already-factored envelope per pedestal. Use when the frame analysis has already produced governing factored reactions. Read &sect;0.3.6 for what this mode gives up."},
@@ -8692,7 +8704,7 @@ manPart("p2","2. Input Reference",[
 /* ===== PART 3 — OUTPUT REFERENCE ===== */
 manPart("p3","3. Output Reference",[
 {h:"3.1 Summary dashboard"},
-{p:"One chip per check family, on one line: the check, a short value and the status. On screens 1500&nbsp;px and wider the dashboard is a left column beside the input and output panels and scrolls on its own; on narrower screens it sits at the top of the output panel, above the tabs. &laquo; / &raquo; (or Hide / Show checks) collapses it; the choice is remembered in this browser. The short value is the D/C (FS<sub>target</sub>/FS for a factor-of-safety check; the FS itself where overturning is reported, not gated). Where a chip is NG or REVIEW for a reason other than its D/C, the short value is that condition instead (e.g. <i>A_s &lt; A_s,min</i> while the moment D/C is within its limit, or <i>straight &#8467;_d &gt; avail</i>), and the D/C shows when the chip is expanded. &#9656; expands a chip to the governing value, its threshold, the governing combination and the reference (NG and REVIEW chips open expanded); clicking a chip goes to its worked section. "},
+{p:"One chip per check family, on one line: the check, a short value and the status. On screens 1200&nbsp;px and wider the dashboard is a left column beside the input and output panels and scrolls on its own; on narrower screens it sits at the top of the output panel, above the tabs. &laquo; / &raquo; (or Hide / Show checks) collapses it; the choice is remembered in this browser. The short value is the D/C (FS<sub>target</sub>/FS for a factor-of-safety check; the FS itself where overturning is reported, not gated). Where a chip is NG or REVIEW for a reason other than its D/C, the short value is that condition instead (e.g. <i>A_s &lt; A_s,min</i> while the moment D/C is within its limit, or <i>straight &#8467;_d &gt; avail</i>), and the D/C shows when the chip is expanded. &#9656; expands a chip to the governing value, its threshold, the governing combination and the reference (NG and REVIEW chips open expanded); clicking a chip goes to its worked section. "},
 {p:"<b>PASS/FAIL</b> is strictly the printed criterion; <b>REVIEW</b> marks detailing items (e.g. dowel area below 0.005A<sub>g</sub>) that are not strength failures; <b>N/A</b> marks checks that do not apply (e.g. flotation with no water table)."},
 {tbl:{head:["Chip","Criterion"],rows:[
  ["Bearing (service)","max over service combos of qmax/qallow (direct) or qeff/qallow (Vesi\u0107) \u2264 1"],

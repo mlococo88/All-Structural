@@ -1908,3 +1908,410 @@ index 2f29ed5..c3246e1 100644
 - **How verified:** main vs branch on the default project: every localStorage key (1), page text (7773 chars), Export JSON (2002 chars identical) and the printed report text (print media, 22204 chars) identical (clock times normalised); 0 console errors; chip click → card on screen, no dialog; Ctrl+S / Ctrl+Shift+S → Save as; header at 1280 / 1400 / 1920 / 390 px (390: no sideways scroll), screenshots looked at. `node tests/check-syntax.mjs "Timber Beam Check.html"`; `node tests/smoke/project-library.mjs --tool timber`; `node tests/smoke/github-sync-tools.mjs --tool timber`; `node tests/smoke/home-projects.mjs --tool timber`: pass.
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
+
+## 2026-11-07 — PR: claude/timber-kcr (PR #1008: https://github.com/mlococo88/All-Structural/pull/1008) (TBK1: creep factor K<sub>cr</sub> = 2.0 in wet service)   [calc change] [MORE conservative]
+
+Line numbers are approximate; search for the anchor text. Code sites are tagged `TBK1`.
+
+### TBK1. K<sub>cr</sub> follows the service condition (review finding H2)
+
+- **Where:** `tbcRun`, deflection block. Anchor: `const KcrIn = num(dz.creep) > 0 ? dz.creep : 0;` (replaces `const Kcr = num(dz.creep) > 0 ? dz.creep : 1.5;`). Also: the K<sub>cr</sub> input hint (`fRow(body, 'Creep factor K<sub>cr</sub>'`), the Deflection card's "where" row (`'NDS 3.5.2 (1.5 seasoned, dry; 2.0 wet or unseasoned) '`), the "Creep factor" rows of the Design values input table and of the Report's input table (`['Creep factor K<sub>cr</sub>', R.ok && dz.moisture === 'Wet' && R.Kcr !== dz.creep ?` and `['Creep factor K_cr', R.ok && dz.moisture === 'Wet' && …`), and a new Validation group "7. TBK1" (4 benchmarks; 102 → 106, all match).
+- **Problem:** K<sub>cr</sub> was the user value (default 1.5) whatever the service condition. Ticking Wet service reduced E by C<sub>M</sub> but kept K<sub>cr</sub> = 1.5, so the total (long-term) deflection was unconservative by 0.5 Δ<sub>D</sub> in wet service.
+- **Governing provision:** NDS 2018 3.5.2 (Eq. 3.5-1): K<sub>cr</sub> = 1.5 for seasoned lumber, glulam and SCL in dry service, 2.0 for unseasoned lumber and for wet service. **Verify against NDS 2018 (not in references).** IBC 2018 Table 1604.3 footnote d (checked in `2018_IBC.pdf`) agrees in substance: for members not dry at installation or not used in dry conditions, the creep component is estimated as the immediate D deflection (i.e. K<sub>cr</sub> − 1 = 1.0).
+- **Before:**
+  ```js
+    const Kcr = num(dz.creep) > 0 ? dz.creep : 1.5;
+  ```
+- **After:**
+  ```js
+    const KcrIn = num(dz.creep) > 0 ? dz.creep : 0;
+    const Kcr = wet && (KcrIn === 0 || KcrIn === 1.5) ? 2.0 : (KcrIn || 1.5);
+    if (wet && KcrIn === 1.5) adv.push('Wet service: creep factor K_cr = 2.0 used (NDS 3.5.2, verify against NDS 2018 (not in references); IBC 2018 Table 1604.3 footnote d). The K_cr input holds 1.5, the dry-service default used for wet service too before 2026-11-07; enter another value to override.');
+    if (!wet && cat === 'timber' && KcrIn !== 2.0) adv.push('Timbers (5 in. and thicker) are often surfaced green: if this member is unseasoned (not dry at installation), NDS 3.5.2 gives K_cr = 2.0. Enter 2.0 in the creep factor if so.');
+  ```
+  (`wet` is the existing `const wet = dz.moisture === 'Wet';`.) Input hint before: "…(NDS 3.5.2: 1.5 for seasoned lumber in dry service). 0 or blank = 1.5." After: states 1.5 dry / 2.0 wet or unseasoned, "0 or blank = by service condition", and that 1.5 with Wet ticked is read as the old default.
+- **Decision (pending engineer review):** every saved file stores `creep: 1.5` (the old default), so an entered 1.5 cannot be told apart from the default. With Wet service ticked, 1.5 (or blank / 0) is therefore read as the default and 2.0 is used, with the one-line note above (conservative). Any other value is used as entered (override kept). Consequence: a user who really wants 1.5 in wet service cannot enter it (NDS 3.5.2 does not give 1.5 for wet service). No saved key or format changed (§5): `creep` keeps its stored value; nothing is rewritten. Dry service is unchanged. Unseasoned timbers in dry service: advisory only (no seasoned / unseasoned input added), no result change.
+- **Check case 1 (default joist, Wet ticked):** DF-L No.2 2x10 @ 16 in., 16 ft, D 15 / L 40 psf, self-weight 34 pcf. E′ = 1,600,000 × 0.9 = 1,440,000 psi; Δ<sub>D</sub> = 0.2409 in., Δ<sub>L</sub> = 0.5520 in., limit 192/240 = 0.800 in.
+  - Before: Δ<sub>T</sub> = 1.5 × 0.2409 + 0.5520 = 0.9134 in., ratio **1.142**.
+  - After: Δ<sub>T</sub> = 2.0 × 0.2409 + 0.5520 = 1.0338 in., ratio **1.292**.
+- **Check case 2 (glulam, wet):** 24F-1.8E DF, 5-1/8 × 18 in., 24 ft, trib. 8 ft, D 15 / L 40 psf, top edge braced at the supports. E′ = 1,800,000 × 0.833 = 1,499,400 psi; Δ<sub>D</sub> = 0.2847 in., Δ<sub>L</sub> = 0.6396 in., limit 288/240 = 1.200 in.
+  - Before: Δ<sub>T</sub> = 1.0667 in., ratio **0.889** (OK). After: Δ<sub>T</sub> = 1.2090 in., ratio **1.007** (NG).
+- **How verified:** `tbcRun` on 33 review cases, origin/main vs branch, headless Chromium from `file://`: only the wet cases moved (dTL and K<sub>cr</sub> only; bending, shear, bearing and live-load deflection identical). Moved: default wet 1.1418 → 1.2923, wet glulam 0.8889 → 1.0075, wet LRFD joist 1.1418 → 1.2923, wet incised 125–150 °F joist 1.3354 → 1.5115, wet with K<sub>cr</sub> blank 1.1418 → 1.2923. Wet with K<sub>cr</sub> 2.0 or 1.8 entered: unchanged. Validation 106/106 match (the 102 existing unchanged). Every output tab at 1400 px (Summary and Report at 400 px) without NaN / undefined / KaTeX errors; save → open round trip identical; no console errors; no horizontal scroll at 400 px. `node tests/check-syntax.mjs` passes.
+- **Other copies:** none.
+- **Open items:** a seasoned / unseasoned input for sawn lumber (K<sub>cr</sub> 2.0 for unseasoned in dry service) was not added; advisory for timbers only.
+
+## 2026-11-07 — PR: claude/timber-eymin (PR #1011: https://github.com/mlococo88/All-Structural/pull/1011) (TBE1: glulam beam stability F<sub>bE</sub> with E<sub>y,min</sub>)   [calc change] [MORE conservative]
+
+Line numbers are approximate; search for the anchor text. Code sites are tagged `TBE1`.
+
+### TBE1. Glulam F<sub>bE</sub> uses E<sub>y,min</sub>, not E<sub>x,min</sub> (review finding H1)
+
+- **Where:**
+  - `GLULAM_5A` (anchor `const GLULAM_5A = {`): an 8th value, E<sub>y,min</sub>, is added to each `v` array. A new constant `GL_EYMIN_RATIO` follows the table.
+  - `tbcRun`: the glulam `ref` objects get `Eymin`. Custom glulam: the block after `errors.push('Enter all glulam reference design values`. Stability: anchor `const EminStab = isGL ? ref.Eymin : ref.Emin;`. `EminStab` is added to the result object.
+  - `tbcDefaultModel` and `tbcSanitize`: `custom: { … Eymin: null … }` and `Eymin: nb(glc.Eymin, null)`.
+  - Custom-glulam inputs: a new row `['Eymin', 'E<sub>y,min</sub> (beam stability)', 'psi']`.
+  - Displays: `refLineHTML` (`Ey,min`), the Reference Values Table 5A (new column "E<sub>y,min</sub> (stability)"), the Design Values "Stiffness" card and the Report step `dv.Emin` (base value E<sub>y,min</sub> for glulam), and the Bending card's E′<sub>min</sub> row.
+- **Problem:** for glulam bent about x–x, lateral-torsional buckling is weak-axis behaviour. NDS uses E′<sub>y,min</sub> in F<sub>bE</sub>, but the tool used E<sub>x,min</sub>, so C<sub>L</sub> came out too high whenever stability governed. This was unconservative.
+- **Governing provision:** NDS 2018 3.3.3.8 (F<sub>bE</sub> = 1.20 E′<sub>min</sub>/R<sub>B</sub>²). For glulam, E′<sub>min</sub> is E<sub>y,min</sub> per NDS Supplement 2018 Table 5A / 5A Expanded and its footnote on beam stability. **Verify against NDS 2018 (not in references).** E<sub>x</sub> is still used for deflection (NDS 5.3, Table 5A).
+- **E<sub>y,min</sub> values added (psi), as best known. Verify against NDS 2018 Supplement Table 5A / 5A Expanded (not in references):**
+
+  | Combination | E<sub>y,min</sub> (psi) |
+  |---|---|
+  | 20F-1.5E | 630,000 |
+  | 24F-1.7E | 690,000 |
+  | 24F-1.8E | 850,000 |
+  | 24F-V4 DF | 850,000 |
+  | 24F-V8 DF | 850,000 |
+  | 24F-V3 SP | 850,000 |
+  | 24F-V5 SP | 790,000 |
+
+  The Southern Pine values have the lowest confidence.
+- **Before:**
+  ```js
+    const Emin_p = ref.Emin * CM.E * Ct.E * Ci.E * KF.Emin * PHI.Emin;
+  ```
+  The table rows had 7 values, e.g. `'24F-1.8E': { table: '5A', grp: null, v: [2400, 1450, 650, 650, 265, 1800000, 950000] },`
+- **After:**
+  ```js
+    const EminStab = isGL ? ref.Eymin : ref.Emin;
+    const Emin_p = EminStab * CM.E * Ct.E * Ci.E * KF.Emin * PHI.Emin;
+  ```
+  - Table row: `'24F-1.8E': { table: '5A', grp: null, v: [2400, 1450, 650, 650, 265, 1800000, 950000, 850000] },` (and likewise for the other rows).
+  - New constant: `const GL_EYMIN_RATIO = Math.min(...Object.values(GLULAM_5A).map(s => s.v[7] / s.v[6]));` gives 690,000/900,000 = 0.76667.
+  - Custom glulam:
+    ```js
+            else if (!(ref.Eymin > 0)) {   // TBE1: never an optimistic default for Ey,min
+                ref.Eymin = ref.Emin * GL_EYMIN_RATIO; ref.EyminAssumed = true;
+                adv.push(`REVIEW: custom glulam has no Ey,min … Assumed Ey,min = Ex,min × ${GL_EYMIN_RATIO.toFixed(4)} … Enter Ey,min from NDS Supplement Table 5A or the manufacturer.`);
+            }
+    ```
+- **Saved data (§5):** no key was renamed and nothing was discarded. Custom glulam gains an optional `Eymin`, which is `null` in files saved before this change.
+  - **Decision (pending engineer review):** a custom glulam with no E<sub>y,min</sub> (every file saved before this change) uses E<sub>x,min</sub> × 0.7667, the lowest E<sub>y,min</sub>/E<sub>x,min</sub> ratio in the built-in table, and shows a REVIEW note. This is conservative, never a silent optimistic default. A blocking error was not chosen, because it would hide every result of an old file.
+  - Opening and saving such a file adds only `"Eymin": null`, and its results are identical before and after the round trip.
+- **Check case:** 24F-1.8E DF, 5-1/8 × 18 in., simple span 24 ft, trib. 8 ft, D 15 / L 40 psf, top edge braced at the supports only. This is the Validation glulam case. l<sub>e</sub> = 523.44 in., R<sub>B</sub> = 18.940, F<sub>b</sub>* = 2400 psi (ASD), f<sub>b</sub> = 1443.7 psi.
+
+  | Quantity | ASD before | ASD after | LRFD before | LRFD after |
+  |---|---|---|---|---|
+  | E′<sub>min</sub> (psi) | 950,000 | 850,000 | 950,000 × 1.76 × 0.85 = 1,421,200 | 1,271,600 |
+  | F<sub>bE</sub> (psi) | 3178.0 | 2843.5 | 4754 | 4253.8 |
+  | C<sub>L</sub> | 0.9031 | 0.8759 | 0.8663 | 0.8276 |
+  | F′<sub>b</sub> (psi) | 2167.5 | 2102.0 | 3591.0 | 3430.6 |
+  | Ratio | **0.666** | **0.687** | **0.594** | **0.6215** |
+
+  LRFD: F<sub>b</sub>* = 2400 × 0.8 × 2.54 × 0.85 = 4145.3 psi, f<sub>b</sub> = 2132.0 psi.
+- **Benchmarks:**
+  - Validation group 3, glulam "C<sub>L</sub> governs": its 4 values were intentionally changed to the E<sub>y,min</sub> values above. The labels give the old values.
+  - New group 8 (TBE1) adds 5 benchmarks: LRFD E′<sub>min</sub>, F<sub>bE</sub>, ratio; custom glulam with no E<sub>y,min</sub>: assumed value and REVIEW note.
+  - Total 106 → 111, all match.
+- **How verified:** 35 review cases were run on origin/main and on the branch (headless Chromium, `file://`). Only glulam cases with stability moved, and only the bending ratio and E′<sub>min</sub>:
+
+  | Case | Before | After |
+  |---|---|---|
+  | 24F-1.8E ASD | 0.6660 | 0.6868 |
+  | LRFD | 0.5937 | 0.6215 |
+  | Wet | 0.8252 | 0.8480 |
+  | 20F-1.5E | 0.7996 | 0.8617 |
+  | Cantilevered glulam | 0.2838 | 0.2881 |
+  | Custom glulam with E<sub>y,min</sub> 850,000 entered | 0.6660 | 0.6868 |
+  | Custom glulam with none | 0.6660 | 0.7306 (assumed 728,333 psi) |
+
+  - Glulam with continuous top-edge bracing: E′<sub>min</sub> is shown changed, and every ratio is unchanged.
+  - Sawn lumber, SCL and timbers: identical.
+  - Every output tab: no NaN, no undefined, no KaTeX errors.
+  - Save → open: identical results.
+  - No console errors. At 400 px there is no horizontal scroll.
+  - `node tests/check-syntax.mjs` passes.
+- **Other copies:** none.
+- **Open items:** the E<sub>y,min</sub> values need checking against the printed Supplement (engineer).
+
+## 2026-11-07 — PR: claude/timber-flat-e (PR #1014: https://github.com/mlococo88/All-Structural/pull/1014) (TBF1: Table 4D flat use of Beams and Stringers, E and E<sub>min</sub> factor)   [calc change] [MORE conservative]
+
+Line numbers are approximate; search for the anchor text. Code sites are tagged `TBF1`.
+
+### TBF1. Flat-use factor on E and E<sub>min</sub> for Beams and Stringers (review finding H3)
+
+- **Where:**
+  - New constant `T4D_FLAT_E`, after `const T4D_FLAT_FB = {`.
+  - `tbcRun`: `const CfuE = …` after the `const Cfu =` line; the `const Emin_p =` and `const E_p =` lines; and `CfuE` added to the result object.
+  - Displays:
+    - `eFacs`, which shows `C_{fu,E}` when it is not 1;
+    - the Design Values factor table row `'C<sub>fu</sub> flat use'` (E column);
+    - the Reference Values Table 4D hint;
+    - the comment above `T4D_FLAT_FB`.
+  - Validation: new group 9 (3 benchmarks; 111 → 114, all match).
+- **Problem:** for Beams and Stringers used flat (load on the wide face), the Table 4D footnote factors E and E<sub>min</sub> as well as F<sub>b</sub>. The tool applied only the F<sub>b</sub> factor, so for No.1 the deflection came out about 11 % low (unconservative). Beam stability does not apply in flat use, so only deflection moves.
+- **Governing provision:** NDS Supplement 2018, Table 4D footnote (flat-use factors for Beams and Stringers).
+  - Values as best known: F<sub>b</sub> 0.86 / 0.74 / 1.00 and E, E<sub>min</sub> 1.00 / 0.90 / 1.00 (SS / No.1 / No.2).
+  - **Verify against NDS 2018 (not in references).** Confidence is medium.
+  - Applied to the same members as the F<sub>b</sub> factor: Table 4D timbers that are not Posts and Timbers, including Southern Pine timbers (conservative, as before), and not when manual or custom values are used.
+- **Before:**
+  ```js
+    const Emin_p = EminStab * CM.E * Ct.E * Ci.E * KF.Emin * PHI.Emin;
+    const E_p = ref.E * CM.E * Ct.E * Ci.E;
+  ```
+- **After:**
+  ```js
+  const T4D_FLAT_E = { 'SS': 1.00, 'No.1': 0.90, 'No.2': 1.00 };
+  ...
+    const CfuE = (flat && cat === 'timber' && !userVals && cls4D !== 'PT') ? (T4D_FLAT_E[mt.grade] || 1.0) : 1.0;   // TBF1: E, Emin (Table 4D footnote)
+  ...
+    const Emin_p = EminStab * CM.E * Ct.E * Ci.E * CfuE * KF.Emin * PHI.Emin;
+    const E_p = ref.E * CM.E * Ct.E * Ci.E * CfuE;
+  ```
+- **Check case:** 6x12 DF-L No.1 used flat, 16 ft simple span, spacing 48 in., D 15 / L 40 psf, self-weight on.
+
+  | | Before | After |
+  |---|---|---|
+  | E′ (psi) | 1,600,000 | 1,600,000 × 0.90 = 1,440,000 |
+  | Live-load deflection ratio | 1.734 | **1.927** (= 1.734 / 0.90) |
+  | Total deflection ratio | 1.968 | **2.187** |
+
+  Bending is unchanged at 1.558 (F′<sub>b</sub> = 1350 × 0.74 = 999 psi).
+- **How verified:** 37 review cases were run on origin/main and on the branch (headless Chromium, `file://`). Only the two No.1 Beams and Stringers flat cases moved:
+
+  | Case | Live-load deflection ratio | Total deflection ratio |
+  |---|---|---|
+  | DF-L 6x12 No.1 flat | 1.7340 → 1.9267 | 1.9681 → 2.1868 |
+  | SP 6x12 No.1 flat | 1.8496 → 2.0552 | 2.1095 → 2.3439 |
+
+  - SS and No.2 flat, Posts and Timbers flat, dimension lumber flat and every edgewise case are identical.
+  - Validation: 114/114 match.
+  - Output tabs: no NaN, undefined or KaTeX errors.
+  - Save → open: identical.
+  - No console errors; no horizontal scroll at 400 px.
+  - `node tests/check-syntax.mjs`: passes.
+- **Other copies:** none.
+- **Saved data:** no change.
+
+## 2026-11-07 — PR: claude/timber-bearing (PR #1027: https://github.com/mlococo88/All-Structural/pull/1027) (TBB1: bearing on the supporting member and under point loads)   [calc change: new checks] [MORE conservative only where the new inputs are used; old projects unchanged]
+
+Line numbers are approximate; search for the anchor text. Code sites are tagged `TBB1`.
+
+### TBB1. Supporting-member F<sub>c⊥</sub> per support, and bearing under point loads (review finding M1)
+
+- **Engineer request (brief 2026-11-07):** check bearing under point loads and on the supporting member. Add a new input for the supporting member's species/grade F<sub>c⊥</sub>, defaulting to the beam's own value, so that old projects do not change.
+- **Where:**
+  - **`tbcRun`:**
+    - `const fcsIn = supIn.map(…)` after `const cbOn =`.
+    - `pls` gains `lb`.
+    - `const plBear = [];` and `const FcpTop =` come before `const legacyBear =`, which now also requires that no new check is present.
+    - In each combination, `const bearX = [];` builds the supporting-member and point-load entries.
+    - `const gx = …`, `r_cB` (the beam at its supports, exactly the old `r_c`) and `const r_c = gx && gx.r > r_cB ? gx.r : r_cB;` are new.
+    - New combination fields: `bearX, gcX, r_cB, gcKind`. `gov.cb = govBy('r_cB')`. New result fields: `fcsIn, plBear, FcpTop`.
+  - **Constant `SUP_FCP_PRESETS`:** No.2 F<sub>c⊥</sub> taken from the built-in Tables 4A / 4B (DF-L 625, HF 405, SPF 425, SP 565 psi).
+  - **`tbcSanitize`:** supports keep a numeric `fcs`, and point loads keep a numeric `lb`. Both are written only when set, so the format of files without them is unchanged.
+  - **Input wiring:** `setGeom` and "+ Add span" carry `fcs`. `refreshInputs` checks `fcs` and `plb`.
+  - **Inputs:**
+    - Support table: new column "Supporting member F<sub>c⊥</sub>". Its options are "Same as beam" (the default: no separate check), the presets, and "Other (psi)".
+    - Point-load table: new column "Bearing l<sub>b</sub>" (blank = not checked).
+  - **Displays:**
+    - New helpers `bearLab`, `bearVals`, `bearXKey`, `bearXName`, `bearXBest`.
+    - The Summary chip and row, and the Report's summary row, name the governing bearing check.
+    - The Design Values bearing card and Report step `dv.Fcp` now use `R.gov.cb`, the beam at its supports.
+    - Bearing tab: the beam card uses `R.gov.cb` and `r_cB`. A new section "Supporting members and point loads" (`buildBearX`) shows the governing item fully worked plus a table of every item.
+    - Report: new sub-section `tbrBearX()` under Bearing.
+  - **Validation:** new group 10 (6 benchmarks; 114 → 120, all match).
+- **Problem:** NDS 3.10 applies to every bearing: the beam on its support, the softer supporting member under the beam (a DF joist on an HF or SPF plate is governed by the plate), and concentrated loads delivered onto the beam. The tool checked only the beam at its supports.
+- **Governing provision:** NDS 2018 3.10.1, 3.10.2 (f<sub>c⊥</sub> = R/(b l<sub>b</sub>) ≤ F′<sub>c⊥</sub>), 3.10.4 (C<sub>b</sub>, Eq. 3.10-2) and Table 4.3.1. Supplement Table 4A footnote: C<sub>M</sub> for F<sub>c⊥</sub> = 0.67. **Verify against NDS 2018 (not in references).**
+- **Rules implemented and decisions (pending engineer review), all conservative:**
+  - **Supporting member:** F′<sub>c⊥,s</sub> = F<sub>c⊥,s</sub> × C<sub>M</sub> × C<sub>t</sub> × [K<sub>F</sub> φ<sub>c</sub>].
+    - The reaction and contact area are the beam's: R / (b × l<sub>b</sub>).
+    - C<sub>M</sub> = 0.67 in wet service, taking the support as sawn lumber. For a glulam support, enter the value with this in mind (glulam C<sub>M</sub> 0.53).
+    - C<sub>t</sub> is the beam's.
+    - C<sub>b</sub> = 1.0 (conservative: the bearing length along the supporting member's grain is the beam width, and the end distance is unknown).
+    - C<sub>i</sub> = 1.0, as for F<sub>c⊥</sub>.
+    - No C<sub>D</sub> or λ.
+  - **Point loads:** checked only where a bearing length is entered. F′<sub>c⊥</sub> = F<sub>c⊥</sub> (glulam: compression-face value, since the load is on the top face) × C<sub>M</sub> × C<sub>t</sub> × C<sub>i</sub> × C<sub>b</sub> × [K<sub>F</sub> φ<sub>c</sub>].
+    - C<sub>b</sub> = (l<sub>b</sub> + 0.375)/l<sub>b</sub> applies when l<sub>b</sub> < 6 in. and the load is at least 3 in. from both member ends; otherwise C<sub>b</sub> = 1.0.
+    - Loads at the same location are added per combination, with the shortest entered l<sub>b</sub>. Upward loads count as 0.
+    - The post or hanger that delivers the load is not checked.
+  - **Governing ratio:** the bearing ratio of a combination is the largest of the beam at its supports, each supporting member, and each point-load bearing.
+- **Before:**
+  ```js
+        const gc = bear.reduce((a, e) => (e.r > a.r ? e : a), bear[0]);
+        …
+        const r_b = …, r_c = legacyBear ? fcp / Fcp_p : gc.r;
+  ```
+- **After:**
+  ```js
+        const bearX = [];
+        supJ.forEach(j => { if (fcsIn[j] === null) return;
+            const Rb = Math.max(bm.R[j], 0), Fcp_pj = fcsIn[j] * (wet ? 0.67 : 1.0) * Ct.Fcp * KF.Fcp * PHI.Fcp, fcpj = Rb / (bw * lbs[j]);
+            bearX.push({ kind: 'sup', j, R: bm.R[j], Rb, lb: lbs[j], Cb: 1.0, Fcs: fcsIn[j], CMs: wet ? 0.67 : 1.0, Fcp_p: Fcp_pj, fcp: fcpj, r: fcpj / Fcp_pj }); });
+        plBear.forEach(g => {
+            const Pc = g.idx.reduce((sum, i) => sum + (c.f[pls[i].type] || 0) * pls[i].mag, 0), Rb = Math.max(Pc, 0);
+            const Fcp_pj = FcpTop * CM.Fcp * Ct.Fcp * Ci.Fcp * g.Cb * KF.Fcp * PHI.Fcp, fcpj = Rb / (bw * g.lb);
+            bearX.push({ kind: 'pl', j: null, loc: g.loc, idx: g.idx, R: Pc, Rb, lb: g.lb, Cb: g.Cb, Fcp_p: Fcp_pj, fcp: fcpj, r: fcpj / Fcp_pj }); });
+        const gx = bearX.length ? bearX.reduce((a, e) => (e.r > a.r ? e : a), bearX[0]) : null;
+        const gc = bear.reduce((a, e) => (e.r > a.r ? e : a), bear[0]);   // the beam at its supports (as before TBB1)
+        …
+        const r_b = …, r_cB = legacyBear ? fcp / Fcp_p : gc.r;
+        const r_c = gx && gx.r > r_cB ? gx.r : r_cB;
+  ```
+  The `plBear` grouping, as entered before `legacyBear`:
+  ```js
+    const plBear = [];
+    pls.forEach((p, i) => { if (!(p.lb > 0) || !isFinite(p.loc)) return; const g = plBear.find(q => Math.abs(q.loc - p.loc) < 1e-9);
+        if (g) { g.idx.push(i); g.lb = Math.min(g.lb, p.lb); } else plBear.push({ loc: p.loc, idx: [i], lb: p.lb }); });
+    plBear.forEach(g => { const endDist = Math.min(g.loc, L - g.loc) * 12; g.cbOK = endDist >= 3; g.Cb = (g.cbOK && g.lb < 6) ? (g.lb + 0.375) / g.lb : 1.0; });
+    const FcpTop = isGL && ref.Fcpc !== undefined ? ref.Fcpc : ref.Fcp;
+  ```
+- **Saved data (§5):** no key was renamed. `supports[j].fcs` and `points[i].lb` are optional. Files without them (every existing file) give identical results and identical displays, and opening then saving them leaves the JSON identical.
+- **Check case 1 (review M1):** default joist (DF-L No.2 2x10 @ 16 in., 16 ft, D 15 / L 40 psf) on Hem-Fir plates at both supports.
+  - R = 612.9 lb; f<sub>c⊥</sub> = 612.9/(1.5 × 3.5) = 116.7 psi.
+  - Beam: 116.7/625 = 0.187 (unchanged). Plate: 116.7/405 = **0.288**.
+  - Bearing ratio: before **0.187**, after **0.288**.
+  - Wet service: 116.7/(405 × 0.67) = 0.430. LRFD: 0.2835.
+- **Check case 2:** default joist with 1500 lb D and 3000 lb L at midspan, l<sub>b</sub> 3.5 in. and 5.5 in. (shortest used: 3.5 in.).
+  - D + L: P = 4500 lb; f<sub>c⊥</sub> = 4500/(1.5 × 3.5) = 857.1 psi.
+  - C<sub>b</sub> = 3.875/3.5 = 1.107; F′<sub>c⊥</sub> = 625 × 1.107 = 692.0 psi.
+  - Ratio **1.239** (before: bearing 0.872 at the supports only).
+- **How verified:**
+  - **Review cases, origin/main vs branch (headless Chromium, `file://`):** 48 cases run.
+    - Only the cases that use the new inputs moved, and only the bearing ratio:
+      - HF plates: 0.1868 → 0.2882
+      - HF plates, wet: 0.2788 → 0.4302
+      - HF plates, LRFD: 0.1837 → 0.2835
+      - 3000 lb on 1.5 in. at midspan: 0.6439 → 1.7067
+      - The same load 1.2 in. from the end: 1.0954 → 2.1333 (C<sub>b</sub> = 1.0)
+      - Overhang on HF plates: 0.1977 → 0.3378
+    - Invalid inputs (l<sub>b</sub> = 0, F<sub>c⊥,s</sub> < 0) give input errors.
+  - **Old projects:** full text of every output tab and of the input panel, origin/main vs branch, for 8 cases without the new inputs (default, notch, glulam, glulam LRFD with notch, point loads, LRFD, overhang, two-span). Identical except the Validation tab, which only gains the new benchmarks.
+  - **Validation:** 120/120 match.
+  - **Other checks:**
+    - Every output tab: no NaN, undefined or KaTeX errors.
+    - Save → open: identical.
+    - No console errors; no horizontal scroll at 400 px.
+    - Input-panel screenshots checked.
+    - `node tests/check-syntax.mjs`: passes.
+- **Other copies:** none.
+- **Open items:**
+  - Glulam supporting members (C<sub>M</sub> 0.53) are not a preset.
+  - The member delivering a point load (post end grain, hanger) is not checked.
+  - Supporting-member C<sub>b</sub> is fixed at 1.0.
+
+## 2026-11-07 — PR: claude/timber-notch-face (PR #1034: https://github.com/mlococo88/All-Structural/pull/1034) (TBN1: notch face selector — tension face, compression face, interior)   [calc change: new check option] [old projects unchanged]
+
+Line numbers are approximate; search for the anchor text. Code sites are tagged `TBN1`.
+
+### TBN1. Notch location: tension face (as before), compression face (new check), interior (refused) (review finding M3; closes part of O8)
+
+- **Where:**
+  - `tbcRun`, notch block: the anchor `const notchFace = ['comp', 'interior'].includes(mt.notchFace)` comes before `const Cn =`. The result object gains `notchFace, notchE, notchEIn, notchDe`.
+  - `tbcSanitize`: after `m.material.scl = {`, `notchFace` and `notchE` are kept only when set.
+  - Inputs: the End notch card gets a new "Notch location" select and, for the compression face, an input for "e".
+  - Shear tab: a new card for the compression face (`if (R.hasNotch && R.notchFace === 'comp') mkSec(pg, 'sNotch', 'Notched ends (compression face …`).
+  - Report Shear steps: `const nc = R.notchFace === 'comp';` adds step `sh.de` and the compression-face `sh.Cn`.
+  - Input summary rows of Design values and the Report.
+  - Method limitation text.
+  - Validation group 11 (3 benchmarks; 120 → 123).
+- **Problem:** the tool checked every end notch as a tension-face notch, and a user could not say that a notch was on the compression face or in the interior. A notch entered for an interior location was silently checked as an end notch.
+- **Governing provision (verify against NDS 2018, not in references):**
+  - NDS 2018 3.4.3.2(a), Eq. 3.4-3: tension-face end notch, unchanged.
+  - NDS 2018 3.4.3.2, compression-face end notch (paragraph (c) per the review; the brief asked whether it is (b)): V′<sub>r</sub> = (2/3) F′<sub>v</sub> b [d − ((d − d<sub>n</sub>)/d<sub>n</sub>) e], with e ≤ d<sub>n</sub> the distance the notch extends past the inner edge of the support. The paragraph letter and the equation number need checking.
+  - NDS 4.4.3.1 / 5.4.4.1: interior notches are restricted.
+- **Before:**
+  ```js
+    const Cn = hasNotch ? Math.pow(dn / dep, 2) : 1.0;
+  ```
+- **After:**
+  ```js
+    const notchFace = ['comp', 'interior'].includes(mt.notchFace) ? mt.notchFace : 'tension';
+    const notchEIn = (mt.notchE === undefined || mt.notchE === null || mt.notchE === '') ? null : num(mt.notchE);
+    if (hasNotch && notchFace === 'interior') { errors.push('Interior notch: not permitted by this tool and not checked (…)'); return base; }
+    if (hasNotch && notchFace === 'comp' && notchEIn !== null && !(notchEIn >= 0 && notchEIn <= dn)) { errors.push(`Compression-face notch: e … must be between 0 and d_n …`); return base; }
+    const notchE = hasNotch && notchFace === 'comp' ? (notchEIn === null ? dn : notchEIn) : null;
+    const notchDe = notchE === null ? null : dep - ((dep - dn) / dn) * notchE;
+    const Cn = hasNotch ? (notchFace === 'comp' ? notchDe / dn : Math.pow(dn / dep, 2)) : 1.0;
+  ```
+  - The existing notch ratio is still `fvn / (Fv_p * Cn * Cvr)` with `fvn = 1.5 R/(b d_n)`.
+  - For the compression face, setting C<sub>n</sub> = d<sub>e</sub>/d<sub>n</sub> makes the check V ≤ (2/3) F′<sub>v</sub> b d<sub>e</sub>.
+- **Decisions (pending engineer review):**
+  - **Interior notch:** input error ("not permitted / not checked"), so no results are shown. This is conservative.
+  - **e not entered:** e = d<sub>n</sub> is used, the largest permitted value, which gives the net section (d<sub>e</sub> = d<sub>n</sub>). This is conservative. e must lie between 0 and d<sub>n</sub>; otherwise an input error is shown.
+  - **Notch-depth limits** (d/4 sawn; min(d/10, 3 in.) glulam) are kept for the compression face. This is conservative: the glulam compression-face limit is believed to be larger.
+  - **Glulam C<sub>vr</sub>** is kept on the compression-face check (conservative).
+  - The same face and depth apply at both end supports (O8).
+- **Saved data (§5):** `material.notchFace` (`'comp'` / `'interior'`) and `material.notchE` are optional. They are written only when set. A missing value means a tension-face notch, which is exactly the old behaviour. Files without them give identical results and displays, and identical JSON on save.
+- **Check case:** the fix-log joist (DF-L No.2 2x10 @ 16 in., 14 ft, D 10 / L 40 psf), 2 in. end notch, D + L.
+  - Inputs: R = 489.6 lb; d<sub>n</sub> = 7.25 in.; f<sub>v,n</sub> = 1.5 × 489.6/(1.5 × 7.25) = 67.5 psi; F′<sub>v</sub> = 180 psi.
+  - Tension face (unchanged): C<sub>n</sub> = (7.25/9.25)² = 0.6143, ratio **0.611**.
+  - Compression face, e = 3 in.: d<sub>e</sub> = 9.25 − (2/7.25) × 3 = 8.422 in.; C<sub>n</sub> = 8.422/7.25 = 1.1617; ratio 67.5/(180 × 1.1617) = **0.323**. In V terms: V′<sub>r</sub> = (2/3)(180)(1.5)(8.422) = 1516 lb ≥ 489.6 lb.
+  - Compression face, e blank (e = d<sub>n</sub>): C<sub>n</sub> = 1.0, notched ratio 0.375.
+  - Interior: input error.
+- **How verified:**
+  - **origin/main vs branch** (headless Chromium, `file://`): 55 review cases.
+    - Only the cases that select the new options moved: compression face 0.6107 → 0.3752 (e blank), 0.3229 (e = 3), 0.2941 (e = 0, where the unnotched check governs); glulam LRFD compression face 0.4798 → 0.4279.
+    - Interior and e > d<sub>n</sub> give input errors.
+    - Tension-face and un-notched cases: identical.
+  - **Full text** of every output tab and the input panel for 7 old-style cases (default, notch, glulam, glulam LRFD with notch, tension notch, LRFD, SCL): identical except the Validation tab (new benchmarks).
+  - **Validation:** 123/123.
+  - **Other checks:**
+    - Save → open: identical, including key order.
+    - No NaN or KaTeX errors.
+    - No console errors.
+    - No horizontal scroll at 400 px.
+    - Input card screenshot.
+    - `node tests/check-syntax.mjs`: passes.
+- **Other copies:** none.
+- **Open items:**
+  - The paragraph letter and equation number of the compression-face expression in NDS 2018 3.4.3.2.
+  - The glulam compression-face depth limit (5.4.4.2).
+  - Different notches at the two ends (O8).
+
+## 2026-11-07 — PR: claude/timber-low (PR #1038: https://github.com/mlococo88/All-Structural/pull/1038) (TBL1: cantilever citation footnote i; snow "S or W" note; negative dead load warning; IBC footnote d quantity as information; AUDIT.md timber section)   [citation / notes / information only; no result change]
+
+Line numbers are approximate; search for the anchor text. Code sites are tagged `TBL1`.
+
+### TBL1-a. Cantilever deflection length: IBC 2018 Table 1604.3 footnote **i**, not h   [citation]
+- **Where:** every "footnote h" in the tool was changed to "footnote i". There are 7 places:
+  - the comment above `const dSpan = Ls.map(`;
+  - the Total limit input hint;
+  - the Deflection card `where` row;
+  - the Method text;
+  - the Reference-values row "Deflection limits (defaults)";
+  - the references table row `['IBC 2018', 'Table 1604.3 and footnote i, …']`;
+  - the Report step `df.limLL`.
+- **Before:** `… (IBC Table 1604.3 footnote h)`. **After:** `… (IBC Table 1604.3 footnote i)`.
+- **Governing provision:** IBC 2018 Table 1604.3, checked in `2018_IBC.pdf`. Footnote i says ℓ is the length between supports and, for cantilevers, twice the cantilever length. Footnote h covers aluminum members. The value used (twice the cantilever length) was already right.
+- **Note on older entries:** fix log R1-c and later entries cite "footnote h". They are history and are left as written. Read them as footnote i.
+
+### TBL1-b. Snow against the "S or W" column   [note]
+- **Where:**
+  - the Total limit input hint, anchor `The live/snow limit is used for L, Lr and S`;
+  - the Live / snow deflection card, new `where` row `n_{LL}`.
+- **Content:** IBC 2018 Table 1604.3 gives snow in its "S or W" column, which for roof members equals the "L or Lr" column (checked in `2018_IBC.pdf`). Floor members have no S limit. The tool keeps one live/snow limit for L, Lr and S, and the note now says this. No result changes.
+- **Verify:** whether a separate snow limit input is wanted. That would be a decision for the engineer.
+
+### TBL1-c. Negative dead load warning   [advisory]
+- **Where:** `tbcRun`, after `const Kcr =`. Anchor: `if (num(ld.D) < 0 || pls.some(p => p.type === 'D' && p.mag < 0)) adv.push('Negative dead load entered'`.
+- **Content:** a negative area D, or a D point load, is still accepted, and an advisory is now shown. No result changes.
+
+### TBL1-d. IBC Table 1604.3 footnote d quantity shown as information   [information only]
+- **Where:**
+  - `tbcRun`: `const cIBC = (wet || Kcr >= 2) ? 1.0 : 0.5;`, `Dibc` per span, and `defl_` gains `cIBC, Dibc, r_dIBC, spanIBC`;
+  - Deflection tab: a new card "IBC Table 1604.3 footnote d quantity (information only, not a check)";
+  - Report: a new topic with step `df.IBC`. It has no ok/NG status.
+- **Formula:** Δ<sub>IBC</sub> = c Δ<sub>D</sub> + Δ<sub>LL</sub>, the largest at the stations over the transient cases. c = 0.5 when the member is dry at installation and in use, and 1.0 otherwise. The tool takes "otherwise" as Wet service ticked or K<sub>cr</sub> ≥ 2.
+- **Decision (pending engineer review):** the total-deflection check stays as it is: Δ<sub>T</sub> = K<sub>cr</sub>Δ<sub>D</sub> + Δ<sub>LL</sub> against L/n<sub>TL</sub>. That check includes the immediate dead-load deflection, so it is more conservative than footnote d, which counts only the creep component plus the short-term live load. The footnote-d quantity is shown as information only.
+- **Check case (default joist):** Δ<sub>D</sub> = 0.2168 in., Δ<sub>L</sub> = 0.4968 in.
+  - Δ<sub>IBC</sub> = 0.5 × 0.2168 + 0.4968 = 0.605 in.; 0.605/0.800 = 0.757 (information).
+  - The check stays Δ<sub>T</sub> = 0.822 in., ratio 1.028.
+  - With Wet ticked: Δ<sub>IBC</sub> = 0.2409 + 0.5520 = 0.793 in. (0.991).
+
+### TBL1-e. AUDIT.md timber section   [documentation]
+- **Inventory row:** now describes the current tool: materials, ASD/LRFD, pinned libraries, storage keys, size. The audited description is kept in the row's note.
+- **§3.8:** a status note says the old table is history and lists the 2026-11-07 review changes.
+- **A31:** marked done (rebuilt and kept).
+
+### How verified (TBL1)
+- **No results moved.** `tbcRun` was run on 55 review cases, origin/main vs the branch: every ratio is identical. The only new output is the negative-D advisory.
+- **Validation:** 123/123.
+- **Every output tab:**
+  - no NaN / undefined / KaTeX errors;
+  - save → open identical;
+  - no console errors;
+  - no horizontal scroll at 400 px.
+- **Footnote d values:** checked on the Deflection tab for the default joist (0.605 in., 0.757) and the wet joist (0.793 in., 0.991).
+- **Syntax:** `node tests/check-syntax.mjs` passes.
