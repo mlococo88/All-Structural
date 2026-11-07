@@ -2084,7 +2084,7 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
 - **Other copies:** none.
 - **Saved data:** no change.
 
-## 2026-11-07 — PR: claude/timber-bearing (TBB1: bearing on the supporting member and under point loads)   [calc change: new checks] [MORE conservative only where the new inputs are used; old projects unchanged]
+## 2026-11-07 — PR: claude/timber-bearing (PR #1027: https://github.com/mlococo88/All-Structural/pull/1027) (TBB1: bearing on the supporting member and under point loads)   [calc change: new checks] [MORE conservative only where the new inputs are used; old projects unchanged]
 
 Line numbers are approximate; search for the anchor text. Code sites are tagged `TBB1`.
 
