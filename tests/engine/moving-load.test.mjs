@@ -516,8 +516,34 @@ export const EXPECTED = {
 const PRE_H1 = c => [c[0], c[1], c[2], { ...c[3], axleOnM: false }];
 test('vehicle presets: same keys, order and values as the original page', () => {
   let O; try { O = originalEngine(); } catch (e) { return; }   // no git history: covered by the hashes below
+  const S = sharedEngine(), keep = {};
+  // M1 (2026-11-07): rating vehicles were added after the original keys; the original keys, order and values are unchanged
+  Object.keys(O.P).forEach(k => { keep[k] = S.P[k]; });
+  assert.deepEqual(Object.keys(S.P).filter(k => k in O.P), Object.keys(O.P));   // (the page adds Fatigue after the table, as before)
+  assert.equal(JSON.stringify(plain(keep)), JSON.stringify(plain(O.P)));
+});
+
+test('M1 (2026-11-07): rating vehicles: gross weight and length as documented; Type 3S2 hand check; CT-TLC without IM', () => {
   const S = sharedEngine();
-  assert.equal(JSON.stringify(plain(S.P)), JSON.stringify(plain(O.P)));
+  // [key, gross weight (kips), axle 1 to last axle (ft)]: RIDOT LRFR (Sept 2022) 4.4.1.2 figures (MBE D6A-1..-5, D6A-7, EVs, RIPTA), CTDOT BDM 1.3.6
+  const DOC = [['H20-Legal', 40, 14], ['Type3', 50, 19], ['Type3S2', 72, 41], ['Type3-3', 80, 54], ['Legal-Lane', 60, 54], ['SU4', 54, 18], ['SU5', 62, 22],
+    ['SU6', 69.5, 26], ['SU7', 77.5, 30], ['EV2', 57.5, 15], ['EV3', 86, 19], ['RIPTA', 41.6, 23.25], ['CT-TLC', 279.6, 84.78]];
+  for (const [k, W, L] of DOC) {
+    const p = S.P[k]; assert.ok(p && p.hwy && p.rating, k);
+    assert.ok(Math.abs(p.axles.reduce((a, b) => a + b[0], 0) - W) < 1e-9, `${k} weight`);
+    assert.ok(Math.abs(p.axles.reduce((a, b) => a + b[1], 0) - L) < 1e-9, `${k} length`);
+  }
+  assert.deepEqual(S.P['Legal-Lane'].axles.map(a => a[0]), S.P['Type3-3'].axles.map(a => 0.75 * a[0]));
+  // Type 3S2, simple span 100 ft, midspan +M: axle 3 (15.5 k) on the section, lead axle at 35 ft: ordinates 17.5, 23, 25, 14, 12
+  // M = 10(17.5) + 15.5(23 + 25 + 14 + 12) = 175 + 1147 = 1322 kip-ft; with IM 1.33: 1758.26
+  const run = (key, spans) => { const m = modelFrom(S.P, S.props, key, { spans, m: { dfM: spans.map(() => 1), dfV: spans.map(() => 1) } }); return S.analyze(m, {}); };
+  const R = run('Type3S2', [100]), i = R.effs.findIndex(e => e.t === 'M' && Math.abs(e.x - 50) < 1e-6);
+  assert.ok(Math.abs(R.res[i].max - 1.33 * 1322) < 1e-3, `3S2 midspan ${R.res[i].max}`);
+  // CT-TLC, IM 0 (BDM 1.3.6): the midspan moment carries no impact; it equals the static moment from a 0.1 ft search
+  const C = run('CT-TLC', [100]), j = C.effs.findIndex(e => e.t === 'M' && Math.abs(e.x - 50) < 1e-6), ax = S.P['CT-TLC'].axles;
+  let best = 0; for (let p = 0; p <= 185; p += 0.01) { let off = 0, M = 0; ax.forEach(([P, sp]) => { off += sp; const x = p - off; if (x >= 0 && x <= 100) M += P * (x <= 50 ? x / 2 : (100 - x) / 2); }); best = Math.max(best, M); }
+  assert.ok(Math.abs(C.res[j].max - best) < 0.05, `CT-TLC ${C.res[j].max} vs ${best}`);
+  console.log(`       Type 3S2 100 ft midspan +M ${R.res[i].max.toFixed(2)} (1.33 × 1322); CT-TLC ${C.res[j].max.toFixed(2)} (static ${best.toFixed(2)})`);
 });
 
 test(`${CASES.length} cases: shared engine output hash = the original's (recorded)`, () => {

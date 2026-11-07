@@ -1594,3 +1594,13 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
     w_PL × A × DF_PL / g" with values substituted (e.g. 0.450 · 1250.00 · 1.00 / 1.0000 = 562.50 for the check case).
 - **Check case:** 1 span 100 ft, HL-93, DF 1, LLF 1, PL on with 0.45 k/ft: Max +M 2821.6 → 3384.1 kip-ft (+0.45 × 100²/8).
 - **Saved data:** new fields `pedOn`, `pedW`, `pedDF` in the autosave / export (`fields`); old saves open with PL off.
+## 2026-11-07 — PR: claude/ml-legal-vehicles (M1: rating vehicles in the preset list; page wiring only here)
+- **Engine data:** `shared/vehicles.js` adds 13 rating vehicles (see `fixlog/shared-vehicles.md`, same date). They appear in the
+  Preset list after the rail presets.
+- **Where (page):**
+  - `isRail(key)`: before `!HWY.includes(key)`; after `!HWY.includes(key)&&!(P[key]&&P[key].hwy)` (rating vehicles use the highway DFs).
+  - Report vehicle list (`buildRptList`): before every preset `checked`; after `${p.rating?'':' checked'}` (rating vehicles not ticked
+    by default, so the default multi-vehicle report is unchanged). `#rRail` ("Rail") no longer ticks `hwy` presets.
+  - New hint `#mlgRatingNote` under the axle table (sources, IM rules, the lane-type use, LLF / DF not set by the preset).
+- **Saved data:** none changed. A save holds the preset key and the axles; old saves name only the original keys.
+- **Check case:** preset Type 3S2, 1 span 100 ft, DF 1, LLF 1: midspan +M 1758.26 kip-ft (hand 1.33 × 1322).
