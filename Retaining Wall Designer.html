@@ -1393,6 +1393,9 @@ body.rwDashColl #rwDash { display: none; }
     </div>
     <div class="ig full" id="grp_sk" style="display:none"><label for="dk">Shear Key Depth d<sub>k</sub></label>
       <div class="iw"><input type="number" id="dk" value="12" min="6" max="36" step="1"><span class="iw-unit">in</span></div></div>
+    <div class="ig full" id="grp_skb" style="display:none"><label for="key_bk">Shear Key Width b<sub>k</sub></label>   <!-- RWSK (2026-11-07): key width, structural design of the key; absent in old saves = 12 in -->
+      <div class="iw"><input type="number" id="key_bk" value="12" min="6" max="48" step="1"><span class="iw-unit">in</span></div></div>
+    <div class="hint" id="hint_key_pp" style="display:none">Shear key gives no sliding credit: passive resistance is off (MassDOT BDM 3.3.1.1 neglects passive in front of the wall). The key is still designed for the passive pressure on its depth.</div>
     <hr class="sec-divider">
     <div class="ig full"><label for="heel_basis">Heel flexure/shear design basis</label>
       <select id="heel_basis" onchange="onInputChange()">
@@ -1743,13 +1746,14 @@ const RW_CARDS = {
   toeFlex:     ['footing', 'Toe Step 3 — Flexural Steel', 'Toe Step 3 — Flexural Steel'],
   toeShear:    ['footing', 'Toe Step 4 — Shear', 'Toe Step 4 — Shear'],
   ftgTS:       ['footing', 'Temperature & Shrinkage — Parallel to Wall', 'Temperature & Shrinkage — Parallel to Wall'],
-  ftgLoads:    ['footing', 'Factored Loads on Footing', 'Factored Loads on Footing'],   // RWBP (2026-11-06): link target of the bearing selector
+  ftgLoads:    ['footing', 'Factored Loads on Footing', 'Factored Loads on Footing'],
+  ftgKey:      ['footing', 'Shear Key — Structural Design', 'Shear Key — Structural Design'],   // RWSK   // RWBP (2026-11-06): link target of the bearing selector
 };
 // r.checks key → card where the check is worked (ACI crack control has no card in the tabs; the report adds one)
 const RW_CHECK_CARD = { ot:'stabOT', sliding:'stabSlide', bearing:'stabBrg', ecc:'stabEcc',
   stemFlex:'stemFlex', stemShear:'stemShear', stemMidShear:'stemMid', stemHook:'stemDev', stemMidFlex:'stemMid', stemLap:'stemDev', heelDev:'heelShear', toeDev:'toeShear', stemS3Lap:'stemS13', stemMAlong:'stemS13',
   heelFlex:'heelFlex', heelShear:'heelShear', toeFlex:'toeFlex', toeShear:'toeShear', colAxial:'stabCol',
-  ishFtg:'stabISH', ishStem:'stabISH', tsStem:'stemTS', tsFF:'stemTS', tsFtg:'ftgTS', ctSliding:'stabCT', ctEcc:'stabCT', ctBearing:'stabCT', ctYield:'stabYL',
+  ishFtg:'stabISH', ishStem:'stabISH', tsStem:'stemTS', tsFF:'stemTS', tsFtg:'ftgTS', keyFlex:'ftgKey', keyShear:'ftgKey', keyDev:'ftgKey', ctSliding:'stabCT', ctEcc:'stabCT', ctBearing:'stabCT', ctYield:'stabYL',
   crackStem:'stabServ', minRfStem:'stabServ', crackHeel:'stabServ', minRfHeel:'stabServ', crackToe:'stabServ', minRfToe:'stabServ' };
 function rwCardTitle(key, isAASHTO) { const c = RW_CARDS[key]; return c ? c[isAASHTO ? 2 : 1] : null; }
 function rwLink(r, key, txt) {
@@ -3338,6 +3342,57 @@ function calcAll(inp) {
     : 0.0018 * bw * inp.tf;
   const sel_ftg_long = applyOvr('f3', As_ftg_long, selectBar(As_ftg_long, tsMaxS(inp.tf)));
 
+  // ── RWSK (2026-11-07): structural design of the shear key (engineer decision, audit item 6a) ──
+  // Cantilever from the footing underside, loaded by the passive pressure on its depth (trapezoid p_top = K_p γ D_f to
+  // p_bot = K_p γ (D_f + d_k), the same pressure as P_p,key), factored as H 1.6 (ACI 318-19 §5.3.8) or EH max 1.50 (AASHTO 10th
+  // Table 3.4.1-2). Designed whenever a key is entered, passive on or off. ACI: plain concrete first (Ch. 14: h = b_k − 2 in,
+  // §14.5.1.7; M_n = 5λ√f'c S_m ≤ 0.85 f'c S_m, §14.5.2.1; V_n = (4/3)λ√f'c b h, Table 14.5.5.1(a); φ = 0.60, Table 21.2.1(i)),
+  // reinforced (K1 bars on the toe face, hooked into the footing) if it fails. AASHTO: reinforced (Section 5).
+  let keyR = null;
+  if (inp.useShearKey && dk_ft > 0) {
+    const bk = inp.key_bk > 0 ? inp.key_bk : 12;
+    const gP = isAASHTO ? 1.50 : 1.6;
+    const p_top = Kp * inp.gamma_s * Df, p_bot = Kp * inp.gamma_s * (Df + dk_ft);
+    const P_k = (p_top + p_bot) / 2 * dk_ft;                                        // lb/ft (= P_p,key)
+    const M_k = p_top * dk_ft * dk_ft / 2 + (p_bot - p_top) * dk_ft * dk_ft / 6;    // lb·ft/ft at the footing underside
+    const Vu = gP * P_k, Mu = gP * M_k;
+    const sq = Math.sqrt(inp.fc);
+    const h_pl = bk - 2, S_pl = bw * h_pl * h_pl / 6;
+    const Mn_pl = h_pl > 0 ? Math.min(5 * sq * S_pl, 0.85 * inp.fc * S_pl) / 12 : 0;
+    const Vn_pl = h_pl > 0 ? 4 / 3 * sq * bw * h_pl : 0;
+    const phiMn_pl = 0.60 * Mn_pl, phiVn_pl = 0.60 * Vn_pl;
+    const plain_flex_ok = Mu <= phiMn_pl, plain_shear_ok = Vu <= phiVn_pl;
+    const plain = !isAASHTO && plain_flex_ok && plain_shear_ok;
+    let rf = null;
+    if (!plain) {
+      const cov = inp.cov_ftg, maxS = isAASHTO ? Math.min(1.5 * bk, 18) : Math.min(3 * bk, 18);
+      let d = bk - cov - 0.375, sel = null, As_req = 0, As_min = 0, As_des = 0, os = false;
+      for (let pass = 0; pass < 2 && d > 0; pass++) {
+        const Rn = Mu * 12 / (0.9 * bw * d * d), disc = 1 - 2 * Rn / (0.85 * inp.fc);
+        os = disc < 0;
+        As_req = os ? 0 : (0.85 * inp.fc / inp.fy) * (1 - Math.sqrt(disc)) * bw * d;
+        As_min = asMin(d, bk, Mu * 12, 0.9);
+        As_des = Math.max(os ? As_min : As_req, As_min);
+        sel = selectBar(As_des, maxS);
+        d = bk - cov - sel.bar.db / 2;
+      }
+      const a = sel.As_prov * inp.fy / (0.85 * inp.fc * bw), phiMn = 0.9 * sel.As_prov * inp.fy * (d - a / 2) / 12;
+      const sh = shearVc(d, bk, sel.As_prov, Mu, Vu, dk_ft), phiV = isAASHTO ? 0.90 : 0.75, phiVc = phiV * sh.Vc;
+      const db = sel.bar.db;
+      const ldP = isAASHTO ? devLengthAASHTOParts(db, inp.fy, inp.fc, false, cov + db / 2, sel.spacing) : null;
+      const ld = isAASHTO ? devLengthAASHTO(db, inp.fy, inp.fc, false, cov + db / 2, sel.spacing)
+                          : devLength(db, inp.fy, inp.fc, 1.0, 1.0, cov + db / 2, 1.0, sel.spacing);
+      const ldh = hookDevLength(db, inp.fy, inp.fc, isAASHTO, sel.bar, ldP ? ldP.lam_rc : 1.0);
+      const av_ftg = inp.tf - inp.cov_ftg, av_key = inp.dk - cov;               // hooked up into the footing; down into the key
+      const hook_bot = ld > av_key, need_key = hook_bot ? ldh : ld;                // straight into the key if ℓd fits, else a standard hook at the key bottom
+      rf = { d, As_req, As_min, As_des, os, sel, a, phiMn, sh, phiV, phiVc, ld, ldh, av_ftg, av_key, hook_bot, need_key,
+             flex_ok: !os && sel.As_prov >= As_des - 0.001 && phiMn >= Mu - 1e-6, shear_ok: phiVc >= Vu, dev_ok: ldh <= av_ftg && need_key <= av_key };
+      if (!rf.dev_ok) warnings.push(`Shear key bars K1: ℓdh = ${f(ldh,1)}" into the footing (${f(av_ftg,1)}" available) / ${hook_bot ? 'ℓdh' : 'ℓd'} = ${f(need_key,1)}" into the key (${f(av_key,1)}" available) — deepen the key or the footing, or use smaller bars.`);
+    }
+    keyR = { bk, gP, p_top, p_bot, P_k, M_k, Vu, Mu, h_pl, S_pl, Mn_pl, Vn_pl, phiMn_pl, phiVn_pl, plain_flex_ok, plain_shear_ok, plain, rf,
+             no_credit: !inp.inclPassive };
+  }
+
   // ── Column axial load on stem (per ft of wall) ───────────────
   // The column creates axial compression in the stem — check P/Ag
   const Pu_stem_axial = Puf_max;          // lb/ft — factored axial from column
@@ -3499,6 +3554,10 @@ function calcAll(inp) {
     tsStem:    { ok: sel_temp.As_prov >= As_temp_stem - 0.001,     label: 'Stem T&amp;S (S2)' },
     tsFtg:     { ok: sel_ftg_long.As_prov >= As_ftg_long - 0.001,  label: 'Ftg T&amp;S (F3)' },
     ...(isAASHTO ? { tsFF: { ok: sel_ff.As_prov >= As_ff_stem - 0.001, label: 'Stem Front T&amp;S (S4)' } } : {}),   // RWFF
+    ...(keyR ? {   // RWSK
+      keyFlex:  { ok: keyR.plain ? keyR.plain_flex_ok : keyR.rf.flex_ok,   label: 'Key Flex',  val: keyR.plain ? 'plain concrete' : 'K1 ' + keyR.rf.sel.label },
+      keyShear: { ok: keyR.plain ? keyR.plain_shear_ok : keyR.rf.shear_ok, label: 'Key Shear', val: keyR.plain ? 'plain concrete' : undefined },
+      ...(keyR.rf ? { keyDev: { ok: keyR.rf.dev_ok, label: 'Key K1 ℓdh/ℓd' } } : {}) } : {}),
     ...(hasCol ? { colAxial: { ok: col_axial_ok,   label: 'Col. Axial', val: `P/φPn=${f(col_axial_ratio,3)}` } } : {}),
     ...(isAASHTO && aashtoR && aashtoR.ish ? {
       ishFtg:  { ok: aashtoR.ish.ish_ftg_ok || aashtoR.ish.dowel_ok, label: 'Interface Shear',
@@ -3609,6 +3668,7 @@ function calcAll(inp) {
     // Longitudinal
     As_ftg_long, sel_ftg_long,
     fy_TS, As_ff_stem, sel_ff,   // RWFF
+    keyR,   // RWSK
     // Checks
     checks,
   };
@@ -3662,6 +3722,7 @@ function getInputs() {
     cov_stem: n('cov_stem'), cov_ftg: n('cov_ftg'), gamma_c: n('gamma_c'),
     heel_basis: s('heel_basis') || 'std', uplift_mode: s('uplift_mode') || 'uniform',
     mu, useShearKey: b('use_shear_key'), dk: n('dk'), inclPassive: b('incl_passive'),
+    key_bk: n('key_bk') > 0 ? n('key_bk') : 12,   // RWSK (2026-11-07): key width (in)
     // Barrier / railing on top of stem (adds weight + collision lever arm; retains NO soil)
     bar_enable: b('bar_enable'),
     bar_h:      n('bar_h'),
@@ -4277,7 +4338,7 @@ function renderStabilityAASHTO(r) {
      {sym:'P_p', desc:inp.inclPassive?'passive resistance':'passive (neglected — toggle off)', val:F(r.Pp,0), unit:'lb/ft'}]);
   h += `<div class="alert info" style="margin:4px 0 8px;">${HINTS.aashto_base_fric[a.fricMode] || ''}</div>`;
   if (!inp.inclPassive)
-    h += `<div class="alert warn" style="margin:4px 0 8px;">\u26a0 Passive resistance <strong>neglected</strong> (toggle off) \u2014 computed P_p = ${F(r.Pp_full,0)} lb/ft not counted. Enable in Design Options to include.</div>`;
+    h += `<div class="alert warn" style="margin:4px 0 8px;">\u26a0 Passive resistance <strong>neglected</strong> (toggle off) \u2014 computed P_p = ${F(r.Pp_full,0)} lb/ft not counted. Enable in Design Options to include.${inp.useShearKey ? ' <strong>Shear key gives no sliding credit: passive resistance is off (MassDOT BDM 3.3.1.1 neglects passive in front of the wall).</strong>' : ''}</div>`;   // RWSK (b)
   h += eqCheck('Sliding check \u2014 total resistance \u2265 demand',
     `R_R + \\phi_{ep}P_p = ${F(a.R_slide,0)} \\geq \\sum\\gamma Q = ${F(a.H_drive_str,0)}\\ \\text{lb/ft} \\quad (\\text{DCR}=\\boxed{${F(a.sliding_dcr,2)}})`, a.sliding_ok_A,'',
     [{sym:'R_R', desc:'factored friction resistance', val:F(a.R_tau,0), unit:'lb/ft'},
@@ -4777,6 +4838,7 @@ function renderStability(r) {
     [{sym:'F_r', desc:'total sliding resistance', val:F(r.Fr,1), unit:'lb/ft'},
      {sym:'F_h', desc:'total horizontal thrust', val:F(r.Fh,1), unit:'lb/ft'},
      {sym:'FOS_{SL}', desc:'factor of safety (sliding)', val:F(r.FOS_SL,3), unit:''}]);
+  if (inp.useShearKey && !inp.inclPassive) h += `<div class="alert warn" style="margin-top:6px;">\u26a0 Shear key gives no sliding credit: passive resistance is off (MassDOT BDM 3.3.1.1 neglects passive in front of the wall).</div>`;   // RWSK (b)
   h += `</div></div>`;
 
   // ════ STEP 6 — BEARING ════
@@ -5757,6 +5819,40 @@ function renderFooting(r) {
     r.sel_ftg_long.As_prov >= r.As_ftg_long - 0.001);
   h += `</div></div>`;
 
+  // RWSK (2026-11-07): structural design of the shear key
+  if (r.keyR) {
+    const k = r.keyR, q = k.rf, gs = r.isAASHTO ? '1.50' : '1.6';
+    h += `<div class="card" style="margin-bottom:16px;">
+    <div class="card-hd"><span class="card-title">Shear Key — Structural Design</span><span class="card-ref">${r.isAASHTO ? 'AASHTO §5.6.3 / §5.7.3 / §5.10.8; passive as EH, γ = 1.50 (Table 3.4.1-2)' : 'ACI 318-19 Ch. 14 (plain) / Ch. 22 (reinforced); passive as H, γ = 1.6 (§5.3.8)'} · b_k = ${F(k.bk,1)} in, d_k = ${F(inp.dk,1)} in</span></div>
+    <div class="card-body">`;
+    if (k.no_credit) h += `<div class="alert warn" style="margin-bottom:8px;">\u26a0 Shear key gives no sliding credit: passive resistance is off (MassDOT BDM 3.3.1.1 neglects passive in front of the wall). The key is still designed below for the passive pressure on its depth.</div>`;
+    h += eq('Passive pressure on the key (cantilever from the footing underside)',
+      `p_{top} = K_p\\gamma_s D_f = (${F(r.Kp,3)})(${F(inp.gamma_s,0)})(${F(r.Df,3)}) = ${F(k.p_top,1)};\\quad p_{bot} = K_p\\gamma_s(D_f + d_k) = ${F(k.p_bot,1)}\\ \\text{psf}`, '',
+      [{sym:'P_k', desc:'passive force on the key = (p_top + p_bot)/2 · d_k (= P_p,key)', val:F(k.P_k,1), unit:'lb/ft'},
+       {sym:'M_k', desc:'moment at the footing underside = p_top d_k²/2 + (p_bot − p_top) d_k²/6', val:F(k.M_k,1), unit:'lb·ft/ft'}]);
+    h += eq('Factored demand (' + (r.isAASHTO ? 'EH max 1.50' : 'H 1.6') + ')',
+      `V_u = ${gs}(${F(k.P_k,1)}) = \\boxed{${F(k.Vu,0)}\\ \\text{lb/ft}};\\quad M_u = ${gs}(${F(k.M_k,1)}) = \\boxed{${F(k.Mu,0)}\\ \\text{lb·ft/ft}}`, r.isAASHTO ? 'Table 3.4.1-2' : 'ACI 5.3.8');
+    if (!r.isAASHTO) {
+      h += eqCheck('Plain concrete flexure (h = b_k − 2 in, cast against soil, §14.5.1.7; φ = 0.60, Table 21.2.1)',
+        `S_m = \\frac{b h^2}{6} = \\frac{12(${F(k.h_pl,1)})^2}{6} = ${F(k.S_pl,1)}\\ \\text{in}^3;\\quad \\phi M_n = 0.60\\min(5\\lambda\\sqrt{f'_c},\\,0.85f'_c)S_m = ${F(k.phiMn_pl,0)} ${k.plain_flex_ok ? '\\geq' : '<'} M_u = ${F(k.Mu,0)}\\ \\text{lb·ft/ft}`, k.plain_flex_ok, 'ACI 14.5.2.1');
+      h += eqCheck('Plain concrete shear (one-way)',
+        `\\phi V_n = 0.60\\cdot\\tfrac{4}{3}\\lambda\\sqrt{f'_c}\\,b\\,h = 0.60\\cdot\\tfrac{4}{3}(1.0)(${F(Math.sqrt(inp.fc),2)})(12)(${F(k.h_pl,1)}) = ${F(k.phiVn_pl,0)} ${k.plain_shear_ok ? '\\geq' : '<'} V_u = ${F(k.Vu,0)}\\ \\text{lb/ft}`, k.plain_shear_ok, 'ACI Table 14.5.5.1(a)');
+      h += k.plain ? `<div class="alert pass" style="margin:4px 0 8px;">\u2713 Plain concrete key: no reinforcement required.</div>`
+                   : `<div class="alert warn" style="margin:4px 0 8px;">Plain concrete is not enough: the key is reinforced (K1) below.</div>`;
+    }
+    if (q) {
+      h += eq('Reinforced key — effective depth (K1 on the toe face, cover ' + F(inp.cov_ftg,1) + ' in)',
+        `d = b_k - c_c - \\frac{d_b}{2} = ${F(k.bk,1)} - ${F(inp.cov_ftg,1)} - ${F(q.sel.bar.db/2,3)} = ${F(q.d,2)}\\ \\text{in}`, '');
+      h += eqCheck('K1 flexure (φ = 0.90): A_s,req = ' + F(q.As_req,4) + ', A_s,min = ' + F(q.As_min,4) + ' in²/ft',
+        `\\text{\\#${q.sel.bar.num} @ ${q.sel.spacing}'' o.c.} \\Rightarrow A_{s,prov} = ${F(q.sel.As_prov,4)} \\geq ${F(q.As_des,4)};\\quad \\phi M_n = ${F(q.phiMn,0)} \\geq M_u = ${F(k.Mu,0)}\\ \\text{lb·ft/ft}`, q.flex_ok, r.isAASHTO ? '\u00a75.6.3' : 'ACI 22.2');
+      h += eqCheck('K1 one-way shear (' + q.sh.method + ', φ = ' + F(q.phiV,2) + ')',
+        `\\phi V_c = ${F(q.phiVc,0)} ${q.shear_ok ? '\\geq' : '<'} V_u = ${F(k.Vu,0)}\\ \\text{lb/ft}`, q.shear_ok, r.isAASHTO ? '\u00a75.7.3' : 'ACI 22.5.5.1');
+      h += eqCheck('K1 development: hooked up into the footing; ' + (q.hook_bot ? 'ℓ_d = ' + F(q.ld,1) + ' in does not fit in the key, so K1 is hooked at the key bottom too' : 'straight down into the key'),
+        `\\ell_{dh} = ${F(q.ldh,1)} ${q.ldh <= q.av_ftg ? '\\leq' : '>'} t_f - c_c = ${F(q.av_ftg,1)}\\ \\text{in};\\quad ${q.hook_bot ? '\\ell_{dh}' : '\\ell_d'} = ${F(q.need_key,1)} ${q.need_key <= q.av_key ? '\\leq' : '>'} d_k - c_c = ${F(q.av_key,1)}\\ \\text{in}`, q.dev_ok, r.isAASHTO ? '\u00a75.10.8.2.4a / 5.10.8.2.1a' : 'ACI 25.4.3.1 / 25.4.2');
+    }
+    h += `</div></div>`;
+  }
+
   clearPlots('footing');
   registerPlot('footing', () => plotFootingLoads(r));
   registerPlot('footing', () => plotHeelSM(r));
@@ -5874,7 +5970,7 @@ const LS_OK = _lsAvailable();
 
 // Snapshot every form field by id → plain object
 const RWTB_FIELDS = ['proj_date', 'proj_chkdate'];   // RWTB (2026-11-06): the optional title-block dates (Project tab)
-const RWLS_DEF = { aashto_traffic_dir: 'parallel', toe_hook: false, ovr_bar_s4: '0', ovr_spc_s4: '0' };   // RWFF: + the S4 override (saved only when set)   // RWLS (2026-11-07) / RWDS (toe_hook): saved only when not the default; absent → the default
+const RWLS_DEF = { aashto_traffic_dir: 'parallel', toe_hook: false, ovr_bar_s4: '0', ovr_spc_s4: '0', key_bk: '12' };   // RWSK: + key width (saved only when not 12 in; absent = 12 in)   // RWFF: + the S4 override (saved only when set)   // RWLS (2026-11-07) / RWDS (toe_hook): saved only when not the default; absent → the default
 function snapshotFields() {
   const out = {};
   document.querySelectorAll('.sidebar input, .sidebar select, .sidebar textarea').forEach(el => {
@@ -5948,6 +6044,8 @@ function syncConditionalUI() {
   const chk = id => { const e=document.getElementById(id); return e?e.checked:false; };
   setDisp('grp_mu',        val('mu_method')==='custom');
   setDisp('grp_sk',        chk('use_shear_key'));
+  setDisp('grp_skb',       chk('use_shear_key'));   // RWSK
+  setDisp('hint_key_pp',   chk('use_shear_key') && !chk('incl_passive'));   // RWSK (b)
   setDisp('grp_heq_manual',val('aashto_heq_mode')==='manual');
   setDisp('grp_qn_manual', val('aashto_qn_mode')==='manual');
   // Water table mode
@@ -6205,7 +6303,7 @@ function rwInputErrors() {
   if (!blank('beta') && val('beta') < 0) R.push(['beta', `${lab('beta')} = ${raw('beta')}° (backfill sloping down from the wall): the earth-pressure formulas are used with β < 0 as entered. Confirm.`]);
   if (!(isA && sel('aashto_qn_mode') === 'manual')) need('qa', gt0);
   if (sel('mu_method') === 'custom') need('custom_mu', gt0);
-  if (on('use_shear_key')) need('dk', gt0);
+  if (on('use_shear_key')) { need('dk', gt0); need('key_bk', Object.assign(v => v > 2, { msg: 'must be greater than 2 in (the plain-concrete check takes 2 in off for concrete cast against soil)' })); }   // RWSK
   // ── Water ──
   if (sel('wt_mode') === 'elev') { need('el_tow'); need('el_gw'); }
   else opt('wt_depth', ge0);
@@ -7258,10 +7356,10 @@ function buildCrossSection(r) {
 
   // Shear key
   if (inp.useShearKey && dk_px > 0) {
-    const skw = tsbot_px*0.36, skx = x_ftoe+tsbot_px*0.32;
+    const skw = (inp.key_bk || 12) / 12 * SCALE, skx = x_ftoe + tsbot_px / 2 - skw / 2;   // RWSK: width b_k (was 0.36 t_s,base), centred under the stem as before
     s += `<rect x="${skx}" y="${y_fbot}" width="${skw}" height="${dk_px}"
       fill="${CC.fill}" stroke="${CC.stroke}" stroke-width="1.2"
-      data-tip="<b>Shear key</b><br>Depth d_k = ${f(inp.dk,0)} in<br>Added passive P_p,key = ${f(r.Pp_key,0)} lb/ft"/>`;
+      data-tip="<b>Shear key</b><br>Depth d_k = ${f(inp.dk,0)} in · width b_k = ${f(inp.key_bk||12,0)} in<br>${r.keyR ? (r.keyR.plain ? 'Plain concrete (ACI Ch. 14)' : 'Reinforced: K1 ' + r.keyR.rf.sel.label) + '<br>' : ''}Added passive P_p,key = ${f(r.Pp_key,0)} lb/ft"/>`;
     s += `<text x="${skx+skw/2}" y="${y_fbot+dk_px+FS.s+1}" font-size="7" fill="#2155c4" text-anchor="middle">key</text>`;
   }
   s += `</g>`;
@@ -8051,7 +8149,7 @@ function renderOverview(r) {
                 <tr><td class="lbl">Toe length L<sub>t</sub></td><td class="val">${f(inp.Lt,2)}</td><td class="unit">ft</td></tr>
                 <tr><td class="lbl">Heel length L<sub>h</sub></td><td class="val">${f(inp.Lh,2)}</td><td class="unit">ft</td></tr>
                 <tr><td class="lbl">Toe embedment D<sub>f</sub></td><td class="val">${f(r.Df,3)}</td><td class="unit">ft</td></tr>
-                ${inp.useShearKey ? `<tr><td class="lbl">Shear key depth d<sub>k</sub></td><td class="val">${f(inp.dk,0)}</td><td class="unit">in</td></tr>` : ''}
+                ${inp.useShearKey ? `<tr><td class="lbl">Shear key depth d<sub>k</sub></td><td class="val">${f(inp.dk,0)}</td><td class="unit">in</td></tr><tr><td class="lbl">Shear key width b<sub>k</sub></td><td class="val">${f(inp.key_bk,0)}</td><td class="unit">in</td></tr>` : ''}
               </tbody>
             </table>
           </div>
@@ -8329,7 +8427,7 @@ function buildOverviewSVG(r) {
 
   // ── Shear key ─────────────────────────────────────────────────
   if (inp.useShearKey && dk_px > 0) {
-    const skw = tsbot_px*0.36, skx = x_ftoe+tsbot_px*0.32;
+    const skw = (inp.key_bk || 12) / 12 * SCALE, skx = x_ftoe + tsbot_px / 2 - skw / 2;   // RWSK: width b_k
     s += `<rect x="${skx}" y="${y_fbot}" width="${skw}" height="${dk_px}"
       fill="${C_CONC.fill}" stroke="${C_CONC.stroke}" stroke-width="1.2"/>`;
     s += `<rect x="${skx}" y="${y_fbot}" width="${skw}" height="${dk_px}" fill="url(#oc)"/>`;
@@ -8665,6 +8763,10 @@ function rwResultRows(r) {
     tsStem:       () => [A ? AA('5.10.6') : 'ACI 318-19 §24.4.3.2', r.As_temp_stem / r.sel_temp.As_prov],
     tsFtg:        () => [A ? AA('5.10.6') : 'ACI 318-19 §24.4.3.2', r.As_ftg_long / r.sel_ftg_long.As_prov],
     tsFF:         () => [AA('5.10.6') + '; front face, vertical, each face and each direction', r.As_ff_stem / r.sel_ff.As_prov],   // RWFF
+    keyFlex:      () => { const k = r.keyR; return k.plain ? ['ACI 318-19 §14.5.2.1, plain concrete (φ 0.60, h = b<sub>k</sub> − 2 in); M<sub>u</sub> = ' + (A ? '1.50' : '1.6') + ' × passive on the key', k.Mu / k.phiMn_pl]
+                                   : [(A ? AA('5.6.3') : 'ACI 318-19 §22.2') + '; reinforced (K1)' + (A ? '' : ', plain concrete fails (M<sub>u</sub>/φM<sub>n</sub> = ' + f(k.Mu / Math.max(k.phiMn_pl, 1e-9), 2) + ')'), k.rf.As_des / k.rf.sel.As_prov]; },   // RWSK
+    keyShear:     () => { const k = r.keyR; return k.plain ? ['ACI 318-19 Table 14.5.5.1(a), plain concrete (φ 0.60)', k.Vu / k.phiVn_pl] : [A ? AA('5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', k.Vu / k.rf.phiVc]; },   // RWSK
+    keyDev:       () => { const q = r.keyR.rf; return [(A ? AA('5.10.8.2.4a / 5.10.8.2.1a') : 'ACI 318-19 §25.4.3.1 / §25.4.2') + '; K1 hooked into the footing, ' + (q.hook_bot ? 'hooked' : 'straight') + ' into the key', Math.max(q.ldh / q.av_ftg, q.need_key / q.av_key)]; },   // RWSK
     ctSliding:    () => ['MassDOT §3.3.2.4; Extreme Event II', E.sliding_dcr_ct],
     ctEcc:        () => ['Extreme Event II; e ≤ B/' + f(E.eccDiv, 0), Math.abs(E.e_ct) / E.e_lim_ct],
     ctBearing:    () => ['Extreme Event II; q<sub>u</sub> ≤ q<sub>R</sub>', E.q_ult_ct / E.q_R_ct],
@@ -9127,7 +9229,7 @@ function buildGeometry3D(r) {
 
   // ── Shear key ──
   if (inp.useShearKey && r.dk_ft > 0) {
-    const key = new THREE.Mesh(new THREE.BoxGeometry(ts_bot*0.4, r.dk_ft, WL), mat(0x7788aa));
+    const key = new THREE.Mesh(new THREE.BoxGeometry((inp.key_bk || 12) / 12, r.dk_ft, WL), mat(0x7788aa));
     key.position.set(Lt + ts_bot*0.5, -r.dk_ft/2, WL/2); key.castShadow = true;
     G.concrete.add(key);
   }
@@ -9335,9 +9437,11 @@ document.getElementById('mu_method').addEventListener('change', function () {
 });
 document.getElementById('use_shear_key').addEventListener('change', function () {
   document.getElementById('grp_sk').style.display = this.checked ? '' : 'none';
+  if (typeof syncConditionalUI === 'function') syncConditionalUI();   // RWSK: key width and the passive-off note
   onInputChange();
 });
 document.getElementById('incl_passive').addEventListener('change', onInputChange);
+document.getElementById('incl_passive').addEventListener('change', () => { if (typeof syncConditionalUI === 'function') syncConditionalUI(); });   // RWSK (b)
 document.getElementById('aashto_heq_mode').addEventListener('change', function () {
   document.getElementById('grp_heq_manual').style.display = this.value === 'manual' ? '' : 'none';
 });
@@ -9544,7 +9648,7 @@ function rwrModel(r) {
       ['Footing thickness t_f', rwrCell(inp.tf, 1), 'in'], ['Stem thickness at base t_s,bot', rwrCell(inp.ts_bot, 1), 'in'], ['Stem thickness at top t_s,top', rwrCell(inp.ts_top, 1), 'in'],
       ['Toe length L_t', rwrCell(inp.Lt, 2), 'ft'], ['Heel length L_h', rwrCell(inp.Lh, 2), 'ft'], ['Toe soil cover above footing D_f,add', rwrCell(inp.Df_add, 2), 'ft'],
       ['Total toe embedment D_f = t_f + D_f,add', rwrCell(r.Df, 3), 'ft'], ['Footing width B', rwrCell(r.B, 3), 'ft'], ['Total wall height H = H_s + t_f', rwrCell(r.H, 3), 'ft'],
-      ...(inp.useShearKey ? [['Shear key depth d_k', rwrCell(inp.dk, 0), 'in']] : []),
+      ...(inp.useShearKey ? [['Shear key depth d_k', rwrCell(inp.dk, 0), 'in'], ['Shear key width b_k', rwrCell(r.keyR ? r.keyR.bk : inp.key_bk, 0), 'in']] : []),   // RWSK: + b_k
       ...(r.hasBarrier ? [['Barrier height / weight W_bar', rwrN(r.bar_h_ft, 2) + ' ft / ' + rwrN(r.W_bar, 0) + ' lb/ft', '–'],
         ['Barrier weight from', inp.bar_mode === 'geom' ? 'geometry: thickness ' + rwrN(inp.bar_t, 1) + ' in × height × γ_c' : 'entered weight', '–'], ['Barrier offset from the stem-top centreline (+ toward the heel)', rwrCell(inp.bar_ecc, 1), 'in']] : [])];   // RWPR: + barrier mode / offset
     const fig = (() => { try { return buildOverviewSVG(r); } catch (e) { return ''; } })();
@@ -9953,6 +10057,23 @@ function rwrModel(r) {
       rwrS({ id: 'F3', label: 'Bar selection F3 (longitudinal, both faces): #' + r.sel_ftg_long.bar.num + ' at ' + r.sel_ftg_long.spacing + ' in' + (r.sel_ftg_long.overridden ? ' (user override)' : ''), sym: 'A_{s,prov}', eq: '', sub: rwrN(r.sel_ftg_long.As_prov, 4) + ' \\ge ' + rwrN(r.As_ftg_long, 4), value: r.sel_ftg_long.As_prov, unit: 'in^{2}/ft', d: 4, ok: ok('tsFtg') })];
     CK.tsFtg = 'lng/F3';
     subs.push(sub('Longitudinal reinforcement: temperature and shrinkage parallel to the wall', [rwrItem('lng', [{ title: 'T&S', steps: L }]), onTab('ftgTS')]));
+    if (r.keyR) {   // RWSK (2026-11-07)
+      const k = r.keyR, q = k.rf, gs = isA ? '1.50' : '1.6';
+      const K = [rwrS({ id: 'pt', label: 'Passive pressure at the top of the key', sym: 'p_{top}', eq: 'K_{p}\\gamma_{s}D_{f}', sub: '(' + rwrN(r.Kp, 3) + ')(' + rwrN(inp.gamma_s, 0) + ')(' + rwrN(r.Df, 3) + ')', value: k.p_top, unit: 'psf', d: 1 }),
+        rwrS({ id: 'pb', label: 'Passive pressure at the bottom of the key', sym: 'p_{bot}', eq: 'K_{p}\\gamma_{s}(D_{f} + d_{k})', sub: '(' + rwrN(r.Kp, 3) + ')(' + rwrN(inp.gamma_s, 0) + ')(' + rwrN(r.Df + r.dk_ft, 3) + ')', value: k.p_bot, unit: 'psf', d: 1 }),
+        rwrS({ id: 'Mk', label: 'Moment at the footing underside (unfactored)', sym: 'M_{k}', eq: '\\frac{p_{top}d_{k}^{2}}{2} + \\frac{(p_{bot} \\minus p_{top})d_{k}^{2}}{6}', sub: '', value: k.M_k, unit: 'lb-ft/ft', d: 1 }),
+        rwrS({ id: 'Mu', label: 'Factored moment (' + (isA ? 'EH max 1.50, Table 3.4.1-2' : 'H 1.6, ACI 318-19 §5.3.8') + ')', sym: 'M_{u}', eq: gs + 'M_{k}', sub: gs + '(' + rwrN(k.M_k, 1) + ')', value: k.Mu, unit: 'lb-ft/ft', d: 0 }),
+        rwrS({ id: 'Vu', label: 'Factored shear', sym: 'V_{u}', eq: gs + '\\frac{(p_{top} + p_{bot})d_{k}}{2}', sub: gs + '(' + rwrN(k.P_k, 1) + ')', value: k.Vu, unit: 'lb/ft', d: 0 })];
+      if (!isA) { K.push(rwrS({ id: 'plM', label: 'Plain concrete flexure, h = b_k − 2 = ' + rwrN(k.h_pl, 1) + ' in (cast against soil, §14.5.1.7), φ = 0.60', sym: '\\frac{M_{u}}{\\phi M_{n}}', eq: '\\frac{M_{u}}{0.60\\min(5\\lambda\\sqrt{' + RWR_FC + '},\\, 0.85' + RWR_FC + ')S_{m}}', sub: '\\frac{' + rwrN(k.Mu, 0) + '}{' + rwrN(k.phiMn_pl, 0) + '}', value: k.Mu / Math.max(k.phiMn_pl, 1e-9), unit: '', d: 3, ok: k.plain_flex_ok, ref: 'ACI 318-19 §14.5.2.1' }),
+          rwrS({ id: 'plV', label: 'Plain concrete shear, φ = 0.60', sym: '\\frac{V_{u}}{\\phi V_{n}}', eq: '\\frac{V_{u}}{0.60\\cdot\\frac{4}{3}\\lambda\\sqrt{' + RWR_FC + '}\\,b\\,h}', sub: '\\frac{' + rwrN(k.Vu, 0) + '}{' + rwrN(k.phiVn_pl, 0) + '}', value: k.Vu / Math.max(k.phiVn_pl, 1e-9), unit: '', d: 3, ok: k.plain_shear_ok, ref: 'ACI 318-19 Table 14.5.5.1(a)' }));
+        if (k.plain) { CK.keyFlex = 'key/plM'; CK.keyShear = 'key/plV'; } }
+      if (q) { K.push(rwrS({ id: 'K1', label: 'K1 bars (toe face of the key; d = ' + rwrN(q.d, 2) + ' in): A_s,req = ' + rwrN(q.As_req, 4) + ', A_s,min = ' + rwrN(q.As_min, 4) + '; #' + q.sel.bar.num + ' at ' + q.sel.spacing + ' in, φM_n = ' + rwrN(q.phiMn, 0) + ' lb-ft/ft', sym: 'A_{s,prov}', eq: '', sub: rwrN(q.sel.As_prov, 4) + ' \\ge ' + rwrN(q.As_des, 4), value: q.sel.As_prov, unit: 'in^{2}/ft', d: 4, ok: q.flex_ok, ref: isA ? AA('Art. 5.6.3') : 'ACI 318-19 §22.2' }),
+          rwrS({ id: 'V', label: 'Reinforced key shear (' + rwrPlain(q.sh.method) + ', φ = ' + rwrN(q.phiV, 2) + ')', sym: '\\frac{V_{u}}{\\phi V_{c}}', eq: '', sub: '\\frac{' + rwrN(k.Vu, 0) + '}{' + rwrN(q.phiVc, 0) + '}', value: k.Vu / q.phiVc, unit: '', d: 3, ok: q.shear_ok, ref: isA ? AA('Art. 5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)' }),
+          rwrS({ id: 'dev', label: 'K1 development: ℓ_dh = ' + rwrN(q.ldh, 1) + ' in ≤ t_f − c_c = ' + rwrN(q.av_ftg, 1) + ' in (hooked into the footing); ' + (q.hook_bot ? 'hooked at the key bottom (ℓ_d = ' + rwrN(q.ld, 1) + ' in does not fit): ℓ_dh' : 'straight: ℓ_d') + ' = ' + rwrN(q.need_key, 1) + ' in ≤ d_k − c_c = ' + rwrN(q.av_key, 1) + ' in', sym: 'D/C', eq: '', sub: '', value: Math.max(q.ldh / q.av_ftg, q.need_key / q.av_key), unit: '', d: 3, ok: q.dev_ok, ref: isA ? AA('Art. 5.10.8.2.4a / 5.10.8.2.1a') : 'ACI 318-19 §25.4.3.1 / §25.4.2' }));
+        CK.keyFlex = 'key/K1'; CK.keyShear = 'key/V'; CK.keyDev = 'key/dev'; }
+      subs.push(sub('Shear key (b_k = ' + rwrN(k.bk, 1) + ' in, d_k = ' + rwrN(inp.dk, 1) + ' in)', [rwrItem('key', [{ title: 'Shear key — structural design', ref: isA ? AA('Art. 5.6.3 / 5.7.3 / 5.10.8') : 'ACI 318-19 Ch. 14 / Ch. 22', steps: K }]),
+        k.no_credit ? { type: 'note', text: 'Shear key gives no sliding credit: passive resistance is off (MassDOT BDM 3.3.1.1 neglects passive in front of the wall).' } : null, onTab('ftgKey', 'Footing design tab, Shear Key')].filter(Boolean)));
+    }
     secs.push({ title: 'Footing design', subs });
   }
 
@@ -9960,7 +10081,7 @@ function rwrModel(r) {
   {
     const rows = [['S1', 'Stem — vertical (back face)', r.sel_stem, r.As_stem_des, r.ld_stem, r.stem_overstressed, 'stb/s3.S1'], ['S3', 'Stem — vertical mid-height (top half)', r.sel_stemT, r.As_stemT_des, null, r.stemT_overstressed, 'stm/m2.S3'],
       ['S2', 'Stem — horizontal T&S (both faces)', r.sel_temp, r.As_temp_stem, null, false, 'stb/s6.S2'], ...(r.sel_ff ? [['S4', 'Stem — vertical front face (T&S)', r.sel_ff, r.As_ff_stem, null, false, 'stb/s6.S4']] : []), ['F1', 'Heel — transverse ' + (r.Mu_heel_net >= 0 ? 'top' : 'bottom') + ' bars', r.sel_heel, r.As_heel_des, r.ld_heel, r.heel_overstressed, 'heel/h3.F1'],
-      ['F2', 'Toe — transverse bottom bars', r.sel_toe, r.As_toe_des, r.ld_toe, r.toe_overstressed, 'toe/t3.F2'], ['F3', 'Footing — longitudinal T&S (both faces)', r.sel_ftg_long, r.As_ftg_long, null, false, 'lng/F3']]
+      ['F2', 'Toe — transverse bottom bars', r.sel_toe, r.As_toe_des, r.ld_toe, r.toe_overstressed, 'toe/t3.F2'], ['F3', 'Footing — longitudinal T&S (both faces)', r.sel_ftg_long, r.As_ftg_long, null, false, 'lng/F3'], ...(r.keyR && r.keyR.rf ? [['K1', 'Shear key — toe face, hooked into the footing', r.keyR.rf.sel, r.keyR.rf.As_des, r.keyR.rf.ld, r.keyR.rf.os, 'key/K1']] : [])]
       .map(([m, loc, s, req, ld, os, key]) => { const okk = !os && s.As_prov >= req - 0.001;
         return { cells: [{ t: m + (s.overridden ? ' (override)' : ''), key }, loc, '#' + s.bar.num, rwrCell(s.spacing, 0), rwrCell(req, 4), rwrCell(s.As_prov, 4), rwrCell(s.As_prov / Math.max(req, 0.001), 2), ld == null ? '—' : rwrCell(ld, 1), { t: okk ? 'OK' : 'NG', cls: okk ? 'ok' : 'ng' }] }; });
     const items = [{ type: 'table', wide: true, caption: 'Bar schedule per foot of wall (f′c = ' + rwrN(inp.fc, 0) + ' psi, f_y = ' + rwrN(inp.fy / 1000, 0) + ' ksi)', head: ['Mark', 'Location', 'Bar', 's (in)', 'A_s,req (in²/ft)', 'A_s,prov (in²/ft)', 'Ratio', 'ℓ_d (in)', 'Status'], rows },
@@ -10262,8 +10383,8 @@ function rwdwGeo(r) {
     Dfa: inp.Df_add * k12, dk: inp.useShearKey ? inp.dk : 0, beta: inp.beta, dH: (r.dH_slope || 0) * k12 };
   G.xf = G.Lt; G.xbb = G.Lt + G.tsb; G.xbt = G.Lt + G.tst;
   G.xb = y => G.xbb + (G.xbt - G.xbb) * Math.max(0, Math.min(1, (y - G.tf) / Math.max(G.Hs, 1e-9)));   // back face at height y
-  // shear key: width not in the model; drawn as the tool's own section drawings (0.36 t_s,base wide, 0.32 t_s,base from the front face)
-  G.kw = 0.36 * G.tsb; G.kx = G.xf + 0.32 * G.tsb;
+  // shear key: width b_k (input, RWSK; before 2026-11-07 drawn nominal 0.36 t_s,base wide), centred under the stem
+  G.kw = inp.key_bk || 12; G.kx = G.xf + G.tsb / 2 - G.kw / 2;   // RWSK (2026-11-07): key width = the input b_k (was 0.36 t_s,base, drawn nominal), centred under the stem as before
   G.tanb = Math.tan(G.beta * Math.PI / 180);
   G.gradeB = y0 => y0;   // placeholder
   G.bar = r.hasBarrier ? { h: r.bar_h_ft * k12, w: inp.bar_mode === 'geom' ? inp.bar_t : 0.85 * G.tst, nominalW: inp.bar_mode !== 'geom' } : null;
@@ -10290,6 +10411,7 @@ function rwdwBars(r, G) {
     S3: { s: s3, from: G.tf + G.Hs / 2, to: yTop, len: yTop - (G.tf + G.Hs / 2) },
     S2: { s: s2 }, F3: { s: f3 },
     S4: r.sel_ff ? { s: r.sel_ff, len: G.H - cs - G.tf } : null,   // RWFF
+    K1: (r.keyR && r.keyR.rf && G.dk > 0) ? (() => { const s = r.keyR.rf.sel, x = G.kx + cf + s.bar.db / 2, y0 = -G.dk + cf, y1 = G.tf - cf - f1.bar.db - s.bar.db / 2, hk = 12 * s.bar.db, hb = r.keyR.rf.hook_bot ? Math.min(12 * s.bar.db, G.kw - 2 * cf) : 0; return { s, x, y0, y1, hk, hb, len: (y1 - y0) + hk + hb }; })() : null,   // RWSK: toe face of the key, 90° hook toward the heel under the top mat
     F1: { s: f1, x0: Math.max(cf, G.xbb - r.ld_heel), x1: G.B - cf, y: G.tf - cf - db(f1) / 2 },
     F2: { s: f2, x0: cf, x1: Math.min(G.B - cf, G.xf + r.ld_toe), y: cf + db(f2) / 2, hook: r.toe_hook ? 12 * db(f2) : 0 },   // RWDS: 90° hook up at the toe end when ticked
     yCut, cs, cf,
@@ -10491,6 +10613,7 @@ function rwdwBuild(r) {
       D.circle(L.bar, G.xf + BR.cs + (BR.S4 ? BR.S4.s.bar.db : 0) + r2, y, r2); }   // RWFF: inside S4 when present
     // RWFF (2026-11-07): S4 front-face verticals (AASHTO), from the joint to the top cover
     if (BR.S4) D.line(L.bar, G.xf + BR.cs + BR.S4.s.bar.db / 2, G.tf, G.xf + BR.cs + BR.S4.s.bar.db / 2, G.H - BR.cs);
+    if (BR.K1) D.pline(L.bar, [...(BR.K1.hb ? [[BR.K1.x + BR.K1.hb, BR.K1.y0]] : []), [BR.K1.x, BR.K1.y0], [BR.K1.x, BR.K1.y1], [BR.K1.x + BR.K1.hk, BR.K1.y1]], false);   // RWSK
     // F1 top (heel), F2 bottom (toe), F3 dots on both mats
     D.line(L.bar, BR.F1.x0, BR.F1.y, BR.F1.x1, BR.F1.y); D.line(L.bar, BR.F2.x0, BR.F2.y, BR.F2.x1, BR.F2.y);
     if (BR.F2.hook) D.line(L.bar, BR.F2.x0, BR.F2.y, BR.F2.x0, BR.F2.y + BR.F2.hook);   // RWDS: hooked F2
@@ -10543,7 +10666,7 @@ function rwdwBuild(r) {
     const yTop = G.H + (G.bar ? G.bar.h : 0) + 0.35 * P; dHs(G.xf, G.xbt, yTop, G.H, 'STEM TOP <>', 'left');
     if (G.Dfa > 0) dVs(G.tf, G.tf + G.Dfa, gr.xs - 0.35 * P, G.xf, '<>', true);
     dVs(0, G.tf + G.Dfa, gr.xs - (G.Dfa > 0 ? 1.3 : 0.35) * P, 0, 'D_F = <>', true);
-    if (G.dk > 0) { dVs(-G.dk, 0, G.kx + G.kw + 0.3 * P, G.kx + G.kw, '<>', false); T(L.txt, G.kx + G.kw + 0.75 * P, -G.dk / 2 - 0.03 * P, hs, 'SHEAR KEY (WIDTH NOT IN THE MODEL, DRAWN NOMINAL)', 0); }
+    if (G.dk > 0) { dVs(-G.dk, 0, G.kx + G.kw + 0.3 * P, G.kx + G.kw, '<>', false); T(L.txt, G.kx + G.kw + 0.75 * P, -G.dk / 2 - 0.03 * P, hs, 'SHEAR KEY, B_K = ' + rwdwIn(G.kw), 0); }
     if (isA && r.coulombThrust && inp.aashto.batter) T(L.txt, G.B / 2, yb2 - 0.48 * P, hs, 'COULOMB BACK-FACE BATTER OMEGA = ' + rwdwN(inp.aashto.batter, 1) + '° IS USED IN K_A; THE SECTION IS DRAWN AS MODELLED (STEM TAPER).', 1);
     const sbK = scaleBar(G.B / 2, yb2 - (isA && r.coulombThrust && inp.aashto.batter ? 0.8 : 0.65) * P, P, 'TYPICAL WALL SECTION  ·  SCALE ' + rwdwScName(P));
     return { known: sbK };
@@ -10573,7 +10696,7 @@ function rwdwBuild(r) {
       let yPrev = Infinity, nPrev = 1; list.forEach(([x, y, s]) => { const yl = Math.min(Math.max(y, -G.dk - 0.2 * P), yPrev - (0.12 + 0.13 * nPrev) * P); yPrev = yl; nPrev = s.split('\n').length; callout(x, y, xs, yl, s, side === 'R' ? 0 : 2, h); });
     });
     T(L.cj, G.xbb + 0.08 * P, G.tf + 0.06 * P, 0.065 * P, 'CONST. JT.', 0);
-    if (G.dk > 0) T(L.txt, G.kx + G.kw / 2, -G.dk - 0.18 * P, hs, 'SHEAR KEY: NO REINFORCEMENT DESIGNED IN THE TOOL', 1);
+    if (G.dk > 0 && r.keyR) T(L.txt, G.kx + G.kw / 2, -G.dk - 0.18 * P, hs, r.keyR.plain ? 'SHEAR KEY: PLAIN CONCRETE (ACI 318-19 CH. 14), NO REINFORCEMENT' : 'SHEAR KEY: K1 ' + bl(r.keyR.rf.sel) + ' TOE FACE, HOOKED INTO THE FOOTING', 1);   // RWSK
     const sbK = scaleBar(G.B / 2, -G.dk - 0.5 * P, P, 'REINFORCEMENT SECTION  ·  SCALE ' + rwdwScName(P) + '  ·  COVER: STEM ' + rwdwIn(BR.cs) + ', FOOTING ' + rwdwIn(BR.cf) + ' (TOP AND BOTTOM)');
     // the schedule below the view, at paper size
     const yT = -G.dk - 1.15 * P, th = 0.068 * P;
@@ -10584,6 +10707,7 @@ function rwdwBuild(r) {
       ['S3', '#' + r.sel_stemT.bar.num, r.sel_stemT.spacing + '"', 'STEM VERT., BACK, UPPER HALF', 'STRAIGHT', len(BR.S3.len), rwdwN(r.sel_stemT.As_prov, 3), rwdwN(r.ld_S3, 1) + ' (LAP ' + rwdwN(r.s13_lst, 1) + ')'],
       ['S2', '#' + r.sel_temp.bar.num, r.sel_temp.spacing + '"', 'STEM HORIZ. T&S, EACH FACE', 'STRAIGHT', 'CONT.', rwdwN(r.sel_temp.As_prov, 3), '-'],
       ...(BR.S4 ? [['S4', '#' + r.sel_ff.bar.num, r.sel_ff.spacing + '"', 'STEM VERT. T&S, FRONT FACE', 'STRAIGHT', len(BR.S4.len), rwdwN(r.sel_ff.As_prov, 3), '-']] : []),   // RWFF
+      ...(BR.K1 ? [['K1', '#' + BR.K1.s.bar.num, BR.K1.s.spacing + '"', 'SHEAR KEY, TOE FACE', BR.K1.hb ? '90° HOOK BOTH ENDS' : '90° HOOK', len(BR.K1.len), rwdwN(BR.K1.s.As_prov, 3), rwdwN(r.keyR.rf.ld, 1) + ' / ' + rwdwN(r.keyR.rf.ldh, 1)]] : []),   // RWSK
       ['F1', '#' + r.sel_heel.bar.num, r.sel_heel.spacing + '"', 'HEEL, TRANSVERSE, TOP', 'STRAIGHT', len(BR.F1.len), rwdwN(r.sel_heel.As_prov, 3), rwdwN(r.ld_heel, 1)],
       ['F2', '#' + r.sel_toe.bar.num, r.sel_toe.spacing + '"', 'TOE, TRANSVERSE, BOTTOM', r.toe_hook ? '90° HOOK' : 'STRAIGHT', len(BR.F2.len), rwdwN(r.sel_toe.As_prov, 3), rwdwN(r.ld_toe, 1) + (r.toe_hook ? ' / ' + rwdwN(r.ldh_toe, 1) : '')],   // RWDS
       ['F3', '#' + r.sel_ftg_long.bar.num, r.sel_ftg_long.spacing + '"', 'FOOTING LONGIT. T&S, T&B (' + BR.nF3 + ' EA. FACE)', 'STRAIGHT', 'CONT.', rwdwN(r.sel_ftg_long.As_prov, 3), '-'],

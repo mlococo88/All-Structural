@@ -10,7 +10,7 @@
 // RWSC (2026-11-07): the self-consistency panel passes on representative walls, reports MISMATCH on a tampered result, hides on error.
 // RWPR (2026-11-07): the Report prints alone, with every section, the overview figures and the input echo; 0 KaTeX errors.
 // RWKX (2026-11-07): the tabs' equations are all set by KaTeX, none in error; MathJax is not loaded.
-// Audit items (2026-11-07, table AUD): the new checks of the calculation audit on their check cases (RWS13 stem S1/S3 layout, RWEC ACI eccentricity limit, RWFF front-face T&S, ...).
+// Audit items (2026-11-07, table AUD): the new checks of the calculation audit on their check cases (RWS13 stem S1/S3 layout, RWEC ACI eccentricity limit, RWFF front-face T&S, RWSK shear key, ...).
 //   node tests/smoke/retaining-wall-checks.mjs [--file <file or git ref>]
 import path from 'path';
 import { openPage, resolveFile } from '../lib.mjs';
@@ -199,6 +199,17 @@ const AUD = [
   ['RWFF AASHTO f_y 80 ksi: Eq. 5.10.6-1 with f_y = 75 ksi (S2, S4, F3 0.1387 / 0.1393)', { design_basis: 'AASHTO', fy: 80000 }, [
     ['R.fy_TS === 75 && Math.abs(R.As_temp_stem - 0.1387) < 0.0001 && Math.abs(R.As_ff_stem - 0.1387) < 0.0001 && Math.abs(R.As_ftg_long - 0.1393) < 0.0001', 'capped f_y']]],
   ['RWFF ACI: no S4, note only', {}, [['R.sel_ff === null && !R.checks.tsFF && /no vertical bars are required/i.test(T.stem)', 'note on Stem Step 6']]],
+  ['RWSK ACI 12-in key, passive on: plain concrete, D/C 0.167 / 0.190', { use_shear_key: true, dk: 12, incl_passive: true }, [
+    ['R.keyR.plain && Math.abs(R.keyR.Mu - 528) < 0.5 && Math.abs(R.keyR.phiMn_pl - 3162) < 1 && Math.abs(R.keyR.phiVn_pl - 6072) < 1 && R.checks.keyFlex.ok && R.checks.keyShear.ok && !R.checks.keyDev', 'plain: M_u 528 ≤ φM_n 3162, V_u 1152 ≤ φV_n 6072'],
+    ['/Shear Key — Structural Design/i.test(T.footing) && /Key Flex/.test(T.overview)', 'Footing card and dashboard row'], ['/Shear key \\(b_k = 12\\.0 in/.test(P) && /Passive pressure at the top of the key/.test(P)', 'Report sub']]],
+  ['RWSK ACI 36-in key: M_u 6480 > 3162 → reinforced K1 #4@9', { use_shear_key: true, dk: 36, incl_passive: true }, [
+    ['!R.keyR.plain && R.keyR.rf.sel.bar.num === 4 && R.keyR.rf.sel.spacing === 9 && R.checks.keyFlex.ok && R.checks.keyShear.ok && R.checks.keyDev.ok', 'K1 #4@9, flexure, shear and development OK']]],
+  ['RWSK AASHTO 12-in key: reinforced, K1 hooked both ends', { design_basis: 'AASHTO', use_shear_key: true, dk: 12, incl_passive: true }, [
+    ['!R.keyR.plain && R.keyR.rf.hook_bot && R.checks.keyDev.ok && Math.abs(R.keyR.Mu - 495) < 0.5', 'M_u 495, K1 #3@18 hooked at the key bottom']]],
+  ['RWSK key with passive off: no sliding credit note, key still designed; key width b_k 18 in', { use_shear_key: true, dk: 12, key_bk: 18 }, [
+    ['R.keyR.no_credit && R.keyR.bk === 18 && /gives no sliding credit/.test(T.stability) && /gives no sliding credit/.test(T.footing)', 'notes on Stability and Footing'],
+    ['getComputedStyle(document.getElementById("hint_key_pp")).display !== "none"', 'note under the key input']]],
+  ['RWSK walls without a key: no key rows', {}, [['R.keyR === null && !R.checks.keyFlex', 'no key design']]],
   ['RWEC AASHTO unchanged by the ACI select', { design_basis: 'AASHTO', aci_ecc_limit: 'b6' }, [['R.ecc_lim_aci === null && /e=1\\.43/.test(R.checks.ecc.val)', 'AASHTO e check as before']]],
 ];
 for (const [name, set, tests, opt] of AUD.filter(x => !process.env.RW_AUD || x[0].startsWith(process.env.RW_AUD))) {
