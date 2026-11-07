@@ -5631,7 +5631,7 @@ Second-pass review finding H4 (2026-11-07). Code sites are tagged `RW2H4`.
 ### Saved data
 - No input or format change.
 
-## 2026-11-07 — PR: claude/rw2-h1-aci-static-brg — ACI/IBC with earthquake: the service bearing and the eccentricity are checked for the static case (E = 0) and for the case with 1.0·ΔP_E; the larger governs (RW2H1; calculation change, k_h > 0 only)
+## 2026-11-07 — PR: claude/rw2-h1-aci-static-brg — ACI/IBC with earthquake: the service bearing and the eccentricity are checked for the static case (E = 0) and for the case with 1.0·ΔP_E; the larger governs (RW2H1; calculation change, k_h > 0 only) (PR #1137: https://github.com/mlococo88/All-Structural/pull/1137)
 
 Second-pass review finding H1 (2026-11-07), the open item of RWIB (#953). Code sites are tagged `RW2H1`.
 
