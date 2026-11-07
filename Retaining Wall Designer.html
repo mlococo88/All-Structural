@@ -832,6 +832,14 @@ body.rwDashColl #rwDash { display: none; }
   border: 1px solid var(--border); border-left: 4px solid var(--slate-400); border-radius: 3px; background: #fff; font-size: 8.5pt; line-height: 1.35; cursor: pointer; }
 .rwdCh:hover { background: var(--slate-50); } .rwdCh:focus-visible { outline: 2px solid var(--blue-600); outline-offset: -1px; }
 .rwdCh.pass { border-left-color: var(--pass); } .rwdCh.fail { border-left-color: var(--fail); background: #FEF2F2; } .rwdCh.warn { border-left-color: var(--warn); background: #FFFBEB; }
+/* RWDL (2026-11-07, engineer: "the summary cards should be on the left panel" as in Spread Footing): each row is styled as
+   Spread Footing's dashboard chip (SFDC): a 1 px border in the status colour on a tinted background, the check name in bold.
+   Display only. */
+.rwdCh { border-left-width: 1px; }
+.rwdCh.pass { border-color: var(--pass); background: #ECFDF5; } .rwdCh.fail { border-color: var(--fail); background: #FEF2F2; }
+.rwdCh.warn { border-color: var(--warn); background: #FFFBEB; } .rwdCh.na { border-color: var(--slate-400); background: var(--slate-50); }
+.rwdCh.pass:hover { background: #D1FAE5; } .rwdCh.fail:hover { background: #FEE2E2; } .rwdCh.warn:hover { background: #FEF3C7; } .rwdCh.na:hover { background: var(--slate-100); }
+.rwdCh .rwdN { font-weight: 700; color: var(--slate-900); }
 .rwdCh .rwdX { grid-row: 1; grid-column: 1; margin: 0; padding: 0 3px; border: none; background: transparent; font-size: 9px; color: var(--slate-700); line-height: 1.2; cursor: pointer; }
 .rwdCh .rwdN { grid-row: 1; grid-column: 2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rwdCh .rwdR { grid-row: 1; grid-column: 3; white-space: nowrap; color: var(--slate-700); }
