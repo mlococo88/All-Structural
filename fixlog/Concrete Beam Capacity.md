@@ -5267,7 +5267,7 @@ Frames: Beam Capacity (`suite-frame-capacity`, the shared-inputs block) and Deve
 - **How verified:** headless main vs branch, the hand-off object (`RBCAP.last` in the Dev frame) for all probe cases + aasPos2 and aasMinNegTop: only aasPos2 moves. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
 - **Saved data:** no change.
 
-## 2026-11-07 — PR: claude/cbc-skin-draw (CBM3d: skin bars drawn in the section figure and on the DXF / drawing sheets — section, elevation, bar schedule; display and export only, no result change)
+## 2026-11-07 — PR: claude/cbc-skin-draw, PR #1059: https://github.com/mlococo88/All-Structural/pull/1059 (CBM3d: skin bars drawn in the section figure and on the DXF / drawing sheets — section, elevation, bar schedule; display and export only, no result change)
 
 Frame: Beam Capacity (`suite-frame-capacity`). Open item of CBM3 (#1001), review item M3.
 
