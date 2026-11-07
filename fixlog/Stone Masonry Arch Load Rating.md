@@ -1364,3 +1364,35 @@ function transDisp(w,n,c,cap){
 - **Saved data:** no key or format change. Old projects open with the cap (more conservative). There is no option to switch it off, and no migration: this is a correction toward the provision, not a choice the user made.
 - **How verified:** `node tests/check-syntax.mjs`; `tests/smoke/phone-layout.mjs --tool arch`; `tests/smoke/project-library.mjs --tool stonearch` (the only failures are the four A-vs-B identity checks, by design: live-load envelopes and ratings move; undo, dialog, quota and console checks pass); all 14 tabs with 0 console errors.
 - **Open item closed:** the 2026-10-12 "Remaining" item (Art. 6.4.2 slab-width limit).
+
+## 2026-11-07 — PR: claude/stonearch-m3-quarter-nodes — Auto element count a multiple of 4; QP / CR labels only on the true nodes (MQN; review M-3)
+
+### MQN-1. Auto count = §7.2.7.2B minimum rounded up to a multiple of 4   [§4 result change]
+- **Problem (review M-3):** the auto count was max(10, ceil(S/4)), which is 10 at the 40 ft default. On a 10-element mesh, node 3 sits at 0.3 of the arc (x = 11.38 ft), not at the quarter point (arc 0.25, x ≈ 10.4 ft). §7.2.7.7B and §7.2.2.6 require influence lines and ratings at the quarter points at a minimum.
+- **Where:** `readP()`, anchor `const auto=Math.ceil(Math.max(10,Math.ceil(S/4))/4)*4;`.
+- **Before:** `const auto=Math.max(10,Math.ceil(S/4));`
+- **After:** `const auto=Math.ceil(Math.max(10,Math.ceil(S/4))/4)*4;`. A count the user entered is kept as entered.
+- **Governing provisions:** MassDOT BM Pt. I §7.2.7.2B (minimum count), §7.2.7.7B (influence lines at least at the springlines, crown and quarter points), §7.2.2.6 (crown, springlines and quarter points rated). Checked in the MassDOT PDF.
+- **Decision (pending engineer review):** the auto count is rounded up rather than adding nodes at the quarter points, because the mesh stays equal arc length. Projects saved with "0 = auto" follow the new auto count; no migration, because auto is still the stored choice. A saved explicit count is unchanged.
+- **Check case:** the 40 ft default.
+  - Count: min = max(10, 40/4) = 10, and 4·ceil(10/4) = 12 elements.
+  - Nodes: QP-L = node 3 at arc 0.25. Convergence meshes become 12, 24, 48 (were 10, 20, 40).
+- **Reported RFs, main → branch (lowest of the three meshes, barrel cap in both):**
+
+| Case | main (10/20/40) | branch (12/24/48) |
+|---|---|---|
+| Default | H20 0.623, HS20 0.554, T3 0.732, 3S2 0.802, 3-3 0.888, SU4 0.635, SU5 0.606, SU6 0.564, SU7 0.574, EV2 0.573, EV3 0.401 | 0.747, 0.677, 0.801, 0.878, 0.972, 0.707, 0.672, 0.628, 0.664, 0.670, 0.439 |
+| 20/4 rise (from the finest mesh) | HS20 0.391, EV3 0.415 | 0.391, 0.413 |
+| 30/6 rise | HS20 0.278, EV2 0.266, EV3 0.188 | 0.286, 0.273, 0.196 |
+| 40/20 semicircle | all 0.000 (dead load overstress) | all 0.000 |
+| 4 ft cover | HS20 0.579, EV3 0.366 | 0.643, 0.445 |
+| Lanes = 1 | HS20 0.772, EV3 0.549 | 0.938, 0.607 |
+
+  **Less conservative on the default.** The 10-element mesh was the lowest of the three only because of the chord artefact described in MCV-1. With the cap, the converged default is HS20 ≈ 0.78 at 40 el (review §2.4), so 0.677 is still below converged. On the 30/6 case HS20 goes from 0.278 (40 el) to 0.286 (48 el); the review's 120-el value is 0.276, about 3% below the new value. Flagged to the engineer.
+
+### MQN-2. Section names: QP-L / CR / QP-R only on the true node   [display]
+- **Where:** `secTag`, anchor `if(n%4===0){named[n/4]="QP-L";named[3*n/4]="QP-R";}`.
+- **Before:** `const named={0:"SL-L",[Math.round(n*0.25)]:"QP-L",[Math.round(n*0.5)]:"CR",[Math.round(n*0.75)]:"QP-R",[n]:"SL-R"};`
+- **After:** SL-L and SL-R always; CR only when n is even; QP-L / QP-R only when n is a multiple of 4. Any other node is "N<i>".
+- **Dashboard:** "Quarter points are not nodes" (REVIEW) when the mesh in use is not a multiple of 4 (a user count). **Model tab:** a new step "Rounded up to a multiple of 4". **Input help:** the row and the manual table say so.
+- **How verified:** `check-syntax` (all pass); `phone-layout --tool arch`; `project-library --tool stonearch` (the A-vs-B identity checks differ by design; the others pass); all 14 tabs with 0 console errors; a count of 13 shows the warning.
