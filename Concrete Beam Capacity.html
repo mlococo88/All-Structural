@@ -3746,6 +3746,20 @@ function barXs(n,db){                       /* x-centres across the web, in */
 }
 
 /* ---------- to-scale, dimensioned SVG cross-section ---------- */
+/* CBM3d (2026-11-07): positions of the skin bars entered (S.skin) for drawing, in the sense of bending neg: on both side faces
+   inside the stirrup (x = +-(b_w/2 - c_c - d_s - d_b/2)), the first at s from the outermost tension layer toward the
+   compression face, then every s, within the zone of the code: ACI 9.7.2.3 h/2 from the tension face; AASHTO 5.6.7
+   d_l/2 nearest the flexural tension reinforcement (d_l = d of the outermost tension layer). Display only. */
+function cbcSkinBars(neg){
+  const sz=S.skin&amp;&amp;S.skin.size?String(S.skin.size):&quot;&quot;, sp=+(S.skin&amp;&amp;S.skin.s)||0;
+  if(!sz||!REBAR[sz]||!(sp>0)) return null;
+  const {bw,h}=S.sec, ds=S.stir.present?stirDia():0, db=REBAR[sz].d;
+  const T=layerGeom(neg).filter(L=>L.side==='T'); if(!T.length) return null;
+  const outer=T.reduce((a,b)=>a.d>b.d?a:b), y0=outer.yTop, dir=neg?1:-1;   /* toward the compression face */
+  const zone=S.code==='ACI'?h/2-(h-outer.d):outer.d/2;   /* measured from the outermost tension layer */
+  const ys=[]; for(let k=1;k*sp<=zone+1e-9&amp;&amp;ys.length<200;k++) ys.push(y0+dir*k*sp);
+  return {size:sz,db,s:sp,x:bw/2-S.cover.cc-ds-db/2,ys,zone,dl:outer.d,neg};
+}
 function svgSection(neg){
   const {bw,h,bf,hf,type}=S.sec, tee=type==='tee';
   const secW=tee?bf:bw;
@@ -3784,6 +3798,9 @@ function svgSection(neg){
         : `<circle data-layer=&quot;${L.i}&quot; cx=&quot;${X(x)}&quot; cy=&quot;${Y(L.yTop)}&quot; r=&quot;${rr}&quot; fill=&quot;#fff&quot; stroke=&quot;#2563EB&quot; stroke-width=&quot;1.8&quot;/>`;
     });
   });
+  /* CBM3d: skin bars on both side faces (entered; drawn over the code zone) */
+  const SK=cbcSkinBars(neg);
+  if(SK) SK.ys.forEach(y=>[-SK.x,SK.x].forEach(x=>{ s+=`<circle cx=&quot;${X(x)}&quot; cy=&quot;${Y(y)}&quot; r=&quot;${Math.max(2,SK.db/2*sc)}&quot; fill=&quot;#0D9488&quot;/>`; }));
   /* --- torsion: closed-stirrup perimeter and indicative A_l bars (\u00a79) --- */
   if(S.tor.present &amp;&amp; S.code==='ACI' &amp;&amp; S.tor.Al>0 &amp;&amp; S.stir.present){
     const cc2=S.cover.cc, ds2=stirDia();
@@ -4546,6 +4563,7 @@ function cbdwBuild(){
   const layerName=(Lr,j)=>{ const same=G.filter(q=>q.face===Lr.face), k=same.indexOf(Lr); return faceOf(Lr)+(same.length>1?' LAYER '+(k+1):''); };
   const svc=servicecalc(CC.govRow.F,false), B2=CC.both||bothSenses();
   const AsF=f=>G.filter(q=>q.face===f).reduce((s,q)=>s+q.As,0);
+  const SKd=cbcSkinBars(!!(CC.govRow&amp;&amp;CC.govRow.neg));   /* CBM3d: skin bars, in the governing combination's sense */
 
   /* ---------- 1. BEAM CROSS SECTION ---------- */
   sheet('sec','BEAM CROSS SECTION',P=>{
@@ -4555,6 +4573,12 @@ function cbdwBuild(){
     else D.rect(L.conc,-bw/2,0,bw/2,h);
     /* longitudinal bars, true size, at their positions (layerGeom, positive-moment convention: physical) */
     G.forEach(Lr=>{ barXs(Lr.n,Lr.db).forEach(x=>D.circle(L.bar,x,h-Lr.yTop,Lr.db/2)); });
+    /* CBM3d: skin bars (entered), both side faces, zone of the governing combination's sense; callout to the right */
+    if(SKd){ SKd.ys.forEach(y=>[-SKd.x,SKd.x].forEach(x=>D.circle(L.bar,x,h-y,SKd.db/2)));
+      const yk=h-SKd.ys[0], tx=(tee?bf:bw)/2+1.6*P, ty=h*0.62-0.75*P;
+      D.line(L.ldr,SKd.x+SKd.db/2,yk,tx-0.05*P,ty+0.05*P);
+      D.text(L.txt,tx,ty,th,'#'+SKd.size+' SKIN BARS @ '+cbdwIn(SKd.s)+' O.C., EACH SIDE FACE ('+SKd.ys.length+' PER FACE)',0);
+      D.text(L.txt,tx,ty-0.16*P,th,(S.code==='ACI'?'ACI 318-19 9.7.2.3: OVER h/2 FROM THE TENSION FACE':'AASHTO 5.6.7: OVER d_ℓ/2 NEAREST THE TENSION REINFORCEMENT')+(SKd.neg?' (TOP, NEGATIVE MOMENT)':''),0); }
     /* closed stirrup: centre line at the cover, corners bent to the minimum inside diameter, 135-degree hooks at the top-left corner */
     if(hk){ const xL=-bw/2+cc+hk.ds/2, xR=bw/2-cc-hk.ds/2, yB=cc+hk.ds/2, yT=h-cc-hk.ds/2, rc=hk.rc;
       const cTL=[xL+rc,yT-rc], cTR=[xR-rc,yT-rc], cBR=[xR-rc,yB+rc], cBL=[xL+rc,yB+rc];
@@ -4614,6 +4638,8 @@ function cbdwBuild(){
     D.line(L.conc,0,0,Lel,0); D.line(L.conc,0,h,Lel,h); if(tee) D.line(L.hid,0,h-hf,Lel,h-hf,D.ltype('HIDDEN'));
     D.pline(L.brk,zig(0),false); D.pline(L.brk,zig(Lel),false);
     G.forEach(Lr=>{ const y=h-Lr.yTop; D.line(L.bar,0.2*P,y-Lr.db/2,Lel-0.2*P,y-Lr.db/2); D.line(L.bar,0.2*P,y+Lr.db/2,Lel-0.2*P,y+Lr.db/2); });
+    if(SKd){ SKd.ys.forEach(yt=>{ const y=h-yt; D.line(L.bar,0.2*P,y-SKd.db/2,Lel-0.2*P,y-SKd.db/2); D.line(L.bar,0.2*P,y+SKd.db/2,Lel-0.2*P,y+SKd.db/2); });   /* CBM3d */
+      const y=h-SKd.ys[0]; D.text(L.txt,Lel+0.35*P,y-0.04*P,th,'#'+SKd.size+' SKIN BARS @ '+cbdwIn(SKd.s)+', EACH FACE (CONT.)',0); D.line(L.ldr,Lel+0.3*P,y,Lel-0.2*P,y); }
     if(sSp){ const ds=hk.ds, xs=[];
       for(let i=0;i<nS;i++){ const x=x0s+i*sSp; xs.push(x); D.line(L.stir,x-ds/2,cc,x-ds/2,h-cc); D.line(L.stir,x+ds/2,cc,x+ds/2,h-cc); }
       D.chainH(L.dim,xs,h+0.45*P,h);
@@ -4645,6 +4671,7 @@ function cbdwBuild(){
     let y=-(0.3+0.2*notes.length)*P;
     D.text(L.txt,0,y,0.15*P,'BAR SCHEDULE (ONE CROSS SECTION)',0); y-=0.15*P;
     const rows=G.map((Lr,j)=>['L'+(j+1),'#'+Lr.size,String(Lr.n),layerName(Lr),'STRAIGHT (LENGTH BY SPAN)',fmt(Lr.As,2)]);
+    if(SKd) rows.push(['SK','#'+SKd.size,String(2*SKd.ys.length),'SKIN, EACH SIDE FACE @ '+cbdwIn(SKd.s),'STRAIGHT (LENGTH BY SPAN)',fmt(2*SKd.ys.length*REBAR[SKd.size].a,2)]);   /* CBM3d */
     if(hk) rows.push(['S1','#'+S.stir.size,S.stir.legs+' LEGS','CLOSED STIRRUP @ '+cbdwIn(S.stir.s),'135° HOOKS '+cbdwIn(hk.ext)+', BEND Ø '+cbdwIn(hk.Di),fmt(S.stir.legs*REBAR[S.stir.size].a,2)+' (A_v)']);
     const t1=table(0,y,['MARK','SIZE','NO.','LOCATION','SHAPE','A_s (IN²)'],rows,th,[5]); y-=t1.h+0.45*P;
     D.text(L.txt,0,y,0.15*P,'DEVELOPMENT AND SPLICE LENGTHS (DEVELOPMENT &amp; SPLICE TAB)',0); y-=0.15*P;
