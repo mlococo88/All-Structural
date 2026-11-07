@@ -5418,7 +5418,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Other copies:** none.
 - **Open items:** without torsion, ψ_ec,V stays 1.0: the elastic plate gives equal shares to the row anchors.
 
-## 2026-11-07 — BPM5: Seismic Design Category input and ACI 318-19 §17.10 (PR: claude/bp-m5-seismic)
+## 2026-11-07 — BPM5: Seismic Design Category input and ACI 318-19 §17.10 (PR: claude/bp-m5-seismic, PR #976: https://github.com/mlococo88/All-Structural/pull/976)
 
 ### BPM5. SDC A–F; with C–F: 0.75 on concrete-governed tension, the §17.10.5.3 / §17.10.6.3 options, ductility check   [calculation change only when SDC C–F is picked; saved data: three optional fields]
 - **Problem (review M5):** §17.10 was not implemented. The banner (F14) fired only when the generator's seismic / Ω₀ boxes were ticked, not for E combinations typed in or imported.
