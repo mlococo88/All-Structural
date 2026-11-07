@@ -1988,6 +1988,26 @@ function j10WLC(p,lbIn,endDistIn){
   else{Rn=0.40*tw*tw*(1+(4*lbIn/d-0.2)*ratio)*root;clause='J10-5b';}
   return{Rn,phi:0.75,atEnd,clause};
 }
+/* M3 (2026-11-07): AISC 360-16 Sec. J10.1 flange local bending (tensile single force): R_n = 6.25 F_yf t_f^2 (J10-1),
+   phi = 0.90, halved within 10 t_f of the member end. The 0.15 b_f loading-width exemption is not taken (width unknown). */
+function j10FLB(p,endDistIn){
+  const nearEnd=endDistIn<10*p.tf,Rn=6.25*p.mat.Fy*p.tf*p.tf*(nearEnd?0.5:1);
+  return{Rn,phi:0.90,nearEnd,clause:'J10-1'};
+}
+/* M3: Sec. J10.4 web sidesway buckling (compressive single force, relative lateral movement of the flanges not restrained
+   at the load). r = (h/t_w)/(L_b/b_f). (a) compression flange restrained against rotation: r <= 2.3 -> J10-6,
+   R_n = C_r t_w^3 t_f/h^2 [1 + 0.4 r^3]; (b) not restrained: r <= 1.7 -> J10-7, R_n = C_r t_w^3 t_f/h^2 [0.4 r^3];
+   otherwise the limit state does not apply. C_r = 960,000 ksi when M_u < M_y at the load, 480,000 ksi otherwise; phi = 0.85.
+   mode 'env' (default): the lower of (a) and (b) where either applies (conservative when the restraint is not stated). */
+function j10WSB(p,LbIn,Mu,mode){
+  const h=webH(p),htw=h/p.tw,r=htw/(LbIn/p.bf),My=p.mat.Fy*p.Sx,Cr=(Math.abs(Mu)*12<My)?960000:480000;
+  const base=Cr*Math.pow(p.tw,3)*p.tf/(h*h);
+  const A=r<=2.3?{Rn:base*(1+0.4*r*r*r),clause:'J10-6',case:'a'}:null;
+  const B=r<=1.7?{Rn:base*0.4*r*r*r,clause:'J10-7',case:'b'}:null;
+  let g=null;
+  if(mode==='rot')g=A;else if(mode==='free')g=B;else g=(A&&B)?(B.Rn<A.Rn?B:A):(A||B);
+  return{h,htw,r,LbIn,Cr,My,Mu:Math.abs(Mu),base,phi:0.85,applies:!!g,Rn:g?g.Rn:null,clause:g?g.clause:null,cs:g?g.case:null,mode};
+}
 /* =====================================================================
    DESIGN ORCHESTRATION — regions, Cb, per-combination checks
    ===================================================================== */
@@ -2174,6 +2194,8 @@ function designAll(A){
       if(lo.lb!=null&&lo.lb>0){lo.wly=j10WLY(p,lo.lb,lo.endDist);lo.wlc=j10WLC(p,lo.lb,lo.endDist);}});
     D.j10={locs,lbSup:dsn.lbSup,lbPt:dsn.lbPt};
   }
+  /* M3: J10.4 inputs (L_b = largest unbraced length along either flange); kept out of D.j10 (unchanged structure) */
+  const wsbMode=dsn.wsb||'env',LbWsb=Math.max(D.LbTop||0,D.LbBot||0)*12;
   /* ---- per combination ---- */
   A.combos.forEach(cb=>{
     const man=manOf(cb.id);
@@ -2238,15 +2260,25 @@ function designAll(A){
     /* J10 demands */
     if(D.j10){
       C.j10=D.j10.locs.map(lo=>{
-        let dem=null;
-        if(lo.kind==='support'){const R=cb.R[lo.node].v;dem=R>0?R:null;}
+        let dem=null,F=0;   /* F > 0: compressive force on the web (reaction up, load down); F < 0: tensile */
+        if(lo.kind==='support'){const R=cb.R[lo.node].v;F=R;dem=R>0?R:null;}
         let terms=null;
         if(lo.kind==='load'){terms=lo.loads.map(q=>({nm:q.nm||'',lc:q.lc,f:cb.f[q.lc]||0,mag:q.mag||0})).filter(t=>t.f&&t.mag);
-          const P=terms.reduce((s,t)=>s+t.f*t.mag,0);dem=P>0?P:null;}
+          const P=terms.reduce((s,t)=>s+t.f*t.mag,0);F=P;dem=P>0?P:null;}
         const r={label:lo.label,x:lo.x,dem,lb:lo.lb,endDist:lo.endDist};
         if(terms&&lo.loads.length>1)r.terms=terms;
-        if(dem!=null&&lo.wly){r.dcrWLY=dem/(lo.wly.phi*lo.wly.Rn);r.dcrWLC=dem/(lo.wlc.phi*lo.wlc.Rn);
-          r.wly=lo.wly;r.wlc=lo.wlc;}
+        /* M3: web local yielding applies to tensile forces too (Sec. J10.2): demand |F|; crippling compressive only */
+        const demY=Math.abs(F)>1e-9?Math.abs(F):null;
+        if(demY!=null&&lo.wly){r.demY=demY;r.tens=F<0;r.dcrWLY=demY/(lo.wly.phi*lo.wly.Rn);r.wly=lo.wly;r.wlc=lo.wlc;
+          if(dem!=null)r.dcrWLC=dem/(lo.wlc.phi*lo.wlc.Rn);}
+        /* M3: Sec. J10.1 flange local bending, tensile forces (uplift reaction, upward point load) */
+        if(F<-1e-9){r.demT=-F;r.flb=j10FLB(p,lo.endDist);r.dcrFLB=r.demT/(r.flb.phi*r.flb.Rn);}
+        /* M3: Sec. J10.4 web sidesway buckling, compressive point loads (supports: restrained, as Chapter F assumes) */
+        if(lo.kind==='load'&&dem!=null&&wsbMode!=='braced'&&LbWsb>0){
+          const Mu=evalVM(Math.min(Ltot,lo.x),cb.R,cb.f).M;
+          r.wsb=j10WSB(p,LbWsb,Mu,wsbMode);
+          if(r.wsb.applies)r.dcrWSB=dem/(r.wsb.phi*r.wsb.Rn);
+        }
         return r;
       });
     }
@@ -2329,13 +2361,23 @@ function buildDesignChecks(D,A){
     D.warns.push('\u00A7H3.3(c) open-section torsion, buckling: a Chapter E/F buckling stress is below F\u1D67 for '+h33B.map(q=>q.name).join(', ')+', so the normal stresses at the critical station are also checked against buckling: f\u2090/(\u03C6F\u1D9C\u02B3,E) + (f\u1D47\u2093 + f\u1D47\u1D67 + \u03C3\u1D42)/(\u03C6F\u1D9C\u02B3,F) \u2264 1.0, with F\u1D9C\u02B3,F = M\u2099/S\u2093 of the governing major-axis flexure check and F\u1D9C\u02B3,E = P\u2099/A\u1D4D. Worst: '+c.name+', ratio = '+fmt(c.h33.dcrB,3)+'. This is a conservative reading of \u00A7H3.3(c); a DG 9 interaction may be used instead by hand.');}
   if(D.j10){
     const wGov=gv(c=>{let m=null;(c.j10||[]).forEach(r=>{if(r.dcrWLY!=null&&(!m||r.dcrWLY>m.d))m={d:r.dcrWLY,c,r};});return m;});
-    D.checks.push(wGov?{label:'Web local yielding',ref:'J10.2',dcr:wGov.d,combo:wGov.c.name,detail:wGov.r.label,tab:'tabJ10',
-      dem:wGov.r.dem,cap:wGov.r.wly.phi*wGov.r.wly.Rn,unit:'kip',capSym:'\u03C6R\u2099'}:
+    D.checks.push(wGov?{label:'Web local yielding',ref:'J10.2',dcr:wGov.d,combo:wGov.c.name,detail:wGov.r.label+(wGov.r.tens?' (tension)':''),tab:'tabJ10',
+      dem:wGov.r.demY!=null?wGov.r.demY:wGov.r.dem,cap:wGov.r.wly.phi*wGov.r.wly.Rn,unit:'kip',capSym:'\u03C6R\u2099'}:
       {label:'Web local yielding',ref:'J10.2',na:true,detail:'bearing length not entered',tab:'tabJ10'});
     const cGov=gv(c=>{let m=null;(c.j10||[]).forEach(r=>{if(r.dcrWLC!=null&&(!m||r.dcrWLC>m.d))m={d:r.dcrWLC,c,r};});return m;});
     D.checks.push(cGov?{label:'Web local crippling',ref:'J10.3',dcr:cGov.d,combo:cGov.c.name,detail:cGov.r.label,tab:'tabJ10',
       dem:cGov.r.dem,cap:0.75*cGov.r.wlc.Rn,unit:'kip',capSym:'\u03C6R\u2099'}:
       {label:'Web local crippling',ref:'J10.3',na:true,detail:'bearing length not entered',tab:'tabJ10'});
+    /* M3: J10.4 and J10.1 rows */
+    const sGov=gv(c=>{let m=null;(c.j10||[]).forEach(r=>{if(r.dcrWSB!=null&&(!m||r.dcrWSB>m.d))m={d:r.dcrWSB,c,r};});return m;});
+    const anyPt=D.j10.locs.some(l=>l.kind==='load');
+    if(anyPt)D.checks.push(sGov?{label:'Web sidesway buckling',ref:'J10.4',dcr:sGov.d,combo:sGov.c.name,detail:sGov.r.label+', Eq. '+sGov.r.wsb.clause,tab:'tabJ10',
+      dem:sGov.r.dem,cap:sGov.r.wsb.phi*sGov.r.wsb.Rn,unit:'kip',capSym:'\u03C6R\u2099'}:
+      {label:'Web sidesway buckling',ref:'J10.4',na:true,tab:'tabJ10',detail:(S.design.wsb||'env')==='braced'?'flanges stated restrained at the point loads':
+        '(h/t\u1D65)/(L\u1D47/b\u2093) above the limit: does not apply'});
+    const bGov=gv(c=>{let m=null;(c.j10||[]).forEach(r=>{if(r.dcrFLB!=null&&(!m||r.dcrFLB>m.d))m={d:r.dcrFLB,c,r};});return m;});
+    if(bGov)D.checks.push({label:'Flange local bending',ref:'J10.1',dcr:bGov.d,combo:bGov.c.name,detail:bGov.r.label+' (tension)',tab:'tabJ10',
+      dem:bGov.r.demT,cap:bGov.r.flb.phi*bGov.r.flb.Rn,unit:'kip',capSym:'\u03C6R\u2099'});
   }else D.checks.push({label:'Concentrated forces',ref:'J10',na:true,
     detail:(D.p._kind==='I'||D.p._kind==='C')?'bearing length / concentrated force not entered':'HSS \u2014 J10 web provisions do not apply; verify locally loaded faces separately',
     tab:'tabComp'});
@@ -3893,7 +3935,7 @@ function buildAxialTab(pg){
       C.j10.forEach(r=>{
         if(r.dcrWLY==null)return;
         const tr=el('tr');
-        [r.label,fmt(r.dem,1),fmt(r.wly.phi*r.wly.Rn,1),fmt(r.dcrWLY,3),fmt(0.75*r.wlc.Rn,1),fmt(r.dcrWLC,3)]
+        [r.label,fmt(r.demY!=null?r.demY:r.dem,1)+(r.tens?' (tension)':''),fmt(r.wly.phi*r.wly.Rn,1),fmt(r.dcrWLY,3),fmt(0.75*r.wlc.Rn,1),fmt(r.dcrWLC,3)]
           .forEach((v,i)=>tr.appendChild(el('td',i===0?'lft':null,v)));
         if(r.dcrWLY>1||r.dcrWLC>1)tr.className='gov';
         t.appendChild(tr);
@@ -5456,7 +5498,8 @@ function buildJ10Tab(pg){
     body.appendChild(t);
     const w0=locs[0];
     if(w0&&typeof j10Worked==='function')j10Worked(body,p,w0);
-    body.appendChild(el('div','hint','<b>Sidesway web buckling (J10.4) is not checked</b> \u2014 it depends on flange rotational restraint conditions not modeled here. Verify separately where the compression flange is unrestrained against rotation.'));
+    body.appendChild(el('div','hint',isMember()?'<b>Sidesway web buckling (J10.4) is not checked in member mode</b> \u2014 verify separately where the flanges are not restrained at the load.':
+      'Web sidesway buckling (\u00A7J10.4) and flange local bending (\u00A7J10.1): see the section below (point loads and tensile forces).'));
   },pg);
   perComboSections(pg,'j1_',isMember()?'Case ':'Combination ',(body,C)=>{
     if(!C.j10||!C.j10.some(r=>r.dcrWLY!=null)){
@@ -5466,7 +5509,7 @@ function buildJ10Tab(pg){
     C.j10.forEach(r=>{
       if(r.dcrWLY==null)return;
       const tr=el('tr');
-      [r.label,fmt(r.dem,1),fmt(r.wly.phi*r.wly.Rn,1),fmt(r.dcrWLY,3),fmt(0.75*r.wlc.Rn,1),fmt(r.dcrWLC,3)]
+      [r.label,fmt(r.demY!=null?r.demY:r.dem,1)+(r.tens?' (tension)':''),fmt(r.wly.phi*r.wly.Rn,1),fmt(r.dcrWLY,3),fmt(0.75*r.wlc.Rn,1),fmt(r.dcrWLC,3)]
         .forEach((v,i)=>tr.appendChild(el('td',i===0?'lft':null,v)));
       if(r.dcrWLY>1||r.dcrWLC>1)tr.className='gov';
       t.appendChild(tr);
@@ -5481,6 +5524,46 @@ function buildJ10Tab(pg){
     if(C.j10.some(r=>r.dcrWLY>1||r.dcrWLC>1))
       body.appendChild(el('div','errBox','DCR > 1 at a bearing location \u2014 provide bearing stiffeners (\u00A7J10.8) or increase the bearing length.'));
   });
+  j10More(pg,D,p);   /* M3: J10.4 and J10.1 */
+}
+/* M3 (2026-11-07): worked J10.4 web sidesway buckling and J10.1 flange local bending, per combination (beam mode) */
+function j10More(pg,D,p){
+  if(isMember()||!D.j10)return;
+  const anyPt=D.j10.locs.some(l=>l.kind==='load');
+  const anyT=D.perCombo.some(C=>(C.j10||[]).some(r=>r.dcrFLB!=null));
+  if(!anyPt&&!anyT)return;
+  const md={env:'not stated: the lower of J10.4(a) and (b) where either applies (conservative)',rot:'compression flange restrained against rotation, J10.4(a)',
+    free:'compression flange not restrained against rotation, J10.4(b)',braced:'relative lateral movement of the flanges restrained at the point loads: J10.4 does not apply'}[S.design.wsb||'env']||'';
+  mkSection('j1More','Web Sidesway Buckling (\u00A7J10.4) and Flange Local Bending (\u00A7J10.1)',body=>{
+    if(anyPt){
+      body.appendChild(el('div','note','<b>J10.4</b> is checked at the compressive point loads (supports are taken as restrained against relative lateral movement of the flanges, as Chapter F assumes torsional restraint there). Restraint: '+md+
+        '. L\u1D47 = largest unbraced length along either flange = '+fmt(Math.max(D.LbTop||0,D.LbBot||0),2)+' ft; h = '+fmt(webH(p),3)+' in.'));
+      let g=null;D.perCombo.forEach(C=>(C.j10||[]).forEach(r=>{if(r.wsb&&(!g||(r.dcrWSB||0)>(g.r.dcrWSB||0)))g={C,r};}));
+      if(g){const w=g.r.wsb;
+        const lines=['\\tfrac{h/t_w}{L_b/b_f}=\\tfrac{'+fmt(w.htw,1)+'}{'+fmt(w.LbIn,1)+'/'+fmt(p.bf,3)+'}=\\mathbf{'+fmt(w.r,3)+'}\\quad(\\text{limits }2.3\\text{ (a)},\\ 1.7\\text{ (b)})',
+          'M_u='+fmt(w.Mu,1)+'\\ \\text{kip\u00B7ft}\\ '+(w.Cr>500000?'<':'\\ge')+'\\ M_y=F_yS_x='+fmt(w.My/12,1)+'\\ \\text{kip\u00B7ft}\\Rightarrow C_r='+fmt(w.Cr,0)+'\\ \\text{ksi}'];
+        if(w.applies)lines.push('R_n=\\tfrac{C_rt_w^3t_f}{h^2}'+(w.cs==='a'?'\\left[1+0.4r^3\\right]':'\\left[0.4r^3\\right]')+'=\\tfrac{'+fmt(w.Cr,0)+'\\times '+fmt(p.tw,3)+'^3\\times '+fmt(p.tf,3)+'}{'+fmt(w.h,3)+'^2}'+
+          (w.cs==='a'?'\\left[1+0.4\\times '+fmt(w.r,3)+'^3\\right]':'\\left[0.4\\times '+fmt(w.r,3)+'^3\\right]')+'=\\mathbf{'+fmt(w.Rn,1)+'\\ \\text{kip}}\\ \\text{(Eq. '+w.clause+')}',
+          '\\text{DCR}=\\tfrac{R_u}{\\phi R_n}=\\tfrac{'+fmt(g.r.dem,1)+'}{0.85\\times '+fmt(w.Rn,1)+'}=\\mathbf{'+fmt(g.r.dcrWSB,3)+'}'+(g.r.dcrWSB>1?'\\ \\color{#B42318}{\\text{FAIL}}':'\\ \\checkmark'));
+        else lines.push('\\text{ratio above the applicable limit: the limit state does not apply}');
+        body.appendChild(eqBlock({title:'Governing location: '+g.r.label+', '+(isMember()?'case ':'combination ')+g.C.name,ref:'\u00A7J10.4',lines}));
+        const t=el('table','tbl');const hd=el('tr');['Combination','Location','R\u1D64 (kip)','M\u1D64 (kip\u00B7ft)','C\u1D63','Eq.','\u03C6R\u2099 (kip)','DCR'].forEach(x=>hd.appendChild(el('th',null,x)));t.appendChild(hd);
+        D.perCombo.forEach(C=>(C.j10||[]).forEach(r=>{if(!r.wsb)return;const tr=el('tr');
+          [C.name,r.label,fmt(r.dem,1),fmt(r.wsb.Mu,1),fmt(r.wsb.Cr,0),r.wsb.clause||'n/a',r.wsb.applies?fmt(0.85*r.wsb.Rn,1):'\u2014',r.dcrWSB!=null?fmt(r.dcrWSB,3):'n/a']
+            .forEach((v,i)=>tr.appendChild(el('td',i<2?'lft':null,v)));if(r.dcrWSB>1)tr.className='gov';t.appendChild(tr);}));
+        body.appendChild(t);
+        if(g.r.dcrWSB>1)body.appendChild(el('div','errBox','J10.4 DCR > 1: brace the tension flange (or both flanges) at the load, or provide a pair of transverse stiffeners or a doubler.'));
+      }else if((S.design.wsb||'env')==='braced')body.appendChild(el('div','note','Not applicable (restraint stated in the input panel).'));
+    }
+    if(anyT){
+      body.appendChild(el('div','note','<b>J10.1</b> is checked where the concentrated force is tensile (an uplift reaction or an upward point load): R\u2099 = 6.25F\u1D67t\u2093\u00B2 (Eq. J10-1), \u03C6 = 0.90, halved within 10t\u2093 of the member end. The 0.15b\u2093 loading-width exemption is not taken. Web local yielding (\u00A7J10.2) also covers these tensile forces (table above).'));
+      const t=el('table','tbl');const hd=el('tr');['Combination','Location','T\u1D64 (kip)','R\u2099 (kip)','\u03C6R\u2099 (kip)','DCR'].forEach(x=>hd.appendChild(el('th',null,x)));t.appendChild(hd);
+      D.perCombo.forEach(C=>(C.j10||[]).forEach(r=>{if(r.dcrFLB==null)return;const tr=el('tr');
+        [C.name,r.label,fmt(r.demT,1),'6.25\u00B7'+p.mat.Fy+'\u00B7'+fmt(p.tf,3)+'\u00B2'+(r.flb.nearEnd?'\u00B70.5':'')+' = '+fmt(r.flb.Rn,1),fmt(0.9*r.flb.Rn,1),fmt(r.dcrFLB,3)]
+          .forEach((v,i)=>tr.appendChild(el('td',i<2?'lft':null,v)));if(r.dcrFLB>1)tr.className='gov';t.appendChild(tr);}));
+      body.appendChild(t);
+    }
+  },pg);
 }
 /* =====================================================================
    INTERACTION
@@ -6414,8 +6497,13 @@ function secJ10(P){
     }else{
       fRow(body,'Bearing length at supports',numInput(()=>S.design.lbSup,v=>{S.design.lbSup=v;},0.5,'lbSup'),'in');
       fRow(body,'Bearing length at point loads',numInput(()=>S.design.lbPt,v=>{S.design.lbPt=v;},0.5,'lbPt'),'in');
+      /* M3: J10.4 flange restraint at the point loads (new field design.wsb; absent = 'env') */
+      fRow(body,'Flanges at point loads (J10.4)',selInput(['env','rot','free','braced'],()=>S.design.wsb||'env',v=>{S.design.wsb=v;},
+        o=>({env:'Not stated: lower of (a) and (b)',rot:'Compression flange restrained against rotation (a)',free:'Compression flange free to rotate (b)',braced:'Relative lateral movement restrained (J10.4 N/A)'})[o],null,'wsbMode'),'',
+        'AISC 360-16 \u00A7J10.4: web sidesway buckling under compressive point loads where the loaded flange can move laterally relative to the tension flange');
     }
-    body.appendChild(el('div','hint','Blank \u2192 web local yielding and crippling report N/A rather than passing. Sidesway web buckling (\u00A7J10.4) is not checked.'));
+    body.appendChild(el('div','hint',isMember()?'Blank \u2192 web local yielding and crippling report N/A rather than passing. Sidesway web buckling (\u00A7J10.4) is not checked in member mode.':
+      'Blank \u2192 web local yielding and crippling report N/A rather than passing. Web sidesway buckling (\u00A7J10.4, at point loads) and flange local bending (\u00A7J10.1, tensile forces) are checked without a bearing length.'));
   },P,secOpts());
 }
 /* ---------- 8. member self-weight ---------- */
@@ -7086,11 +7174,11 @@ async function xlChecks(X,p,D,mem,Fy,E){
       X.line('Web local crippling','Rn',N2(lo.wlc.Rn,2),'kip','Eq. '+lo.wlc.clause,{});
       const rows=[];
       D.perCombo.forEach(C=>(C.j10||[]).forEach(r=>{if(r.dcrWLY!=null)rows.push([C.name+' \u2014 '+r.label,
-        {v:N2(r.dem,2),dp:2},{v:N2(r.wly.phi*r.wly.Rn,2),dp:2},{v:N2(r.dcrWLY,3),dp:3,kind:r.dcrWLY>1?'bad':'ok'},
+        {v:N2(r.demY!=null?r.demY:r.dem,2),dp:2},{v:N2(r.wly.phi*r.wly.Rn,2),dp:2},{v:N2(r.dcrWLY,3),dp:3,kind:r.dcrWLY>1?'bad':'ok'},
         {v:N2(0.75*r.wlc.Rn,2),dp:2},{v:N2(r.dcrWLC,3),dp:3,kind:r.dcrWLC>1?'bad':'ok'}]);}));
       if(rows.length)X.table(['Case / location','R (kip)','\u03C6Rn WLY','DCR','\u03C6Rn WLC','DCR'],rows);
     }else X.note('No bearing length entered \u2014 web local yielding and crippling are reported N/A, not passing.');
-    X.note('Sidesway web buckling (\u00A7J10.4) is not checked \u2014 it depends on flange rotational restraint not modelled here.');
+    X.note('Web sidesway buckling (\u00A7J10.4, point loads) and flange local bending (\u00A7J10.1, tensile forces): see the Concentrated Forces tab.');
     X.gap();
   }
   /* ---------- interaction ---------- */
