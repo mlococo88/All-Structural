@@ -5228,7 +5228,7 @@ Frame: Beam Capacity (`suite-frame-capacity`). Open item of CBL7 (#1005), review
 - **Check case `aasTlw`** (aasT with f′c 6 ksi, λ 0.85, M_s 500 k-ft, f_ss computed):
   - Before: w_c = 0.140 + 0.006 = 0.146 kcf, E_c = 120,000 · 0.146² · 6^0.33 = 4,620 ksi, n = 6.28; crack-control s_max 10.39 in (D/C 0.276).
   - After: w_c = 0.110 kcf, E_c = 120,000 · 0.110² · 6^0.33 = 2,623 ksi, n = 11.06; **s_max 10.02 in (D/C 0.286).**
-  - With w_c = 0.125 kcf entered (`aasTlwWc`): E_c = 3,387 ksi; s_max 10.20 in (D/C 0.281). Normal weight with w_c = 0.150 entered (`aasTwc`, f′c 12): E_c 6,132 ksi (Table 0.152 → 6,297); s_max 10.57 → 10.55 in.
+  - With w_c = 0.125 kcf entered (`aasTlwWc`): E_c = 3,387 ksi; s_max 10.20 in (D/C 0.281). Normal weight with w_c = 0.150 entered (`aasTwc`, f′c 12): E_c 6,130 ksi (Table 0.152 → 6,297); s_max 10.57 → 10.55 in.
   - Normal weight without an entry, and ACI mode: unchanged.
 - **How verified:** headless main vs branch, all probe cases: only the three cases above move (crack-control row); all other Beam Capacity and Dev cases identical. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar` (save round trip with the new field), `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
 - **Saved data:** additive field `mat.wc` (old saves read 0 = not entered: normal weight saves unchanged; lightweight AASHTO saves with computed f_ss move as above).
