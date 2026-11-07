@@ -3507,7 +3507,7 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
   - Headless probe, main vs branch: 0 value differences (40 models, all 1,660 shapes, Validation 136/136).
   - Every output tab built; 0 console errors.
 
-## 2026-11-07 — PR: claude/spc-l7-pipe — SPL7: note on the accuracy of the pipe and round-HSS annulus model (review L7; wording only)
+## 2026-11-07 — PR: claude/spc-l7-pipe — SPL7: note on the accuracy of the pipe and round-HSS annulus model (review L7; wording only; PR #1111: https://github.com/mlococo88/All-Structural/pull/1111)
 
 - **Problem (review L7):** the annulus model of Pipe shapes (OD, t_des) differs from the v16.0 Pipe table by up to ±3.4 % in A, I, S, Z and J, in both directions (Pipe20XS +3.4 %, Pipe10STD −3.3 %, Pipe12XXS −2.9 %). Because the sign varies, it is not always conservative. The tool did not say so. The numbers are in the SPH1 table.
 - **Fix (wording only):**
