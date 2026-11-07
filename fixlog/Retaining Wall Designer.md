@@ -5527,3 +5527,40 @@ Review Phase 8, PR 8f, following the abutment calculator's contract (HANDOFF.md 
   - `pile_Rn` = **320**, `pile_Rnup` = **90**; φ unchanged.
   - Without `group`, or with `reduce` 1: 400 / 150 as before.
 - **How verified:** handoffs tests 10 pass; `tests/smoke/retwall-pile-handoff.mjs` all passed; `check-syntax`: pass.
+
+## 2026-11-07 — PR: claude/rw2-h5-collision-phib — AASHTO Extreme Event II (collision): bearing φ_b = 0.8 for semigravity walls per Art. 11.5.8; sliding keeps φ = 1.0 (RW2H5; calculation change) (PR #1134: https://github.com/mlococo88/All-Structural/pull/1134)
+
+Second-pass review finding H5 (2026-11-07). Code sites are tagged `RW2H5`.
+
+### RW2H5-1. Problem
+- The collision bearing check used `q_R_ct = phi_ct * q_n_ct` with the single extreme-event φ input (`aashto_ct_phi`, default 1.00).
+- AASHTO LRFD 10th Ed. (2024) Art. 11.5.8: extreme-event resistance factors are 1.0 unless otherwise specified; for bearing, φ = 0.8 for gravity and semigravity walls (0.9 for MSE). The bearing sentence is not limited to earthquake loading (C11.5.8: bearing should not fail before sliding). The tool already used φ_b = 0.8 for Extreme Event I (RWE1). Unconservative by 25 % on the bearing resistance.
+
+### RW2H5-2. Fix (`calcAll`, collision block, anchor `const q_R_ct`)
+Before:
+```js
+      const q_R_ct     = phi_ct * q_n_ct;                     // φ=1.0 × nominal
+```
+After:
+```js
+      const phi_b_ct   = Math.min(0.80, phi_ct);              // RW2H5 ...
+      const q_R_ct     = phi_b_ct * q_n_ct;                   // φ_b = 0.8 × nominal
+```
+- `phi_b_ct` is returned in `aashtoR.ct.ee2`. Sliding (`R_tau_ct`, `R_ep_ct`) keeps `phi_ct`.
+- Display: Stability Step 7b card reference "φ = 1.00 sliding, φ_b = 0.80 bearing (§11.5.8)"; the bearing check shows q_R = φ_b q_n = 0.80(q_n) with φ_b and q_n in the variable list; Overview dashboard row "φ=1.00 φb=0.80"; Report load-case table and Step 7b bearing label "q_R = φ_b q_n = 0.80 × 9.00 = 7.20 ksf (Art. 11.5.8)"; the collision input note mentions φ_b.
+
+### Check case (AASHTO default wall, collision TL-4 on, defaults otherwise)
+- q_n = 9000 psf (the placeholder φ_b q_n 4950 / 0.55). V_max = 18011 lb/ft, q_u = 1535 psf (unchanged).
+- Before: q_R = 1.0 × 9000 = 9000 psf, D/C = 1535 / 9000 = **0.171**.
+- After: q_R = 0.8 × 9000 = **7200 psf**, D/C = 1535 / 7200 = **0.213**. PASS either way.
+- Collision sliding D/C 0.246 and e unchanged.
+
+### How verified
+- origin/main vs branch, headless (`calcAll` on 17 review walls: ACI/AASHTO defaults, variants, pile cases, k_h, η, water, collision): only `aashto_ct` and `aashto_ct_var` move, and only `ctBearing` (9.00 → 7.20 ksf). 0 console errors.
+- Tests: check-syntax; smoke/retaining-wall-checks (new `AUD` row RW2H5); phone-layout rwall; project-library retwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs, pile-group.
+
+### Decision (pending engineer review)
+- φ_b,EE II = min(0.80, φ input): a φ input below 0.80 also governs bearing (conservative); the input otherwise applies to sliding and passive only.
+
+### Saved data
+- No input or format change. `aashto_ct_phi` keeps its value and now governs sliding/passive only (and bearing when below 0.80).

@@ -1420,7 +1420,7 @@ body.rwDashColl #rwDash { display: none; }
       </select></div>
     <div class="note">
         MassDOT: collision engages the <b>entire wall section between expansion joints</b>,
-        γ_CT = 1.0, and φ = 1.0. For <b>stability</b>, earth pressure is dropped (the wall
+        γ_CT = 1.0, and φ = 1.0 (bearing: φ_b = 0.8 for semigravity walls, AASHTO Art. 11.5.8). For <b>stability</b>, earth pressure is dropped (the wall
         deflects away from the backfill during the impact). For <b>stem design</b>, earth
         pressure IS applied at γ_p = 1.0 — not because it acts concurrently, but because it
         has already strained the rebar and the collision strain adds to it.
@@ -2900,11 +2900,12 @@ function calcAll(inp) {
       const B_eff_ct   = Math.max(0.1, B - 2*Math.abs(e_brg_ct));
       const q_ult_ct   = onRock ? qRock(V_ct_max, e_brg_ct) : V_ct_max / B_eff_ct;   // psf (rock: Eq. 11.6.3.2-2/-3)
       const q_n_ct     = useManualQn ? A.qR / Math.max(A.phi_b, 1e-6) : q_n_A;  // nominal
-      const q_R_ct     = phi_ct * q_n_ct;                     // φ=1.0 × nominal
+      const phi_b_ct   = Math.min(0.80, phi_ct);              // RW2H5 (2026-11-07): bearing φ_b = 0.8 for semigravity walls in extreme events (AASHTO 10th Art. 11.5.8); the φ input stays for sliding/passive (was q_R = φ·q_n with φ = 1.0)
+      const q_R_ct     = phi_b_ct * q_n_ct;                   // φ_b = 0.8 × nominal
       const bearing_ok_ct = q_ult_ct <= q_R_ct;
 
       ct.ee2 = {
-        gEH_ct, gLS_ct, phi_ct, eccDiv, CMB_EE2,
+        gEH_ct, gLS_ct, phi_ct, phi_b_ct, eccDiv, CMB_EE2,
         H_drive_ct, V_ct_min, V_ct_max,
         R_tau_ct, R_ep_ct, R_ct, sliding_ok_ct, sliding_dcr_ct,
         Mo_ct, Mr_ct, x_R_ct, e_ct, e_lim_ct, ecc_ok_ct,
@@ -4736,7 +4737,7 @@ function renderStabilityAASHTO(r) {
             {ok:a.ee1.ecc_ok,     txt:'e='+F(Math.abs(a.ee1.e_gov),2)+'≤'+F(a.ee1.eLim,2)},
             {ok:a.ee1.bearing_ok, txt:F(a.ee1.q_gov/1000,2)+'≤'+F(a.ee1.q_R/1000,2)+' ksf'} ]) : ''}   <!-- RWE1 -->
         ${E ? dcrRow('Extreme Event II (collision)',
-          'γCT=1.0 γEH='+(E.ehDropped?'0 (MassDOT)':'1.0')+' γLS='+F(E.gLS_ct,2)+' · φ='+F(E.phi_ct,2),
+          'γCT=1.0 γEH='+(E.ehDropped?'0 (MassDOT)':'1.0')+' γLS='+F(E.gLS_ct,2)+' · φ='+F(E.phi_ct,2)+' φb='+F(E.phi_b_ct,2),
           [ {ok:E.sliding_ok_ct, txt:'DCR '+F(E.sliding_dcr_ct,2)},
             {ok:E.ecc_ok_ct,     txt:'e='+F(Math.abs(E.e_ct),2)+'≤'+F(E.e_lim_ct,2)},
             {ok:E.bearing_ok_ct, txt:F(E.q_ult_ct/1000,2)+'≤'+F(E.q_R_ct/1000,2)+' ksf'} ]) : ''}
@@ -5006,7 +5007,7 @@ function renderStabilityAASHTO(r) {
 
     // ── EE-II STABILITY SUITE ──
     h += `<div class="card" style="margin-bottom:16px;">
-      <div class="card-hd"><span class="card-title">Step 7b \u2014 Stability under Collision (Extreme Event II)</span><span class="card-ref">\u03c6 = ${F(E.phi_ct,2)} \u00b7 \u03b3_CT = 1.0 \u00b7 \u03b3_LS = ${F(E.gLS_ct,2)}</span></div>
+      <div class="card-hd"><span class="card-title">Step 7b \u2014 Stability under Collision (Extreme Event II)</span><span class="card-ref">\u03c6 = ${F(E.phi_ct,2)} sliding, \u03c6_b = ${F(E.phi_b_ct,2)} bearing (\u00a711.5.8) \u00b7 \u03b3_CT = 1.0 \u00b7 \u03b3_LS = ${F(E.gLS_ct,2)}</span></div>
       <div class="card-body">`;
     if (E.ehDropped) {
       h += `<div class="alert warn" style="margin-bottom:10px;">
@@ -5072,8 +5073,10 @@ function renderStabilityAASHTO(r) {
       [{sym:"B'", desc:'effective footing width', val:F(E.B_eff_ct,3), unit:'ft'},
        {sym:'q_u', desc:'factored bearing pressure', val:F(E.q_ult_ct/1000,2), unit:'ksf'}]);
     h += eqCheck('Bearing under collision',
-      `q_u = ${F(E.q_ult_ct/1000,2)}\\ \\text{ksf} \\leq q_R = \\phi\\,q_n = ${F(E.q_R_ct/1000,2)}\\ \\text{ksf}`, E.bearing_ok_ct,'',
-      [{sym:'q_R', desc:'factored bearing resistance (\u03c6 = 1.0)', val:F(E.q_R_ct/1000,2), unit:'ksf'}]);
+      `q_u = ${F(E.q_ult_ct/1000,2)}\\ \\text{ksf} \\leq q_R = \\phi_b\\,q_n = ${F(E.phi_b_ct,2)}(${F(E.q_R_ct/E.phi_b_ct/1000,2)}) = ${F(E.q_R_ct/1000,2)}\\ \\text{ksf}`, E.bearing_ok_ct,'AASHTO Art. 11.5.8',
+      [{sym:'\\phi_b', desc:'bearing resistance factor, extreme event (0.8 for semigravity walls; the \u03c6 input, if lower, governs)', val:F(E.phi_b_ct,2), unit:''},
+       {sym:'q_n', desc:'nominal bearing resistance', val:F(E.q_R_ct/E.phi_b_ct/1000,2), unit:'ksf'},
+       {sym:'q_R', desc:'factored bearing resistance', val:F(E.q_R_ct/1000,2), unit:'ksf'}]);   // RW2H5 (2026-11-07)
     h += `</div></div>`;
 
     // ── BARRIER YIELD-LINE CAPACITY ──
@@ -10614,7 +10617,7 @@ function rwrModel(r) {
     const subs = [], E = a.ct ? a.ct.ee2 : null;
     const lc = [['Strength I', 'γ_EH = ' + rwrN(a.gEH_max, 2) + ' / 0.90, γ_EV = 1.35 / 1.00, γ_LS = 1.75; φ_τ = ' + rwrN(A.phi_tau, 2) + ', φ_b = ' + rwrN(A.phi_b, 2),
       { t: 'DCR ' + rwrN(a.sliding_dcr, 2), cls: a.sliding_ok_A ? 'ok' : 'ng', key: 'sa4/dc' }, { t: 'e = ' + rwrN(Math.abs(a.e_A), 2) + ' ≤ ' + rwrN(a.e_limit, 2), cls: a.ecc_ok_A ? 'ok' : 'ng', key: 'sa5/dc' }, { t: rwrN(a.q_ult_gov / 1000, 2) + ' ≤ ' + rwrN(a.q_R_A / 1000, 2) + ' ksf', cls: a.bearing_ok_A ? 'ok' : 'ng', key: 'sa6/dc' }]];
-    if (E) lc.push(['Extreme Event II (collision)', 'γ_CT = 1.0, γ_EH = ' + (E.ehDropped ? '0 (MassDOT)' : '1.0') + ', γ_LS = ' + rwrN(E.gLS_ct, 2) + '; φ = ' + rwrN(E.phi_ct, 2),
+    if (E) lc.push(['Extreme Event II (collision)', 'γ_CT = 1.0, γ_EH = ' + (E.ehDropped ? '0 (MassDOT)' : '1.0') + ', γ_LS = ' + rwrN(E.gLS_ct, 2) + '; φ = ' + rwrN(E.phi_ct, 2) + ', φ_b = ' + rwrN(E.phi_b_ct, 2),
       { t: 'DCR ' + rwrN(E.sliding_dcr_ct, 2), cls: E.sliding_ok_ct ? 'ok' : 'ng', key: 'sa7b/sl' }, { t: 'e = ' + rwrN(Math.abs(E.e_ct), 2) + ' ≤ ' + rwrN(E.e_lim_ct, 2), cls: E.ecc_ok_ct ? 'ok' : 'ng', key: 'sa7b/ec' }, { t: rwrN(E.q_ult_ct / 1000, 2) + ' ≤ ' + rwrN(E.q_R_ct / 1000, 2) + ' ksf', cls: E.bearing_ok_ct ? 'ok' : 'ng', key: 'sa7b/br' }]);
     if (a.ee1) { const Q = a.ee1; lc.push(['Extreme Event I (seismic)', 'k_h = ' + rwrN(inp.kh, 3) + ', γ_EQ = ' + rwrN(Q.gEQ, 2) + '; φ = 1.0, φ_b = 0.8',
       { t: 'DCR ' + rwrN(Q.sliding_dcr, 2), cls: Q.sliding_ok ? 'ok' : 'ng', key: 'sa7a/sl' }, { t: 'e = ' + rwrN(Math.abs(Q.e_gov), 2) + ' ≤ ' + rwrN(Q.eLim, 2), cls: Q.ecc_ok ? 'ok' : 'ng', key: 'sa7a/ec' }, { t: rwrN(Q.q_gov / 1000, 2) + ' ≤ ' + rwrN(Q.q_R / 1000, 2) + ' ksf', cls: Q.bearing_ok ? 'ok' : 'ng', key: 'sa7a/br' }]); }   // RWE1
@@ -10701,7 +10704,7 @@ function rwrModel(r) {
         rwrS({ id: 'Vmax', label: 'Vertical load for bearing: V plus the live-load surcharge on the heel at γ_LS = ' + rwrN(E.gLS_ct, 2) + ' (V_LS = q_LL L_h = ' + rwrN(a.V_LS_v, 0) + ' lb/ft)', sym: 'V_{max}', eq: 'V + ' + rwrN(E.gLS_ct, 2) + '\\,V_{LS}', sub: rwrN(E.V_ct_min, 0) + ' + ' + rwrN(E.gLS_ct, 2) + '(' + rwrN(a.V_LS_v, 0) + ')', value: E.V_ct_max, unit: 'lb/ft', d: 0, ref: AA('Table 3.4.1-1') }),   // RWCT
         a.onRock ? rwrS({ id: 'qu', label: 'Bearing pressure on rock (linear distribution), e = ' + rwrN(Math.abs(E.e_brg_ct), 3) + ' ft', sym: 'q_{u}', eq: Math.abs(E.e_brg_ct) <= r.B / 6 ? '\\frac{V}{B}\\left(1 + \\frac{6e}{B}\\right)' : '\\frac{2V}{3(B/2 \\minus e)}', sub: '', value: E.q_ult_ct / 1000, unit: 'ksf', d: 2, ref: AA('Art. 10.6.5, Eq. 11.6.3.2-' + (Math.abs(E.e_brg_ct) <= r.B / 6 ? '2' : '3')) })
           : rwrS({ id: 'qu', label: "Effective width B' = B − 2|e| = " + rwrN(E.B_eff_ct, 3) + ' ft and bearing pressure (Meyerhof)', sym: 'q_{u}', eq: '\\frac{V_{max}}{B^{\\prime}}', sub: '\\frac{' + rwrN(E.V_ct_max, 0) + '}{' + rwrN(E.B_eff_ct, 3) + '}\\frac{1}{1000}', value: E.q_ult_ct / 1000, unit: 'ksf', d: 2 }),
-        rwrS({ id: 'br', label: 'Bearing under collision: q_u ≤ q_R = φ q_n = ' + rwrN(E.q_R_ct / 1000, 2) + ' ksf', sym: '\\frac{q_{u}}{q_{R}}', eq: '', sub: '\\frac{' + rwrN(E.q_ult_ct / 1000, 2) + '}{' + rwrN(E.q_R_ct / 1000, 2) + '}', value: dcv('ctBearing'), unit: '', d: 3, ok: ok('ctBearing') })];
+        rwrS({ id: 'br', label: 'Bearing under collision: q_u ≤ q_R = φ_b q_n = ' + rwrN(E.phi_b_ct, 2) + ' × ' + rwrN(E.q_R_ct / E.phi_b_ct / 1000, 2) + ' = ' + rwrN(E.q_R_ct / 1000, 2) + ' ksf (Art. 11.5.8)', sym: '\\frac{q_{u}}{q_{R}}', eq: '', sub: '\\frac{' + rwrN(E.q_ult_ct / 1000, 2) + '}{' + rwrN(E.q_R_ct / 1000, 2) + '}', value: dcv('ctBearing'), unit: '', d: 3, ok: ok('ctBearing') })];
       CK.ctSliding = 'sa7b/sl'; CK.ctEcc = 'sa7b/ec'; CK.ctBearing = 'sa7b/br';
       subs.push(sub('Step 7b — Stability under collision (Extreme Event II)', [rwrItem('sa7b', [{ title: 'Sliding', steps: sb.slice(0, 3) }, { title: 'Eccentricity', steps: sb.slice(3, 6) }, { title: 'Bearing', steps: sb.slice(6) }]), onTab('stabCT')]));
       if (c.yl) { const y = c.yl, k8 = y.isEnd ? '' : '8';
