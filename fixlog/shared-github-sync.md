@@ -139,7 +139,7 @@ Engineer's setup steps: `docs/github-sync-setup.md`.
 - **Unchanged:** the five settings fields and their key; with sync off the dialog writes nothing unless a box is changed.
 - **Tests:** see fixlog/shared-projects.md, same PR. **Formulas:** none.
 
-## 2026-11-08 — PR: claude/sync-presence (PR #PR3NUM: https://github.com/mlococo88/All-Structural/pull/PR3NUM) (LIVE PR 3 of 3) — engine `presenceHint(name)`; the dialog box's text names presence   [no key or format change]
+## 2026-11-08 — PR: claude/sync-presence (PR #1253: https://github.com/mlococo88/All-Structural/pull/1253) (LIVE PR 3 of 3) — engine `presenceHint(name)`; the dialog box's text names presence   [no key or format change]
 - **What:** new engine method `presenceHint(name)` (anchor `function presenceHint(`). It returns 'none' when the tree this page read less than 2 × LIVE.poll ago has no other device's heartbeat for the project, 'some' when it has one, and 'unknown' otherwise. With 'none', `projects-ui.js` opens at once, without a request.
 - The box text "Check GitHub every 30 s for changes to the open project" becomes "…, and show who else has it open", and its note says what the presence file is.
 - **Presence file and decisions:** see #1251 (format, path) and fixlog/shared-projects.md, same PR (commit noise).

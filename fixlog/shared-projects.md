@@ -160,7 +160,7 @@ Loaded by: see `shared/README.md` (one row per file). Tests: `node tests/engine/
   - sync off: no request and no key.
 - **Formulas, factors, units, code references:** none.
 
-## 2026-11-08 — PR: claude/sync-presence (PR #PR3NUM: https://github.com/mlococo88/All-Structural/pull/PR3NUM) (LIVE PR 3 of 3) — projects-ui.js: presence (heartbeat of the open project, "Also open on <device>" banner, warning before opening a project open elsewhere)   [GitHub sync only; nothing changes while sync is off; no tool key or format change]
+## 2026-11-08 — PR: claude/sync-presence (PR #1253: https://github.com/mlococo88/All-Structural/pull/1253) (LIVE PR 3 of 3) — projects-ui.js: presence (heartbeat of the open project, "Also open on <device>" banner, warning before opening a project open elsewhere)   [GitHub sync only; nothing changes while sync is off; no tool key or format change]
 - **Why:** engineer request 2026-11-08 (C). Engine: fixlog/shared-github-sync.md #1251 (`beat`, `leave`, `others`, `presenceOf`) and this PR (`presenceHint`).
 - **What (`liveBar`, anchor `---- presence (LIVE PR 3`):**
   - The 3 s tick calls `SharedGitHubSync.beatDue` → engine `beat(name)`: write this device's heartbeat; one file per browser, not more than once a minute.
