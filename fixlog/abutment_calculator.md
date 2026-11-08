@@ -16651,7 +16651,7 @@ Engineer instruction (2026-11-07, paraphrased): "same deal for the abutment" as 
 - **How verified:** origin/main vs the branch, 22 cases (as ABNL-1): at 1100 px `LAST_R` and every tab, dashboard, warnings and Report text identical (byte for byte); at 1440 px `LAST_R`, tabs, warnings and Report identical, the dashboard text differs only by the hidden chip grid. Layout at 1920 / 1440 / 1280 / 1024 / 390 px: column 280 / 240 / 240 / none / none; no sideways page scroll; « gives 42 px and the key '1'. 0 console errors. Tests: check-syntax; project-library --tool abutment (ALL PASS); abutment-pile-group-parity (14/14 identical); engine handoffs + pile-group (19 passed).
 - **Other copies:** none.
 
-## 2026-11-08 — PR: claude/sf-rename-abut (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SFNM-A) — Spread Footing shown as "Shallow Foundation Design"   [display only]
+## 2026-11-08 — PR: claude/sf-rename-abut (PR #1237: https://github.com/mlococo88/All-Structural/pull/1237) (SFNM-A) — Spread Footing shown as "Shallow Foundation Design"   [display only]
 - **Why:** Spread Footing's displayed name is now "Shallow Foundation Design" (engineer request 2026-11-08; #1236). Its file name and hand-off receiver are unchanged.
 - **Before → after** (anchor = the "after" text):
   - Project tab, hand-off group heading: `<b>Foundation (Pile Designer / Spread Footing)</b>` → `<b>Foundation (Pile Designer / Shallow Foundation Design)</b>`.
