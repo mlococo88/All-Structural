@@ -1728,3 +1728,36 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 
   Column width 240 / 280 / absent at 1440 / 1600 / 1100 and 390 px; no sideways scroll; 0 console errors. Tests: `check-syntax`, `phone-layout --tool mlg`, `project-library --tool mlg`, `engine/run.mjs moving-load`. All pass.
 - **Other copies:** none.
+
+## 2026-11-08 — PR: claude/shared-ml-notes (PR #1241: https://github.com/mlococo88/All-Structural/pull/1241) (MLNL-3: the pedestrian-load and Std. Spec. lane warnings as a bold lead and a list; display only, no result change)
+
+### MLNL-3. Warnings built in shared/moving-load.js shown with `mlNL`   [display only] [no result change]
+- **Request:** MLNL-2 open item (#1221). `shared/moving-load.js` now returns `R.warnNL` (same PR; `fixlog/shared-moving-load.md`): a list form of
+  the pedestrian-load and Std. Spec. lane-loading warnings at their index in `R.warn`. `R.warn` is unchanged (the input-tab marks read it).
+- **Where (1):** after `function mlNL(…){…}`, new (anchor `/* MLNL-3 (2026-11-08): the warnings as HTML.`):
+  ```js
+  function mlgWarnHTML(R){let h='',blk=false;R.warn.forEach((w,k)=>{const n=R.warnNL&&R.warnNL[k];
+    if(n){h+='<div class="mlNL">'+mlNL('⚠ '+n.lead,n.items)+'</div>';blk=true;}else{h+=(k&&!blk?'<br>':'')+'⚠ '+w;blk=false;}});return h;}
+  ```
+  With no list warning it gives exactly `R.warn.map(w=>'⚠ '+w).join('<br>')`.
+- **Where (2):** `render`, the warnings box. Before: `$('warns').innerHTML=R.warn.map(w=>'⚠ '+w).join('<br>');` After: `$('warns').innerHTML=mlgWarnHTML(R);`
+- **Where (3):** print report, `reportHTML`, before:
+  `${R.warn.length?`<p class="wn">⚠ ${R.warn.join('<br>⚠ ')}</p>`:''}` after:
+  `${R.warn.length?(R.warnNL&&R.warnNL.some(Boolean)?`<div class="wn">${mlgWarnHTML(R)}</div>`:`<p class="wn">⚠ ${R.warn.join('<br>⚠ ')}</p>`):''}`;
+  and in the D11 recast `var wn=sec.querySelector('p.wn')` → `var wn=sec.querySelector('.wn')` (the block is a `div` when it holds a list).
+  The print CSS of MLNL-2 (`.crdoc .mlNL …`) styles it.
+- **Where (4):** Report tab (`mlr` model), "Analysis model and engine check": before
+  `.concat((R.warn||[]).map(w=>({type:'note',warn:true,text:'Warning: '+String(w).replace(/<[^>]+>/g,'')})))` after: a list warning gives the
+  note "Warning: <lead>" and one warning note "• <lead words> <text>" per item (as MLNL-2 item 8); other warnings as before.
+- **Words:** the same words and digits in the same order, except the Std. Spec. lane lead ("Std. Spec. lane loading is checked as a separate case and
+  enveloped with the vehicle, with impact.") now comes before its loads (no digits in it, so the digit sequence is unchanged).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none.
+- **Check case:** HS20 preset, pedestrian load on (0.45 k/ft, DF 1.00), Std. Spec. lane loading on (0.64 k/ft + 18 / 26 k): before, the warnings box
+  was two paragraphs (300 + 353 characters); after, "⚠ Std. Spec. lane loading is checked as a separate case …" with Loads / Where it governs, and
+  "⚠ Pedestrian load 0.45 k/ft on this girder line (DF 1) is included with every vehicle case:" with Applied / Per-lane values / Not included.
+- **How verified:** origin/main vs branch, headless Chromium at 1440 and 390 px, 4 cases (HS20 default; pedestrian on; Std. Spec. lane on; both):
+  `RES.warn` identical; the warnings box HTML identical when neither is on; the digit sequence of the page text (solve time masked), of the Report tab
+  `textContent` and of the print report (`genReport` into a frame) identical; 0 console errors. Screenshots `notes/shared/mlg-*-warns-*.png`.
+  Tests: `check-syntax`, `phone-layout --tool mlg`, `project-library --tool mlg`, `engine/run.mjs moving-load` (see the PR).
+- **Other copies:** none.
+- **Open item:** the two LRFD fatigue-truck warnings (also built in `shared/moving-load.js`, ~400 characters) are not converted here; same approach if wanted.
