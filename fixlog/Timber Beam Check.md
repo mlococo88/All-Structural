@@ -2315,3 +2315,120 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
   - no horizontal scroll at 400 px.
 - **Footnote d values:** checked on the Deflection tab for the default joist (0.605 in., 0.757) and the wet joist (0.793 in., 0.991).
 - **Syntax:** `node tests/check-syntax.mjs` passes.
+
+## 2026-11-08 — PR: claude/timber-notes-a (PR #1185: https://github.com/mlococo88/All-Structural/pull/1185) (TBNL-1: long notes as a bold lead and a list — input tabs, Summary, Analysis Results, Bending, Bearing, Deflection; display only, no result change)
+
+Code sites are tagged `TBNL`.
+
+### TBNL-1. Long notes split into a lead line and a list   [display only] [no result change]
+- **Request (engineer, 2026-11-07):** "there are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Part 1 of 2: the input tabs and the result tabs Summary, Analysis Results, Bending, Bearing and Deflection. Part 2 (Reference Values, Validation, Method & Manual, the warnings list and the Report's own notes) follows in TBNL-2.
+- **New helper** (before `function el(`), anchor `/* TBNL (2026-11-08, engineer's request`:
+  ```js
+  function tbNL(lead, items, o) {
+    o = o || {}; const T = o.ol ? 'ol' : 'ul';
+    const li = (items || []).filter(Boolean).map(x => '<li>' + (Array.isArray(x) ? '<b class="tbNLk">' + x[0] + '</b> ' + x[1] : x) + '</li>').join('');
+    return (o.act || []).filter(Boolean).map(a => '<div class="warnBox tbNLa">' + a + '</div>').join('') + (lead ? '<div class="tbNLl">' + lead + '</div>' : '') + (li ? '<' + T + ' class="tbNLu">' + li + '</' + T + '>' : '');
+  }
+  ```
+  A note becomes `el('div', 'hint', tbNL(lead, [[leadWords, text], …]))` (or `'note'` / `'warnBox'`); an fRow / chkRow hint takes the `tbNL(…)` string as its hint. A falsy item is skipped (conditional facts).
+- **CSS** (after `.errBox ul,.warnBox ul{…}`), no new colours (the note / hint / warnBox colours are inherited), print keeps a list item on one page:
+  ```css
+  .tbNLl{font-weight:700;margin:0 0 1px}
+  ul.tbNLu,ol.tbNLu{margin:2px 0 3px;padding:0 0 0 18px}
+  .tbNLu>li{margin:1px 0}
+  .tbNLa{margin:2px 0 4px}
+  @media print{.tbNLu>li{break-inside:avoid}}
+  ```
+- **Report:** new `tbrNLParts(e, warn)` (after `const tbrHtx =`) returns the parts of a tbNL note (action lines, lead, one "• " line per item).
+  - `tbrHarvest` (the result tabs' notes): a tbNL note is kept or left out as one note, with the same `fresh` test on the joined text of its parts, then printed as its parts (the card title prefix goes on the lead). Anchor `// TBNL: kept or left out as one note`.
+  - `tbrAddPorted`: `n.list.filter(fresh).flatMap(q => q.parts || [q])`.
+  - `tbrDomItems` (the appendices): a tbNL note is pushed as its parts. Anchor `const nl = tbrNLParts(c,`.
+- **Notes changed (anchor = the old opening text; new lead → item lead words).** Every sentence, number, citation and link of the old note is kept, in the same order; only the lead words, list-start capitals and end punctuation are new. Exact before / after: the PR diff.
+  1. Geometry, "<b>Supporting member F<sub>c⊥</sub></b> (fix log TBB1): the reference…" → lead (same sentence) → Its bearing is checked too / Same as beam / Presets.
+  2. Geometry, "<b>Cb</b>: tick when the bearing…" → lead "Support types and the C<sub>b</sub> box" → Cb / Qualifies / Free / Pin and roller / Fixed.
+  3. Loads, area loads hint (ASD and LRFD versions) "All ten ASD combinations…" / "LRFD: the ten strength combinations…" → lead (first clause) → C<sub>D</sub> or λ / (LRFD: W) / A blank load.
+  4. Loads, "Positive = downward. x is measured…" → lead "Point loads: positive = downward." → x / Type / Within d of a support / Bearing l<sub>b</sub> (fix log TBB1).
+  5. Loads, x/d box hint "Design shear only (…)" → lead (same sentence) → Permitted only / x / Unticked.
+  6. Material, Manual values hint "For grades, sizes or species that are not built in…" → lead (same sentence) → Enter / Timbers (5 in. and thicker).
+  7. Material, Notch location hint "Tension face: NDS 3.4.3.2(a)…" → lead "How each notch location is checked:" → Tension face / Compression face / Interior notches.
+  8. Material (glulam), "Straight, prismatic members, bending about x–x…" → lead (same sentence) → F<sub>bx</sub><sup>+</sup> / Not covered.
+  9. Material (SCL), warnBox "<b>The manufacturer’s literature governs.</b> …" → lead (same) → Proprietary / No product values.
+  10. Factors, Repetitive member hint "Three or more members…" → lead (same sentence) → Dimension lumber / SCL / Not.
+  11. Factors, lateral support hint "Negative moment occurs over interior supports…" → lead (same sentence) → Brace points / Earlier files.
+  12. Factors, creep factor hint "Applied to the dead-load deflection (NDS 3.5.2: …" → lead "Applied to the dead-load deflection." → NDS 3.5.2 / 0 or blank / With Wet service ticked.
+  13. Factors, total limit hint "IBC Table 1604.3 (user-editable). …" → lead (same) → Cantilever / Live/snow limit.
+  14. Summary, governing results hint "Ratio = demand / capacity; ≤ 1.000 passes. …" → lead (same) → Highlighted / Stresses (ASD) or LRFD.
+  15. Summary, all combinations hint "Bold = governing. …" → lead (same) → C<sub>D</sub> or λ / Point loads / M.
+  16. Analysis Results, diagrams hint "Grey band = envelope…" → lead (same) → Dotted lines / Shear.
+  17. Analysis Results, reactions hint "A negative reaction (red) is net uplift…" → lead (same) → ΣR = ΣF / Simple span or Continuous / cantilever beam.
+  18. Analysis Results, peaks hint "Moments are evaluated at 100 stations…" → lead "Stations and design shear" → Moments / V design.
+  19. Bending, stability hint "Top edge: …; bottom edge: …. Continuous beams…" → lead "Lateral support of the edges" → Top edge / Bottom edge / Continuous beams and cantilevers (continuous only).
+  20. Bearing, supporting member hint "Supporting member (fix log TBB1): the beam bears on a softer member…" → lead (same sentence) → Its F<sub>c⊥</sub> / Point loads / the last sentence as a plain item.
+  21. Deflection, method note "Simple span: deflection by superposition…" / "Continuous beam / cantilever: …" → lead (that sentence) → Evaluated / Shear deformation.
+- **Not changed:** short notes (one or two sentences, under ~300 characters) such as the notch depth hint, the glulam / SCL service hints, the LRFD method hint, the Design Values "psi. F<sub>t</sub> and F<sub>c</sub>…" hint; the shared Save and open card (`SharedProjectsUI`, a shared file); "Worked in" link lines; the worked steps.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none (no key, no saved field).
+- **Check case:** default project (DF-L No.2 2x10 @ 16 in., 16 ft, D 15 / L 40 psf), Loads tab: the point-load hint was one 510-character paragraph; now the lead "Point loads: positive = downward." and four bullets; "(fix log O4)", "NDS 3.10" and "3 in." unchanged. Report §5 (Analysis): "Peak values by combination: Stations and design shear" then two "• " lines with the same text as before.
+- **How verified:** headless Chromium, origin/main vs the branch, 9 cases (default; 3 spans with a fixed support, point loads, snow, wind uplift, notch, x/d; span + overhang with compression-face notch, wet, negative D; glulam LRFD 2 spans; custom glulam; SCL LRFD; 6x12 timber flat, incised, 100–125 °F; manual SP values with a bearing point load; an input error): `TBC.res` identical (JSON); the digit sequence of every input tab, every output tab, the governing strip, and the Report (`SharedReport.text` and the full HTML text, all three appendices on) identical. Validation 123/123. 0 console errors. No horizontal scroll at 390 px. `tests/check-syntax.mjs`, `tests/smoke/project-library.mjs --tool timber`: pass. (Timber has no entry in `tests/smoke/phone-layout.mjs`.)
+- **Other copies:** none.
+
+## 2026-11-08 — PR: claude/timber-notes-b (PR #1190: https://github.com/mlococo88/All-Structural/pull/1190) (TBNL-2: long notes as a bold lead and a list — Reference Values, Validation, Method & Manual, the Summary notes list and the Report's own notes; display only, no result change)
+
+Code sites are tagged `TBNL`. Uses `tbNL` and the CSS of TBNL-1 (PR #1185).
+
+### TBNL-2. Long notes split into a lead line and a list, part 2   [display only] [no result change]
+- **Request:** as TBNL-1 (engineer, 2026-11-07).
+- **Summary notes list (warnings), display only.** The strings in `R.notes` / `R.adv` are byte-identical: the Report's "Note: …" lines, the Validation check `q.adv.filter(t => /^REVIEW: custom glulam has no Ey,min/.test(t))` and every other reader see the same text.
+  - In `tbcRun` (after `const adv = [];`) a display-only map `advNL` is added, keyed by the exact text: `const nlMsg = (lead, items) => { const t = [lead, ...items].join(' '); advNL[t] = { lead, items }; return t; };`.
+  - The map is a non-enumerable property of the `adv` array (`Object.defineProperty(adv, 'nl', { value: advNL })`), so `R.adv.nl` is available to the display but is not part of the results (JSON, saved data, test comparisons).
+  - Six messages are now built as `nlMsg(lead, [sentences])`. The joined text equals the old literal exactly (checked: `R.adv` / `R.notes` identical in every case):
+    - "REVIEW: custom glulam has no Ey,min …" (the REVIEW sentence is the lead, so the action comes first);
+    - "Incised timber: …";
+    - "Compression-face end notch: …";
+    - "Fixed support: …";
+    - "Continuous beam: the live, roof live and snow …";
+    - "Wet service: creep factor K_cr = 2.0 used …".
+  - `buildSummary`: `nlH(m)` (reads `R.adv.nl`) shows such a message as a lead and a sub-list (`tbNL`). Other messages are unchanged.
+  - Report (Notes and references, anchor `R.notes.concat(R.adv).forEach(m => { const q = R.adv.nl`): "Note: " + lead, then one "• " line per item.
+- **Report model notes** (`tbrModel`), new `tbrNL(lead, items)` (before `const tbrTbl =`) gives a lead note and one "• " note per item:
+  - §1.1 "Ratio = demand / capacity; ≤ 1.000 passes. …" → Each ratio links / Stresses (ASD) or LRFD / The same values.
+  - §2.1 "Units: lb, ft, in., psi unless noted. …" → Every value in this report….
+  - §4.1 "psi. Source: …" → F_t and F_c are listed only….
+  - §5.1 "Bold = governing for bending, shear or bearing. …" → C_D or λ / M = …; V = … / Statics.
+- **Appendix C (Method and manual), `tbrDomItems`:** a list item with a sub-list prints as "• lead", then one "– " line per sub-item. Anchor `// TBNL: a list item with a sub-list`.
+- **Notes changed (anchor = the old opening text → new lead → item lead words).** Every sentence, number, citation and link is kept, in the same order. Only lead words, list-start capitals, end punctuation and the joining words named below are new.
+  1. Reference Values warnBox, "<b>Verify the built-in values.</b> Every value below…" → Entered without the printed documents / Before use / last sentence.
+  2. Table 4A hint, "psi. SPF No.1 and No.2…" → lead "Values in psi." → SPF / F<sub>t</sub> and F<sub>c</sub> / Stud 8 in. and wider.
+  3. Table 4B hint, "psi. Select Structural and No.1 were added…" → "Values in psi." → first sentence / Not built in ("…grades; use Manual values") / Widths over 12 in. / F<sub>t</sub> and F<sub>c</sub>.
+  4. Table 4D hint, "psi. Added in Phase 2 (fix log R3, open item O3)…" → "Values in psi." → Added / Size class from the section / C<sub>F</sub> / Flat use…, Table 4D footnote / Wet service / last sentence.
+  5. Table 5A hint, "psi. F<sub>bx</sub><sup>+</sup> for positive moment…" → "Values in psi." → F<sub>bx</sub><sup>+</sup> / Bearing / Wet service C<sub>M</sub> / Volume factor / Notches / Added.
+  6. LRFD factors hint, "All values verify. LRFD adjusted value…" → lead "All values verify." → LRFD adjusted value / F<sub>b</sub>* / W / Not used (the 0.5L option…) / Not offered (λ = 1.25 (impact)) / Added.
+  7. SCL note, "No SCL values are built in: the reference design values…" → lead "No SCL values are built in." → From the manufacturer’s literature, which governs (NDS 8.2, 8.3.6) / The tool applies / Not covered (manufacturer) / C<sub>r</sub>.
+  8. Size factor hint, "NDS Supplement 2018 Table 4A footnotes verify. …" → lead (same) → Table 4B (SP) / A non-standard width / Timbers (5x5 and larger…).
+  9. Validation, "Closed forms: AISC Steel Construction Manual Table 3-23…" → lead (same) → Section / Fix-log case / Rounding.
+  10. Validation, parity note, "A single span on two pin supports runs exactly…" → lead (first sentence) → Files / Checked.
+  11. Method & Manual, Scope paragraph, "Beams of sawn lumber (…)" → lead "Beams checked for bending, shear, bearing and deflection." → Materials / Checked by / Layout.
+  12. Method & Manual list items as a lead and a sub-list:
+      - Inputs: Loads (Area loads / Point loads), Material (Sawn lumber / Glulam / SCL);
+      - Analysis: "A single span on two pins uses statics…" (Any other layout / The solver), the ASD / LRFD item (new lead "Load combinations": ASD / LRFD / Wind);
+      - Checks: Bending (Per span / l<sub>u</sub> / l<sub>e</sub> per Table 3.3.3 / R<sub>B</sub> ≤ 50), Shear (V / A point load within d of a support / End notch), Deflection (Per span / Limits / Wind / Always at service loads), Glulam (F<sub>bx</sub><sup>+</sup> / Volume factor / Wet service / End notch / Bearing), SCL (Values / C<sub>V</sub> / Repetitive member factor / Not covered);
+      - Saved data: Files (Export JSON / Open file / Dressed sizes), Shared project info (Shared and received / last sentence);
+      - Limitations: "No axial load, no torsion, no lateral load on the weak axis." (Notches / Shear / Creep).
+  13. The six Summary notes listed above.
+- **Not changed:**
+  - short notes;
+  - table cells (the l<sub>e</sub> and dressed-size rows of the factors table, the references table);
+  - the worked steps' own notes (`SharedSteps`, shared);
+  - the existing "Notes on the Summary tab" Report line, which joins the Summary notes box without spaces between items. This is old behaviour, not changed here (open item).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). `tbcRun` changes only by building six message strings from parts and attaching the display map to `adv` (non-enumerable). **Saved data:** none.
+- **Check case:** 3 spans 12 / 14 / 10 ft, support C fixed, D 15 / L 40 psf, W −20 psf. The Summary notes box shows:
+  - "Fixed support: bearing is checked with the vertical reaction only (uniform Fc⊥ stress over the bearing length)." with one sub-item;
+  - "Continuous beam: the live, roof live and snow area loads act on all spans at once." with two sub-items.
+  - `R.adv` is the same two strings as before, character for character.
+- **How verified:** headless Chromium, origin/main (after #1185) vs the branch, the 9 cases of TBNL-1:
+  - `TBC.res` identical (JSON), including `R.adv` / `R.notes`;
+  - the digit sequence of every input tab, every output tab, the governing strip and the Report (text and full HTML, all appendices on) identical;
+  - Validation 123/123;
+  - 0 console errors;
+  - no horizontal scroll at 390 px;
+  - `tests/check-syntax.mjs` and `tests/smoke/project-library.mjs --tool timber`: pass.
+- **Other copies:** none.

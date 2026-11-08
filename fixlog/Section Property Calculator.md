@@ -3662,3 +3662,46 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
   - Screen Report viewer: only its `innerText` changed. The viewer renders subsections lazily, so taller notes push a later subsection out of the rendered range. The Report content is identical, as `SharedReport.text` and the model show.
   - Validation 136/136. 0 console errors. Screenshots at 1440 and 390 px. Tests: see the PR.
 - **Other copies:** none.
+
+## 2026-11-08 — PR: spc-left-summary (PR #1184: https://github.com/mlococo88/All-Structural/pull/1184) — SPLS: key results in a left summary column from 1200 px (display only, no result change)
+
+### SPLS. Results summary column on the left at 1200 px and wider   [display only]
+- **Request (engineer, 2026-11-07/08):** add the left summary panel to the tools with summary or result cards, the way it was done in Retaining Wall (RWDL #959, RWLB #984), Spread Footing (SFLB #988), Light Pole (LPLB #991, #994/#997) and Shear and Moment Diagrams (SMLS #1130).
+- **What changed (screen only):**
+  - From **1200 px** a new left column `#spcDashCol` sits to the left of the input panel: **240 px** wide up to 1499 px, **280 px** from 1500 px.
+  - It holds "Results summary": one chip per value, each with name, value and status.
+    - **Check the model:** the warning count, in warning style. Expands to the warnings.
+    - **Key properties:** the Section-tab key properties with the same labels, values and formatting as the `buildSecSummary` tiles (A, x̄, ȳ, Ix, Iy, Ixy, I1, I2, θp, Sx top / bottom, Sy, Zx, Zy, rx, ry, rmin, J, Cw). J is flagged "check" when `T.jHigh`.
+    - **Shear centre:** xo, yo.
+    - **Torsion warnings:** the count, when there are any.
+    - **Connector D/C:** one chip per contact with a connector check. Same value (`nf(cs.dc, 'n', 3)`) and same OK / NG rule (`cs.dc <= 1`) as the D/C column of the Q & shear flow table.
+    - **Validation:** "136 / 136 pass", or FAIL.
+  - Status counts in the head: "N NG", "N warn", or "no NG".
+  - **Click a chip (or Enter / Space):** opens the card that works the value and flashes it (CLAUDE.md §6). This uses the D11 "Worked in" targets (`spcGoto`: Calc detail Parallel-axis table / Centroid / Moments of inertia / Principal axes, Plastic Zx / Zy, Torsion J / Cw). A connector chip opens the Q & shear flow table with that contact selected. The Validation chip opens the Validation tab, and Check the model opens the Section tab.
+  - The ▸ / ▾ button shows the chip's detail and "→ Tab · Card". NG and warning chips start open, as in the other tools.
+  - « shrinks the column to a 42 px strip, which shows the vertical title and the counts; » opens it again. The state is stored in this browser under the per-tool UI key **`spc_dashCollapsed_v1`** ('1' = collapsed). It is not in the project, the autosave or the export (§5).
+  - The canvas is redrawn when the column changes width.
+  - **Below 1200 px nothing changes:** tablet and phone layouts are as before, and the column is `display:none`. It is hidden in print (Print prints the Report, which is unchanged).
+- **Decision (pending engineer review):**
+  - The Section-tab key-property tiles stay where they are while the column is open; the column is visible from every tab.
+  - Shear and Moment Diagrams hid its cards while the column was open. Here the tiles sit beside the drawing and are part of the Section tab, so they are kept.
+- **Where (`Section Property Calculator.html`):**
+  - **CSS:** after `#outputPanel{…}`, the block that starts `/* SPLS (2026-11-08, engineer: the left summary panel`.
+  - **HTML:** the first child of `<div id="main">` is `<aside id="spcDashCol" aria-label="Results summary">`, containing the head (`#spcDashTgl`, `#spcDashTtl`, `#spcDashCnt`), `#spcDashSub` and `#spcDash`.
+  - **JS:** after `function spcGoto(card) {…}`, the block `/* SPLS … */`: `SPCD`, `spcDashItems()`, `spcDashGo(it)`, `spcDashRender()`, `spcDashPlace()`, `spcDashColl(v, save, redraw)` and a start-up IIFE.
+  - `renderOutput(light)` now ends with `spcDashRender();`.
+- **Formulas, factors, units, code references:** none changed. The chips read `R`, `R.tors`, the shear flow (`SPC.shearFlow`, only when a connector is entered, and not cached on `R` so the result object is unchanged), `sfVal`, `connSummary` and `VAL` as the tabs do. No new calculation.
+- **Saved data:** none. New UI key `spc_dashCollapsed_v1` (prefixed per tool).
+- **Check case:** welded girder PL 16 × 1 / PL 1/2 × 36 / PL 16 × 1, Vy = 100 kip LRFD.
+  - Connectors: top contact fillet weld w = 1/8 in (two welds); bottom contact bolts φRn = 20 kip, 2 lines, s = 6 in.
+  - Chips: A = 50 in², Ix = 12,899 in⁴, Zx = 754 in³, J = 12.208 in⁴.
+  - Connector chips: "#1 … D/C 0.412 OK" and "#2 … D/C 0.344 OK", the same as the D/C column of the Q & shear flow table.
+  - Validation chip: "136 / 136 pass".
+  - The Zx chip opens Plastic · Zx. A connector chip opens Q & shear flow with that contact selected.
+- **How verified:**
+  - Headless Chromium, origin/main vs the branch, the 9 cases of SPNL-1: `SPCUI.res` identical; every tab, input tab, strip and Report text identical.
+  - Column measured at 1440, 1250 and 390 px: 240 px wide at 1440 and 1250 px; hidden at 390 px, with no sideways scroll.
+  - Collapse: 42 px, and the key is written.
+  - 0 console errors.
+  - Tests: see the PR.
+- **Other copies:** none (the same pattern, not shared code, as SMLS / SFLB / RWLB / LPLB).
