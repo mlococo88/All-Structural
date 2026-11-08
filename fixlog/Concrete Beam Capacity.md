@@ -5418,7 +5418,7 @@ Frames: Development & Splice (`suite-frame-dev`) and ASD Beam Calcs (`suite-fram
 - **How verified:** headless Chromium, CBNL-1 (origin/main) vs the branch, the same 31 cases as CBNL-1. Every result (Beam Capacity, ASD, Development & Splice) is identical. The digit sequence of every tab's text (the 2 ASD and 15 Dev cases changed wording) and of the combined Report text is identical in all 31 cases. 0 console errors. Screenshots at 1440 and 390 px. Tests: see the PR.
 - **Other copies:** none. The standalone rebar calculator is a redirect page (RBRT), so the Development & Splice tab is the only copy.
 
-## 2026-11-08 — PR: nl-cbc-c (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (CBLB: the check summary panel (CBDC) as a left column from 1200 px, was 1500 px; 240 px wide from 1200 to 1499 px; display only, no result change)
+## 2026-11-08 — PR: nl-cbc-c (PR #1226: https://github.com/mlococo88/All-Structural/pull/1226) (CBLB: the check summary panel (CBDC) as a left column from 1200 px, was 1500 px; 240 px wide from 1200 to 1499 px; display only, no result change)
 
 Frame: Beam Capacity (`suite-frame-capacity`).
 
