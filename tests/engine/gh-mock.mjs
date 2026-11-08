@@ -12,7 +12,8 @@ export function makeGitHubMock({ owner = 'mlococo88', repo = 'structural-project
   const log = [];            // { method, url, auth, body }
   const m = { files, log, offline: false, rate: false, token, commits: [],
     /* edit a file "on another device" */
-    setRemote(path, text) { files.set(path, text); m.commits.push({ path, message: 'remote edit' }); },
+    setRemote(path, text, message) { files.set(path, text); m.commits.push({ path, message: message || 'remote edit', date: new Date(m.clock ? m.clock() : Date.now()).toISOString() }); },
+    clock: null,   // LIVE (2026-11-08): optional () => ms for commit dates (the engine tests' fake time)
     handle(method, url, headers, bodyText) {
       headers = Object.fromEntries(Object.entries(headers || {}).map(([k, v]) => [k.toLowerCase(), v]));
       log.push({ method, url, auth: headers.authorization || null, body: bodyText || null });
@@ -32,6 +33,10 @@ export function makeGitHubMock({ owner = 'mlococo88', repo = 'structural-project
         for (const [p, t] of files) { const parts = p.split('/'); for (let i = 1; i < parts.length; i++) dirs.add(parts.slice(0, i).join('/')); tree.push({ path: p, mode: '100644', type: 'blob', sha: gitBlobSha(t), size: Buffer.byteLength(t) }); }
         for (const d of dirs) tree.push({ path: d, mode: '040000', type: 'tree', sha: 't' + d.length });
         return J(200, { sha: 'root', tree, truncated: false });
+      }
+      if (rest === '/commits' && method === 'GET') {   // LIVE: the newest commit that changed ?path= (per_page=1)
+        const pth = u.searchParams.get('path'); const c = [...m.commits].reverse().find(x => x.path === pth);
+        return J(200, c ? [{ sha: 'c' + m.commits.indexOf(c), commit: { message: c.message, committer: { date: c.date }, author: { date: c.date } } }] : []);
       }
       if (rest.startsWith('/branches/')) return decodeURIComponent(rest.slice(10)) === branch ? J(200, { name: branch }) : J(404, { message: 'Branch not found' });
       if (!rest.startsWith('/contents/')) return J(404, { message: 'Not Found' });
@@ -56,13 +61,13 @@ export function makeGitHubMock({ owner = 'mlococo88', repo = 'structural-project
           if (body.sha !== gitBlobSha(files.get(path))) return J(409, { message: `${path} does not match ${body.sha}` });
         } else if (body.sha) return J(409, { message: `${path} does not match ${body.sha}` });   // GitHub: sha given for a file that is not there
         const text = Buffer.from(body.content, 'base64').toString('utf8'); const isNew = !files.has(path);
-        files.set(path, text); m.commits.push({ path, message: body.message });
+        files.set(path, text); m.commits.push({ path, message: body.message, date: new Date(m.clock ? m.clock() : Date.now()).toISOString() });
         return J(isNew ? 201 : 200, { content: { name: path.split('/').pop(), path, sha: gitBlobSha(text) }, commit: { sha: 'c' + m.commits.length, message: body.message } });
       }
       if (method === 'DELETE') {
         if (!files.has(path)) return J(404, { message: 'Not Found' });
         if (body.sha !== gitBlobSha(files.get(path))) return J(409, { message: 'sha mismatch' });
-        files.delete(path); m.commits.push({ path, message: body.message, deleted: true });
+        files.delete(path); m.commits.push({ path, message: body.message, deleted: true, date: new Date(m.clock ? m.clock() : Date.now()).toISOString() });
         return J(200, { content: null, commit: { sha: 'c' + m.commits.length } });
       }
       return J(405, { message: 'Method not allowed' });
