@@ -1598,7 +1598,7 @@ Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.4.2.1 (L2), C14.8.3.1 (L3), 14.7.5.3.
 - **How verified:** check-syntax; project-library edm ALL PASS; headless round trip (×1, ×2, ×4): no warning naming the Abutment app, no dialogs, 0 console errors.
 - **Saved data:** none changed.
 
-## 2026-11-08 — PR: nl-edm-a (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (EDNL: long notes as a bold lead and a list; display only, no result change)
+## 2026-11-08 — PR: nl-edm-a (PR #1203: https://github.com/mlococo88/All-Structural/pull/1203) (EDNL: long notes as a bold lead and a list; display only, no result change)
 
 ### EDNL-1. Long notes split into a lead line and a list   [display only] [no result change]
 - **Request (engineer, 2026-11-07/08):** "there are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Approved for all apps.
