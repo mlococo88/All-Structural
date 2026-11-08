@@ -22811,3 +22811,39 @@ Basis: AASHTO LRFD 10th Ed. (2024). Reference implementation: `lldf.html` `membe
 - **Check case:** built-in project, Girder section, 1440 px: 21 lines, GS7 "0.93 OK" (as the Summary's governing ratio 0.93), GS22 / GS9 / GS10 "—" with N/A; click GS4 → Checks tab, card GS4 at the top; « → 42 px, key '1'.
 - **How verified:** `tests/compare.mjs --tool gd`: every section identical (A's 3 console errors: the extracted main copy has no `shared/` folder). Headless 1300 / 1440 / 1600 / 390 px: column 240 / 240 / 280 px / not displayed, page scrollWidth = viewport; click → Checks tab with the card on screen; collapse → 42 px and the key; print media: not displayed. 0 console errors. Screenshots: see the PR.
 - **Other copies:** none.
+## 2026-11-08 — PR: nl-sbd-a4 (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SBNL-4: the remaining long check notes of the GirderDetail modules as a bold lead and a list, Checks tab and Report; display only, no result change)
+
+### SBNL-4. The shorter long check notes as a lead line and items   [display only] [no result change]
+- **Request (engineer, 2026-11-07, for every app):** as SBNL-3 (#1193). Part 4 of the tool: the check notes (`c.note`) left by SBNL-3's open item, the ones of about 170 to 650 characters with 3 or more sentences or several facts.
+- **Helpers:** SBNL-3's `gdNL(title, items)` and `gdNoteHTML(k, rep)` (anchor `/* SBNL-3 (2026-11-08, engineer: no long run-on notes)`), unchanged; no new CSS, no renderer change.
+- **Rule:** as SBNL-3. `c.note` stays the **same string, byte for byte** (the item texts joined by one space, cut at sentence starts or at a semicolon of the old literal, the semicolon kept); `c.nl` (title and bold lead words, new display words, no digits) is display only. Conditional parts stay inside the item they belonged to; a conditional sentence is a conditional item (`...(cond ? [[lead, text]] : [])`). Where an owner rule is put in front of the note (GS4, SA3), the owner branch now rebuilds the note with `Object.assign(c, gdNL(title, [['Owner rule:', …], …c.nl[1]]))`, the same string as `owner text + ' ' + c.note` before. Text that later code adds (the narrow-flange message on DT3 / DT7, `spCtNarrow`) is kept as a line before the title by `gdNoteHTML`.
+- **Notes changed** (each `note: '…'` → `...gdNL(title, [[lead words, '…'], …])`; anchor = the old opening words → title → lead words):
+  1. DF1 "Outside the range the approximate equations" → "Range of applicability:" → Outside the range / Special cases / Exterior girders.
+  2. DF2 "Informational: the governing factors" → "Governing factors, where each applies:" → Use / Moment / Shear.
+  3. DF4 "L_as = arc span" → "Curved girders analyzed as straight, the conditions:" → Arc span / Not met / Girders.
+  4. DF5 (MassDOT) "${gdOwnCite(rU)}: ${rU.text}. A DW row" → "Owner rule for utilities:" → Owner rule / DW rows / No utilities yet.
+  5. SA3 "All lanes loaded, all girders deflecting equally" → "Live load deflection, the assumptions:" → Loading / Axles; owner branch (`c.note = \`${gdOwnCite(oR)}: ${oR.text}. Sidewalk or pedestrians:` …` + c.note`) → "Live load deflection, the owner limit and the assumptions:" → Owner rule / Limit used / (Exterior girder) / Loading / Axles.
+  6. GS4 "Required where the deck tensile stress" → "Minimum deck reinforcement, where and what:" → Where / Bars / Top layer; owner branch (OWN17, `c.note = \`${gdOwnCite(rM)}: required between the dead load points` …` + c.note`) → Owner rule first.
+  7. GS6 "Compact when F_y ≤ 70 ksi" → "Compact or noncompact, and how each is checked:" → Compact / Plastic moment / Noncompact.
+  8. GS12 "Service II: DC + DW + 1.30(LL+IM)" → "Permanent deformations, the stresses used:" → Combination / Negative flexure / Lateral bending.
+  9. GS14 "Noncomposite steel section; M = γ_DC M_DC1" → "Deck placement, the section and the resistance:" → Section / Resistance / Webs.
+  10. CF4 "Single shear, threads" → "Bolts at the member ends:" → Shear / Number / No slip check / Threads.
+  11. CF7 "M_br is applied to the truss" → "Bracing force, how it is applied:" → Couple / Direction / Stiffness.
+  12. TS5 "The 6.10.9.1 limits decide only" → "What the spacing limits decide:" → Purpose / Wider panel / Connection plates only.
+  13. TS8 (owner) "${[rF, rM]…} A location is on the exterior (fascia) girder" → "Owner rules for the stiffeners and connection plates:" → Owner rule (one per rule) / Exterior girder / (Pairs) / (Thickness).
+  14. CP1 "Connection plates must be welded or bolted to both flanges" → "Connection plate welds, the basis:" → Both flanges / Design force / Welds.
+  15. SC2 "Q_n = 0.70A_scF_u" → "Stud resistance and count:" → Nominal resistance / Factored resistance / Curvature / Count.
+  16. BS3 "φ_c = 0.95. The effective column" → "Bearing stiffener as a column, the terms:" → Factor / Effective column / Radius of gyration / Hybrid girders / Check by hand / Preliminary sizing.
+  17. BS4 "φ_e2 = 0.80, F_EXX" → "Stiffener-to-web welds, the assumptions:" → Factors / Welds / Load path.
+  18. TF5 / BF5 (one builder) "φ_bs = 0.80, R_p" → "Block shear, the terms:" → Factors / Blocks / Inner lines / Tension only.
+  19. TF6 / BF6 (one builder) "Fatigue I (infinite life). The flange stress range" → "Fatigue at the bolted splice, the stress ranges:" → Limit state / Flange range / Plate range.
+  20. WS1 "Elastic vector method" → "Web bolt group, the terms:" → Method / Eccentricity / Polar moment / Long joints.
+  21. WS3 (10th Edition method; the other method's one-sentence note unchanged) "Service II and deck-casting shear V_s" → "Web bolt slip, the forces:" → Forces / Eccentricity moment.
+  22. DT3 "Minimum for a ${frac(d)} in bolt" → "Edge distances, the minimum and the maximum:" → Minimum / Maximum / Flange edges.
+  23. DT7 "Structural steel plates, including splice plates" → "Minimum plate thickness, the basis:" → Limit / Confirm / Fillers.
+  24. DT11 "C₁ is the clearance" → "Wrench clearance, the basis:" → Clearance / Flange bolts / Web bolts.
+- **Not changed:** two-sentence notes under ~300 characters (DF3, DT8, SA5, SC6, FA2, TF1/TF2, DT2, DT5, GS22, CF2, CF6, SA1, TR1); notes that only appear for other projects (e.g. DF6, CF10's owner rule) keep SBNL-3's form or the plain form. Decision (pending engineer review): action words in a note ("confirm", "check that case by hand") are a bold lead in the list ("Confirm:", "Check by hand:"), in the note's own style, not a separate warning box, as SBNL-3.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none (`nl` is on the check objects only, which are not saved).
+- **Check case:** built-in project, Bearing stiffeners, BS3 card: before one 537-character paragraph; after the title "Bearing stiffener as a column, the terms:" and six items; `c.note` identical (string compare); the Report reads "Note: Bearing stiffener as a column, the terms:" then the same six items.
+- **How verified:** headless, main vs branch, built-in project with the owner set to AASHTO, MassDOT, RIDOT and CTDOT (Preliminary sizing's Limits): every `c.note` of all 11 modules identical, 24–26 of them now with `nl`; `tests/compare.mjs --tool gd` (A = a full main worktree): every result section identical (`gd.project`, `pl.*`, `gd.stPayloads`, `mod.*`, `sa.girder1`, `gd.dxf`); `rpt.*` of the 8 modules with a changed note differ only by the note being split into lines (digit sequence of every report identical); `--tool st`: all sections identical; `tests/check-syntax.mjs`; `tests/smoke/sbd-undo.mjs`, `steel-bridge-report.mjs`. 0 console errors. 390 px: no note wider than its card.
+- **Other copies:** none.
