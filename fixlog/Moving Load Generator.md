@@ -1761,3 +1761,14 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   Tests: `check-syntax`, `phone-layout --tool mlg`, `project-library --tool mlg`, `engine/run.mjs moving-load` (see the PR).
 - **Other copies:** none.
 - **Open item:** the two LRFD fatigue-truck warnings (also built in `shared/moving-load.js`, ~400 characters) are not converted here; same approach if wanted.
+
+## 2026-11-08 — PR: claude/nl-ml (PR #1250: https://github.com/mlococo88/All-Structural/pull/1250) (MLNL-4: the LRFD fatigue-truck warnings as a bold lead and a list; display only, no result change)
+
+### MLNL-4. Fatigue-truck warnings shown with `mlNL`   [display only] [no result change]
+- **Request:** MLNL-3 open item (#1241). `shared/moving-load.js` now also gives the two LRFD fatigue-truck warnings a list form in `R.warnNL` (same PR; `fixlog/shared-moving-load.md`). `R.warn` is unchanged.
+- **Where:** no code change in this file: `mlgWarnHTML(R)` (MLNL-3, the warnings box and the print report) and the Report-tab model ("Analysis model and engine check", MLNL-3 `flatMap`) already show any `R.warnNL[k]` as a lead and a list (`mlNL`), so the fatigue warnings now appear that way.
+- **Words:** the same words and digits in the same order; the joining words of the sentence ("(…); ", "For fatigue use …, and ") become the item leads DFs used / One-lane DF / Load factor / Check / DF / Fatigue DFs.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none.
+- **Check case:** Fatigue preset (2 spans, LLF 1.75, no fatigue DFs): before, the warnings box was one 424-character paragraph "⚠ LRFD fatigue truck: the distribution factors … Enter the fatigue DFs under Factors & Analysis to apply them to this vehicle."; after, "⚠ LRFD fatigue truck: the distribution factors and live load factor entered (LLF = 1.75) are applied exactly as given." with **DF:** / **Load factor:** / **Fatigue DFs:**. With fatigue DFs 0.45 / 0.52 and LLF 1.3: "⚠ LRFD fatigue truck: the fatigue DFs entered under Factors & Analysis are used for this vehicle:" with **DFs used:** moment 0.45, shear 0.52, negative moment 0.45. / **One-lane DF:** / **Load factor:** LLF = 1.3: use γ = 1.75 … / **Check:** The current LLF is not a fatigue load factor.
+- **How verified:** origin/main vs branch, headless Chromium, 4 cases (default HL-93; Fatigue default; Fatigue with DFs 0.45 / 0.52 and LLF 1.3; Fatigue with LLF 1.1): `RES.warn` and `RES.res` identical; the default case byte-identical on every tab and in the Report; in the Fatigue cases the text of every input and output tab and the Report (`.rp-doc` textContent, `SharedReport.text`) with the same digit sequence (solve time masked); 0 console errors, 0 KaTeX errors. Tests: `check-syntax`, `engine/run.mjs`, `phone-layout --tool mlg`, `project-library --tool mlg`.
+- **Other copies:** none.
