@@ -22749,7 +22749,7 @@ Basis: AASHTO LRFD 10th Ed. (2024). Reference implementation: `lldf.html` `membe
 - **Check case:** Preliminary sizing, Manual, Part 2, "Suggest: lowest-cost layout": before a 4,371-character paragraph; after a bold lead and items, every number and article unchanged and in the same order.
 - **How verified:** text identity check above; `tests/compare.mjs --tool gd` and `--tool st`; 390 px: no manual paragraph or item wider than its part (all 11 parts); 0 console errors. Tests: see the PR.
 - **Other copies:** none.
-## 2026-11-08 — PR: nl-sbd-a3 (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SBNL-3: the 20 longest check notes of the GirderDetail modules as a bold lead and a list, Checks tab and Report; display only, no result change)
+## 2026-11-08 — PR: nl-sbd-a3 (PR #1193: https://github.com/mlococo88/All-Structural/pull/1193) (SBNL-3: the 20 longest check notes of the GirderDetail modules as a bold lead and a list, Checks tab and Report; display only, no result change)
 
 ### SBNL-3. Long check notes as a lead line and items   [display only] [no result change]
 - **Request (engineer, 2026-11-07, for every app):** as SBNL-1 (#1172) and SBNL-2 (#1175, the two manuals). Part 3 of the tool: the notes under the check cards (`c.note`) of the GirderDetail modules, shown on the Checks tab and in the module's calculation report ("Note: …").
