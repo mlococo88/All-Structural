@@ -16601,7 +16601,7 @@ Engineer instruction (2026-11-07, paraphrased): "same deal for the abutment" as 
 - **How verified:** headless Chromium, origin/main vs the branch, 22 cases (default, piles, rock, seismic, single-span seismic, MassDOT, RIDOT, CTDOT, integral, semi-integral, semi-integral on piles, approach slab, integral + approach slab, passive, water, Coulomb, at-rest, 0.5(K₀+Kₐ), construction fill, piles + seismic, scour, manual distribution): `LAST_R` JSON identical; the digit sequence of every tab, the dashboard, the warnings and the Report text identical in all 22 cases (only wording / splitting changed). 0 console errors. Screenshots at 1440 and 390 px. Tests: check-syntax; project-library --tool abutment (ALL PASS); abutment-pile-group-parity (14/14 identical); engine handoffs + pile-group (19 passed). No phone-layout entry for this tool.
 - **Other copies:** none. Hand-off payloads (Substructure Loading, Pile Designer, elastomeric module): not touched.
 
-## 2026-11-08 — PR: notes-list-abutment-2 (PR #TBD) (ABNL-2: long notes on Tabs 5–10 as a bold lead and a list; display only, no result change)
+## 2026-11-08 — PR: notes-list-abutment-2 (PR #1215: https://github.com/mlococo88/All-Structural/pull/1215) (ABNL-2: long notes on Tabs 5–10 as a bold lead and a list; display only, no result change)
 
 ### ABNL-2. Long notes split into a lead line and a list, Tabs 5–10   [display only] [no result change]
 - **Request:** as ABNL-1 (#1205), part 2 of 2. Same rule, the same helper `abNL` and CSS (ABNL-1). The Report walker is unchanged: each lead and item prints as its own Report line.
