@@ -7279,7 +7279,7 @@ index 50f3837..c2d5000 100644
   - 3.4 Warnings lists "dowel steel below minimum" and "slenderness screen exceeded" as amber boxes. I found no such warnings in the code; both are now dashboard FAIL items.
 - **Other copies:** none.
 
-## 2026-11-08 — PR: docs/sf-manual-audit (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SFSC-4) — User Manual audited against the code: every out-of-date statement corrected (3.2, 3.4 and the rest)   [DISPLAY ONLY; no computed value changes]
+## 2026-11-08 — PR: docs/sf-manual-audit (PR #1245: https://github.com/mlococo88/All-Structural/pull/1245) (SFSC-4) — User Manual audited against the code: every out-of-date statement corrected (3.2, 3.4 and the rest)   [DISPLAY ONLY; no computed value changes]
 - **Request (engineer, 2026-11-08):**
   - Fix 3.2 (cover magnification and the Wall Design tab).
   - Fix 3.4 (drop the two items that are now dashboard FAILs; list the warnings the code raises).
