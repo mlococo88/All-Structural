@@ -4490,3 +4490,35 @@ function NumberListInput({value, onChange, placeholder, label, col = 'Value', un
 - Default project, origin/main vs this branch, headless: the Report's rendered text (`.rp-doc` textContent) and the page text are identical.
 ### How verified
 - `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`; the headless comparison listed in the PR.
+
+## 2026-11-08 — PR: claude/index-notes-split (PR link added after merge) (IXNL: long notes as a bold lead and a list: Project, Combos, Generate, Report; display only, no result change)
+
+### IXNL. Long notes split into a lead line and a list   [display only] [no result change]
+- **Request (engineer, 2026-11-07, approved for all apps):** "There are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Pattern of Spread Footing SFNL-1 (#1167).
+- **Rule used:** a note is long if it is over ~300 characters, has 3 or more sentences, or carries several facts in one paragraph. Every word, number, citation and link is kept, in the same order. New lead words carry no digits, so the digit sequence of every step and of the Report is unchanged.
+- **New JSX component** (before `function InfoBox(`), anchor `/* IXNL (2026-11-08, engineer request`: `IxNL({lead,items,act})` draws action lines first (bold, amber), then a bold lead line, then a `<ul>` whose items start with bold lead words (`[leadWords, content]`; `null` items skipped). Inline styles, as the rest of the page: `ul` margin 2px 0 0, padding-left 18px; `li` margin 1px 0, `breakInside:'avoid'`.
+- **Notes changed:**
+  1. Project step, the InfoBox "Project Name, Bridge ID, Client, Address, and Revision are written into…" → `<IxNL lead="Where these project fields go:">` → Written to the MCT / Analysis / Read on import.
+  2. Combos step, InfoBox "{activeCount} active combination(s) will be written to the MCT file." (lead) → AASHTO presets / Per-case factors.
+  3. Combos step, the note "🔗 PS/ST Load Combos sets the load combinations required by the Prestressed Beam and Composite Steel Beam design modules." (lead) → Sets / Replaces / Keeps.
+  4. Generate step, the railroad box "Written as NAME=..., 2, YES, W1, D1, W2, D2, 0 with axle load/spacing pairs." (lead) → Rail consist / Highway vehicles / Load cases / Trailing uniform loads (only when there are any, as before).
+  5. Report 5.1 Notes (`idxrModel`, anchor `{title:'Notes',items:[`): one note → lead "Retired report windows:" and four "• " notes: Retired (IXRX, 2026-11-03) / Where their content is / Their buttons / Worked on their steps.
+  6. Report "Model and MCT report → About this section" (`ixxApply`, `sec(...)`): `sec(title,subs,note)` now also takes a list, `[lead, '• item', …]` (one Report note each). A text note is drawn as before. The note becomes a lead "What the "Generate Report" window printed and the sections above do not show:", seven "• " items and "Built by the same generator from the same values.".
+  7. `generateReportHTML` → `idxCalcSheet` front-matter note, "Equations are shown symbolically, …". `idxCalcSheet` now also takes `o.note = {lead, items:[[leadWords,text],…]}`, drawn as `<p class="cr-small"><b>lead</b></p><ul class="cr-small"><li>…`; a text note is drawn as before. The note becomes the lead "How this calculation is laid out:" with the items Equations / Results / Units / DC, DW and LL. `ixxWalk` turns each `li` into a "• " Report note (existing behaviour). The AREMA sheet's own note ("The rating ends with one result line per rating case …", about 190 characters) is not changed. If it were split, the Report would treat its first sentence as already printed and drop it.
+  8. `generateAremaReport`, "Standard Notes: (1) … (5) …" → lead "Standard Notes of this AREMA rating:" and a `<ul>` with no markers, one item per note. The "(1)"…"(5)" stay as text, so the Report keeps the numbers.
+- **Not changed (decisions):**
+  - The Report Card's "Lowest … RF of all nodes. Unfactored MIDAS results at node …" notes (about 300 characters). The Report de-duplicates the window reports' text by sentence (`ixxApply`, `T.fresh`). The three actions share the sentence "s = live-load scale factor; capacity: §…", so after a split that line would be printed once instead of three times.
+  - The posting notes, the 4.3 reference table cells (citation lists) and the formula lines.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none (`mct_cfg_v3`, IndexedDB rows, `bridgeSuite.v1.*` unchanged; §5). The duplicated `bridgeSuite.v1.*` bootstrap / hand-off code is not touched.
+- **Check case:** the Combos step of the `base` case of `tests/smoke/index-report.mjs`. Before: one paragraph "🔗 PS/ST Load Combos sets … intact." (330 characters). After: the lead and three bullets; "HL-93 … 33% … DC1 / DC2 … 1.0" is unchanged.
+- **How verified:** `tests/smoke/index-report.mjs`, cases base, lfr and arema, modes state and rep, origin/main vs the branch:
+  - localStorage before, during and after, IndexedDB rows, and the Report model are identical (time stamps and folder normalised);
+  - the digit sequence of all 20 steps and sub-tabs and of the printed Report text is identical (clock times removed);
+  - the printed Report TeX is identical; figures 1/1/3 on both; 0 unresolved and 0 duplicate references; 0 console errors.
+  - The only Report lines that changed are those of notes 5–8 above, which became their lead and "• " lines.
+  - Tests: see the PR.
+- **Other copies:** none.
+- **Open items:** Part B (left summary panel) was not added. **Decision (pending engineer review):**
+  - The rating results exist only after MIDAS results are pasted, and the AASHTO Rating step already has its Summary and Report Card sub-tabs.
+  - The page already has a fixed 196 px step navigation on the left, so a second left column would leave little room for the steps' wide tables at 1200–1500 px.
+  - A compact RF summary in the step navigation could be a separate request.
