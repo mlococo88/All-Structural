@@ -128,6 +128,49 @@ header.app-head{
   .p-body{overflow-x:auto;}
 }
 .col-in,.col-out{min-width:0;}
+/* ABLS (2026-11-08, engineer: the summary checks in a left summary panel, as Retaining Wall / Spread Footing / Light Pole / Shear and
+   Moment Diagrams / Timber): from 1200 px a left column of compact check lines (#abDashCol), 240 px up to 1499 px, 280 px from 1500 px;
+   « shrinks it to a 42 px strip. Below 1200 px nothing changes; hidden in print (the Report is printed). */
+#abDashCol{display:none}
+@media print{#abDashCol{display:none!important}}
+@media screen and (min-width:1200px){
+ body.abDashWide .main{grid-template-columns:280px minmax(340px,1fr) 2fr}
+ body.abDashWide.abDashColl .main{grid-template-columns:42px minmax(340px,1fr) 2fr}
+ body.abDashWide #abDashCol{display:block;position:sticky;top:0;max-height:100vh;overflow-y:auto;overflow-x:hidden;min-width:0;box-sizing:border-box;
+   background:var(--paper);border:1.5px solid var(--navy);border-radius:3px;padding:0 6px 10px;overscroll-behavior:contain}
+ body.abDashWide:not(.abDashColl) #dashboard .dash-grid{display:none}
+ #abDashHead{position:sticky;top:0;z-index:3;background:var(--paper);display:flex;align-items:center;gap:4px 8px;flex-wrap:wrap;padding:7px 0 4px}
+ #abDashTtl{margin:0;padding:0;border:none;font-size:0.72rem;font-weight:bold;color:var(--navy);text-transform:uppercase;letter-spacing:.06em}
+ #abDashTgl{margin:0;padding:0 7px;font-size:0.8rem;border:1px solid var(--line);background:var(--panel);border-radius:3px;cursor:pointer}
+ #abDashCnt{display:inline-flex;gap:4px;flex-wrap:wrap}
+ #abDashCnt .flagchip{font-size:0.66rem;padding:0 4px;margin:0}
+ #abDashSub{font-size:0.75rem;color:#555;margin:0 0 6px;overflow-wrap:anywhere}
+ #abDash{display:grid;grid-template-columns:minmax(0,1fr);gap:3px;align-items:start}
+ .abCh{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;column-gap:5px;padding:2px 5px 2px 1px;min-width:0;
+   border:1px solid var(--line-lt);border-radius:3px;background:var(--panel);font-size:0.78rem;line-height:1.35;cursor:pointer}
+ .abCh:focus-visible{outline:2px solid var(--navy);outline-offset:-1px}
+ .abCh.pass{border-color:var(--pass);background:var(--pass-bg)}.abCh.fail{border-color:var(--fail);background:var(--fail-bg)}
+ .abCh:hover{filter:brightness(0.96)}
+ .abCh .abChX{grid-row:1;grid-column:1;margin:0;padding:0 3px;border:none;background:transparent;font-size:0.6rem;color:#333;line-height:1.2;cursor:pointer}
+ .abCh .abChN{grid-row:1;grid-column:2;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .abCh .abChR{grid-row:1;grid-column:3;white-space:nowrap;color:var(--navy);font-variant-numeric:tabular-nums}
+ .abCh .abChS{grid-row:1;grid-column:4;font-size:0.68rem;font-weight:bold;white-space:nowrap;color:#777}
+ .abCh.pass .abChS{color:var(--pass)}.abCh.fail .abChS{color:var(--fail)}
+ .abCh .abChV,.abCh .abChRef{grid-column:1/-1;display:none;padding-left:16px;font-size:0.72rem;color:#444;overflow-wrap:anywhere}
+ .abCh .abChRef{font-style:italic;color:#666}
+ .abCh.abOpen .abChV,.abCh.abOpen .abChRef{display:block}
+ .abCh.abOpen .abChN{white-space:normal}
+ body.abDashWide.abDashColl #abDashCol{padding:0}
+ body.abDashWide.abDashColl #abDash,body.abDashWide.abDashColl #abDashSub{display:none}
+ body.abDashWide.abDashColl #abDashHead{flex-direction:column;align-items:center}
+ body.abDashWide.abDashColl #abDashTtl{writing-mode:vertical-rl;transform:rotate(180deg);margin:4px 0;white-space:nowrap}
+ body.abDashWide.abDashColl #abDashCnt{flex-direction:column;align-items:center}
+ body.abDashWide.abDashColl #abDashCnt .flagchip{font-size:0.56rem;padding:1px 2px;white-space:normal;text-align:center;width:34px;box-sizing:border-box}
+}
+@media screen and (min-width:1200px) and (max-width:1499.98px){
+ body.abDashWide .main{grid-template-columns:240px minmax(340px,1fr) 2fr}
+ body.abDashWide.abDashColl .main{grid-template-columns:42px minmax(340px,1fr) 2fr}
+}
 
 /* ================= COLLAPSIBLE PANELS ================= */
 .panel{
@@ -468,6 +511,11 @@ svg circle.fi[data-pile].fhl,svg circle.fi[data-pile]:hover,svg circle.fi[data-p
 
   <!-- ======= MAIN 2-PANEL LAYOUT ======= -->
   <div class="main" id="appmain">
+    <aside id="abDashCol" aria-label="Check summary"><!-- ABLS (2026-11-08): the dashboard checks as a left column on screens 1200 px and wider -->
+      <div id="abDashHead"><button type="button" id="abDashTgl" aria-controls="abDash" aria-expanded="true">&laquo;</button><h2 id="abDashTtl">Check summary</h2><span id="abDashCnt"></span></div>
+      <div id="abDashSub"></div>
+      <div id="abDash"></div>
+    </aside>
     <div class="col-in" id="inputCol"><div id="prjPane" data-cid="prjPane"><!-- ABHD (2026-11-05): the Project input tab, moved here from the header; kept across rebuilds by buildInputs() -->
       <div class="panel"><div class="p-head"><span class="tri">▼</span><span>Save and open</span></div><div class="p-body"><div id="abSaveCard"><!-- STDS (2026-11-06): was "Project file" (Save Project, Export / Import JSON, Reset Defaults; Compare…, Self-Test), after the title block; the standard save card (abStdsInit) -->
         <button id="btnExport" title="Download all inputs as a JSON backup file">Export JSON</button>
@@ -6219,8 +6267,59 @@ function renderDashboard(R){
     <div class="dash-grid">${items}</div>
     ${hints.length?`<div class="note-box" style="margin-top:6px;"><b>Sizing hints (advisory only — the engineer decides):</b><br>${hints.map(x=>"• "+esc(x)).join("<br>")}</div>`:""}`;
   el.querySelectorAll(".dash-item").forEach(n=>n.addEventListener("click",()=>gotoPanel(n.dataset.goto,n.dataset.anchor)));
+  abDashRender(R);   /* ABLS: the same rows in the left column */
   if(!window.__xlinkWired){ window.__xlinkWired=true; document.addEventListener("click",ev=>{ const x=ev.target.closest(".xlink[data-jump]"); if(x){ const [tb,an]=x.dataset.jump.split("|"); gotoPanel(tb,an); } }); }
 }
+/* ABLS (2026-11-08, engineer: the summary checks in a left summary panel, as RWLB / SFLB / LPLB / SMLS / TBLS): from 1200 px each
+   dashboard row (R.dash) is one line of #abDashCol: name, D/C (or the row's text, or n/a), PASS / FAIL / N/A. The expand button shows the
+   governing case (d.gov) and the tab; a click (or Enter / Space) opens the panel that works the value (gotoPanel, as the dashboard
+   chips). No new calculation: the same fields and fmt() as renderDashboard. Collapse state: per-browser UI key abutcalc_dashCollapsed_v1
+   ('1' = collapsed, '0' or absent = open); not in the project, the autosave or the export. Below 1200 px nothing changes. */
+const ABDD={key:"abutcalc_dashCollapsed_v1",mq:window.matchMedia?window.matchMedia("screen and (min-width:1200px)"):null,open:new Map(),coll:false,wide:null};
+try{ ABDD.coll=localStorage.getItem(ABDD.key)==="1"; }catch(e){}
+function abDashRender(R){
+  const box=document.getElementById("abDash"), cnt=document.getElementById("abDashCnt"), sub=document.getElementById("abDashSub"); if(!box) return;
+  box.innerHTML="";
+  const DS=dashStatus(R), nf=R.nFail, plain=h=>{ const t=document.createElement("div"); t.innerHTML=h||""; return t.textContent; };
+  const gov=R.dash.filter(d=>d.pass!==null).slice().sort((a,b)=>b.dc-a.dc)[0];
+  if(sub) sub.textContent=gov?"Governing: "+plain(gov.name).replace(/\s*\[.*?\]/,"")+" · "+(gov.txt?plain(gov.txt):"D/C "+fmt(gov.dc)):"";
+  const tabName=id=>{ const t=TABS.find(x=>x[0]===id); return t?plain(t[1]):""; };
+  R.dash.forEach(d=>{
+    const st=d.pass===null?"na":(d.pass?"pass":"fail"), name=plain(d.name), key=d.id||name;
+    const c=document.createElement("div"); c.className="abCh "+st; c.tabIndex=0; c.setAttribute("role","button");
+    const val=d.pass===null?"n/a":(d.txt?esc(d.txt):fmt(d.dc)), ref=tabName(d.tab);
+    c.innerHTML=`<button type="button" class="abChX" title="Show the governing case and where the value is worked"></button><span class="abChN">${esc(name)}</span>`
+      +`<span class="abChR">${val}</span><span class="abChS">${d.pass===null?"N/A":d.pass?"PASS":"FAIL"}</span>`
+      +(d.gov?`<div class="abChV">${esc(plain(d.gov))}</div>`:"")+(ref?`<div class="abChRef">→ ${esc(ref)}</div>`:"");
+    c.title=name+": "+(d.pass===null?"n/a":(d.txt?plain(d.txt):"D/C "+fmt(d.dc)))+(d.gov?"\n"+plain(d.gov):"")+(ref?"\nClick: → "+ref:"");
+    const x=c.querySelector(".abChX");
+    const setOpen=o=>{ c.classList.toggle("abOpen",o); x.setAttribute("aria-expanded",o?"true":"false"); x.textContent=o?"▾":"▸"; };
+    setOpen(ABDD.open.has(key)?ABDD.open.get(key):st==="fail");   /* FAIL lines open by default, as in the other tools */
+    x.addEventListener("click",ev=>{ ev.preventDefault(); ev.stopPropagation(); const o=!c.classList.contains("abOpen"); ABDD.open.set(key,o); setOpen(o); });
+    const go=()=>gotoPanel(d.tab,DASH_ANCHOR[d.id]||"");
+    c.addEventListener("click",go); c.addEventListener("keydown",ev=>{ if(ev.target!==c) return; if(ev.key==="Enter"||ev.key===" "){ ev.preventDefault(); go(); } });
+    box.appendChild(c);
+  });
+  if(cnt) cnt.innerHTML=(nf?`<span class="flagchip fail">${nf} FAIL</span>`:`<span class="flagchip pass">no FAIL</span>`)+(DS.inc?`<span class="flagchip warn" title="Design incomplete: inputs needed (see the dashboard)">INCOMPLETE</span>`:"");
+}
+function abDashPlace(){
+  const wide=!!(ABDD.mq&&ABDD.mq.matches), ch=ABDD.wide!==null&&ABDD.wide!==wide; ABDD.wide=wide;
+  document.body.classList.toggle("abDashWide",wide);
+  abDashColl(ABDD.coll,false,ch);
+}
+function abDashColl(v,save,redraw){
+  ABDD.coll=!!v; document.body.classList.toggle("abDashColl",ABDD.coll);
+  const t=document.getElementById("abDashTgl");
+  if(t){ t.setAttribute("aria-expanded",ABDD.coll?"false":"true"); t.innerHTML=ABDD.coll?"&raquo;":"&laquo;";
+    t.title=ABDD.coll?"Show the check summary column (remembered in this browser)":"Shrink the check summary column; the check chips show in the dashboard (remembered in this browser)"; }
+  if(save){ try{ localStorage.setItem(ABDD.key,ABDD.coll?"1":"0"); }catch(e){} }
+  if(save||redraw) requestAnimationFrame(()=>{ window.dispatchEvent(new Event("resize")); if(window.LAST_R) drawChartsFor(S.ui.tab,window.LAST_R); });   /* the output column changed width */
+}
+(function(){
+  const t=document.getElementById("abDashTgl"); if(t) t.addEventListener("click",()=>abDashColl(!ABDD.coll,true));
+  if(ABDD.mq){ if(ABDD.mq.addEventListener) ABDD.mq.addEventListener("change",abDashPlace); else if(ABDD.mq.addListener) ABDD.mq.addListener(abDashPlace); }
+  abDashPlace();
+})();
 function renderWarnings(){
   const el=document.getElementById("warnbox");
   let h=WARNINGS.map(w=>w.nl?`<div class="warn-item ${w.level==="err"?"err":""}">${abNL(`${w.level==="err"?"⛔":"⚠"} `+esc(w.nl[0]),w.nl[1].map(esc))}</div>`   /* ABNL: a long warning as a lead and a list */
