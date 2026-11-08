@@ -229,6 +229,12 @@ select option { background: #fff; color: var(--text); }
   color: var(--text-dim); background: var(--blue-dim);
   border-radius: var(--r); padding: 7px 10px;
 }
+/* RWNL (2026-11-08, engineer): a long note as a bold lead line and a list (rwNL); colours inherited from the note / hint / alert */
+.rwNL .rwNLl { font-weight: 600; margin: 0 0 1px; }
+.rwNL .rwNLu { margin: 2px 0 3px; padding-left: 18px; }
+.rwNL .rwNLu > li { margin: 1px 0; }
+.rwNL .rwNLa { font-weight: 600; margin: 0 0 3px; }
+@media print { .rwNL .rwNLu > li { break-inside: avoid; } }
 .bar-ovr { padding-bottom: 10px; border-bottom: 1px solid var(--border); }
 .bar-ovr:last-child { border-bottom: 0; }
 .grp-lbl { color: var(--text) !important; font-weight: 600 !important; }
@@ -1154,7 +1160,7 @@ body.rwDashColl #rwDash { display: none; }
         <option value="spread">Spread footing on soil</option>
         <option value="pile">Pile-supported footing (rows of vertical piles)</option>
       </select></div>
-    <div class="note pile-only" id="note_pile" style="display:none">Rows of identical vertical piles across the footing, each with its own spacing along the wall; one pile type per wall; no staggering. The footing acts as a rigid cap (Phase 8). <span class="aci-only">ACI / IBC mode: allowable pile capacities (service loads).</span><span class="aashto-only" style="display:none">AASHTO mode: nominal resistances with their φ, factored lateral resistance.</span></div>
+    <div class="note pile-only" id="note_pile" style="display:none"><div class="rwNL"><div class="rwNLl">Pile-supported footing:</div><ul class="rwNLu"><li><b class="rwNLk">Rows:</b> identical vertical piles across the footing, each with its own spacing along the wall; one pile type per wall; no staggering.</li><li><b class="rwNLk">Cap:</b> the footing acts as a rigid cap (Phase 8).</li><li><span class="aci-only">ACI / IBC mode: allowable pile capacities (service loads).</span><span class="aashto-only" style="display:none">AASHTO mode: nominal resistances with their φ, factored lateral resistance.</span></li></ul></div></div>
     <div class="ig full pile-only" style="display:none"><label for="pile_nrows">Number of pile rows</label>
       <select id="pile_nrows">
         <option value="2" selected>2</option>
@@ -1235,11 +1241,7 @@ body.rwDashColl #rwDash { display: none; }
       <div class="iw"><input type="number" id="vh_hlo" value="8" min="1" max="40" step="0.5"><span class="iw-unit">ft</span></div></div>
     <div class="ig" id="grp_vh_hi" style="display:none"><label for="vh_hhi">High-end Stem Ht</label>
       <div class="iw"><input type="number" id="vh_hhi" value="16" min="1" max="40" step="0.5"><span class="iw-unit">ft</span></div></div>
-    <div class="note" id="grp_vh_note" style="display:none">
-        MassDOT §3.3.2.2: design height = <b>H<sub>low</sub> + 0.75·(H<sub>high</sub> − H<sub>low</sub>)</b>.
-        This overrides the Stem Height input above and drives the whole design.
-        <span class="aci-only">This is a MassDOT owner rule for variable-height wall segments (paraphrased), not an ACI 318 provision; in ACI mode it is applied because it is ticked here.</span>
-      </div>
+    <div class="note" id="grp_vh_note" style="display:none"><div class="rwNL"><div class="rwNLl">MassDOT §3.3.2.2: design height = <b>H<sub>low</sub> + 0.75·(H<sub>high</sub> − H<sub>low</sub>)</b>.</div><ul class="rwNLu"><li><b class="rwNLk">Effect:</b> this overrides the Stem Height input above and drives the whole design.</li><li class="aci-only"><b class="rwNLk">ACI mode:</b> this is a MassDOT owner rule for variable-height wall segments (paraphrased), not an ACI 318 provision; in ACI mode it is applied because it is ticked here.</li></ul></div></div>
 
     </div>
 <button type="button" class="sec-hd" data-target="sec-mat" aria-expanded="true"><span class="sec-hd-label">Materials</span><svg class="sec-hd-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -1275,7 +1277,7 @@ body.rwDashColl #rwDash { display: none; }
         <option value="b4">e ≤ B/4</option>
         <option value="none">No eccentricity limit (IBC / ACI) — information only</option>
       </select></div>
-    <div class="hint aci-only" id="hint_aci_ecc">Neither code sets a maximum eccentricity: ACI 318-19 §13.2.6.1 proportions the footing for bearing and for stability against overturning and sliding under the general building code, and IBC 2018 §1807.2.1 asks for stability against overturning, sliding, excessive foundation pressure and water uplift. The limit is the engineer's choice (the middle third keeps the whole base in contact). A project saved before this option opens with "No eccentricity limit", as it was calculated.</div>
+    <div class="hint aci-only" id="hint_aci_ecc"><div class="rwNL"><div class="rwNLl">Neither code sets a maximum eccentricity:</div><ul class="rwNLu"><li><b class="rwNLk">ACI 318-19 §13.2.6.1</b> proportions the footing for bearing and for stability against overturning and sliding under the general building code.</li><li><b class="rwNLk">IBC 2018 §1807.2.1</b> asks for stability against overturning, sliding, excessive foundation pressure and water uplift.</li><li><b class="rwNLk">Limit:</b> the engineer's choice (the middle third keeps the whole base in contact).</li><li><b class="rwNLk">Older projects:</b> a project saved before this option opens with "No eccentricity limit", as it was calculated.</li></ul></div></div>
     <div class="ck-row aci-only">   <!-- RW2L6 (2026-11-07): ACI 318-19 §13.2.6.2 size-effect option, default off (conservative); saved only when on -->
       <input type="checkbox" id="aci_ftg_nolams" onchange="onInputChange()">
       <label for="aci_ftg_nolams">Heel / toe one-way shear: neglect the size-effect factor λ<sub>s</sub> (ACI §13.2.6.2)</label>
@@ -1391,7 +1393,7 @@ body.rwDashColl #rwDash { display: none; }
       <label for="aashto_gamma_eq">γ<sub>EQ</sub> on live load / LS (Extreme Event I)</label>
       <div class="iw"><input type="number" id="aashto_gamma_eq" value="0" min="0" max="1" step="0.5"><span class="iw-unit">—</span></div>
     </div>
-    <div class="hint aashto-only" style="display:none">AASHTO mode: with k<sub>h</sub> &gt; 0 the wall is checked for Extreme Event I (Art. 11.6.5.1): P<sub>AE</sub> + 0.5P<sub>IR</sub> and max(0.5P<sub>AE</sub>, P<sub>A</sub>) + P<sub>IR</sub>, P<sub>IR</sub> = k<sub>h</sub>(W<sub>w</sub> + W<sub>s</sub>). Enter k<sub>h</sub> as used for design (Art. 11.6.5.2: k<sub>h0</sub> = A<sub>s</sub>; 0.5k<sub>h0</sub> where 1–2 in of wall displacement is acceptable). γ<sub>EQ</sub> = 0 is the default (MassDOT practice); it also sets the eccentricity limit (B/3 at 0, 0.4B at 1.0).</div>
+    <div class="hint aashto-only" style="display:none"><div class="rwNL"><div class="rwNLl">AASHTO mode: with k<sub>h</sub> &gt; 0 the wall is checked for Extreme Event I (Art. 11.6.5.1).</div><ul class="rwNLu"><li><b class="rwNLk">Thrust combinations:</b> P<sub>AE</sub> + 0.5P<sub>IR</sub> and max(0.5P<sub>AE</sub>, P<sub>A</sub>) + P<sub>IR</sub>, P<sub>IR</sub> = k<sub>h</sub>(W<sub>w</sub> + W<sub>s</sub>).</li><li><b class="rwNLk">Enter k<sub>h</sub></b> as used for design (Art. 11.6.5.2: k<sub>h0</sub> = A<sub>s</sub>; 0.5k<sub>h0</sub> where 1–2 in of wall displacement is acceptable).</li><li><b class="rwNLk">γ<sub>EQ</sub> = 0</b> is the default (MassDOT practice); it also sets the eccentricity limit (B/3 at 0, 0.4B at 1.0).</li></ul></div></div>
   </div>
 <div class="ipane-foot"><button type="button" class="btn ipane-next aashto-only" style="display:none" data-goto="traffic">Next: Traffic</button><button type="button" class="btn ipane-next aci-only" data-goto="design">Next: Design</button></div>
 </div>
@@ -1450,13 +1452,7 @@ body.rwDashColl #rwDash { display: none; }
         <option value="zero" selected>γ_EH = 0 — wall pulls away (MassDOT §3.3.2.4)</option>
         <option value="full">γ_EH = 1.0 — acts concurrently (generic AASHTO)</option>
       </select></div>
-    <div class="note">
-        MassDOT: collision engages the <b>entire wall section between expansion joints</b>,
-        γ_CT = 1.0, and φ = 1.0 (bearing: φ_b = 0.8 for semigravity walls, AASHTO Art. 11.5.8). For <b>stability</b>, earth pressure is dropped (the wall
-        deflects away from the backfill during the impact). For <b>stem design</b>, earth
-        pressure IS applied at γ_p = 1.0 — not because it acts concurrently, but because it
-        has already strained the rebar and the collision strain adds to it.
-      </div>
+    <div class="note"><div class="rwNL"><div class="rwNLl">MassDOT collision (Extreme Event II):</div><ul class="rwNLu"><li><b class="rwNLk">Extent:</b> collision engages the <b>entire wall section between expansion joints</b>.</li><li><b class="rwNLk">Factors:</b> γ_CT = 1.0, and φ = 1.0 (bearing: φ_b = 0.8 for semigravity walls, AASHTO Art. 11.5.8).</li><li><b class="rwNLk">Stability:</b> earth pressure is dropped (the wall deflects away from the backfill during the impact).</li><li><b class="rwNLk">Stem design:</b> earth pressure IS applied at γ_p = 1.0 — not because it acts concurrently, but because it has already strained the rebar and the collision strain adds to it.</li></ul></div></div>
     <div class="ig"><label for="aashto_ct_phi">φ (extreme event)</label>
       <div class="iw"><input type="number" id="aashto_ct_phi" value="1.00" min="0.5" max="1" step="0.05"></div></div>
     <div class="ig"><label for="aashto_ct_ecc_div">Ecc. limit (B/n)</label>
@@ -1503,11 +1499,7 @@ body.rwDashColl #rwDash { display: none; }
       <div class="iw"><input type="number" id="yl_Mw" value="18" min="0" max="500" step="1"><span class="iw-unit">k·ft</span></div></div>
     <div class="ig full"><label for="yl_Mc">M<sub>c</sub> — cantilever (horiz. axis)</label>
       <div class="iw"><input type="number" id="yl_Mc" value="16" min="0.1" max="200" step="0.5"><span class="iw-unit">k·ft/ft</span></div></div>
-    <div class="note">
-        Yield-line capacity of the <b>barrier itself</b>. If R<sub>w</sub> &lt; F<sub>t</sub> the barrier
-        fails before developing the design impact. M<sub>b</sub> = 0 for barriers with no top beam.
-        Capacities are per your barrier's reinforcement — enter from your barrier standard.
-      </div></div>
+    <div class="note"><div class="rwNL"><div class="rwNLl">Yield-line capacity of the <b>barrier itself</b>.</div><ul class="rwNLu"><li><b class="rwNLk">If R<sub>w</sub> &lt; F<sub>t</sub></b> the barrier fails before developing the design impact.</li><li><b class="rwNLk">M<sub>b</sub> = 0</b> for barriers with no top beam.</li><li><b class="rwNLk">Capacities:</b> per your barrier's reinforcement — enter from your barrier standard.</li></ul></div></div></div>
 <div class="ipane-foot"><button type="button" class="btn ipane-next" data-goto="design">Next: Design</button></div>
 </div>
 <div class="ipane" id="ipane-design" role="tabpanel" aria-labelledby="itab-design" hidden>
@@ -1544,11 +1536,7 @@ body.rwDashColl #rwDash { display: none; }
       <input type="checkbox" id="incl_passive">
       <label for="incl_passive">Include passive resistance (sliding &amp; O.T.)</label>
     </div>
-    <div class="note">
-        Off by default (conservative). Passive soil in front of the toe can be
-        excavated or scoured and is often neglected. When on, passive is included
-        in both the sliding resistance and the overturning check for both codes.
-      </div>
+    <div class="note"><div class="rwNL"><div class="rwNLl">Off by default (conservative).</div><ul class="rwNLu"><li><b class="rwNLk">Why:</b> passive soil in front of the toe can be excavated or scoured and is often neglected.</li><li><b class="rwNLk">When on:</b> passive is included in both the sliding resistance and the overturning check for both codes.</li></ul></div></div>
   </div>
 <button type="button" class="sec-hd aashto-only" data-target="sec-aashto" id="sec-hd-aashto" style="display:none" aria-expanded="true"><span class="sec-hd-label">Resistance factors <span class="sec-tag">AASHTO</span></span><svg class="sec-hd-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
 <div class="sec-body aashto-only" id="sec-aashto" style="display:none"><div class="note">AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024). Load and resistance factors per Tables 3.4.1-1 and 3.4.1-2.</div>
@@ -1675,12 +1663,7 @@ body.rwDashColl #rwDash { display: none; }
       <input type="checkbox" id="massdot_ftg" onchange="onInputChange()">
       <label for="massdot_ftg">Apply MassDOT heel top-steel rule</label>
     </div>
-    <div class="note">
-        Heel top steel carries the <b>dead load of all materials above the heel, including
-        the heel's own weight</b>. <b>No live load.</b> γ = φ = <b>1.0</b>. The upward soil
-        pressure / pile reaction <b>may not offset</b> this design load. Enveloped against
-        the standard factored case. (The toe rule — no soil-weight offset — is always applied.)
-      </div>
+    <div class="note"><div class="rwNL"><div class="rwNLl">MassDOT heel top-steel rule:</div><ul class="rwNLu"><li><b class="rwNLk">Load:</b> heel top steel carries the <b>dead load of all materials above the heel, including the heel's own weight</b>. <b>No live load.</b></li><li><b class="rwNLk">Factors:</b> γ = φ = <b>1.0</b>.</li><li><b class="rwNLk">No offset:</b> the upward soil pressure / pile reaction <b>may not offset</b> this design load.</li><li><b class="rwNLk">Envelope:</b> enveloped against the standard factored case.</li><li><b class="rwNLk">Toe:</b> (the toe rule — no soil-weight offset — is always applied.)</li></ul></div></div>
     </div>
 <button type="button" class="sec-hd aashto-only" data-target="sec-ish" style="display:none" aria-expanded="true"><span class="sec-hd-label">Interface shear and dowels <span class="sec-tag">AASHTO</span></span><svg class="sec-hd-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
 <div class="sec-body aashto-only" id="sec-ish" style="display:none">
@@ -4964,10 +4947,9 @@ function renderStabilityAASHTO(r) {
   const condName   = A.ep_cond === 'atrest' ? 'At-Rest (K\u2080)' : 'Active';
 
   let h = `<div class="sec-heading">Stability \u2014 AASHTO LRFD 10th Ed. \u00b7 Limit-State Design</div>`;
-  h += `<div class="alert info" style="margin-bottom:16px;">
-    <strong>Design basis: AASHTO LRFD Bridge Design Specifications, 10th Edition (2024).</strong>
-    Earth pressure: ${methodName}, ${condName}. Load modifier \u03b7 = ${F(a.eta,2)}.
-    Load &amp; resistance factors per Tables 3.4.1-1/-2. Eccentricity limit e \u2264 ${a.e_limit_label} (user-selected).</div>`;
+  h += `<div class="alert info" style="margin-bottom:16px;">${rwNL('<strong>Design basis: AASHTO LRFD Bridge Design Specifications, 10th Edition (2024).</strong>', [   // RWNL (2026-11-08)
+    ['Earth pressure:', `${methodName}, ${condName}.`], ['Load modifier', `η = ${F(a.eta,2)}.`],
+    ['Load &amp; resistance factors', 'per Tables 3.4.1-1/-2.'], ['Eccentricity limit', `e ≤ ${a.e_limit_label} (user-selected).`]])}</div>`;
 
   // ── LOAD COMBINATION SUMMARY ──
   {
@@ -5137,7 +5119,8 @@ function renderStabilityAASHTO(r) {
      {sym:'P_p', desc:inp.inclPassive?'passive resistance':'passive (neglected — toggle off)', val:F(r.Pp,0), unit:'lb/ft'}]);
   h += `<div class="alert info" style="margin:4px 0 8px;">${HINTS.aashto_base_fric[a.fricMode] || ''}</div>`;
   if (!inp.inclPassive)
-    h += `<div class="alert warn" style="margin:4px 0 8px;">\u26a0 Passive resistance <strong>neglected</strong> (toggle off) \u2014 computed P_p = ${F(r.Pp_full,0)} lb/ft not counted. Enable in Design Options to include.${inp.useShearKey ? ' <strong>Shear key gives no sliding credit: passive resistance is off (MassDOT BDM 3.3.1.1 neglects passive in front of the wall).</strong>' : ''}</div>`;   // RWSK (b)
+    h += `<div class="alert warn" style="margin:4px 0 8px;">${rwNL('⚠ Passive resistance <strong>neglected</strong> (toggle off).', [['Not counted:', `computed P_p = ${F(r.Pp_full,0)} lb/ft.`], ['To include:', 'enable in Design Options.'],
+      inp.useShearKey ? ['Shear key gives no sliding credit:', '<strong>passive resistance is off (MassDOT BDM 3.3.1.1 neglects passive in front of the wall).</strong>'] : null])}</div>`;   // RWSK (b); RWNL (2026-11-08): lead and list
   h += eqCheck('Sliding check \u2014 total resistance \u2265 demand',
     `R_R + \\phi_{ep}P_p = ${F(a.R_slide,0)} \\geq \\sum\\gamma Q = ${F(a.H_drive_str,0)}\\ \\text{lb/ft} \\quad (\\text{DCR}=\\boxed{${F(a.sliding_dcr,2)}})`, a.sliding_ok_A,'',
     [{sym:'R_R', desc:'factored friction resistance', val:F(a.R_tau,0), unit:'lb/ft'},
@@ -5238,7 +5221,9 @@ function renderStabilityAASHTO(r) {
       h += eqCheck('Bearing (Case ' + nm + ')' + (a.onRock ? ' — rock, linear pressure' : " — uniform over B′ = B − 2e"),
         `q = ${a.onRock ? '' : `\\frac{${F(Q.V_max,0)}}{${F(c.Be,3)}} = `}${F(c.q,0)}\\ \\text{psf} ${c.q <= Q.q_R ? '\\leq' : '>'} q_R = 0.8\\,q_n = 0.8(${F(Q.q_n,0)}) = ${F(Q.q_R,0)}\\ \\text{psf}`, c.dcB <= 1, '\u00a711.5.8');
     });
-    h += `<div class="alert info" style="margin-top:6px;">ℹ Vertical components of P_AE and P_A are neglected (conservative). The seismic earth force uses the moist unit weight γ_s (water, if any, is added as hydrostatic at γ = 1.0). The column, if any, is in the bearing check only (DL + γ_EQ·LL). The stem and footing are not designed for this case.</div>`;
+    h += `<div class="alert info" style="margin-top:6px;">${rwNL('ℹ Extreme Event I assumptions:', [['Vertical components', 'of P_AE and P_A are neglected (conservative).'],   // RWNL (2026-11-08)
+      ['Unit weight:', 'the seismic earth force uses the moist unit weight γ_s (water, if any, is added as hydrostatic at γ = 1.0).'],
+      ['Column:', 'the column, if any, is in the bearing check only (DL + γ_EQ·LL).'], ['Not designed:', 'the stem and footing are not designed for this case.']])}</div>`;
     h += `</div></div>`;
   }
 
@@ -5270,7 +5255,9 @@ function renderStabilityAASHTO(r) {
        {sym:'h_{CT}', desc:'height of application above roadway (Table 3.3.2-1)', val:F(A.ct_h_app/12,2), unit:'ft'},
        {sym:'y_{CT}', desc:'lever arm above base of footing', val:F(c.y_CT,2), unit:'ft'},
        {sym:'M_{CT}', desc:'collision overturning moment', val:F(c.M_CT/1000,2), unit:'kip·ft/ft'}]);
-    h += `<div class="alert info" style="margin-top:4px;">\u2139 <b>Roadway datum:</b> the roadway sits at the top of the stem (top of retained fill), and the barrier sits on it. Table 3.3.2-1 gives h<sub>CT</sub> <i>above the roadway</i>, so the impact lands ${r.hasBarrier?`<b>${F(A.ct_h_app,0)}" up the ${F(r.bar_h_ft*12,0)}" barrier</b>`:'<b>above the top of the stem</b>'} \u2014 the barrier height does <b>not</b> add to the collision lever arm. The barrier contributes <b>weight</b> (DC) and is checked separately for <b>yield-line capacity</b>.</div>`;
+    h += `<div class="alert info" style="margin-top:4px;">${rwNL('ℹ Roadway datum: the roadway sits at the top of the stem (top of retained fill), and the barrier sits on it.', [   // RWNL (2026-11-08)
+      ['Impact height:', `Table 3.3.2-1 gives h<sub>CT</sub> <i>above the roadway</i>, so the impact lands ${r.hasBarrier?`<b>${F(A.ct_h_app,0)}" up the ${F(r.bar_h_ft*12,0)}" barrier</b>`:'<b>above the top of the stem</b>'} — the barrier height does <b>not</b> add to the collision lever arm.`],
+      ['Barrier:', 'it contributes <b>weight</b> (DC) and is checked separately for <b>yield-line capacity</b>.']])}</div>`;
     h += `</div></div>`;
 
     // ── EE-II STABILITY SUITE ──
@@ -5278,12 +5265,11 @@ function renderStabilityAASHTO(r) {
       <div class="card-hd"><span class="card-title">Step 7b \u2014 Stability under Collision (Extreme Event II)</span><span class="card-ref">\u03c6 = ${F(E.phi_ct,2)} sliding, \u03c6_b = ${F(E.phi_b_ct,2)} bearing (\u00a711.5.8) \u00b7 \u03b3_CT = 1.0 \u00b7 \u03b3_LS = ${F(E.gLS_ct,2)}</span></div>
       <div class="card-body">`;
     if (E.ehDropped) {
-      h += `<div class="alert warn" style="margin-bottom:10px;">
-        \u26a0 <b>Earth pressure dropped (\u03b3_EH = 0)</b> \u2014 MassDOT \u00a73.3.2.4 (paraphrased): for stability the wall is taken to move away
-        from the backfill during the impact, so the retained soil's lateral pressure (EH, and the dead surcharge ES with it) is not applied.
-        The vertical component of the earth thrust P_a,V (sloped backfill or wall friction \u03b4 &gt; 0) is dropped with it: one load, one factor (AASHTO Table 3.4.1-1).
-        Water (hydrostatic force and uplift) stays at \u03b3_WA = 1.0, and the vertical dead loads, ES vertical included, at \u03b3p = 1.0.
-        Switch to \u03b3_EH = 1.0 in the AASHTO options for the generic (conservative) AASHTO reading.</div>`;   // RWCT (2026-11-07): water and ES as AASHTO Table 3.4.1-1 EE II
+      h += `<div class="alert warn" style="margin-bottom:10px;">${rwNL('⚠ <b>Earth pressure dropped (γ_EH = 0)</b>', [   // RWNL (2026-11-08)
+        ['MassDOT §3.3.2.4 (paraphrased):', "for stability the wall is taken to move away from the backfill during the impact, so the retained soil's lateral pressure (EH, and the dead surcharge ES with it) is not applied."],
+        ['Vertical component:', 'the vertical component of the earth thrust P_a,V (sloped backfill or wall friction δ &gt; 0) is dropped with it: one load, one factor (AASHTO Table 3.4.1-1).'],
+        ['Still applied:', 'water (hydrostatic force and uplift) stays at γ_WA = 1.0, and the vertical dead loads, ES vertical included, at γp = 1.0.'],
+        ['Alternative:', 'switch to γ_EH = 1.0 in the AASHTO options for the generic (conservative) AASHTO reading.']])}</div>`;   // RWCT (2026-11-07): water and ES as AASHTO Table 3.4.1-1 EE II
     } else {
       h += `<div class="alert info" style="margin-bottom:10px;">\u2139 <b>\u03b3_EH = 1.0</b> \u2014 earth pressure (EH, and the dead surcharge ES) applied concurrently with the collision (generic AASHTO). This is more conservative than the MassDOT \u00a73.3.2.4 provision, which drops it for stability. Water is at \u03b3_WA = 1.0 in either case.</div>`;
     }
@@ -5761,7 +5747,8 @@ function renderStabilitySoil(r) {
   if (inp.inclPassive)
     h += `<div class="alert info" style="margin-top:6px;">ℹ Passive resistance <strong>included</strong> in sliding and overturning (P_p = ${F(r.Pp_full,0)} lb/ft).</div>`;
   else
-    h += `<div class="alert warn" style="margin-top:6px;">⚠ Passive resistance <strong>neglected</strong> (toggle off). Computed P_p = ${F(r.Pp_full,0)} lb/ft is <em>not</em> counted in sliding or overturning — conservative, since toe soil may be excavated or scoured. Enable "Include passive resistance" in Design Options to count it.</div>`;
+    h += `<div class="alert warn" style="margin-top:6px;">${rwNL('⚠ Passive resistance <strong>neglected</strong> (toggle off).', [['Not counted:', `computed P_p = ${F(r.Pp_full,0)} lb/ft is <em>not</em> counted in sliding or overturning.`],
+    ['Why:', 'conservative, since toe soil may be excavated or scoured.'], ['To count it:', 'enable "Include passive resistance" in Design Options.']])}</div>`;   // RWNL (2026-11-08)
   h += `</div></div>`;
 
   // ════ STEP 3 — VERTICAL FORCES & MOMENT ARMS ════
@@ -5851,7 +5838,9 @@ function renderStabilitySoil(r) {
     `M_{stab,OT} = M_{stab} - q_{sur}L_h\\,x_{sur} - (P_{LL}+P_S)_{col}\\,x_{col} = ${F(r.Ms,1)} - ${F(r.Ms_OT_excl,1)} = \\boxed{${F(r.Ms_OT,1)}\\ \\text{lb·ft/ft}}`,'',
     [{sym:'M_{stab}', desc:'total stabilizing moment (used for bearing / resultant location)', val:F(r.Ms,1), unit:'lb·ft/ft'},
      {sym:'M_{excl}', desc:'surcharge-over-heel + column live/snow moments — excluded', val:F(r.Ms_OT_excl,1), unit:'lb·ft/ft'}]);
-  h += `<div class="alert info" style="margin:4px 0 8px;">ℹ <b>Why the surcharge and column live/snow loads are left out:</b> a resisting moment may only rely on weight certain to be present while the overturning thrust acts. The surcharge over the heel and column live/snow loads can be absent while the lateral soil and surcharge pressures remain, so they are excluded from <b>all</b> resisting forces (overturning and sliding). They are still included in the bearing check, where they add demand.</div>`;
+  h += `<div class="alert info" style="margin:4px 0 8px;">${rwNL('ℹ Why the surcharge and column live/snow loads are left out:', [['Rule:', 'a resisting moment may only rely on weight certain to be present while the overturning thrust acts.'],
+    ['Here:', 'the surcharge over the heel and column live/snow loads can be absent while the lateral soil and surcharge pressures remain, so they are excluded from <b>all</b> resisting forces (overturning and sliding).'],
+    ['Bearing:', 'they are still included in the bearing check, where they add demand.']])}</div>`;   // RWNL (2026-11-08)
   h += eqCheck('Factor of safety against overturning' + (r.hasSeismic ? ' — static case (earthquake set to zero, IBC 2018 §1807.2.3)' : ''),
     `FOS_{OT} = \\frac{M_{stab,OT}}{M_{OT}${r.hasSeismic ? ' - M_{o,E}' : ''}} = \\frac{${F(r.Ms_OT,1)}}{${F(r.Mo_st,1)}} = \\boxed{${F(r.FOS_OT,3)}} \\geq 1.5`, r.FOS_OT >= 1.5,'',
     [{sym:'M_{stab,OT}', desc:'stabilizing moment used for overturning', val:F(r.Ms_OT,1), unit:'lb·ft/ft'},
@@ -5872,7 +5861,11 @@ function renderStabilitySoil(r) {
      {sym:'q_{sur}L_h', desc:'surcharge over heel — excluded', val:F(r.Wsur,1), unit:'lb/ft'},
      {sym:'(P_{LL}+P_S)_{col}', desc:'column live + snow load — excluded', val:F(r.V_slide_excl - r.Wsur,1), unit:'lb/ft'},
      {sym:'\\Sigma V_{fr}', desc:'vertical force used for friction', val:F(r.SumV_slide,1), unit:'lb/ft'}]);
-  h += `<div class="alert info" style="margin:4px 0 8px;">ℹ <b>Why the surcharge and column live/snow loads are left out:</b> friction can only rely on weight that is certain to be present at the moment the lateral thrust acts. The surcharge over the heel and column live/snow loads may be absent (e.g., an empty lot or no snow) while the soil thrust — including the surcharge's own lateral pressure, which is still applied to F<sub>h</sub> — remains. Counting them as resisting would be unconservative. They <b>are</b> still included in the bearing check (and in the overturning resisting moment as currently coded). Dead column load stays in.</div>`;
+  h += `<div class="alert info" style="margin:4px 0 8px;">${rwNL('ℹ Why the surcharge and column live/snow loads are left out:', [['Rule:', 'friction can only rely on weight that is certain to be present at the moment the lateral thrust acts.'],
+    ['Here:', "the surcharge over the heel and column live/snow loads may be absent (e.g., an empty lot or no snow) while the soil thrust — including the surcharge's own lateral pressure, which is still applied to F<sub>h</sub> — remains."],
+    ['Effect:', 'counting them as resisting would be unconservative.'],
+    ['Still included:', 'they <b>are</b> still included in the bearing check (and in the overturning resisting moment as currently coded).'],
+    ['Dead column load', 'stays in.']])}</div>`;   // RWNL (2026-11-08)
   h += eq('Friction resistance at base',
     `F_{fr} = \\mu\\,\\Sigma V_{fr} = (${F(inp.mu,4)})(${F(r.SumV_slide,1)}) = ${F(inp.mu*r.SumV_slide,1)}\\ \\text{lb/ft}`,'',
     [{sym:'\\mu', desc:'base friction coefficient', val:F(inp.mu,4), unit:''}]);
@@ -5899,7 +5892,9 @@ function renderStabilitySoil(r) {
     const A2 = r.brgAlt, mS = A2.gov === 'static' ? r.Mo_brg : A2.Mo, mE = A2.gov === 'static' ? A2.Mo : r.Mo_brg;
     const xS = A2.gov === 'static' ? r.x_R : A2.x_R, xE = A2.gov === 'static' ? A2.x_R : r.x_R;
     const eS = r.B/2 - xS, eE = r.B/2 - xE, qS = A2.gov === 'static' ? r.q_max : A2.q_max, qE = A2.gov === 'static' ? A2.q_max : r.q_max;
-    h += `<div class="alert info" style="margin-bottom:8px;">\u2139 <b>Earthquake included (k_h &gt; 0):</b> bearing and eccentricity are checked for the static case (E = 0) and for the case with the seismic increment 1.0\u00b7\u0394P_E at 0.6H; the case with the larger |e| (and q_max, \u03a3V being the same) governs and is worked below. IBC 2018 \u00a71807.2.3 / ASCE 7-16 \u00a72.4.1: the load combinations without E must be satisfied on their own.</div>`;
+    h += `<div class="alert info" style="margin-bottom:8px;">${rwNL('ℹ Earthquake included (k_h &gt; 0):', [['Cases:', 'bearing and eccentricity are checked for the static case (E = 0) and for the case with the seismic increment 1.0·ΔP_E at 0.6H.'],
+      ['Governs:', 'the case with the larger |e| (and q_max, ΣV being the same) governs and is worked below.'],
+      ['IBC 2018 §1807.2.3 / ASCE 7-16 §2.4.1:', 'the load combinations without E must be satisfied on their own.']])}</div>`;   // RWNL (2026-11-08)
     h += eq('Both cases: resultant, eccentricity and peak pressure',
       `\\text{static: } \\bar{x} = \\frac{${F(r.Ms,1)} - ${F(mS,1)}}{${F(r.SumV,1)}} = ${F(xS,4)},\\ e = ${F(eS,4)},\\ q_{max} = ${F(qS,1)};\\quad \\text{seismic: } \\bar{x} = \\frac{${F(r.Ms,1)} - ${F(mE,1)}}{${F(r.SumV,1)}} = ${F(xE,4)},\\ e = ${F(eE,4)},\\ q_{max} = ${F(qE,1)}\\ \\Rightarrow\\ \\text{${A2.gov} governs}`, 'IBC 1807.2.3',
       [{sym:'M_{OT,0}', desc:'overturning moment without E', val:F(mS,1), unit:'lb·ft/ft'},
@@ -6026,7 +6021,8 @@ function renderStabilitySoil(r) {
       `\\Delta P_E = P_{AE} - P_{a,MO} = ${F(r.Pae,1)} - ${F(r.Pa_MO,1)} = \\boxed{${F(r.Pe_inc,1)}\\ \\text{lb/ft}} \\text{ at } 0.6${r.Hp > r.H_ret + 1e-9 ? "H'" : rwHt(r)} = ${F(0.6*r.Hp,2)}\\ \\text{ft above base}`,'',
       [{sym:'P_{a,MO}', desc:'static active force, the same M-O expression at \u03b8 = 0: \u00bdK_A,MO\u03b3_s' + (r.Hp > r.H_ret + 1e-9 ? 'H\u2032\u00b2' : rwHu(r) + '\u00b2'), val:F(r.Pa_MO,1), unit:'lb/ft'},   // RW2H2
        {sym:'\\Delta P_E', desc:'seismic force increment', val:F(r.Pe_inc,1), unit:'lb/ft'}]);
-    h += `<div class="alert warn">⚠ Simplified M-O per Seed &amp; Whitman (1970). Verify with the project geotechnical engineer; sites with liquefaction potential require site-specific study (IBC §1803.5.12). Seismic FOS acceptance criteria may be reduced to 1.1 per local practice — confirm with AHJ.</div>`;
+    h += `<div class="alert warn">${rwNL('⚠ Simplified M-O per Seed &amp; Whitman (1970).', [['Verify', 'with the project geotechnical engineer; sites with liquefaction potential require site-specific study (IBC §1803.5.12).'],   // RWNL (2026-11-08)
+      ['Seismic FOS:', 'acceptance criteria may be reduced to 1.1 per local practice — confirm with AHJ.']])}</div>`;
     h += `</div></div>`;
   }
 
@@ -6400,9 +6396,12 @@ function renderStem(r) {
     `V_u = \\boxed{${F(r.Vu_stem,1)}\\ \\text{lb/ft}} = ${Fk(r.Vu_stem)}\\ \\text{kip/ft}`,'',
     [{sym:'V_u', desc:'factored shear at base of stem', val:F(r.Vu_stem,1), unit:'lb/ft'}]);
   h += rwWorkedIn(r, [['stabKa','K<sub>a</sub>'], ...(q_ll_stem > 0 ? [['stabLS','q<sub>LS</sub>']] : [])]);
-  h += `<div class="alert info">ℹ ${r.stem_water
-      ? '<strong>Water-aware:</strong> stem demands use the 3-block effective-stress profile (moist above WT, buoyant γ′ below) plus the full hydrostatic triangle. '
-      : 'Stem demands use static earth pressure. '}${r.stem_ee2_governs?'<strong>Extreme Event II governs</strong> (collision + earth at γ=1.0, φ=1.0). ':''}${r.hasSeismic?(r.isAASHTO?'<strong>Seismic:</strong> the stem is designed for Extreme Event I as well (above). ':'<strong>Seismic:</strong> the stem is designed for U = 1.2D + 1.0E + 1.6H as well (above). '):''}Critical section at top of footing.</div>`;
+  h += (r.stem_water || r.stem_ee2_governs || r.hasSeismic)   // RWNL (2026-11-08): a lead and a list when there is more than the one-line note
+    ? `<div class="alert info">${rwNL('ℹ Stem demands:', [r.stem_water ? ['Water-aware:', 'stem demands use the 3-block effective-stress profile (moist above WT, buoyant γ′ below) plus the full hydrostatic triangle.'] : 'Stem demands use static earth pressure.',
+        r.stem_ee2_governs ? ['Extreme Event II governs', '(collision + earth at γ=1.0, φ=1.0).'] : null,
+        r.hasSeismic ? ['Seismic:', r.isAASHTO ? 'the stem is designed for Extreme Event I as well (above).' : 'the stem is designed for U = 1.2D + 1.0E + 1.6H as well (above).'] : null,
+        ['Critical section', 'at top of footing.']])}</div>`
+    : `<div class="alert info">ℹ Stem demands use static earth pressure. Critical section at top of footing.</div>`;
   h += `</div></div>`;
 
   // ════ STEP 2 — EFFECTIVE DEPTH ════
@@ -6526,7 +6525,8 @@ function renderStem(r) {
       `\\text{\\#${r.sel_ff.bar.num} @ ${r.sel_ff.spacing}'' o.c.} \\Rightarrow A_{s,prov} = ${F(r.sel_ff.As_prov,4)}\\ \\text{in}^2/\\text{ft} \\geq ${F(r.As_ff_stem,4)}`,
       r.sel_ff.As_prov >= r.As_ff_stem - 0.001, '\u00a75.10.6');
   else
-    h += `<div class="alert info" style="margin-top:6px;">ℹ Front face: no vertical bars are required. ACI 318-19 §11.7.2.3 exempts cantilever retaining walls from two layers of distributed reinforcement, and the stem is designed as a one-way slab (§13.3.6.1, Ch. 7).</div>`;
+    h += `<div class="alert info" style="margin-top:6px;">${rwNL('ℹ Front face: no vertical bars are required.', [['ACI 318-19 §11.7.2.3', 'exempts cantilever retaining walls from two layers of distributed reinforcement.'],   // RWNL (2026-11-08)
+      ['Design:', 'the stem is designed as a one-way slab (§13.3.6.1, Ch. 7).']])}</div>`;
   h += `</div></div>`;
 
   // ════ MID-HEIGHT (TOP-HALF) STEM SECTION ════
@@ -6574,7 +6574,8 @@ function renderStem(r) {
   h += `<div class="card" style="margin-bottom:16px;">
     <div class="card-hd"><span class="card-title">Mid Step 3 — S3–S1 Lap, End of S1 &amp; Moment along the Height</span><span class="card-ref">${r.isAASHTO?'AASHTO §5.10.8.4.3a / §5.10.8.1.2a; ACI 318-19 §25.5.2.2 (adopted)':'ACI 318-19 §25.5.2 / §7.7.3.3 / §13.3.6.3'}</span></div>
     <div class="card-body">`;
-  h += `<div class="alert info" style="margin-bottom:8px;">Layout: S1 (lapped with the S1D dowels at the joint) runs from the footing to mid-height + the S3–S1 lap${r.s1_full ? ' — here that reaches the top, so S1 runs full height' : ''}; S3 runs from mid-height (${F(r.Hs_mid,2)} ft) to the top. All S3 bars lap S1 at one level, so the lap is Class B. No alternate-bar cut-off.</div>`;
+  h += `<div class="alert info" style="margin-bottom:8px;">${rwNL('Layout of the back-face bars:', [['S1', `(lapped with the S1D dowels at the joint) runs from the footing to mid-height + the S3–S1 lap${r.s1_full ? ' — here that reaches the top, so S1 runs full height' : ''};`],   // RWNL (2026-11-08)
+    ['S3', `runs from mid-height (${F(r.Hs_mid,2)} ft) to the top.`], ['Lap:', 'all S3 bars lap S1 at one level, so the lap is Class B.'], 'No alternate-bar cut-off.'])}</div>`;
   h += eq('Lap length of each bar alone — Class B, ℓ_d before the 12-in minimum' + (r.isAASHTO ? ' (§5.10.8.2.1a)' : ' (§25.4.2.1(a))'),
     `\\ell_{st,S1} = \\max(1.3(${F(r.s13_ld_a1,2)}),\\;12) = ${F(r.s13_lst1,1)}\\ \\text{in};\\quad \\ell_{st,S3} = \\max(1.3(${F(r.s13_ld_a3,2)}),\\;12) = ${F(r.s13_lst3,1)}\\ \\text{in}`, r.isAASHTO ? '§5.10.8.4.3a' : 'Table 25.5.2.1');
   h += eqCheck(r.s13_diff ? 'S3–S1 lap, bars of different size (#' + r.sel_stem.bar.num + ' / #' + r.sel_stemT.bar.num + '): the greater of ℓ_d of the larger bar (' + r.s13_big + ') and ℓ_st of the smaller' + (r.isAASHTO ? ' — ACI 318-19 §25.5.2.2, adopted by the engineer for AASHTO mode' : '') : 'S3–S1 lap, bars of the same size: the larger ℓ_st',
@@ -6751,7 +6752,10 @@ function renderFooting(r) {
   // ── Load diagram ──
   h += `<div class="card" style="margin-bottom:16px;">
     <div class="card-hd"><span class="card-title">Factored Loads on Footing</span><span class="card-ref">bearing from ${r.isAASHTO ? 'Step 7 of Stability tab' : '<a class="wkA" href="#" data-card="stabFactBrg" data-intext="1">Step 7 of Stability tab</a>'}</span></div>
-    <div class="card-body"><div id="plt-ftg-loads"></div>${r.upS ? `<div class="alert info" style="margin:8px 0 0;">Water uplift (ACI 318-19 §5.3.8; water in soil is part of H, R5.3.8): for the heel and toe design the uplift is split out of the factored base pressure. In each combination the soil reaction is ΣV<sub>u</sub> less γ<sub>U</sub>·U (moment less γ<sub>U</sub>·U·x<sub>U</sub>), and the water pushes up on the member with γ<sub>U</sub>·u(x): <b>toe γ<sub>U</sub> = 1.6</b> (the uplift adds to the toe’s upward bending, §5.3.8(a)); <b>heel γ<sub>U</sub> = 0.9</b> (permanent, counteracts the heel’s downward load, §5.3.8(b)). The plot shows the total factored base pressure of Stability Step 7; the members’ own pressures are worked in Heel Step 1 and Toe Step 1.</div>` : ''}</div>
+    <div class="card-body"><div id="plt-ftg-loads"></div>${r.upS ? `<div class="alert info" style="margin:8px 0 0;">${rwNL('Water uplift (ACI 318-19 §5.3.8; water in soil is part of H, R5.3.8): for the heel and toe design the uplift is split out of the factored base pressure.', [   /* RWNL (2026-11-08) */
+      ['Soil reaction:', 'in each combination the soil reaction is ΣV<sub>u</sub> less γ<sub>U</sub>·U (moment less γ<sub>U</sub>·U·x<sub>U</sub>), and the water pushes up on the member with γ<sub>U</sub>·u(x):'],
+      ['Toe:', '<b>γ<sub>U</sub> = 1.6</b> (the uplift adds to the toe’s upward bending, §5.3.8(a));'], ['Heel:', '<b>γ<sub>U</sub> = 0.9</b> (permanent, counteracts the heel’s downward load, §5.3.8(b)).'],
+      ['Plot:', 'the plot shows the total factored base pressure of Stability Step 7; the members’ own pressures are worked in Heel Step 1 and Toe Step 1.']])}</div>` : ''}</div>
   </div>`;   // RWUPN (2026-11-07): ACI uplift note, display only; RWUP (2026-11-07): rewritten, the uplift is split out
 
   // ════ HEEL ════
@@ -6809,7 +6813,7 @@ function renderFooting(r) {
     `M_u = \\boxed{${Fk(Math.abs(r.Mu_heel_net))}\\ \\text{kip·ft/ft}} \\;(${heel_down?'\\text{TOP bars}':'\\text{BOTTOM bars}'}), \\quad V_u = \\boxed{${Fk(r.Vu_heel)}\\ \\text{kip/ft}}`,'',
     [{sym:'M_u', desc:'heel design moment at stem face', val:F(r.Mu_heel_net,1), unit:'lb·ft/ft'},
      {sym:'V_u', desc:'heel design shear at stem face', val:F(r.Vu_heel,1), unit:'lb/ft'}]);
-  h += `<div class="alert info" style="margin:4px 0 8px;">${HINTS.heel_basis[r.heelBasis] || ''}<br><span style="opacity:.85">Change the basis under <b>Design Options → Heel flexure/shear design basis</b>. Serviceability (crack control) always uses the unfactored no-relief moment.</span></div>`;
+  h += `<div class="alert info" style="margin:4px 0 8px;">${HINTS.heel_basis[r.heelBasis] || ''}<div style="opacity:.85">Change the basis under <b>Design Options → Heel flexure/shear design basis</b>. Serviceability (crack control) always uses the unfactored no-relief moment.</div></div>`;   // RWNL: a line of its own after the hint's list (was <br><span>)
   if (r.useMassDOTFtg) {
     // RWMW (2026-11-07, display only): w_DL as computed: the soil column w_soil_col (γ_sat below the water table) + γ_c·t_f; + the slope wedge
     const hSat = r.hasWT ? Math.max(0, r.Hs_ret - r.wt_r) : 0, wDL = r.w_soil_col + inp.gamma_c*r.tf_ft, mW = r.M_wedge_heel > 0;
@@ -7023,7 +7027,10 @@ function renderFooting(r) {
     h += `<div class="card" style="margin-bottom:16px;">
     <div class="card-hd"><span class="card-title">Heel and Toe — Extreme Event I / II Check</span><span class="card-ref">AASHTO \u00a711.6.4 / \u00a711.6.5.1 \u00b7 \u03c6 = 1.0 \u00b7 the Strength I bars F1 / F2</span></div>
     <div class="card-body">`;
-    h += `<div class="alert info" style="margin-bottom:8px;">\u2139 Each extreme-event case (Stability tab, Steps 7a / 7b; maximum and minimum vertical) loads the footing with its total base reaction (water uplift added back; trapezoid, or the block 3x\u0304 in partial contact). Heel down: w = soil + footing + q_s + \u03b3_LS\u00b7LS at \u03b3 = 1.0; toe down: the footing weight at \u03b3 = 1.0. Capacity: M_n and V_c of the Strength I design with \u03c6 = 1.0.</div>`;
+    h += `<div class="alert info" style="margin-bottom:8px;">${rwNL('ℹ How the extreme-event cases load the footing:', [   // RWNL (2026-11-08)
+      ['Base reaction:', 'each extreme-event case (Stability tab, Steps 7a / 7b; maximum and minimum vertical) loads the footing with its total base reaction (water uplift added back; trapezoid, or the block 3x̄ in partial contact).'],
+      ['Heel down:', 'w = soil + footing + q_s + γ_LS·LS at γ = 1.0;'], ['Toe down:', 'the footing weight at γ = 1.0.'],
+      ['Capacity:', 'M_n and V_c of the Strength I design with φ = 1.0.']])}</div>`;
     h += `<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Case</th><th>V<sub>tot</sub> (k/ft)</th><th>x\u0304 (ft)</th><th>q<sub>toe</sub> / q<sub>heel</sub> (ksf)</th><th>w heel (psf)</th><th>M heel = M<sub>down</sub> \u2212 M<sub>up</sub> (k-ft/ft)</th><th>V heel (k/ft)</th><th>M toe (k-ft/ft)</th><th>V toe (k/ft)</th></tr></thead><tbody>${X.cases.map(c => `<tr><td>${c.label}</td><td>${k(c.Vt)}</td><td>${F(c.xRt,3)}</td><td>${k(c.qt)} / ${k(c.qh)}</td><td>${F(c.w,0)}</td><td>${k(c.Md)} \u2212 ${k(c.Mup)} = ${k(c.Mh)}</td><td>${k(c.Vh)}</td><td>${k(c.MupT)} \u2212 ${k(inp.gamma_c*r.tf_ft*inp.Lt**2/2)} = ${k(c.Mt)}</td><td>${k(c.Vt_toe)}</td></tr>`).join('')}</tbody></table></div>`;
     h += eqCheck('Heel (F1) under the extreme events, \u03c6 = 1.0',
       `M = ${k(Math.max(0, X.gH.Mh))} \\le M_n = ${k(X.Mn_heel)};\\quad V = ${k(X.gHV.Vh)} \\le V_c = ${k(X.Vn_heel)}\\ \\text{kip, kip·ft per ft}`, r.checks.heelEE.ok, r.checks.heelEE.ref);
@@ -7220,28 +7227,74 @@ function restoreFields(fields) {
   syncConditionalUI();
 }
 // Re-run the show/hide logic for conditional input groups
+/* RWNL (2026-11-08, engineer: "split this up into a numbered list or bullets ... so it's not just a text that will likely get
+   overlooked because it's too long"): a long note as a one-line bold lead, then a list whose items carry bold lead words.
+   rwNL(lead, items, o): items are strings or [lead words, text]; null items are skipped; o.ol: numbered list; o.act: action lines
+   (REVIEW / Input needed …) shown first, in the alert's own colour. Returns one <div class="rwNL">; display only. The Report reads
+   it part by part (rwrNLParts). New lead words carry no digits, so the digit sequence of every tab is unchanged. */
+function rwNL(lead, items, o) {
+  o = o || {}; const L = o.ol ? 'ol' : 'ul';
+  const li = (items || []).filter(Boolean).map(x => '<li>' + (Array.isArray(x) ? '<b class="rwNLk">' + x[0] + '</b> ' + x[1] : x) + '</li>').join('');
+  return '<div class="rwNL">' + (o.act || []).filter(Boolean).map(a => '<div class="rwNLa">' + a + '</div>').join('')
+    + (lead ? '<div class="rwNLl">' + lead + '</div>' : '') + (li ? '<' + L + ' class="rwNLu">' + li + '</' + L + '>' : '') + '</div>';
+}
 // ── Explanatory hints for option dropdowns (kept next to the input so nobody has to hunt) ──
-const HINTS = {
+const HINTS = {   // RWNL (2026-11-08): each long hint as a bold lead (the option) and a list; every sentence kept, in order
   heel_basis: {
-    std: '<b>Standard (upward relief credited)</b> — heel moment/shear = factored downward loads (soil, heel self-weight, surcharge, LL) <i>minus</i> the factored bearing pressure acting under the heel, taken from the same load combination. This is the textbook ACI/AASHTO approach and gives the smallest heel demand. It relies on the linear bearing distribution being accurate under the heel, which is least reliable exactly where it matters (the heel end often sees low or zero pressure, and actual contact pressure is non-linear).',
-    norelief: '<b>No upward relief (full factored downward)</b> — heel treated as a cantilever carrying all factored downward loads with <i>no</i> credit for soil pressure underneath. Common DOT practice (used in the CTDOT/HDR reference calcs) and conservative: it covers the case where the heel loses contact (large eccentricity, construction staging before the toe is backfilled, soft spots under the heel). Produces much larger top-steel and shear demand — shear is usually what governs the footing thickness under this basis.',
-    envelope: '<b>Envelope</b> — designs for the larger of the Standard and No-relief cases. Equivalent to No-relief whenever relief reduces demand (almost always), but reports both so the effect of the assumption is visible. The MassDOT §3.3.2.2 checkbox (AASHTO options) is enveloped on top of whichever basis is chosen.',
+    std: rwNL('<b>Standard (upward relief credited)</b>', [
+      ['Demand:', 'heel moment/shear = factored downward loads (soil, heel self-weight, surcharge, LL) <i>minus</i> the factored bearing pressure acting under the heel, taken from the same load combination.'],
+      ['Practice:', 'this is the textbook ACI/AASHTO approach and gives the smallest heel demand.'],
+      ['Caution:', 'it relies on the linear bearing distribution being accurate under the heel, which is least reliable exactly where it matters (the heel end often sees low or zero pressure, and actual contact pressure is non-linear).']]),
+    norelief: rwNL('<b>No upward relief (full factored downward)</b>', [
+      ['Demand:', 'heel treated as a cantilever carrying all factored downward loads with <i>no</i> credit for soil pressure underneath.'],
+      ['Practice:', 'common DOT practice (used in the CTDOT/HDR reference calcs) and conservative: it covers the case where the heel loses contact (large eccentricity, construction staging before the toe is backfilled, soft spots under the heel).'],
+      ['Effect:', 'produces much larger top-steel and shear demand — shear is usually what governs the footing thickness under this basis.']]),
+    envelope: rwNL('<b>Envelope</b>', [
+      ['Demand:', 'designs for the larger of the Standard and No-relief cases.'],
+      ['Effect:', 'equivalent to No-relief whenever relief reduces demand (almost always), but reports both so the effect of the assumption is visible.'],
+      ['MassDOT §3.3.2.2:', 'that checkbox (AASHTO options) is enveloped on top of whichever basis is chosen.']]),
   },
   uplift_mode: {
-    uniform: '<b>Uniform uplift</b> — full hydrostatic head γ<sub>w</sub>h<sub>w</sub> acts across the entire base (resultant at B/2). Correct when water stands at the same level on both sides of the wall or the toe side cannot drain (tidal / flood / impounded conditions). Conservative for sliding, overturning and eccentricity; use it when drainage in front of the wall is not assured.',
-    triangular: '<b>Triangular uplift</b> — water on the backfill side only with a free-draining toe: pressure varies linearly from γ<sub>w</sub>h<sub>w</sub> at the heel to zero at the toe (steady seepage under the footing). Total uplift is half the uniform value but acts 2B/3 from the toe. Use only where the toe side is reliably drained (weep holes / drains that will be maintained, grade falling away from the toe). Lateral water pressure on the toe side is not modeled in either case.',
+    uniform: rwNL('<b>Uniform uplift</b>', [
+      ['Acts:', 'full hydrostatic head γ<sub>w</sub>h<sub>w</sub> across the entire base (resultant at B/2).'],
+      ['Correct when:', 'water stands at the same level on both sides of the wall or the toe side cannot drain (tidal / flood / impounded conditions).'],
+      ['Effect:', 'conservative for sliding, overturning and eccentricity; use it when drainage in front of the wall is not assured.']]),
+    triangular: rwNL('<b>Triangular uplift</b>', [
+      ['Acts:', 'water on the backfill side only with a free-draining toe: pressure varies linearly from γ<sub>w</sub>h<sub>w</sub> at the heel to zero at the toe (steady seepage under the footing).'],
+      ['Resultant:', 'total uplift is half the uniform value but acts 2B/3 from the toe.'],
+      ['Use only:', 'where the toe side is reliably drained (weep holes / drains that will be maintained, grade falling away from the toe).'],
+      ['Not modeled:', 'lateral water pressure on the toe side, in either case.']]),
   },
   aashto_base_fric: {
-    two_thirds: '<b>tan(⅔φ)</b> — interface angle δ = ⅔φ (note: this is tan of ⅔φ, not ⅔·tanφ). Long-standing conservative practice (older AASHTO Standard Specs, NAVFAC DM-7, many DOT design manuals incl. the CTDOT reference calcs). Use when the footing bears on a leveling course or mud mat, when the subgrade may be disturbed or softened during construction, when φ is not from site-specific testing, or when your DOT requires it.',
-    full: '<b>tan φ</b> — AASHTO §10.6.3.4: for concrete <i>cast directly against soil</i>, the interface is as rough as the soil itself, so tanδ = tanφ<sub>f</sub>. Appropriate only when the footing is poured on undisturbed or properly compacted soil and φ<sub>f</sub> is a reliable site-specific value <i>for the foundation soil</i>. Note: the app uses the backfill φ — confirm it also represents the soil under the footing.',
+    two_thirds: rwNL('<b>tan(⅔φ)</b>', [
+      ['Interface angle:', 'δ = ⅔φ (note: this is tan of ⅔φ, not ⅔·tanφ).'],
+      ['Practice:', 'long-standing conservative practice (older AASHTO Standard Specs, NAVFAC DM-7, many DOT design manuals incl. the CTDOT reference calcs).'],
+      ['Use when:', 'the footing bears on a leveling course or mud mat, when the subgrade may be disturbed or softened during construction, when φ is not from site-specific testing, or when your DOT requires it.']]),
+    full: rwNL('<b>tan φ</b>', [
+      ['AASHTO §10.6.3.4:', 'for concrete <i>cast directly against soil</i>, the interface is as rough as the soil itself, so tanδ = tanφ<sub>f</sub>.'],
+      ['Appropriate only:', 'when the footing is poured on undisturbed or properly compacted soil and φ<sub>f</sub> is a reliable site-specific value <i>for the foundation soil</i>.'],
+      ['Note:', 'the app uses the backfill φ — confirm it also represents the soil under the footing.']]),
     precast: '<b>0.8·tan φ</b> — AASHTO §10.6.3.4 for precast footings/units placed on soil (smoother formed surface, imperfect contact). Also a reasonable intermediate choice when a CIP footing bears on a thin granular leveling pad.',
     manual: '<b>User δ<sub>b</sub></b> — enter the interface friction angle from the geotechnical report (e.g., when the footing bears on a different material than the backfill, or on a geotextile/geomembrane with tested interface properties).',
   },
   aashto_ecc_limit: {
-    b6: '<b>e ≤ B/6 (middle third)</b> — keeps the entire base in compression (no heel uplift / soil tension). Classic ASD criterion and still required by several DOTs (the CTDOT reference calc checks B/6). Use for walls on compressible soils where differential settlement / tilt matters, for walls supporting settlement-sensitive structures, or where your DOT manual specifies it. Most restrictive.',
-    b4: '<b>e ≤ B/4 (middle half)</b> — AASHTO LRFD limit for foundations on soil through the 2013 edition (§11.6.3.3/§10.6.3.3), paired with the factored-load (Strength I) check. Retained by many state DOT bridge manuals. Reasonable default when the governing agency has not adopted the newer limit.',
-    b3: '<b>e ≤ B/3 (middle two-thirds)</b> — current AASHTO LRFD limit for foundations on soil (revised in the 2014 7th Ed. / later editions) under Strength limit states. Permitted because the Meyerhof effective-width bearing check already penalizes eccentric loading. Confirm your agency has adopted it — verify against your copy of §11.6.3.3.',
-    rock: '<b>e ≤ 0.45B (middle nine-tenths)</b> — current AASHTO limit for footings on <i>rock</i>, where bearing stiffness makes large eccentricity acceptable. Do not use for footings on soil. With this option the bearing check uses the linear (trapezoidal / triangular) pressure of AASHTO §10.6.5 / Eqs. 11.6.3.2-2 and -3 instead of the uniform Meyerhof B′.',
+    b6: rwNL('<b>e ≤ B/6 (middle third)</b>', [
+      ['Effect:', 'keeps the entire base in compression (no heel uplift / soil tension).'],
+      ['Practice:', 'classic ASD criterion and still required by several DOTs (the CTDOT reference calc checks B/6).'],
+      ['Use for:', 'walls on compressible soils where differential settlement / tilt matters, for walls supporting settlement-sensitive structures, or where your DOT manual specifies it.'],
+      'Most restrictive.']),
+    b4: rwNL('<b>e ≤ B/4 (middle half)</b>', [
+      ['Basis:', 'AASHTO LRFD limit for foundations on soil through the 2013 edition (§11.6.3.3/§10.6.3.3), paired with the factored-load (Strength I) check.'],
+      ['Practice:', 'retained by many state DOT bridge manuals.'],
+      ['Default:', 'reasonable when the governing agency has not adopted the newer limit.']]),
+    b3: rwNL('<b>e ≤ B/3 (middle two-thirds)</b>', [
+      ['Basis:', 'current AASHTO LRFD limit for foundations on soil (revised in the 2014 7th Ed. / later editions) under Strength limit states.'],
+      ['Why permitted:', 'the Meyerhof effective-width bearing check already penalizes eccentric loading.'],
+      ['Confirm:', 'that your agency has adopted it — verify against your copy of §11.6.3.3.']]),
+    rock: rwNL('<b>e ≤ 0.45B (middle nine-tenths)</b>', [
+      ['Basis:', 'current AASHTO limit for footings on <i>rock</i>, where bearing stiffness makes large eccentricity acceptable.'],
+      ['Do not use:', 'for footings on soil.'],
+      ['Bearing check:', 'with this option the bearing check uses the linear (trapezoidal / triangular) pressure of AASHTO §10.6.5 / Eqs. 11.6.3.2-2 and -3 instead of the uniform Meyerhof B′.']]),
   },
 };
 function updateHints() {
@@ -11797,7 +11850,10 @@ function rwrTabNotes(r) {
     t.content.querySelectorAll('.alert').forEach(e => {
       const c = e.closest('.card'), ct = c && c.querySelector('.card-title'), x = txt(e);
       if (!x || warn.has(nrm(x.replace(/^[⚠ℹ✓]\s*/, '')))) return;
-      notes.push({ type: 'note', warn: e.classList.contains('warn') || e.classList.contains('fail'), text: (ct ? txt(ct) + ': ' : '') + x });
+      const w = e.classList.contains('warn') || e.classList.contains('fail');
+      if (e.querySelector('.rwNL')) {   // RWNL (2026-11-08): a lead-and-list note prints as one Report note line per part
+        rwrNLParts(e, txt).forEach((q, i) => notes.push({ type: 'note', warn: w, text: (i === 0 && ct ? txt(ct) + ': ' : '') + q })); return; }
+      notes.push({ type: 'note', warn: w, text: (ct ? txt(ct) + ': ' : '') + x });
     });
     t.content.querySelectorAll('.card').forEach(c => { const ct = c.querySelector('.card-title'); if (ct) cards[ct.textContent.trim()] = c; });
     const tbl = c => { const T = c && c.querySelector('table.tbl'); if (!T) return null;
@@ -11813,6 +11869,20 @@ function rwrTabNotes(r) {
     }
     out[tab] = { notes, extra };
   });
+  return out;
+}
+/* RWNL (2026-11-08): the parts of a note built with rwNL, in order, as Report text: the text before it, the action lines, the lead,
+   each list item as "• lead words text", the text after it. txt(e) gives an element's plain text. */
+function rwrNLParts(e, txt) {
+  const out = []; let acc = '';
+  const flush = () => { const t = acc.replace(/\s+/g, ' ').trim(); if (t) out.push(t); acc = ''; };
+  e.childNodes.forEach(n => {
+    if (n.nodeType === 1 && n.classList.contains('rwNL')) {
+      flush();
+      n.querySelectorAll('.rwNLa, .rwNLl, .rwNLu > li').forEach(q => { const t = txt(q); if (t) out.push((q.tagName === 'LI' ? '• ' : '') + t); });
+    } else acc += ' ' + (n.nodeType === 1 ? txt(n) : String(n.textContent));
+  });
+  flush();
   return out;
 }
 function rwrAddNotes(M, N) {
