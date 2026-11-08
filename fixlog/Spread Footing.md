@@ -7278,3 +7278,113 @@ index 50f3837..c2d5000 100644
   - 3.2 "6.x … and the slenderness screen" (no magnification or Wall Design tab named).
   - 3.4 Warnings lists "dowel steel below minimum" and "slenderness screen exceeded" as amber boxes. I found no such warnings in the code; both are now dashboard FAIL items.
 - **Other copies:** none.
+
+## 2026-11-08 — PR: docs/sf-manual-audit (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SFSC-4) — User Manual audited against the code: every out-of-date statement corrected (3.2, 3.4 and the rest)   [DISPLAY ONLY; no computed value changes]
+- **Request (engineer, 2026-11-08):**
+  - Fix 3.2 (cover magnification and the Wall Design tab).
+  - Fix 3.4 (drop the two items that are now dashboard FAILs; list the warnings the code raises).
+  - Go through the whole User Manual against the current code and fix every out-of-date statement.
+- **Where:** `manPart("p0"…"pA",…)` (the manual blocks only). Exact before / after: the PR diff. Each statement was checked against the code named below, or against a run of the tool.
+- **Part 0:**
+  - 0.1 calculation list:
+    - item 1: wind 0.75(±Wx ±Wy) and the seismic combinations (`genCombos`, SFW3, SFEQ);
+    - item 3: eccentricity limit, sliding on the resultant;
+    - item 4: transverse strip (SFTX), minimum steel, spacing, tension-controlled (SFET), d ≥ 6 in (SFMD), development at every face (SFDE), bearing / dowels / shear friction at pedestal or wall interfaces;
+    - item 5: P–M at each combination's own P_u (SFPM), magnification, shear, torsion, crossties, cover.
+  - 0.1 load modes: the Steel Beam Design reactions hand-off. The key "six self-consistency checks" → the checks named, no count (`selfConsistency` gives up to 12).
+  - 0.2:
+    - "Seismic loads (E): no E combinations" → E_h entered as load type E with the 2.4.5 / 2.3.6 combinations and E_v = 0.2S_DS·D; no Ω₀ unless E_mh is entered; no Ch. 18 detailing.
+    - Minimum eccentricity: M_2,min of a slender pedestal and the load offsets noted.
+    - Lateral earth pressure: walls added.
+    - "§4.5 of the report" → Stability tab card 4.5.
+  - 0.3.1: card reference. 0.3.4: "pedestal or wall face".
+  - 0.3.5: "Structural pressure excludes self-weight and overburden" → they, the surcharge and buoyancy are carried in the resultant and subtracted inside each free body (`netResultant`, `bodyResultant`).
+  - 0.3.6: the 1.2 / 0.9 bracket, or the AASHTO factors of an imported case.
+  - 0.3.7: "interior-perimeter closed form" → J_c and c from the truncated section about its centroid (SFPJ, SFPC); γ_f for edge/corner still by hand.
+  - 0.4:
+    - 3D row: the smoke tests open the tab;
+    - edge/corner J_c row updated;
+    - "Moment magnification … not computed" row removed (SFSL);
+    - "multi-pedestal" → "combined".
+- **Part 1:**
+  - 1.1:
+    - the input tabs; output tabs 8 User Manual, 9 Report, 10 Drawings;
+    - Auto-calculate on change / Re-analyze (SFAC); Undo / Redo;
+    - "six green checks" → every check ✓; the warnings list.
+  - 1.2: E load type, simultaneous wind, seismic combinations, both hand-offs.
+  - 1.3: "Named projects" → the Save and open card (Save, Save as, New, Saved projects…, GitHub copy where set up, start chooser). "All report tabs print" → Print-to-PDF Report / Ctrl+P prints the Report tab from any tab, with its Include boxes.
+- **Part 2:**
+  - 2.1: Project tab contents.
+  - 2.2: "Df must be ≥ t" → allowed with a warning.
+  - 2.3: rows added for V_c basis, size effect, bar coating, d_agg, footing sides, self-weight override.
+  - 2.4:
+    - depth factors are now the AASHTO Eq. 10.6.3.1.2a-10 form, d_q ≤ 1.4 (SFLW L6; the old row said "not the AASHTO form");
+    - shear failure mode (SFVL) and q_allow override rows added;
+    - water table: submerged concrete, D_f + 1.5B′ (SFLW L7);
+    - surcharge row added.
+  - 2.5:
+    - "Typical … (IBC 1807 practice)" → defaults, and IBC / ASCE 7 set no FS for building footings, 1807.2.3 for retaining walls;
+    - rows added: OT gate, eccentricity limit, simultaneous wind, S_DS.
+  - 2.6: quantity input, outer layer, 13.3.4.1 → 8.6.1.1 for combined, s_max = min(2h, 18 in), clear spacing, ℓ_dc option.
+  - 2.7: element type and the wall inputs, load offsets, T_u, E row, dowel projection. Bar-fit minimum + 4/3 d_agg (SFAG).
+  - 2.8: the backfills that differ from new-project defaults (`migrateState`).
+- **Part 3:**
+  - 3.2, retitled "Output tabs and the Report":
+    - tab ranges 2.1–2.6, 3.1–3.4, 4.1–4.6, 5.1–5.7;
+    - 6.x: P–M views, magnification, shear, torsion, crossties, cover;
+    - 6W.x, 7 3D View, 10 Drawings;
+    - the Report's sections and appendices (checked by rendering the Report tab).
+  - 3.4: rewritten as the warnings list. The amber items are listed as the code raises them (every `W.push` with lvl 'warn'). The red items are the input errors and the design errors. "Dowel steel below minimum" and "slenderness screen exceeded" are dropped: both are now dashboard FAIL items. "Punching perimeter truncated", "rigidity marginal" and "bar-fit" are replaced by what the code shows.
+- **Part 4A:**
+  - 4A.1 equations: load offsets, the dead and live surcharge. U = γ_w × submerged concrete volume (the code); the old text had γ_w·depth·BL.
+  - 4A.2: the combination list as `genCombos` builds it (Lr or S, wind cases, seismic). The key on diagonal wind → Case 3.
+  - 4A.3: §0.3.5 treatment.
+- **Part 4B:**
+  - 4B.1: "a sixth check" → the named check.
+  - 4B.2: q_allow override, depth factors (AASHTO form, cap), local shear, D_f + 1.5B′, card 3.3.
+  - 4B.3: gating and the eccentricity limit.
+  - 4B.4: ΣP of each combination (not "at the min-dead bracket"), passive over D_f and the full width, sliding on the resultant.
+  - 4B.5: flotation on the gross and net bases, the smaller governs (SFFG).
+- **Part 4C:**
+  - 4C.1: the free-body treatment; strength combinations off the footing are skipped as errors.
+  - 4C.2:
+    - wall faces; transverse strip (SFTX);
+    - flexural capacity: φ by strain, tension-controlled required (SFET, SFPY), s_max, d ≥ 6 in;
+    - one-way V_c example: Part 6 numbers (263.3 vs 153.2 k, 1.7×; the old "Part 6 example #4 @ 12, d = 14.75" was not Part 6). The factor 2.4 at ρ_w = 0.0011 is kept as a general case.
+    - λ_s option; the override warning is on the Footing Design tab.
+  - 4C.3: V_u includes the body forces inside the critical area (`bodyIn`); moments about the critical-section centroid; J_c from the truncated section; overlapping perimeters REVIEW.
+  - 4C.4 split into four paragraphs:
+    - footing bars at every face, hooks (SFDV, SFDE);
+    - interface bearing with the excess to the dowels (SFBX);
+    - dowels: minimum, count, ℓ_dc gate and option, tension, laps;
+    - shear friction (22.9, μ, N_u = 0.9D, development both sides).
+  - 4C.5:
+    - classification sets the 1% floor (pedestal: none);
+    - P–M at each combination's own P_u, exact clipped block, the views (SFPM, SFPX, SFPV);
+    - limits and cover;
+    - new items: shear (SFVP), torsion (SFTQ), crossties (SFXT).
+  - **New 4C.6 "Wall elements (Wall Design tab)":** SFWD-2…8, SFWC, SFWM, SFWH.
+- **Part 5:** checked by running Case B on the current code. q_max 7.66, bearing 2.04, M_u 1426.55 / 1323.50, V_u 304.67 / 273.55, punching V_u 778.0145, DCR 1.758 (1.275 with λ_s neglected), pedestal M_ux 910.00, M_uy 157.50: all as printed. Unchanged.
+- **Part 6** (run on the current code):
+  - 6.4: the garbled "d = 29.5… wait —" sentence fixed: d = 28.5 in, DCR 0.84 (card 5.3); x: d = 27.5, DCR 1.07 (card 5.2).
+  - 6.5: φV_c was written 0.75·2λλ_s√f′c·b·d (the old basis) → Table 22.5.5.1(c), 153.2 k, DCR 1.99.
+  - 6.6:
+    - b₀ = 2(12+29)+2(30+29) = 200 in → d = 28, b₀ = 196 in (code `bo`);
+    - V_u 774.5 → 778.0 k;
+    - v_c = 143.0 psi, DCR 1.76;
+    - the "1.67–1.76 depending on cover" note replaced: the setup states cover 4 in.
+- **Part 7:** 7.3 "would pass a one-way shear check it should fail (strip DCR 0.96 vs true 1.16)" → 1.65 vs 1.99 at the current capacity; the old figures kept as the earlier basis.
+- **Part A:** references extended to the provisions the tool uses: ACI 318-19 Ch. 6, 10, 11, 20.5, 21.2, 22.4, 22.7, 22.9; ASCE 7-16 2.3.6, 2.4.5, 12.4.2.2, 27.3.5; IBC 1807.2.3; AASHTO 10.6.3.1.2a (depth-factor form used), Table 10.6.3.1.2a-2, 10.6.3.1.2b, 10.6.3.3, 10.6.3.4.
+- **Checked and left unchanged:** 0.2 (settlement, live-load patterning, rain, buoyancy), 0.3.2, 0.3.3 (λ_s = 0.726 at d = 28 in, ~38 %), 0.3.8, 0.4 one-way residual / baselines / third benchmark, 1.4, 3.1, 3.3, 4A.4, 4B.1 solver text, 4C.3 v_c, Part 5, Part 7 other text, A.1, A.3.
+- **Governing provision / formulas / factors / units:** none changed in the engine (§4 does not apply). The manual's quoted numbers changed only where they no longer matched the program's output (Part 6, Part 7, 4C.2), each checked by running the case. **Saved data:** none.
+- **Check case:** Part 5 Case B (13 × 13 × 2.75 ft, γ_c = 0, f′c 3000, q_a 3.75 gross, cover 4 in, #8@12 x / #8@9 y, pedestal 1.0 × 2.5 × 2.25 ft; D: P 350, V_x 50, V_y 200, M_x 200; L: P 275). Values as listed above under Part 6.
+- **How verified:**
+  - Main-vs-branch probe (headless Chromium, `tests/lib.mjs` `openPage`), seven cases: `R`, `P2` and the digit sequence of every output tab identical; only the Manual differs.
+  - Every manual part renders with KaTeX; 0 KaTeX errors, 0 console errors.
+  - Tests: check-syntax, phone-layout --tool sf, project-library --tool spreadfooting, spread-footing-nobear: pass.
+- **Left, not the manual (tool display text, raised for a separate change):**
+  - The Report's assumption "Pedestal slenderness is screened only … moment magnification is not performed" (`sfrModel`, anchor `'Pedestal slenderness is screened only`).
+  - The Schematic 1.5 list "Not considered in this version": "seismic loads (E)" and "slender-pedestal moment magnification".
+  - The depth-factor input hint "Vesić form (not AASHTO LRFD 10th Ed. Eq. 10.6.3.1.2a-10)".
+  - All three contradict the code: the tool magnifies (SFSL), has E combinations (SFEQ), and uses the AASHTO arctan form with d_q ≤ 1.4 (SFLW).
+- **Other copies:** none.
