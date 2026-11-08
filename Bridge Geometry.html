@@ -146,6 +146,52 @@
   .bgNL .bgNLk { font-weight:600; }
   .bgNL .bgNLa { color:var(--oxide); margin:2px 0 4px; }
   @media print { .bgNL .bgNLu > li { break-inside:avoid; } }
+  /* BGLS (2026-11-08, engineer: the left summary panel of Retaining Wall, Spread Footing, Light Pole, Shear and Moment Diagrams —
+     RWDL #959, RWLB #984, SFLB #988, LPLB #991, SMLS #1130): on screens 1200 px and wider a left column (#bgDashCol, 240 px up to
+     1499 px, 280 px from 1500 px) lists the key results as compact chips; a click opens the tab and scrolls to the table that
+     works the value. « shrinks it to a 42 px strip. Below 1200 px nothing changes. Screen only. */
+  #bgDashCol { display:none; }
+  @media print { #bgDashCol { display:none !important; } }
+  @media screen and (min-width:1200px){
+    body.bgDashWide { display:grid; grid-template-columns:280px minmax(0,1fr); align-items:start; }
+    body.bgDashWide > * { grid-column:1 / -1; }
+    body.bgDashWide > #bgDashCol { grid-column:1; grid-row:2; display:block; position:sticky; top:0; height:100vh; box-sizing:border-box; overflow-y:auto; overflow-x:hidden;
+      min-width:0; padding:0 8px 24px; border-right:1px solid var(--graphite); background:var(--vellum-edge); overscroll-behavior:contain; }
+    body.bgDashWide > main { grid-column:2; grid-row:2; min-width:0; }
+    body.bgDashWide main fieldset { min-width:0; }   /* the main column is narrower: wide tables scroll in their own boxes (as the phone rule BGX10), not the page */
+    #bgDashHead { position:sticky; top:0; z-index:3; background:var(--vellum-edge); display:flex; align-items:center; gap:4px 8px; flex-wrap:wrap; padding:10px 0 4px; }
+    #bgDashTtl { margin:0; font-size:10.5px; font-weight:600; text-transform:uppercase; letter-spacing:.1em; color:var(--ink-soft); }
+    #bgDashTgl { margin:0; padding:1px 7px; font-size:12px; border:1px solid var(--graphite); background:var(--paper); border-radius:3px; cursor:pointer; color:var(--ink-soft); }
+    #bgDashCnt { display:inline-flex; gap:4px; flex-wrap:wrap; }
+    #bgDashCnt span { font-size:10px; font-weight:600; padding:1px 5px; border:1px solid; border-radius:3px; white-space:nowrap; background:var(--paper); }
+    #bgDashCnt .bgCf { color:var(--oxide); } #bgDashCnt .bgCw { color:#7A5B12; } #bgDashCnt .bgCp { color:var(--good); }
+    #bgDashSub { font-size:10.5px; color:var(--ink-soft); margin:0 0 6px; overflow-wrap:anywhere; }
+    #bgDash { display:grid; grid-template-columns:minmax(0,1fr); gap:3px; align-items:start; }
+    .bgCh { display:grid; grid-template-columns:auto minmax(0,1fr) auto auto; align-items:center; column-gap:5px; padding:3px 6px 3px 2px; min-width:0;
+      border:1px solid var(--graphite); border-radius:3px; background:var(--paper); font-size:11px; line-height:1.35; cursor:pointer; color:var(--ink); }
+    .bgCh:hover { background:#fff; } .bgCh:focus-visible { outline:2px solid var(--cyan); outline-offset:-1px; }
+    .bgCh.pass { border-color:var(--good); } .bgCh.fail { border-color:var(--oxide); background:#fbeee9; } .bgCh.warn { border-color:#B08A2E; background:#FBF4E2; }
+    .bgCh .bgChX { grid-row:1; grid-column:1; margin:0; padding:0 3px; border:none; background:transparent; font-size:9px; color:var(--ink-soft); line-height:1.2; cursor:pointer; }
+    .bgCh .bgChX:disabled { visibility:hidden; }
+    .bgCh .bgChN { grid-row:1; grid-column:2; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .bgCh .bgChR { grid-row:1; grid-column:3; white-space:nowrap; color:var(--cyan); font-weight:600; font-variant-numeric:tabular-nums; }
+    .bgCh .bgChS { grid-row:1; grid-column:4; font-size:10px; font-weight:700; white-space:nowrap; }
+    .bgCh.pass .bgChS { color:var(--good); } .bgCh.fail .bgChS { color:var(--oxide); } .bgCh.warn .bgChS { color:#7A5B12; }
+    .bgCh .bgChV, .bgCh .bgChRef { grid-column:1 / -1; display:none; padding-left:16px; font-size:10.5px; color:var(--ink-soft); overflow-wrap:anywhere; }
+    .bgCh .bgChRef { font-style:italic; }
+    .bgCh.bgOpen .bgChV, .bgCh.bgOpen .bgChRef { display:block; } .bgCh.bgOpen .bgChN { white-space:normal; }
+    .bgDHd { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-soft); margin:6px 0 1px; }
+    .bgDMsg { font-size:11px; padding:6px 8px; border:1px solid var(--oxide); background:#fbeee9; color:var(--ink); border-radius:3px; }
+    .bgFlash { outline:3px solid var(--cyan); outline-offset:3px; transition:outline-color .4s; }
+    body.bgDashWide.bgDashColl { grid-template-columns:42px minmax(0,1fr); }
+    body.bgDashWide.bgDashColl > #bgDashCol { padding:0; }
+    body.bgDashWide.bgDashColl #bgDash, body.bgDashWide.bgDashColl #bgDashSub { display:none; }
+    body.bgDashWide.bgDashColl #bgDashHead { flex-direction:column; align-items:center; }
+    body.bgDashWide.bgDashColl #bgDashTtl { writing-mode:vertical-rl; transform:rotate(180deg); margin:4px 0; white-space:nowrap; }
+    body.bgDashWide.bgDashColl #bgDashCnt { flex-direction:column; align-items:center; }
+    body.bgDashWide.bgDashColl #bgDashCnt span { font-size:9px; padding:1px 2px; white-space:normal; text-align:center; width:36px; box-sizing:border-box; }
+  }
+  @media screen and (min-width:1200px) and (max-width:1499.98px){ body.bgDashWide:not(.bgDashColl) { grid-template-columns:240px minmax(0,1fr); } }
   .pill { display: inline-block; font-size: 10px; padding: 1px 6px; border: 1px solid var(--graphite); border-radius: 10px; color: var(--ink-soft); }
   /* substructure table */
   .subtbl input, .subtbl select { padding: 3px 5px; font-size: 12px; }
@@ -193,6 +239,11 @@
     <button class="tabbtn" role="tab" aria-selected="false" data-tab="project">Project</button>
   </div>
 </header>
+<aside id="bgDashCol" class="noprint" aria-label="Results summary"><!-- BGLS (2026-11-08): key results as a left column on screens 1200 px and wider -->
+  <div id="bgDashHead"><button type="button" id="bgDashTgl" aria-controls="bgDash" aria-expanded="true">&laquo;</button><h2 id="bgDashTtl">Results summary</h2><span id="bgDashCnt"></span></div>
+  <div id="bgDashSub"></div>
+  <div id="bgDash"></div>
+</aside>
 
 <main>
   <div id="geom_err" style="display:none; border:2px solid var(--oxide); background:#fbeee9; color:var(--ink); padding:8px 12px; margin:0 0 14px; font-size:13px;"></div>
@@ -741,6 +792,86 @@ const DEG = Math.PI/180;
 function bgNL(lead,items,o){ o=o||{}; const L=o.ol?'ol':'ul';
   const li=(items||[]).filter(Boolean).map(x=>'<li>'+(Array.isArray(x)?'<b class="bgNLk">'+x[0]+'</b> '+x[1]:x)+'</li>').join('');
   return (o.act||[]).filter(Boolean).map(a=>'<div class="bgNLa">'+a+'</div>').join('')+(lead?'<div class="bgNLl">'+lead+'</div>':'')+(li?'<'+L+' class="bgNLu">'+li+'</'+L+'>':''); }
+/* BGLS (2026-11-08, engineer: the left summary panel, as Retaining Wall / Spread Footing / Light Pole / Shear and Moment Diagrams):
+   on screens >= 1200 px the key results show as one chip each in #bgDashCol: geometry errors / warnings, the span lengths (read from
+   the Bridge-tab span table), the lowest / highest beam seat (seatData(), as the Beam Seat table), the midspan haunch check (the
+   counts of buildSeatWork's table) and the last elevation / coordinate Check. A chip click opens the tab and scrolls to the table
+   that works the value. No new calculation. Collapse state: per-browser UI key bridgeGeomEngine.dashCollapsed.v1 ('1' = collapsed);
+   not in the project, the autosave or the export. Below 1200 px nothing changes. */
+const BGLS={ key:'bridgeGeomEngine.dashCollapsed.v1', mq:(window.matchMedia?window.matchMedia('screen and (min-width:1200px)'):null), open:new Map(), coll:false, wide:null, haunch:null, val:null, hval:null };
+try{ BGLS.coll=localStorage.getItem(BGLS.key)==='1'; }catch(e){}
+function bgDashItems(){
+  const it=[], P=(n,v,o)=>it.push(Object.assign({n,v,st:'na'},o||{})), esc=t=>String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  const li=id=>{ const d=document.getElementById(id); return d&&d.style.display!=='none'?[...d.querySelectorAll('li')].map(x=>x.textContent):[]; };
+  const ge=li('geom_err'), gw=li('geom_warn');
+  if(ge.length) P('Geometry input error',ge.length+'',{st:'fail',s:'STOP',hd:'Model',tab:'align',el:'geom_err',d:'Computation stopped; the results below are the last valid geometry.<br>'+ge.map(esc).join('<br>'),to:'Geometry input error (top of every tab)'});
+  if(gw.length) P('Geometry warnings',gw.length+'',{st:'warn',s:'',hd:'Model',tab:'align',el:'geom_warn',d:gw.map(esc).join('<br>'),to:'Geometry warnings (top of every tab)'});
+  const aw=['elem_warn','vprof_warn'].map(id=>{ const d=document.getElementById(id); return d&&d.textContent.trim()?id:null; }).filter(Boolean);
+  aw.forEach(id=>P(id==='elem_warn'?'Alignment table warning':'Profile table warning','',{st:'warn',s:'check',hd:'Model',tab:'align',el:id,d:esc(document.getElementById(id).textContent),to:'Alignment · '+(id==='elem_warn'?'Horizontal Alignment':'Vertical Profile')}));
+  if(!ENG) return it;
+  const su=sortedUnits();
+  [...document.querySelectorAll('#span_wrap tbody tr')].forEach(tr=>{ const c=[...tr.cells].map(x=>x.textContent);
+    const ref=c[4]&&c[4]!=='—'; P('Span '+c[0]+' <span style="font-weight:400">('+esc(c[1])+' → '+esc(c[2])+')</span>',esc(ref?c[4]:c[3])+' ft',{hd:'Spans',tab:'bridge',el:'span_wrap',
+      d:'Along the construction reference line: '+esc(c[4])+' ft; PGL stations: '+esc(c[3])+' ft; girder bearing to bearing: '+esc(c[5])+' ft.',to:'Bridge · Spans table'}); });
+  if(su.length>=2){ let lo=null, hi=null;
+    seatData().forEach(r=>r.seats.forEach((q,k)=>{ if(!q) return; if(!lo||q.seatZ<lo.z) lo={z:q.seatZ,l:r.label,g:k+1}; if(!hi||q.seatZ>hi.z) hi={z:q.seatZ,l:r.label,g:k+1}; }));
+    if(lo){ P('Lowest beam seat',lo.z.toFixed(outDec())+' ft',{hd:'Beam seats',tab:'seat',el:'seat_tbl_wrap',d:esc(lo.l)+', G'+lo.g,to:'Beam Seat Output · Beam Seat Elevations'});
+      P('Highest beam seat',hi.z.toFixed(outDec())+' ft',{hd:'Beam seats',tab:'seat',el:'seat_tbl_wrap',d:esc(hi.l)+', G'+hi.g,to:'Beam Seat Output · Beam Seat Elevations'}); } }
+  const H=BGLS.haunch;
+  if(H&&H.n){ const m=H.min; P('Midspan haunch',(H.n-H.low)+' / '+H.n,{st:H.low?'fail':'pass',s:H.low?'LOW':'OK',hd:'Checks',tab:'seat',el:'seat_work_h',
+    d:(H.low?H.low+' girder(s) below the minimum haunch at midspan. ':'')+'Lowest haunch at the flange edge: '+(m.hE*12).toFixed(2)+' in (span '+m.span+', G'+m.g+'); h<sub>min</sub> = '+(m.hmin*12).toFixed(2)+' in.',to:'Beam Seat Output · Seat working · midspan haunch check'}); }
+  const V=(o,nm,tab,el,to)=>{ if(!o) { P(nm,'not run',{hd:'Checks',s:'',tab,el,d:'Press Check to compare.',to}); return; }
+    const stale=o.eng!==ENG; P(nm,o.pass+' / '+o.n,{st:stale?'warn':(o.n&&o.pass===o.n?'pass':'fail'),s:stale?'re-run':(o.n&&o.pass===o.n?'OK':'OUT'),hd:'Checks',tab,el,
+      d:'Within ±'+o.tol+' ft'+(stale?'; the geometry changed since the last Check: press Check again.':'.'),to}); };
+  if(VALPTS.length||BGLS.val) V(BGLS.val,'Elevation check','output','val_wrap','Top of Deck Output · Validation · known points');
+  if(HVALPTS.length||BGLS.hval) V(BGLS.hval,'Coordinate check','output','hval_wrap','Top of Deck Output · Validation · horizontal');
+  return it;
+}
+function bgDashGo(it){
+  const b=document.querySelector('.tabbtn[data-tab="'+it.tab+'"]'); if(b&&b.getAttribute('aria-selected')!=='true') b.click();
+  const e=document.getElementById(it.el); if(!e) return; const t=(e.offsetParent===null&&e.closest('details'))?e.closest('details'):e;
+  if(t.tagName==='DETAILS') t.open=true;
+  requestAnimationFrame(()=>{ t.scrollIntoView({block:'start',behavior:'smooth'}); t.classList.add('bgFlash'); setTimeout(()=>t.classList.remove('bgFlash'),1600); });
+}
+function bgDashRender(){
+  const box=document.getElementById('bgDash'), cnt=document.getElementById('bgDashCnt'), sub=document.getElementById('bgDashSub'); if(!box) return;
+  box.innerHTML=''; const items=bgDashItems(), n={pass:0,fail:0,warn:0}, ST={pass:'OK',fail:'NG',warn:'',na:''};
+  const plain=h=>{ const t=document.createElement('div'); t.innerHTML=h||''; return t.textContent; };
+  sub.textContent=(typeof CURRENT_NAME!=='undefined'&&CURRENT_NAME?CURRENT_NAME+' · ':'')+sortedUnits().length+' supports · elevations in ft';
+  if(!items.length){ box.innerHTML='<div class="bgDMsg">Define at least two substructure units.</div>'; cnt.innerHTML=''; return; }
+  let hd=null;
+  items.forEach(it=>{
+    if(n[it.st]!=null) n[it.st]++;
+    if(it.hd!==hd){ hd=it.hd; const h=document.createElement('div'); h.className='bgDHd'; h.textContent=hd; box.appendChild(h); }
+    const c=document.createElement('div'); c.className='bgCh '+it.st; c.tabIndex=0; c.setAttribute('role','button');
+    const key=plain(it.n);
+    c.innerHTML='<button type="button" class="bgChX" title="Show the details and where the value is worked"'+(it.d?'':' disabled')+'></button><span class="bgChN">'+it.n+'</span><span class="bgChR">'+it.v+'</span><span class="bgChS">'+(it.s!=null?it.s:ST[it.st])+'</span>'
+      +(it.d?'<div class="bgChV">'+it.d+'</div>':'')+'<div class="bgChRef">→ '+it.to+'</div>';
+    c.title=key+': '+plain(it.v)+(it.d?'\n'+plain(String(it.d).replace(/<br>/g,'\n')):'')+'\nClick: → '+it.to;
+    const x=c.querySelector('.bgChX');
+    const setOpen=o=>{ c.classList.toggle('bgOpen',o); x.setAttribute('aria-expanded',o?'true':'false'); x.textContent=o?'▾':'▸'; };
+    setOpen(BGLS.open.has(key)?BGLS.open.get(key):(it.st==='fail'||it.st==='warn'));   /* NG and warning chips open by default, as in the other tools */
+    x.addEventListener('click',ev=>{ ev.preventDefault(); ev.stopPropagation(); const o=!c.classList.contains('bgOpen'); BGLS.open.set(key,o); setOpen(o); });
+    c.addEventListener('click',()=>bgDashGo(it)); c.addEventListener('keydown',ev=>{ if(ev.target!==c) return; if(ev.key==='Enter'||ev.key===' '){ ev.preventDefault(); bgDashGo(it); } });
+    box.appendChild(c);
+  });
+  cnt.innerHTML=(n.fail?'<span class="bgCf">'+n.fail+' NG</span>':'')+(n.warn?'<span class="bgCw">'+n.warn+' warn</span>':'')+(n.pass&&!n.fail?'<span class="bgCp">no NG</span>':'');
+}
+function bgDashPlace(){
+  const wide=!!(BGLS.mq&&BGLS.mq.matches), ch=BGLS.wide!==null&&BGLS.wide!==wide; BGLS.wide=wide;
+  document.body.classList.toggle('bgDashWide',wide); bgDashColl(BGLS.coll,false,ch);
+}
+function bgDashColl(v,save,redraw){
+  BGLS.coll=!!v; document.body.classList.toggle('bgDashColl',BGLS.coll);
+  const t=document.getElementById('bgDashTgl');
+  if(t){ t.setAttribute('aria-expanded',BGLS.coll?'false':'true'); t.innerHTML=BGLS.coll?'&raquo;':'&laquo;'; t.title=BGLS.coll?'Show the results summary column (remembered in this browser)':'Shrink the results summary column (remembered in this browser)'; }
+  if(save){ try{ localStorage.setItem(BGLS.key,BGLS.coll?'1':'0'); }catch(e){} }
+  if(save||redraw) requestAnimationFrame(()=>window.dispatchEvent(new Event('resize')));   /* the plots changed width */
+}
+(function(){ const t=document.getElementById('bgDashTgl'); if(t) t.addEventListener('click',()=>bgDashColl(!BGLS.coll,true));
+  if(BGLS.mq){ if(BGLS.mq.addEventListener) BGLS.mq.addEventListener('change',bgDashPlace); else if(BGLS.mq.addListener) BGLS.mq.addListener(bgDashPlace); }
+  bgDashPlace(); })();   /* placed before the first compute, so the plots are drawn at the main column's width */
+document.addEventListener('DOMContentLoaded',bgDashRender);
 /* BGNL: a list of plain-text warnings into a box: one warning as its text, two or more as a list (each text unchanged) */
 function bgNLWarn(box,list){ list=list||[]; if(list.length<2){ box.textContent=list.join(''); return; }
   box.innerHTML='<ul class="bgNLu">'+list.map(t=>'<li>'+String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))+'</li>').join('')+'</ul>'; }
@@ -1591,7 +1722,7 @@ function showGeomWarnings(ws){
 }
 function compute(){
   const gErr=geometryInputErrors(); showGeomErrors(gErr);
-  if(gErr.length){ if(_autosaveArmed) autosave(); return; }
+  if(gErr.length){ bgDashRender(); if(_autosaveArmed) autosave(); return; }
   ENG=buildEngine();
   showGeomWarnings(geometryWarnings());
   buildElemReport();   // BGX7 (report only)
@@ -1604,6 +1735,7 @@ function compute(){
   if(typeof bgdwRefresh==='function') bgdwRefresh();   // BGDW: the Drawings tab, when it is open
   document.getElementById('plan_len').textContent='L = '+(ENG.align.staEnd-ENG.align.staStart).toFixed(1)+' ft';
   if(typeof PICKPTS!=='undefined' && PICKPTS.length) recomputePickPoints();
+  bgDashRender();   /* BGLS: the summary column */
   if(_autosaveArmed) autosave();
 }
 
@@ -3003,7 +3135,7 @@ function buildGirderTenths(){
   box.innerHTML=h;
 }
 function buildSeatWork(){
-  const box=document.getElementById('seat_work_wrap'); if(!box) return;
+  const box=document.getElementById('seat_work_wrap'); if(!box) return; BGLS.haunch=null;   /* BGLS: set again below */
   const su=sortedUnits(); if(su.length<2||!ENG||!ENG.chord||!ENG.girderSag){ box.innerHTML='<p class="note">Define at least two substructure units.</p>'; return; }
   const ST=ENG.seatTerms(), F=v=>v.toFixed(3), IN=v=>(v*12).toFixed(2);
   const esc=t=>String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
@@ -3020,16 +3152,17 @@ function buildSeatWork(){
   h+='</tbody></table></details>';
   // midspan haunch check: girder straight between its two seats, rising by the net camber at midspan
   h+='<table class="wide" style="margin-top:10px"><thead><tr><th class="lbl">Span</th><th class="lbl">Girder</th><th title="Distance between the girder\'s two bearing points (along the girder).">L<sub>brg</sub> (ft)</th><th title="Top of deck at the girder at the start / end bearing and at midspan between them.">TD<sub>A</sub> / TD<sub>B</sub> / TD<sub>mid</sub></th><th title="(TD_A + TD_B)/2 − TD_mid. Positive = sag (deck below the chord at midspan); negative = crest.">m (in)</th><th title="Top of girder at midspan = (TOG_A + TOG_B)/2 + net camber, TOG = seat + bearing + beam depth.">TOG<sub>mid</sub></th><th title="Haunch at the girder centerline at midspan = TD_mid − t_s − TOG_mid.">haunch CL (in)</th><th title="Fall of the deck across the top flange at midspan.">Δ<sub>cs</sub> (in)</th><th title="Haunch at the low flange edge = haunch CL − Δ_cs.">haunch edge (in)</th><th>h<sub>min</sub> (in)</th><th class="lbl">check</th></tr></thead><tbody>';
-  let low=0;
+  let low=0; const hk={n:0,low:0,min:null};   /* BGLS: the check's counts and lowest edge haunch, kept for the summary column (display only) */
   for(let k=1;k<=su.length-1;k++){ const sb=ENG.spanBrgs(k); girdersForSpan(k).forEach((o,bi)=>{
     const r=ENG.girderSag(k,bi); if(!r) return;
     const sA=ENG.beamSeatAtSupport(sb.A,o,{bi,span:k}).z, sB=ENG.beamSeatAtSupport(sb.B,o,{bi,span:k}).z;
     const tog=v=>v+resolveDepth('bearing',bi,k)+resolveDepth('beam',bi,k), c=resolveDepth('camber',bi,k);
     const togM=(tog(sA)+tog(sB))/2+c, hCL=r.zM-ENG.depths.slab-togM, dcs=ENG.crossDrop(r.tM,r.w), hE=hCL-dcs, hmin=ENG.depths.minHaunch, ok=hE>=hmin-0.0005;
     if(!ok) low++;
+    hk.n++; if(hk.min===null||hE<hk.min.hE) hk.min={hE,hmin,span:k,g:bi+1};
     h+=`<tr><td class="lbl">${k}</td><td class="lbl">G${bi+1}</td><td>${r.len.toFixed(2)}</td><td>${F(r.zA)} / ${F(r.zB)} / ${F(r.zM)}</td><td>${IN(r.m)}</td><td>${F(togM)}</td><td>${IN(hCL)}</td><td>${IN(dcs)}</td><td>${IN(hE)}</td><td>${IN(hmin)}</td>`+
        `<td class="lbl" style="color:${ok?'var(--good)':'var(--oxide)'}">${ok?'OK':'LOW by '+IN(hmin-hE)+' in'}</td></tr>`; }); }
-  h+='</tbody></table>';
+  h+='</tbody></table>'; hk.low=low; BGLS.haunch=hk;
   h+=`<div class="note bgNL" style="margin:6px 0 0;">`+bgNL(low?'':'Every girder keeps at least the minimum haunch at midspan (at the low flange edge when b<sub>f</sub> is given).',[   /* BGNL: the action line first (warning colour), then the method and the owner practice as a list */
      ['Method:','the girder is taken straight between its two seats and rising by the net camber at midspan; the minimum haunch is checked at the low edge of the top flange.'],
      '<b class="bgNLk">Owner practice (paraphrased):</b><ul class="bgNLu">'+
@@ -3332,6 +3465,7 @@ function runValidation(){
   });
   h+=`</tbody></table><p class="note">${pass}/${n} within &plusmn;${tol} ft. Overlay thickness in use: ${(ENG.depths.hma*12).toFixed(2)} in &mdash; top of pavement is top of deck plus this.</p>`;
   document.getElementById('val_wrap').innerHTML=h;
+  BGLS.val={pass,n,tol,eng:ENG}; bgDashRender();   /* BGLS: the last Check, for the summary column */
 }
 
 // Horizontal validation: {label, n, e, expStaStr, expOff, datum}
@@ -3427,6 +3561,7 @@ function runHValidation(){
   });
   h+=`</tbody></table><p class="note">${pass}/${n} within &plusmn;${tol} ft in both station and offset.</p>`;
   document.getElementById('hval_wrap').innerHTML=h;
+  BGLS.hval={pass,n,tol,eng:ENG}; bgDashRender();   /* BGLS */
 }
 
 /* ===== ALIGNMENT / PVI / GIRDER TABLE UI ===== */
