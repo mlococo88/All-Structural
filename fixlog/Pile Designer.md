@@ -20239,7 +20239,7 @@ Cross-tool PR with the Retaining Wall Designer (Phase 8f, HANDOFF.md §4.6 / §4
 - **How verified:** as PDNL-1 (same 8 projects, origin/main vs the branch): `computeAll` identical; digit sequence of every output tab, every input tab and the whole page text identical; no content word lost; 390 px no sideways scroll; 0 console errors. Tests: see the PR.
 - **Other copies:** none.
 
-## 2026-11-08 — PR: nl-pile-3 (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (PDNL-3: long notes as a bold lead and a list — the Report (the hidden PrintReport notes that the Report prints as "Notes as printed") and the elevation figure note; display only, no result change)
+## 2026-11-08 — PR: nl-pile-3 (PR #1200: https://github.com/mlococo88/All-Structural/pull/1200) (PDNL-3: long notes as a bold lead and a list — the Report (the hidden PrintReport notes that the Report prints as "Notes as printed") and the elevation figure note; display only, no result change)
 
 ### PDNL-3. Long Report notes split into a lead line and a list (part 3)   [display only] [no result change]
 - **Request:** as PDNL-1 (#1181) / PDNL-2 (#1189); same helpers (`pdNL`, `NarrNL`), CSS and rule. The Report's own notes (`pdrModel` `note(...)`) are all short; every long note of the Report comes from the hidden PrintReport through `pdrRest` ("Notes as printed"). `pdrRest` (PDNL-1) keeps or skips a `.pdNL` note as one note, as its paragraph was, and prints its lead, action lines and items as separate Report lines ("• " for an item; an action line as a warning note).
