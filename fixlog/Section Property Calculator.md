@@ -3533,3 +3533,66 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
 - Default project, origin/main vs this branch, headless: the Report's rendered text (`.rp-doc` textContent) and the page text are identical.
 ### How verified
 - `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`; the headless comparison listed in the PR.
+
+## 2026-11-08 — PR: nl-spc-a (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — SPNL-1: long Method-tab notes as a bold lead and a list (display only, no result change)
+
+### SPNL-1. Method tab: long items split into a lead line and a list   [display only] [no result change]
+- **Request (engineer, 2026-11-07/08):** "There are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Approved for all tools. Part 1 of 2 for this tool: the Method tab (and so the Report's "As printed: Method and assumptions" section, which is built from it). The other tabs, the input panel and the Report's own notes follow in SPNL-2.
+- **Rule used:** a note is long if it is over ~300 characters, has 3 or more sentences, or carries several facts in one paragraph. It becomes a one-line bold lead, then a list with bold lead words. Every sentence, number, citation and link is kept, in the same order; only lead words, list-start capitals and end punctuation are new. New lead words carry no digits, so the digit sequence of the page is unchanged.
+- **New helper** (after `function el(`), anchor `/* SPNL (2026-11-08, engineer`:
+  ```js
+  function spNL(lead, items, o) {
+    o = o || {}; const L = o.ol ? 'ol' : 'ul';
+    const li = (items || []).filter(Boolean).map(x => '<li>' + (Array.isArray(x) ? '<b class="spNLk">' + x[0] + '</b>' + (x[1] ? ' ' + x[1] : '') + (x[2] ? spNL('', x[2]) : '') : x) + '</li>').join('');
+    return (o.act || []).filter(Boolean).map(a => '<div class="warnBox spNLa">' + a + '</div>').join('') + (lead ? '<div class="spNLl">' + lead + '</div>' : '') + (li ? '<' + L + ' class="spNLu">' + li + '</' + L + '>' : '');
+  }
+  ```
+  An item is `'text'`, `[lead words, text]` or `[lead words, text, sub-items]` (one nested list, used once: Closed loop (2)). The element that holds the note gets the class `spNL`.
+- **CSS** (after `.manList{…}`), tool-scoped, no new colours, print keeps a list item on one page:
+  ```css
+  .spNL .spNLl{font-weight:600;margin:0 0 1px}
+  .spNL .spNLu{margin:2px 0 3px;padding-left:18px}
+  .spNL .spNLu>li{margin:1px 0}
+  .spNL .spNLa{margin:2px 0 4px}
+  @media print{.spNL .spNLu>li{break-inside:avoid}}
+  ```
+- **Report** (`spxWalk`, after `if (e.matches('.kp')) { kp(e); return; }`), anchor `if (e.matches('.spNL')) {`: an `.spNL` element is kept or skipped as one note (`T.fresh` on its text without the bold lead words, `T.newNum` on the whole text, as for any note), then printed as one Report line per part: the action line (warning style), the lead, then each item. Prefixes: a note that is a Method-tab bullet prints "• lead", "◦ item", "– sub-item"; any other note prints "lead", "• item", "◦ sub-item". A numbered list (MASSPROP steps) prints with bullets in the Report (no new digits). Without this branch the lead and the items would be lost (the walker only prints leaf text blocks).
+- **buildManual:** `P(x)` and `UL([...])` take `NL(lead, items, o)` = `{ nl: spNL(lead, items, o) }` as well as a string (`<li class="spNL">` / `<div class="manP spNL">`). Items changed (anchor = the old opening text → new lead → item lead words):
+  1. Scope "Section properties of built-up sections" → Phase 1 / Not included.
+  2. "Move: drag a selected part." → Snapping / Arrow keys / Exact positions / With "Prevent overlap" on.
+  3. "Right-click a part:" → lead "Right-click a part (or the background):" → Flip, rotate, mirror / Align / Edit / Right-click the background.
+  4. "Flip and rotate act about the part centroid" → lead "Flip and rotate act about one point:" → One part / Several parts / Flip horizontal / With "Prevent overlap" on / If the part then overlaps another / Holes.
+  5. "Rolled shapes (AISC Shapes Database v16.0)" → W/M/S/HP / C/MC / L / WT/MT/ST / Rectangular HSS / Round HSS/pipe / Fillets and toe radii.
+  6. "S, C, MC and ST shapes (sloped inner flange faces)" → lead "… the outline is fitted to the tabulated values." → Database / Outline / Fit / MC shapes with flatter flanges / Independent checks / Reference point / Torsion.
+  7. "AISC tabulated option (per part)" → Used / Recommended / Plate model always / One rolled shape alone.
+  8. "Data sources:" → action line first ("verify against the printed Manual before relying on a tabulated value.") → W, M, S, HP, C, MC, HSS and Pipe / L, WT, MT, ST and 2L / Cross-checks.
+  9. Plastic "The plastic neutral axis divides" → Found / Z / Computed / PNA in a gap.
+  10. Torsion "Model:" → Rolled shapes / Tubes.
+  11. Torsion "Connections:" → At an angle / Face contact / On a tube wall / Other contacts.
+  12. "J, closed cells:" → Loops inside solid material / One cell / Several cells / Open branches.
+  13. "Shear centre and Cw" → Shear centre / Warping constant / Not computed.
+  14. "Not modelled in torsion:" → Modulus ratios n / Geometric.
+  15. Q "Q = first moment" → Symmetric sections / With Ixy ≠ 0 / Shear stress.
+  16. "Connections = the contacts of the Torsion tab" → For each / Loads.
+  17. "Sign and formula." → Group of parts / Same as the Q cut / Reported.
+  18. "Closed loop" → lead "… the first of these that applies." → (1) Symmetry / (2) Thin-wall closed-section shear flow (sub-items Flow / Load correction / Result) / (3) Otherwise n/a.
+  19. "Connector check (optional, per contact):" → Fasteners / Fillet welds / Not checked.
+  20. "Weight per length" → Density per part / Modulus ratio n / Holes / AISC tabulated.
+  21. "Coating (paint) area" → lead "… area per length = perimeter × length." → Exposed perimeter / Outside perimeter / Geometry.
+  22. "r̄o, H (AISC 360-16 Eq. E4-9, E4-8" → lead "Buckling parameters:" → r̄o, H / rts / ho.
+  23. "Wagner coefficient βx" → Computed with / Sign / Use.
+  24. "Kern:" → lead "Kern, Mohr's circle and the central ellipse of inertia:" → Kern / Mohr's circle / Central ellipse of inertia / Overlays.
+  25. "Stresses tab:" → Stress / Transformed sections / Shown / No design check.
+  26. MASSPROP "Export DXF (Project tab)" → Polygons / Circles / Precision and units.
+  27. "Layers:" → one item per layer.
+  28. "Coordinate basis" → Section centroid at 0,0 (default) / Or the tool's own origin / Axes.
+  29. "Steps:" → a numbered list of the five AutoCAD steps.
+  30. "Differences to expect:" → Unweighted / Rolled shapes / Overlapping parts / Not in MASSPROP.
+  31. Saved data "Files:" → lead "Files: Export JSON and Import JSON." → Export JSON / Import JSON / Optional fields (Phase 2a …) / Phase 2b.
+  32. Limitations "Thin-wall torsion is approximate" → Stocky elements / Thick flanges.
+- **Not changed:** items under ~300 characters with one or two sentences (Select, View, Keys, Each part, Modulus ratio n, Elastic properties, J open parts, Pieces not connected, Open, This browser, Shared project info, the two short Limitations).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none.
+- **Check case:** Method tab, "Closed loop": before one 1,166-character paragraph; after the lead "Closed loop (the parts stay connected through other parts; statically indeterminate): the first of these that applies." and three items, (2) with three sub-items; "½|Φ|", "4-plate box", "q(s) = q0 − ∫t·∂σ/∂z ds", "∮q/t ds = 0" unchanged. Report §9 "As printed: Method and assumptions": "• Closed loop …", "◦ (1) Symmetry: …", "◦ (2) …", "– Flow: …", "– Load correction: …", "– Result: …", "◦ (3) …".
+- **How verified:** headless Chromium, origin/main vs the branch, 9 cases (default; plate girder with weld and bolt connector checks, stresses and Vy; 4-plate box with ASD Vx, Vy; W14X90 with cover plates and n = 2; double angle; laced 2C; S12X35 tabulated + C10X20 with n = 3; W14X730; two overlapping plates), every Report Include box on: results (`SPCUI.res`) identical; every output tab, every input tab, the strip and the Report text (`SharedReport.text`) have identical digit sequences; only the Method tab and the Report text changed. Validation 136/136. 0 console errors. Screenshots at 1440 and 390 px. Tests: see the PR.
+- **Observation (not changed, §4/§9):** item 22 still says "equation numbers to be verified against the printed Specification" for E4-9 / E4-8, although SPL6 (#1110) records them as checked against the printed Specification. Left as is; for the engineer to decide.
+- **Other copies:** none.
