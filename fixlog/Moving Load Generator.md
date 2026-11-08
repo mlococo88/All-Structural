@@ -1697,4 +1697,34 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   - 0 console errors.
 
   (The Report must be read with `textContent`: `shared/report.js` uses `content-visibility`, so `innerText` leaves out off-screen sections.) Tests: `check-syntax`; `phone-layout --tool mlg`; `project-library --tool mlg`; `engine/run.mjs moving-load`. All pass.
+
+## 2026-11-08 — PR: claude/ml-left-summary (PR #1228: https://github.com/mlococo88/All-Structural/pull/1228) (MLLS: key results and deflection ratios as a left summary column from 1200 px; display only, no result change)
+
+### MLLS. Results summary column on the left at 1200 px and wider   [display only]
+- **Request (engineer, 2026-11-07/08):** add the left summary panel of Retaining Wall, Spread Footing, Light Pole and Shear and Moment Diagrams (RWLB #984, SFLB #988, LPLB #991, SMLS #1130). This tool has no D/C checks, so the panel shows the key results and the deflection ratios.
+- **What changed (screen only):**
+  - From **1200 px** a new first column `#mlgDashCol` of the `.body` grid: 240 px up to 1499 px, 280 px from 1500 px. It is a `div`, because `document.querySelector('aside')` is the input panel.
+  - Chips:
+    - "Key results (factored per girder)": Max +M, Max −M, Max +V, Max −V, Max reaction. Each is the text of its metric card (`#mMp #mMn #mVp #mVn #mR`), with a unit; the reaction detail is `#mRw`.
+    - "Live load deflection": one chip per row of `#dB`, showing the Ratio cell without its mark and the status from the ✓ / ✗ (OK / NG). The detail is the δ, x and allowable cells and `#dNote`.
+  - Head: « button, title, "n NG" / "no NG" badge, and "Vehicle: <preset label>".
+  - Clicking a chip calls `mlrGoto(cardElementId)`: `cM`, `cV`, `rB` or `deflCard`.
+  - While the column is open, `main>.mets` and `#mlgWk` are hidden.
+  - « collapses the column to 42 px and the metric cards come back. The state is in the localStorage UI key **`movingLoadGen.dashCollapsed.v1`** ('1' / '0'), written only on a click.
+  - **Below 1200 px nothing changes.** The column is hidden in print.
+- **Where (`Moving Load Generator.html`):**
+  - CSS: after `@media print{.bx-alltools{display:none!important}}`, block `/* MLLS (2026-11-08, engineer: a left summary panel …` (rules `#mlgDashCol{display:none}`, `@media screen and (min-width:1200px){ body.mlgDashWide .body{grid-template-columns:280px 390px minmax(0,1fr)} …}` and the 1200–1499.98 px block with `240px`).
+  - HTML: after `<div class="body">`, the `<div id="mlgDashCol">` with `#mlgDashHead` (`#mlgDashTgl`, `#mlgDashTtl`, `#mlgDashCnt`), `#mlgDashSub` and `#mlgDash`.
+  - JS: before `window.__mlrForTest=`, the block `/* MLLS (2026-11-08 …` with `MLDD`, `mlgDashItems()`, `mlgDashRender()`, `mlgDashSoon()`, `mlgDashPlace()`, `mlgDashColl()` and a start-up IIFE. The IIFE sets a `MutationObserver` on `main>.mets`, `#dB` and `#dNote`, and a `change` listener on `#preset`.
+- **Formulas, factors, units, code references:** none changed. **Saved data:** none; the new key above is a per-tool UI key.
+- **Check case:** default project (2 × 100 ft, HL-93), 1440 px. Chips:
+  - Max +M 3932.2 kip-ft, Max −M -4049.2 kip-ft, Max +V 227.7 kips, Max −V -227.7 kips, Max reaction 365.4 kips;
+  - Span 1 and Span 2 δ / (L/N) 0.54 OK.
+
+  These equal the metric cards and the deflection table.
+- **How verified:** headless Chromium, origin/main vs the branch, the same 7 cases as MLNL-1:
+  - `RES` identical;
+  - the digit sequence of the page text (without `#mlgDashCol`), the Report and the print report identical.
+
+  Column width 240 / 280 / absent at 1440 / 1600 / 1100 and 390 px; no sideways scroll; 0 console errors. Tests: `check-syntax`, `phone-layout --tool mlg`, `project-library --tool mlg`, `engine/run.mjs moving-load`. All pass.
 - **Other copies:** none.

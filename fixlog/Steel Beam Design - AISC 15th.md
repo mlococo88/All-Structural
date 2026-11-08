@@ -3075,3 +3075,38 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
   - A live edit (span 40 ft) updates the column.
 - **Tests:** check-syntax; steel-beam-builtup 11/11; phone-layout sbeam; project-library steelbeam ALL PASS; list-input sbeam: only note text from SBNL-1 / SBNL-2 differs from its recorded baseline (plus the minor-axis flange case label 10 → 13 already reported since L2, #1065).
 - **Other copies:** none.
+
+## 2026-11-08 — PR: sbeam-tfa-hint (PR #1229: https://github.com/mlococo88/All-Structural/pull/1229) — TFAH: the Web Stiffeners hint and the Vₓ shear note follow the tension field action option (display only, no result change)
+
+### TFAH. "Tension field action (§G2.2) is not used" no longer shown when the option is on   [display only] [no result change]
+- **Problem:** since the TFA option (#1073, `design.stiff.tfa`, default off) the Web Stiffeners hint still said "Tension field action (§G2.2) is not used." whatever the option's state (open item recorded under SBNL-1). With the option on and applied, the Vₓ tab's G2.1 note also still said "Tension field action (§G2.2) is not used — conservative." just above the worked G2.2 block.
+- **Report:** checked headless in 7 states (below): the Report does not carry either text (its only TFA text is "Stiffener Proportioning (§G2.3, no tension field action)", which stays true: §G2.3 is on the §G2.1 basis). No Report change.
+- **Where 1:** `secStiffeners`, the hint under the option. Anchor `TFAH (2026-11-08): the hint follows the TFA option`.
+  - Before: `else body.appendChild(el('div','hint sbNL',sbNL('How the spacing is used:',[…,['Tension field action','(§G2.2) is not used.']])));`
+  - After: the same `sbNL(…)` call with `['Tension field action',tfaTxt]`, inside `else{ … }`, where
+    ```
+    const tq=AN&&AN.design?AN.design.tfa:null;
+    const tfaTxt=isMember()?'(§G2.2) is not used.':
+      !S.design.stiff.tfa?'(§G2.2) is not used — tick the option above to use §G2.2 for interior panels.':
+      (pk&&pk._kind!=='I')?'(§G2.2) is ticked but applies to I-shapes only, so it is not used for this section.':
+      (tq&&!tq.applies)?'(§G2.2) is ticked but not used: '+tq.note+'.':
+      '(§G2.2) is used for interior panels (the larger of §G2.1 and §G2.2); panels within <i>a</i> of a support or member end keep §G2.1.';
+    ```
+  - The option's checkbox already rebuilds the inputs after the recalculation (`chkInput` → `schedule(true)`), so the hint follows a tick at once.
+- **Where 2:** `buildVxTab`, "Major-Axis Shear Strength". Anchor `TFAH (2026-11-08): with the TFA option applied`.
+  - Before: `shearBlock(body,p,D.shearX,'Shear per '+D.shearX.route);`
+  - After:
+    ```
+    const shX=D.tfa&&D.tfa.applies?Object.assign({},D.shearX,{note:(D.shearX.note||'').replace('Tension field action (§G2.2) is not used — conservative.','Interior panels use tension field action (§G2.2, option on, below); end panels keep this strength.')}):D.shearX;
+    shearBlock(body,p,shX,'Shear per '+D.shearX.route);
+    ```
+  - Display copy only: `D.shearX` (and `AN`) are not changed. With the option off, or ticked but not applicable (a/h > 3), the note is as before.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none.
+- **Check case:** built-up welded I (24 × 12 × 1/2 flanges, 7/16 web, A572 Gr. 50), stiffeners a = 30 in.
+  - Option off: hint "Tension field action (§G2.2) is not used — tick the option above to use §G2.2 for interior panels."; Vₓ note unchanged.
+  - Option on: hint "… is used for interior panels (the larger of §G2.1 and §G2.2); panels within a of a support or member end keep §G2.1."; Vₓ note "G2.1(b). Cᵥ1 per Eq. G2-3 with kᵥ = 7.94. Interior panels use tension field action (§G2.2, option on, below); end panels keep this strength. …".
+  - Option on with a = 90 in: hint "… is ticked but not used: a/h = 3.91 > 3.0: §G2.2 does not apply."
+  - Member mode: hint "Tension field action (§G2.2) is not used." (as before; the option is not offered there).
+- **How verified:** headless Chromium, origin/main vs the branch, 7 states (default; rolled with stiffeners; built-up with stiffeners, option off; built-up option on; rolled option on; built-up option on with a/h > 3; member mode with the option set): `AN` identical (JSON compare); the digit sequence of every output tab and the Report identical in all 7 states (the only text differences are the hint and, with the option applied, the Vₓ note, whose digits are unchanged); the input panel differs only in the hint item; 0 KaTeX errors; 0 console errors. Tests: check-syntax; steel-beam-builtup 11/11; project-library steelbeam ALL PASS; phone-layout sbeam (390, 768) pass.
+- **Open item closed:** SBNL-1 "the Web Stiffeners hint keeps 'Tension field action (§G2.2) is not used.'".
+- **Other copies:** none.

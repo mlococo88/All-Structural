@@ -228,6 +228,12 @@
   .notes ul{margin:0;padding-left:18px}
   .notes li{margin:4px 0}
   .notes li.warn{color:var(--governs);font-weight:500}
+  /* LLNL (2026-11-08, engineer request): a long note as a bold lead line, then a list with bold lead words (llNL); display only */
+  .llNLl{font-weight:700;margin:0 0 1px}
+  ul.llNLu,ol.llNLu{margin:2px 0 3px;padding-left:18px}
+  .llNLu>li{margin:1px 0}
+  .llNLa{color:var(--governs);font-weight:600;font-style:normal;margin:2px 0 4px}
+  @media print{.llNLu>li{break-inside:avoid}}
   .disclaimer{margin-top:34px;padding-top:14px;border-top:1px solid var(--rule);font-size:10.5px;color:var(--muted);line-height:1.55}
   sub{font-size:.72em}
 
@@ -698,11 +704,15 @@ var st=document.createElement('style'); st.textContent=css;
       <div class="notes" id="notes"></div>
     </div>
 
-    <div class="disclaimer">
-      For preliminary design and educational use. Distribution factors are computed by the approximate method of AASHTO LRFD
-      Article 4.6.2.2. The empirical S-based equations use the average beam spacing; the rigid cross-section method uses the
-      actual (variable) beam positions. Results must be verified against the governing edition of the AASHTO LRFD Bridge Design
-      Specifications and confirmed by a licensed professional engineer of record.
+    <div class="disclaimer"><!-- LLNL (2026-11-08): a lead and a list (llNL markup) -->
+      <div class="llNLl">For preliminary design and educational use.</div>
+      <ul class="llNLu">
+        <li><b class="llNLk">Method:</b> distribution factors are computed by the approximate method of AASHTO LRFD Article 4.6.2.2.</li>
+        <li><b class="llNLk">Beam positions:</b> the empirical S-based equations use the average beam spacing; the rigid cross-section method uses the
+          actual (variable) beam positions.</li>
+        <li><b class="llNLk">Verification:</b> results must be verified against the governing edition of the AASHTO LRFD Bridge Design
+          Specifications and confirmed by a licensed professional engineer of record.</li>
+      </ul>
     </div>
   </div>
   </div>
@@ -1771,6 +1781,12 @@ const f1=x=>(+x).toFixed(1), f2=x=>(+x).toFixed(2), f3=x=>(+x).toFixed(3);
 const commas=n=>Number(n).toLocaleString("en-US");
 const tnum=n=>String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g,"{,}"); // thousands sep for LaTeX
 const V=(s,d,v,u)=>({s,d,v:String(v),u:u||""}); // variable definition: symbol, description, value, unit
+/* LLNL (2026-11-08, engineer request: no long run-on notes): a note as a bold lead line, then a list whose items start with bold
+   lead words. items: [leadWords, html] pairs or plain html; null items are skipped. o.act: action lines shown first (warning
+   colour); o.x: indexes of items shown on screen only (the Report leaves them out, class llNLx). Display only. */
+function llNL(lead,items,o){ o=o||{}; const L=o.ol?"ol":"ul", X=o.x||[];
+  const li=(items||[]).map((x,i)=>x?'<li'+(X.indexOf(i)>=0?' class="llNLx"':'')+'>'+(Array.isArray(x)?'<b class="llNLk">'+x[0]+'</b> '+x[1]:x)+'</li>':'').join("");
+  return (o.act||[]).filter(Boolean).map(a=>'<div class="llNLa">'+a+'</div>').join("")+(lead?'<div class="llNLl">'+lead+'</div>':"")+(li?'<'+L+' class="llNLu">'+li+'</'+L+'>':""); }
 
 /* The calculation engine (multiplePresence … memberDF, inputErrors, computeBridge) lives in shared/lldf.js (window.SharedLLDF,
    loaded above), moved there unchanged on 2026-10-29 (fixlog/lldf.md, fixlog/shared-lldf.md). The names stay global here, so the
@@ -1779,7 +1795,10 @@ const {multiplePresence,RANGES,BEAM_SLAB,BOX,BOXR,SPREADR,CELLR,FAMILY,designL,s
   girderU,skewFactors,boxDF,empiricalInterior,leverContribution,leverConfig,leverAll,leverMulti,rigidMethod,memberDF,inputErrors}=SharedLLDF;
 
 function bridgeWarnings(p,geo,Kg){
-  const w=[], warn=(m,l)=>w.push({msg:m,level:l||"warn"});
+  const w=[], warn=(m,l,nl)=>{ const o={msg:m,level:l||"warn"};
+    /* LLNL: nl = [lead, items, act], the same text as msg split for display (renderNotes, Report 7.1); msg is unchanged. Not
+       enumerable, so JSON (window.lldfLast, the lldf-hash harness) does not see it. */
+    if(nl) Object.defineProperty(o,"nl",{value:nl}); w.push(o); };
   if(BEAM_SLAB.has(p.type)){
     const chk=(key,val)=>{const r=RANGES[key]; if(val<r.min||val>r.max){const hi=r.max===Infinity?"∞":r.max;
       warn(`${r.name} (${r.label}=${commas(Math.round(val))} ${r.unit}) is outside the applicable range ${r.min}–${hi} ${r.unit}. Approximate equations may not apply.`);}};
@@ -1794,7 +1813,9 @@ function bridgeWarnings(p,geo,Kg){
     const chk=(key,val)=>{const r=BOXR[key]; if(val<r.min||val>r.max){
       warn(`${r.name} (${r.label}=${commas(Math.round(val))} ${r.unit}) is outside the applicable range ${r.min}–${commas(r.max)} ${r.unit}. Box-beam equations may not apply.`);}};
     chk("b",p.boxB);chk("L",p.L);chk("Nb",p.Nb);chk("J",p.boxJ);chk("I",p.boxI);
-    warn(`Type (${p.type}): adjacent precast box beams in multibeam decks (AASHTO Tables 4.6.2.2.2b-1 / 4.6.2.2.3a-1). ${p.type==="f"?"With composite structural deck.":"Integral (no structural deck)."} Interior factors depend on b, I, J, L, N_b (not spacing); exterior girders use e-factors (not the lever rule or rigid method).`,"info");
+    warn(`Type (${p.type}): adjacent precast box beams in multibeam decks (AASHTO Tables 4.6.2.2.2b-1 / 4.6.2.2.3a-1). ${p.type==="f"?"With composite structural deck.":"Integral (no structural deck)."} Interior factors depend on b, I, J, L, N_b (not spacing); exterior girders use e-factors (not the lever rule or rigid method).`,"info",
+      [`Type (${p.type}): adjacent precast box beams in multibeam decks`,[["Tables:","AASHTO Tables 4.6.2.2.2b-1 / 4.6.2.2.3a-1."],["Deck:",p.type==="f"?"with composite structural deck.":"integral (no structural deck)."],
+        ["Interior factors:","depend on b, I, J, L, N_b (not spacing)."],["Exterior girders:","use e-factors (not the lever rule or rigid method)."]]]);
     if(p.skew>0) warn(`Skew θ=${f0(p.skew)}° applied: moment ×(1.05−0.25 tanθ)≤1.0 and shear ×[1+(12L/90d)√tanθ] per Tables 4.6.2.2.2e-1 / 4.6.2.2.3c-1.`,"info");
     warn("Verify J (St. Venant torsional constant) and confirm the beams are adequately connected with shear keys to act as a unit.","info");
   } else if(p.type==="bc"){
@@ -1823,23 +1844,33 @@ function bridgeWarnings(p,geo,Kg){
     if(hi!=null) [["left",geo.deL],["right",geo.deR]].forEach(([nm,de])=>{
       const rng=lo==null?`d_e ≤ ${f1(hi)} ft`:`${f1(lo)} ≤ d_e ≤ ${f1(hi)} ft`;
       const head=`d_e = ${f2(de)} ft at the ${nm} exterior girder is outside the range ${rng} (Tables 4.6.2.2.2d-1 / 4.6.2.2.3b-1). `;
-      if(lo!=null&&de<lo-1e-9) warn(head+(clampLo?`d_e = ${f1(lo)} ft is used in the e-factors (clamped up; this raises e).`:`The e-factor equations are extrapolated.`));
-      else if(de>hi+1e-9) warn(head+(clampHi?`d_e = ${f1(hi)} ft is used in the e-factors (clamped DOWN; this LOWERS e and the exterior-girder DF, which is unconservative). Check the exterior girder by another method (e.g. lever rule / refined analysis).`:`The e-factor equations are extrapolated with the actual d_e (not limited to ${f1(hi)} ft, which would lower e); check the exterior girder by another method.`));
+      const nl=it=>[`d_e = ${f2(de)} ft at the ${nm} exterior girder is outside the range ${rng}`,[["Tables:","4.6.2.2.2d-1 / 4.6.2.2.3b-1."]].concat(it)];   // LLNL: msg split for display
+      if(lo!=null&&de<lo-1e-9) warn(head+(clampLo?`d_e = ${f1(lo)} ft is used in the e-factors (clamped up; this raises e).`:`The e-factor equations are extrapolated.`),undefined,
+        nl([["Used:",clampLo?`d_e = ${f1(lo)} ft is used in the e-factors (clamped up; this raises e).`:`the e-factor equations are extrapolated.`]]));
+      else if(de>hi+1e-9) warn(head+(clampHi?`d_e = ${f1(hi)} ft is used in the e-factors (clamped DOWN; this LOWERS e and the exterior-girder DF, which is unconservative). Check the exterior girder by another method (e.g. lever rule / refined analysis).`:`The e-factor equations are extrapolated with the actual d_e (not limited to ${f1(hi)} ft, which would lower e); check the exterior girder by another method.`),undefined,
+        nl(clampHi?[["Used:",`d_e = ${f1(hi)} ft is used in the e-factors (clamped DOWN; this LOWERS e and the exterior-girder DF, which is unconservative).`],["Action:","check the exterior girder by another method (e.g. lever rule / refined analysis)."]]
+          :[["Used:",`the e-factor equations are extrapolated with the actual d_e (not limited to ${f1(hi)} ft, which would lower e).`],["Action:","check the exterior girder by another method."]]));
     });
   }
   if(p.skewV!=null&&p.type!=="slab"&&Math.abs(p.skewV-p.skew)>1e-9)
-    warn(`Separate skews: θ = ${f1(p.skew)}° for the moment reduction (Table 4.6.2.2.2e-1) and θ_V = ${f1(p.skewV)}° for the shear correction (Table 4.6.2.2.3c-1). Where the support skews differ, use the smallest |θ| for moment (0 if adjacent supports differ by more than 10°, Art. 4.6.2.2.2e) and the largest |θ| for shear.`,"info");
+    warn(`Separate skews: θ = ${f1(p.skew)}° for the moment reduction (Table 4.6.2.2.2e-1) and θ_V = ${f1(p.skewV)}° for the shear correction (Table 4.6.2.2.3c-1). Where the support skews differ, use the smallest |θ| for moment (0 if adjacent supports differ by more than 10°, Art. 4.6.2.2.2e) and the largest |θ| for shear.`,"info",
+      ["Separate skews for moment and shear",[["Moment:",`θ = ${f1(p.skew)}° for the moment reduction (Table 4.6.2.2.2e-1).`],["Shear:",`θ_V = ${f1(p.skewV)}° for the shear correction (Table 4.6.2.2.3c-1).`],
+        ["Where the support skews differ:","use the smallest |θ| for moment (0 if adjacent supports differ by more than 10°, Art. 4.6.2.2.2e) and the largest |θ| for shear."]]]);
   if(BEAM_SLAB.has(p.type)&&p.beamShape!=="steel-i"){
     // n = E_B/E_D (Eq. 4.6.2.2.1-2). For a concrete girder, compare with E_c from the two f'c (Eq. 5.4.2.4-1).
     const nc=nFromFc(p.fcGirder,p.fcDeck);
     const locked=!!(window.BridgeLocks&&BridgeLocks.ok&&BridgeLocks.ok()&&(BridgeLocks.isLocked('geometry')||BridgeLocks.isLocked('psSection')));
     if(nc!=null&&!locked&&Math.abs(p.n-nc)>0.006)
-      warn(`Modular ratio n = ${f2(p.n)} differs from E_c,girder / E_c,deck = ${f2(nc)} computed from f′c = ${f1(p.fcGirder)} / ${f1(p.fcDeck)} ksi (Eq. 5.4.2.4-1, w_c per Table 3.5.1-1). K_g = n(I + A·e_g²) uses the n entered; check it.`);
+      warn(`Modular ratio n = ${f2(p.n)} differs from E_c,girder / E_c,deck = ${f2(nc)} computed from f′c = ${f1(p.fcGirder)} / ${f1(p.fcDeck)} ksi (Eq. 5.4.2.4-1, w_c per Table 3.5.1-1). K_g = n(I + A·e_g²) uses the n entered; check it.`,undefined,
+        [`Modular ratio n = ${f2(p.n)} differs from E_c,girder / E_c,deck = ${f2(nc)}`,[["Computed from:",`f′c = ${f1(p.fcGirder)} / ${f1(p.fcDeck)} ksi (Eq. 5.4.2.4-1, w_c per Table 3.5.1-1).`],["Entered n:","K_g = n(I + A·e_g²) uses the n entered; check it."]]]);
     else if(nc==null&&p.n<=1+1e-9)
-      warn(`Modular ratio n = ${f2(p.n)} for a concrete girder. When the girder f′c exceeds the deck f′c, n = E_B/E_D > 1 (Eq. 4.6.2.2.1-2), which raises K_g and the DFs. Enter the girder and deck f′c to compute n.`,"info");
+      warn(`Modular ratio n = ${f2(p.n)} for a concrete girder. When the girder f′c exceeds the deck f′c, n = E_B/E_D > 1 (Eq. 4.6.2.2.1-2), which raises K_g and the DFs. Enter the girder and deck f′c to compute n.`,"info",
+        [`Modular ratio n = ${f2(p.n)} for a concrete girder.`,[["Why it matters:","when the girder f′c exceeds the deck f′c, n = E_B/E_D > 1 (Eq. 4.6.2.2.1-2), which raises K_g and the DFs."]],["Input needed: enter the girder and deck f′c to compute n."]]);
   }
   if(Math.max(p.skew,p.skewV||0)>60 && p.type!=="slab")
-    warn(`Skew θ = ${f0(Math.max(p.skew,p.skewV||0))}° exceeds the 60° limit of Tables 4.6.2.2.2e-1 / 4.6.2.2.3c-1. θ = 60° is used for BOTH the moment reduction and the shear correction (capped). The table directs θ = 60° for the moment reduction; the shear correction is only defined up to 60°, so the obtuse-corner shear may be understated. Consider a refined analysis (4.6.3).`);
+    warn(`Skew θ = ${f0(Math.max(p.skew,p.skewV||0))}° exceeds the 60° limit of Tables 4.6.2.2.2e-1 / 4.6.2.2.3c-1. θ = 60° is used for BOTH the moment reduction and the shear correction (capped). The table directs θ = 60° for the moment reduction; the shear correction is only defined up to 60°, so the obtuse-corner shear may be understated. Consider a refined analysis (4.6.3).`,undefined,
+      [`Skew θ = ${f0(Math.max(p.skew,p.skewV||0))}° exceeds the 60° limit of Tables 4.6.2.2.2e-1 / 4.6.2.2.3c-1.`,[["Used:","θ = 60° is used for BOTH the moment reduction and the shear correction (capped)."],
+        ["Moment:","the table directs θ = 60° for the moment reduction."],["Shear:","the shear correction is only defined up to 60°, so the obtuse-corner shear may be understated."],["Action:","consider a refined analysis (4.6.3)."]]]);
   return w;
 }
 
@@ -2499,7 +2530,9 @@ function renderLever(p,geo,md,la){
     return `<tr class="${g}"><td>${c.N} truck${c.N>1?"s":""}${g?' <span class="ttag" style="color:var(--ok);border-color:var(--ok)">GOVERNS</span>':""}</td><td>${f3(c.R)}</td><td>${f2(c.m)}</td><td class="lvdf">${f3(c.df)}</td></tr>`;
   }).join("");
   $("leverConfigs").innerHTML=
-    `<p class="lvnote">Girder <b>${md.label}</b> (${md.type==="ext"?"exterior":"interior"}) — deck assumed hinged over each girder; the truck train is positioned to maximize this girder's reaction with wheel-line gaps between adjacent trucks as input below Figure 2 (${state.truckGaps.slice(0,Math.max(0,(gov?la.cfgs.length:1)-1)).map(g=>f1(Math.max(4,g))).join(" / ")||"—"} ft, minimum 4 ft per Art. 3.6.1.3.1). Only configurations that physically fit the ${f2(geo.roadway)}-ft roadway are shown. Governing lever value <b>${gov?f3(gov.df):"—"}</b> at ${gov?gov.N:0} truck(s).</p>
+    `<div class="lvnote llNL">${llNL(`Girder ${md.label} (${md.type==="ext"?"exterior":"interior"}): lever rule`,[["Deck:","assumed hinged over each girder."],
+      ["Truck train:",`positioned to maximize this girder's reaction with wheel-line gaps between adjacent trucks as input below Figure 2 (${state.truckGaps.slice(0,Math.max(0,(gov?la.cfgs.length:1)-1)).map(g=>f1(Math.max(4,g))).join(" / ")||"—"} ft, minimum 4 ft per Art. 3.6.1.3.1).`],
+      ["Shown:",`only configurations that physically fit the ${f2(geo.roadway)}-ft roadway.`],["Governing lever value:",`<b>${gov?f3(gov.df):"—"}</b> at ${gov?gov.N:0} truck(s).`]])}</div>
      <table class="tbl"><thead><tr><th>Configuration</th><th>Reaction R (lanes)</th><th>MPF m</th><th>Lever DF = m·R</th></tr></thead><tbody>${body||'<tr><td colspan="4">No configuration fits.</td></tr>'}</tbody></table>`;
 }
 
@@ -2552,7 +2585,7 @@ function renderNotes(warnings){
   const sec=$("notesSection");
   if(!warnings.length){sec.style.display="none";return;}
   sec.style.display="";
-  $("notes").innerHTML="<ul>"+warnings.map(w=>`<li class="${w.level==='warn'?'warn':''}">${w.msg}</li>`).join("")+"</ul>";
+  $("notes").innerHTML="<ul>"+warnings.map(w=>w.nl?`<li class="llNL${w.level==='warn'?' warn':''}">${llNL(w.nl[0],w.nl[1],{act:w.nl[2]})}</li>`:`<li class="${w.level==='warn'?'warn':''}">${w.msg}</li>`).join("")+"</ul>";   // LLNL: a long note as a lead and a list
 }
 
 /* -------------------- FIGURES -------------------- */
@@ -3991,7 +4024,7 @@ window.addEventListener('load',function(){
     distBuilt=true;
     const sec=document.createElement("div"); sec.className="section"; sec.id="mdDistSec";
     sec.innerHTML=`<h2><span><span class="num">3.6</span>MassDOT Load Distribution — Dead &amp; Pedestrian Loads</span><span class="ref">§3.5.3.3–.5</span></h2>
-      <div id="mdDistNote" style="font-size:12px;margin-bottom:10px;line-height:1.5"></div>
+      <div id="mdDistNote" class="llNL" style="font-size:12px;margin-bottom:10px;line-height:1.5"></div>
       <div class="igroup"><h3>Loads on the bridge <span style="font-size:11px;color:var(--muted);font-weight:400">— standard loads auto-fill from the inputs (override the line load, position, or distribution); add your own (temporary barrier, utility, etc.)</span></h3></div>
       <div style="overflow-x:auto"><table class="tbl" id="mdLoadsTable">
         <thead><tr><th style="width:150px">Description</th><th style="width:64px">Cat.</th><th>Position x₀ (ft)</th><th>Line load (klf)</th><th style="width:150px">Distribution</th><th style="width:34px"></th></tr></thead>
@@ -4002,7 +4035,7 @@ window.addEventListener('load',function(){
         <thead><tr><th>Beam</th><th>Class</th><th>Trib (ft)</th><th>DC1</th><th>DC2</th><th>DW</th><th>PL</th><th>Total (klf)</th></tr></thead>
         <tbody id="mdDistBody"></tbody></table></div>
       <div class="wkLink">Worked in: <a class="wkA" href="#" data-scope="dl" data-m="Per-beam dead" data-txt="per-beam DC1 / DC2 / DW / PL and totals">per-beam DC1 / DC2 / DW / PL and totals</a> · <a class="wkA" href="#" data-scope="dl" data-m="DC1 — deck slab" data-txt="deck slab DC1">deck slab DC1</a> · <a class="wkA" href="#" data-scope="dl" data-m="All loads distributed" data-txt="each load">each load</a><span class="wkTail"> → 4D Dead Load Distribution — Detailed Calculations</span></div>
-      <div id="mdDistAssume" style="font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.5"></div>`;
+      <div id="mdDistAssume" class="llNL" style="font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.5"></div>`;
     geomSec.parentNode.insertBefore(sec, geomSec.nextSibling);
     $("mdAddLoad").addEventListener("click",()=>{ const p=readInputs(), geo=computeBridge(p).geo, Wd=geo.Wdeck;
       state.userLoads.push({id:loadUid(),desc:"Added load",cat:"DC2",x:+(Wd/2).toFixed(2),plf:0.100,dist:"pilecap"});
@@ -4066,9 +4099,12 @@ window.addEventListener('load',function(){
   function renderDist(p,geo){
     buildDistSec(); const body=$("mdDistBody"); if(!body) return;
     const D=distribute(p,geo), rows=D.rows, mm=(D.method==="massdot");
-    $("mdDistNote").innerHTML=mm
-      ? `<b>Method: MassDOT §3.5.3.</b> Wearing surface (DW) is distributed equally to all beams; curbs, railings, sidewalk slabs and median (DC2) and pedestrian LL are distributed by the <b>pile-cap analogy</b> (A = 1 for all beams, group centroid, <b>no uplift relief</b> → every beam carries at least its P/N share). DC1 = deck slab by tributary area only — <b>beam self-weight is not included</b>.`
-      : `<b>Method: typical AASHTO (all-equal).</b> All superimposed dead load (DC2 + DW) and pedestrian LL are distributed <b>equally</b> to every beam (Σ/N). DC1 = deck slab by tributary area only — <b>beam self-weight is not included</b>.`;
+    $("mdDistNote").innerHTML=mm   // LLNL: a lead and a list
+      ? llNL("Method: MassDOT §3.5.3.",[["Wearing surface (DW):","distributed equally to all beams."],
+          ["Pile-cap analogy:","curbs, railings, sidewalk slabs and median (DC2) and pedestrian LL are distributed by the <b>pile-cap analogy</b> (A = 1 for all beams, group centroid, <b>no uplift relief</b> → every beam carries at least its P/N share)."],
+          ["Deck slab:","DC1 = deck slab by tributary area only — <b>beam self-weight is not included</b>."]])
+      : llNL("Method: typical AASHTO (all-equal).",[["Equal shares:","all superimposed dead load (DC2 + DW) and pedestrian LL are distributed <b>equally</b> to every beam (Σ/N)."],
+          ["Deck slab:","DC1 = deck slab by tributary area only — <b>beam self-weight is not included</b>."]]);
     body.innerHTML=rows.map(r=>{ const cc=CLS[r.cls]||CLS.interior;
       return `<tr><td style="font-weight:600">B${r.i+1}</td>
         <td class="method" style="text-align:left"><span style="color:${cc.col};font-weight:700">${cc.ab}</span></td>
@@ -4078,7 +4114,14 @@ window.addEventListener('load',function(){
         return `<tr><td colspan="3" style="text-align:right;font-weight:600">Σ / bridge</td><td style="font-weight:700">${f3(sum('dc1'))}</td><td style="font-weight:700">${f3(sum('dc2'))}</td><td style="font-weight:700">${f3(sum('dw'))}</td><td style="font-weight:700">${f3(sum('pl'))}</td><td style="font-weight:700">${f3(sum('total'))}</td></tr>`; })();
     drawDistBars(rows);
     $("cap-mddist").textContent=`Per-beam superimposed dead load & pedestrian LL — ${mm?'MassDOT pile-cap':'AASHTO equal'} distribution (klf).`;
-    $("mdDistAssume").innerHTML=`Each load in the table above is distributed by its chosen method — <b>Equal</b> (Σ/N to all beams), <b>MassDOT pile-cap</b> (A=1, no uplift relief → each beam ≥ P/N), or <b>Two adjacent beams</b> (split by position to the beams either side; a load on an overhang is levered about the first interior beam: P(1+a/S) to the exterior beam and −P·a/S to the next). <b>DC1 shown here = deck slab by tributary area only</b> (t<sub>s</sub>=${p.ts}″ × ${f3(concUW())} kcf) <i>plus</i> any DC1-category loads you add. <b>Beam self-weight is excluded</b> — the girder carries its own weight directly in the design app (PS-Beam), so including it here would double-count on handoff (for reference, this section would add ${f3(D.selfWt)} klf per beam at A = ${f2(p.A||0)} in² × ${D.steel?'0.490':'0.150'} kcf). Diaphragms/haunch/soffit are not auto-included — add them as DC1 rows if required. Adjacent box/deck (§3.8.2) modifications are pending the rest of that manual page. Step-by-step arithmetic for every load is in <b>§4D Dead Load Distribution</b> below.`;
+    $("mdDistAssume").innerHTML=llNL("Each load in the table above is distributed by its chosen method:",[   // LLNL: a lead and a list
+      ["Equal:","Σ/N to all beams."],["MassDOT pile-cap:","A=1, no uplift relief → each beam ≥ P/N."],
+      ["Two adjacent beams:","split by position to the beams either side; a load on an overhang is levered about the first interior beam: P(1+a/S) to the exterior beam and −P·a/S to the next."],
+      ["Deck slab:",`<b>DC1 shown here = deck slab by tributary area only</b> (t<sub>s</sub>=${p.ts}″ × ${f3(concUW())} kcf) <i>plus</i> any DC1-category loads you add.`],
+      ["Beam self-weight:",`<b>excluded</b> — the girder carries its own weight directly in the design app (PS-Beam), so including it here would double-count on handoff (for reference, this section would add ${f3(D.selfWt)} klf per beam at A = ${f2(p.A||0)} in² × ${D.steel?'0.490':'0.150'} kcf).`],
+      ["Not auto-included:","diaphragms/haunch/soffit — add them as DC1 rows if required."],
+      ["Adjacent box/deck:","(§3.8.2) modifications are pending the rest of that manual page."],
+      ["Worked steps:","step-by-step arithmetic for every load is in <b>§4D Dead Load Distribution</b> below."]],{x:[7]});
   }
   /* ===== 4D · dead-load distribution — step-by-step calculations ===== */
   let dlBuilt=false;
@@ -4140,7 +4183,9 @@ window.addEventListener('load',function(){
             {s:"\\sum w_{DC1}",d:"total deck slab weight per foot of bridge",v:f3(rows.reduce((s,r)=>s+r.deckDC1,0)),u:" klf"}],
       extra:tbl(`<th style="text-align:left">Beam</th>${bh}`,
         `<tr>${L1}w<sub>DC1,i</sub> — deck slab (klf)</td>${rows.map(r=>`<td>${f3(r.deckDC1)}</td>`).join("")}</tr>`),
-      note:`<b>Beam self-weight is deliberately excluded from DC1.</b> The design app (PS-Beam) applies the girder's own weight directly from its section properties, so carrying it here would double-count it on handoff. For reference only, the current section (A = ${f2(p.A||0)} in², ${D.steel?"steel 0.490":("concrete "+f3(concUW()))} kcf) would weigh ${f3(D.selfWt)} klf per beam. Haunch, diaphragms and stay-in-place forms are also not auto-generated — add them as DC1 rows in the loads table if they govern.`});
+      note:llNL("Beam self-weight is deliberately excluded from DC1.",[["Why:","the design app (PS-Beam) applies the girder's own weight directly from its section properties, so carrying it here would double-count it on handoff."],   // LLNL
+        ["For reference only:",`the current section (A = ${f2(p.A||0)} in², ${D.steel?"steel 0.490":("concrete "+f3(concUW()))} kcf) would weigh ${f3(D.selfWt)} klf per beam.`],
+        ["Also not auto-generated:","haunch, diaphragms and stay-in-place forms — add them as DC1 rows in the loads table if they govern."]])});
 
     /* --- 4D.3 pile-cap group properties --- */
     st.push({title:"Beam group properties — pile-cap analogy",ref:"MassDOT §3.5.3.4",
@@ -4161,7 +4206,9 @@ window.addEventListener('load',function(){
       vars:[{s:"P",d:"line load being distributed",v:"—",u:" klf"},
             {s:"x_L",d:"transverse position of the load from the left deck edge",v:"—",u:" ft"},
             {s:"e",d:"eccentricity of the load about the beam group centroid",v:"—",u:" ft"}],
-      note:`<b>Two adjacent beams</b>, load on an overhang a beyond the exterior beam: R<sub>ext</sub> = P(1 + a/S), R<sub>next</sub> = −P·a/S (simple-span lever about the first interior beam, S = exterior bay). The <b>max[ ]</b> in the pile-cap expression is the <b>no-uplift-relief</b> rule of §3.5.3.4: a beam on the far side of the centroid is never credited with a reduction below its P/N<sub>b</sub> share, so the sum of the distributed reactions is generally larger than P. Wearing surface (DW) is distributed <b>Equal</b> per §3.5.3.5. Current method for auto-generated DC2 rows: <b>${mm?"MassDOT pile-cap":"Equal (typical AASHTO)"}</b>.`});
+      note:llNL("How the rules above are applied:",[["Two adjacent beams:","load on an overhang a beyond the exterior beam: R<sub>ext</sub> = P(1 + a/S), R<sub>next</sub> = −P·a/S (simple-span lever about the first interior beam, S = exterior bay)."],   // LLNL
+        ["No uplift relief:","the <b>max[ ]</b> in the pile-cap expression is the no-uplift-relief rule of §3.5.3.4: a beam on the far side of the centroid is never credited with a reduction below its P/N<sub>b</sub> share, so the sum of the distributed reactions is generally larger than P."],
+        ["Wearing surface (DW):","distributed <b>Equal</b> per §3.5.3.5."],["Auto-generated rows:",`current method for auto-generated DC2 rows: <b>${mm?"MassDOT pile-cap":"Equal (typical AASHTO)"}</b>.`]])});
 
     /* --- 4D.5 worked example on the governing load --- */
     const pilecapLoads=D.perLoad.filter(q=>q.dist==="pilecap"&&Math.abs(q.P)>0);
@@ -4212,7 +4259,8 @@ window.addEventListener('load',function(){
          <tr>${L1}PL — pedestrian LL (klf)</td>${rows.map(r=>`<td>${f3(r.pl)}</td>`).join("")}<td>${f3(sum('pl'))}</td></tr>
          <tr>${L1}<b>Total (klf)</b></td>${rows.map(r=>`<td><b>${f3(r.total)}</b></td>`).join("")}<td><b>${f3(sum('total'))}</b></td></tr>
          <tr>${L1}Beam self-weight <i>(not included above)</i></td>${rows.map(()=>`<td style="color:var(--muted)">${f3(D.selfWt)}</td>`).join("")}<td style="color:var(--muted)">${f3(D.selfWt*N)}</td></tr>`),
-      note:`These are the per-foot loads to apply to each beam line. <b>Add the girder self-weight separately</b> — PS-Beam generates it from the section, so it is shown greyed above for reference only. DC1 is applied to the non-composite section; DC2, DW and PL are applied to the composite (long-term) section.`});
+      note:llNL("These are the per-foot loads to apply to each beam line.",[["Girder self-weight:","<b>add it separately</b> — PS-Beam generates it from the section, so it is shown greyed above for reference only."],   // LLNL
+        ["Non-composite section:","DC1 is applied to it."],["Composite (long-term) section:","DC2, DW and PL are applied to it."]])});
 
     dlRenderSteps(st);
     const rf=$("dlRef"); if(rf) rf.textContent=mm?"MassDOT §3.5.3.3–.5":"AASHTO — equal distribution";
@@ -4419,6 +4467,13 @@ function meta(id){ var e=el(id); return e?String(e.value||"").trim():""; }
 var N=function(x,d){ return SharedSteps.n(x,d); };
 var cell=function(v,d,key,cls){ return {t:(typeof v==="number")?(isFinite(v)?N(v,d):"—"):String(v==null?"—":v),n:typeof v==="number",key:key,cls:cls}; };
 var plain=function(s){ return String(s==null?"":s).replace(/<[^>]*>/g,"").replace(/\$/g,"").replace(/\[\[/g,"[ ["); };
+/* LLNL (2026-11-08): the Report notes of an element of the sheet. A note split by llNL (lead .llNLl, list .llNLu, action lines
+   .llNLa) gives one Report note per part: the action lines (warning), the lead, then each list item as "• lead words text";
+   items marked llNLx (screen-only links) are left out. Any other element gives one note of its whole text, as before. */
+var nlItems=function(h){ var t=function(e){ return plain(e.textContent.replace(/\s+/g," ").trim()); };
+  if(!h||!h.textContent.trim()) return [];
+  var P=h.querySelectorAll(".llNLa,.llNLl,.llNLu>li:not(.llNLx)"); if(!P.length) return [{type:"note",text:t(h)}];
+  var o=[]; Array.prototype.forEach.call(P,function(e){ var x=t(e); if(x) o.push({type:"note",warn:e.matches(".llNLa")||undefined,text:(e.tagName==="LI"?"• ":"")+x}); }); return o; };
 /* topics of one girder's steps (SharedSteps.group), in the order of the check */
 var LL_TOPICS=[
   {key:"sp",title:"Spacing and the interior-girder equations",ref:"Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1",ids:/^(S|kterm|k|IJ|Nc|mom[12]|shr[12])$/},
@@ -4604,20 +4659,23 @@ function model(){
       w6.add({id:"ex.R",label:"Share of that load on beam B"+(gi+1)+" (pile-cap analogy, no uplift relief: not less than P/N_b)",sym:"R_{B"+(gi+1)+"}",eq:"\\max\\left(\\frac{P}{N_{b}}, \\frac{P}{N_{b}} + \\frac{P e c_{"+(gi+1)+"}}{S}\\right)",sub:"\\max\\left(\\frac{"+N(pl.P,3)+"}{"+Nn+"}, \\frac{"+N(pl.P,3)+"}{"+Nn+"} + \\frac{"+N(pl.P,3)+"("+N(pl.e,3)+")("+N(D.c[gi],3)+")}{"+N(D.S,2)+"}\\right)",value:pl.r[gi],unit:"klf",d:3,ref:"MassDOT LRFD Bridge Manual Part I §3.5.3.4–.5"}); }
     /* LXM: what the Calc sheet's section 4 had besides these steps: the 3.6 card's method text, Figure (bars) and notes, the 4D
        tables of the beam group and of the worked load, the distribution rules, the self-weight row (the 4D card's own numbers) */
-    var dlNote=function(t){ var h=null; Array.prototype.forEach.call(document.querySelectorAll("#dlSteps .calcstep"),function(cs){ var tt=cs.querySelector(".cs-title"); if(!h&&tt&&tt.textContent.indexOf(t)>=0) h=cs.querySelector(".cs-note"); }); return h?plain(h.textContent.replace(/\s+/g," ").trim()):""; };
+    var dlNote=function(t){ var h=null; Array.prototype.forEach.call(document.querySelectorAll("#dlSteps .calcstep"),function(cs){ var tt=cs.querySelector(".cs-title"); if(!h&&tt&&tt.textContent.indexOf(t)>=0) h=cs.querySelector(".cs-note"); }); return nlItems(h); };
     var it0=[], dn=el("mdDistNote"), da=el("mdDistAssume"), fb=el("fig-mddist"), fs=fb&&fb.querySelector("svg"), fc=el("cap-mddist");
-    if(dn&&dn.textContent.trim()) it0.push({type:"note",text:plain(dn.textContent.replace(/\s+/g," ").trim())});
+    if(dn&&dn.textContent.trim()) it0.push.apply(it0,nlItems(dn));
     if(fs) it0.push({type:"figure",svg:fs.outerHTML,caption:(fc?plain(fc.textContent):"Per-beam dead load")+" (as the figure of the [[tab:dl|Dead load tab]])."});
-    if(da&&da.textContent.trim()) it0.push({type:"note",text:plain(da.textContent.replace(/\s+/g," ").trim().replace(/\s*Step-by-step arithmetic for every load is in §4D Dead Load Distribution below\.?/,""))});
+    if(da&&da.textContent.trim()) it0.push.apply(it0,nlItems(da));   // LLNL: the "Worked steps" item (llNLx, the link back to §4D) is left out, as before
     if(it0.length) subs5.push({title:"Distribution method and the loads on the beams",items:it0});
     subs5.push({title:"Deck slab (DC1) on the tributary widths",items:[topics("dl",w5.steps,[{key:"trib",title:"Tributary deck widths",ref:"",ids:/^trib/},{key:"dc1",title:"DC1, deck slab",ref:"MassDOT §3.5.3.3",ids:/^dc1/}]),
-      {type:"note",text:"Beam self-weight is not included in DC1 (the design app applies it from the section): "+N(D.selfWt,3)+" klf per beam, for reference. Distribution method: "+(D.method==="aashto"?"typical AASHTO (all beams equal)":"MassDOT §3.5.3")+". In the app: [[tab:dl|Dead load tab (3.6 distribution, 4D worked steps)]]."}]});
+      {type:"note",text:"Beam self-weight and the distribution method:"},   // LLNL: a lead and a list (one Report line each)
+      {type:"note",text:"• Beam self-weight: not included in DC1 (the design app applies it from the section): "+N(D.selfWt,3)+" klf per beam, for reference."},
+      {type:"note",text:"• Distribution method: "+(D.method==="aashto"?"typical AASHTO (all beams equal)":"MassDOT §3.5.3")+"."},
+      {type:"note",text:"• In the app: [[tab:dl|Dead load tab (3.6 distribution, 4D worked steps)]]."}]});
     var bh=rw.map(function(r){ return "B"+(r.i+1); }), it6=[one("dlg",w6.steps,"Beam group properties"+(pl?" and a worked load":""),"MassDOT §3.5.3.4")];
     it6.push({type:"table",caption:"Beam group (every beam A = 1)",head:["Beam"].concat(bh),rows:[["x_i from the left deck edge (ft)"].concat(ub.map(function(x){ return cell(x,2); })),
       ["c_i = x_i − x̄ (ft)"].concat(D.c.map(function(c){ return cell(c,2); })),["c_i² (ft²)"].concat(D.c.map(function(c){ return cell(c*c,2); }))]});
-    var gn=dlNote("Beam group properties"); if(gn) it6.push({type:"note",text:gn});
+    it6.push.apply(it6,dlNote("Beam group properties"));
     it6.push({type:"note",text:"Distribution rules available to each load (MassDOT §3.5.3.4–.5): Equal $R_i = P/N_b$; MassDOT pile-cap $R_i = \\max[P/N_b,\\ P/N_b + P e c_i/S]$, $e = x_L - \\bar{x}$; two adjacent beams $R_k = P(1 - t)$, $R_{k+1} = P t$, $t = (x_L - x_k)/(x_{k+1} - x_k)$."});
-    var rn=dlNote("Distribution rules"); if(rn) it6.push({type:"note",text:rn});
+    it6.push.apply(it6,dlNote("Distribution rules"));
     if(pl){ var Pn=pl.P/Nn, sR=pl.r.reduce(function(s,v){ return s+v; },0);   /* the 4D worked example's table (renderDLCalcs: P/N, P·e·c_i/S, R_i) */
       it6.push({type:"table",caption:"Worked load "+plain(pl.L.desc)+": share of every beam (P = "+N(pl.P,3)+" klf, x_L = "+N(pl.x,2)+" ft, e = "+N(pl.e,2)+" ft)",head:["Beam"].concat(bh).concat(["Σ"]),rows:[
         ["P/N_b (klf)"].concat(rw.map(function(){ return cell(Pn,3); })).concat([cell(pl.P,3)]),
@@ -4657,8 +4715,12 @@ function model(){
   }
   /* ---------- 7. Notes ---------- */
   {
-    var it7=(R.warnings||[]).map(function(x){ return {type:"note",warn:x.level!=="info",text:plain(x.msg)}; });
-    var dsc=document.querySelector("#sheet .disclaimer"); if(dsc) it7.push({type:"note",text:plain(dsc.textContent.replace(/\s+/g," ").trim())});
+    var it7=[]; (R.warnings||[]).forEach(function(x){ var wn=x.level!=="info";   // LLNL: a warning with a display split (nl) as its lead and "• " lines
+      if(!x.nl){ it7.push({type:"note",warn:wn,text:plain(x.msg)}); return; }
+      (x.nl[2]||[]).forEach(function(a){ it7.push({type:"note",warn:true,text:plain(a)}); });
+      it7.push({type:"note",warn:wn,text:plain(x.nl[0])});
+      x.nl[1].forEach(function(t){ if(t) it7.push({type:"note",warn:wn,text:"• "+plain(Array.isArray(t)?t[0]+" "+t[1]:t)}); }); });
+    it7.push.apply(it7,nlItems(document.querySelector("#sheet .disclaimer")));
     if(!it7.length) it7.push({type:"note",text:"No notes."});
     secs.push({title:"Notes and assumptions",subs:[{title:"Notes and warnings",items:it7}]});
   }
@@ -5126,9 +5188,11 @@ c=card(P.girders,null); move($("sectRow"),c); move($("boxRow"),c);
 c=card(P.roadway,null); move(grpWrap("curbL"),c);
 c=card(P.roadway,"Sidewalks"); move(row("swIncL"),c); move(row("swIncR"),c);
 c=card(P.roadway,"Design lanes");
-c.appendChild(mk("p","lx-note",'The clear roadway w runs between the interior faces of the railings (or the curbs or sidewalks entered above); '+
-  'the number of design lanes N<sub>L</sub> = INT(w/12) (Art. 3.6.1.1.1). Both are worked under <a href="#" data-lxgo="lxDerivedSec">Summary &rarr; Derived quantities</a>; '+
-  'the truck spacing of the lever rule is entered on the <a href="#" data-lxgo="fig-lever">Lever rule</a> tab.'));
+c.appendChild(mk("div","lx-note llNL",llNL('Clear roadway w and design lanes N<sub>L</sub>',[   // LLNL: a lead and a list
+  ['Clear roadway w:','runs between the interior faces of the railings (or the curbs or sidewalks entered above).'],
+  ['Design lanes:','the number of design lanes N<sub>L</sub> = INT(w/12) (Art. 3.6.1.1.1).'],
+  ['Worked in:','both are worked under <a href="#" data-lxgo="lxDerivedSec">Summary &rarr; Derived quantities</a>.'],
+  ['Truck spacing:','the truck spacing of the lever rule is entered on the <a href="#" data-lxgo="fig-lever">Lever rule</a> tab.']])));
 c=card(P.loads,null); move(grpWrap("mdMethod"),c);
 var loadsCard=card(P.loads,null,"lx-loads");
 loadsCard.appendChild(mk("p","lx-note lx-loadswait","The loads on the bridge appear here after the first calculation."));

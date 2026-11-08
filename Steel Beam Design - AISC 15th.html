@@ -5436,7 +5436,9 @@ function buildVxTab(pg){
       body.appendChild(el('div','note','Round sections: V\u2099 depends on L\u1D65 (maximum-shear to zero-shear distance), which varies by combination \u2014 derived in each section below.'));
     else{
       stiffBlock(body,p,D.shearX,D);
-      shearBlock(body,p,D.shearX,'Shear per '+D.shearX.route);
+      /* TFAH (2026-11-08): with the TFA option applied, the G2.1 note no longer says G2.2 is not used (display only) */
+      const shX=D.tfa&&D.tfa.applies?Object.assign({},D.shearX,{note:(D.shearX.note||'').replace('Tension field action (\u00A7G2.2) is not used \u2014 conservative.','Interior panels use tension field action (\u00A7G2.2, option on, below); end panels keep this strength.')}):D.shearX;
+      shearBlock(body,p,shX,'Shear per '+D.shearX.route);
       if(D.tfa)tfaBlock(body,p,D.tfa,D.shearX);   /* TFA option */
     }
   },pg);
@@ -6665,7 +6667,16 @@ function secStiffeners(P){
     const pk=AN&&AN.sect?AN.sect:null;
     if(pk&&!(pk._kind==='I'||pk._kind==='C'))
       body.appendChild(el('div','warnBox','Stiffener spacing affects k\u1D65 only for I-shapes and channels (\u00A7G2). It has no effect on the current section type.'));
-    else body.appendChild(el('div','hint sbNL',sbNL('How the spacing is used:',[['k\u1D65','= 5 + 5/(a/h)\u00B2 (Eq. G2-5), reverting to 5.34 when a/h > 3.0.'],['Single spacing:','applied along the member \u2014 for panels of differing spacing, enter the largest <i>a</i> where shear is critical.'],['Tension field action','(\u00A7G2.2) is not used.']])));
+    else{
+      /* TFAH (2026-11-08): the hint follows the TFA option (design.stiff.tfa) above it; display only */
+      const tq=AN&&AN.design?AN.design.tfa:null;
+      const tfaTxt=isMember()?'(\u00A7G2.2) is not used.':
+        !S.design.stiff.tfa?'(\u00A7G2.2) is not used \u2014 tick the option above to use \u00A7G2.2 for interior panels.':
+        (pk&&pk._kind!=='I')?'(\u00A7G2.2) is ticked but applies to I-shapes only, so it is not used for this section.':
+        (tq&&!tq.applies)?'(\u00A7G2.2) is ticked but not used: '+tq.note+'.':
+        '(\u00A7G2.2) is used for interior panels (the larger of \u00A7G2.1 and \u00A7G2.2); panels within <i>a</i> of a support or member end keep \u00A7G2.1.';
+      body.appendChild(el('div','hint sbNL',sbNL('How the spacing is used:',[['k\u1D65','= 5 + 5/(a/h)\u00B2 (Eq. G2-5), reverting to 5.34 when a/h > 3.0.'],['Single spacing:','applied along the member \u2014 for panels of differing spacing, enter the largest <i>a</i> where shear is critical.'],['Tension field action',tfaTxt]])));
+    }
   },P,secOpts());
 }
 /* ---------- 6. torsion ---------- */

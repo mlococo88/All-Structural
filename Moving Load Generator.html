@@ -73,6 +73,52 @@ tr.pier td{background:#f8fafc;font-weight:600}
 @media(max-width:900px){.body{grid-template-columns:1fr}aside{position:static;max-height:none}.mets{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:900px){.hdr{height:auto;min-height:54px;flex-wrap:wrap;gap:6px;padding:6px 12px;position:static}.hdr>div:last-child{display:flex;flex-wrap:wrap;align-items:center;gap:6px 0}}
 @media print{.bx-alltools{display:none!important}}
+/* MLLS (2026-11-08, engineer: a left summary panel, as Retaining Wall, Spread Footing, Light Pole and Shear and Moment Diagrams):
+   on screens 1200 px and wider the key results (the metric cards: max +M, -M, +V, -V, reaction) and the live load deflection
+   ratio of each span show as one chip each in a left column (#mlgDashCol, 240 px up to 1499 px, 280 px from 1500 px); a click
+   opens the card that works the value. The metric cards and the "Worked in" line are hidden while the column is open. « shrinks
+   it to a 42 px strip. Below 1200 px nothing changes. Screen only. */
+#mlgDashCol{display:none}
+@media print{#mlgDashCol{display:none!important}}
+@media screen and (min-width:1200px){
+ body.mlgDashWide .body{grid-template-columns:280px 390px minmax(0,1fr)}
+ body.mlgDashWide.mlgDashColl .body{grid-template-columns:42px 390px minmax(0,1fr)}
+ body.mlgDashWide #mlgDashCol{display:block;min-width:0;position:sticky;top:54px;max-height:calc(100vh - 54px);overflow-y:auto;overflow-x:hidden;background:#fff;border-right:1px solid #e2e8f0;padding:0 8px 24px;overscroll-behavior:contain}
+ body.mlgDashWide:not(.mlgDashColl) main>.mets,body.mlgDashWide:not(.mlgDashColl) main>#mlgWk{display:none}
+ #mlgDashHead{position:sticky;top:0;z-index:3;background:#fff;display:flex;align-items:center;gap:4px 8px;flex-wrap:wrap;padding:8px 0 4px}
+ #mlgDashTtl{margin:0;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em}
+ #mlgDashTgl{margin:0;padding:1px 7px;font-size:11px;border:1px solid #e2e8f0;background:#f1f5f9;border-radius:5px;cursor:pointer;color:#475569;font-family:inherit}
+ #mlgDashCnt{display:inline-flex;gap:4px;flex-wrap:wrap}
+ #mlgDashCnt span{font-size:10px;font-weight:700;padding:1px 5px;border:1px solid;border-radius:3px;white-space:nowrap}
+ #mlgDashCnt .mlgCf{color:#991b1b;background:#fef2f2;border-color:#dc2626}
+ #mlgDashCnt .mlgCp{color:#065f46;background:#ecfdf5;border-color:#059669}
+ #mlgDashSub{font-size:10.5px;color:#94a3b8;margin:0 0 6px;overflow-wrap:anywhere}
+ #mlgDash{display:grid;grid-template-columns:minmax(0,1fr);gap:3px;align-items:start}
+ .mlgDG{font-size:9.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin:6px 0 1px}
+ .mlgCh{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;column-gap:5px;padding:3px 6px 3px 2px;min-width:0;border:1px solid #94a3b8;border-radius:3px;background:#f8fafc;font-size:11.5px;line-height:1.35;cursor:pointer}
+ .mlgCh:focus-visible{outline:2px solid #6366f1;outline-offset:-1px}
+ .mlgCh.pass{border-color:#059669;background:#ecfdf5}.mlgCh.fail{border-color:#dc2626;background:#fef2f2}
+ .mlgCh.na:hover{background:#f1f5f9}.mlgCh.pass:hover{background:#d1fae5}.mlgCh.fail:hover{background:#fee2e2}
+ .mlgCh .mlgChX{grid-row:1;grid-column:1;margin:0;padding:0 3px;border:none;background:transparent;font-size:9px;color:#334155;line-height:1.2;cursor:pointer}
+ .mlgCh .mlgChN{grid-row:1;grid-column:2;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .mlgCh .mlgChR{grid-row:1;grid-column:3;white-space:nowrap;color:#1e40af;font-weight:600;font-variant-numeric:tabular-nums}
+ .mlgCh .mlgChS{grid-row:1;grid-column:4;font-size:10px;font-weight:700;white-space:nowrap}
+ .mlgCh.pass .mlgChS{color:#059669}.mlgCh.fail .mlgChS{color:#dc2626}
+ .mlgCh .mlgChV,.mlgCh .mlgChRef{grid-column:1/-1;display:none;padding-left:16px;font-size:10.5px;color:#475569;overflow-wrap:anywhere}
+ .mlgCh .mlgChRef{font-style:italic;color:#94a3b8}
+ .mlgCh.mlgOpen .mlgChV,.mlgCh.mlgOpen .mlgChRef{display:block}
+ .mlgDMsg{font-size:11.5px;padding:6px 8px;border:1px solid #e2e8f0;background:#f8fafc;color:#64748b;border-radius:3px}
+ body.mlgDashWide.mlgDashColl #mlgDashCol{padding:0}
+ body.mlgDashWide.mlgDashColl #mlgDash,body.mlgDashWide.mlgDashColl #mlgDashSub{display:none}
+ body.mlgDashWide.mlgDashColl #mlgDashHead{flex-direction:column;align-items:center}
+ body.mlgDashWide.mlgDashColl #mlgDashTtl{writing-mode:vertical-rl;transform:rotate(180deg);margin:4px 0;white-space:nowrap}
+ body.mlgDashWide.mlgDashColl #mlgDashCnt{flex-direction:column;align-items:center}
+ body.mlgDashWide.mlgDashColl #mlgDashCnt span{font-size:9px;padding:1px 2px;white-space:normal;text-align:center;width:36px}
+}
+@media screen and (min-width:1200px) and (max-width:1499.98px){
+ body.mlgDashWide .body{grid-template-columns:240px 390px minmax(0,1fr)}
+ body.mlgDashWide.mlgDashColl .body{grid-template-columns:42px 390px minmax(0,1fr)}
+}
 </style>
 </head>
 <body>
@@ -83,6 +129,11 @@ tr.pier td{background:#f8fafc;font-weight:600}
 </header>
 
 <div class="body">
+<div id="mlgDashCol" aria-label="Results summary"><!-- MLLS (2026-11-08): key results as a left column on screens 1200 px and wider -->
+  <div id="mlgDashHead"><button type="button" id="mlgDashTgl" aria-controls="mlgDash" aria-expanded="true">&laquo;</button><h2 id="mlgDashTtl">Results summary</h2><span id="mlgDashCnt"></span></div>
+  <div id="mlgDashSub"></div>
+  <div id="mlgDash"></div>
+</div>
 <aside>
   <details open><summary>Spans</summary><div class="pb">
     <div class="f"><label>Number of spans</label>
@@ -2411,6 +2462,72 @@ window.addEventListener('beforeprint',()=>{
   box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(MLRP.doc,{lazy:false})+'</article></div>';
   document.body.classList.add('rp-printing');
 });
+/* MLLS (2026-11-08, engineer: the left summary panel of the other tools; RWLB, SFLB, LPLB, SMLS): one chip per metric card
+   (the text the card shows, read after each render: no new calculation) and per span of the Live Load Deflection table (ratio and
+   its ✓ / ✗ as shown there: OK / NG). A chip click opens the card that works the value (mlrGoto: from the Report tab the Results
+   tab first). Collapse state: per-browser UI key movingLoadGen.dashCollapsed.v1 ('1' = collapsed); not in the project, the
+   autosave or the export. Below 1200 px nothing changes. */
+const MLDD={key:'movingLoadGen.dashCollapsed.v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1200px)'):null,open:new Map(),coll:false,wide:null,t:0};
+try{MLDD.coll=localStorage.getItem(MLDD.key)==='1';}catch(e){}
+function mlgDashItems(){
+  const T=id=>{const e=$(id);return e?e.textContent.trim():'';},out=[];
+  [['Max +M','mMp','kip-ft','cM','Moment Envelope'],['Max −M','mMn','kip-ft','cM','Moment Envelope'],['Max +V','mVp','kips','cV','Shear Envelope'],['Max −V','mVn','kips','cV','Shear Envelope'],
+   ['Max reaction','mR','kips','rB','Support Reactions']].forEach(([n,id,u,c,cn])=>{const v=T(id);
+    out.push({g:'Key results (factored per girder)',n,v:v&&v!=='—'?v+' '+u:'—',st:'na',d:id==='mR'?T('mRw'):'',c,cn});});
+  const tb=$('dB');if(tb)[...tb.rows].forEach(r=>{const td=[...r.cells].map(x=>x.textContent.trim());if(td.length<6)return;
+    const ok=/✓/.test(td[5]),ng=/✗/.test(td[5]);
+    out.push({g:'Live load deflection',n:'Span '+td[0]+' δ / (L/N)',v:td[5].replace(/\s*[✓✗]\s*$/,''),st:ng?'fail':ok?'pass':'na',
+      d:'Max ↓ δ '+td[2]+' in @ x = '+td[3]+' ft · allowable '+td[4]+' in · '+(T('dNote')||''),c:'deflCard',cn:'Live Load Deflection'});});
+  return out;
+}
+function mlgDashRender(){
+  const box=$('mlgDash'),cnt=$('mlgDashCnt'),sub=$('mlgDashSub');if(!box)return;
+  box.innerHTML='';
+  if(!RES){box.innerHTML='<div class="mlgDMsg">No results: press Run (or correct the input errors).</div>';if(cnt)cnt.innerHTML='';if(sub)sub.textContent='';return;}
+  if(sub){const p=$('preset');sub.textContent='Vehicle: '+(p&&p.selectedOptions[0]?p.selectedOptions[0].text:'');}
+  const n={pass:0,fail:0},ST={pass:'OK',fail:'NG',na:''};let grp='';
+  mlgDashItems().forEach(it=>{
+    if(n[it.st]!=null)n[it.st]++;
+    if(it.g!==grp){grp=it.g;const h=document.createElement('div');h.className='mlgDG';h.textContent=grp;box.appendChild(h);}
+    const c=document.createElement('div');c.className='mlgCh '+it.st;c.tabIndex=0;c.setAttribute('role','button');
+    c.innerHTML='<button type="button" class="mlgChX" title="Show the details and where the value is worked"></button><span class="mlgChN"></span><span class="mlgChR"></span><span class="mlgChS"></span>'
+      +(it.d?'<div class="mlgChV"></div>':'')+'<div class="mlgChRef"></div>';
+    c.querySelector('.mlgChN').textContent=it.n;c.querySelector('.mlgChR').textContent=it.v;c.querySelector('.mlgChS').textContent=ST[it.st];
+    if(it.d)c.querySelector('.mlgChV').textContent=it.d;c.querySelector('.mlgChRef').textContent='→ '+it.cn;
+    c.title=it.n+': '+it.v+(it.d?'\n'+it.d:'')+'\nClick: → '+it.cn;
+    const x=c.querySelector('.mlgChX'),key=it.n;
+    const setOpen=o=>{c.classList.toggle('mlgOpen',o);x.setAttribute('aria-expanded',o?'true':'false');x.textContent=o?'▾':'▸';};
+    setOpen(MLDD.open.has(key)?MLDD.open.get(key):it.st==='fail');
+    x.addEventListener('click',ev=>{ev.preventDefault();ev.stopPropagation();const o=!c.classList.contains('mlgOpen');MLDD.open.set(key,o);setOpen(o);});
+    const go=()=>mlrGoto(it.c);
+    c.addEventListener('click',go);c.addEventListener('keydown',ev=>{if(ev.target!==c)return;if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();go();}});
+    box.appendChild(c);
+  });
+  if(cnt)cnt.innerHTML=(n.fail?'<span class="mlgCf">'+n.fail+' NG</span>':'')+(n.pass&&!n.fail?'<span class="mlgCp">no NG</span>':'');
+}
+function mlgDashSoon(){cancelAnimationFrame(MLDD.t);MLDD.t=requestAnimationFrame(mlgDashRender);}
+function mlgDashPlace(){
+  const wide=!!(MLDD.mq&&MLDD.mq.matches),ch=MLDD.wide!==null&&MLDD.wide!==wide;MLDD.wide=wide;
+  document.body.classList.toggle('mlgDashWide',wide);
+  mlgDashColl(MLDD.coll,false,ch);
+}
+function mlgDashColl(v,save,redraw){
+  MLDD.coll=!!v;document.body.classList.toggle('mlgDashColl',MLDD.coll);
+  const t=$('mlgDashTgl');
+  if(t){t.setAttribute('aria-expanded',MLDD.coll?'false':'true');t.innerHTML=MLDD.coll?'&raquo;':'&laquo;';
+    t.title=MLDD.coll?'Show the results summary column (remembered in this browser)':'Shrink the results summary column; the metric cards show above the plots (remembered in this browser)';}
+  if(save){try{localStorage.setItem(MLDD.key,MLDD.coll?'1':'0');}catch(e){}}
+  if(save||redraw)requestAnimationFrame(()=>window.dispatchEvent(new Event('resize')));   /* the plots are redrawn at the new width (resize handler) */
+}
+(function(){
+  const t=$('mlgDashTgl');if(t)t.addEventListener('click',()=>mlgDashColl(!MLDD.coll,true));
+  if(MLDD.mq){if(MLDD.mq.addEventListener)MLDD.mq.addEventListener('change',mlgDashPlace);else if(MLDD.mq.addListener)MLDD.mq.addListener(mlgDashPlace);}
+  const mo=new MutationObserver(mlgDashSoon),M=document.querySelector('main>.mets');
+  if(M)mo.observe(M,{childList:true,characterData:true,subtree:true});if($('dB'))mo.observe($('dB'),{childList:true,characterData:true,subtree:true});
+  if($('dNote'))mo.observe($('dNote'),{childList:true,characterData:true,subtree:true});
+  const p=$('preset');if(p)p.addEventListener('change',mlgDashSoon);
+  mlgDashPlace();mlgDashRender();
+})();
 window.__mlrForTest=()=>({doc:MLRP.doc,RES,DEF,X:RES?extremes(RES,envData(RES,true).F):null});   /* tests only */
 </script>
 </body>

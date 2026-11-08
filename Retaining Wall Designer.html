@@ -5882,7 +5882,7 @@ function renderStabilitySoil(r) {
   h += `<div class="alert info" style="margin:4px 0 8px;">${rwNL('ℹ Why the surcharge and column live/snow loads are left out:', [['Rule:', 'friction can only rely on weight that is certain to be present at the moment the lateral thrust acts.'],
     ['Here:', "the surcharge over the heel and column live/snow loads may be absent (e.g., an empty lot or no snow) while the soil thrust — including the surcharge's own lateral pressure, which is still applied to F<sub>h</sub> — remains."],
     ['Effect:', 'counting them as resisting would be unconservative.'],
-    ['Still included:', 'they <b>are</b> still included in the bearing check (and in the overturning resisting moment as currently coded).'],
+    ['Still included:', 'they <b>are</b> still included in the bearing check only; they are excluded from the overturning resisting moment as well (Step 4).'],
     ['Dead column load', 'stays in.']])}</div>`;   // RWNL (2026-11-08)
   h += eq('Friction resistance at base',
     `F_{fr} = \\mu\\,\\Sigma V_{fr} = (${F(inp.mu,4)})(${F(r.SumV_slide,1)}) = ${F(inp.mu*r.SumV_slide,1)}\\ \\text{lb/ft}`,'',
