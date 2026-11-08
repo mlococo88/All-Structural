@@ -3110,3 +3110,15 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
 - **How verified:** headless Chromium, origin/main vs the branch, 7 states (default; rolled with stiffeners; built-up with stiffeners, option off; built-up option on; rolled option on; built-up option on with a/h > 3; member mode with the option set): `AN` identical (JSON compare); the digit sequence of every output tab and the Report identical in all 7 states (the only text differences are the hint and, with the option applied, the Vₓ note, whose digits are unchanged); the input panel differs only in the hint item; 0 KaTeX errors; 0 console errors. Tests: check-syntax; steel-beam-builtup 11/11; project-library steelbeam ALL PASS; phone-layout sbeam (390, 768) pass.
 - **Open item closed:** SBNL-1 "the Web Stiffeners hint keeps 'Tension field action (§G2.2) is not used.'".
 - **Other copies:** none.
+
+## 2026-11-08 — PR: claude/sf-rename-sbd (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SFNM-S) — Spread Footing shown as "Shallow Foundation Design"   [display only]
+- **Why:** Spread Footing's displayed name is now "Shallow Foundation Design" (engineer request 2026-11-08; #1236). Its file name and `memberReactions` receiver are unchanged.
+- **Before → after** (anchor = the "after" text):
+  - Project tab hint: `Unfactored reactions by load type for Base Plate and Spread Footing, or as a file.` → `… for Base Plate and Shallow Foundation Design, or as a file.`
+  - "Send to other tools" tooltip: `… for the base plate and spread footing tools (HANDOFF.md, …` → `… for the base plate and shallow foundation design tools (HANDOFF.md, …`.
+  - Send / Export reactions dialog note (`bxSendMemberReactions`): `For the Base Plate &amp; Anchor Designer and the Spread Footing tool.` → `… and the Shallow Foundation Design tool.`
+- **Left unchanged:** code comments. No payload text changed.
+- **Formulas, factors, units, code references:** none (§4). **Saved data / hand-off format:** none (§5).
+- **Check case:** Project tab → the hint reads "… for Base Plate and Shallow Foundation Design, or as a file." Results are unchanged.
+- **How verified:** check-syntax; `node tests/engine/run.mjs handoffs` (10 / 10); `steel-beam-builtup` (11 checks); page opened, 0 console errors.
+- **Other copies:** none.
