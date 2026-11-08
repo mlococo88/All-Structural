@@ -1729,7 +1729,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   Column width 240 / 280 / absent at 1440 / 1600 / 1100 and 390 px; no sideways scroll; 0 console errors. Tests: `check-syntax`, `phone-layout --tool mlg`, `project-library --tool mlg`, `engine/run.mjs moving-load`. All pass.
 - **Other copies:** none.
 
-## 2026-11-08 — PR: claude/shared-ml-notes (PR #PRNUM) (MLNL-3: the pedestrian-load and Std. Spec. lane warnings as a bold lead and a list; display only, no result change)
+## 2026-11-08 — PR: claude/shared-ml-notes (PR #1241: https://github.com/mlococo88/All-Structural/pull/1241) (MLNL-3: the pedestrian-load and Std. Spec. lane warnings as a bold lead and a list; display only, no result change)
 
 ### MLNL-3. Warnings built in shared/moving-load.js shown with `mlNL`   [display only] [no result change]
 - **Request:** MLNL-2 open item (#1221). `shared/moving-load.js` now returns `R.warnNL` (same PR; `fixlog/shared-moving-load.md`): a list form of

@@ -285,7 +285,7 @@ results unchanged).
 ### Other copies
 - None.
 
-## 2026-11-08 — PR: claude/shared-ml-notes (PR #PRNUM) — `warnNL`: a display-only list form of the pedestrian-load and Std. Spec. lane-loading warnings (MLNL-3; no result or string change)
+## 2026-11-08 — PR: claude/shared-ml-notes (PR #1241: https://github.com/mlococo88/All-Structural/pull/1241) — `warnNL`: a display-only list form of the pedestrian-load and Std. Spec. lane-loading warnings (MLNL-3; no result or string change)
 ### Where (`analyze`)
 - `const warn=[]; let segSum=0;` → `const warn=[], warnNL=[]; let segSum=0;` plus the helper (anchor `/* MLNL-3 (2026-11-08): warnNL[k]`):
   ```js
