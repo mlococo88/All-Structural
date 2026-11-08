@@ -71,7 +71,7 @@ test('github-sync: first connect records existing projects; Upload all; save; up
   assert.equal(s.getItem(KEY), raw0);                                          // the tool's list is untouched
   // a new save is uploaded
   store.save('Footing C', { B: 9, L: 9 }); assert.equal(e.scan(), 1); assert.equal((await e.flush()).done, 1);
-  assert.match(gh.commits.at(-1).message, /^Spread Footing: save "Footing C"$/);
+  assert.match(gh.commits.at(-1).message, /^Spread Footing: save "Footing C" \(from Laptop\)$/);   // LIVE (2026-11-08): the device, for "Updated on <device>"
   // an update goes with the file's sha (PUT body.sha = the blob sha GitHub has)
   const sha0 = gitBlobSha(gh.files.get(P('Footing A')));
   store.save('Footing A', { B: 8.5, L: 10 }); e.scan(); assert.equal((await e.flush()).done, 1);

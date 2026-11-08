@@ -23,6 +23,9 @@
        c = git blob sha of the file on GitHub, l = git blob sha of this browser's file text, at the last sync.
        hold (STDS, 2026-11-05): projects saved with "This browser only" (Save as): not uploaded until the user presses Upload.
        Written only while sync is set up (no key appears while sync is off).
+     LIVE (2026-11-08; auto-save, the open project's GitHub check and presence): bridgeSuite.v1.githubSync.live,
+       bridgeSuite.v1.githubSync.deviceId, bridgeSuite.v1.githubSync.presence.<tool> (see "live" below); and on GitHub, beside the
+       project files, projects/<tool>/.presence/<safe name>.<device id>.json heartbeats (a sub-folder: never listed as a project).
 
    Security: the token is sent only in the Authorization header of requests to https://api.github.com (the only host this file
    calls), never in a URL, never logged, never shown (mask()), never part of a project file. It IS stored in this browser's
@@ -32,6 +35,8 @@
      settings(storage) / saveSettings(storage, s) / forgetToken(storage) / configured(s)
      client(settings, fetch) -> { repo(), branch(), tree(dir), list(dir), meta(path), raw(path), put(path, text, sha, message), del(path, sha, message) }
      engine({ tool, label, store, storage, fetch, toFile, fromFile, space, now, device, onNotice }) -> see below
+     LIVE: live(storage) / saveLive(storage, { autoSave, watch }) / deviceId(storage, create); pure decisions autoSaveDue, pollDue, beatDue,
+       presenceFresh; engine poll(name), changeInfo(name, sha), loadCloud(name), undoLoad(undo), others(name), beat(name), leave(name)
      attach(ctx) -> the hooks shared/projects-ui.js libraryDialog calls when ctx.cloud = { tool, label, toFile?, fromFile?, space?, store? }
        ctx.cloud.store (STDS-B, 2026-11-06; optional): the list the sync works on instead of ctx.store, for a dialog that shows more rows
        than the sync has names (an id-keyed list with duplicate names: the dialog lists every item, the sync the newest of each name).
@@ -68,6 +73,80 @@
   function forgetToken(storage) { const s = settings(storage); s.token = ''; return writeJSON(storage, KEY, s); }
   /* mask(token): never the token itself; the last 4 characters only */
   function mask(t) { t = String(t || ''); return t ? (t.startsWith('github_pat_') ? 'github_pat_' : '') + '••••••••' + t.slice(-4) : ''; }
+
+  /* ---------------- live: auto-save, watch, presence (LIVE, 2026-11-08) ----------------
+     New keys only (CLAUDE.md §5), none written while sync is off:
+       bridgeSuite.v1.githubSync.live      { v:1, autoSave:bool, watch:bool }   the two Cloud sync dialog boxes; absent = both on
+       bridgeSuite.v1.githubSync.deviceId  12 random [a-z0-9]: this browser profile (made on its first heartbeat; two browsers with the
+                                           same device name stay apart)
+       bridgeSuite.v1.githubSync.presence.<tool>  { v:1, files: { "<presence path>": { sha, at, since, tabs: { <tab>: ms } } } }
+                                           this browser's own heartbeat files (so two tabs of one tool write one file, once a minute)
+     Times (LIVE): every 30 s auto-save at most, after 5 s without a change; poll 30 s; heartbeat 60 s; a heartbeat is stale after
+     150 s; no heartbeat after 10 min without input on the page. */
+  const LIVE_KEY = KEY + '.live', DEV_KEY = KEY + '.deviceId', ID_RX = /^[a-z0-9]{8,32}$/;
+  const LIVE = { every: 30000, quiet: 5000, poll: 30000, beat: 60000, stale: 150000, idle: 600000 };
+  function live(storage) { const v = readJSON(storage, LIVE_KEY) || {}; return { autoSave: v.autoSave !== false, watch: v.watch !== false }; }
+  function saveLive(storage, x) {
+    const c = live(storage), n = { v: 1, autoSave: x && x.autoSave != null ? !!x.autoSave : c.autoSave, watch: x && x.watch != null ? !!x.watch : c.watch };
+    return writeJSON(storage, LIVE_KEY, n);
+  }
+  function randomId() {
+    let s = '';
+    try { const a = new Uint8Array(12); (window.crypto || self.crypto).getRandomValues(a); a.forEach(x => { s += (x % 36).toString(36); }); } catch (e) { s = ''; }
+    while (s.length < 12) s += Math.floor(Math.random() * 36).toString(36);
+    return s.slice(0, 12);
+  }
+  /* deviceId(storage, create): this browser's id ('' when there is none and create is false, or storage refuses) */
+  function deviceId(storage, create) {
+    let id = null; try { id = storage ? storage.getItem(DEV_KEY) : null; } catch (e) { return ''; }
+    if (id && ID_RX.test(id)) return id;
+    if (!create) return '';
+    id = randomId(); try { storage.setItem(DEV_KEY, id); } catch (e) { return ''; }
+    return id;
+  }
+  /* autoSaveDue(x): should the open project be saved into its named project now? Pure (Node-tested).
+     x = { configured, on (live().autoSave), name (the open project), inList (it is in the saved list), dirty (the inputs on screen differ
+           from the saved copy), edited (the inputs changed on this page since it was opened / saved), snap (text of the inputs now),
+           lastSnap (the text the last auto-save wrote), changedAt (ms: the inputs last changed), lastAt (ms: the last save, auto-save or
+           open), now, every (default 30 s), quiet (default 5 s) }
+     -> { due, why }  why: off | disabled | unnamed | clean | not-edited | same | typing | wait | due */
+  function autoSaveDue(x) {
+    const every = x.every == null ? LIVE.every : x.every, quiet = x.quiet == null ? LIVE.quiet : x.quiet, r = why => ({ due: why === 'due', why });
+    if (!x.configured) return r('off');
+    if (!x.on) return r('disabled');
+    if (!x.name || !x.inList) return r('unnamed');
+    if (!x.dirty) return r('clean');
+    if (!x.edited) return r('not-edited');
+    if (x.snap != null && x.snap === x.lastSnap) return r('same');
+    if (x.now - (x.changedAt || 0) < quiet) return r('typing');
+    if (x.now - (x.lastAt || 0) < every) return r('wait');
+    return r('due');
+  }
+  /* pollDue(x) / beatDue(x): is it time to check GitHub for the open project / write this device's heartbeat? Pure.
+     x = { configured, on (live().watch), name, inList, hidden (the tab is not visible), now, lastAt (the last check / write),
+           every (default 30 s / 60 s), activeAt (beatDue: the last input on the page), idle (default 10 min) } -> { due, why } */
+  function pollDue(x) {
+    const every = x.every == null ? LIVE.poll : x.every, r = why => ({ due: why === 'due', why });
+    if (!x.configured) return r('off'); if (!x.on) return r('disabled'); if (!x.name || !x.inList) return r('unnamed');
+    if (x.hidden) return r('hidden'); if (x.now - (x.lastAt || 0) < every) return r('wait');
+    return r('due');
+  }
+  function beatDue(x) {
+    const every = x.every == null ? LIVE.beat : x.every, idle = x.idle == null ? LIVE.idle : x.idle, r = why => ({ due: why === 'due', why });
+    if (!x.configured) return r('off'); if (!x.on) return r('disabled'); if (!x.name || !x.inList) return r('unnamed');
+    if (x.hidden) return r('hidden'); if (x.activeAt != null && x.now - x.activeAt > idle) return r('idle');
+    if (x.now - (x.lastAt || 0) < every) return r('wait');
+    return r('due');
+  }
+  /* presenceFresh(p, now, stale): is another device's heartbeat fresh? p = { at (ms, the time written in the file, by that device's
+     clock), seenAt (ms, this page's clock: when the file's current sha was first seen here), changed (this page saw the sha change) }.
+     Fresh = the current sha was first seen less than `stale` ago, and either this page saw it change (the device is alive, whatever its
+     clock says) or its own time is less than `stale` old. A device whose clock is off therefore still goes stale once it stops writing. */
+  function presenceFresh(p, now, stale) {
+    stale = stale == null ? LIVE.stale : stale;
+    if (!p || p.seenAt == null || now - p.seenAt > stale) return false;
+    return !!p.changed || (p.at != null && now - p.at < stale);
+  }
 
   /* ---------------- names and files ---------------- */
   const SAFE = /[A-Za-z0-9 _\-.(),+&'!~=@]/;
@@ -166,7 +245,7 @@
       let r;
       try {
         r = await fetchFn(url, { method, headers: headers(o.accept, !!o.body), body: o.body ? JSON.stringify(o.body) : undefined,
-          cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer', redirect: 'error', mode: 'cors' });
+          cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer', redirect: 'error', mode: 'cors', keepalive: !!o.keepalive });   // keepalive (LIVE): the presence delete sent while the page closes
       } catch (e) { return { ok: false, kind: 'offline', status: 0, message: 'GitHub could not be reached (offline, or blocked by the network). Changes wait here and are sent later.' }; }
       const hd = k => { try { return r.headers && r.headers.get ? r.headers.get(k) : null; } catch (e) { return null; } };
       if (r.ok) {
@@ -212,7 +291,9 @@
         const r = await call('PUT', `${base}/contents/${enc(path)}`, { body });
         return r.ok ? { ok: true, sha: r.json && r.json.content && r.json.content.sha } : r;
       },
-      del: (path, sha, message) => call('DELETE', `${base}/contents/${enc(path)}`, { body: { message, sha, branch: s.branch || 'main' } })
+      del: (path, sha, message, ko) => call('DELETE', `${base}/contents/${enc(path)}`, { body: { message, sha, branch: s.branch || 'main' }, keepalive: !!(ko && ko.keepalive) }),
+      /* commits(path) (LIVE, 2026-11-08) -> { ok, json: [ the newest commit that changed path ] } (who changed a file, and when) */
+      commits: path => call('GET', `${base}/commits?path=${encodeURIComponent(path)}&sha=${encodeURIComponent(s.branch || 'main')}&per_page=1`)
     };
   }
 
@@ -237,7 +318,10 @@
        once; Sync now, Upload and Upload all send at once).
      The store may be a mapStore or a listStore (shared/projects.js); store.stamp() (when present) tells whether the list changed.
      Methods: configured(), init(), scan(), flush(), refreshCloud(), rows(), uploadAll(), upload(name), download(name),
-       useCloud(name), keepMine(name), deleteCloud(name), hold(name, on), held(name), state(), cloud(), lastError(), pending(), notices */
+       useCloud(name), keepMine(name), deleteCloud(name), hold(name, on), held(name), state(), cloud(), lastError(), pending(), notices,
+       and (LIVE, 2026-11-08) poll, changeInfo, loadCloud, undoLoad, presenceOf, others, beat, leave (each documented where it is defined).
+     LIVE commit messages: a save is "<label>: save "<name>" (from <device>)" (the device name of the settings, when set), so another
+     device can say who changed a file (changeInfo). */
   function engine(o) {
     if (!TOOL_RX.test(o.tool || '')) throw new Error('github-sync: bad tool key');
     const store = o.store, storage = o.storage, now = o.now || (() => Date.now()), space = o.space == null ? 1 : o.space, settle = o.settle || 0;
@@ -249,9 +333,18 @@
     const toFile = o.toFile || (i => i), fromFile = o.fromFile || (x => x);
     const me = Math.random().toString(36).slice(2);
     let lastRaw, busy = false, cloud = null, cloudErr = null, err = null, nextTry = 0, backoff = 0;
+    let lastTree = null, pbusy = false;   // LIVE: { at, files } the last tree this page read (poll() reuses it); pbusy: a heartbeat write
     const notices = [];
     const S = () => settings(storage);
     const pathOf = n => `${folder}/${safeName(n)}.json`;
+    const devName = () => String(o.device || S().device || '').replace(/[()\r\n]/g, '').trim();
+    const saveMsg = n => `${label}: save "${n}"${devName() ? ` (from ${devName()})` : ''}`;   // LIVE: the device, for "Updated on <device>"
+    async function treeOf(c, maxAge) {
+      if (maxAge && lastTree && now() - lastTree.at < maxAge) return { ok: true, files: lastTree.files, cached: true };
+      const t = await c.tree(folder); if (t.ok) lastTree = { at: now(), files: t.files };
+      return t;
+    }
+    const noteSha = (path, sha) => { if (lastTree) { if (sha) lastTree.files.set(path, sha); else lastTree.files.delete(path); } };
     function note(kind, text) { const n = { kind, text, t: now() }; notices.push(n); if (notices.length > 20) notices.shift(); if (o.onNotice) { try { o.onNotice(n); } catch (e) { /* ignore */ } } }
     function st() { const v = readJSON(storage, SKEY); return v && v.v === 1 ? Object.assign({ base: {}, seen: {}, queue: [], conflicts: {} }, v) : null; }
     function mut(fn) { const v = st() || { v: 1, base: {}, seen: {}, queue: [], conflicts: {}, asked: false }; const r = fn(v); writeJSON(storage, SKEY, v); return r; }
@@ -315,6 +408,7 @@
       if (!d.ok) { note('error', `"${name}" changed on GitHub and here, and the copy could not be kept in this browser (${d.message || d.error}). Nothing was uploaded.`); return d; }
       const l = gitSha(text), ctext = fileText(cn), lc = gitSha(ctext);   // the copy's own file text (a tool's file may carry the name)
       const r = await c.put(pathOf(cn), ctext, null, `${label}: conflict copy "${cn}" (from ${dev})`);
+      if (r.ok) noteSha(pathOf(cn), r.sha);
       mut(v => {
         v.seen[cn] = lc; v.queue = v.queue.filter(x => x !== name && (r.ok ? x !== cn : true)); if (!r.ok && v.queue.indexOf(cn) < 0) v.queue.push(cn);
         if (r.ok) v.base[cn] = { c: r.sha, l: lc };
@@ -327,14 +421,14 @@
     }
     /* flush(): upload the queue, oldest first. Stops at the first connection / token / rate-limit error (kept for later). */
     async function flush(force, all) {   // all (STDS): also the projects still inside the settle time
-      if (busy || !configured_()) return { ok: true, skipped: true };
+      if (busy || pbusy || !configured_()) return { ok: true, skipped: true };
       if (!force && now() < nextTry) return { ok: true, waiting: true };
       const v0 = st(); if (!v0 || !v0.queue.length) return { ok: true, done: 0 };
       if (!lock()) return { ok: true, locked: true };
       busy = true; let done = 0;
       try {
         const c = client(S(), o.fetch);
-        const t = await c.tree(folder); if (!t.ok) { failed(t); return t; }
+        const t = await treeOf(c, 0); if (!t.ok) { failed(t); return t; }
         const shas = t.files;
         for (const name of st().queue.slice()) {
           const v = st();
@@ -348,8 +442,14 @@
           let r;
           if (m.sha === l) r = { ok: true, sha: l };
           else if (m.sha && !(b && b.c === m.sha)) { r = await keepBoth(c, name, text, m.sha); if (!r.ok) { failed(r); return r; } done++; continue; }
-          else r = await c.put(path, text, m.sha, `${label}: save "${name}"`);
-          if (!r.ok && r.kind === 'conflict') { const m2 = await c.meta(path); r = await keepBoth(c, name, text, m2.ok ? m2.sha : null); if (!r.ok) { failed(r); return r; } done++; continue; }
+          else r = await c.put(path, text, m.sha, saveMsg(name));
+          if (!r.ok && r.kind === 'conflict') {
+            let m2 = await c.meta(path);
+            /* LIVE (2026-11-08): GitHub can refuse a commit when another file of the branch was committed at the same moment (a heartbeat
+               of another device); the file itself is unchanged: send it once more. Changed: both kept, as before. */
+            if (m2.ok && m2.sha === m.sha) { r = await c.put(path, text, m.sha, saveMsg(name)); if (!r.ok && r.kind === 'conflict') m2 = await c.meta(path); }
+            if (!r.ok && r.kind === 'conflict') { r = await keepBoth(c, name, text, m2.ok ? m2.sha : null); if (!r.ok) { failed(r); return r; } done++; continue; }
+          }
           if (!r.ok) { failed(r); return r; }
           shas.set(path, r.sha);
           mut(x => { x.base[name] = { c: r.sha, l }; x.queue = x.queue.filter(n => n !== name); });
@@ -363,10 +463,10 @@
     /* refreshCloud(): the files on GitHub for this tool -> cloud (Map name -> { sha, path }) */
     async function refreshCloud() {
       if (!configured_()) { cloud = null; return { ok: false, kind: 'off' }; }
-      const r = await client(S(), o.fetch).list(folder);
+      const r = await treeOf(client(S(), o.fetch), 0);   // LIVE: the same one request as client.list(), kept for poll()
       if (!r.ok) { cloudErr = r; return r; }
       cloudErr = null; cloud = new Map();
-      r.files.forEach(f => { const n = nameOf(f.name); if (n != null) cloud.set(n, { sha: f.sha, path: f.path }); });
+      r.files.forEach((sha, p) => { const f = p.slice(folder.length + 1); if (f.indexOf('/') >= 0) return; const n = nameOf(f); if (n != null) cloud.set(n, { sha, path: p }); });   // files directly in the folder only (not .presence/)
       return { ok: true, count: cloud.size };
     }
     /* status of one name: synced | pending | local | removed | cloud | cloud-newer | conflict | unknown */
@@ -419,12 +519,16 @@
        is not already kept elsewhere (synced, or kept as the conflict copy) is first kept as a conflict copy. */
     async function useCloud(name) {
       const v = st(), l = localSha(name), b = v && v.base[name], cf = v && v.conflicts[name];
+      let copy = null;
       if (l && !(b && b.l === l) && !(cf && cf.l === l)) {
         const dev = (o.device || S().device || 'this device').replace(/[()]/g, ''), cn = uniqueName(`${name} (conflict ${dev} ${stamp(now())})`);
         const d = store.duplicate(name, cn); if (!d.ok) return d;
         note('conflict', `Your version of "${name}" is kept as "${cn}".`);
+        copy = cn;
       }
-      return download(name, true);
+      const r = await download(name, true);
+      if (r.ok && copy) r.copy = copy;   // LIVE: the copy made here (loadCloud / undoLoad)
+      return r;
     }
     /* keepMine(name): replace GitHub's file with this browser's version (explicit, after a conflict or when GitHub is newer). */
     async function keepMine(name) {
@@ -432,6 +536,7 @@
       const m = await c.meta(path); if (!m.ok) { err = m; return m; }
       const r = await c.put(path, text, m.sha, `${label}: save "${name}" (replacing the GitHub version)`);
       if (!r.ok) { err = r; return r; }
+      noteSha(path, r.sha);
       const l = gitSha(text);
       mut(v => { v.base[name] = { c: r.sha, l }; v.seen[name] = l; v.queue = v.queue.filter(n => n !== name); delete v.conflicts[name]; });
       if (cloud) cloud.set(name, { sha: r.sha, path });
@@ -443,11 +548,174 @@
       const m = await c.meta(path); if (!m.ok) { err = m; return m; }
       if (!m.sha) { if (cloud) cloud.delete(name); mut(v => { delete v.base[name]; }); return { ok: true }; }
       const r = await c.del(path, m.sha, `${label}: delete "${name}"`); if (!r.ok) { err = r; return r; }
+      noteSha(path, null);
       if (cloud) cloud.delete(name); mut(v => { delete v.base[name]; delete v.conflicts[name]; });
       return { ok: true };
     }
+    /* ---------- LIVE (2026-11-08): the open project ---------- */
+    /* poll(name, po): has GitHub's file of the open project changed? One tree request, reused when this page read the tree less than
+       po.maxAge ms ago (default 25 s: a background upload just read it). Waits out an offline / rate-limit backoff (nextTry) unless
+       po.force. With po.presence !== false also the other devices' heartbeats of the project (presenceOf).
+       -> { ok, state, cloudSha, localSha, base, conflict, presence }
+          state: same (GitHub has what this browser last synced, or the same text) | changed (GitHub changed, this browser's saved copy
+          did not) | both (both changed since the last sync, or never synced here and different) | gone (deleted on GitHub) |
+          none (not on GitHub, never synced here) | held ("This browser only") */
+    async function poll(name, po) {
+      po = po || {};
+      if (!configured_()) return { ok: false, kind: 'off' };
+      if (!live(storage).watch) return { ok: false, kind: 'disabled' };
+      if (!po.force && now() < nextTry) return { ok: true, waiting: true };
+      if (!store.has(name)) return { ok: false, kind: 'missing' };
+      init();
+      const t = await treeOf(client(S(), o.fetch), po.maxAge == null ? LIVE.poll * 0.8 : po.maxAge);   // 24 s
+      if (!t.ok) { failed(t); return t; }
+      if (err && (err.kind === 'offline' || err.kind === 'rate')) { err = null; backoff = 0; nextTry = 0; }   // reachable again
+      const path = pathOf(name), cs = t.files.get(path) || null, v = st() || { base: {}, conflicts: {} }, b = v.base[name] || null, l = localSha(name);
+      if (cloud) { if (cs) cloud.set(name, { sha: cs, path }); else cloud.delete(name); }
+      let state;
+      if (v.hold && v.hold[name] && !b) state = 'held';
+      else if (!cs) state = b ? 'gone' : 'none';
+      else if (cs === l || (b && b.c === cs)) state = 'same';
+      else if (b && b.l === l) state = 'changed';
+      else state = 'both';
+      const presence = po.presence === false ? [] : await presenceOf(name, t.files);
+      return { ok: true, state, cloudSha: cs, localSha: l, base: b, conflict: v.conflicts[name] || null, presence };
+    }
+    /* changeInfo(name, sha): who changed GitHub's file, and when: { device (from the commit message "... (from <device>)", or null for
+       a commit made before LIVE / by hand), at (ms, the commit time) }. One request per new sha (kept for this page). */
+    const who = {};
+    async function changeInfo(name, sha) {
+      if (sha && who[sha]) return who[sha];
+      const r = await client(S(), o.fetch).commits(pathOf(name));
+      if (!r.ok) return { device: null, at: null, error: r.kind };
+      const k = (Array.isArray(r.json) && r.json[0] && r.json[0].commit) || {}, msg = String(k.message || '').split('\n')[0];
+      const m = /\(from ([^()]{1,60})\)\s*$/.exec(msg), at = Date.parse((k.committer && k.committer.date) || (k.author && k.author.date) || '') || null;
+      const res = { device: m ? m[1].trim() : null, at };
+      if (sha) who[sha] = res;
+      return res;
+    }
+    /* loadCloud(name): "Load it": GitHub's version into this browser's list (useCloud: a version of this browser that is not kept
+       anywhere is first kept as a conflict copy). -> { ok, copy?, undo } (undo: what undoLoad needs). The tool then opens the name. */
+    async function loadCloud(name) {
+      const v = st() || { base: {}, seen: {}, queue: [], conflicts: {} };
+      const undo = { name, text: fileText(name), base: v.base[name] || null, conflict: v.conflicts[name] || null };
+      const r = await useCloud(name);
+      if (!r.ok) return r;
+      undo.copy = r.copy || (undo.conflict && undo.conflict.copy) || null;
+      undo.cloudSha = (cloud && cloud.get(name) || {}).sha || ((st() || { base: {} }).base[name] || {}).c || null;
+      return Object.assign({}, r, { undo });
+    }
+    /* undoLoad(undo): this browser's previous version back under the name (fromFile of its file text, the way a download is saved) and
+       the name's sync bookkeeping as before the load. A previous version GitHub does not have shows as "conflict" (its copy stays in the
+       list). Nothing is uploaded or deleted on GitHub. */
+    function undoLoad(u) {
+      if (!u || u.text == null) return { ok: false, message: 'Nothing to undo.' };
+      let state; try { state = fromFile(JSON.parse(u.text), u.name); } catch (e) { return { ok: false, message: `The previous version could not be read back (${e.message}).` }; }
+      if (state == null) return { ok: false, message: 'The previous version could not be read back.' };
+      const w = store.save(u.name, state); if (!w.ok) return w;
+      const l = localSha(u.name);
+      mut(v => {
+        if (u.base) v.base[u.name] = u.base; else delete v.base[u.name];
+        v.seen[u.name] = l; v.queue = v.queue.filter(n => n !== u.name);
+        if (u.conflict) v.conflicts[u.name] = u.conflict;
+        else if (!(u.base && u.base.l === l)) v.conflicts[u.name] = { copy: u.copy, l, c: u.cloudSha || null, t: now() };
+        else delete v.conflicts[u.name];
+      });
+      lastRaw = rawList();
+      return { ok: true, name: u.name };
+    }
+    /* presence: projects/<tool>/.presence/<safe name>.<device id>.json = { v:1, app:'presence', tool, project, device, id, since, at }
+       (ISO times). In a sub-folder, so the project listing (refreshCloud, files directly in projects/<tool>/) never shows it. */
+    const presDir = `${folder}/.presence`, PKEY = `${KEY}.presence.${o.tool}`;
+    const presPath = (name, id) => `${presDir}/${safeName(name)}.${id}.json`;
+    function presIn(files, name) {   // the heartbeat files of one project: [{ path, id, sha }]
+      const pre = `${presDir}/${safeName(name)}.`, out = [];
+      files.forEach((sha, p) => { if (p.indexOf(pre) !== 0 || !/\.json$/.test(p)) return; const id = p.slice(pre.length, -5); if (ID_RX.test(id)) out.push({ path: p, id, sha }); });
+      return out;
+    }
+    const seenP = {};   // path -> { sha, info, seenAt, checkedAt, changed } (this page only)
+    /* presenceOf(name, files): the OTHER devices' heartbeats of the project: [{ id, device, since, at, fresh }]. A file is read (one
+       request) only when its sha is new to this page. */
+    async function presenceOf(name, files) {
+      const mine = deviceId(storage, false), out = [];
+      for (const f of presIn(files, name)) {
+        if (f.id === mine) continue;
+        let p = seenP[f.path];
+        if (!p || p.sha !== f.sha) {
+          const r = await client(S(), o.fetch).raw(f.path);
+          if (!r.ok) { if (r.kind === 'offline' || r.kind === 'rate') { failed(r); break; } continue; }
+          let info = null; try { const j = JSON.parse(r.text); if (j && typeof j === 'object') info = { device: String(j.device || '').slice(0, 60), since: Date.parse(j.since) || null, at: Date.parse(j.at) || null }; } catch (e) { info = null; }
+          p = seenP[f.path] = { sha: f.sha, info, seenAt: now(), checkedAt: now(), changed: !!(p && now() - p.checkedAt < LIVE.stale) };   // changed: seen to change while this page watched
+        } else p.checkedAt = now();
+        if (!p.info) continue;
+        out.push({ id: f.id, device: p.info.device, since: p.info.since, at: p.info.at, fresh: presenceFresh({ at: p.info.at, seenAt: p.seenAt, changed: p.changed }, now()) });
+      }
+      return out;
+    }
+    /* others(name, po): the fresh heartbeats of other devices (before opening a project): the tree reused when younger than po.maxAge
+       (default LIVE.poll, 30 s). -> { ok, list } */
+    async function others(name, po) {
+      po = po || {};
+      if (!configured_() || !live(storage).watch) return { ok: true, list: [] };
+      if (now() < nextTry) return { ok: true, list: [], waiting: true };
+      const t = await treeOf(client(S(), o.fetch), po.maxAge == null ? LIVE.poll : po.maxAge); if (!t.ok) return t;
+      return { ok: true, list: (await presenceOf(name, t.files)).filter(x => x.fresh) };
+    }
+    function pst() { const v = readJSON(storage, PKEY); return v && v.v === 1 && v.files && typeof v.files === 'object' ? v : { v: 1, files: {} }; }
+    function pmut(fn) {
+      const v = pst(); const r = fn(v);
+      Object.keys(v.files).forEach(k => { const f = v.files[k]; if (!f || typeof f !== 'object') { delete v.files[k]; return; }
+        if (f.tabs) Object.keys(f.tabs).forEach(t => { if (now() - f.tabs[t] > LIVE.stale) delete f.tabs[t]; });
+        if (now() - (f.at || 0) > 86400000 && !(f.tabs && Object.keys(f.tabs).length)) delete v.files[k]; });
+      writeJSON(storage, PKEY, v); return r;
+    }
+    const iso = t => { try { return new Date(t).toISOString(); } catch (e) { return null; } };
+    /* beat(name, po): write this device's heartbeat of the open project (create, or update with the file's sha). Not more than once a
+       minute for the whole browser (another tab of the tool that wrote it less than 55 s ago counts) unless po.force. Never while an
+       upload runs; waits out a backoff. */
+    async function beat(name, po) {
+      po = po || {};
+      if (!configured_()) return { ok: false, kind: 'off' };
+      if (!live(storage).watch) return { ok: false, kind: 'disabled' };
+      if (busy || pbusy) return { ok: true, busy: true };
+      if (now() < nextTry) return { ok: true, waiting: true };
+      const id = deviceId(storage, true); if (!id) return { ok: false, kind: 'storage' };
+      const path = presPath(name, id), rec = pst().files[path] || null, alive = !!(rec && rec.sha && now() - (rec.at || 0) < LIVE.stale);
+      pmut(v => { const f = v.files[path] = v.files[path] || {}; f.tabs = f.tabs || {}; f.tabs[me] = now(); });
+      if (!po.force && alive && now() - rec.at < LIVE.beat - 5000) return { ok: true, skipped: 'recent' };
+      const since = alive && rec.since ? rec.since : now(), dev = devName();
+      const text = JSON.stringify({ v: 1, app: 'presence', tool: o.tool, project: name, device: dev, id, since: iso(since), at: iso(now()) }, null, 1);
+      const msg = `${label}: "${name}" open on ${dev || 'a device'} (presence)`;
+      pbusy = true;
+      try {
+        const c = client(S(), o.fetch);
+        let r = await c.put(path, text, (rec && rec.sha) || (lastTree && lastTree.files.get(path)) || null, msg);
+        if (!r.ok && r.kind === 'conflict') { const m = await c.meta(path); if (m.ok) r = await c.put(path, text, m.sha, msg); }
+        if (!r.ok) { if (r.kind === 'offline' || r.kind === 'rate') failed(r); return r; }
+        noteSha(path, r.sha);
+        pmut(v => { const f = v.files[path] = v.files[path] || {}; f.sha = r.sha; f.at = now(); f.since = since; f.tabs = f.tabs || {}; f.tabs[me] = now(); });
+        return { ok: true, path, sha: r.sha };
+      } finally { pbusy = false; }
+    }
+    /* leave(name, po): this tab closes the project: the heartbeat file is deleted when no other tab of this browser has it open
+       (po.keepalive: sent while the page closes). */
+    async function leave(name, po) {
+      po = po || {};
+      if (!configured_()) return { ok: false, kind: 'off' };
+      const id = deviceId(storage, false); if (!id) return { ok: true, none: true };
+      const path = presPath(name, id), rec = pst().files[path];
+      if (!rec) return { ok: true, none: true };
+      let kept = false;
+      pmut(v => { const f = v.files[path]; if (!f) return; if (f.tabs) delete f.tabs[me]; kept = !!(f.tabs && Object.keys(f.tabs).some(k => now() - f.tabs[k] < LIVE.stale)); if (!kept) delete v.files[path]; });
+      if (kept) return { ok: true, kept: true };
+      const sha = rec.sha || (lastTree && lastTree.files.get(path)) || null; if (!sha) return { ok: true, none: true };
+      const r = await client(S(), o.fetch).del(path, sha, `${label}: "${name}" closed on ${devName() || 'a device'} (presence)`, { keepalive: !!po.keepalive });
+      if (r.ok || r.kind === 'notfound') noteSha(path, null);
+      return r;
+    }
     return { tool: o.tool, label, folder, pathOf, configured: configured_, init, scan, flush, refreshCloud, rows, statusOf, upload, uploadAll, skipFirst,
       download, useCloud, keepMine, deleteCloud, hold, held, notices, fileText, localSha,
+      poll, changeInfo, loadCloud, undoLoad, presenceOf, others, beat, leave, presPath, live: () => live(storage), deviceId: () => deviceId(storage, false),
       state: st, cloud: () => cloud, cloudError: () => cloudErr, lastError: () => err, nextTry: () => nextTry, busy: () => busy,
       pending: () => { const v = st(); return v ? v.queue.length : 0; }, settings: S };
   }
@@ -669,5 +937,6 @@
   }
 
   window.SharedGitHubSync = { API, KEY, settings, saveSettings, forgetToken, configured, mask, safeName, nameOf, gitSha, b64, unb64, client, engine,
-    attach, testConnection, settingsDialog, stamp };
+    attach, testConnection, settingsDialog, stamp,
+    LIVE, LIVE_KEY, DEV_KEY, live, saveLive, deviceId, autoSaveDue, pollDue, beatDue, presenceFresh };
 })();
