@@ -225,3 +225,10 @@ Plan: rotating in-depth code-compliance reviews (read-only) → fix PRs for clea
 - SF Wall Design done: #1165 b_eff, #1166 in-plane, #1168 graphics, #1169 notes. No agents running.
 - Awaiting engineer: b_eff,base vs b_eff,top (base measured from b — conservative but non-physical for short walls); J_c garbled note wording; next tools for note cleanup; Base Plate literal <b> tags; abutment toe strut-and-tie; left summary panel in other apps.
 - Check-ins stopped (no work running).
+
+## Check-in 2026-11-08 01:07 UTC
+- Engineer answers: wall-end cap (done #1178), J_c note (done #1178), note cleanup ALL apps, Base Plate <b> fix, left panel in other apps. Abutment STM: no.
+- Brief: scratchpad/notes_panel_brief.md. Done: SubLoads #1173/#1179 (no panel), Light Pole #1177/#1183, Section Property #1174/#1180 + panel #1184.
+- Running: Steel Bridge Design, Stone Arch, Pile Designer, Retaining Wall, Base Plate, Timber, Gusset, Concrete Beam, Bridge Geometry, Moving Load.
+- Queue: abutment_calculator, elastomeric, Steel Beam, ASCE7, Shear&Moment (notes), lldf, index.html, tools.html (notes). Skip apps/steel-bridge, Prestressed (on hold).
+- Pending engineer: Spread Footing display rename → "Shallow Foundation Design" (file name kept). SPC r̄o/H stale "to be verified" text — fold into a small PR.
