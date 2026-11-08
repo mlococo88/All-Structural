@@ -547,8 +547,8 @@ svg circle.fi[data-pile].fhl,svg circle.fi[data-pile]:hover,svg circle.fi[data-p
         <div class="prjGrp"><b>Bearings (Elastomeric Bearing Design)</b><div class="in-note">Opens EDM with this abutment's geometry, loads and thermal movement.</div><div class="prjBtns">
         <button id="btnOpenEDM" title="Open the Elastomeric Bearing Design Module and hand off geometry, loads and thermal movement">↗ Open EDM (Bearing Design)</button>
         </div></div>
-        <div class="prjGrp"><b>Foundation (Pile Designer / Spread Footing)</b><div class="in-note">Send the footing / pile-cap loads; pull the pile results back.</div><div class="prjBtns">
-        <button id="fdx-send" title="Send to other tools: the factored and service load combinations at the bottom of the footing / pile cap, per limit state (channel foundationLoads), for Pile Designer and Spread Footing; with piles also the pile layout, section and each pile's reactions, and the governing compression / uplift pile per limit state; for an integral abutment the data of Pile Designer's integral-abutment mode. The dialog also offers Export hand-off (JSON)">Send foundation loads</button>
+        <div class="prjGrp"><b>Foundation (Pile Designer / Shallow Foundation Design)</b><div class="in-note">Send the footing / pile-cap loads; pull the pile results back.</div><div class="prjBtns">
+        <button id="fdx-send" title="Send to other tools: the factored and service load combinations at the bottom of the footing / pile cap, per limit state (channel foundationLoads), for Pile Designer and Shallow Foundation Design; with piles also the pile layout, section and each pile's reactions, and the governing compression / uplift pile per limit state; for an integral abutment the data of Pile Designer's integral-abutment mode. The dialog also offers Export hand-off (JSON)">Send foundation loads</button>
         <button id="pxr-pull" title="Pull the pile results sent by Pile Designer (channel pileResults): geotechnical R_n and φ, the p-y pile moment of each matched limit state, the depth to fixity, integral-abutment pile-head moment. Asks first; nothing changes until you import">Pull pile results<span id="pxr-new" class="axh-new" hidden> ● new data</span></button>
         <button id="pxr-imp" title="Import a pileResults hand-off JSON file from Pile Designer (asks first)">Import pile results (JSON)</button>
         <input type="file" id="pxr-file" accept=".json,application/json" style="display:none">
@@ -11584,8 +11584,8 @@ document.addEventListener("DOMContentLoaded",init);
     let ov=document.getElementById("fdx-ov"); if(!ov){ ov=document.createElement("div"); ov.id="fdx-ov"; document.body.appendChild(ov); }
     const f=v=>escH(r3(v));
     ov.innerHTML="<div id='fdx-dlg' role='dialog' aria-label='Send foundation loads'><h3>Send foundation loads</h3>"+
-      (iabType()==="integral"? "<div>Integral abutment: factored and service <b>per-pile</b> loads of the integral design (Tab 10 §10.4), for Pile Designer's integral-abutment mode (channel foundationLoads). Spread Footing refuses them.</div>"
-        : "<div>Factored and service load combinations at the bottom of the footing / pile cap, per limit state, for Pile Designer and Spread Footing (channel foundationLoads).</div>")+
+      (iabType()==="integral"? "<div>Integral abutment: factored and service <b>per-pile</b> loads of the integral design (Tab 10 §10.4), for Pile Designer's integral-abutment mode (channel foundationLoads). Shallow Foundation Design refuses them.</div>"
+        : "<div>Factored and service load combinations at the bottom of the footing / pile cap, per limit state, for Pile Designer and Shallow Foundation Design (channel foundationLoads).</div>")+
       "<div style='margin:6px 0'>"+lss.map(ls=>"<label style='margin-right:12px'><input type='checkbox' data-fdx-ls='"+escH(ls)+"'"+(DLG.sel.includes(ls)?" checked":"")+"> "+escH(lsOut(ls))+"</label>").join("")+"</div>"+
       (b.err?"<div style='color:#c62828'>"+escH(b.err)+"</div>":
         "<div class='fdx-note'><b>Location:</b> "+escH(b.p.location)+"<br><b>Sign convention:</b> "+escH(SIGN)+"</div>"+
