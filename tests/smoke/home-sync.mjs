@@ -70,7 +70,7 @@ const copy = Object.keys(st[SF] || {}).find(n => /^HSP A \(conflict Home \d{4}-\
 ok(copy && gh.files.has(P(SF, copy)) && st[SF][copy] === 'synced', 'conflict: our version kept as "' + copy + '" here and on GitHub');
 ok(list.every(k => NAMES.every(n => FOLDER[k] === SF && n === 'HSP A' ? st[SF][n] === 'conflict' : st[FOLDER[k]][n] === 'synced')), 'after Sync all: every project "synced" (Spread Footing "HSP A": conflict)');
 ok(/Sync all: \d+ files? uploaded/.test(bar) && /conflict/i.test(bar), 'the bar reports the uploads and the conflict: ' + bar.replace(/\s+/g, ' ').slice(0, 300));
-ok(!gh.log.some(l => l.method === 'DELETE'), 'nothing deleted on GitHub');
+ok(!gh.log.some(l => l.method === 'DELETE' && !l.url.includes('/.presence/')), 'nothing deleted on GitHub');
 if (SHOTS) await home.screenshot({ path: path.join(SHOTS, 'home-sync-after.png') });
 // 4. each tool afterwards: its own dialog says synced; no upload by the tool
 for (const key of list) {
@@ -95,7 +95,7 @@ gh.setRemote(P(k1, NAMES[1]), '{\n "newer": true\n}');
 await home.click('#spCheck'); await home.waitForTimeout(300); await idle();
 st = await status(); ok(st[k1][NAMES[1]] === 'cloud-newer', `${k1}: changed on GitHub -> "GitHub newer"`);
 const L1 = gh.log.length; await home.click('#spSyncAll'); await home.waitForTimeout(300); await idle();
-ok(!gh.log.slice(L1).some(l => l.method !== 'GET') && gh.files.get(P(k1, NAMES[1])) === '{\n "newer": true\n}', 'Sync all again: nothing uploaded, the newer GitHub file is not overwritten');
+ok(!gh.log.slice(L1).some(l => l.method !== 'GET' && !l.url.includes('/.presence/')) && gh.files.get(P(k1, NAMES[1])) === '{\n "newer": true\n}', 'Sync all again: nothing uploaded, the newer GitHub file is not overwritten');
 // 6. token, layout, errors
 ok(gh.log.every(l => l.auth === `Bearer ${TOKEN}` && !l.url.includes(TOKEN)) && !(await home.evaluate(() => document.body.innerText)).includes(TOKEN.slice(11)), 'token only in the Authorization header, never in a URL or the page');
 await home.setViewportSize({ width: 390, height: 800 }); await home.waitForTimeout(300);

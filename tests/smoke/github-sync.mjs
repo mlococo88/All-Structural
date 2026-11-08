@@ -148,9 +148,9 @@ await p.click('#spLibDlg [data-spa=del][data-n="Footing%20C"]'); await p.waitFor
 assert.ok(!JSON.parse(await ls(T.list))['Footing C']); assert.ok(gh.files.has(pathOf('Footing C')));
 assert.match((await p.evaluate(() => window.__asked)).at(-1), /Also delete "Footing C" from GitHub/);
 await until(() => p.evaluate(() => !!document.querySelector('#spLibDlg [data-ghx=delcloud][data-n="Footing%20C"]')), 5000, 'cloud-only after delete');
-assert.equal(gh.log.filter(l => l.method === 'DELETE').length, 0);
+assert.equal(gh.log.filter(l => l.method === 'DELETE' && !l.url.includes('/.presence/')).length, 0);
 await p.evaluate(() => { window.__ans = [true]; }); await p.click('#spLibDlg [data-ghx=delcloud][data-n="Footing%20C"]');
-await until(() => !gh.files.has(pathOf('Footing C')), 8000, 'cloud delete'); assert.equal(gh.log.filter(l => l.method === 'DELETE').length, 1);
+await until(() => !gh.files.has(pathOf('Footing C')), 8000, 'cloud delete'); assert.equal(gh.log.filter(l => l.method === 'DELETE' && !l.url.includes('/.presence/')).length, 1);
 ok('deleting in the dialog asks about GitHub; Cancel keeps the GitHub file; "Delete from GitHub" deletes it');
 
 // --- 9. the token, the tool's data, 390 px

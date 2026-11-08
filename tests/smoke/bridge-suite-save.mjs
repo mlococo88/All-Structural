@@ -146,11 +146,11 @@ for (const key of list) {
       const e = await p.evaluate(k => Object.values(JSON.parse(localStorage.getItem(k))).find(x => x.name === 'Gamma'), K);
       ok(JSON.stringify(Object.keys(f)) === '["app","v","name","savedAt","slices"]' && f.app === 'BridgeSuite' && f.name === 'Gamma' && f.savedAt === e.savedAt && JSON.stringify(f.slices) === JSON.stringify(e.slices), 'file = { app, v, name, savedAt, slices } of the entry (no demands)');
       // another app's autosave into the open project: waits for the 30 s pause
-      const puts0 = gh.log.filter(l => l.method === 'PUT').length;
+      const puts0 = gh.log.filter(l => l.method === 'PUT' && !l.url.includes('/.presence/')).length;
       await p.evaluate(() => { const id = window.BridgeProjects.current(); window.BridgeProjects.saveSlice(id, undefined, 'otherApp', { n: 1 }); });
       await p.waitForTimeout(12000);
-      ok(gh.log.filter(l => l.method === 'PUT').length === puts0, 'a change of the entry is not uploaded within 12 s (settle)');
-      for (let i = 0; i < 120 && gh.log.filter(l => l.method === 'PUT').length === puts0; i++) await p.waitForTimeout(500);
+      ok(gh.log.filter(l => l.method === 'PUT' && !l.url.includes('/.presence/')).length === puts0, 'a change of the entry is not uploaded within 12 s (settle)');
+      for (let i = 0; i < 120 && gh.log.filter(l => l.method === 'PUT' && !l.url.includes('/.presence/')).length === puts0; i++) await p.waitForTimeout(500);
       const f2 = JSON.parse(gh.files.get(F('Gamma')));
       ok(f2.slices.otherApp && f2.slices.otherApp.n === 1, 'uploaded after the edits paused (~30 s)');
       ok(!/demands/.test(gh.files.get(F('Gamma'))), 'no MIDAS demands in the file');
