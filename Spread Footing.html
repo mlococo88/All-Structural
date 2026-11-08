@@ -414,7 +414,7 @@ a.wkA:hover{text-decoration:underline}
  <div class="row sm-vesic"><label>Cohesion c</label><input type="number" step="0.05" data-path="soil.c" data-num><span class="unit">ksf</span></div>
  <div class="row sm-vesic"><label>Friction angle &phi;</label><input type="number" step="0.5" data-path="soil.phi" data-num><span class="unit">deg</span></div>
  <div class="row sm-vesic"><label>Bearing capacity FS</label><input type="number" step="0.1" data-path="soil.FSb" data-num><span class="unit">&ndash;</span></div>
- <div class="row sm-vesic"><label>Depth factors d<sub>q</sub>, d<sub>c</sub></label><select data-path="soil.sfdDepthF"><option value="off">Off (d = 1.0)</option><option value="on">On (Vesi&cacute;)</option></select><span class="hint">Vesi&cacute; form (not AASHTO LRFD 10th Ed. Eq. 10.6.3.1.2a-10); use condition per AASHTO 10.6.3.1.2a</span></div>
+ <div class="row sm-vesic"><label>Depth factors d<sub>q</sub>, d<sub>c</sub></label><select data-path="soil.sfdDepthF"><option value="off">Off (d = 1.0)</option><option value="on">On (AASHTO dq &le; 1.4, Vesi&cacute; dc)</option></select><span class="hint">d<sub>q</sub> per AASHTO LRFD 10th Ed. Eq. 10.6.3.1.2a-10 (arctan(D<sub>f</sub>/B&prime;), &le; 1.4), d<sub>c</sub> Vesi&cacute; form from d<sub>q</sub>; use condition per AASHTO 10.6.3.1.2a</span></div>
 <div class="row sm-vesic"><label>Shear failure mode</label><select data-path="soil.sfdShearMode"><option value="general">General shear (c, &phi; as entered)</option><option value="local">Local / punching shear (c* = 0.67c, &phi;* = tan<sup>&minus;1</sup>(0.67 tan &phi;))</option></select><span class="hint"><b class="sfNLk">AASHTO LRFD 10th Ed. 10.6.3.1.2b:</b> use the reduced parameters where local or punching shear failure is possible (loose or compressible soil, weak soil under slow loading, dense sand under a deep footing with a high load).<br><b class="sfNLk">Applies to:</b> bearing capacity only; sliding and passive use &phi;.</span></div>
  <div class="row sm-vesic"><label>Override q<sub>allow</sub></label><select data-path="soil.qaOverride" id="qaOverSel"><option value="off">Off (use computed)</option><option value="on">On (user value)</option></select></div>
  <div class="row sm-vesic qa-over"><label>User q<sub>allow</sub></label><input type="number" step="0.25" data-path="soil.qaOverVal" data-num><span class="unit">ksf</span></div>
@@ -2324,10 +2324,10 @@ function renderSchematic(){
   ['Bearing:','checked conservatively against allowable bearing.'],
   ['Overturning/sliding/flotation:','indicative (single envelope, not a full combination evaluation).']])));
  ul.appendChild(el('div','note sfNL',sfNL('Not considered in this version (v1 audit trail):',[   /* SFNL */
-  'settlement;','live-load patterning;','seismic loads (E);','rain load (R);','minimum/accidental eccentricity;','lateral earth pressure;','slender-pedestal moment magnification;','non-rectangular footings.',
+  'settlement;','live-load patterning;','seismic analysis and detailing (E loads are entered as E_h; the ASCE 7-16 seismic combinations are generated; no Ω₀ unless E_mh is entered; no ACI 318-19 Chapter 18 detailing);','rain load (R);','minimum/accidental eccentricity (other than M_2,min of a slender pedestal);','lateral earth pressure;','second-order frame (story) analysis of slender pedestals (the moments of a slender pedestal are magnified per ACI 318-19 6.6.4);','non-rectangular footings.',
   ['Passive resistance:','neglected unless a mobilized fraction is entered.'],
   ['Buoyancy U:','applied at a factor of 1.0 in all combinations as a permanent action.'],
-  ['Structural design:','structural (LRFD, ACI 318-19) design of the footing and pedestals uses the generated LRFD combinations and is reported on the Footing Design and Pedestal Design tabs.']])));
+  ['Structural design:','structural (LRFD, ACI 318-19) design of the footing, pedestals and walls uses the generated LRFD combinations and is reported on the Footing Design, Pedestal Design and Wall Design tabs.']])));
  b5.appendChild(ul);
 }
 /* SFTS (2026-11-05, engineer: every drawing to scale): helpers of the elevation drawings. Display only.
@@ -4563,7 +4563,7 @@ function sfrModel(){
    'Loads act at the load point of each pedestal (x + e_x, y + e_y); the pedestal transmits them to the footing as P at its centroid and the moments P·e.',
    'Flexure and shear capacities per foot of width with uniformly spaced bars (A_s = 12 A_b/s); short-direction banding (ACI 13.3.3.3) is advisory.',
    'No shear reinforcement in the footing (one-way V_c by ACI Table 22.5.5.1(c)).',
-   'Pedestal slenderness is screened only (k = 2.0, free top: fixed at the footing, free at the top; ℓ_u = h); moment magnification is not performed.',
+   'Pedestal slenderness: k = 2.0 (fixed at the footing, free at the top), ℓ_u = h; a pedestal with kℓ_u/r > 22 has its moments magnified (ACI 318-19 6.6.4; sway cantilever, δ_s of the pedestal alone, C_m = 1.0) and is NG where unstable or where δ_sδ > 1.4 (6.2.5.3).',
    'Footing self-weight, soil cover and surcharge carry the dead (or live) factor of each combination; buoyancy is 1.0 in every combination.'].forEach(t=>items.push({type:'note',text:t}));
   (R.W||[]).forEach(w=>items.push({type:'note',warn:true,text:(w.lvl==='err'?'Error: ':'Warning: ')+sfrPlain(w.msg)}));
   items.push({type:'note',text:'Design checks that fail (NG) or need review (REVIEW): [[S-ng]].'});   /* SFNG */
@@ -7894,7 +7894,7 @@ function renderFootingDesign(){
  const intro=secPanel(T,'o-fd-basis','5.1  Design Basis & Effective Depths');
  intro.appendChild(el('div','note sfNL',sfNL('Structural design uses strength (LRFD) combinations (ASCE 7-16 §2.3.1 / ACI 318-19 §5.3).',[   /* SFNL */
   ['Net soil pressure:','the net soil pressure driving footing shear and moment is computed from the pedestal-delivered factored loads (axial, applied moment, and V·h shear couples'+(R.peds.some(p=>p.lex||p.ley)?', and P·e from the load offsets on the pedestals':'')+') plus pedestal self-weight.'],
-  ['Excluded:','footing self-weight, EV, and buoyancy are uniform reactions carried directly to the soil and are excluded from the structural pressure per standard practice.'],
+  ['Body forces:','footing self-weight, EV, surcharge and buoyancy are carried in the structural resultant and subtracted back inside each free body: under full contact this equals leaving them out (a uniform load reacted by a uniform pressure); under partial contact the weight over the uplifted region is carried in bending back to the contact area.'],
   ['Analysis:','the footing is analyzed as a rigid body on a compression-only (no-tension) soil; the factored base-pressure plane is solved for each combination and the moment and shear at each critical section are obtained by <b>direct integration of that pressure solid</b> over the region outboard of the section, with the uplifted (zero-pressure) area excluded.'],
   ['Moment direction:','moments are reported by the direction of the resisting bars: the x-direction moment is taken at the pedestal face normal to x.'],
   ['Reinforcement convention:','flexural and shear capacities are computed on a <b>per-foot</b> basis, A<sub>s</sub> = A<sub>b</sub>&times;12/s, and are therefore independent of any assumed discrete bar count.'],
@@ -10131,7 +10131,7 @@ buildManualTab();
     var add={}, from={};
     s.rows.forEach(function(row){
       var tr=o.map[row.key]||'';
-      if(row.type==='E' && !tr && (Math.abs(row.V)>1e-9 || Math.abs(row.M)>1e-9)) r.warn.push('E (seismic) is not imported: this tool has no seismic load type (see its scope notes).');
+      if(row.type==='E' && !tr && (Math.abs(row.V)>1e-9 || Math.abs(row.M)>1e-9)) r.warn.push('E (seismic) is not imported by default: pick the E row (horizontal seismic effect E_h) as its target if the reaction is E_h.');
       if(!tr) return;
       if(TYPES.indexOf(tr)<0){ r.err.push('Unknown target row '+tr+'.'); return; }
       var a=add[tr]=add[tr]||{P:0}; a.P+=row.V;
