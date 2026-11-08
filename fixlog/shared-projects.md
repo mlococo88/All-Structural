@@ -122,7 +122,7 @@ Loaded by: see `shared/README.md` (one row per file). Tests: `node tests/engine/
 - **How verified:** see the PR (standard-save, start-chooser, project-library for every tool entry, sbd-standard-save, pile-library, steel-bridge-library, github-sync, github-sync-tools, bridge-suite-save, check-syntax).
 - **Formulas, factors, units, code references:** none (§4 does not apply).
 
-## 2026-11-08 — PR: claude/sync-autosave-ui (PR #PR2NUM: https://github.com/mlococo88/All-Structural/pull/PR2NUM) (LIVE PR 2 of 3) — projects-ui.js: auto-save of the open named project, chip status, "Updated on <device>" banner with Load it / Keep mine / Undo   [GitHub sync only; nothing changes while sync is off; no key or format change; no result change]
+## 2026-11-08 — PR: claude/sync-autosave-ui (PR #1252: https://github.com/mlococo88/All-Structural/pull/1252) (LIVE PR 2 of 3) — projects-ui.js: auto-save of the open named project, chip status, "Updated on <device>" banner with Load it / Keep mine / Undo   [GitHub sync only; nothing changes while sync is off; no key or format change; no result change]
 - **Why:** engineer request 2026-11-08 (A, B). Engine: fixlog/shared-github-sync.md LIVE PR 1 (#1251).
 - **What (`shared/projects-ui.js`):**
   - New `liveBar(ctx, b)` (anchor `function liveBar(ctx, b)`), made by every `projectBar` (anchor `live = liveBar(ctx, {`). A 3 s timer. Its first line returns at once when `SharedGitHubSync` is not loaded or sync is not set up (`eng()` null): no request, no key, no element.
