@@ -3597,7 +3597,7 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
 - **Observation (not changed, §4/§9):** item 22 still says "equation numbers to be verified against the printed Specification" for E4-9 / E4-8, although SPL6 (#1110) records them as checked against the printed Specification. Left as is; for the engineer to decide.
 - **Other copies:** none.
 
-## 2026-11-08 — PR: nl-spc-a2 (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — SPNL-2: long notes on the other tabs, the input panel, the warnings and the Report as a bold lead and a list (display only, no result change)
+## 2026-11-08 — PR: nl-spc-a2 (PR #1180: https://github.com/mlococo88/All-Structural/pull/1180) — SPNL-2: long notes on the other tabs, the input panel, the warnings and the Report as a bold lead and a list (display only, no result change)
 
 ### SPNL-2. Long notes outside the Method tab: lead line and list   [display only] [no result change]
 - **Request:** as SPNL-1 (#1174), part 2 of 2. This part uses the `spNL` helper, the CSS and the `spxWalk` `.spNL` branch from SPNL-1. A note element `el('div', 'hint', '…')` becomes `el('div', 'hint spNL', spNL(lead, [[lead words, text], …]))`. An item that is `null` is skipped, so conditional sentences stay conditional.
