@@ -188,6 +188,7 @@ Loaded by: see `shared/README.md` (one row per file). Tests: `node tests/engine/
 - **Tests changed (presence keys and writes are not project data):**
   - `tests/smoke/github-sync.mjs`, `github-sync-tools.mjs`, `standard-save.mjs`: the "only these sync keys" checks leave out `bridgeSuite.v1.githubSync.deviceId|live|presence.*`.
   - `home-sync.mjs`: "no upload by the tool" leaves out PUTs to `/.presence/`.
+  - The request counts and "last PUT of <project>" in `github-sync.mjs`, `github-sync-tools.mjs`, `home-sync.mjs` and `bridge-suite-save.mjs` leave out `/.presence/` URLs. A heartbeat of "GHS A" matched `url.includes('GHS%20A')`.
 - **Check case:** `tests/smoke/github-sync-live.mjs` step 4:
   - A shows "Also open on Desktop (since hh:mm)", and two heartbeat files `Pier 1.<id>.json` exist;
   - Saved projects lists no presence file;
