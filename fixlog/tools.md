@@ -55,3 +55,31 @@
   - screenshots at 1280 and 390 px looked at.
 - **Other copies:** none (the status labels repeat `LABEL` of `shared/github-sync.js`, which does not export it).
 - **Open items:** none.
+
+## 2026-11-08 — PR: claude/tools-notes-split (PR link added after merge) (TLNL: long notes on the tools list as a lead and a short list; display only)
+
+### TLNL. Long notes split into a lead and a list   [display only] [no result change]
+- **Request (engineer, 2026-11-07, approved for all apps):** "There are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Pattern of Spread Footing SFNL-1 (#1167). The left summary panel (Part B of the same request) does not apply: this page lists the tools and has no checks.
+- **CSS** (after `.spNote{…}`), page-scoped, no new colours (dark and light use the page's variables), anchor `/* TLNL (2026-11-08`:
+  ```css
+  ul.nlU{margin:2px 0 0;padding-left:18px}ul.nlU>li{margin:1px 0}
+  .desc ul.nlU{margin:2px 0 0}.spNote ul.nlU{margin:2px 0 0}
+  ```
+- **Notes changed (anchor = the old opening text).** Each is now its first sentence (or bold name) followed by `<ul class="nlU">` with one item per sentence or per decision. Every word, number, link and citation is kept in the same order, except "(see ENGINEER_CHECKS.md)", which moves up into the lead of the Gusset item (it has no digits). Exact before / after: the PR diff.
+  1. Saved projects, `<p class="spNote">Click a project…` → `<div class="spNote">How to use this list:` + Open / Where they are kept / A file you can keep.
+  2. Checks, "Concrete Beam ASD: retired (2026-11-01); …" → two items.
+  3. Checks, "ACI Rebar Development Length: retired (2026-11-05); …" → three items.
+  4. Checks, "Cloud sync (GitHub), in the tools with a Saved projects dialog: …" → four steps.
+  5. Results changed, "Gusset: 2026-11-07 review decisions to confirm: …" → seven decisions.
+  6. Results changed, "Pile: 2026-11-07 decisions to confirm: …" → six decisions.
+  7. Results changed, "SubLoads: 2026-11-07 review decisions to confirm: …" → six decisions.
+  8. Results changed, "Steel Beam: … Timber: … Moving Load: …" → lead "Steel Beam, Timber, Moving Load:" and one item per tool.
+  9. Card "Steel Bridge Design (GirderDetail)" description → Includes / Sends.
+  10. Card "Steel Bridge Design (new, in development)" description → So far / Not for design use yet.
+  11. Card "Light Pole & Sign Post" description → Anchor groups / Not for.
+  12. Card "Base Plate & Anchor Designer" description → Also / Hand-off / Report tab.
+- **Not changed:** the Saved projects status bar (generated with its Refresh button), the short card descriptions, the page subtitle and footer, and the tool filter script. The filter still matches the same text, because a card's `textContent` keeps every word.
+- **Formulas, factors, units, code references:** none (§4 does not apply). **Saved data:** none (§5).
+- **Check case:** the Gusset item. Before: one 436-character line. After: a lead and seven items; "23.8 ksi" and "1.403 → 1.165" are unchanged.
+- **How verified:** headless Chromium, origin/main vs the branch, at 1440 and 390 px: the digit sequence of the page text is identical; the filter "anchor" shows the same two cards; no sideways scroll at 390 px; 0 console errors. Tests: see the PR.
+- **Other copies:** none. **Open items:** none.

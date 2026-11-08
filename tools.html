@@ -44,6 +44,9 @@ ul.spL .spD{color:var(--muted);font-size:12px;white-space:nowrap}
 .spSt{display:inline-block;font-size:12px;padding:0 7px;border-radius:9px;border:1px solid var(--line);white-space:nowrap;color:var(--muted)}
 .spSt.synced{background:#dcfce7;border-color:#86efac;color:#166534}.spSt.cloud-newer,.spSt.cloud{background:#e0f2fe;border-color:#7dd3fc;color:#075985}.spSt.conflict{background:#fef3c7;border-color:#fcd34d;color:#92400e}
 .spNote{color:var(--muted);font-size:13px;margin:8px 0 2px}
+/* TLNL (2026-11-08, engineer request): a long note as a lead and a short list (display only) */
+ul.nlU{margin:2px 0 0;padding-left:18px}ul.nlU>li{margin:1px 0}
+.desc ul.nlU{margin:2px 0 0}.spNote ul.nlU{margin:2px 0 0}
 </style>
 <script src="shared/projects.js"></script>
 <script src="shared/github-sync.js"></script>
@@ -59,30 +62,64 @@ ul.spL .spD{color:var(--muted);font-size:12px;white-space:nowrap}
 <div class="spTools"><input id="spq" type="search" placeholder="Find a saved project" aria-label="Find a saved project"><select id="spApp" aria-label="Show the projects of one app"></select></div>
 <div class="spBar" id="spBar"></div>
 <div id="spOut"></div>
-<p class="spNote">Click a project (or an app's name) to open its app in a new tab, then open the project there with <b>Saved projects…</b>. Projects saved in a browser are kept in that browser only; Export JSON in each app makes a file you can keep.</p>
+<div class="spNote">How to use this list:<ul class="nlU">
+<li><b>Open:</b> click a project (or an app's name) to open its app in a new tab, then open the project there with <b>Saved projects…</b>.</li>
+<li><b>Where they are kept:</b> projects saved in a browser are kept in that browser only.</li>
+<li><b>A file you can keep:</b> Export JSON in each app makes one.</li></ul></div>
 </details>
 <details class="checks" open>
 <summary>Open engineer checks and decisions — check these before relying on the affected results</summary>
 <h3>Checks (your own action)</h3><ul>
 <li><b>Base Plate &amp; Anchor:</b> type 5.5 into f'c in Edge/Chrome; it should stay 5.5 (decimal fix tested headless only).</li>
-<li><b>Concrete Beam ASD:</b> retired (2026-11-01); it now opens the ASD tab of Concrete Beam Capacity. Old project files (.json): <a href="Concrete%20Beam%20ASD.html#old" target="_blank">list their values</a> and enter them again.</li>
-<li><b>ACI Rebar Development Length:</b> retired (2026-11-05); it now opens the Development &amp; Splice tab of Concrete Beam Capacity (the same calculator). Projects saved in the browser are listed there; old project files (.json) open with its Import JSON.</li>
+<li><b>Concrete Beam ASD:</b> retired (2026-11-01).<ul class="nlU">
+<li>It now opens the ASD tab of Concrete Beam Capacity.</li>
+<li>Old project files (.json): <a href="Concrete%20Beam%20ASD.html#old" target="_blank">list their values</a> and enter them again.</li></ul></li>
+<li><b>ACI Rebar Development Length:</b> retired (2026-11-05).<ul class="nlU">
+<li>It now opens the Development &amp; Splice tab of Concrete Beam Capacity (the same calculator).</li>
+<li>Projects saved in the browser are listed there.</li>
+<li>Old project files (.json) open with its Import JSON.</li></ul></li>
 <li><b>Section Properties:</b> AutoCAD MASSPROP sign check: 1 × 1 square at 0,0 should give XY = +0.25; note the principal-moment order.</li>
 <li><b>Timber:</b> NDS 2018 equation numbers and the 3.3.3 / 3.3.3.7 wording; all "verify" reference values.</li>
 <li><b>Timber:</b> supply values not built in if wanted (SP Stud, SPF timbers, Dense/Non-Dense, other glulam).</li>
 <li><b>Gusset:</b> check all "verify" values against the printed MBE / FHWA guide / AASHTO.</li>
 <li><b>Gusset:</b> open an exported DXF in AutoCAD and MicroStation and re-import it.</li>
 <li><b>Base Plate &amp; Anchor:</b> open an exported PROFIS .pe in PROFIS Engineering; check it opens, the load signs and plate orientation, and the "select in PROFIS" items.</li>
-<li><b>Cloud sync (GitHub), in the tools with a Saved projects dialog:</b> set it up with <code>docs/github-sync-setup.md</code>, then Saved projects… → Cloud sync (GitHub)… → Test connection on the work laptop; save a project and open it on a second device. Tested only against a stand-in GitHub, not the real one.</li>
+<li><b>Cloud sync (GitHub), in the tools with a Saved projects dialog:</b><ul class="nlU">
+<li>Set it up with <code>docs/github-sync-setup.md</code>.</li>
+<li>Then Saved projects… → Cloud sync (GitHub)… → Test connection on the work laptop.</li>
+<li>Save a project and open it on a second device.</li>
+<li>Why: tested only against a stand-in GitHub, not the real one.</li></ul></li>
 </ul><h3>Results changed in the 2026-10-12 sweep — review first</h3><ul>
-<li><b>Gusset:</b> 2026-11-07 review decisions to confirm: L<sub>mid</sub> from the middle of the Whitmore section, K 0.5 (reverses your C4.4 confirmation; old saves not migrated, <code>lmidAvg</code> restores the average); RIDOT &phi; per LRFD 6.5.4.2 over the MBE rating values; LFR unknown-origin rivets 23.8 ksi; partial shear planes (default LFR 1.403 &rarr; 1.165); bolt slip required by the MBE?; tension splice net section; open C14.7-1 / C14.7-2 (see ENGINEER_CHECKS.md).</li>
-<li><b>Pile:</b> 2026-11-07 decisions to confirm: buckling (Module 10) automatic with a stickup or scour; uncased axial + flexure linear interim; plunge bond and bar development basis; Davisson E_s from S_u and the group modulus reduction; group-uplift block; pile self-weight in the bond demand (see ENGINEER_CHECKS.md).</li>
+<li><b>Gusset:</b> 2026-11-07 review decisions to confirm (see ENGINEER_CHECKS.md):<ul class="nlU">
+<li>L<sub>mid</sub> from the middle of the Whitmore section, K 0.5 (reverses your C4.4 confirmation; old saves not migrated, <code>lmidAvg</code> restores the average);</li>
+<li>RIDOT &phi; per LRFD 6.5.4.2 over the MBE rating values;</li>
+<li>LFR unknown-origin rivets 23.8 ksi;</li>
+<li>partial shear planes (default LFR 1.403 &rarr; 1.165);</li>
+<li>bolt slip required by the MBE?;</li>
+<li>tension splice net section;</li>
+<li>open C14.7-1 / C14.7-2.</li></ul></li>
+<li><b>Pile:</b> 2026-11-07 decisions to confirm (see ENGINEER_CHECKS.md):<ul class="nlU">
+<li>buckling (Module 10) automatic with a stickup or scour;</li>
+<li>uncased axial + flexure linear interim;</li>
+<li>plunge bond and bar development basis;</li>
+<li>Davisson E_s from S_u and the group modulus reduction;</li>
+<li>group-uplift block;</li>
+<li>pile self-weight in the bond demand.</li></ul></li>
 <li><b>Pile:</b> micropile casing tension through threaded joints now 0 % by default (FHWA) — enter the joint efficiency if documented (tension capacity at defaults 626 → 53 kip).</li>
 <li><b>Light Pole:</b> flexible poles (n&#8321; &lt; 1 Hz) use G<sub>f</sub> with damping &beta; = 0.005 — confirm &beta;; monopost torsion now checked.</li>
 <li><b>SubLoads:</b> Zones 2–4 seismic — foundations R/2 or 1.0, bearings R = 0.8 ("Unit R" option restores old numbers).</li>
 <li><b>Abutment, SubLoads:</b> EE-I &gamma;<sub>EH</sub> = 1.00 per the 10th Ed. Table 3.4.1-1 for new projects; old saves with a fixed value keep it.</li>
-<li><b>SubLoads:</b> 2026-11-07 review decisions to confirm: no-water case with the design flood; Zone 1 force at several fixed lines; skew correction sides, girders and K<sub>g</sub> estimate; Service IV vertical wind 0.020 ksf default (0.010 option); E<sub>c</sub> w<sub>c</sub>; wind Z.</li>
-<li><b>Steel Beam:</b> H3.3(c) torsion buckling and axial tension now checked. <b>Timber:</b> point loads within d now in shear. <b>Moving Load:</b> HS20/H20 lane loading enveloped.</li>
+<li><b>SubLoads:</b> 2026-11-07 review decisions to confirm:<ul class="nlU">
+<li>no-water case with the design flood;</li>
+<li>Zone 1 force at several fixed lines;</li>
+<li>skew correction sides, girders and K<sub>g</sub> estimate;</li>
+<li>Service IV vertical wind 0.020 ksf default (0.010 option);</li>
+<li>E<sub>c</sub> w<sub>c</sub>;</li>
+<li>wind Z.</li></ul></li>
+<li><b>Steel Beam, Timber, Moving Load:</b><ul class="nlU">
+<li><b>Steel Beam:</b> H3.3(c) torsion buckling and axial tension now checked.</li>
+<li><b>Timber:</b> point loads within d now in shear.</li>
+<li><b>Moving Load:</b> HS20/H20 lane loading enveloped.</li></ul></li>
 <li><b>Bridge suite:</b> exterior-girder b<sub>eff</sub>/DL and fatigue DFs; Service II rating; skew for moment vs shear; n from f&prime;c for concrete girders.</li>
 </ul><h3>Decisions</h3><ul>
 <li>About 100 questions across all tools, each with a recommendation the tool currently follows — see section C of ENGINEER_CHECKS.md.</li>
@@ -98,8 +135,12 @@ ul.spL .spD{color:var(--muted);font-size:12px;white-space:nowrap}
 </div></section>
 
 <section><h2>Steel Bridge Design</h2><div class="grid">
-<a class="card" href="Steel%20Bridge%20Design.html" target="_blank"><div class="name">Steel Bridge Design (GirderDetail)</div><div class="desc">Steel girder details: splices, stiffeners, studs, cross-frames, overhang, section, fatigue. Includes PlateLine sizing and ST-Girder: steel plate girder design check and load rating (Design &amp; Rating view; stgirder.html was merged into it). Sends every girder's bearing reactions to Substructure Loading.</div><span class="tag">AASHTO LRFD 10th</span></a>
-<a class="card" href="apps/steel-bridge/index.html" target="_blank"><div class="name">Steel Bridge Design (new, in development)</div><div class="desc">The Steel Bridge Design rebuild (one engine, worked steps for every value). So far: project model, plate segments and the section properties of one girder (steel, 3n, n, steel + rebar, plastic moment, D<sub>c</sub>, D<sub>cp</sub>, R<sub>h</sub>). Not for design use yet; use the card above.</div><span class="tag">AASHTO LRFD 10th</span></a>
+<a class="card" href="Steel%20Bridge%20Design.html" target="_blank"><div class="name">Steel Bridge Design (GirderDetail)</div><div class="desc">Steel girder details: splices, stiffeners, studs, cross-frames, overhang, section, fatigue.<ul class="nlU">
+<li><b>Includes:</b> PlateLine sizing and ST-Girder: steel plate girder design check and load rating (Design &amp; Rating view; stgirder.html was merged into it).</li>
+<li><b>Sends:</b> every girder's bearing reactions to Substructure Loading.</li></ul></div><span class="tag">AASHTO LRFD 10th</span></a>
+<a class="card" href="apps/steel-bridge/index.html" target="_blank"><div class="name">Steel Bridge Design (new, in development)</div><div class="desc">The Steel Bridge Design rebuild (one engine, worked steps for every value).<ul class="nlU">
+<li><b>So far:</b> project model, plate segments and the section properties of one girder (steel, 3n, n, steel + rebar, plastic moment, D<sub>c</sub>, D<sub>cp</sub>, R<sub>h</sub>).</li>
+<li><b>Not for design use yet:</b> use the card above.</li></ul></div><span class="tag">AASHTO LRFD 10th</span></a>
 </div></section>
 
 <section><h2>Loads &amp; analysis</h2><div class="grid">
@@ -123,11 +164,16 @@ ul.spL .spD{color:var(--muted);font-size:12px;white-space:nowrap}
 <section><h2>Foundations</h2><div class="grid">
 <a class="card" href="Pile%20Designer.html" target="_blank"><div class="name">Pile Designer</div><div class="desc">Micropiles, H-piles and integral-abutment piles with p-y lateral analysis.</div><span class="tag">AASHTO LRFD</span><span class="tag">FHWA</span></a>
 <a class="card" href="Spread%20Footing.html" target="_blank"><div class="name">Spread Footing</div><div class="desc">Spread and combined footings: bearing, stability, flexure, shear, pedestals.</div><span class="tag">ACI 318-19</span><span class="tag">ASCE 7-16</span></a>
-<a class="card" href="Light%20Pole%20and%20Sign%20Post.html" target="_blank"><div class="name">Light Pole &amp; Sign Post</div><div class="desc">Drilled-shaft foundations for light masts and sign posts, with Report and Drawings (DXF) tabs. Anchor groups are sent to the Base Plate &amp; Anchor Designer for the anchor checks. Not for AASHTO LRFDLTS highway supports.</div><span class="tag">IBC 2021</span><span class="tag">ASCE 7-22</span></a>
+<a class="card" href="Light%20Pole%20and%20Sign%20Post.html" target="_blank"><div class="name">Light Pole &amp; Sign Post</div><div class="desc">Drilled-shaft foundations for light masts and sign posts, with Report and Drawings (DXF) tabs.<ul class="nlU">
+<li><b>Anchor groups:</b> sent to the Base Plate &amp; Anchor Designer for the anchor checks.</li>
+<li><b>Not for:</b> AASHTO LRFDLTS highway supports.</li></ul></div><span class="tag">IBC 2021</span><span class="tag">ASCE 7-22</span></a>
 </div></section>
 
 <section><h2>Connections &amp; anchorage</h2><div class="grid">
-<a class="card" href="BasePlateAnchorDesigner.html" target="_blank"><div class="name">Base Plate &amp; Anchor Designer</div><div class="desc">Column base plates with cast-in anchors and anchor reinforcement; bolt circles, circular plates and round piers (pier cage as anchor reinforcement); checks the anchor groups sent from Light Pole &amp; Sign Post. Report tab.</div><span class="tag">AISC DG1</span><span class="tag">ACI 318-19 Ch. 17</span></a>
+<a class="card" href="BasePlateAnchorDesigner.html" target="_blank"><div class="name">Base Plate &amp; Anchor Designer</div><div class="desc">Column base plates with cast-in anchors and anchor reinforcement.<ul class="nlU">
+<li><b>Also:</b> bolt circles, circular plates and round piers (pier cage as anchor reinforcement).</li>
+<li><b>Hand-off:</b> checks the anchor groups sent from Light Pole &amp; Sign Post.</li>
+<li><b>Report tab.</b></li></ul></div><span class="tag">AISC DG1</span><span class="tag">ACI 318-19 Ch. 17</span></a>
 </div></section>
 
 <section><h2>Members &amp; detailing</h2><div class="grid">
