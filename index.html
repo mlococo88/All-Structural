@@ -2883,10 +2883,14 @@ function generateAremaReport({cfg, ap, data, govN, govX, govM, govFat, settings=
   </div>
   <div style="margin-top:8px;padding:8px 12px;background:#f8fafc;border:1px solid #e5e7eb;
     border-radius:4px;font-size:8pt;color:#6b7280;font-family:monospace">
-    Standard Notes: (1) Rating performed per AREMA Manual for Railway Engineering, Chapter 15.
-    (2) Material properties per ASTM A36 unless otherwise noted.
-    (3) Net section computed per AREMA §1.5.8; standard bolt hole diameter assumed.
-    (4) Impact computed per AREMA §1.3.1. (5) LTB check per AREMA §1.12.3.
+    <div style="font-weight:bold">Standard Notes of this AREMA rating:</div><!-- IXNL: a lead and a list; the (n) numbers kept as text -->
+    <ul style="list-style:none;margin:2px 0 0;padding-left:8px">
+      <li>(1) Rating performed per AREMA Manual for Railway Engineering, Chapter 15.</li>
+      <li>(2) Material properties per ASTM A36 unless otherwise noted.</li>
+      <li>(3) Net section computed per AREMA §1.5.8; standard bolt hole diameter assumed.</li>
+      <li>(4) Impact computed per AREMA §1.3.1.</li>
+      <li>(5) LTB check per AREMA §1.12.3.</li>
+    </ul>
   </div>`:''}
 
   <!-- Footer -->
@@ -3664,6 +3668,17 @@ function Field({label,hint,children}) {
   </div>);
 }
 
+/* IXNL (2026-11-08, engineer request: no long run-on notes): a note as a bold lead line, then a list whose items start with
+   bold lead words. items: [leadWords, content] pairs or plain content; null items are skipped. act: action lines shown first.
+   Display only. */
+function IxNL({lead,items,act}) {
+  return (<>
+    {(act||[]).filter(Boolean).map((a,i)=><div key={'a'+i} style={{fontWeight:700,color:'#b45309',margin:'0 0 3px'}}>{a}</div>)}
+    {lead&&<div style={{fontWeight:700,margin:'0 0 1px'}}>{lead}</div>}
+    <ul style={{margin:'2px 0 0',paddingLeft:'18px'}}>{(items||[]).filter(Boolean).map((x,i)=><li key={i} style={{margin:'1px 0',breakInside:'avoid'}}>{Array.isArray(x)?<><strong>{x[0]}</strong> {x[1]}</>:x}</li>)}</ul>
+  </>);
+}
+
 function InfoBox({children,type='info'}) {
   const c=type==='warn'?{bg:'#fffbeb',border:'#fde68a',text:'#92400e'}:{bg:'#eff6ff',border:'#bfdbfe',text:'#1e40af'};
   return (<div style={{padding:'9px 12px',background:c.bg,borderRadius:'5px',border:`1px solid ${c.border}`,
@@ -3795,9 +3810,11 @@ function StepProject({cfg,set}) {
 
     <div style={{maxWidth:'860px',marginTop:'14px'}}>
       <InfoBox>
-        <strong>Project Name</strong>, <strong>Bridge ID</strong>, <strong>Client</strong>, <strong>Address</strong>, and <strong>Revision</strong> are written into
-        the MCT <em>*PROJINFO</em> block and visible in MIDAS Civil's project properties dialog.
-        They do not affect analysis results. Only the <strong>Version</strong> field is read by MIDAS on import.
+        <IxNL lead="Where these project fields go:" items={[
+          ['Written to the MCT:',<><strong>Project Name</strong>, <strong>Bridge ID</strong>, <strong>Client</strong>, <strong>Address</strong>, and <strong>Revision</strong> are written into
+            the MCT <em>*PROJINFO</em> block and visible in MIDAS Civil's project properties dialog.</>],
+          ['Analysis:','they do not affect analysis results.'],
+          ['Read on import:',<>only the <strong>Version</strong> field is read by MIDAS on import.</>]]}/>
       </InfoBox>
     </div>
   </div>);
@@ -8032,9 +8049,9 @@ function StepCombos({cfg,set}) {
     <StepHeader icon="🔗" title="Load Combinations" sub="Writes *LOADCOMB blocks into the MCT file"/>
     <div style={{marginBottom:'14px'}}>
       <InfoBox>
-        <strong>{activeCount}</strong> active combination{activeCount!==1?'s':''} will be written to the MCT file.
-        AASHTO presets use global γ_DC / γ_DW / γ_LL factors. Click <strong>⊞ Expand</strong> or add a <strong>Custom Combo</strong>
-        to select individual load cases with per-case factors.
+        <IxNL lead={<>{activeCount} active combination{activeCount!==1?'s':''} will be written to the MCT file.</>} items={[
+          ['AASHTO presets:','use global γ_DC / γ_DW / γ_LL factors.'],
+          ['Per-case factors:',<>click <strong>⊞ Expand</strong> or add a <strong>Custom Combo</strong> to select individual load cases with per-case factors.</>]]}/>
       </InfoBox>
     </div>
 
@@ -8104,11 +8121,11 @@ function StepCombos({cfg,set}) {
     </div>
     <div style={{fontSize:'11px',color:'#6b7280',lineHeight:1.5,marginTop:'2px',
       background:'#eff6ff',border:'1px solid #dbeafe',borderRadius:'5px',padding:'7px 11px'}}>
-      <strong style={{color:'#1d4ed8'}}>🔗 PS/ST Load Combos</strong> sets the load combinations
-      required by the <strong>Prestressed Beam</strong> and <strong>Composite Steel Beam</strong> design
-      modules — HL-93 truck + tandem at 33% impact and the DC1 / DC2 / DW / LL passthrough combos at
-      factor 1.0. It replaces the vehicle selection and the auto-generated design combos while keeping
-      your other combos intact.
+      <IxNL lead={<><span style={{color:'#1d4ed8'}}>🔗 PS/ST Load Combos</span> sets the load combinations required by the Prestressed Beam
+        and Composite Steel Beam design modules.</>} items={[
+        ['Sets:','HL-93 truck + tandem at 33% impact and the DC1 / DC2 / DW / LL passthrough combos at factor 1.0.'],
+        ['Replaces:','the vehicle selection and the auto-generated design combos.'],
+        ['Keeps:','your other combos intact.']]}/>
     </div>
   </div>);
 }
@@ -9362,13 +9379,11 @@ function StepGenerate({mctOutput,downloadMCT,cfg}) {
             <strong>{trainVehs.map(v=>v.label).join(' · ')}</strong>
           </div>
           <div style={{fontSize:'10.5px',fontFamily:'monospace',color:'#15803d',marginTop:'6px',lineHeight:'1.6'}}>
-            Written as <code>NAME=..., 2, YES, W1, D1, W2, D2, 0</code> with axle load/spacing pairs
-            — the <code>YES</code> train form, which MIDAS reads as a rail consist. Highway vehicles
-            take the <code>NO</code> form instead, where the same slot holds the uniform lane load.
-            Each vehicle also has a corresponding <code>*MVLDCASE</code> entry.
-            {trainVehs.some(v=>v.trailingLoad>0) && (
-              <> Trailing uniform loads: {trainVehs.filter(v=>v.trailingLoad>0).map(v=>`${v.label} = ${v.trailingLoad} k/lf`).join(', ')}.</>
-            )}
+            <IxNL lead={<>Written as <code>NAME=..., 2, YES, W1, D1, W2, D2, 0</code> with axle load/spacing pairs.</>} items={[
+              ['Rail consist:',<>the <code>YES</code> train form, which MIDAS reads as a rail consist.</>],
+              ['Highway vehicles:',<>take the <code>NO</code> form instead, where the same slot holds the uniform lane load.</>],
+              ['Load cases:',<>each vehicle also has a corresponding <code>*MVLDCASE</code> entry.</>],
+              trainVehs.some(v=>v.trailingLoad>0)?['Trailing uniform loads:',<>{trainVehs.filter(v=>v.trailingLoad>0).map(v=>`${v.label} = ${v.trailingLoad} k/lf`).join(', ')}.</>]:null]}/>
           </div>
         </div>
       );
@@ -19783,7 +19798,9 @@ function idxCalcSheet(html,o){
     fm.appendChild(E('ol','cr-toc',toc.map(s=>'<li><a href="#'+s.id+'">'+s.n+'. '+idxEsc(s.t)+'</a>'+
       (s.subs.length?'<ol>'+s.subs.map(q=>'<li><a href="#'+q.id+'">'+q.num+'. '+idxEsc(q.t)+'</a></li>').join('')+'</ol>':'')+'</li>').join('')));
   }
-  if(o.note) fm.appendChild(E('p','cr-small',idxEsc(o.note)));
+  if(o.note&&typeof o.note==='object'){ fm.appendChild(E('p','cr-small','<b>'+idxEsc(o.note.lead)+'</b>'));   // IXNL: a lead and a list (items [lead words, text])
+    fm.appendChild(E('ul','cr-small','\n'+o.note.items.map(([k,t])=>'<li><b>'+idxEsc(k)+'</b> '+idxEsc(t)+'</li>').join('\n')+'\n')); }
+  else if(o.note) fm.appendChild(E('p','cr-small',idxEsc(o.note)));
   front.appendChild(fm);
   body.insertBefore(front, body.firstChild);
   const st=doc.createElement('style'); st.textContent=IDX_CR_CSS+'\n'+idxPageCSS(o.tb||{},o.tool||'MCT Generator');
@@ -19897,7 +19914,11 @@ function idxrModel(cfg, rs, rows, zones, combos){
   if((zones||[]).length) secs.push({title:'Capacity zones',subs:[{title:'Nominal resistances by zone',items:[{type:'table',head:['From (ft)','To (ft)','Type','M_n+ (kip-ft)','M_n− (kip-ft)','V_n (kip)','F_y (ksi)'],rows:zones.map(z=>[cell(+z.startX,2),cell(+z.endX,2),plain(z.type),cell(+z.MnPos,1),cell(+z.MnNeg,1),cell(+z.Vn,1),cell(+z.Fy,0)])},
     {type:'note',text:'Zones of a computed type (quick-calc, AREMA, design hand-off) show their entered values here; the resistance used at a node is C/(φ_c φ_s φ) in §3. Entered on the [[tab:AASHTO Rating|AASHTO Rating step]].'}]}]});
   /* ---------- 5. Notes and references ---------- */
-  secs.push({title:'Notes and references',subs:[{title:'Notes',items:[{type:'note',text:'The report windows of "Generate Report" (sidebar), "Print AREMA Report" (AREMA Rating step) and the Report Card (AASHTO Rating step) are retired (IXRX, 2026-11-03): what they showed is in the sections before this one, each with an Include box; those buttons print this report. Service II, fatigue, PS checks and multi-vehicle ratings are worked on their steps.'}]},
+  secs.push({title:'Notes and references',subs:[{title:'Notes',items:[{type:'note',text:'Retired report windows:'},   /* IXNL: a lead and "• " lines */
+      {type:'note',text:'• Retired (IXRX, 2026-11-03): the report windows of "Generate Report" (sidebar), "Print AREMA Report" (AREMA Rating step) and the Report Card (AASHTO Rating step).'},
+      {type:'note',text:'• Where their content is: in the sections before this one, each with an Include box.'},
+      {type:'note',text:'• Their buttons: print this report.'},
+      {type:'note',text:'• Worked on their steps: Service II, fatigue, PS checks and multi-vehicle ratings.'}]},
     {title:'References',items:[{type:'table',head:['Reference','Provisions used'],rows:[['AASHTO Manual for Bridge Evaluation','Section 6A: Art. 6A.4.2.1 (rating equation), Tables 6A.4.2.2-1, 6A.4.2.3-1, 6A.4.2.4-1, Art. 6A.8.3 (posting). Edition: verify.'],
       ['AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)','Art. 3.6.1.2, 3.6.2.1 (HL-93, IM), 4.6.2.2 (distribution factor g), Table 3.4.1-1'],['MIDAS Civil','Analysis results (beam forces) pasted from the model built from this project\'s MCT file']]}]}]});
   return {title:'Bridge Rating & MCT — Calculation Report',subtitle:(cfg.projectName||'Untitled')+(cfg.projectBridgeId?' · '+cfg.projectBridgeId:''),code:'AASHTO MBE Section 6A (LRFR) · AASHTO LRFD 10th Ed. (2024)',
@@ -20043,9 +20064,11 @@ function ixxApply(M,c){
   const T={newNum:t=>ixxNums(t).some(n=>!have.has(n)), fresh:t=>String(t).split(/(?<=[.;:])\s+/).map(ixxNrm).filter(x=>x.length>15).some(x=>!all.includes(x)),
     seen:t=>{ ixxNums(t).forEach(addNum); all+=ixxNrm(t); }, figs:new Set()};
   const add=[], at=secs.findIndex(s=>s.title==='Notes and references');
-  const sec=(title,subs,note)=>{ if(subs&&subs.length) add.push({title,subs:note?[{title:'About this section',items:[{type:'note',text:note}]},...subs]:subs}); };
+  const sec=(title,subs,note)=>{ if(subs&&subs.length) add.push({title,subs:note?[{title:'About this section',items:Array.isArray(note)?note.map(t=>({type:'note',text:t})):[{type:'note',text:note}]},...subs]:subs}); };   // IXNL: note = a text, or [lead, '• item', …]
   if(IXX.inc.gen){ const b=ixxDoc(ixxGen(()=>generateReportHTML(idxGenArgs(c.cfg,c.mctOutput,c.rows,c.zones,c.combos,c.rs,c.chart?{rating:c.chart}:{}))));
-    if(b) sec('Model and MCT report',ixxWalk(b,'ixg',T),'What the "Generate Report" window printed and the sections above do not show: its title block, the model tables, the generated MCT file, the results overview, the rating inputs, the worked rating factor at the node where each action governs and the RF diagram. Built by the same generator from the same values.'); }
+    if(b) sec('Model and MCT report',ixxWalk(b,'ixg',T),['What the "Generate Report" window printed and the sections above do not show:',   // IXNL: a lead and "• " lines
+      '• its title block;','• the model tables;','• the generated MCT file;','• the results overview;','• the rating inputs;','• the worked rating factor at the node where each action governs;','• the RF diagram.',
+      'Built by the same generator from the same values.']); }
   const A=c.rx&&c.rx.arema;
   if(IXX.inc.arema&&A){ const b=ixxDoc(ixxGen(()=>generateAremaReport({cfg:c.cfg, ap:A.ap, data:A.data, govN:A.govN, govX:A.govX, govM:A.govM, govFat:A.govFat, settings:c.cfg.rating?.arema_reportSections, gfsInfo:A.gfsInfo})));
     if(b) sec('AREMA rating report',ixxWalk(b,'ixa',T),'The "Print AREMA Report" report (AREMA Rating step), built by the same generator from the same values; its sections are chosen by the Include boxes above (the AREMA Rating step\'s Report Settings).'); }
@@ -20824,7 +20847,11 @@ function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
       ? `Governing rating factor (${rateLbl}): RF = ${govRating.rfGov.toFixed(3)} → ${govRating.rfTons.toFixed(1)} tons (${ratingVehicleName||'rated vehicle'}) at node ${govRating.node}, x = ${govRating.pos.toFixed(2)} ft — ${govRating.rfGov>=1?'PASS':'FAIL'}`
       : 'No rating in this report (no MIDAS results or rating inputs yet).',
     refs: IDX_REFS_MBE, results: rateResults, resultsTitle: 'Results — Rating factors',
-    note: 'Equations are shown symbolically, then with values substituted, then with the result. The rating section ends with one result line per rated action (PASS: RF ≥ 1.0). Units: kip, ft unless noted. DC, DW and LL are the unfactored MIDAS results of the load cases named in the rating inputs.',
+    note: {lead: 'How this calculation is laid out:', items: [   // IXNL: a lead and a list
+      ['Equations:', 'shown symbolically, then with values substituted, then with the result.'],
+      ['Results:', 'the rating section ends with one result line per rated action (PASS: RF ≥ 1.0).'],
+      ['Units:', 'kip, ft unless noted.'],
+      ['DC, DW and LL:', 'the unfactored MIDAS results of the load cases named in the rating inputs.']]},
   });
 }
 
