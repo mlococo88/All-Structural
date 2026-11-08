@@ -5927,6 +5927,11 @@ h3{font-size:11pt;margin:10px 0 4px}
 .fRow.chk input{flex:0 0 auto;min-width:0}
 .fRow.chk label{flex:1 1 auto}
 .note{font-size:9pt;color:#475569;line-height:1.45;margin:5px 0}
+/* CBNL (2026-11-08): a long note as a lead line and a list (cbNL), as the Beam Capacity tab */
+.cbNL .cbNLl{font-weight:600;margin:0 0 1px}
+.cbNL .cbNLu{margin:2px 0 3px;padding-left:18px}
+.cbNL .cbNLu>li{margin:1px 0}
+@media print{.cbNL .cbNLu>li{break-inside:avoid}}
 .btnRow{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
 button.b{font-family:var(--font-ui);font-size:9pt;padding:4px 10px;border-radius:4px;
   border:1px solid var(--color-border);background:#fff;cursor:pointer}
@@ -6327,6 +6332,12 @@ const LS_AUTO=&quot;asd_v1_auto&quot;, LS_PROJ=&quot;asd_v1_projects&quot;;
 
 /* ---------- helpers (mirrors the Capacity framework) ---------- */
 function el(t,c,x){const e=document.createElement(t); if(c)e.className=c; if(x!==undefined)e.textContent=x; return e;}
+/* CBNL (2026-11-08, engineer: long notes split up): a note as a bold lead line and a list with bold lead words, as the Beam
+   Capacity tab (cbNL there); the suite's Report copies it one line per part. Items: &quot;text&quot; or [lead words, text]. Display only. */
+function cbNL(cls,lead,items){const e=el(&quot;div&quot;,(cls?cls+&quot; &quot;:&quot;&quot;)+&quot;cbNL&quot;);
+  const li=(items||[]).filter(Boolean).map(x=>&quot;<li>&quot;+(Array.isArray(x)?&quot;<b class=\&quot;cbNLk\&quot;>&quot;+x[0]+&quot;</b> &quot;+x[1]:x)+&quot;</li>&quot;).join(&quot;&quot;);
+  e.innerHTML=(lead?&quot;<div class=\&quot;cbNLl\&quot;>&quot;+lead+&quot;</div>&quot;:&quot;&quot;)+(li?&quot;<ul class=\&quot;cbNLu\&quot;>&quot;+li+&quot;</ul>&quot;:&quot;&quot;); return e;}
+function cbrNL(lead,items){ return [lead?{type:'note',text:lead}:null,...(items||[]).filter(Boolean).map(x=>({type:'note',text:'• '+(Array.isArray(x)?x[0]+' '+x[1]:x)}))].filter(Boolean); }
 function fmt(v,dec){ if(v===undefined||v===null||!isFinite(v))return &quot;—&quot;;
   const d=(dec===undefined)?2:dec; return Number(v).toFixed(d); }
 function grp(v){ if(!isFinite(v)) return &quot;—&quot;; return Math.round(v).toLocaleString(); }
@@ -6670,9 +6681,9 @@ function buildInput(){
 
   /* 3. Allowable stresses */
   mkSection(&quot;inAllow&quot;,NT(&quot;Allowable Stresses&quot;),b=>{
-    b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;AASHTO 8.15.2 service-level allowables, set automatically from f'_c and f_y (auto): &quot;+
-      &quot;f_c,inv = 0.40 f'_c; f_s,inv = 20,000 psi (Gr 40/50) or 24,000 psi (Gr 60); f_s,op = 28,000 psi (Gr 40) or 36,000 psi (Gr 60, MBE 6B.6.2.3). &quot;+
-      &quot;Typing a value overrides it. Operating f_c is always the entered value.&quot;));
+    b.appendChild(cbNL(&quot;note&quot;,&quot;AASHTO 8.15.2 service-level allowables, set automatically from f'_c and f_y (auto):&quot;,[[&quot;f_c,inv:&quot;,&quot;f_c,inv = 0.40 f'_c.&quot;],
+      [&quot;f_s,inv:&quot;,&quot;f_s,inv = 20,000 psi (Gr 40/50) or 24,000 psi (Gr 60).&quot;],[&quot;f_s,op:&quot;,&quot;f_s,op = 28,000 psi (Gr 40) or 36,000 psi (Gr 60, MBE 6B.6.2.3).&quot;],
+      [&quot;Override:&quot;,&quot;typing a value overrides it.&quot;],[&quot;Operating f_c:&quot;,&quot;always the entered value.&quot;]]));   /* CBNL */
     b.appendChild(el(&quot;div&quot;,&quot;grpMini&quot;,&quot;Inventory&quot;));
     fRow(b,&quot;Concrete, f_{c,inv}&quot;+allowTag(&quot;fc_inv&quot;),numIn(()=>S.allow.fc_inv,v=>{S.allow.fc_inv=v;S.allow.ovr.fc_inv=true;},&quot;50&quot;,&quot;fcInv&quot;),&quot;psi&quot;);
     fRow(b,&quot;Steel, f_{s,inv}&quot;+allowTag(&quot;fs_inv&quot;),numIn(()=>S.allow.fs_inv,v=>{S.allow.fs_inv=v;S.allow.ovr.fs_inv=true;},&quot;500&quot;,&quot;fsInv&quot;),&quot;psi&quot;);
@@ -6879,7 +6890,7 @@ function buildSummaryTab(pg){
     : &quot;<b>Section is deficient.</b> The governing rating factor is <b>&quot;+fmt(govRF)+&quot;</b> &amp;lt; 1.0 — the live-load effect exceeds the available capacity margin.&quot;;
   pg.appendChild(box);
   const sc=el(&quot;div&quot;,&quot;note&quot;);
-  sc.innerHTML=&quot;<b>Scope:</b> singly reinforced flexure only (working stress, AASHTO Std. Spec. 8.15). Compression steel (8.15.3, 2n&amp;middot;A&amp;prime;<sub>s</sub>) is ignored and ASD shear (8.15.5) is not checked.&quot;;
+  sc.classList.add(&quot;cbNL&quot;); sc.innerHTML=&quot;<div class=\&quot;cbNLl\&quot;>Scope: singly reinforced flexure only (working stress, AASHTO Std. Spec. 8.15).</div><ul class=\&quot;cbNLu\&quot;><li><b class=\&quot;cbNLk\&quot;>Compression steel</b> (8.15.3, 2n&amp;middot;A&amp;prime;<sub>s</sub>) is ignored.</li><li><b class=\&quot;cbNLk\&quot;>Shear:</b> ASD shear (8.15.5) is not checked.</li></ul>&quot;;   /* CBNL */
   pg.appendChild(sc);
   /* Std. Spec. 8.10.1.1 effective flange width note */
   if(R.beffEntered!==null){
@@ -7235,9 +7246,9 @@ function asdRxAbout(){
   const P=S.proj||{};
   return [{type:'note',text:&quot;Concrete Beam Load Rating — ASD — &quot;+(P.name||&quot;Untitled&quot;)+(P.subj?&quot; — &quot;+P.subj:&quot;&quot;)+&quot;. AASHTO Standard Specifications, §8.15 (Working Stress) · Concrete Beam Design Suite · by M. Lococo.&quot;},
     {type:'note',text:&quot;Title block of the ASD Beam Calcs tab: Subject &quot;+(P.subj||&quot;—&quot;)+&quot;; Sheet &quot;+(P.sheet||&quot;—&quot;)+&quot;; Method AASHTO 8.15 (ASD).&quot;},
-    {type:'note',text:&quot;Equations are shown symbolically, then with values substituted, then with the result. &quot;+
-      &quot;The section, f′c, f_y, d and A_s are received from the Beam Capacity tab of the suite (its own calculation report). &quot;+
-      &quot;A rating level passes when RF ≥ 1.00. Units: psi, in, k-ft unless noted.&quot;},
+    ...cbrNL(&quot;How this chapter is laid out:&quot;,[[&quot;Equations:&quot;,&quot;shown symbolically, then with values substituted, then with the result.&quot;],   /* CBNL */
+      [&quot;Inputs:&quot;,&quot;the section, f′c, f_y, d and A_s are received from the Beam Capacity tab of the suite (its own calculation report).&quot;],
+      [&quot;Pass:&quot;,&quot;a rating level passes when RF ≥ 1.00.&quot;],[&quot;Units:&quot;,&quot;psi, in, k-ft unless noted.&quot;]]),
     {type:'note',text:&quot;This calculation is a computation aid. All results must be independently verified and sealed by the responsible engineer of record.&quot;}];
 }
 function asdRxPrint(){ try{ const P=window.parent; if(P&amp;&amp;P!==window&amp;&amp;P.CBRP&amp;&amp;P.CBRP.printAny){ P.CBRP.printAny(); return; } }catch(e){} window.print(); }
@@ -7392,7 +7403,8 @@ function asdRptModel(){
     {type:'table',caption:'Load rating summary',head:['Rating level','$M_{all}$ (kip-ft)','Controlled by','RF','Status'],rows:[].concat(
       S.mode.inv?[['Inventory',{t:F(R.M_inv),n:true,key:'an/inv.M'},R.ctrl_inv,{t:isFinite(R.rf_inv)?F(R.rf_inv):'—',n:true,key:'an/inv.RF'},isFinite(R.rf_inv)?{t:R.rf_inv>=1?'PASS':'FAIL',cls:R.rf_inv>=1?'ok':'ng'}:{t:'N/A',cls:'na'}]]:[],
       S.mode.op?[['Operating',{t:F(R.M_op),n:true,key:'an/op.M'},R.ctrl_op,{t:isFinite(R.rf_op)?F(R.rf_op):'—',n:true,key:'an/op.RF'},isFinite(R.rf_op)?{t:R.rf_op>=1?'PASS':'FAIL',cls:R.rf_op>=1?'ok':'ng'}:{t:'N/A',cls:'na'}]]:[])},
-    {type:'note',text:'Scope: singly reinforced flexure only (working stress, AASHTO Std. Spec. 8.15); compression steel (8.15.3) is ignored and ASD shear (8.15.5) is not checked. A rating level passes when RF ≥ 1.00. [[tab:tabAnalysis|On screen: Analysis tab]]'+(R.A.fc_op>0.60*R.fc+1e-9?' Operating $f_{c}$ = '+grp(R.A.fc_op)+' psi is greater than 0.60$f^{\\prime}_{c}$ = '+fmt(0.60*R.fc,1)+' psi (AASHTO MBE 6B.6.2.3): confirm the owner\'s basis.':'')}])}]});
+    ...cbrNL('Scope: singly reinforced flexure only (working stress, AASHTO Std. Spec. 8.15).',[['Compression steel','(8.15.3) is ignored.'],['Shear:','ASD shear (8.15.5) is not checked.'],['Pass:','a rating level passes when RF ≥ 1.00. [[tab:tabAnalysis|On screen: Analysis tab]]'],   /* CBNL */
+      R.A.fc_op>0.60*R.fc+1e-9?['Operating $f_{c}$:','operating $f_{c}$ = '+grp(R.A.fc_op)+' psi is greater than 0.60$f^{\\prime}_{c}$ = '+fmt(0.60*R.fc,1)+' psi (AASHTO MBE 6B.6.2.3): confirm the owner\'s basis.']:null])])}]});
   const RX=asdRxSel(), TABOF={'Inputs':'tabInputEcho','Analysis and rating':'tabAnalysis'};   /* CBRX: the Include boxes (S.ui.rptOpts) */
   secs.forEach(s=>{ s.tab=TABOF[s.title]; });
   return {title:'ASD Beam Rating',code:'AASHTO Std. Spec. 8.15 (working stress); AASHTO MBE 6B',proj:P,refs:ASD_REFS,sections:secs.filter(s=>!(s.tab&amp;&amp;RX.tabs[s.tab]===false))};
@@ -7824,6 +7836,15 @@ input,select,textarea{font-family:inherit; font-size:13px;}
 .note .note-body b{color:#222;}
 .note .note-body .vardef{margin:3px 0; padding-left:2px;}
 .note .note-body .vardef .s{font-weight:bold; color:var(--accent);}
+/* RBNL (2026-11-08, engineer: long notes split up): a note as a lead line and a list with bold lead words (rbNL); action lines
+   (.rbNLa) in the warning style; colours from the box it sits in */
+.rbNL .rbNLl{font-weight:600; margin:0 0 1px;}
+.rbNL .rbNLu{margin:2px 0 3px; padding-left:18px;}
+.rbNL .rbNLu>li{margin:1px 0;}
+.rbNL .rbNLa{margin:2px 0 5px; padding:5px 9px;}
+.note .note-body .rbNLp{margin:0 0 7px;}
+.note .note-body .rbNLp:last-child{margin-bottom:0;}
+@media print{.rbNL .rbNLu>li{break-inside:avoid;}}
 
 .subsec{margin:14px 0;}
 .subsec > .sh{font-size:12px; font-weight:bold; text-transform:uppercase; letter-spacing:.4px;
@@ -8453,7 +8474,7 @@ function buildInputPanel(){
     <div class=&quot;field&quot; style=&quot;margin-top:6px&quot;><label>&amp;lambda; for lightweight concrete <span class=&quot;unit&quot;>(0.75–1.0)</span></label>
       <input id=&quot;lwLambda&quot; type=&quot;number&quot; value=&quot;0.75&quot; step=&quot;0.05&quot; min=&quot;0.75&quot; max=&quot;1&quot;>
       <div class=&quot;hint rbAciOnly&quot;><b>ACI mode:</b> development lengths use &amp;lambda; = 0.75 for lightweight concrete (ACI 318-19 Tables 25.4.2.5, 25.4.3.2 and 25.4.9.3), whatever is entered here; this box is used in AASHTO mode.</div>
-      <div class=&quot;hint&quot;>Used only when Lightweight is ticked. ACI 318-19 19.2.4.1: Table 19.2.4.1(a) from the equilibrium density w<sub>c</sub>, or Table 19.2.4.1(b) from the aggregates (all-lightweight 0.75, sand-lightweight 0.85); 0.75 &amp;le; &amp;lambda; &amp;le; 1.0. AASHTO 5.4.2.8: Eq. 5.4.2.8-1 &amp;lambda; = 4.7f<sub>ct</sub>/&amp;radic;f'<sub>c</sub> &amp;le; 1.0 where f<sub>ct</sub> is specified, else Eq. 5.4.2.8-2 0.75 &amp;le; &amp;lambda; = 7.5w<sub>c</sub> &amp;le; 1.0. This tool accepts 0.75 to 1.0.</div></div>`)}
+      <div class=&quot;hint rbNL&quot;><div class=&quot;rbNLl&quot;>Used only when Lightweight is ticked.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>ACI 318-19 19.2.4.1:</b> Table 19.2.4.1(a) from the equilibrium density w<sub>c</sub>, or Table 19.2.4.1(b) from the aggregates (all-lightweight 0.75, sand-lightweight 0.85); 0.75 &amp;le; &amp;lambda; &amp;le; 1.0.</li><li><b class=&quot;rbNLk&quot;>AASHTO 5.4.2.8:</b> Eq. 5.4.2.8-1 &amp;lambda; = 4.7f<sub>ct</sub>/&amp;radic;f'<sub>c</sub> &amp;le; 1.0 where f<sub>ct</sub> is specified, else Eq. 5.4.2.8-2 0.75 &amp;le; &amp;lambda; = 7.5w<sub>c</sub> &amp;le; 1.0.</li><li><b class=&quot;rbNLk&quot;>Accepted:</b> this tool accepts 0.75 to 1.0.</li></ul></div></div>`)}
 
   ${panel(&quot;C&quot;,&quot;Tension: Modification Factors&quot;,true,`
     <div class=&quot;field&quot;><label>Casting Position</label>
@@ -8488,8 +8509,8 @@ function buildInputPanel(){
     </div>
     <div class=&quot;btnrow rbExcessOnly&quot; id=&quot;asFromCapRow&quot; style=&quot;display:none;margin-top:6px;&quot;><button type=&quot;button&quot; class=&quot;btn small&quot; id=&quot;asFromCap&quot; title=&quot;Fill A_s,req, A_s,prov and the bar size from the Beam Capacity tab's current results (you can still edit them)&quot;>From Beam Capacity</button></div>
     <div class=&quot;hint rbExcessOnly&quot; id=&quot;asFromCapNote&quot; style=&quot;display:none;margin-top:6px&quot;></div>
-    <div class=&quot;hint&quot;>Reduces l_d by A<sub>s,req</sub>/A<sub>s,prov</sub> (ACI: straight bars in tension and bars in compression; the ACI hook length l<sub>dh</sub> is never reduced). The tool does not check where the bar is, so <b>do not tick this</b> if any of these apply &amp;mdash; ACI 318-19 25.4.10.2: (a) at noncontinuous supports, (b) where anchorage or development for f<sub>y</sub> is required, (c) where bars are required to be continuous, (d) hooked, headed or mechanically anchored bars, (e) seismic-force-resisting systems in SDC C, D, E or F, (f) anchorage of concrete piles and concrete-filled pipe piles to pile caps in SDC C, D, E or F. AASHTO &amp;lambda;<sub>er</sub> (5.10.8.2.1c): not where development for f<sub>y</sub> is specifically required or for seismic (5.11) detailing. Never applied to splices. Also drives Class A splice eligibility.</div>
-    <div class=&quot;hint&quot; style=&quot;margin-top:6px&quot;><b>A<sub>s,req</sub> for a beam:</b> the flexural requirement from analysis. Where the minimum of ACI 318-19 9.6.1 governs, A<sub>s,req</sub> = A<sub>s,min</sub> may be used: 9.6.1.1 defines A<sub>s,min</sub> as minimum <em>flexural</em> reinforcement (R9.6.1.1), not the shrinkage and temperature reinforcement of 24.4, for which R25.4.10.2 says the factor does not apply.</div>`)}
+    <div class=&quot;hint rbNL&quot;><div class=&quot;warnbox rbNLa&quot;>The tool does not check where the bar is, so <b>do not tick this</b> if any of these apply &amp;mdash; ACI 318-19 25.4.10.2:<ul class=&quot;rbNLu&quot;><li>(a) at noncontinuous supports,</li><li>(b) where anchorage or development for f<sub>y</sub> is required,</li><li>(c) where bars are required to be continuous,</li><li>(d) hooked, headed or mechanically anchored bars,</li><li>(e) seismic-force-resisting systems in SDC C, D, E or F,</li><li>(f) anchorage of concrete piles and concrete-filled pipe piles to pile caps in SDC C, D, E or F.</li></ul>AASHTO &amp;lambda;<sub>er</sub> (5.10.8.2.1c): not where development for f<sub>y</sub> is specifically required or for seismic (5.11) detailing.</div><div class=&quot;rbNLl&quot;>Reduces l_d by A<sub>s,req</sub>/A<sub>s,prov</sub> (ACI: straight bars in tension and bars in compression; the ACI hook length l<sub>dh</sub> is never reduced).</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>Splices:</b> never applied to splices.</li><li><b class=&quot;rbNLk&quot;>Class A:</b> also drives Class A splice eligibility.</li></ul></div>
+    <div class=&quot;hint rbNL&quot; style=&quot;margin-top:6px&quot;><div class=&quot;rbNLl&quot;>A<sub>s,req</sub> for a beam: the flexural requirement from analysis.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>Minimum governs:</b> where the minimum of ACI 318-19 9.6.1 governs, A<sub>s,req</sub> = A<sub>s,min</sub> may be used.</li><li><b class=&quot;rbNLk&quot;>Why:</b> 9.6.1.1 defines A<sub>s,min</sub> as minimum <em>flexural</em> reinforcement (R9.6.1.1), not the shrinkage and temperature reinforcement of 24.4, for which R25.4.10.2 says the factor does not apply.</li></ul></div>`)}
 
   ${panel(&quot;E&quot;,&quot;Standard Hook Factors&quot;,true,`
     <div class=&quot;field&quot;><label>Epoxy Coating (&amp;psi;<sub>e</sub>)</label>
@@ -8500,10 +8521,10 @@ function buildInputPanel(){
         <option value=&quot;1.25&quot;>Other, e.g. side cover &amp;lt;2.5&amp;quot; (1.25)</option>
       </select></div>
     <div class=&quot;chk&quot;><input id=&quot;hookConfined&quot; type=&quot;checkbox&quot;><label for=&quot;hookConfined&quot;>Confining reinf. present &amp;rarr; &amp;psi;<sub>r</sub>=1.0 (else 1.6)</label></div>
-    <div class=&quot;hint&quot;>AASHTO: ticked = hook ties per 5.10.8.2.4b (#11 and smaller) &amp;rarr; k<sub>tr</sub> = 0 and l<sub>dh</sub> &amp;times; 0.8. Do not tick at a discontinuous end with side and top/bottom cover both under 2.5 in. (ties required there, no reduction).</div>
+    <div class=&quot;hint rbNL&quot;><div class=&quot;rbNLl&quot;>AASHTO: ticked = hook ties per 5.10.8.2.4b (#11 and smaller) &amp;rarr; k<sub>tr</sub> = 0 and l<sub>dh</sub> &amp;times; 0.8.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>Do not tick:</b> at a discontinuous end with side and top/bottom cover both under 2.5 in. (ties required there, no reduction).</li></ul></div>
     <div class=&quot;field rbAashOnly&quot; style=&quot;margin-top:8px&quot;><label>Bend radius R to bar centroid <span class=&quot;unit&quot;>(in, AASHTO only)</span></label>
       <input id=&quot;hookR&quot; type=&quot;number&quot; step=&quot;0.125&quot; min=&quot;0&quot; placeholder=&quot;blank = minimum standard bend&quot;>
-      <div class=&quot;hint&quot;>AASHTO 5.10.8.2.4a. Blank = minimum finished bend of Table 5.10.2.3-1: R = D/2 + d<sub>b</sub>/2 with D = 6d<sub>b</sub> (#3&amp;ndash;#8), 8d<sub>b</sub> (#9&amp;ndash;#11), 10d<sub>b</sub> (#14, #18). The smallest R gives the longest l<sub>dh</sub> (conservative); galvanized bars have larger bends (Table 5.10.2.3-2).</div></div>`)}
+      <div class=&quot;hint rbNL&quot;><div class=&quot;rbNLl&quot;>AASHTO 5.10.8.2.4a.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>Blank:</b> minimum finished bend of Table 5.10.2.3-1: R = D/2 + d<sub>b</sub>/2 with D = 6d<sub>b</sub> (#3&amp;ndash;#8), 8d<sub>b</sub> (#9&amp;ndash;#11), 10d<sub>b</sub> (#14, #18).</li><li><b class=&quot;rbNLk&quot;>Smallest R:</b> gives the longest l<sub>dh</sub> (conservative).</li><li><b class=&quot;rbNLk&quot;>Galvanized bars:</b> have larger bends (Table 5.10.2.3-2).</li></ul></div></div>`)}
 
   ${panel(&quot;E2&quot;,&quot;Compression Development (&amp;psi;<sub>r</sub>)&quot;,true,`
     <div class=&quot;field rbAciOnly&quot;><label>Confining Reinforcement (&amp;psi;<sub>r</sub>, ACI Table 25.4.9.3)</label>
@@ -8754,8 +8775,8 @@ function excessBlock(inp,f){
       [&quot;A_{s,prov}&quot;,&quot;Area of steel actually provided&quot;,fmt(inp.asProv,2),&quot;in²&quot;],
       [f.AASHTO?&quot;\\lambda_{er}&quot;:&quot;\\text{ratio}&quot;,&quot;Reduction factor&quot;,fmt(f.excess,3),&quot;—&quot;],
     ])
-    + note(`<p>When more steel is provided than the analysis requires, each bar is stressed below its yield capacity, so it doesn't need to develop full f_y. The code lets you shorten the development length by the ratio of required to provided steel.${f.AASHTO?&quot; In AASHTO 10th Ed. Eq. 5.10.8.2.1a-2, λ_er multiplies f_y inside the squared bracket (the bar stress to be developed), so for tension and hooks the length falls faster than the ratio; for compression (Eq. 5.10.8.2.2a-1) it multiplies the length.&quot;:&quot;&quot;}</p>
-      <p><b>Important limits:</b> this reduction is <em>not</em> permitted where the bar must reach full f_y — at seismic locations, at non-continuous supports, and anywhere the code requires development for f_y regardless of stress. It also never increases length (capped at 1.0).</p>${f.excessRaw>1?`<p><b>Note:</b> As,req > As,prov here, so the raw ratio (${fmt(f.excessRaw,3)}) exceeds 1.0 and is held at 1.0 — no reduction applied.</p>`:&quot;&quot;}`)
+    + note(`<div class=&quot;rbNL rbNLp&quot;><div class=&quot;rbNLl&quot;>When more steel is provided than the analysis requires, each bar is stressed below its yield capacity, so it doesn't need to develop full f_y.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>Reduction:</b> the code lets you shorten the development length by the ratio of required to provided steel.</li>${f.AASHTO?&quot;<li><b class='rbNLk'>AASHTO:</b> in AASHTO 10th Ed. Eq. 5.10.8.2.1a-2, λ_er multiplies f_y inside the squared bracket (the bar stress to be developed), so for tension and hooks the length falls faster than the ratio; for compression (Eq. 5.10.8.2.2a-1) it multiplies the length.</li>&quot;:&quot;&quot;}</ul></div>
+      <div class=&quot;rbNLp rbNL&quot;><div class=&quot;rbNLl&quot;>Important limits:</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>Not permitted:</b> this reduction is <em>not</em> permitted where the bar must reach full f_y — at seismic locations, at non-continuous supports, and anywhere the code requires development for f_y regardless of stress.</li><li><b class=&quot;rbNLk&quot;>Never longer:</b> it also never increases length (capped at 1.0).</li></ul></div>${f.excessRaw>1?`<p><b>Note:</b> As,req > As,prov here, so the raw ratio (${fmt(f.excessRaw,3)}) exceeds 1.0 and is held at 1.0 — no reduction applied.</p>`:&quot;&quot;}`)
     + eqBlock(&quot;Excess reinforcement factor&quot;,ref,
         (f.AASHTO?&quot;\\lambda_{er}&quot;:&quot;\\text{factor}&quot;)+&quot; = \\dfrac{A_{s,req}}{A_{s,prov}} \\le 1.0&quot;,
         `\\dfrac{${fmt(inp.asReq,2)}}{${fmt(inp.asProv,2)}} = ${fmt(f.excessRaw,3)}`,
@@ -8797,9 +8818,7 @@ function tabTension(inp,f,forPrint){
   const psiTE = f.psiTEcap;
   return hero(&quot;Tension Development Length&quot;,&quot;ACI 318-19 §25.4.2.4 — General Equation&quot;,
               `${fmt(t.ld,2)} in`,&quot;Governing l_d&quot;)
-  + `<div class=&quot;narr&quot;>The general equation is used (rather than the simplified §25.4.2.3 table) because it credits transverse
-     confinement through the <em>(c_b + K_tr)/d_b</em> term, producing a sharper, code-compliant length. Bond develops the bar
-     to full yield f_y through adhesion, friction, and rib interlock; splitting governs where cover and confinement are limited.</div>`
+  + `<div class=&quot;narr rbNL&quot;><div class=&quot;rbNLl&quot;>The general equation is used (rather than the simplified §25.4.2.3 table).</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>Why:</b> it credits transverse confinement through the <em>(c_b + K_tr)/d_b</em> term, producing a sharper, code-compliant length.</li><li><b class=&quot;rbNLk&quot;>Bond:</b> develops the bar to full yield f_y through adhesion, friction, and rib interlock.</li><li><b class=&quot;rbNLk&quot;>Splitting:</b> governs where cover and confinement are limited.</li></ul></div>`
   + subsec(&quot;1. Modification Factors&quot;,&quot;Table 25.4.2.5&quot;, varTable([
       [&quot;\\psi_t&quot;,&quot;Casting position (top-bar effect)&quot;,fmt(f.psiT,1),&quot;—&quot;],
       [&quot;\\psi_e&quot;,&quot;Epoxy coating&quot;,fmt(f.psiE,1),&quot;—&quot;],
@@ -8809,11 +8828,11 @@ function tabTension(inp,f,forPrint){
     ])
     + note(`
       <p>Each ψ factor is a multiplier that lengthens (>1) or shortens (<1) the bar length needed to reach yield. They all enter the numerator, so the required length scales directly with their product.</p>
-      <div class=&quot;vardef&quot;><span class=&quot;s&quot;>ψ_t = ${fmt(f.psiT,1)}</span> — Casting position. When more than 12 in of fresh concrete is placed below a horizontal bar, bleed water and air rise and collect under the bar, weakening the bond on its underside. The 1.3 penalty (a 30% increase) accounts for this &quot;top-bar effect.&quot; Bottom and vertical bars use 1.0.</div>
-      <div class=&quot;vardef&quot;><span class=&quot;s&quot;>ψ_e = ${fmt(f.psiE,1)}</span> — Epoxy coating. Epoxy is slick and reduces the friction and adhesion component of bond, so a coated bar needs to be longer. 1.5 applies where cover or spacing is tight (cover < 3d_b or clear spacing < 6d_b); 1.2 otherwise; 1.0 for uncoated black bar.</div>
-      <div class=&quot;vardef&quot;><span class=&quot;s&quot;>ψ_s = ${fmt(f.psiS,1)}</span> — Bar size. Smaller bars (#6 and under) develop more efficiently per unit length because their surface-area-to-cross-section ratio is higher, so they earn a 0.8 credit. #7 and larger use 1.0.</div>
-      <div class=&quot;vardef&quot;><span class=&quot;s&quot;>ψ_g = ${fmt(f.psiG,2)}</span> — Grade. Higher-grade steel carries more force at yield, requiring more bond length to anchor it. Gr 40/60 = 1.0, Gr 80 = 1.15, Gr 100 = 1.30.</div>
-      <div class=&quot;vardef&quot;><span class=&quot;s&quot;>λ = ${fmt(f.lambda,2)}</span> — Lightweight concrete. Lightweight aggregate has lower tensile strength at a given f'c, so it splits earlier along the bar's ribs; the 0.75 value effectively lengthens development. Normalweight = 1.0. ACI 318-19 Table 25.4.2.5 gives 0.75 for every lightweight concrete, so the λ entered in Code &amp;amp; Material is not used here (it is used in AASHTO mode).</div>
+      <div class=&quot;vardef rbNL&quot;><div class=&quot;rbNLl&quot;><span class=&quot;s&quot;>ψ_t = ${fmt(f.psiT,1)}</span> — Casting position.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>Why:</b> when more than 12 in of fresh concrete is placed below a horizontal bar, bleed water and air rise and collect under the bar, weakening the bond on its underside.</li><li><b class=&quot;rbNLk&quot;>Top bar:</b> the 1.3 penalty (a 30% increase) accounts for this &quot;top-bar effect.&quot;</li><li><b class=&quot;rbNLk&quot;>Other bars:</b> bottom and vertical bars use 1.0.</li></ul></div>
+      <div class=&quot;vardef rbNL&quot;><div class=&quot;rbNLl&quot;><span class=&quot;s&quot;>ψ_e = ${fmt(f.psiE,1)}</span> — Epoxy coating.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>Why:</b> epoxy is slick and reduces the friction and adhesion component of bond, so a coated bar needs to be longer.</li><li><b class=&quot;rbNLk&quot;>1.5</b> applies where cover or spacing is tight (cover &amp;lt; 3d_b or clear spacing &amp;lt; 6d_b); 1.2 otherwise; 1.0 for uncoated black bar.</li></ul></div>
+      <div class=&quot;vardef rbNL&quot;><div class=&quot;rbNLl&quot;><span class=&quot;s&quot;>ψ_s = ${fmt(f.psiS,1)}</span> — Bar size.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>Smaller bars</b> (#6 and under) develop more efficiently per unit length because their surface-area-to-cross-section ratio is higher, so they earn a 0.8 credit.</li><li><b class=&quot;rbNLk&quot;>Larger bars:</b> #7 and larger use 1.0.</li></ul></div>
+      <div class=&quot;vardef rbNL&quot;><div class=&quot;rbNLl&quot;><span class=&quot;s&quot;>ψ_g = ${fmt(f.psiG,2)}</span> — Grade.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>Why:</b> higher-grade steel carries more force at yield, requiring more bond length to anchor it.</li><li><b class=&quot;rbNLk&quot;>Values:</b> Gr 40/60 = 1.0, Gr 80 = 1.15, Gr 100 = 1.30.</li></ul></div>
+      <div class=&quot;vardef rbNL&quot;><div class=&quot;rbNLl&quot;><span class=&quot;s&quot;>λ = ${fmt(f.lambda,2)}</span> — Lightweight concrete.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>Why:</b> lightweight aggregate has lower tensile strength at a given f'c, so it splits earlier along the bar's ribs; the 0.75 value effectively lengthens development.</li><li><b class=&quot;rbNLk&quot;>Normalweight:</b> = 1.0.</li><li><b class=&quot;rbNLk&quot;>ACI 318-19 Table 25.4.2.5:</b> gives 0.75 for every lightweight concrete, so the λ entered in Code &amp;amp; Material is not used here (it is used in AASHTO mode).</li></ul></div>
       <p><b>The 1.7 cap:</b> ψ_t and ψ_e both reduce bond in overlapping ways (a coated top bar). Testing showed multiplying them in full double-counts the penalty, so the code limits their product to 1.7.</p>`)
     + eqBlock(&quot;Product limit on ψ_t·ψ_e&quot;,&quot;§25.4.2.4&quot;,
         &quot;\\psi_t \\cdot \\psi_e \\le 1.7&quot;,
@@ -8828,7 +8847,7 @@ function tabTension(inp,f,forPrint){
       [&quot;d_b&quot;,&quot;Bar diameter (#&quot;+inp.barSize+&quot;)&quot;,fmt(f.db,3),&quot;in&quot;],
     ])
     + note(`
-      <p>This term is what separates the general equation from the simplified table method. It rewards <b>confinement</b>: the more the concrete and transverse steel resist the bar splitting outward, the shorter the development length can be. It sits in the <em>denominator</em>, so a bigger value shortens l_d.</p>
+      <div class=&quot;rbNLp rbNL&quot;><div class=&quot;rbNLl&quot;>This term is what separates the general equation from the simplified table method.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>It rewards confinement:</b> the more the concrete and transverse steel resist the bar splitting outward, the shorter the development length can be.</li><li><b class=&quot;rbNLk&quot;>Denominator:</b> it sits in the <em>denominator</em>, so a bigger value shortens l_d.</li></ul></div>
       <div class=&quot;vardef&quot;><span class=&quot;s&quot;>c_b = ${fmt(inp.cb,2)} in</span> — The smaller of (a) the distance from the bar center to the nearest concrete surface, and (b) half the center-to-center spacing to the adjacent bar. It represents how much concrete is available to resist a splitting crack.</div>
       <div class=&quot;vardef&quot;><span class=&quot;s&quot;>A_tr = ${fmt(inp.Atr,2)} in²</span> — Total cross-sectional area of transverse reinforcement (stirrups or ties) crossing the potential splitting plane within spacing s. Entering 0 is conservative and treats the section as unconfined.</div>
       <div class=&quot;vardef&quot;><span class=&quot;s&quot;>s = ${fmt(inp.sTr,2)} in, n = ${fmt(inp.nBars,0)}</span> — s is the spacing of that transverse steel; n is the number of bars being developed along the splitting plane. Both spread the confining steel's effect across the bars it protects.</div>
@@ -8892,10 +8911,7 @@ function tabTensionAASHTO(inp,f,t,forPrint){
   const hiFc = f.fc_ksi>10 &amp;&amp; !inp.lightweight, hiFy = f.fy_ksi>75;
   return hero(&quot;Tension Development Length&quot;,&quot;AASHTO LRFD 10th Ed. (2024) §5.10.8.2.1a&quot;,
               `${fmt(t.ld,2)} in`,&quot;Governing l_d&quot;)
-  + `<div class=&quot;narr&quot;>The 10th Edition finds a <em>basic</em> length l_db from the bar stress to be developed (λ_er·f_y, less
-     F_h/A_b where a hook or head carries part of the force; F_h = 0 for a straight bar) and an effective bond-splitting strength
-     that grows with the fourth root of f'c. It then multiplies l_db by the location, coating and confinement factors, with a
-     12 in. minimum. Bars must be fully developed at every point of required strength (§5.10.8.1.1).</div>`
+  + `<div class=&quot;narr rbNL&quot;><div class=&quot;rbNLl&quot;>Tension development, AASHTO:</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>Basic length:</b> the 10th Edition finds a <em>basic</em> length l_db from the bar stress to be developed (λ_er·f_y, less F_h/A_b where a hook or head carries part of the force; F_h = 0 for a straight bar) and an effective bond-splitting strength that grows with the fourth root of f'c.</li><li><b class=&quot;rbNLk&quot;>Factors:</b> it then multiplies l_db by the location, coating and confinement factors, with a 12 in. minimum.</li><li><b class=&quot;rbNLk&quot;>Full development:</b> bars must be fully developed at every point of required strength (§5.10.8.1.1).</li></ul></div>`
   + excessBlock(inp,f)
   + subsec(&quot;1. Basic Development Length&quot;,&quot;Eq. 5.10.8.2.1a-2&quot;, varTable([
       [&quot;f_y&quot;,&quot;Yield strength&quot;,fmt(f.fy_ksi,1),&quot;ksi&quot;],
@@ -8907,7 +8923,7 @@ function tabTensionAASHTO(inp,f,t,forPrint){
       [&quot;\\lambda_{er}&quot;,&quot;Excess reinforcement (1.0 unless the reduction is applied)&quot;,fmt(f.excess,3),&quot;—&quot;],
       [&quot;F_h&quot;,&quot;Force developed by a hook or head (straight bar)&quot;,&quot;0&quot;,&quot;kip&quot;],
     ])
-    + note(`<p>The squared bracket is the bar stress to be developed divided by an effective splitting strength of the concrete, 1.97·λ·(f'c)^0.25. Because the bracket is squared, λ and λ_er act on the length as 1/λ² and λ_er²: lightweight concrete lengthens the bar more, and excess steel shortens it more, than in the 9th Ed. form. F_h is the force a hook or head takes by bearing; it is zero for a straight bar and for lap splices (see the Standard Hook tab for a hooked bar).</p>`)
+    + note(`<div class=&quot;rbNLp rbNL&quot;><div class=&quot;rbNLl&quot;>The squared bracket is the bar stress to be developed divided by an effective splitting strength of the concrete, 1.97·λ·(f'c)^0.25.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>Squared:</b> because the bracket is squared, λ and λ_er act on the length as 1/λ² and λ_er²: lightweight concrete lengthens the bar more, and excess steel shortens it more, than in the 9th Ed. form.</li><li><b class=&quot;rbNLk&quot;>F_h:</b> the force a hook or head takes by bearing; it is zero for a straight bar and for lap splices (see the Standard Hook tab for a hooked bar).</li></ul></div>`)
     + eqBlock(&quot;Basic tension development length&quot;,&quot;Eq. 5.10.8.2.1a-2&quot;,
         &quot;l_{db} = 0.17\\,d_b\\left(\\dfrac{\\lambda_{er}\\,f_y - F_h/A_b}{1.97\\,\\lambda\\,(f'_c)^{0.25}}\\right)^{2}&quot;,
         `0.17\\times ${fmt(f.db,3)}\\times\\left(\\dfrac{${fmt(f.excess,3)}\\times ${fmt(f.fy_ksi,1)} - 0/${fmt(f.Ab,2)}}{1.97\\times ${fmt(f.lambda,2)}\\times ${fmt(f.fc4,4)}}\\right)^{2}`,
@@ -8923,7 +8939,7 @@ function tabTensionAASHTO(inp,f,t,forPrint){
         `${fmt(f.lam_rl,1)}\\times ${fmt(f.lam_cf,1)} = ${fmt(f.lam_rl*f.lam_cf,2)}`,
         `= ${fmt(f.lam_rlcf_cap,2)}`))
   + subsec(&quot;3. Confinement Factor&quot;,&quot;§5.10.8.2.1c&quot;,
-      note(`<p>λ_rc rewards cover, bar spacing and transverse steel crossing the splitting plane. With no transverse steel and β_t = 0 it reduces to d_b/c_b. k_tr = A_tr/(s·n) here has no factor of 40 (unlike ACI's K_tr), and is scaled by 1.67·n_s. β_t (negative) credits permanent compression across the splitting plane; 0 is conservative. The result is bounded between 0.3 and 1.0.</p>`)
+      note(`<div class=&quot;rbNLp rbNL&quot;><div class=&quot;rbNLl&quot;>λ_rc rewards cover, bar spacing and transverse steel crossing the splitting plane.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>No transverse steel:</b> with no transverse steel and β_t = 0 it reduces to d_b/c_b.</li><li><b class=&quot;rbNLk&quot;>k_tr:</b> k_tr = A_tr/(s·n) here has no factor of 40 (unlike ACI's K_tr), and is scaled by 1.67·n_s.</li><li><b class=&quot;rbNLk&quot;>β_t:</b> β_t (negative) credits permanent compression across the splitting plane; 0 is conservative.</li><li><b class=&quot;rbNLk&quot;>Bounds:</b> the result is bounded between 0.3 and 1.0.</li></ul></div>`)
       + aashtoRcBlock(inp,f,f.ktr_a,f.lam_rc_raw,f.lam_rc))
   + subsec(&quot;4. Development Length&quot;,&quot;Eq. 5.10.8.2.1a-1&quot;,
       eqBlock(&quot;Tension development length&quot;,&quot;Eq. 5.10.8.2.1a-1&quot;,
@@ -8945,9 +8961,7 @@ function tabHook(inp,f){
   const h = calcHook(inp,f);
   if(f.AASHTO) return tabHookAASHTO(inp,f,h);
   return hero(&quot;Standard Hook Development&quot;,&quot;ACI 318-19 §25.4.3&quot;,`${fmt(h.ldh,2)} in`,&quot;Required l_dh&quot;)
-  + `<div class=&quot;narr&quot;>Hooks transfer force by bond along the straight lead-in plus mechanical bearing on the concrete
-     inside the bend. ACI 318-19 uses a d_b^{1.5} exponent, reflecting that larger bars generate more localized
-     splitting for a given length. Result is measured from the critical section to the far side of the hook.</div>`
+  + `<div class=&quot;narr rbNL&quot;><div class=&quot;rbNLl&quot;>Hooks transfer force by bond along the straight lead-in plus mechanical bearing on the concrete inside the bend.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>ACI 318-19</b> uses a d_b^{1.5} exponent, reflecting that larger bars generate more localized splitting for a given length.</li><li><b class=&quot;rbNLk&quot;>Measured:</b> the result is measured from the critical section to the far side of the hook.</li></ul></div>`
   + hookSchematic(inp,f,h)
   + subsec(&quot;1. Modification Factors&quot;,&quot;Table 25.4.3.2&quot;, varTable([
       [&quot;\\psi_e&quot;,&quot;Epoxy coating&quot;,fmt(f.psiE_h,1),&quot;—&quot;],
@@ -8959,18 +8973,18 @@ function tabHook(inp,f){
     + note(`
       <p>A hook works differently from a straight bar: instead of relying only on bond along its length, the bend bears mechanically against the concrete inside it, like an anchor. These factors adjust for how well that concrete core is protected.</p>
       <div class=&quot;vardef&quot;><span class=&quot;s&quot;>ψ_e = ${fmt(f.psiE_h,1)}</span> — Epoxy coating reduces the bond along the straight lead-in portion of the hook. 1.2 if coated, 1.0 if uncoated.</div>
-      <div class=&quot;vardef&quot;><span class=&quot;s&quot;>ψ_r = ${fmt(f.psiR,1)}</span> — Confining reinforcement. Ties or stirrups wrapped around the hook resist the outward bursting force where the bend bears on the concrete. If that confinement is present per code, ψ_r = 1.0; without it, the length must grow by 60% (ψ_r = 1.6). This is often the single biggest driver of hook length.</div>
-      <div class=&quot;vardef&quot;><span class=&quot;s&quot;>ψ_o = ${fmt(f.psiO,2)}</span> — Location (Table 25.4.3.2, #11 and smaller). 1.0 where the hook terminates inside a column or structural-wall core with side cover normal to the plane of the hook ≥ 2.5 in., or where that side cover is ≥ 6d_b. All other cases (e.g. a hook near a free edge with side cover < 2.5 in.) have less concrete to bear against and use 1.25.</div>
-      <div class=&quot;vardef&quot;><span class=&quot;s&quot;>ψ_c = ${fmt(f.psiC_h,3)}</span> — Concrete strength (new in ACI 318-19). Stronger concrete bears harder against the hook, allowing a shorter length. Below 6,000 psi it gives a credit < 1.0; it caps at 1.0.</div>
+      <div class=&quot;vardef rbNL&quot;><div class=&quot;rbNLl&quot;><span class=&quot;s&quot;>ψ_r = ${fmt(f.psiR,1)}</span> — Confining reinforcement.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>Why:</b> ties or stirrups wrapped around the hook resist the outward bursting force where the bend bears on the concrete.</li><li><b class=&quot;rbNLk&quot;>Values:</b> if that confinement is present per code, ψ_r = 1.0; without it, the length must grow by 60% (ψ_r = 1.6).</li><li><b class=&quot;rbNLk&quot;>Effect:</b> this is often the single biggest driver of hook length.</li></ul></div>
+      <div class=&quot;vardef rbNL&quot;><div class=&quot;rbNLl&quot;><span class=&quot;s&quot;>ψ_o = ${fmt(f.psiO,2)}</span> — Location (Table 25.4.3.2, #11 and smaller).</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>1.0</b> where the hook terminates inside a column or structural-wall core with side cover normal to the plane of the hook ≥ 2.5 in., or where that side cover is ≥ 6d_b.</li><li><b class=&quot;rbNLk&quot;>All other cases</b> (e.g. a hook near a free edge with side cover &amp;lt; 2.5 in.) have less concrete to bear against and use 1.25.</li></ul></div>
+      <div class=&quot;vardef rbNL&quot;><div class=&quot;rbNLl&quot;><span class=&quot;s&quot;>ψ_c = ${fmt(f.psiC_h,3)}</span> — Concrete strength (new in ACI 318-19).</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>Why:</b> stronger concrete bears harder against the hook, allowing a shorter length.</li><li><b class=&quot;rbNLk&quot;>Values:</b> below 6,000 psi it gives a credit &amp;lt; 1.0; it caps at 1.0.</li></ul></div>
       <div class=&quot;vardef&quot;><span class=&quot;s&quot;>λ = ${fmt(f.lambda,2)}</span> — Same lightweight penalty as tension.</div>
-      <p><b>Why d_b^{1.5} instead of d_b?</b> Larger hooked bars concentrate more bearing force in the bend, splitting the concrete disproportionately. The 1.5 power makes big bars grow faster than a linear relationship would, matching test data.</p>`)
+      <div class=&quot;rbNLp rbNL&quot;><div class=&quot;rbNLl&quot;>Why d_b^{1.5} instead of d_b?</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>Bearing:</b> larger hooked bars concentrate more bearing force in the bend, splitting the concrete disproportionately.</li><li><b class=&quot;rbNLk&quot;>Exponent:</b> the 1.5 power makes big bars grow faster than a linear relationship would, matching test data.</li></ul></div>`)
     + eqBlock(&quot;Concrete strength factor&quot;,&quot;Table 25.4.3.2&quot;,
         &quot;\\psi_c = \\min\\!\\left(\\dfrac{f'_c}{15000}+0.6,\\ 1.0\\right)&quot;,
         `\\min\\!\\left(\\dfrac{${fmt(inp.fc,0)}}{15000}+0.6,\\ 1.0\\right)`,
         `\\psi_c = ${fmt(f.psiC_h,3)}`))
-  + (inp.useExcess?subsec(&quot;Excess Reinforcement Factor&quot;,&quot;§25.4.10.2(d)&quot;,note(`<p><b>Not applied to the hook.</b> ACI 318-19 25.4.10.1 permits the A<sub>s,req</sub>/A<sub>s,prov</sub> reduction only for the lengths of 25.4.2.1(a), 25.4.6.1(a), 25.4.7.1(a) and 25.4.9.1(a) (not 25.4.3.1), and 25.4.10.2(d) does not permit it for hooked, headed or mechanically anchored bars. l<sub>dh</sub> below develops full f<sub>y</sub>.</p>`)):&quot;&quot;)
+  + (inp.useExcess?subsec(&quot;Excess Reinforcement Factor&quot;,&quot;§25.4.10.2(d)&quot;,note(`<div class=&quot;rbNLp rbNL&quot;><div class=&quot;rbNLl&quot;>Not applied to the hook.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>ACI 318-19 25.4.10.1</b> permits the A<sub>s,req</sub>/A<sub>s,prov</sub> reduction only for the lengths of 25.4.2.1(a), 25.4.6.1(a), 25.4.7.1(a) and 25.4.9.1(a) (not 25.4.3.1).</li><li><b class=&quot;rbNLk&quot;>Hooked bars:</b> 25.4.10.2(d) does not permit it for hooked, headed or mechanically anchored bars.</li><li><b class=&quot;rbNLk&quot;>So:</b> l<sub>dh</sub> below develops full f<sub>y</sub>.</li></ul></div>`)):&quot;&quot;)
   + subsec(&quot;2. Hook Development Length&quot;,&quot;Eq. 25.4.3.1&quot;,
-      note(`<p>The straight development length rarely fits where a beam frames into a column or a bar reaches a wall end — that's where hooks are used. The result below is measured from the critical section (where the bar must be fully stressed) to the outside face of the hook. The two floors (8d_b and 6 in) guarantee a minimum embedment even when the formula returns a very small number for small bars in strong concrete.</p>`)
+      note(`<div class=&quot;rbNLp rbNL&quot;><div class=&quot;rbNLl&quot;>The straight development length rarely fits where a beam frames into a column or a bar reaches a wall end — that's where hooks are used.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>Measured:</b> the result below is measured from the critical section (where the bar must be fully stressed) to the outside face of the hook.</li><li><b class=&quot;rbNLk&quot;>Floors:</b> the two floors (8d_b and 6 in) guarantee a minimum embedment even when the formula returns a very small number for small bars in strong concrete.</li></ul></div>`)
     + eqBlock(&quot;Standard hook length&quot;,&quot;Eq. 25.4.3.1&quot;,
         &quot;l_{dh} = \\dfrac{f_y\\,\\psi_e\\psi_r\\psi_o\\psi_c}{55\\,\\lambda\\sqrt{f'_c}}\\,d_b^{1.5}&quot;,
         `\\dfrac{${fmt(inp.fy,0)}\\times ${fmt(f.psiE_h,1)}\\times ${fmt(f.psiR,1)}\\times ${fmt(f.psiO,2)}\\times ${fmt(f.psiC_h,3)}}{55\\times ${fmt(f.lambda,2)}\\times ${fmt(f.sqrtFc,1)}}\\times ${fmt(f.db,3)}^{1.5}`,
@@ -8984,10 +8998,7 @@ function tabHook(inp,f){
 /* ---- AASHTO hook branch (AASHTO LRFD 10th Ed. 5.10.8.2.4) ---- */
 function tabHookAASHTO(inp,f,h){
   return hero(&quot;Standard Hook Development&quot;,&quot;AASHTO LRFD 10th Ed. (2024) §5.10.8.2.4a&quot;,`${fmt(h.ldh,2)} in`,&quot;Required l_dh&quot;)
-  + `<div class=&quot;narr&quot;>The 10th Edition develops a hooked bar with the straight-bar equation: bearing inside the bend carries a
-     force F_h = d_b·R·v·f'c, so the straight lead-in only has to develop the rest of the bar stress (λ_er·f_y − F_h/A_b).
-     l_dh is that straight length plus the bend, R + d_b/2, measured from the critical section to the outside of the hook.
-     Applies to standard hooks (§5.10.2.1) of #11 bars and smaller, f'c up to 15 ksi (normal weight).</div>`
+  + `<div class=&quot;narr rbNL&quot;><div class=&quot;rbNLl&quot;>The 10th Edition develops a hooked bar with the straight-bar equation:</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>Hook force:</b> bearing inside the bend carries a force F_h = d_b·R·v·f'c, so the straight lead-in only has to develop the rest of the bar stress (λ_er·f_y − F_h/A_b).</li><li><b class=&quot;rbNLk&quot;>l_dh:</b> that straight length plus the bend, R + d_b/2, measured from the critical section to the outside of the hook.</li><li><b class=&quot;rbNLk&quot;>Applies to:</b> standard hooks (§5.10.2.1) of #11 bars and smaller, f'c up to 15 ksi (normal weight).</li></ul></div>`
   + hookSchematic(inp,f,h)
   + subsec(&quot;1. Hook Force&quot;,&quot;Eq. 5.10.8.2.4a-2&quot;, varTable([
       [&quot;d_b&quot;,&quot;Bar diameter (#&quot;+inp.barSize+&quot;)&quot;,fmt(f.db,3),&quot;in&quot;],
@@ -8997,7 +9008,7 @@ function tabHookAASHTO(inp,f,h){
       [&quot;f'_c&quot;,&quot;Concrete strength used (≤ &quot;+fmt(f.fcLimA,0)+&quot; ksi)&quot;,fmt(f.fcA,2),&quot;ksi&quot;],
       [&quot;v&quot;,&quot;Concrete efficiency factor, CTT node (Table 5.8.2.5.3a-1)&quot;,fmt(h.v,3),&quot;—&quot;],
     ])
-    + note(`<p>R is measured from the center of the bend to the centroid of the bar. A tighter bend (smaller R) takes less force by bearing and adds less length, and gives the longer l_dh, so the minimum standard bend is the conservative default. The efficiency factor is that of a CTT node, bounded between 0.45 and 0.65.</p>`)
+    + note(`<div class=&quot;rbNLp rbNL&quot;><div class=&quot;rbNLl&quot;>R is measured from the center of the bend to the centroid of the bar.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>Tighter bend:</b> a tighter bend (smaller R) takes less force by bearing and adds less length, and gives the longer l_dh, so the minimum standard bend is the conservative default.</li><li><b class=&quot;rbNLk&quot;>Efficiency factor:</b> that of a CTT node, bounded between 0.45 and 0.65.</li></ul></div>`)
     + (h.Rentered?&quot;&quot;:eqBlock(&quot;Bend radius (minimum standard bend)&quot;,&quot;Table 5.10.2.3-1&quot;,
         &quot;R = \\dfrac{D}{2} + \\dfrac{d_b}{2}&quot;,
         `\\dfrac{${fmt(h.Dmin,0)}\\times ${fmt(f.db,3)}}{2} + \\dfrac{${fmt(f.db,3)}}{2}`,
@@ -9120,7 +9131,7 @@ function tabComp(inp,f){
       [&quot;d_b&quot;,&quot;Bar diameter&quot;,fmt(f.db,3),&quot;in&quot;],
     ])
     + note(`
-      <p>A bar in compression doesn't try to split the concrete the way a tension bar does, and its end bears directly on the concrete. Both effects mean it anchors in far less length than the same bar in tension — often less than half. Because there's no splitting mechanism, the confinement term and most ψ factors from the tension equation drop out entirely.</p>
+      <div class=&quot;rbNLp rbNL&quot;><div class=&quot;rbNLl&quot;>A bar in compression doesn't try to split the concrete the way a tension bar does, and its end bears directly on the concrete.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>Shorter:</b> both effects mean it anchors in far less length than the same bar in tension — often less than half.</li><li><b class=&quot;rbNLk&quot;>Dropped terms:</b> because there's no splitting mechanism, the confinement term and most ψ factors from the tension equation drop out entirely.</li></ul></div>
       <div class=&quot;vardef&quot;><span class=&quot;s&quot;>Expression (a)</span> — Governs for stronger concrete: as f'c rises, √f'c grows and the required length shrinks, because stiffer concrete grips the bar better.</div>
       <div class=&quot;vardef&quot;><span class=&quot;s&quot;>Expression (b)</span> — A floor that does <em>not</em> depend on f'c. For high-strength concrete, expression (a) becomes very small, and (b) takes over so the length never drops unrealistically low.</div>
       <div class=&quot;vardef&quot;><span class=&quot;s&quot;>8 in absolute minimum</span> — A practical constructability floor for small bars.</div>
@@ -9143,10 +9154,7 @@ function tabComp(inp,f){
 /* ---- AASHTO compression branch (AASHTO LRFD 10th Ed. 5.10.8.2.2a; numbered 5.10.8.2.5 in the tool before 2026-10-19) ---- */
 function tabCompAASHTO(inp,f,c){
   return hero(&quot;Compression Development&quot;,&quot;AASHTO LRFD 10th Ed. (2024) §5.10.8.2.2a&quot;,`${fmt(c.ldc,2)} in`,&quot;Required l_dc&quot;)
-  + `<div class=&quot;narr&quot;>AASHTO compression development takes the larger of two expressions (ksi units), then applies the
-     applicable modification factors, with an 8 in floor. As in ACI, the splitting mechanism is absent so the length is short.
-     This tool applies λ_er and λ (Eq. 5.10.8.2.2a-1 divides by λ, the concrete density modification factor of §5.4.2.8:
-     the entered value for lightweight concrete, 1.0 for normalweight); λ_rc = 1.0 (no reduction for spirals or hoops, §5.10.8.2.2b).</div>`
+  + `<div class=&quot;narr rbNL&quot;><div class=&quot;rbNLl&quot;>AASHTO compression development takes the larger of two expressions (ksi units), then applies the applicable modification factors, with an 8 in floor.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>As in ACI:</b> the splitting mechanism is absent so the length is short.</li><li><b class=&quot;rbNLk&quot;>λ_er and λ:</b> this tool applies λ_er and λ (Eq. 5.10.8.2.2a-1 divides by λ, the concrete density modification factor of §5.4.2.8: the entered value for lightweight concrete, 1.0 for normalweight).</li><li><b class=&quot;rbNLk&quot;>λ_rc:</b> λ_rc = 1.0 (no reduction for spirals or hoops, §5.10.8.2.2b).</li></ul></div>`
   + subsec(&quot;1. Governing Expressions&quot;,&quot;§5.10.8.2.2a&quot;, varTable([
       [&quot;f_y&quot;,&quot;Yield strength&quot;,fmt(f.fy_ksi,1),&quot;ksi&quot;],
       [&quot;f'_c&quot;,&quot;Concrete strength&quot;,fmt(f.fc_ksi,2),&quot;ksi&quot;],
@@ -9193,7 +9201,7 @@ function tabTSplice(inp,f){
     + rebarWorkedIn([[&quot;tLd&quot;,&quot;l_d&quot;]], (inp.useExcess&amp;&amp;f.excess<1)?` (there l_d includes the excess-reinforcement factor ${fmt(f.excess,3)}; the splice base above does not)`:&quot;&quot;)
     + note(`
       <p>When a bar isn't long enough to run continuously, two bars overlap so force transfers from one to the other through the concrete between them. A lap splice must be <em>longer</em> than a plain development length because both bars are fully stressed across the same zone, crowding the bond.</p>
-      <div class=&quot;vardef&quot;><span class=&quot;s&quot;>Class B (1.3 l_d)</span> — The default. Use it whenever you're not certain Class A qualifies. This is the safe assumption for most designs.</div>
+      <div class=&quot;vardef rbNL&quot;><div class=&quot;rbNLl&quot;><span class=&quot;s&quot;>Class B (1.3 l_d)</span> — The default.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>When:</b> use it whenever you're not certain Class A qualifies.</li><li><b class=&quot;rbNLk&quot;>Safe:</b> this is the safe assumption for most designs.</li></ul></div>
       <div class=&quot;vardef&quot;><span class=&quot;s&quot;>Class A (1.0 l_d)</span> — Only allowed when the section is lightly stressed: the steel actually provided is at least twice what's required <em>and</em> no more than half the bars are spliced at one location. The check above evaluates this for you.</div>
       <p><b>Base length:</b> the splice is built on l_d computed <em>without</em> the excess-reinforcement reduction, per code — the excess steel already relaxes the Class requirement, so applying it twice would be unconservative.</p>`)
     + eqBlock(&quot;Lap splice length&quot;,ref,
@@ -9299,9 +9307,7 @@ function tabBatch(inp,f){
       <td class=&quot;num&quot;>${lapProhibited(bi,bf)?&quot;N/P*&quot;:fmt(cs.lsc,1)}</td></tr>`;
   }).join(&quot;&quot;);
   return hero(&quot;Bar Development Schedule&quot;,codeName+&quot; — all bar sizes&quot;,`#${inp.barSize}`,&quot;current selection&quot;)
-  + `<div class=&quot;narr&quot;>Every length below is computed with your current f'<sub>c</sub> = ${fmt(inp.fc,0)} psi, f<sub>y</sub> = ${fmt(inp.fy,0)} psi,
-     and the modification factors set in the input panel — recomputed for each bar size. The row matching your selected bar is
-     highlighted. Values are inches, rounded to 0.1 in. Use this as a quick-reference schedule; the individual tabs show the full derivation.</div>`
+  + `<div class=&quot;narr rbNL&quot;><div class=&quot;rbNLl&quot;>Every length below is computed with your current f'<sub>c</sub> = ${fmt(inp.fc,0)} psi, f<sub>y</sub> = ${fmt(inp.fy,0)} psi, and the modification factors set in the input panel — recomputed for each bar size.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>Highlighted:</b> the row matching your selected bar.</li><li><b class=&quot;rbNLk&quot;>Values:</b> inches, rounded to 0.1 in.</li><li><b class=&quot;rbNLk&quot;>Use:</b> as a quick-reference schedule; the individual tabs show the full derivation.</li></ul></div>`
   + subsec(&quot;Development &amp;amp; Splice Lengths — All Bar Sizes&quot;,codeName,
       `<table class=&quot;vars&quot;>
         <thead><tr>
@@ -9311,9 +9317,9 @@ function tabBatch(inp,f){
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      <div class=&quot;hint&quot; style=&quot;margin-top:8px&quot;>All lengths in inches. Tension splice uses Class ${inp.tensClass}. ${inp.useExcess?`Excess-reinforcement reduction (×${fmt(f.excess,3)}) applied to development lengths but not splices${f.AASHTO?&quot;&quot;:&quot; or hooks (ACI 25.4.10.2(d))&quot;}, per code.`:&quot;No excess-reinforcement reduction applied.&quot;}${f.AASHTO?&quot; *N/P = lap splices not used for bars larger than No. 11 (AASHTO 5.10.8.4.2a).&quot;:&quot; *N/P = lap splice not permitted for #14/#18 bars (ACI 25.5.1.1); in compression they may be lapped only to #11 and smaller bars (25.5.5.3).&quot;}</div>`)
+      <div class=&quot;hint rbNL&quot; style=&quot;margin-top:8px&quot;><div class=&quot;rbNLl&quot;>All lengths in inches.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>Tension splice:</b> uses Class ${inp.tensClass}.</li><li><b class=&quot;rbNLk&quot;>Excess reinforcement:</b> ${inp.useExcess?`reduction (×${fmt(f.excess,3)}) applied to development lengths but not splices${f.AASHTO?&quot;&quot;:&quot; or hooks (ACI 25.4.10.2(d))&quot;}, per code.`:&quot;no excess-reinforcement reduction applied.&quot;}</li><li><b class=&quot;rbNLk&quot;>*N/P:</b> ${f.AASHTO?&quot;lap splices not used for bars larger than No. 11 (AASHTO 5.10.8.4.2a).&quot;:&quot;lap splice not permitted for #14/#18 bars (ACI 25.5.1.1); in compression they may be lapped only to #11 and smaller bars (25.5.5.3).&quot;}</li></ul></div>`)
   + rebarWorkedIn(rebarLenCards(),&quot;&quot;,&quot;Selected bar (#&quot;+inp.barSize+&quot;) worked in: &quot;)
-  + note(`<p>This schedule is the single most-used output for detailing: it lets you look up any bar's development and splice length at a glance for the current concrete/steel combination, rather than re-running each bar individually. Because every value obeys the same modification factors you set, it stays consistent with the detailed tabs.</p>`);
+  + note(`<div class=&quot;rbNLp rbNL&quot;><div class=&quot;rbNLl&quot;>This schedule is the single most-used output for detailing.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>Look-up:</b> it lets you look up any bar's development and splice length at a glance for the current concrete/steel combination, rather than re-running each bar individually.</li><li><b class=&quot;rbNLk&quot;>Consistent:</b> because every value obeys the same modification factors you set, it stays consistent with the detailed tabs.</li></ul></div>`);
 }
 
 /* ---- D11 links (CLAUDE.md §6, 2026-10-18): a value quoted away from where it is worked links to that card.
@@ -10161,12 +10167,20 @@ function rbrCSplice(inp,f){
 function rbComm(html){
   const t=document.createElement('template'); t.innerHTML=html; const out=[];
   const txt=h=>rbPlain(h).replace(/\s+/g,' ').trim();
+  /* RBNL (2026-11-08): a block built as a lead line and a list (rbNL) gives one line per part: the action line, the lead, then
+     &quot;• lead words text&quot; per item (an <li> nested in an action line stays in that line) */
+  const nlParts=e=>[...e.querySelectorAll('.rbNLa,.rbNLl,.rbNLu>li')].filter(p=>!(p.tagName==='LI'&amp;&amp;p.closest('.rbNLa'))).map(p=>{
+    const c=p.cloneNode(true); c.querySelectorAll('li').forEach(x=>x.insertAdjacentText('afterbegin','• '));
+    return (p.tagName==='LI'?'• ':'')+txt(c.innerHTML); });
   t.content.querySelectorAll('.narr,.note-body').forEach(e=>{
-    if(e.classList.contains('narr')){ if(!e.parentElement||!e.parentElement.closest('.note-body')) out.push(txt(e.innerHTML)); return; }
-    e.childNodes.forEach(n=>out.push(txt(n.nodeType===1?n.innerHTML:String(n.textContent).replace(/&amp;/g,'&amp;amp;').replace(/</g,'&amp;lt;'))));
+    if(e.classList.contains('narr')){ if(!e.parentElement||!e.parentElement.closest('.note-body')) out.push(...(e.classList.contains('rbNL')?nlParts(e):[txt(e.innerHTML)])); return; }
+    e.childNodes.forEach(n=>{ if(n.nodeType===1&amp;&amp;n.classList.contains('rbNL')) out.push(...nlParts(n));
+      else out.push(txt(n.nodeType===1?n.innerHTML:String(n.textContent).replace(/&amp;/g,'&amp;amp;').replace(/</g,'&amp;lt;'))); });
   });
   return out.filter(Boolean).map(text=>({type:'note',text}));
 }
+/* RBNL (2026-11-08): a Report note as a lead line and &quot;• lead words text&quot; lines */
+function rbrNL(lead,items){ return [lead?{type:'note',text:lead}:null,...(items||[]).filter(Boolean).map(x=>({type:'note',text:'• '+(Array.isArray(x)?x[0]+' '+x[1]:x)}))].filter(Boolean); }
 function rbCommSub(html){ const L=rbComm(html); return L.length?[{title:'Notes and commentary',items:L}]:[]; }
 function rbrModel(){
   const inp=readInputs(), f=computeFactors(inp), w=validate(inp,f), A=f.AASHTO, secs=[];
@@ -10181,7 +10195,7 @@ function rbrModel(){
     const subs=[];
     subs.push({title:'Project',items:[{type:'kv',rows:[['Project',inp.projName||'—'],['Project number',inp.projNo||'—'],
       ['Calculated by',(inp.calcBy||'—')+(inp.calcDate?', '+inp.calcDate:'')],['Checked by',(inp.chkBy||'—')+(inp.chkDate?', '+inp.chkDate:'')],['Design code',codeName]]},
-      {type:'note',text:REBAR_RPT_TOOL+', by Mario Lococo. Equations are shown symbolically, then with the values substituted, then with the result. '+'Units: in., psi'+(A?' (ksi in the AASHTO equations)':'')+'. Every value in this report is the value the tool computes on its result tabs (Tension l_d, Hook l_dh, Compression l_dc, Tension Splice, Comp. Splice, Bar Schedule); each section links to its tab.'}]});
+      ...rbrNL(REBAR_RPT_TOOL+', by Mario Lococo.',[['Equations:','shown symbolically, then with the values substituted, then with the result.'],['Units:','in., psi'+(A?' (ksi in the AASHTO equations)':'')+'.'],['Values:','every value in this report is the value the tool computes on its result tabs (Tension l_d, Hook l_dh, Compression l_dc, Tension Splice, Comp. Splice, Bar Schedule); each section links to its tab.']])]});   /* RBNL */
     const yn=b=>b?'yes':'no';
     const rows=[['Design code',codeName,'–'],['Bar size','#'+inp.barSize+' ($d_{b}$ = '+rbN(f.db,3)+' in., $A_{b}$ = '+rbN(f.Ab)+' in²)','–'],
       ['Yield strength $f_{y}$',rbG(inp.fy,0).replace('{,}',','),'psi'],['Concrete strength $f^{\\prime}_{c}$',rbG(inp.fc,0).replace('{,}',','),'psi'],
@@ -10229,7 +10243,10 @@ function rbrModel(){
     });
     secs.push({title:'Bar development schedule',subs:[{title:'Development and splice lengths, all bar sizes',items:[
       {type:'table',head:['Bar','$d_{b}$ (in.)','Tension $l_{d}$','Hook $l_{dh}$','Comp. $l_{dc}$','Tens. splice ('+inp.tensClass+')','Comp. splice'],rows,wide:true},
-      {type:'note',text:'All lengths in inches, rounded to 0.1 in., computed with the inputs above for each bar size (bold: the selected #'+inp.barSize+'; its lengths are worked in [[td/ld]], [[hk/ldh]], [[cd/ldc]], [[ts/lst]], [[cs/lsc]]). '+(inp.useExcess?'Excess reinforcement reduction (×'+rbN(f.excess,3)+') applied to development lengths, not to splices'+(A?'':' or hooks (ACI 318-19 25.4.10.2(d))')+'. ':'No excess reinforcement reduction applied. ')+(A?'*N/P = lap splices not used for bars larger than No. 11 (AASHTO 5.10.8.4.2a).':'*N/P = lap splice not permitted for #14/#18 bars (ACI 318-19 25.5.1.1); in compression they may be lapped only to #11 and smaller bars (25.5.5.3).')+' '+tabLink('batch','On screen: Bar Schedule tab')}]}].concat(rbCommSub(tabBatch(inp,f)))});
+      ...rbrNL('All lengths in inches, rounded to 0.1 in., computed with the inputs above for each bar size (bold: the selected #'+inp.barSize+'; its lengths are worked in [[td/ld]], [[hk/ldh]], [[cd/ldc]], [[ts/lst]], [[cs/lsc]]).',   /* RBNL */
+        [['Excess reinforcement:',inp.useExcess?'reduction (×'+rbN(f.excess,3)+') applied to development lengths, not to splices'+(A?'':' or hooks (ACI 318-19 25.4.10.2(d))')+'.':'no excess reinforcement reduction applied.'],
+         ['*N/P:',A?'lap splices not used for bars larger than No. 11 (AASHTO 5.10.8.4.2a).':'lap splice not permitted for #14/#18 bars (ACI 318-19 25.5.1.1); in compression they may be lapped only to #11 and smaller bars (25.5.5.3).']]),
+      {type:'note',text:tabLink('batch','On screen: Bar Schedule tab')}]}].concat(rbCommSub(tabBatch(inp,f)))});
   }
   /* 8. references */
   secs.push({title:'References',subs:[{title:'Codes and articles cited',items:[{type:'table',head:['Reference','Provisions used'],rows:rebarRefs(inp,f).map(r=>[rbPlain(r[0]),rbPlain(r[1])])}]}]});
