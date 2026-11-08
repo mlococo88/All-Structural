@@ -7388,3 +7388,47 @@ index 50f3837..c2d5000 100644
   - The depth-factor input hint "Vesić form (not AASHTO LRFD 10th Ed. Eq. 10.6.3.1.2a-10)".
   - All three contradict the code: the tool magnifies (SFSL), has E combinations (SFEQ), and uses the AASHTO arctan form with d_q ≤ 1.4 (SFLW).
 - **Other copies:** none.
+
+## 2026-11-08 — PR: docs/sf-stale-display (PR #1246: https://github.com/mlococo88/All-Structural/pull/1246) (SFSC-5) — stale scope statements in the tool's own display text (Report assumption, Schematic 1.5, depth-factor hint, card 5.1, hand-off message)   [DISPLAY ONLY; no computed value changes]
+- **Request (engineer, 2026-11-08):** fix the three display texts raised in SFSC-4 (#1245). Also search the tool's non-manual text for other "not performed / not considered / screened only" statements the code has overtaken.
+- **Search:** "not performed", "not considered", "screened only", "not computed", "not checked", "not modelled", "is not applied", "seismic", "magnif", "standard practice", "excluded from", "carried directly", outside the manual. Every hit was checked against the code. Still true, left as they are:
+  - torsion design not performed (SFTQ);
+  - grouped punching stress not computed;
+  - wind Cases 2 / 4 not modelled;
+  - Ω₀ not applied unless E_mh is entered;
+  - confining ties A_th not considered;
+  - the LRFD reference tables "not checked";
+  - the wall "Not checked" list;
+  - flotation excludes live loads;
+  - pedestal loads "self-weight not included" (loads at the pedestal top);
+  - the 1% lower limit not applied to a pedestal.
+- **Changed (anchor = the before text):**
+  1. **Report assumptions** (`sfrModel`, "7. Assumptions" list).
+     - Before: `'Pedestal slenderness is screened only (k = 2.0, free top: fixed at the footing, free at the top; ℓ_u = h); moment magnification is not performed.'`
+     - After: `'Pedestal slenderness: k = 2.0 (fixed at the footing, free at the top), ℓ_u = h; a pedestal with kℓ_u/r > 22 has its moments magnified (ACI 318-19 6.6.4; sway cantilever, δ_s of the pedestal alone, C_m = 1.0) and is NG where unstable or where δ_sδ > 1.4 (6.2.5.3).'`
+     - Code: SFSL (`sfslMag`).
+  2. **Schematic 1.5 "Not considered in this version (v1 audit trail)"** (`renderSchematic`, anchor `'Not considered in this version`). Before → after:
+     - `'seismic loads (E);'` → `'seismic analysis and detailing (E loads are entered as E_h; the ASCE 7-16 seismic combinations are generated; no Ω₀ unless E_mh is entered; no ACI 318-19 Chapter 18 detailing);'` (SFEQ).
+     - `'minimum/accidental eccentricity;'` → `'minimum/accidental eccentricity (other than M_2,min of a slender pedestal);'`.
+     - `'slender-pedestal moment magnification;'` → `'second-order frame (story) analysis of slender pedestals (the moments of a slender pedestal are magnified per ACI 318-19 6.6.4);'` (SFSL).
+     - "Structural design: … of the footing and pedestals … Footing Design and Pedestal Design tabs." → "… of the footing, pedestals and walls … Footing Design, Pedestal Design and Wall Design tabs." (SFWD).
+  3. **Depth-factor input** (Soil tab, `data-path="soil.sfdDepthF"`).
+     - Option "On (Vesić)" → "On (AASHTO dq ≤ 1.4, Vesić dc)".
+     - Hint "Vesić form (not AASHTO LRFD 10th Ed. Eq. 10.6.3.1.2a-10); use condition per AASHTO 10.6.3.1.2a" → "d_q per AASHTO LRFD 10th Ed. Eq. 10.6.3.1.2a-10 (arctan(D_f/B′), ≤ 1.4), d_c Vesić form from d_q; use condition per AASHTO 10.6.3.1.2a".
+     - Code: `vesicCapacity`, `kk=Math.atan(Df/Beff)`, `dq=Math.min(…,1.4)` (SFLW L6). The saved value `'on'` / `'off'` is unchanged.
+  4. **Footing Design card 5.1** (`renderFootDes`, anchor `'5.1  Design Basis & Effective Depths'`; also in the Report).
+     - Before: `['Excluded:','footing self-weight, EV, and buoyancy are uniform reactions carried directly to the soil and are excluded from the structural pressure per standard practice.']`
+     - After: `['Body forces:','footing self-weight, EV, surcharge and buoyancy are carried in the structural resultant and subtracted back inside each free body: under full contact this equals leaving them out (a uniform load reacted by a uniform pressure); under partial contact the weight over the uplifted region is carried in bending back to the contact area.']`
+     - Code: `netResultant`, `bodyResultant`.
+  5. **Support-reaction hand-off** (the BridgeXfer receiver's `plan()`).
+     - Before: `'E (seismic) is not imported: this tool has no seismic load type (see its scope notes).'`
+     - After: `'E (seismic) is not imported by default: pick the E row (horizontal seismic effect E_h) as its target if the reaction is E_h.'`
+     - The target list already offers E (`TYPES`). The default map (`DEF_ROW.E = ''`) is unchanged, so imports behave as before. This message exists in this tool only; it is not part of the duplicated bootstrap.
+- **Governing provision / formulas / factors / units:** none changed (§4 does not apply). **Saved data:** none.
+- **Check case:** default project. The Schematic 1.5 list and the Report "Assumptions and warnings" read as above. Card 5.1 shows the "Body forces" item. With Depth factors On, the option reads "On (AASHTO dq ≤ 1.4, Vesić dc)". Every result is identical.
+- **How verified:** main-vs-branch probe (headless Chromium, `tests/lib.mjs` `openPage`), five cases: default, Direct factored, a pedestal and a wall, slender, one pedestal.
+  - `R`, `P2` and `state` identical.
+  - The only text differences: the Schematic 1.5 list, the card 5.1 item, and the matching Report lines (Report text by `SharedReport.text`).
+  - 0 console errors.
+  - Tests: check-syntax, phone-layout --tool sf, project-library --tool spreadfooting, spread-footing-nobear: pass.
+- **Other copies:** none.
