@@ -7241,3 +7241,40 @@ index 50f3837..c2d5000 100644
 - **How verified:** main-vs-branch probe (headless Chromium, `tests/lib.mjs` `openPage`), seven cases: default; Direct factored; one pedestal; a pedestal and a wall; a wall alone; the slender case above; slender in Direct factored mode. `R` and `P2` are identical (JSON), and so is the digit sequence of every output tab; only the Manual text differs. 0 console errors. Tests: check-syntax, phone-layout --tool sf, project-library --tool spreadfooting, spread-footing-nobear: pass.
 - **Raised, not changed:** in Part 3, the dashboard-criteria table rows "Concrete bearing" (P_u/φP_nb ≤ 1) and "Dowel steel" (provided ≥ 0.005A_g) predate SFBX (compression beyond φB_n carried by the dowels) and SFWL (wall minimum).
 - **Other copies:** none.
+
+## 2026-11-08 — PR: docs/sf-manual-criteria (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SFSC-3) — User Manual 3.1: the dashboard-criteria table matches the chips   [DISPLAY ONLY; no computed value changes]
+- **Request (engineer, 2026-11-08):**
+  - Fix the "Concrete bearing" and "Dowel steel" rows raised in SFSC-2 (#1243).
+  - Scan the rest of the criteria table against `renderDashboard` and correct anything else that is stale.
+- **Where:** `manPart("p3",…)`, card 3.1 Summary dashboard: the `{tbl:{head:["Chip","Criterion"],…}}` rows and the PASS/FAIL paragraph above them. Each row was checked against its chip in `renderDashboard` and its `sfdResultRows` entry. Exact before / after: the PR diff.
+- **Rows changed:**
+  1. **Concrete bearing.** Before: P_u/φP_nb ≤ 1 at each pedestal interface. After (SFBX): for the largest P_u, φB_n = the lesser of footing and pedestal, φ = 0.65. Where P_u ≤ φB_n, D/C = P_u/φB_n. Where P_u > φB_n, the dowels carry the excess (16.3.1.2(a)): A_s,req = (P_u − φB_n)/(0.65f_y), D/C = P_u/(φB_n + 0.65f_yA_s,dow), and ℓ_dc is then checked. Applies at pedestal or wall interfaces.
+  2. **Dowel steel.** Before: "provided ≥ 0.005A_g (REVIEW when short)". After: FAIL when short, not REVIEW (the chip is `dowOK?'pass':'fail'`). The minimum is 0.005A_g for a pedestal (16.3.4.1) or ρ_ℓA_g for a wall, with the larger of Table 11.6.1 and 11.6.2 (16.3.4.2; SFWL, SFWM). The chip name gives the basis (`sfdDowChipName`).
+  3. **Bearing (service).** Added two facts: the Direct factored basis (factored envelopes against the allowable bearing, conservative), and that a combination with no bearing solution governs with D/C ∞ as FAIL (SFNB).
+  4. **Overturning.** Before: "min Mr/Mo ≥ target FS". After: FAIL where FS < 1 or the resultant is off the footing. Otherwise the FS is reported, not gated (N/A), unless "Overturning FS gates result" is Yes.
+  5. **New row, Eccentricity limit / Eccentricity (information).** The limit chosen (kern, AASHTO-based, custom) is PASS / FAIL; "No eccentricity limit" gives an information chip (SFNE).
+  6. **Sliding.** Renamed "Sliding x / y / resultant": one chip per direction plus the resultant.
+  7. **Rigidity → "Rigidity (rigid method)".** The chip's name. "gate for everything else" replaced: the other chips are still shown, and where rigidity fails the linear pressure solution is not reliable (§0.3.1).
+  8. **Flexure / One-way shear / Punching** split into two rows:
+     - **Flexure (footing):** also FAIL on A_s < A_s,min, s > s_max, ε_t < ε_ty + 0.003 (SFET) or d < 6 in (SFMD); REVIEW for top steel required but not entered.
+     - **One-way shear / Punching shear:** N/A where the section is outside the footing or there is no closed perimeter; punching REVIEW where the perimeters overlap.
+  9. **New row, Wall checks (ACI 318-19 Ch. 11).** The wall chips (SFWC-2, SFWC-3, SFWD-2, SFWD-4) with their statuses, the minimum thickness as information, and the REVIEW "not checked" chip.
+  10. **Pedestal design.** Pedestals only (walls on the Wall Design tab); also FAIL for a slender pedestal that is unstable or beyond δ_sδ = 1.4 (SFSL); N/A with no pedestals.
+  11. **Interface shear friction.** "at each pedestal" → "at each pedestal or wall interface".
+  12. **Dowels (tension, laps).** Added the REVIEW cases: shear-friction development short (SFDR), and dowel count different from the vertical bars (SFDN).
+  13. **Pedestal P–M (biaxial).** Pedestals only; magnified moments of a slender pedestal (SFSL); FAIL where P_u is below the section's tension capacity.
+  14. **New rows:**
+      - Footing bar development (SFDV / SFDE: PASS straight, REVIEW hook needed, FAIL);
+      - Pedestal shear (SFVP);
+      - Pedestal torsion (SFTQ);
+      - Pedestal crossties (SFXT, REVIEW to detail);
+      - Structural design (N/A, no valid LRFD combination).
+  15. **PASS/FAIL paragraph.** The REVIEW example "dowel area below 0.005A_g" (that chip is FAIL) became "a dowel count different from the vertical-bar count, crossties to detail, or 'Input needed' for a wall's horizontal bars".
+- **Unchanged rows (checked, current):** Flotation, Contact area, Input validation, Wall reinforcement, Dowel development (ℓdc), Footing bar clear spacing, Concrete cover, Pedestal tie cover.
+- **Governing provision / formulas / factors / units:** none changed (§4 does not apply). The manual now describes the checks the engine already makes. **Saved data:** none.
+- **Check case:** default project, Manual tab, Part 3, card 3.1. The "Concrete bearing" row reads as item 1. With Ped 1 set to Wall (b_x 6 ft, b_y 1 ft), the dashboard chip "Dowel steel (min 0.005A_g; wall ρ_l A_g)" matches the "Dowel steel" row. Results are identical.
+- **How verified:** main-vs-branch probe (headless Chromium, `tests/lib.mjs` `openPage`), seven cases: default; Direct factored; one pedestal; a pedestal and a wall; a wall alone; slender; slender in Direct factored mode. `R` and `P2` are identical (JSON), and so is the digit sequence of every output tab; only the Manual text differs. 0 console errors. Tests: check-syntax, phone-layout --tool sf, project-library --tool spreadfooting, spread-footing-nobear: pass.
+- **Raised, not changed (outside the table):**
+  - 3.2 "6.x … and the slenderness screen" (no magnification or Wall Design tab named).
+  - 3.4 Warnings lists "dowel steel below minimum" and "slenderness screen exceeded" as amber boxes. No such warnings are pushed now; they are dashboard FAIL items.
+- **Other copies:** none.
