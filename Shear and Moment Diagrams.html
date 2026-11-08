@@ -170,6 +170,13 @@ tbody tr.ud td{background:var(--blt);font-weight:600}
 .bxo{background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:6px 10px;margin:4px 0}
 .bxr{background:#fff1f2;border:1px solid #fecdd3;border-radius:6px;padding:6px 10px;margin:4px 0}
 .hint{font-size:10px;color:var(--fa);line-height:1.5;margin-top:4px}
+/* SMNL (2026-11-08, engineer: long notes as a bold lead and a list, not one block of text; display only). Tool-scoped; colours inherited from the box it sits in */
+.smdNL .smdNLl{font-weight:700;margin:0 0 1px}
+.smdNL .smdNLu{margin:2px 0 3px;padding-left:18px}
+.smdNL .smdNLu>li{margin:1px 0}
+.smdNL .smdNLu>li .btn{font-weight:600}
+.smdNL .smdNLa{background:#fffbeb;border:1px solid #fcd34d;border-radius:5px;color:#92400e;font-weight:700;padding:3px 7px;margin:2px 0 4px}
+@media print{.smdNL .smdNLu>li{break-inside:avoid}}
 .tog{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;font-weight:600;color:var(--mu);user-select:none}
 .tog input{display:none}
 .pil{width:30px;height:17px;background:#e2e8f0;border-radius:99px;position:relative;transition:background .2s;flex-shrink:0}
@@ -490,13 +497,20 @@ a.wkA:hover{text-decoration:underline}
     <button class="btn btn-s" id="psLRFD" title="Replace all combinations with the ASCE 7-16 Sec. 2.3.1 strength (LRFD) basic combinations for D, L, S, W">Preset: LRFD</button>
     <button class="btn btn-s" id="psASD" title="Replace all combinations with the ASCE 7-16 Sec. 2.4.1 allowable stress (ASD) basic combinations for D, L, S, W">Preset: ASD</button>
   </div>
-  <p class="hint">Names are generated from the factors. The single-combination dropdown and the envelope both follow this table. Presets: ASCE 7-16 Sec. 2.3.1 (LRFD) and Sec. 2.4.1 (ASD) basic combinations for D, L, S and W only (Lr, R, E and the alternate snow/wind arrangements are not included). The default list's "Unfactored (1.0 All)" row is not a code combination. Since 2026-11-07 the default list and the LRFD preset include combination 3 (1.2D + 1.6S + 1.0L and 1.2D + 1.6S + 0.5W), and the preset also 1.2D + 1.6L; a project saved before keeps its own list, and the results offer to add the missing rows when it has snow load. The default wind row is combination 4 with 1.0L; where ASCE 7-16 Sec. 2.3.1 Exception 1 applies (L<sub>o</sub> ≤ 100 psf, not garages or public assembly) you may edit the L factor to 0.5. Wind acts in one direction per load case: where it can act both downward and upward, enter two cases (for example WL downward and WU uplift, negative) and add the matching combinations (1.2D + 1.0W + L + 0.5S and 1.2D + 1.6S + 0.5W with downward wind, 0.9D + 1.0W with uplift). A case with a zero factor in every enabled combination adds nothing to the results (a warning is shown). Verify preset factors against your governing code edition.</p>
+  <div class="hint smdNL"><!-- SMNL (2026-11-08): this note as a bold lead and a list --><div class="smdNLa">Verify preset factors against your governing code edition.</div><div class="smdNLl">Names are generated from the factors. The single-combination dropdown and the envelope both follow this table.</div><ul class="smdNLu"><li><b class="smdNLk">Presets:</b> ASCE 7-16 Sec. 2.3.1 (LRFD) and Sec. 2.4.1 (ASD) basic combinations for D, L, S and W only (Lr, R, E and the alternate snow/wind arrangements are not included).</li><li><b class="smdNLk">Unfactored row:</b> the default list's "Unfactored (1.0 All)" row is not a code combination.</li><li><b class="smdNLk">Snow rows:</b> since 2026-11-07 the default list and the LRFD preset include combination 3 (1.2D + 1.6S + 1.0L and 1.2D + 1.6S + 0.5W), and the preset also 1.2D + 1.6L.</li><li><b class="smdNLk">Saved projects:</b> a project saved before keeps its own list, and the results offer to add the missing rows when it has snow load.</li><li><b class="smdNLk">Default wind row:</b> combination 4 with 1.0L; where ASCE 7-16 Sec. 2.3.1 Exception 1 applies (L<sub>o</sub> ≤ 100 psf, not garages or public assembly) you may edit the L factor to 0.5.</li><li><b class="smdNLk">Wind direction:</b> wind acts in one direction per load case. Where it can act both downward and upward, enter two cases (for example WL downward and WU uplift, negative) and add the matching combinations (1.2D + 1.0W + L + 0.5S and 1.2D + 1.6S + 0.5W with downward wind, 0.9D + 1.0W with uplift).</li><li><b class="smdNLk">Zero factors:</b> a case with a zero factor in every enabled combination adds nothing to the results (a warning is shown).</li></ul></div>
  </div>
 </div>
 
 
 <script>
 const g=id=>document.getElementById(id);
+/* SMNL (2026-11-08, engineer: "split this up into a numbered list or bullets"): a long note as a bold lead line, then a list with bold lead words.
+   items: [leadWords, text] or plain text; null items are skipped (conditional facts). o.act: action lines shown first, in the warning style. o.ol: numbered. */
+function smdNL(lead,items,o){o=o||{};const L=o.ol?'ol':'ul',li=(items||[]).filter(Boolean).map(x=>'<li>'+(Array.isArray(x)?'<b class="smdNLk">'+x[0]+'</b> '+x[1]:x)+'</li>').join('');
+  return (o.act||[]).filter(Boolean).map(a=>'<div class="smdNLa">'+a+'</div>').join('')+(lead?'<div class="smdNLl">'+lead+'</div>':'')+(li?'<'+L+' class="smdNLu">'+li+'</'+L+'>':'');}
+/* SMNL (Report): the same note as Report note items: the lead, then one "• lead words: text" item per fact (shared/report.js prints each as a note line) */
+function smdrNL(lead,items,o){o=o||{};const n=t=>o.warn?{type:'note',warn:true,text:t}:{type:'note',text:t};
+  return [lead?n(lead):null,...(items||[]).filter(Boolean).map(x=>n('• '+(Array.isArray(x)?x[0]+' '+x[1]:x)))].filter(Boolean);}
 const NN='ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 const CLRS=['cbl','cpu','cgn','cam','ctm','crd'];
 /* ── LOAD CASES & COMBINATIONS (editable) ── */
@@ -647,7 +661,8 @@ function smdStrAlt(v){if(fu==='kip'&&lu==='ft')return` = ${(v/144).toFixed(3)} k
 /* SMD8: the envelope mixes the unfactored "1.0 All" row with factored rows */
 function smdMixedEnv(){const on=combosArr.filter(c=>c.on!==false);return on.some(c=>COMBOS[c.id]&&COMBOS[c.id].name==='Unfactored (1.0 All)')&&on.some(c=>COMBOS[c.id]&&COMBOS[c.id].name!=='Unfactored (1.0 All)');}
 const SMD_MIXED_TXT='The enabled combinations mix the unfactored “1.0 All” row with factored rows: the envelope is mixed service / factored.';
-const SMD_DEFL_TXT='The deflection limit L/x is user-selected (IBC 2018 Table 1604.3 gives l/360 for L only, l/240 for D + L and so on, each with its own load basis); check against the combination that matches the limit — a factored combination gives a factored deflection.';
+const SMD_DEFL_LIM='deflection limit L/x is user-selected (IBC 2018 Table 1604.3 gives l/360 for L only, l/240 for D + L and so on, each with its own load basis)',SMD_DEFL_CHK='check against the combination that matches the limit — a factored combination gives a factored deflection';   /* SMNL: the two parts, listed separately on the Analysis view */
+const SMD_DEFL_TXT='The '+SMD_DEFL_LIM+'; '+SMD_DEFL_CHK+'.';   /* unchanged text (Report step notes) */
 function smdSolveLoads(){
   const n=spans.length,fl=[],out=[],fin=v=>typeof v==='number'&&isFinite(v),r3=v=>+(+v).toFixed(4);
   loads.forEach((ld,i)=>{if(ld.off){out.push(ld);return;}
@@ -970,19 +985,19 @@ function updStats(){
     _rk();};}
   if(window.unstable&&window.smdBad){g('statsRow').innerHTML=`<div style="grid-column:1/-1;background:#fff1f2;border:1.5px solid #fda4af;border-radius:9px;padding:12px 14px;color:#9f1239;font-weight:700;font-size:12.5px">⚠ ${window.smdBad}</div>`;g('pkV').textContent='';g('pkM').textContent='';if(g('pkD'))g('pkD').textContent='';smdDashRender(null,'No results: input error. See the message above the loads.');return;}   /* LV; SMLS */
   if(window.unstable){
-    g('statsRow').innerHTML=`<div style="grid-column:1/-1;background:#fff1f2;border:1.5px solid #fda4af;border-radius:9px;padding:12px 14px;color:#9f1239;font-weight:700;font-size:12.5px">⚠ UNSTABLE STRUCTURE — this support configuration is a mechanism (it can move as a rigid body). Provide at least one <u>fixed</u> support, or at least <u>two pinned</u> nodes. Results are suppressed until the model is stable.</div>`;
+    g('statsRow').innerHTML=`<div class="smdNL" style="grid-column:1/-1;background:#fff1f2;border:1.5px solid #fda4af;border-radius:9px;padding:12px 14px;color:#9f1239;font-weight:700;font-size:12.5px">${smdNL('⚠ UNSTABLE STRUCTURE — this support configuration is a mechanism (it can move as a rigid body).',[['Remedy:','provide at least one <u>fixed</u> support, or at least <u>two pinned</u> nodes.'],['Results:','suppressed until the model is stable.']])}</div>`;   /* SMNL */
     g('pkV').textContent='';g('pkM').textContent='';if(g('pkD'))g('pkD').textContent='';
     smdDashRender(null,'No results: the structure is unstable. See the message above the loads.');   /* SMLS */
     return;}
   let h='';const dI=[],wk=smdWkCards();   /* SMLS: the same values, one line each, for the left summary column (smdDashRender) */
   if(smdLoadFlags.length)h+=`<div class="smd-lv" style="grid-column:1/-1;background:#fffbeb;border:1.5px solid #fcd34d;border-radius:9px;padding:10px 14px;color:#92400e;font-size:12px">⚠ <b>Load input adjusted for the analysis</b> (the entered values are kept as entered):<br>${smdLoadFlags.map(s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')).join('<br>')}</div>`;   /* LV */
   if(secOn&&!(Ev>0&&Iv>0))h+=`<div style="grid-column:1/-1;background:#fff1f2;border:1.5px solid #fda4af;border-radius:9px;padding:10px 14px;color:#9f1239;font-weight:700;font-size:12px">⚠ Section properties: ${!(Ev>0)?'E':''}${!(Ev>0)&&!(Iv>0)?' and ':''}${!(Iv>0)?'I':''} must be greater than 0 (blank, zero or negative entered). Deflection is not computed until this is fixed.</div>`;
-  {const z=smdZeroCases();if(z.length)h+=`<div class="smd-czf" style="grid-column:1/-1;background:#fff1f2;border:1.5px solid #fda4af;border-radius:9px;padding:10px 14px;color:#9f1239;font-size:12px">⚠ <b>Load cases not combined:</b> ${smdZeroTxt(z)}</div>`;}   /* CZF */
+  {const z=smdZeroCases();if(z.length){const q=smdZeroNL(z);h+=`<div class="smd-czf smdNL" style="grid-column:1/-1;background:#fff1f2;border:1.5px solid #fda4af;border-radius:9px;padding:10px 14px;color:#9f1239;font-size:12px">${smdNL('⚠ <b>Load cases not combined:</b> '+q[0],q[1])}</div>`;}}   /* CZF; SMNL */
   if(smdPatWarn()){   /* PATW; PATL: off → the warning and a one-click enable; on → what the envelope includes */
-    if(!patLL)h+=`<div class="smd-patw" style="grid-column:1/-1;background:#fffbeb;border:1.5px solid #fcd34d;border-radius:9px;padding:10px 14px;color:#92400e;font-size:12px">⚠ <b>Live load patterns:</b> ${SMD_PATW_TXT} <button class="btn btn-s" onclick="smdPatEnable()">Enable pattern live load</button></div>`;
-    else if(envOn)h+=`<div class="smd-patl" style="grid-column:1/-1;background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:9px;padding:10px 14px;color:#1e3a8a;font-size:12px">ℹ ${SMD_PATL_TXT()}</div>`;
+    if(!patLL)h+=`<div class="smd-patw smdNL" style="grid-column:1/-1;background:#fffbeb;border:1.5px solid #fcd34d;border-radius:9px;padding:10px 14px;color:#92400e;font-size:12px">${smdNL('⚠ <b>Live load patterns:</b> '+SMD_PATW_NL[0]+' <button class="btn btn-s" onclick="smdPatEnable()">Enable pattern live load</button>',SMD_PATW_NL[1])}</div>`;   /* SMNL */
+    else if(envOn){const q=SMD_PATL_NL();h+=`<div class="smd-patl smdNL" style="grid-column:1/-1;background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:9px;padding:10px 14px;color:#1e3a8a;font-size:12px">${smdNL('ℹ '+q[0],q[1])}</div>`;}   /* SMNL */
     else h+=`<div class="smd-patw" style="grid-column:1/-1;background:#fffbeb;border:1.5px solid #fcd34d;border-radius:9px;padding:10px 14px;color:#92400e;font-size:12px">⚠ <b>Live load patterns:</b> this single-combination view applies LL to every span it is entered on. The envelope view includes the pattern live load (IBC 2018 Sec. 1607.12, ASCE 7-16 Sec. 4.3.3).</div>`;}
-  {const mc=smdCmbMissing();if(mc.length&&!smdCmb3Hide)h+=`<div class="smd-cmb3" style="grid-column:1/-1;background:#fffbeb;border:1.5px solid #fcd34d;border-radius:9px;padding:10px 14px;color:#92400e;font-size:12px">⚠ <b>Load combinations:</b> ${smdCmbNoteTxt(mc)} <button class="btn btn-s" onclick="smdCmbAddMissing()">Add the missing rows</button> <button class="btn btn-s" onclick="smdCmb3Hide=true;updStats()">Hide</button></div>`;}   /* CMB3 */
+  {const mc=smdCmbMissing();if(mc.length&&!smdCmb3Hide){const q=smdCmbNoteNL(mc);h+=`<div class="smd-cmb3 smdNL" style="grid-column:1/-1;background:#fffbeb;border:1.5px solid #fcd34d;border-radius:9px;padding:10px 14px;color:#92400e;font-size:12px">${smdNL('⚠ <b>Load combinations:</b> '+q[0]+' <button class="btn btn-s" onclick="smdCmbAddMissing()">Add the missing rows</button> <button class="btn btn-s" onclick="smdCmb3Hide=true;updStats()">Hide</button>',q[1])}</div>`;}}   /* CMB3; SMNL */
   nodes.forEach((nd2,j)=>{if(nd2.t==='free')return;const cl=CLRS[j%CLRS.length];
     if(envOn){const Rj=env.R[j],up=Rj.mn<-1e-9;h+=`<div class="sc ${cl}"><div class="sc-l">R_${NN[j]} max / min</div><div class="sc-v">${Rj.mx.toFixed(3)}</div><div class="sc-u">${fu} · ${COMBOS[Rj.mc].name}<br><span style="${up?'color:#b91c1c;font-weight:700':''}">min ${Rj.mn.toFixed(3)}${up?' UPLIFT':''} · ${COMBOS[Rj.mnc]?COMBOS[Rj.mnc].name:''}</span>${nd2.t==='fixed'?`<br>M<sub>R</sub> max ${Rj.mmx.toFixed(3)} · ${COMBOS[Rj.mmc]?COMBOS[Rj.mmc].name:''}<br>M<sub>R</sub> min ${Rj.mmn.toFixed(3)} · ${COMBOS[Rj.mmnc]?COMBOS[Rj.mmnc].name:''} (${fu}·${lu}, +CCW)`:''}</div></div>`;
       dI.push({n:`R<sub>${NN[j]}</sub> max / min`,v:`${Rj.mx.toFixed(3)} ${fu}`,st:up?'warn':'na',s:up?'UPLIFT':'',d:`max ${Rj.mx.toFixed(3)} · ${COMBOS[Rj.mc].name}<br>min ${Rj.mn.toFixed(3)}${up?' UPLIFT':''} · ${COMBOS[Rj.mnc]?COMBOS[Rj.mnc].name:''}${nd2.t==='fixed'?`<br>M<sub>R</sub> max ${Rj.mmx.toFixed(3)} · ${COMBOS[Rj.mmc]?COMBOS[Rj.mmc].name:''}<br>M<sub>R</sub> min ${Rj.mmn.toFixed(3)} · ${COMBOS[Rj.mmnc]?COMBOS[Rj.mmnc].name:''} (${fu}·${lu}, +CCW)`:''}`,c:(wk[0]||[])[1]});}   /* MRE; SMLS */
@@ -1662,7 +1677,7 @@ function renderKaTeX(){
   const ki=s=>{s=fixK(s);try{return katex.renderToString(s,{throwOnError:false});}catch{return`<code>${s}</code>`;}};
   const kb=s=>{s=fixK(s);try{return`<div class="keq">${katex.renderToString(s,{throwOnError:false,displayMode:true})}</div>`;}catch{return`<div class="keq"><code>${s}</code></div>`;}};
   const sec=(n,t,b)=>`<div style="border-bottom:1px solid #f1f5f9"><div class="csh" onclick="this.nextSibling.classList.toggle('hidden');"><span class="csn">${n}</span>${t}</div><div class="csb">${b}</div></div>`;
-  const p=s=>`<p class="cp">${s}</p>`;
+  const p=s=>`<p class="cp">${s}</p>`,pNL=(l,it)=>`<div class="cp smdNL">${smdNL(l,it)}</div>`;   /* SMNL: a long note as a lead and a list */
   const ns=spans.length;
   let html='',N=1;
 
@@ -1696,7 +1711,7 @@ function renderKaTeX(){
     s3+=`<div class="bxg">${kb(`|V|_{\\text{env}}=${vm.toFixed(4)}\\,\\text{${fu}}\\;\\text{governed by ${vg.gVn||vg.name}}`)}${kb(`|M|_{\\text{env}}=${mm.toFixed(4)}\\,\\text{${fu}\\!\\cdot\\!${lu}}\\;\\text{governed by ${mg.gMn||mg.name}}`)}</div>`;   /* PATL: the governing pattern */
     if(secOn&&Iv>0&&cv>0)s3+=`<div class="bxr">${kb(`\\sigma_{\\text{env}}=\\frac{|M|_{\\text{env}}\\cdot c}{I}=\\boxed{${(mm*cv/Iv).toFixed(4)}\\,\\text{${fu}/${lu}^2}}`)}</div>`;
     if(deD.length){const dm=Math.max(...deD.map(p2=>Math.abs(p2.y)));
-      s3+=`<div class="bxb">${p('<strong>Deflection envelope</strong> — δ by double integration of M/EI for each enabled combination, enveloped point-wise. A factored combination gives a factored deflection: for a service-level check, enable only service combinations or use single-combination mode. The limit L/x is user-selected (IBC 2018 Table 1604.3).')}${kb(`|\\delta|_{\\text{env}}=\\boxed{${dm.toFixed(6)}\\,\\text{${lu}}}`)}`;
+      s3+=`<div class="bxb">${pNL('<strong>Deflection envelope</strong> — δ by double integration of M/EI for each enabled combination, enveloped point-wise.',[['Load basis:','a factored combination gives a factored deflection: for a service-level check, enable only service combinations or use single-combination mode.'],['Limit:','the limit L/x is user-selected (IBC 2018 Table 1604.3).']])}${kb(`|\\delta|_{\\text{env}}=\\boxed{${dm.toFixed(6)}\\,\\text{${lu}}}`)}`;
       if(defLim>0)deflSpans().forEach(s2=>{s3+=kb(`\\text{Span ${s2.i+1}: }|\\delta|_{\\max}=${s2.dm.toFixed(5)}\\;${s2.ok?'\\le':'>'}\\;L_{${s2.i+1}}/${defLim}=${s2.L}/${defLim}=${s2.allow.toFixed(5)}\\,\\text{${lu}}\\;\\Rightarrow\\;${s2.ok?'\\text{OK}\\;\\checkmark':'\\text{NG}\\;\\times'}\\;\\text{(${s2.c&&COMBOS[s2.c]?COMBOS[s2.c].name:''})}`);});
       s3+=`</div>`;}
     html+=sec(N++,'Envelope Results — All Combinations',s3);
@@ -1726,7 +1741,8 @@ function renderKaTeX(){
       return s+((ld.sm+ld.em)/2)*fk*((ld.ex||spL)-(ld.sx||0));},0);
     const tR=nodeR.reduce((s,r)=>s+(r?.v||0),0);
     {const SD=smdSDRows();if(SD.length){   /* SMW: fixed-end forces, solved displacements and member end forces per span */
-      s4+=p(`<strong>Member end forces</strong> per span: {V<sub>L</sub>, M<sub>L</sub>, V<sub>R</sub>, M<sub>R</sub>} = fixed-end forces of the span loads − k<sub>e</sub>·d<sub>e</sub> (d = solved nodal deflection and rotation${secOn&&Ev>0&&Iv>0?'':', × EI: EI = 1 with the section off'}; forces up +, moments CCW +). The beam moment at a support (sagging +) is M<sub>R</sub> of the span to its left = −M<sub>L</sub> of the span to its right (a couple applied exactly at a node is part of the fixed-end forces).`);
+      s4+=pNL(`<strong>Member end forces</strong> per span: {V<sub>L</sub>, M<sub>L</sub>, V<sub>R</sub>, M<sub>R</sub>} = fixed-end forces of the span loads − k<sub>e</sub>·d<sub>e</sub>.`,[['d:',`solved nodal deflection and rotation${secOn&&Ev>0&&Iv>0?'':', × EI: EI = 1 with the section off'}.`],['Signs:','forces up +, moments CCW +.'],
+        ['Support moment:','the beam moment at a support (sagging +) is M<sub>R</sub> of the span to its left = −M<sub>L</sub> of the span to its right (a couple applied exactly at a node is part of the fixed-end forces).']]);   /* SMNL */
       s4+=`<table class="ctb"><thead><tr><th>Span</th><th>L</th><th>FEF V<sub>L</sub>, M<sub>L</sub></th><th>FEF V<sub>R</sub>, M<sub>R</sub></th><th>d<sub>L</sub>: v, θ</th><th>d<sub>R</sub>: v, θ</th><th>V<sub>L</sub>, M<sub>L</sub></th><th>V<sub>R</sub>, M<sub>R</sub></th></tr></thead><tbody>`+SD.map(q=>`<tr><td>${q.i+1}</td><td>${q.L}</td><td>${q.FE[0].toFixed(4)}, ${q.FE[1].toFixed(4)}</td><td>${q.FE[2].toFixed(4)}, ${q.FE[3].toFixed(4)}</td><td>${q.d[0].toExponential(4)}, ${q.d[1].toExponential(4)}</td><td>${q.d[2].toExponential(4)}, ${q.d[3].toExponential(4)}</td><td>${q.EF[0].toFixed(4)}, ${q.EF[1].toFixed(4)}</td><td>${q.EF[2].toFixed(4)}, ${q.EF[3].toFixed(4)}</td></tr>`).join('')+`</tbody></table>`;}}
     nodes.forEach((nd2,j)=>{if(nd2.t==='free')return;
       const w=smdLastR&&smdLastR.EF?smdRwork(j,false):null,wm=w&&Math.abs(nodeR[j].m)>1e-6?smdRwork(j,true):null;   /* SMW: R_j = sum of the member end forces at j */
@@ -1754,7 +1770,7 @@ function renderKaTeX(){
       if(tq)s6+=`<div class="bxr">${kb(`${tq.tex}=\\boxed{${tq.val.toFixed(4)}\\,\\text{${fu}/${lu}^2}}`)}${shpW?p(`${String(shpW.nm).replace(/[<>&]/g,'')}: average web shear on A<sub>w</sub> = d·t<sub>w</sub> (AISC 360-16 Sec. G2.1).`):''}</div>`;
       if(deD.length){const dm=Math.max(...deD.map(p2=>Math.abs(p2.y)));
         const dp=deD.reduce((m,q)=>Math.abs(q.y)>Math.abs(m.y)?q:m,deD[0]),dw=smdDwork(dp.x);   /* SMW: worked at the governing x; SMDL: the combination stated */
-        s6+=`<div class="bxb">${p(`<strong>Deflection</strong> for ${curName().replace(/[<>&]/g,'')} — double integration of M/EI with δ=0 at supports (cantilever: δ=0 and slope=0 at the fixed support). ${SMD_DEFL_TXT}`)}${dw?kb(`\\delta(x)=\\frac{-F_2(x)+C_1x+C_2}{EI},\\;F_2(x)=\\int_0^x\\!\\int_0^x M\\,dx\\,dx`)+kb(dw.xb!=null?`C_1=\\frac{F_2(${dw.xb})-F_2(${dw.xa})}{${dw.xb}-${dw.xa}}=${dw.C1.toPrecision(6)},\\;C_2=F_2(${dw.xa})-C_1\\,${dw.xa}=${dw.C2.toPrecision(6)}`:`C_1=F_1(${dw.xa})=${dw.C1.toPrecision(6)},\\;C_2=F_2(${dw.xa})-C_1\\,${dw.xa}=${dw.C2.toPrecision(6)}`)+kb(`x=${dp.x.toFixed(3)}:\\;\\delta=\\frac{-(${dw.F2.toPrecision(6)})+${dw.C1.toPrecision(6)}\\times${dp.x.toFixed(3)}+(${dw.C2.toPrecision(6)})}{${dw.EI.toPrecision(6)}}=${dw.v.toFixed(6)}\\,\\text{${lu}}`):''}${kb(`\\delta_{\\max}=\\boxed{${dm.toFixed(6)}\\,\\text{${lu}}}`)}`;
+        s6+=`<div class="bxb">${pNL(`<strong>Deflection</strong> for ${curName().replace(/[<>&]/g,'')} — double integration of M/EI.`,[['Boundary conditions:','δ=0 at supports (cantilever: δ=0 and slope=0 at the fixed support).'],['Limit:','the '+SMD_DEFL_LIM+'.'],['Load basis:',SMD_DEFL_CHK+'.']])}${dw?kb(`\\delta(x)=\\frac{-F_2(x)+C_1x+C_2}{EI},\\;F_2(x)=\\int_0^x\\!\\int_0^x M\\,dx\\,dx`)+kb(dw.xb!=null?`C_1=\\frac{F_2(${dw.xb})-F_2(${dw.xa})}{${dw.xb}-${dw.xa}}=${dw.C1.toPrecision(6)},\\;C_2=F_2(${dw.xa})-C_1\\,${dw.xa}=${dw.C2.toPrecision(6)}`:`C_1=F_1(${dw.xa})=${dw.C1.toPrecision(6)},\\;C_2=F_2(${dw.xa})-C_1\\,${dw.xa}=${dw.C2.toPrecision(6)}`)+kb(`x=${dp.x.toFixed(3)}:\\;\\delta=\\frac{-(${dw.F2.toPrecision(6)})+${dw.C1.toPrecision(6)}\\times${dp.x.toFixed(3)}+(${dw.C2.toPrecision(6)})}{${dw.EI.toPrecision(6)}}=${dw.v.toFixed(6)}\\,\\text{${lu}}`):''}${kb(`\\delta_{\\max}=\\boxed{${dm.toFixed(6)}\\,\\text{${lu}}}`)}`;
         if(defLim>0)deflSpans().forEach(s2=>{s6+=kb(`\\text{Span ${s2.i+1}: }\\delta_{\\max}=${s2.dm.toFixed(5)}\\;${s2.ok?'\\le':'>'}\\;L_{${s2.i+1}}/${defLim}=${s2.L}/${defLim}=${s2.allow.toFixed(5)}\\,\\text{${lu}}\\;\\Rightarrow\\;${s2.ok?'\\text{OK}\\;\\checkmark':'\\text{NG}\\;\\times'}`);});
         s6+=`</div>`;}
       html+=sec(N++,'Section Analysis',s6);
@@ -2284,19 +2300,28 @@ function smdPatLoads(ps){
     if(ps.includes(Math.min(ld.si||0,n-1)))out.push(ld);});
   return out;
 }
-const SMD_PATL_TXT=()=>`Pattern live load: each enabled combination with LL is also solved with LL on ${smdPatSets().length} pattern(s) of the spans that carry LL (dead and other loads on all spans; ${smdPatSpanCount()<=6?'every subset of those spans, LL off included':'the standard alternate and adjacent-span patterns, LL off included'}), as IBC 2018 Sec. 1607.12 and ASCE 7-16 Sec. 4.3.3 require; the envelope and the governing combinations include them (named “· LL on spans …”).`;
+/* SMNL (2026-11-08): the pattern notes as a lead and items [lead words, text] (screen: smdNL; Report: smdrNL); plain text, no markup */
+const SMD_PATL_NL=()=>[`Pattern live load: each enabled combination with LL is also solved with LL on ${smdPatSets().length} pattern(s) of the spans that carry LL.`,
+  [['Other loads:','dead and other loads on all spans.'],['Patterns:',smdPatSpanCount()<=6?'every subset of those spans, LL off included.':'the standard alternate and adjacent-span patterns, LL off included.'],
+   ['Basis:','IBC 2018 Sec. 1607.12 and ASCE 7-16 Sec. 4.3.3 require them.'],['Results:','the envelope and the governing combinations include them (named “· LL on spans …”).']]];
 function smdPatSpanCount(){return new Set(loads.filter(ld=>!ld.off&&ld.lc==='LL').flatMap(ld=>ld.allSpans?spans.map((_,i)=>i):[Math.min(ld.si||0,spans.length-1)])).size;}
-const SMD_PATW_TXT='Pattern live load is not generated: each combination applies LL to every span it is entered on at once. IBC 2018 Sec. 1607.12 and ASCE 7-16 Sec. 4.3.3 require the live load on the spans that give the greatest effect at each location (skip-span patterns), which can govern the positive span moments and the end reactions. Enter LL per span as separate load cases (for example L1, L2) with matching combinations, or check the patterns by hand.';
+const SMD_PATW_NL=['Pattern live load is not generated: each combination applies LL to every span it is entered on at once.',
+  [['Required:','IBC 2018 Sec. 1607.12 and ASCE 7-16 Sec. 4.3.3 require the live load on the spans that give the greatest effect at each location (skip-span patterns), which can govern the positive span moments and the end reactions.'],
+   ['Otherwise:','enter LL per span as separate load cases (for example L1, L2) with matching combinations, or check the patterns by hand.']]];
 /* CZF (2026-11-07, review M2): load cases that carry enabled loads but have a zero factor in every enabled combination
    (every combination when none is ticked): their loads contribute nothing to any combination or to the envelope. */
 function smdZeroCases(){
   const on=combosArr.filter(c=>c.on!==false),L=on.length?on:combosArr;
   return CASES.filter(cs=>loads.some(ld=>!ld.off&&ld.lc===cs.id)&&L.every(c=>!(+c.f[cs.id])));
 }
-function smdZeroTxt(z){return`Load case${z.length>1?'s':''} ${z.map(c=>c.id).join(', ')} ${z.length>1?'carry':'carries'} loads but ${z.length>1?'have':'has'} a zero factor in every enabled combination, so ${z.length>1?'their':'its'} loads add nothing to the combination results or the envelope (the single-case view shows them unfactored). Enter ${z.length>1?'their factors':'its factor'} in ⚙ Edit Load Cases & Combinations.`;}
+function smdZeroNL(z){const m=z.length>1;return[`Load case${m?'s':''} ${z.map(c=>c.id).join(', ')} ${m?'carry':'carries'} loads but ${m?'have':'has'} a zero factor in every enabled combination.`,   /* SMNL: lead and items */
+  [['Remedy:',`enter ${m?'their factors':'its factor'} in ⚙ Edit Load Cases & Combinations.`],['Effect:',`${m?'their':'its'} loads add nothing to the combination results or the envelope (the single-case view shows them unfactored).`]]];}
 /* WPM (2026-11-07, review M3): wind in one direction per case */
-const SMD_WPM_TXT='Wind acts in one direction per load case: a WL load is applied with the same sign in every combination. Where wind can act both downward and upward, enter two cases (for example WL for downward pressure and WU for uplift, with WU loads entered upward, i.e. negative) and add the matching combinations (1.2D + 1.0W + L + 0.5S and 1.2D + 1.6S + 0.5W with downward wind; 0.9D + 1.0W with uplift), ASCE 7-16 Sec. 2.3.1.';
-function smdCmbNoteTxt(m){return`This project's saved combination list has no ${m.map(r=>r.nm).join(', ')}. ASCE 7-16 Sec. 2.3.1 combination 3 (1.2D + 1.6S + L or 0.5W) and the case with snow set to zero (IBC 2018 Sec. 1605.1) can govern a beam with snow load. New projects include these rows; saved lists are kept as saved.`;}
+const SMD_WPM_NL=['Wind acts in one direction per load case: a WL load is applied with the same sign in every combination.',   /* SMNL: lead and items (Report) */
+  [['Wind both ways:','where wind can act both downward and upward, enter two cases (for example WL for downward pressure and WU for uplift, with WU loads entered upward, i.e. negative).'],
+   ['Combinations:','add the matching combinations (1.2D + 1.0W + L + 0.5S and 1.2D + 1.6S + 0.5W with downward wind; 0.9D + 1.0W with uplift), ASCE 7-16 Sec. 2.3.1.']]];
+function smdCmbNoteNL(m){return[`This project's saved combination list has no ${m.map(r=>r.nm).join(', ')}.`,   /* SMNL: lead and items */
+  [['Why:','ASCE 7-16 Sec. 2.3.1 combination 3 (1.2D + 1.6S + L or 0.5W) and the case with snow set to zero (IBC 2018 Sec. 1605.1) can govern a beam with snow load.'],['Saved lists:','new projects include these rows; saved lists are kept as saved.']]];}
 g('psLRFD').onclick=()=>loadCmbPreset('LRFD');
 g('psASD').onclick=()=>loadCmbPreset('ASD');
 
@@ -2392,7 +2417,7 @@ function smrTopics(list,opt){
     return{title:t.title,ref:t.ref||'',n:t.steps.length,cls:q.cls,chip:q.chip,res:q.res};});
   return Object.assign({type:'steps',scope:'sm',steps,topics},opt||{});
 }
-function smdPatNote(){return!patLL?{type:'note',warn:true,text:SMD_PATW_TXT+' (Pattern live load is off for this project.)'}:envOn?{type:'note',text:SMD_PATL_TXT()}:{type:'note',warn:true,text:'Pattern live load: this single-combination analysis applies LL to every span it is entered on; the envelope includes the LL patterns (IBC 2018 Sec. 1607.12, ASCE 7-16 Sec. 4.3.3).'};}
+function smdPatNote(){return!patLL?smdrNL(SMD_PATW_NL[0],[...SMD_PATW_NL[1],['Setting:','pattern live load is off for this project.']],{warn:true}):envOn?smdrNL(...SMD_PATL_NL()):{type:'note',warn:true,text:'Pattern live load: this single-combination analysis applies LL to every span it is entered on; the envelope includes the LL patterns (IBC 2018 Sec. 1607.12, ASCE 7-16 Sec. 4.3.3).'};}
 function smrModel(){
   const nm=g('projNm').value.trim(),dt=new Date().toISOString().slice(0,10),ns=spans.length,U=`\\text{${smrTx(fu)}}`,FL=fu+'-'+lu;
   const secs=[],sup=nodes.map((n2,j)=>n2.t!=='free'?j:-1).filter(j=>j>=0);
@@ -2404,7 +2429,7 @@ function smrModel(){
     {type:'note',text:`${ns}-span beam, ${ns+1} nodes, total length ${totL.toFixed(3)} ${lu}. Units: ${fu}, ${lu}.`}]});
   mSubs.push({title:'Applied loads (unfactored)',items:loads.length?[{type:'table',head:['#','Name','Type','Case','Location','Magnitude','Status'],rows:loads.map((ld,i)=>[String(i+1),ld.nm||'',typeLabel(ld.type),ld.lc,ld.allSpans?'Entire beam':`Span ${Math.min(ld.si||0,ns-1)+1}`,ldTxt(ld),ld.off?'EXCLUDED':'Included'])}].concat(smdLoadFlags.length?[{type:'note',warn:true,text:'Load input adjusted for the analysis (entered values kept): '+smdLoadFlags.join('; ')+'.'}]:[]).concat(loads.some(l=>l.off)?[{type:'note',warn:true,text:`${loads.filter(l=>l.off).length} load(s) are excluded and contribute nothing to the results.`}]:[]):[{type:'note',text:'No loads entered.'}]});
   mSubs.push({title:'Load cases and combinations',items:[{type:'table',head:['Combination',...CASES.map(c=>c.id),'Envelope'],rows:combosArr.map(c=>({cls:!envOn&&!caseView&&c.id===cid?'gov':'',cells:[COMBOS[c.id].name,...CASES.map(cs=>c.f[cs.id]?fmtF(c.f[cs.id]):'—'),c.on!==false?'yes':'no']}))},
-    {type:'note',text:`Analysed: ${curName()}. ${CASES.map(c=>c.id+' = '+c.name).join(', ')}. Factors as entered in the combination table (presets: ASCE 7-16 Sec. 2.3.1 / 2.4.1 basic combinations).`}].concat(smdCmbMissing().length?[{type:'note',warn:true,text:smdCmbNoteTxt(smdCmbMissing())+' Use “Add the missing rows” on the Analysis view.'}]:[]).concat(smdPatWarn()?[smdPatNote()]:[]).concat(smdZeroCases().length?[{type:'note',warn:true,text:smdZeroTxt(smdZeroCases())}]:[]).concat(loads.some(ld=>!ld.off&&ld.lc==='WL')?[{type:'note',text:SMD_WPM_TXT}]:[])});   /* CMB3, PATW, PATL, CZF, WPM */
+    {type:'note',text:`Analysed: ${curName()}. ${CASES.map(c=>c.id+' = '+c.name).join(', ')}. Factors as entered in the combination table (presets: ASCE 7-16 Sec. 2.3.1 / 2.4.1 basic combinations).`}].concat(smdCmbMissing().length?(q=>smdrNL(q[0],[['Remedy:','use “Add the missing rows” on the Analysis view.'],...q[1]],{warn:true}))(smdCmbNoteNL(smdCmbMissing())):[]).concat(smdPatWarn()?smdPatNote():[]).concat(smdZeroCases().length?smdrNL(...smdZeroNL(smdZeroCases()),{warn:true}):[]).concat(loads.some(ld=>!ld.off&&ld.lc==='WL')?smdrNL(...SMD_WPM_NL):[])});   /* CMB3, PATW, PATL, CZF, WPM; SMNL: each long note as a lead and "• " items */
   if(secOn)mSubs.push({title:'Section properties',items:[{type:'table',head:['Quantity','Value','Unit'],rows:[['E',smrC(Ev,0),`${fu}/${lu}²`],['I',smrC(Iv,6),`${lu}⁴`],['c',smrC(cv,4),lu],['A',smrC(Av,5),`${lu}²`],['Shape',shpW?shpW.nm:'custom section','—'],['Deflection limit',defLim>0?'L/'+defLim:'off','—'],['Allowable stress σ_allow',Fbv>0?String(Fbv):'off',`${fu}/${lu}²`]]}]});
   /* ---------- 3. Analysis ---------- */
   const aSubs=[],res=[];   // res: summary rows [quantity, value cell, limit, ratio cell]
@@ -2479,7 +2504,8 @@ function smrModel(){
         T.push({title:'Deflection',ref:defLim>0?'limit L/'+defLim+' per span (user input)':'',res:/dm$/,steps:DS});}
     } else if(secOn)aSubs.push({title:'Section analysis',items:[{type:'note',warn:true,text:'E and I must both be greater than 0: a blank, zero or negative value was entered, so deflection and section results are not computed.'}]});
     {const SD=smdSDRows();if(SD.length)aSubs.push({title:'Member end forces (fixed-end forces − k_e d_e)',items:[{type:'table',head:['Span',`L (${lu})`,`FEF V_L, M_L`,`FEF V_R, M_R`,'d_L: v, θ','d_R: v, θ',`V_L, M_L`,`V_R, M_R`],rows:SD.map(q=>[String(q.i+1),smrC(q.L,3),q.FE[0].toFixed(4)+', '+q.FE[1].toFixed(4),q.FE[2].toFixed(4)+', '+q.FE[3].toFixed(4),q.d[0].toExponential(4)+', '+q.d[1].toExponential(4),q.d[2].toExponential(4)+', '+q.d[3].toExponential(4),q.EF[0].toFixed(4)+', '+q.EF[1].toFixed(4),q.EF[2].toFixed(4)+', '+q.EF[3].toFixed(4)])},
-      {type:'note',text:`Per span: fixed-end forces (FEF) of the span loads; d = the solved nodal deflection and rotation${secOn&&Ev>0&&Iv>0?'':' (× EI: EI = 1 with the section off)'}; member end forces = FEF − k_e d_e (forces ${fu} up +, moments ${fu}·${lu} CCW +). Each reaction is the sum of the end forces at its node; the beam moment at a support (sagging +) is M_R of the span to its left = −M_L of the span to its right (a couple applied exactly at a node is part of the fixed-end forces).`}]});}   /* SMW */
+      ...smdrNL('Member end forces, per span:',[['FEF:','fixed-end forces of the span loads.'],['d:',`the solved nodal deflection and rotation${secOn&&Ev>0&&Iv>0?'':' (× EI: EI = 1 with the section off)'}.`],['Member end forces:',`= FEF − k_e d_e (forces ${fu} up +, moments ${fu}·${lu} CCW +).`],
+        ['Reactions:','each reaction is the sum of the end forces at its node.'],['Support moment:','the beam moment at a support (sagging +) is M_R of the span to its left = −M_L of the span to its right (a couple applied exactly at a node is part of the fixed-end forces).']])]});}   /* SMW; SMNL: lead and items */
     aSubs.unshift({title:`Analysis for ${curName()}`,items:[smrTopics(T),{type:'note',text:'The same values are worked on the Analysis view (Engineering Calculations cards). Units: '+fu+', '+lu+'.'}]});
   }
   if(userX.length&&!window.unstable&&loads.length)aSubs.push({title:'User positions',items:[{type:'table',head:[`x (${lu})`,...(envOn?[`V min (${fu})`,`V max (${fu})`,`M min (${fu}·${lu})`,`M max (${fu}·${lu})`]:[`V (${fu})`,`M (${fu}·${lu})`,...(deD.length?[`δ (${lu})`]:[])])],
@@ -2502,8 +2528,8 @@ function smrModel(){
   const sItems=[{type:'kv',rows:[['Analysis',curName()],['Spans',`${ns} (total length ${totL.toFixed(3)} ${lu})`],['Units',`${fu}, ${lu}`],['Method','Direct stiffness method, Euler-Bernoulli beam elements (2 DOF/node), Gaussian elimination with partial pivoting; internal forces by left-segment statics; deflection by double numerical integration of M/EI anchored at the first and last supports']]}];   /* SMRX: the method wording of the retired 📄 Report */
   if(res.length)sItems.push({type:'table',head:['Quantity','Value','Limit','D/C'],rows:res},{type:'note',text:'Each value links to the step where it is taken. The deflection limit L/x and σ_allow are user inputs; the analysis (statics, beam theory) cites no design code.'});
   else if(window.unstable)sItems.push({type:'note',warn:true,text:'UNSTABLE STRUCTURE: results suppressed.'});
-  if(smdPatWarn()&&!window.unstable)sItems.push(smdPatNote());   /* PATW, PATL */
-  if(smdZeroCases().length)sItems.push({type:'note',warn:true,text:smdZeroTxt(smdZeroCases())});   /* CZF */
+  if(smdPatWarn()&&!window.unstable)sItems.push(...[].concat(smdPatNote()));   /* PATW, PATL; SMNL: note items */
+  if(smdZeroCases().length)sItems.push(...smdrNL(...smdZeroNL(smdZeroCases()),{warn:true}));   /* CZF; SMNL */
   sItems.push({type:'note',text:'Verify all results independently before use in design.'});   /* SMRX: the retired 📄 Report's footer line */
   secs.push({title:'Summary',subs:[{title:'Results',items:sItems}]});
   secs.push({title:'Model, loads and combinations',subs:mSubs});
@@ -2682,4 +2708,4 @@ schedule();
 })();
 </script>
 </body>
-</html>
+</html>
