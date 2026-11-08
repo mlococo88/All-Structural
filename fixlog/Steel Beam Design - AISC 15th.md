@@ -3037,3 +3037,76 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
 - **Check case:** composite project (W16X26, 30 ft, tributary 4 + 4 ft), Mₓ tab, Moment Capacity vs Stud Count: before one 554-character paragraph; after the lead "Every point is the §I3.2a plastic distribution re-solved at that stud count — it is the capacity, not a sketch." and three bullets (Stud count / At zero studs / If the beam is unbraced …), "about 1% below φFᵧZₓ" unchanged.
 - **How verified:** headless Chromium, origin/main vs the branch, the 12 states of SBNL-1: `AN` identical; the digit sequence of the input panel, every output tab and the full Report text (`SharedReport.text`) identical; 0 KaTeX errors, 0 console errors; Validation 41/41. Tests: check-syntax; steel-beam-builtup 11/11; phone-layout sbeam; project-library steelbeam ALL PASS; list-input sbeam: only note text differs from its recorded baseline (plus the minor-axis flange case label 10 → 13 already reported since L2, #1065).
 - **Other copies:** none.
+
+## 2026-11-08 — PR: nl-sbeam-b (PR #1223: https://github.com/mlococo88/All-Structural/pull/1223) (SBLP: the Summary checks as a left column from 1200 px, as Retaining Wall / Spread Footing / Light Pole / Shear and Moment Diagrams / Base Plate)   [display only; no result change]
+
+### SBLP. Check summary column on the left at 1200 px and wider   [display only]
+- **Request (engineer, 2026-11-07/08):** add the left summary panel to the tools that have summary / result cards, as in Retaining Wall (#959, #984), Spread Footing (#988), Light Pole (#991, #994/#997), Shear and Moment Diagrams (#1130) and Base Plate (BPLS #1199).
+- **What changed (screen only):**
+  - At **1200 px and wider** a new left column `#sbDashCol` (left of the input panel; **240 px** from 1200 to 1499 px, **280 px** from 1500 px) lists every check of the Summary tab: one compact chip per check (status dot, name, D/C to 2 decimals or "—", PASS / FAIL / N/A). Head: « button, "Checks", and "n FAIL" (red) or "max D/C" (green). Batch mode: one chip per member (governing DCR, status), as the Batch Results.
+  - The input panel takes 33 % of the width left beside the column (`calc((100% − column) × .33)`, its 340–460 px limits unchanged); the output panel takes the rest.
+  - **Click a chip** (or Enter / Space: chips are buttons): opens and scrolls to the card that works the value (`sbdChkTarget` → `sbdGoto`, the D11 "Worked in" targets; service deflection chips → the Service card `sv_<id>`), or the check's tab when no card is mapped (model stability, ΣR = ΣF, member-mode equilibrium, N/A checks). Batch chips open Batch Results.
+  - « shrinks the column to a 42 px strip (vertical title and count); » opens it. With validation blockers the column says "No results: the model is not valid. See the message on the output tab."
+  - The column follows every recalculation (`schedule`) and every tab rebuild (`buildTabs`).
+  - **Below 1200 px nothing changes** (no column; tablet and phone layouts and order as before). The column is `noPrint` and hidden in print; the Summary tab, the Report and Print are unchanged.
+- **Where:**
+  - CSS: after `@media print{.govStrip{display:none!important}}`, the block starting `/* SBLP (2026-11-08, engineer: the left summary panel`.
+  - HTML: first child of `<div id="main">`: `<aside id="sbDashCol" class="noPrint" aria-label="Check summary">` with `#sbDashHead` (`#sbDashTgl`, `#sbDashTtl`, `#sbDashCnt`) and `#sbDash`.
+  - JS: new `sbSumChecks()` before the live `buildSummaryTab`: the check list that `buildSummaryTab` built inline, moved out unchanged (pure refactor) with three extra fields for the column only (`ch` = the design check, `dcr`, `sec` = the Service card); `buildSummaryTab` now calls it after the member-mode box. New before `updateGovStrip`: `const SBLP={key:'sbd_dashCollapsed_v1'}`, `sbDashColl(v,save)`, `sbDashRender()` and a start-up IIFE that reads the key and wires «. `sbDashRender();` after `updateGovStrip()` in `buildTabs` and before it in `schedule`.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). The column shows the Summary chips' values.
+- **Saved data (§5):** no key or format changed. New per-browser UI key **`sbd_dashCollapsed_v1`** ('1' = shrunk, '0' = open), tool-prefixed, written only when « / » is clicked; not part of the project, the autosave or the export.
+- **Decisions (pending engineer review):**
+  1. Breakpoints and widths as SFLB / SMLS / BPLS.
+  2. The Summary tab keeps its own chips and tables.
+  3. Chips list what the Summary chips list, including Model stability, ΣR = ΣF and the per-span service deflection checks; reference and governing combination are in the tooltip.
+  4. Phone and tablet (below 1200 px) unchanged, including the order (inputs first, then the output tabs).
+- **Check case (default project, W18X50, 20 ft):** 15 chips: Model stability — PASS, ΣR = ΣF — PASS, Flexure Mₓ 0.12 PASS, Shear Vₓ 0.05 PASS, Flexure Mᵧ / Shear Vᵧ / Compression / Torsion N/A, Interaction 0.12 PASS, Web local yielding / crippling N/A, Deflection 0.09 PASS, δ span 1 — 1.0DL N/A, δ ≤ L/240 0.09 PASS, δ ≤ L/360 0.09 PASS; head "max 0.12" — the Summary chips' values. Clicking Flexure Mₓ opens the Mₓ tab at the card "Combination 1.2DL + 1.6LL + 0.5SL" (`mx_c216`) and flashes it.
+- **How verified:** headless Chromium, origin/main vs the branch, the 12 states of SBNL-1:
+  - `AN` identical (deep JSON) in all 12.
+  - At 1150 px (no column): the digit sequence of the input panel, every output tab and the full Report text identical in all 12.
+  - At 1440 px: every computed value and the full Report text identical; the only page-text differences are Plotly axis tick labels on the Summary / Mₓ diagrams (fewer ticks in the narrower output panel).
+  - 0 KaTeX errors, 0 console errors.
+- **Layout** (column / input / output widths, px): 1920: 280 / 403 / 817; 1440: 240 / 396 / 804; 1280: 240 / 343 / 697; 1024 and 390: no column, panels exactly as on main; no sideways scroll at any width.
+- **Behaviour:**
+  - Collapse writes `sbd_dashCollapsed_v1` = '1' and survives a reload.
+  - Chip clicks: Shear Vₓ → `vx_c216`; δ ≤ L/240 → `sv_sDL`; Model stability → Schematic & Inputs tab.
+  - Member mode: 10 chips; a member with no Lᵇ shows the blocker message.
+  - Batch mode (2 members, 1 failing): 2 chips, head "1 FAIL".
+  - A live edit (span 40 ft) updates the column.
+- **Tests:** check-syntax; steel-beam-builtup 11/11; phone-layout sbeam; project-library steelbeam ALL PASS; list-input sbeam: only note text from SBNL-1 / SBNL-2 differs from its recorded baseline (plus the minor-axis flange case label 10 → 13 already reported since L2, #1065).
+- **Other copies:** none.
+
+## 2026-11-08 — PR: sbeam-tfa-hint (PR #1229: https://github.com/mlococo88/All-Structural/pull/1229) — TFAH: the Web Stiffeners hint and the Vₓ shear note follow the tension field action option (display only, no result change)
+
+### TFAH. "Tension field action (§G2.2) is not used" no longer shown when the option is on   [display only] [no result change]
+- **Problem:** since the TFA option (#1073, `design.stiff.tfa`, default off) the Web Stiffeners hint still said "Tension field action (§G2.2) is not used." whatever the option's state (open item recorded under SBNL-1). With the option on and applied, the Vₓ tab's G2.1 note also still said "Tension field action (§G2.2) is not used — conservative." just above the worked G2.2 block.
+- **Report:** checked headless in 7 states (below): the Report does not carry either text (its only TFA text is "Stiffener Proportioning (§G2.3, no tension field action)", which stays true: §G2.3 is on the §G2.1 basis). No Report change.
+- **Where 1:** `secStiffeners`, the hint under the option. Anchor `TFAH (2026-11-08): the hint follows the TFA option`.
+  - Before: `else body.appendChild(el('div','hint sbNL',sbNL('How the spacing is used:',[…,['Tension field action','(§G2.2) is not used.']])));`
+  - After: the same `sbNL(…)` call with `['Tension field action',tfaTxt]`, inside `else{ … }`, where
+    ```
+    const tq=AN&&AN.design?AN.design.tfa:null;
+    const tfaTxt=isMember()?'(§G2.2) is not used.':
+      !S.design.stiff.tfa?'(§G2.2) is not used — tick the option above to use §G2.2 for interior panels.':
+      (pk&&pk._kind!=='I')?'(§G2.2) is ticked but applies to I-shapes only, so it is not used for this section.':
+      (tq&&!tq.applies)?'(§G2.2) is ticked but not used: '+tq.note+'.':
+      '(§G2.2) is used for interior panels (the larger of §G2.1 and §G2.2); panels within <i>a</i> of a support or member end keep §G2.1.';
+    ```
+  - The option's checkbox already rebuilds the inputs after the recalculation (`chkInput` → `schedule(true)`), so the hint follows a tick at once.
+- **Where 2:** `buildVxTab`, "Major-Axis Shear Strength". Anchor `TFAH (2026-11-08): with the TFA option applied`.
+  - Before: `shearBlock(body,p,D.shearX,'Shear per '+D.shearX.route);`
+  - After:
+    ```
+    const shX=D.tfa&&D.tfa.applies?Object.assign({},D.shearX,{note:(D.shearX.note||'').replace('Tension field action (§G2.2) is not used — conservative.','Interior panels use tension field action (§G2.2, option on, below); end panels keep this strength.')}):D.shearX;
+    shearBlock(body,p,shX,'Shear per '+D.shearX.route);
+    ```
+  - Display copy only: `D.shearX` (and `AN`) are not changed. With the option off, or ticked but not applicable (a/h > 3), the note is as before.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none.
+- **Check case:** built-up welded I (24 × 12 × 1/2 flanges, 7/16 web, A572 Gr. 50), stiffeners a = 30 in.
+  - Option off: hint "Tension field action (§G2.2) is not used — tick the option above to use §G2.2 for interior panels."; Vₓ note unchanged.
+  - Option on: hint "… is used for interior panels (the larger of §G2.1 and §G2.2); panels within a of a support or member end keep §G2.1."; Vₓ note "G2.1(b). Cᵥ1 per Eq. G2-3 with kᵥ = 7.94. Interior panels use tension field action (§G2.2, option on, below); end panels keep this strength. …".
+  - Option on with a = 90 in: hint "… is ticked but not used: a/h = 3.91 > 3.0: §G2.2 does not apply."
+  - Member mode: hint "Tension field action (§G2.2) is not used." (as before; the option is not offered there).
+- **How verified:** headless Chromium, origin/main vs the branch, 7 states (default; rolled with stiffeners; built-up with stiffeners, option off; built-up option on; rolled option on; built-up option on with a/h > 3; member mode with the option set): `AN` identical (JSON compare); the digit sequence of every output tab and the Report identical in all 7 states (the only text differences are the hint and, with the option applied, the Vₓ note, whose digits are unchanged); the input panel differs only in the hint item; 0 KaTeX errors; 0 console errors. Tests: check-syntax; steel-beam-builtup 11/11; project-library steelbeam ALL PASS; phone-layout sbeam (390, 768) pass.
+- **Open item closed:** SBNL-1 "the Web Stiffeners hint keeps 'Tension field action (§G2.2) is not used.'".
+- **Other copies:** none.

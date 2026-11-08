@@ -2028,3 +2028,47 @@ index 219cc2c..a3e337e 100644
 - **How verified:** main vs branch: localStorage keys (the folder path in `bridgeSuite.v1.appPaths` normalised), page text, Export JSON and printed text identical on load (index.html, lldf.html, Prestressed Bridge Design.html); `tests/smoke/bridge-suite-compare.mjs --a <main worktree>`: all identical; `tests/smoke/bridge-suite-save.mjs`: all passed (updated, see the PR); `project-library.mjs --tool lldf / index`, `github-sync-tools.mjs --tool index`, `home-projects.mjs --tool index`, `tests/engine/run.mjs`, `check-syntax.mjs`: see the PR. Header at 1280 / 1400 / 1920 / 390 px; screenshots looked at.
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** the same change in the other two Bridge Suite pages (index.html, lldf.html, Prestressed Bridge Design.html) and `shared/bridge-suite-projects.js` (one PR). **Open items:** none.
+
+## 2026-11-08 — PR: claude/lldf-notes-split (PR #1231: https://github.com/mlococo88/All-Structural/pull/1231) (LLNL: long notes as a bold lead and a list — input, Lever rule, Dead load, Applicability & notes, warnings, Report; display only, no result change)
+
+### LLNL. Long notes split into a lead line and a list   [display only] [no result change]
+- **Request (engineer, 2026-11-07, approved for all apps):** "There are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Pattern of Spread Footing SFNL-1 (#1167).
+- **Rule used:** a note is long if it is over ~300 characters, has 3 or more sentences, or carries several facts in one paragraph. It becomes a one-line bold lead, then a list whose items start with bold lead words. Every sentence, number, citation and link is kept, in the same order (one exception: the "Input needed" line of the modular-ratio note, moved first as an action line; it has no digits). New lead words carry no digits, so the digit sequence of every tab and of the Report is unchanged.
+- **New helper** (main script, after `const V=(s,d,v,u)=>`), anchor `/* LLNL (2026-11-08, engineer request`:
+  ```js
+  function llNL(lead,items,o){ o=o||{}; const L=o.ol?"ol":"ul", X=o.x||[];
+    const li=(items||[]).map((x,i)=>x?'<li'+(X.indexOf(i)>=0?' class="llNLx"':'')+'>'+(Array.isArray(x)?'<b class="llNLk">'+x[0]+'</b> '+x[1]:x)+'</li>':'').join("");
+    return (o.act||[]).filter(Boolean).map(a=>'<div class="llNLa">'+a+'</div>').join("")+(lead?'<div class="llNLl">'+lead+'</div>':"")+(li?'<'+L+' class="llNLu">'+li+'</'+L+'>':""); }
+  ```
+  A container that holds the result gets the class `llNL` as a marker (no style of its own; the static `.disclaimer` keeps its single class, which `tests/smoke/lldf-layout.mjs` checks). `o.x`: items shown on screen only (class `llNLx`, left out of the Report).
+- **CSS** (after `.notes li.warn{…}`), no new colours (inherits the note colour; the action line uses `--governs`, as `.notes li.warn`), a list item kept on one printed page:
+  ```css
+  .llNLl{font-weight:700;margin:0 0 1px}
+  ul.llNLu,ol.llNLu{margin:2px 0 3px;padding-left:18px}
+  .llNLu>li{margin:1px 0}
+  .llNLa{color:var(--governs);font-weight:600;font-style:normal;margin:2px 0 4px}
+  @media print{.llNLu>li{break-inside:avoid}}
+  ```
+- **Report helper** (Report script, after `var plain=function(s){`), anchor `/* LLNL (2026-11-08): the Report notes of an element of the sheet`: `nlItems(h)` returns one Report note per part of an `llNL` note (action lines with `warn`, the lead, each item as "• lead words text", `llNLx` items skipped); any other element gives one note of its whole text, as before. Used by 5.1 (`dn`, `da`), 5.3 (`dlNote(...)` now returns the items) and 7.1 (the disclaimer).
+- **Warnings** (`bridgeWarnings`): `warn(m,l)` → `warn(m,l,nl)`. `msg` is byte-identical (same template); `nl = [lead, items, act]` is the same text split for display, set with `Object.defineProperty(o,"nl",{value:nl})` (not enumerable), so `window.lldfLast`, the hand-off and the `tests/engine/lldf-hash.mjs` hashes do not see it. `renderNotes` draws `llNL(nl[0],nl[1],{act:nl[2]})` in an `li.llNL`; Report 7.1 prints the act lines (warn), the lead and "• " lines with the warning's `warn` flag.
+- **Notes changed (anchor = the old opening text → new lead → item lead words).** Exact before / after: the PR diff.
+  1. Roadway & lanes input tab, "Design lanes" card (`c=card(P.roadway,"Design lanes")`): "The clear roadway w runs between…" (`p.lx-note` → `div.lx-note.llNL`) → "Clear roadway w and design lanes N_L" → Clear roadway w / Design lanes / Worked in / Truck spacing (both links kept).
+  2. Lever rule tab (`$("leverConfigs").innerHTML`): "Girder B2 (interior) — deck assumed hinged…" (`p.lvnote` → `div.lvnote.llNL`) → "Girder B2 (interior): lever rule" → Deck / Truck train / Shown / Governing lever value.
+  3. Dead load 3.6, `#mdDistNote` (`renderDist`), both methods: "Method: MassDOT §3.5.3." → Wearing surface (DW) / Pile-cap analogy / Deck slab; "Method: typical AASHTO (all-equal)." → Equal shares / Deck slab.
+  4. Dead load 3.6, `#mdDistAssume`: "Each load in the table above is distributed by its chosen method —" → lead "…by its chosen method:" → Equal / MassDOT pile-cap / Two adjacent beams / Deck slab / Beam self-weight / Not auto-included / Adjacent box/deck / Worked steps (screen only; the Report left this sentence out before too, by a regex now removed).
+  5. 4D step "DC1 per beam" note: "Beam self-weight is deliberately excluded from DC1." (lead) → Why / For reference only / Also not auto-generated.
+  6. 4D step "Distribution rules" note: "Two adjacent beams, load on an overhang…" → "How the rules above are applied:" → Two adjacent beams / No uplift relief / Wearing surface (DW) / Auto-generated rows.
+  7. 4D step "Per-beam summary" note: "These are the per-foot loads to apply to each beam line." (lead) → Girder self-weight / Non-composite section / Composite (long-term) section.
+  8. Applicability & notes 6.0, `.disclaimer` (static HTML; cloned to the tab and read by Report 7.1): "For preliminary design and educational use." (lead) → Method / Beam positions / Verification.
+  9. Report 5.2 note "Beam self-weight is not included in DC1 (…)… Distribution method: … In the app: …" → three notes: lead "Beam self-weight and the distribution method:", then "• Beam self-weight: …", "• Distribution method: …", "• In the app: [[tab:dl|…]]".
+  10. Warning `Type (f|g): adjacent precast box beams…` → Tables / Deck / Interior factors / Exterior girders.
+  11. Warnings `d_e = … ft at the left|right exterior girder is outside the range …` (every branch) → Tables / Used / Action.
+  12. Warning `Separate skews: …` → "Separate skews for moment and shear" → Moment / Shear / Where the support skews differ.
+  13. Warning `Skew θ = …° exceeds the 60° limit…` → Used / Moment / Shear / Action.
+  14. Warnings `Modular ratio n = …` (both): differs → Computed from / Entered n; concrete girder → action line "Input needed: enter the girder and deck f′c to compute n." first, then Why it matters.
+- **Not changed:** short notes (under ~300 characters with one or two sentences: the other warnings, 4D.1/4D.3/4D.5/4D.6 step notes, the Report's fatigue lines); the Figure 1 caption (a legend); the Report 8.1 references table cell (a citation list, not a note); KaTeX blocks.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none; no key added (§5).
+- **Check case:** default project, Dead load tab, 3.6: before one 934-character paragraph under the table; after the lead "Each load in the table above is distributed by its chosen method:" and eight bullets; "0.822 klf per beam at A = 789.00 in² × 0.150 kcf" and "t_s=8″ × 0.150 kcf" unchanged. Report 5.1: the same lead and seven "• " lines (the "Worked steps" link line left out, as before).
+- **How verified:** tests: check-syntax, engine lldf / handoffs, lldf-hash (0 differ), project-library --tool lldf, lldf-layout (319 checks), bridge-suite-compare --app lldf. Headless Chromium, origin/main vs the branch, 16 cases (default; AASHTO method; sidewalks + median; median joint + special sidewalk beam; types a, e, b/c, d, f, g, slab; skew 65°; separate skews 20/35°; n ≠ E_c ratio; n = 1 without f′c; type g with skew 65°): `window.lldfLast` identical (JSON), every localStorage key identical (time stamps and folder normalised), the digit sequence of every input and output tab and of the expanded Report identical; 0 console errors.
+- **Other copies:** none (the notes are lldf.html's own; the duplicated bridgeSuite.v1.* bootstrap/hand-off code is not touched).
+- **Open items:** Part B (left summary panel): not added. **Decision (pending engineer review):** LL & DL Distribution has no check summary (its results are distribution factors, not D/C or PASS/FAIL checks), and it already uses a two-panel layout (inputs left, results right); a third column of factor chips would only repeat the Summary tab's table.
