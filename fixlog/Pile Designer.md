@@ -20220,7 +20220,7 @@ Cross-tool PR with the Retaining Wall Designer (Phase 8f, HANDOFF.md §4.6 / §4
   - Tests: check-syntax; `tests/engine/run.mjs handoffs pile-group`; `tests/smoke/retwall-pile-handoff.mjs`; `tests/smoke/project-library.mjs --tool pile`; `tests/smoke/pile-library.mjs` (see the PR).
 - **Other copies:** none.
 
-## 2026-11-08 — PR: nl-pile-2 (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (PDNL-2: long notes as a bold lead and a list — Structural, Load test, Group, Simplified Method, Tier 2; display only, no result change)
+## 2026-11-08 — PR: nl-pile-2 (PR #1189: https://github.com/mlococo88/All-Structural/pull/1189) (PDNL-2: long notes as a bold lead and a list — Structural, Load test, Group, Simplified Method, Tier 2; display only, no result change)
 
 ### PDNL-2. Long notes split into a lead line and a list (part 2)   [display only] [no result change]
 - **Request:** as PDNL-1 (#1181), same helpers `pdNL` / `NarrNL`, CSS and `pdrRest` handling (see PDNL-1). Same rule: a note over ~300 characters, of 3+ sentences, or with several facts becomes a bold lead plus a list with bold lead words. Action items go on their own amber line at the top. Every sentence, number, citation and link is kept, in the same order. New lead words carry no digits.
