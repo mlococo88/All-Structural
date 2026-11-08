@@ -2290,6 +2290,7 @@ function rwPileSchedule(r) {
 const RW_HP_MINRET = 1.0;   // ft
 function calcAll(inp) {
   const errors = [], warnings = [];
+  const warnNL = (window.RWNL_WARN = window.RWNL_WARN || {});   // RWNL (2026-11-08): display only, kept out of the results — the lead-and-list form [lead, items, act] of a long warning, keyed by its text (the text itself is unchanged: Report §8, tab dedupe)
 
   // ── Derived geometry ─────────────────────────────────────────
   const tf_ft     = inp.tf     / 12;
@@ -2868,7 +2869,8 @@ function calcAll(inp) {
     const q_ult_Ia  = onRock ? qRock(Math.max(V_str_min, 0), e_A)
                              : (B_eff_Ia > 0 ? Math.max(V_str_min, 0) / B_eff_Ia : 999999);
     if (onRock && !useManualQn && A.phi_b > 0.45)
-      warnings.push(`AASHTO bearing on rock: φb = ${f(A.phi_b,2)} is used. Table 10.5.5.2.2-1 gives φb = 0.45 for footings on rock (Table 11.5.7-1 gives 0.55 for semi-gravity walls). Confirm φb with the geotechnical engineer.`);
+      { const m = `AASHTO bearing on rock: φb = ${f(A.phi_b,2)} is used. Table 10.5.5.2.2-1 gives φb = 0.45 for footings on rock (Table 11.5.7-1 gives 0.55 for semi-gravity walls). Confirm φb with the geotechnical engineer.`;
+        warnings.push(m); warnNL[m] = [`AASHTO bearing on rock: φb = ${f(A.phi_b,2)} is used.`, [['Table 10.5.5.2.2-1', 'gives φb = 0.45 for footings on rock (Table 11.5.7-1 gives 0.55 for semi-gravity walls).']], ['Confirm φb with the geotechnical engineer.']]; }   // RWNL
     const bearing_ok_max = q_ult_A <= q_R_A;
     const bearing_ok_Ia  = q_ult_Ia <= q_R_A;
     const bearing_Ia_governs = q_ult_Ia > q_ult_A;
@@ -3505,7 +3507,7 @@ function calcAll(inp) {
   // the middle third (statically consistent triangular block of length 3x̄_s). Without water, or in AASHTO mode, nothing changes.
   const upS = (!isAASHTO && F_uplift > 0 && !isPile) ?   // RWPL: on piles the factored vertical load (water included) goes to the pile rows; no split
     { gToe: 1.6, gHeel: 0.9 } : null;
-  const upWarn = [];
+  const upWarn = [], upNL = [];   // RWNL: upNL[i] = the lead-and-list form of upWarn[i] (display only)
   function rwUpSplit(V, M, g, lbl) {   // V, M: factored vertical load and net moment about the toe (resisting − overturning), no uplift deducted
     const Vs = V - g * F_uplift, Mss = M - g * F_uplift * x_uplift;
     const xs = Vs > 0 ? Mss / Vs : B / 2, es = B / 2 - xs;
@@ -3516,8 +3518,10 @@ function calcAll(inp) {
     else if (Math.abs(es) <= B / 6) { kind = 'full'; qt = Vs / B * (1 + 6 * es / B); qh = Vs / B * (1 - 6 * es / B); }
     else if (es > 0) { kind = 'toe'; Lc = 3 * xs; qt = 2 * Vs / Lc; }
     else { kind = 'heel'; Lc = 3 * (B - xs); qh = 2 * Vs / Lc; }
-    if (kind === 'none' || kind === 'outToe' || kind === 'outHeel')
-      upWarn.push(`${lbl}${g ? `, water uplift at γ_U = ${g}` : ''}: ${kind === 'none' ? 'the factored uplift exceeds the vertical load (no soil reaction)' : 'the soil resultant falls outside the base (no equilibrium with the soil in compression)'}. The footing is designed with the soil reaction ${kind === 'outToe' ? 'concentrated at the toe tip' : 'taken as zero on that member'} (conservative); review the proportions or the water level.`);
+    if (kind === 'none' || kind === 'outToe' || kind === 'outHeel') {
+      upNL.push([`${lbl}${g ? `, water uplift at γ_U = ${g}` : ''}: ${kind === 'none' ? 'the factored uplift exceeds the vertical load (no soil reaction)' : 'the soil resultant falls outside the base (no equilibrium with the soil in compression)'}.`,
+        [['Design:', `the footing is designed with the soil reaction ${kind === 'outToe' ? 'concentrated at the toe tip' : 'taken as zero on that member'} (conservative);`]], ['Review the proportions or the water level.']]);
+      upWarn.push(`${lbl}${g ? `, water uplift at γ_U = ${g}` : ''}: ${kind === 'none' ? 'the factored uplift exceeds the vertical load (no soil reaction)' : 'the soil resultant falls outside the base (no equilibrium with the soil in compression)'}. The footing is designed with the soil reaction ${kind === 'outToe' ? 'concentrated at the toe tip' : 'taken as zero on that member'} (conservative); review the proportions or the water level.`); }
     const uw0 = g * gamma_w * hw * (upliftTri ? 0 : 1), uwB = g * gamma_w * hw;   // water pressure at the toe (x = 0) and the heel end (x = B)
     return { g, V, M, Vs, Ms: Mss, xs, es, kind, qt, qh, Lc, uw0, uwB, combo: lbl.split(', ')[1] };
   }
@@ -3552,7 +3556,7 @@ function calcAll(inp) {
     upS.heelMin = rwUpMember(rwUpSplit(SumVu_min, Msu_min - Mou, upS.gHeel, 'Heel, U = 0.9D + 1.6H'), x_back, B);
     upS.toeMax  = rwUpMember(rwUpSplit(SumVu, Msu - Mou, upS.gToe, 'Toe, U = 1.2D + 1.6H'), x_front, 0);
     upS.toeMin  = rwUpMember(rwUpSplit(SumVu_min, Msu_min - Mou, upS.gToe, 'Toe, U = 0.9D + 1.6H'), x_front, 0);
-    upWarn.forEach(w => warnings.push('Footing (water uplift split, ACI 318-19 §5.3.8): ' + w));
+    upWarn.forEach((w, i) => { const P = 'Footing (water uplift split, ACI 318-19 §5.3.8): ', m = P + w; warnings.push(m); warnNL[m] = [P + upNL[i][0], upNL[i][1], upNL[i][2]]; });   // RWNL
   }
   // RWPC (2026-11-07): without the water split (ACI without water; AASHTO Strength I / Ia), a combination whose resultant lies
   // beyond the kern (|e| > B/6) loads the heel and toe with the triangular soil block of length 3x̄ (γ_U = 0: no uplift taken
@@ -3561,7 +3565,7 @@ function calcAll(inp) {
                        : [[SumVu, Msu - Mou, e_u, 'U = 1.2D + 1.6H'], [SumVu_min, Msu_min - Mou, e_u_min, 'U = 0.9D + 1.6H']];
   const pcS = (upS || pileFtg) ? [null, null] : pcV.map(([V, M, e, c]) => Math.abs(e) > B / 6
     ? { heel: rwUpMember(rwUpSplit(V, M, 0, 'Heel, ' + c), x_back, B), toe: rwUpMember(rwUpSplit(V, M, 0, 'Toe, ' + c), x_front, 0) } : null);
-  if (!upS) upWarn.forEach(w => warnings.push('Footing (partial contact): ' + w));
+  if (!upS) upWarn.forEach((w, i) => { const P = 'Footing (partial contact): ', m = P + w; warnings.push(m); warnNL[m] = [P + upNL[i][0], upNL[i][1], upNL[i][2]]; });   // RWNL
   function heelCase(gEVc, gDCc, gESc, gLSc, q0, qL, up, pc, et = 1) {   // up: RWUP split (soil + water) for this combination, or null; pc: RWPL pile rows; et: RW2H4 η (max) or 1/η (min), AASHTO
     const wu  = et * (gEVc * w_soil_col + gDCc * (inp.gamma_c * tf_ft) + gESc * inp.q_sur
               + (isAASHTO ? gLSc * q_ll_aashto : 0));
@@ -4157,11 +4161,15 @@ function calcAll(inp) {
                       ref: (isAASHTO ? 'AASHTO LRFD 10th Ed. Art. 10.7.1.2 / 5.12.9.1' : 'IBC 2018 §1810.3.11 / §1810.3.3.1.5') + '; pile-to-cap tension connection (anchorage) not designed in this tool: by the engineer (Pile Designer)', note: pc.govT.label } } : {}),
         pileEmbed:  { ok: d.embed >= d.embMin - 1e-9, label: 'Pile Embedment', val: `${f(d.embed,1)}${d.embed >= d.embMin - 1e-9 ? '≥' : '<'}${f(d.embMin,0)}"`, dc: d.embMin / Math.max(d.embed, 1e-9), ref: d.ref + '; pile top into the footing' },
       };
-      if (pc.govT.L.Pmin < 0) warnings.push(`Pile uplift: P_min = −${f(-pc.govT.L.Pmin,1)} kip per pile (${pc.govT.label}). The pile-to-cap tension connection is not checked here: with a ${f(d.embed,1)}-in embedment, provide and design the anchorage (embedded bars, strands or dowels developed into the cap, ${isAASHTO ? 'AASHTO LRFD 10th Ed. Art. 10.7.1.2 / 5.12.9.1' : 'IBC 2018 §1810.3.11 / §1810.3.3.1.5'}) and the pile's own tension capacity (Pile Designer). Marked FAIL until then.`);   // RW2M3
+      if (pc.govT.L.Pmin < 0) { const ref = isAASHTO ? 'AASHTO LRFD 10th Ed. Art. 10.7.1.2 / 5.12.9.1' : 'IBC 2018 §1810.3.11 / §1810.3.3.1.5';
+        const m = `Pile uplift: P_min = −${f(-pc.govT.L.Pmin,1)} kip per pile (${pc.govT.label}). The pile-to-cap tension connection is not checked here: with a ${f(d.embed,1)}-in embedment, provide and design the anchorage (embedded bars, strands or dowels developed into the cap, ${ref}) and the pile's own tension capacity (Pile Designer). Marked FAIL until then.`;
+        warnings.push(m); warnNL[m] = [`Pile uplift: P_min = −${f(-pc.govT.L.Pmin,1)} kip per pile (${pc.govT.label}).`, [['Not checked here:', `the pile-to-cap tension connection: with a ${f(d.embed,1)}-in embedment, provide and design the anchorage (embedded bars, strands or dowels developed into the cap, ${ref}) and the pile's own tension capacity (Pile Designer).`], ['Status:', 'marked FAIL until then.']]]; }   // RW2M3; RWNL
       if (d.grp3) warnings.push(`Pile spacing ${f(d.cc,1)} in < 3D = ${f(3 * pc.D,1)} in: axial group effects apply (IBC 2018 §1810.2.5; AASHTO Art. 10.7.2.4 / 10.7.3.9). The capacities entered must include them.`);
       if (d.grp8) warnings.push(`Row-to-row spacing ${f(d.minRowDx,1)} in < 8D = ${f(8 * pc.D,1)} in in the direction of the lateral load: lateral group effects apply (IBC 2018 §1810.2.5; AASHTO Art. 10.7.2.4). The lateral capacity entered must include them.`);
       for (let i = warnings.length - 1; i >= 0; i--) if (/^AASHTO bearing|tension zone in soil/.test(warnings[i])) warnings.splice(i, 1);   // soil-bearing notes do not apply
-      warnings.push(`Pile cap: the bottom bars are at the footing cover c_c = ${f(cov_bot,2)} in and pass between the pile heads, which project ${f(+inp.fnd.embed || 0,1)} in into the footing. Detail the bars to clear the piles (bar spacing against the pile width D = ${f(+inp.fnd.D || 0,1)} in; field adjustment of bars at a pile). Punching uses the depth over the pile heads, t_f − ${f(cov_ph,2)} in − d_b.`);   // RWPB (was: the "bottom bars sit … above the base" warning)
+      { const m = `Pile cap: the bottom bars are at the footing cover c_c = ${f(cov_bot,2)} in and pass between the pile heads, which project ${f(+inp.fnd.embed || 0,1)} in into the footing. Detail the bars to clear the piles (bar spacing against the pile width D = ${f(+inp.fnd.D || 0,1)} in; field adjustment of bars at a pile). Punching uses the depth over the pile heads, t_f − ${f(cov_ph,2)} in − d_b.`;
+        warnings.push(m); warnNL[m] = [`Pile cap: the bottom bars are at the footing cover c_c = ${f(cov_bot,2)} in and pass between the pile heads, which project ${f(+inp.fnd.embed || 0,1)} in into the footing.`,
+          [['Detail', `the bars to clear the piles (bar spacing against the pile width D = ${f(+inp.fnd.D || 0,1)} in; field adjustment of bars at a pile).`], ['Punching', `uses the depth over the pile heads, t_f − ${f(cov_ph,2)} in − d_b.`]]]; }   // RWNL   // RWPB (was: the "bottom bars sit … above the base" warning)
       warnings.push('Pile-supported footing: soil bearing, base sliding and overturning are not checked (the piles carry the wall). The heel and toe are designed from the factored pile reactions (Footing design tab).');
       if (pc.passive) warnings.push(`Pile mode: passive in front of the toe credited against H: ${f(pc.Hpass,3)} kip/ft${isAASHTO ? ' (φ_ep = ' + f(inp.aashto.phi_ep,2) + ')' : ''}.`);
     }
@@ -5442,7 +5450,7 @@ function renderStabilityAASHTO(r) {
   clearPlots('stability'); registerPlot('stability', () => plotBearing(r));
 
   if (r.warnings.length)
-    h += r.warnings.map(w=>`<div class="alert warn">\u26a0 ${w}</div>`).join('');
+    h += r.warnings.map(w => rwWarnBox(w, r)).join('');   // RWNL
 
   el.innerHTML = h;
 }
@@ -5507,10 +5515,15 @@ function rwptCombRows(r) {
       + `<td>${F(c.dcC, 3)}</td><td>${c.dcT > 0 ? F(c.dcT, 3) : '—'}</td><td>${F(c.dcH, 3)}</td><td>${gv.length ? '<b>' + gv.join(', ') + '</b>' : ''}</td></tr>`;
   }).join('');
 }
-function rwptCombNote(r) {
+function rwptCombNote(r) { return rwNL(...rwptCombNL(r)); }   // RWNL (2026-11-08): a lead and a list (was one paragraph)
+function rwptCombNL(r) {   // [lead, items] of the combination note: the tab (rwNL) and the Report (rwrNL)
   const P = r.pile, A = r.isAASHTO;
-  return `Every combination the wall checks on piles (${A ? 'AASHTO LRFD 10th Ed.: Strength I maximum / minimum vertical' + (P.comb.some(c => /^ee1/.test(c.key)) ? ', Extreme Event I (both Art. 11.6.5.1 cases)' : '') + (P.comb.some(c => /^ee2/.test(c.key)) ? ', Extreme Event II (collision)' : '') + '; resistances φ<sub>c</sub>R<sub>n</sub>, φ<sub>up</sub>R<sub>n,up</sub>, H<sub>r</sub> (Strength), 1.0R<sub>n</sub>, 0.80R<sub>n,up</sub>, H<sub>r</sub> (Extreme Event)'
-    : 'ACI / IBC: the service (ASD) combinations of ASCE 7-16 §2.4.1' + (P.comb.length > 2 ? ', with 0.7E' : '') + ', against P<sub>a</sub>, T<sub>a</sub>, H<sub>a</sub>'}). Only the active design basis is computed. Shaded: the combination that governs compression, uplift or lateral (D/C largest); bold: the largest pile load of each combination. P per pile = V/N + M·x'/I (Pile Step 1, 1.3); H per pile = H/N, the same on every pile${P.passive ? ', H net of the passive credit' : ''}.`;
+  return ['Every combination the wall checks on piles:', [
+    ['Basis:', `${A ? 'AASHTO LRFD 10th Ed.: Strength I maximum / minimum vertical' + (P.comb.some(c => /^ee1/.test(c.key)) ? ', Extreme Event I (both Art. 11.6.5.1 cases)' : '') + (P.comb.some(c => /^ee2/.test(c.key)) ? ', Extreme Event II (collision)' : '') + '; resistances φ<sub>c</sub>R<sub>n</sub>, φ<sub>up</sub>R<sub>n,up</sub>, H<sub>r</sub> (Strength), 1.0R<sub>n</sub>, 0.80R<sub>n,up</sub>, H<sub>r</sub> (Extreme Event)'
+      : 'ACI / IBC: the service (ASD) combinations of ASCE 7-16 §2.4.1' + (P.comb.length > 2 ? ', with 0.7E' : '') + ', against P<sub>a</sub>, T<sub>a</sub>, H<sub>a</sub>'}.`],
+    ['Only the active design basis', 'is computed.'],
+    ['Shaded:', 'the combination that governs compression, uplift or lateral (D/C largest);'], ['Bold:', 'the largest pile load of each combination.'],
+    ['P per pile', "= V/N + M·x'/I (Pile Step 1, 1.3);"], ['H per pile', `= H/N, the same on every pile${P.passive ? ', H net of the passive credit' : ''}.`]]];
 }
 function rwptGroupSteps(r) {
   const P = r.pile, g = P.g, F = (v, d = 2) => (isFinite(v) ? (+v).toFixed(d) : '—'), R = P.rows;
@@ -5561,7 +5574,10 @@ function renderPiles(r) {
   h += `<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Pile Step 1 — Pile Group (per ft of wall)</span><span class="card-ref">rigid cap · identical vertical piles · shared/pile-group.js</span></div><div class="card-body">
     <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Row</th><th>x from toe (ft)</th><th>s along wall (ft)</th><th>n = 1/s (/ft)</th><th>x' = x − x̄ (ft)</th><th>n·x'² (ft²/ft)</th></tr></thead><tbody>${rowsT}</tbody></table></div>`
     + rwptGroupSteps(r)
-    + `<div class="note">${A ? 'AASHTO LRFD 10th Ed.: factored loads per limit state; resistances φ<sub>c</sub>R<sub>n</sub>, φ<sub>up</sub>R<sub>n,up</sub> (Art. 10.5.5.2.3), H<sub>r</sub> as entered; Extreme Event φ = 1.0, uplift 0.80 (Art. 10.5.5.3.3).' : 'ACI 318-19 / IBC 2018: service (ASD) loads, ASCE 7-16 §2.4.1, against the allowable capacities (IBC 2018 §1810.3.3.1, §1810.3.3.2). The soil under the cap carries no vertical load (§1810.3.11).'} Each pile takes H/N of the horizontal load.${P.passive ? ' Passive in front of the toe credited: ' + F(P.Hpass, 3) + ' kip/ft.' : ' No passive or base friction credited.'}</div></div></div>`;
+    + `<div class="note">${rwNL(A ? 'AASHTO LRFD 10th Ed.: factored loads per limit state.' : 'ACI 318-19 / IBC 2018: service (ASD) loads, ASCE 7-16 §2.4.1:', [   // RWNL (2026-11-08)
+        ...(A ? [['Resistances:', 'φ<sub>c</sub>R<sub>n</sub>, φ<sub>up</sub>R<sub>n,up</sub> (Art. 10.5.5.2.3), H<sub>r</sub> as entered;'], ['Extreme Event:', 'φ = 1.0, uplift 0.80 (Art. 10.5.5.3.3).']]
+            : [['Against', 'the allowable capacities (IBC 2018 §1810.3.3.1, §1810.3.3.2).'], ['Soil under the cap:', 'carries no vertical load (§1810.3.11).']]),
+        ['Horizontal load:', 'each pile takes H/N of the horizontal load.'], P.passive ? ['Passive', 'in front of the toe credited: ' + F(P.Hpass, 3) + ' kip/ft.'] : 'No passive or base friction credited.'])}</div></div></div>`;
   const cr = rwptCombRows(r);   // RWPT2: every combination, P per row, P_max / P_min, h, D/C; governing rows highlighted
   const gc = P.govC, x0 = gc.L.rows[gc.L.iMax];
   h += `<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Pile Step 2 — Pile Reactions and Checks</span><span class="card-ref">${A ? 'AASHTO LRFD 10th Ed. Sec. 10.7' : 'IBC 2018 §1810; ASCE 7-16 §2.4.1'}</span></div><div class="card-body">
@@ -5570,7 +5586,9 @@ function renderPiles(r) {
     + eq('2.1 Governing pile compression (' + gc.label + ')', `\\begin{aligned} M &= V(x_R - \\bar{x}) = ${F(gc.V, 3)}(${F(gc.xR, 3)} - ${F(g.xbar, 3)}) = ${F(gc.M, 3)}\\ \\text{kip-ft/ft} \\\\ P &= \\frac{V}{N} + \\frac{M\\,x'}{I} = \\frac{${F(gc.V, 3)}}{${F(g.N, 4)}} + \\frac{(${F(gc.M, 3)})(${F(x0.xp, 3)})}{${F(g.I, 4)}} = \\boxed{${F(x0.P, 2)}\\ \\text{kip}} \\end{aligned}`, 'row ' + (gc.L.iMax + 1))   // RWPT2: two lines (was one, too wide)
     + eqCheck('2.2 Compression', `P_{max} = ${F(gc.L.Pmax, 2)} \\le ${gc.cap.cs} = ${F(gc.cap.c, 2)}\\ \\text{kip} \\quad (D/C = ${F(gc.dcC, 3)})`, r.checks.pileComp.ok, r.checks.pileComp.ref)
     + eqCheck('2.3 Uplift', P.govT.L.Pmin < 0 ? `-P_{min} = ${F(-P.govT.L.Pmin, 2)} \\le ${P.govT.cap.ts} = ${F(P.govT.cap.t, 2)}\\ \\text{kip} \\quad \\text{(${P.govT.label.replace(/[^A-Za-z0-9 .+()]/g, '')})}` : `P_{min} = ${F(Math.min(...P.comb.map(c => c.L.Pmin)), 2)}\\ \\text{kip} \\ge 0\\ \\text{(no uplift)}`, r.checks.pileUplift.ok, r.checks.pileUplift.ref)
-    + (r.checks.pileCapT ? `<div class="alert warn" style="margin:4px 0 8px;">\u26a0 <b>Pile\u2013cap tension (not designed): FAIL.</b> T = ${F(-P.govT.L.Pmin, 2)} kip per pile (${P.govT.label}); embedment ${F(P.det.embed, 1)} in. The uplift needs a designed pile-to-cap tension connection: embedded bars, strands or dowels developed into the cap and the pile's own tension capacity (${r.checks.pileCapT.ref}). Design it outside this tool (Pile Designer) and keep the record with the calculation.</div>` : '')   // RW2M3
+    + (r.checks.pileCapT ? `<div class="alert warn" style="margin:4px 0 8px;">${rwNL('⚠ <b>Pile–cap tension (not designed): FAIL.</b>', [['Uplift:', `T = ${F(-P.govT.L.Pmin, 2)} kip per pile (${P.govT.label}); embedment ${F(P.det.embed, 1)} in.`],   /* RWNL (2026-11-08) */
+        ['Needed:', `the uplift needs a designed pile-to-cap tension connection: embedded bars, strands or dowels developed into the cap and the pile's own tension capacity (${r.checks.pileCapT.ref}).`]],
+        { act: ['Design it outside this tool (Pile Designer) and keep the record with the calculation.'] })}</div>` : '')   // RW2M3
     + eqCheck('2.4 Lateral', `h = \\frac{H}{N} = \\frac{${F(P.govH.H, 3)}}{${F(g.N, 4)}} = ${F(P.govH.L.rows[0].h, 2)} \\le ${P.govH.cap.hs} = ${F(P.govH.cap.h, 2)}\\ \\text{kip}`, r.checks.pileLat.ok, r.checks.pileLat.ref)
     + `<div class="note">Detailing: c-c spacing ${F(P.det.cc, 1)} in${P.det.ccMin ? ' (min. ' + F(P.det.ccMin, 1) + ' in)' : ''}; pile side to footing edge ${F(P.det.edge, 1)} in (min. ${F(P.det.edgeMin, 0)} in); embedment ${F(P.det.embed, 1)} in (min. ${F(P.det.embMin, 0)} in) — ${P.det.ref}.</div></div></div>`;
   // ── Pile Step 3: every pile check ──
@@ -6028,7 +6046,7 @@ function renderStabilitySoil(r) {
 
   // Warnings
   if (r.warnings.length)
-    h += r.warnings.map(w=>`<div class="alert warn">⚠ ${w}</div>`).join('');
+    h += r.warnings.map(w => rwWarnBox(w, r)).join('');   // RWNL
 
   el.innerHTML = h;
 }
@@ -7237,6 +7255,11 @@ function rwNL(lead, items, o) {
   const li = (items || []).filter(Boolean).map(x => '<li>' + (Array.isArray(x) ? '<b class="rwNLk">' + x[0] + '</b> ' + x[1] : x) + '</li>').join('');
   return '<div class="rwNL">' + (o.act || []).filter(Boolean).map(a => '<div class="rwNLa">' + a + '</div>').join('')
     + (lead ? '<div class="rwNLl">' + lead + '</div>' : '') + (li ? '<' + L + ' class="rwNLu">' + li + '</' + L + '>' : '') + '</div>';
+}
+/* RWNL: one warning box of the tabs; a long warning (window.RWNL_WARN, filled by calcAll) as its lead and list, marked rwWarn (the Report lists r.warnings in §8) */
+function rwWarnBox(w, r) {
+  const nl = window.RWNL_WARN && Object.prototype.hasOwnProperty.call(window.RWNL_WARN, w) ? window.RWNL_WARN[w] : null;
+  return nl ? `<div class="alert warn rwWarn">${rwNL('⚠ ' + nl[0], nl[1], { act: nl[2] })}</div>` : `<div class="alert warn">⚠ ${w}</div>`;
 }
 // ── Explanatory hints for option dropdowns (kept next to the input so nobody has to hunt) ──
 const HINTS = {   // RWNL (2026-11-08): each long hint as a bold lead (the option) and a list; every sentence kept, in order
@@ -10444,8 +10467,10 @@ function rw3Title(r, S) {
       + (X.omit.length ? ` Not in this combination's base resultant: ${X.omit.join(', ')}.` : '')
       + `<div class="c3d-sign">Check: Σγ·V of the arrows = ${f(X.V, 0)} lb/ft vs R = ${f(c.V, 0)} lb/ft ${okV ? '✓' : '✗'}; Σγ·M about the toe = ${f(X.M, 0)} vs R·x̄ = ${f(c.V * c.xR, 0)} lb·ft/ft ${okM ? '✓' : '✗'}.</div>`;
   }
-  else what = `${S.gov ? '<b>Governing</b> bearing combination: ' : ''}<b>${S.combo ? S.combo.name : ''}</b>: base reaction R and bearing pressure as the analysis computes them${S.combo && /Service/.test(S.combo.name) ? '' : ' (factored)'}; <b>load arrows: unfactored</b>, the load cases${S.F ? ' (choose Factored to see them × this combination\'s load factors)' : ''} (choose one in the list to see it alone).`;
-  return `<div>${what}</div><div class="c3d-sign">${unit} ${sign} Worked on the Stability tab (<a class="wkA" href="#" data-card="stabBrg">bearing</a>).</div>`;
+  else what = rwNL(`${S.gov ? '<b>Governing</b> bearing combination: ' : ''}<b>${S.combo ? S.combo.name : ''}</b>`, [   // RWNL (2026-11-08): a lead and a list
+    ['Base reaction R and bearing pressure:', `as the analysis computes them${S.combo && /Service/.test(S.combo.name) ? '' : ' (factored)'};`],
+    ['Load arrows: unfactored,', `the load cases${S.F ? ' (choose Factored to see them × this combination\'s load factors)' : ''} (choose one in the list to see it alone).`]]);
+  return `<div>${what}</div><div class="c3d-sign">${rwNL(unit, [['Arrows', sign.replace(/^Arrows /, '')], ['Worked', 'on the Stability tab (<a class="wkA" href="#" data-card="stabBrg">bearing</a>).']])}</div>`;
 }
 /* RWPL (2026-11-07): the 3D title on a pile-supported footing (pile combinations, pile reactions per row; no soil base reaction) */
 function rw3TitlePile(r, S, unit) {
@@ -10462,7 +10487,8 @@ function rw3TitlePile(r, S, unit) {
       + `<div class="c3d-sign">Check: Σγ·V of the arrows = ${f(X.V, 0)} lb/ft vs V = ${f(c.V, 0)} lb/ft ${okV ? '✓' : '✗'}; Σγ·M about the toe = ${f(X.M, 0)} vs V·x_R = ${f(c.V * c.xR, 0)} lb·ft/ft ${okM ? '✓' : '✗'}.</div>`;
   }
   else what = `${S.gov ? '<b>Governing</b> pile compression combination: ' : ''}${cmb}: pile reactions per row (kip per pile) as the pile analysis computes them${r.isAASHTO ? ' (factored)' : ' (service loads)'}; <b>load arrows: unfactored</b>, the load cases${S.F ? ' (choose Factored to see them × this combination\'s load factors)' : ' (no factor map for this combination: the arrows stay unfactored)'}.`;
-  return `<div>${what}</div><div class="c3d-sign">${unit} ${sign} Worked on the Piles tab (<a class="wkA" href="#" data-card="stabPile">pile reactions</a>).</div>`;
+  return `<div>${what}</div><div class="c3d-sign">${rwNL(unit, [['Arrows', sign.replace(/^Arrows /, '').replace(/ Pile reactions act .*$/, '')], ['Pile reactions', sign.replace(/^.* Pile reactions /, '')],   // RWNL (2026-11-08)
+    ['Worked', 'on the Piles tab (<a class="wkA" href="#" data-card="stabPile">pile reactions</a>).']])}</div>`;
 }
 // label sprite: fixed pixel size, faces the camera, never hidden by geometry or the section cut
 function rw3Label(g, txt, anchor, color) {
@@ -10994,6 +11020,12 @@ const rwrN = (x, d) => SharedSteps.n(x, d == null ? 2 : d);
 const rwrP = (x, d) => (typeof x === 'number' && x < 0) ? '(' + rwrN(x, d) + ')' : rwrN(x, d);   // a negative value in parentheses inside a substitution
 const rwrPlain = s => String(s == null ? '' : s).replace(/<sub>(.*?)<\/sub>/g, '_$1').replace(/<sup>(.*?)<\/sup>/g, '^$1').replace(/<[^>]+>/g, '')
   .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&nbsp;/g, ' ');
+/* RWNL (2026-11-08): a long Report note as note items: the action lines, the lead, then each list item as "• lead words text"
+   (the Report form of rwNL); o.html: the parts are HTML (rwrPlain); o.warn: every item a warning. */
+function rwrNL(lead, items, o) {
+  o = o || {}; const P = t => o.html ? rwrPlain(t) : t, n = t => o.warn ? { type: 'note', warn: true, text: P(t) } : { type: 'note', text: P(t) };
+  return [...(o.act || []).filter(Boolean).map(n), lead ? n(lead) : null, ...(items || []).filter(Boolean).map(x => n('• ' + (Array.isArray(x) ? x[0] + ' ' + x[1] : x)))].filter(Boolean);
+}
 const RWR_FC = "f^{\\prime}_{c}";
 const RWR_DEG = '^{\\circ}';
 /* a steps item; with more than one topic the steps are grouped (SharedSteps.group, one topic per list entry, in order) */
@@ -11192,7 +11224,7 @@ function rwrModel(r) {
         rwrS({ id: 'eumin', label: 'Factored eccentricity, minimum-vertical case', sym: 'e_{u}', eq: '\\frac{B}{2} \\minus \\bar{x}_{u}', sub: '\\frac{' + rwrN(r.B, 3) + '}{2} \\minus ' + rwrN(r.x_Ru_min, 4), value: r.e_u_min, unit: 'ft', d: 4 }),
         ...rwrTrap('min', r.SumVu_min, r.e_u_min, r.x_Ru_min, r.qu_toe_min, r.qu_heel_min, r.quf_front_min, r.quf_back_min, '\\sum V_{u}', ', minimum-vertical case')];
       subs.push(sub('Step 7 — Factored bearing for footing design', [rwrItem('st7', [{ title: 'U = 1.2D + 1.6H (+ 1.0E)', ref: 'ACI 318-19 §5.3', steps: st }, { title: 'U = 0.9D + 1.6H (footing design envelope)', ref: 'ACI 318-19 §5.3', steps: sm }]),
-        r.upS ? { type: 'note', text: 'Water uplift: these are the total factored base pressures (soil + water). For the heel and toe design the uplift U = ' + rwrN(r.F_uplift, 0) + ' lb/ft is split out of them (ACI 318-19 §5.3.8: γ_U = 1.6 toe, 0.9 heel); see Footing, Heel Step 1 and Toe Step 1.' } : null,   // RWUP (2026-11-07)
+        ...(r.upS ? rwrNL('Water uplift: these are the total factored base pressures (soil + water).', [['For the heel and toe design', 'the uplift U = ' + rwrN(r.F_uplift, 0) + ' lb/ft is split out of them (ACI 318-19 §5.3.8: γ_U = 1.6 toe, 0.9 heel); see Footing, Heel Step 1 and Toe Step 1.']]) : []),   // RWNL   // RWUP (2026-11-07)
         onTab('stabFactBrg')])); }
     secs.push({ title: 'Stability analysis (service, unfactored)', subs, key: 'stab' });
   } else {
@@ -11205,7 +11237,8 @@ function rwrModel(r) {
       { t: 'DCR ' + rwrN(Q.sliding_dcr, 2), cls: Q.sliding_ok ? 'ok' : 'ng', key: 'sa7a/sl' }, { t: 'e = ' + rwrN(Math.abs(Q.e_gov), 2) + ' ≤ ' + rwrN(Q.eLim, 2), cls: Q.ecc_ok ? 'ok' : 'ng', key: 'sa7a/ec' }, { t: rwrN(Q.q_gov / 1000, 2) + ' ≤ ' + rwrN(Q.q_R / 1000, 2) + ' ksf', cls: Q.bearing_ok ? 'ok' : 'ng', key: 'sa7a/br' }]); }   // RWE1
     lc.push(['Service I', 'all γ = 1.0', { t: '—', cls: 'na' }, { t: 'e = ' + rwrN(Math.abs(r.e), 2) + (Math.abs(r.e) <= r.B / 6 ? ' ≤ ' : ' > ') + 'B/6', cls: Math.abs(r.e) <= r.B / 6 ? 'ok' : 'ng' }, { t: rwrN(r.q_max / 1000, 2) + ' ≤ ' + rwrN(inp.qa / 1000, 2) + ' ksf', cls: r.bearing_ok ? 'ok' : 'ng' }]);
     subs.push(sub('Load combination summary', [{ type: 'table', wide: true, caption: 'AASHTO LRFD 10th Ed. Table 3.4.1-1: governing result per check', head: ['Limit state', 'Key factors', 'Sliding', 'Eccentricity', 'Bearing'], rows: lc },
-      { type: 'note', text: 'Concrete design is enveloped separately: Strength I vs Extreme Event II' + (r.stem_ee2_governs ? ' (Extreme Event II governs the stem)' : '') + (r.heel_md_governs ? '; MassDOT §3.3.2.2 governs the heel top steel' : '') + '. The Service I row is a status-bar check of the tool (e ≤ B/6, q_max ≤ q_a with the service values of the ACI-format stability, not worked on the AASHTO tab).' }]));
+      ...rwrNL('Concrete design is enveloped separately: Strength I vs Extreme Event II' + (r.stem_ee2_governs ? ' (Extreme Event II governs the stem)' : '') + (r.heel_md_governs ? '; MassDOT §3.3.2.2 governs the heel top steel' : '') + '.',   // RWNL
+        [['Service I row:', 'a status-bar check of the tool (e ≤ B/6, q_max ≤ q_a with the service values of the ACI-format stability, not worked on the AASHTO tab).']])]));
     { const st = [], ph = rwrN(inp.phi, 0) + RWR_DEG;
       if (A.ep_cond === 'atrest') st.push(rwrS({ id: 'K', label: 'At-rest coefficient (Jaky, OCR-corrected)', sym: 'K_{0}', eq: '(1 \\minus \\sin\\phi)\\,OCR^{\\sin\\phi}', sub: '(1 \\minus \\sin ' + ph + ')(' + rwrN(A.ocr, 1) + ')^{\\sin ' + ph + '}', value: r.Ka, unit: '', d: 4, ref: AA('Art. 3.11.5.2') }));
       else if (A.ep_method === 'coulomb') { st.push(rwrS({ id: 'K', label: 'Coulomb active coefficient', sym: 'K_{a}', eq: '\\frac{\\sin^{2}(\\theta + \\phi)}{\\Gamma\\,\\sin^{2}\\theta\\,\\sin(\\theta \\minus \\delta)}', sub: '\\phi = ' + ph + ',\\; \\delta = ' + rwrN(A.delta, 0) + RWR_DEG + ',\\; \\beta = ' + rwrN(inp.beta, 0) + RWR_DEG + ',\\; \\theta = ' + rwrN(90 - A.batter, 2) + RWR_DEG, value: r.Ka, unit: '', d: 4, ref: AA('Art. 3.11.5.3'),
@@ -11269,7 +11302,8 @@ function rwrModel(r) {
         rwrS({ id: 'br', label: 'Bearing, governing ' + nm(cB) + ' (V = ' + rwrN(Q.V_max, 0) + ' lb/ft); q_R = 0.8 q_n = ' + rwrN(Q.q_R, 0) + ' psf', sym: 'q', eq: a.onRock ? '' : '\\frac{V}{B \\minus 2e}', sub: a.onRock ? '' : '\\frac{' + rwrN(Q.V_max, 0) + '}{' + rwrN(cB.Be, 3) + '}', value: cB.q, unit: 'psf', d: 0, ok: ok('eeBearing'), ref: AA('Art. 11.5.8') })];
       CK.eeSliding = 'sa7a/sl'; CK.eeEcc = 'sa7a/ec'; CK.eeBearing = 'sa7a/br';
       subs.push(sub('Step 7a — Extreme Event I (seismic) stability, k_h = ' + rwrN(inp.kh, 3), [rwrItem('sa7a', [{ title: 'P_AE + 0.5P_IR (case 1) and max(0.5P_AE, P_A) + P_IR (case 2)', ref: AA('Art. 11.6.5.1'), steps: st }]),
-        { type: 'note', text: 'Case 1: H = ' + rwrN(Q.c1.H, 0) + ', DCR ' + rwrN(Q.c1.dcS, 3) + ', e = ' + rwrN(Q.c1.e, 3) + ' ft, q = ' + rwrN(Q.c1.q, 0) + ' psf. Case 2: H = ' + rwrN(Q.c2.H, 0) + ', DCR ' + rwrN(Q.c2.dcS, 3) + ', e = ' + rwrN(Q.c2.e, 3) + ' ft, q = ' + rwrN(Q.c2.q, 0) + ' psf. Vertical components of P_AE and P_A are neglected (conservative).' }, onTab('stabEE1')]));
+        ...rwrNL('Extreme Event I, the two cases:', [['Case 1:', 'H = ' + rwrN(Q.c1.H, 0) + ', DCR ' + rwrN(Q.c1.dcS, 3) + ', e = ' + rwrN(Q.c1.e, 3) + ' ft, q = ' + rwrN(Q.c1.q, 0) + ' psf.'],   // RWNL
+          ['Case 2:', 'H = ' + rwrN(Q.c2.H, 0) + ', DCR ' + rwrN(Q.c2.dcS, 3) + ', e = ' + rwrN(Q.c2.e, 3) + ' ft, q = ' + rwrN(Q.c2.q, 0) + ' psf.'], ['Vertical components', 'of P_AE and P_A are neglected (conservative).']]), onTab('stabEE1')]));
     }
     if (a.ct) {
       const c = a.ct, TLN = { tl23: 'TL-2 / TL-3', tl4: 'TL-4 (S3-MTL4)', tl5: 'TL-5 (CF-MTL5)', manual: 'manual' };
@@ -11326,7 +11360,8 @@ function rwrModel(r) {
       ['Stem', 'Heel', 'Toe'].forEach(x => { CK['crack' + x] = 'sa9/' + x.toLowerCase() + '.ok'; CK['minRf' + x] = 'sa9/' + x.toLowerCase() + '.mr'; });
       CK.crackStemT = 'sa9/stemT.ok';   // RW2L4
       subs.push(sub('Step 9 — Serviceability: crack control and minimum reinforcement', [rwrItem('sa9', T),
-        { type: 'note', text: 'n = ' + rwrN(sv.n_modular, 0) + ' (E_c = ' + rwrN(sv.Ec / 1000, 0) + ' ksi, Eq. 5.4.2.4-1). Service I stem moment: ' + (sv.serv_ko ? 'K_0 = ' + rwrN(sv.K_serv, 3) + ' for the earth term, K_a for the surcharge' : 'K_a') + '; heel: full downward load, no upward relief; toe: |M_u| / 1.5 (approximation of the tool). Heel and toe minimum reinforcement are status-bar checks without a card on the tab.' }, onTab('stabServ')])); }
+        ...rwrNL('n = ' + rwrN(sv.n_modular, 0) + ' (E_c = ' + rwrN(sv.Ec / 1000, 0) + ' ksi, Eq. 5.4.2.4-1).', [['Service I stem moment:', (sv.serv_ko ? 'K_0 = ' + rwrN(sv.K_serv, 3) + ' for the earth term, K_a for the surcharge' : 'K_a') + ';'],   // RWNL
+          ['Heel:', 'full downward load, no upward relief;'], ['Toe:', '|M_u| / 1.5 (approximation of the tool).'], ['Minimum reinforcement:', 'heel and toe minimum reinforcement are status-bar checks without a card on the tab.']]), onTab('stabServ')])); }
     { const sI = [rwrS({ id: 'V', label: 'Factored vertical load on the footing underside, Strength I maximum (total: water uplift added back, it acts on the same underside)', sym: 'V_{u}', eq: '\\eta(1.25\\,DC + 1.35\\,EV + \\gamma_{EH}\\,P_{a,V} + 1.75\\,LS_{v}' + (a.V_ES_v > 0 ? ' + 1.50\\,ES_{v}' : '') + (a.eta !== 1 ? ' + V_{col})' : ') + V_{col}'), sub: '', value: a.V_str_max_tot, unit: 'lb/ft', d: 0, ref: AA('Table 3.4.1-1') })];
       const eI = a.e_tot;   // RWETOT: the Strength I footing-design eccentricity returned by calcAll (with or without water uplift)
       sI.push(...rwrTrap('', a.V_str_max_tot, eI, a.x_R_tot, a.quA_toe, a.quA_heel, a.quA_front, a.quA_back, 'V_{u}'));
@@ -11334,7 +11369,7 @@ function rwrModel(r) {
         rwrS({ id: 'eIa', label: 'Eccentricity of the Strength Ia resultant (total vertical)', sym: 'e', eq: '\\frac{B}{2} \\minus \\bar{x}', sub: '', value: a.e_Ia, unit: 'ft', d: 3 })];
       sIa.push(...rwrTrap('Ia', a.V_str_min_tot, a.e_Ia, r.B / 2 - a.e_Ia, a.quIa_toe, a.quIa_heel, a.quIa_front, a.quIa_back, 'V_{u}', ', Strength Ia'));
       subs.push(sub('Factored bearing for footing design (Strength I / Ia, full width B)', [rwrItem('saf', [{ title: 'Strength I (maximum vertical)', ref: AA('Table 3.4.1-1'), steps: sI }, { title: 'Strength Ia (minimum vertical)', ref: AA('C11.5.6'), steps: sIa }]),
-        { type: 'note', text: 'Report only: the tab uses these values in the heel and toe cards without working them. The trapezoid across the full width B (not the Meyerhof width) is what the heel and toe design use; the envelope takes the case that governs each cantilever.' + '' }])); }
+        ...rwrNL('Report only: the tab uses these values in the heel and toe cards without working them.', [['Trapezoid:', 'the trapezoid across the full width B (not the Meyerhof width) is what the heel and toe design use;'], ['Envelope:', 'the envelope takes the case that governs each cantilever.']])])); }   // RWNL
     secs.push({ title: 'Stability (AASHTO LRFD limit states)', subs, key: 'stab' });
   }
   /* column / beam loads (both bases: the tool computes them the same way) and seismic detail (ACI) */
@@ -11610,7 +11645,8 @@ function rwrModel(r) {
         'Rankine earth pressure; surcharge over the heel and column live / snow loads are excluded from the resisting forces and included in the bearing check.',
         'b = 12 in design strip; no shear reinforcement (ACI 318-19 Table 22.5.5.1(c)).']).forEach(t => items.push({ type: 'note', text: t }));
     (r.warnings || []).forEach(w => items.push({ type: 'note', warn: true, text: 'Warning: ' + rwrPlain(w) }));
-    items.push({ type: 'note', text: 'Engineering note: generated by Retaining Wall Designer as a calculation aid only. All results must be independently reviewed by a licensed Professional Engineer before use in construction. Global slope stability (IBC §1807.2 / ASCE 7 §12.13.5), seismic earth pressure (Mononobe-Okabe), drainage design, and site-specific geotechnical conditions require separate evaluation.' });   // RWRX: the Export report's closing note
+    items.push(...rwrNL('Engineering note: generated by Retaining Wall Designer as a calculation aid only.', [['Review:', 'all results must be independently reviewed by a licensed Professional Engineer before use in construction.'],   // RWNL
+      ['Separate evaluation:', 'global slope stability (IBC §1807.2 / ASCE 7 §12.13.5), seismic earth pressure (Mononobe-Okabe), drainage design, and site-specific geotechnical conditions require separate evaluation.']]));   // RWRX: the Export report's closing note
     secs.push({ title: 'Assumptions and warnings', subs: [sub('Assumptions and warnings', items)] });
     secs.push({ title: 'References', subs: [sub('Codes and references cited', [{ type: 'table', head: ['Reference', 'Provisions used'], rows: RW_REFS[isA ? 'AASHTO' : 'ACI'].map(([x, y]) => [rwrPlain(x), rwrPlain(y)]) }])] });
   }
@@ -11625,8 +11661,8 @@ function rwrModel(r) {
       ...(isA ? [['Nominal compression R_n, φ_c', N(inp.fnd.Rn, 1) + ', ' + N(inp.fnd.phic, 2), 'kip, –'], ['Nominal uplift R_n,up, φ_up', N(inp.fnd.Rnup, 1) + ', ' + N(inp.fnd.phiup, 2), 'kip, –'], ['Factored lateral resistance H_r', rwrCell(inp.fnd.Hr, 1), 'kip']]
              : [['Allowable compression P_a', rwrCell(inp.fnd.Pa, 1), 'kip'], ['Allowable uplift T_a', rwrCell(inp.fnd.Ta, 1), 'kip'], ['Allowable lateral H_a', rwrCell(inp.fnd.Ha, 1), 'kip']]),
       ['Passive in front of the toe', P.passive ? 'credited against H: ' + N(P.Hpass, 3) + ' kip/ft' : 'not credited (no passive, no base friction)', '–']] },
-      { type: 'note', text: isA ? 'AASHTO LRFD 10th Ed.: rigid cap on vertical piles; factored loads per limit state; φ_c R_n, φ_up R_n,up (Art. 10.5.5.2.3); Extreme Event φ = 1.0, uplift φ = 0.80 (Art. 10.5.5.3.3); H_r as entered. Soil bearing, base sliding and overturning are not checked.'
-                                : 'IBC 2018 §1810: service (ASD) combinations of ASCE 7-16 §2.4.1 against the allowable capacities (§1810.3.3.1, §1810.3.3.2); the soil under the cap carries no vertical load (§1810.3.11). Soil bearing, base sliding and overturning are not checked.' }]));
+      ...(isA ? rwrNL('AASHTO LRFD 10th Ed.: rigid cap on vertical piles.', [['Loads:', 'factored loads per limit state;'], ['Resistances:', 'φ_c R_n, φ_up R_n,up (Art. 10.5.5.2.3); Extreme Event φ = 1.0, uplift φ = 0.80 (Art. 10.5.5.3.3); H_r as entered.'], ['Not checked:', 'soil bearing, base sliding and overturning.']])   // RWNL
+              : rwrNL('IBC 2018 §1810: service (ASD) combinations of ASCE 7-16 §2.4.1 against the allowable capacities (§1810.3.3.1, §1810.3.3.2).', [['Soil under the cap:', 'carries no vertical load (§1810.3.11).'], ['Not checked:', 'soil bearing, base sliding and overturning.']]))]));
     { let Bd = null; try { Bd = rwdwBuild(r); } catch (e) { Bd = null; }   // RWPT2: the pile layout plan of the Piles tab (Drawings sheet), to scale
       const pl = Bd && Bd.S ? Bd.S.find(x => x.id === 'piles') : null;
       if (pl && pl.iv) subs[subs.length - 1].items.push({ type: 'figure', svg: rwovView(Bd, pl.i0, pl.iv, '3.4in'), caption: 'Pile layout plan, from above, toe at the bottom, to scale with its scale bar — Piles tab[[tab:piles| ↗]] and Drawings tab, sheet ' + (Bd.S.indexOf(pl) + 1) + ' (' + pl.scale + ').' }); }
@@ -11651,7 +11687,7 @@ function rwrModel(r) {
       rwrS({ id: 'latdc', label: 'Lateral check', sym: '\\frac{h}{' + gh.cap.hs + '}', eq: '', sub: '\\frac{' + N(gh.L.rows[0].h, 2) + '}{' + N(gh.cap.h, 2) + '}', value: gh.dcH, unit: '', d: 3, ok: ok('pileLat') })];
     const d = P.det, dt = [['Center-to-center spacing (along the wall and row to row)', N(d.cc, 1) + ' in', d.ccMin ? '≥ ' + N(d.ccMin, 1) + ' in' : 'no minimum (group effects: §1810.2.5)'],
       ['Pile side to the footing edge (toe / heel)', N(d.edge, 1) + ' in', '≥ ' + N(d.edgeMin, 0) + ' in'], ['Embedment into the footing', N(d.embed, 1) + ' in', '≥ ' + N(d.embMin, 0) + ' in']];
-    subs.push(sub('Pile Step 2 — Pile reactions and checks', [{ type: 'table', wide: true, head, rows }, { type: 'note', text: rwrPlain(rwptCombNote(r)) }, rwrItem('pl2', [{ title: 'Governing pile loads', ref: isA ? AA('Sec. 10.7') : 'IBC 2018 §1810', steps: ck }]),
+    subs.push(sub('Pile Step 2 — Pile reactions and checks', [{ type: 'table', wide: true, head, rows }, ...rwrNL(...rwptCombNL(r), { html: true }), rwrItem('pl2', [{ title: 'Governing pile loads', ref: isA ? AA('Sec. 10.7') : 'IBC 2018 §1810', steps: ck }]),
       { type: 'table', head: ['Detailing', 'Provided', 'Required (' + d.ref + ')'], rows: dt }, onTab('stabPile')]));
     // RWPL (2026-11-07, pile schedule; display only): one row per pile row; values from Pile Step 2 (rwPileSchedule)
     const PS = rwPileSchedule(r);
@@ -11661,7 +11697,7 @@ function rwrModel(r) {
         cmb(q.c), cmb(q.t), PS.h ? N(PS.h.h, 2) + ' / ' + N(PS.h.cap, 2) + ' (' + PS.h.n + ')' : '–']);
       const cap = isA ? 'factored resistance' : 'allowable';
       subs.push(sub('Pile schedule', [{ type: 'table', wide: true, caption: 'Pile schedule (per pile row; loads per pile, kip)', head: ['Row', 'x from the toe (ft)', 'Spacing s (ft)', 'Piles per ft', PS.Lseg ? 'Piles in ' + N(PS.Lseg, 1) + ' ft' : 'Piles per segment', 'Pile', 'Embedment (in)', 'Compression P / ' + cap + ' (comb.)', 'Uplift T / ' + cap + ' (comb.)', 'Lateral h / ' + cap + ' (comb.)'], rows: prow },
-        { type: 'note', text: 'Combinations: ' + PS.combs.map(c => '(' + c.n + ') ' + c.label).join('; ') + '. For each row the combination with the largest load-to-capacity ratio is shown; the lateral load h = H/N is the same on every pile. Every value is worked in Pile Step 2 (above; on screen: Piles tab, Pile Step 2).' },
+        ...rwrNL('Combinations: ' + PS.combs.map(c => '(' + c.n + ') ' + c.label).join('; ') + '.', [['For each row', 'the combination with the largest load-to-capacity ratio is shown; the lateral load h = H/N is the same on every pile.'], ['Every value', 'is worked in Pile Step 2 (above; on screen: Piles tab, Pile Step 2).']]),   // RWNL
         { type: 'note', text: PS.Lseg ? 'Piles per segment: one joint segment of ' + N(PS.Lseg, 1) + ' ft (the collision input), the first pile s/2 from the joint, then every s (as drawn on the Drawings, sheet 5).' : 'The wall length is not in the model: piles per ft only; the Drawings (sheet 5) show a typical segment at a nominal length.' },
         { type: 'note', text: '[[tab:drawings|On screen: Drawings tab, sheet 5 (pile layout plan and pile schedule)]]' }]));
     }
@@ -11672,7 +11708,7 @@ function rwrModel(r) {
       subs.push(sub('Pile Step 3 — Pile checks', [{ type: 'table', wide: true, head: ['Check', 'Value', 'D/C', 'Basis', 'Status', 'Worked in'], rows: prow }, onTab('pileCk')])); }
     const iS = secs.findIndex(x => x.key === 'stab');
     secs.splice(iS + 1, 0, { title: 'Piles (pile-supported footing)', subs, key: 'pile' });   // RWPT: titled as the Piles tab (was 'Pile-supported footing')
-    if (iS >= 0) secs[iS].subs.unshift(sub('Pile-supported footing: soil checks not applicable', [{ type: 'note', text: 'The footing is on piles. The overturning, sliding, eccentricity and soil-bearing steps of this section are shown for information only and are not checks; the piles carry the wall (next section). The earth pressures and the factored loads of this section are used.' }]));
+    if (iS >= 0) secs[iS].subs.unshift(sub('Pile-supported footing: soil checks not applicable', rwrNL('The footing is on piles.', [['Information only:', 'the overturning, sliding, eccentricity and soil-bearing steps of this section are shown for information only and are not checks; the piles carry the wall (next section).'], ['Used:', 'the earth pressures and the factored loads of this section are used.']])));
   }
   /* ---------- 1. Design summary (in front) ---------- */
   {
@@ -11849,7 +11885,7 @@ function rwrTabNotes(r) {
     const notes = [], cards = {};
     t.content.querySelectorAll('.alert').forEach(e => {
       const c = e.closest('.card'), ct = c && c.querySelector('.card-title'), x = txt(e);
-      if (!x || warn.has(nrm(x.replace(/^[⚠ℹ✓]\s*/, '')))) return;
+      if (!x || e.classList.contains('rwWarn') || warn.has(nrm(x.replace(/^[⚠ℹ✓]\s*/, '')))) return;   // RWNL: rwWarn = an r.warnings box
       const w = e.classList.contains('warn') || e.classList.contains('fail');
       if (e.querySelector('.rwNL')) {   // RWNL (2026-11-08): a lead-and-list note prints as one Report note line per part
         rwrNLParts(e, txt).forEach((q, i) => notes.push({ type: 'note', warn: w, text: (i === 0 && ct ? txt(ct) + ': ' : '') + q })); return; }
@@ -12211,7 +12247,10 @@ const RWMAN_PARTS = [
     'Each sheet is 11 × 17 landscape at its plot scale with a title block from the Project tab. **Print sheet** / **Print all sheets** print through the browser (Tabloid, landscape, margins none, scale 100 %). **Download DXF** writes one AutoCAD R12 file with every sheet side by side, full size in inches, on named layers (RW-CONC, RW-REBAR, RW-DIMS, …).',
     'Bars, sizes, spacings and the loads are the tool’s results. Bar lengths that the model does not give (lap and hook tails, nominal extensions) are labelled as nominal on sheet 2. On piles the bottom mat is drawn at the footing cover with the pile heads projecting through it.' ] },
   { h: 'Rebar schedule tab' },
-  { p: 'One row per bar mark with bar size, spacing, A_s required and provided, ratio, ℓ_d (or ℓ_dh for hooked bars) and status, bar notes, the general detailing requirements of the mode and approximate quantities per foot of wall. The marks: S1 stem back-face verticals from the joint to mid-height plus the lap; S1D the hooked dowel into the footing, lapped with S1; S3 back-face verticals of the upper half; S2 horizontal temperature and shrinkage bars (both faces); S4 front-face verticals (AASHTO); F1 heel top bars; F2 toe bottom bars; F3 longitudinal footing bars (both faces); K1 shear-key bars when the key is reinforced ([[go:man:bars|bar layout part]]).' },
+  { p: 'One row per bar mark with bar size, spacing, A_s required and provided, ratio, ℓ_d (or ℓ_dh for hooked bars) and status, bar notes, the general detailing requirements of the mode and approximate quantities per foot of wall. The marks:' },   // RWNL (2026-11-08): the marks as a list (was one paragraph)
+  { ul: ['**S1** stem back-face verticals from the joint to mid-height plus the lap;', '**S1D** the hooked dowel into the footing, lapped with S1;', '**S3** back-face verticals of the upper half;',
+    '**S2** horizontal temperature and shrinkage bars (both faces);', '**S4** front-face verticals (AASHTO);', '**F1** heel top bars;', '**F2** toe bottom bars;', '**F3** longitudinal footing bars (both faces);',
+    '**K1** shear-key bars when the key is reinforced ([[go:man:bars|bar layout part]]).'] },
   { h: '3D model and analysis diagram' },
   { p: 'The [[go:tab:threed|3D model]] shows one load case or one combination at a time (the governing bearing or pile combination by default); in a combination view the arrows can be unfactored or factored, and the base reaction (or the pile reactions) is the combination’s. The [[go:tab:diagram|Analysis diagram]] shows the section with the service-load pressure diagrams to scale. Both are display only.' } ] },
 
@@ -12988,7 +13027,11 @@ function rwdwRender(r) {
     + '<button type="button" class="btn" id="rwdwPrint1" title="Print the sheet shown: one 11 x 17 in landscape page at its plot scale">Print sheet</button> '
     + '<button type="button" class="btn" id="rwdwPrintAll" title="Print every sheet: one 11 x 17 in landscape page per sheet, each at its plot scale">Print all sheets (' + B.S.length + ')</button></div>'
     + '<div class="note rwdwNote">' + esc(SharedDxf.PRINT_NOTE) + '</div>'
-    + '<div class="note rwdwNote">One DXF file (AutoCAD R12, model space, full size in inches): each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side. Layers RW-CONC, RW-JOINT, RW-HIDDEN, RW-REBAR, RW-REBAR-TEXT, RW-LEADER, RW-DIMS, RW-TEXT, RW-SOIL, RW-GRADE, RW-WATER, RW-SURCHARGE, RW-LOAD, RW-LOAD-TEXT, RW-TABLE, RW-TBLK, RW-BRDR. Title block from the Project tab (Project name, Project number, Engineer of record as "Calculated by", Date, Checked by, Checked date; a blank field prints "-"). Geometry, bars and loads as computed; lengths the model does not give are nominal and labelled (sheet 2).</div>'
+    + '<div class="note rwdwNote">' + rwNL('One DXF file (AutoCAD R12, model space, full size in inches):', [   // RWNL (2026-11-08)
+      ['Sheets:', 'each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side.'],
+      ['Layers', 'RW-CONC, RW-JOINT, RW-HIDDEN, RW-REBAR, RW-REBAR-TEXT, RW-LEADER, RW-DIMS, RW-TEXT, RW-SOIL, RW-GRADE, RW-WATER, RW-SURCHARGE, RW-LOAD, RW-LOAD-TEXT, RW-TABLE, RW-TBLK, RW-BRDR.'],
+      ['Title block', 'from the Project tab (Project name, Project number, Engineer of record as "Calculated by", Date, Checked by, Checked date; a blank field prints "-").'],
+      ['Values:', 'geometry, bars and loads as computed; lengths the model does not give are nominal and labelled (sheet 2).']]) + '</div>'
     + '<div class="rwdwHead"><b>' + (B.S.indexOf(cur) + 1) + '. ' + esc(cur.title) + '</b> · scale ' + esc(scTxt(cur)) + (cur.over ? ' · <span style="color:var(--fail)">does not fit the sheet even at the smallest scale</span>' : '') + '</div>'
     + '<div class="rwdwBox"></div><div class="note">Wheel: zoom about the cursor · drag: pan · pinch · double-click: fit · + / − / Fit buttons.</div>'
     + '<div class="rwdwScroll"><table class="tbl rwdwIdx"><thead><tr><th>No.</th><th>Sheet</th><th>Scale</th><th>Worked in</th></tr></thead><tbody>' + B.S.map((s, j) =>
