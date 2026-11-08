@@ -3663,7 +3663,7 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
   - Validation 136/136. 0 console errors. Screenshots at 1440 and 390 px. Tests: see the PR.
 - **Other copies:** none.
 
-## 2026-11-08 — PR: spc-left-summary (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — SPLS: key results in a left summary column from 1200 px (display only, no result change)
+## 2026-11-08 — PR: spc-left-summary (PR #1184: https://github.com/mlococo88/All-Structural/pull/1184) — SPLS: key results in a left summary column from 1200 px (display only, no result change)
 
 ### SPLS. Results summary column on the left at 1200 px and wider   [display only]
 - **Request (engineer, 2026-11-07/08):** add the left summary panel to the tools with summary or result cards, the way it was done in Retaining Wall (RWDL #959, RWLB #984), Spread Footing (SFLB #988), Light Pole (LPLB #991, #994/#997) and Shear and Moment Diagrams (SMLS #1130).
