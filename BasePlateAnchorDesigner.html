@@ -83,6 +83,41 @@
     #outputPanel{flex:none;overflow:visible;}
     #bpadInTabs{top:0;}
   }
+  /* BPLS (2026-11-08, engineer: the check summary in a left panel, as Retaining Wall / Spread Footing / Light Pole / Shear and
+     Moment): from 1200 px a left column of compact check chips (name, D/C, PASS / FAIL); 240 px to 1499 px, 280 px from 1500 px;
+     « shrinks it to a 42 px strip. Below 1200 px it is not shown and nothing changes. Screen only (never printed). */
+  #bpadDashCol{display:none;}
+  @media screen and (min-width:1200px){
+    #bpadDashCol{display:flex;flex-direction:column;flex:0 0 280px;width:280px;min-width:0;overflow-y:auto;overscroll-behavior:contain;border-right:1px solid var(--color-border);background:var(--color-bg);font-family:var(--font-ui);font-size:9pt;}
+    #main>#inputPanel{flex-basis:calc((100% - 280px) * .33);max-width:calc((100% - 280px) * .33);}
+    #bpadDashHead{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:6px;padding:7px 8px 6px;background:var(--color-bg);border-bottom:2px solid var(--ink);}
+    #bpadDashTgl{margin:0;padding:1px 7px;font:9pt var(--font-ui);border:1px solid var(--color-border);background:var(--slate-100);border-radius:4px;cursor:pointer;}
+    #bpadDashTtl{margin:0;font-size:9pt;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#334155;}
+    #bpadDashCnt{margin-left:auto;font-size:8.5pt;font-weight:600;white-space:nowrap;}
+    #bpadDashCnt.fail{color:#c62828;} #bpadDashCnt.pass{color:var(--pass);}
+    #bpadDash{padding:6px 6px 24px;display:flex;flex-direction:column;gap:4px;}
+    #bpadDash .bpdMsg{font-style:italic;color:#555;padding:4px 2px;}
+    .bpdChip{display:grid;grid-template-columns:10px minmax(0,1fr) auto;column-gap:6px;align-items:center;width:100%;text-align:left;padding:4px 6px;border:1px solid var(--line);border-radius:4px;background:#fff;cursor:pointer;font:9pt var(--font-ui);color:var(--color-fg);}
+    .bpdChip:hover{background:#eef3f8;} .bpdChip:focus-visible{outline:2px solid var(--color-ring);outline-offset:1px;}
+    .bpdChip .dot{width:9px;height:9px;border-radius:50%;border:1px solid rgba(0,0,0,.3);}
+    .bpdChip.pass .dot{background:var(--pass);} .bpdChip.fail .dot{background:#c62828;} .bpdChip.na .dot{background:#9e9e9e;}
+    .bpdChip.fail{border-color:#c62828;background:#fdecea;}
+    .bpdChip .nm{font-weight:600;overflow-wrap:anywhere;}
+    .bpdChip .vl{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}
+    .bpdChip .vl b{display:block;font-size:8pt;}
+    .bpdChip.pass .vl b{color:var(--pass);} .bpdChip.fail .vl b{color:#c62828;} .bpdChip.na .vl b{color:#777;}
+    body.bpadDashColl #bpadDashCol{flex-basis:42px;width:42px;overflow:hidden;}
+    body.bpadDashColl #main>#inputPanel{flex-basis:calc((100% - 42px) * .33);max-width:calc((100% - 42px) * .33);}
+    body.bpadDashColl #bpadDash{display:none;}
+    body.bpadDashColl #bpadDashHead{flex-direction:column;border-bottom:none;padding:7px 4px;}
+    body.bpadDashColl #bpadDashTtl{writing-mode:vertical-rl;}
+    body.bpadDashColl #bpadDashCnt{margin:0;writing-mode:vertical-rl;}
+  }
+  @media screen and (min-width:1200px) and (max-width:1499.98px){
+    #bpadDashCol{flex-basis:240px;width:240px;}
+    #main>#inputPanel{flex-basis:calc((100% - 240px) * .33);max-width:calc((100% - 240px) * .33);}
+  }
+  @media print{ #bpadDashCol{display:none!important;} }
   h2.secTitle{font-size:12pt;margin:0;}
   h3{font-size:11pt;margin:10px 0 4px;}
   .sec{border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface);margin:10px 0;overflow:hidden;box-shadow:0 1px 2px rgba(15,23,42,.04);}
@@ -375,6 +410,10 @@
     </div>
   </div>
   <div id="main">
+    <aside id="bpadDashCol" class="noPrint" aria-label="Check summary"><!-- BPLS (2026-11-08): the checks as a left column on screens 1200 px and wider -->
+      <div id="bpadDashHead"><button type="button" id="bpadDashTgl" aria-controls="bpadDash" aria-expanded="true" title="Shrink the check summary">&laquo;</button><h2 id="bpadDashTtl">Checks</h2><span id="bpadDashCnt"></span></div>
+      <div id="bpadDash" role="list"></div>
+    </aside>
     <div id="inputPanel"><div id="prjPane" data-secid="prjPane"><!-- BPHD (2026-11-05): the Project input tab, moved here from the header; kept across rebuilds by buildInputPanel() -->
       <div class="sec"><div class="secHead"><h2 class="secTitle">Save and open</h2></div><div class="secBody" id="bpSaveCard"><!-- STDS (2026-11-05): the standard card (shared/projects-ui.js projectBar), first in the Project tab; was "Saved projects and files" after the title block -->
         <div class="prjRow">
@@ -6913,6 +6952,7 @@ function buildOutput(){
       "configuration would describe an anchorage the code does not permit, so no "+
       "results are shown until it is corrected.";
     pg.appendChild(b);
+    bpDashRender(true);   /* BPLS */
     return;
   }
   CC=computeAll();
@@ -6934,7 +6974,51 @@ function buildOutput(){
     case "tabManual": buildManualTab(pg); break;
   }
   if(window.katex) renderAllTex(pg);
+  bpDashRender(false);   /* BPLS */
 }
+/* BPLS (2026-11-08): the left check-summary column (screen 1200 px and wider). The chips are the Summary tab's checks
+   (allChecks(), the same D/C and status as its chips); a click opens and scrolls to the card that works the value, as the
+   Summary chips do (bpadCardFor / bpadGoto, D11). « / » shrinks it to a strip; the choice is kept per browser under
+   bpad_dashCollapsed_v1 ('1' = shrunk), which is not part of the project or the autosave. */
+const BPLS={key:"bpad_dashCollapsed_v1",cc:null,checks:null};
+function bpDashColl(v,save){
+  document.body.classList.toggle("bpadDashColl",!!v);
+  const t=document.getElementById("bpadDashTgl");
+  if(t){ t.innerHTML=v?"&raquo;":"&laquo;"; t.setAttribute("aria-expanded",v?"false":"true"); t.title=v?"Show the check summary":"Shrink the check summary"; }
+  if(save){ try{ localStorage.setItem(BPLS.key,v?"1":"0"); }catch(e){} }
+}
+function bpDashRender(blocked){
+  const host=document.getElementById("bpadDash"), cnt=document.getElementById("bpadDashCnt");
+  if(!host||!cnt) return;
+  host.innerHTML=""; cnt.textContent=""; cnt.className="";
+  if(blocked){ host.appendChild(el("div","bpdMsg","No results: the output is withheld. See the message on the output tab.")); return; }
+  let checks;
+  try{ if(BPLS.cc!==CC){ BPLS.checks=allChecks(); BPLS.cc=CC; } checks=BPLS.checks||[]; }catch(e){ checks=null; }
+  if(!checks||!checks.length){ host.appendChild(el("div","bpdMsg","No results yet.")); return; }
+  let worst=0, nFail=0;
+  checks.forEach(c=>{
+    const st=statusOf(c.dcr,c.na);
+    if(st==="fail") nFail++;
+    const v=isNaN(c.dcr)?Infinity:c.dcr; if(!c.na&&v>worst) worst=v;
+    const b=el("button","bpdChip "+st); b.type="button"; b.setAttribute("role","listitem");
+    b.title=c.label+" ["+c.ref+"] — governs: "+(c.combo||"—")+". Opens the card where it is worked.";
+    b.appendChild(el("span","dot"));
+    b.appendChild(el("span","nm",c.label));
+    const vl=el("span","vl",c.na?"\u2014":fmtDCR(c.dcr)); vl.appendChild(el("b",null,st==="na"?"N/A":st==="fail"?"FAIL":"PASS"));
+    b.appendChild(vl);
+    b.addEventListener("click",()=>{ const cd=bpadCardFor(c.label); if(cd) bpadGoto(c.tab,cd,bpadComboIndex(c.combo)); else { S.ui.tab=c.tab; autosave(); buildTabs(); } });   /* as the Summary chips */
+    host.appendChild(b);
+  });
+  cnt.textContent=nFail? (nFail+" FAIL") : ("max "+fmtDCR(worst));
+  cnt.className=nFail?"fail":"pass";
+  cnt.title="Maximum D/C = "+fmtDCR(worst)+(nFail? "; "+nFail+" check"+(nFail===1?"":"s")+" fail" : "; all checks pass");
+}
+(function(){
+  let v=false; try{ v=localStorage.getItem(BPLS.key)==="1"; }catch(e){}
+  const go=()=>{ bpDashColl(v,false);
+    const t=document.getElementById("bpadDashTgl"); if(t) t.addEventListener("click",()=>bpDashColl(!document.body.classList.contains("bpadDashColl"),true)); };
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",go); else go();
+})();
 function renderAllTex(){ /* eqBlock renders inline already */ }
 /* RPT-4 (2026-11-01): the Report tab is the shared viewer (bprReportTab, below). Of the RPT-3 viewer (buildReportTab, bpCrKey,
    bpCrSizeBar, bpCrJump, bpCrSpyOn/Off, BP_RPT_CLOSED and its resize listener; removed 2026-11-01, no longer called) only these stay:

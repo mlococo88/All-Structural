@@ -77,6 +77,39 @@ body{margin:0;background:var(--paper);color:var(--ink);
   #wrap{grid-template-columns:minmax(0,1fr);}
   div.tw,.pnl>.bd{overflow-x:auto;}
 }
+/* ARDC (2026-11-08, engineer: the left summary panel as in Retaining Wall / Spread Footing / Light Pole / Shear and Moment):
+   from 1200 px a column of compact check chips left of the inputs (240 px to 1499 px, 280 px from 1500 px); « shrinks it to a
+   42 px strip (stoneArchLR.dashCollapsed.v1). Below 1200 px it is not shown and nothing changes. Screen only. */
+#arDashCol{display:none;}
+@media screen and (min-width:1200px){
+  #wrap{grid-template-columns:280px minmax(360px,0.9fr) 2.6fr;}
+  body.arDashColl #wrap{grid-template-columns:42px minmax(360px,0.9fr) 2.6fr;}
+  #arDashCol{display:block;height:100%;min-height:0;overflow-y:auto;overflow-x:hidden;background:var(--sheet);
+    border:1px solid var(--line);padding:6px 7px;}
+}
+@media screen and (min-width:1200px) and (max-width:1499.98px){
+  #wrap{grid-template-columns:240px minmax(360px,0.9fr) 2.6fr;}
+}
+#arDashHead{display:flex;align-items:center;gap:6px;margin-bottom:5px;}
+#arDashHead h2{font-size:1rem;margin:0;flex:1;}
+#arDashTgl{padding:0 6px;font-size:.95rem;line-height:1.3;}
+#arDashCnt{font-size:.8rem;}
+#arDashCnt .badge{font-size:.75rem;padding:0 5px;}
+#arDashSub{font-size:.82rem;color:var(--soft);margin:0 0 5px;}
+.adChip{display:grid;grid-template-columns:1fr auto;gap:0 6px;width:100%;text-align:left;margin:0 0 4px;padding:3px 6px;
+  border:1px solid var(--na);background:var(--na-bg);color:var(--ink);font-size:.86rem;line-height:1.25;cursor:pointer;}
+.adChip:hover{background:var(--sheet);color:var(--ink);}
+.adChip .n{font-weight:700;grid-column:1/3;}
+.adChip .v{font-family:"Courier New",Courier,monospace;font-size:.82rem;}
+.adChip .s{font-weight:700;font-size:.78rem;align-self:end;}
+.adChip.ad-pass{border-color:var(--ok);background:var(--ok-bg);} .adChip.ad-pass .s{color:var(--ok);}
+.adChip.ad-fail{border-color:var(--bad);background:var(--bad-bg);} .adChip.ad-fail .s{color:var(--bad);}
+.adChip.ad-warn{border-color:var(--warn);background:var(--warn-bg);} .adChip.ad-warn .s{color:var(--warn);}
+body.arDashColl #arDashCol{padding:6px 3px;}
+body.arDashColl #arDashCol h2,body.arDashColl #arDashSub,body.arDashColl #arDash{display:none;}
+body.arDashColl #arDashHead{flex-direction:column;}
+body.arDashColl #arDashCnt{writing-mode:vertical-rl;}
+@media print{#arDashCol{display:none !important;}}
 @media(max-width:700px){
   #tblk{min-width:0;flex:1 1 100%;grid-template-columns:repeat(2,minmax(0,1fr));}
   #appTitle{min-width:0;}
@@ -499,6 +532,11 @@ a.wkA{color:var(--blue);text-decoration:none;border-bottom:1px dotted var(--blue
 </div></div>
 
 <div id="wrap">
+<aside id="arDashCol" class="noprint" aria-label="Rating summary"><!-- ARDC (2026-11-08): the check chips as a left column on screens 1200 px and wider -->
+  <div id="arDashHead"><button type="button" id="arDashTgl" aria-controls="arDash" aria-expanded="true" title="Hide the summary column">&laquo;</button><h2>Rating summary</h2><span id="arDashCnt"></span></div>
+  <div id="arDashSub"></div>
+  <div id="arDash"></div>
+</aside>
 <!-- ================= INPUT PANEL ================= -->
 <div id="inPanel"></div>
 <!-- ================= OUTPUT PANEL ================= -->
@@ -12458,7 +12496,7 @@ function render(){
   try{p=readP();}catch(e){
     archInTabMarks(e.message);
     $("panes").innerHTML=msg("err","Input error",esc(e.message));
-    $("tabs").innerHTML="";if($("focusBar"))$("focusBar").innerHTML="";return;
+    $("tabs").innerHTML="";if($("focusBar"))$("focusBar").innerHTML="";archDash(null,"No results: input error. See the output panel.");return;
   }
   errText="";
   secResCache=null; secResKey=null;
@@ -12470,6 +12508,7 @@ function render(){
     $("panes").innerHTML=msg("err","The model cannot be built",
       esc(e.message)+"<br><br>The calculation is stopped rather than returning a number that looks legitimate. "+
       "Correct the input above.");
+    archDash(null,"No results: the model cannot be built. See the output panel.");
     return;
   }
   archInTabMarks("");
@@ -12577,11 +12616,54 @@ function render(){
       if(t){UI.setClp(t.id,false);t.classList.remove("clp");t.scrollIntoView({behavior:"smooth",block:"start"});}},60);
   });
   postRender(p);
+  archDash(p);   /* ARDC */
   if(activeTab==="rpt")archRenderReport(p);   /* ARPT */
   if(window.katex&&window.renderMathInElement)try{}catch(e){}
 }
 /* D11 links: open the tab, expand the panel, scroll to it (or to the named heading inside it) and flash it.
    (The retired print report's copies were rewritten to "see §n.k"; ARX 2026-11-03.) */
+/* ARDC (2026-11-08, engineer: the left summary panel): the check chips, from the same values as the Summary Dashboard (results,
+   lane loading, mesh convergence, sliding, mechanism, MS18 and the dashboard check counts). Display only. A chip opens the tab
+   and scrolls to the card that works the value (archGoto). Collapse state: stoneArchLR.dashCollapsed.v1 ('1' = strip). */
+const ARDC_KEY="stoneArchLR.dashCollapsed.v1";
+function archDash(p,msgTxt){
+  const host=$("arDash"); if(!host)return;
+  const it=[];
+  if(!msgTxt&&M&&results.length){
+    const gv=results.reduce((a,b)=>a.rf<b.rf?a:b);
+    for(const r of results){const v=ARCH.ALL_VEHICLES.find(x=>x.id===r.id); if(!v)continue;
+      const ok=r.rf>=1;
+      it.push({n:v.name+(r.id===gv.id?" (governs)":""),v:"RF "+nfx(r.rf,3)+" · "+nfx(r.tons,1)+" t"+(v.eRef?" · E"+(r.rf*v.eRef).toFixed(0):"")+" · "+CALC.secTag(M,r.sec).replace(/-/g,"\u2011"),
+        st:ok?"pass":"fail",s:ok?"PASS":"FAIL",tab:"rate",card:"veh_"+r.id});}
+    if(archLane&&archLane.rows)for(const row of archLane.rows){const lr=row.best.res.rf;
+      it.push({n:row.name+" lane loading",v:"RF "+nfx(lr,3),st:lr>=1?"pass":"fail",s:lr>=1?"PASS":"FAIL",tab:"rate",card:"rate_lane"});}
+    const rH=(p&&p.loadMode!=="rail")?results.find(q=>q.id==="HS20"):null;
+    if(rH&&isFinite(rH.rf))it.push({n:"MS18 (Items 64 / 66)",v:nfx(0.9*rH.tons,2)+" t · MS "+nfx(0.9*rH.tons/1.8,2),st:"na",s:"",tab:"sum",card:"o_ms18"});
+    if(archConv&&archConv.rows&&archConv.rows.length)
+      it.push({n:"Mesh convergence",v:"spread "+nfx(archConv.spread,1)+"% · "+archConv.meshes.join(", ")+" el",st:archConv.spread<=3?"pass":"warn",s:archConv.spread<=3?"OK":"REVIEW",tab:"rate",card:"rate_mcv"});
+    if(archSlide&&archSlide.worst){const dc=archSlide.worst.s.dc;
+      it.push({n:"Bed-joint sliding (advisory)",v:"D/C "+(isFinite(dc)?nfx(dc,3):"∞"),st:dc<=1?"pass":"fail",s:dc<=1?"OK":"NG",tab:"rate",card:"rate_slide"});}
+    if(archMech&&archMech.rows&&archMech.rows.length){const G=archMech.gov, lam=G.r.best?G.r.best.lam:Infinity, bad=archMech.dlRun||archMech.low.length;
+      it.push({n:"Collapse mechanism (advisory)",v:"λ "+(isFinite(lam)?nfx(lam,2):"∞")+" vs RF "+nfx(G.rf,3),st:bad?"warn":"pass",s:bad?"REVIEW":"OK",tab:"rate",card:"rate_mech"});}
+    const nb=checks.filter(c=>c.state==="bad").length, nw=checks.filter(c=>c.state==="wn").length;
+    it.push({n:"Other dashboard checks",v:nb+" FAIL · "+nw+" REVIEW",st:nb?"fail":(nw?"warn":"pass"),s:nb?"FAIL":(nw?"REVIEW":"OK"),tab:"sum",card:"o_dash"});
+  }
+  const nF=it.filter(x=>x.st==="fail").length, nR=it.filter(x=>x.st==="warn").length;
+  $("arDashCnt").innerHTML=msgTxt?"":(nF?badge("bad",nF+" FAIL"):badge("ok","no FAIL"))+(nR?" "+badge("wn",nR+" REVIEW"):"");
+  $("arDashSub").textContent=msgTxt?"":"Inventory level, Allowable Stress · click a line for its worked card";
+  host.innerHTML=msgTxt?`<div class="h">${esc(msgTxt)}</div>`:it.map(x=>
+    `<button type="button" class="adChip ad-${x.st}" data-tab="${x.tab}" data-card="${x.card}" title="Open the card that works this value"><span class="n">${esc(x.n)}</span><span class="v">${esc(x.v)}</span><span class="s">${x.s}</span></button>`).join("");
+  host.querySelectorAll(".adChip").forEach(b=>b.onclick=()=>archGoto(b.getAttribute("data-tab"),b.getAttribute("data-card")));
+}
+function archDashColl(v,save){
+  document.body.classList.toggle("arDashColl",!!v);
+  const t=$("arDashTgl"); if(t){t.innerHTML=v?"&raquo;":"&laquo;";t.setAttribute("aria-expanded",v?"false":"true");t.title=v?"Show the summary column":"Hide the summary column";}
+  if(save)try{localStorage.setItem(ARDC_KEY,v?"1":"0");}catch(e){}
+  if(typeof Plotly!=="undefined")setTimeout(()=>{document.querySelectorAll(".js-plotly-plot").forEach(g=>{try{Plotly.Plots.resize(g);}catch(e){}});},60);
+}
+(function(){let c=false;try{c=localStorage.getItem(ARDC_KEY)==="1";}catch(e){}
+  archDashColl(c,false);
+  const t=$("arDashTgl"); if(t)t.onclick=()=>archDashColl(!document.body.classList.contains("arDashColl"),true);})();
 function archGoto(tab,card,sub){
   if(!TABS.some(t=>t[0]===tab))return;
   activeTab=tab; render(); autosave();
