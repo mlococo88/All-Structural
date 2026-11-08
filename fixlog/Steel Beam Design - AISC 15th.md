@@ -2948,3 +2948,92 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
 - Default project, origin/main vs this branch, headless: the Report's rendered text (`.rp-doc` textContent) and the page text are identical.
 ### How verified
 - `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`; the headless comparison listed in the PR.
+
+## 2026-11-08 — PR: nl-sbeam (PR #1207: https://github.com/mlococo88/All-Structural/pull/1207) (SBNL-1: long notes as a bold lead and a list — input panel, Summary warnings, Load Derivation, Analysis, Section Properties, Vᵧ / Compression / Torsion / Concentrated Forces / Interaction, member-mode Serviceability; display only, no result change)
+
+### SBNL-1. Long notes split into a lead line and a list   [display only] [no result change]
+- **Request (engineer, 2026-11-07/08):** "There are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Approved for all apps. Part 1 of 2 (the Mₓ / composite, Schematic composite drawings, Validation, Batch, Sensitivity and ASCE 7 hand-off notes follow in SBNL-2).
+- **Rule used:** a note is long if it is over ~300 characters, has 3 or more sentences, or carries several facts in one paragraph. It becomes a one-line bold lead, then a list with bold lead words; an action item ("Input needed: …", "Thicken the web …") is its own warning-style line at the top. Every sentence, number, citation and link is kept, in the same order; new lead words carry no digits, so the digit sequence of every tab and of the Report is unchanged.
+- **New helper** (after `function el(`), anchor `/* SBNL (2026-11-08, engineer:`:
+  ```js
+  function sbNL(lead,items,o){o=o||{};const L=o.ol?'ol':'ul';
+    const li=(items||[]).filter(Boolean).map(x=>'<li>'+(Array.isArray(x)?'<b class="sbNLk">'+x[0]+'</b> '+x[1]:x)+'</li>').join('');
+    return (o.act||[]).filter(Boolean).map(a=>'<div class="sbNLa">'+a+'</div>').join('')+(lead?'<div class="sbNLl">'+lead+'</div>':'')+(li?'<'+L+' class="sbNLu">'+li+'</'+L+'>':'');}
+  const SB_NLW=new Map();
+  function sbWarnEl(n,cls){cls=cls||'warnBox';const f=SB_NLW.get(n);return f?el('div',cls+' sbNL',sbNL(f[0],f[1],f[2])):el('div',cls,n);}
+  ```
+  A note becomes `el('div','note sbNL',sbNL(lead,[[leadWords,text],…],{act:[…]}))` (`'hint sbNL'`, `'warnBox sbNL'`, `'errBox sbNL'`, `'okBox sbNL'` likewise). `null` items are skipped (conditional facts).
+- **Warnings whose string is read elsewhere** (`AN.warns`, `AN.bracingNotes`, `D.warns`, `C.torsBlocked`: the Summary list, the Excel export, hashes): the string is **byte-identical**; its display form is stored beside it with `SB_NLW.set(<the same string>,[lead,items,opts])` and drawn by `sbWarnEl(n)` (falls back to the old `el('div','warnBox',n)` when there is none). Render sites changed: every `AN.warns.forEach(…el('div','warnBox',n)…)`, `AN.bracingNotes.forEach(…)`, `D.warns.forEach(…)` and `if(C.torsBlocked)body.appendChild(el('div','errBox','Torsion: '+C.torsBlocked))` → `sbWarnEl(…)`.
+- **CSS** (after `.okBox{…}`), tool-scoped, colours inherited from the box; the action line uses the tool's warnBox colours; print keeps a list item on one page:
+  ```css
+  .sbNL .sbNLl{font-weight:700;margin:0 0 1px}
+  .sbNL .sbNLu{margin:2px 0 3px;padding-left:18px}
+  .sbNL .sbNLu>li{margin:1px 0}
+  .sbNL .sbNLa{font-weight:700;color:#7C4A03;background:#FEF6E7;border:1px solid #F0C36D;border-radius:4px;padding:2px 6px;margin:1px 0 4px}
+  .okBox.sbNL .sbNLu,.errBox.sbNL .sbNLu{font-weight:400}
+  @media print{.sbNL .sbNLu>li{break-inside:avoid}}
+  ```
+- **Report** (`sbrTab` walker, before `if(cl.contains('note')||cl.contains('hint')||…`): an `.sbNL` element prints as one Report note per part — action line, lead, then each item as "• lead words text"; the box prefix ("Warning: ", "Error: ", "OK: ") goes on the first part; a part in a warnBox / errBox, or an action line, keeps `warn:true`.
+  ```js
+  if(cl.contains('sbNL')){flush(c);
+    const pre=cl.contains('errBox')?'Error: ':cl.contains('warnBox')?'Warning: ':cl.contains('okBox')?'OK: ':'',w=cl.contains('warnBox')||cl.contains('errBox');let first=true;
+    Array.from(ch.querySelectorAll('.sbNLa,.sbNLl,.sbNLu>li')).forEach(p=>{const t=sbrText(p);if(!t)return;c.list.push({type:'note',warn:w||p.classList.contains('sbNLa'),text:(first?pre:'')+(p.tagName==='LI'?'• ':'')+t});first=false;});return;}
+  ```
+- **Notes changed** (anchor = the old opening text → new lead → item lead words). Exact before / after: the PR diff.
+  1. Input, Section & Material, property overrides: "Blank = database value" → "Property overrides:" → Blank / Slenderness ratios / Units.
+  2. Input, Tributary Load Generator: "Generated loads appear locked…" (lead) → Derivation / Model / Continuity effects.
+  3. Input, Applied Loads: "Signs: transverse loads positive DOWN" → "Load table conventions:" → Signs / Units / "All" (entire beam).
+  4. Input, Manual Member Demands (`secManualDemands`): "The model is planar, so axial force…" → "Enter here what the planar model cannot generate:" → Why / Styling / Second-order effects.
+  5. Input, Lateral Bracing (`secBracing`): "The engine picks the compression flange…" → "How bracing is applied:" → Compression flange / Inflection point / Calculated Cᵇ.
+  6. Input, Web Stiffeners (`secStiffeners`): "kᵥ = 5 + 5/(a/h)²" → "How the spacing is used:" → kᵥ / Single spacing / Tension field action.
+  7. Input, Torsion (`torsionInputs`): "Warping-free ("fork") supports…" → "End restraint against warping:" → Warping-free supports / Warping-fixed ends / The difference is large.
+  8. Summary, member mode (`buildSummaryTab`): "Member check mode." → Scope / No structural model was solved.
+  9. Summary, Entered Demands & Self-Weight: "Flexure and shear DCRs use Mᵤₓ + ΔMᵤₓ…" (lead) → Effect / If self-weight opposes.
+  10. Load Derivation 1 (`buildDeriveTab`): "One-way tributary model:" → Deck / Line load / Deck continuity.
+  11. Analysis Results diagrams (`buildAnalysisTab`): "Interactive: hover for values…" → "Interactive plots:" → Mouse / Legend / Grey dashed / Envelope band.
+  12. Section Properties (`buildSectionTab`): §F13.2 errBox → lead "The section is outside the §F13.2 proportioning limits." + action line "Thicken the web, …" + Effect; built-up "properties computed from the plates" (`<br>` lines → one item per property); "h clear is the clear web depth…" → Value / To model a built-up plate girder; HSS "Flat widths use the AISC convention…" → "HSS wall and flat widths:" → Flat widths / A500.
+  13. `sectionWarnings`, built-up stale properties (`AN.warns`, display form via `SB_NLW`): action line "Input needed: enter the properties listed below for the welded section." → lead "Built-up section: these properties were not entered and are still the values of the parent shape …:" → one item per property → Enter them / Computed from the plates where not entered.
+  14. `naBox` (every "— not evaluated." box: Mᵧ, Vᵧ, Compression, Torsion, J10 (HSS, no bearing length)): lead "<what> — not evaluated." → Why / Dashboard.
+  15. Compression (`buildCompTabCore`): channel errBox → lead + action line "Check the member in a program that covers §E4, or use an I-shape or HSS." + Why; "How AISC 360-16 handles slender compression elements." → Stress / Area / Q-factor method / Older calculations; okBox "Classified slender, but no area is removed." → Every element / Why / So; column curves "Each curve is φPₙ re-solved…" → "Reading the column curves:" → Curves / Dashed verticals / Diamonds / Star.
+  16. Compression, cross section (`xsecBlock`, live copy): "Drawn to scale from the resolved dimensions…" (lead) → Plot / the caller's note.
+  17. Compression, Axial Tension (`tensionSections`): "Design tensile strength φₜPₙ = …" (lead) → Not checked / Combined tension and flexure.
+  18. `D.warns` (display form via `SB_NLW`): "Axial TENSION (Pᵤ < 0) is entered for: …" → action line "Input needed: …" (only when Aₙ or U is blank) → Checked / Assumed / Limited / Not checked / Interaction / Stress sum; "Wind imported from the ASCE 7-16 hand-off…" → If this member is a component / Those pressures; "§H3.3(c) open-section torsion, buckling: …" → Check / Stresses / Worst / Basis.
+  19. `AN.bracingNotes` (display form via `SB_NLW`): "Negative moment exists … but no bottom-flange unbraced length is entered." → Default / Why.
+  20. Torsion (`buildTorsTab`): "Open-section torsion is not evaluated." → action line "Input needed: enable Open-section torsion (DG 9) …" + Why; the two "Open sections are extremely inefficient in torsion." boxes → For scale / If torque is unavoidable, and Why / If this check governs; "Checked at all N torsion stations…" → "Stations and flexural shear:" → Stations / Flexural shear; "Stresses are combined conservatively…" → "How the stresses are combined:" → Combination / Stations / Stresses checked.
+  21. Interaction / Torsion errBox (`'Torsion: '+C.torsBlocked`, display form via `SB_NLW`): "Torsion: torsion on an open section (I-shape or channel) is outside the scope of this tool." → Why / Instead.
+  22. Concentrated Forces (`j10More`): "J10.4 is checked at the compressive point loads…" → Supports / Restraint / Lᵇ; "J10.1 is checked where the concentrated force is tensile…" → Strength / Not taken / Web local yielding.
+  23. Interaction (`buildInterTab`): "Mᵣₓ/Mᶜₓ is taken as the governing major-axis flexural DCR…" → Why this is safe / HSS torsion; "The green boundary is Eq. H1-1a…" → "Reading the interaction diagram:" → Green boundary / Points / Horizontal axis / Eq. H3-6.
+  24. Vₓ, stiffeners (`stiffBlock`): "The stiffeners do not change the shear strength here." → Why / kᵥ.
+  25. Member-mode Serviceability (`buildMemDeflSection`): "Deflection — not evaluated." → action line "Input needed: enable the check in the Deflection Check section …" + Why / Dashboard; "This is a closed-form deflection…" → Load / Configuration.
+- **Not changed (decisions, pending engineer review):**
+  1. The User Manual's paragraphs (manual prose; a separate document-style tab) and its disclaimer.
+  2. Short notes (under ~200 characters) whose "3 sentences" come from abbreviations ("Eq.", "Ch.", "App."), e.g. the Vₓ "Shear per G2.1(b) …" line, the F13.2 worked line, the A500 / Section Properties header line, the Torsion "No Tᵤ was entered" box.
+  3. Notes in function copies that are no longer called (the last definition wins, see O4): left as they are.
+  4. The Mₓ / composite, Schematic composite drawings, Validation, Batch, Sensitivity and ASCE 7 hand-off notes: SBNL-2.
+- **Open item (not changed, §4/§9):** the Web Stiffeners hint keeps "Tension field action (§G2.2) is not used." although the TFA option (#1073) can now be ticked just above it; the wording should read "is not used unless the option above is ticked". Raised for the engineer; the text is kept as it was.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none.
+- **Check case:** default project, Interaction tab, card 2: before one 481-character paragraph; after the lead "Reading the interaction diagram:" and four bullets (Green boundary / Points / Horizontal axis / Eq. H3-6) with "P_r/P_c = 0.2", "Eq. H1-1a/b", "T_u > 0.2φT_n" unchanged. Report: the same lead and four "• " lines.
+- **How verified:** headless Chromium, origin/main vs the branch, pinned libraries, 12 states (default, two-span calculated Cᵇ, cantilever, member mode with tension, member mode channel with torsion, composite, composite member, open-section torsion, HSS, built-up girder with stiffeners and TFA, point load without bearing length, batch): `AN` identical (deep JSON compare); the digit sequence of the input panel, every output tab and the Report identical in all 12 states; 0 KaTeX errors; 0 console errors. Validation 41/41. Screenshots at 1440 and 390 px. Tests: check-syntax; steel-beam-builtup 11/11; phone-layout sbeam; project-library steelbeam ALL PASS; list-input sbeam: only note text differs from its recorded baseline (plus the minor-axis flange case label 10 → 13 already reported since L2, #1065).
+- **Other copies:** none.
+
+## 2026-11-08 — PR: nl-sbeam-2 (PR #1212: https://github.com/mlococo88/All-Structural/pull/1212) (SBNL-2: long notes as a bold lead and a list — Mₓ / composite, Schematic composite drawings, composite inputs, construction stage, Validation, Batch, Sensitivity, ASCE 7 hand-off; display only, no result change)
+
+### SBNL-2. Long notes split into a lead line and a list (part 2 of 2)   [display only] [no result change]
+- **Request:** as SBNL-1 (#1207). Same rule, same helpers (`sbNL`, `SB_NLW` / `sbWarnEl`, the `.sbNL` CSS and the `sbrTab` Report branch from SBNL-1); nothing new in the helpers.
+- **Notes changed** (anchor = the old opening text → new lead → item lead words). Exact before / after: the PR diff.
+  1. Validation (`buildValidTab`): "Two independent test families run live…" (lead) → items "(1) closed-form mechanics benchmarks…" / "(2) AISC Design Examples…"; "Anchored by the v16.0 examples above…" → action line "REVIEW: hand-check the routes not independently anchored before relying on them in production." → "Coverage of the published anchors:" → Anchored by the v16.0 examples above / Still not independently anchored / These; "A second commercial AISC 360-16 implementation…" (lead) → one item per route; "These are agreement checks against another program…" (lead) → Caution / Role / Composite case; "No published worked example for open-section torsion is embedded" → action line "REVIEW: verify against DG 9 by hand before relying on the result in production." → Why / These.
+  2. Batch Results (`buildBatchTab`): "Sorted worst first; …" → Colours / Hover / Dashed line; "→ Import loads that member…" → "Row buttons and units:" → → Import / The printer icon / Capacities; "Each row runs: …" → one item per check family; "Not checked in batch:" → one item per item not checked → Instead.
+  3. Mₓ, composite (`buildMxTab`): okBox "Composite action is enabled." → Positive moment / Negative-moment regions and the construction stage / Lateral-torsional buckling; warnBox "Composite scope." → Checked here / Serviceability tab / Not checked / Shear.
+  4. Mₓ, stud curve (`studCurveBlock`): "Every point is the §I3.2a plastic distribution…" (lead) → Stud count / At zero studs / If the beam is unbraced before the slab cures.
+  5. Mₓ, capacity envelope (`capEnvBlock`): "The green step is the available φMₙ…" → "Reading the capacity envelope:" → Green step / Dotted grey lines / Blue trace.
+  6. Mₓ, construction stage (`constructionStage`, live copy; `out.notes`, display form via `SB_NLW`, the note string read by the Excel export unchanged; render `cs.notes.forEach(…sbWarnEl(n,'note'))` in the live `buildConstrSections`): "The construction unbraced length defaults to the full span." → Not inherited / If the deck is attached as it is laid.
+  7. Schematic, composite elevation (`compElevBlock`): "Drawn to scale (equal x and y scales); drawing only." → Entered values / Studs / Not entered.
+  8. Schematic / Mₓ, composite cross section (`compXsecBlock`, live copy): "Drawn to scale … from the resolved geometry." → Slab width / Colours (not in geometry-only view) / Metal deck and Rib spacing (with a deck only).
+  9. Input, Composite Action: okBox "Inherited from the rest of the model — …" (its "•" lines joined by `<br>` → a real list, one item per inherited value); hint "Which loads act after the concrete cures?" → Ticked loads / Everything else / Default.
+  10. Summary, Sensitivity (`buildSensSection`): "Each input below is changed by ±10% on its own and the whole model is re-solved." → Engine / Held fixed; "±10% is a probe, not a code requirement." → Section properties / Where a row says the governing check changes.
+  11. ASCE 7-16 hand-off import (`Not in this hand-off:` box): action line "Apply C&C, drift and unbalanced loads by hand where this beam needs them." → Components and cladding / Snow drift and unbalanced snow / Sent.
+- **Not changed (decisions, pending engineer review):** as SBNL-1 (User Manual prose; short notes whose sentence count comes from abbreviations; uncalled function copies). Also the batch input hint "1. Download the template, 2. fill in one row per member, 3. upload it back." (already a numbered sequence, 156 characters), the Torsion "§H3.3 requires the torsional stresses to be added…" note (one sentence, one fact) and the Serviceability "The Total row adds the residual…" note (two sentences, 213 characters).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none.
+- **Check case:** composite project (W16X26, 30 ft, tributary 4 + 4 ft), Mₓ tab, Moment Capacity vs Stud Count: before one 554-character paragraph; after the lead "Every point is the §I3.2a plastic distribution re-solved at that stud count — it is the capacity, not a sketch." and three bullets (Stud count / At zero studs / If the beam is unbraced …), "about 1% below φFᵧZₓ" unchanged.
+- **How verified:** headless Chromium, origin/main vs the branch, the 12 states of SBNL-1: `AN` identical; the digit sequence of the input panel, every output tab and the full Report text (`SharedReport.text`) identical; 0 KaTeX errors, 0 console errors; Validation 41/41. Tests: check-syntax; steel-beam-builtup 11/11; phone-layout sbeam; project-library steelbeam ALL PASS; list-input sbeam: only note text differs from its recorded baseline (plus the minor-axis flange case label 10 → 13 already reported since L2, #1065).
+- **Other copies:** none.

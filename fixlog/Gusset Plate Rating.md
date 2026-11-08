@@ -3405,3 +3405,36 @@ From the code-compliance review of 2026-11-07 (LOW findings L3 to L7).
 - **Check case:** default project with Owner = RIDOT, Summary "Warnings (1)": before one 640-character line; after the bold lead "Owner RIDOT (LRFR Guidelines, Sept 2022):" and three bullets (φ 0.75, 0.80, 0.65; φ_c 1.00; φ_s 1.00 (M5)). `R.warnings[0]` is the same string, byte for byte.
 - **How verified:** headless Chromium, origin/main vs the branch, the 11 cases of GPNL-1: `R` identical; the digit sequence of every output tab, input pane, the status bar and the Report model identical. Warning text: 13 more models that raise all six changed warnings (RIDOT; Whitmore crossing; spliced chord with L2-L3 at 30° (L_mid stop warnings); dead load alone over capacity (19 warnings); custom hole outside the spread lines; custom pattern without a corner hole): `R.warnings` identical to main in every model. Validation 17 of 17. 0 console errors. `check-syntax`, `phone-layout --tool gusset`, `project-library --tool gusset` pass (the first run, with `warnNL` enumerable, failed its "results identical" checks; hence the non-enumerable property).
 - **Other copies:** none.
+
+## 2026-11-08 — PR: nl-gusset-panel (PR #1202: https://github.com/mlococo88/All-Structural/pull/1202) — GPLS: left rating summary panel at 1200 px and wider (display only, no result change)
+
+### GPLS. Rating summary column on the left at 1200 px and wider   [display only]
+- **Request (engineer, 2026-11-07/08):** add the left summary panel, as in Retaining Wall (RWDL #959, RWLB #984), Spread Footing (SFLB #988), Light Pole (LPLB #991, #994/#997) and Shear and Moment Diagrams (SMLS #1130).
+- **What changed (screen only):**
+  - At **1200 px and wider** a new left column `#gpDashCol`, left of the inputs sidebar (**240 px** from 1200 to 1499 px, **280 px** from 1500 px), titled "Rating summary". It holds one chip per line (expand button, name, value, status), in three groups:
+    - **Rating cases:** one chip per rating case, showing the governing RF (`R.gov`, as the status-bar chips). Status OK, or NG below 1.00; "incomplete" / ERROR when a check could not be computed. Expanded: the governing check.
+    - **Members and planes:** one chip per member or plane, showing the lowest RF over the rating cases. Each case's value comes from the same loop as the Summary table "Governing rating factor by member or plane". Expanded: the value and check for each case.
+    - **Advisory (not in the RF):** one chip per advisory check, showing its ratio or flag count (`advItems`, as the Summary "Advisory checks" card). Status ADV, amber when the ratio is over 1.00 or something is flagged.
+  - Chip colours follow the tool's RF classes (`rfCls`): green for 1.20 and up, amber for 1.00 to 1.20, red below 1.00 or on error. NG / error chips start expanded.
+  - **Click a chip (or Enter / Space):** opens the Checks tab card that works the value (`gotoCheck(id)`, the same as the status-bar chips) or the advisory card (as `[data-goadv]`), and scrolls it to the top (CLAUDE.md §6).
+  - « shrinks the column to a 42 px strip (vertical title and the "n NG" / "no NG" badge); » opens it again. The state is kept under the per-browser UI key **`gussetRating.dashCollapsed.v1`** ('1' = collapsed). It is not in the project, the autosave or the export.
+  - **Below 1200 px nothing changes**, including the tablet and phone layouts. The Summary tab and the status bar are unchanged; the column only repeats their values. Print prints the Report, which is unchanged (the column is `noprint` and hidden in print).
+  - An input error shows "No results: input error(s). See the Summary tab." in the column.
+- **Where (`Gusset Plate Rating.html`):**
+  - **CSS:** after `@media print { .gpNLu > li { break-inside: avoid; } }`, the block starting `/* GPLS (2026-11-08, engineer: the left summary panel` (`#gpDashCol`, `#gpDashHead`, `.gpCh…`, `@media screen and (min-width: 1200px)` and `(max-width: 1499.98px)`). It uses only the tool's colour variables.
+  - **HTML:** `<div class="app" id="app">` → after it, `<aside id="gpDashCol" class="noprint" aria-label="Rating summary">…</aside>` (toggle `#gpDashTgl`, title, count `#gpDashCnt`, list `#gpDash`).
+  - **JS:** before `/* ---------- rating matrix ---------- */`, the block `/* GPLS … */` with `GPDD`, `gpDashItems()`, `gpDashRender()`, `gpDashPlace()`, `gpDashColl()` and a start-up IIFE. Before / after in `recompute()`:
+    - Before: `  if (R.errors.length) { renderErrors(); return; }` / `  renderStatus(); updateAuto();`
+    - After: `  if (R.errors.length) { renderErrors(); gpDashRender(); return; }` / `  renderStatus(); gpDashRender(); updateAuto();`
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). The member/plane value is the minimum over the rating cases of the Summary table's values; nothing new is computed. **Saved data:** none changed; one new UI key, prefixed for this tool (§5).
+- **Check case:** default project at 1440 px, the column shows:
+  - Rating cases: LRFR Inventory HL-93 RF 1.17 OK, LRFR Operating 1.52, LFR Inventory HS20 1.16, LFR Operating 1.94.
+  - Members and planes: L2-U1 1.17, L2-U3 1.17, L2-U2 1.69, Chord 2.30, horizontal plane 1.41, partial planes 1.16 and 1.65.
+  - Advisory: free edge 0.74, eccentric groups —, SP1 0.69.
+  - Clicks land as follows: "LRFR Inventory, HL-93" → `chk-L2-U1-FS` at the top of the Checks tab; "L2-U2" → `chk-L2-U2-FS`; free-edge → `adv-edge`; SP1 → `adv-SP1`.
+- **How verified:**
+  - Headless Chromium, origin/main vs the branch, the 11 cases of GPNL-1: `R`, the digit sequence of every input pane, the status bar and the Report model identical.
+  - The rendered Report tab text differs in 3 cases only because the column narrows the page (the viewer lays out a different part in the time allowed). main at 1200 px shows the same three differences against main at 1440 px.
+  - Column width 240 px at 1280 and 1440 px, 280 px at 1600 px, 42 px collapsed (key saved '1'); `display: none` at 390 px, page width 390 (no side scroll).
+  - 0 console errors. `check-syntax`, `phone-layout --tool gusset`, `project-library --tool gusset` pass. Validation 17 of 17.
+- **Other copies:** none.

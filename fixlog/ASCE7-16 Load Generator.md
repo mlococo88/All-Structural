@@ -1486,3 +1486,110 @@ Basis: ASCE/SEI 7-16 Fig. 29.3-1 (Cases A, B, C; Case C table and the (1.8 − s
 - Default project, origin/main vs this branch, headless: the Report's rendered text (`.rp-doc` textContent) and the page text are identical.
 ### How verified
 - `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`; the headless comparison listed in the PR.
+
+## 2026-11-08 — PR: nl-asce7 (PR #1206: https://github.com/mlococo88/All-Structural/pull/1206) — A7NL-1: long notes as a bold lead and a list, part 1 (display only, no result change)
+
+### A7NL-1. Long notes split into a lead line and a list   [display only] [no result change]
+- **Request (engineer, 2026-11-07/08):** "split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long" (all apps). Reference: Spread Footing SFNL (#1167).
+- **Rule used:** a note is long if it is over about 300 characters, has 3 or more sentences, or carries several facts in one paragraph. It becomes a one-line bold lead, then a list with bold lead words. Action items ("Confirm …") go on their own line at the top, in the warning-note style, unless moving them would put a number ahead of earlier numbers. Every sentence, number, citation and link is kept, in the same order, so the digit sequence of the page and Report is unchanged.
+- **Helpers** (after `function note(`), anchor `/* A7NL (2026-11-08, engineer`:
+  ```js
+  function a7NL(lead,items,o){ o=o||{}; const L=o.ol?"ol":"ul";
+    const li=(items||[]).filter(Boolean).map(x=>"<li>"+(Array.isArray(x)?'<b class="a7NLk">'+x[0]+"</b> "+x[1]:x)+"</li>").join("");
+    return (o.act||[]).filter(Boolean).map(a=>'<div class="a7NLa">'+a+"</div>").join("")+(lead?'<div class="a7NLl">'+lead+"</div>":"")+(li?"<"+L+' class="a7NLu">'+li+"</"+L+">":""); }
+  function noteNL(host,lead,items,kind,o){ host.appendChild(el("div","note a7NL"+(kind?" "+kind:""),a7NL(lead,items,o))); }
+  const A7WNL=new Map();   // R.warn string -> [lead, items, o]: display form of a long warning
+  ```
+  A note `note(b,"A. B. C.",k)` becomes `noteNL(b,"A.",[["Lead:","b."],["Lead:","c."]],k)`.
+- **CSS** (after `.note b{…}`): `.a7NL .a7NLl` (bold lead), `.a7NL .a7NLl .a7NLn` (plain second half of a lead), `.a7NL .a7NLu` / `>li` (list), `.a7NL .a7NLa` (action line: `--warnbg`, left border #c69026, bold; inside `.note.w`/`.note.e` no own border), `.cap.a7NL .a7NLl` (not bold), and `@media print{.a7NL .a7NLu>li{break-inside:avoid}}`.
+- **Report:**
+  - `a7xWalk`: `if(n.classList.contains("a7NL")){ a7xNL(n,out); return; }` before the `.cap` branch. `a7xNL` pushes the action lines (warn), then the lead (a figure caption when it is a `.cap` right after a figure), then "• " + each item. Items inside `.note.w/.note.e/.warnbox` keep `warn`.
+  - `a7rNL(lead,items,o)` turns the Report model's own notes into note items: the lead, then "• lead words text".
+- **Warnings (`R.warn` strings byte-identical; Report Notes §"Warnings and assumptions" and Excel still read them):** `solve()` sets `A7WNL.set(msg,[lead,items,o])` right after the push, and `renderDash` Advisory Notices draws `noteNL` when the map has the string.
+  1. Anchor `if(enc.degenerate){ R.warn.push("Every opening area is zero.`: action "Confirm the opening areas were meant to be zero." / lead / Classification.
+  2. Anchor `780 CMR Table 12.2-1 Note 2 applies (system H).`: lead "… Note 2:" / Connections / Columns / K-braced frames / V and inverted-V braced frames / "This tool does not apply the factor of 2; carry it into the connection design." (kept last: moving it first would reorder the numbers).
+- **Notes changed** (anchor = old opening text → new lead → item lead words):
+  1. Dashboard Status Register: "This tool generates design loads, so there are no demand-to-capacity ratios." (+ plain "Each row reports whether the governing method:") → OK / Review / Blocked / N/A / Standing.
+  2. `a7WorkedIn`: more than 3 links → lead "Worked in:" and one link per line (3 or fewer unchanged). Report: one "• value: see §n.k" line each.
+  3. Enclosure "Every wall is tested in turn" → A_o / A_oi / A_gi / Basis.
+  4. Enclosure "ASCE 7-16 defines Enclosed and Partially Open in terms of each other" → Reading adopted / Enclosed / Partially Open / Why stated.
+  5. Enclosure "Sec. 26.2 places a site in a wind-borne debris region" → the two triggers / Wind speed used.
+  6. Enclosure "Manual hazard entry:" → action "Confirm that the site is on the Atlantic or Gulf of Mexico coast, or set the region by override." / lead / Effect.
+  7. Enclosure "Unprotected glazing in a wind-borne debris region." → Requirement / Applied here / Effect.
+  8. Enclosure "User override." → Computed / Applied / Recorded.
+  9. Enclosure "q_i is taken as q_h" → Permitted alternative / Applied here.
+  10. Enclosure "Every opening area entered is zero." → action "Confirm the schedule was meant to be blank." / Classification.
+  11. Design Basis Wall Schedule caption (moved from the `dtable` cap argument to its own `div.cap.a7NL`) → Eave wall / Gable end / Roof.
+  12. Velocity Pressure "Sec. 26.11.1 permits G = 0.85" → Assumed / Low-rise.
+  13. Velocity Pressure "Sec. 26.8.1 applicability." → action "Confirm the feature and decide." / Not met / Rule / Applied here; the other variant: "Conditions (1) to (3)" + the three conditions.
+  14. Velocity Pressure "K_zt is not a single number for the building." → Why / Windward wall / Everything else / Chapter 29 elements / Table below.
+  15. 3-D "Drag to orbit, scroll to zoom" → Colour / Windward wall / Every other surface.
+  16. Snow input hint "Fig. 7.4-1 (verify): the slippery-surface curve needs" → Surface / Warm roof / Otherwise.
+  17. Report "About this report" → Worked values / Links / Scope / Units; "Disclaimer" → Not a substitute / Scope / Outside its scope / Responsibility / Full statement.
+- **Decisions (pending engineer review):** Short notes (under about 250 characters) with three brief sentences, figure captions under about 250 characters, and Status Register table cells stay as they are. Parts 2 and 3 cover Snow, Walls, Roof, Seismic, Combinations and the User Manual.
+- **Formulas, factors, units, code references:** none changed. **Saved data / hand-offs:** none changed.
+- **Check case:** default project (Melrose, flat roof). The Advisory Notices show the 780 CMR warning as a lead plus 5 items. The Report Notes list prints the same string as before.
+- **How verified:**
+  - Headless origin/main vs branch, 13 cases:
+    - `R` is identical.
+    - The digit sequence of every output tab, input tab, manual part and the Report (`SharedReport.text`, html) is identical.
+    - 0 console errors.
+  - Tests:
+    - `check-syntax` passed.
+    - `phone-layout --tool asce7` passed.
+    - `project-library --tool asce7 --a HEAD` passed (against main only the reworded note text differs).
+    - `engine handoffs` passed.
+    - The Excel workbook builds.
+- **Other copies:** none.
+
+## 2026-11-08 — PR: nl-asce7-2 (PR #1213: https://github.com/mlococo88/All-Structural/pull/1213) — A7NL-2: long notes as a bold lead and a list, part 2 (display only, no result change)
+
+### A7NL-2. Snow, Walls, Roof, Seismic and Combinations notes as a lead and a list   [display only] [no result change]
+- **Request and rule:** as A7NL-1 (#1206), using the same helpers (`a7NL`, `noteNL`, `A7WNL`, `a7xNL`). Each `note(b,"A. B. C.",k)` becomes `noteNL(b,"A.",[["Lead:","b."],…],k[,{act:[…]}])`. Every sentence, number and citation is kept, in the same order.
+- **`plotBox`**, anchor `if(caption) host.appendChild(el("div","cap"`:
+  - Before: `el("div","cap",caption)`
+  - After: `el("div","cap"+(/^<div class="a7NL/.test(caption)?" a7NL":""),caption)`. A figure caption built with `a7NL` gets the class. In the Report, its lead is the figure caption (`a7xNL`) and its items follow as notes.
+- **Table captions** made with `a7NL` are no longer passed to `dtable` (which escapes them). They are appended after the table as `el("div","cap a7NL",a7NL(…))`: the Table 12.2-1 screening caption (`renderSeis`) and the hip-end planes caption (`renderRoof`).
+- **`ssReason`** (Sec. 11.4.8 Exception 2, `solve()`, anchor `A7NL: display form of that string`): the string is unchanged. `A7WNL.set(string,[lead,items])` is added after it. `renderSeis`, anchor `if(q.siteSpecific) q.ssReason.forEach`, draws `noteNL` when the map has the string.
+- **Notes changed** (anchor = old opening text → lead → item lead words; action lines first):
+  1. Snow "No drift locations have been entered." → action "Enter each such location on the Snow input tab." / Requirement / Not a finding.
+  2. Snow "Sec. 7.5: for continuous beam systems" → action "Apply the pattern in the member analysis." (was "…; apply it in the member analysis.") / Pattern / For a continuous beam / Not combined / Not carried / Exempt (gable, conditional) / Verify.
+  3. Walls, free roof "The selected roof type is a monoslope free roof canopy" → No walls / Roof pressures.
+  4. Walls, free roof "Sec. 27.1.5 sets a floor of 16 psf" → Open building / Lateral demand on the frame.
+  5. Walls figure caption "Figure. Wall pressures in the … direction" → Windward diagram / Leeward diagram / Side walls / Opposite direction.
+  6. Walls "Sec. 27.1.5 sets a floor on the MWFRS wind load" → Floor / Total force.
+  7. Walls roof term note: monoslope from the high side unchanged (short). Monoslope low eave → No relief. Gable / hip → (hip) Projected roof area / Net coefficient / No relief.
+  8. Walls "The minimum governs in at least one direction." → action "Scale the computed surface pressures … by n, or apply 16 psf … directly." / MWFRS only.
+  9. Walls "Interpretation applied:" → Wind normal to the ridge / Wind parallel to the ridge / Otherwise / Internal pressure / Manual.
+  10. Walls "Chapter 27 Part 1 requires four load cases" → Case 1 / Case 2 / Case 3 / Case 4 / This version / Exemption.
+  11. Roof "Wind acts normal to the roof surface. Dead and snow act vertically" → Added directly / Normal pressure / Vertical effect / Horizontal component.
+  12. Roof figure caption "Figure. Roof pressures in the … direction." → Normal to the surface / Colours / Scale / Windward slope or Bands (conditional).
+  13. Roof "Wind normal to the ridge with θ = …" → Between row groups / First / Then / Permitted (or Row group).
+  14. Roof "…, so the distance-band table applies." → h/L / Bands.
+  15. Roof hip-end caption "The hip-end planes face along the ridge" → action "Decision pending engineer review (common practice and the Commentary, verify)." / Coefficients / Side slopes.
+  16. Free roof "C_NW acts on the windward half" → At γ = 0° / At γ = 180° / Most common error.
+  17. Free roof "Wind along the ridge is a separate required case" → Bands / Cases A and B / γ = 270°.
+  18. Seismic Table 12.2-1 caption "NL = not limited, NP = not permitted." → Highlighted column / Screen only / Massachusetts.
+  19. Seismic "780 CMR amendment to Table 12.2-1, Note 2 (system H)." → Connections / Columns / K-braced frames / V and inverted-V braced frame beams / Not applied.
+  20. Seismic "Sec. 12.7.2: where the flat roof snow load exceeds 30 psf" → action "If the entered W already includes it, tick the box on the Seismic input tab." / Taken here.
+  21. Seismic "Sec. 12.8.4.1 requires the story shear" → Stiffness / Torsion / Amplification / Not performed here.
+  22. Seismic "Horizontal distribution and accidental torsion" → lead "Not performed:" / one item per excluded provision / Computed / Redundancy / ELF procedure.
+  23. Seismic Sec. 11.4.8 Exception 2 (`ssReason`) → C_s / Limit.
+  24. Combinations "Roof pressures below are net downward" → Lateral force / Floor live load L.
+  25. Combinations "Rain load R (Ch. 8) is not computed" → Combinations / Where rain governs.
+  26. Combinations "Scope decision." → Strength and ASD / Massachusetts / Allowable stress materials.
+  27. Combinations "Massachusetts amendment. 780 CMR 1605.1 adds" → Not used / Used instead / Deleted.
+- **Formulas, factors, units, code references:** none changed. **Saved data / hand-offs:** none changed.
+- **Check case:** default project. The Seismic tab "Not Performed" note shows 9 items. The Report §"Not Included in the Seismic Module" prints the lead and 9 "•" lines, with the same numbers in the same order.
+- **How verified:**
+  - Headless origin/main vs branch, 13 cases:
+    - `R` is identical.
+    - The digit sequence of every output tab, input tab, manual part and the Report (`SharedReport.text`, html) is identical.
+    - 0 console errors.
+  - Tests:
+    - `check-syntax` passed.
+    - `project-library --tool asce7 --a HEAD` passed.
+    - `phone-layout --tool asce7` passed.
+    - `engine handoffs` passed.
+    - The Excel workbook builds.
+- **Other copies:** none.
