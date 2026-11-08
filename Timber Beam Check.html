@@ -3593,6 +3593,17 @@ function tbrNLParts(e, warn) {
   if (!P.length) return null;
   return P.map(q => ({ type: 'note', warn: (warn || q.matches('.tbNLa')) || undefined, text: (q.tagName === 'LI' ? '• ' : '') + tbrHtx(q) })).filter(q => q.text && q.text !== '• ');
 }
+/* TBNS: a box of a bold lead and a plain list (the Summary tab's "Notes:" box) as the lead and one "• " line per list item; an item
+   that is itself a tbNL note prints its lead after the "• " and its own items as "– " lines. null when the element is not one. */
+function tbrBoxParts(e, warn) {
+  const C = [...e.children], U = C.filter(c => /^(UL|OL)$/.test(c.tagName) && !c.matches('.tbNLu'));
+  if (U.length !== 1 || C.some(c => c !== U[0] && !/^(B|STRONG)$/.test(c.tagName)) || [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) return null;
+  const P = C.filter(c => c !== U[0]).map(c => ({ type: 'note', warn, text: tbrHtx(c) }));
+  [...U[0].children].forEach(li => { const q = tbrNLParts(li, warn);
+    if (q) q.forEach((x, k) => P.push(Object.assign({}, x, { text: k ? x.text.replace(/^• /, '– ') : '• ' + x.text })));
+    else P.push({ type: 'note', warn, text: '• ' + tbrHtx(li) }); });
+  return P.filter(q => q.text && q.text !== '• ');
+}
 function tbrDomTable(t) {
   const trs = [...t.rows]; if (!trs.length) return null;
   const isHead = trs[0].querySelector('th') && !trs[0].querySelector('td');
@@ -3643,6 +3654,8 @@ function tbrHarvest() {
     h.querySelectorAll('.hint, .note, .warnBox').forEach(e => { if (e.closest('.wkLink') || e.matches('.tbNLa')) return; const s = e.closest('.sec'), t = s && s.querySelector('.secTitle');
       const pre = t ? t.textContent.replace(/^\s*\d+\.\s*/, '').trim() + ': ' : '', w = e.classList.contains('warnBox') || undefined, nl = tbrNLParts(e, w);   // TBNL: kept or left out as one note, printed as its parts
       if (nl) { nl[0] = Object.assign({}, nl[0], { text: pre + nl[0].text }); nn.push({ type: 'note', warn: w, text: nl.map(q => q.text).join(' '), parts: nl }); return; }
+      const bx = tbrBoxParts(e, w);   // TBNS: printed as its parts; text as before, so the report keeps or leaves out the box as before
+      if (bx && bx.length) { bx[0] = Object.assign({}, bx[0], { text: pre + bx[0].text }); nn.push({ type: 'note', warn: w, text: pre + tbrHtx(e), parts: bx }); return; }
       nn.push({ type: 'note', warn: w, text: pre + tbrHtx(e) }); });
     hv.notes[id] = { tab: TAB[id], list: nn };
     const sec = k => h.querySelector('.sec[data-secid="' + k + '"]');
