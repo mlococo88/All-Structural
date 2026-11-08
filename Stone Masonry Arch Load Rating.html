@@ -14096,10 +14096,31 @@ function arptStep(o,id){
   if(u&&!num1){if(sub)sub+="\\ \\text{"+u+"}";else sym+="\\ \\text{"+u+"}";}   /* units of a non-numeric result: as the tab writes them */
   const d=num1?(res.split(".")[1]||"").length:2;
   const nt=document.createElement("div"); nt.innerHTML=o.note||"";
-  nt.querySelectorAll(".arNLl,.arNLa").forEach(x=>x.append(" ")); nt.querySelectorAll(".arNLu>li").forEach(li=>{li.prepend("• ");li.append(" ");});   /* ARNL: a listed step note on one line */
+  const nl=arptNoteList(nt);   /* ARNL-3 (2026-11-08): a listed step note (arNL) as a list note of shared/steps.js */
+  nt.querySelectorAll(".arNLl,.arNLa").forEach(x=>x.append(" ")); nt.querySelectorAll(".arNLu>li").forEach(li=>{li.prepend("• ");li.append(" ");});   /* ARNL: a listed step note on one line (ARNL-3: now only a note arptNoteList does not take) */
   if(!window.katex){sym=arptTex(sym);sub=arptTex(sub);}   /* ARX (2026-11-03): without KaTeX the built-in renderer sets the step, so the TeX is written in its subset (as the running text) */
   return SharedSteps.step({id,label:String(o.label||"").trim()||"Step",sym,eq:"",sub,value:num1?+res:null,unit:num1?u:"",d,
-    ref:o.ref||"",note:arptClean(nt.textContent).replace(/§(?=[A-Za-z])/g,"§ ")});
+    ref:o.ref||"",note:nl||arptClean(nt.textContent).replace(/§(?=[A-Za-z])/g,"§ ")});
+}
+/* ARNL-3 (2026-11-08): a step note written with arNL (R.arNL: .arNLa action lines, an .arNLl lead, an .arNLu / ol list) -> a list
+   note { lead, items, action } (shared/steps.js, SNL), drawn by shared/report.js as a bold lead and bullets (was one line
+   "lead • item • item"). The same words in the same order: each piece is the text the one-line form had (arptClean, "§ " before a
+   letter). An item that starts with a bold lead word (.arNLk) ending in ':', '.', '?', '!' or '—' becomes [lead, text]; any other
+   item stays one plain string (e.g. "h_f is the fill height …", where the lead word is the start of the sentence, so no ': ' is put
+   after it). null when the note has no list or holds anything besides these parts (then the one-line form is used, as before). */
+function arptNoteList(nt){
+  const kids=[...nt.childNodes].filter(n=>!(n.nodeType===3&&!n.textContent.trim()));
+  if(!kids.some(n=>n.nodeType===1&&n.matches(".arNLu"))||!kids.every(n=>n.nodeType===1&&n.matches(".arNLa,.arNLl,.arNLu")))return null;
+  const T=s=>arptClean(s).replace(/§(?=[A-Za-z])/g,"§ ");
+  const action=[],items=[];let lead="";
+  kids.forEach(n=>{
+    if(n.matches(".arNLa")){const t=T(n.textContent);if(t)action.push(t);}
+    else if(n.matches(".arNLl"))lead=(lead?lead+" ":"")+T(n.textContent);
+    else [...n.children].forEach(li=>{const k=li.firstElementChild,t=T(li.textContent);if(!t)return;
+      const kl=k&&k.matches(".arNLk")&&!(li.firstChild.nodeType===3&&li.firstChild.textContent.trim())?T(k.textContent):"";
+      if(kl&&/[:.?!\u2014]$/.test(kl)&&t.startsWith(kl))items.push([kl,t.slice(kl.length).trim()]);else items.push(t);});
+  });
+  const o={lead,items};if(action.length)o.action=action;return o;
 }
 const arptSlug=s=>String(s||"").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"").slice(0,36)||"step";
 /* a table element -> a report table (header: the last header row; badges -> cell status) */

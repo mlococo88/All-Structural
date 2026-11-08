@@ -1709,3 +1709,27 @@ function transDisp(w,n,c,cap){
   - 0 console errors;
   - origin/main against the branch: results, the model and every tab's text identical (see the PR).
 - **Other copies:** none.
+
+## 2026-11-08 — PR: claude/nl-arch (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Report: listed step notes as list notes (bold lead and bullets) instead of one line with "•" (ARNL-3; display only, no result change)
+### ARNL-3. Report step notes written with arNL: shared list notes   [display only] [no result change]
+- **Request:** the open item of `fixlog/shared-report.md` (SNL, PR #1240): the Report's worked steps whose note the tab writes with `R.arNL` (ARNL-1) were flattened to one italic line "lead • item • item" (`arptStep`, ARNL-1), 13 different notes, each over 300 characters. SNL made a step's note a list note `{ lead, items: [[lead, text] | text, …], action? }` (shared/steps.js), drawn by shared/report.js as a bold lead and bullets.
+- **Where:** `arptStep(o,id)` (Report, anchor `function arptStep(o,id){`) and the new `arptNoteList(nt)` right after it (anchor `/* ARNL-3 (2026-11-08): a step note written with arNL`).
+  - Before:
+    ```js
+    nt.querySelectorAll(".arNLl,.arNLa").forEach(x=>x.append(" ")); nt.querySelectorAll(".arNLu>li").forEach(li=>{li.prepend("• ");li.append(" ");});   /* ARNL: a listed step note on one line */
+    …
+        ref:o.ref||"",note:arptClean(nt.textContent).replace(/§(?=[A-Za-z])/g,"§ ")});
+    ```
+  - After:
+    ```js
+    const nl=arptNoteList(nt);   /* ARNL-3 … */
+    nt.querySelectorAll(".arNLl,.arNLa").forEach(x=>x.append(" ")); nt.querySelectorAll(".arNLu>li").forEach(li=>{li.prepend("• ");li.append(" ");});   /* … (ARNL-3: now only a note arptNoteList does not take) */
+    …
+        ref:o.ref||"",note:nl||arptClean(nt.textContent).replace(/§(?=[A-Za-z])/g,"§ ")});
+    ```
+    `arptNoteList(nt)`: when the note's top-level parts are only `.arNLa` (action lines), `.arNLl` (lead) and `.arNLu` / ol lists (at least one list), it returns `{ lead, items, action? }`; else `null` (the one-line form, as before). Each piece is `arptClean(text).replace(/§(?=[A-Za-z])/g,"§ ")`, the same text the one-line form had. An item that starts with a bold lead word (`.arNLk`) ending in `:` `.` `?` `!` or `—` becomes `[lead, rest]` (bold lead word in the Report); any other item stays one plain string, so a lead word that starts the sentence ("h_f is the fill height …", "Near the crown Δy goes to zero …", "Here z = 13.399 ft …") gets no ": " after it.
+- **Notes converted (default project; the first two are repeated per vehicle, 16 times each):** Convergence criterion; Utilization against the allowable; Elements used in this model; Vertical dead load intensity at a node; Superimposed dead load distributed across the barrel; Lateral earth pressure intensity; Equivalent nodal load; Lateral pressure at the arch axis; Total horizontal force on an element; Mirror symmetry of the tables; Radial direction of the section, from vertical; Depth to the arch axis, for the lateral pressure (13 different notes in 42 steps). Every other step note (203 steps) is a plain string, unchanged.
+- **Governing provision:** none changed (the §7.2.7.x citations in the notes are the same text).
+- **Check case:** default project, Report, step "Elements used in this model: n_el = 12". Before (plain text): `Elements used in this model: n_(el) = 12 (1.2× the code minimum. • Floor: The minimum is a compliance floor, not evidence of convergence. • Mesh study: Every vehicle is also rated at about two and four times the count in use and the lowest rating is reported; the worked steps use the mesh on which the controlling vehicle rates lowest (Rating tab, Mesh convergence).)`. After: `Elements used in this model: n_(el) = 12`, then the indented lines `1.2× the code minimum.`, `• Floor: The minimum is a compliance floor, not evidence of convergence.`, `• Mesh study: Every vehicle is also rated …`. On screen and in print: bold lead, bullets with bold "Floor:" / "Mesh study:".
+- **How verified:** origin/main vs branch, headless Chromium, default project: `__archRptForTest().results` identical; the text of all 19 input and output tabs identical (the run-time lines "rated in x s" / "Computed in x s" masked); the Report `.rp-doc` textContent, `SharedReport.text(doc)` and `text(doc, { legacy: true })` with the same digit sequence; of the 393 `.rp-step` elements, 42 differ, each only in its note markup (`rp-nt rp-ntl`); 0 console errors, 0 KaTeX errors. Tests: `node tests/check-syntax.mjs`, `node tests/engine/run.mjs`, `tests/smoke/phone-layout.mjs --tool arch`, `tests/smoke/project-library.mjs --tool stonearch`.
+- **Other copies:** none.
