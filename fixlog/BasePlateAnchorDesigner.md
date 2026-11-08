@@ -5665,3 +5665,26 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Check case (default project):** 10 chips: Base Plate Bending 0.66 PASS, Bolt Bearing / Tearout (plate) 0.05 PASS, Concrete Bearing 0.37 PASS, Steel Tension 0.15 PASS, Pullout 0.11 PASS, Concrete Breakout (T) 0.26 PASS, Steel Shear 0.74 PASS, Concrete Breakout (V) 1.13 FAIL, Pryout 0.19 PASS, Combined T–V Interaction 1.33 FAIL; head "2 FAIL" — the same values as the Summary tab chips. Clicking Concrete Breakout (V) opens the Concrete Embedment tab at the card that works it.
 - **How verified:** origin/main vs branch, headless, the 10 BPNL-1 states: input panel, every output tab, the Report tab and the printed report text identical; `CC` identical apart from the existing `__subJust` memo, which `allChecks()` fills on the Summary tab in main too. Layout at 1920 / 1440 / 1280 / 1024 / 390 px: no sideways scroll; column 280 / 240 / 240 / none / none px; at 1024 and 390 px the panels sit exactly as on main. Collapse writes `bpad_dashCollapsed_v1` = '1' and survives a reload. `node tests/check-syntax.mjs`; `tests/smoke/phone-layout.mjs --tool bpad`; `tests/smoke/project-library.mjs --tool baseplate`; `tests/smoke/lightpole-anchor-handoff.mjs`; 0 console errors.
 - **Other copies:** none.
+
+## 2026-11-08 — PR: claude/nl-bp (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — BPNL-4: Report "where …" step notes over 300 characters as a list (display only, no result change)
+### BPNL-4. Report worked steps: a long "where …" note as a lead and bullets   [display only] [no result change]
+- **Request:** the open item of `fixlog/shared-report.md` (SNL, PR #1240): BasePlateAnchorDesigner "where …" lists, 8 over 300 characters, made from the tab's own variable lists, were one italic line in the Report. SNL made a step's note a list note `{ lead, items: [[lead, text] | text, …], action? }` (shared/steps.js), drawn by shared/report.js as a bold lead and bullets.
+- **Where:** `bprStep(eb,id)` (Report, anchor `function bprStep(eb,id){`), its `note:`; new `bprWhere(vars)` right after it (anchor `/* BPNL-4 (2026-11-08): the "where …" note of a worked step`).
+  - Before: `note:vars.length?('where '+vars.join('; ').replace(/\$([^$]+)\$/g,(m,t)=>SharedSteps.toText(t,{legacy:true}))).replace(/§(?=[A-Za-z])/g,'§⁠'):''`
+  - After: `note:bprWhere(vars)`, with
+    ```js
+    function bprWhere(vars){
+      const fix=t=>t.replace(/\$([^$]+)\$/g,(m,x)=>SharedSteps.toText(x,{legacy:true})).replace(/§(?=[A-Za-z])/g,'§⁠');
+      if(!vars.length)return '';
+      const str=fix('where '+vars.join('; '));
+      if(str.length<=300)return str;
+      const items=vars.map(fix);
+      return 'where '+items.join('; ')===str?{lead:'where',items}:str;
+    }
+    ```
+    A note of 300 characters or less is the same string as before. A longer one becomes lead "where" and one bullet per variable; the bullets are checked to rebuild the string exactly ("where " + bullets joined with "; "), else the string is kept.
+- **Notes converted (default project, every combination worked):** Concrete bearing capacity; Effective embedment reduction; Step 2 — Basic single-anchor breakout strength V_b; Step 3 — Projected areas; Step 3 — Modification factors; Projected areas & modification factors (3 variants): 8 different notes in 18 steps. The other 41 different "where" notes (all ≤ 300 characters) are unchanged.
+- **Governing provision:** none changed (the citations in the variable lists are the same text).
+- **Check case:** default project, Report, "Concrete bearing capacity" (φ f_p = 0.65×0.85×4.00×1.50 = 2.76 ksi; DCR 1.017/2.76 = 0.368). Before (plain text): the step line, then ` (where A_1 = 400.0 in^2 (loaded area (grout footprint)); A_2 = 900.0 in^2 (largest supporting area …, 1V:2H frustum within the pedestal height H); √(A_2/A_1) = 1.50 (≤ 2.0); φ = 0.65 (bearing on concrete); basis = f_p / φf_p (small eccentricity: …; DG1 uniform block f_p = P/(B(N−2e)) for e > N/6))` on the same line. After: the step line ends at "= 0.368"; then the indented lines `where`, `• A_1 = 400.0 in^2 (loaded area (grout footprint))`, `• A_2 = 900.0 in^2 (…)`, `• √(A_2/A_1) = 1.50 (≤ 2.0)`, `• φ = 0.65 (bearing on concrete)`, `• basis = f_p / φf_p (…)`.
+- **How verified:** origin/main vs branch, headless Chromium, default project: `computeAll()` JSON identical; the text of every tab identical; the Report `.rp-doc` textContent, `SharedReport.text(doc)` and `text(doc, { legacy: true })` with the same digit sequence; of the 100 `.rp-step` elements 18 differ, each only in its note markup; 0 console errors, 0 KaTeX errors. `tests/bpad-circle.mjs` section 1 (40 projects): `computeAll`, every combination's capacities, `allChecks()`, validation and the print-report text identical; the Report-tab model differs only in the converted notes (577 list notes; each, written back as "where " + bullets joined with "; ", equals main's string; the model is then identical in all 40); sections 2a / 2b pass. Tests: `node tests/check-syntax.mjs`, `node tests/engine/run.mjs`, `tests/bpad-profis.mjs` (results same), `tests/smoke/phone-layout.mjs --tool bpad`, `tests/smoke/project-library.mjs --tool baseplate`.
+- **Other copies:** none.

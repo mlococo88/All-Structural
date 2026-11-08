@@ -7072,7 +7072,19 @@ function bprStep(eb,id){
   const res=lines.length?bprResult(lines[lines.length-1]):null;
   if(res){value=res.value;unit=res.unit;d=res.d;lines[lines.length-1]=res.line;}
   const eq=lines.length>1?'\\begin{gathered}'+lines.join(' \\\\ ')+'\\end{gathered}':(lines[0]||'');
-  return {id,label:title||'Worked equation',sym:'',eq,sub:'',value,unit:unit.replace(/\u00B2|\^2/g,'^{2}').replace(/\u00B3|\^3/g,'^{3}'),d,ref:r?r.textContent.replace(/^\[|\]$/g,'').trim():'',note:vars.length?('where '+vars.join('; ').replace(/\$([^$]+)\$/g,(m,t)=>SharedSteps.toText(t,{legacy:true}))).replace(/\u00A7(?=[A-Za-z])/g,'\u00A7\u2060'):''};
+  return {id,label:title||'Worked equation',sym:'',eq,sub:'',value,unit:unit.replace(/\u00B2|\^2/g,'^{2}').replace(/\u00B3|\^3/g,'^{3}'),d,ref:r?r.textContent.replace(/^\[|\]$/g,'').trim():'',note:bprWhere(vars)};   /* BPNL-4: was note:vars.length?('where '+vars.join('; ')…):'' (now in bprWhere) */
+}
+/* BPNL-4 (2026-11-08): the "where …" note of a worked step. The string as before ('where ' + the variables joined with '; ',
+   $…$ as plain text, '§' + letter kept from becoming a step link); when that string is over 300 characters, a list note of
+   shared/steps.js (SNL) instead: lead "where", one bullet per variable, each the same text as in the string (checked: the bullets
+   joined with '; ' after "where " give the string exactly, else the string is kept). Display only. */
+function bprWhere(vars){
+  const fix=t=>t.replace(/\$([^$]+)\$/g,(m,x)=>SharedSteps.toText(x,{legacy:true})).replace(/\u00A7(?=[A-Za-z])/g,'\u00A7\u2060');
+  if(!vars.length)return '';
+  const str=fix('where '+vars.join('; '));
+  if(str.length<=300)return str;
+  const items=vars.map(fix);
+  return 'where '+items.join('; ')===str?{lead:'where',items}:str;
 }
 /* the RPT-2 document -> the viewer's model (same chapters, cards and numbering) */
 function bprModel(){
