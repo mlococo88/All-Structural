@@ -3309,7 +3309,7 @@ From the code-compliance review of 2026-11-07 (LOW findings L3 to L7).
 ### How verified
 - `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`; the headless comparison listed in the PR.
 
-## 2026-11-08 — PR: nl-gusset-a (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — GPNL-1: long Method notes as a bold lead and a list (Method tab and Report appendix; display only, no result change)
+## 2026-11-08 — PR: nl-gusset-a (PR #1187: https://github.com/mlococo88/All-Structural/pull/1187) — GPNL-1: long Method notes as a bold lead and a list (Method tab and Report appendix; display only, no result change)
 
 ### GPNL-1. Method tab: long paragraphs and items split into a lead and a list   [display only] [no result change]
 - **Request (engineer, 2026-11-07/08):** "there are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Part 1 of 2 for this tool (the Method tab, which is also the Report appendix "Appendix: method"). The other tabs, the warnings and the Report front matter follow in GPNL-2.
