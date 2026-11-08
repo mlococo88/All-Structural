@@ -3360,3 +3360,48 @@ From the code-compliance review of 2026-11-07 (LOW findings L3 to L7).
 - **Check case:** default project, Method tab, the Lmid item: before one 2,260-character paragraph; after the lead "Lmid: three lengths are measured … or the plate edge.", the action line and eight bullets; "K = 0.5", "K = 1.2", "2026-11-07, H2" and both badges unchanged. Report appendix: the same lead as a "• " line, the action line as a warning note, then eight "◦ " lines.
 - **How verified:** headless Chromium, origin/main vs the branch, 11 cases (default; validation model; templates t2h heel joint, t5u upper chord and t4v with forces; a custom hole pattern; bolt slip on; LFR only; LRFR only; section loss; Lmid average): `R` (errors, warnings, checks, governing, advisory, equilibrium) identical; the digit sequence of every output tab, every input pane, the status bar and the Report model identical; only the Method tab text changed. Validation 17 of 17. 0 console errors. `check-syntax`, `phone-layout --tool gusset`, `project-library --tool gusset` pass. Screenshots at 1440 and 390 px.
 - **Other copies:** none.
+
+## 2026-11-08 — PR: nl-gusset-b (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — GPNL-2: long notes on the input and output tabs, the warnings and the Report front matter as a bold lead and a list (display only, no result change)
+
+### GPNL-2. Input panes, Summary, Drawing, 3D, Checks (advisory), Rating, Code parameters, Validation, warnings, Report   [display only] [no result change]
+- **Request:** as GPNL-1 (#1187, the Method tab). Same rule: a note over ~300 characters, with 3 or more sentences, or with several facts in one paragraph becomes a lead and a list with bold lead words. Every sentence, number, citation and link is kept, in the same order. New lead words carry no digits.
+- **New helper** (after `const T = String.raw;`), anchor `/* GPNL-2 (2026-11-08, engineer`:
+  ```js
+  function gpNL(lead, items, o = {}) { const li = (items || []).filter(Boolean).map(x => '<li>' + (Array.isArray(x) ? `<b>${x[0]}</b> ${x[1]}` : x) + '</li>').join('');
+    return (o.act || []).filter(Boolean).map(a => `<div class="alert warn gpNLa">${a}</div>`).join('') + (lead ? `<div class="gpNLl">${lead}</div>` : '') + (li ? `<ul class="gpNLu">${li}</ul>` : ''); }
+  function warnHtml(w) { const n = R && R.warnNL && R.warnNL[w]; return n ? `<b>${esc(n[0])}</b><ul class="gpNLu">${n[1].map(x => `<li>${Array.isArray(x) ? `<b>${esc(x[0])}</b> ${esc(x[1])}` : esc(x)}</li>`).join('')}</ul>` : esc(w); }
+  ```
+  A note becomes `<div class="note gpNL">${gpNL(lead, [[leadWords, text], …])}</div>` (or `hint`, `note-p`, `cap`, `alert warn`); `null` items are skipped (conditional facts).
+- **CSS** (after the GPNL-1 block): `.gpNL > .gpNLl { margin: 0 0 1px; }`, `.gpNL > .gpNLu { margin: 3px 0 2px 18px !important; }`, `.gpNL > .gpNLa { margin: 2px 0 5px; }`, `.dlist .gpNLu { margin: 1px 0 2px 16px !important; }`. No new colours; inherits the note / hint / alert colours.
+- **Report walker** (`gprItems`, before `if (cl.contains('alert')) { flush();`): a `.gpNL` block is printed as one note per part, the lead then "• " per item; inside an `alert warn`/`fail` (or an action line `.gpNLa`) each part keeps `warn: true`. Before, a `div` was run into one note.
+- **Warnings** (`compute`): each long warning keeps its text byte-identical, now built from the same pieces (`a`, `b`, …) and joined as before, and gains a display-only lead and list through `nlw(msg, lead, items)`, stored in `warnNL` (keyed by the text). The result object carries it as a **non-enumerable** property (`Object.defineProperty(…, 'warnNL', { value: warnNL })`), so `R` compares, saves and hashes exactly as before. The Summary "Warnings" card and the Report "Warnings:" list draw `warnHtml(w)`; the status-bar count and everything else still read `R.warnings`. Warnings changed (anchor = the text opening):
+  1. "Member … (custom holes): … outside the …° Whitmore spread lines" → Verify.
+  2. "Member … (custom holes), block shear: no hole at" → Block used / Verify.
+  3. "Member …: the Whitmore section crosses the outline of" → Clipping / Area / Status.
+  4. "Member …, L_mid: L… stops along the plate edge" → one "Stop:" item per stopped length / Lengths / Judge.
+  5. "Owner RIDOT (LRFR Guidelines, Sept 2022):" → Resistance factors / Condition factor / System factor.
+  6. "…: the factored dead load alone, in the … direction, exceeds the factored resistance:" → one item per rating case / Why no rating factor shows it.
+- **`VERIFY_NOTE`** → `VERIFY_L` (its two sentences; `VERIFY_NOTE` was only displayed and is removed) and `verifyItems()` = Defaults / Action. Used by the Project "Verify the code parameters." alert (+ Where: the Code parameters tab / fix log sentence), the Code parameters "Defaults must be verified." alert, the Method tab, Report §1 "Verification of code parameters:" and Report "Code parameters".
+- **Other notes changed** (anchor = the old opening → lead → item lead words):
+  1. Summary, "Lowest RF over the limit states of each member or plane" → Limit states / Highlighted / Click a value.
+  2. Plates, "Continuous: the two chord members' fasteners" → lead "Chord at the joint:" → Continuous / Spliced.
+  3. Plates, "Plates other than the gusset plates that cross the splice line." → None entered / Flange plate / Web plate / Offset / Holes.
+  4. Plates, "The demand on a plane is the component" → Automatic planes / Partial plane.
+  5. Members, "Each member: work line from the work point" → Work line / Fastener rows / Gage lines / Irregular hole pattern.
+  6. Forces, "A design column is rated at Inventory and Operating." → lead "Live load columns:" → Design / Legal and permit / Stress reversal.
+  7. Forces, `eqmNote()` with a residual: lead "Joint equilibrium of the member forces (ΣF): …" → Residual (HEEL_EQM, or the panel-point-load sentence) / Shear planes. Without a residual: one line, as before.
+  8. Rating input, "MBE Eq. 6A.4.2.1-1: C = φcφsφRn" → Defaults / Confirm.
+  9. Drawing caption "Colours: D/C for" → lead "Legend:" → Colours / Thick line / Violet arrows / Dotted / Dashed / Wide amber outline (when shown) / Scroll.
+  10. 3D caption (`#v3-cap`, now a `div`) "Colours: governing D/C for" → lead "Legend:" → Colours / Lines / View.
+  11. Rating tab, "Each check is rated for each live load column" → Tension-only / Compression-only / Both / Dead load acting against the live load effect.
+  12. Validation, "The validation model is one diagonal at 45°" → Code parameters / Hand values.
+  13. Advisory free edge (`adv-edge`): ADV_NOTE as the lead → Limit / Basis / Not a rating limit; "Free edge: a run of the plate outline" → Outside / Lg / Member widths.
+  14. Advisory bolt slip (`adv-slip`) → Requirement / Resistance / Rating factor / Ratio shown.
+  15. Advisory eccentric groups (`adv-ecc`) → e / Note given / Equal sharing / Plates of different thickness.
+  16. Advisory combined actions (`adv-<plane>`): ADV_NOTE as the lead → Plane / Forces / Heel joint (when shown); "Shear with normal force (O16)" paragraph → lead "Interaction checks:" → Shear with normal force (O16) / Shear, normal force and moment (O1) / Demand.
+  17. Report §1 Objectives "Rate the gusset-plate connection at … for …:" → Limit states / Advisory checks.
+- **Not changed:** the Code parameters table notes and the "where" table descriptions (table cells; the Report reads them as table cells); notes under ~300 characters with one or two facts (the bolt-slip input note, `CONC_NOTE`, `HEEL_SP`); the "Not included in this calculation" list (already a list).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none.
+- **Check case:** default project with Owner = RIDOT, Summary "Warnings (1)": before one 640-character line; after the bold lead "Owner RIDOT (LRFR Guidelines, Sept 2022):" and three bullets (φ 0.75, 0.80, 0.65; φ_c 1.00; φ_s 1.00 (M5)). `R.warnings[0]` is the same string, byte for byte.
+- **How verified:** headless Chromium, origin/main vs the branch, the 11 cases of GPNL-1: `R` identical; the digit sequence of every output tab, input pane, the status bar and the Report model identical. Warning text: 13 more models that raise all six changed warnings (RIDOT; Whitmore crossing; spliced chord with L2-L3 at 30° (L_mid stop warnings); dead load alone over capacity (19 warnings); custom hole outside the spread lines; custom pattern without a corner hole): `R.warnings` identical to main in every model. Validation 17 of 17. 0 console errors. `check-syntax`, `phone-layout --tool gusset`, `project-library --tool gusset` pass (the first run, with `warnNL` enumerable, failed its "results identical" checks; hence the non-enumerable property).
+- **Other copies:** none.
