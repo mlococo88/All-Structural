@@ -164,6 +164,12 @@
   .warnBox{border:1px solid var(--warn);background:#fff8ec;color:#6b4300;padding:6px 8px;margin:6px 0;font-size:10pt;}
   .errBox{border:1px solid #c62828;background:#fdecea;color:#7c1a1a;padding:6px 8px;margin:6px 0;font-size:10pt;}
   .okBox{border:1px solid var(--pass);background:#eef7ee;color:#1b5e20;padding:6px 8px;margin:6px 0;font-size:10pt;}
+  /* BPNL (2026-11-08): long notes as a lead line and a list */
+  .bpNL .bpNLl{font-weight:bold;margin:0 0 1px;}
+  .bpNL .bpNLu{margin:2px 0 3px;padding-left:18px;}
+  .bpNL .bpNLu>li{margin:1px 0;}
+  .bpNL .bpNLa{font-style:normal;margin:2px 0 4px;}
+  @media print{ .bpNL .bpNLu>li{break-inside:avoid;} }
   svg text{font-family:"Times New Roman",Times,serif;}
   .dimTxt{font-size:11px;fill:#00427a;}
   .lblTxt{font-size:11px;fill:#333;}
@@ -1297,6 +1303,17 @@ function el(tag,cls,txt){ const e=document.createElement(tag); if(cls)e.classNam
 /* BPMK-1 (2026-11-08): el() with trusted, app-written markup (<b>, <i>, <br>, entities) rendered as HTML.
    Never pass user-entered text (project, combination or group names) through it. */
 function elH(tag,cls,html){ const e=el(tag,cls); if(html!==undefined)e.innerHTML=html; return e; }
+/* BPNL (2026-11-08, engineer: "split this up into a numbered list or bullets ... so it's not just a text that will
+   likely get overlooked"): a long note as a one-line bold lead, then a list with bold lead words.
+   lead / items: app-written HTML (escape user text first); an item is [leadWords, text] or a string; null items are
+   skipped. o.ol: numbered list; o.act: action lines first, in the warning style. The parts are joined with spaces, so
+   the note's textContent still reads as sentences. bpNLdiv: the same as an element (class "bpNL" added). */
+function bpNL(lead,items,o){ o=o||{}; const L=o.ol?"ol":"ul";
+  const li=(items||[]).filter(Boolean).map(x=>"<li>"+(Array.isArray(x)?'<b class="bpNLk">'+x[0]+"</b> "+x[1]:x)+"</li>").join(" ");
+  return (o.act||[]).filter(Boolean).map(a=>'<div class="warnBox bpNLa">'+a+"</div>").join(" ")+
+    (lead?' <div class="bpNLl">'+lead+"</div>":"")+(li?" <"+L+' class="bpNLu">'+li+"</"+L+">":""); }
+function bpNLdiv(tag,cls,lead,items,o){ return elH(tag,(cls?cls+" ":"")+"bpNL",bpNL(lead,items,o)); }
+function bpNLhint(lead,items,o){ return '<div class="bpNL">'+bpNL(lead,items,o)+"</div>"; }   /* fRow hint */
 function tex(elm,src,disp){ if(window.katex){ try{ katex.render(src,elm,{throwOnError:false,displayMode:!!disp}); return; }catch(e){} } elm.textContent=src; }
 
 /* Equation block: title, ref, symbolic/substituted/result lines, variable defs */
@@ -6116,18 +6133,21 @@ function buildInputPanel(){
       ()=>S.conc.edgeReinf||"none",v=>S.conc.edgeReinf=v,o=>o[1],o=>o[0]),"");
     if(S.conc.cracked){
       const pv=(S.conc.edgeReinf==="stirrups")?1.4:(S.conc.edgeReinf==="bar")?1.2:1.0;
-      body.appendChild(el("div","note",
-        "ACI 318-19 §17.7.2.5 — applies to CONCRETE BREAKOUT IN SHEAR only: ψ_c,V = "+pv.toFixed(1)+". "+
-        "Cracked concrete with no supplementary reinforcement is 1.0; edge reinforcement of at least a "+
-        "No. 4 bar between the anchor and the edge gives 1.2; that bar plus stirrups at 4 in. or closer "+
-        "gives 1.4. Hilti PROFIS states this condition on page 1 of its report, and the PDF importer reads "+
-        "it. Going from 1.0 to 1.4 raises the shear breakout capacity by 40%, so confirm it against the "+
-        "actual reinforcing drawings before relying on it."));
+      body.appendChild(bpNLdiv("div","note",   /* BPNL */
+        "ACI 318-19 §17.7.2.5 — applies to CONCRETE BREAKOUT IN SHEAR only: ψ_c,V = "+pv.toFixed(1)+".",
+        [["Values:","cracked concrete with no supplementary reinforcement is 1.0; edge reinforcement of at least a "+
+          "No. 4 bar between the anchor and the edge gives 1.2; that bar plus stirrups at 4 in. or closer gives 1.4."],
+         ["PROFIS:","Hilti PROFIS states this condition on page 1 of its report, and the PDF importer reads it."],
+         ["Confirm:","going from 1.0 to 1.4 raises the shear breakout capacity by 40%, so confirm it against the "+
+          "actual reinforcing drawings before relying on it."]]));
     } else {
       body.appendChild(el("div","note","Uncracked concrete gives ψ_c,V = 1.4 directly (§17.7.2.5); the edge-reinforcement selection does not apply."));
     }
     body.appendChild(el("h3",null,"Plate position on pedestal"));
-    body.appendChild(el("div","note","Offset of the plate center from the pedestal center. (0,0) = centered. Positive x shifts the plate toward the +x edge, reducing that edge distance. The whole anchor pattern shifts with the plate and the concrete edge distances (ca) update automatically."));
+    body.appendChild(bpNLdiv("div","note","Offset of the plate center from the pedestal center.",   /* BPNL */
+      [["Origin:","(0,0) = centered."],
+       ["Sign:","positive x shifts the plate toward the +x edge, reducing that edge distance."],
+       ["Edge distances:","the whole anchor pattern shifts with the plate and the concrete edge distances (ca) update automatically."]]));
     fRow(body,"Plate offset on pedestal, x",numInput(()=>S.conc.plate_off_x,v=>S.conc.plate_off_x=v,0.5),"in");
     fRow(body,"Plate offset on pedestal, y",numInput(()=>S.conc.plate_off_y,v=>S.conc.plate_off_y=v,0.5),"in");
     /* live readout of resulting edge distances */
@@ -6152,7 +6172,9 @@ function buildInputPanel(){
   mkSection("inShear","6. Shear Distribution",body=>{
     body.appendChild(el("h3",null,"Breakout case selection (Fig. R17.7.2.1b)"));
     fRow(body,"Anchors welded to a common plate",chkInput(()=>!!S.shear.weldedPlate,v=>S.shear.weldedPlate=v),"",
-      "Headed studs welded to an embed plate. Per R17.7.2.1 the near-edge anchor then sheds shear to the stiffer rear anchor, so ONLY Case 2 is considered and Case 3 does not apply. <b>Anchor rods through a base plate with nuts are NOT welded to a common plate</b> \u2014 leave this off for a normal bolted base plate.");
+      bpNLhint("Headed studs welded to an embed plate.",   /* BPNL */
+        [["Per R17.7.2.1:","the near-edge anchor then sheds shear to the stiffer rear anchor, so ONLY Case 2 is considered and Case 3 does not apply."],
+         ["Base plates:","<b>Anchor rods through a base plate with nuts are NOT welded to a common plate</b> \u2014 leave this off for a normal bolted base plate."]]));
     fRow(body,"Case selection",selInput(
       [["auto","Automatic \u2014 evaluate all applicable, worst governs"],
        ["c1","Force Case 1 (tributary V on front row)"],
@@ -6165,18 +6187,22 @@ function buildInputPanel(){
     fRow(body,"Anchor shear share",selInput(
       [["case","Governing breakout case (default)"],["hilti","Hilti PROFIS: equal share V/n on every anchor"]],
       ()=>S.shear.hiltiDist?"hilti":"case",v=>S.shear.hiltiDist=(v==="hilti"),o=>o[1],o=>o[0]),"",
-      "Default: each anchor's steel shear (and stand-off lever-arm bending) is checked for the share of the governing case above, e.g. V/2 per anchor of a 2-anchor rear row in Case 2. <b>Hilti PROFIS</b> treats the plate as rigid and shares the shear equally, V/n, for these checks. Concrete breakout and pryout are the same either way (the case above).");
+      bpNLhint("The share of V each anchor's steel checks use:",   /* BPNL */
+        [["Default:","each anchor's steel shear (and stand-off lever-arm bending) is checked for the share of the governing case above, e.g. V/2 per anchor of a 2-anchor rear row in Case 2."],
+         ["Hilti PROFIS:","treats the plate as rigid and shares the shear equally, V/n, for these checks."],
+         ["Breakout and pryout:","concrete breakout and pryout are the same either way (the case above)."]]));
     /* el(tag,cls,text) sets textContent, so markup must go through innerHTML */
     {const n=el("div","note");
      n.innerHTML="Every applicable case is worked in full on the <b>Shear Distribution</b> output tab, with the controlling one named.";
      body.appendChild(n);}
     {const n=el("div","note");
-     n.innerHTML="This selection now governs the shear check itself, not just the report. The old "+
-       "<i>equal / front-row</i> model was removed because it asked the same question in a weaker "+
-       "vocabulary \u2014 <i>equal</i> was roughly Case 1 and <i>front row</i> roughly Case 3, and neither "+
-       "could express <b>Case 2</b> (the full shear on the REAR row with its larger c<sub>a1</sub>), "+
-       "which the figure's Note requires to be checked whenever s \u2265 c<sub>a1,1</sub>. Having both also "+
-       "let the Summary DCR disagree with the case the report said was governing.";
+     n.classList.add("bpNL");   /* BPNL */
+     n.innerHTML=bpNL("This selection now governs the shear check itself, not just the report.",
+       [["Old model removed:","the old <i>equal / front-row</i> model was removed because it asked the same question in a weaker "+
+         "vocabulary \u2014 <i>equal</i> was roughly Case 1 and <i>front row</i> roughly Case 3, and neither "+
+         "could express <b>Case 2</b> (the full shear on the REAR row with its larger c<sub>a1</sub>), "+
+         "which the figure's Note requires to be checked whenever s \u2265 c<sub>a1,1</sub>."],
+        ["Why:","having both also let the Summary DCR disagree with the case the report said was governing."]]);
      body.appendChild(n);}
   },P);
 
@@ -6196,36 +6222,40 @@ function buildInputPanel(){
           fmt((5/6)*(S.anchor.hef||0),2)+"″ for the current h_ef of "+fmt(S.anchor.hef||0,2)+"″. "+
           "Validated against three PROFIS reports spanning h_ef 6″–25″; see the Validation tab."));
     }
-    body.appendChild(el("div","note",
-      "The neutral-axis model treats the plate as rigid, rotating about a neutral axis. Anchors act as steel "+
-      "springs (K_a = E_s·A_se/h_ef) and the concrete as an elastic bearing foundation with a triangular stress "+
-      "block. Anchors on the tension side of the neutral axis develop tension even when they sit on the geometric "+
-      "compression half of the plate, because the concrete block — not the anchors — resists compression. This is "+
-      "the AISC DG1 §3.4 model and what Hilti PROFIS uses. The legacy elastic bolt group "+
-      "(T_i = N/n ± M·x/Σx², negatives clipped) puts fewer anchors in tension and under-predicts the group "+
-      "tension demand; it is retained only for comparison."));
+    body.appendChild(bpNLdiv("div","note",   /* BPNL */
+      "The neutral-axis model treats the plate as rigid, rotating about a neutral axis.",
+      [["Springs:","anchors act as steel springs (K_a = E_s·A_se/h_ef) and the concrete as an elastic bearing foundation "+
+        "with a triangular stress block."],
+       ["Tension side:","anchors on the tension side of the neutral axis develop tension even when they sit on the geometric "+
+        "compression half of the plate, because the concrete block — not the anchors — resists compression."],
+       ["Basis:","this is the AISC DG1 §3.4 model and what Hilti PROFIS uses."],
+       ["Legacy model:","the legacy elastic bolt group (T_i = N/n ± M·x/Σx², negatives clipped) puts fewer anchors in tension "+
+        "and under-predicts the group tension demand; it is retained only for comparison."]]));
     if(S.forceModel.method==="na")
-      body.appendChild(elH("div","warnBox",   /* BPMK-1: markup rendered, not shown as text */
-        "<b>D is a calibrated modeling assumption, not a code value.</b> The concrete bedding modulus is E_c/D. "+
-        "D = 10 in. reproduces the Hilti PROFIS anchor reactions, compression resultant and its location to within "+
-        "0.5 lb on the CB Plaza report — but that is a fit to a <i>single</i> case, not yet confirmed against a run "+
-        "with different f'_c, h_ef, or bolt diameter.<br><br>"+
-        "<b>The result is, however, only weakly sensitive to D.</b> Over a 20-fold range (D = 1 to 20 in.) the "+
-        "governing anchor tension moves about &plusmn;3% and the group tension about &plusmn;2.6% on that case, "+
-        "because the neutral-axis position is set mainly by equilibrium rather than by the stiffness ratio. The "+
-        "choice of D is therefore a second-order refinement; the first-order correctness comes from using the "+
-        "neutral-axis model at all. Smaller D stiffens the bearing side and slightly reduces computed anchor "+
-        "tension; larger D increases it."));
+      body.appendChild(bpNLdiv("div","warnBox",   /* BPMK-1: markup rendered, not shown as text; BPNL: lead + list */
+        "D is a calibrated modeling assumption, not a code value.",
+        [["Bedding modulus:","the concrete bedding modulus is E_c/D."],
+         ["Calibration:","D = 10 in. reproduces the Hilti PROFIS anchor reactions, compression resultant and its location to within "+
+          "0.5 lb on the CB Plaza report — but that is a fit to a <i>single</i> case, not yet confirmed against a run "+
+          "with different f'_c, h_ef, or bolt diameter."],
+         ["Sensitivity:","the result is, however, only weakly sensitive to D. Over a 20-fold range (D = 1 to 20 in.) the "+
+          "governing anchor tension moves about &plusmn;3% and the group tension about &plusmn;2.6% on that case, "+
+          "because the neutral-axis position is set mainly by equilibrium rather than by the stiffness ratio."],
+         ["Second-order:","the choice of D is therefore a second-order refinement; the first-order correctness comes from using the "+
+          "neutral-axis model at all."],
+         ["Direction:","smaller D stiffens the bearing side and slightly reduces computed anchor tension; larger D increases it."]]));
   },P);
 
   /* PR-1 (2026-10-23): pedestal reinforcement — entered once, used by the
      §10.7.6.1.6 tie check, the "pedestal vertical bars" tension option and the
      closed-tie shear option */
   mkSection("inPed","7a. Pedestal Reinforcement",body=>{
-    body.appendChild(elH("div","note",   /* BPMK-1 */
-      "Longitudinal bars on the pedestal perimeter and the closed ties around them. Used for: the ACI 318-19 §10.7.6.1.6 "+
-      "check of ties at anchor bolts (Concrete Embedment tab, §8); the tension option <b>Pedestal vertical bars</b>; and the shear "+
-      "option <b>Closed ties enclosing the anchor group</b>. The app decides from this geometry which bars and ties are eligible."));
+    body.appendChild(bpNLdiv("div","note",   /* BPMK-1; BPNL */
+      "Longitudinal bars on the pedestal perimeter and the closed ties around them. Used for:",
+      ["the ACI 318-19 §10.7.6.1.6 check of ties at anchor bolts (Concrete Embedment tab, §8);",
+       "the tension option <b>Pedestal vertical bars</b>;",
+       "and the shear option <b>Closed ties enclosing the anchor group</b>.",
+       ["Eligibility:","the app decides from this geometry which bars and ties are eligible."]]));
     fRow(body,"Pedestal reinforcement entered",chkInput(()=>!!S.ped.present,v=>S.ped.present=v),"",
       "Turn on to describe the pedestal's longitudinal bars and ties.");
     if(!S.ped.present) return;
@@ -6272,14 +6302,14 @@ function buildInputPanel(){
   },P);
 
   mkSection("inTRebar","8. Tension Reinforcement",body=>{
-    body.appendChild(el("div","note",
-      "Anchor reinforcement is vertical rebar (usually stirrups) detailed to catch the tension "+
-      "breakout cone and carry the anchor tension into the pedestal, so the brittle concrete-breakout "+
-      "check (§17.6.2) can be replaced by a ductile steel check (§17.5.2.1.1). For that substitution to "+
-      "count, every bar must (a) physically cross the 35° failure cone AND sit within 0.5·h_ef of a tension "+
-      "anchor and (b) be developed on BOTH sides of where it crosses. The fields below define the bar, "+
-      "its plan position (which decides whether it catches the cone), and its development (which decides "+
-      "whether it is anchored each side). Each field notes what it drives."));
+    body.appendChild(bpNLdiv("div","note",   /* BPNL */
+      "Anchor reinforcement is vertical rebar (usually stirrups).",
+      [["Purpose:","detailed to catch the tension breakout cone and carry the anchor tension into the pedestal, so the brittle "+
+        "concrete-breakout check (§17.6.2) can be replaced by a ductile steel check (§17.5.2.1.1)."],
+       ["To count:","for that substitution to count, every bar must (a) physically cross the 35° failure cone AND sit within "+
+        "0.5·h_ef of a tension anchor and (b) be developed on BOTH sides of where it crosses."],
+       ["Fields below:","they define the bar, its plan position (which decides whether it catches the cone), and its development "+
+        "(which decides whether it is anchored each side). Each field notes what it drives."]]));
     fRow(body,"Tension rebar present",chkInput(()=>S.tRebar.present,v=>S.tRebar.present=v),"",
       "Turn on when the pedestal has vertical bars detailed to resist anchor tension. Off = rely on the plain concrete breakout capacity instead.");
     if(S.tRebar.pieceType!=="pedbars")
@@ -6290,7 +6320,9 @@ function buildInputPanel(){
        {id:"ustirrup",nm:"U-stirrup (2 legs)"},{id:"closedtie",nm:"Closed tie (2 legs)"},
        {id:"pedbars",nm:"Pedestal vertical bars (from Pedestal Reinforcement)"}],
       ()=>S.tRebar.pieceType,v=>S.tRebar.pieceType=v,o=>o.nm,o=>o.id),"",
-      "How many effective LEGS each piece gives and how they develop. A bar is one straight leg; a stirrup/tie gives two legs, each bent end developing in ℓ_dh above/below the breakout surface per Fig. R17.5.2.1a — the shorter hooked length is why stirrups are the usual detail, though ℓ_dh (not zero) is still required.");
+      bpNLhint("How many effective LEGS each piece gives and how they develop.",   /* BPNL */
+        [["Bar:","a bar is one straight leg."],
+         ["Stirrup / tie:","gives two legs, each bent end developing in ℓ_dh above/below the breakout surface per Fig. R17.5.2.1a — the shorter hooked length is why stirrups are the usual detail, though ℓ_dh (not zero) is still required."]]));
     if(S.tRebar.pieceType==="pedbars"){
       /* PR-1: the pedestal longitudinal bars act as the anchor reinforcement */
       bpPedLink(body,"bars");   /* VR-2: read-only summary + edit button (the bars are entered only in 7a) */
@@ -6326,7 +6358,10 @@ function buildInputPanel(){
         [{id:"perRow",nm:"Run alongside each tension row"},{id:"enclose",nm:"Enclosing the anchor group"},
          {id:"rowWide",nm:"Wide U per anchor row/column (auto-gauged)"}],
         ()=>S.tRebar.layoutMode,v=>S.tRebar.layoutMode=v,o=>o.nm,o=>o.id),"",
-        "<b>Per-row</b>: a run beside each tension anchor row (both legs near the anchors). <b>Enclose</b>: one run wrapping the whole group, so under moment only the tension-side leg of each piece counts. <b>Wide U per row/column</b>: one wide U-bar bracketing the OUTER anchors of each line, legs just outboard of the outer rods, gauge auto-set from the anchor span — the “U-bar doubled at anchors” pedestal detail.");
+        bpNLhint("Where the pieces go:",   /* BPNL */
+          [["Per-row:","a run beside each tension anchor row (both legs near the anchors)."],
+           ["Enclose:","one run wrapping the whole group, so under moment only the tension-side leg of each piece counts."],
+           ["Wide U per row/column:","one wide U-bar bracketing the OUTER anchors of each line, legs just outboard of the outer rods, gauge auto-set from the anchor span — the “U-bar doubled at anchors” pedestal detail."]]));
       if(isRW){
         const gn=el("div","note");
         gn.innerHTML="<b>Wide-U layout.</b> Quantity below is the number of U-bars nested at EACH anchor line "+
@@ -6342,11 +6377,11 @@ function buildInputPanel(){
           fRow(body,"Leg-to-leg width (gauge)",numInput(()=>S.tRebar.legGauge,v=>S.tRebar.legGauge=Math.max(0.5,v),0.5),"in",
             "Explicit clear width between the two legs of the wide U. Legs sit at ±gauge/2 about the anchor-line centre; each must still fall within cover and within 0.5·h_ef of a tension anchor to count.");
       } else {
-        body.appendChild(el("div","note",
-          "Each piece contributes TWO legs at their true plan positions. A leg on the compression "+
-          "side of the plate \u2014 the far leg of an enclosing stirrup under moment \u2014 falls outside "+
-          "0.5\u00b7h_ef of the tension anchors and is EXCLUDED from \u03c6N_r. Capacity counts effective "+
-          "legs only."));
+        body.appendChild(bpNLdiv("div","note",   /* BPNL */
+          "Each piece contributes TWO legs at their true plan positions.",
+          [["Compression side:","a leg on the compression side of the plate \u2014 the far leg of an enclosing stirrup under moment \u2014 "+
+            "falls outside 0.5\u00b7h_ef of the tension anchors and is EXCLUDED from \u03c6N_r."],
+           ["Capacity:","counts effective legs only."]]));
       }
     }
     fRow(body,"Grade",selInput(LIB.rebarGrades,()=>S.tRebar.grade,v=>S.tRebar.grade=v,o=>o.name,o=>o.id),"",
@@ -6360,26 +6395,28 @@ function buildInputPanel(){
       fRow(body,"Set-centroid offset from bolt-group centroid, y",
         numInput(()=>S.tRebar.offY,v=>S.tRebar.offY=v,0.25),"in",
         "Plan shift in y. Moving the set away from the tension anchors costs effective legs — bars are re-checked against the cone at their shifted positions.");
-      body.appendChild(el("div","note",
-        "The whole piece set is translated rigidly so its CENTROID sits at the bolt-group "+
-        "centroid + (x, y) — an explicit dimension for the drawings. (0, 0) places the set "+
-        "on the bolt-group centroid in BOTH layouts. Bars are re-checked against the cone "+
-        "at their shifted positions, so moving the set away from the tension anchors will "+
-        "cost effective legs."));
+      body.appendChild(bpNLdiv("div","note",   /* BPNL */
+        "The whole piece set is translated rigidly so its CENTROID sits at the bolt-group centroid + (x, y).",
+        [["Drawings:","an explicit dimension for the drawings."],
+         ["Zero:","(0, 0) places the set on the bolt-group centroid in BOTH layouts."],
+         ["Re-check:","bars are re-checked against the cone at their shifted positions, so moving the set away from the "+
+          "tension anchors will cost effective legs."]]));
     } else {
-      body.appendChild(el("div","note",
-        "Automatic set-out: an ENCLOSING run is centred on the bolt-group centroid; a "+
-        "PER-ROW run follows each tension row, so under moment the pieces sit on the loaded "+
-        "side rather than on the bolt-group centre — that is the mode doing its job, not an "+
-        "offset error. Untick to place the set centroid explicitly."));
+      body.appendChild(bpNLdiv("div","note","Automatic set-out:",   /* BPNL */
+        [["ENCLOSING run:","centred on the bolt-group centroid."],
+         ["PER-ROW run:","follows each tension row, so under moment the pieces sit on the loaded side rather than on the "+
+          "bolt-group centre — that is the mode doing its job, not an offset error."],
+         ["Explicit:","untick to place the set centroid explicitly."]]));
     }
     body.appendChild(el("h3",null,"Vertical extent of the bars"));
-    body.appendChild(el("div","note",
-      "These two lengths fix where the top and bottom of each bar sit in elevation. With the cone depth "+
-      "they decide how much development length is AVAILABLE above and below the crossing point — what the "+
-      "check compares against ℓ_d / ℓ_dh. They are geometry you set on the drawing, not a claimed length. "+
-      "(Development available is NOT a direct input: the breakout surface sits at z = z_head + d_s/1.5 (d_s = plan distance to the flat bottom across the tension anchors), so "+
-      "above = (H − top cover) − z_cross and below = z_cross − (z_head − extension); the worst bar governs.)"));
+    body.appendChild(bpNLdiv("div","note",   /* BPNL */
+      "These two lengths fix where the top and bottom of each bar sit in elevation.",
+      [["Available length:","with the cone depth they decide how much development length is AVAILABLE above and below the "+
+        "crossing point — what the check compares against ℓ_d / ℓ_dh."],
+       ["Geometry, not a claim:","they are geometry you set on the drawing, not a claimed length."],
+       ["Not a direct input:","development available is NOT a direct input: the breakout surface sits at z = z_head + d_s/1.5 "+
+        "(d_s = plan distance to the flat bottom across the tension anchors), so above = (H − top cover) − z_cross and "+
+        "below = z_cross − (z_head − extension); the worst bar governs."]]));
     fRow(body,"Top cover to bar end",numInput(()=>S.tRebar.topCover,v=>S.tRebar.topCover=v,0.25),"in",
       "How far the TOP of the bar stops below the concrete surface (bar top at z = H − cover). Sets the length available ABOVE the cone crossing.");
     fRow(body,"Bar extension below anchor head",numInput(()=>S.tRebar.extBelow,v=>S.tRebar.extBelow=v,0.5),"in",
@@ -6404,23 +6441,27 @@ function buildInputPanel(){
       body.appendChild(el("h3",null,"Hooks / bends (§25.4.3)"));
       const pt=S.tRebar.pieceType;
       const isTie=(pt==="closedtie"), isU=(pt==="ustirrup");
-      const devNote=el("div","note");
-      devNote.innerHTML="Anchor reinforcement must be developed on BOTH sides of the breakout surface, per "+
-        "<b>ACI Fig. R17.5.2.1a</b>: a hooked or bent end develops <b>ℓ_dh</b> (typically 40–50% shorter than "+
-        "straight ℓ_d), a straight end develops <b>ℓ_d</b>. Each side of the cone is checked with its own end "+
-        "condition. <b>Note:</b> a stirrup/tie bend wrapping a longitudinal bar does NOT reduce this to zero — "+
-        "the §25.7.1.3(a) &ldquo;developed at the bend&rdquo; shortcut is validated for beam stirrups in a "+
-        "confined core and is <i>not</i> imported into Chapter 17, where the hook sits in the thin wedge above "+
-        "the cone against a free surface with no load redistribution. This is why ℓ_dh above the cone often "+
-        "governs and drives you toward deeper embedment, smaller bars, or longer legs.";
+      const devNote=el("div","note bpNL");   /* BPNL */
+      devNote.innerHTML=bpNL("Anchor reinforcement must be developed on BOTH sides of the breakout surface, per ACI Fig. R17.5.2.1a:",
+        [["Hooked or bent end:","develops <b>ℓ_dh</b> (typically 40–50% shorter than straight ℓ_d)."],
+         ["Straight end:","develops <b>ℓ_d</b>."],
+         ["Each side:","each side of the cone is checked with its own end condition."],
+         ["Note:","a stirrup/tie bend wrapping a longitudinal bar does NOT reduce this to zero — "+
+          "the §25.7.1.3(a) &ldquo;developed at the bend&rdquo; shortcut is validated for beam stirrups in a "+
+          "confined core and is <i>not</i> imported into Chapter 17, where the hook sits in the thin wedge above "+
+          "the cone against a free surface with no load redistribution."],
+         ["Consequence:","this is why ℓ_dh above the cone often governs and drives you toward deeper embedment, smaller bars, or longer legs."]]);
       body.appendChild(devNote);
       if(isTie||isU){
         const dv=el("div","note");
+        if(isTie) dv.classList.add("bpNL");   /* BPNL */
         dv.innerHTML = isTie
-          ? "<b>Closed tie:</b> a bend is present at BOTH the top and bottom by geometry, so both ends "+
-            "develop in ℓ_dh (not straight ℓ_d) automatically. The bends wrapping the group's longitudinal "+
-            "bars is what makes them standard hooks — but each side still must develop ℓ_dh above/below the "+
-            "cone; there is no zero-length credit."
+          ? bpNL("Closed tie:",
+              [["Bends:","a bend is present at BOTH the top and bottom by geometry, so both ends "+
+                "develop in ℓ_dh (not straight ℓ_d) automatically."],
+               ["Standard hooks:","the bends wrapping the group's longitudinal "+
+                "bars is what makes them standard hooks — but each side still must develop ℓ_dh above/below the "+
+                "cone; there is no zero-length credit."]])
           : "<b>U-stirrup:</b> the TOP is a continuous bend (develops ℓ_dh automatically); the BOTTOM is two "+
             "free straight ends — tick below if those ends are actually hooked, which lets them use ℓ_dh "+
             "instead of straight ℓ_d.";
@@ -6439,28 +6480,34 @@ function buildInputPanel(){
           "Ties/stirrups confining the hook per §25.4.3.2, OR bar spacing ≥ 6·d_b. Sets ψ_r = 1.0 instead of 1.6 — the single largest factor on ℓ_dh, so leave it OFF unless the confinement is actually detailed.");
         fRow(body,"Hook at discontinuous end / thin cover",chkInput(()=>S.tRebar.hookAtEdge,v=>S.tRebar.hookAtEdge=v),"",
           "Hook at a discontinuous end (e.g. pedestal top) with side cover < 2.5″. Sets ψ_o = 1.25, lengthening ℓ_dh. Tick if the hook sits near a free edge with thin cover.");
-        body.appendChild(el("div","note",
-          "A hooked or bent end develops the bar in \u2113_dh per Eq.(25.4.3.1a) instead of the "+
-          "straight \u2113_d, typically 40\u201350% shorter. Each SIDE of the cone is checked with its own "+
-          "end condition: the top bend of a closed stirrup counts above the surface crossing, a bottom "+
-          "hook counts below it. With a straight top the leg must fit a full straight \u2113_d between the "+
-          "cone and the surface, which rarely works \u2014 that is why stirrups are the usual detail. \u03c8_r = 1.0 with enclosing ties per §25.4.3.2 "+
-          "or bar spacing \u2265 6d_b, otherwise 1.6 \u2014 this is the single largest factor, so leave it "+
-          "unticked unless the ties are actually detailed. \u03c8_o = 1.25 for a hook at a discontinuous "+
-          "end with side cover < 2.5 in. \u2113_dh is measured from the critical section to the OUTSIDE "+
-          "of the bend, and must still fit within the available length entered above."));
+        body.appendChild(bpNLdiv("div","note",   /* BPNL */
+          "A hooked or bent end develops the bar in \u2113_dh per Eq.(25.4.3.1a) instead of the straight \u2113_d, typically 40\u201350% shorter.",
+          [["Each side:","each SIDE of the cone is checked with its own end condition: the top bend of a closed stirrup counts "+
+            "above the surface crossing, a bottom hook counts below it."],
+           ["Straight top:","with a straight top the leg must fit a full straight \u2113_d between the cone and the surface, which "+
+            "rarely works \u2014 that is why stirrups are the usual detail."],
+           ["Confinement:","\u03c8_r = 1.0 with enclosing ties per §25.4.3.2 or bar spacing \u2265 6d_b, otherwise 1.6 \u2014 this is "+
+            "the single largest factor, so leave it unticked unless the ties are actually detailed."],
+           ["Edge:","\u03c8_o = 1.25 for a hook at a discontinuous end with side cover &lt; 2.5 in."],
+           ["Measured:","\u2113_dh is measured from the critical section to the OUTSIDE of the bend, and must still fit within "+
+            "the available length entered above."]]));
       }
     }
-    body.appendChild(el("div","note","Concrete breakout (tension) is replaced by the anchor-reinforcement steel check only once the §17.5.2.1.1 substitution is JUSTIFIED (geometry verified and detailing confirmed on the Tension Rebar tab); until then breakout remains evaluated and enforced. Development above the breakout cone is verified separately."));
+    body.appendChild(bpNLdiv("div","note",   /* BPNL */
+      "Concrete breakout (tension) is replaced by the anchor-reinforcement steel check only once the §17.5.2.1.1 substitution is JUSTIFIED.",
+      [["Justified:","geometry verified and detailing confirmed on the Tension Rebar tab."],
+       ["Until then:","breakout remains evaluated and enforced."],
+       ["Development:","development above the breakout cone is verified separately."]]));
   },P);
 
   mkSection("inVRebar","9. Shear Reinforcement (Hairpins)",body=>{
-    body.appendChild(el("div","note",
-      "Hairpins are horizontal bars laid across the shear breakout body so their legs cross the crack "+
-      "that opens toward the loaded edge, carrying the shear into the pedestal and replacing the concrete "+
-      "shear-breakout check (§17.5.2.1.2). To count, a leg must sit close to a leading anchor (within "+
-      "0.5·c_a1), fall within the breakout body depth, and develop behind the failure plane. The fields "+
-      "note what each one drives."));
+    body.appendChild(bpNLdiv("div","note",   /* BPNL */
+      "Hairpins are horizontal bars laid across the shear breakout body.",
+      [["Purpose:","their legs cross the crack that opens toward the loaded edge, carrying the shear into the pedestal and "+
+        "replacing the concrete shear-breakout check (§17.5.2.1.2)."],
+       ["To count:","a leg must sit close to a leading anchor (within 0.5·c_a1), fall within the breakout body depth, and "+
+        "develop behind the failure plane."],
+       ["Fields below:","the fields note what each one drives."]]));
     fRow(body,"Shear rebar present",chkInput(()=>S.vRebar.present,v=>S.vRebar.present=v),"",
       "Turn on when hairpins/ties are detailed to resist anchor shear. Off = rely on the plain concrete shear-breakout capacity.");
     if(S.vRebar.pieceType!=="closedtie") fRow(body,"Bar size",selInput(LIB.rebar,()=>S.vRebar.size,v=>S.vRebar.size=v,o=>o.size,o=>o.size),"",
@@ -6468,7 +6515,10 @@ function buildInputPanel(){
     fRow(body,"Piece type",selInput(
       [{id:"hairpin",nm:"Hairpin (2 legs)"},{id:"bar",nm:"Single bar (1 leg)"},{id:"closedtie",nm:"Closed ties enclosing the anchor group"}],
       ()=>S.vRebar.pieceType,v=>S.vRebar.pieceType=v,o=>o.nm,o=>o.id),"",
-      "A hairpin is a U-bar giving TWO legs that straddle the anchor rod, with the bend engaging the rod for near-side anchorage; a single bar is one leg and needs its own near-side development. <b>Closed ties</b> (pedestal ties around all the anchors, ACI Fig. R17.5.2.1b): the ties are entered in <b>7a. Pedestal Reinforcement</b> and the app decides which tie legs are eligible.");
+      bpNLhint("What each piece type gives:",   /* BPNL */
+        [["Hairpin:","a U-bar giving TWO legs that straddle the anchor rod, with the bend engaging the rod for near-side anchorage."],
+         ["Single bar:","one leg; it needs its own near-side development."],
+         ["Closed ties","(pedestal ties around all the anchors, ACI Fig. R17.5.2.1b): the ties are entered in <b>7a. Pedestal Reinforcement</b> and the app decides which tie legs are eligible."]]));
     const vTie=(S.vRebar.pieceType==="closedtie");
     if(vTie && S.vRebar.present){
       /* VR-2 (2026-10-24): the ties are the pedestal ties, defined only in 7a; here a read-only
@@ -6477,15 +6527,20 @@ function buildInputPanel(){
       bpPedLink(body,"ties");
       fRow(body,"Epoxy-coated",chkInput(()=>S.vRebar.epoxy,v=>S.vRebar.epoxy=v),"",
         "Epoxy coating raises the required hook development ℓ_dh (ψ_e = 1.2).");
-      body.appendChild(el("div","note",
-        "The tie follows the pedestal outline. For each set and side the app checks: depth ≤ 0.5·c_a1; where the leg crosses the "+
-        "shear failure surface (x_c = max(lateral offset, depth)/1.5 in front of the leading anchors), before the closed front corner "+
-        "that anchors it; and ℓ_dh behind the surface (to the back corner). The result is listed leg by leg on the Shear Rebar tab."));
+      body.appendChild(bpNLdiv("div","note",   /* BPNL */
+        "The tie follows the pedestal outline. For each set and side the app checks:",
+        ["depth ≤ 0.5·c_a1;",
+         "where the leg crosses the shear failure surface (x_c = max(lateral offset, depth)/1.5 in front of the leading anchors), "+
+         "before the closed front corner that anchors it;",
+         "and ℓ_dh behind the surface (to the back corner).",
+         ["Results:","the result is listed leg by leg on the Shear Rebar tab."]]));
     }
     if(!vTie) fRow(body,"Layout",selInput(
       [{id:"perAnchor",nm:"At each leading anchor"},{id:"group",nm:"Around/across the whole group"}],
       ()=>S.vRebar.layoutMode||"perAnchor",v=>S.vRebar.layoutMode=v,o=>o.nm,o=>o.id),"",
-      "<b>Per-anchor</b>: pieces at each edge-nearest anchor, each hairpin wrapping its own rod. <b>Group</b>: the ACI Fig R17.5.2.1b(i) detail — one hairpin whose bend wraps the WHOLE leading row (gauge auto-sized to the anchor span + rod Ø + bar Ø + ½″), or one run of bars across the group.");
+      bpNLhint("Where the pieces go:",   /* BPNL */
+        [["Per-anchor:","pieces at each edge-nearest anchor, each hairpin wrapping its own rod."],
+         ["Group:","the ACI Fig R17.5.2.1b(i) detail — one hairpin whose bend wraps the WHOLE leading row (gauge auto-sized to the anchor span + rod Ø + bar Ø + ½″), or one run of bars across the group."]]));
     const vGrp=(S.vRebar.layoutMode==="group");
     if(vTie){ /* closed ties: geometry above */ }
     else if(vGrp && S.vRebar.pieceType==="hairpin"){
@@ -6577,13 +6632,18 @@ function buildInputPanel(){
         "Epoxy coating reduces bond, raising the required development (ψ_e up to 1.5×). Tick only if the bars are coated.");
       fRow(body,"Ktr (transverse reinf. index)",numInput(()=>S.vRebar.Ktr,v=>S.vRebar.Ktr=v,0.1),"",
         "Confinement from transverse steel crossing the splitting plane. 0 is conservative; a positive value shortens development but must be justified by actual ties.");
-      body.appendChild(el("div","note",
-        "Development available is NOT an input. The plane through the anchors nearest the loaded "+
-        "edge is the rear boundary of the shear breakout body; the length behind it is what develops "+
-        "the leg, clipped by the far pedestal face less cover. Legs further than 0.5·c_a1 laterally "+
-        "from a leading anchor, or deeper than 1.5·c_a1 below the surface, are not credited."));
+      body.appendChild(bpNLdiv("div","note",   /* BPNL */
+        "Development available is NOT an input.",
+        [["Plane:","the plane through the anchors nearest the loaded edge is the rear boundary of the shear breakout body; "+
+          "the length behind it is what develops the leg, clipped by the far pedestal face less cover."],
+         ["Not credited:","legs further than 0.5·c_a1 laterally from a leading anchor, or deeper than 1.5·c_a1 below the "+
+          "surface, are not credited."]]));
     }
-    body.appendChild(el("div","note","Concrete breakout (shear) is replaced by the hairpin steel check only once the §17.5.2.1.2 substitution is JUSTIFIED (geometry verified and detailing confirmed on the Shear Rebar tab); until then breakout remains evaluated and enforced. Pryout is still evaluated either way."));
+    body.appendChild(bpNLdiv("div","note",   /* BPNL */
+      "Concrete breakout (shear) is replaced by the hairpin steel check only once the §17.5.2.1.2 substitution is JUSTIFIED.",
+      [["Justified:","geometry verified and detailing confirmed on the Shear Rebar tab."],
+       ["Until then:","breakout remains evaluated and enforced."],
+       ["Pryout:","pryout is still evaluated either way."]]));
   },P);
 
   mkSection("inLoads","10. Load Combinations (pre-factored, LRFD)",body=>{
@@ -6607,10 +6667,11 @@ function buildInputPanel(){
         fRow(body,"§17.10.6.3 shear option",selInput(Object.keys(BP_SEIS_V).map(k=>[k,BP_SEIS_V[k]]),()=>Z.vOpt,v=>{ SL.seisV=v; },o=>o[1],o=>o[0]),"",
           "The combinations above must already be those loads. Shear strength per §17.7 (no seismic reduction, §17.10.6.2).");
       } }
-    body.appendChild(el("div","note",
-      "\u26a0 Hilti PROFIS reports forces in \u2018lb\u2019 and moments in \u2018lb-in\u2019. Entering those numbers here without "+
-      "dividing by 1000 makes the load 1000\u00d7 too large. Importing the PROFIS PDF converts units automatically; "+
-      "typing values across by hand does not. Implausible loads are flagged in the validation box."));
+    body.appendChild(bpNLdiv("div","note",   /* BPNL */
+      "\u26a0 Hilti PROFIS reports forces in \u2018lb\u2019 and moments in \u2018lb-in\u2019.",
+      [["Typed by hand:","entering those numbers here without dividing by 1000 makes the load 1000\u00d7 too large."],
+       ["PDF import:","importing the PROFIS PDF converts units automatically; typing values across by hand does not."],
+       ["Check:","implausible loads are flagged in the validation box."]]));
     /* compact read-only summary that fits the narrow panel */
     const t=el("table","tbl"); t.style.fontSize="9pt";
     const hd=el("tr"); ["Name","P","V","M"].forEach(h=>hd.appendChild(el("th",null,h))); t.appendChild(hd);
