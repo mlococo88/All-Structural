@@ -1715,3 +1715,22 @@ Basis: ASCE/SEI 7-16 Fig. 29.3-1 (Cases A, B, C; Case C table and the (1.8 − s
     - `engine handoffs` passed.
     - The Excel workbook builds.
 - **Other copies:** none.
+
+## 2026-11-08 — PR: asce7-keybox-close (PR #1230: https://github.com/mlococo88/All-Structural/pull/1230) — A7KB: the User Manual's Excel key-point box closes with `</div>` (markup only, no result change)
+
+### A7KB. Part 2.4 key point "Every derived cell carries a live formula" closed by `</p>`   [display only] [no result change]
+- **Problem:** recorded under A7NL-3 (#1219). The `<div class="keybox">` in User Manual Part 2.4 ended with `</p>`. The browser dropped the stray `</p>` (an empty `<p>` in the box) and left the box open, so the paragraph "Each formula is written together with the app's own computed result…", heading "2.5 Live calculation", its paragraph, heading "2.6 Panels, state and saving" and its paragraph were drawn inside the shaded key-point box.
+- **Where:** `MANUAL`, part "2. Using the Program", section 2.4. Anchor text `Excel-2007-era functions are used throughout for compatibility.`
+  - Before: `the same steps they would take by hand. Excel-2007-era functions are used throughout for compatibility.</p>`
+  - After: `the same steps they would take by hand. Excel-2007-era functions are used throughout for compatibility.</div>`
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data / hand-offs:** none changed.
+- **Check case:** User Manual, Part 2.
+  - Before: 14 top-level blocks; the key-point box holds 3 paragraphs (1 empty) and 2 headings (2.5, 2.6).
+  - After: 19 top-level blocks; the box holds its own text only; 2.5 and 2.6 are headings at the top level, as in every other part.
+- **How verified:** headless Chromium, origin/main vs the branch.
+  - A tag-balance check of every `MANUAL` part (div, p, ul, ol, li, table, tr, td, th, h3, h4, b, i): on main the only mismatch was this `</p>`, and part 2 ended with an open `div`. On the branch there is no mismatch in any of the 11 parts.
+  - Rendered manual: the other 10 parts are unchanged (same blocks). Every part's text and digit sequence is identical.
+  - `R` is identical, and the digit sequence of every output tab is identical (default state and after an input change).
+  - The Report's text and digit sequence are identical with and without the User Manual. The Report's manual appendix (`a7xHarvest`, 11 parts) is identical item by item: the walk already flattened the open box, and the box text stays one note, followed by "Each formula…", "▸ 2.5 Live calculation" and "▸ 2.6 Panels, state and saving".
+  - Tests: `check-syntax` passed; `project-library --tool asce7` ALL PASS; `phone-layout --tool asce7` (390, 768) passed; 0 console errors.
+- **Other copies:** none. Open item from A7NL-3 closed.
