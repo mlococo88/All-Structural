@@ -5519,7 +5519,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **How verified:** `node tests/check-syntax.mjs`; `tests/smoke/phone-layout.mjs --tool bpad`; `tests/smoke/project-library.mjs --tool baseplate`; `tests/smoke/lightpole-anchor-handoff.mjs`; 0 console errors.
 - **Other copies:** none.
 
-## 2026-11-08 — PR: nl/bp-notes-1 (PR: pending) — BPNL-1: long input notes as a bold lead and a list (display only, no result change)
+## 2026-11-08 — PR: nl/bp-notes-1 (PR #1176: https://github.com/mlococo88/All-Structural/pull/1176) — BPNL-1: long input notes as a bold lead and a list (display only, no result change)
 ### BPNL-1. Input panel: long notes split into a lead line and a list   [display only] [no result change]
 - **Request (engineer, 2026-11-07):** "Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Part 1 of 2 for this tool: the input panel. The output tabs and the Report are BPNL-2.
 - **Rule used:** a note is long if it is over ~300 characters, has 3 or more sentences, or carries several facts in one paragraph. Short 3-sentence hints under ~230 characters (for example the hairpin plan-offset hint) are left as they are. Every sentence, number, citation and link is kept, in the same order. Only the lead words, list-start capitals and end punctuation are new.
