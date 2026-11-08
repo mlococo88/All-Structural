@@ -2379,7 +2379,7 @@ Code sites are tagged `TBNL`. Uses `tbNL` and the CSS of TBNL-1 (PR #1185).
 - **Request:** as TBNL-1 (engineer, 2026-11-07).
 - **Summary notes list (warnings), display only.** The strings in `R.notes` / `R.adv` are byte-identical: the Report's "Note: …" lines, the Validation check `q.adv.filter(t => /^REVIEW: custom glulam has no Ey,min/.test(t))` and every other reader see the same text.
   - In `tbcRun` (after `const adv = [];`) a display-only map `advNL` is added, keyed by the exact text: `const nlMsg = (lead, items) => { const t = [lead, ...items].join(' '); advNL[t] = { lead, items }; return t; };`.
-  - `advNL` is returned in `base` (`… notes, adv, advNL, …`).
+  - The map is a non-enumerable property of the `adv` array (`Object.defineProperty(adv, 'nl', { value: advNL })`), so `R.adv.nl` is available to the display but is not part of the results (JSON, saved data, test comparisons).
   - Six messages are now built as `nlMsg(lead, [sentences])`. The joined text equals the old literal exactly (checked: `R.adv` / `R.notes` identical in every case):
     - "REVIEW: custom glulam has no Ey,min …" (the REVIEW sentence is the lead, so the action comes first);
     - "Incised timber: …";
@@ -2387,8 +2387,8 @@ Code sites are tagged `TBNL`. Uses `tbNL` and the CSS of TBNL-1 (PR #1185).
     - "Fixed support: …";
     - "Continuous beam: the live, roof live and snow …";
     - "Wet service: creep factor K_cr = 2.0 used …".
-  - `buildSummary`: `nlH(m)` shows such a message as a lead and a sub-list (`tbNL`). Other messages are unchanged.
-  - Report (Notes and references, anchor `R.notes.concat(R.adv).forEach(m => { const q = R.advNL`): "Note: " + lead, then one "• " line per item.
+  - `buildSummary`: `nlH(m)` (reads `R.adv.nl`) shows such a message as a lead and a sub-list (`tbNL`). Other messages are unchanged.
+  - Report (Notes and references, anchor `R.notes.concat(R.adv).forEach(m => { const q = R.adv.nl`): "Note: " + lead, then one "• " line per item.
 - **Report model notes** (`tbrModel`), new `tbrNL(lead, items)` (before `const tbrTbl =`) gives a lead note and one "• " note per item:
   - §1.1 "Ratio = demand / capacity; ≤ 1.000 passes. …" → Each ratio links / Stresses (ASD) or LRFD / The same values.
   - §2.1 "Units: lb, ft, in., psi unless noted. …" → Every value in this report….
@@ -2419,13 +2419,13 @@ Code sites are tagged `TBNL`. Uses `tbNL` and the CSS of TBNL-1 (PR #1185).
   - table cells (the l<sub>e</sub> and dressed-size rows of the factors table, the references table);
   - the worked steps' own notes (`SharedSteps`, shared);
   - the existing "Notes on the Summary tab" Report line, which joins the Summary notes box without spaces between items. This is old behaviour, not changed here (open item).
-- **Formulas, factors, units, code references:** none changed (§4 does not apply). `tbcRun` changes only by building six message strings from parts and returning the display map `advNL`. **Saved data:** none.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). `tbcRun` changes only by building six message strings from parts and attaching the display map to `adv` (non-enumerable). **Saved data:** none.
 - **Check case:** 3 spans 12 / 14 / 10 ft, support C fixed, D 15 / L 40 psf, W −20 psf. The Summary notes box shows:
   - "Fixed support: bearing is checked with the vertical reaction only (uniform Fc⊥ stress over the bearing length)." with one sub-item;
   - "Continuous beam: the live, roof live and snow area loads act on all spans at once." with two sub-items.
   - `R.adv` is the same two strings as before, character for character.
 - **How verified:** headless Chromium, origin/main (after #1185) vs the branch, the 9 cases of TBNL-1:
-  - `TBC.res` identical apart from the added `advNL`, with `R.adv` / `R.notes` identical;
+  - `TBC.res` identical (JSON), including `R.adv` / `R.notes`;
   - the digit sequence of every input tab, every output tab, the governing strip and the Report (text and full HTML, all appendices on) identical;
   - Validation 123/123;
   - 0 console errors;

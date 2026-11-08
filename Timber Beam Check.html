@@ -680,7 +680,8 @@ function tbcRun(m) {
     const fails = [];   // code limits violated: member is NG regardless of stress ratios
     const notes = [];   // informational (pre-R1 notes)
     const adv = [];     // advisories added with R1 (multi-span / bottom-edge bracing); shown with the notes
-    const advNL = {};   // TBNL (2026-11-08): display only: a long advisory as { lead, items }, keyed by its exact text (the text itself is unchanged)
+    const advNL = {};   // TBNL (2026-11-08): display only: a long note as { lead, items }, keyed by its exact text (the text itself is unchanged);
+    Object.defineProperty(adv, 'nl', { value: advNL });   // a non-enumerable property of R.adv: not part of the results (JSON, comparisons)
     const nlMsg = (lead, items) => { const t = [lead, ...items].join(' '); advNL[t] = { lead, items }; return t; };
     const num = (v) => (typeof v === 'number' && isFinite(v)) ? v : NaN;
     const g = m.geom || {}, ld = m.loads || {}, mt = m.material || {}, dz = m.design || {};
@@ -848,7 +849,7 @@ function tbcRun(m) {
     const notch = isFinite(num(mt.notch)) ? num(mt.notch) : 0;
     if (isSCL && notch > 0) errors.push('Notch depth: notches in SCL are governed by the manufacturer\'s literature and are not checked here. Set the notch depth to 0 or check the notch by hand.');
 
-    const base = { ok: false, errors, fails, notes, adv, advNL, b, d, cat, wg, ref, src, flat, G, dens, userVals, refTable, simple, nS, Ls, xN, L, types, supJ, mtype, isGL, isSCL, method: lrfd ? 'LRFD' : 'ASD' };
+    const base = { ok: false, errors, fails, notes, adv, b, d, cat, wg, ref, src, flat, G, dens, userVals, refTable, simple, nS, Ls, xN, L, types, supJ, mtype, isGL, isSCL, method: lrfd ? 'LRFD' : 'ASD' };
     if (errors.length || !ref || !cat) return base;
 
     // Orientation: bending width bw and bending depth dep
@@ -2300,7 +2301,7 @@ function buildSummary(pg) {
   ce.addEventListener('click', () => { M.ui.outTab = 'ana'; buildTabBar(); renderTab(); }); dash.appendChild(ce);
   pg.appendChild(dash);
   if (R.fails.length) pg.appendChild(el('div', 'errBox', '<b>Code limit violated (NG):</b><ul>' + R.fails.map(m => '<li>' + esc(m) + '</li>').join('') + '</ul>'));
-  const nlH = m => { const q = R.advNL && R.advNL[m]; return q ? tbNL(esc(q.lead), q.items.map(esc)) : esc(m); };   // TBNL: a long note as a lead and a list (display only)
+  const nlH = m => { const q = R.adv.nl && R.adv.nl[m]; return q ? tbNL(esc(q.lead), q.items.map(esc)) : esc(m); };   // TBNL: a long note as a lead and a list (display only)
   if (R.notes.length || R.adv.length) pg.appendChild(el('div', 'warnBox', '<b>Notes:</b><ul>' + R.notes.concat(R.adv).map(m => '<li>' + nlH(m) + '</li>').join('') + '</ul>'));
   mkSec(pg, 'sumGov', 'Governing results', body => {
     const rows = [];
@@ -3443,7 +3444,7 @@ function tbrModel() {
     const items = [];
     if ((p.notes || '').trim()) items.push({ type: 'note', text: 'Project notes and assumptions (input): ' + String(p.notes).trim().replace(/\s*\n\s*/g, ' / ') });
     R.fails.forEach(m => items.push({ type: 'note', warn: true, text: 'Code limit violated: ' + m }));
-    R.notes.concat(R.adv).forEach(m => { const q = R.advNL && R.advNL[m];   // TBNL: a long note as its lead and "• " lines
+    R.notes.concat(R.adv).forEach(m => { const q = R.adv.nl && R.adv.nl[m];   // TBNL: a long note as its lead and "• " lines
       if (q) items.push({ type: 'note', warn: true, text: 'Note: ' + q.lead }, ...q.items.map(x => ({ type: 'note', warn: true, text: '• ' + x }))); else items.push({ type: 'note', warn: true, text: 'Note: ' + m }); });
     if (!items.length) items.push({ type: 'note', text: 'No notes.' });
     secs.push({ title: 'Notes and references', subs: [{ title: 'Notes', items }, { title: 'Codes and references cited', items: [{ type: 'table', head: ['Reference', 'Provisions used'], rows: tbcRefs(tbrApxSel()).map(x => x.map(tbrPlain)) }] }] });
