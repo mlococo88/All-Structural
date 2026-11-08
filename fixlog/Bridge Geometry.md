@@ -2247,7 +2247,7 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **Tests:** check-syntax; bgeo-examples; dxf-print-sheets; phone-layout --tool bgeo (390 / 768 px; the 12 console errors are the Site Map tiles, as on main); home-projects; tests/engine/run.mjs handoffs, lldf: pass. project-library --tool bgeo: the expected text-only difference in the Bridge-tab text (ENG and the output / seat tabs identical).
 - **Other copies:** none.
 
-## 2026-11-08 — PR: nl-bgeo-a2 (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (BGNL-2: long notes as a bold lead and a list — Top of Deck Output, Beam Seat Output, Site Map, Drawings, Export DXF and LL & DL dialogs, curve report; display only, no result change)   [display only]
+## 2026-11-08 — PR: nl-bgeo-a2 (PR #1209: https://github.com/mlococo88/All-Structural/pull/1209) (BGNL-2: long notes as a bold lead and a list — Top of Deck Output, Beam Seat Output, Site Map, Drawings, Export DXF and LL & DL dialogs, curve report; display only, no result change)   [display only]
 
 ### BGNL-2. Long notes split into a lead line and a list (output tabs, Site Map, Drawings, dialogs)   [display only] [no result change]
 - **Request:** as BGNL-1 (#1197), part 2 of 2. Same rule, helpers (`bgNL`, `bgNLWarn`) and CSS (`.bgNL …`); nothing new added to them. Every sentence, number, citation and link is kept in the same order. New lead words carry no digits.
