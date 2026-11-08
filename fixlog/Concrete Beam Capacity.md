@@ -5417,3 +5417,35 @@ Frames: Development & Splice (`suite-frame-dev`) and ASD Beam Calcs (`suite-fram
 - **Check case:** Development & Splice, AASHTO, #8, f′c 4000 psi, lightweight λ 0.85, excess 0.8/1.0 (`aasLW085ex`), Tension tab. The 436-character narrative becomes the lead "Tension development, AASHTO:" and three items, with "λ_er·f_y", "F_h = 0", "fourth root of f'c", "12 in. minimum" and "§5.10.8.1.1" unchanged. Report §15.2 shows the same four lines.
 - **How verified:** headless Chromium, CBNL-1 (origin/main) vs the branch, the same 31 cases as CBNL-1. Every result (Beam Capacity, ASD, Development & Splice) is identical. The digit sequence of every tab's text (the 2 ASD and 15 Dev cases changed wording) and of the combined Report text is identical in all 31 cases. 0 console errors. Screenshots at 1440 and 390 px. Tests: see the PR.
 - **Other copies:** none. The standalone rebar calculator is a redirect page (RBRT), so the Development & Splice tab is the only copy.
+
+## 2026-11-08 — PR: nl-cbc-c (PR #1226: https://github.com/mlococo88/All-Structural/pull/1226) (CBLB: the check summary panel (CBDC) as a left column from 1200 px, was 1500 px; 240 px wide from 1200 to 1499 px; display only, no result change)
+
+Frame: Beam Capacity (`suite-frame-capacity`).
+
+### CBLB. The check summary is on the left at common laptop widths   [display only]
+- **Request (engineer, 2026-11-07/08):** the left summary panel in every tool with summary cards, the way it was done in Retaining Wall (RWLB #984), Spread Footing (SFLB #988), Light Pole (LPLB #991) and Shear and Moment Diagrams (SMLS #1130): a left column from 1200 px, 240 px up to 1499 px, a « collapse button with a per-tool key, a click opens the card that works the value, nothing changes below 1200 px. The Beam Capacity tab already had this panel (CBDC, 2026-11-05: one chip per check, name, D/C or condition, PASS / FAIL / N/A; click → `cbcGoto` to the card; « with key `cbc_dashCollapsed_v1`), but only from 1500 px. Below that it sat as a compact grid above the output tabs. Only the breakpoint and the width change here.
+- **Where:**
+  - CSS: `@media screen and (min-width:1500px){` (the CBDC block, anchor `body.cbcDashWide #cbcDashCol{display:block;flex:0 0 292px`) → `@media screen and (min-width:1200px){`, with the comment `/* CBLB (2026-11-08 … */` above it. After that block, added:
+    ```css
+    @media screen and (min-width:1200px) and (max-width:1499.98px){   /* CBLB: 240 px column from 1200 to 1499 px */
+      body.cbcDashWide #cbcDashCol{flex-basis:240px;width:240px}
+      body.cbcDashWide #inputPanel{flex-basis:calc((100% - 240px)*.33);max-width:calc((100% - 240px)*.33)}
+    }
+    ```
+    The collapsed rules (42 px strip) are more specific (`body.cbcDashWide.cbcDashColl …`), so they still win.
+  - JS: `const CBDC={key:'cbc_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1500px)')` → `'screen and (min-width:1200px)'` (comment `/* CBLB: was 1500px */`). Comments on `#cbcDashCol`, `#cbcDashBox` and above `const CBDC` follow.
+- **Decision (pending engineer review):** from 1500 px the column stays **292 px** as before, the width Retaining Wall and Light Pole kept there. The brief's 280 px (Spread Footing's width) would change the layout that already exists at that width; one rule changes it if wanted.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data (§5):** no key or format changed (`cbc_dashCollapsed_v1` as before).
+- **Check case / how verified:** headless, origin/main vs the branch, default project, frame widths 1920 / 1440 / 1280 / 1200 / 1024 / 390 px:
+
+  | Width | Column, main | Column, branch | Input panel, branch | Output panel, branch |
+  |---|---|---|---|---|
+  | 1920 | 292 | 292 | 537 | 1091 |
+  | 1440 | none (grid above the tabs) | 240 | 396 | 804 |
+  | 1280 | none | 240 | 343 | 697 |
+  | 1200 | none | 240 | 317 | 643 |
+  | 1024 | none | none | same as main | same as main |
+  | 390 | none | none | same as main | same as main |
+
+  All widths are px. No sideways scroll, 17 chips, 0 console errors. At 1280 px, a click on the FAIL chip "Torsional capacity" opens the Torsion tab at "Combination 1 — 1.2D + 1.6L"; « gives the 42 px strip and `cbc_dashCollapsed_v1` = '1'. Page text and storage are identical (`compare.mjs --tool page`). Screenshots looked at. Tests: see the PR.
+- **Other copies:** none.

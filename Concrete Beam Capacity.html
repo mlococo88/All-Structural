@@ -497,7 +497,10 @@ body dialog.spLib{font-family:var(--font-ui)}
   .cbdCh.cbdOpen .cbdN{white-space:normal}
   .cbdMsg{grid-column:1/-1;font-size:8.5pt;padding:5px 8px;border:1px solid var(--color-border);border-left:4px solid var(--fail);background:#FEF2F2;color:#7F1D1D;border-radius:3px}
 }
-@media screen and (min-width:1500px){
+/* CBLB (2026-11-08, engineer: the check summary on the left, as Spread Footing SFLB #988, Retaining Wall RWLB #984, Light Pole
+   LPLB #991): the left column from 1200 px (was 1500 px); 240 px wide from 1200 to 1499 px, 292 px from 1500 px as before.
+   Below 1200 px nothing changes (the compact grid above the output tabs; the phone order as before). Screen only. */
+@media screen and (min-width:1200px){
   body.cbcDashWide #cbcDashCol{display:block;flex:0 0 292px;width:292px;overflow-y:auto;overflow-x:hidden;position:relative;
     padding:0 6px 24px;border-right:1px solid var(--color-border);background:var(--slate-50);overscroll-behavior:contain;font-family:var(--font-ui)}
   body.cbcDashWide #cbcDashBox{padding:0;border-bottom:0;max-height:none;overflow:visible;background:transparent}
@@ -512,6 +515,10 @@ body dialog.spLib{font-family:var(--font-ui)}
   body.cbcDashWide.cbcDashColl #cbcDashCnt span{font-size:7.5pt;padding:1px 2px;white-space:normal;text-align:center;width:36px}
   body.cbcDashWide #cbcDashCol::-webkit-scrollbar{width:7px}
   body.cbcDashWide #cbcDashCol::-webkit-scrollbar-thumb{background:#c2ccd6;border-radius:4px}
+}
+@media screen and (min-width:1200px) and (max-width:1499.98px){   /* CBLB: 240 px column from 1200 to 1499 px */
+  body.cbcDashWide #cbcDashCol{flex-basis:240px;width:240px}
+  body.cbcDashWide #inputPanel{flex-basis:calc((100% - 240px)*.33);max-width:calc((100% - 240px)*.33)}
 }
 /* CBIE (2026-11-05): a required input that is blank (stored as 0) or invalid is outlined red, with the message under its row */
 #inputPanel input.cbcInErr{border-color:var(--fail);background:#FEF2F2}
@@ -535,7 +542,7 @@ body dialog.spLib{font-family:var(--font-ui)}
     </div>
   </div>
   <div id=&quot;main&quot;>
-    <aside id=&quot;cbcDashCol&quot; aria-label=&quot;Check summary&quot;></aside><!-- CBDC (2026-11-05): the check summary panel on screens 1500 px and wider -->
+    <aside id=&quot;cbcDashCol&quot; aria-label=&quot;Check summary&quot;></aside><!-- CBDC (2026-11-05): the check summary panel on screens 1200 px and wider (CBLB; was 1500 px) -->
     <div id=&quot;inputPanel&quot;><div id=&quot;prjPane&quot;><!-- HDR (2026-11-05): the Project input tab; moved here from the header, kept across rebuilds by buildInput() -->
       <div class=&quot;sec&quot; id=&quot;prjFileSec&quot;><div class=&quot;secHead&quot;><h2 class=&quot;secTitle&quot;>Save and open</h2></div><div class=&quot;secBody&quot;><!-- STDS (2026-11-06): was &quot;Project file&quot; (New / Save Project / Open / Export / Import); the standard save card (cbcStdsInit) -->
         <div id=&quot;cbcSaveCard&quot;>
@@ -557,7 +564,7 @@ body dialog.spLib{font-family:var(--font-ui)}
       </div></div>
     </div></div>
     <div id=&quot;outputWrap&quot;>
-      <div id=&quot;cbcDashBox&quot;><!-- CBDC: check summary (moved into #cbcDashCol on screens 1500 px and wider) -->
+      <div id=&quot;cbcDashBox&quot;><!-- CBDC: check summary (moved into #cbcDashCol on screens 1200 px and wider; CBLB) -->
         <div id=&quot;cbcDashHead&quot;><button type=&quot;button&quot; id=&quot;cbcDashTgl&quot; aria-controls=&quot;cbcDash&quot;></button><h2 id=&quot;cbcDashTtl&quot;>Check summary</h2><span id=&quot;cbcDashCnt&quot;></span></div>
         <div id=&quot;cbcDash&quot;></div>
       </div>
@@ -5510,10 +5517,10 @@ function cbcRptModel(){
    The short value is the Summary's D/C; for a check whose status is a condition (detailing limits, the torsion cross-section
    limit) that is not satisfied, the condition instead, and the D/C moves to the expanded text. NG lines start expanded. A line
    click opens the card where the check is worked (cbcGoto, the D11 links). No new calculation.
-   On screens >= 1500 px the box is moved into the left column #cbcDashCol; below that it sits above the output tabs.
+   On screens >= 1200 px (CBLB; was 1500 px) the box is moved into the left column #cbcDashCol; below that it sits above the output tabs.
    Collapse state: per-browser UI key cbc_dashCollapsed_v1 ('1' = collapsed, '0' or absent = open); not in S, the autosave,
    the saved projects or the JSON export. */
-const CBDC={key:'cbc_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1500px)'):null,open:new Map(),coll:false};
+const CBDC={key:'cbc_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1200px)'):null,open:new Map(),coll:false};   /* CBLB: was 1500px */
 CBDC.coll=lsGet(CBDC.key)==='1';
 const CBDC_ST={pass:'PASS',fail:'FAIL',na:'N/A'};
 /* the condition a detailing check (or the torsion cross-section limit) states when it is not satisfied */
