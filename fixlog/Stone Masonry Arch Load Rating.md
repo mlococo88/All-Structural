@@ -1604,3 +1604,52 @@ function transDisp(w,n,c,cap){
   - all 14 tabs on the default and the semicircle with 0 console errors;
   - the panel appears in the Report.
 - **Saved data:** no change.
+
+## 2026-11-08 — PR: nl-arch-a (PR #TBD) — Long notes as a bold lead and a list: dashboard checks and every output tab (ARNL-1; display only, no result change)
+
+### ARNL-1. Long notes split into a lead line and a list   [display only] [no result change]
+- **Request (engineer, 2026-11-07/08, approved for all apps):** "There are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Pattern as Spread Footing SFNL-1 / SFNL-2 (#1167). Part 1 of 2: the Summary dashboard checks and the notes of the Summary, Model, Dead Load, Live Load, Vehicles, Earth Pressure, Diagrams, Influence Lines, Rating, Rating Summary, Nodal Results and Verification tabs, and through them the Report. The Manual and the input panel are part 2 (ARNL-2).
+- **Rule used:** a note is long if it is over ~300 characters, or has 3 or more sentences and is over ~200 characters, or carries several distinct facts in one paragraph. It becomes a one-line lead (or, in a callout, the callout title is the lead) and a list with bold lead words. Action items ("Check … before reading …", "Do not issue this run.", "Decision pending engineer review: …") are on their own warning-coloured line at the top. Every sentence, number, citation and link is kept, in the same order (an action line is moved first only when it has no digits). New lead words carry no digits, so the digit sequence of every tab and of the Report is unchanged.
+- **New helper** (module `R`, before `function badge(`), anchor `/* ARNL (2026-11-08): a long note as a lead line and a list (R.arNL)`:
+  ```js
+  function arNL(lead,items,o){
+    o=o||{}; const L=o.ol?"ol":"ul";
+    const li=(items||[]).filter(Boolean).map(x=>"<li>"+(Array.isArray(x)?`<b class="arNLk">${x[0]}</b> ${x[1]}`:x)+"</li>").join("");
+    return (o.act||[]).filter(Boolean).map(a=>`<div class="arNLa">${a}</div>`).join("")+
+      (lead?`<div class="arNLl">${lead}</div>`:"")+(li?`<${L} class="arNLu">${li}</${L}>`:"");
+  }
+  ```
+  exported as `R.arNL` (`return {step,eqLine,vars,dtab,msg,arNL,badge,…}`); in the application layer also `const arNL=R.arNL;` (the Rating Summary functions have a local `R`). A note `X. Y. Z.` becomes `R.arNL("X.",[["Lead:","Y."],["Lead:","Z."]])` inside the same `msg(…)`, `<div class="note">`, step `note:`, `figcaption` or dashboard detail cell. Items that are `null` are skipped (conditional sentences).
+- **CSS** (after `.msg > b:first-child{display:block;}`), no new colours:
+  ```css
+  .arNLl{font-weight:700;margin:0 0 1px;}
+  .arNLu{margin:2px 0 4px;padding-left:20px;}
+  .arNLu>li{margin:1px 0;}
+  .msg .arNLl{font-weight:400;}
+  .arNLa{border-left:3px solid var(--warn);background:var(--warn-bg);padding:2px 8px;margin:2px 0 5px;font-style:normal;color:var(--ink);}
+  @media print{.arNLu>li{break-inside:avoid;}}
+  ```
+- **Report (ARPT walker):**
+  - new `arptHasNL(e)` / `arptNL(e,ctx,warn)` after `const arptClean=`: a `.msg`, `.note` or `<p>` holding an `.arNLu` / `.arNLl` / `.arNLa` part becomes Report notes in order — each action line (`warn`), the lead ("Title: lead"), one note per item "• Lead words text"; `warn` as the callout's. Hooked in `arptItems` before the `.msg` branch: `if((cl.contains("msg")||tag==="P"||cl.contains("note"))&&arptHasNL(e)){…arptNL(e,ctx,…).forEach(push);continue;}`.
+  - `arptInline`: an `.arNLu>li` reads as " • …", an `.arNLl` / `.arNLa` part gets a trailing space (table cells, captions).
+  - `arptStep`: a listed step note is one line ("lead • item • item").
+  - `UL`/`OL` branch: the item text is read from the `<li>`'s children (`[...li.childNodes].map(c=>arptInline(c,ctx)).join("")`), same text as before for every existing list, and no double bullet for a nested `.arNLu`.
+- **Notes changed** (anchor = the old opening text; each is now a lead plus items). Exact before / after: the PR diff (every changed site carries `/* ARNL */`).
+  - Dashboard checks (`CALC.validate`): Element count (convergence and compliance), No fill anywhere, Fill runs out, No wearing surface, Fill spread credited below 2 ft, Shallow-cover distribution, Wheel spread tire patch + 1.75H, One truck transversely, Side-by-side trucks, Wearing surface under railroad loading, Track layout not entered, Cover threshold (rail), Cover at crown < 2 ft, Dead load exceeds / uses most of the allowable, No superimposed dead load, SDL implausibly small, Load width on the extrados, Fill column over the springing, Distribution reaches every table, Adverse influence only, Rail distribution, Transverse spread exceeds the barrel, Deterioration by node number, Ring implausibly thin, Deterioration deeper / implausibly thin, Section loss, Why a thinner ring can rate higher, Moment release, Governing position at the edge, Net tension, Quarter points, Deep elements, Shear rating (both), Stiffness self-check, Shear deformation off, Allowable stress range, Operating level, Bed-joint sliding (both; "(Decision pending engineer review)" is now the action line "Decision pending engineer review: how to treat the exceeded friction."), Outside the scope, Collapse mechanism, Midas verification (both); the Controlling result callout.
+  - Summary: MS18 Reporting, Design Basis Method, sign convention "Moment is sagging-positive", stated assumption "Dead load on the extrados projection".
+  - Model: elements note, modeled span ≠ clear span, Why this matters (measured), Idealized geometry, Fixed / Pinned springings, Figure 1 caption.
+  - Dead Load: components callout, h_f note, SDL note, lateral pressure note, Why not lumped, frame solver callout.
+  - Live Load: rail distribution, H note, L_s note, axle footprint note, What happens next (×2), Distribution through fill, 2 ft threshold, fill spread credit, LRFD least fill, Why the footprint, slab width selected, 6.4.1 note, rule switched off, spread basis, one truck, side-by-side, Figure transverse section caption, Why max eccentricity, These positions, coefficients on their own tab, Scope, rail impact, crown / local basis, railroad impact, nodal load, distribution table note, axle matrix "What this table is", adverse only, column totals check.
+  - Vehicles: comparison note, unverified trailing loads, check against your figures (action line first), axle-by-axle note.
+  - Earth Pressure: three things follow, z note, Δy note, element table note (1 945 characters, was the longest note of the tool), self-balancing load, separate solve note, pressure diagram caption, Why this is here.
+  - Diagrams: What is plotted, adverse-only, kern figure caption, Why the stress climbs.
+  - Influence Lines: verbatim requirement (now a list, sentence per item), program applies (was a `<p>`, now a `.note` div), Why no cases at the springings, element stiffness note, sign convention, How to read these tables, moment table note, Midas walk-through, walk-through table note, influence line caption, symmetry note.
+  - Rating: Every vehicle worked in full, selected section callout and note, mesh convergence table note, lane loading, HS20 V, bed-joint sliding callout and note, mechanism callout, How it is worked, Not included, mesh-reported callout; per vehicle: selected section, axle train note, consist weight, How the position is found, dead load split note, earth dominates, Basis of this worked section, components note, sensitivity, utilization note, Why an iteration (the §7.2.7.12 text, sentence per item), convergence criterion, iteration note, Why not 1/(f/f_a), Outside §7.2.7, shear capacity, shear table note, EV reporting.
+  - Rating Summary: How to read, table note, tonnage note, two sections close, mirror note, symmetry check.
+  - Nodal Results: three depths, distribution note, component notes (moment, units), combined results note, thrust line note, worked node Scope, (n_x, n_y), axle footprint, t_j, 6.4.1 axles, z note, frame solve callout.
+  - Verification: Purpose callout, Midas step 3, dead load cases, import format, import status, mesh study text; comparison block (shown only after a Midas import): sign mapping, agreement, scaling note, dead load components.
+- **Not changed:** notes under ~200 characters; the RF ≥ / < 1.0 callouts; the "Worked in" lines; numbered list `{ol:true}` is supported by the helper but not used (an `<ol>` would put new digits "1. 2." in the Report text).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none (§5).
+- **Check case:** default project, Earth Pressure tab, panel "Lateral pressure on each element": before one 1 945-character paragraph with `<br><br>` breaks; after the lead "How to read the table:" and seven items (Direction, Resultant, θ, p_h is the load., Midas, Everything here is on the arch axis., Vertical fill load), "θ near 90°", "bPROJ = YES" and "§7.2.7.5B" unchanged. Report §7.2: the same lead and seven "• " lines.
+- **How verified:** headless Chromium, origin/main vs the branch, six cases (default; railroad; 60/12 pinned shallow cover with deterioration; 25/8 parabolic deep cover adverse-only; 50/14 cover 1.0 ft with shear and μ = 0; 30/10 deep fill K = 0.30 f_a = 300 3 lanes): every vehicle result (`results`, deep compare) and the model `M` identical; the digit sequence of every tab, the input panel and the Report text identical in all six (the run-time figures "rated in … s" / "Computed in … s" masked). 0 console errors, 0 KaTeX errors. Screenshots at 1440 and 390 px. Tests: see the PR.
+- **Other copies:** none.

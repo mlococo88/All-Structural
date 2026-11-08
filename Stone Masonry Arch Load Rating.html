@@ -4755,7 +4755,7 @@ function pane(p,M,selEl,selCase,selSec){
       "for moment, shear, and axial load at given nodes.","Extreme care shall be exercised to ensure that proper "+
       "sign convention is maintained.","From these influence lines, the maximum moment and corresponding shear "+
       "and axial loads shall be calculated.","At a minimum, influence lines shall be developed at the springlines, "+
-      "crown, quarter points, and at points where significant changes in section properties occur."],{ol:true}))+
+      "crown, quarter points, and at points where significant changes in section properties occur."]))+
     `<div class="note">${R.arNL(null,[
       ["This program applies a 1 kip downward load at each free node in turn",`— ${nN-2} separate load `+
      `cases for the ${nN} nodes of this model — and records the moment, thrust and shear produced at `+
@@ -4889,7 +4889,7 @@ function pane(p,M,selEl,selCase,selSec){
         ["Second,","at interior nodes the two adjacent element ends are <b>averaged</b>, because thrust is "+
       "discontinuous across a node carrying a concentrated load and the section at the node sits at the middle "+
       "of its tributary length."],
-        ["Sign:","Thrust is reported compression-positive."]],{ol:true}))+
+        ["Sign:","Thrust is reported compression-positive."]]))+
     step({label:"Unit tangent and normal at this section",
       sym:"\\hat{t}=(n_y,\\,-n_x),\\qquad \\hat{n}=(n_x,\\,n_y)",
       sub:`\\hat{t}=(${num(tx,5)},\\,${num(ty,5)}),\\ \\hat{n}=(${num(nd.nx,5)},\\,${num(nd.ny,5)})`,
@@ -5002,7 +5002,7 @@ function pane(p,M,selEl,selCase,selSec){
         "read straight off the corresponding Midas beam force table one case at a time, rather than trying to "+
         "match a whole curve at once.",
           "The marker on the chart shows where the load currently sits; the curves "+
-        "themselves are the influence lines for the selected section."],{ol:true}))+
+        "themselves are the influence lines for the selected section."]))+
       `<figure><div id="figILWalk" class="plot" style="height:360px"></div>
         <figcaption>Influence lines at section ${esc(CALC.secTag(M,selSec))} with the current unit load position
         marked. Moment on the left axis in feet, thrust and shear on the right, dimensionless.</figcaption>
@@ -5888,7 +5888,7 @@ function pane(p,M,govVeh,govRes){
       ["Vertical height:","The pressure is computed "+
      "on the <b>vertical height</b> of each element, so a near-horizontal element at the crown attracts almost "+
      "none of it and a near-vertical element at the springing attracts nearly all."],
-      ["Element load:","And it is applied as a <b>linearly varying element load</b>, not lumped to nodes."]],{ol:true})}</div>`+
+      ["Element load:","And it is applied as a <b>linearly varying element load</b>, not lumped to nodes."]])}</div>`+
     step({label:"Lateral pressure at the arch axis",ref:"§7.2.7.5B",
       sym:"p_h=K\\left(\\gamma_f\\,z+\\gamma_{ws}\\,t_{ws}\\right)",
       sub:`${num(p.K,3)}\\left(${num(gf,4)}\\,z+${num(gws,4)}\\times${num(p.tws,3)}\\right)`,
@@ -9028,7 +9028,7 @@ function vehicleSection(p,M,veh,res,vopt){
     "re-rating the arch elements; dead loads are not modified.",
       "The multiplier is increased or decreased until "+
     "the rating factor equals 1.0, at which point the multiplier is the rating factor for that vehicle "+
-    "(Figure 7.2.7-1)."],{ol:true}));
+    "(Figure 7.2.7-1)."]));
   h+=eqLine("Convergence criterion",
     "\\text{find } m \\text{ such that } \\max_i f_i\\big(P_{DL}+m P_{LL}(1+I),\\ M_{DL}+m M_{LL}(1+I)\\big)=f_a",
     "§7.2.7.12 / Fig. 7.2.7-1",
