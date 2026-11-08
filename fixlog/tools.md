@@ -56,7 +56,7 @@
 - **Other copies:** none (the status labels repeat `LABEL` of `shared/github-sync.js`, which does not export it).
 - **Open items:** none.
 
-## 2026-11-08 — PR: claude/tools-notes-split (PR link added after merge) (TLNL: long notes on the tools list as a lead and a short list; display only)
+## 2026-11-08 — PR: claude/tools-notes-split (PR #1235: https://github.com/mlococo88/All-Structural/pull/1235) (TLNL: long notes on the tools list as a lead and a short list; display only)
 
 ### TLNL. Long notes split into a lead and a list   [display only] [no result change]
 - **Request (engineer, 2026-11-07, approved for all apps):** "There are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Pattern of Spread Footing SFNL-1 (#1167). The left summary panel (Part B of the same request) does not apply: this page lists the tools and has no checks.
@@ -81,5 +81,5 @@
 - **Not changed:** the Saved projects status bar (generated with its Refresh button), the short card descriptions, the page subtitle and footer, and the tool filter script. The filter still matches the same text, because a card's `textContent` keeps every word.
 - **Formulas, factors, units, code references:** none (§4 does not apply). **Saved data:** none (§5).
 - **Check case:** the Gusset item. Before: one 436-character line. After: a lead and seven items; "23.8 ksi" and "1.403 → 1.165" are unchanged.
-- **How verified:** headless Chromium, origin/main vs the branch, at 1440 and 390 px: the digit sequence of the page text is identical; the filter "anchor" shows the same two cards; no sideways scroll at 390 px; 0 console errors. Tests: see the PR.
+- **How verified:** headless Chromium, origin/main vs the branch, at 1440 and 390 px: the digit sequence of the page text is identical; the filter "anchor" shows the same two cards; no sideways scroll at 390 px; 0 console errors. Tests: check-syntax, home-projects, home-sync (ALL PASS).
 - **Other copies:** none. **Open items:** none.
