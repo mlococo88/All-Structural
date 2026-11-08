@@ -170,6 +170,35 @@ header { flex-wrap: wrap; height: auto; min-height: var(--header-h); row-gap: 6p
 
 /* ─────────────────────────── LAYOUT */
 .app { display: flex; flex: 1; min-height: 0; }
+/* SBLS (2026-11-08, engineer: a left summary panel as in Retaining Wall / Spread Footing / Light Pole / Shear and Moment Diagrams): the open
+   module's checks as compact lines left of the inputs, 280 px from 1500 px, 240 px from 1200 to 1499 px; nothing below 1200 px; screen only. */
+#gdDashCol { display: none; }
+@media screen and (min-width: 1200px) {
+  #gdDashCol { display: flex; flex-direction: column; flex: 0 0 280px; width: 280px; min-height: 0; background: var(--sidebar); border-right: 1px solid var(--border); }
+  #gdDashHead { display: flex; align-items: center; gap: 8px; padding: 10px 10px 8px; border-bottom: 1px solid var(--border); }
+  #gdDashTgl { border: 1px solid var(--border); background: var(--surface); border-radius: 6px; width: 26px; height: 24px; cursor: pointer; color: var(--text-dim); font: inherit; line-height: 1; }
+  #gdDashTtl { font-size: 13px; font-weight: 650; margin: 0; flex: 1; }
+  #gdDashCnt { font-size: 11px; color: var(--muted); white-space: nowrap; }
+  #gdDash { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 8px 8px 24px; }
+  .gdd-it { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 8px; width: 100%; text-align: left; margin: 0 0 5px; padding: 5px 8px; border: 1px solid var(--border); border-left-width: 3px; border-radius: 6px; background: var(--surface); font: inherit; font-size: 12px; color: var(--text); cursor: pointer; }
+  .gdd-it:hover, .gdd-it:focus-visible { border-color: var(--blue); }
+  .gdd-it .gdd-n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gdd-it .gdd-n b { font-weight: 700; margin-right: 4px; }
+  .gdd-it .gdd-v { font-family: var(--mono); font-size: 11.5px; text-align: right; }
+  .gdd-it .gdd-s { grid-column: 2; text-align: right; font-size: 10.5px; font-weight: 700; }
+  .gdd-it .gdd-l { grid-column: 1; grid-row: 2; font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gdd-it.pass { border-left-color: var(--pass); } .gdd-it.pass .gdd-s { color: var(--pass); }
+  .gdd-it.fail { border-left-color: var(--fail); background: var(--fail-dim); } .gdd-it.fail .gdd-s { color: var(--fail); }
+  .gdd-it.warn { border-left-color: var(--warn); background: var(--warn-dim); } .gdd-it.warn .gdd-s { color: var(--warn); }
+  .gdd-it.info .gdd-s, .gdd-it.na .gdd-s { color: var(--muted); }
+  .gdd-msg { font-size: 12px; color: var(--text-dim); padding: 6px 4px; }
+  body.gdDashColl #gdDashCol { flex-basis: 42px; width: 42px; }
+  body.gdDashColl #gdDash, body.gdDashColl #gdDashCnt { display: none; }
+  body.gdDashColl #gdDashHead { flex-direction: column; padding: 10px 6px; border-bottom: 0; }
+  body.gdDashColl #gdDashTtl { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 12px; }
+}
+@media screen and (min-width: 1200px) and (max-width: 1499.98px) { #gdDashCol { flex-basis: 240px; width: 240px; } }
+@media print { #gdDashCol { display: none !important; } }
 
 /* ─────────────────────────── SIDEBAR */
 .side {
@@ -1282,6 +1311,10 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
 <div id="pl-wrap"></div>
 <div id="st-wrap"><div id="st-bar"></div><div id="st-frame-box"></div></div>
 <div class="app" id="app">
+<aside id="gdDashCol" class="noprint" aria-label="Checks summary"><!-- SBLS (2026-11-08): the module's checks as a left column on screens 1200 px and wider -->
+  <div id="gdDashHead"><button type="button" id="gdDashTgl" aria-controls="gdDash" aria-expanded="true" title="Collapse the checks summary">&laquo;</button><h2 id="gdDashTtl">Checks summary</h2><span id="gdDashCnt"></span></div>
+  <div id="gdDash"></div>
+</aside>
 <div class="side" id="side">
   <div class="itabs" role="tablist" id="itabs">
     <button type="button" role="tab" class="itab" data-pane="project">Project</button><button type="button" role="tab" class="itab" data-pane="section">Section</button>
@@ -19077,7 +19110,7 @@ function gmRecompute() {
   const m = GM[P.mod], d = P[m.id]; RS = m.compute(d); if (m.id === 'gs') setTimeout(gsaRefresh, 0);   // check at any location (LOC1)
   const src = document.getElementById('gm-src-' + m.id); if (src) src.innerHTML = d.source ? `<div class="alert info" style="margin:0"><b>Source:</b> ${esc(d.source)}</div>` : '';
   if (RS.errors.length) { CK = null; renderErrors();
-    if (RS.locked) { plEnsure(); $('#status-bar').innerHTML = `<div class="verdict warn"><span class="vd-ico">!</span>Waiting for the bridge</div><div class="sb-msg">Define a complete bridge in Preliminary sizing.</div>`; ['combos', 'checks', 'drawings', 'cap'].forEach(t => { const el = $('#tab-' + t); if (el) el.innerHTML = ''; }); $('#tab-summary').innerHTML = card('lock', 'Waiting for a complete bridge', '', `<div class="df-lockview"><p><b>This module works only from a fully defined bridge.</b> ${esc(RS.errors[0])}</p><p>The Preliminary sizing module publishes its bridge automatically every time it recalculates without input errors; this module unlocks and stays in sync from then on.</p><button type="button" class="btn btn-primary" data-dfpl="1">Open Preliminary sizing</button></div>`); }
+    if (RS.locked) { plEnsure(); $('#status-bar').innerHTML = `<div class="verdict warn"><span class="vd-ico">!</span>Waiting for the bridge</div><div class="sb-msg">Define a complete bridge in Preliminary sizing.</div>`; gdDashRender('Waiting for the bridge: define a complete bridge in Preliminary sizing.'); /* SBLS */ ['combos', 'checks', 'drawings', 'cap'].forEach(t => { const el = $('#tab-' + t); if (el) el.innerHTML = ''; }); $('#tab-summary').innerHTML = card('lock', 'Waiting for a complete bridge', '', `<div class="df-lockview"><p><b>This module works only from a fully defined bridge.</b> ${esc(RS.errors[0])}</p><p>The Preliminary sizing module publishes its bridge automatically every time it recalculates without input errors; this module unlocks and stays in sync from then on.</p><button type="button" class="btn btn-primary" data-dfpl="1">Open Preliminary sizing</button></div>`); }
     return; }
   showN(m.id, RS.MR); if (m.after) m.after(RS); CK = m.checks(RS); renderStatus(); gmSummary(m);
   if (typeof gdXfAlerts === 'function') { const a = gdXfAlerts(m.id === 'df' || m.id === 'sa'); if (a) $('#tab-summary').insertAdjacentHTML('afterbegin', a); }
@@ -21066,12 +21099,12 @@ function recompute() {
 /* field splices not included: one line where the splice results would be */
 function renderSplOff() { crMarkStale();
   const why = (P.spl || {}).inc === 'no' ? 'Field splices are set to "Not included" on the Splice tab.' : 'The Preliminary sizing layout has no field splices.';
-  $('#status-bar').innerHTML = `<div class="verdict"><span class="vd-ico">–</span>Field splices not included</div><div class="sb-msg">${why}</div>`;
+  $('#status-bar').innerHTML = `<div class="verdict"><span class="vd-ico">–</span>Field splices not included</div><div class="sb-msg">${why}</div>`; gdDashRender(`Field splices not included. ${why}`);   // SBLS
   $('#dem-src').innerHTML = '';
   ['summary', 'combos', 'checks', 'drawings', 'v3d'].forEach(t => { const el = $('#tab-' + t); if (el) el.innerHTML = t === 'summary' ? `<div class="alert info" style="margin:0"><b>Field splices not included.</b> ${why} No splice checks are made. To design a splice, set "Field splices" on the Splice tab to Included, or add field splices in Preliminary sizing.</div>` : ''; });
 }
 function typeset(root) { if (window.MathJax && MathJax.typesetPromise) { const els = root ? [root] : ['#tab-summary', '#tab-combos', '#tab-cap', '#tab-geometry', '#tab-checks', '#tab-manual'].map(s => $(s)).filter(Boolean); try { MathJax.typesetClear(els); } catch (e) {} MathJax.typesetPromise(els).catch(() => {}); } }
-function renderErrors() { crMarkStale();
+function renderErrors() { crMarkStale(); gdDashRender('Input error: the checks are blocked until the inputs listed on the Summary tab are fixed.');   // SBLS
   $('#status-bar').innerHTML = `<div class="verdict fail"><span class="vd-ico">!</span>Input error</div><div class="sb-msg">${RS.errors.length} problem${RS.errors.length > 1 ? 's' : ''} must be fixed.</div>`;
   const h = `<div class="alert fail"><b>Checks are blocked until these inputs are fixed.</b><ul class="err-list">${RS.errors.map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>`;
   ['summary', 'combos', 'checks', 'drawings', 'v3d'].forEach(t => $('#tab-' + t).innerHTML = h);
@@ -21083,7 +21116,24 @@ function renderStatus() { crMarkStale();
   if (RS && RS.pnaOOS) v.t += ' (out of scope: plastic neutral axis below the web)';   // PNA-OOS
   const chips = grps().map(g => { const s = worst(CK.filter(k => k.grp === g).map(k => k.status)), n = CK.filter(k => k.grp === g && k.status === 'fail').length; return `<button type="button" class="chip ${STCLS[s]}" data-goto-grp="${g}"><b>${s === 'fail' ? '✕' : s === 'warn' ? '!' : '✓'}</b>${g}${n ? `<em>${n}</em>` : ''}</button>`; }).join('');
   $('#status-bar').innerHTML = `<div class="verdict ${v.cls}"><span class="vd-ico">${v.ico}</span>${v.t}</div><div class="sb-msg">${c.warn ? c.warn + ' warning' + (c.warn > 1 ? 's' : '') : 'No warnings'}</div><div class="chips">${chips}</div>`;
+  gdDashRender();   // SBLS
 }
+/* SBLS (2026-11-08): the checks summary column (#gdDashCol). One line per check of CK, in the order of the Summary table: ID and title,
+   the governing ratio (the same gvTxt of the governing item as the Summary table) and the status; the second line is the governing location.
+   Click: gotoCheck (the global [data-goto] handler) opens the Checks tab at that check's card, which works the value. msg: no checks (input
+   error, splices not included). Collapsed state: localStorage girderdetail_dashCollapsed_v1 (screen only). */
+function gdDashRender(msg) {
+  const box = $('#gdDash'), cnt = $('#gdDashCnt'); if (!box) return;
+  if (msg || !CK || !CK.length) { box.innerHTML = `<div class="gdd-msg">${msg || 'No checks.'}</div>`; if (cnt) cnt.textContent = ''; return; }
+  const c = counts();
+  if (cnt) cnt.textContent = c.fail ? `${c.fail} fail` : c.warn ? `${c.warn} warning${c.warn > 1 ? 's' : ''}` : 'all OK';
+  box.innerHTML = CK.map(k => { const g = k.items[k.gov], v = g && g.r !== undefined && g.r !== null && (isFinite(g.r) || g.st !== 'na') ? gvTxt(g) : '—';
+    return `<button type="button" class="gdd-it ${STCLS[k.status]}" data-goto="${k.id}" title="${esc(k.id + ' ' + k.title)}: open its card on the Checks tab"><span class="gdd-n"><b>${k.id}</b>${esc(k.title)}</span><span class="gdd-v">${v}</span><span class="gdd-l">${g ? sub(g.loc) : esc(k.naWhy || '')}</span><span class="gdd-s">${STLBL[k.status]}</span></button>`; }).join('');
+}
+function gdDashColl(v, save) { document.body.classList.toggle('gdDashColl', v); const b = $('#gdDashTgl'); if (b) { b.innerHTML = v ? '&raquo;' : '&laquo;'; b.setAttribute('aria-expanded', String(!v)); b.title = v ? 'Open the checks summary' : 'Collapse the checks summary'; }
+  if (save) { try { localStorage.setItem('girderdetail_dashCollapsed_v1', v ? '1' : '0'); } catch (e) { /* storage blocked: screen state only */ } setTimeout(() => { try { renderPlots(); } catch (e) { } }, 0); } }
+document.addEventListener('click', e => { if (e.target.closest('#gdDashTgl')) gdDashColl(!document.body.classList.contains('gdDashColl'), true); });
+(() => { let v = false; try { v = localStorage.getItem('girderdetail_dashCollapsed_v1') === '1'; } catch (e) { } gdDashColl(v, false); })();
 function card(id, title, ref, body, extra = '') { return `<section class="card cc" id="${id}"><button type="button" class="card-hd cc-hd" data-cc="${id}" aria-expanded="true"><span class="card-title"><span class="sec-no"></span>${title}</span><span class="card-right">${extra}${ref ? `<span class="card-ref">${ref}</span>` : ''}${CHEV}</span></button><div class="card-body">${body}</div></section>`; }
 function applyCollapse() { setTimeout(() => renderPlots(), 0);
   $$('.cc').forEach(el => { const c = !!P.ui.col[el.id]; el.classList.toggle('closed', c); el.querySelector('.cc-hd')?.setAttribute('aria-expanded', String(!c)); });
