@@ -170,6 +170,9 @@ svg.sch .ld{stroke:var(--bad);fill:var(--bad)}
 .man h4{font-size:10.5pt;color:#2b4a75;margin:10px 0 3px}
 .man p,.man li{font-size:10.5pt;line-height:1.45}
 .man ul,.man ol{margin:4px 0 8px;padding-left:22px}
+.man div.a7NL,.man li.a7NL{font-size:10.5pt;line-height:1.45}   /* A7NL: a manual paragraph as a lead and a list */
+.man div.a7NL:not(.keybox):not(.warnbox){margin:4px 0 8px}
+.man .a7NL .a7NLu{margin:2px 0 4px}
 .warnbox{border:2px solid var(--bad);background:var(--badbg);padding:8px 11px;margin:9px 0}
 .warnbox b{color:var(--bad)}
 .keybox{border:1px solid var(--outblue);background:#eef4fb;padding:7px 10px;margin:8px 0}
@@ -4221,10 +4224,7 @@ function signControl(host,onChange){
 const K=t=>'<span class="ke" data-tex="'+t.replace(/"/g,"&quot;")+'"></span>';
 const MANUAL=[
 {t:"1. Read This First",h:`
-<div class="warnbox"><b>This app is an engineering aid, not a substitute for engineering judgment.</b>
-It generates design loads. It performs no structural analysis, no member or connection design, and no code capacity check.
-The engineer who seals the calculation is responsible for every number that leaves this tool, including the ones it got right
-for the wrong reason. Read this part in full before using any output on a project.</div>
+<div class="warnbox a7NL"><div class="a7NLa">Read this part in full before using any output on a project.</div><div class="a7NLl"><b>This app is an engineering aid, not a substitute for engineering judgment.</b></div><ul class="a7NLu"><li><b class="a7NLk">Scope:</b> it generates design loads. It performs no structural analysis, no member or connection design, and no code capacity check.</li><li><b class="a7NLk">Responsibility:</b> the engineer who seals the calculation is responsible for every number that leaves this tool, including the ones it got right for the wrong reason.</li></ul></div>
 
 <h3>1.1 What this app does</h3>
 <p>It generates snow, wind and seismic design loads for a rectangular building, and it classifies the building envelope.
@@ -4258,8 +4258,8 @@ Implemented provisions:</p>
 <li><b>Sliding snow (Sec. 7.9), ponding (Sec. 7.11), and unbalanced snow on curved, sawtooth and dome roofs (Sec. 7.6.2 to 7.6.4).</b> Not generated.</li>
 <li><b>Flexible structures.</b> G is fixed at 0.85 on the assumption of rigidity. The natural frequency is not computed and Sec. 26.11.4 is not implemented.</li>
 <li><b>Table 12.2-1 footnote exceptions.</b> The system limitations and height limits are screened against the main table, and a system that is not permitted in the resulting design category, or that exceeds its height limit, is blocked. The footnote exceptions, including those of Sec. 12.2.5 that permit certain systems in higher categories under stated conditions, are not evaluated.</li>
-<li><b>Seismic beyond the story shears.</b> Story shears and overturning moments are produced, but their <i>horizontal</i> distribution to the vertical resisting elements is not, nor the inherent and accidental torsional moments of Sec. 12.8.4.1 and 12.8.4.2 or the amplification factor A<sub>x</sub> of Sec. 12.8.4.3. No drift or P-delta, no irregularity checks, no Ch. 13 components, no Ch. 15 nonbuilding structures, no modal analysis. Sec. 12.6 permissibility for the equivalent lateral force procedure is not checked, nor are Table 12.2-1 system limitations and height limits. E<sub>v</sub> per Sec. 12.4.2.2 <i>is</i> computed and carried into the combinations with both signs, and &rho; is applied as entered.</li>
-<li><b>Worked allowable stress combinations.</b> The Sec. 2.4 combinations are listed for reference but not worked. In Massachusetts 780 CMR 1605.1 deletes the Sec. 2.4 combinations containing wind or earthquake for structural steel and substitutes two-thirds of the strength combinations, so for a steel building the ASD path returns to combinations already worked in full. Where the governing material standard works in allowable stress terms, such as TMS 402 masonry or NDS wood, evaluate Sec. 2.4 separately. This is a deliberate scope decision, not an oversight.</li>
+<li class="a7NL"><div class="a7NLl"><b>Seismic beyond the story shears.</b></div><ul class="a7NLu"><li><b class="a7NLk">Produced:</b> story shears and overturning moments.</li><li><b class="a7NLk">Not produced:</b> their <i>horizontal</i> distribution to the vertical resisting elements, nor the inherent and accidental torsional moments of Sec. 12.8.4.1 and 12.8.4.2 or the amplification factor A<sub>x</sub> of Sec. 12.8.4.3.</li><li><b class="a7NLk">Not checked:</b> no drift or P-delta, no irregularity checks, no Ch. 13 components, no Ch. 15 nonbuilding structures, no modal analysis.</li><li><b class="a7NLk">Not checked either:</b> Sec. 12.6 permissibility for the equivalent lateral force procedure, nor Table 12.2-1 system limitations and height limits.</li><li><b class="a7NLk">Computed:</b> E<sub>v</sub> per Sec. 12.4.2.2 <i>is</i> computed and carried into the combinations with both signs, and &rho; is applied as entered.</li></ul></li>
+<li class="a7NL"><div class="a7NLl"><b>Worked allowable stress combinations.</b> The Sec. 2.4 combinations are listed for reference but not worked.</div><ul class="a7NLu"><li><b class="a7NLk">Massachusetts:</b> 780 CMR 1605.1 deletes the Sec. 2.4 combinations containing wind or earthquake for structural steel and substitutes two-thirds of the strength combinations, so for a steel building the ASD path returns to combinations already worked in full.</li><li><b class="a7NLk">Allowable stress materials:</b> where the governing material standard works in allowable stress terms, such as TMS 402 masonry or NDS wood, evaluate Sec. 2.4 separately.</li><li><b class="a7NLk">Deliberate:</b> this is a deliberate scope decision, not an oversight.</li></ul></li>
 <li><b>Floor live load L, rain load R, ice and flood.</b> Not addressed. Roof live load L<sub>r</sub> <i>is</i> carried, as the (L<sub>r</sub> or S) term of Sec. 2.3.1 combinations 2, 3 and 4.</li>
 <li><b>Template features the Excel writer cannot reproduce.</b> The page-header logo, conditional formatting, custom table styles and any live-equation add-in content do not survive the ExcelJS writer. The header text, margins, print scale and footer are reproduced exactly; the logo is not yet embedded.</li>
 <li><b>ASCE 7-10 and ASCE 7-22.</b> ASCE 7-16 only. Coefficients, the ground elevation factor, and the snow chapter differ between editions and are not interchangeable.</li>
@@ -4270,37 +4270,18 @@ Implemented provisions:</p>
 <h4>1.3.1 Rectangular plan, single volume</h4>
 <p>The building is modeled as a rectangle L<sub>x</sub> by L<sub>y</sub> with four walls and one roof. Re-entrant corners, wings, courtyards, and stepped roofs are outside the model.</p>
 <h4>1.3.2 Gross wall area follows the roof profile</h4>
-<p>Each wall's gross area is its true elevation area, obtained by integrating the roof profile along the line of that wall. An eave wall therefore stops at the eave height, while a gable end carries its triangle. The reference workbook used length &times; h for every wall, which happens to be exact for a gable end, because h &minus; h<sub>e</sub> is half the rise, but overstates an eave wall. That overstatement is <b>not</b> conservative: a larger A<sub>g</sub> raises the 0.8A<sub>g</sub> open threshold and lowers A<sub>oi</sub>/A<sub>gi</sub>, both of which bias the classification toward Enclosed and therefore toward the smaller GC<sub>pi</sub>. The wall schedule reports the average height alongside the area so the difference is visible.</p>
+<div class="a7NL"><div class="a7NLl">Each wall's gross area is its true elevation area, obtained by integrating the roof profile along the line of that wall.</div><ul class="a7NLu"><li><b class="a7NLk">Eave wall:</b> stops at the eave height.</li><li><b class="a7NLk">Gable end:</b> carries its triangle.</li><li><b class="a7NLk">Reference workbook:</b> used length &times; h for every wall, which happens to be exact for a gable end, because h &minus; h<sub>e</sub> is half the rise, but overstates an eave wall.</li><li><b class="a7NLk">Not conservative:</b> that overstatement is <b>not</b> conservative: a larger A<sub>g</sub> raises the 0.8A<sub>g</sub> open threshold and lowers A<sub>oi</sub>/A<sub>gi</sub>, both of which bias the classification toward Enclosed and therefore toward the smaller GC<sub>pi</sub>.</li><li><b class="a7NLk">Wall schedule:</b> reports the average height alongside the area so the difference is visible.</li></ul></div>
 <h4>1.3.3 The enclosure definitions are circular in the code</h4>
 <p>See Part 5.3 for the interpretation adopted and its basis.</p>
 <h4>1.3.4 Cross-checks between tabs</h4>
-<p>Inputs that live on different tabs are compared against each other on every recalculation, and the findings appear in their own
-panel on the dashboard. Opening and glazed areas are checked against the wall areas the geometry produces; Chapter 29 element
-elevations and widths against the building; drift fetches and drift widths against the plan dimensions; the story schedule against
-h<sub>n</sub>, the base elevation and the roof; the effective seismic weight against the plan area and the number of levels; and the
-seismic force-resisting system against the resulting design category under Table 12.2-1. Impossible combinations are blocked;
-implausible ones are flagged for review. Part 8.7 lists the story schedule checks in full.</p>
+<div class="a7NL"><div class="a7NLl">Inputs that live on different tabs are compared against each other on every recalculation, and the findings appear in their own panel on the dashboard:</div><ul class="a7NLu"><li><b class="a7NLk">Opening and glazed areas</b> against the wall areas the geometry produces;</li><li><b class="a7NLk">Chapter 29 element</b> elevations and widths against the building;</li><li><b class="a7NLk">Drift fetches and drift widths</b> against the plan dimensions;</li><li><b class="a7NLk">Story schedule</b> against h<sub>n</sub>, the base elevation and the roof;</li><li><b class="a7NLk">Effective seismic weight</b> against the plan area and the number of levels;</li><li><b class="a7NLk">Seismic force-resisting system</b> against the resulting design category under Table 12.2-1.</li><li><b class="a7NLk">Outcome:</b> impossible combinations are blocked; implausible ones are flagged for review.</li><li><b class="a7NLk">Story schedule checks:</b> Part 8.7 lists them in full.</li></ul></div>
 <h4>1.3.5 K<sub>zt</sub> varies with height</h4>
 <p>K<sub>3</sub> = exp(&minus;&gamma;z/L<sub>h</sub>) decays with height, so K<sub>zt</sub> is not a single number for a building.
 It is evaluated at every height the calculation needs it: at each level of the windward wall, at the mean roof height for the
 leeward wall, the side walls and the roof, and at each Chapter 29 element&rsquo;s own reference height. There is no topographic
 height input for that reason, and the velocity pressure table reports K<sub>zt</sub> alongside K<sub>z</sub> at each height.</p>
 <h4>1.3.6 Interpretation of Sec. 27.1.5</h4>
-<p>The minimum is written as a force on projected areas, not as a pressure floor on individual surfaces. The app computes the
-projected areas from the building silhouette normal to each wind direction, takes the wall term as B &times; h<sub>e</sub> and
-the roof term as everything above the eave line, and compares the total against 16A<sub>wall</sub> + 8A<sub>roof</sub>. The
-computed force excludes internal pressure, because it acts on both faces and cancels on the net. For wind normal to the ridge
-(&theta; &ge; 10&deg;) the roof contribution is q<sub>h</sub>G(C<sub>p,windward</sub> &minus; C<sub>p,leeward</sub>) on the projected roof
-area, because windward-slope pressure and leeward-slope suction both push downwind; both windward values of Fig. 27.3-1 are tried,
-and the largest roof |C<sub>p</sub>| on the projected area (the method used before) is the floor: windward-slope suction is not
-credited as relief (decision pending engineer review). A monoslope is treated as one plane:
-from the low eave it is a windward roof with the wall strip above the high eave leeward; from the high side that strip is a windward
-wall (0.8 at q<sub>h</sub>) and the roof is leeward. For wind parallel to the ridge of a gable or monoslope, the silhouette above the
-eave is the end wall: it takes the wall coefficients (0.8 q<sub>z</sub> windward, C<sub>p</sub>(L/B) leeward) and counts as wall area
-at 16 psf. In the remaining cases (a hip roof parallel to its ridge, &theta; &lt; 10&deg;) the largest magnitude roof C<sub>p</sub>
-for that direction acts on the projected roof area (A7H1, 2026-11-07). Where the
-minimum governs, the app reports the scale factor rather than silently rewriting the surface pressures, so the reviewer sees
-both numbers.</p>
+<div class="a7NL"><div class="a7NLl">The minimum is written as a force on projected areas, not as a pressure floor on individual surfaces.</div><ul class="a7NLu"><li><b class="a7NLk">Projected areas:</b> the app computes the projected areas from the building silhouette normal to each wind direction, takes the wall term as B &times; h<sub>e</sub> and the roof term as everything above the eave line, and compares the total against 16A<sub>wall</sub> + 8A<sub>roof</sub>.</li><li><b class="a7NLk">Internal pressure:</b> the computed force excludes internal pressure, because it acts on both faces and cancels on the net.</li><li><b class="a7NLk">Wind normal to the ridge</b> (&theta; &ge; 10&deg;): the roof contribution is q<sub>h</sub>G(C<sub>p,windward</sub> &minus; C<sub>p,leeward</sub>) on the projected roof area, because windward-slope pressure and leeward-slope suction both push downwind; both windward values of Fig. 27.3-1 are tried, and the largest roof |C<sub>p</sub>| on the projected area (the method used before) is the floor: windward-slope suction is not credited as relief (decision pending engineer review).</li><li><b class="a7NLk">Monoslope:</b> treated as one plane: from the low eave it is a windward roof with the wall strip above the high eave leeward; from the high side that strip is a windward wall (0.8 at q<sub>h</sub>) and the roof is leeward.</li><li><b class="a7NLk">Wind parallel to the ridge</b> of a gable or monoslope: the silhouette above the eave is the end wall: it takes the wall coefficients (0.8 q<sub>z</sub> windward, C<sub>p</sub>(L/B) leeward) and counts as wall area at 16 psf.</li><li><b class="a7NLk">Remaining cases</b> (a hip roof parallel to its ridge, &theta; &lt; 10&deg;): the largest magnitude roof C<sub>p</sub> for that direction acts on the projected roof area (A7H1, 2026-11-07).</li><li><b class="a7NLk">Where the minimum governs:</b> the app reports the scale factor rather than silently rewriting the surface pressures, so the reviewer sees both numbers.</li></ul></div>
 <h4>1.3.7 q<sub>i</sub> is always taken as q<sub>h</sub></h4>
 <p>Sec. 27.3.1 permits q<sub>i</sub> for a partially enclosed building to be evaluated at the height of the highest opening. Using q<sub>h</sub> throughout is simpler and generally more conservative, and is what is applied.</p>
 <h4>1.3.8 Mean roof height</h4>
@@ -4340,17 +4321,8 @@ shear can be confirmed without leaving the input panel.</p>
 <li>Save the project and export the JSON as the portable backup.</li>
 </ol>
 <h3>2.3 The 3-D model</h3>
-<p>The 3-D Model tab draws the building from the geometry inputs and shades every surface with the quantity selected. Drag to
-orbit, scroll to zoom, and use the legend to hide any element. The controls above the view set what is coloured (wind pressure,
-snow load, or nothing), which of the four wind directions is shown, which sign of GC<sub>pi</sub> is applied, which windward roof
-case is used where Fig. 27.3-1 gives two, and which free-roof load case where Fig. 27.3-4 applies. Checkboxes toggle walls, roof,
-story levels, seismic story forces, the coordinate axes, the wind arrow and the labels, and a slider controls opacity so the
-interior levels and forces can be seen through the envelope.</p>
-<div class="keybox"><b>Read the model as a check on the inputs.</b> The windward wall is shaded as a gradient because
-q<sub>z</sub> varies with height; every other surface uses q<sub>h</sub> and is uniform. On a low-slope roof the distance bands
-of Fig. 27.3-1 appear as visible steps running away from the windward edge, and on a gable in the unbalanced snow case the
-leeward surcharge appears as a band along the ridge. If the shape on screen is not the building you meant, every number on every
-other tab is for the wrong building.</div>
+<div class="a7NL"><div class="a7NLl">The 3-D Model tab draws the building from the geometry inputs and shades every surface with the quantity selected.</div><ul class="a7NLu"><li><b class="a7NLk">View:</b> drag to orbit, scroll to zoom, and use the legend to hide any element.</li><li><b class="a7NLk">Controls above the view:</b> set what is coloured (wind pressure, snow load, or nothing), which of the four wind directions is shown, which sign of GC<sub>pi</sub> is applied, which windward roof case is used where Fig. 27.3-1 gives two, and which free-roof load case where Fig. 27.3-4 applies.</li><li><b class="a7NLk">Checkboxes:</b> toggle walls, roof, story levels, seismic story forces, the coordinate axes, the wind arrow and the labels.</li><li><b class="a7NLk">Slider:</b> controls opacity so the interior levels and forces can be seen through the envelope.</li></ul></div>
+<div class="keybox a7NL"><div class="a7NLl"><b>Read the model as a check on the inputs.</b></div><ul class="a7NLu"><li><b class="a7NLk">Windward wall:</b> shaded as a gradient because q<sub>z</sub> varies with height; every other surface uses q<sub>h</sub> and is uniform.</li><li><b class="a7NLk">Low-slope roof:</b> the distance bands of Fig. 27.3-1 appear as visible steps running away from the windward edge.</li><li><b class="a7NLk">Gable, unbalanced snow:</b> the leeward surcharge appears as a band along the ridge.</li><li><b class="a7NLk">Wrong shape:</b> if the shape on screen is not the building you meant, every number on every other tab is for the wrong building.</li></ul></div>
 <p>The interactive view does not print. Press <i>Capture this view for the report</i> to store a static image of the current
 camera angle and element selection; the captured image then appears in the report's contents list as its own selectable section.</p>
 <h3>2.4 The Excel calculation export</h3>
@@ -4416,17 +4388,9 @@ bug. Page breaks are placed adaptively at section boundaries rather than at fixe
 <tr><td><span class="badge b-e">Blocked</span></td><td class="d">An input falls outside the range of the method and the app refuses to extrapolate.</td></tr>
 <tr><td><span class="badge b-na">N/A</span></td><td class="d">The provision does not apply, or is out of scope. The reason is always stated.</td></tr></table>
 <h3>4.2 The 3-D model as output</h3>
-<p>Colour is a diverging scale centred on zero for wind, so blue and red read directly as pressure toward and away from the
-surface, and the colour bar is symmetric about zero so the two directions are comparable at a glance. For snow the scale is
-sequential from zero. Hovering any surface reports its name, its value in psf and the elevation of that point. The companion
-table below the view lists every surface value in the current view exactly as the wall and roof tabs derive them, so the
-picture and the calculation cannot disagree.</p>
+<div class="a7NL"><div class="a7NLl">Colour is a diverging scale centred on zero for wind, so blue and red read directly as pressure toward and away from the surface.</div><ul class="a7NLu"><li><b class="a7NLk">Colour bar:</b> symmetric about zero so the two directions are comparable at a glance.</li><li><b class="a7NLk">Snow:</b> the scale is sequential from zero.</li><li><b class="a7NLk">Hover:</b> any surface reports its name, its value in psf and the elevation of that point.</li><li><b class="a7NLk">Companion table:</b> below the view lists every surface value in the current view exactly as the wall and roof tabs derive them, so the picture and the calculation cannot disagree.</li></ul></div>
 <h3>4.3 Sign conventions</h3>
-<div class="keybox"><b>Wind pressure.</b> Positive acts toward the surface, negative away from it. On a roof, negative is uplift.
-Wind pressure acts normal to the surface it bears on, unlike dead and snow load which act vertically on the horizontal projection;
-see Part 6.4 for why the three can still be added directly.
-The internal pressure term is subtracted, so a positive GC<sub>pi</sub> (internal pressurization) makes external pressures on
-every surface algebraically smaller and makes uplift and outward suction larger.</div>
+<div class="keybox a7NL"><div class="a7NLl"><b>Wind pressure.</b> Positive acts toward the surface, negative away from it. On a roof, negative is uplift.</div><ul class="a7NLu"><li><b class="a7NLk">Direction:</b> wind pressure acts normal to the surface it bears on, unlike dead and snow load which act vertically on the horizontal projection; see Part 6.4 for why the three can still be added directly.</li><li><b class="a7NLk">Internal pressure:</b> the internal pressure term is subtracted, so a positive GC<sub>pi</sub> (internal pressurization) makes external pressures on every surface algebraically smaller and makes uplift and outward suction larger.</li></ul></div>
 <h3>4.4 Principal outputs</h3>
 <table class="vt"><tr><th>Symbol</th><th>Meaning</th><th>Interpretation</th></tr>
 <tr><td>GC<sub>pi</sub></td><td class="d">Internal pressure coefficient</td><td class="d">Both signs must be carried through every surface</td></tr>
@@ -4452,36 +4416,20 @@ classification is a tab of its own rather than a line in the wind input.</p>
 </ul>
 <p>Open requires `+K("A_o \\ge 0.8 A_g")+` for every wall. Partially Enclosed requires some wall to satisfy all three of
 `+K("A_o > 1.1 A_{oi}")+`, `+K("A_o > \\min(4\\ \\mathrm{ft}^2,\\ 0.01 A_g)")+`, and `+K("A_{oi}/A_{gi} \\le 0.20")+`.</p>
-<div class="keybox"><b>Key point.</b> The balance of the envelope includes the roof. A calculation that compares a wall's openings
-only against the other three walls understates A<sub>oi</sub> and can classify a building as Partially Enclosed when it is not,
-or fail criterion 3 when it should pass. The reference workbook this tool replaces omitted the roof from that sum.</div>
+<div class="keybox a7NL"><div class="a7NLl"><b>Key point.</b> The balance of the envelope includes the roof.</div><ul class="a7NLu"><li><b class="a7NLk">Walls only:</b> a calculation that compares a wall's openings only against the other three walls understates A<sub>oi</sub> and can classify a building as Partially Enclosed when it is not, or fail criterion 3 when it should pass.</li><li><b class="a7NLk">Reference workbook:</b> the reference workbook this tool replaces omitted the roof from that sum.</li></ul></div>
 <h3>5.3 The circularity, and the interpretation adopted</h3>
 <p>ASCE 7-16 defines an Enclosed building as one that does not comply with the requirements for open, partially enclosed, or
 partially open buildings, and defines a Partially Open building as one that does not comply with the requirements for open,
 partially enclosed, or enclosed buildings. As written the two definitions refer to each other and neither can be evaluated first.</p>
-<p>This tool resolves it by treating criterion (2) of the partially enclosed test as the substantive definition of a
-"small opening": a building is <b>Enclosed</b> when every wall has `+K("A_o \\le \\min(4\\ \\mathrm{ft}^2,\\ 0.01 A_g)")+`, and
-<b>Partially Open</b> is the residual category for everything that is neither open, nor partially enclosed, nor enclosed on
-that reading. This is the reading in general use and it is the one the reference workbook applied. It is stated here so a
-reviewer who prefers a different resolution can identify the difference rather than discover it.</p>
+<div class="a7NL"><div class="a7NLl">This tool resolves it by treating criterion (2) of the partially enclosed test as the substantive definition of a "small opening":</div><ul class="a7NLu"><li><b class="a7NLk">Enclosed:</b> every wall has `+K("A_o \\le \\min(4\\ \\mathrm{ft}^2,\\ 0.01 A_g)")+`;</li><li><b class="a7NLk">Partially Open:</b> the residual category for everything that is neither open, nor partially enclosed, nor enclosed on that reading.</li><li><b class="a7NLk">General use:</b> this is the reading in general use and it is the one the reference workbook applied.</li><li><b class="a7NLk">Stated:</b> it is stated here so a reviewer who prefers a different resolution can identify the difference rather than discover it.</li></ul></div>
 <h3>5.4 Wind-borne debris regions</h3>
-<p>Massachusetts is a hurricane-prone region, and the enclosure classification is where that matters. Sec. 26.2 places a site in
-a wind-borne debris region when it is in a hurricane-prone region and either lies within one mile of the coastal mean high water
-line with V &ge; 130 mph, or has V &ge; 140 mph anywhere. In 780 CMR Table 1604.11 twenty communities reach 130 mph at Risk
-Category II, and thirty-six reach 140 mph at Risk Category IV, so this is not a theoretical concern in this jurisdiction.</p>
-<div class="keybox"><b>Key point.</b> Where the site is in a debris region and the glazed openings are not impact-protected,
-the glazing must be treated as opening area. A curtain-walled elevation that reads as Enclosed on the drawings can become
-Partially Enclosed on the calculation, and GC<sub>pi</sub> goes from &plusmn;0.18 to &plusmn;0.55. On a low building that
-single step can be the difference between net downward pressure and net uplift on the roof.</div>
+<div class="a7NL"><div class="a7NLl">Massachusetts is a hurricane-prone region, and the enclosure classification is where that matters.</div><ul class="a7NLu"><li><b class="a7NLk">Debris region:</b> Sec. 26.2 places a site in a wind-borne debris region when it is in a hurricane-prone region and either lies within one mile of the coastal mean high water line with V &ge; 130 mph, or has V &ge; 140 mph anywhere.</li><li><b class="a7NLk">In practice:</b> in 780 CMR Table 1604.11 twenty communities reach 130 mph at Risk Category II, and thirty-six reach 140 mph at Risk Category IV, so this is not a theoretical concern in this jurisdiction.</li></ul></div>
+<div class="keybox a7NL"><div class="a7NLl"><b>Key point.</b> Where the site is in a debris region and the glazed openings are not impact-protected, the glazing must be treated as opening area.</div><ul class="a7NLu"><li><b class="a7NLk">Curtain wall:</b> a curtain-walled elevation that reads as Enclosed on the drawings can become Partially Enclosed on the calculation, and GC<sub>pi</sub> goes from &plusmn;0.18 to &plusmn;0.55.</li><li><b class="a7NLk">Low building:</b> that single step can be the difference between net downward pressure and net uplift on the roof.</li></ul></div>
 <p>The app runs both triggers, reports each separately, and adds the glazed areas to the opening areas only when the region
 test passes and the glazing is not declared protected. The one-mile coastal question is a user input because the app has no
 coordinates, and the Sec. 26.12.3 height exemptions are left to the user.</p>
 <h3>5.5 A degenerate case the code does not cover</h3>
-<p>With every opening area zero, criterion 1 reads `+K("0 > 1.1 \\times 0")+`, which is false under a strict inequality and true
-under a non-strict one. Sec. 26.2 uses "exceeds", so this tool uses the strict inequality and a fully sealed building fails
-criterion 1 as it should. A calculation that codes this as `+K("\\ge")+` will report that every wall satisfies criterion 1 of the
-partially enclosed test for a building with no openings at all, and will arrive at Enclosed by accident rather than by the
-correct path. The reference workbook had this defect.</p>
+<div class="a7NL"><div class="a7NLl">With every opening area zero, criterion 1 reads `+K("0 > 1.1 \\times 0")+`, which is false under a strict inequality and true under a non-strict one.</div><ul class="a7NLu"><li><b class="a7NLk">This tool:</b> Sec. 26.2 uses "exceeds", so this tool uses the strict inequality and a fully sealed building fails criterion 1 as it should.</li><li><b class="a7NLk">Non-strict coding:</b> a calculation that codes this as `+K("\\ge")+` will report that every wall satisfies criterion 1 of the partially enclosed test for a building with no openings at all, and will arrive at Enclosed by accident rather than by the correct path.</li><li><b class="a7NLk">Reference workbook:</b> the reference workbook had this defect.</li></ul></div>
 `},
 
 {t:"6. Methodology: Wind and Snow",h:`
@@ -4491,21 +4439,12 @@ enclosed, partially enclosed or partially open building of regular shape. Design
 <p>`+K("p = q\\,G\\,C_p - q_i\\,(GC_{pi})")+` &nbsp;(Eq. 27.3-1)</p>
 <p>with q = q<sub>z</sub> at each height on the windward wall and q = q<sub>h</sub> on the leeward wall, the side walls and the roof.</p>
 <h3>6.2 Which roof table</h3>
-<div class="keybox"><b>Key point.</b> Fig. 27.3-1 gives windward and leeward slope coefficients only for wind <i>normal to the
-ridge</i> with `+K("\\theta \\ge 10^\\circ")+`. Every other case, which means all wind parallel to the ridge and every roof under
-10&deg; in both directions, uses the distance-band table measured from the windward edge in multiples of h. A flat roof therefore
-never uses the slope table, in any direction.</div>
+<div class="keybox a7NL"><div class="a7NLl"><b>Key point.</b> Fig. 27.3-1 gives windward and leeward slope coefficients only for wind <i>normal to the ridge</i> with `+K("\\theta \\ge 10^\\circ")+`.</div><ul class="a7NLu"><li><b class="a7NLk">Every other case:</b> all wind parallel to the ridge and every roof under 10&deg; in both directions, uses the distance-band table measured from the windward edge in multiples of h.</li><li><b class="a7NLk">Flat roof:</b> therefore never uses the slope table, in any direction.</li></ul></div>
 <p>h/L uses L parallel to the wind, so it changes with direction on a non-square plan, and the h/L row group can differ between
 the X and Y cases for the same building. The app reports the group used for every direction.</p>
 <h3>6.3 Wind directions on a free roof</h3>
-<p>A free roof needs four wind directions, and they come from two different figures. Fig. 27.3-4 covers &gamma; = 0&deg; and
-180&deg;, wind <i>across the slope</i>, with a windward and a leeward half. Fig. 27.3-7 covers &gamma; = 90&deg; and 270&deg;,
-wind <i>along the ridge</i>, where the coefficient does not split by half but changes in bands measured from the windward edge in
-multiples of the mean roof height: within h, from h to 2h, and beyond 2h. Cases A and B are alternatives in both figures.</p>
-<div class="keybox"><b>Key point.</b> The along-ridge case is not a lesser version of the across-slope case and it is not optional.
-For a long narrow canopy the first band, within h of the windward end, carries the largest coefficient over a short length, which
-is often what governs the end bay and its hold-downs. &gamma; = 270&deg; is the mirror of &gamma; = 90&deg; about mid-length, so
-the two give the same coefficients measured from opposite ends and both must be run.</div>
+<div class="a7NL"><div class="a7NLl">A free roof needs four wind directions, and they come from two different figures.</div><ul class="a7NLu"><li><b class="a7NLk">Fig. 27.3-4</b> covers &gamma; = 0&deg; and 180&deg;, wind <i>across the slope</i>, with a windward and a leeward half.</li><li><b class="a7NLk">Fig. 27.3-7</b> covers &gamma; = 90&deg; and 270&deg;, wind <i>along the ridge</i>, where the coefficient does not split by half but changes in bands measured from the windward edge in multiples of the mean roof height: within h, from h to 2h, and beyond 2h.</li><li><b class="a7NLk">Cases A and B:</b> alternatives in both figures.</li></ul></div>
+<div class="keybox a7NL"><div class="a7NLl"><b>Key point.</b> The along-ridge case is not a lesser version of the across-slope case and it is not optional.</div><ul class="a7NLu"><li><b class="a7NLk">Long narrow canopy:</b> the first band, within h of the windward end, carries the largest coefficient over a short length, which is often what governs the end bay and its hold-downs.</li><li><b class="a7NLk">Both ends:</b> &gamma; = 270&deg; is the mirror of &gamma; = 90&deg; about mid-length, so the two give the same coefficients measured from opposite ends and both must be run.</li></ul></div>
 <h3>6.4 Direction of the roof pressure</h3>
 <div class="keybox"><b>Key point.</b> Wind pressure acts <i>normal to the roof surface</i>. Dead load and snow load act
 <i>vertically</i>, on the horizontal projection. The roof pressure diagrams lay their ordinates along the surface normal for
@@ -4519,10 +4458,7 @@ vertical effect per unit horizontal projected area is p itself and it adds direc
 contributes to the lateral demand on the frame. This tool carries it through the roof term of the Sec. 27.1.5 force check, which
 uses the projected roof area above the eave line. On a steep roof it is not small: at 6 on 12 it is half the normal pressure.</p>
 <h3>6.5 Wall coefficients</h3>
-<p>Windward is 0.8 for all cases. Side walls are &minus;0.7. The leeward coefficient depends on L/B and interpolates between
-&minus;0.5 at L/B &le; 1, &minus;0.3 at L/B = 2, and &minus;0.2 at L/B &ge; 4. Because L and B swap between the X and Y wind
-cases, the leeward coefficient is generally different in the two directions, and a calculation that fixes one value per wall
-rather than per direction will be wrong in one of them. The reference workbook carried an internal note flagging exactly this.</p>
+<div class="a7NL"><div class="a7NLl">Windward is 0.8 for all cases. Side walls are &minus;0.7.</div><ul class="a7NLu"><li><b class="a7NLk">Leeward:</b> the coefficient depends on L/B and interpolates between &minus;0.5 at L/B &le; 1, &minus;0.3 at L/B = 2, and &minus;0.2 at L/B &ge; 4.</li><li><b class="a7NLk">Per direction:</b> because L and B swap between the X and Y wind cases, the leeward coefficient is generally different in the two directions, and a calculation that fixes one value per wall rather than per direction will be wrong in one of them.</li><li><b class="a7NLk">Reference workbook:</b> the reference workbook carried an internal note flagging exactly this.</li></ul></div>
 <h3>6.6 Snow</h3>
 <p>`+K("p_f = 0.7\\,C_e\\,C_t\\,I_s\\,p_g")+` (Eq. 7.3-1), then `+K("p_s = C_s\\,p_f")+` (Eq. 7.4-1).</p>
 <p>C<sub>s</sub> is computed from the piecewise-linear definition of Fig. 7.4-1 rather than read off the figure. Each branch is
@@ -4532,13 +4468,8 @@ C<sub>s</sub> = 1.0 up to a breakpoint, then linear to zero at 70&deg;. The brea
 design value is the largest of the three. The minimum is a <i>separate uniform load case</i> and is not combined with drift,
 unbalanced or partial loading.</p>
 <h3>6.7 Unbalanced snow on hip and gable roofs</h3>
-<p>Sec. 7.6.1 applies between 2.38&deg; (half on twelve) and 30.2&deg; (seven on twelve). Outside that band it is not required.
-Within it, the windward side carries `+K("0.3 p_s")+` and the leeward side carries `+K("p_s")+` plus a rectangular surcharge of
-intensity `+K("h_d \\gamma / \\sqrt{S}")+` extending `+K("8 h_d \\sqrt{S} / 3")+` horizontally from the ridge, with
-`+K("\\gamma = 0.13 p_g + 14 \\le 30\\ \\mathrm{pcf}")+` and h<sub>d</sub> from Fig. 7.6-1 using l<sub>u</sub> = W, not taken less than 25 ft (the same floor as the drifts; see 7.3 below).
-The exception for W &le; 20 ft with simply supported prismatic members spanning eave to ridge replaces all of that with a
-uniform `+K("I_s p_g")+` on the leeward side and nothing on the windward side.</p>
-<div class="keybox"><b>Key point.</b> Unbalanced snow is a <i>separate required load case</i>, not an alternative reading of the balanced case, and it is not an output to be admired and then set aside. Both faces of it are carried into every load combination as their own snow case alongside the balanced case, so the leeward peak reaches the gravity combinations, where it normally governs the members near the ridge.</div>
+<div class="a7NL"><div class="a7NLl">Sec. 7.6.1 applies between 2.38&deg; (half on twelve) and 30.2&deg; (seven on twelve). Outside that band it is not required.</div><ul class="a7NLu"><li><b class="a7NLk">Windward side:</b> within the band, it carries `+K("0.3 p_s")+`</li><li><b class="a7NLk">Leeward side:</b> carries `+K("p_s")+` plus a rectangular surcharge of intensity `+K("h_d \\gamma / \\sqrt{S}")+` extending `+K("8 h_d \\sqrt{S} / 3")+` horizontally from the ridge;</li><li><b class="a7NLk">Parameters:</b> with `+K("\\gamma = 0.13 p_g + 14 \\le 30\\ \\mathrm{pcf}")+` and h<sub>d</sub> from Fig. 7.6-1 using l<sub>u</sub> = W, not taken less than 25 ft (the same floor as the drifts; see 7.3 below).</li><li><b class="a7NLk">Exception:</b> the exception for W &le; 20 ft with simply supported prismatic members spanning eave to ridge replaces all of that with a uniform `+K("I_s p_g")+` on the leeward side and nothing on the windward side.</li></ul></div>
+<div class="keybox a7NL"><div class="a7NLl"><b>Key point.</b> Unbalanced snow is a <i>separate required load case</i>.</div><ul class="a7NLu"><li><b class="a7NLk">Not an alternative:</b> it is not an alternative reading of the balanced case, and it is not an output to be admired and then set aside.</li><li><b class="a7NLk">Carried:</b> both faces of it are carried into every load combination as their own snow case alongside the balanced case, so the leeward peak reaches the gravity combinations, where it normally governs the members near the ridge.</li></ul></div>
 `},
 
 {t:"7. Methodology: Snow Drift",h:`
@@ -4549,9 +4480,7 @@ the balanced load.</p>
 <h3>7.2 The chain</h3>
 <p>Snow density from Eq. 7.7-1, `+K("\\gamma = 0.13\\,p_g + 14 \\le 30\\ \\mathrm{pcf}")+`, gives the balanced snow depth
 `+K("h_b = p_s/\\gamma")+` and the clear height `+K("h_c = h - h_b")+` from the top of that snow to the obstruction.</p>
-<div class="keybox"><b>Key point.</b> If `+K("h_c/h_b < 0.2")+` no drift is required, and that is the only exemption of general
-application. A parapet shorter than the balanced snow depth traps nothing. Everything else with a clear height gets a drift,
-including a 4 ft parapet on an ordinary roof, which is why the absence of drift entries on a calculation is not a finding.</div>
+<div class="keybox a7NL"><div class="a7NLl"><b>Key point.</b> If `+K("h_c/h_b < 0.2")+` no drift is required, and that is the only exemption of general application.</div><ul class="a7NLu"><li><b class="a7NLk">Short parapet:</b> a parapet shorter than the balanced snow depth traps nothing.</li><li><b class="a7NLk">Everything else:</b> everything else with a clear height gets a drift, including a 4 ft parapet on an ordinary roof, which is why the absence of drift entries on a calculation is not a finding.</li></ul></div>
 <h3>7.3 Leeward and windward</h3>
 <p>The drift height comes from Fig. 7.6-1, `+K("h_d = 0.43\\,l_u^{1/3}(p_g+10)^{1/4} - 1.5")+`, with l<sub>u</sub> never taken
 less than 25 ft. For a lower roof the <i>leeward</i> drift uses the length of the upper roof and the <i>windward</i> drift uses the
@@ -4573,24 +4502,14 @@ within w of the obstruction.</p>
 
 {t:"8. Methodology: Seismic",h:`
 <h3>8.1 Scope</h3>
-<p>Sec. 12.8, the equivalent lateral force procedure, taken as far as the story shears and overturning moments. Whether the ELF
-procedure is <i>permitted</i> for a given structure and seismic design category is governed by Table 12.6-1. The app checks it
-in Seismic Design Categories D, E and F from the risk category, the number of levels, a light-frame system, h<sub>n</sub>,
-T against 3.5T<sub>s</sub> and the irregularities you enter (it does not evaluate irregularities), with T taken as the larger of
-the period used and C<sub>u</sub>T<sub>a</sub>. For Site Class E with S<sub>1</sub> &ge; 0.2 it applies Sec. 11.4.8 Exception 3:
-without a site-specific analysis the ELF procedure is permitted only where T &le; T<sub>s</sub>. Either failure is a blocking
-check (A7M3, A7M4, 2026-11-07).</p>
+<div class="a7NL"><div class="a7NLl">Sec. 12.8, the equivalent lateral force procedure, taken as far as the story shears and overturning moments.</div><ul class="a7NLu"><li><b class="a7NLk">Permitted?</b> whether the ELF procedure is <i>permitted</i> for a given structure and seismic design category is governed by Table 12.6-1.</li><li><b class="a7NLk">Checked:</b> the app checks it in Seismic Design Categories D, E and F from the risk category, the number of levels, a light-frame system, h<sub>n</sub>, T against 3.5T<sub>s</sub> and the irregularities you enter (it does not evaluate irregularities), with T taken as the larger of the period used and C<sub>u</sub>T<sub>a</sub>.</li><li><b class="a7NLk">Site Class E</b> with S<sub>1</sub> &ge; 0.2: it applies Sec. 11.4.8 Exception 3: without a site-specific analysis the ELF procedure is permitted only where T &le; T<sub>s</sub>.</li><li><b class="a7NLk">Blocking:</b> either failure is a blocking check (A7M3, A7M4, 2026-11-07).</li></ul></div>
 <h3>8.2 Site coefficients and the site-specific triggers</h3>
 <p>F<sub>a</sub> and F<sub>v</sub> are interpolated from Tables 11.4-1 and 11.4-2. Three conditions force a site-specific
 ground motion analysis under Sec. 11.4.8 and each raises a Review flag: Site Class F under any condition, Site Class E with
 S<sub>s</sub> &ge; 1.0, and Site Class D or E with S<sub>1</sub> &ge; 0.2. The exceptions in Sec. 11.4.8 may relieve the last of
 these; the app flags rather than decides.</p>
 <h3>8.3 Seismic design category</h3>
-<div class="keybox"><b>Key point.</b> The SDC is the <i>more severe</i> of the categories from Table 11.6-1 (on S<sub>DS</sub>)
-and Table 11.6-2 (on S<sub>D1</sub>). Evaluating only the S<sub>DS</sub> table is a common shortcut and it understates the
-category whenever the long-period demand is relatively higher, which is typical of soft sites. Both tables are printed with the
-governing row highlighted. Separately, S<sub>1</sub> &ge; 0.75 forces category E, or F for Risk Category IV, regardless of both
-tables.</p>
+<div class="keybox a7NL"><div class="a7NLl"><b>Key point.</b> The SDC is the <i>more severe</i> of the categories from Table 11.6-1 (on S<sub>DS</sub>) and Table 11.6-2 (on S<sub>D1</sub>).</div><ul class="a7NLu"><li><b class="a7NLk">Common shortcut:</b> evaluating only the S<sub>DS</sub> table is a common shortcut and it understates the category whenever the long-period demand is relatively higher, which is typical of soft sites.</li><li><b class="a7NLk">Printed:</b> both tables are printed with the governing row highlighted.</li><li><b class="a7NLk">Separately:</b> S<sub>1</sub> &ge; 0.75 forces category E, or F for Risk Category IV, regardless of both tables.</li></ul></div>
 <h3>8.4 Period</h3>
 <p>`+K("T_a = C_t h_n^{\\,x}")+` (Eq. 12.8-7). The code permits T up to `+K("C_u T_a")+`, but only where a properly substantiated
 analysis establishes the computed period. The app defaults to T = T<sub>a</sub>, which is the conservative choice because a
@@ -4604,9 +4523,7 @@ All limits are shown worked, not just the governing one.</p>
 `+K("M_x = \\sum_{i>x} F_i (h_i - h_x)")+` (Eq. 12.8-14) the overturning moment at that level, with the overturning factor
 &tau; taken as 1.0. The schedule is sorted top down because that is the order the shear accumulates, and the editor computes each
 story height from the elevations so a missing or duplicated level is visible at a glance.</p>
-<div class="keybox"><b>Key point.</b> V<sub>x</sub> is the <i>total</i> story shear. Distributing it to the individual frames or
-walls in proportion to their stiffness, and adding the inherent and accidental torsion of Sec. 12.8.4.1 and 12.8.4.2 with the
-A<sub>x</sub> amplification of Sec. 12.8.4.3 where the category requires it, is the next step and is not done here.</div>
+<div class="keybox a7NL"><div class="a7NLl"><b>Key point.</b> V<sub>x</sub> is the <i>total</i> story shear.</div><ul class="a7NLu"><li><b class="a7NLk">Next step, not done here:</b> distributing it to the individual frames or walls in proportion to their stiffness, and adding the inherent and accidental torsion of Sec. 12.8.4.1 and 12.8.4.2 with the A<sub>x</sub> amplification of Sec. 12.8.4.3 where the category requires it.</li></ul></div>
 <h3>8.7 Consistency between the schedule and the geometry</h3>
 <p>The story schedule is entered on the Seismic tab while the building height is entered on the Geometry tab, so the two can
 disagree without either looking wrong on its own. Every recalculation cross-checks them and reports the result on the dashboard,
@@ -4621,9 +4538,7 @@ in the schedule editor and on the Seismic tab.</p>
 <tr><td class="d">The top level is above the mean roof height but at or below the ridge</td><td class="d">Review</td></tr>
 <tr><td class="d">h<sub>n</sub> is above the ridge or below the eave</td><td class="d">Review</td></tr>
 <tr><td class="d">A level carries no weight</td><td class="d">Review. It is excluded from the distribution</td></tr></table>
-<div class="keybox"><b>Blocked means suppressed, not merely flagged.</b> Where any blocking condition holds, the vertical
-distribution, the story shears and the overturning moments are withheld rather than printed. The arithmetic would still produce
-numbers, and those numbers would look entirely reasonable, which is exactly the failure this tool exists to avoid.</div>
+<div class="keybox a7NL"><div class="a7NLl"><b>Blocked means suppressed, not merely flagged.</b></div><ul class="a7NLu"><li><b class="a7NLk">Withheld:</b> where any blocking condition holds, the vertical distribution, the story shears and the overturning moments are withheld rather than printed.</li><li><b class="a7NLk">Why:</b> the arithmetic would still produce numbers, and those numbers would look entirely reasonable, which is exactly the failure this tool exists to avoid.</li></ul></div>
 `},
 
 {t:"9. Verification",h:`
