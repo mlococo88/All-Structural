@@ -22811,7 +22811,7 @@ Basis: AASHTO LRFD 10th Ed. (2024). Reference implementation: `lldf.html` `membe
 - **Check case:** built-in project, Girder section, 1440 px: 21 lines, GS7 "0.93 OK" (as the Summary's governing ratio 0.93), GS22 / GS9 / GS10 "—" with N/A; click GS4 → Checks tab, card GS4 at the top; « → 42 px, key '1'.
 - **How verified:** `tests/compare.mjs --tool gd`: every section identical (A's 3 console errors: the extracted main copy has no `shared/` folder). Headless 1300 / 1440 / 1600 / 390 px: column 240 / 240 / 280 px / not displayed, page scrollWidth = viewport; click → Checks tab with the card on screen; collapse → 42 px and the key; print media: not displayed. 0 console errors. Screenshots: see the PR.
 - **Other copies:** none.
-## 2026-11-08 — PR: nl-sbd-a4 (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SBNL-4: the remaining long check notes of the GirderDetail modules as a bold lead and a list, Checks tab and Report; display only, no result change)
+## 2026-11-08 — PR: nl-sbd-a4 (PR #1227: https://github.com/mlococo88/All-Structural/pull/1227) (SBNL-4: the remaining long check notes of the GirderDetail modules as a bold lead and a list, Checks tab and Report; display only, no result change)
 
 ### SBNL-4. The shorter long check notes as a lead line and items   [display only] [no result change]
 - **Request (engineer, 2026-11-07, for every app):** as SBNL-3 (#1193). Part 4 of the tool: the check notes (`c.note`) left by SBNL-3's open item, the ones of about 170 to 650 characters with 3 or more sentences or several facts.
