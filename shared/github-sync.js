@@ -733,6 +733,7 @@
       '.spGhSt.cloud-newer,.spGhSt.cloud{background:#e0f2fe;border-color:#7dd3fc;color:#075985;} .spGhSt.conflict{background:#fef3c7;border-color:#fcd34d;color:#92400e;}',
       '.spGhAsk{background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:6px 8px;margin:6px 0;font-size:9pt;}',
       'dialog.spGh label{display:block;margin:6px 0 2px;font-weight:600;font-size:9pt;} dialog.spGh input{font:inherit;font-size:10pt;padding:3px 6px;width:100%;box-sizing:border-box;border:1px solid #94a3b8;border-radius:4px;}',
+      'dialog.spGh label.spGhChk{display:flex;gap:6px;align-items:flex-start;font-weight:600;margin:10px 0 0;} dialog.spGh label.spGhChk input{width:auto;margin:2px 0 0;flex:0 0 auto;} dialog.spGh label.spGhChk + .spNote{margin:2px 0 0 22px;}',   // LIVE
       'dialog.spGh .spGhRes{margin:8px 0;font-size:9pt;white-space:pre-wrap;} dialog.spGh .spGhBtns{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;} dialog.spGh .spGhBtns button{margin-left:0;}',
       '.spGhToast{position:fixed;right:12px;bottom:12px;z-index:2147483000;max-width:min(420px,92vw);background:#fffbeb;color:#78350f;border:1px solid #f59e0b;border-radius:6px;padding:8px 28px 8px 10px;font:13px/1.35 system-ui,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.15);}',
       '.spGhToast button{position:absolute;top:4px;right:4px;border:0;background:none;font-size:14px;cursor:pointer;color:#78350f;}',
@@ -758,7 +759,7 @@
       setDlg = document.createElement('dialog'); setDlg.className = 'spLib spGh'; setDlg.setAttribute('data-sp', 'gh-dialog'); setDlg.id = 'spGhDlg';
       document.body.appendChild(setDlg);
     }
-    const d = setDlg, s = settings(storage);
+    const d = setDlg, s = settings(storage), L = live(storage);
     d.innerHTML = `<div class="spHead"><strong>Cloud sync (GitHub)</strong><span><button type="button" data-gh="close">Close</button></span></div>
       <p class="spNote">Copies the saved projects of every tool in this browser to your <b>private</b> GitHub repository, so they are on all your devices. The browser's list stays the working copy: the tools work offline as before, and changes are sent when GitHub can be reached. Autosave is not synced, only named projects. Setup steps: docs/github-sync-setup.md.</p>
       <label for="spGhOwner">GitHub account (owner)</label><input id="spGhOwner" autocomplete="off" spellcheck="false" value="${esc(s.owner || 'mlococo88')}">
@@ -766,10 +767,19 @@
       <label for="spGhBranch">Branch</label><input id="spGhBranch" autocomplete="off" spellcheck="false" value="${esc(s.branch || 'main')}">
       <label for="spGhToken">Fine-grained access token</label><input id="spGhToken" type="password" autocomplete="off" spellcheck="false" placeholder="${s.token ? 'saved: ' + esc(mask(s.token)) + ' (leave blank to keep it)' : 'github_pat_…'}">
       <label for="spGhDevice">This device's name (used in conflict copies)</label><input id="spGhDevice" autocomplete="off" value="${esc(s.device)}" placeholder="e.g. Work laptop">
+      <label class="spGhChk"><input type="checkbox" id="spGhAuto"${L.autoSave ? ' checked' : ''}> Auto-save open project every 30 s</label>
+      <p class="spNote">While a <b>named</b> saved project is open and you change its inputs, they are saved into it about every 30 s (after a few seconds without a change) and uploaded. A new project with no name yet is never auto-saved. Untick to save only with Save.</p>
+      <label class="spGhChk"><input type="checkbox" id="spGhWatch"${L.watch ? ' checked' : ''}> Check GitHub every 30 s for changes to the open project</label>
+      <p class="spNote">When another device saved the project you have open, a banner offers <b>Load it</b> (with Undo) or <b>Keep mine</b>; nothing on screen is replaced without Load it. Paused while the tab is hidden.</p>
       <p class="spNote"><b>The token is stored in this browser's storage</b> (readable by anyone who can use this browser profile). It is sent only to api.github.com, is never shown again, and is never part of a project file. Use a token limited to this one repository, with Contents read and write only. Forget it on shared computers.</p>
       <div class="spGhBtns"><button type="button" data-gh="save">Save</button><button type="button" data-gh="test">Test connection</button><button type="button" class="spDel" data-gh="forget"${s.token ? '' : ' disabled'}>Forget token on this device</button></div>
       <div class="spGhRes" role="status"></div>`;
     const res = d.querySelector('.spGhRes'), val = id => d.querySelector('#' + id).value;
+    d.onchange = e => {   // LIVE: the two boxes apply at once (bridgeSuite.v1.githubSync.live)
+      if (!e.target || (e.target.id !== 'spGhAuto' && e.target.id !== 'spGhWatch')) return;
+      const ok = saveLive(storage, { autoSave: d.querySelector('#spGhAuto').checked, watch: d.querySelector('#spGhWatch').checked });
+      res.textContent = ok ? 'Saved (applies to every tool in this browser).' : 'Browser storage refused the write.';
+    };
     const form = () => ({ owner: val('spGhOwner'), repo: val('spGhRepo'), branch: val('spGhBranch'), token: val('spGhToken'), device: val('spGhDevice') });
     d.onclick = async e => {
       if (e.target === d) { d.close(); return; }

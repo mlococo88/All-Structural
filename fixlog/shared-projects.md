@@ -121,3 +121,41 @@ Loaded by: see `shared/README.md` (one row per file). Tests: `node tests/engine/
 - **Check case:** Spread Footing (opts in): header = chip · Undo · Redo · Auto-calculate · Re-analyze · Print; chip click → Project tab, title block open. Standard-save fixture (does not opt in): header chip · Undo · Redo · Save · Saved projects… · Print and chip click = Saved projects…, as before (`tests/smoke/standard-save.mjs` unchanged and passing).
 - **How verified:** see the PR (standard-save, start-chooser, project-library for every tool entry, sbd-standard-save, pile-library, steel-bridge-library, github-sync, github-sync-tools, bridge-suite-save, check-syntax).
 - **Formulas, factors, units, code references:** none (§4 does not apply).
+
+## 2026-11-08 — PR: claude/sync-autosave-ui (PR #1252: https://github.com/mlococo88/All-Structural/pull/1252) (LIVE PR 2 of 3) — projects-ui.js: auto-save of the open named project, chip status, "Updated on <device>" banner with Load it / Keep mine / Undo   [GitHub sync only; nothing changes while sync is off; no key or format change; no result change]
+- **Why:** engineer request 2026-11-08 (A, B). Engine: fixlog/shared-github-sync.md LIVE PR 1 (#1251).
+- **What (`shared/projects-ui.js`):**
+  - New `liveBar(ctx, b)` (anchor `function liveBar(ctx, b)`), made by every `projectBar` (anchor `live = liveBar(ctx, {`). A 3 s timer. Its first line returns at once when `SharedGitHubSync` is not loaded or sync is not set up (`eng()` null): no request, no key, no element.
+    - **Auto-save:** `SharedGitHubSync.autoSaveDue` with "edited" = the inputs' snapshot differs from the one taken when the project was opened / saved (`reset()`, called by `setCur`), so unsaved work restored from a tool's autosave is not saved until it is changed on the page. The save is the tool's own Save (`ctx.save(name)` or `store.save(name, getState())`) through `done(r, name, true, true)`. Never while a dialog is open.
+    - **Check:** `SharedGitHubSync.pollDue` (not while `document.visibilityState === 'hidden'` or the page is a frame that is not shown); engine `poll`; a GitHub change → `changeInfo` → banner.
+    - **Banners:** `<div class="spLive" data-sp="live">`, fixed bottom left, hidden in print:
+      - "Updated on <device> at <hh:mm Eastern> — Load it / Keep mine" (`data-lv="upd"`);
+      - after Load it, "Loaded the version from … Undo" (`data-lv="undo"`, until the next input change or ×);
+      - messages (`data-lv="msg"`).
+    - **Load it:** unsaved inputs on screen are first saved into the project (the tool's Save). Then engine `loadCloud`, the tool's `ctx.open(name)`, and the same bookkeeping as the dialog's Open (`opened`: setCur, afterOpen, start strip, changed).
+    - **Undo:** engine `undoLoad`, then `ctx.open`; that GitHub version is not offered again on this page.
+    - **Keep mine:** closes the banner for that GitHub version.
+  - `done(r, name, quiet)` → `done(r, name, quiet, auto)`. With `auto`, the start strip's `opened` and the immediate `tick(true)` upload are skipped (the background upload sends it, with the tool's settle time). Before: `setCur(name); savedAt[name] = Date.now(); if (st) st.opened(name); … if (dialog.cloud && dialog.cloud.tick) dialog.cloud.tick(true)…`. After: `… if (st && !auto) st.opened(name); … if (!auto && dialog.cloud && dialog.cloud.tick) …`. Save / Save as call it without `auto`: unchanged.
+  - `setCur(n)` also calls `live.reset()`.
+  - Chip (`refresh()`): after the GitHub badge, `live.chipHtml(n, inList)` = `<span class="spLiveSt">` "auto-saved 14:32" / "uploading" (queued) / "pending (offline)" / "pending (rate limit)" / "pending (token refused)" / "auto-save failed", or nothing. Sync on only.
+  - CSS lines for `.spLiveSt` and `.spLive`. The projectBar API returns `live`.
+- **Per tool (no tool file changed):**
+  - Every tool goes through `projectBar`, so each one auto-saves with its own Save.
+  - **Steel Bridge Design:** its Save writes both lists (`sbdPairStore`), and its snapshot holds both parts.
+  - **Bridge Suite** (index, lldf, Prestressed): Save = this app's parts into the open project (+ the MIDAS demands bundle in the MCT generator, as Save). The upload keeps the suite's 30 s settle. Hand-off locks are not touched (no channel is written). LL & DL and Prestressed already write their part into the open project on every change, so they are rarely "unsaved"; auto-save mainly acts in the MCT generator. A project listed as "<name> (older, saved …)" is not checked (the sync has no file for it).
+  - **Spread Footing:** the Recent projects strip is not closed or reordered by an auto-save (only by the user's own Save / Open).
+  - **Concrete Beam Capacity:** each tab's frame has its own bar; a frame that is not shown is treated as hidden.
+- **Decisions (pending engineer review):**
+  1. "Keep mine" does not upload over the other device's file (that would hide its change in the history). A later save of the project keeps both versions (conflict copy), as before.
+  2. Load it with unsaved inputs on screen saves them into the project first, so they end up in the conflict copy.
+  3. Banners sit at the bottom left, so the tools' headers and layout are not moved.
+  4. The Bridge Suite's MCT auto-save also bundles the latest MIDAS demands, as its Save does.
+- **Loaded by (§3):** ASCE7-16 Load Generator, BasePlateAnchorDesigner, Bridge Geometry, Bridge Substructure Loading, Concrete Beam Capacity (three frames), Gusset Plate Rating, Light Pole and Sign Post, Moving Load Generator, Pile Designer, Prestressed Bridge Design, Retaining Wall Designer, Section Property Calculator, Shear and Moment Diagrams, Spread Footing, Steel Beam Design - AISC 15th, Steel Bridge Design, Stone Masonry Arch Load Rating, Timber Beam Check, abutment_calculator, elastomeric_design_module, index.html, lldf.html, apps/steel-bridge (projectBar); tools.html loads github-sync.js only (no projectBar: unchanged).
+- **Check case:** `tests/smoke/github-sync-live.mjs` (new; two browsers = two devices on one in-memory GitHub; timings shortened in the page). Spread Footing "Pier 1", geom.B 10 → 11 on device A:
+  - auto-saved and uploaded once; the chip shows "auto-saved hh:mm"; no further upload while nothing changes;
+  - device B shows "Updated on Laptop at hh:mm" with its geom.B still 10;
+  - Load it → 11; Undo → 10, and GitHub still has 11;
+  - A and B edit at once (21 / 31) → "Pier 1.json" = 21 and "Pier 1 (conflict Desktop …).json" = 31;
+  - a hidden tab makes no request for 14 s and checks again when shown;
+  - sync off: no request and no key.
+- **Formulas, factors, units, code references:** none.
