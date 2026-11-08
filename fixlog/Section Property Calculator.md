@@ -3705,3 +3705,15 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
   - 0 console errors.
   - Tests: see the PR.
 - **Other copies:** none (the same pattern, not shared code, as SMLS / SFLB / RWLB / LPLB).
+
+## 2026-11-08 — PR: spc-e4-cite (PR #1217: https://github.com/mlococo88/All-Structural/pull/1217) — Method tab: AISC 360-16 Eq. E4-9 / E4-8 cited plainly; "to be verified" removed (SPE4; wording only, no result change)
+
+- **Problem:** the Method tab, "Buckling parameters:" item r̄o, H still said "(AISC 360-16 Eq. E4-9, E4-8 — equation numbers to be verified against the printed Specification)", although SPL6 (PR #1110) recorded both equation numbers and forms as checked against the printed AISC 360-16 Specification (A4 closed). The observation was recorded under SPNL-1 ("item 22").
+- **Where:** `Section Property Calculator.html`, Method tab builder (anchor `NL('<b>Buckling parameters:</b>'`, ~line 7084).
+  - Before: `['r̄<sub>o</sub>, H', '(AISC 360-16 Eq. E4-9, E4-8 — equation numbers to be verified against the printed Specification) from the thin-wall shear centre; n/a when the shear centre is n/a.'],`
+  - After: `['r̄<sub>o</sub>, H', '(AISC 360-16 Eq. E4-9, E4-8) from the thin-wall shear centre; n/a when the shear centre is n/a.'],`
+- **Governing provision:** AISC 360-16 Eq. E4-9 (r̄o² = x_o² + y_o² + (I_x + I_y)/A_g) and Eq. E4-8 (H = 1 − (x_o² + y_o²)/r̄o²), as checked in SPL6. The citation itself is unchanged; only the "to be verified" wording is removed.
+- **Formulas, factors, units:** none changed. **Saved data:** none. The "thin-wall — verify" badge of the Calc detail block stays (it is about the thin-wall shear centre, SPL6).
+- **Check case:** default section, Method tab and Report §9 "As printed: Method and assumptions": "◦ r̄o, H (AISC 360-16 Eq. E4-9, E4-8) from the thin-wall shear centre; n/a when the shear centre is n/a." Numbers unchanged.
+- **How verified:** headless Chromium, origin/main vs the branch, default project: the digit sequence of every input and output tab and of the whole printed Report (`SharedReport.html(SPRP.doc, { lazy: false })`) is identical (the removed text had no digits); only the Method tab and the Report text changed. 0 console errors. Tests: `tests/check-syntax.mjs "Section Property Calculator.html"` (pass); `tests/smoke/project-library.mjs --tool spc` (ALL PASS). The tool has no entry in `tests/smoke/phone-layout.mjs`.
+- **Other copies:** none.

@@ -101,6 +101,41 @@ body{font-family:var(--font-doc);font-size:10pt;color:var(--ink);background:#efe
 .govStrip.pass .govBadge{color:var(--pass)}
 .govStrip.fail .govBadge{color:var(--fail)}
 @media print{.govStrip{display:none!important}}
+/* SBLP (2026-11-08, engineer: the left summary panel, as Retaining Wall / Spread Footing / Light Pole / Shear and Moment / Base Plate):
+   from 1200 px a left column of compact check chips (name, D/C, PASS / FAIL); 240 px to 1499 px, 280 px from 1500 px; the toggle
+   button shrinks it to a 42 px strip. Below 1200 px it is not shown and nothing changes. Screen only (never printed). */
+#sbDashCol{display:none}
+@media screen and (min-width:1200px){
+  #sbDashCol{display:flex;flex-direction:column;flex:0 0 280px;width:280px;min-width:0;overflow-y:auto;overscroll-behavior:contain;border-right:1px solid var(--line);background:var(--panel);font-family:var(--font-ui);font-size:9pt}
+  #main>#inputPanel{flex-basis:calc((100% - 280px) * .33)}
+  #sbDashHead{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:6px;padding:7px 8px 6px;background:var(--panel);border-bottom:2px solid var(--accent)}
+  #sbDashTgl{margin:0;padding:1px 7px;font:9pt var(--font-ui);border:1px solid var(--line);background:var(--slate-100);border-radius:4px;cursor:pointer}
+  #sbDashTtl{margin:0;font-size:9pt;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#334155}
+  #sbDashCnt{margin-left:auto;font-size:8.5pt;font-weight:600;white-space:nowrap}
+  #sbDashCnt.fail{color:var(--fail)} #sbDashCnt.pass{color:var(--pass)}
+  #sbDash{padding:6px 6px 24px;display:flex;flex-direction:column;gap:4px}
+  #sbDash .sbdMsg{font-style:italic;color:#555;padding:4px 2px}
+  .sbdChip{display:grid;grid-template-columns:10px minmax(0,1fr) auto;column-gap:6px;align-items:center;width:100%;text-align:left;padding:4px 6px;border:1px solid var(--line);border-radius:4px;background:#fff;cursor:pointer;font:9pt var(--font-ui);color:var(--ink)}
+  .sbdChip:hover{background:#eef3f8} .sbdChip:focus-visible{outline:2px solid var(--blue-600);outline-offset:1px}
+  .sbdChip .dot{width:9px;height:9px;border-radius:50%;border:1px solid rgba(0,0,0,.3)}
+  .sbdChip.pass .dot{background:var(--pass)} .sbdChip.fail .dot{background:var(--fail)} .sbdChip.na .dot{background:#94A3B8}
+  .sbdChip.fail{border-color:#F1A8A8;background:#FDF3F3}
+  .sbdChip .nm{font-weight:600;overflow-wrap:anywhere}
+  .sbdChip .vl{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .sbdChip .vl b{display:block;font-size:8pt}
+  .sbdChip.pass .vl b{color:var(--pass)} .sbdChip.fail .vl b{color:var(--fail)} .sbdChip.na .vl b{color:#64748B}
+  body.sbDashColl #sbDashCol{flex-basis:42px;width:42px;overflow:hidden}
+  body.sbDashColl #main>#inputPanel{flex-basis:calc((100% - 42px) * .33)}
+  body.sbDashColl #sbDash{display:none}
+  body.sbDashColl #sbDashHead{flex-direction:column;border-bottom:none;padding:7px 4px}
+  body.sbDashColl #sbDashTtl{writing-mode:vertical-rl;transform:rotate(180deg)}
+  body.sbDashColl #sbDashCnt{margin-left:0;writing-mode:vertical-rl;transform:rotate(180deg)}
+}
+@media screen and (min-width:1200px) and (max-width:1499.98px){
+  #sbDashCol{flex-basis:240px;width:240px}
+  #main>#inputPanel{flex-basis:calc((100% - 240px) * .33)}
+}
+@media print{#sbDashCol{display:none!important}}
 #tabBar button.active{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
 .tabPage{padding:10px 2px}
 /* sections */
@@ -155,6 +190,13 @@ table.cfg input,table.cfg select{font-size:8.8pt;padding:2px 4px}
 .warnBox{font-size:9.5pt;color:#7C4A03;background:#FEF6E7;border:1.5px solid #F0C36D;border-radius:5px;padding:7px 10px;margin:7px 0}
 .errBox{font-size:9.5pt;color:#8C1D1D;background:#FDECEC;border:1.5px solid #F1A8A8;border-radius:5px;padding:7px 10px;margin:7px 0;font-weight:600}
 .okBox{font-size:9.5pt;color:#065F46;background:#E8F7F0;border:1.5px solid #7FD1B0;border-radius:5px;padding:7px 10px;margin:7px 0;font-weight:600}
+/* SBNL (2026-11-08, engineer: a long note as a bold lead line and a list; display only). Colours inherited from the box */
+.sbNL .sbNLl{font-weight:700;margin:0 0 1px}
+.sbNL .sbNLu{margin:2px 0 3px;padding-left:18px}
+.sbNL .sbNLu>li{margin:1px 0}
+.sbNL .sbNLa{font-weight:700;color:#7C4A03;background:#FEF6E7;border:1px solid #F0C36D;border-radius:4px;padding:2px 6px;margin:1px 0 4px}
+.okBox.sbNL .sbNLu,.errBox.sbNL .sbNLu{font-weight:400}
+@media print{.sbNL .sbNLu>li{break-inside:avoid}}
 /* dashboard chips */
 #dash{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
 .chip{display:flex;align-items:center;gap:6px;font-family:var(--font-ui);font-size:8.5pt;border:1.5px solid;border-radius:5px;padding:4px 9px;cursor:pointer;background:#fff}
@@ -224,6 +266,10 @@ textarea{min-height:64px;resize:vertical;font-family:var(--font-doc);font-size:1
     </div>
   </div>
   <div id="main">
+    <aside id="sbDashCol" class="noPrint" aria-label="Check summary"><!-- SBLP (2026-11-08): the checks as a left column on screens 1200 px and wider -->
+      <div id="sbDashHead"><button type="button" id="sbDashTgl" aria-controls="sbDash" aria-expanded="true" title="Shrink the check summary">&laquo;</button><h2 id="sbDashTtl">Checks</h2><span id="sbDashCnt"></span></div>
+      <div id="sbDash" role="list"></div>
+    </aside>
     <div id="inputPanel"><div id="prjPane" data-secid="prjPane"><!-- SBHD (2026-11-05): moved here from the header; kept across rebuilds by rebuildInputs() -->
       <div class="sec"><div class="secHead"><span class="secTitle">Save and open</span></div><div class="secBody" id="sbSaveCard"></div></div><!-- STDS (2026-11-06): the standard "Save and open" card (shared/projects-ui.js projectBar, SBPL.pb); it replaces the "Project Save / Load" section -->
       <div class="sec"><div class="secHead"><span class="secTitle">Title block</span></div><div class="secBody">
@@ -265,6 +311,15 @@ const EKSI=29000, GKSI=11200;              /* ksi */
 const NN='ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 const $=id=>document.getElementById(id);
 function el(tag,cls,txt){const e=document.createElement(tag);if(cls)e.className=cls;if(txt!==undefined)e.innerHTML=txt;return e;}
+/* SBNL (2026-11-08, engineer: "split this up into a numbered list or bullets ... so it's not just a text that will likely get overlooked").
+   Display only: a note as a bold lead line, then a list; an item [lead words, text] gets bold lead words; null items are skipped.
+   o.act: action lines on top (warning style); o.ol: a numbered list. Used as el('div','note sbNL',sbNL(...)); sbrTab prints it as one
+   Report line per part. SB_NLW: the display form of a warning whose string (AN / D warns) stays as it was, keyed by that string. */
+function sbNL(lead,items,o){o=o||{};const L=o.ol?'ol':'ul';
+  const li=(items||[]).filter(Boolean).map(x=>'<li>'+(Array.isArray(x)?'<b class="sbNLk">'+x[0]+'</b> '+x[1]:x)+'</li>').join('');
+  return (o.act||[]).filter(Boolean).map(a=>'<div class="sbNLa">'+a+'</div>').join('')+(lead?'<div class="sbNLl">'+lead+'</div>':'')+(li?'<'+L+' class="sbNLu">'+li+'</'+L+'>':'');}
+const SB_NLW=new Map();
+function sbWarnEl(n,cls){cls=cls||'warnBox';const f=SB_NLW.get(n);return f?el('div',cls+' sbNL',sbNL(f[0],f[1],f[2])):el('div',cls,n);}
 function fmt(v,d){if(v===undefined||v===null||!isFinite(v))return'\u2014';const p=(d===undefined)?2:d;
   const a=Math.abs(v);let s=v.toFixed(p);
   if(a!==0&&a<0.5*Math.pow(10,-p))s=v.toExponential(2);
@@ -539,9 +594,13 @@ function sectionWarnings(p){
       const plv={A:2*p.bf*p.tf+hw*p.tw,Ix,Sx:Ix/(p.d/2),Zx:p.bf*p.tf*(p.d-p.tf)+0.25*p.tw*hw*hw};
       plv.rx=Math.sqrt(Ix/plv.A);
       const stale=['A','Ix','Sx','Zx','rx','kdes','Qf','Qw','Wno','Sw1','Wt'].filter(k=>src[k]==='db');
-      if(stale.length)w.push('Built-up section: these properties were not entered and are still the values of the parent shape '+p.lbl+': '+
+      if(stale.length){w.push('Built-up section: these properties were not entered and are still the values of the parent shape '+p.lbl+': '+
         stale.map(k=>k+' = '+fmt(p[k],3)+(plv[k]!=null?' (plates: '+fmt(plv[k],3)+')':'')).join(', ')+
         '. Enter them for the welded section (k = t\u2093 + weld size; Q\u2093, Q\u1D65, W_no, S_w1 for torsion). Computed from the plates where not entered: h = d \u2212 2t\u2093, h\u2092, I\u1D67, S\u1D67, Z\u1D67, r\u1D67, J, C\u1D65 and r\u209C\u209B (Eq. F2-7).');
+        SB_NLW.set(w[w.length-1],['Built-up section: these properties were not entered and are still the values of the parent shape '+p.lbl+':',   /* SBNL: display form; the string above is unchanged */
+          stale.map(k=>k+' = '+fmt(p[k],3)+(plv[k]!=null?' (plates: '+fmt(plv[k],3)+')':'')).concat([['Enter them','for the welded section (k = t\u2093 + weld size; Q\u2093, Q\u1D65, W_no, S_w1 for torsion).'],
+          ['Computed from the plates where not entered:','h = d \u2212 2t\u2093, h\u2092, I\u1D67, S\u1D67, Z\u1D67, r\u1D67, J, C\u1D65 and r\u209C\u209B (Eq. F2-7).']]),
+          {act:['Input needed: enter the properties listed below for the welded section.']}]);}
     }
   }else if(p._kind==='P'){
     const Acalc=Math.PI/4*(p.OD*p.OD-Math.pow(p.OD-2*p.tdes,2));
@@ -1544,6 +1603,8 @@ function computeAll(){
   if(anyNeg&&S.bracing.LbBot==null){
     const longest=Math.max(...S.geom.spans.map(sp=>sp.L));
     res.bracingNotes.push('Negative moment exists under at least one strength combination but no bottom-flange unbraced length is entered. Stage-2 flexure checks will default L_b,bot to the longest span ('+fmt(longest)+' ft) — the distance between supports — because an inflection point is NOT a brace point (AISC 360-16 Commentary App. 6).');
+    SB_NLW.set(res.bracingNotes[res.bracingNotes.length-1],['Negative moment exists under at least one strength combination but no bottom-flange unbraced length is entered.',   /* SBNL: display form */
+      [['Default:','Stage-2 flexure checks will default L_b,bot to the longest span ('+fmt(longest)+' ft) \u2014 the distance between supports.'],['Why:','an inflection point is NOT a brace point (AISC 360-16 Commentary App. 6).']]]);
   }
   if(S.bracing.topCont){
     res.combos.forEach(cb=>{
@@ -1977,7 +2038,9 @@ function torsionHSS(p,Lin){
     const F1=1.23*E/(SQ(Lin/p.OD)*Math.pow(p.Dt,1.25));
     const F2c=0.60*E/Math.pow(p.Dt,1.5);
     out.Fcr=Math.min(0.6*Fy,Math.max(F1,F2c));out.clause='H3-2a/b';
-  }else{out.blocked='Torsion on an open section (I-shape or channel) is governed by \u00A7H3.3, which requires the normal and shear stresses from a warping-torsion analysis (AISC Design Guide 9) \u2014 outside the scope of this tool. Check the axial, flexural and shear stresses independently per \u00A7H3.3, or use an HSS, for which \u00A7H3.1/H3.2 is implemented here.';return out;}
+  }else{out.blocked='Torsion on an open section (I-shape or channel) is governed by \u00A7H3.3, which requires the normal and shear stresses from a warping-torsion analysis (AISC Design Guide 9) \u2014 outside the scope of this tool. Check the axial, flexural and shear stresses independently per \u00A7H3.3, or use an HSS, for which \u00A7H3.1/H3.2 is implemented here.';
+    SB_NLW.set('Torsion: '+out.blocked,['Torsion: torsion on an open section (I-shape or channel) is outside the scope of this tool.',[['Why:','it is governed by \u00A7H3.3, which requires the normal and shear stresses from a warping-torsion analysis (AISC Design Guide 9).'],['Instead:','check the axial, flexural and shear stresses independently per \u00A7H3.3, or use an HSS, for which \u00A7H3.1/H3.2 is implemented here.']]]);   /* SBNL: display form of the errBox */
+    return out;}
   out.Tn=out.Fcr*p.Cc;out.phiTn=0.9*out.Tn;
   return out;
 }
@@ -2386,13 +2449,28 @@ function buildDesignChecks(D,A){
       (dflt.length?' \u2014 '+dflt.join(' and ')+' ASSUMED because the input is blank (no holes, every element connected); enter the net area and the shear-lag factor of the end connection (\u00A7D3, Table D3.1) under Compression Effective Lengths':'')+
       (t.AnCapped?'; the entered A\u2099 exceeds A\u1D4D and was limited to A\u1D4D':'')+(t.UCapped?'; the entered U exceeds 1.0 and was limited to 1.0':'')+
       '. Block shear (\u00A7J4.3) and the connection are not checked. The \u00A7H1.2 interaction uses P\u1D9C = \u03C6\u209CP\u2099 without the optional C\u1D47 increase (conservative).'+
-      (D.perCombo.some(c=>c.h33)?' (The \u00A7H3.3 stress sum includes |P\u1D64|/A.)':''));}
+      (D.perCombo.some(c=>c.h33)?' (The \u00A7H3.3 stress sum includes |P\u1D64|/A.)':''));
+    SB_NLW.set(D.warns[D.warns.length-1],['Axial TENSION (P\u1D64 < 0) is entered for: '+tenC.map(c=>c.name).join(', ')+'.',[   /* SBNL: display form; the warning string above is unchanged */
+      ['Checked:','tensile yielding and rupture (\u00A7D2) with A\u2099 = '+fmt(t.An,2)+' in\u00B2 and U = '+fmt(t.U,2)+'.'],
+      dflt.length?['Assumed:',dflt.join(' and ')+' ASSUMED because the input is blank (no holes, every element connected); the net area and the shear-lag factor of the end connection (\u00A7D3, Table D3.1) are entered under Compression Effective Lengths.']:null,
+      t.AnCapped?['Limited:','the entered A\u2099 exceeds A\u1D4D and was limited to A\u1D4D.']:null,
+      t.UCapped?['Limited:','the entered U exceeds 1.0 and was limited to 1.0.']:null,
+      ['Not checked:','block shear (\u00A7J4.3) and the connection.'],
+      ['Interaction:','the \u00A7H1.2 interaction uses P\u1D9C = \u03C6\u209CP\u2099 without the optional C\u1D47 increase (conservative).'],
+      D.perCombo.some(c=>c.h33)?['Stress sum:','the \u00A7H3.3 stress sum includes |P\u1D64|/A.']:null],
+      {act:dflt.length?['Input needed: enter the net area and the shear-lag factor of the end connection under Compression Effective Lengths.']:null}]);}
   const bxImp=ty=>!D.member&&(S.loads||[]).some(ld=>!ld.off&&ld.bx&&ld.bx.ch==='buildingLoads'&&ld.bx.type===ty);
-  if(bxImp('W'))D.warns.push('Wind imported from the ASCE 7-16 hand-off is the MWFRS pressure. If this member is a component (a purlin, a girt, or any member loaded directly by the cladding), use the components and cladding pressures of ASCE 7-16 Ch. 30, which are usually higher and are not in the hand-off.');
+  if(bxImp('W')){D.warns.push('Wind imported from the ASCE 7-16 hand-off is the MWFRS pressure. If this member is a component (a purlin, a girt, or any member loaded directly by the cladding), use the components and cladding pressures of ASCE 7-16 Ch. 30, which are usually higher and are not in the hand-off.');
+    SB_NLW.set(D.warns[D.warns.length-1],['Wind imported from the ASCE 7-16 hand-off is the MWFRS pressure.',[['If this member is a component','(a purlin, a girt, or any member loaded directly by the cladding), use the components and cladding pressures of ASCE 7-16 Ch. 30.'],['Those pressures','are usually higher and are not in the hand-off.']]]);}   /* SBNL: display form */
   if(bxImp('S'))D.warns.push('Snow imported from the ASCE 7-16 hand-off is the balanced roof snow only. Unbalanced snow and snow drifts (ASCE 7-16 Sec. 7.6 to 7.8) are not included; add them where this beam lies in an unbalanced or drift zone.');
   const h33B=D.perCombo.filter(c=>c.h33&&c.h33.dcrB!=null);
   if(h33B.length){const c=h33B.reduce((m,q)=>q.h33.dcrB>m.h33.dcrB?q:m,h33B[0]);
-    D.warns.push('\u00A7H3.3(c) open-section torsion, buckling: a Chapter E/F buckling stress is below F\u1D67 for '+h33B.map(q=>q.name).join(', ')+', so the normal stresses at the critical station are also checked against buckling: f\u2090/(\u03C6F\u1D9C\u02B3,E) + (f\u1D47\u2093 + f\u1D47\u1D67 + \u03C3\u1D42)/(\u03C6F\u1D9C\u02B3,F) \u2264 1.0, with F\u1D9C\u02B3,F = M\u2099/S\u2093 of the governing major-axis flexure check and F\u1D9C\u02B3,E = P\u2099/A\u1D4D. Worst: '+c.name+', ratio = '+fmt(c.h33.dcrB,3)+'. This is a conservative reading of \u00A7H3.3(c); a DG 9 interaction may be used instead by hand.');}
+    D.warns.push('\u00A7H3.3(c) open-section torsion, buckling: a Chapter E/F buckling stress is below F\u1D67 for '+h33B.map(q=>q.name).join(', ')+', so the normal stresses at the critical station are also checked against buckling: f\u2090/(\u03C6F\u1D9C\u02B3,E) + (f\u1D47\u2093 + f\u1D47\u1D67 + \u03C3\u1D42)/(\u03C6F\u1D9C\u02B3,F) \u2264 1.0, with F\u1D9C\u02B3,F = M\u2099/S\u2093 of the governing major-axis flexure check and F\u1D9C\u02B3,E = P\u2099/A\u1D4D. Worst: '+c.name+', ratio = '+fmt(c.h33.dcrB,3)+'. This is a conservative reading of \u00A7H3.3(c); a DG 9 interaction may be used instead by hand.');
+    SB_NLW.set(D.warns[D.warns.length-1],['\u00A7H3.3(c) open-section torsion, buckling: a Chapter E/F buckling stress is below F\u1D67 for '+h33B.map(q=>q.name).join(', ')+'.',[   /* SBNL: display form */
+      ['Check:','the normal stresses at the critical station are also checked against buckling: f\u2090/(\u03C6F\u1D9C\u02B3,E) + (f\u1D47\u2093 + f\u1D47\u1D67 + \u03C3\u1D42)/(\u03C6F\u1D9C\u02B3,F) \u2264 1.0.'],
+      ['Stresses:','F\u1D9C\u02B3,F = M\u2099/S\u2093 of the governing major-axis flexure check and F\u1D9C\u02B3,E = P\u2099/A\u1D4D.'],
+      ['Worst:',c.name+', ratio = '+fmt(c.h33.dcrB,3)+'.'],
+      ['Basis:','this is a conservative reading of \u00A7H3.3(c); a DG 9 interaction may be used instead by hand.']]]);}
   if(D.j10){
     const wGov=gv(c=>{let m=null;(c.j10||[]).forEach(r=>{if(r.dcrWLY!=null&&(!m||r.dcrWLY>m.d))m={d:r.dcrWLY,c,r};});return m;});
     D.checks.push(wGov?{label:'Web local yielding',ref:'J10.2',dcr:wGov.d,combo:wGov.c.name,detail:wGov.r.label+(wGov.r.tens?' (tension)':''),tab:'tabJ10',
@@ -2668,7 +2746,7 @@ function rebuildInputs(){
       const clr=el('button','btn sm','Reset all overrides');
       clr.addEventListener('click',()=>{S.section.ovr={};rebuildInputs();schedule(true);});
       det.appendChild(clr);
-      det.appendChild(el('div','hint','Blank = database value (shown as placeholder). Slenderness ratios are always recomputed from resolved geometry, never read stale from the database. Units: in, in\u00B2, in\u00B3, in\u2074, in\u2076; Wt in lb/ft.'));
+      det.appendChild(el('div','hint sbNL',sbNL('Property overrides:',[['Blank','= database value (shown as placeholder).'],['Slenderness ratios:','always recomputed from resolved geometry, never read stale from the database.'],['Units:','in, in\u00B2, in\u00B3, in\u2074, in\u2076; Wt in lb/ft.']])));
       body.appendChild(det);
     }
   },P,{noNum:true});
@@ -2735,7 +2813,7 @@ function rebuildInputs(){
       body.appendChild(t);
     }
     fRow(body,'Include beam self-weight \u2192 DL',chkInput(()=>S.trib.sw,v=>{S.trib.sw=v;},'swOn'),'', 'Uniform load from the selected shape weight, applied to the Dead case');
-    body.appendChild(el('div','hint','Generated loads appear locked in the load table and update live with the inputs above. The full derivation is shown in the Load Derivation tab. The one-way tributary model assumes deck delivers load as if simply supported on this beam; continuity effects are neglected (see Manual).'));
+    body.appendChild(el('div','hint sbNL',sbNL('Generated loads appear locked in the load table and update live with the inputs above.',[['Derivation:','shown in full in the Load Derivation tab.'],['Model:','the one-way tributary model assumes deck delivers load as if simply supported on this beam.'],['Continuity effects:','neglected (see Manual).']])));
   },P,{noNum:true});
   /* ---------- Loads ---------- */
   mkSection('inLoads','Applied Loads (unfactored)',body=>{
@@ -2755,7 +2833,7 @@ function rebuildInputs(){
     });
     body.appendChild(bts);
     body.appendChild(loadTable());
-    body.appendChild(el('div','hint','Signs: transverse loads positive DOWN; applied moments positive counter-clockwise. Units: point kip, distributed kip/ft, moment kip\u00B7ft, positions ft from span start. \u201CAll\u201D (entire beam) applies to uniform loads only.'));
+    body.appendChild(el('div','hint sbNL',sbNL('Load table conventions:',[['Signs:','transverse loads positive DOWN; applied moments positive counter-clockwise.'],['Units:','point kip, distributed kip/ft, moment kip\u00B7ft, positions ft from span start.'],['\u201CAll\u201D (entire beam):','applies to uniform loads only.']])));
   },P,{noNum:true});
   /* ---------- Analysis options ---------- */
   if(typeof extraInputSections==='function')extraInputSections(P,'B');
@@ -2941,6 +3019,7 @@ function schedule(structural){
     if(structural)rebuildInputs();
     else if(uxCtl)uxCtl.relabel();   /* Custom stations x: re-check against the beam length */
     renderTab();
+    sbDashRender();   /* SBLP: the left summary panel follows every recalculation */
     updateGovStrip();   /* SBGS (2026-11-02): the Governing strip under the header follows every recalculation (it was refreshed only when the tabs were rebuilt) */
     sbdInputTabMarks();   /* refresh the input-tab error dots */
     autosave();pushHist();
@@ -3013,8 +3092,8 @@ function buildSummaryTab(pg){
   pg.appendChild(el('div',fails.length?'errBox':'okBox',
     fails.length?('One or more checks FAIL \u2014 see red chips ('+fails.length+').'):
     'All implemented checks pass. Strength checks (flexure, shear, axial, interaction, J10, torsion) arrive in Stage 2 and are shown N/A above so their absence is explicit, not silent.'));
-  AN.bracingNotes.forEach(n=>pg.appendChild(el('div','warnBox',n)));
-  AN.warns.forEach(n=>pg.appendChild(el('div','warnBox',n)));
+  AN.bracingNotes.forEach(n=>pg.appendChild(sbWarnEl(n)));
+  AN.warns.forEach(n=>pg.appendChild(sbWarnEl(n)));
   mkSection('sumPeaks','Envelope Peaks \u2014 Strength Combinations',body=>{
     if(!AN.env){body.appendChild(el('div','note','No strength combinations enabled.'));return;}
     const mx=(arr,C)=>{let bi=0;for(let i=1;i<arr.length;i++)if(Math.abs(arr[i])>Math.abs(arr[bi]))bi=i;
@@ -3221,7 +3300,7 @@ function buildDeriveTab(pg){
     return;
   }
   mkSection('dvTrib','Area \u2192 Line Load Conversion',body=>{
-    body.appendChild(el('div','note','One-way tributary model: the deck spans perpendicular to this beam and delivers load as if simply supported on it. w = p\u00B7(TW\u2097+TW\u1D63)/1000 + w\u2097\u1D62\u2099\u2091. Deck continuity over the beam (which raises the delivered reaction) is neglected \u2014 standard practice, disclosed per Manual \u00A70.3.'));
+    body.appendChild(el('div','note sbNL',sbNL('One-way tributary model:',[['Deck:','spans perpendicular to this beam and delivers load as if simply supported on it.'],['Line load:','w = p\u00B7(TW\u2097+TW\u1D63)/1000 + w\u2097\u1D62\u2099\u2091.'],['Deck continuity','over the beam (which raises the delivered reaction) is neglected \u2014 standard practice, disclosed per Manual \u00A70.3.']])));
     S.cases.forEach(cs=>{
       const p=S.trib.p[cs.id]||0,ln=S.trib.line[cs.id]||0;
       if(!p&&!ln)return;
@@ -3278,7 +3357,7 @@ function buildAnalysisTab(pg){
   const c=curCombo();if(!c)return;
   mkSection('anDia','Diagrams \u2014 '+c.name,body=>{
     ['plotV','plotM'].forEach(id=>{const d=el('div','plotHold');d.id=id;body.appendChild(d);});
-    body.appendChild(el('div','hint','Interactive: hover for values, drag to zoom, double-click to reset. Legend entries toggle. Grey dashed = interior supports; the envelope band (all enabled combinations) is drawn behind the active combination.'));
+    body.appendChild(el('div','hint sbNL',sbNL('Interactive plots:',[['Mouse:','hover for values, drag to zoom, double-click to reset.'],['Legend:','entries toggle.'],['Grey dashed','= interior supports.'],['Envelope band','(all enabled combinations): drawn behind the active combination.']])));
     setTimeout(drawDiagrams,30);
   },pg);
   /* per-combination worked sections — §7.1 with §7.2 identical-actions cross-ref */
@@ -3452,7 +3531,7 @@ function buildSectionTab(pg){
   const p=AN.sect;
   if(!p){pg.appendChild(el('div','errBox','No section resolved.'));return;}
   pg.appendChild(el('div','note','<b>'+p.lbl+'</b> \u2014 '+famMeta(p._fam).name+' \u00B7 '+p.mat.name+' (F\u1D67 = '+p.mat.Fy+' ksi, F\u1D64 = '+p.mat.Fu+' ksi) \u00B7 source: '+DBVER+'. Slenderness ratios shown are recomputed from the resolved geometry.'));
-  AN.warns.forEach(w=>pg.appendChild(el('div','warnBox',w)));
+  AN.warns.forEach(w=>pg.appendChild(sbWarnEl(w)));
   mkSection('sctFig','Cross Section',body=>{
     xsecBlock(body,p,{id:'xsecSect',title:p.lbl+'  \u00B7  '+p.mat.name+'  \u00B7  '+fmt(p.Wt,1)+' lb/ft',height:380});
   },pg);
@@ -3468,7 +3547,7 @@ function buildSectionTab(pg){
       x.id==='F13-3'?'12.0\u221A(29000/'+p.mat.Fy+') = '+fmt(x.lim,1):x.id==='F13-4'?'0.40\u00B729000/'+p.mat.Fy+' = '+fmt(x.lim,1):fmt(x.lim,0),
       fmt(x.r,3),x.r>1?'FAIL':'OK'].forEach((v,i)=>tr.appendChild(el('td',i===0?'lft':null,v)));if(x.r>1)tr.className='gov';t.appendChild(tr);});
     body.appendChild(t);
-    if(f13.dcr>1)body.appendChild(el('div','errBox','The section is outside the \u00A7F13.2 proportioning limits: the Chapter F and G strengths shown are not valid for it. Thicken the web, add or close up transverse stiffeners, or enlarge the compression flange.'));
+    if(f13.dcr>1)body.appendChild(el('div','errBox sbNL',sbNL('The section is outside the \u00A7F13.2 proportioning limits.',[['Effect:','the Chapter F and G strengths shown are not valid for it.']],{act:['Thicken the web, add or close up transverse stiffeners, or enlarge the compression flange.']})));
     const aw=f13.L.find(x=>x.id==='aw');
     if(aw&&aw.v>10)body.appendChild(el('div','hint','R\u209A\u1D4D (Eq. F5-6) uses a\u1D65 capped at 10 by its definition; the limit itself is reported above.'));
   },pg);
@@ -3511,11 +3590,11 @@ function buildSectionTab(pg){
         Wno:'W\u2099\u2092 = b\u2093h\u2092/4 = '+f3(p.Wno)+' in\u00B2 (AISC DG 9)',
         Sw1:'S_w1 = t\u2093b\u2093\u00B2h\u2092/16 = '+f3(p.Sw1)+' in\u2074 (AISC DG 9)',
         Wt:'Wt = 490/144\u00B7A = 3.403\u00B7'+f3(p.A)+' = '+fmt(p.Wt,1)+' lb/ft (steel 490 pcf)'};
-      body.appendChild(el('div','hint','<b>Built-up section: properties computed from the plates</b> (welds neglected; AISC 360-16 Table B4.1b note on h, \u00A7F2.2):<br>'+
-        Object.keys(E).filter(k=>p._src[k]==='plates').map(k=>E[k]).join('<br>')));
+      body.appendChild(el('div','hint sbNL',sbNL('Built-up section: properties computed from the plates (welds neglected; AISC 360-16 Table B4.1b note on h, \u00A7F2.2):',
+        Object.keys(E).filter(k=>p._src[k]==='plates').map(k=>E[k]))));   /* SBNL: one item per property */
     }
-    if(p._kind==='I'||p._kind==='C')body.appendChild(el('div','hint','<b>h clear</b> is the clear web depth driving h/t\u1D65 and, where transverse stiffeners are entered, a/h. It is backed out of the tabulated h/t\u1D65 at database thickness; override it together with d, t\u1D65, b\u1DA0 and t\u1DA0 to model a built-up plate girder.'));
-    if(p._kind==='R')body.appendChild(el('div','hint','Flat widths use the AISC convention b = B \u2212 3t, h = H \u2212 3t when corner radii are unknown (Spec. \u00A7B4.1b(d), G4). For A500, the tabulated design wall t_des = 0.93\u00B7t_nom is used; selecting A1085 switches to the nominal wall.'));
+    if(p._kind==='I'||p._kind==='C')body.appendChild(el('div','hint sbNL',sbNL('<b>h clear</b> is the clear web depth driving h/t\u1D65 and, where transverse stiffeners are entered, a/h.',[['Value:','backed out of the tabulated h/t\u1D65 at database thickness.'],['To model a built-up plate girder,','override it together with d, t\u1D65, b\u1DA0 and t\u1DA0.']])));
+    if(p._kind==='R')body.appendChild(el('div','hint sbNL',sbNL('HSS wall and flat widths:',[['Flat widths:','use the AISC convention b = B \u2212 3t, h = H \u2212 3t when corner radii are unknown (Spec. \u00A7B4.1b(d), G4).'],['A500:','the tabulated design wall t_des = 0.93\u00B7t_nom is used; selecting A1085 switches to the nominal wall.']])));
   },pg);
   mkSection('sctBr','Bracing Summary',body=>{
     const t=el('table','tbl');
@@ -3533,7 +3612,7 @@ function buildSectionTab(pg){
     }
     rows.forEach(r=>{const tr=el('tr');r.forEach((v,i)=>tr.appendChild(el('td',i===0?null:'lft',v)));t.appendChild(tr);});
     body.appendChild(t);
-    (AN.bracingNotes||[]).forEach(n=>body.appendChild(el('div','warnBox',n)));
+    (AN.bracingNotes||[]).forEach(n=>body.appendChild(sbWarnEl(n)));
   },pg);
 }
 /* =====================================================================
@@ -3687,10 +3766,10 @@ function buildSummaryTab(pg){
   pg.appendChild(el('div',fails.length?'errBox':'okBox',
     fails.length?('One or more checks FAIL ('+fails.length+') \u2014 red chips link to the supporting math.'):
     'All implemented checks pass for '+(AN.sect?AN.sect.lbl:'')+'. N/A chips state why they do not run \u2014 nothing is silently skipped.'));
-  AN.bracingNotes.forEach(n=>pg.appendChild(el('div','warnBox',n)));
+  AN.bracingNotes.forEach(n=>pg.appendChild(sbWarnEl(n)));
   if(D&&D.LbTopDefaulted)pg.appendChild(el('div','warnBox','Top flange is not continuously braced and no L\u1D47,top was entered \u2014 defaulted to the longest span ('+fmt(D.LbTop,1)+' ft).'));
-  AN.warns.forEach(n=>pg.appendChild(el('div','warnBox',n)));
-  if(D)D.warns.forEach(n=>pg.appendChild(el('div','warnBox',n)));
+  AN.warns.forEach(n=>pg.appendChild(sbWarnEl(n)));
+  if(D)D.warns.forEach(n=>pg.appendChild(sbWarnEl(n)));
   mkSection('sumGov','Governing Results',body=>{
     if(!D){body.appendChild(el('div','note','Design pass unavailable.'));return;}
     const t=el('table','tbl');
@@ -3994,7 +4073,7 @@ function buildAxialTab(pg){
       }
       seen[sig]=cb.id;
       if(C.compBlocked)body.appendChild(el('div','errBox','Compression: '+C.compBlocked));
-      if(C.torsBlocked)body.appendChild(el('div','errBox','Torsion: '+C.torsBlocked));
+      if(C.torsBlocked)body.appendChild(sbWarnEl('Torsion: '+C.torsBlocked,'errBox'));
       const tm=C.inter.terms;
       const ratioLines=[];
       if(tm.P)ratioLines.push('\\tfrac{P_r}{P_c}=\\tfrac{'+fmt(C.man.Pu,1)+'}{'+fmt(C.phiPn||0,0)+'}='+fmt(tm.P,3));
@@ -4128,7 +4207,7 @@ function runDesignExamples(){
   return out;
 }
 function buildValidTab(pg){
-  pg.appendChild(el('div','note','Two independent test families run <b>live</b> through the production code path every time this tab renders: (1) closed-form mechanics benchmarks through the analysis solver, and (2) AISC Design Examples (v16.0, published results; where v16 uses an AISC 360-22 value that differs from 360-16 the case is left out) through the Stage-2/3 capacity engine.'));
+  pg.appendChild(el('div','note sbNL',sbNL('Two independent test families run <b>live</b> through the production code path every time this tab renders:',['(1) closed-form mechanics benchmarks through the analysis solver;','(2) AISC Design Examples (v16.0, published results; where v16 uses an AISC 360-22 value that differs from 360-16 the case is left out) through the Stage-2/3 capacity engine.'])));
   mkSection('valBench','Analysis Benchmarks (closed form)',body=>{
     let res=[];
     try{res=runBenchmarks();}catch(e){body.appendChild(el('div','errBox','Benchmark run failed: '+e.message));}
@@ -4160,10 +4239,10 @@ function buildValidTab(pg){
     body.appendChild(t);
     body.appendChild(el('div',fails?'errBox':'okBox',fails?fails+' design-example check(s) FAILED \u2014 do not rely on strength results.':
       'All '+res.length+' design-example checks pass (F2 I & channel, F3, F4 plate girder, F7, F8, G2, G4, G6, H3, E3, E7 built-up, J10). Tolerances 0.5\u20131.5% reflect the rounding used in the published solutions.'));
-    body.appendChild(el('div','hint','Anchored by the v16.0 examples above: \u00A7F4 (F.14 plate girder), \u00A7E7 effective width (E.2, E.3, E.10), \u00A7J10.2 / J10.3 / J10.4 (J.7). Still not independently anchored: \u00A7F5 (slender webs), \u00A7E4 torsional buckling, \u00A7J10.1, and the \u00A7H1 composition of the individual ratios. These are direct transcriptions of the Specification equations, exercised by construction but not compared against a published answer \u2014 hand-check them before relying on them in production.'));
+    body.appendChild(el('div','hint sbNL',sbNL('Coverage of the published anchors:',[['Anchored by the v16.0 examples above:','\u00A7F4 (F.14 plate girder), \u00A7E7 effective width (E.2, E.3, E.10), \u00A7J10.2 / J10.3 / J10.4 (J.7).'],['Still not independently anchored:','\u00A7F5 (slender webs), \u00A7E4 torsional buckling, \u00A7J10.1, and the \u00A7H1 composition of the individual ratios.'],['These','are direct transcriptions of the Specification equations, exercised by construction but not compared against a published answer.']],{act:['REVIEW: hand-check the routes not independently anchored before relying on them in production.']})));
   },pg);
   mkSection('valEC','Independent Reference Checks (ENERCALC)',body=>{
-    body.appendChild(el('div','note','A second commercial AISC 360-16 implementation, used to anchor routes the AISC Design Examples do not reach: elastic lateral-torsional buckling (Eq. F2-4), rectangular HSS flexure and shear at F\u1D67 = 36 ksi, minor-axis flexure (\u00A7F6 and \u00A7F7), compression governed by the y-axis, lightweight-concrete stud strength, and a partial-composite section with the plastic neutral axis in the web.'));
+    body.appendChild(el('div','note sbNL',sbNL('A second commercial AISC 360-16 implementation, used to anchor routes the AISC Design Examples do not reach:',['elastic lateral-torsional buckling (Eq. F2-4);','rectangular HSS flexure and shear at F\u1D67 = 36 ksi;','minor-axis flexure (\u00A7F6 and \u00A7F7);','compression governed by the y-axis;','lightweight-concrete stud strength;','a partial-composite section with the plastic neutral axis in the web.'])));
     let res=[];
     try{res=enercalcSelfTest();}catch(e){body.appendChild(el('div','errBox','Reference self-test failed: '+e.message));}
     const t=el('table','tbl');
@@ -4178,7 +4257,7 @@ function buildValidTab(pg){
     });
     body.appendChild(t);
     body.appendChild(el('div',f?'errBox':'okBox',f?f+' reference check(s) FAILED.':'All '+res.length+' reference checks agree within 0.5\u20131%.'));
-    body.appendChild(el('div','hint','These are agreement checks against another program, not against a published code answer \u2014 two implementations can share a misreading. They complement the AISC Design Example anchors above rather than replacing them. Note that the reference composite case states an effective width of 8.50 ft where \u00A7I3.1a would limit it to '+fmt(27.68/4,2)+' ft for the 27.68 ft span; the comparison uses the stated width so that the flexural calculation is what is being compared.'));
+    body.appendChild(el('div','hint sbNL',sbNL('These are agreement checks against another program, not against a published code answer.',[['Caution:','two implementations can share a misreading.'],['Role:','they complement the AISC Design Example anchors above rather than replacing them.'],['Composite case:','the reference states an effective width of 8.50 ft where \u00A7I3.1a would limit it to '+fmt(27.68/4,2)+' ft for the 27.68 ft span; the comparison uses the stated width so that the flexural calculation is what is being compared.']])));
   },pg);
   mkSection('valComp','Composite Beam Checks (Chapter I)',body=>{
     body.appendChild(el('div','note','The composite engine is compared against the published AISC Design Examples I.1 and I.2 (direct calculation), the beam design in Part III, and Manual Table 3-21 stud strengths.'));
@@ -4214,7 +4293,7 @@ function buildValidTab(pg){
     });
     body.appendChild(t);
     body.appendChild(el('div',f?'errBox':'okBox',f?f+' torsion check(s) FAILED.':'All '+res.length+' torsion solver checks pass.'));
-    body.appendChild(el('div','hint','No published worked example for open-section torsion is embedded \u2014 AISC Design Guide 9 is a separate document. These are self-consistency checks, not a comparison against a published answer; verify against DG 9 by hand before relying on the result in production.'));
+    body.appendChild(el('div','hint sbNL',sbNL('No published worked example for open-section torsion is embedded.',[['Why:','AISC Design Guide 9 is a separate document.'],['These','are self-consistency checks, not a comparison against a published answer.']],{act:['REVIEW: verify against DG 9 by hand before relying on the result in production.']})));
   },pg);
   if(AN&&AN.svc&&AN.svc.length){
     const resid=[];
@@ -5077,28 +5156,36 @@ function TABS(){
     ['tabManual','User Manual']];
 }
 /* ---------- summary (mode aware) ---------- */
-function buildSummaryTab(pg){
+/* SBLP (2026-11-08): the Summary tab's check list (chips), also read by the left summary panel (sbDashRender). Moved out of
+   buildSummaryTab unchanged; the panel's extra fields: ch (the design check), dcr, sec (the card that works the value). */
+function sbSumChecks(){
   const D=AN.design,checks=[];
-  if(isMember()){
-    pg.appendChild(el('div','warnBox','<b>Member check mode.</b> This is a section capacity check against demands you entered \u2014 <b>not</b> a beam analysis. No structural model was solved, so equilibrium, deflection, reactions and moment distribution are not verified and are reported N/A below.'));
-  }else{
+  if(!isMember()){
     checks.push({label:'Model stability',ref:'mechanics',status:AN.stable?'pass':'fail',detail:AN.stable?'stable':'mechanism',tab:'tabSchem'});
     let eqWorst=0,eqC='';
     AN.combos.forEach(c=>{const e2=Math.abs(c.sumR-c.sumF);if(e2>eqWorst){eqWorst=e2;eqC=c.name;}});
     checks.push({label:'\u03A3R = \u03A3F (all combos)',ref:'statics',status:eqWorst<=1e-4?'pass':'fail',
       detail:'max err '+fmt(eqWorst,5)+' kip'+(eqC?(' ('+eqC+')'):''),tab:'tabAnalysis'});
   }
-  if(D)D.checks.forEach(ch=>checks.push({label:ch.label,ref:ch.ref,
+  if(D)D.checks.forEach(ch=>checks.push({ch,dcr:ch.na?null:ch.dcr,label:ch.label,ref:ch.ref,
     status:ch.na?'na':(ch.dcr>1.0001?'fail':'pass'),
     detail:ch.na?(ch.detail||'N/A'):('DCR '+fmt(ch.dcr,2)+(ch.combo?(' \u2014 '+ch.combo):'')),tab:ch.tab}));
   if(isMember()){
     checks.push({label:'Equilibrium / reactions',ref:'statics',status:'na',detail:'demands entered, not solved',tab:'tabSummary'});
   }else AN.svc.forEach(sc=>sc.perSpan.forEach(ps=>{
     if(ps.lim==null)checks.push({label:'\u03B4 span '+(ps.span+1)+' \u2014 '+sc.name,ref:'report',status:'na',
-      detail:fmt(Math.abs(ps.dmax)*12,3)+' in (no limit)',tab:'tabService'});
+      detail:fmt(Math.abs(ps.dmax)*12,3)+' in (no limit)',tab:'tabService',sec:'sv_'+sc.id});
     else checks.push({label:'\u03B4 \u2264 L/'+sc.den+' sp'+(ps.span+1)+' \u2014 '+sc.name,ref:'IBC 1604.3',
-      status:ps.pass?'pass':'fail',detail:'DCR '+fmt(ps.ratio,2),tab:'tabService'});
+      status:ps.pass?'pass':'fail',detail:'DCR '+fmt(ps.ratio,2),tab:'tabService',sec:'sv_'+sc.id,dcr:ps.ratio});
   }));
+  return checks;
+}
+function buildSummaryTab(pg){
+  const D=AN.design;
+  if(isMember()){
+    pg.appendChild(el('div','warnBox sbNL',sbNL('Member check mode.',[['Scope:','this is a section capacity check against demands you entered \u2014 <b>not</b> a beam analysis.'],['No structural model was solved,','so equilibrium, deflection, reactions and moment distribution are not verified and are reported N/A below.']])));
+  }
+  const checks=sbSumChecks();   /* SBLP: the check list as a function, shared with the left summary panel */
   const dash=el('div');dash.id='dash';
   checks.forEach(c=>{
     const chip=el('div','chip '+c.status);
@@ -5114,10 +5201,10 @@ function buildSummaryTab(pg){
   pg.appendChild(el('div',fails.length?'errBox':'okBox',
     fails.length?('One or more checks FAIL ('+fails.length+') \u2014 red chips link to the supporting math.'):
     'All implemented checks pass for '+(AN.sect?AN.sect.lbl:'')+'. N/A chips state why they do not run \u2014 nothing is silently skipped.'));
-  AN.bracingNotes.forEach(n=>pg.appendChild(el('div','warnBox',n)));
+  AN.bracingNotes.forEach(n=>pg.appendChild(sbWarnEl(n)));
   if(D&&!isMember()&&D.LbTopDefaulted)pg.appendChild(el('div','warnBox','Top flange is not continuously braced and no L\u1D47,top was entered \u2014 defaulted to the longest span ('+fmt(D.LbTop,1)+' ft).'));
-  AN.warns.forEach(n=>pg.appendChild(el('div','warnBox',n)));
-  if(D)D.warns.forEach(n=>pg.appendChild(el('div','warnBox',n)));
+  AN.warns.forEach(n=>pg.appendChild(sbWarnEl(n)));
+  if(D)D.warns.forEach(n=>pg.appendChild(sbWarnEl(n)));
   mkSection('sumGov','Governing Results',body=>{
     if(!D){body.appendChild(el('div','note','Design pass unavailable.'));return;}
     const t=el('table','tbl');
@@ -5162,7 +5249,7 @@ function buildSummaryTab(pg){
         vars:[['W_{shape}',fmt(AN.sect.Wt,1)+' lb/ft','tracks the selected section'],
           ['L',fmt(D.sw.L,1)+' ft','user-stated span'],['k,\\,c',fmt(D.sw.k,1)+', '+fmt(D.sw.c,2),'moment/shear coefficients \u2014 user asserts they match the condition and moment sign being checked'],
           ['\\gamma',fmt(D.sw.gam,2),'dead-load factor']]}));
-      body.appendChild(el('div','note','Flexure and shear DCRs use M\u1D64\u2093 + \u0394M\u1D64\u2093 and V\u1D64\u2093 + \u0394V\u1D64\u2093. The additions raise the demand magnitude; if self-weight opposes the entered moment sign in your actual condition, disable this and account for it in the entered values instead.'));
+      body.appendChild(el('div','note sbNL',sbNL('Flexure and shear DCRs use M\u1D64\u2093 + \u0394M\u1D64\u2093 and V\u1D64\u2093 + \u0394V\u1D64\u2093.',[['Effect:','the additions raise the demand magnitude.'],['If self-weight opposes','the entered moment sign in your actual condition, disable this and account for it in the entered values instead.']])));
     }else if(isMember()){
       body.appendChild(el('div','hint','Self-weight is <b>not</b> included \u2014 the entered demands are used as-is.'));
     }
@@ -5204,8 +5291,7 @@ function dOrNull(pg){
   return D;
 }
 function naBox(pg,what,why){
-  pg.appendChild(el('div','warnBox','<b>'+what+' \u2014 not evaluated.</b> '+why+
-    ' This limit state is reported N/A on the Summary dashboard; it is never treated as passing.'));
+  pg.appendChild(el('div','warnBox sbNL',sbNL(what+' \u2014 not evaluated.',[['Why:',why],['Dashboard:','this limit state is reported N/A on the Summary dashboard; it is never treated as passing.']])));   /* SBNL */
 }
 function perComboSections(pg,idPfx,title,fn,sigExtra){
   const D=AN.design,seen={};
@@ -5350,7 +5436,9 @@ function buildVxTab(pg){
       body.appendChild(el('div','note','Round sections: V\u2099 depends on L\u1D65 (maximum-shear to zero-shear distance), which varies by combination \u2014 derived in each section below.'));
     else{
       stiffBlock(body,p,D.shearX,D);
-      shearBlock(body,p,D.shearX,'Shear per '+D.shearX.route);
+      /* TFAH (2026-11-08): with the TFA option applied, the G2.1 note no longer says G2.2 is not used (display only) */
+      const shX=D.tfa&&D.tfa.applies?Object.assign({},D.shearX,{note:(D.shearX.note||'').replace('Tension field action (\u00A7G2.2) is not used \u2014 conservative.','Interior panels use tension field action (\u00A7G2.2, option on, below); end panels keep this strength.')}):D.shearX;
+      shearBlock(body,p,shX,'Shear per '+D.shearX.route);
       if(D.tfa)tfaBlock(body,p,D.tfa,D.shearX);   /* TFA option */
     }
   },pg);
@@ -5398,7 +5486,7 @@ function buildCompTabCore(pg){
   const any=D.perCombo.some(C=>C.man.Pu>0);
   if(!any)naBox(pg,'Axial compression','No '+(D.perCombo.some(C=>C.dcrPt!=null)?'compressive ':'')+'P\u1D64 was entered on any '+(isMember()?'load case':'combination')+(D.perCombo.some(C=>C.dcrPt!=null)?' (the axial tension is checked under Axial Tension below)':'')+'. The available strength at the stated effective lengths is shown below for reference; the check itself is reported N/A.');
   if(p._kind==='C'){
-    pg.appendChild(el('div','errBox','<b>Axial compression on channels is outside this tool.</b> A channel is singly symmetric about one axis, so \u00A7E4 flexural-torsional buckling governs and needs the shear-centre properties (e\u2092, r\u0304\u2092, H) in a coupled solution that is not implemented here. Check the member in a program that covers \u00A7E4, or use an I-shape or HSS.'));
+    pg.appendChild(el('div','errBox sbNL',sbNL('Axial compression on channels is outside this tool.',[['Why:','a channel is singly symmetric about one axis, so \u00A7E4 flexural-torsional buckling governs and needs the shear-centre properties (e\u2092, r\u0304\u2092, H) in a coupled solution that is not implemented here.']],{act:['Check the member in a program that covers \u00A7E4, or use an I-shape or HSS.']})));
     pg.appendChild(el('div','note','The channel\u2019s flexural and shear checks on the other tabs are unaffected.'));
     return;
   }
@@ -5409,7 +5497,7 @@ function buildCompTabCore(pg){
   if(D.perCombo.some(C=>C.compBlocked)&&!D.comp){
     pg.appendChild(el('div','errBox','<b>Compression cannot be evaluated:</b> '+
       (D.perCombo.find(C=>C.compBlocked).compBlocked)));
-    D.warns.forEach(w=>pg.appendChild(el('div','warnBox',w)));
+    D.warns.forEach(w=>pg.appendChild(sbWarnEl(w)));
     return;
   }
   if(D.comp&&D.comp.blocked){pg.appendChild(el('div','errBox',D.comp.blocked));return;}
@@ -5459,7 +5547,7 @@ function buildCompTabCore(pg){
         '=\\mathbf{'+fmt(cc.Fcr,1)+'\\ \\text{ksi}}']}));
     const anySl=cc.eff.length,red=p.A-cc.Ae;
     if(anySl){
-      body.appendChild(el('div','note','<b>How AISC 360-16 handles slender compression elements.</b> F\u1D9C\u02B3 above is computed from the <b>full</b> F\u1D67 \u2014 it is <i>not</i> reduced. The reduction is taken on the <b>area</b>: P\u2099 = F\u1D9C\u02B3A\u2091 with A\u2091 built from reduced effective widths b\u2091 (\u00A7E7). This replaced the Q-factor method of AISC 360-10 and earlier, where F\u1D9C\u02B3 was reduced by Q and applied to A\u1D4D. The two give different numbers; older calculations and the v14.0 Design Examples use the Q method.'));
+      body.appendChild(el('div','note sbNL',sbNL('How AISC 360-16 handles slender compression elements.',[['Stress:','F\u1D9C\u02B3 above is computed from the <b>full</b> F\u1D67 \u2014 it is <i>not</i> reduced.'],['Area:','the reduction is taken on the <b>area</b>: P\u2099 = F\u1D9C\u02B3A\u2091 with A\u2091 built from reduced effective widths b\u2091 (\u00A7E7).'],['Q-factor method:','this replaced the Q-factor method of AISC 360-10 and earlier, where F\u1D9C\u02B3 was reduced by Q and applied to A\u1D4D.'],['Older calculations:','the two give different numbers; older calculations and the v14.0 Design Examples use the Q method.']])));
       const t2=el('table','tbl');
       const h2=el('tr');['Slender element','\u03BB','\u03BB\u1D63\u221A(F\u1D67/F\u1D9C\u02B3)','b (in)','b\u2091 (in)','Area removed (in\u00B2)'].forEach(x=>h2.appendChild(el('th',null,x)));t2.appendChild(h2);
       cc.eff.forEach(e2=>{
@@ -5470,7 +5558,7 @@ function buildCompTabCore(pg){
         t2.appendChild(tr);
       });
       body.appendChild(t2);
-      if(red<=1e-9)body.appendChild(el('div','okBox','<b>Classified slender, but no area is removed.</b> Every element satisfies \u03BB \u2264 \u03BB\u1D63\u221A(F\u1D67/F\u1D9C\u02B3) (Eq. E7-2), so b\u2091 = b and A\u2091 = A\u1D4D = '+fmt(p.A,2)+' in\u00B2. The B4.1a limits are written at F\u1D67; the E7 threshold relaxes them by \u221A(F\u1D67/F\u1D9C\u02B3) because the element never reaches F\u1D67 before the member buckles. A slender classification therefore does not always cost capacity.'));
+      if(red<=1e-9)body.appendChild(el('div','okBox sbNL',sbNL('Classified slender, but no area is removed.',[['Every element','satisfies \u03BB \u2264 \u03BB\u1D63\u221A(F\u1D67/F\u1D9C\u02B3) (Eq. E7-2), so b\u2091 = b and A\u2091 = A\u1D4D = '+fmt(p.A,2)+' in\u00B2.'],['Why:','the B4.1a limits are written at F\u1D67; the E7 threshold relaxes them by \u221A(F\u1D67/F\u1D9C\u02B3) because the element never reaches F\u1D67 before the member buckles.'],['So:','a slender classification therefore does not always cost capacity.']])));
       else if(false)body.appendChild(eqBlock({title:'Effective area',ref:'Eqs. E7-1 through E7-4',
         lines:['b_e=b\\left[1-c_1\\sqrt{\\tfrac{F_{el}}{F_{cr}}}\\right]\\sqrt{\\tfrac{F_{el}}{F_{cr}}}\\quad\\text{where}\\quad F_{el}=\\left(c_2\\tfrac{\\lambda_r}{\\lambda}\\right)^2F_y',
           'A_e=A_g-\\Sigma(b-b_e)t='+fmt(p.A,2)+'-'+fmt(red,3)+'=\\mathbf{'+fmt(cc.Ae,3)+'\\ \\text{in}^2}\\quad('+fmt(100*red/p.A,1)+'\\%\\ \\text{removed})']}));
@@ -5485,7 +5573,7 @@ function buildCompTabCore(pg){
     const fig=(typeof colCurveFig==='function')?colCurveFig(p,cc,D,Pu):null;
     if(!fig){body.appendChild(el('div','hint','Column curve unavailable for this section.'));return;}
     plotHolder(body,'colCurve',fig.layout.height);regPlot('colCurve',fig);
-    body.appendChild(el('div','hint','Each curve is \u03C6P\u2099 re-solved at every effective length with that axis made to govern, using the same \u00A7E3/E4/E7 code as the result above \u2014 so it is the capacity, not a sketch. The dashed verticals are the L\u1D9C at which 4.71\u221A(E/F\u1D67) is reached and the curve crosses from inelastic (Eq. E3-2) to elastic (Eq. E3-3) buckling. Diamonds mark the effective lengths actually used; the star is the governing \u03C6P\u2099 that the checks use.'));
+    body.appendChild(el('div','hint sbNL',sbNL('Reading the column curves:',[['Curves:','each is \u03C6P\u2099 re-solved at every effective length with that axis made to govern, using the same \u00A7E3/E4/E7 code as the result above \u2014 so it is the capacity, not a sketch.'],['Dashed verticals:','the L\u1D9C at which 4.71\u221A(E/F\u1D67) is reached and the curve crosses from inelastic (Eq. E3-2) to elastic (Eq. E3-3) buckling.'],['Diamonds:','the effective lengths actually used.'],['Star:','the governing \u03C6P\u2099 that the checks use.']])));
   },pg);
   if(!any)return;
   demandEcho(pg,[['Pu','P\u1D64 (kip)',true]]);
@@ -5509,7 +5597,7 @@ function tensionSections(pg){
       lines:['A_e=UA_n='+fmt(t.U,2)+'\\times '+fmt(t.An,2)+'=\\mathbf{'+fmt(t.Ae,2)+'\\ \\text{in}^2}',
         'P_n=F_uA_e='+fmt(t.Fu,0)+'\\times '+fmt(t.Ae,2)+'=\\mathbf{'+fmt(t.Pnr,1)+'\\ \\text{kip}},\\quad \\phi_tP_n=0.75\\times '+fmt(t.Pnr,1)+'=\\mathbf{'+fmt(t.phiR,1)+'\\ \\text{kip}}'],
       vars:[['A_n',fmt(t.An,2)+' in\u00B2',t.AnDef?'blank \u2192 A\u1D4D':'entered'],['U',fmt(t.U,2),t.UDef?'blank \u2192 1.0':'entered (Table D3.1)']]}));
-    body.appendChild(el('div','note','Design tensile strength \u03C6\u209CP\u2099 = <b>'+fmt(t.phiPn,1)+' kip</b> ('+(t.rupture?'rupture, Eq. D2-2':'yielding, Eq. D2-1')+'). Block shear (\u00A7J4.3) and the end connection are not checked. Combined tension and flexure use \u00A7H1.2 (the H1-1 equations with P\u1D9C = \u03C6\u209CP\u2099); the optional C\u1D47 increase of \u00A7H1.2 is not taken.'));
+    body.appendChild(el('div','note sbNL',sbNL('Design tensile strength \u03C6\u209CP\u2099 = <b>'+fmt(t.phiPn,1)+' kip</b> ('+(t.rupture?'rupture, Eq. D2-2':'yielding, Eq. D2-1')+').',[['Not checked:','block shear (\u00A7J4.3) and the end connection.'],['Combined tension and flexure:','use \u00A7H1.2 (the H1-1 equations with P\u1D9C = \u03C6\u209CP\u2099); the optional C\u1D47 increase of \u00A7H1.2 is not taken.']])));
   },pg);
   perComboSections(pg,'tn_',isMember()?'Case ':'Combination ',(body,C)=>{
     if(C.dcrPt==null){body.appendChild(el('div','note','No axial tension for this '+(isMember()?'case':'combination')+'.'));return;}
@@ -5608,8 +5696,8 @@ function j10More(pg,D,p){
     free:'compression flange not restrained against rotation, J10.4(b)',braced:'relative lateral movement of the flanges restrained at the point loads: J10.4 does not apply'}[S.design.wsb||'env']||'';
   mkSection('j1More','Web Sidesway Buckling (\u00A7J10.4) and Flange Local Bending (\u00A7J10.1)',body=>{
     if(anyPt){
-      body.appendChild(el('div','note','<b>J10.4</b> is checked at the compressive point loads (supports are taken as restrained against relative lateral movement of the flanges, as Chapter F assumes torsional restraint there). Restraint: '+md+
-        '. L\u1D47 = largest unbraced length along either flange = '+fmt(Math.max(D.LbTop||0,D.LbBot||0),2)+' ft; h = '+fmt(webH(p),3)+' in.'));
+      body.appendChild(el('div','note sbNL',sbNL('<b>J10.4</b> is checked at the compressive point loads.',[['Supports:','taken as restrained against relative lateral movement of the flanges, as Chapter F assumes torsional restraint there.'],['Restraint:',md+'.'],
+        ['L\u1D47','= largest unbraced length along either flange = '+fmt(Math.max(D.LbTop||0,D.LbBot||0),2)+' ft; h = '+fmt(webH(p),3)+' in.']])));
       let g=null;D.perCombo.forEach(C=>(C.j10||[]).forEach(r=>{if(r.wsb&&(!g||(r.dcrWSB||0)>(g.r.dcrWSB||0)))g={C,r};}));
       if(g){const w=g.r.wsb;
         const lines=['\\tfrac{h/t_w}{L_b/b_f}=\\tfrac{'+fmt(w.htw,1)+'}{'+fmt(w.LbIn,1)+'/'+fmt(p.bf,3)+'}=\\mathbf{'+fmt(w.r,3)+'}\\quad(\\text{limits }2.3\\text{ (a)},\\ 1.7\\text{ (b)})',
@@ -5628,7 +5716,7 @@ function j10More(pg,D,p){
       }else if((S.design.wsb||'env')==='braced')body.appendChild(el('div','note','Not applicable (restraint stated in the input panel).'));
     }
     if(anyT){
-      body.appendChild(el('div','note','<b>J10.1</b> is checked where the concentrated force is tensile (an uplift reaction or an upward point load): R\u2099 = 6.25F\u1D67t\u2093\u00B2 (Eq. J10-1), \u03C6 = 0.90, halved within 10t\u2093 of the member end. The 0.15b\u2093 loading-width exemption is not taken. Web local yielding (\u00A7J10.2) also covers these tensile forces (table above).'));
+      body.appendChild(el('div','note sbNL',sbNL('<b>J10.1</b> is checked where the concentrated force is tensile (an uplift reaction or an upward point load).',[['Strength:','R\u2099 = 6.25F\u1D67t\u2093\u00B2 (Eq. J10-1), \u03C6 = 0.90, halved within 10t\u2093 of the member end.'],['Not taken:','the 0.15b\u2093 loading-width exemption.'],['Web local yielding','(\u00A7J10.2) also covers these tensile forces (table above).']])));
       const t=el('table','tbl');const hd=el('tr');['Combination','Location','T\u1D64 (kip)','R\u2099 (kip)','\u03C6R\u2099 (kip)','DCR'].forEach(x=>hd.appendChild(el('th',null,x)));t.appendChild(hd);
       D.perCombo.forEach(C=>(C.j10||[]).forEach(r=>{if(r.dcrFLB==null)return;const tr=el('tr');
         [C.name,r.label,fmt(r.demT,1),'6.25\u00B7'+p.mat.Fy+'\u00B7'+fmt(p.tf,3)+'\u00B2'+(r.flb.nearEnd?'\u00B70.5':'')+' = '+fmt(r.flb.Rn,1),fmt(0.9*r.flb.Rn,1),fmt(r.dcrFLB,3)]
@@ -5643,7 +5731,7 @@ function j10More(pg,D,p){
 function buildInterTab(pg){
   const D=dOrNull(pg);if(!D)return;
   mkSection('itBasis','Interaction Basis',body=>{
-    body.appendChild(el('div','note','M\u1D63\u2093/M\u1D9C\u2093 is taken as the <b>governing major-axis flexural DCR</b> across all regions \u2014 each region is already divided by its own capacity, so the composition is safe. Where T\u1D64 > 0.2\u03C6T\u2099 on an HSS, Eq. H3-6 replaces H1 and brings the shear ratio in with it.'));
+    body.appendChild(el('div','note sbNL',sbNL('M\u1D63\u2093/M\u1D9C\u2093 is taken as the <b>governing major-axis flexural DCR</b> across all regions.',[['Why this is safe:','each region is already divided by its own capacity, so the composition is safe.'],['HSS torsion:','where T\u1D64 > 0.2\u03C6T\u2099 on an HSS, Eq. H3-6 replaces H1 and brings the shear ratio in with it.']])));
     body.appendChild(eqBlock({title:'Equations used',ref:'\u00A7H1.1, \u00A7H3.2',
       lines:['\\tfrac{P_r}{P_c}\\ge 0.2:\\quad \\tfrac{P_r}{P_c}+\\tfrac{8}{9}\\left(\\tfrac{M_{rx}}{M_{cx}}+\\tfrac{M_{ry}}{M_{cy}}\\right)\\le 1.0\\qquad\\text{(H1-1a)}',
         '\\tfrac{P_r}{P_c}< 0.2:\\quad \\tfrac{P_r}{2P_c}+\\left(\\tfrac{M_{rx}}{M_{cx}}+\\tfrac{M_{ry}}{M_{cy}}\\right)\\le 1.0\\qquad\\text{(H1-1b)}',
@@ -5653,7 +5741,7 @@ function buildInterTab(pg){
     const fig=(typeof pmFig==='function')?pmFig(D):null;
     if(!fig){body.appendChild(el('div','hint','No interaction points to plot.'));return;}
     plotHolder(body,'pmFig',fig.layout.height);regPlot('pmFig',fig);
-    body.appendChild(el('div','hint','The green boundary is Eq. H1-1a above P\u1D63/P\u1D9C = 0.2 and Eq. H1-1b below it \u2014 the kink at 0.2 is where the Specification switches equations, and the two expressions meet there. A point inside the boundary satisfies \u00A7H1; a red point does not. The horizontal axis carries the sum of both flexural ratios because \u00A7H1 adds them. Where Eq. H3-6 governs instead (an HSS with T\u1D64 > 0.2\u03C6T\u2099) the point is still plotted for context, but the H3-6 value in the table below is the one that governs.'));
+    body.appendChild(el('div','hint sbNL',sbNL('Reading the interaction diagram:',[['Green boundary:','Eq. H1-1a above P\u1D63/P\u1D9C = 0.2 and Eq. H1-1b below it \u2014 the kink at 0.2 is where the Specification switches equations, and the two expressions meet there.'],['Points:','a point inside the boundary satisfies \u00A7H1; a red point does not.'],['Horizontal axis:','carries the sum of both flexural ratios because \u00A7H1 adds them.'],['Eq. H3-6:','where it governs instead (an HSS with T\u1D64 > 0.2\u03C6T\u2099) the point is still plotted for context, but the H3-6 value in the table below is the one that governs.']])));
   },pg);
   mkSection('itAll','Interaction Summary \u2014 All '+(isMember()?'Cases':'Combinations'),body=>{
     const t=el('table','tbl');
@@ -5676,7 +5764,7 @@ function buildInterTab(pg){
   },pg);
   perComboSections(pg,'it_',isMember()?'Case ':'Combination ',(body,C)=>{
     if(C.compBlocked)body.appendChild(el('div','errBox','Compression: '+C.compBlocked));
-    if(C.torsBlocked)body.appendChild(el('div','errBox','Torsion: '+C.torsBlocked));
+    if(C.torsBlocked)body.appendChild(sbWarnEl('Torsion: '+C.torsBlocked,'errBox'));
     const tm=C.inter.terms,lines=[];
     if(tm.P)lines.push('\\tfrac{P_r}{P_c}=\\tfrac{'+fmt(Math.abs(C.man.Pu),1)+'}{'+fmt(C.phiPn||C.phiPt||0,0)+'}='+fmt(tm.P,3)+(C.dcrPt!=null?'\\ \\text{(tension, \u00A7H1.2)}':''));
     if(C.B1)lines.push('\\tfrac{M_{rx}}{M_{cx}}=B_1\\times'+fmt(C.B1.rx0,3)+'='+fmt(C.B1.B1,3)+'\\times'+fmt(C.B1.rx0,3)+'='+fmt(tm.Mx,3)+'\\ \\text{(governing flexure DCR}\\times B_1)');
@@ -5868,7 +5956,7 @@ function stiffBlock(body,p,sh,D){
       ['h',fmt(h,2)+' in','clear distance between flanges'],
       ['h/t_w',fmt(p.htw,1),'web slenderness']]}));
   if(sh.stiffIrrelevant)
-    body.appendChild(el('div','warnBox','<b>The stiffeners do not change the shear strength here.</b> This rolled I-shape satisfies \u00A7G2.1(a) (h/t\u1D65 \u2264 2.24\u221A(E/F\u1D67)), so C\u1D651 = 1.0 and \u03C6\u1D65 = 1.00 with or without them \u2014 the web develops full shear yielding either way. k\u1D65 is shown above for reference only.'));
+    body.appendChild(el('div','warnBox sbNL',sbNL('The stiffeners do not change the shear strength here.',[['Why:','this rolled I-shape satisfies \u00A7G2.1(a) (h/t\u1D65 \u2264 2.24\u221A(E/F\u1D67)), so C\u1D651 = 1.0 and \u03C6\u1D65 = 1.00 with or without them \u2014 the web develops full shear yielding either way.'],['k\u1D65','is shown above for reference only.']])));
   else{
     body.appendChild(eqBlock({title:'Web shear coefficient',ref:sh.limCv&&p.htw<=sh.limCv?'Eq. G2-3':'Eq. G2-4',
       lines:['1.10\\sqrt{\\tfrac{k_vE}{F_y}}=1.10\\sqrt{\\tfrac{'+fmt(sh.kv,3)+'\\times 29000}{'+p.mat.Fy+'}}='+fmt(sh.limCv,1)+
@@ -5960,11 +6048,11 @@ function buildMemDeflSection(pg){
   const p=AN.sect,r=memberDefl(p);
   mkSection('mdDefl','Deflection Check',body=>{
     if(!r){
-      body.appendChild(el('div','warnBox','<b>Deflection \u2014 not evaluated.</b> No structural model exists in Member Check mode. Enable the check in the <b>Deflection Check</b> section of the input panel and supply the service load, span and configuration, or verify deflection separately. It is reported N/A on the dashboard, never as a pass.'));
+      body.appendChild(el('div','warnBox sbNL',sbNL('Deflection \u2014 not evaluated.',[['Why:','no structural model exists in Member Check mode.'],['Dashboard:','it is reported N/A on the dashboard, never as a pass.']],{act:['Input needed: enable the check in the <b>Deflection Check</b> section of the input panel and supply the service load, span and configuration, or verify deflection separately.']})));
       return;
     }
     if(r.err){body.appendChild(el('div','errBox',r.err));return;}
-    body.appendChild(el('div','note','This is a <b>closed-form</b> deflection for the configuration you state, using the <b>service</b> (unfactored) load you enter \u2014 it is not derived from a solved model. Choosing the wrong configuration gives the wrong answer; the coefficient used is shown.'));
+    body.appendChild(el('div','note sbNL',sbNL('This is a <b>closed-form</b> deflection for the configuration you state.',[['Load:','the <b>service</b> (unfactored) load you enter \u2014 it is not derived from a solved model.'],['Configuration:','choosing the wrong configuration gives the wrong answer; the coefficient used is shown.']])));
     body.appendChild(eqBlock({title:'Deflection \u2014 '+r.cfgLab,ref:'elastic beam theory',
       lines:[r.pt?
         '\\Delta=c\\,\\tfrac{PL^3}{EI}='+fmt(r.c,5)+'\\times\\tfrac{'+fmt(r.w,3)+'\\times('+fmt(r.L,2)+'\\times 12)^3}{'+EKSI+'\\times '+fmt(r.I,0)+'}=\\mathbf{'+fmt(r.d,4)+'\\ \\text{in}}':
@@ -6312,7 +6400,7 @@ function torsionInputs(body){
     (conc?'concentrated':'distributed uniformly over L')+'; used unchanged in every '+(isMember()?'case':'combination'));
   if(conc&&TOR_CASES[t.caseId].ends[1]!=='free')
     fRow(body,'Torque location from left end',numInput(()=>t.pos,v=>{t.pos=v;},1,'torPos'),'ft','blank \u2192 midspan');
-  body.appendChild(el('div','hint','Warping-free ("fork") supports resist twist but let the flanges warp; warping-fixed ends prevent flange warping (e.g. a heavy end plate or a boxed-in end). The difference is large \u2014 compare the cases.'));
+  body.appendChild(el('div','hint sbNL',sbNL('End restraint against warping:',[['Warping-free ("fork") supports:','resist twist but let the flanges warp.'],['Warping-fixed ends:','prevent flange warping (e.g. a heavy end plate or a boxed-in end).'],['The difference is large','\u2014 compare the cases.']])));
 }
 function buildTorsTab(pg){
   const D=dOrNull(pg),p=AN.sect;if(!D)return;
@@ -6359,12 +6447,12 @@ function buildTorsTab(pg){
            '<b>both mechanisms are significant</b>, which is the usual case for rolled beams.')));
       }
       const Jc=p.J,Cw=p.Cw;
-      body.appendChild(el('div','warnBox','Open sections are extremely inefficient in torsion. For scale, this section\u2019s pure-torsional stiffness GJ = '+
+      body.appendChild(el('div','warnBox sbNL',sbNL('Open sections are extremely inefficient in torsion.',[['For scale:','this section\u2019s pure-torsional stiffness GJ = '+
         fmt(GKSI*Jc/1000,0)+'\u00D710\u00B3 kip\u00B7in\u00B2 is roughly '+
-        fmt((GKSI*Jc)/(0.6*p.mat.Fy*(p.d*p.tw)*p.d)*100,1)+'% of what a closed section of the same depth would provide. If torque is unavoidable, an HSS is usually the answer.'));
+        fmt((GKSI*Jc)/(0.6*p.mat.Fy*(p.d*p.tw)*p.d)*100,1)+'% of what a closed section of the same depth would provide.'],['If torque is unavoidable,','an HSS is usually the answer.']])));
       body.appendChild(el('div','hint','These are properties of the section alone. The stresses additionally depend on the loading pattern and the end warping restraint, which is why a torsion case must be stated before \u00A7H3.3 can be checked.'));
     },pg);
-    pg.appendChild(el('div','warnBox','<b>Open-section torsion is not evaluated.</b> An I-shape or channel resists torque partly by pure (St-Venant) shear and partly by <b>warping</b>, and the split depends on the loading pattern and on how the ends are restrained against warping \u2014 a torque magnitude alone does not determine the stresses. Enable <i>Open-section torsion (DG 9)</i> in the <b>Torsion</b> section of the input panel and state the case, span and torque.'));
+    pg.appendChild(el('div','warnBox sbNL',sbNL('Open-section torsion is not evaluated.',[['Why:','an I-shape or channel resists torque partly by pure (St-Venant) shear and partly by <b>warping</b>, and the split depends on the loading pattern and on how the ends are restrained against warping \u2014 a torque magnitude alone does not determine the stresses.']],{act:['Input needed: enable <i>Open-section torsion (DG 9)</i> in the <b>Torsion</b> section of the input panel and state the case, span and torque.']})));
     if(any)pg.appendChild(el('div','errBox','T\u1D64 has been entered on at least one '+(isMember()?'case':'combination')+' but no torsional case is defined, so no torsion check is being made. This is reported N/A on the dashboard \u2014 it is not a pass.'));
     return;
   }
@@ -6388,7 +6476,7 @@ function buildTorsTab(pg){
      ['Warping shear stress \u03C4\u1D65',fmt(Math.abs(tor.tauWmax),3)+' ksi',fmt(tor.tauWat,1),'\u2212E\u00B7S\u1D65\u2081\u00B7\u03B8\u2034/t\u1DA0  (S\u1D65\u2081 = '+fmt(p.Sw1,1)+' in\u2074)']]
       .forEach(r=>{const tr=el('tr');r.forEach((v,i)=>tr.appendChild(el('td',(i===0||i===3)?'lft':null,v)));t2.appendChild(tr);});
     body.appendChild(t2);
-    body.appendChild(el('div','warnBox','Open sections are extremely inefficient in torsion. A modest torque produces large warping normal stresses that add directly to the flexural stresses \u2014 if this check governs, the usual remedy is an HSS, a torsion-resisting end detail, or removing the eccentricity that causes the torque.'));
+    body.appendChild(el('div','warnBox sbNL',sbNL('Open sections are extremely inefficient in torsion.',[['Why:','a modest torque produces large warping normal stresses that add directly to the flexural stresses.'],['If this check governs,','the usual remedy is an HSS, a torsion-resisting end detail, or removing the eccentricity that causes the torque.']])));
   },pg);
   demandEcho(pg,[['Tu','T\u1D64 entered (kip\u00B7ft)',true]]);
   perComboSections(pg,'to_',isMember()?'Case ':'Combination ',(body,C)=>{
@@ -6399,10 +6487,10 @@ function buildTorsTab(pg){
       body.appendChild(el('div','note','T\u1D64 = '+(tm.length?tm.join(' + '):'0')+' = <b>'+fmt(bc.Tu[C.id]||0,2)+' kip\u00B7ft</b>; torsional stresses = solved values \u00D7 '+fmt(h.kT,3)+'.'));}
     body.appendChild(el('div','note','\u00A7H3.3 requires the torsional stresses to be added to the axial, flexural and shear stresses at the same point and checked against yielding and, where the Chapter E/F buckling stress is below F\u1D67, against buckling \u2014 there is no separate \u201C\u03C6T\u2099\u201D for an open section.'));
     /* H2: every station checked; the governing station of each stress is shown */
-    body.appendChild(el('div','note','Checked at all '+tor.st.length+' torsion stations, with '+(h.basis==='diagram'?
+    body.appendChild(el('div','note sbNL',sbNL('Stations and flexural shear:',[['Stations:','checked at all '+tor.st.length+' torsion stations, with '+(h.basis==='diagram'?
       'the shear V(z) and moment M(z) of this combination at the same z (the torsional span is the analysed beam, z = x)':
-      'the largest |V| and |M| of this '+(isMember()?'case':'combination')+' at every station (the torsional span is not the analysed beam: conservative envelope)')+
-      '. Flexural shear by VQ/(I t) (DG 9 Eq. 4.6): Q\u2093 = '+fmt(h.Qf,2)+' in\u00B3 (flange), Q\u1D65 = '+fmt(h.Qw,2)+' in\u00B3 (web), I\u2093 = '+fmt(p.Ix,1)+' in\u2074.'));
+      'the largest |V| and |M| of this '+(isMember()?'case':'combination')+' at every station (the torsional span is not the analysed beam: conservative envelope)')+'.'],
+      ['Flexural shear:','by VQ/(I t) (DG 9 Eq. 4.6): Q\u2093 = '+fmt(h.Qf,2)+' in\u00B3 (flange), Q\u1D65 = '+fmt(h.Qw,2)+' in\u00B3 (web), I\u2093 = '+fmt(p.Ix,1)+' in\u2074.']])));
     body.appendChild(eqBlock({title:'Normal stress at the flange tip, governing station z = '+fmt(h.zN,1)+' in (M = '+fmt(h.Mz,2)+' kip\u00B7ft)',ref:'\u00A7H3.3(a)',
       lines:['f_n=\\tfrac{P_u}{A_g}+\\tfrac{M_{ux}(z)}{S_x}+\\tfrac{M_{uy}}{S_y}+\\sigma_w(z)='+
         fmt(h.fa,2)+'+'+fmt(h.fbx,2)+'+'+fmt(h.fby,2)+'+'+fmt(h.sigW,2)+'=\\mathbf{'+fmt(h.fn,2)+'\\ \\text{ksi}}',
@@ -6432,7 +6520,7 @@ function buildTorsTab(pg){
     const hg=h33Gov(h);
     body.appendChild(el('div',h.dcr>1?'errBox':'okBox','Governing \u00A7H3.3 DCR = <b>'+fmt(h.dcr,3)+'</b> ('+(hg==='B'?'normal stress, buckling':hg==='N'?'normal':'shear')+' stress)'));
   },C=>C.h33?fmt(C.h33.dcr,4):'x');
-  pg.appendChild(el('div','hint','Stresses are combined conservatively by direct summation of magnitudes at the same point, which is the practice DG 9 recommends for design. Every torsion station is checked (H2, 2026-11-07): the normal stress at the flange tip, the shear in the flange (mid-flange) and the shear in the web, each with the flexural V and M at that station; the largest of each governs.'));
+  pg.appendChild(el('div','hint sbNL',sbNL('How the stresses are combined:',[['Combination:','conservatively, by direct summation of magnitudes at the same point, which is the practice DG 9 recommends for design.'],['Stations:','every torsion station is checked (H2, 2026-11-07).'],['Stresses checked:','the normal stress at the flange tip, the shear in the flange (mid-flange) and the shear in the web, each with the flexural V and M at that station; the largest of each governs.']])));
 }
 /* =====================================================================
    INPUT PANEL ORGANISATION
@@ -6470,7 +6558,7 @@ function secBracing(P){
     hr(body);
     fRow(body,'C\u1D47 basis',selInput(['unity','calc'],()=>S.design.CbMode,v=>{S.design.CbMode=v;},
       o=>o==='unity'?'C\u1D47 = 1.0 (conservative)':'Calculated (worst window, Eq. F1-1)',null,'cbMode'),'');
-    body.appendChild(el('div','hint','The engine picks the compression flange from the sign of M in each region. An inflection point is not a brace point. Calculated C\u1D47 slides a window of length L\u1D47 through each region and keeps the worst-DCR window.'));
+    body.appendChild(el('div','hint sbNL',sbNL('How bracing is applied:',[['Compression flange:','the engine picks it from the sign of M in each region.'],['Inflection point:','not a brace point.'],['Calculated C\u1D47:','slides a window of length L\u1D47 through each region and keeps the worst-DCR window.']])));
   },P,secOpts());
 }
 /* ---------- 2. member load cases (member mode only) ---------- */
@@ -6513,7 +6601,7 @@ function secMemberCases(P){
 /* ---------- 3. manual demands per combination (beam mode) ---------- */
 function secManualDemands(P){
   mkSection('inMan','Manual Member Demands per Combination',body=>{
-    body.appendChild(el('div','hint','The model is planar, so axial force, minor-axis moment and shear, and torque cannot be generated from it \u2014 enter them here. They carry the imported-value styling wherever they appear. Second-order effects must already be included.'));
+    body.appendChild(el('div','hint sbNL',sbNL('Enter here what the planar model cannot generate:',[['Why:','the model is planar, so axial force, minor-axis moment and shear, and torque cannot be generated from it \u2014 enter them here.'],['Styling:','they carry the imported-value styling wherever they appear.'],['Second-order effects:','must already be included.']])));
     const t=el('table','cfg');
     const hd=el('tr');['Combination','P\u1D64','M\u1D64\u1D67','V\u1D64\u1D67','T\u1D64'].forEach(h=>hd.appendChild(el('th',null,h)));t.appendChild(hd);
     S.combos.filter(c=>c.on!==false).forEach(c=>{
@@ -6579,7 +6667,16 @@ function secStiffeners(P){
     const pk=AN&&AN.sect?AN.sect:null;
     if(pk&&!(pk._kind==='I'||pk._kind==='C'))
       body.appendChild(el('div','warnBox','Stiffener spacing affects k\u1D65 only for I-shapes and channels (\u00A7G2). It has no effect on the current section type.'));
-    else body.appendChild(el('div','hint','k\u1D65 = 5 + 5/(a/h)\u00B2 (Eq. G2-5), reverting to 5.34 when a/h > 3.0. A single spacing is applied along the member \u2014 for panels of differing spacing, enter the largest <i>a</i> where shear is critical. Tension field action (\u00A7G2.2) is not used.'));
+    else{
+      /* TFAH (2026-11-08): the hint follows the TFA option (design.stiff.tfa) above it; display only */
+      const tq=AN&&AN.design?AN.design.tfa:null;
+      const tfaTxt=isMember()?'(\u00A7G2.2) is not used.':
+        !S.design.stiff.tfa?'(\u00A7G2.2) is not used \u2014 tick the option above to use \u00A7G2.2 for interior panels.':
+        (pk&&pk._kind!=='I')?'(\u00A7G2.2) is ticked but applies to I-shapes only, so it is not used for this section.':
+        (tq&&!tq.applies)?'(\u00A7G2.2) is ticked but not used: '+tq.note+'.':
+        '(\u00A7G2.2) is used for interior panels (the larger of \u00A7G2.1 and \u00A7G2.2); panels within <i>a</i> of a support or member end keep \u00A7G2.1.';
+      body.appendChild(el('div','hint sbNL',sbNL('How the spacing is used:',[['k\u1D65','= 5 + 5/(a/h)\u00B2 (Eq. G2-5), reverting to 5.34 when a/h > 3.0.'],['Single spacing:','applied along the member \u2014 for panels of differing spacing, enter the largest <i>a</i> where shear is critical.'],['Tension field action',tfaTxt]])));
+    }
   },P,secOpts());
 }
 /* ---------- 6. torsion ---------- */
@@ -7873,7 +7970,7 @@ function buildBatchTab(pg){
       const fig=batchDcrFig(res);
       if(!fig){body.appendChild(el('div','hint','Nothing to plot.'));return;}
       plotHolder(body,'batchDcr',fig.layout.height);regPlot('batchDcr',fig);
-      body.appendChild(el('div','hint','Sorted worst first; green passes, red fails, grey could not be checked. Hover for the governing limit state, or <b>click a bar</b> to load that member into Member Check mode. The dashed line is DCR = 1.00.'));
+      body.appendChild(el('div','hint sbNL',sbNL('Sorted worst first.',[['Colours:','green passes, red fails, grey could not be checked.'],['Hover','for the governing limit state, or <b>click a bar</b> to load that member into Member Check mode.'],['Dashed line:','DCR = 1.00.']])));
     },pg);
   }
   const show=S.batch.filterFail?res.filter(r=>r.status!=='PASS'):res;
@@ -7933,7 +8030,7 @@ function buildBatchTab(pg){
     });
     if(!show.length){const tr=el('tr');const td=el('td','hint','No rows to display.');td.colSpan=32;tr.appendChild(td);t.appendChild(tr);}
     wrap.appendChild(t);body.appendChild(wrap);
-    body.appendChild(el('div','hint','<b>\u2192 Import</b> loads that member into Member Check mode with its demands, bracing, effective lengths and torsion case, so you can read and edit the full worked calculation. The printer icon prints that one member\u2019s report. Capacities are kip and kip\u00B7ft.'));
+    body.appendChild(el('div','hint sbNL',sbNL('Row buttons and units:',[['\u2192 Import','loads that member into Member Check mode with its demands, bracing, effective lengths and torsion case, so you can read and edit the full worked calculation.'],['The printer icon','prints that one member\u2019s report.'],['Capacities','are kip and kip\u00B7ft.']])));
   },pg);
   const msgs=res.filter(r=>(r.blockers&&r.blockers.length)||(r.warns&&r.warns.length)||(r.notes&&r.notes.length)||r.torNA);
   if(msgs.length)mkSection('bMsg','Messages, Blocked Rows and Assumptions',body=>{
@@ -7946,8 +8043,8 @@ function buildBatchTab(pg){
     });
   },pg);
   mkSection('bScope','Scope of the Batch Check',body=>{
-    body.appendChild(el('div','note','Each row runs: classification (Table B4.1), major and minor flexure (\u00A7F2\u2013F8), major and minor shear (\u00A7G2\u2013G6), axial compression (\u00A7E3/E4/E7), combined forces (\u00A7H1), and torsion (\u00A7H3.1 for HSS, \u00A7H3.3 with Design Guide 9 for open sections when a torsion case is given).'));
-    body.appendChild(el('div','warnBox','<b>Not checked in batch:</b> block shear and connections (a negative P\u1D64 is checked for tensile yielding and rupture, \u00A7D2, and taken as zero for compression), deflection, and web local yielding and crippling (\u00A7J10, which needs bearing lengths). Use Member Check mode on an individual row for J10 and deflection.'));
+    body.appendChild(el('div','note sbNL',sbNL('Each row runs:',['classification (Table B4.1);','major and minor flexure (\u00A7F2\u2013F8);','major and minor shear (\u00A7G2\u2013G6);','axial compression (\u00A7E3/E4/E7);','combined forces (\u00A7H1);','torsion (\u00A7H3.1 for HSS, \u00A7H3.3 with Design Guide 9 for open sections when a torsion case is given).'])));
+    body.appendChild(el('div','warnBox sbNL',sbNL('Not checked in batch:',['block shear and connections (a negative P\u1D64 is checked for tensile yielding and rupture, \u00A7D2, and taken as zero for compression);','deflection;','web local yielding and crippling (\u00A7J10, which needs bearing lengths).',['Instead:','use Member Check mode on an individual row for J10 and deflection.']])));
   },pg);
 }
 function applyRowToState(r){
@@ -8920,8 +9017,8 @@ function compositeInputs(body){
     const un={L:'ft',sLeft:'ft',sRight:'ft',trib:'ft',superDL:'psf',LL:'psf'};
     if(keys.length){
       const box=el('div','okBox');
-      box.innerHTML='<b>Inherited from the rest of the model</b> \u2014 leave these blank and they fill themselves:<br>'+
-        keys.map(k=>'\u2022 '+nm[k]+' = <b>'+fmt(inh[k].v,2)+' '+un[k]+'</b> ('+inh[k].src+')').join('<br>');
+      box.className='okBox sbNL';box.innerHTML=sbNL('Inherited from the rest of the model \u2014 leave these blank and they fill themselves:',   /* SBNL: the bullets as a list */
+        keys.map(k=>nm[k]+' = <b>'+fmt(inh[k].v,2)+' '+un[k]+'</b> ('+inh[k].src+')'));
       body.appendChild(box);
     }
   }
@@ -9326,7 +9423,7 @@ function compElevBlock(body,p,r,opts){
   const node=plotHolder(body,id,h);
   fitHolder(node,fig,h);
   regPlot(id,fig);
-  body.appendChild(el('div','hint','Drawn to scale (equal x and y scales); drawing only. h<sub>r</sub>, w<sub>r</sub>, the slab depths, the rib spacing s\u1D63, the stud diameter and the stud length and pitch are the entered values; the studs are welded to the top flange. Where s\u1D63, the stud length or the pitch is not entered, the drawn one is illustrative and labelled.'));
+  body.appendChild(el('div','hint sbNL',sbNL('Drawn to scale (equal x and y scales); drawing only.',[['Entered values:','h<sub>r</sub>, w<sub>r</sub>, the slab depths, the rib spacing s\u1D63, the stud diameter and the stud length and pitch.'],['Studs:','welded to the top flange.'],['Not entered:','where s\u1D63, the stud length or the pitch is not entered, the drawn one is illustrative and labelled.']])));
 }
 function compXsecBlock(body,p,r,opts){
   const id=(opts&&opts.id)||'xsecComp';
@@ -9659,7 +9756,8 @@ function constructionStage(p,r){
     if(out.dcrM>1)out.warns.push('The bare steel section is overstressed under wet concrete \u2014 the construction stage governs, not the composite stage.');
     if(out.dcrPre>1)out.warns.push('Pre-composite deflection exceeds the limit. Increase the section or add camber; AISC Design Guide 3 recommends the lesser of L/360 and 1 in for concrete plus self weight.');
   }
-  if(k.Lb==null)out.notes.push('The construction unbraced length defaults to the full span and is <b>not</b> inherited from the final bracing, because a slab that braces the beam once cured does not brace it during the pour. If the deck is attached as it is laid, state a shorter L\u1D47 deliberately.');
+  if(k.Lb==null){out.notes.push('The construction unbraced length defaults to the full span and is <b>not</b> inherited from the final bracing, because a slab that braces the beam once cured does not brace it during the pour. If the deck is attached as it is laid, state a shorter L\u1D47 deliberately.');
+    SB_NLW.set(out.notes[out.notes.length-1],['The construction unbraced length defaults to the full span.',[['Not inherited','from the final bracing, because a slab that braces the beam once cured does not brace it during the pour.'],['If the deck is attached as it is laid,','state a shorter L\u1D47 deliberately.']]]);}   /* SBNL: display form; the note string (Excel export) is unchanged */
   if(!S.trib||!S.trib.on){}
   else if((S.trib.p&&S.trib.p.DL>0)&&(constrCfg().superDL==null))
     out.notes.push('The superimposed dead pressure was inherited from the tributary generator. The slab and deck weights are derived separately from the slab geometry above \u2014 make sure that DL pressure does <b>not</b> also include them, or the slab is counted twice.');
@@ -9731,7 +9829,7 @@ function postCompInputs(body){
   if(isMember()||isBatch())return;
   if(!S.composite.postLoads)S.composite.postLoads={};
   const act=S.loads.filter(l=>!l.off);
-  body.appendChild(el('div','hint','<b>Which loads act after the concrete cures?</b> Ticked loads deflect the composite section on I\u1D38\u1D2E; everything else deflects the bare steel section on I\u2093. The default is bare steel for every load, so the composite stiffness benefit is opted into deliberately.'));
+  body.appendChild(el('div','hint sbNL',sbNL('Which loads act after the concrete cures?',[['Ticked loads','deflect the composite section on I\u1D38\u1D2E.'],['Everything else','deflects the bare steel section on I\u2093.'],['Default:','bare steel for every load, so the composite stiffness benefit is opted into deliberately.']])));
   if(!act.length){body.appendChild(el('div','note','No active loads.'));return;}
   act.forEach(l=>{
     const r=el('label');
@@ -9795,6 +9893,7 @@ function buildTabs(){
   sbrTabButton(bar);   /* SBRP: the Report tab (not saved in S.ui.tab) */
   renderTab();
   updateGovStrip();
+  sbDashRender();   /* SBLP */
 }
 /* =====================================================================
    REPORT TAB (SBRP, 2026-11-01): the calculation report in the shared viewer (shared/report.js: navigation tree,
@@ -9879,6 +9978,9 @@ function sbrTab(tab,holder,links){
       if(cl.contains('wkLink')){flush(c);const as=Array.from(ch.querySelectorAll('a.wkA'));
         c.list.push({type:'note',text:'Worked in: '+as.map(a=>{const L=links(a.dataset.tab,a.dataset.sec);return (a.dataset.txt?a.dataset.txt+' ':'')+(L?'[['+L+']]':'[[tab:'+a.dataset.tab+'|'+a.dataset.card+']]');}).join(' · ')});return;}
       if(/^H[1-6]$/.test(tag)){flush(c);c.head=ch.textContent.trim();c.list.push({type:'note',text:'— '+c.head+' —'});return;}
+      if(cl.contains('sbNL')){flush(c);   /* SBNL (2026-11-08): a lead + list note, one Report line per part (the box's prefix on the first) */
+        const pre=cl.contains('errBox')?'Error: ':cl.contains('warnBox')?'Warning: ':cl.contains('okBox')?'OK: ':'',w=cl.contains('warnBox')||cl.contains('errBox');let first=true;
+        Array.from(ch.querySelectorAll('.sbNLa,.sbNLl,.sbNLu>li')).forEach(p=>{const t=sbrText(p);if(!t)return;c.list.push({type:'note',warn:w||p.classList.contains('sbNLa'),text:(first?pre:'')+(p.tagName==='LI'?'\u2022 ':'')+t});first=false;});return;}
       if(cl.contains('note')||cl.contains('hint')||cl.contains('warnBox')||cl.contains('errBox')||cl.contains('okBox')||cl.contains('infoBox')||tag==='P'){
         if(ch.querySelector('.eqBlock,table,svg,.sec')){walk(ch,c);return;}
         const t=sbrText(ch);if(t){flush(c);c.list.push({type:'note',warn:cl.contains('warnBox')||cl.contains('errBox'),text:(cl.contains('errBox')?'Error: ':cl.contains('warnBox')?'Warning: ':cl.contains('okBox')?'OK: ':'')+t});}return;}
@@ -10078,6 +10180,53 @@ function govSummary(){
   return{txt:'Governing: '+g.label+' \u00B7 DCR '+fmt(g.dcr,3)+(g.combo?(' \u00B7 '+g.combo):''),
     cls:g.dcr>1.0001?'fail':'pass',tab:g.tab,dcr:g.dcr};
 }
+/* SBLP (2026-11-08): the left check-summary column (screen 1200 px and wider). The chips are the Summary tab's checks
+   (sbSumChecks(): the same status and D/C as its chips; batch mode: one chip per member, as the Batch Results); a click opens and
+   scrolls to the card that works the value (sbdChkTarget / sbdGoto, D11), or the check's tab when no card is mapped. The toggle
+   button shrinks it to a strip; the choice is kept per browser under sbd_dashCollapsed_v1 ('1' = shrunk), not part of the project or the autosave. */
+const SBLP={key:'sbd_dashCollapsed_v1'};
+function sbDashColl(v,save){
+  document.body.classList.toggle('sbDashColl',!!v);
+  const t=$('sbDashTgl');
+  if(t){t.innerHTML=v?'&raquo;':'&laquo;';t.setAttribute('aria-expanded',v?'false':'true');t.title=v?'Show the check summary':'Shrink the check summary';}
+  if(save)lsSet(SBLP.key,v?'1':'0');
+}
+function sbDashRender(){
+  const host=$('sbDash'),cnt=$('sbDashCnt');if(!host||!cnt)return;
+  host.innerHTML='';cnt.textContent='';cnt.className='';
+  const msg=t=>host.appendChild(el('div','sbdMsg',t));
+  if(!AN){msg('No results yet.');return;}
+  if(AN.blockers&&AN.blockers.length){msg('No results: the model is not valid. See the message on the output tab.');return;}
+  let items;
+  try{
+    if(isBatch())items=(AN.results||[]).map(r=>({nm:r.lbl||(r.row&&(r.row.desc||r.row.size))||'Member',st:r.status==='PASS'?'pass':r.status==='FAIL'?'fail':'na',dcr:r.status==='BLOCKED'?null:r.govDCR,
+      tip:(r.row&&r.row.desc?r.row.desc+' \u2014 ':'')+(r.status||''),go:()=>sbdGoto('tabBatch')}));
+    else items=sbSumChecks().map(c=>({nm:c.label,st:c.status,dcr:c.status==='na'?null:c.dcr,tip:c.label+' ['+c.ref+'] \u2014 '+(c.status==='na'?'N/A: ':'')+c.detail,
+      go:()=>{const t=c.ch?sbdChkTarget(c.ch):(c.sec?[c.tab,c.sec]:null);if(t)sbdGoto(t[0],t[1]);else sbdGoto(c.tab);}}));
+  }catch(e){items=null;}
+  if(!items||!items.length){msg(isBatch()?'No members loaded.':'No results yet.');return;}
+  let worst=0,nFail=0;
+  items.forEach(c=>{
+    if(c.st==='fail')nFail++;
+    if(c.dcr!=null&&isFinite(c.dcr)&&c.dcr>worst)worst=c.dcr;
+    const b=el('button','sbdChip '+c.st);b.type='button';b.setAttribute('role','listitem');
+    b.title=c.tip+'. Opens the card where it is worked.';
+    b.appendChild(el('span','dot'));
+    b.appendChild(el('span','nm'));b.lastChild.textContent=c.nm;
+    const vl=el('span','vl',c.dcr!=null&&isFinite(c.dcr)?fmt(c.dcr,2):'\u2014');vl.appendChild(el('b',null,c.st==='na'?'N/A':c.st==='fail'?'FAIL':'PASS'));
+    b.appendChild(vl);
+    b.addEventListener('click',c.go);
+    host.appendChild(b);
+  });
+  cnt.textContent=nFail?(nFail+' FAIL'):('max '+fmt(worst,2));
+  cnt.className=nFail?'fail':'pass';
+  cnt.title='Maximum D/C = '+fmt(worst,2)+(nFail?'; '+nFail+' check'+(nFail===1?'':'s')+' fail':'; all checks pass');
+}
+(function(){
+  const go=()=>{sbDashColl(lsGet(SBLP.key)==='1',false);
+    const t=$('sbDashTgl');if(t)t.addEventListener('click',()=>sbDashColl(!document.body.classList.contains('sbDashColl'),true));};
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',go);else go();
+})();
 function updateGovStrip(){
   let s=document.getElementById('govStrip');
   const hdr=$('hdr');
@@ -10315,7 +10464,7 @@ function buildConstrSections(pg,p,r,which){
         .forEach(rw=>{const tr=el('tr');
           [rw[0],rw[1],fmt(rw[2],4),rw[3]].forEach((v,i)=>tr.appendChild(el('td',i===2?null:'lft',''+v)));t.appendChild(tr);});
       body.appendChild(t);
-      cs.notes.forEach(n=>body.appendChild(el('div','note',n)));
+      cs.notes.forEach(n=>body.appendChild(sbWarnEl(n,'note')));
     },pg);
     if(!cs.shored)mkSection('cpConstr','Pre-Composite Strength \u2014 Bare Steel Section',body=>{
       body.appendChild(el('div','note','Simple span of '+fmt(cs.L,2)+' ft, unbraced length '+fmt(cs.Lb,2)+
@@ -10473,7 +10622,7 @@ function buildMxTab(pg){
   },pg);
   mkSection('mxCls','Section Classification \u2014 Flexure (Table B4.1b)',body=>{classFlexBlock(body,p,D);},pg);
   if(cmp&&!cmp.blocked){
-    pg.appendChild(el('div','okBox','<b>Composite action is enabled.</b> The positive-moment capacity is derived from Chapter I immediately below; negative-moment regions and the construction stage use the bare steel section further down. Lateral-torsional buckling does not apply to the composite positive-moment regions \u2014 the cured slab braces the compression flange continuously.'));
+    pg.appendChild(el('div','okBox sbNL',sbNL('Composite action is enabled.',[['Positive moment:','the capacity is derived from Chapter I immediately below.'],['Negative-moment regions and the construction stage:','use the bare steel section further down.'],['Lateral-torsional buckling:','does not apply to the composite positive-moment regions \u2014 the cured slab braces the compression flange continuously.']])));
     if(D.member)pg.appendChild(el('div','warnBox','In Member Check mode M\u1D64\u2093 is taken as <b>positive</b> (sagging, slab in compression). Switch composite off to check a negative-moment condition.'));
     compositeFlexSections(pg,p,cmp);
     buildConstrSections(pg,p,cmp,'strength');
@@ -10534,7 +10683,7 @@ function buildMxTab(pg){
         fmt(g.steelPhiMn,1)+' kip\u00B7ft'+(g.steelGov?(' governed by '+g.steelGov.toLowerCase()):'')+'.'));
     }else if(g&&g.blocked)body.appendChild(el('div','errBox',g.blocked));
   });
-  if(cmp&&!cmp.blocked)pg.appendChild(el('div','warnBox','<b>Composite scope.</b> Checked here: effective width (\u00A7I3.1a), horizontal shear (\u00A7I3.2d), plastic flexural strength (\u00A7I3.2a(1)), stud strength (\u00A7I8.2a) and the deck/anchor requirements. Deflection and I\u1D38\u1D2E are on the Serviceability tab. <b>Not checked:</b> camber, negative-moment composite action with slab reinforcement (\u00A7I3.2b), concrete breakout and ponding. Shear is carried entirely by the steel section \u2014 see the V\u2093 tab.'));
+  if(cmp&&!cmp.blocked)pg.appendChild(el('div','warnBox sbNL',sbNL('Composite scope.',[['Checked here:','effective width (\u00A7I3.1a), horizontal shear (\u00A7I3.2d), plastic flexural strength (\u00A7I3.2a(1)), stud strength (\u00A7I8.2a) and the deck/anchor requirements.'],['Serviceability tab:','deflection and I\u1D38\u1D2E.'],['Not checked:','camber, negative-moment composite action with slab reinforcement (\u00A7I3.2b), concrete breakout and ponding.'],['Shear:','carried entirely by the steel section \u2014 see the V\u2093 tab.']])));
 }
 /* ---- Serviceability: member deflection + composite/construction deflection ---- */
 function buildServiceTab(pg){
@@ -10696,7 +10845,7 @@ function studCurveBlock(body,p,r,opts){
   body.appendChild(el('div','note','At Q\u2099 = '+fmt(m.Qn,2)+' kip per stud: <b>'+m.n25+
     '</b> studs each side reach 25% composite action, <b>'+m.nFull+
     '</b> reach full composite at \u03C6M\u2099 = '+fmt(m.phiFull,1)+' kip\u00B7ft, and beyond that the concrete or the steel governs so further studs add nothing.'));
-  body.appendChild(el('div','hint','Every point is the \u00A7I3.2a plastic distribution re-solved at that stud count \u2014 it is the capacity, not a sketch. The count is per side of the point of maximum moment, so a simple span needs roughly twice these numbers in total. At zero studs the curve tends to the bare-steel plastic moment \u2014 about 1% below \u03C6F\u1D67Z\u2093 because the plastic model builds the steel from flange and web rectangles and does not count the fillets \u2014 and that is the fully braced value. If the beam is unbraced before the slab cures, the construction-stage check above governs instead.'));
+  body.appendChild(el('div','hint sbNL',sbNL('Every point is the \u00A7I3.2a plastic distribution re-solved at that stud count \u2014 it is the capacity, not a sketch.',[['Stud count:','per side of the point of maximum moment, so a simple span needs roughly twice these numbers in total.'],['At zero studs:','the curve tends to the bare-steel plastic moment \u2014 about 1% below \u03C6F\u1D67Z\u2093 because the plastic model builds the steel from flange and web rectangles and does not count the fillets \u2014 and that is the fully braced value.'],['If the beam is unbraced before the slab cures,','the construction-stage check above governs instead.']])));
 }
 /* =====================================================================
    CROSS SECTION ON THE SCHEMATIC TAB, AND TIGHTER FIGURE FRAMING
@@ -10727,8 +10876,7 @@ function xsecBlock(body,p,opts){
   const node=plotHolder(body,id,h);
   fitHolder(node,fig,h);
   regPlot(id,fig);
-  body.appendChild(el('div','hint','Drawn to scale from the resolved dimensions (equal x and y scales); drag to zoom, hover the elements for slenderness ratios.'+
-    (opts.note?(' '+opts.note):'')));
+  body.appendChild(el('div','hint sbNL',sbNL('Drawn to scale from the resolved dimensions (equal x and y scales).',[['Plot:','drag to zoom, hover the elements for slenderness ratios.'],opts.note||null])));   /* SBNL */
 }
 function compXsecBlock(body,p,r,opts){
   opts=opts||{};
@@ -10739,9 +10887,10 @@ function compXsecBlock(body,p,r,opts){
   const node=plotHolder(body,id,h);
   fitHolder(node,fig,h);
   regPlot(id,fig);
-  body.appendChild(el('div','hint','Drawn to scale (equal x and y scales) from the resolved geometry; the drawn slab width is the effective width b\u2091\u2093\u2093, not the full slab. '+
-    (opts.geomOnly?'':'Red is the plastic compression block, blue the yielded tension zone, and the dash-dot line is the plastic neutral axis that produced M\u2099 above. ')+
-    (slabGeom(compCfg()).hr>0?'The metal deck is drawn in its entered orientation: ribs perpendicular to the beam \u2014 the section is cut through a rib (the dashed line is the deck high flute beyond); ribs parallel \u2014 the flutes are cut, with a rib centred on the beam. '+(deckDrawGeom(compCfg()).pitchGiven?'The rib spacing is the entered s\u1D63.':'The rib spacing s\u1D63 is not entered, so the drawn spacing is illustrative.'):'')));
+  body.appendChild(el('div','hint sbNL',sbNL('Drawn to scale (equal x and y scales) from the resolved geometry.',[['Slab width:','the drawn slab width is the effective width b\u2091\u2093\u2093, not the full slab.'],
+    opts.geomOnly?null:['Colours:','red is the plastic compression block, blue the yielded tension zone, and the dash-dot line is the plastic neutral axis that produced M\u2099 above.'],
+    slabGeom(compCfg()).hr>0?['Metal deck:','drawn in its entered orientation: ribs perpendicular to the beam \u2014 the section is cut through a rib (the dashed line is the deck high flute beyond); ribs parallel \u2014 the flutes are cut, with a rib centred on the beam.']:null,
+    slabGeom(compCfg()).hr>0?['Rib spacing:',deckDrawGeom(compCfg()).pitchGiven?'the entered s\u1D63.':'s\u1D63 is not entered, so the drawn spacing is illustrative.']:null])));
 }
 /* ---- Schematic & Inputs: show the member, not just the loading ---- */
 function buildSchemTab(pg){
@@ -10808,7 +10957,7 @@ function buildSchemTab(pg){
     if(D){rows.push(['L\u1D9C\u2093 / L\u1D9C\u1D67 / L\u1D9C\u1DBB',fmt(D.Lcx/12,2)+' / '+fmt(D.Lcy/12,2)+' / '+fmt(D.Lcz/12,2)+' ft','compression effective lengths']);}
     rows.forEach(r=>{const tr=el('tr');r.forEach((v,i)=>tr.appendChild(el('td',i===0?null:'lft',''+v)));t.appendChild(tr);});
     body.appendChild(t);
-    (AN.bracingNotes||[]).forEach(n=>body.appendChild(el('div','warnBox',n)));
+    (AN.bracingNotes||[]).forEach(n=>body.appendChild(sbWarnEl(n)));
   },pg);
   mkSection('schGeom','Geometry Echo',body=>{
     const t=el('table','tbl');
@@ -11206,7 +11355,7 @@ function buildSensSection(pg){
     try{res=runSensitivity();}catch(e){body.appendChild(el('div','errBox','Sensitivity run failed: '+e.message));return;}
     if(!res||!res.rows.length){
       body.appendChild(el('div','note','No governing ratio is available to perturb yet.'));return;}
-    body.appendChild(el('div','note','Each input below is changed by \u00B110% on its own and the <b>whole model is re-solved</b> through the same engine that produced the results \u2014 these are actual recomputed ratios, not derivatives of a simplified formula. Everything else is held fixed, so interactions between two inputs are not captured.'));
+    body.appendChild(el('div','note sbNL',sbNL('Each input below is changed by \u00B110% on its own and the <b>whole model is re-solved</b>.',[['Engine:','the same engine that produced the results \u2014 these are actual recomputed ratios, not derivatives of a simplified formula.'],['Held fixed:','everything else, so interactions between two inputs are not captured.']])));
     const fig=sensFig(res);
     if(fig){const id='sensFig';plotHolder(body,id,fig.layout.height);regPlot(id,fig);}
     const t=el('table','tbl');
@@ -11233,7 +11382,7 @@ function buildSensSection(pg){
       'No single input at \u00B110% moves the design across DCR = 1.00 from a base of '+fmt(res.base.dcr,3)+'.'));
     if(flat.length)body.appendChild(el('div','hint','Insensitive at \u00B110%: '+
       flat.map(r=>r.p.label).join(', ')+'. These do not currently govern; a larger change may still matter.'));
-    body.appendChild(el('div','hint','\u00B110% is a probe, not a code requirement, and section properties are not varied because changing a shape changes all of them at once. Where a row says the governing check changes, the ratio shown is for the <b>new</b> governing limit state, which is why some entries move more than expected.'));
+    body.appendChild(el('div','hint sbNL',sbNL('\u00B110% is a probe, not a code requirement.',[['Section properties:','not varied, because changing a shape changes all of them at once.'],['Where a row says the governing check changes,','the ratio shown is for the <b>new</b> governing limit state, which is why some entries move more than expected.']])));
   },pg);
 }
 /* =====================================================================
@@ -11311,7 +11460,7 @@ function capEnvBlock(body,A,D,C){
   const id='capEnv_'+C.id;
   plotHolder(body,id,330);
   regPlot(id,fig);
-  body.appendChild(el('div','hint','The green step is the available \u03C6M\u2099 in each moment region \u2014 it changes where the compression flange changes, where the unbraced length changes, and (with composite action) where the slab goes into tension. Dotted grey lines are region boundaries at the inflection points; solid grey are interior supports. The blue trace on the right axis is the demand/capacity ratio at every station, so the tight part of the beam is visible rather than just its worst value.'));
+  body.appendChild(el('div','hint sbNL',sbNL('Reading the capacity envelope:',[['Green step:','the available \u03C6M\u2099 in each moment region \u2014 it changes where the compression flange changes, where the unbraced length changes, and (with composite action) where the slab goes into tension.'],['Dotted grey lines:','region boundaries at the inflection points; solid grey are interior supports.'],['Blue trace','(right axis): the demand/capacity ratio at every station, so the tight part of the beam is visible rather than just its worst value.']])));
 }
 /* ---------------------------------------------------------------------
    2. BATCH — GOVERNING DCR BY MEMBER
@@ -11703,7 +11852,7 @@ function colCurveFig(p,cc,D,Pu){
       ' &middot; <b>sent</b> '+esc(when(p.producedAt))+' &middot; <b>project</b> '+esc((p.project&&p.project.name)||'\u2014')+
       ' &middot; '+esc(p.code||'')+' &middot; nominal (unfactored) area loads'+(via==='file'?' &middot; from a JSON file':'')));
     if(chk.warn.length) box.appendChild(el('div','warnBox',chk.warn.map(esc).join('<br>')));
-    box.appendChild(el('div','warnBox','<b>Not in this hand-off:</b> components and cladding (C&amp;C, ASCE 7-16 Ch. 30) wind pressures, which usually govern purlins, girts and other members loaded directly by the cladding; snow drift and unbalanced snow (Sec. 7.6 to 7.8). Only the MWFRS wind and the balanced roof snow are sent. Apply C&amp;C, drift and unbalanced loads by hand where this beam needs them.'));
+    box.appendChild(el('div','warnBox sbNL',sbNL('Not in this hand-off:',[['Components and cladding','(C&amp;C, ASCE 7-16 Ch. 30) wind pressures, which usually govern purlins, girts and other members loaded directly by the cladding.'],['Snow drift and unbalanced snow','(Sec. 7.6 to 7.8).'],['Sent:','only the MWFRS wind and the balanced roof snow.']],{act:['Apply C&amp;C, drift and unbalanced loads by hand where this beam needs them.']})));
     if(p.notes && p.notes.length){
       var nb=el('details'); nb.appendChild(el('summary','hint','Sender notes ('+p.notes.length+') \u2014 read before importing'));
       nb.appendChild(el('div','note',p.notes.map(function(n){ return '&bull; '+esc(n); }).join('<br>'))); nb.open=true; box.appendChild(nb);

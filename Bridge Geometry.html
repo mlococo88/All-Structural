@@ -146,6 +146,52 @@
   .bgNL .bgNLk { font-weight:600; }
   .bgNL .bgNLa { color:var(--oxide); margin:2px 0 4px; }
   @media print { .bgNL .bgNLu > li { break-inside:avoid; } }
+  /* BGLS (2026-11-08, engineer: the left summary panel of Retaining Wall, Spread Footing, Light Pole, Shear and Moment Diagrams —
+     RWDL #959, RWLB #984, SFLB #988, LPLB #991, SMLS #1130): on screens 1200 px and wider a left column (#bgDashCol, 240 px up to
+     1499 px, 280 px from 1500 px) lists the key results as compact chips; a click opens the tab and scrolls to the table that
+     works the value. « shrinks it to a 42 px strip. Below 1200 px nothing changes. Screen only. */
+  #bgDashCol { display:none; }
+  @media print { #bgDashCol { display:none !important; } }
+  @media screen and (min-width:1200px){
+    body.bgDashWide { display:grid; grid-template-columns:280px minmax(0,1fr); align-items:start; }
+    body.bgDashWide > * { grid-column:1 / -1; }
+    body.bgDashWide > #bgDashCol { grid-column:1; grid-row:2; display:block; position:sticky; top:0; height:100vh; box-sizing:border-box; overflow-y:auto; overflow-x:hidden;
+      min-width:0; padding:0 8px 24px; border-right:1px solid var(--graphite); background:var(--vellum-edge); overscroll-behavior:contain; }
+    body.bgDashWide > main { grid-column:2; grid-row:2; min-width:0; }
+    body.bgDashWide main fieldset { min-width:0; }   /* the main column is narrower: wide tables scroll in their own boxes (as the phone rule BGX10), not the page */
+    #bgDashHead { position:sticky; top:0; z-index:3; background:var(--vellum-edge); display:flex; align-items:center; gap:4px 8px; flex-wrap:wrap; padding:10px 0 4px; }
+    #bgDashTtl { margin:0; font-size:10.5px; font-weight:600; text-transform:uppercase; letter-spacing:.1em; color:var(--ink-soft); }
+    #bgDashTgl { margin:0; padding:1px 7px; font-size:12px; border:1px solid var(--graphite); background:var(--paper); border-radius:3px; cursor:pointer; color:var(--ink-soft); }
+    #bgDashCnt { display:inline-flex; gap:4px; flex-wrap:wrap; }
+    #bgDashCnt span { font-size:10px; font-weight:600; padding:1px 5px; border:1px solid; border-radius:3px; white-space:nowrap; background:var(--paper); }
+    #bgDashCnt .bgCf { color:var(--oxide); } #bgDashCnt .bgCw { color:#7A5B12; } #bgDashCnt .bgCp { color:var(--good); }
+    #bgDashSub { font-size:10.5px; color:var(--ink-soft); margin:0 0 6px; overflow-wrap:anywhere; }
+    #bgDash { display:grid; grid-template-columns:minmax(0,1fr); gap:3px; align-items:start; }
+    .bgCh { display:grid; grid-template-columns:auto minmax(0,1fr) auto auto; align-items:center; column-gap:5px; padding:3px 6px 3px 2px; min-width:0;
+      border:1px solid var(--graphite); border-radius:3px; background:var(--paper); font-size:11px; line-height:1.35; cursor:pointer; color:var(--ink); }
+    .bgCh:hover { background:#fff; } .bgCh:focus-visible { outline:2px solid var(--cyan); outline-offset:-1px; }
+    .bgCh.pass { border-color:var(--good); } .bgCh.fail { border-color:var(--oxide); background:#fbeee9; } .bgCh.warn { border-color:#B08A2E; background:#FBF4E2; }
+    .bgCh .bgChX { grid-row:1; grid-column:1; margin:0; padding:0 3px; border:none; background:transparent; font-size:9px; color:var(--ink-soft); line-height:1.2; cursor:pointer; }
+    .bgCh .bgChX:disabled { visibility:hidden; }
+    .bgCh .bgChN { grid-row:1; grid-column:2; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .bgCh .bgChR { grid-row:1; grid-column:3; white-space:nowrap; color:var(--cyan); font-weight:600; font-variant-numeric:tabular-nums; }
+    .bgCh .bgChS { grid-row:1; grid-column:4; font-size:10px; font-weight:700; white-space:nowrap; }
+    .bgCh.pass .bgChS { color:var(--good); } .bgCh.fail .bgChS { color:var(--oxide); } .bgCh.warn .bgChS { color:#7A5B12; }
+    .bgCh .bgChV, .bgCh .bgChRef { grid-column:1 / -1; display:none; padding-left:16px; font-size:10.5px; color:var(--ink-soft); overflow-wrap:anywhere; }
+    .bgCh .bgChRef { font-style:italic; }
+    .bgCh.bgOpen .bgChV, .bgCh.bgOpen .bgChRef { display:block; } .bgCh.bgOpen .bgChN { white-space:normal; }
+    .bgDHd { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-soft); margin:6px 0 1px; }
+    .bgDMsg { font-size:11px; padding:6px 8px; border:1px solid var(--oxide); background:#fbeee9; color:var(--ink); border-radius:3px; }
+    .bgFlash { outline:3px solid var(--cyan); outline-offset:3px; transition:outline-color .4s; }
+    body.bgDashWide.bgDashColl { grid-template-columns:42px minmax(0,1fr); }
+    body.bgDashWide.bgDashColl > #bgDashCol { padding:0; }
+    body.bgDashWide.bgDashColl #bgDash, body.bgDashWide.bgDashColl #bgDashSub { display:none; }
+    body.bgDashWide.bgDashColl #bgDashHead { flex-direction:column; align-items:center; }
+    body.bgDashWide.bgDashColl #bgDashTtl { writing-mode:vertical-rl; transform:rotate(180deg); margin:4px 0; white-space:nowrap; }
+    body.bgDashWide.bgDashColl #bgDashCnt { flex-direction:column; align-items:center; }
+    body.bgDashWide.bgDashColl #bgDashCnt span { font-size:9px; padding:1px 2px; white-space:normal; text-align:center; width:36px; box-sizing:border-box; }
+  }
+  @media screen and (min-width:1200px) and (max-width:1499.98px){ body.bgDashWide:not(.bgDashColl) { grid-template-columns:240px minmax(0,1fr); } }
   .pill { display: inline-block; font-size: 10px; padding: 1px 6px; border: 1px solid var(--graphite); border-radius: 10px; color: var(--ink-soft); }
   /* substructure table */
   .subtbl input, .subtbl select { padding: 3px 5px; font-size: 12px; }
@@ -193,6 +239,11 @@
     <button class="tabbtn" role="tab" aria-selected="false" data-tab="project">Project</button>
   </div>
 </header>
+<aside id="bgDashCol" class="noprint" aria-label="Results summary"><!-- BGLS (2026-11-08): key results as a left column on screens 1200 px and wider -->
+  <div id="bgDashHead"><button type="button" id="bgDashTgl" aria-controls="bgDash" aria-expanded="true">&laquo;</button><h2 id="bgDashTtl">Results summary</h2><span id="bgDashCnt"></span></div>
+  <div id="bgDashSub"></div>
+  <div id="bgDash"></div>
+</aside>
 
 <main>
   <div id="geom_err" style="display:none; border:2px solid var(--oxide); background:#fbeee9; color:var(--ink); padding:8px 12px; margin:0 0 14px; font-size:13px;"></div>
@@ -418,7 +469,7 @@
 
   <!-- TAB 3: OUTPUT -->
   <section class="tabpane" id="pane-output" role="tabpanel">
-    <p class="note" style="font-size:12px; margin-bottom:14px;">Top-of-deck (riding surface) results: a color <strong>heatmap</strong> of deck elevation in plan, a <strong>cross-section</strong> at a chosen station, and a <strong>table</strong> of elevations at each cross-section location. Use the <strong>validation</strong> panel to check the model against known points. Beam-seat results are on the next tab.</p>
+    <div class="note bgNL" style="font-size:12px; margin-bottom:14px;"><div class="bgNLl">Top-of-deck (riding surface) results:</div><ul class="bgNLu"><li><b class="bgNLk">Heatmap:</b> a color heatmap of deck elevation in plan.</li><li><b class="bgNLk">Cross-section:</b> at a chosen station.</li><li><b class="bgNLk">Table:</b> elevations at each cross-section location.</li><li><b class="bgNLk">Validation:</b> use the validation panel to check the model against known points.</li><li><b class="bgNLk">Beam-seat results:</b> on the next tab.</li></ul></div>
     <h2 class="sec">Deck elevation heatmap</h2>
     <div style="display:grid; grid-template-columns:auto 1fr; gap:14px; align-items:end; margin-bottom:8px;">
       <div><label>Divisions per span</label><input type="number" id="divs" value="10" min="2" step="1" style="width:90px" title="Number of equal sampling intervals per span used to build the deck-elevation heatmap. Higher = finer/smoother color grid."></div>
@@ -458,7 +509,7 @@
     </div>
 
     <h2 class="sec">Cross-section at station</h2>
-    <p class="note" style="margin-top:-6px;">Transverse cut through the deck at the chosen station, looking up-station. Shows the top-of-deck surface, deck slab, each girder with its full stack down to the beam seat, deck edges, curbs, cross-slope, and key elevations. Set the station with the slider or by typing it.</p>
+    <div class="note bgNL" style="margin-top:-6px;"><div class="bgNLl">Transverse cut through the deck at the chosen station, looking up-station.</div><ul class="bgNLu"><li><b class="bgNLk">Shows:</b> the top-of-deck surface, deck slab, each girder with its full stack down to the beam seat, deck edges, curbs, cross-slope, and key elevations.</li><li><b class="bgNLk">Station:</b> set it with the slider or by typing it.</li></ul></div>
     <div style="display:grid; grid-template-columns:auto 1fr auto; gap:12px; align-items:center; margin-bottom:8px;">
       <div><label style="font-size:11px;">Station</label><input type="text" id="sec_sta_in" value="" placeholder="100+00.00" style="width:110px" title="Station of the cross-section (NNN+NN.NN). Type a station or drag the slider."></div>
       <input type="range" id="sec_sta_slider" min="0" max="1000" step="0.1" value="0" style="width:100%;" title="Drag to move the cross-section along the bridge.">
@@ -522,7 +573,7 @@
     <details id="gird10_box" style="margin-top:12px;"><summary class="note" style="cursor:pointer;">Girder lines: bearing-to-bearing length and top-of-deck at tenth points along each girder</summary><div id="gird10_wrap" style="overflow-x:auto;"></div></details>
 
     <h2 class="sec" style="margin-top:26px;">Validation · known points</h2>
-    <p class="note" style="margin-top:-6px;">Spot-check the model against points whose elevation you already know (e.g. from a plan or independent calc). Enter each point's station, transverse offset (from the PGL, offset 0), and expected top-of-deck elevation in its own box. Each is compared to the computed elevation and flagged if it differs by more than the tolerance.</p>
+    <div class="note bgNL" style="margin-top:-6px;"><div class="bgNLl">Spot-check the model against points whose elevation you already know (e.g. from a plan or independent calc).</div><ul class="bgNLu"><li><b class="bgNLk">Enter:</b> each point's station, transverse offset (from the PGL, offset 0), and expected top-of-deck elevation in its own box.</li><li><b class="bgNLk">Check:</b> each is compared to the computed elevation and flagged if it differs by more than the tolerance.</li></ul></div>
     <div style="overflow-x:auto;"><table class="subtbl" id="val_tbl"></table></div>
     <div style="display:flex; gap:10px; align-items:end; margin-top:8px; flex-wrap:wrap;">
       <button class="sm ghost" id="val_add" title="Add a known point row.">+ Point</button>
@@ -532,7 +583,7 @@
     <div id="val_wrap" style="margin-top:10px;"></div>
 
     <h2 class="sec" style="margin-top:26px;">Validation &middot; horizontal (coordinates)</h2>
-    <p class="note" style="margin-top:-6px;">Check the <em>horizontal</em> model the same way. Enter a point whose Northing/Easting you know &mdash; from a plan coordinate table, a monument, or a picked point on the Site Map &mdash; together with the station and offset it should land on. The point is projected onto the alignment and both are compared. This catches a wrong POB, bearing, curve, or Bridge&nbsp;CL offset, none of which an elevation check can see.</p>
+    <div class="note bgNL" style="margin-top:-6px;"><div class="bgNLl">Check the <em>horizontal</em> model the same way.</div><ul class="bgNLu"><li><b class="bgNLk">Enter:</b> a point whose Northing/Easting you know &mdash; from a plan coordinate table, a monument, or a picked point on the Site Map &mdash; together with the station and offset it should land on.</li><li><b class="bgNLk">Check:</b> the point is projected onto the alignment and both are compared.</li><li><b class="bgNLk">Catches:</b> a wrong POB, bearing, curve, or Bridge&nbsp;CL offset, none of which an elevation check can see.</li></ul></div>
     <div style="overflow-x:auto;"><table class="subtbl" id="hval_tbl"></table></div>
     <div style="display:flex; gap:10px; align-items:end; margin-top:8px; flex-wrap:wrap;">
       <button class="sm ghost" id="hval_add" title="Add a known coordinate row.">+ Point</button>
@@ -545,7 +596,7 @@
   <!-- TAB: BEAM SEAT OUTPUT -->
   <section class="tabpane" id="pane-seat" role="tabpanel">
     <h2 class="sec">Beam Seat Elevations · at bearing lines</h2>
-    <p class="note" style="margin-top:-6px;">Seat = top-of-deck − deck thickness − (min haunch + net camber [+ sag ordinate + cross slope × b<sub>f</sub>/2 when Seat terms is ticked]) − beam depth − bearing assembly; hover a seat, or see <a href="#seat_work_h">Seat working</a> below, for its working. One row per bearing line; dual-bearing piers report back &amp; ahead separately, each using its own span's camber/depth/bearing.</p>
+    <div class="note bgNL" style="margin-top:-6px;"><div class="bgNLl">Seat = top-of-deck − deck thickness − (min haunch + net camber [+ sag ordinate + cross slope × b<sub>f</sub>/2 when Seat terms is ticked]) − beam depth − bearing assembly.</div><ul class="bgNLu"><li><b class="bgNLk">Working:</b> hover a seat, or see <a href="#seat_work_h">Seat working</a> below, for its working.</li><li><b class="bgNLk">Rows:</b> one row per bearing line; dual-bearing piers report back &amp; ahead separately, each using its own span's camber/depth/bearing.</li></ul></div>
     <p class="note vdatum_cap" style="margin:6px 0 0;" title="Label only — no datum conversion is applied.">Elevations in feet · vertical datum: not specified</p>
     <div class="noprint" style="display:flex; gap:8px; margin:6px 0;"><button class="sm ghost" type="button" onclick="exportTableCSV('seat_tbl_wrap','beam-seat')" title="Download the beam-seat table as a CSV file.">Export CSV</button><button class="sm ghost" type="button" onclick="window.print()" title="Print this tab.">Print</button></div>
     <div id="seat_tbl_wrap" style="overflow-x:auto;"></div>
@@ -570,7 +621,7 @@
 
   <!-- TAB: DRAWINGS (BGDW, 2026-11-03): drawing sheets at plot scale, DXF of the sheets, printing to 11 x 17 -->
   <section class="tabpane" id="pane-drawings" role="tabpanel">
-    <p class="note" style="font-size:12px; margin-bottom:10px;">Drawing sheets of the computed geometry: plan, profile, typical section(s), a framing plan per span and the data and elevation tables, each on a B-size sheet (11 &times; 17 in) at a standard scale chosen to fit, with border and title block. The same entities are the preview, the DXF and the printed pages. Display only: nothing here changes a result.</p>
+    <div class="note bgNL" style="font-size:12px; margin-bottom:10px;"><div class="bgNLl">Drawing sheets of the computed geometry.</div><ul class="bgNLu"><li><b class="bgNLk">Sheets:</b> plan, profile, typical section(s), a framing plan per span and the data and elevation tables.</li><li><b class="bgNLk">Format:</b> each on a B-size sheet (11 &times; 17 in) at a standard scale chosen to fit, with border and title block.</li><li><b class="bgNLk">One source:</b> the same entities are the preview, the DXF and the printed pages.</li><li><b class="bgNLk">Display only:</b> nothing here changes a result.</li></ul></div>
     <div id="bgdwHost"></div>
   </section>
 
@@ -603,7 +654,7 @@
   </section>
 
   <section class="tabpane" id="pane-map" role="tabpanel">
-    <p class="note">Plot the computed bridge geometry on a real-world map. The bridge's Point of Beginning Northing/Easting are interpreted as State Plane coordinates in the datum below, projected to the map through proj4. The alignment is laid out from the POB at ground distance (no combined scale factor), and NAD 83 is taken as WGS 84 for the map (about 1–1.5 m); the map is for orientation, not for survey. You can also paste arbitrary survey points to plot alongside. Requires an internet connection for map tiles.</p>
+    <div class="note bgNL"><div class="bgNLl">Plot the computed bridge geometry on a real-world map (for orientation, not for survey).</div><ul class="bgNLu"><li><b class="bgNLk">POB:</b> the bridge's Point of Beginning Northing/Easting are interpreted as State Plane coordinates in the datum below, projected to the map through proj4.</li><li><b class="bgNLk">Distances:</b> the alignment is laid out from the POB at ground distance (no combined scale factor).</li><li><b class="bgNLk">Datum:</b> NAD 83 is taken as WGS 84 for the map (about 1–1.5 m); the map is for orientation, not for survey.</li><li><b class="bgNLk">Survey points:</b> you can also paste arbitrary survey points to plot alongside.</li><li><b class="bgNLk">Internet:</b> required for map tiles.</li></ul></div>
     <div class="cols">
       <div>
         <fieldset>
@@ -667,7 +718,7 @@
 
         <fieldset>
           <legend>pick points</legend>
-          <p class="note" style="margin-top:0">Drop points on the map (or a placed overlay) to read Northing/Easting, Station/Offset, and top-of-pavement / top-of-deck elevation. Works outside the deck too (e.g. approach-slab ends) — points past the deck are flagged since the cross-slope is extrapolated. Zoom in as far as you need for accuracy.</p>
+          <div class="note bgNL" style="margin-top:0"><div class="bgNLl">Drop points on the map (or a placed overlay) to read Northing/Easting, Station/Offset, and top-of-pavement / top-of-deck elevation.</div><ul class="bgNLu"><li><b class="bgNLk">Outside the deck:</b> works there too (e.g. approach-slab ends) — points past the deck are flagged since the cross-slope is extrapolated.</li><li><b class="bgNLk">Accuracy:</b> zoom in as far as you need.</li></ul></div>
           <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center">
             <button class="sm" id="pick_toggle">Pick points</button>
             <button class="sm ghost" id="pick_clear">Clear</button>
@@ -741,6 +792,86 @@ const DEG = Math.PI/180;
 function bgNL(lead,items,o){ o=o||{}; const L=o.ol?'ol':'ul';
   const li=(items||[]).filter(Boolean).map(x=>'<li>'+(Array.isArray(x)?'<b class="bgNLk">'+x[0]+'</b> '+x[1]:x)+'</li>').join('');
   return (o.act||[]).filter(Boolean).map(a=>'<div class="bgNLa">'+a+'</div>').join('')+(lead?'<div class="bgNLl">'+lead+'</div>':'')+(li?'<'+L+' class="bgNLu">'+li+'</'+L+'>':''); }
+/* BGLS (2026-11-08, engineer: the left summary panel, as Retaining Wall / Spread Footing / Light Pole / Shear and Moment Diagrams):
+   on screens >= 1200 px the key results show as one chip each in #bgDashCol: geometry errors / warnings, the span lengths (read from
+   the Bridge-tab span table), the lowest / highest beam seat (seatData(), as the Beam Seat table), the midspan haunch check (the
+   counts of buildSeatWork's table) and the last elevation / coordinate Check. A chip click opens the tab and scrolls to the table
+   that works the value. No new calculation. Collapse state: per-browser UI key bridgeGeomEngine.dashCollapsed.v1 ('1' = collapsed);
+   not in the project, the autosave or the export. Below 1200 px nothing changes. */
+const BGLS={ key:'bridgeGeomEngine.dashCollapsed.v1', mq:(window.matchMedia?window.matchMedia('screen and (min-width:1200px)'):null), open:new Map(), coll:false, wide:null, haunch:null, val:null, hval:null };
+try{ BGLS.coll=localStorage.getItem(BGLS.key)==='1'; }catch(e){}
+function bgDashItems(){
+  const it=[], P=(n,v,o)=>it.push(Object.assign({n,v,st:'na'},o||{})), esc=t=>String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  const li=id=>{ const d=document.getElementById(id); return d&&d.style.display!=='none'?[...d.querySelectorAll('li')].map(x=>x.textContent):[]; };
+  const ge=li('geom_err'), gw=li('geom_warn');
+  if(ge.length) P('Geometry input error',ge.length+'',{st:'fail',s:'STOP',hd:'Model',tab:'align',el:'geom_err',d:'Computation stopped; the results below are the last valid geometry.<br>'+ge.map(esc).join('<br>'),to:'Geometry input error (top of every tab)'});
+  if(gw.length) P('Geometry warnings',gw.length+'',{st:'warn',s:'',hd:'Model',tab:'align',el:'geom_warn',d:gw.map(esc).join('<br>'),to:'Geometry warnings (top of every tab)'});
+  const aw=['elem_warn','vprof_warn'].map(id=>{ const d=document.getElementById(id); return d&&d.textContent.trim()?id:null; }).filter(Boolean);
+  aw.forEach(id=>P(id==='elem_warn'?'Alignment table warning':'Profile table warning','',{st:'warn',s:'check',hd:'Model',tab:'align',el:id,d:esc(document.getElementById(id).textContent),to:'Alignment · '+(id==='elem_warn'?'Horizontal Alignment':'Vertical Profile')}));
+  if(!ENG) return it;
+  const su=sortedUnits();
+  [...document.querySelectorAll('#span_wrap tbody tr')].forEach(tr=>{ const c=[...tr.cells].map(x=>x.textContent);
+    const ref=c[4]&&c[4]!=='—'; P('Span '+c[0]+' <span style="font-weight:400">('+esc(c[1])+' → '+esc(c[2])+')</span>',esc(ref?c[4]:c[3])+' ft',{hd:'Spans',tab:'bridge',el:'span_wrap',
+      d:'Along the construction reference line: '+esc(c[4])+' ft; PGL stations: '+esc(c[3])+' ft; girder bearing to bearing: '+esc(c[5])+' ft.',to:'Bridge · Spans table'}); });
+  if(su.length>=2){ let lo=null, hi=null;
+    seatData().forEach(r=>r.seats.forEach((q,k)=>{ if(!q) return; if(!lo||q.seatZ<lo.z) lo={z:q.seatZ,l:r.label,g:k+1}; if(!hi||q.seatZ>hi.z) hi={z:q.seatZ,l:r.label,g:k+1}; }));
+    if(lo){ P('Lowest beam seat',lo.z.toFixed(outDec())+' ft',{hd:'Beam seats',tab:'seat',el:'seat_tbl_wrap',d:esc(lo.l)+', G'+lo.g,to:'Beam Seat Output · Beam Seat Elevations'});
+      P('Highest beam seat',hi.z.toFixed(outDec())+' ft',{hd:'Beam seats',tab:'seat',el:'seat_tbl_wrap',d:esc(hi.l)+', G'+hi.g,to:'Beam Seat Output · Beam Seat Elevations'}); } }
+  const H=BGLS.haunch;
+  if(H&&H.n){ const m=H.min; P('Midspan haunch',(H.n-H.low)+' / '+H.n,{st:H.low?'fail':'pass',s:H.low?'LOW':'OK',hd:'Checks',tab:'seat',el:'seat_work_h',
+    d:(H.low?H.low+' girder(s) below the minimum haunch at midspan. ':'')+'Lowest haunch at the flange edge: '+(m.hE*12).toFixed(2)+' in (span '+m.span+', G'+m.g+'); h<sub>min</sub> = '+(m.hmin*12).toFixed(2)+' in.',to:'Beam Seat Output · Seat working · midspan haunch check'}); }
+  const V=(o,nm,tab,el,to)=>{ if(!o) { P(nm,'not run',{hd:'Checks',s:'',tab,el,d:'Press Check to compare.',to}); return; }
+    const stale=o.eng!==ENG; P(nm,o.pass+' / '+o.n,{st:stale?'warn':(o.n&&o.pass===o.n?'pass':'fail'),s:stale?'re-run':(o.n&&o.pass===o.n?'OK':'OUT'),hd:'Checks',tab,el,
+      d:'Within ±'+o.tol+' ft'+(stale?'; the geometry changed since the last Check: press Check again.':'.'),to}); };
+  if(VALPTS.length||BGLS.val) V(BGLS.val,'Elevation check','output','val_wrap','Top of Deck Output · Validation · known points');
+  if(HVALPTS.length||BGLS.hval) V(BGLS.hval,'Coordinate check','output','hval_wrap','Top of Deck Output · Validation · horizontal');
+  return it;
+}
+function bgDashGo(it){
+  const b=document.querySelector('.tabbtn[data-tab="'+it.tab+'"]'); if(b&&b.getAttribute('aria-selected')!=='true') b.click();
+  const e=document.getElementById(it.el); if(!e) return; const t=(e.offsetParent===null&&e.closest('details'))?e.closest('details'):e;
+  if(t.tagName==='DETAILS') t.open=true;
+  requestAnimationFrame(()=>{ t.scrollIntoView({block:'start',behavior:'smooth'}); t.classList.add('bgFlash'); setTimeout(()=>t.classList.remove('bgFlash'),1600); });
+}
+function bgDashRender(){
+  const box=document.getElementById('bgDash'), cnt=document.getElementById('bgDashCnt'), sub=document.getElementById('bgDashSub'); if(!box) return;
+  box.innerHTML=''; const items=bgDashItems(), n={pass:0,fail:0,warn:0}, ST={pass:'OK',fail:'NG',warn:'',na:''};
+  const plain=h=>{ const t=document.createElement('div'); t.innerHTML=h||''; return t.textContent; };
+  sub.textContent=(typeof CURRENT_NAME!=='undefined'&&CURRENT_NAME?CURRENT_NAME+' · ':'')+sortedUnits().length+' supports · elevations in ft';
+  if(!items.length){ box.innerHTML='<div class="bgDMsg">Define at least two substructure units.</div>'; cnt.innerHTML=''; return; }
+  let hd=null;
+  items.forEach(it=>{
+    if(n[it.st]!=null) n[it.st]++;
+    if(it.hd!==hd){ hd=it.hd; const h=document.createElement('div'); h.className='bgDHd'; h.textContent=hd; box.appendChild(h); }
+    const c=document.createElement('div'); c.className='bgCh '+it.st; c.tabIndex=0; c.setAttribute('role','button');
+    const key=plain(it.n);
+    c.innerHTML='<button type="button" class="bgChX" title="Show the details and where the value is worked"'+(it.d?'':' disabled')+'></button><span class="bgChN">'+it.n+'</span><span class="bgChR">'+it.v+'</span><span class="bgChS">'+(it.s!=null?it.s:ST[it.st])+'</span>'
+      +(it.d?'<div class="bgChV">'+it.d+'</div>':'')+'<div class="bgChRef">→ '+it.to+'</div>';
+    c.title=key+': '+plain(it.v)+(it.d?'\n'+plain(String(it.d).replace(/<br>/g,'\n')):'')+'\nClick: → '+it.to;
+    const x=c.querySelector('.bgChX');
+    const setOpen=o=>{ c.classList.toggle('bgOpen',o); x.setAttribute('aria-expanded',o?'true':'false'); x.textContent=o?'▾':'▸'; };
+    setOpen(BGLS.open.has(key)?BGLS.open.get(key):(it.st==='fail'||it.st==='warn'));   /* NG and warning chips open by default, as in the other tools */
+    x.addEventListener('click',ev=>{ ev.preventDefault(); ev.stopPropagation(); const o=!c.classList.contains('bgOpen'); BGLS.open.set(key,o); setOpen(o); });
+    c.addEventListener('click',()=>bgDashGo(it)); c.addEventListener('keydown',ev=>{ if(ev.target!==c) return; if(ev.key==='Enter'||ev.key===' '){ ev.preventDefault(); bgDashGo(it); } });
+    box.appendChild(c);
+  });
+  cnt.innerHTML=(n.fail?'<span class="bgCf">'+n.fail+' NG</span>':'')+(n.warn?'<span class="bgCw">'+n.warn+' warn</span>':'')+(n.pass&&!n.fail?'<span class="bgCp">no NG</span>':'');
+}
+function bgDashPlace(){
+  const wide=!!(BGLS.mq&&BGLS.mq.matches), ch=BGLS.wide!==null&&BGLS.wide!==wide; BGLS.wide=wide;
+  document.body.classList.toggle('bgDashWide',wide); bgDashColl(BGLS.coll,false,ch);
+}
+function bgDashColl(v,save,redraw){
+  BGLS.coll=!!v; document.body.classList.toggle('bgDashColl',BGLS.coll);
+  const t=document.getElementById('bgDashTgl');
+  if(t){ t.setAttribute('aria-expanded',BGLS.coll?'false':'true'); t.innerHTML=BGLS.coll?'&raquo;':'&laquo;'; t.title=BGLS.coll?'Show the results summary column (remembered in this browser)':'Shrink the results summary column (remembered in this browser)'; }
+  if(save){ try{ localStorage.setItem(BGLS.key,BGLS.coll?'1':'0'); }catch(e){} }
+  if(save||redraw) requestAnimationFrame(()=>window.dispatchEvent(new Event('resize')));   /* the plots changed width */
+}
+(function(){ const t=document.getElementById('bgDashTgl'); if(t) t.addEventListener('click',()=>bgDashColl(!BGLS.coll,true));
+  if(BGLS.mq){ if(BGLS.mq.addEventListener) BGLS.mq.addEventListener('change',bgDashPlace); else if(BGLS.mq.addListener) BGLS.mq.addListener(bgDashPlace); }
+  bgDashPlace(); })();   /* placed before the first compute, so the plots are drawn at the main column's width */
+document.addEventListener('DOMContentLoaded',bgDashRender);
 /* BGNL: a list of plain-text warnings into a box: one warning as its text, two or more as a list (each text unchanged) */
 function bgNLWarn(box,list){ list=list||[]; if(list.length<2){ box.textContent=list.join(''); return; }
   box.innerHTML='<ul class="bgNLu">'+list.map(t=>'<li>'+String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))+'</li>').join('')+'</ul>'; }
@@ -1591,7 +1722,7 @@ function showGeomWarnings(ws){
 }
 function compute(){
   const gErr=geometryInputErrors(); showGeomErrors(gErr);
-  if(gErr.length){ if(_autosaveArmed) autosave(); return; }
+  if(gErr.length){ bgDashRender(); if(_autosaveArmed) autosave(); return; }
   ENG=buildEngine();
   showGeomWarnings(geometryWarnings());
   buildElemReport();   // BGX7 (report only)
@@ -1604,6 +1735,7 @@ function compute(){
   if(typeof bgdwRefresh==='function') bgdwRefresh();   // BGDW: the Drawings tab, when it is open
   document.getElementById('plan_len').textContent='L = '+(ENG.align.staEnd-ENG.align.staStart).toFixed(1)+' ft';
   if(typeof PICKPTS!=='undefined' && PICKPTS.length) recomputePickPoints();
+  bgDashRender();   /* BGLS: the summary column */
   if(_autosaveArmed) autosave();
 }
 
@@ -1873,7 +2005,7 @@ function buildElemReport(){
     if(A&&C&&B&&A.t==='spi'&&A.into&&C.t==='crv'&&B.t==='spi'&&!B.into&&Math.abs(A.Rc-C.R)<1e-6&&Math.abs(B.Rc-C.R)<1e-6&&Math.abs(A.L-B.L)<1e-6){
       const D=C.D+A.th+B.th, R=C.R; rows.push(`<tr><td class="lbl">${i+1}–${i+3}</td><td class="lbl">Spiral–curve–spiral</td><td class="lbl" style="text-align:left;white-space:normal">total Δ ${dms(D)} · Ts ${F((R+A.p)*Math.tan(D/2)+A.k)} · Es ${F((R+A.p)/Math.cos(D/2)-R)} · Δc ${dms(C.D)}</td></tr>`); } }
   box.innerHTML=rows.length?`<table class="wide" style="font-size:11px;margin-top:6px"><thead><tr><th class="lbl">#</th><th class="lbl">Element</th><th class="lbl" style="text-align:left">elements (ft, deg; coordinates as entered at the POB)</th></tr></thead><tbody>${rows.join('')}</tbody></table>`+
-    `<p class="note" style="margin:4px 0 0">Report only. Curves: arc definition (the tool's curves are arcs); D for a 100 ft arc and a 100 ft chord. Spirals: clothoid, offsets measured from the tangent at the TS / ST.</p>`:'<p class="note">No curve or spiral.</p>';
+    `<div class="note bgNL" style="margin:4px 0 0">${bgNL('Report only.',[['Curves:',"arc definition (the tool's curves are arcs); D for a 100 ft arc and a 100 ft chord."],['Spirals:','clothoid, offsets measured from the tangent at the TS / ST.']])}</div>`:'<p class="note">No curve or spiral.</p>';
 }
 let PLANVIEWXF=null;
 
@@ -2894,8 +3026,13 @@ function buildTable(){
         h+='</tr>';
       });
     }
-    h+=`</tbody></table><p class="note">${seat?'Beam-seat':'Top-of-deck'} elevations per span. Rows are the even divisions plus each support centerline and bearing line (highlighted). Curb offsets interpolate between supports; columns G1..Gn use the global girder set (per-span overrides apply when counts match).`+
-      ` Every row, including those named "… CL" and "… brg", is a line square to the construction reference line through the reference-line point at that station; on a skewed support it is <b>not</b> the support line. For elevations along the skewed support and bearing lines use Rows = bearing lines (above) or the Beam Seat tab. Grey italic values lie beyond the skewed deck end.</p>`;   // BGX9 (review M4)
+    h+=`</tbody></table><div class="note bgNL">`+bgNL(`${seat?'Beam-seat':'Top-of-deck'} elevations per span.`,[   /* BGNL: the same facts as a list */
+      ['Rows:','the even divisions plus each support centerline and bearing line (highlighted).'],
+      ['Curb offsets:','interpolate between supports.'],
+      ['Columns G1..Gn:','use the global girder set (per-span overrides apply when counts match).'],
+      ['Every row,','including those named "… CL" and "… brg", is a line square to the construction reference line through the reference-line point at that station; on a skewed support it is <b>not</b> the support line.'],
+      ['Along the skewed support and bearing lines:','use Rows = bearing lines (above) or the Beam Seat tab.'],
+      ['Grey italic values:','lie beyond the skewed deck end.']])+`</div>`;   // BGX9 (review M4)
   } else {
     h='<table class="wide"><thead><tr><th class="lbl">Line</th><th>Skew°</th>'+
       TH('edgeL','<th>Edge L</th>')+TH('curbL','<th>Curb L</th>');
@@ -2991,34 +3128,48 @@ function buildGirderTenths(){
     girdersForSpan(k).forEach((o,bi)=>{ const w=o-bridgeCL(), tA=ENG.supT(sb.A,w), tB=ENG.supT(sb.B,w), pA=ENG.deckPointCW(tA,w), pB=ENG.deckPointCW(tB,w);
       h+=`<tr><td class="lbl">${k}</td><td class="lbl">G${bi+1}@${w.toFixed(2)}</td><td class="lbl">${sb.A.label} &rarr; ${sb.B.label}</td><td>${Math.hypot(pB.x-pA.x,pB.y-pA.y).toFixed(2)}</td>`+
         [0,1,2,3,4,5,6,7,8,9,10].map(j=>`<td>${ENG.deckPointCW(tA+(tB-tA)*j/10,w).z.toFixed(3)}</td>`).join('')+'</tr>'; }); }
-  h+='</tbody></table><p class="note" style="margin:4px 0 0">Top of deck (ft) over each girder at tenth points of its bearing-to-bearing length (0.0 = the span\'s start bearing line, 1.0 = its end bearing line); L is measured along the girder in plan. For haunch and screed work (CTDOT BDM 8.3.2 asks for deck elevations at bearings and tenth points) subtract the deck thickness and add the dead-load deflections; those are not modelled here.</p>';
+  h+='</tbody></table><div class="note bgNL" style="margin:4px 0 0">'+bgNL('Top of deck (ft) over each girder at tenth points of its bearing-to-bearing length.',[   /* BGNL */
+    ['Tenth points:','0.0 = the span\'s start bearing line, 1.0 = its end bearing line.'],
+    ['L:','measured along the girder in plan.'],
+    ['For haunch and screed work</b> (CTDOT BDM 8.3.2 asks for deck elevations at bearings and tenth points)<b class="bgNLk">:','subtract the deck thickness and add the dead-load deflections; those are not modelled here.']])+'</div>';
   box.innerHTML=h;
 }
 function buildSeatWork(){
-  const box=document.getElementById('seat_work_wrap'); if(!box) return;
+  const box=document.getElementById('seat_work_wrap'); if(!box) return; BGLS.haunch=null;   /* BGLS: set again below */
   const su=sortedUnits(); if(su.length<2||!ENG||!ENG.chord||!ENG.girderSag){ box.innerHTML='<p class="note">Define at least two substructure units.</p>'; return; }
   const ST=ENG.seatTerms(), F=v=>v.toFixed(3), IN=v=>(v*12).toFixed(2);
   const esc=t=>String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-  let h=`<p class="note" style="margin-top:0;">Each seat worked out (ft): <b>seat = TD − t<sub>s</sub> − (h<sub>min</sub> + c`+(ST.on?' + m<sub>sag</sub> + Δ<sub>cs</sub>':'')+`) − d − t<sub>brg</sub></b>. TD = top of deck at the girder on the bearing line (Top of Deck Output); t<sub>s</sub> deck thickness; h<sub>min</sub> minimum haunch; c net camber; d beam depth; t<sub>brg</sub> bearing assembly (Bridge tab, per-beam overrides applied). `+
-    (ST.on?`m<sub>sag</sub> = the deck's sag ordinate along the girder over the span the bearing carries, (TD<sub>A</sub> + TD<sub>B</sub>)/2 − TD<sub>mid</sub> (a crest is not used; a single bearing line at a pier takes the larger of its two spans); Δ<sub>cs</sub> = how far the deck falls across the top flange, b<sub>f</sub> = ${IN(ST.bf)} in`+(ST.bf>0?'':' (0: not used)')+`.`
-      :`<b>Seat terms are off</b> for this project (saved before 2026-11-07, or switched off on the Bridge tab): m<sub>sag</sub> and Δ<sub>cs</sub> are worked below but not applied; the seats are as before. Basis: MassDOT Bridge Manual Part I 3.5.6.3, CTDOT BDM 7.2.11.1 and 8.1.2.4, RIDOT BDM 9.4.6 (see the note under the check).`)+`</p>`;
+  let h=`<div class="note bgNL" style="margin-top:0;">`+bgNL(`Each seat worked out (ft): seat = TD − t<sub>s</sub> − (h<sub>min</sub> + c`+(ST.on?' + m<sub>sag</sub> + Δ<sub>cs</sub>':'')+`) − d − t<sub>brg</sub>.`,[   /* BGNL: the symbols as a list */
+    ['TD','= top of deck at the girder on the bearing line (Top of Deck Output);'],
+    ['t<sub>s</sub>','deck thickness;'],['h<sub>min</sub>','minimum haunch;'],['c','net camber;'],['d','beam depth;'],
+    ['t<sub>brg</sub>','bearing assembly (Bridge tab, per-beam overrides applied).'],
+    ...(ST.on?[['m<sub>sag</sub>',"= the deck's sag ordinate along the girder over the span the bearing carries, (TD<sub>A</sub> + TD<sub>B</sub>)/2 − TD<sub>mid</sub> (a crest is not used; a single bearing line at a pier takes the larger of its two spans);"],
+      ['Δ<sub>cs</sub>',`= how far the deck falls across the top flange, b<sub>f</sub> = ${IN(ST.bf)} in`+(ST.bf>0?'':' (0: not used)')+`.`]]
+      :[['Seat terms are off','for this project (saved before 2026-11-07, or switched off on the Bridge tab): m<sub>sag</sub> and Δ<sub>cs</sub> are worked below but not applied; the seats are as before.'],
+        ['Basis:','MassDOT Bridge Manual Part I 3.5.6.3, CTDOT BDM 7.2.11.1 and 8.1.2.4, RIDOT BDM 9.4.6 (see the note under the check).']])])+`</div>`;
   h+='<details><summary class="note" style="cursor:pointer">Working of every seat ('+seatData().reduce((n,r)=>n+r.seats.length,0)+')</summary><table class="wide" style="font-size:11px"><thead><tr><th class="lbl">Bearing line</th><th class="lbl">Girder</th><th class="lbl" style="text-align:left">working</th></tr></thead><tbody>';
   seatData().forEach(r=>r.seats.forEach((q,k)=>{ if(q.parts) h+=`<tr><td class="lbl">${esc(r.label)}</td><td class="lbl">G${k+1}</td><td class="lbl" style="text-align:left;white-space:normal">${esc(seatWorkText(q))}</td></tr>`; }));
   h+='</tbody></table></details>';
   // midspan haunch check: girder straight between its two seats, rising by the net camber at midspan
   h+='<table class="wide" style="margin-top:10px"><thead><tr><th class="lbl">Span</th><th class="lbl">Girder</th><th title="Distance between the girder\'s two bearing points (along the girder).">L<sub>brg</sub> (ft)</th><th title="Top of deck at the girder at the start / end bearing and at midspan between them.">TD<sub>A</sub> / TD<sub>B</sub> / TD<sub>mid</sub></th><th title="(TD_A + TD_B)/2 − TD_mid. Positive = sag (deck below the chord at midspan); negative = crest.">m (in)</th><th title="Top of girder at midspan = (TOG_A + TOG_B)/2 + net camber, TOG = seat + bearing + beam depth.">TOG<sub>mid</sub></th><th title="Haunch at the girder centerline at midspan = TD_mid − t_s − TOG_mid.">haunch CL (in)</th><th title="Fall of the deck across the top flange at midspan.">Δ<sub>cs</sub> (in)</th><th title="Haunch at the low flange edge = haunch CL − Δ_cs.">haunch edge (in)</th><th>h<sub>min</sub> (in)</th><th class="lbl">check</th></tr></thead><tbody>';
-  let low=0;
+  let low=0; const hk={n:0,low:0,min:null};   /* BGLS: the check's counts and lowest edge haunch, kept for the summary column (display only) */
   for(let k=1;k<=su.length-1;k++){ const sb=ENG.spanBrgs(k); girdersForSpan(k).forEach((o,bi)=>{
     const r=ENG.girderSag(k,bi); if(!r) return;
     const sA=ENG.beamSeatAtSupport(sb.A,o,{bi,span:k}).z, sB=ENG.beamSeatAtSupport(sb.B,o,{bi,span:k}).z;
     const tog=v=>v+resolveDepth('bearing',bi,k)+resolveDepth('beam',bi,k), c=resolveDepth('camber',bi,k);
     const togM=(tog(sA)+tog(sB))/2+c, hCL=r.zM-ENG.depths.slab-togM, dcs=ENG.crossDrop(r.tM,r.w), hE=hCL-dcs, hmin=ENG.depths.minHaunch, ok=hE>=hmin-0.0005;
     if(!ok) low++;
+    hk.n++; if(hk.min===null||hE<hk.min.hE) hk.min={hE,hmin,span:k,g:bi+1};
     h+=`<tr><td class="lbl">${k}</td><td class="lbl">G${bi+1}</td><td>${r.len.toFixed(2)}</td><td>${F(r.zA)} / ${F(r.zB)} / ${F(r.zM)}</td><td>${IN(r.m)}</td><td>${F(togM)}</td><td>${IN(hCL)}</td><td>${IN(dcs)}</td><td>${IN(hE)}</td><td>${IN(hmin)}</td>`+
        `<td class="lbl" style="color:${ok?'var(--good)':'var(--oxide)'}">${ok?'OK':'LOW by '+IN(hmin-hE)+' in'}</td></tr>`; }); }
-  h+='</tbody></table>';
-  h+=`<p class="note" style="margin:6px 0 0;${low?'color:var(--oxide)':''}">${low?`<b>${low} girder(s) have less than the minimum haunch at midspan</b> at the low flange edge.${ST.on?'':' Tick Seat terms on the Bridge tab to lower the seats by the sag ordinate and the cross-slope term.'}`:'Every girder keeps at least the minimum haunch at midspan (at the low flange edge when b<sub>f</sub> is given).'} `+
-     `The girder is taken straight between its two seats and rising by the net camber at midspan; the minimum haunch is checked at the low edge of the top flange. Owner practice (paraphrased): MassDOT Bridge Manual Part I 3.5.6.3: prestressed beam camber is considered with the profile's vertical curvature when setting seat elevations, and the deck is not thinned by a negative haunch; CTDOT BDM (02/24) 7.2.11.1 item 5: on a sag vertical curve the ordinate goes in the haunch (on a crest, in the steel camber) and 8.1.2.4: minimum haunch from the top of the top flange, deeper where a wide flange meets the cross slope; RIDOT BDM (2026) 9.4.6: minimum nominal haunch at the girder centerline, deeper for flanges wider than 16 in on a cross slope, and profile, cross slope and camber considered.</p>`;
+  h+='</tbody></table>'; hk.low=low; BGLS.haunch=hk;
+  h+=`<div class="note bgNL" style="margin:6px 0 0;">`+bgNL(low?'':'Every girder keeps at least the minimum haunch at midspan (at the low flange edge when b<sub>f</sub> is given).',[   /* BGNL: the action line first (warning colour), then the method and the owner practice as a list */
+     ['Method:','the girder is taken straight between its two seats and rising by the net camber at midspan; the minimum haunch is checked at the low edge of the top flange.'],
+     '<b class="bgNLk">Owner practice (paraphrased):</b><ul class="bgNLu">'+
+     "<li><b class=\"bgNLk\">MassDOT Bridge Manual Part I 3.5.6.3:</b> prestressed beam camber is considered with the profile's vertical curvature when setting seat elevations, and the deck is not thinned by a negative haunch;</li>"+
+     '<li><b class="bgNLk">CTDOT BDM (02/24) 7.2.11.1 item 5:</b> on a sag vertical curve the ordinate goes in the haunch (on a crest, in the steel camber) and <b class="bgNLk">8.1.2.4:</b> minimum haunch from the top of the top flange, deeper where a wide flange meets the cross slope;</li>'+
+     '<li><b class="bgNLk">RIDOT BDM (2026) 9.4.6:</b> minimum nominal haunch at the girder centerline, deeper for flanges wider than 16 in on a cross slope, and profile, cross slope and camber considered.</li></ul>'],
+     {act:low?[`<b>${low} girder(s) have less than the minimum haunch at midspan</b> at the low flange edge.${ST.on?'':' Tick Seat terms on the Bridge tab to lower the seats by the sag ordinate and the cross-slope term.'}`]:[]})+`</div>`;
   box.innerHTML=h;
 }
 // stacked cross-section per bearing line
@@ -3032,7 +3183,7 @@ function buildSeatSections(){
     html+=`<div class="svgcard" style="margin-bottom:14px;">
       <div class="cap"><span>${r.label}</span><span class="pill">${formatStation(r.sta)}</span>
         <span class="note" style="text-transform:none;letter-spacing:0;">span ${r.span} · skew ${r.skew.toFixed(1)}°</span></div>
-      <div id="seatsec_${idx}" class="plotbox" style="height:320px"></div>${r.seats.some(q=>q.parts)?`<div class="note" style="font-size:10.5px;margin:4px 8px 6px;">${r.seats.map((q,k)=>'G'+(k+1)+': '+seatWorkText(q).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))).join('<br>')} &middot; <a href="#seat_work_h">all seats and the midspan haunch check</a></div>`:''}</div>`;   // BGX5 (§6): the working
+      <div id="seatsec_${idx}" class="plotbox" style="height:320px"></div>${r.seats.some(q=>q.parts)?`<div class="note bgNL" style="font-size:10.5px;margin:4px 8px 6px;">${bgNL('',r.seats.map((q,k)=>['G'+(k+1)+':',seatWorkText(q).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))]))}<a href="#seat_work_h">All seats and the midspan haunch check</a></div>`:''}</div>`;   // BGX5 (§6): the working
   });
   host.innerHTML=html;
   data.forEach((r,idx)=>drawSeatSection('seatsec_'+idx, r));
@@ -3314,6 +3465,7 @@ function runValidation(){
   });
   h+=`</tbody></table><p class="note">${pass}/${n} within &plusmn;${tol} ft. Overlay thickness in use: ${(ENG.depths.hma*12).toFixed(2)} in &mdash; top of pavement is top of deck plus this.</p>`;
   document.getElementById('val_wrap').innerHTML=h;
+  BGLS.val={pass,n,tol,eng:ENG}; bgDashRender();   /* BGLS: the last Check, for the summary column */
 }
 
 // Horizontal validation: {label, n, e, expStaStr, expOff, datum}
@@ -3409,6 +3561,7 @@ function runHValidation(){
   });
   h+=`</tbody></table><p class="note">${pass}/${n} within &plusmn;${tol} ft in both station and offset.</p>`;
   document.getElementById('hval_wrap').innerHTML=h;
+  BGLS.hval={pass,n,tol,eng:ENG}; bgDashRender();   /* BGLS */
 }
 
 /* ===== ALIGNMENT / PVI / GIRDER TABLE UI ===== */
@@ -5509,7 +5662,10 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
     dlg.querySelector('#bgx_do_send').disabled=!ok; dlg.querySelector('#bgx_do_export').disabled=!ok;
     if(r.error){ out.innerHTML='<p style="color:var(--oxide);margin:6px 0">'+escT(r.error)+'</p>'; return null; }
     out.innerHTML=(need?'<p style="color:var(--oxide);margin:6px 0;font-size:12px"><b>Choose &ldquo;Skew sent&rdquo;</b> (for moment DFs or for shear DFs) before sending.</p>':'')
-      +(r.skewWarn?'<p style="color:var(--oxide);margin:6px 0;font-size:12px"><b>Skews differ between supports.</b> LL &amp; DL takes both values from this hand-off in one run: the moment skew for the moment DFs and the shear skew (largest) for the shear DFs. The single &ldquo;Skew sent&rdquo; value matters only to a reader that does not use the moment / shear detail (see the notes).</p>':'')
+      +(r.skewWarn?'<div class="bgNL" style="color:var(--oxide);margin:6px 0;font-size:12px">'+bgNL('',[   /* BGNL (display only; the payload and its notes are unchanged) */
+          ['LL &amp; DL','takes both values from this hand-off in one run:'],
+          ['Moment DFs:','the moment skew;'],['Shear DFs:','the shear skew (largest).'],
+          ['The single &ldquo;Skew sent&rdquo; value','matters only to a reader that does not use the moment / shear detail (see the notes).']],{act:['<b>Skews differ between supports.</b>']})+'</div>':'')
       +'<table style="font-size:12px;margin:6px 0"><tbody>'+r.summary.map(x=>'<tr><td class="lbl" style="text-align:left">'+escT(x[0])+'</td><td style="text-align:left">'+escT(x[1])+'</td></tr>').join('')+'</tbody></table>'
       +'<p class="note" style="margin:4px 0 0">Notes sent with the data (shown in LL &amp; DL):</p><ul class="note" style="margin:2px 0 0 18px;padding:0">'+r.payload.notes.map(t=>'<li>'+escT(t)+'</li>').join('')+'</ul>';
     return ok?r:null;
@@ -5945,7 +6101,13 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
         +'</div>'
         +'<div style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:10px">'+CHK.map(([k,t])=>'<label class="cfg"><input type="checkbox" id="dxf_c_'+k+'"> '+t+'</label>').join('')+'</div>'
         +'<p class="note" id="dxf_basis" style="margin:8px 0 0"></p>'
-        +'<p class="note" style="margin:6px 0 0">Layers: <b>BG-ALIGN</b> (PGL; circular curves as arcs, spirals as polylines), <b>BG-ALIGN-TICK</b>, <b>BG-ALIGN-TEXT</b>; <b>BG-BRG-CL</b> support centerlines, <b>BG-BRG</b> back/ahead bearing lines, <b>BG-BRG-TEXT</b>; <b>BG-GIRDER</b>; <b>BG-DECK</b>; <b>BG-CURB</b>; <b>BG-REFLINE</b>; <b>BG-ELEV-PT</b> (points at top-of-deck elevation) and <b>BG-ELEV-TEXT</b> (TD / BS); <b>BG-PICK</b>; <b>BG-NOTES</b>; profile on <b>BG-PROF</b>, <b>BG-PROF-TAN</b>, <b>BG-PROF-GRID</b>, <b>BG-PROF-BRG</b>, <b>BG-PROF-TEXT</b>. Verify against the survey.</p>'
+        +'<div class="note bgNL" style="margin:6px 0 0">'+bgNL('Layers (verify against the survey):',[   /* BGNL */
+          ['Alignment:','<b>BG-ALIGN</b> (PGL; circular curves as arcs, spirals as polylines), <b>BG-ALIGN-TICK</b>, <b>BG-ALIGN-TEXT</b>;'],
+          ['Supports:','<b>BG-BRG-CL</b> support centerlines, <b>BG-BRG</b> back/ahead bearing lines, <b>BG-BRG-TEXT</b>;'],
+          ['Superstructure:','<b>BG-GIRDER</b>; <b>BG-DECK</b>; <b>BG-CURB</b>; <b>BG-REFLINE</b>;'],
+          ['Elevations:','<b>BG-ELEV-PT</b> (points at top-of-deck elevation) and <b>BG-ELEV-TEXT</b> (TD / BS);'],
+          ['Other:','<b>BG-PICK</b>; <b>BG-NOTES</b>;'],
+          ['Profile:','on <b>BG-PROF</b>, <b>BG-PROF-TAN</b>, <b>BG-PROF-GRID</b>, <b>BG-PROF-BRG</b>, <b>BG-PROF-TEXT</b>.']])+'</div>'
         +'<p class="note" id="dxf_msg" style="margin:8px 0 0"></p>'
         +'<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button class="sm" id="dxf_do" type="button">Download DXF</button>'
         +'<button class="sm ghost" id="dxf_cancel" type="button" style="margin-left:auto">Cancel</button></div></div>';
@@ -6274,7 +6436,11 @@ function bgdwRender(){
     '<button type="button" class="sm ghost" id="bgdwPrint1" title="Print the sheet shown: one 11 x 17 in landscape page at its plot scale">Print sheet</button> '+
     '<button type="button" class="sm ghost" id="bgdwPrintAll" title="Print every sheet: one 11 x 17 in landscape page per sheet, each at its plot scale">Print all sheets ('+B.S.length+')</button></div>'+
     '<p class="note">'+bgdwEsc(SharedDxf.PRINT_NOTE)+'</p>'+
-    '<p class="note">One DXF file (AutoCAD R12, model space, full size in inches): each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side; the plan and framing plans are in a local frame (+X along the construction reference line from Abut 1). The <b>Export DXF</b> button above (plan and profile in State Plane or local feet) is unchanged. Title block: the shared project info (Project, Job #, Prepared by, Checked by, Date) and the bridge name.</p>'+
+    '<div class="note bgNL">'+bgNL('One DXF file (AutoCAD R12, model space, full size in inches).',[   /* BGNL */
+      ['Sheets:','each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side.'],
+      ['Frame:','the plan and framing plans are in a local frame (+X along the construction reference line from Abut 1).'],
+      ['Other export:','the <b>Export DXF</b> button above (plan and profile in State Plane or local feet) is unchanged.'],
+      ['Title block:','the shared project info (Project, Job #, Prepared by, Checked by, Date) and the bridge name.']])+'</div>'+
     '<div class="bgdwHead"><b>'+(B.S.indexOf(cur)+1)+'. '+bgdwEsc(cur.title)+'</b> · scale '+bgdwEsc(cur.k===1?'NTS (paper inches)':cur.scale)+(cur.over?' · <span style="color:var(--oxide)">does not fit the sheet even at the smallest scale</span>':'')+'</div>'+
     '<div class="bgdwBox"></div><p class="note">Wheel: zoom about the cursor · drag: pan · pinch · double-click: fit · + / − / Fit buttons.</p>'+
     '<div style="overflow-x:auto"><table class="bgdwIdx"><thead><tr><th class="lbl">No.</th><th class="lbl">Sheet</th><th class="lbl">Scale</th><th class="lbl">Worked on</th></tr></thead><tbody>'+B.S.map((s,j)=>
