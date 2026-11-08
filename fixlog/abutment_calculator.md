@@ -16553,7 +16553,7 @@ Engineer instruction (2026-11-07, paraphrased): "same deal for the abutment" as 
 ### Saved data
 - No input, key or format change; `meta.defRev` unchanged. Old pile saves open with the mat at c_F (engineer instruction: no option); Input IDs unchanged.
 
-## 2026-11-08 — PR: notes-list-abutment (PR #TBD) (ABNL-1: long notes on Tabs 1–4, the warnings list and the Report summary as a bold lead and a list; display only, no result change)
+## 2026-11-08 — PR: notes-list-abutment (PR #1205: https://github.com/mlococo88/All-Structural/pull/1205) (ABNL-1: long notes on Tabs 1–4, the warnings list and the Report summary as a bold lead and a list; display only, no result change)
 
 ### ABNL-1. Long notes split into a lead line and a list   [display only] [no result change]
 - **Request (engineer, 2026-11-07, approved for all apps):** "There are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Part 1 of 2 (Tabs 1–4, warnings, Report summary; Tabs 5–10 in ABNL-2).
