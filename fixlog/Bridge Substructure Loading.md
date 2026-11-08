@@ -2563,3 +2563,16 @@ function listTables() {
 - **Decision (pending engineer review):** in the Manual the section heading (h3) or the item's existing bold lead serves as the bold lead; the first sentence stays as the item's opening line.
 - **Decision (pending engineer review), Part B (left summary panel) not added to SubLoads:** the tool is a load generator with no capacity checks (no D/C, PASS/FAIL); its key results are per-unit force tables already summarised on the Combinations tab and in the Report's "Governing design forces"; and the left column is already the input sidebar (360 px), so a further 240–280 px column from 1200 px would leave the force tables about 600 px wide.
 - **Other copies:** none.
+
+## 2026-11-08 — PR: claude/sf-rename-bsl (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SFNM-B) — Spread Footing shown as "Shallow Foundation Design"   [display only]
+- **Why:** Spread Footing's displayed name is now "Shallow Foundation Design" (engineer request 2026-11-08; #1236). Its file name and hand-off receiver are unchanged.
+- **Before → after** (anchor = the "after" text):
+  - Foundation-loads dialog: `<p>Combined loads … per limit state, for Pile Designer and Spread Footing (channel foundationLoads).</p>` → `… for Pile Designer and Shallow Foundation Design (channel foundationLoads).</p>`.
+  - Flash after sending: `Open Pile Designer or Spread Footing and pull them.` → `Open Pile Designer or Shallow Foundation Design and pull them.`
+  - `#btn-fdx` tooltip: `… for Pile Designer and Spread Footing; or export …` → `… for Pile Designer and Shallow Foundation Design; or export …`.
+  - Project tab group heading: `G('To Pile Designer and Spread Footing', …` → `G('To Pile Designer and Shallow Foundation Design', …`.
+- **Left unchanged:** the footing option "Spread footing or pile cap" (a foundation type, not the app); code comments. No payload text changed.
+- **Formulas, factors, units, code references:** none (§4). **Saved data / hand-off format:** none (§5).
+- **Check case:** Project tab → the group reads "To Pile Designer and Shallow Foundation Design". Results are unchanged.
+- **How verified:** check-syntax; `node tests/engine/run.mjs handoffs` (10 / 10); page opened, 0 console errors.
+- **Other copies:** none.
