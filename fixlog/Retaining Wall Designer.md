@@ -6616,6 +6616,75 @@ None: no computed value changes. Only worked-step text (tab and Report).
 ### Open items (not changed; for the engineer)
 - `M_wedge_heel` / `V_wedge_heel` (anchor `const M_wedge_heel = inp.beta > 0 ? inp.gamma_s * tanB * (dT_ft`) use Δt = t_bot − t_top, while the stability wedge uses L from the stem back face at the grade (t_bot − t_g, RWHP). With h_p > 0 and β > 0 the heel wedge is taken from the stem top thickness rather than the thickness at the grade (slightly larger heel load). Decision needed: use t_g in the heel wedge as in the stability analysis?
 
+## 2026-11-08 — PR: nl-retwall-a (PR #1182: https://github.com/mlococo88/All-Structural/pull/1182) — Long notes as a bold lead and a list: input panel, Stability, Stem design and Footing design tabs, and their Report notes (RWNL-1; display only, no result change)
+
+### RWNL-1. Long notes split into a lead line and a list   [display only] [no result change]
+- **Request (engineer, 2026-11-07/08):** "there are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Approved for all tools. Part 1 of 2 (the Piles, 3D model and Drawings tabs, the warnings list and the Report's own notes are RWNL-2). Pattern as Spread Footing SFNL-1/2 (#1167).
+- **Rule used:** a note is long if it is over ~300 characters, has 3 or more sentences, or carries several facts in one paragraph. It becomes a one-line lead, then a list whose items start with bold lead words. Every sentence, number, citation and link is kept, in the same order; only the lead words, list-start capitals and end punctuation are new. New lead words carry no digits, so the digit sequence of every tab is unchanged.
+- **New helper** (before `const HINTS = {`), anchor `/* RWNL (2026-11-08, engineer:`:
+  ```js
+  function rwNL(lead, items, o) {
+    o = o || {}; const L = o.ol ? 'ol' : 'ul';
+    const li = (items || []).filter(Boolean).map(x => '<li>' + (Array.isArray(x) ? '<b class="rwNLk">' + x[0] + '</b> ' + x[1] : x) + '</li>').join('');
+    return '<div class="rwNL">' + (o.act || []).filter(Boolean).map(a => '<div class="rwNLa">' + a + '</div>').join('')
+      + (lead ? '<div class="rwNLl">' + lead + '</div>' : '') + (li ? '<' + L + ' class="rwNLu">' + li + '</' + L + '>' : '') + '</div>';
+  }
+  ```
+  A note becomes `<div class="alert info">${rwNL(lead, [[leadWords, text], …])}</div>` (the static input-panel notes carry the same markup written out). `null` items are skipped (conditional facts).
+- **CSS** (after `.hint:not(.static) {…}`), tool-scoped, no new colours (inherits the note / hint / alert colours, so print and screen are as before):
+  ```css
+  .rwNL .rwNLl { font-weight: 600; margin: 0 0 1px; }
+  .rwNL .rwNLu { margin: 2px 0 3px; padding-left: 18px; }
+  .rwNL .rwNLu > li { margin: 1px 0; }
+  .rwNL .rwNLa { font-weight: 600; margin: 0 0 3px; }
+  @media print { .rwNL .rwNLu > li { break-inside: avoid; } }
+  ```
+- **Report** (`rwrTabNotes`, anchor `t.content.querySelectorAll('.alert').forEach(e => {`): an alert holding an `.rwNL` prints as one Report note per part (new `rwrNLParts(e, txt)`, before `function rwrAddNotes(`): the text before it, the lead, each item as "• lead words text", the text after it; the card title prefixes the first part, the warn flag is the alert's. Before, the alert printed as one paragraph:
+  ```js
+  notes.push({ type: 'note', warn: e.classList.contains('warn') || e.classList.contains('fail'), text: (ct ? txt(ct) + ': ' : '') + x });
+  ```
+  After:
+  ```js
+  const w = e.classList.contains('warn') || e.classList.contains('fail');
+  if (e.querySelector('.rwNL')) { rwrNLParts(e, txt).forEach((q, i) => notes.push({ type: 'note', warn: w, text: (i === 0 && ct ? txt(ct) + ': ' : '') + q })); return; }
+  notes.push({ type: 'note', warn: w, text: (ct ? txt(ct) + ': ' : '') + x });
+  ```
+- **Notes changed** (anchor = the old opening text → new lead → item lead words). Exact before / after: the PR diff.
+  1. `HINTS` (option hints of the input panel, also shown as the alerts of Stability Steps 3 / 4 / 5 and Footing Heel Step 2): each long option text → bold option name as the lead, then:
+     - `heel_basis` std / norelief / envelope → Demand / Practice / Caution (Effect; MassDOT §3.3.2.2).
+     - `uplift_mode` uniform / triangular → Acts / Correct when / Effect; Acts / Resultant / Use only / Not modeled.
+     - `aashto_base_fric` two_thirds / full → Interface angle / Practice / Use when; AASHTO §10.6.3.4 / Appropriate only / Note. `precast` and `manual` (two sentences, ≤ 200 characters) unchanged.
+     - `aashto_ecc_limit` b6 / b4 / b3 / rock → Effect / Practice / Use for / "Most restrictive."; Basis / Practice / Default; Basis / Why permitted / Confirm; Basis / Do not use / Bearing check.
+     - Footing Heel Step 2 alert: the "Change the basis under Design Options …" line after the hint is now a `<div>` (was `<br><span>`).
+  2. Input panel, pile note `#note_pile` "Rows of identical vertical piles …" → "Pile-supported footing:" → Rows / Cap / the ACI / AASHTO line.
+  3. Input panel, `#hint_aci_ecc` "Neither code sets a maximum eccentricity: …" → ACI 318-19 §13.2.6.1 / IBC 2018 §1807.2.1 / Limit / Older projects.
+  4. Input panel, AASHTO k_h hint "AASHTO mode: with k_h > 0 …" → Thrust combinations / Enter k_h / γ_EQ = 0.
+  5. Input panel, variable height `#grp_vh_note` "MassDOT §3.3.2.2: design height = …" → Effect / ACI mode (the `aci-only` sentence is now an `aci-only` list item).
+  6. Input panel, collision "MassDOT: collision engages …" → "MassDOT collision (Extreme Event II):" → Extent / Factors / Stability / Stem design.
+  7. Input panel, barrier yield line "Yield-line capacity of the barrier itself." → If R_w < F_t / M_b = 0 / Capacities.
+  8. Input panel, passive "Off by default (conservative)." → Why / When on.
+  9. Input panel, MassDOT heel top steel "Heel top steel carries …" → "MassDOT heel top-steel rule:" → Load / Factors / No offset / Envelope / Toe.
+  10. Stability (AASHTO), "Design basis: AASHTO LRFD …" → Earth pressure / Load modifier / Load & resistance factors / Eccentricity limit.
+  11. Stability (AASHTO) Step 4, passive neglected warning → Not counted / To include / Shear key gives no sliding credit (with a shear key).
+  12. Stability (ACI) Step 2, passive neglected warning → Not counted / Why / To count it.
+  13. Stability (ACI) Step 4 "Why the surcharge and column live/snow loads are left out:" → Rule / Here / Bearing.
+  14. Stability (ACI) Step 5, the same lead → Rule / Here / Effect / Still included / Dead column load.
+  15. Stability (ACI) Step 6 "Earthquake included (k_h > 0):" → Cases / Governs / IBC 2018 §1807.2.3 / ASCE 7-16 §2.4.1.
+  16. Stability (ACI) M-O detail "Simplified M-O per Seed & Whitman (1970)." → Verify / Seismic FOS.
+  17. Stability (AASHTO) Step 7 "Roadway datum: …" → Impact height / Barrier.
+  18. Stability (AASHTO) Step 7b "Earth pressure dropped (γ_EH = 0)" → MassDOT §3.3.2.4 (paraphrased) / Vertical component / Still applied / Alternative.
+  19. Stability (AASHTO) Step 7a "Vertical components of P_AE and P_A …" → "Extreme Event I assumptions:" → Vertical components / Unit weight / Column / Not designed.
+  20. Stem Step 1 "Water-aware: …" / seismic / Extreme Event II note → "Stem demands:" → Water-aware (or "Stem demands use static earth pressure.") / Extreme Event II governs / Seismic / Critical section. With none of the three the note stays one line, unchanged.
+  21. Stem Step 6 "Front face: no vertical bars are required." → ACI 318-19 §11.7.2.3 / Design.
+  22. Stem Mid Step 3 "Layout: S1 (lapped …" → "Layout of the back-face bars:" → S1 / S3 / Lap / "No alternate-bar cut-off."
+  23. Footing, Factored Loads on Footing "Water uplift (ACI 318-19 §5.3.8; …)" → Soil reaction / Toe / Heel / Plot.
+  24. Footing, Heel and Toe — Extreme Event I / II "Each extreme-event case …" → "How the extreme-event cases load the footing:" → Base reaction / Heel down / Toe down / Capacity.
+- **Not changed:** notes under ~200 characters even with three short sentences (e.g. "ASCE 7-22 §11.8 / IBC §1807.2.4. Enter 0 to disable. …", the λ_s hint); the Coulomb wall-friction alert (already a bold-lead line per fact); "Worked in" link lines; equations; the User Manual tab (prose and lists already).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none (no key, no format).
+- **Check case:** ACI default, Stability Step 4 card. Before: one 427-character alert. After: the lead "ℹ Why the surcharge and column live/snow loads are left out:" and three bullets (Rule / Here / Bearing). Report §4, "Notes on the Stability tab": "Step 4 — Overturning Check: ℹ Why the surcharge … left out:" then "• Rule: …", "• Here: …", "• Bearing: …".
+- **How verified:** headless Chromium, pinned libraries, origin/main 2cd2a1b vs the branch, 9 cases (ACI default; AASHTO barrier + collision + variable height + key + yield line; ACI water + passive + seismic + column + surcharge + β + key; ACI triangular uplift + envelope heel + variable height; pile ACI; pile AASHTO + k_h; AASHTO seismic + water + column + rock + tan φ + no relief; AASHTO collision γ_EH = 1 + B/6 + precast + key + passive; AASHTO B/3 + manual δ + β): `window._R` identical (JSON); the digit sequence of the input panel, every result tab, the check summary, the Manual and `SharedReport.text` identical in every case; 0 console errors.
+- **Other copies:** none.
+- **Open item (not changed; for the engineer):** Stability Step 5 says the surcharge and column live/snow loads are still in "the overturning resisting moment as currently coded", while Step 4 says they are excluded from all resisting forces. One of the two notes is out of date; the wording is kept as it was.
 ## 2026-11-08 — PR: nl-retwall-b (PR #TBD-A2) — Long notes as a bold lead and a list: Piles tab, 3D model, Drawings, the long warnings, the Report's own notes and one Manual paragraph (RWNL-2; display only, no result change)
 
 ### RWNL-2. Long notes split into a lead line and a list, part 2   [display only] [no result change]
