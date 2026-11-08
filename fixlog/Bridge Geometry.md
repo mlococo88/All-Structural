@@ -2275,7 +2275,7 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **Tests:** check-syntax; bgeo-examples; dxf-print-sheets; phone-layout --tool bgeo; home-projects; tests/engine/run.mjs handoffs, lldf: pass. project-library --tool bgeo: the expected text-only difference in the output and seat tab text (ENG identical).
 - **Other copies:** none.
 
-## 2026-11-08 — PR: bgeo-left-summary (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (BGLS: key results in a left summary column from 1200 px; display only, no result change)   [display only] [new UI key]
+## 2026-11-08 — PR: bgeo-left-summary (PR #1224: https://github.com/mlococo88/All-Structural/pull/1224) (BGLS: key results in a left summary column from 1200 px; display only, no result change)   [display only] [new UI key]
 
 ### BGLS. Results summary column on the left at 1200 px and wider   [display only]
 - **Request (engineer, 2026-11-07/08):** add the left summary panel to the tools with summary or result cards, the way it was done in Retaining Wall (RWDL #959, RWLB #984), Spread Footing (SFLB #988), Light Pole (LPLB #991, #994/#997) and Shear and Moment Diagrams (SMLS #1130).
