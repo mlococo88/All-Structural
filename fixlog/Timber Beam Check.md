@@ -2370,3 +2370,65 @@ Code sites are tagged `TBNL`.
 - **Check case:** default project (DF-L No.2 2x10 @ 16 in., 16 ft, D 15 / L 40 psf), Loads tab: the point-load hint was one 510-character paragraph; now the lead "Point loads: positive = downward." and four bullets; "(fix log O4)", "NDS 3.10" and "3 in." unchanged. Report §5 (Analysis): "Peak values by combination: Stations and design shear" then two "• " lines with the same text as before.
 - **How verified:** headless Chromium, origin/main vs the branch, 9 cases (default; 3 spans with a fixed support, point loads, snow, wind uplift, notch, x/d; span + overhang with compression-face notch, wet, negative D; glulam LRFD 2 spans; custom glulam; SCL LRFD; 6x12 timber flat, incised, 100–125 °F; manual SP values with a bearing point load; an input error): `TBC.res` identical (JSON); the digit sequence of every input tab, every output tab, the governing strip, and the Report (`SharedReport.text` and the full HTML text, all three appendices on) identical. Validation 123/123. 0 console errors. No horizontal scroll at 390 px. `tests/check-syntax.mjs`, `tests/smoke/project-library.mjs --tool timber`: pass. (Timber has no entry in `tests/smoke/phone-layout.mjs`.)
 - **Other copies:** none.
+
+## 2026-11-08 — PR: claude/timber-notes-b (PR #__PR__: https://github.com/mlococo88/All-Structural/pull/__PR__) (TBNL-2: long notes as a bold lead and a list — Reference Values, Validation, Method & Manual, the Summary notes list and the Report's own notes; display only, no result change)
+
+Code sites are tagged `TBNL`. Uses `tbNL` and the CSS of TBNL-1 (PR #1185).
+
+### TBNL-2. Long notes split into a lead line and a list, part 2   [display only] [no result change]
+- **Request:** as TBNL-1 (engineer, 2026-11-07).
+- **Summary notes list (warnings), display only.** The strings in `R.notes` / `R.adv` are byte-identical: the Report's "Note: …" lines, the Validation check `q.adv.filter(t => /^REVIEW: custom glulam has no Ey,min/.test(t))` and every other reader see the same text.
+  - In `tbcRun` (after `const adv = [];`) a display-only map `advNL` is added, keyed by the exact text: `const nlMsg = (lead, items) => { const t = [lead, ...items].join(' '); advNL[t] = { lead, items }; return t; };`.
+  - `advNL` is returned in `base` (`… notes, adv, advNL, …`).
+  - Six messages are now built as `nlMsg(lead, [sentences])`. The joined text equals the old literal exactly (checked: `R.adv` / `R.notes` identical in every case):
+    - "REVIEW: custom glulam has no Ey,min …" (the REVIEW sentence is the lead, so the action comes first);
+    - "Incised timber: …";
+    - "Compression-face end notch: …";
+    - "Fixed support: …";
+    - "Continuous beam: the live, roof live and snow …";
+    - "Wet service: creep factor K_cr = 2.0 used …".
+  - `buildSummary`: `nlH(m)` shows such a message as a lead and a sub-list (`tbNL`). Other messages are unchanged.
+  - Report (Notes and references, anchor `R.notes.concat(R.adv).forEach(m => { const q = R.advNL`): "Note: " + lead, then one "• " line per item.
+- **Report model notes** (`tbrModel`), new `tbrNL(lead, items)` (before `const tbrTbl =`) gives a lead note and one "• " note per item:
+  - §1.1 "Ratio = demand / capacity; ≤ 1.000 passes. …" → Each ratio links / Stresses (ASD) or LRFD / The same values.
+  - §2.1 "Units: lb, ft, in., psi unless noted. …" → Every value in this report….
+  - §4.1 "psi. Source: …" → F_t and F_c are listed only….
+  - §5.1 "Bold = governing for bending, shear or bearing. …" → C_D or λ / M = …; V = … / Statics.
+- **Appendix C (Method and manual), `tbrDomItems`:** a list item with a sub-list prints as "• lead", then one "– " line per sub-item. Anchor `// TBNL: a list item with a sub-list`.
+- **Notes changed (anchor = the old opening text → new lead → item lead words).** Every sentence, number, citation and link is kept, in the same order. Only lead words, list-start capitals, end punctuation and the joining words named below are new.
+  1. Reference Values warnBox, "<b>Verify the built-in values.</b> Every value below…" → Entered without the printed documents / Before use / last sentence.
+  2. Table 4A hint, "psi. SPF No.1 and No.2…" → lead "Values in psi." → SPF / F<sub>t</sub> and F<sub>c</sub> / Stud 8 in. and wider.
+  3. Table 4B hint, "psi. Select Structural and No.1 were added…" → "Values in psi." → first sentence / Not built in ("…grades; use Manual values") / Widths over 12 in. / F<sub>t</sub> and F<sub>c</sub>.
+  4. Table 4D hint, "psi. Added in Phase 2 (fix log R3, open item O3)…" → "Values in psi." → Added / Size class from the section / C<sub>F</sub> / Flat use…, Table 4D footnote / Wet service / last sentence.
+  5. Table 5A hint, "psi. F<sub>bx</sub><sup>+</sup> for positive moment…" → "Values in psi." → F<sub>bx</sub><sup>+</sup> / Bearing / Wet service C<sub>M</sub> / Volume factor / Notches / Added.
+  6. LRFD factors hint, "All values verify. LRFD adjusted value…" → lead "All values verify." → LRFD adjusted value / F<sub>b</sub>* / W / Not used (the 0.5L option…) / Not offered (λ = 1.25 (impact)) / Added.
+  7. SCL note, "No SCL values are built in: the reference design values…" → lead "No SCL values are built in." → From the manufacturer’s literature, which governs (NDS 8.2, 8.3.6) / The tool applies / Not covered (manufacturer) / C<sub>r</sub>.
+  8. Size factor hint, "NDS Supplement 2018 Table 4A footnotes verify. …" → lead (same) → Table 4B (SP) / A non-standard width / Timbers (5x5 and larger…).
+  9. Validation, "Closed forms: AISC Steel Construction Manual Table 3-23…" → lead (same) → Section / Fix-log case / Rounding.
+  10. Validation, parity note, "A single span on two pin supports runs exactly…" → lead (first sentence) → Files / Checked.
+  11. Method & Manual, Scope paragraph, "Beams of sawn lumber (…)" → lead "Beams checked for bending, shear, bearing and deflection." → Materials / Checked by / Layout.
+  12. Method & Manual list items as a lead and a sub-list:
+      - Inputs: Loads (Area loads / Point loads), Material (Sawn lumber / Glulam / SCL);
+      - Analysis: "A single span on two pins uses statics…" (Any other layout / The solver), the ASD / LRFD item (new lead "Load combinations": ASD / LRFD / Wind);
+      - Checks: Bending (Per span / l<sub>u</sub> / l<sub>e</sub> per Table 3.3.3 / R<sub>B</sub> ≤ 50), Shear (V / A point load within d of a support / End notch), Deflection (Per span / Limits / Wind / Always at service loads), Glulam (F<sub>bx</sub><sup>+</sup> / Volume factor / Wet service / End notch / Bearing), SCL (Values / C<sub>V</sub> / Repetitive member factor / Not covered);
+      - Saved data: Files (Export JSON / Open file / Dressed sizes), Shared project info (Shared and received / last sentence);
+      - Limitations: "No axial load, no torsion, no lateral load on the weak axis." (Notches / Shear / Creep).
+  13. The six Summary notes listed above.
+- **Not changed:**
+  - short notes;
+  - table cells (the l<sub>e</sub> and dressed-size rows of the factors table, the references table);
+  - the worked steps' own notes (`SharedSteps`, shared);
+  - the existing "Notes on the Summary tab" Report line, which joins the Summary notes box without spaces between items. This is old behaviour, not changed here (open item).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). `tbcRun` changes only by building six message strings from parts and returning the display map `advNL`. **Saved data:** none.
+- **Check case:** 3 spans 12 / 14 / 10 ft, support C fixed, D 15 / L 40 psf, W −20 psf. The Summary notes box shows:
+  - "Fixed support: bearing is checked with the vertical reaction only (uniform Fc⊥ stress over the bearing length)." with one sub-item;
+  - "Continuous beam: the live, roof live and snow area loads act on all spans at once." with two sub-items.
+  - `R.adv` is the same two strings as before, character for character.
+- **How verified:** headless Chromium, origin/main (after #1185) vs the branch, the 9 cases of TBNL-1:
+  - `TBC.res` identical apart from the added `advNL`, with `R.adv` / `R.notes` identical;
+  - the digit sequence of every input tab, every output tab, the governing strip and the Report (text and full HTML, all appendices on) identical;
+  - Validation 123/123;
+  - 0 console errors;
+  - no horizontal scroll at 390 px;
+  - `tests/check-syntax.mjs` and `tests/smoke/project-library.mjs --tool timber`: pass.
+- **Other copies:** none.
