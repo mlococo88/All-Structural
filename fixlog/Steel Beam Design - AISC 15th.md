@@ -3111,7 +3111,7 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
 - **Open item closed:** SBNL-1 "the Web Stiffeners hint keeps 'Tension field action (§G2.2) is not used.'".
 - **Other copies:** none.
 
-## 2026-11-08 — PR: claude/sf-rename-sbd (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SFNM-S) — Spread Footing shown as "Shallow Foundation Design"   [display only]
+## 2026-11-08 — PR: claude/sf-rename-sbd (PR #1239: https://github.com/mlococo88/All-Structural/pull/1239) (SFNM-S) — Spread Footing shown as "Shallow Foundation Design"   [display only]
 - **Why:** Spread Footing's displayed name is now "Shallow Foundation Design" (engineer request 2026-11-08; #1236). Its file name and `memberReactions` receiver are unchanged.
 - **Before → after** (anchor = the "after" text):
   - Project tab hint: `Unfactored reactions by load type for Base Plate and Spread Footing, or as a file.` → `… for Base Plate and Shallow Foundation Design, or as a file.`
