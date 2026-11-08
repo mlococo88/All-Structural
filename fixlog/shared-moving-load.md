@@ -284,3 +284,48 @@ results unchanged).
   or w = 0 gives identical `res`.
 ### Other copies
 - None.
+
+## 2026-11-08 — PR: claude/shared-ml-notes (PR #PRNUM) — `warnNL`: a display-only list form of the pedestrian-load and Std. Spec. lane-loading warnings (MLNL-3; no result or string change)
+### Where (`analyze`)
+- `const warn=[]; let segSum=0;` → `const warn=[], warnNL=[]; let segSum=0;` plus the helper (anchor `/* MLNL-3 (2026-11-08): warnNL[k]`):
+  ```js
+  const nlWarn=(str,nl)=>{warn.push(str);warnNL[warn.length-1]=nl;};
+  ```
+- Std. Spec. lane loading, before:
+  ```js
+  if(m.stdLane)warn.push(`Std. Spec. lane loading (${m.stdLane.w} k/ft + ${m.stdLane.PM} k moment / ${m.stdLane.PV} k shear and reactions; a second ${m.stdLane.PM} k in one other span for negative moment) is checked as a separate case and enveloped with the vehicle, with impact. Where it governs, the case reads "Std. lane" and "@" is the concentrated-load position.`);
+  ```
+  after (the same string, built from the same three parts as its list form):
+  ```js
+  if(m.stdLane){const ld=`${m.stdLane.w} k/ft + ${m.stdLane.PM} k moment / ${m.stdLane.PV} k shear and reactions; a second ${m.stdLane.PM} k in one other span for negative moment`,
+      cs='is checked as a separate case and enveloped with the vehicle, with impact.',gv='the case reads "Std. lane" and "@" is the concentrated-load position.';
+    nlWarn(`Std. Spec. lane loading (${ld}) ${cs} Where it governs, ${gv}`,{lead:'Std. Spec. lane loading '+cs,items:[['Loads:',ld+'.'],['Where it governs:',gv]]});}
+  ```
+- Pedestrian load, before:
+  ```js
+  if(PED){warn.push(`Pedestrian load ${PED.w} k/ft on this girder line (DF ${PED.df}) is included with every vehicle case: patterned on the parts of the influence line that add, no impact, not reduced in the multi-vehicle case (LRFD 3.6.1.6, 3.6.2.1). Per-lane values include w·A·DF_PL / g so that the factored values carry γ_LL·w·A·DF_PL. Step mode and deflection do not include it.`);
+  ```
+  after:
+  ```js
+  if(PED){const ld=`Pedestrian load ${PED.w} k/ft on this girder line (DF ${PED.df}) is included with every vehicle case:`,ap='patterned on the parts of the influence line that add, no impact, not reduced in the multi-vehicle case (LRFD 3.6.1.6, 3.6.2.1).',
+      pl='include w·A·DF_PL / g so that the factored values carry γ_LL·w·A·DF_PL.',ni='Step mode and deflection do not include it.';
+    nlWarn(`${ld} ${ap} Per-lane values ${pl} ${ni}`,{lead:ld,items:[['Applied:',ap],['Per-lane values',pl],['Not included:',ni]]});
+  ```
+- Return: `…,dfOf,warn,check,…` → `…,dfOf,warn,warnNL,check,…`. `warnNL[k]` is `{ lead, items: [[lead words, text]…] }` for these two warnings
+  and empty (undefined) for every other warning; a page may show it in place of `warn[k]`.
+### Problem
+- MLNL-2 open item (#1221): the two warnings are long (554 / 294 characters with a multi-span DF list; 508 / 300 at the HS20 default) and are built
+  here, so Moving Load Generator could not split them. Their strings must stay as they are (other code tests them: the input-tab marks `MSG`,
+  `tests/engine/moving-load.test.mjs` "M2" `/^Pedestrian load/`, the parity hashes).
+### Governing provision
+- None: display only. No formula, factor, unit, value, code reference or warning text changes.
+### Check case
+- Moving Load Generator, HS20 preset, pedestrian load on (0.45 k/ft, DF 1.00) and Std. Spec. lane loading on: `RES.warn` identical to main
+  (`JSON.stringify` equal; 653 characters in all); `RES.warnNL` = [lane list, pedestrian list] at the same indices.
+### How verified
+- `node tests/engine/run.mjs moving-load`: the 35 parity cases still hash identically to the original functions (warnings included) and "M2" passes.
+- Steel Bridge app (loads this file; not edited, and it reads neither `warn` nor `warnNL` of `analyze`): `node tests/engine/run.mjs` (analysis,
+  loads, report, … all files) and `node tests/smoke/steel-bridge-report.mjs`: pass, unchanged.
+- Moving Load Generator: see `fixlog/Moving Load Generator.md` (MLNL-3).
+### Other copies
+- None.
