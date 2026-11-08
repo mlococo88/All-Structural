@@ -7189,3 +7189,246 @@ index 50f3837..c2d5000 100644
 - **Governing provision:** none changed (ACI 318-19 R8.4.4.2.3 is quoted, as before).
 - **Check case:** any project with a pedestal (default): the note reads as above; every computed value unchanged (harness: `def`, `rev`, `sfe*`, `edgeHook` R and P2 identical).
 - **Other copies:** none.
+
+## 2026-11-08 — PR: claude/sf-display-rename (PR #1236: https://github.com/mlococo88/All-Structural/pull/1236) (SFNM) — displayed name "Shallow Foundation Design"   [DISPLAY ONLY; no computed value changes]
+- **Request (engineer, 2026-11-08):** the app designs spread, combined and wall footings; show it as "Shallow Foundation Design", descriptor "Spread, combined and wall footings". The file name `Spread Footing.html`, the project-registry / GitHub sync tool id `spread-footing` (folder `projects/spread-footing/`), the storage keys (`sfd_projects`, `sfd_auto`, …), the hand-off receiver id `spreadFooting`, the export file names (`spread_footing_inputs.json`, `…_drawings.dxf`), this fixlog's name and every code identifier are unchanged (CLAUDE.md §5, §7).
+- **Before → after** (search for the "after" text):
+  - `<title>`: `Spread Footing Design Tool` → `Shallow Foundation Design`.
+  - Header `#sfdHdr`: `<h1>Spread Footing Design Tool</h1>` → `<h1>Shallow Foundation Design</h1>`; byline `by Mario Lococo &nbsp;|&nbsp; …` → `Spread, combined and wall footings &nbsp;|&nbsp; by Mario Lococo &nbsp;|&nbsp; …` (rest of the byline unchanged).
+  - Report (`sfrModel`, return): `title:'Spread Footing Design — Calculation Report'` → `title:'Shallow Foundation Design — Calculation Report'` (cover and print header); footer `' (Spread Footing Design Tool)'` → `' (Shallow Foundation Design)'`.
+  - Report "About this report" (`sfxApply`): `'ACI 318-19 · ASCE 7-16 · IBC 2021 · Spread Footing Design Tool, by Mario Lococo.'` → `'… · Shallow Foundation Design (spread, combined and wall footings), by Mario Lococo.'`.
+  - DXF / printed drawing sheets, title block (`row2`): `['DRAWN BY','SPREAD FOOTING DESIGN TOOL (DRAWINGS TAB)',5]` → `['DRAWN BY','SHALLOW FOUNDATION DESIGN (DRAWINGS TAB)',5]` (40 characters; the cell fits 41).
+  - Saved projects (`SharedProjectsUI.projectBar`): `label:'Spread Footing'` → `label:'Shallow Foundation Design'` (dialog title "Saved projects — …"); `cloud:{tool:'spread-footing',label:'Spread Footing'` → `label:'Shallow Foundation Design'` (GitHub commit messages "<label>: save …"; folder still `spread-footing`). Must equal `shared/project-registry.js` `label` (tests/engine/project-registry.test.mjs), changed in the same PR.
+  - Import messages: `not a Spread Footing input file` → `not a Shallow Foundation Design input file` (cloud `fromFile`), `does not look like a Spread Footing input file` → `does not look like a Shallow Foundation Design input file` (Import JSON confirm).
+  - Foundation-load receiver messages: `Spread Footing cannot design it; use Pile Designer` → `Shallow Foundation Design cannot design it; …`; `Spread Footing needs the loads at the top of the footing` → `Shallow Foundation Design needs …`.
+  - Project info share (`btnShareProjMeta`): `ProjMetaUI.share(MAP, values(), 'Spread Footing', 'Spread Footing.html')` → `'Shallow Foundation Design'` (the `producer` display name of the `projectMeta` hand-off, shown by receivers as "from …"; not hashed, compared by no receiver; `producerFile` unchanged).
+- **Left as they were:** code comments; `console.error('Spread Footing: …')` (developer console only); the manual's 0.1 text ("This program designs and checks a single rectangular spread footing …": it does not name the app).
+- **Governing provision / formulas / factors / units:** none changed (§4 does not apply). **Saved data:** no key or format change (§5).
+- **Check case:** default project: header reads "Shallow Foundation Design / Spread, combined and wall footings | by Mario Lococo | …"; Report cover "Shallow Foundation Design — Calculation Report"; drawing sheet DRAWN BY "SHALLOW FOUNDATION DESIGN (DRAWINGS TAB)"; every result identical to before.
+- **How verified:** main-vs-branch probe (headless Chromium, default project): `sfdResultRows()`, `state`, the output panel text and the full Report text (`SharedReport.text`) identical after mapping the new name back to the old; 0 console errors. Tests: check-syntax, phone-layout --tool sf, spread-footing-nobear, start-chooser, spread-footing-scroll, project-library --tool spreadfooting, home-projects, home-sync, dxf-print-sheets, engine handoffs / project-registry / github-sync / projects: pass.
+- **Other tools in this PR:** `shared/project-registry.js` (entry label / name), `tools.html` (card). Other tools' "… Spread Footing" labels: separate PRs (abutment_calculator, Bridge Substructure Loading, Steel Beam Design - AISC 15th).
+- **Other copies:** none.
+
+## 2026-11-08 — PR: docs/sf-manual-scope (PR #1242: https://github.com/mlococo88/All-Structural/pull/1242) (SFSC) — User Manual 0.1 and 0.2: scope covers spread, combined and wall footings   [DISPLAY ONLY; no computed value changes]
+- **Request (engineer, 2026-11-08):** after SFNM (#1236) the manual's 0.1 still said the program designs "a single rectangular spread footing". Rewrite 0.1 to the tool's real scope (footing types, element types with the wall Chapter 11 checks, load modes, code basis) as a bold lead and a list (the SFNL style), and correct other single-spread-footing scope statements in the manual.
+- **Where:** `manPart("p0","0. Read This First",[` (Part 0 of the User Manual; manual blocks only, rendered by `manRender`). The manual's own block types are used (`{p}` lead in bold, `{ul}` items with bold lead words), the same look as `sfNL` (lead line, then a list with bold lead words).
+- **0.1, before:** `{p:"This program designs and checks a single rectangular <b>spread footing</b> with one or more concrete <b>pedestals</b>, bearing on soil. It performs, in one continuous calculation:"},`
+- **0.1, after** (anchor `/* SFSC (2026-11-08)`): bold lead "This program designs and checks one rectangular concrete footing bearing on soil, with the pedestals and walls it carries.", then five items: Footing types / Element types / Wall checks / Load input modes / Code basis (exact text: the PR diff), then `{p:"It performs, in one continuous calculation:"}` before the existing numbered list.
+- **0.1 numbered list:** item 1 "structural design of the footing and pedestals" → "… of the footing, pedestals and walls"; item 4 "one-way shear at d from each pedestal face" → "… each pedestal or wall face", "dowels at each pedestal interface" → "… each pedestal or wall interface"; item 5 "and a slenderness screen." → "and slenderness, with moment magnification of a slender pedestal."; new item 6 "Wall checks: the ACI 318-19 Chapter 11 checks listed above, on the Wall Design tab, in place of the pedestal checks for that element."
+- **0.2:** "Live-load patterning. All pedestals receive … For multi-pedestal footings where …" → "All pedestals and walls receive … For combined footings where …"; "Non-rectangular footings, strip footings, combined footings acting as beams on elastic foundations, or mat behaviour." → "Non-rectangular footings, continuous strip footings analysed per unit length (a wall footing here is a rectangular footing of the entered B and L), combined footings acting as beams on elastic foundations, or mat behaviour."
+- **Checked against the code:** element type select `peds.<i>.elemType` (Pedestal / Wall) and `sfdIsWallEl` / SFWD comment (a Wall with ℓw/t ≤ 3 stays a pedestal); `SFWD_INTRO` (out of plane 11.5.2.1, 6.6.4, 11.5.5.1; in plane 11.5.4, 11.5.2.1; reinforcement 11.6, 11.7.2, 11.7.3, 11.7.4.1; connection 16.3); load mode select `loadMode` (`type` / `direct`); `sfAashtoDirect` and the Imported AASHTO case notes (self-weight, EV and surcharge at the case's AASHTO factors; HANDOFF.md §4.6, producers Abutment / SubLoads); `soil.mode` (Vesić / direct q_a); `stab.eccMode` (kern, AASHTO-based, custom, none); `sfslMag` (SFSL, magnification of a slender pedestal); one-way shear at d from the wall faces and the wall interface (SFWL).
+- **Governing provision / formulas / factors / units:** none changed (§4 does not apply); the manual quotes ACI 318-19 Chapter 11, ASCE 7-16 and AASHTO LRFD 10th Ed. as the tool already uses them. New digits in the manual text: "Chapter 11" (twice), "ACI 318-19", "ASCE 7-16", "6W", "AASHTO LRFD 10th Ed." (code references and the tab name only; no counts). **Saved data:** none.
+- **Check case:** default project, Manual tab, Part 0: 0.1 opens with the bold lead above and the five bullets; every result identical.
+- **How verified:** main-vs-branch probe (headless Chromium, `tests/lib.mjs` `openPage`), five cases (default two-pedestal; Direct factored; one pedestal; a pedestal and a wall; one wall alone): `R` and `P2` identical (JSON), the digit sequence of every output tab identical; only the Manual tab text differs. 0 console errors. Tests: check-syntax, phone-layout --tool sf, project-library --tool spreadfooting, spread-footing-nobear: pass.
+- **Raised, not changed (stale manual text, outside this scope):** 0.2 "Slender-pedestal moment magnification … flags it but does not magnify" and 4C "Slenderness screen … flagged otherwise" predate SFSL (#974), which magnifies; 0.2 "Uplift anchorage … beyond the dowel minimum-steel check" predates the dowel tension checks (checks table "Dowels (tension, laps)").
+- **Other copies:** none.
+
+## 2026-11-08 — PR: docs/sf-manual-stale (PR #1243: https://github.com/mlococo88/All-Structural/pull/1243) (SFSC-2) — User Manual: slender-pedestal magnification and dowel uplift checks described as the tool does them   [DISPLAY ONLY; no computed value changes]
+- **Request (engineer, 2026-11-08):** fix the three stale manual items raised in SFSC (#1242).
+- **Where:** `manPart("p0",…)` (0.2 What this program does NOT do) and `manPart("p4c",…)` (4C.5 Pedestal checks). Manual text only.
+- **1. 0.2, slender pedestals.**
+  - Before: `"<b>Slender-pedestal moment magnification.</b> The slenderness screen (kl<sub>u</sub>/r &le; 22) tells you whether magnification may be neglected; if the screen fails the program flags it but does not magnify.",`
+  - After: lead "Second-order frame analysis of slender pedestals.". The text says the pedestal is magnified by ACI 318-19 §6.6.4 where kℓu/r > 22 (k = 2.0, ℓu = h, §6.2.5.1(a)), with the P–M check on the magnified moments. It lists the SFSL simplifications: sway cantilever; all base moment sway; δ_s of the pedestal alone; C_m = 1.0; both axes magnified; β_ds = β_dns = 1.0 in Direct factored mode. It states what is not modelled: story P–Δ, a restrained top, C_m from end moments. Exact text: the PR diff.
+- **2. 4C.5, slenderness item.**
+  - Before: `"Slenderness screen: r = 0.3b<sub>min</sub>, k = 1, l<sub>u</sub> = h, neglect if kl<sub>u</sub>/r &le; 22; flagged otherwise (&sect;0.2)."`
+  - After: k = 2.0 (SFKS, #710; the old text still said k = 1). The method of `sfslMag` is worked: (EI)_eff = 0.4E_cI_g/(1 + β); δ_s with P_c = π²(EI)_eff/(2h)² and β_ds; δ with P_c = π²(EI)_eff/h², β_dns and C_m = 1.0; M_c = δ·max(δ_s|M_u|, M_2,min), with M_2,min = P_u(0.6 + 0.03b) about one axis at a time. NG where P_u ≥ 0.75P_c or δ_sδ > 1.4. Citations: 6.2.5.1(a), 6.6.4.4.4(a), 6.6.4.6.2(b), 6.6.4.5.2, 6.6.4.5.4, 6.2.5.3, as in the SFSL comment.
+- **3. 0.2, uplift anchorage.**
+  - Before: `"<b>Uplift anchorage</b> of the pedestal to the footing beyond the dowel minimum-steel check, and <b>anchor bolt design</b> at the top of the pedestal (a separate program by the same author covers base plates and anchoring).",`
+  - After: what is still not checked: anchor bolt design, and headed or mechanically anchored dowels (the input `reinf.dowelHook` offers straight or 90° hook only). Then the dowel checks that are made (§4C.4, card 5.6): minimum area and count (SFDN); interface tension by strain compatibility in every combination with uplift or the resultant outside the pedestal-section kern (SFDO, SFDA); tension development into the footing, ℓ_d or ℓ_dh (SFDO, SFDH); the Class B tension lap, compression lap and projection (SFDO); compression beyond the concrete bearing strength with ℓ_dc (SFBX, SFBC, SFLA); shear friction with the dowels developed on both sides (SFDA, SFDR).
+- **Checked against the code:** `sfslMag` and its SFSL header comment; `const kSl=2.0` with `klu_r>22` (`pedDes`); `sfdDowelCheck`; the `reinf.dowelHook` toggle (`hook90` / `straight`); the SFBX bearing map.
+- **Governing provision / formulas / factors / units:** none changed (§4 does not apply). The manual now quotes the provisions the engine already uses. **Saved data:** none.
+- **Check case:** the SFSL check case (both pedestals h = 8 ft, Ped 2 Wx V_x = 20 k): kℓu/r = 2·96/5.4 = 35.6 > 22. The pedestal is magnified (P2 `slm` present) as the new 4C.5 item describes; results identical before and after.
+- **How verified:** main-vs-branch probe (headless Chromium, `tests/lib.mjs` `openPage`), seven cases: default; Direct factored; one pedestal; a pedestal and a wall; a wall alone; the slender case above; slender in Direct factored mode. `R` and `P2` are identical (JSON), and so is the digit sequence of every output tab; only the Manual text differs. 0 console errors. Tests: check-syntax, phone-layout --tool sf, project-library --tool spreadfooting, spread-footing-nobear: pass.
+- **Raised, not changed:** in Part 3, the dashboard-criteria table rows "Concrete bearing" (P_u/φP_nb ≤ 1) and "Dowel steel" (provided ≥ 0.005A_g) predate SFBX (compression beyond φB_n carried by the dowels) and SFWL (wall minimum).
+- **Other copies:** none.
+
+## 2026-11-08 — PR: docs/sf-manual-criteria (PR #1244: https://github.com/mlococo88/All-Structural/pull/1244) (SFSC-3) — User Manual 3.1: the dashboard-criteria table matches the chips   [DISPLAY ONLY; no computed value changes]
+- **Request (engineer, 2026-11-08):**
+  - Fix the "Concrete bearing" and "Dowel steel" rows raised in SFSC-2 (#1243).
+  - Scan the rest of the criteria table against `renderDashboard` and correct anything else that is stale.
+- **Where:** `manPart("p3",…)`, card 3.1 Summary dashboard: the `{tbl:{head:["Chip","Criterion"],…}}` rows and the PASS/FAIL paragraph above them. Each row was checked against its chip in `renderDashboard` and its `sfdResultRows` entry. Exact before / after: the PR diff.
+- **Rows changed:**
+  1. **Concrete bearing.** Before: P_u/φP_nb ≤ 1 at each pedestal interface. After (SFBX): for the largest P_u, φB_n = the lesser of footing and pedestal, φ = 0.65. Where P_u ≤ φB_n, D/C = P_u/φB_n. Where P_u > φB_n, the dowels carry the excess (16.3.1.2(a)): A_s,req = (P_u − φB_n)/(0.65f_y), D/C = P_u/(φB_n + 0.65f_yA_s,dow), and ℓ_dc is then checked. Applies at pedestal or wall interfaces.
+  2. **Dowel steel.** Before: "provided ≥ 0.005A_g (REVIEW when short)". After: FAIL when short, not REVIEW (the chip is `dowOK?'pass':'fail'`). The minimum is 0.005A_g for a pedestal (16.3.4.1) or ρ_ℓA_g for a wall, with the larger of Table 11.6.1 and 11.6.2 (16.3.4.2; SFWL, SFWM). The chip name gives the basis (`sfdDowChipName`).
+  3. **Bearing (service).** Added two facts: the Direct factored basis (factored envelopes against the allowable bearing, conservative), and that a combination with no bearing solution governs with D/C ∞ as FAIL (SFNB).
+  4. **Overturning.** Before: "min Mr/Mo ≥ target FS". After: FAIL where FS < 1 or the resultant is off the footing. Otherwise the FS is reported, not gated (N/A), unless "Overturning FS gates result" is Yes.
+  5. **New row, Eccentricity limit / Eccentricity (information).** The limit chosen (kern, AASHTO-based, custom) is PASS / FAIL; "No eccentricity limit" gives an information chip (SFNE).
+  6. **Sliding.** Renamed "Sliding x / y / resultant": one chip per direction plus the resultant.
+  7. **Rigidity → "Rigidity (rigid method)".** The chip's name. "gate for everything else" replaced: the other chips are still shown, and where rigidity fails the linear pressure solution is not reliable (§0.3.1).
+  8. **Flexure / One-way shear / Punching** split into two rows:
+     - **Flexure (footing):** also FAIL on A_s < A_s,min, s > s_max, ε_t < ε_ty + 0.003 (SFET) or d < 6 in (SFMD); REVIEW for top steel required but not entered.
+     - **One-way shear / Punching shear:** N/A where the section is outside the footing or there is no closed perimeter; punching REVIEW where the perimeters overlap.
+  9. **New row, Wall checks (ACI 318-19 Ch. 11).** The wall chips (SFWC-2, SFWC-3, SFWD-2, SFWD-4) with their statuses, the minimum thickness as information, and the REVIEW "not checked" chip.
+  10. **Pedestal design.** Pedestals only (walls on the Wall Design tab); also FAIL for a slender pedestal that is unstable or beyond δ_sδ = 1.4 (SFSL); N/A with no pedestals.
+  11. **Interface shear friction.** "at each pedestal" → "at each pedestal or wall interface".
+  12. **Dowels (tension, laps).** Added the REVIEW cases: shear-friction development short (SFDR), and dowel count different from the vertical bars (SFDN).
+  13. **Pedestal P–M (biaxial).** Pedestals only; magnified moments of a slender pedestal (SFSL); FAIL where P_u is below the section's tension capacity.
+  14. **New rows:**
+      - Footing bar development (SFDV / SFDE: PASS straight, REVIEW hook needed, FAIL);
+      - Pedestal shear (SFVP);
+      - Pedestal torsion (SFTQ);
+      - Pedestal crossties (SFXT, REVIEW to detail);
+      - Structural design (N/A, no valid LRFD combination).
+  15. **PASS/FAIL paragraph.** The REVIEW example "dowel area below 0.005A_g" (that chip is FAIL) became "a dowel count different from the vertical-bar count, crossties to detail, or 'Input needed' for a wall's horizontal bars".
+- **Unchanged rows (checked, current):** Flotation, Contact area, Input validation, Wall reinforcement, Dowel development (ℓdc), Footing bar clear spacing, Concrete cover, Pedestal tie cover.
+- **Governing provision / formulas / factors / units:** none changed (§4 does not apply). The manual now describes the checks the engine already makes. **Saved data:** none.
+- **Check case:** default project, Manual tab, Part 3, card 3.1. The "Concrete bearing" row reads as item 1. With Ped 1 set to Wall (b_x 6 ft, b_y 1 ft), the dashboard chip "Dowel steel (min 0.005A_g; wall ρ_l A_g)" matches the "Dowel steel" row. Results are identical.
+- **How verified:** main-vs-branch probe (headless Chromium, `tests/lib.mjs` `openPage`), seven cases: default; Direct factored; one pedestal; a pedestal and a wall; a wall alone; slender; slender in Direct factored mode. `R` and `P2` are identical (JSON), and so is the digit sequence of every output tab; only the Manual text differs. 0 console errors. Tests: check-syntax, phone-layout --tool sf, project-library --tool spreadfooting, spread-footing-nobear: pass.
+- **Raised, not changed (outside the table):**
+  - 3.2 "6.x … and the slenderness screen" (no magnification or Wall Design tab named).
+  - 3.4 Warnings lists "dowel steel below minimum" and "slenderness screen exceeded" as amber boxes. I found no such warnings in the code; both are now dashboard FAIL items.
+- **Other copies:** none.
+
+## 2026-11-08 — PR: docs/sf-manual-audit (PR #1245: https://github.com/mlococo88/All-Structural/pull/1245) (SFSC-4) — User Manual audited against the code: every out-of-date statement corrected (3.2, 3.4 and the rest)   [DISPLAY ONLY; no computed value changes]
+- **Request (engineer, 2026-11-08):**
+  - Fix 3.2 (cover magnification and the Wall Design tab).
+  - Fix 3.4 (drop the two items that are now dashboard FAILs; list the warnings the code raises).
+  - Go through the whole User Manual against the current code and fix every out-of-date statement.
+- **Where:** `manPart("p0"…"pA",…)` (the manual blocks only). Exact before / after: the PR diff. Each statement was checked against the code named below, or against a run of the tool.
+- **Part 0:**
+  - 0.1 calculation list:
+    - item 1: wind 0.75(±Wx ±Wy) and the seismic combinations (`genCombos`, SFW3, SFEQ);
+    - item 3: eccentricity limit, sliding on the resultant;
+    - item 4: transverse strip (SFTX), minimum steel, spacing, tension-controlled (SFET), d ≥ 6 in (SFMD), development at every face (SFDE), bearing / dowels / shear friction at pedestal or wall interfaces;
+    - item 5: P–M at each combination's own P_u (SFPM), magnification, shear, torsion, crossties, cover.
+  - 0.1 load modes: the Steel Beam Design reactions hand-off. The key "six self-consistency checks" → the checks named, no count (`selfConsistency` gives up to 12).
+  - 0.2:
+    - "Seismic loads (E): no E combinations" → E_h entered as load type E with the 2.4.5 / 2.3.6 combinations and E_v = 0.2S_DS·D; no Ω₀ unless E_mh is entered; no Ch. 18 detailing.
+    - Minimum eccentricity: M_2,min of a slender pedestal and the load offsets noted.
+    - Lateral earth pressure: walls added.
+    - "§4.5 of the report" → Stability tab card 4.5.
+  - 0.3.1: card reference. 0.3.4: "pedestal or wall face".
+  - 0.3.5: "Structural pressure excludes self-weight and overburden" → they, the surcharge and buoyancy are carried in the resultant and subtracted inside each free body (`netResultant`, `bodyResultant`).
+  - 0.3.6: the 1.2 / 0.9 bracket, or the AASHTO factors of an imported case.
+  - 0.3.7: "interior-perimeter closed form" → J_c and c from the truncated section about its centroid (SFPJ, SFPC); γ_f for edge/corner still by hand.
+  - 0.4:
+    - 3D row: the smoke tests open the tab;
+    - edge/corner J_c row updated;
+    - "Moment magnification … not computed" row removed (SFSL);
+    - "multi-pedestal" → "combined".
+- **Part 1:**
+  - 1.1:
+    - the input tabs; output tabs 8 User Manual, 9 Report, 10 Drawings;
+    - Auto-calculate on change / Re-analyze (SFAC); Undo / Redo;
+    - "six green checks" → every check ✓; the warnings list.
+  - 1.2: E load type, simultaneous wind, seismic combinations, both hand-offs.
+  - 1.3: "Named projects" → the Save and open card (Save, Save as, New, Saved projects…, GitHub copy where set up, start chooser). "All report tabs print" → Print-to-PDF Report / Ctrl+P prints the Report tab from any tab, with its Include boxes.
+- **Part 2:**
+  - 2.1: Project tab contents.
+  - 2.2: "Df must be ≥ t" → allowed with a warning.
+  - 2.3: rows added for V_c basis, size effect, bar coating, d_agg, footing sides, self-weight override.
+  - 2.4:
+    - depth factors are now the AASHTO Eq. 10.6.3.1.2a-10 form, d_q ≤ 1.4 (SFLW L6; the old row said "not the AASHTO form");
+    - shear failure mode (SFVL) and q_allow override rows added;
+    - water table: submerged concrete, D_f + 1.5B′ (SFLW L7);
+    - surcharge row added.
+  - 2.5:
+    - "Typical … (IBC 1807 practice)" → defaults, and IBC / ASCE 7 set no FS for building footings, 1807.2.3 for retaining walls;
+    - rows added: OT gate, eccentricity limit, simultaneous wind, S_DS.
+  - 2.6: quantity input, outer layer, 13.3.4.1 → 8.6.1.1 for combined, s_max = min(2h, 18 in), clear spacing, ℓ_dc option.
+  - 2.7: element type and the wall inputs, load offsets, T_u, E row, dowel projection. Bar-fit minimum + 4/3 d_agg (SFAG).
+  - 2.8: the backfills that differ from new-project defaults (`migrateState`).
+- **Part 3:**
+  - 3.2, retitled "Output tabs and the Report":
+    - tab ranges 2.1–2.6, 3.1–3.4, 4.1–4.6, 5.1–5.7;
+    - 6.x: P–M views, magnification, shear, torsion, crossties, cover;
+    - 6W.x, 7 3D View, 10 Drawings;
+    - the Report's sections and appendices (checked by rendering the Report tab).
+  - 3.4: rewritten as the warnings list. The amber items are listed as the code raises them (every `W.push` with lvl 'warn'). The red items are the input errors and the design errors. "Dowel steel below minimum" and "slenderness screen exceeded" are dropped: both are now dashboard FAIL items. "Punching perimeter truncated", "rigidity marginal" and "bar-fit" are replaced by what the code shows.
+- **Part 4A:**
+  - 4A.1 equations: load offsets, the dead and live surcharge. U = γ_w × submerged concrete volume (the code); the old text had γ_w·depth·BL.
+  - 4A.2: the combination list as `genCombos` builds it (Lr or S, wind cases, seismic). The key on diagonal wind → Case 3.
+  - 4A.3: §0.3.5 treatment.
+- **Part 4B:**
+  - 4B.1: "a sixth check" → the named check.
+  - 4B.2: q_allow override, depth factors (AASHTO form, cap), local shear, D_f + 1.5B′, card 3.3.
+  - 4B.3: gating and the eccentricity limit.
+  - 4B.4: ΣP of each combination (not "at the min-dead bracket"), passive over D_f and the full width, sliding on the resultant.
+  - 4B.5: flotation on the gross and net bases, the smaller governs (SFFG).
+- **Part 4C:**
+  - 4C.1: the free-body treatment; strength combinations off the footing are skipped as errors.
+  - 4C.2:
+    - wall faces; transverse strip (SFTX);
+    - flexural capacity: φ by strain, tension-controlled required (SFET, SFPY), s_max, d ≥ 6 in;
+    - one-way V_c example: Part 6 numbers (263.3 vs 153.2 k, 1.7×; the old "Part 6 example #4 @ 12, d = 14.75" was not Part 6). The factor 2.4 at ρ_w = 0.0011 is kept as a general case.
+    - λ_s option; the override warning is on the Footing Design tab.
+  - 4C.3: V_u includes the body forces inside the critical area (`bodyIn`); moments about the critical-section centroid; J_c from the truncated section; overlapping perimeters REVIEW.
+  - 4C.4 split into four paragraphs:
+    - footing bars at every face, hooks (SFDV, SFDE);
+    - interface bearing with the excess to the dowels (SFBX);
+    - dowels: minimum, count, ℓ_dc gate and option, tension, laps;
+    - shear friction (22.9, μ, N_u = 0.9D, development both sides).
+  - 4C.5:
+    - classification sets the 1% floor (pedestal: none);
+    - P–M at each combination's own P_u, exact clipped block, the views (SFPM, SFPX, SFPV);
+    - limits and cover;
+    - new items: shear (SFVP), torsion (SFTQ), crossties (SFXT).
+  - **New 4C.6 "Wall elements (Wall Design tab)":** SFWD-2…8, SFWC, SFWM, SFWH.
+- **Part 5:** checked by running Case B on the current code. q_max 7.66, bearing 2.04, M_u 1426.55 / 1323.50, V_u 304.67 / 273.55, punching V_u 778.0145, DCR 1.758 (1.275 with λ_s neglected), pedestal M_ux 910.00, M_uy 157.50: all as printed. Unchanged.
+- **Part 6** (run on the current code):
+  - 6.4: the garbled "d = 29.5… wait —" sentence fixed: d = 28.5 in, DCR 0.84 (card 5.3); x: d = 27.5, DCR 1.07 (card 5.2).
+  - 6.5: φV_c was written 0.75·2λλ_s√f′c·b·d (the old basis) → Table 22.5.5.1(c), 153.2 k, DCR 1.99.
+  - 6.6:
+    - b₀ = 2(12+29)+2(30+29) = 200 in → d = 28, b₀ = 196 in (code `bo`);
+    - V_u 774.5 → 778.0 k;
+    - v_c = 143.0 psi, DCR 1.76;
+    - the "1.67–1.76 depending on cover" note replaced: the setup states cover 4 in.
+- **Part 7:** 7.3 "would pass a one-way shear check it should fail (strip DCR 0.96 vs true 1.16)" → 1.65 vs 1.99 at the current capacity; the old figures kept as the earlier basis.
+- **Part A:** references extended to the provisions the tool uses: ACI 318-19 Ch. 6, 10, 11, 20.5, 21.2, 22.4, 22.7, 22.9; ASCE 7-16 2.3.6, 2.4.5, 12.4.2.2, 27.3.5; IBC 1807.2.3; AASHTO 10.6.3.1.2a (depth-factor form used), Table 10.6.3.1.2a-2, 10.6.3.1.2b, 10.6.3.3, 10.6.3.4.
+- **Checked and left unchanged:** 0.2 (settlement, live-load patterning, rain, buoyancy), 0.3.2, 0.3.3 (λ_s = 0.726 at d = 28 in, ~38 %), 0.3.8, 0.4 one-way residual / baselines / third benchmark, 1.4, 3.1, 3.3, 4A.4, 4B.1 solver text, 4C.3 v_c, Part 5, Part 7 other text, A.1, A.3.
+- **Governing provision / formulas / factors / units:** none changed in the engine (§4 does not apply). The manual's quoted numbers changed only where they no longer matched the program's output (Part 6, Part 7, 4C.2), each checked by running the case. **Saved data:** none.
+- **Check case:** Part 5 Case B (13 × 13 × 2.75 ft, γ_c = 0, f′c 3000, q_a 3.75 gross, cover 4 in, #8@12 x / #8@9 y, pedestal 1.0 × 2.5 × 2.25 ft; D: P 350, V_x 50, V_y 200, M_x 200; L: P 275). Values as listed above under Part 6.
+- **How verified:**
+  - Main-vs-branch probe (headless Chromium, `tests/lib.mjs` `openPage`), seven cases: `R`, `P2` and the digit sequence of every output tab identical; only the Manual differs.
+  - Every manual part renders with KaTeX; 0 KaTeX errors, 0 console errors.
+  - Tests: check-syntax, phone-layout --tool sf, project-library --tool spreadfooting, spread-footing-nobear: pass.
+- **Left, not the manual (tool display text, raised for a separate change):**
+  - The Report's assumption "Pedestal slenderness is screened only … moment magnification is not performed" (`sfrModel`, anchor `'Pedestal slenderness is screened only`).
+  - The Schematic 1.5 list "Not considered in this version": "seismic loads (E)" and "slender-pedestal moment magnification".
+  - The depth-factor input hint "Vesić form (not AASHTO LRFD 10th Ed. Eq. 10.6.3.1.2a-10)".
+  - All three contradict the code: the tool magnifies (SFSL), has E combinations (SFEQ), and uses the AASHTO arctan form with d_q ≤ 1.4 (SFLW).
+- **Other copies:** none.
+
+## 2026-11-08 — PR: docs/sf-stale-display (PR #1246: https://github.com/mlococo88/All-Structural/pull/1246) (SFSC-5) — stale scope statements in the tool's own display text (Report assumption, Schematic 1.5, depth-factor hint, card 5.1, hand-off message)   [DISPLAY ONLY; no computed value changes]
+- **Request (engineer, 2026-11-08):** fix the three display texts raised in SFSC-4 (#1245). Also search the tool's non-manual text for other "not performed / not considered / screened only" statements the code has overtaken.
+- **Search:** "not performed", "not considered", "screened only", "not computed", "not checked", "not modelled", "is not applied", "seismic", "magnif", "standard practice", "excluded from", "carried directly", outside the manual. Every hit was checked against the code. Still true, left as they are:
+  - torsion design not performed (SFTQ);
+  - grouped punching stress not computed;
+  - wind Cases 2 / 4 not modelled;
+  - Ω₀ not applied unless E_mh is entered;
+  - confining ties A_th not considered;
+  - the LRFD reference tables "not checked";
+  - the wall "Not checked" list;
+  - flotation excludes live loads;
+  - pedestal loads "self-weight not included" (loads at the pedestal top);
+  - the 1% lower limit not applied to a pedestal.
+- **Changed (anchor = the before text):**
+  1. **Report assumptions** (`sfrModel`, "7. Assumptions" list).
+     - Before: `'Pedestal slenderness is screened only (k = 2.0, free top: fixed at the footing, free at the top; ℓ_u = h); moment magnification is not performed.'`
+     - After: `'Pedestal slenderness: k = 2.0 (fixed at the footing, free at the top), ℓ_u = h; a pedestal with kℓ_u/r > 22 has its moments magnified (ACI 318-19 6.6.4; sway cantilever, δ_s of the pedestal alone, C_m = 1.0) and is NG where unstable or where δ_sδ > 1.4 (6.2.5.3).'`
+     - Code: SFSL (`sfslMag`).
+  2. **Schematic 1.5 "Not considered in this version (v1 audit trail)"** (`renderSchematic`, anchor `'Not considered in this version`). Before → after:
+     - `'seismic loads (E);'` → `'seismic analysis and detailing (E loads are entered as E_h; the ASCE 7-16 seismic combinations are generated; no Ω₀ unless E_mh is entered; no ACI 318-19 Chapter 18 detailing);'` (SFEQ).
+     - `'minimum/accidental eccentricity;'` → `'minimum/accidental eccentricity (other than M_2,min of a slender pedestal);'`.
+     - `'slender-pedestal moment magnification;'` → `'second-order frame (story) analysis of slender pedestals (the moments of a slender pedestal are magnified per ACI 318-19 6.6.4);'` (SFSL).
+     - "Structural design: … of the footing and pedestals … Footing Design and Pedestal Design tabs." → "… of the footing, pedestals and walls … Footing Design, Pedestal Design and Wall Design tabs." (SFWD).
+  3. **Depth-factor input** (Soil tab, `data-path="soil.sfdDepthF"`).
+     - Option "On (Vesić)" → "On (AASHTO dq ≤ 1.4, Vesić dc)".
+     - Hint "Vesić form (not AASHTO LRFD 10th Ed. Eq. 10.6.3.1.2a-10); use condition per AASHTO 10.6.3.1.2a" → "d_q per AASHTO LRFD 10th Ed. Eq. 10.6.3.1.2a-10 (arctan(D_f/B′), ≤ 1.4), d_c Vesić form from d_q; use condition per AASHTO 10.6.3.1.2a".
+     - Code: `vesicCapacity`, `kk=Math.atan(Df/Beff)`, `dq=Math.min(…,1.4)` (SFLW L6). The saved value `'on'` / `'off'` is unchanged.
+  4. **Footing Design card 5.1** (`renderFootDes`, anchor `'5.1  Design Basis & Effective Depths'`; also in the Report).
+     - Before: `['Excluded:','footing self-weight, EV, and buoyancy are uniform reactions carried directly to the soil and are excluded from the structural pressure per standard practice.']`
+     - After: `['Body forces:','footing self-weight, EV, surcharge and buoyancy are carried in the structural resultant and subtracted back inside each free body: under full contact this equals leaving them out (a uniform load reacted by a uniform pressure); under partial contact the weight over the uplifted region is carried in bending back to the contact area.']`
+     - Code: `netResultant`, `bodyResultant`.
+  5. **Support-reaction hand-off** (the BridgeXfer receiver's `plan()`).
+     - Before: `'E (seismic) is not imported: this tool has no seismic load type (see its scope notes).'`
+     - After: `'E (seismic) is not imported by default: pick the E row (horizontal seismic effect E_h) as its target if the reaction is E_h.'`
+     - The target list already offers E (`TYPES`). The default map (`DEF_ROW.E = ''`) is unchanged, so imports behave as before. This message exists in this tool only; it is not part of the duplicated bootstrap.
+- **Governing provision / formulas / factors / units:** none changed (§4 does not apply). **Saved data:** none.
+- **Check case:** default project. The Schematic 1.5 list and the Report "Assumptions and warnings" read as above. Card 5.1 shows the "Body forces" item. With Depth factors On, the option reads "On (AASHTO dq ≤ 1.4, Vesić dc)". Every result is identical.
+- **How verified:** main-vs-branch probe (headless Chromium, `tests/lib.mjs` `openPage`), five cases: default, Direct factored, a pedestal and a wall, slender, one pedestal.
+  - `R`, `P2` and `state` identical.
+  - The only text differences: the Schematic 1.5 list, the card 5.1 item, and the matching Report lines (Report text by `SharedReport.text`).
+  - 0 console errors.
+  - Tests: check-syntax, phone-layout --tool sf, project-library --tool spreadfooting, spread-footing-nobear: pass.
+- **Other copies:** none.
