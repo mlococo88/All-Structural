@@ -1648,3 +1648,53 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 
   Tests: `check-syntax` pass; `phone-layout --tool mlg` pass; `project-library --tool mlg` ALL PASS; `engine/run.mjs moving-load` 7/7.
 - **Other copies:** none.
+
+## 2026-11-08 — PR: claude/ml-notes-b (PR #1221: https://github.com/mlococo88/All-Structural/pull/1221) (MLNL-2: long result, benchmark, Report and print-report notes as a bold lead and a list; display only, no result change)
+
+### MLNL-2. Long notes split into a lead line and a list: result cards, benchmarks, Report tab, print report   [display only] [no result change]
+- **Request:** as MLNL-1 (#1201). Uses the same helper `mlNL` and CSS. Every sentence, number, citation and link is kept, in the same order; new lead words carry no digits. Exact before / after: the PR diff.
+- **Notes changed (anchor = the old opening text):**
+  1. Deflection card, `<p class="hint" style="padding:8px 14px">Deflection DF is typically`: now `<div class="hint mlNL">`, with lead "Deflection DF and limit:" and items Deflection DF / Limit / Plot.
+  2. `#tblNote`:
+     - In `render`, before: `$('tblNote').textContent=`Values ${u}. Governing case, direction, and lead axle position shown for each extreme.`;`. After: `$('tblNote').classList.add('mlNL');$('tblNote').innerHTML=mlNL(`Values ${u}.`,[['Shown:','governing case, direction, and lead axle position for each extreme.']]);`.
+     - In the `_render3` wrapper, before: `if(n)n.textContent+=' Click any value or governing case to load it into step mode (reactions table too).';`. After: an `<li><b class="mlNLk">Step mode:</b> click any value …</li>` appended to `n.querySelector('.mlNLu')`.
+  3. Absolute maxima card, "Found with the same moving-load engine": lead "How the absolute maxima are found:"; items Engine / Sections / Refined / Envelope table / Screen only.
+  4. Pull-from-lldf dialog, `'<p class="hint" style="color:#475569">Basis: lldf\'s moment`: lead "Basis:"; items Included (both `<b>` phrases kept) / "Do not apply either again." / Units / Rail.
+  5. FHWA `benchmarkReport` (plate-built version), "Section built from the FHWA plates": lead "Section and grading:"; items Section (with `${Is}`) / Reversal values / Uplift.
+  6. `#bmNote07`: lead "0.7L (84 ft, where the plates change): the +M cell is shown but not graded."; items Independent check / Conclusion.
+  7. Closed-form benchmark, "Inputs loaded: 120 ft + 120 ft, uniform I": lead "Closed-form check:"; items Inputs loaded / Reversal values / Tolerance.
+  8. Report tab, `mlr` model, anchor `const ck=document.createElement('div'); ck.innerHTML=R.check||'';`:
+     - Before: `items:[{type:'note',text:ck.textContent.replace(/\s+/g,' ').trim()||'—'}].concat(…)`.
+     - After: `const ckL=[...ck.children].map(d=>d.textContent.replace(/\s+/g,' ').trim()).filter(Boolean);` and `items:(ckL.length?ckL.map(t=>({type:'note',text:t})):[…as before…]).concat(…)`. This gives one note per line of the engine check; `R.check` (shared) is not changed.
+  9. Report tab References, anchor `secs.push({title:'References'`. Before: `items:[{type:'note',text:basis||'—'}]`. After: one note `'• '+text` per `#mlgBasis .mlNLu>li` (MLNL-1 list), falling back to `basis`.
+  10. Print report (D11 recast):
+      - Vehicle note, anchor `s2el.appendChild(mk('p','cr-note','Axles that do not contribute: '`: now `mk('div','cr-note mlNL',mlNL('Vehicle rules:',[…],{act:[mv2?'Decision (pending engineer review): the two-vehicle case below.':null]}))` with `mv2=m.multi&&m.spans.length>1`. Items: Axles that do not contribute / Travel / Vehicle / Two-vehicle case (… ×) (conditional). The inline "Decision (pending engineer review)" moved to the action line.
+      - Front matter `'<p class="cr-p cr-small">Prepared with '`: now `'<div class="cr-p cr-small mlNL">'+mlNL('Prepared with '+TOOL+'.',[Method / Factored values / No design checks / Units])+'</div>'`.
+      - Print CSS, before `'.crdoc .cr-p{margin:0 0 7pt}`:
+        ```
+        .crdoc .mlNL .mlNLl{font-weight:700}
+        .crdoc .mlNL .mlNLu{margin:1pt 0 2pt;padding-left:14pt}
+        .crdoc .mlNL .mlNLu>li{margin:0;break-inside:avoid}
+        .crdoc .mlNL .mlNLa{font-style:normal;font-weight:700;border-left:3pt solid #d97706;padding-left:5pt;margin:2pt 0 3pt}
+        ```
+- **Not changed (open item):** the pedestrian-load and Std. Spec. lane warnings are long (554 / 294 characters), but they are built in `shared/moving-load.js`, which Steel Bridge Design also loads; they are left for a shared-file PR. Also not changed:
+  - `#vehInfo`: a "·" summary line that the Report and print report quote;
+  - the print report's factoring "where" lines (part of the worked equations);
+  - the cover "Codes:" line.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none.
+- **Check case:** default project (2 × 100 ft, HL-93), Report tab §1.3. Before, it was one 469-character paragraph. After, it is six notes:
+  - "Mesh: 241 nodes, 240 elements (max element ≈ 0.83 ft). …"
+  - "Unit uniform load on all spans, L = span 1:"
+  - "• M at first interior support = -0.1250 wL² …"
+  - "• R_A = 0.3750 wL (theory: 0.375 wL)"
+  - "• ΣR / wL_total = 1.0000 (must equal 1.0000)"
+  - the theory note.
+
+  The numbers are unchanged.
+- **How verified:** headless Chromium, origin/main vs the branch, the same 7 cases as MLNL-1:
+  - `RES` identical;
+  - the digit sequence of the page text, of the Report tab `textContent` and of the print report identical;
+  - 0 console errors.
+
+  (The Report must be read with `textContent`: `shared/report.js` uses `content-visibility`, so `innerText` leaves out off-screen sections.) Tests: `check-syntax`; `phone-layout --tool mlg`; `project-library --tool mlg`; `engine/run.mjs moving-load`. All pass.
+- **Other copies:** none.

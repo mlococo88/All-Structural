@@ -491,7 +491,7 @@ function render(){
   $('mMp').textContent=mp.toFixed(1);$('mMn').textContent=mn.toFixed(1);$('mVp').textContent=vp.toFixed(1);$('mVn').textContent=vn.toFixed(1);
   $('mR').textContent=rx.toFixed(1);$('mRw').textContent=`kips, factored · ${rxs}`;
   const u=view==='f'?`factored per girder (LLF ${m.llf} × DF)`:'unfactored per lane, including impact';
-  $('envNote').textContent=`Red = max (+), blue = min (−) · ${u}`; $('tblNote').textContent=`Values ${u}. Governing case, direction, and lead axle position shown for each extreme.`;
+  $('envNote').textContent=`Red = max (+), blue = min (−) · ${u}`; $('tblNote').classList.add('mlNL');$('tblNote').innerHTML=mlNL(`Values ${u}.`,[['Shown:','governing case, direction, and lead axle position for each extreme.']]);   // MLNL (2026-11-08)
   // Warnings
   $('warns').classList.toggle('hidden',!R.warn.length); $('warns').innerHTML=R.warn.map(w=>'⚠ '+w).join('<br>');
   // Envelopes
@@ -663,7 +663,7 @@ $('stepCard').insertAdjacentHTML('afterend',`<div class="card" id="deflCard">
     </div></div>
   <canvas id="cD" style="height:240px"></canvas>
   <div class="tw"><table><thead><tr><th>Span</th><th>L (ft)</th><th>Max ↓ δ (in)</th><th>@ x (ft)</th><th>Allowable L/N (in)</th><th>Ratio</th><th>Max ↑ δ (in)</th><th>Governing ↓</th></tr></thead><tbody id="dB"></tbody></table></div>
-  <p class="hint" style="padding:8px 14px">Deflection DF is typically (number of lanes × multiple presence) ÷ number of girders, assuming all girders deflect equally (LRFD 2.5.2.6.2). AREMA commonly limits live load plus impact deflection to L/640; confirm the owner's criterion. Blue = max downward, teal = max upward.</p>
+  <div class="hint mlNL" style="padding:8px 14px"><div class="mlNLl">Deflection DF and limit:</div><ul class="mlNLu"><li><b class="mlNLk">Deflection DF:</b> typically (number of lanes × multiple presence) ÷ number of girders, assuming all girders deflect equally (LRFD 2.5.2.6.2).</li><li><b class="mlNLk">Limit:</b> AREMA commonly limits live load plus impact deflection to L/640; confirm the owner's criterion.</li><li><b class="mlNLk">Plot:</b> blue = max downward, teal = max upward.</li></ul></div>
 </div>`);
 
 // ═══════════ LIVE LOAD DEFLECTION ═══════════
@@ -713,7 +713,7 @@ $('rB').addEventListener('click',e=>{const td=e.target.closest('td'),tr=e.target
 
 // Wrap run/render so deflection and notes stay in sync
 const _run0=run; run=function(){_run0();if(RES){try{DEF=deflAnalyze();}catch(e){console.error(e);DEF=null;}drawDefl();}};
-const _render3=render; render=function(){_render3();drawDefl();const n=$('tblNote');if(n)n.textContent+=' Click any value or governing case to load it into step mode (reactions table too).';};
+const _render3=render; render=function(){_render3();drawDefl();const n=$('tblNote'),ul=n&&n.querySelector('.mlNLu');if(ul)ul.insertAdjacentHTML('beforeend','<li><b class="mlNLk">Step mode:</b> click any value or governing case to load it into step mode (reactions table too).</li>');};   // MLNL (2026-11-08): was n.textContent+=' Click any value …'
 
 // ═══════════ GIRDER SECTION INPUTS ON THE INPUT PANEL ═══════════
 document.head.insertAdjacentHTML('beforeend','<style>.segb{border:1px solid #e2e8f0;border-radius:8px;padding:9px;background:#f8fafc;display:flex;flex-direction:column;gap:7px}.segh{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#475569}.segh b{color:#1e293b}.segp{font-size:10.5px;color:#64748b;line-height:1.55;border-top:1px dashed #e2e8f0;padding-top:6px}#segList{display:flex;flex-direction:column;gap:8px}</style>');
@@ -1147,8 +1147,8 @@ benchmarkReport=function(){
     <div style="font-size:12px;color:#475569">FHWA 1.43 in (full-width section, all lanes, IM) · App <b>${Math.abs(dmax).toFixed(2)} in</b> with DF 0.51 and the single-girder section. Enter a deflection width per girder to approximate the full-width section.</div>
     <div style="display:flex;gap:8px;align-items:center"><button class="btn" id="bmSensBtn">Run stiffness sensitivity</button><span class="hint">Tests which section-property assumption best matches FHWA</span></div>
     <div id="bmSens"></div>
-    <p class="hint">Section built from the FHWA plates with the haunch measured from the top of the web (3.5 in), giving composite I = ${Is} in⁴ (FHWA lists 66,340 and 130,196 for the end and pier regions). Reversal values are shown but not graded: by statics, moment over the pier and shear just left of the pier cannot be positive under downward load, and FHWA's −33.8 kip uplift exceeds the 27.4 kip bound implied by its own −2,450 kip-ft pier moment.</p>
-    <p class="hint" id="bmNote07">0.7L (84 ft, where the plates change): the +M cell is shown but not graded. An independent check with a separate variable-EI force-method solver (code review, 2026-11-07) gives 1250.6 kip-ft, the same as this tool, against FHWA's 1318; the difference is taken to be in the FHWA table, not in the analysis.</p>`;
+    <div class="hint mlNL"><div class="mlNLl">Section and grading:</div><ul class="mlNLu"><li><b class="mlNLk">Section:</b> built from the FHWA plates with the haunch measured from the top of the web (3.5 in), giving composite I = ${Is} in⁴ (FHWA lists 66,340 and 130,196 for the end and pier regions).</li><li><b class="mlNLk">Reversal values:</b> shown but not graded: by statics, moment over the pier and shear just left of the pier cannot be positive under downward load.</li><li><b class="mlNLk">Uplift:</b> FHWA's −33.8 kip uplift exceeds the 27.4 kip bound implied by its own −2,450 kip-ft pier moment.</li></ul></div>
+    <div class="hint mlNL" id="bmNote07"><div class="mlNLl">0.7L (84 ft, where the plates change): the +M cell is shown but not graded.</div><ul class="mlNLu"><li><b class="mlNLk">Independent check:</b> a separate variable-EI force-method solver (code review, 2026-11-07) gives 1250.6 kip-ft, the same as this tool, against FHWA's 1318.</li><li><b class="mlNLk">Conclusion:</b> the difference is taken to be in the FHWA table, not in the analysis.</li></ul></div>`;
   $('bmSensBtn').onclick=runSensitivity;
   $('bmCard').classList.remove('hidden');$('bmCard').scrollIntoView({behavior:'smooth',block:'start'});
 };
@@ -1188,7 +1188,7 @@ function closedFormReport(){
   const col=p=>Math.abs(p)<=0.5?'#059669':Math.abs(p)<=1.5?'#d97706':'#dc2626';
   $('bmBody').innerHTML=`<div style="font-size:13px;font-weight:700;color:${col(worst)}">Largest difference: ${worst.toFixed(2)}% — ${worst<=0.5?'matches the exact solution':worst<=1.5?'close; check step sizes':'does not match; investigate'}</div>
     <div class="tw"><table><thead><tr><th>Quantity</th><th>Exact</th><th>App</th><th>Δ</th><th>Basis</th></tr></thead><tbody>${chk.map(([q,a,b,n])=>{const p=bmPct(a,b);return `<tr><td>${q}</td><td>${b}</td><td>${a.toFixed(2)}</td><td style="font-weight:700;color:${col(p)}">${(p>=0?'+':'')+p.toFixed(2)}%</td><td class="g" style="white-space:normal">${n}</td></tr>`;}).join('')}</tbody></table></div>
-    <p class="hint">Inputs loaded: 120 ft + 120 ft, uniform I, HS20 (no lane), impact 1.00, LLF 1.00, DF 1.00, both directions. These cells include the reversal values the FHWA table cannot check (uplift, negative moment in the positive region). Tolerance: green ≤ 0.5%, amber ≤ 1.5%.</p>`;
+    <div class="hint mlNL"><div class="mlNLl">Closed-form check:</div><ul class="mlNLu"><li><b class="mlNLk">Inputs loaded:</b> 120 ft + 120 ft, uniform I, HS20 (no lane), impact 1.00, LLF 1.00, DF 1.00, both directions.</li><li><b class="mlNLk">Reversal values:</b> these cells include the reversal values the FHWA table cannot check (uplift, negative moment in the positive region).</li><li><b class="mlNLk">Tolerance:</b> green ≤ 0.5%, amber ≤ 1.5%.</li></ul></div>`;
   $('bmCard').classList.remove('hidden');$('bmCard').scrollIntoView({behavior:'smooth',block:'start'});
 }
 $('cfBtn').onclick=()=>{if(!confirm('Load the closed-form two-span check? This replaces the current inputs.'))return;loadClosedForm();setTimeout(closedFormReport,30);};
@@ -1248,7 +1248,7 @@ reportHTML=function(out,o,base,dk){
 // then re-runs with 0.1 ft mesh points around each moment candidate. Runs after the main results are shown.
 $('envB').closest('.card').insertAdjacentHTML('afterend',`<div class="card" id="absCard"><div class="ch"><div><h2>Absolute Maxima per Span</h2><p id="absNote"></p></div></div>
   <div class="tw"><table><thead><tr><th>Span</th><th>Result</th><th>Value</th><th>x (ft)</th><th>Location</th><th>Governing case / vehicle position</th></tr></thead><tbody id="absB"></tbody></table></div>
-  <p class="hint" style="padding:8px 14px">Found with the same moving-load engine and vehicle cases as the envelope, by adding output sections at every analysis node between the twentieth points (moment at each node, shear just right of each node), then re-solving with mesh points every 0.1 ft around each moment maximum. Rows are in addition to the envelope table above, which is unchanged. Shown on screen only; not in the CSV or the printed report.</p></div>`);
+  <div class="hint mlNL" style="padding:8px 14px"><div class="mlNLl">How the absolute maxima are found:</div><ul class="mlNLu"><li><b class="mlNLk">Engine:</b> the same moving-load engine and vehicle cases as the envelope.</li><li><b class="mlNLk">Sections:</b> output sections added at every analysis node between the twentieth points (moment at each node, shear just right of each node).</li><li><b class="mlNLk">Refined:</b> then re-solved with mesh points every 0.1 ft around each moment maximum.</li><li><b class="mlNLk">Envelope table:</b> rows are in addition to the envelope table above, which is unchanged.</li><li><b class="mlNLk">Screen only:</b> shown on screen only; not in the CSV or the printed report.</li></ul></div></div>`);
 let absTimer=null;
 function absScan(R){return SharedMovingLoad.absScan(R,analyze);}   // analyze = the page's current (wrapped) analyze
 function absPaint(){
@@ -1688,7 +1688,11 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
     '<label class="chk"><input type="checkbox" id="lxNeg" checked>Set the negative-moment DF from lldf\'s interior-support (negative-region) DF</label>'+
     '<div id="lxSpanWarn" class="warn hidden"></div>'+
     '<label class="chk" id="lxSpansF"><input type="checkbox" id="lxSpans"><span id="lxSpansT">Also set the spans here to lldf\'s spans</span></label>'+
-    '<p class="hint" style="color:#475569">Basis: lldf\'s moment and shear DFs <b>include the multiple presence factor</b> (also in lever-rule cases, LRFD 3.6.1.1.2) <b>and the skew correction</b> (LRFD 4.6.2.2.2e / 4.6.2.2.3c). Do not apply either again. Units: lanes per girder, the same basis as the DF inputs here. Rail DF inputs are not changed.</p>'+
+    '<div class="hint mlNL" style="color:#475569"><div class="mlNLl">Basis:</div><ul class="mlNLu">'+   // MLNL (2026-11-08): was one paragraph
+    '<li><b class="mlNLk">Included:</b> lldf\'s moment and shear DFs <b>include the multiple presence factor</b> (also in lever-rule cases, LRFD 3.6.1.1.2) <b>and the skew correction</b> (LRFD 4.6.2.2.2e / 4.6.2.2.3c).</li>'+
+    '<li><b class="mlNLk">Do not</b> apply either again.</li>'+
+    '<li><b class="mlNLk">Units:</b> lanes per girder, the same basis as the DF inputs here.</li>'+
+    '<li><b class="mlNLk">Rail:</b> rail DF inputs are not changed.</li></ul></div>'+
     '<div id="lxFat" style="font-size:12px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;padding:8px 10px;line-height:1.6"></div>'+
     '<div class="lbl">This will overwrite</div><div id="lxChanges" style="font-size:12px;line-height:1.6"></div>'+
     '<div id="lxNotes" class="hint" style="color:#475569"></div>'+
@@ -2095,7 +2099,11 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
       if(vi)s2el.appendChild(vi); if(info)s2el.appendChild(info);
       var off=0, rows=m.axles.map(function(a,j){off+=j?+a[1]:0;var vs=r.R.varOK&&j+1===m.vK;return '<tr><td>'+(j+1)+'</td><td class="n">'+fx(a[0],2)+'</td><td class="n">'+(j?(vs?m.vMin+'–'+m.vMax+' (varies)':fx(a[1],2)):'—')+'</td><td class="n">'+(vs?'—':fx(off,2))+'</td></tr>';}).join('');
       s2el.appendChild(mk('table','cr-tbl','<thead><tr><th>Axle</th><th>Load (kips)</th><th>Spacing from previous (ft)</th><th>Distance from axle 1 (ft)</th></tr></thead><tbody>'+rows+'</tbody>'));
-      s2el.appendChild(mk('p','cr-note','Axles that do not contribute: '+(m.neglect?'neglected (LRFD 3.6.1.3.1)':'always included')+' · travel: '+(m.dirs&&m.dirs.length>1?'both directions':'one direction')+(m.rail?' · rail vehicle (rail DF set)':' · highway vehicle')+(m.multi&&m.spans.length>1?' · two-vehicle case ('+m.mScale+' ×): uniform load on the parts of the influence line that add only (C3.6.1.3.1; the 10th Ed. Art. 3.6.1.3.1 text reads all spans), vehicles not limited to adjacent spans; both conservative, Decision (pending engineer review)':'')+'.'));
+      var mv2=m.multi&&m.spans.length>1;   // MLNL (2026-11-08): was one "·"-separated line
+      s2el.appendChild(mk('div','cr-note mlNL',mlNL('Vehicle rules:',[['Axles that do not contribute:',(m.neglect?'neglected (LRFD 3.6.1.3.1)':'always included')+'.'],
+        ['Travel:',(m.dirs&&m.dirs.length>1?'both directions':'one direction')+'.'],['Vehicle:',(m.rail?'rail vehicle (rail DF set)':'highway vehicle')+'.'],
+        mv2?['Two-vehicle case ('+m.mScale+' ×):','uniform load on the parts of the influence line that add only (C3.6.1.3.1; the 10th Ed. Art. 3.6.1.3.1 text reads all spans), vehicles not limited to adjacent spans; both conservative.']:null],
+        {act:[mv2?'Decision (pending engineer review): the two-vehicle case below.':null]})));
     });
     body.appendChild(s2el);
 
@@ -2159,7 +2167,8 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
     var front='<section class="cr-front"><h2 class="cr-h1">References</h2><table class="cr-refs">'+R.map(function(x,i){return (i&&R[i-1][0]===x[0]?'':'<tr><td colspan="2"><b>'+x[0]+'</b></td></tr>')+'<tr><td class="cr-ra">'+x[1]+'</td><td>'+x[2]+'</td></tr>';}).join('')+'</table>'+
       '<p class="cr-note">Only what this tool cites, for the vehicles in this report. The distribution factors, deflection limit and owner criteria are user inputs.</p>'+
       '<h2 class="cr-h1">Table of Contents</h2><ol class="cr-toc">'+sTop.map(function(s){return '<li><a href="#'+s.id+'">'+s.n+'. '+e(s.t)+'</a>'+(s.subs.length?'<ol>'+s.subs.map(function(q,i){return '<li><a href="#'+q.id+'">'+s.n+'.'+(i+1)+' '+e(q.t)+'</a></li>';}).join('')+'</ol>':'')+'</li>';}).join('')+'</ol>'+
-      '<p class="cr-p cr-small">Prepared with '+TOOL+'. Moving-load envelopes by influence lines on the girder line model ('+alink(id14)+'); the factored values are worked as γ<sub>LL</sub> · g · value per lane in each results section. No design checks (D/C) are made in this report. Units: kip, ft, in unless noted.</p></section>';
+      '<div class="cr-p cr-small mlNL">'+mlNL('Prepared with '+TOOL+'.',[['Method:','moving-load envelopes by influence lines on the girder line model ('+alink(id14)+').'],   // MLNL (2026-11-08)
+        ['Factored values:','worked as γ<sub>LL</sub> · g · value per lane in each results section.'],['No design checks','(D/C) are made in this report.'],['Units:','kip, ft, in unless noted.']])+'</div></section>';
 
     // ---- print-legible diagrams (same series, smaller canvas so the text prints larger) ----
     var saved=RES;
@@ -2207,6 +2216,7 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
     '.crdoc h2.cr-h1{font:700 12pt "Times New Roman",Times,serif;text-decoration:underline;text-transform:uppercase;margin:0 0 8pt;border:0;padding:0;color:#000;break-after:avoid}'+
     '.crdoc .cr-front h2.cr-h1{margin-top:10pt}'+
     '.crdoc h3.cr-h2{font:700 11pt "Times New Roman",Times,serif;text-transform:none;letter-spacing:0;margin:14pt 0 6pt;color:#000;break-after:avoid}'+
+    '.crdoc .mlNL .mlNLl{font-weight:700}.crdoc .mlNL .mlNLu{margin:1pt 0 2pt;padding-left:14pt}.crdoc .mlNL .mlNLu>li{margin:0;break-inside:avoid}.crdoc .mlNL .mlNLa{font-style:normal;font-weight:700;border-left:3pt solid #d97706;padding-left:5pt;margin:2pt 0 3pt}'+   // MLNL (2026-11-08)
     '.crdoc .cr-p{margin:0 0 7pt}.crdoc .cr-small{font-size:9.5pt;margin-top:18pt}.crdoc .cr-note{font-size:9.5pt;font-style:italic;margin:3pt 0 8pt}'+
     '.crdoc .cr-refs{border-collapse:collapse;margin:0 0 6pt;width:100%}.crdoc .cr-refs td{border:0;padding:1pt 10pt 1pt 0;vertical-align:top;text-align:left;font-size:10pt}.crdoc .cr-refs td.cr-ra{padding-left:14pt;white-space:nowrap;width:1%}'+
     '.crdoc .cr-toc,.crdoc .cr-toc ol{list-style:none;margin:0;padding:0}.crdoc .cr-toc>li{margin:3pt 0}.crdoc .cr-toc ol{padding-left:18pt;font-size:10.5pt}'+
@@ -2301,7 +2311,8 @@ function mlrModel(){
     subs.push({title:'Girder segments',items:[{type:'table',caption:'Segments from the left abutment (dimensions in inches; * = I override used for stiffness)',head:['#','x (ft)','Top flg b × t','Web D × t','Bot flg b × t','A (in²)','ȳ (in)','I (in⁴)','S bot stl (in³)','S top stl (in³)','S deck (in³)'],rows:segRows,wide:true},
       {type:'note',text:'Section properties per AASHTO LRFD 10th Ed. Art. 6.10.1.5 (uncracked short-term composite for live load). Only relative stiffness affects V, M and R; absolute EI matters for deflection.'}]});
     const ck=document.createElement('div'); ck.innerHTML=R.check||'';
-    subs.push({title:'Analysis model and engine check',items:[{type:'note',text:ck.textContent.replace(/\s+/g,' ').trim()||'—'}].concat((R.warn||[]).map(w=>({type:'note',warn:true,text:'Warning: '+String(w).replace(/<[^>]+>/g,'')})))});
+    const ckL=[...ck.children].map(d=>d.textContent.replace(/\s+/g,' ').trim()).filter(Boolean);   // MLNL (2026-11-08): one note per line of the engine check (was one paragraph)
+    subs.push({title:'Analysis model and engine check',items:(ckL.length?ckL.map(t=>({type:'note',text:t})):[{type:'note',text:ck.textContent.replace(/\s+/g,' ').trim()||'—'}]).concat((R.warn||[]).map(w=>({type:'note',warn:true,text:'Warning: '+String(w).replace(/<[^>]+>/g,'')})))});
     secs.push({title:'Structure and analysis inputs',subs});
   }
   /* ---------- 2. Vehicle ---------- */
@@ -2368,7 +2379,8 @@ function mlrModel(){
   }
   secs.forEach(sc=>sc.subs.forEach(q=>{q.items=q.items.filter(it=>!(it.type==='note'&&!String(it.text||'').trim()));}));   // no empty notes
   /* ---------- 7. References ---------- */
-  secs.push({title:'References',subs:[{title:'Codes and references cited',items:[{type:'note',text:basis||'—'}]}]});
+  const bL=$('mlgBasis')?[...$('mlgBasis').querySelectorAll('.mlNLu>li')].map(li=>li.textContent.replace(/\s+/g,' ').trim()):[];   // MLNL (2026-11-08): one note per code (was one paragraph)
+  secs.push({title:'References',subs:[{title:'Codes and references cited',items:bL.length?bL.map(t=>({type:'note',text:'• '+t})):[{type:'note',text:basis||'—'}]}]});
   const pj=$('rProj')?$('rProj').value.trim():'', by=$('rBy')?$('rBy').value.trim():'';
   return {title:'Moving Load Generator — Calculation Report',subtitle:(pj||'Untitled')+' · '+vName,code:'AASHTO LRFD 10th Ed. (2024) · AASHTO Std. Spec. 17th Ed. (2002) · AREMA (rail presets)',
     info:[['Project',pj],['Project No.',''],['Computed by',by],['Date',''],['Checked by',''],['Checked date','']],
