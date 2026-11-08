@@ -3361,7 +3361,7 @@ From the code-compliance review of 2026-11-07 (LOW findings L3 to L7).
 - **How verified:** headless Chromium, origin/main vs the branch, 11 cases (default; validation model; templates t2h heel joint, t5u upper chord and t4v with forces; a custom hole pattern; bolt slip on; LFR only; LRFR only; section loss; Lmid average): `R` (errors, warnings, checks, governing, advisory, equilibrium) identical; the digit sequence of every output tab, every input pane, the status bar and the Report model identical; only the Method tab text changed. Validation 17 of 17. 0 console errors. `check-syntax`, `phone-layout --tool gusset`, `project-library --tool gusset` pass. Screenshots at 1440 and 390 px.
 - **Other copies:** none.
 
-## 2026-11-08 — PR: nl-gusset-b (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — GPNL-2: long notes on the input and output tabs, the warnings and the Report front matter as a bold lead and a list (display only, no result change)
+## 2026-11-08 — PR: nl-gusset-b (PR #1195: https://github.com/mlococo88/All-Structural/pull/1195) — GPNL-2: long notes on the input and output tabs, the warnings and the Report front matter as a bold lead and a list (display only, no result change)
 
 ### GPNL-2. Input panes, Summary, Drawing, 3D, Checks (advisory), Rating, Code parameters, Validation, warnings, Report   [display only] [no result change]
 - **Request:** as GPNL-1 (#1187, the Method tab). Same rule: a note over ~300 characters, with 3 or more sentences, or with several facts in one paragraph becomes a lead and a list with bold lead words. Every sentence, number, citation and link is kept, in the same order. New lead words carry no digits.
