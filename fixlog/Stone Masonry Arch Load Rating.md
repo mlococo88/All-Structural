@@ -1653,3 +1653,59 @@ function transDisp(w,n,c,cap){
 - **Check case:** default project, Earth Pressure tab, panel "Lateral pressure on each element": before one 1 945-character paragraph with `<br><br>` breaks; after the lead "How to read the table:" and seven items (Direction, Resultant, θ, p_h is the load., Midas, Everything here is on the arch axis., Vertical fill load), "θ near 90°", "bPROJ = YES" and "§7.2.7.5B" unchanged. Report §7.2: the same lead and seven "• " lines.
 - **How verified:** headless Chromium, origin/main vs the branch, six cases (default; railroad; 60/12 pinned shallow cover with deterioration; 25/8 parabolic deep cover adverse-only; 50/14 cover 1.0 ft with shear and μ = 0; 30/10 deep fill K = 0.30 f_a = 300 3 lanes): every vehicle result (`results`, deep compare) and the model `M` identical; the digit sequence of every tab, the input panel and the Report text identical in all six (the run-time figures "rated in … s" / "Computed in … s" masked). 0 console errors, 0 KaTeX errors. Screenshots at 1440 and 390 px. Tests: see the PR.
 - **Other copies:** none.
+
+## 2026-11-08 — PR: nl-arch-b (PR #1192: https://github.com/mlococo88/All-Structural/pull/1192) — Long notes as a bold lead and a list: the User Manual and the input panel (ARNL-2; display only, no result change)
+
+### ARNL-2. Manual and input-panel paragraphs as a lead and a list   [display only] [no result change]
+- **Request:** as ARNL-1 (#1188), part 2 of 2. Uses the same helper and classes (`R.arNL`, `.arNLl`, `.arNLu`, `.arNLk`).
+- **Input panel (`inputPanel`, `deterRender`):**
+  - Ring Depth hint, anchor `One row per deteriorated area`: becomes a lead plus "Empty cell / Units / Face".
+  - Deterioration editor hint, anchor `Stations are in feet along the span`: becomes a lead plus "Point or zone / Stays put".
+  - Superimposed Dead Load note, anchor `§7.2.7.4B requires the dead load of sidewalks`: becomes three items.
+- **Manual (`MANUAL.PARTS`, static HTML):** every `<p>` / `<li>` whose text is over 500 characters (45 paragraphs) is rewritten as follows:
+  - a `<p>` becomes `<div class="arNLl">first sentence</div><ul class="arNLu"><li><b class="arNLk">Lead words</b> sentence(s)</li>…</ul>`;
+  - an `<li>` keeps its first sentence and gains a nested `ul.arNLu`;
+  - the long enumerations (1.1 MassDOT provisions, 2.2 Earth Pressure / Influence Lines contents) become one item per element.
+  - Sentences are unchanged and in the same order; lead words carry no digits. Exact before / after: the PR diff.
+- **CSS** (after `.manpart ul,.manpart ol{…}`): `.manpart .arNLl{font-size:.99rem;margin-top:6px;} .manpart .arNLu{margin:2px 0 8px;padding-left:22px;}`.
+- **Decision (pending engineer review):** Manual paragraphs of 300 to 500 characters (about 50) are left as prose. The Manual is reference reading under numbered headings, and those paragraphs run 3–4 sentences. Say if they should be split too.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none.
+- **Check case:** Manual §1.3.6, paragraph `§7.2.7.2B sets a minimum of 10 elements`. Before: one 930-character paragraph. After: the lead "§7.2.7.2B sets a minimum of 10 elements or one per 4 ft of clear span." followed by the items "Convergence testing / Why / Therefore", with the 27 %, 30 %, 15 % and 0.26 figures unchanged.
+- **How verified:** headless Chromium, main (after #1188) against the branch, default and a deteriorated shallow case. Results, the model, the digit sequence of every tab (the Manual with all parts shown), the input panel and the Report are identical. 0 console errors.
+## 2026-11-08 — PR: nl-arch-c (PR #1198: https://github.com/mlococo88/All-Structural/pull/1198) — Rating summary as a left column of check chips from 1200 px (ARDC; display only, no result change)
+
+### ARDC. Left summary column   [display only]
+- **Request (engineer, 2026-11-07/08):** add the left summary panel, as in Retaining Wall (#959, #984), Spread Footing (#988), Light Pole (#991, #994/#997) and Shear and Moment Diagrams (#1130). The panel has compact check chips, a « collapse with a per-tool key, and a chip click opens the working card. It is shown from 1200 px; below that nothing changes.
+- **What changed (screen only):**
+  - New `<aside id="arDashCol" class="noprint">` as the first child of `#wrap`, before `#inPanel`. Anchor: `<!-- ARDC (2026-11-08)`.
+  - From 1200 px, `#wrap` gets three columns: `280px minmax(360px,0.9fr) 2.6fr`, with 240 px from 1200 to 1499.98 px.
+  - Collapsed (`body.arDashColl`), the column is a 42 px strip showing the « / » button and the count badges.
+  - Below 1200 px `#arDashCol` is `display:none` and the grid rules do not apply, so the tablet / phone layout and order are unchanged. It is hidden in print.
+- **Chips** (`archDash(p,msg)`, called at the end of `render()` after `postRender(p)`; the two early returns pass a message):
+  - one per rated vehicle: "RF · tons (· E-number) · governing section", PASS / FAIL → Rating · `veh_<id>`;
+  - H lane loading, where rated: RF, PASS / FAIL → `rate_lane`;
+  - MS18 (Items 64 / 66): metric t and MS, no status → Summary · `o_ms18`;
+  - Mesh convergence: spread % and meshes, OK when ≤ 3 %, else REVIEW → `rate_mcv`;
+  - Bed-joint sliding (advisory): worst D/C, OK / NG → `rate_slide`;
+  - Collapse mechanism (advisory): λ against the elastic RF, REVIEW when a dead-load mechanism forms or λ < RF → `rate_mech`;
+  - "Other dashboard checks": the number of FAIL and REVIEW rows of `checks` → Summary · `o_dash`.
+  - Head: the count badges "n FAIL" / "no FAIL" and "n REVIEW".
+  - Values come from the same expressions as the dashboard, with the same rounding.
+  - A chip click calls `archGoto(tab, card)`: the tab opens, the card expands, scrolls under the sticky bar and flashes (§6).
+- **Saved data (§5):** none changed. New per-browser UI key `stoneArchLR.dashCollapsed.v1` ('1' = strip), tool-prefixed. It is written only by the « / » button and is not in the project or the autosave.
+- **Formulas, factors, units, code references:** none (§4 does not apply).
+- **Decisions (pending engineer review):**
+  1. The chips are the vehicle ratings plus the advisory and convergence results that have their own worked card. The other ~30 dashboard rows are summarised in one "Other dashboard checks" chip that opens the dashboard: most of them carry no single value.
+  2. The column sits left of the input panel, as in Shear and Moment Diagrams; the inputs and the output keep their columns.
+  3. The column scrolls on its own, like the two panels.
+- **Check case (default project):**
+  - Chips: H20 RF 0.747 · 14.9 t · SL‑L FAIL; … EV3 (Inv basis) (governs) RF 0.439 · 18.9 t · SL‑R FAIL; MS18 21.92 t · MS 12.18 (HS20 24.4 t × 0.9); Mesh convergence spread 18.7 % · 12, 24, 48 el REVIEW; sliding and mechanism lines; "Other dashboard checks".
+  - Head: "11 FAIL", "2 REVIEW".
+- **How verified:** headless Chromium at 1920 / 1440 / 1280 / 1024 / 390 px:
+  - column 280 / 240 / 240 px, then not shown at 1024 and 390;
+  - no sideways scroll;
+  - a chip click opens Rating · H20;
+  - « gives a 42 px strip and writes `'1'`;
+  - 0 console errors;
+  - origin/main against the branch: results, the model and every tab's text identical (see the PR).
+- **Other copies:** none.

@@ -218,6 +218,48 @@ a.wkA:hover{text-decoration:underline}
   .hero .hP{text-align:left}
   .plotHold{height:300px}
 }
+/* TBLS (2026-11-08, engineer: the summary checks in a left summary panel, as Retaining Wall / Spread Footing / Light Pole /
+   Shear and Moment Diagrams): from 1200 px a column #tbcDashCol left of the inputs (240 px up to 1499 px, 280 px from 1500 px),
+   one line per check of the Summary tab (name, ratio, OK / NG); a click opens the card that works it. Below 1200 px: hidden. */
+#tbcDashCol{display:none}
+@media screen and (min-width:1200px){
+ body.tbcDashWide #tbcDashCol{display:block;flex:0 0 280px;width:280px;min-width:0;overflow-y:auto;overflow-x:hidden;background:var(--panel);border-right:2px solid var(--line);padding:0 8px 24px;font-family:var(--font-ui);overscroll-behavior:contain}
+ #tbcDashHead{position:sticky;top:0;z-index:3;background:var(--panel);display:flex;align-items:center;gap:4px 8px;flex-wrap:wrap;padding:8px 0 4px}
+ #tbcDashTtl{margin:0;font-size:8pt;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.08em}
+ #tbcDashTgl{margin:0;padding:1px 7px;font-size:9pt;border:1px solid var(--line);background:#fff;border-radius:4px;cursor:pointer;color:#475569}
+ #tbcDashCnt{display:inline-flex;gap:4px;flex-wrap:wrap}
+ #tbcDashCnt span{font-size:7.5pt;font-weight:700;padding:1px 5px;border:1px solid;border-radius:3px;white-space:nowrap}
+ #tbcDashCnt .tbcCf{color:#8C1D1D;background:#FDECEC;border-color:var(--fail)}
+ #tbcDashCnt .tbcCp{color:#065F46;background:#E8F7F0;border-color:var(--pass)}
+ #tbcDashSub{font-size:8.5pt;color:#4A5568;margin:0 0 6px;overflow-wrap:anywhere}
+ #tbcDashSub b{color:var(--navy-900)}
+ #tbcDash{display:grid;grid-template-columns:minmax(0,1fr);gap:3px;align-items:start}
+ .tbcDc{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;column-gap:5px;padding:3px 6px 3px 2px;min-width:0;border:1px solid #CBD5E1;border-radius:4px;background:#fff;font-size:8.8pt;line-height:1.35;cursor:pointer}
+ .tbcDc:focus-visible{outline:2px solid var(--blue-600);outline-offset:-1px}
+ .tbcDc.pass{border-color:#9CD6BC;background:#F2FBF6}.tbcDc.fail{border-color:#F1A8A8;background:#FDF3F3}
+ .tbcDc.pass:hover{background:#E3F5EC}.tbcDc.fail:hover{background:#FBE4E4}.tbcDc.na:hover{background:var(--slate-100)}
+ .tbcDc .tbcDcX{grid-row:1;grid-column:1;margin:0;padding:0 3px;border:none;background:transparent;font-size:7.5pt;color:#334155;line-height:1.2;cursor:pointer}
+ .tbcDc .tbcDcN{grid-row:1;grid-column:2;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .tbcDc .tbcDcR{grid-row:1;grid-column:3;white-space:nowrap;color:var(--navy-800);font-weight:600;font-variant-numeric:tabular-nums}
+ .tbcDc .tbcDcS{grid-row:1;grid-column:4;font-size:7.5pt;font-weight:700;white-space:nowrap}
+ .tbcDc.pass .tbcDcS{color:var(--pass)}.tbcDc.fail .tbcDcS{color:var(--fail)}
+ .tbcDc .tbcDcV,.tbcDc .tbcDcRef{grid-column:1/-1;display:none;padding-left:16px;font-size:8pt;color:#475569;overflow-wrap:anywhere}
+ .tbcDc .tbcDcRef{font-style:italic;color:#6B7A8F}
+ .tbcDc.tbcOpen .tbcDcV,.tbcDc.tbcOpen .tbcDcRef{display:block}
+ .tbcDc.tbcOpen .tbcDcN{white-space:normal}
+ .tbcDMsg{font-size:8.8pt;padding:6px 8px;border:1px solid #F1A8A8;background:#FDECEC;color:#8C1D1D;border-radius:4px}
+ body.tbcDashWide.tbcDashColl #tbcDashCol{flex-basis:42px;width:42px;padding:0}
+ body.tbcDashWide.tbcDashColl #tbcDash,body.tbcDashWide.tbcDashColl #tbcDashSub{display:none}
+ body.tbcDashWide.tbcDashColl #tbcDashHead{flex-direction:column;align-items:center}
+ body.tbcDashWide.tbcDashColl #tbcDashTtl{writing-mode:vertical-rl;transform:rotate(180deg);margin:4px 0;white-space:nowrap}
+ body.tbcDashWide.tbcDashColl #tbcDashCnt{flex-direction:column;align-items:center}
+ body.tbcDashWide.tbcDashColl #tbcDashCnt span{font-size:7pt;padding:1px 2px;white-space:normal;text-align:center;width:36px}
+}
+@media screen and (min-width:1200px) and (max-width:1499.98px){
+ body.tbcDashWide #tbcDashCol{flex-basis:240px;width:240px}
+ body.tbcDashWide.tbcDashColl #tbcDashCol{flex-basis:42px;width:42px}
+}
+@media print{#tbcDashCol{display:none!important}}
 @media print{
   html,body{background:#fff!important;overflow:visible!important;height:auto!important}
   #toast,#prOverlay{display:none!important}
@@ -246,6 +288,11 @@ a.wkA:hover{text-decoration:underline}
   </div>
   <div id="govStrip" class="govStrip"></div>
   <div id="main">
+    <aside id="tbcDashCol" aria-label="Check summary"><!-- TBLS (2026-11-08): the Summary tab's checks as a left column on screens 1200 px and wider -->
+      <div id="tbcDashHead"><button type="button" id="tbcDashTgl" aria-controls="tbcDash" aria-expanded="true">&laquo;</button><h2 id="tbcDashTtl">Check summary</h2><span id="tbcDashCnt"></span></div>
+      <div id="tbcDashSub"></div>
+      <div id="tbcDash"></div>
+    </aside>
     <div id="inputPanel"><div id="prjPane"><!-- TBHD (2026-11-05): moved here from the header; kept across rebuilds by rebuildInputs() (first in the Project tab) -->
       <div class="sec"><div class="secHead"><span class="secTitle">Save and open</span></div><div class="secBody" id="tbSaveCard"></div></div><!-- STDS (2026-11-06): the standard "Save and open" card (shared/projects-ui.js projectBar, TBPL.pb); it replaces "Saved projects (this browser)" and "Project file" -->
       <div class="sec"><div class="secHead"><span class="secTitle">Title block</span></div><div class="secBody">
@@ -2125,7 +2172,7 @@ const OUT_TABS = [['sum', 'Summary'], ['sch', 'Schematic & Inputs'], ['ana', 'An
 const LS_TABS = { bend: () => R.dcr.b, shear: () => R.dcr.v, bear: () => R.dcr.c, defl: () => R.dcr.def };
 let PLOTQ = [], PLOTREG = {};
 function curTab() { const t = M.ui.outTab; return OUT_TABS.some(x => x[0] === t) ? t : 'sum'; }
-function renderOutput() { buildGovStrip(); buildTabBar(); renderTab(); inputTabMarks(); }
+function renderOutput() { buildGovStrip(); buildTabBar(); renderTab(); inputTabMarks(); tbcDashRender(); }   // TBLS: the left column
 function buildTabBar() {
   const bar = $('tabBar'); bar.innerHTML = ''; const cur = curTab();
   OUT_TABS.forEach(([id, lab]) => {
@@ -2178,6 +2225,61 @@ function buildGovStrip() {
   g.appendChild(el('span', 'govBadge', isNG() ? 'NG' : 'OK'));
 }
 
+/* TBLS (2026-11-08, engineer: the summary checks in a left summary panel, as Retaining Wall / Spread Footing / Light Pole / Shear and
+   Moment Diagrams; RWLB, SFLB, LPLB, SMLS): on screens >= 1200 px the Summary tab's checks (tbcChips, the ΣR = ΣF chip and the code
+   limits) show as one line each in #tbcDashCol: name, ratio, OK / NG; the expand button shows the governing combination and the card.
+   A click opens the card that works the value (tbcGoto, the "Worked in" targets). No new calculation: the values the Summary tab shows.
+   Collapse state: per-browser UI key tbc_dashCollapsed_v1 ('1' = collapsed, '0' or absent = open); not in the project, the autosave or
+   the export. Below 1200 px nothing changes. */
+const TBDD = { key: 'tbc_dashCollapsed_v1', mq: window.matchMedia ? window.matchMedia('screen and (min-width:1200px)') : null, open: new Map(), coll: false, wide: null };
+try { TBDD.coll = localStorage.getItem(TBDD.key) === '1'; } catch (e) { }
+function tbcDashRender() {
+  const box = $('tbcDash'), cnt = $('tbcDashCnt'), sub = $('tbcDashSub'); if (!box) return;
+  box.innerHTML = ''; cnt.innerHTML = ''; sub.innerHTML = '';
+  if (!R || !R.ok) { box.appendChild(el('div', 'tbcDMsg', `No results: input or design data required (${R ? R.errors.length : 0} item${R && R.errors.length === 1 ? '' : 's'}); see the red tab dots in the input panel.`)); return; }
+  sub.innerHTML = 'Governing: <b>' + esc(R.fails.length ? 'Code limit violated (NG)' : R.ctrlName) + ' · ' + esc(pct(R.dcrMax)) + '</b><br>' + esc(memberTxt());
+  const items = tbcChips().map(([lab, rr, det, tab, card]) => ({ n: lab, v: f3(rr), st: stCls(rr) === 'ok' ? 'pass' : stCls(rr) === 'ng' ? 'fail' : 'na', d: det, card }));
+  const eqOK = R.combos.every(c => Math.abs(c.sumR - c.sumF) <= 1e-6 * Math.max(1, Math.abs(c.sumF)));   // the Summary tab's ΣR = ΣF chip, same test
+  items.push({ n: 'ΣR = ΣF [statics]', v: eqOK ? 'all' : 'check', st: eqOK ? 'pass' : 'fail', d: eqOK ? 'all combinations' : 'not every combination', card: 'anaReac' });
+  if (R.fails.length) items.unshift({ n: 'Code limits', v: String(R.fails.length), st: 'fail', d: R.fails.map(esc).join('<br>'), card: null, tab: 'sum' });
+  let nf = 0, np = 0;
+  items.forEach(it => {
+    if (it.st === 'fail') nf++; else if (it.st === 'pass') np++;
+    const c = el('div', 'tbcDc ' + it.st); c.tabIndex = 0; c.setAttribute('role', 'button');
+    const ref = it.card ? '→ ' + tbcCardTxt(it.card) : '→ Summary';
+    c.innerHTML = `<button type="button" class="tbcDcX" title="Show the governing combination and where the value is worked"></button><span class="tbcDcN">${esc(it.n)}</span>`
+      + `<span class="tbcDcR">${esc(it.v)}</span><span class="tbcDcS">${it.st === 'pass' ? 'OK' : it.st === 'fail' ? 'NG' : ''}</span>`
+      + `<div class="tbcDcV">${it.card ? esc(it.d) : it.d}</div><div class="tbcDcRef">${ref}</div>`;
+    c.title = it.n + ': ' + it.v + '\nClick: ' + ref.replace(/<[^>]+>/g, '');
+    const x = c.querySelector('.tbcDcX');
+    const setOpen = o => { c.classList.toggle('tbcOpen', o); x.setAttribute('aria-expanded', o ? 'true' : 'false'); x.textContent = o ? '▾' : '▸'; };
+    setOpen(TBDD.open.has(it.n) ? TBDD.open.get(it.n) : it.st === 'fail');   // NG lines open by default, as in the other tools
+    x.addEventListener('click', ev => { ev.preventDefault(); ev.stopPropagation(); const o = !c.classList.contains('tbcOpen'); TBDD.open.set(it.n, o); setOpen(o); });
+    const go = () => { if (it.card) tbcGoto(it.card); else { M.ui.outTab = 'sum'; buildTabBar(); renderTab(); } };
+    c.addEventListener('click', go); c.addEventListener('keydown', ev => { if (ev.target !== c) return; if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); go(); } });
+    box.appendChild(c);
+  });
+  cnt.innerHTML = (nf ? `<span class="tbcCf">${nf} NG</span>` : '') + (np && !nf ? '<span class="tbcCp">no NG</span>' : '');
+}
+function tbcDashPlace() {
+  const wide = !!(TBDD.mq && TBDD.mq.matches), ch = TBDD.wide !== null && TBDD.wide !== wide; TBDD.wide = wide;
+  document.body.classList.toggle('tbcDashWide', wide);
+  tbcDashColl(TBDD.coll, false, ch);
+}
+function tbcDashColl(v, save, redraw) {
+  TBDD.coll = !!v; document.body.classList.toggle('tbcDashColl', TBDD.coll);
+  const t = $('tbcDashTgl');
+  if (t) { t.setAttribute('aria-expanded', TBDD.coll ? 'false' : 'true'); t.innerHTML = TBDD.coll ? '&raquo;' : '&laquo;';
+    t.title = TBDD.coll ? 'Show the check summary column (remembered in this browser)' : 'Shrink the check summary column (remembered in this browser)'; }
+  if (save) { try { localStorage.setItem(TBDD.key, TBDD.coll ? '1' : '0'); } catch (e) { } }
+  if (save || redraw) requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));   // the output column changed width: the diagrams are re-laid out
+}
+(function () {
+  const t = $('tbcDashTgl'); if (t) t.addEventListener('click', () => tbcDashColl(!TBDD.coll, true));
+  if (TBDD.mq) { if (TBDD.mq.addEventListener) TBDD.mq.addEventListener('change', tbcDashPlace); else if (TBDD.mq.addListener) TBDD.mq.addListener(tbcDashPlace); }
+  tbcDashPlace();
+})();
+
 /* ---- shared descriptions ---- */
 const nodeN = j => TBC_NODE[j];
 function spanLab(i) { return R.nS > 1 ? `span ${i + 1} (${nodeN(i)}–${nodeN(i + 1)})` : 'span'; }
@@ -2195,7 +2297,7 @@ function srcTag(builtIn) { return builtIn ? 'NDS Supplement 2018 ' + VFY : 'user
    link reads "see §n.k" (the retired print report rewrote it; the Report tab links its own steps, TBRX 2026-11-02). ---- */
 const TBC_CARDS = { dvSect: ['dv', 'Section properties'], dvAdj: ['dv', 'Adjusted design values'], anaDiag: ['ana', 'Shear and moment diagrams'], anaReac: ['ana', 'Support reactions'], anaPeaks: ['ana', 'Peak values by combination'],
   bCL: ['bend', 'Beam stability factor C<sub>L</sub>'], bCV: ['bend', 'Volume / size factor C<sub>V</sub>'], bCap: ['bend', 'Adjusted bending design value and check'],
-  sCap: ['shear', 'Adjusted shear design value and check'], sNotch: ['shear', 'Notched ends'], brCalc: ['bear', 'Bearing perpendicular to grain'], dfCheck: ['defl', 'Deflection checks'] };
+  sCap: ['shear', 'Adjusted shear design value and check'], sNotch: ['shear', 'Notched ends'], brCalc: ['bear', 'Bearing perpendicular to grain'], brX: ['bear', 'Supporting members and point loads'], dfCheck: ['defl', 'Deflection checks'] };
 const tbcTabName = id => (OUT_TABS.find(t => t[0] === id) || [id, id])[1];
 const tbcCardTxt = card => tbcTabName(TBC_CARDS[card][0]) + ' · ' + TBC_CARDS[card][1];
 // txt = the visible text; pre = the label the report puts before "see §n.k"
@@ -2269,6 +2371,17 @@ function whereFb(c, CL, CV, sign) {
 /* =====================================================================
    SUMMARY
    ===================================================================== */
+/* TBLS: the Summary tab's checks: [label, ratio, governing combination, tab, card that works it] (moved out of buildSummary unchanged) */
+function tbcChips() {
+  const chips = [];
+  const gb = R.gov.b, gv = R.gov.v, gc = R.gov.c, d = R.defl;
+  chips.push(['Bending [NDS 3.3]', R.dcr.b, gb.name, 'bend', 'bCap']);
+  chips.push(['Shear [NDS 3.4]', R.dcr.v, gv.name + (shearIsNotch(gv) ? ', notch' : ''), 'shear', shearIsNotch(gv) ? 'sNotch' : 'sCap']);
+  chips.push(['Bearing [NDS 3.10]', R.dcr.c, gc.name + (gc.gcKind !== 'beam' ? ', ' + bearLab(gc) : R.supJ.length > 1 ? ', support ' + nodeN(gc.gcJ) : ''), 'bear', gc.gcKind !== 'beam' ? 'brX' : 'brCalc']);
+  chips.push([`Deflection L/${g4(d.LLdiv)} (live/snow)`, d.r_dLL, d.trName + (R.nS > 1 ? ', span ' + (d.spanLL + 1) : ''), 'defl', 'dfCheck']);
+  chips.push([`Deflection L/${g4(d.TLdiv)} (total)`, d.r_dTL, 'Kcr·D + ' + d.totName + (R.nS > 1 ? ', span ' + (d.spanTL + 1) : ''), 'defl', 'dfCheck']);
+  return chips;
+}
 function buildSummary(pg) {
   const ng = isNG();
   const h = el('div', 'hero' + (ng ? ' fail' : ''));
@@ -2281,13 +2394,8 @@ function buildSummary(pg) {
   r.appendChild(el('div', 'hP', pct(R.dcrMax)));
   r.appendChild(el('div', 'hPs', 'Capacity utilization (max of bending, shear, bearing, deflection)'));
   h.appendChild(l); h.appendChild(r); pg.appendChild(h);
-  const chips = [];
   const gb = R.gov.b, gv = R.gov.v, gc = R.gov.c, d = R.defl;
-  chips.push(['Bending [NDS 3.3]', R.dcr.b, gb.name, 'bend']);
-  chips.push(['Shear [NDS 3.4]', R.dcr.v, gv.name + (shearIsNotch(gv) ? ', notch' : ''), 'shear']);
-  chips.push(['Bearing [NDS 3.10]', R.dcr.c, gc.name + (gc.gcKind !== 'beam' ? ', ' + bearLab(gc) : R.supJ.length > 1 ? ', support ' + nodeN(gc.gcJ) : ''), 'bear']);
-  chips.push([`Deflection L/${g4(d.LLdiv)} (live/snow)`, d.r_dLL, d.trName + (R.nS > 1 ? ', span ' + (d.spanLL + 1) : ''), 'defl']);
-  chips.push([`Deflection L/${g4(d.TLdiv)} (total)`, d.r_dTL, 'Kcr·D + ' + d.totName + (R.nS > 1 ? ', span ' + (d.spanTL + 1) : ''), 'defl']);
+  const chips = tbcChips();   // TBLS: the same list feeds the left column (tbcDashRender)
   const dash = el('div'); dash.id = 'dash';
   chips.forEach(([lab, rr, det, tab]) => {
     const c = el('div', 'chip ' + (stCls(rr) === 'ok' ? 'pass' : stCls(rr) === 'ng' ? 'fail' : 'na'));
@@ -3143,7 +3251,7 @@ function buildManual(pg) {
   UL([S('<b>Files:</b>', [['Export JSON', 'writes the project as JSON with <code>_schema: "timber-beam-check"</code> and <code>version: 2</code>, or <code>version: 3</code> when the project uses glulam, SCL or LRFD (so that the earlier version of the tool refuses it instead of reading it as sawn lumber / ASD).'],   // TBNL
       ['Open file', 'reads versions 2 and 3 and every format of the earlier version (the original 11-field file, the full flat file of fix log F18, <code>temp: "High"</code>, custom species in the old <code>F_b</code> shape); those convert with identical results, except that the bottom (negative-moment) edge opens as braced at supports only (engineer\'s decision R1-a, fix log R2; that version took it as braced like the top edge, which can still be chosen as "Same as top edge").'],
       ['Dressed sizes:', 'files of any version that use the 6x8 or 8x8 size open with the Table 1B dressed sizes (5.5 × 7.5 and 7.5 × 7.5 in.; fix log R4), so their results change.']]),
-    `<b>This browser:</b> the last session is autosaved (<code>${LS_AUTO}</code>) and named projects are kept (<code>${LS_PROJ}</code>); the selected input tab is remembered (<code>${TBC_IN_KEY}</code>). All keys start with <code>tbc_</code>.`,
+    `<b>This browser:</b> the last session is autosaved (<code>${LS_AUTO}</code>) and named projects are kept (<code>${LS_PROJ}</code>); the selected input tab is remembered (<code>${TBC_IN_KEY}</code>) and whether the check summary column (screens 1200 px and wider) is shrunk (<code>${TBDD.key}</code>). All keys start with <code>tbc_</code>.`,
     S('<b>Shared project info</b> (bridgeSuite.v1.projectMeta):', [['Shared and received:', 'Project, Client, Job #, Designer, Checked by and Date (shared fields <code>projectName</code>, <code>client</code>, <code>jobNo</code>, <code>preparedBy</code>, <code>checkedBy</code>, <code>date</code>; Project, Checked by and Date added in fix log R5).'],   // TBNL
       'Member / mark and Notes stay in this tool.'])]);
   H('Limitations and open items');
