@@ -1605,3 +1605,46 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   - New hint `#mlgRatingNote` under the axle table (sources, IM rules, the lane-type use, LLF / DF not set by the preset).
 - **Saved data:** none changed. A save holds the preset key and the axles; old saves name only the original keys.
 - **Check case:** preset Type 3S2, 1 span 100 ft, DF 1, LLF 1: midspan +M 1758.26 kip-ft (hand 1.33 × 1322).
+
+## 2026-11-08 — PR: claude/ml-notes-a (PR #1201: https://github.com/mlococo88/All-Structural/pull/1201) (MLNL-1: long input-panel notes as a bold lead and a list; display only, no result change)
+
+### MLNL-1. Long input-panel notes split into a lead line and a list   [display only] [no result change]
+- **Request (engineer, 2026-11-07/08):** sections that are one block of text become a numbered or bulleted list so they are not overlooked. Rule used: a note is long if it is over ~300 characters, has 3+ sentences, or carries several facts in one paragraph. It becomes an action line (warning style, if any), a bold lead and a list with bold lead words. Every sentence, number, citation and link is kept, in the same order. New lead words have no digits.
+- **CSS** (after `.hint{font-size:10.5px;color:#94a3b8;line-height:1.5}`), anchor `/* MLNL (2026-11-08, engineer`:
+  ```css
+  .mlNL .mlNLl{font-weight:700}
+  .mlNL .mlNLu{margin:2px 0 3px;padding-left:16px}
+  .mlNL .mlNLu>li{margin:1px 0}
+  .mlNL .mlNLa{background:#fef3c7;border:1px solid #f59e0b;border-left:3px solid #d97706;border-radius:5px;padding:3px 7px;margin:2px 0 4px;color:#78350f;font-weight:600}
+  @media print{.mlNL .mlNLu>li{break-inside:avoid}}
+  ```
+  (`.mlNLa` uses the `.warn` colours.)
+- **Helper** (after `const sp=(load,arr)=>arr.map(s=>[load,s]);`):
+  ```js
+  function mlNL(lead,items,o){o=o||{};const tag=o.ol?'ol':'ul';
+    const li=(items||[]).filter(Boolean).map(x=>'<li>'+(Array.isArray(x)?'<b class="mlNLk">'+x[0]+'</b> '+x[1]:x)+'</li>').join('');
+    return (o.act||[]).filter(Boolean).map(a=>'<div class="mlNLa">'+a+'</div>').join('')+(lead?'<div class="mlNLl">'+lead+'</div>':'')+(li?'<'+tag+' class="mlNLu">'+li+'</'+tag+'>':'');}
+  ```
+- **Notes changed.** Each `<p class="hint" …>one paragraph</p>` becomes `<div class="hint mlNL" …><div class="mlNLl">lead</div><ul class="mlNLu"><li><b class="mlNLk">Lead words:</b> text</li>…</ul></div>`, keeping the same id. The anchor is the old opening text; the new lead is followed by the item lead words. Exact before / after: the PR diff.
+  1. `#mlgRatingNote` "Rating vehicles (legal, emergency, owner): axle loads…": lead "Rating vehicles (legal, emergency, owner):"; items Axle loads and spacings / MassDOT / Impact / Lane-type model / LLF and DFs.
+  2. `#stdLaneH` "AASHTO Std. Spec. 17th Ed. Art. 3.7.1.1, Fig. 3.7.6B": lead "Std. Spec. lane loading, a separate case:"; items Loads / Continuous spans (Art. 3.11.3; the word "and" before it dropped) / Pattern / Envelope / DFs.
+  3. `#pedH` "PL = 0.075 ksf on sidewalks": lead "Pedestrian load PL, off by default:" (was the last sentence "Off by default."); items Load / Input / Applied / Not included.
+  4. Multi-vehicle hint "The multi-vehicle case applies only to": lead "Multi-vehicle case (two vehicles):"; items Applies only to / Headway / Uniform load.
+  5. `#mlgMultiNote` "90 % case (LRFD 10th Ed. Art. 3.6.1.3.1):": action line first, "Decision (pending engineer review): keep both choices below (conservative)." (this was the inline "Decision (pending engineer review)." and matches the L1/L4 decision of #1121); lead "90 % case (LRFD 10th Ed. Art. 3.6.1.3.1):"; items Lane load / Truck positions.
+  6. AREMA impact hint, `ADDED UI` block, anchor `{const hn=$('impAF').querySelector('.hint');`. Before: `hn.textContent='I% = 100/S + […]. Choose how L is defined below. With "span containing section", … Confirm the basis against the current AREMA Ch. 15 for your structure.'`. After: `hn.classList.add('mlNL');hn.innerHTML=mlNL('AREMA steel impact: I% = 100/S + […].',[['L:','choose how L is defined below.'],['With "span containing section":','pier sections and interior reactions use the mean of the adjacent spans.'],['Confirm:','the basis against the current AREMA Ch. 15 for your structure.']])`. The static `<p class="hint">I% = …` in `#impAF` (always overwritten) is now a `<div>`, so it can hold the list.
+  7. `#impSF` "AASHTO Std. Spec. 17th Ed. Art. 3.8.2.1": lead "… I = 50/(L + 125) ≤ 0.30, with L per Art. 3.8.2.2:"; items Positive moment / Negative moment / Shear / Reactions / Verify.
+  8. `#mlgBasis` "Basis:": items LRFD / HS20 / H20 / Rail. **The one-line text is kept byte-identical in `data-txt`**, because three readers quote it. Each was changed from `$('mlgBasis').textContent` to `$('mlgBasis').dataset.txt`:
+     - print-report inputs, anchor `['Code basis',esc($('mlgBasis')`;
+     - D11 cover, anchor `var basis=$('mlgBasis')?`;
+     - Report tab, anchor `const basis=$('mlgBasis')?`.
+- **Decision (pending engineer review):** the rating-vehicle sentence "Enter the rating load factor … as the LLF and the matching DFs" is kept as the last item ("LLF and DFs:") and not as a warning line. It is standing guidance shown for every vehicle, not a pending action.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none changed.
+- **Check case:** default project, Rules tab. `#pedH` was before one 540-character paragraph. After, it is the lead "Pedestrian load PL, off by default:" and 4 bullets; "0.075 ksf", "2 ft", "3.6.1.6", "6 ft → 0.45 k/ft", "3.5.3.5–3.5.3.7" and "90 %" are unchanged. Print report "Code basis" and Report "References" read exactly as before.
+- **How verified:** headless Chromium, origin/main vs the branch, 7 cases: default, HS20, E80, 3 spans with multi + pedestrian + impact on uniform load, Type 3S2 + Std. Spec. lane, FHWA benchmark, closed-form benchmark. In all 7:
+  - `RES` JSON is identical.
+  - The digit sequence of the whole page text is identical.
+  - The Report-tab text and the print-report text are identical character for character (the "Generated … time" line excepted).
+  - 0 console errors.
+
+  Tests: `check-syntax` pass; `phone-layout --tool mlg` pass; `project-library --tool mlg` ALL PASS; `engine/run.mjs moving-load` 7/7.
+- **Other copies:** none.
