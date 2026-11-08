@@ -2316,7 +2316,7 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
 - **Footnote d values:** checked on the Deflection tab for the default joist (0.605 in., 0.757) and the wet joist (0.793 in., 0.991).
 - **Syntax:** `node tests/check-syntax.mjs` passes.
 
-## 2026-11-08 — PR: claude/timber-notes-a (PR #__PR__: https://github.com/mlococo88/All-Structural/pull/__PR__) (TBNL-1: long notes as a bold lead and a list — input tabs, Summary, Analysis Results, Bending, Bearing, Deflection; display only, no result change)
+## 2026-11-08 — PR: claude/timber-notes-a (PR #1185: https://github.com/mlococo88/All-Structural/pull/1185) (TBNL-1: long notes as a bold lead and a list — input tabs, Summary, Analysis Results, Bending, Bearing, Deflection; display only, no result change)
 
 Code sites are tagged `TBNL`.
 
