@@ -2502,7 +2502,7 @@ Code sites are tagged `TBNL`. Uses `tbNL` and the CSS of TBNL-1 (PR #1185).
   - **Tests:** `tests/check-syntax.mjs`; `tests/smoke/project-library.mjs --tool timber` (ALL PASS). Timber has no entry in `tests/smoke/phone-layout.mjs`; checked by hand at 390 px.
 - **Other copies:** none (pattern as SMLS; no shared code).
 
-## 2026-11-08 — PR: timber-report-notes (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (TBNS: the Report's "Notes on the Summary tab" prints the Summary "Notes:" box one item per line)   [display only; no result change]
+## 2026-11-08 — PR: timber-report-notes (PR #1216: https://github.com/mlococo88/All-Structural/pull/1216) (TBNS: the Report's "Notes on the Summary tab" prints the Summary "Notes:" box one item per line)   [display only; no result change]
 
 - **Problem (pre-existing):** the Summary tab's warnings box (`buildSummary`, anchor `'<b>Notes:</b><ul>'`) is a bold lead and a plain `<ul>`. `tbrHarvest()` read it with `tbrHtx(e)` (tags stripped), so the Report line under "Notes on the Summary tab" ran the lead and every item together with no space: `Notes:Fixed support: bearing is checked ... length).The effect of the fixing moment ...` and `Notes:Net uplift reaction ... edge.Negative dead load entered ...`. Only this box has this shape (`grep "'<b>[^']*</b><ul>'"`: one hit).
 - **Where:** `Timber Beam Check.html`, Report port (TBRP).
