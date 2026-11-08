@@ -3076,7 +3076,7 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
 - **Tests:** check-syntax; steel-beam-builtup 11/11; phone-layout sbeam; project-library steelbeam ALL PASS; list-input sbeam: only note text from SBNL-1 / SBNL-2 differs from its recorded baseline (plus the minor-axis flange case label 10 → 13 already reported since L2, #1065).
 - **Other copies:** none.
 
-## 2026-11-08 — PR: sbeam-tfa-hint (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — TFAH: the Web Stiffeners hint and the Vₓ shear note follow the tension field action option (display only, no result change)
+## 2026-11-08 — PR: sbeam-tfa-hint (PR #1229: https://github.com/mlococo88/All-Structural/pull/1229) — TFAH: the Web Stiffeners hint and the Vₓ shear note follow the tension field action option (display only, no result change)
 
 ### TFAH. "Tension field action (§G2.2) is not used" no longer shown when the option is on   [display only] [no result change]
 - **Problem:** since the TFA option (#1073, `design.stiff.tfa`, default off) the Web Stiffeners hint still said "Tension field action (§G2.2) is not used." whatever the option's state (open item recorded under SBNL-1). With the option on and applied, the Vₓ tab's G2.1 note also still said "Tension field action (§G2.2) is not used — conservative." just above the worked G2.2 block.
