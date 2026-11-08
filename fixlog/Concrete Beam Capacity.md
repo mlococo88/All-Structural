@@ -5301,7 +5301,7 @@ Frame: Beam Capacity (`suite-frame-capacity`). Open item of CBM3 (#1001), review
 ### How verified
 - `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`; the headless comparison listed in the PR.
 
-## 2026-11-08 — PR: nl-cbc-a (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (CBNL-1: long notes of the Beam Capacity tab as a bold lead and a list — input panel, Summary, Flexure, Shear, Torsion, Serviceability, Detailing, Visuals, Drawings, Validation, and the Report; display only, no result change)
+## 2026-11-08 — PR: nl-cbc-a (PR #1214: https://github.com/mlococo88/All-Structural/pull/1214) (CBNL-1: long notes of the Beam Capacity tab as a bold lead and a list — input panel, Summary, Flexure, Shear, Torsion, Serviceability, Detailing, Visuals, Drawings, Validation, and the Report; display only, no result change)
 
 Frames: Beam Capacity (`suite-frame-capacity`) and the suite shell's Report (`rxWalk`). The ASD Beam Calcs and Development & Splice frames are CBNL-2 (next PR).
 
