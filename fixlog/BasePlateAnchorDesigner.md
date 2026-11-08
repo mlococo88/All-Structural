@@ -5574,7 +5574,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **How verified:** `node tests/check-syntax.mjs`; `tests/smoke/phone-layout.mjs --tool bpad`; `tests/smoke/project-library.mjs --tool baseplate`; `tests/smoke/lightpole-anchor-handoff.mjs`; 0 console errors. Screenshots before / after at 1440 and 390 px (neutral-axis note, hook factors, anchor reinforcement).
 - **Other copies:** none.
 
-## 2026-11-08 — PR: nl/bp-notes-2 (PR: pending) — BPNL-2: long notes on the output tabs (Summary, Base Plate, Anchor Design, Shear Distribution, Drawings, 3D View, Validation, Manual) and in the Report (display only, no result change)
+## 2026-11-08 — PR: nl/bp-notes-2 (PR #1186: https://github.com/mlococo88/All-Structural/pull/1186) — BPNL-2: long notes on the output tabs (Summary, Base Plate, Anchor Design, Shear Distribution, Drawings, 3D View, Validation, Manual) and in the Report (display only, no result change)
 ### BPNL-2. Output tabs: long notes as a lead line and a list; the Report prints them as one note per part   [display only] [no result change]
 - **Request / rule / helper:** as BPNL-1 (`bpNL`, `bpNLdiv`, `bpNLhint`). The Tension Rebar and Shear Rebar tabs are BPNL-3.
 - **CSS:** the BPNL-1 rules no longer need a `.bpNL` ancestor (`.bpNLl`, `.bpNLu`, `.bpNLu>li`, `.bpNLa`, print `break-inside:avoid`), because the printed report copies a note's inner HTML into its "Note:" boxes, the Summary's "Note n." list and the "Notes / basis" B.n items, where the outer class is lost.
