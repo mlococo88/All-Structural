@@ -10783,7 +10783,11 @@ function RptGroupChecks({ I, r }) {
     // ---- 1. axial group efficiency ----
     subh(hp ? (g.aashtoMP ? "1 · Axial group efficiency (η) — reduces the micropile bond resistance" : "1 · Axial group efficiency (η) — reduces the H-pile static resistance") : "1 · Axial group efficiency (η) — reduces bond capacity"),
     hp
-      ? e(Narr, null, (g.aashtoMP ? "AASHTO LRFD 10th Ed. Art. 10.7.3.9 (micropile groups, 10.9.3.6): cohesionless soil η = 1.0. Cohesive soil: η is reduced only when the pile cap is not in firm contact with the ground and the soil at the surface is soft (S" : "AASHTO LRFD 10th Ed. Art. 10.7.3.9 (driven piles): cohesionless soil η = 1.0. Cohesive soil: η is reduced only when the pile cap is not in firm contact with the ground and the soil at the surface is soft (S"), e("sub", null, "u"), " < " + fmt(HP_SOFT_SU_KSF, 2) + (g.aashtoMP ? " ksf; verify): η = 0.65 at s = 2.5B rising linearly to 1.0 at 6B. Cap in firm contact, or cap not in contact over surface soil that is not soft: η = 1.0. η reduces the micropile bond resistance φR" : " ksf; verify): η = 0.65 at s = 2.5B rising linearly to 1.0 at 6B. Cap in firm contact, or cap not in contact over surface soil that is not soft: η = 1.0. η reduces the H-pile static resistance φR"), e("sub", null, "n"), " of Module 01 (skin + tip, φ per layer). The " + fmt(HP_SOFT_SU_KSF, 2) + " ksf limit for \"soft\" is the tool's choice (AASHTO gives no number); a cohesionless surface layer is not treated as soft.")
+      ? e(NarrNL, { lead: g.aashtoMP ? "AASHTO LRFD 10th Ed. Art. 10.7.3.9 (micropile groups, 10.9.3.6):" : "AASHTO LRFD 10th Ed. Art. 10.7.3.9 (driven piles):", items: [
+          ["Cohesionless soil:", "η = 1.0."],
+          ["Cohesive soil:", "η is reduced only when the pile cap is not in firm contact with the ground and the soil at the surface is soft (S", e("sub", null, "u"), " < " + fmt(HP_SOFT_SU_KSF, 2) + " ksf; verify): η = 0.65 at s = 2.5B rising linearly to 1.0 at 6B. Cap in firm contact, or cap not in contact over surface soil that is not soft: η = 1.0."],
+          ["Applied to:", (g.aashtoMP ? "η reduces the micropile bond resistance φR" : "η reduces the H-pile static resistance φR"), e("sub", null, "n"), " of Module 01 (skin + tip, φ per layer)."],
+          ["\"Soft\":", "the " + fmt(HP_SOFT_SU_KSF, 2) + " ksf limit for \"soft\" is the tool's choice (AASHTO gives no number); a cohesionless surface layer is not treated as soft."]] })
       : e(Narr, null, "FHWA NHI-05-039: micropiles may be treated as individual elements (η = 1.0) when center-to-center spacing ≥ 3× the bond diameter. Below that, a reduction applies (Converse-Labarre efficiency shown). This tool uses s/d\u2095 (the bond-zone diameter) for \u03b7 and \u03b8; the lateral row f\u2098 use s/B with B = the casing OD (the p-y width) (F62)."),
     hp && a
       ? e(React.Fragment, null,
@@ -10825,7 +10829,9 @@ function RptGroupChecks({ I, r }) {
               e(RptCheck, { pass: g.block_pass, eq: `\\min(\\eta\\,\\Sigma\\phi R_n,\\ \\phi_g R_g)=${fmt(g.phiGroupBond, 0)}\\text{ kip}${g.block_pass ? ' \\geq ' : ' < '}\\Sigma STL=${fmt(g.groupDemand, 0)}\\text{ kip}` }),
               note("Group resistance (AASHTO 10.7.3.9, cohesive soil) vs total factored group demand (STL × n). φ_g = " + fmt(g.blk.phi, 2) + (g.aashtoMP ? " (Table 10.5.5.2.5-1, block failure in clay)." : " (Table 10.5.5.2.3-1, block failure in clay).")))
           : e(React.Fragment, null,
-              e(Narr, null, e("b", null, "Not required — cohesionless soil. "), (g.aashtoMP ? "AASHTO LRFD 10th Ed. Art. 10.7.3.9: for micropile groups (10.9.3.6) in cohesionless soil η = 1.0 and the group resistance is the sum of the individual resistances; there is no block check. A group in a strong layer over a weaker compressible layer, and group settlement, are not checked here — confirm with the geotechnical engineer." : "AASHTO LRFD 10th Ed. Art. 10.7.3.9: for driven pile groups in cohesionless soil η = 1.0 and the group resistance is the sum of the individual resistances; there is no block check. A group in a strong layer over a weaker compressible layer, and group settlement, are not checked here — confirm with the geotechnical engineer.")),
+              e(NarrNL, { lead: "Not required — cohesionless soil.", items: [
+                ["AASHTO LRFD 10th Ed. Art. 10.7.3.9:", (g.aashtoMP ? "for micropile groups (10.9.3.6) in cohesionless soil η = 1.0 and the group resistance is the sum of the individual resistances; there is no block check." : "for driven pile groups in cohesionless soil η = 1.0 and the group resistance is the sum of the individual resistances; there is no block check.")],
+                ["Not checked here:", "a group in a strong layer over a weaker compressible layer, and group settlement."]], o: { act: ["Confirm with the geotechnical engineer: a group over a weaker compressible layer and group settlement."] } }),
               line("block footprint ≈ ", fmt(g.Bx_ft, 1), " × ", fmt(g.By_ft, 1), (g.aashtoMP ? " ft (c/c + B); Σ individual micropile φP" : " ft (c/c + B); Σ individual H-pile φR"), e("sub", null, "n"), " = ", fmt(g.sumPhiIndiv, 0), " kip; total factored group demand ", fmt(g.groupDemand, 0), " kip")))
       : e(React.Fragment, null,
           e(Narr, null, "At tight spacing the group can fail as one monolithic block rather than as individual piles. The block's perimeter bond capacity is compared to the sum of individual capacities; the lesser governs the group. Group settlement is typically a geotechnical-report item and is not computed here."),
@@ -10845,12 +10851,15 @@ function RptGeomChecks({ I, r }) {
   const note = t => e("div", { style: { fontSize: "8.5px", color: "#64748b", margin: "-3px 0 5px", paddingLeft: "12px", fontStyle: "italic" } }, t);
   return e("div", { className: "rpt-section" },
     e(RptHeading, { n: "G", title: "Code-Limit Checks", code: "AASHTO 10.9 / FHWA NHI-05-039", badge: true }),
-    e(Narr, null, "Below the casing tip the section is bar-plus-grout only, with a small nominal capacity — the casing should extend deep enough that the moment there is within the uncased section’s φM", e("sub", null, "n"), ", leaving the uncased bond zone essentially axial. Bond length, plunge, grout cover and casing depth are checked against the practical limits below."),
+    e(NarrNL, { lead: null, items: [["Uncased section:", "below the casing tip the section is bar-plus-grout only, with a small nominal capacity — the casing should extend deep enough that the moment there is within the uncased section’s φM", e("sub", null, "n"), ", leaving the uncased bond zone essentially axial."], ["Practical limits:", "bond length, plunge, grout cover and casing depth are checked against the practical limits below."]] }),
     e(Calc, { label: "Bar plastic modulus", eq: `Z_{bar}=\\dfrac{d_b^3}{6}=\\dfrac{${fmt(gc.db_un, 3)}^3}{6}=${fmt(gc.Z_bar, 3)}\\text{ in}^3` }),
     e(Calc, { label: "Nominal capacity (bar only)", eq: `\\phi M_{n}=0.90\\,f_{yb}\\,Z_{bar}=0.90(${fmt(I.fyb || 75, 0)})(${fmt(gc.Z_bar, 3)})/12=${fmt(gc.phiMn_uncased, 2)}\\text{ kip}\\cdot\\text{ft}` }),
     e(Calc, { label: "Demand below casing tip", eq: `M_{u,unc}=\\max_{z\\,\\geq\\,z_{tip}}|M|=${fmt(gc.M_belowTip, 1)}\\text{ kip}\\cdot\\text{ft}`, note: belowTipSrcText(gc) }),
     e(RptCheck, { pass: gc.uncasedFlex_pass, eq: r.lateralNoConv ? PY_NC_TEX : `\\phi M_{n,uncased}=${fmt(gc.phiMn_uncased, 2)}\\text{ kip}\\cdot\\text{ft}${gc.uncasedFlex_pass ? ' \\geq ' : ' < '}M_{u,unc}=${fmt(gc.M_belowTip, 1)}\\text{ kip}\\cdot\\text{ft}` }),
-    note("Uncased flexure over the whole uncased length below the casing tip: bar only, grout neglected (the fiber M–φ model gives M_n ≈ " + fmt(gc.Mn_uncased_fiber != null ? gc.Mn_uncased_fiber : 23, 0) + " kip·ft). φ = 0.90 kept for this bar-in-grout section (conservative; AASHTO 6.5.4.2's φ_f = 1.00 is the steel-member flexure factor — verify). Cased φM_n = " + fmt(gc.casedMn, 1) + " kip·ft for comparison."),
+    e("div", { className: "pdNL", style: { fontSize: "8.5px", color: "#64748b", margin: "-3px 0 5px", paddingLeft: "12px", fontStyle: "italic" } }, pdNL("Uncased flexure over the whole uncased length below the casing tip:", [
+      ["Capacity:", "bar only, grout neglected (the fiber M–φ model gives M_n ≈ " + fmt(gc.Mn_uncased_fiber != null ? gc.Mn_uncased_fiber : 23, 0) + " kip·ft)."],
+      ["φ", "= 0.90 kept for this bar-in-grout section (conservative; AASHTO 6.5.4.2's φ_f = 1.00 is the steel-member flexure factor — verify)."],
+      ["Cased φM_n", "= " + fmt(gc.casedMn, 1) + " kip·ft for comparison."]])),
     e(RptSee, { items: [{ txt: "M_u,unc (p-y moment below the casing tip)", mods: ["02R", "02"] }] }),
     gc.uncPM_c != null && e(RptCheck, { pass: gc.uncPM_c <= 1.0 && !r.lateralNoConv, eq: `\\tfrac{P_{u,unc}}{\\phi_{CU}R_n}+\\tfrac{M_{u,unc}}{\\phi M_n}=\\tfrac{${fmt(r.axial.Pu_unc != null ? r.axial.Pu_unc : I.STL, 1)}}{${fmt(r.axial.phiRn_ucased, 1)}}+\\tfrac{${fmt(gc.M_belowTip, 2)}}{${fmt(gc.phiMn_uncased, 2)}}=${fmt(gc.uncPM_c, 3)}${gc.uncPM_c <= 1 ? '\\leq' : '>'}1.0` }),   // PDA-M1
     gc.uncPM_t != null && e(RptCheck, { pass: gc.uncPM_t <= 1.0 && !r.lateralNoConv, eq: `\\tfrac{T_u-P_t}{\\phi_t f_{yb}A_b}+\\tfrac{M_{u,unc}}{\\phi M_n}=\\tfrac{${fmt(r.tension.Tu_unc, 1)}}{${fmt(r.tension.phiPn_tension, 1)}}+\\tfrac{${fmt(gc.M_belowTip, 2)}}{${fmt(gc.phiMn_uncased, 2)}}=${fmt(gc.uncPM_t, 3)}${gc.uncPM_t <= 1 ? '\\leq' : '>'}1.0` }),
@@ -11121,7 +11130,7 @@ function PrintReport({
   // run from the report alone -- previously 120 of 160 input keys never appeared.
   /*#__PURE__*/React.createElement("div", { className: "rpt-section" },
     /*#__PURE__*/React.createElement(RptHeading, { n: "A", title: "Input Summary", code: "as entered \u00b7 " + (I.pileType === "iab" ? "integral abutment H-pile" : I.pileType === "hpile" ? "driven H-pile" : "cased micropile") }),
-    /*#__PURE__*/React.createElement(Narr, null, "Every input governing this analysis, as entered. Values shown are the ones actually used by the calculations that follow; fields not applicable to this pile type are omitted. Derived quantities are labelled as such and are not independent inputs."),
+    /*#__PURE__*/React.createElement(NarrNL, { lead: "Every input governing this analysis, as entered.", items: [["Values shown", "are the ones actually used by the calculations that follow; fields not applicable to this pile type are omitted."], ["Derived quantities", "are labelled as such and are not independent inputs."]] }),
 
     /*#__PURE__*/React.createElement(RptInputs, { title: "Project", rows: [
       ["Project name", I.projName, "", ""],
@@ -11336,7 +11345,18 @@ function PrintReport({
   }, /*#__PURE__*/React.createElement(RptHeading, {
     n: "B",
     title: "Scope & Design Criteria"
-  }), /*#__PURE__*/React.createElement(Narr, null, I.pileType === "iab" ? "This package documents the integral abutment pile design by the MassDOT Simplified Method (Bridge Manual Part I \u00a73.10.11). The abutment is supported on a single row of vertical H-piles with webs oriented parallel to the abutment centerline, so thermal movement of the superstructure bends the piles about their weak axis. Provided the bridge satisfies the \u00a73.10.11.1 boundary conditions, the maximum factored axial load per pile is read from MassDOT's pre-computed tables \u2014 which already embed the thermal- and skew-induced bending via a modified interaction with an inelastic rotation factor \u03b8\u1d62 = 1.75 \u2014 and checked against the factored gravity load per pile. No project-specific p-y analysis is required for the non-scour case." : I.pileType === "hpile" ? "This package documents the structural and geotechnical design checks for driven steel H-piles supporting the referenced structure. Axial resistance is developed by end bearing on the section toe and skin friction along the embedded length; structural adequacy is checked for axial compression (with buckling), flexure, combined loading, shear, and tension. All resistance checks are performed at the Strength Limit State per the AASHTO LRFD Bridge Design Specifications (Sections 6 and 10). Factored load effects are taken from the structural analysis and are input directly; load combinations are established elsewhere in the project documents." : "This package documents the structural and geotechnical design checks for cased, gravity-grouted drilled micropiles supporting the referenced structure. Each micropile consists of a permanent steel casing over the upper length, a central reinforcing bar, and neat-cement grout, with load transferred to the bearing stratum through grout-to-ground bond over the bond zone. All resistance checks are performed at the Strength Limit State per the AASHTO LRFD Bridge Design Specifications, with micropile-specific provisions taken from FHWA NHI-05-039. Factored load effects are taken from the structural analysis and are input directly; load combinations are established elsewhere in the project documents.")), /*#__PURE__*/React.createElement("div", {
+  }), I.pileType === "iab" ? /*#__PURE__*/React.createElement(NarrNL, { lead: "This package documents the integral abutment pile design by the MassDOT Simplified Method (Bridge Manual Part I §3.10.11).", items: [
+    ["Piles:", "the abutment is supported on a single row of vertical H-piles with webs oriented parallel to the abutment centerline, so thermal movement of the superstructure bends the piles about their weak axis."],
+    ["Capacity:", "provided the bridge satisfies the §3.10.11.1 boundary conditions, the maximum factored axial load per pile is read from MassDOT's pre-computed tables — which already embed the thermal- and skew-induced bending via a modified interaction with an inelastic rotation factor θᵢ = 1.75 — and checked against the factored gravity load per pile."],
+    ["No p-y analysis:", "no project-specific p-y analysis is required for the non-scour case."]] })
+    : I.pileType === "hpile" ? /*#__PURE__*/React.createElement(NarrNL, { lead: "This package documents the structural and geotechnical design checks for driven steel H-piles supporting the referenced structure.", items: [
+    ["Resistance:", "axial resistance is developed by end bearing on the section toe and skin friction along the embedded length; structural adequacy is checked for axial compression (with buckling), flexure, combined loading, shear, and tension."],
+    ["Limit state:", "all resistance checks are performed at the Strength Limit State per the AASHTO LRFD Bridge Design Specifications (Sections 6 and 10)."],
+    ["Loads:", "factored load effects are taken from the structural analysis and are input directly; load combinations are established elsewhere in the project documents."]] })
+    : /*#__PURE__*/React.createElement(NarrNL, { lead: "This package documents the structural and geotechnical design checks for cased, gravity-grouted drilled micropiles supporting the referenced structure.", items: [
+    ["Pile:", "each micropile consists of a permanent steel casing over the upper length, a central reinforcing bar, and neat-cement grout, with load transferred to the bearing stratum through grout-to-ground bond over the bond zone."],
+    ["Limit state:", "all resistance checks are performed at the Strength Limit State per the AASHTO LRFD Bridge Design Specifications, with micropile-specific provisions taken from FHWA NHI-05-039."],
+    ["Loads:", "factored load effects are taken from the structural analysis and are input directly; load combinations are established elsewhere in the project documents."]] })), /*#__PURE__*/React.createElement("div", {
     className: "rpt-section"
   }, /*#__PURE__*/React.createElement(RptHeading, {
     n: "D",
@@ -11632,7 +11652,7 @@ function PrintReport({
     n: "01",
     title: "Geotechnical Bond Resistance",
     code: "AASHTO 10.9.3.5"
-  }), /*#__PURE__*/React.createElement(Narr, null, "Axial load is transferred to the bearing stratum by grout-to-ground bond over the bond length. The nominal bond resistance is the product of the bond stress, the drilled-hole circumference, and the bond length; the required bond length is obtained by inverting this relation at the factored axial demand."), /*#__PURE__*/React.createElement(Calc, {
+  }), /*#__PURE__*/React.createElement(NarrNL, { lead: "Axial load is transferred to the bearing stratum by grout-to-ground bond over the bond length.", items: [["Nominal bond resistance:", "the product of the bond stress, the drilled-hole circumference, and the bond length."], ["Required bond length:", "obtained by inverting this relation at the factored axial demand."]] }), /*#__PURE__*/React.createElement(Calc, {
     label: "Bond stress",
     eq: `\\beta = ${fmt(r.geo.beta_ksf, 2)}\\ \\text{ksf} = ${fmt(r.geo.beta_ksf * 1000 / 144, 1)}\\ \\text{psi}`,
     cite: "Table C10.9.3.5.2-1"
@@ -11663,7 +11683,13 @@ function PrintReport({
     n: "02",
     title: "Lateral Analysis",
     code: I.lateralSource === "py" ? "nonlinear p-y (built-in)" : I.lateralSource === "input" ? "p-y (LPILE)" : "linear estimate"
-  }), /*#__PURE__*/React.createElement(Narr, null, I.lateralSource === "py" ? `The maximum bending moment used in the structural checks is computed by the built-in nonlinear p-y finite-difference analysis (Reese et al. 1974 sand; Matlock 1970 soft clay; Welch & Reese 1972 stiff clay; Georgiadis 1983 layering; axial thrust carried in the governing equation). Mmax = ${fmt(r.MmaxUsed != null ? r.MmaxUsed : I.Mmax, 1)} kip·ft.${I.solverFree < 0 ? ` The pile head is modeled ${fmt(Math.abs(I.solverFree),1)} ft below grade (buried pile cap); lateral soil resistance is credited from the head down at true overburden. The cap’s passive resistance is not included in this pile analysis and no near-surface p-y reduction is applied — near-surface soil should be down-rated separately if backfill is disturbed or non-structural.` : ``} The implementation is benchmarked against an LPILE 2022 project analysis (within 0.2% on Mmax); final design should be verified against a project-specific LPILE run prior to sealing.` : I.lateralSource === "input" ? `The maximum bending moment used in the structural checks is taken from an external p-y (LPILE) analysis as Mmax = ${fmt(I.Mmax, 1)} kip·ft.` : `The maximum bending moment is computed by a finite-difference beam-on-elastic-foundation analysis using a linear subgrade modulus, and reports the depth to fixity (the first zero crossing of the moment below the maximum moment) as a reference figure only \u2014 it is not used in the structural checks. This first-order result is to be verified against a project-specific LPILE analysis prior to sealing.`),
+  }), I.lateralSource === "py" ? /*#__PURE__*/React.createElement(NarrNL, { lead: "The maximum bending moment used in the structural checks is computed by the built-in nonlinear p-y finite-difference analysis.", items: [
+    ["Models:", "(Reese et al. 1974 sand; Matlock 1970 soft clay; Welch & Reese 1972 stiff clay; Georgiadis 1983 layering; axial thrust carried in the governing equation)."],
+    ["Mmax", `= ${fmt(r.MmaxUsed != null ? r.MmaxUsed : I.Mmax, 1)} kip·ft.`],
+    I.solverFree < 0 ? ["Buried pile cap:", `the pile head is modeled ${fmt(Math.abs(I.solverFree),1)} ft below grade (buried pile cap); lateral soil resistance is credited from the head down at true overburden. The cap’s passive resistance is not included in this pile analysis and no near-surface p-y reduction is applied — near-surface soil should be down-rated separately if backfill is disturbed or non-structural.`] : null,
+    ["Benchmark:", "the implementation is benchmarked against an LPILE 2022 project analysis (within 0.2% on Mmax)."]], o: { act: ["Final design should be verified against a project-specific LPILE run prior to sealing."] } })
+    : I.lateralSource === "input" ? /*#__PURE__*/React.createElement(Narr, null, `The maximum bending moment used in the structural checks is taken from an external p-y (LPILE) analysis as Mmax = ${fmt(I.Mmax, 1)} kip·ft.`)
+    : /*#__PURE__*/React.createElement(NarrNL, { lead: "The maximum bending moment is computed by a finite-difference beam-on-elastic-foundation analysis using a linear subgrade modulus.", items: [["Reports", "the depth to fixity (the first zero crossing of the moment below the maximum moment) as a reference figure only — it is not used in the structural checks."]], o: { act: ["This first-order result is to be verified against a project-specific LPILE analysis prior to sealing."] } }),
   I.lateralSource === "py" && /*#__PURE__*/React.createElement("div", { style: { margin: "6px 0 8px" } },
     /*#__PURE__*/React.createElement("div", { style: { fontSize: "8.5px", fontWeight: 700, color: "#16304F", marginBottom: "2px" } }, "p-y ANALYSIS CONSTANTS (these govern the result — verify against the geotechnical report)"),
     /*#__PURE__*/React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: "8px" } },
@@ -11688,7 +11714,7 @@ function PrintReport({
   /*#__PURE__*/React.createElement(Calc, {
     label: "Maximum moment",
     eq: `M_{max} = ${fmt(r.MmaxUsed != null ? r.MmaxUsed : I.Mmax, 1)}\\ \\text{kip}\\cdot\\text{ft}`
-  }), r.casingExt.checked && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Narr, null, "The permanent casing provides the flexural stiffness and capacity in the laterally-loaded zone; below the casing tip only the grout and central bar remain, with little flexural capacity. Following common detailing practice, the casing is checked to extend past the depth at which the lateral moment has effectively decayed — taken here as the depth where the moment falls below 5% of its maximum."), /*#__PURE__*/React.createElement(Calc, {
+  }), r.casingExt.checked && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(NarrNL, { lead: "The permanent casing provides the flexural stiffness and capacity in the laterally-loaded zone.", items: [["Below the casing tip", "only the grout and central bar remain, with little flexural capacity."], ["Check:", "following common detailing practice, the casing is checked to extend past the depth at which the lateral moment has effectively decayed — taken here as the depth where the moment falls below 5% of its maximum."]] }), /*#__PURE__*/React.createElement(Calc, {
     label: "Casing tip below grade",
     eq: `L_{cased} - e_{stickup} = ${fmt(I.Lcased, 1)} - ${fmt(I.solverFree, 1)} = ${fmt(r.casingExt.tipBelowGrade, 1)}\\ \\text{ft}`
   }), /*#__PURE__*/React.createElement(Calc, {
@@ -11740,7 +11766,7 @@ function PrintReport({
   }), /*#__PURE__*/React.createElement(RptCheck, {
     pass: r.axial.ucased_pass,
     eq: `\\phi_{cu}R_n = ${fmt((r.phiUsed || I).phiCU, 2)}(${fmt(r.axial.Rn_ucased, 1)}) = ${fmt(r.axial.phiRn_ucased, 1)}\\ \\text{kip} \\;${r.axial.ucased_pass ? '\\geq' : '<'}\\; P_u = STL - P_t = ${fmt(I.STL, 0)} - ${fmt(r.axial.Pt_c, 1)} = ${fmt(r.axial.Pu_unc, 1)}\\ \\text{kip}`   // PDA-D8
-  }), /*#__PURE__*/React.createElement(Narr, null, "The outer 0.85 factor is that of AASHTO Eqs. 10.9.3.10.2a-2 and 10.9.3.10.2b-2. f", /*#__PURE__*/React.createElement("sub", null, "y"), " = min(f", /*#__PURE__*/React.createElement("sub", null, "yb"), ", f", /*#__PURE__*/React.createElement("sub", null, "yc"), ", 0.003E) for the cased length (Eq. 10.9.3.10.2a-2) and min(f", /*#__PURE__*/React.createElement("sub", null, "yb"), ", 0.003E) for the uncased length (Eq. 10.9.3.10.2b-2)."), /*#__PURE__*/React.createElement(Narr, null, "The cased section governs from the pile head to the casing tip at ", fmt(r.geo.casingTip, 0), " ft; the uncased section governs over the remaining ", fmt(r.axial.L_uncasedBond, 0), " ft of bond below the casing tip. Load is transferred across the ", fmt(r.axial.L_plunge, 0), " ft plunge overlap, which is to be confirmed to develop the casing load into the bar and grout per FHWA NHI-05-039.")), /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement(Narr, null, "The outer 0.85 factor is that of AASHTO Eqs. 10.9.3.10.2a-2 and 10.9.3.10.2b-2. f", /*#__PURE__*/React.createElement("sub", null, "y"), " = min(f", /*#__PURE__*/React.createElement("sub", null, "yb"), ", f", /*#__PURE__*/React.createElement("sub", null, "yc"), ", 0.003E) for the cased length (Eq. 10.9.3.10.2a-2) and min(f", /*#__PURE__*/React.createElement("sub", null, "yb"), ", 0.003E) for the uncased length (Eq. 10.9.3.10.2b-2)."), /*#__PURE__*/React.createElement(NarrNL, { lead: null, items: [["Cased section:", "governs from the pile head to the casing tip at ", fmt(r.geo.casingTip, 0), " ft."], ["Uncased section:", "governs over the remaining ", fmt(r.axial.L_uncasedBond, 0), " ft of bond below the casing tip."], ["Plunge:", "load is transferred across the ", fmt(r.axial.L_plunge, 0), " ft plunge overlap, which is to be confirmed to develop the casing load into the bar and grout per FHWA NHI-05-039."]] })), /*#__PURE__*/React.createElement("div", {
     className: "rpt-section"
   }, /*#__PURE__*/React.createElement(RptHeading, {
     n: "04",
@@ -11842,7 +11868,7 @@ function PrintReport({
     n: "05b",
     title: "Combined Loading — CFST Composite",
     code: "AASHTO 6.9.6"
-  }), /*#__PURE__*/React.createElement(Narr, null, "As an alternative, the grout-filled casing is evaluated as a Concrete-Filled Steel Tube. The applicability limits of Art. 6.9.6.2 are checked first; ", r.cfst.qualifies ? "the section satisfies these limits and the composite method is applied." : "the section does NOT satisfy these limits, so the composite results are shown for reference only and the casing-only method of Section 05 governs."), /*#__PURE__*/React.createElement(RptCheck, {
+  }), /*#__PURE__*/React.createElement(NarrNL, { lead: "As an alternative, the grout-filled casing is evaluated as a Concrete-Filled Steel Tube.", items: [["Applicability:", "the limits of Art. 6.9.6.2 are checked first; ", r.cfst.qualifies ? "the section satisfies these limits and the composite method is applied." : "the section does NOT satisfy these limits, so the composite results are shown for reference only and the casing-only method of Section 05 governs."]] }), /*#__PURE__*/React.createElement(RptCheck, {
     pass: r.cfst.Dt_ok,
     eq: `D/t = ${fmt(r.cfst.Dt_act, 1)} \\;${r.cfst.Dt_ok ? '\\leq' : '>'}\\; 0.15E/F_y = ${fmt(r.cfst.Dt_lim, 1)}`
   }), /*#__PURE__*/React.createElement(RptCheck, {
@@ -11952,7 +11978,14 @@ function PrintReport({
     n: "10",   // unified check numbering (was "B" for H-pile, "12"/"13" for micropile)
     title: "Buckling — Unsupported Length",
     code: "AASHTO 6.9.4"
-  }), /*#__PURE__*/React.createElement(Narr, null, "An unsupported length is present (stickup, scour, or soft/liquefiable soil that does not brace the shaft). The unbraced length runs from the top of the unsupported span down to the depth of rotational fixity in the competent soil below. Three bases for the fixity depth are available: the ", /*#__PURE__*/React.createElement("b", null, "Davisson & Robinson (1965) closed form"), " (preliminary; assumes uniform soil, linear springs, constant EI), the ", /*#__PURE__*/React.createElement("b", null, "deflection-matched equivalent cantilever"), " (site-specific; a STIFFNESS match to a lateral analysis \u2014 not the moment zero-crossing), and the ", /*#__PURE__*/React.createElement("b", null, "nonlinear P-crit ramp"), " (LPile Tech Manual \u00a74.4 hyperbolic-fit method on the p-y model; validated end-to-end against LPILE Example 23, Ensoft LPile 2026-13.001 \u2014 P\u1d04\u1d63 9,074 vs 9,074 kip). All three run the identical column check once the fixity depth is known. The method selected by the engineer governs \u2014 it is not chosen automatically."),
+  }), /*#__PURE__*/React.createElement(NarrNL, { lead: "An unsupported length is present (stickup, scour, or soft/liquefiable soil that does not brace the shaft).", items: [
+    ["Unbraced length:", "runs from the top of the unsupported span down to the depth of rotational fixity in the competent soil below."],
+    ["Fixity depth:", "three bases are available:"],
+    ["Davisson & Robinson (1965) closed form", "(preliminary; assumes uniform soil, linear springs, constant EI);"],
+    ["Deflection-matched equivalent cantilever", "(site-specific; a STIFFNESS match to a lateral analysis — not the moment zero-crossing);"],
+    ["Nonlinear P-crit ramp", "(LPile Tech Manual §4.4 hyperbolic-fit method on the p-y model; validated end-to-end against LPILE Example 23, Ensoft LPile 2026-13.001 — Pᴄᵣ 9,074 vs 9,074 kip)."],
+    ["Same column check:", "all three run the identical column check once the fixity depth is known."],
+    ["Governs:", "the method selected by the engineer governs — it is not chosen automatically."]] }),
     // ---- three-method comparison, mirroring the on-screen tabs ----
     /*#__PURE__*/React.createElement("div", { className: "rpt-avoid", style: { margin: "6px 0 10px" } },
       /*#__PURE__*/React.createElement("div", { style: { fontFamily: "monospace", fontSize: "9.5px", fontWeight: 700, color: "#16304F", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "3px", borderBottom: "1px solid #cbd5e1", paddingBottom: "2px" } },
@@ -11975,12 +12008,12 @@ function PrintReport({
               /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px", textAlign: "right", fontWeight: 700, color: mm ? (mm.pass ? "#2f6f3e" : "#B91C1C") : "#94a3b8" } },
                 mm ? (mm.pass ? "OK" : "NG") : "\u2014"));
           }))),
-      /*#__PURE__*/React.createElement("p", { style: { fontSize: "8.5px", color: "#64748b", marginTop: "3px", lineHeight: 1.5 } },
-        "\u25b8 = the method selected by the engineer; it governs the check below. ",
-        "* For the nonlinear ramp the effective length is BACK-COMPUTED as KL\u2091q = \u03c0\u221a(EI/P\u1d04\u0280) and used with K = 1.0 \u2014 the soil bracing and boundary conditions are already embedded in the ramp. ",
+      /*#__PURE__*/React.createElement("div", { className: "pdNL", style: { fontSize: "8.5px", color: "#64748b", marginTop: "3px", lineHeight: 1.5 } }, pdNL(null, [
+        ["▸", "= the method selected by the engineer; it governs the check below."],
+        ["*", "For the nonlinear ramp the effective length is BACK-COMPUTED as KLₑq = π√(EI/Pᴄʀ) and used with K = 1.0 — the soil bracing and boundary conditions are already embedded in the ramp."],
         r.buckling.mostConsIsOther
-          ? "NOTE: the " + (r.buckling.mostConsKey === "davisson" ? "Davisson" : r.buckling.mostConsKey === "deflmatch" ? "deflection-matched" : "nonlinear P-crit") + " method is MORE CONSERVATIVE (\u03c6c\u00b7Pn = " + fmt(r.buckling.mostConsPhiPn, 0) + " kip). It was not substituted automatically."
-          : "")),
+          ? ["NOTE:", "the " + (r.buckling.mostConsKey === "davisson" ? "Davisson" : r.buckling.mostConsKey === "deflmatch" ? "deflection-matched" : "nonlinear P-crit") + " method is MORE CONSERVATIVE (φc·Pn = " + fmt(r.buckling.mostConsPhiPn, 0) + " kip). It was not substituted automatically."]
+          : null]))),
     /*#__PURE__*/React.createElement(RptInputs, { title: "Column section \u00b7 buckling basis", rows: [
       ["Section", r.buckling.isHPile ? ("H-pile, " + ((r.hpileStruct ? !r.hpileStruct.axisStrong : I.hpAxis === "weak") ? "weak (y\u2013y)" : "strong (x\u2013x)") + " axis") : "Steel casing (corroded)", "", "the member that buckles"],
       ["Area A", r.buckling.Acas, "in\u00b2", ""],
@@ -12180,7 +12213,10 @@ function PrintReport({
   // ---- p-y lateral analysis results (previously ZERO report coverage) ----
   (I.pileType !== "iab" && I.lateralSource === "py" && pyRes && pyRes.ok) && /*#__PURE__*/React.createElement("div", { className: "rpt-section" },
     /*#__PURE__*/React.createElement(RptHeading, { n: "02R", title: "Lateral Analysis \u2014 Results & Diagnostics", code: "nonlinear p-y \u00b7 " + (I.solverHead === "fixed" ? "fixed head" : "free head") + (I.pyCyclic ? " \u00b7 CYCLIC" : " \u00b7 static") }),
-    /*#__PURE__*/React.createElement(Narr, null, "Results of the built-in nonlinear finite-difference p-y solve. The governing equation is (EI(z)\u00b7y\u2033)\u2033 + Q\u00b7y\u2033 + Es(y,z)\u00b7y = 0, with the axial thrust Q carried in the stiffness so P-\u0394 is second-order native. Soil models: Reese et al. (1974) sand, Matlock (1970) soft clay, Welch & Reese (1972) stiff clay, Reese (1997) weak rock, with the Georgiadis (1983) layering correction. Benchmarked against LPILE 2026 (head deflection and maximum moment within 0.00% on the Example 23 static, cyclic, and fixed-head runs)."),
+    /*#__PURE__*/React.createElement(NarrNL, { lead: "Results of the built-in nonlinear finite-difference p-y solve.", items: [
+      ["Governing equation:", "(EI(z)·y″)″ + Q·y″ + Es(y,z)·y = 0, with the axial thrust Q carried in the stiffness so P-Δ is second-order native."],
+      ["Soil models:", "Reese et al. (1974) sand, Matlock (1970) soft clay, Welch & Reese (1972) stiff clay, Reese (1997) weak rock, with the Georgiadis (1983) layering correction."],
+      ["Benchmarked", "against LPILE 2026 (head deflection and maximum moment within 0.00% on the Example 23 static, cyclic, and fixed-head runs)."]] }),
     /*#__PURE__*/React.createElement(RptInputs, { title: "Governing result \u00b7 active case", rows: [
       ["Maximum bending moment M\u2098\u2090\u2093", pyRes.Mmax_kft, "kip\u00b7ft", "flows to all structural checks"],
       ["Depth to M\u2098\u2090\u2093", pyRes.MmaxAboveGrade ? Math.abs(pyRes.zMmax) : pyRes.zMmax, "ft", pyRes.MmaxAboveGrade ? "ABOVE grade \u2014 in the stickup" : "below mudline"],
@@ -12212,12 +12248,13 @@ function PrintReport({
               (() => { const zw = pyZfixWords(pyRes, I); return zw && zw.nth ? " \u00b7 here " + zw.nth : ""; })()))
         : /*#__PURE__*/React.createElement("div", { style: { fontFamily: "monospace", fontSize: "10px", color: "#64748b", marginBottom: "3px" } },
             "\u2014 the moment does not reverse below M\u2098\u2090\u2093; there is no z_fix."),
-      /*#__PURE__*/React.createElement("p", { style: { fontSize: "9px", color: "#475569", lineHeight: 1.5, margin: 0 } },
-        "The depth that reproduces the correct above-grade moment in an equivalent fixed-base model \u2014 the conventional geotechnical \u201cdepth to fixity.\u201d It is a ",
-        /*#__PURE__*/React.createElement("b", null, "moment-diagram"), " measure. ",
-        /*#__PURE__*/React.createElement("b", null, "It is NOT used in the buckling check or any other structural calculation"),
-        " and is reported here for reference. Buckling requires a ", /*#__PURE__*/React.createElement("b", null, "stiffness"),
-        " equivalence (Davisson / deflection-matched / nonlinear P-crit), which gives a substantially shorter fixity depth; using this value as a buckling effective length would understate the critical load. Crossings whose preceding moment lobe is under 2% of |M\u2098\u2090\u2093| are ignored so numerical tail-ringing is not mistaken for a reversal.")),
+      /*#__PURE__*/React.createElement("div", { className: "pdNL", style: { fontSize: "9px", color: "#475569", lineHeight: 1.5, margin: 0 } },
+        pdNL("The depth that reproduces the correct above-grade moment in an equivalent fixed-base model — the conventional geotechnical “depth to fixity.”", [
+        ["What it is:", "a ", /*#__PURE__*/React.createElement("b", null, "moment-diagram"), " measure."],
+        ["Use:", /*#__PURE__*/React.createElement("b", null, "It is NOT used in the buckling check or any other structural calculation"), " and is reported here for reference."],
+        ["Buckling", "requires a ", /*#__PURE__*/React.createElement("b", null, "stiffness"),
+        " equivalence (Davisson / deflection-matched / nonlinear P-crit), which gives a substantially shorter fixity depth; using this value as a buckling effective length would understate the critical load."],
+        ["Tail-ringing:", "crossings whose preceding moment lobe is under 2% of |Mₘₐₓ| are ignored so numerical tail-ringing is not mistaken for a reversal."]]))),
     (pyRes.mzCrossings && pyRes.mzCrossings.length > 1) && /*#__PURE__*/React.createElement("p", { style: { fontSize: "9px", color: "#94a3b8", fontStyle: "italic", marginTop: "-2px" } },
       "Deeper moment crossings at " + pyRes.mzCrossings.slice(1).map(c => fmt(c, 1)).join(", ") + " ft are second-order tail oscillations, not the fixity depth."),
     // ---- model setup actually used by the solve ----
@@ -12261,8 +12298,8 @@ function PrintReport({
             /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px", color: "#475569" } }, meta.ref),
             /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px", fontSize: "8.5px", color: bad ? "#8a5a1f" : "#2f6f3e" } }, meta.cal));
         }))),
-      /*#__PURE__*/React.createElement("p", { style: { fontSize: "8.5px", color: "#94a3b8", marginTop: "2px", fontStyle: "italic" } },
-        "Calibration status refers to whether this app's implementation of the model has been benchmarked node-for-node against an LPILE run. Uncalibrated models are believed correct per the published formulation but have not been independently verified; treat their results as preliminary and confirm against a project-specific LPILE analysis.")),
+      /*#__PURE__*/React.createElement("div", { className: "pdNL", style: { fontSize: "8.5px", color: "#94a3b8", marginTop: "2px", fontStyle: "italic" } },
+        pdNL("Calibration status refers to whether this app's implementation of the model has been benchmarked node-for-node against an LPILE run.", [["Uncalibrated models", "are believed correct per the published formulation but have not been independently verified."]], { act: ["Treat their results as preliminary and confirm against a project-specific LPILE analysis."] }))),
     // ---- response profile table ----
     (pyRes.records && pyRes.records.length > 0) && /*#__PURE__*/React.createElement("div", { className: "rpt-avoid", style: { marginBottom: "6px" } },
       /*#__PURE__*/React.createElement("div", { style: { fontFamily: "monospace", fontSize: "9.5px", fontWeight: 700, color: "#16304F", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "3px", borderBottom: "1px solid #cbd5e1", paddingBottom: "2px" } },
@@ -12492,6 +12529,7 @@ function PrintReport({
       fontFamily: serif
     }
   }, /*#__PURE__*/React.createElement("b", null, "Conclusion:\xA0"), r.allPass ? (I.pileType === "iab" ? "The integral abutment pile satisfies the MassDOT Simplified Method: all \u00a73.10.11.1 boundary conditions are met and the factored gravity load per pile is within the tabulated capacity. Pile tip elevation shall be set at the required length shown; thermal/skew effects are embedded in the tabulated Pu per \u00a73.10.11.3." : I.pileType === "hpile" ? "All evaluated strength and geotechnical checks are satisfied for the driven H-pile as designed. Nominal geotechnical resistance is to be field-verified by dynamic testing / driving criteria per the resistance factors used." : "All evaluated strength and load-test checks are satisfied for the micropile as designed. Geotechnical bond resistance is to be confirmed by the specified verification and proof load tests.") : (I.pileType === "iab" ? "The Simplified Method is not satisfied \u2014 either a boundary condition fails (requiring the 3D Space Frame Analysis Method, \u00a73.10.11.5) or the gravity demand exceeds the tabulated capacity (requiring a larger section or more piles). Revise before sealing." : "One or more checks require review (marked NG above). The design must be revised until all applicable checks are satisfied before this package is sealed.")))), /*#__PURE__*/React.createElement("div", {
+    className: "pdNL",
     style: {
       marginTop: "14px",
       paddingTop: "8px",
@@ -12501,7 +12539,10 @@ function PrintReport({
       fontFamily: "monospace",
       lineHeight: 1.5
     }
-  }, "Computed checks follow AASHTO LRFD Bridge Design Specifications and FHWA NHI-05-039 methodology. This calculation package is a design aid; all results, assumptions, and input load effects must be independently verified and sealed by a licensed Professional Engineer prior to use for construction. " + (I.pileType === "hpile" ? "Nominal geotechnical resistances are from static analysis and must be field-verified by dynamic testing / driving criteria (AASHTO Table 10.5.5.2.3-1)." : "Bond values are preliminary (AASHTO Table C10.9.3.5.2-1) and must be confirmed by load testing.") + " — ", [I.projNum, rptDate].filter(Boolean).join(" · ")))));
+  }, pdNL("Computed checks follow AASHTO LRFD Bridge Design Specifications and FHWA NHI-05-039 methodology.", [
+    ["Design aid:", "this calculation package is a design aid."],
+    I.pileType === "hpile" ? ["Geotechnical resistances:", "nominal geotechnical resistances are from static analysis and must be field-verified by dynamic testing / driving criteria (AASHTO Table 10.5.5.2.3-1)."] : ["Bond values", "are preliminary (AASHTO Table C10.9.3.5.2-1) and must be confirmed by load testing."],
+    "— " + [I.projNum, rptDate].filter(Boolean).join(" · ")], { act: ["All results, assumptions, and input load effects must be independently verified and sealed by a licensed Professional Engineer prior to use for construction."] })))));
 }
 
 /* ---- Nonlinear p-y panel: layer table with real soil parameters ---- */
@@ -13646,9 +13687,11 @@ function ElevationPlot({ I, pyRes, height = 340, print, narrow, kv }) {
     xaxis2: { domain: DOM_M, anchor: "y", range: mRange, title: { text: "M (kip·ft)", font: { size: 9 } }, gridcolor: C.grid, zeroline: true, zerolinecolor: "#cbd5e1", ticks: "outside" },
     yaxis: { title: { text: "depth below grade (ft)", font: { size: 9 } }, range: [yBot, yTop], autorange: false, gridcolor: C.grid, fixedrange: true } });
   const plot = React.createElement(Plot, { data, layout, height: H, config: print ? { staticPlot: true, responsive: false } : undefined });
-  const note = "Left: the pile to scale — depths true, every width in true proportion, drawn " + Nt + "× wider than the depth scale (one factor for the whole pile); the cap is schematic. " +
-    (isHP ? "H-pile seen in the plane of bending (" + (G.hp.weak ? "weak axis: flange width b_f, web edge-on" : "strong axis: depth d, flanges edge-on") + "). " : "Dark = casing, gray = grout (inside the casing and in the bond hole d_h), orange = central bar, orange dashed = plunge. ") +
-    "Right: moment diagram (active case); bands = soil layers; " + (kv && kv.fix.length ? "horizontal lines = depth to fixity: " + kv.fix.map(f => (f.k === "dav" ? "teal solid (heavier) = Davisson & Robinson z_f, the primary line (Module 10 value; " + LAT_DAV_REF + ")" : f.k === "zfix" ? "purple solid = z_fix (first moment reversal below M_max, Module 02 reference)" : f.k === "decay" ? "green dash = 5% moment-decay depth" : "brown dot = buckling equivalent fixed base (Module 10)")).join(", ") + " (hover for the definition)." : "green dash = 5% moment-decay depth.") + " Stickup plots above grade (negative depth).";
+  /* PDNL (2026-11-08): the figure note as a lead and items (display only; same words) */
+  const note = pdNL("Left: the pile to scale — depths true, every width in true proportion, drawn " + Nt + "× wider than the depth scale (one factor for the whole pile); the cap is schematic.", [
+    isHP ? ["H-pile", "seen in the plane of bending (" + (G.hp.weak ? "weak axis: flange width b_f, web edge-on" : "strong axis: depth d, flanges edge-on") + ")."] : ["Dark", "= casing, gray = grout (inside the casing and in the bond hole d_h), orange = central bar, orange dashed = plunge."],
+    ["Right:", "moment diagram (active case); bands = soil layers; " + (kv && kv.fix.length ? "horizontal lines = depth to fixity: " + kv.fix.map(f => (f.k === "dav" ? "teal solid (heavier) = Davisson & Robinson z_f, the primary line (Module 10 value; " + LAT_DAV_REF + ")" : f.k === "zfix" ? "purple solid = z_fix (first moment reversal below M_max, Module 02 reference)" : f.k === "decay" ? "green dash = 5% moment-decay depth" : "brown dot = buckling equivalent fixed base (Module 10)")).join(", ") + " (hover for the definition)." : "green dash = 5% moment-decay depth.")],
+    ["Stickup", "plots above grade (negative depth)."]]);
   const keys = kv ? [
     ["Horizontal scale", "\u00d7" + Nt + " (widths drawn " + Nt + "\u00d7 the depth scale)"],
     Math.abs(s) > 0.01 ? [s > 0 ? "Stickup" : "Head below grade", latFmt(Math.abs(s), 1) + " ft"] : null,
@@ -13658,12 +13701,12 @@ function ElevationPlot({ I, pyRes, height = 340, print, narrow, kv }) {
     G.embedIn > 0 ? ["Cap embedment", latFmt(G.embedIn, 1) + " in"] : null,
     ...latKeysFix(kv)] : null;
   if (print) return React.createElement("div", { "data-pd-elev": "1" }, plot,
-    React.createElement("div", { style: { fontSize: "7.5px", color: "#475569", marginTop: "2px", lineHeight: 1.4 } }, note),
+    React.createElement("div", { className: "pdNL", style: { fontSize: "7.5px", color: "#475569", marginTop: "2px", lineHeight: 1.4 } }, note),
     keys ? React.createElement(LatKeys, { items: keys, print: true, title: "Dimensions and depth to fixity" }) : null);
   return /*#__PURE__*/React.createElement("div", { className: "bg-white rounded-sm p-3 border border-slate-200", "data-pd-elev": "1" },
     /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "Elevation · pile to scale and moment diagram, depth-aligned with stratigraphy"),
     plot,
-    /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, note),
+    /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug pdNL" }, note),
     keys ? React.createElement(LatKeys, { items: keys, title: "Dimensions and depth to fixity" }) : null);
 }
 
