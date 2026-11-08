@@ -1594,7 +1594,7 @@ Basis: ASCE/SEI 7-16 Fig. 29.3-1 (Cases A, B, C; Case C table and the (1.8 − s
     - The Excel workbook builds.
 - **Other copies:** none.
 
-## 2026-11-08 — PR: nl-asce7-3 (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — A7NL-3: User Manual long paragraphs and key-point boxes as a lead and a list (display only, no result change)
+## 2026-11-08 — PR: nl-asce7-3 (PR #1219: https://github.com/mlococo88/All-Structural/pull/1219) — A7NL-3: User Manual long paragraphs and key-point boxes as a lead and a list (display only, no result change)
 
 ### A7NL-3. User Manual: long paragraphs and callout boxes as a lead and a list   [display only] [no result change]
 - **Request and rule:** as A7NL-1 (#1206) and A7NL-2 (#1213). This part covers the User Manual (`MANUAL`, static HTML in template literals).
