@@ -2371,7 +2371,7 @@ Code sites are tagged `TBNL`.
 - **How verified:** headless Chromium, origin/main vs the branch, 9 cases (default; 3 spans with a fixed support, point loads, snow, wind uplift, notch, x/d; span + overhang with compression-face notch, wet, negative D; glulam LRFD 2 spans; custom glulam; SCL LRFD; 6x12 timber flat, incised, 100–125 °F; manual SP values with a bearing point load; an input error): `TBC.res` identical (JSON); the digit sequence of every input tab, every output tab, the governing strip, and the Report (`SharedReport.text` and the full HTML text, all three appendices on) identical. Validation 123/123. 0 console errors. No horizontal scroll at 390 px. `tests/check-syntax.mjs`, `tests/smoke/project-library.mjs --tool timber`: pass. (Timber has no entry in `tests/smoke/phone-layout.mjs`.)
 - **Other copies:** none.
 
-## 2026-11-08 — PR: claude/timber-notes-b (PR #__PR__: https://github.com/mlococo88/All-Structural/pull/__PR__) (TBNL-2: long notes as a bold lead and a list — Reference Values, Validation, Method & Manual, the Summary notes list and the Report's own notes; display only, no result change)
+## 2026-11-08 — PR: claude/timber-notes-b (PR #1190: https://github.com/mlococo88/All-Structural/pull/1190) (TBNL-2: long notes as a bold lead and a list — Reference Values, Validation, Method & Manual, the Summary notes list and the Report's own notes; display only, no result change)
 
 Code sites are tagged `TBNL`. Uses `tbNL` and the CSS of TBNL-1 (PR #1185).
 
