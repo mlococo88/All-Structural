@@ -16625,3 +16625,28 @@ Engineer instruction (2026-11-07, paraphrased): "same deal for the abutment" as 
 - **Check case:** default project, Tab 9 §9.0: before one 1,178-character note; after the lead "Attached wing — U-wing (parallel to the roadway)" and eight items; "γ = 0.120 kcf, φ = 32.0°", "β_w = 0.0°", "[11.6.1.4]", "[11.6.1.5.2]", "[5.10.6]", "FHWA DS 7.6" unchanged.
 - **How verified:** the 22-case headless probe of ABNL-1, origin/main (before ABNL-1) vs the branch: `LAST_R` JSON identical; the digit sequence of every tab, the dashboard, the warnings and the Report text identical in all 22 cases. 0 console errors. Screenshots at 1440 and 390 px. Tests: check-syntax; project-library --tool abutment (ALL PASS); abutment-pile-group-parity (14/14 identical); engine handoffs + pile-group (19 passed).
 - **Other copies:** none.
+
+## 2026-11-08 — PR: abutment-left-summary (PR #TBD) (ABLS: the dashboard checks in a left summary column from 1200 px, as Retaining Wall / Spread Footing / Light Pole / Shear and Moment Diagrams / Timber)   [display only; no result change]
+
+### ABLS. Check summary column on the left at 1200 px and wider   [display only]
+- **Request (engineer, 2026-11-07/08):** add the left summary panel to the tools with summary / result cards, as RWDL #959, RWLB #984, SFLB #988, LPLB #991, SMLS #1130 (and TBLS #1194).
+- **What changed (screen only):**
+  - At **1200 px and wider** a new column `#abDashCol` is the first column of `.main` (left of the input column): **240 px** from 1200 to 1499 px, **280 px** from 1500 px, sticky, scrolls on its own. Title "Check summary".
+  - **Head:** « button, title, badges "n FAIL" (or "no FAIL") and "INCOMPLETE" when the design is incomplete (`dashStatus`).
+  - **Sub-line:** "Governing: <check> · D/C x.xx" (the largest D/C row, as the dashboard's "Controlling" 1.).
+  - **One line per dashboard row (`R.dash`):** name, D/C (`fmt(d.dc)`, or the row's text, or n/a), PASS / FAIL / N/A. The ▸ / ▾ button shows the governing case (`d.gov`) and "→ <tab>". FAIL lines start open.
+  - **Click a line (or Enter / Space):** `gotoPanel(d.tab, DASH_ANCHOR[d.id])`, the same target as the dashboard chip: the tab opens and the panel that works the value is scrolled to and flashed.
+  - **Collapse:** « shrinks the column to a 42 px strip (vertical title and badges); » opens it again; the charts of the open tab are redrawn for the new width.
+  - While the column is open, the dashboard's chip grid (`#dashboard .dash-grid`) is hidden (the same rows are in the column); the dashboard's status line, "Controlling", the "Not checked" box and the sizing hints stay. Collapsed, the chip grid shows again.
+  - **Below 1200 px nothing changes** (column hidden; tablet and phone layouts and order as before). Hidden in print; the Report is unchanged.
+- **Where:** CSS after `.col-in,.col-out{min-width:0;}` (block `/* ABLS (2026-11-08`); HTML first child of `<div class="main" id="appmain">` (`<aside id="abDashCol">`); JS before `function renderWarnings(){`: `ABDD`, `abDashRender(R)`, `abDashPlace()`, `abDashColl()` and a start-up IIFE; `renderDashboard` calls `abDashRender(R)` after wiring its chips.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). The column reads the same `R.dash` fields and `fmt()` as the dashboard.
+- **Saved data (§5):** no key or format changed. New per-browser UI key **`abutcalc_dashCollapsed_v1`** ('1' = collapsed; '0' or absent = open), tool-prefixed, written only by « / », not in the project, the autosave or the export.
+- **Decisions (pending engineer review):**
+  1. Breakpoints and widths as SMLS / SFLB / TBLS.
+  2. The column sits left of the input column (the results are tabs right of the inputs, as in Shear and Moment Diagrams and Timber).
+  3. The dashboard chip grid is hidden while the column is open (as SMLS hides its cards); the rest of the dashboard stays.
+  4. All dashboard rows are listed (35 in the default project), n/a rows included, in the dashboard's order.
+- **Check case:** default project at 1440 px: badges "1 FAIL", "INCOMPLETE"; sub-line "Governing: Sliding · D/C 1.10"; first line "Sliding [10.6.3.4] 1.10 FAIL" (open: "Constr — Str I", "→ 3 · External Stability"), then Eccentricity 0.64 PASS, Bearing resistance 0.88 PASS, … the same numbers as the dashboard chips. Clicking "Stem-base shear friction [5.7.4]" opens Tab 5 with panel 5.5 (`o-str-shearfric`) flashed.
+- **How verified:** origin/main vs the branch, 22 cases (as ABNL-1): at 1100 px `LAST_R` and every tab, dashboard, warnings and Report text identical (byte for byte); at 1440 px `LAST_R`, tabs, warnings and Report identical, the dashboard text differs only by the hidden chip grid. Layout at 1920 / 1440 / 1280 / 1024 / 390 px: column 280 / 240 / 240 / none / none; no sideways page scroll; « gives 42 px and the key '1'. 0 console errors. Tests: check-syntax; project-library --tool abutment (ALL PASS); abutment-pile-group-parity (14/14 identical); engine handoffs + pile-group (19 passed).
+- **Other copies:** none.
