@@ -1663,7 +1663,7 @@ Basis: ASCE/SEI 7-16 Fig. 29.3-1 (Cases A, B, C; Case C table and the (1.8 − s
     - 0 console errors.
 - **Other copies:** none.
 
-## 2026-11-08 — PR: asce7-leftpanel (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — A7LS: key results as a left column from 1200 px (display only, no result change)
+## 2026-11-08 — PR: asce7-leftpanel (PR #1225: https://github.com/mlococo88/All-Structural/pull/1225) — A7LS: key results as a left column from 1200 px (display only, no result change)
 
 ### A7LS. Key-results column on the left at 1200 px and wider   [display only]
 - **Request (engineer, 2026-11-07/08):** add the left summary panel to the tools that have summary / result cards, as in Retaining Wall (#959, #984), Spread Footing (#988), Light Pole (#991, #994/#997), Shear and Moment (#1130) and Base Plate (#1199).
