@@ -6685,7 +6685,7 @@ None: no computed value changes. Only worked-step text (tab and Report).
 - **How verified:** headless Chromium, pinned libraries, origin/main 2cd2a1b vs the branch, 9 cases (ACI default; AASHTO barrier + collision + variable height + key + yield line; ACI water + passive + seismic + column + surcharge + β + key; ACI triangular uplift + envelope heel + variable height; pile ACI; pile AASHTO + k_h; AASHTO seismic + water + column + rock + tan φ + no relief; AASHTO collision γ_EH = 1 + B/6 + precast + key + passive; AASHTO B/3 + manual δ + β): `window._R` identical (JSON); the digit sequence of the input panel, every result tab, the check summary, the Manual and `SharedReport.text` identical in every case; 0 console errors.
 - **Other copies:** none.
 - **Open item (not changed; for the engineer):** Stability Step 5 says the surcharge and column live/snow loads are still in "the overturning resisting moment as currently coded", while Step 4 says they are excluded from all resisting forces. One of the two notes is out of date; the wording is kept as it was.
-## 2026-11-08 — PR: nl-retwall-b (PR #TBD-A2) — Long notes as a bold lead and a list: Piles tab, 3D model, Drawings, the long warnings, the Report's own notes and one Manual paragraph (RWNL-2; display only, no result change)
+## 2026-11-08 — PR: nl-retwall-b (PR #1210: https://github.com/mlococo88/All-Structural/pull/1210) — Long notes as a bold lead and a list: Piles tab, 3D model, Drawings, the long warnings, the Report's own notes and one Manual paragraph (RWNL-2; display only, no result change)
 
 ### RWNL-2. Long notes split into a lead line and a list, part 2   [display only] [no result change]
 - **Request:** as RWNL-1 (engineer, 2026-11-07/08; same rule, same `rwNL` helper and CSS).
