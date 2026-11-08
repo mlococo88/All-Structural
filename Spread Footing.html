@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Spread Footing Design Tool</title>
+<title>Shallow Foundation Design</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
@@ -308,8 +308,8 @@ a.wkA:hover{text-decoration:underline}
 <div id="sfdHdr">
  <div>
   <a class="allToolsLink noprint" href="tools.html" target="_top" title="Open the list of all tools">&larr; All tools</a>
-  <h1>Spread Footing Design Tool</h1>
-  <p class="byline">by Mario Lococo &nbsp;|&nbsp; Loads &amp; Combinations &middot; Bearing &amp; Stability &middot; Footing &amp; Pedestal Design &middot; 3D View &nbsp;|&nbsp; ACI 318-19 / ASCE 7-16 / IBC 2021</p>
+  <h1>Shallow Foundation Design</h1>
+  <p class="byline">Spread, combined and wall footings &nbsp;|&nbsp; by Mario Lococo &nbsp;|&nbsp; Loads &amp; Combinations &middot; Bearing &amp; Stability &middot; Footing &amp; Pedestal Design &middot; 3D View &nbsp;|&nbsp; ACI 318-19 / ASCE 7-16 / IBC 2021</p>
  </div>
  <div class="noprint" id="sfdHdrA">
   <a id="sfdHdrProj" hidden href="#sec-title" title="Project name and number: edit them in the Project tab (title block)">Project: <span id="sfdHdrProjTxt"></span></a>
@@ -673,7 +673,7 @@ a.wkA:hover{text-decoration:underline}
            {shared:'checkedBy',key:'meta.chkBy',label:'Checked By'}];
   function inp(k){ return document.querySelector('#titleblock [data-path="'+k+'"]'); }
   function values(){ var v={}; MAP.forEach(function(m){ var i=inp(m.key); v[m.key]=i?i.value:''; }); return v; }
-  document.getElementById('btnShareProjMeta').addEventListener('click',function(){ ProjMetaUI.share(MAP, values(), 'Spread Footing', 'Spread Footing.html'); });
+  document.getElementById('btnShareProjMeta').addEventListener('click',function(){ ProjMetaUI.share(MAP, values(), 'Shallow Foundation Design', 'Spread Footing.html'); });
   document.getElementById('btnUseProjMeta').addEventListener('click',function(){
     var patch=ProjMetaUI.use(MAP, values(), 'spreadFooting'); if(!patch) return;
     Object.keys(patch).forEach(function(k){ var i=inp(k); if(!i) return; i.value=patch[k]; i.dispatchEvent(new Event('input',{bubbles:true})); });
@@ -4595,9 +4595,9 @@ function sfrModel(){
    ...sfrNL('',[['NG:','the check fails.'],['REVIEW:','the tool cannot decide alone (a detail it does not model, or a judgment it asks the engineer to make); the reason is stated.'],'Every row is also in the table below.'])]:[{type:'note',text:'No check fails or needs review.'}]};
   if(rows.length)secs.unshift({title:'Summary of results',key:'S-sum',subs:[ngSub,{title:'Checks (as on the dashboard)',items:[{type:'table',wide:true,head:['Check','Result','D/C','Status','Worked in'],rows},
    ...sfrNL('One row per dashboard check.',[['D/C','is computed from the values the dashboard shows (n/a where the check has no ratio).'],['"Worked in"','is the section where the value is worked; on screen it links there.']])]}]});}
- return {title:'Spread Footing Design — Calculation Report',subtitle:m.project||'Untitled',code:'ACI 318-19 · ASCE 7-16 · IBC 2021',
+ return {title:'Shallow Foundation Design — Calculation Report',subtitle:m.project||'Untitled',code:'ACI 318-19 · ASCE 7-16 · IBC 2021',
   info:[['Project',m.project],['Project No.',m.number],['Calculated by',m.calcBy],['Date',m.calcDate],['Checked by',m.chkBy],['Checked date',m.chkDate]],
-  head:{left:'Project No. '+(m.number||'—')+' — '+String(m.project||'—').slice(0,40),right:'Computed: '+(m.calcBy||'—')+' '+(m.calcDate||'')+' · Checked: '+(m.chkBy||'—')+' '+(m.chkDate||''),foot:(m.project||'Untitled')+' (Spread Footing Design Tool)'},
+  head:{left:'Project No. '+(m.number||'—')+' — '+String(m.project||'—').slice(0,40),right:'Computed: '+(m.calcBy||'—')+' '+(m.calcDate||'')+' · Checked: '+(m.chkBy||'—')+' '+(m.chkDate||''),foot:(m.project||'Untitled')+' (Shallow Foundation Design)'},
   sections:secs};
 }
 /* SFWC / SFWC-2 / SFWC-3 report topics of a wall (moved unchanged from the pedestal loop, SFWD-2) */
@@ -4912,7 +4912,7 @@ function sfxApply(model){
  const ref=secs.find(x=>x.title==='References');
  if(ref){const RR=(typeof sfdResultRows==='function'?sfdResultRows():[]),cnt={pass:0,fail:0,warn:0,na:0};RR.forEach(x=>cnt[x.st]++);
   const verdict=(cnt.fail?cnt.fail+' of '+RR.length+' checks FAIL':'No check fails')+' · '+cnt.pass+' PASS'+(cnt.warn?' · '+cnt.warn+' REVIEW':'')+(cnt.na?' · '+cnt.na+' N/A':'');
-  ref.subs.push({title:'About this report',items:[{type:'note',text:'ACI 318-19 · ASCE 7-16 · IBC 2021 · Spread Footing Design Tool, by Mario Lococo.'},{type:'note',text:'Verdict: '+verdict+'.'},
+  ref.subs.push({title:'About this report',items:[{type:'note',text:'ACI 318-19 · ASCE 7-16 · IBC 2021 · Shallow Foundation Design (spread, combined and wall footings), by Mario Lococo.'},{type:'note',text:'Verdict: '+verdict+'.'},
    ...sfrNL('Each result section ends with the result lines of its checks (one per dashboard chip; status = the chip’s own PASS / FAIL / REVIEW / N/A).',[['Factor-of-safety check:','D/C = FS_target/FS.'],['§ links:','where a value is used away from where it is worked, a § link gives the section where it is worked.'],['Units:','kips, ft, ksf unless noted.']])]});}
  return model;
 }
@@ -5325,7 +5325,7 @@ function sfdwBuild(){
   const x0=ox+mm, y0=mm, w=(SFDW.W-2*SFDW.m)*k, r=tb/2, sc=k===1?'NTS':(SFDW_SCALES.find(q=>q[0]===k)||[0,'1:'+k])[1];
   D.rect(L.tb,x0,y0,x0+w,y0+tb);D.line(L.tb,x0,y0+r,x0+w,y0+r);
   const row1=[['PROJECT',m.project,4.25],['PROJECT NO.',m.number,2],['CALCULATED BY',m.calcBy,2],['DATE',m.calcDate,1.75],['CHECKED BY',m.chkBy,2],['CHECKED DATE',m.chkDate,1.75],['SCALE',sc,2.5]];
-  const row2=[['SHEET TITLE',title,8.25],['DRAWN BY','SPREAD FOOTING DESIGN TOOL (DRAWINGS TAB)',5],['SHEET','?',3]];
+  const row2=[['SHEET TITLE',title,8.25],['DRAWN BY','SHALLOW FOUNDATION DESIGN (DRAWINGS TAB)',5],['SHEET','?',3]];
   let sheetEnt=null;
   [[row1,y0+r],[row2,y0]].forEach(([row,yb])=>{let x=x0;row.forEach(([lab,val,cw],ci)=>{
    D.text(L.tb,x+0.05*k,yb+r-0.11*k,0.065*k,lab,0);
@@ -5859,7 +5859,7 @@ $('#tabbar').addEventListener('click',e=>{
  const canon=v=>JSON.stringify(v,(k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.keys(x).sort().reduce((o,kk)=>(o[kk]=x[kk],o),{}):x);
  const opened=o=>{const keep=state;try{state=Object.assign(defaultState(),JSON.parse(JSON.stringify(o)));migrateState();return canon(state);}finally{state=keep;}};
  const exportName=n=>(n||state.meta.number||state.meta.project||'spread_footing')+(n?'':'_inputs')+'.json';
- const pb=SharedProjectsUI.projectBar({store,storage:ST,label:'Spread Footing',id:'spLibDlg',
+ const pb=SharedProjectsUI.projectBar({store,storage:ST,label:'Shallow Foundation Design',id:'spLibDlg',
   snapshot:()=>canon(state),snapOf:n=>{const o=store.get(n);return o?opened(o):null;},
   save:n=>projSave(n)?{ok:true}:{ok:false,message:'The project was not saved.'},
   open:n=>{const o=store.get(n);if(!o)return false;state=Object.assign(defaultState(),JSON.parse(JSON.stringify(o)));migrateState();
@@ -5882,8 +5882,8 @@ $('#tabbar').addEventListener('click',e=>{
    incoming:()=>{const X=window.BridgeXfer;if(!X)return false;
     return ['memberReactions','foundationLoads'].some(ch=>{if(!X.isNew(ch,'spreadFooting'))return false;let at=NaN;try{at=Date.parse(localStorage.getItem(X.NS+ch+'.updatedAt'));}catch(e){}return !(at<Date.now()-30*60000);});}},
   /* GHS (2026-11-05): GitHub sync of this list (shared/github-sync.js). Files are the Export JSON format (the stored item is the state). */
-  cloud:{tool:'spread-footing',label:'Spread Footing',
-   fromFile:j=>{if(!(j&&typeof j==='object'&&!Array.isArray(j)&&j.geom&&typeof j.geom==='object'&&j.soil&&typeof j.soil==='object'&&Array.isArray(j.peds)))throw new Error('not a Spread Footing input file: missing geometry, soil or pedestal data');return j;}}});
+  cloud:{tool:'spread-footing',label:'Shallow Foundation Design',
+   fromFile:j=>{if(!(j&&typeof j==='object'&&!Array.isArray(j)&&j.geom&&typeof j.geom==='object'&&j.soil&&typeof j.soil==='object'&&Array.isArray(j.peds)))throw new Error('not a Shallow Foundation Design input file: missing geometry, soil or pedestal data');return j;}}});
  window.SFPL={store,dlg:pb.dialog,pb};
 })();
 $('#btnExport').addEventListener('click',()=>{
@@ -5898,7 +5898,7 @@ $('#fileImport').addEventListener('change',e=>{
  rd.onload=()=>{try{const j=JSON.parse(rd.result);
   // no format tag in the export, so recognise the file by its required sections
   const looksSF=j&&typeof j==='object'&&!Array.isArray(j)&&j.geom&&typeof j.geom==='object'&&j.soil&&typeof j.soil==='object'&&Array.isArray(j.peds);
-  if(!looksSF&&!confirm('"'+f.name+'" does not look like a Spread Footing input file (missing geometry, soil or pedestal data). Missing values will be filled with defaults.\n\nLoad it anyway?'))return;
+  if(!looksSF&&!confirm('"'+f.name+'" does not look like a Shallow Foundation Design input file (missing geometry, soil or pedestal data). Missing values will be filled with defaults.\n\nLoad it anyway?'))return;
   state=Object.assign(defaultState(),j);migrateState();
   bindStaticInputs();buildPedCards();saveAuto();recalc();if(window.SFPL&&SFPL.pb)SFPL.pb.setCurrent(null);}catch(err){alert('Invalid JSON file.');}};   /* STDS: an imported file is not a saved project */
  rd.readAsText(f);e.target.value='';});
@@ -10305,7 +10305,7 @@ buildManualTab();
     /* AXI (2026-10-21): an integral abutment has no footing; its payload carries per-pile loads (HANDOFF.md §4.6) */
     var el=p.element||{};
     if(el.type==='integralAbutment' || el.abutmentType==='integral' || (p.reference && (p.reference.level==='pileHead' || p.reference.perPile)) || p.perPile){
-      out.err.push('This hand-off is from an integral abutment: its loads are per-pile axial loads at the head of one pile of a single pile row, cast with the superstructure (no footing). Spread Footing cannot design it; use Pile Designer (integral-abutment mode).'); return out; }
+      out.err.push('This hand-off is from an integral abutment: its loads are per-pile axial loads at the head of one pile of a single pile row, cast with the superstructure (no footing). Shallow Foundation Design cannot design it; use Pile Designer (integral-abutment mode).'); return out; }
     var u=p.units||{}, kf=FORCE[u.force], km=MOMENT[u.moment];
     if(!kf){ out.err.push('Unknown force unit "'+(u.force||'')+'". Accepted: kip, or lb (converted ÷ 1000).'); return out; }
     if(!km){ out.err.push('Unknown moment unit "'+(u.moment||'')+'". Accepted: kip-ft, kip-in, lb-ft, lb-in.'); return out; }
@@ -10357,7 +10357,7 @@ buildManualTab();
   function plan(p,chk,o){
     var r={err:[],warn:[],changes:[],set:null};
     var lev=level(p);
-    if(BAD_LEVEL[lev]) r.err.push('These loads act at '+BAD_LEVEL[lev]+' ('+(p.location||lev)+'). Spread Footing needs the loads at the top of the footing (base of the column or wall): it adds the footing self-weight, the soil over the footing and the shear couple itself, so loads at the bottom would count them twice. In the sender, pick the top-of-footing level (SubLoads) — the abutment calculator only sends bottom-of-footing loads.');
+    if(BAD_LEVEL[lev]) r.err.push('These loads act at '+BAD_LEVEL[lev]+' ('+(p.location||lev)+'). Shallow Foundation Design needs the loads at the top of the footing (base of the column or wall): it adds the footing self-weight, the soil over the footing and the shear couple itself, so loads at the bottom would count them twice. In the sender, pick the top-of-footing level (SubLoads) — the abutment calculator only sends bottom-of-footing loads.');
     else if(!OK_LEVEL[lev] && !o.confirmLevel) r.err.push('The payload does not say where the loads act ("'+(p.location||'')+'"). Tick the box to confirm they act at the top of the footing.');
     var c=chk.cases[o.ci];
     if(!c) r.err.push(chk.cases.some(function(x){ return x.factored; }) ? 'Pick a factored case.' : 'The payload has no factored case. This tool takes factored (Strength / Extreme Event) loads only, in its Direct factored mode; service combinations cannot be split into its unfactored load types.');
