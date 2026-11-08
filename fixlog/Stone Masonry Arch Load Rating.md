@@ -1654,6 +1654,24 @@ function transDisp(w,n,c,cap){
 - **How verified:** headless Chromium, origin/main vs the branch, six cases (default; railroad; 60/12 pinned shallow cover with deterioration; 25/8 parabolic deep cover adverse-only; 50/14 cover 1.0 ft with shear and μ = 0; 30/10 deep fill K = 0.30 f_a = 300 3 lanes): every vehicle result (`results`, deep compare) and the model `M` identical; the digit sequence of every tab, the input panel and the Report text identical in all six (the run-time figures "rated in … s" / "Computed in … s" masked). 0 console errors, 0 KaTeX errors. Screenshots at 1440 and 390 px. Tests: see the PR.
 - **Other copies:** none.
 
+## 2026-11-08 — PR: nl-arch-b (PR #1192: https://github.com/mlococo88/All-Structural/pull/1192) — Long notes as a bold lead and a list: the User Manual and the input panel (ARNL-2; display only, no result change)
+
+### ARNL-2. Manual and input-panel paragraphs as a lead and a list   [display only] [no result change]
+- **Request:** as ARNL-1 (#1188), part 2 of 2. Uses the same helper and classes (`R.arNL`, `.arNLl`, `.arNLu`, `.arNLk`).
+- **Input panel (`inputPanel`, `deterRender`):**
+  - Ring Depth hint, anchor `One row per deteriorated area`: becomes a lead plus "Empty cell / Units / Face".
+  - Deterioration editor hint, anchor `Stations are in feet along the span`: becomes a lead plus "Point or zone / Stays put".
+  - Superimposed Dead Load note, anchor `§7.2.7.4B requires the dead load of sidewalks`: becomes three items.
+- **Manual (`MANUAL.PARTS`, static HTML):** every `<p>` / `<li>` whose text is over 500 characters (45 paragraphs) is rewritten as follows:
+  - a `<p>` becomes `<div class="arNLl">first sentence</div><ul class="arNLu"><li><b class="arNLk">Lead words</b> sentence(s)</li>…</ul>`;
+  - an `<li>` keeps its first sentence and gains a nested `ul.arNLu`;
+  - the long enumerations (1.1 MassDOT provisions, 2.2 Earth Pressure / Influence Lines contents) become one item per element.
+  - Sentences are unchanged and in the same order; lead words carry no digits. Exact before / after: the PR diff.
+- **CSS** (after `.manpart ul,.manpart ol{…}`): `.manpart .arNLl{font-size:.99rem;margin-top:6px;} .manpart .arNLu{margin:2px 0 8px;padding-left:22px;}`.
+- **Decision (pending engineer review):** Manual paragraphs of 300 to 500 characters (about 50) are left as prose. The Manual is reference reading under numbered headings, and those paragraphs run 3–4 sentences. Say if they should be split too.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none.
+- **Check case:** Manual §1.3.6, paragraph `§7.2.7.2B sets a minimum of 10 elements`. Before: one 930-character paragraph. After: the lead "§7.2.7.2B sets a minimum of 10 elements or one per 4 ft of clear span." followed by the items "Convergence testing / Why / Therefore", with the 27 %, 30 %, 15 % and 0.26 figures unchanged.
+- **How verified:** headless Chromium, main (after #1188) against the branch, default and a deteriorated shallow case. Results, the model, the digit sequence of every tab (the Manual with all parts shown), the input panel and the Report are identical. 0 console errors.
 ## 2026-11-08 — PR: nl-arch-c (PR #TBD) — Rating summary as a left column of check chips from 1200 px (ARDC; display only, no result change)
 
 ### ARDC. Left summary column   [display only]
