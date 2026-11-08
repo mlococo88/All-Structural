@@ -5300,3 +5300,120 @@ Frame: Beam Capacity (`suite-frame-capacity`). Open item of CBM3 (#1001), review
 - Default project, origin/main vs this branch, headless: the Report's rendered text (`.rp-doc` textContent) and the page text are identical.
 ### How verified
 - `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`; the headless comparison listed in the PR.
+
+## 2026-11-08 — PR: nl-cbc-a (PR #1214: https://github.com/mlococo88/All-Structural/pull/1214) (CBNL-1: long notes of the Beam Capacity tab as a bold lead and a list — input panel, Summary, Flexure, Shear, Torsion, Serviceability, Detailing, Visuals, Drawings, Validation, and the Report; display only, no result change)
+
+Frames: Beam Capacity (`suite-frame-capacity`) and the suite shell's Report (`rxWalk`). The ASD Beam Calcs and Development & Splice frames are CBNL-2 (next PR).
+
+### CBNL-1. Long notes split into a lead line and a list   [display only] [no result change]
+- **Request (engineer, 2026-11-07/08):** "There are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Approved for all tools. Pattern of Spread Footing SFNL (#1167).
+- **Rule used:** a note is long if it is over ~300 characters, has 3 or more sentences, or carries several facts in one paragraph. It becomes a one-line bold lead, then a list with bold lead words; action items ("Input needed: …", "Decision (pending engineer review): …") go first on their own line in the warning style. Every sentence, number, citation and link is kept, in the same order (except the two action lines moved to the top, below); only lead words, list-start capitals and end punctuation are new. New lead words carry no digits.
+- **New helpers** (capacity frame, after `function el(`), anchor `/* CBNL (2026-11-08, engineer: long notes split up`:
+  ```js
+  function cbNLh(lead,items,o){o=o||{};const L=o.ol?"ol":"ul",ac=o.ac==null?"warnBox":o.ac;
+    const li=(items||[]).filter(Boolean).map(x=>"<li>"+(Array.isArray(x)?"<b class=\"cbNLk\">"+x[0]+"</b> "+x[1]:x)+"</li>").join("");
+    return (o.act||[]).filter(Boolean).map(a=>"<div class=\""+(ac?ac+" ":"")+"cbNLa\">"+a+"</div>").join("")+(lead?"<div class=\"cbNLl\">"+lead+"</div>":"")+(li?"<"+L+" class=\"cbNLu\">"+li+"</"+L+">":"");}
+  function cbNL(cls,lead,items,o){const e=el("div",(cls?cls+" ":"")+"cbNL"); e.innerHTML=cbNLh(lead,items,o); return e;}
+  function cbrNL(lead,items,o){o=o||{};
+    return [...(o.act||[]).filter(Boolean).map(a=>({type:'note',warn:true,text:a})),lead?{type:'note',text:lead}:null,
+      ...(items||[]).filter(Boolean).map(x=>({type:'note',text:'• '+(Array.isArray(x)?x[0]+' '+x[1]:x)}))].filter(Boolean);}
+  ```
+  A note `el("div","note","A. B. C.")` becomes `cbNL("note","A.",[["Lead:","b."],["Lead:","c."]])`; a Report note `{type:'note',text:'A. B.'}` becomes `...cbrNL('A.',[['Lead:','b.']])`.
+- **CSS** (after `.figCap{…}`), tool-scoped, no new colours (the box's own colours), a list item kept on one printed page:
+  ```css
+  .cbNL .cbNLl{font-weight:600;margin:0 0 1px}
+  .cbNL .cbNLu{margin:2px 0 3px;padding-left:18px}
+  .cbNL .cbNLu>li{margin:1px 0}
+  .cbNL .cbNLa{font-style:normal;margin:2px 0 4px;padding:4px 8px}
+  .cbNL .cbNLa:not(.warnBox){padding:0;font-weight:600}
+  .figCap.cbNL{text-align:left}
+  @media print{.cbNL .cbNLu>li{break-inside:avoid}}
+  ```
+- **Report (shell, `rxWalk`, before `var kids=[].slice.call(e.children), leaf=`), anchor `/* CBNL (2026-11-08): a note built as a lead line and a list`:** a `.cbNL` element is kept or skipped as one note with the same test as before (`T.fresh(t)||T.newNum(t)`, `t` = the joined text of its parts), then copied as one Report line per part (lead; "• lead words text" per item; an action line `.cbNLa` as a warning line):
+  ```js
+  if(e.matches('.cbNL')){ var P=[].slice.call(e.querySelectorAll('.cbNLa,.cbNLl,.cbNLu>li')), tA=P.map(txt).filter(Boolean).join(' ');
+    if(tA.length>=12&&(T.fresh(tA)||T.newNum(tA))){ P.forEach(function(p){ var x=txt(p); if(x) push({type:'note',warn:p.matches('.cbNLa')||undefined,text:(p.tagName==='LI'?'• ':'')+x}); }); T.seen(tA); }
+    return; }
+  ```
+- **Display-only fields (strings read elsewhere unchanged):**
+  - `validate()` notes ACI 9.7.6.2.2 and AASHTO 5.7.2.1 keep `msg` byte-identical and gain `nl:{lead,items,act}`, attached right after the push by `cbNLx(N[N.length-1],"nl",{…})` as a non-enumerable property (`function cbNLx(o,k,v){ if(v) Object.defineProperty(o,k,{value:v,enumerable:false}); return o; }`), so it is in no JSON, save or result snapshot; the Validation tab draws `cbNLh("<b>"+code+"</b> — "+nl.lead,nl.items,{act:nl.act})` and the Report's Validation notices use `cbrNL` from `nl` (other notices as before).
+  - Detailing checks: `add(…,naWhy,naL)` (new optional 12th argument, attached with `cbNLx` as a non-enumerable property: `out.push(cbNLx({…},"naL",naL))`) for "Longitudinal torsion bar distribution" (A_ℓ entered as an area) and "Minimum shear reinforcement" (Table 9.6.3.1 exemption). `naWhy` is unchanged (Summary N/A list, dashboard chips, Report Summary); the Detailing tab's "Not applicable." box and the Report's 9.x "Not applicable" lines show `naL` when present.
+- **Notes changed (anchor = the old opening text → new lead → item lead words):**
+  1. Input, Reinforcement: "Each layer’s d is computed automatically" → "Layer depth d and face names:" → Depth d / Set d / Face convention / Negative M_u.
+  2. Input, Torsion (`alWarn`): "These are reference figures." → Torsion steel / Placement / Flexural tension side; "The outermost perimeter layers are … in apart vertically … intermediate bars at mid-depth are required." is now the action line at the top (was the last sentence).
+  3. Input, Crack control: "Enter the unfactored (service) moment" → "Service moment for crack control:" → Enter / fₛ / Worked in / Positive moment / Negative moment / No service moment entered yet.
+  4. Input, Materials (AASHTO): "w_c enters E_c (Eq. 5.4.2.4-1)…" → Blank / If known.
+  5. Summary: "Checks reported as N/A" ("• " lines with `<br>`) → a real list, one item per check (name — reason).
+  6. Summary, All Combinations × Limit States: "Each row is one load combination; each column a limit state." → Why this table / Shading.
+  7. Summary and Flexure, Section Flexural Capacity: "Both senses are reported…" → Positive (sagging) / Negative (hogging) / One face reinforced.
+  8. Summary: "No tension reinforcement for … moment." → Why / Reported value.
+  9. Flexure: "The combination that governs FLEXURE … is highlighted." → Kept open / Overall / Worked.
+  10. Shear (Step 4): warning "The stirrup cannot resist shear and torsion independently." → V_s above / φT_n / Combined.
+  11. Shear, AASHTO Torsion Design: "Decision (pending engineer review): AASHTO gives no separate cross-section limit…" → the decision as the action line, then "Torsion with shear, other limits:" → f′c / Longitudinal reinforcement / Corner bars.
+  12. Shear, AASHTO Longitudinal Reinforcement: "Shear adds tension in the longitudinal reinforcement…" → A_s / V_s / With torsion.
+  13. Torsion: "A_{ℓ,req} is the area that develops Tᵤ…" → "Longitudinal torsion steel, two requirements:" → A_{ℓ,req} / A_{ℓ,min} of 9.6.4.3 / Both / Input panel.
+  14. Torsion: warning "φT_n above assumes the entire stirrup leg…" → Shear tab / Read together.
+  15. Torsion: error "No longitudinal torsion reinforcement is provided (A_ℓ = 0)." → action line "Input needed: enter the longitudinal steel provided specifically for torsion, …" → Why.
+  16. Serviceability, Service-Load Steel Stress: "ACI 24.3.2.1 allows f_s…" → "Service-load steel stress:" → ACI 24.3.2.1 / AASHTO 5.6.7 / Below / Used in.
+  17. Detailing: "Most detailing limits depend on the section…" → "How the detailing checks are enveloped:" → Most limits / Crack control / Every combination / N/A.
+  18. Detailing, N/A boxes (`naL`): "Not applicable." → Why / Confirm by inspection (torsion bar distribution); Exempt / Table 9.6.3.1 / Any depth / Confirm (shear exemption); Every combination.
+  19. Visuals, section: "Drawn to scale for the sense of …" → Colours / Clear cover / Layer depths d; torsion legend "Purple dashed line is the closed-stirrup centreline…" → "Torsion in the figure:" → Purple dashed line / Purple rings / Illustrative.
+  20. Visuals, forces: "Combination … (select above)." → Scales / Signs / Arrows / Values.
+  21. Visuals, Design Assist: "Each curve is the design capacity…" → Star / Dashed red line / Use.
+  22. Visuals, 3D: "Drag to rotate, scroll to zoom." → Scale / Length.
+  23. Drawings: "One DXF file (AutoCAD R12, model space, full size in inches):" → Sheets / Layers / Title block / Development and splice lengths. (`SharedDxf.PRINT_NOTE`, a shared file, is not changed.)
+  24. Validation: "N mandatory code limit(s) … not satisfied." → Mandatory / Result.
+  25. Validation, Method Choices: ACI 9.7.6.2.2 (the "Decision (pending engineer review, 2026-11-07)" sentence now the action line at the top; Why / Both values) and AASHTO 5.7.2.1 (Threshold / Above it / T_u / Stirrups), through `nl`.
+  26. Report, 3.2 Reinforcement: "Transverse: … Skin bars … Clear spacing …" → "Other reinforcement:" → Transverse (or "No transverse reinforcement specified.") / Torsion / Skin bars / Clear spacing between layers.
+  27. Report, About the Beam Capacity chapter: "Equations are shown symbolically…" → "How this chapter is laid out:" → Equations / Results / Units / Combinations (or Omitted).
+- **Not changed:** equation lines (TeX remarks such as "The numerator is negative …" belong to the worked step); figure captions of the Report (one string each, e.g. the overview "Cross-section, bw × h …"); the dashboard chips' expanded "N/A: …" line; `naWhy`, `msg` and every other string read by the Report lists, the dashboard or the hand-offs; notes under ~300 characters with one or two facts.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none.
+- **Check case:** default project (ACI, torsion on), Validation tab, Method Choices, ACI 9.7.6.2.2: before one 718-character paragraph; after the action line "Decision (pending engineer review, 2026-11-07): this V_s-required reading is kept …", the lead "ACI 9.7.6.2.2 — The tighter d/4 spacing limit is triggered from V_s REQUIRED (V_u/φ − V_c) …" and the items Why / Both values. Report §4.1 Notices: the same three parts as Report lines.
+- **How verified:** headless Chromium, origin/main vs the branch, 31 cases (14 Beam Capacity projects: default, aciD, aasT, aasMinNeg, aciFy100, aciDeep, aciTeeCant, aasTeeNeg, aasDeepSkin, aciShallowLo, aasRT, aasTnoV, aasTlw, aciShallowHi; 2 ASD; 15 Development & Splice): `validate()`, `computeAll()`, `allChecks()` (without the new display fields `nl`, `naL`), the ASD and Dev results identical; the digit sequence of every Beam Capacity tab, every ASD and Dev tab and the combined Report text identical in all 31 cases once the two moved action lines are masked (those two lines occur 47 times, identically, in both versions). 0 console errors. Screenshots at 1440 and 390 px. Tests: see the PR.
+- **Other copies:** none.
+
+## 2026-11-08 — PR: nl-cbc-b (PR #1222: https://github.com/mlococo88/All-Structural/pull/1222) (CBNL-2: long notes of the Development & Splice and ASD Beam Calcs tabs as a bold lead and a list — input hints, narratives, commentary, Bar Schedule, Report; display only, no result change)
+
+Frames: Development & Splice (`suite-frame-dev`) and ASD Beam Calcs (`suite-frame-asd`). Follows CBNL-1 (#1214, the Beam Capacity frame and the shell's `rxWalk`, which also copies the ASD tab's `.cbNL` notes).
+
+### CBNL-2. Long notes split into a lead line and a list   [display only] [no result change]
+- **Request and rule:** as CBNL-1. Every sentence, number, citation and link is kept in the same order. New lead words carry no digits. Where a lead word is old text (for example "1.5" or "ACI 318-19 Table 25.4.2.5:"), it is at its old place.
+- **Development & Splice frame:**
+  - CSS (after `.note .note-body .vardef .s{…}`), anchor `/* RBNL (2026-11-08`:
+    ```css
+    .rbNL .rbNLl{font-weight:600; margin:0 0 1px;}
+    .rbNL .rbNLu{margin:2px 0 3px; padding-left:18px;}
+    .rbNL .rbNLu>li{margin:1px 0;}
+    .rbNL .rbNLa{margin:2px 0 5px; padding:5px 9px;}
+    .note .note-body .rbNLp{margin:0 0 7px;}
+    .note .note-body .rbNLp:last-child{margin-bottom:0;}
+    @media print{.rbNL .rbNLu>li{break-inside:avoid;}}
+    ```
+  - Markup, written in the tab templates themselves: `<div class="… rbNL">[<div class="warnbox rbNLa">action</div>]<div class="rbNLl">lead</div><ul class="rbNLu"><li><b class="rbNLk">Lead words:</b> text</li>…</ul></div>`. A `<p>` of a commentary note becomes `<div class="rbNL rbNLp">`, and a `.vardef` becomes `<div class="vardef rbNL">`, with the symbol (`<span class="s">ψ_t = …</span> — Name.`) as its lead.
+  - Report (`rbComm`, which reads the `.narr` and commentary notes into "Notes and commentary"), anchor `/* RBNL (2026-11-08): a block built as a lead line and a list`. An `.rbNL` block gives one Report line per part: the action line, the lead, then "• lead words text" per item. A list inside an action line stays in that line as "• (a) … • (b) …". Before: one line per block.
+  - New `rbrNL(lead,items)` (before `function rbCommSub(`), used by `rbrModel` for two Report-only notes.
+  - Notes changed (anchor = the old opening text → new lead → item lead words):
+    1. Input, λ hint: "Used only when Lightweight is ticked." → ACI 318-19 19.2.4.1 / AASHTO 5.4.2.8 / Accepted.
+    2. Input, excess reinforcement hint. Action line first: "The tool does not check where the bar is, so do not tick this if any of these apply — ACI 318-19 25.4.10.2:", with (a)–(f) as a list, then the AASHTO λ_er sentence. Then the lead "Reduces l_d by A_s,req/A_s,prov (…)" → Splices / Class A. The lead has no digits, so the digit order is unchanged.
+    3. Input, "A_s,req for a beam:" → Minimum governs / Why.
+    4. Input, AASHTO hook ties: → Do not tick.
+    5. Input, AASHTO bend radius: "AASHTO 5.10.8.2.4a." → Blank / Smallest R / Galvanized bars.
+    6. Excess reinforcement block: "When more steel is provided…" → Reduction / AASHTO (AASHTO only); "Important limits:" → Not permitted / Never longer.
+    7. Tension (ACI): narrative "The general equation is used…" → Why / Bond / Splitting; ψ_t → Why / Top bar / Other bars; ψ_e → Why / 1.5; ψ_s → Smaller bars / Larger bars; ψ_g → Why / Values; λ → Why / Normalweight / ACI 318-19 Table 25.4.2.5; "This term is what separates…" → It rewards confinement / Denominator.
+    8. Tension (AASHTO): narrative → "Tension development, AASHTO:" → Basic length / Factors / Full development; "The squared bracket…" → Squared / F_h; "λ_rc rewards cover…" → No transverse steel / k_tr / β_t / Bounds.
+    9. Hook (ACI): narrative "Hooks transfer force…" → ACI 318-19 / Measured; ψ_r → Why / Values / Effect; ψ_o → 1.0 / All other cases; ψ_c → Why / Values; "Why d_b^{1.5} instead of d_b?" → Bearing / Exponent; "Not applied to the hook." → ACI 318-19 25.4.10.1 / Hooked bars / So; "The straight development length rarely fits…" → Measured / Floors.
+    10. Hook (AASHTO): narrative "The 10th Edition develops a hooked bar…" → Hook force / l_dh / Applies to; "R is measured from the center of the bend…" → Tighter bend / Efficiency factor.
+    11. Compression: ACI "A bar in compression doesn't try to split…" → Shorter / Dropped terms; AASHTO narrative "AASHTO compression development takes the larger…" → As in ACI / λ_er and λ / λ_rc.
+    12. Tension splice: "Class B (1.3 l_d) — The default." → When / Safe.
+    13. Bar Schedule: narrative "Every length below is computed…" → Highlighted / Values / Use; hint "All lengths in inches." → Tension splice / Excess reinforcement / *N/P; "This schedule is the single most-used output for detailing." → Look-up / Consistent.
+    14. Report: the project note "… Development & Splice, by Mario Lococo." → Equations / Units / Values; 20.1 "All lengths in inches, rounded to 0.1 in., …" → Excess reinforcement / *N/P, then the "On screen: Bar Schedule tab" link as its own line.
+- **ASD Beam Calcs frame:** helpers `cbNL(cls,lead,items)` and `cbrNL(lead,items)` (after `function el(`) and the CBNL-1 CSS, without the action-line rules. Notes:
+  1. Input, Allowable Stresses: "AASHTO 8.15.2 service-level allowables, set automatically from f'_c and f_y (auto):" → f_c,inv / f_s,inv / f_s,op / Override / Operating f_c.
+  2. Summary & Rating, Scope: "Scope: singly reinforced flexure only (…)." → Compression steel / Shear.
+  3. Report, Analysis and rating: the Scope note → Compression steel / Shear / Pass / Operating f_c (when above 0.60f′c).
+  4. Report, About the ASD chapter: "Equations are shown symbolically…" → "How this chapter is laid out:" → Equations / Inputs / Pass / Units.
+- **Not changed:** the c_b, A_tr, s/n, K_tr, λ_rl, λ_cf, hook ψ_e, Class A and other definitions and notes of one or two sentences under ~300 characters; the References table; title-block lines.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none.
+- **Check case:** Development & Splice, AASHTO, #8, f′c 4000 psi, lightweight λ 0.85, excess 0.8/1.0 (`aasLW085ex`), Tension tab. The 436-character narrative becomes the lead "Tension development, AASHTO:" and three items, with "λ_er·f_y", "F_h = 0", "fourth root of f'c", "12 in. minimum" and "§5.10.8.1.1" unchanged. Report §15.2 shows the same four lines.
+- **How verified:** headless Chromium, CBNL-1 (origin/main) vs the branch, the same 31 cases as CBNL-1. Every result (Beam Capacity, ASD, Development & Splice) is identical. The digit sequence of every tab's text (the 2 ASD and 15 Dev cases changed wording) and of the combined Report text is identical in all 31 cases. 0 console errors. Screenshots at 1440 and 390 px. Tests: see the PR.
+- **Other copies:** none. The standalone rebar calculator is a redirect page (RBRT), so the Development & Splice tab is the only copy.
