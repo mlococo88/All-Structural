@@ -232,3 +232,9 @@ Plan: rotating in-depth code-compliance reviews (read-only) → fix PRs for clea
 - Running: Steel Bridge Design, Stone Arch, Pile Designer, Retaining Wall, Base Plate, Timber, Gusset, Concrete Beam, Bridge Geometry, Moving Load.
 - Queue: abutment_calculator, elastomeric, Steel Beam, ASCE7, Shear&Moment (notes), lldf, index.html, tools.html (notes). Skip apps/steel-bridge, Prestressed (on hold).
 - Pending engineer: Spread Footing display rename → "Shallow Foundation Design" (file name kept). SPC r̄o/H stale "to be verified" text — fold into a small PR.
+
+## Check-in 2026-11-08 02:08 UTC
+- Notes/panel done: SubLoads, Light Pole, Section Prop, Timber, Steel Bridge (part 1), Stone Arch, Base Plate (+<b> fix), Gusset, Pile Designer, Retaining Wall, elastomeric, Shear&Moment, abutment.
+- Running: Concrete Beam, Bridge Geometry, Moving Load, Steel Beam, ASCE7, lldf/index/tools, Steel Bridge remainder, 3 small text fixes (RW sliding note, SPC r̄o/H, Timber report spacing).
+- Shallow-clone artefact: local main showed 50 "unpushed" commits (Oct-30 history before shallow boundary) — reset local main to origin/main, checkout back on claude/bold-meitner-jtfopv.
+- Pending engineer: SF rename "Shallow Foundation Design"; default projects with FAILs (Base Plate 2, abutment sliding 1.10) — adjust?; shared report.js bullet support in step notes (later).
