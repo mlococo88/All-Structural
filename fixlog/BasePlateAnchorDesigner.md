@@ -5503,3 +5503,18 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - Default project, origin/main vs this branch, headless: the Report's rendered text (`.rp-doc` textContent) and the page text are identical.
 ### How verified
 - `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`; the headless comparison listed in the PR.
+
+## 2026-11-08 — PR: fix/bp-escaped-bold (PR #1171: https://github.com/mlococo88/All-Structural/pull/1171) — markup shown as literal text (display only)
+### BPMK-1. Four notes showed `<b>`, `<i>`, `<br>` and `&plusmn;` as text   [display only; saved data: none]
+- **Problem:** `el(tag,cls,txt)` sets `textContent`, so markup in its text argument was printed literally. Found by a headless scan of every text node (all input panes and all output tabs; default, pedestal-reinforcement, fixed-D, elastic-model and tension-reinforcement states). Four places, all on origin/main; after the fix the scan finds none.
+- **Where / Before / After:**
+  - New helper next to `el()`: `function elH(tag,cls,html){ const e=el(tag,cls); if(html!==undefined)e.innerHTML=html; return e; }` — app-written markup only, never user text.
+  - `mkSection("inForceModel","7. Anchor Force Distribution"…)` warning, anchor text `"<b>D is a calibrated modeling assumption`: before `body.appendChild(el("div","warnBox",` → after `body.appendChild(elH("div","warnBox",`. (Its `<i>single</i>`, `<br><br>` and `&plusmn;` now render too.)
+  - `mkSection("inPed","7a. Pedestal Reinforcement"…)` first note, anchor text `"Longitudinal bars on the pedestal perimeter`: before `body.appendChild(el("div","note",` → after `body.appendChild(elH("div","note",`.
+  - `mkSection("coPedTie","8. Pedestal Ties at Anchor Bolts"…)`, anchor text `"Not checked: enter the pedestal longitudinal bars`: `el("div","note",…` → `elH("div","note",…`.
+  - Tension Reinforcement tab, note anchor text `"§17.5.2.1.1 credits a bar only where"`: the text up to `…for combination "+ic.govCombo+"."` stays in `el("div","note",…)` (now `const icNote=`); when `ic.hefReduced`, a text node `" "`, a `<b>` element "h_ef here is the ACTUAL embedment, <h_ef>″." and a text node with the rest of the sentence are appended (no innerHTML, because the combination name is user text), then `body.appendChild(icNote)`.
+- **Report:** the Report reads these notes by `textContent`, so its text loses only the literal tags (e.g. "under <b>Pedestal Reinforcement</b>" → "under Pedestal Reinforcement").
+- **Governing provision:** none (display only).
+- **Check case:** default project and the four states above, origin/main vs branch, headless: `CC` (all results) JSON identical; input panel and every tab's `textContent` identical after removing `<b>`/`</b>`/`<i>`/`</i>`/`<br><br>` and `&plusmn;`→`±` from main's text; digit sequences identical in all 71 texts compared.
+- **How verified:** `node tests/check-syntax.mjs`; `tests/smoke/phone-layout.mjs --tool bpad`; `tests/smoke/project-library.mjs --tool baseplate`; `tests/smoke/lightpole-anchor-handoff.mjs`; 0 console errors.
+- **Other copies:** none.
