@@ -1654,7 +1654,7 @@ function transDisp(w,n,c,cap){
 - **How verified:** headless Chromium, origin/main vs the branch, six cases (default; railroad; 60/12 pinned shallow cover with deterioration; 25/8 parabolic deep cover adverse-only; 50/14 cover 1.0 ft with shear and μ = 0; 30/10 deep fill K = 0.30 f_a = 300 3 lanes): every vehicle result (`results`, deep compare) and the model `M` identical; the digit sequence of every tab, the input panel and the Report text identical in all six (the run-time figures "rated in … s" / "Computed in … s" masked). 0 console errors, 0 KaTeX errors. Screenshots at 1440 and 390 px. Tests: see the PR.
 - **Other copies:** none.
 
-## 2026-11-08 — PR: nl-arch-b (PR #TBD) — Long notes as a bold lead and a list: the User Manual and the input panel (ARNL-2; display only, no result change)
+## 2026-11-08 — PR: nl-arch-b (PR #1192: https://github.com/mlococo88/All-Structural/pull/1192) — Long notes as a bold lead and a list: the User Manual and the input panel (ARNL-2; display only, no result change)
 
 ### ARNL-2. Manual and input-panel paragraphs as a lead and a list   [display only] [no result change]
 - **Request:** as ARNL-1 (#1188), part 2 of 2. Uses the same helper and classes (`R.arNL`, `.arNLl`, `.arNLu`, `.arNLk`).
