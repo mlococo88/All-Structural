@@ -101,6 +101,41 @@ body{font-family:var(--font-doc);font-size:10pt;color:var(--ink);background:#efe
 .govStrip.pass .govBadge{color:var(--pass)}
 .govStrip.fail .govBadge{color:var(--fail)}
 @media print{.govStrip{display:none!important}}
+/* SBLP (2026-11-08, engineer: the left summary panel, as Retaining Wall / Spread Footing / Light Pole / Shear and Moment / Base Plate):
+   from 1200 px a left column of compact check chips (name, D/C, PASS / FAIL); 240 px to 1499 px, 280 px from 1500 px; the toggle
+   button shrinks it to a 42 px strip. Below 1200 px it is not shown and nothing changes. Screen only (never printed). */
+#sbDashCol{display:none}
+@media screen and (min-width:1200px){
+  #sbDashCol{display:flex;flex-direction:column;flex:0 0 280px;width:280px;min-width:0;overflow-y:auto;overscroll-behavior:contain;border-right:1px solid var(--line);background:var(--panel);font-family:var(--font-ui);font-size:9pt}
+  #main>#inputPanel{flex-basis:calc((100% - 280px) * .33)}
+  #sbDashHead{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:6px;padding:7px 8px 6px;background:var(--panel);border-bottom:2px solid var(--accent)}
+  #sbDashTgl{margin:0;padding:1px 7px;font:9pt var(--font-ui);border:1px solid var(--line);background:var(--slate-100);border-radius:4px;cursor:pointer}
+  #sbDashTtl{margin:0;font-size:9pt;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#334155}
+  #sbDashCnt{margin-left:auto;font-size:8.5pt;font-weight:600;white-space:nowrap}
+  #sbDashCnt.fail{color:var(--fail)} #sbDashCnt.pass{color:var(--pass)}
+  #sbDash{padding:6px 6px 24px;display:flex;flex-direction:column;gap:4px}
+  #sbDash .sbdMsg{font-style:italic;color:#555;padding:4px 2px}
+  .sbdChip{display:grid;grid-template-columns:10px minmax(0,1fr) auto;column-gap:6px;align-items:center;width:100%;text-align:left;padding:4px 6px;border:1px solid var(--line);border-radius:4px;background:#fff;cursor:pointer;font:9pt var(--font-ui);color:var(--ink)}
+  .sbdChip:hover{background:#eef3f8} .sbdChip:focus-visible{outline:2px solid var(--blue-600);outline-offset:1px}
+  .sbdChip .dot{width:9px;height:9px;border-radius:50%;border:1px solid rgba(0,0,0,.3)}
+  .sbdChip.pass .dot{background:var(--pass)} .sbdChip.fail .dot{background:var(--fail)} .sbdChip.na .dot{background:#94A3B8}
+  .sbdChip.fail{border-color:#F1A8A8;background:#FDF3F3}
+  .sbdChip .nm{font-weight:600;overflow-wrap:anywhere}
+  .sbdChip .vl{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .sbdChip .vl b{display:block;font-size:8pt}
+  .sbdChip.pass .vl b{color:var(--pass)} .sbdChip.fail .vl b{color:var(--fail)} .sbdChip.na .vl b{color:#64748B}
+  body.sbDashColl #sbDashCol{flex-basis:42px;width:42px;overflow:hidden}
+  body.sbDashColl #main>#inputPanel{flex-basis:calc((100% - 42px) * .33)}
+  body.sbDashColl #sbDash{display:none}
+  body.sbDashColl #sbDashHead{flex-direction:column;border-bottom:none;padding:7px 4px}
+  body.sbDashColl #sbDashTtl{writing-mode:vertical-rl;transform:rotate(180deg)}
+  body.sbDashColl #sbDashCnt{margin-left:0;writing-mode:vertical-rl;transform:rotate(180deg)}
+}
+@media screen and (min-width:1200px) and (max-width:1499.98px){
+  #sbDashCol{flex-basis:240px;width:240px}
+  #main>#inputPanel{flex-basis:calc((100% - 240px) * .33)}
+}
+@media print{#sbDashCol{display:none!important}}
 #tabBar button.active{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
 .tabPage{padding:10px 2px}
 /* sections */
@@ -231,6 +266,10 @@ textarea{min-height:64px;resize:vertical;font-family:var(--font-doc);font-size:1
     </div>
   </div>
   <div id="main">
+    <aside id="sbDashCol" class="noPrint" aria-label="Check summary"><!-- SBLP (2026-11-08): the checks as a left column on screens 1200 px and wider -->
+      <div id="sbDashHead"><button type="button" id="sbDashTgl" aria-controls="sbDash" aria-expanded="true" title="Shrink the check summary">&laquo;</button><h2 id="sbDashTtl">Checks</h2><span id="sbDashCnt"></span></div>
+      <div id="sbDash" role="list"></div>
+    </aside>
     <div id="inputPanel"><div id="prjPane" data-secid="prjPane"><!-- SBHD (2026-11-05): moved here from the header; kept across rebuilds by rebuildInputs() -->
       <div class="sec"><div class="secHead"><span class="secTitle">Save and open</span></div><div class="secBody" id="sbSaveCard"></div></div><!-- STDS (2026-11-06): the standard "Save and open" card (shared/projects-ui.js projectBar, SBPL.pb); it replaces the "Project Save / Load" section -->
       <div class="sec"><div class="secHead"><span class="secTitle">Title block</span></div><div class="secBody">
@@ -2980,6 +3019,7 @@ function schedule(structural){
     if(structural)rebuildInputs();
     else if(uxCtl)uxCtl.relabel();   /* Custom stations x: re-check against the beam length */
     renderTab();
+    sbDashRender();   /* SBLP: the left summary panel follows every recalculation */
     updateGovStrip();   /* SBGS (2026-11-02): the Governing strip under the header follows every recalculation (it was refreshed only when the tabs were rebuilt) */
     sbdInputTabMarks();   /* refresh the input-tab error dots */
     autosave();pushHist();
@@ -5116,28 +5156,36 @@ function TABS(){
     ['tabManual','User Manual']];
 }
 /* ---------- summary (mode aware) ---------- */
-function buildSummaryTab(pg){
+/* SBLP (2026-11-08): the Summary tab's check list (chips), also read by the left summary panel (sbDashRender). Moved out of
+   buildSummaryTab unchanged; the panel's extra fields: ch (the design check), dcr, sec (the card that works the value). */
+function sbSumChecks(){
   const D=AN.design,checks=[];
-  if(isMember()){
-    pg.appendChild(el('div','warnBox sbNL',sbNL('Member check mode.',[['Scope:','this is a section capacity check against demands you entered \u2014 <b>not</b> a beam analysis.'],['No structural model was solved,','so equilibrium, deflection, reactions and moment distribution are not verified and are reported N/A below.']])));
-  }else{
+  if(!isMember()){
     checks.push({label:'Model stability',ref:'mechanics',status:AN.stable?'pass':'fail',detail:AN.stable?'stable':'mechanism',tab:'tabSchem'});
     let eqWorst=0,eqC='';
     AN.combos.forEach(c=>{const e2=Math.abs(c.sumR-c.sumF);if(e2>eqWorst){eqWorst=e2;eqC=c.name;}});
     checks.push({label:'\u03A3R = \u03A3F (all combos)',ref:'statics',status:eqWorst<=1e-4?'pass':'fail',
       detail:'max err '+fmt(eqWorst,5)+' kip'+(eqC?(' ('+eqC+')'):''),tab:'tabAnalysis'});
   }
-  if(D)D.checks.forEach(ch=>checks.push({label:ch.label,ref:ch.ref,
+  if(D)D.checks.forEach(ch=>checks.push({ch,dcr:ch.na?null:ch.dcr,label:ch.label,ref:ch.ref,
     status:ch.na?'na':(ch.dcr>1.0001?'fail':'pass'),
     detail:ch.na?(ch.detail||'N/A'):('DCR '+fmt(ch.dcr,2)+(ch.combo?(' \u2014 '+ch.combo):'')),tab:ch.tab}));
   if(isMember()){
     checks.push({label:'Equilibrium / reactions',ref:'statics',status:'na',detail:'demands entered, not solved',tab:'tabSummary'});
   }else AN.svc.forEach(sc=>sc.perSpan.forEach(ps=>{
     if(ps.lim==null)checks.push({label:'\u03B4 span '+(ps.span+1)+' \u2014 '+sc.name,ref:'report',status:'na',
-      detail:fmt(Math.abs(ps.dmax)*12,3)+' in (no limit)',tab:'tabService'});
+      detail:fmt(Math.abs(ps.dmax)*12,3)+' in (no limit)',tab:'tabService',sec:'sv_'+sc.id});
     else checks.push({label:'\u03B4 \u2264 L/'+sc.den+' sp'+(ps.span+1)+' \u2014 '+sc.name,ref:'IBC 1604.3',
-      status:ps.pass?'pass':'fail',detail:'DCR '+fmt(ps.ratio,2),tab:'tabService'});
+      status:ps.pass?'pass':'fail',detail:'DCR '+fmt(ps.ratio,2),tab:'tabService',sec:'sv_'+sc.id,dcr:ps.ratio});
   }));
+  return checks;
+}
+function buildSummaryTab(pg){
+  const D=AN.design;
+  if(isMember()){
+    pg.appendChild(el('div','warnBox sbNL',sbNL('Member check mode.',[['Scope:','this is a section capacity check against demands you entered \u2014 <b>not</b> a beam analysis.'],['No structural model was solved,','so equilibrium, deflection, reactions and moment distribution are not verified and are reported N/A below.']])));
+  }
+  const checks=sbSumChecks();   /* SBLP: the check list as a function, shared with the left summary panel */
   const dash=el('div');dash.id='dash';
   checks.forEach(c=>{
     const chip=el('div','chip '+c.status);
@@ -9834,6 +9882,7 @@ function buildTabs(){
   sbrTabButton(bar);   /* SBRP: the Report tab (not saved in S.ui.tab) */
   renderTab();
   updateGovStrip();
+  sbDashRender();   /* SBLP */
 }
 /* =====================================================================
    REPORT TAB (SBRP, 2026-11-01): the calculation report in the shared viewer (shared/report.js: navigation tree,
@@ -10120,6 +10169,53 @@ function govSummary(){
   return{txt:'Governing: '+g.label+' \u00B7 DCR '+fmt(g.dcr,3)+(g.combo?(' \u00B7 '+g.combo):''),
     cls:g.dcr>1.0001?'fail':'pass',tab:g.tab,dcr:g.dcr};
 }
+/* SBLP (2026-11-08): the left check-summary column (screen 1200 px and wider). The chips are the Summary tab's checks
+   (sbSumChecks(): the same status and D/C as its chips; batch mode: one chip per member, as the Batch Results); a click opens and
+   scrolls to the card that works the value (sbdChkTarget / sbdGoto, D11), or the check's tab when no card is mapped. The toggle
+   button shrinks it to a strip; the choice is kept per browser under sbd_dashCollapsed_v1 ('1' = shrunk), not part of the project or the autosave. */
+const SBLP={key:'sbd_dashCollapsed_v1'};
+function sbDashColl(v,save){
+  document.body.classList.toggle('sbDashColl',!!v);
+  const t=$('sbDashTgl');
+  if(t){t.innerHTML=v?'&raquo;':'&laquo;';t.setAttribute('aria-expanded',v?'false':'true');t.title=v?'Show the check summary':'Shrink the check summary';}
+  if(save)lsSet(SBLP.key,v?'1':'0');
+}
+function sbDashRender(){
+  const host=$('sbDash'),cnt=$('sbDashCnt');if(!host||!cnt)return;
+  host.innerHTML='';cnt.textContent='';cnt.className='';
+  const msg=t=>host.appendChild(el('div','sbdMsg',t));
+  if(!AN){msg('No results yet.');return;}
+  if(AN.blockers&&AN.blockers.length){msg('No results: the model is not valid. See the message on the Schematic & Inputs tab.');return;}
+  let items;
+  try{
+    if(isBatch())items=(AN.results||[]).map(r=>({nm:r.lbl||(r.row&&(r.row.desc||r.row.size))||'Member',st:r.status==='PASS'?'pass':r.status==='FAIL'?'fail':'na',dcr:r.status==='BLOCKED'?null:r.govDCR,
+      tip:(r.row&&r.row.desc?r.row.desc+' \u2014 ':'')+(r.status||''),go:()=>sbdGoto('tabBatch')}));
+    else items=sbSumChecks().map(c=>({nm:c.label,st:c.status,dcr:c.status==='na'?null:c.dcr,tip:c.label+' ['+c.ref+'] \u2014 '+(c.status==='na'?'N/A: ':'')+c.detail,
+      go:()=>{const t=c.ch?sbdChkTarget(c.ch):(c.sec?[c.tab,c.sec]:null);if(t)sbdGoto(t[0],t[1]);else sbdGoto(c.tab);}}));
+  }catch(e){items=null;}
+  if(!items||!items.length){msg(isBatch()?'No members loaded.':'No results yet.');return;}
+  let worst=0,nFail=0;
+  items.forEach(c=>{
+    if(c.st==='fail')nFail++;
+    if(c.dcr!=null&&isFinite(c.dcr)&&c.dcr>worst)worst=c.dcr;
+    const b=el('button','sbdChip '+c.st);b.type='button';b.setAttribute('role','listitem');
+    b.title=c.tip+'. Opens the card where it is worked.';
+    b.appendChild(el('span','dot'));
+    b.appendChild(el('span','nm'));b.lastChild.textContent=c.nm;
+    const vl=el('span','vl',c.dcr!=null&&isFinite(c.dcr)?fmt(c.dcr,2):'\u2014');vl.appendChild(el('b',null,c.st==='na'?'N/A':c.st==='fail'?'FAIL':'PASS'));
+    b.appendChild(vl);
+    b.addEventListener('click',c.go);
+    host.appendChild(b);
+  });
+  cnt.textContent=nFail?(nFail+' FAIL'):('max '+fmt(worst,2));
+  cnt.className=nFail?'fail':'pass';
+  cnt.title='Maximum D/C = '+fmt(worst,2)+(nFail?'; '+nFail+' check'+(nFail===1?'':'s')+' fail':'; all checks pass');
+}
+(function(){
+  const go=()=>{sbDashColl(lsGet(SBLP.key)==='1',false);
+    const t=$('sbDashTgl');if(t)t.addEventListener('click',()=>sbDashColl(!document.body.classList.contains('sbDashColl'),true));};
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',go);else go();
+})();
 function updateGovStrip(){
   let s=document.getElementById('govStrip');
   const hdr=$('hdr');
