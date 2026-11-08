@@ -1901,3 +1901,47 @@ Review of 2026-11-07, LOW findings. L7 (closed-form FER) is a separate PR. Every
   - Screenshots before / after at 1920, 1440, 1280, 1024, 390 px (and the collapsed strip and a clicked line at 1280) looked at.
   - Tests: `tests/check-syntax.mjs`; `tests/smd-verify.mjs` (ALL PASS; its `#statsRow` warning checks still read the warnings, which stay there); `tests/smoke/phone-layout.mjs --tool smd` (390 / 768); `tests/smoke/project-library.mjs --tool smd`.
 - **Other copies:** none (the pattern follows LPDC / SFDC; no shared code).
+
+## 2026-11-08 — PR: nl-smd-notes (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SMNL: long notes as a bold lead and a list — combinations dialog, warnings above the loads, Engineering Calculations, Report; display only, no result change)
+
+### SMNL. Long notes split into a lead line and a list   [display only] [no result change]
+- **Request (engineer, 2026-11-07):** "There are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Approved for all tools. Pattern: Spread Footing SFNL-1 / SFNL-2 (#1167).
+- **Rule used:** a note is long if it is over ~300 characters, has 3 or more sentences, or carries several facts in one paragraph. It becomes a one-line bold lead, then a list with bold lead words. Every sentence, number, citation and link is kept in the same order (one action line moved first, see 1); new lead words carry no digits, so the digit sequence of each view is unchanged.
+- **New helpers** (after `const g=id=>document.getElementById(id);`, anchor `/* SMNL (2026-11-08, engineer:`):
+  ```js
+  function smdNL(lead,items,o){o=o||{};const L=o.ol?'ol':'ul',li=(items||[]).filter(Boolean).map(x=>'<li>'+(Array.isArray(x)?'<b class="smdNLk">'+x[0]+'</b> '+x[1]:x)+'</li>').join('');
+    return (o.act||[]).filter(Boolean).map(a=>'<div class="smdNLa">'+a+'</div>').join('')+(lead?'<div class="smdNLl">'+lead+'</div>':'')+(li?'<'+L+' class="smdNLu">'+li+'</'+L+'>':'');}
+  function smdrNL(lead,items,o){o=o||{};const n=t=>o.warn?{type:'note',warn:true,text:t}:{type:'note',text:t};
+    return [lead?n(lead):null,...(items||[]).filter(Boolean).map(x=>n('• '+(Array.isArray(x)?x[0]+' '+x[1]:x)))].filter(Boolean);}
+  ```
+  `smdNL` builds the screen note (inside an element with class `smdNL`); `smdrNL` returns the Report note items (the lead, then one "• lead words: text" note per item; `shared/report.js` is not changed).
+- **CSS** (after `.hint{…}`), tool-scoped, colours inherited from the box (the action line uses the tool's existing amber warning colours), print keeps a list item on one page:
+  ```css
+  .smdNL .smdNLl{font-weight:700;margin:0 0 1px}
+  .smdNL .smdNLu{margin:2px 0 3px;padding-left:18px}
+  .smdNL .smdNLu>li{margin:1px 0}
+  .smdNL .smdNLu>li .btn{font-weight:600}
+  .smdNL .smdNLa{background:#fffbeb;border:1px solid #fcd34d;border-radius:5px;color:#92400e;font-weight:700;padding:3px 7px;margin:2px 0 4px}
+  @media print{.smdNL .smdNLu>li{break-inside:avoid}}
+  ```
+- **Notes changed** (anchor = old opening text → new lead → item lead words). Exact before / after: the PR diff.
+  1. Load Cases & Combinations dialog, `<p class="hint">Names are generated from the factors.` (1,238 characters) → `<div class="hint smdNL">`: action line "Verify preset factors against your governing code edition." (moved from the end to the top) → lead "Names are generated from the factors. The single-combination dropdown and the envelope both follow this table." → Presets / Unfactored row / Snow rows / Saved projects / Default wind row / Wind direction / Zero factors.
+  2. Warning above the loads, pattern live load off (`.smd-patw`): `SMD_PATW_TXT` (string) → `SMD_PATW_NL` ([lead, items]): lead "Live load patterns: Pattern live load is not generated: …at once." with the "Enable pattern live load" button right after the lead → Required / Otherwise. Report (`smdPatNote`): the same lead and items plus "• Setting: pattern live load is off for this project." (was the appended "(Pattern live load is off for this project.)").
+  3. Info box, pattern live load in the envelope (`.smd-patl`): `SMD_PATL_TXT()` → `SMD_PATL_NL()`: lead "Pattern live load: each enabled combination with LL is also solved with LL on N pattern(s) of the spans that carry LL." → Other loads / Patterns / Basis / Results. Same in the Report.
+  4. Warning, missing snow combinations (`.smd-cmb3`): `smdCmbNoteTxt(m)` → `smdCmbNoteNL(m)`: lead "Load combinations: This project's saved combination list has no …." with the "Add the missing rows" / "Hide" buttons right after the lead → Why / Saved lists. Report: lead, "• Remedy: use “Add the missing rows” on the Analysis view." (moved from the end), Why, Saved lists.
+  5. Warning, load cases not combined (`.smd-czf`): `smdZeroTxt(z)` → `smdZeroNL(z)`: lead "Load case(s) … carry/carries loads but has/have a zero factor in every enabled combination." → Remedy (moved before Effect) / Effect. Same in the Report (§1 and §2.3).
+  6. Unstable structure box (`updStats`, 3 sentences): lead "⚠ UNSTABLE STRUCTURE — this support configuration is a mechanism (it can move as a rigid body)." → Remedy / Results.
+  7. Engineering Calculations, Support Reactions, "Member end forces per span: …" → lead "Member end forces per span: {V_L, M_L, V_R, M_R} = fixed-end forces of the span loads − k_e·d_e." → d / Signs / Support moment.
+  8. Engineering Calculations, Section Analysis, "Deflection for … — double integration of M/EI with δ=0 at supports … `SMD_DEFL_TXT`" → lead "Deflection for … — double integration of M/EI." → Boundary conditions / Limit / Load basis. `SMD_DEFL_TXT` is now built from two parts (`SMD_DEFL_LIM`, `SMD_DEFL_CHK`) and stays byte-identical (it is still used by the Report step notes).
+  9. Engineering Calculations, envelope, "Deflection envelope — δ by double integration …" (3 sentences) → same lead (first sentence) → Load basis / Limit.
+  10. Report §2.3, wind note `SMD_WPM_TXT` → `SMD_WPM_NL`: lead "Wind acts in one direction per load case: …" → Wind both ways / Combinations.
+  11. Report, member end forces note "Per span: fixed-end forces (FEF) …" → lead "Member end forces, per span:" → FEF / d / Member end forces / Reactions / Support moment.
+- **Not changed:** the Report step notes (`rp-nt`, printed by `shared/report.js` as one italic line under a step: the deflection-limit note, 253 characters, and the envelope deflection note, 397 characters); "Each enabled combination is solved independently …" (2 sentences, under 300 characters); the single-combination pattern warning (2 sentences, 189 characters); "Analysed: …" notes; the load-input-adjusted box (already one line per flag); the left Results summary column (short lines).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none; no new key.
+- **Decisions (pending engineer review):**
+  1. Action lines are placed right after the lead (buttons in the warning boxes, "Remedy" items in the Report), not above it, so the action follows the statement of what is wrong; the dialog's "Verify preset factors…" line is placed first, in the amber warning style.
+  2. The two long Report step notes (`rp-nt`) are left as they are: splitting a step note needs a change to `shared/report.js` (a shared file used by many tools). Raise separately if wanted. The envelope note also says "a factored combination gives a factored deflection" twice (its own sentence and `SMD_DEFL_TXT`); not changed (wording, not structure).
+  3. Report notes are printed one line per item, as Spread Footing (`sfrNL`); the shared renderer gives each line the note spacing.
+- **Check case:** default units kip / ft; spans 20 / 25 / 8 ft, nodes fixed–roller–roller–free, DL 1.5 + LL 2 kip/ft all spans, WL −30 kip at 4 ft on span 3, σ_allow 3000, envelope on, project saved without `patLL` (pattern live load off). Above the loads: before one 441-character warning; after the bold lead "Live load patterns: Pattern live load is not generated: each combination applies LL to every span it is entered on at once.", the Enable button, and two bullets carrying "IBC 2018 Sec. 1607.12 and ASCE 7-16 Sec. 4.3.3" and "(for example L1, L2)". Results summary values unchanged: R_A 43.252, R_B 123.114, R_C 98.634 kip (min −9.669 UPLIFT), |V| env 66.366 kip, |M| env 256.641 kip·ft, σ env 6416.02 kip/ft².
+- **How verified:** headless Chromium, origin/main vs the branch, 15 projects (simple span with σ / δ limits; the envelope case above with pattern live load off and on; single combination with pattern on and off; an old saved combination list with snow (missing rows); a zero-factor case, single and envelope; a load off the span; an unstable beam; I = 0; cantilever overhang with a couple; lb / in): `nodeR`, `shD`, `moD`, `deD`, `env.R`, `gatherProject()` identical; the digit sequence of `#statsRow`, Engineering Calculations, the tabular results, the diagram notes, the Results summary column, the combinations dialog and the whole Report text identical in all 15. 0 console errors. Screenshots at 1440 and 390 px (no sideways scroll). Tests: `tests/check-syntax.mjs`; `tests/smd-verify.mjs` (ALL PASS); `tests/smoke/phone-layout.mjs --tool smd`; `tests/smoke/project-library.mjs --tool smd`.
+- **Other copies:** none.
