@@ -7141,7 +7141,7 @@ index 50f3837..c2d5000 100644
 - **Saved data:** no key or format change; no migration (old projects recompute).
 - **Other copies:** none.
 
-## 2026-11-08 — PR: sf-endcap (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SFWD-8: wall b_eff,top cut at the wall ends; CALCULATION CHANGE for Wall elements with a concentrated load near a wall end only. SFNL-3: Footing Design 5.5 J_c note, garbled fragment rewritten; display only)
+## 2026-11-08 — PR: sf-endcap (PR #1178: https://github.com/mlococo88/All-Structural/pull/1178) (SFWD-8: wall b_eff,top cut at the wall ends; CALCULATION CHANGE for Wall elements with a concentrated load near a wall end only. SFNL-3: Footing Design 5.5 J_c note, garbled fragment rewritten; display only)
 
 ### SFWD-8. b_eff,top cut at the wall ends   [CALCULATION CHANGE, Wall elements only; CLAUDE.md §4]
 - **Decision (engineer, 2026-11-08):** for a concentrated out-of-plane wall load, b_eff at the top is capped by the distance to each wall end as well: b_eff,top = min( min(b/2 + 2t, a₁) + min(b/2 + 2t, a₂), s, ℓ_w ), a₁, a₂ = the distances from the load centre to the two wall ends. Since b + 4t = 2(b/2 + 2t), this equals the old min(b + 4t, s, ℓ_w) wherever the load is at least b/2 + 2t from both ends. Replaces the SFWD-3 / SFWD-7 statement "b_eff,top is not cut at the wall ends". b_eff,base is unchanged in form: min( max(b_eff,top, b_spread), s, ℓ_w ) (SFWD-7); it follows the new b_eff,top. Less conservative than before: never (b_eff,top can only fall); the per-ft top and base demands rise where the end cut governs.
