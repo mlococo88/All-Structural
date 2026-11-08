@@ -1716,7 +1716,7 @@ Basis: ASCE/SEI 7-16 Fig. 29.3-1 (Cases A, B, C; Case C table and the (1.8 − s
     - The Excel workbook builds.
 - **Other copies:** none.
 
-## 2026-11-08 — PR: asce7-keybox-close (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — A7KB: the User Manual's Excel key-point box closes with `</div>` (markup only, no result change)
+## 2026-11-08 — PR: asce7-keybox-close (PR #1230: https://github.com/mlococo88/All-Structural/pull/1230) — A7KB: the User Manual's Excel key-point box closes with `</div>` (markup only, no result change)
 
 ### A7KB. Part 2.4 key point "Every derived cell carries a live formula" closed by `</p>`   [display only] [no result change]
 - **Problem:** recorded under A7NL-3 (#1219). The `<div class="keybox">` in User Manual Part 2.4 ended with `</p>`. The browser dropped the stray `</p>` (an empty `<p>` in the box) and left the box open, so the paragraph "Each formula is written together with the app's own computed result…", heading "2.5 Live calculation", its paragraph, heading "2.6 Panels, state and saving" and its paragraph were drawn inside the shaded key-point box.
