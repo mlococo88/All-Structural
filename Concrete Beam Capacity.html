@@ -259,6 +259,14 @@ table.dt a:hover{text-decoration:underline}
 /* ---- figures (§9) ---- */
 .figWrap{border:1px solid var(--color-border);border-radius:5px;background:#fff;padding:8px;margin:9px 0}
 .figCap{font-size:8.5pt;color:#64748b;text-align:center;margin-top:5px;font-style:italic}
+/* CBNL (2026-11-08): a long note as a lead line and a list (cbNL); colours from the box it sits in */
+.cbNL .cbNLl{font-weight:600;margin:0 0 1px}
+.cbNL .cbNLu{margin:2px 0 3px;padding-left:18px}
+.cbNL .cbNLu>li{margin:1px 0}
+.cbNL .cbNLa{font-style:normal;margin:2px 0 4px;padding:4px 8px}
+.cbNL .cbNLa:not(.warnBox){padding:0;font-weight:600}
+.figCap.cbNL{text-align:left}
+@media print{.cbNL .cbNLu>li{break-inside:avoid}}
 svg.dwg{width:100%;height:auto;display:block;max-width:520px;margin:0 auto}
 .hlRow{background:#FEF9C3!important}
 svg.dwg circle.hlB{stroke:#B45309!important;stroke-width:3px!important}
@@ -604,6 +612,19 @@ const COVER_PRESETS={
 
 /* ---------- helpers ---------- */
 function el(t,c,x){const e=document.createElement(t); if(c)e.className=c; if(x!==undefined)e.textContent=x; return e;}
+/* CBNL (2026-11-08, engineer: long notes split up so they are not overlooked): a note as a bold lead line and a list with bold
+   lead words; action lines (o.act) first, in the warning style. Items: &quot;text&quot; or [lead words, text]; null items are skipped.
+   Strings are HTML. cbNLh returns the HTML, cbNL the element (class cls + &quot; cbNL&quot;). cbrNL: the same note as Report note items
+   (lead, then &quot;• lead words text&quot;). Display only: no computed value is read or changed here. */
+function cbNLh(lead,items,o){o=o||{};const L=o.ol?&quot;ol&quot;:&quot;ul&quot;,ac=o.ac==null?&quot;warnBox&quot;:o.ac;
+  const li=(items||[]).filter(Boolean).map(x=>&quot;<li>&quot;+(Array.isArray(x)?&quot;<b class=\&quot;cbNLk\&quot;>&quot;+x[0]+&quot;</b> &quot;+x[1]:x)+&quot;</li>&quot;).join(&quot;&quot;);
+  return (o.act||[]).filter(Boolean).map(a=>&quot;<div class=\&quot;&quot;+(ac?ac+&quot; &quot;:&quot;&quot;)+&quot;cbNLa\&quot;>&quot;+a+&quot;</div>&quot;).join(&quot;&quot;)+(lead?&quot;<div class=\&quot;cbNLl\&quot;>&quot;+lead+&quot;</div>&quot;:&quot;&quot;)+(li?&quot;<&quot;+L+&quot; class=\&quot;cbNLu\&quot;>&quot;+li+&quot;</&quot;+L+&quot;>&quot;:&quot;&quot;);}
+function cbNL(cls,lead,items,o){const e=el(&quot;div&quot;,(cls?cls+&quot; &quot;:&quot;&quot;)+&quot;cbNL&quot;); e.innerHTML=cbNLh(lead,items,o); return e;}
+/* cbNLx: attach a display-only list to a result object as a non-enumerable property (not in JSON, saves or result snapshots) */
+function cbNLx(o,k,v){ if(v) Object.defineProperty(o,k,{value:v,enumerable:false}); return o; }
+function cbrNL(lead,items,o){o=o||{};
+  return [...(o.act||[]).filter(Boolean).map(a=>({type:'note',warn:true,text:a})),lead?{type:'note',text:lead}:null,
+    ...(items||[]).filter(Boolean).map(x=>({type:'note',text:'• '+(Array.isArray(x)?x[0]+' '+x[1]:x)}))].filter(Boolean);}
 function fmt(v,dec){ if(v===undefined||v===null||!isFinite(v))return &quot;\u2014&quot;;
   const d=(dec===undefined)?2:dec; return Number(v).toFixed(d); }
 function tex(elm,src,disp){ if(window.katex){ try{ katex.render(src,elm,{throwOnError:false,displayMode:!!disp}); return; }catch(e){} } elm.textContent=src; }
@@ -1081,17 +1102,16 @@ function crackMsInputs(b){
   let P=null,N=null;
   try{ P=serviceSteelStress(false,Math.abs(S.crack.MsPos||0)); }catch(e){}
   try{ N=serviceSteelStress(true, Math.abs(S.crack.MsNeg||0)); }catch(e){}
-  const nd=el(&quot;div&quot;,&quot;note&quot;);
-  nd.innerHTML=&quot;Enter the <b>unfactored (service)</b> moment for each sense — both ACI 24.3.2.1 and &quot;+
-    &quot;AASHTO 5.6.7 take the steel stress at the service limit state, not the factored one. &quot;+
-    &quot;fₛ is then computed from the cracked transformed section (concrete in tension neglected, &quot;+
-    &quot;steel transformed by n = Eₛ/E_c) and used in the spacing limit. The full derivation is on &quot;+
-    &quot;the Serviceability and Detailing tabs.&quot;+
-    (P?&quot;<br><br><b>Positive moment:</b> fₛ = <b>&quot;+fmt(P.fsOuter,1)+&quot; ksi</b> at the bar closest to the bottom face&quot;+
-       &quot; (kd = &quot;+fmt(P.kd,2)+&quot; in, I_cr = &quot;+fmt(P.Icr,0)+&quot; in⁴, n = &quot;+fmt(P.n,2)+&quot;)&quot;:&quot;&quot;)+
-    (N?&quot;<br><b>Negative moment:</b> fₛ = <b>&quot;+fmt(N.fsOuter,1)+&quot; ksi</b> at the bar closest to the top face&quot;+
-       &quot; (kd = &quot;+fmt(N.kd,2)+&quot; in, I_cr = &quot;+fmt(N.Icr,0)+&quot; in⁴, n = &quot;+fmt(N.n,2)+&quot;)&quot;:&quot;&quot;)+
-    ((!P&amp;&amp;!N)?&quot;<br><br>No service moment entered yet — the code default is used until one is.&quot;:&quot;&quot;);
+  const nd=cbNL(&quot;note&quot;,&quot;Service moment for crack control:&quot;,[[&quot;Enter:&quot;,&quot;the <b>unfactored (service)</b> moment for each sense — both ACI 24.3.2.1 and &quot;+
+    &quot;AASHTO 5.6.7 take the steel stress at the service limit state, not the factored one.&quot;],
+    [&quot;fₛ:&quot;,&quot;computed from the cracked transformed section (concrete in tension neglected, &quot;+
+    &quot;steel transformed by n = Eₛ/E_c) and used in the spacing limit.&quot;],[&quot;Worked in:&quot;,&quot;the full derivation is on &quot;+
+    &quot;the Serviceability and Detailing tabs.&quot;],
+    (P?[&quot;Positive moment:&quot;,&quot;fₛ = <b>&quot;+fmt(P.fsOuter,1)+&quot; ksi</b> at the bar closest to the bottom face&quot;+
+       &quot; (kd = &quot;+fmt(P.kd,2)+&quot; in, I_cr = &quot;+fmt(P.Icr,0)+&quot; in⁴, n = &quot;+fmt(P.n,2)+&quot;)&quot;]:null),
+    (N?[&quot;Negative moment:&quot;,&quot;fₛ = <b>&quot;+fmt(N.fsOuter,1)+&quot; ksi</b> at the bar closest to the top face&quot;+
+       &quot; (kd = &quot;+fmt(N.kd,2)+&quot; in, I_cr = &quot;+fmt(N.Icr,0)+&quot; in⁴, n = &quot;+fmt(N.n,2)+&quot;)&quot;]:null),
+    ((!P&amp;&amp;!N)?[&quot;No service moment entered yet:&quot;,&quot;the code default is used until one is.&quot;]:null)]);   /* CBNL */
   b.appendChild(nd);
 }
 function servicecalc(F,neg){
@@ -1126,8 +1146,8 @@ function detailing(F,sh,neg,govMu,Vu,tor,torD){
   const {bw,h}=S.sec, fc=S.mat.fc, fy=S.mat.fy, fyt=fytDesign(), dagg=S.mat.dagg;
   const cc=S.cover.cc, ds=stirDia(), rt=sqrtfc_psi(fc), code=S.code;
   const out=[];
-  const add=(id,name,ref,have,need,cmp,unit,ok,deriv,na,naWhy)=>
-    out.push({id,name,ref,have,need,cmp,unit,ok,deriv:deriv||[],na:!!na,naWhy:naWhy||&quot;&quot;});
+  const add=(id,name,ref,have,need,cmp,unit,ok,deriv,na,naWhy,naL)=>   /* CBNL: naL = naWhy as display items (display only) */
+    out.push(cbNLx({id,name,ref,have,need,cmp,unit,ok,deriv:deriv||[],na:!!na,naWhy:naWhy||&quot;&quot;},&quot;naL&quot;,naL));
 
   /* cover */
   add(&quot;dCover&quot;,&quot;Clear cover&quot;,code==='ACI'?&quot;ACI 20.5.1.3&quot;:&quot;AASHTO 5.10.1&quot;,
@@ -1358,9 +1378,12 @@ function detailing(F,sh,neg,govMu,Vu,tor,torD){
     } else if(smallH &amp;&amp; VuA<=sh.phi*sh.Vc+1e-9){   /* CBL4: Table 9.6.3.1 applies only where V_u <= phi V_c */
       add(&quot;dAvMin&quot;,&quot;Minimum shear reinforcement&quot;,trigRef,0,avMin0,&quot;\\ge&quot;,&quot;in²/in&quot;,true,[],true,
         &quot;Exempt. &quot;+trigTx+&quot;, so ACI 9.6.3.1 would otherwise require A_v,min ≥ &quot;+fmt(avMin0,4)+
-        &quot; in²/in and none is provided — but Table 9.6.3.1 exempts members with h ≤ 10 in where V_u ≤ \u03c6V_c, &quot;+
-        &quot;and h = &quot;+fmt(h)+&quot; in, V_u = &quot;+fmt(VuA)+&quot; kip ≤ \u03c6V_c = &quot;+fmt(sh.phi*sh.Vc)+&quot; kip here. One-way slabs, footings and joists are exempt at any depth. &quot;+
-        &quot;Confirm the exemption being relied on is the right one for this member.&quot;);
+        &quot; in²/in and none is provided — but Table 9.6.3.1 exempts members with h ≤ 10 in where V_u ≤ φV_c, &quot;+
+        &quot;and h = &quot;+fmt(h)+&quot; in, V_u = &quot;+fmt(VuA)+&quot; kip ≤ φV_c = &quot;+fmt(sh.phi*sh.Vc)+&quot; kip here. One-way slabs, footings and joists are exempt at any depth. &quot;+
+        &quot;Confirm the exemption being relied on is the right one for this member.&quot;,
+        [[&quot;Exempt:&quot;,trigTx+&quot;, so ACI 9.6.3.1 would otherwise require A_v,min ≥ &quot;+fmt(avMin0,4)+&quot; in²/in and none is provided.&quot;],
+         [&quot;Table 9.6.3.1:&quot;,&quot;exempts members with h ≤ 10 in where V_u ≤ φV_c, and h = &quot;+fmt(h)+&quot; in, V_u = &quot;+fmt(VuA)+&quot; kip ≤ φV_c = &quot;+fmt(sh.phi*sh.Vc)+&quot; kip here.&quot;],
+         [&quot;Any depth:&quot;,&quot;one-way slabs, footings and joists are exempt at any depth.&quot;],[&quot;Confirm:&quot;,&quot;the exemption being relied on is the right one for this member.&quot;]]);   /* CBNL */
     } else {
       add(&quot;dAvMin&quot;,&quot;Minimum shear reinforcement&quot;,trigRef,0,avMin0,&quot;\\ge&quot;,&quot;in²/in&quot;,false,
         smallH?[[&quot;h \\le 10\\text{ in but } V_u > \\phi V_c&quot;,`${fmt(VuA)}\\text{ kip} > ${fmt(sh.phi*sh.Vc)}\\text{ kip}`,&quot;The h \u2264 10 in exemption of Table 9.6.3.1 applies only where V_u \u2264 \u03c6V_c (9.6.3.1), so A_v,min is required.&quot;]].concat(dvA):dvA);   /* CBL4 */
@@ -1405,7 +1428,9 @@ function detailing(F,sh,neg,govMu,Vu,tor,torD){
       &quot;Information only (not a stand-alone requirement in ACI 318-19): A_t/s = &quot;+fmt(tor.At_s,5)+(tor.AtsFloorOK?&quot; \u2265 &quot;:&quot; < &quot;)+&quot;25b_w/f_yt = &quot;+fmt(tor.AtsFloor,5)+&quot; in\u00b2/in. The term enters 9.6.4.3(b) for A_\u2113,min, which uses the lesser of (a) and (b).&quot;);
     add(&quot;dTorAlDist&quot;,&quot;Longitudinal torsion bar distribution&quot;,&quot;ACI 9.7.5.1&quot;,
       tor.alSpacingMax,12,&quot;\\le&quot;,&quot;in&quot;,tor.alDistOK,[],tor.alDistNA,
-      tor.alDistNA?&quot;Longitudinal torsion bars are entered as a total area, not as individual bar positions, so the 12 in perimeter spacing of 9.7.5.1 cannot be verified automatically. Confirm by inspection that bars are placed at every corner of the closed stirrup and spaced no more than 12 in around p_h \u2014 for a section of this depth that normally requires intermediate bars at mid-depth.&quot;:&quot;&quot;);
+      tor.alDistNA?&quot;Longitudinal torsion bars are entered as a total area, not as individual bar positions, so the 12 in perimeter spacing of 9.7.5.1 cannot be verified automatically. Confirm by inspection that bars are placed at every corner of the closed stirrup and spaced no more than 12 in around p_h — for a section of this depth that normally requires intermediate bars at mid-depth.&quot;:&quot;&quot;,
+      tor.alDistNA?[[&quot;Why:&quot;,&quot;longitudinal torsion bars are entered as a total area, not as individual bar positions, so the 12 in perimeter spacing of 9.7.5.1 cannot be verified automatically.&quot;],
+        [&quot;Confirm by inspection:&quot;,&quot;bars are placed at every corner of the closed stirrup and spaced no more than 12 in around p_h — for a section of this depth that normally requires intermediate bars at mid-depth.&quot;]]:null);   /* CBNL */
   }
 
   /* ---- crack control: bar spacing at the face that is actually in tension ----
@@ -1739,7 +1764,10 @@ function validate(){
   if(allZero) W.push({code:&quot;Loads&quot;,msg:&quot;All factored actions are zero. Capacities are reported, but no demand/capacity ratio is meaningful.&quot;});
   /* torsion */
   if(S.code==='AASHTO'){   /* CBH1 */
-    N.push({code:&quot;AASHTO 5.7.2.1&quot;,msg:&quot;AASHTO torsion: the tool checks the 5.7.2.1 threshold T_u \u2264 0.25\u03c6T_cr for every combination (Shear tab). Above it the combination is designed for combined shear and torsion of a solid section (5.7.3.4.2 V_eff, 5.7.3.6.1 transverse, 5.7.3.6.2 T_n, 5.7.3.6.3 longitudinal; f\u2032c \u2264 10 ksi). T_u is used as entered (the compatibility-torsion reduction to \u03c6T_cr is not applied); the stirrups are taken as closed, with a longitudinal bar in each corner (5.7.3.6.3; confirm on the drawings).&quot;});   /* CBH1b */
+    N.push({code:&quot;AASHTO 5.7.2.1&quot;,msg:&quot;AASHTO torsion: the tool checks the 5.7.2.1 threshold T_u \u2264 0.25\u03c6T_cr for every combination (Shear tab). Above it the combination is designed for combined shear and torsion of a solid section (5.7.3.4.2 V_eff, 5.7.3.6.1 transverse, 5.7.3.6.2 T_n, 5.7.3.6.3 longitudinal; f\u2032c \u2264 10 ksi). T_u is used as entered (the compatibility-torsion reduction to φT_cr is not applied); the stirrups are taken as closed, with a longitudinal bar in each corner (5.7.3.6.3; confirm on the drawings).&quot;});
+    cbNLx(N[N.length-1],&quot;nl&quot;,{lead:&quot;AASHTO torsion:&quot;,items:[[&quot;Threshold:&quot;,&quot;the tool checks the 5.7.2.1 threshold T_u ≤ 0.25φT_cr for every combination (Shear tab).&quot;],   /* CBNL: display only; msg unchanged */
+        [&quot;Above it:&quot;,&quot;the combination is designed for combined shear and torsion of a solid section (5.7.3.4.2 V_eff, 5.7.3.6.1 transverse, 5.7.3.6.2 T_n, 5.7.3.6.3 longitudinal; f′c ≤ 10 ksi).&quot;],
+        [&quot;T_u:&quot;,&quot;used as entered (the compatibility-torsion reduction to φT_cr is not applied).&quot;],[&quot;Stirrups:&quot;,&quot;taken as closed, with a longitudinal bar in each corner (5.7.3.6.3; confirm on the drawings).&quot;]]});   /* CBH1b */
     const big=S.combos.filter(c=>cbcTorA(c.Tu).consider).map(c=>c.name);
     if(big.length) W.push({code:&quot;AASHTO 5.7.2.1&quot;,msg:&quot;T_u exceeds 0.25\u03c6T_cr in &quot;+big.join(&quot;, &quot;)+&quot;: torsion is designed for those combinations (Shear tab, Torsion Design).&quot;+(S.mat.fyt100&amp;&amp;S.mat.fyt>fytTorA()?&quot; The 100 ksi transverse yield strength of 5.7.2.7 applies without torsion only: f_y = &quot;+fmt(fytTorA())+&quot; ksi is used for those combinations.&quot;:&quot;&quot;)});
   }
@@ -1775,7 +1803,9 @@ function validate(){
   if(S.tor.present &amp;&amp; S.code==='ACI' &amp;&amp; S.stir.present)
     N.push({code:&quot;ACI 22.7.6.1&quot;,msg:&quot;Shear and torsion share the same closed stirrup. The Shear tab reserves the transverse steel required for torsion and reports \u03c6V_n on the remainder; the \u03c6V_n that ignores torsion is also shown for reference but is not used in any demand/capacity ratio.&quot;});
   if(S.code==='ACI' &amp;&amp; S.stir.present)
-    N.push({code:&quot;ACI 9.7.6.2.2&quot;,msg:&quot;The tighter d/4 spacing limit is triggered from V_s REQUIRED (V_u/\u03c6 \u2212 V_c) rather than the V_s the detailed stirrups could provide. The provision exists to control diagonal crack width where stirrups work hard in shear; stirrups placed for torsion or minimum area are not. Both values are shown in the Detailing derivation so the alternative reading can be checked. Decision (pending engineer review, 2026-11-07): this V_s-required reading is kept as common practice (it avoids the circularity of a spacing limit that depends on the spacing chosen); under the literal reading (V_s = the strength provided by the stirrups) the d/4 limit applies wherever V_s,provided > 4\u221af\u2032c b_w d, which can be tighter.&quot;});
+    N.push(cbNLx({code:&quot;ACI 9.7.6.2.2&quot;,msg:&quot;The tighter d/4 spacing limit is triggered from V_s REQUIRED (V_u/φ − V_c) rather than the V_s the detailed stirrups could provide. The provision exists to control diagonal crack width where stirrups work hard in shear; stirrups placed for torsion or minimum area are not. Both values are shown in the Detailing derivation so the alternative reading can be checked. Decision (pending engineer review, 2026-11-07): this V_s-required reading is kept as common practice (it avoids the circularity of a spacing limit that depends on the spacing chosen); under the literal reading (V_s = the strength provided by the stirrups) the d/4 limit applies wherever V_s,provided > 4√f′c b_w d, which can be tighter.&quot;},&quot;nl&quot;,{lead:&quot;The tighter d/4 spacing limit is triggered from V_s REQUIRED (V_u/φ − V_c) rather than the V_s the detailed stirrups could provide.&quot;,   /* CBNL: display only; msg unchanged */
+        items:[[&quot;Why:&quot;,&quot;the provision exists to control diagonal crack width where stirrups work hard in shear; stirrups placed for torsion or minimum area are not.&quot;],[&quot;Both values:&quot;,&quot;shown in the Detailing derivation so the alternative reading can be checked.&quot;]],
+        act:[&quot;Decision (pending engineer review, 2026-11-07): this V_s-required reading is kept as common practice (it avoids the circularity of a spacing limit that depends on the spacing chosen); under the literal reading (V_s = the strength provided by the stirrups) the d/4 limit applies wherever V_s,provided > 4√f′c b_w d, which can be tighter.&quot;]}));
   if(S.tor.present &amp;&amp; S.code==='ACI')
     N.push({code:&quot;ACI 9.7.5.1&quot;,msg:&quot;Longitudinal torsion steel is entered as a total area, so the requirement for a bar at every corner of the closed stirrup and a maximum 12 in spacing around p_h cannot be verified automatically. That check is reported N/A and must be confirmed by inspection.&quot;});
   if(S.code==='ACI') N.push({code:&quot;ACI 9.6.1.3&quot;,msg:&quot;The exception allowing A_{s,min} to be waived where A_s provided is at least 4/3 of A_s required is NOT applied; the full 9.6.1.2 minimum is always enforced. This is conservative.&quot;});
@@ -2055,7 +2085,8 @@ function buildInput(){
     fRow(b,&quot;Aggregate size&quot;,numIn(()=>S.mat.dagg,v=>S.mat.dagg=v,&quot;0.25&quot;,&quot;dagg&quot;),&quot;in&quot;);
     fRow(b,&quot;λ (lightweight)&quot;,numIn(()=>S.mat.lambda,v=>S.mat.lambda=v,&quot;0.05&quot;,&quot;lam&quot;),&quot;&quot;);
     if(S.code==='AASHTO'){ fRow(b,&quot;Unit weight w_c (for E_c; blank = Table 3.5.1-1)&quot;,numIn(()=>S.mat.wc>0?S.mat.wc:&quot;&quot;,v=>S.mat.wc=Math.max(0,v),&quot;0.005&quot;,&quot;wc&quot;),&quot;kcf&quot;);   /* CBL7b */
-      b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;w_c enters E_c (Eq. 5.4.2.4-1), used for the computed service steel stress f_ss. Blank: normal weight per Table 3.5.1-1&quot;+(S.mat.lambda<1?&quot;; lightweight (λ < 1): 0.110 kcf, the low end of the Table 3.5.1-1 range (conservative). Enter the specified unit weight if known.&quot;:&quot;.&quot;))); }
+      b.appendChild(cbNL(&quot;note&quot;,&quot;w_c enters E_c (Eq. 5.4.2.4-1), used for the computed service steel stress f_ss.&quot;,[[&quot;Blank:&quot;,&quot;normal weight per Table 3.5.1-1&quot;+(S.mat.lambda<1?&quot;; lightweight (λ &amp;lt; 1): 0.110 kcf, the low end of the Table 3.5.1-1 range (conservative).&quot;:&quot;.&quot;)],
+        S.mat.lambda<1?[&quot;If known:&quot;,&quot;enter the specified unit weight.&quot;]:null])); }   /* CBNL */
     if(S.code==='AASHTO') fRow(b,&quot;γ₃ (bar spec., 5.6.3.3)&quot;,selIn(G3_SPECS.map(o=>o.k),()=>cbcG3Key(),v=>{ const o=G3_SPECS.find(x=>x.k===v); if(o){ S.mat.gamma3=o.g; S.mat.g3spec=o.k; } },
       k=>{ const o=G3_SPECS.find(x=>x.k===k); return o.g.toFixed(2)+&quot; — &quot;+o.lab; },o=>o,&quot;gamma3&quot;),&quot;&quot;);   /* CBL1 */
     b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;E_s = 29,000 ksi and ε_cu = 0.003 are fixed by code.&quot;));
@@ -2107,7 +2138,10 @@ function buildInput(){
       S.layers.push({n:l.n,size:l.size,face:l.face,dMan:null}); refresh(); });
     br.appendChild(add); b.appendChild(br);
     fRow(b,&quot;Clear spacing between layers&quot;,numIn(()=>S.layerClear,v=>S.layerClear=Math.max(1,v),&quot;0.25&quot;,&quot;lclr&quot;),&quot;in&quot;);
-    var noteD=el(&quot;div&quot;,&quot;note&quot;); noteD.innerHTML=&quot;Each layer\u2019s <b>d</b> is computed automatically from the clear cover, stirrup diameter and bar size, and updates live as you change inputs. Tick <b>Set d</b> only to type an exact depth (measured from the extreme compression fibre).<br><br><b>Face convention:</b> \u201cTension\u201d and \u201cCompression\u201d are named for <b>positive moment</b> \u2014 the <b>tension</b> face is the <b>bottom</b> of the section and the <b>compression</b> face is the top. When a load combination has a negative M_u (hogging), the faces swap automatically, so a \u201ctension\u201d layer is then analysed at the top.&quot;; b.appendChild(noteD);
+    var noteD=cbNL(&quot;note&quot;,&quot;Layer depth d and face names:&quot;,[[&quot;Depth d:&quot;,&quot;each layer’s <b>d</b> is computed automatically from the clear cover, stirrup diameter and bar size, and updates live as you change inputs.&quot;],
+      [&quot;Set d:&quot;,&quot;tick <b>Set d</b> only to type an exact depth (measured from the extreme compression fibre).&quot;],
+      [&quot;Face convention:&quot;,&quot;“Tension” and “Compression” are named for <b>positive moment</b> — the <b>tension</b> face is the <b>bottom</b> of the section and the <b>compression</b> face is the top.&quot;],
+      [&quot;Negative M_u:&quot;,&quot;when a load combination has a negative M_u (hogging), the faces swap automatically, so a “tension” layer is then analysed at the top.&quot;]]); b.appendChild(noteD);   /* CBNL */
   },P);
 
   mkSection(&quot;inStir&quot;,NT(&quot;Transverse Reinforcement&quot;),b=>{
@@ -2308,13 +2342,12 @@ function buildAlGuidance(b){
   }
   wrap.appendChild(st);
 
-  const warn=el(&quot;div&quot;,&quot;alWarn&quot;);
-  warn.innerHTML=&quot;These are reference figures. A\u2113 must be steel provided <b>specifically for torsion</b>, &quot;+
-    &quot;distributed around the perimeter of the closed stirrup with a bar at every corner and no more than 12 in &quot;+
-    &quot;between bars around p\u2095 (ACI 9.7.5.1). On the flexural tension side it is <b>additive</b> to the flexural &quot;+
-    &quot;requirement \u2014 the same bar area cannot serve both.&quot;+
-    (avail.needsMid?(&quot; <b>The outermost perimeter layers are &quot;+fmt(avail.midGap)+
-      &quot; in apart vertically, which exceeds 12 in \u2014 intermediate bars at mid-depth are required.</b>&quot;):&quot;&quot;);
+  const warn=cbNL(&quot;alWarn&quot;,&quot;These are reference figures.&quot;,[[&quot;Torsion steel:&quot;,&quot;Aℓ must be steel provided <b>specifically for torsion</b>.&quot;],
+    [&quot;Placement:&quot;,&quot;distributed around the perimeter of the closed stirrup with a bar at every corner and no more than 12 in &quot;+
+    &quot;between bars around pₕ (ACI 9.7.5.1).&quot;],[&quot;Flexural tension side:&quot;,&quot;Aℓ is <b>additive</b> to the flexural &quot;+
+    &quot;requirement — the same bar area cannot serve both.&quot;]],
+    {ac:&quot;&quot;,act:[avail.needsMid?(&quot;The outermost perimeter layers are &quot;+fmt(avail.midGap)+
+      &quot; in apart vertically, which exceeds 12 in — intermediate bars at mid-depth are required.&quot;):&quot;&quot;]});   /* CBNL: the action line first */
   wrap.appendChild(warn);
   b.appendChild(wrap);
 }
@@ -2517,13 +2550,12 @@ function bothCapSection(pg,key){
   mkSection(key,&quot;Section Flexural Capacity \u2014 Positive &amp; Negative&quot;,b=>{
     const B=(CC&amp;&amp;CC.both)?CC.both:bothSenses();
     const P=B.pos, N=B.neg;
-    var intro=el(&quot;div&quot;,&quot;note&quot;);
-    intro.innerHTML=&quot;Both senses are reported for the section as detailed, whether or not a load &quot;+
-      &quot;combination exercises them. <b>Positive (sagging)</b> moment puts the <b>bottom</b> face in &quot;+
-      &quot;tension; <b>negative (hogging)</b> moment puts the <b>top</b> face in tension. A section &quot;+
+    var intro=cbNL(&quot;note&quot;,&quot;Both senses are reported for the section as detailed, whether or not a load &quot;+
+      &quot;combination exercises them.&quot;,[[&quot;Positive (sagging):&quot;,&quot;moment puts the <b>bottom</b> face in &quot;+
+      &quot;tension.&quot;],[&quot;Negative (hogging):&quot;,&quot;moment puts the <b>top</b> face in tension.&quot;],[&quot;One face reinforced:&quot;,&quot;a section &quot;+
       &quot;reinforced on one face only will show a large capacity in one sense and a very small one in &quot;+
-      &quot;the other \u2014 the small value is the plain-concrete-like capacity of the compression steel &quot;+
-      &quot;acting alone and should not be relied on.&quot;;
+      &quot;the other — the small value is the plain-concrete-like capacity of the compression steel &quot;+
+      &quot;acting alone and should not be relied on.&quot;]]);   /* CBNL */
     b.appendChild(intro);
     const t=el(&quot;table&quot;,&quot;rt&quot;);
     t.innerHTML=&quot;<tr><th>Quantity</th><th>Positive M (bottom in tension)</th>&quot;+
@@ -2553,11 +2585,10 @@ function bothCapSection(pg,key){
                    {tab:&quot;tabFlex&quot;,c:cbcComboCard(&quot;flexC&quot;,senseCi(true)),txt:&quot;Negative&quot;}]);
     const noS=[]; if(P.F.As<=1e-9) noS.push(&quot;positive&quot;); if(N.F.As<=1e-9) noS.push(&quot;negative&quot;);
     if(noS.length){
-      var w=el(&quot;div&quot;,&quot;infoBox&quot;);
-      w.innerHTML=&quot;<b>No tension reinforcement for &quot;+noS.join(&quot; or &quot;)+&quot; moment.</b> The section as &quot;+
+      var w=cbNL(&quot;infoBox&quot;,&quot;No tension reinforcement for &quot;+noS.join(&quot; or &quot;)+&quot; moment.&quot;,[[&quot;Why:&quot;,&quot;the section as &quot;+
         &quot;detailed has no bars on the face that would be in tension under &quot;+noS.join(&quot; or &quot;)+
-        &quot; bending. The value reported for that sense is nominal only \u2014 an unreinforced tension &quot;+
-        &quot;face has no reliable flexural capacity and no ductility.&quot;;
+        &quot; bending.&quot;],[&quot;Reported value:&quot;,&quot;the value reported for that sense is nominal only — an unreinforced tension &quot;+
+        &quot;face has no reliable flexural capacity and no ductility.&quot;]]);   /* CBNL */
       b.appendChild(w);
     } else if(P.phiMn>0 &amp;&amp; N.phiMn>0){
       const rt=P.phiMn>N.phiMn?P.phiMn/N.phiMn:N.phiMn/P.phiMn;
@@ -2604,16 +2635,14 @@ function buildSummaryTab(pg){
   /* N/A explanations */
   const nas=detEnvelope().filter(x=>x.na);
   if(nas.length){
-    const b=el(&quot;div&quot;,&quot;infoBox&quot;);
-    b.innerHTML=&quot;<b>Checks reported as N/A</b><br>&quot;+nas.map(x=>&quot;\u2022 &quot;+x.name+&quot; — &quot;+x.naWhy).join(&quot;<br>&quot;);
+    const b=cbNL(&quot;infoBox&quot;,&quot;Checks reported as N/A&quot;,nas.map(x=>[x.name+&quot; —&quot;,x.naWhy]));   /* CBNL: a list (was &quot;• &quot; lines) */
     pg.appendChild(b);
   }
   /* combination × limit-state matrix */
   mkSection(&quot;sumMatrix&quot;,&quot;All Combinations \u00d7 Limit States&quot;,b=>{
-    b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Each row is one load combination; each column a limit state. &quot;+
-      &quot;The dashboard above reports the envelope, which can hide the case where one combination &quot;+
-      &quot;governs flexure while another governs shear. Cells are shaded from green (low utilisation) &quot;+
-      &quot;through amber to red (over capacity), so near-misses are visible at a glance.&quot;));
+    b.appendChild(cbNL(&quot;note&quot;,&quot;Each row is one load combination; each column a limit state.&quot;,[[&quot;Why this table:&quot;,&quot;the dashboard above reports the envelope, which can hide the case where one combination &quot;+
+      &quot;governs flexure while another governs shear.&quot;],[&quot;Shading:&quot;,&quot;cells are shaded from green (low utilisation) &quot;+
+      &quot;through amber to red (over capacity), so near-misses are visible at a glance.&quot;]]));   /* CBNL */
     const t=el(&quot;table&quot;,&quot;rt&quot;);
     const hasT=S.tor.present&amp;&amp;S.code==='ACI';
     let head=&quot;<tr><th>Combination</th><th>M_u<br>(k-ft)</th><th>V_u<br>(kip)</th>&quot;+
@@ -2733,7 +2762,7 @@ function buildFlexTab(pg){
       tr.appendChild(td); t.appendChild(tr);
     });
     b.appendChild(t);
-    b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;The combination that governs FLEXURE — the largest M_u/\u03c6M_n — is highlighted, and it is the one the collapse control below keeps open. It need not be the combination that governs the section overall (that is reported on the Summary tab), because shear, torsion or a detailing limit may be critical under a different combination. Every combination is worked in full below.&quot;));
+    b.appendChild(cbNL(&quot;note&quot;,&quot;The combination that governs FLEXURE — the largest M_u/φM_n — is highlighted.&quot;,[[&quot;Kept open:&quot;,&quot;it is the one the collapse control below keeps open.&quot;],[&quot;Overall:&quot;,&quot;it need not be the combination that governs the section overall (that is reported on the Summary tab), because shear, torsion or a detailing limit may be critical under a different combination.&quot;],[&quot;Worked:&quot;,&quot;every combination is worked in full below.&quot;]]));   /* CBNL */
   },pg);
   comboControls(pg,&quot;flexC&quot;);
   CC.combos.forEach(r=>{
@@ -2916,7 +2945,8 @@ function workTorA(b,r){
   b.appendChild(eqBlock({title:&quot;Section limit with torsion&quot;,ref:&quot;AASHTO Eq. 5.7.3.3-2 with V_eff&quot;,
     lines:[`\\phi\\,0.25f'_cb_vd_v = ${fmt(sh.phi,2)}(0.25)(${fmt(t.fc)})(${fmt(t.bw)})(${fmt(t.dv)}) = ${fmt(t.VlimR,1)}\\text{ kip}`,
       `V_{eff} = ${fmt(t.Veff)}\\text{ kip} \\;${ok(t.dcSec)?&quot;\\le&quot;:&quot;>&quot;}\\; ${fmt(t.VlimR,1)}\\text{ kip}\\qquad D/C = ${dc(t.dcSec)}`]}));
-  b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Decision (pending engineer review): AASHTO gives no separate cross-section limit for combined shear and torsion of a solid section; the web-crushing limit of Eq. 5.7.3.3-2 is applied to V_eff, which is not less conservative than applying it to V_u. f\u2032c is limited to 10 ksi for torsion and shear (5.7.2.1). The longitudinal reinforcement with torsion (Eq. 5.7.3.6.3-1) is worked in Longitudinal Reinforcement; at least one longitudinal bar is needed in each corner of the closed stirrup (5.7.3.6.3, not checked by the tool).&quot;));
+  b.appendChild(cbNL(&quot;note&quot;,&quot;Torsion with shear, other limits:&quot;,[[&quot;f′c:&quot;,&quot;f′c is limited to 10 ksi for torsion and shear (5.7.2.1).&quot;],[&quot;Longitudinal reinforcement:&quot;,&quot;with torsion (Eq. 5.7.3.6.3-1) it is worked in Longitudinal Reinforcement.&quot;],[&quot;Corner bars:&quot;,&quot;at least one longitudinal bar is needed in each corner of the closed stirrup (5.7.3.6.3, not checked by the tool).&quot;]],
+    {act:[&quot;Decision (pending engineer review): AASHTO gives no separate cross-section limit for combined shear and torsion of a solid section; the web-crushing limit of Eq. 5.7.3.3-2 is applied to V_eff, which is not less conservative than applying it to V_u.&quot;]}));   /* CBNL */
   const w=Math.max(t.dcT,t.dcComb,t.dcSec), v=el(&quot;div&quot;,ok(w)?&quot;okBox&quot;:&quot;errBox&quot;);
   v.innerHTML=&quot;<b>&quot;+(ok(w)?&quot;PASS&quot;:&quot;FAIL&quot;)+&quot;</b> \u2014 torsion design under &quot;+r.name+&quot;: T_u/\u03c6T_n = &quot;+fmt(t.dcT)+&quot;, transverse &quot;+fmt(t.dcComb)+&quot;, section limit &quot;+fmt(t.dcSec)+&quot;.&quot;;
   b.appendChild(v);
@@ -2950,7 +2980,7 @@ function buildShearTab(pg){
     });
     /* CBM2 (2026-11-07): AASHTO 5.7.3.5 longitudinal reinforcement, every combination */
     mkSection(&quot;shLonA&quot;,&quot;Longitudinal Reinforcement (AASHTO 5.7.3.5)&quot;,b=>{
-      b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Shear adds tension in the longitudinal reinforcement on the flexural tension side (Eq. 5.7.3.5-1, no prestress, N_u = 0). A_s is the tension steel of the combination's sense, taken as fully developed at the section; V_s is not taken greater than V_u/\u03c6_v. Where torsion must be considered (5.7.2.1), Eq. 5.7.3.6.3-1 (solid section) is used instead: the shear term becomes the square root of the sum of the squares of the shear and torsion terms.&quot;));
+      b.appendChild(cbNL(&quot;note&quot;,&quot;Shear adds tension in the longitudinal reinforcement on the flexural tension side (Eq. 5.7.3.5-1, no prestress, N_u = 0).&quot;,[[&quot;A_s:&quot;,&quot;the tension steel of the combination's sense, taken as fully developed at the section.&quot;],[&quot;V_s:&quot;,&quot;not taken greater than V_u/φ_v.&quot;],[&quot;With torsion:&quot;,&quot;where torsion must be considered (5.7.2.1), Eq. 5.7.3.6.3-1 (solid section) is used instead: the shear term becomes the square root of the sum of the squares of the shear and torsion terms.&quot;]]));   /* CBNL */
       CC.combos.forEach(r=>{ const L=r.lonA; if(!L) return;
         if(L.tor){ const t=r.torD;   /* CBH1b: Eq. 5.7.3.6.3-1 */
           b.appendChild(eqBlock({title:&quot;Combination &quot;+(r.ci+1)+&quot; (&quot;+r.name+&quot;), with torsion&quot;,ref:&quot;AASHTO 5.7.3.6.3, Eq. 5.7.3.6.3-1&quot;,
@@ -3122,12 +3152,11 @@ function workShear(b,r){
   if(r.share){
     const SH=r.share;
     b.appendChild(el(&quot;h3&quot;,null,&quot;Step &quot;+(S.code==='AASHTO'?&quot;4&quot;:&quot;4&quot;)+&quot; — Transverse steel shared with torsion&quot;));
-    const wb=el(&quot;div&quot;,&quot;warnBox&quot;);
-    wb.innerHTML=&quot;<b>The stirrup cannot resist shear and torsion independently.</b> &quot;+
-      &quot;The V_s computed above assumes the whole stirrup is available for shear, and \u03c6T_n in the &quot;+
-      (SH.aashto?&quot;Torsion Design card&quot;:&quot;Torsion tab&quot;)+&quot; assumes the whole leg is available for torsion. &quot;+(SH.aashto?&quot;AASHTO 5.7.3.6.1&quot;:&quot;ACI 22.7.6.1&quot;)+&quot; requires the two demands &quot;+
+    const wb=cbNL(&quot;warnBox&quot;,&quot;The stirrup cannot resist shear and torsion independently.&quot;,[[&quot;V_s above:&quot;,
+      &quot;the V_s computed above assumes the whole stirrup is available for shear.&quot;],[&quot;φT_n:&quot;,&quot;φT_n in the &quot;+
+      (SH.aashto?&quot;Torsion Design card&quot;:&quot;Torsion tab&quot;)+&quot; assumes the whole leg is available for torsion.&quot;],[&quot;Combined:&quot;,(SH.aashto?&quot;AASHTO 5.7.3.6.1&quot;:&quot;ACI 22.7.6.1&quot;)+&quot; requires the two demands &quot;+
       &quot;to be added, so the torsional requirement is reserved first and the shear capacity is recomputed &quot;+
-      &quot;on what remains.&quot;;
+      &quot;on what remains.&quot;]]);   /* CBNL */
     b.appendChild(wb);
     cbcWorkedIn(b,[SH.aashto?{tab:&quot;tabShear&quot;,c:{card:&quot;shTorD&quot;+cbcComboCi(r.ci),name:&quot;Torsion Design, Combination &quot;+(cbcComboCi(r.ci)+1)},txt:&quot;(A_t/s)_req,T&quot;}   /* CBH1b */
       :{tab:&quot;tabTor&quot;,c:cbcComboCard(&quot;torC&quot;,r.ci),txt:&quot;(A_t/s)_req,T&quot;}]);   /* D11 link */
@@ -3287,9 +3316,9 @@ function workTorsion(b,r){
           [&quot;A_\\ell&quot;,&quot;Longitudinal torsion steel provided, distributed around p_h&quot;,fmt(T.Al),&quot;in\u00b2&quot;],
           [&quot;A_{\\ell,min}&quot;,&quot;Minimum of 9.6.4.3 (checked separately)&quot;,fmt(T.Al_min,3),&quot;in\u00b2&quot;]]
   }));
-  b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;A_{\u2113,req} is the area that develops T\u1d64; A_{\u2113,min} of 9.6.4.3 is a separate &quot;+
-    &quot;floor. Both must be satisfied. The Torsion input panel reports these alongside the area available from &quot;+
-    &quot;bars already on the stirrup perimeter.&quot;));
+  b.appendChild(cbNL(&quot;note&quot;,&quot;Longitudinal torsion steel, two requirements:&quot;,[[&quot;A_{ℓ,req}:&quot;,&quot;the area that develops Tᵤ.&quot;],[&quot;A_{ℓ,min} of 9.6.4.3:&quot;,&quot;a separate &quot;+
+    &quot;floor.&quot;],[&quot;Both:&quot;,&quot;must be satisfied.&quot;],[&quot;Input panel:&quot;,&quot;the Torsion input panel reports these alongside the area available from &quot;+
+    &quot;bars already on the stirrup perimeter.&quot;]]));   /* CBNL */
   b.appendChild(el(&quot;h3&quot;,null,&quot;Step 4 — Torsional capacity from each reinforcement type&quot;));
   b.appendChild(eqBlock({
     title:&quot;Capacity limited by the transverse steel&quot;,ref:&quot;ACI Eq. 22.7.6.1(a)&quot;,
@@ -3314,17 +3343,15 @@ function workTorsion(b,r){
     vars:[[&quot;T_n&quot;,&quot;Nominal torsional strength&quot;,fmt(T.Tn),&quot;k-ft&quot;],
           [&quot;\\phi T_n&quot;,&quot;Design torsional strength&quot;,fmt(T.phiTn),&quot;k-ft&quot;]]
   }));
-  const xr=el(&quot;div&quot;,&quot;warnBox&quot;);
-  xr.innerHTML=&quot;<b>\u03c6T_n above assumes the entire stirrup leg is available for torsion.</b> &quot;+
-    &quot;Because the same stirrup also carries shear, the Shear tab reserves this torsional requirement &quot;+
-    &quot;first and reports \u03c6V_n on the steel that remains. Read the two capacities together, not independently.&quot;;
+  const xr=cbNL(&quot;warnBox&quot;,&quot;φT_n above assumes the entire stirrup leg is available for torsion.&quot;,[[&quot;Shear tab:&quot;,
+    &quot;because the same stirrup also carries shear, the Shear tab reserves this torsional requirement &quot;+
+    &quot;first and reports φV_n on the steel that remains.&quot;],[&quot;Read together:&quot;,&quot;read the two capacities together, not independently.&quot;]]);   /* CBNL */
   b.appendChild(xr);
   if(!(S.tor.Al>0)){
-    const z=el(&quot;div&quot;,&quot;errBox&quot;);
-    z.innerHTML=&quot;<b>No longitudinal torsion reinforcement is provided (A_\u2113 = 0).</b> &quot;+
+    const z=cbNL(&quot;errBox&quot;,&quot;No longitudinal torsion reinforcement is provided (A_ℓ = 0).&quot;,[[&quot;Why:&quot;,
       &quot;ACI 22.7.6.1(b) makes the torsional capacity the lesser of the transverse and longitudinal &quot;+
-      &quot;contributions, so T_n = 0 and the section has no torsional capacity. Enter the longitudinal &quot;+
-      &quot;steel provided specifically for torsion, distributed around the perimeter of the closed stirrup.&quot;;
+      &quot;contributions, so T_n = 0 and the section has no torsional capacity.&quot;]],{act:[&quot;Input needed: enter the longitudinal &quot;+
+      &quot;steel provided specifically for torsion, distributed around the perimeter of the closed stirrup.&quot;]});   /* CBNL */
     b.appendChild(z);
   }
   const g=el(&quot;div&quot;,&quot;infoBox&quot;);
@@ -3475,11 +3502,11 @@ function buildServTab(pg){
   }
   if(S.crack.check &amp;&amp; S.crack.fsBasis==='calc'){
     mkSection(&quot;svcFs&quot;,&quot;Service-Load Steel Stress&quot;,b=>{
-      b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;ACI 24.3.2.1 allows f_s to be calculated from the unfactored &quot;+
-        &quot;moment instead of taken as 2/3 f_y; AASHTO 5.6.7 uses f_ss at the service limit state. &quot;+
-        &quot;The cracked transformed section is solved below for each sense of bending a service moment &quot;+
-        &quot;has been entered for. These are the values carried into the crack-control spacing limit on &quot;+
-        &quot;the Detailing tab.&quot;));
+      b.appendChild(cbNL(&quot;note&quot;,&quot;Service-load steel stress:&quot;,[[&quot;ACI 24.3.2.1:&quot;,&quot;allows f_s to be calculated from the unfactored &quot;+
+        &quot;moment instead of taken as 2/3 f_y.&quot;],[&quot;AASHTO 5.6.7:&quot;,&quot;uses f_ss at the service limit state.&quot;],
+        [&quot;Below:&quot;,&quot;the cracked transformed section is solved for each sense of bending a service moment &quot;+
+        &quot;has been entered for.&quot;],[&quot;Used in:&quot;,&quot;these are the values carried into the crack-control spacing limit on &quot;+
+        &quot;the Detailing tab.&quot;]]));   /* CBNL */
       let any=false;
       [[false,&quot;Positive moment \u2014 bottom face in tension&quot;,Math.abs(S.crack.MsPos||0)],
        [true, &quot;Negative moment \u2014 top face in tension&quot;,   Math.abs(S.crack.MsNeg||0)]].forEach(cse=>{
@@ -3545,14 +3572,16 @@ function buildDetailTab(pg){
       tr.appendChild(td); t.appendChild(tr);
     });
     b.appendChild(t);
-    b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Most detailing limits depend on the section and reinforcement alone, but crack control depends on the SENSE of bending \u2014 the face in tension changes with the sign of M_u. Every check is therefore evaluated for every load combination and the worst applicable case is reported above, together with the combination it came from. A check reads N/A only when no combination can evaluate it.&quot;));
+    b.appendChild(cbNL(&quot;note&quot;,&quot;How the detailing checks are enveloped:&quot;,[[&quot;Most limits:&quot;,&quot;depend on the section and reinforcement alone.&quot;],[&quot;Crack control:&quot;,&quot;depends on the SENSE of bending — the face in tension changes with the sign of M_u.&quot;],[&quot;Every combination:&quot;,&quot;every check is therefore evaluated for every load combination and the worst applicable case is reported above, together with the combination it came from.&quot;],[&quot;N/A:&quot;,&quot;a check reads N/A only when no combination can evaluate it.&quot;]]));   /* CBNL */
   },pg);
   ENV.forEach((E,i)=>{
     const d=E.entry;
     mkSection(&quot;det&quot;+d.id,(i+1)+&quot;. &quot;+d.name+&quot;  \u2014  &quot;+(E.na?&quot;N/A&quot;:(E.allOk?&quot;PASS&quot;:&quot;FAIL&quot;))+
       (E.na?&quot;&quot;:&quot;   |   &quot;+E.combo),b=>{
       if(E.na){ const x=el(&quot;div&quot;,&quot;infoBox&quot;);
-        x.innerHTML=&quot;<b>Not applicable.</b> &quot;+E.naWhy+
+        if(E.entry.naL&amp;&amp;E.naWhy===E.entry.naWhy){ x.className=&quot;infoBox cbNL&quot;;   /* CBNL: the display list of naWhy */
+          x.innerHTML=cbNLh(&quot;Not applicable.&quot;,E.entry.naL.concat(E.naCombos.length>1?[[&quot;Every combination:&quot;,&quot;this is the case for every combination entered (&quot;+E.naCombos.join(&quot;, &quot;)+&quot;).&quot;]]:[])); }
+        else x.innerHTML=&quot;<b>Not applicable.</b> &quot;+E.naWhy+
           (E.naCombos.length>1?&quot;<br><br>This is the case for every combination entered (&quot;+E.naCombos.join(&quot;, &quot;)+&quot;).&quot;:&quot;&quot;);
         b.appendChild(x); return; }
       if(E.naCombos.length &amp;&amp; E.naWhyFirst){
@@ -3624,10 +3653,9 @@ function buildValidTab(pg){
       x.innerHTML=&quot;No mandatory code limit is violated by the current configuration.&quot;; b.appendChild(x); }
     else {
       if(uniq.length){
-        const hd=el(&quot;div&quot;,&quot;errBox&quot;);
-        hd.innerHTML=&quot;<b>&quot;+uniq.length+&quot; mandatory code limit&quot;+(uniq.length>1?&quot;s are&quot;:&quot; is&quot;)+
-          &quot; not satisfied.</b> These are requirements of the code, not advisory notes. &quot;+
-          &quot;The section as configured does not comply.&quot;;
+        const hd=cbNL(&quot;errBox&quot;,uniq.length+&quot; mandatory code limit&quot;+(uniq.length>1?&quot;s are&quot;:&quot; is&quot;)+
+          &quot; not satisfied.&quot;,[[&quot;Mandatory:&quot;,&quot;these are requirements of the code, not advisory notes.&quot;],
+          [&quot;Result:&quot;,&quot;the section as configured does not comply.&quot;]]);   /* CBNL */
         b.appendChild(hd);
         uniq.forEach(f=>{ const x=el(&quot;div&quot;,&quot;errBox&quot;);
           x.innerHTML=&quot;<b>&quot;+f.name+&quot;</b> [&quot;+f.code+&quot;] \u2014 &quot;+f.msg; b.appendChild(x); });
@@ -3645,7 +3673,8 @@ function buildValidTab(pg){
   mkSection(&quot;vNotes&quot;,&quot;Method Choices and Disclosed Conservatism&quot;,b=>{
     b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Where this tool deliberately takes a conservative path or declines a code allowance, it is stated here.&quot;));
     V.notes.forEach(e=>{ const x=el(&quot;div&quot;,&quot;infoBox&quot;);
-      x.innerHTML=&quot;<b>&quot;+e.code+&quot;</b> \u2014 &quot;+e.msg; b.appendChild(x); });
+      if(e.nl){ x.className=&quot;infoBox cbNL&quot;; x.innerHTML=cbNLh(&quot;<b>&quot;+e.code+&quot;</b> — &quot;+e.nl.lead,e.nl.items,{act:e.nl.act}); }   /* CBNL: display list; e.msg unchanged */
+      else x.innerHTML=&quot;<b>&quot;+e.code+&quot;</b> — &quot;+e.msg; b.appendChild(x); });
   },pg);
 }
 
@@ -4145,7 +4174,7 @@ function build3D(container){
   const pv=el(&quot;span&quot;,&quot;mono&quot;,Math.round(VIS3D.opacity*100)+&quot;%&quot;);
   sl.addEventListener(&quot;input&quot;,()=>pv.textContent=sl.value+&quot;%&quot;);
   sr.appendChild(pv); container.appendChild(sr);
-  container.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Drag to rotate, scroll to zoom. The cross-section (concrete, bars, cover, stirrups at s) is modelled to scale; the view is a perspective, so it has no scale bar (the dimensioned, to-scale section and elevation are above). The length shown (&quot;+fmt(Lb,0)+&quot; in) is illustrative; the tool checks a cross-section, not a span.&quot;));
+  container.appendChild(cbNL(&quot;note&quot;,&quot;Drag to rotate, scroll to zoom.&quot;,[[&quot;Scale:&quot;,&quot;the cross-section (concrete, bars, cover, stirrups at s) is modelled to scale; the view is a perspective, so it has no scale bar (the dimensioned, to-scale section and elevation are above).&quot;],[&quot;Length:&quot;,&quot;the length shown (&quot;+fmt(Lb,0)+&quot; in) is illustrative; the tool checks a cross-section, not a span.&quot;]]));   /* CBNL */
   /* render loop */
   cancelAnimationFrame(VIS3D.raf);
   (function loop(){
@@ -4388,31 +4417,30 @@ function buildVisualsTab(pg){
     wireSvgHL(f);
     b.appendChild(f);
     if(S.tor.present&amp;&amp;S.code==='ACI'&amp;&amp;S.tor.Al>0&amp;&amp;S.stir.present){
-      const lg=el(&quot;div&quot;,&quot;note&quot;);
       const cc3=S.cover.cc, ds3=stirDia(), legH=(S.sec.h-cc3-ds3/2)-(cc3+ds3/2);
       const nMid=Math.max(0,Math.ceil(legH/12)-1), nBars=4+2*nMid;
-      lg.innerHTML=&quot;<b style='color:#7C3AED'>Purple dashed line</b> is the closed-stirrup centreline &quot;+
-        &quot;enclosing A_oh, the shear-flow path used for torsion. <b style='color:#7C3AED'>Purple rings</b> show &quot;+
-        &quot;an <i>indicative</i> distribution of A_\u2113 = &quot;+fmt(S.tor.Al,3)+&quot; in\u00b2 over &quot;+nBars+&quot; bars \u2014 one at each corner&quot;+
+      const lg=cbNL(&quot;note&quot;,&quot;Torsion in the figure:&quot;,[[&quot;<span style='color:#7C3AED'>Purple dashed line:</span>&quot;,&quot;the closed-stirrup centreline &quot;+
+        &quot;enclosing A_oh, the shear-flow path used for torsion.&quot;],[&quot;<span style='color:#7C3AED'>Purple rings:</span>&quot;,&quot;show &quot;+
+        &quot;an <i>indicative</i> distribution of A_ℓ = &quot;+fmt(S.tor.Al,3)+&quot; in² over &quot;+nBars+&quot; bars — one at each corner&quot;+
         (nMid>0?(&quot; plus &quot;+nMid+&quot; intermediate bar&quot;+(nMid>1?&quot;s&quot;:&quot;&quot;)+&quot; per vertical leg, required because the leg is &quot;+
           fmt(legH)+&quot; in and ACI 9.7.5.1 permits no more than 12 in between bars around p_h&quot;):&quot;&quot;)+
-        &quot;. These positions are illustrative: the tool holds A_\u2113 as an area, not as located bars, so it cannot &quot;+
-        &quot;verify the actual arrangement.&quot;;
+        &quot;.&quot;],[&quot;Illustrative:&quot;,&quot;these positions are illustrative: the tool holds A_ℓ as an area, not as located bars, so it cannot &quot;+
+        &quot;verify the actual arrangement.&quot;]]);   /* CBNL */
       b.appendChild(lg);
     }
-    b.appendChild(el(&quot;div&quot;,&quot;figCap&quot;,&quot;Drawn to scale for the sense of &quot;+rSel.name+
-      &quot;. Red = tension-face layers, blue outline = compression-face layers, grey = closed stirrup (&quot;+
+    b.appendChild(cbNL(&quot;figCap&quot;,&quot;Drawn to scale for the sense of &quot;+cbdwEsc(rSel.name)+&quot;.&quot;,[[&quot;Colours:&quot;,
+      &quot;red = tension-face layers, blue outline = compression-face layers, grey = closed stirrup (&quot;+
       (S.stir.present?(S.stir.legs+&quot;-leg #&quot;+S.stir.size+&quot; at &quot;+fmt(S.stir.s)+&quot; in&quot;):&quot;none&quot;)+
-      &quot;). Clear cover c_c = &quot;+fmt(S.cover.cc)+&quot; in. Layer depths d are measured from the extreme compression fibre.&quot;));
+      &quot;).&quot;],[&quot;Clear cover:&quot;,&quot;c_c = &quot;+fmt(S.cover.cc)+&quot; in.&quot;],[&quot;Layer depths d:&quot;,&quot;measured from the extreme compression fibre.&quot;]]));   /* CBNL */
     cbcWorkedIn(b,[{tab:&quot;tabFlex&quot;,c:cbcComboCard(&quot;flexC&quot;,S.ui.detailCombo),txt:&quot;d, A_s&quot;}]);   /* CBIE §6 link */
   },pg);
 
   /* CBVL (2026-11-05): strain, stress and force diagram with value labels for the selected combination */
   mkSection(&quot;visForce&quot;,&quot;Strain, Stress and Forces at Nominal Strength&quot;,b=>{
     const f=el(&quot;div&quot;,&quot;figWrap&quot;); f.innerHTML=cbcForceSVG(rSel); wireSvgHL(f); b.appendChild(f);
-    b.appendChild(el(&quot;div&quot;,&quot;figCap&quot;,&quot;Combination &quot;+rSel.name+(S.ui.detailCombo===CC.govIndex?&quot; (governing)&quot;:&quot;&quot;)+&quot; (select above). &quot;+
-      &quot;Section to scale; strains, stresses and forces drawn to their own scales. Signs as the Flexure tab: + tension, \u2212 compression. &quot;+
-      &quot;Arrows: \u2192 tension, \u2190 compression; z = lever arm about the concrete resultant C_c. Every value is the Flexure tab's; the table works each label.&quot;));
+    b.appendChild(cbNL(&quot;figCap&quot;,&quot;Combination &quot;+cbdwEsc(rSel.name)+(S.ui.detailCombo===CC.govIndex?&quot; (governing)&quot;:&quot;&quot;)+&quot; (select above).&quot;,[
+      [&quot;Scales:&quot;,&quot;section to scale; strains, stresses and forces drawn to their own scales.&quot;],[&quot;Signs:&quot;,&quot;as the Flexure tab: + tension, − compression.&quot;],
+      [&quot;Arrows:&quot;,&quot;→ tension, ← compression; z = lever arm about the concrete resultant C_c.&quot;],[&quot;Values:&quot;,&quot;every value is the Flexure tab's; the table works each label.&quot;]]));   /* CBNL */
     const t=el(&quot;table&quot;,&quot;rt&quot;); t.innerHTML=&quot;<tr><th>Quantity</th><th>Expression</th><th>Values</th><th>Result</th></tr>&quot;;
     cbcForceRows(rSel).forEach(rw=>{ const tr=el(&quot;tr&quot;); rw.forEach(c=>tr.appendChild(el(&quot;td&quot;,null,c))); t.appendChild(tr); });
     b.appendChild(t);
@@ -4448,9 +4476,9 @@ function buildVisualsTab(pg){
   },pg);
 
   mkSection(&quot;visAssist&quot;,&quot;Design Assist \u2014 Capacity Curves&quot;,b=>{
-    b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Each curve is the design capacity recomputed by the full engine as one input varies, &quot;+
-      &quot;with every other input held at its current value. The star is the current design; the dashed red line is the &quot;+
-      &quot;governing demand. These are aids for choosing a layout \u2014 the binding checks remain the worked calculations.&quot;));
+    b.appendChild(cbNL(&quot;note&quot;,&quot;Each curve is the design capacity recomputed by the full engine as one input varies, &quot;+
+      &quot;with every other input held at its current value.&quot;,[[&quot;Star:&quot;,&quot;the current design.&quot;],[&quot;Dashed red line:&quot;,&quot;the &quot;+
+      &quot;governing demand.&quot;],[&quot;Use:&quot;,&quot;these are aids for choosing a layout — the binding checks remain the worked calculations.&quot;]]));   /* CBNL */
     const d1=el(&quot;div&quot;); d1.id=&quot;assistM&quot;; b.appendChild(d1);
     const d2=el(&quot;div&quot;); d2.id=&quot;assistV&quot;; b.appendChild(d2);
     setTimeout(()=>{ plotAssistM(&quot;assistM&quot;); plotAssistV(&quot;assistV&quot;); },0);
@@ -4719,8 +4747,9 @@ function buildDrawingsTab(pg){
     '<button type=&quot;button&quot; class=&quot;b&quot; id=&quot;cbdwPrint1&quot; title=&quot;Print the sheet shown: one 11 x 17 in landscape page at its plot scale&quot;>Print sheet</button> '+
     '<button type=&quot;button&quot; class=&quot;b&quot; id=&quot;cbdwPrintAll&quot; title=&quot;Print every sheet: one 11 x 17 in landscape page per sheet, each at its plot scale&quot;>Print all sheets ('+B.S.length+')</button></div>'+
     '<div class=&quot;note&quot;>'+cbdwEsc(SharedDxf.PRINT_NOTE)+'</div>'+
-    '<div class=&quot;note&quot;>One DXF file (AutoCAD R12, model space, full size in inches): each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side. Layers CB-CONC, CB-REBAR, CB-STIRRUP, CB-DIMS, CB-TEXT, CB-LEADER, CB-TABLE, CB-TBLK, CB-BRDR, CB-BREAK, CB-HIDDEN. Title block: the project fields in the header (Project, Project No., Subject, Calculated By, Date, Checked By, Checked Date).'+
-    (B.dev?'':' The development and splice lengths come from the Development &amp;amp; Splice tab of the suite: not available when this tab is opened on its own.')+'</div>'+
+    '<div class=&quot;note cbNL&quot;>'+cbNLh('One DXF file (AutoCAD R12, model space, full size in inches):',[['Sheets:','each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side.'],
+      ['Layers:','CB-CONC, CB-REBAR, CB-STIRRUP, CB-DIMS, CB-TEXT, CB-LEADER, CB-TABLE, CB-TBLK, CB-BRDR, CB-BREAK, CB-HIDDEN.'],['Title block:','the project fields in the header (Project, Project No., Subject, Calculated By, Date, Checked By, Checked Date).'],
+      B.dev?null:['Development and splice lengths:','they come from the Development &amp;amp; Splice tab of the suite: not available when this tab is opened on its own.']])+'</div>'+   /* CBNL */
     '<div class=&quot;note&quot;><b>'+(B.S.indexOf(cur)+1)+'. '+cbdwEsc(cur.title)+'</b> · scale '+cbdwEsc(cur.scale)+(cur.over?' · <span style=&quot;color:var(--red-600)&quot;>does not fit the sheet even at the smallest scale</span>':'')+'</div>'+
     '<div class=&quot;cbdwBox&quot;></div><div class=&quot;note&quot;>Wheel: zoom about the cursor · drag: pan · pinch · double-click: fit · + / − / Fit buttons.</div>'+
     '<table class=&quot;rt&quot;><tr><th>No.</th><th>Sheet</th><th>Scale</th><th>Worked in</th></tr>'+B.S.map((s,j)=>'<tr data-cbdw=&quot;'+s.id+'&quot; style=&quot;cursor:pointer'+(s===cur?';background:#eff6ff':'')+'&quot;><td>'+(j+1)+'</td><td>'+cbdwEsc(s.title)+'</td><td>'+cbdwEsc(s.scale)+'</td><td><a href=&quot;#&quot; data-cbdwgo=&quot;'+s.src[0]+'&quot;>'+cbdwEsc(s.src[1])+' tab</a></td></tr>').join('')+'</table>';
@@ -5126,10 +5155,10 @@ function cbcRxAbout(){
   const sel=cbcRxSel(), P=S.proj||{}, om=S.combos.map((c,i)=>sel.combos[i]?null:&quot;Combination &quot;+(i+1)+&quot; (&quot;+c.name+&quot;)&quot;).filter(Boolean);
   return [{type:'note',text:&quot;Reinforced Concrete Beam Capacity — &quot;+(P.name||&quot;Untitled&quot;)+(P.subj?&quot; — &quot;+P.subj:&quot;&quot;)+&quot;. &quot;+cbcCodeLabel()+&quot; · Concrete Beam Design Suite · by Mario Lococo.&quot;},
     {type:'note',text:&quot;Title block of the Beam Capacity tab: Subject &quot;+(P.subj||&quot;—&quot;)+&quot;; Sheet &quot;+(P.sheet||&quot;—&quot;)+&quot;; Code &quot;+(S.code==='ACI'?&quot;ACI 318-19&quot;:&quot;AASHTO LRFD&quot;)+&quot;.&quot;},
-    {type:'note',text:&quot;Equations are shown symbolically, then with values substituted, then with the result. &quot;+
-      &quot;The Flexure, Shear, Torsion, Serviceability and Detailing sections end with the D/C result of each check; PASS means D/C ≤ 1.00 &quot;+
-      &quot;(detailing: the limit is met for every combination it applies to). Units: kip, in, ksi unless noted. &quot;+
-      (om.length?&quot;The worked derivation is omitted at the user’s selection for: &quot;+om.join(&quot;, &quot;)+&quot;; their results are in every summary table.&quot;:&quot;Every load combination is worked.&quot;)},
+    ...cbrNL(&quot;How this chapter is laid out:&quot;,[[&quot;Equations:&quot;,&quot;shown symbolically, then with values substituted, then with the result.&quot;],   /* CBNL */
+      [&quot;Results:&quot;,&quot;the Flexure, Shear, Torsion, Serviceability and Detailing sections end with the D/C result of each check; PASS means D/C ≤ 1.00 &quot;+
+      &quot;(detailing: the limit is met for every combination it applies to).&quot;],[&quot;Units:&quot;,&quot;kip, in, ksi unless noted.&quot;],
+      (om.length?[&quot;Omitted:&quot;,&quot;the worked derivation is omitted at the user’s selection for: &quot;+om.join(&quot;, &quot;)+&quot;; their results are in every summary table.&quot;]:[&quot;Combinations:&quot;,&quot;every load combination is worked.&quot;])]),
     {type:'note',text:&quot;This calculation is a computation aid. All results must be independently verified and sealed by the responsible engineer of record.&quot;}];
 }
 /* Print / PDF and Ctrl+P: the suite's Report (the shell's CBRP.printAny); this frame alone only when the shell is not there */
@@ -5352,7 +5381,7 @@ function cbcRptModel(){
       [&quot;$f^{\\prime}_{c}$&quot;,{t:fmt(S.mat.fc),n:true},'ksi'],['$f_{y}$',{t:fmt(S.mat.fy),n:true},'ksi'],['$f_{yt}$',{t:fmt(S.mat.fyt),n:true},'ksi'],...(S.code==='AASHTO'?[['$f_{yt}$ up to 100 ksi (5.4.3.3, no torsion; 5.7.2.7)',S.mat.fyt100?'yes':'no','']]:[]),['$\\lambda$',{t:fmt(S.mat.lambda,2),n:true},''],...(S.code==='AASHTO'?[['Unit weight $w_{c}$ for $E_{c}$',S.mat.wc>0?{t:fmt(S.mat.wc,3),n:true}:(S.mat.lambda<1?'0.110 (lightweight, not entered)':'Table 3.5.1-1'),'kcf']]:[]),
       ['Aggregate size',{t:fmt(S.mat.dagg),n:true},'in'],['Clear cover provided / required',fmt(S.cover.cc)+' / '+fmt(S.cover.req),'in']]}]});
     subs.push({title:'Reinforcement',items:[{type:'table',head:['Layer','Bars','Size','$A_{s}$ (in²)','Face','d (in)','Source'],rows:G.map((L,i)=>[L.side+(i+1),String(L.n),'#'+L.size,{t:fmt(L.As),n:true},L.face==='tension'?'Tension':'Compression',{t:fmt(L.d),n:true},L.manual?'manual override':'auto-stacked'])},
-      {type:'note',text:(S.stir.present?'Transverse: '+S.stir.legs+'-leg #'+S.stir.size+' closed stirrup at '+fmt(S.stir.s)+' in. ($A_{v}$ = '+fmt(S.stir.legs*REBAR[S.stir.size].a)+' in²).':'No transverse reinforcement specified.')+(S.tor.present&amp;&amp;ACI?' Torsion: '+(S.tor.kind==='compatibility'?'compatibility':'equilibrium')+' torsion, θ = '+fmt(S.tor.theta,0)+'°, $A_{\\ell}$ = '+fmt(S.tor.Al)+' in².':'')+(S.skin&amp;&amp;S.skin.size&amp;&amp;S.skin.s>0?' Skin bars: #'+S.skin.size+' at '+fmt(S.skin.s)+' in on each side face.':' Skin bars: none entered.')+' Clear spacing between layers: '+fmt(S.layerClear)+' in.'}]});   /* CBM3: skin bars */
+      ...cbrNL('Other reinforcement:',[S.stir.present?['Transverse:',S.stir.legs+'-leg #'+S.stir.size+' closed stirrup at '+fmt(S.stir.s)+' in. ($A_{v}$ = '+fmt(S.stir.legs*REBAR[S.stir.size].a)+' in²).']:'No transverse reinforcement specified.',S.tor.present&amp;&amp;ACI?['Torsion:',(S.tor.kind==='compatibility'?'compatibility':'equilibrium')+' torsion, θ = '+fmt(S.tor.theta,0)+'°, $A_{\\ell}$ = '+fmt(S.tor.Al)+' in².']:null,S.skin&amp;&amp;S.skin.size&amp;&amp;S.skin.s>0?['Skin bars:','#'+S.skin.size+' at '+fmt(S.skin.s)+' in on each side face.']:['Skin bars:','none entered.'],['Clear spacing between layers:',fmt(S.layerClear)+' in.']])]});   /* CBM3: skin bars; CBNL: as a list */
     const hasT=(S.tor.present&amp;&amp;ACI)||!ACI;   /* CBH1b: T_u shown in AASHTO mode (as the Loads input) */
     subs.push({title:'Load combinations',items:[{type:'table',head:['#','Combination','$M_{u}$ (kip-ft)','$V_{u}$ (kip)'].concat(hasT?['$T_{u}$ (kip-ft)']:[]),rows:CC.combos.map(r=>[String(r.ci+1),r.name,{t:fmt(r.Mu),n:true},{t:fmt(r.Vu),n:true}].concat(hasT?[{t:fmt(r.Tu),n:true}]:[]))}]});
     if(String(S.assumptions||'').trim()) subs.push({title:'Assumptions',items:[{type:'note',text:String(S.assumptions).trim()}]});
@@ -5465,11 +5494,11 @@ function cbcRptModel(){
       return {title:d.name+' ('+E.combo+')',ref:cRef(d.ref),steps:d.deriv.map((q,k)=>cS({id:d.id+'.'+k,label:q[2]||d.name,sym:'',eq:q[0],sub:q[1]||'',value:null})).concat([
         cS({id:d.id+'.cmp',label:'Provided '+(d.cmp==='\\ge'?'≥':'≤')+' required',sym:'\\text{provided}',eq:d.cmp+'\\;\\text{required}',sub:fmt(d.have,dp)+' '+cbcDetRel(d)+' '+fmt(d.need,dp),value:d.have,unit:cU(d.unit),d:dp,ok:!!d.ok,note:E.allOk?'':'fails for at least one combination'})])}; });
     if(L.length) subs.push({title:'Worked detailing checks',items:[{type:'topics',scope:'dt',title:'Worked steps',list:L},{type:'note',text:'[[tab:tabDetail|On screen: Detailing tab]]'}]});
-    const na=ENV.filter(E=>E.na); if(na.length) subs.push({title:'Not applicable',items:na.map(E=>({type:'note',text:E.entry.name+': '+E.naWhy}))});
+    const na=ENV.filter(E=>E.na); if(na.length) subs.push({title:'Not applicable',items:[].concat(...na.map(E=>E.entry.naL&amp;&amp;E.naWhy===E.entry.naWhy?cbrNL(E.entry.name+':',E.entry.naL):[{type:'note',text:E.entry.name+': '+E.naWhy}]))});   /* CBNL */
     secs.push({title:'Detailing',subs});
   }
   /* 8. validation notices */
-  { const W=[].concat((V.blockers||[]).map(x=>({warn:true,text:'Blocker ('+x.code+'): '+x.msg})),(V.warnings||[]).map(x=>({warn:true,text:'Warning ('+x.code+'): '+x.msg})),(V.notes||[]).map(x=>({text:(x.code?x.code+': ':'')+x.msg})));
+  { const W=[].concat((V.blockers||[]).map(x=>({warn:true,text:'Blocker ('+x.code+'): '+x.msg})),(V.warnings||[]).map(x=>({warn:true,text:'Warning ('+x.code+'): '+x.msg})),...(V.notes||[]).map(x=>x.nl?cbrNL((x.code?x.code+': ':'')+x.nl.lead,x.nl.items,{act:x.nl.act}).map(q=>q.warn?{warn:true,text:q.text}:{text:q.text}):[{text:(x.code?x.code+': ':'')+x.msg}]));   /* CBNL: a notice with a display list as items */
     if(W.length) secs.push({title:'Validation notices',subs:[{title:'Notices',items:W.map(w=>Object.assign({type:'note'},w,{text:String(w.text).replace(/<[^>]+>/g,'')}))}]});
   }
   const keep=cbcRxFilter(secs,RX,{'Inputs':'tabInputEcho','Summary of checks':'tabSummary','Flexure':'tabFlex','Shear':'tabShear','Torsion (AASHTO 5.7.2.1, 5.7.3.6)':'tabShear','Longitudinal reinforcement (AASHTO 5.7.3.5)':'tabShear','Torsion':'tabTor','Serviceability':'tabServ','Detailing':'tabDetail','Validation notices':'tabValid'},RXO);   /* CBRX */
@@ -10633,6 +10662,12 @@ window.addEventListener('DOMContentLoaded',()=>{
       if(e.matches('svg')){ nfig++; var cap=(card||'Figure')+(nfig>1?' ('+nfig+')':''); if(!T.figs.has(rxNrm(cap))){ T.figs.add(rxNrm(cap)); push({type:'figure',svg:e.outerHTML,caption:cap}); } return; }
       if(e.matches('table')){ table(e); return; }
       if(e.matches('.eqBlock')){ eqb(e); return; }
+      /* CBNL (2026-11-08): a note built as a lead line and a list (the tabs' cbNL) is kept or skipped as one note, with the same test as
+         before on its whole text, then copied as one Report line per part (the lead, then "• lead words: text"
+         per item); an action line (.cbNLa) is a warning line */
+      if(e.matches('.cbNL')){ var P=[].slice.call(e.querySelectorAll('.cbNLa,.cbNLl,.cbNLu>li')), tA=P.map(txt).filter(Boolean).join(' ');
+        if(tA.length>=12&&(T.fresh(tA)||T.newNum(tA))){ P.forEach(function(p){ var x=txt(p); if(x) push({type:'note',warn:p.matches('.cbNLa')||undefined,text:(p.tagName==='LI'?'• ':'')+x}); }); T.seen(tA); }
+        return; }
       var kids=[].slice.call(e.children), leaf=kids.every(function(x){ return INL.test(x.tagName)&&!x.querySelector('table,svg,div,p,ul,ol,li'); });
       if(leaf){ var t=txt(e); if(t.length>=12&&(T.fresh(t)||T.newNum(t))){ push({type:'note',text:(e.tagName==='LI'?'• ':'')+t}); T.seen(t); } return; }
       kids.forEach(visit);
