@@ -5611,3 +5611,32 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Check case:** origin/main vs branch, headless, the 10 BPNL-1 states: `CC` (all results) JSON identical; the digit sequence of the input panel, every output tab, the Report tab and the printed report identical in all 159 texts; the "Notes / basis" appendix has the same B.n notes (13 in the default project).
 - **How verified:** `node tests/check-syntax.mjs`; `tests/smoke/phone-layout.mjs --tool bpad`; `tests/smoke/project-library.mjs --tool baseplate`; `tests/smoke/lightpole-anchor-handoff.mjs`; 0 console errors. Screenshots before / after at 1440 and 390 px (Summary basis note, interaction note, foundation depth D, Report).
 - **Other copies:** none.
+
+## 2026-11-08 — PR: nl/bp-notes-3 (PR #1191: https://github.com/mlococo88/All-Structural/pull/1191) — BPNL-3: long notes on the Tension Rebar and Shear Rebar tabs (display only, no result change)
+### BPNL-3. Tension Rebar / Shear Rebar tabs: long notes as a lead line and a list   [display only] [no result change]
+- **Request / rule / helpers / Report handling:** as BPNL-1 and BPNL-2. Last part of the long-notes work for this tool.
+- **Notes changed** (old opening text → new lead → item lead words). Exact before / after: the PR diff.
+  1. Tension Rebar, figure caption: "Figure — ACI 318-19 Fig. R17.5.2.1a… both are dimensioned on it." → Placement / Development / Cone / Reference only.
+  2. "Wide-U layout: n interior anchor(s) not restrained." → Why / Fix.
+  3. "n of m anchors in tension have no effective leg within 0.5·h_ef" → Share / Pooling / Confirm / Wide-U layout (when it applies).
+  4. "§17.5.2.1.1 credits a bar only where…" (BPMK-1 note) → Zone / Not credited / Distances below / "h_ef here is the ACTUAL embedment …″." (when h_ef is reduced). The combination name is escaped (`sbdEscB`) now that the note is HTML.
+  5. "Limitation." → Lightly loaded / Load path / Review.
+  6. "Piece set-out (enclosing layout)." / "Piece set-out (per-row layout)." → Set-out / Datum or Under moment / Creditable / Drawings.
+  7. "Elevations are measured UP from the BOTTOM of the member…" (lead unchanged, so the Report's "Basis: see Note B.n" pointer still quotes it) → z_cross / Available / Required / Both sides / "worst DCR" / Effective.
+  8. "n of m bars do not qualify as anchor reinforcement." → Outside the zone / Do not fit / Overstated / Fix.
+  9. §17.5.2.1 compliance (`rebarCompliance`, both tabs): "Anchor reinforcement may replace the concrete breakout check only when…" → Automatic / Your confirmation.
+  10. §17.5.2.1 compliance error box: "n geometric requirement(s) not satisfied and m detailing requirement(s) unconfirmed." → Not justified / Meanwhile.
+  11. Development: "Development is N/A — no leg reaches the breakout cone." → Why / Not a pass / Fix.
+  12. Development: "Per ACI Fig. R17.5.2.1a, anchor reinforcement is developed on BOTH sides of the breakout surface:" → Hooked or bent end / Straight end / Bends / Below.
+  13. Rebar Layout: "n leg(s) violate cover or fall outside the pedestal." / "No tension reinforcement leg fits inside cover." → Limit / Driver / Capacity.
+  14. Shear Rebar, figure caption: "Figure — application of hairpin reinforcement to concrete edges for shear load…" → Development / Note on the figure number / Reference only.
+  15. "The leg-to-leg gauge is too wide for any leg to count." → Why / Fix.
+  16. Closed ties: "Closed ties enclosing the anchor group (ACI 318-19 R17.5.2.1(b), Fig. R17.5.2.1b). Governing edge …" → Legs / (1) / (2) / (3) / Capacity.
+  17. Hairpins: "Governing edge … taken from the same shear-breakout solve as the capacity check." → "lateral offset" / "behind" / Effective.
+  18. "The hairpin bend is not marked as engaging the anchor rod." → Requirement / Without engagement / Confirm.
+  19. Layout: "A hairpin is a DIRECTIONAL detail:" → Credit / Plan / Elevation; closed ties: "Closed ties enclosing the anchor group (§17.5.2.1(b), R17.5.2.1(b), Fig. R17.5.2.1b):" → Legs / Drawings. The combination name is escaped.
+- **Decision (pending engineer review):** the "Why none / only n of the m bars are creditable" banner (`ineffCauseBanner`) is already a list of causes with their fixes and is left as it is. A "Fix:" item stays in its place in the list (not moved to the top), so each box keeps its order of facts.
+- **Governing provision:** none (display only).
+- **Check case:** origin/main vs branch, headless, the 10 BPNL-1 states: `CC` (all results) JSON identical; the digit sequence of the input panel, every output tab, the Report tab and the printed report identical in all 159 texts. One exception, not from this change: the 3D View text in one state differs only by the Plotly chart's axis labels, which had not finished drawing in the main run; the text before the chart is identical.
+- **How verified:** `node tests/check-syntax.mjs`; `tests/smoke/phone-layout.mjs --tool bpad`; `tests/smoke/project-library.mjs --tool baseplate`; `tests/smoke/lightpole-anchor-handoff.mjs`; 0 console errors. Screenshots before / after at 1440 and 390 px (elevations note, tension figure caption, §17.5.2.1.1 crediting note).
+- **Other copies:** none.
