@@ -5640,3 +5640,28 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Check case:** origin/main vs branch, headless, the 10 BPNL-1 states: `CC` (all results) JSON identical; the digit sequence of the input panel, every output tab, the Report tab and the printed report identical in all 159 texts. One exception, not from this change: the 3D View text in one state differs only by the Plotly chart's axis labels, which had not finished drawing in the main run; the text before the chart is identical.
 - **How verified:** `node tests/check-syntax.mjs`; `tests/smoke/phone-layout.mjs --tool bpad`; `tests/smoke/project-library.mjs --tool baseplate`; `tests/smoke/lightpole-anchor-handoff.mjs`; 0 console errors. Screenshots before / after at 1440 and 390 px (elevations note, tension figure caption, §17.5.2.1.1 crediting note).
 - **Other copies:** none.
+
+## 2026-11-08 — PR: nl/bp-leftpanel (PR #1199: https://github.com/mlococo88/All-Structural/pull/1199) — BPLS: the check summary as a left column from 1200 px (display only, no result change)
+### BPLS. Check summary column on the left at 1200 px and wider   [display only]
+- **Request (engineer, 2026-11-07/08):** add the left summary panel to the tools that have summary / result cards, as in Retaining Wall (RWDL #959, RWLB #984), Spread Footing (SFLB #988), Light Pole and Sign Post (LPLB #991, #994/#997) and Shear and Moment Diagrams (SMLS #1130).
+- **What changed (screen only):**
+  - At **1200 px and wider** a new left column `#bpadDashCol` (left of the input panel; **240 px** from 1200 to 1499 px, **280 px** from 1500 px) lists every check of the Summary tab (`allChecks()`): one compact chip per check: status dot, name, D/C (`fmtDCR`, as the Summary chips) and PASS / FAIL / N/A. Head: « button, "Checks", and "n FAIL" (red) or "max D/C" (green).
+  - The input panel is 33 % of the width left beside the column (`calc((100% − column) × .33)`); the output panel takes the rest.
+  - **Click a chip** (or Enter / Space: chips are buttons): opens and scrolls to the card that works the value, exactly as a Summary chip does (`bpadCardFor` → `bpadGoto`, D11), or the check's tab when no card is mapped.
+  - « shrinks the column to a 42 px strip (vertical title and the count); » opens it.
+  - When the output is withheld (validation blockers) the column says "No results: the output is withheld. See the message on the output tab."
+  - **Below 1200 px nothing changes** (no column; tablet and phone layouts and order as before). The column is `noPrint` and hidden in print; the Summary tab, the Report and Print / PDF are unchanged.
+- **Where (`BasePlateAnchorDesigner.html`):**
+  - CSS: after the LAY-1 `@media screen and (max-width:899.98px){…}` block, the block starting `/* BPLS (2026-11-08, engineer: the check summary in a left panel` (`#bpadDashCol{display:none;}`, `@media screen and (min-width:1200px){…}`, `@media screen and (min-width:1200px) and (max-width:1499.98px){…}`, `@media print{ #bpadDashCol{display:none!important;} }`).
+  - HTML: before `<div id="inputPanel">` inside `<div id="main">`: `<aside id="bpadDashCol" class="noPrint" aria-label="Check summary">` with `#bpadDashHead` (`#bpadDashTgl`, `#bpadDashTtl`, `#bpadDashCnt`) and `#bpadDash`.
+  - JS, `buildOutput()`: `bpDashRender(true);` before the `return` of the blockers branch, and `bpDashRender(false);` after `if(window.katex) renderAllTex(pg);`. New after `buildOutput`: `const BPLS={key:"bpad_dashCollapsed_v1",…}`, `bpDashColl(v,save)`, `bpDashRender(blocked)` and a start-up IIFE that reads the key and wires «.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). The column shows the same `allChecks()` values as the Summary chips.
+- **Saved data (§5):** no key or format changed. New per-browser UI key **`bpad_dashCollapsed_v1`** ('1' = shrunk, '0' = open), tool-prefixed, written only when « / » is clicked, not part of the project, the autosave or the export.
+- **Decisions (pending engineer review):**
+  1. Breakpoints and widths as SFLB / SMLS: column from 1200 px, 240 px to 1499 px, 280 px from 1500 px.
+  2. The Summary tab keeps its own chips and tables (it is a tab, not an always-visible block, so nothing is hidden when the column is open).
+  3. The chips list what the Summary chips list (one per check, enveloped over the combinations); the governing combination and reference are in each chip's tooltip, not on the chip.
+  4. Phone and tablet (below 1200 px) are unchanged, including the order (inputs first, then the output tabs).
+- **Check case (default project):** 10 chips: Base Plate Bending 0.66 PASS, Bolt Bearing / Tearout (plate) 0.05 PASS, Concrete Bearing 0.37 PASS, Steel Tension 0.15 PASS, Pullout 0.11 PASS, Concrete Breakout (T) 0.26 PASS, Steel Shear 0.74 PASS, Concrete Breakout (V) 1.13 FAIL, Pryout 0.19 PASS, Combined T–V Interaction 1.33 FAIL; head "2 FAIL" — the same values as the Summary tab chips. Clicking Concrete Breakout (V) opens the Concrete Embedment tab at the card that works it.
+- **How verified:** origin/main vs branch, headless, the 10 BPNL-1 states: input panel, every output tab, the Report tab and the printed report text identical; `CC` identical apart from the existing `__subJust` memo, which `allChecks()` fills on the Summary tab in main too. Layout at 1920 / 1440 / 1280 / 1024 / 390 px: no sideways scroll; column 280 / 240 / 240 / none / none px; at 1024 and 390 px the panels sit exactly as on main. Collapse writes `bpad_dashCollapsed_v1` = '1' and survives a reload. `node tests/check-syntax.mjs`; `tests/smoke/phone-layout.mjs --tool bpad`; `tests/smoke/project-library.mjs --tool baseplate`; `tests/smoke/lightpole-anchor-handoff.mjs`; 0 console errors.
+- **Other copies:** none.

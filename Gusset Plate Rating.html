@@ -714,6 +714,52 @@ select option { background: #fff; color: var(--text); }
 .gpNLu > li { margin: 2px 0; }
 .gpNLa { margin: 4px 0 4px; }
 @media print { .gpNLu > li { break-inside: avoid; } }
+/* GPLS (2026-11-08, engineer: the left summary panel, as Retaining Wall / Spread Footing / Light Pole / Shear and Moment Diagrams —
+   RWDL #959, RWLB #984, SFLB #988, LPLB #991, SMLS #1130): on screens 1200 px and wider a left column (#gpDashCol, 240 px up to
+   1499 px, 280 px from 1500 px) lists one chip per rating case, per member or plane, and per advisory check (name, rating factor
+   or ratio, OK / NG); a click opens the Checks tab card that works the value. « shrinks it to a 42 px strip. Below 1200 px
+   nothing changes. Screen only (print prints the Report). */
+#gpDashCol { display: none; }
+@media print { #gpDashCol { display: none !important; } }
+@media screen and (min-width: 1200px) {
+  body.gpDashWide #gpDashCol { display: block; flex: 0 0 280px; width: 280px; min-width: 0; overflow-y: auto; overflow-x: hidden; background: var(--sidebar); border-right: 1px solid var(--border); padding: 0 8px 24px; overscroll-behavior: contain; }
+  #gpDashHead { position: sticky; top: 0; z-index: 3; background: var(--sidebar); display: flex; align-items: center; gap: 4px 8px; flex-wrap: wrap; padding: 8px 0 4px; }
+  #gpDashTtl { margin: 0; font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  #gpDashTgl { margin: 0; padding: 1px 7px; font-size: 11px; border: 1px solid var(--border); background: var(--card); border-radius: 5px; cursor: pointer; color: var(--text-dim); }
+  #gpDashCnt { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+  #gpDashCnt span { font-size: 10px; font-weight: 700; padding: 1px 5px; border: 1px solid; border-radius: 3px; white-space: nowrap; }
+  #gpDashCnt .gpCf { color: var(--fail); background: var(--fail-dim); border-color: var(--fail); }
+  #gpDashCnt .gpCw { color: var(--warn); background: var(--warn-dim); border-color: var(--warn); }
+  #gpDashCnt .gpCp { color: var(--pass); background: var(--pass-dim); border-color: var(--pass); }
+  #gpDash { display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; align-items: start; }
+  .gpDashH { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 8px 0 1px; }
+  .gpCh { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; column-gap: 5px; padding: 3px 6px 3px 2px; min-width: 0;
+    border: 1px solid var(--border); border-radius: 3px; background: var(--card); font-size: 11.5px; line-height: 1.35; cursor: pointer; }
+  .gpCh:focus-visible { outline: 2px solid var(--info); outline-offset: -1px; }
+  .gpCh.pass { border-color: var(--pass); background: var(--pass-dim); } .gpCh.fail { border-color: var(--fail); background: var(--fail-dim); } .gpCh.warn { border-color: var(--warn); background: var(--warn-dim); }
+  .gpCh:hover { filter: brightness(.97); }
+  .gpCh .gpChX { grid-row: 1; grid-column: 1; margin: 0; padding: 0 3px; border: none; background: transparent; font-size: 9px; color: var(--text-dim); line-height: 1.2; cursor: pointer; }
+  .gpCh .gpChX:disabled { visibility: hidden; }
+  .gpCh .gpChN { grid-row: 1; grid-column: 2; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gpCh .gpChR { grid-row: 1; grid-column: 3; white-space: nowrap; color: var(--info); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .gpCh .gpChS { grid-row: 1; grid-column: 4; font-size: 10px; font-weight: 700; white-space: nowrap; }
+  .gpCh.pass .gpChS { color: var(--pass); } .gpCh.fail .gpChS { color: var(--fail); } .gpCh.warn .gpChS { color: var(--warn); }
+  .gpCh .gpChV, .gpCh .gpChRef { grid-column: 1 / -1; display: none; padding-left: 16px; font-size: 10.5px; color: var(--text-dim); overflow-wrap: anywhere; }
+  .gpCh .gpChRef { font-style: italic; color: var(--muted); }
+  .gpCh.gpOpen .gpChV, .gpCh.gpOpen .gpChRef { display: block; }
+  .gpCh.gpOpen .gpChN { white-space: normal; }
+  .gpDMsg { font-size: 11.5px; padding: 6px 8px; border: 1px solid var(--fail); background: var(--fail-dim); color: var(--fail); border-radius: 3px; }
+  body.gpDashWide.gpDashColl #gpDashCol { flex-basis: 42px; width: 42px; padding: 0; }
+  body.gpDashWide.gpDashColl #gpDash { display: none; }
+  body.gpDashWide.gpDashColl #gpDashHead { flex-direction: column; align-items: center; }
+  body.gpDashWide.gpDashColl #gpDashTtl { writing-mode: vertical-rl; transform: rotate(180deg); margin: 4px 0; white-space: nowrap; }
+  body.gpDashWide.gpDashColl #gpDashCnt { flex-direction: column; align-items: center; }
+  body.gpDashWide.gpDashColl #gpDashCnt span { font-size: 9px; padding: 1px 2px; white-space: normal; text-align: center; width: 36px; }
+}
+@media screen and (min-width: 1200px) and (max-width: 1499.98px) {
+  body.gpDashWide #gpDashCol { flex-basis: 240px; width: 240px; }
+  body.gpDashWide.gpDashColl #gpDashCol { flex-basis: 42px; width: 42px; }
+}
 .gpNL > .gpNLl { margin: 0 0 1px; }
 .gpNL > .gpNLu { margin: 3px 0 2px 18px !important; }
 .gpNL > .gpNLa { margin: 2px 0 5px; }
@@ -1217,6 +1263,10 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
 </header>
 <nav class="modbar" id="modbar" aria-label="Rating method"><div role="tablist"><span class="mgrp-l">Rating method</span><button type="button" role="tab" class="mtab" data-meth="both" aria-selected="false"><span class="mtab-l">LRFR + LFR</span><span class="mtab-s" data-s="both"></span></button><button type="button" role="tab" class="mtab" data-meth="lrfr" aria-selected="false"><span class="mtab-l">LRFR (MBE 6A)</span><span class="mtab-s" data-s="lrfr"></span></button><button type="button" role="tab" class="mtab" data-meth="lfr" aria-selected="false"><span class="mtab-l">LFR (MBE 6B)</span><span class="mtab-s" data-s="lfr"></span></button></div></nav>
 <div class="app" id="app">
+<aside id="gpDashCol" class="noprint" aria-label="Rating summary"><!-- GPLS (2026-11-08): the rating results as a left column on screens 1200 px and wider -->
+  <div id="gpDashHead"><button type="button" id="gpDashTgl" aria-controls="gpDash" aria-expanded="true">&laquo;</button><h2 id="gpDashTtl">Rating summary</h2><span id="gpDashCnt"></span></div>
+  <div id="gpDash"></div>
+</aside>
 <div class="side" id="side">
   <div class="itabs" role="tablist" id="itabs">
     <button type="button" role="tab" class="itab" data-pane="project">Project</button><button type="button" role="tab" class="itab" data-pane="plates">Plates</button><button type="button" role="tab" class="itab" data-pane="members">Members</button><button type="button" role="tab" class="itab" data-pane="forces">Forces</button><button type="button" role="tab" class="itab" data-pane="rating">Rating</button>
@@ -3306,8 +3356,8 @@ document.addEventListener('click', e => { const b = e.target.closest('[data-act]
 /* ---------- compute + render ---------- */
 function recompute() {
   R = GPR.compute(P);
-  if (R.errors.length) { renderErrors(); return; }
-  renderStatus(); updateAuto(); updateCaseSel(); drawPreview();
+  if (R.errors.length) { renderErrors(); gpDashRender(); return; }   /* GPLS: the left summary column */
+  renderStatus(); gpDashRender(); updateAuto(); updateCaseSel(); drawPreview();
   ['summary', 'drawing', 'checks', 'rating', 'params', 'validation'].forEach(t => DIRTY.add(t)); crMarkStale(); GP3D.markDirty();
   renderTab(P.ui.otab);
 }
@@ -3547,6 +3597,61 @@ document.addEventListener('click', e => { const g = e.target.closest('[data-goad
 document.addEventListener('click', e => { const x = e.target.closest('[data-exp],[data-col]'); if (!x) return; const t = x.dataset.exp || x.dataset.col; $$(`#tab-${t} .cc`).forEach(c => { if (x.dataset.exp) delete P.ui.col[c.id]; else P.ui.col[c.id] = true; }); applyCollapse(); autosave(); });
 document.addEventListener('click', e => { const h = e.target.closest('.cc-hd'); if (h) { const id = h.dataset.cc; P.ui.col[id] = !P.ui.col[id]; applyCollapse(); autosave(); return; }
   const s = e.target.closest('.sec-hd'); if (s) { const id = 'in-' + s.dataset.target; P.ui.col[id] = !P.ui.col[id]; applyCollapse(); autosave(); } });
+
+/* GPLS (2026-11-08, engineer: the left summary panel, as Retaining Wall / Spread Footing / Light Pole / Shear and Moment Diagrams;
+   RWDL, RWLB, SFLB, LPLB, SMLS): on screens >= 1200 px one chip per rating case (governing RF, R.gov, as the status bar), per member
+   or plane (its lowest RF over the rating cases, from the same per-case loop as the Summary table "Governing rating factor by member
+   or plane") and per advisory check (advItems, as the Summary "Advisory checks" card). Nothing new is computed. The expand button
+   shows the per-case values; a click opens the Checks tab card that works the value (gotoCheck / the advisory card). Collapse state:
+   per-browser UI key gussetRating.dashCollapsed.v1 ('1' = collapsed); not in the project, the autosave or the export. */
+const GPDD = { key: 'gussetRating.dashCollapsed.v1', mq: window.matchMedia ? window.matchMedia('screen and (min-width: 1200px)') : null, open: new Map(), coll: false };
+try { GPDD.coll = localStorage.getItem(GPDD.key) === '1'; } catch (e) {}
+function gpDashItems() {
+  const H = t => ({ h: t }), out = [H('Rating cases')], ST = r => r == null ? 'na' : r.err ? 'fail' : rfCls(r.RF), SS = r => r == null ? '' : r.err ? 'ERROR' : r.RF < 1 - 1e-9 ? 'NG' : 'OK';
+  R.cases.forEach((c, j) => { const g = R.gov[j], inc = govInc(g);
+    out.push({ n: `${esc(c.meth.toUpperCase())} ${esc(c.lvl)}, ${esc(c.name)}`, v: g ? (inc ? 'incomplete' : `RF ${govTxt(g)}`) : '—', st: g ? (inc ? 'fail' : ST(g.r)) : 'na', s: g ? (inc ? 'ERROR' : SS(g.r)) : '',
+      d: g ? (inc ? `Could not be computed: ${esc(govIds(g))}` : `Governing: ${esc(g.c.id)} (${esc(g.c.title)})`) : 'No live load effect to rate', go: g ? (inc ? g.inc[0].c.id : g.c.id) : '', ref: g ? 'Checks' : '' }); });
+  out.push(H('Members and planes'));
+  [...new Set(R.checks.map(c => c.who))].forEach(w => { const cs = R.checks.filter(c => c.who === w && !c.na); if (!cs.length) return;
+    const per = R.cases.map((cc, j) => { let b = null; cs.forEach(c => { const r = c.rf[j]; if (!r || (b && b.r.err)) return; if (r.err || !b || r.RF < b.r.RF) b = { r, c }; }); return b; });   /* as the Summary table */
+    let lo = null; per.forEach(b => { if (!b || (lo && lo.r.err)) return; if (b.r.err || !lo || b.r.RF < lo.r.RF) lo = b; });
+    out.push({ n: esc(w), v: lo ? (lo.r.err ? 'error' : `RF ${f2(lo.r.RF)}`) : '—', st: lo ? ST(lo.r) : 'na', s: lo ? SS(lo.r) : '',
+      d: per.map((b, j) => b ? `${esc(R.cases[j].label)}: ${rTxt(b.r)} (${esc(b.c.id)})` : '').filter(Boolean).join('<br>'), go: lo ? lo.c.id : '', ref: lo ? 'Checks' : '' }); });
+  const A = advItems(); if (A.length) { out.push(H('Advisory (not in the RF)'));
+    A.forEach(a => out.push({ n: esc(a.title), v: a.ratio != null ? f2(a.ratio) : a.flag ? `${a.flag} flagged` : '—', st: (a.ratio > 1 + 1e-9 || a.flag) ? 'warn' : 'na', s: 'ADV', d: advLine(a), adv: a.id, ref: 'Checks, advisory checks' })); }
+  return out;
+}
+function gpDashRender() {
+  const box = $('#gpDash'), cnt = $('#gpDashCnt'); if (!box) return; box.innerHTML = '';
+  if (!R || R.errors.length) { box.innerHTML = `<div class="gpDMsg">No results: input error${R && R.errors.length > 1 ? 's' : ''}. See the Summary tab.</div>`; if (cnt) cnt.innerHTML = ''; return; }
+  const n = { fail: 0 }, plain = h => { const t = document.createElement('div'); t.innerHTML = h || ''; return t.textContent; };
+  let sec = '';
+  gpDashItems().forEach(it => {
+    if (it.h) { sec = it.h; const d = document.createElement('div'); d.className = 'gpDashH'; d.textContent = it.h; box.appendChild(d); return; }
+    if (it.st === 'fail' && sec === 'Rating cases') n.fail++;
+    const c = document.createElement('div'); c.className = 'gpCh ' + it.st; c.tabIndex = 0; c.setAttribute('role', 'button');
+    const key = sec + '|' + plain(it.n);
+    c.innerHTML = `<button type="button" class="gpChX" title="Show the values and where they are worked"${it.d ? '' : ' disabled'}></button><span class="gpChN">${it.n}</span><span class="gpChR">${it.v}</span><span class="gpChS">${it.s || ''}</span>`
+      + (it.d ? `<div class="gpChV">${it.d}</div>` : '') + (it.ref ? `<div class="gpChRef">→ ${it.ref}${it.go ? ' · ' + esc(it.go) : ''}</div>` : '');
+    c.title = plain(it.n) + ': ' + plain(it.v) + (it.d ? '\n' + plain(it.d.replace(/<br>/g, '\n')) : '') + (it.ref ? '\nClick: → ' + it.ref : '');
+    const x = c.querySelector('.gpChX'), setOpen = o => { c.classList.toggle('gpOpen', o); x.setAttribute('aria-expanded', o ? 'true' : 'false'); x.textContent = it.d ? (o ? '▾' : '▸') : ''; };
+    setOpen(GPDD.open.has(key) ? GPDD.open.get(key) : it.st === 'fail');   /* NG / error lines open by default, as in the other tools */
+    x.addEventListener('click', ev => { ev.preventDefault(); ev.stopPropagation(); const o = !c.classList.contains('gpOpen'); GPDD.open.set(key, o); setOpen(o); });
+    const go = () => { if (it.go) gotoCheck(it.go); else if (it.adv) { setOTab('checks'); delete P.ui.col[it.adv]; applyCollapse(); setTimeout(() => document.getElementById(it.adv)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80); } };   /* as [data-goadv] */
+    if (it.go || it.adv) { c.addEventListener('click', go); c.addEventListener('keydown', ev => { if (ev.target !== c) return; if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); go(); } }); }
+    box.appendChild(c);
+  });
+  if (cnt) cnt.innerHTML = n.fail ? `<span class="gpCf">${n.fail} NG</span>` : '<span class="gpCp">no NG</span>';
+}
+function gpDashPlace() { document.body.classList.toggle('gpDashWide', !!(GPDD.mq && GPDD.mq.matches)); gpDashColl(GPDD.coll, false); }
+function gpDashColl(v, save) {
+  GPDD.coll = !!v; document.body.classList.toggle('gpDashColl', GPDD.coll); const t = $('#gpDashTgl');
+  if (t) { t.setAttribute('aria-expanded', GPDD.coll ? 'false' : 'true'); t.innerHTML = GPDD.coll ? '&raquo;' : '&laquo;'; t.title = GPDD.coll ? 'Show the rating summary column (remembered in this browser)' : 'Shrink the rating summary column (remembered in this browser)'; }
+  if (save) { try { localStorage.setItem(GPDD.key, GPDD.coll ? '1' : '0'); } catch (e) {} requestAnimationFrame(() => window.dispatchEvent(new Event('resize'))); }
+}
+(function () { const t = $('#gpDashTgl'); if (t) t.addEventListener('click', () => gpDashColl(!GPDD.coll, true));
+  if (GPDD.mq) { if (GPDD.mq.addEventListener) GPDD.mq.addEventListener('change', gpDashPlace); else if (GPDD.mq.addListener) GPDD.mq.addListener(gpDashPlace); }
+  gpDashPlace(); })();
 
 /* ---------- rating matrix ---------- */
 function ratingMatrix(forReport) {
