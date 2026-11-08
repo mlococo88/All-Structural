@@ -88,7 +88,7 @@ test('live: auto-save path — an unchanged file text is not uploaded again (no 
   A.store.save('Pier 3', { B: 11 }); assert.equal(A.e.scan(), 1); await A.e.flush(); assert.equal(puts(gh).length, 2);
 });
 
-test('live: poll — same / changed / both / gone / none / held; the tree is reused for 25 s; backoff is respected', async () => {
+test('live: poll — same / changed / both / gone / none / held; the tree is reused for 24 s; backoff is respected', async () => {
   const gh = makeGitHubMock(); gh.clock = () => A.t.v; const A = device(gh, 'Laptop');
   A.e.scan(); A.store.save('J', { a: 1 }); A.e.scan(); await A.e.flush();
   const t0 = trees(gh).length;

@@ -567,7 +567,7 @@
       if (!po.force && now() < nextTry) return { ok: true, waiting: true };
       if (!store.has(name)) return { ok: false, kind: 'missing' };
       init();
-      const t = await treeOf(client(S(), o.fetch), po.maxAge == null ? 25000 : po.maxAge);
+      const t = await treeOf(client(S(), o.fetch), po.maxAge == null ? LIVE.poll * 0.8 : po.maxAge);   // 24 s
       if (!t.ok) { failed(t); return t; }
       if (err && (err.kind === 'offline' || err.kind === 'rate')) { err = null; backoff = 0; nextTry = 0; }   // reachable again
       const path = pathOf(name), cs = t.files.get(path) || null, v = st() || { base: {}, conflicts: {} }, b = v.base[name] || null, l = localSha(name);
@@ -653,12 +653,12 @@
       return out;
     }
     /* others(name, po): the fresh heartbeats of other devices (before opening a project): the tree reused when younger than po.maxAge
-       (default 30 s). -> { ok, list } */
+       (default LIVE.poll, 30 s). -> { ok, list } */
     async function others(name, po) {
       po = po || {};
       if (!configured_() || !live(storage).watch) return { ok: true, list: [] };
       if (now() < nextTry) return { ok: true, list: [], waiting: true };
-      const t = await treeOf(client(S(), o.fetch), po.maxAge == null ? 30000 : po.maxAge); if (!t.ok) return t;
+      const t = await treeOf(client(S(), o.fetch), po.maxAge == null ? LIVE.poll : po.maxAge); if (!t.ok) return t;
       return { ok: true, list: (await presenceOf(name, t.files)).filter(x => x.fresh) };
     }
     function pst() { const v = readJSON(storage, PKEY); return v && v.v === 1 && v.files && typeof v.files === 'object' ? v : { v: 1, files: {} }; }
