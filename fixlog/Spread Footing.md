@@ -7433,7 +7433,7 @@ index 50f3837..c2d5000 100644
   - Tests: check-syntax, phone-layout --tool sf, project-library --tool spreadfooting, spread-footing-nobear: pass.
 - **Other copies:** none.
 
-## 2026-11-08 — PR: claude/nl-sf (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SFNL-4) — Report: the dowel development note (step p<i>.Lftg) as a bold lead and a list   [DISPLAY ONLY; no computed value changes]
+## 2026-11-08 — PR: claude/nl-sf (PR #1249: https://github.com/mlococo88/All-Structural/pull/1249) (SFNL-4) — Report: the dowel development note (step p<i>.Lftg) as a bold lead and a list   [DISPLAY ONLY; no computed value changes]
 ### SFNL-4. Footing-side dowel development step: list note   [display only] [no result change]
 - **Request:** the open item of `fixlog/shared-steps.md` / `fixlog/shared-report.md` (SNL, PR #1240): Spread Footing step note `p0.Lftg` (359 characters in the default project: the ψ factors of the hooked dowel development length, the 25.4.10 statement, the available length) was one italic line. SNL made a step's note a list note `{ lead, items: [[lead, text] | text, …], action? }` (shared/steps.js), drawn by shared/report.js as a bold lead and bullets.
 - **Where:**
