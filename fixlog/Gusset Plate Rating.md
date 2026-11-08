@@ -3308,3 +3308,55 @@ From the code-compliance review of 2026-11-07 (LOW findings L3 to L7).
 - Default project, origin/main vs this branch, headless: the Report's rendered text (`.rp-doc` textContent) and the page text are identical.
 ### How verified
 - `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`; the headless comparison listed in the PR.
+
+## 2026-11-08 — PR: nl-gusset-a (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — GPNL-1: long Method notes as a bold lead and a list (Method tab and Report appendix; display only, no result change)
+
+### GPNL-1. Method tab: long paragraphs and items split into a lead and a list   [display only] [no result change]
+- **Request (engineer, 2026-11-07/08):** "there are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Part 1 of 2 for this tool (the Method tab, which is also the Report appendix "Appendix: method"). The other tabs, the warnings and the Report front matter follow in GPNL-2.
+- **Rule used:** a note is long if it is over ~300 characters, has 3 or more sentences, or carries several facts in one paragraph. It becomes a one-line lead (the first sentence, as before), then a sub-list (`<ul class="gpNLu">`) with bold lead words. Every sentence, number, citation, badge and link is kept, in the same order; only the lead words, list-start capitals and end punctuation are new. New lead words carry no digits, so the digit sequence of the page and the Report is unchanged.
+- **CSS** (after `.man-part li { margin: 3px 0; }`), tool-scoped, no new colours:
+  ```css
+  .gpNLl { font-weight: 600; margin: 6px 0 2px; }
+  .gpNLu { margin: 2px 0 6px 20px !important; padding-left: 0; }
+  .gpNLu > li { margin: 2px 0; }
+  .gpNLa { margin: 4px 0 4px; }
+  @media print { .gpNLu > li { break-inside: avoid; } }
+  ```
+- **Report walker** (`gprItems`, anchor `if (tag === 'UL' || tag === 'OL') { flush();`). Before: each `<li>` became one note `'• ' + gprInline(li)` (a nested list would have been run into the item's text). After: an item with a nested `UL`/`OL` or an action line `.gpNLa` gives the item's own text (`'• …'`, as before), the action line as a warning note, then one note `'◦ ' + text` per sub-item. An item with neither is unchanged (same object, same text).
+  ```js
+  const subs = [...li.children].filter(k => /^(UL|OL)$/.test(k.tagName)), acts = [...li.children].filter(k => k.classList.contains('gpNLa')), own = subs.length || acts.length ? li.cloneNode(true) : li;
+  if (own !== li) [...own.children].forEach(k => { if (/^(UL|OL)$/.test(k.tagName) || k.classList.contains('gpNLa')) k.remove(); });
+  const t = gprClean(gprInline(own)); if (t) push({ type: 'note', text: (tag === 'OL' ? (i + 1) + '. ' : '• ') + t });
+  acts.forEach(a => { const x = gprClean(gprInline(a)); if (x) push({ type: 'note', text: x, warn: true }); });
+  subs.forEach(u => [...u.children].forEach(q => { const x = gprClean(gprInline(q)); if (x) push({ type: 'note', text: '◦ ' + x }); }));
+  ```
+- **Notes changed** (`methodHtml`; anchor = the old opening text → lead → item lead words). Exact before / after: the PR diff.
+  1. Geometry, "Whitmore section: lines at θW" → Adjacent members / Net width.
+  2. Geometry, "Lmid: three lengths are measured" (2,260 characters) → action line "Decision pending engineer review: the LRFR length is taken from the middle of the Whitmore section by default." (new wording, no digits; the original "decision pending engineer review" stays in the LRFR item) → LRFR / LFR / Continuous chord / Whitmore end clipped at the plate edge / Plate not continuing toward the WP / Along a plate edge / Warning / Orientation. Both engineer badges kept at the end of their items.
+  3. Geometry, "Shear planes (full-width planes" → Lengths / Demand.
+  4. Custom patterns intro "A member's fasteners are either a grid" → lead "… a grid (…) or custom." → Custom / Rows and gage lines / Limit states.
+  5. Custom, "Bearing: for each hole" → Staggered holes.
+  6. Custom, "Whitmore section: spread at θW" (1,502 characters; the `<br>` paragraph is now an item) → Warning / Far row of a staggered pattern (rule C11 …) / Spread of a staggered far row / Otherwise / Row nearest the WP / Long-joint length.
+  7. Custom, "Staggered holes (s²/4g" → Path search / Other rows / Whitmore / Partial shear planes / Each net length.
+  8. Custom, "Block shear: tension plane across the row nearest the WP between the outer holes" → Net lengths / No hole at a corner.
+  9. Custom, "Inputs and warnings:" → Errors / Warnings only / Conversion.
+  10. Custom, "Saved data and older copies" → Custom member / Project files.
+  11. "Summing the two plates" → lead "Member forces are entered for the whole joint (both gusset plates)." → Plate resistances / Fastener shear / Assumption.
+  12. "Continuous chord" → Checked / Not applicable.
+  13. "Chord spliced at the joint" paragraph → Splice section / Splice line / No splice plates entered.
+  14. Splice "Demand:" → Each load column / V and M / Eccentricity.
+  15. Splice "Compression (SPL-C):" → Fcr / Least-certain parameters / Whitmore buckling.
+  16. Splice "Tension (SPL-TY, SPL-TF" → Splice line / Net section / Fy, Fu / Shear lag / Earlier form.
+  17. Advisory "Combined actions on a plane" → Shear with normal force / With moment / Resistances.
+  18. Advisory "Free-edge slenderness (O3)" → Status / Free edge.
+  19. "Rating" paragraph → new lead "The rating factor of each limit state, by method:" → LRFR / LRFR resistance factors for the gusset plate / LFR / Live load direction / Dead load opposite to the live load effect / Concurrency.
+  20. "CAD (DXF) exchange" paragraph → lead "Members tab, “CAD (DXF)”: download a template, export the current model, or import a DXF." → Templates / Files / Not read.
+  21. "GP-M<n>-WL" → Angle / Without it.
+  22. "GP-M<n>-BOLT" → Grouping / Regular grid / Custom member / Fastener diameter.
+  23. "GP-DATA" → Keys / Per member / Unknown keys and invalid values.
+  24. "Import shows the current model" → new lead "Import:" → Shows / Apply / Members / Undo import.
+- **Not changed here:** the `VERIFY_NOTE` paragraph at the top of the Method tab (a constant also used on the Project, Code parameters and Report pages: GPNL-2); "Not included in Phase 1" (already a list); items under ~300 characters with one or two facts.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none.
+- **Check case:** default project, Method tab, the Lmid item: before one 2,260-character paragraph; after the lead "Lmid: three lengths are measured … or the plate edge.", the action line and eight bullets; "K = 0.5", "K = 1.2", "2026-11-07, H2" and both badges unchanged. Report appendix: the same lead as a "• " line, the action line as a warning note, then eight "◦ " lines.
+- **How verified:** headless Chromium, origin/main vs the branch, 11 cases (default; validation model; templates t2h heel joint, t5u upper chord and t4v with forces; a custom hole pattern; bolt slip on; LFR only; LRFR only; section loss; Lmid average): `R` (errors, warnings, checks, governing, advisory, equilibrium) identical; the digit sequence of every output tab, every input pane, the status bar and the Report model identical; only the Method tab text changed. Validation 17 of 17. 0 console errors. `check-syntax`, `phone-layout --tool gusset`, `project-library --tool gusset` pass. Screenshots at 1440 and 390 px.
+- **Other copies:** none.
