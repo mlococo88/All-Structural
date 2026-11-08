@@ -66,6 +66,51 @@ body{font-family:var(--font-doc);font-size:10pt;color:var(--ink);background:#efe
 #main{flex:1 1 auto;display:flex;min-height:0;overflow:hidden}
 #inputPanel{flex:0 0 33%;max-width:450px;min-width:330px;overflow-y:auto;border-right:2px solid var(--line);background:var(--panel);padding:9px 10px 40px}
 #outputPanel{flex:1 1 auto;min-width:0;overflow-y:auto;overflow-x:hidden;padding:0 14px 60px;background:var(--paper)}
+/* SPLS (2026-11-08, engineer: the left summary panel of Retaining Wall, Spread Footing, Light Pole and Shear and Moment Diagrams —
+   RWDL #959, RWLB #984, SFLB #988, LPLB #991, SMLS #1130): on screens 1200 px and wider a left column (#spcDashCol, 240 px up to
+   1499 px, 280 px from 1500 px) lists the key results as compact chips; a click opens the card that works the value. « shrinks it to
+   a 42 px strip. Below 1200 px nothing changes. Screen only (print prints the Report). */
+#spcDashCol{display:none}
+@media print{#spcDashCol{display:none!important}}
+@media screen and (min-width:1200px){
+ body.spcDashWide #spcDashCol{display:block;flex:0 0 280px;width:280px;min-width:0;overflow-y:auto;overflow-x:hidden;background:var(--panel);border-right:2px solid var(--line);padding:0 8px 24px;overscroll-behavior:contain;font-family:var(--font-ui)}
+ #spcDashHead{position:sticky;top:0;z-index:3;background:var(--panel);display:flex;align-items:center;gap:4px 8px;flex-wrap:wrap;padding:8px 0 4px}
+ #spcDashTtl{margin:0;font-size:8pt;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.08em}
+ #spcDashTgl{margin:0;padding:1px 7px;font-size:9pt;border:1px solid var(--line);background:var(--paper);border-radius:5px;cursor:pointer;color:#475569}
+ #spcDashCnt{display:inline-flex;gap:4px;flex-wrap:wrap}
+ #spcDashCnt span{font-size:7.5pt;font-weight:700;padding:1px 5px;border:1px solid;border-radius:3px;white-space:nowrap}
+ #spcDashCnt .spcCf{color:#991B1B;background:#FEF2F2;border-color:var(--fail)}
+ #spcDashCnt .spcCw{color:#92400E;background:#FFFBEB;border-color:var(--warn)}
+ #spcDashCnt .spcCp{color:#065F46;background:#ECFDF5;border-color:var(--pass)}
+ #spcDashSub{font-size:8pt;color:#6B7A8F;margin:0 0 6px;overflow-wrap:anywhere}
+ #spcDash{display:grid;grid-template-columns:minmax(0,1fr);gap:3px;align-items:start}
+ .spcCh{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;column-gap:5px;padding:3px 6px 3px 2px;min-width:0;
+   border:1px solid var(--slate-400);border-radius:3px;background:var(--slate-50);font-size:8.5pt;line-height:1.35;cursor:pointer;color:var(--ink)}
+ .spcCh:focus-visible{outline:2px solid var(--blue-600);outline-offset:-1px}
+ .spcCh.pass{border-color:var(--pass);background:#ECFDF5}.spcCh.fail{border-color:var(--fail);background:#FEF2F2}.spcCh.warn{border-color:var(--warn);background:#FFFBEB}
+ .spcCh.na:hover{background:var(--slate-100)}.spcCh.pass:hover{background:#D1FAE5}.spcCh.fail:hover{background:#FEE2E2}.spcCh.warn:hover{background:#FEF3C7}
+ .spcCh .spcChX{grid-row:1;grid-column:1;margin:0;padding:0 3px;border:none;background:transparent;font-size:7pt;color:#334155;line-height:1.2;cursor:pointer}
+ .spcCh .spcChX:disabled{visibility:hidden}
+ .spcCh .spcChN{grid-row:1;grid-column:2;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .spcCh .spcChR{grid-row:1;grid-column:3;white-space:nowrap;color:#1E40AF;font-weight:600;font-variant-numeric:tabular-nums}
+ .spcCh .spcChS{grid-row:1;grid-column:4;font-size:7.5pt;font-weight:700;white-space:nowrap}
+ .spcCh.pass .spcChS{color:var(--pass)}.spcCh.fail .spcChS{color:var(--fail)}.spcCh.warn .spcChS{color:var(--warn)}
+ .spcCh .spcChV,.spcCh .spcChRef{grid-column:1/-1;display:none;padding-left:16px;font-size:8pt;color:#475569;overflow-wrap:anywhere}
+ .spcCh .spcChRef{font-style:italic;color:#6B7A8F}
+ .spcCh.spcOpen .spcChV,.spcCh.spcOpen .spcChRef{display:block}
+ .spcCh.spcOpen .spcChN{white-space:normal}
+ .spcDMsg{font-size:8.5pt;padding:6px 8px;border:1px solid #FDA4AF;background:#FFF1F2;color:#9F1239;border-radius:3px}
+ body.spcDashWide.spcDashColl #spcDashCol{flex-basis:42px;width:42px;padding:0}
+ body.spcDashWide.spcDashColl #spcDash,body.spcDashWide.spcDashColl #spcDashSub{display:none}
+ body.spcDashWide.spcDashColl #spcDashHead{flex-direction:column;align-items:center}
+ body.spcDashWide.spcDashColl #spcDashTtl{writing-mode:vertical-rl;transform:rotate(180deg);margin:4px 0;white-space:nowrap}
+ body.spcDashWide.spcDashColl #spcDashCnt{flex-direction:column;align-items:center}
+ body.spcDashWide.spcDashColl #spcDashCnt span{font-size:7pt;padding:1px 2px;white-space:normal;text-align:center;width:36px}
+}
+@media screen and (min-width:1200px) and (max-width:1499.98px){
+ body.spcDashWide #spcDashCol{flex-basis:240px;width:240px}
+ body.spcDashWide.spcDashColl #spcDashCol{flex-basis:42px;width:42px}
+}
 #tabBar{position:sticky;top:0;z-index:15;background:var(--paper);border-bottom:2px solid var(--accent);padding:7px 0 0;display:flex;flex-wrap:wrap;gap:2px}
 #tabBar button{display:inline-flex;align-items:center;font-family:var(--font-ui);font-size:9pt;padding:5px 11px;border:1px solid var(--line);border-bottom:none;background:var(--slate-100);color:#41546E;cursor:pointer;border-radius:5px 5px 0 0}
 #tabBar button.active{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
@@ -327,6 +372,11 @@ table.plist button{font-size:8pt;padding:0 5px;border:1px solid #C6CFDA;backgrou
   </div>
   <div id="govStrip" class="govStrip"></div>
   <div id="main">
+    <aside id="spcDashCol" aria-label="Results summary"><!-- SPLS (2026-11-08): key results as a left column on screens 1200 px and wider -->
+      <div id="spcDashHead"><button type="button" id="spcDashTgl" aria-controls="spcDash" aria-expanded="true">&laquo;</button><h2 id="spcDashTtl">Results summary</h2><span id="spcDashCnt"></span></div>
+      <div id="spcDashSub"></div>
+      <div id="spcDash"></div>
+    </aside>
     <div id="inputPanel"><div id="prjPane"><!-- SPHD (2026-11-05): moved here from the header; kept across rebuilds by rebuildInputs() (first in the Project tab) -->
       <div class="sec"><div class="secHead"><span class="secTitle">Save and open</span></div><div class="secBody" id="spcSaveCard"></div></div><!-- STDS (2026-11-06): the standard "Save and open" card (shared/projects-ui.js projectBar, SPCPL.pb); it replaces the "Saved projects (this browser)" section and takes the Project file buttons -->
       <div class="sec"><div class="secHead"><span class="secTitle">Title block</span></div><div class="secBody">
@@ -5693,7 +5743,7 @@ const OUT_TABS = [['sec', 'Section'], ['props', 'Properties'], ['calc', 'Calc de
 const SPX = { tab: null, back: null };   // SPRX: the Report shown for printing from another tab (not saved; M.ui.outTab unchanged)
 function curTab() { if (SPX.tab) return SPX.tab; const t = M.ui.outTab; return OUT_TABS.some(x => x[0] === t) ? t : 'sec'; }
 function setOutTab(id) { if (curTab() === id) return; M.ui.outTab = id; autosave(); buildTabBar(); renderTab(); }
-function renderOutput(light) { buildGovStrip(); if (!light) buildTabBar(); renderTab(light); inputTabMarks(); updateToolState(); }
+function renderOutput(light) { buildGovStrip(); if (!light) buildTabBar(); renderTab(light); inputTabMarks(); updateToolState(); spcDashRender(); }
 function buildTabBar() {
   const bar = $('tabBar'); bar.innerHTML = ''; const cur = curTab();
   OUT_TABS.forEach(([id, lab]) => {
@@ -5746,6 +5796,85 @@ function spcGoto(card) {
   else s.scrollIntoView({ block: 'start' });
   s.classList.add('wkFlash'); setTimeout(() => s.classList.remove('wkFlash'), 1600);
 }
+/* SPLS (2026-11-08, engineer: the left summary panel, as Retaining Wall / Spread Footing / Light Pole / Shear and Moment Diagrams;
+   RWDL, RWLB, SFLB, LPLB, SMLS): on screens >= 1200 px the key results show as one chip each in #spcDashCol: the Section-tab
+   key properties (same labels, values and formatting as the tiles of buildSecSummary), the connector D/C of the Q & shear flow tab
+   (the same value and OK / NG rule as its table), the Validation tab result and the warning counts. A chip click opens the card or tab
+   that works the value (spcGoto, the D11 "Worked in" targets). No new calculation. Collapse state: per-browser UI key
+   spc_dashCollapsed_v1 ('1' = collapsed); not in the project, the autosave or the export. Below 1200 px nothing changes. */
+const SPCD = { key: 'spc_dashCollapsed_v1', mq: window.matchMedia ? window.matchMedia('screen and (min-width:1200px)') : null, open: new Map(), coll: false, wide: null };
+try { SPCD.coll = localStorage.getItem(SPCD.key) === '1'; } catch (e) { }
+function spcDashItems() {
+  const T = R.tors || {}, it = [], vu = (x, k, na) => isNum(x) ? esc(nf(x, k)) + ' ' + esc(un(k)) : (na || 'n/a');
+  const P = (n, v, c, o) => it.push(Object.assign({ n, v, st: 'na', c }, o || {}));
+  if (R.warnings.length) P('Check the model', R.warnings.length + ' warning' + (R.warnings.length > 1 ? 's' : ''), null, { st: 'warn', s: '', tab: 'sec', d: R.warnings.map(esc).join('<br>'), to: 'Section · Check the model' });
+  P('A' + (R.anyN ? ' (transformed)' : ''), vu(R.A, 'A'), 'cTab'); P('x̄ (from origin)', vu(R.cx, 'L'), 'cCen'); P('ȳ (from origin)', vu(R.cy, 'L'), 'cCen');
+  P('I<sub>x</sub>', vu(R.Ix, 'I'), 'cI'); P('I<sub>y</sub>', vu(R.Iy, 'I'), 'cI'); P('I<sub>xy</sub>', vu(R.Ixy, 'I'), 'cI');
+  P('I<sub>1</sub> (major)', vu(R.I1, 'I'), 'cP'); P('I<sub>2</sub> (minor)', vu(R.I2, 'I'), 'cP'); P('θ<sub>p</sub> (x → axis 1, CCW)', ang(R.thp), 'cP');
+  P('S<sub>x</sub> top', vu(R.Sxt, 'S'), 'cI'); P('S<sub>x</sub> bottom', vu(R.Sxb, 'S'), 'cI'); P('S<sub>y</sub> left / right', vu(Math.min(R.Syl, R.Syr), 'S'), 'cI', { d: 'smaller of the two' });
+  P('Z<sub>x</sub>', vu(R.Zx, 'S'), 'plZx'); P('Z<sub>y</sub>', vu(R.Zy, 'S'), 'plZy');
+  P('r<sub>x</sub>', vu(R.rx, 'L'), 'cI'); P('r<sub>y</sub>', vu(R.ry, 'L'), 'cI'); P('r<sub>min</sub> (principal)', vu(R.r2, 'L'), 'cP');
+  P('J', vu(T.J, 'I'), 'tJ', { d: (T.J !== null ? (T.Jn ? 'transformed Σ n·J, thin-wall' : 'thin-wall') + (T.jHigh ? '; may be high, see Torsion' : '') : '') + (isNum(T.J) ? '' : esc(T.why || '')), st: T.jHigh ? 'warn' : 'na', s: T.jHigh ? 'check' : '' });
+  P('C<sub>w</sub>', vu(T.Cw, 'W'), 'tCw', { d: isNum(T.Cw) ? '' : esc(T.cwWhy || '') });
+  P('x<sub>o</sub>, y<sub>o</sub> (shear centre)', T.sc ? esc(nf(T.xo, 'L')) + ', ' + esc(nf(T.yo, 'L')) + ' ' + esc(un('L')) : 'n/a', 'tCw', { d: 'from the centroid' });
+  if ((T.warn || []).length) P('Torsion warnings', T.warn.length + '', 'tJ', { st: 'warn', s: '', d: T.warn.map(esc).join('<br>') });
+  let S = null;   /* connector D/C: the Q & shear flow table's value and OK / NG rule (cs.dc <= 1); computed only when a connector is entered, not cached on R */
+  if (Object.values((M.sf && M.sf.conn) || {}).some(q => q && q.type && q.type !== 'none')) { try { S = (R._x && R._x.sf) || SPC.shearFlow(R, M.settings.tol); } catch (e) { S = null; } }
+  if (S && S.ok) S.contacts.forEach((c, i) => { const v = sfVal(c), cs = connSummary(c, v); if (isNum(cs.dc)) P('#' + (i + 1) + ' ' + esc(c.la + ' — ' + c.lb), 'D/C ' + esc(nf(cs.dc, 'n', 3)), null, { st: cs.dc <= 1 ? 'pass' : 'fail', tab: 'q', sec: 'sfTab', key: c.key, d: esc(cs.txt), to: 'Q & shear flow · Shear flow q at each connection' }); });
+  const ok = valSummary(); if (VAL) P('Validation', VAL.filter(v => v.ok).length + ' / ' + VAL.length, null, { st: ok ? 'pass' : 'fail', s: ok ? 'pass' : 'FAIL', tab: 'val', to: 'Validation' });
+  return it;
+}
+function spcDashGo(it) {
+  if (it.c) { spcGoto(it.c); return; }
+  if (it.key) SFSEL = it.key;
+  if (it.sec) COLL[it.sec] = false;
+  M.ui.outTab = it.tab; autosave(); buildTabBar(); renderTab();
+  const op = $('outputPanel'); op.scrollTop = 0;
+  const s = it.sec && document.querySelector('#tabPages [data-secid="' + it.sec + '"]'); if (!s) return;
+  s.classList.remove('collapsed'); op.scrollTop += s.getBoundingClientRect().top - op.getBoundingClientRect().top - $('tabBar').offsetHeight - 6;
+  s.classList.add('wkFlash'); setTimeout(() => s.classList.remove('wkFlash'), 1600);
+}
+function spcDashRender() {
+  const box = $('spcDash'), cnt = $('spcDashCnt'), sub = $('spcDashSub'); if (!box) return;
+  box.innerHTML = '';
+  if (!R || !R.ok) { box.innerHTML = '<div class="spcDMsg">No results: input required (see the message above the tabs).</div>'; cnt.innerHTML = ''; sub.textContent = ''; return; }
+  const items = spcDashItems(), n = { pass: 0, fail: 0, warn: 0 }, ST = { pass: 'OK', fail: 'NG', warn: '', na: '' };
+  const plain = h => { const t = document.createElement('div'); t.innerHTML = h || ''; return t.textContent; };
+  sub.textContent = M.parts.length + ' part' + (M.parts.length === 1 ? '' : 's') + ' · ' + (unitSys() === 'mm' ? 'units: mm, kN' : 'units: in, kip');
+  items.forEach(it => {
+    if (n[it.st] != null) n[it.st]++;
+    const to = it.to || (it.c ? spcCardTxt(it.c).replace(/<[^>]+>/g, '') : '');
+    const c = document.createElement('div'); c.className = 'spcCh ' + it.st; c.tabIndex = 0; c.setAttribute('role', 'button');
+    const key = plain(it.n);
+    c.innerHTML = `<button type="button" class="spcChX" title="Show the details and where the value is worked"></button><span class="spcChN">${it.n}</span><span class="spcChR">${it.v}</span><span class="spcChS">${it.s != null ? it.s : ST[it.st]}</span>`
+      + (it.d ? `<div class="spcChV">${it.d}</div>` : '') + `<div class="spcChRef">→ ${esc(to)}</div>`;
+    c.title = key + ': ' + plain(it.v) + (it.d ? '\n' + plain(String(it.d).replace(/<br>/g, '\n')) : '') + '\nClick: → ' + to;
+    const x = c.querySelector('.spcChX');
+    const setOpen = o => { c.classList.toggle('spcOpen', o); x.setAttribute('aria-expanded', o ? 'true' : 'false'); x.textContent = o ? '▾' : '▸'; };
+    setOpen(SPCD.open.has(key) ? SPCD.open.get(key) : (it.st === 'fail' || it.st === 'warn'));   /* NG and warning chips open by default, as in the other tools */
+    x.addEventListener('click', ev => { ev.preventDefault(); ev.stopPropagation(); const o = !c.classList.contains('spcOpen'); SPCD.open.set(key, o); setOpen(o); });
+    c.addEventListener('click', () => spcDashGo(it)); c.addEventListener('keydown', ev => { if (ev.target !== c) return; if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); spcDashGo(it); } });
+    box.appendChild(c);
+  });
+  cnt.innerHTML = (n.fail ? `<span class="spcCf">${n.fail} NG</span>` : '') + (n.warn ? `<span class="spcCw">${n.warn} warn</span>` : '') + (n.pass && !n.fail ? '<span class="spcCp">no NG</span>' : '');
+}
+function spcDashPlace() {
+  const wide = !!(SPCD.mq && SPCD.mq.matches), ch = SPCD.wide !== null && SPCD.wide !== wide; SPCD.wide = wide;
+  document.body.classList.toggle('spcDashWide', wide);
+  spcDashColl(SPCD.coll, false, ch);
+}
+function spcDashColl(v, save, redraw) {
+  SPCD.coll = !!v; document.body.classList.toggle('spcDashColl', SPCD.coll);
+  const t = $('spcDashTgl');
+  if (t) { t.setAttribute('aria-expanded', SPCD.coll ? 'false' : 'true'); t.innerHTML = SPCD.coll ? '&raquo;' : '&laquo;'; t.title = SPCD.coll ? 'Show the results summary column (remembered in this browser)' : 'Shrink the results summary column (remembered in this browser)'; }
+  if (save) { try { localStorage.setItem(SPCD.key, SPCD.coll ? '1' : '0'); } catch (e) { } }
+  if (save || redraw) requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));   /* the drawing column changed width: the canvas is redrawn */
+}
+(function () {
+  const t = $('spcDashTgl'); if (t) t.addEventListener('click', () => spcDashColl(!SPCD.coll, true));
+  if (SPCD.mq) { if (SPCD.mq.addEventListener) SPCD.mq.addEventListener('change', spcDashPlace); else if (SPCD.mq.addListener) SPCD.mq.addListener(spcDashPlace); }
+  spcDashPlace();
+})();
 document.addEventListener('click', e => { const a = e.target && e.target.closest ? e.target.closest('a.wkA') : null; if (!a || a.closest('#printReport')) return; e.preventDefault(); spcGoto(a.getAttribute('data-card')); });
 function warnPanel(parent) {
   if (!R || !R.ok) return;
