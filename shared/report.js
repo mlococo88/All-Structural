@@ -108,7 +108,7 @@
           else if (it.type === 'figure') scan(it.caption, w);
           else if (it.type === 'kv') (it.rows || []).forEach(r => { scan(r[0], w); scan(r[1], w); if (r[2]) note(r[2], w); });
           else if (it.type === 'table') { scan(it.caption, w); (it.head || []).forEach(c => cell(c, w)); (it.rows || []).forEach(r => (Array.isArray(r) ? r : r.cells).forEach(c => cell(c, w))); }
-          else if (it.type === 'steps') { scan(it.title, w); (it.steps || []).forEach(st => String(st.note || '').replace(SEE, (m, id) => { note(seeKey(doc, it, id), w); return m; })); }
+          else if (it.type === 'steps') { scan(it.title, w); (it.steps || []).forEach(st => noteSrc(st.note).replace(SEE, (m, id) => { note(seeKey(doc, it, id), w); return m; })); }
         });
       });
     });
@@ -126,6 +126,16 @@
   const noteOf = (doc, it, t, html, o) => { const ps = String(t).split(SEE);   // a note that already says "See §x" does not get the "see " of .rp-see in front a second time (class rp-seen)
     return ps.map((p, i) => i % 2 ? (a => html && /\bsee\s*$/i.test(ps[i - 1]) ? a.replace('class="rp-see"', 'class="rp-see rp-seen"') : a)(rich(doc, `[[${seeKey(doc, it, p)}]]`, html, o)) : html ? esc(p) : p).join(''); };
   const ref = (doc, key) => { const e = doc.index.get(key); return e ? '§' + e.n : null; };
+  /* SNL (2026-11-08): a step note may be a list note { lead, items: [[lead, text] | text, …], action? } (SharedSteps.noteParts). A string
+     note goes through exactly the code of before (one italic line .rp-nt; " (note)" after the step's line in the text). A list note:
+     screen and print, the action line(s) in warning style, the bold lead and a bullet list with bold lead words (each piece through
+     noteOf, so a "§id" in it is a link as before); text, the step's line without " (…)", then the note's lines indented (noteText). */
+  const NP = n => (n && typeof n === 'object' && ST().noteParts ? ST().noteParts(n) : null);
+  const noteSrc = n => { const P = NP(n); return P ? P.action.concat([P.lead], ...P.items).join('\n') : String(n || ''); };   // the note's text, for the "§id" scan of build()
+  const noteHtml = (doc, it, n) => { const P = NP(n), F = t => noteOf(doc, it, t, true); if (!P) return `<div class="rp-nt">${F(n)}</div>`;
+    return `<div class="rp-nt rp-ntl">${P.action.map(a => `<div class="rp-nta">${F(a)}</div>`).join('')}${P.lead ? `<div class="rp-ntb">${F(P.lead)}</div>` : ''}${P.items.length ? `<ul class="rp-ntu">${P.items.map(([l, t]) => `<li>${l ? `<b>${F(l)}</b>${t ? ST().noteSep(l) : ''}` : ''}${F(t)}</li>`).join('')}</ul>` : ''}</div>`; };
+  const noteTxt = (doc, it, n, o) => { const P = NP(n), F = t => noteOf(doc, it, t, false, o);   // list note only: its lines, indented under the step
+    return P.action.map(F).concat(P.lead ? [F(P.lead)] : [], P.items.map(([l, t]) => '• ' + (l ? F(l) + (t ? ST().noteSep(l) : '') : '') + F(t))).map(x => '    ' + x); };
 
   /* ---------- rich text: $tex$, [[key]], [[tab:name|text]] ----------
      Notation in running text, titles and table cells is set by SharedSteps' built-in renderer (subscripts, Greek, fractions in the
@@ -160,7 +170,7 @@
   function stepsHtml(doc, it) {
     const T = topAt(it);
     return (it.steps || []).map((s, i) => `${T.get(i) || ''}<div class="rp-step${s.ok === false ? ' rp-ng' : ''}" id="${it._anc[i]}"><div class="rp-d">${esc(s.label)}${s.ref ? `<span class="rp-ref">${esc(s.ref)}</span>` : ''}</div>
-      <div class="rp-m">${ST().line({ ...s, value: null, unit: '' }, true)}</div><div class="rp-r">${stepVal(s)}</div>${s.note ? `<div class="rp-nt">${noteOf(doc, it, s.note, true)}</div>` : ''}</div>`).join('');
+      <div class="rp-m">${ST().line({ ...s, value: null, unit: '' }, true)}</div><div class="rp-r">${stepVal(s)}</div>${s.note ? noteHtml(doc, it, s.note) : ''}</div>`).join('');
   }
   function cellHtml(doc, c, th) {
     const o = c && typeof c === 'object' ? c : { t: c }, tag = th ? 'th' : 'td', cl = [o.cls ? 'rp-' + o.cls : '', o.n ? 'rp-n' : ''].filter(Boolean).join(' ');
@@ -222,7 +232,7 @@
         (q.items || []).forEach(it => {
           if (it.topic) { const t = it.topic; L.push(`  ${t.no != null ? t.no + '. ' : ''}${t.title}${t.ref ? ' [' + t.ref + ']' : ''}${t.chip ? ' (' + t.chip + ')' : ''}${t.res ? ' — ' + SM(t) : ''}`); }
           if (it.type === 'steps') { if (it.title) L.push(T(it.title)); const tp = new Map(); { let j = 0; (it.topics || []).forEach((t, k) => { tp.set(j, `  ${k + 1}. ${t.title}${t.ref ? ' [' + t.ref + ']' : ''}${t.chip ? ' (' + t.chip + ')' : ''}${t.res ? ' — ' + SM(t) : ''}`); j += t.n; }); }
-            (it.steps || []).forEach((st, i) => { if (tp.has(i)) L.push(tp.get(i)); L.push(`  ${st.label}${st.ref ? ' [' + st.ref + ']' : ''}: ${ST().line(st, false, o)}${st.ok === true ? ' OK' : st.ok === false ? ' NG' : ''}${st.note ? ' (' + noteOf(doc, it, st.note, false, o) + ')' : ''}`); }); }
+            (it.steps || []).forEach((st, i) => { if (tp.has(i)) L.push(tp.get(i)); L.push(`  ${st.label}${st.ref ? ' [' + st.ref + ']' : ''}: ${ST().line(st, false, o)}${st.ok === true ? ' OK' : st.ok === false ? ' NG' : ''}${st.note && !NP(st.note) ? ' (' + noteOf(doc, it, st.note, false, o) + ')' : ''}`); if (NP(st.note)) L.push(...noteTxt(doc, it, st.note, o)); }); }
           else if (it.type === 'table') { if (it.caption) L.push(T(it.caption)); const c = x => { const o = x && typeof x === 'object' ? x : { t: x }; return T(o.t) + (o.key ? ' ' + T(`[[${o.key}]]`) : ''); };
             L.push((it.head || []).map(c).join(' | ')); (it.rows || []).forEach(r => L.push((Array.isArray(r) ? r : r.cells).map(c).join(' | '))); }
           else if (it.type === 'figure') L.push('[Figure] ' + T(it.caption));
@@ -276,6 +286,7 @@
 .rp-step{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"d r" "m r" "n n";gap:1pt 12pt;padding:4pt 0 3pt;border-top:0.4pt solid #bbb;break-inside:avoid;scroll-margin-top:calc(var(--rp-stick,0px) + var(--rp-top,64px) + 8px);}
 .rp-step .rp-d{grid-area:d;font-size:10pt;} .rp-step .rp-m{grid-area:m;padding-left:0.25in;overflow-x:auto;} .rp-step .rp-r{grid-area:r;align-self:center;text-align:right;white-space:nowrap;} .rp-step .rp-nt{grid-area:n;padding-left:0.25in;font-size:9pt;font-style:italic;color:#7a4a00;}
 .rp-ref{font-size:8.5pt;font-style:italic;color:#444;margin-left:8pt;}
+.rp-step .rp-ntl .rp-nta{font-style:normal;font-weight:700;border-left:3px solid #B45309;padding-left:6pt;margin:1pt 0 2pt;} .rp-step .rp-ntl .rp-ntb{font-weight:700;} .rp-step .rp-ntl .rp-ntu{margin:1pt 0 0;padding-left:14pt;} .rp-step .rp-ntl .rp-ntu li{margin:0;break-inside:avoid;}   /* SNL: a list note */
 .rp-ng .rp-r,.rp-ngt{font-weight:700;text-decoration:underline;} .rp-okt{font-size:8.5pt;} .rp-ngt{font-size:8.5pt;}
 .rp-step:target,.rp-flash{animation:rpflash 1.6s ease-out;}
 @keyframes rpflash{from{background:#FFF1B8;}to{background:transparent;}}

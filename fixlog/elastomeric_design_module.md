@@ -1673,3 +1673,27 @@ Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.4.2.1 (L2), C14.8.3.1 (L3), 14.7.5.3.
   - origin/main against the branch, 15 scenarios: `LAST`, warning `msg` and the textContent of every tab, Report included, are identical. innerText of the Report differs only through `content-visibility:auto` sub-sections that are off screen at the narrower width.
   - Abutment ↔ module round trip identical.
 - **Other copies:** none.
+
+## 2026-11-08 — PR: claude/shared-step-notes (PR #1240: https://github.com/mlococo88/All-Structural/pull/1240) (EDNL-3: three Report step remarks as a bold lead and a list; display only, no result change)
+
+### EDNL-3. Report worked-step remarks as list notes   [display only] [no result change]
+- **Request:** EDNL-1 "Not changed" (the Report's worked-step remarks needed a shared-file change). `shared/steps.js` / `shared/report.js` now accept a
+  list note `{ lead, items }` (same PR; `fixlog/shared-steps.md`, `fixlog/shared-report.md`). Converted: notes over ~300 characters or with 3+ distinct facts.
+- **Where:** `edrModel()`; each `note:"…"` becomes `note:{lead,items}` (anchor comment `/* EDNL-3 (2026-11-08)`):
+  1. Topic "One-way thermal movement (reference)", step `tm.D` (327 characters at the default). Before:
+     `note:"reference calculation; the design shear movement Δ_s = "+edrN(+L.deltaS,3)+" in is the input of panel I-4. Use this as Δ_s, adding creep / shrinkage. Half span = floating bridge with zero movement at midspan (MassDOT §3.1.8.3); for a fixed bearing elsewhere use the distance from the point of zero movement; transverse movement is not included"`
+     After: `note:{lead:"reference calculation; the design shear movement Δ_s = "+edrN(+L.deltaS,3)+" in is the input of panel I-4.",items:[["Design value:","Use this as Δ_s, adding creep / shrinkage."],["Span length:","Half span = floating bridge with zero movement at midspan (MassDOT §3.1.8.3); for a fixed bearing elsewhere use the distance from the point of zero movement."],["Transverse:","transverse movement is not included."]]}`
+  2. Anchorage, step `anc.Pf` ("Friction resistance, coefficient 0.2", 227 characters, 3 facts). Before:
+     `note:"friction coefficient 0.2 between elastomer and clean concrete or steel (C14.8.3.1); Δ_s taken as the factored shear deformation; P_min = minimum vertical force due to permanent loads"+(a.PminFromDL?" (taken as P_DL; enter P_min in I-4 if lower)":"")`
+     After: `note:{lead:"Friction check terms:",items:[["Friction:","friction coefficient 0.2 between elastomer and clean concrete or steel (C14.8.3.1)."],["Shear deformation:","Δ_s taken as the factored shear deformation."],["P_min:","P_min = minimum vertical force due to permanent loads"+(a.PminFromDL?" (taken as P_DL; enter P_min in I-4 if lower)":"")+"."]]}`
+  3. Rotation, step `res.lhs` ("Rotation per internal layer", 226 characters, 3 facts). Before:
+     `note:"n = number of internal layers (not increased for the cover layers); θ_st includes the construction tolerance (rotation build-up). A bearing with bonded external plates is secured per 14.8.3.1: tick “anchored / doweled” in I-5."`
+     After: `note:{lead:"Terms and scope:",items:[["n:","n = number of internal layers (not increased for the cover layers)."],["θ_st:","θ_st includes the construction tolerance (rotation build-up)."],["Bonded external plates:","A bearing with bonded external plates is secured per 14.8.3.1: tick “anchored / doweled” in I-5."]]}`
+- **Decision (pending engineer review):** "Use this as Δ_s …" and "enter P_min in I-4 if lower" / "tick “anchored / doweled” in I-5" stay in their place in the list
+  (not moved to a warning-style action line): they are guidance tied to the item they follow, and keeping them in place keeps the order of facts.
+- **Words:** every word, number and citation kept in order; a closing "." added to items that ended a clause; new lead words carry no digits.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none; the PAD hand-off is not built from these notes.
+- **Check case:** default pad: Δ = 0.351 in, Δ_s = 0.350 in, 0.2 P_min and θ_s/n unchanged; the three notes show a bold lead and 3 bullets each (screenshots `notes/shared/edm-*`).
+- **How verified:** origin/main vs branch, default project, Report tab: every step's innerHTML identical except the three notes; `.rp-doc` digit sequence identical;
+  0 console / KaTeX errors. Tests: `tests/smoke/phone-layout.mjs`, `tests/smoke/project-library.mjs --tool edm` (see the PR).
+- **Other copies:** none.

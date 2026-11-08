@@ -662,7 +662,10 @@ function smdStrAlt(v){if(fu==='kip'&&lu==='ft')return` = ${(v/144).toFixed(3)} k
 function smdMixedEnv(){const on=combosArr.filter(c=>c.on!==false);return on.some(c=>COMBOS[c.id]&&COMBOS[c.id].name==='Unfactored (1.0 All)')&&on.some(c=>COMBOS[c.id]&&COMBOS[c.id].name!=='Unfactored (1.0 All)');}
 const SMD_MIXED_TXT='The enabled combinations mix the unfactored “1.0 All” row with factored rows: the envelope is mixed service / factored.';
 const SMD_DEFL_LIM='deflection limit L/x is user-selected (IBC 2018 Table 1604.3 gives l/360 for L only, l/240 for D + L and so on, each with its own load basis)',SMD_DEFL_CHK='check against the combination that matches the limit — a factored combination gives a factored deflection';   /* SMNL: the two parts, listed separately on the Analysis view */
-const SMD_DEFL_TXT='The '+SMD_DEFL_LIM+'; '+SMD_DEFL_CHK+'.';   /* unchanged text (Report step notes) */
+const SMD_DEFL_TXT='The '+SMD_DEFL_LIM+'; '+SMD_DEFL_CHK+'.';   /* unchanged text (was the Report step notes; SMNL-2 (2026-11-08): those notes are now SMD_DEFL_NOTE list notes) */
+/* SMNL-2 (2026-11-08): the deflection step notes of the Report as list notes (shared/steps.js { lead, items }; shared/report.js renders them):
+   the same words as SMD_DEFL_TXT, split as on the Analysis view (Limit / Load basis); pre: items put before them (the envelope note) */
+const SMD_DEFL_NOTE=(lead,pre)=>({lead,items:(pre||[]).concat([['Limit:','the '+SMD_DEFL_LIM+'.'],['Load basis:',SMD_DEFL_CHK+'.']])});
 function smdSolveLoads(){
   const n=spans.length,fl=[],out=[],fin=v=>typeof v==='number'&&isFinite(v),r3=v=>+(+v).toFixed(4);
   loads.forEach((ld,i)=>{if(ld.off){out.push(ld);return;}
@@ -2449,7 +2452,7 @@ function smrModel(){
       if(tq){const w=shpW&&shpW.d>0&&shpW.tw>0;
         T.push({title:'Shear stress',ref:w?'AISC 360-16 Sec. G2.1':'solid rectangle',res:/\.tau$/,steps:[smrS({id:'env.tau',label:w?`Average web shear for the envelope |V| (${shpW.nm}: A_w = d t_w)`:'Shear stress for the envelope |V|, solid rectangle',sym:'\\tau_{env}',eq:w?'\\frac{|V|_{env}}{d\\,t_{w}}':'\\frac{3|V|_{env}}{2A}',sub:w?`\\frac{${vm.toFixed(3)}}{${shpW.d.toPrecision(4)} \\times ${shpW.tw.toPrecision(4)}}`:`\\frac{3 \\times ${vm.toFixed(3)}}{2 \\times ${Av}}`,value:tq.val,unit:`${fu}/${lu}^{2}`,d:4})]});
         res.push(['τ envelope = '+tbrStrip(tq.lbl),{t:tq.val.toFixed(4)+` ${fu}/${lu}²`+smdStrAlt(tq.val),n:true,key:'sm/env.tau'},'—','—']);}}
-    if(deD.length){const dm=Math.max(...deD.map(p2=>Math.abs(p2.y))),st=[smrS({id:'env.dm',label:'Largest |δ| over the enabled combinations (double integration of M/EI per combination)',sym:'|\\delta|_{env}',eq:'',sub:'',value:dm,unit:lu,d:6,note:'A factored combination gives a factored deflection: for a service-level check enable only service combinations, or use single-combination mode. '+SMD_DEFL_TXT})];   /* SMDL */
+    if(deD.length){const dm=Math.max(...deD.map(p2=>Math.abs(p2.y))),st=[smrS({id:'env.dm',label:'Largest |δ| over the enabled combinations (double integration of M/EI per combination)',sym:'|\\delta|_{env}',eq:'',sub:'',value:dm,unit:lu,d:6,note:SMD_DEFL_NOTE('A factored combination gives a factored deflection:',[['For a service-level check:','enable only service combinations, or use single-combination mode.']])})];   /* SMNL-2: was 'A factored … mode. '+SMD_DEFL_TXT */   /* SMDL */
       if(defLim>0)deflSpans().forEach(s2=>{st.push(smrS({id:'env.dr'+s2.i,label:`Span ${s2.i+1}: |δ|max = ${s2.dm.toFixed(5)} ${lu}${s2.c&&COMBOS[s2.c]?' ('+COMBOS[s2.c].name+')':''} against L/${defLim} = ${s2.L}/${defLim} = ${s2.allow.toFixed(5)} ${lu}`,sym:'\\frac{\\delta_{max}}{L/'+defLim+'}',eq:'',sub:`\\frac{${s2.dm.toFixed(5)}}{${s2.allow.toFixed(5)}}`,value:s2.ratio,unit:'',d:3,ok:s2.ok}));
         res.push([`δ max, span ${s2.i+1}`,{t:s2.dm.toFixed(6)+' '+lu,n:true},`L/${defLim} = ${s2.allow.toFixed(5)} ${lu}`,smrDC(s2.ratio,s2.ok,'sm/env.dr'+s2.i)]);});
       else res.push(['|δ| envelope',{t:dm.toFixed(6)+' '+lu,n:true,key:'sm/env.dm'},'—','—']);
@@ -2497,7 +2500,7 @@ function smrModel(){
       if(tq){const w=shpW&&shpW.d>0&&shpW.tw>0;SS.push(smrS({id:'tau',label:w?`Average web shear (${shpW.nm}: A_w = d t_w)`:'Shear stress, solid rectangle',sym:'\\tau_{max}',eq:w?'\\frac{|V|_{max}}{d\\,t_{w}}':'\\frac{3|V|_{max}}{2A}',sub:w?`\\frac{${mv2.toFixed(3)}}{${shpW.d.toPrecision(4)} \\times ${shpW.tw.toPrecision(4)}}`:`\\frac{3 \\times ${mv2.toFixed(3)}}{2 \\times ${Av}}`,value:tq.val,unit:`${fu}/${lu}^{2}`,d:4,ref:w?'AISC 360-16 Sec. G2.1':''}));
         res.push(['τ max = '+tbrStrip(tq.lbl),{t:tq.val.toFixed(4)+` ${fu}/${lu}²`+smdStrAlt(tq.val),n:true,key:'sm/tau'},'—','—']);}
       if(SS.length)T.push({title:'Section stresses',ref:'σ = M c / I',res:/sig$/,steps:SS});
-      if(deD.length){const dm=Math.max(...deD.map(p2=>Math.abs(p2.y))),dp=deD.reduce((m,q)=>Math.abs(q.y)>Math.abs(m.y)?q:m,deD[0]),dw=smdDwork(dp.x),DS=[smrS({id:'dm',label:`Largest deflection for ${curName()}, at x = ${dp.x.toFixed(3)} ${lu} (double integration of M/EI: F2 = ∫∫M dx dx from x = 0; δ = 0 at the supports, cantilever: δ = 0 and slope = 0 at the fixed support${dw?`; C1 = ${dw.C1.toPrecision(6)}, C2 = ${dw.C2.toPrecision(6)}, F2(x) = ${dw.F2.toPrecision(6)}`:''})`,sym:'\\delta_{max}',eq:dw?'\\frac{-F_{2}(x)+C_{1}x+C_{2}}{EI}':'',sub:dw?`\\frac{-(${dw.F2.toPrecision(6)})+${dw.C1.toPrecision(6)} \\times ${dp.x.toFixed(3)}+(${dw.C2.toPrecision(6)})}{${dw.EI.toPrecision(6)}}`:'',value:dm,unit:lu,d:6,note:SMD_DEFL_TXT})];   /* SMW, SMDL */
+      if(deD.length){const dm=Math.max(...deD.map(p2=>Math.abs(p2.y))),dp=deD.reduce((m,q)=>Math.abs(q.y)>Math.abs(m.y)?q:m,deD[0]),dw=smdDwork(dp.x),DS=[smrS({id:'dm',label:`Largest deflection for ${curName()}, at x = ${dp.x.toFixed(3)} ${lu} (double integration of M/EI: F2 = ∫∫M dx dx from x = 0; δ = 0 at the supports, cantilever: δ = 0 and slope = 0 at the fixed support${dw?`; C1 = ${dw.C1.toPrecision(6)}, C2 = ${dw.C2.toPrecision(6)}, F2(x) = ${dw.F2.toPrecision(6)}`:''})`,sym:'\\delta_{max}',eq:dw?'\\frac{-F_{2}(x)+C_{1}x+C_{2}}{EI}':'',sub:dw?`\\frac{-(${dw.F2.toPrecision(6)})+${dw.C1.toPrecision(6)} \\times ${dp.x.toFixed(3)}+(${dw.C2.toPrecision(6)})}{${dw.EI.toPrecision(6)}}`:'',value:dm,unit:lu,d:6,note:SMD_DEFL_NOTE('Deflection limit and load basis:')})];   /* SMNL-2: was note:SMD_DEFL_TXT */   /* SMW, SMDL */
         if(defLim>0)deflSpans().forEach(s2=>{DS.push(smrS({id:'dr'+s2.i,label:`Span ${s2.i+1}: δmax = ${s2.dm.toFixed(5)} ${lu} at x = ${s2.x.toFixed(3)} against L/${defLim} = ${s2.L}/${defLim} = ${s2.allow.toFixed(5)} ${lu}`,sym:'\\frac{\\delta_{max}}{L/'+defLim+'}',eq:'',sub:`\\frac{${s2.dm.toFixed(5)}}{${s2.allow.toFixed(5)}}`,value:s2.ratio,unit:'',d:3,ok:s2.ok}));
           res.push([`δ max, span ${s2.i+1}`,{t:s2.dm.toFixed(6)+' '+lu,n:true},`L/${defLim} = ${s2.allow.toFixed(5)} ${lu}`,smrDC(s2.ratio,s2.ok,'sm/dr'+s2.i)]);});
         else res.push(['δ max',{t:dm.toFixed(6)+' '+lu,n:true,key:'sm/dm'},'—','—']);
@@ -2544,11 +2547,13 @@ const smrImg=(u,t,id)=>`<img${id?` data-smrimg="${id}"`:''} src="${u||'data:,'}"
 function tbrStrip(s){return String(s==null?'':s).replace(/<sub>(.*?)<\/sub>/g,'$1').replace(/<[^>]+>/g,'').replace(/&amp;/g,'&');}
 /* rich-text notation in tables and notes: 'R_A', 'σ_allow', 't_w' → $…$ (subscripts) */
 const smrNot=s=>String(s==null?'':s).replace(/([A-Za-zσδτ])_([A-Za-z0-9]+)/g,(m,a,b)=>'$'+a+'_{'+b+'}$');
+/* SMNL-2: a list note (SMD_DEFL_NOTE) gets the same '_' removal in each of its texts */
+const smrNoteU=n=>{const u=t=>String(t==null?'':t).replace(/_/g,'');const o={lead:u(n.lead),items:(n.items||[]).map(x=>Array.isArray(x)?x.map(u):u(x))};if(n.action!=null)o.action=Array.isArray(n.action)?n.action.map(u):u(n.action);return o;};
 function smrRich(M2){const cell=c=>(c&&typeof c==='object')?Object.assign({},c,{t:smrNot(c.t)}):smrNot(c);
   M2.sections.forEach(s=>s.subs.forEach(q=>q.items.forEach(it=>{
     if(it.type==='note')it.text=smrNot(it.text);
     else if(it.type==='table'){it.head=it.head.map(cell);it.rows=it.rows.map(r=>Array.isArray(r)?r.map(cell):Object.assign({},r,{cells:r.cells.map(cell)}));}
-    else if(it.type==='steps')it.steps.forEach(st=>{st.label=st.label.replace(/_/g,'');st.note=String(st.note||'').replace(/_/g,'');});})));
+    else if(it.type==='steps')it.steps.forEach(st=>{st.label=st.label.replace(/_/g,'');st.note=st.note&&typeof st.note==='object'?smrNoteU(st.note):String(st.note||'').replace(/_/g,'');});})));
   return M2;}
 function smrRender(){
   const T=g('smdRpt');if(!T||!SMRP.on)return;

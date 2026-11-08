@@ -14,7 +14,10 @@
        unit   unit of value ('in', 'in^{2}', 'kip-ft', '' for none)
        d      decimals to show value with (display only; value is never rounded)
        ref    code reference with its edition, 'AASHTO LRFD 10th Ed. Eq. D6.1-…' ('' if none)
-       note   optional remark (a condition, why a case was chosen)
+       note   optional remark (a condition, why a case was chosen). A string, or (SNL, 2026-11-08) a list note for a long remark:
+              { lead, items: [[lead, text] | text, …], action? } — a bold lead, then bullets with bold lead words; action (a string or a
+              list of strings: "Input needed…", "Decision (pending engineer review): …") on its own line(s) first, in warning style.
+              noteParts(note) / noteText(note) below; shared/report.js renders it (screen, print, plain text). A string note is unchanged.
        ok     optional: true / false for a test step (a condition met or not); undefined otherwise
    It renders as:  label:  sym = eq = sub = value unit   (ref)
 
@@ -46,6 +49,24 @@
     if (s.ok === undefined) delete s.ok;
     return s;
   }
+  /* ---------- list notes (SNL, 2026-11-08): a step note as a lead and bullets ----------
+     noteParts(note) -> null for a string note (or none); for a list note { action: [string…], lead: string, items: [[lead, text]…] }
+                        (an item given as a plain string becomes ['', text]; empty items are dropped).
+     noteSep(lead)   -> ' ' when the item lead already ends in punctuation (':', '.', '?', '!', '—'), else ': '.
+     noteText(note)  -> the note as plain text: a string note as it is; a list note as lines: each action, the lead, then
+                        '• lead: text' per item, joined with '\n'. */
+  const noteParts = note => {
+    if (!note || typeof note !== 'object' || Array.isArray(note)) return null;
+    const str = v => (v == null ? '' : String(v));
+    const action = (Array.isArray(note.action) ? note.action : note.action != null && note.action !== '' ? [note.action] : []).map(str).filter(Boolean);
+    const items = (note.items || []).map(t => (Array.isArray(t) ? [str(t[0]), str(t[1])] : ['', str(t)])).filter(t => t[0] || t[1]);
+    return { action, lead: str(note.lead), items };
+  };
+  const noteSep = lead => (/[:.?!\u2014]$/.test(lead) ? ' ' : ': ');
+  const noteText = note => {
+    const P = noteParts(note); if (!P) return note == null ? '' : String(note);
+    return P.action.concat(P.lead ? [P.lead] : [], P.items.map(([l, t]) => '• ' + (l ? l + (t ? noteSep(l) : '') : '') + t)).join('\n');
+  };
   /* work(prefix): a collector. w.add({...}) stores a step (id prefixed with 'prefix.') and returns its value, so an
      engine writes  const yb = w.add({ id: 'yb', …, value: … });  w.steps is the list, in order. */
   function work(prefix) {
@@ -310,5 +331,5 @@
     window.addEventListener('afterprint', () => { opened.forEach(d => { d.open = false; }); opened = []; });
   }
 
-  window.SharedSteps = { step, work, n, g, fmt, toHTML, toText, line, unitTeX, katexOpt: KATEX_OPT, group, summary, groupsHTML, wire, reveal, groupCss };
+  window.SharedSteps = { step, work, n, g, fmt, toHTML, toText, line, unitTeX, katexOpt: KATEX_OPT, group, summary, groupsHTML, wire, reveal, groupCss, noteParts, noteSep, noteText };
 })();

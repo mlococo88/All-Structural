@@ -242,3 +242,42 @@ Loaded by: `apps/steel-bridge/index.html` (Report tab, `ui/report.js`). Tests: `
   (`tests/engine/steps-tohtml.test.mjs`). In the default projects of the 21 consumers no `$…$` title / cell uses such a command, so with
   KaTeX loaded every Report is byte-identical to origin/main (PR).
 - **Consumers (CLAUDE.md §3):** the 21 tools listed in `fixlog/shared-steps.md`.
+
+## 2026-11-08 — PR: claude/shared-step-notes (PR #1240: https://github.com/mlococo88/All-Structural/pull/1240) — list notes in worked steps: bold lead and bullets on screen and in print, "lead" / "• lead: text" lines in the text (SNL; display only)
+- **Where:** after `const ref = (doc, key) => …` (anchor `/* SNL (2026-11-08): a step note may be a list note`): new `NP`, `noteSrc`, `noteHtml`, `noteTxt`.
+  - `build()`, the steps scan: before `(it.steps || []).forEach(st => String(st.note || '').replace(SEE, …` → after `… => noteSrc(st.note).replace(SEE, …`
+    (a "§id" in any piece of a list note is a cross-reference as in a string note).
+  - `stepsHtml()`: before `${s.note ? `<div class="rp-nt">${noteOf(doc, it, s.note, true)}</div>` : ''}` → after `${s.note ? noteHtml(doc, it, s.note) : ''}`.
+    For a string note `noteHtml` returns exactly `<div class="rp-nt">${noteOf(doc, it, n, true)}</div>`. A list note:
+    `<div class="rp-nt rp-ntl">` + one `<div class="rp-nta">` per action + `<div class="rp-ntb">lead</div>` + `<ul class="rp-ntu"><li><b>lead</b>[sep]text</li>…</ul></div>`,
+    each piece through `noteOf` (escaping and "§id" links as before); sep = `SharedSteps.noteSep(lead)` (': ' unless the lead ends in punctuation).
+  - `text()`: before `${st.note ? ' (' + noteOf(doc, it, st.note, false, o) + ')' : ''}`); → after `${st.note && !NP(st.note) ? ' (' + noteOf(doc, it, st.note, false, o) + ')' : ''}`); if (NP(st.note)) L.push(...noteTxt(doc, it, st.note, o));`
+    — a list note's lines (each action, the lead, then `• lead: text` per item) follow the step's line, indented four spaces; `o.legacy` (#1138) is passed through.
+  - CSS, after `.rp-ref{…}`:
+    ```css
+    .rp-step .rp-ntl .rp-nta{font-style:normal;font-weight:700;border-left:3px solid #B45309;padding-left:6pt;margin:1pt 0 2pt;} .rp-step .rp-ntl .rp-ntb{font-weight:700;} .rp-step .rp-ntl .rp-ntu{margin:1pt 0 0;padding-left:14pt;} .rp-step .rp-ntl .rp-ntu li{margin:0;break-inside:avoid;}
+    ```
+    The note keeps `.rp-nt`'s 9 pt italic brown; the action line uses the `.rp-warn` border colour. Same in print (the report is a white calc sheet in both themes).
+- **Problem:** see `fixlog/shared-steps.md` (same PR): a long step note could only be one italic paragraph.
+- **Governing provision:** none (display only). No formula, factor, unit, value or code reference changes.
+- **Check case:** Shear and Moment Diagrams, template "2-span continuous", section properties on, envelope on: step "Largest |δ| over the enabled
+  combinations" (|δ|_env = 0.014728 ft). Before: one 397-character italic line. After: lead "A factored combination gives a factored deflection:" and
+  bullets For a service-level check / Limit / Load basis (same words, same digits: 2018, 1604.3, 360, 240). Text export before:
+  `  Largest |δ| … = 0.014728 ft (A factored combination … deflection.)`; after: `  Largest |δ| … = 0.014728 ft` then
+  `    A factored combination gives a factored deflection:`, `    • For a service-level check: enable only …`, `    • Limit: the deflection limit L/x …`, `    • Load basis: check against …`.
+- **Consumers (CLAUDE.md §3; every tool that loads shared/steps.js and shared/report.js):** apps/steel-bridge/index.html, Spread Footing, elastomeric_design_module,
+  Timber Beam Check, Shear and Moment Diagrams, abutment_calculator, Concrete Beam Capacity (with the ACI Rebar Development Length tab; `ACI Rebar Development Length.html`
+  is a redirect page), lldf, Stone Masonry Arch Load Rating, Section Property Calculator, Bridge Substructure Loading, Retaining Wall Designer,
+  Steel Beam Design - AISC 15th, Moving Load Generator, ASCE7-16 Load Generator, Prestressed Bridge Design, Pile Designer, index.html, Gusset Plate Rating,
+  BasePlateAnchorDesigner, Light Pole and Sign Post.
+- **How verified (origin/main vs branch, headless Chromium, KaTeX served, Report opened; the Steel Bridge app with Build report; SMD with the
+  2-span template and section on, also with the envelope):**
+  - every consumer: the innerHTML of every `.rp-step` and the `.rp-doc` textContent identical to main, and `SharedReport.text(doc)` and
+    `text(doc, { legacy: true })` identical, except the steps whose note this PR converts (Shear and Moment Diagrams 1 step per view, elastomeric 3):
+    there only the note's markup differs; the rest of the step's innerHTML is identical and the digit sequence of `.rp-doc` is identical;
+  - 0 KaTeX errors; console errors as on main (Pile Designer, Prestressed and index.html have the same 1 error on main: none new);
+  - `node tests/engine/run.mjs` (all files, incl. the new `steps-listnote`); `node tests/check-syntax.mjs`; consumer tests: see the PR.
+- **Other copies:** none.
+- **Open items (not converted here; per-tool follow-ups, decision pending engineer review):** other long step notes found by the survey:
+  Spread Footing `p0.Lftg` (359 chars, ψ factors of the dowel development length); Stone Masonry Arch (13 notes over 300 chars, already written with
+  inline "•" separators); BasePlateAnchorDesigner "where …" lists (8 over 300 chars, made from the tab's own lists); Steel Bridge `fx.a6.ok` (277 chars).

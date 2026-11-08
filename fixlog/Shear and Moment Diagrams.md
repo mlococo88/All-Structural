@@ -1945,3 +1945,36 @@ Review of 2026-11-07, LOW findings. L7 (closed-form FER) is a separate PR. Every
 - **Check case:** default units kip / ft; spans 20 / 25 / 8 ft, nodes fixed–roller–roller–free, DL 1.5 + LL 2 kip/ft all spans, WL −30 kip at 4 ft on span 3, σ_allow 3000, envelope on, project saved without `patLL` (pattern live load off). Above the loads: before one 441-character warning; after the bold lead "Live load patterns: Pattern live load is not generated: each combination applies LL to every span it is entered on at once.", the Enable button, and two bullets carrying "IBC 2018 Sec. 1607.12 and ASCE 7-16 Sec. 4.3.3" and "(for example L1, L2)". Results summary values unchanged: R_A 43.252, R_B 123.114, R_C 98.634 kip (min −9.669 UPLIFT), |V| env 66.366 kip, |M| env 256.641 kip·ft, σ env 6416.02 kip/ft².
 - **How verified:** headless Chromium, origin/main vs the branch, 15 projects (simple span with σ / δ limits; the envelope case above with pattern live load off and on; single combination with pattern on and off; an old saved combination list with snow (missing rows); a zero-factor case, single and envelope; a load off the span; an unstable beam; I = 0; cantilever overhang with a couple; lb / in): `nodeR`, `shD`, `moD`, `deD`, `env.R`, `gatherProject()` identical; the digit sequence of `#statsRow`, Engineering Calculations, the tabular results, the diagram notes, the Results summary column, the combinations dialog and the whole Report text identical in all 15. 0 console errors. Screenshots at 1440 and 390 px (no sideways scroll). Tests: `tests/check-syntax.mjs`; `tests/smd-verify.mjs` (ALL PASS); `tests/smoke/phone-layout.mjs --tool smd`; `tests/smoke/project-library.mjs --tool smd`.
 - **Other copies:** none.
+
+## 2026-11-08 — PR: claude/shared-step-notes (PR #1240: https://github.com/mlococo88/All-Structural/pull/1240) (SMNL-2: the two long Report step notes as a bold lead and a list; display only, no result change)
+
+### SMNL-2. Deflection step notes of the Report as list notes   [display only] [no result change]
+- **Request:** SMNL open item 2 (#1211): the two long Report step notes could not be split without a shared-file change. `shared/steps.js` /
+  `shared/report.js` now accept a list note (`{ lead, items }`, same PR; `fixlog/shared-steps.md`, `fixlog/shared-report.md`).
+- **Where (1):** after `const SMD_DEFL_TXT=…;` (its comment now says it was the Report step notes), new:
+  ```js
+  const SMD_DEFL_NOTE=(lead,pre)=>({lead,items:(pre||[]).concat([['Limit:','the '+SMD_DEFL_LIM+'.'],['Load basis:',SMD_DEFL_CHK+'.']])});
+  ```
+  `SMD_DEFL_TXT` is kept unchanged (byte-identical; no longer used by the Report).
+- **Where (2):** `smrModel`, envelope, step `env.dm` ("Largest |δ| over the enabled combinations"). Before:
+  `note:'A factored combination gives a factored deflection: for a service-level check enable only service combinations, or use single-combination mode. '+SMD_DEFL_TXT`
+  After: `note:SMD_DEFL_NOTE('A factored combination gives a factored deflection:',[['For a service-level check:','enable only service combinations, or use single-combination mode.']])`
+  (397 characters → lead + For a service-level check / Limit / Load basis).
+- **Where (3):** `smrModel`, single combination, step `dm` ("Largest deflection for …"). Before: `note:SMD_DEFL_TXT` (253 characters). After:
+  `note:SMD_DEFL_NOTE('Deflection limit and load basis:')` (lead + Limit / Load basis; the same split as the Analysis view, SMNL item 8).
+- **Where (4):** `smrRich` (the '_' removal of step labels and notes), before:
+  `st.note=String(st.note||'').replace(/_/g,'');` after: `st.note=st.note&&typeof st.note==='object'?smrNoteU(st.note):String(st.note||'').replace(/_/g,'');`
+  with, before `function smrRich(M2){`:
+  ```js
+  const smrNoteU=n=>{const u=t=>String(t==null?'':t).replace(/_/g,'');const o={lead:u(n.lead),items:(n.items||[]).map(x=>Array.isArray(x)?x.map(u):u(x))};if(n.action!=null)o.action=Array.isArray(n.action)?n.action.map(u):u(n.action);return o;};
+  ```
+  (without it a list note would print as "[object Object]").
+- **Words:** every word and digit kept in order; the dm note's "The deflection limit …" now reads "the deflection limit …" after the lead word "Limit:".
+  New lead words carry no digits. Text export (`SharedReport.text`): the step line, then the lead and "• Limit: …", "• Load basis: …" lines.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none.
+- **Check case:** template "2-span continuous", section on, single combination (Unfactored): δ_max = 0.008206 ft at x = 23.700 ft unchanged; note before one 253-character line,
+  after "Deflection limit and load basis:" + 2 bullets (IBC 2018 Table 1604.3, l/360, l/240 unchanged). Envelope on: |δ|_env = 0.014728 ft unchanged; note: 3 bullets.
+- **How verified:** origin/main vs branch, both views: every Report step's innerHTML identical except the converted note; `.rp-doc` digit sequence identical;
+  0 console / KaTeX errors. Tests: `tests/smd-verify.mjs`, `tests/smoke/phone-layout.mjs`, `tests/smoke/project-library.mjs --tool smd` (see the PR).
+  Screenshots: scratchpad `notes/shared/smd-*`.
+- **Other copies:** none.
