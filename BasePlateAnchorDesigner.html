@@ -1294,6 +1294,9 @@ function fF(kip,dec){ return fmt(kip*forceFactor(), dec===undefined?(unitMode()=
 function fM(kipin,dec){ const m=momentMode();
   return fmt(kipin*momentFactor(), dec===undefined?((m==="kip-ft"||m==="lb-ft")?2:0):dec); }        /* format moment */
 function el(tag,cls,txt){ const e=document.createElement(tag); if(cls)e.className=cls; if(txt!==undefined)e.textContent=txt; return e; }
+/* BPMK-1 (2026-11-08): el() with trusted, app-written markup (<b>, <i>, <br>, entities) rendered as HTML.
+   Never pass user-entered text (project, combination or group names) through it. */
+function elH(tag,cls,html){ const e=el(tag,cls); if(html!==undefined)e.innerHTML=html; return e; }
 function tex(elm,src,disp){ if(window.katex){ try{ katex.render(src,elm,{throwOnError:false,displayMode:!!disp}); return; }catch(e){} } elm.textContent=src; }
 
 /* Equation block: title, ref, symbolic/substituted/result lines, variable defs */
@@ -6202,7 +6205,7 @@ function buildInputPanel(){
       "(T_i = N/n ± M·x/Σx², negatives clipped) puts fewer anchors in tension and under-predicts the group "+
       "tension demand; it is retained only for comparison."));
     if(S.forceModel.method==="na")
-      body.appendChild(el("div","warnBox",
+      body.appendChild(elH("div","warnBox",   /* BPMK-1: markup rendered, not shown as text */
         "<b>D is a calibrated modeling assumption, not a code value.</b> The concrete bedding modulus is E_c/D. "+
         "D = 10 in. reproduces the Hilti PROFIS anchor reactions, compression resultant and its location to within "+
         "0.5 lb on the CB Plaza report — but that is a fit to a <i>single</i> case, not yet confirmed against a run "+
@@ -6219,7 +6222,7 @@ function buildInputPanel(){
      §10.7.6.1.6 tie check, the "pedestal vertical bars" tension option and the
      closed-tie shear option */
   mkSection("inPed","7a. Pedestal Reinforcement",body=>{
-    body.appendChild(el("div","note",
+    body.appendChild(elH("div","note",   /* BPMK-1 */
       "Longitudinal bars on the pedestal perimeter and the closed ties around them. Used for: the ACI 318-19 §10.7.6.1.6 "+
       "check of ties at anchor bolts (Concrete Embedment tab, §8); the tension option <b>Pedestal vertical bars</b>; and the shear "+
       "option <b>Closed ties enclosing the anchor group</b>. The app decides from this geometry which bars and ties are eligible."));
@@ -8242,7 +8245,7 @@ function buildConcTab(pg){
   /* PR-1: §10.7.6.1.6 */
   mkSection("coPedTie","8. Pedestal Ties at Anchor Bolts",body=>{
     const ptc=pedTieCheck();
-    if(ptc.na){ body.appendChild(el("div","note","Not checked: enter the pedestal longitudinal bars and ties under <b>Pedestal Reinforcement</b> (Reinforcement inputs) to check ACI 318-19 §10.7.6.1.6.")); return; }
+    if(ptc.na){ body.appendChild(elH("div","note","Not checked: enter the pedestal longitudinal bars and ties under <b>Pedestal Reinforcement</b> (Reinforcement inputs) to check ACI 318-19 §10.7.6.1.6.")); return; }
     renderSteps(body,ptc.steps);
     dcrBox(body,ptc.dcr,false,{load:ptc.req,cap:ptc.nTop,unit:"ties",loadSym:"n_req",capSym:"n (within 5 in)"});
     if(!ptc.encl) body.appendChild(el("div","errBox","The ties do not enclose every anchor (anchor + rod radius outside the tie's inside face). Move the anchors inward or reduce the cover."));
@@ -8410,7 +8413,7 @@ function buildTRebarTab(pg){
     }
     if(ic){
       body.appendChild(el("h3",null,"Do the bars cross the breakout cone, close to a tension anchor? (§17.5.2.1.1)"));
-      body.appendChild(el("div","note",
+      const icNote=el("div","note",
         "§17.5.2.1.1 credits a bar only where it crosses the assumed failure surface, is "+
         "developed each side of it, AND is placed close enough to the anchor to restrain its "+
         "breakout. The effective-placement zone is 0.5·h_ef = "+fmt(ic.rNear,2)+"″ (actual h_ef) in "+
@@ -8418,11 +8421,15 @@ function buildTRebarTab(pg){
         "the limit Hilti PROFIS enforces. A leg farther than that from every tension anchor — or "+
         "one whose nearest anchor is in compression — is NOT credited, even though the 1.5·h_ef = "+
         fmt(ic.rMax,2)+"″ breakout prism still physically exists out there. Distances below are "+
-        "measured in plan from each bar to the nearest anchor in tension for combination "+ic.govCombo+"."+
-        (ic.hefReduced?
-          " <b>h_ef here is the ACTUAL embedment, "+fmt(ic.hef,2)+"″.</b> The §17.6.2.1.2 reduced h_ef′ = "+
+        "measured in plan from each bar to the nearest anchor in tension for combination "+ic.govCombo+".");
+      if(ic.hefReduced){   /* BPMK-1: the bold lead as a <b> node (it showed as literal <b> tags) */
+        icNote.appendChild(document.createTextNode(" "));
+        icNote.appendChild(el("b",null,"h_ef here is the ACTUAL embedment, "+fmt(ic.hef,2)+"″."));
+        icNote.appendChild(document.createTextNode(" The §17.6.2.1.2 reduced h_ef′ = "+
           fmt(ic.hefBreakout,2)+"″ is used only in the breakout equations (Concrete Embedment tab); the anchor "+
-          "reinforcement restrains the physical failure surface, which starts at the anchor head (§17.5.2.1, R17.5.2.1)." : "")));
+          "reinforcement restrains the physical failure surface, which starts at the anchor head (§17.5.2.1, R17.5.2.1)."));
+      }
+      body.appendChild(icNote);
       if(ic.tMaxA>0 && ic.tMinA < 0.05*ic.tMaxA){
         const lw=el("div","warnBox");
         lw.innerHTML="<b>Limitation.</b> One or more anchors counted as \u201Cin tension\u201D carry under 5% of "+
