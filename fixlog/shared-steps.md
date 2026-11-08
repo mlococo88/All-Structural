@@ -137,3 +137,40 @@ Tests: `node tests/engine/run.mjs` (steps, steps-totext, tex, report, …).
 ### Open items
 - Tools that call KaTeX themselves (not through SharedSteps) still show TeX source when KaTeX is blocked: e.g. Spread Footing's Report
   notes copied from its tabs (`W_f = 10.00 \cdot 8.00 … \;\mathrm{kcf}` in `.rp-nt`). Not changed here (tool code, one tool per PR).
+
+## 2026-11-08 — PR: claude/shared-step-notes (PR #PRNUM) — list notes: a step's note may be a lead and bullets (SNL; display only)
+### Where
+- `shared/steps.js`, anchor `/* ---------- list notes (SNL, 2026-11-08)`, before `/* work(prefix): a collector.`; the header comment's `note` line; the
+  export line `window.SharedSteps = { …, groupCss, noteParts, noteSep, noteText };` (the last three are new).
+### Before / After
+- Before: `note` was a string only (the README and the header said "optional remark").
+- After: `note` may also be a **list note** `{ lead, items: [[lead, text] | text, …], action? }` (action: a string or a list of strings).
+  New functions (nothing existing changed; `step()` keeps the object as given):
+  ```js
+  const noteParts = note => {
+    if (!note || typeof note !== 'object' || Array.isArray(note)) return null;
+    const str = v => (v == null ? '' : String(v));
+    const action = (Array.isArray(note.action) ? note.action : note.action != null && note.action !== '' ? [note.action] : []).map(str).filter(Boolean);
+    const items = (note.items || []).map(t => (Array.isArray(t) ? [str(t[0]), str(t[1])] : ['', str(t)])).filter(t => t[0] || t[1]);
+    return { action, lead: str(note.lead), items };
+  };
+  const noteSep = lead => (/[:.?!—]$/.test(lead) ? ' ' : ': ');
+  const noteText = note => {
+    const P = noteParts(note); if (!P) return note == null ? '' : String(note);
+    return P.action.concat(P.lead ? [P.lead] : [], P.items.map(([l, t]) => '• ' + (l ? l + (t ? noteSep(l) : '') : '') + t)).join('\n');
+  };
+  ```
+  Rendering is in `shared/report.js` (see `fixlog/shared-report.md`, same PR).
+### Problem
+- Engineer request (2026-11-07, approved for all tools): long notes as a lead and a list. The per-tool passes (SFNL … SBNL) could not split
+  a long worked-step note, because a step's note was one string drawn by the shared viewer as one italic paragraph (open items in
+  `fixlog/Shear and Moment Diagrams.md` SMNL and `fixlog/elastomeric_design_module.md` EDNL-1).
+### Governing provision
+- None: display only. No formula, factor, unit, value or code reference changes.
+### Check case
+- `noteText({ lead: 'L.', items: [['A:', 'x'], ['B', 'y'], 'z'], action: 'Decision (pending engineer review): q.' })` →
+  `Decision (pending engineer review): q.\nL.\n• A: x\n• B: y\n• z`; `noteText('abc')` → `abc`.
+### How verified
+- `node tests/engine/run.mjs steps-listnote` (new, 5 tests); the whole engine suite; `node tests/check-syntax.mjs`. Consumer checks: see `fixlog/shared-report.md` (same PR).
+### Other copies
+- None.

@@ -66,7 +66,7 @@ A step is a plain object:
 | `unit` | Unit of `value` (`in`, `in^{2}`, `kip-ft`, or empty). |
 | `d` | Decimals to display `value` with (display only). |
 | `ref` | Code reference with edition, e.g. `AASHTO LRFD 10th Ed. Eq. 6.10.1.10.1-1`; empty if none. |
-| `note` | Optional remark (condition, why a case applies, a scope flag). |
+| `note` | Optional remark (condition, why a case applies, a scope flag). A string, or (SNL, 2026-11-08) a **list note** `{ lead, items: [[lead, text] \| text, …], action? }` for a long remark: rendered by `shared/report.js` as the action line(s) in warning style, a bold lead and a bullet list with bold lead words; in `SharedReport.text()` as the step's line, then the lines `action`, `lead`, `• lead: text` (indented). `SharedSteps.noteParts(note)` / `noteText(note)` read it. A string note renders exactly as before. |
 | `ok` | Optional, for a test step: `true` / `false`. |
 
 It renders as `label` over `sym = eq = sub = value unit`, with `ref` beside the label.
