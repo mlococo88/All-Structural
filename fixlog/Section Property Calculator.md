@@ -3534,7 +3534,7 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
 ### How verified
 - `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`; the headless comparison listed in the PR.
 
-## 2026-11-08 — PR: nl-spc-a (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — SPNL-1: long Method-tab notes as a bold lead and a list (display only, no result change)
+## 2026-11-08 — PR: nl-spc-a (PR #1174: https://github.com/mlococo88/All-Structural/pull/1174) — SPNL-1: long Method-tab notes as a bold lead and a list (display only, no result change)
 
 ### SPNL-1. Method tab: long items split into a lead line and a list   [display only] [no result change]
 - **Request (engineer, 2026-11-07/08):** "There are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Approved for all tools. Part 1 of 2 for this tool: the Method tab (and so the Report's "As printed: Method and assumptions" section, which is built from it). The other tabs, the input panel and the Report's own notes follow in SPNL-2.
