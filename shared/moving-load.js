@@ -417,7 +417,9 @@ function analyze(m,opt){
       pl='include w·A·DF_PL / g so that the factored values carry γ_LL·w·A·DF_PL.',ni='Step mode and deflection do not include it.';
     nlWarn(`${ld} ${ap} Per-lane values ${pl} ${ni}`,{lead:ld,items:[['Applied:',ap],['Per-lane values',pl],['Not included:',ni]]});
     if(effs.some((ef,ei)=>!(PED.g[ei][0]>0)||!(PED.g[ei][1]>0)))warn.push('Pedestrian load: a distribution factor is zero or blank, so the pedestrian load is left out where it is.');}
-  return {m,effs,res,rows,x,sup,Lt,IL,ends,dfOf,warn,warnNL,check,supNodes,stepSolve,stepCase,varOK,imSpan,imR,effR,A,nf,fmap,nn,...(PED?{ped:PED}:{})};
+  const out={m,effs,res,rows,x,sup,Lt,IL,ends,dfOf,warn,check,supNodes,stepSolve,stepCase,varOK,imSpan,imR,effR,A,nf,fmap,nn,...(PED?{ped:PED}:{})};
+  Object.defineProperty(out,'warnNL',{value:warnNL,enumerable:false,writable:true,configurable:true});   // MLNL-3: display only, not enumerable, so result copies, JSON and hashes are as before
+  return out;
 }
 const ENGINE_ANALYZE=analyze;
 function deflection(R,opt){

@@ -311,7 +311,17 @@ results unchanged).
       pl='include w·A·DF_PL / g so that the factored values carry γ_LL·w·A·DF_PL.',ni='Step mode and deflection do not include it.';
     nlWarn(`${ld} ${ap} Per-lane values ${pl} ${ni}`,{lead:ld,items:[['Applied:',ap],['Per-lane values',pl],['Not included:',ni]]});
   ```
-- Return: `…,dfOf,warn,check,…` → `…,dfOf,warn,warnNL,check,…`. `warnNL[k]` is `{ lead, items: [[lead words, text]…] }` for these two warnings
+- Return: the returned object is unchanged (same enumerable keys); `warnNL` is added to it as a **non-enumerable** property, so result
+  comparisons, `JSON.stringify` and hashes see the same object as before:
+  ```js
+  // before
+  return {m,effs,res,rows,x,sup,Lt,IL,ends,dfOf,warn,check,supNodes,stepSolve,stepCase,varOK,imSpan,imR,effR,A,nf,fmap,nn,...(PED?{ped:PED}:{})};
+  // after
+  const out={m,effs,res,rows,x,sup,Lt,IL,ends,dfOf,warn,check,supNodes,stepSolve,stepCase,varOK,imSpan,imR,effR,A,nf,fmap,nn,...(PED?{ped:PED}:{})};
+  Object.defineProperty(out,'warnNL',{value:warnNL,enumerable:false,writable:true,configurable:true});
+  return out;
+  ```
+  (A first version returned it as a normal key; `tests/smoke/project-library.mjs --tool mlg` then reported the new key as a result difference.) `warnNL[k]` is `{ lead, items: [[lead words, text]…] }` for these two warnings
   and empty (undefined) for every other warning; a page may show it in place of `warn[k]`.
 ### Problem
 - MLNL-2 open item (#1221): the two warnings are long (554 / 294 characters with a multi-span DF list; 508 / 300 at the HS20 default) and are built
