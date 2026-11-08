@@ -7223,7 +7223,7 @@ index 50f3837..c2d5000 100644
 - **Raised, not changed (stale manual text, outside this scope):** 0.2 "Slender-pedestal moment magnification … flags it but does not magnify" and 4C "Slenderness screen … flagged otherwise" predate SFSL (#974), which magnifies; 0.2 "Uplift anchorage … beyond the dowel minimum-steel check" predates the dowel tension checks (checks table "Dowels (tension, laps)").
 - **Other copies:** none.
 
-## 2026-11-08 — PR: docs/sf-manual-stale (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SFSC-2) — User Manual: slender-pedestal magnification and dowel uplift checks described as the tool does them   [DISPLAY ONLY; no computed value changes]
+## 2026-11-08 — PR: docs/sf-manual-stale (PR #1243: https://github.com/mlococo88/All-Structural/pull/1243) (SFSC-2) — User Manual: slender-pedestal magnification and dowel uplift checks described as the tool does them   [DISPLAY ONLY; no computed value changes]
 - **Request (engineer, 2026-11-08):** fix the three stale manual items raised in SFSC (#1242).
 - **Where:** `manPart("p0",…)` (0.2 What this program does NOT do) and `manPart("p4c",…)` (4C.5 Pedestal checks). Manual text only.
 - **1. 0.2, slender pedestals.**
