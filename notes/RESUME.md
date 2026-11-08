@@ -238,3 +238,9 @@ Plan: rotating in-depth code-compliance reviews (read-only) → fix PRs for clea
 - Running: Concrete Beam, Bridge Geometry, Moving Load, Steel Beam, ASCE7, lldf/index/tools, Steel Bridge remainder, 3 small text fixes (RW sliding note, SPC r̄o/H, Timber report spacing).
 - Shallow-clone artefact: local main showed 50 "unpushed" commits (Oct-30 history before shallow boundary) — reset local main to origin/main, checkout back on claude/bold-meitner-jtfopv.
 - Pending engineer: SF rename "Shallow Foundation Design"; default projects with FAILs (Base Plate 2, abutment sliding 1.10) — adjust?; shared report.js bullet support in step notes (later).
+
+## 2026-11-08 — long-note + left-panel pass COMPLETE (no agents running)
+- All apps done (except apps/steel-bridge, Prestressed: on hold). Panels added: SPC, Timber, SBD, Arch, BP, Gusset, Pile, EDM, Abutment, BG, CBC (1200px), Steel Beam, ASCE7 (key results), MLG (key results). No panel (by decision): SubLoads, lldf, index, tools.
+- Small fixes: RW sliding note #1218, SPC r̄o/H #1217, Timber report #1216, SB TFA hint #1229, ASCE7 manual box #1230, BP <b> #1171.
+- Open/pending engineer: SF display rename "Shallow Foundation Design"; default projects with FAILs (BP 2, abutment sliding 1.10); shared report.js step-note bullets + shared/moving-load.js warnings (one shared PR, all consumers); ST-Girder leftovers (12 notes, code-built banners); Timber §1.3/§10 duplicate notes (kept).
+- Check-ins stopped.
