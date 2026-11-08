@@ -163,7 +163,7 @@ ok('the token: only in the Authorization header to api.github.com; not in a URL,
 const fin = JSON.parse(await ls(T.list)), first = JSON.parse(rawOwn);
 assert.equal(typeof fin, 'object'); assert.ok(Object.values(fin).every(v => v && typeof v === 'object' && v.geom && v.soil));
 assert.ok(Object.keys(first).every(k => k in fin));
-assert.deepEqual((await keys()).filter(k => !keys0.includes(k)).sort(), ['bridgeSuite.v1.githubSync', `bridgeSuite.v1.githubSync.tool.${T.folder}`]);
+assert.deepEqual((await keys()).filter(k => !keys0.includes(k) && !/^bridgeSuite\.v1\.githubSync\.(deviceId|live|presence\.)/.test(k)).sort(), ['bridgeSuite.v1.githubSync', `bridgeSuite.v1.githubSync.tool.${T.folder}`]);   // LIVE (2026-11-08): besides its own keys (.deviceId, .presence.<tool>)
 ok('the tool\'s list key keeps its format ({ name: state }); the only new keys are bridgeSuite.v1.githubSync and .tool.' + T.folder);
 await p.setViewportSize({ width: 390, height: 800 }); await T.openBtn(p); await p.waitForTimeout(1500);
 const sw = await p.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]); assert.ok(sw[0] <= sw[1], sw.join(' > '));

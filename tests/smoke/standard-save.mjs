@@ -142,7 +142,7 @@ await p.click('[data-sp=hlib]'); await p.waitForSelector('#fixtLib[open]'); awai
 assert.ok(await p.evaluate(() => { const d = document.querySelector('#fixtLib'); return d.scrollWidth <= d.clientWidth + 1; }), 'dialog 390');
 await shot(p, 'std-dialog-390');
 assert.equal(errs.length, 0, errs.join(' | '));
-const k8 = await keys(); assert.deepEqual(k8.filter(k => !k.startsWith('fixt_')), ['bridgeSuite.v1.githubSync', 'bridgeSuite.v1.githubSync.tool.fixture-tool']);
+const k8 = await keys(); assert.deepEqual(k8.filter(k => !k.startsWith('fixt_') && !/^bridgeSuite\.v1\.githubSync\.(deviceId|live|presence\.)/.test(k)), ['bridgeSuite.v1.githubSync', 'bridgeSuite.v1.githubSync.tool.fixture-tool']);   // LIVE (2026-11-08): presence keys aside
 ok('reload: the open project found again by content; 390 px: page and dialog do not scroll sideways; no console errors; sync keys only');
 await b.close();
 console.log(`\nALL PASS (${n} steps)`);

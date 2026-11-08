@@ -82,12 +82,21 @@ Two boxes in **Cloud sync (GitHub)…** turn these on or off. Both are **on** on
   - Inputs restored from last time and not touched since are not auto-saved until you change something.
   - The header chip shows the state: **auto-saved 14:32**, **uploading**, or **pending (offline)** (it waits and is sent when GitHub can be reached).
   - Untick the box to save only with Save / Ctrl+S.
-- **Check GitHub every 30 s for changes to the open project**
+- **Check GitHub every 30 s for changes to the open project, and show who else has it open**
   - While the tab is visible, the tool asks GitHub every 30 s whether the open project's file changed (one request). It does not ask while the tab is hidden or minimised.
   - When another device saved it, a banner appears at the bottom left: **Updated on <device> at <time> — Load it / Keep mine**. Nothing on screen changes until you press **Load it**.
   - **Load it:** the other device's version is opened. The banner then offers **Undo**, which brings back what you had (GitHub is not changed). If you also had changes here, they are kept first as `<name> (conflict <device> <date>)`.
   - **Keep mine:** the banner closes and nothing is loaded. If you save this project later, both versions are kept (yours as a conflict copy), as before.
   - Untick the box to stop these checks.
+- **Who else has it open** (same box as the GitHub check, from 2026-11-08):
+  - While a named project is open, each device writes a small file next to the projects on GitHub: `projects/<tool>/.presence/<project>.<device id>.json`. It says which device has it open and since when.
+  - The file is written when the project is opened, then about once a minute, but only while the tab is visible and you have used the page in the last 10 minutes.
+  - It is deleted when you open another project, start a new one, untick the box, or close the page. A file that has not been refreshed for 2.5 minutes counts as closed. For example, a device that went to sleep, or a hidden tab.
+  - Opening a project that another device has open asks first: **Open on <device> since <time> — edits on both may conflict**, with **Open anyway** / **Cancel**.
+  - While both devices have it open, a banner says **Also open on <device>**. It goes away when the other device closes the project.
+  - Each browser has its own random id (kept in this browser), so two browsers with the same device name are still told apart. Two tabs of the same browser count as one device.
+  - These files are not projects. Saved projects and the home page never list them, and Download ignores them.
+  - They add commits to the repository (about one a minute per device that has a project open and in use). To avoid them, untick the box: no file is written, and no other device's file is read.
 - The device name in "Updated on …" is **This device's name** of the other device. Older saves, and devices with no name, show "another device".
 
 ## Save, Save as and where a project goes (tools with the standard save)
@@ -126,5 +135,10 @@ Tools that have the standard save controls (a **Save and open** card first in th
 
 - Not yet tested against the real GitHub service from a page opened as a file (`file://`). GitHub's API allows browser requests from any page, including file pages, so it is expected to work. It was tested here against a stand-in GitHub that answers the same way. If **Test connection** says GitHub could not be reached on the work laptop while github.com opens in the browser, the company network may block `api.github.com`.
 - GitHub limits requests to 5,000 per hour per token. The tools use a few per save, so this is reached only in unusual cases. When it is, sync waits and resumes by itself.
-- With the open project's check on, each visible tab with a named project open makes about 120 requests an hour (one every 30 s). Auto-save adds up to about 2 requests per save while you edit. Hidden tabs make none. Ten such tabs open at once stay well under the limit.
+- Requests per hour, for each visible tab with a named project open (box on):
+  - the check: about 120 (one every 30 s);
+  - this device's open-here file: about 60 (once a minute; none after 10 minutes without use);
+  - for each other device that has the same project open: about 60 more (its file is read when it changes);
+  - auto-save while you edit: up to about 2 per save.
+  - Hidden tabs make none. Several tabs open at once stay well under the limit.
 - Very large repositories (over 100,000 files) are not supported for listing.

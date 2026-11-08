@@ -670,6 +670,12 @@
       writeJSON(storage, PKEY, v); return r;
     }
     const iso = t => { try { return new Date(t).toISOString(); } catch (e) { return null; } };
+    /* presenceHint(name): 'none' when the tree this page read less than two check intervals ago has no other device's heartbeat for
+       the project (open at once), 'some' when it has one, 'unknown' when there is no recent tree (LIVE PR 3) */
+    function presenceHint(name) {
+      if (!lastTree || now() - lastTree.at > LIVE.poll * 2) return 'unknown';
+      const mine = deviceId(storage, false); return presIn(lastTree.files, name).some(f => f.id !== mine) ? 'some' : 'none';
+    }
     /* beat(name, po): write this device's heartbeat of the open project (create, or update with the file's sha). Not more than once a
        minute for the whole browser (another tab of the tool that wrote it less than 55 s ago counts) unless po.force. Never while an
        upload runs; waits out a backoff. */
@@ -715,7 +721,7 @@
     }
     return { tool: o.tool, label, folder, pathOf, configured: configured_, init, scan, flush, refreshCloud, rows, statusOf, upload, uploadAll, skipFirst,
       download, useCloud, keepMine, deleteCloud, hold, held, notices, fileText, localSha,
-      poll, changeInfo, loadCloud, undoLoad, presenceOf, others, beat, leave, presPath, live: () => live(storage), deviceId: () => deviceId(storage, false),
+      poll, changeInfo, loadCloud, undoLoad, presenceOf, others, beat, leave, presPath, presenceHint, live: () => live(storage), deviceId: () => deviceId(storage, false),
       state: st, cloud: () => cloud, cloudError: () => cloudErr, lastError: () => err, nextTry: () => nextTry, busy: () => busy,
       pending: () => { const v = st(); return v ? v.queue.length : 0; }, settings: S };
   }
@@ -769,8 +775,8 @@
       <label for="spGhDevice">This device's name (used in conflict copies)</label><input id="spGhDevice" autocomplete="off" value="${esc(s.device)}" placeholder="e.g. Work laptop">
       <label class="spGhChk"><input type="checkbox" id="spGhAuto"${L.autoSave ? ' checked' : ''}> Auto-save open project every 30 s</label>
       <p class="spNote">While a <b>named</b> saved project is open and you change its inputs, they are saved into it about every 30 s (after a few seconds without a change) and uploaded. A new project with no name yet is never auto-saved. Untick to save only with Save.</p>
-      <label class="spGhChk"><input type="checkbox" id="spGhWatch"${L.watch ? ' checked' : ''}> Check GitHub every 30 s for changes to the open project</label>
-      <p class="spNote">When another device saved the project you have open, a banner offers <b>Load it</b> (with Undo) or <b>Keep mine</b>; nothing on screen is replaced without Load it. Paused while the tab is hidden.</p>
+      <label class="spGhChk"><input type="checkbox" id="spGhWatch"${L.watch ? ' checked' : ''}> Check GitHub every 30 s for changes to the open project, and show who else has it open</label>
+      <p class="spNote">When another device saved the project you have open, a banner offers <b>Load it</b> (with Undo) or <b>Keep mine</b>; nothing on screen is replaced without Load it. While a named project is open, this device also writes a small "open here" file next to it on GitHub (about once a minute while you use the page), so other devices can warn that it is open here. Paused while the tab is hidden.</p>
       <p class="spNote"><b>The token is stored in this browser's storage</b> (readable by anyone who can use this browser profile). It is sent only to api.github.com, is never shown again, and is never part of a project file. Use a token limited to this one repository, with Contents read and write only. Forget it on shared computers.</p>
       <div class="spGhBtns"><button type="button" data-gh="save">Save</button><button type="button" data-gh="test">Test connection</button><button type="button" class="spDel" data-gh="forget"${s.token ? '' : ' disabled'}>Forget token on this device</button></div>
       <div class="spGhRes" role="status"></div>`;

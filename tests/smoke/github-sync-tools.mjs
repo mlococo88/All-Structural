@@ -81,7 +81,7 @@ for (const key of list) {
     ok(!d.length, 'GitHub-only copy opened: results identical to the saved project' + (T.openIgnore ? ' (except ' + T.openIgnore.join(', ') + ')' : '') + (d.length ? ` (${d.length} differences: ${JSON.stringify(d.slice(0, 3)).slice(0, 400)})` : ''));
     const nms = T.names ? await T.names(p) : Object.keys(JSON.parse(await p.evaluate(k => localStorage.getItem(k), T.list) || '{}'));
     ok(nms.includes('GHS remote') && nms.includes('GHS A'), 'the tool\'s own list holds both projects');
-    const sk = (await p.evaluate(() => Object.keys(localStorage))).filter(k => /^bridgeSuite\.v1\.githubSync/.test(k)).sort();
+    const sk = (await p.evaluate(() => Object.keys(localStorage))).filter(k => /^bridgeSuite\.v1\.githubSync/.test(k) && !/^bridgeSuite\.v1\.githubSync\.(deviceId|live|presence\.)/.test(k)).sort();   // LIVE (2026-11-08): .deviceId / .presence.<tool> are the presence keys
     // STDS (2026-11-06): the Concrete Beam suite page holds three frames with sync (Beam Capacity, Development & Splice): each keeps its own bookkeeping key
     const sib = (SUITE[key] || []).map(k => `bridgeSuite.v1.githubSync.tool.${FOLDER[k]}`), want = ['bridgeSuite.v1.githubSync', `bridgeSuite.v1.githubSync.tool.${folder}`, ...sib].sort();
     ok(JSON.stringify(sk) === JSON.stringify(want), 'sync keys: bridgeSuite.v1.githubSync and .tool.' + folder + (sib.length ? ' (+ the suite\'s other tabs: ' + sib.join(', ') + ')' : '') + ' only (' + sk.join(', ') + ')');
