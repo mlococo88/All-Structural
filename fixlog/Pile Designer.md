@@ -20263,7 +20263,7 @@ Cross-tool PR with the Retaining Wall Designer (Phase 8f, HANDOFF.md §4.6 / §4
 - **How verified:** as PDNL-1 (same 8 projects, origin/main vs the branch): `computeAll` identical; digit sequence of every output tab (Report included), every input tab and the whole page text identical; no content word lost; 390 px no sideways scroll; 0 console errors. Tests: see the PR.
 - **Other copies:** none.
 
-## 2026-11-08 — PR: nl-pile-panel (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (PDSP: the Summary-of-checks rows as a left check-summary column from 1200 px, as Retaining Wall / Spread Footing / Light Pole / Shear and Moment Diagrams; display only, no result change)
+## 2026-11-08 — PR: nl-pile-panel (PR #1204: https://github.com/mlococo88/All-Structural/pull/1204) (PDSP: the Summary-of-checks rows as a left check-summary column from 1200 px, as Retaining Wall / Spread Footing / Light Pole / Shear and Moment Diagrams; display only, no result change)
 
 ### PDSP. Check summary column on the left at 1200 px and wider   [display only]
 - **Request (engineer, 2026-11-07/08):** add the left summary panel to the other apps that have summary / result cards, as in Retaining Wall (RWDL #959, RWLB #984), Spread Footing (SFLB #988), Light Pole (LPLB #991) and Shear and Moment Diagrams (SMLS #1130).
