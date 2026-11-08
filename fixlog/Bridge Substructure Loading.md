@@ -2467,3 +2467,99 @@ function listTables() {
 - **How verified:** headless main vs branch on the default, the check variant, the Zone 4 variant, the +30 ft variant and the Service IV option: every change traced to E_c (all projects), Z (only the +30 ft variant), the Service IV option (only with it set); 0 console errors on every tab. Receivers: abutment calculator, Spread Footing, Pile Designer pulled SubLoads' hand-offs with no page errors (foundationLoads values move with E_c). `check-syntax` (tool and tools.html), `phone-layout --tool bsl`, `engine/run.mjs handoffs` (10 / 10) pass; `project-library --tool bsl`: library / undo checks pass, the "identical to main" checks fail by design (E_c).
 - **Hand-offs changed (§7):** foundationLoads and abutmentLoads values (E_c through the stiffness distribution); no format change.
 - **Saved data (§5):** new optional field `br.vwSIV` (blank = previous behaviour). No key changed.
+
+## 2026-11-08 — PR: nl-bsl-notes (PR #1173: https://github.com/mlococo88/All-Structural/pull/1173) (SLNL-1) — long notes on the output tabs and input panes as a bold lead and a list (display only, no result change)
+
+### SLNL-1. Long notes split into a lead line and a list   [display only] [no result change]
+- **Request (engineer, 2026-11-07, approved for all apps):** "There are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Part 1 of 2: the output tabs and the input panes. The Manual and the Report's own notes follow in SLNL-2.
+- **Rule used:** a note is long if it is over ~300 characters, has 3 or more sentences, or carries several facts in one paragraph. It becomes a bold one-line lead, then a list with bold lead words. Every sentence, number, citation and link is kept, in the same order; only lead words, list-start capitals and end punctuation are new. New lead words carry no digits.
+- **New helper** (after `const esc =`), anchor `/* SLNL (2026-11-08, engineer`:
+  ```js
+  function slNL(lead, items, o) { o = o || {};
+    const li = a => (a || []).filter(Boolean).map(x => '<li>' + (Array.isArray(x) ? (x[0] ? '<b class="slNLk">' + x[0] + '</b> ' : '') + (x[1] || '') + (x[2] && x[2].filter(Boolean).length ? '<ul class="slNLu">' + li(x[2]) + '</ul>' : '') : x) + '</li>').join(''), L = o.ol ? 'ol' : 'ul', t = li(items);
+    return (o.act || []).filter(Boolean).map(a => '<div class="slNLa">' + a + '</div>').join('') + (lead ? '<div class="slNLl">' + lead + '</div>' : '') + (t ? '<' + L + ' class="slNLu">' + t + '</' + L + '>' : ''); }
+  ```
+  A note `<p class="note" …>A. B. C.</p>` becomes `<div class="note slNL" …>${slNL('Lead:', [['Lead words', 'a.'], ['Lead words', 'b.', [sub-items]], null, …])}</div>` (`null` items skipped: conditional facts; a third element gives a nested list). `o.act`: action lines on top, in the warning colour.
+- **CSS** (after `.note.pad`), tool-scoped, no new colours (inherits the note colour; the action line uses `--warn`); the tool has no dark theme; print keeps a list item on one page:
+  ```css
+  .slNL .slNLl { font-weight: 600; color: var(--text); margin: 0 0 1px; }
+  .slNL .slNLu { margin: 2px 0 3px; padding-left: 18px; }
+  .slNL .slNLu > li { margin: 1px 0; max-width: none; overflow-wrap: anywhere; }
+  .slNL .slNLu .slNLu { margin: 1px 0 2px; }
+  .slNL .slNLk { font-weight: 600; }
+  .slNL .slNLa { color: var(--warn); font-weight: 600; margin: 2px 0 4px; }
+  @media print { .slNL .slNLu > li { break-inside: avoid; } }
+  ```
+- **Report:** no change to the Report code. The tab chapters of the Report are read from the tabs' HTML (`slxWalk`): the lead prints as a note line and each list item as a "• " line (nested items as their own "• " lines).
+- **Sign convention:** `SIGNS` (the string) is unchanged; new `SIGNS_NL` (after `const SIGNS =`) is the same text as the lead "Signs:" and six items (Axial / Cap moment / Cap shear / M_t / M_l / Moments of resultants). The notes that showed `${SIGNS}` (Dead load, Live load, Braking, Wind, Water, Ice, Temperature, Seismic, Vessel and Vehicle collision, Earth loads, Combinations) now show `${SIGNS_NL}`; text that followed SIGNS in the same note is a list of its own after it.
+- **Notes changed (function, anchor = the old opening text → new lead → item lead words):**
+  1. `summaryHtml`, "Height is the column clear height" → Height / Self-weight / DC and DW (the SRX patch that appends "Reactions hand-off …" after "DC and DW are the superstructure reactions summed over the girders (kip, unfactored)." still matches).
+  2. `paneRx`, "Unfactored DC1, DC2, and DW per girder" → lead (first sentence) → Live load / Paste (the Excel patch's `.replace('To paste from a spreadsheet, …first cell.'` still matches).
+  3. Dead load tab: `${SIGNS} The bent is a 2D frame…` → Signs list + Bent.
+  4. Live load tab: `${SIGNS} Lanes are stepped…` → Signs list + "Lane search:" → Lanes / Each lane / Loaded lanes / No IM.
+  5. Live load tab, "Truck or tandem and lane parts" → "Per-lane reactions:" → Truck or tandem and lane parts / Two trucks / At an expansion joint.
+  6. Live load tab (skew card), "Applied to the maximum bearing LL + IM" → "Where the skew correction applies:" → Applied to / Stiffness / Not applied to / Bearings rows.
+  7. Bridge pane (Live load), "IM applies to the truck and tandem only" → "Live load options:" → IM / Pedestrian load / Skew correction (Table 4.6.2.2.3c-1) / K_g blank / Older projects.
+  8. Braking tab, "Truck axles 72 kip" → "Braking force BR:" → Loads / Applied / IM; and `${SIGNS} H and V_t + toward the left…` → Signs list + Bearing forces. ("(Force distribution tab)" is still linked by the FD patch.)
+  9. Wind tab, "Strength V uses 80 mph" → "Wind speeds, coefficients, and how the wind reaches the units:" → Speeds / K_z and G / Attack angles / Minimum / Z / To the units / Vertical wind; and `${SIGNS} Directions: …` → Signs list + Directions.
+  10. Force distribution tab, "Elastomeric bearings: k_b = n G A / h_rt" → "Stiffness of each unit and how the forces are shared:" → Elastomeric bearings / Fixed bearings / Columns, piles, and walls / E (one sub-item per f′c) / Free units / Overturning couples.
+  11. Combinations tab, "Load factors: Strength I: …" (2,000 characters) → "Load factors and how each effect is enveloped:" → Load factors (one sub-item per limit state) / Details per limit state (one sub-item per limit state) / Each effect is enveloped on its own / Values in a row / Collision loads; then the Signs list. **MassDOT UF patch** (`comboHtml` wrapper, anchor `// SRXF`): before `h.replace('<p class="note" style="padding:8px 0 0">Load factors: ', '… Load factors: UF (future utility allowance, …); ')`; after `h.replace('<li><b class="slNLk">Load factors:</b> <ul class="slNLu">', '<li><b class="slNLk">Load factors:</b> <ul class="slNLu"><li><b>UF</b> (future utility allowance, MassDOT utilities from GirderDetail) in every limit state: the DC maximum factor where it adds, 0 where it relieves (MassDOT Part I 3.5.5.2, as GirderDetail)</li>')` (the UF line is the first sub-item, where it was).
+  12. Combinations tab (concurrent sets), "Every load keeps the same factor" → "Each row is a set that acts together:" → Same factors / (hover hint, still left out of the Report) / Live load.
+  13. Temperature tab, "Each continuous segment expands or contracts" → "Temperature movement, bearing forces, and friction:" → Point of no movement / Force at a row / Movements / Friction / Shrinkage and creep (only when entered) / Load factors.
+  14. Water tab, "Stream pressure acts from the water surface" → "Water loads WA and the floods:" → Stream pressure / Debris / Lateral pressure / Shielding / Buoyancy / Floods / No-water case / Scour. **Entered-C_D patch** (`waterHtml` wrapper, anchor `if (!w.cd || w.cd === 'auto') return h;`): the replaced text now starts at "acts from the water surface…" (before: "Stream pressure acts from…"; "Stream pressure" is now the bold lead word), both in the search and in the replacement.
+  15. Ice tab, "Load cases of 3.9.2.4.1" → "Ice load cases:" → Load cases / Combination / Not included.
+  16. Units pane (Water and ice), "Flow direction is along the bearing line" → Flow direction / Blank scour elevations / Ice.
+  17. Units pane (Collision), "Vessel: Method I" → Vessel / Vehicle / Angles.
+  18. Seismic tab, "W is the superstructure DC + DW" → "Seismic weight and model:" → W / Longitudinally / Transversely.
+  19. Seismic tab, design-force note (Zone 1: "Seismic Zone 1: the design forces are the connection forces"; Zones 2–4: "Design forces are the elastic forces divided by R") → "Seismic design forces:" → Seismic Zone 1 / Longitudinally / Elastic forces / Directions, or Design forces / Connection and foundation R (or Unit R) / Plastic hinging forces (or Zone 2) / Directions. The Zone 1 "Check: segment n has m lines of fixed bearings … Confirm the share with the engineer of record." is now an action line on top (`o.act`).
+  20. Seismic tab, "Entered on the Bridge tab. S_a between the listed periods" → lead "Entered on the Bridge tab." → Between periods / A_s; and `${SIGNS}${Zones 3 and 4 …}` → Signs list + Zones 3 and 4.
+  21. Bridge pane (Seismic), "S_a values from the AASHTO-USGS Seismic Design Ground Motion Database" → lead (with the database link) → Entry / Result (or Incomplete) / Older input (only with AASHTO-2009 input) / γ_EQ.
+  22. Earth loads tab (abutment), "γ = … kcf, φ = …°, β = …°. Active pressure" → "Backfill and earth pressures:" → Soil / Active pressure / Stem and footing / Live load surcharge / Seismic / Construction stage / Approach slab (only when on).
+  23. Earth loads tab, "Load factors: EH …" → "Load factors:" → EH / EV / ES / LS / Service; then the Signs list.
+  24. Bridge pane (Owner), MassDOT note "MassDOT: temperature ranges of 3.1.8.2" → "MassDOT amendments used here:" → Temperature / γ_EQ / Seismic / Scour / Surcharge / Set under each abutment.
+  25. Bridge pane (Load factors), "Blank uses the AASHTO value shown." → that lead → Extreme Event I and II / Extreme Event I live load / TU / Strength II / Strength IV / Older overrides (only with saved Strength IV overrides).
+- **Not changed:** the Manual and the Report's own notes (SLNL-2); "Worked in:" link lines; the earth-pressure drawing labels; the Earth loads "Soil … deep over the footing" worked line (one worked value with its parenthesised equation, 2 sentences); input-check lines (all under ~300 characters); hand-off payload text (`notes`, `basis`, `signConvention`, `SIGN`).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none. **Hand-offs:** payloads byte-identical (abutmentLoads, the abutment export, foundationLoads for every unit), apart from the export time stamp.
+- **Check case:** default project, Pier 1, Combinations tab: before one 2,082-character paragraph; after the lead "Load factors and how each effect is enveloped:", two lists of 8 limit states each ("Strength I: DC 1.25/0.90, DW 1.50/0.65, LL, BR, CE 1.75" … and the details), three bullets, then the six-item Signs list. Report: the same lines, each "• ".
+- **How verified:** headless Chromium, origin/main vs the branch, 8 cases (default; MassDOT + water + ice + seismic Zone 1; all package chapters; two-span wall pier; MassDOT utilities + shrinkage + approach slab + Strength IV overrides + AASHTO-2009 input; Zone 3/4 + unit R + entered C_D + debris; Zone 1 + code Service IV vertical wind; Zone 1 with every bearing line fixed): every unit's `combine()` result, `MODEL`, the abutment hand-off and export, the foundationLoads payload of every unit identical; the digit sequence of every output tab (every unit), every input pane (every unit) and the printed Report text identical, and the Report's KaTeX source identical, in every case except the moved Zone 1 "Check:" line (case 8: identical once that line is set aside). 0 console errors, 0 unresolved / duplicate Report links. Screenshots at 1440 and 390 px. Tests: see the PR.
+- **Decision (pending engineer review):** the Zone 1 "Check: … lines of fixed bearings" line moved from mid-note to the top of the note (action items first), so on that note the order of the digits changes.
+- **Other copies:** none.
+
+## 2026-11-08 — PR: nl-bsl-notes2 (PR #1179: https://github.com/mlococo88/All-Structural/pull/1179) (SLNL-2) — the Manual, the open-items log and the Report's own notes as a lead and a list (display only, no result change)
+
+### SLNL-2. Manual and Report notes split into a lead line and a list   [display only] [no result change]
+- **Request:** as SLNL-1 (#1173), part 2 of 2. Same rule and the same `slNL` helper and CSS. Every sentence, number, citation and link is kept, in the same order; new lead words carry no digits.
+- **Manual (`manualHtml` and its phase wrappers):** the card body is now `<div class="card-b man slNL">` so the SLNL list styles apply. A long paragraph becomes `<div class="slNLl">first sentence</div><ul class="slNLu">…</ul>`; a long bullet keeps its bold lead and first sentence and gets a nested `<ul class="slNLu">` of `<li><b class="slNLk">lead words</b> text</li>`. The section heading (h3) stays the heading. Changed (anchor → item lead words):
+  1. What this app does, "SubLoads computes the loads" → Stands alone / Phase tabs.
+  2. Fixity checks, "The superstructure is split into continuous segments" → Restraint / More than one fixed unit.
+  3. Drawings and DXF, "The plan, elevation, and unit drawings are built once" → DXF / Dimensions / Sheets.
+  4. Files, "Save (Ctrl+S) keeps the project" → Save / Save as… / Saved projects… / Export JSON / Import JSON / Autosave (no lead line: the h3 "Files").
+  5. Dead load (Phase 2), "Superstructure DC1, DC2, and DW act at the bearings" → Substructure self-weight / Soil over footings.
+  6. Live load: Per lane → Influence lines / Vehicles / Interior supports / IM; Across the bridge → In each lane / Deck to girders; Search → Lanes combined / Shown; Bent → Bearing loads / Hammerheads, wall piers, and abutments.
+  7. Phase 3: Braking (3.6.4) → Lanes / Applied; Wind (3.8) → Superstructure wind / Substructure wind / Wind on live load / Vertical wind; Distribution → Transverse forces / Couples / Bents.
+  8. Phase 4: Temperature (3.12.2) → Rise and fall / Movement / Friction / Load factors; Water (3.7) → Buoyancy / Stream pressure / Debris / Floods; Ice (3.9.2) → Cases.
+  9. Seismic: Ground motion → Site class / S_a / S_D1 / Zone / Earth pressure / Older projects; Analysis → Longitudinally / Transversely; Design forces → Zone 1 / Zones 2 to 4 / At piers / Directions / Not included.
+  10. Collision: Vessel (3.14, Method I) → Ship / Barge / Or (enter the force) / Applied / Method II.
+  11. Phase 7: Export DXF → File / Model space / Sheets / Load summary / Offline; Verification, "Checked against FHWA's" → FHWA example / Live load / Independent checks / Report.
+  12. Abutment export, "Export abutments writes one JSON file" → Load cases / A calculatorInput block / Signs / Earth pressure.
+  13. Earth loads: Abutments → Stem and footing / Surcharges / Extreme Event I / Construction / Same equations; Approach slab → Live load / Where.
+  14. Pedestrian load, "Sidewalks are entered by width" → Pressure / To the girders / Lane search.
+  15. Owner requirements: MassDOT → Temperature / γ_EQ / Seismic / Scour / Surcharge / Abutment inputs / Not used; Zone 1 connection force → Longitudinally / Single-span bridges; Bearings → Friction / Pinned column base.
+  16. Reactions from Excel, "On the Reactions tab, Download Excel template" → Fill / Matching / Library.
+- **Open items log:** the `PENDING` entry `['Seismic', 'Capacity design with plastic hinging forces (3.10.9.4.3) is not computed. …']` keeps its text (`p[1]`, read by `pendingMd` "Download the log" and by the `PENDING.findIndex` patches) byte-identical and gains a display-only third element `[lead, items]` (Foundations and bearings / Unit R / Column shear / Hammerhead and wall pier). `pendingHtml`: before `PENDING.forEach(([a, t]) => (g[a] = g[a] || []).push(t));`, after `PENDING.forEach(([a, t, nl]) => (g[a] = g[a] || []).push(nl ? slNL(nl[0], nl[1]) : t));`.
+- **Report helper** (after `function slNL(`), anchor `/* SLNL (Report)`:
+  ```js
+  function slrNL(lead, items, o) { o = o || {}; const n = t => o.warn ? { type: 'note', warn: true, text: t } : { type: 'note', text: t };
+    return [lead ? n(lead) : null, ...(items || []).filter(Boolean).map(x => n('• ' + (Array.isArray(x) ? x[0] + ' ' + x[1] : x)))].filter(Boolean); }
+  ```
+  `{ type: 'note', text: 'A. B. C.' }` → `...slrNL('A.', [['Lead:', 'b.'], ['Lead:', 'c.']])`. Changed (`slrModel`, `slxAdd`):
+  1. §1.1 "Units: kip, ft, kip-ft unless noted." → Values / Input.
+  2. Per unit, "Each load at the resultant section, unfactored, with its source." → Several cases / Used by / Worked on (links).
+  3. Per unit, "Each limit state is the sum of its loads at the resultant section, with the factors of §1.2 (η = 1.0):" → Permanent loads / LL + IM / Shown already factored / Unfactored loads (links). The list "BR, CE, LS, WS + WL, TU + FR, WA, IC, EQ, CV and CT" now follows "(the governing case of each):" (same words; no digits in either).
+  4. Calculation package cover line "n spans (…), m substructure units; units in the calculation package: … Chapters: …" → lead "n spans (…), m substructure units." → Units in the calculation package / Chapters.
+- **Not changed:** short Manual items (Checks, Centrifugal force, Combinations, Extreme Event I and II, Support length, Vehicle, Scour, Wind on the substructure, Transverse superstructure loads, Ice / Vessel options, Load diagrams, 3D, Print, Workflow and Conventions items); the §1.2 load-factor note and the cover "Subject:" / "Load factors are those of Tables…" notes (under ~200 characters).
+- **Formulas, factors, units, code references:** none changed. **Saved data:** none. **Hand-offs:** unchanged.
+- **How verified:** the SLNL-1 harness (8 cases), origin/main (with SLNL-1) vs the branch: results, MODEL, every hand-off payload identical; the digit sequence of every tab (Manual included), every input pane and the printed Report identical; KaTeX source identical; 0 console errors. Screenshots at 1440 and 390 px. Tests: see the PR.
+- **Decision (pending engineer review):** in the Manual the section heading (h3) or the item's existing bold lead serves as the bold lead; the first sentence stays as the item's opening line.
+- **Decision (pending engineer review), Part B (left summary panel) not added to SubLoads:** the tool is a load generator with no capacity checks (no D/C, PASS/FAIL); its key results are per-unit force tables already summarised on the Combinations tab and in the Report's "Governing design forces"; and the left column is already the input sidebar (360 px), so a further 240–280 px column from 1200 px would leave the force tables about 600 px wide.
+- **Other copies:** none.
