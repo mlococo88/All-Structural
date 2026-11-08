@@ -66,6 +66,51 @@ body{font-family:var(--font-doc);font-size:10pt;color:var(--ink);background:#efe
 #main{flex:1 1 auto;display:flex;min-height:0;overflow:hidden}
 #inputPanel{flex:0 0 33%;max-width:450px;min-width:330px;overflow-y:auto;border-right:2px solid var(--line);background:var(--panel);padding:9px 10px 40px}
 #outputPanel{flex:1 1 auto;min-width:0;overflow-y:auto;overflow-x:hidden;padding:0 14px 60px;background:var(--paper)}
+/* SPLS (2026-11-08, engineer: the left summary panel of Retaining Wall, Spread Footing, Light Pole and Shear and Moment Diagrams —
+   RWDL #959, RWLB #984, SFLB #988, LPLB #991, SMLS #1130): on screens 1200 px and wider a left column (#spcDashCol, 240 px up to
+   1499 px, 280 px from 1500 px) lists the key results as compact chips; a click opens the card that works the value. « shrinks it to
+   a 42 px strip. Below 1200 px nothing changes. Screen only (print prints the Report). */
+#spcDashCol{display:none}
+@media print{#spcDashCol{display:none!important}}
+@media screen and (min-width:1200px){
+ body.spcDashWide #spcDashCol{display:block;flex:0 0 280px;width:280px;min-width:0;overflow-y:auto;overflow-x:hidden;background:var(--panel);border-right:2px solid var(--line);padding:0 8px 24px;overscroll-behavior:contain;font-family:var(--font-ui)}
+ #spcDashHead{position:sticky;top:0;z-index:3;background:var(--panel);display:flex;align-items:center;gap:4px 8px;flex-wrap:wrap;padding:8px 0 4px}
+ #spcDashTtl{margin:0;font-size:8pt;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.08em}
+ #spcDashTgl{margin:0;padding:1px 7px;font-size:9pt;border:1px solid var(--line);background:var(--paper);border-radius:5px;cursor:pointer;color:#475569}
+ #spcDashCnt{display:inline-flex;gap:4px;flex-wrap:wrap}
+ #spcDashCnt span{font-size:7.5pt;font-weight:700;padding:1px 5px;border:1px solid;border-radius:3px;white-space:nowrap}
+ #spcDashCnt .spcCf{color:#991B1B;background:#FEF2F2;border-color:var(--fail)}
+ #spcDashCnt .spcCw{color:#92400E;background:#FFFBEB;border-color:var(--warn)}
+ #spcDashCnt .spcCp{color:#065F46;background:#ECFDF5;border-color:var(--pass)}
+ #spcDashSub{font-size:8pt;color:#6B7A8F;margin:0 0 6px;overflow-wrap:anywhere}
+ #spcDash{display:grid;grid-template-columns:minmax(0,1fr);gap:3px;align-items:start}
+ .spcCh{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;column-gap:5px;padding:3px 6px 3px 2px;min-width:0;
+   border:1px solid var(--slate-400);border-radius:3px;background:var(--slate-50);font-size:8.5pt;line-height:1.35;cursor:pointer;color:var(--ink)}
+ .spcCh:focus-visible{outline:2px solid var(--blue-600);outline-offset:-1px}
+ .spcCh.pass{border-color:var(--pass);background:#ECFDF5}.spcCh.fail{border-color:var(--fail);background:#FEF2F2}.spcCh.warn{border-color:var(--warn);background:#FFFBEB}
+ .spcCh.na:hover{background:var(--slate-100)}.spcCh.pass:hover{background:#D1FAE5}.spcCh.fail:hover{background:#FEE2E2}.spcCh.warn:hover{background:#FEF3C7}
+ .spcCh .spcChX{grid-row:1;grid-column:1;margin:0;padding:0 3px;border:none;background:transparent;font-size:7pt;color:#334155;line-height:1.2;cursor:pointer}
+ .spcCh .spcChX:disabled{visibility:hidden}
+ .spcCh .spcChN{grid-row:1;grid-column:2;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .spcCh .spcChR{grid-row:1;grid-column:3;white-space:nowrap;color:#1E40AF;font-weight:600;font-variant-numeric:tabular-nums}
+ .spcCh .spcChS{grid-row:1;grid-column:4;font-size:7.5pt;font-weight:700;white-space:nowrap}
+ .spcCh.pass .spcChS{color:var(--pass)}.spcCh.fail .spcChS{color:var(--fail)}.spcCh.warn .spcChS{color:var(--warn)}
+ .spcCh .spcChV,.spcCh .spcChRef{grid-column:1/-1;display:none;padding-left:16px;font-size:8pt;color:#475569;overflow-wrap:anywhere}
+ .spcCh .spcChRef{font-style:italic;color:#6B7A8F}
+ .spcCh.spcOpen .spcChV,.spcCh.spcOpen .spcChRef{display:block}
+ .spcCh.spcOpen .spcChN{white-space:normal}
+ .spcDMsg{font-size:8.5pt;padding:6px 8px;border:1px solid #FDA4AF;background:#FFF1F2;color:#9F1239;border-radius:3px}
+ body.spcDashWide.spcDashColl #spcDashCol{flex-basis:42px;width:42px;padding:0}
+ body.spcDashWide.spcDashColl #spcDash,body.spcDashWide.spcDashColl #spcDashSub{display:none}
+ body.spcDashWide.spcDashColl #spcDashHead{flex-direction:column;align-items:center}
+ body.spcDashWide.spcDashColl #spcDashTtl{writing-mode:vertical-rl;transform:rotate(180deg);margin:4px 0;white-space:nowrap}
+ body.spcDashWide.spcDashColl #spcDashCnt{flex-direction:column;align-items:center}
+ body.spcDashWide.spcDashColl #spcDashCnt span{font-size:7pt;padding:1px 2px;white-space:normal;text-align:center;width:36px}
+}
+@media screen and (min-width:1200px) and (max-width:1499.98px){
+ body.spcDashWide #spcDashCol{flex-basis:240px;width:240px}
+ body.spcDashWide.spcDashColl #spcDashCol{flex-basis:42px;width:42px}
+}
 #tabBar{position:sticky;top:0;z-index:15;background:var(--paper);border-bottom:2px solid var(--accent);padding:7px 0 0;display:flex;flex-wrap:wrap;gap:2px}
 #tabBar button{display:inline-flex;align-items:center;font-family:var(--font-ui);font-size:9pt;padding:5px 11px;border:1px solid var(--line);border-bottom:none;background:var(--slate-100);color:#41546E;cursor:pointer;border-radius:5px 5px 0 0}
 #tabBar button.active{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
@@ -327,6 +372,11 @@ table.plist button{font-size:8pt;padding:0 5px;border:1px solid #C6CFDA;backgrou
   </div>
   <div id="govStrip" class="govStrip"></div>
   <div id="main">
+    <aside id="spcDashCol" aria-label="Results summary"><!-- SPLS (2026-11-08): key results as a left column on screens 1200 px and wider -->
+      <div id="spcDashHead"><button type="button" id="spcDashTgl" aria-controls="spcDash" aria-expanded="true">&laquo;</button><h2 id="spcDashTtl">Results summary</h2><span id="spcDashCnt"></span></div>
+      <div id="spcDashSub"></div>
+      <div id="spcDash"></div>
+    </aside>
     <div id="inputPanel"><div id="prjPane"><!-- SPHD (2026-11-05): moved here from the header; kept across rebuilds by rebuildInputs() (first in the Project tab) -->
       <div class="sec"><div class="secHead"><span class="secTitle">Save and open</span></div><div class="secBody" id="spcSaveCard"></div></div><!-- STDS (2026-11-06): the standard "Save and open" card (shared/projects-ui.js projectBar, SPCPL.pb); it replaces the "Saved projects (this browser)" section and takes the Project file buttons -->
       <div class="sec"><div class="secHead"><span class="secTitle">Title block</span></div><div class="secBody">
@@ -2797,7 +2847,11 @@ const SPC = (function () {
        neglected fillets: the thin-wall J of 155 W, WT, HP, M, MT shapes is above the AISC J (W14X730 +9.1 %, WT7X436.5 +11.1 %),
        all with b_f/2t_f ≤ 5.33. Flag J (unconservative where J resists torsion) for a W, M, HP, WT or MT part with b_f/2t_f ≤ 5.5. */
     const thick = parts.filter(q => q.pt.type === 'shape' && q.pt.p && { W: 1, M: 1, HP: 1, WT: 1, MT: 1 }[q.pt.p.fam] && q.G.g.dims && q.G.g.dims.bf / (2 * q.G.g.dims.tf) <= 5.5);   // S, ST: thin-wall J always 14–27 % below the table
-    if (thick.length) { T.jHigh = true; T.warn.push(`Thick flanges (b_f/2t_f ≤ 5.5: ${thick.map(q => (q.pt.lbl || q.pt.id) + ' ' + q.G.g.desc + ' ' + (+(q.G.g.dims.bf / (2 * q.G.g.dims.tf)).toFixed(2))).join(', ')}): the thin-wall J (Σ b t³/3) can be higher than the true J for such stocky flanges (up to +11 % over the AISC tables for the heaviest W and WT shapes), which is unconservative where J resists torsion. Use the AISC tabulated J of the shape, or check J by another method.`); }
+    if (thick.length) {   /* SPNL (2026-11-08): the message is unchanged (Report, notes); T.warnNL[message] = [lead, items, action lines] is for the screen only */
+      T.jHigh = true; const a = `Thick flanges (b_f/2t_f ≤ 5.5: ${thick.map(q => (q.pt.lbl || q.pt.id) + ' ' + q.G.g.desc + ' ' + (+(q.G.g.dims.bf / (2 * q.G.g.dims.tf)).toFixed(2))).join(', ')})`,
+        b = 'the thin-wall J (Σ b t³/3) can be higher than the true J for such stocky flanges (up to +11 % over the AISC tables for the heaviest W and WT shapes), which is unconservative where J resists torsion.', c = 'Use the AISC tabulated J of the shape, or check J by another method.';
+      T.warn.push(a + ': ' + b + ' ' + c); (T.warnNL = T.warnNL || {})[a + ': ' + b + ' ' + c] = [a + ':', [['Thin-wall J:', b]], [c]];
+    }
     if (R.anyTab) T.notes.push('Parts set to "use AISC tabulated" still use their plate model here (except a single shape on its own, see the comparison).');
     T.contacts = contactPairs(R, tol, off);
     // part-level groups (allowed contacts)
@@ -3747,6 +3801,11 @@ function spNL(lead, items, o) {
   const li = (items || []).filter(Boolean).map(x => '<li>' + (Array.isArray(x) ? '<b class="spNLk">' + x[0] + '</b>' + (x[1] ? ' ' + x[1] : '') + (x[2] ? spNL('', x[2]) : '') : x) + '</li>').join('');
   return (o.act || []).filter(Boolean).map(a => '<div class="warnBox spNLa">' + a + '</div>').join('') + (lead ? '<div class="spNLl">' + lead + '</div>' : '') + (li ? '<' + L + ' class="spNLu">' + li + '</' + L + '>' : '');
 }
+/* SPNL (Report): the same note as Report note items, the lead line, then "• lead words text" per item (o.warn: warning style) */
+function sprNL(lead, items, o) {
+  o = o || {}; const n = t => o.warn ? { type: 'note', warn: true, text: t } : { type: 'note', text: t };
+  return [lead ? n(lead) : null, ...(items || []).filter(Boolean).map(x => n('• ' + (Array.isArray(x) ? x[0] + (x[1] ? ' ' + x[1] : '') : x)))].filter(Boolean);
+}
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 const isNum = v => typeof v === 'number' && isFinite(v);
 function toast(t, warn) { const e = $('toast'); e.textContent = t; e.classList.toggle('warn', !!warn); e.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => e.classList.remove('show'), warn ? 7000 : 2200); }
@@ -4277,8 +4336,8 @@ function buildPartsPane(P) {
     const r2 = el('div', 'btnRow');
     r2.appendChild(btn('Rect. hole', 'sm', () => addSimple('hrect'))); r2.appendChild(btn('Round hole', 'sm', () => addSimple('hcirc'))); r2.appendChild(btn('Polygon hole…', 'sm', () => startPoly(true)));
     body.appendChild(r2);
-    body.appendChild(el('div', 'hint', '<b>Click a part to change its size — or double-click it.</b> A selected part shows its dimensions on the drawing: click one to type a new value, or drag an edge handle (plates, bars, rectangular tubes). Sizes can also be typed in the list below.'));
-    body.appendChild(el('div', 'hint', 'New parts go to the centre of the view. Drag them on the drawing (snapping to corners, edge midpoints, centroids and the grid), or type exact positions on the Part properties tab. Right-click a part for flip, mirror, rotate, align and "place touching".'));
+    body.appendChild(el('div', 'hint spNL', spNL('<b>Click a part to change its size — or double-click it.</b>', [['On the drawing:', 'a selected part shows its dimensions on the drawing: click one to type a new value, or drag an edge handle (plates, bars, rectangular tubes).'], ['In the list:', 'sizes can also be typed in the list below.']])));
+    body.appendChild(el('div', 'hint spNL', spNL('New parts go to the centre of the view.', [['Place them:', 'drag them on the drawing (snapping to corners, edge midpoints, centroids and the grid), or type exact positions on the Part properties tab.'], ['Right-click a part', 'for flip, mirror, rotate, align and "place touching".']])));
   });
   mkSec(P, 'inShape', 'Add a rolled shape (AISC Shapes Database v16.0)', body => {
     const fam = selIn(SPC.FAM_ORDER.map(f => [f, SPC.FAMS[f].name]), () => SHAPE_UI.fam, v => { SHAPE_UI.fam = v; SHAPE_UI.name = ''; }, 'shFam', true);
@@ -4297,7 +4356,7 @@ function buildPartsPane(P) {
     fill(); body.appendChild(list);
     const r = el('div', 'btnRow'); r.appendChild(btn('Add shape', 'primary sm', () => { if (list.value) addShape(SHAPE_UI.fam, list.value); else alert('Pick a shape from the list.'); }));
     body.appendChild(r);
-    body.appendChild(el('div', 'hint', 'Shapes are drawn and computed as their plates (flanges, web, legs) with fillets and corner radii neglected; the AISC tabulated A, I, J, Cw are shown for comparison. L, WT, MT, ST and 2L data: see Method. Double-click a name to add it.'));
+    body.appendChild(el('div', 'hint spNL', spNL('Shapes are drawn and computed as their plates (flanges, web, legs) with fillets and corner radii neglected.', [['For comparison:', 'the AISC tabulated A, I, J, Cw are shown for comparison.'], ['L, WT, MT, ST and 2L data:', 'see Method.'], ['Add:', 'double-click a name to add it.']])));
   });
   mkSec(P, 'inList', 'Parts in the section (' + M.parts.length + ')', body => {
     ovEditBox(body);
@@ -4528,7 +4587,10 @@ function buildSetPane(P) {
     fRow(body, 'Snap radius', numIn(() => S.snapPx, v => { S.snapPx = v; }, 'set_spx', { k: 'n', min: 0 }), 'px', 'Within this distance on screen a dragged part snaps flush to another part (parallel edges become coincident; ends and centres line up along the contact), then to corners and midpoints, then to the grid.');
     const nov = document.createElement('input'); nov.type = 'checkbox'; nov.checked = NOOV; tagField(nov, 'set_noov');
     nov.addEventListener('change', () => { setNoOverlap(nov.checked); toast(NOOV ? 'Prevent overlap is on' : 'Prevent overlap is off: parts may overlap (overlap is counted twice)'); });
-    chkRow(body, 'Prevent overlap', nov, 'Solid parts may touch but not overlap: a dragged part stops at contact and slides along it; new, pasted and copied parts go to the nearest free position; typed positions and sizes that would overlap are not applied. A rotate or flip is always applied in place; if the part then overlaps another, a warning names it (Check the model → Fix: move apart). Holes must stay inside a solid part (they move with the part they are in). Turn off for special cases. This setting is kept in this browser only, not in the project.');
+    chkRow(body, 'Prevent overlap', nov);
+    body.appendChild(el('div', 'hint spNL', spNL('Solid parts may touch but not overlap:', [['Dragging:', 'a dragged part stops at contact and slides along it.'], ['New, pasted and copied parts', 'go to the nearest free position.'],
+      ['Typed positions and sizes', 'that would overlap are not applied.'], ['Rotate or flip:', 'always applied in place; if the part then overlaps another, a warning names it (Check the model → Fix: move apart).'],
+      ['Holes', 'must stay inside a solid part (they move with the part they are in).'], ['Turn off', 'for special cases.'], ['This setting', 'is kept in this browser only, not in the project.']])));
     fRow(body, 'Arrow-key step', numIn(() => S.nudge, v => { S.nudge = v; }, 'set_nud', { k: 'L', min: 0 }), un('L'), 'Shift+arrow moves 10 steps.');
   });
   mkSec(P, 'setCalc', 'Calculation', body => {
@@ -4816,7 +4878,8 @@ function buildLibPane(T) {
     s.value = LIBF.which; s.addEventListener('change', () => { LIBF.which = s.value; });
     fRow(body, 'Parts', s, '');
     const r = el('div', 'btnRow'); r.appendChild(btn('Save to library', 'primary sm', libSaveCurrent, 'Save these parts as a named library entry (an entry with the same name is replaced after a confirmation)')); body.appendChild(r);
-    body.appendChild(el('div', 'hint', 'Stored for each part: everything a project file stores (type, size or rolled shape, position, rotation, mirrored, n, density ρ, hole, AISC tabulated option, label), plus the "not connected" contacts (Torsion tab) and the shear-flow connector inputs between the saved parts. Positions are kept as drawn; dimensions are stored in inches.'));
+    body.appendChild(el('div', 'hint spNL', spNL('What is stored:', [['Stored for each part:', 'everything a project file stores (type, size or rolled shape, position, rotation, mirrored, n, density ρ, hole, AISC tabulated option, label).'],
+      ['Plus', 'the "not connected" contacts (Torsion tab) and the shear-flow connector inputs between the saved parts.'], ['Positions', 'are kept as drawn; dimensions are stored in inches.']])));
   }, { noNum: true });
   mkSec(P, 'libList', 'My sections (' + entries.length + ')', body => {
     if (!entries.length) body.appendChild(el('div', 'note', L.bad ? 'No entries shown.' : 'The library is empty. Save the current section above, or import a library or project file below.'));
@@ -4855,7 +4918,8 @@ function buildLibPane(T) {
     const es = btn('Export selected (' + LIBCHK.size + ')', 'sm', () => libExport(libRead().entries.filter(e => LIBCHK.has(e.id)), 'section_library_selected.json'), 'Save the ticked entries to a file (.json)'); es.setAttribute('data-libexpsel', '1'); es.disabled = !LIBCHK.size; r.appendChild(es);
     r.appendChild(btn('Import…', 'sm', libPickFile, 'Add the entries of a library file, or a project file as one new entry'));
     body.appendChild(r);
-    body.appendChild(el('div', 'hint', `Import accepts a library file (<code>_schema: "${LIB_SCHEMA}"</code>: its entries are added; on a name clash you are asked whether to replace the entry or keep both) or a project file (<code>_schema: "${SCHEMA}"</code>: added as one entry named after the project). The library is stored in this browser under <code>${LS_LIB}</code>; it is not part of the project file.`));
+    body.appendChild(el('div', 'hint spNL', spNL('Import accepts a library file or a project file:', [['Library file', `(<code>_schema: "${LIB_SCHEMA}"</code>): its entries are added; on a name clash you are asked whether to replace the entry or keep both.`],
+      ['Project file', `(<code>_schema: "${SCHEMA}"</code>): added as one entry named after the project.`], ['Storage:', `the library is stored in this browser under <code>${LS_LIB}</code>; it is not part of the project file.`]])));
   }, { noNum: true });
   mkSec(P, 'libProj', 'Project file (JSON)', body => {
     const r = el('div', 'btnRow');
@@ -5679,7 +5743,7 @@ const OUT_TABS = [['sec', 'Section'], ['props', 'Properties'], ['calc', 'Calc de
 const SPX = { tab: null, back: null };   // SPRX: the Report shown for printing from another tab (not saved; M.ui.outTab unchanged)
 function curTab() { if (SPX.tab) return SPX.tab; const t = M.ui.outTab; return OUT_TABS.some(x => x[0] === t) ? t : 'sec'; }
 function setOutTab(id) { if (curTab() === id) return; M.ui.outTab = id; autosave(); buildTabBar(); renderTab(); }
-function renderOutput(light) { buildGovStrip(); if (!light) buildTabBar(); renderTab(light); inputTabMarks(); updateToolState(); }
+function renderOutput(light) { buildGovStrip(); if (!light) buildTabBar(); renderTab(light); inputTabMarks(); updateToolState(); spcDashRender(); }
 function buildTabBar() {
   const bar = $('tabBar'); bar.innerHTML = ''; const cur = curTab();
   OUT_TABS.forEach(([id, lab]) => {
@@ -5732,6 +5796,85 @@ function spcGoto(card) {
   else s.scrollIntoView({ block: 'start' });
   s.classList.add('wkFlash'); setTimeout(() => s.classList.remove('wkFlash'), 1600);
 }
+/* SPLS (2026-11-08, engineer: the left summary panel, as Retaining Wall / Spread Footing / Light Pole / Shear and Moment Diagrams;
+   RWDL, RWLB, SFLB, LPLB, SMLS): on screens >= 1200 px the key results show as one chip each in #spcDashCol: the Section-tab
+   key properties (same labels, values and formatting as the tiles of buildSecSummary), the connector D/C of the Q & shear flow tab
+   (the same value and OK / NG rule as its table), the Validation tab result and the warning counts. A chip click opens the card or tab
+   that works the value (spcGoto, the D11 "Worked in" targets). No new calculation. Collapse state: per-browser UI key
+   spc_dashCollapsed_v1 ('1' = collapsed); not in the project, the autosave or the export. Below 1200 px nothing changes. */
+const SPCD = { key: 'spc_dashCollapsed_v1', mq: window.matchMedia ? window.matchMedia('screen and (min-width:1200px)') : null, open: new Map(), coll: false, wide: null };
+try { SPCD.coll = localStorage.getItem(SPCD.key) === '1'; } catch (e) { }
+function spcDashItems() {
+  const T = R.tors || {}, it = [], vu = (x, k, na) => isNum(x) ? esc(nf(x, k)) + ' ' + esc(un(k)) : (na || 'n/a');
+  const P = (n, v, c, o) => it.push(Object.assign({ n, v, st: 'na', c }, o || {}));
+  if (R.warnings.length) P('Check the model', R.warnings.length + ' warning' + (R.warnings.length > 1 ? 's' : ''), null, { st: 'warn', s: '', tab: 'sec', d: R.warnings.map(esc).join('<br>'), to: 'Section · Check the model' });
+  P('A' + (R.anyN ? ' (transformed)' : ''), vu(R.A, 'A'), 'cTab'); P('x̄ (from origin)', vu(R.cx, 'L'), 'cCen'); P('ȳ (from origin)', vu(R.cy, 'L'), 'cCen');
+  P('I<sub>x</sub>', vu(R.Ix, 'I'), 'cI'); P('I<sub>y</sub>', vu(R.Iy, 'I'), 'cI'); P('I<sub>xy</sub>', vu(R.Ixy, 'I'), 'cI');
+  P('I<sub>1</sub> (major)', vu(R.I1, 'I'), 'cP'); P('I<sub>2</sub> (minor)', vu(R.I2, 'I'), 'cP'); P('θ<sub>p</sub> (x → axis 1, CCW)', ang(R.thp), 'cP');
+  P('S<sub>x</sub> top', vu(R.Sxt, 'S'), 'cI'); P('S<sub>x</sub> bottom', vu(R.Sxb, 'S'), 'cI'); P('S<sub>y</sub> left / right', vu(Math.min(R.Syl, R.Syr), 'S'), 'cI', { d: 'smaller of the two' });
+  P('Z<sub>x</sub>', vu(R.Zx, 'S'), 'plZx'); P('Z<sub>y</sub>', vu(R.Zy, 'S'), 'plZy');
+  P('r<sub>x</sub>', vu(R.rx, 'L'), 'cI'); P('r<sub>y</sub>', vu(R.ry, 'L'), 'cI'); P('r<sub>min</sub> (principal)', vu(R.r2, 'L'), 'cP');
+  P('J', vu(T.J, 'I'), 'tJ', { d: (T.J !== null ? (T.Jn ? 'transformed Σ n·J, thin-wall' : 'thin-wall') + (T.jHigh ? '; may be high, see Torsion' : '') : '') + (isNum(T.J) ? '' : esc(T.why || '')), st: T.jHigh ? 'warn' : 'na', s: T.jHigh ? 'check' : '' });
+  P('C<sub>w</sub>', vu(T.Cw, 'W'), 'tCw', { d: isNum(T.Cw) ? '' : esc(T.cwWhy || '') });
+  P('x<sub>o</sub>, y<sub>o</sub> (shear centre)', T.sc ? esc(nf(T.xo, 'L')) + ', ' + esc(nf(T.yo, 'L')) + ' ' + esc(un('L')) : 'n/a', 'tCw', { d: 'from the centroid' });
+  if ((T.warn || []).length) P('Torsion warnings', T.warn.length + '', 'tJ', { st: 'warn', s: '', d: T.warn.map(esc).join('<br>') });
+  let S = null;   /* connector D/C: the Q & shear flow table's value and OK / NG rule (cs.dc <= 1); computed only when a connector is entered, not cached on R */
+  if (Object.values((M.sf && M.sf.conn) || {}).some(q => q && q.type && q.type !== 'none')) { try { S = (R._x && R._x.sf) || SPC.shearFlow(R, M.settings.tol); } catch (e) { S = null; } }
+  if (S && S.ok) S.contacts.forEach((c, i) => { const v = sfVal(c), cs = connSummary(c, v); if (isNum(cs.dc)) P('#' + (i + 1) + ' ' + esc(c.la + ' — ' + c.lb), 'D/C ' + esc(nf(cs.dc, 'n', 3)), null, { st: cs.dc <= 1 ? 'pass' : 'fail', tab: 'q', sec: 'sfTab', key: c.key, d: esc(cs.txt), to: 'Q & shear flow · Shear flow q at each connection' }); });
+  const ok = valSummary(); if (VAL) P('Validation', VAL.filter(v => v.ok).length + ' / ' + VAL.length, null, { st: ok ? 'pass' : 'fail', s: ok ? 'pass' : 'FAIL', tab: 'val', to: 'Validation' });
+  return it;
+}
+function spcDashGo(it) {
+  if (it.c) { spcGoto(it.c); return; }
+  if (it.key) SFSEL = it.key;
+  if (it.sec) COLL[it.sec] = false;
+  M.ui.outTab = it.tab; autosave(); buildTabBar(); renderTab();
+  const op = $('outputPanel'); op.scrollTop = 0;
+  const s = it.sec && document.querySelector('#tabPages [data-secid="' + it.sec + '"]'); if (!s) return;
+  s.classList.remove('collapsed'); op.scrollTop += s.getBoundingClientRect().top - op.getBoundingClientRect().top - $('tabBar').offsetHeight - 6;
+  s.classList.add('wkFlash'); setTimeout(() => s.classList.remove('wkFlash'), 1600);
+}
+function spcDashRender() {
+  const box = $('spcDash'), cnt = $('spcDashCnt'), sub = $('spcDashSub'); if (!box) return;
+  box.innerHTML = '';
+  if (!R || !R.ok) { box.innerHTML = '<div class="spcDMsg">No results: input required (see the message above the tabs).</div>'; cnt.innerHTML = ''; sub.textContent = ''; return; }
+  const items = spcDashItems(), n = { pass: 0, fail: 0, warn: 0 }, ST = { pass: 'OK', fail: 'NG', warn: '', na: '' };
+  const plain = h => { const t = document.createElement('div'); t.innerHTML = h || ''; return t.textContent; };
+  sub.textContent = M.parts.length + ' part' + (M.parts.length === 1 ? '' : 's') + ' · ' + (unitSys() === 'mm' ? 'units: mm, kN' : 'units: in, kip');
+  items.forEach(it => {
+    if (n[it.st] != null) n[it.st]++;
+    const to = it.to || (it.c ? spcCardTxt(it.c).replace(/<[^>]+>/g, '') : '');
+    const c = document.createElement('div'); c.className = 'spcCh ' + it.st; c.tabIndex = 0; c.setAttribute('role', 'button');
+    const key = plain(it.n);
+    c.innerHTML = `<button type="button" class="spcChX" title="Show the details and where the value is worked"></button><span class="spcChN">${it.n}</span><span class="spcChR">${it.v}</span><span class="spcChS">${it.s != null ? it.s : ST[it.st]}</span>`
+      + (it.d ? `<div class="spcChV">${it.d}</div>` : '') + `<div class="spcChRef">→ ${esc(to)}</div>`;
+    c.title = key + ': ' + plain(it.v) + (it.d ? '\n' + plain(String(it.d).replace(/<br>/g, '\n')) : '') + '\nClick: → ' + to;
+    const x = c.querySelector('.spcChX');
+    const setOpen = o => { c.classList.toggle('spcOpen', o); x.setAttribute('aria-expanded', o ? 'true' : 'false'); x.textContent = o ? '▾' : '▸'; };
+    setOpen(SPCD.open.has(key) ? SPCD.open.get(key) : (it.st === 'fail' || it.st === 'warn'));   /* NG and warning chips open by default, as in the other tools */
+    x.addEventListener('click', ev => { ev.preventDefault(); ev.stopPropagation(); const o = !c.classList.contains('spcOpen'); SPCD.open.set(key, o); setOpen(o); });
+    c.addEventListener('click', () => spcDashGo(it)); c.addEventListener('keydown', ev => { if (ev.target !== c) return; if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); spcDashGo(it); } });
+    box.appendChild(c);
+  });
+  cnt.innerHTML = (n.fail ? `<span class="spcCf">${n.fail} NG</span>` : '') + (n.warn ? `<span class="spcCw">${n.warn} warn</span>` : '') + (n.pass && !n.fail ? '<span class="spcCp">no NG</span>' : '');
+}
+function spcDashPlace() {
+  const wide = !!(SPCD.mq && SPCD.mq.matches), ch = SPCD.wide !== null && SPCD.wide !== wide; SPCD.wide = wide;
+  document.body.classList.toggle('spcDashWide', wide);
+  spcDashColl(SPCD.coll, false, ch);
+}
+function spcDashColl(v, save, redraw) {
+  SPCD.coll = !!v; document.body.classList.toggle('spcDashColl', SPCD.coll);
+  const t = $('spcDashTgl');
+  if (t) { t.setAttribute('aria-expanded', SPCD.coll ? 'false' : 'true'); t.innerHTML = SPCD.coll ? '&raquo;' : '&laquo;'; t.title = SPCD.coll ? 'Show the results summary column (remembered in this browser)' : 'Shrink the results summary column (remembered in this browser)'; }
+  if (save) { try { localStorage.setItem(SPCD.key, SPCD.coll ? '1' : '0'); } catch (e) { } }
+  if (save || redraw) requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));   /* the drawing column changed width: the canvas is redrawn */
+}
+(function () {
+  const t = $('spcDashTgl'); if (t) t.addEventListener('click', () => spcDashColl(!SPCD.coll, true));
+  if (SPCD.mq) { if (SPCD.mq.addEventListener) SPCD.mq.addEventListener('change', spcDashPlace); else if (SPCD.mq.addListener) SPCD.mq.addListener(spcDashPlace); }
+  spcDashPlace();
+})();
 document.addEventListener('click', e => { const a = e.target && e.target.closest ? e.target.closest('a.wkA') : null; if (!a || a.closest('#printReport')) return; e.preventDefault(); spcGoto(a.getAttribute('data-card')); });
 function warnPanel(parent) {
   if (!R || !R.ok) return;
@@ -5800,7 +5943,14 @@ function aisCompare(q) {
   const h = rows.map(([lab, a, b, kk]) => `<tr><td class="lft">${lab}</td><td>${esc(nf(a, kk))}</td><td>${b === null || b === undefined ? '—' : esc(nf(b, kk))}</td><td>${esc(pctS(pctd(a, b)))}</td><td class="lft">${esc(un(kk))}</td></tr>`).join('');
   const box = el('div', 'sec');
   box.innerHTML = `<div class="secHead" style="cursor:default"><h2 class="secTitle">Single rolled shape ${esc(name)}: plate model vs AISC Shapes Database v16.0</h2></div><div class="secBody"><div class="tscroll"><table class="tbl"><tr><th class="lft">Property</th><th>This tool (plate model)</th><th>AISC tabulated</th><th>Diff.</th><th class="lft">Unit</th></tr>${h}</table></div>
-  <div class="hint">The plate model of W, M, HP, L, WT and MT shapes neglects the root fillets and toe radii, so A and I differ from the table by a few percent (HSS: rounded corners are modelled). S, C, MC and ST shapes are modelled with the sloped inner flange faces, root fillets and toe radii, found so that A and I<sub>y</sub> equal the table (Method tab); their other values (I<sub>x</sub>, S, Z, x̄) agree with the table within about 1–3 %. Torsion (J, C<sub>w</sub>, shear centre) uses the thin-wall centre-line model with the average t<sub>f</sub> for every shape. AISC J and C<sub>w</sub> include fillet effects (C<sub>w</sub> of angles and tees includes the plate-thickness term that thin-wall theory drops). The thin-wall J is usually below the AISC J (fillets neglected), but for heavy W, M, HP, WT and MT shapes with thick flanges (b<sub>f</sub>/2t<sub>f</sub> ≤ 5.5) it can be above it (W14X730 +9 %, WT7X436.5 +11 %): Σbt³/3 overestimates J of stocky plates. Such J values are flagged. ${q.use ? '<b>This part uses the AISC tabulated A and I</b> (elastic results).' : 'Tick "Use AISC tabulated" on the Part properties tab to use the tabulated A, I instead.'} Z and the torsion constants are from the plate model in either case. L, WT, MT, ST data: see the Method tab.${q.pt.p.fam === 'PIPE' ? ' <b>Pipe:</b> the annulus (OD, t<sub>des</sub>) differs from the tabulated A, I, S, Z and J by up to about ±3.4 % over the v16.0 Pipe table (Pipe20XS +3.4 %, Pipe10STD −3.3 %), in both directions; for design, use the tabulated values (tick "Use AISC tabulated" for A, I) or check against the Manual.' : ''}</div></div>`;
+  <div class="hint spNL">${spNL('Plate model and AISC tabulated values:', [['Fillets:', 'the plate model of W, M, HP, L, WT and MT shapes neglects the root fillets and toe radii, so A and I differ from the table by a few percent (HSS: rounded corners are modelled).'],
+    ['Sloped flanges:', 'S, C, MC and ST shapes are modelled with the sloped inner flange faces, root fillets and toe radii, found so that A and I<sub>y</sub> equal the table (Method tab); their other values (I<sub>x</sub>, S, Z, x̄) agree with the table within about 1–3 %.'],
+    ['Torsion', '(J, C<sub>w</sub>, shear centre) uses the thin-wall centre-line model with the average t<sub>f</sub> for every shape.'],
+    ['AISC J and C<sub>w</sub>', 'include fillet effects (C<sub>w</sub> of angles and tees includes the plate-thickness term that thin-wall theory drops).'],
+    ['Thick flanges:', 'the thin-wall J is usually below the AISC J (fillets neglected), but for heavy W, M, HP, WT and MT shapes with thick flanges (b<sub>f</sub>/2t<sub>f</sub> ≤ 5.5) it can be above it (W14X730 +9 %, WT7X436.5 +11 %): Σbt³/3 overestimates J of stocky plates. Such J values are flagged.'],
+    ['Elastic results:', q.use ? '<b>This part uses the AISC tabulated A and I</b> (elastic results).' : 'tick "Use AISC tabulated" on the Part properties tab to use the tabulated A, I instead.'],
+    ['Z and the torsion constants', 'are from the plate model in either case.'], ['L, WT, MT, ST data:', 'see the Method tab.'],
+    q.pt.p.fam === 'PIPE' ? ['Pipe:', 'the annulus (OD, t<sub>des</sub>) differs from the tabulated A, I, S, Z and J by up to about ±3.4 % over the v16.0 Pipe table (Pipe20XS +3.4 %, Pipe10STD −3.3 %), in both directions; for design, use the tabulated values (tick "Use AISC tabulated" for A, I) or check against the Manual.'] : null])}</div></div>`;
   return box;
 }
 const nt = (v, k, sig) => nf(v, k, sig).replace(/,/g, '{,}');
@@ -5875,7 +6025,7 @@ function partsTable() {
 function buildCalc(pg) {
   const L = un('L'), A = un('A'), I = un('I');
   mkSec(pg, 'cTab', 'Parallel-axis table (each part about its own centroid, then transferred)', body => {
-    body.appendChild(el('div', 'hint', 'Units: ' + L + ', ' + A + ', ' + un('S') + ', ' + I + '. Holes have negative A. Columns with n are transformed (multiplied by the modulus ratio n). d<sub>x</sub> = x̄<sub>i</sub> − x̄, d<sub>y</sub> = ȳ<sub>i</sub> − ȳ.'));
+    body.appendChild(el('div', 'hint spNL', spNL('Units: ' + L + ', ' + A + ', ' + un('S') + ', ' + I + '.', [['Holes', 'have negative A.'], ['Columns with n', 'are transformed (multiplied by the modulus ratio n).'], ['Distances:', 'd<sub>x</sub> = x̄<sub>i</sub> − x̄, d<sub>y</sub> = ȳ<sub>i</sub> − ȳ.']])));
     const rows = R.rows.map(r => [r.lbl, String(+r.n.toPrecision(4)), nf(r.A, 'A'), nf(r.nA, 'A'), nf(r.x, 'L'), nf(r.y, 'L'), nf(r.Ax, 'S'), nf(r.Ay, 'S'), nf(r.Ixo, 'I'), nf(r.Iyo, 'I'), nf(r.Ixyo, 'I'), nf(r.dx, 'L'), nf(r.dy, 'L'), nf(r.Ady2, 'I'), nf(r.Adx2, 'I'), nf(r.Adxdy, 'I')]);
     const sm = k => R.rows.reduce((s, r) => s + r[k], 0);
     rows.push({ cls: 'gov', cells: [{ h: '<b>Σ</b>' }, '', '', { h: '<b>' + nf(sm('nA'), 'A') + '</b>' }, '', '', { h: '<b>' + nf(sm('Ax'), 'S') + '</b>' }, { h: '<b>' + nf(sm('Ay'), 'S') + '</b>' }, { h: '<b>' + nf(sm('Ixo'), 'I') + '</b>' }, { h: '<b>' + nf(sm('Iyo'), 'I') + '</b>' }, { h: '<b>' + nf(sm('Ixyo'), 'I') + '</b>' }, '', '', { h: '<b>' + nf(sm('Ady2'), 'I') + '</b>' }, { h: '<b>' + nf(sm('Adx2'), 'I') + '</b>' }, { h: '<b>' + nf(sm('Adxdy'), 'I') + '</b>' }] });
@@ -5931,7 +6081,11 @@ function partGeomTable() {
 /* ---- Plastic tab ---- */
 function buildPlas(pg) {
   const S = un('S'), L = un('L'), A = un('A');
-  pg.appendChild(el('div', 'note', 'Plastic neutral axis (PNA): the line that divides the (n-weighted) area into two equal halves, found by bisection on the exact area of each polygon and circle on one side of the line. Z = A<sub>above</sub>·d<sub>above</sub> + A<sub>below</sub>·d<sub>below</sub> (distances from the PNA to the centroids of the two halves). Geometry of the plate model (fillets neglected), also for parts set to "AISC tabulated".' + (R.anyN ? ' <b>Transformed (n-weighted) areas</b>: the PNA balances n·A, which is meaningful only when n is the ratio of yield strengths. Concrete is not treated as a no-tension material: parts below (or beside) the PNA count in tension at n times the reference yield stress, so with a concrete slab Z is not the composite plastic modulus. For the plastic moment of a composite girder use AASHTO LRFD 10th Ed. (2024) Appendix D6.1 or AISC 360-16 Sections I3.2a and I1.2a (plastic stress distribution; concrete at 0.85f′<sub>c</sub> in compression only, concrete in tension neglected).' : '')));
+  pg.appendChild(el('div', 'note spNL', spNL('Plastic neutral axis (PNA): the line that divides the (n-weighted) area into two equal halves, found by bisection on the exact area of each polygon and circle on one side of the line.', [['Z', '= A<sub>above</sub>·d<sub>above</sub> + A<sub>below</sub>·d<sub>below</sub> (distances from the PNA to the centroids of the two halves).'],
+    ['Geometry', 'of the plate model (fillets neglected), also for parts set to "AISC tabulated".'],
+    R.anyN ? ['Transformed (n-weighted) areas:', 'the PNA balances n·A, which is meaningful only when n is the ratio of yield strengths.'] : null,
+    R.anyN ? ['Concrete', 'is not treated as a no-tension material: parts below (or beside) the PNA count in tension at n times the reference yield stress, so with a concrete slab Z is not the composite plastic modulus.'] : null,
+    R.anyN ? ['Composite girder:', 'for the plastic moment of a composite girder use AASHTO LRFD 10th Ed. (2024) Appendix D6.1 or AISC 360-16 Sections I3.2a and I1.2a (plastic stress distribution; concrete at 0.85f′<sub>c</sub> in compression only, concrete in tension neglected).'] : null])));
   const blk = (title, p, axis, ref) => calc(pg, { title, ref: 'plastic section modulus', lines: [
     TX`\Sigma A_{above}=\Sigma A_{below}=\tfrac{A}{2}=${nt(R.Ageo / 2, 'A')}\ \text{${A}}\quad\Rightarrow\quad \text{PNA at } ${axis}=${nt(p.c, 'L')}\ \text{${L}}`,
     TX`Z=A_{1}d_{1}+A_{2}d_{2}=${nt(p.Aup, 'A')}\times${nt(p.dUp, 'L')}+${nt(p.Adn, 'A')}\times${nt(p.dDn, 'L')}=${nt(p.Z, 'S')}\ \text{${S}}`],
@@ -5947,12 +6101,13 @@ function buildPlas(pg) {
 /* ---- Torsion tab ---- */
 function buildTors(pg) {
   const T = R.tors, I = un('I'), L = un('L');
-  pg.appendChild(el('div', 'warnBox', '<b>Thin-wall approximation — verify.</b> St. Venant J and the warping constant C<sub>w</sub> are computed on the centre-line model of the plates (thin-walled beam theory, e.g. AISC Design Guide 9, Seaburg &amp; Carter 1997; Vlasov). Fillets are neglected. Results are approximate; for thick or stocky parts, check by another method.'));
-  (T.warn || []).forEach(w => pg.appendChild(el('div', 'warnBox', esc(w))));
+  pg.appendChild(el('div', 'warnBox spNL', spNL('<b>Thin-wall approximation — verify.</b>', [['Model:', 'St. Venant J and the warping constant C<sub>w</sub> are computed on the centre-line model of the plates (thin-walled beam theory, e.g. AISC Design Guide 9, Seaburg &amp; Carter 1997; Vlasov).'],
+    ['Fillets', 'are neglected.'], ['Results', 'are approximate; for thick or stocky parts, check by another method.']])));
+  (T.warn || []).forEach(w => { const nl = (T.warnNL || {})[w]; pg.appendChild(nl ? el('div', 'warnBox spNL', spNL(esc(nl[0]), nl[1].map(x => [esc(x[0]), esc(x[1])]), { act: nl[2].map(esc) })) : el('div', 'warnBox', esc(w))); });   /* SPNL: T.warnNL = display only */
   (T.notes || []).forEach(w => pg.appendChild(el('div', 'note', esc(w))));
   mkSec(pg, 'tCon', 'Contacts (parts that touch are connected for torsion)', body => {
     if (!T.contacts.length) { body.appendChild(el('div', 'hint', 'No parts touch each other.')); return; }
-    body.appendChild(el('div', 'hint', 'Touching parts are assumed connected continuously (welded or continuously bolted) along the contact. Untick a contact to treat the two parts as separate for torsion (e.g. stitch-bolted or intermittently welded). Area properties are not affected.'));
+    body.appendChild(el('div', 'hint spNL', spNL('Touching parts are assumed connected continuously (welded or continuously bolted) along the contact.', [['Untick a contact', 'to treat the two parts as separate for torsion (e.g. stitch-bolted or intermittently welded).'], ['Area properties', 'are not affected.']])));
     const t = el('table', 'tbl'); t.appendChild(el('tr', null, '<th>Connected</th><th class="lft">Parts</th>'));
     T.contacts.forEach(c => {
       const tr = el('tr'); const td = el('td'); const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = c.on;
@@ -6003,7 +6158,9 @@ function buildTors(pg) {
         TX`x_o=\frac{I_y I_{\omega x}-I_{xy}I_{\omega y}}{I_xI_y-I_{xy}^2},\qquad y_o=\frac{I_{xy}I_{\omega x}-I_xI_{\omega y}}{I_xI_y-I_{xy}^2}\quad(I_{\omega x}=\textstyle\int\omega_B\,y\,t\,ds,\ I_{\omega y}=\int\omega_B\,x\,t\,ds)`,
         TX`C_w=\int\omega_n^2\,t\,ds,\qquad \omega_n=\omega_S-\tfrac{1}{A}\textstyle\int\omega_S\,t\,ds`,
         TX`C_w=${nt(T.Cw, 'W')}\ \text{${un('W')}}`], result: `Shear centre at (${nf(T.sc[0], 'L')}, ${nf(T.sc[1], 'L')}) ${L}; from the centroid x_o = ${nf(T.xo, 'L')}, y_o = ${nf(T.yo, 'L')} ${L}`, badge: VFY });
-      body.appendChild(el('div', 'hint', `Centre-line model: A = ${esc(nu(S.A, 'A'))}, centroid (${esc(nf(S.cx, 'L'))}, ${esc(nf(S.cy, 'L'))}), I<sub>x</sub> = ${esc(nu(S.Ix, 'I'))}, I<sub>y</sub> = ${esc(nu(S.Iy, 'I'))} (no t³/12 terms). Check: with the pole at the shear centre, ∫ω·x·t ds = ${esc(nf(S.check.Iwy, 'n', 3))} and ∫ω·y·t ds = ${esc(nf(S.check.Iwx, 'n', 3))} (should be ≈ 0). Thin-wall theory gives C<sub>w</sub> = 0 for sections whose elements all meet at one point (angles, tees, cruciforms); AISC tabulates small non-zero values for those.`));
+      body.appendChild(el('div', 'hint spNL', spNL(`Centre-line model: A = ${esc(nu(S.A, 'A'))}, centroid (${esc(nf(S.cx, 'L'))}, ${esc(nf(S.cy, 'L'))}), I<sub>x</sub> = ${esc(nu(S.Ix, 'I'))}, I<sub>y</sub> = ${esc(nu(S.Iy, 'I'))} (no t³/12 terms).`,
+        [['Check:', `with the pole at the shear centre, ∫ω·x·t ds = ${esc(nf(S.check.Iwy, 'n', 3))} and ∫ω·y·t ds = ${esc(nf(S.check.Iwx, 'n', 3))} (should be ≈ 0).`],
+          ['Elements meeting at one point:', 'thin-wall theory gives C<sub>w</sub> = 0 for sections whose elements all meet at one point (angles, tees, cruciforms); AISC tabulates small non-zero values for those.']])));
     } else body.appendChild(el('div', 'note', esc(T.cwMethod) + ': C<sub>w</sub> = ' + esc(nu(T.Cw, 'W'))));
   });
 }
@@ -6116,7 +6273,9 @@ function buildPropsP2a(pg) {
       ['Centre (I<sub>x</sub> + I<sub>y</sub>)/2', nf((R.Ix + R.Iy) / 2, 'I'), '0', un('I')], ['Radius √(((I<sub>x</sub> − I<sub>y</sub>)/2)² + I<sub>xy</sub>²)', nf(Math.hypot((R.Ix - R.Iy) / 2, R.Ixy), 'I'), '', un('I')],
       ['I<sub>1</sub> (major), I<sub>2</sub> (minor)', nf(R.I1, 'I') + ', ' + nf(R.I2, 'I'), '0', un('I')], ['2θ<sub>p</sub> (from X to I<sub>1</sub>, CCW on the circle)', ang(2 * R.thp), '', '']
     ].map(r => r.map((c, i) => i === 0 ? { h: c } : c)), { left: [0] }));
-    body.appendChild(el('div', 'hint', 'Sign convention: I horizontal, I<sub>xy</sub> = ∫xy dA plotted <b>upward</b>. Point X = (I<sub>x</sub>, I<sub>xy</sub>), point Y = (I<sub>y</sub>, −I<sub>xy</sub>). Turning the axes counter-clockwise by θ moves X counter-clockwise by 2θ on the circle (I<sub>x′</sub> = c + R cos(2θ + 2α), I<sub>x′y′</sub> = R sin(2θ + 2α)); X reaches I<sub>1</sub> after 2θ<sub>p</sub>. Some texts plot −I<sub>xy</sub> upward, which mirrors the figure.'));
+    body.appendChild(el('div', 'hint spNL', spNL('Sign convention: I horizontal, I<sub>xy</sub> = ∫xy dA plotted <b>upward</b>.', [['Points:', 'point X = (I<sub>x</sub>, I<sub>xy</sub>), point Y = (I<sub>y</sub>, −I<sub>xy</sub>).'],
+      ['Rotation:', 'turning the axes counter-clockwise by θ moves X counter-clockwise by 2θ on the circle (I<sub>x′</sub> = c + R cos(2θ + 2α), I<sub>x′y′</sub> = R sin(2θ + 2α)); X reaches I<sub>1</sub> after 2θ<sub>p</sub>.'],
+      ['Other texts:', 'some texts plot −I<sub>xy</sub> upward, which mirrors the figure.']])));
     body.appendChild(spcWorkedIn([['cP', 'centre, radius, I<sub>1</sub>, I<sub>2</sub>']]));   // D11 links
   });
   mkSec(pg, 'pBk', 'Flexural-torsional and lateral-torsional buckling parameters', body => {
@@ -6130,7 +6289,8 @@ function buildPropsP2a(pg) {
       ['β<sub>x</sub>, top (+v side) in compression', wg.ok ? nf(-wg.b1, 'L') : 'n/a', un('L'), { h: (wg.ok ? 'Wagner monosymmetry constant about the major principal axis 1; positive when the larger flange is in compression. Bottom (−v side) in compression: β<sub>x</sub> = ' + esc(nf(wg.b1, 'L')) + '. ' : esc(wg.why || '') + '. ') + 'Not used by AISC 360 (F4 uses I<sub>yc</sub>/I<sub>y</sub>); for AS 4100 / EN 1993 / SSRC methods ' + VFY2('Sign convention and use in the design standard to be confirmed') }]
     ];
     body.appendChild(tblEl(['Parameter', 'Value', 'Unit', 'Note'], rows.map(r => r.map((c, i) => i === 0 ? { h: c } : c)), { left: [0, 3] }));
-    body.appendChild(el('div', 'hint', 'x<sub>o</sub>, y<sub>o</sub>: shear centre from the centroid (thin-wall model, Torsion tab). r̄<sub>o</sub> and H do not depend on the axis directions (AISC uses the principal axes). n/a when the shear centre is n/a (closed cells, separate pieces, custom polygons). v = axis 2 direction (for an unrotated section with x as the major axis, v = y, upward).'));
+    body.appendChild(el('div', 'hint spNL', spNL('x<sub>o</sub>, y<sub>o</sub>: shear centre from the centroid (thin-wall model, Torsion tab).', [['r̄<sub>o</sub> and H', 'do not depend on the axis directions (AISC uses the principal axes).'],
+      ['n/a', 'when the shear centre is n/a (closed cells, separate pieces, custom polygons).'], ['v', '= axis 2 direction (for an unrotated section with x as the major axis, v = y, upward).']])));
     body.appendChild(spcWorkedIn([['cBk', 'r̄<sub>o</sub>, H, r<sub>ts</sub>'], ['cWag', 'β<sub>x</sub>']]));   // D11 links
   });
   mkSec(pg, 'pKern', 'Kern (core) of the section', body => {
@@ -6143,7 +6303,9 @@ function buildPropsP2a(pg) {
     const many = K.V.length > 48;
     const rows = (many ? K.V.filter((v, i) => i % Math.ceil(K.V.length / 24) === 0) : K.V).map((v, i) => [String(i + 1), nf(v.e[0], 'L'), nf(v.e[1], 'L'), nf(v.p[0], 'L'), nf(v.p[1], 'L')]);
     body.appendChild(tblEl(['Vertex', 'e<sub>x</sub> (from centroid)', 'e<sub>y</sub> (from centroid)', 'x (from origin)', 'y (from origin)'], rows));
-    body.appendChild(el('div', 'hint', (many ? `${K.V.length} vertices (curved boundary from round parts); every ${Math.ceil(K.V.length / 24)}th listed. ` : `${K.V.length} vertices, one per edge of the convex hull. `) + 'An axial force applied inside the kern causes no stress reversal over the section (compression only for a compressive force). Toggle "Kern" in Settings → Drawing to draw it.' + (R.anyN ? ' Transformed section (n): the kern of the transformed section.' : '')));
+    body.appendChild(el('div', 'hint spNL', spNL(many ? `${K.V.length} vertices (curved boundary from round parts); every ${Math.ceil(K.V.length / 24)}th listed.` : `${K.V.length} vertices, one per edge of the convex hull.`,
+      [['No stress reversal:', 'an axial force applied inside the kern causes no stress reversal over the section (compression only for a compressive force).'], ['Drawing:', 'toggle "Kern" in Settings → Drawing to draw it.'],
+        R.anyN ? ['Transformed section (n):', 'the kern of the transformed section.'] : null])));
     body.appendChild(spcWorkedIn([['cKern', 'kern vertices']]));   // D11 links
   });
   mkSec(pg, 'pWt', 'Weight and coating (paint) area per length', body => {
@@ -6152,7 +6314,9 @@ function buildPropsP2a(pg) {
       const rows = Wt.rows.map(r => [r.lbl + (r.hole ? ' (hole' + (r.host ? ' in ' + r.host : '') + ')' : ''), nf(r.A, 'A'), nf(r.rho, 'rho', 4) + (r.hole ? '' : (r.own ? '' : ' (default steel)')), nf(r.w, 'wt')]);
       rows.push({ cls: 'gov', cells: [{ h: '<b>Total</b>' }, '', '', { h: '<b>' + nf(Wt.w, 'wt') + '</b>' }] });
       body.appendChild(tblEl(['Part', 'A', 'ρ (' + un('rho') + ')', 'Weight (' + un('wt') + ')'], rows, { left: [0] }));
-      body.appendChild(el('div', 'hint', 'Weight = Σ A<sub>i</sub>·ρ<sub>i</sub> (net of holes; tube voids excluded). The modulus ratio n does <b>not</b> change the weight. ' + (R.anyTab ? 'Parts set to "AISC tabulated" use the tabulated A (fillets included). ' : 'Rolled shapes: plate-model A (fillets neglected; tick "Use AISC tabulated" for the tabulated A). ') + 'Densities are typical values unless entered (Part properties → Material).'));
+      body.appendChild(el('div', 'hint spNL', spNL('Weight = Σ A<sub>i</sub>·ρ<sub>i</sub> (net of holes; tube voids excluded).', [['Modulus ratio n:', 'the modulus ratio n does <b>not</b> change the weight.'],
+        R.anyTab ? ['AISC tabulated:', 'parts set to "AISC tabulated" use the tabulated A (fillets included).'] : ['Rolled shapes:', 'plate-model A (fillets neglected; tick "Use AISC tabulated" for the tabulated A).'],
+        ['Densities', 'are typical values unless entered (Part properties → Material).']])));
       // a single rolled shape: its nominal weight from the AISC table, beside the computed one, for reference only (P2a-O6)
       const one = R.parts.length === 1 && R.parts[0].pt.type === 'shape' ? R.parts[0] : null, rec = one && SPC.shapeRec(one.pt.p.fam, one.pt.p.name);
       if (rec && isNum(rec.Wt)) body.appendChild(el('div', 'note', `For reference: nominal weight of ${esc(rec.lbl)} = <b>${esc(nu(rec.Wt, 'wt'))}</b> (AISC Shapes Database v16.0, steel; fillets included). Not used: the weight above is from ${one.use ? 'the tabulated A' : 'the plate-model A (fillets neglected)'} and ρ = ${esc(nu(Wt.rows[0].rho, 'rho', 4))}.`));
@@ -6164,7 +6328,8 @@ function buildPropsP2a(pg) {
         ['Outside only', pr(C.outside), pa(C.outside), { h: C.ok ? 'outer boundary; closed cells and holes excluded' : 'n/a: the boundary could not be closed into loops' }],
         ['Inside (closed cells and holes)', pr(C.inner), pa(C.inner), { h: C.ok ? C.nIn + ' loop' + (C.nIn === 1 ? '' : 's') : '' }]
       ].map(r => r.map((c, i) => i === 0 ? { h: c } : c)), { left: [0, 3] }));
-      body.appendChild(el('div', 'hint', 'Paint area per length = perimeter × 1 ft (' + (unitSys() === 'mm' ? 'perimeter in m × 1 m' : 'perimeter in in ÷ 12') + '). Faces closer than the contact tolerance (' + esc(nu(C.eps, 'L')) + ') to another part are treated as faying (not painted). Round parts exact (2πr); rectangular-tube and HSS corners as the 24 chords per corner the tool uses (perimeter 0.04 % short of the true arc). Rolled shapes: plate model (no fillets).'));
+      body.appendChild(el('div', 'hint spNL', spNL('Paint area per length = perimeter × 1 ft (' + (unitSys() === 'mm' ? 'perimeter in m × 1 m' : 'perimeter in in ÷ 12') + ').', [['Faying faces:', 'faces closer than the contact tolerance (' + esc(nu(C.eps, 'L')) + ') to another part are treated as faying (not painted).'],
+        ['Round parts', 'exact (2πr); rectangular-tube and HSS corners as the 24 chords per corner the tool uses (perimeter 0.04 % short of the true arc).'], ['Rolled shapes:', 'plate model (no fillets).']])));
     }
     body.appendChild(spcWorkedIn([['cWt', 'weight, coating perimeter']]));   // D11 links
   });
@@ -6206,7 +6371,10 @@ function buildCalcP2a(pg) {
       TX`\beta_{x,(+v\ \text{in compression})}=${nt(-wg.b1, 'L')}\ \text{${L}}`],
       result: `β_x = ${nf(-wg.b1, 'L')} ${L} with the +v (top) side in compression; ${nf(wg.b1, 'L')} ${L} with the −v (bottom) side in compression` });
     if (isNum(wg.b2)) calc(body, { title: 'About the minor principal axis 2 (for reference)', ref: 'same definition', lines: [TX`\beta_y=\frac{1}{I_2}\int_A u\,(u^2+v^2)\,dA-2u_o=\frac{${nt(wg.int2 * uf('I') * uf('L'), 'n')}}{${nt(wg.I2, 'I')}}-2\times${nt(wg.uo, 'L')}=${nt(wg.b2, 'L')}\ \text{${L}}\ (+u\ \text{in tension})`], result: '' });
-    body.appendChild(el('div', 'hint', 'Sign convention: v is measured positive toward the <b>tension</b> side (as y in Trahair &amp; Bradford, where y points down for a top flange in compression), so β<sub>x</sub> &gt; 0 when the larger flange is in compression and β<sub>x</sub> = 0 for doubly symmetric sections. The area integral is exact (polygons and circles, n-weighted, plate model, about the centroid and principal axes of that geometry); v<sub>o</sub> is the thin-wall shear centre. Approximation for monosymmetric I-sections: β<sub>x</sub> ≈ 0.9h(2ρ − 1)(1 − (I<sub>y</sub>/I<sub>x</sub>)²), ρ = I<sub>yc</sub>/I<sub>y</sub> (Kitipornchai &amp; Trahair). AISC 360 does not use β<sub>x</sub> (F4 uses I<sub>yc</sub>/I<sub>y</sub>). EN 1993 (z<sub>j</sub>) and AS 4100 use related quantities with their own sign conventions — verify before use.'));
+    body.appendChild(el('div', 'hint spNL', spNL('Sign convention: v is measured positive toward the <b>tension</b> side (as y in Trahair &amp; Bradford, where y points down for a top flange in compression).', [['So:', 'β<sub>x</sub> &gt; 0 when the larger flange is in compression and β<sub>x</sub> = 0 for doubly symmetric sections.'],
+      ['Area integral:', 'the area integral is exact (polygons and circles, n-weighted, plate model, about the centroid and principal axes of that geometry); v<sub>o</sub> is the thin-wall shear centre.'],
+      ['Approximation for monosymmetric I-sections:', 'β<sub>x</sub> ≈ 0.9h(2ρ − 1)(1 − (I<sub>y</sub>/I<sub>x</sub>)²), ρ = I<sub>yc</sub>/I<sub>y</sub> (Kitipornchai &amp; Trahair).'],
+      ['AISC 360', 'does not use β<sub>x</sub> (F4 uses I<sub>yc</sub>/I<sub>y</sub>).'], ['EN 1993 (z<sub>j</sub>) and AS 4100', 'use related quantities with their own sign conventions — verify before use.']])));
   });
   mkSec(pg, 'cKern', 'Kern (core)', body => {
     const K = ext('kern'); if (!K || !K.ok) { body.appendChild(el('div', 'note', 'n/a')); return; }
@@ -6305,7 +6473,8 @@ function buildStress(pg) {
   const S = SPC.stress(R, s.P, s.Mx, s.My);
   mkSec(pg, 'sPlot', 'Normal stress σ over the section', body => {
     const d = el('div'); const nar = window.innerWidth < 600 && !PRMODE; d.innerHTML = stressSVG(S, nar ? 380 : 720, nar ? 400 : 440); body.appendChild(d);   // narrow screens: smaller drawing box, so the text stays legible
-    body.appendChild(el('div', 'hint', 'Colour: σ from blue (compression) through grey (0) to red (tension), symmetric scale. Dashed: neutral axis (σ = 0). Hover a part for its extreme stresses.' + (R.anyN ? ' Transformed section: part i shows n<sub>i</sub> × the transformed-section stress, so the colour can jump at a material boundary; the neutral axis is common.' : '')));
+    body.appendChild(el('div', 'hint spNL', spNL('Colour: σ from blue (compression) through grey (0) to red (tension), symmetric scale.', [['Dashed:', 'neutral axis (σ = 0).'], ['Hover a part', 'for its extreme stresses.'],
+      R.anyN ? ['Transformed section:', 'part i shows n<sub>i</sub> × the transformed-section stress, so the colour can jump at a material boundary; the neutral axis is common.'] : null])));
   });
   mkSec(pg, 'sCalc', 'Stress formula (unsymmetric bending)', body => {
     const nax = S.na ? (S.na.ang * 180 / Math.PI) : null, na2 = isNum(nax) ? ((nax % 180) + 180) % 180 : null;
@@ -6314,7 +6483,9 @@ function buildStress(pg) {
       TX`\frac{P}{A}=\frac{${nt(S.P, 'F')}}{${nt(R.A, 'A')}}=${nt(S.s0, 'sig')}\ \text{${un('sig')}},\qquad I_xI_y-I_{xy}^2=${nt(S.D * uf('I'), 'I')}\ \text{${unitSys() === 'mm' ? 'mm⁸' : 'in⁸'}}`,
       TX`\sigma=${nt(S.s0, 'sig')}${S.kx >= 0 ? '+' : '-'}${nt(Math.abs(S.kx) * uf('sig') / uf('L'), 'n')}\,x${S.ky >= 0 ? '+' : '-'}${nt(Math.abs(S.ky) * uf('sig') / uf('L'), 'n')}\,y\quad(\sigma\ \text{in ${un('sig')}},\ x,y\ \text{in ${un('L')} from the centroid})`],
       result: `Max tension ${S.max && S.max.s > 0 ? nu(S.max.s, 'sig') + ' (' + S.max.lbl + ')' : 'none'}; max compression ${S.min && S.min.s < 0 ? nu(S.min.s, 'sig') + ' (' + S.min.lbl + ')' : 'none'}` + (isNum(na2) ? `; neutral axis at ${na2.toFixed(3)}° from +x` : '') });
-    body.appendChild(el('div', 'hint', 'Sign convention: P &gt; 0 tension; M<sub>x</sub> &gt; 0 compresses the +y side and M<sub>y</sub> &gt; 0 compresses the +x side (M<sub>x</sub> = −∫σy dA, M<sub>y</sub> = −∫σx dA). σ &gt; 0 tension. With I<sub>xy</sub> ≠ 0 (e.g. an angle) the neutral axis is not parallel to the moment axis. ' + (R.anyN ? '<b>Transformed section:</b> σ in part i = n<sub>i</sub> × the transformed-section stress above. ' : '') + (R.anyTab ? 'A, I include the AISC tabulated values where selected; the extreme points are on the plate model. ' : '') + 'Elastic, plane sections; no local effects, shear lag or residual stresses.'));
+    body.appendChild(el('div', 'hint spNL', spNL('Sign convention: P &gt; 0 tension; M<sub>x</sub> &gt; 0 compresses the +y side and M<sub>y</sub> &gt; 0 compresses the +x side (M<sub>x</sub> = −∫σy dA, M<sub>y</sub> = −∫σx dA).', [['σ &gt; 0', 'tension.'],
+      ['With I<sub>xy</sub> ≠ 0', '(e.g. an angle) the neutral axis is not parallel to the moment axis.'], R.anyN ? ['Transformed section:', 'σ in part i = n<sub>i</sub> × the transformed-section stress above.'] : null,
+      R.anyTab ? ['AISC tabulated:', 'A, I include the AISC tabulated values where selected; the extreme points are on the plate model.'] : null, ['Model:', 'elastic, plane sections; no local effects, shear lag or residual stresses.']])));
   });
   mkSec(pg, 'sTab', 'Stress at each part\'s extreme points', body => {
     const pt = e => e ? `(${nf(e.p[0], 'L', 4)}, ${nf(e.p[1], 'L', 4)})` : '';
@@ -6438,7 +6609,7 @@ function buildSF(pg) {
     fRow(body, 'Shear V<sub>y</sub> (force along +y)', numIn(() => sfIn().Vy, v => setSF('Vy', v), 'sf_Vy', { k: 'F' }), un('F'));
     fRow(body, 'Shear V<sub>x</sub> (force along +x)', numIn(() => sfIn().Vx, v => setSF('Vx', v), 'sf_Vx', { k: 'F' }), un('F'));
     fRow(body, 'Load basis', selIn([['LRFD', 'LRFD — factored V; design strength φR_n'], ['ASD', 'ASD — service V; allowable strength R_n/Ω']], () => sfIn().basis, v => setSF('basis', v), 'sf_basis', false), '');
-    body.appendChild(el('div', 'hint', 'V<sub>x</sub>, V<sub>y</sub> act through the shear centre (no torsion). State whether they are factored (LRFD) or service (ASD) loads with the load basis; it sets φ or Ω of the weld check and the label of the fastener strength. Saved with the project.'));
+    body.appendChild(el('div', 'hint spNL', spNL('V<sub>x</sub>, V<sub>y</sub> act through the shear centre (no torsion).', [['Load basis:', 'state whether they are factored (LRFD) or service (ASD) loads with the load basis; it sets φ or Ω of the weld check and the label of the fastener strength.'], ['Saved', 'with the project.']])));
   });
   if (!S.contacts.length) { pg.appendChild(el('div', 'note', 'No parts touch each other: there are no connections to check.')); return; }
   if (!S.ok) { pg.appendChild(el('div', 'errBox', 'Shear flow not computed: ' + esc(S.why))); return; }
@@ -6457,17 +6628,25 @@ function buildSF(pg) {
     const t = tblEl(['#', 'Parts', 'Contact length (' + un('L') + ')', 'Location (x, y) ' + un('L'), 'Method', 'Separated group', '|q| (' + un('q') + ')', 'Connector', 'D/C'], rows, { left: [1, 4, 5, 7] });
     t.querySelectorAll('tr').forEach((tr, i) => { if (!i) return; const c = S.contacts[i - 1]; tr.style.cursor = 'pointer'; tr.title = 'Show the calculation of ' + c.la + ' — ' + c.lb; tr.addEventListener('click', () => { SFSEL = c.key; renderTab(true); }); });
     body.appendChild(t);
-    body.appendChild(el('div', 'hint', 'q = longitudinal shear force per unit length transferred across the contact (all its lines together), elastic, plane sections. Click a row or a tag for its calculation; the separated group is highlighted. Contacts are the touching parts of the Torsion tab (tolerance ' + esc(nu(M.settings.tol, 'L')) + '); a contact switched off there is "not connected" here. ' + (S.ncomp > 1 ? '<b>The connected parts form ' + S.ncomp + ' separate pieces</b>: the section properties assume they act together (e.g. through lacing or battens not modelled); each q here is the equilibrium of the separated group alone. ' : '') + (S.holeLost.length ? 'Hole(s) ' + esc(S.holeLost.join(', ')) + ' lie in no part and are not in any group. ' : '')));
+    body.appendChild(el('div', 'hint spNL', spNL('q = longitudinal shear force per unit length transferred across the contact (all its lines together), elastic, plane sections.', [['Click a row or a tag', 'for its calculation; the separated group is highlighted.'],
+      ['Contacts', 'are the touching parts of the Torsion tab (tolerance ' + esc(nu(M.settings.tol, 'L')) + '); a contact switched off there is "not connected" here.'],
+      S.ncomp > 1 ? ['Separate pieces:', '<b>The connected parts form ' + S.ncomp + ' separate pieces</b>: the section properties assume they act together (e.g. through lacing or battens not modelled); each q here is the equilibrium of the separated group alone.'] : null,
+      S.holeLost.length ? ['Holes outside the parts:', 'Hole(s) ' + esc(S.holeLost.join(', ')) + ' lie in no part and are not in any group.'] : null])));
   });
   const list = PRMODE ? S.contacts : S.contacts.filter(c => c.key === SFSEL);
   list.forEach(c => { const i = S.contacts.indexOf(c); mkSec(pg, 'sfDet' + (PRMODE ? i : ''), 'Connection #' + (i + 1) + ': ' + esc(c.la + ' — ' + c.lb), body => sfDetail(body, S, c, vals[i])); });
   mkSec(pg, 'sfNot', 'Connector checks: what is and is not checked', body => {
-    body.appendChild(el('ul', 'manList', [
-      'Fasteners: the strength per fastener (' + (asd ? 'R<sub>n</sub>/Ω' : 'φR<sub>n</sub>') + ', shear, bearing / tear-out, slip-critical as applicable) is entered by you per AISC 360-16 J3 or AASHTO LRFD 6.13.2 ' + VFY2() + '. Required spacing s<sub>req</sub> = n<sub>l</sub>·' + (asd ? 'R<sub>n</sub>/Ω' : 'φR<sub>n</sub>') + '/q along the member; D/C = s/s<sub>req</sub>.',
-      'Fillet welds: ' + (asd ? 'R<sub>n</sub>/Ω' : 'φR<sub>n</sub>') + ' per unit length = ' + (asd ? '0.60F<sub>EXX</sub>·0.707w/Ω, Ω = 2.00' : 'φ·0.60F<sub>EXX</sub>·0.707w, φ = 0.75') + ' (AISC 360-16 J2.4 and Table J2.5, load parallel to the weld axis, no directional increase) ' + VFY2() + '. Intermittent welds: length L<sub>w</sub> at pitch p (L<sub>w</sub>/p of the length is welded).',
-      '<b>Not checked</b> (verify separately): minimum fillet weld size (AISC 360-16 Table J2.4) and maximum size along edges (J2.2b); minimum length of intermittent welds (J2.2b); base metal shear at the fusion face (J2.4, J4.2); minimum and maximum fastener spacing and edge distance (J3.3, J3.4, J3.5); connector spacing of built-up compression members (E6) and AASHTO LRFD 6.13.2.6 (maximum pitch of stitch and sealing fasteners); fatigue (AISC Appendix 3, AASHTO 6.6.1); combined shear and tension, prying, and local effects of concentrated loads.',
+    body.appendChild(el('ul', 'manList', [   /* SPNL (2026-11-08): {nl} = a long item as a bold lead and a list */
+      { nl: spNL('Fasteners: the strength per fastener (' + (asd ? 'R<sub>n</sub>/Ω' : 'φR<sub>n</sub>') + ', shear, bearing / tear-out, slip-critical as applicable) is entered by you per AISC 360-16 J3 or AASHTO LRFD 6.13.2 ' + VFY2() + '.',
+        [['Required spacing', 's<sub>req</sub> = n<sub>l</sub>·' + (asd ? 'R<sub>n</sub>/Ω' : 'φR<sub>n</sub>') + '/q along the member.'], ['D/C', '= s/s<sub>req</sub>.']]) },
+      { nl: spNL('Fillet welds: ' + (asd ? 'R<sub>n</sub>/Ω' : 'φR<sub>n</sub>') + ' per unit length = ' + (asd ? '0.60F<sub>EXX</sub>·0.707w/Ω, Ω = 2.00' : 'φ·0.60F<sub>EXX</sub>·0.707w, φ = 0.75') + ' (AISC 360-16 J2.4 and Table J2.5, load parallel to the weld axis, no directional increase) ' + VFY2() + '.',
+        [['Intermittent welds:', 'length L<sub>w</sub> at pitch p (L<sub>w</sub>/p of the length is welded).']]) },
+      { nl: spNL('<b>Not checked</b> (verify separately):', [['Welds:', 'minimum fillet weld size (AISC 360-16 Table J2.4) and maximum size along edges (J2.2b); minimum length of intermittent welds (J2.2b); base metal shear at the fusion face (J2.4, J4.2).'],
+        ['Fasteners:', 'minimum and maximum fastener spacing and edge distance (J3.3, J3.4, J3.5).'],
+        ['Built-up members:', 'connector spacing of built-up compression members (E6) and AASHTO LRFD 6.13.2.6 (maximum pitch of stitch and sealing fasteners).'],
+        ['Fatigue:', 'fatigue (AISC Appendix 3, AASHTO 6.6.1).'], ['Other:', 'combined shear and tension, prying, and local effects of concentrated loads.']]) },
       'q is per contact: a contact with several lines (e.g. both flange tips of a channel on a plate) carries q over all its lines together; n<sub>l</sub> and n<sub>w</sub> count the fastener lines and welds that cross this contact.'
-    ].map(x => '<li>' + x + '</li>').join('')));
+    ].map(x => x && x.nl ? '<li class="spNL">' + x.nl + '</li>' : '<li>' + x + '</li>').join('')));
   });
 }
 function sfDetail(body, S, c, v) {
@@ -6803,7 +6982,7 @@ function runValidation() {
 function buildValid(pg) {
   VAL = runValidation(); const bad = VAL.filter(v => !v.ok).length;
   pg.appendChild(el('div', bad ? 'errBox' : 'okBox', bad ? `${bad} of ${VAL.length} checks are outside their tolerance.` : `All ${VAL.length} checks pass (computed live by the production engine on built-in models; the current drawing is not changed).`));
-  pg.appendChild(el('div', 'hint', 'Tolerance 1e-9 (relative) = the tool must reproduce the closed form or hand calculation exactly. Comparisons with AISC tabulated values have engineering tolerances, because the plate model of W, M, HP, L and WT/MT shapes neglects fillets and toe radii (S, C, MC and ST: fitted to the tabulated A and I<sub>y</sub>, see the Method tab) and torsion is thin-wall.'));
+  pg.appendChild(el('div', 'hint spNL', spNL('Tolerance 1e-9 (relative) = the tool must reproduce the closed form or hand calculation exactly.', [['Comparisons with AISC tabulated values', 'have engineering tolerances, because:', [['Plate model:', 'the plate model of W, M, HP, L and WT/MT shapes neglects fillets and toe radii (S, C, MC and ST: fitted to the tabulated A and I<sub>y</sub>, see the Method tab);'], ['Torsion', 'is thin-wall.']]]])));
   let grp = null; const rows = [];
   VAL.forEach(v => {
     if (v.grp !== grp) { grp = v.grp; rows.push({ cls: 'gov', cells: [{ h: '<b>' + esc(grp) + '</b>', span: 7 }] }); }
@@ -7250,7 +7429,9 @@ function buildDwg(pg) {
     '<button type="button" class="btn" id="spdwPrint1" title="Print the sheet shown: one 11 x 17 in landscape page at its plot scale">Print sheet</button> ' +
     '<button type="button" class="btn" id="spdwPrintAll" title="Print every sheet: one 11 x 17 in landscape page per sheet, each at its plot scale">Print all sheets (' + B.S.length + ')</button></div>' +
     '<div class="hint">' + esc(SharedDxf.PRINT_NOTE) + '</div>' +
-    '<div class="hint">One DXF file (AutoCAD R12, model space, full size in ' + (B.mm ? 'millimetres' : 'inches') + '): each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side. Layers SPC-PARTS, SPC-PARTS-N, SPC-HOLES, SPC-CENTROID, SPC-AXES, SPC-DIMS, SPC-TEXT, SPC-TABLE, SPC-TBLK, SPC-BRDR. The <b>Export DXF</b> button at the top (the geometry for the AutoCAD MASSPROP check) is unchanged. Title block: the Project fields (Project, Job #, Prepared by, Date, Checked by, Member).</div>' +
+    '<div class="hint spNL">' + spNL('One DXF file (AutoCAD R12, model space, full size in ' + (B.mm ? 'millimetres' : 'inches') + '):', [['Sheets:', 'each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side.'],
+      ['Layers', 'SPC-PARTS, SPC-PARTS-N, SPC-HOLES, SPC-CENTROID, SPC-AXES, SPC-DIMS, SPC-TEXT, SPC-TABLE, SPC-TBLK, SPC-BRDR.'], ['Export DXF:', 'the <b>Export DXF</b> button at the top (the geometry for the AutoCAD MASSPROP check) is unchanged.'],
+      ['Title block:', 'the Project fields (Project, Job #, Prepared by, Date, Checked by, Member).']]) + '</div>' +
     '<div class="spdwHead"><b>' + (B.S.indexOf(cur) + 1) + '. ' + esc(cur.title) + '</b> · scale ' + esc(scTxt(cur)) + (cur.over ? ' · <span style="color:var(--fail)">does not fit the sheet even at the smallest scale</span>' : '') + '</div>' +
     '<div class="spdwBox"></div><div class="hint">Wheel: zoom about the cursor · drag: pan · pinch · double-click: fit · + / − / Fit buttons.</div>' +
     '<div class="tscroll"><table class="tbl spdwIdx"><tr><th>No.</th><th class="lft">Sheet</th><th>Scale</th><th class="lft">Worked in</th></tr>' + B.S.map((s, j) =>
@@ -7346,7 +7527,7 @@ function spxHarvest(sel) {
         ['Units', unitSys() === 'mm' ? 'mm, mm², mm³, mm⁴, mm⁶; kN' : 'in, in², in³, in⁴, in⁶; kip'], ['Significant figures shown', String(S.prec)],
         ['Number of parts', String(M.parts.length)], ['Contact tolerance (touching parts are connected for torsion)', nu(S.tol, 'L')],
         ['Contacts switched off for torsion', off.length ? off.join('; ') : 'none']], { left: [0, 1] })));
-      if (ok) mkSec(h, 'inParts', 'Parts: position, rotation, mirror, modulus ratio n', b => { b.appendChild(partsTable()); b.appendChild(el('div', 'hint', 'x, y: part centroid from the origin. A: area of the part (holes negative). Basis: plate model, AISC tabulated A and I, or exact geometry.')); });
+      if (ok) mkSec(h, 'inParts', 'Parts: position, rotation, mirror, modulus ratio n', b => { b.appendChild(partsTable()); b.appendChild(el('div', 'hint spNL', spNL('Columns:', [['x, y:', 'part centroid from the origin.'], ['A:', 'area of the part (holes negative).'], ['Basis:', 'plate model, AISC tabulated A and I, or exact geometry.']]))); });
       mkSec(h, 'inDims', 'Part dimensions (plate model)', b => b.appendChild(partGeomTable()));
     });
     section('sum', h => {
@@ -7478,14 +7659,15 @@ function spxResults(keys) {
   if (R.anyN) notes.push('Transformed section: A, I, S, Z are in units of the reference material (n = 1).');
   notes.push('Section properties only: this report makes no design check.');
   return [{ type: 'table', head: ['Property', 'Value', 'Unit', 'Worked in'], rows: rows.map(([lab, v, kk, id]) => [lab.replace(/([A-Za-zθ])_([A-Za-z0-9]+)/g, (m, a, b) => '$' + a + '_{' + b + '}$'), { t: kk === 'ang' ? ang(R.thp) : isNum(v) ? nf(v, kk) : 'n/a', n: true }, kk === 'ang' || !isNum(v) ? '' : un(kk), keys.has('sp/' + id) ? '[[sp/' + id + ']]' : spcTabName({ pl: 'plas', to: 'tors' }[id.split('.')[0]] || 'calc') + ' tab (not in this report)']) },
-    { type: 'note', text: notes.join(' ') }];
+    ...(notes.length > 1 ? sprNL('Notes on these values:', notes) : [{ type: 'note', text: notes.join(' ') }])];
 }
 /* the print report's cover, title block, front note and footer lines the Report lacked */
 function spxAbout(model, sel) {
   const p = M.project || {}, ok = !!(R && R.ok), today = new Date().toISOString().slice(0, 10);
   model.info = model.info.concat([['Member / description', p.member], ['Client', p.client], ['Parts', ok ? R.rows.map(r => r.lbl).join(', ') : String(M.parts.length)], ['Units', unitSys() === 'mm' ? 'mm, kN' : 'in, kip']]);
   return [{ type: 'note', text: SPC_TOOL + ' — ' + (p.name || 'Untitled') + (p.member ? ' — ' + p.member : '') + ': section properties — inputs and worked results.' },
-    { type: 'note', text: 'Inputs first, then the section drawing and the results. Where the tool works a value, the equation is shown symbolically, then with the values substituted, then with the result (Calc detail, Plastic, Torsion); the parallel-axis table gives each part’s A, centroid, own I and transfer term A·d² with their sums. A § link points to the subsection where a quoted value is worked. Section properties only: no design check is summarised. Units: ' + (unitSys() === 'mm' ? 'mm, kN' : 'in, kip') + ' unless noted.' },
+    ...sprNL('Inputs first, then the section drawing and the results.', [['Worked values:', 'where the tool works a value, the equation is shown symbolically, then with the values substituted, then with the result (Calc detail, Plastic, Torsion); the parallel-axis table gives each part’s A, centroid, own I and transfer term A·d² with their sums.'],
+      ['§ links:', 'a § link points to the subsection where a quoted value is worked.'], ['Scope:', 'section properties only: no design check is summarised.'], ['Units:', (unitSys() === 'mm' ? 'mm, kN' : 'in, kip') + ' unless noted.']]),
     { type: 'note', text: (p.name || '') + (p.member ? ' — ' + p.member : '') + ' · ' + SPC_TOOL + '.html · printed ' + today }];
 }
 /* the report bar's Include boxes: the retired dialog's choices */
@@ -7614,7 +7796,7 @@ function sprModel() {
       krow('S_x,top', R.Sxt, 'S', 'sp/sm.Sxt'), krow('S_x,bottom', R.Sxb, 'S', 'sp/sm.Sxb'), krow('S_y,left', R.Syl, 'S', 'sp/sm.Syl'), krow('S_y,right', R.Syr, 'S', 'sp/sm.Syr'),
       krow('Z_x', R.Zx, 'S', 'sp/pl.Zx'), krow('Z_y', R.Zy, 'S', 'sp/pl.Zy'), krow('r_x', R.rx, 'L', 'sp/sm.rx'), krow('r_y', R.ry, 'L', 'sp/sm.ry'), krow('r_min', R.r2, 'L', 'sp/pa.r2'),
       krow(T.Jn ? 'J (transformed Σ n·J, thin-wall)' : 'J (thin-wall)', T.J, 'I', 'sp/to.J'), krow('C_w (thin-wall)', T.Cw, 'W', 'sp/to.Cw'), ...(Wt && isNum(Wt.w) ? [krow('Weight per length', Wt.w, 'wt', 'sp/wt.w')] : [])] },
-    { type: 'note', text: 'Each value links to the step where it is worked; the same values are on the Properties tab[[tab:props| ↗]].' + (R.anyN ? ' Transformed section: A, I, S, Z are in units of the reference material (n = 1).' : '') }].concat(R.warnings.length ? [{ type: 'note', warn: true, text: 'Check the model: ' + R.warnings.join(' ') }] : []) }] });
+    { type: 'note', text: 'Each value links to the step where it is worked; the same values are on the Properties tab[[tab:props| ↗]].' + (R.anyN ? ' Transformed section: A, I, S, Z are in units of the reference material (n = 1).' : '') }].concat(R.warnings.length ? sprNL('Check the model:', R.warnings, { warn: true }) : []) }] });
   /* ---------- 2. Inputs ---------- */
   const partsRows = R.rows.map(r => { const q = partById(r.id); return [r.lbl, partDesc(q), sprC(r.x, 'L'), sprC(r.y, 'L'), (+(+q.rot || 0).toFixed(3)) + '°', q.mir ? 'yes' : '', String(+(r.n).toPrecision(4)), sprC(r.A, 'A'), r.tab ? 'AISC tab.' : (q.type === 'shape' ? 'plate model' : 'geometry')]; });
   const geoRows = M.parts.map(q => { const G = SPC.partGeom(q); return [q.lbl, (q.hole ? 'hole: ' : '') + (q.type === 'shape' ? G.desc + shapeModel(G) : SPC.TYPES[q.type].name), Object.keys(G.dims).map(k => k + ' = ' + nf(G.dims[k], 'L', 4)).join(', ') + slopeTxt(G) + (q.type === 'poly' ? (G.prims[0] ? G.prims[0].pts.length + ' vertices' : '') : '')]; });
@@ -7627,14 +7809,19 @@ function sprModel() {
   const paRows = R.rows.map(r => [r.lbl, String(+r.n.toPrecision(4)), sprC(r.nA, 'A'), sprC(r.x, 'L'), sprC(r.y, 'L'), sprC(r.Ixo, 'I'), sprC(r.Iyo, 'I'), sprC(r.Ixyo, 'I'), sprC(r.dx, 'L'), sprC(r.dy, 'L'), sprC(r.Ady2, 'I'), sprC(r.Adx2, 'I'), sprC(r.Adxdy, 'I')]);
   paRows.push({ cls: 'gov', cells: ['Σ', '', sprC(sm('nA'), 'A'), '', '', sprC(sm('Ixo'), 'I'), sprC(sm('Iyo'), 'I'), sprC(sm('Ixyo'), 'I'), '', '', sprC(sm('Ady2'), 'I'), sprC(sm('Adx2'), 'I'), sprC(sm('Adxdy'), 'I')] });
   secs.push({ title: 'Area, centroid and moments of inertia', subs: [
-    { title: 'Area, centroid and moments of inertia', items: [sprTopics(T3), { type: 'note', text: 'Each part about its own centroid (in the section x–y directions), then transferred: d_x = $\\bar{x}_{i}$ − x̄, d_y = $\\bar{y}_{i}$ − ȳ. Holes have negative A. The same steps are on the Calc detail tab[[tab:calc| ↗]].' }] },
+    { title: 'Area, centroid and moments of inertia', items: [sprTopics(T3), ...sprNL('Each part about its own centroid (in the section x–y directions), then transferred: d_x = $\\bar{x}_{i}$ − x̄, d_y = $\\bar{y}_{i}$ − ȳ.', [['Holes', 'have negative A.'], ['Steps:', 'the same steps are on the Calc detail tab[[tab:calc| ↗]].']])] },
     { title: 'Parallel-axis table (' + R.rows.length + ' parts)', items: [{ type: 'table', wide: true, lazy: true, title: 'Parallel-axis table', head: ['Part', 'n', 'n·A_i', '$\\bar{x}_{i}$', '$\\bar{y}_{i}$', 'n·I_xo', 'n·I_yo', 'n·I_xyo', 'd_x', 'd_y', 'n·A·d_y²', 'n·A·d_x²', 'n·A·d_x d_y'], rows: paRows }] }] });
   /* ---------- 4.–6. ---------- */
   let mohr = ''; try { mohr = mohrSVG(R.Ix, R.Iy, R.Ixy); } catch (e) { mohr = ''; }
   secs.push({ title: 'Section moduli and principal axes', subs: [{ title: 'Section moduli, radii of gyration and principal axes', items: [sprTopics(T4)].concat(mohr ? [{ type: 'figure', svg: mohr, caption: 'Mohr’s circle of inertia (I horizontal, I_xy upward)' }] : []) }] });
-  secs.push({ title: 'Plastic moduli', subs: [{ title: 'Plastic section moduli and shape factors', items: [sprTopics(T5), { type: 'note', text: 'PNA: the line that divides the ' + (R.anyN ? 'n-weighted ' : '') + 'area into two equal halves; Z = A_1 d_1 + A_2 d_2 (distances from the PNA to the centroids of the halves). Plate model geometry (fillets neglected).' + (R.anyN ? ' Transformed (n-weighted) areas: the PNA balances n·A, which is meaningful only when n is the ratio of yield strengths. Concrete is not treated as a no-tension material: parts below (or beside) the PNA count in tension at n times the reference yield stress, so with a concrete slab Z is not the composite plastic modulus. For the plastic moment of a composite girder use AASHTO LRFD 10th Ed. (2024) Appendix D6.1 or AISC 360-16 Sections I3.2a and I1.2a (plastic stress distribution; concrete at 0.85f′_c in compression only, concrete in tension neglected).' : '') + ' The same steps are on the Plastic tab[[tab:plas| ↗]].' }] }] });
+  secs.push({ title: 'Plastic moduli', subs: [{ title: 'Plastic section moduli and shape factors', items: [sprTopics(T5), ...sprNL('PNA: the line that divides the ' + (R.anyN ? 'n-weighted ' : '') + 'area into two equal halves.', [['Z', '= A_1 d_1 + A_2 d_2 (distances from the PNA to the centroids of the halves).'], ['Geometry:', 'plate model geometry (fillets neglected).'],
+    R.anyN ? ['Transformed (n-weighted) areas:', 'the PNA balances n·A, which is meaningful only when n is the ratio of yield strengths.'] : null,
+    R.anyN ? ['Concrete', 'is not treated as a no-tension material: parts below (or beside) the PNA count in tension at n times the reference yield stress, so with a concrete slab Z is not the composite plastic modulus.'] : null,
+    R.anyN ? ['Composite girder:', 'for the plastic moment of a composite girder use AASHTO LRFD 10th Ed. (2024) Appendix D6.1 or AISC 360-16 Sections I3.2a and I1.2a (plastic stress distribution; concrete at 0.85f′_c in compression only, concrete in tension neglected).'] : null,
+    ['Steps:', 'the same steps are on the Plastic tab[[tab:plas| ↗]].']])] }] });
   const t6 = T6.filter(t => t.steps.length);
-  secs.push({ title: 'Torsion, buckling parameters and weight', subs: [{ title: 'Torsion, buckling parameters and weight', items: (t6.length ? [sprTopics(t6)] : []).concat([{ type: 'note', warn: true, text: 'Thin-wall approximation — verify: J and C_w are computed on the centre-line model of the plates (thin-walled beam theory, AISC Design Guide 9; Vlasov); fillets are neglected.' + (isNum(T.J) ? '' : ' J: n/a — ' + (T.why || '') + '.') + (isNum(T.Cw) ? '' : ' C_w: n/a — ' + (T.cwWhy || '') + '.') + ' Worked on the Torsion tab[[tab:tors| ↗]].' }]) }] });
+  secs.push({ title: 'Torsion, buckling parameters and weight', subs: [{ title: 'Torsion, buckling parameters and weight', items: (t6.length ? [sprTopics(t6)] : []).concat(sprNL('Thin-wall approximation — verify: J and C_w are computed on the centre-line model of the plates (thin-walled beam theory, AISC Design Guide 9; Vlasov).', [['Fillets:', 'fillets are neglected.'],
+    isNum(T.J) ? null : ['J:', 'n/a — ' + (T.why || '') + '.'], isNum(T.Cw) ? null : ['C_w:', 'n/a — ' + (T.cwWhy || '') + '.'], ['Worked', 'on the Torsion tab[[tab:tors| ↗]].']], { warn: true })) }] });
   /* ---------- 7. Notes and references ---------- */
   const notes = [];
   if ((p.notes || '').trim()) notes.push({ type: 'note', text: 'Project notes (input): ' + String(p.notes).trim().replace(/\s*\n\s*/g, ' / ') });

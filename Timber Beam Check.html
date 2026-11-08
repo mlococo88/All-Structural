@@ -128,6 +128,12 @@ table.cfg input,table.cfg select{font-size:8.8pt;padding:2px 4px}
 .errBox{font-size:9.5pt;color:#8C1D1D;background:#FDECEC;border:1.5px solid #F1A8A8;border-radius:5px;padding:7px 10px;margin:7px 0}
 .okBox{font-size:9.5pt;color:#065F46;background:#E8F7F0;border:1.5px solid #7FD1B0;border-radius:5px;padding:7px 10px;margin:7px 0;font-weight:600}
 .errBox ul,.warnBox ul{margin:3px 0 0 18px;padding:0}
+/* TBNL (2026-11-08): a long note as a bold lead line and a list (tbNL) */
+.tbNLl{font-weight:700;margin:0 0 1px}
+ul.tbNLu,ol.tbNLu{margin:2px 0 3px;padding:0 0 0 18px}
+.tbNLu>li{margin:1px 0}
+.tbNLa{margin:2px 0 4px}
+@media print{.tbNLu>li{break-inside:avoid}}
 /* dashboard */
 .hero{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;border:1px solid var(--line);border-left:5px solid var(--pass);border-radius:6px;padding:10px 14px;margin:8px 0;background:#FBFDFC}
 .hero.fail{border-left-color:var(--fail);background:#FFFBFB}
@@ -674,6 +680,9 @@ function tbcRun(m) {
     const fails = [];   // code limits violated: member is NG regardless of stress ratios
     const notes = [];   // informational (pre-R1 notes)
     const adv = [];     // advisories added with R1 (multi-span / bottom-edge bracing); shown with the notes
+    const advNL = {};   // TBNL (2026-11-08): display only: a long note as { lead, items }, keyed by its exact text (the text itself is unchanged);
+    Object.defineProperty(adv, 'nl', { value: advNL });   // a non-enumerable property of R.adv: not part of the results (JSON, comparisons)
+    const nlMsg = (lead, items) => { const t = [lead, ...items].join(' '); advNL[t] = { lead, items }; return t; };
     const num = (v) => (typeof v === 'number' && isFinite(v)) ? v : NaN;
     const g = m.geom || {}, ld = m.loads || {}, mt = m.material || {}, dz = m.design || {};
 
@@ -739,7 +748,7 @@ function tbcRun(m) {
             if (![ref.Fb, ref.Fbn, ref.Fv, ref.Fcp, ref.E, ref.Emin].every(v => v > 0)) errors.push('Enter all glulam reference design values (Fbx+, Fbx−, Fvx, Fc⊥x, Ex, Ex,min) greater than zero.');
             else if (!(ref.Eymin > 0)) {   // TBE1: never an optimistic default for Ey,min
                 ref.Eymin = ref.Emin * GL_EYMIN_RATIO; ref.EyminAssumed = true;
-                adv.push(`REVIEW: custom glulam has no Ey,min (beam stability uses Ey,min, NDS 3.3.3.8). Assumed Ey,min = Ex,min × ${GL_EYMIN_RATIO.toFixed(4)} (the lowest Ey,min/Ex,min of the built-in Table 5A values) = ${Math.round(ref.Eymin)} psi. Enter Ey,min from NDS Supplement Table 5A or the manufacturer.`);
+                adv.push(nlMsg('REVIEW: custom glulam has no Ey,min (beam stability uses Ey,min, NDS 3.3.3.8).', [`Assumed Ey,min = Ex,min × ${GL_EYMIN_RATIO.toFixed(4)} (the lowest Ey,min/Ex,min of the built-in Table 5A values) = ${Math.round(ref.Eymin)} psi.`, 'Enter Ey,min from NDS Supplement Table 5A or the manufacturer.']));   // TBNL: same text
             }
             if (ld.selfWeight && !(dens >= 0)) errors.push('Enter the density (pcf) for self-weight, or turn self-weight off.');
         } else if (!glSpec) errors.push(`Unknown glulam combination "${glC.combo}".`);
@@ -877,7 +886,7 @@ function tbcRun(m) {
     const Ct = { Fb: ct.other, Fv: ct.other, Fcp: ct.other, E: ct.E };
     const ciOn = !!dz.incising && !isGL && !isSCL;
     if (dz.incising && (isGL || isSCL)) notes.push('Ci applies to sawn lumber only (NDS 4.3.8); Ci = 1.0 used.');
-    if (ciOn && cat === 'timber') notes.push('Incised timber: NDS 4.3.8 and Table 4.3.8 are written for dimension lumber. Their Ci values are applied to this timber as ticked (conservative, fix log O14). Untick Incised if the timber is not incised.');
+    if (ciOn && cat === 'timber') notes.push(nlMsg('Incised timber: NDS 4.3.8 and Table 4.3.8 are written for dimension lumber.', ['Their Ci values are applied to this timber as ticked (conservative, fix log O14).', 'Untick Incised if the timber is not incised.']));   // TBNL: same text
     const Ci = { Fb: ciOn ? 0.80 : 1.0, Fv: ciOn ? 0.80 : 1.0, Fcp: 1.0, E: ciOn ? 0.95 : 1.0 };
     // Repetitive member factor: dimension lumber 1.15 (NDS 4.3.9); SCL 1.04 (NDS 8.3.7; engineer's decision P2-7, 2026-10-10, fix log R4)
     const Cr = (dz.repetitive && cat === 'dim' && spacing <= 24) ? 1.15 : (dz.repetitive && cat === 'scl' && spacing <= 24) ? SCL_CR : 1.0;
@@ -948,9 +957,9 @@ function tbcRun(m) {
     const notchE = hasNotch && notchFace === 'comp' ? (notchEIn === null ? dn : notchEIn) : null;
     const notchDe = notchE === null ? null : dep - ((dep - dn) / dn) * notchE;
     const Cn = hasNotch ? (notchFace === 'comp' ? notchDe / dn : Math.pow(dn / dep, 2)) : 1.0;
-    if (hasNotch && notchFace === 'comp') adv.push('Compression-face end notch: checked with V′r = (2/3) F′v b [d − ((d − d_n)/d_n) e] (NDS 3.4.3.2, compression-face notch; verify against NDS 2018 (not in references))' + (notchEIn === null ? '; e not entered, e = d_n assumed (conservative).' : '.') + ' The notch-depth limit of the tension face is kept (conservative).');
+    if (hasNotch && notchFace === 'comp') adv.push(nlMsg('Compression-face end notch: checked with V′r = (2/3) F′v b [d − ((d − d_n)/d_n) e] (NDS 3.4.3.2, compression-face notch; verify against NDS 2018 (not in references))' + (notchEIn === null ? '; e not entered, e = d_n assumed (conservative).' : '.'), ['The notch-depth limit of the tension face is kept (conservative).']));   // TBNL: same text
     const notchJ = [0, nS].filter(j => types[j] !== 'free');   // supports at the member ends
-    if (types.some(t => t === 'fixed')) adv.push('Fixed support: bearing is checked with the vertical reaction only (uniform Fc⊥ stress over the bearing length). The effect of the fixing moment on the bearing stress, and the connection that provides the fixity, are not checked (fix log R1-i).');
+    if (types.some(t => t === 'fixed')) adv.push(nlMsg('Fixed support: bearing is checked with the vertical reaction only (uniform Fc⊥ stress over the bearing length).', ['The effect of the fixing moment on the bearing stress, and the connection that provides the fixity, are not checked (fix log R1-i).']));   // TBNL: same text
     if (hasNotch && notchJ.length < 2 && !simple) adv.push(notchJ.length ? `End notch: applied at end support ${notchJ.map(j => TBC_NODE[j]).join(', ')} only (the other end is a cantilever tip).` : 'End notch: neither member end is supported (both ends cantilever); the notch input is not used.');
 
     // --- Loads (plf for uniform, lb for point) ---
@@ -1155,7 +1164,7 @@ function tbcRun(m) {
     const gov = { b: govBy('r_b'), v: govBy('r_v'), c: govBy('r_c'), cb: govBy('r_cB') };   // cb: the beam at its supports (TBB1)
     const upl = supJ.filter(j => combos.some(c => c.R[j] < 0));
     if (upl.length) notes.push('Net uplift reaction in at least one combination: provide an uplift connection, and check lateral bracing of the bottom (compression) edge.');
-    if (nS > 1 && ['L', 'Lr', 'S'].some(t => wu[t] !== 0)) adv.push('Continuous beam: the live, roof live and snow area loads act on all spans at once. Pattern (skip) loading is not generated; alternate-span loading can give larger positive moments and adjacent-span loading larger support moments. Check pattern cases separately if they matter (for example with point loads, or one span at a time).');
+    if (nS > 1 && ['L', 'Lr', 'S'].some(t => wu[t] !== 0)) adv.push(nlMsg('Continuous beam: the live, roof live and snow area loads act on all spans at once.', ['Pattern (skip) loading is not generated; alternate-span loading can give larger positive moments and adjacent-span loading larger support moments.', 'Check pattern cases separately if they matter (for example with point loads, or one span at a time).']));   // TBNL: same text
     if (upl.length && nS > 1) adv.push(`Net uplift at support${upl.length > 1 ? 's' : ''} ${upl.map(j => TBC_NODE[j]).join(', ')}.`);
     // bottom-edge slenderness where negative moment occurs
     if (latBot !== 'same' && stabBot) stab.forEach((s, i) => {
@@ -1210,7 +1219,7 @@ function tbcRun(m) {
     const Kcr = wet && (KcrIn === 0 || KcrIn === 1.5) ? 2.0 : (KcrIn || 1.5);
     // TBL1: negative dead load (area load or a D point load) is accepted but flagged
     if (num(ld.D) < 0 || pls.some(p => p.type === 'D' && p.mag < 0)) adv.push('Negative dead load entered' + (num(ld.D) < 0 ? ` (D = ${ld.D} psf)` : ' (a D point load)') + ': check the input. A negative D reduces every combination (and 0.6D is the uplift case); enter wind uplift as W.');
-    if (wet && KcrIn === 1.5) adv.push('Wet service: creep factor K_cr = 2.0 used (NDS 3.5.2, verify against NDS 2018 (not in references); IBC 2018 Table 1604.3 footnote d). The K_cr input holds 1.5, the dry-service default used for wet service too before 2026-11-07; enter another value to override.');
+    if (wet && KcrIn === 1.5) adv.push(nlMsg('Wet service: creep factor K_cr = 2.0 used (NDS 3.5.2, verify against NDS 2018 (not in references); IBC 2018 Table 1604.3 footnote d).', ['The K_cr input holds 1.5, the dry-service default used for wet service too before 2026-11-07; enter another value to override.']));   // TBNL: same text
     if (!wet && cat === 'timber' && KcrIn !== 2.0) adv.push('Timbers (5 in. and thicker) are often surfaced green: if this member is unseasoned (not dry at installation), NDS 3.5.2 gives K_cr = 2.0. Enter 2.0 in the creep factor if so.');
     const maxAbs = (arr) => arr.reduce((mx, v) => Math.max(mx, Math.abs(v)), 0);
     // TBL1 (information only, no check): IBC 2018 Table 1604.3 footnote d quantity = creep component + short-term live load, the creep
@@ -1407,6 +1416,14 @@ function tbcMigrate(d) {
    Steel Beam Design - AISC 15th.html). The engine is in the script above.
    ===================================================================== */
 const $ = id => document.getElementById(id);
+/* TBNL (2026-11-08, engineer's request: a long note as a bold lead line and a list; display only). tbNL(lead, items, o) returns HTML:
+   o.act: action lines (warning style) first; lead: one bold line; items: 'text' or [leadWords, text] (a falsy item is skipped);
+   o.ol: a numbered list. The Report reads such a note as its parts (tbrNLParts). */
+function tbNL(lead, items, o) {
+  o = o || {}; const T = o.ol ? 'ol' : 'ul';
+  const li = (items || []).filter(Boolean).map(x => '<li>' + (Array.isArray(x) ? '<b class="tbNLk">' + x[0] + '</b> ' + x[1] : x) + '</li>').join('');
+  return (o.act || []).filter(Boolean).map(a => '<div class="warnBox tbNLa">' + a + '</div>').join('') + (lead ? '<div class="tbNLl">' + lead + '</div>' : '') + (li ? '<' + T + ' class="tbNLu">' + li + '</' + T + '>' : '');
+}
 function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function f(v, d) { if (typeof v !== 'number' || !isFinite(v)) return '—'; return v.toFixed(d === undefined ? 2 : d); }
@@ -1893,8 +1910,13 @@ function buildGeomPane(P) {
       nt.appendChild(tr);
     });
     body.appendChild(nt);
-    body.appendChild(el('div', 'hint', '<b>Supporting member F<sub>c⊥</sub></b> (fix log TBB1): the reference F<sub>c⊥</sub> of the plate, ledger or beam the member bears on. Its bearing is checked too, with the same reaction and contact area, C<sub>M</sub> = 0.67 in wet service (sawn lumber), C<sub>t</sub> as the beam and C<sub>b</sub> = 1.0 (conservative). Same as beam = no separate check. Presets: No.2 values of NDS Supplement Tables 4A / 4B ' + VFY + '.'));
-    body.appendChild(el('div', 'hint', '<b>Cb</b>: tick when the bearing is at least 3 in. from the end of the member (NDS 3.10.4); C<sub>b</sub> = (l<sub>b</sub> + 0.375)/l<sub>b</sub> then applies for l<sub>b</sub> &lt; 6 in. A support where the member continues past it (interior support, or a support with an overhang beyond it) normally qualifies. <b>Free</b> (ends only) makes a cantilever; pin and roller are the same in this model. Fixed supports are available for completeness (rare in timber).'));
+    body.appendChild(el('div', 'hint', tbNL('Supporting member F<sub>c⊥</sub> (fix log TBB1): the reference F<sub>c⊥</sub> of the plate, ledger or beam the member bears on.', [   // TBNL
+      ['Its bearing is checked too,', 'with the same reaction and contact area, C<sub>M</sub> = 0.67 in wet service (sawn lumber), C<sub>t</sub> as the beam and C<sub>b</sub> = 1.0 (conservative).'],
+      ['Same as beam', '= no separate check.'], ['Presets:', 'No.2 values of NDS Supplement Tables 4A / 4B ' + VFY + '.']])));
+    body.appendChild(el('div', 'hint', tbNL('Support types and the C<sub>b</sub> box', [   // TBNL
+      ['Cb:', 'tick when the bearing is at least 3 in. from the end of the member (NDS 3.10.4); C<sub>b</sub> = (l<sub>b</sub> + 0.375)/l<sub>b</sub> then applies for l<sub>b</sub> &lt; 6 in.'],
+      ['Qualifies:', 'a support where the member continues past it (interior support, or a support with an overhang beyond it) normally qualifies.'],
+      ['Free', '(ends only) makes a cantilever.'], ['Pin and roller', 'are the same in this model.'], ['Fixed', 'supports are available for completeness (rare in timber).']])));
   }, { noNum: true });
   mkSec(P, 'inSpacing', 'Member spacing', body => {
     fRow(body, 'Spacing s', numIn(() => M.geom.spacing, v => { M.geom.spacing = v; }, 'spacing', { chk: 'pos:0' }), 'in',
@@ -1908,7 +1930,9 @@ function buildLoadsPane(P) {
       fRow(body, lab, numIn(() => M.loads[k], v => { M.loads[k] = v; }, 'load_' + k), 'psf'));
     chkRow(body, 'Include self-weight (in D)', chkIn(() => M.loads.selfWeight, v => { M.loads.selfWeight = v; }, 'selfW'));
     const sw = el('div', 'hint'); sw.id = 'swVal'; body.appendChild(sw);
-    body.appendChild(el('div', 'hint', M.design.method === 'LRFD' ? 'LRFD: the ten strength combinations of ASCE 7-16 Sec. 2.3.1 (D, L, Lr, S, W) are checked automatically, each with the time effect factor λ of its row in NDS Table N3. W is the strength-level wind load. A blank load is taken as 0.' : 'All ten ASD combinations of ASCE 7-16 Sec. 2.4.1 are checked automatically; each one uses the load duration factor C<sub>D</sub> of the shortest-duration load present in it (NDS 2.3.2). A blank load is taken as 0.'));
+    body.appendChild(el('div', 'hint', M.design.method === 'LRFD'   // TBNL
+      ? tbNL('LRFD: the ten strength combinations of ASCE 7-16 Sec. 2.3.1 (D, L, Lr, S, W) are checked automatically.', [['λ:', 'each with the time effect factor λ of its row in NDS Table N3.'], ['W', 'is the strength-level wind load.'], ['A blank load', 'is taken as 0.']])
+      : tbNL('All ten ASD combinations of ASCE 7-16 Sec. 2.4.1 are checked automatically.', [['C<sub>D</sub>:', 'each one uses the load duration factor C<sub>D</sub> of the shortest-duration load present in it (NDS 2.3.2).'], ['A blank load', 'is taken as 0.']])));
   }, { noNum: true });
   mkSec(P, 'inPts', 'Point loads', body => {
     const pts = M.loads.points;
@@ -1929,9 +1953,14 @@ function buildLoadsPane(P) {
     const add = el('button', 'btn sm', '+ Add point load'); add.type = 'button';
     add.addEventListener('click', () => { const L0 = M.geom.spans[0].L; pts.push({ mag: 500, loc: (L0 > 0 ? L0 : 0.1) / 2, type: 'D' }); schedule(true); });
     body.appendChild(el('div', 'btnRow')).appendChild(add);
-    body.appendChild(el('div', 'hint', 'Positive = downward. x is measured from the left end of the beam (node A). The type sets the load case (and C<sub>D</sub>). A point load within d of a support counts in the design shear at that support at full value, or times x/d with the box below (fix log O4). Bearing l<sub>b</sub> (fix log TBB1): length of the bearing (post, hanger seat, beam above) along the beam; the bearing stress of the factored load on the beam is then checked (NDS 3.10, with C<sub>b</sub> when the load is 3 in. or more from the member ends). Blank = not checked.'));
+    body.appendChild(el('div', 'hint', tbNL('Point loads: positive = downward.', [   // TBNL
+      ['x', 'is measured from the left end of the beam (node A).'], ['Type:', 'sets the load case (and C<sub>D</sub>).'],
+      ['Within d of a support:', 'a point load counts in the design shear at that support at full value, or times x/d with the box below (fix log O4).'],
+      ['Bearing l<sub>b</sub> (fix log TBB1):', 'length of the bearing (post, hanger seat, beam above) along the beam; the bearing stress of the factored load on the beam is then checked (NDS 3.10, with C<sub>b</sub> when the load is 3 in. or more from the member ends). Blank = not checked.']])));
     chkRow(body, 'Reduce point loads within d of a support by x/d (shear, NDS 3.4.3.1(b))', chkIn(() => M.design.shearXd, v => { M.design.shearXd = v; }, 'shearXd'),
-      'Design shear only (reactions, bearing, notch shear, moments and deflections use the full loads). Permitted only for a beam in full bearing on one face with the loads applied to the opposite face. x is measured from the support point (conservative compared with the support face). Unticked = no reduction.');
+      tbNL('Design shear only (reactions, bearing, notch shear, moments and deflections use the full loads).', [   // TBNL
+        ['Permitted only', 'for a beam in full bearing on one face with the loads applied to the opposite face.'],
+        ['x', 'is measured from the support point (conservative compared with the support face).'], ['Unticked', '= no reduction.']]));
   }, { noNum: true });
 }
 
@@ -1972,12 +2001,15 @@ function buildGlulamInputs(body, mt) {
       fRow(body, l, numIn(() => gl.custom[k], v => { gl.custom[k] = v; }, 'glc_' + k), u, k === 'Eymin' ? 'Used for F<sub>bE</sub> (NDS 3.3.3.8). Blank: E<sub>x,min</sub> × ' + GL_EYMIN_RATIO.toFixed(4) + ' is assumed (conservative) and a REVIEW note is shown.' : undefined));
   }
   const rl = el('div', 'note small'); rl.id = 'refLine'; body.appendChild(rl);
-  body.appendChild(el('div', 'hint', 'Straight, prismatic members, bending about x–x (load perpendicular to the wide faces of the laminations). F<sub>bx</sub><sup>+</sup> applies to positive moment (bottom tension laminations in tension) and F<sub>bx</sub><sup>−</sup> to negative moment (NDS Supplement Table 5A footnotes). Flat use (y–y), curved and tapered members are not covered.'));
+  body.appendChild(el('div', 'hint', tbNL('Straight, prismatic members, bending about x–x (load perpendicular to the wide faces of the laminations).', [   // TBNL
+    ['F<sub>bx</sub><sup>+</sup>', 'applies to positive moment (bottom tension laminations in tension) and F<sub>bx</sub><sup>−</sup> to negative moment (NDS Supplement Table 5A footnotes).'],
+    ['Not covered:', 'flat use (y–y), curved and tapered members.']])));
 }
 /* SCL inputs (Phase 2, fix log R3): every value from the manufacturer */
 function buildSclInputs(body, mt) {
   const s = mt.scl;
-  body.appendChild(el('div', 'warnBox', '<b>The manufacturer’s literature governs.</b> SCL design values and the size (volume) factor are proprietary: enter the values published for the product (code evaluation report). No product values are built into this tool.'));
+  body.appendChild(el('div', 'warnBox', tbNL('The manufacturer’s literature governs.', [   // TBNL
+    ['Proprietary:', 'SCL design values and the size (volume) factor; enter the values published for the product (code evaluation report).'], ['No product values', 'are built into this tool.']])));
   fRow(body, 'Product type', selIn(Object.keys(SCL_KINDS).map(k => [k, SCL_KINDS[k]]), () => s.kind, v => { s.kind = v; }, 'sclKind', false), '');
   fRow(body, 'Product / grade', txtIn(() => s.name, v => { s.name = v; }, 'sclName', 'manufacturer, grade'), '');
   fRow(body, 'b (width)', numIn(() => s.b, v => { s.b = v; }, 'sclB'), 'in');
@@ -2023,7 +2055,8 @@ function buildMaterialPane(P) {
       fRow(body, 'd (width, depth when edgewise)', numIn(() => mt.customD, v => { mt.customD = v; }, 'customD'), 'in');
     }
     chkRow(body, 'Use manual reference values (Man)', chkIn(() => mt.manual, v => { mt.manual = v; }, 'manual', true),
-      'For grades, sizes or species that are not built in (e.g. Southern Pine Stud, Spruce-Pine-Fir timbers, Dense grades). Enter the Supplement values for the size. Timbers (5 in. and thicker) use NDS Supplement Table 4D: Beams and Stringers when d − b > 2 in., else Posts and Timbers.');
+      tbNL('For grades, sizes or species that are not built in (e.g. Southern Pine Stud, Spruce-Pine-Fir timbers, Dense grades).', [   // TBNL
+        ['Enter', 'the Supplement values for the size.'], ['Timbers (5 in. and thicker)', 'use NDS Supplement Table 4D: Beams and Stringers when d − b > 2 in., else Posts and Timbers.']]));
     if (mt.manual) propEditor(body, 'Manual reference values (NDS Supplement)', mt.manualProps, 'mp_');
     else if (custom[mt.species]) propEditor(body, `Custom species "${mt.species}" reference values`, custom[mt.species], 'cs_');
     const rl = el('div', 'note small'); rl.id = 'refLine'; body.appendChild(rl);
@@ -2036,7 +2069,9 @@ function buildMaterialPane(P) {
     if (mt.type !== 'scl') {   // TBN1: notch face
       fRow(body, 'Notch location', selIn([['tension', 'Tension face, end supports'], ['comp', 'Compression face, end supports'], ['interior', 'Interior (not checked)']], () => mt.notchFace || 'tension',
         v => { if (v === 'tension') delete mt.notchFace; else mt.notchFace = v; }, 'notchFace'), '',
-        'Tension face: NDS 3.4.3.2(a), Eq. 3.4-3. Compression face: V′<sub>r</sub> = (2/3) F′<sub>v</sub> b [d − ((d − d<sub>n</sub>)/d<sub>n</sub>) e] (NDS 3.4.3.2, compression-face notch ' + VFY + '). Interior notches are not permitted / not checked: the tool stops with an input error (fix log TBN1).');
+        tbNL('How each notch location is checked:', [['Tension face:', 'NDS 3.4.3.2(a), Eq. 3.4-3.'],   // TBNL
+          ['Compression face:', 'V′<sub>r</sub> = (2/3) F′<sub>v</sub> b [d − ((d − d<sub>n</sub>)/d<sub>n</sub>) e] (NDS 3.4.3.2, compression-face notch ' + VFY + ').'],
+          ['Interior notches', 'are not permitted / not checked: the tool stops with an input error (fix log TBN1).']]));
       if (mt.notchFace === 'comp') fRow(body, 'e (notch length past the inner edge of the support)', numIn(() => mt.notchE, v => { if (v === null) delete mt.notchE; else mt.notchE = v; }, 'notchE'), 'in', 'e ≤ d<sub>n</sub>. Blank: e = d<sub>n</sub> (the largest permitted; conservative).');
     }
   }, { noNum: true });
@@ -2059,7 +2094,7 @@ function buildFactorsPane(P) {
     chkRow(body, 'Wet service (C<sub>M</sub>)', chkIn(() => dz.moisture === 'Wet', v => { dz.moisture = v ? 'Wet' : 'Dry'; }, 'wet'));
     fRow(body, 'Temperature (C<sub>t</sub>)', selIn([['Normal', 'T ≤ 100 °F'], ['100-125', '100 °F < T ≤ 125 °F'], ['125-150', '125 °F < T ≤ 150 °F']], () => dz.temp, v => { dz.temp = v; }, 'temp', false), '');
     chkRow(body, 'Incised (C<sub>i</sub>)', chkIn(() => dz.incising, v => { dz.incising = v; }, 'incised'));
-    chkRow(body, 'Repetitive member (C<sub>r</sub>)', chkIn(() => dz.repetitive, v => { dz.repetitive = v; }, 'repetitive'), 'Three or more members at ≤ 24 in., joined by a load-distributing element. Dimension lumber C<sub>r</sub> = 1.15 (NDS 4.3.9); SCL C<sub>r</sub> = 1.04 (NDS 8.3.7). Not timbers or glulam.');
+    chkRow(body, 'Repetitive member (C<sub>r</sub>)', chkIn(() => dz.repetitive, v => { dz.repetitive = v; }, 'repetitive'), tbNL('Three or more members at ≤ 24 in., joined by a load-distributing element.', [['Dimension lumber', 'C<sub>r</sub> = 1.15 (NDS 4.3.9).'], ['SCL', 'C<sub>r</sub> = 1.04 (NDS 8.3.7).'], ['Not', 'timbers or glulam.']]));   // TBNL
     chkRow(body, 'Flat use (C<sub>fu</sub>, load on the wide face)', chkIn(() => dz.flatUse, v => { dz.flatUse = v; }, 'flat'));
     if (M.material.type !== 'sawn') body.appendChild(el('div', 'hint', M.material.type === 'glulam' ? 'Glulam: C<sub>M</sub> per the Table 5A footnote (F<sub>b</sub> 0.8, F<sub>v</sub> 0.875, F<sub>c⊥</sub> 0.53, E 0.833); C<sub>i</sub>, C<sub>r</sub>, C<sub>F</sub> and flat use do not apply.' : 'SCL: wet service and flat use need the manufacturer’s values (not built in); C<sub>i</sub> is not applied; C<sub>r</sub> = 1.04 when Repetitive member is ticked and s ≤ 24 in. (NDS 8.3.7).'));
   }, { noNum: true });
@@ -2068,12 +2103,16 @@ function buildFactorsPane(P) {
     if (dz.latTop === 'Supports') fRow(body, 'Unbraced length l<sub>u</sub>, top', numIn(() => dz.luTop, v => { dz.luTop = v; }, 'luTop', { ph: 'span' }), 'ft', '0 or blank = the length of each span.');
     fRow(body, 'Bottom edge (compression where M < 0)', selIn([['Supports', 'At supports only'], ['Continuous', 'Continuous (e.g. ceiling)'], ['same', 'Same as top edge (earlier tool versions)']], () => dz.latBot, v => { dz.latBot = v; }, 'latBot'), '');
     if (dz.latBot === 'Supports') fRow(body, 'Unbraced length l<sub>u</sub>, bottom', numIn(() => dz.luBot, v => { dz.luBot = v; }, 'luBot', { ph: 'span' }), 'ft', '0 or blank = the length of each span (support to support, or the cantilever length).');
-    body.appendChild(el('div', 'hint', 'Negative moment occurs over interior supports, on cantilevers and under net uplift; its compression edge is the bottom edge. An inflection point is not a brace point. Files from the earlier (pre-2026-10-10) version of this tool open with the bottom edge "At supports only" (engineer\'s decision, fix log R2); "Same as top edge" is how that version worked and can still be chosen.'));
+    body.appendChild(el('div', 'hint', tbNL('Negative moment occurs over interior supports, on cantilevers and under net uplift; its compression edge is the bottom edge.', [   // TBNL
+      ['Brace points:', 'an inflection point is not a brace point.'],
+      ['Earlier files:', 'files from the earlier (pre-2026-10-10) version of this tool open with the bottom edge "At supports only" (engineer\'s decision, fix log R2); "Same as top edge" is how that version worked and can still be chosen.']])));
   }, { noNum: true });
   mkSec(P, 'inDefl', 'Deflection', body => {
-    fRow(body, 'Creep factor K<sub>cr</sub>', numIn(() => dz.creep, v => { dz.creep = v; }, 'creep'), '', 'Applied to the dead-load deflection (NDS 3.5.2: 1.5 for seasoned lumber, glulam and SCL in dry service; 2.0 for unseasoned lumber or wet service). 0 or blank = by service condition (1.5 dry, 2.0 wet). With Wet service ticked, 1.5 is read as the old default and 2.0 is used; any other value is used as entered.');
+    fRow(body, 'Creep factor K<sub>cr</sub>', numIn(() => dz.creep, v => { dz.creep = v; }, 'creep'), '', tbNL('Applied to the dead-load deflection.', [['NDS 3.5.2:', '1.5 for seasoned lumber, glulam and SCL in dry service; 2.0 for unseasoned lumber or wet service.'],   // TBNL
+      ['0 or blank', '= by service condition (1.5 dry, 2.0 wet).'], ['With Wet service ticked,', '1.5 is read as the old default and 2.0 is used; any other value is used as entered.']]));
     fRow(body, 'Live/snow limit L /', numIn(() => dz.deflLL, v => { dz.deflLL = v; }, 'deflLL'), '');
-    fRow(body, 'Total limit L /', numIn(() => dz.deflTL, v => { dz.deflTL = v; }, 'deflTL'), '', 'IBC Table 1604.3 (user-editable). For a cantilever, L = twice the cantilever length (IBC Table 1604.3, footnote i). The live/snow limit is used for L, Lr and S: the table gives S in its "S or W" column, which for roof members equals the "L or Lr" column (floor members have no S limit); enter another value if they differ.');
+    fRow(body, 'Total limit L /', numIn(() => dz.deflTL, v => { dz.deflTL = v; }, 'deflTL'), '', tbNL('IBC Table 1604.3 (user-editable).', [['Cantilever:', 'L = twice the cantilever length (IBC Table 1604.3, footnote i).'],   // TBNL
+      ['Live/snow limit:', 'used for L, Lr and S: the table gives S in its "S or W" column, which for roof members equals the "L or Lr" column (floor members have no S limit); enter another value if they differ.']]));
   }, { noNum: true });
 }
 
@@ -2262,7 +2301,8 @@ function buildSummary(pg) {
   ce.addEventListener('click', () => { M.ui.outTab = 'ana'; buildTabBar(); renderTab(); }); dash.appendChild(ce);
   pg.appendChild(dash);
   if (R.fails.length) pg.appendChild(el('div', 'errBox', '<b>Code limit violated (NG):</b><ul>' + R.fails.map(m => '<li>' + esc(m) + '</li>').join('') + '</ul>'));
-  if (R.notes.length || R.adv.length) pg.appendChild(el('div', 'warnBox', '<b>Notes:</b><ul>' + R.notes.concat(R.adv).map(m => '<li>' + esc(m) + '</li>').join('') + '</ul>'));
+  const nlH = m => { const q = R.adv.nl && R.adv.nl[m]; return q ? tbNL(esc(q.lead), q.items.map(esc)) : esc(m); };   // TBNL: a long note as a lead and a list (display only)
+  if (R.notes.length || R.adv.length) pg.appendChild(el('div', 'warnBox', '<b>Notes:</b><ul>' + R.notes.concat(R.adv).map(m => '<li>' + nlH(m) + '</li>').join('') + '</ul>'));
   mkSec(pg, 'sumGov', 'Governing results', body => {
     const rows = [];
     const bc = gb;
@@ -2273,7 +2313,8 @@ function buildSummary(pg) {
     rows.push({ cls: R.dcr.def === R.dcrMax && d.r_dLL >= d.r_dTL ? 'gov' : '', cells: ['Deflection, live/snow [IBC 1604.3]', d.trName, R.nS > 1 ? spanLab(d.spanLL) : 'span', `Δ = ${f3(d.Dtr)} in.`, `L/${g4(d.LLdiv)} = ${f3(d.LLlim)} in.`, f3(d.r_dLL), { cls: stCls(d.r_dLL), h: stTxt(d.r_dLL) }] });
     rows.push({ cls: R.dcr.def === R.dcrMax && d.r_dTL > d.r_dLL ? 'gov' : '', cells: ['Deflection, total [NDS 3.5.2, IBC 1604.3]', 'Kcr·D + ' + d.totName, R.nS > 1 ? spanLab(d.spanTL) : 'span', `Δ = ${f3(d.Dtot)} in.`, `L/${g4(d.TLdiv)} = ${f3(d.TLlim)} in.`, f3(d.r_dTL), { cls: stCls(d.r_dTL), h: stTxt(d.r_dTL) }] });
     body.appendChild(tblEl(['Check', 'Governing combination', 'Location', 'Demand', 'Capacity / limit', 'Ratio', 'Status'], rows, { left: [0, 1, 2] }));
-    body.appendChild(el('div', 'hint', 'Ratio = demand / capacity; ≤ 1.000 passes. Highlighted = controls the utilization. ' + (isLRFD() ? 'LRFD: stresses from factored loads; adjusted values include K<sub>F</sub>, φ and λ (NDS Appendix N). Deflection at service loads.' : 'Stresses are ASD (unfactored loads).')));
+    body.appendChild(el('div', 'hint', tbNL('Ratio = demand / capacity; ≤ 1.000 passes.', [['Highlighted', '= controls the utilization.'],   // TBNL
+      isLRFD() ? ['LRFD:', 'stresses from factored loads; adjusted values include K<sub>F</sub>, φ and λ (NDS Appendix N). Deflection at service loads.'] : ['Stresses', 'are ASD (unfactored loads).']])));
     body.appendChild(tbcWorkedIn([['bCap', 'Bending'], [nt ? 'sNotch' : 'sCap', 'Shear'], ['brCalc', 'Bearing'], ['dfCheck', 'Deflection']]));
   });
   mkSec(pg, 'sumCombos', isLRFD() ? 'All LRFD load combinations (ASCE 7-16 Sec. 2.3.1)' : 'All ASD load combinations (ASCE 7-16 Sec. 2.4.1)', body => body.appendChild(comboTable()));
@@ -2283,7 +2324,8 @@ function comboTable() {
     { cls: c === R.gov.b ? 'b' : '', h: f3(c.r_b) }, { cls: c === R.gov.v ? 'b' : '', h: f3(c.r_v) }, { cls: c === R.gov.c ? 'b' : '', h: f3(c.r_c) }] }));
   const w = el('div');
   w.appendChild(tblEl(['Combination', tfHead(), 'w (plf)', 'R ' + R.supJ.map(nodeN).join(' / ') + ' (lb)', 'M (ft-lb)', 'f<sub>b</sub>/F′<sub>b</sub>', 'f<sub>v</sub>/F′<sub>v</sub>', 'f<sub>c⊥</sub>/F′<sub>c⊥</sub>'], rows, { left: [0] }));
-  w.appendChild(el('div', 'hint', 'Bold = governing. ' + (isLRFD() ? 'λ is the time effect factor of the combination (NDS Table N3).' : 'C<sub>D</sub> is that of the shortest-duration load present in the combination (NDS 2.3.2).') + ' Point loads are included per their load type. M = ' + (R.legacyBend ? 'largest |M|' : 'moment of the governing bending region') + '.'));
+  w.appendChild(el('div', 'hint', tbNL('Bold = governing.', [isLRFD() ? ['λ', 'is the time effect factor of the combination (NDS Table N3).'] : ['C<sub>D</sub>', 'is that of the shortest-duration load present in the combination (NDS 2.3.2).'],   // TBNL
+    ['Point loads', 'are included per their load type.'], ['M', '= ' + (R.legacyBend ? 'largest |M|' : 'moment of the governing bending region') + '.']])));
   return w;
 }
 
@@ -2428,7 +2470,7 @@ function buildAnalysis(pg) {
     fRow(body, 'Diagrams show', s, '');
     const c = diagCombo();
     plotHolder(body, 'plotV', () => figV(c)); plotHolder(body, 'plotM', () => figM(c));
-    body.appendChild(el('div', 'hint', 'Grey band = envelope of all ten combinations. Dotted lines = supports. Shear just left and right of each point load and support is plotted.'));
+    body.appendChild(el('div', 'hint', tbNL('Grey band = envelope of all ten combinations.', [['Dotted lines', '= supports.'], ['Shear', 'just left and right of each point load and support is plotted.']])));   // TBNL
   });
   mkSec(pg, 'anaReac', 'Support reactions (+ up)', body => {
     const heads = ['Combination', tfHead(), 'w (plf)', ...R.supJ.map(j => 'R<sub>' + nodeN(j) + '</sub> (lb)')];
@@ -2437,7 +2479,8 @@ function buildAnalysis(pg) {
     heads.push('ΣR (lb)', 'ΣF (lb)');
     const rows = R.combos.map(c => [c.name, String(c.TF), f1(c.w), ...R.supJ.map(j => ({ cls: c.R[j] < 0 ? 'ng' : '', h: f0(c.R[j]) })), ...fixed.map(j => f0(c.Rm[j])), f1(c.sumR), f1(c.sumF)]);
     body.appendChild(tblEl(heads, rows, { left: [0] }));
-    body.appendChild(el('div', 'hint', 'A negative reaction (red) is net uplift: provide an uplift connection. ΣR = ΣF is the equilibrium check of each combination. ' + (R.simple ? 'Simple span: reactions by statics.' : 'Continuous / cantilever beam: direct-stiffness solution (one EI for the member; reactions do not depend on E′I).')));
+    body.appendChild(el('div', 'hint', tbNL('A negative reaction (red) is net uplift: provide an uplift connection.', [['ΣR = ΣF', 'is the equilibrium check of each combination.'],   // TBNL
+      R.simple ? ['Simple span:', 'reactions by statics.'] : ['Continuous / cantilever beam:', 'direct-stiffness solution (one EI for the member; reactions do not depend on E′I).']])));
   });
   mkSec(pg, 'anaPeaks', 'Peak values by combination', body => {
     const rows = R.combos.map(c => {
@@ -2446,7 +2489,8 @@ function buildAnalysis(pg) {
       return [c.name, f0(mp.v), mp.x == null ? '—' : f2(mp.x), mn.v > 0 ? f0(-mn.v) : '0', mn.x == null || !(mn.v > 0) ? '—' : f2(mn.x), f0(c.Vd), f2(c.xV)];
     });
     body.appendChild(tblEl(['Combination', '+M max (ft-lb)', 'x (ft)', '−M max (ft-lb)', 'x (ft)', 'V design (lb)', 'x (ft)'], rows, { left: [0] }));
-    body.appendChild(el('div', 'hint', 'Moments are evaluated at 100 stations per span, at every point load and support, and at the analytical zero-shear points. V design = largest |V| outside the zones within d of the supports (NDS 3.4.3.1(a)), or the shear at a support when a point load lies within d of it (full value, or times x/d when ticked; fix log O4).'));
+    body.appendChild(el('div', 'hint', tbNL('Stations and design shear', [['Moments', 'are evaluated at 100 stations per span, at every point load and support, and at the analytical zero-shear points.'],   // TBNL
+      ['V design', '= largest |V| outside the zones within d of the supports (NDS 3.4.3.1(a)), or the shear at a support when a point load lies within d of it (full value, or times x/d when ticked; fix log O4).']])));
   });
 }
 
@@ -2607,7 +2651,9 @@ function buildBend(pg) {
     body.appendChild(tblEl(['Span', 'Region', '|M| (ft-lb)', 'x (ft)', 'C<sub>L</sub>', ...(cv ? ['C<sub>V</sub>'] : []), 'F′<sub>b</sub> (psi)', 'f<sub>b</sub> (psi)', 'Ratio'], rows, { left: [0, 1] }));
     const srows = R.stab.map((s, k) => [spanLab(k), f1(s.top.lu), f1(s.top.le), f2(s.top.RB), f0(s.top.FbE), f1(s.bot.lu), f1(s.bot.le), f2(s.bot.RB), f0(s.bot.FbE)]);
     body.appendChild(tblEl(['Span', 'top l<sub>u</sub> (in)', 'l<sub>e</sub>', 'R<sub>B</sub>', 'F<sub>bE</sub>', 'bottom l<sub>u</sub> (in)', 'l<sub>e</sub>', 'R<sub>B</sub>', 'F<sub>bE</sub>'], srows, { left: [0] }));
-    body.appendChild(el('div', 'hint', `Top edge: ${R.stabilityApplies ? 'at supports only' : 'braced (C<sub>L</sub> = 1.0)'}; bottom edge: ${R.latBot === 'same' ? 'same as top edge' : (R.stabBot ? 'at supports only' : 'braced (C<sub>L</sub> = 1.0)')}. ` + (R.simple ? '' : 'Continuous beams and cantilevers use the general rule of NDS Table 3.3.3 footnote 1 (2.06 l<sub>u</sub> / 1.63 l<sub>u</sub> + 3d / 1.84 l<sub>u</sub>), which is not less than the cantilever rows of the table.')));
+    body.appendChild(el('div', 'hint', tbNL('Lateral support of the edges', [['Top edge:', R.stabilityApplies ? 'at supports only.' : 'braced (C<sub>L</sub> = 1.0).'],   // TBNL
+      ['Bottom edge:', (R.latBot === 'same' ? 'same as top edge' : (R.stabBot ? 'at supports only' : 'braced (C<sub>L</sub> = 1.0)')) + '.'],
+      R.simple ? null : ['Continuous beams and cantilevers', 'use the general rule of NDS Table 3.3.3 footnote 1 (2.06 l<sub>u</sub> / 1.63 l<sub>u</sub> + 3d / 1.84 l<sub>u</sub>), which is not less than the cantilever rows of the table.']])));
   });
   mkSec(pg, 'bCombos', 'Bending ratio by combination', body => {
     const cv = !sawnOnly();
@@ -2725,7 +2771,9 @@ function buildBearX(pg) {
       result: `Bearing ratio ${f3(e.r)}` });
     body.appendChild(tblEl(['Check', 'l<sub>b</sub> (in)', 'C<sub>b</sub>', 'F′<sub>c⊥</sub> (psi)', 'Governing combination', 'R or P (lb)', 'f<sub>c⊥</sub> (psi)', 'Ratio'],
       B.map(o => ({ cls: o === top ? 'gov' : '', cells: [bearXName(o.e), g4(o.e.lb), f3(o.e.Cb), f1(o.e.Fcp_p), o.k.name, f0(o.e.R), f1(o.e.fcp), { cls: stCls(o.e.r), h: f3(o.e.r) }] })), { left: [0, 4] }));
-    body.appendChild(el('div', 'hint', 'Supporting member (fix log TBB1): the beam bears on a softer member (plate, ledger, beam below). Its F<sub>c⊥</sub> is the input value × C<sub>M</sub> (0.67 in wet service, sawn lumber) × C<sub>t</sub> of the beam' + (isLRFD() ? ' × K<sub>F</sub> φ<sub>c</sub>' : '') + '; C<sub>b</sub> = 1.0 (conservative). Point loads: checked on the beam where a bearing length is entered for the load. The post, hanger or member that delivers the load is not checked here.'));
+    body.appendChild(el('div', 'hint', tbNL('Supporting member (fix log TBB1): the beam bears on a softer member (plate, ledger, beam below).', [   // TBNL
+      ['Its F<sub>c⊥</sub>', 'is the input value × C<sub>M</sub> (0.67 in wet service, sawn lumber) × C<sub>t</sub> of the beam' + (isLRFD() ? ' × K<sub>F</sub> φ<sub>c</sub>' : '') + '; C<sub>b</sub> = 1.0 (conservative).'],
+      ['Point loads:', 'checked on the beam where a bearing length is entered for the load.'], 'The post, hanger or member that delivers the load is not checked here.'])));
   });
 }
 
@@ -2738,7 +2786,8 @@ function buildDefl(pg) {
     calc(body, { title: 'Bending stiffness', ref: 'NDS 3.5.1, Table 4.3.1',
       lines: [T`E'I = ${f0(R.E_p)} \times ${f3(R.I)} = ${sci(R.E_p * R.I)}\ \text{lb-in}^2`],
       where: [['E\'', 'adjusted modulus of elasticity', f0(R.E_p), 'psi', tbcLink('dvAdj', 'Design Values tab')], ['I', 'moment of inertia (bending axis)', f3(R.I), 'in⁴', tbcLink('dvSect', 'Design Values tab')]] });
-    body.appendChild(el('div', 'note', (R.simple ? 'Simple span: deflection by superposition of the uniform load (w x (L³ − 2Lx² + x³)/24E′I) and each point load (standard simple-beam expressions).' : 'Continuous beam / cantilever: deflection of each span = chord between the nodal deflections of the stiffness solution + simple-beam deflection of the span’s own loads + effect of the end moments (exact for a prismatic member).') + ' Evaluated per load type (D, L, Lr, S) at the analysis stations; wind is not included. Shear deformation is neglected (E values include it per NDS).'));
+    body.appendChild(el('div', 'note', tbNL(R.simple ? 'Simple span: deflection by superposition of the uniform load (w x (L³ − 2Lx² + x³)/24E′I) and each point load (standard simple-beam expressions).' : 'Continuous beam / cantilever: deflection of each span = chord between the nodal deflections of the stiffness solution + simple-beam deflection of the span’s own loads + effect of the end moments (exact for a prismatic member).', [   // TBNL
+      ['Evaluated', 'per load type (D, L, Lr, S) at the analysis stations; wind is not included.'], ['Shear deformation', 'is neglected (E values include it per NDS).']])));
   });
   mkSec(pg, 'dfCheck', 'Deflection checks', body => {
     const sp = g.span; const Lref = g.Lref;
@@ -2770,7 +2819,9 @@ function buildDefl(pg) {
 // Confidence recorded when the values were entered (fix log F1). Everything still needs verifying.
 const REF_CONF = { 'HF|Stud': 'Medium-high (verify Ft, Fc)', 'SPF|Stud': 'Medium-high (verify Ft, Fc)' };
 function buildRefv(pg) {
-  pg.appendChild(el('div', 'warnBox', '<b>Verify the built-in values.</b> Every value below was entered from the NDS Supplement 2018 Ed. and the NDS 2018 without the printed documents at hand (fix log F1; the Phase 2 tables 4B SS / No.1, 4D, 5A and the LRFD factors: fix log R3). Each must be verified against the printed tables before the results are relied on. The row in use for the current project is highlighted.'));
+  pg.appendChild(el('div', 'warnBox', tbNL('Verify the built-in values.', [   // TBNL
+    ['Entered without the printed documents:', 'every value below was entered from the NDS Supplement 2018 Ed. and the NDS 2018 without the printed documents at hand (fix log F1; the Phase 2 tables 4B SS / No.1, 4D, 5A and the LRFD factors: fix log R3).'],
+    ['Before use:', 'each must be verified against the printed tables before the results are relied on.'], 'The row in use for the current project is highlighted.'])));
   const inUse = R && R.ok && R.refTable ? R.refTable.key : (R && R.refTable ? R.refTable.key : '');
   mkSec(pg, 'rv4A', 'NDS Supplement 2018 Table 4A — visually graded dimension lumber (2"–4" thick)', body => {
     const rows = [];
@@ -2779,7 +2830,8 @@ function buildRefv(pg) {
       rows.push({ cls: key === inUse ? 'inuse' : '', cells: [DEFAULT_SPECIES[sp].name, (GRADES_DB[gr] || {}).name || gr, ...a.map(v => v == null ? '—' : String(v)), 'Table 4A', { h: (REF_CONF[key] || 'High') + ' ' + VFY + (key === inUse ? ' <span class="badge use">in use</span>' : '') }] });
     }));
     body.appendChild(tblEl(['Species', 'Grade', 'F<sub>b</sub>', 'F<sub>t</sub>', 'F<sub>v</sub>', 'F<sub>c⊥</sub>', 'F<sub>c</sub>', 'E', 'E<sub>min</sub>', 'Table', 'Confidence'], rows, { left: [0, 1, 10] }));
-    body.appendChild(el('div', 'hint', 'psi. SPF No.1 and No.2 are one combined grade in Table 4A. F<sub>t</sub> and F<sub>c</sub> are not used (no axial load). Stud 8 in. and wider: Table 4A directs No.3 values, which are not built in (Manual values required).'));
+    body.appendChild(el('div', 'hint', tbNL('Values in psi.', [['SPF', 'No.1 and No.2 are one combined grade in Table 4A.'], ['F<sub>t</sub> and F<sub>c</sub>', 'are not used (no axial load).'],   // TBNL
+      ['Stud 8 in. and wider:', 'Table 4A directs No.3 values, which are not built in (Manual values required).']])));
   });
   mkSec(pg, 'rv4B', 'NDS Supplement 2018 Table 4B — Southern Pine (size-specific values)', body => {
     const rows = Object.keys(REF_4B_SP).flatMap(gr => Object.keys(REF_4B_SP[gr]).map(w => {
@@ -2788,7 +2840,8 @@ function buildRefv(pg) {
       return { cls: key === inUse ? 'inuse' : '', cells: ['Southern Pine', (GRADES_DB[gr] || {}).name, w === '2-4' ? '2"–4"' : w === '5-6' ? '5"–6"' : w + '"', ...a.map(v => v == null ? 'not entered' : String(v)), 'Table 4B', { h: conf + ' ' + VFY + (key === inUse ? ' <span class="badge use">in use</span>' : '') }] };
     }));
     body.appendChild(tblEl(['Species', 'Grade', 'Width', 'F<sub>b</sub>', 'F<sub>t</sub>', 'F<sub>v</sub>', 'F<sub>c⊥</sub>', 'F<sub>c</sub>', 'E', 'E<sub>min</sub>', 'Table', 'Confidence'], rows, { left: [0, 1, 11] }));
-    body.appendChild(el('div', 'hint', 'psi. Select Structural and No.1 were added in Phase 2 (fix log R3, open item O2). Southern Pine Stud and the Dense / Non-Dense grades are not built in: use Manual values. Widths over 12 in. use the 12 in. values with C<sub>F</sub> = 0.9 on F<sub>b</sub>. F<sub>t</sub> and F<sub>c</sub> are not used (no axial load).'));
+    body.appendChild(el('div', 'hint', tbNL('Values in psi.', ['Select Structural and No.1 were added in Phase 2 (fix log R3, open item O2).', ['Not built in:', 'Southern Pine Stud and the Dense / Non-Dense grades; use Manual values.'],   // TBNL
+      ['Widths over 12 in.', 'use the 12 in. values with C<sub>F</sub> = 0.9 on F<sub>b</sub>.'], ['F<sub>t</sub> and F<sub>c</sub>', 'are not used (no axial load).']])));
   });
   mkSec(pg, 'rv4D', 'NDS Supplement 2018 Table 4D — visually graded timbers (5" × 5" and larger)', body => {
     const cn = { BS: 'Beams and Stringers', PT: 'Posts and Timbers', ALL: 'Timbers 5" × 5" and larger' };
@@ -2798,7 +2851,10 @@ function buildRefv(pg) {
       return { cls: key === inUse ? 'inuse' : '', cells: [DEFAULT_SPECIES[sp].name, cn[cl], (GRADES_DB[gr] || {}).name, ...a.map(v => String(v)), 'Table 4D', { h: '<b>' + conf + ': VERIFY</b> ' + VFY + (key === inUse ? ' <span class="badge use">in use</span>' : '') }] };
     })));
     body.appendChild(tblEl(['Species', 'Size class', 'Grade', 'F<sub>b</sub>', 'F<sub>t</sub>', 'F<sub>v</sub>', 'F<sub>c⊥</sub>', 'F<sub>c</sub>', 'E', 'E<sub>min</sub>', 'Table', 'Confidence'], rows, { left: [0, 1, 2, 11] }));
-    body.appendChild(el('div', 'hint', 'psi. Added in Phase 2 (fix log R3, open item O3). Size class from the section: Beams and Stringers when d − b > 2 in., else Posts and Timbers. C<sub>F</sub> = (12/d)<sup>1/9</sup> for d > 12 in. (NDS 4.3.6.2); C<sub>r</sub> does not apply. Flat use (load on the wide face), Table 4D footnote: Beams and Stringers F<sub>b</sub> × ' + T4D_FLAT_FB['SS'] + ' (SS), ' + T4D_FLAT_FB['No.1'] + ' (No.1), ' + T4D_FLAT_FB['No.2'].toFixed(2) + ' (No.2), and E, E<sub>min</sub> × ' + T4D_FLAT_E['SS'].toFixed(2) + ' (SS), ' + T4D_FLAT_E['No.1'].toFixed(2) + ' (No.1), ' + T4D_FLAT_E['No.2'].toFixed(2) + ' (No.2; fix log TBF1) ' + VFY + '; Posts and Timbers 1.00; Southern Pine timbers take the Beams and Stringers factors (conservative). Wet service: F<sub>c⊥</sub> × 0.67 only. Spruce-Pine-Fir timbers, Dense grades and Stud are not built in (Manual values).'));
+    body.appendChild(el('div', 'hint', tbNL('Values in psi.', [['Added', 'in Phase 2 (fix log R3, open item O3).'], ['Size class from the section:', 'Beams and Stringers when d − b > 2 in., else Posts and Timbers.'],   // TBNL
+      ['C<sub>F</sub>', '= (12/d)<sup>1/9</sup> for d > 12 in. (NDS 4.3.6.2); C<sub>r</sub> does not apply.'],
+      ['Flat use (load on the wide face), Table 4D footnote:', 'Beams and Stringers F<sub>b</sub> × ' + T4D_FLAT_FB['SS'] + ' (SS), ' + T4D_FLAT_FB['No.1'] + ' (No.1), ' + T4D_FLAT_FB['No.2'].toFixed(2) + ' (No.2), and E, E<sub>min</sub> × ' + T4D_FLAT_E['SS'].toFixed(2) + ' (SS), ' + T4D_FLAT_E['No.1'].toFixed(2) + ' (No.1), ' + T4D_FLAT_E['No.2'].toFixed(2) + ' (No.2; fix log TBF1) ' + VFY + '; Posts and Timbers 1.00; Southern Pine timbers take the Beams and Stringers factors (conservative).'],
+      ['Wet service:', 'F<sub>c⊥</sub> × 0.67 only.'], 'Spruce-Pine-Fir timbers, Dense grades and Stud are not built in (Manual values).'])));
   });
   mkSec(pg, 'rvGL', 'NDS Supplement 2018 Table 5A — structural glued laminated softwood timber (bending about x–x)', body => {
     const rows = Object.keys(GLULAM_5A).map(k => {
@@ -2807,16 +2863,26 @@ function buildRefv(pg) {
     });
     body.appendChild(tblEl(['Combination', 'Species', 'F<sub>bx</sub><sup>+</sup>', 'F<sub>bx</sub><sup>−</sup>', 'F<sub>c⊥x</sub> tension face', 'F<sub>c⊥x</sub> compr. face', 'F<sub>vx</sub>', 'E<sub>x</sub>', 'E<sub>x,min</sub>', 'E<sub>y,min</sub> (stability)', 'Table', 'Confidence'], rows, { left: [0, 1, 11] }));
     body.appendChild(tblEl(['Species group', 'Lamination t (in.)', 'x (C<sub>V</sub>)', 'Standard widths (in.)', 'Density (pcf, self-weight)'], Object.keys(GLULAM_GRP).map(k => { const g = GLULAM_GRP[k]; return [g.name, String(g.lam), String(g.x), g.widths.join(', '), String(g.dens) + ' (tool value)']; }), { left: [0] }));
-    body.appendChild(el('div', 'hint', 'psi. F<sub>bx</sub><sup>+</sup> for positive moment, F<sub>bx</sub><sup>−</sup> for negative moment (unbalanced layups; balanced layups have F<sub>bx</sub><sup>−</sup> = F<sub>bx</sub><sup>+</sup>, use Custom values). Bearing uses the tension-face F<sub>c⊥x</sub>. Wet service C<sub>M</sub> (Table 5A footnote): F<sub>b</sub> ' + GLULAM_CM.Fb + ', F<sub>v</sub> ' + GLULAM_CM.Fv + ', F<sub>c⊥</sub> ' + GLULAM_CM.Fcp + ', E and E<sub>min</sub> ' + GLULAM_CM.E + ' ' + VFY + '. Volume factor C<sub>V</sub> = (21/L)<sup>1/x</sup>(12/d)<sup>1/x</sup>(5.125/b)<sup>1/x</sup> ≤ 1.0 (NDS 5.3.6) ' + VFY + '; the lesser of C<sub>L</sub> and C<sub>V</sub> applies. Notches: C<sub>vr</sub> = ' + GLULAM_CVR + ' (NDS 5.3.10) and the tension-face end notch ≤ the lesser of d/10 and 3 in. (NDS 5.4.4.1) ' + VFY + '. Added in Phase 2 (fix log R3).'));
+    body.appendChild(el('div', 'hint', tbNL('Values in psi.', [   // TBNL
+      ['F<sub>bx</sub><sup>+</sup>', 'for positive moment, F<sub>bx</sub><sup>−</sup> for negative moment (unbalanced layups; balanced layups have F<sub>bx</sub><sup>−</sup> = F<sub>bx</sub><sup>+</sup>, use Custom values).'], ['Bearing', 'uses the tension-face F<sub>c⊥x</sub>.'],
+      ['Wet service C<sub>M</sub> (Table 5A footnote):', 'F<sub>b</sub> ' + GLULAM_CM.Fb + ', F<sub>v</sub> ' + GLULAM_CM.Fv + ', F<sub>c⊥</sub> ' + GLULAM_CM.Fcp + ', E and E<sub>min</sub> ' + GLULAM_CM.E + ' ' + VFY + '.'],
+      ['Volume factor', 'C<sub>V</sub> = (21/L)<sup>1/x</sup>(12/d)<sup>1/x</sup>(5.125/b)<sup>1/x</sup> ≤ 1.0 (NDS 5.3.6) ' + VFY + '; the lesser of C<sub>L</sub> and C<sub>V</sub> applies.'],
+      ['Notches:', 'C<sub>vr</sub> = ' + GLULAM_CVR + ' (NDS 5.3.10) and the tension-face end notch ≤ the lesser of d/10 and 3 in. (NDS 5.4.4.1) ' + VFY + '.'], ['Added', 'in Phase 2 (fix log R3).']])));
   });
   mkSec(pg, 'rvLRFD', 'LRFD factors — NDS 2018 Appendix N (Tables N1, N2, N3)', body => {
     body.appendChild(tblEl(['Property', 'K<sub>F</sub> (Table N1)', 'φ (Table N2)'], [['F<sub>b</sub>', String(LRFD_KF.Fb), String(LRFD_PHI.Fb)], ['F<sub>v</sub>', String(LRFD_KF.Fv), String(LRFD_PHI.Fv)], ['F<sub>c⊥</sub>', String(LRFD_KF.Fcp), String(LRFD_PHI.Fcp)], ['E<sub>min</sub>', String(LRFD_KF.Emin), String(LRFD_PHI.Emin)]].map(r => [{ h: r[0] }, r[1], r[2]]), { left: [0] }));
     const lamTxt = c => c.lam === 'L' ? '0.8 (L from occupancy) / 0.7 (L from storage)' : String(LRFD_LAMBDA[c.lam]);
     body.appendChild(tblEl(['LRFD combination (ASCE 7-16 Sec. 2.3.1)', 'λ (Table N3)'], COMBOS_LRFD.map(c => [c.name, lamTxt(c)]), { left: [0] }));
-    body.appendChild(el('div', 'hint', 'All values ' + VFY + '. LRFD adjusted value = reference value × the applicable factors of NDS Table 4.3.1 / 5.3.1 / 8.3.1 × K<sub>F</sub> × φ × λ; C<sub>D</sub> is not used; F<sub>c⊥</sub> has no λ; E (deflection) has no K<sub>F</sub>, φ or λ. F<sub>b</sub>* for C<sub>L</sub> includes K<sub>F</sub>, φ and λ, and F<sub>bE</sub> uses E′<sub>min</sub> with K<sub>F</sub> φ<sub>s</sub>. W is the strength-level wind load (the ASD combinations use 0.6W). The 0.5L option of ASCE 7-16 2.3.1 (exception 1) is not used (L factor 1.0, conservative). λ = 1.25 (impact) is not offered. Added in Phase 2 (fix log R3).'));
+    body.appendChild(el('div', 'hint', tbNL('All values ' + VFY + '.', [   // TBNL
+      ['LRFD adjusted value', '= reference value × the applicable factors of NDS Table 4.3.1 / 5.3.1 / 8.3.1 × K<sub>F</sub> × φ × λ; C<sub>D</sub> is not used; F<sub>c⊥</sub> has no λ; E (deflection) has no K<sub>F</sub>, φ or λ.'],
+      ['F<sub>b</sub>*', 'for C<sub>L</sub> includes K<sub>F</sub>, φ and λ, and F<sub>bE</sub> uses E′<sub>min</sub> with K<sub>F</sub> φ<sub>s</sub>.'], ['W', 'is the strength-level wind load (the ASD combinations use 0.6W).'],
+      ['Not used:', 'the 0.5L option of ASCE 7-16 2.3.1 (exception 1) (L factor 1.0, conservative).'], ['Not offered:', 'λ = 1.25 (impact).'], ['Added', 'in Phase 2 (fix log R3).']])));
   });
   mkSec(pg, 'rvSCL', 'Structural composite lumber (LVL, PSL, LSL) — NDS Chapter 8', body => {
-    body.appendChild(el('div', 'note', 'No SCL values are built in: the reference design values (F<sub>b</sub>, F<sub>v</sub>, F<sub>c⊥</sub>, E, E<sub>min</sub>) and the size factor C<sub>V</sub> = (d<sub>ref</sub>/d)<sup>n</sup> are entered from the manufacturer’s literature, which governs (NDS 8.2, 8.3.6). The tool applies C<sub>D</sub> (ASD) or K<sub>F</sub> φ λ (LRFD), C<sub>t</sub> (Table 2.3.3), C<sub>L</sub>, C<sub>V</sub> (the lesser of C<sub>L</sub> and C<sub>V</sub> when C<sub>V</sub> ≤ 1.0; both when C<sub>V</sub> > 1.0) and C<sub>b</sub>. Wet service, flat use and notches are not covered (manufacturer). C<sub>r</sub> = ' + SCL_CR + ' in repetitive use (NDS 8.3.7) ' + VFY + '.'));
+    body.appendChild(el('div', 'note', tbNL('No SCL values are built in.', [   // TBNL
+      ['From the manufacturer’s literature, which governs (NDS 8.2, 8.3.6):', 'the reference design values (F<sub>b</sub>, F<sub>v</sub>, F<sub>c⊥</sub>, E, E<sub>min</sub>) and the size factor C<sub>V</sub> = (d<sub>ref</sub>/d)<sup>n</sup>.'],
+      ['The tool applies', 'C<sub>D</sub> (ASD) or K<sub>F</sub> φ λ (LRFD), C<sub>t</sub> (Table 2.3.3), C<sub>L</sub>, C<sub>V</sub> (the lesser of C<sub>L</sub> and C<sub>V</sub> when C<sub>V</sub> ≤ 1.0; both when C<sub>V</sub> > 1.0) and C<sub>b</sub>.'],
+      ['Not covered (manufacturer):', 'wet service, flat use and notches.'], ['C<sub>r</sub>', '= ' + SCL_CR + ' in repetitive use (NDS 8.3.7) ' + VFY + '.']])));
   });
   mkSec(pg, 'rvCF', 'Size factor C_F and flat use factor C_fu (Table 4A / 4B footnotes)', body => {
     const ws = [3, 4, 5, 6, 8, 10, 12, 14];
@@ -2828,7 +2894,10 @@ function buildRefv(pg) {
       ['C<sub>fu</sub>, 2"–3" thick', ...ws.map(w => T4A_CFU[w][0].toFixed(2))],
       ['C<sub>fu</sub>, 4" thick', ...ws.map(w => w === 3 ? '—' : T4A_CFU[w][1].toFixed(2))],
     ].map(r => [{ h: r[0] }, ...r.slice(1)]), { left: [0] }));
-    body.appendChild(el('div', 'hint', 'NDS Supplement 2018 Table 4A footnotes ' + VFY + '. Table 4B (SP): C<sub>F</sub> = 1.0 (size-specific values), 0.9 for widths over 12 in.; 4"-thick SP 8" and wider may use 1.1 (not applied, conservative, O12). A non-standard width rounds up to the next nominal group (smaller C<sub>F</sub>). Timbers (5x5 and larger, Table 4D or Manual values): C<sub>F</sub> = (12/d)<sup>1/9</sup> for d > 12 in. (NDS 4.3.6.2); flat use factors of Table 4D: see the Table 4D section.'));
+    body.appendChild(el('div', 'hint', tbNL('NDS Supplement 2018 Table 4A footnotes ' + VFY + '.', [   // TBNL
+      ['Table 4B (SP):', 'C<sub>F</sub> = 1.0 (size-specific values), 0.9 for widths over 12 in.; 4"-thick SP 8" and wider may use 1.1 (not applied, conservative, O12).'],
+      ['A non-standard width', 'rounds up to the next nominal group (smaller C<sub>F</sub>).'],
+      ['Timbers (5x5 and larger, Table 4D or Manual values):', 'C<sub>F</sub> = (12/d)<sup>1/9</sup> for d > 12 in. (NDS 4.3.6.2); flat use factors of Table 4D: see the Table 4D section.']])));
   });
   mkSec(pg, 'rvFac', 'Other adjustment factors and defaults', body => {
     const rows = [
@@ -3011,13 +3080,18 @@ function buildValid(pg) {
     B.forEach(b => { if (b.grp !== grp) { grp = b.grp; rows.push({ cls: 'gov', cells: [{ h: '<b>' + esc(grp) + '</b>' }, '', '', '', '', ''] }); }
       rows.push([b.what, b.unit === '' ? f3(b.hand) : g4(b.hand), b.unit === 'in.' || b.unit === '' ? (b.tool).toFixed(4) : f2(b.tool), b.unit, (b.diff * 100).toFixed(4) + ' %', { cls: b.ok ? 'ok' : 'ng', h: b.ok ? 'match' : 'differs' }]); });
     body.appendChild(tblEl(['Quantity (hand calculation / closed form)', 'Hand', 'Tool', 'Unit', 'Diff.', 'Status'], rows, { left: [0] }));
-    body.appendChild(el('div', 'hint', 'Closed forms: AISC Steel Construction Manual Table 3-23 beam diagrams (any linear-elastic beam). The closed-form benchmarks use the 2x10 DF-L No.2 section with E′ = 1,600,000 psi and dead load only (spacing 12 in., no self-weight). The fix-log case reproduces the engineer’s accepted 84.4 % result. Hand values of the fix-log case and of the Phase 2 hand checks (fix log R3, R4, R5, S1) are rounded as printed there (tolerance 0.01–0.2 %).'));
+    body.appendChild(el('div', 'hint', tbNL('Closed forms: AISC Steel Construction Manual Table 3-23 beam diagrams (any linear-elastic beam).', [   // TBNL
+      ['Section:', 'the closed-form benchmarks use the 2x10 DF-L No.2 section with E′ = 1,600,000 psi and dead load only (spacing 12 in., no self-weight).'],
+      ['Fix-log case:', 'reproduces the engineer’s accepted 84.4 % result.'],
+      ['Rounding:', 'hand values of the fix-log case and of the Phase 2 hand checks (fix log R3, R4, R5, S1) are rounded as printed there (tolerance 0.01–0.2 %).']])));
   });
   if (R.ok) mkSec(pg, 'vEq', 'Equilibrium of the current model', body => {
     body.appendChild(tblEl(['Combination', 'Σ applied loads (lb)', 'Σ reactions (lb)', 'Difference (lb)', 'Status'], R.combos.map(c => { const d = c.sumR - c.sumF; const ok = Math.abs(d) <= 1e-6 * Math.max(1, Math.abs(c.sumF)); return [c.name, f2(c.sumF), f2(c.sumR), d.toExponential(2), { cls: ok ? 'ok' : 'ng', h: ok ? 'OK' : 'check' }]; }), { left: [0] }));
   });
   mkSec(pg, 'vParity', 'Parity with the earlier version of the tool', body => {
-    body.appendChild(el('div', 'note', 'A single span on two pin supports runs exactly the calculation of the earlier (React) version of this tool (fix log F1–F22): the same formulas in the same order. Every file format the earlier version saved opens with identical results, except where negative moment occurs: those files now open with the bottom edge braced at supports only (fix log R2). The rebuild was checked by running the earlier engine and this one side by side on thousands of cases (fix log R1).'));
+    body.appendChild(el('div', 'note', tbNL('A single span on two pin supports runs exactly the calculation of the earlier (React) version of this tool (fix log F1–F22): the same formulas in the same order.', [   // TBNL
+      ['Files:', 'every file format the earlier version saved opens with identical results, except where negative moment occurs: those files now open with the bottom edge braced at supports only (fix log R2).'],
+      ['Checked', 'by running the earlier engine and this one side by side on thousands of cases (fix log R1).']])));
   });
 }
 
@@ -3026,34 +3100,57 @@ function buildValid(pg) {
    ===================================================================== */
 function buildManual(pg) {
   const H = (t) => pg.appendChild(el('h2', 'manH', t)), H3 = (t) => pg.appendChild(el('h3', 'manH3', t)), P = (t) => pg.appendChild(el('p', 'manP', t)), UL = (a) => pg.appendChild(el('ul', 'manList', a.map(x => '<li>' + x + '</li>').join('')));
+  const N = (lead, items) => pg.appendChild(el('div', 'manP', tbNL(lead, items))), S = (lead, items) => lead + tbNL(null, items);   // TBNL: a lead and a list; a list item with a sub-list
   H('Scope');
-  P('Beams of sawn lumber (visually graded dimension lumber, Tables 4A / 4B; timbers, Table 4D), structural glued laminated timber (glulam, Table 5A) and structural composite lumber (LVL, PSL, LSL, with the manufacturer’s values) checked by NDS 2018 ASD or LRFD (Appendix N) for bending (with beam stability and, for glulam and SCL, the volume / size factor), shear (with end notches), bearing perpendicular to grain at every support and deflection. The beam can be a simple span, a continuous beam over any number of supports, or have cantilevers (free ends).');
+  N('Beams checked for bending, shear, bearing and deflection.', [   // TBNL
+    ['Materials:', 'sawn lumber (visually graded dimension lumber, Tables 4A / 4B; timbers, Table 4D), structural glued laminated timber (glulam, Table 5A) and structural composite lumber (LVL, PSL, LSL, with the manufacturer’s values).'],
+    ['Checked by', 'NDS 2018 ASD or LRFD (Appendix N) for bending (with beam stability and, for glulam and SCL, the volume / size factor), shear (with end notches), bearing perpendicular to grain at every support and deflection.'],
+    ['Layout:', 'the beam can be a simple span, a continuous beam over any number of supports, or have cantilevers (free ends).']]);
   H('Inputs');
   UL(['<b>Geometry:</b> spans (ft) and one support per node: pin/roller, fixed, or free (ends only, makes a cantilever). Each support has its own bearing length and a "≥ 3 in. from member end" box for C<sub>b</sub>.',
-    '<b>Loads:</b> area loads D, L, Lr, S, W in psf on the tributary width (spacing/12), on all spans; self-weight from the density; point loads (lb, + down) at x from the left end, each with a load type; optional x/d reduction of point loads within d of a support for shear (NDS 3.4.3.1(b)).',
-    '<b>Material:</b> sawn lumber: species, grade and size select the NDS Supplement values (Table 4A; Table 4B for Southern Pine SS, No.1, No.2; Table 4D for timbers 5 in. and thicker, Beams and Stringers or Posts and Timbers from the section). Manual values or a custom species can be entered instead. Glulam: a Table 5A stress class or combination (or custom values), the species group, the width and the number of laminations (or any b × d). SCL: the product’s values and size factor from the manufacturer.',
+    S('<b>Loads:</b>', [['Area loads', 'D, L, Lr, S, W in psf on the tributary width (spacing/12), on all spans; self-weight from the density.'],   // TBNL
+      ['Point loads', '(lb, + down) at x from the left end, each with a load type; optional x/d reduction of point loads within d of a support for shear (NDS 3.4.3.1(b)).']]),
+    S('<b>Material:</b>', [['Sawn lumber:', 'species, grade and size select the NDS Supplement values (Table 4A; Table 4B for Southern Pine SS, No.1, No.2; Table 4D for timbers 5 in. and thicker, Beams and Stringers or Posts and Timbers from the section). Manual values or a custom species can be entered instead.'],   // TBNL
+      ['Glulam:', 'a Table 5A stress class or combination (or custom values), the species group, the width and the number of laminations (or any b × d).'], ['SCL:', 'the product’s values and size factor from the manufacturer.']]),
     '<b>Factors:</b> design method (ASD or LRFD, with the source of the floor live load for λ); wet service, temperature, incising, repetitive member, flat use; lateral support of the top and bottom edges; creep factor and deflection limits.']);
   H('Analysis');
-  UL(['A single span on two pins uses statics (the earlier tool’s exact code path). Any other layout is solved by the direct stiffness method (Euler–Bernoulli elements, one E′I for the member, exact fixed-end forces); V and M then follow exactly from statics on the left segment. The solver is copied from Steel Beam Design (CLAUDE.md §3).',
+  UL([S('A single span on two pins uses statics (the earlier tool’s exact code path).', [   // TBNL
+      ['Any other layout', 'is solved by the direct stiffness method (Euler–Bernoulli elements, one E′I for the member, exact fixed-end forces); V and M then follow exactly from statics on the left segment.'], ['The solver', 'is copied from Steel Beam Design (CLAUDE.md §3).']]),
     'Sign conventions: loads + down, reactions + up, moment + sagging, deflection + down.',
     'Stations: 100 equal divisions per span, every point load and support, plus the analytical zero-shear points for the moment peaks. Shear is evaluated just left and right of each point load and support.',
-    'ASD: all ten combinations of ASCE 7-16 Sec. 2.4.1 are evaluated; C<sub>D</sub> is that of the shortest-duration load present (NDS 2.3.2). LRFD: the ten strength combinations of ASCE 7-16 Sec. 2.3.1 for D, L, Lr, S and W, each with λ of NDS Table N3 (1.4D: 0.6; 1.2D + 1.6L + 0.5(Lr or S): 0.8 occupancy / 0.7 storage; 1.2D + 1.6(Lr or S) + (L or 0.5W): 0.8; with 1.0W: 1.0); adjusted values × K<sub>F</sub> × φ (Tables N1, N2), no C<sub>D</sub>. Wind acts on all spans with its sign (+ down, − uplift).',
+    S('<b>Load combinations</b>', [['ASD:', 'all ten combinations of ASCE 7-16 Sec. 2.4.1 are evaluated; C<sub>D</sub> is that of the shortest-duration load present (NDS 2.3.2).'],   // TBNL
+      ['LRFD:', 'the ten strength combinations of ASCE 7-16 Sec. 2.3.1 for D, L, Lr, S and W, each with λ of NDS Table N3 (1.4D: 0.6; 1.2D + 1.6L + 0.5(Lr or S): 0.8 occupancy / 0.7 storage; 1.2D + 1.6(Lr or S) + (L or 0.5W): 0.8; with 1.0W: 1.0); adjusted values × K<sub>F</sub> × φ (Tables N1, N2), no C<sub>D</sub>.'],
+      ['Wind', 'acts on all spans with its sign (+ down, − uplift).']]),
     'Pattern (skip) live loading is <b>not</b> generated for continuous beams (as in Steel Beam Design); check it separately where it matters.']);
   H('Checks');
-  UL(['<b>Bending (NDS 3.3):</b> per span, the largest positive moment is checked with the top-edge C<sub>L</sub> and the largest negative moment with the bottom-edge C<sub>L</sub>. l<sub>u</sub> = the entered unbraced length, else the span length (cantilever: its length). l<sub>e</sub> per Table 3.3.3: a simple span with uniform load only uses the uniform-load row; other loading, continuous beams and cantilevers use the footnote 1 general rule, which is not less than the cantilever rows. R<sub>B</sub> ≤ 50 is enforced (NG otherwise) for each edge in a span where that edge is in compression in some combination (top edge: positive moment; bottom edge: negative moment; fix log R4, R5).',
-    '<b>Shear (NDS 3.4):</b> V = largest |V| between d from each support face (or to a cantilever tip); f<sub>v</sub> = 3V/2A. A point load within d of a support adds to the shear at that support (uniform load within d ignored), at full value, or times x/d (NDS 3.4.3.1(b)) when ticked on the Loads tab (fix log O4). End notch (tension face, at end supports): f<sub>v,n</sub> = 3R/(2 b d<sub>n</sub>) with the full reaction, against F′<sub>v</sub>(d<sub>n</sub>/d)<sup>2</sup>; notch > d/4 is NG (NDS 4.4.3.2).',
+  UL([S('<b>Bending (NDS 3.3):</b>', [['Per span:', 'the largest positive moment is checked with the top-edge C<sub>L</sub> and the largest negative moment with the bottom-edge C<sub>L</sub>.'],   // TBNL
+      ['l<sub>u</sub>', '= the entered unbraced length, else the span length (cantilever: its length).'],
+      ['l<sub>e</sub> per Table 3.3.3:', 'a simple span with uniform load only uses the uniform-load row; other loading, continuous beams and cantilevers use the footnote 1 general rule, which is not less than the cantilever rows.'],
+      ['R<sub>B</sub> ≤ 50', 'is enforced (NG otherwise) for each edge in a span where that edge is in compression in some combination (top edge: positive moment; bottom edge: negative moment; fix log R4, R5).']]),
+    S('<b>Shear (NDS 3.4):</b>', [['V', '= largest |V| between d from each support face (or to a cantilever tip); f<sub>v</sub> = 3V/2A.'],   // TBNL
+      ['A point load within d of a support', 'adds to the shear at that support (uniform load within d ignored), at full value, or times x/d (NDS 3.4.3.1(b)) when ticked on the Loads tab (fix log O4).'],
+      ['End notch', '(tension face, at end supports): f<sub>v,n</sub> = 3R/(2 b d<sub>n</sub>) with the full reaction, against F′<sub>v</sub>(d<sub>n</sub>/d)<sup>2</sup>; notch > d/4 is NG (NDS 4.4.3.2).']]),
     '<b>Bearing (NDS 3.10):</b> at every support, f<sub>c⊥</sub> = R/(b l<sub>b</sub>) with the downward reaction; C<sub>b</sub> only when the bearing is ≥ 3 in. from the member end. Net uplift is reported (provide a connection).',
-    '<b>Deflection (NDS 3.5):</b> per span, Δ<sub>LL</sub> = max of L, Lr, S, 0.75L + 0.75Lr, 0.75L + 0.75S; Δ<sub>T</sub> = K<sub>cr</sub>Δ<sub>D</sub> + Δ<sub>LL</sub>. Limits L/n with L = span, or twice the cantilever length (IBC Table 1604.3 footnote i). Wind is excluded. Always at service loads (also with LRFD).',
-    '<b>Glulam (NDS Ch. 5):</b> F<sub>bx</sub><sup>+</sup> for positive and F<sub>bx</sub><sup>−</sup> for negative moment; volume factor C<sub>V</sub> = (21/L)<sup>1/x</sup>(12/d)<sup>1/x</sup>(5.125/b)<sup>1/x</sup> ≤ 1.0 per bending region, with L = the distance between the points of zero moment around the governing moment (found on the moment diagram of the combination); the lesser of C<sub>L</sub> and C<sub>V</sub> applies (NDS 5.3.6). Wet service per Table 5A. End notch ≤ the lesser of d/10 and 3 in., with C<sub>vr</sub> = 0.72 in the notch shear check. Bearing with the tension-face F<sub>c⊥x</sub>.',
-    '<b>SCL (NDS Ch. 8):</b> manufacturer’s values; C<sub>V</sub> = (d<sub>ref</sub>/d)<sup>n</sup> up to the limit entered; the lesser of C<sub>L</sub> and C<sub>V</sub> applies when C<sub>V</sub> ≤ 1.0, both when C<sub>V</sub> > 1.0 (NDS 8.3.6); repetitive member factor C<sub>r</sub> = 1.04 on F<sub>b</sub> (NDS 8.3.7). Wet service, flat use and notches: not covered.',
+    S('<b>Deflection (NDS 3.5):</b>', [['Per span:', 'Δ<sub>LL</sub> = max of L, Lr, S, 0.75L + 0.75Lr, 0.75L + 0.75S; Δ<sub>T</sub> = K<sub>cr</sub>Δ<sub>D</sub> + Δ<sub>LL</sub>.'],   // TBNL
+      ['Limits', 'L/n with L = span, or twice the cantilever length (IBC Table 1604.3 footnote i).'], ['Wind', 'is excluded.'], ['Always at service loads', '(also with LRFD).']]),
+    S('<b>Glulam (NDS Ch. 5):</b>', [['F<sub>bx</sub><sup>+</sup>', 'for positive and F<sub>bx</sub><sup>−</sup> for negative moment.'],   // TBNL
+      ['Volume factor', 'C<sub>V</sub> = (21/L)<sup>1/x</sup>(12/d)<sup>1/x</sup>(5.125/b)<sup>1/x</sup> ≤ 1.0 per bending region, with L = the distance between the points of zero moment around the governing moment (found on the moment diagram of the combination); the lesser of C<sub>L</sub> and C<sub>V</sub> applies (NDS 5.3.6).'],
+      ['Wet service', 'per Table 5A.'], ['End notch', '≤ the lesser of d/10 and 3 in., with C<sub>vr</sub> = 0.72 in the notch shear check.'], ['Bearing', 'with the tension-face F<sub>c⊥x</sub>.']]),
+    S('<b>SCL (NDS Ch. 8):</b>', [['Values:', 'the manufacturer’s.'], ['C<sub>V</sub>', '= (d<sub>ref</sub>/d)<sup>n</sup> up to the limit entered; the lesser of C<sub>L</sub> and C<sub>V</sub> applies when C<sub>V</sub> ≤ 1.0, both when C<sub>V</sub> > 1.0 (NDS 8.3.6).'],   // TBNL
+      ['Repetitive member factor', 'C<sub>r</sub> = 1.04 on F<sub>b</sub> (NDS 8.3.7).'], ['Not covered:', 'wet service, flat use and notches.']]),
     '<b>Timbers (Table 4D):</b> C<sub>F</sub> = (12/d)<sup>1/9</sup> for d > 12 in.; no C<sub>r</sub>; flat use with the Table 4D factors (Beams and Stringers).']);
   H('Saved data');
-  UL(['<b>Files:</b> Export JSON writes the project as JSON with <code>_schema: "timber-beam-check"</code> and <code>version: 2</code>, or <code>version: 3</code> when the project uses glulam, SCL or LRFD (so that the earlier version of the tool refuses it instead of reading it as sawn lumber / ASD). Open file reads versions 2 and 3 and every format of the earlier version (the original 11-field file, the full flat file of fix log F18, <code>temp: "High"</code>, custom species in the old <code>F_b</code> shape); those convert with identical results, except that the bottom (negative-moment) edge opens as braced at supports only (engineer\'s decision R1-a, fix log R2; that version took it as braced like the top edge, which can still be chosen as "Same as top edge"). Files of any version that use the 6x8 or 8x8 size open with the Table 1B dressed sizes (5.5 × 7.5 and 7.5 × 7.5 in.; fix log R4), so their results change.',
+  UL([S('<b>Files:</b>', [['Export JSON', 'writes the project as JSON with <code>_schema: "timber-beam-check"</code> and <code>version: 2</code>, or <code>version: 3</code> when the project uses glulam, SCL or LRFD (so that the earlier version of the tool refuses it instead of reading it as sawn lumber / ASD).'],   // TBNL
+      ['Open file', 'reads versions 2 and 3 and every format of the earlier version (the original 11-field file, the full flat file of fix log F18, <code>temp: "High"</code>, custom species in the old <code>F_b</code> shape); those convert with identical results, except that the bottom (negative-moment) edge opens as braced at supports only (engineer\'s decision R1-a, fix log R2; that version took it as braced like the top edge, which can still be chosen as "Same as top edge").'],
+      ['Dressed sizes:', 'files of any version that use the 6x8 or 8x8 size open with the Table 1B dressed sizes (5.5 × 7.5 and 7.5 × 7.5 in.; fix log R4), so their results change.']]),
     `<b>This browser:</b> the last session is autosaved (<code>${LS_AUTO}</code>) and named projects are kept (<code>${LS_PROJ}</code>); the selected input tab is remembered (<code>${TBC_IN_KEY}</code>). All keys start with <code>tbc_</code>.`,
-    '<b>Shared project info</b> (bridgeSuite.v1.projectMeta): Project, Client, Job #, Designer, Checked by and Date are shared and received (shared fields <code>projectName</code>, <code>client</code>, <code>jobNo</code>, <code>preparedBy</code>, <code>checkedBy</code>, <code>date</code>; Project, Checked by and Date added in fix log R5). Member / mark and Notes stay in this tool.']);
+    S('<b>Shared project info</b> (bridgeSuite.v1.projectMeta):', [['Shared and received:', 'Project, Client, Job #, Designer, Checked by and Date (shared fields <code>projectName</code>, <code>client</code>, <code>jobNo</code>, <code>preparedBy</code>, <code>checkedBy</code>, <code>date</code>; Project, Checked by and Date added in fix log R5).'],   // TBNL
+      'Member / mark and Notes stay in this tool.'])]);
   H('Limitations and open items');
   UL(['Built-in reference values and factors must be verified against the printed NDS Supplement (Reference Values tab).',
-    'No axial load, no torsion, no lateral load on the weak axis; interior notches are not checked (input error) and compression-face end notches use the compression-face expression of NDS 3.4.3.2 (fix log TBN1), one notch depth at both ends (O8); x/d shear reduction only when ticked (O4); no sustained live load in creep (O7).',
+    S('No axial load, no torsion, no lateral load on the weak axis.', [   // TBNL
+      ['Notches:', 'interior notches are not checked (input error) and compression-face end notches use the compression-face expression of NDS 3.4.3.2 (fix log TBN1), one notch depth at both ends (O8).'],
+      ['Shear:', 'x/d shear reduction only when ticked (O4).'], ['Creep:', 'no sustained live load in creep (O7).']]),
     'Glulam: straight prismatic members bending about x–x only (no flat use, curvature, taper or balanced-layup option for the stress classes; use custom values). SCL: no product values built in.',
     'Equation numbers are quoted from NDS 2018 as recalled; verify them against the printed standard.',
     'Continuous beams: one section for all spans; no pattern loading; no support settlement.']);
@@ -3139,6 +3236,7 @@ function tbrRich(model) {
 }
 /* the product F = base · factors as eq / sub strings (the same symbols and values as facEq on the tabs) */
 const tbrFac = (base, facs) => ({ eq: base[0] + '\\,' + facs.map(x => x[0]).join('\\,'), sub: base[1] + ' \\times ' + facs.map(x => x[1]).join(' \\times ') });
+const tbrNL = (lead, items) => [{ type: 'note', text: lead }, ...items.filter(Boolean).map(x => ({ type: 'note', text: '• ' + x }))];   // TBNL: a lead note and one "• " note per item
 const tbrTbl = () => 'NDS 2018 Table ' + (R.isGL ? '5.3.1' : R.isSCL ? '8.3.1' : '4.3.1') + (isLRFD() ? ', App. N' : '');
 
 function tbrModel() {
@@ -3156,7 +3254,7 @@ function tbrModel() {
     const items = [{ type: 'kv', rows: [['Member', memberTxt()], ['Design method', 'NDS 2018 ' + methTxt() + (isLRFD() ? ' (Appendix N)' : '')],
       ['Controlling limit state', (R.fails.length ? 'Code limit violated (NG)' : R.ctrlName) + ' — ' + pct(R.dcrMax) + ' (' + ctrlDetail() + ')'], ['Result', isNG() ? 'DOES NOT PASS' : 'All checks pass']] },
       { type: 'table', head: ['Check', 'Governing combination', 'Location', 'Demand', 'Capacity / limit', 'Ratio', 'Reference'], rows: rows.map(x => ({ cells: x, cls: x[5].t === f3(R.dcrMax) ? 'gov' : '' })) },
-      { type: 'note', text: 'Ratio = demand / capacity; ≤ 1.000 passes. Each ratio links to the step where it is worked. ' + (isLRFD() ? 'LRFD: stresses from factored loads; adjusted values include K_F, φ and λ (NDS 2018 Appendix N). Deflection at service loads.' : 'Stresses are ASD (unfactored loads).') + ' The same values are on the Summary tab[[tab:sum| ↗]].' }];
+      ...tbrNL('Ratio = demand / capacity; ≤ 1.000 passes.', ['Each ratio links to the step where it is worked.', isLRFD() ? 'LRFD: stresses from factored loads; adjusted values include K_F, φ and λ (NDS 2018 Appendix N). Deflection at service loads.' : 'Stresses are ASD (unfactored loads).', 'The same values are on the Summary tab[[tab:sum| ↗]].'])];   // TBNL
     if (R.fails.length) items.push({ type: 'note', warn: true, text: 'Code limit violated (NG): ' + R.fails.join(' ') });
     secs.push({ title: 'Summary of results', subs: [{ title: 'Governing results', items }] });
   }
@@ -3165,7 +3263,7 @@ function tbrModel() {
     const subs = [], xN = nodeXs();
     subs.push({ title: 'Project', items: [{ type: 'kv', rows: [['Project', p.name || '—'], ['Member / mark', p.member || '—'], ['Job #', p.job || '—'], ['Designer', (p.designer || '—') + (p.date ? ', ' + p.date : '')], ['Checked by', p.checker || '—'],
       ['Codes', 'NDS 2018 (' + methTxt() + '), NDS Supplement 2018, ASCE 7-16 ' + (isLRFD() ? 'Sec. 2.3.1' : 'Sec. 2.4.1') + ', IBC 2018 Table 1604.3']] },
-      { type: 'note', text: 'Units: lb, ft, in., psi unless noted. Every value in this report is the value the tool computes on its result tabs (Design Values[[tab:dv| ↗]], Analysis Results[[tab:ana| ↗]], Bending[[tab:bend| ↗]], Shear[[tab:shear| ↗]], Bearing[[tab:bear| ↗]], Deflection[[tab:defl| ↗]]).' }] });
+      ...tbrNL('Units: lb, ft, in., psi unless noted.', ['Every value in this report is the value the tool computes on its result tabs (Design Values[[tab:dv| ↗]], Analysis Results[[tab:ana| ↗]], Bending[[tab:bend| ↗]], Shear[[tab:shear| ↗]], Bearing[[tab:bear| ↗]], Deflection[[tab:defl| ↗]]).'])] });   // TBNL
     const sch = schematicSVG(), svg = (sch.querySelector && sch.querySelector('svg')) ? sch.querySelector('svg').outerHTML : '';
     const gItems = [{ type: 'table', head: ['Span', 'From – to', 'Length (ft)', 'Type'], rows: M.geom.spans.map((s, i) => [String(i + 1), nodeN(i) + ' – ' + nodeN(i + 1), tbrCell(R.Ls[i], 2), (R.types[i] === 'free' || R.types[i + 1] === 'free') ? 'cantilever' : 'between supports']) },
       { type: 'table', head: ['Support', 'x (ft)', 'Type', 'Bearing l_b (in.)', 'C_b permitted (≥ 3 in. from end)'], rows: M.geom.supports.map((s, j) => [nodeN(j), tbrCell(xN[j], 2), s.t === 'pin' ? 'pin / roller' : s.t === 'fixed' ? 'fixed' : 'free end', s.t === 'free' ? '—' : g4(s.lb), s.t === 'free' ? '—' : (s.cb ? 'yes' : 'no (end bearing)')]) },
@@ -3207,7 +3305,7 @@ function tbrModel() {
     subs.push({ title: 'Reference design values', items: [
       R.isGL ? { type: 'table', head: ['F_bx^+', 'F_bx^−', 'F_vx', 'F_c⊥x (tension face)', 'E_x', 'E_x,min'], rows: [[r.Fb, r.Fbn, r.Fv, r.Fcp, r.E, r.Emin].map(v => ({ t: g4(v), n: true }))] }
         : { type: 'table', head: ['F_b', 'F_t', 'F_v', 'F_c⊥', 'F_c', 'E', 'E_min'], rows: [[g4(r.Fb), r.Ft ?? '—', g4(r.Fv), g4(r.Fcp), r.Fc ?? '—', g4(r.E), g4(r.Emin)].map(v => ({ t: String(v), n: true }))] },
-      { type: 'note', text: 'psi. Source: ' + tbrPlain(R.src) + (R.userVals ? '.' : ' (built-in value: verify against the printed NDS Supplement; every built-in value is listed with its table on the Reference Values tab[[tab:refv| ↗]]).') + ' F_t and F_c are listed only: this beam check has no axial load.' }] });
+      ...tbrNL('psi. Source: ' + tbrPlain(R.src) + (R.userVals ? '.' : ' (built-in value: verify against the printed NDS Supplement; every built-in value is listed with its table on the Reference Values tab[[tab:refv| ↗]]).'), ['F_t and F_c are listed only: this beam check has no axial load.'])] });   // TBNL
     subs.push({ title: 'Adjustment factors (NDS 2018 Table ' + (R.isGL ? '5.3.1, glulam' : R.isSCL ? '8.3.1, SCL' : '4.3.1, sawn lumber') + ', ' + methTxt() + ')', items: [{ type: 'table', head: ['Factor', 'F_b', 'F_v', 'F_c⊥', 'E, E_min', 'Basis', 'Reference'], rows: factorRows().map(x => x.map(tbrPlain)) },
       { type: 'note', text: 'C_L is worked per span and edge in §6 ([[tb/bd.CL]]); C_b per support in §8 ([[tb/br.Cb]]).' }] });
     const sg = R.legacyBend ? 1 : gb.gbSign, T = [];
@@ -3228,7 +3326,8 @@ function tbrModel() {
     const eqOK = R.combos.every(c => Math.abs(c.sumR - c.sumF) <= 1e-6 * Math.max(1, Math.abs(c.sumF)));
     secs.push({ title: 'Analysis', subs: [{ title: isLRFD() ? 'LRFD load combinations (ASCE 7-16 Sec. 2.3.1): actions and reactions' : 'ASD load combinations (ASCE 7-16 Sec. 2.4.1): actions and reactions', items: [
       { type: 'table', wide: true, head: ['Combination', tfHead().replace(/<sub>(.*?)<\/sub>/, '_$1'), 'w (plf)', ...sj.map(j => 'R_' + nodeN(j) + ' (lb)'), 'M (ft-lb)', 'V (lb)', 'ΣF (lb)', 'ΣR (lb)'], rows },
-      { type: 'note', text: 'Bold = governing for bending, shear or bearing. ' + (isLRFD() ? 'λ is the time effect factor of the combination (NDS 2018 Table N3).' : 'C_D is that of the shortest-duration load present in the combination (NDS 2018 2.3.2).') + ' M = ' + (R.legacyBend ? 'largest |M|' : 'moment of the governing bending region') + '; V = design shear (NDS 2018 3.4.3.1). Statics: ΣR = ΣF in ' + (eqOK ? 'every combination.' : 'NOT every combination (check).') },
+      ...tbrNL('Bold = governing for bending, shear or bearing.', [isLRFD() ? 'λ is the time effect factor of the combination (NDS 2018 Table N3).' : 'C_D is that of the shortest-duration load present in the combination (NDS 2018 2.3.2).',   // TBNL
+        'M = ' + (R.legacyBend ? 'largest |M|' : 'moment of the governing bending region') + '; V = design shear (NDS 2018 3.4.3.1).', 'Statics: ΣR = ΣF in ' + (eqOK ? 'every combination.' : 'NOT every combination (check).')]),
       { type: 'note', text: (R.simple ? 'Simple span: closed-form statics.' : 'Continuous beam / cantilever: direct stiffness method, one E′I for the member (EI does not affect the reactions of a prismatic member).') + ' Shear and moment diagrams and the peak values of every combination: Analysis Results tab[[tab:ana| ↗]].' }] }] });
   }
   /* ---------- 6. Bending ---------- */
@@ -3345,7 +3444,8 @@ function tbrModel() {
     const items = [];
     if ((p.notes || '').trim()) items.push({ type: 'note', text: 'Project notes and assumptions (input): ' + String(p.notes).trim().replace(/\s*\n\s*/g, ' / ') });
     R.fails.forEach(m => items.push({ type: 'note', warn: true, text: 'Code limit violated: ' + m }));
-    R.notes.concat(R.adv).forEach(m => items.push({ type: 'note', warn: true, text: 'Note: ' + m }));
+    R.notes.concat(R.adv).forEach(m => { const q = R.adv.nl && R.adv.nl[m];   // TBNL: a long note as its lead and "• " lines
+      if (q) items.push({ type: 'note', warn: true, text: 'Note: ' + q.lead }, ...q.items.map(x => ({ type: 'note', warn: true, text: '• ' + x }))); else items.push({ type: 'note', warn: true, text: 'Note: ' + m }); });
     if (!items.length) items.push({ type: 'note', text: 'No notes.' });
     secs.push({ title: 'Notes and references', subs: [{ title: 'Notes', items }, { title: 'Codes and references cited', items: [{ type: 'table', head: ['Reference', 'Provisions used'], rows: tbcRefs(tbrApxSel()).map(x => x.map(tbrPlain)) }] }] });
   }
@@ -3379,6 +3479,12 @@ const TBR_APX = [['refv', 'Reference values'], ['val', 'Validation'], ['man', 'M
 function tbrApxSel() { const s = Object.assign({}, PR_DEFAULT, (M.ui && typeof M.ui.print === 'object' && M.ui.print) || {}); return { refv: !!s.refv, val: !!s.val, man: !!s.man }; }
 const tbrNrm = x => String(x).toLowerCase().replace(/[^a-z0-9]+/g, '');
 const tbrHtx = e => tbrPlain(e.innerHTML).replace(/\s+/g, ' ').trim();
+/* TBNL: the parts of a tbNL note (action lines, lead, list items) as report notes; null when the element is not one */
+function tbrNLParts(e, warn) {
+  const P = [...e.children].flatMap(c => c.matches('.tbNLa, .tbNLl') ? [c] : c.matches('.tbNLu') ? [...c.children] : []);
+  if (!P.length) return null;
+  return P.map(q => ({ type: 'note', warn: (warn || q.matches('.tbNLa')) || undefined, text: (q.tagName === 'LI' ? '• ' : '') + tbrHtx(q) })).filter(q => q.text && q.text !== '• ');
+}
 function tbrDomTable(t) {
   const trs = [...t.rows]; if (!trs.length) return null;
   const isHead = trs[0].querySelector('th') && !trs[0].querySelector('td');
@@ -3392,7 +3498,12 @@ function tbrDomItems(node) {
     if (c.matches('.plotHold, .eqb, .eqbW, .wkLink, script, style')) return;
     if (c.tagName === 'TABLE') { const t = tbrDomTable(c); if (t) out.push(t); return; }
     if (c.querySelector && c.querySelector('table') && !c.matches('.hint, .note, .warnBox, .okBox, .errBox')) { c.querySelectorAll('table').forEach(t => { const x = tbrDomTable(t); if (x) out.push(x); }); return; }
-    if (c.tagName === 'UL' || c.tagName === 'OL') { [...c.children].forEach(li => { const x = tbrHtx(li); if (x) out.push({ type: 'note', text: '• ' + x }); }); return; }
+    if (c.tagName === 'UL' || c.tagName === 'OL') { [...c.children].forEach(li => {
+      const sub = li.querySelector(':scope > .tbNLu');   // TBNL: a list item with a sub-list: its lead, then one "– " line per sub-item
+      if (sub) { const h = li.cloneNode(true); h.querySelector(':scope > .tbNLu').remove(); const x = tbrHtx(h); if (x) out.push({ type: 'note', text: '• ' + x });
+        [...sub.children].forEach(q => { const y = tbrHtx(q); if (y) out.push({ type: 'note', text: '– ' + y }); }); return; }
+      const x = tbrHtx(li); if (x) out.push({ type: 'note', text: '• ' + x }); }); return; }
+    const nl = tbrNLParts(c, c.matches('.warnBox, .errBox')); if (nl) { out.push(...nl); return; }   // TBNL
     const x = tbrHtx(c); if (x) out.push({ type: 'note', text: x, warn: c.matches('.warnBox, .errBox') || undefined });
   });
   return out;
@@ -3421,8 +3532,10 @@ function tbrHarvest() {
   Object.keys(TAB).forEach(id => {
     let h; try { h = tbrBuildPage(id); } catch (e) { console.warn('report port:', e); return; }
     const nn = [];
-    h.querySelectorAll('.hint, .note, .warnBox').forEach(e => { if (e.closest('.wkLink')) return; const s = e.closest('.sec'), t = s && s.querySelector('.secTitle');
-      nn.push({ type: 'note', warn: e.classList.contains('warnBox') || undefined, text: (t ? t.textContent.replace(/^\s*\d+\.\s*/, '').trim() + ': ' : '') + tbrHtx(e) }); });
+    h.querySelectorAll('.hint, .note, .warnBox').forEach(e => { if (e.closest('.wkLink') || e.matches('.tbNLa')) return; const s = e.closest('.sec'), t = s && s.querySelector('.secTitle');
+      const pre = t ? t.textContent.replace(/^\s*\d+\.\s*/, '').trim() + ': ' : '', w = e.classList.contains('warnBox') || undefined, nl = tbrNLParts(e, w);   // TBNL: kept or left out as one note, printed as its parts
+      if (nl) { nl[0] = Object.assign({}, nl[0], { text: pre + nl[0].text }); nn.push({ type: 'note', warn: w, text: nl.map(q => q.text).join(' '), parts: nl }); return; }
+      nn.push({ type: 'note', warn: w, text: pre + tbrHtx(e) }); });
     hv.notes[id] = { tab: TAB[id], list: nn };
     const sec = k => h.querySelector('.sec[data-secid="' + k + '"]');
     if (id === 'sum' && sec('sumCombos')) { const s = sec('sumCombos'), t = s.querySelector('table'); hv.combos = { title: s.querySelector('.secTitle').textContent.replace(/^\s*\d+\.\s*/, '').trim(), table: t && tbrDomTable(t) }; }
@@ -3460,7 +3573,7 @@ function tbrAddPorted(Mo) {
     if (hv.peaks) ana.subs.push({ title: 'Peak values by combination', items: [hv.peaks] });
   }
   if (dfl && im && im.D) dfl.subs.push({ title: 'Deflected shapes', items: [fig(im.D, 'Deflection, service loads (+ down) (Deflection tab)')] });
-  Object.keys(hv.notes).forEach(id => { const n = hv.notes[id], L = n.list.filter(fresh); if (!L.length) return;
+  Object.keys(hv.notes).forEach(id => { const n = hv.notes[id], L = n.list.filter(fresh).flatMap(q => q.parts || [q]); if (!L.length) return;   // TBNL: parts
     const tgt = { sum: sum, sch: S(/^Project and inputs/), ana, dv: S(/^Design values/), bend: S(/^Bending/), shear: S(/^Shear/), bear: S(/^Bearing/), defl: dfl }[id] || S(/^Notes and references/);
     if (tgt) tgt.subs.push({ title: 'Notes on the ' + n.tab + ' tab', items: L }); });
   const sel = tbrApxSel(), nr = Mo.sections.findIndex(x => /^Notes and references/.test(x.title)), apx = [];

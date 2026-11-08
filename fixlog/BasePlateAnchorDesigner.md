@@ -5518,3 +5518,125 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Check case:** default project and the four states above, origin/main vs branch, headless: `CC` (all results) JSON identical; input panel and every tab's `textContent` identical after removing `<b>`/`</b>`/`<i>`/`</i>`/`<br><br>` and `&plusmn;`→`±` from main's text; digit sequences identical in all 71 texts compared.
 - **How verified:** `node tests/check-syntax.mjs`; `tests/smoke/phone-layout.mjs --tool bpad`; `tests/smoke/project-library.mjs --tool baseplate`; `tests/smoke/lightpole-anchor-handoff.mjs`; 0 console errors.
 - **Other copies:** none.
+
+## 2026-11-08 — PR: nl/bp-notes-1 (PR #1176: https://github.com/mlococo88/All-Structural/pull/1176) — BPNL-1: long input notes as a bold lead and a list (display only, no result change)
+### BPNL-1. Input panel: long notes split into a lead line and a list   [display only] [no result change]
+- **Request (engineer, 2026-11-07):** "Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Part 1 of 2 for this tool: the input panel. The output tabs and the Report are BPNL-2.
+- **Rule used:** a note is long if it is over ~300 characters, has 3 or more sentences, or carries several facts in one paragraph. Short 3-sentence hints under ~230 characters (for example the hairpin plan-offset hint) are left as they are. Every sentence, number, citation and link is kept, in the same order. Only the lead words, list-start capitals and end punctuation are new.
+- **New helpers** (after `function elH(`), anchor `/* BPNL (2026-11-08, engineer`:
+  ```js
+  function bpNL(lead,items,o){ o=o||{}; const L=o.ol?"ol":"ul";
+    const li=(items||[]).filter(Boolean).map(x=>"<li>"+(Array.isArray(x)?'<b class="bpNLk">'+x[0]+"</b> "+x[1]:x)+"</li>").join(" ");
+    return (o.act||[]).filter(Boolean).map(a=>'<div class="warnBox bpNLa">'+a+"</div>").join(" ")+
+      (lead?' <div class="bpNLl">'+lead+"</div>":"")+(li?" <"+L+' class="bpNLu">'+li+"</"+L+">":""); }
+  function bpNLdiv(tag,cls,lead,items,o){ return elH(tag,(cls?cls+" ":"")+"bpNL",bpNL(lead,items,o)); }
+  function bpNLhint(lead,items,o){ return '<div class="bpNL">'+bpNL(lead,items,o)+"</div>"; }   /* fRow hint */
+  ```
+  A note becomes `bpNLdiv("div","note",lead,[[leadWords,text],…])` (`"warnBox"` for a warning box); an `fRow` hint becomes `bpNLhint(lead,[…])`. The parts are joined with spaces, so `textContent` still reads as sentences. Text that came from `el()` (textContent) is now HTML: the one `<` in it ("side cover < 2.5 in.") is written `&lt;`.
+- **CSS** (after `.okBox{…}`), tool-scoped, no new colours (inherits the note / warnBox colours):
+  ```css
+  .bpNL .bpNLl{font-weight:bold;margin:0 0 1px;}
+  .bpNL .bpNLu{margin:2px 0 3px;padding-left:18px;}
+  .bpNL .bpNLu>li{margin:1px 0;}
+  .bpNL .bpNLa{font-style:normal;margin:2px 0 4px;}
+  @media print{ .bpNL .bpNLu>li{break-inside:avoid;} }
+  ```
+- **Notes changed** (section → old opening text → new lead → item lead words). Exact before / after: the PR diff.
+  1. 5 Concrete Pedestal, cracked: "ACI 318-19 §17.7.2.5 — applies to CONCRETE BREAKOUT IN SHEAR only" (lead unchanged) → Values / PROFIS / Confirm.
+  2. 5, plate position: "Offset of the plate center from the pedestal center." → Origin / Sign / Edge distances.
+  3. 6 Shear Distribution, hint "Anchors welded to a common plate": "Headed studs welded to an embed plate." → Per R17.7.2.1 / Base plates.
+  4. 6, hint "Anchor shear share": "Default: each anchor's steel shear…" → lead "The share of V each anchor's steel checks use:" → Default / Hilti PROFIS / Breakout and pryout.
+  5. 6, "This selection now governs the shear check itself, not just the report." → Old model removed / Why.
+  6. 7 Anchor Force Distribution: "The neutral-axis model treats the plate as rigid…" → Springs / Tension side / Basis / Legacy model.
+  7. 7, warning (BPMK-1): "D is a calibrated modeling assumption, not a code value." → Bedding modulus / Calibration / Sensitivity / Second-order / Direction (the `<br><br>` paragraph break is now the list).
+  8. 7a Pedestal Reinforcement: "Longitudinal bars on the pedestal perimeter… Used for:" → the three uses as items, then Eligibility.
+  9. 8 Tension Reinforcement: "Anchor reinforcement is vertical rebar (usually stirrups)." → Purpose / To count / Fields below.
+  10. 8, hint "Piece type": "How many effective LEGS each piece gives and how they develop." → Bar / Stirrup / tie.
+  11. 8, hint "Layout": "<b>Per-row</b>: …" → lead "Where the pieces go:" → Per-row / Enclose / Wide U per row/column.
+  12. 8, "Each piece contributes TWO legs at their true plan positions." → Compression side / Capacity.
+  13. 8, set-out off: "The whole piece set is translated rigidly…" → Drawings / Zero / Re-check.
+  14. 8, set-out on: "Automatic set-out:" → ENCLOSING run / PER-ROW run / Explicit.
+  15. 8, Vertical extent: "These two lengths fix where the top and bottom of each bar sit in elevation." → Available length / Geometry, not a claim / Not a direct input.
+  16. 8, Hooks: "Anchor reinforcement must be developed on BOTH sides of the breakout surface, per ACI Fig. R17.5.2.1a:" → Hooked or bent end / Straight end / Each side / Note / Consequence.
+  17. 8, closed tie (`dv`): "Closed tie:" → Bends / Standard hooks.
+  18. 8, hook factors: "A hooked or bent end develops the bar in ℓ_dh per Eq.(25.4.3.1a)…" → Each side / Straight top / Confinement / Edge / Measured.
+  19. 8, "Concrete breakout (tension) is replaced … only once the §17.5.2.1.1 substitution is JUSTIFIED." → Justified / Until then / Development.
+  20. 9 Shear Reinforcement: "Hairpins are horizontal bars laid across the shear breakout body." → Purpose / To count / Fields below.
+  21. 9, hint "Piece type": lead "What each piece type gives:" → Hairpin / Single bar / Closed ties.
+  22. 9, closed ties: "The tie follows the pedestal outline. For each set and side the app checks:" → the three checks as items, then Results.
+  23. 9, hint "Layout": lead "Where the pieces go:" → Per-anchor / Group.
+  24. 9, "Development available is NOT an input." → Plane / Not credited.
+  25. 9, "Concrete breakout (shear) is replaced … only once the §17.5.2.1.2 substitution is JUSTIFIED." → Justified / Until then / Pryout.
+  26. 10 Load Combinations: "⚠ Hilti PROFIS reports forces in 'lb' and moments in 'lb-in'." → Typed by hand / PDF import / Check.
+- **Decision (pending engineer review):** cautions inside a note ("confirm it against the actual reinforcing drawings…") stay in their place as an item rather than moving to an action line at the top, so the note keeps its order of facts.
+- **Governing provision:** none (display only).
+- **Check case:** origin/main vs branch, headless, 10 input states (default; pedestal reinforcement; fixed D; elastic + uncracked; tension reinforcement bar / U-stirrup with offset set-out and hooks / closed tie enclosing; hairpins welded plate; group; closed ties): `CC` (all results) JSON identical; the digit sequence of the input panel, every output tab, the Report tab and the printed report (`buildPrintReport`) identical in all 159 texts; only the input panel's text differs (wording/structure).
+- **How verified:** `node tests/check-syntax.mjs`; `tests/smoke/phone-layout.mjs --tool bpad`; `tests/smoke/project-library.mjs --tool baseplate`; `tests/smoke/lightpole-anchor-handoff.mjs`; 0 console errors. Screenshots before / after at 1440 and 390 px (neutral-axis note, hook factors, anchor reinforcement).
+- **Other copies:** none.
+
+## 2026-11-08 — PR: nl/bp-notes-2 (PR #1186: https://github.com/mlococo88/All-Structural/pull/1186) — BPNL-2: long notes on the output tabs (Summary, Base Plate, Anchor Design, Shear Distribution, Drawings, 3D View, Validation, Manual) and in the Report (display only, no result change)
+### BPNL-2. Output tabs: long notes as a lead line and a list; the Report prints them as one note per part   [display only] [no result change]
+- **Request / rule / helper:** as BPNL-1 (`bpNL`, `bpNLdiv`, `bpNLhint`). The Tension Rebar and Shear Rebar tabs are BPNL-3.
+- **CSS:** the BPNL-1 rules no longer need a `.bpNL` ancestor (`.bpNLl`, `.bpNLu`, `.bpNLu>li`, `.bpNLa`, print `break-inside:avoid`), because the printed report copies a note's inner HTML into its "Note:" boxes, the Summary's "Note n." list and the "Notes / basis" B.n items, where the outer class is lost.
+- **Report viewer** (`bprModel`, `walk`, before `if(cl.contains('cr-bn'))`, anchor `/* BPNL (2026-11-08): a lead-and-list note`): an element whose child is a `.bpNLu` list (directly, or inside a `.bpNL` child) becomes one Report note per part: any text before it ("Note:", "B.1") joined to the first part, then the lead, then each list item as "• lead words text". A "Note:" box stays a warning note. An element that only contains such a note deeper down (a figure and its caption) is walked into. Before, every note was one Report note (`linkText` of the element).
+- **Notes changed** (tab → old opening text → new lead → item lead words). Exact before / after: the PR diff.
+  1. Summary, All Combinations × Limit States: "Every combination against every limit state." → Column / Row / Why both.
+  2. Summary, "Tension / Shear anchor reinforcement is present but the §17.5.2.1 substitution is not yet justified" → Outstanding (the reasons) / Effect / To take the credit.
+  3. Summary, "Shear hairpins / closed ties: only n of m claimed legs are effective" → Why / Capacity / Breakout.
+  4. Summary, Per-Anchor Forces: "Why some checks use one anchor and others the group." → Basis / One anchor / The group / Mixing them / Hilti PROFIS.
+  5. Base Plate 1: "Rigid base plate, iterative neutral-axis solution." → Axes / Plate length.
+  6. Anchor Design 1: "Tension positive, compression negative (sign convention matches Hilti PROFIS)." → Resultants / Highlighted row / Shear distribution (`c.frontDesc`, now escaped as it is HTML).
+  7. Anchor Design 1: "Anchor forces are from a rigid-plate neutral-axis solve…" → Anchors / Concrete / Tension side / Biaxial.
+  8. Anchor Design, Governing Tension Capacity: "Why the basis differs by mode." → Basis / One anchor / The group / Mixing them / Hilti PROFIS.
+  9. Anchor Design, interaction: "Both forms are permitted by ACI 318-19 §17.8…" (was one `pre-line` paragraph) → Commentary / Governing / §17.8.2 (when a cut-off applies) / Comparing against Hilti PROFIS / Lower PROFIS values / Confirm.
+  10. Anchor Design, interaction: "⚠ The two permitted interaction forms DISAGREE on pass/fail here:" → Forms / Reported / Engineer of record.
+  11. Anchor Design, Installation Limits: "Anchor installation: TORQUED/UNTORQUED (input 2. Anchors)." → Spacing / Edge distance / Combinations.
+  12. Shear Distribution 1: "ACI 318-19 Fig. R17.7.2.1b gives three assumptions… chosen by GEOMETRY, not preference:" (the `<br>&nbsp;&nbsp;` lines) → Case 1 / Case 2 / Case 3 / The figure's Note / Controlling case.
+  13. Shear Distribution 1: "Welded to a common plate." → Per R17.7.2.1 / Applies to / Base plates / Changing it.
+  14. Shear Distribution 1, figure caption: "Figure — ACI 318-19 Fig. R17.7.2.1b… Note the two different spacings:" → s₁ / s / Not shown / Reference only.
+  15. Drawings: "One DXF file (AutoCAD R12, model space, full size in inches)." → Sheets / Layers / Export DXF / Title block. (The shared `SharedDxf.PRINT_NOTE` above it is not changed.)
+  16. 3D View: lead "How to use this view:" → Mouse / Load arrows (combination name now escaped) / Anchors / Triad.
+  17. 3D View: "Reinforcement, coloured as in the plans and the per-leg tables:" → Green / Red / Grey / Sphere / Blue-grey / Breakout bodies.
+  18. Validation: "Each case reproduces a Hilti PROFIS 3.1.34 run (uploaded reports)." → Method / Colours / Units.
+  19. Validation: "Important: the pedestal dimensions in these cases are reconstructed…" → Exact matches / May differ / Your project.
+  20. Validation, CB Plaza Struct 2 v1 and v2 case box: new display-only `noteNL` next to the unchanged `note` (the `note` string is kept byte-identical; `noteNL` is drawn when present) → This tool / Expect.
+  21. Validation, every case: "Why these rows differ:" as a real list (was `&bull; <b>k</b>: …<br>` lines).
+  22. Validation, Foundation depth D: lead "The foundation depth D of the neutral-axis solver:" → What it is. / D = (5/6)·h_ef / Why that form. / Physically / Still an assumption.
+  23. Validation, Foundation depth D: "Superseded: earlier versions used a fixed D = 10″ calibrated to CB Plaza alone." → Why it matched / Error / Legacy mode.
+  24. Manual 0.2, list items: Post-installed anchors → Why not / Covered; Seismic design per ACI 318-19 §17.10 → Input / SDC C–F / Not computed / Engineer's; Anchor reinforcement design → Checked / Not done.
+  25. Manual 0.3.1, warning: "The foundation depth D is a calibrated modeling assumption, not a code-specified value." → Calibration / Sensitivity / Input.
+  26. Manual 0.6, note: "A DCR is only meaningful alongside the assumptions that produced it." → Example / Confirm.
+- **Decision (pending engineer review):** the Manual's prose paragraphs (`{p:…}`) are document text and are left as paragraphs; only its notes, warnings and long list items are split. The PROFIS footnote lines ("* PROFIS reports this mode…") stay as footnotes. Notes under ~250 characters with short sentences are left as they are.
+- **Governing provision:** none (display only).
+- **Check case:** origin/main vs branch, headless, the 10 BPNL-1 states: `CC` (all results) JSON identical; the digit sequence of the input panel, every output tab, the Report tab and the printed report identical in all 159 texts; the "Notes / basis" appendix has the same B.n notes (13 in the default project).
+- **How verified:** `node tests/check-syntax.mjs`; `tests/smoke/phone-layout.mjs --tool bpad`; `tests/smoke/project-library.mjs --tool baseplate`; `tests/smoke/lightpole-anchor-handoff.mjs`; 0 console errors. Screenshots before / after at 1440 and 390 px (Summary basis note, interaction note, foundation depth D, Report).
+- **Other copies:** none.
+
+## 2026-11-08 — PR: nl/bp-notes-3 (PR #1191: https://github.com/mlococo88/All-Structural/pull/1191) — BPNL-3: long notes on the Tension Rebar and Shear Rebar tabs (display only, no result change)
+### BPNL-3. Tension Rebar / Shear Rebar tabs: long notes as a lead line and a list   [display only] [no result change]
+- **Request / rule / helpers / Report handling:** as BPNL-1 and BPNL-2. Last part of the long-notes work for this tool.
+- **Notes changed** (old opening text → new lead → item lead words). Exact before / after: the PR diff.
+  1. Tension Rebar, figure caption: "Figure — ACI 318-19 Fig. R17.5.2.1a… both are dimensioned on it." → Placement / Development / Cone / Reference only.
+  2. "Wide-U layout: n interior anchor(s) not restrained." → Why / Fix.
+  3. "n of m anchors in tension have no effective leg within 0.5·h_ef" → Share / Pooling / Confirm / Wide-U layout (when it applies).
+  4. "§17.5.2.1.1 credits a bar only where…" (BPMK-1 note) → Zone / Not credited / Distances below / "h_ef here is the ACTUAL embedment …″." (when h_ef is reduced). The combination name is escaped (`sbdEscB`) now that the note is HTML.
+  5. "Limitation." → Lightly loaded / Load path / Review.
+  6. "Piece set-out (enclosing layout)." / "Piece set-out (per-row layout)." → Set-out / Datum or Under moment / Creditable / Drawings.
+  7. "Elevations are measured UP from the BOTTOM of the member…" (lead unchanged, so the Report's "Basis: see Note B.n" pointer still quotes it) → z_cross / Available / Required / Both sides / "worst DCR" / Effective.
+  8. "n of m bars do not qualify as anchor reinforcement." → Outside the zone / Do not fit / Overstated / Fix.
+  9. §17.5.2.1 compliance (`rebarCompliance`, both tabs): "Anchor reinforcement may replace the concrete breakout check only when…" → Automatic / Your confirmation.
+  10. §17.5.2.1 compliance error box: "n geometric requirement(s) not satisfied and m detailing requirement(s) unconfirmed." → Not justified / Meanwhile.
+  11. Development: "Development is N/A — no leg reaches the breakout cone." → Why / Not a pass / Fix.
+  12. Development: "Per ACI Fig. R17.5.2.1a, anchor reinforcement is developed on BOTH sides of the breakout surface:" → Hooked or bent end / Straight end / Bends / Below.
+  13. Rebar Layout: "n leg(s) violate cover or fall outside the pedestal." / "No tension reinforcement leg fits inside cover." → Limit / Driver / Capacity.
+  14. Shear Rebar, figure caption: "Figure — application of hairpin reinforcement to concrete edges for shear load…" → Development / Note on the figure number / Reference only.
+  15. "The leg-to-leg gauge is too wide for any leg to count." → Why / Fix.
+  16. Closed ties: "Closed ties enclosing the anchor group (ACI 318-19 R17.5.2.1(b), Fig. R17.5.2.1b). Governing edge …" → Legs / (1) / (2) / (3) / Capacity.
+  17. Hairpins: "Governing edge … taken from the same shear-breakout solve as the capacity check." → "lateral offset" / "behind" / Effective.
+  18. "The hairpin bend is not marked as engaging the anchor rod." → Requirement / Without engagement / Confirm.
+  19. Layout: "A hairpin is a DIRECTIONAL detail:" → Credit / Plan / Elevation; closed ties: "Closed ties enclosing the anchor group (§17.5.2.1(b), R17.5.2.1(b), Fig. R17.5.2.1b):" → Legs / Drawings. The combination name is escaped.
+- **Decision (pending engineer review):** the "Why none / only n of the m bars are creditable" banner (`ineffCauseBanner`) is already a list of causes with their fixes and is left as it is. A "Fix:" item stays in its place in the list (not moved to the top), so each box keeps its order of facts.
+- **Governing provision:** none (display only).
+- **Check case:** origin/main vs branch, headless, the 10 BPNL-1 states: `CC` (all results) JSON identical; the digit sequence of the input panel, every output tab, the Report tab and the printed report identical in all 159 texts. One exception, not from this change: the 3D View text in one state differs only by the Plotly chart's axis labels, which had not finished drawing in the main run; the text before the chart is identical.
+- **How verified:** `node tests/check-syntax.mjs`; `tests/smoke/phone-layout.mjs --tool bpad`; `tests/smoke/project-library.mjs --tool baseplate`; `tests/smoke/lightpole-anchor-handoff.mjs`; 0 console errors. Screenshots before / after at 1440 and 390 px (elevations note, tension figure caption, §17.5.2.1.1 crediting note).
+- **Other copies:** none.
