@@ -223,6 +223,41 @@ svg.sch .ld{stroke:var(--bad);fill:var(--bad)}
   .pnl>.bd{overflow-x:auto}   /* a wide table scrolls inside its panel */
 }
 @media screen and (max-width:520px){#tbfields,#a7prjPane #tbfields{grid-template-columns:minmax(0,1fr)}}
+/* A7LS (2026-11-08, engineer: the left summary panel, as Retaining Wall / Spread Footing / Light Pole / Shear and Moment / Base
+   Plate): from 1200 px a left column of compact key-result chips (name, value, OK / REVIEW / BLOCKED from the status register);
+   240 px to 1499 px, 280 px from 1500 px; « shrinks it to a 42 px strip. Below 1200 px it is not shown and nothing changes.
+   Screen only (never printed). This tool has no D/C ratios: the chips show the Dashboard's governing design values. */
+#a7lsCol{display:none}
+@media screen and (min-width:1200px){
+  #a7lsCol{display:flex;flex-direction:column;flex:0 0 280px;width:280px;min-width:0;overflow-y:auto;overscroll-behavior:contain;border-right:1px solid var(--line);background:#f4f7fb;font-size:9.5pt}
+  #mainwrap>#inpanel{flex-basis:calc((100% - 280px) * .33)}
+  #a7lsHead{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:6px;padding:7px 8px 6px;background:#f4f7fb;border-bottom:2px solid var(--navy)}
+  #a7lsTgl{margin:0;padding:1px 7px;font-size:9.5pt;border:1px solid var(--line);background:#fff;border-radius:2px;cursor:pointer;color:var(--navy)}
+  #a7lsTtl{font-weight:700;color:var(--navy);font-size:10pt}
+  #a7lsCnt{margin-left:auto;font-size:9pt;font-weight:700;white-space:nowrap}
+  #a7lsCnt.e{color:var(--bad)} #a7lsCnt.w{color:var(--warn)} #a7lsCnt.k{color:var(--ok)}
+  #a7ls{padding:6px 6px 24px;display:flex;flex-direction:column;gap:4px}
+  #a7ls .a7lsMsg{font-style:italic;color:#555;padding:4px 2px}
+  .a7lsChip{display:grid;grid-template-columns:10px minmax(0,1fr) auto;column-gap:6px;align-items:center;width:100%;text-align:left;padding:4px 6px;border:1px solid var(--line);border-radius:3px;background:#fff;cursor:pointer;font:inherit;color:var(--ink)}
+  .a7lsChip:hover{background:#eef3f8} .a7lsChip:focus-visible{outline:2px solid #9db8dc;outline-offset:1px}
+  .a7lsChip .dot{width:9px;height:9px;border-radius:50%;border:1px solid rgba(0,0,0,.3)}
+  .a7lsChip.k .dot{background:var(--ok)} .a7lsChip.w .dot{background:#c69026} .a7lsChip.e .dot{background:var(--bad)} .a7lsChip.n .dot{background:#9e9e9e}
+  .a7lsChip.e{border-color:var(--bad);background:var(--badbg)} .a7lsChip.w{border-color:#d8b871}
+  .a7lsChip .nm{font-weight:700;overflow-wrap:anywhere}
+  .a7lsChip .vl{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .a7lsChip .vl b{display:block;font-size:8pt}
+  .a7lsChip.k .vl b{color:var(--ok)} .a7lsChip.w .vl b{color:var(--warn)} .a7lsChip.e .vl b{color:var(--bad)} .a7lsChip.n .vl b{color:var(--na)}
+  body.a7lsColl #a7lsCol{flex-basis:42px;width:42px;overflow:hidden}
+  body.a7lsColl #mainwrap>#inpanel{flex-basis:calc((100% - 42px) * .33)}
+  body.a7lsColl #a7ls{display:none}
+  body.a7lsColl #a7lsHead{flex-direction:column;border-bottom:none;padding:7px 4px}
+  body.a7lsColl #a7lsTtl,body.a7lsColl #a7lsCnt{margin:0;writing-mode:vertical-rl}
+}
+@media screen and (min-width:1200px) and (max-width:1499.98px){
+  #a7lsCol{flex-basis:240px;width:240px}
+  #mainwrap>#inpanel{flex-basis:calc((100% - 240px) * .33)}
+}
+@media print{#a7lsCol{display:none!important}}
 </style>
 </head>
 <body>
@@ -243,6 +278,10 @@ svg.sch .ld{stroke:var(--bad);fill:var(--bad)}
 </div>
 
 <div id="main"><div id="mainwrap">
+  <aside id="a7lsCol" class="noprint" aria-label="Key results"><!-- A7LS (2026-11-08): left summary column from 1200 px -->
+    <div id="a7lsHead"><button id="a7lsTgl" type="button" title="Collapse the key results">&laquo;</button><span id="a7lsTtl">Key results</span><span id="a7lsCnt"></span></div>
+    <div id="a7ls"></div>
+  </aside>
   <div id="inpanel">
     <div id="intabs"></div>
     <div id="inbody"><div id="inputs"></div>
@@ -2283,6 +2322,62 @@ function renderDash(host){
   if(R.warn.length){const wb=panel(host,"o-warn",++n+".","Advisory Notices","");R.warn.forEach(x=>{ const nl=A7WNL.get(x);   /* A7NL: the display form of a long warning */
     if(nl) noteNL(wb,nl[0],nl[1],"w",nl[2]); else note(wb,esc(x),"w"); });}
 }
+
+/* A7LS (2026-11-08, engineer: the left summary panel): the Dashboard's governing design values as chips in a left column from 1200 px.
+   Each chip: value as on the Dashboard (same expressions), status from the Status Register rows of the tab that works it (BLOCKED if
+   any is Blocked, REVIEW if any is Review, Standing rows excluded, else OK); a click opens that panel (a7Goto, D11). Display only. */
+const A7LS={key:"asce7bldg.leftPanelCollapsed_v1"};
+function a7lsState(anchors){
+  const rel=(R.checks||[]).filter(c=>anchors.indexOf(c.anchor)>=0).concat((R.xchecks||[]).filter(c=>anchors.indexOf(c.anchor)>=0).map(c=>({state:c.sev==="err"?"err":"warn"})));
+  return rel.some(c=>c.state==="err")?"e":rel.some(c=>c.state==="warn"&&!c.standing)?"w":"k";
+}
+function a7lsRender(){
+  const host=document.getElementById("a7ls"), cnt=document.getElementById("a7lsCnt"); if(!host||!cnt) return;
+  host.innerHTML=""; cnt.className=""; cnt.textContent="";
+  const msg=t=>host.appendChild(el("div","a7lsMsg",t));
+  if(R.err&&R.err.length){ cnt.className="e"; cnt.textContent=R.err.length+" blocking"; }
+  if(!R.enc||!R.geom||!R.wind||!R.snow||!R.seis){ msg("No results: the calculation is blocked. See the Dashboard."); if(!cnt.textContent){ cnt.className="e"; cnt.textContent="blocked"; } return; }
+  const all=(R.checks||[]).map(c=>c.state==="warn"&&c.standing?"s":c.state).concat((R.xchecks||[]).map(c=>c.sev==="err"?"err":"warn"));
+  const nB=all.filter(s=>s==="err").length+((R.err||[]).length), nW=all.filter(s=>s==="warn").length;
+  cnt.className=nB?"e":nW?"w":"k"; cnt.textContent=nB?nB+" blocked":nW?nW+" review":"OK";
+  const chips=[];
+  const add=(name,val,st,tab,key,tip)=>chips.push({name,val,st,tab,key,tip});
+  add("Status register",nB?nB+" Blocked":nW?nW+" Review":"All OK",cnt.className,"dash","o-dash","Blocked / Review rows of the Status Register and the Cross-Tab Consistency checks");
+  add("Enclosure",esc(R.enc.cls)+", GC<sub>pi</sub> ±"+R2(R.enc.gcpi.p),a7lsState(["s-encl"]),"encl",R.enc.freeRoof?"o-enfree":"o-en3","Sec. 26.2, Table 26.13-1");
+  add("q<sub>h</sub>",R2(R.wind.qh.q)+" psf",a7lsState(["s-windp"]),"windp","o-wp4","Velocity pressure at h, Eq. 26.10-1");
+  if(R.cases&&R.cases.length){
+    let wwM=-Infinity,wwI=0,rfM=Infinity,rfI=0;
+    R.cases.forEach((c,i)=>{ const ww=c.wwTable[c.wwTable.length-1], w=Math.max(ww.pPos,ww.pNeg); if(w>wwM){wwM=w;wwI=i;}
+      const rp=c.roofRows?[].concat(...c.roofRows.map(r=>[r.pPos,r.pNeg].concat(r.pMaxPos!==undefined?[r.pMaxPos,r.pMaxNeg]:[]))):[0], m=Math.min(...rp); if(m<rfM){rfM=m;rfI=i;} });
+    if(!R.geom.free) add("Windward wall at h",R2(wwM)+" psf",a7lsState(["s-walls","s-minw"]),"walls","o-wa"+wwI,"Largest over the wind directions ("+R.cases[wwI].id+"), Fig. 27.3-1");
+    add("Roof, most negative",R2(rfM)+" psf",a7lsState(["s-roof"]),"roof",R.geom.free?"o-fr1":"o-rf"+rfI,"Most negative over the wind directions"+(R.geom.free?"":" ("+R.cases[rfI].id+")")+"; negative is suction");
+  }
+  add("p<sub>f,des</sub>",R2(R.snow.pfDes)+" psf",a7lsState(["s-snow"]),"snow",R.snow.minApplies?"o-sn2":"o-sn1","Design flat roof snow load, Sec. 7.3");
+  add("p<sub>s</sub>",R2(R.snow.balanced)+" psf",a7lsState(["s-snow"]),"snow","o-sn6","Design balanced snow load, Sec. 7.4");
+  if(R.seis.Fa!==null){
+    const st=a7lsState(["s-seis"]);
+    add("SDC",esc(R.seis.SDC),st,"seis","o-se2","Seismic design category, Sec. 11.6");
+    add("C<sub>s</sub>",RN(R.seis.Cs,4),st,"seis","o-se4","Seismic response coefficient, Sec. 12.8.1.1");
+    add("V",R2(R.seis.Vbase)+" kip",st,"seis","o-se5","Seismic base shear, Eq. 12.8-1");
+  } else add("Seismic","not computed","e","seis","s-seis","No tabulated site coefficient: a site response analysis is required");
+  const LAB={k:"OK",w:"REVIEW",e:"BLOCKED",n:"—"};
+  chips.forEach(c=>{
+    const b=el("button","a7lsChip "+c.st,'<span class="dot"></span><span class="nm">'+c.name+'</span><span class="vl">'+c.val+'<b>'+LAB[c.st]+'</b></span>');
+    b.type="button"; b.title=c.tip||"";
+    b.onclick=()=>{ if(c.key==="s-seis") goto("s-seis"); else a7Goto(c.tab,c.key); };
+    host.appendChild(b);
+  });
+}
+function a7lsColl(v,save){
+  document.body.classList.toggle("a7lsColl",!!v);
+  const t=document.getElementById("a7lsTgl"); if(t){ t.innerHTML=v?"&raquo;":"&laquo;"; t.title=v?"Show the key results":"Collapse the key results"; }
+  if(save){ try{ localStorage.setItem(A7LS.key,v?"1":"0"); }catch(e){} }
+}
+window.addEventListener("DOMContentLoaded",()=>{
+  let v=false; try{ v=localStorage.getItem(A7LS.key)==="1"; }catch(e){}
+  a7lsColl(v,false);
+  const t=document.getElementById("a7lsTgl"); if(t) t.onclick=()=>a7lsColl(!document.body.classList.contains("a7lsColl"),true);
+});
 
 /* ---------------- Design Basis ---------------- */
 function renderBasis(host){
@@ -4672,6 +4767,7 @@ function renderManual(host){
    Section H : RENDER DISPATCH
    ================================================================== */
 function render(){
+  a7lsRender();   /* A7LS: the left summary column */
   buildTabs();
   const h=document.getElementById("outbody"); h.innerHTML="";
   if(A7RP.on){ renderReport(h); return; }   /* A7RP */
