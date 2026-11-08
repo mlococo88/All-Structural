@@ -4751,23 +4751,27 @@ function pane(p,M,selEl,selCase,selSec){
   /* ---- 1. method ---- */
   h+=UI.pnl("il_meth",c(),"Method",
     msg("key","§7.2.7.7B, verbatim requirement",
-      "Unit loads shall be applied to each node in the model to generate influence coefficient tables and lines "+
-      "for moment, shear, and axial load at given nodes. Extreme care shall be exercised to ensure that proper "+
-      "sign convention is maintained. From these influence lines, the maximum moment and corresponding shear "+
-      "and axial loads shall be calculated. At a minimum, influence lines shall be developed at the springlines, "+
-      "crown, quarter points, and at points where significant changes in section properties occur.")+
-    `<p>This program applies a <b>1 kip downward load at each free node in turn</b> — ${nN-2} separate load
-     cases for the ${nN} nodes of this model — and records the moment, thrust and shear produced at
-     <b>every</b> section, not only the minimum set the clause requires. The resulting arrays are the influence
-     coefficient tables reproduced below.</p>`+
+      R.arNL(null,["Unit loads shall be applied to each node in the model to generate influence coefficient tables and lines "+   /* ARNL */
+      "for moment, shear, and axial load at given nodes.","Extreme care shall be exercised to ensure that proper "+
+      "sign convention is maintained.","From these influence lines, the maximum moment and corresponding shear "+
+      "and axial loads shall be calculated.","At a minimum, influence lines shall be developed at the springlines, "+
+      "crown, quarter points, and at points where significant changes in section properties occur."],{ol:true}))+
+    `<div class="note">${R.arNL(null,[
+      ["This program applies a 1 kip downward load at each free node in turn",`— ${nN-2} separate load `+
+     `cases for the ${nN} nodes of this model — and records the moment, thrust and shear produced at `+
+     `<b>every</b> section, not only the minimum set the clause requires.`],
+      ["Tables:","The resulting arrays are the influence coefficient tables reproduced below."]])}</div>`+
     step({label:"Load vector for case j",
       sym:"\\mathbf{F}_j:\\quad F_{y,j}=-1\\ \\text{kip},\\quad F_{k}=0\\ \\ \\forall k\\neq j",
       sub:"",res:"",note:"Downward is negative in the global vertical axis. One case per free node."})+
     msg("inf","Why no cases at the springings",
-      "Nodes 1 and "+nN+" are restrained against translation, so a vertical load applied there passes directly "+
+      R.arNL(null,[   /* ARNL */
+        ["Restrained:","Nodes 1 and "+nN+" are restrained against translation, so a vertical load applied there passes directly "+
       "into the support and produces no internal force anywhere in the arch — the influence ordinates for those "+
-      "load positions are identically zero. Cases are therefore generated for the free nodes only. The "+
-      "influence lines are still evaluated <i>at</i> the springline sections, which is what §7.2.7.7B requires.")+
+      "load positions are identically zero."],
+        ["Cases:","Cases are therefore generated for the free nodes only."],
+        ["Still evaluated at the springings:","The "+
+      "influence lines are still evaluated <i>at</i> the springline sections, which is what §7.2.7.7B requires."]]))+
     step({label:"Number of load cases",sym:"n_{cases}=n_{nd}-2",
       sub:`${nN}-2`,res:num(nN-2,0)}),
     "§7.2.7.7B");
@@ -4818,11 +4822,12 @@ function pane(p,M,selEl,selCase,selSec){
       "\\end{bmatrix}","Standard direct stiffness formulation")+
     `<h4>k<sub>loc</sub> for element ${selEl+1}, evaluated (kip, ft)</h4>`+
     mat(el.kl,["u₁","v₁","θ₁","u₂","v₂","θ₂"],2)+
-    `<div class="note">The stiffness matrix of element ${selEl+1} in its own local axes, evaluated from the
-     section and length above. Rows and columns run u, v, θ at end I then end J: u is axial along the member,
-     v transverse to it, θ the rotation. The axial terms are EA/L and are uncoupled from bending; the bending
-     terms follow from EI/L, with the shear parameter Φ folded in when Timoshenko is selected. Symmetric by
-     construction, and singular on its own until restraints are applied.</div>`+
+    `<div class="note">${R.arNL(`The stiffness matrix of element ${selEl+1} in its own local axes, evaluated from the `+   /* ARNL */
+     `section and length above.`,[
+      ["Rows and columns","run u, v, θ at end I then end J: u is axial along the member, v transverse to it, θ the rotation."],
+      ["Axial terms","are EA/L and are uncoupled from bending;"],
+      ["Bending terms","follow from EI/L, with the shear parameter Φ folded in when Timoshenko is selected."],
+      ["Properties:","Symmetric by construction, and singular on its own until restraints are applied."]])}</div>`+
     eqLine("Transformation to global axes",
       "\\mathbf{T}=\\begin{bmatrix}c&s&0&0&0&0\\\\-s&c&0&0&0&0\\\\0&0&1&0&0&0\\\\"+
       "0&0&0&c&s&0\\\\0&0&0&-s&c&0\\\\0&0&0&0&0&1\\end{bmatrix},\\qquad "+
@@ -4876,12 +4881,15 @@ function pane(p,M,selEl,selCase,selSec){
       <select id="ilSecSel">${M.g.nodes.map((nn,k)=>
         `<option value="${k}"${k===selSec?" selected":""}>${CALC.secTag(M,k)} — x = ${nfx(nn.x,2)} ft</option>`).join("")}</select></div>`+
     msg("key","Sign convention, per the caution in §7.2.7.7B",
-      "The clause warns that extreme care must be exercised to maintain proper sign convention. Two decisions "+
-      "are made here and applied everywhere. First, thrust and shear are resolved on the <b>section normal to "+
+      R.arNL("The clause warns that extreme care must be exercised to maintain proper sign convention. Two decisions "+   /* ARNL */
+      "are made here and applied everywhere.",[
+        ["First,","thrust and shear are resolved on the <b>section normal to "+
       "the arch axis</b>, not on the element chord, so a value does not depend on which adjacent element is "+
-      "used. Second, at interior nodes the two adjacent element ends are <b>averaged</b>, because thrust is "+
+      "used."],
+        ["Second,","at interior nodes the two adjacent element ends are <b>averaged</b>, because thrust is "+
       "discontinuous across a node carrying a concentrated load and the section at the node sits at the middle "+
-      "of its tributary length. Thrust is reported compression-positive.")+
+      "of its tributary length."],
+        ["Sign:","Thrust is reported compression-positive."]],{ol:true}))+
     step({label:"Unit tangent and normal at this section",
       sym:"\\hat{t}=(n_y,\\,-n_x),\\qquad \\hat{n}=(n_x,\\,n_y)",
       sub:`\\hat{t}=(${num(tx,5)},\\,${num(ty,5)}),\\ \\hat{n}=(${num(nd.nx,5)},\\,${num(nd.ny,5)})`,
@@ -4941,22 +4949,23 @@ function pane(p,M,selEl,selCase,selSec){
     return r;});
   /* Which way round the table reads is the thing people get wrong, so it is
      stated once, in the same words, above all three tables. */
-  const axes=`<div class="msg m-key"><b>How to read these tables</b>
-     <b>Down the side — each ROW is a section</b>, the place where the effect is measured.
-     <b>Across the top — each COLUMN is a position of the 1 kip load</b>.
-     So the cell in row <span class="mono">CR</span>, column <span class="mono">QP-L</span> is the effect at the
-     crown produced by one kip standing at the left quarter point. Reading a row across shows how one section
-     responds as the load moves — that row is the influence line for that section, and it is the row the
-     superposition multiplies by the nodal loads. Reading a column down shows what one load position does to
-     the whole arch.
-     <b>The two springing columns are zero throughout</b>: those nodes are restrained in both translations and
-     rotation, so a load applied there goes directly into the abutment and produces no internal force anywhere
-     in the barrel. They are shown rather than omitted so the zero is visible.</div>`;
+  const axes=`<div class="msg m-key"><b>How to read these tables</b>${R.arNL(null,[   /* ARNL */
+     ["Down the side — each ROW is a section,","the place where the effect is measured."],
+     ["Across the top — each COLUMN is a position of the 1 kip load."," So the cell in row <span class=\"mono\">CR</span>, column <span class=\"mono\">QP-L</span> is the effect at the "+
+     "crown produced by one kip standing at the left quarter point."],
+     ["Reading a row across","shows how one section "+
+     "responds as the load moves — that row is the influence line for that section, and it is the row the "+
+     "superposition multiplies by the nodal loads."],
+     ["Reading a column down","shows what one load position does to the whole arch."],
+     ["The two springing columns are zero throughout:","those nodes are restrained in both translations and "+
+     "rotation, so a load applied there goes directly into the abutment and produces no internal force anywhere "+
+     "in the barrel. They are shown rather than omitted so the zero is visible."]])}</div>`;
   h+=UI.pnl("il_tabM",c(),"Influence coefficient table — moment",
     axes+
-    `<div class="note">An influence ordinate is the effect produced by a unit load, so a moment ordinate is a
-     moment divided by a force and carries units of <b>length: feet</b>. Multiplying an ordinate by an applied
-     load in kips gives kip·ft directly. Sagging positive. The section of interest is shaded.</div>`+
+    `<div class="note">${R.arNL("An influence ordinate is the effect produced by a unit load, so a moment ordinate is a "+   /* ARNL */
+     "moment divided by a force and carries units of <b>length: feet</b>.",[
+      ["Use:","Multiplying an ordinate by an applied load in kips gives kip·ft directly."],
+      ["Sign:","Sagging positive."],["Shading:","The section of interest is shaded."]])}</div>`+
     dtab(cols,mk(M.ILM),{govIdx:selSec}),"§7.2.7.7B",true);
   h+=UI.pnl("il_tabP",c(),"Influence coefficient table — thrust",
     axes+
@@ -4986,11 +4995,14 @@ function pane(p,M,selEl,selCase,selSec){
       </div>
       <div id="ilwRead"></div>`+
       msg("key","How to check this against Midas",
-        `Set the section of interest, then step the unit load along the arch. Each position is one load case in `+
-        `the exported model — the load case name is given in the readout — so the three ordinates below can be `+
-        `read straight off the corresponding Midas beam force table one case at a time, rather than trying to `+
-        `match a whole curve at once. The marker on the chart shows where the load currently sits; the curves `+
-        `themselves are the influence lines for the selected section.`)+
+        R.arNL(null,[   /* ARNL */
+          "Set the section of interest, then step the unit load along the arch.",
+          "Each position is one load case in "+
+        "the exported model — the load case name is given in the readout — so the three ordinates below can be "+
+        "read straight off the corresponding Midas beam force table one case at a time, rather than trying to "+
+        "match a whole curve at once.",
+          "The marker on the chart shows where the load currently sits; the curves "+
+        "themselves are the influence lines for the selected section."],{ol:true}))+
       `<figure><div id="figILWalk" class="plot" style="height:360px"></div>
         <figcaption>Influence lines at section ${esc(CALC.secTag(M,selSec))} with the current unit load position
         marked. Moment on the left axis in feet, thrust and shear on the right, dimensionless.</figcaption>
@@ -4999,25 +5011,29 @@ function pane(p,M,selEl,selCase,selSec){
       dtab([{k:"tag",h:"Section",txt:1},{k:"x",h:"x (ft)",dp:3},
         {k:"M",h:"moment (kip·ft)",dp:6},{k:"P",h:"thrust (kip)",dp:6},{k:"V",h:"shear (kip)",dp:6}],
         rows2,{govIdx:selSec})+
-      `<div class="note">This table is a <b>column</b> of the coefficient tables above, not a row: one load
-       position, every section. That is the direct analogue of one Midas load case — run UN${selCase+1} in Midas
-       and its beam forces should reproduce these numbers. The row for the section of interest is shaded; that row's moment, thrust and shear are
-       one column of the influence coefficient tables above.</div>`,
+      `<div class="note">${R.arNL("This table is a <b>column</b> of the coefficient tables above, not a row: one load "+   /* ARNL */
+       "position, every section.",[
+        ["Midas:",`That is the direct analogue of one Midas load case — run UN${selCase+1} in Midas `+
+       `and its beam forces should reproduce these numbers.`],
+        ["Shading:","The row for the section of interest is shaded; that row's moment, thrust and shear are "+
+       "one column of the influence coefficient tables above."]])}</div>`,
       "§7.2.7.7B");
   }
 
   /* ---- 8. plot ---- */
   h+=UI.pnl("il_plot",c(),"Influence lines at the selected section",
     `<figure><div id="ilBigPlot" class="plot" style="height:340px"></div>
-     <figcaption>Influence lines for moment, thrust and shear at section ${esc(CALC.secTag(M,selSec))},
-     plotted against the position of the 1 kip load. <b>Moment is on the left axis, thrust and shear on the
-     right</b>; the two scales are stretched so that both zeros fall on the same gridline. The horizontal axis
-     runs along the <b>arch axis</b> with its origin at the left springing node, which is the coordinate the
-     exported Midas model uses, so positions can be compared directly. The axis spans
-     ${nfx(M.g.axisSpan,2)} ft; the intrados clear span of ${nfx(M.g.span,2)} ft runs from
-     ${nfx(M.g.xIntL,2)} to ${nfx(M.g.xIntR,2)} ft, inset because the axis is the intrados offset by d/2.
-     The dotted verticals mark the springings. Every ordinate is zero at both
-     springings, because a load applied at a restrained node passes directly into the support.</figcaption>
+     <figcaption>${R.arNL(`Influence lines for moment, thrust and shear at section ${esc(CALC.secTag(M,selSec))}, `+   /* ARNL */
+     `plotted against the position of the 1 kip load.`,[
+      ["Moment is on the left axis, thrust and shear on the right;","the two scales are stretched so that both zeros fall on the same gridline."],
+      ["Horizontal axis:","The horizontal axis "+
+     "runs along the <b>arch axis</b> with its origin at the left springing node, which is the coordinate the "+
+     "exported Midas model uses, so positions can be compared directly."],
+      ["Spans:",`The axis spans `+
+     `${nfx(M.g.axisSpan,2)} ft; the intrados clear span of ${nfx(M.g.span,2)} ft runs from `+
+     `${nfx(M.g.xIntL,2)} to ${nfx(M.g.xIntR,2)} ft, inset because the axis is the intrados offset by d/2.`],
+      ["Springings:","The dotted verticals mark the springings. Every ordinate is zero at both "+
+     "springings, because a load applied at a restrained node passes directly into the support."]])}</figcaption>
      </figure>`,"§7.2.7.7B");
 
   /* ---- 9. verification ---- */
@@ -5044,9 +5060,10 @@ function pane(p,M,selEl,selCase,selSec){
       ? step({label:"Mirror symmetry of the tables",
           sym:"\\max\\left|\\eta_{i,j}-\\eta_{n-i,\\,n-j}\\right|",sub:"",
           res:`M:\\ ${wM.toExponential(2)},\\ P:\\ ${wC.toExponential(2)}`,
-          note:"The geometry, restraint and grade of this model are symmetric, so every influence ordinate must "+
-            "mirror. A residual at machine precision confirms the solve and the section force recovery. This "+
-            "test is what originally exposed a defect in the recovery, described in Manual Part 5.3."})
+          note:R.arNL(null,[   /* ARNL */
+            ["Symmetric:","The geometry, restraint and grade of this model are symmetric, so every influence ordinate must mirror."],
+            ["Residual:","A residual at machine precision confirms the solve and the section force recovery."],
+            ["History:","This test is what originally exposed a defect in the recovery, described in Manual Part 5.3."]])})
       : msg("inf","Symmetry test not applicable",
           "This model is not symmetric — measured geometry, a sloped grade, or local ring depth overrides are "+
           "in use — so the mirror test does not apply. Equilibrium of each load case, checked above, and the "+
@@ -5866,31 +5883,37 @@ function pane(p,M,govVeh,govRes){
       "The horizontal earth pressure loads shall be calculated assuming a lateral earth pressure coefficient "+
       "of 0.25. The loads shall be computed along the vertical heights of each element and shall be applied as "+
       "linearly varying loads to each element.")+
-    `<p>Three things follow from that sentence and are implemented literally. The coefficient is <b>fixed at
-     0.25</b> by the clause, not derived from a friction angle or an at-rest condition. The pressure is computed
-     on the <b>vertical height</b> of each element, so a near-horizontal element at the crown attracts almost
-     none of it and a near-vertical element at the springing attracts nearly all. And it is applied as a
-     <b>linearly varying element load</b>, not lumped to nodes.</p>`+
+    `<div class="note">${R.arNL("Three things follow from that sentence and are implemented literally.",[   /* ARNL */
+      ["Coefficient:","The coefficient is <b>fixed at 0.25</b> by the clause, not derived from a friction angle or an at-rest condition."],
+      ["Vertical height:","The pressure is computed "+
+     "on the <b>vertical height</b> of each element, so a near-horizontal element at the crown attracts almost "+
+     "none of it and a near-vertical element at the springing attracts nearly all."],
+      ["Element load:","And it is applied as a <b>linearly varying element load</b>, not lumped to nodes."]],{ol:true})}</div>`+
     step({label:"Lateral pressure at the arch axis",ref:"§7.2.7.5B",
       sym:"p_h=K\\left(\\gamma_f\\,z+\\gamma_{ws}\\,t_{ws}\\right)",
       sub:`${num(p.K,3)}\\left(${num(gf,4)}\\,z+${num(gws,4)}\\times${num(p.tws,3)}\\right)`,
       res:"",units:"ksf",
-      note:"z is the depth from the bottom of the wearing surface down to the ARCH AXIS — the element the "+
-        "load is applied to. The "+
+      note:R.arNL(null,[   /* ARNL */
+        ["z","is the depth from the bottom of the wearing surface down to the ARCH AXIS — the element the "+
+        "load is applied to."],
+        ["Wearing surface:","The "+
         "wearing surface is a surcharge bearing on the fill, so its weight enters the vertical stress at its "+
-        "own unit weight — its thickness is not part of h_f, but its weight is not omitted either."+
-        (p.tws>0?"":" Here t_ws = 0, so that term vanishes and p_h = K·γ_f·h_f. Check the Roadway Grade & "+
+        "own unit weight — its thickness is not part of h_f, but its weight is not omitted either."],
+        p.tws>0?null:["Here t_ws = 0,","so that term vanishes and p_h = K·γ_f·h_f. Check the Roadway Grade & "+
           "Fill panel if a wearing surface was intended, or the Superimposed Dead Load panel if the pavement "+
-          "weight was entered as a line item instead.")})+
+          "weight was entered as a line item instead."]])})+
     step({label:"Line load on the one-foot strip",
       sym:"w_h=p_h\\,b=p_h\\times1\\ \\text{ft}",sub:"",res:"",units:"k/ft",
       note:"The load per foot of vertical height is numerically the pressure. §7.2.7.5B computes the loads "+
         "along the vertical heights of the elements, and that is what is applied — nothing is converted."})+
     step({label:"Total horizontal force on an element",
       sym:"F=\\tfrac12\\left(p_{h,I}+p_{h,J}\\right)\\Delta y",sub:"",res:"",units:"k/ft width",
-      note:"Δy is the vertical projection of the element on the arch axis. Near the crown Δy goes to zero "+
+      note:R.arNL(null,[   /* ARNL */
+        ["Δy","is the vertical projection of the element on the arch axis."],
+        ["Near the crown","Δy goes to zero "+
         "and the lateral load vanishes with it — the soil there is carried as vertical fill load instead, "+
-        "not lost. The exported Midas model writes p_h with bPROJ = YES and forms this same product itself."})+
+        "not lost."],
+        ["Midas:","The exported Midas model writes p_h with bPROJ = YES and forms this same product itself."]])})+
     vars([["K","Lateral earth pressure coefficient",p.K,"—",3],
           ["\\gamma_f","Fill unit weight",p.gf,"pcf",0],
           ["\\gamma_{ws}","Wearing surface unit weight",p.gws,"pcf",0],
@@ -5917,29 +5940,31 @@ function pane(p,M,govVeh,govRes){
       {k:"p1",h:"p_h at I (ksf) = k/ft on the 1 ft strip",dp:4},
       {k:"p2",h:"p_h at J (ksf) = k/ft on the 1 ft strip",dp:4},
       {k:"R",h:"resultant (k/ft width)",dp:4},{k:"side",h:"Direction",txt:1}],rows)+
-    `<div class="note">Pressure acts inward on both haunches — toward the barrel centerline — so the two sides
-     largely balance and the net effect on the arch is a compressive squeeze plus, where the geometry or the
-     grade is not symmetric, a net horizontal push. Resultant is positive to the right, per foot of barrel
-     width. θ near 90° is a near-vertical element carrying nearly the full pressure; near 0° at the crown it
-     carries almost none.
-     <br><br><b>p_h is the load.</b> It acts along the global X axis and is distributed over the vertical
-     extent of the element, so on the one-foot analysis strip the k/ft figure and the ksf figure are the same
-     number — there is nothing else to convert. The total horizontal force on an element is mean p_h × its
-     vertical projection, which is the resultant column.
-     <br><br>The exported Midas model carries these same values: the DLEARTH beam loads are written with
-     <span class="mono">bPROJ = YES</span>, so the number in the MCT file is p_h itself and Midas resolves it
-     onto the vertical projection of each element. Nothing is folded into it, and the file can be read against
-     this table line for line.
-     <br><br><b>Everything here is on the arch axis.</b> The depth z is measured from the grade line down to
-     the axis, and the pressure is applied over the axis vertical projection of the element. One datum, the
-     structural centreline, for both — so the ratio above is |sin θ| and never exceeds one, and the load dies
-     away at the crown where the element is horizontal.
-     <br><br>The vertical fill load is a separate case and is <b>not</b> on this basis: it is computed on the
-     extrados, where the fill physically bears on the ring. The two loads therefore reference different
-     surfaces, deliberately. The fill is a weight resting on a face, so the face is what matters; the lateral
-     pressure is applied to the element §7.2.7.5B tells us to apply it to, and referencing its depth anywhere
-     other than that element would split one load across two surfaces and leave an eccentric couple this
-     frame model has nowhere to put.</div>`,"§7.2.7.5B",true);
+    `<div class="note">${R.arNL("How to read the table:",[   /* ARNL */
+      ["Direction:","Pressure acts inward on both haunches — toward the barrel centerline — so the two sides "+
+     "largely balance and the net effect on the arch is a compressive squeeze plus, where the geometry or the "+
+     "grade is not symmetric, a net horizontal push."],
+      ["Resultant","is positive to the right, per foot of barrel width."],
+      ["θ","near 90° is a near-vertical element carrying nearly the full pressure; near 0° at the crown it "+
+     "carries almost none."],
+      ["p_h is the load.","It acts along the global X axis and is distributed over the vertical "+
+     "extent of the element, so on the one-foot analysis strip the k/ft figure and the ksf figure are the same "+
+     "number — there is nothing else to convert. The total horizontal force on an element is mean p_h × its "+
+     "vertical projection, which is the resultant column."],
+      ["Midas:",`The exported Midas model carries these same values: the DLEARTH beam loads are written with `+
+     `<span class="mono">bPROJ = YES</span>, so the number in the MCT file is p_h itself and Midas resolves it `+
+     `onto the vertical projection of each element. Nothing is folded into it, and the file can be read against `+
+     `this table line for line.`],
+      ["Everything here is on the arch axis.","The depth z is measured from the grade line down to "+
+     "the axis, and the pressure is applied over the axis vertical projection of the element. One datum, the "+
+     "structural centreline, for both — so the ratio above is |sin θ| and never exceeds one, and the load dies "+
+     "away at the crown where the element is horizontal."],
+      ["Vertical fill load:","The vertical fill load is a separate case and is <b>not</b> on this basis: it is computed on the "+
+     "extrados, where the fill physically bears on the ring. The two loads therefore reference different "+
+     "surfaces, deliberately. The fill is a weight resting on a face, so the face is what matters; the lateral "+
+     "pressure is applied to the element §7.2.7.5B tells us to apply it to, and referencing its depth anywhere "+
+     "other than that element would split one load across two surfaces and leave an eccentric couple this "+
+     "frame model has nowhere to put."]])}</div>`,"§7.2.7.5B",true);
 
   /* ---- 3. totals and balance ---- */
   let RL=0,RR=0;
@@ -5956,10 +5981,12 @@ function pane(p,M,govVeh,govRes){
         : "Non-zero, because the geometry or the grade is not symmetric. This net push is carried by the "+
           "springings and shows up as unequal horizontal reactions."})+
     msg("inf","Why a self-balancing load still matters",
-      "Even when the net force is zero, the lateral pressure is not a null load. It applies an inward squeeze "+
-      "that raises the thrust and, more importantly, generates moment at the haunches and springings. On a "+
+      R.arNL("Even when the net force is zero, the lateral pressure is not a null load.",[   /* ARNL */
+        ["Effect:","It applies an inward squeeze "+
+      "that raises the thrust and, more importantly, generates moment at the haunches and springings."],
+        ["Size:","On a "+
       "typical arch it supplies a large fraction of the springline dead load moment, and all of it rests on the "+
-      "single assumed coefficient."),"§7.2.7.5B");
+      "single assumed coefficient."]])),"§7.2.7.5B");
 
   /* ---- 4. force effects and share ---- */
   const fr=[];
@@ -5996,19 +6023,20 @@ function pane(p,M,govVeh,govRes){
         ? "That is a large share for a load defined by one assumed coefficient. Run the sensitivity below and "+
           "keep it with the calculation."
         : "Modest at this geometry, but still worth documenting."))+
-    `<div class="note">This is a separate solve of the same frame with only the lateral pressure applied, so it
-     superposes exactly with the other dead load components shown on the Dead Load and Nodal Results tabs.
-     The share columns are left blank where the total dead load moment is below 15% of its peak, because close
-     to a moment reversal the total passes through zero and a percentage of it is meaningless rather than
-     large.</div>`,
+    `<div class="note">${R.arNL(null,[   /* ARNL */
+      ["Separate solve:","This is a separate solve of the same frame with only the lateral pressure applied, so it "+
+     "superposes exactly with the other dead load components shown on the Dead Load and Nodal Results tabs."],
+      ["Blank shares:","The share columns are left blank where the total dead load moment is below 15% of its peak, because close "+
+     "to a moment reversal the total passes through zero and a percentage of it is meaningless rather than "+
+     "large."]])}</div>`,
     "§7.2.7.5B");
 
   /* ---- 5. pressure diagram ---- */
   h+=UI.pnl("le_fig",c(),"Pressure diagram",
     `<figure><svg id="figLat" viewBox="0 0 1000 620"></svg>
-      <figcaption>Lateral earth pressure on the barrel. Arrows are drawn to scale from the extrados, pointing
-      inward on both haunches, with the intensity trapezoid on each element. The pressure grows with depth and
-      is resolved onto the vertical projection, so it dies away toward the crown.</figcaption></figure>`,
+      <figcaption>${R.arNL("Lateral earth pressure on the barrel.",[   /* ARNL */
+      ["Arrows","are drawn to scale from the extrados, pointing inward on both haunches, with the intensity trapezoid on each element."],
+      ["Intensity:","The pressure grows with depth and is resolved onto the vertical projection, so it dies away toward the crown."]])}</figcaption></figure>`,
     "§7.2.7.5B");
 
   /* ---- 6. sensitivity to K ---- */
@@ -6029,10 +6057,12 @@ function pane(p,M,govVeh,govRes){
     }
     h+=UI.pnl("le_sens",c(),"Sensitivity of the rating to K",
       msg("key","Why this is here",
-        "§7.2.7.5B prescribes K = 0.25 without qualification, so the value is not the engineer's to choose — "+
-        "but it is still an assumption, and it is the one input in the dead load that is not measurable. This "+
-        "table shows what the rating would be at other coefficients, so the sensitivity is documented rather "+
-        "than assumed away. The prescribed value is the one to report.")+
+        R.arNL(null,[   /* ARNL */
+          ["Prescribed:","§7.2.7.5B prescribes K = 0.25 without qualification, so the value is not the engineer's to choose — "+
+        "but it is still an assumption, and it is the one input in the dead load that is not measurable."],
+          ["This table","shows what the rating would be at other coefficients, so the sensitivity is documented rather "+
+        "than assumed away."],
+          ["Report:","The prescribed value is the one to report."]]))+
       dtab([{k:"K",h:"K",dp:3},{k:"slM",h:"DL M at springline",dp:3},{k:"crM",h:"DL M at crown",dp:3},
         {k:"rf",h:"RF",dp:3},{k:"tons",h:"Rating (tons)",dp:1},{k:"sec",h:"Governs at",txt:1},
         {k:"d",h:"Δ RF vs prescribed (%)",dp:1}],srows,{govIdx:srows.findIndex(r=>Math.abs(r.K-0.25)<1e-9)})+
@@ -6332,20 +6362,22 @@ function pane(p,M,st){
       <div id="dgRead"></div>
     </div>`+
     msg("inf","What is plotted",
-      "Each curve is the section force from one load group, resolved on the section normal to the arch axis. "+
-      "Dead load groups ring self-weight, wearing surface and superimposed dead load; the fill weight is shown "+
-      "separately as vertical earth pressure, and the K·γ·z load as lateral earth pressure. Live load is drawn "+
-      "at the position on the slider, with impact on the selected basis, unfactored unless scaled to the rating "+
-      "factor. The envelope band is the maximum and minimum of each effect at every section over every truck "+
-      "position and both directions of travel, added to the dead load."),"§7.2.7.7B / 9B");
+      R.arNL("Each curve is the section force from one load group, resolved on the section normal to the arch axis.",[   /* ARNL */
+        ["Dead load","groups ring self-weight, wearing surface and superimposed dead load; the fill weight is shown "+
+      "separately as vertical earth pressure, and the K·γ·z load as lateral earth pressure."],
+        ["Live load","is drawn at the position on the slider, with impact on the selected basis, unfactored unless scaled to the rating "+
+      "factor."],
+        ["Envelope band:","The envelope band is the maximum and minimum of each effect at every section over every truck "+
+      "position and both directions of travel, added to the dead load."]])),"§7.2.7.7B / 9B");
 
   if(p.llAdverse)
     h+=msg("wn","Diagrams show the whole vehicle, not the adverse-only case",
-      "Live load placement is set to adverse influence only. That produces a <b>different load case for "+
-      "every section</b> — the nodes dropped when checking the crown are not the nodes dropped when "+
-      "checking a springing — so no single diagram can represent it. These diagrams show the whole vehicle "+
-      "in place. The Rating, Live Load and Nodal Results tabs do apply the filter, so their moments will "+
-      "not match what is drawn here.","§7.2.7.8B");
+      R.arNL("Live load placement is set to adverse influence only.",[   /* ARNL */
+        ["Different load case for every section:","the nodes dropped when checking the crown are not the nodes dropped when "+
+      "checking a springing — so no single diagram can represent it."],
+        ["Here:","These diagrams show the whole vehicle in place."],
+        ["Other tabs:","The Rating, Live Load and Nodal Results tabs do apply the filter, so their moments will "+
+      "not match what is drawn here."]]),"§7.2.7.8B");
   h+=UI.pnl("dg_m",c(),"Moment",
     `<figure><div id="figDgM" class="plot" style="height:340px"></div>
       <figcaption>Moment along the barrel by load component. Positive moment is drawn upward; the rating uses
@@ -6356,20 +6388,22 @@ function pane(p,M,st){
       combined compressive stress only.</figcaption></figure>`,"§7.2.7.7B");
   h+=UI.pnl("dg_kern",c(),"Section, kern and pressure wedge — at the selected node",
     `<figure><div id="figKern" class="plot" style="height:470px"></div>
-      <figcaption>The arch section at ${esc(CALC.secTag(M,st.node))} drawn edge-on over the one-foot analysis
-      strip, under dead load plus the live load at the position on the slider. The green band is the kern, the
-      middle third of the depth, whose limits sit at ±d/6 from the centroid. The red arrow is the combined
-      thrust at its eccentricity e = ΣM/ΣP. To the right is the stress block that equilibrates it: trapezoidal
-      while the resultant stays inside the kern, and triangular over a reduced bearing depth once it leaves,
-      with the tension zone hatched out and ignored per §7.2.7.10B. The gauge along the bottom shows how close
-      the eccentricity is to both limits.</figcaption></figure>`+
+      <figcaption>${R.arNL(`The arch section at ${esc(CALC.secTag(M,st.node))} drawn edge-on over the one-foot analysis `+   /* ARNL */
+      `strip, under dead load plus the live load at the position on the slider.`,[
+        ["Green band:","the kern, the middle third of the depth, whose limits sit at ±d/6 from the centroid."],
+        ["Red arrow:","the combined thrust at its eccentricity e = ΣM/ΣP."],
+        ["Stress block","(to the right) equilibrates it: trapezoidal "+
+      "while the resultant stays inside the kern, and triangular over a reduced bearing depth once it leaves, "+
+      "with the tension zone hatched out and ignored per §7.2.7.10B."],
+        ["Gauge","along the bottom shows how close the eccentricity is to both limits."]])}</figcaption></figure>`+
     msg("inf","Why the stress climbs so steeply outside the kern",
-      "Inside the kern the whole depth carries compression and the stress varies linearly with eccentricity. "+
-      "Outside it, the section is assumed to carry no tension, so the pressure redistributes over a bearing "+
-      "depth of only 3(d/2 − e) and the peak becomes 2ΣP divided by that reduced area. As e approaches d/2 "+
-      "the bearing depth goes to zero and the stress to infinity — which is why a section can look comfortable "+
+      R.arNL(null,[   /* ARNL */
+        ["Inside the kern","the whole depth carries compression and the stress varies linearly with eccentricity."],
+        ["Outside it,","the section is assumed to carry no tension, so the pressure redistributes over a bearing "+
+      "depth of only 3(d/2 − e) and the peak becomes 2ΣP divided by that reduced area."],
+        ["As e approaches d/2","the bearing depth goes to zero and the stress to infinity — which is why a section can look comfortable "+
       "and still be close to losing its equilibrium block, and why §7.2.7.12 requires the rating to be "+
-      "iterated rather than scaled."),"§7.2.7.10B");
+      "iterated rather than scaled."]])),"§7.2.7.10B");
   h+=UI.pnl("dg_p",c(),"Thrust",
     `<figure><div id="figDgP" class="plot" style="height:320px"></div>
       <figcaption>Axial thrust, compression positive. The lateral earth pressure raises thrust at the haunches
@@ -6780,32 +6814,36 @@ function pane(p,M,list,results){
       {k:"sec",h:"Governs at",txt:1},{k:"pos",h:"Lead axle (ft)",dp:2},
       {k:"dirTxt",h:"Direction",txt:1}],
       rows,{govIdx:rows.indexOf(gov)})+
-    `<div class="note"><b>Σ axle load</b> is the whole consist as it stands on the structure.
-     <b>Rating weight</b> is what the rating factor is multiplied by to give tons — for a highway truck the two
-     are the same, but for a railroad consist the axle train represents several identical units and the rating
-     is expressed per vehicle, and for the Cooper series it is the 80 kip reference rather than a physical
-     weight. The governing vehicle is shaded.</div>`+
+    `<div class="note">${R.arNL(null,[   /* ARNL */
+      ["Σ axle load","is the whole consist as it stands on the structure."],
+      ["Rating weight","is what the rating factor is multiplied by to give tons — for a highway truck the two "+
+     "are the same, but for a railroad consist the axle train represents several identical units and the rating "+
+     "is expressed per vehicle, and for the Cooper series it is the 80 kip reference rather than a physical "+
+     "weight."],
+      ["Shading:","The governing vehicle is shaded."]])}</div>`+
     (()=>{
       const susp=list.filter(x=>x.mode==="rail"&&x.trail>0&&Math.abs(x.trail-2.0)<1e-9);
       return susp.length
-        ? msg("wrn","Unverified trailing loads",
+        ? msg("wrn","Unverified trailing loads",R.arNL(
             susp.map(x=>esc(x.name)).join(", ")+(susp.length>1?" carry":" carries")+
-            " a uniform trailing load of 2.0 k/ft. That figure is not traceable to an AREMA source and should "+
+            " a uniform trailing load of 2.0 k/ft.",[   /* ARNL (lead built above) */
+              ["Placeholder:","That figure is not traceable to an AREMA source and should "+
             "be treated as a placeholder: confirm it against the track owner's criteria, or set it to zero and "+
-            "rate the consist alone, before issuing. The Cooper E-80 trailing load of 8.0 k/ft is the standard "+
-            "value and is not in question.")
+            "rate the consist alone, before issuing."],
+              ["Standard:","The Cooper E-80 trailing load of 8.0 k/ft is the standard value and is not in question."]]))
         : "";
     })()+
     msg("key","Check these against your own copy of the figures",
-      "Axle loads and spacings were built from the standard definitions — MassDOT Bridge Manual Figures "+
+      R.arNL("Axle loads and spacings were built from the standard definitions — MassDOT Bridge Manual Figures "+   /* ARNL */
       "7.5.2-1 onward for the highway vehicles, and the railroad consists from the reference application. "+
-      "Provenance, vehicle by vehicle: <b>Cooper E-80</b> — 8-5-5-5-9-5-6-5-8 repeated, 1136 kip over 104 ft "+
-      "with an 8.0 k/ft trailing load, which matches the standard diagram and has been checked. "+
-      "<b>HSP-46</b> — 8 axles of 74 kip over 125.33 ft, two four-axle units of 296 kip each, internally "+
-      "consistent but not checked against a controlled source. <b>All others</b> — built from standard "+
-      "definitions and unchecked. "+
-      "Verify the configuration below against your own source before issuing a rating; an error here moves "+
-      "every result and would not be caught by any other check in this program."),"§7.2.4.1B");
+      "Provenance, vehicle by vehicle:",[
+        ["Cooper E-80","— 8-5-5-5-9-5-6-5-8 repeated, 1136 kip over 104 ft "+
+      "with an 8.0 k/ft trailing load, which matches the standard diagram and has been checked."],
+        ["HSP-46","— 8 axles of 74 kip over 125.33 ft, two four-axle units of 296 kip each, internally "+
+      "consistent but not checked against a controlled source."],
+        ["All others","— built from standard definitions and unchecked."]],
+        {act:["Verify the configuration below against your own source before issuing a rating; an error here moves "+
+      "every result and would not be caught by any other check in this program."]})),"§7.2.4.1B");
 
   /* ---- one schematic per vehicle ---- */
   list.forEach((v,k)=>{
@@ -6823,13 +6861,14 @@ function pane(p,M,list,results){
         v.axles.map((a,i)=>({__i:i,ax:"A"+(i+1),x:a.x,
           sp:i?a.x-v.axles[i-1].x:NaN,P:a.P,
           cum:v.axles.slice(0,i+1).reduce((s,q)=>s+q.P,0)})))+
-      `<div class="note">Axle by axle, matching the schematic above. <b>Distance from lead axle</b> is
-       cumulative, so the final row is the overall length; <b>spacing from previous</b> is the gap drawn between
-       adjacent axles. <b>Cumulative load</b> runs to the total axle load of the consist${
+      `<div class="note">${R.arNL("Axle by axle, matching the schematic above.",[   /* ARNL */
+        ["Distance from lead axle","is cumulative, so the final row is the overall length;"],
+        ["Spacing from previous","is the gap drawn between adjacent axles."],
+        ["Cumulative load",`runs to the total axle load of the consist${
          v.eRef?", which for the Cooper series is not the weight the rating is expressed against — that is the "
            +nfx(v.eRef,0)+" kip reference":(v.mode==="rail"
-           ?", which may represent several identical units coupled together":"")}. Check these figures against
-       your own copy of the source before issuing a rating.</div>`+
+           ?", which may represent several identical units coupled together":"")}.`],
+        ["Check","these figures against your own copy of the source before issuing a rating."]])}</div>`+
       (v.trailNote?`<div class="note">${esc(v.trailNote)}</div>`:""),
       v.mode==="rail"?"AREMA / owner":"§7.2.4.1B");
   });
@@ -6906,12 +6945,14 @@ function render(p,M,veh,pos,dir,sec,opt){
   let h="";
 
   h+=msg("key","What this table is",
-    `Every node of the model against every axle of <b>${esc(veh.name)}</b> standing at x = ${nfx(pos,2)} ft, travelling <b>${dir<0?"right to left":"left to right"}</b>. `+
-    `Each axle cell gives the nodal load <b>q</b> that axle delivers to the one-foot strip, with the pressure `+
-    `<b>p</b> it produces on the extrados underneath. Blank means that axle's footprint does not reach that `+
-    `node. The influence ordinates and the three contribution columns are <b>for the section of interest, `+
+    R.arNL(`Every node of the model against every axle of <b>${esc(veh.name)}</b> standing at x = ${nfx(pos,2)} ft, travelling <b>${dir<0?"right to left":"left to right"}</b>.`,[   /* ARNL */
+      ["Axle cells:",`Each axle cell gives the nodal load <b>q</b> that axle delivers to the one-foot strip, with the pressure `+
+    `<b>p</b> it produces on the extrados underneath.`],
+      ["Blank","means that axle's footprint does not reach that node."],
+      ["Influence and contribution columns:",`The influence ordinates and the three contribution columns are <b>for the section of interest, `+
     `${esc(CALC.secTag(M,sec))}</b> — a row's contribution is what that node's load does to that section, not `+
-    `a force at the node itself. The sum row is the live load effect at ${esc(CALC.secTag(M,sec))}.`);
+    `a force at the node itself.`],
+      ["Sum row:",`The sum row is the live load effect at ${esc(CALC.secTag(M,sec))}.`]]));
   if(!D.local)
     h+=msg("inf","Crown impact basis",
       `One factor of ${nfx(1+D.impCrown,3)} is applied at every node, from the minimum cover. On the local `+
@@ -6968,12 +7009,14 @@ function render(p,M,veh,pos,dir,sec,opt){
   h+=`</tbody></table></div>`;
   if(D.adverse)
     h+=msg("wn","Adverse influence only — opposing nodes unloaded",
-      `Live load placement is set to adverse influence only, so the live load is applied at this section `+
-      `solely where the moment influence ordinate is <b>${D.keepSign>0?"positive":"negative"}</b>. The `+
+      R.arNL(`Live load placement is set to adverse influence only, so the live load is applied at this section `+   /* ARNL */
+      `solely where the moment influence ordinate is <b>${D.keepSign>0?"positive":"negative"}</b>.`,[
+        ["Unloaded:",`The `+
       `${D.rows.filter(r=>r.dropped&&M.ILM[sec][r.i]!==0).length} nodes of opposing influence are shown `+
-      `struck through and carry no load. Both signs were evaluated at this section and this one stresses it `+
-      `more. Rigorous for the uniform trailing load, which ends where the train ends; an upper-bound `+
-      `envelope for the axle set, which cannot be truncated between axles.`,"§7.2.7.8B");
+      `struck through and carry no load.`],
+        ["Sign:","Both signs were evaluated at this section and this one stresses it more."],
+        ["Validity:","Rigorous for the uniform trailing load, which ends where the train ends; an upper-bound "+
+      "envelope for the axle set, which cannot be truncated between axles."]]),"§7.2.7.8B");
 
   /* the sum must reproduce the solver */
   const q=D.rows.map(r=>r.q);
@@ -6983,13 +7026,15 @@ function render(p,M,veh,pos,dir,sec,opt){
   const fI=D.local?1:(1+D.impCrown);
   const dM=Math.abs(D.sM-LL[sec].M), dP=Math.abs(D.sP-LL[sec].C);
   h+=msg(dM<1e-9&&dP<1e-9?"key":"wrn","Check — the column totals against the solver",
-    `Summing the contribution column gives M<sub>LL</sub> = <b>${nfx(D.sM,6)}</b> k·ft/ft and `+
-    `P<sub>LL</sub> = <b>${nfx(D.sP,6)}</b> k/ft at ${esc(CALC.secTag(M,sec))}. The solver's own superposition `+
-    `gives ${nfx(LL[sec].M,6)} and ${nfx(LL[sec].C,6)}. `+
-    (dM<1e-9&&dP<1e-9
-      ? "They agree to machine precision, so the table is a decomposition of the calculation actually used and "+
-        "not a parallel one that could drift from it."
-      : `<b>They differ by ${dM.toExponential(2)} and ${dP.toExponential(2)}.</b> Do not rely on this run.`));
+    R.arNL(null,[   /* ARNL */
+      ["Table:",`Summing the contribution column gives M<sub>LL</sub> = <b>${nfx(D.sM,6)}</b> k·ft/ft and `+
+    `P<sub>LL</sub> = <b>${nfx(D.sP,6)}</b> k/ft at ${esc(CALC.secTag(M,sec))}.`],
+      ["Solver:",`The solver's own superposition gives ${nfx(LL[sec].M,6)} and ${nfx(LL[sec].C,6)}.`],
+      (dM<1e-9&&dP<1e-9)
+      ? ["Agree:","They agree to machine precision, so the table is a decomposition of the calculation actually used and "+
+        "not a parallel one that could drift from it."]
+      : ["Differ:",`<b>They differ by ${dM.toExponential(2)} and ${dP.toExponential(2)}.</b>`]],
+      {act:[(dM<1e-9&&dP<1e-9)?null:"Do not rely on this run."]}));
   return h;
 }
 return {render,build};
@@ -7189,7 +7234,7 @@ function validate(p,M,results){
               ["State it:",`The credit is `+
              `defensible as engineering judgment about the fill — there is real material over the extrados and it `+
              `does spread load — but it is a judgment and it must appear in the assumptions.`]]).concat([
-          ["Against Art. 6.4.2:",(Math.abs(rSh-1.75)<1e-9)
+          ["Against the article:",(Math.abs(rSh-1.75)<1e-9)
             ?(ARCH.deepTire(p).tire
               ?"At 1.75H the result is arithmetically identical to applying Art. 6.4.2 (tire-patch basis) at every "+
                "depth, which is what a legacy rating built before this distinction was drawn would have produced."
@@ -7227,7 +7272,7 @@ function validate(p,M,results){
       if(ARCH.deepTire(p).tire)
         add("wn","Wheel spread at 2 ft of fill or more: tire patch + 1.75H",
           R.arNL("The tire contact area is grown at 1.75H.",[   /* ARNL */
-            ["Against Art. 6.4.2:","Std. Spec. Art. 6.4.2 as written uses a 1.75H square with no "+
+            ["Against the article:","Std. Spec. Art. 6.4.2 as written uses a 1.75H square with no "+
             "tire dimensions, so this basis spreads the load further and gives lower pressures than the cited "+
             "article."],
             ["State it:","State it in the assumptions, or select the literal 6.4.2 basis on the input panel."]]),"Std Spec 6.4.2");
@@ -7287,7 +7332,7 @@ function validate(p,M,results){
     else if(M.g.coverCrown<2.0)
       add("wn","Cover at crown less than 2 ft",
         R.arNL(`Crown cover = ${nfx(M.g.coverCrown,2)} ft.`,[   /* ARNL */
-          ["Std. Spec. 3.24.3:",`AASHTO Std. Spec. 3.24.3 requires slab-type distribution `+
+          ["Slab distribution:",`AASHTO Std. Spec. 3.24.3 requires slab-type distribution `+
         `where fill is less than 2 ft; the through-fill spread of Std. Spec. 6.4 used here does not apply.`]],
           {act:[`Perform the slab distribution check separately — this tool does not.`]}),"Std Spec 3.24.3");
     else if(p.loadMode!=="rail") add("ok","Fill cover for through-fill distribution",
@@ -7758,7 +7803,7 @@ function validate(p,M,results){
       if(!(p.fv>0)){
         add("na","Shear rating",
           R.arNL("Not checked.",[   /* ARNL */
-            ["§7.2.7:","§7.2.7 rates stone masonry arches on combined compressive stress only; shear is "+
+            ["Code:","§7.2.7 rates stone masonry arches on combined compressive stress only; shear is "+
           "computed and reported for information."],
             ["To add it:","Enter an allowable shear stress to add a shear check to the "+
           "governing rating factor — a supplement to the code procedure, not part of it."]]),"§7.2.7.9B");
@@ -8387,7 +8432,7 @@ function liveLoadSection(p,M,veh,pos,dir){
           ["Both directions or neither:","fill does not know which direction "+
         "is which, a dispersion cone through soil is symmetric, and crediting lateral spread while denying "+
         "longitudinal spread through the same material has no basis."],
-          ["At 2 ft:",Math.abs(rateSh-1.75)<1e-9
+          ["At the threshold:",Math.abs(rateSh-1.75)<1e-9
           ? (ARCH.deepTire(p).tire
             ? "At this rate the shallow branch is arithmetically identical to Art. 6.4.2 (tire-patch basis), so the "+
               "load is continuous across the 2 ft threshold and there is no step at H = 2 ft."
@@ -8441,7 +8486,7 @@ function liveLoadSection(p,M,veh,pos,dir){
           ["Masonry:","An unreinforced stone ring has no such mechanism: mortared "+
         "or dry voussoirs, longitudinal joints, and ring separation as a recognized failure mode. Adopting "+
         "the slab width over masonry would import a load path the structure does not possess."],
-          ["Consistent with Art. 6.4:","The reasoning is consistent with the other branch of Art. 6.4: the 1.75H spread does not rely on the "+
+          ["Consistent:","The reasoning is consistent with the other branch of Art. 6.4: the 1.75H spread does not rely on the "+
         "ring's transverse stiffness either, it relies on the <b>fill</b> to spread the load, which is a soil "+
         "mechanism and works perfectly well over masonry."],
           ["Below 2 ft","there is neither enough fill to spread "+
@@ -8493,7 +8538,7 @@ function liveLoadSection(p,M,veh,pos,dir){
   h+=msg(dTL.tire?"warn":"inf","Spread basis at 2 ft of fill or more",
     dTL.tire
       ? R.arNL("<b>Tire patch + 1.75H</b> is selected: the tire contact area (10 in by 20 in) is grown at 1.75H.",[   /* ARNL */
-        ["Against Art. 6.4.2:","Std. Spec. "+
+        ["Against the article:","Std. Spec. "+
         "Art. 6.4.2 as written distributes the wheel over a square of side 1.75H with no tire dimensions added, "+
         "so this option spreads the load further and gives lower pressures than the cited article."],
         ["State","the basis in the assumptions."]])
@@ -8676,12 +8721,13 @@ function vehicleSection(p,M,veh,res,vopt){
   let h="";
   if(atSec)
     h+=msg("warn","Worked at the selected section, not this vehicle's governing section",
-      `Everything below is for <b>${esc(SEC)}</b>, the section chosen in the bar at the top of the page. `+
-      `The rating factor shown is that section's own — the multiplier that would bring ${esc(SEC)} alone to `+
-      `the allowable — and it is <b>not</b> the reported rating for this vehicle. `+
-      `<b>${esc(veh.name)} rates ${nfx(govR.rf,3)}</b>, governed at <b>${esc(secTag(M,govR.sec))}</b> with the `+
-      `lead axle at x = ${nfx(ARCH.leadAxleX(veh,govR.pos,govR.dir),2)} ft. Switch the basis above the vehicle `+
-      `panels back to "its own governing section" to work the reported rating instead.`);
+      R.arNL(`Everything below is for <b>${esc(SEC)}</b>, the section chosen in the bar at the top of the page.`,[   /* ARNL */
+        ["This section's own RF:",`The rating factor shown is that section's own — the multiplier that would bring ${esc(SEC)} alone to `+
+      `the allowable — and it is <b>not</b> the reported rating for this vehicle.`],
+        ["Reported rating:",`<b>${esc(veh.name)} rates ${nfx(govR.rf,3)}</b>, governed at <b>${esc(secTag(M,govR.sec))}</b> with the `+
+      `lead axle at x = ${nfx(ARCH.leadAxleX(veh,govR.pos,govR.dir),2)} ft.`],
+        ["To work the reported rating:",`Switch the basis above the vehicle `+
+      `panels back to "its own governing section" to work the reported rating instead.`]]));
   const faKsf=p.fa*KSF_PSI;
   const local=(p.impMode==="local");
   const impU=local?0:ARCH.impactAt(p,M.g.coverCrown+p.tws);
@@ -8690,10 +8736,12 @@ function vehicleSection(p,M,veh,res,vopt){
   h+=`<h4>Vehicle configuration</h4>`;
   h+=dtab([{k:"n",h:"Axle",txt:1},{k:"x",h:"Spacing from lead axle (ft)",dp:2},{k:"P",h:"Axle load (kip)",dp:2}],
     veh.axles.map((a,i)=>({__i:i,n:"A"+(i+1),x:a.x,P:a.P})));
-  h+=`<div class="note">The axle train as this program holds it, spacings cumulative from the lead axle so the
-   last row is the overall length. The Vehicles tab draws the same configuration to scale. These were built
-   from standard definitions and have not been checked against a controlled copy of the governing figures;
-   an error here would move every result and no other check in this program would catch it.</div>`;
+  h+=`<div class="note">${R.arNL("The axle train as this program holds it, spacings cumulative from the lead axle so the "+   /* ARNL */
+   "last row is the overall length.",[
+    ["Drawing:","The Vehicles tab draws the same configuration to scale."],
+    ["Not checked:","These were built "+
+   "from standard definitions and have not been checked against a controlled copy of the governing figures; "+
+   "an error here would move every result and no other check in this program would catch it."]])}</div>`;
   if(veh.mode==="rail"&&veh.trail>0)
     h+=msg("inf","Uniform trailing load",
       `${esc(veh.trailNote||"")} The trailing load acts continuously behind the consist and is swept with it, `+
@@ -8702,13 +8750,15 @@ function vehicleSection(p,M,veh,res,vopt){
   const axSum=veh.axles.reduce((s,a)=>s+a.P,0);
   if(veh.mode==="rail"&&Math.abs(axSum/2-veh.tons)>0.5)
     h+=msg("key","Consist weight and rating reference weight are different quantities",
-      `The axle train above totals <b>${nfx(axSum,1)} kip = ${nfx(axSum/2,1)} tons</b>, which is the whole `+
-      `consist as it sits on the structure. The rating is expressed against `+
+      R.arNL(null,[   /* ARNL */
+        ["Consist:",`The axle train above totals <b>${nfx(axSum,1)} kip = ${nfx(axSum/2,1)} tons</b>, which is the whole `+
+      `consist as it sits on the structure.`],
+        ["Rating reference:",`The rating is expressed against `+
       (veh.eRef?`the <b>${nfx(veh.eRef,0)} kip Cooper reference</b>, so RF × ${nfx(veh.eRef,0)} is the E-number `+
         `and the tonnage figure below derives from that same reference rather than from a physical weight.`
         :`<b>one ${nfx(veh.gvw,0)} kip vehicle (${nfx(veh.tons,1)} tons)</b>, because the axle train represents `+
          `several identical units coupled together; the tonnage below is therefore the rated capacity for one `+
-         `such vehicle, not for the whole consist.`));
+         `such vehicle, not for the whole consist.`)]]));
   h+=step({label:veh.mode==="rail"?"Total axle load of the consist":"Gross vehicle weight",
     sym:"W=\\sum P_{ax}",
     sub:veh.axles.length>8?`\\text{sum of }${veh.axles.length}\\text{ axles}`
@@ -8721,14 +8771,14 @@ function vehicleSection(p,M,veh,res,vopt){
   // critical position
   h+=`<h4>Critical position search</h4>`;
   h+=msg("inf","How the position is found",
-    "The vehicle is swept across the structure in quarter-foot steps in both directions of travel. "+
-    (atSec
-      ? `At every position the rating factor is evaluated <b>at ${esc(SEC)} only</b>, and the position `+
+    R.arNL("The vehicle is swept across the structure in quarter-foot steps in both directions of travel.",[   /* ARNL */
+      ["At every position",atSec
+      ? `the rating factor is evaluated <b>at ${esc(SEC)} only</b>, and the position `+
         "producing the lowest value there is the one reported. The sweep is otherwise identical to the "+
         "governing search, so the two are directly comparable."
-      : "At every position the rating factor is evaluated at every node, and the position and section "+
-        "producing the lowest rating factor is reported as governing.")+
-    " §7.2.7.8B requires live loads to be positioned so as to maximise the load effect at each node.");
+      : "the rating factor is evaluated at every node, and the position and section "+
+        "producing the lowest rating factor is reported as governing."],
+      ["§7.2.7.8B","requires live loads to be positioned so as to maximise the load effect at each node."]]));
   h+=step({label:atSec?`Critical position of the lead axle for ${SEC}`:"Governing position of the lead axle",
     sym:"x_{lead}",sub:"",res:num(ARCH.leadAxleX(veh,res.pos,res.dir),2),units:"ft",
     note:`Direction of travel: ${res.dir>0?"left to right":"right to left (reversed)"}. `+
@@ -8774,25 +8824,27 @@ function vehicleSection(p,M,veh,res,vopt){
     {k:"P",h:"ΣP at RF",dp:2},{k:"M",h:"ΣM at RF",dp:2},
     {k:"eIn",h:"e (in)",dp:3},{k:"kIn",h:"kern d/6 (in)",dp:3},{k:"reg",h:"Regime",txt:1},
     {k:"f",h:"f (psi)",dp:0},{k:"u",h:"f/f_a",dp:3}],rows,{govIdx:res.sec});
-  h+=`<div class="note">Dead load is split so the lateral earth pressure of §7.2.7.5B can be seen against
-      everything else. <b>Gravity</b> is fill, wearing surface, superimposed dead load and ring self weight —
-      the loads that act downward. <b>Earth</b> is the K·γ·z pressure acting inward on the haunches, which
-      carries no net vertical force on a symmetric arch but supplies a large share of the springline moment,
-      often with the opposite sign to the gravity moment. The two sum to the total, and the total is what the
-      rating uses. The share column is left blank where the total dead load moment passes through zero, because
-      a percentage of nothing is meaningless rather than large. Live load columns are the unfactored vehicle;
-      ΣP and ΣM include the live load multiplier at its converged value. Forces in k/ft and k·ft/ft on the
-      one-foot strip. Governing row shaded.</div>`;
+  h+=`<div class="note">${R.arNL("Dead load is split so the lateral earth pressure of §7.2.7.5B can be seen against everything else.",[   /* ARNL */
+      ["Gravity","is fill, wearing surface, superimposed dead load and ring self weight — the loads that act downward."],
+      ["Earth","is the K·γ·z pressure acting inward on the haunches, which "+
+      "carries no net vertical force on a symmetric arch but supplies a large share of the springline moment, "+
+      "often with the opposite sign to the gravity moment."],
+      ["Total:","The two sum to the total, and the total is what the rating uses."],
+      ["Share column:","The share column is left blank where the total dead load moment passes through zero, because "+
+      "a percentage of nothing is meaningless rather than large."],
+      ["Live load columns","are the unfactored vehicle; ΣP and ΣM include the live load multiplier at its converged value."],
+      ["Units:","Forces in k/ft and k·ft/ft on the one-foot strip. Governing row shaded."]])}</div>`;
   {
     const E0=(M.DLC&&M.DLC.earth)?M.DLC.earth[res.sec]:null;
     if(E0&&Math.abs(M.DL[res.sec].M)>1e-9){
       const sh=100*E0.M/M.DL[res.sec].M;
       if(Math.abs(sh)>25)h+=msg("wn","Lateral earth pressure dominates the dead load moment here",
-        `At the governing section it supplies <b>${nfx(sh,0)}%</b> of the dead load moment, and it rests `+
-        `entirely on the coefficient K = ${nfx(p.K,3)} that §7.2.7.5B prescribes without qualification. `+
-        `That is the one load in this calculation that is assumed rather than measured. The sensitivity table `+
-        `on the Earth Pressure tab shows what the rating would be at other coefficients; run it and keep it `+
-        `with the calculation.`,"§7.2.7.5B");
+        R.arNL(`At the governing section it supplies <b>${nfx(sh,0)}%</b> of the dead load moment, and it rests `+   /* ARNL */
+        `entirely on the coefficient K = ${nfx(p.K,3)} that §7.2.7.5B prescribes without qualification.`,[
+          ["Assumed:","That is the one load in this calculation that is assumed rather than measured."],
+          ["Sensitivity:","The sensitivity table "+
+        "on the Earth Pressure tab shows what the rating would be at other coefficients; run it and keep it "+
+        "with the calculation."]]),"§7.2.7.5B");
     }
   }
 
@@ -8801,10 +8853,12 @@ function vehicleSection(p,M,veh,res,vopt){
   const PLg=(1+impU)*LL[i].C, MLg=(1+impU)*LL[i].M;
   h+=`<h4>${atSec?"Selected section":"Governing section"} ${secTag(M,i)} — worked in full</h4>`;
   h+=msg("inf","Basis of this worked section",
-    "Combined effects below are AT THE CONVERGED MULTIPLIER — the live load carries m = RF, so the governing "+
-    "check closes at exactly f/f_a = 1.000. The worked calculation on the Nodal Results tab shows the same "+
+    R.arNL(null,[   /* ARNL */
+      ["Here:","Combined effects below are AT THE CONVERGED MULTIPLIER — the live load carries m = RF, so the governing "+
+    "check closes at exactly f/f_a = 1.000."],
+      ["Nodal Results tab:","The worked calculation on the Nodal Results tab shows the same "+
     "section at m = 1, the vehicle as it stands; both are correct on their own basis, and the multiplier is "+
-    "the only difference between them.");
+    "the only difference between them."]]));
 
   /* The dead load arrives at this point as two numbers, P_DL and M_DL, which
      is where a reviewer loses sight of the lateral earth pressure entirely —
@@ -8832,13 +8886,13 @@ function vehicleSection(p,M,veh,res,vopt){
       {k:"P",h:"P (k/ft)",dp:4},{k:"V",h:"V (k/ft)",dp:4},{k:"Mo",h:"M (k·ft/ft)",dp:4},
       {k:"shP",h:"% of P_DL",dp:0},{k:"shM",h:"% of M_DL",dp:0}],cr,{govIdx:cr.length-1});
     const E=(M.DLC&&M.DLC.earth)?M.DLC.earth[i]:null;
-    h+=`<div class="note">Each component is a separate solve of the same frame, so they superpose exactly and
-      the rows sum to the total the rating uses. `+
-      (E?`Lateral earth pressure contributes ${nfx(E.C,4)} k/ft of thrust and ${nfx(E.M,4)} k·ft/ft of moment
-      here. It acts inward on both haunches, so on a symmetric arch it delivers no net horizontal force — but
-      it is not a null load: it squeezes the ring, raising thrust, and it generates moment at the haunches and
-      springings that frequently opposes the gravity moment. `:``)+
-      `Share columns are blank where the total passes through zero.</div>`+
+    h+=`<div class="note">${R.arNL("Each component is a separate solve of the same frame, so they superpose exactly and "+   /* ARNL */
+      "the rows sum to the total the rating uses.",[
+      E?["Lateral earth pressure",`contributes ${nfx(E.C,4)} k/ft of thrust and ${nfx(E.M,4)} k·ft/ft of moment `+
+      `here. It acts inward on both haunches, so on a symmetric arch it delivers no net horizontal force — but `+
+      `it is not a null load: it squeezes the ring, raising thrust, and it generates moment at the haunches and `+
+      `springings that frequently opposes the gravity moment.`]:null,
+      ["Share columns","are blank where the total passes through zero."]])}</div>`+
       archWorkedIn([{tab:"dl",card:"o_dl",sub:"Dead load section forces",
         txt:"P_DL, M_DL at "+secTag(M,i),lab:"Dead Load · Dead load section forces"}]);
   }
@@ -8931,17 +8985,19 @@ function vehicleSection(p,M,veh,res,vopt){
     {
       const amp=(d/2-e>1e-9)?(d/2)/(d/2-e):Infinity;
       h+=msg(amp>=8?"wn":"key","Sensitivity of this section",
-        `The bearing depth is a small difference of two nearly equal numbers: d/2 = `+
+        R.arNL(`The bearing depth is a small difference of two nearly equal numbers: d/2 = `+   /* ARNL */
         `${nfx(inOf(d/2),3)} in against e = ${nfx(inOf(e),3)} in leaves `+
-        `${nfx(inOf(d/2-e),3)} in. A proportional error in the eccentricity therefore reaches the stress `+
-        `multiplied by <b>(d/2)/(d/2 &minus; e) = ${(amp===Infinity)?"&infin;":nfx(amp,1)}</b>. `+
-        (amp>=8
-          ? `<b>At that amplification, judge mesh convergence on the rating factor or the stress, never on `+
-            `the moment</b> — a moment converged to 1% can still carry ${nfx(amp,0)}% of stress error. Every `+
+        `${nfx(inOf(d/2-e),3)} in.`,[
+          ["Amplification:",`A proportional error in the eccentricity therefore reaches the stress `+
+        `multiplied by <b>(d/2)/(d/2 &minus; e) = ${(amp===Infinity)?"&infin;":nfx(amp,1)}</b>.`]].concat(
+        amp>=8
+          ? [["At that amplification, judge mesh convergence on the rating factor or the stress, never on the moment",
+            `— a moment converged to 1% can still carry ${nfx(amp,0)}% of stress error.`],
+             ["Inputs:",`Every `+
             `assumed input reaching this section is magnified the same way: the earth pressure coefficient, `+
             `the fill unit weight, the superimposed dead load and the shear deformation choice all arrive `+
-            `here multiplied by about ${nfx(amp,0)}.`
-          : `That is a moderate amplification and the section is not unusually sensitive.`),
+            `here multiplied by about ${nfx(amp,0)}.`]]
+          : [["Moderate:",`That is a moderate amplification and the section is not unusually sensitive.`]])),
         "§7.2.7.10B");
     }
   }else{
@@ -8954,26 +9010,32 @@ function vehicleSection(p,M,veh,res,vopt){
     sym:"\\dfrac{f}{f_a}",
     sub:`\\dfrac{${num(f===Infinity?NaN:f/KSF_PSI,1)}}{${num(p.fa,0)}}`,
     res:(f===Infinity)?"\\infty":num(f/faKsf,3),units:"",
-    note:"By construction of the iteration below, this equals 1.00 at the converged multiplier. "+
-      "The Nodal Results tab works this same section at m = 1 — the vehicle before the multiplier — so the "+
-      "lower utilization printed there is a difference of basis, not a disagreement between the two tabs."});
+    note:R.arNL(null,[   /* ARNL */
+      ["Here:","By construction of the iteration below, this equals 1.00 at the converged multiplier."],
+      ["Nodal Results tab:","The Nodal Results tab works this same section at m = 1 — the vehicle before the multiplier — so the "+
+      "lower utilization printed there is a difference of basis, not a disagreement between the two tabs."]])});
 
   /* ---- the iteration (§7.2.7.12 / Fig 7.2.7-1) ---- */
   h+=`<h4>Rating factor by iteration on the live load multiplier</h4>`;
   h+=msg("key","Why an iteration is required",
-    "§7.2.7.12: since the applied loading to the arch affects the section compression forces, an iterative "+
-    "process must be used to determine the load ratings. It is not permissible to simply use the rating factor "+
-    "calculated from the applied rating vehicle loadings and multiply it by the vehicle tonnage. A live load "+
+    R.arNL("§7.2.7.12:",[   /* ARNL */
+      "since the applied loading to the arch affects the section compression forces, an iterative "+
+    "process must be used to determine the load ratings.",
+      "It is not permissible to simply use the rating factor "+
+    "calculated from the applied rating vehicle loadings and multiply it by the vehicle tonnage.",
+      "A live load "+
     "effect multiplier specific to each vehicle factors the live load axial forces and bending moments prior to "+
-    "re-rating the arch elements; dead loads are not modified. The multiplier is increased or decreased until "+
+    "re-rating the arch elements; dead loads are not modified.",
+      "The multiplier is increased or decreased until "+
     "the rating factor equals 1.0, at which point the multiplier is the rating factor for that vehicle "+
-    "(Figure 7.2.7-1).");
+    "(Figure 7.2.7-1)."],{ol:true}));
   h+=eqLine("Convergence criterion",
     "\\text{find } m \\text{ such that } \\max_i f_i\\big(P_{DL}+m P_{LL}(1+I),\\ M_{DL}+m M_{LL}(1+I)\\big)=f_a",
     "§7.2.7.12 / Fig. 7.2.7-1",
-    "Solved by bisection to 48 iterations, which converges the multiplier to better than 1×10⁻¹² of its value. "+
-    "The maximum is taken over all sections at every step, so the governing section is free to migrate as the "+
-    "multiplier changes — which it does, and which is precisely why the iteration is required.");
+    R.arNL(null,[   /* ARNL */
+      ["Bisection:","Solved by bisection to 48 iterations, which converges the multiplier to better than 1×10⁻¹² of its value."],
+      ["All sections:","The maximum is taken over all sections at every step, so the governing section is free to migrate as the "+
+    "multiplier changes — which it does, and which is precisely why the iteration is required."]]));
 
   /* The loop of Fig. 7.2.7-1, shown turning. These are the real trials from the
      real bisection, not a reconstruction for display. */
@@ -8996,29 +9058,32 @@ function vehicleSection(p,M,veh,res,vopt){
         {k:"u",h:"f / f_a",dp:3},{k:"br",h:"RF known to lie in",txt:1},
         {k:"act",h:"What that tells the next step",txt:1}],tr,{govIdx:tr.length-1});
       const migrated=new Set(TR.steps.filter(x=>x.sec>=0).map(x=>x.sec)).size>1;
-      h+=`<div class="note">Only the first ${
-        TR.steps.filter(x=>x.tag==="bisect").length} refinement steps are listed; the solver runs
-        ${TR.nBisect} in total. The midpoints are not monotonic and are not meant to be — each one halves the
-        interval the answer is known to lie in, which is the column beside it. Dead loads are never scaled:
-        only the live load thrust and moment carry the multiplier, per §7.2.7.12.`+
-        (migrated
-          ? ` <b>The governing section moves during the iteration</b>, which is exactly why the clause forbids
-            scaling a single preliminary rating factor — the section that controls at m = 1 is not the section
-            that controls at the answer.`
-          : ` The governing section happens to stay at ${secTag(M,res.sec)} throughout on this model, but the
-            search is over every section at every step and is free to move.`)+
-        `</div>`;
+      h+=`<div class="note">${R.arNL(`Only the first ${   /* ARNL */
+        TR.steps.filter(x=>x.tag==="bisect").length} refinement steps are listed; the solver runs `+
+        `${TR.nBisect} in total.`,[
+        ["Midpoints:","The midpoints are not monotonic and are not meant to be — each one halves the "+
+        "interval the answer is known to lie in, which is the column beside it."],
+        ["Dead loads are never scaled:","only the live load thrust and moment carry the multiplier, per §7.2.7.12."],
+        migrated
+          ? ["The governing section moves during the iteration,","which is exactly why the clause forbids "+
+            "scaling a single preliminary rating factor — the section that controls at m = 1 is not the section "+
+            "that controls at the answer."]
+          : ["Governing section:",`The governing section happens to stay at ${secTag(M,res.sec)} throughout on this model, but the `+
+            `search is over every section at every step and is free to move.`]])}</div>`;
       const prelim=TR.steps[0];
       if(prelim&&prelim.util>0&&prelim.util!==Infinity){
         const naive=1/prelim.util;
         h+=msg("key","Why the answer is not simply 1 / (f/f_a) at m = 1",
-          `The preliminary trial puts the section at f/f_a = ${nfx(prelim.util,3)}. Scaling that the way an `+
+          R.arNL(`The preliminary trial puts the section at f/f_a = ${nfx(prelim.util,3)}.`,[   /* ARNL */
+            ["Scaled:",`Scaling that the way an `+
           `elastic check would allow gives ${nfx(naive,3)}, against the correct answer of `+
-          `<b>${nfx(TR.m,3)}</b> — a difference of ${nfx(100*Math.abs(naive-TR.m)/TR.m,1)}%. The stress is not `+
+          `<b>${nfx(TR.m,3)}</b> — a difference of ${nfx(100*Math.abs(naive-TR.m)/TR.m,1)}%.`],
+            ["Not proportional:",`The stress is not `+
           `proportional to the load: the eccentricity e = ΣM/ΣP changes as the live load grows, and once the `+
           `thrust leaves the kern the section carries on a reduced bearing depth 3(d/2 − e), so f rises faster `+
-          `than linearly and runs away as e approaches d/2. That non-linearity is the whole reason §7.2.7.12 `+
-          `requires an iteration and states that scaling a preliminary rating factor is not permissible.`,
+          `than linearly and runs away as e approaches d/2.`],
+            ["Code:",`That non-linearity is the whole reason §7.2.7.12 `+
+          `requires an iteration and states that scaling a preliminary rating factor is not permissible.`]]),
           "§7.2.7.12");
       }
     }
@@ -9029,13 +9094,16 @@ function vehicleSection(p,M,veh,res,vopt){
   if(p.fv>0){
     h+=`<h4>Shear check</h4>`;
     h+=msg("wrn","Outside §7.2.7",
-      "The clause rates stone masonry arches on combined compressive stress only. The check below is a "+
+      R.arNL("The clause rates stone masonry arches on combined compressive stress only.",[   /* ARNL */
+        ["Supplement:","The check below is a "+
       "supplement, included in the governing rating factor because an allowable shear stress has been "+
-      "entered. Report it as such.");
+      "entered."],
+        ["Report","it as such."]]));
     h+=eqLine("Shear capacity of the section","V_{cap}=f_v\\,A=f_v\\,d\\,b","",
-      "Average shear on the full bed area. A constant allowable takes no account of the normal thrust, which "+
+      R.arNL("Average shear on the full bed area.",[   /* ARNL */
+        ["Not represented:","A constant allowable takes no account of the normal thrust, which "+
       "is what resists sliding in a masonry joint — a springing under high thrust resists far more than a "+
-      "lightly loaded crown, and that is not represented here.");
+      "lightly loaded crown, and that is not represented here."]]));
     /* Live shear at the governing position, on the same basis the rating used. */
     const locV=(res.impMode==="local");
     let qv=ARCH.nodalLL(M,veh,res.pos,res.dir);
@@ -9058,11 +9126,13 @@ function vehicleSection(p,M,veh,res,vopt){
       {k:"vT",h:"V at RF (k/ft)",dp:4},{k:"cap",h:"V capacity (k/ft)",dp:4},
       {k:"tau",h:"τ at RF (psi)",dp:1},{k:"util",h:"τ / f_v",dp:3},
       {k:"rf",h:"RF this section, shear",dp:3}],rowsV,{govIdx:res.sec});
-    h+=`<div class="note">Shear is resolved on the section normal to the arch axis and averaged across the two
-     adjacent element ends, the same basis as the thrust. <b>RF this section, shear</b> is the live load
-     multiplier that would bring that section alone to the allowable in shear; a blank means the section carries
-     no live shear at this vehicle position and so is not controlled by it. The reported rating factor for this
-     vehicle is the lowest value over all sections and both checks.</div>`;
+    h+=`<div class="note">${R.arNL("Shear is resolved on the section normal to the arch axis and averaged across the two "+   /* ARNL */
+     "adjacent element ends, the same basis as the thrust.",[
+      ["RF this section, shear","is the live load "+
+     "multiplier that would bring that section alone to the allowable in shear; a blank means the section carries "+
+     "no live shear at this vehicle position and so is not controlled by it."],
+      ["Reported:","The reported rating factor for this "+
+     "vehicle is the lowest value over all sections and both checks."]])}</div>`;
   }
   h+=step({label:"Rating in tons",
     sym:"W_{rating}=RF\\times W_{veh}",
@@ -9083,10 +9153,11 @@ function vehicleSection(p,M,veh,res,vopt){
     (pass?"":"Posting analysis is required per MBE Art. 6B.7; this tool does not perform it."));
   if(veh.ev)
     h+=msg("inf","EV vehicle reporting",
-      "§7.2.7.11B: ratings for stone masonry arches shall only be provided at the Inventory Stress Level. "+
-      "Ratings for the EV2 and EV3 vehicles shall also be calculated at the Inventory Stress Level but "+
+      R.arNL("§7.2.7.11B:",[   /* ARNL */
+        "ratings for stone masonry arches shall only be provided at the Inventory Stress Level.",
+        "Ratings for the EV2 and EV3 vehicles shall also be calculated at the Inventory Stress Level but "+
       "reported at both Inventory and Operating Stress Levels for this type of structure — report the same "+
-      "value for Items 64 and 66.");
+      "value for Items 64 and 66."]));
   return h;
 }
 
@@ -9109,11 +9180,12 @@ function liveWorked(p,M,veh,pos,dir,node,part){
   let h="";
 
   if(want("scope"))h+=msg("key","Scope of this calculation",
-    `Every step from ${esc(veh.name)} with its lead axle at `+
+    R.arNL(`Every step from ${esc(veh.name)} with its lead axle at `+   /* ARNL */
     `x = ${nfx(ARCH.leadAxleX(veh,pos,dir),2)} ft, traveling `+
     `${dir<0?"right to left":"left to right"}, to the live load thrust, moment and shear at `+
-    `<b>${esc(CALC.secTag(M,node))}</b>. Impact is worked at every node, the pressure is worked at every node, `+
-    `and the influence line superposition is shown term by term so the total can be added up by hand.`);
+    `<b>${esc(CALC.secTag(M,node))}</b>.`,[
+      ["Impact","is worked at every node,"],["Pressure","is worked at every node,"],
+      ["Influence line superposition","is shown term by term so the total can be added up by hand."]]));
 
   /* ---- 1. impact, worked at every node ---- */
   if(want("impact")){
@@ -9121,10 +9193,13 @@ function liveWorked(p,M,veh,pos,dir,node,part){
   if(rail){
     h+=eqLine("Impact below the base of rail",
       "IM=\\left[1-\\dfrac{H-1.5}{8.5}\\right]\\times 0.60","AREMA",
-      "H is the depth from the base of rail down to the top of the arch. The base of rail is the top of the "+
+      R.arNL(null,[   /* ARNL */
+        ["H","is the depth from the base of rail down to the top of the arch."],
+        ["Datum:","The base of rail is the top of the "+
       "tie, which is the surface this program measures cover from, so the same H that sets the load spread "+
-      "sets the impact. The expression gives 60% at 1.5 ft and falls linearly to zero at 10 ft; it is clamped "+
-      "at both ends rather than extrapolated.");
+      "sets the impact."],
+        ["Range:","The expression gives 60% at 1.5 ft and falls linearly to zero at 10 ft; it is clamped "+
+      "at both ends rather than extrapolated."]]));
     h+=vars([["IM_{max}","Impact at 1.5 ft and shallower",40,"%",0],
              ["H_{0}","Depth at which impact vanishes",10,"ft",0]]);
   }else{
@@ -9137,17 +9212,20 @@ function liveWorked(p,M,veh,pos,dir,node,part){
   h+=msg(local?"inf":"key",local?"Local basis — each node uses its own depth"
       :"Crown basis — one percentage applied everywhere",
     local
-      ? "Each node's own cover is used and (1 + I) multiplies that node's pressure before superposition, so "+
-        "the deep haunches attract no impact while the crown does. This can never rate lower than the crown "+
-        "basis."
-      : `The minimum cover, at the crown, sets one percentage for the whole barrel: H = `+
-        `${nfx(M.g.coverCrown+p.tws,3)} ft gives I = ${nfx(100*impCrown,0)}%, applied uniformly. This is the `+
-        `conservative reading and is most likely what a legacy rating used.`);
+      ? R.arNL(null,[   /* ARNL */
+        ["Per node:","Each node's own cover is used and (1 + I) multiplies that node's pressure before superposition, so "+
+        "the deep haunches attract no impact while the crown does."],
+        ["Against the crown basis:","This can never rate lower than the crown basis."]])
+      : R.arNL(`The minimum cover, at the crown, sets one percentage for the whole barrel:`,[
+        ["Here:",`H = ${nfx(M.g.coverCrown+p.tws,3)} ft gives I = ${nfx(100*impCrown,0)}%, applied uniformly.`],
+        ["Conservative:",`This is the conservative reading and is most likely what a legacy rating used.`]]));
   if(rail)
     h+=msg("inf","Railroad impact is applied, not the highway rule",
-      "Impact follows the AREMA expression above, measured below the base of rail — not AASHTO Std. Spec. "+
+      R.arNL(null,[   /* ARNL */
+        ["AREMA:","Impact follows the AREMA expression above, measured below the base of rail — not AASHTO Std. Spec. "+
       "3.8.2.3, which is a highway provision and would give zero beyond 3 ft of cover where AREMA still "+
-      "requires around 28%. Confirm the expression against the track owner's criteria, which can differ.");
+      "requires around 28%."],
+        ["Confirm","the expression against the track owner's criteria, which can differ."]]));
   h+=dtab([{k:"tag",h:"Node",txt:1},{k:"x",h:"x (ft)",dp:2},
     {k:"H",h:"cover at this node (ft)",dp:3},
     {k:"Hb",h:"depth used for I (ft)",dp:3},{k:"band",h:"Band applied",txt:1},
@@ -9174,11 +9252,13 @@ function liveWorked(p,M,veh,pos,dir,node,part){
   if(want("dist")){
   if(part==="all")h+=`<h4>2. Pressure and the equivalent nodal load at every node</h4>`;
   h+=eqLine("Equivalent nodal load","q_j=p_j\\,b\\,t_j\\,(1+I_j)","§7.2.7.7B",
-    "p is the pressure delivered to the extrados at that node, b = 1.00 ft is the analysis strip, and t is the "+
-    "tributary horizontal length of the node, <b>measured on the extrados</b> because that is the surface "+
-    "receiving the pressure — on a deep ring the extrados is materially wider than the arch axis beneath it. "+
-    "The impact factor is folded in here on the local basis; on the "+
-    "crown basis it multiplies the assembled effects instead.");
+    R.arNL(null,[   /* ARNL */
+      ["p","is the pressure delivered to the extrados at that node,"],
+      ["b","= 1.00 ft is the analysis strip,"],
+      ["t","is the tributary horizontal length of the node, <b>measured on the extrados</b> because that is the surface "+
+    "receiving the pressure — on a deep ring the extrados is materially wider than the arch axis beneath it."],
+      ["Impact:","The impact factor is folded in here on the local basis; on the "+
+    "crown basis it multiplies the assembled effects instead."]]));
   /* The full distribution, node by node: the spread geometry, which axles reach
      the node, the pressure that arrives, and the nodal load that goes into the
      solve. Everything the reader needs to reproduce a row by hand, in the order
@@ -9241,24 +9321,26 @@ function liveWorked(p,M,veh,pos,dir,node,part){
     {k:"pct",h:"% of Σq",dp:1}]).concat(
       rail?[]:[{k:"shallow",h:"caveat",txt:1}])),
     rowsD,{govIdx:node})+
-    `<div class="note">One row per node, in the order the calculation takes them.
-   <b>H</b> is the cover over that node and sets how far the load has spread by the time it arrives, which is why
-   a deep haunch receives far less than the crown from the same axle; <b>depth used for I</b> differs from it on
-   the crown impact basis and is shown separately for that reason.
-   ${rail
-     ? "<b>Tracks</b> records whether adjacent track widths overlap, in which case the outer limits are taken "+
-       "and the combined load is spread over the merged width."
-     : "<b>Std Spec 6.4 branch</b> records the decision that governs the transverse spread: the two wheel lines "+
+    `<div class="note">${R.arNL("One row per node, in the order the calculation takes them.",[   /* ARNL */
+      ["H","is the cover over that node and sets how far the load has spread by the time it arrives, which is why "+
+   "a deep haunch receives far less than the crown from the same axle; <b>depth used for I</b> differs from it on "+
+   "the crown impact basis and is shown separately for that reason."],
+      rail
+     ? ["Tracks","records whether adjacent track widths overlap, in which case the outer limits are taken "+
+       "and the combined load is spread over the merged width."]
+     : ["Std Spec 6.4 branch","records the decision that governs the transverse spread: the two wheel lines "+
        "spread independently and each carries half an axle until w_t reaches the 6.00 ft gage, after which the "+
        "axle acts as one patch over gage + w_t. That branch point is the most error-prone step in the "+
-       "distribution, so the comparison is shown rather than just its outcome."}
-   <b>Which axles</b> names them, so a pressure can be traced back to the specific wheels producing it in the
-   axle contribution matrix above. <b>t_j</b> is the tributary horizontal length the node owns, measured along
-   the extrados. <b>q applied</b> is what enters the solve, and <b>% of Σq</b> shows how few nodes usually carry
-   the load. ${rail?"":"A <b>caveat</b> entry marks a node with less than 2 ft of cover, where Std. Spec. "+
+       "distribution, so the comparison is shown rather than just its outcome."],
+      ["Which axles","names them, so a pressure can be traced back to the specific wheels producing it in the "+
+   "axle contribution matrix above."],
+      ["t_j","is the tributary horizontal length the node owns, measured along the extrados."],
+      ["q applied","is what enters the solve, and <b>% of Σq</b> shows how few nodes usually carry the load."],
+      rail?null:["Caveat:","A <b>caveat</b> entry marks a node with less than 2 ft of cover, where Std. Spec. "+
    "3.24.3 calls for slab distribution instead of the through-fill spread used here — this program does not "+
-   "perform that check. "}A blank row means no footprint reaches that node at this position. The section of
-   interest is shaded.</div></div>`;
+   "perform that check."],
+      ["Blank row:","A blank row means no footprint reaches that node at this position."],
+      ["Shading:","The section of interest is shaded."]])}</div></div>`;
   const sq=qI.reduce((a,b)=>a+b,0);
   h+=step({label:"Total live load arriving on the one-foot strip",
     sym:"\\sum q_j",sub:"",res:num(sq,5),units:"k/ft",
@@ -9476,25 +9558,21 @@ function section(p,M,veh,pos,dir,govSec){
       {k:"hf",h:"fill h_f, extrados→bottom of HMA (ft)",dp:3},
       {k:"H",h:"distribution depth H, extrados→top of HMA (ft)",dp:3},
       {k:"z",h:"equivalent depth z for K·γ_f·z (ft)",dp:3}],rs,opt)+
-    `<div class="note"><b>These are three different things and they are deliberately not equal.</b>
-     <br><br>
-     <b>h_f</b> is fill only. It stops at the <b>bottom</b> of the HMA and is weighed at γ_f, so the pavement
-     is never counted as soil. Its weight is computed separately as γ_ws·t_ws and distributed across the
-     barrel per §7.2.7.4B.
-     <br><br>
-     <b>H</b> <b>includes</b> the HMA and is the depth that drives live load distribution and the local impact
-     basis. The pavement is a stiffer medium than the fill beneath it, so it disperses a wheel load at least as
-     well as soil does; excluding it from the distribution depth would understate the spread and, more to the
-     point, would move a barrel across the 2 ft threshold of Std. Spec. 6.4 on a technicality about which layer
-     is which.
-     <br><br>
-     <b>z</b> is the equivalent depth that reproduces the vertical stress at the extrados when multiplied by
-     K·γ_f: z = h_f + (γ_ws/γ_f)·t_ws. The pavement bears on the fill as a surcharge, so it belongs in the
-     vertical stress driving the lateral pressure — again at its own unit weight, not the soil's. Where the
-     pavement and fill unit weights differ, z is not equal to H.
-     <br><br>
-     On a sloped grade all three vary independently along the barrel, and confusing them is an easy and
-     consequential error.</div>`,"§7.2.7.3B / 4B / 5B",true);
+    `<div class="note">${R.arNL("These are three different things and they are deliberately not equal.",[   /* ARNL */
+      ["h_f","is fill only. It stops at the <b>bottom</b> of the HMA and is weighed at γ_f, so the pavement "+
+     "is never counted as soil. Its weight is computed separately as γ_ws·t_ws and distributed across the "+
+     "barrel per §7.2.7.4B."],
+      ["H","<b>includes</b> the HMA and is the depth that drives live load distribution and the local impact "+
+     "basis. The pavement is a stiffer medium than the fill beneath it, so it disperses a wheel load at least as "+
+     "well as soil does; excluding it from the distribution depth would understate the spread and, more to the "+
+     "point, would move a barrel across the 2 ft threshold of Std. Spec. 6.4 on a technicality about which layer "+
+     "is which."],
+      ["z","is the equivalent depth that reproduces the vertical stress at the extrados when multiplied by "+
+     "K·γ_f: z = h_f + (γ_ws/γ_f)·t_ws. The pavement bears on the fill as a surcharge, so it belongs in the "+
+     "vertical stress driving the lateral pressure — again at its own unit weight, not the soil's. Where the "+
+     "pavement and fill unit weights differ, z is not equal to H."],
+      ["Sloped grade:","On a sloped grade all three vary independently along the barrel, and confusing them is an easy and "+
+     "consequential error."]])}</div>`,"§7.2.7.3B / 4B / 5B",true);
 
   const isRail=(veh.mode==="rail");
   h+=UI.pnl("nd_ll",c(),"Live load distribution through fill"+(isRail?" — railroad, tie distribution":" — highway, Std Spec 6.4"),
@@ -9506,22 +9584,23 @@ function section(p,M,veh,pos,dir,govSec){
       (!isRail&&ARCH.lanesOn(p)>1)?[{k:"kap",h:"κ side-by-side trucks",dp:3}]:[]).concat([{k:"nAx",h:"axles",dp:0},
       {k:"press",h:"pressure p (ksf)",dp:5},{k:"trib",h:"trib length (ft)",dp:3},
       {k:"q",h:"q_j (k/ft)",dp:4}]),rs,opt)+
-    `<div class="note">${isRail
-      ? "Railroad distribution: load enters at the bottom of the ties over the tie length transversely and 3.0 ft "+
+    `<div class="note">${R.arNL(null,(isRail   /* ARNL */
+      ? [["Railroad distribution:","load enters at the bottom of the ties over the tie length transversely and 3.0 ft "+
         "longitudinally, then spreads at the rate set in the Track and Tie panel — r horizontal per unit of "+
         "depth each side — so W = L_tie + 2rh and L_s = 3.0 + 2rh at depth h "+
-        "below the ties. The tracks column records whether adjacent track widths overlap."
-      : "Effective width is w_t where the two wheel lines spread independently, and (gage + w_t) = (6.00 + w_t) "+
+        "below the ties."],["Tracks column:","The tracks column records whether adjacent track widths overlap."]]
+      : [["Effective width","is w_t where the two wheel lines spread independently, and (gage + w_t) = (6.00 + w_t) "+
         "once their spreads overlap and the axle acts as a single patch — the wheel lines column records which "+
-        "branch of Std. Spec. 6.4 applied at that node. A row marked <b>6.4.1 concentrated</b> is one where the "+
+        "branch of Std. Spec. 6.4 applied at that node."],
+        ["Concentrated rows:","A row marked <b>6.4.1 concentrated</b> is one where the "+
         "axle landed on cover shallower than "+nfx(ARCH.SHALLOW_FILL,1)+" ft: it is not dispersed through the "+
         "fill at all, so the width shown is the Art. 3.24.3.2 distribution width E = 4 + 0.06S and the length "+
-        "shown is the node's own tributary length, over which its share of the strip load is carried."}
-     q_j = p × b × trib length is the equivalent nodal load, and includes impact when the local impact basis is
-     selected; the pressure column is q_j divided by the tributary length, so the two are always consistent.
-     <b>The tributary length is measured on the extrados</b>, where the pressure is delivered, not on the arch
-     axis below it — on a deep ring the extrados is materially wider and measuring on the axis would understate
-     the load.</div>`,
+        "shown is the node's own tributary length, over which its share of the strip load is carried."]]).concat([
+      ["q_j = p × b × trib length","is the equivalent nodal load, and includes impact when the local impact basis is "+
+     "selected; the pressure column is q_j divided by the tributary length, so the two are always consistent."],
+      ["The tributary length is measured on the extrados,","where the pressure is delivered, not on the arch "+
+     "axis below it — on a deep ring the extrados is materially wider and measuring on the axis would understate "+
+     "the load."]]))}</div>`,
     isRail?"Tie distribution":"Std Spec 6.4",true);
 
   h+=UI.pnl("nd_imp",c(),"Impact",
@@ -9550,19 +9629,21 @@ function section(p,M,veh,pos,dir,govSec){
     dtab([{k:"tag",h:"Node",txt:1}].concat(
       comps.map(w=>({k:"M_"+w[0],h:"M "+w[1],dp:3})),
       [{k:"M_dl",h:"M total",dp:3}]),rs,opt)+
-    `<div class="note">Moment at each node from each dead load acting alone. These are the columns worth
-     studying: the components frequently oppose one another, so the total is smaller than any single term, and
-     the lateral earth pressure typically carries a large share of the springline moment while resting entirely
-     on the assumed K.</div>`+
+    `<div class="note">${R.arNL("Moment at each node from each dead load acting alone.",[   /* ARNL */
+      ["Worth studying:","These are the columns worth "+
+     "studying: the components frequently oppose one another, so the total is smaller than any single term, and "+
+     "the lateral earth pressure typically carries a large share of the springline moment while resting entirely "+
+     "on the assumed K."]])}</div>`+
     `<h4>Shear V, by component (k/ft, on the section normal)</h4>`+
     dtab([{k:"tag",h:"Node",txt:1}].concat(
       comps.map(w=>({k:"V_"+w[0],h:"V "+w[1],dp:3})),
       [{k:"V_dl",h:"V total",dp:3}]),rs,opt)+
-    `<div class="note">Thrust in k/ft, moment in k·ft/ft, shear in k/ft, all on the one-foot strip. Each
-     component is a separate solve of the same frame; superposition is exact, so the component columns sum to
-     the total. The lateral earth pressure column deserves attention — it is computed from the single assumed
-     coefficient K = ${nfx(p.K,2)} of §7.2.7.5B and is usually the least certain load in the calculation, so
-     seeing its share of the springline moment directly is worth more than seeing only the combined result.</div>`,
+    `<div class="note">${R.arNL("Thrust in k/ft, moment in k·ft/ft, shear in k/ft, all on the one-foot strip.",[   /* ARNL */
+      ["Superposition:","Each component is a separate solve of the same frame; superposition is exact, so the component columns sum to "+
+     "the total."],
+      ["Lateral earth pressure column:",`deserves attention — it is computed from the single assumed `+
+     `coefficient K = ${nfx(p.K,2)} of §7.2.7.5B and is usually the least certain load in the calculation, so `+
+     `seeing its share of the springline moment directly is worth more than seeing only the combined result.`]])}</div>`,
     "§7.2.7.3B / 4B / 5B",true);
 
   h+=UI.pnl("nd_il",c(),"Influence line summary",
@@ -9583,24 +9664,29 @@ function section(p,M,veh,pos,dir,govSec){
       {k:"eIn",h:"e (in)",dp:3},{k:"eod",h:"e/d",dp:4},{k:"reg",h:"Regime",txt:1},
       {k:"fExt",h:"f extrados (psi)",dp:1},{k:"fInt",h:"f intrados (psi)",dp:1},
       {k:"f",h:"f max (psi)",dp:1},{k:"util",h:"f/f_a",dp:3},{k:"rf",h:"RF this section",dp:3}],rs,opt)+
-    `<div class="note">Live load columns are the unfactored vehicle at the position shown, so ΣP and ΣM here are
-     the service condition, not the condition at the converged rating multiplier. The final column is each
-     section's own rating factor — the multiplier that would bring that section alone to the allowable — so the
-     margin at non-governing sections is visible rather than hidden behind the single governing value.
-     Stresses are given at both faces as §7.2.7.10B sets them out: within the kern both faces are in
-     compression, and outside it the face opposite the thrust reads zero because the masonry there is assumed
-     to carry no tension and is ignored in the pressure wedge.</div>`,
+    `<div class="note">${R.arNL(null,[   /* ARNL */
+      ["Live load columns","are the unfactored vehicle at the position shown, so ΣP and ΣM here are "+
+     "the service condition, not the condition at the converged rating multiplier."],
+      ["Final column:","The final column is each "+
+     "section's own rating factor — the multiplier that would bring that section alone to the allowable — so the "+
+     "margin at non-governing sections is visible rather than hidden behind the single governing value."],
+      ["Stresses","are given at both faces as §7.2.7.10B sets them out: within the kern both faces are in "+
+     "compression, and outside it the face opposite the thrust reads zero because the masonry there is assumed "+
+     "to carry no tension and is ignored in the pressure wedge."]])}</div>`,
     "§7.2.7.9B / 10B",true);
 
   h+=UI.pnl("nd_thr",c(),"Thrust line coordinates",
     dtab([{k:"tag",h:"Section",txt:1},{k:"x",h:"section x (ft)",dp:3},{k:"y",h:"section y (ft)",dp:3},
       {k:"eIn",h:"|e| (in)",dp:3},{k:"tx",h:"thrust x (ft)",dp:3},{k:"ty",h:"thrust y (ft)",dp:3}],rs,opt)+
-    `<div class="note"><b>A coordinate outside the barrel is not an error.</b> The offset is measured along the
-     section normal, and at a springing that normal is close to horizontal, so a modest eccentricity moves the
-     point well beyond the end of the arch. Judge a springing by the eccentricity column, not by the plotted
-     position. Coordinates of the resultant at each section, offset from the arch axis along the section
-     normal by −ΣM/ΣP. These are the numbers behind the thrust line overlay, so the figure can be checked
-     arithmetically rather than only by eye.</div>`,"§7.2.7.10B",true);
+    `<div class="note">${R.arNL("A coordinate outside the barrel is not an error.",[   /* ARNL */
+      ["Why:","The offset is measured along the "+
+     "section normal, and at a springing that normal is close to horizontal, so a modest eccentricity moves the "+
+     "point well beyond the end of the arch."],
+      ["Judge a springing","by the eccentricity column, not by the plotted position."],
+      ["Columns:","Coordinates of the resultant at each section, offset from the arch axis along the section "+
+     "normal by −ΣM/ΣP."],
+      ["Use:","These are the numbers behind the thrust line overlay, so the figure can be checked "+
+     "arithmetically rather than only by eye."]])}</div>`,"§7.2.7.10B",true);
 
   // reactions
   const Rd=M.reactions(M.DL);
@@ -9709,15 +9795,18 @@ function worked(p,M,veh,pos,dir,i){
   let h="";
 
   h+=msg("inf","Scope of this worked calculation",
-    `Every quantity at node <b>${esc(tag)}</b> for <b>${esc(veh.name)}</b> with the lead axle at `+
+    R.arNL(`Every quantity at node <b>${esc(tag)}</b> for <b>${esc(veh.name)}</b> with the lead axle at `+   /* ARNL */
     `x = ${nfx(ARCH.leadAxleX(veh,pos,dir),2)} ft, traveling `+
-    `${dir<0?"right to left":"left to right"}. <b>Live load is at m = 1</b> — the vehicle as it stands, `+
-    `before the §7.2.7.12 multiplier. The Rating tab works the same section at the converged multiplier, `+
+    `${dir<0?"right to left":"left to right"}.`,[
+      ["Live load is at m = 1",`— the vehicle as it stands, `+
+    `before the §7.2.7.12 multiplier.`],
+      ["Rating tab:",`The Rating tab works the same section at the converged multiplier, `+
     `where the governing check closes at f/f_a = 1.000; a lower utilization here is that difference of `+
-    `basis, not a disagreement. Quantities that follow from the frame solve are identified where they `+
-    `appear. <b>Rounding:</b> substituted values are printed to display precision, so multiplying the `+
+    `basis, not a disagreement.`],
+      ["Frame solve:","Quantities that follow from the frame solve are identified where they appear."],
+      ["Rounding:",`substituted values are printed to display precision, so multiplying the `+
     `printed factors can differ from the printed result in the last digit; the arithmetic is carried at `+
-    `full precision throughout.`);
+    `full precision throughout.`]]));
 
   /* ---- 1. geometry and section properties ---- */
   h+=`<h4>1. Geometry and section properties</h4>`;
@@ -9750,11 +9839,13 @@ function worked(p,M,veh,pos,dir,i){
     sym:"\\theta=\\tan^{-1}\\left(\\dfrac{n_x}{n_y}\\right)",
     sub:`\\tan^{-1}\\left(\\dfrac{${num(n.nx,4)}}{${num(n.ny,4)}}\\right)`,
     res:num(Math.atan2(n.nx,n.ny)*180/Math.PI,2),units:"°",
-    note:"(n_x, n_y) is the outward radial unit vector, intrados toward extrados, lying IN the section plane "+
-      "— eccentricity and the thrust-line offset in step 9 are measured along it. It is perpendicular to the "+
-      "axis tangent, which is the section plane's true normal. The section itself is cut normal to the arch "+
+    note:R.arNL(null,[   /* ARNL */
+      ["(n_x, n_y)","is the outward radial unit vector, intrados toward extrados, lying IN the section plane "+
+      "— eccentricity and the thrust-line offset in step 9 are measured along it."],
+      ["Normal:","It is perpendicular to the axis tangent, which is the section plane's true normal."],
+      ["Section:","The section itself is cut normal to the arch "+
       "axis, so it is vertical at the crown and near-horizontal at the springings, and thrust and shear are "+
-      "resolved on that inclined plane."});
+      "resolved on that inclined plane."]])});
 
   /* ---- 2. depths ---- */
   h+=`<h4>2. Depths at this node</h4>`;
@@ -9798,12 +9889,15 @@ function worked(p,M,veh,pos,dir,i){
       sym:"\\sum P_{ax}\\,\\phi_{ax}",
       sub:`${nA}\\ \\text{axles overlapping this node's }${num(M.tribH[i],3)}\\ \\text{ft tributary}`,
       res:num(Pax,2),units:"kip",
-      note:(p.railCapLong?`Each axle spreads over its own capped L_s — no wider than the track that axle `+
-        `owns, so neighbouring footprints never overlap. `:`Each axle spreads over L_s = ${nfx(RS.Ls,3)} ft `+
-        `centred on itself. `)+`φ is the fraction of this `+
+      note:R.arNL(null,[   /* ARNL */
+        ["Footprint:",p.railCapLong?`Each axle spreads over its own capped L_s — no wider than the track that axle `+
+        `owns, so neighbouring footprints never overlap.`:`Each axle spreads over L_s = ${nfx(RS.Ls,3)} ft `+
+        `centred on itself.`],
+        ["φ",`is the fraction of this `+
         `node's tributary that footprint covers, so a partly overlapping axle contributes its part rather `+
-        `than all or nothing. The φ over all nodes sum to the footprint length, so no load is created or `+
-        `lost in the discretisation.`});
+        `than all or nothing.`],
+        ["Check:",`The φ over all nodes sum to the footprint length, so no load is created or `+
+        `lost in the discretisation.`]])});
     if(veh.trail>0){
       const tailX=(dir>0)?pos+maxOff+(veh.trailGap||0):pos-(veh.trailGap||0);
       const TT=ARCH.tribSpan(M,i);
@@ -9825,20 +9919,23 @@ function worked(p,M,veh,pos,dir,i){
       sym:"q_j=p\\,b\\,t_j",
       sub:`${num(M.tribH[i]>0?(q[i]||0)/M.tribH[i]:0,5)}\\times1.00\\times${num(M.tribH[i],4)}`,
       res:num(q[i]||0,5),units:"k/ft",
-      note:`t_j = ${nfx(M.tribH[i],4)} ft is the tributary horizontal length of this node. A q of zero here `+
-        `means no axle footprint reaches THIS node at this position — the live load thrust and moment further `+
+      note:R.arNL(null,[   /* ARNL */
+        ["t_j",`= ${nfx(M.tribH[i],4)} ft is the tributary horizontal length of this node.`],
+        ["A q of zero here",`means no axle footprint reaches THIS node at this position — the live load thrust and moment further `+
         `down are superpositions over every loaded node on the arch, so they are non-zero whenever any node `+
-        `carries load, not only this one.`});
+        `carries load, not only this one.`]])});
   }else{
   if(concAx.length){
     const E2=ARCH.shallowWidth(p);
     h+=msg("warn","Some axles at this position are governed by Std. Spec. 6.4.1, not 6.4.2",
-      `${concAx.length} of this vehicle's axles land on cover shallower than ${nfx(ARCH.SHALLOW_FILL,1)} ft `+
-      `(at x = ${concAx.map(x=>nfx(x,2)).join(", ")} ft). Those axles are <b>not</b> dispersed through the fill: `+
+      R.arNL(`${concAx.length} of this vehicle's axles land on cover shallower than ${nfx(ARCH.SHALLOW_FILL,1)} ft `+   /* ARNL */
+      `(at x = ${concAx.map(x=>nfx(x,2)).join(", ")} ft).`,[
+        ["Not dispersed:",`Those axles are <b>not</b> dispersed through the fill: `+
       `Art. 6.4.1 carries them to the ring as concentrated loads distributed only across the width, over `+
-      `E = 4 + 0.06S = ${nfx(E2,3)} ft per Art. 3.24.3.2. The 1.75H geometry worked immediately below applies `+
-      `only to the remaining axles, which land on 2 ft of cover or more. The nodal load q that closes this `+
-      `section includes both contributions.`);
+      `E = 4 + 0.06S = ${nfx(E2,3)} ft per Art. 3.24.3.2.`],
+        ["Below:",`The 1.75H geometry worked immediately below applies `+
+      `only to the remaining axles, which land on 2 ft of cover or more.`],
+        ["Nodal load:",`The nodal load q that closes this section includes both contributions.`]]));
   }
   h+=step({label:"Longitudinal spread length",ref:"Std Spec 6.4",
     sym:dTW.tire?"L_s=\\ell_t+1.75H":"L_s=1.75H",
@@ -9939,11 +10036,13 @@ function worked(p,M,veh,pos,dir,i){
   h+=step({label:"Depth to the arch axis, for the lateral pressure",ref:"§7.2.7.5B",
     sym:"z=y_{bws}(x)-y_{axis}",
     sub:`${num(M.g.bwsAt(M.g.nodes[i].x),4)}-${num(M.g.nodes[i].y,4)}`,res:num(zAx,4),units:"ft",
-    note:"The lateral pressure is taken entirely on the ARCH AXIS — depth measured to it, pressure applied "+
-      "to it. That differs from the fill height h_f above, which is measured to the EXTRADOS because the "+
-      "fill physically rests on that face. The two loads reference different surfaces by design: a weight "+
+    note:R.arNL("The lateral pressure is taken entirely on the ARCH AXIS — depth measured to it, pressure applied to it.",[   /* ARNL */
+      ["Not h_f:","That differs from the fill height h_f above, which is measured to the EXTRADOS because the "+
+      "fill physically rests on that face."],
+      ["By design:","The two loads reference different surfaces by design: a weight "+
       "bears on a face, whereas §7.2.7.5B applies the lateral pressure to the element, and the element is "+
-      "the axis. Here z = "+nfx(zAx,3)+" ft against h_f = "+nfx(hf,3)+" ft."});
+      "the axis."],
+      ["Here","z = "+nfx(zAx,3)+" ft against h_f = "+nfx(hf,3)+" ft."]])});
   h+=step({label:"Vertical stress at that depth",ref:"§7.2.7.5B",
     sym:"\\sigma_v=\\gamma_f z+\\gamma_{ws}t_{ws}",
     sub:`${num(gf,4)}\\times${num(zAx,4)}+${num(gws,4)}\\times${num(p.tws,3)}`,
@@ -9956,10 +10055,13 @@ function worked(p,M,veh,pos,dir,i){
     note:"Applied to the axis vertical projection of the adjacent elements, directed inward. K = 0.25 is "+
       "prescribed by §7.2.7.5B and is the least certain load in the calculation."});
   h+=msg("wrn","Force effects below follow from the frame solve",
-    "The intensities above are applied as linearly varying element loads through consistent fixed-end load "+
-    "vectors and distributed by the plane frame analysis. The resulting section forces cannot be reduced to "+
+    R.arNL(null,[   /* ARNL */
+      ["Applied:","The intensities above are applied as linearly varying element loads through consistent fixed-end load "+
+    "vectors and distributed by the plane frame analysis."],
+      ["Not hand arithmetic:","The resulting section forces cannot be reduced to "+
     "hand arithmetic at a single node — they depend on the whole structure — so they are reported from the "+
-    "solve. Each component is a separate solve and the four sum exactly to the total.");
+    "solve."],
+      ["Components:","Each component is a separate solve and the four sum exactly to the total."]]));
   const CN2={fill:"Fill",ws:"Wearing surface",sdl:"Superimposed DL",
     self:"Ring self weight",earth:"Lateral earth pressure"};
   const comps=M.COMPS.map(w=>[w,CN2[w]||w]);
@@ -10073,6 +10175,7 @@ return {section,csv,rows,worked};
 const $=id=>document.getElementById(id);
 const SVGNS="http://www.w3.org/2000/svg";
 const {step,eqLine,vars,dtab,msg,badge,num,nfx,esc}=R;
+const arNL=R.arNL;   /* ARNL: for the functions here whose own R is a local (the Rating Summary) */
 
 let M=null, results=[], errText="", checks=[], activeTab="sum", animPos=null, playing=false, raf=null;
 let mctOpt={includeDL:true,includeCombo:false}, impText="", impParsed=null, impErr="", impSgn=null, impConv=null, impCmp=null;
@@ -11453,9 +11556,11 @@ function buildOutput(p){
   s=`<div class="btnrow noprint" style="margin-bottom:8px">
       <button id="bColGov">Collapse all but governing</button><button id="bExpAll">Expand all</button></div>`;
   s+=msg("inf","Every rating vehicle is worked in full",
-    "MassDOT §7.2.7 is an Allowable Stress procedure with a single service load case, D + L(1+I); the rating "+
-    "vehicles take the place of a load combination matrix. Each selected vehicle below is worked completely at "+
-    "its own governing position and direction — none is omitted or summarized.");
+    R.arNL(null,[   /* ARNL */
+      ["Procedure:","MassDOT §7.2.7 is an Allowable Stress procedure with a single service load case, D + L(1+I); the rating "+
+    "vehicles take the place of a load combination matrix."],
+      ["Each selected vehicle","below is worked completely at "+
+    "its own governing position and direction — none is omitted or summarized."]]));
 
   /* Rating at the section currently selected in the focus bar. Each vehicle is
      swept exactly as it is for the governing rating, but the stress check is
@@ -11485,22 +11590,27 @@ function buildOutput(p){
              :"This is not the governing section",
         isGov
           ? `Every vehicle's structure-wide rating is set here, so the numbers below are the reported ratings.`
-          : `The structure is governed at <b>${esc(CALC.secTag(M,gv0?gv0.sec:0))}</b>. The numbers below are `+
+          : R.arNL(`The structure is governed at <b>${esc(CALC.secTag(M,gv0?gv0.sec:0))}</b>.`,[   /* ARNL */
+            ["Local:",`The numbers below are `+
             `local to ${esc(CALC.secTag(M,focusNode))} and are <b>not</b> the reported ratings — they are `+
-            `larger, because this section is not the one that runs out of capacity first. They are here to `+
-            `show how much margin this section carries and which vehicle presses it hardest.`)+
+            `larger, because this section is not the one that runs out of capacity first.`],
+            ["Purpose:",`They are here to `+
+            `show how much margin this section carries and which vehicle presses it hardest.`]]))+
       dtab([{k:"tag",h:"Vehicle",txt:1},
         {k:"rf",h:"RF at this section",dp:3},{k:"tons",h:"tons",dp:1},
         {k:"pos",h:"lead axle x (ft)",dp:2},{k:"dir",h:"direction",txt:1},
         {k:"mode",h:"check",txt:1},
         {k:"govRf",h:"RF governing",dp:3},{k:"gov",h:"governs at",txt:1}],secRows,{})+
-      `<div class="note">Each vehicle is swept over the same positions as for the governing rating, with the
-       stress check restricted to this node, so <b>RF at this section</b> is the multiplier that would bring
-       this section alone to the allowable and the position shown is the one that does it — not necessarily
-       the vehicle's governing position. <b>RF governing</b> and <b>governs at</b> repeat the structure-wide
-       result for comparison; where the two rating factors are equal, this section is the one setting that
-       vehicle's rating. The hardest-pressed vehicle here is
-       <b>${esc(worst.tag)}</b> at RF ${nfx(worst.rf,3)}.</div>`,
+      `<div class="note">${R.arNL("Each vehicle is swept over the same positions as for the governing rating, with the "+   /* ARNL */
+       "stress check restricted to this node.",[
+        ["RF at this section","is the multiplier that would bring "+
+       "this section alone to the allowable and the position shown is the one that does it — not necessarily "+
+       "the vehicle's governing position."],
+        ["RF governing and governs at","repeat the structure-wide "+
+       "result for comparison; where the two rating factors are equal, this section is the one setting that "+
+       "vehicle's rating."],
+        ["Hardest-pressed:",`The hardest-pressed vehicle here is `+
+       `<b>${esc(worst.tag)}</b> at RF ${nfx(worst.rf,3)}.`]])}</div>`,
       "§7.2.7.9B / 10B");
   }
   if(archConv&&archConv.rows&&archConv.rows.length)
@@ -11508,11 +11618,13 @@ function buildOutput(p){
       archConvTable(),"§7.2.7.2B");
   if(archLane&&archLane.rows.length){
     let lh=msg("warn","An H vehicle rates at 12 tons or less: lane loading also rated",
-      "MassDOT §7.2.4.2B: a component rated for an H vehicle at 12 tons or less is also rated with the Std. Spec. "+
+      R.arNL(null,[   /* ARNL */
+        ["MassDOT §7.2.4.2B:","a component rated for an H vehicle at 12 tons or less is also rated with the Std. Spec. "+
       "lane loading (0.64 klf plus an 18 kip concentrated load for moment; Std. Spec. Art. 3.7, verify, not in "+
-      "references). The lane loading is a load train swept like a vehicle over four loaded lengths; its point loads use "+
-      "the wheel-load distribution (6 ft gage), a narrower width than the 10 ft lane, which is conservative. The reported "+
-      "rating of the vehicle is the lower of the truck and the lane loading.");
+      "references)."],
+        ["Sweep:","The lane loading is a load train swept like a vehicle over four loaded lengths; its point loads use "+
+      "the wheel-load distribution (6 ft gage), a narrower width than the 10 ft lane, which is conservative."],
+        ["Reported:","The reported rating of the vehicle is the lower of the truck and the lane loading."]]));
     for(const row of archLane.rows){
       lh+=`<h4>${esc(row.name)}: truck RF ${nfx(row.truckRF,3)} (${nfx(row.truckTons,1)} tons)</h4>`+
         dtab([{k:"L",h:"Loaded length (ft)",dp:1},{k:"rf",h:"Lane loading RF",dp:3}],row.runs.map((q,i)=>({__i:i,L:q.L,rf:q.rf})),{})+
@@ -11526,10 +11638,12 @@ function buildOutput(p){
   if(archHsv&&archHsv.runs){
     const H=archHsv, b=H.best;
     let hh=msg("inf","HS20 rear-axle spacing varied from 14 to 30 ft",
-      "AASHTO Std. Spec. 17th Ed. Art. 3.7.6 (verify, not in references): the spacing V between the two 32 kip axles of the "+
-      "HS20 truck is varied from 14 to 30 ft and the spacing that produces the maximum effect is used. Each spacing below "+
-      "is a complete rating (swept in both directions at the same step) on the "+H.Mo.nEl+"-element mesh that the reported "+
-      "HS20 rating comes from. The reported HS20 rating is the lowest of the nine.")+
+      R.arNL(null,[   /* ARNL */
+        ["AASHTO Std. Spec. 17th Ed. Art. 3.7.6","(verify, not in references): the spacing V between the two 32 kip axles of the "+
+      "HS20 truck is varied from 14 to 30 ft and the spacing that produces the maximum effect is used."],
+        ["Each spacing below","is a complete rating (swept in both directions at the same step) on the "+H.Mo.nEl+"-element mesh that the reported "+
+      "HS20 rating comes from."],
+        ["Reported:","The reported HS20 rating is the lowest of the nine."]]))+
       dtab([{k:"V",h:"Rear-axle spacing V (ft)",dp:0},{k:"rf",h:"HS20 RF",dp:3},{k:"t",h:"tons",dp:1}],
         H.runs.map((q,i)=>({__i:i,V:q.V,rf:q.rf,t:q.rf*36})),{})+
       `<div class="note">Reported HS20: RF = <b>${nfx(b.rf,3)}</b> at V = ${b.V} ft `+
@@ -11544,13 +11658,16 @@ function buildOutput(p){
     const C=archSlide, w=C.worst, ws=w.s, Mw=w.Mo, dw=C.dlWorst;
     const dcTxt=x=>isFinite(x)?nfx(x,3):"&infin; (no compression)";
     let sh=msg("inf","Bed-joint sliding: friction against the thrust (advisory)",
-      "§7.2.7 rates the ring on combined compressive stress only. This check adds the friction condition that a "+
+      R.arNL("§7.2.7 rates the ring on combined compressive stress only.",[   /* ARNL */
+        ["Friction condition:","This check adds the friction condition that a "+
       "masonry joint needs to transmit shear: |V| &le; &mu;N, with V and N resolved on the section normal to the arch "+
-      "axis (the radial bed joint at the node). It is evaluated at every section and every vehicle position, with each "+
-      "vehicle's live load at its reported rating factor (the load the rating says the arch carries), including impact. "+
-      "It is reported beside the rating and does <b>not</b> change any rating factor. &mu; = "+nfx(C.mu,2)+
+      "axis (the radial bed joint at the node)."],
+        ["Where:","It is evaluated at every section and every vehicle position, with each "+
+      "vehicle's live load at its reported rating factor (the load the rating says the arch carries), including impact."],
+        ["Advisory:","It is reported beside the rating and does <b>not</b> change any rating factor."],
+        ["&mu; =",nfx(C.mu,2)+
       " (input; 0.6 is a common judgment value for stone on stone or mortared joints in masonry arch assessment, "+
-      "not a code value: verify against the joint condition).");
+      "not a code value: verify against the joint condition)."]]));
     sh+=R.step({label:"Friction demand / capacity at the governing joint",ref:"advisory",
       sym:"\\dfrac{D}{C}=\\dfrac{|V_{DL}+m\\,(1+I)\\,V_{LL}|}{\\mu\\,\\left(N_{DL}+m\\,(1+I)\\,N_{LL}\\right)}",
       sub:`\\dfrac{|${R.num(ws.VD,3)}+${R.num(ws.m,3)}\\times(${R.num(ws.VL,3)})|}{${R.num(C.mu,2)}\\times(${R.num(ws.ND,3)}+${R.num(ws.m,3)}\\times ${R.num(ws.NL,3)})}`,
@@ -11567,23 +11684,30 @@ function buildOutput(p){
         {k:"sec",h:"governing joint",txt:1},{k:"dc",h:"D/C sliding",dp:3},{k:"ms",h:"m at sliding",dp:2},{k:"ok",h:"check",txt:1}],
       C.rows.map((q,i)=>({__i:i,tag:esc(q.name),rf:q.rf,mesh:q.nEl+" el",sec:esc(CALC.secTag(q.Mo,q.s.sec)),
         dc:q.s.dc,ms:q.s.mSlide,ok:(q.s.dc<=1)?"OK":"SLIDES"})),{})+
-      `<div class="note"><b>m at sliding</b> is the largest live load multiplier for which friction holds at every joint and
-       every position (— : friction is never exceeded however large the live load). Where it exceeds the reported RF,
-       compression governs and the joints do not slide at the rated load. The check uses the section normal at the node as
-       the joint, the same section the stress check uses; real bed joints may be inclined to it.</div>`;
+      `<div class="note">${R.arNL(null,[   /* ARNL */
+        ["m at sliding","is the largest live load multiplier for which friction holds at every joint and "+
+       "every position (— : friction is never exceeded however large the live load)."],
+        ["Above the reported RF:","Where it exceeds the reported RF, "+
+       "compression governs and the joints do not slide at the rated load."],
+        ["Joint:","The check uses the section normal at the node as "+
+       "the joint, the same section the stress check uses; real bed joints may be inclined to it."]])}</div>`;
     s+=UI.pnl("rate_slide",c5(),"Bed-joint sliding — |V| ≤ μN (advisory)",sh,"advisory");
   }
   if(archMech&&archMech.rows.length){
     const C=archMech, G=C.gov, b=G.r.best, Mh=C.Mh;
     let mh=msg("inf","Collapse mechanism: an advisory cross-check, not a rating",
-      "Rigid-block limit analysis after Heyman (<i>The Masonry Arch</i>, 1982; verify, not in references): the masonry "+
-      "has no tensile strength, unlimited compressive strength, and joints do not slide. Four hinges, on the intrados "+
+      R.arNL(null,[   /* ARNL */
+        ["Rigid-block limit analysis after Heyman","(<i>The Masonry Arch</i>, 1982; verify, not in references): the masonry "+
+      "has no tensile strength, unlimited compressive strength, and joints do not slide."],
+        ["Four hinges,","on the intrados "+
       "or the extrados at the nodes of the "+C.nH+"-element mesh (a pinned springing is an axis hinge), turn the ring into "+
-      "a three-block chain. For each admissible chain (every hinge opening) the virtual work of the loads gives the "+
+      "a three-block chain."],
+        ["&lambda;:","For each admissible chain (every hinge opening) the virtual work of the loads gives the "+
       "live load factor at collapse; the lowest over "+C.nMech.toLocaleString("en-US")+" chains and every vehicle position "+
       "(swept at "+nfx(G.r.step,2)+" ft in both directions, same wheel-load distribution and impact as the rating) is "+
-      "&lambda;. The elastic §7.2.7 rating stands; &lambda; carries no safety factor and ignores crushing, so it is only "+
-      "a check that the elastic rating is not above the collapse load.");
+      "&lambda;."],
+        ["Not a rating:","The elastic §7.2.7 rating stands; &lambda; carries no safety factor and ignores crushing, so it is only "+
+      "a check that the elastic rating is not above the collapse load."]]));
     if(C.dlRun)mh+=msg("err","Dead load alone forms a mechanism",
       `Hinges at ${C.dlRun.n.map((i,k)=>esc(CALC.secTag(Mh,i))+" ("+["intrados","extrados","axis"][C.dlRun.f[k]]+")").join(", ")}: `+
       `the dead load does positive work (P<sub>D</sub> = ${nfx(C.dlRun.PD,3)} k·ft/ft per unit rotation), so no thrust line `+
@@ -11609,20 +11733,27 @@ function buildOutput(p){
         R.step({label:"Collapse load factor on the live load",ref:"advisory",sym:"\\lambda=-P_D/P_L",
           sub:`-(${R.num(b.PD,3)})/${R.num(b.PL,3)}`,res:R.num(b.lam,3),units:"",
           note:`Elastic RF for this vehicle ${nfx(G.rf,3)}; &lambda;/RF = ${nfx(G.rf>0?b.lam/G.rf:Infinity,2)}.`})+
-        `<div class="note"><b>How it is worked.</b> h is the hinge offset from the axis along the outward normal (−d/2 intrados,
-         +d/2 extrados, 0 at a pin). m = M − P·h is the section moment about the hinge point (P compression positive, M sagging
-         positive, as in the stress check). &Delta;&omega; is the relative rotation of the block to the right of the hinge
-         against the block to its left, from the four-bar kinematics with the first block turning +1 about the first hinge
-         (anticlockwise positive); an intrados hinge opens only for &Delta;&omega; &lt; 0 and an extrados hinge only for
-         &Delta;&omega; &gt; 0. The work of the loads equals &Sigma; &Delta;&omega;·m for any set of section forces in
-         equilibrium with them (a self-stress does no work in a mechanism), so the elastic section forces at the hinges are
-         used. Check of the method: a semicircular ring under its own weight alone first forms a mechanism at a thickness of
-         0.1067 of the axis radius on a 48-element mesh, against Heyman's 0.106 and the 0.1075 usually quoted.</div>`;
+        `<div class="note">${R.arNL("How it is worked.",[   /* ARNL */
+          ["h","is the hinge offset from the axis along the outward normal (−d/2 intrados, "+
+         "+d/2 extrados, 0 at a pin)."],
+          ["m = M − P·h","is the section moment about the hinge point (P compression positive, M sagging "+
+         "positive, as in the stress check)."],
+          ["&Delta;&omega;","is the relative rotation of the block to the right of the hinge "+
+         "against the block to its left, from the four-bar kinematics with the first block turning +1 about the first hinge "+
+         "(anticlockwise positive); an intrados hinge opens only for &Delta;&omega; &lt; 0 and an extrados hinge only for "+
+         "&Delta;&omega; &gt; 0."],
+          ["Work:","The work of the loads equals &Sigma; &Delta;&omega;·m for any set of section forces in "+
+         "equilibrium with them (a self-stress does no work in a mechanism), so the elastic section forces at the hinges are "+
+         "used."],
+          ["Check of the method:","a semicircular ring under its own weight alone first forms a mechanism at a thickness of "+
+         "0.1067 of the axis radius on a 48-element mesh, against Heyman's 0.106 and the 0.1075 usually quoted."]])}</div>`;
     }
-    mh+=`<div class="note"><b>Not included:</b> crushing (finite compressive strength) and sliding at the hinges, passive
-     restraint and load spread by the fill beyond the wheel-load rules, spandrel walls, ring separation, and hinges between
-     nodes (the hinge grid is the ${C.nH}-element mesh). Deterioration zones enter through the reduced depth at the nodes
-     only. MEXE / modified MEXE screening is not provided. Computed in ${nfx(C.ms/1000,1)} s.</div>`;
+    mh+=`<div class="note">${R.arNL("Not included:",[   /* ARNL */
+      "crushing (finite compressive strength) and sliding at the hinges,","passive "+
+     "restraint and load spread by the fill beyond the wheel-load rules,","spandrel walls,","ring separation,",
+      `and hinges between nodes (the hinge grid is the ${C.nH}-element mesh).`])+
+      R.arNL(null,[["Deterioration zones","enter through the reduced depth at the nodes only."],
+      ["MEXE / modified MEXE","screening is not provided."],["Run time:",`Computed in ${nfx(C.ms/1000,1)} s.`]])}</div>`;
     s+=UI.pnl("rate_mech",c5(),"Collapse mechanism — four-hinge cross-check (advisory)",mh,"advisory");
   }
   const govId=results.length?results.reduce((a,b)=>a.rf<b.rf?a:b).id:null;
@@ -11650,10 +11781,11 @@ function buildOutput(p){
           `The lane loading rates ${nfx(r.rf,3)} against ${nfx(r.truckRF,3)} for the truck (MassDOT §7.2.4.2B); the steps `+
           `below are the truck's. The lane loading is worked in the "Lane loading" panel above.`):"")+
         (r.nElR?msg("warn","This vehicle's reported rating is from the "+r.nElR+"-element mesh",
-          `It rates lowest on the ${r.nElR}-element mesh: RF = <b>${nfx(r.rf,3)}</b> at ${esc(CALC.secTag(r.Mo,r.secOwn))} `+
-          `of that mesh (x = ${nfx(r.Mo.g.nodes[r.secOwn].x,2)} ft). The steps below are worked on the ${M.nEl}-element mesh `+
-          `used on every tab, where it rates ${nfx(((archConv.rows.find(q=>q.id===r.id)||{rf:[]}).rf[archConv.meshes.indexOf(M.nEl)]),3)}; `+
-          `the reported value is the lower one (Mesh convergence table above).`):"")+
+          R.arNL(`It rates lowest on the ${r.nElR}-element mesh: RF = <b>${nfx(r.rf,3)}</b> at ${esc(CALC.secTag(r.Mo,r.secOwn))} `+   /* ARNL */
+          `of that mesh (x = ${nfx(r.Mo.g.nodes[r.secOwn].x,2)} ft).`,[
+            ["Steps below:",`The steps below are worked on the ${M.nEl}-element mesh `+
+          `used on every tab, where it rates ${nfx(((archConv.rows.find(q=>q.id===r.id)||{rf:[]}).rf[archConv.meshes.indexOf(M.nEl)]),3)};`],
+            ["Reported:",`the reported value is the lower one (Mesh convergence table above).`]])):"")+
         CALC.vehicleSection(p,M,v,rr,{atSec:off,gov:r}),
         off
           ? `RF at ${esc(CALC.secTag(M,rr.sec))} = ${nfx(rr.rf,3)} &nbsp;
@@ -11750,21 +11882,24 @@ function verifyPane(p){
   let s="";
   s+=UI.pnl("v_why",c(),"Purpose",
     msg("key","Independent verification of the frame solve",
-      "This program computes its own influence coefficients. That solve is the one part of the calculation "+
+      R.arNL("This program computes its own influence coefficients.",[   /* ARNL */
+        ["Why verify:","That solve is the one part of the calculation "+
       "that cannot be presented as checkable hand arithmetic, so the strongest available evidence is agreement "+
-      "with a second, independent program. Export the model below, run it in Midas Civil, paste the beam force "+
-      "results back, and this page reports the difference ordinate by ordinate.")+
+      "with a second, independent program."],
+        ["How:","Export the model below, run it in Midas Civil, paste the beam force "+
+      "results back, and this page reports the difference ordinate by ordinate."]]))+
     `<ol>
       <li>Export the MCT file and import it into Midas Civil.</li>
       <li>Run the analysis. The file defines one unit-load case per interior node
           (<span class="mono">UN2</span>, <span class="mono">UN3</span>, …), which are the influence
           coefficient cases required by §7.2.7.7B.</li>
       <li>In Midas, display <b>Results → Forces → Beam Forces</b> for all elements and all load cases, with
-          both member ends (Part I and J) shown. Include the dead load cases as well as the unit load cases:
-          the export writes <span class="mono">DLFILL</span>, <span class="mono">DLWS</span>,
-          <span class="mono">DLSDL</span>, <span class="mono">DLSELF</span> and
-          <span class="mono">DLEARTH</span> separately, and if they are pasted the program checks each
-          component against its own solve.</li>
+          both member ends (Part I and J) shown.${R.arNL(null,[["Dead load cases:",   /* ARNL */
+          `Include the dead load cases as well as the unit load cases: `+
+          `the export writes <span class="mono">DLFILL</span>, <span class="mono">DLWS</span>, `+
+          `<span class="mono">DLSDL</span>, <span class="mono">DLSELF</span> and `+
+          `<span class="mono">DLEARTH</span> separately, and if they are pasted the program checks each `+
+          `component against its own solve.`]])}</li>
       <li>Copy the result table, including its column headings, and paste it below.</li>
     </ol>`,"§7.2.7.7B");
 
@@ -11780,34 +11915,41 @@ function verifyPane(p){
      <div class="btnrow noprint"><button class="pri" id="bMct">Download MCT file</button>
        <button id="bMctPrev">Preview</button></div>`+
     msg("inf","Dead load is exported one case per component",
-      "The file writes <span class=\"mono\">DLFILL</span>, <span class=\"mono\">DLWS</span>, "+
+      R.arNL(null,[   /* ARNL */
+        ["Cases:","The file writes <span class=\"mono\">DLFILL</span>, <span class=\"mono\">DLWS</span>, "+
       "<span class=\"mono\">DLSDL</span>, <span class=\"mono\">DLSELF</span> and "+
       "<span class=\"mono\">DLEARTH</span> as separate load cases, with a <span class=\"mono\">DL_ALL</span> "+
       "combination summing them, so each can be checked against its own column in the Dead Load and Nodal "+
-      "Results tables. <b>The lateral earth pressure case is the one worth checking first</b> — it rests "+
-      "entirely on the assumed coefficient of §7.2.7.5B and supplies a large share of the springline moment. "+
-      "Solving all five independently from the exported file reproduces this program's component solve to "+
-      "within 2×10⁻⁶ at every node.")+
+      "Results tables."],
+        ["The lateral earth pressure case is the one worth checking first","— it rests "+
+      "entirely on the assumed coefficient of §7.2.7.5B and supplies a large share of the springline moment."],
+        ["Agreement:","Solving all five independently from the exported file reproduces this program's component solve to "+
+      "within 2×10⁻⁶ at every node."]]))+
     msg("key","Import format is not the export format",
-      "Midas writes more fields on export than its import parser accepts. Padding this file to match a "+
+      R.arNL("Midas writes more fields on export than its import parser accepts.",[   /* ARNL */
+        ["Padding","this file to match a "+
       "Midas-written export — a nine-field <span class=\"mono\">*CONLOAD</span> line, a twenty-four-field "+
-      "section line, a color block — produces <i>the number of parameters are too many</i> on import. This "+
-      "file therefore contains only the block forms confirmed to import, and nothing cosmetic.")+
+      "section line, a color block — produces <i>the number of parameters are too many</i> on import."],
+        ["This file","therefore contains only the block forms confirmed to import, and nothing cosmetic."]]))+
     msg("inf","Import status",
-      "A file from this program has been imported into Midas with every block parsing, so the node, element, "+
+      R.arNL(null,[   /* ARNL */
+        ["Confirmed blocks:","A file from this program has been imported into Midas with every block parsing, so the node, element, "+
       "section, material, constraint, static load case, <span class=\"mono\">*CONLOAD</span> and "+
-      "<span class=\"mono\">*BEAMLOAD</span> blocks are confirmed against Midas rather than assumed. "+
-      "The <span class=\"mono\">*LOADCOMB</span> block is off by default because it was rejected on import and "+
+      "<span class=\"mono\">*BEAMLOAD</span> blocks are confirmed against Midas rather than assumed."],
+        ["*LOADCOMB:","The <span class=\"mono\">*LOADCOMB</span> block is off by default because it was rejected on import and "+
       "is only a convenience; build the total dead load in Midas by summing DLFILL, DLWS, DLSDL, DLSELF and "+
-      "DLEARTH at unit factors. The dead load element loads themselves can also be omitted, leaving only the "+
-      "unit load cases, which is all the influence line comparison needs.")+
+      "DLEARTH at unit factors."],
+        ["Unit load cases only:","The dead load element loads themselves can also be omitted, leaving only the "+
+      "unit load cases, which is all the influence line comparison needs."]]))+
     `<div id="mctPrev"></div>`,"");
 
   s+=UI.pnl("v_mesh",c(),"Mesh convergence study",
-    `<p>§7.2.7.2B fixes the element count by span — ten elements, or one per four feet of clear span,
-     whichever gives more. That is a compliance floor, not evidence that the answer has settled: it takes no
-     account of the rise-to-span ratio, the ring depth, or where the deterioration is. This runs the rating
-     again at about twice and four times the element count in use and reports how far it moves.</p>
+    `<div class="note">${R.arNL(null,[   /* ARNL */
+      ["§7.2.7.2B","fixes the element count by span — ten elements, or one per four feet of clear span, "+
+     "whichever gives more."],
+      ["Floor, not convergence:","That is a compliance floor, not evidence that the answer has settled: it takes no "+
+     "account of the rise-to-span ratio, the ring depth, or where the deterioration is."],
+      ["This study","runs the rating again at about twice and four times the element count in use and reports how far it moves."]])}</div>
      <p>It runs automatically on every change of input (MCV, 2026-11-07): every vehicle is rated on all three
      meshes and the lowest rating factor is the one reported. The same table is on the Rating tab.</p>`+
     `<div id="meshOut">${archConvTable()}</div>`,"§7.2.7.2B");
@@ -11831,59 +11973,61 @@ function comparisonBlock(p){
   h+=`<h4>Sign and end conventions</h4>`;
   const cOK=impConv.continuity<1e-3;
   h+=msg(cOK?"inf":"wrn","Sign mapping resolved from physics, not fitted to this program",
-    `<b>How the mapping was found.</b> Programs differ in whether they report the internal force diagram or the
-     applied end forces, and in which direction is positive. Rather than assume, the mapping is resolved by
+    `<div class="arNLl">How the mapping was found.</div><ul class="arNLu">${"" /* ARNL: the R.arNL markup, written in place */}<li><b class="arNLk">Conventions:</b> Programs differ in whether they report the internal force diagram or the
+     applied end forces, and in which direction is positive.</li><li><b class="arNLk">Continuity:</b> Rather than assume, the mapping is resolved by
      continuity: at a node carrying no applied load the two adjacent element ends must give the same section
-     force once projected onto the section. A joint search over the relative and global sign options finds the
-     mapping that satisfies that condition. Continuity is unchanged if every sign flips at once, so it fixes the
+     force once projected onto the section.</li><li><b class="arNLk">Search:</b> A joint search over the relative and global sign options finds the
+     mapping that satisfies that condition.</li><li><b class="arNLk">Overall sign:</b> Continuity is unchanged if every sign flips at once, so it fixes the
      mapping only up to one overall sign; that last choice is settled by arch behavior — the mapping giving net
-     compression is adopted. <b>None of this is fitted to the internal solver</b>, so the magnitudes reported
-     below remain an independent check.<br><br>
-     <b>Adopted mapping:</b> axial ${impConv.sA>0?"+1":"\u22121"}, shear ${impConv.sV>0?"+1":"\u22121"},
+     compression is adopted.</li><li><b class="arNLk">None of this is fitted to the internal solver,</b> so the magnitudes reported
+     below remain an independent check.</li>
+     <li><b class="arNLk">Adopted mapping:</b> axial ${impConv.sA>0?"+1":"\u22121"}, shear ${impConv.sV>0?"+1":"\u22121"},
      J-end axial ${impConv.relN>0?"+1":"\u22121"}, J-end shear ${impConv.relV>0?"+1":"\u22121"},
-     J-end moment ${impConv.relM>0?"+1":"\u22121"}, moment sense ${impSgn.mom>0?"+1":"\u22121"}.<br>
-     <b>Sign mapping is resolved by continuity of thrust and shear at unloaded nodes.</b> Where two mappings
+     J-end moment ${impConv.relM>0?"+1":"\u22121"}, moment sense ${impSgn.mom>0?"+1":"\u22121"}.</li>
+     <li><b class="arNLk">Sign mapping is resolved by continuity of thrust and shear at unloaded nodes.</b> Where two mappings
      satisfy continuity equally well the choice cannot be made on physics alone; the program keeps the
      continuity-satisfying mapping rather than the best-fitting one, so a residual difference below is a real
-     difference between the models and not an artefact of the mapping.<br>
-     <b>Continuity residual (median):</b> ${impConv.continuity.toExponential(2)} over ${impConv.nPairs}
+     difference between the models and not an artefact of the mapping.</li>
+     <li><b class="arNLk">Continuity residual (median):</b> ${impConv.continuity.toExponential(2)} over ${impConv.nPairs}
      interior node pairs${impConv.alternatives>1?", with "+impConv.alternatives+" mappings tied on continuity and the compressive one adopted":""}.
      ${cOK?"A residual at this level confirms the mapping is correct."
-          :"<b>This residual is large.</b> The element end forces are not continuous under any sign mapping, which usually means the pasted results are not from the exported model, the element numbering differs, or the wrong result columns were picked up. Resolve this before reading the comparison below."}`);
+          :"<b>This residual is large.</b> The element end forces are not continuous under any sign mapping, which usually means the pasted results are not from the exported model, the element numbering differs, or the wrong result columns were picked up. Resolve this before reading the comparison below."}</li></ul>`);
   h+=`<h4>Agreement, ordinate by ordinate</h4>`;
   h+=R.step({label:"Relative difference, scaled to the largest ordinate in each load case",
     sym:"\\Delta=\\dfrac{\\left|\\eta_{Midas}-\\eta_{internal}\\right|}{\\max_i\\left|\\eta_{internal,i}\\right|}\\times100",
     sub:"",res:"",units:"\\%",
-    note:"Scaling to the case maximum rather than to the local ordinate matters. Load cases near a springing "+
+    note:R.arNL("Scaling to the case maximum rather than to the local ordinate matters.",[   /* ARNL */
+      ["Near a springing:","Load cases near a springing "+
       "consist mostly of ordinates a few hundredths in size, where half a rounding unit is already tens of "+
-      "percent; dividing by those would report a meaningless number. Absolute differences are given alongside "+
-      "and compared against the precision of the pasted data. Comparison is made after this program's own "+
-      "section force recovery is applied to the imported end forces, so the test isolates the solve."});
+      "percent; dividing by those would report a meaningless number."],
+      ["Absolute differences","are given alongside and compared against the precision of the pasted data."],
+      ["Isolates the solve:","Comparison is made after this program's own "+
+      "section force recovery is applied to the imported end forces, so the test isolates the solve."]])});
   const noiseStr=impCmp.decimals?`${impCmp.decimals} decimal place${impCmp.decimals>1?"s":""}, so values are rounded to ±${impCmp.noise}`:"unknown precision";
   h+=`<div class="msg ${impCmp.withinNoise?"m-key":"m-wrn"}">
       <b>${impCmp.withinNoise
         ? "Agreement is within the precision of the pasted data"
-        : "Differences exceed what rounding can explain — the two models are not identical"}</b><br>
-      Worst difference, scaled to the case maximum: moment <b>${impCmp.worstM>0?nfx(impCmp.worstM,2)+"%":"—"}</b>
+        : "Differences exceed what rounding can explain — the two models are not identical"}</b><ul class="arNLu">${"" /* ARNL: the R.arNL markup, written in place */}
+      <li><b class="arNLk">Worst difference,</b> scaled to the case maximum: moment <b>${impCmp.worstM>0?nfx(impCmp.worstM,2)+"%":"—"}</b>
       ${impCmp.wmCase?"at "+esc(impCmp.wmCase):""}, thrust
       <b>${impCmp.worstC>0?nfx(impCmp.worstC,2)+"%":"—"}</b>
-      ${impCmp.wcCase?"at "+esc(impCmp.wcCase):""}.<br>
-      ${impCmp.nUnres?`<b>${impCmp.nUnres}</b> load case${impCmp.nUnres>1?"s are":" is"} excluded from that
+      ${impCmp.wcCase?"at "+esc(impCmp.wcCase):""}.</li>
+      ${impCmp.nUnres?`<li><b class="arNLk">Excluded:</b> <b>${impCmp.nUnres}</b> load case${impCmp.nUnres>1?"s are":" is"} excluded from that
       percentage because ${impCmp.nUnres>1?"their peaks are":"its peak is"} below
       ${impCmp.resolveMult}× the rounding unit of the pasted data — rounding alone would move
       ${impCmp.nUnres>1?"them":"it"} by tens of percent, so the figure would be noise. Their absolute
-      differences are still shown and still checked.<br>`:""}
-      Worst absolute difference: moment <b>${nfx(impCmp.absM,4)}</b> kip·ft, thrust
-      <b>${nfx(impCmp.absC,4)}</b> kip. The pasted results carry ${noiseStr}.<br>
-      ${impCmp.nCmp} ordinates compared across ${impCmp.rows.length} unit load cases.<br>
-      <b>Best achievable with this data: ±${impCmp.noise}.</b> Printing an exact answer at
+      differences are still shown and still checked.</li>`:""}
+      <li><b class="arNLk">Worst absolute difference:</b> moment <b>${nfx(impCmp.absM,4)}</b> kip·ft, thrust
+      <b>${nfx(impCmp.absC,4)}</b> kip. The pasted results carry ${noiseStr}.</li>
+      <li><b class="arNLk">Compared:</b> ${impCmp.nCmp} ordinates compared across ${impCmp.rows.length} unit load cases.</li>
+      <li><b class="arNLk">Best achievable with this data: ±${impCmp.noise}.</b> Printing an exact answer at
       ${impCmp.decimals||2} decimal places loses up to half a unit, so two programs in perfect agreement would
       still differ by up to that much — in moment and in thrust alike. A difference at or below that figure is
-      the data speaking, not the models. Thrust ordinates are of order one while moment ordinates near a
+      the data speaking, not the models.</li><li><b class="arNLk">Asymmetry:</b> Thrust ordinates are of order one while moment ordinates near a
       springing are hundredths, so the same absolute rounding loss reads as a fraction of a percent in thrust
       and tens of percent in moment; that asymmetry is presentational, not physical.
-      ${impCmp.missing.length?`<br>Load cases in the model but not in the pasted data: `+
-        esc(impCmp.missing.slice(0,12).join(", "))+(impCmp.missing.length>12?" …":"")+".":""}</div>`;
+      ${impCmp.missing.length?`<li><b class="arNLk">Missing:</b> Load cases in the model but not in the pasted data: `+
+        esc(impCmp.missing.slice(0,12).join(", "))+(impCmp.missing.length>12?" …":"")+".</li>":""}</ul></div>`;
   if(!impCmp.withinNoise)
     h+=msg("wrn","What to check when the models differ",
       "The sign and end conventions above resolved cleanly, so the pasted data is being read correctly — the "+
@@ -11914,11 +12058,13 @@ function comparisonBlock(p){
     h+=msg(impDead.withinNoise?"key":"wrn",
       impDead.withinNoise?"Every dead load component agrees within the data precision"
         :`Largest dead load difference is in <b>${esc(impDead.worstWhat)}</b>`,
-      "The export writes each dead load component as its own load case — fill, wearing surface, superimposed "+
+      R.arNL(null,[   /* ARNL */
+        ["One case per component:","The export writes each dead load component as its own load case — fill, wearing surface, superimposed "+
       "dead load, ring self weight, and lateral earth pressure — so a disagreement can be traced to the load "+
-      "that causes it rather than left in one combined figure. Differences are shown against the peak value of "+
-      "that component, since a component that is small everywhere cannot be judged on a percentage. "+
-      (impDead.tolNote?esc(impDead.tolNote)+".":""));
+      "that causes it rather than left in one combined figure."],
+        ["Against the peak:","Differences are shown against the peak value of "+
+      "that component, since a component that is small everywhere cannot be judged on a percentage."],
+        impDead.tolNote?["Tolerance:",esc(impDead.tolNote)+"."]:null]));
     h+=dtab([{k:"name",h:"Load case",txt:1},{k:"comp",h:"Component",txt:1},
       {k:"peakM",h:"peak |M| (k·ft/ft)",dp:3},{k:"aM",h:"worst ΔM",dp:5},{k:"pM",h:"ΔM (%)",dp:2},
       {k:"peakP",h:"peak |P| (k/ft)",dp:3},{k:"aP",h:"worst ΔP",dp:5},{k:"pP",h:"ΔP (%)",dp:2}],
@@ -11987,18 +12133,21 @@ function ratingSummary(p){
      </div>`+
     rsTable(p,R,tonsMode)+
     msg("key","How to read this table",
-      "Each cell is the live load effect multiplier that brings <b>that section</b> to its allowable stress, "+
+      arNL(null,[   /* ARNL */
+        ["Each cell","is the live load effect multiplier that brings <b>that section</b> to its allowable stress, "+
       "with the vehicle at <b>that section's own critical position</b> — found by sweeping the vehicle across "+
-      "the structure in both directions and taking the minimum at that section alone. It is not the rating "+
-      "evaluated at the position that governs the bridge, which would understate every other section. "+
-      "<b>The governing cell in each vehicle's column is boxed and marked</b>, and its value is the rating "+
-      "factor reported for that vehicle. Every other cell in the column is the margin that section carries "+
-      "beyond the governing one.")+
-    `<div class="note">Sections are listed springing to springing. Rows shade from the governing section
-      outward, so where the margin is thin across several sections — which is where a small change of
-      assumption moves which one governs — it is visible at a glance rather than by reading numbers.
-      ${R.ms>400?`Computed in ${nfx(R.ms/1000,1)} s; this table is one full position sweep per vehicle and is
-      cached until the model changes.`:""}</div>`,"§7.2.7.12");
+      "the structure in both directions and taking the minimum at that section alone."],
+        ["Not the bridge position:","It is not the rating "+
+      "evaluated at the position that governs the bridge, which would understate every other section."],
+        ["The governing cell in each vehicle's column is boxed and marked,","and its value is the rating "+
+      "factor reported for that vehicle."],
+        ["Every other cell","in the column is the margin that section carries beyond the governing one."]]))+
+    `<div class="note">${arNL("Sections are listed springing to springing.",[   /* ARNL */
+      ["Shading:","Rows shade from the governing section "+
+      "outward, so where the margin is thin across several sections — which is where a small change of "+
+      "assumption moves which one governs — it is visible at a glance rather than by reading numbers."],
+      R.ms>400?["Run time:",`Computed in ${nfx(R.ms/1000,1)} s; this table is one full position sweep per vehicle and is `+
+      `cached until the model changes.`]:null])}</div>`,"§7.2.7.12");
 
   s+=UI.pnl("rs_margin",c(),"Where the margin is thinnest",rsMargin(p,R),"§7.2.7.9B");
   return s;
@@ -12045,10 +12194,11 @@ function rsTable(p,R,tonsMode){
        `<div class="h">at ${CALC.secTag(M,c.S.gov)}</div></td>`;
   });
   h+=`</tr></tfoot></table></div>`;
-  if(tonsMode)h+=`<div class="note">Tonnage is the rating factor times the vehicle's rating weight.
-    For a highway truck that is the truck's own weight; for a railroad consist the axle train may represent
-    several identical units, and for the Cooper series the reference is 80 kip rather than a physical weight,
-    so the E-number below each Cooper total is the meaningful figure.</div>`;
+  if(tonsMode)h+=`<div class="note">${arNL("Tonnage is the rating factor times the vehicle's rating weight.",[   /* ARNL */
+    ["Highway truck:","For a highway truck that is the truck's own weight;"],
+    ["Railroad consist:","for a railroad consist the axle train may represent several identical units,"],
+    ["Cooper series:","and for the Cooper series the reference is 80 kip rather than a physical weight, "+
+    "so the E-number below each Cooper total is the meaningful figure."]])}</div>`;
   return h;
 }
 function rsMargin(p,R){
@@ -12091,29 +12241,33 @@ function rsMargin(p,R){
     {k:"note",h:"",txt:1}],out);
   const tight=out.filter(o=>o.gap<10);
   if(tight.length)h+=msg("wn","Two sections are close to governing",
-    `For ${tight.map(o=>"<b>"+esc(o.veh)+"</b>").join(", ")} the second-lowest section is within 10% of the `+
-    `governing one. That means the choice of governing section rests on assumptions rather than on a clear `+
+    arNL(`For ${tight.map(o=>"<b>"+esc(o.veh)+"</b>").join(", ")} the second-lowest section is within 10% of the `+   /* ARNL */
+    `governing one.`,[
+      ["Meaning:",`That means the choice of governing section rests on assumptions rather than on a clear `+
     `structural margin: the lateral earth pressure coefficient, the fill unit weight, the element count and `+
-    `the deterioration extent can each move the two past one another. Check that both sections are defensible `+
-    `rather than only the one that happens to be reported.`,"§7.2.7.9B");
+    `the deterioration extent can each move the two past one another.`],
+      ["Check",`that both sections are defensible rather than only the one that happens to be reported.`]]),"§7.2.7.9B");
   else h+=msg("ok","The governing section is clear",
     "For every vehicle the next-lowest independent section carries a comfortable margin over the governing "+
     "one, so the reported location is not sensitive to small changes in assumption.");
-  h+=`<div class="note">The mirror of the governing section is excluded from the "next lowest" column. On a
-    symmetric barrel it rates within a fraction of a percent of the governing section for every vehicle, which
-    is the geometry being symmetric rather than the rating being finely balanced, and including it would mark
-    every row close.</div>`;
+  h+=`<div class="note">${arNL(`The mirror of the governing section is excluded from the "next lowest" column.`,[   /* ARNL */
+    ["Why:","On a "+
+    "symmetric barrel it rates within a fraction of a percent of the governing section for every vehicle, which "+
+    "is the geometry being symmetric rather than the rating being finely balanced, and including it would mark "+
+    "every row close."]])}</div>`;
   if(symWorst>0)h+=msg(symWorst>2?"wn":"key",
     symWorst>2?"Mirror sections do not agree":"Symmetry check on the rating sweep",
-    `The largest disagreement between a governing section and its mirror is <b>${nfx(symWorst,2)}%</b>. `+
+    arNL(`The largest disagreement between a governing section and its mirror is <b>${nfx(symWorst,2)}%</b>.`,   /* ARNL */
     (symWorst>2
-      ? `On a model whose geometry, restraint, depth profile and grade are all symmetric these should agree to
-         rounding. A gap this size means something is not symmetric — check the grade, the deterioration
-         stations and any measured-point geometry before reading the governing location.`
-      : `On a symmetric model the two should agree to rounding, and they do. What residual there is comes from
-         the position sweep: the vehicle is stepped on a fixed grid from one end, so the exact mirror of a
-         critical position does not always fall on that grid. It bounds the discretisation error in the
-         reported rating and is a useful number to quote.`),"§7.2.7.8B");
+      ? [["Expected:","On a model whose geometry, restraint, depth profile and grade are all symmetric these should agree to "+
+         "rounding."],
+         ["Not symmetric:","A gap this size means something is not symmetric — check the grade, the deterioration "+
+         "stations and any measured-point geometry before reading the governing location."]]
+      : [["Agree:","On a symmetric model the two should agree to rounding, and they do."],
+         ["Residual:","What residual there is comes from "+
+         "the position sweep: the vehicle is stepped on a fixed grid from one end, so the exact mirror of a "+
+         "critical position does not always fall on that grid."],
+         ["Use:","It bounds the discretisation error in the reported rating and is a useful number to quote."]])),"§7.2.7.8B");
   return h;
 }
 function readPSafe(){try{return readP();}catch(e){return M?M.p:null;}}
@@ -12320,13 +12474,16 @@ function archConvTable(){
       on:String(C.meshes[r.rf.indexOf(r.lo)])+" el"};
     r.rf.forEach((x,i)=>o["m"+i]=x);return o;});
   return dtab(cols,rows,{})+
-    `<div class="note">Each column is a complete rating: the model is rebuilt at that element count (equal arc length,
-     nodes at the ring mid-depth) and every vehicle is swept in both directions at the same 0.25 ft step. §7.2.7.2B
-     sets ${C.n1} elements as the minimum for this span (or the count entered, if larger); finer meshes are compliant.
-     The lowest rating factor of the three is reported for each vehicle, so the reported rating is never above what
-     any of the three meshes gives. The worked steps on every tab use the ${C.gN}-element mesh, on which the
-     controlling vehicle rates lowest. Spread for the controlling vehicle: <b>${nfx(C.spread,1)}%</b> of its highest rating
-     (rated in ${nfx(C.ms/1000,1)} s).</div>`;
+    `<div class="note">${R.arNL("Each column is a complete rating:",[   /* ARNL */
+      ["Mesh:","the model is rebuilt at that element count (equal arc length, "+
+     "nodes at the ring mid-depth) and every vehicle is swept in both directions at the same 0.25 ft step."],
+      ["§7.2.7.2B",`sets ${C.n1} elements as the minimum for this span (or the count entered, if larger); finer meshes are compliant.`],
+      ["Reported:","The lowest rating factor of the three is reported for each vehicle, so the reported rating is never above what "+
+     "any of the three meshes gives."],
+      ["Worked steps:",`The worked steps on every tab use the ${C.gN}-element mesh, on which the `+
+     `controlling vehicle rates lowest.`],
+      ["Spread",`for the controlling vehicle: <b>${nfx(C.spread,1)}%</b> of its highest rating `+
+     `(rated in ${nfx(C.ms/1000,1)} s).`]])}</div>`;
 }
 /* ---------------- render ---------------- */
 const TABS=[["sum","Summary"],["geo","Model"],["dl","Dead Load"],["ll","Live Load"],
@@ -13954,7 +14111,7 @@ function arptItems(body,scope,cap,ctx){
       if(cl.contains("msg")){flushTxt();endRun();const b=e.querySelector(":scope>b");let t="";
         [...e.childNodes].forEach(c=>{t+=(c===b?arptInline(c,ctx)+": ":c.nodeType===1&&!ARPT_INLINE.test(c.tagName)?" "+arptInline(c,ctx)+" ":arptInline(c,ctx));});
         t=arptClean(t).replace(/:\s*:/,":");if(t)push({type:"note",text:t,warn:cl.contains("m-err")||cl.contains("m-wrn")});continue;}
-      if(tag==="UL"||tag==="OL"){flushTxt();endRun();[...e.children].forEach((li,i)=>{const t=arptClean(arptInline(li,ctx));if(t)push({type:"note",text:(tag==="OL"?(i+1)+". ":"• ")+t});});continue;}
+      if(tag==="UL"||tag==="OL"){flushTxt();endRun();[...e.children].forEach((li,i)=>{const t=arptClean([...li.childNodes].map(c=>arptInline(c,ctx)).join(""));if(t)push({type:"note",text:(tag==="OL"?(i+1)+". ":"• ")+t});});continue;}
       if(cl.contains("wkLink")){buf+=" "+arptInline(e,ctx).replace(/^\s*Worked in:\s*/,"Worked in: ")+" ";continue;}
       if(ARPT_INLINE.test(tag)){buf+=arptInline(e,ctx);continue;}
       if(tag==="P"||cl.contains("note")||tag==="PRE"||tag==="BLOCKQUOTE"){flushTxt();endRun();const t=arptClean(arptInline(e,ctx));if(t)push({type:"note",text:t});continue;}
