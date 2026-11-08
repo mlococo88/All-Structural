@@ -64,7 +64,7 @@ for (const key of list) {
     const sha0 = gitBlobSha(gh.files.get(P('GHS A')));
     await T.change(p); await T.save(p, 'GHS A');
     await until(() => gitBlobSha(gh.files.get(P('GHS A'))) !== sha0, 15000, 'upload of the update');
-    const put = gh.log.filter(l => l.method === 'PUT' && l.url.includes('GHS%20A')).at(-1);
+    const put = gh.log.filter(l => l.method === 'PUT' && l.url.includes('GHS%20A') && !l.url.includes('/.presence/')).at(-1);
     ok(JSON.parse(put.body).sha === sha0, 'change + Save -> update sent with the file\'s sha');
     const r1 = await T.results(p);
     gh.setRemote(P('GHS remote'), gh.files.get(P('GHS A')));
@@ -81,7 +81,7 @@ for (const key of list) {
     ok(!d.length, 'GitHub-only copy opened: results identical to the saved project' + (T.openIgnore ? ' (except ' + T.openIgnore.join(', ') + ')' : '') + (d.length ? ` (${d.length} differences: ${JSON.stringify(d.slice(0, 3)).slice(0, 400)})` : ''));
     const nms = T.names ? await T.names(p) : Object.keys(JSON.parse(await p.evaluate(k => localStorage.getItem(k), T.list) || '{}'));
     ok(nms.includes('GHS remote') && nms.includes('GHS A'), 'the tool\'s own list holds both projects');
-    const sk = (await p.evaluate(() => Object.keys(localStorage))).filter(k => /^bridgeSuite\.v1\.githubSync/.test(k)).sort();
+    const sk = (await p.evaluate(() => Object.keys(localStorage))).filter(k => /^bridgeSuite\.v1\.githubSync/.test(k) && !/^bridgeSuite\.v1\.githubSync\.(deviceId|live|presence\.)/.test(k)).sort();   // LIVE (2026-11-08): .deviceId / .presence.<tool> are the presence keys
     // STDS (2026-11-06): the Concrete Beam suite page holds three frames with sync (Beam Capacity, Development & Splice): each keeps its own bookkeeping key
     const sib = (SUITE[key] || []).map(k => `bridgeSuite.v1.githubSync.tool.${FOLDER[k]}`), want = ['bridgeSuite.v1.githubSync', `bridgeSuite.v1.githubSync.tool.${folder}`, ...sib].sort();
     ok(JSON.stringify(sk) === JSON.stringify(want), 'sync keys: bridgeSuite.v1.githubSync and .tool.' + folder + (sib.length ? ' (+ the suite\'s other tabs: ' + sib.join(', ') + ')' : '') + ' only (' + sk.join(', ') + ')');

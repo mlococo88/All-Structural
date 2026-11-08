@@ -301,7 +301,9 @@
       : confirm(`The project on screen has unsaved changes${getCur() && store.has(getCur()) ? ` (since "${getCur()}" was last saved)` : ' and is not in the saved list'}. ${what} anyway? (Cancel, then Save, keeps them.)`);
     let st = null;   // START: the start-of-session chooser (ctx.start), else null
     /* the dialog's Open (and the strip's): asks first on unsaved changes, then the tool's own open path */
-    const openNamed = n => { if (!guard(`Open "${n}"`)) return false; const r = ctx.open(n); if (r === false) return false; setCur(n); if (ctx.afterOpen) ctx.afterOpen(n); if (st) st.opened(n); later(); return true; };
+    const openNow = n => { if (!guard(`Open "${n}"`)) return false; const r = ctx.open(n); if (r === false) return false; setCur(n); if (ctx.afterOpen) ctx.afterOpen(n); if (st) st.opened(n); later(); return true; };
+    /* LIVE PR 3 (presence): another device has the project open -> "Open on <device> since <time>" first (Open anyway / Cancel) */
+    const openNamed = n => live && live.openCheck ? live.openCheck(n, openNow) : openNow(n);
     const dialog = libraryDialog({ store, storage: ctx.storage, standard: true, label: ctx.label, id: ctx.id, cloud: ctx.cloud, note: ctx.note, exportOne: ctx.exportOne, ghNote: ctx.ghNote,
       current: () => { const n = getCur(); return n && store.has(n) ? n : null; },
       open: openNamed,
@@ -441,13 +443,15 @@
         offers Undo (this browser's previous version back, nothing changed on GitHub). Keep mine: the banner closes for that GitHub
         version; nothing is loaded or uploaded (a later save of this project keeps both, as a conflict copy). Nothing on screen is
         ever replaced without Load it.
+     C. Presence (LIVE PR 3): see "presence" below.
      b = { store, dialog, eng, getCur, snapshot, dirty, refresh, opened(name), autoSave(name) } (projectBar internals) */
   function liveBar(ctx, b) {
     if (typeof document === 'undefined' || typeof window === 'undefined') return null;
     const G = () => window.SharedGitHubSync && window.SharedGitHubSync.autoSaveDue ? window.SharedGitHubSync : null;
     const now = () => Date.now();
     const lv = { name: undefined, ref: null, snap: null, changedAt: 0, lastAt: now(), autoSnap: null, autoAt: 0, fail: null, pollAt: 0, polling: false,
-      loading: false, dismissed: {}, upd: null, undo: null, msg: null };
+      loading: false, dismissed: {}, upd: null, undo: null, msg: null,
+      beatAt: 0, beatName: null, activeAt: now(), others: [] };   // presence (LIVE PR 3)
     const hm = t => { try { return new Date(t).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }); } catch (e) { return ''; } };
     const hidden = () => { try { if (document.visibilityState === 'hidden') return true; const f = window.frameElement; return !!(f && !f.getClientRects().length); } catch (e) { return false; } };   // a tab in the background, or a frame that is not shown
     let box = null;
@@ -455,7 +459,7 @@
     function reset() {
       const n = b.getCur(), other = n !== lv.name;
       lv.name = n; lv.ref = lv.snap = b.snapshot(); lv.changedAt = lv.lastAt = now(); lv.autoSnap = null; lv.fail = null;
-      if (other) { lv.pollAt = 0; lv.autoAt = 0; if (lv.upd && lv.upd.name !== n) lv.upd = null; if (lv.undo && lv.undo.u.name !== n) lv.undo = null; draw(); }
+      if (other) { lv.pollAt = 0; lv.autoAt = 0; lv.others = []; lv.beatAt = 0; leave(); if (lv.upd && lv.upd.name !== n) lv.upd = null; if (lv.undo && lv.undo.u.name !== n) lv.undo = null; draw(); }
     }
     function tick() {
       const g = G(), e = g && b.eng();
@@ -469,6 +473,9 @@
         if (b.autoSave(n)) { lv.autoAt = now(); lv.fail = null; } else { lv.fail = 'not saved'; }
         b.refresh();
       }
+      if (!L.watch && (lv.beatName || lv.others.length)) { leave(); lv.others = []; draw(); }
+      const bd = g.beatDue({ configured: true, on: L.watch, name: n, inList, hidden: hidden(), now: t, lastAt: lv.beatAt, activeAt: lv.activeAt });
+      if (bd.due && e.statusOf(n) != null) { lv.beatAt = t; lv.beatName = n; e.beat(n).catch(() => {}); }   // presence: this device's heartbeat (LIVE PR 3)
       const pd = g.pollDue({ configured: true, on: L.watch, name: n, inList, hidden: hidden(), now: t, lastAt: lv.pollAt });
       if (pd.due && !lv.polling && !lv.loading) {
         lv.pollAt = t; lv.polling = true;
@@ -477,6 +484,8 @@
     }
     async function onPoll(e, n, r) {
       if (n !== b.getCur() || !r || !r.ok || r.waiting) return;
+      const oth = (r.presence || []).filter(x => x.fresh), was = JSON.stringify(lv.others);
+      lv.others = oth; if (JSON.stringify(oth) !== was) draw();   // presence: "Also open on <device>"
       if (r.state === 'changed' || r.state === 'both') {
         if (lv.dismissed[n + '\n' + r.cloudSha]) { if (lv.upd) { lv.upd = null; draw(); } return; }
         if (lv.upd && lv.upd.sha === r.cloudSha) { lv.upd.both = r.state === 'both'; draw(); return; }
@@ -541,7 +550,45 @@
       }
       box.innerHTML = parts.join('');
     }
-    const extra = [], acts = [];   // more banners / actions (presence, LIVE PR 3)
+    const extra = [], acts = [];   // more banners / actions
+    /* ---- presence (LIVE PR 3, 2026-11-08) ----
+       While a named project is open (sync and the "Check GitHub…" box on): this device's heartbeat file
+       projects/<tool>/.presence/<safe name>.<device id>.json is written when the project is opened and then once a minute, only while
+       the tab is visible and the page had an input, click or key in the last 10 min (SharedGitHubSync.beatDue); one file per browser
+       (tabs share it). It is deleted when another project is opened, New is used, the box is unticked, or the page closes (pagehide,
+       keepalive). Not deleted when the tab is hidden (it goes stale after 2.5 min; deleting and re-adding would double the commits).
+       Banner "Also open on <device> (since <time>)" while another device's heartbeat is fresh (from the 30 s check). Opening a
+       project (Saved projects, Recent projects strip) that another device has open: "Open on <device> since <time> — edits on both
+       may conflict" with Open anyway / Cancel. */
+    function leave(ko) { const e = b.eng(), n = lv.beatName; lv.beatName = null; if (e && n) e.leave(n, ko).catch(() => {}); }
+    extra.push(() => {
+      if (!lv.others.length) return '';
+      const list = lv.others.map(x => `<b>${esc(x.device || 'another device')}</b>${x.since ? ` (since ${esc(hm(x.since))})` : ''}`).join(', ');
+      return `<div class="spLvB warn" data-lv="pres" role="status">Also open on ${list}<span class="spLvN">“${esc(lv.name || '')}” is open there too. Edits on both devices may conflict; if they do, both versions are kept.</span></div>`;
+    });
+    const mark = () => { lv.activeAt = now(); };
+    ['input', 'pointerdown', 'keydown'].forEach(k => document.addEventListener(k, mark, { capture: true, passive: true }));
+    window.addEventListener('pagehide', () => { leave({ keepalive: true }); });
+    let pw = null;
+    function warnOpen(n, list, go) {
+      if (!pw) { pw = document.createElement('dialog'); pw.className = 'spLib spSave'; pw.setAttribute('data-sp', 'presence'); document.body.appendChild(pw); }
+      const who = list.map(x => `<b>${esc(x.device || 'another device')}</b>${x.since ? ` since ${esc(hm(x.since))}` : ''}`).join(', ');
+      pw.innerHTML = `<div class="spHead"><strong>“${esc(n)}” is open on another device</strong></div>`
+        + `<p>Open on ${who} — edits on both may conflict.</p><p class="spNote">If both are saved, both versions are kept (one as a conflict copy). Nothing is lost.</p>`
+        + `<div class="spBtns"><button type="button" data-pw="cancel">Cancel</button><button type="button" class="spPri" data-pw="open">Open anyway</button></div>`;
+      pw.onclick = ev => { const t = ev.target.closest('[data-pw]'); if (ev.target === pw) { pw.close(); return; } if (!t) return; pw.close(); if (t.dataset.pw === 'open') go(); };
+      if (!pw.open) { if (pw.showModal) pw.showModal(); else pw.setAttribute('open', ''); }
+    }
+    /* openCheck(n, open): the dialog's / strip's Open. At once when sync or the box is off, when it is the open project, or when the
+       last tree this page read (less than a minute ago) has no other device's heartbeat for it; else after one check (the tree,
+       reused when recent, and the heartbeat files new to this page): returns false at first and opens (or warns) when the answer comes. */
+    function openCheck(n, open) {
+      const g = G(), e = g && b.eng();
+      if (!e || !g.live(ctx.storage).watch || n === b.getCur() || e.presenceHint(n) === 'none') return open(n);
+      const go = () => { if (open(n) !== false) { const d = b.dialog && b.dialog.el; if (d && d.open) d.close(); } };
+      e.others(n).then(r => { const list = r && r.ok ? r.list : []; if (list.length) warnOpen(n, list, go); else go(); }, go);
+      return false;
+    }
     /* the chip's text: "auto-saved 14:32" / "uploading" / "pending (offline)" (only with sync set up and a project in the list) */
     function chipHtml(n, inList) {
       const e = b.eng(); if (!e || !inList) return '';
@@ -554,7 +601,7 @@
     }
     setInterval(() => { try { tick(); } catch (e) { /* the tool works without it */ } }, 3000);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') setTimeout(() => { try { tick(); } catch (e) { /* next tick */ } }, 300); });
-    return { reset, tick, chipHtml, draw, state: () => lv, extra, acts, hidden, loadIt, undo, keepMine };
+    return { reset, tick, chipHtml, draw, state: () => lv, extra, acts, hidden, loadIt, undo, keepMine, openCheck, presence: true };
   }
 
   /* startChooser(ctx, bar) (START, 2026-11-06: TRIAL in Spread Footing only, pending engineer review). Called by projectBar when

@@ -107,7 +107,7 @@ await until(() => gh.files.has(pathOf('Footing C')), 10000, 'background upload o
 const shaA = gitBlobSha(gh.files.get(pathOf('Footing A')));
 await T.change(p); await T.overwrite(p, 'Footing A');
 await until(() => gitBlobSha(gh.files.get(pathOf('Footing A'))) !== shaA, 10000, 'update');
-const put = gh.log.filter(l => l.method === 'PUT' && l.url.includes('Footing%20A')).at(-1); assert.equal(JSON.parse(put.body).sha, shaA);
+const put = gh.log.filter(l => l.method === 'PUT' && l.url.includes('Footing%20A') && !l.url.includes('/.presence/')).at(-1); assert.equal(JSON.parse(put.body).sha, shaA);
 assert.equal(gh.files.get(pathOf('Footing A')), JSON.stringify(JSON.parse(await ls(T.list))['Footing A'], null, 1));
 ok('a new save and an Overwrite are uploaded in the background; the update carries the file\'s sha');
 
@@ -148,9 +148,9 @@ await p.click('#spLibDlg [data-spa=del][data-n="Footing%20C"]'); await p.waitFor
 assert.ok(!JSON.parse(await ls(T.list))['Footing C']); assert.ok(gh.files.has(pathOf('Footing C')));
 assert.match((await p.evaluate(() => window.__asked)).at(-1), /Also delete "Footing C" from GitHub/);
 await until(() => p.evaluate(() => !!document.querySelector('#spLibDlg [data-ghx=delcloud][data-n="Footing%20C"]')), 5000, 'cloud-only after delete');
-assert.equal(gh.log.filter(l => l.method === 'DELETE').length, 0);
+assert.equal(gh.log.filter(l => l.method === 'DELETE' && !l.url.includes('/.presence/')).length, 0);
 await p.evaluate(() => { window.__ans = [true]; }); await p.click('#spLibDlg [data-ghx=delcloud][data-n="Footing%20C"]');
-await until(() => !gh.files.has(pathOf('Footing C')), 8000, 'cloud delete'); assert.equal(gh.log.filter(l => l.method === 'DELETE').length, 1);
+await until(() => !gh.files.has(pathOf('Footing C')), 8000, 'cloud delete'); assert.equal(gh.log.filter(l => l.method === 'DELETE' && !l.url.includes('/.presence/')).length, 1);
 ok('deleting in the dialog asks about GitHub; Cancel keeps the GitHub file; "Delete from GitHub" deletes it');
 
 // --- 9. the token, the tool's data, 390 px
@@ -163,7 +163,7 @@ ok('the token: only in the Authorization header to api.github.com; not in a URL,
 const fin = JSON.parse(await ls(T.list)), first = JSON.parse(rawOwn);
 assert.equal(typeof fin, 'object'); assert.ok(Object.values(fin).every(v => v && typeof v === 'object' && v.geom && v.soil));
 assert.ok(Object.keys(first).every(k => k in fin));
-assert.deepEqual((await keys()).filter(k => !keys0.includes(k)).sort(), ['bridgeSuite.v1.githubSync', `bridgeSuite.v1.githubSync.tool.${T.folder}`]);
+assert.deepEqual((await keys()).filter(k => !keys0.includes(k) && !/^bridgeSuite\.v1\.githubSync\.(deviceId|live|presence\.)/.test(k)).sort(), ['bridgeSuite.v1.githubSync', `bridgeSuite.v1.githubSync.tool.${T.folder}`]);   // LIVE (2026-11-08): besides its own keys (.deviceId, .presence.<tool>)
 ok('the tool\'s list key keeps its format ({ name: state }); the only new keys are bridgeSuite.v1.githubSync and .tool.' + T.folder);
 await p.setViewportSize({ width: 390, height: 800 }); await T.openBtn(p); await p.waitForTimeout(1500);
 const sw = await p.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]); assert.ok(sw[0] <= sw[1], sw.join(' > '));

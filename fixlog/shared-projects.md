@@ -159,3 +159,41 @@ Loaded by: see `shared/README.md` (one row per file). Tests: `node tests/engine/
   - a hidden tab makes no request for 14 s and checks again when shown;
   - sync off: no request and no key.
 - **Formulas, factors, units, code references:** none.
+
+## 2026-11-08 — PR: claude/sync-presence (PR #1253: https://github.com/mlococo88/All-Structural/pull/1253) (LIVE PR 3 of 3) — projects-ui.js: presence (heartbeat of the open project, "Also open on <device>" banner, warning before opening a project open elsewhere)   [GitHub sync only; nothing changes while sync is off; no tool key or format change]
+- **Why:** engineer request 2026-11-08 (C). Engine: fixlog/shared-github-sync.md #1251 (`beat`, `leave`, `others`, `presenceOf`) and this PR (`presenceHint`).
+- **What (`liveBar`, anchor `---- presence (LIVE PR 3`):**
+  - The 3 s tick calls `SharedGitHubSync.beatDue` → engine `beat(name)`: write this device's heartbeat; one file per browser, not more than once a minute.
+  - `reset()` on another project / New, the box unticked, and `pagehide` → `leave()` (engine `leave`, keepalive on pagehide).
+  - The 30 s check's `presence` → `lv.others` (fresh ones only) → banner `data-lv="pres"` "Also open on <device> (since hh:mm)".
+  - Input / pointerdown / keydown mark activity (no heartbeat after 10 min without it).
+- **What (`projectBar`, anchor `const openNow = n =>`):** the old `openNamed` body is now `openNow`. `openNamed = n => live && live.openCheck ? live.openCheck(n, openNow) : openNow(n)`.
+  - `openCheck` opens at once when sync or the box is off, when it is the open project, or when the last tree read (< 60 s) shows no other device's heartbeat for it (`presenceHint` 'none').
+  - Otherwise it returns false (the Saved projects dialog stays), asks GitHub (`others`), and then either opens (and closes the dialog) or shows `<dialog data-sp="presence">` "“<name>” is open on another device — Open on <device> since <hh:mm> — edits on both may conflict" with Cancel / Open anyway (`data-pw`).
+  - The dialog's Open, its GitHub-only Open and the Recent projects strip all go through `openNamed`. Load it / Undo do not ask.
+- **Decision (pending engineer review), commit noise:**
+  - The heartbeat is written on open and then every 60 s, only while the tab is visible AND the page had an input, click or key in the last 10 min.
+  - One file per browser and project: tabs share it through `bridgeSuite.v1.githubSync.presence.<tool>`, and the last tab to close deletes it.
+  - It is NOT deleted when the tab is hidden. It goes stale after 150 s (2.5 min), which avoids an add / delete commit pair at every tab switch.
+  - It is deleted on close, on opening another project or New, and when the box is unticked.
+  - Result: at most about 60 commits per hour per device actively working on a project; none from idle, hidden or closed pages.
+  - Rejected alternatives: a separate branch (a second tree request every 30 s and a branch to create); a longer interval (with a 2.5 min staleness a missed write would make the device look closed).
+  - The box "Check GitHub every 30 s for changes to the open project, and show who else has it open" turns presence off together with the check.
+- **Per tool:**
+  - Every projectBar tool.
+  - **Bridge Suite:** index / lldf / Prestressed in one browser share the tool `bridge-suite`, so they count as one device (one file; no warning between them).
+  - **Concrete Beam Capacity:** each tab's frame has its own tool folder; a frame not shown writes no heartbeat.
+  - **Steel Bridge Design:** one bar, one heartbeat.
+  - **Spread Footing:** opening from the Recent projects strip asks first in the same way.
+- **Tests changed (presence keys and writes are not project data):**
+  - `tests/smoke/github-sync.mjs`, `github-sync-tools.mjs`, `standard-save.mjs`: the "only these sync keys" checks leave out `bridgeSuite.v1.githubSync.deviceId|live|presence.*`.
+  - `home-sync.mjs`: "no upload by the tool" leaves out PUTs to `/.presence/`.
+  - The request counts and "last PUT of <project>" in `github-sync.mjs`, `github-sync-tools.mjs`, `home-sync.mjs` and `bridge-suite-save.mjs` leave out `/.presence/` URLs. A heartbeat of "GHS A" matched `url.includes('GHS%20A')`.
+- **Check case:** `tests/smoke/github-sync-live.mjs` step 4:
+  - A shows "Also open on Desktop (since hh:mm)", and two heartbeat files `Pier 1.<id>.json` exist;
+  - Saved projects lists no presence file;
+  - B opens "Pier 2" → B's Pier 1 file is deleted and A's banner goes;
+  - A opening "Pier 2" warns "Open on Desktop since hh:mm — edits on both may conflict"; Cancel keeps "Pier 1"; Open anyway opens it and the banner shows;
+  - B closes (pagehide) → keepalive DELETE of its file, and A's banner goes.
+  - Engine: `github-sync-live.test.mjs` (stale after 150 s, two tabs, two browsers with one device name).
+- **Formulas, factors, units, code references:** none.

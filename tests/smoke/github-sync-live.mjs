@@ -33,7 +33,7 @@ const settings = dev => ({ 'bridgeSuite.v1.githubSync': JSON.stringify({ owner: 
 async function open(dev, { sync = true } = {}) {
   const o = await openPage(FILE, { ls: sync ? settings(dev) : undefined });
   const log = [];
-  await o.p.route('https://api.github.com/**', async route => {
+  await o.ctx.route('https://api.github.com/**', async route => {   // on the context: also the keepalive delete sent while a page closes
     const r = route.request(); log.push({ m: r.method(), u: r.url(), t: Date.now() });
     if (gh.offline) return route.abort('internetdisconnected');
     const res = gh.handle(r.method(), r.url(), await r.allHeaders(), r.postData());
@@ -69,7 +69,7 @@ const inPath = (await A.p.evaluate(() => document.querySelector('#inputPanel inp
 await B.p.evaluate(() => SharedProjectsUI.bars[0].dialog.show());
 await until(() => B.p.evaluate(() => !!document.querySelector('dialog.spLib[open] [data-ghx=open][data-n="Pier%201"]')), 20000, 'B lists Pier 1 on GitHub');
 await B.p.evaluate(() => document.querySelector('dialog.spLib[open] [data-ghx=open][data-n="Pier%201"]').click());
-await until(async () => (await B.p.evaluate(() => SharedProjectsUI.bars[0].current())) === 'Pier 1', 20000, 'B opened Pier 1');
+await until(() => B.p.evaluate(() => { const w = document.querySelector('dialog[data-sp=presence][open] [data-pw=open]'); if (w) w.click(); return SharedProjectsUI.bars[0].current() === 'Pier 1'; }), 20000, 'B opened Pier 1');   // (presence: A has it open -> Open anyway)
 ok('device B opened "Pier 1" from GitHub');
 const v0 = await val(A.p);
 const putsA = () => A.log.filter(l => l.m === 'PUT' && l.u.includes('Pier%201.json')).length;
@@ -148,9 +148,12 @@ if (await hasPresence(A.p)) {
   await until(async () => (await A.p.evaluate(() => SharedProjectsUI.bars[0].current())) === 'Pier 2', 10000, 'A opened Pier 2');
   await until(() => banner(A.p, 'pres'), 30000, 'A sees B on Pier 2'); ok('Open anyway opens it; the banner "Also open on Desktop" is shown');
   // B closes the page: its heartbeat is deleted, A's banner goes
-  await B.p.close({ runBeforeUnload: true }); await new Promise(r => setTimeout(r, 1500));
+  // the page's pagehide handler (dispatched here: a headless page that closes does not hand its keepalive request to the test's route)
+  const nB = B.log.length; await B.p.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+  await until(() => B.log.slice(nB).some(l => l.m === 'DELETE'), 5000, 'B keepalive delete'); await new Promise(r => setTimeout(r, 300)); await B.p.close();
+  assert.ok(B.log.slice(nB).some(l => l.m === 'DELETE' && l.u.includes('/.presence/Pier%202.')), 'B deletes its heartbeat on pagehide');
   assert.ok(![...gh.files.keys()].some(k => k.includes('/.presence/Pier 2.') && JSON.parse(gh.files.get(k)).device === 'Desktop'), 'B heartbeat deleted on close');
-  await until(async () => !(await banner(A.p, 'pres')), 30000, 'A banner gone'); ok('B closed: its heartbeat file is deleted and A\'s banner goes');
+  await until(async () => !(await banner(A.p, 'pres')), 30000, 'A banner gone'); ok('B closed (pagehide): its heartbeat file is deleted (keepalive DELETE) and A\'s banner goes');
 } else console.log('  --   presence: not in this page (LIVE PR 3)');
 
 /* 5. hidden tab pauses */

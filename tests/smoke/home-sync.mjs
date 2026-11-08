@@ -70,7 +70,7 @@ const copy = Object.keys(st[SF] || {}).find(n => /^HSP A \(conflict Home \d{4}-\
 ok(copy && gh.files.has(P(SF, copy)) && st[SF][copy] === 'synced', 'conflict: our version kept as "' + copy + '" here and on GitHub');
 ok(list.every(k => NAMES.every(n => FOLDER[k] === SF && n === 'HSP A' ? st[SF][n] === 'conflict' : st[FOLDER[k]][n] === 'synced')), 'after Sync all: every project "synced" (Spread Footing "HSP A": conflict)');
 ok(/Sync all: \d+ files? uploaded/.test(bar) && /conflict/i.test(bar), 'the bar reports the uploads and the conflict: ' + bar.replace(/\s+/g, ' ').slice(0, 300));
-ok(!gh.log.some(l => l.method === 'DELETE'), 'nothing deleted on GitHub');
+ok(!gh.log.some(l => l.method === 'DELETE' && !l.url.includes('/.presence/')), 'nothing deleted on GitHub');
 if (SHOTS) await home.screenshot({ path: path.join(SHOTS, 'home-sync-after.png') });
 // 4. each tool afterwards: its own dialog says synced; no upload by the tool
 for (const key of list) {
@@ -80,7 +80,7 @@ for (const key of list) {
     if (T.ui) await T.ui.open(p); else await openSavedList(p);   // HDRS: no header Saved projects… (project-library.mjs openSavedList)
     await p.waitForTimeout(4500);   // the dialog's check (flush + list) and one 3 s background check of the tool
     const r = await p.evaluate(() => ({ st: [...document.querySelectorAll('dialog[open] [data-gh-status], #lib_panel [data-gh-status]')].map(e => e.dataset.ghStatus).sort(), ask: !!document.querySelector('dialog[open] [data-sp=gh-ask]') }));
-    const puts = gh.log.slice(L0).filter(l => l.method !== 'GET');
+    const puts = gh.log.slice(L0).filter(l => l.method !== 'GET' && !l.url.includes('/.presence/'));   // LIVE (2026-11-08): presence heartbeats are not project uploads
     const exp = f === SF ? ['cloud', 'conflict', 'synced', 'synced'] : r.st.length >= 2 ? r.st.map(() => 'synced') : ['synced', 'synced'];   // Bridge Geometry: its 5 example bridges too
     ok(JSON.stringify(r.st) === JSON.stringify(exp) && !r.ask && !puts.length, `${key}: the tool's own dialog shows ${r.st.join(', ')}; no first-sync offer; no upload by the tool (${puts.length} writes): its file = the home page's file`);
     await page.close();
@@ -95,7 +95,7 @@ gh.setRemote(P(k1, NAMES[1]), '{\n "newer": true\n}');
 await home.click('#spCheck'); await home.waitForTimeout(300); await idle();
 st = await status(); ok(st[k1][NAMES[1]] === 'cloud-newer', `${k1}: changed on GitHub -> "GitHub newer"`);
 const L1 = gh.log.length; await home.click('#spSyncAll'); await home.waitForTimeout(300); await idle();
-ok(!gh.log.slice(L1).some(l => l.method !== 'GET') && gh.files.get(P(k1, NAMES[1])) === '{\n "newer": true\n}', 'Sync all again: nothing uploaded, the newer GitHub file is not overwritten');
+ok(!gh.log.slice(L1).some(l => l.method !== 'GET' && !l.url.includes('/.presence/')) && gh.files.get(P(k1, NAMES[1])) === '{\n "newer": true\n}', 'Sync all again: nothing uploaded, the newer GitHub file is not overwritten');
 // 6. token, layout, errors
 ok(gh.log.every(l => l.auth === `Bearer ${TOKEN}` && !l.url.includes(TOKEN)) && !(await home.evaluate(() => document.body.innerText)).includes(TOKEN.slice(11)), 'token only in the Authorization header, never in a URL or the page');
 await home.setViewportSize({ width: 390, height: 800 }); await home.waitForTimeout(300);
