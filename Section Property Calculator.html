@@ -7081,7 +7081,7 @@ function buildManual(pg) {
       ['Modulus ratio n:', 'does not change the weight.'], ['Holes', 'remove weight at the density of the solid part they lie in.'], ['AISC tabulated:', 'parts with "AISC tabulated" use the tabulated A.']]),
     NL('<b>Coating (paint) area</b>: area per length = perimeter × length.', [['Exposed perimeter', '= all boundary of the union of the material (closed cells and holes included; faces where parts touch within the contact tolerance excluded).'],
       ['Outside perimeter', '= the outer boundary only.'], ['Geometry:', 'round parts exact; rectangular-tube and HSS corners as the 24 chords the tool uses; rolled shapes as the plate model (no fillets).']]),
-    NL('<b>Buckling parameters:</b>', [['r̄<sub>o</sub>, H', '(AISC 360-16 Eq. E4-9, E4-8 — equation numbers to be verified against the printed Specification) from the thin-wall shear centre; n/a when the shear centre is n/a.'],
+    NL('<b>Buckling parameters:</b>', [['r̄<sub>o</sub>, H', '(AISC 360-16 Eq. E4-9, E4-8) from the thin-wall shear centre; n/a when the shear centre is n/a.'],
       ['r<sub>ts</sub>', '= √(√(I<sub>y</sub>C<sub>w</sub>)/S<sub>x</sub>) (Eq. F2-7) only when the section is doubly symmetric about its principal axes (detected geometrically: every polygon and circle maps onto one of the same weight under reflection about each principal axis).'],
       ['h<sub>o</sub>', 'for a single rolled I-shape or three plates forming an I.']]),
     NL('<b>Wagner coefficient β<sub>x</sub></b> = (1/I<sub>1</sub>)∫v(u² + v²)dA − 2v<sub>o</sub> about the principal axes.', [['Computed with', 'exact polygon and circle integrals; thin-wall shear centre.'],
