@@ -6961,7 +6961,7 @@ function lprTopics(scope,list){
 const lprxPlain=s=>lprPlain(s).replace(/\s+/g,' ').trim();
 // LPNL (2026-11-08): the same lead-and-list note as Report note items ("• lead words text")
 function lprNL(lead,items,o){ o=o||{}; const n=t=>o.warn?{type:'note',warn:true,text:t}:{type:'note',text:t};
-  return [lead?n(lead):null,...[].concat(...(items||[]).filter(Boolean).map(x=>[n('• '+(Array.isArray(x)?x[0]+' '+x[1]:x)),...(Array.isArray(x)&&x[2]?x[2].filter(Boolean).map(s=>n('   – '+s)):[])]))].filter(Boolean); }
+  return [lead?n(lead):null,...[].concat(...(items||[]).filter(Boolean).map(x=>[n('• '+(Array.isArray(x)?x[0]+(x[1]?' '+x[1]:''):x)),...(Array.isArray(x)&&x[2]?x[2].filter(Boolean).map(s=>n('   – '+s)):[])]))].filter(Boolean); }
 function lprxText(el,has){
   const c=el.cloneNode(true);
   c.querySelectorAll('.ratiobar,.chipwrap,button,script,style').forEach(x=>x.remove());
