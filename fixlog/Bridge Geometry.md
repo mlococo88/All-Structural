@@ -2199,3 +2199,78 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
     - project-library --tool bgeo: text-only difference (the new select).
 - **Saved data (§5):** additive scalar `out_dec` (absent = '2', as before). No key changed.
 - **Other copies:** none. `tests/smoke/phone-layout.mjs` gains the `bgeo` entry.
+
+## 2026-11-08 — PR: nl-bgeo-a1 (PR #1197: https://github.com/mlococo88/All-Structural/pull/1197) (BGNL-1: long notes as a bold lead and a list — Alignment and Bridge tabs; display only, no result change)   [display only]
+
+### BGNL-1. Long notes split into a lead line and a list (Alignment, Bridge)   [display only] [no result change]
+- **Request (engineer, 2026-11-08, for all tools):** "There are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Part 1 of 2 (Alignment and Bridge tabs); the output tabs, Site Map, Drawings and the dialogs follow in BGNL-2. Pattern as Spread Footing SFNL (#1167).
+- **Rule used:** a note is long if it is over ~300 characters, has 3 or more sentences, or carries several facts in one paragraph. It becomes a one-line bold lead, then a list with bold lead words. Every sentence, number, citation and link is kept, in the same order; only the lead words, list-start capitals and end punctuation are new. New lead words carry no digits, so the digit sequence of every tab is unchanged.
+- **New helpers** (after `const DEG = Math.PI/180;`), anchor `/* BGNL (2026-11-08, engineer`:
+  ```js
+  function bgNL(lead,items,o){ o=o||{}; const L=o.ol?'ol':'ul';
+    const li=(items||[]).filter(Boolean).map(x=>'<li>'+(Array.isArray(x)?'<b class="bgNLk">'+x[0]+'</b> '+x[1]:x)+'</li>').join('');
+    return (o.act||[]).filter(Boolean).map(a=>'<div class="bgNLa">'+a+'</div>').join('')+(lead?'<div class="bgNLl">'+lead+'</div>':'')+(li?'<'+L+' class="bgNLu">'+li+'</'+L+'>':''); }
+  function bgNLWarn(box,list){ list=list||[]; if(list.length<2){ box.textContent=list.join(''); return; }
+    box.innerHTML='<ul class="bgNLu">'+list.map(t=>'<li>'+String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))+'</li>').join('')+'</ul>'; }
+  ```
+  A note becomes `<div class="note bgNL">` + `bgNL(lead,[[leadWords,text],…])` (a `<p>` cannot hold a list, so static notes change from `<p class="note">` to `<div class="note bgNL">` with the same inline style).
+- **CSS** (after `.note { … }`), tool-scoped, no new colours (the lead uses `--ink`, the action line `--oxide`, the tool's warning colour); print keeps a list item on one page:
+  ```css
+  .bgNL .bgNLl { font-weight:600; color:var(--ink); margin:0 0 1px; }
+  .bgNL .bgNLu { margin:2px 0 3px; padding-left:18px; }
+  .bgNL .bgNLu > li { margin:1px 0; overflow-wrap:anywhere; }
+  .bgNL .bgNLk { font-weight:600; }
+  .bgNL .bgNLa { color:var(--oxide); margin:2px 0 4px; }
+  @media print { .bgNL .bgNLu > li { break-inside:avoid; } }
+  ```
+- **Notes changed (anchor = the old opening text → new lead → item lead words).** Exact before / after: the PR diff.
+  1. Alignment intro "Define the roadway geometry the bridge follows: the horizontal alignment" → "Define the roadway geometry the bridge follows:" → Horizontal alignment / Vertical profile / Everything else / Graphics.
+  2. Horizontal alignment "Station NNN+NN.NN. Bearing as quadrant DMS" → "Input formats:" → Station / Bearing / Coordinates / Curves.
+  3. Vertical profile "Required inputs (solid boxes)" → "Solid boxes are required inputs; dashed boxes are optional overrides." → Required inputs / Optional overrides / Editing grade-out / Start and End rows / Computed automatically / Vertical curve.
+  4. `#elem_warn` (`renderElemTable`) and `#vprof_warn` (`renderVProfTable`): two or more warnings as a list (`bgNLWarn`); before, `textContent = warnings.join('  ')` on one line. One warning: unchanged. Each warning's text unchanged.
+  5. Bridge intro "Define the bridge itself on top of the alignment:" → Spans / Substructure / Deck cross-section / Superstructure depths / Help.
+  6. Cross Section "The PGL = baseline = reference line" → "The reference lines of the cross section:" → PGL = baseline = reference line / Construction reference line / Crown reference (dropdown) / Drives.
+  7. Superelevation transition table "Leave empty to use the global mode / rate" → "Cross slopes by station, in place of the global controls." → Empty / With one or more rows / Slopes / Green Book method (AASHTO A Policy on Geometric Design, 7th Ed. Sec. 3.3.8, verify) / Rotation.
+  8. `#xs_info` (`renderXsInfo`): "Used: N row(s) replace …" as the lead; "Relative gradient of the deck edges to the PGL (edge offsets …):" with one item per station range; "Compare with the maximum relative gradient … (Green Book Table 3-15, verify)."
+  9. Girders & Deck Edges "Girders, deck edges, and curbs are all measured from the construction reference line" → the same lead → The line / Offsets / Its position / Per-span edge overrides and per-support curb offsets.
+  10. Superstructure Depths "The vertical profile and PGL are defined at top of pavement" → the same lead → Top-of-deck (structural surface) / Beam seats.
+  11. Superstructure Depths "Beam seat = top-of-deck − deck thickness − …" → the equation as the lead → Camber / Bracketed terms / Working / Units.
+  12. Derived "Everything below is computed from the inputs above." → the same lead → Use / Offsets.
+  13. Derived, construction reference line (`buildDerived`, anchor `/* BGNL: the same facts as a list */`): per-span chords: "Construction reference line: chorded span by span through the reference point of each support." → In each span / one item per span (was joined with " · ") / Total along the chords / Angle change at the piers. Single chord: "Construction reference line: L ft (ft-in) between end supports." → Bearing / Angle / Offset along the span.
+  14. Substructure Units "Skew is measured from the datum chosen above" → "Skew is measured from the datum chosen above, 0° = support square to it." → Support line / Alignment normal / Chord normal / On a tangent alignment / Dual bearing offset.
+  15. Per-span overrides "Most bridges use the same girders and deck width everywhere" → the same first sentence → Use it only / Greyed cell / Override.
+  16. 3D Bridge View "Three-dimensional view of the bridge" → the same first sentence → Inspect / Navigate.
+  17. Per-beam / per-span overrides "Grey italic = inherited default" → the same first sentence → Override / Revert / Layout.
+- **Not changed:** "N spans → 2 abutments + (N−1) piers …" (two short sentences); the Derived "not the deck centerline" note (two sentences). The hand-off payload and its notes are not touched (HANDOFF.md §4.2).
+- **Formulas, factors, units, code references:** none changed. **Saved data (§5):** none; no new key.
+- **How verified:** headless probe origin/main vs branch, 13 cases (Examples 1–5 as saved, Examples 1–5 with the new-project defaults and b_f = 14 in, two cases with a superelevation table, validation points and a low haunch, and the fresh demo): `seatData()`, the LL & DL hand-off payload (`bgxBuildLldfGeom`, two option sets), Export JSON, the Export DXF file and the Drawings-tab DXF identical (time stamps aside); the digit sequence of every tab and of both dialogs identical; only the Alignment and Bridge tab wording / structure changed. 0 console errors (Site Map tiles aside). 390 px: no page overflow; screenshots of the three longest notes (skew, superelevation table, reference lines) before / after at 1440 and 390 px.
+- **Tests:** check-syntax; bgeo-examples; dxf-print-sheets; phone-layout --tool bgeo (390 / 768 px; the 12 console errors are the Site Map tiles, as on main); home-projects; tests/engine/run.mjs handoffs, lldf: pass. project-library --tool bgeo: the expected text-only difference in the Bridge-tab text (ENG and the output / seat tabs identical).
+- **Other copies:** none.
+
+## 2026-11-08 — PR: nl-bgeo-a2 (PR #1209: https://github.com/mlococo88/All-Structural/pull/1209) (BGNL-2: long notes as a bold lead and a list — Top of Deck Output, Beam Seat Output, Site Map, Drawings, Export DXF and LL & DL dialogs, curve report; display only, no result change)   [display only]
+
+### BGNL-2. Long notes split into a lead line and a list (output tabs, Site Map, Drawings, dialogs)   [display only] [no result change]
+- **Request:** as BGNL-1 (#1197), part 2 of 2. Same rule, helpers (`bgNL`, `bgNLWarn`) and CSS (`.bgNL …`); nothing new added to them. Every sentence, number, citation and link is kept in the same order. New lead words carry no digits.
+- **Notes changed (anchor = the old opening text → new lead → item lead words).** Exact before / after: the PR diff.
+  1. Alignment, curve and spiral report (`buildElemReport`): "Report only. Curves: arc definition …" → "Report only." → Curves / Spirals.
+  2. Top of Deck Output intro "Top-of-deck (riding surface) results: a color heatmap" → "Top-of-deck (riding surface) results:" → Heatmap / Cross-section / Table / Validation / Beam-seat results.
+  3. Cross-section at station "Transverse cut through the deck" → the same first sentence → Shows / Station.
+  4. Top-of-deck table, grid rows (`buildTable`, anchor `/* BGNL: the same facts as a list */`): "Top-of-deck (Beam-seat) elevations per span." → Rows / Curb offsets / Columns G1..Gn / Every row, … / Along the skewed support and bearing lines / Grey italic values.
+  5. Girder tenth points (`buildGird10`): "Top of deck (ft) over each girder at tenth points of its bearing-to-bearing length." → Tenth points / L / For haunch and screed work (CTDOT BDM 8.3.2 …).
+  6. Validation, known points "Spot-check the model" → the same first sentence → Enter / Check.
+  7. Validation, horizontal "Check the horizontal model the same way." → Enter / Check / Catches.
+  8. Beam Seat Output "Seat = top-of-deck − deck thickness − …" → the equation as the lead → Working (link to Seat working kept) / Rows.
+  9. Seat working intro (`buildSeatWork`): "Each seat worked out (ft): seat = TD − t_s − (h_min + c [+ m_sag + Δ_cs]) − d − t_brg." → one item per symbol (TD, t_s, h_min, c, d, t_brg, and m_sag, Δ_cs when Seat terms is on); when it is off: "Seat terms are off" / "Basis" (MassDOT Bridge Manual Part I 3.5.6.3, CTDOT BDM 7.2.11.1 and 8.1.2.4, RIDOT BDM 9.4.6).
+  10. Midspan haunch check note (`buildSeatWork`): when girders are low, "N girder(s) have less than the minimum haunch at midspan … [Tick Seat terms …]" is the action line on top in the warning colour (before: the whole note was in that colour); otherwise the lead is "Every girder keeps at least the minimum haunch at midspan …". Then Method, and "Owner practice (paraphrased):" with one item per owner: MassDOT Bridge Manual Part I 3.5.6.3; CTDOT BDM (02/24) 7.2.11.1 item 5 and 8.1.2.4; RIDOT BDM (2026) 9.4.6. Wording of each citation unchanged.
+  11. Cross-sections at each bearing line (`buildSeatSections`): the per-girder working "G1: …<br>G2: …" as a list (G1: / G2: … as lead words; each `seatWorkText` unchanged); the link "all seats and the midspan haunch check" on its own line (was after " · ").
+  12. Site Map intro "Plot the computed bridge geometry on a real-world map." → "… (for orientation, not for survey)." → POB / Distances / Datum / Survey points / Internet.
+  13. Site Map, pick points "Drop points on the map" → the same first sentence → Outside the deck / Accuracy.
+  14. Drawings intro "Drawing sheets of the computed geometry:" → Sheets / Format / One source / Display only.
+  15. Drawings, "One DXF file (AutoCAD R12, model space, full size in inches):" → Sheets / Frame / Other export / Title block.
+  16. Export DXF dialog, "Layers: BG-ALIGN …" → "Layers (verify against the survey):" → Alignment / Supports / Superstructure / Elevations / Other / Profile (the layer names unchanged).
+  17. Send to LL & DL dialog, skew warning (shown when the skews differ): "Skews differ between supports." as the action line in the warning colour → LL & DL / Moment DFs / Shear DFs / The single "Skew sent" value. Display only: the hand-off payload and its notes (HANDOFF.md §4.2) are not touched.
+- **Not changed:** `SharedDxf.PRINT_NOTE` on the Drawings tab (a shared file, `shared/dxf.js`; out of scope for a one-tool PR); the Export DXF dialog intro and basis line (two sentences each); short notes.
+- **Formulas, factors, units, code references:** none changed. **Saved data (§5):** none; no new key.
+- **How verified:** the BGNL-1 headless probe, origin/main (with BGNL-1) vs branch, 13 cases: `seatData()`, the LL & DL hand-off payload (two option sets), Export JSON, the Export DXF file and the Drawings-tab DXF identical (time stamps aside); the digit sequence of every tab and of both dialogs identical. The LL & DL dialog with differing skews (Example 2, skews 10–25°) checked at 390 px. 0 console errors (Site Map tiles aside). 390 px: no new page overflow (the Top of Deck tab is 6 px wide of the viewport on main and on the branch). Screenshots before / after at 1440 and 390 px: midspan haunch note, seat working intro, top-of-deck table note, per-bearing-line working, LL & DL dialog.
+- **Tests:** check-syntax; bgeo-examples; dxf-print-sheets; phone-layout --tool bgeo; home-projects; tests/engine/run.mjs handoffs, lldf: pass. project-library --tool bgeo: the expected text-only difference in the output and seat tab text (ENG identical).
+- **Other copies:** none.

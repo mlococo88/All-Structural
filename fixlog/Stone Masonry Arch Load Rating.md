@@ -1604,3 +1604,108 @@ function transDisp(w,n,c,cap){
   - all 14 tabs on the default and the semicircle with 0 console errors;
   - the panel appears in the Report.
 - **Saved data:** no change.
+
+## 2026-11-08 — PR: nl-arch-a (PR #1188: https://github.com/mlococo88/All-Structural/pull/1188) — Long notes as a bold lead and a list: dashboard checks and every output tab (ARNL-1; display only, no result change)
+
+### ARNL-1. Long notes split into a lead line and a list   [display only] [no result change]
+- **Request (engineer, 2026-11-07/08, approved for all apps):** "There are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Pattern as Spread Footing SFNL-1 / SFNL-2 (#1167). Part 1 of 2: the Summary dashboard checks and the notes of the Summary, Model, Dead Load, Live Load, Vehicles, Earth Pressure, Diagrams, Influence Lines, Rating, Rating Summary, Nodal Results and Verification tabs, and through them the Report. The Manual and the input panel are part 2 (ARNL-2).
+- **Rule used:** a note is long if it is over ~300 characters, or has 3 or more sentences and is over ~200 characters, or carries several distinct facts in one paragraph. It becomes a one-line lead (or, in a callout, the callout title is the lead) and a list with bold lead words. Action items ("Check … before reading …", "Do not issue this run.", "Decision pending engineer review: …") are on their own warning-coloured line at the top. Every sentence, number, citation and link is kept, in the same order (an action line is moved first only when it has no digits). New lead words carry no digits, so the digit sequence of every tab and of the Report is unchanged.
+- **New helper** (module `R`, before `function badge(`), anchor `/* ARNL (2026-11-08): a long note as a lead line and a list (R.arNL)`:
+  ```js
+  function arNL(lead,items,o){
+    o=o||{}; const L=o.ol?"ol":"ul";
+    const li=(items||[]).filter(Boolean).map(x=>"<li>"+(Array.isArray(x)?`<b class="arNLk">${x[0]}</b> ${x[1]}`:x)+"</li>").join("");
+    return (o.act||[]).filter(Boolean).map(a=>`<div class="arNLa">${a}</div>`).join("")+
+      (lead?`<div class="arNLl">${lead}</div>`:"")+(li?`<${L} class="arNLu">${li}</${L}>`:"");
+  }
+  ```
+  exported as `R.arNL` (`return {step,eqLine,vars,dtab,msg,arNL,badge,…}`); in the application layer also `const arNL=R.arNL;` (the Rating Summary functions have a local `R`). A note `X. Y. Z.` becomes `R.arNL("X.",[["Lead:","Y."],["Lead:","Z."]])` inside the same `msg(…)`, `<div class="note">`, step `note:`, `figcaption` or dashboard detail cell. Items that are `null` are skipped (conditional sentences).
+- **CSS** (after `.msg > b:first-child{display:block;}`), no new colours:
+  ```css
+  .arNLl{font-weight:700;margin:0 0 1px;}
+  .arNLu{margin:2px 0 4px;padding-left:20px;}
+  .arNLu>li{margin:1px 0;}
+  .msg .arNLl{font-weight:400;}
+  .arNLa{border-left:3px solid var(--warn);background:var(--warn-bg);padding:2px 8px;margin:2px 0 5px;font-style:normal;color:var(--ink);}
+  @media print{.arNLu>li{break-inside:avoid;}}
+  ```
+- **Report (ARPT walker):**
+  - new `arptHasNL(e)` / `arptNL(e,ctx,warn)` after `const arptClean=`: a `.msg`, `.note` or `<p>` holding an `.arNLu` / `.arNLl` / `.arNLa` part becomes Report notes in order — each action line (`warn`), the lead ("Title: lead"), one note per item "• Lead words text"; `warn` as the callout's. Hooked in `arptItems` before the `.msg` branch: `if((cl.contains("msg")||tag==="P"||cl.contains("note"))&&arptHasNL(e)){…arptNL(e,ctx,…).forEach(push);continue;}`.
+  - `arptInline`: an `.arNLu>li` reads as " • …", an `.arNLl` / `.arNLa` part gets a trailing space (table cells, captions).
+  - `arptStep`: a listed step note is one line ("lead • item • item").
+  - `UL`/`OL` branch: the item text is read from the `<li>`'s children (`[...li.childNodes].map(c=>arptInline(c,ctx)).join("")`), same text as before for every existing list, and no double bullet for a nested `.arNLu`.
+- **Notes changed** (anchor = the old opening text; each is now a lead plus items). Exact before / after: the PR diff (every changed site carries `/* ARNL */`).
+  - Dashboard checks (`CALC.validate`): Element count (convergence and compliance), No fill anywhere, Fill runs out, No wearing surface, Fill spread credited below 2 ft, Shallow-cover distribution, Wheel spread tire patch + 1.75H, One truck transversely, Side-by-side trucks, Wearing surface under railroad loading, Track layout not entered, Cover threshold (rail), Cover at crown < 2 ft, Dead load exceeds / uses most of the allowable, No superimposed dead load, SDL implausibly small, Load width on the extrados, Fill column over the springing, Distribution reaches every table, Adverse influence only, Rail distribution, Transverse spread exceeds the barrel, Deterioration by node number, Ring implausibly thin, Deterioration deeper / implausibly thin, Section loss, Why a thinner ring can rate higher, Moment release, Governing position at the edge, Net tension, Quarter points, Deep elements, Shear rating (both), Stiffness self-check, Shear deformation off, Allowable stress range, Operating level, Bed-joint sliding (both; "(Decision pending engineer review)" is now the action line "Decision pending engineer review: how to treat the exceeded friction."), Outside the scope, Collapse mechanism, Midas verification (both); the Controlling result callout.
+  - Summary: MS18 Reporting, Design Basis Method, sign convention "Moment is sagging-positive", stated assumption "Dead load on the extrados projection".
+  - Model: elements note, modeled span ≠ clear span, Why this matters (measured), Idealized geometry, Fixed / Pinned springings, Figure 1 caption.
+  - Dead Load: components callout, h_f note, SDL note, lateral pressure note, Why not lumped, frame solver callout.
+  - Live Load: rail distribution, H note, L_s note, axle footprint note, What happens next (×2), Distribution through fill, 2 ft threshold, fill spread credit, LRFD least fill, Why the footprint, slab width selected, 6.4.1 note, rule switched off, spread basis, one truck, side-by-side, Figure transverse section caption, Why max eccentricity, These positions, coefficients on their own tab, Scope, rail impact, crown / local basis, railroad impact, nodal load, distribution table note, axle matrix "What this table is", adverse only, column totals check.
+  - Vehicles: comparison note, unverified trailing loads, check against your figures (action line first), axle-by-axle note.
+  - Earth Pressure: three things follow, z note, Δy note, element table note (1 945 characters, was the longest note of the tool), self-balancing load, separate solve note, pressure diagram caption, Why this is here.
+  - Diagrams: What is plotted, adverse-only, kern figure caption, Why the stress climbs.
+  - Influence Lines: verbatim requirement (now a list, sentence per item), program applies (was a `<p>`, now a `.note` div), Why no cases at the springings, element stiffness note, sign convention, How to read these tables, moment table note, Midas walk-through, walk-through table note, influence line caption, symmetry note.
+  - Rating: Every vehicle worked in full, selected section callout and note, mesh convergence table note, lane loading, HS20 V, bed-joint sliding callout and note, mechanism callout, How it is worked, Not included, mesh-reported callout; per vehicle: selected section, axle train note, consist weight, How the position is found, dead load split note, earth dominates, Basis of this worked section, components note, sensitivity, utilization note, Why an iteration (the §7.2.7.12 text, sentence per item), convergence criterion, iteration note, Why not 1/(f/f_a), Outside §7.2.7, shear capacity, shear table note, EV reporting.
+  - Rating Summary: How to read, table note, tonnage note, two sections close, mirror note, symmetry check.
+  - Nodal Results: three depths, distribution note, component notes (moment, units), combined results note, thrust line note, worked node Scope, (n_x, n_y), axle footprint, t_j, 6.4.1 axles, z note, frame solve callout.
+  - Verification: Purpose callout, Midas step 3, dead load cases, import format, import status, mesh study text; comparison block (shown only after a Midas import): sign mapping, agreement, scaling note, dead load components.
+- **Not changed:** notes under ~200 characters; the RF ≥ / < 1.0 callouts; the "Worked in" lines; numbered list `{ol:true}` is supported by the helper but not used (an `<ol>` would put new digits "1. 2." in the Report text).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none (§5).
+- **Check case:** default project, Earth Pressure tab, panel "Lateral pressure on each element": before one 1 945-character paragraph with `<br><br>` breaks; after the lead "How to read the table:" and seven items (Direction, Resultant, θ, p_h is the load., Midas, Everything here is on the arch axis., Vertical fill load), "θ near 90°", "bPROJ = YES" and "§7.2.7.5B" unchanged. Report §7.2: the same lead and seven "• " lines.
+- **How verified:** headless Chromium, origin/main vs the branch, six cases (default; railroad; 60/12 pinned shallow cover with deterioration; 25/8 parabolic deep cover adverse-only; 50/14 cover 1.0 ft with shear and μ = 0; 30/10 deep fill K = 0.30 f_a = 300 3 lanes): every vehicle result (`results`, deep compare) and the model `M` identical; the digit sequence of every tab, the input panel and the Report text identical in all six (the run-time figures "rated in … s" / "Computed in … s" masked). 0 console errors, 0 KaTeX errors. Screenshots at 1440 and 390 px. Tests: see the PR.
+- **Other copies:** none.
+
+## 2026-11-08 — PR: nl-arch-b (PR #1192: https://github.com/mlococo88/All-Structural/pull/1192) — Long notes as a bold lead and a list: the User Manual and the input panel (ARNL-2; display only, no result change)
+
+### ARNL-2. Manual and input-panel paragraphs as a lead and a list   [display only] [no result change]
+- **Request:** as ARNL-1 (#1188), part 2 of 2. Uses the same helper and classes (`R.arNL`, `.arNLl`, `.arNLu`, `.arNLk`).
+- **Input panel (`inputPanel`, `deterRender`):**
+  - Ring Depth hint, anchor `One row per deteriorated area`: becomes a lead plus "Empty cell / Units / Face".
+  - Deterioration editor hint, anchor `Stations are in feet along the span`: becomes a lead plus "Point or zone / Stays put".
+  - Superimposed Dead Load note, anchor `§7.2.7.4B requires the dead load of sidewalks`: becomes three items.
+- **Manual (`MANUAL.PARTS`, static HTML):** every `<p>` / `<li>` whose text is over 500 characters (45 paragraphs) is rewritten as follows:
+  - a `<p>` becomes `<div class="arNLl">first sentence</div><ul class="arNLu"><li><b class="arNLk">Lead words</b> sentence(s)</li>…</ul>`;
+  - an `<li>` keeps its first sentence and gains a nested `ul.arNLu`;
+  - the long enumerations (1.1 MassDOT provisions, 2.2 Earth Pressure / Influence Lines contents) become one item per element.
+  - Sentences are unchanged and in the same order; lead words carry no digits. Exact before / after: the PR diff.
+- **CSS** (after `.manpart ul,.manpart ol{…}`): `.manpart .arNLl{font-size:.99rem;margin-top:6px;} .manpart .arNLu{margin:2px 0 8px;padding-left:22px;}`.
+- **Decision (pending engineer review):** Manual paragraphs of 300 to 500 characters (about 50) are left as prose. The Manual is reference reading under numbered headings, and those paragraphs run 3–4 sentences. Say if they should be split too.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none.
+- **Check case:** Manual §1.3.6, paragraph `§7.2.7.2B sets a minimum of 10 elements`. Before: one 930-character paragraph. After: the lead "§7.2.7.2B sets a minimum of 10 elements or one per 4 ft of clear span." followed by the items "Convergence testing / Why / Therefore", with the 27 %, 30 %, 15 % and 0.26 figures unchanged.
+- **How verified:** headless Chromium, main (after #1188) against the branch, default and a deteriorated shallow case. Results, the model, the digit sequence of every tab (the Manual with all parts shown), the input panel and the Report are identical. 0 console errors.
+## 2026-11-08 — PR: nl-arch-c (PR #1198: https://github.com/mlococo88/All-Structural/pull/1198) — Rating summary as a left column of check chips from 1200 px (ARDC; display only, no result change)
+
+### ARDC. Left summary column   [display only]
+- **Request (engineer, 2026-11-07/08):** add the left summary panel, as in Retaining Wall (#959, #984), Spread Footing (#988), Light Pole (#991, #994/#997) and Shear and Moment Diagrams (#1130). The panel has compact check chips, a « collapse with a per-tool key, and a chip click opens the working card. It is shown from 1200 px; below that nothing changes.
+- **What changed (screen only):**
+  - New `<aside id="arDashCol" class="noprint">` as the first child of `#wrap`, before `#inPanel`. Anchor: `<!-- ARDC (2026-11-08)`.
+  - From 1200 px, `#wrap` gets three columns: `280px minmax(360px,0.9fr) 2.6fr`, with 240 px from 1200 to 1499.98 px.
+  - Collapsed (`body.arDashColl`), the column is a 42 px strip showing the « / » button and the count badges.
+  - Below 1200 px `#arDashCol` is `display:none` and the grid rules do not apply, so the tablet / phone layout and order are unchanged. It is hidden in print.
+- **Chips** (`archDash(p,msg)`, called at the end of `render()` after `postRender(p)`; the two early returns pass a message):
+  - one per rated vehicle: "RF · tons (· E-number) · governing section", PASS / FAIL → Rating · `veh_<id>`;
+  - H lane loading, where rated: RF, PASS / FAIL → `rate_lane`;
+  - MS18 (Items 64 / 66): metric t and MS, no status → Summary · `o_ms18`;
+  - Mesh convergence: spread % and meshes, OK when ≤ 3 %, else REVIEW → `rate_mcv`;
+  - Bed-joint sliding (advisory): worst D/C, OK / NG → `rate_slide`;
+  - Collapse mechanism (advisory): λ against the elastic RF, REVIEW when a dead-load mechanism forms or λ < RF → `rate_mech`;
+  - "Other dashboard checks": the number of FAIL and REVIEW rows of `checks` → Summary · `o_dash`.
+  - Head: the count badges "n FAIL" / "no FAIL" and "n REVIEW".
+  - Values come from the same expressions as the dashboard, with the same rounding.
+  - A chip click calls `archGoto(tab, card)`: the tab opens, the card expands, scrolls under the sticky bar and flashes (§6).
+- **Saved data (§5):** none changed. New per-browser UI key `stoneArchLR.dashCollapsed.v1` ('1' = strip), tool-prefixed. It is written only by the « / » button and is not in the project or the autosave.
+- **Formulas, factors, units, code references:** none (§4 does not apply).
+- **Decisions (pending engineer review):**
+  1. The chips are the vehicle ratings plus the advisory and convergence results that have their own worked card. The other ~30 dashboard rows are summarised in one "Other dashboard checks" chip that opens the dashboard: most of them carry no single value.
+  2. The column sits left of the input panel, as in Shear and Moment Diagrams; the inputs and the output keep their columns.
+  3. The column scrolls on its own, like the two panels.
+- **Check case (default project):**
+  - Chips: H20 RF 0.747 · 14.9 t · SL‑L FAIL; … EV3 (Inv basis) (governs) RF 0.439 · 18.9 t · SL‑R FAIL; MS18 21.92 t · MS 12.18 (HS20 24.4 t × 0.9); Mesh convergence spread 18.7 % · 12, 24, 48 el REVIEW; sliding and mechanism lines; "Other dashboard checks".
+  - Head: "11 FAIL", "2 REVIEW".
+- **How verified:** headless Chromium at 1920 / 1440 / 1280 / 1024 / 390 px:
+  - column 280 / 240 / 240 px, then not shown at 1024 and 390;
+  - no sideways scroll;
+  - a chip click opens Rating · H20;
+  - « gives a 42 px strip and writes `'1'`;
+  - 0 console errors;
+  - origin/main against the branch: results, the model and every tab's text identical (see the PR).
+- **Other copies:** none.

@@ -5573,3 +5573,95 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Check case:** origin/main vs branch, headless, 10 input states (default; pedestal reinforcement; fixed D; elastic + uncracked; tension reinforcement bar / U-stirrup with offset set-out and hooks / closed tie enclosing; hairpins welded plate; group; closed ties): `CC` (all results) JSON identical; the digit sequence of the input panel, every output tab, the Report tab and the printed report (`buildPrintReport`) identical in all 159 texts; only the input panel's text differs (wording/structure).
 - **How verified:** `node tests/check-syntax.mjs`; `tests/smoke/phone-layout.mjs --tool bpad`; `tests/smoke/project-library.mjs --tool baseplate`; `tests/smoke/lightpole-anchor-handoff.mjs`; 0 console errors. Screenshots before / after at 1440 and 390 px (neutral-axis note, hook factors, anchor reinforcement).
 - **Other copies:** none.
+
+## 2026-11-08 — PR: nl/bp-notes-2 (PR #1186: https://github.com/mlococo88/All-Structural/pull/1186) — BPNL-2: long notes on the output tabs (Summary, Base Plate, Anchor Design, Shear Distribution, Drawings, 3D View, Validation, Manual) and in the Report (display only, no result change)
+### BPNL-2. Output tabs: long notes as a lead line and a list; the Report prints them as one note per part   [display only] [no result change]
+- **Request / rule / helper:** as BPNL-1 (`bpNL`, `bpNLdiv`, `bpNLhint`). The Tension Rebar and Shear Rebar tabs are BPNL-3.
+- **CSS:** the BPNL-1 rules no longer need a `.bpNL` ancestor (`.bpNLl`, `.bpNLu`, `.bpNLu>li`, `.bpNLa`, print `break-inside:avoid`), because the printed report copies a note's inner HTML into its "Note:" boxes, the Summary's "Note n." list and the "Notes / basis" B.n items, where the outer class is lost.
+- **Report viewer** (`bprModel`, `walk`, before `if(cl.contains('cr-bn'))`, anchor `/* BPNL (2026-11-08): a lead-and-list note`): an element whose child is a `.bpNLu` list (directly, or inside a `.bpNL` child) becomes one Report note per part: any text before it ("Note:", "B.1") joined to the first part, then the lead, then each list item as "• lead words text". A "Note:" box stays a warning note. An element that only contains such a note deeper down (a figure and its caption) is walked into. Before, every note was one Report note (`linkText` of the element).
+- **Notes changed** (tab → old opening text → new lead → item lead words). Exact before / after: the PR diff.
+  1. Summary, All Combinations × Limit States: "Every combination against every limit state." → Column / Row / Why both.
+  2. Summary, "Tension / Shear anchor reinforcement is present but the §17.5.2.1 substitution is not yet justified" → Outstanding (the reasons) / Effect / To take the credit.
+  3. Summary, "Shear hairpins / closed ties: only n of m claimed legs are effective" → Why / Capacity / Breakout.
+  4. Summary, Per-Anchor Forces: "Why some checks use one anchor and others the group." → Basis / One anchor / The group / Mixing them / Hilti PROFIS.
+  5. Base Plate 1: "Rigid base plate, iterative neutral-axis solution." → Axes / Plate length.
+  6. Anchor Design 1: "Tension positive, compression negative (sign convention matches Hilti PROFIS)." → Resultants / Highlighted row / Shear distribution (`c.frontDesc`, now escaped as it is HTML).
+  7. Anchor Design 1: "Anchor forces are from a rigid-plate neutral-axis solve…" → Anchors / Concrete / Tension side / Biaxial.
+  8. Anchor Design, Governing Tension Capacity: "Why the basis differs by mode." → Basis / One anchor / The group / Mixing them / Hilti PROFIS.
+  9. Anchor Design, interaction: "Both forms are permitted by ACI 318-19 §17.8…" (was one `pre-line` paragraph) → Commentary / Governing / §17.8.2 (when a cut-off applies) / Comparing against Hilti PROFIS / Lower PROFIS values / Confirm.
+  10. Anchor Design, interaction: "⚠ The two permitted interaction forms DISAGREE on pass/fail here:" → Forms / Reported / Engineer of record.
+  11. Anchor Design, Installation Limits: "Anchor installation: TORQUED/UNTORQUED (input 2. Anchors)." → Spacing / Edge distance / Combinations.
+  12. Shear Distribution 1: "ACI 318-19 Fig. R17.7.2.1b gives three assumptions… chosen by GEOMETRY, not preference:" (the `<br>&nbsp;&nbsp;` lines) → Case 1 / Case 2 / Case 3 / The figure's Note / Controlling case.
+  13. Shear Distribution 1: "Welded to a common plate." → Per R17.7.2.1 / Applies to / Base plates / Changing it.
+  14. Shear Distribution 1, figure caption: "Figure — ACI 318-19 Fig. R17.7.2.1b… Note the two different spacings:" → s₁ / s / Not shown / Reference only.
+  15. Drawings: "One DXF file (AutoCAD R12, model space, full size in inches)." → Sheets / Layers / Export DXF / Title block. (The shared `SharedDxf.PRINT_NOTE` above it is not changed.)
+  16. 3D View: lead "How to use this view:" → Mouse / Load arrows (combination name now escaped) / Anchors / Triad.
+  17. 3D View: "Reinforcement, coloured as in the plans and the per-leg tables:" → Green / Red / Grey / Sphere / Blue-grey / Breakout bodies.
+  18. Validation: "Each case reproduces a Hilti PROFIS 3.1.34 run (uploaded reports)." → Method / Colours / Units.
+  19. Validation: "Important: the pedestal dimensions in these cases are reconstructed…" → Exact matches / May differ / Your project.
+  20. Validation, CB Plaza Struct 2 v1 and v2 case box: new display-only `noteNL` next to the unchanged `note` (the `note` string is kept byte-identical; `noteNL` is drawn when present) → This tool / Expect.
+  21. Validation, every case: "Why these rows differ:" as a real list (was `&bull; <b>k</b>: …<br>` lines).
+  22. Validation, Foundation depth D: lead "The foundation depth D of the neutral-axis solver:" → What it is. / D = (5/6)·h_ef / Why that form. / Physically / Still an assumption.
+  23. Validation, Foundation depth D: "Superseded: earlier versions used a fixed D = 10″ calibrated to CB Plaza alone." → Why it matched / Error / Legacy mode.
+  24. Manual 0.2, list items: Post-installed anchors → Why not / Covered; Seismic design per ACI 318-19 §17.10 → Input / SDC C–F / Not computed / Engineer's; Anchor reinforcement design → Checked / Not done.
+  25. Manual 0.3.1, warning: "The foundation depth D is a calibrated modeling assumption, not a code-specified value." → Calibration / Sensitivity / Input.
+  26. Manual 0.6, note: "A DCR is only meaningful alongside the assumptions that produced it." → Example / Confirm.
+- **Decision (pending engineer review):** the Manual's prose paragraphs (`{p:…}`) are document text and are left as paragraphs; only its notes, warnings and long list items are split. The PROFIS footnote lines ("* PROFIS reports this mode…") stay as footnotes. Notes under ~250 characters with short sentences are left as they are.
+- **Governing provision:** none (display only).
+- **Check case:** origin/main vs branch, headless, the 10 BPNL-1 states: `CC` (all results) JSON identical; the digit sequence of the input panel, every output tab, the Report tab and the printed report identical in all 159 texts; the "Notes / basis" appendix has the same B.n notes (13 in the default project).
+- **How verified:** `node tests/check-syntax.mjs`; `tests/smoke/phone-layout.mjs --tool bpad`; `tests/smoke/project-library.mjs --tool baseplate`; `tests/smoke/lightpole-anchor-handoff.mjs`; 0 console errors. Screenshots before / after at 1440 and 390 px (Summary basis note, interaction note, foundation depth D, Report).
+- **Other copies:** none.
+
+## 2026-11-08 — PR: nl/bp-notes-3 (PR #1191: https://github.com/mlococo88/All-Structural/pull/1191) — BPNL-3: long notes on the Tension Rebar and Shear Rebar tabs (display only, no result change)
+### BPNL-3. Tension Rebar / Shear Rebar tabs: long notes as a lead line and a list   [display only] [no result change]
+- **Request / rule / helpers / Report handling:** as BPNL-1 and BPNL-2. Last part of the long-notes work for this tool.
+- **Notes changed** (old opening text → new lead → item lead words). Exact before / after: the PR diff.
+  1. Tension Rebar, figure caption: "Figure — ACI 318-19 Fig. R17.5.2.1a… both are dimensioned on it." → Placement / Development / Cone / Reference only.
+  2. "Wide-U layout: n interior anchor(s) not restrained." → Why / Fix.
+  3. "n of m anchors in tension have no effective leg within 0.5·h_ef" → Share / Pooling / Confirm / Wide-U layout (when it applies).
+  4. "§17.5.2.1.1 credits a bar only where…" (BPMK-1 note) → Zone / Not credited / Distances below / "h_ef here is the ACTUAL embedment …″." (when h_ef is reduced). The combination name is escaped (`sbdEscB`) now that the note is HTML.
+  5. "Limitation." → Lightly loaded / Load path / Review.
+  6. "Piece set-out (enclosing layout)." / "Piece set-out (per-row layout)." → Set-out / Datum or Under moment / Creditable / Drawings.
+  7. "Elevations are measured UP from the BOTTOM of the member…" (lead unchanged, so the Report's "Basis: see Note B.n" pointer still quotes it) → z_cross / Available / Required / Both sides / "worst DCR" / Effective.
+  8. "n of m bars do not qualify as anchor reinforcement." → Outside the zone / Do not fit / Overstated / Fix.
+  9. §17.5.2.1 compliance (`rebarCompliance`, both tabs): "Anchor reinforcement may replace the concrete breakout check only when…" → Automatic / Your confirmation.
+  10. §17.5.2.1 compliance error box: "n geometric requirement(s) not satisfied and m detailing requirement(s) unconfirmed." → Not justified / Meanwhile.
+  11. Development: "Development is N/A — no leg reaches the breakout cone." → Why / Not a pass / Fix.
+  12. Development: "Per ACI Fig. R17.5.2.1a, anchor reinforcement is developed on BOTH sides of the breakout surface:" → Hooked or bent end / Straight end / Bends / Below.
+  13. Rebar Layout: "n leg(s) violate cover or fall outside the pedestal." / "No tension reinforcement leg fits inside cover." → Limit / Driver / Capacity.
+  14. Shear Rebar, figure caption: "Figure — application of hairpin reinforcement to concrete edges for shear load…" → Development / Note on the figure number / Reference only.
+  15. "The leg-to-leg gauge is too wide for any leg to count." → Why / Fix.
+  16. Closed ties: "Closed ties enclosing the anchor group (ACI 318-19 R17.5.2.1(b), Fig. R17.5.2.1b). Governing edge …" → Legs / (1) / (2) / (3) / Capacity.
+  17. Hairpins: "Governing edge … taken from the same shear-breakout solve as the capacity check." → "lateral offset" / "behind" / Effective.
+  18. "The hairpin bend is not marked as engaging the anchor rod." → Requirement / Without engagement / Confirm.
+  19. Layout: "A hairpin is a DIRECTIONAL detail:" → Credit / Plan / Elevation; closed ties: "Closed ties enclosing the anchor group (§17.5.2.1(b), R17.5.2.1(b), Fig. R17.5.2.1b):" → Legs / Drawings. The combination name is escaped.
+- **Decision (pending engineer review):** the "Why none / only n of the m bars are creditable" banner (`ineffCauseBanner`) is already a list of causes with their fixes and is left as it is. A "Fix:" item stays in its place in the list (not moved to the top), so each box keeps its order of facts.
+- **Governing provision:** none (display only).
+- **Check case:** origin/main vs branch, headless, the 10 BPNL-1 states: `CC` (all results) JSON identical; the digit sequence of the input panel, every output tab, the Report tab and the printed report identical in all 159 texts. One exception, not from this change: the 3D View text in one state differs only by the Plotly chart's axis labels, which had not finished drawing in the main run; the text before the chart is identical.
+- **How verified:** `node tests/check-syntax.mjs`; `tests/smoke/phone-layout.mjs --tool bpad`; `tests/smoke/project-library.mjs --tool baseplate`; `tests/smoke/lightpole-anchor-handoff.mjs`; 0 console errors. Screenshots before / after at 1440 and 390 px (elevations note, tension figure caption, §17.5.2.1.1 crediting note).
+- **Other copies:** none.
+
+## 2026-11-08 — PR: nl/bp-leftpanel (PR #1199: https://github.com/mlococo88/All-Structural/pull/1199) — BPLS: the check summary as a left column from 1200 px (display only, no result change)
+### BPLS. Check summary column on the left at 1200 px and wider   [display only]
+- **Request (engineer, 2026-11-07/08):** add the left summary panel to the tools that have summary / result cards, as in Retaining Wall (RWDL #959, RWLB #984), Spread Footing (SFLB #988), Light Pole and Sign Post (LPLB #991, #994/#997) and Shear and Moment Diagrams (SMLS #1130).
+- **What changed (screen only):**
+  - At **1200 px and wider** a new left column `#bpadDashCol` (left of the input panel; **240 px** from 1200 to 1499 px, **280 px** from 1500 px) lists every check of the Summary tab (`allChecks()`): one compact chip per check: status dot, name, D/C (`fmtDCR`, as the Summary chips) and PASS / FAIL / N/A. Head: « button, "Checks", and "n FAIL" (red) or "max D/C" (green).
+  - The input panel is 33 % of the width left beside the column (`calc((100% − column) × .33)`); the output panel takes the rest.
+  - **Click a chip** (or Enter / Space: chips are buttons): opens and scrolls to the card that works the value, exactly as a Summary chip does (`bpadCardFor` → `bpadGoto`, D11), or the check's tab when no card is mapped.
+  - « shrinks the column to a 42 px strip (vertical title and the count); » opens it.
+  - When the output is withheld (validation blockers) the column says "No results: the output is withheld. See the message on the output tab."
+  - **Below 1200 px nothing changes** (no column; tablet and phone layouts and order as before). The column is `noPrint` and hidden in print; the Summary tab, the Report and Print / PDF are unchanged.
+- **Where (`BasePlateAnchorDesigner.html`):**
+  - CSS: after the LAY-1 `@media screen and (max-width:899.98px){…}` block, the block starting `/* BPLS (2026-11-08, engineer: the check summary in a left panel` (`#bpadDashCol{display:none;}`, `@media screen and (min-width:1200px){…}`, `@media screen and (min-width:1200px) and (max-width:1499.98px){…}`, `@media print{ #bpadDashCol{display:none!important;} }`).
+  - HTML: before `<div id="inputPanel">` inside `<div id="main">`: `<aside id="bpadDashCol" class="noPrint" aria-label="Check summary">` with `#bpadDashHead` (`#bpadDashTgl`, `#bpadDashTtl`, `#bpadDashCnt`) and `#bpadDash`.
+  - JS, `buildOutput()`: `bpDashRender(true);` before the `return` of the blockers branch, and `bpDashRender(false);` after `if(window.katex) renderAllTex(pg);`. New after `buildOutput`: `const BPLS={key:"bpad_dashCollapsed_v1",…}`, `bpDashColl(v,save)`, `bpDashRender(blocked)` and a start-up IIFE that reads the key and wires «.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). The column shows the same `allChecks()` values as the Summary chips.
+- **Saved data (§5):** no key or format changed. New per-browser UI key **`bpad_dashCollapsed_v1`** ('1' = shrunk, '0' = open), tool-prefixed, written only when « / » is clicked, not part of the project, the autosave or the export.
+- **Decisions (pending engineer review):**
+  1. Breakpoints and widths as SFLB / SMLS: column from 1200 px, 240 px to 1499 px, 280 px from 1500 px.
+  2. The Summary tab keeps its own chips and tables (it is a tab, not an always-visible block, so nothing is hidden when the column is open).
+  3. The chips list what the Summary chips list (one per check, enveloped over the combinations); the governing combination and reference are in each chip's tooltip, not on the chip.
+  4. Phone and tablet (below 1200 px) are unchanged, including the order (inputs first, then the output tabs).
+- **Check case (default project):** 10 chips: Base Plate Bending 0.66 PASS, Bolt Bearing / Tearout (plate) 0.05 PASS, Concrete Bearing 0.37 PASS, Steel Tension 0.15 PASS, Pullout 0.11 PASS, Concrete Breakout (T) 0.26 PASS, Steel Shear 0.74 PASS, Concrete Breakout (V) 1.13 FAIL, Pryout 0.19 PASS, Combined T–V Interaction 1.33 FAIL; head "2 FAIL" — the same values as the Summary tab chips. Clicking Concrete Breakout (V) opens the Concrete Embedment tab at the card that works it.
+- **How verified:** origin/main vs branch, headless, the 10 BPNL-1 states: input panel, every output tab, the Report tab and the printed report text identical; `CC` identical apart from the existing `__subJust` memo, which `allChecks()` fills on the Summary tab in main too. Layout at 1920 / 1440 / 1280 / 1024 / 390 px: no sideways scroll; column 280 / 240 / 240 / none / none px; at 1024 and 390 px the panels sit exactly as on main. Collapse writes `bpad_dashCollapsed_v1` = '1' and survives a reload. `node tests/check-syntax.mjs`; `tests/smoke/phone-layout.mjs --tool bpad`; `tests/smoke/project-library.mjs --tool baseplate`; `tests/smoke/lightpole-anchor-handoff.mjs`; 0 console errors.
+- **Other copies:** none.
