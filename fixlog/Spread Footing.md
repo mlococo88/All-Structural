@@ -7389,7 +7389,7 @@ index 50f3837..c2d5000 100644
   - All three contradict the code: the tool magnifies (SFSL), has E combinations (SFEQ), and uses the AASHTO arctan form with d_q ≤ 1.4 (SFLW).
 - **Other copies:** none.
 
-## 2026-11-08 — PR: docs/sf-stale-display (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SFSC-5) — stale scope statements in the tool's own display text (Report assumption, Schematic 1.5, depth-factor hint, card 5.1, hand-off message)   [DISPLAY ONLY; no computed value changes]
+## 2026-11-08 — PR: docs/sf-stale-display (PR #1246: https://github.com/mlococo88/All-Structural/pull/1246) (SFSC-5) — stale scope statements in the tool's own display text (Report assumption, Schematic 1.5, depth-factor hint, card 5.1, hand-off message)   [DISPLAY ONLY; no computed value changes]
 - **Request (engineer, 2026-11-08):** fix the three display texts raised in SFSC-4 (#1245). Also search the tool's non-manual text for other "not performed / not considered / screened only" statements the code has overtaken.
 - **Search:** "not performed", "not considered", "screened only", "not computed", "not checked", "not modelled", "is not applied", "seismic", "magnif", "standard practice", "excluded from", "carried directly", outside the manual. Every hit was checked against the code. Still true, left as they are:
   - torsion design not performed (SFTQ);
