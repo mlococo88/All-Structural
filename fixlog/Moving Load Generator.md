@@ -1762,7 +1762,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Other copies:** none.
 - **Open item:** the two LRFD fatigue-truck warnings (also built in `shared/moving-load.js`, ~400 characters) are not converted here; same approach if wanted.
 
-## 2026-11-08 — PR: claude/nl-ml (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (MLNL-4: the LRFD fatigue-truck warnings as a bold lead and a list; display only, no result change)
+## 2026-11-08 — PR: claude/nl-ml (PR #1250: https://github.com/mlococo88/All-Structural/pull/1250) (MLNL-4: the LRFD fatigue-truck warnings as a bold lead and a list; display only, no result change)
 
 ### MLNL-4. Fatigue-truck warnings shown with `mlNL`   [display only] [no result change]
 - **Request:** MLNL-3 open item (#1241). `shared/moving-load.js` now also gives the two LRFD fatigue-truck warnings a list form in `R.warnNL` (same PR; `fixlog/shared-moving-load.md`). `R.warn` is unchanged.

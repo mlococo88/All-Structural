@@ -340,7 +340,7 @@ results unchanged).
 ### Other copies
 - None.
 
-## 2026-11-08 — PR: claude/nl-ml (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — `warnNL` for the two LRFD fatigue-truck warnings (MLNL-4; no result or string change)
+## 2026-11-08 — PR: claude/nl-ml (PR #1250: https://github.com/mlococo88/All-Structural/pull/1250) — `warnNL` for the two LRFD fatigue-truck warnings (MLNL-4; no result or string change)
 ### Where (`analyze`, the `if(m.short==='Fatigue'){…}` block, anchor `/* MLNL-4 (2026-11-08): the two fatigue-truck warnings`)
 - Before:
   ```js
