@@ -1710,7 +1710,7 @@ function transDisp(w,n,c,cap){
   - origin/main against the branch: results, the model and every tab's text identical (see the PR).
 - **Other copies:** none.
 
-## 2026-11-08 — PR: claude/nl-arch (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Report: listed step notes as list notes (bold lead and bullets) instead of one line with "•" (ARNL-3; display only, no result change)
+## 2026-11-08 — PR: claude/nl-arch (PR #1247: https://github.com/mlococo88/All-Structural/pull/1247) — Report: listed step notes as list notes (bold lead and bullets) instead of one line with "•" (ARNL-3; display only, no result change)
 ### ARNL-3. Report step notes written with arNL: shared list notes   [display only] [no result change]
 - **Request:** the open item of `fixlog/shared-report.md` (SNL, PR #1240): the Report's worked steps whose note the tab writes with `R.arNL` (ARNL-1) were flattened to one italic line "lead • item • item" (`arptStep`, ARNL-1), 13 different notes, each over 300 characters. SNL made a step's note a list note `{ lead, items: [[lead, text] | text, …], action? }` (shared/steps.js), drawn by shared/report.js as a bold lead and bullets.
 - **Where:** `arptStep(o,id)` (Report, anchor `function arptStep(o,id){`) and the new `arptNoteList(nt)` right after it (anchor `/* ARNL-3 (2026-11-08): a step note written with arNL`).
