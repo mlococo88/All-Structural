@@ -2525,7 +2525,7 @@ function listTables() {
 - **Decision (pending engineer review):** the Zone 1 "Check: … lines of fixed bearings" line moved from mid-note to the top of the note (action items first), so on that note the order of the digits changes.
 - **Other copies:** none.
 
-## 2026-11-08 — PR: nl-bsl-notes2 (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SLNL-2) — the Manual, the open-items log and the Report's own notes as a lead and a list (display only, no result change)
+## 2026-11-08 — PR: nl-bsl-notes2 (PR #1179: https://github.com/mlococo88/All-Structural/pull/1179) (SLNL-2) — the Manual, the open-items log and the Report's own notes as a lead and a list (display only, no result change)
 
 ### SLNL-2. Manual and Report notes split into a lead line and a list   [display only] [no result change]
 - **Request:** as SLNL-1 (#1173), part 2 of 2. Same rule and the same `slNL` helper and CSS. Every sentence, number, citation and link is kept, in the same order; new lead words carry no digits.
