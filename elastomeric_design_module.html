@@ -92,6 +92,12 @@ table.itbl input{width:80px;font-family:inherit;font-size:12.5px;border:1px soli
 .eqb .eqref{font-size:11.5px;color:#777;font-style:italic;margin-left:6px;}
 .eqb .ktx{margin:3px 0;overflow-x:auto;}
 .eqb .eqnote{font-size:12px;color:#555;margin-top:2px;}
+/* EDNL (2026-11-08): a long note as a bold lead and a list (edmNL) */
+.edmNL .edmNLl{font-weight:bold;margin:0 0 1px}
+.edmNL .edmNLu{margin:2px 0 3px;padding-left:18px}
+.edmNL .edmNLu>li{margin:1px 0}
+.edmNL .edmNLa{margin:2px 0 4px}
+@media print{.edmNL .edmNLu>li{break-inside:avoid}}
 .vtbl{border-collapse:collapse;margin:4px 0;font-size:12.5px;}
 .vtbl td{border:1px solid #e0e2d8;padding:1px 7px;}
 .vtbl td:first-child{text-align:right;}
@@ -815,6 +821,11 @@ function eqB(title,ref,lines,note,key){   // key: data-chk anchor for the D11 li
     ${lines.map(t=>`<div class="ktx" data-tex="${esc(t)}"></div>`).join("")}
     ${note?`<div class="eqnote">${note}</div>`:""}</div>`;
 }
+/* EDNL (2026-11-08, engineer: long notes split up so they are not overlooked): a note as action lines (tool warning style), a bold lead
+   line and a list; an item is text or [lead words, text]; null items are skipped. Display only. */
+function edmNL(lead,items,o){ o=o||{}; const L=o.ol?"ol":"ul";
+  const li=(items||[]).filter(Boolean).map(x=>"<li>"+(Array.isArray(x)?"<b>"+x[0]+"</b> "+x[1]:x)+"</li>").join("");
+  return `<div class="edmNL">${(o.act||[]).filter(Boolean).map(a=>`<div class="warn-item edmNLa">${a}</div>`).join("")}${lead?`<div class="edmNLl">${lead}</div>`:""}${li?`<${L} class="edmNLu">${li}</${L}>`:""}</div>`; }
 function varsTbl(rows){
   return `<table class="vtbl">${rows.map(r=>`<tr><td>${r[0]?`\\(${r[0]}\\)`:""}</td><td>${r[1]}</td><td><b>${fmt(r[2],r[4]??2)}</b></td><td>${r[3]||""}</td></tr>`).join("")}</table>`
     .replace(/\\\(([^)]*)\\\)/g,(m,tex)=>`<span class="ktxi" data-tex="${esc(tex)}">${esc(tex)}</span>`);
@@ -974,7 +985,8 @@ function renderDesign(R){
     ${eqB("Combined compression & rotation (pre-2009 no-liftoff, informational)","AASHTO 9th Ed. and earlier 14.7.6.3.5 form; C14.7.6.3.5a",[
       `\\sigma_s \\ge ${fmtT(ma.DrA,3)}\\,G\\,S\\left(\\dfrac{${isCirc()?"D":"L"}}{h_{ri}}\\right)^2\\dfrac{\\theta_s}{n} = ${fmtT(ma.upliftA,3)}\\ \\text{ksi}`].concat(isCirc()?[]:[`\\text{transverse: } \\sigma_s \\ge ${fmtT(ma.DrA,3)}\\,G\\,S\\left(\\dfrac{W}{h_{ri}}\\right)^2\\dfrac{\\theta_t}{n} = ${fmtT(ma.upliftAW,3)}\\ \\text{ksi}, \\quad ${thTWtex(R)}`]).concat([
       `\\sigma_s = ${fmtT(R.sigTL,3)}\\ \\text{ksi}`]),`Coefficient 0.5 for rectangular and 0.75 for circular bearings [14.7.6.3.5]. G = ${fmt(ma.GmA,3)} ksi, the highest value of the durometer range (least favourable for this check) [14.7.6.2].`,"uplift")}
-    ${infoLine("Compression–rotation, pre-2009 no-liftoff: σ<sub>up</sub>/σ<sub>s</sub> = "+fmt(ma.upliftA/R.sigTL)+(isCirc()?"":"; transverse "+fmt(ma.upliftAW/R.sigTL))+" for reference — not a pass/fail check: the 10th Ed. removed the no-liftoff provisions from Method A, rotation being implicit in its geometric and stress limits (C14.7.6.3.5a, C14.7.6.1; MassDOT §3.5.7.3). Decision (pending engineer review): kept as information.","C14.7.6.3.5a","uplift")}
+    ${infoLine(edmNL("Compression–rotation, pre-2009 no-liftoff: σ<sub>up</sub>/σ<sub>s</sub> = "+fmt(ma.upliftA/R.sigTL)+(isCirc()?"":"; transverse "+fmt(ma.upliftAW/R.sigTL))+" for reference — not a pass/fail check.",
+      [["Why:","the 10th Ed. removed the no-liftoff provisions from Method A, rotation being implicit in its geometric and stress limits (C14.7.6.3.5a, C14.7.6.1; MassDOT §3.5.7.3)."]],{act:["Decision (pending engineer review): kept as information."]}),"C14.7.6.3.5a","uplift")}
     ${stabTEq(R,"AASHTO 14.7.6.3.6")}
     ${checkLine("Stability thickness",R.stabT.dc,isCirc()?"h_total ≤ D/4":"h_total ≤ L/3, W/3","stabT")}
     ${eqB("Steel reinforcement thickness","AASHTO 14.7.6.3.7 / 14.7.5.3.5",reinfLines(R),"","reinf")}
@@ -1003,7 +1015,8 @@ function reinfLines(R){ const g=S.geom,m=S.mat; return [
 function hsMinLine(R){ const r=R.reinf, ok=r.minPass, ref=r.hsMin>=0.1196-1e-9?"MassDOT §3.5.7.5":"14.7.5.3.5";
   return `<div class="checkline" data-chk="reinf"><span class="verdict ${ok?"ok":"bad"}">${ok?"PASS":"FAIL"}</span><span style="flex:1">Steel laminate h<sub>s</sub> = ${fmt(r.tProvided,4)} in ${ok?"≥":"&lt;"} minimum ${fmt(r.hsMin,4)} in${ok?"":" (h<sub>s,min</sub>/h<sub>s</sub> = "+fmt(r.minRatio)+")"} <span class="eqref">[${ref}]</span></span></div>`; }
 /* L11 (2026-11-07): low-temperature zone / option note for the H_bu block */
-function lowTNote(R){ const t=R.lowT; return (t.zone?`Low-temperature zone ${t.zone}: minimum elastomer grade ${t.grade} [Table 14.7.5.2-1]. `:`Low-temperature zone not set (panel I-5) [Table 14.7.5.2-1]. `)+(t.mult>1?`Design option of 14.7.5.2: H<sub>bu</sub> × ${t.mult} (${t.mult===2?"special force provisions with a low-friction slider":"special force provisions without a slider"}). `:`Design option of 14.7.5.2: minimum grade, H<sub>bu</sub> per 14.6.3.1 (× 1). `); }
+function lowTNote(R){ const t=R.lowT; return [t.zone?[`Low-temperature zone ${t.zone}:`,`minimum elastomer grade ${t.grade} [Table 14.7.5.2-1].`]:["Low-temperature zone:",`not set (panel I-5) [Table 14.7.5.2-1].`],   /* EDNL: list items (was one string) */
+  t.mult>1?["Design option of 14.7.5.2:",`H<sub>bu</sub> × ${t.mult} (${t.mult===2?"special force provisions with a low-friction slider":"special force provisions without a slider"}).`]:["Design option of 14.7.5.2:",`minimum grade, H<sub>bu</sub> per 14.6.3.1 (× 1).`]]; }
 /* M3 (2026-11-07): compressive deflection, worked (symbolic → substituted → result) */
 function deflEq(R){ const d=R.defl, mBd=S.method==="B"&&!isPlain(), pep=isPlain(), Gs=mBd?"G_{min}":"G";
   const fx=pep?"3\\,":"", fxv=pep?"3":"";
@@ -1012,9 +1025,11 @@ function deflEq(R){ const d=R.defl, mBd=S.method==="B"&&!isPlain(), pep=isPlain(
     `\\delta_L = \\varepsilon_L\\,${pep?"t":"n\\,h_{ri}"} = (${fmtT(d.eL,5)})(${fmtT(d.hEl,3)}) = ${fmtT(d.dL,4)}\\ \\text{in}, \\quad \\delta_d = (${fmtT(d.eD,5)})(${fmtT(d.hEl,3)}) = ${fmtT(d.dD,4)}\\ \\text{in}`,
     `\\delta_{lt} = \\delta_d + a_{cr}\\,\\delta_d = ${fmtT(d.dD,4)} + ${fmtT(d.acr,2)}(${fmtT(d.dD,4)}) = ${fmtT(d.dLT,4)}\\ \\text{in}`];
   if(!mBd) L.push(`\\varepsilon_{DL+LL} = \\dfrac{${fxv}${fxv?"(":""}${fmtT(R.sigTL,4)}${fxv?")":""}}{${fmtT(d.k,2)}} = ${fmtT(d.eTL,4)} \\;${d.dcA<=1.0001?"\\le":">"}\\; 0.09 \\quad (\\delta \\le 0.09\\,h_{ri}\\ \\text{per layer})`);
-  const note=(mBd?"Eqs. 14.7.5.3.6-1 to -3 with the layer strain of Eq. C14.7.5.3.6-1 (a linear approximation; Figure C14.7.6.3.3-1 may be used instead, and the two diverge for S above about 6), G = G<sub>min</sub> (H1). Reported; checked only against the limits entered in I-5 (none in the owner manuals; C14.7.5.3.6 suggests 0.125 in relative LL deflection across a joint).":
-    "Instantaneous LL plus initial DL deflection of "+(pep?"a plain pad (PEP, ×3 the steel-reinforced value of the same shape factor, C14.7.6.3.3)":"an internal layer")+" ≤ 0.09 h<sub>ri</sub> [14.7.6.3.3]; layer strain by Eq. C14.7.5.3.6-1 (linear approximation; Figure C14.7.6.3.3-1 may give less at low S), G = the lowest of the durometer range. Decision (pending engineer review): the linear equation is used.")
-    +` δ = Σ ε·h<sub>ri</sub> over the internal layers (cover layers not counted). a<sub>cr</sub> from Table 14.7.6.2-1 (panel I-6).`;
+  const tail=[["Deflection:","δ = Σ ε·h<sub>ri</sub> over the internal layers (cover layers not counted)."],["Creep ratio:","a<sub>cr</sub> from Table 14.7.6.2-1 (panel I-6)."]];   /* EDNL */
+  const note=mBd?edmNL("How the deflection is found and checked:",[["Equations:","Eqs. 14.7.5.3.6-1 to -3 with the layer strain of Eq. C14.7.5.3.6-1 (a linear approximation; Figure C14.7.6.3.3-1 may be used instead, and the two diverge for S above about 6)."],
+      ["Shear modulus:","G = G<sub>min</sub> (H1)."],["Check:","reported; checked only against the limits entered in I-5 (none in the owner manuals; C14.7.5.3.6 suggests 0.125 in relative LL deflection across a joint)."]].concat(tail)):
+    edmNL("How the deflection is found and checked:",[["Limit:","instantaneous LL plus initial DL deflection of "+(pep?"a plain pad (PEP, ×3 the steel-reinforced value of the same shape factor, C14.7.6.3.3)":"an internal layer")+" ≤ 0.09 h<sub>ri</sub> [14.7.6.3.3]."],
+      ["Layer strain:","by Eq. C14.7.5.3.6-1 (linear approximation; Figure C14.7.6.3.3-1 may give less at low S)."],["Shear modulus:","G = the lowest of the durometer range."]].concat(tail),{act:["Decision (pending engineer review): the linear equation is used."]});
   let chk="";
   if(!mBd) chk=checkLine("Compressive deflection ≤ 0.09 h_ri",d.dcA,"[14.7.6.3.3]","defl");
   else { if(d.dLLmax>0) chk+=checkLine("LL compressive deflection δ_L ≤ "+fmt(d.dLLmax,3)+" in",d.dL/d.dLLmax,"[14.7.5.3.6]","defl");
@@ -1026,7 +1041,8 @@ function infoLine(txt,ref,key){ return `<div class="checkline"${key?` data-chk="
 /* M1: Method A applicability S_i²/n, worked */
 function appAEq(R){ const a=R.appA; if(!a) return "";
   return eqB("Method A applicability","AASHTO 14.7.6.1 / C14.7.6.1",[`\\dfrac{S_i^2}{n} = \\dfrac{${fmtT(R.S,3)}^2}{${fmtT(R.n,0)}} = ${fmtT(a.S2n,2)} \\; ${a.dc<1?"<":"\\ge"} \\; ${fmtT(a.lim,0)}`],
-    `Method A applies to steel-reinforced bearings with S<sub>i</sub>²/n &lt; 22 [14.7.6.1]; the commentary suggests 20 when n ≥ 3 and 16 for circular or nearly square pads [C14.7.6.1]. Limit used: ${fmt(a.lim,0)} (${a.why}). Decision (pending engineer review): the commentary values are used. When this fails, design by Method B.`,"appA")
+    edmNL("Method A applies to steel-reinforced bearings with S<sub>i</sub>²/n &lt; 22 [14.7.6.1].",[["Commentary:","suggests 20 when n ≥ 3 and 16 for circular or nearly square pads [C14.7.6.1]."],
+      ["Limit used:",`${fmt(a.lim,0)} (${a.why}).`],["When this fails:","design by Method B."]],{act:["Decision (pending engineer review): the commentary values are used."]}),"appA")
   +`<div class="checkline" data-chk="appA"><span class="verdict ${a.dc<1?"ok":"bad"}">${a.dc<1?"PASS":"FAIL"}</span><span style="flex:1">Method A applicability S²/n &lt; ${fmt(a.lim,0)} — D/C = <b>${fmt(a.dc)}</b> <span class="eqref">[14.7.6.1]</span></span></div>`; }
 function coverLine(){ const g=S.geom; return `c = ${fmtT(g.cover,3)} \\le \\max(0.7\\,h_{ri},\\ 5/16) = \\max(0.7(${fmtT(g.hri,3)}),\\ 0.3125) = ${fmtT(Math.max(0.7*g.hri,5/16),3)}\\ \\text{in}`; }
 /* D11 (report only): the stability-thickness check has no worked block in the tab; this shows the comparison the check itself makes */
@@ -1042,12 +1058,16 @@ function edmDashDC(R,id){ const d=R.dash.find(x=>x.id===id); return d?d.dc:NaN; 
 function gRangeEq(R){ const r=R.Grange; if(!r||!r.mB) return "";
   return eqB("Design shear modulus range","AASHTO 14.7.5.2 / MassDOT §3.5.7.4",[
     `G_{min} = (1-t_G)\\,G = (1-${fmtT(r.Gv,2)})(${fmtT(r.G,3)}) = ${fmtT(r.Gmin,3)}\\ \\text{ksi}, \\quad G_{max} = (1+t_G)\\,G = (1+${fmtT(r.Gv,2)})(${fmtT(r.G,3)}) = ${fmtT(r.Gmax,3)}\\ \\text{ksi}`],
-    `G = the specified shear modulus (panel I-3); t<sub>G</sub> = the AASHTO M 251 tolerance (panel I-6). Each check takes the least favourable value: G<sub>min</sub> for the axial shear strains and the stability limit, G<sub>max</sub> for the shear force H (slip check, H<sub>bu</sub>, the pad sent to the Abutment app) and the restraint test.`,"grange"); }
-function hbuEq(R){ return eqB("Horizontal force for substructure design (report only)","AASHTO 14.6.3.1",[`H_{bu} = \\dfrac{G_{max}\\,A\\,\\Delta_u}{h_{rt}} = \\dfrac{(${fmtT(R.anc.G,3)})(${fmtT(R.A,1)})(${fmtT(S.loads.deltaS,3)})}{${fmtT(R.hrt,3)}} = ${fmtT(R.Hbu/R.lowT.mult,2)}\\ \\text{kip per bearing}`].concat(R.lowT.mult>1?[`H_{bu} = ${R.lowT.mult}(${fmtT(R.Hbu/R.lowT.mult,2)}) = ${fmtT(R.Hbu,2)}\\ \\text{kip (low-temperature design option, 14.7.5.2)}`]:[]),(lowTNote(R))+(R.Grange.mB?`G<sub>max</sub> = (1 + ${fmt(R.Grange.Gv,2)})·G, the upper end of the specified range [14.7.5.2; MassDOT §3.5.7.4]`:`G<sub>max</sub> = the highest G of the durometer range, panel I-6 [14.7.6.2]`)+`; Δu = Δs. This is the G and H sent to the Abutment app (↩ Send Pad to Abutment).`,"hbu"); }
+    edmNL("Each check takes the least favourable value of G.",[["G:","the specified shear modulus (panel I-3)."],["t<sub>G</sub>:","the AASHTO M 251 tolerance (panel I-6)."],
+      ["G<sub>min</sub>:","for the axial shear strains and the stability limit."],["G<sub>max</sub>:","for the shear force H (slip check, H<sub>bu</sub>, the pad sent to the Abutment app) and the restraint test."]]),"grange"); }
+function hbuEq(R){ return eqB("Horizontal force for substructure design (report only)","AASHTO 14.6.3.1",[`H_{bu} = \\dfrac{G_{max}\\,A\\,\\Delta_u}{h_{rt}} = \\dfrac{(${fmtT(R.anc.G,3)})(${fmtT(R.A,1)})(${fmtT(S.loads.deltaS,3)})}{${fmtT(R.hrt,3)}} = ${fmtT(R.Hbu/R.lowT.mult,2)}\\ \\text{kip per bearing}`].concat(R.lowT.mult>1?[`H_{bu} = ${R.lowT.mult}(${fmtT(R.Hbu/R.lowT.mult,2)}) = ${fmtT(R.Hbu,2)}\\ \\text{kip (low-temperature design option, 14.7.5.2)}`]:[]),edmNL("Inputs of H<sub>bu</sub>:",lowTNote(R).concat([["Shear modulus:",R.Grange.mB?`G<sub>max</sub> = (1 + ${fmt(R.Grange.Gv,2)})·G, the upper end of the specified range [14.7.5.2; MassDOT §3.5.7.4].`:`G<sub>max</sub> = the highest G of the durometer range, panel I-6 [14.7.6.2].`],
+    ["Movement:","Δu = Δs."],["Hand-off:","this is the G and H sent to the Abutment app (↩ Send Pad to Abutment)."]])),"hbu"); }
 function ancEq(R){ const a=R.anc; return eqB("Anchorage — slip check, friction coefficient 0.2 (pad secured against horizontal movement if exceeded)","AASHTO 14.8.3.1 / "+a.ref,[
     `H = \\dfrac{G\\,A\\,\\Delta_s}{h_{rt}} = \\dfrac{(${fmtT(a.G,3)})(${fmtT(R.A,1)})(${fmtT(S.loads.deltaS,3)})}{${fmtT(R.hrt,3)}} = ${fmtT(a.H,2)}\\ \\text{kip}`,
     `H \\le \\dfrac{P_{min}}{5} = \\dfrac{${fmtT(a.Pmin,1)}}{5} = ${fmtT(a.Pmin/5,2)}\\ \\text{kip}`],
-    `H ≤ 0.2 P<sub>min</sub> = P<sub>min</sub>/5 (friction coefficient 0.2 between elastomer and clean concrete or steel, C14.8.3.1). ${a.mB?"G = G<sub>max</sub> = (1 + tol)·specified G, the least favourable value for the shear force (Method B) [14.7.5.2; MassDOT §3.5.7.4].":"G = highest value of the durometer range (least favourable for the shear force) [14.7.6.2], panel I-6."} Δs taken as the factored shear deformation. P<sub>min</sub> = minimum vertical force due to permanent loads${a.PminFromDL?" (taken as P<sub>DL</sub>; enter P<sub>min</sub> in I-4 if lower)":""}.`,"anc")
+    edmNL("H ≤ 0.2 P<sub>min</sub> = P<sub>min</sub>/5",[["Friction coefficient:","0.2 between elastomer and clean concrete or steel, C14.8.3.1."],
+      ["Shear modulus:",a.mB?"G = G<sub>max</sub> = (1 + tol)·specified G, the least favourable value for the shear force (Method B) [14.7.5.2; MassDOT §3.5.7.4].":"G = highest value of the durometer range (least favourable for the shear force) [14.7.6.2], panel I-6."],
+      ["Δs:","taken as the factored shear deformation."],["P<sub>min</sub>:",`minimum vertical force due to permanent loads${a.PminFromDL?" (taken as P<sub>DL</sub>; enter P<sub>min</sub> in I-4 if lower)":""}.`]]),"anc")
   +(a.anchored&&EDM_RPT?edmResLine("Anchorage — pad anchored / doweled: design the anchorage for H = "+fmt(a.H)+" kip per bearing",null,a.ref,"INFO")
     :a.anchored?`<div class="checkline" data-chk="anc"><span class="verdict" style="background:#888">INFO</span>
     <span style="flex:1">Pad anchored / doweled (panel I-5) — design the anchorage for H = <b>${fmt(a.H)} kip</b> per bearing; H/(P<sub>min</sub>/5) = ${fmt(a.dc)} for reference (not a pass/fail check) <span class="eqref">[${a.ref}]</span></span></div>`
@@ -1059,7 +1079,10 @@ function resEq(R){ const r=R.res; if(!r) return ""; const m=S.loads;
     `\\varepsilon_a = \\dfrac{\\sigma_s}{3\\,B_a\\,G_{max}\\,S_i^2} = \\dfrac{${fmtT(r.sigS,4)}}{3(${fmtT(r.Ba,1)})(${fmtT(r.G,3)})(${fmtT(R.S,3)})^2} = ${fmtT(r.epsA,5)}`,
     `\\theta_s = \\theta_{st} + 1.75\\,\\theta_{cy} = ${fmtT(R.strain.thSt,4)} + 1.75(${fmtT(R.strain.thCy,4)}) = ${fmtT(r.thSL,4)}\\ \\text{rad}`+(isCirc()?"":`, \\quad \\theta_{t} = ${fmtT(r.thSW,4)}\\ \\text{rad} \\Rightarrow \\theta_s = ${fmtT(r.thS,4)}`),
     `\\dfrac{\\theta_s}{n} = \\dfrac{${fmtT(r.thS,4)}}{${fmtT(R.n,0)}} = ${fmtT(r.lhs,5)} \\quad \\text{vs.} \\quad \\dfrac{3\\,\\varepsilon_a}{S_i} = \\dfrac{3(${fmtT(r.epsA,5)})}{${fmtT(R.S,3)}} = ${fmtT(r.rhs,5)}`],
-    `A restraint system is required when θ<sub>s</sub>/n ≥ 3ε<sub>a</sub>/S<sub>i</sub>. ε<sub>a</sub> per Eq. 14.7.5.3.3-15 with B<sub>a</sub> = 1.6 (Eqs. 14.7.5.3.3-16/-17); σ<sub>s</sub> and θ<sub>s</sub> are static + 1.75 × cyclic (live load cyclic). θ<sub>st</sub> includes the construction tolerance (rotation build-up)${isCirc()?"":"; rectangular: the larger of the rotation about L and the transverse rotation θ<sub>t</sub> about W"}. n = number of internal layers (not increased for the cover layers). A bearing with bonded external plates is secured per 14.8.3.1: tick “anchored / doweled” in I-5.`,"res")
+    edmNL("A restraint system is required when θ<sub>s</sub>/n ≥ 3ε<sub>a</sub>/S<sub>i</sub>.",[["ε<sub>a</sub>:","per Eq. 14.7.5.3.3-15 with B<sub>a</sub> = 1.6 (Eqs. 14.7.5.3.3-16/-17)."],
+      ["σ<sub>s</sub> and θ<sub>s</sub>:","static + 1.75 × cyclic (live load cyclic)."],["θ<sub>st</sub>:","includes the construction tolerance (rotation build-up)."],
+      isCirc()?null:["Rectangular:","the larger of the rotation about L and the transverse rotation θ<sub>t</sub> about W."],["n:","number of internal layers (not increased for the cover layers)."],
+      ["Bonded external plates:","a bearing with bonded external plates is secured per 14.8.3.1: tick “anchored / doweled” in I-5."]]),"res")
   +(r.anchored&&EDM_RPT?edmResLine("Restraint — pad anchored / doweled: restraint provided",null,"14.7.5.4","INFO")
     :r.anchored?`<div class="checkline" data-chk="res"><span class="verdict" style="background:#888">INFO</span><span style="flex:1">Pad anchored / doweled (panel I-5) — restraint provided; (θ<sub>s</sub>/n)/(3ε<sub>a</sub>/S<sub>i</sub>) = ${fmt(r.dc)} for reference <span class="eqref">[14.7.5.4]</span></span></div>`
     :checkLine("Restraint θs/n < 3εa/Si",r.dc,"[14.7.5.4]","res")); }
@@ -1070,7 +1093,8 @@ function hydEq(R){ const h=R.hyd, r=R.res; if(!h) return "";
   else L.push(`C_\\alpha = \\tfrac{4}{3}\\left[(\\alpha^2+\\tfrac13)^{1.5} - \\alpha(1-\\alpha^2)\\right] = \\tfrac{4}{3}\\left[(${fmtT(h.al,4)}^2+0.3333)^{1.5} - ${fmtT(h.al,4)}(1-${fmtT(h.al,4)}^2)\\right] = ${fmtT(h.Ca,5)}`,
     `\\sigma_{hyd} = 3\\,G_{max}\\,S_i^3\\,\\dfrac{\\theta_s}{n}\\,C_\\alpha = 3(${fmtT(h.G,3)})(${fmtT(R.S,3)})^3\\dfrac{${fmtT(r.thS,4)}}{${fmtT(R.n,0)}}(${fmtT(h.Ca,5)}) = ${fmtT(h.sh,4)}\\ \\text{ksi} \;${h.dc<=1.0001?"\\le":">"}\; 2.25\\,G_{max} = ${fmtT(h.lim,3)}\\ \\text{ksi}`);
   return eqB("Hydrostatic tension, bonded external plates top and bottom","AASHTO 14.7.5.3.3, Eqs. 14.7.5.3.3-11 to -15",L,
-    `ε<sub>a</sub> and θ<sub>s</sub> as in the restraint test above (static + 1.75 × cyclic; G = G<sub>max</sub>, the least favourable here). The commentary asks for this check also in the construction case (light axial load, large camber rotation, cyclic = 0), which is not modelled. Panel I-5: “External steel plates bonded”.`,"hyd")
+    edmNL("ε<sub>a</sub> and θ<sub>s</sub> as in the restraint test above (static + 1.75 × cyclic; G = G<sub>max</sub>, the least favourable here).",[
+      ["Construction case:","the commentary asks for this check also in the construction case (light axial load, large camber rotation, cyclic = 0), which is not modelled."],["Input:","panel I-5: “External steel plates bonded”."]]),"hyd")
     +checkLine("Hydrostatic tension σhyd ≤ 2.25G",h.dc,"[14.7.5.3.3]","hyd"); }
 /* edge cover of the steel laminates ≥ 1/4 in. (pass/fail, no D/C) */
 function edgeEq(R,ref){ const e=R.edge; if(!e) return ""; const v=e.pass?"PASS":"FAIL";
@@ -1082,7 +1106,10 @@ function thermEqHtml(){
   return eqB("One-way thermal movement","MassDOT §3.5.7.6, Fig 3.5.7-2",[
         `\\Delta = f\\cdot 0.5\\,\\alpha\\,L_{span}\\,\\Delta T`,
         `\\Delta = ${fmtT(f,2)}(0.5)(${fmtT(th.alpha,7)})(${fmtT(th.span)}\\cdot12)(${fmtT(th.dT,0)}) = ${fmtT(dTherm,3)}\\ \\text{in}`],
-        `Half-span (midspan-neutral, standard bridge) with the ×${fmt(f,1)} thermal movement factor (panel I-5). Use this as Δs above, adding creep/shrinkage. Enter span/α/ΔT below. The half span is right for a floating bridge with the point of zero movement at midspan (MassDOT §3.1.8.3); with a fixed bearing elsewhere use the distance from the point of zero movement (enter it as twice the span here), and combine any transverse movement vectorially (MassDOT Figs 3.5.7-2 to -4) — this reference calculation does neither (L5).`);
+        edmNL(`Half-span (midspan-neutral, standard bridge) with the ×${fmt(f,1)} thermal movement factor (panel I-5).`,[["Design movement:","use this as Δs above, adding creep/shrinkage."],["Input:","enter span/α/ΔT below."],
+          ["Floating bridge:","the half span is right for a floating bridge with the point of zero movement at midspan (MassDOT §3.1.8.3)."],
+          ["Fixed bearing elsewhere:","use the distance from the point of zero movement (enter it as twice the span here)."],
+          ["Transverse movement:","combine any transverse movement vectorially (MassDOT Figs 3.5.7-2 to -4)."],["Not done here:","this reference calculation does neither of the last two (L5)."]]));
 }
 function renderRot(R){
   const L=S.loads;
@@ -1100,7 +1127,7 @@ function renderRot(R){
 }
 function renderGird(R){
   const gs=S.girders||[];
-  if(!gs.length) return panel("o-gird","4.1","Girder Run",`<div class="in-note">No girder set loaded. Open the EDM from the Abutment app to receive per-girder loads, or add girders via JSON import. You can still design for the single load case in panel I-4.</div>`);
+  if(!gs.length) return panel("o-gird","4.1","Girder Run",`<div class="in-note">${edmNL("No girder set loaded.",[["To load girders:","open the EDM from the Abutment app to receive per-girder loads, or add girders via JSON import."],["Meanwhile:","you can still design for the single load case in panel I-4."]])}</div>`);
   const run=edmGirdRun();
   const govAll=Math.max(...run.map(r=>r.gov));
   return panel("o-gird","4.1","Girder Run — one pad checked against every girder",`
