@@ -5504,7 +5504,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 ### How verified
 - `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`; the headless comparison listed in the PR.
 
-## 2026-11-08 — PR: fix/bp-escaped-bold (PR: pending) — markup shown as literal text (display only)
+## 2026-11-08 — PR: fix/bp-escaped-bold (PR #1171: https://github.com/mlococo88/All-Structural/pull/1171) — markup shown as literal text (display only)
 ### BPMK-1. Four notes showed `<b>`, `<i>`, `<br>` and `&plusmn;` as text   [display only; saved data: none]
 - **Problem:** `el(tag,cls,txt)` sets `textContent`, so markup in its text argument was printed literally. Found by a headless scan of every text node (all input panes and all output tabs; default, pedestal-reinforcement, fixed-D, elastic-model and tension-reinforcement states). Four places, all on origin/main; after the fix the scan finds none.
 - **Where / Before / After:**
