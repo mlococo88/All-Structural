@@ -284,8 +284,8 @@ textarea{min-height:64px;resize:vertical;font-family:var(--font-doc);font-size:1
         <button type="button" onclick="bxPullBuildingLoads()" title="Import nominal area loads (psf) from the ASCE 7-16 Load Generator as line loads (HANDOFF.md, channel buildingLoads)">Pull from ASCE 7-16<span id="bxBldNew" style="display:none;color:#FDE68A;font-weight:700"> &#9679; new data available</span></button>
         <button type="button" onclick="document.getElementById('bxBldFile').click()">Import hand-off (JSON)</button><input type="file" id="bxBldFile" accept=".json,application/json" style="display:none" onchange="bxImportBuildingLoads(event)">
         <span id="bxBldSrc" style="font-family:var(--font-ui);font-size:8pt;color:#C7D4E4;align-self:center"></span></div></div>
-        <div class="prjGrp"><b>Support reactions to other tools</b><div class="hint">Unfactored reactions by load type for Base Plate and Spread Footing, or as a file.</div><div class="btnRow">
-        <button type="button" onclick="bxSendMemberReactions('send')" title="Publish the unfactored support reactions by load type for the base plate and spread footing tools (HANDOFF.md, channel memberReactions)">Send to other tools</button>
+        <div class="prjGrp"><b>Support reactions to other tools</b><div class="hint">Unfactored reactions by load type for Base Plate and Shallow Foundation Design, or as a file.</div><div class="btnRow">
+        <button type="button" onclick="bxSendMemberReactions('send')" title="Publish the unfactored support reactions by load type for the base plate and shallow foundation design tools (HANDOFF.md, channel memberReactions)">Send to other tools</button>
         <button type="button" onclick="bxSendMemberReactions('export')" title="Save the same support-reaction hand-off as a JSON file">Export hand-off (JSON)</button></div></div>
       </div></div>
     </div></div>
@@ -12120,7 +12120,7 @@ function colCurveFig(p,cc,D,Pu){
     box.style.cssText='background:#fff;border-radius:8px;padding:14px 18px;width:760px;max-width:96vw;max-height:88vh;overflow:auto;font-family:var(--font-ui);font-size:9pt;box-shadow:0 12px 40px rgba(0,0,0,.3)';
     ov.appendChild(box);
     box.appendChild(el('div',null,'<b style="font-size:11pt">'+(action==='export'?'Export':'Send')+' support reactions (unfactored, by load type)</b>'));
-    box.appendChild(el('div','note','For the Base Plate &amp; Anchor Designer and the Spread Footing tool. Each case is analysed alone with factor 1.0. '+
+    box.appendChild(el('div','note','For the Base Plate &amp; Anchor Designer and the Shallow Foundation Design tool. Each case is analysed alone with factor 1.0. '+
       '<b>V + = downward on the support</b> (beam pushing down); uplift is negative. <b>M</b> (fixed supports only) = moment of the beam on the support, + counter-clockwise in the beam elevation.'));
     var t=el('table','cfg'); t.style.margin='6px 0';
     var ct=el('div');

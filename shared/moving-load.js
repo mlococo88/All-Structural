@@ -333,7 +333,10 @@ function analyze(m,opt){
     });
   }
 
-  const warn=[]; let segSum=0; m.segs.slice(0,-1).forEach(s=>segSum+=s.len);
+  const warn=[], warnNL=[]; let segSum=0;
+  /* MLNL-3 (2026-11-08): warnNL[k] (display only) is a list form { lead, items: [[lead words, text]…] } of warn[k], or absent. warn[k] is
+     the same string as before, built from the same parts (other code reads it); a page may show warnNL[k] in its place. */
+  const nlWarn=(str,nl)=>{warn.push(str);warnNL[warn.length-1]=nl;}; m.segs.slice(0,-1).forEach(s=>segSum+=s.len);
   if(m.segs.length>1&&segSum>=Lt) warn.push('Segment lengths reach or exceed the girder length, so the last segment has zero length.');
   if(m.segs.some(s=>s.bad)) warn.push('A segment has invalid geometry (zero area or I); a placeholder stiffness was used.');
   if(m.vK>0&&!(m.vK>=2&&m.vK<=m.axles.length)) warn.push(`Variable spacing axle # must be between 2 and ${m.axles.length}; variable spacing was ignored.`);
@@ -347,7 +350,9 @@ function analyze(m,opt){
   if(m.short==='Fatigue'){const ll=m.llf,fl=Math.abs(ll-1.75)<1e-9||Math.abs(ll-0.80)<1e-9,fd=m.fatDF;
     if(fd&&!m.rail)warn.push(`LRFD fatigue truck: the fatigue DFs entered under Factors & Analysis are used for this vehicle (moment ${fd.M!=null?fd.M:'= highway span DFs'}, shear ${fd.V!=null?fd.V:'= highway span DFs'}, negative moment ${fd.N!=null?fd.N:fd.M!=null?fd.M:'= highway DF'}); they should be the ONE-LANE DF divided by 1.2 (LRFD 3.6.1.4.3b, C3.6.1.1.2). LLF = ${ll}: use γ = 1.75 (Fatigue I) or 0.80 (Fatigue II), Table 3.4.1-1.${fl?'':' The current LLF is not a fatigue load factor.'}`);
     else warn.push(`LRFD fatigue truck: the distribution factors and live load factor entered (LLF = ${ll}) are applied exactly as given. For fatigue use the ONE-LANE distribution factor divided by 1.2 to remove the multiple presence factor (LRFD 3.6.1.4.3b, C3.6.1.1.2), not the strength (multi-lane) DF, and γ = 1.75 (Fatigue I) or 0.80 (Fatigue II), Table 3.4.1-1.${fl?'':' The current LLF is not a fatigue load factor.'}${m.rail?'':' Enter the fatigue DFs under Factors & Analysis to apply them to this vehicle.'}`);}
-  if(m.stdLane)warn.push(`Std. Spec. lane loading (${m.stdLane.w} k/ft + ${m.stdLane.PM} k moment / ${m.stdLane.PV} k shear and reactions; a second ${m.stdLane.PM} k in one other span for negative moment) is checked as a separate case and enveloped with the vehicle, with impact. Where it governs, the case reads "Std. lane" and "@" is the concentrated-load position.`);
+  if(m.stdLane){const ld=`${m.stdLane.w} k/ft + ${m.stdLane.PM} k moment / ${m.stdLane.PV} k shear and reactions; a second ${m.stdLane.PM} k in one other span for negative moment`,
+      cs='is checked as a separate case and enveloped with the vehicle, with impact.',gv='the case reads "Std. lane" and "@" is the concentrated-load position.';
+    nlWarn(`Std. Spec. lane loading (${ld}) ${cs} Where it governs, ${gv}`,{lead:'Std. Spec. lane loading '+cs,items:[['Loads:',ld+'.'],['Where it governs:',gv]]});}
   else if(m.short==='HS20'||m.short==='H20')warn.push(`${m.short}: the AASHTO Std. Spec. lane loading is not checked (Load Model Rules). It can govern longer spans (Std. Spec. 17th Ed. Art. 3.7.1.1, Fig. 3.7.6B).`);
 
   // Engine check: unit uniform load on all spans
@@ -408,9 +413,13 @@ function analyze(m,opt){
   const imSpan=m.spans.map((_,k)=>imOf({spans:[k]}));
   const effR=effs.filter(ef=>ef.t==='R'), imR=effs.map((ef,i)=>ef.t==='R'?imArr[i]:null).filter(v=>v!==null);
 
-  if(PED){warn.push(`Pedestrian load ${PED.w} k/ft on this girder line (DF ${PED.df}) is included with every vehicle case: patterned on the parts of the influence line that add, no impact, not reduced in the multi-vehicle case (LRFD 3.6.1.6, 3.6.2.1). Per-lane values include w·A·DF_PL / g so that the factored values carry γ_LL·w·A·DF_PL. Step mode and deflection do not include it.`);
+  if(PED){const ld=`Pedestrian load ${PED.w} k/ft on this girder line (DF ${PED.df}) is included with every vehicle case:`,ap='patterned on the parts of the influence line that add, no impact, not reduced in the multi-vehicle case (LRFD 3.6.1.6, 3.6.2.1).',
+      pl='include w·A·DF_PL / g so that the factored values carry γ_LL·w·A·DF_PL.',ni='Step mode and deflection do not include it.';
+    nlWarn(`${ld} ${ap} Per-lane values ${pl} ${ni}`,{lead:ld,items:[['Applied:',ap],['Per-lane values',pl],['Not included:',ni]]});
     if(effs.some((ef,ei)=>!(PED.g[ei][0]>0)||!(PED.g[ei][1]>0)))warn.push('Pedestrian load: a distribution factor is zero or blank, so the pedestrian load is left out where it is.');}
-  return {m,effs,res,rows,x,sup,Lt,IL,ends,dfOf,warn,check,supNodes,stepSolve,stepCase,varOK,imSpan,imR,effR,A,nf,fmap,nn,...(PED?{ped:PED}:{})};
+  const out={m,effs,res,rows,x,sup,Lt,IL,ends,dfOf,warn,check,supNodes,stepSolve,stepCase,varOK,imSpan,imR,effR,A,nf,fmap,nn,...(PED?{ped:PED}:{})};
+  Object.defineProperty(out,'warnNL',{value:warnNL,enumerable:false,writable:true,configurable:true});   // MLNL-3: display only, not enumerable, so result copies, JSON and hashes are as before
+  return out;
 }
 const ENGINE_ANALYZE=analyze;
 function deflection(R,opt){

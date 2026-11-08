@@ -77,3 +77,9 @@ Loaded by: see `shared/README.md` (row `project-registry.js`). Tests: `node test
 - **Sync:** on (the file is made from the stored entry alone: byte-identical to the suite's own; the engine test and `home-sync.mjs --tool index` prove it: after the home page's Upload all, the MCT page's own dialog shows "synced" and uploads nothing). A conflict found from the home page keeps nothing and uploads nothing (the view refuses duplicate), as for the other views.
 - **How verified:** `node tests/engine/run.mjs project-registry` (7 / 7 after merging #862, new "Bridge Suite view"), `node tests/smoke/home-projects.mjs`, `node tests/smoke/home-sync.mjs`.
 - **Formulas, factors, units, code references:** none.
+
+## 2026-11-08 — PR: claude/sf-display-rename (PR #1236: https://github.com/mlococo88/All-Structural/pull/1236) (SFNM) — Spread Footing entry: displayed name "Shallow Foundation Design"   [display only; no result change]
+- **What:** entry `spread-footing`: before `{ tool: 'spread-footing', label: 'Spread Footing', name: 'Spread Footing', href: 'Spread%20Footing.html', key: 'sfd_projects' }`; after `label: 'Shallow Foundation Design', name: 'Shallow Foundation Design'`. `tool` (GitHub folder `projects/spread-footing/`), `href`, `key` unchanged.
+- **Why:** engineer request 2026-11-08 (the app designs spread, combined and wall footings). `label` must equal the tool's own `ctx.cloud.label` (changed in `Spread Footing.html` in the same PR; tests/engine/project-registry.test.mjs checks it); it is the prefix of GitHub commit messages only, never a path or key. `name` is the home page's Saved projects heading.
+- **Tools that load this file:** `tools.html` (changed in this PR: card), `Pile Designer.html`, `Steel Bridge Design.html` (unchanged; they show no Spread Footing label).
+- **How verified:** `node tests/engine/run.mjs project-registry github-sync projects`; `home-projects`, `home-sync` (all tools); `project-library --tool spreadfooting`: pass.

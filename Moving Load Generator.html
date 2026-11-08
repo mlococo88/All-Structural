@@ -383,6 +383,10 @@ const sp=(load,arr)=>arr.map(s=>[load,s]);
 function mlNL(lead,items,o){o=o||{};const tag=o.ol?'ol':'ul';
   const li=(items||[]).filter(Boolean).map(x=>'<li>'+(Array.isArray(x)?'<b class="mlNLk">'+x[0]+'</b> '+x[1]:x)+'</li>').join('');
   return (o.act||[]).filter(Boolean).map(a=>'<div class="mlNLa">'+a+'</div>').join('')+(lead?'<div class="mlNLl">'+lead+'</div>':'')+(li?'<'+tag+' class="mlNLu">'+li+'</'+tag+'>':'');}
+/* MLNL-3 (2026-11-08): the warnings as HTML. A warning that shared/moving-load.js also gives as a list (R.warnNL[k]: the pedestrian load,
+   the Std. Spec. lane loading) is shown as a lead and a list (mlNL); R.warn itself is not changed. With no list warning the HTML is as before. */
+function mlgWarnHTML(R){let h='',blk=false;R.warn.forEach((w,k)=>{const n=R.warnNL&&R.warnNL[k];
+  if(n){h+='<div class="mlNL">'+mlNL('⚠ '+n.lead,n.items)+'</div>';blk=true;}else{h+=(k&&!blk?'<br>':'')+'⚠ '+w;blk=false;}});return h;}
 
 // ═══════════ PRESETS: shared/vehicles.js (defaults only — every rule is editable in the UI) ═══════════
 const VEH=SharedVehicles.build(), P=VEH.presets, NOSL=VEH.NOSL;
@@ -544,7 +548,7 @@ function render(){
   const u=view==='f'?`factored per girder (LLF ${m.llf} × DF)`:'unfactored per lane, including impact';
   $('envNote').textContent=`Red = max (+), blue = min (−) · ${u}`; $('tblNote').classList.add('mlNL');$('tblNote').innerHTML=mlNL(`Values ${u}.`,[['Shown:','governing case, direction, and lead axle position for each extreme.']]);   // MLNL (2026-11-08)
   // Warnings
-  $('warns').classList.toggle('hidden',!R.warn.length); $('warns').innerHTML=R.warn.map(w=>'⚠ '+w).join('<br>');
+  $('warns').classList.toggle('hidden',!R.warn.length); $('warns').innerHTML=mlgWarnHTML(R);   // MLNL-3: was R.warn.map(w=>'⚠ '+w).join('<br>')
   // Envelopes
   const cut=fn=>{const out=[];let k=-1;rows.forEach(r=>{if(k>=0&&r.k!==k)out.push(null);k=r.k;out.push([r.x,fn(r)]);});return out;};
   plot($('cM'),[{pts:rows.map(r=>[r.x,F(r.mi,res[r.mi].max)]),color:'#ef4444',fill:'rgba(239,68,68,.12)',peak:1},
@@ -935,7 +939,7 @@ function reportHTML(out,o,base,dk){
     if(o.tab){const tr=R.rows.filter(q=>q.t%2===0);
       tsec=`<h3>Tenth-Point Envelope</h3><table><thead><tr><th>Span</th><th>x (ft)</th><th>x/L</th><th>+M</th><th>−M</th><th>+V</th><th>−V</th></tr></thead><tbody>${tr.map(q=>`<tr><td>${q.k+1}</td><td>${q.x.toFixed(2)}</td><td>${(q.t/20).toFixed(1)}</td><td>${f1(F(q.mi,R.res[q.mi].max))}</td><td>${f1(F(q.mi,R.res[q.mi].min))}</td><td>${f1(F(q.vi,R.res[q.vi].max))}</td><td>${f1(F(q.vi,R.res[q.vi].min))}</td></tr>`).join('')}</tbody></table>`;}
     return `<section class="pb"><h2>${i+3}. ${esc(r.name)}</h2>
-      ${R.warn.length?`<p class="wn">⚠ ${R.warn.join('<br>⚠ ')}</p>`:''}
+      ${R.warn.length?(R.warnNL&&R.warnNL.some(Boolean)?`<div class="wn">${mlgWarnHTML(R)}</div>`:`<p class="wn">⚠ ${R.warn.join('<br>⚠ ')}</p>`):''}
       <div class="img"><img src="${r.veh}"></div><p class="info">${r.info}</p>
       <h3>Governing Results — ${unit}</h3>
       <table class="kv"><thead><tr><th>Result</th><th>Value</th><th>Location</th><th>Governing case / vehicle position</th></tr></thead><tbody>${kv}</tbody></table>
@@ -2168,7 +2172,7 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
       var sec=secs[i];sec.className='cr-sec cr-break';
       var oh2=sec.querySelector('h2'),t=stripN(oh2.textContent);oh2.remove();
       var s=head(sec,t+' — Results');
-      var wn=sec.querySelector('p.wn'), lk=mk('p','cr-note','Vehicle definition: see '+alink(vdef[i])+' · inputs, DFs and LLF: see '+alink(id11)+'.');
+      var wn=sec.querySelector('.wn'), lk=mk('p','cr-note','Vehicle definition: see '+alink(vdef[i])+' · inputs, DFs and LLF: see '+alink(id11)+'.');
       (wn?wn:sec.querySelector('h2')).insertAdjacentElement('afterend',lk);
       var h3s=[].slice.call(sec.querySelectorAll('h3'));
       h3s.forEach(function(x){var t3=x.textContent.trim();if(/^Governing Results/.test(t3))t3='Governing Results — '+unit;sub(s,x,t3);});
@@ -2363,7 +2367,8 @@ function mlrModel(){
       {type:'note',text:'Section properties per AASHTO LRFD 10th Ed. Art. 6.10.1.5 (uncracked short-term composite for live load). Only relative stiffness affects V, M and R; absolute EI matters for deflection.'}]});
     const ck=document.createElement('div'); ck.innerHTML=R.check||'';
     const ckL=[...ck.children].map(d=>d.textContent.replace(/\s+/g,' ').trim()).filter(Boolean);   // MLNL (2026-11-08): one note per line of the engine check (was one paragraph)
-    subs.push({title:'Analysis model and engine check',items:(ckL.length?ckL.map(t=>({type:'note',text:t})):[{type:'note',text:ck.textContent.replace(/\s+/g,' ').trim()||'—'}]).concat((R.warn||[]).map(w=>({type:'note',warn:true,text:'Warning: '+String(w).replace(/<[^>]+>/g,'')})))});
+    subs.push({title:'Analysis model and engine check',items:(ckL.length?ckL.map(t=>({type:'note',text:t})):[{type:'note',text:ck.textContent.replace(/\s+/g,' ').trim()||'—'}]).concat((R.warn||[]).flatMap((w,k)=>{const n=R.warnNL&&R.warnNL[k],T=x=>String(x).replace(/<[^>]+>/g,'');   /* MLNL-3: a list warning as its lead, then one '• ' note per item */
+      return n?[{type:'note',warn:true,text:'Warning: '+T(n.lead)}].concat(n.items.map(([l,t])=>({type:'note',warn:true,text:'• '+T(l)+' '+T(t)}))):[{type:'note',warn:true,text:'Warning: '+T(w)}];}))});
     secs.push({title:'Structure and analysis inputs',subs});
   }
   /* ---------- 2. Vehicle ---------- */
