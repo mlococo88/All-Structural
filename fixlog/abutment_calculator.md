@@ -16626,7 +16626,7 @@ Engineer instruction (2026-11-07, paraphrased): "same deal for the abutment" as 
 - **How verified:** the 22-case headless probe of ABNL-1, origin/main (before ABNL-1) vs the branch: `LAST_R` JSON identical; the digit sequence of every tab, the dashboard, the warnings and the Report text identical in all 22 cases. 0 console errors. Screenshots at 1440 and 390 px. Tests: check-syntax; project-library --tool abutment (ALL PASS); abutment-pile-group-parity (14/14 identical); engine handoffs + pile-group (19 passed).
 - **Other copies:** none.
 
-## 2026-11-08 — PR: abutment-left-summary (PR #TBD) (ABLS: the dashboard checks in a left summary column from 1200 px, as Retaining Wall / Spread Footing / Light Pole / Shear and Moment Diagrams / Timber)   [display only; no result change]
+## 2026-11-08 — PR: abutment-left-summary (PR #1220: https://github.com/mlococo88/All-Structural/pull/1220) (ABLS: the dashboard checks in a left summary column from 1200 px, as Retaining Wall / Spread Footing / Light Pole / Shear and Moment Diagrams / Timber)   [display only; no result change]
 
 ### ABLS. Check summary column on the left at 1200 px and wider   [display only]
 - **Request (engineer, 2026-11-07/08):** add the left summary panel to the tools with summary / result cards, as RWDL #959, RWLB #984, SFLB #988, LPLB #991, SMLS #1130 (and TBLS #1194).
