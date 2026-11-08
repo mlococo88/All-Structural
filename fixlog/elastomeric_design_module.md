@@ -1598,7 +1598,7 @@ Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.4.2.1 (L2), C14.8.3.1 (L3), 14.7.5.3.
 - **How verified:** check-syntax; project-library edm ALL PASS; headless round trip (×1, ×2, ×4): no warning naming the Abutment app, no dialogs, 0 console errors.
 - **Saved data:** none changed.
 
-## 2026-11-08 — PR: nl-edm-b (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Design summary as a left column of check chips from 1200 px (EDSC; display only, no result change)
+## 2026-11-08 — PR: nl-edm-b (PR #1208: https://github.com/mlococo88/All-Structural/pull/1208) — Design summary as a left column of check chips from 1200 px (EDSC; display only, no result change)
 
 ### EDSC. Left summary column   [display only]
 - **Request (engineer, 2026-11-07/08):** add the left summary panel as in Retaining Wall (#959, #984), Spread Footing (#988), Light Pole (#991, #994/#997), Shear and Moment Diagrams (#1130) and Stone Arch (#1198): compact check chips, a « collapse with a per-tool key, a chip click opens the worked check, shown from 1200 px, nothing changes below.
