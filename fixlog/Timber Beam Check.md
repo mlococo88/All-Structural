@@ -2315,3 +2315,58 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
   - no horizontal scroll at 400 px.
 - **Footnote d values:** checked on the Deflection tab for the default joist (0.605 in., 0.757) and the wet joist (0.793 in., 0.991).
 - **Syntax:** `node tests/check-syntax.mjs` passes.
+
+## 2026-11-08 — PR: claude/timber-notes-a (PR #1185: https://github.com/mlococo88/All-Structural/pull/1185) (TBNL-1: long notes as a bold lead and a list — input tabs, Summary, Analysis Results, Bending, Bearing, Deflection; display only, no result change)
+
+Code sites are tagged `TBNL`.
+
+### TBNL-1. Long notes split into a lead line and a list   [display only] [no result change]
+- **Request (engineer, 2026-11-07):** "there are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Part 1 of 2: the input tabs and the result tabs Summary, Analysis Results, Bending, Bearing and Deflection. Part 2 (Reference Values, Validation, Method & Manual, the warnings list and the Report's own notes) follows in TBNL-2.
+- **New helper** (before `function el(`), anchor `/* TBNL (2026-11-08, engineer's request`:
+  ```js
+  function tbNL(lead, items, o) {
+    o = o || {}; const T = o.ol ? 'ol' : 'ul';
+    const li = (items || []).filter(Boolean).map(x => '<li>' + (Array.isArray(x) ? '<b class="tbNLk">' + x[0] + '</b> ' + x[1] : x) + '</li>').join('');
+    return (o.act || []).filter(Boolean).map(a => '<div class="warnBox tbNLa">' + a + '</div>').join('') + (lead ? '<div class="tbNLl">' + lead + '</div>' : '') + (li ? '<' + T + ' class="tbNLu">' + li + '</' + T + '>' : '');
+  }
+  ```
+  A note becomes `el('div', 'hint', tbNL(lead, [[leadWords, text], …]))` (or `'note'` / `'warnBox'`); an fRow / chkRow hint takes the `tbNL(…)` string as its hint. A falsy item is skipped (conditional facts).
+- **CSS** (after `.errBox ul,.warnBox ul{…}`), no new colours (the note / hint / warnBox colours are inherited), print keeps a list item on one page:
+  ```css
+  .tbNLl{font-weight:700;margin:0 0 1px}
+  ul.tbNLu,ol.tbNLu{margin:2px 0 3px;padding:0 0 0 18px}
+  .tbNLu>li{margin:1px 0}
+  .tbNLa{margin:2px 0 4px}
+  @media print{.tbNLu>li{break-inside:avoid}}
+  ```
+- **Report:** new `tbrNLParts(e, warn)` (after `const tbrHtx =`) returns the parts of a tbNL note (action lines, lead, one "• " line per item).
+  - `tbrHarvest` (the result tabs' notes): a tbNL note is kept or left out as one note, with the same `fresh` test on the joined text of its parts, then printed as its parts (the card title prefix goes on the lead). Anchor `// TBNL: kept or left out as one note`.
+  - `tbrAddPorted`: `n.list.filter(fresh).flatMap(q => q.parts || [q])`.
+  - `tbrDomItems` (the appendices): a tbNL note is pushed as its parts. Anchor `const nl = tbrNLParts(c,`.
+- **Notes changed (anchor = the old opening text; new lead → item lead words).** Every sentence, number, citation and link of the old note is kept, in the same order; only the lead words, list-start capitals and end punctuation are new. Exact before / after: the PR diff.
+  1. Geometry, "<b>Supporting member F<sub>c⊥</sub></b> (fix log TBB1): the reference…" → lead (same sentence) → Its bearing is checked too / Same as beam / Presets.
+  2. Geometry, "<b>Cb</b>: tick when the bearing…" → lead "Support types and the C<sub>b</sub> box" → Cb / Qualifies / Free / Pin and roller / Fixed.
+  3. Loads, area loads hint (ASD and LRFD versions) "All ten ASD combinations…" / "LRFD: the ten strength combinations…" → lead (first clause) → C<sub>D</sub> or λ / (LRFD: W) / A blank load.
+  4. Loads, "Positive = downward. x is measured…" → lead "Point loads: positive = downward." → x / Type / Within d of a support / Bearing l<sub>b</sub> (fix log TBB1).
+  5. Loads, x/d box hint "Design shear only (…)" → lead (same sentence) → Permitted only / x / Unticked.
+  6. Material, Manual values hint "For grades, sizes or species that are not built in…" → lead (same sentence) → Enter / Timbers (5 in. and thicker).
+  7. Material, Notch location hint "Tension face: NDS 3.4.3.2(a)…" → lead "How each notch location is checked:" → Tension face / Compression face / Interior notches.
+  8. Material (glulam), "Straight, prismatic members, bending about x–x…" → lead (same sentence) → F<sub>bx</sub><sup>+</sup> / Not covered.
+  9. Material (SCL), warnBox "<b>The manufacturer’s literature governs.</b> …" → lead (same) → Proprietary / No product values.
+  10. Factors, Repetitive member hint "Three or more members…" → lead (same sentence) → Dimension lumber / SCL / Not.
+  11. Factors, lateral support hint "Negative moment occurs over interior supports…" → lead (same sentence) → Brace points / Earlier files.
+  12. Factors, creep factor hint "Applied to the dead-load deflection (NDS 3.5.2: …" → lead "Applied to the dead-load deflection." → NDS 3.5.2 / 0 or blank / With Wet service ticked.
+  13. Factors, total limit hint "IBC Table 1604.3 (user-editable). …" → lead (same) → Cantilever / Live/snow limit.
+  14. Summary, governing results hint "Ratio = demand / capacity; ≤ 1.000 passes. …" → lead (same) → Highlighted / Stresses (ASD) or LRFD.
+  15. Summary, all combinations hint "Bold = governing. …" → lead (same) → C<sub>D</sub> or λ / Point loads / M.
+  16. Analysis Results, diagrams hint "Grey band = envelope…" → lead (same) → Dotted lines / Shear.
+  17. Analysis Results, reactions hint "A negative reaction (red) is net uplift…" → lead (same) → ΣR = ΣF / Simple span or Continuous / cantilever beam.
+  18. Analysis Results, peaks hint "Moments are evaluated at 100 stations…" → lead "Stations and design shear" → Moments / V design.
+  19. Bending, stability hint "Top edge: …; bottom edge: …. Continuous beams…" → lead "Lateral support of the edges" → Top edge / Bottom edge / Continuous beams and cantilevers (continuous only).
+  20. Bearing, supporting member hint "Supporting member (fix log TBB1): the beam bears on a softer member…" → lead (same sentence) → Its F<sub>c⊥</sub> / Point loads / the last sentence as a plain item.
+  21. Deflection, method note "Simple span: deflection by superposition…" / "Continuous beam / cantilever: …" → lead (that sentence) → Evaluated / Shear deformation.
+- **Not changed:** short notes (one or two sentences, under ~300 characters) such as the notch depth hint, the glulam / SCL service hints, the LRFD method hint, the Design Values "psi. F<sub>t</sub> and F<sub>c</sub>…" hint; the shared Save and open card (`SharedProjectsUI`, a shared file); "Worked in" link lines; the worked steps.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none (no key, no saved field).
+- **Check case:** default project (DF-L No.2 2x10 @ 16 in., 16 ft, D 15 / L 40 psf), Loads tab: the point-load hint was one 510-character paragraph; now the lead "Point loads: positive = downward." and four bullets; "(fix log O4)", "NDS 3.10" and "3 in." unchanged. Report §5 (Analysis): "Peak values by combination: Stations and design shear" then two "• " lines with the same text as before.
+- **How verified:** headless Chromium, origin/main vs the branch, 9 cases (default; 3 spans with a fixed support, point loads, snow, wind uplift, notch, x/d; span + overhang with compression-face notch, wet, negative D; glulam LRFD 2 spans; custom glulam; SCL LRFD; 6x12 timber flat, incised, 100–125 °F; manual SP values with a bearing point load; an input error): `TBC.res` identical (JSON); the digit sequence of every input tab, every output tab, the governing strip, and the Report (`SharedReport.text` and the full HTML text, all three appendices on) identical. Validation 123/123. 0 console errors. No horizontal scroll at 390 px. `tests/check-syntax.mjs`, `tests/smoke/project-library.mjs --tool timber`: pass. (Timber has no entry in `tests/smoke/phone-layout.mjs`.)
+- **Other copies:** none.

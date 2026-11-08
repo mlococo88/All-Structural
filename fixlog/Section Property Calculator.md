@@ -3596,3 +3596,112 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
 - **How verified:** headless Chromium, origin/main vs the branch, 9 cases (default; plate girder with weld and bolt connector checks, stresses and Vy; 4-plate box with ASD Vx, Vy; W14X90 with cover plates and n = 2; double angle; laced 2C; S12X35 tabulated + C10X20 with n = 3; W14X730; two overlapping plates), every Report Include box on: results (`SPCUI.res`) identical; every output tab, every input tab, the strip and the Report text (`SharedReport.text`) have identical digit sequences; only the Method tab and the Report text changed. Validation 136/136. 0 console errors. Screenshots at 1440 and 390 px. Tests: see the PR.
 - **Observation (not changed, §4/§9):** item 22 still says "equation numbers to be verified against the printed Specification" for E4-9 / E4-8, although SPL6 (#1110) records them as checked against the printed Specification. Left as is; for the engineer to decide.
 - **Other copies:** none.
+
+## 2026-11-08 — PR: nl-spc-a2 (PR #1180: https://github.com/mlococo88/All-Structural/pull/1180) — SPNL-2: long notes on the other tabs, the input panel, the warnings and the Report as a bold lead and a list (display only, no result change)
+
+### SPNL-2. Long notes outside the Method tab: lead line and list   [display only] [no result change]
+- **Request:** as SPNL-1 (#1174), part 2 of 2. This part uses the `spNL` helper, the CSS and the `spxWalk` `.spNL` branch from SPNL-1. A note element `el('div', 'hint', '…')` becomes `el('div', 'hint spNL', spNL(lead, [[lead words, text], …]))`. An item that is `null` is skipped, so conditional sentences stay conditional.
+- **New Report helper** (after `function spNL(`), anchor `/* SPNL (Report): the same note as Report note items`:
+  ```js
+  function sprNL(lead, items, o) {
+    o = o || {}; const n = t => o.warn ? { type: 'note', warn: true, text: t } : { type: 'note', text: t };
+    return [lead ? n(lead) : null, ...(items || []).filter(Boolean).map(x => n('• ' + (Array.isArray(x) ? x[0] + (x[1] ? ' ' + x[1] : '') : x)))].filter(Boolean);
+  }
+  ```
+  A Report note `{ type: 'note', text: 'A. B. C.' }` becomes `...sprNL('A.', [['Lead:', 'b.'], ['Lead:', 'c.']])`.
+- **Warning kept byte-identical** (engine, torsion, anchor `if (thick.length) {`): the "Thick flanges (b_f/2t_f ≤ 5.5: …)" message pushed to `T.warn` is built from the same pieces and is unchanged; the Report notes and the "Check the model" lists still read it. A display-only `T.warnNL[message] = [lead, items, action lines]` was added. The Torsion tab (`(T.warn || []).forEach(…)`, anchor `/* SPNL: T.warnNL = display only */`) draws it as the action line "Use the AISC tabulated J of the shape, or check J by another method." first, then the lead "Thick flanges (…):", then "Thin-wall J: …". Other `T.warn` messages print as before.
+- **Notes changed (anchor = the old opening text → new lead → item lead words):**
+  1. Parts tab: "Click a part to change its size" → On the drawing / In the list.
+  2. Parts tab: "New parts go to the centre of the view." → Place them / Right-click a part.
+  3. Parts tab, rolled shapes: "Shapes are drawn and computed as their plates" → For comparison / L, WT, MT, ST and 2L data / Add.
+  4. Settings tab, "Prevent overlap" hint: `chkRow(…, hint)` → `chkRow(body, 'Prevent overlap', nov)` + `el('div', 'hint spNL', …)`. Lead "Solid parts may touch but not overlap:" → Dragging / New, pasted and copied parts / Typed positions and sizes / Rotate or flip / Holes / Turn off / This setting.
+  5. Templates tab, library: "Stored for each part:" → lead "What is stored:" → Stored for each part / Plus / Positions.
+  6. Templates tab, library: "Import accepts a library file" → Library file / Project file / Storage.
+  7. Section tab, single rolled shape (`aisCompare`): "The plate model of W, M, HP, L, WT and MT shapes" (about 1,100 characters) → lead "Plate model and AISC tabulated values:" → Fillets / Sloped flanges / Torsion / AISC J and Cw / Thick flanges / Elastic results / Z and the torsion constants / L, WT, MT, ST data / Pipe (pipe only).
+  8. Properties, Mohr's circle: "Sign convention: I horizontal" → Points / Rotation / Other texts.
+  9. Properties, buckling parameters: "xo, yo: shear centre from the centroid" → r̄o and H / n/a / v.
+  10. Properties, kern: "N vertices, one per edge of the convex hull." → No stress reversal / Drawing / Transformed section (n).
+  11. Properties, weight: "Weight = Σ Ai·ρi" → Modulus ratio n / AISC tabulated or Rolled shapes / Densities.
+  12. Properties, coating: "Paint area per length" → Faying faces / Round parts / Rolled shapes.
+  13. Calc detail, parallel-axis table: "Units: …" → Holes / Columns with n / Distances.
+  14. Calc detail, Wagner βx: "Sign convention: v is measured positive toward the tension side" → So / Area integral / Approximation for monosymmetric I-sections / AISC 360 / EN 1993 (zj) and AS 4100.
+  15. Plastic: "Plastic neutral axis (PNA): the line" → Z / Geometry / Transformed (n-weighted) areas / Concrete / Composite girder (the last three only with modulus ratios).
+  16. Torsion warnBox: "Thin-wall approximation — verify." → Model / Fillets / Results.
+  17. Torsion, contacts: "Touching parts are assumed connected continuously" → Untick a contact / Area properties.
+  18. Torsion, Cw: "Centre-line model: A = …" → Check / Elements meeting at one point.
+  19. Q & shear flow: "Vx, Vy act through the shear centre" → Load basis / Saved.
+  20. Q & shear flow: "q = longitudinal shear force per unit length" → Click a row or a tag / Contacts / Separate pieces / Holes outside the parts (the last two only when they apply).
+  21. Q & shear flow, "Connector checks: what is and is not checked": the Fasteners item (Required spacing / D/C), the Fillet welds item (Intermittent welds) and the "Not checked (verify separately)" item (Welds / Fasteners / Built-up members / Fatigue / Other). The list maps `{ nl }` items to `<li class="spNL">`.
+  22. Stresses: "Colour: σ from blue" → Dashed / Hover a part / Transformed section.
+  23. Stresses: "Sign convention: P > 0 tension" → σ > 0 / With Ixy ≠ 0 / Transformed section / AISC tabulated / Model.
+  24. Validation: "Tolerance 1e-9 (relative)" → "Comparisons with AISC tabulated values have engineering tolerances, because:", with the sub-items Plate model and Torsion.
+  25. Drawings: "One DXF file (AutoCAD R12 …):" → Sheets / Layers / Export DXF / Title block. (`SharedDxf.PRINT_NOTE` is a shared file and is not changed.)
+  26. Report, Inputs (harvest): "x, y: part centroid from the origin." → lead "Columns:" → x, y / A / Basis.
+  27. Report §1.1: "Check the model: <all warnings in one line>" → lead "Check the model:" and one "• " line per warning, all in the warning style. The warning strings are unchanged.
+  28. Report §1.2 notes (`spxResults`): when there are two or more, the lead "Notes on these values:" and one "• " line each.
+  29. Report §5: "Each part about its own centroid" → Holes / Steps.
+  30. Report §7: "PNA: the line that divides the … area into two equal halves" → Z / Geometry / Transformed (n-weighted) areas / Concrete / Composite girder / Steps.
+  31. Report §8 warning: "Thin-wall approximation — verify: J and C_w are computed" → Fillets / J (n/a only) / C_w (n/a only) / Worked.
+  32. Report, About this report: "Inputs first, then the section drawing and the results." → Worked values / § links / Scope / Units.
+- **Not changed:**
+  - Equations (KaTeX lines).
+  - "Worked in" link lines.
+  - The c₁,max / c₂,max result line (282 characters, two clauses of one definition).
+  - `SharedDxf.PRINT_NOTE` (shared file).
+  - List items under ~400 characters that hold a single fact.
+  - The other warnings: one sentence each, already list items.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none.
+- **Check case:** W14X730 alone. Section tab, comparison note:
+  - Before: one 1,089-character paragraph.
+  - After: the lead "Plate model and AISC tabulated values:" and eight items. "W14X730 +9 %", "WT7X436.5 +11 %", "within about 1–3 %" and "b_f/2t_f ≤ 5.5" are unchanged.
+  - Torsion tab, Thick flanges warning: the action line is first, then "Thick flanges (b_f/2t_f ≤ 5.5: W1 W14X730 1.82):" and "Thin-wall J: …".
+  - Report §10.1 still prints the warning as one unchanged line.
+- **How verified:** same harness as SPNL-1: headless Chromium, origin/main (with SPNL-1) vs the branch, 9 cases, every Report Include box on.
+  - `SPCUI.res`: identical, except the new display-only `tors.warnNL`. That field was removed before comparing; `tors.warn` is identical.
+  - Digit sequences identical: every output tab, every input tab, the strip and the full Report text (`SharedReport.text`).
+  - Screen Report viewer: only its `innerText` changed. The viewer renders subsections lazily, so taller notes push a later subsection out of the rendered range. The Report content is identical, as `SharedReport.text` and the model show.
+  - Validation 136/136. 0 console errors. Screenshots at 1440 and 390 px. Tests: see the PR.
+- **Other copies:** none.
+
+## 2026-11-08 — PR: spc-left-summary (PR #1184: https://github.com/mlococo88/All-Structural/pull/1184) — SPLS: key results in a left summary column from 1200 px (display only, no result change)
+
+### SPLS. Results summary column on the left at 1200 px and wider   [display only]
+- **Request (engineer, 2026-11-07/08):** add the left summary panel to the tools with summary or result cards, the way it was done in Retaining Wall (RWDL #959, RWLB #984), Spread Footing (SFLB #988), Light Pole (LPLB #991, #994/#997) and Shear and Moment Diagrams (SMLS #1130).
+- **What changed (screen only):**
+  - From **1200 px** a new left column `#spcDashCol` sits to the left of the input panel: **240 px** wide up to 1499 px, **280 px** from 1500 px.
+  - It holds "Results summary": one chip per value, each with name, value and status.
+    - **Check the model:** the warning count, in warning style. Expands to the warnings.
+    - **Key properties:** the Section-tab key properties with the same labels, values and formatting as the `buildSecSummary` tiles (A, x̄, ȳ, Ix, Iy, Ixy, I1, I2, θp, Sx top / bottom, Sy, Zx, Zy, rx, ry, rmin, J, Cw). J is flagged "check" when `T.jHigh`.
+    - **Shear centre:** xo, yo.
+    - **Torsion warnings:** the count, when there are any.
+    - **Connector D/C:** one chip per contact with a connector check. Same value (`nf(cs.dc, 'n', 3)`) and same OK / NG rule (`cs.dc <= 1`) as the D/C column of the Q & shear flow table.
+    - **Validation:** "136 / 136 pass", or FAIL.
+  - Status counts in the head: "N NG", "N warn", or "no NG".
+  - **Click a chip (or Enter / Space):** opens the card that works the value and flashes it (CLAUDE.md §6). This uses the D11 "Worked in" targets (`spcGoto`: Calc detail Parallel-axis table / Centroid / Moments of inertia / Principal axes, Plastic Zx / Zy, Torsion J / Cw). A connector chip opens the Q & shear flow table with that contact selected. The Validation chip opens the Validation tab, and Check the model opens the Section tab.
+  - The ▸ / ▾ button shows the chip's detail and "→ Tab · Card". NG and warning chips start open, as in the other tools.
+  - « shrinks the column to a 42 px strip, which shows the vertical title and the counts; » opens it again. The state is stored in this browser under the per-tool UI key **`spc_dashCollapsed_v1`** ('1' = collapsed). It is not in the project, the autosave or the export (§5).
+  - The canvas is redrawn when the column changes width.
+  - **Below 1200 px nothing changes:** tablet and phone layouts are as before, and the column is `display:none`. It is hidden in print (Print prints the Report, which is unchanged).
+- **Decision (pending engineer review):**
+  - The Section-tab key-property tiles stay where they are while the column is open; the column is visible from every tab.
+  - Shear and Moment Diagrams hid its cards while the column was open. Here the tiles sit beside the drawing and are part of the Section tab, so they are kept.
+- **Where (`Section Property Calculator.html`):**
+  - **CSS:** after `#outputPanel{…}`, the block that starts `/* SPLS (2026-11-08, engineer: the left summary panel`.
+  - **HTML:** the first child of `<div id="main">` is `<aside id="spcDashCol" aria-label="Results summary">`, containing the head (`#spcDashTgl`, `#spcDashTtl`, `#spcDashCnt`), `#spcDashSub` and `#spcDash`.
+  - **JS:** after `function spcGoto(card) {…}`, the block `/* SPLS … */`: `SPCD`, `spcDashItems()`, `spcDashGo(it)`, `spcDashRender()`, `spcDashPlace()`, `spcDashColl(v, save, redraw)` and a start-up IIFE.
+  - `renderOutput(light)` now ends with `spcDashRender();`.
+- **Formulas, factors, units, code references:** none changed. The chips read `R`, `R.tors`, the shear flow (`SPC.shearFlow`, only when a connector is entered, and not cached on `R` so the result object is unchanged), `sfVal`, `connSummary` and `VAL` as the tabs do. No new calculation.
+- **Saved data:** none. New UI key `spc_dashCollapsed_v1` (prefixed per tool).
+- **Check case:** welded girder PL 16 × 1 / PL 1/2 × 36 / PL 16 × 1, Vy = 100 kip LRFD.
+  - Connectors: top contact fillet weld w = 1/8 in (two welds); bottom contact bolts φRn = 20 kip, 2 lines, s = 6 in.
+  - Chips: A = 50 in², Ix = 12,899 in⁴, Zx = 754 in³, J = 12.208 in⁴.
+  - Connector chips: "#1 … D/C 0.412 OK" and "#2 … D/C 0.344 OK", the same as the D/C column of the Q & shear flow table.
+  - Validation chip: "136 / 136 pass".
+  - The Zx chip opens Plastic · Zx. A connector chip opens Q & shear flow with that contact selected.
+- **How verified:**
+  - Headless Chromium, origin/main vs the branch, the 9 cases of SPNL-1: `SPCUI.res` identical; every tab, input tab, strip and Report text identical.
+  - Column measured at 1440, 1250 and 390 px: 240 px wide at 1440 and 1250 px; hidden at 390 px, with no sideways scroll.
+  - Collapse: 42 px, and the key is written.
+  - 0 console errors.
+  - Tests: see the PR.
+- **Other copies:** none (the same pattern, not shared code, as SMLS / SFLB / RWLB / LPLB).
