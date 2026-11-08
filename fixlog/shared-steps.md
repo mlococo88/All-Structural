@@ -138,7 +138,7 @@ Tests: `node tests/engine/run.mjs` (steps, steps-totext, tex, report, …).
 - Tools that call KaTeX themselves (not through SharedSteps) still show TeX source when KaTeX is blocked: e.g. Spread Footing's Report
   notes copied from its tabs (`W_f = 10.00 \cdot 8.00 … \;\mathrm{kcf}` in `.rp-nt`). Not changed here (tool code, one tool per PR).
 
-## 2026-11-08 — PR: claude/shared-step-notes (PR #PRNUM) — list notes: a step's note may be a lead and bullets (SNL; display only)
+## 2026-11-08 — PR: claude/shared-step-notes (PR #1240: https://github.com/mlococo88/All-Structural/pull/1240) — list notes: a step's note may be a lead and bullets (SNL; display only)
 ### Where
 - `shared/steps.js`, anchor `/* ---------- list notes (SNL, 2026-11-08)`, before `/* work(prefix): a collector.`; the header comment's `note` line; the
   export line `window.SharedSteps = { …, groupCss, noteParts, noteSep, noteText };` (the last three are new).

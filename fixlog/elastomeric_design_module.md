@@ -1674,7 +1674,7 @@ Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.4.2.1 (L2), C14.8.3.1 (L3), 14.7.5.3.
   - Abutment ↔ module round trip identical.
 - **Other copies:** none.
 
-## 2026-11-08 — PR: claude/shared-step-notes (PR #PRNUM) (EDNL-3: three Report step remarks as a bold lead and a list; display only, no result change)
+## 2026-11-08 — PR: claude/shared-step-notes (PR #1240: https://github.com/mlococo88/All-Structural/pull/1240) (EDNL-3: three Report step remarks as a bold lead and a list; display only, no result change)
 
 ### EDNL-3. Report worked-step remarks as list notes   [display only] [no result change]
 - **Request:** EDNL-1 "Not changed" (the Report's worked-step remarks needed a shared-file change). `shared/steps.js` / `shared/report.js` now accept a

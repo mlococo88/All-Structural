@@ -243,7 +243,7 @@ Loaded by: `apps/steel-bridge/index.html` (Report tab, `ui/report.js`). Tests: `
   KaTeX loaded every Report is byte-identical to origin/main (PR).
 - **Consumers (CLAUDE.md §3):** the 21 tools listed in `fixlog/shared-steps.md`.
 
-## 2026-11-08 — PR: claude/shared-step-notes (PR #PRNUM) — list notes in worked steps: bold lead and bullets on screen and in print, "lead" / "• lead: text" lines in the text (SNL; display only)
+## 2026-11-08 — PR: claude/shared-step-notes (PR #1240: https://github.com/mlococo88/All-Structural/pull/1240) — list notes in worked steps: bold lead and bullets on screen and in print, "lead" / "• lead: text" lines in the text (SNL; display only)
 - **Where:** after `const ref = (doc, key) => …` (anchor `/* SNL (2026-11-08): a step note may be a list note`): new `NP`, `noteSrc`, `noteHtml`, `noteTxt`.
   - `build()`, the steps scan: before `(it.steps || []).forEach(st => String(st.note || '').replace(SEE, …` → after `… => noteSrc(st.note).replace(SEE, …`
     (a "§id" in any piece of a list note is a cross-reference as in a string note).

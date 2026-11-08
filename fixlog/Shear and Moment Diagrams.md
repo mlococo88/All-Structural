@@ -1946,7 +1946,7 @@ Review of 2026-11-07, LOW findings. L7 (closed-form FER) is a separate PR. Every
 - **How verified:** headless Chromium, origin/main vs the branch, 15 projects (simple span with σ / δ limits; the envelope case above with pattern live load off and on; single combination with pattern on and off; an old saved combination list with snow (missing rows); a zero-factor case, single and envelope; a load off the span; an unstable beam; I = 0; cantilever overhang with a couple; lb / in): `nodeR`, `shD`, `moD`, `deD`, `env.R`, `gatherProject()` identical; the digit sequence of `#statsRow`, Engineering Calculations, the tabular results, the diagram notes, the Results summary column, the combinations dialog and the whole Report text identical in all 15. 0 console errors. Screenshots at 1440 and 390 px (no sideways scroll). Tests: `tests/check-syntax.mjs`; `tests/smd-verify.mjs` (ALL PASS); `tests/smoke/phone-layout.mjs --tool smd`; `tests/smoke/project-library.mjs --tool smd`.
 - **Other copies:** none.
 
-## 2026-11-08 — PR: claude/shared-step-notes (PR #PRNUM) (SMNL-2: the two long Report step notes as a bold lead and a list; display only, no result change)
+## 2026-11-08 — PR: claude/shared-step-notes (PR #1240: https://github.com/mlococo88/All-Structural/pull/1240) (SMNL-2: the two long Report step notes as a bold lead and a list; display only, no result change)
 
 ### SMNL-2. Deflection step notes of the Report as list notes   [display only] [no result change]
 - **Request:** SMNL open item 2 (#1211): the two long Report step notes could not be split without a shared-file change. `shared/steps.js` /
