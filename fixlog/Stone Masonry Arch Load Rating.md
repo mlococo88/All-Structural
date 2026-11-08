@@ -1672,7 +1672,7 @@ function transDisp(w,n,c,cap){
 - **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none.
 - **Check case:** Manual §1.3.6, paragraph `§7.2.7.2B sets a minimum of 10 elements`. Before: one 930-character paragraph. After: the lead "§7.2.7.2B sets a minimum of 10 elements or one per 4 ft of clear span." followed by the items "Convergence testing / Why / Therefore", with the 27 %, 30 %, 15 % and 0.26 figures unchanged.
 - **How verified:** headless Chromium, main (after #1188) against the branch, default and a deteriorated shallow case. Results, the model, the digit sequence of every tab (the Manual with all parts shown), the input panel and the Report are identical. 0 console errors.
-## 2026-11-08 — PR: nl-arch-c (PR #TBD) — Rating summary as a left column of check chips from 1200 px (ARDC; display only, no result change)
+## 2026-11-08 — PR: nl-arch-c (PR #1198: https://github.com/mlococo88/All-Structural/pull/1198) — Rating summary as a left column of check chips from 1200 px (ARDC; display only, no result change)
 
 ### ARDC. Left summary column   [display only]
 - **Request (engineer, 2026-11-07/08):** add the left summary panel, as in Retaining Wall (#959, #984), Spread Footing (#988), Light Pole (#991, #994/#997) and Shear and Moment Diagrams (#1130). The panel has compact check chips, a « collapse with a per-tool key, and a chip click opens the working card. It is shown from 1200 px; below that nothing changes.
