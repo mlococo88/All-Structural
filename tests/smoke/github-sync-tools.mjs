@@ -64,7 +64,7 @@ for (const key of list) {
     const sha0 = gitBlobSha(gh.files.get(P('GHS A')));
     await T.change(p); await T.save(p, 'GHS A');
     await until(() => gitBlobSha(gh.files.get(P('GHS A'))) !== sha0, 15000, 'upload of the update');
-    const put = gh.log.filter(l => l.method === 'PUT' && l.url.includes('GHS%20A')).at(-1);
+    const put = gh.log.filter(l => l.method === 'PUT' && l.url.includes('GHS%20A') && !l.url.includes('/.presence/')).at(-1);
     ok(JSON.parse(put.body).sha === sha0, 'change + Save -> update sent with the file\'s sha');
     const r1 = await T.results(p);
     gh.setRemote(P('GHS remote'), gh.files.get(P('GHS A')));

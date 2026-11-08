@@ -107,7 +107,7 @@ await until(() => gh.files.has(pathOf('Footing C')), 10000, 'background upload o
 const shaA = gitBlobSha(gh.files.get(pathOf('Footing A')));
 await T.change(p); await T.overwrite(p, 'Footing A');
 await until(() => gitBlobSha(gh.files.get(pathOf('Footing A'))) !== shaA, 10000, 'update');
-const put = gh.log.filter(l => l.method === 'PUT' && l.url.includes('Footing%20A')).at(-1); assert.equal(JSON.parse(put.body).sha, shaA);
+const put = gh.log.filter(l => l.method === 'PUT' && l.url.includes('Footing%20A') && !l.url.includes('/.presence/')).at(-1); assert.equal(JSON.parse(put.body).sha, shaA);
 assert.equal(gh.files.get(pathOf('Footing A')), JSON.stringify(JSON.parse(await ls(T.list))['Footing A'], null, 1));
 ok('a new save and an Overwrite are uploaded in the background; the update carries the file\'s sha');
 
