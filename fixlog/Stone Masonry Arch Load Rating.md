@@ -1605,7 +1605,7 @@ function transDisp(w,n,c,cap){
   - the panel appears in the Report.
 - **Saved data:** no change.
 
-## 2026-11-08 — PR: nl-arch-a (PR #TBD) — Long notes as a bold lead and a list: dashboard checks and every output tab (ARNL-1; display only, no result change)
+## 2026-11-08 — PR: nl-arch-a (PR #1188: https://github.com/mlococo88/All-Structural/pull/1188) — Long notes as a bold lead and a list: dashboard checks and every output tab (ARNL-1; display only, no result change)
 
 ### ARNL-1. Long notes split into a lead line and a list   [display only] [no result change]
 - **Request (engineer, 2026-11-07/08, approved for all apps):** "There are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Pattern as Spread Footing SFNL-1 / SFNL-2 (#1167). Part 1 of 2: the Summary dashboard checks and the notes of the Summary, Model, Dead Load, Live Load, Vehicles, Earth Pressure, Diagrams, Influence Lines, Rating, Rating Summary, Nodal Results and Verification tabs, and through them the Report. The Manual and the input panel are part 2 (ARNL-2).
