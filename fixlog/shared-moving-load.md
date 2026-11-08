@@ -339,3 +339,36 @@ results unchanged).
 - Moving Load Generator: see `fixlog/Moving Load Generator.md` (MLNL-3).
 ### Other copies
 - None.
+
+## 2026-11-08 — PR: claude/nl-ml (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — `warnNL` for the two LRFD fatigue-truck warnings (MLNL-4; no result or string change)
+### Where (`analyze`, the `if(m.short==='Fatigue'){…}` block, anchor `/* MLNL-4 (2026-11-08): the two fatigue-truck warnings`)
+- Before:
+  ```js
+  if(fd&&!m.rail)warn.push(`LRFD fatigue truck: the fatigue DFs entered under Factors & Analysis are used for this vehicle (moment ${fd.M!=null?fd.M:'= highway span DFs'}, shear ${fd.V!=null?fd.V:'= highway span DFs'}, negative moment ${fd.N!=null?fd.N:fd.M!=null?fd.M:'= highway DF'}); they should be the ONE-LANE DF divided by 1.2 (LRFD 3.6.1.4.3b, C3.6.1.1.2). LLF = ${ll}: use γ = 1.75 (Fatigue I) or 0.80 (Fatigue II), Table 3.4.1-1.${fl?'':' The current LLF is not a fatigue load factor.'}`);
+  else warn.push(`LRFD fatigue truck: the distribution factors and live load factor entered (LLF = ${ll}) are applied exactly as given. For fatigue use the ONE-LANE distribution factor divided by 1.2 to remove the multiple presence factor (LRFD 3.6.1.4.3b, C3.6.1.1.2), not the strength (multi-lane) DF, and γ = 1.75 (Fatigue I) or 0.80 (Fatigue II), Table 3.4.1-1.${fl?'':' The current LLF is not a fatigue load factor.'}${m.rail?'':' Enter the fatigue DFs under Factors & Analysis to apply them to this vehicle.'}`);}
+  ```
+- After (the same strings, built from the parts of their list forms, with the MLNL-3 helper `nlWarn`):
+  ```js
+  const gm='γ = 1.75 (Fatigue I) or 0.80 (Fatigue II), Table 3.4.1-1.',nf='The current LLF is not a fatigue load factor.';
+  if(fd&&!m.rail){const ld='LRFD fatigue truck: the fatigue DFs entered under Factors & Analysis are used for this vehicle',
+      dfs=`moment ${fd.M!=null?fd.M:'= highway span DFs'}, shear ${fd.V!=null?fd.V:'= highway span DFs'}, negative moment ${fd.N!=null?fd.N:fd.M!=null?fd.M:'= highway DF'}`,
+      one='they should be the ONE-LANE DF divided by 1.2 (LRFD 3.6.1.4.3b, C3.6.1.1.2).',lf=`LLF = ${ll}: use ${gm}`;
+    nlWarn(`${ld} (${dfs}); ${one} ${lf}${fl?'':' '+nf}`,{lead:ld+':',items:[['DFs used:',dfs+'.'],['One-lane DF:',one],['Load factor:',lf]].concat(fl?[]:[['Check:',nf]])});}
+  else{const ld=`LRFD fatigue truck: the distribution factors and live load factor entered (LLF = ${ll}) are applied exactly as given.`,
+      df='the ONE-LANE distribution factor divided by 1.2 to remove the multiple presence factor (LRFD 3.6.1.4.3b, C3.6.1.1.2), not the strength (multi-lane) DF',
+      en='Enter the fatigue DFs under Factors & Analysis to apply them to this vehicle.';
+    nlWarn(`${ld} For fatigue use ${df}, and ${gm}${fl?'':' '+nf}${m.rail?'':' '+en}`,{lead:ld,items:[['DF:','for fatigue use '+df+'.'],['Load factor:',gm]].concat(fl?[]:[['Check:',nf]],m.rail?[]:[['Fatigue DFs:',en]])});}}
+  ```
+  `R.warn` is unchanged; `R.warnNL[k]` (non-enumerable, MLNL-3) now also holds the list form of the fatigue warning. Items are left out (not `null`) when their condition is off, so pages can map over them.
+### Problem
+- MLNL-3 open item (#1241): the two fatigue-truck warnings were one paragraph each (e.g. 424 characters at the Fatigue preset default, LLF 1.75, no fatigue DFs; 467 with a non-fatigue LLF).
+### Governing provision
+- None: display only. No formula, factor, unit, value, code reference or warning text changes (LRFD 3.6.1.4.3b, C3.6.1.1.2, Table 3.4.1-1 quoted as before).
+### Check case
+- Fatigue preset, 2 spans 60/80, LLF 1.75, no fatigue DFs: `warn` = "LRFD fatigue truck: the distribution factors and live load factor entered (LLF = 1.75) are applied exactly as given. For fatigue use the ONE-LANE … Enter the fatigue DFs under Factors & Analysis to apply them to this vehicle." (424 characters, as on main); `warnNL` = lead "LRFD fatigue truck: … (LLF = 1.75) are applied exactly as given." with **DF:** "for fatigue use the ONE-LANE distribution factor divided by 1.2 … not the strength (multi-lane) DF.", **Load factor:** "γ = 1.75 (Fatigue I) or 0.80 (Fatigue II), Table 3.4.1-1.", **Fatigue DFs:** "Enter the fatigue DFs …". With fatigue DFs 0.5 / 0.6 / 0.55 and LLF 1.0: lead "LRFD fatigue truck: the fatigue DFs entered under Factors & Analysis are used for this vehicle:" with **DFs used:** "moment 0.5, shear 0.6, negative moment 0.55.", **One-lane DF:**, **Load factor:** "LLF = 1: use γ = 1.75 …", **Check:** "The current LLF is not a fatigue load factor."
+### How verified
+- Node, main vs branch `analyze` on 40 Fatigue models (LLF 1.75 / 0.80 / 1.0 / 1.35 × rail off / on × 5 fatigue-DF sets: none, all three, M only, all blank, V and N): `warn` byte-identical and the same enumerable keys in all 40; `warnNL` present for the fatigue warning in all 40.
+- `node tests/engine/run.mjs moving-load`: the 35 parity cases hash identically (warnings included). Whole engine suite; `node tests/check-syntax.mjs`.
+- **Consumers (CLAUDE.md §3; every tool that loads shared/moving-load.js):** Moving Load Generator (shows `warnNL` with `mlNL`, MLNL-3: see `fixlog/Moving Load Generator.md`, same PR; `tests/smoke/phone-layout.mjs --tool mlg`, `tests/smoke/project-library.mjs --tool mlg`) and apps/steel-bridge (not edited: on hold; it reads `warn` only; `tests/smoke/steel-bridge-report.mjs` run).
+### Other copies
+- None.

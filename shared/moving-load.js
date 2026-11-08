@@ -348,8 +348,16 @@ function analyze(m,opt){
   if(m.imp.method==='const'&&m.imp.val<1) warn.push('The impact multiplier is below 1.0.');
   if(m.axles.some(a=>!(a[0]>0))) warn.push('One or more axles have zero or negative load.');
   if(m.short==='Fatigue'){const ll=m.llf,fl=Math.abs(ll-1.75)<1e-9||Math.abs(ll-0.80)<1e-9,fd=m.fatDF;
-    if(fd&&!m.rail)warn.push(`LRFD fatigue truck: the fatigue DFs entered under Factors & Analysis are used for this vehicle (moment ${fd.M!=null?fd.M:'= highway span DFs'}, shear ${fd.V!=null?fd.V:'= highway span DFs'}, negative moment ${fd.N!=null?fd.N:fd.M!=null?fd.M:'= highway DF'}); they should be the ONE-LANE DF divided by 1.2 (LRFD 3.6.1.4.3b, C3.6.1.1.2). LLF = ${ll}: use γ = 1.75 (Fatigue I) or 0.80 (Fatigue II), Table 3.4.1-1.${fl?'':' The current LLF is not a fatigue load factor.'}`);
-    else warn.push(`LRFD fatigue truck: the distribution factors and live load factor entered (LLF = ${ll}) are applied exactly as given. For fatigue use the ONE-LANE distribution factor divided by 1.2 to remove the multiple presence factor (LRFD 3.6.1.4.3b, C3.6.1.1.2), not the strength (multi-lane) DF, and γ = 1.75 (Fatigue I) or 0.80 (Fatigue II), Table 3.4.1-1.${fl?'':' The current LLF is not a fatigue load factor.'}${m.rail?'':' Enter the fatigue DFs under Factors & Analysis to apply them to this vehicle.'}`);}
+    /* MLNL-4 (2026-11-08): the two fatigue-truck warnings, built from parts (the strings are byte-identical to before) with a list form in warnNL */
+    const gm='γ = 1.75 (Fatigue I) or 0.80 (Fatigue II), Table 3.4.1-1.',nf='The current LLF is not a fatigue load factor.';
+    if(fd&&!m.rail){const ld='LRFD fatigue truck: the fatigue DFs entered under Factors & Analysis are used for this vehicle',
+        dfs=`moment ${fd.M!=null?fd.M:'= highway span DFs'}, shear ${fd.V!=null?fd.V:'= highway span DFs'}, negative moment ${fd.N!=null?fd.N:fd.M!=null?fd.M:'= highway DF'}`,
+        one='they should be the ONE-LANE DF divided by 1.2 (LRFD 3.6.1.4.3b, C3.6.1.1.2).',lf=`LLF = ${ll}: use ${gm}`;
+      nlWarn(`${ld} (${dfs}); ${one} ${lf}${fl?'':' '+nf}`,{lead:ld+':',items:[['DFs used:',dfs+'.'],['One-lane DF:',one],['Load factor:',lf]].concat(fl?[]:[['Check:',nf]])});}
+    else{const ld=`LRFD fatigue truck: the distribution factors and live load factor entered (LLF = ${ll}) are applied exactly as given.`,
+        df='the ONE-LANE distribution factor divided by 1.2 to remove the multiple presence factor (LRFD 3.6.1.4.3b, C3.6.1.1.2), not the strength (multi-lane) DF',
+        en='Enter the fatigue DFs under Factors & Analysis to apply them to this vehicle.';
+      nlWarn(`${ld} For fatigue use ${df}, and ${gm}${fl?'':' '+nf}${m.rail?'':' '+en}`,{lead:ld,items:[['DF:','for fatigue use '+df+'.'],['Load factor:',gm]].concat(fl?[]:[['Check:',nf]],m.rail?[]:[['Fatigue DFs:',en]])});}}
   if(m.stdLane){const ld=`${m.stdLane.w} k/ft + ${m.stdLane.PM} k moment / ${m.stdLane.PV} k shear and reactions; a second ${m.stdLane.PM} k in one other span for negative moment`,
       cs='is checked as a separate case and enveloped with the vehicle, with impact.',gv='the case reads "Std. lane" and "@" is the concentrated-load position.';
     nlWarn(`Std. Spec. lane loading (${ld}) ${cs} Where it governs, ${gv}`,{lead:'Std. Spec. lane loading '+cs,items:[['Loads:',ld+'.'],['Where it governs:',gv]]});}
