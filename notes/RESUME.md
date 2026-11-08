@@ -244,3 +244,7 @@ Plan: rotating in-depth code-compliance reviews (read-only) → fix PRs for clea
 - Small fixes: RW sliding note #1218, SPC r̄o/H #1217, Timber report #1216, SB TFA hint #1229, ASCE7 manual box #1230, BP <b> #1171.
 - Open/pending engineer: SF display rename "Shallow Foundation Design"; default projects with FAILs (BP 2, abutment sliding 1.10); shared report.js step-note bullets + shared/moving-load.js warnings (one shared PR, all consumers); ST-Girder leftovers (12 notes, code-built banners); Timber §1.3/§10 duplicate notes (kept).
 - Check-ins stopped.
+
+## 2026-11-08 — all note work complete
+- SF rename "Shallow Foundation Design" #1236–#1239; SF manual audit #1242–#1246; shared step-note lists #1240, ML warnings #1241; leftovers #1247 (Arch), #1248 (BP), #1249 (SF), #1250 (ML fatigue).
+- No agents running. Engineer left default-project FAILs as is. ST-Girder leftovers deferred (it lives inside SBD; new SB app on hold).
