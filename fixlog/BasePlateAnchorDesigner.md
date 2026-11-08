@@ -5641,7 +5641,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **How verified:** `node tests/check-syntax.mjs`; `tests/smoke/phone-layout.mjs --tool bpad`; `tests/smoke/project-library.mjs --tool baseplate`; `tests/smoke/lightpole-anchor-handoff.mjs`; 0 console errors. Screenshots before / after at 1440 and 390 px (elevations note, tension figure caption, §17.5.2.1.1 crediting note).
 - **Other copies:** none.
 
-## 2026-11-08 — PR: nl/bp-leftpanel (PR: pending) — BPLS: the check summary as a left column from 1200 px (display only, no result change)
+## 2026-11-08 — PR: nl/bp-leftpanel (PR #1199: https://github.com/mlococo88/All-Structural/pull/1199) — BPLS: the check summary as a left column from 1200 px (display only, no result change)
 ### BPLS. Check summary column on the left at 1200 px and wider   [display only]
 - **Request (engineer, 2026-11-07/08):** add the left summary panel to the tools that have summary / result cards, as in Retaining Wall (RWDL #959, RWLB #984), Spread Footing (SFLB #988), Light Pole and Sign Post (LPLB #991, #994/#997) and Shear and Moment Diagrams (SMLS #1130).
 - **What changed (screen only):**
