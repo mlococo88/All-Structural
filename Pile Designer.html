@@ -15374,12 +15374,11 @@ function BucklingTabs({ b, I, set, pcr, computePcr }) {
     // The selected method produced nothing, so every number outside this component
     // (status chip, dashboard, report) is coming from Davisson instead. Say so --
     // otherwise the module appears to endorse a result the engineer did not choose.
-    b.resultIsFallback && /*#__PURE__*/React.createElement("div", { className: "mb-3 p-1.5 rounded-sm text-[9px] leading-snug", style: { background: "rgba(201,98,46,0.10)", color: "#7a4d15", border: "1px solid rgba(201,98,46,0.35)" } },
-      /*#__PURE__*/React.createElement("b", null, "\u26a0 The selected method has no result, so the checks are falling back to Davisson. "),
-      "The status chip, dashboard, and report currently show the ", /*#__PURE__*/React.createElement("b", null, "Davisson"),
-      " numbers (\u03c6", /*#__PURE__*/React.createElement("sub", null, "c"), "P", /*#__PURE__*/React.createElement("sub", null, "n"),
-      " = ", fmt(b.sel.phiPn, 0), " kip), not this tab's. ",
-      tab === "pcrit" ? "Run the ramp below to populate this method." : "Resolve the issue below, or select a method that has data."),
+    b.resultIsFallback && /*#__PURE__*/React.createElement("div", { className: "mb-3 p-1.5 rounded-sm text-[9px] leading-snug pdNL", style: { background: "rgba(201,98,46,0.10)", color: "#7a4d15", border: "1px solid rgba(201,98,46,0.35)" } },
+      pdNL("⚠ The selected method has no result, so the checks are falling back to Davisson.", [
+      ["Shown now:", "the status chip, dashboard, and report currently show the ", /*#__PURE__*/React.createElement("b", null, "Davisson"),
+      " numbers (φ", /*#__PURE__*/React.createElement("sub", null, "c"), "P", /*#__PURE__*/React.createElement("sub", null, "n"),
+      " = ", fmt(b.sel.phiPn, 0), " kip), not this tab's."]], { act: [tab === "pcrit" ? "Run the ramp below to populate this method." : "Resolve the issue below, or select a method that has data."] })),
 
     // ---------- TAB 1: DAVISSON ----------
     tab === "davisson" && /*#__PURE__*/React.createElement("div", null,
@@ -15390,10 +15389,9 @@ function BucklingTabs({ b, I, set, pcr, computePcr }) {
       P("Davisson & Robinson solved the buckling eigenvalue problem for a pile on a Winkler (linear-spring) foundation and fitted the equivalent fixed-base cantilever length that reproduces the same critical load. The coefficients ",
         /*#__PURE__*/React.createElement("b", null, "1.8"), " and ", /*#__PURE__*/React.createElement("b", null, "1.4"),
         " below are the result of that fit \u2014 so you are consuming somebody else's eigenvalue solution, hard-coded."),
-      /*#__PURE__*/React.createElement("p", { className: "text-[9px] leading-snug mb-1 p-1.5 rounded-sm", style: { background: "rgba(201,98,46,0.08)", color: "#7a4d15" } },
-        /*#__PURE__*/React.createElement("b", null, "Valid only for the idealization it was fitted to: "),
-        "uniform soil, linear springs, constant EI. It cannot see layering, soil nonlinearity, degradation, or P-\u0394. Cited as ",
-        /*#__PURE__*/React.createElement("b", null, "AASHTO LRFD 10th Ed. Art. 10.7.3.13.4, Eqs. C10.7.3.13.4-1 / -2"), "; see FHWA NHI-05-039 for its use in practice."),
+      /*#__PURE__*/React.createElement("div", { className: "text-[9px] leading-snug mb-1 p-1.5 rounded-sm pdNL", style: { background: "rgba(201,98,46,0.08)", color: "#7a4d15" } }, pdNL(
+        "Valid only for the idealization it was fitted to:", [["Assumes", "uniform soil, linear springs, constant EI."], ["Cannot see", "layering, soil nonlinearity, degradation, or P-Δ."], ["Cited as",
+        /*#__PURE__*/React.createElement("b", null, "AASHTO LRFD 10th Ed. Art. 10.7.3.13.4, Eqs. C10.7.3.13.4-1 / -2"), "; see FHWA NHI-05-039 for its use in practice."]])),
       /*#__PURE__*/React.createElement(Lbl, null, "Fixity depth"),
       /*#__PURE__*/React.createElement("p", { className: "text-[9px] text-slate-500 mb-1" },
         "Soil stiffness from: ", /*#__PURE__*/React.createElement("b", null, b.bklSoilSrc),
@@ -19466,7 +19464,10 @@ function App() {
   }, (() => {
     const b = r.iab, s = b.sect;
     return /*#__PURE__*/React.createElement("div", null,
-      /*#__PURE__*/React.createElement(Narr, null, "The MassDOT Simplified Method establishes an adequate H-pile section by checking the factored gravity load per pile (dead + live, one pile per beam line) against a tabulated maximum factored axial load, ", /*#__PURE__*/React.createElement(RTex, { tex: "P_u" }), ", that already incorporates the thermal- and skew-induced weak-axis bending. MassDOT derived these values by imposing the thermal head displacement on an L-Pile model and solving the modified interaction equation (with an inelastic rotation factor \u03b8\u1d62 = 1.75) for each section, soil type, and skew. The designer performs no p-y analysis for the non-scour case."),
+      /*#__PURE__*/React.createElement(NarrNL, { lead: "The MassDOT Simplified Method establishes an adequate H-pile section.", items: [
+        ["Check:", "the factored gravity load per pile (dead + live, one pile per beam line) against a tabulated maximum factored axial load, ", /*#__PURE__*/React.createElement(RTex, { tex: "P_u" }), ", that already incorporates the thermal- and skew-induced weak-axis bending."],
+        ["Derivation:", "MassDOT derived these values by imposing the thermal head displacement on an L-Pile model and solving the modified interaction equation (with an inelastic rotation factor θᵢ = 1.75) for each section, soil type, and skew."],
+        ["No p-y analysis:", "the designer performs no p-y analysis for the non-scour case."]] }),
       /*#__PURE__*/React.createElement(RptHeading, { n: "1", title: "Simplified-Method eligibility", code: "\u00a73.10.11.1 boundary conditions" }),
       /*#__PURE__*/React.createElement("table", { className: "w-full text-[10px] font-mono-tech mb-1" },
         /*#__PURE__*/React.createElement("tbody", null,
@@ -19478,7 +19479,9 @@ function App() {
         ? /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-sm px-2 py-1 mb-1 leading-snug" }, "\u2713 All boundary conditions satisfied \u2014 the Simplified Method applies.")
         : /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-amber-800 bg-amber-50 border border-amber-300 rounded-sm px-2 py-1 mb-1 leading-snug" }, "\u26a0 Boundary condition(s) not met \u2014 the Simplified Method does not apply; MassDOT requires the 3D Space Frame Analysis Method (\u00a73.10.11.5), outside this tool."),
       /*#__PURE__*/React.createElement(RptHeading, { n: "2", title: "Section & soil", code: "AISC published \u00b7 Table 3.10.11-1" }),
-      /*#__PURE__*/React.createElement(Narr, null, "Only HP10\u00d757 and HP12\u00d784 in Grade 50 steel (F", /*#__PURE__*/React.createElement("sub", null, "y"), " = 50 ksi) are permitted \u2014 the only H-pile sections compact enough to develop a fully plastic stress distribution where hinge formation is expected (\u00a73.10.10.1). Webs are oriented parallel to the abutment centerline regardless of skew, so thermal movement bends the pile about its weak (y-y) axis."),
+      /*#__PURE__*/React.createElement(NarrNL, { lead: null, items: [
+        ["Sections:", "only HP10×57 and HP12×84 in Grade 50 steel (F", /*#__PURE__*/React.createElement("sub", null, "y"), " = 50 ksi) are permitted — the only H-pile sections compact enough to develop a fully plastic stress distribution where hinge formation is expected (§3.10.10.1)."],
+        ["Orientation:", "webs are oriented parallel to the abutment centerline regardless of skew, so thermal movement bends the pile about its weak (y-y) axis."]] }),
       /*#__PURE__*/React.createElement("div", { className: "grid md:grid-cols-2 gap-3 mb-2" },
         /*#__PURE__*/React.createElement("div", null,
           /*#__PURE__*/React.createElement("div", { className: "text-[9px] font-mono-tech text-slate-500 uppercase tracking-wider mb-0.5" }, "Section " + s.label + " (published AISC values)"),
@@ -19519,7 +19522,12 @@ function App() {
         ? /*#__PURE__*/React.createElement(Calc, { label: "P\u1d64 at skew " + fmt(b.skew, 0) + "\u00b0", eq: `P_u=${fmt(b.Pu, 0)}\\ \\text{kip}`, cite: "table value, no interpolation" })
         : /*#__PURE__*/React.createElement(Calc, { label: "Linear interpolation at skew " + fmt(b.skew, 1) + "\u00b0", eq: `P_u=P_{u,${b.interp.skLo}^\\circ}+\\frac{${fmt(b.skew, 1)}-${b.interp.skLo}}{10}\\left(P_{u,${b.interp.skHi}^\\circ}-P_{u,${b.interp.skLo}^\\circ}\\right)=${fmt(b.interp.PuLo, 0)}+${fmt(b.interp.t, 2)}\\,(${fmt(b.interp.PuHi, 0)}-${fmt(b.interp.PuLo, 0)})`, result: `=${fmt(b.Pu, 1)}\\ \\text{kip}`, cite: "\u00a73.10.11.3: \u201cthe Designer may interpolate\u201d" }),
       /*#__PURE__*/React.createElement("div", { className: "text-[9px] font-mono-tech text-slate-500 uppercase tracking-wider mt-2 mb-0.5" }, "Basis of the tabulated P\u1d64 (how MassDOT derived it, \u00a73.10.11.3)"),
-      /*#__PURE__*/React.createElement(Narr, null, "MassDOT imposed a \u00bd-inch lateral displacement at the pile head in L-Pile (fixed head, the soil above), read the resulting weak-axis thermal moment, resolved it into components for skewed bridges (biaxial), then solved the modified interaction equation for the axial load P\u1d64 that brings the interaction to 1.0. The constants for this section:"),
+      /*#__PURE__*/React.createElement(NarrNL, { lead: "How MassDOT derived the table:", o: { ol: true }, items: [
+        ["Imposed", "a ½-inch lateral displacement at the pile head in L-Pile (fixed head, the soil above);"],
+        ["read", "the resulting weak-axis thermal moment;"],
+        ["resolved", "it into components for skewed bridges (biaxial);"],
+        ["then solved", "the modified interaction equation for the axial load Pᵤ that brings the interaction to 1.0."]] }),
+      /*#__PURE__*/React.createElement(Narr, null, "The constants for this section:"),
       /*#__PURE__*/React.createElement(Calc, { label: "Axial resistance basis", eq: `P_r=\\phi_c F_y A_g=0.70\\times ${fmt(s.Fy, 0)}\\times ${fmt(s.Ag, 1)}=${fmt(0.70 * s.Fy * s.Ag, 0)}\\ \\text{kip}`, note: "\u03c6c = 0.70, fully braced compact section" }),
       /*#__PURE__*/React.createElement(Calc, { label: "Weak-axis flexural resistance", eq: `M_{ry}=Z_y F_y=\\min(${fmt(s.Zy, 1)},\\,1.5\\times ${fmt(s.Sy, 1)})\\times ${fmt(s.Fy, 0)}/12=${fmt(Math.min(s.Zy, 1.5 * s.Sy) * s.Fy / 12, 1)}\\ \\text{kip}\\cdot\\text{ft}`, note: "Z \u2264 1.5S per AISC" }),
       /*#__PURE__*/React.createElement(Calc, { label: "Modified interaction (solved for P\u1d64)", eq: `\\dfrac{P_u}{P_r}+\\dfrac{8}{9}\\left[\\dfrac{M_{uy}}{\\theta_i M_{ry}}+\\dfrac{M_{ux}}{M_{rx}}\\right]=1.0,\\quad \\theta_i=1.75`, note: "\u03b8\u1d62 = inelastic rotational capacity factor (weak axis only); thermal load factor \u03b3_TU = 1.0" }),
@@ -19529,14 +19537,20 @@ function App() {
         : /*#__PURE__*/React.createElement(Calc, { label: "Factored gravity demand", eq: `P_{u}=\\gamma_{DC}\\,DL+\\gamma_{LL}\\,LL=${fmt(b.gDC, 2)}(${fmt(b.DL, 0)})+${fmt(b.gLL, 2)}(${fmt(b.LL, 0)})=${fmt(b.demand, 0)}\\ \\text{kip}`, note: "Strength I, one pile/beam line; dead + live only (\u00a73.10.11.4)" }),
       /*#__PURE__*/React.createElement(RptCheck, { pass: b.cap_pass, eq: `P_{u,\\text{demand}}=${fmt(b.demand, 0)}\\ \\text{kip}\\ ${b.cap_pass ? "\\le" : ">"}\\ P_u=${fmt(b.Pu, 0)}\\ \\text{kip}\\quad(\\text{D/C}=${fmt(b.dcr, 3)})` }),
       /*#__PURE__*/React.createElement(RptHeading, { n: "4", title: "Pile tip elevation & fixity", code: "\u00a73.10.11.2 \u00b7 Table 3.10.11-4" }),
-      /*#__PURE__*/React.createElement(Narr, null, "To obtain the intended pile behavior the pile must be installed to the theoretical point of fixity or deeper. L", /*#__PURE__*/React.createElement("sub", null, "f"), " is defined as the depth along the pile to the second point of zero lateral deflection under the calculated thermal movement (\u00a73.10.11.2); the pile must then be installed 5 ft beyond it to cover uncertainty in the actual L", /*#__PURE__*/React.createElement("sub", null, "f"), ". The governing pile length is the longer of the fixity-based length and the geotechnical requirement."),
+      /*#__PURE__*/React.createElement(NarrNL, { lead: "To obtain the intended pile behavior the pile must be installed to the theoretical point of fixity or deeper.", items: [
+        [["L", /*#__PURE__*/React.createElement("sub", { key: "s" }, "f")], "is defined as the depth along the pile to the second point of zero lateral deflection under the calculated thermal movement (§3.10.11.2)."],
+        ["Margin:", "the pile must then be installed 5 ft beyond it to cover uncertainty in the actual L", /*#__PURE__*/React.createElement("sub", null, "f"), "."],
+        ["Governing pile length:", "the longer of the fixity-based length and the geotechnical requirement."]] }),
       /*#__PURE__*/React.createElement(Calc, { label: "Criterion 1 \u2014 fixity", eq: `L_f+5=${fmt(b.Lf, 0)}+5=${fmt(b.LfPlus5, 0)}\\ \\text{ft}`, cite: "L_f from Table 3.10.11-" + (b.sectKey === "HP10X57" ? "2" : "3") + " row above" }),
       /*#__PURE__*/React.createElement(Calc, { label: "Criterion 2 \u2014 geotechnical", eq: `L_{geo}=${fmt(b.geoLength, 0)}\\ \\text{ft}`, note: "factored geotechnical pile resistance, from the geotech report" }),
       /*#__PURE__*/React.createElement(Calc, { label: "Required pile length", eq: `L_{req}=\\max(L_{geo},\\,L_f+5)=\\max(${fmt(b.geoLength, 0)},\\,${fmt(b.LfPlus5, 0)})=${fmt(b.reqLength, 0)}\\ \\text{ft}`, result: `\\text{governs: ${String(b.tipGovern).replace(/L_f/g, "}L_f\\text{")}}` }),
       b.lenChk && /*#__PURE__*/React.createElement(RptCheck, { pass: b.lenChk.pass, eq: `L_{req}=${fmt(b.lenChk.req, 1)}\\ \\text{ft}\\ ${b.lenChk.pass ? "\\le" : ">"}\\ L_{designed}=${fmt(b.lenChk.des, 1)}\\ \\text{ft (below the cap; abutment calculator / entered)}` }),   // PDA-IAB2
       /*#__PURE__*/React.createElement(Calc, { label: "Equivalent length (reference)", eq: `L_e=${fmt(b.Le, 1)}\\ \\text{ft}`, note: "fixed/fixed free-standing column translated through \u03b4\u1d1b (Table 3.10.11-4); used only in the 3D Space Frame Method" }),
       /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mb-1 leading-snug" }, "Where bedrock is above the L_f + 5 ft depth but less than 5 ft below the fixity point, piles need only be driven to bedrock; where bedrock is above the fixity point, the site is unsuitable for pile-supported integral abutments (\u00a73.10.11.2). The bedrock boundary condition in \u00a71 attests to this."),
-      /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-400 mt-1 leading-snug" }, "P\u1d64 embeds thermal + skew weak-axis bending via MassDOT's \u03b8\u1d62=1.75 modified interaction (\u00a73.10.11.3). Piles are fully braced against Euler buckling and LTB except at scour. Scour / extremely soft soil (peat) are outside these tables \u2014 they require the AASHTO interaction with an unbraced length = exposed depth. Sanity-check aid; independent PE review required."));
+      /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-400 mt-1 leading-snug pdNL" }, pdNL(null, [
+        ["Pᵤ", "embeds thermal + skew weak-axis bending via MassDOT's θᵢ=1.75 modified interaction (§3.10.11.3)."],
+        ["Bracing:", "piles are fully braced against Euler buckling and LTB except at scour."],
+        ["Outside these tables:", "scour / extremely soft soil (peat) — they require the AASHTO interaction with an unbraced length = exposed depth."]], { act: ["Sanity-check aid; independent PE review required."] })));
   })()),
   /*#__PURE__*/  I.pileType === "iab" && r.iab && r.iab.tier2 && /*#__PURE__*/React.createElement(Module, {
     idx: "12",
@@ -19548,7 +19562,10 @@ function App() {
   }, (() => {
     const t = r.iab.tier2, b = r.iab, s = b.sect;
     return /*#__PURE__*/React.createElement("div", null,
-      /*#__PURE__*/React.createElement(Narr, null, "This reproduces MassDOT's own derivation for the specific site conditions rather than reading the frozen table. The thermal movement of the superstructure imposes a lateral displacement ", /*#__PURE__*/React.createElement(RTex, { tex: "\\delta_T" }), " at the (fixed) pile head; a displacement-controlled p-y solve returns the resulting weak-axis moment, which is then checked in the modified interaction equation. ", t.hasScour ? "Because scour/soft-soil is present, the soil springs are removed over the exposed depth (adding an unbraced length) and the inelastic-rotation credit is dropped (\u03b8\u1d62 = 1.0)." : "For the non-scour case the compact section keeps its inelastic-rotation credit \u03b8\u1d62 = 1.75 (weak-axis only)."),
+      /*#__PURE__*/React.createElement(NarrNL, { lead: "This reproduces MassDOT's own derivation for the specific site conditions rather than reading the frozen table.", items: [
+        ["Imposed displacement:", "the thermal movement of the superstructure imposes a lateral displacement ", /*#__PURE__*/React.createElement(RTex, { tex: "\\delta_T" }), " at the (fixed) pile head."],
+        ["Moment:", "a displacement-controlled p-y solve returns the resulting weak-axis moment, which is then checked in the modified interaction equation."],
+        t.hasScour ? ["Scour:", "because scour/soft-soil is present, the soil springs are removed over the exposed depth (adding an unbraced length) and the inelastic-rotation credit is dropped (θᵢ = 1.0)."] : ["Non-scour:", "for the non-scour case the compact section keeps its inelastic-rotation credit θᵢ = 1.75 (weak-axis only)."]] }),
       /*#__PURE__*/React.createElement(RptHeading, { n: "1", title: "Thermal head displacement", code: "\u00a73.10.2.4 \u00b7 \u03b3_TU = 1.0 (\u00a73.10.2.6)" }),
       t.deltaSource === "direct"
         ? /*#__PURE__*/React.createElement(Calc, { label: "Imposed \u03b4\u1d1b (direct)", eq: `\\delta_T=${fmt(t.deltaT, 3)}\\ \\text{in}` })
@@ -19596,7 +19613,11 @@ function App() {
       t.checkFlood && /*#__PURE__*/React.createElement(RptCheck, { pass: t.checkFlood.pass, eq: `P_u=${fmt(t.checkFlood.Pu, 1)}\\ ${t.checkFlood.Pu <= t.checkFlood.Pr ? "\\le" : ">"}\\ \\phi_cP_n=1.0(${fmt(t.checkFlood.col.Pn, 1)})=${fmt(t.checkFlood.Pr, 1)}\\ \\text{kip}${t.checkFlood.col.KLr_ok ? "" : "\\quad (KL/r>120\\ \\text{NG})"}` }),
       t.nl && t.nl.ok ? /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement(RptHeading, { n: "4", title: "Full nonlinear p-y check (Reese / Matlock)", code: "displacement-controlled, fixed head" }),
-        /*#__PURE__*/React.createElement(Narr, null, "The same imposed \u03b4\u1d1b is applied to the full nonlinear p\u2013y engine (real Reese sand / Matlock\u2013Welch clay curves, axial thrust in the second-order term) by iterating the head shear until the fixed-head displacement equals \u03b4\u1d1b \u2014 the same displacement-matching iteration used in the buckling analysis. Unlike the linear MassDOT-basis solve above, this runs on the project soil profile and full nonlinear curves, so it may diverge from the tabulated Pu, which is expected. This is the honest check for the scoured condition, where the exposed length is unbraced."),
+        /*#__PURE__*/React.createElement(NarrNL, { lead: "The same imposed δᴛ is applied to the full nonlinear p–y engine.", items: [
+          ["Engine:", "real Reese sand / Matlock–Welch clay curves, axial thrust in the second-order term."],
+          ["Method:", "iterating the head shear until the fixed-head displacement equals δᴛ — the same displacement-matching iteration used in the buckling analysis."],
+          ["Difference:", "unlike the linear MassDOT-basis solve above, this runs on the project soil profile and full nonlinear curves, so it may diverge from the tabulated Pu, which is expected."],
+          ["Use:", "this is the honest check for the scoured condition, where the exposed length is unbraced."]] }),
         /*#__PURE__*/React.createElement("div", { className: "text-[9px] px-2 py-1 rounded-sm mb-2 leading-snug " + (t.nlLayeredUsed ? "bg-slate-50 border border-slate-200 text-slate-600" : "bg-amber-50 border border-amber-200 text-amber-800") },
           t.nlLayeredUsed
             ? ("Soil source: project layered profile (" + (t.nlLayers ? t.nlLayers.length : 0) + " layer" + ((t.nlLayers && t.nlLayers.length === 1) ? "" : "s") + ") \u2014 " + (t.nlLayers ? t.nlLayers.map(l => l.type + "@" + fmt(l.topDepth, 0) + "'").join(", ") : "") + ". Same p-y engine and models as the Module 02 lateral analysis.")
@@ -19640,7 +19661,8 @@ function App() {
         })()) : null,
       t.nl && t.nl.ok && t.nl.sweep && t.nl.sweep.length > 1 && /*#__PURE__*/React.createElement("div", { className: "mt-3" },
         /*#__PURE__*/React.createElement("div", { className: "text-[9px] font-mono-tech text-[var(--blueprint2)] uppercase tracking-wider mb-1" }, "Head push\u2013deflection (\u03b4\u1d1b iteration path)"),
-        /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 leading-snug mb-1" }, "Pile-head deflection as the head shear is ramped from zero to the value that produces the thermal displacement \u03b4\u1d1b. A straight line means near-elastic response; curvature (softening) shows soil yielding. The endpoint is the operating state used for the moment check \u2014 head deflection = \u03b4\u1d1b."),
+        /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 leading-snug mb-1 pdNL" }, pdNL("Pile-head deflection as the head shear is ramped from zero to the value that produces the thermal displacement δᴛ.", [
+          ["Straight line:", "near-elastic response; curvature (softening) shows soil yielding."], ["Endpoint:", "the operating state used for the moment check — head deflection = δᴛ."]])),
         /*#__PURE__*/React.createElement(Plot, { data: [{ x: [0, ...t.nl.sweep.map(sw => sw.y0)], y: [0, ...t.nl.sweep.map(sw => sw.Q)], mode: "lines+markers", line: { color: C.blueprint2, width: 2 }, marker: { size: 4 }, hoverinfo: "text", text: ["origin", ...t.nl.sweep.map(sw => "Q=" + fmt(sw.Q, 1) + " kip<br>y\u2080=" + fmt(sw.y0, 3) + " in<br>Mmax=" + fmt(sw.M, 1) + " kip\u00b7ft")] },
           { x: [Math.abs(t.nl.yHead_in)], y: [Math.abs(t.nl.Qhead_kip)], mode: "markers", marker: { color: C.accent, size: 9, symbol: "circle" }, hoverinfo: "text", text: ["operating: \u03b4\u1d1b=" + fmt(Math.abs(t.nl.yHead_in), 3) + " in, Q=" + fmt(Math.abs(t.nl.Qhead_kip), 1) + " kip"] }],
           layout: baseLayout({ height: 190, margin: { l: 46, r: 12, t: 10, b: 34 }, showlegend: false, xaxis: { title: { text: "head deflection (in)", font: { size: 9 } }, gridcolor: C.grid }, yaxis: { title: { text: "head shear Q (kip)", font: { size: 9 } }, gridcolor: C.grid } }), height: 190 })),
@@ -19656,7 +19678,10 @@ function App() {
         /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 leading-snug mb-1" }, "Fraction of ultimate soil resistance mobilized at each depth under \u03b4\u1d1b (p = the solver-applied reaction E\u209b\u00b7y). Values approaching 1.0 mean the soil spring is near its capacity there \u2014 concentrated near the head where deflection is largest."),
         /*#__PURE__*/React.createElement(Plot, { data: [{ x: t.nl.mobil.map(m => m.r), y: t.nl.mobil.map(m => -m.d), mode: "lines", line: { color: C.accent, width: 2 }, hoverinfo: "text", text: t.nl.mobil.map(m => "@" + fmt(m.d, 1) + " ft: " + fmt(m.r * 100, 0) + "%") }],
           layout: baseLayout({ height: 220, margin: { l: 46, r: 12, t: 10, b: 34 }, showlegend: false, xaxis: { title: { text: "p / p\u1d64", font: { size: 9 } }, gridcolor: C.grid, range: [0, 1.05] }, yaxis: { title: { text: "depth (ft)", font: { size: 9 } }, gridcolor: C.grid } }), height: 220 })),
-      /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-400 mt-1 leading-snug" }, "\u03b8\u1d62 = 1.75 applies to compact sections in weak-axis bending with no unbraced length (non-scour). The linear p\u2013y solve uses a constant subgrade k per Table 3.10.11-1, matching MassDOT's basis; the nonlinear solve uses the full Reese/Matlock curves. Both are displacement-controlled (imposed \u03b4\u1d1b, fixed head). For the non-scour case they should agree and reproduce the tabulated Pu closely; the nonlinear result is the appropriate refined check under scour. Sanity-check aid \u2014 independent PE review required."));
+      /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-400 mt-1 leading-snug pdNL" }, pdNL(null, [
+        ["θᵢ = 1.75", "applies to compact sections in weak-axis bending with no unbraced length (non-scour)."],
+        ["Linear p–y solve:", "uses a constant subgrade k per Table 3.10.11-1, matching MassDOT's basis; the nonlinear solve uses the full Reese/Matlock curves. Both are displacement-controlled (imposed δᴛ, fixed head)."],
+        ["Agreement:", "for the non-scour case they should agree and reproduce the tabulated Pu closely; the nonlinear result is the appropriate refined check under scour."]], { act: ["Sanity-check aid — independent PE review required."] })));
   })()),
   // PDA-IAB (2026-10-21): Module 13, geotechnical axial resistance of the integral pile (the Module 01 H-pile engine and work)
   I.pileType === "iab" && r.iab && r.iab.geo && /*#__PURE__*/React.createElement(Module, {
@@ -19716,7 +19741,11 @@ function App() {
     }
     return /*#__PURE__*/React.createElement("div", null,
       /*#__PURE__*/React.createElement(HpCorrNote, { c: hs.corr }),
-      /*#__PURE__*/React.createElement(Narr, null, "The factored axial compressive resistance is ", /*#__PURE__*/React.createElement(RTex, { tex: "P_r=\\phi_c P_n" }), ", where the nominal resistance ", /*#__PURE__*/React.createElement(RTex, { tex: "P_n" }), " follows the AASHTO unified column curve as a function of the yield resistance ", /*#__PURE__*/React.createElement(RTex, { tex: "P_o=F_yA_g" }), " and the elastic critical buckling resistance ", /*#__PURE__*/React.createElement(RTex, { tex: "P_e" }), ". For a driven H-pile the effective length is governed by the soil\u2013pile system: with no stickup the embedded pile is taken as fully braced (", /*#__PURE__*/React.createElement(RTex, { tex: "P_n=P_o" }), "); with stickup, ", /*#__PURE__*/React.createElement(RTex, { tex: "P_e" }), " is found either from the assumed effective-length factor or, more refined, from the nonlinear thrust-to-instability analysis on the p\u2013y model."),
+      /*#__PURE__*/React.createElement(NarrNL, { lead: ["The factored axial compressive resistance is ", /*#__PURE__*/React.createElement(RTex, { key: "t", tex: "P_r=\\phi_c P_n" }), "."], items: [
+        ["Nominal resistance", /*#__PURE__*/React.createElement(RTex, { tex: "P_n" }), " follows the AASHTO unified column curve as a function of the yield resistance ", /*#__PURE__*/React.createElement(RTex, { tex: "P_o=F_yA_g" }), " and the elastic critical buckling resistance ", /*#__PURE__*/React.createElement(RTex, { tex: "P_e" }), "."],
+        ["Effective length:", "for a driven H-pile it is governed by the soil–pile system."],
+        ["No stickup:", "the embedded pile is taken as fully braced (", /*#__PURE__*/React.createElement(RTex, { tex: "P_n=P_o" }), ")."],
+        ["With stickup:", /*#__PURE__*/React.createElement(RTex, { tex: "P_e" }), " is found either from the assumed effective-length factor or, more refined, from the nonlinear thrust-to-instability analysis on the p–y model."]] }),
       /*#__PURE__*/React.createElement(RptHeading, { n: "1", title: "Section & local buckling classification", code: "AASHTO 6.9.4.2.1 \u00b7 Table 6.9.4.2.1-1" }),
       /*#__PURE__*/React.createElement(Calc, { label: "Gross area", eq: `A_g = ${fmt(hp.A,2)}\\ \\text{in}^2`, note: hp.tab ? "AISC tabulated, " + hp.tab + " (three rectangles: " + fmt(hp.calc.A, 2) + " in\u00b2)" : "rectangular idealization" }),
       /*#__PURE__*/React.createElement(Calc, { label: "Flange slenderness", eq: `\\lambda_f=\\dfrac{b_f/2}{t_f}=${fmt(hp.flange_bt,2)}`, result: `\\lambda_r=0.56\\sqrt{E/F_y}=${fmt(hs.flange_lr_comp,2)}`, cite: hs.flangeSlender ? "slender" : "nonslender" }),
@@ -19739,11 +19768,11 @@ function App() {
       !hs.hasStickup
         ? /*#__PURE__*/React.createElement(Calc, { label: "Bracing", eq: `L_u=0 \\Rightarrow \\text{fully soil-braced},\\ P_n=P_o`, cite: "no column buckling" })
         : /*#__PURE__*/React.createElement("div", null,
-            /*#__PURE__*/React.createElement("p", { className: "text-[9px] leading-snug mb-2 p-1.5 rounded-sm", style: { background: "rgba(201,98,46,0.10)", color: "#7a4d15", border: "1px solid rgba(201,98,46,0.30)" } },
-              /*#__PURE__*/React.createElement("b", null, "\u26a0 Changed: the unbraced length now includes a fixity depth. "),
-              "This check previously used L = the bare stickup, i.e. the pile was assumed fixed exactly AT grade \u2014 unconservative, since the equivalent fixed base sits BELOW the top of competent soil. It also could not represent scour, voids, or soft layers. Buckling is now handled by ",
-              /*#__PURE__*/React.createElement("b", null, "Module 10"), ", identically to the micropile. ",
-              /*#__PURE__*/React.createElement("b", null, "Expect a substantially lower axial capacity than earlier runs of this app.")),
+            /*#__PURE__*/React.createElement("div", { className: "text-[9px] leading-snug mb-2 p-1.5 rounded-sm pdNL", style: { background: "rgba(201,98,46,0.10)", color: "#7a4d15", border: "1px solid rgba(201,98,46,0.30)" } },
+              pdNL("⚠ Changed: the unbraced length now includes a fixity depth.", [
+              ["Before:", "this check previously used L = the bare stickup, i.e. the pile was assumed fixed exactly AT grade — unconservative, since the equivalent fixed base sits BELOW the top of competent soil. It also could not represent scour, voids, or soft layers."],
+              ["Now:", "buckling is now handled by ", /*#__PURE__*/React.createElement("b", null, "Module 10"), ", identically to the micropile."],
+              ["Effect:", /*#__PURE__*/React.createElement("b", null, "Expect a substantially lower axial capacity than earlier runs of this app.")]])),
             /*#__PURE__*/React.createElement(Calc, {
               label: "Unbraced length (from Module 10)",
               eq: `L=L_u+L_f=${fmt(hs.Lu_bkl, 1)}+${fmt(bsel && bsel.Lf != null ? bsel.Lf : 0, 1)}=${fmt(bsel ? bsel.Le : 0, 1)}\\ \\text{ft}`,
@@ -19793,7 +19822,10 @@ function App() {
     const hs = r.hpileStruct, hp = hs.hp;
     return /*#__PURE__*/React.createElement("div", null,
       /*#__PURE__*/React.createElement(HpCorrNote, { c: hs.corr }),
-      /*#__PURE__*/React.createElement(Narr, null, "The factored flexural resistance is ", /*#__PURE__*/React.createElement(RTex, { tex: "M_r=\\phi_f M_n" }), ". M_n is computed per AASHTO LRFD 10th Ed. (", hs.axisStrong ? "strong axis: Appendix A6, flange local buckling and lateral\u2013torsional buckling over the unsupported length" : "weak axis: 6.12.2.2.1, yielding and flange local buckling", "). Reference: the elastic yield moment ", /*#__PURE__*/React.createElement(RTex, { tex: "F_yS" }), " about the ", hs.axisStrong ? "strong (x\u2013x)" : "weak (y\u2013y)", " axis, where ", /*#__PURE__*/React.createElement(RTex, { tex: "S" }), " is the elastic section modulus. Lateral\u2013torsional buckling (strong axis) is checked over the unsupported length (Module 10 L\u1d64); below the ground the soil braces the pile."),
+      /*#__PURE__*/React.createElement(NarrNL, { lead: ["The factored flexural resistance is ", /*#__PURE__*/React.createElement(RTex, { key: "t", tex: "M_r=\\phi_f M_n" }), "."], items: [
+        ["M_n", "is computed per AASHTO LRFD 10th Ed. (", hs.axisStrong ? "strong axis: Appendix A6, flange local buckling and lateral–torsional buckling over the unsupported length" : "weak axis: 6.12.2.2.1, yielding and flange local buckling", ")."],
+        ["Reference:", "the elastic yield moment ", /*#__PURE__*/React.createElement(RTex, { tex: "F_yS" }), " about the ", hs.axisStrong ? "strong (x–x)" : "weak (y–y)", " axis, where ", /*#__PURE__*/React.createElement(RTex, { tex: "S" }), " is the elastic section modulus."],
+        ["Lateral–torsional buckling", "(strong axis) is checked over the unsupported length (Module 10 Lᵤ); below the ground the soil braces the pile."]] }),
       /*#__PURE__*/React.createElement(RptHeading, { n: "1", title: "Section modulus", code: "governing axis" }),
       /*#__PURE__*/React.createElement(Calc, { label: hs.axisStrong ? "Strong-axis elastic modulus" : "Weak-axis elastic modulus", eq: hs.axisStrong ? `S_x=\\dfrac{I_x}{d/2}=\\dfrac{${fmt(hp.Ix,1)}}{${fmt(hp.d/2,2)}}=${fmt(hp.Sx,1)}\\ \\text{in}^3` : `S_y=\\dfrac{I_y}{b_f/2}=\\dfrac{${fmt(hp.Iy,1)}}{${fmt(hp.bf/2,2)}}=${fmt(hp.Sy,1)}\\ \\text{in}^3` }),
       /*#__PURE__*/React.createElement(RptHeading, { n: "2", title: "Nominal flexural resistance", code: hs.axisStrong ? "App. A6 (6.12.2.2.1a \u2192 6.10)" : "AASHTO 6.12.2.2.1" }),
@@ -19824,7 +19856,9 @@ function App() {
     const PuPr = hs.STL / Pr, MuMr = hs.Mr > 0 ? hs.Mu / hs.Mr : 0;
     return /*#__PURE__*/React.createElement("div", null,
       /*#__PURE__*/React.createElement(HpCorrNote, { c: hs.corr }),
-      /*#__PURE__*/React.createElement(Narr, null, "Members under combined axial compression and flexure must satisfy the AASHTO beam-column interaction. The form depends on the axial demand ratio ", /*#__PURE__*/React.createElement(RTex, { tex: "P_u/P_r" }), ": below 0.2 the axial term is halved, at or above 0.2 the flexural term carries the 8/9 factor. The resistances use ", /*#__PURE__*/React.createElement(RTex, { tex: "\\phi_c=0.70" }), " and ", /*#__PURE__*/React.createElement(RTex, { tex: "\\phi_f=1.00" }), " per the undamaged-H-pile values in 6.5.4.2."),
+      /*#__PURE__*/React.createElement(NarrNL, { lead: "Members under combined axial compression and flexure must satisfy the AASHTO beam-column interaction.", items: [
+        ["Form:", "depends on the axial demand ratio ", /*#__PURE__*/React.createElement(RTex, { tex: "P_u/P_r" }), ": below 0.2 the axial term is halved, at or above 0.2 the flexural term carries the 8/9 factor."],
+        ["Resistances:", "use ", /*#__PURE__*/React.createElement(RTex, { tex: "\\phi_c=0.70" }), " and ", /*#__PURE__*/React.createElement(RTex, { tex: "\\phi_f=1.00" }), " per the undamaged-H-pile values in 6.5.4.2."]] }),
       /*#__PURE__*/React.createElement(RptHeading, { n: "1", title: "Factored resistances", code: "AASHTO 6.9.2.1 / 6.12" }),
       /*#__PURE__*/React.createElement(Calc, { label: "Axial", eq: `P_r=\\phi_c P_n=${fmt(hs.phi_c_comb,2)}\\times ${fmt(Pn,0)}=${fmt(Pr,0)}\\ \\text{kip}`, cite: "\u03c6c=" + fmt(hs.phi_c_comb, 2) }),
       /*#__PURE__*/React.createElement(Calc, { label: "Flexure", eq: `M_r=\\phi_f M_n=${fmt(hs.Mr,1)}\\ \\text{kip}\\cdot\\text{ft}`, cite: "\u03c6f=" + fmt(hs.phi_f, 2) }),
@@ -20503,9 +20537,9 @@ function App() {
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "font-mono-tech text-[11px] text-[var(--blueprint2)] mb-1 uppercase tracking-wider"
-  }, "Section transition & plunge transfer"), /*#__PURE__*/React.createElement("p", {
-    className: "text-[11px] text-slate-600 leading-relaxed"
-  }, "The ", /*#__PURE__*/React.createElement("b", null, "cased section"), " (casing + grout + bar) applies from the head to the casing tip at ", fmt(r.geo.casingTip, 0), " ft. Below the tip the ", /*#__PURE__*/React.createElement("b", null, "uncased section"), " (grout + bar) governs over the remaining ", fmt(r.axial.L_uncasedBond, 0), " ft of bond. Load transfers across the ", fmt(r.axial.L_plunge, 0), " ft plunge overlap, where the casing is bonded into the top of the bond zone. Confirm the plunge develops the casing's load into the bar + grout per FHWA guidance."), /*#__PURE__*/React.createElement("div", {
+  }, "Section transition & plunge transfer"), /*#__PURE__*/React.createElement("div", {
+    className: "text-[11px] text-slate-600 leading-relaxed pdNL"
+  }, pdNL(null, [["Cased section", "(casing + grout + bar): applies from the head to the casing tip at ", fmt(r.geo.casingTip, 0), " ft."], ["Uncased section", "(grout + bar): below the tip it governs over the remaining ", fmt(r.axial.L_uncasedBond, 0), " ft of bond."], ["Plunge:", "load transfers across the ", fmt(r.axial.L_plunge, 0), " ft plunge overlap, where the casing is bonded into the top of the bond zone."]], { act: ["Confirm the plunge develops the casing's load into the bar + grout per FHWA guidance."] })), /*#__PURE__*/React.createElement("div", {
     className: "mt-2"
   }, /*#__PURE__*/React.createElement(CheckRow, {
     pass: r.axial.plunge_ok,
@@ -20520,12 +20554,12 @@ function App() {
     /*#__PURE__*/React.createElement(DerivLine, { label: "Nominal steel tension (governing segment)", tex: `T_n=\\min(T_{n,c},T_{n,u})=\\min(${fmt(r.axial.Tn_cased, 1)},${fmt(r.axial.Tn_uncased, 1)})=${fmt(r.axial.Tn_steel, 1)}\\text{ kip}` }),
     /*#__PURE__*/React.createElement(DerivLine, { label: "Factored tensile resistance", tex: `\\phi_t T_n=${fmt(r.axial.phiT_ax, 2)}(${fmt(r.axial.Tn_steel, 1)})=\\mathbf{${fmt(r.axial.phiTn_steel, 1)}\\text{ kip}}` }),
     /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, "φt = φTC = φTU, AASHTO LRFD 10th Ed. Table 10.5.5.2.5-2 (see Resistance Factors). Casing tension across threaded joints may be governed by the net section at the joint — confirm the joint capacity for uplift-controlled designs.")),
-  /*#__PURE__*/React.createElement("div", { className: "mt-3 p-2.5 rounded-sm border text-[10px] leading-snug",
+  /*#__PURE__*/React.createElement("div", { className: "mt-3 p-2.5 rounded-sm border text-[10px] leading-snug pdNL",
     style: (I.solverFree > 0 || r.buckling.enable) ? { borderColor: "#c9622e", background: "rgba(201,98,46,0.08)", color: "#7a4515" } : { borderColor: "#cbd5e1", background: "rgba(148,163,184,0.06)", color: "#475569" } },
-    /*#__PURE__*/React.createElement("b", null, "Note — compression resistance above excludes buckling. "),
-    (I.solverFree > 0 || r.buckling.enable)
-      ? [/*#__PURE__*/React.createElement("span", { key: "a" }, "This design has "), /*#__PURE__*/React.createElement("b", { key: "b" }, I.solverFree > 0 ? "an unsupported length (stickup " + fmt(I.solverFree, 1) + " ft)" : "the buckling check enabled"), /*#__PURE__*/React.createElement("span", { key: "c" }, " — the axial capacity here (φ", /*#__PURE__*/React.createElement("sub", { key: "s" }, "cc"), "R", /*#__PURE__*/React.createElement("sub", { key: "s2" }, "n"), ") is a pure squash/crushing capacity and does NOT include column buckling. See "), /*#__PURE__*/React.createElement("b", { key: "d" }, "Module 10 (Buckling — Unsupported Length)"), /*#__PURE__*/React.createElement("span", { key: "e" }, " for the governing buckling check, which may control below this value.")]
-      : "The section is treated as continuously braced by competent soil, so column buckling does not govern and this squash capacity applies. If a stickup, scour zone, or soft/liquefiable layer is present, enable Module 10 to check buckling over the unsupported length.")), /*#__PURE__*/(I.pileType === "micropile") && React.createElement(Module, {
+    pdNL("Note — compression resistance above excludes buckling.", (I.solverFree > 0 || r.buckling.enable)
+      ? [["This design", "has ", /*#__PURE__*/React.createElement("b", { key: "b" }, I.solverFree > 0 ? "an unsupported length (stickup " + fmt(I.solverFree, 1) + " ft)" : "the buckling check enabled"), " — the axial capacity here (φ", /*#__PURE__*/React.createElement("sub", { key: "s" }, "cc"), "R", /*#__PURE__*/React.createElement("sub", { key: "s2" }, "n"), ") is a pure squash/crushing capacity and does NOT include column buckling."],
+         ["See", /*#__PURE__*/React.createElement("b", { key: "d" }, "Module 10 (Buckling — Unsupported Length)"), " for the governing buckling check, which may control below this value."]]
+      : [["Braced:", "the section is treated as continuously braced by competent soil, so column buckling does not govern and this squash capacity applies."], ["Unsupported length:", "if a stickup, scour zone, or soft/liquefiable layer is present, enable Module 10 to check buckling over the unsupported length."]]))), /*#__PURE__*/(I.pileType === "micropile") && React.createElement(Module, {
     idx: "04",
     title: "Casing Flexure at Joints",
     code: "AASHTO 6.12.2.2.3 · round HSS",
@@ -20640,7 +20674,10 @@ function App() {
   }), React.createElement(PdWorkedIn, { I: I, items: [{ mod: "02", txt: "M_u", title: "Lateral Analysis \u2014 Maximum Moment" }, { mod: "04", txt: "M_n", title: "Casing Flexure at Joints" }, ...(r.comb.prM10 != null ? [{ mod: "10", txt: "P_r,10", title: "Buckling \u2014 unsupported length" }] : [])] }))), /*#__PURE__*/React.createElement("div", {
     className: "bg-slate-50 rounded-sm p-3 border border-slate-200"
   }, /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint2)] uppercase tracking-wider mb-1" }, "Interaction diagram — how to read it"),
-  /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "The shaded curve is the AASHTO axial–moment ", /*#__PURE__*/React.createElement("b", null, "capacity envelope"), " for the casing, normalized so both axes run 0–1: the x-axis is the moment ratio M", /*#__PURE__*/React.createElement("sub", null, "u"), "/φM", /*#__PURE__*/React.createElement("sub", null, "n"), " and the y-axis is the axial ratio P", /*#__PURE__*/React.createElement("sub", null, "u"), "/φP", /*#__PURE__*/React.createElement("sub", null, "n"), ". The ● is your factored ", /*#__PURE__*/React.createElement("b", null, "demand point"), ". Inside the envelope = OK; on or outside = over capacity. The bilinear shape reflects AASHTO 6.9.2.2.1: the kink at P", /*#__PURE__*/React.createElement("sub", null, "u"), "/φP", /*#__PURE__*/React.createElement("sub", null, "n"), " = 0.2 is where the code switches between the two interaction equations (steeper axial dependence above 0.2)."),
+  /*#__PURE__*/React.createElement("div", { className: "text-[9.5px] text-slate-600 leading-snug mb-2 pdNL" }, pdNL(null, [
+    ["Shaded curve:", "the AASHTO axial–moment ", /*#__PURE__*/React.createElement("b", null, "capacity envelope"), " for the casing, normalized so both axes run 0–1: the x-axis is the moment ratio M", /*#__PURE__*/React.createElement("sub", null, "u"), "/φM", /*#__PURE__*/React.createElement("sub", null, "n"), " and the y-axis is the axial ratio P", /*#__PURE__*/React.createElement("sub", null, "u"), "/φP", /*#__PURE__*/React.createElement("sub", null, "n"), "."],
+    ["●", "is your factored ", /*#__PURE__*/React.createElement("b", null, "demand point"), ". Inside the envelope = OK; on or outside = over capacity."],
+    ["Bilinear shape:", "reflects AASHTO 6.9.2.2.1: the kink at P", /*#__PURE__*/React.createElement("sub", null, "u"), "/φP", /*#__PURE__*/React.createElement("sub", null, "n"), " = 0.2 is where the code switches between the two interaction equations (steeper axial dependence above 0.2)."]])),
   /*#__PURE__*/React.createElement(InteractionDiagram, { r: r }),
   /*#__PURE__*/React.createElement("div", { className: "mt-2 rounded-sm border border-slate-200 bg-white p-2" },
     /*#__PURE__*/React.createElement("div", { className: "text-[9px] font-mono-tech text-[var(--blueprint2)] uppercase tracking-wider mb-1" }, "Sample calculation — the demand point ●"),
@@ -20661,9 +20698,9 @@ function App() {
     sub: "treats casing + grout core compositely per AASHTO 10th Ed. Art. 6.9.6 — less conservative than the casing-only check above, but only valid if the section passes the 6.9.6.2 limits",
     on: I.cfstEnable,
     onChange: v => set('cfstEnable', v)
-  })), !r.cfst.enable ? /*#__PURE__*/React.createElement("p", {
-    className: "text-[12px] text-slate-500 max-w-3xl"
-  }, "Disabled. When enabled, the micropile is checked as a composite CFST: composite axial resistance and stiffness (EI", /*#__PURE__*/React.createElement("sub", null, "eff"), "), buckling on the composite section, and a full plastic-stress material-based P-M interaction curve reduced to the nominal stability-based curve (points A'-A''-D-B). This typically yields more capacity than the casing-only method, but is gated behind the Art. 6.9.6.2 applicability limits — if the section fails those, the composite results are not usable and the casing-only check above governs.") : /*#__PURE__*/React.createElement("div", {
+  })), !r.cfst.enable ? /*#__PURE__*/React.createElement("div", {
+    className: "text-[12px] text-slate-500 max-w-3xl pdNL"
+  }, pdNL("Disabled.", [["When enabled,", "the micropile is checked as a composite CFST: composite axial resistance and stiffness (EI", /*#__PURE__*/React.createElement("sub", null, "eff"), "), buckling on the composite section, and a full plastic-stress material-based P-M interaction curve reduced to the nominal stability-based curve (points A'-A''-D-B)."], ["Capacity:", "this typically yields more capacity than the casing-only method, but is gated behind the Art. 6.9.6.2 applicability limits — if the section fails those, the composite results are not usable and the casing-only check above governs."]])) : /*#__PURE__*/React.createElement("div", {
     className: "space-y-4"
   }, /*#__PURE__*/React.createElement("div", {
     className: "rounded-sm p-3 border " + (r.cfst.qualifies ? "border-green-200 bg-green-50/40" : "border-red-200 bg-red-50/40")
@@ -20743,7 +20780,11 @@ function App() {
   }))), /*#__PURE__*/React.createElement("div", {
     className: "bg-slate-50 rounded-sm p-3 border border-slate-200"
   }, /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint2)] uppercase tracking-wider mb-1" }, "CFST interaction diagram — how to read it"),
-  /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "Two curves in real units (moment kip·ft on x, axial kip on y). The outer curve is the ", /*#__PURE__*/React.createElement("b", null, "material-based"), " plastic-stress P-M capacity of the full composite section. The inner curve is the ", /*#__PURE__*/React.createElement("b", null, "stability-based"), " nominal capacity (AASHTO points A'–A''–D–B), which reduces the material curve for column slenderness — this inner curve is what design uses. The ● is your factored ", /*#__PURE__*/React.createElement("b", null, "demand"), " (M", /*#__PURE__*/React.createElement("sub", null, "u"), ", P", /*#__PURE__*/React.createElement("sub", null, "u"), "). Inside the stability curve = OK. The check reads the curve's moment capacity at the demand axial level and compares it to the demand moment."),
+  /*#__PURE__*/React.createElement("div", { className: "text-[9.5px] text-slate-600 leading-snug mb-2 pdNL" }, pdNL("Two curves in real units (moment kip·ft on x, axial kip on y).", [
+    ["Outer curve:", "the ", /*#__PURE__*/React.createElement("b", null, "material-based"), " plastic-stress P-M capacity of the full composite section."],
+    ["Inner curve:", "the ", /*#__PURE__*/React.createElement("b", null, "stability-based"), " nominal capacity (AASHTO points A'–A''–D–B), which reduces the material curve for column slenderness — this inner curve is what design uses."],
+    ["●", "is your factored ", /*#__PURE__*/React.createElement("b", null, "demand"), " (M", /*#__PURE__*/React.createElement("sub", null, "u"), ", P", /*#__PURE__*/React.createElement("sub", null, "u"), "). Inside the stability curve = OK."],
+    ["The check", "reads the curve's moment capacity at the demand axial level and compares it to the demand moment."]])),
   /*#__PURE__*/React.createElement(CfstInteractionDiagram, { r: r }),
   r.cfst.qualifies && /*#__PURE__*/React.createElement("div", { className: "mt-2 rounded-sm border border-slate-200 bg-white p-2" },
     /*#__PURE__*/React.createElement("div", { className: "text-[9px] font-mono-tech text-[var(--blueprint2)] uppercase tracking-wider mb-1" }, "Sample calculation — the check at the demand point ●"),
@@ -20835,9 +20876,14 @@ function App() {
     onToggle: () => toggle(8)
   }, /*#__PURE__*/React.createElement("div", { className: "mb-3 p-2.5 rounded-sm border border-slate-200 bg-slate-50 text-[10px] text-slate-600 leading-snug" },
     /*#__PURE__*/React.createElement("div", { className: "font-mono-tech text-[9px] text-[var(--blueprint2)] uppercase tracking-wider mb-1" }, "Why load tests are required & where the equations come from"),
-    /*#__PURE__*/React.createElement("p", { className: "mb-1" }, "Micropile grout-to-ground bond (β) can't be reliably predicted from soil parameters alone — it depends on drilling method, grouting pressure, and ground conditions that only the field can confirm. FHWA NHI-05-039 therefore requires load testing to ", /*#__PURE__*/React.createElement("b", null, "verify"), " the design bond before production and to ", /*#__PURE__*/React.createElement("b", null, "proof"), " selected production piles. The geotechnical resistance factor φ", /*#__PURE__*/React.createElement("sub", null, "geo"), " = 0.70 used in Module 01 is itself contingent on this testing; without it the presumptive factor (0.55) applies."),
+    /*#__PURE__*/React.createElement("div", { className: "mb-1 pdNL" }, pdNL("Micropile grout-to-ground bond (β) can't be reliably predicted from soil parameters alone.", [
+      ["Why:", "it depends on drilling method, grouting pressure, and ground conditions that only the field can confirm."],
+      ["FHWA NHI-05-039", "therefore requires load testing to ", /*#__PURE__*/React.createElement("b", null, "verify"), " the design bond before production and to ", /*#__PURE__*/React.createElement("b", null, "proof"), " selected production piles."],
+      ["φ", /*#__PURE__*/React.createElement("sub", null, "geo"), ": the geotechnical resistance factor = 0.70 used in Module 01 is itself contingent on this testing; without it the presumptive factor (0.55) applies."]])),
     /*#__PURE__*/React.createElement("p", { className: "mb-1" }, /*#__PURE__*/React.createElement("b", null, "Verification test"), " loads a sacrificial (non-production) pile to the ", /*#__PURE__*/React.createElement("b", null, "nominal geotechnical resistance"), " P", /*#__PURE__*/React.createElement("sub", null, "n,geo"), " to confirm the bond develops the full unfactored capacity. ", /*#__PURE__*/React.createElement("b", null, "Proof test"), " loads production piles to at least the ", /*#__PURE__*/React.createElement("b", null, "factored design load"), " (STL) to demonstrate acceptable performance."),
-    /*#__PURE__*/React.createElement("p", null, "The test load is applied through a high-strength bar stressed to ", /*#__PURE__*/React.createElement("b", null, "no more than 80% of its yield"), " (P", /*#__PURE__*/React.createElement("sub", null, "t"), " = 0.8·A", /*#__PURE__*/React.createElement("sub", null, "b"), "·f", /*#__PURE__*/React.createElement("sub", null, "yb"), ") so the test apparatus stays elastic and safe. The bar must be large enough that 80% of its yield still exceeds the required test load — that's what these checks confirm, and what the autosize buttons solve for.")),
+    /*#__PURE__*/React.createElement("div", { className: "pdNL" }, pdNL(null, [
+      ["Test bar:", "the test load is applied through a high-strength bar stressed to ", /*#__PURE__*/React.createElement("b", null, "no more than 80% of its yield"), " (P", /*#__PURE__*/React.createElement("sub", null, "t"), " = 0.8·A", /*#__PURE__*/React.createElement("sub", null, "b"), "·f", /*#__PURE__*/React.createElement("sub", null, "yb"), ") so the test apparatus stays elastic and safe."],
+      ["Bar size:", "the bar must be large enough that 80% of its yield still exceeds the required test load — that's what these checks confirm, and what the autosize buttons solve for."]]))),
   /*#__PURE__*/React.createElement(InputsUsed, { tab: "checks", setTab: setRailTab, panelTitle: "Load test bars",
     items: [["verification bar Ab", fmt(I.AbVerf, 2), "in\u00b2"], ["proof bar Ab", fmt(I.AbProof, 2), "in\u00b2"], ["bar fyb", fmt(I.fyb, 0), "ksi"]] }), /*#__PURE__*/React.createElement("p", {
     className: "text-[11px] text-slate-500 mb-2"
@@ -20943,12 +20989,11 @@ function App() {
           (I.LuFree || 0) > r.buckling.stickPos ? [" + added unsupported ", fmt((I.LuFree || 0) - r.buckling.stickPos, 1), " ft"] : "",
           r.buckling.scourBkl > 0 ? [" (\u2265 stickup + design scour ", fmt(r.buckling.scourBkl, 1), " ft, 10.7.3.6)"] : "",   // PDA-D12
           " = ", /*#__PURE__*/React.createElement("b", null, fmt(r.buckling.Lu_free, 1), " ft")),
-        /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-500 mt-0.5 leading-snug" },
-          /*#__PURE__*/React.createElement("b", null, "Derived \u2014 not edited here. "),
+        /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-500 mt-0.5 leading-snug pdNL" }, pdNL("Derived — not edited here.", [
           r.buckling.stickPos > 0
-            ? ["The stickup (", fmt(r.buckling.stickPos, 1), " ft) comes from the pile geometry on the left. Air above grade can never count as soil bracing, so it is a hard floor on L\u1d64."]
-            : "No stickup in the pile geometry.",
-          " To model a scour zone, void, or soft/liquefiable layer that does not brace the shaft, enter its thickness in the Buckling panel (Checks tab).")),
+            ? ["Stickup:", "the stickup (", fmt(r.buckling.stickPos, 1), " ft) comes from the pile geometry on the left. Air above grade can never count as soil bracing, so it is a hard floor on Lᵤ."]
+            : ["Stickup:", "no stickup in the pile geometry."],
+          ["Other unbraced zones:", "to model a scour zone, void, or soft/liquefiable layer that does not brace the shaft, enter its thickness in the Buckling panel (Checks tab)."]]))),
 
       /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mt-1.5 font-mono-tech" },
         "Section: ", r.buckling.isHPile ? "H-pile" : "casing",
@@ -20956,18 +21001,30 @@ function App() {
     /*#__PURE__*/React.createElement("div", null,
       /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1.5 pb-1 border-b border-slate-200" },
         "Step 2 \u00b7 Method \u2014 pick the design basis"),
-      /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-relaxed mb-2" },
-        "Three methods estimate the same thing: the ", /*#__PURE__*/React.createElement("b", null, "effective length"),
-        " of the equivalent column. They differ only in how the fixity depth is obtained \u2014 a formula, a stiffness match to a lateral analysis, or a nonlinear collapse ramp. ",
-        /*#__PURE__*/React.createElement("b", null, "The tab you select governs"), " the status chip, the dashboard, and the report. All three are shown side by side so nothing is hidden."),
+      /*#__PURE__*/React.createElement("div", { className: "text-[9.5px] text-slate-600 leading-relaxed mb-2 pdNL" }, pdNL(
+        ["Three methods estimate the same thing: the ", /*#__PURE__*/React.createElement("b", { key: "b" }, "effective length"), " of the equivalent column."], [
+        ["Difference:", "they differ only in how the fixity depth is obtained — a formula, a stiffness match to a lateral analysis, or a nonlinear collapse ramp."],
+        ["The tab you select governs", "the status chip, the dashboard, and the report."], ["Shown:", "all three are shown side by side so nothing is hidden."]])),
       /*#__PURE__*/React.createElement(BucklingTabs, { b: r.buckling, I: I, set: set, pcr: pcr, computePcr: computePcr })),
   /*#__PURE__*/React.createElement("div", { className: "mt-4 rounded-sm border p-3", style: { borderColor: "var(--blueprint2)", background: "rgba(20,48,74,0.02)" } },
     /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1.5" }, "Step 4 · Soil-supported critical buckling load — rigorous cross-check"),
-    /*#__PURE__*/React.createElement("p", { className: "text-[9px] text-slate-500 leading-snug mb-2" }, "The most refined answer to the same stability question as Step 3 — instead of idealizing the pile as a column of length KL, the full nonlinear p-y model is ramped in axial thrust until instability, with soil bracing, concurrent lateral load and moment, and the uncased reach all represented. It ", /*#__PURE__*/React.createElement("b", null, "verifies"), " Step 3; Step 3 remains the code design basis."),
+    /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 leading-snug mb-2 pdNL" }, pdNL("The most refined answer to the same stability question as Step 3.", [["Method:", "instead of idealizing the pile as a column of length KL, the full nonlinear p-y model is ramped in axial thrust until instability, with soil bracing, concurrent lateral load and moment, and the uncased reach all represented."], ["Role:", "it ", /*#__PURE__*/React.createElement("b", null, "verifies"), " Step 3; Step 3 remains the code design basis."]])),
     /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-600 leading-relaxed space-y-1.5 mb-2.5" },
-      /*#__PURE__*/React.createElement("p", null, /*#__PURE__*/React.createElement("b", null, "What this does."), " The AASHTO check above idealizes the pile as an equivalent cantilever: it picks a depth to fixity, an effective length KL, and reads a capacity off the Euler/AASHTO column curve for the casing-only section. That is the code number you design to. This cross-check does something different \u2014 it follows the LPile Technical Manual \u00a74.4 buckling procedure on the ", /*#__PURE__*/React.createElement("b", null, "actual nonlinear p-y model"), " (the same one driving Module 02): axial thrust Q is ramped in ", /*#__PURE__*/React.createElement("b", null, "even increments"), " with the active load case\u2019s lateral load held constant, re-solving at each level, and a ", /*#__PURE__*/React.createElement("b", null, "hyperbola is fitted"), " to the resulting head-deflection curve per Eq. 4-3: (y\u2212y\u2080)/P = b + a(y\u2212y\u2080). ", /*#__PURE__*/React.createElement("b", null, "P", /*#__PURE__*/React.createElement("sub", null, "cr"), " = 1/a"), " \u2014 the asymptote the curve approaches but never reaches. Per \u00a74.4.3, if the ramp stops converging before the cap, the reported capacity is the ", /*#__PURE__*/React.createElement("b", null, "lesser"), " of 1/a and the last converged thrust (refined by bisecting the converged/not-converged boundary); a deflection sign reversal truncates the ramp per \u00a74.4.2. Soil bracing, P-\u0394 second-order effects, and moment-curvature (cracking) softening are all active in every solve. There is no threshold detector \u2014 the earlier 10\u00d7-deflection rule was retired because it answered with the search bracket, not the physics."),
-      /*#__PURE__*/React.createElement("p", null, /*#__PURE__*/React.createElement("b", null, "Why the two differ."), " The equivalent-cantilever method deliberately ignores most of the soil’s bracing (it collapses it into a single fixity depth) and uses the bare casing section — both conservative. In firm soil the true soil-supported P", /*#__PURE__*/React.createElement("sub", null, "cr"), " is therefore much larger, and a large factor of safety here simply confirms buckling does not govern. Buckling only becomes real in soft/liquefiable soil, long stickup or scour zones, or a slender uncased section in weak ground — that is when this number, not the idealization, tells the story."),
-      /*#__PURE__*/React.createElement("p", null, /*#__PURE__*/React.createElement("b", null, "How to use it."), " Treat the AASHTO φ", /*#__PURE__*/React.createElement("sub", null, "c"), "P", /*#__PURE__*/React.createElement("sub", null, "n"), " above as the governing design capacity. Use P", /*#__PURE__*/React.createElement("sub", null, "cr"), " here to see how much conservatism that idealization carries, and to get a defensible stability load when the cantilever assumptions do not fit (partial restraint, layered/soft soil, cracked section). The ramp curve below shows the failure ", /*#__PURE__*/React.createElement("i", null, "mechanism"), " — how deflection and moment grow and the section softens as Q climbs toward collapse.")),
+      /*#__PURE__*/React.createElement("div", { className: "pdNL" }, pdNL("What this does.", [
+        ["AASHTO check above:", "idealizes the pile as an equivalent cantilever: it picks a depth to fixity, an effective length KL, and reads a capacity off the Euler/AASHTO column curve for the casing-only section. That is the code number you design to."],
+        ["This cross-check", "does something different — it follows the LPile Technical Manual §4.4 buckling procedure on the ", /*#__PURE__*/React.createElement("b", null, "actual nonlinear p-y model"), " (the same one driving Module 02): axial thrust Q is ramped in ", /*#__PURE__*/React.createElement("b", null, "even increments"), " with the active load case’s lateral load held constant, re-solving at each level, and a ", /*#__PURE__*/React.createElement("b", null, "hyperbola is fitted"), " to the resulting head-deflection curve per Eq. 4-3: (y−y₀)/P = b + a(y−y₀)."],
+        [["P", /*#__PURE__*/React.createElement("sub", { key: "s" }, "cr"), " = 1/a"], "— the asymptote the curve approaches but never reaches."],
+        ["Non-convergence:", "per §4.4.3, if the ramp stops converging before the cap, the reported capacity is the ", /*#__PURE__*/React.createElement("b", null, "lesser"), " of 1/a and the last converged thrust (refined by bisecting the converged/not-converged boundary); a deflection sign reversal truncates the ramp per §4.4.2."],
+        ["Active in every solve:", "soil bracing, P-Δ second-order effects, and moment-curvature (cracking) softening."],
+        ["No threshold detector", "— the earlier 10×-deflection rule was retired because it answered with the search bracket, not the physics."]])),
+      /*#__PURE__*/React.createElement("div", { className: "pdNL" }, pdNL("Why the two differ.", [
+        ["Equivalent-cantilever method:", "deliberately ignores most of the soil’s bracing (it collapses it into a single fixity depth) and uses the bare casing section — both conservative."],
+        ["Firm soil:", "the true soil-supported P", /*#__PURE__*/React.createElement("sub", null, "cr"), " is therefore much larger, and a large factor of safety here simply confirms buckling does not govern."],
+        ["When it matters:", "buckling only becomes real in soft/liquefiable soil, long stickup or scour zones, or a slender uncased section in weak ground — that is when this number, not the idealization, tells the story."]])),
+      /*#__PURE__*/React.createElement("div", { className: "pdNL" }, pdNL("How to use it.", [
+        ["Design capacity:", "treat the AASHTO φ", /*#__PURE__*/React.createElement("sub", null, "c"), "P", /*#__PURE__*/React.createElement("sub", null, "n"), " above as the governing design capacity."],
+        [["P", /*#__PURE__*/React.createElement("sub", { key: "s" }, "cr"), " here:"], "use it to see how much conservatism that idealization carries, and to get a defensible stability load when the cantilever assumptions do not fit (partial restraint, layered/soft soil, cracked section)."],
+        ["Ramp curve below:", "shows the failure ", /*#__PURE__*/React.createElement("i", null, "mechanism"), " — how deflection and moment grow and the section softens as Q climbs toward collapse."]]))),
     pcr && pcr.busy ? /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-slate-500 py-2" }, "computing… running the nonlinear ramp for each compression load case (~30 solves per case)")
     : pcr && pcr.ok ? /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "flex items-baseline gap-3 flex-wrap mb-1" },
@@ -21138,7 +21195,11 @@ function App() {
       (r.group.capBasis === "hpile" || !!r.group.aashtoMP)
         // F32 (O43): H-pile -- eta reduces the H-pile static resistance of Module 01, not the micropile bond
         // F34 (O45): eta per AASHTO 10.7.3.9 (driven piles)
-        ? /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, (r.group.aashtoMP ? "AASHTO LRFD 10th Ed. Art. 10.7.3.9 (micropile groups, 10.9.3.6): cohesionless soil η = 1.0. Cohesive soil: η is reduced only when the pile cap is not in firm contact with the ground and the soil at the surface is soft (S" : "AASHTO LRFD 10th Ed. Art. 10.7.3.9 (driven piles): cohesionless soil η = 1.0. Cohesive soil: η is reduced only when the pile cap is not in firm contact with the ground and the soil at the surface is soft (S"), /*#__PURE__*/React.createElement("sub", null, "u"), " < " + fmt(HP_SOFT_SU_KSF, 2) + (r.group.aashtoMP ? " ksf; verify): η = 0.65 at s = 2.5B rising linearly to 1.0 at 6B. Cap in firm contact, or cap not in contact over surface soil that is not soft: η = 1.0. η reduces the micropile bond resistance φR" : " ksf; verify): η = 0.65 at s = 2.5B rising linearly to 1.0 at 6B. Cap in firm contact, or cap not in contact over surface soil that is not soft: η = 1.0. η reduces the H-pile static resistance φR"), /*#__PURE__*/React.createElement("sub", null, "n"), " of Module 01 (skin + tip, φ per layer). The " + fmt(HP_SOFT_SU_KSF, 2) + " ksf limit for “soft” is the tool's choice (AASHTO gives no number); a cohesionless surface layer is not treated as soft.")
+        ? /*#__PURE__*/React.createElement("div", { className: "text-[9.5px] text-slate-600 leading-snug mb-2 pdNL" }, pdNL(r.group.aashtoMP ? "AASHTO LRFD 10th Ed. Art. 10.7.3.9 (micropile groups, 10.9.3.6):" : "AASHTO LRFD 10th Ed. Art. 10.7.3.9 (driven piles):", [
+          ["Cohesionless soil:", "η = 1.0."],
+          ["Cohesive soil:", "η is reduced only when the pile cap is not in firm contact with the ground and the soil at the surface is soft (S", /*#__PURE__*/React.createElement("sub", null, "u"), " < " + fmt(HP_SOFT_SU_KSF, 2) + " ksf; verify): η = 0.65 at s = 2.5B rising linearly to 1.0 at 6B. Cap in firm contact, or cap not in contact over surface soil that is not soft: η = 1.0."],
+          ["Applied to:", (r.group.aashtoMP ? "η reduces the micropile bond resistance φR" : "η reduces the H-pile static resistance φR"), /*#__PURE__*/React.createElement("sub", null, "n"), " of Module 01 (skin + tip, φ per layer)."],
+          ["“Soft”:", "the " + fmt(HP_SOFT_SU_KSF, 2) + " ksf limit for “soft” is the tool's choice (AASHTO gives no number); a cohesionless surface layer is not treated as soft."]]))
         : /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "FHWA NHI-05-039: micropiles may be treated as individual elements (η = 1.0) when center-to-center spacing ≥ 3× the bond diameter. Below that, a reduction applies (Converse-Labarre efficiency shown). This tool uses s/d\u2095 (the bond-zone diameter) for \u03b7 and \u03b8; the lateral row f\u2098 use s/B with B = the casing OD (the p-y width) (F62)."),
       (r.group.capBasis === "hpile" || !!r.group.aashtoMP) && r.group.aashto
         // F34 (O45): soil classification, cap contact and the AASHTO eta
@@ -21171,7 +21232,9 @@ function App() {
     // the per-row toggle and, when on, the per-row results; off, the helper buttons.
     /*#__PURE__*/React.createElement("div", { className: "rounded-sm border border-slate-200 p-3 mb-3", id: "pd-grp-pm" },
       /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "2 · Lateral p-multipliers (f", /*#__PURE__*/React.createElement("sub", null, "m"), ") by row"),
-      /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "Trailing rows shadow the soil disturbed by leading rows, mobilizing less p-y resistance. With ", /*#__PURE__*/React.createElement("b", null, "Apply group p-multipliers automatically"), " on, the built-in p-y analysis (Module 02) is run once per row with that row's f", /*#__PURE__*/React.createElement("sub", null, "m"), " and the governing row drives the lateral checks. Off, the p-multiplier is a plain input (Module 02) and this table is a reference (or for entry in LPILE)."),
+      /*#__PURE__*/React.createElement("div", { className: "text-[9.5px] text-slate-600 leading-snug mb-2 pdNL" }, pdNL("Trailing rows shadow the soil disturbed by leading rows, mobilizing less p-y resistance.", [
+        ["On:", "with ", /*#__PURE__*/React.createElement("b", null, "Apply group p-multipliers automatically"), " on, the built-in p-y analysis (Module 02) is run once per row with that row's f", /*#__PURE__*/React.createElement("sub", null, "m"), " and the governing row drives the lateral checks."],
+        ["Off:", "the p-multiplier is a plain input (Module 02) and this table is a reference (or for entry in LPILE)."]])),
       /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-2 flex-wrap mb-2 text-[10px] font-mono-tech" },
         /*#__PURE__*/React.createElement("span", { className: "text-slate-500" }, "f", /*#__PURE__*/React.createElement("sub", null, "m"), " source"),
         /*#__PURE__*/React.createElement("select", { className: "border border-slate-300 rounded-sm px-1.5 py-0.5 text-[10px] font-mono-tech bg-white", "aria-label": "p-multiplier source", value: r.group.pmSource, onChange: e => set('groupPmSource', e.target.value) },
@@ -21252,9 +21315,10 @@ function App() {
           note: "Group resistance (AASHTO 10.7.3.9, cohesive soil) vs total factored group demand (STL × n). φ_g = " + fmt(r.group.blk.phi, 2) + (r.group.aashtoMP ? " (Table 10.5.5.2.5-1, block failure in clay)." : " (Table 10.5.5.2.3-1, block failure in clay).")
         })))
       : /*#__PURE__*/React.createElement("div", null,
-        /*#__PURE__*/React.createElement("div", { className: "p-2 rounded-sm text-[9.5px] leading-snug", style: { background: "rgba(47,111,62,0.06)", border: "1px solid rgba(47,111,62,0.25)", color: "#1f4d2b" } },
-          /*#__PURE__*/React.createElement("b", null, "Not required — cohesionless soil. "),
-          (r.group.aashtoMP ? "AASHTO LRFD 10th Ed. Art. 10.7.3.9: for micropile groups (10.9.3.6) in cohesionless soil η = 1.0 and the group resistance is the sum of the individual resistances; there is no block check. A group in a strong layer over a weaker compressible layer, and group settlement, are not checked here — confirm with the geotechnical engineer." : "AASHTO LRFD 10th Ed. Art. 10.7.3.9: for driven pile groups in cohesionless soil η = 1.0 and the group resistance is the sum of the individual resistances; there is no block check. A group in a strong layer over a weaker compressible layer, and group settlement, are not checked here — confirm with the geotechnical engineer.")),
+        /*#__PURE__*/React.createElement("div", { className: "p-2 rounded-sm text-[9.5px] leading-snug pdNL", style: { background: "rgba(47,111,62,0.06)", border: "1px solid rgba(47,111,62,0.25)", color: "#1f4d2b" } }, pdNL(
+          "Not required — cohesionless soil.", [
+          ["AASHTO LRFD 10th Ed. Art. 10.7.3.9:", (r.group.aashtoMP ? "for micropile groups (10.9.3.6) in cohesionless soil η = 1.0 and the group resistance is the sum of the individual resistances; there is no block check." : "for driven pile groups in cohesionless soil η = 1.0 and the group resistance is the sum of the individual resistances; there is no block check.")],
+          ["Not checked here:", "a group in a strong layer over a weaker compressible layer, and group settlement."]], { act: ["Confirm with the geotechnical engineer: a group over a weaker compressible layer and group settlement."] })),
         /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech leading-relaxed mt-2", style: { color: "#334155" } },
           "block footprint ≈ ", fmt(r.group.Bx_ft, 1), " × ", fmt(r.group.By_ft, 1), (r.group.aashtoMP ? " ft (c/c + B); Σ individual micropile φP" : " ft (c/c + B); Σ individual H-pile φR"), /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.sumPhiIndiv, 0), " kip; total factored group demand ", fmt(r.group.groupDemand, 0), " kip")))
       : /*#__PURE__*/React.createElement(React.Fragment, null,
@@ -21270,7 +21334,9 @@ function App() {
         note: "Group capacity = min(block, Σ individual × η) vs total factored group demand."
       })))),
     r.group.upl && /*#__PURE__*/React.createElement("div", { className: "mt-3" },   // PDA-M6a: group uplift
-      /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "Group uplift, AASHTO LRFD 10th Ed. 10.9.3.8 \u2192 10.7.3.11 (Eqs. 10.7.3.11-1, -2): the lesser of the sum of the individual uplift resistances and the block, \u03c6_ug = 0.50 (Table 10.5.5.2.3-1). Block weight with the buoyant unit weight, piles and cap neglected (decision pending engineer review)."),
+      /*#__PURE__*/React.createElement("div", { className: "text-[9.5px] text-slate-600 leading-snug mb-2 pdNL" }, pdNL("Group uplift, AASHTO LRFD 10th Ed. 10.9.3.8 → 10.7.3.11 (Eqs. 10.7.3.11-1, -2):", [
+        ["Resistance:", "the lesser of the sum of the individual uplift resistances and the block, φ_ug = 0.50 (Table 10.5.5.2.3-1)."],
+        ["Block weight", "with the buoyant unit weight, piles and cap neglected (decision pending engineer review)."]], { act: ["Decision pending engineer review: the block weight (below)."] })),
       /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech leading-relaxed", style: { color: "#334155" } },
         r.group.upl.coh ? ["X \u00d7 Y \u00d7 Z = ", fmt(r.group.upl.X, 2), " \u00d7 ", fmt(r.group.upl.Y, 2), " \u00d7 ", fmt(r.group.upl.Z, 1), " ft; side (2XZ + 2YZ)S\u0304u = ", fmt(r.group.upl.Rside, 1), " kip (S\u0304u = ", fmt(r.group.upl.SuAvg, 3), " ksf); "] : ["1H:4V block from the toe: base ", fmt(r.group.upl.X, 2), " \u00d7 ", fmt(r.group.upl.Y, 2), " ft, top ", fmt(r.group.upl.Xt, 2), " \u00d7 ", fmt(r.group.upl.Yt, 2), " ft, Z = ", fmt(r.group.upl.Z, 1), " ft, V = ", fmt(r.group.upl.Vblk, 0), " ft\u00b3; "],
         "W", /*#__PURE__*/React.createElement("sub", null, "g"), " = ", fmt(r.group.upl.gamB, 4), " \u00d7 ", fmt(r.group.upl.Vblk, 0), " = ", fmt(r.group.upl.Wg, 1), " kip; \u03c6", /*#__PURE__*/React.createElement("sub", null, "ug"), "R", /*#__PURE__*/React.createElement("sub", null, "ug"), " = 0.50 \u00d7 ", fmt(r.group.upl.Rug_blk, 1), " = ", fmt(r.group.upl.phiBlk, 1), " kip; n\u03c6", /*#__PURE__*/React.createElement("sub", null, "up"), "R", /*#__PURE__*/React.createElement("sub", null, "up"), " = ", r.group.nPiles, " \u00d7 ", fmt(r.tension.phiPn_up, 1), " = ", fmt(r.group.upl.phiSum, 1), " kip \u2192 ", /*#__PURE__*/React.createElement("b", null, r.group.upl.blockGoverns ? "block governs" : "individual piles govern")),
