@@ -7190,7 +7190,7 @@ index 50f3837..c2d5000 100644
 - **Check case:** any project with a pedestal (default): the note reads as above; every computed value unchanged (harness: `def`, `rev`, `sfe*`, `edgeHook` R and P2 identical).
 - **Other copies:** none.
 
-## 2026-11-08 — PR: claude/sf-display-rename (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SFNM) — displayed name "Shallow Foundation Design"   [DISPLAY ONLY; no computed value changes]
+## 2026-11-08 — PR: claude/sf-display-rename (PR #1236: https://github.com/mlococo88/All-Structural/pull/1236) (SFNM) — displayed name "Shallow Foundation Design"   [DISPLAY ONLY; no computed value changes]
 - **Request (engineer, 2026-11-08):** the app designs spread, combined and wall footings; show it as "Shallow Foundation Design", descriptor "Spread, combined and wall footings". The file name `Spread Footing.html`, the project-registry / GitHub sync tool id `spread-footing` (folder `projects/spread-footing/`), the storage keys (`sfd_projects`, `sfd_auto`, …), the hand-off receiver id `spreadFooting`, the export file names (`spread_footing_inputs.json`, `…_drawings.dxf`), this fixlog's name and every code identifier are unchanged (CLAUDE.md §5, §7).
 - **Before → after** (search for the "after" text):
   - `<title>`: `Spread Footing Design Tool` → `Shallow Foundation Design`.
