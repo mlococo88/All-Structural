@@ -5372,7 +5372,7 @@ Frames: Beam Capacity (`suite-frame-capacity`) and the suite shell's Report (`rx
 - **How verified:** headless Chromium, origin/main vs the branch, 31 cases (14 Beam Capacity projects: default, aciD, aasT, aasMinNeg, aciFy100, aciDeep, aciTeeCant, aasTeeNeg, aasDeepSkin, aciShallowLo, aasRT, aasTnoV, aasTlw, aciShallowHi; 2 ASD; 15 Development & Splice): `validate()`, `computeAll()`, `allChecks()` (without the new display fields `nl`, `naL`), the ASD and Dev results identical; the digit sequence of every Beam Capacity tab, every ASD and Dev tab and the combined Report text identical in all 31 cases once the two moved action lines are masked (those two lines occur 47 times, identically, in both versions). 0 console errors. Screenshots at 1440 and 390 px. Tests: see the PR.
 - **Other copies:** none.
 
-## 2026-11-08 — PR: nl-cbc-b (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (CBNL-2: long notes of the Development & Splice and ASD Beam Calcs tabs as a bold lead and a list — input hints, narratives, commentary, Bar Schedule, Report; display only, no result change)
+## 2026-11-08 — PR: nl-cbc-b (PR #1222: https://github.com/mlococo88/All-Structural/pull/1222) (CBNL-2: long notes of the Development & Splice and ASD Beam Calcs tabs as a bold lead and a list — input hints, narratives, commentary, Bar Schedule, Report; display only, no result change)
 
 Frames: Development & Splice (`suite-frame-dev`) and ASD Beam Calcs (`suite-frame-asd`). Follows CBNL-1 (#1214, the Beam Capacity frame and the shell's `rxWalk`, which also copies the ASD tab's `.cbNL` notes).
 
