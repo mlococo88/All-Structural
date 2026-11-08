@@ -72,6 +72,43 @@ table.itbl input{width:80px;font-family:inherit;font-size:12.5px;border:1px soli
 .dash-item.fail{border-color:var(--bad);background:#fdecec;font-weight:bold;}
 .dash-summary{margin-top:6px;font-size:13px;}
 .dash-summary .pass{color:var(--ok);font-weight:bold;}.dash-summary .fail{color:var(--bad);font-weight:bold;}
+/* EDSC (2026-11-08, engineer: the left summary panel as in Retaining Wall / Spread Footing / Light Pole / Shear and Moment / Stone Arch):
+   from 1200 px a column of compact check chips left of the inputs (240 px to 1499 px, 280 px from 1500 px); « shrinks it to a
+   42 px strip (edm_v1_sumColCollapsed). Below 1200 px it is not shown and nothing changes. Screen only. */
+#edmSumCol{display:none;}
+@media screen and (min-width:1200px){
+  #edmSumCol{display:block;flex:0 0 280px;width:280px;box-sizing:border-box;position:sticky;top:0;max-height:100vh;overflow-y:auto;overflow-x:hidden;
+    padding:10px 8px;border-right:1px solid var(--line);background:#fafbf7;}
+  .layout>#inputPanel{width:calc((100% - 280px)*0.34);box-sizing:border-box;}
+  .layout>#outputPanel{width:calc((100% - 280px)*0.66);box-sizing:border-box;min-width:0;}
+  body.edmSumColl #edmSumCol{flex-basis:42px;width:42px;padding:8px 3px;}
+  body.edmSumColl .layout>#inputPanel{width:calc((100% - 42px)*0.34);}
+  body.edmSumColl .layout>#outputPanel{width:calc((100% - 42px)*0.66);}
+}
+@media screen and (min-width:1200px) and (max-width:1499.98px){
+  #edmSumCol{flex-basis:240px;width:240px;}
+  .layout>#inputPanel{width:calc((100% - 240px)*0.34);}
+  .layout>#outputPanel{width:calc((100% - 240px)*0.66);}
+}
+#edmSumHead{display:flex;align-items:center;gap:6px;margin-bottom:5px;}
+#edmSumHead h2{font-size:14px;color:var(--navy);margin:0;flex:1;}
+#edmSumTgl{font-family:inherit;font-size:13px;line-height:1.3;padding:0 6px;border:1px solid var(--line);background:#fff;border-radius:3px;cursor:pointer;}
+#edmSumCnt{font-size:12px;font-weight:bold;}
+#edmSumCnt .ok{color:var(--ok);} #edmSumCnt .bad{color:var(--bad);}
+#edmSumSub{font-size:11.5px;color:#555;margin:0 0 5px;}
+.esChip{display:grid;grid-template-columns:1fr auto;gap:0 6px;width:100%;box-sizing:border-box;text-align:left;margin:0 0 4px;padding:3px 6px;font-family:inherit;
+  border:1px solid var(--line);border-radius:3px;background:#fff;color:#1a1a1a;font-size:12.5px;line-height:1.25;cursor:pointer;}
+.esChip:hover{background:var(--panel-h);}
+.esChip .n{font-weight:bold;grid-column:1/3;}
+.esChip .v{font-size:12px;color:#333;overflow-wrap:anywhere;}
+.esChip .s{font-weight:bold;font-size:11.5px;align-self:end;}
+.esChip.es-pass{border-left:3px solid var(--ok);} .esChip.es-pass .s{color:var(--ok);}
+.esChip.es-fail{border-color:var(--bad);border-left:3px solid var(--bad);background:#fdecec;} .esChip.es-fail .s{color:var(--bad);}
+.esChip.es-na .s{color:#777;}
+body.edmSumColl #edmSumHead h2,body.edmSumColl #edmSumSub,body.edmSumColl #edmSum{display:none;}
+body.edmSumColl #edmSumHead{flex-direction:column;}
+body.edmSumColl #edmSumCnt{writing-mode:vertical-rl;}
+@media print{#edmSumCol{display:none !important;}}
 /* tabs */
 #tabbar{display:flex;flex-wrap:wrap;gap:3px;border-bottom:2px solid var(--navy);margin-bottom:10px;}
 .tab{font-size:13px;padding:6px 12px;border:1px solid var(--line);border-bottom:none;border-radius:5px 5px 0 0;background:var(--panel);cursor:pointer;}
@@ -278,6 +315,11 @@ textarea{width:100%;min-height:90px;font-family:inherit;font-size:13px;border:1p
   <button id="btnSendBack" title="Send the designed pad back to the Abutment app (if opened from it)">↩ Send Pad to Abutment</button></div></div>
 </div></div></div>
 <div class="layout">
+  <aside id="edmSumCol" aria-label="Design summary"><!-- EDSC (2026-11-08): the check chips as a left column on screens 1200 px and wider -->
+    <div id="edmSumHead"><button type="button" id="edmSumTgl" aria-controls="edmSum" aria-expanded="true" title="Hide the summary column">&laquo;</button><h2>Design summary</h2><span id="edmSumCnt"></span></div>
+    <div id="edmSumSub"></div>
+    <div id="edmSum"></div>
+  </aside>
   <div id="inputPanel"></div>
   <div id="outputPanel">
     <div id="dashboard"></div>
@@ -865,6 +907,7 @@ const TABS=[["tab-in","Geometry & Schematic"],["tab-des","Design Checks"],["tab-
 function renderAll(){
   const R=LAST; if(!R)return;
   renderDashboard(R);
+  edmSumCol(R);   /* EDSC */
   // tabbar
   document.getElementById("tabbar").innerHTML=TABS.map(([id,t])=>`<div class="tab${S.ui.tab===id?" active":""}" data-tab="${id}">${t}</div>`).join("");
   // tabs
@@ -895,6 +938,40 @@ function renderDashboard(R){
     <div class="dash-grid">${items}</div>
     <div class="dash-summary">${R.nInErr?`<span class="fail">${R.nInErr} input error(s) — results not valid; see Warnings &amp; Assumptions</span> · `:""}${ok?`<span class="pass">All ${R.dash.filter(d=>d.pass!==null).length} checks PASS</span>`:`<span class="fail">${R.nFail} of ${R.dash.filter(d=>d.pass!==null).length} checks FAIL</span>`} · governing D/C = <b>${fmt(Math.max(...R.dash.map(d=>d.dc||0)))}</b></div>`;
 }
+/* EDSC (2026-11-08, engineer: the left summary panel): one chip per dashboard item (R.dash: the same D/C, PASS / FAIL and rounding
+   as the Design Summary), an input-error chip, and H_bu (the force sent to the Abutment app). A chip opens the Design Checks tab
+   at the block that works the value (edmGoto, as the dashboard does). Display only. Collapse state: edm_v1_sumColCollapsed ('1' = strip). */
+const EDSC_KEY="edm_v1_sumColCollapsed";
+const EDSC_NAME={gast:"Static axial strain",comb:"Combined shear strain",stab:"Stability",shearB:"Shear deformation",shearA:"Shear deformation",shearP:"Shear deformation",
+  reinf:"Steel laminate thickness",reinfA:"Steel laminate thickness",hsmin:"Steel laminate minimum",hsminA:"Steel laminate minimum",cover:"Cover layer",coverA:"Cover layer",
+  edge:"Edge cover",edgeA:"Edge cover",anc:"Slip / anchorage",ancA:"Slip / anchorage",ancP:"Slip / anchorage",res:"Restraint",hyd:"Hydrostatic tension",
+  deflI:"Compressive deflection",deflA:"Compressive deflection",deflP:"Compressive deflection",deflL:"LL compressive deflection",deflLT:"Long-term DL deflection",
+  sigA:"Compressive stress",sigP:"Compressive stress",appA:"Method A applicability",rotA:"No-liftoff (pre-2009)",rotAW:"No-liftoff, transverse (pre-2009)",stabA:"Stability thickness",stabP:"Stability thickness"};
+function edmSumCol(R){
+  const host=document.getElementById("edmSum"); if(!host)return;
+  const strip=t=>String(t).replace(/\s*\[[^\]]*\]/g,"").trim();
+  const it=[];
+  if(R.nInErr) it.push({n:"Input errors",v:R.nInErr+" — results not valid",st:"fail",s:"FAIL",tab:"tab-warn",card:"o-warn"});
+  for(const d of R.dash){ const full=strip(d.name), n=EDSC_NAME[d.id]||full;
+    let v;
+    if(d.pass===null){ const m=/ — (.*)$/.exec(full)||/\(informational, (.*)\)/.exec(full)||/\): (.*)$/.exec(full); v=m?m[1]:""; }
+    else v=d.dc!=null&&d.dc>0?"D/C "+fmt(d.dc):(d.ref&&d.ref!=="info"?d.ref:"");
+    it.push({n,v,st:d.pass===null?"na":d.pass?"pass":"fail",s:d.pass===null?"INFO":d.pass?"PASS":"FAIL",tab:"tab-des",card:EDM_DASH2CHK[d.id]||""}); }
+  if(!isPlain()&&isFinite(R.Hbu)) it.push({n:"H<sub>bu</sub> to the Abutment app",v:fmt(R.Hbu)+" kip per bearing",st:"na",s:"",tab:"tab-des",card:"hbu",html:true});
+  const nChk=R.dash.filter(d=>d.pass!==null).length;
+  document.getElementById("edmSumCnt").innerHTML=R.nFail?`<span class="bad">${R.nFail} FAIL</span>`:`<span class="ok">all PASS</span>`;
+  document.getElementById("edmSumSub").textContent=(R.nFail?R.nFail+" of "+nChk+" checks FAIL":"All "+nChk+" checks PASS")+" · governing D/C = "+fmt(Math.max(...R.dash.map(d=>d.dc||0)))+" · click a line for its worked check";
+  host.innerHTML=it.map(x=>`<button type="button" class="esChip es-${x.st}" data-tab="${x.tab}" data-card="${x.card}" title="Open the worked check"><span class="n">${x.html?x.n:esc(x.n)}</span><span class="v">${esc(x.v)}</span><span class="s">${x.s}</span></button>`).join("");
+  host.querySelectorAll(".esChip").forEach(b=>b.onclick=()=>edmGoto(b.dataset.tab,b.dataset.card||null));
+}
+function edmSumColl(v,save){
+  document.body.classList.toggle("edmSumColl",!!v);
+  const t=document.getElementById("edmSumTgl"); if(t){ t.innerHTML=v?"&raquo;":"&laquo;"; t.setAttribute("aria-expanded",v?"false":"true"); t.title=v?"Show the summary column":"Hide the summary column"; }
+  if(save) try{ localStorage.setItem(EDSC_KEY,v?"1":"0"); }catch(e){}
+}
+(function(){ let c=false; try{ c=localStorage.getItem(EDSC_KEY)==="1"; }catch(e){}
+  edmSumColl(c,false);
+  const t=document.getElementById("edmSumTgl"); if(t) t.onclick=()=>edmSumColl(!document.body.classList.contains("edmSumColl"),true); })();
 function renderGeom(R){
   const g=S.geom;
   const shapeEq=isCirc()
