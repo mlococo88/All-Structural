@@ -2564,7 +2564,7 @@ function listTables() {
 - **Decision (pending engineer review), Part B (left summary panel) not added to SubLoads:** the tool is a load generator with no capacity checks (no D/C, PASS/FAIL); its key results are per-unit force tables already summarised on the Combinations tab and in the Report's "Governing design forces"; and the left column is already the input sidebar (360 px), so a further 240–280 px column from 1200 px would leave the force tables about 600 px wide.
 - **Other copies:** none.
 
-## 2026-11-08 — PR: claude/sf-rename-bsl (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SFNM-B) — Spread Footing shown as "Shallow Foundation Design"   [display only]
+## 2026-11-08 — PR: claude/sf-rename-bsl (PR #1238: https://github.com/mlococo88/All-Structural/pull/1238) (SFNM-B) — Spread Footing shown as "Shallow Foundation Design"   [display only]
 - **Why:** Spread Footing's displayed name is now "Shallow Foundation Design" (engineer request 2026-11-08; #1236). Its file name and hand-off receiver are unchanged.
 - **Before → after** (anchor = the "after" text):
   - Foundation-loads dialog: `<p>Combined loads … per limit state, for Pile Designer and Spread Footing (channel foundationLoads).</p>` → `… for Pile Designer and Shallow Foundation Design (channel foundationLoads).</p>`.
