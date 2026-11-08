@@ -3406,7 +3406,7 @@ From the code-compliance review of 2026-11-07 (LOW findings L3 to L7).
 - **How verified:** headless Chromium, origin/main vs the branch, the 11 cases of GPNL-1: `R` identical; the digit sequence of every output tab, input pane, the status bar and the Report model identical. Warning text: 13 more models that raise all six changed warnings (RIDOT; Whitmore crossing; spliced chord with L2-L3 at 30° (L_mid stop warnings); dead load alone over capacity (19 warnings); custom hole outside the spread lines; custom pattern without a corner hole): `R.warnings` identical to main in every model. Validation 17 of 17. 0 console errors. `check-syntax`, `phone-layout --tool gusset`, `project-library --tool gusset` pass (the first run, with `warnNL` enumerable, failed its "results identical" checks; hence the non-enumerable property).
 - **Other copies:** none.
 
-## 2026-11-08 — PR: nl-gusset-panel (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — GPLS: left rating summary panel at 1200 px and wider (display only, no result change)
+## 2026-11-08 — PR: nl-gusset-panel (PR #1202: https://github.com/mlococo88/All-Structural/pull/1202) — GPLS: left rating summary panel at 1200 px and wider (display only, no result change)
 
 ### GPLS. Rating summary column on the left at 1200 px and wider   [display only]
 - **Request (engineer, 2026-11-07/08):** add the left summary panel, as in Retaining Wall (RWDL #959, RWLB #984), Spread Footing (SFLB #988), Light Pole (LPLB #991, #994/#997) and Shear and Moment Diagrams (SMLS #1130).
