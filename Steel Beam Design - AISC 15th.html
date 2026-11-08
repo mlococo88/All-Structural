@@ -10185,7 +10185,7 @@ function sbDashRender(){
   host.innerHTML='';cnt.textContent='';cnt.className='';
   const msg=t=>host.appendChild(el('div','sbdMsg',t));
   if(!AN){msg('No results yet.');return;}
-  if(AN.blockers&&AN.blockers.length){msg('No results: the model is not valid. See the message on the Schematic & Inputs tab.');return;}
+  if(AN.blockers&&AN.blockers.length){msg('No results: the model is not valid. See the message on the output tab.');return;}
   let items;
   try{
     if(isBatch())items=(AN.results||[]).map(r=>({nm:r.lbl||(r.row&&(r.row.desc||r.row.size))||'Member',st:r.status==='PASS'?'pass':r.status==='FAIL'?'fail':'na',dcr:r.status==='BLOCKED'?null:r.govDCR,
