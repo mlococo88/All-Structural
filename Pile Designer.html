@@ -425,6 +425,40 @@
     .out-tab { font-size: 12px; padding: 5px 9px; }
   }
   @media print { .out-tabs, .pd-prdlg-ov { display: none !important; } }
+  /* PDSP (2026-11-08): the check summary as a left column from 1200 px (240 px to 1499 px, 280 px above; 42 px shrunk); display only */
+  .pdsp-col { display: none; }
+  @media screen and (min-width: 1200px) {
+    .pdsp-grid { grid-template-columns: 280px minmax(300px, 1fr) minmax(0, 2fr) !important; }
+    .pdsp-grid.pdsp-coll { grid-template-columns: 42px minmax(300px, 1fr) minmax(0, 2fr) !important; }
+    .pdsp-col { display: block; position: sticky; top: calc(var(--ci-h, 56px) + 8px); align-self: start; max-height: calc(100vh - var(--ci-h, 56px) - 1rem); overflow-y: auto; background: #fff; border: 1px solid #cbd5e1; border-radius: 4px; padding: 6px; font-family: var(--f-ui, sans-serif); }
+    .pdsp-col.is-coll { padding: 4px 2px; text-align: center; }
+    .pdsp-head { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+    #pdDashTgl { flex: 0 0 auto; width: 26px; height: 22px; border: 1px solid #cbd5e1; border-radius: 3px; background: #fff; color: var(--blueprint); font-weight: 700; line-height: 1; }
+    #pdDashTgl:hover { background: #f1f5f9; }
+    .pdsp-ttl { flex: 1; margin: 0; font-size: 12.5px; font-weight: 700; color: var(--blueprint); }
+    .pdsp-cnt { font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
+    .pdsp-cnt.is-ng { background: rgba(178,59,59,0.12); color: #b23b3b; }
+    .pdsp-cnt.is-ok { background: rgba(47,125,79,0.12); color: #2f6f3e; }
+    .pdsp-col.is-coll .pdsp-cnt { display: inline-block; margin-top: 6px; writing-mode: vertical-rl; transform: rotate(180deg); padding: 6px 1px; }
+    .pdsp-vt { writing-mode: vertical-rl; transform: rotate(180deg); margin: 10px auto 0; font-size: 12px; font-weight: 700; color: var(--blueprint); }
+    .pdsp-sub { font-size: 11px; color: #64748b; margin: 0 0 6px; line-height: 1.3; }
+    .pdsp-chip { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 0 6px; align-items: baseline; width: 100%; text-align: left; padding: 3px 6px; margin: 0 0 3px; border: 1px solid; border-radius: 3px; font-size: 11.5px; line-height: 1.3; }
+    button.pdsp-chip { cursor: pointer; }
+    button.pdsp-chip:hover { filter: brightness(0.96); }
+    .pdsp-chip.is-ok { border-color: rgba(47,125,79,0.45); background: rgba(47,125,79,0.06); }
+    .pdsp-chip.is-ng { border-color: rgba(178,59,59,0.6); background: rgba(178,59,59,0.08); }
+    .pdsp-chip.is-warn { border-color: rgba(183,121,31,0.6); background: rgba(183,121,31,0.10); }
+    .pdsp-n { font-weight: 700; color: #1e293b; overflow-wrap: anywhere; }
+    .pdsp-v { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; white-space: nowrap; }
+    .pdsp-s { font-size: 10px; font-weight: 700; }
+    .pdsp-chip.is-ok .pdsp-s, .pdsp-chip.is-ok .pdsp-v { color: #2f6f3e; }
+    .pdsp-chip.is-ng .pdsp-s, .pdsp-chip.is-ng .pdsp-v { color: #b23b3b; }
+    .pdsp-chip.is-warn .pdsp-s, .pdsp-chip.is-warn .pdsp-v { color: #7a4d15; }
+  }
+  @media screen and (min-width: 1200px) and (max-width: 1499.98px) {
+    .pdsp-grid { grid-template-columns: 240px minmax(300px, 1fr) minmax(0, 2fr) !important; column-gap: 16px !important; }
+    .pdsp-grid.pdsp-coll { grid-template-columns: 42px minmax(300px, 1fr) minmax(0, 2fr) !important; }
+  }
   /* PDNL (2026-11-08, engineer: long notes as a bold lead and a list; display only): .pdNL on the note's own box */
   .pdNL .pdNLl { font-weight: 700; margin: 0 0 1px; }
   .pdNL ul.pdNLu, .pdNL ol.pdNLu { margin: 2px 0 3px; padding-left: 16px; }
@@ -13069,10 +13103,9 @@ function HpCorrNote({ c }) {
     fmt(c.d, 3), " \u00d7 ", fmt(c.bf, 3), " in, t", /*#__PURE__*/React.createElement("sub", null, "f"), " ", fmt(c.tf, 3), " in, t", /*#__PURE__*/React.createElement("sub", null, "w"), " ", fmt(c.tw, 3),
     " in. The section properties below are the corroded section (all structural checks; conservative, not depth-specific). The p\u2013y analysis and Davisson fixity use the nominal EI.");
 }
-function UtilizationDashboard({ r, I, pyRes }) {
-  // Build demand/capacity ratios from the same data the report uses.
-  // rows: [label, capacity, unit, demand, pass, code]. For most, DCR = demand/capacity.
-  // Two are already-normalized ratios (interaction), handled explicitly.
+/* PDSP (2026-11-08): the Summary-of-checks rows, built once for the Summary tab card and the left summary column
+   (moved unchanged out of UtilizationDashboard; display only). Sorted governing (highest D/C) first. */
+function pdUtilRows(r, I) {
   const isHP = I.pileType === "hpile";
   const isIAB = I.pileType === "iab";
   const raw = isIAB ? (() => {
@@ -13157,6 +13190,46 @@ function UtilizationDashboard({ r, I, pyRes }) {
   }).filter(x => isFinite(x.dcr));
   // sort governing (highest DCR) first
   rows.sort((a, b) => b.dcr - a.dcr);
+  return rows;
+}
+/* PDSP (2026-11-08, engineer: the summary cards in a left summary panel, as Retaining Wall / Spread Footing / Light Pole /
+   Shear and Moment Diagrams): from 1200 px wide a left column of compact check chips (name, D/C or value, PASS / FAIL), the
+   rows of the Summary tab card (pdUtilRows, same order and values). A click opens and scrolls to the module that works the
+   value (jumpToModule, as the card's rows). « shrinks it to a 42 px strip; the state is the per-browser UI key
+   pd_dashCollapsed_v1 ('1' = shrunk; not in the project, the autosave or the export). Below 1200 px it is not shown
+   (CSS), so tablet and phone layouts are unchanged. Display only. */
+const PDSP_KEY = "pd_dashCollapsed_v1";
+function pdspRead() { try { return window.localStorage.getItem(PDSP_KEY) === "1"; } catch (e) { return false; } }
+function PdDashCol({ r, I, pyRes, caseLabel, coll, setColl }) {
+  const e = React.createElement;
+  const rows = pdUtilRows(r, I), nNG = rows.filter(x => !x.pass).length;
+  const dw = (I.pileType !== "iab" && I.lateralSource === "py" && pyRes && pyRes.ok) ? pyDeflWarnOfRes(pyRes, I) : null;
+  const tgl = e("button", { type: "button", id: "pdDashTgl", "aria-controls": "pdDash", "aria-expanded": coll ? "false" : "true",
+    title: coll ? "Show the check summary" : "Hide the check summary",
+    onClick: () => { const v = !coll; setColl(v); try { window.localStorage.setItem(PDSP_KEY, v ? "1" : "0"); } catch (x) {} } }, coll ? "»" : "«");
+  const badge = e("span", { className: "pdsp-cnt " + (nNG ? "is-ng" : "is-ok") }, nNG ? nNG + " NG" : "all OK");
+  if (coll) return e("aside", { id: "pdDashCol", className: "pdsp-col is-coll no-print", "aria-label": "Check summary" }, tgl, e("div", { className: "pdsp-vt" }, "Check summary"), badge);
+  const chip = (x, i) => {
+    const t = moduleForCheck(x.label, I.pileType);
+    const val = (x.isStab || x.nc || x.isElig) ? (x.pass ? "OK" : "NG") : x.zeroCap ? "cap 0 — NG" : fmt(x.dcr, 2);
+    return e(t ? "button" : "div", { key: i, type: t ? "button" : undefined, className: "pdsp-chip " + (x.pass ? "is-ok" : "is-ng"), onClick: t ? () => jumpToModule(t) : undefined,
+      title: x.label + (x.code ? " · " + x.code : "") + (t ? " — show the full calculation" : "") },
+      e("span", { className: "pdsp-n" }, x.label), e("span", { className: "pdsp-v" }, val), e("span", { className: "pdsp-s" }, x.pass ? "PASS" : "FAIL"));
+  };
+  return e("aside", { id: "pdDashCol", className: "pdsp-col no-print", "aria-label": "Check summary" },
+    e("div", { className: "pdsp-head" }, tgl, e("h2", { className: "pdsp-ttl" }, "Check summary"), badge),
+    e("div", { className: "pdsp-sub" }, caseLabel ? "Active case: " + caseLabel + " · D/C" : "D/C"),
+    e("div", { id: "pdDash" },
+      dw && dw.warn ? e("button", { type: "button", className: "pdsp-chip is-warn", onClick: () => jumpToModule("module-02"), title: "Large head deflection (warning only, not a check) — show Module 02" },
+        e("span", { className: "pdsp-n" }, "Head deflection"), e("span", { className: "pdsp-v" }, fmt(dw.yD, 2) + " D"), e("span", { className: "pdsp-s" }, "WARN")) : null,
+      rows.length ? rows.map(chip) : e("div", { className: "pdsp-sub" }, "No checks.")));
+}
+function UtilizationDashboard({ r, I, pyRes }) {
+  // Build demand/capacity ratios from the same data the report uses.
+  // rows: [label, capacity, unit, demand, pass, code]. For most, DCR = demand/capacity.
+  // Two are already-normalized ratios (interaction), handled explicitly.
+  const isIAB = I.pileType === "iab";
+  const rows = pdUtilRows(r, I);   // PDSP
   const gov = rows.length ? rows[0] : null;
   const barColor = d => d > 1.0 ? "#b23b3b" : d > 0.85 ? "#c9622e" : d > 0.6 ? "#8a6d1f" : "#2f6f3e";
   return /*#__PURE__*/React.createElement("div", { className: "bg-white rounded-md border border-slate-200 card-sh p-3", "data-otab-fixed": "summary" },
@@ -16679,6 +16752,7 @@ function App() {
   const setRptSel = v => { setRptSelState(v); saveRptSel(v); };
   // UI: active tab of the left input rail (presentation state, not an input)
   const [railTab, setRailTab] = useState("pile");
+  const [pdspColl, setPdspColl] = useState(pdspRead);   // PDSP: left check-summary column shrunk (per-browser UI key)
   const [pyDepths, setPyDepths] = useState(readPyDepths); // Figure F-3 depths (per browser, micropile_lrfd_pyCurveDepths_v1)
   const [lpileParse, setLpileParse] = useState(() => loadSavedLpile()); // {ok, summary, warnings, records, fileName, ...} — persisted
   const [lpileBusy, setLpileBusy] = useState(false);
@@ -18439,8 +18513,9 @@ function App() {
     (r.inputErrors || []).map((m, i) => /*#__PURE__*/React.createElement("div", { key: "e" + i, className: "text-[11px] px-2 py-1 mb-1 rounded-sm", style: { background: "rgba(178,59,59,0.10)", color: "#8a2a2a", border: "1px solid rgba(178,59,59,0.35)" } }, /*#__PURE__*/React.createElement("b", null, "\u26a0 Input error: "), m)),
     (r.inputNotes || []).concat(loadNotes).map((m, i) => /*#__PURE__*/React.createElement("div", { key: "n" + i, className: "text-[11px] px-2 py-1 mb-1 rounded-sm", style: { background: "rgba(201,98,46,0.10)", color: "#7a4d15", border: "1px solid rgba(201,98,46,0.30)" } }, /*#__PURE__*/React.createElement("b", null, "\u26a0 Note: "), m)),
     loadNotes.length > 0 && /*#__PURE__*/React.createElement("button", { onClick: () => setLoadNotes([]), className: "text-[10px] text-slate-500 underline" }, "dismiss load notes")) : null, /*#__PURE__*/React.createElement("div", {
-    className: "max-w-[1920px] mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-6"
-  }, /*#__PURE__*/React.createElement("aside", {
+    className: "max-w-[1920px] mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-6 pdsp-grid" + (pdspColl ? " pdsp-coll" : "")
+  }, React.createElement(PdDashCol, { r: r, I: I, pyRes: pyRes, coll: pdspColl, setColl: setPdspColl, caseLabel: (cases && cases[activeIdx]) ? (cases[activeIdx].name || ("Case " + (activeIdx + 1))) : null }),   // PDSP
+  /*#__PURE__*/React.createElement("aside", {
     className: "input-rail space-y-4 lg:sticky lg:self-start no-print",
     style: {
       top: "calc(var(--ci-h, 56px) + 8px)",
