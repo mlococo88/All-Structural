@@ -1597,3 +1597,79 @@ Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.4.2.1 (L2), C14.8.3.1 (L3), 14.7.5.3.
 - **Check case:** default pad, low-temperature option "no slider" (×4): before, one warning about the Abutment app and an alert on send; after, neither; H_bu unchanged (sent pad: G = 0.1495 ksi, h_rt = 3.50 in; H_bu = 6.83 kip ×1, 13.65 kip ×2, 27.31 kip ×4); the abutment receives Gmult = 4 and its H_TU becomes 4 × 23.49 = 93.96 kip.
 - **How verified:** check-syntax; project-library edm ALL PASS; headless round trip (×1, ×2, ×4): no warning naming the Abutment app, no dialogs, 0 console errors.
 - **Saved data:** none changed.
+
+## 2026-11-08 — PR: nl-edm-a (PR #1203: https://github.com/mlococo88/All-Structural/pull/1203) (EDNL: long notes as a bold lead and a list; display only, no result change)
+
+### EDNL-1. Long notes split into a lead line and a list   [display only] [no result change]
+- **Request (engineer, 2026-11-07/08):** "there are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Approved for all apps.
+- **Rule used:** a note is long if it is over ~300 characters, has 3 or more sentences, or carries several facts in one paragraph. It becomes action lines ("Decision (pending engineer review): …", in the tool's warning style `warn-item`) first, then a one-line bold lead, then a list with bold lead words. Every sentence, number, citation and link is kept, in the same order; new lead words carry no digits, so the digit sequence of every tab is unchanged.
+- **New helper** (before `function varsTbl(rows){`), anchor `/* EDNL (2026-11-08, engineer`:
+  ```js
+  function edmNL(lead,items,o){ o=o||{}; const L=o.ol?"ol":"ul";
+    const li=(items||[]).filter(Boolean).map(x=>"<li>"+(Array.isArray(x)?"<b>"+x[0]+"</b> "+x[1]:x)+"</li>").join("");
+    return `<div class="edmNL">${(o.act||[]).filter(Boolean).map(a=>`<div class="warn-item edmNLa">${a}</div>`).join("")}${lead?`<div class="edmNLl">${lead}</div>`:""}${li?`<${L} class="edmNLu">${li}</${L}>`:""}</div>`; }
+  ```
+  An item is a string or `[leadWords, text]`; `null` items are skipped (conditional facts).
+- **CSS** (after `.eqb .eqnote{…}`), tool-scoped, no new colours (inherits the note colours; the action line uses the existing `.warn-item`):
+  ```css
+  .edmNL .edmNLl{font-weight:bold;margin:0 0 1px}
+  .edmNL .edmNLu{margin:2px 0 3px;padding-left:18px}
+  .edmNL .edmNLu>li{margin:1px 0}
+  .edmNL .edmNLa{margin:2px 0 4px}
+  @media print{.edmNL .edmNLu>li{break-inside:avoid}}
+  ```
+- **Notes changed** (function, anchor = the old opening text → new lead → item lead words). Exact before / after: the PR diff.
+  1. `thermEqHtml` (3.2 Thermal Movement): "Half-span (midspan-neutral, standard bridge) with the ×f thermal movement factor (panel I-5)." stays the lead → Design movement / Input / Floating bridge / Fixed bearing elsewhere / Transverse movement / Not done here ("this reference calculation does neither of the last two (L5)"; was "does neither (L5)").
+  2. `deflEq`, Method B: "Eqs. 14.7.5.3.6-1 to -3 …" → lead "How the deflection is found and checked:" → Equations / Shear modulus / Check / Deflection / Creep ratio.
+  3. `deflEq`, Method A and plain pad: "Instantaneous LL plus initial DL deflection …" → action line "Decision (pending engineer review): the linear equation is used." (moved first) → lead "How the deflection is found and checked:" → Limit / Layer strain / Shear modulus / Deflection / Creep ratio.
+  4. `resEq`: "A restraint system is required when θs/n ≥ 3εa/Si." stays the lead → εa / σs and θs / θst / Rectangular (rectangular pads only, was a "; rectangular: …" clause) / n / Bonded external plates.
+  5. `ancEq`: "H ≤ 0.2 Pmin = Pmin/5" lead → Friction coefficient / Shear modulus / Δs / Pmin.
+  6. `hbuEq` with `lowTNote`: `lowTNote(R)` now returns two list items (was one string; used only by `hbuEq`) → lead "Inputs of Hbu:" → Low-temperature zone (…) / Design option of 14.7.5.2 / Shear modulus / Movement / Hand-off.
+  7. `gRangeEq`: "G = the specified shear modulus (panel I-3); …" → lead "Each check takes the least favourable value of G." → G / tG / Gmin / Gmax.
+  8. `appAEq`: action line "Decision (pending engineer review): the commentary values are used." (moved first) → lead "Method A applies to steel-reinforced bearings with Si²/n < 22 [14.7.6.1]." → Commentary / Limit used / When this fails.
+  9. `hydEq`: "εa and θs as in the restraint test above (…)." stays the lead → Construction case / Input.
+  10. Method A no-liftoff INFO line (`renderDesign`, `infoLine("Compression–rotation, pre-2009 no-liftoff: …`): action line "Decision (pending engineer review): kept as information." (moved first) → lead "Compression–rotation, pre-2009 no-liftoff: σup/σs = … for reference — not a pass/fail check." → Why.
+  11. Girder Run, no girder set (`renderGird`): "No girder set loaded." lead → To load girders / Meanwhile.
+- **Not changed:** the warnings list (no warning over ~250 characters or with 3 sentences in 15 scenarios; `msg` is also the Report §6 list); Engineering Assumptions (the engineer's saved, editable text `S.assumptions`, already numbered); the Report's worked-step remarks (`note` of a `SharedSteps` step is a one-line remark rendered by `shared/report.js`; splitting it needs a shared-file change, decision pending engineer review); the PAD hand-off to the Abutment app (HANDOFF.md §4.13), no text of it is built from these notes.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none.
+- **Check case:** default pad, Method A, Design Checks tab, block "Compressive deflection": before one 400-character paragraph ending "Decision (pending engineer review): the linear equation is used. δ = Σ ε·hri … (panel I-6)."; after the decision line in the warning style, the lead "How the deflection is found and checked:" and five bullets; "≤ 0.09 hri [14.7.6.3.3]", "Eq. C14.7.5.3.6-1", "Table 14.7.6.2-1 (panel I-6)" unchanged; ε_DL+LL = 0.0168 ≤ 0.09 unchanged.
+- **How verified:** headless Chromium, origin/main vs the branch, 15 scenarios (default, Method A, plain, rectangular, Method A rectangular, anchored, thin laminate, input error, low-temperature ×2 and ×4, bonded plates, Pmin, deflection limits, thermal inputs, high demand): `LAST` identical (deep compare), warning `msg` identical, digit sequence of every tab (Geometry, Design Checks, Rotation & Movement, Girder Run, Warnings, Report) and the dashboard identical; 0 console errors, 0 KaTeX errors. Abutment ↔ module round trip (×1, ×2, ×4, old PAD) identical. 390 px: no horizontal page scroll. Tests: see the PR.
+
+## 2026-11-08 — PR: nl-edm-b (PR #1208: https://github.com/mlococo88/All-Structural/pull/1208) — Design summary as a left column of check chips from 1200 px (EDSC; display only, no result change)
+
+### EDSC. Left summary column   [display only]
+- **Request (engineer, 2026-11-07/08):** add the left summary panel as in Retaining Wall (#959, #984), Spread Footing (#988), Light Pole (#991, #994/#997), Shear and Moment Diagrams (#1130) and Stone Arch (#1198): compact check chips, a « collapse with a per-tool key, a chip click opens the worked check, shown from 1200 px, nothing changes below.
+- **Markup:** new `<aside id="edmSumCol">` as the first child of `.layout`, before `#inputPanel`. Anchor: `<!-- EDSC (2026-11-08)`.
+- **CSS** (before `/* tabs */`), anchor `/* EDSC (2026-11-08`:
+  - `#edmSumCol{display:none}`.
+  - From 1200 px the column is shown, 280 px wide (240 px from 1200 to 1499.98 px), sticky at the top, with its own scroll. `#inputPanel` / `#outputPanel` keep their 34 % / 66 % split of the remaining width.
+  - Collapsed (`body.edmSumColl`): a 42 px strip with the « / » button and the FAIL count.
+  - Hidden in print. Below 1200 px nothing changes: the panel split of 900 to 1199 px and the phone order stay the same.
+- **Chips** (`edmSumCol(R)`, called in `renderAll()` after `renderDashboard(R)`):
+  - an "Input errors" chip first when `R.nInErr` > 0 (FAIL), which opens Warnings & Assumptions 5.1;
+  - one chip per dashboard item `R.dash`, in its order:
+    - a short name (`EDSC_NAME` by item id, else the dashboard name without its bracketed reference);
+    - the value: "D/C x.xx" (the dashboard's `fmt(dc)`), the criterion (`ref`) for a pass/fail item without a D/C, or, for an INFO item, the value text of the dashboard name;
+    - PASS / FAIL / INFO, as the dashboard;
+  - "H_bu to the Abutment app": `fmt(R.Hbu)` kip per bearing, no status, steel-reinforced pads only; it opens the Horizontal force block.
+  - Head: "n FAIL" or "all PASS"; sub-line "n of N checks FAIL / All N checks PASS · governing D/C = …", the same counts and the same governing D/C as the dashboard summary line.
+  - A chip calls `edmGoto(tab, card)`, the dashboard's own jump: the tab opens and the block scrolls into view and flashes.
+- **Saved data (§5):** none changed. New per-browser UI key `edm_v1_sumColCollapsed` ('1' = strip), tool-prefixed. Only the « / » button writes it. It is not in `S`, the autosave, saved projects, JSON export or the PAD hand-off.
+- **Formulas, factors, units, code references:** none (§4 does not apply).
+- **Decisions (pending engineer review):**
+  1. The column sits left of the input panel, as in Shear and Moment Diagrams and Stone Arch; the inputs and the output keep their columns.
+  2. H_bu is added as a value chip because it is the key result sent to the Abutment app.
+  3. The Design Summary above the tabs stays as it is.
+- **Check case (default project, circular Method B):**
+  - 10 check chips plus INFO "Compressive deflection | δ_L = 0.020, δ_d = 0.029, δ_lt = 0.039 in" and "H_bu to the Abutment app | 3.70 kip per bearing";
+  - "Restraint | D/C 1.35 | FAIL"; head "1 FAIL"; sub-line "1 of 10 checks FAIL · governing D/C = 1.35";
+  - the dashboard shows the same values.
+- **How verified:** headless Chromium at 1920 / 1440 / 1280 / 1024 / 390 px:
+  - column 280 / 240 / 240 px, not shown at 1024 and 390 (input and output panel boxes identical to main there);
+  - no sideways scroll;
+  - the Restraint chip opens Design Checks at the restraint block;
+  - « gives a 42 px strip, writes '1' and survives a reload;
+  - 0 console errors.
+  - origin/main against the branch, 15 scenarios: `LAST`, warning `msg` and the textContent of every tab, Report included, are identical. innerText of the Report differs only through `content-visibility:auto` sub-sections that are off screen at the narrower width.
+  - Abutment ↔ module round trip identical.
+- **Other copies:** none.
