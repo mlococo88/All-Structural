@@ -64,7 +64,7 @@
     { tool: 'retaining-wall-designer', label: 'Retaining Wall Designer', name: 'Retaining Wall Designer', href: 'Retaining%20Wall%20Designer.html',
       key: 'retaincalcpro.projects.v1', time: i => i && i.ts || null, space: 2,
       toFile: (i, n) => ({ format: 'RetainCalcPro.project', version: 1, name: n, fields: i.fields }) },
-    { tool: 'spread-footing', label: 'Spread Footing', name: 'Spread Footing', href: 'Spread%20Footing.html',
+    { tool: 'spread-footing', label: 'Shallow Foundation Design', name: 'Shallow Foundation Design', href: 'Spread%20Footing.html',
       key: 'sfd_projects' },
     { tool: 'light-pole-sign-post', label: 'Light Pole and Sign Post', name: 'Light Pole & Sign Post', href: 'Light%20Pole%20and%20Sign%20Post.html',
       key: 'lpp_projects_v1', space: 1,

@@ -83,3 +83,11 @@
 - **Check case:** the Gusset item. Before: one 436-character line. After: a lead and seven items; "23.8 ksi" and "1.403 → 1.165" are unchanged.
 - **How verified:** headless Chromium, origin/main vs the branch, at 1440 and 390 px: the digit sequence of the page text is identical; the filter "anchor" shows the same two cards; no sideways scroll at 390 px; 0 console errors. Tests: check-syntax, home-projects, home-sync (ALL PASS).
 - **Other copies:** none. **Open items:** none.
+
+## 2026-11-08 — PR: claude/sf-display-rename (PR #1236: https://github.com/mlococo88/All-Structural/pull/1236) (SFNM) — Spread Footing card renamed   [display only]
+- **Where:** Foundations section, card `href="Spread%20Footing.html"`.
+- **Before:** `<div class="name">Spread Footing</div><div class="desc">Spread and combined footings: bearing, stability, flexure, shear, pedestals.</div>`
+- **After:** `<div class="name">Shallow Foundation Design</div><div class="desc">Spread, combined and wall footings: bearing, stability, flexure, shear, pedestals.</div>`
+- The Saved projects panel heading comes from `shared/project-registry.js` `name` (changed in the same PR). Link target unchanged.
+- **Formulas, factors, units, code references:** none. **Saved data:** none.
+- **How verified:** home-projects, home-sync: pass. **Other copies:** none.
