@@ -139,6 +139,13 @@
   tr:nth-child(even) td { background: rgba(255,255,255,.25); }
   .delta-good { color: var(--good); } .delta-bad { color: var(--oxide); font-weight: 600; }
   .note { font-size: 11px; color: var(--ink-soft); line-height: 1.5; }
+  /* BGNL (2026-11-08): a long note as a bold lead line and a list with bold lead words (bgNL); action items first, in the warning colour */
+  .bgNL .bgNLl { font-weight:600; color:var(--ink); margin:0 0 1px; }
+  .bgNL .bgNLu { margin:2px 0 3px; padding-left:18px; }
+  .bgNL .bgNLu > li { margin:1px 0; overflow-wrap:anywhere; }
+  .bgNL .bgNLk { font-weight:600; }
+  .bgNL .bgNLa { color:var(--oxide); margin:2px 0 4px; }
+  @media print { .bgNL .bgNLu > li { break-inside:avoid; } }
   .pill { display: inline-block; font-size: 10px; padding: 1px 6px; border: 1px solid var(--graphite); border-radius: 10px; color: var(--ink-soft); }
   /* substructure table */
   .subtbl input, .subtbl select { padding: 3px 5px; font-size: 12px; }
@@ -192,7 +199,7 @@
   <div id="geom_warn" style="display:none; border:1px solid var(--oxide); background:#fdf5f0; color:var(--ink); padding:6px 12px; margin:0 0 14px; font-size:12.5px;"></div><!-- BGX (2026-11-07): geometry warnings (results computed, but check them) -->
   <!-- TAB 1: ALIGNMENT -->
   <section class="tabpane active" id="pane-align" role="tabpanel">
-    <p class="note" style="font-size:12px; margin-bottom:14px;">Define the roadway geometry the bridge follows: the <strong>horizontal alignment</strong> (the path in plan — tangents, curves, spirals) and the <strong>vertical profile</strong> (elevation along the route — grades and vertical curves). Everything else in the tool is positioned relative to this. Graphics at the bottom show the result.</p>
+    <div class="note bgNL" style="font-size:12px; margin-bottom:14px;"><div class="bgNLl">Define the roadway geometry the bridge follows:</div><ul class="bgNLu"><li><b class="bgNLk">Horizontal alignment:</b> the path in plan — tangents, curves, spirals.</li><li><b class="bgNLk">Vertical profile:</b> elevation along the route — grades and vertical curves.</li><li><b class="bgNLk">Everything else</b> in the tool is positioned relative to this.</li><li><b class="bgNLk">Graphics</b> at the bottom show the result.</li></ul></div>
     <h2 class="sec">Horizontal Alignment</h2>
     <fieldset>
       <legend>POB · point of beginning</legend>
@@ -202,7 +209,7 @@
         <div><label>Northing (start) <span class="unit">(ft)</span></label><input type="number" id="h_y0" value="0" step="0.001" title="Survey northing (Y coordinate) of the point of beginning, in feet."></div>
         <div><label>Easting (start) <span class="unit">(ft)</span></label><input type="number" id="h_x0" value="0" step="0.001" title="Survey easting (X coordinate) of the point of beginning, in feet."></div>
       </div>
-      <p class="note">Station NNN+NN.NN. Bearing as quadrant DMS (N17°48'37"E) or azimuth degrees. Northing→Y, Easting→X. Positive R curves right.</p>
+      <div class="note bgNL"><div class="bgNLl">Input formats:</div><ul class="bgNLu"><li><b class="bgNLk">Station:</b> NNN+NN.NN.</li><li><b class="bgNLk">Bearing:</b> as quadrant DMS (N17°48'37"E) or azimuth degrees.</li><li><b class="bgNLk">Coordinates:</b> Northing→Y, Easting→X.</li><li><b class="bgNLk">Curves:</b> positive R curves right.</li></ul></div>
     </fieldset>
 
     <h2 class="sec">Horizontal Alignment Data</h2>
@@ -210,7 +217,7 @@
       <legend>elements · begin/end station &amp; bearing computed from POB</legend>
       <div style="overflow-x:auto;"><table class="subtbl" id="elem_tbl"></table></div>
       <button class="sm ghost" id="elem_add" style="margin-top:8px;">+ Element</button>
-      <div class="note" id="elem_warn" style="color:var(--oxide); margin-top:6px;"></div>
+      <div class="note bgNL" id="elem_warn" style="color:var(--oxide); margin-top:6px;"></div>
       <!-- BGX7 (2026-11-07, review M2): curve and spiral elements, a report only -->
       <details id="elem_rep_box" style="margin-top:8px;"><summary class="note" style="cursor:pointer;">Curve and spiral elements (report: T, E, M, LC, PI, D; θs, Xs, Ys, p, k, LT, ST)</summary><div id="elem_rep" style="overflow-x:auto;"></div></details>
     </fieldset>
@@ -225,8 +232,8 @@
       </div>
       <div style="overflow-x:auto;"><table class="subtbl" id="vprof_tbl"></table></div>
       <button class="sm ghost" id="vpvi_add" style="margin-top:8px;">+ PVI</button>
-      <div class="note" id="vprof_warn" style="color:var(--oxide); margin-top:6px;"></div>
-      <p class="note"><strong>Required inputs</strong> (solid boxes): station and elevation for each point, plus a vertical curve length for interior PVIs. <strong>Optional overrides</strong> (dashed, italic boxes): grade in/out are computed and shown, but you may type one to override it — editing grade-out holds that PVI and recomputes the next point's elevation; an overridden grade turns solid oxide. The Start and End rows are the profile endpoints (no curve). A.D., K, BVC/EVC and high/low point compute automatically; a vertical curve is centered on its PVI and spans BVC to EVC = its length.</p>
+      <div class="note bgNL" id="vprof_warn" style="color:var(--oxide); margin-top:6px;"></div>
+      <div class="note bgNL"><div class="bgNLl">Solid boxes are required inputs; dashed boxes are optional overrides.</div><ul class="bgNLu"><li><b class="bgNLk">Required inputs</b> (solid boxes)<b class="bgNLk">:</b> station and elevation for each point, plus a vertical curve length for interior PVIs.</li><li><b class="bgNLk">Optional overrides</b> (dashed, italic boxes)<b class="bgNLk">:</b> grade in/out are computed and shown, but you may type one to override it.</li><li><b class="bgNLk">Editing grade-out:</b> holds that PVI and recomputes the next point's elevation; an overridden grade turns solid oxide.</li><li><b class="bgNLk">Start and End rows:</b> the profile endpoints (no curve).</li><li><b class="bgNLk">Computed automatically:</b> A.D., K, BVC/EVC and high/low point.</li><li><b class="bgNLk">Vertical curve:</b> centered on its PVI; spans BVC to EVC = its length.</li></ul></div>
     </fieldset>
 
     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
@@ -258,7 +265,7 @@
 
   <!-- TAB 2: BRIDGE -->
   <section class="tabpane" id="pane-bridge" role="tabpanel">
-    <p class="note" style="font-size:12px; margin-bottom:14px;">Define the bridge itself on top of the alignment: how many <strong>spans</strong>, where the <strong>substructure</strong> (abutments and piers) sit, the <strong>deck cross-section</strong> (crown or superelevation, edges, curbs, girders), and the <strong>superstructure depths</strong> used to get from top-of-deck down to the beam seats. Hover any field label for an explanation.</p>
+    <div class="note bgNL" style="font-size:12px; margin-bottom:14px;"><div class="bgNLl">Define the bridge itself on top of the alignment:</div><ul class="bgNLu"><li><b class="bgNLk">Spans:</b> how many spans.</li><li><b class="bgNLk">Substructure:</b> where the abutments and piers sit.</li><li><b class="bgNLk">Deck cross-section:</b> crown or superelevation, edges, curbs, girders.</li><li><b class="bgNLk">Superstructure depths:</b> used to get from top-of-deck down to the beam seats.</li><li><b class="bgNLk">Help:</b> hover any field label for an explanation.</li></ul></div>
     <div class="cols">
       <div>
         <h2 class="sec">Spans</h2>
@@ -293,14 +300,14 @@
           <input type="hidden" id="x_pivot" value="0"><!-- not used by the engine; kept so older saved projects read and write the same scalars -->
           <input type="hidden" id="bcl_off" value="0">
           <input type="hidden" id="crown_off" value="0">
-          <p class="note">The <strong>PGL = baseline = reference line</strong>, fixed at offset 0 — the deck elevation equals the vertical profile elevation here. The <strong>construction reference line</strong> is a straight chord between its offset at each abutment — the line the plans dimension the superstructure from. It need not be the deck centerline. Girders, edges, and curbs are built parallel to it. The <strong>crown</strong> reference (dropdown) sets what the crown offset is measured from: choose <em>PGL</em> and the crown follows the alignment curve at that offset (offset 0 = on the PGL); choose <em>construction ref line</em> and the crown is a straight line offset from the reference-line chord. This drives both the drawn crown line and the cross-slope pivot in the elevations.</p>
+          <div class="note bgNL"><div class="bgNLl">The reference lines of the cross section:</div><ul class="bgNLu"><li><b class="bgNLk">PGL = baseline = reference line:</b> fixed at offset 0 — the deck elevation equals the vertical profile elevation here.</li><li><b class="bgNLk">Construction reference line:</b> a straight chord between its offset at each abutment — the line the plans dimension the superstructure from. It need not be the deck centerline. Girders, edges, and curbs are built parallel to it.</li><li><b class="bgNLk">Crown reference</b> (dropdown)<b class="bgNLk">:</b> sets what the crown offset is measured from: choose <em>PGL</em> and the crown follows the alignment curve at that offset (offset 0 = on the PGL); choose <em>construction ref line</em> and the crown is a straight line offset from the reference-line chord.</li><li><b class="bgNLk">Drives:</b> both the drawn crown line and the cross-slope pivot in the elevations.</li></ul></div>
           <!-- BGX6 (2026-11-07): optional superelevation transition table (review H3, engineer item O2) -->
           <div style="margin-top:10px; border-top:1px dashed var(--rule, #ccc); padding-top:8px;">
             <label style="margin:0 0 4px;">Superelevation transition table <span class="unit">(optional)</span></label>
-            <p class="note" style="margin:0 0 6px;">Leave empty to use the global mode / rate and the per-support cross-slope controls (as before). With one or more rows, the deck's left and right cross slopes come from this table instead: each side is interpolated linearly in station between rows and held beyond the first / last row. Slopes are entered in % <b>outward from the crown</b> (− = falls away from the crown): normal crown 2 % is left −2, right −2; full super 6 % banked down to the right is left +6, right −6. For the Green Book method (AASHTO <i>A Policy on Geometric Design</i>, 7th Ed. Sec. 3.3.8, verify) enter its stations: normal crown, level crown (end of tangent runout), reverse crown, full super (end of runoff, e.g. at the SC). The deck rotates about the crown line.</p>
+            <div class="note bgNL" style="margin:0 0 6px;"><div class="bgNLl">Cross slopes by station, in place of the global controls.</div><ul class="bgNLu"><li><b class="bgNLk">Empty:</b> the global mode / rate and the per-support cross-slope controls are used (as before).</li><li><b class="bgNLk">With one or more rows:</b> the deck's left and right cross slopes come from this table instead: each side is interpolated linearly in station between rows and held beyond the first / last row.</li><li><b class="bgNLk">Slopes:</b> entered in % <b>outward from the crown</b> (− = falls away from the crown): normal crown 2 % is left −2, right −2; full super 6 % banked down to the right is left +6, right −6.</li><li><b class="bgNLk">Green Book method</b> (AASHTO <i>A Policy on Geometric Design</i>, 7th Ed. Sec. 3.3.8, verify)<b class="bgNLk">:</b> enter its stations: normal crown, level crown (end of tangent runout), reverse crown, full super (end of runoff, e.g. at the SC).</li><li><b class="bgNLk">Rotation:</b> the deck rotates about the crown line.</li></ul></div>
             <div style="overflow-x:auto;"><table class="subtbl" id="xs_tbl"></table></div>
             <button class="sm ghost" id="xs_add" type="button" style="margin-top:6px;">+ Row</button>
-            <div class="note" id="xs_info" style="margin-top:4px;"></div>
+            <div class="note bgNL" id="xs_info" style="margin-top:4px;"></div>
           </div>
         </fieldset>
 
@@ -317,7 +324,7 @@
             <div><label>Curb LEFT, from ref line <span class="unit">(ft)</span></label><input type="number" id="curb_l" value="-21" step="0.1" placeholder="opt" title="Transverse offset (ft from the construction reference line) of the left curb line. Used for curb elevations in the output. Can be overridden per support in the substructure table."></div>
             <div><label>Curb RIGHT, from ref line <span class="unit">(ft)</span></label><input type="number" id="curb_r" value="21" step="0.1" placeholder="opt" title="Transverse offset (ft from the construction reference line) of the right curb line. Used for curb elevations in the output. Can be overridden per support in the substructure table."></div>
           </div>
-          <p class="note"><strong>Girders, deck edges, and curbs are all measured from the construction reference line</strong> — a straight line running parallel to the bridge. It does <em>not</em> have to be the deck centerline; use whatever line the plans dimension from, and enter offsets to either side of it (they need not be symmetric). The construction reference line itself is positioned relative to the PGL by the <em>construction reference line offset</em> field above — changing that slides the whole deck (edges, girders, curbs) together. Per-span edge overrides and per-support curb offsets are in the substructure table.</p>
+          <div class="note bgNL"><div class="bgNLl">Girders, deck edges, and curbs are all measured from the construction reference line.</div><ul class="bgNLu"><li><b class="bgNLk">The line:</b> a straight line running parallel to the bridge. It does <em>not</em> have to be the deck centerline; use whatever line the plans dimension from.</li><li><b class="bgNLk">Offsets:</b> enter them to either side of it (they need not be symmetric).</li><li><b class="bgNLk">Its position:</b> set relative to the PGL by the <em>construction reference line offset</em> field above — changing that slides the whole deck (edges, girders, curbs) together.</li><li><b class="bgNLk">Per-span edge overrides and per-support curb offsets:</b> in the substructure table.</li></ul></div>
         </fieldset>
 
         <h2 class="sec">Superstructure Depths</h2>
@@ -327,8 +334,8 @@
             <div><label>HMA overlay thickness <span class="unit">(in)</span></label><input type="number" id="d_hma" value="0" step="0.125" title="Hot-mix asphalt (wearing surface) thickness, in INCHES. The vertical profile / PGL is taken to TOP OF PAVEMENT; top-of-deck = profile elevation − this thickness, applied uniformly across the section. Enter 0 for a bare deck with no overlay."></div>
             <div></div>
           </div>
-          <p class="note" style="margin-top:0">The vertical profile and PGL are defined at <strong>top of pavement (top of HMA)</strong>. The top-of-deck (structural surface) is the profile elevation minus the HMA thickness. Beam seats hang off top-of-deck, so they drop with it automatically.</p>
-          <p class="note" style="margin-top:0">Beam seat = top-of-deck − deck thickness − (min haunch + camber [+ sag ordinate + cross slope × b<sub>f</sub>/2]) − beam depth − bearing assembly. Camber is the positive midspan ordinate of the <em>net</em> camber left when the deck is placed (camber − dead-load deflection of the deck and haunch); it lowers the seat. The bracketed terms apply when <em>Seat terms</em> below is ticked; each seat's working is shown on the Beam Seat Output tab. <strong>All depths on this panel are in inches.</strong></p>
+          <div class="note bgNL" style="margin-top:0"><div class="bgNLl">The vertical profile and PGL are defined at top of pavement (top of HMA).</div><ul class="bgNLu"><li><b class="bgNLk">Top-of-deck</b> (structural surface)<b class="bgNLk">:</b> the profile elevation minus the HMA thickness.</li><li><b class="bgNLk">Beam seats:</b> hang off top-of-deck, so they drop with it automatically.</li></ul></div>
+          <div class="note bgNL" style="margin-top:0"><div class="bgNLl">Beam seat = top-of-deck − deck thickness − (min haunch + camber [+ sag ordinate + cross slope × b<sub>f</sub>/2]) − beam depth − bearing assembly.</div><ul class="bgNLu"><li><b class="bgNLk">Camber:</b> the positive midspan ordinate of the <em>net</em> camber left when the deck is placed (camber − dead-load deflection of the deck and haunch); it lowers the seat.</li><li><b class="bgNLk">Bracketed terms:</b> apply when <em>Seat terms</em> below is ticked.</li><li><b class="bgNLk">Working:</b> each seat's working is shown on the Beam Seat Output tab.</li><li><b class="bgNLk">Units:</b> <strong>all depths on this panel are in inches.</strong></li></ul></div>
           <div class="row2">
             <div><label>Deck structural thickness <span class="unit">(in)</span></label><input type="number" id="d_slab" value="8" step="0.125" title="Minimum structural thickness of the deck slab, in INCHES, constant across the section. Subtracted from top-of-deck to reach the bottom of the deck."></div>
             <div><label>Minimum haunch <span class="unit">(in)</span></label><input type="number" id="d_haunch" value="1.5" step="0.125" title="Minimum haunch, in INCHES, between bottom of deck and top of beam, occurring at the point of maximum camber. At the bearings the haunch becomes minimum haunch + camber."></div>
@@ -350,7 +357,7 @@
 
         <fieldset>
           <legend>derived geometry &mdash; check these against the plan</legend>
-          <p class="note" style="margin-top:0">Everything below is <em>computed</em> from the inputs above. These are the numbers a plan sheet dimensions, so they are the fastest way to confirm the model matches the drawing. Offsets are perpendicular to the PGL, positive to the right of travel.</p>
+          <div class="note bgNL" style="margin-top:0"><div class="bgNLl">Everything below is <em>computed</em> from the inputs above.</div><ul class="bgNLu"><li><b class="bgNLk">Use:</b> these are the numbers a plan sheet dimensions, so they are the fastest way to confirm the model matches the drawing.</li><li><b class="bgNLk">Offsets:</b> perpendicular to the PGL, positive to the right of travel.</li></ul></div>
           <div id="derived_wrap" style="overflow-x:auto;"></div>
         </fieldset>
 
@@ -361,14 +368,14 @@
         <div style="overflow-x:auto;"><table class="subtbl" id="subtbl"></table></div>
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0 0;"><label for="skew_datum" style="margin:0;">Skew measured from</label><select id="skew_datum" style="width:auto;" title="The line each support's skew angle is measured from. Alignment normal: the normal (radial line) to the PGL at the support station, as plans give skew. Chord normal: the normal to the construction reference line (the girders' chord; with per-span chords the bisector of the two span chords at a pier). On a tangent the two are the same. Projects saved before this setting existed open with Chord normal (their results are unchanged)."><option value="align">alignment normal (as on the plans)</option><option value="chord">chord normal (the girders' line)</option></select>
           <label for="brg_off_mode" style="margin:0 0 0 12px;">Dual bearing offset measured</label><select id="brg_off_mode" style="width:auto;" title="How a dual-bearing pier's bearing offset is measured. Along the girders: each bearing line is the given distance from the pier line, measured along the construction reference line (the girders' chord), parallel to the pier line. Along the PGL stationing: the bearing lines are at pier station ± offset on the PGL (on a curve the distance along the girders then differs, e.g. 2.167 ft for 2.5 ft in the demo). Projects saved before this setting existed open with the PGL stationing (their results are unchanged)."><option value="chord">along the girders (reference line)</option><option value="pgl">along the PGL stationing</option></select><!-- BGX8 (2026-11-07, review M3) --></div><!-- BGX4 (2026-11-07): skew datum; new projects alignment normal, saved projects without the field chord normal -->
-        <p class="note">Skew is measured from the datum chosen above, 0° = support square to it; the support line passes through the construction reference line point at the support station. <em>Alignment normal</em> is the normal (radial line) to the PGL at the support station, as plans give it. <em>Chord normal</em> is the normal to the straight abutment-to-abutment chord (the construction reference line), or with <em>Girder layout in plan</em> = per-span chords (Bridge tab), the span chord normal at an abutment and the bisector of the two span chords at a pier. On a tangent alignment these are all the same; the Derived table shows each support's skew from both. Dual bearing offset: the distance from the pier line to each bearing line, measured as chosen above (along the girders, or back/ahead of the pier station on the PGL).</p>
+        <div class="note bgNL"><div class="bgNLl">Skew is measured from the datum chosen above, 0° = support square to it.</div><ul class="bgNLu"><li><b class="bgNLk">Support line:</b> passes through the construction reference line point at the support station.</li><li><b class="bgNLk">Alignment normal:</b> the normal (radial line) to the PGL at the support station, as plans give it.</li><li><b class="bgNLk">Chord normal:</b> the normal to the straight abutment-to-abutment chord (the construction reference line), or with <em>Girder layout in plan</em> = per-span chords (Bridge tab), the span chord normal at an abutment and the bisector of the two span chords at a pier.</li><li><b class="bgNLk">On a tangent alignment:</b> these are all the same; the Derived table shows each support's skew from both.</li><li><b class="bgNLk">Dual bearing offset:</b> the distance from the pier line to each bearing line, measured as chosen above (along the girders, or back/ahead of the pier station on the PGL).</li></ul></div>
 
         <h2 class="sec">Per-span girder &amp; deck-edge overrides</h2>
-        <p class="note" style="margin-top:-6px;">Most bridges use the same girders and deck width everywhere &mdash; if so, you can ignore this table entirely; every span uses the global values above. Use it only when a particular span differs (e.g. a span has a different number of girders, a flared deck, or a different edge offset). Each greyed cell shows the global value it would inherit; type a value to override just that span (it turns solid), or clear it to revert.</p>
+        <div class="note bgNL" style="margin-top:-6px;"><div class="bgNLl">Most bridges use the same girders and deck width everywhere &mdash; if so, you can ignore this table entirely; every span uses the global values above.</div><ul class="bgNLu"><li><b class="bgNLk">Use it only:</b> when a particular span differs (e.g. a span has a different number of girders, a flared deck, or a different edge offset).</li><li><b class="bgNLk">Greyed cell:</b> shows the global value it would inherit.</li><li><b class="bgNLk">Override:</b> type a value to override just that span (it turns solid), or clear it to revert.</li></ul></div>
         <div style="overflow-x:auto;"><table class="subtbl" id="spantbl"></table></div>
 
         <h2 class="sec">3D Bridge View</h2>
-        <p class="note" style="margin-top:-6px;">Three-dimensional view of the bridge: deck surface, girders, beam-seat lines, and substructure. Toggle layers and adjust the vertical exaggeration to inspect the geometry. Drag to orbit, scroll to zoom; use plan/elev/iso for standard views.</p>
+        <div class="note bgNL" style="margin-top:-6px;"><div class="bgNLl">Three-dimensional view of the bridge: deck surface, girders, beam-seat lines, and substructure.</div><ul class="bgNLu"><li><b class="bgNLk">Inspect:</b> toggle layers and adjust the vertical exaggeration to inspect the geometry.</li><li><b class="bgNLk">Navigate:</b> drag to orbit, scroll to zoom; use plan/elev/iso for standard views.</li></ul></div>
         <div style="display:flex; flex-wrap:wrap; gap:10px 16px; margin-bottom:8px; font-size:11px; color:var(--ink-soft); align-items:center;">
           <label style="display:inline-flex; gap:5px; align-items:center; margin:0;"><input type="checkbox" id="l3_deck" checked style="width:auto"> deck surface</label>
           <label style="display:inline-flex; gap:5px; align-items:center; margin:0;"><input type="checkbox" id="l3_cl" checked style="width:auto"> centerlines (PGL / ref / deck)</label>
@@ -404,7 +411,7 @@
           </select>
         </div>
         <div style="overflow-x:auto;"><table class="subtbl" id="ovr_grid"></table></div>
-        <p class="note">Grey italic = inherited default (per-beam, then global). Type a value to override; it turns solid. Blank a cell to revert to the default. Rows are beams, columns are spans.</p>
+        <div class="note bgNL"><div class="bgNLl">Grey italic = inherited default (per-beam, then global).</div><ul class="bgNLu"><li><b class="bgNLk">Override:</b> type a value; it turns solid.</li><li><b class="bgNLk">Revert:</b> blank a cell to revert to the default.</li><li><b class="bgNLk">Layout:</b> rows are beams, columns are spans.</li></ul></div>
       </fieldset>
     </div>
   </section>
@@ -727,6 +734,16 @@
 
 <script>
 const DEG = Math.PI/180;
+/* BGNL (2026-11-08, engineer: a long note is "a text that will likely get overlooked because it's too long"; split it into a list):
+   the HTML of a note as optional action lines (o.act: HTML strings, each its own line on top in the warning colour), a bold one-line
+   lead and a list of items, each [lead word(s), text] or plain text; null items are skipped. Used inside a 'note bgNL' element
+   (a div: a list cannot sit in a <p>). o.ol: numbered list. Display only. */
+function bgNL(lead,items,o){ o=o||{}; const L=o.ol?'ol':'ul';
+  const li=(items||[]).filter(Boolean).map(x=>'<li>'+(Array.isArray(x)?'<b class="bgNLk">'+x[0]+'</b> '+x[1]:x)+'</li>').join('');
+  return (o.act||[]).filter(Boolean).map(a=>'<div class="bgNLa">'+a+'</div>').join('')+(lead?'<div class="bgNLl">'+lead+'</div>':'')+(li?'<'+L+' class="bgNLu">'+li+'</'+L+'>':''); }
+/* BGNL: a list of plain-text warnings into a box: one warning as its text, two or more as a list (each text unchanged) */
+function bgNLWarn(box,list){ list=list||[]; if(list.length<2){ box.textContent=list.join(''); return; }
+  box.innerHTML='<ul class="bgNLu">'+list.map(t=>'<li>'+String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))+'</li>').join('')+'</ul>'; }
 
 /* ===== SURVEY INPUT PARSERS / FORMATTERS ===== */
 function parseStation(str){
@@ -3198,16 +3215,19 @@ function buildDerived(){
     const PS=ENG.frameInfo().poly, rows=PS.seg.map((S,i)=>{ const b=Math.atan2(S.ux,S.uy)/DEG, ba=ENG.align.at(PS.sta[i]).brg/DEG; let d=b-ba; while(d>180)d-=360; while(d<-180)d+=360;
       return `span ${i+1} (${su[i].name} &rarr; ${su[i+1].name}): <strong>${S.L.toFixed(3)} ft</strong>, bearing ${azimuthToQuadrant(b)}, ${d>=0?'+':''}${d.toFixed(3)}&deg; to the PGL tangent at ${su[i].name}`; });
     const kinks=PS.seg.slice(1).map((S,i)=>{ const a=PS.seg[i]; let d=(Math.atan2(S.ux,S.uy)-Math.atan2(a.ux,a.uy))/DEG; while(d>180)d-=360; while(d<-180)d+=360; return `${su[i+1].name} ${d>=0?'+':''}${d.toFixed(3)}&deg;`; });
-    h+=`<p class="note" style="margin:8px 0 0">Construction reference line: <strong>chorded span by span</strong> through the reference point of each support (girders, deck edges and curbs straight in each span, kinked at the piers on the bisector of the two chords). `+
-       rows.join(' &middot; ')+`. Total along the chords <strong>${PS.T[PS.n].toFixed(3)} ft</strong>. Angle change at the piers: ${kinks.join(', ')}.</p>`;
+    h+='<div class="note bgNL" style="margin:8px 0 0">'+bgNL('Construction reference line: <strong>chorded span by span</strong> through the reference point of each support.',[   /* BGNL: the same facts as a list */
+       ['In each span:','girders, deck edges and curbs straight in each span, kinked at the piers on the bisector of the two chords.'],
+       ...rows.map((r,i)=>r+(i<rows.length-1?';':'.')),
+       ['Total along the chords:',`<strong>${PS.T[PS.n].toFixed(3)} ft</strong>.`],
+       ['Angle change at the piers:',`${kinks.join(', ')}.`]])+'</div>';
   } else if(ENG.chord){
     const CH=ENG.chord;
     const brgCL=Math.atan2(CH.ux,CH.uy)/DEG, brgA=(ENG.align.at(su[0].sta).brg)/DEG;
     let skewToPGL=brgCL-brgA; while(skewToPGL>180)skewToPGL-=360; while(skewToPGL<-180)skewToPGL+=360;
-    h+=`<p class="note" style="margin:8px 0 0">Construction reference line: <strong>${CH.len.toFixed(3)} ft</strong> (${ftin(CH.len)}) between end supports &middot; `+
-       `bearing <strong>${azimuthToQuadrant(brgCL)}</strong> &middot; `+
-       `<strong>${skewToPGL>=0?'+':''}${skewToPGL.toFixed(3)}&deg;</strong> relative to the PGL tangent at ${su[0].name}. `+
-       `The bridge is straight; the PGL is not, so the construction reference line offset changes along the span.</p>`;
+    h+='<div class="note bgNL" style="margin:8px 0 0">'+bgNL(`Construction reference line: <strong>${CH.len.toFixed(3)} ft</strong> (${ftin(CH.len)}) between end supports.`,[   /* BGNL */
+       ['Bearing:',`<strong>${azimuthToQuadrant(brgCL)}</strong>.`],
+       ['Angle:',`<strong>${skewToPGL>=0?'+':''}${skewToPGL.toFixed(3)}&deg;</strong> relative to the PGL tangent at ${su[0].name}.`],
+       ['Offset along the span:','the bridge is straight; the PGL is not, so the construction reference line offset changes along the span.']])+'</div>';
   }
   box.innerHTML=h;
 }
@@ -3325,8 +3345,9 @@ function renderXsInfo(){ const box=document.getElementById('xs_info'); if(!box) 
   const g=[]; for(let i=1;i<rows.length;i++){ const a=rows[i-1], b=rows[i], ds=b.sta-a.sta; if(!(ds>0)) continue;
     const rl=Math.abs(b.L-a.L)/100*wl/ds, rr=Math.abs(b.R-a.R)/100*wr/ds;
     g.push(`${formatStation(a.sta)}–${formatStation(b.sta)}: left edge ${rl>0?'1:'+Math.round(1/rl):'0'}, right edge ${rr>0?'1:'+Math.round(1/rr):'0'}`); }
-  box.innerHTML=`<b>Used:</b> ${rows.length} row(s) replace the global mode / rate and the per-support controls. `+
-    (g.length?`Relative gradient of the deck edges to the PGL (edge offsets ${wl.toFixed(1)} / ${wr.toFixed(1)} ft): ${g.join('; ')}. Compare with the maximum relative gradient for the design speed (Green Book Table 3-15, verify).`:'');
+  box.innerHTML=bgNL(`Used: ${rows.length} row(s) replace the global mode / rate and the per-support controls.`,   /* BGNL: the gradients as a list */
+    g.length?[`<b class="bgNLk">Relative gradient of the deck edges to the PGL</b> (edge offsets ${wl.toFixed(1)} / ${wr.toFixed(1)} ft):<ul class="bgNLu">${g.map((x,i)=>'<li>'+x+(i<g.length-1?';':'.')+'</li>').join('')}</ul>`,
+      ['Compare','with the maximum relative gradient for the design speed (Green Book Table 3-15, verify).']]:[]);
 }
 function renderHValTable(){
   const t=document.getElementById('hval_tbl'); if(!t) return;
@@ -3474,7 +3495,7 @@ function renderElemTable(){
         warnings.push(`Rows ${i+1}→${i+2}: radius not continuous (row ${i+1} ends at R = ${rs(kEnd)}, row ${i+2} starts at R = ${rs(kBeg)})`+
           ((kEnd*kBeg<0)?' — opposite signs, which makes a reverse curve. A left-hand spiral needs negative radii.':'.'));
     } }
-  const warnEl=document.getElementById('elem_warn'); if(warnEl) warnEl.textContent = warnings.join('  ');
+  const warnEl=document.getElementById('elem_warn'); if(warnEl) bgNLWarn(warnEl, warnings);   /* BGNL: two or more warnings as a list (was joined on one line) */
   t.querySelectorAll('input,select').forEach(el=>el.addEventListener('change',ev=>{
     const i=+ev.target.dataset.i,f=ev.target.dataset.f; let v=ev.target.value;
     if(f==='endSta'){ applyEndStation(i, v); renderElemTable(); if(ENG) compute(); return; }
@@ -3593,7 +3614,7 @@ function renderVProfTable(){
   for(let i=1;i<VPIS.length-1;i++){ const c=cd[i]; if(!c||c.bvcSta==null) continue;
     if(c.bvcSta < VPIS[i-1].sta-1e-6) warn.push(`PVI ${i}: BVC ${formatStation(c.bvcSta)} is before the previous point (${formatStation(VPIS[i-1].sta)}); shorten the curve.`);
     if(c.evcSta > VPIS[i+1].sta+1e-6) warn.push(`PVI ${i}: EVC ${formatStation(c.evcSta)} is past the next point (${formatStation(VPIS[i+1].sta)}); shorten the curve.`); }
-  const w=document.getElementById('vprof_warn'); if(w) w.textContent=warn.join('  ');
+  const w=document.getElementById('vprof_warn'); if(w) bgNLWarn(w, warn);   /* BGNL */
   t.querySelectorAll('input').forEach(el=>el.addEventListener('change',ev=>{
     const i=+ev.target.dataset.i,f=ev.target.dataset.f; let v=ev.target.value;
     if(f==='sta'){ const pv=parseStation(v); VPIS[i].sta=isNaN(pv)?0:pv; }

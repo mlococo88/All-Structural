@@ -77,6 +77,39 @@ body{margin:0;background:var(--paper);color:var(--ink);
   #wrap{grid-template-columns:minmax(0,1fr);}
   div.tw,.pnl>.bd{overflow-x:auto;}
 }
+/* ARDC (2026-11-08, engineer: the left summary panel as in Retaining Wall / Spread Footing / Light Pole / Shear and Moment):
+   from 1200 px a column of compact check chips left of the inputs (240 px to 1499 px, 280 px from 1500 px); « shrinks it to a
+   42 px strip (stoneArchLR.dashCollapsed.v1). Below 1200 px it is not shown and nothing changes. Screen only. */
+#arDashCol{display:none;}
+@media screen and (min-width:1200px){
+  #wrap{grid-template-columns:280px minmax(360px,0.9fr) 2.6fr;}
+  body.arDashColl #wrap{grid-template-columns:42px minmax(360px,0.9fr) 2.6fr;}
+  #arDashCol{display:block;height:100%;min-height:0;overflow-y:auto;overflow-x:hidden;background:var(--sheet);
+    border:1px solid var(--line);padding:6px 7px;}
+}
+@media screen and (min-width:1200px) and (max-width:1499.98px){
+  #wrap{grid-template-columns:240px minmax(360px,0.9fr) 2.6fr;}
+}
+#arDashHead{display:flex;align-items:center;gap:6px;margin-bottom:5px;}
+#arDashHead h2{font-size:1rem;margin:0;flex:1;}
+#arDashTgl{padding:0 6px;font-size:.95rem;line-height:1.3;}
+#arDashCnt{font-size:.8rem;}
+#arDashCnt .badge{font-size:.75rem;padding:0 5px;}
+#arDashSub{font-size:.82rem;color:var(--soft);margin:0 0 5px;}
+.adChip{display:grid;grid-template-columns:1fr auto;gap:0 6px;width:100%;text-align:left;margin:0 0 4px;padding:3px 6px;
+  border:1px solid var(--na);background:var(--na-bg);color:var(--ink);font-size:.86rem;line-height:1.25;cursor:pointer;}
+.adChip:hover{background:var(--sheet);color:var(--ink);}
+.adChip .n{font-weight:700;grid-column:1/3;}
+.adChip .v{font-family:"Courier New",Courier,monospace;font-size:.82rem;}
+.adChip .s{font-weight:700;font-size:.78rem;align-self:end;}
+.adChip.ad-pass{border-color:var(--ok);background:var(--ok-bg);} .adChip.ad-pass .s{color:var(--ok);}
+.adChip.ad-fail{border-color:var(--bad);background:var(--bad-bg);} .adChip.ad-fail .s{color:var(--bad);}
+.adChip.ad-warn{border-color:var(--warn);background:var(--warn-bg);} .adChip.ad-warn .s{color:var(--warn);}
+body.arDashColl #arDashCol{padding:6px 3px;}
+body.arDashColl #arDashCol h2,body.arDashColl #arDashSub,body.arDashColl #arDash{display:none;}
+body.arDashColl #arDashHead{flex-direction:column;}
+body.arDashColl #arDashCnt{writing-mode:vertical-rl;}
+@media print{#arDashCol{display:none !important;}}
 @media(max-width:700px){
   #tblk{min-width:0;flex:1 1 100%;grid-template-columns:repeat(2,minmax(0,1fr));}
   #appTitle{min-width:0;}
@@ -259,6 +292,7 @@ figcaption{font-size:.93rem;color:var(--soft);font-style:italic;margin-top:3px;t
 .manpart h4{font-size:1.02rem;margin:11px 0 3px;}
 .manpart p,.manpart li{font-size:.99rem;}
 .manpart ul,.manpart ol{margin:5px 0 9px;padding-left:26px;}
+.manpart .arNLl{font-size:.99rem;margin-top:6px;} .manpart .arNLu{margin:2px 0 8px;padding-left:22px;}   /* ARNL: the Manual's listed paragraphs */
 
 /* ---------- modal ---------- */
 #modalBg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;display:none;
@@ -498,6 +532,11 @@ a.wkA{color:var(--blue);text-decoration:none;border-bottom:1px dotted var(--blue
 </div></div>
 
 <div id="wrap">
+<aside id="arDashCol" class="noprint" aria-label="Rating summary"><!-- ARDC (2026-11-08): the check chips as a left column on screens 1200 px and wider -->
+  <div id="arDashHead"><button type="button" id="arDashTgl" aria-controls="arDash" aria-expanded="true" title="Hide the summary column">&laquo;</button><h2>Rating summary</h2><span id="arDashCnt"></span></div>
+  <div id="arDashSub"></div>
+  <div id="arDash"></div>
+</aside>
 <!-- ================= INPUT PANEL ================= -->
 <div id="inPanel"></div>
 <!-- ================= OUTPUT PANEL ================= -->
@@ -3082,11 +3121,7 @@ qualified engineer before it is relied upon. Nothing in this program relieves th
 <p>Stone Arch LR performs a load rating of a single-span unreinforced stone masonry arch bridge by the
 Allowable Stress method at the Inventory level. It implements:</p>
 <ul>
-<li><b>MassDOT Bridge Manual, Part I, Chapter 7, §7.2.7</b> — Special Instructions for Load Ratings of Stone
-Masonry Arches, including the modeling requirements of §7.2.7.2B, the dead load provisions of §7.2.7.3B and
-§7.2.7.4B, the lateral earth pressure of §7.2.7.5B, the influence line requirements of §7.2.7.7B, live load
-positioning per §7.2.7.8B, the eccentricity and kern provisions of §7.2.7.9B and §7.2.7.10B, the allowable
-stress direction of §7.2.7.11B, and the iterative rating procedure of §7.2.7.12 and Figure 7.2.7-1.</li>
+<li><b>MassDOT Bridge Manual, Part I, Chapter 7, §7.2.7</b> — Special Instructions for Load Ratings of Stone Masonry Arches, including<ul class="arNLu"><li>the modeling requirements of §7.2.7.2B,</li><li>the dead load provisions of §7.2.7.3B and §7.2.7.4B,</li><li>the lateral earth pressure of §7.2.7.5B,</li><li>the influence line requirements of §7.2.7.7B,</li><li>live load positioning per §7.2.7.8B,</li><li>the eccentricity and kern provisions of §7.2.7.9B and §7.2.7.10B,</li><li>the allowable stress direction of §7.2.7.11B,</li><li>and the iterative rating procedure of §7.2.7.12 and Figure 7.2.7-1.</li></ul></li>
 <li><b>AASHTO Manual for Bridge Evaluation, Art. 6A.9.1</b> — unreinforced masonry arches evaluated by the
 Allowable Stress method, and <b>Art. 6B.5.2.6</b> for allowable compressive stresses in masonry.</li>
 <li><b>AASHTO Standard Specifications, Art. 6.4</b> — distribution of wheel loads through fill, and
@@ -3121,12 +3156,11 @@ Art. 3.24.3 requires slab distribution instead of the through-fill spread used h
 not perform that check; do it separately.</li>
 <li><b>No abutment, foundation, or scour check.</b> Springing reactions are not carried into a stability or
 bearing check of the abutment. Scour, undermining, and foundation movement are not modeled.</li>
-<li><b>Shear rating is optional and outside the clause.</b> §7.2.7 rates on combined compressive stress only.
-Leave the allowable shear stress at zero and shear is computed and reported for information, as the clause
-intends. Enter a value and every section is additionally checked as τ = V/A against it, with the governing
-rating factor becoming the lower of the two checks — a supplement to the code procedure, not part of it. If
+<li><b>Shear rating is optional and outside the clause.</b> §7.2.7 rates on combined compressive stress only.<ul class="arNLu"><li><b class="arNLk">Zero:</b> Leave the allowable shear stress at zero and shear is computed and reported for information, as the clause
+intends.</li><li><b class="arNLk">A value:</b> Enter a value and every section is additionally checked as τ = V/A against it, with the governing
+rating factor becoming the lower of the two checks — a supplement to the code procedure, not part of it.</li><li><b class="arNLk">If shear governs:</b> If
 shear governs, the reported figure is no longer a pure §7.2.7 rating and must be described as such wherever it
-appears, including Items 64 and 66.</li>
+appears, including Items 64 and 66.</li></ul></li>
 <li><b>No thermal effects.</b> Excluded on the explicit direction of §7.2.7.6B.</li>
 <li><b>No live load lateral surcharge, braking, centrifugal, wind, or pedestrian load.</b> Only dead load and
 vertical live load with impact are combined.</li>
@@ -3144,26 +3178,26 @@ so a 3-D view and transparency slider have no subject matter here.</li>
 <h3>1.3 Known limitations and assumptions</h3>
 
 <h4>1.3.1 Linear elastic material, no cracking</h4>
-<p>The frame solve is linear elastic with uncracked section properties throughout, using the full ring depth for
-both axial area and moment of inertia. Where the thrust falls outside the kern the <i>stress check</i> accounts
+<div class="arNLl">The frame solve is linear elastic with uncracked section properties throughout, using the full ring depth for
+both axial area and moment of inertia.</div><ul class="arNLu"><li><b class="arNLk">Stress check:</b> Where the thrust falls outside the kern the <i>stress check</i> accounts
 for the cracked, effectively reduced bearing depth through the pressure wedge of §7.2.7.10B, but the
-<i>stiffness</i> used to distribute the forces does not. In a real arch, cracking at the extrados or intrados
-softens that region and sheds moment elsewhere. Neglecting this is the conventional treatment for this
+<i>stiffness</i> used to distribute the forces does not.</li><li><b class="arNLk">Real arch:</b> In a real arch, cracking at the extrados or intrados
+softens that region and sheds moment elsewhere.</li><li><b class="arNLk">Approximation:</b> Neglecting this is the conventional treatment for this
 procedure and is generally conservative at the cracked section, but it is an approximation, and a barrel showing
-extensive cracking is outside the reliable range of an uncracked elastic model.</p>
+extensive cracking is outside the reliable range of an uncracked elastic model.</li></ul>
 
 <h4>1.3.1a Beam theory — and why the default matches Midas</h4>
 <p>Elements are <b>Timoshenko beams by default</b>, including shear flexibility with Poisson's ratio 0.2 and a
 shear area of five sixths of the gross area, which is the standard factor for a solid rectangle. Euler-Bernoulli
 is available and is flagged on the dashboard when selected.</p>
-<p>The reason for the default is agreement with the program a checker will use. §7.2.7.2B fixes the element count
+<div class="arNLl">The reason for the default is agreement with the program a checker will use.</div><ul class="arNLu"><li><b class="arNLk">Deep elements:</b> §7.2.7.2B fixes the element count
 by clear span, so on a masonry ring the elements are frequently as deep as they are long — d/L of one to two is
-ordinary — and slender-beam theory is not accurate at that proportion. <b>Midas Civil includes shear deformation
-in beam elements by default</b>, deriving the shear areas from the section. Against a Midas run of a model
+ordinary — and slender-beam theory is not accurate at that proportion.</li><li><b class="arNLk">Midas:</b> <b>Midas Civil includes shear deformation
+in beam elements by default</b>, deriving the shear areas from the section.</li><li><b class="arNLk">Timoshenko:</b> Against a Midas run of a model
 exported from this program, the Timoshenko formulation agreed to <b>0.005</b> in both moment and thrust
-influence ordinates, which was the rounding precision of the pasted results — that is, exactly. The
+influence ordinates, which was the rounding precision of the pasted results — that is, exactly.</li><li><b class="arNLk">Euler-Bernoulli:</b> The
 Euler-Bernoulli formulation differed from the same Midas run by up to <b>0.045</b>, roughly nine times the
-precision of the data.</p>
+precision of the data.</li></ul>
 <p>The two formulations differ by about 2% in springline moment and rating factor, Bernoulli being the
 conservative one. If a calculation is issued on the Bernoulli basis, say so, and expect an independent Midas
 check to disagree by that amount unless the checker also turns shear deformation off.</p>
@@ -3175,11 +3209,11 @@ capacity, on the order of a few percent of the compressive strength, may be just
 would raise ratings; that allowance is deliberately not taken here.</p>
 
 <h4>1.3.3 Springing restraint is an idealization</h4>
-<p>Real springings are neither perfectly fixed nor perfectly pinned. Fixed produces springline moment and is
-usually the governing and the conventional assumption for a barrel on massive abutments. Pinned removes
-springline moment entirely and moves the critical section inboard, generally raising the rating. On a
+<div class="arNLl">Real springings are neither perfectly fixed nor perfectly pinned.</div><ul class="arNLu"><li><b class="arNLk">Fixed:</b> Fixed produces springline moment and is
+usually the governing and the conventional assumption for a barrel on massive abutments.</li><li><b class="arNLk">Pinned:</b> Pinned removes
+springline moment entirely and moves the critical section inboard, generally raising the rating.</li><li><b class="arNLk">Example:</b> On a
 representative 40 ft span the difference was a rating factor of 1.30 fixed against 1.77 pinned — roughly 35%.
-This choice is the single most influential modeling decision in the program and must be stated and defended.</p>
+This choice is the single most influential modeling decision in the program and must be stated and defended.</li></ul>
 
 <h4>1.3.4 Uniform pressure over the spread rectangle</h4>
 <p>Std. Spec. Art. 6.4 spreads a wheel load over a rectangle that grows with depth and treats the pressure as
@@ -3195,77 +3229,77 @@ ratings most likely used the crown value uniformly. Confirm the owner's preferen
 numbers.</p>
 
 <h4>1.3.6 Element count and convergence</h4>
-<p>§7.2.7.2B sets a minimum of 10 elements or one per 4 ft of clear span. Convergence testing on a 40 ft span
+<div class="arNLl">§7.2.7.2B sets a minimum of 10 elements or one per 4 ft of clear span.</div><ul class="arNLu"><li><b class="arNLk">Convergence testing:</b> Convergence testing on a 40 ft span
 found the springline moment at that minimum is not reliably close to the converged value, and the error can go either
 way: on the default 40 ft circular arch the springline dead-load moment at 10 elements is about 27% larger than
 converged (the rating is conservative there, by about 30%), while on a shallow 30 ft arch the HS20 rating at the
 minimum is about 15% too high, and on a 40 ft semicircle the minimum mesh rates 0.26 where the refined model is overstressed
-by dead load alone. The straight chords carry the transverse fill load as beams, which a curved ring does not. The
+by dead load alone.</li><li><b class="arNLk">Why:</b> The straight chords carry the transverse fill load as beams, which a curved ring does not.</li><li><b class="arNLk">Therefore:</b> The
 program therefore rates every vehicle at the count in use and at about two and four times it (multiples of 4, capped
 at 120) and reports the <i>lowest</i> rating factor of the three (Rating tab, "Mesh convergence"; the dashboard
-gives the spread).</p>
+gives the spread).</li></ul>
 
 <h4>1.3.6a Modeling deterioration</h4>
 <p>Deterioration is entered by <b>station</b>: <span class="mono">x 5.56, depth, f<sub>a</sub>, treatment</span>
 for a point of loss, or <span class="mono">x 4.5-6.6, depth, f<sub>a</sub>, treatment</span> for a zone between two
 stations, every field after the station optional. Three separate mechanisms can be applied, and they are
 genuinely different things that should not be used as proxies for one another.</p>
-<p><b>Why a station and not a node number.</b> Earlier builds keyed each entry to a node number, and a node
-number is a position in the mesh rather than a position on the arch. On a 9.7 ft barrel at the code minimum of
+<div class="arNLl"><b>Why a station and not a node number.</b> Earlier builds keyed each entry to a node number, and a node
+number is a position in the mesh rather than a position on the arch.</div><ul class="arNLu"><li><b class="arNLk">Example:</b> On a 9.7 ft barrel at the code minimum of
 12 elements, node 7 is the crown; at 16 elements the same entry lands at x = 3.7 ft, and by 60 elements it has
-reached the springing. The intermediate meshes put the reduced section on the haunch, where the arch will not
-carry its own weight, and the rating collapses to zero with no indication that the input has moved. Since this
+reached the springing.</li><li><b class="arNLk">Effect:</b> The intermediate meshes put the reduced section on the haunch, where the arch will not
+carry its own weight, and the rating collapses to zero with no indication that the input has moved.</li><li><b class="arNLk">Workflow:</b> Since this
 manual tells you to refine the mesh until the rating settles, that was the expected workflow rather than an
-unlikely one. A station resolves to whichever node is nearest at build time and stays where you put it. Node
+unlikely one.</li><li><b class="arNLk">A station</b> A station resolves to whichever node is nearest at build time and stays where you put it.</li><li><b class="arNLk">Node numbers</b> Node
 numbers are still accepted so that saved sessions open unchanged, but they are flagged on the dashboard and
-the editor offers to convert them.</p>
-<p><b>What the depth reduction means — the treatment.</b> A reduced depth can describe two physically
-different things, and the number alone cannot tell them apart. Choose <b>Section loss</b> when the stone is
+the editor offers to convert them.</li></ul>
+<div class="arNLl"><b>What the depth reduction means — the treatment.</b> A reduced depth can describe two physically
+different things, and the number alone cannot tell them apart.</div><ul class="arNLu"><li><b class="arNLk">Section loss:</b> Choose <b>Section loss</b> when the stone is
 gone — a spalled soffit, a missing voussoir. The reduced depth then enters the geometry: it softens the ring
-and moves the arch axis to the mid-depth of what remains. Choose <b>Capacity only</b> when the stone is
+and moves the arch axis to the mid-depth of what remains.</li><li><b class="arNLk">Capacity only:</b> Choose <b>Capacity only</b> when the stone is
 present but the joint is degraded — lost or raked mortar. The ring is then analysed with its sound section
 and its true axis, and the reduced depth is used solely in the stress check, as the depth still bearing at
-that joint.</p>
+that joint.</li></ul>
 <p>The distinction is not academic. On a 17 in ring with 8 in entered at the crown, section loss RAISES the
 E-80 rating from 2.41 to 3.99 — most of that coming from the arch axis rising 4.5 in, which makes the model
 a taller arch than the one on site. Capacity only, on the same entry, gives 0.00: the sound-ring analysis
 leaves an eccentricity of 3.88 in at the crown against d/2 = 4.00 in, so the thrust line is all but off the
 reduced section. Neither number is the answer on its own.</p>
-<p><b>End release.</b> Either treatment can carry a moment release at that node. A joint that has lost enough
+<div class="arNLl"><b>End release.</b> Either treatment can carry a moment release at that node.</div><ul class="arNLu"><li><b class="arNLk">Capacity and release:</b> A joint that has lost enough
 mortar to be unreliable in bending is capacity + release: the arch sheds the crown moment, redistributes it
 to the springings, and the reduced section is checked against the thrust that remains. On the example above
 that gives 1.90, governed at the springing — lower than the sound ring, which is the direction damage ought
-to move a rating. A joint merely raked at the surface is capacity alone, with no release. Bear in mind a
-fixed arch has three redundancies: the fourth release makes a mechanism and the program will refuse it.</p>
-<p>Outside the entered station or zone the section feathers back to sound at 45 degrees — the taper runs the
-depth removed, so a 0.77 ft loss in a 1.42 ft ring blends over 0.77 ft on each side. That is a physical length,
-so it does not change with the mesh either. A point entry therefore has an extent of roughly twice the depth
+to move a rating.</li><li><b class="arNLk">Raked joint:</b> A joint merely raked at the surface is capacity alone, with no release.</li><li><b class="arNLk">Limit:</b> Bear in mind a
+fixed arch has three redundancies: the fourth release makes a mechanism and the program will refuse it.</li></ul>
+<div class="arNLl">Outside the entered station or zone the section feathers back to sound at 45 degrees — the taper runs the
+depth removed, so a 0.77 ft loss in a 1.42 ft ring blends over 0.77 ft on each side.</div><ul class="arNLu"><li><b class="arNLk">Mesh:</b> That is a physical length,
+so it does not change with the mesh either.</li><li><b class="arNLk">Point or zone:</b> A point entry therefore has an extent of roughly twice the depth
 lost, which is usually smaller than a real spall: if the damage covers three feet of soffit, enter it as a zone
-rather than as a point, because the two are not the same structure.</p>
-<p><b>Reduced depth</b> removes section. <b>Reduced allowable stress</b> leaves the section in place and lowers
+rather than as a point, because the two are not the same structure.</li></ul>
+<ul class="arNLu"><li><b class="arNLk">Reduced depth</b> <b>Reduced depth</b> removes section.</li><li><b class="arNLk">Reduced allowable stress</b> <b>Reduced allowable stress</b> leaves the section in place and lowers
 its capacity, which is the honest model for weathered or soft masonry and deep mortar loss — faking it by
 removing depth also removes stiffness and moves the axis, changing the force distribution when only the
-capacity should change. <b>A hinge</b> releases moment at the node, which is what a crack through the depth
+capacity should change.</li><li><b class="arNLk">A hinge</b> <b>A hinge</b> releases moment at the node, which is what a crack through the depth
 actually does; the release is applied by static condensation of that rotational freedom out of the element, and
-it is verified by the fact that hinges at both springings of a fixed arch reproduce a pinned arch exactly.</p>
-<p><b>Which face the material is lost from is not a bookkeeping detail.</b> The arch axis is the mid-depth line,
-so the face decides where the axis goes and therefore the shape of the structure being analyzed. Losing the
+it is verified by the fact that hinges at both springings of a fixed arch reproduce a pinned arch exactly.</li></ul>
+<div class="arNLl"><b>Which face the material is lost from is not a bookkeeping detail.</b> The arch axis is the mid-depth line,
+so the face decides where the axis goes and therefore the shape of the structure being analyzed.</div><ul class="arNLu"><li><b class="arNLk">Soffit or backing:</b> Losing the
 soffit — the case an inspector can actually see — leaves the sound material on top and the axis <i>rises</i>;
-losing backing from above drops it. On a 40 ft arch with 1.5 ft remaining over five nodes at the crown, the
+losing backing from above drops it.</li><li><b class="arNLk">Example:</b> On a 40 ft arch with 1.5 ft remaining over five nodes at the crown, the
 same damage gives a rating factor of 0.97 for intrados loss, 0.98 for extrados loss and 1.20 if the loss is
-symmetric, because only the symmetric case leaves the axis where it was. Note also that a measurement taken
-from the soffit tells you the remaining sound depth but not whether the extrados has lost backing as well.</p>
+symmetric, because only the symmetric case leaves the axis where it was.</li><li><b class="arNLk">Measurement:</b> Note also that a measurement taken
+from the soffit tells you the remaining sound depth but not whether the extrados has lost backing as well.</li></ul>
 <p><b>Refine the mesh for deterioration studies.</b> These results are sensitive to element count and to how
 abruptly the zone is tapered — one case moved from 0.036 to 0.102 between 20 and 80 elements. Run the element
 count up until the answer stops moving before relying on it.</p>
 
 <h4>1.3.7 Ring depth overrides shift the arch axis</h4>
-<p>The arch axis is generated by offsetting the intrados outward by half the local depth, so a local depth
-reduction is taken from the <i>extrados</i> side and pulls the axis down in that zone. That is the right model
+<div class="arNLl">The arch axis is generated by offsetting the intrados outward by half the local depth, so a local depth
+reduction is taken from the <i>extrados</i> side and pulls the axis down in that zone.</div><ul class="arNLu"><li><b class="arNLk">Right and wrong:</b> That is the right model
 for extrados-side deterioration or loss of backing, and the wrong one for intrados-side loss such as spalled
-voussoir soffits, where the axis should rise instead. It also means an abrupt depth change puts a kink in the
-axis and generates a local moment that is an artefact of the geometry, not a real effect. Use gradual
-transitions over at least two or three elements, and treat sharp steps with suspicion.</p>
+voussoir soffits, where the axis should rise instead.</li><li><b class="arNLk">Kink:</b> It also means an abrupt depth change puts a kink in the
+axis and generates a local moment that is an artefact of the geometry, not a real effect.</li><li><b class="arNLk">Use</b> Use gradual
+transitions over at least two or three elements, and treat sharp steps with suspicion.</li></ul>
 
 <h4>1.3.8 One-foot strip idealization</h4>
 <p>The analysis is a unit-width longitudinal strip beneath a wheel line. Transverse distribution within the
@@ -3274,12 +3308,11 @@ width carrying a single lane this is the standard idealization; for narrow barre
 is optimistic.</p>
 
 <h4>1.3.9 Solver output is not hand-checkable</h4>
-<p>The program computes its own section forces and influence coefficients — nothing is taken from an external
-analysis. Unit vertical loads are applied at each interior node and the plane frame is solved once per load
-case, producing the influence coefficient tables for moment, shear and axial load that §7.2.7.7B requires.
-What cannot be done is to present that linear algebra as checkable hand steps: the system has tens of degrees
-of freedom and is solved dozens of times. Those results are therefore flagged in the output, in the spirit of, so a reviewer knows exactly which numbers are solver output and which are arithmetic they can
-follow. Everything downstream of them is worked in full, and Part 7 documents how the solver was verified.</p>
+<div class="arNLl">The program computes its own section forces and influence coefficients — nothing is taken from an external
+analysis.</div><ul class="arNLu"><li><b class="arNLk">Influence coefficients:</b> Unit vertical loads are applied at each interior node and the plane frame is solved once per load
+case, producing the influence coefficient tables for moment, shear and axial load that §7.2.7.7B requires.</li><li><b class="arNLk">Not hand steps:</b> What cannot be done is to present that linear algebra as checkable hand steps: the system has tens of degrees
+of freedom and is solved dozens of times.</li><li><b class="arNLk">Flagged:</b> Those results are therefore flagged in the output, in the spirit of, so a reviewer knows exactly which numbers are solver output and which are arithmetic they can
+follow.</li><li><b class="arNLk">Downstream:</b> Everything downstream of them is worked in full, and Part 7 documents how the solver was verified.</li></ul>
 `],
 
 ["m2","2. Using the Program",()=>`
@@ -3302,14 +3335,14 @@ must be justified per MBE Art. 6B.5.2.6 and §7.2.7.11B.</li>
 <p>There is no recalculate button. Every change recomputes the whole calculation immediately.</p>
 
 <h3>2.2 Reading the output</h3>
-<p>A single bar above the tabs fixes the whole load case: <b>section of interest, vehicle, direction and
-position</b>. Everything in the output reads from it — the live load derivation and the axle contribution
+<div class="arNLl">A single bar above the tabs fixes the whole load case: <b>section of interest, vehicle, direction and
+position</b>.</div><ul class="arNLu"><li><b class="arNLk">Everything</b> Everything in the output reads from it — the live load derivation and the axle contribution
 matrix on the Live Load tab, the node-by-node calculation on Nodal Results, the kern and pressure wedge figure
-and the three force diagrams, and the influence line walk-through. Each tab still has its own slider and
+and the three force diagrams, and the influence line walk-through.</li><li><b class="arNLk">Tab controls:</b> Each tab still has its own slider and
 selectors, but they now write to the shared choice rather than keeping their own, so the worked examples cannot
-end up describing different vehicles at different positions. <i>Governing</i> jumps section, vehicle position
-and direction to the case that controls the rating. The older text below describes the section selector alone
-and remains true of it.</p>
+end up describing different vehicles at different positions.</li><li><b class="arNLk">Governing</b> <i>Governing</i> jumps section, vehicle position
+and direction to the case that controls the rating.</li><li><b class="arNLk">Older text:</b> The older text below describes the section selector alone
+and remains true of it.</li></ul>
 <p>A single <b>section of interest</b> selector sits above the tabs and drives every worked example in the
 program — the live load derivation on the Live Load tab, the node-by-node calculation on Nodal Results, the
 kern and pressure wedge figure on Diagrams, and the influence line walk-through. Changing it anywhere changes
@@ -3321,18 +3354,7 @@ button jumps to the section that controls the rating.</p>
 linking to the supporting math; the controlling result; your assumptions; and the design basis.</li>
 <li><b>Model</b> — geometry, curve fitting, ring depth, restraint, grade, node table, and the scaled section figure.</li>
 <li><b>Dead Load</b> — load components, the consistent element load formulation, and dead load section forces.</li>
-<li><b>Live Load</b> — carries the <b>axle contribution matrix</b>: every node of the model against every
-axle of the vehicle, giving the nodal load each axle delivers with the pressure it produces beneath it, the
-impact factor as its own column, the influence ordinates for the section of interest, and each node's
-contribution to the moment, thrust and shear at that section with its share of the total. The sum row is
-checked against the solver's own superposition on every render, so the table is a decomposition of the
-calculation in use rather than a parallel one that could drift from it. Empty nodes can be hidden and the whole
-table copied as CSV. It also carries the <b>complete worked live load calculation</b>: impact worked at every
-node with the depth used, the band applied and the resulting factor; the pressure and equivalent nodal load at
-every node; the influence line superposition shown term by term so the totals can be added by hand; and the
-combination with dead load through to eccentricity, stress and utilization at the section of interest. On the
-crown impact basis the table shows both each node's own cover and the crown depth actually used, because those
-deliberately differ away from the crown.</li>
+<li><b>Live Load</b> — carries the <b>axle contribution matrix</b>: every node of the model against every axle of the vehicle, giving the nodal load each axle delivers with the pressure it produces beneath it, the impact factor as its own column, the influence ordinates for the section of interest, and each node's contribution to the moment, thrust and shear at that section with its share of the total.<ul class="arNLu"><li><b class="arNLk">Sum row:</b> The sum row is checked against the solver's own superposition on every render, so the table is a decomposition of the calculation in use rather than a parallel one that could drift from it.</li><li><b class="arNLk">Options:</b> Empty nodes can be hidden and the whole table copied as CSV.</li><li><b class="arNLk">Worked calculation:</b> It also carries the <b>complete worked live load calculation</b>: impact worked at every node with the depth used, the band applied and the resulting factor; the pressure and equivalent nodal load at every node; the influence line superposition shown term by term so the totals can be added by hand; and the combination with dead load through to eccentricity, stress and utilization at the section of interest.</li><li><b class="arNLk">Crown impact basis:</b> On the crown impact basis the table shows both each node's own cover and the crown depth actually used, because those deliberately differ away from the crown.</li></ul></li>
 <li><b>Live Load</b> — the through-fill distribution worked at a real node, impact, the interactive load
 position view, and influence lines.</li>
 <li><b>Vehicles</b> — every selected rating vehicle drawn to scale with its axle loads and spacings dimensioned,
@@ -3344,44 +3366,26 @@ load, rating weight, trailing load, rating factor and governing section, followe
 vehicle with axle loads, spacings and a full spacing table. This is the tab to check against your own copy of
 the MassDOT figures before issuing a rating — an error in an axle configuration moves every result and no
 other check in this program would catch it.</li>
-<li><b>Earth Pressure</b> — the lateral earth pressure of §7.2.7.5B on its own: the clause quoted, the
-pressure and its resolution onto each element's vertical projection, a table of intensity and resultant per
-element, the inward thrust on each haunch and the net balance, the force effects from the lateral load alone
-with its share of the dead load moment at every section, a scaled pressure diagram, and a sensitivity of the
-rating to the coefficient K. Vertical earth pressure is not here — the weight of fill over the extrados is a
-vertical dead load and appears on the Dead Load tab as the fill component.</li>
+<li><b>Earth Pressure</b> — the lateral earth pressure of §7.2.7.5B on its own:<ul class="arNLu"><li>the clause quoted,</li><li>the pressure and its resolution onto each element's vertical projection,</li><li>a table of intensity and resultant per element,</li><li>the inward thrust on each haunch and the net balance,</li><li>the force effects from the lateral load alone with its share of the dead load moment at every section,</li><li>a scaled pressure diagram,</li><li>and a sensitivity of the rating to the coefficient K.</li><li><b class="arNLk">Not here:</b> Vertical earth pressure is not here — the weight of fill over the extrados is a vertical dead load and appears on the Dead Load tab as the fill component.</li></ul></li>
 <li><b>Diagrams</b> — moment, shear and thrust plotted along the barrel, each filterable by load group: dead
 load (ring self-weight, wearing surface and superimposed dead load), vertical earth pressure (the fill weight),
-lateral earth pressure, live load, and the total. The readout above the charts is laid out one row per curve — dead load, vertical earth, lateral earth, live
+lateral earth pressure, live load, and the total.<ul class="arNLu"><li><b class="arNLk">Readout:</b> The readout above the charts is laid out one row per curve — dead load, vertical earth, lateral earth, live
 load, then the total — so each number maps to a trace and the combined value is never mistaken for the live
-load curve. A dotted vertical marker and a diamond on the total curve show the section the readout describes.
-A slider positions the vehicle, the shared section selector chooses the section of interest, and <i>Go to governing</i> sweeps every position in both directions and places the vehicle
-where the rating factor <b>at that node</b> is lowest. A shaded band shows the live load envelope — the maximum
-and minimum of each effect at every section over the same quarter-foot sweep the rating uses. Live load is drawn
-unfactored unless scaled to the converged rating factor.</li>
+load curve.</li><li><b class="arNLk">Marker:</b> A dotted vertical marker and a diamond on the total curve show the section the readout describes.</li><li><b class="arNLk">Slider:</b> A slider positions the vehicle, the shared section selector chooses the section of interest, and <i>Go to governing</i> sweeps every position in both directions and places the vehicle
+where the rating factor <b>at that node</b> is lowest.</li><li><b class="arNLk">Envelope:</b> A shaded band shows the live load envelope — the maximum
+and minimum of each effect at every section over the same quarter-foot sweep the rating uses.</li><li><b class="arNLk">Scale:</b> Live load is drawn
+unfactored unless scaled to the converged rating factor.</li></ul></li>
 <li><b>Diagrams</b> also carries the <b>kern and pressure wedge</b> figure: the arch section at the selected
 node drawn edge-on over the one-foot strip, with the middle-third kern band, the combined thrust at its true
 eccentricity, and the stress block that equilibrates it — trapezoidal inside the kern, triangular over the
-reduced bearing depth 3(d/2 − e) outside it with the tension zone hatched out and ignored. A gauge along the
-bottom shows how close the eccentricity sits to both d/6 and d/2. This is the clearest presentation in the
+reduced bearing depth 3(d/2 − e) outside it with the tension zone hatched out and ignored.<ul class="arNLu"><li><b class="arNLk">Gauge:</b> A gauge along the
+bottom shows how close the eccentricity sits to both d/6 and d/2.</li><li><b class="arNLk">Why it matters:</b> This is the clearest presentation in the
 program of why §7.2.7.12 requires the rating to be iterated: outside the kern the stress varies as
-1/(d/2 − e), so it cannot be scaled.</li>
-<li><b>Influence Lines</b> — the structural analysis behind the influence coefficients: the §7.2.7.7B
-requirement quoted and how it is met, the degree-of-freedom count, a worked element stiffness matrix in both
-local and global axes, one complete unit load case solved from load vector through displacements to element end
-forces, the section force recovery worked at one section, an equilibrium check on the case, a <b>unit load walk-through</b> that steps the 1 kip load along the arch one
-position at a time and reports the moment, thrust and shear at a chosen section together with the matching
-Midas load case name, the full moment, thrust and shear coefficient tables, and a symmetry verification.</li>
+1/(d/2 − e), so it cannot be scaled.</li></ul></li>
+<li><b>Influence Lines</b> — the structural analysis behind the influence coefficients:<ul class="arNLu"><li>the §7.2.7.7B requirement quoted and how it is met,</li><li>the degree-of-freedom count,</li><li>a worked element stiffness matrix in both local and global axes,</li><li>one complete unit load case solved from load vector through displacements to element end forces,</li><li>the section force recovery worked at one section,</li><li>an equilibrium check on the case,</li><li>a <b>unit load walk-through</b> that steps the 1 kip load along the arch one position at a time and reports the moment, thrust and shear at a chosen section together with the matching Midas load case name,</li><li>the full moment, thrust and shear coefficient tables,</li><li>and a symmetry verification.</li></ul></li>
 <li><b>Rating</b> — every selected vehicle worked in full, with a per-section results table, one section worked
 step by step, and the §7.2.7.12 iteration.</li>
-<li><b>Nodal Results</b> — every quantity the rating depends on, node by node, for a selected vehicle and
-position: section properties, the three depth measures, the live load spread, impact, dead and earth load
-effects separated by component, influence line peaks, the combined check, thrust line coordinates, springing
-reactions and arithmetic checks. Copy CSV puts the whole table on the clipboard for Excel. A node selector at
-the foot of the tab produces the <b>full worked calculation for any single node</b> — every quantity derived
-symbolically, substituted and resulting, from section properties through the spread of the wheel loads to the
-stress check and that section's own rating factor — so any node can be audited by hand, not only the governing
-one.</li>
+<li><b>Nodal Results</b> — every quantity the rating depends on, node by node, for a selected vehicle and position: section properties, the three depth measures, the live load spread, impact, dead and earth load effects separated by component, influence line peaks, the combined check, thrust line coordinates, springing reactions and arithmetic checks.<ul class="arNLu"><li><b class="arNLk">Copy CSV</b> puts the whole table on the clipboard for Excel.</li><li><b class="arNLk">Node selector:</b> A node selector at the foot of the tab produces the <b>full worked calculation for any single node</b> — every quantity derived symbolically, substituted and resulting, from section properties through the spread of the wheel loads to the stress check and that section's own rating factor — so any node can be audited by hand, not only the governing one.</li></ul></li>
 <li><b>Verification</b> — MCT export and comparison against imported Midas results.</li>
 <li><b>Manual</b> — this document.</li>
 </ul>
@@ -3526,30 +3530,29 @@ forces when recovering internal actions. Lumping the same load to nodes instead 
 to underestimate springline moment noticeably and is not used.</p>
 
 <h3>5.3 Section force recovery, the basis, and the moment sign</h3>
-<p><b>Basis.</b> At interior nodes the two adjacent element ends are projected onto the node normal and
+<div class="arNLl"><b>Basis.</b> At interior nodes the two adjacent element ends are projected onto the node normal and
 averaged, which is the common basis needed to combine them and is reproducible from node coordinates by central
-difference. At the two <b>end</b> nodes there is only one adjacent element and nothing to average, so the
-element's own chord basis is used — the basis a checking program reports its end forces in. Projecting a single
+difference.</div><ul class="arNLu"><li><b class="arNLk">End nodes:</b> At the two <b>end</b> nodes there is only one adjacent element and nothing to average, so the
+element's own chord basis is used — the basis a checking program reports its end forces in.</li><li><b class="arNLk">Why not the curve normal:</b> Projecting a single
 end force onto the curve normal instead shifts the springline thrust by roughly one percent and makes the value
 impossible to reproduce from an exported model, because the curve normal is not recoverable from node
-coordinates. This was found by solving an exported MCT independently: every interior node agreed to 10⁻⁷ while
-the two springings did not, which located the difference precisely.</p>
-<p><b>Moment is reported sagging-positive</b>: a positive moment puts the intrados in tension and displaces the
-thrust line toward the extrados. The raw end moments that come out of the stiffness formulation carry the
-opposite sense, so the sign is inverted at recovery. This was verified against the closed form for a two-hinged
-parabolic arch carrying a point load at the crown, where H = 25PL/128f and M at the crown is +7PL/128, sagging.
-The program reproduces the thrust to 0.4%, the moment magnitude to 1.4%, and places the thrust line 0.171 ft
-above the axis against 0.168 ft from the closed form. §7.2.7.7B warns that extreme care must be exercised over
-sign convention, and this is the check that discharges that warning. Note that the rating uses the magnitude of
+coordinates.</li><li><b class="arNLk">How found:</b> This was found by solving an exported MCT independently: every interior node agreed to 10⁻⁷ while
+the two springings did not, which located the difference precisely.</li></ul>
+<div class="arNLl"><b>Moment is reported sagging-positive</b>: a positive moment puts the intrados in tension and displaces the
+thrust line toward the extrados.</div><ul class="arNLu"><li><b class="arNLk">Recovery:</b> The raw end moments that come out of the stiffness formulation carry the
+opposite sense, so the sign is inverted at recovery.</li><li><b class="arNLk">Verified:</b> This was verified against the closed form for a two-hinged
+parabolic arch carrying a point load at the crown, where H = 25PL/128f and M at the crown is +7PL/128, sagging.</li><li><b class="arNLk">Result:</b> The program reproduces the thrust to 0.4%, the moment magnitude to 1.4%, and places the thrust line 0.171 ft
+above the axis against 0.168 ft from the closed form.</li><li><b class="arNLk">Sign convention:</b> §7.2.7.7B warns that extreme care must be exercised over
+sign convention, and this is the check that discharges that warning.</li><li><b class="arNLk">Rating:</b> Note that the rating uses the magnitude of
 the moment, so the sign governs presentation, the thrust-line plot and the two-face stresses, not the rating
-factor.</p>
-<p>Axial force and shear are resolved on the section normal to the arch axis at each node, not on an element
-chord. At interior nodes the values from the two adjacent element ends are averaged. This matters because
+factor.</li></ul>
+<div class="arNLl">Axial force and shear are resolved on the section normal to the arch axis at each node, not on an element
+chord.</div><ul class="arNLu"><li><b class="arNLk">Averaged:</b> At interior nodes the values from the two adjacent element ends are averaged.</li><li><b class="arNLk">Why:</b> This matters because
 thrust is discontinuous across a node carrying a concentrated load, and live load is applied at exactly the
 nodes being checked; taking one side arbitrarily makes the reported thrust depend on which element happens to
-be used. Averaging is also the physically correct reading, since a nodal load represents pressure spread over
-the tributary length and the section at the node sits at its middle. Before this treatment was adopted, the
-influence lines of a perfectly symmetric arch were not mirror-symmetric — the defect that revealed the issue.</p>
+be used.</li><li><b class="arNLk">Physically correct:</b> Averaging is also the physically correct reading, since a nodal load represents pressure spread over
+the tributary length and the section at the node sits at its middle.</li><li><b class="arNLk">History:</b> Before this treatment was adopted, the
+influence lines of a perfectly symmetric arch were not mirror-symmetric — the defect that revealed the issue.</li></ul>
 
 <h3>5.2a Reading the influence coefficient tables</h3>
 <p>The tables have sections down the side and load positions across the top. A <b>row</b> is one section
@@ -3578,20 +3581,20 @@ non-conservative on deep rings by roughly the percentage above and should be re-
 near-semicircular barrel the Cooper rating moved from E92 to E86.</p>
 
 <h3>5.4 Live load through fill</h3>
-<p><b>The spread follows the arch, not a flat line under the axle.</b> The cone from a wheel or a tie keeps
+<div class="arNLl"><b>The spread follows the arch, not a flat line under the axle.</b> The cone from a wheel or a tie keeps
 widening with depth, so the depth it has to travel before reaching the ring is different at every point along
-the barrel: shallow at the crown, much deeper at the haunches. An axle over the crown therefore also delivers
+the barrel: shallow at the crown, much deeper at the haunches.</div><ul class="arNLu"><li><b class="arNLk">Effect:</b> An axle over the crown therefore also delivers
 pressure some distance out along the extrados, because by the time the cone gets down to that lower elevation
-it has spread further sideways. The pressure umbrella drawn on the section figure is bounded below by the
-extrados profile for this reason. How far it reaches depends on the geometry — on a steep ring with shallow
+it has spread further sideways.</li><li><b class="arNLk">Figure:</b> The pressure umbrella drawn on the section figure is bounded below by the
+extrados profile for this reason.</li><li><b class="arNLk">Geometry:</b> How far it reaches depends on the geometry — on a steep ring with shallow
 fill the extrados drops away faster than the cone widens and the difference is a few percent, while on a flat
-ring under deep fill it is substantially more.</p>
-<p>Std. Spec. Art. 6.4 spreads each wheel over a rectangle growing at 1.75 horizontal to 1 vertical from the
-tire contact area. Two wheel lines at 6 ft gage are treated as independent until their transverse spreads meet,
-after which the axle is distributed over the combined width. The resulting pressure is multiplied by the
+ring under deep fill it is substantially more.</li></ul>
+<div class="arNLl">Std. Spec. Art. 6.4 spreads each wheel over a rectangle growing at 1.75 horizontal to 1 vertical from the
+tire contact area.</div><ul class="arNLu"><li><b class="arNLk">Wheel lines:</b> Two wheel lines at 6 ft gage are treated as independent until their transverse spreads meet,
+after which the axle is distributed over the combined width.</li><li><b class="arNLk">Nodal load and depth:</b> The resulting pressure is multiplied by the
 tributary horizontal length of the node to give the equivalent nodal load required by §7.2.7.7B. Depth is taken
 locally at each node from the roadway grade to the extrados, so a deep haunch receives far less pressure than
-the crown from the same axle.</p>
+the crown from the same axle.</li></ul>
 `],
 
 ["m6","6. Methodology II — Stress, Kern and the Rating Iteration",()=>`
@@ -3614,18 +3617,18 @@ ${eqLine("","f=\\begin{cases}\\dfrac{\\Sigma P}{A}\\left(1+\\dfrac{6e}{d}\\right
 steeply, which is why an arch can be comfortable at the crown and critical at a springing carrying similar thrust.</p>
 
 <h3>6.3 Why the rating must be iterated</h3>
-<p>§7.2.7.12 is explicit that because the applied loading affects the section compression forces, an iterative
+<div class="arNLl">§7.2.7.12 is explicit that because the applied loading affects the section compression forces, an iterative
 process must be used, and that it is <i>not permissible</i> to compute a first-pass rating factor and multiply
-it by the vehicle tonnage. The reason is that the stress is not linear in the live load. Increasing the live
+it by the vehicle tonnage.</div><ul class="arNLu"><li><b class="arNLk">Why:</b> The reason is that the stress is not linear in the live load.</li><li><b class="arNLk">Eccentricity:</b> Increasing the live
 load raises both ΣP and ΣM, which changes e; if e crosses the kern boundary the governing equation itself
-changes, and within the wedge regime the stress varies as 1/(d/2 − e) rather than linearly. A rating factor
-computed at one load level therefore does not scale.</p>
-<p>Following Figure 7.2.7-1, this program creates a live load effect multiplier specific to each vehicle,
+changes, and within the wedge regime the stress varies as 1/(d/2 − e) rather than linearly.</li><li><b class="arNLk">Therefore:</b> A rating factor
+computed at one load level therefore does not scale.</li></ul>
+<div class="arNLl">Following Figure 7.2.7-1, this program creates a live load effect multiplier specific to each vehicle,
 applies it to the live load thrusts and moments only, leaves the dead load unmodified, and searches for the
-multiplier that brings the governing section exactly to the allowable stress. That multiplier is the rating
-factor. The search is a bisection carried to 48 iterations, and the maximum is taken over every section at each
+multiplier that brings the governing section exactly to the allowable stress.</div><ul class="arNLu"><li><b class="arNLk">Rating factor:</b> That multiplier is the rating
+factor.</li><li><b class="arNLk">Search:</b> The search is a bisection carried to 48 iterations, and the maximum is taken over every section at each
 step so the governing section may migrate as the multiplier changes — which it does, and which is the whole
-reason the iteration is necessary.</p>
+reason the iteration is necessary.</li></ul>
 
 <h3>6.3a The optional shear check</h3>
 <p>Demand is the <b>average</b> shear on the bed area, τ = V/A, with V resolved on the section normal and
@@ -3634,13 +3637,13 @@ parabolic distribution peaks at 1.5V/A; if the allowable in hand refers to a pea
 mean, divide it by 1.5 before entering it.</p>
 <p>Because demand is linear in the live load multiplier, the shear rating factor is solved directly rather than
 by iteration: it is the largest m satisfying |V<sub>DL</sub> + m·V<sub>LL</sub>| ≤ f<sub>v</sub>A.</p>
-<p><b>Two cautions before relying on it.</b> First, a constant allowable takes no account of the normal thrust,
+<div class="arNLl"><b>Two cautions before relying on it.</b> First, a constant allowable takes no account of the normal thrust,
 and thrust is what actually resists sliding in a masonry bed joint — a springing carrying 25 k/ft has far more
-sliding resistance than a crown carrying 3 k/ft, and this model does not represent that. A Mohr-Coulomb form,
-c·A + μ·P, is the physically appropriate one for masonry. Second, springline shear is high and strongly
+sliding resistance than a crown carrying 3 k/ft, and this model does not represent that.</div><ul class="arNLu"><li><b class="arNLk">Mohr-Coulomb:</b> A Mohr-Coulomb form,
+c·A + μ·P, is the physically appropriate one for masonry.</li><li><b class="arNLk">Second,</b> Second, springline shear is high and strongly
 mesh-dependent: on a 40 ft example the dead-load shear stress at the springline runs 13.2 psi at ten elements
-and 5.3 psi at eighty. A low allowable can therefore be exceeded by dead load alone, and the mesh will change
-whether it is. Run the element count up before concluding that shear controls.</p>
+and 5.3 psi at eighty.</li><li><b class="arNLk">Dead load alone:</b> A low allowable can therefore be exceeded by dead load alone, and the mesh will change
+whether it is.</li><li><b class="arNLk">Run</b> Run the element count up before concluding that shear controls.</li></ul>
 
 <h3>6.4 Vehicle position</h3>
 <p>§7.2.7.8B requires live loads to be positioned so as to maximise the load effect at each node, and suggests
@@ -3698,72 +3701,70 @@ boundary, where both branches must and do agree), and in the wedge regime.</p>
 results against the internal influence coefficients. The workflow is: export the MCT, import and run it in
 Midas, display beam forces for all elements and all unit load cases with both member ends shown, and paste the
 result table back into the program.</p>
-<p>Two conventions must be reconciled before any comparison is meaningful, and the program determines both
-from the data rather than assuming them. The <b>I/J end convention</b> — whether a program reports the internal
+<div class="arNLl">Two conventions must be reconciled before any comparison is meaningful, and the program determines both
+from the data rather than assuming them.</div><ul class="arNLu"><li><b class="arNLk">End convention:</b> The <b>I/J end convention</b> — whether a program reports the internal
 force diagram, which carries the same sign at both ends of a member, or the applied end forces, which are
 opposite — is detected from continuity: at a node carrying no applied load the two adjacent element ends must
-report the same section force, and the program counts the evidence and reports it. The <b>global sign
+report the same section force, and the program counts the evidence and reports it.</li><li><b class="arNLk">Global sign convention:</b> The <b>global sign
 convention</b> for axial force and moment is then chosen as the combination giving closest agreement, and the
-choice is displayed rather than applied silently. Imported element end forces are put through this program's
-own section force recovery before comparison, so the test isolates the solve rather than the post-processing.</p>
-<p>Agreement is reported per ordinate as a percentage of the largest ordinate in that load case, not of the local
+choice is displayed rather than applied silently.</li><li><b class="arNLk">Recovery:</b> Imported element end forces are put through this program's
+own section force recovery before comparison, so the test isolates the solve rather than the post-processing.</li></ul>
+<div class="arNLl">Agreement is reported per ordinate as a percentage of the largest ordinate in that load case, not of the local
 ordinate, because load cases near a springing consist mostly of ordinates a few hundredths in size where half a
-rounding unit is already tens of percent. Absolute differences are reported alongside, together with the
+rounding unit is already tens of percent.</div><ul class="arNLu"><li><b class="arNLk">Absolute differences</b> Absolute differences are reported alongside, together with the
 rounding precision implied by the number of decimals actually pasted, and agreement within that precision is
-reported as a pass. Two solvers running the same geometry with the same restraint and section properties should agree far
+reported as a pass.</li><li><b class="arNLk">Expected:</b> Two solvers running the same geometry with the same restraint and section properties should agree far
 more closely than that; differences of a few percent usually mean the two models are not in fact the same, and
-the geometry, restraint, section depths and unit system should be checked before either result is trusted.</p>
+the geometry, restraint, section depths and unit system should be checked before either result is trusted.</li></ul>
 <h4>7.2.1 Result of a Midas comparison</h4>
-<p>A model exported from this program was run in Midas Civil and the beam force results imported back. With the
+<div class="arNLl">A model exported from this program was run in Midas Civil and the beam force results imported back.</div><ul class="arNLu"><li><b class="arNLk">Timoshenko:</b> With the
 default Timoshenko formulation the <b>moment</b> ordinates agreed to <b>0.0049</b> against a rounding precision
-of ±0.005 in the two-decimal Midas output — agreement to the limit of what the data can resolve. The same
+of ±0.005 in the two-decimal Midas output — agreement to the limit of what the data can resolve.</li><li><b class="arNLk">Euler-Bernoulli:</b> The same
 comparison against Euler-Bernoulli differed by up to <b>0.045</b> in moment, about nine times the data
-precision, and that is the evidence behind the beam-theory default described in Part 1.3.1a.</p>
-<p><b>The thrust ordinates now agree as well, and the discrepancy is closed.</b> Earlier revisions reported a
-thrust difference of 0.085, then 0.063, against the same file. Both were defects in the comparison rather than
-in the solve, and both are fixed. The first was the sign-mapping search, which could not reach the correct
+precision, and that is the evidence behind the beam-theory default described in Part 1.3.1a.</li></ul>
+<div class="arNLl"><b>The thrust ordinates now agree as well, and the discrepancy is closed.</b> Earlier revisions reported a
+thrust difference of 0.085, then 0.063, against the same file.</div><ul class="arNLu"><li><b class="arNLk">Comparison, not solve:</b> Both were defects in the comparison rather than
+in the solve, and both are fixed.</li><li><b class="arNLk">The first</b> The first was the sign-mapping search, which could not reach the correct
 combination of global axial sense and moment sense, and whose continuity test was applied to thrust alone —
 that test barely discriminates the shear signs on a barrel whose elements are close to radial. Continuity is
 now tested on <b>both thrust and shear</b> at unloaded nodes, and the two genuinely free bits are resolved by
-agreement and reported rather than assumed. The second was a basis mismatch on import, since corrected.
-Re-running the same Midas file against the current build gives <b>0.0049 in moment and 0.0049 in thrust</b>,
-both inside the ±0.005 rounding floor of two-decimal output.</p>
-<p>One practical lesson from that episode, worth keeping. When a comparison shows a large difference, suspect
-the geometry and the mapping before the solver. A second Midas file, run on a model whose dimensions were not
+agreement and reported rather than assumed.</li><li><b class="arNLk">The second</b> The second was a basis mismatch on import, since corrected.</li><li><b class="arNLk">Re-run:</b> Re-running the same Midas file against the current build gives <b>0.0049 in moment and 0.0049 in thrust</b>,
+both inside the ±0.005 rounding floor of two-decimal output.</li></ul>
+<div class="arNLl">One practical lesson from that episode, worth keeping.</div><ul class="arNLu"><li><b class="arNLk">Suspect first:</b> When a comparison shows a large difference, suspect
+the geometry and the mapping before the solver.</li><li><b class="arNLk">Example:</b> A second Midas file, run on a model whose dimensions were not
 recorded, still shows a large difference here, and a sweep over plausible depths, spans and rises does not
 bring it below 0.37 in moment — which is the signature of comparing against the wrong model, not of two
-solvers disagreeing. Record the exact inputs alongside any Midas run kept as evidence.</p>
+solvers disagreeing.</li><li><b class="arNLk">Record</b> Record the exact inputs alongside any Midas run kept as evidence.</li></ul>
 <h4>7.2.2 Checking the dead load, including lateral earth pressure</h4>
-<p>The MCT exports the dead load as <b>five separate load cases</b> rather than one combined case, so each can
+<div class="arNLl">The MCT exports the dead load as <b>five separate load cases</b> rather than one combined case, so each can
 be checked on its own: <span class="mono">DLFILL</span> (fill weight over the extrados),
 <span class="mono">DLWS</span> (wearing surface), <span class="mono">DLSDL</span> (superimposed dead load per
 §7.2.7.4B), <span class="mono">DLSELF</span> (ring self weight) and <span class="mono">DLEARTH</span> (the
-lateral earth pressure of §7.2.7.5B, written as a horizontal GX element load). Every case is written as a
-linearly varying element load, matching the clauses. Each of the five was solved independently from the
+lateral earth pressure of §7.2.7.5B, written as a horizontal GX element load).</div><ul class="arNLu"><li><b class="arNLk">Element loads:</b> Every case is written as a
+linearly varying element load, matching the clauses.</li><li><b class="arNLk">Checked:</b> Each of the five was solved independently from the
 exported file and reproduced this program's own component results to <b>6×10⁻⁶</b>, which is the rounding of
-the coordinates and load intensities written into the MCT — that is, exactly. Running them separately in Midas
+the coordinates and load intensities written into the MCT — that is, exactly.</li><li><b class="arNLk">Use:</b> Running them separately in Midas
 is the quickest way to isolate a dead load disagreement, and the lateral earth pressure is the case worth
-checking first because it rests entirely on the assumed K.</p>
-<p><b>Dead load is exported one case per component</b> — DLFILL, DLWS, DLSDL, DLSELF and DLEARTH — matching
-the five the program solves separately, with a DL_ALL combination summing them. Each can therefore be checked
-against its own column in the Dead Load and Nodal Results tables. The lateral earth pressure case is the one
+checking first because it rests entirely on the assumed K.</li></ul>
+<div class="arNLl"><b>Dead load is exported one case per component</b> — DLFILL, DLWS, DLSDL, DLSELF and DLEARTH — matching
+the five the program solves separately, with a DL_ALL combination summing them.</div><ul class="arNLu"><li><b class="arNLk">Columns:</b> Each can therefore be checked
+against its own column in the Dead Load and Nodal Results tables.</li><li><b class="arNLk">Check first:</b> The lateral earth pressure case is the one
 most worth checking, since it rests entirely on the assumed coefficient of §7.2.7.5B and supplies a large share
-of the springline moment. Solving all five independently from the exported file reproduces the program's own
-component solve to within 2×10⁻⁶ at every node.</p>
+of the springline moment.</li><li><b class="arNLk">Agreement:</b> Solving all five independently from the exported file reproduces the program's own
+component solve to within 2×10⁻⁶ at every node.</li></ul>
 <p>The <b>unit load walk-through</b> on the Influence Lines tab is built for this comparison. Each position of
 the 1 kip load is one load case in the exported model, named UN2, UN3 and so on, and the panel reports that
 name alongside the three ordinates at the section of interest and a table of section forces everywhere for that
 single case. That is the direct analogue of one Midas beam force table, so the two can be reconciled a case at
 a time rather than by trying to match a whole curve at once.</p>
-<p><b>Read the absolute difference, not the percentage, when the pasted data is coarse.</b> Midas prints beam
-forces to two decimal places by default. Printing an exact value at two decimals loses up to half a unit, so
+<div class="arNLl"><b>Read the absolute difference, not the percentage, when the pasted data is coarse.</b> Midas prints beam
+forces to two decimal places by default.</div><ul class="arNLu"><li><b class="arNLk">Rounding:</b> Printing an exact value at two decimals loses up to half a unit, so
 two programs in perfect agreement still differ by up to 0.005 in every ordinate — this was confirmed by taking
 this program's own exact results, rounding them to two decimals, and comparing them back, which reproduces a
-worst error of exactly 0.00500 in both moment and thrust with no second solver involved. Because thrust
+worst error of exactly 0.00500 in both moment and thrust with no second solver involved.</li><li><b class="arNLk">Thrust and moment:</b> Because thrust
 ordinates are of order one while moment ordinates near a springing are hundredths, the same rounding loss shows
-up as a fraction of a percent in thrust and as tens of percent in moment. Neither is a model difference.
-Increase the decimal places in the Midas results table before copying — five or six removes the limitation
-entirely and makes every percentage meaningful.</p>
+up as a fraction of a percent in thrust and as tens of percent in moment.</li><li><b class="arNLk">Not a model difference:</b> Neither is a model difference.</li><li><b class="arNLk">Remedy:</b> Increase the decimal places in the Midas results table before copying — five or six removes the limitation
+entirely and makes every percentage meaningful.</li></ul>
 <p>Two cautions from that exercise. The arch axis is the intrados offset by d/2, so on a deep or
 near-semicircular ring the modeled axis spans noticeably more than the clear span — the Model tab reports both
 — and a Midas model built on the intrados will not match. And the comparison is only meaningful if the file
@@ -3784,23 +3785,23 @@ the user's own copy of the MassDOT figures before an issued rating.</li>
 </ul>
 
 <h3>5.6 Cross-check against an independent rating — MassDOT Bridge K-01-001 (9JK)</h3>
-<p>Main Street over Jones River, Kingston. A single-span granite segmental arch, 20 ft clear span, 4 ft rise,
+<div class="arNLl">Main Street over Jones River, Kingston.</div><ul class="arNLu"><li><b class="arNLk">Structure:</b> A single-span granite segmental arch, 20 ft clear span, 4 ft rise,
 ring 20 in at the crown to about 23.5 in at the springings, roughly 1.24 ft of fill over the crown plus 6 in of
-bituminous pavement, 50 ft wide, f<sub>a</sub> = 640 psi. The reference is a consultant's calculation package
+bituminous pavement, 50 ft wide, f<sub>a</sub> = 640 psi.</li><li><b class="arNLk">Reference:</b> The reference is a consultant's calculation package
 dated February 2021, built on a 26-element Midas Civil model with fixed springings, following the same §7.2.7
-procedure. It is an independent implementation: different analyst, different solver, different geometry
-take-off from the same field measurements.</p>
+procedure.</li><li><b class="arNLk">Independent:</b> It is an independent implementation: different analyst, different solver, different geometry
+take-off from the same field measurements.</li></ul>
 
 <p><b>Read this as a cross-check between two models, not as a check against truth.</b> The reference package
 contains errors of its own, identified below. Where the two disagree it is not automatically this program that
 is wrong, and it is not automatically the reference either.</p>
 
-<p>Run on the reference package's own distribution assumption — tire footprint transversely, wheel concentrated
-longitudinally, which is this program's default — the two agreed as follows on governing rating factor. <b>These
+<div class="arNLl">Run on the reference package's own distribution assumption — tire footprint transversely, wheel concentrated
+longitudinally, which is this program's default — the two agreed as follows on governing rating factor.</div><ul class="arNLu"><li><b class="arNLk">Dated figures:</b> <b>These
 "This program" figures date from the 2021 comparison run</b> and have not been re-run since: the SU6 and SU7 axle
 loads were corrected to the MBE specialized hauling vehicles (v2026.10.04), the Art. 6.4.2 spread at 2 ft of fill
 or more became the literal 1.75H square, and side-by-side trucks are now placed on multi-lane barrels
-(v2026.10.12; this 50 ft barrel gets four lanes on Auto). Re-run the K-01-001 project file before quoting them.</p>
+(v2026.10.12; this 50 ft barrel gets four lanes on Auto).</li><li><b class="arNLk">Re-run</b> Re-run the K-01-001 project file before quoting them.</li></ul>
 
 <table class="t">
 <tr><th>Vehicle</th><th>Reference, 2021</th><th>This program</th><th>Difference</th></tr>
@@ -3816,27 +3817,26 @@ exercises the geometry fit, the ring taper, the fill and superimposed dead loads
 the impact banding, the influence coefficients and the kern / pressure-wedge stress check all at once. The
 strip load delivered to the crown by a 32 kip axle is 9.600 kip here against the reference's 9.58 kip.</p>
 
-<p><b>The H20 and HS20 residual is the reference's iteration, not a modelling difference.</b> §7.2.7.12 and
-Figure 7.2.7-1 require the live load effect multiplier to be iterated until the rating factor equals 1.0. The
-reference ran iteration 1, obtained 0.205, ran iteration 2, obtained 0.805, and stopped. Carried to convergence
-on the reference's own load effects the answer is about 0.65. This program solves the multiplier directly by
-bisection on the actual stress state, so it lands on the converged value in one pass.</p>
+<div class="arNLl"><b>The H20 and HS20 residual is the reference's iteration, not a modelling difference.</b> §7.2.7.12 and
+Figure 7.2.7-1 require the live load effect multiplier to be iterated until the rating factor equals 1.0.</div><ul class="arNLu"><li><b class="arNLk">Reference:</b> The
+reference ran iteration 1, obtained 0.205, ran iteration 2, obtained 0.805, and stopped.</li><li><b class="arNLk">Converged:</b> Carried to convergence
+on the reference's own load effects the answer is about 0.65.</li><li><b class="arNLk">This program</b> This program solves the multiplier directly by
+bisection on the actual stress state, so it lands on the converged value in one pass.</li></ul>
 
-<p><b>The SU4–SU7 residual is a position sweep.</b> All four vehicles share a 17 kip maximum axle, and on a 20 ft
+<div class="arNLl"><b>The SU4–SU7 residual is a position sweep.</b> All four vehicles share a 17 kip maximum axle, and on a 20 ft
 span with a single governing axle they rated within a fraction of a percent of one another in the 2021 run (with
 the SU6 and SU7 axle loads as then coded; after the correction to the MBE vehicles their trailing 8 kip axles
-change the arrangement, and they no longer need to agree with SU4 and SU5). A reference spread of 1.585 to 4.153 across those four is the signature of a sweep step
-coarse enough to step over the governing placement. This program sweeps at a true quarter foot and reports the
-step actually used.</p>
+change the arrangement, and they no longer need to agree with SU4 and SU5).</div><ul class="arNLu"><li><b class="arNLk">Signature:</b> A reference spread of 1.585 to 4.153 across those four is the signature of a sweep step
+coarse enough to step over the governing placement.</li><li><b class="arNLk">This program</b> This program sweeps at a true quarter foot and reports the
+step actually used.</li></ul>
 
-<p>Three further differences are worth recording because they are choices rather than errors on either side.
-The reference placed its model axis on a best-fit curve that does not lie at mid-depth of the ring, which
+<div class="arNLl">Three further differences are worth recording because they are choices rather than errors on either side.</div><ul class="arNLu"><li><b class="arNLk">Model axis:</b> The reference placed its model axis on a best-fit curve that does not lie at mid-depth of the ring, which
 §7.2.7.2B requires; its own geometry sheet is internally inconsistent, quoting radii that imply a 35 in ring
-against a block schedule of 20 to 23.5 in. The reference applied a 10% section loss to the capacity check but
-not to the model that generated the demands, so demand and capacity are computed on different sections. And the
+against a block schedule of 20 to 23.5 in.</li><li><b class="arNLk">Section loss:</b> The reference applied a 10% section loss to the capacity check but
+not to the model that generated the demands, so demand and capacity are computed on different sections.</li><li><b class="arNLk">Wearing surface:</b> And the
 reference distributed the wearing surface over the roadway width where this program distributes it over the
 barrel width, which §7.2.7.4B directs; that difference is worth about 0.5 kip of springing thrust here and is
-part of why this program's dead load runs 20 to 30% above the reference's.</p>
+part of why this program's dead load runs 20 to 30% above the reference's.</li></ul>
 
 <p>The reference also omits EV2 and EV3, which §7.2.7.11B requires be rated at the Inventory level and reported
 at both Inventory and Operating. On this structure EV2 governs.</p>
@@ -3922,27 +3922,27 @@ moment to the supports.</li>
 </tbody></table>
 
 <h3>9.1a Railroad loading</h3>
-<p><b>Impact.</b> Railroad impact uses the AREMA expression IM = [1 − (H − 1.5)/8.5] × 0.60, where H is the
-depth from the base of rail to the top of the arch. That gives 60% at 1.5 ft of cover and falls linearly to
-zero at 10 ft; outside that range it is clamped rather than extrapolated. The base of rail is the top of the
+<div class="arNLl"><b>Impact.</b> Railroad impact uses the AREMA expression IM = [1 − (H − 1.5)/8.5] × 0.60, where H is the
+depth from the base of rail to the top of the arch.</div><ul class="arNLu"><li><b class="arNLk">Range:</b> That gives 60% at 1.5 ft of cover and falls linearly to
+zero at 10 ft; outside that range it is clamped rather than extrapolated.</li><li><b class="arNLk">Datum:</b> The base of rail is the top of the
 tie, which is the surface cover is measured from in this program, so the same depth drives both the load spread
-and the impact. This differs sharply from the highway rule at depth — Std. Spec. 3.8.2.3 gives zero beyond 3 ft
-where AREMA still requires about 28%. The crown and local bases apply as they do for highway loading.</p>
-<p>Railroad rating vehicles are the Cooper E-80 consist, the F40PH, HSP-46 and ES44AC locomotives, the 286K and
+and the impact.</li><li><b class="arNLk">Against the highway rule:</b> This differs sharply from the highway rule at depth — Std. Spec. 3.8.2.3 gives zero beyond 3 ft
+where AREMA still requires about 28%. The crown and local bases apply as they do for highway loading.</li></ul>
+<div class="arNLl">Railroad rating vehicles are the Cooper E-80 consist, the F40PH, HSP-46 and ES44AC locomotives, the 286K and
 315K CSX cars, and a transit set comprising the #3 Red Line 3-car train, the 80K ballast surge car 4-car train,
-and the Harsco TS-30 and Mark IV maintenance cars. Axle loads, spacings and uniform trailing loads were taken
+and the Harsco TS-30 and Mark IV maintenance cars.</div><ul class="arNLu"><li><b class="arNLk">Source:</b> Axle loads, spacings and uniform trailing loads were taken
 from the user's reference application; the Cooper E-80 set reproduces the standard
-8-5-5-5-9-5-6-5-8-8-5-5-5-9-5-6-5 spacing totalling 1136 kip over 104 ft with an 8,000 lb/lf trailing load.</p>
+8-5-5-5-9-5-6-5-8-8-5-5-5-9-5-6-5 spacing totalling 1136 kip over 104 ft with an 8,000 lb/lf trailing load.</li></ul>
 <p>The trailing load acts continuously behind the consist and is swept with it, so positions where the consist
 has largely left the structure and the trailing load alone bears on the span are included in the search. On
 short spans that case can govern.</p>
-<p><b>Distribution.</b> Load passes from the rails into the ties and enters the fill at the bottom of the ties,
-over the tie length transversely and over 3.0 ft longitudinally. Below that level it spreads at 1 horizontal to
+<div class="arNLl"><b>Distribution.</b> Load passes from the rails into the ties and enters the fill at the bottom of the ties,
+over the tie length transversely and over 3.0 ft longitudinally.</div><ul class="arNLu"><li><b class="arNLk">Spread:</b> Below that level it spreads at 1 horizontal to
 1 vertical, giving a transverse width of L<sub>tie</sub> + 2h and a longitudinal length of 3.0 + 2h at depth h
-below the ties. Where the transverse widths of adjacent tracks overlap, the outer limits are taken and the
+below the ties.</li><li><b class="arNLk">Adjacent tracks:</b> Where the transverse widths of adjacent tracks overlap, the outer limits are taken and the
 combined load of those tracks is distributed uniformly across that width, following the treatment AASHTO
-applies to overlapping distribution widths. Every track entered is loaded simultaneously; enter a single track
-to rate for one-track loading.</p>
+applies to overlapping distribution widths.</li><li><b class="arNLk">Tracks loaded:</b> Every track entered is loaded simultaneously; enter a single track
+to rate for one-track loading.</li></ul>
 <p><b>Reporting.</b> Cooper ratings are reported as an E-number, RF × 80. A tonnage figure is also shown, but
 for Cooper it derives from the same 80 kip reference and is not a physical vehicle weight. For the locomotives
 and cars the tonnage is the actual vehicle weight and is the meaningful figure.</p>
@@ -10267,12 +10267,13 @@ function inputPanel(){
     `<label style="font-size:.95rem">Local overrides — <span class="mono">station (ft), depth (in)</span> per line</label>`+
     `<textarea id="dOver" rows="2" placeholder="optional, e.g.  18.0, 19">${esc(F.dOver)}</textarea>`+
     `<label style="font-size:.95rem;margin-top:10px">Deterioration, by station</label>`+
-    `<div class="h" style="margin:2px 0 6px">One row per deteriorated area, located by station in feet along
-      the span rather than by node number, so that refining the mesh does not move the damage. Leave a cell
-      empty to leave that property sound — a row with only an allowable stress lowers the strength there
-      without removing any section, and a row with only a depth removes section at full strength. Depths are
-      in inches, stations in feet. The face the material is lost from is set below and applies to every
-      row.</div>`+
+    `<div class="h" style="margin:2px 0 6px">${R.arNL("One row per deteriorated area, located by station in feet along "+   /* ARNL */
+      "the span rather than by node number, so that refining the mesh does not move the damage.",[
+      ["Empty cell:","Leave a cell "+
+      "empty to leave that property sound — a row with only an allowable stress lowers the strength there "+
+      "without removing any section, and a row with only a depth removes section at full strength."],
+      ["Units:","Depths are in inches, stations in feet."],
+      ["Face:","The face the material is lost from is set below and applies to every row."]])}</div>`+
     `<div id="deterEditor"></div>`+
     `<input type="hidden" id="deter" value="${esc(F.deter)}">`+
     row("Material lost from","which face the deterioration removes — this moves the arch axis and matters a great deal",
@@ -10297,10 +10298,11 @@ function inputPanel(){
     `<label style="font-size:.95rem">Line items — <span class="mono">description, weight (plf)</span>, one per line.
       Total weight per foot of bridge length; distributed equally across the barrel width per §7.2.7.4B.</label>
      <textarea id="sdlItems" rows="4" placeholder="Sidewalks (2), 800&#10;Railings (2), 120&#10;Curbs (2), 300&#10;Spandrel walls (2), 1600">${esc(F.sdlItems)}</textarea>`+
-    `<div class="note">§7.2.7.4B requires the dead load of sidewalks, wearing surfaces, railings, curbs and
-     spandrel walls to be computed and equally distributed across the width of the arch. The wearing surface is
-     entered above as a thickness; enter the remainder here. Spandrel wall weight must be included — §7.2.7.4B
-     directs that its structural capacity be neglected, not its weight.</div>`,"§7.2.7.4B");
+    `<div class="note">${R.arNL(null,[   /* ARNL */
+      ["§7.2.7.4B","requires the dead load of sidewalks, wearing surfaces, railings, curbs and "+
+     "spandrel walls to be computed and equally distributed across the width of the arch."],
+      ["Wearing surface:","The wearing surface is entered above as a thickness; enter the remainder here."],
+      ["Spandrel wall weight must be included","— §7.2.7.4B directs that its structural capacity be neglected, not its weight."]])}</div>`,"§7.2.7.4B");
 
   h+=UI.pnl("ip_mat",c(),"Materials &amp; Loads",
     row("Masonry unit weight","pcf",nb("gm","5"))+
@@ -12494,7 +12496,7 @@ function render(){
   try{p=readP();}catch(e){
     archInTabMarks(e.message);
     $("panes").innerHTML=msg("err","Input error",esc(e.message));
-    $("tabs").innerHTML="";if($("focusBar"))$("focusBar").innerHTML="";return;
+    $("tabs").innerHTML="";if($("focusBar"))$("focusBar").innerHTML="";archDash(null,"No results: input error. See the output panel.");return;
   }
   errText="";
   secResCache=null; secResKey=null;
@@ -12506,6 +12508,7 @@ function render(){
     $("panes").innerHTML=msg("err","The model cannot be built",
       esc(e.message)+"<br><br>The calculation is stopped rather than returning a number that looks legitimate. "+
       "Correct the input above.");
+    archDash(null,"No results: the model cannot be built. See the output panel.");
     return;
   }
   archInTabMarks("");
@@ -12613,11 +12616,54 @@ function render(){
       if(t){UI.setClp(t.id,false);t.classList.remove("clp");t.scrollIntoView({behavior:"smooth",block:"start"});}},60);
   });
   postRender(p);
+  archDash(p);   /* ARDC */
   if(activeTab==="rpt")archRenderReport(p);   /* ARPT */
   if(window.katex&&window.renderMathInElement)try{}catch(e){}
 }
 /* D11 links: open the tab, expand the panel, scroll to it (or to the named heading inside it) and flash it.
    (The retired print report's copies were rewritten to "see §n.k"; ARX 2026-11-03.) */
+/* ARDC (2026-11-08, engineer: the left summary panel): the check chips, from the same values as the Summary Dashboard (results,
+   lane loading, mesh convergence, sliding, mechanism, MS18 and the dashboard check counts). Display only. A chip opens the tab
+   and scrolls to the card that works the value (archGoto). Collapse state: stoneArchLR.dashCollapsed.v1 ('1' = strip). */
+const ARDC_KEY="stoneArchLR.dashCollapsed.v1";
+function archDash(p,msgTxt){
+  const host=$("arDash"); if(!host)return;
+  const it=[];
+  if(!msgTxt&&M&&results.length){
+    const gv=results.reduce((a,b)=>a.rf<b.rf?a:b);
+    for(const r of results){const v=ARCH.ALL_VEHICLES.find(x=>x.id===r.id); if(!v)continue;
+      const ok=r.rf>=1;
+      it.push({n:v.name+(r.id===gv.id?" (governs)":""),v:"RF "+nfx(r.rf,3)+" · "+nfx(r.tons,1)+" t"+(v.eRef?" · E"+(r.rf*v.eRef).toFixed(0):"")+" · "+CALC.secTag(M,r.sec).replace(/-/g,"\u2011"),
+        st:ok?"pass":"fail",s:ok?"PASS":"FAIL",tab:"rate",card:"veh_"+r.id});}
+    if(archLane&&archLane.rows)for(const row of archLane.rows){const lr=row.best.res.rf;
+      it.push({n:row.name+" lane loading",v:"RF "+nfx(lr,3),st:lr>=1?"pass":"fail",s:lr>=1?"PASS":"FAIL",tab:"rate",card:"rate_lane"});}
+    const rH=(p&&p.loadMode!=="rail")?results.find(q=>q.id==="HS20"):null;
+    if(rH&&isFinite(rH.rf))it.push({n:"MS18 (Items 64 / 66)",v:nfx(0.9*rH.tons,2)+" t · MS "+nfx(0.9*rH.tons/1.8,2),st:"na",s:"",tab:"sum",card:"o_ms18"});
+    if(archConv&&archConv.rows&&archConv.rows.length)
+      it.push({n:"Mesh convergence",v:"spread "+nfx(archConv.spread,1)+"% · "+archConv.meshes.join(", ")+" el",st:archConv.spread<=3?"pass":"warn",s:archConv.spread<=3?"OK":"REVIEW",tab:"rate",card:"rate_mcv"});
+    if(archSlide&&archSlide.worst){const dc=archSlide.worst.s.dc;
+      it.push({n:"Bed-joint sliding (advisory)",v:"D/C "+(isFinite(dc)?nfx(dc,3):"∞"),st:dc<=1?"pass":"fail",s:dc<=1?"OK":"NG",tab:"rate",card:"rate_slide"});}
+    if(archMech&&archMech.rows&&archMech.rows.length){const G=archMech.gov, lam=G.r.best?G.r.best.lam:Infinity, bad=archMech.dlRun||archMech.low.length;
+      it.push({n:"Collapse mechanism (advisory)",v:"λ "+(isFinite(lam)?nfx(lam,2):"∞")+" vs RF "+nfx(G.rf,3),st:bad?"warn":"pass",s:bad?"REVIEW":"OK",tab:"rate",card:"rate_mech"});}
+    const nb=checks.filter(c=>c.state==="bad").length, nw=checks.filter(c=>c.state==="wn").length;
+    it.push({n:"Other dashboard checks",v:nb+" FAIL · "+nw+" REVIEW",st:nb?"fail":(nw?"warn":"pass"),s:nb?"FAIL":(nw?"REVIEW":"OK"),tab:"sum",card:"o_dash"});
+  }
+  const nF=it.filter(x=>x.st==="fail").length, nR=it.filter(x=>x.st==="warn").length;
+  $("arDashCnt").innerHTML=msgTxt?"":(nF?badge("bad",nF+" FAIL"):badge("ok","no FAIL"))+(nR?" "+badge("wn",nR+" REVIEW"):"");
+  $("arDashSub").textContent=msgTxt?"":"Inventory level, Allowable Stress · click a line for its worked card";
+  host.innerHTML=msgTxt?`<div class="h">${esc(msgTxt)}</div>`:it.map(x=>
+    `<button type="button" class="adChip ad-${x.st}" data-tab="${x.tab}" data-card="${x.card}" title="Open the card that works this value"><span class="n">${esc(x.n)}</span><span class="v">${esc(x.v)}</span><span class="s">${x.s}</span></button>`).join("");
+  host.querySelectorAll(".adChip").forEach(b=>b.onclick=()=>archGoto(b.getAttribute("data-tab"),b.getAttribute("data-card")));
+}
+function archDashColl(v,save){
+  document.body.classList.toggle("arDashColl",!!v);
+  const t=$("arDashTgl"); if(t){t.innerHTML=v?"&raquo;":"&laquo;";t.setAttribute("aria-expanded",v?"false":"true");t.title=v?"Show the summary column":"Hide the summary column";}
+  if(save)try{localStorage.setItem(ARDC_KEY,v?"1":"0");}catch(e){}
+  if(typeof Plotly!=="undefined")setTimeout(()=>{document.querySelectorAll(".js-plotly-plot").forEach(g=>{try{Plotly.Plots.resize(g);}catch(e){}});},60);
+}
+(function(){let c=false;try{c=localStorage.getItem(ARDC_KEY)==="1";}catch(e){}
+  archDashColl(c,false);
+  const t=$("arDashTgl"); if(t)t.onclick=()=>archDashColl(!document.body.classList.contains("arDashColl"),true);})();
 function archGoto(tab,card,sub){
   if(!TABS.some(t=>t[0]===tab))return;
   activeTab=tab; render(); autosave();
@@ -13290,11 +13336,12 @@ function deterRender(){
       anyLegacy?`<button id="dtConv" class="pri">Convert node numbers to stations</button>`:""}${
       deterRows.length?`<button id="dtClear">Clear all</button>`:""}</div>`;
 
-  h+=`<div class="h" style="margin-top:4px">Stations are in feet along the span, `+
-     `${nfx(xLo,2)} to ${nfx(xHi,2)} ft on this arch; reduced depths are in inches. Give one station for a `+
-     `point of loss or two for a `+
-     `zone; the section feathers back to sound at 45&deg; outside it. A station stays where you put it when `+
-     `the element count changes — a node number does not.</div>`;
+  h+=`<div class="h" style="margin-top:4px">`+R.arNL(`Stations are in feet along the span, `+   /* ARNL */
+     `${nfx(xLo,2)} to ${nfx(xHi,2)} ft on this arch; reduced depths are in inches.`,[
+     ["Point or zone:",`Give one station for a point of loss or two for a `+
+     `zone; the section feathers back to sound at 45&deg; outside it.`],
+     ["Stays put:",`A station stays where you put it when `+
+     `the element count changes — a node number does not.`]])+`</div>`;
   if(anyLegacy)h+=`<div class="h" style="margin-top:4px;color:var(--text-warning)">`+
      `Rows keyed to a node number are shown greyed. Convert them before refining the mesh.</div>`;
   if(!deterRows.length)

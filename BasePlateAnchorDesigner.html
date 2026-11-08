@@ -83,6 +83,41 @@
     #outputPanel{flex:none;overflow:visible;}
     #bpadInTabs{top:0;}
   }
+  /* BPLS (2026-11-08, engineer: the check summary in a left panel, as Retaining Wall / Spread Footing / Light Pole / Shear and
+     Moment): from 1200 px a left column of compact check chips (name, D/C, PASS / FAIL); 240 px to 1499 px, 280 px from 1500 px;
+     « shrinks it to a 42 px strip. Below 1200 px it is not shown and nothing changes. Screen only (never printed). */
+  #bpadDashCol{display:none;}
+  @media screen and (min-width:1200px){
+    #bpadDashCol{display:flex;flex-direction:column;flex:0 0 280px;width:280px;min-width:0;overflow-y:auto;overscroll-behavior:contain;border-right:1px solid var(--color-border);background:var(--color-bg);font-family:var(--font-ui);font-size:9pt;}
+    #main>#inputPanel{flex-basis:calc((100% - 280px) * .33);max-width:calc((100% - 280px) * .33);}
+    #bpadDashHead{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:6px;padding:7px 8px 6px;background:var(--color-bg);border-bottom:2px solid var(--ink);}
+    #bpadDashTgl{margin:0;padding:1px 7px;font:9pt var(--font-ui);border:1px solid var(--color-border);background:var(--slate-100);border-radius:4px;cursor:pointer;}
+    #bpadDashTtl{margin:0;font-size:9pt;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#334155;}
+    #bpadDashCnt{margin-left:auto;font-size:8.5pt;font-weight:600;white-space:nowrap;}
+    #bpadDashCnt.fail{color:#c62828;} #bpadDashCnt.pass{color:var(--pass);}
+    #bpadDash{padding:6px 6px 24px;display:flex;flex-direction:column;gap:4px;}
+    #bpadDash .bpdMsg{font-style:italic;color:#555;padding:4px 2px;}
+    .bpdChip{display:grid;grid-template-columns:10px minmax(0,1fr) auto;column-gap:6px;align-items:center;width:100%;text-align:left;padding:4px 6px;border:1px solid var(--line);border-radius:4px;background:#fff;cursor:pointer;font:9pt var(--font-ui);color:var(--color-fg);}
+    .bpdChip:hover{background:#eef3f8;} .bpdChip:focus-visible{outline:2px solid var(--color-ring);outline-offset:1px;}
+    .bpdChip .dot{width:9px;height:9px;border-radius:50%;border:1px solid rgba(0,0,0,.3);}
+    .bpdChip.pass .dot{background:var(--pass);} .bpdChip.fail .dot{background:#c62828;} .bpdChip.na .dot{background:#9e9e9e;}
+    .bpdChip.fail{border-color:#c62828;background:#fdecea;}
+    .bpdChip .nm{font-weight:600;overflow-wrap:anywhere;}
+    .bpdChip .vl{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}
+    .bpdChip .vl b{display:block;font-size:8pt;}
+    .bpdChip.pass .vl b{color:var(--pass);} .bpdChip.fail .vl b{color:#c62828;} .bpdChip.na .vl b{color:#777;}
+    body.bpadDashColl #bpadDashCol{flex-basis:42px;width:42px;overflow:hidden;}
+    body.bpadDashColl #main>#inputPanel{flex-basis:calc((100% - 42px) * .33);max-width:calc((100% - 42px) * .33);}
+    body.bpadDashColl #bpadDash{display:none;}
+    body.bpadDashColl #bpadDashHead{flex-direction:column;border-bottom:none;padding:7px 4px;}
+    body.bpadDashColl #bpadDashTtl{writing-mode:vertical-rl;}
+    body.bpadDashColl #bpadDashCnt{margin:0;writing-mode:vertical-rl;}
+  }
+  @media screen and (min-width:1200px) and (max-width:1499.98px){
+    #bpadDashCol{flex-basis:240px;width:240px;}
+    #main>#inputPanel{flex-basis:calc((100% - 240px) * .33);max-width:calc((100% - 240px) * .33);}
+  }
+  @media print{ #bpadDashCol{display:none!important;} }
   h2.secTitle{font-size:12pt;margin:0;}
   h3{font-size:11pt;margin:10px 0 4px;}
   .sec{border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface);margin:10px 0;overflow:hidden;box-shadow:0 1px 2px rgba(15,23,42,.04);}
@@ -375,6 +410,10 @@
     </div>
   </div>
   <div id="main">
+    <aside id="bpadDashCol" class="noPrint" aria-label="Check summary"><!-- BPLS (2026-11-08): the checks as a left column on screens 1200 px and wider -->
+      <div id="bpadDashHead"><button type="button" id="bpadDashTgl" aria-controls="bpadDash" aria-expanded="true" title="Shrink the check summary">&laquo;</button><h2 id="bpadDashTtl">Checks</h2><span id="bpadDashCnt"></span></div>
+      <div id="bpadDash" role="list"></div>
+    </aside>
     <div id="inputPanel"><div id="prjPane" data-secid="prjPane"><!-- BPHD (2026-11-05): the Project input tab, moved here from the header; kept across rebuilds by buildInputPanel() -->
       <div class="sec"><div class="secHead"><h2 class="secTitle">Save and open</h2></div><div class="secBody" id="bpSaveCard"><!-- STDS (2026-11-05): the standard card (shared/projects-ui.js projectBar), first in the Project tab; was "Saved projects and files" after the title block -->
         <div class="prjRow">
@@ -4572,12 +4611,11 @@ function rebarCompliance(body, kind, ctx){
   }
 
   body.appendChild(el("h3",null,"ACI §17.5.2.1 compliance"));
-  body.appendChild(el("div","note",
-    "Anchor reinforcement may replace the concrete breakout check only when the "+
-    "detailing requirements below are satisfied. Items the program can verify from "+
-    "the geometry are checked automatically. The remainder are detailing decisions "+
-    "outside what the program can see and require your confirmation — they default "+
-    "to unconfirmed, so the substitution is never credited silently."));
+  body.appendChild(bpNLdiv("div","note",   /* BPNL */
+    "Anchor reinforcement may replace the concrete breakout check only when the detailing requirements below are satisfied.",
+    [["Automatic:","items the program can verify from the geometry are checked automatically."],
+     ["Your confirmation:","the remainder are detailing decisions outside what the program can see and require your "+
+      "confirmation — they default to unconfirmed, so the substitution is never credited silently."]]));
 
   const t=el("table","tbl");
   {const h=el("tr");["","Requirement","Reference","Basis"].forEach(x=>h.appendChild(el("th",null,x)));t.appendChild(h);}
@@ -4622,14 +4660,15 @@ function rebarCompliance(body, kind, ctx){
   const unconfirmed = attest.filter(([k])=>!R[k]).length;
 
   if(autoFail>0 || unconfirmed>0){
-    const b=el("div","errBox");
+    const b=el("div","errBox bpNL");   /* BPNL */
     const parts=[];
-    if(autoFail>0) parts.push("<b>"+autoFail+" geometric requirement"+(autoFail>1?"s":"")+" not satisfied</b>");
-    if(unconfirmed>0) parts.push("<b>"+unconfirmed+" detailing requirement"+(unconfirmed>1?"s":"")+" unconfirmed</b>");
-    b.innerHTML = parts.join(" and ")+". Until every item above is resolved, the "+
-      "substitution of anchor reinforcement for the concrete breakout check is "+
-      "<b>not justified under §17.5.2.1</b>. The reinforcement capacity shown on this "+
-      "tab is provisional, and the concrete breakout check is still being enforced.";
+    if(autoFail>0) parts.push(autoFail+" geometric requirement"+(autoFail>1?"s":"")+" not satisfied");
+    if(unconfirmed>0) parts.push(unconfirmed+" detailing requirement"+(unconfirmed>1?"s":"")+" unconfirmed");
+    b.innerHTML = bpNL(parts.join(" and ")+".",
+      [["Not justified:","until every item above is resolved, the "+
+        "substitution of anchor reinforcement for the concrete breakout check is "+
+        "<b>not justified under §17.5.2.1</b>."],
+       ["Meanwhile:","the reinforcement capacity shown on this tab is provisional, and the concrete breakout check is still being enforced."]]);
     body.appendChild(b);
   } else {
     const b=el("div","okBox");
@@ -6913,6 +6952,7 @@ function buildOutput(){
       "configuration would describe an anchorage the code does not permit, so no "+
       "results are shown until it is corrected.";
     pg.appendChild(b);
+    bpDashRender(true);   /* BPLS */
     return;
   }
   CC=computeAll();
@@ -6934,7 +6974,51 @@ function buildOutput(){
     case "tabManual": buildManualTab(pg); break;
   }
   if(window.katex) renderAllTex(pg);
+  bpDashRender(false);   /* BPLS */
 }
+/* BPLS (2026-11-08): the left check-summary column (screen 1200 px and wider). The chips are the Summary tab's checks
+   (allChecks(), the same D/C and status as its chips); a click opens and scrolls to the card that works the value, as the
+   Summary chips do (bpadCardFor / bpadGoto, D11). « / » shrinks it to a strip; the choice is kept per browser under
+   bpad_dashCollapsed_v1 ('1' = shrunk), which is not part of the project or the autosave. */
+const BPLS={key:"bpad_dashCollapsed_v1",cc:null,checks:null};
+function bpDashColl(v,save){
+  document.body.classList.toggle("bpadDashColl",!!v);
+  const t=document.getElementById("bpadDashTgl");
+  if(t){ t.innerHTML=v?"&raquo;":"&laquo;"; t.setAttribute("aria-expanded",v?"false":"true"); t.title=v?"Show the check summary":"Shrink the check summary"; }
+  if(save){ try{ localStorage.setItem(BPLS.key,v?"1":"0"); }catch(e){} }
+}
+function bpDashRender(blocked){
+  const host=document.getElementById("bpadDash"), cnt=document.getElementById("bpadDashCnt");
+  if(!host||!cnt) return;
+  host.innerHTML=""; cnt.textContent=""; cnt.className="";
+  if(blocked){ host.appendChild(el("div","bpdMsg","No results: the output is withheld. See the message on the output tab.")); return; }
+  let checks;
+  try{ if(BPLS.cc!==CC){ BPLS.checks=allChecks(); BPLS.cc=CC; } checks=BPLS.checks||[]; }catch(e){ checks=null; }
+  if(!checks||!checks.length){ host.appendChild(el("div","bpdMsg","No results yet.")); return; }
+  let worst=0, nFail=0;
+  checks.forEach(c=>{
+    const st=statusOf(c.dcr,c.na);
+    if(st==="fail") nFail++;
+    const v=isNaN(c.dcr)?Infinity:c.dcr; if(!c.na&&v>worst) worst=v;
+    const b=el("button","bpdChip "+st); b.type="button"; b.setAttribute("role","listitem");
+    b.title=c.label+" ["+c.ref+"] — governs: "+(c.combo||"—")+". Opens the card where it is worked.";
+    b.appendChild(el("span","dot"));
+    b.appendChild(el("span","nm",c.label));
+    const vl=el("span","vl",c.na?"\u2014":fmtDCR(c.dcr)); vl.appendChild(el("b",null,st==="na"?"N/A":st==="fail"?"FAIL":"PASS"));
+    b.appendChild(vl);
+    b.addEventListener("click",()=>{ const cd=bpadCardFor(c.label); if(cd) bpadGoto(c.tab,cd,bpadComboIndex(c.combo)); else { S.ui.tab=c.tab; autosave(); buildTabs(); } });   /* as the Summary chips */
+    host.appendChild(b);
+  });
+  cnt.textContent=nFail? (nFail+" FAIL") : ("max "+fmtDCR(worst));
+  cnt.className=nFail?"fail":"pass";
+  cnt.title="Maximum D/C = "+fmtDCR(worst)+(nFail? "; "+nFail+" check"+(nFail===1?"":"s")+" fail" : "; all checks pass");
+}
+(function(){
+  let v=false; try{ v=localStorage.getItem(BPLS.key)==="1"; }catch(e){}
+  const go=()=>{ bpDashColl(v,false);
+    const t=document.getElementById("bpadDashTgl"); if(t) t.addEventListener("click",()=>bpDashColl(!document.body.classList.contains("bpadDashColl"),true)); };
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",go); else go();
+})();
 function renderAllTex(){ /* eqBlock renders inline already */ }
 /* RPT-4 (2026-11-01): the Report tab is the shared viewer (bprReportTab, below). Of the RPT-3 viewer (buildReportTab, bpCrKey,
    bpCrSizeBar, bpCrJump, bpCrSpyOn/Off, BP_RPT_CLOSED and its resize listener; removed 2026-11-01, no longer called) only these stay:
@@ -8440,18 +8524,18 @@ function buildTRebarTab(pg){
        leg has just been rejected. */
     figureBlock(body, TENS_REINF_FIG,
       "ACI 318-19 Fig. R17.5.2.1a — reinforcing steel for anchors in tension, side elevation and transverse section",
-      "<b>Figure — ACI 318-19 Fig. R17.5.2.1a</b>, reinforcing steel for anchors in tension. "+
-      "This figure is the authority for the two rules this tab enforces, and both are dimensioned on it. "+
-      "<b>Placement:</b> the legs must lie within <b>0.5·h<sub>ef</sub></b> of the anchor in plan — the "+
-      "“≤ 0.5h_ef” dimension at the bottom of each view. This program applies that limit to the "+
-      "ACTUAL h<sub>ef</sub> = "+fmt(ic.hef,2)+"″"+(ic.hefReduced? (" (the §17.6.2.1.2 reduced h<sub>ef</sub>′ = "+fmt(ic.hefBreakout,2)+"″ applies only to the breakout equations)") : "")+
-      ", because the reinforcement restrains the physical failure surface, which starts at the anchor head. "+
-      "<b>Development:</b> each leg develops on BOTH sides of the breakout surface — <b>ℓ<sub>dh</sub></b> "+
-      "at a hooked or bent end above, <b>ℓ<sub>d</sub></b> straight below. The §25.7.1.3(a) "+
-      "“developed at the bend, zero length” stirrup allowance is NOT imported into Chapter 17: this "+
-      "figure shows a real length on both sides of the surface, and the figure governs. The ≈ 35° "+
-      "face is the assumed breakout cone springing from the effective embedment. "+
-      "Reproduced for reference; the governing text is the code itself.");
+      bpNLhint("Figure — ACI 318-19 Fig. R17.5.2.1a, reinforcing steel for anchors in tension. "+   /* BPNL */
+      "This figure is the authority for the two rules this tab enforces, and both are dimensioned on it.",
+      [["Placement:","the legs must lie within <b>0.5·h<sub>ef</sub></b> of the anchor in plan — the "+
+        "“≤ 0.5h_ef” dimension at the bottom of each view. This program applies that limit to the "+
+        "ACTUAL h<sub>ef</sub> = "+fmt(ic.hef,2)+"″"+(ic.hefReduced? (" (the §17.6.2.1.2 reduced h<sub>ef</sub>′ = "+fmt(ic.hefBreakout,2)+"″ applies only to the breakout equations)") : "")+
+        ", because the reinforcement restrains the physical failure surface, which starts at the anchor head."],
+       ["Development:","each leg develops on BOTH sides of the breakout surface — <b>ℓ<sub>dh</sub></b> "+
+        "at a hooked or bent end above, <b>ℓ<sub>d</sub></b> straight below. The §25.7.1.3(a) "+
+        "“developed at the bend, zero length” stirrup allowance is NOT imported into Chapter 17: this "+
+        "figure shows a real length on both sides of the surface, and the figure governs."],
+       ["Cone:","the ≈ 35° face is the assumed breakout cone springing from the effective embedment."],
+       ["Reference only:","reproduced for reference; the governing text is the code itself."]]));
     /* TWO SEPARATE CLAIMS, deliberately not merged (entry 93).
        (1) A LAYOUT claim, true from the detail alone and independent of load: a
            wide U brackets only the outer rods, so an interior rod of a 3+ line
@@ -8463,56 +8547,55 @@ function buildTRebarTab(pg){
            anchors have no EFFECTIVE leg within 0.5·h_ef, and what share of the
            group tension they carry. */
     if(ic && ic.rowWide && ic.nInteriorUncredited>0){
-      const w=el("div","warnBox");
-      w.innerHTML="<b>Wide-U layout: "+ic.nInteriorUncredited+" interior anchor"+(ic.nInteriorUncredited===1?"":"s")+
-        " not restrained.</b> A wide U-bar brackets only the OUTER anchors of each line, so an anchor between the "+
-        "end rods of a 3+ line has no reinforcement leg beside it and is NOT credited by this detail. Either add an "+
-        "interior tie at that anchor, or use the per-row / enclose layout so every anchor gets a leg.";
+      const w=el("div","warnBox bpNL");   /* BPNL */
+      w.innerHTML=bpNL("Wide-U layout: "+ic.nInteriorUncredited+" interior anchor"+(ic.nInteriorUncredited===1?"":"s")+" not restrained.",
+        [["Why:","a wide U-bar brackets only the OUTER anchors of each line, so an anchor between the "+
+          "end rods of a 3+ line has no reinforcement leg beside it and is NOT credited by this detail."],
+         ["Fix:","either add an interior tie at that anchor, or use the per-row / enclose layout so every anchor gets a leg."]]);
       body.appendChild(w);
     }
     if(ic && ic.nAnchUnrestrained>0 && ic.Ttotal>1e-9){
-      const w=el("div","warnBox");
-      let html="<b>"+ic.nAnchUnrestrained+" of "+ic.nAnchTotal+" anchors in tension have no effective leg within "+
-        "0.5·h_ef = "+fmt(ic.rNear,2)+"″.</b> They carry "+fmt(ic.Tunrestrained*forceFactor(),2)+" "+forceUnit()+
-        " of the "+fmt(ic.Ttotal*forceFactor(),2)+" "+forceUnit()+" group tension ("+
-        fmt(100*ic.fracUnrestrained,0)+"%). φN_r is the SUM over effective legs checked against the TOTAL "+
-        "group tension, so that share is being resisted by reinforcement which is not local to it. The pooling "+
-        "is defensible when the anchors act as ONE group breakout surface, and is not when the cones are "+
-        "separate — confirm which applies before relying on φN_r.";
-      if(ic.rowWide && ic.nInteriorUncredited>0)
-        html+=" <b>Wide-U layout:</b> a wide U brackets only the OUTER anchors of each line, so "+
+      const w=el("div","warnBox bpNL");   /* BPNL */
+      w.innerHTML=bpNL(ic.nAnchUnrestrained+" of "+ic.nAnchTotal+" anchors in tension have no effective leg within "+
+        "0.5·h_ef = "+fmt(ic.rNear,2)+"″.",
+        [["Share:","they carry "+fmt(ic.Tunrestrained*forceFactor(),2)+" "+forceUnit()+
+          " of the "+fmt(ic.Ttotal*forceFactor(),2)+" "+forceUnit()+" group tension ("+fmt(100*ic.fracUnrestrained,0)+"%)."],
+         ["Pooling:","φN_r is the SUM over effective legs checked against the TOTAL "+
+          "group tension, so that share is being resisted by reinforcement which is not local to it. The pooling "+
+          "is defensible when the anchors act as ONE group breakout surface, and is not when the cones are separate."],
+         ["Confirm:","confirm which applies before relying on φN_r."],
+         (ic.rowWide && ic.nInteriorUncredited>0)? ["Wide-U layout:","a wide U brackets only the OUTER anchors of each line, so "+
           ic.nInteriorUncredited+" interior anchor"+(ic.nInteriorUncredited===1?"":"s")+
           " of a 3+ line get no leg by construction. Add an interior tie at that anchor, or use the "+
-          "per-row / enclose layout so every anchor gets a leg.";
-      w.innerHTML=html;
+          "per-row / enclose layout so every anchor gets a leg."] : null]);
       body.appendChild(w);
     }
     if(ic){
       body.appendChild(el("h3",null,"Do the bars cross the breakout cone, close to a tension anchor? (§17.5.2.1.1)"));
-      const icNote=el("div","note",
+      /* BPMK-1: the reduced-h_ef sentence is bold (it showed as literal <b> tags); BPNL: lead + list. The combination
+         name is user text, so it is escaped (sbdEscB) now that the note is HTML. */
+      const icNote=bpNLdiv("div","note",
         "§17.5.2.1.1 credits a bar only where it crosses the assumed failure surface, is "+
-        "developed each side of it, AND is placed close enough to the anchor to restrain its "+
-        "breakout. The effective-placement zone is 0.5·h_ef = "+fmt(ic.rNear,2)+"″ (actual h_ef) in "+
-        "plan from an anchor IN TENSION — the tension analogue of the shear side's 0.5·c_a1, and "+
-        "the limit Hilti PROFIS enforces. A leg farther than that from every tension anchor — or "+
-        "one whose nearest anchor is in compression — is NOT credited, even though the 1.5·h_ef = "+
-        fmt(ic.rMax,2)+"″ breakout prism still physically exists out there. Distances below are "+
-        "measured in plan from each bar to the nearest anchor in tension for combination "+ic.govCombo+".");
-      if(ic.hefReduced){   /* BPMK-1: the bold lead as a <b> node (it showed as literal <b> tags) */
-        icNote.appendChild(document.createTextNode(" "));
-        icNote.appendChild(el("b",null,"h_ef here is the ACTUAL embedment, "+fmt(ic.hef,2)+"″."));
-        icNote.appendChild(document.createTextNode(" The §17.6.2.1.2 reduced h_ef′ = "+
+        "developed each side of it, AND is placed close enough to the anchor to restrain its breakout.",
+        [["Zone:","the effective-placement zone is 0.5·h_ef = "+fmt(ic.rNear,2)+"″ (actual h_ef) in "+
+          "plan from an anchor IN TENSION — the tension analogue of the shear side's 0.5·c_a1, and "+
+          "the limit Hilti PROFIS enforces."],
+         ["Not credited:","a leg farther than that from every tension anchor — or "+
+          "one whose nearest anchor is in compression — is NOT credited, even though the 1.5·h_ef = "+
+          fmt(ic.rMax,2)+"″ breakout prism still physically exists out there."],
+         ["Distances below:","measured in plan from each bar to the nearest anchor in tension for combination "+sbdEscB(ic.govCombo)+"."],
+         ic.hefReduced? ["h_ef here is the ACTUAL embedment, "+fmt(ic.hef,2)+"″.","The §17.6.2.1.2 reduced h_ef′ = "+
           fmt(ic.hefBreakout,2)+"″ is used only in the breakout equations (Concrete Embedment tab); the anchor "+
-          "reinforcement restrains the physical failure surface, which starts at the anchor head (§17.5.2.1, R17.5.2.1)."));
-      }
+          "reinforcement restrains the physical failure surface, which starts at the anchor head (§17.5.2.1, R17.5.2.1)."] : null]);
       body.appendChild(icNote);
       if(ic.tMaxA>0 && ic.tMinA < 0.05*ic.tMaxA){
-        const lw=el("div","warnBox");
-        lw.innerHTML="<b>Limitation.</b> One or more anchors counted as \u201Cin tension\u201D carry under 5% of "+
-          "the highest anchor tension ("+fmt(ic.tMinA,2)+" vs "+fmt(ic.tMaxA,2)+" kip). A leg credited only by "+
-          "proximity to a nearly-unloaded anchor may not reflect the real load path: the model measures distance "+
-          "to the nearest tension anchor, it does not trace which anchor's load each leg carries. Review such legs "+
-          "in the plan view before relying on them.";
+        const lw=el("div","warnBox bpNL");   /* BPNL */
+        lw.innerHTML=bpNL("Limitation.",
+          [["Lightly loaded:","one or more anchors counted as \u201Cin tension\u201D carry under 5% of "+
+            "the highest anchor tension ("+fmt(ic.tMinA,2)+" vs "+fmt(ic.tMaxA,2)+" kip)."],
+           ["Load path:","a leg credited only by proximity to a nearly-unloaded anchor may not reflect the real load path: "+
+            "the model measures distance to the nearest tension anchor, it does not trace which anchor's load each leg carries."],
+           ["Review:","review such legs in the plan view before relying on them."]]);
         body.appendChild(lw);
       }
       /* State the set-out explicitly. It is SYMMETRIC by construction: the run
@@ -8528,24 +8611,27 @@ function buildTRebarTab(pg){
         ? ""
         : " The set has been translated so its centroid sits at the bolt-group centroid + ("+
           fmt(ic.setOffX,2)+", "+fmt(ic.setOffY,2)+")\u2033 — an engineer-entered set-out datum.";
+      ab.classList.add("bpNL");   /* BPNL: lead + list */
+      const abDatum = ic.setCentered? null : ["Datum:",datumTxt.trim()];
+      const abTail = [["Creditable:",ic.nEff+" of "+ic.nBarsTotal+" legs are creditable."],
+        ["Drawings:","<b>The drawings must match this set-out</b>; shifting the run would change which legs qualify."]];
       if(ic.layoutMode==="enclose"){
-        ab.innerHTML="<b>Piece set-out (enclosing layout).</b> The "+ic.nPieces+" piece"+
-          (ic.nPieces===1?" is":"s are")+" set out symmetrically at "+
-          fmt(ic.spacing,2)+"\u2033 spacing"+
-          (ic.setCentered? " about the bolt-group centroid — a single piece sits on the centreline; two straddle it at ±s/2."
-                         : ".")+datumTxt+" "+
-          ic.nEff+" of "+ic.nBarsTotal+" legs are creditable. "+
-          "<b>The drawings must match this set-out</b>; shifting the run would change which legs qualify.";
+        ab.innerHTML=bpNL("Piece set-out (enclosing layout).",
+          [["Set-out:","the "+ic.nPieces+" piece"+
+            (ic.nPieces===1?" is":"s are")+" set out symmetrically at "+
+            fmt(ic.spacing,2)+"\u2033 spacing"+
+            (ic.setCentered? " about the bolt-group centroid — a single piece sits on the centreline; two straddle it at ±s/2."
+                           : ".")],
+           abDatum].concat(abTail));
       } else {
-        ab.innerHTML="<b>Piece set-out (per-row layout).</b> The "+ic.nWanted+" piece"+
-          (ic.nWanted===1?" per tension row is":"s per tension row are")+" set out symmetrically about each row's centre at "+
-          fmt(ic.spacing,2)+"\u2033 spacing ("+ic.arrangement.replace("-"," ")+
-          " follows from the entered quantity and spacing — it is stated, not optimised)."+
-          (ic.setCentered
-            ? " Under moment the runs follow the TENSION rows, so the set legitimately sits on the loaded side rather than on the bolt-group centre; untick \u201cCentre set-out automatically\u201d on the Input tab to place the set centroid explicitly."
-            : datumTxt)+" "+
-          ic.nEff+" of "+ic.nBarsTotal+" legs are creditable. "+
-          "<b>The drawings must match this set-out</b>; shifting the run would change which legs qualify.";
+        ab.innerHTML=bpNL("Piece set-out (per-row layout).",
+          [["Set-out:","the "+ic.nWanted+" piece"+
+            (ic.nWanted===1?" per tension row is":"s per tension row are")+" set out symmetrically about each row's centre at "+
+            fmt(ic.spacing,2)+"\u2033 spacing ("+ic.arrangement.replace("-"," ")+
+            " follows from the entered quantity and spacing — it is stated, not optimised)."],
+           ic.setCentered
+            ? ["Under moment:","the runs follow the TENSION rows, so the set legitimately sits on the loaded side rather than on the bolt-group centre; untick \u201cCentre set-out automatically\u201d on the Input tab to place the set centroid explicitly."]
+            : abDatum].concat(abTail));
       }
       ab.style.cssText="border-left:3px solid #1f4e79;padding-left:8px;margin:6px 0;line-height:1.45;";
       body.appendChild(ab);
@@ -8594,30 +8680,30 @@ function buildTRebarTab(pg){
         trr.appendChild(el("td","lft",b.why||""));
         t.appendChild(trr);
       });
-      body.appendChild(el("div","note",
-        "Elevations are measured UP from the BOTTOM of the member (z = 0 at the bottom, z = H at the top surface). "+
-        "z_cross = z_head + d_s/1.5 is where the group breakout surface meets the leg: flat at the head plane across the tension anchors (d_s = 0 between them), rising at 35° (1:1.5) outside the outer anchors, d_s being the plan distance to that flat bottom. The development available "+
-        "above it is (H \u2212 top cover) \u2212 z_cross and below it is z_cross \u2212 (z_head \u2212 extension). "+
-        "Required lengths are the straight \u2113_d = "+fmt(ic.dev.ld,2)+"\u2033, the hook \u2113_dh = "+fmt(ic.dev.ldh,2)+
-        "\u2033 where that end is hooked or bent. Per Fig. R17.5.2.1a BOTH sides carry a real requirement \u2014 "+
-        "a bend wrapping a longitudinal bar makes the end a standard hook (so \u2113_dh applies) but does NOT "+
-        "reduce it to zero. "+
-        "\u201Cworst DCR\u201D is the governing required/available ratio for that leg. A leg is EFFECTIVE only if it "+
-        "crosses the surface within its own extent AND develops on BOTH sides \u2014 §17.5.2.1.1 gives no partial credit, "+
-        "so a leg failing either side contributes nothing to \u03c6N_r."));
+      body.appendChild(bpNLdiv("div","note","Elevations are measured UP from the BOTTOM of the member (z = 0 at the bottom, z = H at the top surface).",   /* BPNL */
+        [["z_cross","= z_head + d_s/1.5 is where the group breakout surface meets the leg: flat at the head plane across the tension anchors (d_s = 0 between them), rising at 35° (1:1.5) outside the outer anchors, d_s being the plan distance to that flat bottom."],
+         ["Available:","the development available above it is (H \u2212 top cover) \u2212 z_cross and below it is z_cross \u2212 (z_head \u2212 extension)."],
+         ["Required:","required lengths are the straight \u2113_d = "+fmt(ic.dev.ld,2)+"\u2033, the hook \u2113_dh = "+fmt(ic.dev.ldh,2)+
+          "\u2033 where that end is hooked or bent."],
+         ["Both sides:","per Fig. R17.5.2.1a BOTH sides carry a real requirement \u2014 "+
+          "a bend wrapping a longitudinal bar makes the end a standard hook (so \u2113_dh applies) but does NOT reduce it to zero."],
+         ["\u201Cworst DCR\u201D","is the governing required/available ratio for that leg."],
+         ["Effective:","a leg is EFFECTIVE only if it "+
+          "crosses the surface within its own extent AND develops on BOTH sides \u2014 §17.5.2.1.1 gives no partial credit, "+
+          "so a leg failing either side contributes nothing to \u03c6N_r."]]));
       body.appendChild(t);
       if(ic.nEff<ic.nBarsTotal){
-        const w=el("div","errBox");
+        const w=el("div","errBox bpNL");   /* BPNL */
         const lost=ic.nBarsTotal-ic.nEff;
-        w.innerHTML="<b>"+lost+" of "+ic.nBarsTotal+" bars do not qualify as anchor reinforcement.</b> "+
-          (ic.nOutside?(ic.nOutside+" are not within 0.5·h_ef of a tension anchor (or the cone misses the bar). "):"")+
-          (ic.nNotFitting?(ic.nNotFitting+" do not fit inside the pedestal. "):"")+
-          "The check above uses A<sub>s</sub> = "+fmt(ic.AsClaimed,2)+" in² from n = "+ic.nBarsTotal+
-          " bars, but only "+fmt(ic.AsEffective,2)+" in² ("+ic.nEff+" bars) actually crosses the "+
-          "failure surface — <b>&phi;N<sub>r</sub> is overstated by roughly "+
-          (ic.AsEffective>0? fmt(ic.AsClaimed/ic.AsEffective,2)+"×" : "an unbounded factor")+
-          "</b>. Tighten the bar spacing so the bars sit within 0.5·h_ef of a tension anchor, "+
-          "or reduce the quantity to the bars that qualify.";
+        w.innerHTML=bpNL(lost+" of "+ic.nBarsTotal+" bars do not qualify as anchor reinforcement.",
+          [ic.nOutside? ["Outside the zone:",ic.nOutside+" are not within 0.5·h_ef of a tension anchor (or the cone misses the bar)."] : null,
+           ic.nNotFitting? ["Do not fit:",ic.nNotFitting+" do not fit inside the pedestal."] : null,
+           ["Overstated:","the check above uses A<sub>s</sub> = "+fmt(ic.AsClaimed,2)+" in² from n = "+ic.nBarsTotal+
+            " bars, but only "+fmt(ic.AsEffective,2)+" in² ("+ic.nEff+" bars) actually crosses the "+
+            "failure surface — <b>&phi;N<sub>r</sub> is overstated by roughly "+
+            (ic.AsEffective>0? fmt(ic.AsClaimed/ic.AsEffective,2)+"×" : "an unbounded factor")+"</b>."],
+           ["Fix:","tighten the bar spacing so the bars sit within 0.5·h_ef of a tension anchor, "+
+            "or reduce the quantity to the bars that qualify."]]);
         body.appendChild(w);
       } else {
         body.appendChild(el("div","okBox",
@@ -8637,21 +8723,22 @@ function buildTRebarTab(pg){
     const dv=icd?icd.dev:null;
     if(dv){
       if(tr.devNA_noCross){
-        const w=el("div","warnBox");
-        w.innerHTML="<b>Development is N/A — no leg reaches the breakout cone.</b> "+
-          "With no leg crossing the failure surface there is nothing to develop here, so this "+
-          "check is not applicable. That is <b>not a pass</b>: the legs are excluded upstream "+
-          "(see the effectiveness banner at the top of this tab). Fix the placement so a leg "+
-          "crosses the cone, then this section will perform a real ℓ_d / ℓ_dh check.";
+        const w=el("div","warnBox bpNL");   /* BPNL */
+        w.innerHTML=bpNL("Development is N/A — no leg reaches the breakout cone.",
+          [["Why:","with no leg crossing the failure surface there is nothing to develop here, so this check is not applicable."],
+           ["Not a pass:","that is <b>not a pass</b>: the legs are excluded upstream "+
+            "(see the effectiveness banner at the top of this tab)."],
+           ["Fix:","fix the placement so a leg crosses the cone, then this section will perform a real ℓ_d / ℓ_dh check."]]);
         body.appendChild(w);
       } else if(dv.enclOK || dv.enclBotOK || dv.hookTop || dv.hookBot){
-        const w=el("div","note");
-        w.innerHTML="Per <b>ACI Fig. R17.5.2.1a</b>, anchor reinforcement is developed on BOTH "+
-          "sides of the breakout surface: a hooked or bent end develops <b>ℓ_dh = "+fmt(dv.ldh,2)+"″</b>, "+
-          "a straight end <b>ℓ_d = "+fmt(dv.ld,2)+"″</b>. A bend wrapping a longitudinal bar does NOT "+
-          "reduce this to zero — the §25.7.1.3(a) stirrup shortcut is not imported into Chapter 17, "+
-          "because the hook sits in the thin wedge above the cone against a free surface with no "+
-          "load redistribution. The check below uses these lengths against each leg's geometry.";
+        const w=el("div","note bpNL");   /* BPNL */
+        w.innerHTML=bpNL("Per ACI Fig. R17.5.2.1a, anchor reinforcement is developed on BOTH sides of the breakout surface:",
+          [["Hooked or bent end:","develops <b>ℓ_dh = "+fmt(dv.ldh,2)+"″</b>;"],
+           ["Straight end:","<b>ℓ_d = "+fmt(dv.ld,2)+"″</b>."],
+           ["Bends:","a bend wrapping a longitudinal bar does NOT "+
+            "reduce this to zero — the §25.7.1.3(a) stirrup shortcut is not imported into Chapter 17, "+
+            "because the hook sits in the thin wedge above the cone against a free surface with no load redistribution."],
+           ["Below:","the check below uses these lengths against each leg's geometry."]]);
         body.appendChild(w);
       }
     }
@@ -8685,19 +8772,19 @@ function buildTRebarTab(pg){
       const acrossHalf=(R2.orient==="x")? S.conc.Bx/2 : S.conc.By/2;
       const gaugeMax=2*(acrossHalf-(R2.cover||0)-rb2.db/2);
       const gaugeDrives=twoLeg && (R2.legGauge||0)/2 > (acrossHalf-(R2.cover||0)-rb2.db/2)+1e-9;
-      const w=el("div","errBox");
-      w.innerHTML = (fit.nDrawn===0
-        ? "<b>No tension reinforcement leg fits inside cover.</b> "
-        : "<b>"+fit.dropped+" leg(s) violate cover or fall outside the pedestal.</b> ")+
-        "Bar centrelines must stay within &plusmn;(half-width − cover − d_b/2). "+
-        (gaugeDrives
-          ? "The driver here is the <b>leg-to-leg gauge</b>: at "+fmt(R2.legGauge,2)+
+      const w=el("div","errBox bpNL");   /* BPNL */
+      w.innerHTML = bpNL(fit.nDrawn===0
+        ? "No tension reinforcement leg fits inside cover."
+        : fit.dropped+" leg(s) violate cover or fall outside the pedestal.",
+        [["Limit:","bar centrelines must stay within &plusmn;(half-width − cover − d_b/2)."],
+         gaugeDrives
+          ? ["Driver:","the driver here is the <b>leg-to-leg gauge</b>: at "+fmt(R2.legGauge,2)+
             "″ the legs sit at &plusmn;"+fmt(R2.legGauge/2,2)+"″, inside the "+fmt(R2.cover||0,2)+
             "″ cover zone of the "+fmt(2*acrossHalf,1)+"″ pedestal. The largest gauge that fits is "+
-            "<b>"+fmt(gaugeMax,2)+"″</b> — reduce the gauge (or widen the pedestal / relax cover)."
-          : "At "+fmt(fit.spacing,1)+"″ c/c with "+fmt(fit.cover,2)+"″ cover the run is wider than the "+
-            "available &plusmn;"+fmt(fit.xLim,2)+"″ — reduce the quantity or spacing, or widen the pedestal.")+
-        " The &sect;17.5.2.1.1 capacity counts EFFECTIVE legs only, so non-fitting legs earn nothing.";
+            "<b>"+fmt(gaugeMax,2)+"″</b> — reduce the gauge (or widen the pedestal / relax cover)."]
+          : ["Driver:","at "+fmt(fit.spacing,1)+"″ c/c with "+fmt(fit.cover,2)+"″ cover the run is wider than the "+
+            "available &plusmn;"+fmt(fit.xLim,2)+"″ — reduce the quantity or spacing, or widen the pedestal."],
+         ["Capacity:","the &sect;17.5.2.1.1 capacity counts EFFECTIVE legs only, so non-fitting legs earn nothing."]]);
       body.appendChild(w);
     }
   },pg);
@@ -8725,16 +8812,16 @@ function buildVRebarTab(pg){
     ineffCauseBanner(body,"shear",ic);
     if(!isTieV) figureBlock(body, SHEAR_HAIRPIN_FIG,
       "Design detail — application of hairpin reinforcement to concrete edges for shear load: plan, angled-leg option, and cross-section",
-      "<b>Figure — application of hairpin reinforcement to concrete edges for shear load</b>, "+
-      "illustrating §17.5.2.1.2 in plan, in the angled-leg variant, and in section. "+
-      "The hairpin must extend a <b>development length ℓ<sub>d</sub></b> beyond the assumed ≈ 35° "+
-      "breakout surface, and the section view shows the bar set as close to the surface as cover "+
-      "allows — the same intent as the gauge check above, which rejects a hairpin whose legs sit "+
-      "farther than <b>0.5·c<sub>a1</sub></b> from a leading anchor. "+
-      "<b>Note on the figure number:</b> the caption reads “Design Detail FIG 17.5.2.a(i)”, which is "+
-      "NOT an ACI 318-19 figure designation — the code's hairpin figure is Fig. R17.5.2.1b, cited "+
-      "elsewhere on this tab. It is reproduced here as an illustrative design detail, not as a code "+
-      "citation. The governing text is the code itself.");
+      bpNLhint("Figure — application of hairpin reinforcement to concrete edges for shear load, "+   /* BPNL */
+      "illustrating §17.5.2.1.2 in plan, in the angled-leg variant, and in section.",
+      [["Development:","the hairpin must extend a <b>development length ℓ<sub>d</sub></b> beyond the assumed ≈ 35° "+
+        "breakout surface, and the section view shows the bar set as close to the surface as cover "+
+        "allows — the same intent as the gauge check above, which rejects a hairpin whose legs sit "+
+        "farther than <b>0.5·c<sub>a1</sub></b> from a leading anchor."],
+       ["Note on the figure number:","the caption reads “Design Detail FIG 17.5.2.a(i)”, which is "+
+        "NOT an ACI 318-19 figure designation — the code's hairpin figure is Fig. R17.5.2.1b, cited "+
+        "elsewhere on this tab. It is reproduced here as an illustrative design detail, not as a code citation."],
+       ["Reference only:","the governing text is the code itself."]]));
     if(ic){
       /* Gauge sanity per ACI Fig R17.5.2.1b(i): the bend should wrap the rod
          "as small as possible observing cover". Each leg sits gauge/2 from the
@@ -8743,13 +8830,13 @@ function buildVRebarTab(pg){
       if(!ic.isTie && ic.legsPer===2 && !ic.grpMode && ic.gauge/2 > ic.nearLimit+1e-9){
         const rbV=rebarOf(S.vRebar.size);
         const snug=S.anchor.dia+rbV.db+0.5;
-        const w=el("div","errBox");
-        w.innerHTML="<b>The leg-to-leg gauge is too wide for any leg to count.</b> At "+
-          fmt(ic.gauge,2)+"\u2033 gauge each leg sits "+fmt(ic.gauge/2,2)+"\u2033 from the rod it wraps, beyond "+
-          "the 0.5\u00b7c_a1 = "+fmt(ic.nearLimit,2)+"\u2033 proximity limit (R17.5.2.1.2) \u2014 all legs are "+
-          "disqualified on this alone. ACI Fig. R17.5.2.1b(i) details the bend <i>as small as possible "+
-          "observing cover</i>: keep the gauge \u2264 c_a1 = "+fmt(2*ic.nearLimit,2)+"\u2033; a snug wrap around the "+
-          fmt(S.anchor.dia,2)+"\u2033 rod with "+String(rbV.size)+" bar is roughly "+fmt(snug,2)+"\u2033.";
+        const w=el("div","errBox bpNL");   /* BPNL */
+        w.innerHTML=bpNL("The leg-to-leg gauge is too wide for any leg to count.",
+          [["Why:","at "+fmt(ic.gauge,2)+"\u2033 gauge each leg sits "+fmt(ic.gauge/2,2)+"\u2033 from the rod it wraps, beyond "+
+            "the 0.5\u00b7c_a1 = "+fmt(ic.nearLimit,2)+"\u2033 proximity limit (R17.5.2.1.2) \u2014 all legs are disqualified on this alone."],
+           ["Fix:","ACI Fig. R17.5.2.1b(i) details the bend <i>as small as possible "+
+            "observing cover</i>: keep the gauge \u2264 c_a1 = "+fmt(2*ic.nearLimit,2)+"\u2033; a snug wrap around the "+
+            fmt(S.anchor.dia,2)+"\u2033 rod with "+sbdEscB(String(rbV.size))+" bar is roughly "+fmt(snug,2)+"\u2033."]]);
         body.appendChild(w);
       }
       if(ic.truncated){
@@ -8782,16 +8869,17 @@ function buildVRebarTab(pg){
           tt.appendChild(tr);
         });
         body.appendChild(tt);
-        body.appendChild(el("div","note",
-          "Closed ties enclosing the anchor group (ACI 318-19 R17.5.2.1(b), Fig. R17.5.2.1b). Governing edge "+ic.govEdge+
-          ", c_a1 = "+fmt(ic.ca1,2)+"″. The legs that resist V are the two tie legs parallel to the shear, at "+
-          "±"+fmt(ic.tLeg,2)+"″ from the centreline (cover "+fmt(ic.cover,2)+"″). For each tie set and side: "+
-          "(1) the set must be within 0.5·c_a1 = "+fmt(ic.nearLimit,2)+"″ of the top surface; "+
-          "(2) the breakout body in front of the leading anchors has half-width and depth 1.5·x at distance x, so the leg "+
-          "crosses the failure surface at x_c = max(d_T, z)/1.5 and must do so before the front corner (c_a1 − cover = "+
-          fmt(ic.ca1-ic.cover,2)+"″), where the closed corner around a longitudinal bar anchors it (as a hairpin bend around the rod); "+
-          "(3) it must develop ℓ_dh = "+fmt(ic.dev.ldh,2)+"″ behind the surface (from the crossing to the back corner). "+
-          "φV_r = 0.75 · n_eff · A_b · f_y counts only the effective legs."));
+        body.appendChild(bpNLdiv("div","note",   /* BPNL: the (1)-(3) tests as a numbered list */
+          "Closed ties enclosing the anchor group (ACI 318-19 R17.5.2.1(b), Fig. R17.5.2.1b). Governing edge "+sbdEscB(ic.govEdge)+
+          ", c_a1 = "+fmt(ic.ca1,2)+"″.",
+          [["Legs:","the legs that resist V are the two tie legs parallel to the shear, at "+
+            "±"+fmt(ic.tLeg,2)+"″ from the centreline (cover "+fmt(ic.cover,2)+"″). For each tie set and side:"],
+           ["(1)","the set must be within 0.5·c_a1 = "+fmt(ic.nearLimit,2)+"″ of the top surface;"],
+           ["(2)","the breakout body in front of the leading anchors has half-width and depth 1.5·x at distance x, so the leg "+
+            "crosses the failure surface at x_c = max(d_T, z)/1.5 and must do so before the front corner (c_a1 − cover = "+
+            fmt(ic.ca1-ic.cover,2)+"″), where the closed corner around a longitudinal bar anchors it (as a hairpin bend around the rod);"],
+           ["(3)","it must develop ℓ_dh = "+fmt(ic.dev.ldh,2)+"″ behind the surface (from the crossing to the back corner)."],
+           ["Capacity:","φV_r = 0.75 · n_eff · A_b · f_y counts only the effective legs."]]));
       } else {
       const t=el("table","tbl");
       {const h=el("tr");["Piece","Leg","x (in)","y (in)","depth (in)","lateral offset (in)",
@@ -8822,14 +8910,14 @@ function buildVRebarTab(pg){
         t.appendChild(tr);
       });
       body.appendChild(t);
-      body.appendChild(el("div","note",
-        "Governing edge "+ic.govEdge+" with c_a1 = "+fmt(ic.ca1,2)+"″, taken from the same shear-breakout "+
-        "solve as the capacity check. \u201Clateral offset\u201D is the distance along the edge from the leg to the "+
-        "nearest anchor in the leading row; R17.5.2.1.2 places anchor reinforcement within 0.5·c_a1. "+
-        "\u201Cbehind\u201D is measured from the plane through the leading anchors, away from the edge \u2014 everything "+
-        "behind that plane is solid concrete. A leg is EFFECTIVE only if it is within the lateral limit, inside "+
-        "the breakout body depth (1.5·c_a1 = "+fmt(ic.bodyDepth,2)+"″ vs leg depth "+fmt(ic.zBelow,2)+"″), and developed "+
-        "on BOTH sides."));
+      body.appendChild(bpNLdiv("div","note",   /* BPNL */
+        "Governing edge "+sbdEscB(ic.govEdge)+" with c_a1 = "+fmt(ic.ca1,2)+"″, taken from the same shear-breakout solve as the capacity check.",
+        [["\u201Clateral offset\u201D","is the distance along the edge from the leg to the "+
+          "nearest anchor in the leading row; R17.5.2.1.2 places anchor reinforcement within 0.5·c_a1."],
+         ["\u201Cbehind\u201D","is measured from the plane through the leading anchors, away from the edge \u2014 everything "+
+          "behind that plane is solid concrete."],
+         ["Effective:","a leg is EFFECTIVE only if it is within the lateral limit, inside "+
+          "the breakout body depth (1.5·c_a1 = "+fmt(ic.bodyDepth,2)+"″ vs leg depth "+fmt(ic.zBelow,2)+"″), and developed on BOTH sides."]]));
       }
       if(ic.nEff<ic.nLegsTotal){
         const w=el("div","warnBox");
@@ -8843,11 +8931,12 @@ function buildVRebarTab(pg){
         body.appendChild(w);
       }
       if(!ic.engages){
-        const w=el("div","warnBox");
-        w.innerHTML="<b>The hairpin bend is not marked as engaging the anchor rod.</b> §17.5.2.1.2 requires "+
-          "development on BOTH sides of the failure surface. Without mechanical engagement the leg must "+
-          "develop \u2113_d = "+fmt(ic.reqFront,2)+"″ within the "+fmt(ic.availFront,2)+"″ available between the failure "+
-          "plane and the edge, which rarely fits. Confirm the detail in the inputs if the bend does wrap the rod.";
+        const w=el("div","warnBox bpNL");   /* BPNL */
+        w.innerHTML=bpNL("The hairpin bend is not marked as engaging the anchor rod.",
+          [["Requirement:","§17.5.2.1.2 requires development on BOTH sides of the failure surface."],
+           ["Without engagement:","the leg must develop \u2113_d = "+fmt(ic.reqFront,2)+"″ within the "+fmt(ic.availFront,2)+
+            "″ available between the failure plane and the edge, which rarely fits."],
+           ["Confirm:","confirm the detail in the inputs if the bend does wrap the rod."]]);
         body.appendChild(w);
       }
     }
@@ -8856,14 +8945,17 @@ function buildVRebarTab(pg){
     /* RPT-1: the plan shows the combination that governs THIS check (largest resultant shear, as the intercept) */
     const cGov=bpShearGovCombo();
     const fit=drawHairpinPlan(body,cGov);
-    body.appendChild(el("div","note",isTieV?
-      ("Closed ties enclosing the anchor group (§17.5.2.1(b), R17.5.2.1(b), Fig. R17.5.2.1b): the two tie legs parallel to the shear "+
-       "resultant of the governing combination"+(cGov?" ("+cGov.name+")":"")+" resist it where they cross the breakout surface; the legs across V are not counted. "+
-       "The plan shows the tie outline and each leg's verdict; the sections below are cut along V and through the governing edge face.") :
-      ("A hairpin is a DIRECTIONAL detail: §17.5.2.1.2 credits the bar only where its legs "+
-      "cross the crack that opens toward the loaded edge, which means the legs must run "+
-      "perpendicular to the shear resultant. The plan above orients them from the governing "+
-      "combination’s V"+(cGov?" ("+cGov.name+")":"")+". The elevation below is a section through the same detail.")));
+    const cGovN=cGov? " ("+sbdEscB(cGov.name)+")" : "";   /* BPNL: user text, escaped now that the note is HTML */
+    body.appendChild(isTieV?
+      bpNLdiv("div","note","Closed ties enclosing the anchor group (§17.5.2.1(b), R17.5.2.1(b), Fig. R17.5.2.1b):",
+        [["Legs:","the two tie legs parallel to the shear resultant of the governing combination"+cGovN+
+          " resist it where they cross the breakout surface; the legs across V are not counted."],
+         ["Drawings:","the plan shows the tie outline and each leg's verdict; the sections below are cut along V and through the governing edge face."]]) :
+      bpNLdiv("div","note","A hairpin is a DIRECTIONAL detail:",
+        [["Credit:","§17.5.2.1.2 credits the bar only where its legs "+
+          "cross the crack that opens toward the loaded edge, which means the legs must run perpendicular to the shear resultant."],
+         ["Plan:","the plan above orients them from the governing combination’s V"+cGovN+"."],
+         ["Elevation:","the elevation below is a section through the same detail."]]));
     if(fit && !fit.directional){
       const w=el("div","warnBox");
       w.innerHTML="<b>No shear in the governing combination</b>, so there is no direction to "+
