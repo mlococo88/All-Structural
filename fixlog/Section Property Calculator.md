@@ -3706,7 +3706,7 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
   - Tests: see the PR.
 - **Other copies:** none (the same pattern, not shared code, as SMLS / SFLB / RWLB / LPLB).
 
-## 2026-11-08 — PR: spc-e4-cite (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Method tab: AISC 360-16 Eq. E4-9 / E4-8 cited plainly; "to be verified" removed (SPE4; wording only, no result change)
+## 2026-11-08 — PR: spc-e4-cite (PR #1217: https://github.com/mlococo88/All-Structural/pull/1217) — Method tab: AISC 360-16 Eq. E4-9 / E4-8 cited plainly; "to be verified" removed (SPE4; wording only, no result change)
 
 - **Problem:** the Method tab, "Buckling parameters:" item r̄o, H still said "(AISC 360-16 Eq. E4-9, E4-8 — equation numbers to be verified against the printed Specification)", although SPL6 (PR #1110) recorded both equation numbers and forms as checked against the printed AISC 360-16 Specification (A4 closed). The observation was recorded under SPNL-1 ("item 22").
 - **Where:** `Section Property Calculator.html`, Method tab builder (anchor `NL('<b>Buckling parameters:</b>'`, ~line 7084).
