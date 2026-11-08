@@ -7242,7 +7242,7 @@ index 50f3837..c2d5000 100644
 - **Raised, not changed:** in Part 3, the dashboard-criteria table rows "Concrete bearing" (P_u/φP_nb ≤ 1) and "Dowel steel" (provided ≥ 0.005A_g) predate SFBX (compression beyond φB_n carried by the dowels) and SFWL (wall minimum).
 - **Other copies:** none.
 
-## 2026-11-08 — PR: docs/sf-manual-criteria (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SFSC-3) — User Manual 3.1: the dashboard-criteria table matches the chips   [DISPLAY ONLY; no computed value changes]
+## 2026-11-08 — PR: docs/sf-manual-criteria (PR #1244: https://github.com/mlococo88/All-Structural/pull/1244) (SFSC-3) — User Manual 3.1: the dashboard-criteria table matches the chips   [DISPLAY ONLY; no computed value changes]
 - **Request (engineer, 2026-11-08):**
   - Fix the "Concrete bearing" and "Dowel steel" rows raised in SFSC-2 (#1243).
   - Scan the rest of the criteria table against `renderDashboard` and correct anything else that is stale.
@@ -7276,5 +7276,5 @@ index 50f3837..c2d5000 100644
 - **How verified:** main-vs-branch probe (headless Chromium, `tests/lib.mjs` `openPage`), seven cases: default; Direct factored; one pedestal; a pedestal and a wall; a wall alone; slender; slender in Direct factored mode. `R` and `P2` are identical (JSON), and so is the digit sequence of every output tab; only the Manual text differs. 0 console errors. Tests: check-syntax, phone-layout --tool sf, project-library --tool spreadfooting, spread-footing-nobear: pass.
 - **Raised, not changed (outside the table):**
   - 3.2 "6.x … and the slenderness screen" (no magnification or Wall Design tab named).
-  - 3.4 Warnings lists "dowel steel below minimum" and "slenderness screen exceeded" as amber boxes. No such warnings are pushed now; they are dashboard FAIL items.
+  - 3.4 Warnings lists "dowel steel below minimum" and "slenderness screen exceeded" as amber boxes. I found no such warnings in the code; both are now dashboard FAIL items.
 - **Other copies:** none.
