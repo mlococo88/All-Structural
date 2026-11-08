@@ -2200,7 +2200,7 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **Saved data (§5):** additive scalar `out_dec` (absent = '2', as before). No key changed.
 - **Other copies:** none. `tests/smoke/phone-layout.mjs` gains the `bgeo` entry.
 
-## 2026-11-08 — PR: nl-bgeo-a1 (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (BGNL-1: long notes as a bold lead and a list — Alignment and Bridge tabs; display only, no result change)   [display only]
+## 2026-11-08 — PR: nl-bgeo-a1 (PR #1197: https://github.com/mlococo88/All-Structural/pull/1197) (BGNL-1: long notes as a bold lead and a list — Alignment and Bridge tabs; display only, no result change)   [display only]
 
 ### BGNL-1. Long notes split into a lead line and a list (Alignment, Bridge)   [display only] [no result change]
 - **Request (engineer, 2026-11-08, for all tools):** "There are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Part 1 of 2 (Alignment and Bridge tabs); the output tabs, Site Map, Drawings and the dialogs follow in BGNL-2. Pattern as Spread Footing SFNL (#1167).
