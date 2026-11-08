@@ -4491,7 +4491,7 @@ function NumberListInput({value, onChange, placeholder, label, col = 'Value', un
 ### How verified
 - `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`; the headless comparison listed in the PR.
 
-## 2026-11-08 — PR: claude/index-notes-split (PR link added after merge) (IXNL: long notes as a bold lead and a list: Project, Combos, Generate, Report; display only, no result change)
+## 2026-11-08 — PR: claude/index-notes-split (PR #1234: https://github.com/mlococo88/All-Structural/pull/1234) (IXNL: long notes as a bold lead and a list: Project, Combos, Generate, Report; display only, no result change)
 
 ### IXNL. Long notes split into a lead line and a list   [display only] [no result change]
 - **Request (engineer, 2026-11-07, approved for all apps):** "There are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Pattern of Spread Footing SFNL-1 (#1167).
@@ -4516,7 +4516,7 @@ function NumberListInput({value, onChange, placeholder, label, col = 'Value', un
   - the digit sequence of all 20 steps and sub-tabs and of the printed Report text is identical (clock times removed);
   - the printed Report TeX is identical; figures 1/1/3 on both; 0 unresolved and 0 duplicate references; 0 console errors.
   - The only Report lines that changed are those of notes 5–8 above, which became their lead and "• " lines.
-  - Tests: see the PR.
+  - Tests: check-syntax; index-report route (base, arema); home-projects; home-sync; phone-layout --tool index; project-library --tool index; engine handoffs; bridge-suite-save.
 - **Other copies:** none.
 - **Open items:** Part B (left summary panel) was not added. **Decision (pending engineer review):**
   - The rating results exist only after MIDAS results are pasted, and the AASHTO Rating step already has its Summary and Report Card sub-tabs.
