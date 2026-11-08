@@ -22718,7 +22718,7 @@ Basis: AASHTO LRFD 10th Ed. (2024). Reference implementation: `lldf.html` `membe
 - **Why:** #907 took Save and Saved projects… out of the header; `sbd-undo.mjs` still expected them (header order check, and step 10 opened Saved projects… by the header button).
 - **What:** the header check expects `chip|gd-undo|gd-redo|btn-print`; step 10 opens Saved projects… with the card's button `#gd-savecard [data-sp=lib]` (was `[data-sp=hlib]`). Nothing else changed.
 - **How verified:** `node tests/smoke/sbd-undo.mjs`: ALL PASS. **Saved data / formulas:** none (test file only).
-## 2026-11-08 — PR: nl-sbd-a1 (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SBNL-1: GirderDetail user manual: long paragraphs as a bold lead and a list; display only, no result change)
+## 2026-11-08 — PR: nl-sbd-a1 (PR #1172: https://github.com/mlococo88/All-Structural/pull/1172) (SBNL-1: GirderDetail user manual: long paragraphs as a bold lead and a list; display only, no result change)
 
 ### SBNL-1. GirderDetail manual: long paragraphs split into a lead line and a list   [display only] [no result change]
 - **Request (engineer, 2026-11-07, for every app):** "There are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Part 1 of the tool (by module): the GirderDetail user manual (the Manual tab of the detail modules, and the Report's "Appendix: design basis (user manual)"). Preliminary sizing's own manual (`pl-src`), the module tabs and ST-Girder (`st-src`) follow in later PRs.
