@@ -6716,7 +6716,7 @@ None: no computed value changes. Only worked-step text (tab and Report).
 - **How verified:** headless Chromium, pinned libraries, origin/main 2cd2a1b vs the branch, the 9 cases of RWNL-1: `window._R` identical (JSON); the digit sequence of the input panel, every result tab, the check summary, the Manual and `SharedReport.text` identical in every case; 0 console errors.
 - **Other copies:** none.
 
-## 2026-11-08 — PR: rw-sliding-note (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Stability, Step 5 sliding note: the surcharge and column live / snow loads are excluded from the overturning resisting moment too (RWSN; wording only, no result change)
+## 2026-11-08 — PR: rw-sliding-note (PR #1218: https://github.com/mlococo88/All-Structural/pull/1218) — Stability, Step 5 sliding note: the surcharge and column live / snow loads are excluded from the overturning resisting moment too (RWSN; wording only, no result change)
 
 - **Problem:** the ACI Stability tab, Step 5 — Sliding Check, note "ℹ Why the surcharge and column live/snow loads are left out:", bullet "Still included:" said they are still included in the bearing check "(and in the overturning resisting moment as currently coded)". That is wrong: `calcAll` computes `const Ms_OT_excl = Ms_sur + (pLL + pSL) * x_col; const Ms_OT = Ms - Ms_OT_excl;` and the overturning FOS uses `Ms_OT`, as Step 4 ("Resisting moment relied on for overturning (live / transient loads excluded)") and the Method table say.
 - **Where:** `Retaining Wall Designer.html`, Stability tab builder, Step 5 card (anchor `['Still included:', 'they <b>are</b> still included in the bearing check`, ~line 5885).
