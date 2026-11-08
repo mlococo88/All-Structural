@@ -5612,7 +5612,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **How verified:** `node tests/check-syntax.mjs`; `tests/smoke/phone-layout.mjs --tool bpad`; `tests/smoke/project-library.mjs --tool baseplate`; `tests/smoke/lightpole-anchor-handoff.mjs`; 0 console errors. Screenshots before / after at 1440 and 390 px (Summary basis note, interaction note, foundation depth D, Report).
 - **Other copies:** none.
 
-## 2026-11-08 — PR: nl/bp-notes-3 (PR: pending) — BPNL-3: long notes on the Tension Rebar and Shear Rebar tabs (display only, no result change)
+## 2026-11-08 — PR: nl/bp-notes-3 (PR #1191: https://github.com/mlococo88/All-Structural/pull/1191) — BPNL-3: long notes on the Tension Rebar and Shear Rebar tabs (display only, no result change)
 ### BPNL-3. Tension Rebar / Shear Rebar tabs: long notes as a lead line and a list   [display only] [no result change]
 - **Request / rule / helpers / Report handling:** as BPNL-1 and BPNL-2. Last part of the long-notes work for this tool.
 - **Notes changed** (old opening text → new lead → item lead words). Exact before / after: the PR diff.
