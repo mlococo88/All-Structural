@@ -1902,7 +1902,7 @@ Review of 2026-11-07, LOW findings. L7 (closed-form FER) is a separate PR. Every
   - Tests: `tests/check-syntax.mjs`; `tests/smd-verify.mjs` (ALL PASS; its `#statsRow` warning checks still read the warnings, which stay there); `tests/smoke/phone-layout.mjs --tool smd` (390 / 768); `tests/smoke/project-library.mjs --tool smd`.
 - **Other copies:** none (the pattern follows LPDC / SFDC; no shared code).
 
-## 2026-11-08 — PR: nl-smd-notes (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SMNL: long notes as a bold lead and a list — combinations dialog, warnings above the loads, Engineering Calculations, Report; display only, no result change)
+## 2026-11-08 — PR: nl-smd-notes (PR #1211: https://github.com/mlococo88/All-Structural/pull/1211) (SMNL: long notes as a bold lead and a list — combinations dialog, warnings above the loads, Engineering Calculations, Report; display only, no result change)
 
 ### SMNL. Long notes split into a lead line and a list   [display only] [no result change]
 - **Request (engineer, 2026-11-07):** "There are some sections that just have this block of text. Can we split this up into a numbered list or bullets or some other way so it's not just a text that will likely get overlooked because it's too long." Approved for all tools. Pattern: Spread Footing SFNL-1 / SFNL-2 (#1167).
