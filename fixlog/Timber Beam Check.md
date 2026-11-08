@@ -2432,3 +2432,72 @@ Code sites are tagged `TBNL`. Uses `tbNL` and the CSS of TBNL-1 (PR #1185).
   - no horizontal scroll at 390 px;
   - `tests/check-syntax.mjs` and `tests/smoke/project-library.mjs --tool timber`: pass.
 - **Other copies:** none.
+
+## 2026-11-08 — PR: claude/timber-left-summary (PR #__PR__: https://github.com/mlococo88/All-Structural/pull/__PR__) (TBLS: the Summary checks in a left summary column from 1200 px, as Retaining Wall / Spread Footing / Light Pole / Shear and Moment Diagrams)   [display only; no result change]
+
+### TBLS. Check summary column on the left at 1200 px and wider   [display only]
+- **Request (engineer, 2026-11-07/08):** add the left summary panel to the tools that have summary / result cards, as in:
+  - Retaining Wall Designer (RWDL #959, RWLB #984);
+  - Spread Footing (SFLB #988);
+  - Light Pole and Sign Post (LPLB #991);
+  - Shear and Moment Diagrams (SMLS #1130).
+- **What changed (screen only):**
+  - **New column.** At **1200 px and wider**, a new column `#tbcDashCol` sits left of the input panel: **240 px** from 1200 to 1499 px, **280 px** from 1500 px. Title "Check summary".
+  - **Head.** The « button, the title and a count badge ("n NG", or "no NG").
+  - **Sub-line.** The governing check and utilization, as the governing strip ("Governing: … · nn.n %"), and the member.
+  - **One line per check of the Summary tab:** name, ratio (3 decimals), OK / NG. The lines are Bending, Shear, Bearing, Deflection L/n live/snow, Deflection L/n total and ΣR = ΣF. When a code limit is violated, a first line "Code limits" shows the number of violations, NG, and lists them.
+  - **Expand button (▸ / ▾).** Shows the governing combination (the Summary chip's grey text) and "→ <tab> · <card>". NG lines start expanded.
+  - **Click a line (or Enter / Space).** Opens the card that works the value and flashes it, through `tbcGoto` (the "Worked in" links):
+    - Bending → Adjusted bending design value and check (`bCap`);
+    - Shear → Adjusted shear design value and check (`sCap`), or Notched ends (`sNotch`) when the notch governs;
+    - Bearing → Bearing perpendicular to grain (`brCalc`), or Supporting members and point loads (`brX`, added to `TBC_CARDS`) when a supporting member or a point-load bearing governs;
+    - Deflection → Deflection checks (`dfCheck`);
+    - ΣR = ΣF → Support reactions (`anaReac`);
+    - Code limits → the Summary tab.
+  - **Collapse.** « shrinks the column to a 42 px strip (vertical title and badge); » opens it again. The Plotly diagrams are re-laid out when the output column changes width.
+  - **Below 1200 px nothing changes.** The column is hidden; the tablet and phone layouts are as before, inputs first. The Summary tab is unchanged at every width (hero, chips, notes). The column is hidden in print; the Report is unchanged.
+- **Where (`Timber Beam Check.html`):**
+  - **CSS:** before `@media print{\n  html,body{background:#fff!important;…`, the block starting `/* TBLS (2026-11-08, engineer: the summary checks in a left summary panel`. Rules: `#tbcDashCol{display:none}`, `@media screen and (min-width:1200px){ body.tbcDashWide #tbcDashCol{display:block;flex:0 0 280px;width:280px;…} … }`, the 1200–1499.98 px rule (240 px) and `@media print{#tbcDashCol{display:none!important}}`.
+  - **HTML:** first child of `<div id="main">`:
+    ```html
+    <aside id="tbcDashCol" aria-label="Check summary">
+      <div id="tbcDashHead"><button type="button" id="tbcDashTgl" aria-controls="tbcDash" aria-expanded="true">&laquo;</button><h2 id="tbcDashTtl">Check summary</h2><span id="tbcDashCnt"></span></div>
+      <div id="tbcDashSub"></div>
+      <div id="tbcDash"></div>
+    </aside>
+    ```
+  - **JS:**
+    - `tbcChips()` (before `function buildSummary(pg)`): the Summary chip list moved out of `buildSummary` unchanged, plus a 5th field (the card). `buildSummary` now uses `const chips = tbcChips();`. This is a pure refactor: the same labels, ratios and texts.
+    - Before `/* ---- shared descriptions ---- */`: `TBDD`, `tbcDashRender()`, `tbcDashPlace()`, `tbcDashColl()` and a start-up IIFE, as `smdDashRender` / `smdDashPlace` / `smdDashColl` (SMLS).
+    - `renderOutput()` now also calls `tbcDashRender()`.
+    - Method & Manual, Saved data, "This browser" item: the new key is named.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). The column shows the ratios the Summary tab shows (`R.dcr`, `R.defl`, the same ΣR = ΣF test), with the same rounding (`f3`).
+- **Saved data (§5):** no key or format changed. New per-browser UI key **`tbc_dashCollapsed_v1`** ('1' = column shrunk; '0' or absent = open). It is tool-prefixed, written only when « / » is clicked, and is not in the project, the autosave or the export.
+- **Decisions (pending engineer review):**
+  1. Breakpoints and widths as SMLS / SFLB: from 1200 px; 240 px up to 1499 px; 280 px from 1500 px.
+  2. The column sits left of the input panel, as in Shear and Moment Diagrams (the tool's results are tabs right of the inputs).
+  3. The Summary tab keeps its hero and chips at every width. They are a tab of their own, and the Report reads the tab; the column is an extra view, not a move.
+  4. The warnings ("Notes:" box) stay on the Summary tab. The column shows only the code-limit violations (NG), as one "Code limits" line.
+  5. A click opens the card through `tbcGoto`. Like the "Worked in" links, this remembers the opened result tab in the autosave (`M.ui.outTab`).
+- **Check case:** default joist changed to 3 spans 12 / 14 / 10 ft, support C fixed, L 120 psf, end notch 3 in. At 1440 px the column lines are:
+  - Code limits 1 NG ("End notch 3 in. exceeds d/4 = 2.31 in. (NDS 4.4.3.2). Not permitted.");
+  - Bending 3.372 NG;
+  - Shear 1.629 NG (notch);
+  - Bearing 0.484 OK;
+  - Deflection L/360 0.519 OK;
+  - Deflection L/240 0.421 OK;
+  - ΣR = ΣF all OK;
+  - badge "3 NG".
+  These are the same numbers as the Summary chips. Clicking Shear at 1280 px opens the Shear tab with "Notched ends" flashed at the top.
+- **How verified:**
+  - **Results.** origin/main vs the branch, 9 cases (as TBNL-1). `TBC.res` is identical. The digit sequences of all tabs and the Report are identical, except:
+    - the Method & Manual key sentence (and Appendix C);
+    - the Plotly axis ticks of the Analysis Results and Deflection diagrams at 1440 px, whose output column is narrower now.
+  - **Layout** at 1920, 1440, 1280, 1024 and 390 px:
+    - column 280 / 240 / 240 px, ending where the input panel starts;
+    - none at 1024 and 390 px;
+    - no sideways page scroll;
+    - « gives 42 px and `tbc_dashCollapsed_v1` = '1', kept after a reload; » gives '0' and 240 px.
+  - **Console:** 0 errors.
+  - **Tests:** `tests/check-syntax.mjs`; `tests/smoke/project-library.mjs --tool timber` (ALL PASS). Timber has no entry in `tests/smoke/phone-layout.mjs`; checked by hand at 390 px.
+- **Other copies:** none (pattern as SMLS; no shared code).
