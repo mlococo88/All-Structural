@@ -1207,8 +1207,13 @@ function solve(S){
       sq.CsMaxTab=sq.CsMax;
       sq.CsMax=(sq.Tused<=1.5*sq.Ts)? Infinity : 1.5*sq.CsMaxTab;
       sq.ssReason=sq.ssReason.map(r=>r.indexOf("unless the exception is satisfied")>=0
-        ? "Site Class D with S\u2081 \u2265 0.2: Sec. 11.4.8 Exception 2 is applied in place of a site-specific ground motion analysis. C\u209b is taken from Eq. 12.8-2 for T \u2264 1.5T\u209b and as 1.5 times Eq. 12.8-3 or 12.8-4 above that. The exception applies to the equivalent lateral force procedure; other uses of the spectrum need the site-specific analysis."
+        ? "Site Class D with S₁ ≥ 0.2: Sec. 11.4.8 Exception 2 is applied in place of a site-specific ground motion analysis. Cₛ is taken from Eq. 12.8-2 for T ≤ 1.5Tₛ and as 1.5 times Eq. 12.8-3 or 12.8-4 above that. The exception applies to the equivalent lateral force procedure; other uses of the spectrum need the site-specific analysis."
         : r);
+      /* A7NL: display form of that string (the string itself is unchanged: status register, Report) */
+      A7WNL.set("Site Class D with S₁ ≥ 0.2: Sec. 11.4.8 Exception 2 is applied in place of a site-specific ground motion analysis. Cₛ is taken from Eq. 12.8-2 for T ≤ 1.5Tₛ and as 1.5 times Eq. 12.8-3 or 12.8-4 above that. The exception applies to the equivalent lateral force procedure; other uses of the spectrum need the site-specific analysis.",
+        ["Site Class D with S₁ ≥ 0.2: Sec. 11.4.8 Exception 2 is applied in place of a site-specific ground motion analysis.",[
+          ["Cₛ:","taken from Eq. 12.8-2 for T ≤ 1.5Tₛ and as 1.5 times Eq. 12.8-3 or 12.8-4 above that."],
+          ["Limit:","the exception applies to the equivalent lateral force procedure; other uses of the spectrum need the site-specific analysis."]]]);
     }
     sq.CsMin=Math.max(0.044*sq.SDS*sq.Ie,0.01);
     sq.CsMinS1=(site.S1>=0.6)?0.5*site.S1/(sq.R/sq.Ie):null;
@@ -2608,9 +2613,10 @@ function renderSnow(host){
 
   b=panel(host,"o-drift",++n+".","Snow Drift","ASCE 7-16 Sec. 7.7 and 7.8");
   if(!sn.drifts.length){
-    note(b,"No drift locations have been entered. Sec. 7.7 and 7.8 require a drift wherever the roof adjoins a taller surface: "+
-      "a parapet, a rooftop projection more than 15 ft long, an upper roof of the same building, or an adjacent taller structure. "+
-      "Enter each such location on the Snow input tab. <b>The absence of entries is not a finding that no drift applies.</b>","w");
+    noteNL(b,"No drift locations have been entered.",[   /* A7NL */
+      ["Requirement:","Sec. 7.7 and 7.8 require a drift wherever the roof adjoins a taller surface: "+
+      "a parapet, a rooftop projection more than 15 ft long, an upper roof of the same building, or an adjacent taller structure."],
+      ["Not a finding:","<b>the absence of entries is not a finding that no drift applies.</b>"]],"w",{act:["Enter each such location on the Snow input tab."]});
   } else {
     vars(b,[["p<sub>g</sub>","Ground snow load",R2(sn.pg)+" psf",R.site.source],
             ["\u03B3","Snow density",R2(sn.gamma)+" pcf","Eq. 7.7-1"],
@@ -2687,12 +2693,14 @@ function renderSnow(host){
   b=panel(host,"o-snpl",++n+".","Partial Loading","ASCE 7-16 Sec. 7.5");
   eq(b,"Partial load pattern for continuous members",null,"p_{full} = p_s,\\qquad p_{half} = 0.5\\,p_s",
     "p_{half} = 0.5("+R2(sn.partial.full)+")","p_{full} = "+R2(sn.partial.full)+"\\ \\text{psf},\\quad p_{half} = "+R2(sn.partial.half)+"\\ \\text{psf}");
-  note(b,"Sec. 7.5: for continuous beam systems and any member where removing snow from one span increases the effect elsewhere, place the balanced load p\u209b = "+
-    R2(sn.partial.full)+" psf on some spans and "+R2(sn.partial.half)+" psf on the others, in the arrangement that produces the greatest effect (for a continuous beam, Fig. 7.5-1: "+
-    "the end span half-loaded with the others full, the end span full with the next half-loaded, and alternate spans). The minimum load p\u2098 and the rain-on-snow "+
-    "surcharge are not combined with partial loading. The pattern is reported here and is <b>not</b> carried into the combinations or the hand-off; apply it in the member analysis."+
-    (sn.partial.gableExempt?" Members that span perpendicular to the ridge of this gable roof (\u03B8 = "+R2(g.theta)+"\u00B0 \u2265 2.38\u00B0) are exempt.":"")+
-    " Verify (ASCE 7-16 PDF unreadable).","w");
+  noteNL(b,"Sec. 7.5: for continuous beam systems and any member where removing snow from one span increases the effect elsewhere:",[   /* A7NL */
+    ["Pattern:","place the balanced load pₛ = "+
+    R2(sn.partial.full)+" psf on some spans and "+R2(sn.partial.half)+" psf on the others, in the arrangement that produces the greatest effect."],
+    ["For a continuous beam","(Fig. 7.5-1): the end span half-loaded with the others full, the end span full with the next half-loaded, and alternate spans."],
+    ["Not combined:","the minimum load pₘ and the rain-on-snow surcharge are not combined with partial loading."],
+    ["Not carried:","the pattern is reported here and is <b>not</b> carried into the combinations or the hand-off."],
+    sn.partial.gableExempt?["Exempt:","members that span perpendicular to the ridge of this gable roof (θ = "+R2(g.theta)+"° ≥ 2.38°)."]:null,
+    "Verify (ASCE 7-16 PDF unreadable)."],"w",{act:["Apply the pattern in the member analysis."]});
 
   b=panel(host,"o-sn6",++n+".","Design Snow Summary","");
   eq(b,"Balanced design snow load, on the horizontal projection",null,
@@ -2789,15 +2797,16 @@ function renderWalls(host){
   if(g.free){
     let fb=panel(host,"o-wafree",++n+".","Walls","ASCE 7-16 Sec. 26.2");
     fb.parentElement.id="s-walls";
-    note(fb,"The selected roof type is a <b>monoslope free roof canopy</b>, which is an open building under Sec. 26.2. It has no "+
-      "walls, so there are no wall pressures, GC<sub>pi</sub> = 0 and there is no internal pressure term. Roof pressures are "+
-      "generated from Fig. 27.3-4 on the Wind: Roof tab.","k");
+    noteNL(fb,"The selected roof type is a monoslope free roof canopy, which is an open building under Sec. 26.2.",[   /* A7NL */
+      ["No walls:","there are no wall pressures, GC<sub>pi</sub> = 0 and there is no internal pressure term."],
+      ["Roof pressures:","generated from Fig. 27.3-4 on the Wind: Roof tab."]],"k");
     fb=panel(host,"o-minwf",++n+".","Minimum Design Wind Load","ASCE 7-16 Sec. 27.1.5");
     fb.parentElement.id="s-minw";
-    note(fb,"Sec. 27.1.5 sets a floor of 16 psf on the projected wall area and 8 psf on the projected roof area for "+
-      "<b>enclosed and partially enclosed</b> buildings. An open building has no wall area and the provision does not apply. "+
-      "Lateral demand on the frame comes from the free-roof net pressure and from any Chapter 29 elements, which must be added "+
-      "from the Components tab.","w");
+    noteNL(fb,"Sec. 27.1.5 sets a floor of 16 psf on the projected wall area and 8 psf on the projected roof area for "+
+      "enclosed and partially enclosed buildings.",[   /* A7NL */
+      ["Open building:","has no wall area and the provision does not apply."],
+      ["Lateral demand on the frame:","comes from the free-roof net pressure and from any Chapter 29 elements, which must be added "+
+      "from the Components tab."]],"w");
     dtable(fb,null,["Direction","A<sub>roof,proj</sub> (ft\u00B2)","F from the roof (lbf)"],
       R.cases.map(c=>[{v:c.id},{v:R2(c.Aroof)},{v:R2(c.Froof),cls:"hl"}]),
       "Roof force uses the largest magnitude free-roof pressure acting on the projected roof area. Column and screen forces are not included here.");
@@ -2824,10 +2833,11 @@ function renderWalls(host){
     db.appendChild(el("div","eqt","Elevation looking along "+c.axis+", wind "+c.id+"  (windward "+c.ww+", leeward "+c.lw+")"));
     const dg=wallDiagram(c);
     plotBox(db,"wall"+k,()=>dg,430,
-      "Figure. Wall pressures in the "+c.axis+" direction, drawn to scale on the building section. The windward diagram is "+
-      "trapezoidal because q\u1d22 varies with height; the leeward diagram is uniform because it uses q\u2095. Side walls "+
-      "("+c.sides.join(" and ")+") carry "+R2(dg.psw)+" psf and act perpendicular to this section, so they are not shown here. "+
-      "The opposite direction "+(c.id==="+X"?"\u2212X":"\u2212Y")+" mirrors this diagram.");
+      a7NL("Figure. Wall pressures in the "+c.axis+" direction, drawn to scale on the building section.",[   /* A7NL */
+      ["Windward diagram:","trapezoidal because qᴢ varies with height."],
+      ["Leeward diagram:","uniform because it uses qₕ."],
+      ["Side walls","("+c.sides.join(" and ")+") carry "+R2(dg.psw)+" psf and act perpendicular to this section, so they are not shown here."],
+      ["Opposite direction:",(c.id==="+X"?"−X":"−Y")+" mirrors this diagram."]]));
   });
   note(db,"Ordinates are scaled from the pressures, not from a fixed ratio, so the two directions are not to the same "+
     "pressure scale. Hover any diagram for the value at that point.");
@@ -2868,9 +2878,11 @@ function renderWalls(host){
 
   b=panel(host,"o-minw",++n+".","Minimum Design Wind Load","ASCE 7-16 Sec. 27.1.5");
   b.parentElement.id="s-minw";
-  note(b,"Sec. 27.1.5 sets a floor on the MWFRS wind load: it shall not be less than 16 psf multiplied by the wall area of "+
+  noteNL(b,"Sec. 27.1.5 sets a floor on the MWFRS wind load:",[   /* A7NL */
+    ["Floor:","it shall not be less than 16 psf multiplied by the wall area of "+
     "the building and 8 psf multiplied by the roof area of the building, both projected onto a vertical plane normal to the "+
-    "assumed wind direction. This is a check on the total force, not on individual surface pressures.");
+    "assumed wind direction."],
+    ["Total force:","this is a check on the total force, not on individual surface pressures."]]);
   dtable(b,null,["Direction","A<sub>wall,proj</sub> (ft\u00B2)","A<sub>roof,proj</sub> (ft\u00B2)",
     "F windward (lbf)","F leeward (lbf)","F roof (lbf)","F computed (lbf)","F minimum (lbf)","Governs"],
     R.cases.map(c=>[{v:c.id},{v:R2(c.Awall)},{v:R2(c.Aroof)},{v:R2(c.Fww)},{v:R2(c.Flw)},{v:R2(c.Froof)},
@@ -2908,10 +2920,13 @@ function renderWalls(host){
         : (rn.mono ? "C_{net} = \\max(C_{p,ww,pos} - C_{p,L,wall},\\ C_{p,ww,neg} - C_{p,L,wall},\\ |C_{p,L,wall}|,\\ \\max|C_p|)"
                    : "C_{net} = \\max(C_{p,ww,pos} - C_{p,lw},\\ C_{p,ww,neg} - C_{p,lw},\\ \\max|C_p|)"),
       "C_{net} = \\max("+cands+")","C_{net} = "+RN(cg.CpRoofUsed,3)+"\\quad ("+rn.t+")");
-    note(sb,rn.mono
-      ? (rn.fromHigh ? "Monoslope, wind from the high side: the wall strip above the eave is a windward wall (0.8, taken at q<sub>h</sub>) and the roof is a leeward roof whose suction also pushes downwind."
-                     : "Monoslope, wind from the low eave: the roof is a windward roof and the wall strip above the high eave is a leeward wall (C<sub>p</sub>(L/B)). Windward-roof suction is not credited as relief: |C<sub>p,L,wall</sub>| and the largest roof |C<sub>p</sub>| (the earlier method) are floors.")
-      : (cg.hipEnd?"Hip roof, wind parallel to the ridge: the projected roof area is the hip-end planes, which take the normal-to-ridge coefficients of Fig. 27.3-1 at the roof slope (A7M8). ":"")+"Windward-slope pressure and leeward-slope suction both push downwind, so the net horizontal coefficient on the projected roof area is the windward minus the leeward C<sub>p</sub>, for both windward values of Fig. 27.3-1. Windward-slope suction is not credited as relief: the largest roof |C<sub>p</sub>| (the earlier method) is the floor.");
+    if(rn.mono&&rn.fromHigh) note(sb,"Monoslope, wind from the high side: the wall strip above the eave is a windward wall (0.8, taken at q<sub>h</sub>) and the roof is a leeward roof whose suction also pushes downwind.");
+    else if(rn.mono) noteNL(sb,"Monoslope, wind from the low eave: the roof is a windward roof and the wall strip above the high eave is a leeward wall (C<sub>p</sub>(L/B)).",[   /* A7NL */
+      ["No relief:","windward-roof suction is not credited as relief: |C<sub>p,L,wall</sub>| and the largest roof |C<sub>p</sub>| (the earlier method) are floors."]]);
+    else noteNL(sb,cg.hipEnd?"Hip roof, wind parallel to the ridge:":"Windward-slope pressure and leeward-slope suction both push downwind.",[   /* A7NL */
+      cg.hipEnd?["Projected roof area:","the hip-end planes, which take the normal-to-ridge coefficients of Fig. 27.3-1 at the roof slope (A7M8)."]:null,
+      ["Net coefficient:",(cg.hipEnd?"windward-slope pressure and leeward-slope suction both push downwind, so the":"the")+" net horizontal coefficient on the projected roof area is the windward minus the leeward C<sub>p</sub>, for both windward values of Fig. 27.3-1."],
+      ["No relief:","windward-slope suction is not credited as relief: the largest roof |C<sub>p</sub>| (the earlier method) is the floor."]]);
     eq(sb,"Roof contribution on the projected area",null,"F_{roof} = q_h\\,G\\,C_{net}\\,A_{roof}",
       "F_{roof} = "+R2(R.wind.qh.q)+"("+R2(R.wind.G)+")("+RN(cg.CpRoofUsed,3)+")\\,("+R2(cg.Aroof)+")","F_{roof} = "+R2(cg.Froof)+"\\ \\text{lbf}");
   } else if(cg.Aroof>0) eq(sb,"Roof contribution on the projected area",null,"F_{roof} = |q_h\\,G\\,C_p|\\,A_{roof}",
@@ -2923,20 +2938,27 @@ function renderWalls(host){
   eq(sb,"Governing design force",null,"F_{des} = \\max(F,\\ F_{min})",
     "F_{des} = \\max("+R2(cg.Ftot)+",\\ "+R2(cg.Fmin)+")","F_{des} = "+R2(cg.Fdes)+"\\ \\text{lbf}");
   });
-  if(cg.minGoverns) note(b,"The minimum governs in at least one direction. Scale the computed surface pressures for that "+
-    "direction by <b>"+RN(cg.scale,3)+"</b>, or apply 16 psf to the wall projection and 8 psf to the roof projection directly. "+
-    "Sec. 27.1.5 applies to the MWFRS only; the Chapter 30 minimum of 16 psf on components and cladding is a separate provision.","w");
+  if(cg.minGoverns) noteNL(b,"The minimum governs in at least one direction.",[   /* A7NL */
+    ["MWFRS only:","Sec. 27.1.5 applies to the MWFRS only; the Chapter 30 minimum of 16 psf on components and cladding is a separate provision."]],"w",
+    {act:["Scale the computed surface pressures for that direction by <b>"+RN(cg.scale,3)+"</b>, or apply 16 psf to the wall projection and 8 psf to the roof projection directly."]});
   else note(b,"The computed forces exceed the minimum in every direction, so Sec. 27.1.5 does not control.","k");
-  note(b,"Interpretation applied: wind normal to the ridge (\u03B8 \u2265 10\u00B0), the roof term is q<sub>h</sub>G(C<sub>p,windward</sub> \u2212 C<sub>p,leeward</sub>) on the "+
-    "projected roof area, enveloped over both windward values with the largest roof |C\u209a| as a floor; wind parallel to the ridge of a gable or monoslope, the end wall above the eave is wall; "+
-    "otherwise the largest magnitude roof C\u209a for the direction acts on the projected roof area. Internal pressure is excluded because it cancels on the net force. These choices are stated in the manual.");
+  noteNL(b,"Interpretation applied:",[   /* A7NL */
+    ["Wind normal to the ridge","(θ ≥ 10°): the roof term is q<sub>h</sub>G(C<sub>p,windward</sub> − C<sub>p,leeward</sub>) on the "+
+    "projected roof area, enveloped over both windward values with the largest roof |Cₚ| as a floor;"],
+    ["Wind parallel to the ridge","of a gable or monoslope: the end wall above the eave is wall;"],
+    ["Otherwise:","the largest magnitude roof Cₚ for the direction acts on the projected roof area."],
+    ["Internal pressure:","excluded because it cancels on the net force."],
+    ["Manual:","these choices are stated in the manual."]]);
 
   b=panel(host,"o-watr",++n+".","Torsional Load Cases","ASCE 7-16 Fig. 27.3-8");
-  note(b,"Chapter 27 Part 1 requires four load cases for buildings with a rigid diaphragm: Case 1 full windward and leeward "+
-    "pressure acting simultaneously along each principal axis, Case 2 the same reduced to 75 percent with a prescribed eccentricity, "+
-    "Case 3 both axes acting simultaneously at 75 percent, and Case 4 both axes at 56.3 percent with eccentricity. "+
-    "<b>Only Case 1 is generated by this version.</b> Sec. 27.3.5 exempts one-story buildings with h \u2264 30 ft, buildings with "+
-    "flexible diaphragms, and buildings framed with light-frame construction from Cases 2 and 4.","w");
+  noteNL(b,"Chapter 27 Part 1 requires four load cases for buildings with a rigid diaphragm:",[   /* A7NL */
+    ["Case 1:","full windward and leeward pressure acting simultaneously along each principal axis;"],
+    ["Case 2:","the same reduced to 75 percent with a prescribed eccentricity;"],
+    ["Case 3:","both axes acting simultaneously at 75 percent;"],
+    ["Case 4:","both axes at 56.3 percent with eccentricity."],
+    ["This version:","<b>only Case 1 is generated by this version.</b>"],
+    ["Exemption:","Sec. 27.3.5 exempts one-story buildings with h ≤ 30 ft, buildings with "+
+    "flexible diaphragms, and buildings framed with light-frame construction from Cases 2 and 4."]],"w");
 }
 
 /* ---------------- Wind: roof ---------------- */
@@ -2971,29 +2993,35 @@ function renderRoof(host){
       : "Section along "+c.axis+", wind "+c.id+"  ("+
         (c.roofMode==="normal"?"normal to the ridge":"distance bands from the windward edge")+")"));
     plotBox(db,"roof"+k,()=>roofDiagram(c),420,
-      "Figure. Roof pressures in the "+c.axis+" direction. Wind acts <b>normal to the roof surface</b>, so each ordinate and its "+
-      "arrows are laid off along the surface normal, not vertically. Red away from the surface is uplift, blue toward it is "+
-      "pressure. The axes are at equal scale so the normals are undistorted."+
-      (c.roofMode==="normal"?" The windward slope carries both a negative and a positive C\u209a; both are shown and both must be considered.":
-       (c.roofMode==="parallel"?" The band boundaries at h/2, h and 2h are measured from the windward edge.":"")));
+      a7NL("Figure. Roof pressures in the "+c.axis+" direction.",[   /* A7NL */
+      ["Normal to the surface:","wind acts <b>normal to the roof surface</b>, so each ordinate and its "+
+      "arrows are laid off along the surface normal, not vertically."],
+      ["Colours:","red away from the surface is uplift, blue toward it is pressure."],
+      ["Scale:","the axes are at equal scale so the normals are undistorted."],
+      c.roofMode==="normal"?["Windward slope:","carries both a negative and a positive Cₚ; both are shown and both must be considered."]:
+       (c.roofMode==="parallel"?["Bands:","the band boundaries at h/2, h and 2h are measured from the windward edge."]:null)]));
   });
 
-  note(db,"<b>Wind acts normal to the roof surface. Dead and snow act vertically, on the horizontal projection.</b> "+
-    "The two are still added directly in the load combinations, and the reason is worth stating: a pressure p normal to a surface "+
-    "sloped at \u03B8 acts on a sloped area 1/cos\u03B8 larger than the horizontal projection beneath it, and its vertical "+
-    "component is p\u00B7cos\u03B8. The two factors cancel exactly, so the vertical effect per unit <i>horizontal projected</i> "+
-    "area is p itself. The horizontal component, p\u00B7tan\u03B8 per unit horizontal projection, does not cancel; it is carried "+
-    "in the roof term of the Sec. 27.1.5 force check on the Walls tab and must be included in the lateral load path.");
+  noteNL(db,"Wind acts normal to the roof surface. Dead and snow act vertically, on the horizontal projection.",[   /* A7NL */
+    ["Added directly:","the two are still added directly in the load combinations, and the reason is worth stating:"],
+    ["Normal pressure:","a pressure p normal to a surface "+
+    "sloped at θ acts on a sloped area 1/cosθ larger than the horizontal projection beneath it, and its vertical "+
+    "component is p·cosθ."],
+    ["Vertical effect:","the two factors cancel exactly, so the vertical effect per unit <i>horizontal projected</i> area is p itself."],
+    ["Horizontal component:","p·tanθ per unit horizontal projection, does not cancel; it is carried "+
+    "in the roof term of the Sec. 27.1.5 force check on the Walls tab and must be included in the lateral load path."]]);
   if(g.free){ renderFreeRoof(host,n); return; }
 
   R.cases.forEach((c,i)=>{
     const cb=panel(host,"o-rf"+i,++n+".","Roof, Wind Direction "+c.id,"Fig. 27.3-1");
     if(c.roofMode==="normal"){
       const T=CP_ROOF_NORM;
-      note(cb,"Wind normal to the ridge with \u03B8 = "+R2(g.theta)+"\u00B0 \u2265 10\u00B0 and h/L = "+RN(c.hL,3)+". "+
-        (c.hLInterp
-          ? "h/L falls between the tabulated row groups, so the coefficient is obtained in two steps: first on \u03B8 within each of the h/L = 0.25, 0.5 and 1.0 row groups, then across h/L between those results. Fig. 27.3-1 permits linear interpolation on both variables."
-          : "h/L lands on the <b>"+c.hLBand+"</b> row group."));
+      noteNL(cb,"Wind normal to the ridge with θ = "+R2(g.theta)+"° ≥ 10° and h/L = "+RN(c.hL,3)+".",   /* A7NL */
+        c.hLInterp
+          ? [["Between row groups:","h/L falls between the tabulated row groups, so the coefficient is obtained in two steps:"],
+             ["First:","on θ within each of the h/L = 0.25, 0.5 and 1.0 row groups;"],["Then:","across h/L between those results."],
+             ["Permitted:","Fig. 27.3-1 permits linear interpolation on both variables."]]
+          : [["Row group:","h/L lands on the <b>"+c.hLBand+"</b> row group."]]);
       if(c.hlTrace && c.hLInterp){
         dtable(cb,"Two-step interpolation on \u03B8 then on h/L",
           ["Coefficient","at h/L = 0.25","at h/L = 0.5","at h/L = 1.0","interpolated at h/L = "+RN(c.hL,3)],[
@@ -3016,11 +3044,12 @@ function renderRoof(host){
         ["<=0.25","0.5",">=1.0"].map(k=>{const hit=k===c.hLBand;
           return [{v:k,cls:hit?"hl":""}].concat(T.lw[k].map(v=>({v:v.toFixed(2),cls:hit?"hl":""})));}));
     } else {
-      note(cb,(c.normalToRidge? "Wind normal to the ridge but \u03B8 = "+R2(g.theta)+"\u00B0 < 10\u00B0"
-                              : "Wind parallel to the ridge")+", so the distance-band table applies. h/L = "+RN(c.hL,3)+
-        (c.hLInterp? ", which falls between the two tabulated row groups; the coefficient in each band is interpolated linearly between the h/L \u2264 0.5 and h/L \u2265 1.0 values."
-                   : ", which lands on the <b>"+c.hLBand+"</b> row group.")+
-        " Bands are measured from the windward edge in multiples of h = "+R2(g.h)+" ft.");
+      noteNL(cb,(c.normalToRidge? "Wind normal to the ridge but θ = "+R2(g.theta)+"° < 10°"
+                              : "Wind parallel to the ridge")+", so the distance-band table applies.",[   /* A7NL */
+        ["h/L","= "+RN(c.hL,3)+
+        (c.hLInterp? ", which falls between the two tabulated row groups; the coefficient in each band is interpolated linearly between the h/L ≤ 0.5 and h/L ≥ 1.0 values."
+                   : ", which lands on the <b>"+c.hLBand+"</b> row group.")],
+        ["Bands:","measured from the windward edge in multiples of h = "+R2(g.h)+" ft."]]);
       if(c.hLInterp) dtable(cb,"Interpolation on h/L",
         ["Band","at h/L \u2264 0.5","at h/L \u2265 1.0","interpolated at h/L = "+RN(c.hL,3)],
         c.roofRows.map(r=>[{v:r.label}].concat(r.per.map(v=>({v:v.toFixed(2)}))).concat([{v:RN(r.Cp,3),cls:"hl"}])));
@@ -3037,10 +3066,10 @@ function renderRoof(host){
         ["Coefficient","at h/L = 0.25","at h/L = 0.5","at h/L = 1.0","used"],[
         [{v:"Windward hip end, negative C\u209a"}].concat(t.wn.per.map(v=>({v:RN(v,3)}))).concat([{v:RN(c.hipEnd.neg,3),cls:"hl"}]),
         [{v:"Windward hip end, positive C\u209a"}].concat(t.wp.per.map(v=>({v:RN(v,3)}))).concat([{v:RN(c.hipEnd.pos,3),cls:"hl"}]),
-        [{v:"Leeward hip end"}].concat(t.lw.per.map(v=>({v:RN(v,3)}))).concat([{v:RN(c.hipEnd.lw,3),cls:"hl"}])],
-        "The hip-end planes face along the ridge, so for wind parallel to the ridge they are windward and leeward roof surfaces at the roof slope; they take the "+
-        "Fig. 27.3-1 normal-to-ridge coefficients (both windward values, same-sign interpolation). The side slopes keep the distance-band values. "+
-        "Decision pending engineer review (common practice and the Commentary, verify).");
+        [{v:"Leeward hip end"}].concat(t.lw.per.map(v=>({v:RN(v,3)}))).concat([{v:RN(c.hipEnd.lw,3),cls:"hl"}])]);
+      cb.appendChild(el("div","cap a7NL",a7NL("The hip-end planes face along the ridge, so for wind parallel to the ridge they are windward and leeward roof surfaces at the roof slope.",[   /* A7NL */
+        ["Coefficients:","they take the Fig. 27.3-1 normal-to-ridge coefficients (both windward values, same-sign interpolation)."],
+        ["Side slopes:","keep the distance-band values."]],{act:["Decision pending engineer review (common practice and the Commentary, verify)."]})));
     }
     dtable(cb,"Design roof pressures",
       ["Surface / band","C\u209a","p with +GC\u209a\u1d62 (psf)","p with \u2212GC\u209a\u1d62 (psf)"],
@@ -3076,9 +3105,10 @@ function renderFreeRoof(host,n){
       CN_MONO.theta.map((t,i)=>[{v:t.toFixed(1)}].concat(CN_MONO[key][gk][i].map(v=>({v:v.toFixed(2)})))));
   });
   eq(b,"Design pressure","ASCE 7-16 Eq. 27.3-2","p = q_h\\,G\\,C_N","p = "+R2(w.qh.q)+"("+R2(w.G)+")C_N",null);
-  note(b,"C\u2099\u1d21 acts on the windward half of the roof and C\u2099\u029f on the leeward half. At \u03B3 = 0\u00B0 the wind arrives "+
-    "from the high side, so the <b>upper</b> half is windward; at \u03B3 = 180\u00B0 the <b>lower</b> half is windward. Assigning "+
-    "C\u2099\u1d21 to the same physical half in both directions is the most common error in this calculation.");
+  noteNL(b,"Cₙᴡ acts on the windward half of the roof and Cₙʟ on the leeward half.",[   /* A7NL */
+    ["At γ = 0°","the wind arrives from the high side, so the <b>upper</b> half is windward;"],
+    ["At γ = 180°","the <b>lower</b> half is windward."],
+    ["Most common error:","assigning Cₙᴡ to the same physical half in both directions is the most common error in this calculation."]]);
   dtable(b,null,["Case","C\u2099\u1d21","C\u2099\u029f","Windward half","p upper (psf)","p lower (psf)"],
     f.cases.map(c=>[{v:c.name},{v:RN(c.CNW,3)},{v:RN(c.CNL,3)},{v:c.windwardHalf},
       {v:R2(c.dir===0?c.pW:c.pL),cls:"hl"},{v:R2(c.dir===0?c.pL:c.pW),cls:"hl"}]));
@@ -3088,10 +3118,12 @@ function renderFreeRoof(host,n){
     eq(sb,"Leeward half",null,"p_L = q_h\\,G\\,C_{NL}","p_L = "+R2(w.qh.q)+"("+R2(w.G)+")("+RN(c.CNL,3)+")","p_L = "+R2(c.pL)+"\\ \\text{psf}");
   });
   b=panel(host,"o-fr2",++n+".","Wind Along the Ridge, \u03B3 = 90\u00B0 and 270\u00B0","ASCE 7-16 Fig. 27.3-7");
-  note(b,"Wind along the ridge is a separate required case with its own figure. The coefficient changes in bands measured from "+
-    "the windward edge in multiples of the mean roof height h = "+R2(R.geom.h)+" ft, and Cases A and B are alternatives that must "+
-    "both be considered. \u03B3 = 270\u00B0 is the mirror of \u03B3 = 90\u00B0 about mid-length, so the two produce the same "+
-    "coefficients measured from opposite ends.");
+  noteNL(b,"Wind along the ridge is a separate required case with its own figure.",[   /* A7NL */
+    ["Bands:","the coefficient changes in bands measured from "+
+    "the windward edge in multiples of the mean roof height h = "+R2(R.geom.h)+" ft."],
+    ["Cases A and B:","alternatives that must both be considered."],
+    ["γ = 270°","is the mirror of γ = 90° about mid-length, so the two produce the same "+
+    "coefficients measured from opposite ends."]]);
   dtable(b,"Fig. 27.3-7 \u2014 "+f.flow.toLowerCase()+" wind flow",
     ["Distance from the windward edge","Case A C\u2099","Case B C\u2099","p Case A (psf)","p Case B (psf)"],
     f.long.map(bd=>[{v:bd.band},{v:bd.A.toFixed(2)},{v:bd.B.toFixed(2)},
@@ -3187,7 +3219,7 @@ function renderSeis(host){
           ["S<sub>1</sub>","Mapped MCE_R 1-second acceleration",RN(st.S1,3)+" g",st.source],
           ["\u2014","Site class",S.siteClass,"Ch. 20"],
           ["I<sub>e</sub>","Seismic importance factor",R2(st.Ie),"Table 1.5-2"]]);
-  if(q.siteSpecific) q.ssReason.forEach(r=>note(b,esc(r),"w"));
+  if(q.siteSpecific) q.ssReason.forEach(r=>{ const nl=A7WNL.get(r); if(nl) noteNL(b,nl[0],nl[1],"w",nl[2]); else note(b,esc(r),"w"); });   /* A7NL */
   if(q.siteRule) note(b,esc(q.siteRule),"w");
   if(q.Fa===null){ note(b,"No site coefficient is tabulated for Site Class "+S.siteClass+" at S\u209b = "+RN(st.Ss,3)+" g and S\u2081 = "+RN(st.S1,3)+" g. ASCE 7-16 Sec. 11.4.8 requires a site response analysis in this case, and this tool will not extrapolate the tables. Perform the site-specific analysis and enter the resulting parameters elsewhere.","e"); return; }
   dtable(b,"Table 11.4-1 \u2014 short-period site coefficient F\u2090",
@@ -3259,14 +3291,21 @@ function renderSeis(host){
       ["Seismic Design Category","B","C","D","E","F"],
       (SLE.ma?[[{v:esc(S.sfrs)+" \u2014 ASCE 7-16"}].concat(["B","C","D","E","F"].map(k=>({v:fmtL(SLE.asce[k])})))]:[]).concat(
       [[{v:esc(S.sfrs)+(SLE.ma?" \u2014 as amended by 780 CMR (row "+SLE.ma.id+"), used":"")}].concat(["B","C","D","E","F"].map(k=>
-        ({v:fmtL(limE[k]),cls:k===q.SDC?"hl":""})))]),
-      "NL = not limited, NP = not permitted. The highlighted column is the governing category. This is a screen against the "+
+        ({v:fmtL(limE[k]),cls:k===q.SDC?"hl":""})))]));
+    b.appendChild(el("div","cap a7NL",a7NL("NL = not limited, NP = not permitted.",[   /* A7NL */
+      ["Highlighted column:","the governing category."],
+      ["Screen only:","this is a screen against the "+
       "main table only; the footnote exceptions of Table 12.2-1, including those that permit some systems in higher categories "+
-      "under Sec. 12.2.5, are not evaluated."+(S.jur==="MA"?" Massachusetts: the 780 CMR 10th Ed. amendments to Table 12.2-1 are applied to the rows this tool lists (C.7 and H).":""));
-    if(SLE.ma&&SLE.ma.note2&&(q.SDC==="B"||q.SDC==="C")) note(b,"<b>780 CMR amendment to Table 12.2-1, Note 2 (system H).</b> Connections, including those to foundations, are designed for "+
+      "under Sec. 12.2.5, are not evaluated."],
+      S.jur==="MA"?["Massachusetts:","the 780 CMR 10th Ed. amendments to Table 12.2-1 are applied to the rows this tool lists (C.7 and H)."]:null])));
+    if(SLE.ma&&SLE.ma.note2&&(q.SDC==="B"||q.SDC==="C")) noteNL(b,"780 CMR amendment to Table 12.2-1, Note 2 (system H).",[   /* A7NL */
+      ["Connections,","including those to foundations, are designed for "+
       "two times the computed seismic forces and moments in combination with other loads, capped at the expected brace yield strength or 1.1 times the expected beam "+
-      "flexural capacity; columns of the seismic force-resisting system meet AISC 341 Sec. D1.4a; K-braced frames are not permitted; V and inverted-V braced frame beams "+
-      "have added requirements. The factor of 2 is not applied by this tool.","w");
+      "flexural capacity;"],
+      ["Columns","of the seismic force-resisting system meet AISC 341 Sec. D1.4a;"],
+      ["K-braced frames","are not permitted;"],
+      ["V and inverted-V braced frame beams","have added requirements."],
+      ["Not applied:","the factor of 2 is not applied by this tool."]],"w");
     const lim=limE[q.SDC];
     if(lim==="NP") note(b,"<b>Table 12.2-1 does not permit this system in Seismic Design Category "+q.SDC+".</b> Either the "+
       "system or the category has to change; the base shear below is arithmetically correct and structurally inadmissible.","e");
@@ -3319,9 +3358,10 @@ function renderSeis(host){
       "W_s = 0.2\\,p_s\\,A_{plan},\\qquad W = W_{entered} + W_s",
       "W_s = 0.2("+R2(z.ps)+")("+R2(z.A)+")/1000 = "+R2(z.W)+"\\ \\text{kip},\\quad W = "+R2(z.Win)+" + "+R2(z.W),
       "W = "+R2(q.Wt)+"\\ \\text{kip}");
-    note(b,"Sec. 12.7.2: where the flat roof snow load exceeds 30 psf, 20 % of the uniform design snow load is part of W. It is taken here as 0.2 \u00D7 the balanced design snow p\u209b = "+R2(z.ps)+
-      " psf (with the minimum and rain-on-snow where they apply) over the plan area, and added to W and to the weight of the highest level"+(z.level?" ("+esc(z.level)+")":"")+
-      ". If the entered W already includes it, tick the box on the Seismic input tab.","w");
+    noteNL(b,"Sec. 12.7.2: where the flat roof snow load exceeds 30 psf, 20 % of the uniform design snow load is part of W.",[   /* A7NL */
+      ["Taken here","as 0.2 × the balanced design snow pₛ = "+R2(z.ps)+
+      " psf (with the minimum and rain-on-snow where they apply) over the plan area, and added to W and to the weight of the highest level"+(z.level?" ("+esc(z.level)+")":"")+"."]],
+      "w",{act:["If the entered W already includes it, tick the box on the Seismic input tab."]});
   } else if(q.snowWincl) note(b,"Flat roof snow load "+R2(q.snowWincl.pf)+" psf > 30 psf: the entered W and level weights are stated to include 20 % of the design snow load (Sec. 12.7.2).","k");
   eq(b,"Seismic base shear","ASCE 7-16 Eq. 12.8-1","V = C_s\\,W",
     "V = "+RN(q.Cs,4)+"("+R2(q.Wt)+")","V = "+R2(q.Vbase)+"\\ \\text{kip}");
@@ -3370,17 +3410,21 @@ function renderSeis(host){
       "V_{"+esc(LB.name)+"} = "+q.levels.map(L=>R2(L.Fx)).join(" + "),"V_x = "+R2(LB.Vx)+"\\ \\text{kip}");
     eq(sb,"Base overturning moment, Sec. 12.8.5","ASCE 7-16 Eq. 12.8-14","M_0 = \\sum_{i=1}^{n} F_i\\,(h_i - h_{base})",
       "M_0 = "+q.levels.map(L=>R2(L.Fx)+"("+R2(L.h-q.baseElev)+")").join(" + "),"M_0 = "+R2(q.Mbase)+"\\ \\text{kip-ft}");
-    note(sb,"Sec. 12.8.4.1 requires the story shear to be distributed to the vertical resisting elements in proportion to their "+
-      "stiffness, together with the inherent and accidental torsional moments of Sec. 12.8.4.1 and 12.8.4.2 and, in Seismic Design "+
-      "Categories C through F, the amplification factor A\u2093 of Sec. 12.8.4.3. None of that is performed here; the story shear "+
-      "above is the total to be distributed.","w");
+    noteNL(sb,"Sec. 12.8.4.1 requires the story shear to be distributed to the vertical resisting elements:",[   /* A7NL */
+      ["Stiffness:","in proportion to their stiffness,"],
+      ["Torsion:","together with the inherent and accidental torsional moments of Sec. 12.8.4.1 and 12.8.4.2,"],
+      ["Amplification:","and, in Seismic Design Categories C through F, the amplification factor Aₓ of Sec. 12.8.4.3."],
+      ["Not performed here:","none of that is performed here; the story shear above is the total to be distributed."]],"w");
   }
   b=panel(host,"o-se6",++n+".","Not Included in the Seismic Module","");
-  note(b,"Horizontal distribution and accidental torsion (Sec. 12.8.4), drift and P-delta (Sec. 12.8.6, 12.9), irregularity "+
-    "checks (Sec. 12.3.2), nonstructural components (Ch. 13), nonbuilding structures (Ch. 15), and modal response spectrum "+
-    "analysis (Sec. 12.9) are <b>not</b> performed. The vertical seismic effect E\u1d65 (Sec. 12.4.2.2) <i>is</i> computed and "+
-    "carried into the combinations with both signs; the redundancy factor \u03C1 is applied as entered but Sec. 12.3.4.2 is not evaluated. Sec. 12.6: the equivalent lateral force procedure is "+
-    "permitted in Seismic Design Categories B and C; in D, E and F the Table 12.6-1 check relies on the irregularities entered on the input tab, which this tool does not evaluate.","w");
+  noteNL(b,"Not performed:",[   /* A7NL */
+    ["Horizontal distribution and accidental torsion","(Sec. 12.8.4);"],["Drift and P-delta","(Sec. 12.8.6, 12.9);"],
+    ["Irregularity checks","(Sec. 12.3.2);"],["Nonstructural components","(Ch. 13);"],["Nonbuilding structures","(Ch. 15);"],
+    ["Modal response spectrum analysis","(Sec. 12.9)."],
+    ["Computed:","the vertical seismic effect Eᵥ (Sec. 12.4.2.2) <i>is</i> computed and carried into the combinations with both signs."],
+    ["Redundancy:","the redundancy factor ρ is applied as entered but Sec. 12.3.4.2 is not evaluated."],
+    ["ELF procedure:","Sec. 12.6: the equivalent lateral force procedure is "+
+    "permitted in Seismic Design Categories B and C; in D, E and F the Table 12.6-1 check relies on the irregularities entered on the input tab, which this tool does not evaluate."]],"w");
 }
 
 /* ---------------- Combinations ---------------- */
@@ -3412,12 +3456,13 @@ function renderComb(host){
       : "Sec. 7.6.1 unbalanced snow is not required for this roof, so the balanced case is the only snow case.");
   if(q.Fa!==null) eq(b,"Vertical seismic load effect","ASCE 7-16 Eq. 12.4-4a and 12.4-4b","E_v = 0.2\\,S_{DS}\\,D",
     "E_v = 0.2("+RN(q.SDS,4)+")("+R2(D)+")","E_v = "+R2(q.Ev)+"\\ \\text{psf}");
-  note(b,"Roof pressures below are net downward on the horizontal projection; negative is net uplift. Lateral force is the "+
-    "total on the MWFRS in the stated direction, already raised to the Sec. 27.1.5 minimum where that governs. The floor live "+
-    "load L acts on the framing below and does not appear in the roof pressure.");
-  note(b,"Rain load R (Ch. 8) is not computed by this tool. Sec. 2.3.1 combinations 2, 3 and 4 read (L\u1D63 or S or R); the "+
-    "(L\u1D63 or S) term below omits R. Where rain on the roof can exceed L\u1D63 and S (for example a roof that relies on "+
-    "secondary drainage, or one prone to ponding), evaluate R by hand and substitute it.","w");
+  noteNL(b,"Roof pressures below are net downward on the horizontal projection; negative is net uplift.",[   /* A7NL */
+    ["Lateral force:","the total on the MWFRS in the stated direction, already raised to the Sec. 27.1.5 minimum where that governs."],
+    ["Floor live load L:","acts on the framing below and does not appear in the roof pressure."]]);
+  noteNL(b,"Rain load R (Ch. 8) is not computed by this tool.",[   /* A7NL */
+    ["Combinations:","Sec. 2.3.1 combinations 2, 3 and 4 read (Lᵣ or S or R); the (Lᵣ or S) term below omits R."],
+    ["Where rain governs:","where rain on the roof can exceed Lᵣ and S (for example a roof that relies on "+
+    "secondary drainage, or one prone to ponding), evaluate R by hand and substitute it."]],"w");
 
   b=panel(host,"o-cb1",++n+".","Combination Summary","ASCE 7-16 Sec. 2.3.1");
   dtable(b,null,["ID","Combination","Sub-cases","Net roof, min (psf)","Net roof, max (psf)","Lateral, max (kip)","Governs"],
@@ -3479,11 +3524,14 @@ function renderComb(host){
   });
 
   b=panel(host,"o-cb3",++n+".","Allowable Stress Design","ASCE 7-16 Sec. 2.4 / 780 CMR 1605.1");
-  note(b,"<b>Scope decision.</b> This tool works the Sec. 2.3.1 strength combinations in full and lists the Sec. 2.4 combinations "+
-    "for reference without working them. In Massachusetts 780 CMR 1605.1 deletes the Sec. 2.4 combinations containing wind or "+
+  noteNL(b,"Scope decision.",[   /* A7NL */
+    ["Strength and ASD:","this tool works the Sec. 2.3.1 strength combinations in full and lists the Sec. 2.4 combinations "+
+    "for reference without working them."],
+    ["Massachusetts:","780 CMR 1605.1 deletes the Sec. 2.4 combinations containing wind or "+
     "earthquake for structural steel and substitutes two-thirds of the strength combinations, so for the cases that govern a steel "+
-    "building the ASD path returns to the strength combinations already worked above. Where the governing material standard is "+
-    "worked in allowable stress terms, such as TMS 402 masonry or NDS wood, the Sec. 2.4 combinations must be evaluated separately.");
+    "building the ASD path returns to the strength combinations already worked above."],
+    ["Allowable stress materials:","where the governing material standard is "+
+    "worked in allowable stress terms, such as TMS 402 masonry or NDS wood, the Sec. 2.4 combinations must be evaluated separately."]]);
   dtable(b,"ASCE 7-16 Sec. 2.4.1 basic combinations",["ID","Combination"],
     [["ASD-1","D"],["ASD-2","D + L"],["ASD-3","D + (L\u1d63 or S or R)"],
      ["ASD-4","D + 0.75L + 0.75(L\u1d63 or S or R)"],["ASD-5","D + 0.6W"],
@@ -3492,10 +3540,13 @@ function renderComb(host){
      ["ASD-10","0.6D + 0.7E"]].map(r=>[{v:r[0]},{v:r[1]}]),
     "Seismic combinations include E\u1d65 within E per Sec. 12.4.2.");
   if(R.maAsd){
-    note(b,"<b>Massachusetts amendment.</b> 780 CMR 1605.1 adds the following before the exceptions: for allowable stress "+
+    noteNL(b,"Massachusetts amendment. 780 CMR 1605.1 adds the following before the exceptions:",[   /* A7NL */
+      ["Not used:","for allowable stress "+
       "design of structural steel in buildings and other structures, the ASCE 7 Sec. 2.4 combinations that include wind or "+
-      "earthquake effects shall <b>not</b> be used, and two-thirds of the ASCE 7 Sec. 2.3 strength design combinations that "+
-      "include wind or earthquake shall be used instead. 780 CMR 1605.2 is deleted in its entirety.","w");
+      "earthquake effects shall <b>not</b> be used,"],
+      ["Used instead:","and two-thirds of the ASCE 7 Sec. 2.3 strength design combinations that "+
+      "include wind or earthquake shall be used instead."],
+      ["Deleted:","780 CMR 1605.2 is deleted in its entirety."]],"w");
     dtable(b,"ASD combinations for structural steel under 780 CMR",["ID","Basis","Combination","Net roof p\u1d64 (psf)"],
       R.combos.filter(c=>c.W>0||c.E>0).map(c=>[{v:c.id+"a"},{v:"\u2154 \u00D7 "+c.id},
         {v:(2/3*c.D).toFixed(3)+"D + "+(2/3*c.L).toFixed(3)+"L + "+(2/3*c.S).toFixed(3)+(c.useLr?"(L\u1d63 or S)":"S")+" + "+(2/3*c.W).toFixed(3)+"W + "+(2/3*c.E).toFixed(3)+"E"},
@@ -3882,7 +3933,7 @@ function plotBox(host,key,build,height,caption){
   d.style.cssText="width:100%;height:"+(height||430)+"px;border:1px solid var(--line);background:#fff";
   d.innerHTML='<div style="padding:14px;font-style:italic;color:#666">Loading the plotting library\u2026</div>';
   host.appendChild(d);
-  if(caption) host.appendChild(el("div","cap",caption));
+  if(caption) host.appendChild(el("div","cap"+(/^<div class="a7NL/.test(caption)?" a7NL":""),caption));   /* A7NL: a caption built with a7NL */
   if(typeof A7RX!=="undefined"&&A7RX.cap){ A7RX.cap.push({id:d.id,build,height:height||430}); return d; }   /* A7RX: the Report collects the figure, drawn as an image */
   PLOT_PENDING++;
   loadPlotly().then(()=>{
