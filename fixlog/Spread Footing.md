@@ -7140,3 +7140,52 @@ index 50f3837..c2d5000 100644
 - **How verified:** SF harness (24 cases) origin/main 3e301df vs the branch: def, rev, sfe, sfe5, dir, sfe9, revEx, thin, revHook, edgeHook, wSel: R, P2, dashboard and Report identical. wTall, wTallBr, wTallEnv, wAll, wOOP, wHCd, wHCs (b_eff,base ≥ b_eff,top already): only the new fields `spr`, `topGovB` and the new Report step `wo.bs`; every ratio identical. Moved: wHC, wHCenv, wHCe, w769, w769h, w769env only (all had b_eff,base < b_eff,top). 0 console errors, 0 KaTeX errors. Tests: tests/check-syntax.mjs, phone-layout --tool sf, spread-footing-nobear, spread-footing-scroll, project-library --tool spreadfooting: pass.
 - **Saved data:** no key or format change; no migration (old projects recompute).
 - **Other copies:** none.
+
+## 2026-11-08 — PR: sf-endcap (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SFWD-8: wall b_eff,top cut at the wall ends; CALCULATION CHANGE for Wall elements with a concentrated load near a wall end only. SFNL-3: Footing Design 5.5 J_c note, garbled fragment rewritten; display only)
+
+### SFWD-8. b_eff,top cut at the wall ends   [CALCULATION CHANGE, Wall elements only; CLAUDE.md §4]
+- **Decision (engineer, 2026-11-08):** for a concentrated out-of-plane wall load, b_eff at the top is capped by the distance to each wall end as well: b_eff,top = min( min(b/2 + 2t, a₁) + min(b/2 + 2t, a₂), s, ℓ_w ), a₁, a₂ = the distances from the load centre to the two wall ends. Since b + 4t = 2(b/2 + 2t), this equals the old min(b + 4t, s, ℓ_w) wherever the load is at least b/2 + 2t from both ends. Replaces the SFWD-3 / SFWD-7 statement "b_eff,top is not cut at the wall ends". b_eff,base is unchanged in form: min( max(b_eff,top, b_spread), s, ℓ_w ) (SFWD-7); it follows the new b_eff,top. Less conservative than before: never (b_eff,top can only fall); the per-ft top and base demands rise where the end cut governs.
+- **Governing provision:** ACI 318-19 (2019) §11.2.3.1 (b + 4t, the load spacing s); the end cut is the engineer's rule above (11.2.3.1 does not mention the wall ends).
+- **Where / before / after:** `sfdWallOOP`, inner `run(ldc,o)`, anchor `/* SFWD-8 (2026-11-08, engineer): b_eff,top is cut at the wall ends too`:
+  ```js
+  // before
+  const bTop=ldc==='dist'?lw:Math.min(bw+4*tw,sL,lw), spr=Math.min(bw/2+hs,a1)+Math.min(bw/2+hs,a2),
+   bBase=ldc==='dist'?lw:Math.min(Math.max(bTop,spr),sL,lw), topGovB=ldc!=='dist'&&bTop>spr+1e-9;
+  const Lb=bBase/12,Lt=bTop/12,IgS=bBase*Math.pow(tw,3)/12;
+  Object.assign(o,{ldc,bTop,bBase,spr,topGovB,Lb,Lt,IgS});
+  // after
+  const hT=bw/2+2*tw,bt1=Math.min(hT,a1),bt2=Math.min(hT,a2),endT=ldc!=='dist'&&bt1+bt2<Math.min(bw+4*tw,sL,lw)-1e-9;   /* the end cut is what governs */
+  const bTop=ldc==='dist'?lw:Math.min(bt1+bt2,sL,lw), spr=Math.min(bw/2+hs,a1)+Math.min(bw/2+hs,a2),
+   bBase=ldc==='dist'?lw:Math.min(Math.max(bTop,spr),sL,lw), topGovB=ldc!=='dist'&&bTop>spr+1e-9;
+  const Lb=bBase/12,Lt=bTop/12,IgS=bBase*Math.pow(tw,3)/12;
+  Object.assign(o,{ldc,hT,bt1,bt2,endT,bTop,bBase,spr,topGovB,Lb,Lt,IgS});
+  ```
+  Older save ('env'): `o.env.conc` also carries `hT, bt1, bt2, endT`, and the three `Object.assign({},o,{ldc:'conc',…})` display copies (card, Report `sfrWallSub`) pass them on. `(bw/2+2*tw)*2` equals `bw+4*tw` exactly in floating point (scaling by 2 is exact), so uncut cases give bit-identical results. Header comment of `sfdWallOOP`: "b_eff,top = min(b + 4t, s, l_w), cut at the wall ends (SFWD-8, below)".
+- **Display:**
+  - Wall Design card, eq block "Wall: effective length for the out-of-plane load (b_eff)": reference "ACI 318-19 11.2.3.1, cut at the wall ends; …"; symbolic b_eff,top = min[min(b/2 + 2t, a₁) + min(b/2 + 2t, a₂), s, ℓ_w]; substituted min[min(70.00, 101.00) + min(70.00, 17.00), ∞, 118.00] = min(87.00, ∞, 118.00) = 87.00 in "(cut at a wall end)" where the end cut governs. New list item "Decision (engineer-approved 2026-11-08)" with the rule and, where it governs, a₁, a₂ and b/2 + 2t; the 2026-11-07 item no longer says b_eff,top is not cut at the wall ends.
+  - Report `sfrWallSub`, step `wo.bt`: eq and substitution as above, label adds "each side of the load min(b/2 + 2t, a), a_1 = …, a_2 = … in = the distances to the wall ends[: cut at a wall end]", ref "ACI 318-19 11.2.3.1; cut at the wall ends (engineer-approved 2026-11-08)".
+  - Sketch `sfdWallSketchSVG`: b_eff,top label "(11.2.3.1; cut at the wall end)" where it governs (its placement, centred on the load and shifted to stay on the wall, already runs from u₀ − min(b/2 + 2t, a₁) to u₀ + min(b/2 + 2t, a₂)); legend has a third line "b_eff,top = min(min(b/2 + 2t, a₁) + min(b/2 + 2t, a₂), s, ℓ_w); a₁, a₂ = load to the wall ends" (SVG 14 px taller for a concentrated load).
+  - "Wall checks" row "Out of plane": "(11.2.3.1 at the load, cut at the wall ends; at the base the larger of that and a 45° spread)".
+- **Hand check `wHCe`** (= `wHC` with the load 3.5 ft off centre: L = 12 ft footing, Ped 1 wall t = 32, ℓ_w = 118 in, h = 24 in, 28 #6, D.P = 60 k, L.M_y = 40 k-ft, b = 12 in, no s, e = 42 in; a₁ = 59 + 42 = 101 in, a₂ = 59 − 42 = 17 in; governing 1.2D + 1.6L + 0.5S: P_u,a = 168.00 k, W_sw = 9.44 k, M_u,out = 64.00 k-ft, M_u,in = 168.00 · 3.5 = 588.00 k-ft):
+  - b/2 + 2t = 6 + 64 = 70 in. b_eff,top: before min(12 + 128, ∞, 118) = **118 in**; after min[min(70, 101) + min(70, 17), ∞, 118] = min(70 + 17, ∞, 118) = **87 in** (7.250 ft).
+  - b_spread = min(30, 101) + min(30, 17) = 47 in. b_eff,base: before min(max(118, 47), ∞, 118) = **118 in**; after min(max(87, 47), ∞, 118) = **87 in**.
+  - ±6M_u,in/ℓ_w² = 6 · 588.00/9.833² = 36.49 kip/ft (unchanged).
+  - Base, governing end: N = 168.00/b_eff,base + 9.44/9.833 − 36.49: before 17.08 + 0.96 − 36.49 = −18.44; after 23.17 + 0.96 − 36.49 = **−12.35 kip/ft**. M = 64.00/b_eff,base: 6.51 → **8.83 k-ft/ft**. φM_n (per-ft section at that N): 0.9 · 66.66 = 59.99 → 0.9 · 74.58 = 67.12 k-ft/ft. Base ratio **0.108 → 0.132**; dowels (vertical bars) = base.
+  - Top: N = 168.00/b_eff,top − 36.49: −19.40 → **−13.31 kip/ft**; M 6.51 → 8.83 k-ft/ft; φM_n 0.9 · 65.41 = 58.87 → 0.9 · 73.33 = 66.00; ratio **0.111 → 0.134**.
+  - "Wall out-of-plane P–M" (max of base, top, dowels): **0.111 → 0.134** (top governs, as before).
+  - Slenderness strip P_u,strip = 168.00 + 9.44 · b_eff,base/ℓ_w: 177.44 → 174.96 k (slenderness neglected in both).
+  - Out-of-plane shear (1.2D + 1.0(+Wx) + L + 0.5S, V_u = 8.00 k): 8.00/9.833 = 0.814 → 8.00/7.250 = 1.103 kip/ft; φV_c 9.80 → 10.35 kip/ft; ratio **0.083 → 0.107**.
+- **Unchanged check `wHC`** (load centred, a₁ = a₂ = 59 in < 70 in): after min[min(70, 59) + min(70, 59), ∞, 118] = min(118, ∞, 118) = 118 in = before; b_eff,base 118 in; P–M 0.064 (top), base 0.063, shear 0.071: unchanged. Same for `w769` (a = 36 < b/2 + 2t = 45, but 36 + 36 = ℓ_w = 72): unchanged.
+- **How verified:** SF harness (24 cases) origin/main 2cd2a1b vs the branch: def, rev, sfe, sfe5, dir, sfe9, revEx, thin, revHook, edgeHook, wSel: R and P2 identical. Every wall case except `wHCe`: R and P2 identical apart from the new fields `hT`, `bt1`, `bt2`, `endT`; dashboard identical; Report differs only in the `wo.bt` step text, the eq-block text and the "Wall checks" row. Moved: `wHCe` only (the only case where min(b/2 + 2t, a₁) + min(b/2 + 2t, a₂) < min(b + 4t, s, ℓ_w)). 0 console errors, 0 KaTeX errors. Sketch checked as a PNG for `wHCe` (b_eff,top drawn from 31 to 118 in) and `wHC`. Tests: see the PR.
+- **Saved data:** no key or format change; no migration (old projects recompute).
+- **Other copies:** none.
+
+### SFNL-3. Footing Design 5.5: J_c note, edge and corner item   [DISPLAY ONLY; no computed value changes]
+- **Problem:** the SFNL-1 open item: the last item of the note "J_c, the extreme fibre and the pressure relief:" (Footing Design 5.5, after the two-way shear eq block) read "… the flexural-transfer band — see the checks below.fers from the interior form — verify governing cases and the γ_f flexural transfer by hand." (a fragment left by an earlier edit).
+- **Checked against the code:** the punching calculation (anchor `/* M-1: Jc for edge / corner conditions.`) rebuilds J_c and the extreme fibre from the critical faces that close within the footing, so for an edge or corner critical section J_c differs from the interior closed form of ACI R8.4.4.2.3. The requested sentence matches the code; used as given.
+- **Where:** the pedestal punching card, anchor `['Edge and corner conditions','additionally reduce α_s (30 / 20) and the flexural-transfer band`. The SFNL-1 bullet structure (bold lead, four items) is kept.
+  - Before: `'additionally reduce α_s (30 / 20) and the flexural-transfer band — see the checks below.fers from the interior form — verify governing cases and the γ_f flexural transfer by hand.'`
+  - After: `'additionally reduce α_s (30 / 20) and the flexural-transfer band — see the checks below. J_c for an edge or corner critical section differs from the interior form — verify the governing cases and the γ_f flexural transfer by hand.'`
+- **Governing provision:** none changed (ACI 318-19 R8.4.4.2.3 is quoted, as before).
+- **Check case:** any project with a pedestal (default): the note reads as above; every computed value unchanged (harness: `def`, `rev`, `sfe*`, `edgeHook` R and P2 identical).
+- **Other copies:** none.
