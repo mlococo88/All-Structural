@@ -5573,3 +5573,41 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Check case:** origin/main vs branch, headless, 10 input states (default; pedestal reinforcement; fixed D; elastic + uncracked; tension reinforcement bar / U-stirrup with offset set-out and hooks / closed tie enclosing; hairpins welded plate; group; closed ties): `CC` (all results) JSON identical; the digit sequence of the input panel, every output tab, the Report tab and the printed report (`buildPrintReport`) identical in all 159 texts; only the input panel's text differs (wording/structure).
 - **How verified:** `node tests/check-syntax.mjs`; `tests/smoke/phone-layout.mjs --tool bpad`; `tests/smoke/project-library.mjs --tool baseplate`; `tests/smoke/lightpole-anchor-handoff.mjs`; 0 console errors. Screenshots before / after at 1440 and 390 px (neutral-axis note, hook factors, anchor reinforcement).
 - **Other copies:** none.
+
+## 2026-11-08 — PR: nl/bp-notes-2 (PR: pending) — BPNL-2: long notes on the output tabs (Summary, Base Plate, Anchor Design, Shear Distribution, Drawings, 3D View, Validation, Manual) and in the Report (display only, no result change)
+### BPNL-2. Output tabs: long notes as a lead line and a list; the Report prints them as one note per part   [display only] [no result change]
+- **Request / rule / helper:** as BPNL-1 (`bpNL`, `bpNLdiv`, `bpNLhint`). The Tension Rebar and Shear Rebar tabs are BPNL-3.
+- **CSS:** the BPNL-1 rules no longer need a `.bpNL` ancestor (`.bpNLl`, `.bpNLu`, `.bpNLu>li`, `.bpNLa`, print `break-inside:avoid`), because the printed report copies a note's inner HTML into its "Note:" boxes, the Summary's "Note n." list and the "Notes / basis" B.n items, where the outer class is lost.
+- **Report viewer** (`bprModel`, `walk`, before `if(cl.contains('cr-bn'))`, anchor `/* BPNL (2026-11-08): a lead-and-list note`): an element whose child is a `.bpNLu` list (directly, or inside a `.bpNL` child) becomes one Report note per part: any text before it ("Note:", "B.1") joined to the first part, then the lead, then each list item as "• lead words text". A "Note:" box stays a warning note. An element that only contains such a note deeper down (a figure and its caption) is walked into. Before, every note was one Report note (`linkText` of the element).
+- **Notes changed** (tab → old opening text → new lead → item lead words). Exact before / after: the PR diff.
+  1. Summary, All Combinations × Limit States: "Every combination against every limit state." → Column / Row / Why both.
+  2. Summary, "Tension / Shear anchor reinforcement is present but the §17.5.2.1 substitution is not yet justified" → Outstanding (the reasons) / Effect / To take the credit.
+  3. Summary, "Shear hairpins / closed ties: only n of m claimed legs are effective" → Why / Capacity / Breakout.
+  4. Summary, Per-Anchor Forces: "Why some checks use one anchor and others the group." → Basis / One anchor / The group / Mixing them / Hilti PROFIS.
+  5. Base Plate 1: "Rigid base plate, iterative neutral-axis solution." → Axes / Plate length.
+  6. Anchor Design 1: "Tension positive, compression negative (sign convention matches Hilti PROFIS)." → Resultants / Highlighted row / Shear distribution (`c.frontDesc`, now escaped as it is HTML).
+  7. Anchor Design 1: "Anchor forces are from a rigid-plate neutral-axis solve…" → Anchors / Concrete / Tension side / Biaxial.
+  8. Anchor Design, Governing Tension Capacity: "Why the basis differs by mode." → Basis / One anchor / The group / Mixing them / Hilti PROFIS.
+  9. Anchor Design, interaction: "Both forms are permitted by ACI 318-19 §17.8…" (was one `pre-line` paragraph) → Commentary / Governing / §17.8.2 (when a cut-off applies) / Comparing against Hilti PROFIS / Lower PROFIS values / Confirm.
+  10. Anchor Design, interaction: "⚠ The two permitted interaction forms DISAGREE on pass/fail here:" → Forms / Reported / Engineer of record.
+  11. Anchor Design, Installation Limits: "Anchor installation: TORQUED/UNTORQUED (input 2. Anchors)." → Spacing / Edge distance / Combinations.
+  12. Shear Distribution 1: "ACI 318-19 Fig. R17.7.2.1b gives three assumptions… chosen by GEOMETRY, not preference:" (the `<br>&nbsp;&nbsp;` lines) → Case 1 / Case 2 / Case 3 / The figure's Note / Controlling case.
+  13. Shear Distribution 1: "Welded to a common plate." → Per R17.7.2.1 / Applies to / Base plates / Changing it.
+  14. Shear Distribution 1, figure caption: "Figure — ACI 318-19 Fig. R17.7.2.1b… Note the two different spacings:" → s₁ / s / Not shown / Reference only.
+  15. Drawings: "One DXF file (AutoCAD R12, model space, full size in inches)." → Sheets / Layers / Export DXF / Title block. (The shared `SharedDxf.PRINT_NOTE` above it is not changed.)
+  16. 3D View: lead "How to use this view:" → Mouse / Load arrows (combination name now escaped) / Anchors / Triad.
+  17. 3D View: "Reinforcement, coloured as in the plans and the per-leg tables:" → Green / Red / Grey / Sphere / Blue-grey / Breakout bodies.
+  18. Validation: "Each case reproduces a Hilti PROFIS 3.1.34 run (uploaded reports)." → Method / Colours / Units.
+  19. Validation: "Important: the pedestal dimensions in these cases are reconstructed…" → Exact matches / May differ / Your project.
+  20. Validation, CB Plaza Struct 2 v1 and v2 case box: new display-only `noteNL` next to the unchanged `note` (the `note` string is kept byte-identical; `noteNL` is drawn when present) → This tool / Expect.
+  21. Validation, every case: "Why these rows differ:" as a real list (was `&bull; <b>k</b>: …<br>` lines).
+  22. Validation, Foundation depth D: lead "The foundation depth D of the neutral-axis solver:" → What it is. / D = (5/6)·h_ef / Why that form. / Physically / Still an assumption.
+  23. Validation, Foundation depth D: "Superseded: earlier versions used a fixed D = 10″ calibrated to CB Plaza alone." → Why it matched / Error / Legacy mode.
+  24. Manual 0.2, list items: Post-installed anchors → Why not / Covered; Seismic design per ACI 318-19 §17.10 → Input / SDC C–F / Not computed / Engineer's; Anchor reinforcement design → Checked / Not done.
+  25. Manual 0.3.1, warning: "The foundation depth D is a calibrated modeling assumption, not a code-specified value." → Calibration / Sensitivity / Input.
+  26. Manual 0.6, note: "A DCR is only meaningful alongside the assumptions that produced it." → Example / Confirm.
+- **Decision (pending engineer review):** the Manual's prose paragraphs (`{p:…}`) are document text and are left as paragraphs; only its notes, warnings and long list items are split. The PROFIS footnote lines ("* PROFIS reports this mode…") stay as footnotes. Notes under ~250 characters with short sentences are left as they are.
+- **Governing provision:** none (display only).
+- **Check case:** origin/main vs branch, headless, the 10 BPNL-1 states: `CC` (all results) JSON identical; the digit sequence of the input panel, every output tab, the Report tab and the printed report identical in all 159 texts; the "Notes / basis" appendix has the same B.n notes (13 in the default project).
+- **How verified:** `node tests/check-syntax.mjs`; `tests/smoke/phone-layout.mjs --tool bpad`; `tests/smoke/project-library.mjs --tool baseplate`; `tests/smoke/lightpole-anchor-handoff.mjs`; 0 console errors. Screenshots before / after at 1440 and 390 px (Summary basis note, interaction note, foundation depth D, Report).
+- **Other copies:** none.
