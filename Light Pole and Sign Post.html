@@ -248,6 +248,12 @@
   .report{margin-top:12px}
   .subhead2{font-family:var(--font-ui);font-size:8.5pt;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--slate-700);margin:4px 0 4px}
   .tbl-note{font-size:11px;color:#4d5866;margin:0 0 6px;line-height:1.4}
+  /* LPNL (2026-11-08, engineer): a long note as a bold lead line and a list (lpNL); colours from the note it sits in */
+  .lpNL .lpNLl{font-weight:700;margin:0 0 1px}
+  .lpNL .lpNLu,.lpNL .lpNLs{margin:2px 0 3px;padding-left:18px}
+  .lpNL .lpNLu>li,.lpNL .lpNLs>li{margin:1px 0}
+  .lpNL .lpNLa{margin:2px 0 4px}
+  @media print{.lpNL .lpNLu>li,.lpNL .lpNLs>li{break-inside:avoid}}
   .combo-sel{font-family:var(--font-ui);font-variant-numeric:tabular-nums;font-size:9.5pt;padding:3px 6px;border:1px solid var(--slate-300);border-radius:4px;background:#fff;color:var(--ink)}
   .combo-sel:focus{outline:none;border-color:var(--blue-600);box-shadow:0 0 0 2px rgba(37,99,235,.25)}
   .example-box{margin-top:10px;padding:12px 14px;background:var(--slate-50);border:1px solid var(--line);border-left:3px solid var(--steel);border-radius:4px}
@@ -641,7 +647,7 @@
 
     <section class="card ltsOnly" id="ltsCableNote">
       <div class="card-h"><span class="num">4</span><h2>Catenary cables</h2><span class="hint">not in the LRFDLTS mode</span></div>
-      <div class="card-body"><p class="tbl-note" style="margin:0">Cables (catenary spans) are not supported in the AASHTO LRFDLTS mode. Switch to the IBC 2021 · ASCE 7-16 mode to design a cabled pole. The cable inputs are kept in the project unchanged and are ignored in this mode.</p></div>
+      <div class="card-body"><div class="tbl-note lpNL" style="margin:0"><div class="lpNLl">Cables (catenary spans) are not supported in the AASHTO LRFDLTS mode.</div><ul class="lpNLu"><li><b class="lpNLk">To design a cabled pole:</b> switch to the IBC 2021 · ASCE 7-16 mode.</li><li><b class="lpNLk">Cable inputs:</b> kept in the project unchanged and ignored in this mode.</li></ul></div></div>
     </section>
 
     <section class="card ibcOnly" id="iceCard">
@@ -679,13 +685,13 @@
             <option value="clay">Clay, sandy/silty clay, clayey silt (CL, ML, MH, CH)</option>
             <option value="custom">Custom — from geotechnical report</option>
           </select></div></div>
-        <p class="tbl-note ibcOnly" id="soilClassNote" style="margin:-4px 0 8px 0"></p>
+        <div class="tbl-note ibcOnly lpNL" id="soilClassNote" style="margin:-4px 0 8px 0"></div>
         <div class="row ibcOnly"><label>Lateral bearing S₁<span class="note" id="s1Src">psf/ft (IBC Tbl 1806.2)</span></label><div class="ctl"><input id="S1" type="number" value="150" step="10"><span class="unit">psf/ft</span></div></div>
         <div class="row ibcOnly"><label>Allowable bearing, q<sub>a</sub><span class="note">vertical, base of shaft (IBC Tbl 1806.2)</span></label><div class="ctl"><input id="qAllow" type="number" value="2.0" step="0.5"><span class="unit">ksf</span></div></div>
         <div class="subpanel ref" id="bromsPanel">
           <div class="sp-h"><span class="ibcOnly">Broms reference check — AASHTO LTS C13.6.1.1 <span class="ref-chip">reference only</span></span><span class="ltsOnly">Broms embedment — design method, LRFDLTS Art. 13.6.1.1, C13.6.1.1 <span class="ref-chip">required</span></span></div>
           <p class="tbl-note ltsOnly" style="margin:0 0 8px 0">Required in the LRFDLTS mode: the shaft embedment is designed by Broms with the factored groundline M<sub>F</sub>, V<sub>F</sub> (Shaft tab). Choose cohesive or cohesionless and enter the soil parameters from the geotechnical report.</p>
-          <p class="tbl-note ibcOnly" style="margin:0 0 8px 0">Optional. These inputs feed only the Broms comparison in the Shaft tab; they do not affect the IBC design. Leave the soil model at "Not evaluated" unless a geotechnical report supplies the parameters.</p>
+          <div class="tbl-note ibcOnly lpNL" style="margin:0 0 8px 0"><div class="lpNLl">Optional.</div><ul class="lpNLu"><li><b class="lpNLk">Used by:</b> only the Broms comparison in the Shaft tab; these inputs do not affect the IBC design.</li><li><b class="lpNLk">Default:</b> leave the soil model at "Not evaluated" unless a geotechnical report supplies the parameters.</li></ul></div>
         <div class="row"><label>Broms soil model</label><div class="ctl"><select id="bromsSoil" class="combo-sel">
             <option value="none">Not evaluated</option>
             <option value="cohesive">Cohesive (clay) — uses c</option>
@@ -848,7 +854,7 @@
         <div class="subhead2" style="margin-top:12px">Load cases considered</div>
         <table class="tbl" id="sgCaseTbl"></table>
         <div class="flag" id="sgCaseCFlag" style="display:none"></div>
-        <p class="tbl-note" id="sgTorsionNote" style="margin-top:8px"></p>
+        <div class="tbl-note lpNL" id="sgTorsionNote" style="margin-top:8px"></div>
         <details class="calc" open style="margin-top:12px"><summary>ASCE 7-16 Ch. 29 sign wind — worked calculation</summary>
           <div id="signWindExample" class="example-box"></div>
         </details>
@@ -861,7 +867,7 @@
     <section class="card" id="signPostsCard" data-tab="shaft" style="display:none">
       <div class="card-h"><span class="num">3</span><h2>Post &amp; foundation design</h2><span class="hint">each post designed independently</span></div>
       <div class="card-body">
-        <p class="tbl-note" id="sgPostIntro"></p>
+        <div class="tbl-note lpNL" id="sgPostIntro"></div>
         <div id="sgPostContainer"></div>
       </div>
     </section>
@@ -872,7 +878,7 @@
       <div class="card-h"><span class="num">2</span><h2 id="polePropsTitle">Pole properties</h2><span class="hint" id="polePropsHint">tapered tube, 10 segments</span></div>
       <div class="card-body">
         <div class="resrow" style="border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:8px"><span class="k">Computed pole self-weight (added to dead load)</span><span class="v" id="oPoleW">—</span></div>
-        <p class="tbl-note">Pole discretized into 10 equal segments top→base. Diameter and wall thickness vary linearly; section properties and self-weight evaluated at each segment midpoint. Hollow circular section: A = π/4(D₀²−Dᵢ²), I = π/64(D₀⁴−Dᵢ⁴), elastic S = I/(D₀/2), plastic Z = (D₀³−Dᵢ³)/6, r = √(I/A).</p>
+        <div class="tbl-note lpNL"><div class="lpNLl">Pole discretized into 10 equal segments top→base.</div><ul class="lpNLu"><li><b class="lpNLk">Taper:</b> diameter and wall thickness vary linearly.</li><li><b class="lpNLk">Evaluated at each segment midpoint:</b> section properties and self-weight.</li><li><b class="lpNLk">Hollow circular section:</b> A = π/4(D₀²−Dᵢ²), I = π/64(D₀⁴−Dᵢ⁴), elastic S = I/(D₀/2), plastic Z = (D₀³−Dᵢ³)/6, r = √(I/A).</li></ul></div>
         <table class="tbl" id="poleTbl"></table>
         <div class="subhead2" style="margin-top:18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <span>Worked example —</span>
@@ -886,7 +892,7 @@
     <section class="card" id="fixOutCard" data-tab="loading">
       <div class="card-h"><span class="num">3</span><h2>Fixture loading</h2><span class="hint">wind, ice &amp; eccentric dead</span></div>
       <div class="card-body">
-        <p class="tbl-note">Each fixture generates a wind drag force F = q_z(h)·EPA·C_f at its mount height (full EPA is exposed regardless of wind azimuth, since EPA already embeds drag and shape). Ice weight uses the accreted volume V = t·(2·A_ice + 4·√EPA·depth) at the global radial ice thickness. The fixture dead + ice weight, acting at the cantilever arm <i>a</i>, produces an eccentric overturning moment W·a directed along the arm azimuth θ — so fixtures at opposing azimuths (0° / 180°) cancel in moment but add in axial and shear.</p>
+        <div class="tbl-note lpNL"><div class="lpNLl">Fixture loads:</div><ul class="lpNLu"><li><b class="lpNLk">Wind:</b> each fixture generates a wind drag force F = q_z(h)·EPA·C_f at its mount height (full EPA is exposed regardless of wind azimuth, since EPA already embeds drag and shape).</li><li><b class="lpNLk">Ice weight:</b> uses the accreted volume V = t·(2·A_ice + 4·√EPA·depth) at the global radial ice thickness.</li><li><b class="lpNLk">Eccentric moment:</b> the fixture dead + ice weight, acting at the cantilever arm <i>a</i>, produces an eccentric overturning moment W·a directed along the arm azimuth θ — so fixtures at opposing azimuths (0° / 180°) cancel in moment but add in axial and shear.</li></ul></div>
         <table class="tbl" id="fixLoadTbl"></table>
         <details class="calc" open style="margin-top:12px"><summary>ASCE 7-16 velocity pressure &amp; wind force — worked calculation</summary>
           <div id="windExample" class="example-box"></div>
@@ -901,7 +907,7 @@
         <div class="resrow" style="border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:10px"><span class="k">Computed cable wind pressure q<sub>W</sub> / q<sub>Wi</sub></span><span class="v" id="oCablePress">—</span></div>
 
         <div class="subhead2">Unfactored reactions — each cable, each load source</div>
-        <p class="tbl-note">Each load source shown in isolation (pure component, nominal). <b>Every source</b> — dead, ice, wind, wind-on-ice — develops an along-cable catenary pull H∥ from its own line load by the selected method, acting along the cable's plan azimuth θ (resolved to global H_x, H_y). Vertical sources (dead, ice) additionally deliver a half-span vertical support reaction V = w·L/2. Bare wind and wind-on-ice are mutually exclusive cases and are never summed. Cable-local: R∥ along the cable, R⊥v perpendicular in-plane.</p>
+        <div class="tbl-note lpNL"><div class="lpNLl">Each load source shown in isolation (pure component, nominal).</div><ul class="lpNLu"><li><b class="lpNLk">Every source</b> — dead, ice, wind, wind-on-ice — develops an along-cable catenary pull H∥ from its own line load by the selected method, acting along the cable's plan azimuth θ (resolved to global H_x, H_y).</li><li><b class="lpNLk">Vertical sources (dead, ice)</b> additionally deliver a half-span vertical support reaction V = w·L/2.</li><li><b class="lpNLk">Bare wind and wind-on-ice</b> are mutually exclusive cases and are never summed.</li><li><b class="lpNLk">Cable-local:</b> R∥ along the cable, R⊥v perpendicular in-plane.</li></ul></div>
         <p class="tbl-note" id="methodNote" style="font-weight:600;color:var(--accent-deep)"></p>
         <table class="tbl" id="unfactTbl"></table>
         <details class="calc" open style="margin-top:10px"><summary>Cable pressures, line loads &amp; support reactions — worked calculation</summary>
@@ -943,7 +949,7 @@
     <section class="card poleOnly" data-tab="loading">
       <div class="card-h"><span class="num">5</span><h2>Wind direction study</h2><span class="hint">four azimuths, governing envelope</span></div>
       <div class="card-body">
-        <p class="tbl-note">The base demand is evaluated for wind blowing toward 0°, 90°, 180°, and 270°. Forces and moments are assembled as vectors in the plan frame — opposing contributions cancel — then resolved. The direction giving the largest resultant moment governs each load combination. Row shown is the governing combination in each family.</p>
+        <div class="tbl-note lpNL"><div class="lpNLl">How the base demand is found:</div><ul class="lpNLu"><li><b class="lpNLk">Wind directions:</b> the base demand is evaluated for wind blowing toward 0°, 90°, 180°, and 270°.</li><li><b class="lpNLk">Vectors:</b> forces and moments are assembled as vectors in the plan frame — opposing contributions cancel — then resolved.</li><li><b class="lpNLk">Governs:</b> the direction giving the largest resultant moment governs each load combination.</li><li><b class="lpNLk">Row shown:</b> the governing combination in each family.</li></ul></div>
         <div class="subhead2">Governing LRFD combination across directions</div>
         <table class="tbl" id="windDirLRFD"></table>
         <div class="subhead2" style="margin-top:14px">Governing ASD combination across directions</div>
@@ -955,14 +961,14 @@
     <section class="card poleOnly" data-tab="loading">
       <div class="card-h"><span class="num">5b</span><h2>Load combinations — base demand envelope</h2><span class="hint">all ten ASCE 7 combinations</span></div>
       <div class="card-body">
-        <p class="tbl-note">Every ASCE 7 combination is evaluated at its own worst wind direction. The embedment (a service check against presumptive soil bearing) is driven by the worst <b>ASD</b> row; the reinforced-concrete shaft (a strength check) by the worst <b>LRFD</b> row. Governing rows are highlighted.</p>
+        <div class="tbl-note lpNL"><div class="lpNLl">Every ASCE 7 combination is evaluated at its own worst wind direction.</div><ul class="lpNLu"><li><b class="lpNLk">Embedment</b> (a service check against presumptive soil bearing): driven by the worst <b>ASD</b> row.</li><li><b class="lpNLk">Reinforced-concrete shaft</b> (a strength check): driven by the worst <b>LRFD</b> row.</li><li>Governing rows are highlighted.</li></ul></div>
         <table class="tbl" id="comboMatrixTbl"></table>
       </div>
     </section>
     <section class="card" id="signComboCard" data-tab="loading" style="display:none">
       <div class="card-h"><span class="num">3b</span><h2>Load combinations — per-post demand</h2><span class="hint">non-ice ASCE 7 combinations</span></div>
       <div class="card-body">
-        <p class="tbl-note">Every combination applies, the atmospheric-ice ones included (ice on the sign panel and posts, ASCE 7-22 Ch. 10, added 2026-11-01). Each combination is enveloped over the applicable Fig. 29.3-1 load cases and wind directions, per post. Governing rows (largest M) are highlighted for each design family.</p>
+        <div class="tbl-note lpNL"><div class="lpNLl">Every combination applies.</div><ul class="lpNLu"><li><b class="lpNLk">Ice:</b> the atmospheric-ice ones included (ice on the sign panel and posts, ASCE 7-22 Ch. 10, added 2026-11-01).</li><li><b class="lpNLk">Envelope:</b> each combination is enveloped over the applicable Fig. 29.3-1 load cases and wind directions, per post.</li><li><b class="lpNLk">Governing rows</b> (largest M) are highlighted for each design family.</li></ul></div>
         <table class="tbl" id="sgComboTbl"></table>
       </div>
     </section>
@@ -972,7 +978,7 @@
       <div class="card-h"><span class="num">6</span><h2>Pole combined stress</h2><span class="hint">AISC 360 · axial + bending</span></div>
       <div class="card-body">
         <div class="resrow" style="border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:8px"><span class="k">Governing segment / interaction ratio</span><span class="v" id="oPoleGov">—</span></div>
-        <p class="tbl-note">At each segment cut, the shear, moment and axial force from everything above are resolved along the governing wind direction (LRFD). The section is classified per AISC (round → §F8, square/rect → §F7), the nominal flexural strength M_n is found from the plastic modulus, the compressive strength P_n from Chapter E flexural buckling (K = 2.1), and the two are combined with the §H1.1 interaction equation. A prismatic section is governed at its base; a tapered pole is scanned over all ten segments.</p>
+        <div class="tbl-note lpNL"><div class="lpNLl">How the pole is checked:</div><ul class="lpNLu"><li><b class="lpNLk">Demand:</b> at each segment cut, the shear, moment and axial force from everything above are resolved along the governing wind direction (LRFD).</li><li><b class="lpNLk">Classification:</b> the section is classified per AISC (round → §F8, square/rect → §F7).</li><li><b class="lpNLk">Flexure:</b> the nominal flexural strength M_n is found from the plastic modulus.</li><li><b class="lpNLk">Compression:</b> the compressive strength P_n from Chapter E flexural buckling (K = 2.1).</li><li><b class="lpNLk">Interaction:</b> the two are combined with the §H1.1 interaction equation.</li><li><b class="lpNLk">Governing section:</b> a prismatic section is governed at its base; a tapered pole is scanned over all ten segments.</li></ul></div>
         <table class="tbl" id="poleStressTbl"></table>
         <div class="subhead2" style="margin-top:18px" id="poleStrExHd">Worked example — governing section</div>
         <div id="poleStrExample" class="example-box"></div>
@@ -1038,7 +1044,7 @@
     <section class="card" data-tab="anchors" id="lpAnchCard">
       <div class="card-h"><span class="num">A</span><h2>Anchorage</h2><span class="hint">anchor design in the Anchorage app · HANDOFF.md §4.11 / §4.12</span></div>
       <div class="card-body">
-        <p class="tbl-note" style="margin-top:0">Send the anchor groups (one per post), the base plate, the shaft and every LRFD combination (ice combinations included; B₂·M; torsion) to the Base Plate &amp; Anchor Bolt Designer, which designs the anchorage. Factored, Light Pole sign convention (lightPole-v1), lb / lb-ft / in / psi.</p>
+        <div class="tbl-note lpNL" style="margin-top:0"><div class="lpNLl">Send to the Base Plate &amp; Anchor Bolt Designer, which designs the anchorage:</div><ul class="lpNLu"><li><b class="lpNLk">Sent:</b> the anchor groups (one per post), the base plate, the shaft and every LRFD combination (ice combinations included; B₂·M; torsion).</li><li><b class="lpNLk">Basis:</b> factored, Light Pole sign convention (lightPole-v1), lb / lb-ft / in / psi.</li></ul></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <button class="btn mini" id="lpAnchSend" type="button">Send anchors to the Anchorage app</button>
           <button class="btn mini ghost" id="lpAnchExport" type="button">Export hand-off (JSON)</button>
@@ -1046,7 +1052,7 @@
         </div>
         <p class="tbl-note" id="lpAnchStatus" style="margin:8px 0 0 0"></p>
         <div id="lpAnchResult" style="margin-top:8px"></div>
-        <p class="tbl-note" style="margin:8px 0 0 0">Anchor design is done in the Anchorage app (Base Plate &amp; Anchor Bolt Designer): send the anchors with the button above and design them there; the governing anchor D/C comes back here. This tool no longer checks the anchor rods (engineer, 2026-11-01). The anchor inputs (card 7) are kept: they are sent to the Anchorage app and feed the base-plate check.</p>
+        <div class="tbl-note lpNL" style="margin:8px 0 0 0"><div class="lpNLl">Anchor design is done in the Anchorage app (Base Plate &amp; Anchor Bolt Designer).</div><ul class="lpNLu"><li><b class="lpNLk">Workflow:</b> send the anchors with the button above and design them there; the governing anchor D/C comes back here.</li><li><b class="lpNLk">This tool</b> no longer checks the anchor rods (engineer, 2026-11-01).</li><li><b class="lpNLk">Anchor inputs</b> (card 7) are kept: they are sent to the Anchorage app and feed the base-plate check.</li></ul></div>
         <div style="margin-top:6px"><button class="btn mini ghost" id="lpAnchImportRes" type="button">Import result (JSON)</button><input type="file" id="lpAnchResFile" accept=".json,application/json" style="display:none"></div>
       </div>
     </section>
@@ -1176,6 +1182,12 @@
 </script>
 <script>
 const $=id=>document.getElementById(id);
+/* LPNL (2026-11-08, engineer: "split this up into a numbered list or bullets"): a long note as a bold lead line, then a list
+   whose items may start with bold lead words ([lead words, text]); action items (o.act) on their own warning line first.
+   null items are skipped. Display only: the words of the note are the old note's, the lead words are new. */
+function lpNL(lead,items,o){ o=o||{}; const L=o.ol?'ol':'ul';
+  const li=(items||[]).filter(Boolean).map(x=>'<li>'+(Array.isArray(x)?'<b class="lpNLk">'+x[0]+'</b> '+x[1]+(x[2]?'<ul class="lpNLs">'+x[2].filter(Boolean).map(s=>'<li>'+s+'</li>').join('')+'</ul>':''):x)+'</li>').join('');   // [lead words, text, sub-items]
+  return (o.act||[]).filter(Boolean).map(a=>'<div class="flag lpNLa">'+a+'</div>').join('')+(lead?'<div class="lpNLl">'+lead+'</div>':'')+(li?'<'+L+' class="lpNLu">'+li+'</'+L+'>':''); }
 const num=id=>parseFloat($(id).value)||0;
 // NaN / ±Infinity / undefined must never print as a plausible number (it used to print "0.00",
 // so a broken result looked like zero). Non-finite values print "ERR"; markErr() below paints
@@ -1247,7 +1259,7 @@ function applySoilClass(cls,{silent}={}){
       if(s1El) s1El.value=c.lat;
       if(qEl)  qEl.value=(c.vert/1000).toFixed(2).replace(/\.00$/,'');
     }
-    if(note) note.innerHTML=`<b>${c.name}</b> \u2014 ${c.desc}. IBC Table 1806.2: lateral ${c.lat} psf/ft of depth, vertical ${c.vert.toLocaleString()} psf. Values are presumptive; a geotechnical report governs where available.`;
+    if(note) note.innerHTML=lpNL(`${c.name} \u2014 ${c.desc}.`,[['IBC Table 1806.2:',`lateral ${c.lat} psf/ft of depth, vertical ${c.vert.toLocaleString()} psf.`],['Presumptive:','values are presumptive; a geotechnical report governs where available.']]);   // LPNL
     if(src) src.textContent='psf/ft (IBC Tbl 1806.2)';
   }
 }
@@ -1291,8 +1303,12 @@ function lppApplyBpUI(){ const sq=$('bpShape')&&$('bpShape').value==='square'; i
 function lppBpW(inp){ return inp.bpShape==='square' ? (inp.bpB||0) : (inp.bpDia||0); }
 function lppBpTxt(inp,d){ return inp.bpShape==='square' ? 'square '+fmt(inp.bpB,d==null?2:d)+' in' : 'Ø'+fmt(inp.bpDia,d==null?2:d)+' in'; }
 // the square-plate statement shown with the bending-line check (worked step, report); '' for a circular plate
-const LPP_BP_SQ='Square plate: the rods stay on the bolt circle and the plate is centred on it. The bending line at the pole face and b_eff = πD/n are the same as for a circular plate — the check uses only BC, D and n, so the plate outline does not enter; the strip at the pole face lies inside the plate and the corners beyond the bolt circle are not credited. Engineering method, as for the circular plate.';
-function lppBpSqNote(inp){ return inp&&inp.bpShape==='square' ? LPP_BP_SQ+' Plate '+fmt(inp.bpB,2)+' in × '+fmt(inp.bpB,2)+' in.' : ''; }
+// LPNL (2026-11-08): LPP_BP_SQ and lppBpSqNote built from their parts (unchanged); lppBpSqNL: the same words as a lead line and a list
+const LPP_BP_SQ_P=['Square plate: the rods stay on the bolt circle and the plate is centred on it.','The bending line at the pole face and b_eff = πD/n are the same as for a circular plate — the check uses only BC, D and n, so the plate outline does not enter; the strip at the pole face lies inside the plate and the corners beyond the bolt circle are not credited.','Engineering method, as for the circular plate.'];
+const LPP_BP_SQ=LPP_BP_SQ_P.join(' ');
+const lppBpSqPlate=inp=>'Plate '+fmt(inp.bpB,2)+' in × '+fmt(inp.bpB,2)+' in.';
+function lppBpSqNote(inp){ return inp&&inp.bpShape==='square' ? LPP_BP_SQ+' '+lppBpSqPlate(inp) : ''; }
+function lppBpSqNL(inp,esc){ esc=esc||lppEsc; return [esc(LPP_BP_SQ_P[0]),[['Same as a circular plate:',esc(LPP_BP_SQ_P[1])],['Basis:',esc(LPP_BP_SQ_P[2])],['Plate:',esc(lppBpSqPlate(inp).replace(/^Plate /,''))]]]; }
 function lppApplyArUI(){ document.querySelectorAll('.arRow').forEach(r=>r.style.display=anchRe==='yes'?'':'none'); }
 document.querySelectorAll('#segAnchRe button').forEach(b=>b.onclick=()=>{setSeg('segAnchRe',b.dataset.v);anchRe=b.dataset.v;lppApplyArUI();markDirty();calc();});
 lppApplyArUI();
@@ -1678,7 +1694,7 @@ function iceWorkedHTML(inp, pw, fxs){
     return H;
   }
   const kz=Math.pow(inp.Kzt,0.35), Ii=inp.iceIi>0?inp.iceIi:1.0;
-  H+=`<p class="eq-why">The entered t = ${fmt(inp.tIce,3)} in is the nominal (map) ice thickness. It is increased with height by f<sub>z</sub> and for topography by K<sub>zt</sub><sup>0.35</sup>, times the ice importance factor I<sub>i</sub>. The mast uses t<sub>d</sub> at each of its ${pw.NSTRIP} strips (ice weight and the iced width for wind-on-ice); each fixture uses t<sub>d</sub> at its mount height. The cables keep the entered t (cable features unchanged, engineer 2026-11-01).</p>`;
+  H+=`<div class="eq-why lpNL">${lpNL('Design ice thickness t<sub>d</sub>:',[['Entered t:',`the entered t = ${fmt(inp.tIce,3)} in is the nominal (map) ice thickness.`],['Increase:','it is increased with height by f<sub>z</sub> and for topography by K<sub>zt</sub><sup>0.35</sup>, times the ice importance factor I<sub>i</sub>.'],['Mast:',`the mast uses t<sub>d</sub> at each of its ${pw.NSTRIP} strips (ice weight and the iced width for wind-on-ice).`],['Fixtures:','each fixture uses t<sub>d</sub> at its mount height.'],['Cables:','the cables keep the entered t (cable features unchanged, engineer 2026-11-01).']])}</div>`;   // LPNL
   H+=g(`t_d(z) = t\\,f_z\\,K_{zt}^{0.35}\\,I_i,\\qquad f_z = \\left(\\frac{z}{33}\\right)^{0.10}`);
   if(inp.pProj>0) H+=`<p class="eq-why">Shaft projection p = ${fmt(inp.pProj,2)} ft: the heights z are above grade, z = (height above the ${inp.mode==='sign'?'post':'pole'} base) + p.</p>`;   // LPPJ
   H+=g(`t_d(${inp.pProj>0?'H{+}p':'H'}{=}${fmt(lppZg(inp,inp.H),1)}) = ${fmt(inp.tIce,3)}(${fmt(iceFz(lppZg(inp,inp.H)),3)})(${fmt(kz,3)})(${fmt(Ii,2)}) = ${fmt(iceTd(inp,lppZg(inp,inp.H)),3)}\\ \\text{in}\\qquad t_d(${inp.pProj>0?'H/2{+}p':'H/2'}) = ${fmt(inp.tIce,3)}(${fmt(iceFz(lppZg(inp,inp.H/2)),3)})(${fmt(kz,3)})(${fmt(Ii,2)}) = ${fmt(iceTd(inp,lppZg(inp,inp.H/2)),3)}\\ \\text{in}`);
@@ -2431,7 +2447,12 @@ function evalComboDir(key,inp,comps,fxs,pw,phi){
 
 // Base-plate method note (engineer, 2026-11-01): keep b_eff = πD/n; state clearly what is not verified / not checked.
 // LTS-6 (2026-11-02; engineer's answer Q-C3): the bending-line method is an engineering method (common practice), not an LRFDLTS article.
-const LPP_BP_VERIFY='Base-plate method: bending line at the pole face with b_eff = πD/n per rod, double-nut base — an engineering method (common practice), not an AASHTO LRFDLTS article: LRFDLTS 1st Ed. (2015, 2017 Interim) Art. 5.6.3 only requires the base-plate thickness to be considered. Not checked: (1) for square/rectangular poles the same πB/n is used (no flat-face rule); (2) anchor-rod bending in the double-nut standoff; (3) the minimum plate thicknesses of LRFDLTS Table 5.6.3-1 (supports designed for fatigue only).';
+// LPNL (2026-11-08): built from its parts, the string is unchanged; lppBpVerifyNL() is the same words as a lead line and a list.
+const LPP_BP_VERIFY_P={m:'Base-plate method: bending line at the pole face with b_eff = πD/n per rod, double-nut base', b:'an engineering method (common practice), not an AASHTO LRFDLTS article: LRFDLTS 1st Ed. (2015, 2017 Interim) Art. 5.6.3 only requires the base-plate thickness to be considered',
+  nc:['for square/rectangular poles the same πB/n is used (no flat-face rule)','anchor-rod bending in the double-nut standoff','the minimum plate thicknesses of LRFDLTS Table 5.6.3-1 (supports designed for fatigue only)']};
+const LPP_BP_VERIFY=LPP_BP_VERIFY_P.m+' — '+LPP_BP_VERIFY_P.b+'. Not checked: '+LPP_BP_VERIFY_P.nc.map((x,i)=>'('+(i+1)+') '+x).join('; ')+'.';
+const lppBpVerifyNC=esc=>LPP_BP_VERIFY_P.nc.map((x,i,a)=>'('+(i+1)+') '+esc(x)+(i<a.length-1?';':'.'));   // the "Not checked" items
+const lppBpVerifyNL=esc=>{ esc=esc||lppEsc; return [esc(LPP_BP_VERIFY_P.m)+'.',[['Basis:',esc(LPP_BP_VERIFY_P.b)+'.'],['Not checked:','',lppBpVerifyNC(esc)]]]; };   // esc: x=>x for the Report (plain text)
 // Fixtures on an arm (a > 0) whose plan azimuth θ is not on one of the four wind axes (2026-11-01, engineer decision on
 // LP-R1: the four directions are kept; a warning is shown instead of a sweep). Arms and fixtures only (cables excluded,
 // engineer 2026-11-01). Returns [{i, th}] (i is 1-based).
@@ -2441,9 +2462,14 @@ function lppOffAxisFixtures(fx){
     const r=((x.th%90)+90)%90; if(Math.min(r,90-r)>1e-6) L.push({i:i+1, th:x.th}); });
   return L;
 }
-function lppOffAxisMsg(L){
-  return `<b>Wind directions:</b> the tool checks wind toward 0°, 90°, 180° and 270° only. ${L.map(o=>'Fixture '+o.i+' (arm at θ = '+fmt(o.th,0)+'°)').join(', ')} ${L.length>1?'are':'is'} not aligned with these axes: the arm's eccentric load and the wind may combine worst at a direction between them, so the results <b>may be unconservative</b>. Align the arms with the axes (rotate the plan) or check the intermediate directions separately.`;
+// LPNL (2026-11-08): the message from its parts (unchanged); lppOffAxisNL: the same words as a lead line, a list and an action line
+function lppOffAxisP(L){ return ['the tool checks wind toward 0°, 90°, 180° and 270° only.',
+  `${L.map(o=>'Fixture '+o.i+' (arm at θ = '+fmt(o.th,0)+'°)').join(', ')} ${L.length>1?'are':'is'} not aligned with these axes: the arm's eccentric load and the wind may combine worst at a direction between them, so the results <b>may be unconservative</b>.`,
+  'Align the arms with the axes (rotate the plan) or check the intermediate directions separately.']; }
+function lppOffAxisMsg(L){ const P=lppOffAxisP(L);
+  return `<b>Wind directions:</b> ${P[0]} ${P[1]} ${P[2]}`;
 }
+function lppOffAxisNL(L){ const P=lppOffAxisP(L); return ['Wind directions: '+P[0],[['Not on these axes:',P[1]],['Remedy:',P[2]]]]; }
 // Evaluate a combination across all four wind azimuths; keep the one with the largest moment.
 function evalCombo(key,inp,comps,fxs,pw){
   const all=WIND_DIRS.map(phi=>evalComboDir(key,inp,comps,fxs,pw,phi));
@@ -3270,17 +3296,18 @@ function summaryHTML(ctx){
   H+=`</div>`;
   // ---- items this tool does NOT check (never shown as a pass) ----
   const warnL=[];
+  // LPNL (2026-11-08): one list item per item (lpNL); a long item as [lead words, text, sub-items], same words
   if(stacks.some(st=>st.pstress&&st.pstress.lim&&st.pstress.lim.e7Slender))
     warnL.push('Pole/post wall is a <b>slender compression element</b> (λ &gt; λ<sub>r</sub>, AISC 360-16 Table B4.1a); the §E7 effective-area reduction is <b>not applied</b>, so the axial capacity is unconservative — verify.');
   const natL=stacks.map(st=>st.nat).filter(Boolean);
   if(natL.some(x=>!(x.n1>=1.0)))
-    warnL.push(`Natural frequency n<sub>1</sub> ≈ ${natL.map(x=>fmt(x.n1,2)).join(' / ')} Hz &lt; 1 Hz (Rayleigh estimate): the structure is <b>flexible</b> (ASCE 7-16 §26.2). G<sub>f</sub> = ${inp.gf?fmt(inp.gf.Gf,3):'—'} from §26.11.5 (β = ${fmt(inp.beta,3)}); G used = max(entered ${fmt(inp.Ginput!==undefined?inp.Ginput:inp.G,2)}, G<sub>f</sub>) = <b>${fmt(inp.G,3)}</b>. Dynamic effects beyond G<sub>f</sub> (vortex shedding, galloping) are not checked.`);
-  if(mode==='pole'){ const oa=lppOffAxisFixtures(fixtures); if(oa.length) warnL.push(lppOffAxisMsg(oa)); }
-  if(stacks.some(st=>st.found&&st.found.bolts)) warnL.push('<b>Base plate:</b> '+lppEsc(LPP_BP_VERIFY));
+    warnL.push(['Natural frequency',`n<sub>1</sub> ≈ ${natL.map(x=>fmt(x.n1,2)).join(' / ')} Hz &lt; 1 Hz (Rayleigh estimate): the structure is <b>flexible</b> (ASCE 7-16 §26.2).`,[`G<sub>f</sub> = ${inp.gf?fmt(inp.gf.Gf,3):'—'} from §26.11.5 (β = ${fmt(inp.beta,3)}); G used = max(entered ${fmt(inp.Ginput!==undefined?inp.Ginput:inp.G,2)}, G<sub>f</sub>) = <b>${fmt(inp.G,3)}</b>.`,'Dynamic effects beyond G<sub>f</sub> (vortex shedding, galloping) are not checked.']]);
+  if(mode==='pole'){ const oa=lppOffAxisFixtures(fixtures); if(oa.length){ const P=lppOffAxisP(oa); warnL.push(['Wind directions:',P[0],[P[1],P[2]]]); } }
+  if(stacks.some(st=>st.found&&st.found.bolts)){ const B=lppBpVerifyNL(); warnL.push(['Base plate:',B[0],['<b class="lpNLk">Basis:</b> '+B[1][0][1],...B[1][1][2].map((s,i)=>i?s:'<b class="lpNLk">Not checked:</b> '+s)]]); }
   stacks.forEach(st=>{ const m=st.found&&lppShaftFlowMsg(st.found.reo); if(m) warnL.push('<b>Shaft cage'+(st.label?' ('+lppEsc(st.label)+')':'')+':</b> '+lppEsc(m)); });   // LPL2
   if(stacks.some(st=>st.found&&st.found.Tu>0))
     warnL.push((mode==='sign'?'Monopost torsion from the eccentric sign wind (Cases B/C)':'Torsion from the wind on offset fixtures and arms')+': the <b>torsional resistance of the soil around the shaft is NOT CHECKED</b> — verify with the geotechnical engineer.');
-  if(warnL.length) H+=`<div class="flag" style="background:#fbeeea;border-color:#e0a390;color:#8a2318;margin:8px 0">${warnL.join('<br>')}</div>`;
+  if(warnL.length) H+=`<div class="flag lpNL" style="background:#fbeeea;border-color:#e0a390;color:#8a2318;margin:8px 0">${lpNL('Not checked, or to verify:',warnL)}</div>`;   // LPNL
   // ---- design summary ----
   H+=`<div class="step-label" style="margin-top:14px">Design — as ${stacks[0].found.reo.manual?'specified (check mode)':'designed'}</div>`;
   H+=`<table class="tbl"><tr><th style="text-align:left">Item</th>${stacks.map(st=>`<th>${st.label||'Value'}</th>`).join('')}</tr>`;
@@ -3304,7 +3331,7 @@ function summaryHTML(ctx){
   });
   H+=`</table>`;
   if(inp.pProj>0) H+=`<p class="tbl-note">Shaft projection p = ${fmt(inp.pProj,2)} ft: the embedment, bearing, Broms and shaft rows are at grade, V<sub>F</sub> = V + F<sub>s</sub>, M<sub>F</sub> = B·M + V·p + F<sub>s</sub>·p/2 (B on the ${mode==='sign'?'post':'pole'} base moment only; ASD first order), N<sub>F</sub> = N + γ<sub>D</sub>W<sub>c</sub>; the base plate and anchors keep the actions at the top of the shaft.</p>`;
-  H+=`<p class="tbl-note">M above is the first-order moment. The LRFD checks (pole/post, base plate, shaft) and the anchor export use the second-order moment B₂·M of each combination (AISC 360-16 App. 8; B₂ in Key design inputs, worked in the pole/post check). The ASD embedment uses the first-order moment.</p>`;
+  H+=`<div class="tbl-note lpNL">${lpNL('M above is the first-order moment.',[['LRFD checks','(pole/post, base plate, shaft) and the anchor export use the second-order moment B₂·M of each combination (AISC 360-16 App. 8; B₂ in Key design inputs, worked in the pole/post check).'],['ASD embedment','uses the first-order moment.']])}</div>`;   // LPNL
   // ---- demand vs capacity, sorted by utilization ----
   H+=`<div class="step-label" style="margin-top:14px">Demand vs capacity — sorted by utilization</div>`;
   H+=`<table class="tbl utiltbl"><tr><th style="text-align:left">Limit state</th><th style="text-align:left">Code</th><th>Demand</th><th>Capacity</th><th>Utilization</th><th></th><th>Status</th><th style="text-align:left">Worked in</th></tr>`;
@@ -3319,7 +3346,7 @@ function summaryHTML(ctx){
       <td>${c.ok?'<span class="pill ok">OK</span>':'<span class="pill bad">NG</span>'}</td><td style="text-align:left">${lppLink(LPP_CHK2K[c.name],si)}</td></tr>`;
   });
   H+=`</table>`;
-  H+=`<p class="tbl-note">Utilization = demand ÷ capacity. Bars over 85% are highlighted as approaching capacity. Minimum-type checks (min steel, clear spacing) are expressed as required ÷ provided so that a value under 100% is compliant.</p>`;
+  H+=`<div class="tbl-note lpNL">${lpNL('Utilization = demand ÷ capacity.',[['Bars over 85%','are highlighted as approaching capacity.'],['Minimum-type checks','(min steel, clear spacing) are expressed as required ÷ provided so that a value under 100% is compliant.']])}</div>`;   // LPNL
   // ---- key inputs echo ----
   H+=`<div class="step-label" style="margin-top:14px">Key design inputs</div>`;
   const sc=(typeof SOIL_CLASSES!=='undefined')?SOIL_CLASSES[inp.soilClass]:null;
@@ -3354,8 +3381,8 @@ function signLoadPathHTML(inp,sw,pw,postGovList){
   const nP=inp.signPosts, Lp=inp.signSpacing;
   const two=nP===2;
   let H='';
-  H+=`<p class="eq-why">Complete load path from the panel to each post's groundline demand: geometry and lever arms, the dead-load (axial) path, the wind-case force split between posts, and the shear/moment assembly. Every number here is the same computation that feeds the Shaft tab — the governing P, M, N below match the foundation demand exactly.</p>`;
-  H+=`<div class="flag" style="background:#fdf8ee;border-color:#e0c48a;color:#7a5a1e;margin:8px 0"><b>Ice on signs (added 2026-11-01).</b> Atmospheric ice (ASCE 7-22 Ch. 10) is applied to the sign: panel ice weight ${fmt(sw.WiPanel,0)} lb (flat plate, §10.4.1), post ice ${fmt(sw.WiPost,0)} lb per post, and wind on the iced panel (B + 2t<sub>d</sub>)(s + 2t<sub>d</sub>) and posts at V<sub>ice</sub> in the ice combinations. Worked in the sign wind section.</div>`;
+  H+=`<div class="eq-why lpNL">${lpNL('Complete load path from the panel to each post\'s groundline demand:',[['Steps:','geometry and lever arms, the dead-load (axial) path, the wind-case force split between posts, and the shear/moment assembly.'],['Same computation:','every number here is the same computation that feeds the Shaft tab — the governing P, M, N below match the foundation demand exactly.']])}</div>`;   // LPNL
+  H+=`<div class="flag lpNL" style="background:#fdf8ee;border-color:#e0c48a;color:#7a5a1e;margin:8px 0">${lpNL('Ice on signs (added 2026-11-01).',[['Applied:','atmospheric ice (ASCE 7-22 Ch. 10) is applied to the sign.'],['Panel ice weight:',`${fmt(sw.WiPanel,0)} lb (flat plate, §10.4.1).`],['Post ice:',`${fmt(sw.WiPost,0)} lb per post.`],['Wind:','on the iced panel (B + 2t<sub>d</sub>)(s + 2t<sub>d</sub>) and posts at V<sub>ice</sub> in the ice combinations.'],['Worked in','the sign wind section.']])}</div>`;
 
   // ---- 1 · geometry & lever arms ----
   H+=step(`1 · Panel geometry &amp; lever arms`);
@@ -3375,13 +3402,13 @@ function signLoadPathHTML(inp,sw,pw,postGovList){
 
   // ---- 3 · wind cases → force split ----
   H+=step(`3 · Wind cases → post shears ${ref('ASCE 7-16 Fig. 29.3-1 + statics')}`);
-  H+=`<p class="eq-why">Wind fully loads the panel only blowing normal to it (front or back); edge-on directions leave only the posts' own drag, so the normal directions always govern. ${two?`For a resultant F at distance x from the post-group centerline, statics about the spacing L<sub>p</sub> = ${fmt(Lp,2)} ft gives the split <b>share = F(½ ± x/L<sub>p</sub>)</b> — the eccentric Cases B/C load the windward post harder without inducing torsion.`:`A single post takes the full resultant of every case; the eccentric Cases B/C also twist the monopost, T = F·|x| (checked in the post, anchors and shaft — see the torsion note above).`}</p>`;
+  H+=`<div class="eq-why lpNL">${lpNL('Wind fully loads the panel only blowing normal to it (front or back).',[['Edge-on directions','leave only the posts\' own drag, so the normal directions always govern.'],two?['Two posts:',`for a resultant F at distance x from the post-group centerline, statics about the spacing L<sub>p</sub> = ${fmt(Lp,2)} ft gives the split <b>share = F(½ ± x/L<sub>p</sub>)</b> — the eccentric Cases B/C load the windward post harder without inducing torsion.`]:['One post:','a single post takes the full resultant of every case; the eccentric Cases B/C also twist the monopost, T = F·|x| (checked in the post, anchors and shaft — see the torsion note above).']])}</div>`;   // LPNL
   // build case rows exactly as evalSignComboDir does (nominal, onFace=1, windSign=+1)
   const cases=[{name:'A',F:sw.F_A,x:0,z:zArm(sw.zA)}];
   cases.push({name:'B',F:sw.F_A,x:0.2*sw.B,z:zArm(sw.zA)});
   if(sw.caseC) cases.push({name:'C',F:sw.caseC.F,x:sw.caseC.e,z:zArm(sw.zc)});
   const Fdrag=sw.Fpost, Mdrag=sw.Mpost;
-  H+=`<p class="eq-why"><b>Post drag on the exposed column.</b> Each post is itself a member in the wind stream, but only the length <b>below the panel</b> is exposed \u2014 the strip behind the sign is already accounted for in the panel force above, so applying wind over the full post height would double-count it. The exposed height is the clearance, h<sub>exp</sub> = ${pj>0?`clr − p = ${fmt(sw.clr,2)} − ${fmt(pj,2)} = ${fmt(sw.postExpH,2)} ft (top of the shaft to the bottom of the panel; K<sub>z</sub> at z + p above grade)`:`${fmt(sw.clr,2)} ft (grade to bottom of panel)`}. The drag is integrated over that height in ${sw.postStrips?sw.postStrips.length:1} strips (q_z at each strip centroid; K_z is constant below 15 ft), so q̄_z below is the area-average and z<sub>drag</sub> = ΣF_i z_i/ΣF_i = ${fmt(sw.zPost,2)} ft:</p>`;
+  H+=`<div class="eq-why lpNL">${lpNL('Post drag on the exposed column.',[['Exposed length:','each post is itself a member in the wind stream, but only the length <b>below the panel</b> is exposed \u2014 the strip behind the sign is already accounted for in the panel force above, so applying wind over the full post height would double-count it.'],['Exposed height:',`the clearance, h<sub>exp</sub> = ${pj>0?`clr − p = ${fmt(sw.clr,2)} − ${fmt(pj,2)} = ${fmt(sw.postExpH,2)} ft (top of the shaft to the bottom of the panel; K<sub>z</sub> at z + p above grade)`:`${fmt(sw.clr,2)} ft (grade to bottom of panel)`}.`],['Integration:',`the drag is integrated over that height in ${sw.postStrips?sw.postStrips.length:1} strips (q_z at each strip centroid; K_z is constant below 15 ft), so q̄_z below is the area-average and z<sub>drag</sub> = ΣF_i z_i/ΣF_i = ${fmt(sw.zPost,2)} ft:`]])}</div>`;   // LPNL
   H+=g(`\\overline{q_{z}K_dG} = \\frac{1}{h_{exp}}\\int_0^{h_{exp}} 0.00256\\,K_z(z) K_{zt} K_e V^2\\cdot K_d\\,G\\,dz = ${fmt(sw.qzPost,1)}\\ \\text{psf}\\quad(q_z(clr/2) = ${fmt(sw.qzMidPost!==undefined?sw.qzMidPost:sw.qzPost,1)})\\qquad A_{exp} = w_{post}\\,h_{exp} = \\tfrac{${fmt(sw.postW_in,2)}}{12}(${fmt(sw.postExpH,2)}) = ${fmt(sw.Apost,2)}\\ \\text{ft}^2`);
   H+=g(`F_{drag,post} = \\bar q_z\\,C_f\\,A_{exp} = ${fmt(sw.qzPost,1)}(${fmt(sw.cfPost,2)})(${fmt(sw.Apost,2)}) = ${fmt(Fdrag,0)}\\ \\text{lb (per post, at } z_{drag}=${fmt(sw.zPost,2)}\\text{ ft)}`);
   cases.forEach(cs=>{
@@ -3395,7 +3422,7 @@ function signLoadPathHTML(inp,sw,pw,postGovList){
 
   // ---- 4 · per-post V, M assembly (nominal) then factored governing ----
   H+=step(`4 · Shear &amp; moment assembly per post — wind toward 0° (nominal)`);
-  H+=`<p class="eq-why">Per post and case: V = share + F<sub>drag</sub>; M = share·z + F<sub>drag</sub>·z<sub>drag</sub>, tabulated here for <b>wind toward 0°</b> only. ${two?`From this direction post 1 is windward, so the eccentric cases load it more heavily. Reversing the wind to 180° mirrors the table — post 2 then takes the larger share. Each post is designed for its own worst direction, assembled in step 5.`:`A single post takes the whole resultant regardless of direction.`} The governing combination then scales these by its wind factor and the axial by its dead factor.</p>`;
+  H+=`<div class="eq-why lpNL">${lpNL('Per post and case: V = share + F<sub>drag</sub>; M = share·z + F<sub>drag</sub>·z<sub>drag</sub>, tabulated here for <b>wind toward 0°</b> only.',[...(two?[['Windward post:','from this direction post 1 is windward, so the eccentric cases load it more heavily.'],['Reversed wind:','reversing the wind to 180° mirrors the table — post 2 then takes the larger share.'],['Design:','each post is designed for its own worst direction, assembled in step 5.']]:[['One post:','a single post takes the whole resultant regardless of direction.']]),['Factored:','the governing combination then scales these by its wind factor and the axial by its dead factor.']])}</div>`;   // LPNL
   let tb=`<table class="tbl"><tr><th>Case</th><th>Post</th><th>Share<span class="sym">(lb)</span></th><th>z arm<span class="sym">(ft)</span></th><th>V = share+F_drag<span class="sym">(lb)</span></th><th>M = share·z + F_drag·z_drag<span class="sym">(lb·ft)</span></th></tr>`;
   cases.forEach(cs=>{
     const sh=signPostSplit(cs.F,cs.x,Lp,nP);
@@ -4523,15 +4550,15 @@ function renderSign(inp,sw,pw,allCombos,postDesigns,poleSeg){
 
   // torsion note
   if(nPost===1){
-    $('sgTorsionNote').innerHTML=`<b>Torsion (monopost):</b> the eccentric Cases B and C twist the single post, T = F·e. The post is checked for combined torsion, shear, flexure and axial (AISC 360-16 §H3.2), the anchor bolts carry T/(n·R) per bolt in addition to V/n, and the shaft is checked against the ACI 318-19 §22.7.1.1 threshold torsion. <b>Limitation:</b> the torsional resistance of the soil around the shaft is not checked — verify with the geotechnical engineer.`;
+    $('sgTorsionNote').innerHTML=lpNL('Torsion (monopost): the eccentric Cases B and C twist the single post, T = F·e.',[['Post:','checked for combined torsion, shear, flexure and axial (AISC 360-16 §H3.2).'],['Anchor bolts:','carry T/(n·R) per bolt in addition to V/n.'],['Shaft:','checked against the ACI 318-19 §22.7.1.1 threshold torsion.']],{act:['<b>Limitation:</b> the torsional resistance of the soil around the shaft is not checked — verify with the geotechnical engineer.']});   // LPNL
   } else {
-    $('sgTorsionNote').innerHTML=`<b>Limitation:</b> torsion is not evaluated. With two posts, the eccentric Cases B and C are resolved as an <i>unequal force split</i> between the posts (statics about the post spacing), not as torsion in any member. Each post/foundation is designed independently for the worst force it sees across all cases and wind directions.`;
+    $('sgTorsionNote').innerHTML=lpNL('Limitation: torsion is not evaluated.',[['Two posts:','the eccentric Cases B and C are resolved as an <i>unequal force split</i> between the posts (statics about the post spacing), not as torsion in any member.'],['Design:','each post/foundation is designed independently for the worst force it sees across all cases and wind directions.']]);   // LPNL
   }
 
   // ---- per-post foundation cards ----
   $('sgPostIntro').innerHTML = nPost===1
     ? `Single post. The sign wind (Cases A, B and C; B/C also cause torsion) plus the post's own drag drive one drilled-shaft foundation.`
-    : `Two posts, spacing ${fmt(inp.signSpacing,1)} ft, panel centered. Each post is designed independently for the worst force it sees across all cases and all four wind directions. Cases B and C bias load onto the windward post; because wind reverses, each post becomes the windward one under some direction, so a symmetric layout yields two equal designs — the eccentric cases still raise the per-post demand above a naïve 50/50 split.`;
+    : lpNL(`Two posts, spacing ${fmt(inp.signSpacing,1)} ft, panel centered.`,[['Design:','each post is designed independently for the worst force it sees across all cases and all four wind directions.'],['Cases B and C','bias load onto the windward post; because wind reverses, each post becomes the windward one under some direction, so a symmetric layout yields two equal designs — the eccentric cases still raise the per-post demand above a naïve 50/50 split.']]);   // LPNL
 
   let html='';
   postDesigns.forEach(pd=>{
@@ -4707,7 +4734,7 @@ function buildSignReport(inp,sw,pw,allCombos,postDesigns,poleSeg){
   H+=`<div class="subhead">Site &amp; wind</div><p class="varsub">V = ${inp.V} mph · Exposure ${inp.expo} · K_zt = ${n(inp.Kzt,2)} · K_d = ${kdStr(inp)} · G = ${n(inp.G,2)}</p>`;
   H+=`<div class="subhead">Sign panel</div><p class="varsub">B = ${n(sw.B,1)} ft · s = ${n(sw.s,1)} ft · clearance = ${n(sw.clr,1)} ft · top h = ${n(sw.h,1)} ft · weight = ${n(inp.signWt,0)} lb${nPost===2?` · post spacing = ${n(inp.signSpacing,1)} ft`:''}</p>`;
   H+=`<div class="subhead">Post section</div><p class="varsub">${poleSeg.shape==='round'?`Ø ${n(inp.poleDiaBase,2)} in`:`${n(inp.poleDiaBase,2)}${poleSeg.shape==='rect'?` × ${n(inp.poleDepthBase,2)}`:''} in`} · wall ${n(inp.poleTwBase,3)} in · F_y = ${n(inp.poleFy,0)} ksi</p>`;
-  if($('sgTorsionNote')&&$('sgTorsionNote').innerHTML) H+=`<p class="eq-why" style="margin-top:8px">${$('sgTorsionNote').innerHTML}</p>`;   // D11: was "Torsion is not evaluated (§2)", stale since the monopost torsion check (F19)
+  if($('sgTorsionNote')&&$('sgTorsionNote').innerHTML) H+=`<div class="eq-why lpNL" style="margin-top:8px">${$('sgTorsionNote').innerHTML}</div>`;   // LPNL: the note is a lead line and a list   // D11: was "Torsion is not evaluated (§2)", stale since the monopost torsion check (F19)
   H+=`</div></details>`;
 
   // 1. velocity pressure
@@ -4723,7 +4750,7 @@ function buildSignReport(inp,sw,pw,allCombos,postDesigns,poleSeg){
   // 2. load combinations per post (the Loading tab's own table)
   if($('sgComboTbl')&&$('sgComboTbl').innerHTML){
     H+=`<details class="rpt-sec" data-old="2" open><summary><span class="tag">2</span><h3>Load combinations — per-post demand</h3><span class="arw">▶</span></summary><div class="rpt-body">`;
-    H+=`<p class="eq-why">Every combination applies, the atmospheric-ice ones included (ice on the sign panel and posts, ASCE 7-22 Ch. 10, added 2026-11-01). Each combination is enveloped over the applicable Fig. 29.3-1 load cases and wind directions, per post. The governing row of each family (largest M on any post) is marked.</p>`;
+    H+=`<div class="eq-why lpNL">${lpNL('Every combination applies.',[['Ice:','the atmospheric-ice ones included (ice on the sign panel and posts, ASCE 7-22 Ch. 10, added 2026-11-01).'],['Envelope:','each combination is enveloped over the applicable Fig. 29.3-1 load cases and wind directions, per post.'],['Governing row','of each family (largest M on any post) is marked.']])}</div>`;   // LPNL
     H+=`<table class="tbl">${$('sgComboTbl').innerHTML}</table>`;
     if(nPost===2){
       H+=eqB('Two-post force split',
@@ -5043,9 +5070,9 @@ function lppCalcIbc(){
   else if(ratio<3)f+=`<div class="flag">d/b = ${fmt(ratio,1)} is shallow for rigid-pier behavior; verify assumptions.</div>`;
   else f+=`<div class="flag ok">d/b = ${fmt(ratio,1)} within rigid short-pier range.</div>`;
   f+=`<div class="flag ok">Embedment governed by ASD <b>${fASD.name}</b>; shaft P–M governed by LRFD <b>${shaftGov.name}</b> (all LRFD combinations checked); soil bearing by ASD <b>${govAxASD.name}</b> (max axial); base plate <b>${(bolts.byCheck.BP||bolts).comboName}</b>.</div>`;
-  f+=`<div class="flag${govB2.B2max>1.10?' bad':''}">P-Δ (AISC 360-16 App. 8): B<sub>2</sub> = ${fmt(govB2.B2,3)} for ${govB2.name} (range ${fmt(govB2.B2min,3)}–${fmt(govB2.B2max,3)} over the LRFD combinations); each combination's B<sub>2</sub> multiplies its LRFD moments for the pole, anchors and shaft. Pole stress governed by <b>${pstress.comboName}</b>, wind toward ${fmt(pstress.phi,0)}° (all LRFD combinations and azimuths checked).</div>`;
+  f+=`<div class="flag lpNL${govB2.B2max>1.10?' bad':''}">${lpNL(`P-Δ (AISC 360-16 App. 8): B<sub>2</sub> = ${fmt(govB2.B2,3)} for ${govB2.name} (range ${fmt(govB2.B2min,3)}–${fmt(govB2.B2max,3)} over the LRFD combinations).`,[['Applied:','each combination\'s B<sub>2</sub> multiplies its LRFD moments for the pole, anchors and shaft.'],['Pole stress',`governed by <b>${pstress.comboName}</b>, wind toward ${fmt(pstress.phi,0)}° (all LRFD combinations and azimuths checked).`]])}</div>`;   // LPNL
   if(!(nat.n1>=1.0)) f+=`<div class="flag bad">Natural frequency n<sub>1</sub> ≈ ${fmt(nat.n1,2)} Hz &lt; 1 Hz (Rayleigh estimate): the pole is <b>flexible</b> (ASCE 7-16 §26.2). G<sub>f</sub> = ${inp.gf?fmt(inp.gf.Gf,3):'—'} (§26.11.5, β = ${fmt(inp.beta,3)}); G used = max(${fmt(inp.Ginput,2)}, G<sub>f</sub>) = <b>${fmt(inp.G,3)}</b> for every wind force.</div>`;
-  { const oa=lppOffAxisFixtures(fixtures); if(oa.length) f+=`<div class="flag bad">${lppOffAxisMsg(oa)}</div>`; }
+  { const oa=lppOffAxisFixtures(fixtures); if(oa.length){ const N=lppOffAxisNL(oa); f+=`<div class="flag bad lpNL">${lpNL(N[0],N[1])}</div>`; } }   // LPNL
   if(!cablesEnabled){
     f+=`<div class="flag">Catenary system disabled — foundation driven by pole wind, fixtures, and self-weight only.</div>`;
   } else if(cables.length>=2){
@@ -5344,7 +5371,7 @@ function poleWorkedBody(pstress, inp, r){
   H+=`<p class="eq-why">Axial, moment, and shear from everything above the cut are resolved along the governing wind direction. ${pstress.prismatic?'The post is prismatic, so capacity is constant and the base section (maximum moment) governs — this is that section.':'The section is tapered; every segment (at mid-height) and the base section at z = 0 are checked and the worst demand/capacity ratio is shown.'}</p>`;
   if(r.B2!==undefined){
     const p2=pstress.p2||{};
-    H+=`<p class="eq-why">Governing run: <b>${pstress.comboName||'—'}</b>${pstress.phi!==undefined?`, wind toward ${fmt(pstress.phi,0)}°`:''}${pstress.tCase?` (Case ${pstress.tCase})`:''} — every LRFD combination${pstress.tCase!==undefined?' and sign case':''} at every wind azimuth was checked. Second-order (P-Δ) effects use the AISC 360-16 Appendix 8 amplifier on the first-order moment M₁: P<sub>story</sub> = factored axial at the base, Δ<sub>H</sub> = first-order top drift (curvature M/EI integrated over the height), R<sub>M</sub> = 0.85, and H·L taken as the first-order base moment M₀.</p>`;
+    H+=`<div class="eq-why lpNL">${lpNL(`Governing run: <b>${pstress.comboName||'—'}</b>${pstress.phi!==undefined?`, wind toward ${fmt(pstress.phi,0)}°`:''}${pstress.tCase?` (Case ${pstress.tCase})`:''} — every LRFD combination${pstress.tCase!==undefined?' and sign case':''} at every wind azimuth was checked.`,[['Second-order (P-Δ) effects','use the AISC 360-16 Appendix 8 amplifier on the first-order moment M₁:',['P<sub>story</sub> = factored axial at the base;','Δ<sub>H</sub> = first-order top drift (curvature M/EI integrated over the height);','R<sub>M</sub> = 0.85;','H·L taken as the first-order base moment M₀.']]])}</div>`;   // LPNL
     H+=g(`P_{e,story} = R_M\\frac{M_0}{\\Delta_H} = 0.85\\,\\frac{${fmt((p2.M0||0)*12/1000,1)}\\ \\text{kip-in}}{${fmt(p2.drift||0,3)}\\ \\text{in}} = ${fmt((p2.PeStory||0)/1000,1)}\\ \\text{kip}\\qquad B_2 = \\frac{1}{1-\\alpha P_{story}/P_{e,story}} = \\frac{1}{1-${fmt((p2.Pstory||0)/1000,2)}/${fmt((p2.PeStory||0)/1000,1)}} = ${fmt(r.B2,3)}`);
     H+=g(`M_r = B_2\\,M_1 = ${fmt(r.B2,3)}(${fmt(r.M1,0)}) = ${fmt(r.M,0)}\\ \\text{lb}{\\cdot}\\text{ft}`);
   }
@@ -5443,12 +5470,12 @@ function basePlateWorkedHTML(bo,inp){
   let H='';
   const bp=(bo.byCheck&&bo.byCheck.BP)||bo;   // the LRFD combination with the largest t_req
   H+=step(`Base-plate thickness — bending line at the pole face, double-nut base ${ref('AASHTO LRFDLTS (bending-line method; article to be confirmed)')}`);
-  H+=`<p class="eq-why">Double-nut (leveling-nut) base: no grout bearing, so the compression side also loads the plate through the leveling nuts. The governing rod force is the larger of the tension rod and the compression rod. The plate cantilevers from the bending line at the pole face (tangent to the pole, normal to the radius through the rod) over m, with the effective width per rod taken at the pole face, b<sub>eff</sub> = πD/n; plastic plate strip, φ<sub>f</sub> = 0.90. The same method is used in the AASHTO LRFDLTS mode (an engineering method, not an LRFDLTS article; LRFDLTS Art. 5.6.3). Combination shown: ${bp.comboName||'—'}.</p>`;
+  H+=`<div class="eq-why lpNL">${lpNL('Double-nut (leveling-nut) base: no grout bearing, so the compression side also loads the plate through the leveling nuts.',[['Rod force:','the governing rod force is the larger of the tension rod and the compression rod.'],['Plate:','the plate cantilevers from the bending line at the pole face (tangent to the pole, normal to the radius through the rod) over m, with the effective width per rod taken at the pole face, b<sub>eff</sub> = πD/n; plastic plate strip, φ<sub>f</sub> = 0.90.'],['LRFDLTS mode:','the same method is used in the AASHTO LRFDLTS mode (an engineering method, not an LRFDLTS article; LRFDLTS Art. 5.6.3).'],['Combination shown:',`${bp.comboName||'—'}.`]])}</div>`;   // LPNL
   H+=g(`C_{max} = \\frac{M_u\\,|y|}{\\sum y_i^2}+\\frac{P_u}{n} = ${fmt(bp.Cmax,0)}\\ \\text{lb}\\qquad P_{rod} = \\max(T_{max},C_{max}) = \\max(${fmt(bp.Tmax,0)},\\ ${fmt(bp.Cmax,0)}) = ${fmt(bp.Prod,0)}\\ \\text{lb}`);
   H+=g(`m = \\frac{BC-D_{pole}}{2} = \\frac{${fmt(bp.BC,2)}-${fmt(bp.Dpole,2)}}{2} = ${fmt(bp.m,2)}\\text{ in}\\qquad b_{eff} = \\frac{\\pi\\,D_{pole}}{n} = \\frac{\\pi(${fmt(bp.Dpole,2)})}{${bp.n}} = ${fmt(bp.beff,3)}\\text{ in}`);
   H+=g(`t_{p,req} = \\sqrt{\\frac{4\\,P_{rod}\\,m}{\\phi_f\\,F_y\\,b_{eff}}} = \\sqrt{\\frac{4(${fmt(bp.Prod,0)})(${fmt(bp.m,2)})}{0.9(${fmt(bp.Fyp*1000,0)})(${fmt(bp.beff,3)})}} = ${fmt(bp.tpReq,3)}\\text{ in}`);
-  if(lppBpSqNote(inp)) H+=`<p class="eq-why">${lppEsc(lppBpSqNote(inp))}</p>`;   // LPAS
-  H+=`<div class="flag" style="background:#fdf8ee;border-color:#e0c48a;color:#7a5a1e;margin:8px 0">${lppEsc(LPP_BP_VERIFY)}</div>`;
+  if(lppBpSqNote(inp)) H+=`<div class="eq-why lpNL">${lpNL(...lppBpSqNL(inp))}</div>`;   // LPAS; LPNL
+  H+=`<div class="flag lpNL" style="background:#fdf8ee;border-color:#e0c48a;color:#7a5a1e;margin:8px 0">${lpNL(...lppBpVerifyNL())}</div>`;   // LPNL
   H+=`<p class="eq-result">t<sub>req</sub> = ${fmt(bp.tpReq,3)} in ${bp.tpOK?'≤':'&gt;'} t<sub>provided</sub> = ${fmt(bp.tpProv,3)} in → <b>${bp.tpOK?'PASS':'FAIL'}</b> (M<sub>u</sub>/φM<sub>n</sub> = (t<sub>req</sub>/t)² = ${fmt(Math.pow(bp.tpReq/bp.tpProv,2),3)}).</p>`;
 
   return H;
@@ -5478,7 +5505,7 @@ function embedWorkedHTML(embed, inp, P, M, h){
   H+=step(`2 · Depth-dependent allowable lateral bearing ${ref('IBC Table 1806.2')}`);
   const _sc=(typeof SOIL_CLASSES!=='undefined')?SOIL_CLASSES[inp.soilClass]:null;
   const _scTxt=_sc?`Soil class: <b>${_sc.name}</b> (${_sc.desc}) — IBC Table 1806.2 gives S₁ = ${_sc.lat} psf/ft of depth.`:`S₁ is a custom value from the project geotechnical report (supersedes the IBC presumptive table).`;
-  H+=`<p class="eq-why">${_scTxt} The presumptive lateral bearing increases with depth. ${isoFac!==1?`An isolated-pole increase factor of ${fmt(isoFac,2)} is applied per §1806.3.4 (permitted for poles not adversely affected by ½-inch motion at grade).`:''} It is evaluated at ⅓ of the embedment for the non-constrained case (or at full depth for the constrained case).</p>`;
+  H+=`<div class="eq-why lpNL">${lpNL(_scTxt,[['Depth:','the presumptive lateral bearing increases with depth.'],isoFac!==1?['Isolated pole:',`an isolated-pole increase factor of ${fmt(isoFac,2)} is applied per §1806.3.4 (permitted for poles not adversely affected by ½-inch motion at grade).`]:null,['Evaluated at','⅓ of the embedment for the non-constrained case (or at full depth for the constrained case).']])}</div>`;   // LPNL
   H+=g(`S_1 = ${fmt(inp.S1,0)}${isoFac!==1?`\\times${fmt(isoFac,2)}`:''}\\cdot\\tfrac{\\min(d,\\,12)}{3} = ${fmt(S1c,0)}\\cdot\\tfrac{\\min(d,\\,12)}{3}\\ \\text{psf}\\quad(\\text{IBC §1807.3.2.1: }d \\le 12\\text{ ft for the lateral pressure})`);
 
   H+=step(`3 · Governing embedment equation ${ref(non?'§1807.3.2.1 (non-constrained)':'§1807.3.2.2 (constrained)')}`);
@@ -5524,10 +5551,7 @@ function rebarWorkedHTML(reo, inp, Mu, Pu, Vu){
     const ck=L.checks, tk=T.checks||{};
     const pill=(ok)=>ok?'<span class="pill ok">OK</span>':'<span class="pill bad">NG</span>';
     const allOK=L.ok && (tk.ok!==false);
-    H+=`<div class="flag" style="background:${allOK?'#eef6ef':'#fbeeea'};border-color:${allOK?'#bcd9c2':'#e0a390'};color:${allOK?'#2f6b3f':'#8a2318'};margin-bottom:10px">
-      <b>Check mode — user-specified reinforcement.</b> The bars below were entered by the engineer, not designed by the tool.
-      Every code check is evaluated against this exact bar set and reported OK / NG; nothing is substituted or upsized.
-      Overall: <b>${allOK?'ALL CHECKS PASS':'ONE OR MORE CHECKS FAIL'}</b>.</div>`;
+    H+=`<div class="flag lpNL" style="background:${allOK?'#eef6ef':'#fbeeea'};border-color:${allOK?'#bcd9c2':'#e0a390'};color:${allOK?'#2f6b3f':'#8a2318'};margin-bottom:10px">${lpNL('Check mode — user-specified reinforcement.',[['Bars:','the bars below were entered by the engineer, not designed by the tool.'],['Checks:','every code check is evaluated against this exact bar set and reported OK / NG; nothing is substituted or upsized.'],['Overall:',`<b>${allOK?'ALL CHECKS PASS':'ONE OR MORE CHECKS FAIL'}</b>.`]])}</div>`;   // LPNL
     H+=`<table class="tbl"><tr><th style="text-align:left">Check</th><th style="text-align:left">Criterion</th><th>Provided</th><th>Required / limit</th><th>Result</th></tr>
       <tr><td style="text-align:left">Flexure</td><td style="text-align:left">φM_n ≥ M_u  <span class="eq-ref">[§22.4]</span></td><td>${fmt(L.phiMn,0)} lb·ft</td><td>${fmt(Mu,0)} lb·ft</td><td>${pill(ck.flex)}</td></tr>
       <tr><td style="text-align:left">Min steel</td><td style="text-align:left">A_s ≥ ρ_min·A_g  <span class="eq-ref">[§10.6.1.1 / §10.3.1.2]</span></td><td>${fmt(L.As,2)} in²</td><td>${fmt(reo.AsMin,2)} in²</td><td>${pill(ck.rhoMin)}</td></tr>
@@ -5554,7 +5578,7 @@ function rebarWorkedHTML(reo, inp, Mu, Pu, Vu){
   H+=g(`\\text{bar circle radius } r_{bar} = ${fmt(L.rbar,2)}\\ \\text{in}\\qquad \\text{clear spacing } = ${fmt(L.sClear,2)}\\ \\text{in} \\ge \\max(1.5\\text{ in}, 1.5d_b)`);
 
   H+=step(`3 · Axial–moment capacity by strain compatibility ${ref('§22.2, §21.2')}`);
-  H+=`<p class="eq-why">The circular section is analyzed by strain compatibility: a neutral-axis depth c is found so that the concrete Whitney stress block plus all bar forces balance the factored axial load P<sub>u</sub>; the moment of those same forces about the section center is the nominal capacity M<sub>n</sub>. Every quantity below is shown so the equilibrium can be checked by hand.</p>`;
+  H+=`<div class="eq-why lpNL">${lpNL('The circular section is analyzed by strain compatibility:',[['Equilibrium:','a neutral-axis depth c is found so that the concrete Whitney stress block plus all bar forces balance the factored axial load P<sub>u</sub>.'],['Capacity:','the moment of those same forces about the section center is the nominal capacity M<sub>n</sub>.'],['By hand:','every quantity below is shown so the equilibrium can be checked by hand.']])}</div>`;   // LPNL
   const cap=L.cap, det=cap?cap.detail:null;
   if(det){
     H+=`<p class="eq-why"><b>Whitney stress-block parameters</b> — concrete crushing strain ε<sub>cu</sub> = 0.003; β₁ per ACI Table 22.2.2.4.3:</p>`;
@@ -5582,7 +5606,7 @@ function rebarWorkedHTML(reo, inp, Mu, Pu, Vu){
     H+=g(`P_n = C_c+\\Sigma F_s = ${fmt(det.Cc,0)}+(${fmt(det.Fs,0)}) = ${fmt(det.Pn,0)}\\ \\text{lb}\\ \\approx\\ P_u = ${fmt(Pu,0)}\\ \\text{lb}`);
     H+=`<p class="eq-why"><b>Nominal moment</b> — concrete force times its arm to the section center, plus the bar-force moments:</p>`;
     H+=g(`M_n = C_c(R-\\bar y_c)+\\Sigma F_s y = ${fmt(det.Cc,0)}(${fmt(cap.R-det.ybarC,2)})+(${fmt(det.Ms,0)}) = ${fmt(det.Mn,0)}\\ \\text{lb}{\\cdot}\\text{in} = ${fmt(det.Mn/12,0)}\\ \\text{lb}{\\cdot}\\text{ft}`);
-    H+=`<p class="eq-why"><b>Strength reduction factor φ</b> ${ref('ACI 318-19 §21.2.1, Table 21.2.2')} — φ depends on the net tensile strain ε<sub>t</sub> in the extreme tension bar (bar ${cap.kT}, depth d<sub>t</sub> = ${fmt(cap.dt,2)} in), compared with the yield strain ε<sub>ty</sub> = f<sub>y</sub>/E<sub>s</sub>. Tied transverse reinforcement: φ = 0.65 when ε<sub>t</sub> ≤ ε<sub>ty</sub> (compression-controlled), 0.90 when ε<sub>t</sub> ≥ ε<sub>ty</sub> + 0.003 (tension-controlled), linear in between (transition).</p>`;
+    H+=`<div class="eq-why lpNL">${lpNL(`Strength reduction factor φ ${ref('ACI 318-19 §21.2.1, Table 21.2.2')}`,[['Depends on:',`the net tensile strain ε<sub>t</sub> in the extreme tension bar (bar ${cap.kT}, depth d<sub>t</sub> = ${fmt(cap.dt,2)} in), compared with the yield strain ε<sub>ty</sub> = f<sub>y</sub>/E<sub>s</sub>.`],['Tied transverse reinforcement:','',['φ = 0.65 when ε<sub>t</sub> ≤ ε<sub>ty</sub> (compression-controlled);','0.90 when ε<sub>t</sub> ≥ ε<sub>ty</sub> + 0.003 (tension-controlled);','linear in between (transition).']]])}</div>`;   // LPNL
     H+=g(`\\varepsilon_{ty} = \\frac{f_y}{E_s} = \\frac{${fmt(reo.fy,0)}\\ \\text{psi}}{${fmt(cap.Es,0)}\\ \\text{psi}} = ${fmt(cap.ety*1000,3)}\\times10^{-3}`);
     H+=g(`\\varepsilon_t = 0.003\\frac{d_t-c}{c} = 0.003\\frac{${fmt(cap.dt,2)}-${fmt(cap.c,2)}}{${fmt(cap.c,2)}} = ${fmt(cap.epsT*1000,3)}\\times10^{-3}`);
     if(cap.phiCls==='tension-controlled'){
@@ -5600,7 +5624,7 @@ function rebarWorkedHTML(reo, inp, Mu, Pu, Vu){
   H+=`<p class="eq-result">${L.over?`Even (${L.n}) ${L.bar.n} does not reach M_u — increase shaft diameter.`:`Provide (${L.n}) ${L.bar.n} longitudinal bars — φM_n = ${fmt(L.phiMn,0)} lb·ft ≥ M_u = ${fmt(Mu,0)} lb·ft.`}</p>`;
 
   H+=step(`4 · Transverse ties / shear ${ref('§22.5, §25.7.2')}`);
-  H+=`<p class="eq-why">Concrete shear strength, ACI 318-19 Table 22.5.5.1 (effective shear area b<sub>w</sub>d ≈ 0.8A<sub>g</sub> = ${fmt(T.Acv,0)} in², d = 0.8b; axial term neglected). Branch (a) applies when the ties provide A<sub>v</sub> ≥ A<sub>v,min</sub>, branch (c) (size effect λ<sub>s</sub>) when they do not. ρ<sub>w</sub> uses the bars of the tension half (half of the longitudinal bars).</p>`;
+  H+=`<div class="eq-why lpNL">${lpNL(`Concrete shear strength, ACI 318-19 Table 22.5.5.1 (effective shear area b<sub>w</sub>d ≈ 0.8A<sub>g</sub> = ${fmt(T.Acv,0)} in², d = 0.8b; axial term neglected).`,[['Branch','(a) applies when the ties provide A<sub>v</sub> ≥ A<sub>v,min</sub>, branch (c) (size effect λ<sub>s</sub>) when they do not.'],['ρ<sub>w</sub>','uses the bars of the tension half (half of the longitudinal bars).']])}</div>`;   // LPNL
   H+=g(`A_{v,min} = \\max(0.75\\sqrt{f'_c},\\,50)\\frac{b_w\\,s}{f_{yt}} = ${fmt(Math.max(0.75*Math.sqrt(reo.fc),50),1)}\\frac{(${fmt(reo.b_in,1)})(${fmt(T.sTrial,1)})}{${fmt(reo.fy,0)}} = ${fmt(T.avMinPerS*T.sTrial,3)}\\ \\text{in}^2\\qquad A_v = 2A_{tie} = ${fmt(T.Av,3)}\\ \\text{in}^2\\ (${String(T.bar.n).replace(/#/g,'\\#')}\\ @\\ ${fmt(T.sTrial,1)}\\ \\text{in})`);   // a bare # (bar size "#3") is escaped for KaTeX, as the Report's tex() does
   H+=g(`V_{c,(a)} = 2\\lambda\\sqrt{f'_c}\\,b_wd = 2(1.0)\\sqrt{${fmt(reo.fc,0)}}(${fmt(T.Acv,0)}) = ${fmt(T.VcA,0)}\\ \\text{lb}`);
   H+=g(`\\lambda_s = \\sqrt{\\frac{2}{1+d/10}} = \\sqrt{\\frac{2}{1+${fmt(T.dEff,2)}/10}} = ${fmt(T.lamS,3)}\\qquad \\rho_w = \\frac{A_s/2}{b_wd} = \\frac{${fmt(T.AsT,2)}}{${fmt(reo.b_in,1)}(${fmt(T.dEff,2)})} = ${fmt(T.rhoW,5)}`);
@@ -5687,48 +5711,24 @@ function bromsWorkedHTML(br, inp, govLRFD, MuDesign){
   if(!br) return '';
   const g=(t)=>`\\[${t}\\]`, step=(t)=>`<div class="step-label">${t}</div>`, ref=(x)=>`<span class="eq-ref">[${x}]</span>`;
   let H='';
-  H+=`<div class="flag" style="background:var(--steel-soft);border-color:#cfe0e8;color:var(--steel);margin-bottom:10px">
-    <b>Reference check only — this does not govern the design.</b> The embedment carried into the drawings is the IBC §1807.3 value above.
-    Broms is shown for comparison because it is a rational soil-mechanics method rather than a presumptive table, and AASHTO LTS
-    permits it for luminaire and sign shafts.</div>`;
-  H+=`<p class="eq-why"><b>Why the two methods are not directly comparable.</b> IBC §1807.3 is a <i>service-level</i> check: allowable
-    lateral bearing from the presumptive table (IBC Table 1806.2) resisting the governing <b>ASD</b> combination. Broms as printed in
-    AASHTO LTS C13.6.1.1 is an <i>ultimate</i> method: M<sub>F</sub> and V<sub>F</sub> are <b>factored (LRFD)</b> demands and c, φ, γ
-    are ultimate soil strengths with no resistance factor applied in the equations. Comparing a factored demand to a presumptive
-    allowable — or a service demand to an ultimate resistance — would be meaningless, so this check is driven by the governing
-    <b>LRFD</b> combination while the IBC design above uses the governing ASD combination. Expect the two embedments to differ;
-    that difference is a property of the two methods, not an error.</p>`;
+  H+=`<div class="flag lpNL" style="background:var(--steel-soft);border-color:#cfe0e8;color:var(--steel);margin-bottom:10px">${lpNL('Reference check only — this does not govern the design.',[['Design embedment:','the embedment carried into the drawings is the IBC §1807.3 value above.'],['Why shown:','Broms is shown for comparison because it is a rational soil-mechanics method rather than a presumptive table, and AASHTO LTS permits it for luminaire and sign shafts.']])}</div>`;   // LPNL
+  H+=`<div class="eq-why lpNL">${lpNL('Why the two methods are not directly comparable.',[['IBC §1807.3','is a <i>service-level</i> check: allowable lateral bearing from the presumptive table (IBC Table 1806.2) resisting the governing <b>ASD</b> combination.'],['Broms','as printed in AASHTO LTS C13.6.1.1 is an <i>ultimate</i> method: M<sub>F</sub> and V<sub>F</sub> are <b>factored (LRFD)</b> demands and c, φ, γ are ultimate soil strengths with no resistance factor applied in the equations.'],['Driven by LRFD:','comparing a factored demand to a presumptive allowable — or a service demand to an ultimate resistance — would be meaningless, so this check is driven by the governing <b>LRFD</b> combination while the IBC design above uses the governing ASD combination.'],['Expect a difference:','expect the two embedments to differ; that difference is a property of the two methods, not an error.']])}</div>`;   // LPNL
   H+=`<p class="eq-why"><b>Soil parameters</b> come from the project geotechnical report — they are not derived from the IBC
     presumptive soil class, which does not provide c or φ. If no geotechnical data exists, this check should be left disabled
     rather than run on assumed values.</p>`;
-  H+=`<div class="flag" style="background:#fdf8ee;border-color:#e0c48a;color:#7a5a1e;margin:10px 0">
-    <b>Overload &amp; understrength factors \u2014 where the safety margin comes from.</b><br>
-    Broms\u2019 equations describe an <i>ultimate</i> condition: the embedment at which the soil is fully mobilized and the shaft is on the
-    verge of rotational failure. The two sides of that comparison are treated very differently by the spec:
-    <ul style="margin:6px 0 0 18px">
-      <li><b>Overload (load) factors \u2014 explicitly included.</b> AASHTO writes the demands as M<sub>F</sub> and V<sub>F</sub>, the
-        <i>factored</i> moment and shear at groundline, and notes \u03b3 is the effective unit weight \u201cincluding load factors.\u201d This check is
-        therefore driven by the governing <b>LRFD</b> combination, so the overload side is already covered.</li>
-      <li><b>Understrength (resistance) factor \u2014 not specified.</b> The equations as printed apply <b>no</b> resistance factor to the soil
-        terms: c is defined as the <i>ultimate</i> shear strength, and the resistances shown in Figures C13.6.1.1-1 and -2 are 9cD and
-        3\u03b3K<sub>p</sub>DL \u2014 Broms\u2019 published ultimate values, with no reduction. Nothing elsewhere in Article 13.6 prescribes a \u03c6 for shaft
-        embedment either.</li>
-    </ul>
-    <b>So should a factor be applied?</b> There is a genuine argument on each side, and it is the engineer\u2019s call:
-    <ul style="margin:6px 0 0 18px">
-      <li><i>Against:</i> the Broms procedure appears only in the <b>commentary</b>, offered \u201cin lieu of more detailed procedures.\u201d
-        Commentary is non-mandatory. Used as published it is self-consistent, and applying an unspecified factor means departing from the
-        procedure the code actually prints \u2014 with no citation to point a reviewer to. Note also that the cohesive case already carries
-        real built-in conservatism: the top 1.5D of soil is ignored entirely.</li>
-      <li><i>For:</i> these equations describe collapse, so with \u03c6 = 1.00 a factored demand is being checked against an unreduced
-        ultimate soil resistance \u2014 no margin on the most variable material on the project. Load factors cover load uncertainty, not the
-        chance that c or \u03c6\u2032 is well below the boring log. Article 13.6.1.2 points capacity estimation to <i>LRFD Design</i> Section 10,
-        which <b>does</b> carry resistance factors for laterally loaded foundations; traditional Broms practice likewise applied a factor of
-        safety of roughly 2 to 2.5 on ultimate lateral resistance (\u03c6 \u2248 0.4 to 0.5 in modern terms).</li>
-    </ul>
-    <b>This tool therefore defaults to \u03c6 = 1.00</b>, reproducing AASHTO LTS exactly as printed so the number matches a hand check of the
-    spec. Lowering \u03c6 is available as a deliberate, documented choice \u2014 not a code requirement. (\u201cOverload\u201d and \u201cunderstrength\u201d are the
-    historic AASHTO/geotechnical names for load and resistance factors.)</div>`;
+  // LPNL (2026-11-08): three lead-and-list groups in the one box, same words
+  H+=`<div class="flag lpNL" style="background:#fdf8ee;border-color:#e0c48a;color:#7a5a1e;margin:10px 0">`
+    +lpNL('Overload &amp; understrength factors \u2014 where the safety margin comes from.',[
+      ['Ultimate condition:','Broms\u2019 equations describe an <i>ultimate</i> condition: the embedment at which the soil is fully mobilized and the shaft is on the verge of rotational failure. The two sides of that comparison are treated very differently by the spec:'],
+      ['Overload (load) factors \u2014 explicitly included.','AASHTO writes the demands as M<sub>F</sub> and V<sub>F</sub>, the <i>factored</i> moment and shear at groundline, and notes \u03b3 is the effective unit weight \u201cincluding load factors.\u201d This check is therefore driven by the governing <b>LRFD</b> combination, so the overload side is already covered.'],
+      ['Understrength (resistance) factor \u2014 not specified.','The equations as printed apply <b>no</b> resistance factor to the soil terms: c is defined as the <i>ultimate</i> shear strength, and the resistances shown in Figures C13.6.1.1-1 and -2 are 9cD and 3\u03b3K<sub>p</sub>DL \u2014 Broms\u2019 published ultimate values, with no reduction. Nothing elsewhere in Article 13.6 prescribes a \u03c6 for shaft embedment either.']])
+    +lpNL('So should a factor be applied? There is a genuine argument on each side, and it is the engineer\u2019s call:',[
+      ['Against:','the Broms procedure appears only in the <b>commentary</b>, offered \u201cin lieu of more detailed procedures.\u201d Commentary is non-mandatory.',['Used as published it is self-consistent, and applying an unspecified factor means departing from the procedure the code actually prints \u2014 with no citation to point a reviewer to.','Note also that the cohesive case already carries real built-in conservatism: the top 1.5D of soil is ignored entirely.']],
+      ['For:','these equations describe collapse, so with \u03c6 = 1.00 a factored demand is being checked against an unreduced ultimate soil resistance \u2014 no margin on the most variable material on the project.',['Load factors cover load uncertainty, not the chance that c or \u03c6\u2032 is well below the boring log.','Article 13.6.1.2 points capacity estimation to <i>LRFD Design</i> Section 10, which <b>does</b> carry resistance factors for laterally loaded foundations; traditional Broms practice likewise applied a factor of safety of roughly 2 to 2.5 on ultimate lateral resistance (\u03c6 \u2248 0.4 to 0.5 in modern terms).']]])
+    +lpNL('This tool therefore defaults to \u03c6 = 1.00, reproducing AASHTO LTS exactly as printed so the number matches a hand check of the spec.',[
+      ['Lowering \u03c6','is available as a deliberate, documented choice \u2014 not a code requirement.'],
+      ['Names:','(\u201cOverload\u201d and \u201cunderstrength\u201d are the historic AASHTO/geotechnical names for load and resistance factors.)']])
+    +`</div>`;
   H+=step(`1 \u00b7 Resistance factor applied to the soil`);
   H+=`<p class="eq-why">${br.phiR>=0.999
       ? `No resistance factor is applied (\u03c6 = 1.00), so the equations below are AASHTO LTS C13.6.1.1 exactly as printed \u2014 factored demands against unreduced ultimate soil resistance. This is the default because the code prescribes no \u03c6 for this procedure.`
@@ -5739,10 +5739,10 @@ function bromsWorkedHTML(br, inp, govLRFD, MuDesign){
       ? `\\phi c = ${fmt(br.phiR,2)}(${fmt(br.cInput,2)}) = ${fmt(br.c,3)}\\ \\text{ksf}`
       : `\\phi K_p = ${fmt(br.phiR,2)}(${fmt(br.nom.Kp,3)}) = ${fmt(br.fac.Kp,3)}`}`);
   if(br.phiR>=0.999){
-    H+=`<p class="eq-why" style="color:#2f6b3f"><b>Code-faithful basis.</b> With \u03c6 = 1.00 this result is directly comparable to a hand calculation from AASHTO LTS C13.6.1.1. If project conditions or reviewer expectations call for a margin on the soil, lower \u03c6 in the input panel and the comparison table below will show its effect.</p>`;
+    H+=`<div class="eq-why lpNL" style="color:#2f6b3f">${lpNL('Code-faithful basis.',[['Comparable:','with \u03c6 = 1.00 this result is directly comparable to a hand calculation from AASHTO LTS C13.6.1.1.'],['A margin on the soil:','if project conditions or reviewer expectations call for a margin on the soil, lower \u03c6 in the input panel and the comparison table below will show its effect.']])}</div>`;   // LPNL
   }
   H+=step(`2 · Factored demands at groundline ${ref('governing LRFD combination')}`);
-  H+=`<p class="eq-why">Taken from the governing LRFD combination (<b>${govLRFD.name||'—'}</b>) — the same demands that drive the reinforced-concrete shaft design: M<sub>F</sub> is the shaft's M<sub>u</sub>, which includes the P-Δ amplifier B<sub>2</sub> of that combination (AISC 360-16 App. 8; see the shaft P–M design), and V<sub>F</sub> is the largest LRFD base shear (the shaft's V<sub>u</sub>).${br.lambda>1.001?` An additional overload factor λ has been applied on top of these already-factored demands.`:''}</p>`;
+  H+=`<div class="eq-why lpNL">${lpNL(`Taken from the governing LRFD combination (<b>${govLRFD.name||'—'}</b>) — the same demands that drive the reinforced-concrete shaft design:`,[['M<sub>F</sub>','is the shaft\'s M<sub>u</sub>, which includes the P-Δ amplifier B<sub>2</sub> of that combination (AISC 360-16 App. 8; see the shaft P–M design).'],['V<sub>F</sub>','is the largest LRFD base shear (the shaft\'s V<sub>u</sub>).'],br.lambda>1.001?['Overload factor λ:','an additional overload factor λ has been applied on top of these already-factored demands.']:null])}</div>`;   // LPNL
   if(br.lambda>1.001){
     H+=g(`V_{F,0} = ${fmt(br.VF0,2)}\\ \\text{kip}\\qquad M_{F,0} = ${fmt(br.MF0,1)}\\ \\text{kip}{\\cdot}\\text{ft}\\qquad \\lambda = ${fmt(br.lambda,2)}`);
     H+=g(`V_F = \\lambda V_{F,0} = ${fmt(br.lambda,2)}(${fmt(br.VF0,2)}) = ${fmt(br.VF,2)}\\ \\text{kip}\\qquad M_F = \\lambda M_{F,0} = ${fmt(br.lambda,2)}(${fmt(br.MF0,1)}) = ${fmt(br.MF,1)}\\ \\text{kip}{\\cdot}\\text{ft}\\qquad D = ${fmt(br.D,2)}\\ \\text{ft}`);
@@ -5787,9 +5787,7 @@ function bromsWorkedHTML(br, inp, govLRFD, MuDesign){
     <tr><td>As printed (\u03c6 = 1.00)</td><td>${br.model==='cohesive'?`c = ${fmt(br.cInput,2)} ksf`:`K_p = ${fmt(br.nom.Kp,3)}`}</td><td>${fmt(br.nom.L,2)}</td><td>${fmt(br.nom.Mu,2)}</td></tr>
     <tr style="background:var(--accent-wash);font-weight:700"><td>With applied factor (\u03c6 = ${fmt(br.phiR,2)})</td><td>${br.model==='cohesive'?`\u03c6c = ${fmt(br.c,3)} ksf`:`\u03c6K_p = ${fmt(br.fac.Kp,3)}`}</td><td>${fmt(br.fac.L,2)}</td><td>${fmt(br.fac.Mu,2)}</td></tr></table>`;
   H+=`<p class="tbl-note">M<sub>u</sub> changes only slightly with \u03c6 because the resistance factor shifts the depth of the peak moment (through q or the \u221a term) but not the applied V<sub>F</sub> or its lever arm H, which dominate.</p>`;
-  H+=`<p class="eq-why">Reducing the soil resistance by \u03c6 lengthens the required embedment from ${fmt(br.nom.L,2)} ft to ${fmt(br.fac.L,2)} ft
-    (a ${fmt(100*(br.fac.L/Math.max(br.nom.L,1e-9)-1),0)}% increase). If you adopt the factor, the lower row is the value to carry;
-    the as-printed value is shown so the size of the applied margin is explicit.</p>`;
+  H+=`<div class="eq-why lpNL">${lpNL(`Reducing the soil resistance by \u03c6 lengthens the required embedment from ${fmt(br.nom.L,2)} ft to ${fmt(br.fac.L,2)} ft (a ${fmt(100*(br.fac.L/Math.max(br.nom.L,1e-9)-1),0)}% increase).`,[['If you adopt the factor,','the lower row is the value to carry; the as-printed value is shown so the size of the applied margin is explicit.']])}</div>`;   // LPNL
   }
   H+=`<p class="eq-result"><b>Broms reference embedment L = ${fmt(br.L,2)} ft</b> \u2014 ${br.phiR>=0.999
       ? `AASHTO LTS C13.6.1.1 as printed (\u03c6 = 1.00, no resistance factor), LRFD demands`
@@ -5798,12 +5796,11 @@ function bromsWorkedHTML(br, inp, govLRFD, MuDesign){
   if(MuDesign>0){
     const MuK=br.Mu, MdK=MuDesign/1000;
     const exceeds=MuK>MdK*1.001;
-    H+=`<div class="flag" style="margin-top:10px;background:${exceeds?'#fdf3e7':'#eef6ef'};border-color:${exceeds?'#e0b070':'#bcd9c2'};color:${exceeds?'#8a5a1a':'#2f6b3f'}">
-      <b>Maximum shaft moment check.</b> ${br.phiR>=0.999?`On the as-printed basis (\u03c6 = 1.00)`:`On the factored-resistance basis (\u03c6 = ${fmt(br.phiR,2)})`}, Broms predicts the peak moment <b>below grade</b> at ${fmt(br.xMu,2)} ft, M<sub>u</sub> = ${fmt(MuK,1)} kip·ft,
-      versus the groundline moment used for the P–M reinforcement design, M<sub>u</sub> = ${fmt(MdK,1)} kip·ft.
-      ${exceeds
-        ? `Broms predicts a <b>larger</b> moment than the design value (ratio ${fmt(MuK/Math.max(MdK,1e-9),2)}). The reinforcement is currently proportioned for the groundline moment; consider extending full reinforcement past ${fmt(br.xMu,2)} ft depth, or designing the section for this larger below-grade moment. This is a flag for your judgement — it does not change the design above.`
-        : `Broms predicts a moment at or below the design value, so the groundline moment used for the P–M design remains the controlling demand.`}</div>`;
+    H+=`<div class="flag lpNL" style="margin-top:10px;background:${exceeds?'#fdf3e7':'#eef6ef'};border-color:${exceeds?'#e0b070':'#bcd9c2'};color:${exceeds?'#8a5a1a':'#2f6b3f'}">${lpNL('Maximum shaft moment check.',[
+      ['Peak moment:',`${br.phiR>=0.999?`on the as-printed basis (\u03c6 = 1.00)`:`on the factored-resistance basis (\u03c6 = ${fmt(br.phiR,2)})`}, Broms predicts the peak moment <b>below grade</b> at ${fmt(br.xMu,2)} ft, M<sub>u</sub> = ${fmt(MuK,1)} kip·ft, versus the groundline moment used for the P–M reinforcement design, M<sub>u</sub> = ${fmt(MdK,1)} kip·ft.`],
+      ...(exceeds
+        ? [['Result:',`Broms predicts a <b>larger</b> moment than the design value (ratio ${fmt(MuK/Math.max(MdK,1e-9),2)}).`],['Reinforcement:',`the reinforcement is currently proportioned for the groundline moment; consider extending full reinforcement past ${fmt(br.xMu,2)} ft depth, or designing the section for this larger below-grade moment.`],['Your judgement:','this is a flag for your judgement — it does not change the design above.']]
+        : [['Result:','Broms predicts a moment at or below the design value, so the groundline moment used for the P–M design remains the controlling demand.']])])}</div>`;   // LPNL
   }
   return H;
 }
@@ -5822,7 +5819,7 @@ function demandWorkedHTML(gov, inp){
   const g=(t)=>`\\[${t}\\]`, step=(t)=>`<div class="step-label">${t}</div>`;
   let H='';
   H+=step(`1 · Governing service combination`);
-  H+=`<p class="eq-why">The embedment is a service-level (ASD) check. The governing combination is <b>${gov.name||'—'}</b>${gov.phi!==undefined?`, with wind toward φ = ${fmt(gov.phi,0)}°`:''}. Everything above grade is assembled as vectors in the plan frame so opposing contributions genuinely cancel.</p>`;
+  H+=`<div class="eq-why lpNL">${lpNL('The embedment is a service-level (ASD) check.',[['Governing combination:',`<b>${gov.name||'—'}</b>${gov.phi!==undefined?`, with wind toward φ = ${fmt(gov.phi,0)}°`:''}.`],['Vectors:','everything above grade is assembled as vectors in the plan frame so opposing contributions genuinely cancel.']])}</div>`;   // LPNL
   if(gov.per && gov.per.length){
     H+=`<p class="eq-why"><b>Per-cable factored reactions</b> — each cable's factored vertical line load w_v and wind line load w_h produce an along-cable pull H∥ and a vertical reaction V_c; the pulls resolve to global X/Y:</p>`;
     H+=`<table class="tbl"><tr><th>Cable</th><th>w_v<span class="sym">(lb/ft)</span></th><th>w_h<span class="sym">(lb/ft)</span></th><th>H∥<span class="sym">(lb)</span></th><th>V_c<span class="sym">(lb)</span></th><th>H_x<span class="sym">(lb)</span></th><th>H_y<span class="sym">(lb)</span></th><th>H_w = w_h·L/2<span class="sym">(lb, along wind)</span></th></tr>`;
@@ -5877,17 +5874,17 @@ function windWorkedHTML(pw, inp){
   H+=`<p class="eq-why">K_z grows with height z above grade for the site exposure category. It is evaluated at the pole mid-height (for the distributed mast wind) and at the top.</p>`;
   H+=g(`K_z(z) = 2.01\\left(\\tfrac{z}{z_g}\\right)^{2/\\alpha}\\quad\\Rightarrow\\quad K_z(H/2) = ${fmt(pw.KzMid,3)},\\ \\ K_z(H) = ${fmt(pw.KzTop,3)}`);
   H+=step(`2 · Velocity pressure ${ref('ASCE 7-16 Eq. 26.10-1; K_d per Eq. 29.4-1')}`);
-  H+=`<p class="eq-why">The velocity pressure combines the basic wind speed V, the exposure coefficient K_z, the topographic factor K_zt and the ground elevation factor K_e (= 1.0, ASCE 7-16 §26.9). The directionality factor K_d is part of q_z in ASCE 7-16 (Eq. 26.10-1; ASCE 7-22 moved it to the force equation, F = q_z K_d G C_f A_f); the force uses the same product q_z K_d either way.</p>`;
+  H+=`<div class="eq-why lpNL">${lpNL('Velocity pressure:',[['Combines','the basic wind speed V, the exposure coefficient K_z, the topographic factor K_zt and the ground elevation factor K_e (= 1.0, ASCE 7-16 §26.9).'],['Directionality factor K_d:','part of q_z in ASCE 7-16 (Eq. 26.10-1; ASCE 7-22 moved it to the force equation, F = q_z K_d G C_f A_f); the force uses the same product q_z K_d either way.']])}</div>`;   // LPNL
   H+=g(`q_z K_d = 0.00256\\,K_z K_{zt} K_e V^2\\cdot K_d = 0.00256(${fmt(pw.KzMid,3)})(${fmt(inp.Kzt,2)})(1.00)(${inp.V})^2(${fmt(inp.Kd,2)}) = ${fmt(pw.qzMid,1)}\\ \\text{psf}`);
   H+=cfPoleWorkedHTML(inp);
   H+=step(`3 · Wind force on the mast ${ref('ASCE 7-16 §29.4')}`);
-  H+=`<p class="eq-why">The mast is treated as a slender element; the gust factor G amplifies for turbulence, and C_f is the shape drag coefficient. The mast is divided into ${pw.NSTRIP} strips of height Δz = H/${pw.NSTRIP}: each strip takes q_z at its own centroid height z_i and its own width D(z_i) (taper), and acts at z_i. The mid-height single-resultant values are shown first for reference only.</p>`;
+  H+=`<div class="eq-why lpNL">${lpNL('The mast is treated as a slender element.',[['Factors:','the gust factor G amplifies for turbulence, and C_f is the shape drag coefficient.'],['Strips:',`the mast is divided into ${pw.NSTRIP} strips of height Δz = H/${pw.NSTRIP}: each strip takes q_z at its own centroid height z_i and its own width D(z_i) (taper), and acts at z_i.`],['For reference only:','the mid-height single-resultant values are shown first.']])}</div>`;   // LPNL
   H+=g(`A_{pole} = \\bar D\\,H = ${fmt(pw.Davg,3)}(${fmt(inp.H,1)}) = ${fmt(pw.Apole,2)}\\ \\text{ft}^2`);
   H+=`<p class="eq-why">Reference only (not used for the force): the design pressure at mid-height and the single resultant it would give:</p>`;
   H+=g(`p(H/2) = q_z\\,G\\,C_f = ${fmt(pw.qzMid,1)}(${fmt(inp.G,2)})(${fmt(inp.cfPole,2)}) = ${fmt(pw.qzMid*inp.G*inp.cfPole,1)}\\ \\text{psf}\\qquad p(H/2)\\,A_{pole} = ${fmt(pw.qzMid*inp.G*inp.cfPole*pw.Apole,0)}\\ \\text{lb}`);
   H+=g(`F_{pole} = \\sum_i q_z(z_i)\\,G\\,C_f\\,D(z_i)\\,\\Delta z = ${fmt(pw.Fpole,0)}\\ \\text{lb}\\qquad M_{pole} = \\sum_i F_i\\,z_i = ${fmt(pw.Mpole,0)}\\ \\text{lb}{\\cdot}\\text{ft}\\qquad \\bar z_F = \\frac{M_{pole}}{F_{pole}} = ${fmt(pw.zF,2)}\\ \\text{ft}`);
   if(pw.rectDir){   // LPH2 (2026-11-07): rectangular pole, wind on the depth face
-    H+=`<p class="eq-why">Rectangular pole: the values above are for wind toward 0° / 180° on the width B = ${fmt(inp.poleDiaTop,2)} in face. Wind toward 90° / 270° acts on the depth face (${fmt(inp.poleDepthTop,2)} in), and between the axes the projected strip width is |cos φ|·B + |sin φ|·depth (as in the LRFDLTS mode). C<sub>f</sub> stays the least-dimension value.</p>`;
+    H+=`<div class="eq-why lpNL">${lpNL(`Rectangular pole: the values above are for wind toward 0° / 180° on the width B = ${fmt(inp.poleDiaTop,2)} in face.`,[['Other directions:',`wind toward 90° / 270° acts on the depth face (${fmt(inp.poleDepthTop,2)} in), and between the axes the projected strip width is |cos φ|·B + |sin φ|·depth (as in the LRFDLTS mode).`],['C<sub>f</sub>','stays the least-dimension value.']])}</div>`;   // LPNL
     H+=g(`F_{pole,90} = \\sum_i q_z(z_i)\\,G\\,C_f\\,d(z_i)\\,\\Delta z = ${fmt(pw.Fd,0)}\\ \\text{lb}\\qquad M_{pole,90} = ${fmt(pw.Md,0)}\\ \\text{lb}{\\cdot}\\text{ft}\\qquad F_{pole}(\\varphi) = |\\cos\\varphi|\\,F_{pole} + |\\sin\\varphi|\\,F_{pole,90}`);
   }
   H+=iceWorkedHTML(inp,pw,null);
@@ -5914,9 +5911,9 @@ function cableWorkedHTML(comps,inp){
   H+=`<div class="subhead">Cable wind pressures (computed, per cable)</div>`;
   H+=eqB(
     'Wind pressure on the cables, q_W and q_Wi',
-    `Each cable sees wind pressure computed from the same velocity-pressure form as the pole, evaluated at that cable's attachment height h_c. Two conditions apply from different ASCE 7 maps: the primary wind (bare cable), which carries the gust factor G; and the concurrent wind-on-ice, which uses the lower ice-wind speed V_ice and the same gust factor G (ASCE 7-22 §10.5 → Ch. 26–29, verify). C_f is the cable drag coefficient.`,
+    ['Each cable sees wind pressure computed from the same velocity-pressure form as the pole, evaluated at that cable\'s attachment height h_c.',[['Two conditions','apply from different ASCE 7 maps:',['the primary wind (bare cable), which carries the gust factor G;','the concurrent wind-on-ice, which uses the lower ice-wind speed V_ice and the same gust factor G (ASCE 7-22 §10.5 → Ch. 26–29, verify).']],['C_f','is the cable drag coefficient.']]],   // LPNL
     `q_W=0.00256\\,K_z(h_c)K_{zt}K_d\\,G\\,C_{f}\\,V^2\\qquad q_{Wi}=0.00256\\,K_z(h_c)K_{zt}K_d\\,G\\,C_{f}\\,V_{ice}^2`,
-    `Evaluated per cable below. Higher attachment heights give slightly larger K_z and thus pressure.`+(inp.Gcable!==undefined?` Cables: G = ${n(inp.Gcable,3)}, the flexible G_f with h = H = ${n(inp.H,2)} ft (engineer, 2026-11-03), not the G = ${n(inp.G,3)} (h = H + p) of the pole and fixtures.`:''),
+    ['Evaluated per cable below.',[['Height:','higher attachment heights give slightly larger K_z and thus pressure.'],inp.Gcable!==undefined?['Cables:',`G = ${n(inp.Gcable,3)}, the flexible G_f with h = H = ${n(inp.H,2)} ft (engineer, 2026-11-03), not the G = ${n(inp.G,3)} (h = H + p) of the pole and fixtures.`]:null]],   // LPNL
     'ASCE 7 Ch. 26 &amp; 10');
   H+=`<table class="matrix"><thead><tr><th>Cable</th><th>Attachment height<span class="sym">h_c (ft)</span></th><th>Exposure coeff.<span class="sym">K_z(h_c)</span></th><th>Wind pressure, bare<span class="sym">q_W (psf)</span></th><th>Wind pressure, iced<span class="sym">q_Wi (psf)</span></th></tr></thead><tbody>`;
   comps.forEach((cp,i)=>{H+=`<tr><th>C${i+1}</th><td>${n(cp.c.hc,1)}</td><td>${n(cp.KzC,3)}</td><td>${n(cp.qW,2)}</td><td>${n(cp.qWI,2)}</td></tr>`;});
@@ -5924,7 +5921,7 @@ function cableWorkedHTML(comps,inp){
   H+=`<div class="subhead">Nominal distributed loads by direction</div>`;
   H+=eqB(
     'Glaze ice weight and wind line loads',
-    `Ice forms a radial glaze ring around the cable, adding vertical (gravity-direction) weight per unit length — the ring area times the ice density. Wind acts horizontally on the projected width of the cable: the bare diameter for the no-ice case, or the ice-enlarged width (D + 2t) for the wind-on-ice case.`,
+    ['Cable line loads:',[['Ice','forms a radial glaze ring around the cable, adding vertical (gravity-direction) weight per unit length — the ring area times the ice density.'],['Wind','acts horizontally on the projected width of the cable: the bare diameter for the no-ice case, or the ice-enlarged width (D + 2t) for the wind-on-ice case.']]],   // LPNL
     `w_{ice}=\\frac{\\pi\\left[(D/2+t)^2-(D/2)^2\\right]}{144}\\,\\gamma_{ice}\\ (\\downarrow)\\qquad w_{W}=q_W\\tfrac{D}{12}\\ (\\rightarrow)\\qquad w_{Wi}=q_{Wi}\\tfrac{D+2t}{12}\\ (\\rightarrow)`,
     `Tabulated per cable below. These line loads are the raw inputs to the support-reaction calculation that follows.`,
     'ASCE 7 Ch. 10');
@@ -5936,14 +5933,14 @@ function cableWorkedHTML(comps,inp){
   if(isStiff){
     H+=eqB(
       'Along-cable pull — stiffness (elastic-catenary) method',
-      `A cable pulled taut between supports develops horizontal tension purely through elastic elongation as load is applied — there is no pre-defined sag. Setting the geometric elongation of the parabolic profile equal to the cable's elastic stretch H·L/(EA) and solving gives the cube-root relationship below. E is the cable modulus (${n(inp.cableE,0)} ksi) and A = π/4·D² is the metallic area derived from each cable's diameter. Every source — dead, ice, wind, wind-on-ice — develops its along-cable pull from this same law on its own line load; vertical sources also deliver a half-span support reaction V = wL/2. In a combination the perpendicular vertical and wind line loads combine as √(w_v²+w_h²).`,
+      ['A cable pulled taut between supports develops horizontal tension purely through elastic elongation as load is applied — there is no pre-defined sag.',[['Cube-root law:','setting the geometric elongation of the parabolic profile equal to the cable\'s elastic stretch H·L/(EA) and solving gives the cube-root relationship below.'],['E and A:',`E is the cable modulus (${n(inp.cableE,0)} ksi) and A = π/4·D² is the metallic area derived from each cable's diameter.`],['Every source','— dead, ice, wind, wind-on-ice — develops its along-cable pull from this same law on its own line load; vertical sources also deliver a half-span support reaction V = wL/2.'],['In a combination','the perpendicular vertical and wind line loads combine as √(w_v²+w_h²).']]],   // LPNL
       `H_\\parallel=\\left(\\frac{w^2 L^2 E A}{24}\\right)^{1/3}\\qquad A=\\frac{\\pi}{4}D^2\\qquad V=\\frac{w_{vert}L}{2}\\qquad H_x=H_\\parallel\\cos\\theta,\\ H_y=H_\\parallel\\sin\\theta`,
       `The stiffness method typically gives larger pulls than the sag method for taut installations, because a taut cable resists load with less deflection. Use it when the cables are strung tight with no designed sag.`,
       'elastic catenary');
   }else{
     H+=eqB(
       'Along-cable pull — sag (parabolic-catenary) method',
-      `A cable strung with a known sag s carries load in tension along a parabolic profile. Every source develops its along-cable pull from this same law on its own line load; vertical sources (dead, ice) also deliver a half-span support reaction V = wL/2. The horizontal sag is <b>assumed equal to the input vertical sag s</b>. In a combination the perpendicular vertical and wind line loads combine as √(w_v²+w_h²).`,
+      ['A cable strung with a known sag s carries load in tension along a parabolic profile.',[['Every source','develops its along-cable pull from this same law on its own line load; vertical sources (dead, ice) also deliver a half-span support reaction V = wL/2.'],['Horizontal sag:','<b>assumed equal to the input vertical sag s</b>.'],['In a combination','the perpendicular vertical and wind line loads combine as √(w_v²+w_h²).']]],   // LPNL
       `H_\\parallel=\\frac{w\\,L^2}{8s}\\qquad V=\\frac{w_{vert}\\,L}{2}\\qquad H_x=H_\\parallel\\cos\\theta,\\ H_y=H_\\parallel\\sin\\theta\\qquad \\alpha=\\tan^{-1}\\!\\frac{4s}{L}`,
       `Setting horizontal sag equal to vertical sag is a stated, conservative assumption that avoids needing the installed cable tension. Use this method when the cables are strung with a designed sag.`,
       'parabolic catenary');
@@ -5973,7 +5970,7 @@ function cableWorkedHTML(comps,inp){
       H+=eq(`\\text{Wind — along-cable pull: } H_\\parallel=\\frac{w\\,L^2}{8s}=\\frac{(${n(rw.w,3)}\\ \\text{lb/ft})(${n(cp.c.L,1)}\\ \\text{ft})^2}{8(${n(cp.c.s,2)}\\ \\text{ft})}=${n(rw.alongPull,0)}\\ \\text{lb}`);
       H+=`<p class="eq-why" style="margin-top:-4px">Dimensional check: (lb/ft)·(ft)²/(ft) = lb. <b>Every source</b> uses this same sag law on its own line load; horizontal sag is taken equal to the vertical sag s (stated assumption).</p>`;
     }
-    H+=`<p class="eq-why">Ice and wind-on-ice follow the identical form on their own line loads (from the table above). In a load combination the vertical and wind line loads on a cable are perpendicular, so the combination's pull uses the resultant line load √(w_v²+w_h²); bare wind and wind-on-ice never act together.</p>`;
+    H+=`<div class="eq-why lpNL">${lpNL('Ice and wind-on-ice follow the identical form on their own line loads (from the table above).',[['In a load combination','the vertical and wind line loads on a cable are perpendicular, so the combination\'s pull uses the resultant line load √(w_v²+w_h²).'],['Never together:','bare wind and wind-on-ice never act together.']])}</div>`;   // LPNL
     H+=`</div>`;
   });
   // ---- resultant pull direction (geometry of the combined cable pull) ----
@@ -6004,7 +6001,7 @@ function cableWorkedHTML(comps,inp){
     };
     const noice=buildCase(['D','W']), iced=buildCase(['D','I','WI']);
     H+=`<div class="step-label" style="margin-top:16px;border-top:1px solid var(--line);padding-top:12px">Resultant cable pull direction — by load case</div>`;
-    H+=`<p class="eq-why">Every cable's along-cable pull acts along its own plan azimuth θ; summing the global components over all cables gives the net cable pull the foundation resists, and its direction φ_res is the axis the "Align X to resultant" view rotates to. Bare wind and wind-on-ice are mutually exclusive, so the two governing service cases are shown separately — they are never added together.</p>`;
+    H+=`<div class="eq-why lpNL">${lpNL('Every cable\'s along-cable pull acts along its own plan azimuth θ.',[['Net pull:','summing the global components over all cables gives the net cable pull the foundation resists, and its direction φ_res is the axis the "Align X to resultant" view rotates to.'],['Two service cases:','bare wind and wind-on-ice are mutually exclusive, so the two governing service cases are shown separately — they are never added together.']])}</div>`;   // LPNL
     H+=caseTbl('Case 1 — no ice (dead + wind)', 'Nominal dead plus bare-cable wind pulls.', noice);
     H+=caseTbl('Case 2 — iced (dead + ice + wind-on-ice)', 'Nominal dead plus ice weight plus the concurrent wind-on-ice pull (lower speed, with G).', iced);
   }
@@ -6016,7 +6013,7 @@ function fixtureWorkedHTML(fxs, inp){
   const g=(t)=>`\\[${t}\\]`, step=(t)=>`<div class="step-label">${t}</div>`, ref=(s)=>`<span class="eq-ref">[${s}]</span>`;
   const fg=fxs[0], tft=(fg.td!==undefined?fg.td:inp.tIce)/12;
   let H='';
-  H+=`<p class="eq-why">Each fixture contributes four effects: a wind drag force at its mount height, an enlarged iced-wind force, an ice weight from the accreted glaze envelope, and — because it sits at the end of a mast arm — an eccentric gravity moment W·a directed along the arm azimuth θ. The eccentric moment is a fixed vector that does not rotate with the wind, so fixtures on opposing arms (0° / 180°) cancel in moment while still adding to axial load and base shear. Each step is worked for fixture F1; the table above lists all fixtures.</p>`;
+  H+=`<div class="eq-why lpNL">${lpNL('Each fixture contributes four effects:',[['Wind:','a wind drag force at its mount height;'],['Iced wind:','an enlarged iced-wind force;'],['Ice weight:','an ice weight from the accreted glaze envelope;'],['Eccentric gravity moment:','— because it sits at the end of a mast arm — an eccentric gravity moment W·a directed along the arm azimuth θ.'],['Fixed vector:','the eccentric moment is a fixed vector that does not rotate with the wind, so fixtures on opposing arms (0° / 180°) cancel in moment while still adding to axial load and base shear.'],['Worked for','fixture F1; the table above lists all fixtures.']])}</div>`;   // LPNL
   H+=step(`1 · Fixture wind force ${ref('ASCE 7-16 Ch. 29')}`);
   H+=`<p class="eq-why">The wind force uses the fixture's effective projected area (EPA), which bundles its drag coefficient; velocity pressure is evaluated at the mount height h with the gust factor G. Full EPA is taken as exposed for any wind azimuth.</p>`;
   H+=g(`q_z(h)K_dG = 0.00256\\,K_z(h)K_{zt}K_e V^2\\cdot K_d\\,G = 0.00256(${fmt(fg.Kzf,3)})(${fmt(inp.Kzt,2)})(1.00)(${inp.V})^2(${fmt(inp.Kd,2)})(${fmt(inp.G,2)}) = ${fmt(fg.qz,2)}\\ \\text{psf}`);
@@ -6034,12 +6031,12 @@ function fixtureWorkedHTML(fxs, inp){
   H+=g(`\\vec M_{ecc} = W\\,a\\,(\\cos\\theta,\\ \\sin\\theta) = ${fmt(fg.Wdead,0)}(${fmt(fg.x.a,1)})(\\cos${fmt(fg.th,0)}°,\\ \\sin${fmt(fg.th,0)}°) = (${fmt(fg.Wdead*fg.x.a*Math.cos(fg.th*RAD),0)},\\ ${fmt(fg.Wdead*fg.x.a*Math.sin(fg.th*RAD),0)})\\ \\text{lb}{\\cdot}\\text{ft}`);
   if(fg.armDin>0){
     H+=step(`5 · Wind on the arm ${ref('ASCE 7-16 §29.4, Fig. 29.4-1')}`);
-    H+=`<p class="eq-why">Round arm, OD ${fmt(fg.armDin,3)} in, length a = ${fmt(fg.x.a,2)} ft, horizontal at the mount height along θ. Wind toward φ sees the projected area a·D·|sin(θ − φ)|; the force acts along the wind at the arm mid-length. C<sub>f</sub> from Fig. 29.4-1 (round; ${fg.armRow==='smooth'?'D√q<sub>z</sub> &gt; 2.5, moderately smooth':'D√q<sub>z</sub> ≤ 2.5'}), h/D = a/D.</p>`;
+    H+=`<div class="eq-why lpNL">${lpNL(`Round arm, OD ${fmt(fg.armDin,3)} in, length a = ${fmt(fg.x.a,2)} ft, horizontal at the mount height along θ.`,[['Wind toward φ','sees the projected area a·D·|sin(θ − φ)|; the force acts along the wind at the arm mid-length.'],['C<sub>f</sub>',`from Fig. 29.4-1 (round; ${fg.armRow==='smooth'?'D√q<sub>z</sub> &gt; 2.5, moderately smooth':'D√q<sub>z</sub> ≤ 2.5'}), h/D = a/D.`]])}</div>`;   // LPNL
     H+=g(`D\\sqrt{q_z} = ${fmt(fg.armDin/12,3)}\\sqrt{${fmt(fg.qz/(inp.Kd*inp.G),1)}} = ${fmt(fg.armDsq,2)}\\qquad h/D = \\frac{${fmt(fg.x.a,2)}}{${fmt(fg.armDin/12,3)}} = ${fmt(fg.armHD,1)}\\ \\Rightarrow\\ C_f = ${fmt(fg.cfArm,3)}`);
     H+=g(`F_{arm} = q_zK_dG\\,C_f\\,D\\,a\\,|\\sin(\\theta-\\phi)| = ${fmt(fg.qz,2)}(${fmt(fg.cfArm,3)})(${fmt(fg.armDin/12,3)})(${fmt(fg.x.a,2)})|\\sin(\\theta-\\phi)| = ${fmt(fg.FarmMax,1)}\\,|\\sin(\\theta-\\phi)|\\ \\text{lb}\\qquad F_{arm,i} = ${fmt(fg.FarmMaxI,1)}\\,|\\sin(\\theta-\\phi)|\\ \\text{lb (iced, } D+2t_d\\text{, }V_{ice})`);
   }
   H+=step(`${fg.armDin>0?6:5} · Torsion about the pole axis ${ref('statics; AISC 360-16 §H3.2')}`);
-  H+=`<p class="eq-why">The fixture wind acts at the arm tip and the arm wind at mid-arm, both off the pole axis, so they twist the pole: T = Σ (r × F) in plan. The pole is checked by §H3.2 (Eq. H3-6 when T<sub>r</sub> &gt; 0.2T<sub>c</sub>), the bolts carry T/(n·R), and the shaft is checked against φT<sub>th</sub>. Opposite arms (0°/180°) cancel.</p>`;
+  H+=`<div class="eq-why lpNL">${lpNL('The fixture wind acts at the arm tip and the arm wind at mid-arm, both off the pole axis, so they twist the pole: T = Σ (r × F) in plan.',[['Pole:','checked by §H3.2 (Eq. H3-6 when T<sub>r</sub> &gt; 0.2T<sub>c</sub>).'],['Bolts:','carry T/(n·R).'],['Shaft:','checked against φT<sub>th</sub>.'],['Opposite arms','(0°/180°) cancel.']])}</div>`;   // LPNL
   H+=g(`T = \\sum_i \\left(F_{w,i}+\\tfrac12F_{arm,i}\\right)a_i\\,\\sin(\\phi-\\theta_i)`);
   return H;
 }
@@ -6087,7 +6084,7 @@ function signWindWorkedHTML(sw, inp){
   H+=cfPoleWorkedHTML(inp);   // post drag C_f (used for the exposed post below the panel)
   if(sw.F_Ai!==undefined){
     H+=step(`Ice on the sign ${ref('ASCE 7-22 §10.4.1, §10.4.6, §10.5')}`);
-    H+=`<p class="eq-why">Design ice thickness at the panel centroid (z = ${fmt(sw.zc,2)} ft) and at the post mid-height; panel ice volume per §10.4.1 for a flat plate (one side × t<sub>d</sub> × 0.8 for a vertical plate, as read — verify); wind on the iced panel on (B + 2t<sub>d</sub>)(s + 2t<sub>d</sub>) with the same C<sub>f</sub> at V<sub>ice</sub>; Cases B/C scaled by the same factor; posts: radial ice on the whole post and the iced width for the exposed drag.</p>`;
+    H+=`<div class="eq-why lpNL">${lpNL('Ice on the sign:',[['Design ice thickness',`at the panel centroid (z = ${fmt(sw.zc,2)} ft) and at the post mid-height;`],['Panel ice volume','per §10.4.1 for a flat plate (one side × t<sub>d</sub> × 0.8 for a vertical plate, as read — verify);'],['Wind','on the iced panel on (B + 2t<sub>d</sub>)(s + 2t<sub>d</sub>) with the same C<sub>f</sub> at V<sub>ice</sub>;'],['Cases B/C','scaled by the same factor;'],['Posts:','radial ice on the whole post and the iced width for the exposed drag.']])}</div>`;   // LPNL
     H+=g(`t_d = ${fmt(sw.tdP,3)}\\ \\text{in}\\qquad W_{i,panel} = \\gamma_{ice}(0.8)A_s\\,t_d = ${fmt(inp.iceDen,0)}(0.8)(${fmt(sw.As,1)})\\left(\\tfrac{${fmt(sw.tdP,3)}}{12}\\right) = ${fmt(sw.WiPanel,1)}\\ \\text{lb}`);
     H+=g(`q_{hi}K_dG = 0.00256(${fmt(sw.Kzh,3)})(${fmt(inp.Kzt,2)})(1.00)(${fmt(inp.Vice,0)})^2(${fmt(inp.KdSign,2)})(${fmt(inp.G,2)}) = ${fmt(sw.qhI,2)}\\ \\text{psf}\\qquad A_{s,i} = (B+2t_d)(s+2t_d) = ${fmt(sw.AsI,2)}\\ \\text{ft}^2`);
     H+=g(`F_{A,i} = q_{hi}K_dG\\,C_f\\,A_{s,i} = ${fmt(sw.qhI,2)}(${fmt(sw.cfAB,3)})(${fmt(sw.AsI,2)}) = ${fmt(sw.F_Ai,0)}\\ \\text{lb}${sw.caseC?`\\qquad F_{C,i} = ${fmt(sw.caseC.FI,0)}\\ \\text{lb}`:''}`);
@@ -6321,9 +6318,10 @@ function eq(tex){return `<div class="eqn">\\[${tex}\\]</div>`;}
 // prose equation block: title, why-sentence, equation, optional result interpretation, optional code ref
 function eqB(title, why, tex, result, ref){
   let h=`<div class="eq-title">${title}${ref?` <span class="eq-ref">[${ref}]</span>`:''}</div>`;
-  if(why) h+=`<p class="eq-why">${why}</p>`;
+  // LPNL (2026-11-08): why / result may be [lead, items] (a long note as a lead line and a list, lpNL)
+  if(why) h+=Array.isArray(why)?`<div class="eq-why lpNL">${lpNL(why[0],why[1])}</div>`:`<p class="eq-why">${why}</p>`;
   if(tex) h+=eq(tex);
-  if(result) h+=`<p class="eq-result">${result}</p>`;
+  if(result) h+=Array.isArray(result)?`<div class="eq-result lpNL">${lpNL(result[0],result[1])}</div>`:`<p class="eq-result">${result}</p>`;
   return h;
 }
 function n(x,d=2){return fmt(x,d);}   // formatted number
@@ -6961,6 +6959,9 @@ function lprTopics(scope,list){
    ratio and verdict), "§2b" references → a § link to the section, "→ Tab · Card" links → in-app links to the card.
    Nothing is computed here. */
 const lprxPlain=s=>lprPlain(s).replace(/\s+/g,' ').trim();
+// LPNL (2026-11-08): the same lead-and-list note as Report note items ("• lead words text")
+function lprNL(lead,items,o){ o=o||{}; const n=t=>o.warn?{type:'note',warn:true,text:t}:{type:'note',text:t};
+  return [lead?n(lead):null,...[].concat(...(items||[]).filter(Boolean).map(x=>[n('• '+(Array.isArray(x)?x[0]+(x[1]?' '+x[1]:''):x)),...(Array.isArray(x)&&x[2]?x[2].filter(Boolean).map(s=>n('   – '+s)):[])]))].filter(Boolean); }
 function lprxText(el,has){
   const c=el.cloneNode(true);
   c.querySelectorAll('.ratiobar,.chipwrap,button,script,style').forEach(x=>x.remove());
@@ -7004,6 +7005,8 @@ function lprxItems(root,scope,checks,has){
     if(cl.contains('eq-title')||cl.contains('subhead')||cl.contains('cbl-t')){ flush(); label=''; const r=ch.querySelector('.eq-ref'), c2=ch.cloneNode(true); c2.querySelectorAll('.eq-ref').forEach(x=>x.remove());
       const t=lprxPlain(c2.innerHTML); head={t:(head?head.t+' — ':'')+t,r:r?r.textContent.replace(/^\[|\]$/g,'').trim():(head?head.r:'')}; cur=t; return; }   // a heading straight after a heading: one topic title
     if(cl.contains('step-label')){ flush(); label=cur=lprxPlain(ch.innerHTML); return; }   // the label of the steps after it, until the next heading
+    if(cl.contains('lpNL')){ const w=cl.contains('flag'); ch.querySelectorAll('.lpNLa,.lpNLl,.lpNLu>li,.lpNLs>li').forEach(p=>{ const c=p.cloneNode(true); c.querySelectorAll('.lpNLs').forEach(x=>x.remove());
+      const t=lprxText(c,has), sub=p.parentElement.classList.contains('lpNLs'); if(t) note((p.tagName==='LI'?(sub?'   – ':'• '):'')+t,w||p.classList.contains('lpNLa')); }); return; }   // LPNL: one Report note per part
     if(cl.contains('verdict')){ note(lprxText(ch,has),!cl.contains('ok')); return; }
     if(cl.contains('flag')){ note(lprxText(ch,has),true); return; }
     if(ch.querySelector(LPRX_BLOCK)||/\\\[/.test(ch.textContent)){ walk(ch); return; }
@@ -7156,8 +7159,8 @@ function lprModel(){
         S({id:'beff',label:'Effective width per rod at the pole face',sym:'b_{eff}',eq:'\\frac{\\pi D}{n}',sub:'\\frac{\\pi('+N(p.Dpole)+')}{'+p.n+'}',value:p.beff,unit:'in',d:3}),
         S({id:'t',label:'Required thickness',sym:'t_{req}',eq:'\\sqrt{\\frac{4P_{rod}m}{\\phi F_{y}b_{eff}}}',sub:'\\sqrt{\\frac{4('+N(p.Prod,0)+')('+N(p.m)+')}{0.9('+N(p.Fyp*1000,0)+')('+N(p.beff,3)+')}}',value:p.tpReq,unit:'in',d:3}),
         S({id:'dc',label:'Provided t = '+N(p.tpProv,3)+' in',sym:'(t_{req}/t)^{2}',eq:'',sub:'',value:Math.pow(p.tpReq/p.tpProv,2),unit:'',d:3,ok:!!p.tpOK})]}]),
-        {type:'note',warn:true,text:LPP_BP_VERIFY},
-        ...(lppBpSqNote(inp)?[{type:'note',text:lppBpSqNote(inp)}]:[]),   // LPAS
+        ...lprNL(...lppBpVerifyNL(x=>x),{warn:true}),   // LPNL
+        ...(lppBpSqNote(inp)?lprNL(...lppBpSqNL(inp,x=>x)):[]),   // LPAS; LPNL
         {type:'note',text:'Anchor rods (ACI 318-19 Ch. 17) are designed in the Anchorage app: the anchor pattern and every LRFD combination are sent from the [[tab:anchors|Anchorage tab]], and the returned D/C is shown there and on the Summary.'}]});
     });
     subs.push(...(sign?xps('bp','base plate'):xs(['8'])));   // LPRX
@@ -7203,7 +7206,7 @@ function lprModel(){
       'Cables: catenary pull model as on the Loading tab; cable ice uses the entered thickness t.',
       'Anchor rods (ACI 318-19 Ch. 17) are not checked in this tool; they are designed in the Anchorage app. The soil torsional resistance is not checked.',
       LPP_BP_VERIFY,
-      'Shaft V_c: A_cv = 0.8A_g; ρ_w from half the longitudinal bars; N_u/6A_g neglected.'].map(t=>({type:'note',text:t}))},
+      'Shaft V_c: A_cv = 0.8A_g; ρ_w from half the longitudinal bars; N_u/6A_g neglected.'].map(t=>t===LPP_BP_VERIFY?lprNL(...lppBpVerifyNL(x=>x)):[{type:'note',text:t}]).reduce((a,b)=>a.concat(b),[])},   // LPNL
     {title:'References',items:[{type:'table',head:['Reference','Provisions used'],rows:LPP_REFS.map(([a,b])=>[lprPlain(a),lprPlain(b)])}]}]});
   return {title:($('appTitle')?$('appTitle').textContent:'Light Pole and Sign Post')+' — Calculation Report',subtitle:activeProject||'Untitled',code:'IBC 2021 · ASCE 7-16 · AISC 360-16 · ACI 318-19',
     info:[['Project',activeProject||'—'],['Project No.','—'],['Calculated by','—'],['Date','—'],['Checked by','—'],['Checked date','—']],
@@ -7532,7 +7535,8 @@ function lpdRender(){
     '<button type="button" class="btn mini ghost" id="lpdPrint1" title="Print the sheet shown: one 11 x 17 in landscape page at its plot scale">Print sheet</button> '+
     '<button type="button" class="btn mini ghost" id="lpdPrintAll" title="Print every sheet: one 11 x 17 in landscape page per sheet, each at its plot scale">Print all sheets ('+B.S.length+')</button></div>'+
     '<p class="tbl-note">'+lppEsc(SharedDxf.PRINT_NOTE)+'</p>'+
-    '<p class="tbl-note">One DXF file (AutoCAD R12, model space, full size in inches): each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side. Layers S-CONC, S-POLE, S-ARM, S-FIXT, S-CABLE, S-REBAR, S-DIMS, S-TEXT, S-CNTR, S-SOIL, S-PLATE, S-BOLT, S-SIGN, S-TBLK, S-BRDR'+(cx?', S-WIND':'')+'.'+(cx?' Values from the '+(cx.code==='lts'?'AASHTO LRFDLTS results (embedment L by Broms, shaft cage per ACI 318-19: Shaft tab)':'IBC 2021 · ASCE 7-16 results (embedment d per IBC §1807.3, shaft cage per ACI 318-19: Shaft tab)')+'; the panel thickness, the rod projection and the plate standoff are not inputs and are drawn nominal.':'')+'</p>'+
+    '<div class="tbl-note lpNL">'+lpNL('One DXF file (AutoCAD R12, model space, full size in inches):',[['Sheets:','each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side.'],['Layers:','S-CONC, S-POLE, S-ARM, S-FIXT, S-CABLE, S-REBAR, S-DIMS, S-TEXT, S-CNTR, S-SOIL, S-PLATE, S-BOLT, S-SIGN, S-TBLK, S-BRDR'+(cx?', S-WIND':'')+'.'],   // LPNL
+      cx?['Values:','from the '+(cx.code==='lts'?'AASHTO LRFDLTS results (embedment L by Broms, shaft cage per ACI 318-19: Shaft tab)':'IBC 2021 · ASCE 7-16 results (embedment d per IBC §1807.3, shaft cage per ACI 318-19: Shaft tab)')+'; the panel thickness, the rod projection and the plate standoff are not inputs and are drawn nominal.']:null])+'</div>'+
     '<div class="lpdHead"><b>'+(B.S.indexOf(cur)+1)+'. '+lppEsc(cur.title)+'</b> · scale '+lppEsc(scName(cur.k))+(cur.over?' · <span style="color:#b71c1c">does not fit the sheet even at the smallest scale</span>':'')+'</div>'+
     '<div class="lpdBox"></div><p class="tbl-note">Wheel: zoom about the cursor · drag: pan · pinch · double-click: fit · + / − / Fit buttons.</p>';
   SharedDxf.viewer(T.querySelector('.lpdBox'), lpdSheetSVG(B,cur), {height:'64vh'});
@@ -7636,14 +7640,15 @@ function lpsvInfo(d){
   const el=$('lp3dInfo'); if(!el) return;
   const inp=d.inp, lts=d.code==='lts', st=d.stacks, sh=st?lpdShaft(st[0],inp):null, two=inp.signPosts===2;
   const same=st&&st.every(s=>Math.abs(s.found.d-st[0].found.d)<1e-9);
-  let t='<b>'+(lts?'AASHTO LRFDLTS':'IBC 2021 · ASCE 7-16')+' results.</b> Panel '+fmt(inp.signB,2)+' × '+fmt(inp.signS,2)+' ft at '+fmt(inp.signClr,2)+' ft clearance; '+lppEsc(lpsvPostTxt(inp).replace(/^POST: /,'post '))+(two?', two posts at '+fmt(inp.signSpacing,2)+' ft':'')+'. ';
-  if(st) t+='Shaft'+(two?(same?'s (each)':'s')+'':'')+': '+(inp.shaftShape==='square'?'':'Ø')+fmt(inp.b,2)+' ft'+(inp.shaftShape==='square'?' square':'')+' × '+(lts?'L':'d')+' = '+st.map(s=>fmt(s.found.d,2)).filter((v,i,a)=>!same||i===0).join(' / ')+' ft'+(lts?' (Broms)':' (IBC §1807.3)')
-    +', ('+sh.n+') '+lppEsc(sh.bar.n)+' vertical, '+lppEsc(sh.tie.n)+' ties @ '+fmt(sh.s,0)+' in ('+fmt(sh.sTop,0)+' in o.c. within the top '+fmt(sh.zoneH,0)+' in), '+fmt(sh.cover,1)+' in cover — <a href="#" data-l3go="shaft">Shaft tab</a>. ';
-  else t+='<b>Shafts not drawn:</b> '+lppEsc(d.error)+' ';
-  if(d.wind) t+='Wind arrow: toward '+fmt(d.wind.deg,0)+'°, '+lppEsc(d.wind.long)+' (<a href="#" data-l3go="'+(lts?'shaft':'loading')+'">'+(lts?'Shaft':'Loading')+' tab</a>). ';
-  if(inp.pProj>0) t+='The shaft projects p = '+fmt(inp.pProj,2)+' ft above grade (plate on the shaft top; the post runs from there to the top of the panel). ';   // LPPJ
-  t+='Soil: '+lppEsc(lpsvSoilTxt(inp))+'. Not inputs, drawn nominal: panel thickness 1 in, rod projection 2.5 d<sub>b</sub> above the plate, plate on the shaft top (no standoff); ties start 3 in below the top.';
-  el.innerHTML=t;
+  // LPNL (2026-11-08): a lead line and one list item per fact (same words)
+  const it=[['Panel:',fmt(inp.signB,2)+' × '+fmt(inp.signS,2)+' ft at '+fmt(inp.signClr,2)+' ft clearance; '+lppEsc(lpsvPostTxt(inp).replace(/^POST: /,'post '))+(two?', two posts at '+fmt(inp.signSpacing,2)+' ft':'')+'.']];
+  if(st) it.push(['Shaft'+(two?(same?'s (each)':'s')+'':'')+':',(inp.shaftShape==='square'?'':'Ø')+fmt(inp.b,2)+' ft'+(inp.shaftShape==='square'?' square':'')+' × '+(lts?'L':'d')+' = '+st.map(s=>fmt(s.found.d,2)).filter((v,i,a)=>!same||i===0).join(' / ')+' ft'+(lts?' (Broms)':' (IBC §1807.3)')
+    +', ('+sh.n+') '+lppEsc(sh.bar.n)+' vertical, '+lppEsc(sh.tie.n)+' ties @ '+fmt(sh.s,0)+' in ('+fmt(sh.sTop,0)+' in o.c. within the top '+fmt(sh.zoneH,0)+' in), '+fmt(sh.cover,1)+' in cover — <a href="#" data-l3go="shaft">Shaft tab</a>.']);
+  else it.push(['Shafts not drawn:',lppEsc(d.error)]);
+  if(d.wind) it.push(['Wind arrow:','toward '+fmt(d.wind.deg,0)+'°, '+lppEsc(d.wind.long)+' (<a href="#" data-l3go="'+(lts?'shaft':'loading')+'">'+(lts?'Shaft':'Loading')+' tab</a>).']);
+  if(inp.pProj>0) it.push(['Projection:','the shaft projects p = '+fmt(inp.pProj,2)+' ft above grade (plate on the shaft top; the post runs from there to the top of the panel).']);   // LPPJ
+  it.push(['Soil:',lppEsc(lpsvSoilTxt(inp))+'.'],['Not inputs, drawn nominal:','panel thickness 1 in, rod projection 2.5 d<sub>b</sub> above the plate, plate on the shaft top (no standoff); ties start 3 in below the top.']);
+  el.classList.add('lpNL'); el.innerHTML=lpNL((lts?'AASHTO LRFDLTS':'IBC 2021 · ASCE 7-16')+' results.',it);
 }
 function lpsvSoilTxt(inp){
   const bs=inp.bromsSoil, br=bs==='cohesive'?`Broms cohesive, c = ${fmt(inp.bromsC,2)} ksf`:bs==='cohesionless'?`Broms cohesionless, φ = ${fmt(inp.bromsPhi,0)}°, γ = ${fmt(inp.bromsGam,3)} k/ft³`:'';
@@ -8015,7 +8020,7 @@ function ltsStepsHTML(steps){
 }
 const LTS_LIMITS=['The soil torsional resistance of the shaft is not checked (LRFDLTS Art. 13.6 gives no method).','The vertical (axial) bearing resistance of the shaft (Art. 13.6.1.2) is not checked: the axial loads of these supports are small (LPL10, 2026-11-07).','Ice on a square or rectangular support is taken as radial ice on a round of the side width (a few % below the square perimeter; Strength I only; LPL7).','Balanced twin arms: no "one arm loaded" wind case (Art. 3.9.4.1 is written for overhead cantilevered supports; LPL9).','The dimensioned drawings and DXF are produced in the IBC mode only.','8-, 12- and 16-sided sections are not built.','Mast arms, high-mast towers (55 ft and taller: warning) and fatigue design are outside this mode; cables are not supported.'];
 function ltsDevHTML(){
-  return `<p class="lts-basis"><b>Known limits (accepted by the engineer, 2026-11-02):</b> ${LTS_LIMITS.join(' ')}</p>`;
+  return `<div class="lts-basis lpNL">${lpNL('Known limits (accepted by the engineer, 2026-11-02):',LTS_LIMITS)}</div>`;   // LPNL: one item per limit
 
 }
 function ltsCalc(){
@@ -8031,9 +8036,12 @@ function ltsCalc(){
   ltsAddCard('loading','ltsComboCard','L','LRFDLTS load combinations','Table 3.4-1',
     basis+ltsStepsHTML(mSteps)
     +`<table class="tbl"><tr><th>Limit state</th><th>Use</th><th>γ<sub>DC</sub></th><th>γ<sub>IC</sub></th><th>γ<sub>W</sub></th><th>Wind</th><th>Reference</th></tr>${rows}</table>`
-    +`<p class="tbl-note">LL (Art. 3.6) applies to walkways and service platforms only: not applicable to these supports. There is no ice-plus-wind combination (C3.7). `
-    +`Ice, when the Owner specifies it (Art. 3.7), is applied in Strength I with the dead load factor (decision Q-C1, accepted by the engineer 2026-11-02). `
-    +`Wind from any direction: load cases 1–3 of Table 3.9.3-1 (LTS-2). Service III (prestressed concrete) and Fatigue I/II are not used (fatigue design is not required for these supports, Arts. 11.4 and 11.7.2; LTS-5).</p>`
+    +`<div class="tbl-note lpNL">${lpNL('Combinations not used, and how ice and wind enter:',[   // LPNL
+      ['LL (Art. 3.6)','applies to walkways and service platforms only: not applicable to these supports.'],
+      ['No ice-plus-wind combination','(C3.7).'],
+      ['Ice,','when the Owner specifies it (Art. 3.7), is applied in Strength I with the dead load factor (decision Q-C1, accepted by the engineer 2026-11-02).'],
+      ['Wind from any direction:','load cases 1–3 of Table 3.9.3-1 (LTS-2).'],
+      ['Service III (prestressed concrete) and Fatigue I/II','are not used (fatigue design is not required for these supports, Arts. 11.4 and 11.7.2; LTS-5).']])}</div>`
     +`<p class="tbl-note">Member forces along the pole and the checks follow in LTS-3 to LTS-7.</p>`);
   // LTS-2: wind, dead load, ice and the factored base actions
   const inp=lppLtsBlocked?null:lppLastInp;   // LTS-L2: no LTS results while an LTS input is in error
@@ -8048,8 +8056,11 @@ function ltsCalc(){
       +`<p class="tbl-note">Dead load DC = ${fmt(gr.W,0)} lb (support self-weight${g.mode==='sign'?', post(s)':''}, misc. dead load${g.mode==='sign'?', panel':', fixtures'}; Art. 3.5, p. 3-4)`
       +`${gr.Mx||gr.My?`; eccentric fixture weight moment ΣW·e: M<sub>x</sub> = ${fmt(gr.Mx,0)}, M<sub>y</sub> = ${fmt(gr.My,0)} lb·ft`:''}. `
       +`${L.tIce>0?`Ice (t = ${fmt(L.tIce,2)} in, 56 pcf; supports, two faces of each fixture EPA, one face of the panel; Art. 3.7): W<sub>IC</sub> = ${fmt(gr.Wice,0)} lb, Strength I only (decision Q-C1, accepted 2026-11-02).`:'No ice (none specified, Art. 3.7).'}</p>`
-      +`<p class="tbl-note">Factored base actions${per}, first order (the second-order amplification B<sub>2</sub>, Art. 4.8.1, is applied to the bending in the member checks, LTS-3). Load cases per Table 3.9.3-1 (p. 3-24): 1 normal, 2 transverse, 3 = 0.75 of both together. `
-      +`Sign convention as the Anchorage hand-off: P compression +; M<sub>x</sub> = moment of a push toward +x; T torsion about the axis. lb, lb·ft. Largest Extreme I moment in bold.</p>`
+      +`<div class="tbl-note lpNL">${lpNL(`Factored base actions${per}, first order.`,[   // LPNL
+      ['Second order:','the second-order amplification B<sub>2</sub>, Art. 4.8.1, is applied to the bending in the member checks, LTS-3.'],
+      ['Load cases','per Table 3.9.3-1 (p. 3-24): 1 normal, 2 transverse, 3 = 0.75 of both together.'],
+      ['Sign convention','as the Anchorage hand-off: P compression +; M<sub>x</sub> = moment of a push toward +x; T torsion about the axis.'],
+      ['Units:','lb, lb·ft.'],['Bold:','largest Extreme I moment.']])}</div>`
       +`<div style="overflow-x:auto"><table class="tbl"><tr><th>Limit state</th><th>Load case</th><th>P</th><th>V<sub>x</sub></th><th>V<sub>y</sub></th><th>M<sub>x</sub></th><th>M<sub>y</sub></th><th>|M|</th><th>T</th></tr>${tr}</table></div>`);
     // LTS-3: member checks along the pole / post (Section 5), second order (Art. 4.8.1 / Eq. 5.12.1-10)
     const Fy=inp.poleFy, secs=ltsSections(inp), mc=LpLts.memberCheck(g,L,secs,Fy), ms=LpLts.memberSteps(mc,Fy,g);
@@ -8090,15 +8101,19 @@ function ltsCalc(){
         {id:'wd.cap',label:'Fillet weld strength per inch',sym:'\\phi R_{n}',eq:'0.75\\cdot 0.60F_{EXX}\\cdot 0.707w',sub:`0.75\\cdot 0.60\\cdot${n2(num('ltsFexx')||70,0)}\\cdot 0.707\\cdot${n2(num('ltsWeldW')||0.3125,4)}`,value:wd.phiRn,unit:'kip/in',d:3,ref:'AWS D1.1 / AISC 360-16 §J2.4 (LRFDLTS Art. 5.14, p. 5-35, 2017, refers to AWS D1.1)',ok:wd.ok,
           note:`Ratio ${n2(wd.ratio,3)} → ${wd.ok?'OK':'NOT OK'}. LRFDLTS gives no weld strength method; AWS D1.1 / AISC 360-16 §J2 with φ = 0.75 and no directional increase (accepted by the engineer, 2026-11-02).`}]); }
       ltsAddCard('anchors','ltsBpCard','7',(g.mode==='sign'?'Post':'Pole')+' base plate and base weld','engineering method · AWS D1.1',
-        basis+`<p class="lts-dev">${lppEsc(LPP_BP_VERIFY)}</p>`+(lppBpSqNote(inp)?`<p class="tbl-note">${lppEsc(lppBpSqNote(inp))}</p>`:'')+ltsStepsHTML(bpSteps)
+        basis+`<div class="lts-dev lpNL">${lpNL(...lppBpVerifyNL())}</div>`+(lppBpSqNote(inp)?`<div class="tbl-note lpNL">${lpNL(...lppBpSqNL(inp))}</div>`:'')+ltsStepsHTML(bpSteps)
         +`<p class="eq-title" style="margin-top:10px"><b>Pole-to-base-plate weld</b></p>`+wSteps
-        +`<p class="tbl-note">Anchor rods: designed in the Anchorage app — the Anchorage card on this tab sends the LRFDLTS combinations (Strength I, Extreme I; M × B). LRFDLTS Arts. 5.16–5.16.3: cast-in-place anchor bolts for new work; hooked bolts only with F<sub>y</sub> ≤ 55 ksi; anchorage per ACI 318 (C5.16.3). <b>Ductility (Art. 5.16.3):</b> the rods must reach their minimum tensile strength before the concrete fails (concrete-governed tension strengths &gt; N<sub>sa</sub>, or anchor reinforcement): verify in the Anchorage app; stated in the hand-off notes.${g.mode==='sign'&&g.sign.nPost===2?' Values per post.':''}</p>`); }
+        +`<div class="tbl-note lpNL">${lpNL('Anchor rods: designed in the Anchorage app — the Anchorage card on this tab sends the LRFDLTS combinations (Strength I, Extreme I; M × B).',[['LRFDLTS Arts. 5.16–5.16.3:','cast-in-place anchor bolts for new work; hooked bolts only with F<sub>y</sub> ≤ 55 ksi; anchorage per ACI 318 (C5.16.3).'],['Ductility (Art. 5.16.3):','the rods must reach their minimum tensile strength before the concrete fails (concrete-governed tension strengths &gt; N<sub>sa</sub>, or anchor reinforcement): verify in the Anchorage app; stated in the hand-off notes.'],g.mode==='sign'&&g.sign.nPost===2?'Values per post.':null])}</div>`); }   // LPNL
     // LTS-7: foundation
     { const fd=ltsFoundation(inp,g,ba,mc,L); lppLtsLast.fd=fd;
       const notes=[], bIn=inp.b*12, n2=(x,d)=>SharedSteps.n(x,d);
       if(inp.cover<3) notes.push(`Concrete cover ${fmt(inp.cover,2)} in is less than the 3 in minimum (Art. 13.6.2.1, p. 13-5).`);
       if(Math.abs(bIn/6-Math.round(bIn/6))>1e-6) notes.push(`Shaft ${inp.shaftShape==='square'?'width':'diameter'} ${fmt(bIn,1)} in: LRFDLTS recommends 6-in increments (Art. 13.6.2.1).`);
-      let body=basis+`<p class="lts-basis">Lateral embedment: Broms' method (Art. 13.6.1.1 allows it in lieu of more detailed procedures; C13.6.1.1, pp. 13-3, 13-4) with the factored groundline M<sub>F</sub> and V<sub>F</sub> of every Strength I / Extreme I row (M × B of that limit state). Resistance factor φ = ${fmt(inp.bromsPhiR,2)} (decision Q-C7, accepted 2026-11-02). Shaft reinforcement: ACI 318-19, as the IBC mode (engineer, 2026-11-02): LRFDLTS Art. 13.6.2 (p. 13-5) refers to the AASHTO LRFD Bridge Design Specifications for the structural design — <b>not applied</b>.${g.mode==='sign'&&g.sign.nPost===2?' Per post.':''}</p>`;
+      let body=basis+`<div class="lts-basis lpNL">${lpNL('Foundation basis:',[   // LPNL
+        ['Lateral embedment:','Broms\' method (Art. 13.6.1.1 allows it in lieu of more detailed procedures; C13.6.1.1, pp. 13-3, 13-4) with the factored groundline M<sub>F</sub> and V<sub>F</sub> of every Strength I / Extreme I row (M × B of that limit state).'],
+        ['Resistance factor',`φ = ${fmt(inp.bromsPhiR,2)} (decision Q-C7, accepted 2026-11-02).`],
+        ['Shaft reinforcement:','ACI 318-19, as the IBC mode (engineer, 2026-11-02): LRFDLTS Art. 13.6.2 (p. 13-5) refers to the AASHTO LRFD Bridge Design Specifications for the structural design — <b>not applied</b>.'],
+        g.mode==='sign'&&g.sign.nPost===2?'Per post.':null])}</div>`;
       if(notes.length) body+=`<p class="lts-dev">${notes.join('<br>')}</p>`;
       if(fd.sh) body+=`<p class="tbl-note"><b>Shaft projection above grade p = ${fmt(fd.sh.p,2)} ft</b> (engineer, 2026-11-03): the base actions (base plate, weld, anchors) are at the top of the shaft; Broms and the shaft design take the groundline values M<sub>F</sub> = B·M + V·p + W<sub>s</sub>·p/2, V<sub>F</sub> = V + W<sub>s</sub>, P<sub>F</sub> = P + γ<sub>DC</sub>W<sub>c</sub> of every row (worked below for the governing row). The support, fixtures and sign take K<sub>z</sub> at their height above grade (z + p; the sign clearance is measured from grade). Hand-off pier depth = L + p.</p>`;   // LPPJ
       if(!fd.gov){ body+=`<p class="lts-dev"><b>Select the Broms soil model</b> (cohesive or cohesionless) in the Shaft &amp; soil inputs: the LRFDLTS mode designs the embedment by Broms.</p>`; }
@@ -8117,7 +8132,9 @@ function ltsCalc(){
           st.push({id:'f.Mu',label:'Maximum moment in the shaft',sym:'M_{u}',eq:'V_{F}\\left(H + 0.54\\sqrt{\\frac{V_{F}}{\\gamma DK_{p}}}\\right)',sub:`${n2(b.VF,3)}(${n2(b.H,3)} + 0.54\\cdot${n2(b.rootTerm,4)})`,value:b.Mu,unit:'kip-ft',d:2,ref:LpLts.ref('Eq. C13.6.1.1-7 (p. 13-4)')});
         }
         body+=ltsStepsHTML(lppLtsLast.fdSteps=st)+`<p class="lts-basis"><b>Required embedment L = ${fmt(b.L,2)} ft</b> (shaft ${inp.shaftShape==='square'?'width':'diameter'} ${fmt(inp.b,2)} ft). Largest shaft moment ${fmt(fd.gm.br.Mu,2)} kip-ft (${lppEsc(fd.gm.r.name)}, ${lppEsc(fd.gm.r.lcName)}).</p>`;
-        body+=`<p class="tbl-note"><b>Torsion:</b> T<sub>u</sub> = ${fmt(fd.Tu,0)} lb·ft at the groundline. LRFDLTS Art. 13.6 (p. 13-2) requires the shaft to resist the applied torsion but gives no method; the soil torsional resistance is not checked here (open item N2). Concrete torsion threshold (ACI 318-19 §22.7.1.1): φT<sub>th</sub> = ${fmt(fd.tor.phiTth,0)} lb·ft → ${fd.Tu<=fd.tor.phiTth?'torsion may be neglected in the shaft reinforcement':'<b>exceeds the threshold: torsion reinforcement required (not designed here)</b>'}.</p>`;
+        body+=`<div class="tbl-note lpNL">${lpNL(`Torsion: T<sub>u</sub> = ${fmt(fd.Tu,0)} lb·ft at the groundline.`,[   // LPNL
+          ['Soil:','LRFDLTS Art. 13.6 (p. 13-2) requires the shaft to resist the applied torsion but gives no method; the soil torsional resistance is not checked here (open item N2).'],
+          ['Concrete torsion threshold',`(ACI 318-19 §22.7.1.1): φT<sub>th</sub> = ${fmt(fd.tor.phiTth,0)} lb·ft → ${fd.Tu<=fd.tor.phiTth?'torsion may be neglected in the shaft reinforcement':'<b>exceeds the threshold: torsion reinforcement required (not designed here)</b>'}.`]])}</div>`;
         if(fd.reo){ body+=`<div class="eq-title" style="margin-top:8px"><b>Shaft reinforcement — ACI 318-19</b> (with the LRFDLTS demands; Art. 13.6.2 not applied)</div>`+rebarWorkedHTML(fd.reo,inp,fd.gm.br.Mu*1000,fd.gm.r.P,fd.Vu); }
       }
       ltsAddCard('shaft','ltsFndCard','13',(g.mode==='sign'?'Post':'Pole')+' foundation — drilled shaft','Section 13; ACI 318-19',body); }
@@ -8127,7 +8144,9 @@ function ltsCalc(){
     const drows=dfl.rows.map(r=>`<tr${r===dfl.gov?' style="font-weight:700;background:#fff7e6"':''}><td>${lppEsc(r.lcName)}</td><td>${fmt(r.dx,2)}</td><td>${fmt(r.dy,2)}</td><td>${fmt(r.d,2)}</td><td>${fmt(r.slope,3)}</td></tr>`).join('');
     const crow=dfl.checks.map(c=>`<tr><td>${lppEsc(c.label)}</td><td>${fmt(c.value,c.unit==='in'?2:3)} ${c.unit}</td><td>${fmt(c.limit,c.unit==='in'?2:3)} ${c.unit}</td><td>${c.applies?`<b>${c.ok?'OK':'NOT OK'}</b> (${fmt(c.ratio,3)})`:`information (${fmt(c.ratio,3)})`}</td><td>${lppEsc(c.ref)}${c.flag?`<div class="tbl-note">${lppEsc(c.flag)}${/Engineer to confirm/.test(c.flag)?' <span class="lts-flag">engineer to confirm</span>':''}</div>`:''}</td></tr>`).join('');
     ltsAddCard('post','ltsDeflCard','10',(g.mode==='sign'?'Post':'Pole')+' — deflection and fatigue','Sections 10 and 11',
-      basis+`<p class="tbl-note">Service I (Table 3.4-1): 1.0DC + 1.0W at V<sub>svc</sub> = ${fmt(L.Vsvc,0)} mph (10-yr, Fig. 3.8-4), C<sub>v</sub> = 1.0 (Art. 3.8.7), every load case of Table 3.9.3-1. Elastic deflection by double integration of M/(EI) along the ${g.taper?'tapered ':''}${g.mode==='sign'?'post':'pole'} from the base (Art. 10.4.2.1), times the Service I second-order factor B = ${fmt(dfl.B,4)} (C10.4.2.1; Art. 4.8.1 / Eq. 5.12.1-10). Δ at the top in in; slope at the top in in/ft.${g.mode==='sign'&&g.sign.nPost===2?' Per post.':''}</p>`
+      basis+`<div class="tbl-note lpNL">${lpNL(`Service I (Table 3.4-1): 1.0DC + 1.0W at V<sub>svc</sub> = ${fmt(L.Vsvc,0)} mph (10-yr, Fig. 3.8-4), C<sub>v</sub> = 1.0 (Art. 3.8.7), every load case of Table 3.9.3-1.`,[   // LPNL
+        ['Deflection:',`elastic deflection by double integration of M/(EI) along the ${g.taper?'tapered ':''}${g.mode==='sign'?'post':'pole'} from the base (Art. 10.4.2.1), times the Service I second-order factor B = ${fmt(dfl.B,4)} (C10.4.2.1; Art. 4.8.1 / Eq. 5.12.1-10).`],
+        ['Units:','Δ at the top in in; slope at the top in in/ft.'],g.mode==='sign'&&g.sign.nPost===2?'Per post.':null])}</div>`
       +`<table class="tbl"><tr><th>Check</th><th>Value</th><th>Limit</th><th>Result</th><th>Reference</th></tr>${crow}</table>`
       +`<div style="overflow-x:auto"><table class="tbl"><tr><th>Service I load case</th><th>Δ<sub>x</sub></th><th>Δ<sub>y</sub></th><th>Δ</th><th>slope (in/ft)</th></tr>${drows}</table></div>`
       +`<p class="tbl-note">Dead-load slope at the top from the arm-mounted fixtures alone: ${fmt(dfl.slopeDL,3)} in/ft.</p>`
@@ -8201,7 +8220,7 @@ function ltsReportModel(){
     ['Specification',LpLts.BASIS],
     ['Other references','ACI 318-19 (shaft reinforcement; LRFDLTS Art. 13.6.2 refers to the AASHTO LRFD BDS — not applied); AWS D1.1 / AISC 360-16 §J2 (base weld); AISC 360-16 §H3.1 (square-tube torsional constant when no corner radius)'],
     ['Units','lb, ft, in, psf, kip, ksi as noted'],['Prepared with','Light Pole and Sign Post, by Mario Lococo · '+new Date().toLocaleString()]]},
-    {type:'note',text:'Known limits (accepted by the engineer, 2026-11-02): '+LTS_LIMITS.join(' ')}]},
+    ...lprNL('Known limits (accepted by the engineer, 2026-11-02):',LTS_LIMITS)]},   // LPNL
     {title:'Wind criteria',items:[steps('lts.mri',X.mSteps||X.m.steps),{type:'kv',rows:[['Extreme I basic wind speed V',N(L.V,0)+' mph ('+(L.vSrc==='ctdot'?'max of the LRFDLTS map V '+N(L.Vmap,0)+' mph ('+X.m.fig+') and CTDOT BDM §14.2.2 120 mph; see the step above':X.m.fig)+')'],['Service I wind speed',N(L.Vsvc,0)+' mph (10-yr, Fig. 3.8-4)'],['Atmospheric ice (Art. 3.7)',L.tIce>0?N(L.tIce,2)+' in, Strength I only (decision Q-C1, accepted)':'none']]}]}]});
   // 2. Loads
   const cb=LpLts.COMBOS.map(c=>[c.name,c.desc,String(c.DC),L.tIce>0&&c.ICE?String(c.ICE):'—',c.W?N(c.W,1):'—',c.wind==='extreme'?(L.vSrc==='ctdot'?'max(map '+N(L.Vmap,0)+', CTDOT 120) = '+N(L.V,0)+' mph':X.m.mri+'-yr'):c.wind==='service'?'10-yr':'—',c.ref]);
@@ -8228,7 +8247,7 @@ function ltsReportModel(){
       {title:'Fatigue',items:[{type:'note',text:X.fat.text}]}]});
     flags.push('Deflection: 10 % H for luminaire supports is checked; the 0.35 in/ft slope of Art. 10.4.2.1 is checked when unbalanced arm-mounted fixtures put a dead-load moment on the pole (moment load application; review M4, pending engineer review) and shown as information otherwise; the 2.5 % H limit is shown as information (engineer, 2026-11-02).'); }
   // 5. Base plate and weld
-  if(X.bp){ secs.push({title:'Base plate and base weld',subs:[{title:'Base plate (engineering method)'+post,items:[{type:'note',text:LPP_BP_VERIFY},...(lppBpSqNote(X.inp)?[{type:'note',text:lppBpSqNote(X.inp)}]:[]),steps('lts.bp',X.bpSteps)]},
+  if(X.bp){ secs.push({title:'Base plate and base weld',subs:[{title:'Base plate (engineering method)'+post,items:[...lprNL(...lppBpVerifyNL(x=>x)),...(lppBpSqNote(X.inp)?lprNL(...lppBpSqNL(X.inp,x=>x)):[]),steps('lts.bp',X.bpSteps)]},   // LPNL
       {title:'Pole-to-base-plate weld',items:X.wd.type==='cjp'?[{type:'note',text:'Full-penetration groove weld: the base metal governs (member check at the base); no separate weld check (AWS D1.1).'}]:[steps('lts.wd',X.wdSteps)]}]});
     if(X.wd.type!=='cjp') flags.push('Base weld per AWS D1.1 / AISC 360-16 §J2.4, φ = 0.75 (LRFDLTS Art. 5.14 gives no weld strength method; accepted by the engineer, 2026-11-02).'); }
   // 6. Foundation
