@@ -5371,3 +5371,49 @@ Frames: Beam Capacity (`suite-frame-capacity`) and the suite shell's Report (`rx
 - **Check case:** default project (ACI, torsion on), Validation tab, Method Choices, ACI 9.7.6.2.2: before one 718-character paragraph; after the action line "Decision (pending engineer review, 2026-11-07): this V_s-required reading is kept …", the lead "ACI 9.7.6.2.2 — The tighter d/4 spacing limit is triggered from V_s REQUIRED (V_u/φ − V_c) …" and the items Why / Both values. Report §4.1 Notices: the same three parts as Report lines.
 - **How verified:** headless Chromium, origin/main vs the branch, 31 cases (14 Beam Capacity projects: default, aciD, aasT, aasMinNeg, aciFy100, aciDeep, aciTeeCant, aasTeeNeg, aasDeepSkin, aciShallowLo, aasRT, aasTnoV, aasTlw, aciShallowHi; 2 ASD; 15 Development & Splice): `validate()`, `computeAll()`, `allChecks()` (without the new display fields `nl`, `naL`), the ASD and Dev results identical; the digit sequence of every Beam Capacity tab, every ASD and Dev tab and the combined Report text identical in all 31 cases once the two moved action lines are masked (those two lines occur 47 times, identically, in both versions). 0 console errors. Screenshots at 1440 and 390 px. Tests: see the PR.
 - **Other copies:** none.
+
+## 2026-11-08 — PR: nl-cbc-b (PR #1222: https://github.com/mlococo88/All-Structural/pull/1222) (CBNL-2: long notes of the Development & Splice and ASD Beam Calcs tabs as a bold lead and a list — input hints, narratives, commentary, Bar Schedule, Report; display only, no result change)
+
+Frames: Development & Splice (`suite-frame-dev`) and ASD Beam Calcs (`suite-frame-asd`). Follows CBNL-1 (#1214, the Beam Capacity frame and the shell's `rxWalk`, which also copies the ASD tab's `.cbNL` notes).
+
+### CBNL-2. Long notes split into a lead line and a list   [display only] [no result change]
+- **Request and rule:** as CBNL-1. Every sentence, number, citation and link is kept in the same order. New lead words carry no digits. Where a lead word is old text (for example "1.5" or "ACI 318-19 Table 25.4.2.5:"), it is at its old place.
+- **Development & Splice frame:**
+  - CSS (after `.note .note-body .vardef .s{…}`), anchor `/* RBNL (2026-11-08`:
+    ```css
+    .rbNL .rbNLl{font-weight:600; margin:0 0 1px;}
+    .rbNL .rbNLu{margin:2px 0 3px; padding-left:18px;}
+    .rbNL .rbNLu>li{margin:1px 0;}
+    .rbNL .rbNLa{margin:2px 0 5px; padding:5px 9px;}
+    .note .note-body .rbNLp{margin:0 0 7px;}
+    .note .note-body .rbNLp:last-child{margin-bottom:0;}
+    @media print{.rbNL .rbNLu>li{break-inside:avoid;}}
+    ```
+  - Markup, written in the tab templates themselves: `<div class="… rbNL">[<div class="warnbox rbNLa">action</div>]<div class="rbNLl">lead</div><ul class="rbNLu"><li><b class="rbNLk">Lead words:</b> text</li>…</ul></div>`. A `<p>` of a commentary note becomes `<div class="rbNL rbNLp">`, and a `.vardef` becomes `<div class="vardef rbNL">`, with the symbol (`<span class="s">ψ_t = …</span> — Name.`) as its lead.
+  - Report (`rbComm`, which reads the `.narr` and commentary notes into "Notes and commentary"), anchor `/* RBNL (2026-11-08): a block built as a lead line and a list`. An `.rbNL` block gives one Report line per part: the action line, the lead, then "• lead words text" per item. A list inside an action line stays in that line as "• (a) … • (b) …". Before: one line per block.
+  - New `rbrNL(lead,items)` (before `function rbCommSub(`), used by `rbrModel` for two Report-only notes.
+  - Notes changed (anchor = the old opening text → new lead → item lead words):
+    1. Input, λ hint: "Used only when Lightweight is ticked." → ACI 318-19 19.2.4.1 / AASHTO 5.4.2.8 / Accepted.
+    2. Input, excess reinforcement hint. Action line first: "The tool does not check where the bar is, so do not tick this if any of these apply — ACI 318-19 25.4.10.2:", with (a)–(f) as a list, then the AASHTO λ_er sentence. Then the lead "Reduces l_d by A_s,req/A_s,prov (…)" → Splices / Class A. The lead has no digits, so the digit order is unchanged.
+    3. Input, "A_s,req for a beam:" → Minimum governs / Why.
+    4. Input, AASHTO hook ties: → Do not tick.
+    5. Input, AASHTO bend radius: "AASHTO 5.10.8.2.4a." → Blank / Smallest R / Galvanized bars.
+    6. Excess reinforcement block: "When more steel is provided…" → Reduction / AASHTO (AASHTO only); "Important limits:" → Not permitted / Never longer.
+    7. Tension (ACI): narrative "The general equation is used…" → Why / Bond / Splitting; ψ_t → Why / Top bar / Other bars; ψ_e → Why / 1.5; ψ_s → Smaller bars / Larger bars; ψ_g → Why / Values; λ → Why / Normalweight / ACI 318-19 Table 25.4.2.5; "This term is what separates…" → It rewards confinement / Denominator.
+    8. Tension (AASHTO): narrative → "Tension development, AASHTO:" → Basic length / Factors / Full development; "The squared bracket…" → Squared / F_h; "λ_rc rewards cover…" → No transverse steel / k_tr / β_t / Bounds.
+    9. Hook (ACI): narrative "Hooks transfer force…" → ACI 318-19 / Measured; ψ_r → Why / Values / Effect; ψ_o → 1.0 / All other cases; ψ_c → Why / Values; "Why d_b^{1.5} instead of d_b?" → Bearing / Exponent; "Not applied to the hook." → ACI 318-19 25.4.10.1 / Hooked bars / So; "The straight development length rarely fits…" → Measured / Floors.
+    10. Hook (AASHTO): narrative "The 10th Edition develops a hooked bar…" → Hook force / l_dh / Applies to; "R is measured from the center of the bend…" → Tighter bend / Efficiency factor.
+    11. Compression: ACI "A bar in compression doesn't try to split…" → Shorter / Dropped terms; AASHTO narrative "AASHTO compression development takes the larger…" → As in ACI / λ_er and λ / λ_rc.
+    12. Tension splice: "Class B (1.3 l_d) — The default." → When / Safe.
+    13. Bar Schedule: narrative "Every length below is computed…" → Highlighted / Values / Use; hint "All lengths in inches." → Tension splice / Excess reinforcement / *N/P; "This schedule is the single most-used output for detailing." → Look-up / Consistent.
+    14. Report: the project note "… Development & Splice, by Mario Lococo." → Equations / Units / Values; 20.1 "All lengths in inches, rounded to 0.1 in., …" → Excess reinforcement / *N/P, then the "On screen: Bar Schedule tab" link as its own line.
+- **ASD Beam Calcs frame:** helpers `cbNL(cls,lead,items)` and `cbrNL(lead,items)` (after `function el(`) and the CBNL-1 CSS, without the action-line rules. Notes:
+  1. Input, Allowable Stresses: "AASHTO 8.15.2 service-level allowables, set automatically from f'_c and f_y (auto):" → f_c,inv / f_s,inv / f_s,op / Override / Operating f_c.
+  2. Summary & Rating, Scope: "Scope: singly reinforced flexure only (…)." → Compression steel / Shear.
+  3. Report, Analysis and rating: the Scope note → Compression steel / Shear / Pass / Operating f_c (when above 0.60f′c).
+  4. Report, About the ASD chapter: "Equations are shown symbolically…" → "How this chapter is laid out:" → Equations / Inputs / Pass / Units.
+- **Not changed:** the c_b, A_tr, s/n, K_tr, λ_rl, λ_cf, hook ψ_e, Class A and other definitions and notes of one or two sentences under ~300 characters; the References table; title-block lines.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none.
+- **Check case:** Development & Splice, AASHTO, #8, f′c 4000 psi, lightweight λ 0.85, excess 0.8/1.0 (`aasLW085ex`), Tension tab. The 436-character narrative becomes the lead "Tension development, AASHTO:" and three items, with "λ_er·f_y", "F_h = 0", "fourth root of f'c", "12 in. minimum" and "§5.10.8.1.1" unchanged. Report §15.2 shows the same four lines.
+- **How verified:** headless Chromium, CBNL-1 (origin/main) vs the branch, the same 31 cases as CBNL-1. Every result (Beam Capacity, ASD, Development & Splice) is identical. The digit sequence of every tab's text (the 2 ASD and 15 Dev cases changed wording) and of the combined Report text is identical in all 31 cases. 0 console errors. Screenshots at 1440 and 390 px. Tests: see the PR.
+- **Other copies:** none. The standalone rebar calculator is a redirect page (RBRT), so the Development & Splice tab is the only copy.
