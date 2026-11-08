@@ -20262,3 +20262,51 @@ Cross-tool PR with the Retaining Wall Designer (Phase 8f, HANDOFF.md §4.6 / §4
 - **Check case:** default project, Report §7.6 "Notes as printed": before one 871-character paragraph "An unsupported length is present …"; after the lead line and seven "• " lines; "Davisson & Robinson (1965)", "§4.4", "2026-13.001" and "9,074 vs 9,074 kip" unchanged.
 - **How verified:** as PDNL-1 (same 8 projects, origin/main vs the branch): `computeAll` identical; digit sequence of every output tab (Report included), every input tab and the whole page text identical; no content word lost; 390 px no sideways scroll; 0 console errors. Tests: see the PR.
 - **Other copies:** none.
+
+## 2026-11-08 — PR: nl-pile-panel (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (PDSP: the Summary-of-checks rows as a left check-summary column from 1200 px, as Retaining Wall / Spread Footing / Light Pole / Shear and Moment Diagrams; display only, no result change)
+
+### PDSP. Check summary column on the left at 1200 px and wider   [display only]
+- **Request (engineer, 2026-11-07/08):** add the left summary panel to the other apps that have summary / result cards, as in Retaining Wall (RWDL #959, RWLB #984), Spread Footing (SFLB #988), Light Pole (LPLB #991) and Shear and Moment Diagrams (SMLS #1130).
+- **What changed (screen only):**
+  - From **1200 px** a new left column `#pdDashCol` (left of the input rail) shows "Check summary": one compact chip per row of the Summary tab's "Summary of checks · demand / capacity" card. Each chip shows the name, then the D/C (or OK / NG for the stability, no-convergence and eligibility rows, "cap 0 — NG" for a zero capacity), then **PASS / FAIL**. Chips are in the card's order (governing first) and use its values and rounding. The large head-deflection warning (when shown on the card) is an amber **WARN** chip at the top. The head has «, the title and a badge ("n NG" / "all OK"). The sub-line shows the active case.
+  - Width **240 px** from 1200 to 1499 px (column gap 16 px there), **280 px** from 1500 px. The column is sticky under the check-index bar, like the input rail.
+  - **Click a chip:** `jumpToModule(moduleForCheck(label, pileType))`, the same target as the card's rows. It selects the module's output tab, opens the module if collapsed and scrolls to it (CLAUDE.md §6).
+  - **«** shrinks the column to a 42 px strip (vertical title and the badge). **»** opens it again.
+  - **Below 1200 px nothing changes** (the column is `display:none`; tablet and phone layouts as before). Not printed (`no-print`; the app shell is hidden in print anyway).
+  - The Summary tab card is unchanged. Its rows are now built by `pdUtilRows(r, I)`, moved unchanged out of `UtilizationDashboard`, so the card and the column share one source.
+- **Where (`Pile Designer.html`):**
+  - CSS after `@media print { .out-tabs, .pd-prdlg-ov …}`: block `/* PDSP (2026-11-08): the check summary as a left column from 1200 px …` (`.pdsp-col{display:none}`, `@media screen and (min-width:1200px){ .pdsp-grid{grid-template-columns:280px minmax(300px,1fr) minmax(0,2fr)!important} … }`, `@media screen and (min-width:1200px) and (max-width:1499.98px){ .pdsp-grid{grid-template-columns:240px …;column-gap:16px!important} … }`).
+  - JS: new `pdUtilRows(r, I)`. Before → after: in `UtilizationDashboard` the code from `const isHP = I.pileType === "hpile";` to `rows.sort((a, b) => b.dcr - a.dcr);` moves verbatim into `pdUtilRows`, which returns `rows`. The card keeps `const isIAB = …; const rows = pdUtilRows(r, I);`. New `PDSP_KEY`, `pdspRead()` and `PdDashCol({ r, I, pyRes, caseLabel, coll, setColl })` before `UtilizationDashboard`.
+  - `App`:
+    - `const [pdspColl, setPdspColl] = useState(pdspRead);` after `const [railTab, setRailTab] = useState("pile");`.
+    - The layout grid `className` gets `pdsp-grid` (+ `pdsp-coll`).
+    - `React.createElement(PdDashCol, {…})` is its first child, before the input rail `aside`.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). The column shows the card's values.
+- **Saved data (§5):** no key or format changed. New per-browser UI key **`pd_dashCollapsed_v1`** ('1' = shrunk; '0' or absent = open), tool-prefixed. It is written only by « / » and is not in the project, the autosave or the export.
+- **Decisions (pending engineer review):**
+  1. Breakpoints and widths as RWLB / SFLB / LPLB / SMLS: from 1200 px, 240 px to 1499 px, 280 px from 1500 px.
+  2. The column lists the Summary of checks rows (the D/C dashboard). The check-index bar in the sticky header (module chips G, 01 … 11) stays as it is.
+  3. The Summary tab card stays visible with the column open: it carries the bars, AASHTO articles and the governing line that the compact chips leave out.
+  4. The input rail keeps at least 300 px (the column takes its width mainly from the output column).
+  5. The large head-deflection warning is shown as an amber WARN chip (it is not a check; no PASS / FAIL).
+  6. Phone and tablet unchanged (inputs first, then outputs, as before).
+- **Check case:** default project (micropile, 1440 px):
+  - Badge "3 NG". Chips: Head deflection 0.45 D WARN; Combined (casing) 1.39 FAIL; Uncased flexure 1.34 FAIL; Geotech bond 1.02 FAIL; Casing flexure 0.99 PASS; Axial — uncased 0.64; Head bearing 0.47; Buckling 0.40; Combined-load stability OK; Punching shear 0.33; Axial — cased 0.18 (all PASS). These are the Summary card's rows and values.
+  - Clicking Casing flexure opens the Structural tab at Module 04.
+- **How verified:**
+  - Headless Chromium, origin/main vs the branch, 8 projects. `computeAll` results, every output tab's text (the Summary card included) and every input tab's text are identical. Whole page text without the new column: identical.
+  - In 4 projects (micropile, micropile + CFST / group, H-pile + buckling / group, integral + Tier 2) the chips equal the card's rows (name, value, ✓ / ✗ → PASS / FAIL).
+  - Layout:
+    - 1600 px: column 280, rail 408, output 816.
+    - 1440 px: 240 / 373 / 747.
+    - 1280 px: 240 / 320 / 640.
+    - 1200 px: 240 / 300 / 580. No element of any output tab cut off beyond main's (micropile).
+    - 1024 and 390 px: no column, layout as main.
+    - No sideways page scroll at 390 / 1024 / 1200 / 1280 / 1440 / 1600 px on any input or output tab.
+  - « gives a 42 px strip and `pd_dashCollapsed_v1` = '1'. A chip click scrolls to its module. 0 console errors.
+  - Tests:
+    - check-syntax: pass.
+    - `tests/engine/run.mjs handoffs pile-group`: pass.
+    - `tests/smoke/retwall-pile-handoff.mjs`: all passed.
+    - `tests/smoke/pile-library.mjs`: its two "page text identical vs main" checks list the new column's text (expected). Autosaved inputs are identical; everything else passes.
+- **Other copies:** none.
