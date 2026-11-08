@@ -2433,7 +2433,7 @@ Code sites are tagged `TBNL`. Uses `tbNL` and the CSS of TBNL-1 (PR #1185).
   - `tests/check-syntax.mjs` and `tests/smoke/project-library.mjs --tool timber`: pass.
 - **Other copies:** none.
 
-## 2026-11-08 — PR: claude/timber-left-summary (PR #__PR__: https://github.com/mlococo88/All-Structural/pull/__PR__) (TBLS: the Summary checks in a left summary column from 1200 px, as Retaining Wall / Spread Footing / Light Pole / Shear and Moment Diagrams)   [display only; no result change]
+## 2026-11-08 — PR: claude/timber-left-summary (PR #1194: https://github.com/mlococo88/All-Structural/pull/1194) (TBLS: the Summary checks in a left summary column from 1200 px, as Retaining Wall / Spread Footing / Light Pole / Shear and Moment Diagrams)   [display only; no result change]
 
 ### TBLS. Check summary column on the left at 1200 px and wider   [display only]
 - **Request (engineer, 2026-11-07/08):** add the left summary panel to the tools that have summary / result cards, as in:
