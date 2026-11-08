@@ -1541,3 +1541,55 @@ Basis: ASCE/SEI 7-16 Fig. 29.3-1 (Cases A, B, C; Case C table and the (1.8 − s
     - `engine handoffs` passed.
     - The Excel workbook builds.
 - **Other copies:** none.
+
+## 2026-11-08 — PR: nl-asce7-2 (PR #1213: https://github.com/mlococo88/All-Structural/pull/1213) — A7NL-2: long notes as a bold lead and a list, part 2 (display only, no result change)
+
+### A7NL-2. Snow, Walls, Roof, Seismic and Combinations notes as a lead and a list   [display only] [no result change]
+- **Request and rule:** as A7NL-1 (#1206), using the same helpers (`a7NL`, `noteNL`, `A7WNL`, `a7xNL`). Each `note(b,"A. B. C.",k)` becomes `noteNL(b,"A.",[["Lead:","b."],…],k[,{act:[…]}])`. Every sentence, number and citation is kept, in the same order.
+- **`plotBox`**, anchor `if(caption) host.appendChild(el("div","cap"`:
+  - Before: `el("div","cap",caption)`
+  - After: `el("div","cap"+(/^<div class="a7NL/.test(caption)?" a7NL":""),caption)`. A figure caption built with `a7NL` gets the class. In the Report, its lead is the figure caption (`a7xNL`) and its items follow as notes.
+- **Table captions** made with `a7NL` are no longer passed to `dtable` (which escapes them). They are appended after the table as `el("div","cap a7NL",a7NL(…))`: the Table 12.2-1 screening caption (`renderSeis`) and the hip-end planes caption (`renderRoof`).
+- **`ssReason`** (Sec. 11.4.8 Exception 2, `solve()`, anchor `A7NL: display form of that string`): the string is unchanged. `A7WNL.set(string,[lead,items])` is added after it. `renderSeis`, anchor `if(q.siteSpecific) q.ssReason.forEach`, draws `noteNL` when the map has the string.
+- **Notes changed** (anchor = old opening text → lead → item lead words; action lines first):
+  1. Snow "No drift locations have been entered." → action "Enter each such location on the Snow input tab." / Requirement / Not a finding.
+  2. Snow "Sec. 7.5: for continuous beam systems" → action "Apply the pattern in the member analysis." (was "…; apply it in the member analysis.") / Pattern / For a continuous beam / Not combined / Not carried / Exempt (gable, conditional) / Verify.
+  3. Walls, free roof "The selected roof type is a monoslope free roof canopy" → No walls / Roof pressures.
+  4. Walls, free roof "Sec. 27.1.5 sets a floor of 16 psf" → Open building / Lateral demand on the frame.
+  5. Walls figure caption "Figure. Wall pressures in the … direction" → Windward diagram / Leeward diagram / Side walls / Opposite direction.
+  6. Walls "Sec. 27.1.5 sets a floor on the MWFRS wind load" → Floor / Total force.
+  7. Walls roof term note: monoslope from the high side unchanged (short). Monoslope low eave → No relief. Gable / hip → (hip) Projected roof area / Net coefficient / No relief.
+  8. Walls "The minimum governs in at least one direction." → action "Scale the computed surface pressures … by n, or apply 16 psf … directly." / MWFRS only.
+  9. Walls "Interpretation applied:" → Wind normal to the ridge / Wind parallel to the ridge / Otherwise / Internal pressure / Manual.
+  10. Walls "Chapter 27 Part 1 requires four load cases" → Case 1 / Case 2 / Case 3 / Case 4 / This version / Exemption.
+  11. Roof "Wind acts normal to the roof surface. Dead and snow act vertically" → Added directly / Normal pressure / Vertical effect / Horizontal component.
+  12. Roof figure caption "Figure. Roof pressures in the … direction." → Normal to the surface / Colours / Scale / Windward slope or Bands (conditional).
+  13. Roof "Wind normal to the ridge with θ = …" → Between row groups / First / Then / Permitted (or Row group).
+  14. Roof "…, so the distance-band table applies." → h/L / Bands.
+  15. Roof hip-end caption "The hip-end planes face along the ridge" → action "Decision pending engineer review (common practice and the Commentary, verify)." / Coefficients / Side slopes.
+  16. Free roof "C_NW acts on the windward half" → At γ = 0° / At γ = 180° / Most common error.
+  17. Free roof "Wind along the ridge is a separate required case" → Bands / Cases A and B / γ = 270°.
+  18. Seismic Table 12.2-1 caption "NL = not limited, NP = not permitted." → Highlighted column / Screen only / Massachusetts.
+  19. Seismic "780 CMR amendment to Table 12.2-1, Note 2 (system H)." → Connections / Columns / K-braced frames / V and inverted-V braced frame beams / Not applied.
+  20. Seismic "Sec. 12.7.2: where the flat roof snow load exceeds 30 psf" → action "If the entered W already includes it, tick the box on the Seismic input tab." / Taken here.
+  21. Seismic "Sec. 12.8.4.1 requires the story shear" → Stiffness / Torsion / Amplification / Not performed here.
+  22. Seismic "Horizontal distribution and accidental torsion" → lead "Not performed:" / one item per excluded provision / Computed / Redundancy / ELF procedure.
+  23. Seismic Sec. 11.4.8 Exception 2 (`ssReason`) → C_s / Limit.
+  24. Combinations "Roof pressures below are net downward" → Lateral force / Floor live load L.
+  25. Combinations "Rain load R (Ch. 8) is not computed" → Combinations / Where rain governs.
+  26. Combinations "Scope decision." → Strength and ASD / Massachusetts / Allowable stress materials.
+  27. Combinations "Massachusetts amendment. 780 CMR 1605.1 adds" → Not used / Used instead / Deleted.
+- **Formulas, factors, units, code references:** none changed. **Saved data / hand-offs:** none changed.
+- **Check case:** default project. The Seismic tab "Not Performed" note shows 9 items. The Report §"Not Included in the Seismic Module" prints the lead and 9 "•" lines, with the same numbers in the same order.
+- **How verified:**
+  - Headless origin/main vs branch, 13 cases:
+    - `R` is identical.
+    - The digit sequence of every output tab, input tab, manual part and the Report (`SharedReport.text`, html) is identical.
+    - 0 console errors.
+  - Tests:
+    - `check-syntax` passed.
+    - `project-library --tool asce7 --a HEAD` passed.
+    - `phone-layout --tool asce7` passed.
+    - `engine handoffs` passed.
+    - The Excel workbook builds.
+- **Other copies:** none.

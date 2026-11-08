@@ -2501,3 +2501,33 @@ Code sites are tagged `TBNL`. Uses `tbNL` and the CSS of TBNL-1 (PR #1185).
   - **Console:** 0 errors.
   - **Tests:** `tests/check-syntax.mjs`; `tests/smoke/project-library.mjs --tool timber` (ALL PASS). Timber has no entry in `tests/smoke/phone-layout.mjs`; checked by hand at 390 px.
 - **Other copies:** none (pattern as SMLS; no shared code).
+
+## 2026-11-08 — PR: timber-report-notes (PR #1216: https://github.com/mlococo88/All-Structural/pull/1216) (TBNS: the Report's "Notes on the Summary tab" prints the Summary "Notes:" box one item per line)   [display only; no result change]
+
+- **Problem (pre-existing):** the Summary tab's warnings box (`buildSummary`, anchor `'<b>Notes:</b><ul>'`) is a bold lead and a plain `<ul>`. `tbrHarvest()` read it with `tbrHtx(e)` (tags stripped), so the Report line under "Notes on the Summary tab" ran the lead and every item together with no space: `Notes:Fixed support: bearing is checked ... length).The effect of the fixing moment ...` and `Notes:Net uplift reaction ... edge.Negative dead load entered ...`. Only this box has this shape (`grep "'<b>[^']*</b><ul>'"`: one hit).
+- **Where:** `Timber Beam Check.html`, Report port (TBRP).
+  - New function `tbrBoxParts(e, warn)`, directly after `function tbrNLParts(e, warn) { ... }`:
+    ```js
+    function tbrBoxParts(e, warn) {
+      const C = [...e.children], U = C.filter(c => /^(UL|OL)$/.test(c.tagName) && !c.matches('.tbNLu'));
+      if (U.length !== 1 || C.some(c => c !== U[0] && !/^(B|STRONG)$/.test(c.tagName)) || [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) return null;
+      const P = C.filter(c => c !== U[0]).map(c => ({ type: 'note', warn, text: tbrHtx(c) }));
+      [...U[0].children].forEach(li => { const q = tbrNLParts(li, warn);
+        if (q) q.forEach((x, k) => P.push(Object.assign({}, x, { text: k ? x.text.replace(/^• /, '– ') : '• ' + x.text })));
+        else P.push({ type: 'note', warn, text: '• ' + tbrHtx(li) }); });
+      return P.filter(q => q.text && q.text !== '• ');
+    }
+    ```
+  - `tbrHarvest()`, after the line `if (nl) { nl[0] = Object.assign({}, nl[0], { text: pre + nl[0].text }); nn.push(...); return; }`, added:
+    ```js
+    const bx = tbrBoxParts(e, w);   // TBNS: printed as its parts; text as before, so the report keeps or leaves out the box as before
+    if (bx && bx.length) { bx[0] = Object.assign({}, bx[0], { text: pre + bx[0].text }); nn.push({ type: 'note', warn: w, text: pre + tbrHtx(e), parts: bx }); return; }
+    ```
+    Before, such a box fell through to `nn.push({ type: 'note', warn: w, text: pre + tbrHtx(e) });`.
+  - The note's `text` (used only by the `fresh` test in `tbrAddPorted`) is unchanged, so the Report keeps or leaves out the box exactly as before; only its printing changes (`parts`, as TBNL).
+- **After:** `Notes:` then one line per item, `• Net uplift reaction ...` / `• Negative dead load entered (D = -5 psf) ...`. An item that is a long note (TBNL lead and list, e.g. the fixed-support note) prints `• <lead>` and its own items as `– <item>` lines.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data (§5):** none.
+- **Check case:** default joist with D = −5 psf. Report §1.3 before: `Notes:Net uplift reaction in at least one combination: provide an uplift connection, and check lateral bracing of the bottom (compression) edge.Negative dead load entered (D = -5 psf): check ...`. After: `Notes:` / `• Net uplift reaction in at least one combination: ...` / `• Negative dead load entered (D = -5 psf): check the input. ...`. Same digits in the same order.
+- **How verified:** origin/main vs the branch, headless, 3 states (default; D = −5 psf; support A fixed): the digit sequence of every output tab (Summary ... Method & Manual), of the Report tab as shown and of the whole printed Report (`SharedReport.html(TBRP.doc, { lazy: false })`) is identical; the text differs only in the Report's §1.3 lines above (states 2 and 3); default: text identical. 0 console errors. Tests: `tests/check-syntax.mjs "Timber Beam Check.html"` (pass); `tests/smoke/project-library.mjs --tool timber` (ALL PASS). Timber has no entry in `tests/smoke/phone-layout.mjs`.
+- **Other copies:** none.
+- **Open items:** the same warnings are also printed in §10 "Notes and references". The `fresh` test in `tbrAddPorted` keeps the §1.3 copy only because the run-together text never matched §10; this change keeps that behaviour (no item dropped). Whether §1.3 should repeat them is for the engineer.
