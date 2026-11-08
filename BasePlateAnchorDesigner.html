@@ -165,11 +165,12 @@
   .errBox{border:1px solid #c62828;background:#fdecea;color:#7c1a1a;padding:6px 8px;margin:6px 0;font-size:10pt;}
   .okBox{border:1px solid var(--pass);background:#eef7ee;color:#1b5e20;padding:6px 8px;margin:6px 0;font-size:10pt;}
   /* BPNL (2026-11-08): long notes as a lead line and a list */
-  .bpNL .bpNLl{font-weight:bold;margin:0 0 1px;}
-  .bpNL .bpNLu{margin:2px 0 3px;padding-left:18px;}
-  .bpNL .bpNLu>li{margin:1px 0;}
-  .bpNL .bpNLa{font-style:normal;margin:2px 0 4px;}
-  @media print{ .bpNL .bpNLu>li{break-inside:avoid;} }
+  /* BPNL-2: the parts are styled wherever they are (the Report copies a note's inner HTML into "Note:" boxes and B.n basis notes) */
+  .bpNLl{font-weight:bold;margin:0 0 1px;}
+  .bpNLu{margin:2px 0 3px;padding-left:18px;}
+  .bpNLu>li{margin:1px 0;}
+  .bpNLa{font-style:normal;margin:2px 0 4px;}
+  @media print{ .bpNLu>li{break-inside:avoid;} }
   svg text{font-family:"Times New Roman",Times,serif;}
   .dimTxt{font-size:11px;fill:#00427a;}
   .lblTxt{font-size:11px;fill:#333;}
@@ -7025,6 +7026,14 @@ function bprModel(){
         if(tag==='P'&&cl.contains('cr-cap')){if(ch.dataset.used)return;}
         if(/^H[1-6]$/.test(tag)||cl.contains('cr-notesHd')||cl.contains('cr-resh')){flush(c);const t=ch.textContent.trim();if(t){c.head=t;c.items.push({type:'note',text:'— '+t+' —'});}return;}
         if(ch.querySelector('.eqBlock,table,svg,.cr-results')){walk(ch,c);return;}
+        /* BPNL (2026-11-08): a lead-and-list note (also inside a "Note:" box or a B.n basis note) -> one Report note per part: the
+           text before the lead ("Note:", "B.1"), the lead, then each item as "• lead words text" */
+        if(!cl.contains('bpNL')&&ch.querySelector('.bpNLu')&&!ch.querySelector(':scope > .bpNLu, :scope > .bpNL > .bpNLu')){walk(ch,c);return;}   /* e.g. a figure and its caption */
+        if(ch.querySelector(':scope > .bpNLu, :scope > .bpNL > .bpNLu')){flush(c);const box=ch.querySelector(':scope > .bpNL')||ch,w=cl.contains('cr-noteBox')&&!!ch.querySelector('b');
+          let pre='';Array.from(ch.childNodes).forEach(n=>{if(n===box||(n.nodeType===1&&(n.classList.contains('bpNLa')||n.classList.contains('bpNLl')||n.classList.contains('bpNLu'))))return;pre+=' '+(n.nodeType===1?linkText(n):n.textContent);});
+          pre=pre.replace(/\s+/g,' ').trim();let first=true;const put=(t,warn)=>{t=t.replace(/\s+/g,' ').trim();if(!t)return;if(first&&pre){t=pre+' '+t;}first=false;c.items.push({type:'note',warn:(warn||w)||undefined,text:t});};
+          Array.from(box.children).forEach(n=>{if(n.classList.contains('bpNLu'))Array.from(n.children).forEach(li=>put('\u2022 '+linkText(li),false));else if(n.classList.contains('bpNLa'))put(linkText(n),true);else if(n.classList.contains('bpNLl'))put(linkText(n),false);});
+          return;}
         if(cl.contains('cr-bn')){flush(c);c.items.push({type:'note',text:linkText(ch)});return;}
         const t=linkText(ch);if(t){flush(c);c.items.push({type:'note',warn:cl.contains('cr-noteBox')&&/^Note:/.test(t)&&!!ch.querySelector('b'),text:t});}
       });
@@ -7198,12 +7207,11 @@ function buildDcrMatrix(pg){
   const M=dcrMatrix();
   if(!M || !M.rows.length) return;
   mkSection("sumMatrix","All Combinations × Limit States", body=>{
-    body.appendChild(el("div","note",
-      "Every combination against every limit state. The worst cell in each COLUMN is "+
-      "outlined — that is the combination governing that mode. The worst cell in each "+
-      "ROW is the mode governing that combination. Different modes are frequently "+
-      "governed by different combinations, which a single governing-combination view "+
-      "cannot show."));
+    body.appendChild(bpNLdiv("div","note","Every combination against every limit state.",   /* BPNL */
+      [["Column:","the worst cell in each COLUMN is outlined — that is the combination governing that mode."],
+       ["Row:","the worst cell in each ROW is the mode governing that combination."],
+       ["Why both:","different modes are frequently governed by different combinations, which a single "+
+        "governing-combination view cannot show."]]));
     /* per-column maxima */
     const colMax={};
     M.modes.forEach(m=>{
@@ -7699,12 +7707,12 @@ function buildSummary(pg){
       pg.appendChild(b);
     }
     if(j.present && !j.justified){
-      const b=el("div","warnBox");
-      b.innerHTML="<b>"+(k==="tension"?"Tension":"Shear")+" anchor reinforcement is present but the "+
-        "&sect;17.5.2.1 substitution is not yet justified</b> ("+j.reasons.slice(0,3).join("; ")+
-        (j.reasons.length>3?("; +"+(j.reasons.length-3)+" more"):"")+"). "+
-        "The concrete breakout check is therefore still being enforced above. Resolve the "+
-        "outstanding items on the "+(k==="tension"?"Tension":"Shear")+" Rebar tab to take the credit.";
+      const b=el("div","warnBox bpNL");   /* BPNL */
+      b.innerHTML=bpNL((k==="tension"?"Tension":"Shear")+" anchor reinforcement is present but the "+
+        "&sect;17.5.2.1 substitution is not yet justified.",
+        [["Outstanding:",j.reasons.slice(0,3).join("; ")+(j.reasons.length>3?("; +"+(j.reasons.length-3)+" more"):"")+"."],
+         ["Effect:","the concrete breakout check is therefore still being enforced above."],
+         ["To take the credit:","resolve the outstanding items on the "+(k==="tension"?"Tension":"Shear")+" Rebar tab."]]);
       pg.appendChild(b);
     }
   });
@@ -7713,13 +7721,13 @@ function buildSummary(pg){
   if(S.vRebar.present && !rebarJustified("shear",CC).justified){   /* RPT-1: when the substitution is justified the green note above already lists the uncounted legs */
     const ic=shearRebarIntercept(CC);
     if(ic && ic.nLegsTotal>0 && ic.nEff<ic.nLegsTotal){
-      const b=el("div","warnBox");
-      b.innerHTML="<b>Shear "+(ic.isTie?"closed ties":"hairpins")+": only "+ic.nEff+" of "+ic.nLegsTotal+" claimed legs are effective</b> "+
-        "(&sect;"+(ic.isTie?"17.5.2.1(b), R17.5.2.1(b) — tie-set depth, crossing or development":"17.5.2.1.2 — position, depth, development or spacing")+"; see the Shear Rebar tab). "+
-        "&phi;V<sub>r</sub> counts the effective legs only. "+
-        (ic.nEff>0
+      const b=el("div","warnBox bpNL");   /* BPNL */
+      b.innerHTML=bpNL("Shear "+(ic.isTie?"closed ties":"hairpins")+": only "+ic.nEff+" of "+ic.nLegsTotal+" claimed legs are effective.",
+        [["Why:","&sect;"+(ic.isTie?"17.5.2.1(b), R17.5.2.1(b) — tie-set depth, crossing or development":"17.5.2.1.2 — position, depth, development or spacing")+"; see the Shear Rebar tab."],
+         ["Capacity:","&phi;V<sub>r</sub> counts the effective legs only."],
+         ["Breakout:",(ic.nEff>0
           ? "Condition A (&phi; = 0.75, Table 17.5.3) is still applied to shear breakout because at least one leg is effective — confirm the detail is acceptable with the reduced number of legs."
-          : "No leg is effective, so shear breakout uses Condition B (&phi; = 0.70).");
+          : "No leg is effective, so shear breakout uses Condition B (&phi; = 0.70).")]]);
       pg.appendChild(b);
     }
   }
@@ -7828,21 +7836,20 @@ function buildSummary(pg){
     body.appendChild(t2);
 
     /* --- why the basis differs --- */
-    const why=el("div","note");
-    why.innerHTML="<b>Why some checks use one anchor and others the group.</b> "+
-      "ACI 318-19 Table 17.5.2 lists individual-anchor and anchor-group checks separately, "+
-      "because the limit states are physically different. "+
-      "<b>Steel rupture</b> (\u00a717.6.1, \u00a717.7.1) and <b>pullout</b> (\u00a717.6.3) are developed by each bolt "+
-      "on its own \u2014 a bolt yields at its own force regardless of what its neighbours carry \u2014 "+
-      "so they are checked against the single highest-loaded anchor. "+
-      "<b>Concrete breakout</b> (\u00a717.6.2, \u00a717.7.2), <b>side-face blowout</b> (\u00a717.6.4) and "+
-      "<b>pryout</b> (\u00a717.7.3) fail through one concrete surface that envelops the whole group, "+
-      "with overlapping cones sharing the same concrete, so the summed demand is compared against "+
-      "a group capacity. "+
-      "Pairing a group demand with a per-anchor capacity, or the reverse, misstates the utilisation "+
-      "whenever the anchor forces are unevenly distributed. "+
-      "Hilti PROFIS draws the same distinction, marking modes \u201C* highest loaded anchor\u201D "+
-      "versus \u201C** anchor group\u201D.";
+    const why=el("div","note bpNL");   /* BPNL */
+    why.innerHTML=bpNL("Why some checks use one anchor and others the group.",
+      [["Basis:","ACI 318-19 Table 17.5.2 lists individual-anchor and anchor-group checks separately, "+
+        "because the limit states are physically different."],
+       ["One anchor:","<b>steel rupture</b> (\u00a717.6.1, \u00a717.7.1) and <b>pullout</b> (\u00a717.6.3) are developed by each bolt "+
+        "on its own \u2014 a bolt yields at its own force regardless of what its neighbours carry \u2014 "+
+        "so they are checked against the single highest-loaded anchor."],
+       ["The group:","<b>concrete breakout</b> (\u00a717.6.2, \u00a717.7.2), <b>side-face blowout</b> (\u00a717.6.4) and "+
+        "<b>pryout</b> (\u00a717.7.3) fail through one concrete surface that envelops the whole group, "+
+        "with overlapping cones sharing the same concrete, so the summed demand is compared against a group capacity."],
+       ["Mixing them:","pairing a group demand with a per-anchor capacity, or the reverse, misstates the utilisation "+
+        "whenever the anchor forces are unevenly distributed."],
+       ["Hilti PROFIS:","draws the same distinction, marking modes \u201C* highest loaded anchor\u201D "+
+        "versus \u201C** anchor group\u201D."]]);
     why.style.cssText="margin-top:8px;line-height:1.5;";
     body.appendChild(why);
     body.appendChild(el("div","note",
@@ -7946,7 +7953,9 @@ function buildPlateTab(pg){
     },pg);
   } else
   mkSection("pbClass","1. Eccentricity Classification (DG1)",body=>{
-    body.appendChild(el("div","note","Rigid base plate, iterative neutral-axis solution. Each moment axis is solved independently; the two are combined by SRSS on the resulting anchor tension demand. Bending about y uses plate length B in the bending direction; bending about x uses N."));
+    body.appendChild(bpNLdiv("div","note","Rigid base plate, iterative neutral-axis solution.",   /* BPNL */
+      [["Axes:","each moment axis is solved independently; the two are combined by SRSS on the resulting anchor tension demand."],
+       ["Plate length:","bending about y uses plate length B in the bending direction; bending about x uses N."]]));
     const t=el("table","tbl"); const hd=el("tr");
     ["Axis","e (in)","e_crit (in)","Regime","Bearing Y (in)","Anchor T (k)"].forEach(h=>hd.appendChild(el("th",null,h))); t.appendChild(hd);
     [["My (about y)",c.resX],["Mx (about x)",c.resY]].forEach(([lbl,r])=>{ const tr=el("tr");
@@ -8100,17 +8109,18 @@ function buildAnchorTab(pg){
       " ("+(gov.per==="anchor"?"single anchor":"anchor group")+" basis)."));
     /* Explain WHY the basis differs — the column alone invites the suspicion that
        the mixed bases are an inconsistency rather than the code's intent. */
-    const ex=el("div","note");
-    ex.innerHTML="<b>Why the basis differs by mode.</b> ACI 318-19 Table 17.5.2 separates "+
-      "individual-anchor from anchor-group checks. Steel rupture and pullout are developed by each "+
-      "bolt on its own, so they are checked against the HIGHEST-LOADED anchor "+
-      "(N<sub>ua</sub> = "+fmt(cap.tDemand(c,cap.tensionModes[0])*uf,2)+" "+Fu+"). "+
-      "Concrete breakout and side-face blowout share one failure surface enveloping the whole "+
-      "tension group, so they are checked against the SUM of the anchor tensions "+
-      "(N<sub>ua</sub> = "+fmt(c.Tu_group*uf,2)+" "+Fu+" over "+cap.nT+" anchors). "+
-      "Pairing a group demand with a per-anchor capacity — or the reverse — would misstate the "+
-      "utilisation whenever the tension is unevenly distributed. Hilti PROFIS marks the same "+
-      "distinction with * (highest-loaded anchor) and ** (anchor group).";
+    const ex=el("div","note bpNL");   /* BPNL */
+    ex.innerHTML=bpNL("Why the basis differs by mode.",
+      [["Basis:","ACI 318-19 Table 17.5.2 separates individual-anchor from anchor-group checks."],
+       ["One anchor:","steel rupture and pullout are developed by each "+
+        "bolt on its own, so they are checked against the HIGHEST-LOADED anchor "+
+        "(N<sub>ua</sub> = "+fmt(cap.tDemand(c,cap.tensionModes[0])*uf,2)+" "+Fu+")."],
+       ["The group:","concrete breakout and side-face blowout share one failure surface enveloping the whole "+
+        "tension group, so they are checked against the SUM of the anchor tensions "+
+        "(N<sub>ua</sub> = "+fmt(c.Tu_group*uf,2)+" "+Fu+" over "+cap.nT+" anchors)."],
+       ["Mixing them:","pairing a group demand with a per-anchor capacity — or the reverse — would misstate the "+
+        "utilisation whenever the tension is unevenly distributed."],
+       ["Hilti PROFIS:","marks the same distinction with * (highest-loaded anchor) and ** (anchor group)."]]);
     ex.style.cssText="margin-top:6px;line-height:1.45;";
     body.appendChild(ex);
     body.appendChild(el("div","note","Concrete-mode derivations are on the Concrete Embedment tab."));
@@ -8153,21 +8163,25 @@ function buildAnchorTab(pg){
           : it.rN<=0.2? "N_{ua}\\le0.2\\phi N_n\\Rightarrow\\text{shear only, ratio}="+fmt(it.rV,3)
           : "\\frac{N_{ua}}{\\phi N_n}+\\frac{V_{ua}}{\\phi V_n}="+fmt(it.trilinearSum,3)+"\\le1.2\\ \\Rightarrow\\ \\text{ratio}="+fmt(it.triDCR,3)],
       vars:[["","","The trilinear (linear, with the 0.2 full-strength cutoffs) is the alternate permitted form. It is NOT uniformly more conservative \u2014 above a utilization of 1.0 the parabolic grows faster, so the trilinear reads lower there."]]}));
-    const noteTxt =
-      "Both forms are permitted by ACI 318-19 \u00a717.8 (and by \u00a717.6 of ACI 318-14 \u2014 the same provision renumbered, so this is NOT a code-edition difference). "+
-      "The commentary describes the trilinear as a simplification of the parabolic. "+
-      "This tool reports the MORE CONSERVATIVE of the two as the governing DCR \u2014 here the "+it.governingForm+" at "+fmt(it.dcr,3)+
-      " (parabolic "+fmt(it.para,3)+", trilinear "+fmt(it.triDCR,3)+")."+
-      ((it.rV<=0.2||it.rN<=0.2)? " \u00a717.8.2: "+(it.rV<=0.2? "V_ua/\u03c6V_n = "+fmt(it.rV,3)+" \u2264 0.2, so the full tension strength is used and the interaction is neglected (DCR = \u03b2N)." : "N_ua/\u03c6N_n = "+fmt(it.rN,3)+" \u2264 0.2, so the full shear strength is used and the interaction is neglected (DCR = \u03b2V).")+" The two forms above are shown for information." : "")+
-      "\n\nComparing against Hilti PROFIS: PROFIS checks both and prints whichever gives the more FAVOURABLE (lower) utilization, "+
-      "defaulting to the parabolic when both pass. A PROFIS report may therefore show a substantially lower interaction value on identical numbers "+
-      "\u2014 e.g. \u03b2N = 2.118, \u03b2V = 0.162 gives 190% trilinear but 354% parabolic. Confirm which form a PROFIS report used before comparing.";
-    const nd=el("div","note",noteTxt); nd.style.whiteSpace="pre-line"; body.appendChild(nd);
+    /* BPNL: lead + list (was one pre-line paragraph) */
+    const nd=bpNLdiv("div","note",
+      "Both forms are permitted by ACI 318-19 \u00a717.8 (and by \u00a717.6 of ACI 318-14 \u2014 the same provision renumbered, so this is NOT a code-edition difference).",
+      [["Commentary:","the commentary describes the trilinear as a simplification of the parabolic."],
+       ["Governing:","this tool reports the MORE CONSERVATIVE of the two as the governing DCR \u2014 here the "+it.governingForm+" at "+fmt(it.dcr,3)+
+        " (parabolic "+fmt(it.para,3)+", trilinear "+fmt(it.triDCR,3)+")."],
+       (it.rV<=0.2||it.rN<=0.2)? ["\u00a717.8.2:",(it.rV<=0.2? "V_ua/\u03c6V_n = "+fmt(it.rV,3)+" \u2264 0.2, so the full tension strength is used and the interaction is neglected (DCR = \u03b2N)." : "N_ua/\u03c6N_n = "+fmt(it.rN,3)+" \u2264 0.2, so the full shear strength is used and the interaction is neglected (DCR = \u03b2V).")+" The two forms above are shown for information."] : null,
+       ["Comparing against Hilti PROFIS:","PROFIS checks both and prints whichever gives the more FAVOURABLE (lower) utilization, "+
+        "defaulting to the parabolic when both pass."],
+       ["Lower PROFIS values:","a PROFIS report may therefore show a substantially lower interaction value on identical numbers "+
+        "\u2014 e.g. \u03b2N = 2.118, \u03b2V = 0.162 gives 190% trilinear but 354% parabolic."],
+       ["Confirm:","confirm which form a PROFIS report used before comparing."]]);
+    body.appendChild(nd);
     if(it.formsDisagree){
-      const w=el("div","warn","\u26a0 The two permitted interaction forms DISAGREE on pass/fail here: "+
-        "parabolic "+fmt(it.para,3)+" ("+(it.para<=1?"passes":"fails")+"), trilinear "+fmt(it.triDCR,3)+
-        " ("+(it.triDCR<=1?"passes":"fails")+"). The conservative result is reported. "+
-        "Selecting the favourable form is a decision for the engineer of record, and should be stated in the calculation.");
+      const w=bpNLdiv("div","warn","\u26a0 The two permitted interaction forms DISAGREE on pass/fail here:",   /* BPNL */
+        [["Forms:","parabolic "+fmt(it.para,3)+" ("+(it.para<=1?"passes":"fails")+"), trilinear "+fmt(it.triDCR,3)+
+          " ("+(it.triDCR<=1?"passes":"fails")+")."],
+         ["Reported:","the conservative result is reported."],
+         ["Engineer of record:","selecting the favourable form is a decision for the engineer of record, and should be stated in the calculation."]]);
       w.style.cssText="border:1px solid #b45309;background:#fffbeb;padding:7px 9px;margin-top:8px;";
       body.appendChild(w);
     }
@@ -8180,9 +8194,10 @@ function buildAnchorTab(pg){
   /* BP-T1 (2026-10-21): ACI 318-19 §17.9 installation limits, worked (CLAUDE.md §6) */
   mkSection("anInstall",SN()+"Installation Limits \u2014 Spacing & Edge Distance",body=>{
     const IL=installLimits(), d=IL.da, pr=IL.pair, E=IL.edges;
-    body.appendChild(el("div","note","Anchor installation: "+(IL.tq?"TORQUED":"UNTORQUED")+" (input 2. Anchors). "+
-      "ACI 318-19 Table 17.9.2a, cast-in anchors: minimum spacing 4d\u2090 not torqued, 6d\u2090 torqued; "+
-      "minimum edge distance = specified cover (\u00a720.5.1.3) not torqued, 6d\u2090 torqued. These limits do not depend on the load combination."));
+    body.appendChild(bpNLdiv("div","note","Anchor installation: "+(IL.tq?"TORQUED":"UNTORQUED")+" (input 2. Anchors).",   /* BPNL */
+      [["Spacing:","ACI 318-19 Table 17.9.2a, cast-in anchors: minimum spacing 4d\u2090 not torqued, 6d\u2090 torqued."],
+       ["Edge distance:","minimum edge distance = specified cover (\u00a720.5.1.3) not torqued, 6d\u2090 torqued."],
+       ["Combinations:","these limits do not depend on the load combination."]]));
     body.appendChild(eqBlock({title:"Minimum anchor spacing",ref:"ACI 318-19 \u00a717.9.2, Table 17.9.2a",
       lines: IL.sMin==null ? ["\\text{Single anchor: no spacing limit applies.}"] : [
         "s_{min}=\\min_{i\\ne j}\\sqrt{(x_j-x_i)^2+(y_j-y_i)^2}=\\sqrt{("+fmt(pr[1].x,3)+"-("+fmt(pr[0].x,3)+"))^2+("+fmt(pr[1].y,3)+"-("+fmt(pr[0].y,3)+"))^2}="+fmt(IL.sMin,3)+"\\ \\text{in}",
@@ -10914,7 +10929,11 @@ function buildDrawingsTab(pg){
     '<button type="button" id="bpdwPrint1" title="Print the sheet shown: one 11 x 17 in landscape page at its plot scale">Print sheet</button> '+
     '<button type="button" id="bpdwPrintAll" title="Print every sheet: one 11 x 17 in landscape page per sheet, each at its plot scale">Print all sheets ('+B.S.length+')</button></div>'+
     '<div class="note">'+esc(SharedDxf.PRINT_NOTE)+'</div>'+
-    '<div class="note">One DXF file (AutoCAD R12, model space, full size in inches): each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side. Layers BP-CONCRETE, BP-GROUT, BP-PLATE, BP-COLUMN, BP-ANCHOR, BP-NUT-WASHER, BP-THREAD, BP-HOLE, BP-REBAR, BP-REBAR-T, BP-REBAR-V, BP-CENTER, BP-SECTION, BP-DIMS, BP-TEXT, BP-LEADER, BP-TABLE, BP-TBLK, BP-BRDR. The <b>Export DXF</b> button on the Project tab (plan and section for drafting) is unchanged. Title block: the Project fields (Project, Job #, Prepared by, Date, Checked by, Checked date)'+((typeof bpGroupsOn==="function"&&bpGroupsOn())?'; the sheets show the anchor group selected in the group picker':'')+'.</div>'+
+    '<div class="note bpNL">'+bpNL('One DXF file (AutoCAD R12, model space, full size in inches).',   /* BPNL */
+      [['Sheets:','each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side.'],
+       ['Layers:','BP-CONCRETE, BP-GROUT, BP-PLATE, BP-COLUMN, BP-ANCHOR, BP-NUT-WASHER, BP-THREAD, BP-HOLE, BP-REBAR, BP-REBAR-T, BP-REBAR-V, BP-CENTER, BP-SECTION, BP-DIMS, BP-TEXT, BP-LEADER, BP-TABLE, BP-TBLK, BP-BRDR.'],
+       ['Export DXF:','the <b>Export DXF</b> button on the Project tab (plan and section for drafting) is unchanged.'],
+       ['Title block:','the Project fields (Project, Job #, Prepared by, Date, Checked by, Checked date)'+((typeof bpGroupsOn==="function"&&bpGroupsOn())?'; the sheets show the anchor group selected in the group picker':'')+'.']])+'</div>'+
     '<div class="bpdwHead"><b>'+(B.S.indexOf(cur)+1)+'. '+esc(cur.title)+'</b> · scale '+esc(scTxt(cur))+(cur.over?' · <span style="color:var(--fail)">does not fit the sheet even at the smallest scale</span>':'')+'</div>'+
     '<div class="bpdwBox"></div><div class="note">Wheel: zoom about the cursor · drag: pan · pinch · double-click: fit · + / − / Fit buttons.</div>'+
     '<div class="bpdwScroll"><table class="tbl bpdwIdx"><tr><th>No.</th><th class="lft">Sheet</th><th>Scale</th><th class="lft">Worked in</th></tr>'+B.S.map((s,j)=>
@@ -10958,10 +10977,10 @@ function anchorForceTable(body, c){
     t.appendChild(tr);
   });
   body.appendChild(t);
-  body.appendChild(el("div","note",
-    "Tension positive, compression negative (sign convention matches Hilti PROFIS). "+
-    "Resulting tension force = "+fF(sumT)+" "+Fu+"; resulting compression force = "+fF(sumC)+" "+Fu+". "+
-    "Highlighted row is the highest-loaded anchor in tension. Shear distribution: "+c.frontDesc+"."));
+  body.appendChild(bpNLdiv("div","note","Tension positive, compression negative (sign convention matches Hilti PROFIS).",   /* BPNL */
+    [["Resultants:","resulting tension force = "+fF(sumT)+" "+Fu+"; resulting compression force = "+fF(sumC)+" "+Fu+"."],
+     ["Highlighted row:","the highest-loaded anchor in tension."],
+     ["Shear distribution:",sbdEscB(c.frontDesc)+"."]]));
   if(c.na && c.na.method==="na"){
     let s="Neutral-axis solution: ";
     if(c.na.x0!==null && isFinite(c.na.x0))
@@ -10974,14 +10993,14 @@ function anchorForceTable(body, c){
     s += ". PROFIS prints the same two lines beneath its anchor reaction table.";
     body.appendChild(el("div","note",s));
   }
-  body.appendChild(el("div","note",
-    "Anchor forces are from a rigid-plate neutral-axis solve (transformed section), matching "+
-    "Hilti PROFIS. The plate rotates about a neutral axis; anchor i carries T_i = K_a·(x₀ − x_i) "+
-    "with K_a = E_s·A_se/h_ef, and the concrete resists compression as a triangular bearing block "+
-    "from the neutral axis to the plate edge (elastic foundation, bedding modulus E_conc/D with E_conc = 3600 ksi constant). "+
-    "Anchors on the tension side of the neutral axis develop tension even when they lie on the "+
-    "geometric compression half of the plate — the concrete block, not the anchors, takes the "+
-    "compression. Biaxial moments are solved together on a single INCLINED neutral axis."));
+  body.appendChild(bpNLdiv("div","note",   /* BPNL */
+    "Anchor forces are from a rigid-plate neutral-axis solve (transformed section), matching Hilti PROFIS.",
+    [["Anchors:","the plate rotates about a neutral axis; anchor i carries T_i = K_a·(x₀ − x_i) with K_a = E_s·A_se/h_ef."],
+     ["Concrete:","the concrete resists compression as a triangular bearing block from the neutral axis to the plate edge "+
+      "(elastic foundation, bedding modulus E_conc/D with E_conc = 3600 ksi constant)."],
+     ["Tension side:","anchors on the tension side of the neutral axis develop tension even when they lie on the "+
+      "geometric compression half of the plate — the concrete block, not the anchors, takes the compression."],
+     ["Biaxial:","biaxial moments are solved together on a single INCLINED neutral axis."]]));
 }
 
 /* ---- PROFIS-style results table: per-anchor AND per-group for every mode ----
@@ -13286,8 +13305,19 @@ function buildVisualTab(pg){
       sl.addEventListener("input",()=>{ S._vis3.op[k]=parseFloat(sl.value); if(three3D&&three3D.materials[k]){three3D.materials[k].opacity=parseFloat(sl.value);three3D.materials[k].transparent=true;} autosave(); });
       wrap.appendChild(sl); trans.appendChild(wrap); });
     body.appendChild(trans);
-    body.appendChild(el("div","note","Drag to orbit · scroll to zoom · Fit view re-centres. Red = axial P, blue/green = shears Vx/Vy, purple/amber = moment vectors Mx/My (governing combo "+(S.combos[governingComboIndex()]||{}).name+"). Lower concrete opacity to see embedded anchors. The x-y-z triad sits at the pedestal corner."));
-    body.appendChild(el("div","note","Reinforcement, coloured as in the plans and the per-leg tables: green = counted, red = not counted (crosses but is not developed, or is outside 0.5·h_ef / 0.5·c_a1, too deep, or clashes), grey = never reaches the failure surface, does not fit, or a closed-tie leg across V (not counted); a sphere marks where a leg crosses the failure surface. Blue-grey = pedestal bars and ties that are not themselves the anchor reinforcement. Breakout bodies: red = tension group surface (flat across the tension anchors, 1:1.5 from the outer ones); orange = shear half-pyramid from the reference anchor row to the governing edge. Both stop at the concrete faces."));
+    body.appendChild(bpNLdiv("div","note","How to use this view:",   /* BPNL */
+      [["Mouse:","drag to orbit · scroll to zoom · Fit view re-centres."],
+       ["Load arrows:","red = axial P, blue/green = shears Vx/Vy, purple/amber = moment vectors Mx/My (governing combo "+sbdEscB((S.combos[governingComboIndex()]||{}).name)+")."],
+       ["Anchors:","lower concrete opacity to see embedded anchors."],
+       ["Triad:","the x-y-z triad sits at the pedestal corner."]]));
+    body.appendChild(bpNLdiv("div","note","Reinforcement, coloured as in the plans and the per-leg tables:",   /* BPNL */
+      [["Green","= counted;"],
+       ["Red","= not counted (crosses but is not developed, or is outside 0.5·h_ef / 0.5·c_a1, too deep, or clashes);"],
+       ["Grey","= never reaches the failure surface, does not fit, or a closed-tie leg across V (not counted);"],
+       ["Sphere:","a sphere marks where a leg crosses the failure surface."],
+       ["Blue-grey","= pedestal bars and ties that are not themselves the anchor reinforcement."],
+       ["Breakout bodies:","red = tension group surface (flat across the tension anchors, 1:1.5 from the outer ones); orange = shear "+
+        "half-pyramid from the reference anchor row to the governing edge. Both stop at the concrete faces."]]));
     const holder=el("div"); holder.style.cssText="border:1px solid var(--ink);background:#fff;min-height:640px;"; body.appendChild(holder);
     setTimeout(()=>{ const keepCam=!!bpad3dView;   /* CAM-1: frame only on the first build */
       build3D(holder);
@@ -14545,6 +14575,9 @@ const VALIDATION_CASES = [
       "Stand-off bending φV^M_s":"PROFIS 3.1.34 ran this case with bearing under the open stand-off; this tool follows PROFIS 3.1.36 (BP-C1, note above): the rods carry the compression, so the axial force in the governing rod, and with it the (1 − N/N_Rd) reduction of M_s, differs. Probable cause, not confirmed."},
     name:"CB Plaza Struct 2 (v1) — ¾\" F1554-55, 6 anchors",
     note:"PROFIS 3.1.34 run with an open (clamped) stand-off and concrete bearing under the plate, n = 0.5. This tool follows PROFIS 3.1.36 (engineer decision 2026-10-16, BP-C1): an open stand-off has no bearing, the rods carry compression (elastic bolt group) and n = 0 when clamped. Rows that depend on the anchor-force distribution are expected to differ.",
+    noteNL:["PROFIS 3.1.34 run with an open (clamped) stand-off and concrete bearing under the plate, n = 0.5.",   /* BPNL: display only; note above unchanged */
+      [["This tool:","follows PROFIS 3.1.36 (engineer decision 2026-10-16, BP-C1): an open stand-off has no bearing, the rods carry compression (elastic bolt group) and n = 0 when clamped."],
+       ["Expect:","rows that depend on the anchor-force distribution are expected to differ."]]],
     ref:"HDR / Ilyssa Creamer, PROFIS 3.1.34",
     setup(){
       const s=defaultState();
@@ -14580,6 +14613,9 @@ const VALIDATION_CASES = [
       "Anchor tension T @ x=+5 (each)":"Anchor forces and the compression resultant: PROFIS 3.1.34 ran with bearing under the open stand-off; this tool follows PROFIS 3.1.36 (BP-C1, note above), an elastic bolt group. The anchor-force, compression and e′_N rows differ for that reason."},
     name:"CB Plaza Struct 2 (v2) — eb=1.5, 6 anchors in tension",
     note:"PROFIS 3.1.34 run with an open (clamped) stand-off and concrete bearing under the plate, n = 0.5. This tool follows PROFIS 3.1.36 (engineer decision 2026-10-16, BP-C1): an open stand-off has no bearing, the rods carry compression (elastic bolt group) and n = 0 when clamped. Rows that depend on the anchor-force distribution are expected to differ.",
+    noteNL:["PROFIS 3.1.34 run with an open (clamped) stand-off and concrete bearing under the plate, n = 0.5.",   /* BPNL: display only; note above unchanged */
+      [["This tool:","follows PROFIS 3.1.36 (engineer decision 2026-10-16, BP-C1): an open stand-off has no bearing, the rods carry compression (elastic bolt group) and n = 0 when clamped."],
+       ["Expect:","rows that depend on the anchor-force distribution are expected to differ."]]],
     ref:"HDR / Ilyssa Creamer, PROFIS 3.1.34",
     setup(){
       const s=defaultState();
@@ -14715,25 +14751,27 @@ function buildVCaseTab(pg){
     if(r.applicable && (!best || r.used.dcr>best.r.used.dcr)) best={cb,r}; });
 
   mkSection("vcIntro","1. Basis and Case Selection",body=>{
-    const n=el("div","note");
-    n.innerHTML="ACI 318-19 <b>Fig. R17.7.2.1b</b> gives three assumptions for how shear is "+
+    const n=el("div","note bpNL");   /* BPNL */
+    n.innerHTML=bpNL("ACI 318-19 Fig. R17.7.2.1b gives three assumptions for how shear is "+
       "distributed to a group loaded toward an edge, and which anchor row's breakout surface is "+
-      "critical. They are chosen by GEOMETRY, not preference:<br>"+
-      "&nbsp;&nbsp;<b>Case 1</b> (s \u2265 c<sub>a1,1</sub>) \u2014 tributary V on the FRONT row, c<sub>a1</sub> = c<sub>a1,1</sub><br>"+
-      "&nbsp;&nbsp;<b>Case 2</b> (s \u2265 c<sub>a1,1</sub>) \u2014 the FULL V on a REAR row, c<sub>a1</sub> = c<sub>a1,2</sub><br>"+
-      "&nbsp;&nbsp;<b>Case 3</b> (s &lt; c<sub>a1,1</sub>) \u2014 the FULL V on the FRONT row, c<sub>a1</sub> = c<sub>a1,1</sub><br>"+
-      "The figure's Note requires <b>both Case 1 and Case 2</b> to be evaluated when s \u2265 c<sub>a1,1</sub>: "+
-      "neither dominates in advance, because Case 2 carries the whole shear but earns a larger "+
-      "c<sub>a1</sub> and V<sub>b</sub> scales with c<sub>a1</sub><sup>1.5</sup>. The controlling case is the one "+
-      "with the <b>worst DCR</b>, not the largest applied shear.";
+      "critical. They are chosen by GEOMETRY, not preference:",
+      [["Case 1","(s \u2265 c<sub>a1,1</sub>) \u2014 tributary V on the FRONT row, c<sub>a1</sub> = c<sub>a1,1</sub>"],
+       ["Case 2","(s \u2265 c<sub>a1,1</sub>) \u2014 the FULL V on a REAR row, c<sub>a1</sub> = c<sub>a1,2</sub>"],
+       ["Case 3","(s &lt; c<sub>a1,1</sub>) \u2014 the FULL V on the FRONT row, c<sub>a1</sub> = c<sub>a1,1</sub>"],
+       ["The figure's Note:","requires <b>both Case 1 and Case 2</b> to be evaluated when s \u2265 c<sub>a1,1</sub>: "+
+        "neither dominates in advance, because Case 2 carries the whole shear but earns a larger "+
+        "c<sub>a1</sub> and V<sub>b</sub> scales with c<sub>a1</sub><sup>1.5</sup>."],
+       ["Controlling case:","the one with the <b>worst DCR</b>, not the largest applied shear."]]);
     body.appendChild(n);
-    const w=el("div","note");
-    w.innerHTML="<b>Welded to a common plate.</b> Per R17.7.2.1, when anchors are welded to a common "+
-      "plate the near-edge anchor sheds its shear to the stiffer rear anchor as it begins to break "+
-      "out, so only Case 2 need be considered and Case 3 does not apply. This describes headed studs "+
-      "on an embed plate. <b>Anchor rods passing through a base plate with nuts and washers are NOT "+
-      "welded to a common plate</b>, so this program defaults to <i>not welded</i> and both cases are "+
-      "evaluated. Change it on the Input tab only if the detail genuinely welds the anchors to the plate.";
+    const w=el("div","note bpNL");   /* BPNL */
+    w.innerHTML=bpNL("Welded to a common plate.",
+      [["Per R17.7.2.1:","when anchors are welded to a common "+
+        "plate the near-edge anchor sheds its shear to the stiffer rear anchor as it begins to break "+
+        "out, so only Case 2 need be considered and Case 3 does not apply."],
+       ["Applies to:","this describes headed studs on an embed plate."],
+       ["Base plates:","<b>Anchor rods passing through a base plate with nuts and washers are NOT "+
+        "welded to a common plate</b>, so this program defaults to <i>not welded</i> and both cases are evaluated."],
+       ["Changing it:","change it on the Input tab only if the detail genuinely welds the anchors to the plate."]]);
     w.style.cssText="border-left:3px solid #1f4e79;padding-left:8px;";
     body.appendChild(w);
     body.appendChild(el("div","note","Current setting: anchors are "+
@@ -14749,15 +14787,17 @@ function buildVCaseTab(pg){
     /* reference figure */
     figureBlock(body, AVC_FIG,
       "ACI 318-19 Fig. R17.7.2.1b — calculation of A_Vc for single and grouped anchors, showing Cases 1, 2 and 3",
-"<b>Figure — ACI 318-19 Fig. R17.7.2.1b</b>, calculation of A<sub>Vc</sub> for "+
+      bpNLhint("Figure — ACI 318-19 Fig. R17.7.2.1b, calculation of A<sub>Vc</sub> for "+   /* BPNL */
       "single and grouped anchors, reproduced with both its CODE and COMMENTARY columns. "+
-      "Note the two different spacings: "+
-      "<b>s<sub>1</sub></b> is the spacing PARALLEL to the edge, which widens A<sub>Vc</sub> when "+
-      "s<sub>1</sub> &lt; 3c<sub>a1</sub>; <b>s</b> is the spacing PERPENDICULAR to the edge (front "+
-      "row to rear row), which is what selects Case 1/2/3. The single-anchor reference area "+
-      "A<sub>Vco</sub> = 4.5c<sub>a1</sub><sup>2</sup>, which forms the denominator of the "+
-      "A<sub>Vc</sub>/A<sub>Vco</sub> ratio worked below, is a SEPARATE figure — Fig. R17.7.2.1a — "+
-      "and is not shown here. Reproduced for reference; the governing text is the code itself.");
+      "Note the two different spacings:",
+      [["s<sub>1</sub>","is the spacing PARALLEL to the edge, which widens A<sub>Vc</sub> when "+
+        "s<sub>1</sub> &lt; 3c<sub>a1</sub>;"],
+       ["s","is the spacing PERPENDICULAR to the edge (front row to rear row), which is what selects Case 1/2/3."],
+       ["Not shown:","the single-anchor reference area "+
+        "A<sub>Vco</sub> = 4.5c<sub>a1</sub><sup>2</sup>, which forms the denominator of the "+
+        "A<sub>Vc</sub>/A<sub>Vco</sub> ratio worked below, is a SEPARATE figure — Fig. R17.7.2.1a — "+
+        "and is not shown here."],
+       ["Reference only:","reproduced for reference; the governing text is the code itself."]]));
   },pg);
 
   if(!best){
@@ -14852,13 +14892,23 @@ function buildVCaseTab(pg){
 }
 
 function buildValidationTab(pg){
-  pg.appendChild(el("div","note","Each case reproduces a Hilti PROFIS 3.1.34 run (uploaded reports). We build the matching model, run the engine, and compare capacity by capacity. Green ≤ 5% difference, amber 5–15%, red > 15%. Values in lb (PROFIS report units)."));
-  pg.appendChild(el("div","warnBox","Important: the pedestal dimensions in these cases are reconstructed from the PROFIS coordinate tables (the reports give anchor edge distances, not the full pedestal geometry). Checks that depend only on anchor/material properties — steel tension & shear, pullout, Nb, the hef reduction, ψec,N, and the side-face-blowout group factor — are exact matches and validate the engine. Checks that depend on the full projected-area geometry (φNcbg and φVcpg group breakout) can differ where the reconstructed pedestal clip differs from PROFIS's actual member. Drive your own project with its true geometry for the definitive check."));
+  pg.appendChild(bpNLdiv("div","note","Each case reproduces a Hilti PROFIS 3.1.34 run (uploaded reports).",   /* BPNL */
+    [["Method:","we build the matching model, run the engine, and compare capacity by capacity."],
+     ["Colours:","green ≤ 5% difference, amber 5–15%, red &gt; 15%."],
+     ["Units:","values in lb (PROFIS report units)."]]));
+  pg.appendChild(bpNLdiv("div","warnBox","Important: the pedestal dimensions in these cases are reconstructed from the PROFIS coordinate tables "+   /* BPNL */
+    "(the reports give anchor edge distances, not the full pedestal geometry).",
+    [["Exact matches:","checks that depend only on anchor/material properties — steel tension &amp; shear, pullout, Nb, the hef reduction, "+
+      "ψec,N, and the side-face-blowout group factor — are exact matches and validate the engine."],
+     ["May differ:","checks that depend on the full projected-area geometry (φNcbg and φVcpg group breakout) can differ where the "+
+      "reconstructed pedestal clip differs from PROFIS's actual member."],
+     ["Your project:","drive your own project with its true geometry for the definitive check."]]));
 
   VALIDATION_CASES.forEach(vc=>{
     mkSection("val_"+vc.id, vc.name, body=>{
       body.appendChild(el("div","note",vc.ref));
-      if(vc.note) body.appendChild(el("div","warnBox",vc.note));
+      if(vc.noteNL) body.appendChild(bpNLdiv("div","warnBox",vc.noteNL[0],vc.noteNL[1]));   /* BPNL: display-only split of vc.note */
+      else if(vc.note) body.appendChild(el("div","warnBox",vc.note));
       let ours;
       try{ ours=runValidationCase(vc); }
       catch(e){ body.appendChild(el("div","errBox","Engine error on this case: "+e.message)); return; }
@@ -14891,7 +14941,7 @@ function buildValidationTab(pg){
       });
       body.appendChild(t);
       /* BPL6: per-row explanations */
-      if(vc.rowNotes){ const ul=el("div","note"); ul.innerHTML="<b>Why these rows differ:</b><br>"+Object.keys(vc.rowNotes).map(k=>"&bull; <b>"+k+"</b>: "+vc.rowNotes[k]).join("<br>"); body.appendChild(ul); }
+      if(vc.rowNotes) body.appendChild(bpNLdiv("div","note","Why these rows differ:",Object.keys(vc.rowNotes).map(k=>[k+":",vc.rowNotes[k]])));   /* BPNL: a real list (was &bull; lines) */
 
       /* aux diagnostics */
       const a=ours.__aux;
@@ -14916,21 +14966,20 @@ function buildValidationTab(pg){
     const mode=(S.forceModel&&S.forceModel.foundDepthMode)||"hef";
     const D0=(mode==="fixed")?((S.forceModel.foundDepth>0)?S.forceModel.foundDepth:10.0)
                              :(5/6)*hefNow;
-    const n1=el("div","note");
-    n1.innerHTML =
-      "<b>What it is.</b> The rigid-plate neutral-axis solver models the concrete under the plate as a "+
-      "elastic foundation with bedding modulus K<sub>c</sub> = E<sub>conc</sub>/D (E<sub>conc</sub> = 3600 ksi CONSTANT; f&prime;<sub>c</sub> does not enter), where D is the "+
-      "depth of concrete participating in the bearing response. "+
-      "<b>D = (5/6)&middot;h<sub>ef</sub></b> &mdash; currently "+fmt(D0,2)+"&Prime; for h<sub>ef</sub> = "+
-      fmt(hefNow,2)+"&Prime;."+
-      "<br><br><b>Why that form.</b> Setting D proportional to h<sub>ef</sub> gives "+
-      "K<sub>c</sub> = 1.2&middot;E<sub>c</sub>/h<sub>ef</sub>, so the stiffness ratio that fixes the neutral axis is "+
-      "K<sub>a</sub>/K<sub>c</sub> = (E<sub>s</sub>A<sub>se</sub>/h<sub>ef</sub>)/(1.2E<sub>c</sub>/h<sub>ef</sub>) = "+
-      "E<sub>s</sub>A<sub>se</sub>/(1.2E<sub>c</sub>) &mdash; <b>h<sub>ef</sub> cancels entirely.</b> "+
-      "Physically the compression zone mobilizes concrete over a depth proportional to the embedment, "+
-      "i.e. the same depth over which the anchor transfers its load. "+
-      "This is still a modeling assumption &mdash; neither ACI 318-19 nor AISC DG1 specifies it &mdash; but it is "+
-      "a one-parameter form validated across a wide range, not a constant fitted to one report.";
+    const n1=el("div","note bpNL");   /* BPNL */
+    n1.innerHTML = bpNL("The foundation depth D of the neutral-axis solver:",
+      [["What it is.","The rigid-plate neutral-axis solver models the concrete under the plate as a "+
+        "elastic foundation with bedding modulus K<sub>c</sub> = E<sub>conc</sub>/D (E<sub>conc</sub> = 3600 ksi CONSTANT; f&prime;<sub>c</sub> does not enter), where D is the "+
+        "depth of concrete participating in the bearing response."],
+       ["D = (5/6)&middot;h<sub>ef</sub>","&mdash; currently "+fmt(D0,2)+"&Prime; for h<sub>ef</sub> = "+fmt(hefNow,2)+"&Prime;."],
+       ["Why that form.","Setting D proportional to h<sub>ef</sub> gives "+
+        "K<sub>c</sub> = 1.2&middot;E<sub>c</sub>/h<sub>ef</sub>, so the stiffness ratio that fixes the neutral axis is "+
+        "K<sub>a</sub>/K<sub>c</sub> = (E<sub>s</sub>A<sub>se</sub>/h<sub>ef</sub>)/(1.2E<sub>c</sub>/h<sub>ef</sub>) = "+
+        "E<sub>s</sub>A<sub>se</sub>/(1.2E<sub>c</sub>) &mdash; <b>h<sub>ef</sub> cancels entirely.</b>"],
+       ["Physically:","the compression zone mobilizes concrete over a depth proportional to the embedment, "+
+        "i.e. the same depth over which the anchor transfers its load."],
+       ["Still an assumption:","this is still a modeling assumption &mdash; neither ACI 318-19 nor AISC DG1 specifies it &mdash; but it is "+
+        "a one-parameter form validated across a wide range, not a constant fitted to one report."]]);
     body.appendChild(n1);
 
     const t=el("table","tbl"); const hr=el("tr");
@@ -14949,13 +14998,14 @@ function buildValidationTab(pg){
       "twice CB Plaza's and the prediction lands within 0.02%.";
     body.appendChild(n2);
 
-    const n3=el("div","warnBox");
-    n3.innerHTML="<b>Superseded:</b> earlier versions used a fixed D = 10&Prime; calibrated to CB Plaza alone. "+
-      "That value was right only because CB Plaza happens to have h<sub>ef</sub> = 12&Prime; "+
-      "((5/6)&times;12 = 10). It under-predicted anchor tension at shallow embedments and over-predicted "+
-      "at deep ones &mdash; on the Ramp Canopy case (h<sub>ef</sub> = 6) fixed D = 10 gives a peak anchor "+
-      "tension of 5.408 k against PROFIS's 4.749 k, a 14% error. The legacy fixed-D mode is retained "+
-      "on the Input tab for comparison only.";
+    const n3=el("div","warnBox bpNL");   /* BPNL */
+    n3.innerHTML=bpNL("Superseded: earlier versions used a fixed D = 10&Prime; calibrated to CB Plaza alone.",
+      [["Why it matched:","that value was right only because CB Plaza happens to have h<sub>ef</sub> = 12&Prime; "+
+        "((5/6)&times;12 = 10)."],
+       ["Error:","it under-predicted anchor tension at shallow embedments and over-predicted "+
+        "at deep ones &mdash; on the Ramp Canopy case (h<sub>ef</sub> = 6) fixed D = 10 gives a peak anchor "+
+        "tension of 5.408 k against PROFIS's 4.749 k, a 14% error."],
+       ["Legacy mode:","the legacy fixed-D mode is retained on the Input tab for comparison only."]]);
     body.appendChild(n3);
 
     /* live sensitivity around the current basis */
@@ -16958,9 +17008,17 @@ manPart("p0","0. Read This First",[
 {h:"0.2 What this program does NOT do"},
 {p:"Knowing the boundaries of a tool is as important as knowing its capabilities. This program does <b>not</b> cover:"},
 {ul:[
- "<b>Post-installed anchors</b> — adhesive, expansion, undercut, or screw anchors. Those require manufacturer-specific qualification data from an ICC-ES evaluation report (bond strength &tau;<sub>cr</sub>, k<sub>c</sub> values, reduced &phi; factors, and so on) that is not in this tool. Only <b>cast-in headed</b> bolts and headed studs are covered.",
- "<b>Seismic design per ACI 318-19 §17.10.</b> Set the Seismic Design Category under Input &rarr; 10. With C–F the program applies 0.75 to the concrete-governed tension strengths (pullout, breakout, side-face blowout) in every combination (§17.10.5.4), and checks the §17.10.5.3(a) ductility ratio when option (a) is chosen. It does not amplify E by &Omega;<sub>0</sub>, nor compute the attachment forces of options (b) and (c): for those options, and for (d), enter the corresponding combinations. The §17.10.5.1 / §17.10.6.1 20&nbsp;% exemptions are not taken, and the detailing of §17.10.5.3(a)(iii)–(vi) and §17.10.4 is the engineer's.",
- "<b>Anchor reinforcement design.</b> The program can substitute an anchor-reinforcement check for concrete breakout (§17.5.2.1), and it verifies from the geometry you enter that each leg crosses the assumed failure surface within the effective-placement zone of a loaded anchor and is developed on both sides. It does NOT size or select the bars, choose the layout, or confirm the reinforcement is buildable in the cage — those remain the engineer's decisions.",
+ bpNLhint("<b>Post-installed anchors</b> — adhesive, expansion, undercut, or screw anchors.",   /* BPNL */
+  [["Why not:","those require manufacturer-specific qualification data from an ICC-ES evaluation report (bond strength &tau;<sub>cr</sub>, k<sub>c</sub> values, reduced &phi; factors, and so on) that is not in this tool."],
+   ["Covered:","only <b>cast-in headed</b> bolts and headed studs are covered."]]),
+ bpNLhint("Seismic design per ACI 318-19 §17.10.",   /* BPNL */
+  [["Input:","set the Seismic Design Category under Input &rarr; 10."],
+   ["SDC C–F:","with C–F the program applies 0.75 to the concrete-governed tension strengths (pullout, breakout, side-face blowout) in every combination (§17.10.5.4), and checks the §17.10.5.3(a) ductility ratio when option (a) is chosen."],
+   ["Not computed:","it does not amplify E by &Omega;<sub>0</sub>, nor compute the attachment forces of options (b) and (c): for those options, and for (d), enter the corresponding combinations."],
+   ["Engineer's:","the §17.10.5.1 / §17.10.6.1 20&nbsp;% exemptions are not taken, and the detailing of §17.10.5.3(a)(iii)–(vi) and §17.10.4 is the engineer's."]]),
+ bpNLhint("Anchor reinforcement design.",   /* BPNL */
+  [["Checked:","the program can substitute an anchor-reinforcement check for concrete breakout (§17.5.2.1), and it verifies from the geometry you enter that each leg crosses the assumed failure surface within the effective-placement zone of a loaded anchor and is developed on both sides."],
+   ["Not done:","it does NOT size or select the bars, choose the layout, or confirm the reinforcement is buildable in the cage — those remain the engineer's decisions."]]),
  "<b>Hooked (J- or L-) bolts.</b> Their pullout strength follows a different equation (§17.6.3.2.2b, N<sub>p</sub> = 0.9f'<sub>c</sub>e<sub>h</sub>d<sub>a</sub>) that depends on the hook length and is not implemented. The head-type options here are heavy hex, plate washer, or plain rod.",
  "<b>Fatigue, creep, fire, or sustained-tension adhesive checks.</b>",
  "<b>Weld design</b> between the column and the base plate.",
@@ -16979,7 +17037,10 @@ manPart("p0","0. Read This First",[
 {p:"while the concrete bears over the compressed region of the plate (elastic foundation, bedding modulus E<sub>conc</sub>/D with <b>E<sub>conc</sub> = 3600 ksi CONSTANT</b> &mdash; f&prime;<sub>c</sub> does not enter the force distribution, verified against PROFIS runs at 4, 6 and 8 ksi that return identical anchor forces). All three equilibrium equations are solved together, so combined M<sub>x</sub> and M<sub>y</sub> produce a <b>single inclined neutral axis</b>, not two superposed uniaxial solutions."},
 {key:"A consequence worth understanding: anchors on the tension side of the neutral axis develop tension <b>even when they sit on the geometric compression half of the plate</b>, because the concrete block — not the anchors — resists the compression. A simpler elastic bolt-group model (T<sub>i</sub> = N/n &plusmn; M&middot;x/&Sigma;x&sup2; with negative values clipped to zero) puts fewer anchors in tension and <b>under-predicts</b> the group tension demand. That legacy model is still selectable for comparison, but it is not the default and should not be used for design."},
 {p:"This is the AISC DG1 &sect;3.4 model and the one Hilti PROFIS uses. It is <b>not</b> exact: a flexible plate redistributes load toward the stiffer anchors, and a very thin plate may deform enough that the outermost anchors never reach the force this model predicts."},
-{warn:"<b>The foundation depth D is a calibrated modeling assumption, not a code-specified value.</b> D = 10 in. reproduces the Hilti PROFIS anchor reactions and compression resultant to within 0.5 lb on the reference case, but that is a fit to a single report. The result is only weakly sensitive to it — over a twenty-fold range in D the governing anchor tension moves about &plusmn;3% — so the choice is a second-order refinement rather than a driver of the answer. D is exposed as an input so it can be inspected and overridden."},
+{warn:bpNLhint("The foundation depth D is a calibrated modeling assumption, not a code-specified value.",   /* BPNL */
+  [["Calibration:","D = 10 in. reproduces the Hilti PROFIS anchor reactions and compression resultant to within 0.5 lb on the reference case, but that is a fit to a single report."],
+   ["Sensitivity:","the result is only weakly sensitive to it — over a twenty-fold range in D the governing anchor tension moves about &plusmn;3% — so the choice is a second-order refinement rather than a driver of the answer."],
+   ["Input:","D is exposed as an input so it can be inspected and overridden."]])},
 {key:"The rigid-plate assumption is only valid if the plate is actually stiff enough. The program computes a required thickness from the DG1 yield-line model, but satisfying that thickness check does <b>not</b> by itself prove the rigid-plate assumption. For thin plates with widely spaced anchors, or for plates with large overhangs, consider a finite-element check. PROFIS issues the same warning in its own reports."},
 
 {h3:"0.3.2 Open (ungrouted) stand-off — plate bending is indicative only"},
@@ -17053,7 +17114,9 @@ manPart("p0","0. Read This First",[
 {p:"Every check produces a <b>demand–capacity ratio (DCR)</b>, the factored demand divided by the design capacity:"},
 {eq:"\\text{DCR} = \\frac{\\text{factored demand}}{\\phi \\times \\text{nominal capacity}}"},
 {p:"A DCR of 1.00 means the check is exactly satisfied. Above 1.00 the check fails. The Summary tab shows every check as a coloured chip — green below 0.90, amber 0.90 to 1.00, red above 1.00 — and reports the single governing (highest) DCR across all checks and all load combinations."},
-{note:"A DCR is only meaningful alongside the assumptions that produced it. A DCR of 0.4 computed with the wrong edge distance or the wrong sign on P is not a passing design. Use the Input &amp; Schematics tab to confirm the model matches your drawing before trusting any number."}
+{note:bpNLhint("A DCR is only meaningful alongside the assumptions that produced it.",   /* BPNL */
+  [["Example:","a DCR of 0.4 computed with the wrong edge distance or the wrong sign on P is not a passing design."],
+   ["Confirm:","use the Input &amp; Schematics tab to confirm the model matches your drawing before trusting any number."]])}
 ]);
 
 /* ===== MANUAL PART I — ORIENTATION ===== */
