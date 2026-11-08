@@ -7209,7 +7209,7 @@ index 50f3837..c2d5000 100644
 - **Other tools in this PR:** `shared/project-registry.js` (entry label / name), `tools.html` (card). Other tools' "… Spread Footing" labels: separate PRs (abutment_calculator, Bridge Substructure Loading, Steel Beam Design - AISC 15th).
 - **Other copies:** none.
 
-## 2026-11-08 — PR: docs/sf-manual-scope (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SFSC) — User Manual 0.1 and 0.2: scope covers spread, combined and wall footings   [DISPLAY ONLY; no computed value changes]
+## 2026-11-08 — PR: docs/sf-manual-scope (PR #1242: https://github.com/mlococo88/All-Structural/pull/1242) (SFSC) — User Manual 0.1 and 0.2: scope covers spread, combined and wall footings   [DISPLAY ONLY; no computed value changes]
 - **Request (engineer, 2026-11-08):** after SFNM (#1236) the manual's 0.1 still said the program designs "a single rectangular spread footing". Rewrite 0.1 to the tool's real scope (footing types, element types with the wall Chapter 11 checks, load modes, code basis) as a bold lead and a list (the SFNL style), and correct other single-spread-footing scope statements in the manual.
 - **Where:** `manPart("p0","0. Read This First",[` (Part 0 of the User Manual; manual blocks only, rendered by `manRender`). The manual's own block types are used (`{p}` lead in bold, `{ul}` items with bold lead words), the same look as `sfNL` (lead line, then a list with bold lead words).
 - **0.1, before:** `{p:"This program designs and checks a single rectangular <b>spread footing</b> with one or more concrete <b>pedestals</b>, bearing on soil. It performs, in one continuous calculation:"},`
