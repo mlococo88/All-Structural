@@ -1662,3 +1662,56 @@ Basis: ASCE/SEI 7-16 Fig. 29.3-1 (Cases A, B, C; Case C table and the (1.8 − s
     - The Excel workbook builds.
     - 0 console errors.
 - **Other copies:** none.
+
+## 2026-11-08 — PR: asce7-leftpanel (PR #1225: https://github.com/mlococo88/All-Structural/pull/1225) — A7LS: key results as a left column from 1200 px (display only, no result change)
+
+### A7LS. Key-results column on the left at 1200 px and wider   [display only]
+- **Request (engineer, 2026-11-07/08):** add the left summary panel to the tools that have summary / result cards, as in Retaining Wall (#959, #984), Spread Footing (#988), Light Pole (#991, #994/#997), Shear and Moment (#1130) and Base Plate (#1199).
+- **This tool:** it has no D/C ratios. The chips show the Dashboard's "Governing Design Values" and wind envelope, plus the status register count.
+- **What changed (screen only):**
+  - At **1200 px and wider** a new left column `#a7lsCol` sits left of the input panel: **240 px** from 1200 to 1499 px and **280 px** from 1500 px. The input panel's 33 % is taken of the width beside it (`calc((100% − column) × .33)`, still at least 390 px); the output panel takes the rest.
+  - The head has «, "Key results" and the count: "n blocked" (red), "n review" (amber) or "OK" (green). The count covers the Status Register (Standing rows excluded), the Cross-Tab Consistency checks and the blocking errors.
+  - Chips, each a button with a status dot, name, value and OK / REVIEW / BLOCKED:
+    - Status register;
+    - Enclosure (classification, ±GC_pi);
+    - q_h;
+    - Windward wall at h (largest over the directions; not shown for a free roof);
+    - Roof, most negative (over the directions);
+    - p_f,des;
+    - p_s;
+    - SDC, C_s, V (or "Seismic: not computed", BLOCKED, when no site coefficient is tabulated).
+  - Values use the same expressions and rounding as the Dashboard (`R2`, `RN(Cs,4)`). The status comes from the Status Register rows (and cross-tab checks) whose anchor is the tab that works the value, as the input-tab dots do (`itabState`).
+  - **Click a chip** (or Enter / Space): it opens the tab, expands and scrolls to the panel that works the value, and flashes it (`a7Goto`, the D11 "Worked in" targets). The Status register chip opens the Dashboard; "Seismic: not computed" opens the Seismic tab.
+  - « shrinks the column to a 42 px strip (vertical title and count); » opens it again.
+  - When the calculation is blocked, the column says "No results: the calculation is blocked. See the Dashboard."
+  - **Below 1200 px nothing changes:** no column, and tablet and phone layouts and order are as before. The column is `noprint` and hidden in print. The Dashboard, the Report and Print / PDF are unchanged.
+- **Where (`ASCE7-16 Load Generator.html`):**
+  - CSS: after `@media screen and (max-width:520px){#tbfields…}`, the block starting `/* A7LS (2026-11-08, engineer: the left summary panel`.
+  - HTML: `<aside id="a7lsCol" class="noprint" aria-label="Key results">` (`#a7lsHead` with `#a7lsTgl`, `#a7lsTtl`, `#a7lsCnt`; `#a7ls`) before `<div id="inpanel">`.
+  - JS:
+    - before `/* ---------------- Design Basis`: `A7LS`, `a7lsState(anchors)`, `a7lsRender()`, `a7lsColl(v,save)` and a DOMContentLoaded handler that reads the key and wires «;
+    - `render()`: `a7lsRender();` as its first line.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Saved data (§5):** no key or format changed. New per-browser UI key **`asce7bldg.leftPanelCollapsed_v1`** ('1' = shrunk, '0' = open). It is tool-prefixed, written only when « / » is clicked, and is not part of the project, the autosave or the export.
+- **Decisions (pending engineer review):**
+  1. Breakpoints and widths as in the other tools.
+  2. The chips show key results, not checks (the tool generates loads). The wind values are the extremes of the Dashboard's envelope table.
+  3. The status per chip is taken from the status register of that chip's tab.
+  4. Phone and tablet layouts are unchanged.
+- **Check case (default project, Melrose flat roof):**
+  - Chips: Status register 2 Review; Enclosure Enclosed, GC_pi ±0.18 REVIEW; q_h 31.45 psf OK; Windward wall at h 27.05 psf OK; Roof, most negative −34.43 psf OK; p_f,des 30.00 psf REVIEW; p_s 30.00 psf REVIEW; SDC B OK; C_s 0.1031 OK; V 123.74 kip OK.
+  - These are the same values as the Dashboard. Clicking V opens Seismic at "Base Shear and Vertical Distribution".
+- **How verified:**
+  - Headless origin/main vs branch, 13 cases: `R`, every tab, input tab, manual part and the Report text are identical.
+  - Layout at 1920 / 1440 / 1280 / 1024 / 390 px:
+    - column 280 / 240 / 240 / none / none;
+    - no sideways scroll;
+    - at 1024 and 390 px the panels sit exactly as on main.
+  - Collapse writes the key and survives a reload. 0 console errors.
+  - Tests:
+    - `check-syntax` passed.
+    - `project-library --tool asce7 --a HEAD` passed.
+    - `phone-layout --tool asce7` passed.
+    - `engine handoffs` passed.
+    - The Excel workbook builds.
+- **Other copies:** none.
