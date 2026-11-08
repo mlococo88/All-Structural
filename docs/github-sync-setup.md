@@ -70,6 +70,26 @@ A fine-grained personal access token lets the tools write to that one repository
 - On a phone or another computer: set up step 3 there, open the tool, click **Saved projects…**. Projects from other devices are under "On GitHub only". Click **Open**.
 - Problems are shown in the bar at the top of Saved projects (offline, token refused, rate limit). Saves wait and are retried. Nothing is lost locally.
 
+## Auto-save and changes from other devices (2026-11-08)
+
+Two boxes in **Cloud sync (GitHub)…** turn these on or off. Both are **on** once sync is set up. They apply to every tool in this browser and take effect at once.
+
+- **Auto-save open project every 30 s**
+  - While a **named** project (one in Saved projects) is open and you change its inputs, the tool saves them into that project about every 30 s, once the inputs have not changed for a few seconds.
+  - It uses the same Save as the Save button, so the browser list and the GitHub file are exactly what Save would make. The background upload then sends it (in the Bridge Suite, after its usual 30 s pause).
+  - A file is uploaded only when its content changed, so an unchanged project makes no commit.
+  - A new project that has no name yet is never auto-saved: use **Save as…** once. The tools' own autosave of the inputs on screen is unchanged.
+  - Inputs restored from last time and not touched since are not auto-saved until you change something.
+  - The header chip shows the state: **auto-saved 14:32**, **uploading**, or **pending (offline)** (it waits and is sent when GitHub can be reached).
+  - Untick the box to save only with Save / Ctrl+S.
+- **Check GitHub every 30 s for changes to the open project**
+  - While the tab is visible, the tool asks GitHub every 30 s whether the open project's file changed (one request). It does not ask while the tab is hidden or minimised.
+  - When another device saved it, a banner appears at the bottom left: **Updated on <device> at <time> — Load it / Keep mine**. Nothing on screen changes until you press **Load it**.
+  - **Load it:** the other device's version is opened. The banner then offers **Undo**, which brings back what you had (GitHub is not changed). If you also had changes here, they are kept first as `<name> (conflict <device> <date>)`.
+  - **Keep mine:** the banner closes and nothing is loaded. If you save this project later, both versions are kept (yours as a conflict copy), as before.
+  - Untick the box to stop these checks.
+- The device name in "Updated on …" is **This device's name** of the other device. Older saves, and devices with no name, show "another device".
+
 ## Save, Save as and where a project goes (tools with the standard save)
 
 Tools that have the standard save controls (a **Save and open** card first in the Project tab, and **Project: … · Save · Saved projects…** in the header) work like this:
@@ -106,4 +126,5 @@ Tools that have the standard save controls (a **Save and open** card first in th
 
 - Not yet tested against the real GitHub service from a page opened as a file (`file://`). GitHub's API allows browser requests from any page, including file pages, so it is expected to work. It was tested here against a stand-in GitHub that answers the same way. If **Test connection** says GitHub could not be reached on the work laptop while github.com opens in the browser, the company network may block `api.github.com`.
 - GitHub limits requests to 5,000 per hour per token. The tools use a few per save, so this is reached only in unusual cases. When it is, sync waits and resumes by itself.
+- With the open project's check on, each visible tab with a named project open makes about 120 requests an hour (one every 30 s). Auto-save adds up to about 2 requests per save while you edit. Hidden tabs make none. Ten such tabs open at once stay well under the limit.
 - Very large repositories (over 100,000 files) are not supported for listing.

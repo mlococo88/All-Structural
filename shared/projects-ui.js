@@ -74,7 +74,15 @@
       '.spStart button.spStX{margin-left:auto;border-color:transparent;background:transparent;font-size:11pt;line-height:1;padding:0 6px;} .spStart button.spStX:hover{background:#dbeafe;}',
       '.spStart button .spGhMini{margin-left:4px;} .spLib .spStartPref{display:flex;gap:6px;align-items:center;font-size:9pt;color:#334155;margin:8px 0 2px;}',
       '@media (max-width:560px){.spStart button{max-width:calc(100vw - 60px);}}',
-      '@media print{dialog.spLib{display:none!important;} .spStart[data-sp]{display:none!important;}}'
+      /* LIVE (2026-11-08): the chip's auto-save / upload status and the open project's banners (GitHub sync only) */
+      '.spLiveSt{font-size:8pt;color:#475569;white-space:nowrap;} .spLiveSt.warn{color:#92400e;}',
+      '.spLive[data-sp]{position:fixed;left:12px;bottom:12px;z-index:2147482000;display:flex;flex-direction:column;gap:6px;max-width:min(480px,calc(100vw - 24px));font:13px/1.35 system-ui,sans-serif;}',
+      '.spLive .spLvB{position:relative;background:#eff6ff;color:#0f172a;border:1px solid #93c5fd;border-radius:6px;padding:7px 28px 7px 10px;box-shadow:0 4px 14px rgba(0,0,0,.15);}',
+      '.spLive .spLvB.warn{background:#fffbeb;border-color:#f59e0b;color:#78350f;} .spLive .spLvB.info{background:#f8fafc;border-color:#cbd5e1;}',
+      '.spLive .spLvB button{font:inherit;font-size:12px;padding:2px 9px;margin:4px 6px 0 0;border:1px solid #94a3b8;border-radius:4px;background:#fff;color:#0f172a;cursor:pointer;}',
+      '.spLive .spLvB button.spPri{background:#1d4ed8;border-color:#1d4ed8;color:#fff;} .spLive .spLvB button.spLvX{position:absolute;top:3px;right:3px;margin:0;border:0;background:none;font-size:14px;line-height:1;padding:2px 5px;}',
+      '.spLive .spLvB .spLvN{display:block;font-size:11.5px;color:#475569;margin-top:2px;}',
+      '@media print{dialog.spLib{display:none!important;} .spStart[data-sp]{display:none!important;} .spLive[data-sp]{display:none!important;}}'
     ].join('\n');
     document.head.appendChild(s);
   }
@@ -279,7 +287,8 @@
     const snapshot = () => { try { return ctx.snapshot ? ctx.snapshot() : C(ctx.getState()); } catch (e) { return null; } };
     let cur = null, touched = false; const savedAt = {};   // touched: inputs changed on this page since the last open / save / New
     function getCur() { if (ctx.current) { const n = clean(ctx.current()); return n || null; } return cur; }
-    function setCur(n) { cur = n; touched = false; if (ctx.setCurrent) ctx.setCurrent(n || ''); }
+    let live = null;   // LIVE (2026-11-08): liveBar below (GitHub sync only)
+    function setCur(n) { cur = n; touched = false; if (ctx.setCurrent) ctx.setCurrent(n || ''); if (live) live.reset(); }
     /* on load: the tool's open name if it is in the list, else the saved project whose data equals what is on screen */
     (function find() {
       const n = getCur(); if (n && store.has(n)) { cur = n; return; }
@@ -344,7 +353,8 @@
       const n = getCur(), inList = !!(n && store.has(n)), d = dirty(), e = eng(), stt = e && inList ? e.statusOf(n) : null, t = inList ? timeOf(n) : '';
       const shown = inList ? n : (n || (ctx.displayName && clean(ctx.displayName())) || 'not saved yet');
       chip.innerHTML = `<span class="spDot${d ? ' dirty' : ''}"></span><span>Project:</span> <b>${esc(shown)}</b> <span>· ${!inList ? 'not saved' : d ? 'unsaved changes' : 'saved'}</span>`
-        + (e ? ` <span class="spGhMini ${stt || ''}" title="Cloud sync (GitHub): ${esc(stt ? LBL[stt] || stt : 'not saved')}">GitHub ${stt === 'synced' ? '✓' : stt === 'pending' ? '↑' : stt === 'conflict' ? '!' : '·'}</span>` : '');
+        + (e ? ` <span class="spGhMini ${stt || ''}" title="Cloud sync (GitHub): ${esc(stt ? LBL[stt] || stt : 'not saved')}">GitHub ${stt === 'synced' ? '✓' : stt === 'pending' ? '↑' : stt === 'conflict' ? '!' : '·'}</span>` : '')
+        + (e && live ? live.chipHtml(n, inList) : '');   // LIVE: "auto-saved 14:32" / "uploading" / "pending (offline)"
       chip.title = (inList ? `"${n}" ${d ? 'has unsaved changes' : 'is saved'} in this browser` : 'The inputs on screen are not a saved project yet') + '. Click: ' + (ctx.chipClick ? ctx.chipHint || 'open the project' : 'Saved projects…');
       if (stat) stat.innerHTML = `<span class="spDot${d ? ' dirty' : ''}"></span> ` + (inList
         ? `<b>${esc(n)}</b> — ${d ? 'changed since it was saved' : 'saved'}${t ? ` (${esc(t)})` : ''}. In this browser ✓${e ? ` · GitHub (cloud) <span class="spGhSt ${stt || ''}">${esc(LBL[stt] || stt || '')}</span>` : ''}`
@@ -354,12 +364,12 @@
     const edit = ev => { const t = ev.target; if (!(t && t.closest && t.closest('[data-sp]'))) touched = true; later(); };
     document.addEventListener('input', edit, true); document.addEventListener('change', edit, true); document.addEventListener('click', later, true);
     setInterval(refresh, 3000);
-    function done(r, name, quiet) {
+    function done(r, name, quiet, auto) {   // auto (LIVE): an auto-save: no message, the background upload sends it (with the tool's settle time)
       if (r && r.ok && typeof r.name === 'string' && r.name) name = r.name;   // STDS-B: the name the tool's save stored it under (the list name follows the project's own name field)
       const ok = r !== false && !(r && r.ok === false) && store.has(name);   // the tool's save may return nothing
       if (!ok) { if (!quiet) alert((r && r.message) || 'The project was not saved.'); later(); return false; }
-      setCur(name); savedAt[name] = Date.now(); if (st) st.opened(name); if (ctx.changed) ctx.changed(); dialog.refresh();
-      if (dialog.cloud && dialog.cloud.tick) dialog.cloud.tick(true).catch(() => {});   // true (BSS): sent now even with a settle time
+      setCur(name); savedAt[name] = Date.now(); if (st && !auto) st.opened(name); if (ctx.changed) ctx.changed(); dialog.refresh();
+      if (!auto && dialog.cloud && dialog.cloud.tick) dialog.cloud.tick(true).catch(() => {});   // true (BSS): sent now even with a settle time
       if (ctx.afterSave) ctx.afterSave(name); refresh(); return true;
     }
     const doSave = name => done(ctx.save ? ctx.save(name) : store.save(name, ctx.getState()), name);
@@ -407,9 +417,144 @@
       if (ev.shiftKey) saveAs(); else save();
     });
     st = ctx.start ? startChooser(ctx, { store, dialog, eng, openNamed, getCur, setCur, snapshot, snapOf, refresh, clean, dirty }) : null;
+    /* LIVE: after a Load it / Undo the tool has opened the name: the same bookkeeping as the dialog's Open */
+    const opened = n => { setCur(n); if (ctx.afterOpen) ctx.afterOpen(n); if (st) st.opened(n); if (ctx.changed) ctx.changed(); dialog.refresh(); refresh(); };
+    live = liveBar(ctx, { store, dialog, eng, getCur, snapshot, dirty, refresh, opened, autoSave: n => { let r; try { r = ctx.save ? ctx.save(n) : store.save(n, ctx.getState()); } catch (x) { r = { ok: false, message: x && x.message }; } return done(r, n, true, true); } });
     refresh();
-    const api = { dialog, save, saveAs, newProject, importJSON, mount, refresh, dirty, current: getCur, setCurrent: n => { setCur(n); refresh(); }, el: { chip, save: hSave, lib: hLib, card }, start: st };
+    const api = { dialog, save, saveAs, newProject, importJSON, mount, refresh, dirty, current: getCur, setCurrent: n => { setCur(n); refresh(); }, el: { chip, save: hSave, lib: hLib, card }, start: st, live };
     bars.push(api); return api;
+  }
+
+  /* liveBar(ctx, b) (LIVE, 2026-11-08; engineer request). Called by projectBar for every tool; does NOTHING (no timer work, no request,
+     no key) while Cloud sync (GitHub) is not set up in this browser or shared/github-sync.js is not loaded. With sync set up:
+     A. Auto-save ("Auto-save open project every 30 s" in the Cloud sync dialog; on unless unticked): while a NAMED project of the list
+        is open, its inputs were changed on this page and differ from the saved copy, they are saved into it through the tool's own
+        Save (ctx.save: the same path, list key and format as Save) about every 30 s, once they have been unchanged for 5 s
+        (SharedGitHubSync.autoSaveDue). A project not saved under a name yet is never auto-saved (the tool's own autosave key is
+        untouched). The upload is the existing background upload (with the tool's settle time, e.g. 30 s in the Bridge Suite), and
+        only a changed file text is uploaded (the file's sha). The chip shows "auto-saved 14:32" / "uploading" / "pending (offline)".
+     B. The open project's GitHub check ("Check GitHub every 30 s for changes to the open project"; on unless unticked): every 30 s
+        while the tab is visible (paused while it is hidden), one tree request (SharedGitHubSync engine poll). When GitHub's file
+        changed since this browser last synced it, a banner "Updated on <device> at <time> — Load it / Keep mine". Load it: the
+        GitHub version into the list (a version of this browser that GitHub does not have is kept first as a conflict copy; unsaved
+        inputs on screen are first saved into the project, so they end up in that copy) and the tool's own open path; the banner then
+        offers Undo (this browser's previous version back, nothing changed on GitHub). Keep mine: the banner closes for that GitHub
+        version; nothing is loaded or uploaded (a later save of this project keeps both, as a conflict copy). Nothing on screen is
+        ever replaced without Load it.
+     b = { store, dialog, eng, getCur, snapshot, dirty, refresh, opened(name), autoSave(name) } (projectBar internals) */
+  function liveBar(ctx, b) {
+    if (typeof document === 'undefined' || typeof window === 'undefined') return null;
+    const G = () => window.SharedGitHubSync && window.SharedGitHubSync.autoSaveDue ? window.SharedGitHubSync : null;
+    const now = () => Date.now();
+    const lv = { name: undefined, ref: null, snap: null, changedAt: 0, lastAt: now(), autoSnap: null, autoAt: 0, fail: null, pollAt: 0, polling: false,
+      loading: false, dismissed: {}, upd: null, undo: null, msg: null };
+    const hm = t => { try { return new Date(t).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }); } catch (e) { return ''; } };
+    const hidden = () => { try { if (document.visibilityState === 'hidden') return true; const f = window.frameElement; return !!(f && !f.getClientRects().length); } catch (e) { return false; } };   // a tab in the background, or a frame that is not shown
+    let box = null;
+    /* reset(): a project was opened, saved or started (projectBar setCur): the inputs now are the reference for "edited on this page" */
+    function reset() {
+      const n = b.getCur(), other = n !== lv.name;
+      lv.name = n; lv.ref = lv.snap = b.snapshot(); lv.changedAt = lv.lastAt = now(); lv.autoSnap = null; lv.fail = null;
+      if (other) { lv.pollAt = 0; lv.autoAt = 0; if (lv.upd && lv.upd.name !== n) lv.upd = null; if (lv.undo && lv.undo.u.name !== n) lv.undo = null; draw(); }
+    }
+    function tick() {
+      const g = G(), e = g && b.eng();
+      if (!e) { if (box) { lv.upd = lv.undo = lv.msg = null; draw(); } return; }
+      const L = g.live(ctx.storage), n = b.getCur(), inList = !!(n && b.store.has(n)), t = now(), s = b.snapshot();
+      if (n !== lv.name) reset();
+      if (s !== lv.snap) { lv.snap = s; lv.changedAt = t; if (lv.undo && s !== lv.undo.after) { lv.undo = null; draw(); } }
+      const d = g.autoSaveDue({ configured: true, on: L.autoSave, name: n, inList, dirty: inList && b.dirty(), edited: lv.ref !== s, snap: s, lastSnap: lv.autoSnap, changedAt: lv.changedAt, lastAt: lv.lastAt, now: t });
+      if (d.due && !lv.loading && !document.querySelector('dialog[open]')) {
+        lv.lastAt = t; lv.autoSnap = s;
+        if (b.autoSave(n)) { lv.autoAt = now(); lv.fail = null; } else { lv.fail = 'not saved'; }
+        b.refresh();
+      }
+      const pd = g.pollDue({ configured: true, on: L.watch, name: n, inList, hidden: hidden(), now: t, lastAt: lv.pollAt });
+      if (pd.due && !lv.polling && !lv.loading) {
+        lv.pollAt = t; lv.polling = true;
+        e.poll(n).then(r => onPoll(e, n, r)).catch(() => {}).then(() => { lv.polling = false; });
+      }
+    }
+    async function onPoll(e, n, r) {
+      if (n !== b.getCur() || !r || !r.ok || r.waiting) return;
+      if (r.state === 'changed' || r.state === 'both') {
+        if (lv.dismissed[n + '\n' + r.cloudSha]) { if (lv.upd) { lv.upd = null; draw(); } return; }
+        if (lv.upd && lv.upd.sha === r.cloudSha) { lv.upd.both = r.state === 'both'; draw(); return; }
+        const who = await e.changeInfo(n, r.cloudSha);
+        if (n !== b.getCur()) return;
+        lv.upd = { name: n, sha: r.cloudSha, device: who.device, at: who.at, both: r.state === 'both' };
+      } else if (lv.upd) lv.upd = null;
+      draw();
+    }
+    async function loadIt() {
+      const u = lv.upd, e = b.eng(); if (!u || !e || lv.loading) return;
+      lv.loading = true; lv.msg = null; draw();
+      try {
+        if (b.dirty() && b.store.has(u.name)) {   // the inputs on screen first into the project, so they are kept (as the conflict copy) below
+          if (!b.autoSave(u.name)) { lv.msg = { warn: true, text: 'Your changes on screen could not be saved first, so nothing was loaded. Save them (or Export JSON), then try again.' }; return; }
+        }
+        const r = await e.loadCloud(u.name);
+        if (!r.ok) { lv.msg = { warn: true, text: 'Not loaded: ' + (r.message || r.error || 'GitHub could not be reached.') }; return; }
+        if (ctx.open(u.name) === false) { e.undoLoad(r.undo); lv.msg = { warn: true, text: 'The tool did not open the GitHub version; your version was put back.' }; return; }
+        b.opened(u.name);
+        lv.undo = { u: r.undo, after: b.snapshot(), device: u.device, at: u.at, copy: r.copy || null };
+        lv.upd = null;
+      } finally { lv.loading = false; b.refresh(); draw(); }
+    }
+    function undo() {
+      const x = lv.undo, e = b.eng(); if (!x || !e) return;
+      const r = e.undoLoad(x.u);
+      if (!r.ok) { lv.msg = { warn: true, text: r.message || 'Not undone.' }; draw(); return; }
+      ctx.open(x.u.name); b.opened(x.u.name);
+      lv.dismissed[x.u.name + '\n' + (x.u.cloudSha || '')] = true;   // not offered again for this GitHub version
+      lv.undo = null; lv.msg = { text: `Your previous version of “${x.u.name}” is back. The version on GitHub is not changed (Saved projects… shows it).` };
+      b.refresh(); draw();
+    }
+    function keepMine() { const u = lv.upd; if (!u) return; lv.dismissed[u.name + '\n' + u.sha] = true; lv.upd = null; draw(); }
+    const who = (dev, at) => `<b>${esc(dev || 'another device')}</b>${at ? ` at ${esc(hm(at))}` : ''}`;
+    function draw() {
+      const parts = [];
+      if (lv.upd) {
+        const u = lv.upd, both = u.both || (b.getCur() === u.name && b.dirty());
+        parts.push(`<div class="spLvB" data-lv="upd" role="status">Updated on ${who(u.device, u.at)} — <button type="button" class="spPri" data-lva="load"${lv.loading ? ' disabled' : ''}>Load it</button><button type="button" data-lva="keep">Keep mine</button>`
+          + `<span class="spLvN">“${esc(u.name)}” was saved on GitHub from another device.${both ? ' You have changes here too: both are kept (yours as a conflict copy).' : ' Load it replaces the inputs on screen (Undo brings them back).'}</span>`
+          + `<button type="button" class="spLvX" data-lva="keep" title="Keep mine" aria-label="Close">×</button></div>`);
+      }
+      if (lv.undo) {
+        const x = lv.undo;
+        parts.push(`<div class="spLvB info" data-lv="undo" role="status">Loaded the version from ${who(x.device, x.at)}. <button type="button" data-lva="undo">Undo</button>`
+          + (x.copy ? `<span class="spLvN">Your previous version is also kept as “${esc(x.copy)}”.</span>` : '')
+          + `<button type="button" class="spLvX" data-lva="noundo" aria-label="Close">×</button></div>`);
+      }
+      if (lv.msg) parts.push(`<div class="spLvB${lv.msg.warn ? ' warn' : ' info'}" data-lv="msg" role="status">${esc(lv.msg.text)}<button type="button" class="spLvX" data-lva="nomsg" aria-label="Close">×</button></div>`);
+      extra.forEach(f => { const h = f(); if (h) parts.push(h); });
+      if (!parts.length) { if (box) { box.remove(); box = null; } return; }
+      if (!box) {
+        box = document.createElement('div'); box.className = 'spLive'; box.setAttribute('data-sp', 'live');
+        box.addEventListener('click', ev => {
+          const t = ev.target.closest('[data-lva]'); if (!t) return; const a = t.dataset.lva;
+          if (a === 'load') loadIt(); else if (a === 'keep') keepMine(); else if (a === 'undo') undo();
+          else if (a === 'noundo') { lv.undo = null; draw(); } else if (a === 'nomsg') { lv.msg = null; draw(); }
+          else acts.forEach(f => f(a, t));
+        });
+        document.body.appendChild(box);
+      }
+      box.innerHTML = parts.join('');
+    }
+    const extra = [], acts = [];   // more banners / actions (presence, LIVE PR 3)
+    /* the chip's text: "auto-saved 14:32" / "uploading" / "pending (offline)" (only with sync set up and a project in the list) */
+    function chipHtml(n, inList) {
+      const e = b.eng(); if (!e || !inList) return '';
+      const v = e.state(), q = !!(v && v.queue.indexOf(n) >= 0), le = e.lastError();
+      let t = '', warn = false;
+      if (q) { if (le && le.kind === 'offline') { t = 'pending (offline)'; warn = true; } else if (le && le.kind === 'rate') { t = 'pending (rate limit)'; warn = true; } else if (le && le.kind === 'auth') { t = 'pending (token refused)'; warn = true; } else t = 'uploading'; }
+      else if (lv.fail && lv.name === n) { t = 'auto-save failed'; warn = true; }
+      else if (lv.autoAt && lv.name === n) t = 'auto-saved ' + hm(lv.autoAt);
+      return t ? ` <span class="spLiveSt${warn ? ' warn' : ''}" data-sp-live="${esc(t)}">${esc(t)}</span>` : '';
+    }
+    setInterval(() => { try { tick(); } catch (e) { /* the tool works without it */ } }, 3000);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') setTimeout(() => { try { tick(); } catch (e) { /* next tick */ } }, 300); });
+    return { reset, tick, chipHtml, draw, state: () => lv, extra, acts, hidden, loadIt, undo, keepMine };
   }
 
   /* startChooser(ctx, bar) (START, 2026-11-06: TRIAL in Spread Footing only, pending engineer review). Called by projectBar when
