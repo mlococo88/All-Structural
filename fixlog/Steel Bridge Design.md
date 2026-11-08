@@ -22749,3 +22749,46 @@ Basis: AASHTO LRFD 10th Ed. (2024). Reference implementation: `lldf.html` `membe
 - **Check case:** Preliminary sizing, Manual, Part 2, "Suggest: lowest-cost layout": before a 4,371-character paragraph; after a bold lead and items, every number and article unchanged and in the same order.
 - **How verified:** text identity check above; `tests/compare.mjs --tool gd` and `--tool st`; 390 px: no manual paragraph or item wider than its part (all 11 parts); 0 console errors. Tests: see the PR.
 - **Other copies:** none.
+## 2026-11-08 — PR: nl-sbd-a3 (PR #1193: https://github.com/mlococo88/All-Structural/pull/1193) (SBNL-3: the 20 longest check notes of the GirderDetail modules as a bold lead and a list, Checks tab and Report; display only, no result change)
+
+### SBNL-3. Long check notes as a lead line and items   [display only] [no result change]
+- **Request (engineer, 2026-11-07, for every app):** as SBNL-1 (#1172) and SBNL-2 (#1175, the two manuals). Part 3 of the tool: the notes under the check cards (`c.note`) of the GirderDetail modules, shown on the Checks tab and in the module's calculation report ("Note: …").
+- **New helpers** (main page, after `const sub = s => esc(s).replace(/_([A-Za-z0-9ℓ]+`), anchor `/* SBNL-3 (2026-11-08, engineer: no long run-on notes)`:
+  ```js
+  function gdNL(title, items) { return { note: items.map(x => x[1]).join(' '), nl: [title, items] }; }
+  function gdNoteHTML(k, rep) {
+    const n = k.note, L = k.nl, base = L ? L[1].map(x => x[1]).join(' ') : null, i = base ? n.indexOf(base) : -1;
+    if (i < 0) return rep ? `<p class="cr-note">Note: ${sub(n)}</p>` : `<p class="note-p">${sub(n)}</p>`;
+    const pre = n.slice(0, i).trim(), post = n.slice(i + base.length).trim();
+    return `<div class="${rep ? 'cr-note' : 'note-p'} gdNL">${pre ? `<p>${sub(pre)}</p>` : ''}<p class="gdNLl">${rep ? 'Note: ' : ''}${L[0]}</p><ul>${L[1].map(x => `<li><b>${x[0]}</b> ${sub(x[1])}</li>`).join('')}${post ? `<li>${sub(post)}</li>` : ''}</ul></div>`;
+  }
+  ```
+  `c.note` stays the **same string, byte for byte** (the item texts joined by one space, cut at sentence starts of the old literal); `c.nl` is display only: a new title and new bold lead words (no digits). Text that later code adds before or after the note (an owner rule, the connection-plate fit) is kept: a line before the title, or a last item. Without `nl`, or if the note was replaced, the note is drawn as before.
+- **Renderers:** `renderChecks()` (Checks tab) and the geometry tab: `if (k.note) b += \`<p class="note-p">${sub(k.note)}</p>\`;` → `if (k.note) b += gdNoteHTML(k, false);` (2 places); the calculation report check block: `if (k.note) h += \`<p class="cr-note">Note: ${sub(k.note)}</p>\`;` → `if (k.note) h += gdNoteHTML(k, true);`.
+- **CSS** (main page, after the first `.note-p { … }`): `.gdNL .gdNLl { font-weight: 600; margin: 0 0 1px; }`, `.gdNL ul { margin: 2px 0 2px 18px; padding: 0; }`, `.gdNL li { margin: 1px 0; overflow-wrap: anywhere; }`, `@media print { .gdNL li { break-inside: avoid; } }`. No new colours (the note / report note styles are inherited).
+- **Notes changed** (each `note: '…'` → `...gdNL(title, [[lead words, '…'], …])`; each `c.note = \`…\`` → `Object.assign(c, gdNL(…))`; anchor = the old opening words → title → lead words):
+  1. GS7 "L_p = 1.1r_t√(E/F_yc) (10th Edition). C_b is an input" → "How the compression-flange resistance is found:" → L<sub>p</sub> / C<sub>b</sub> / Section change within L<sub>b</sub> / Section / R<sub>b</sub> / f<sub>ℓ</sub>.
+  2. SC1 "Fatigue I: Z_r = (ΔF)_TH A_sc" → "Fatigue resistance of a stud and the limit state of each zone:" → Infinite life / Finite life / Limit state per zone / Cycles n / Not included / Section / Radial force.
+  3. GS17 "Fatigue I (infinite life) or Fatigue II (finite life) for each flange's" → Limit state / Load factor / Cycles n / Section / Categories.
+  4. TS3 "I_t is about the edge in contact with the web" → I<sub>t</sub> axis / ρ<sub>w</sub> / Requirement / Work line.
+  5. CF10 "Basis: the girder depth d" → Depth used / Below the minimum / Auto-design / Check.
+  6. GS20 "HL-93 design inventory rating from this module's checks" → Factors / Ratios / Owner / Use (the "Pending (vehicles …)" sentence stays at the end of the last item).
+  7. CF8 "Brace stiffness from the diagonal" → Brace / β<sub>sec</sub> / β<sub>g</sub> / C.
+  8. SA6 "The NSBA Guide defines a routine steel I-girder bridge" → Definition / Outside the limits / Skew over twenty degrees.
+  9. CP2 "Base metal at the toe of transverse stiffener-to-flange" → Category / Web weld toe / Stress range.
+  10. SA7 "Pours in order:" → Order / Noncomposite envelope / Deck tension.
+  11. TS4 "Interior stiffened panels include tension-field action" → Stiffened panels / Unstiffened panels / V<sub>u</sub>.
+  12. GS9 "Permitted (6.10.6.2.3, 10th Ed.)" → "When this appendix is used:" → Conditions / M<sub>p</sub> / Otherwise.
+  13. MT1 "Where M_u exceeds M_r the web splice" → Web takes the excess / Lever arm A<sub>w</sub> / Deck reinforcement / Advisory.
+  14. SA4 "The analysis in this tool is a line-girder analysis" → Method / This check / Fail or warning / Not computed.
+  15. TF3 / BF3 (one builder) "Flange slip force from the factored moment" → Slip force / Slip resistance / Excess.
+  16. GS11 "Unstiffened webs and panels (d_o = 0" → Panels / V<sub>u</sub>.
+  17. CF1 "Single angles connected through one leg" → Connection / r<sub>x</sub> / Properties / Q.
+  18. GS19 "The opposite extreme combines the live load moment" → Opposite extreme / Sign change.
+  19. FA1 "ADTT_SL = …" → Traffic / Limit state / Exempt details / Studs.
+  20. DT9 "t is the thinner outside plate." → Thickness / Compression / Status / End pitch.
+- **Not changed (open item):** the notes under ~400 characters (about 27, e.g. DF5, BS3, GS4, TF5/BF5, DT3, DT7, DT11, GS6, GS12, GS14, WS1, WS3, CF4, TS5, TS8, CP1, DF1, DF2, DF4, TF6/BF6, SC2, CF7, BS4), Preliminary sizing's check notes (`pl-src`) and ST-Girder (`st-src`): later PRs.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none (`nl` is on the check objects only, which are not saved; `gd.project` and the ST-Girder payloads identical).
+- **Check case:** Girder section, GS7 card on the Checks tab: before one 1,777-character paragraph; after the title "How the compression-flange resistance is found:" and six items; `c.note` identical (string compare), the Report note "Note: How the compression-flange resistance is found:" then the same six items.
+- **How verified:** headless, main vs branch, built-in project, all 11 GirderDetail modules: every `c.note` string identical; the digit sequence of every tab and of every module's full calculation report identical (the Summary tab differs only in its clock time, both ways); `tests/compare.mjs --tool gd`: every result section identical (`mod.*`, `pl.*`, `sa.girder1`, `gd.dxf`, `gd.project`, `gd.stPayloads`); `rpt.*` of the 7 modules with a changed note differ only by the note being split into lines (title, items); `--tool st`: all sections identical. 0 console errors. 390 px screenshots. Tests: see the PR.
+- **Other copies:** none.
