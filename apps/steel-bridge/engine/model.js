@@ -68,6 +68,12 @@
                   steelAllowPct (%; used when xs.allow is not available), haunchInStiffness (true | false; absent = the owner rule) }
                   deflSidewalk: 'auto' | 'yes' | 'no' (added 2026-11-01, C-32: sidewalk or pedestrians for the owner LL deflection limits, OWN19;
                   absent or 'auto' = the cross-section's sidewalks)
+                  -- added 2026-11-09 (CLC, construction live load calculated), optional --
+                  clCalc: true | false (calculate the construction live load w_CL = q_CL × b_trib; new projects: true; absent, every project
+                  saved before: false, as before), qCL (psf; blank: the owner's, CTDOT 50, else 20), fm: { P (kip, each of the pair of
+                  finishing-machine loads), e (ft, each load from its deck edge) } (absent or P blank: no finishing machine)
+     girders[i].clOverride (added 2026-11-09, optional, true | false): use girders[i].loadsManual.CL in place of the calculated construction
+                  live load; absent: on when loadsManual.CL is entered (as before)
      girders[i].line: the cross-section girder (0-based, of xs.nb) whose loads and factors this plate girder takes
                   (absent: the first exterior girder for position 'exterior', else the first interior girder)
      girders[i].loadsManual: { DC1wet, DC2, DW, CL, UT, UF (klf), xf: [{ x (ft), P (kip) }] } and girders[i].dfManual: { gM, gMpier,
@@ -156,7 +162,8 @@
       framing: defaultFraming(),
       crossframes: defaultCrossframes(),
       splices: defaultSplices(),
-      welds: defaultWelds()
+      welds: defaultWelds(),
+      analysis: { clCalc: true }   // CLC (2026-11-09): a new project calculates its construction live load (engine/analysis.js clOf)
     };
   }
   /* defaultXs(p): GirderDetail's built-in cross-section (5 girders at 9.5 ft, 3.25 ft overhangs, 1.5 ft 0.40 klf barriers, 25 psf future

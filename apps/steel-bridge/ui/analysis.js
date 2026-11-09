@@ -20,7 +20,7 @@
   const IM_SRC = 'AASHTO LRFD 10th Ed. Table 3.6.2.1-1';
   const blank = v => v == null || v === '' || (typeof v === 'number' && Number.isNaN(v));
   const numIn = (scope, k, label, unit, v, ph) => `<div class="fRow"><label for="an_${scope}_${k}">${label}</label><input type="number" step="any" id="an_${scope}_${k}" data-an="${scope}" data-k="${k}" value="${blank(v) ? '' : esc(v)}"${ph != null && ph !== '' ? ` placeholder="${esc(ph)}"` : ''}><span class="unit">${unit}</span></div>`;
-  const chk = (id, label, on) => `<div class="fRow"><label for="${id}">${label}</label><input type="checkbox" id="${id}" data-an="ov" data-k="${id === 'an_ov_l' ? 'loadsOverride' : 'dfOverride'}"${on ? ' checked' : ''}><span class="unit">off: the calculated value is used</span></div>`;
+  const chk = (id, label, on, k, sc, unit) => `<div class="fRow"><label for="${id}">${label}</label><input type="checkbox" id="${id}" data-an="${sc || 'ov'}" data-k="${k || (id === 'an_ov_l' ? 'loadsOverride' : 'dfOverride')}"${on ? ' checked' : ''}><span class="unit">${unit || 'off: the calculated value is used'}</span></div>`;
   const kf = v => isFinite(v) ? f(v, 4) : '—';
   /* ctxOf(P, gi): the girder, its loads module result, its loads and factors (engine/analysis.js), and whether each override is on */
   function ctxOf(P, gi) {
@@ -57,8 +57,16 @@
       ${xfShow ? `<div class="fRow"><label for="an_l_xf">Cross-frame point loads (stored entry)</label><input type="text" id="an_l_xf" data-an="l" data-k="xf" value="${esc((Lm.xf || []).map(q => `${q.x}:${q.P}`).join(', '))}" style="width:180px"><span class="unit">one load per row</span></div>
         <p class="note">Kept because this project stored it and has no framing: it is used until the framing is set (<a href="#" data-itgo="framing">Framing &amp; bracing tab</a>); then the frames give the point loads.</p>`
         : `<p class="note">Cross-frame point loads: ${LD.src.xf === 'module' && LD.xfInfo ? `${LD.xfInfo.n} frames, ${LD.xfInfo.tot.toFixed(2)} kip in all, from the framing and the cross-frame weights (<a href="#" data-itgo="framing">Framing &amp; bracing tab</a>)` : LD.src.xf === 'girder' ? 'from the girder loads' : 'none (the project has no framing: <a href="#" data-itgo="framing">Framing &amp; bracing tab</a>)'}.</p>`}`, 'an-dead');
-    h += card(`Construction live load, girder ${gl}`, numIn('l', 'CL', 'Construction live load', 'klf', Lm.CL)
-      + '<p class="note">Entered per girder (not calculated yet); blank: 0. Used in the deck placement checks (Constructibility tab).</p>', 'an-cl');
+    // construction live load (CLC, 2026-11-09): calculated w_CL = q_CL × b_trib, an override per girder, and the finishing machine
+    const CL = LD.cl, fm = A0.fm || {}, ovC = LD.clOverride, qPh = CL.qSrc === 'entered' ? '' : String(CL.q);
+    h += card(`Construction live load, girder ${gl}`, `${chk('an_a_clCalc', 'Calculate the construction live load', CL.on, 'clCalc', 'a', CL.on ? 'w<sub>CL</sub> = q<sub>CL</sub> × tributary deck width' : 'off: a project saved before 2026-11-09 (0 unless entered below)')}
+      ${CL.on ? numIn('a', 'qCL', 'Construction live load on the deck q<sub>CL</sub>', `psf — ${CL.qSrc === 'entered' ? 'entered' : CL.qSrc === 'owner' ? `blank: owner rule ${esc(CL.qCite)}, ${CL.q} psf` : 'blank: 20 psf (AASHTO LRFD 3.4.2.1 gives no value; this app\'s default)'}${CL.own ? `; owner minimum ${CL.own} psf (${esc(CL.ownCite)})` : ''}`, A0.qCL, qPh)
+        + `<p class="note">Calculated: w<sub>CL</sub> = q<sub>CL</sub>/1000 × b<sub>trib</sub> = ${f(CL.q, 1)}/1000 × ${isFinite(CL.trib) ? f(CL.trib, 3) : '—'} ft = <b>${isFinite(CL.w) ? f(CL.w, 4) + ' klf' : '— (the tributary width needs a complete cross-section)'}</b> (b<sub>trib</sub>: cross-section girder G${line + 1}, worked on the ${see}; w<sub>CL</sub> worked on the <a href="#" data-gotab="an">Analysis tab</a>, steps an.CL.q, an.CL.w).</p>` : ''}
+      ${chk('an_ov_c', 'Override calculated value', ovC, 'clOverride')}
+      ${ovC ? numIn('l', 'CL', 'Construction live load w<sub>CL</sub>', `klf${CL.on && isFinite(CL.w) ? ` — calculated ${kf(CL.w)}` : ''}; blank: ${CL.on ? 'calculated' : '0'}`, Lm.CL, CL.on && isFinite(CL.w) ? f(CL.w, 4) : '') : ''}
+      <p class="note">Used: <b>${kf(LD.CL)} klf</b> (${{ girder: 'girder loads', manual: 'entered (override)', calc: 'calculated', none: 'none' }[LD.src.CL]}). The construction live load enters the deck placement checks (Constructibility tab, γ construction) on the steel section.</p>`, 'an-cl');
+    h += card('Finishing machine (optional)', `${numIn('fm', 'P', 'Load P<sub>fm</sub>, each of the pair', 'kip (blank: none)', fm.P)}${numIn('fm', 'e', 'Each load from its deck edge e<sub>fm</sub>', 'ft (on the overhang; blank: 0, at the edge)', fm.e)}
+      <p class="note">A pair of equal point loads, one on each overhang, moving together along the bridge. Each girder takes its lever-rule share and the share moves along the steel section; the moments and shears are added to M<sub>CL</sub>, V<sub>CL</sub> where they add to the deck placement effects (worked on the <a href="#" data-gotab="an">Analysis tab</a>, steps an.fm.*). The overhang bracket checks keep their own finishing machine load per bracket (Constructibility tab, OH inputs).</p>`, 'an-fm');
     // distribution factors
     const rowsD = [['gM', 'g moment (spans)'], ['gMpier', 'g moment (pier regions)'], ['gV', 'g shear'], ['fatM', 'g fatigue moment'], ['fatV', 'g fatigue shear'], ['gDef', 'g deflection (all lanes, all girders)']];
     const DF = C.DF, s0 = DF.spans[0] || {};
@@ -72,8 +80,10 @@
   function onInputChange(el, P, gi) {
     const sc = el.dataset && el.dataset.an, k = el.dataset && el.dataset.k; if (!sc || !k) return false;
     const g = P.girders[gi];
-    if (sc === 'a') { P.analysis = P.analysis || {}; const v = el.value; P.analysis[k] = el.tagName === 'SELECT' ? (v === 'true' ? true : v === 'false' ? false : v === '' ? null : v) : k === 'seqCustom' ? v : (v === '' ? null : Number(v)); }
+    if (sc === 'a' && el.type !== 'checkbox') { P.analysis = P.analysis || {}; const v = el.value; P.analysis[k] = el.tagName === 'SELECT' ? (v === 'true' ? true : v === 'false' ? false : v === '' ? null : v) : k === 'seqCustom' ? v : (v === '' ? null : Number(v)); }
+    else if (sc === 'a' && el.type === 'checkbox') { P.analysis = P.analysis || {}; P.analysis[k] = !!el.checked; }
     else if (sc === 'ov') g[k] = !!el.checked;
+    else if (sc === 'fm') { P.analysis = P.analysis || {}; const F = { ...(P.analysis.fm || {}) }; if (el.value === '') delete F[k]; else F[k] = Number(el.value); if (Object.keys(F).length) P.analysis.fm = F; else delete P.analysis.fm; }
     else if (sc === 'l') { g.loadsManual = g.loadsManual || {};
       if (k === 'xf') g.loadsManual.xf = el.value.split(/[,;]/).map(s => s.trim()).filter(Boolean).map(s => s.split(':').map(Number)).filter(q => q.length === 2 && q.every(isFinite)).map(([x, P_]) => ({ x, P: P_ }));
       else g.loadsManual[k] = el.value === '' ? null : Number(el.value); }
@@ -86,7 +96,7 @@
   function usedHtml(P, gi) {
     const C = ctxOf(P, gi), g = C.g, LD = C.LD, DF = C.DF, S = AN().settings(P), A0 = P.analysis || {}, nb = P.xs ? Math.round(P.xs.nb) : 0, line = AN().lineOf(P, g);
     const lineSel = nb > 0 ? `<div class="fRow"><label for="an_g_line">Cross-section girder (loads, factors)</label><select id="an_g_line" data-an="g" data-k="line">${[...Array(nb)].map((_, j) => `<option value="${j}"${j === line ? ' selected' : ''}>G${j + 1}${j === 0 || j === nb - 1 ? ' (exterior)' : ''}</option>`).join('')}</select></div>` : '';
-    const SRC = { girder: 'girder loads (hand-off)', module: 'calculated', manual: 'entered (override)', none: 'none' };
+    const SRC = { girder: 'girder loads (hand-off)', module: 'calculated', manual: 'entered (override)', none: 'none', calc: `calculated, q<sub>CL</sub> ${f(LD.cl.q, 0)} psf × b<sub>trib</sub>` };
     const j = C.mod && C.mod.j != null ? C.mod.j : line, G = `G${j + 1}`;
     const where = (k, sid) => LD.src[k] === 'module' ? `<a href="#" data-gotab="loads" title="Loads &amp; LLDF tab, girder ${G}, step dl.${G}.${sid}">Loads &amp; LLDF, ${G} §</a>` : LD.src[k] === 'manual' || LD.src[k] === 'none' ? '<a href="#" data-goto="loads">Loads input tab</a>' : '';
     const rows = [['DC1wet', 'DC1 wet deck (deck, haunch, SIP)', 'DC1'], ['DC2', 'DC2', 'DC2'], ['DW', 'DW', 'DW'], ['UT', 'Existing utilities', 'UT'], ['UF', 'Future utility allowance', 'UF'], ['PL', 'Pedestrian live load', 'PL'], ['CL', 'Construction live load', null]]
@@ -95,7 +105,8 @@
     const xfTxt = LD.xf.length ? `${LD.xf.length} loads, ${f(LD.xf.reduce((a, q) => a + q.P, 0), 2)} kip in all` : 'none';
     return card(`Loads and factors used, girder ${esc(g.label || g.id)} (read-only)`, `${lineSel}
       <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Load (per girder)</th><th>w (klf)</th><th class="lft">Source</th><th class="lft">Worked</th></tr></thead><tbody>
-      ${rows.map(([k, t, sid]) => tr(t, kf(LD[k]), SRC[LD.src[k]] || LD.src[k], k === 'CL' ? (LD.src.CL === 'manual' || LD.src.CL === 'none' ? '<a href="#" data-goto="loads">Loads input tab</a>' : '') : where(k, sid))).join('')}
+      ${rows.map(([k, t, sid]) => tr(t, kf(LD[k]), SRC[LD.src[k]] || LD.src[k], k === 'CL' ? (LD.src.CL === 'calc' ? wk('an.CL.w') : LD.src.CL === 'manual' || LD.src.CL === 'none' ? '<a href="#" data-goto="loads">Loads input tab</a>' : '') : where(k, sid))).join('')}
+      ${(P.analysis || {}).fm && +(P.analysis.fm.P) > 0 ? tr('Finishing machine (moving, added to M<sub>CL</sub>)', (() => { const F = AN().fmOf(P, C.mod, j); return F && isFinite(F.Pj) ? `P<sub>j</sub> = ${f(F.Pj, 3)} kip` : '— (needs the cross-section)'; })(), `pair of ${f(+P.analysis.fm.P, 2)} kip loads, lever rule`, wk('an.fm.Pj')) : ''}
       ${tr('Girder steel', 'by segment', `A<sub>s</sub> × 490 pcf × (1 + ${f(LD.steelAllowPct, 1)} %)`, wk('an.wst0'))}
       ${tr('Cross-frame point loads', xfTxt, LD.src.xf === 'module' ? 'framing and cross-frame weights' : SRC[LD.src.xf] || LD.src.xf, LD.src.xf === 'module' ? '<a href="#" data-gotab="cf">Cross-frames tab</a>' : LD.src.xf === 'manual' ? '<a href="#" data-goto="loads">Loads input tab</a>' : '')}
       </tbody></table></div>
@@ -145,7 +156,8 @@
     { key: 'll', title: 'Live-load envelopes and reactions (LL+IM)', ref: A + '3.6.1.2, 3.6.1.3.1, 3.6.2.1', ids: /^an\.(M\.LL|R\.LL)/ },
     { key: 'defl', title: 'Live-load deflection', ref: A + '2.5.2.6.2, 3.6.1.3.2', ids: /^an\.defl\./ },
     { key: 'camber', title: 'Dead-load deflection (camber)', ref: A + '6.7.2', ids: /^an\.camber/ },
-    { key: 'seq', title: 'Deck placement sequence', ref: A + '6.10.3.4.1', ids: /^an\.seq\./ }] };
+    { key: 'seq', title: 'Deck placement sequence', ref: A + '6.10.3.4.1', ids: /^an\.seq\./ },
+    { key: 'cl', title: 'Construction live load and finishing machine', ref: A + '3.4.2.1', ids: /^an\.(CL|fm)\./ }] };
   const groups = (kind, list) => window.SharedSteps.group(list, TOPICS[kind || 'x'](), { strip: false });
   function resultsHtml(R) {
     if (R.errors && R.errors.length) return `<div class="alert err"><b>Analysis input errors.</b><ul>${R.errors.map(e => `<li>${esc(e.msg || e)}</li>`).join('')}</ul></div>`;
