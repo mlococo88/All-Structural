@@ -32,6 +32,10 @@
                   overlays: [ { name, mode, psf, thk, gam } ], sip (psf), allow (steel detail allowance, %),
                   extra: [ { name, cat: 'DC1'|'DC2'|'DW'|'PL'|'UT'|'UF', x (ft), plf (klf), dist: 'auto'|'pilecap'|'equal'|'two' } ],
                   overrides: { loadId: { x, plf, dist } }, beamClass: { index: class }, dlMethod: 'massdot' | 'aashto' | 'ridot',
+                  -- added 2026-11-09 (EQSP), optional: absent = 'individual' (the per-bay spacings as entered; every project before) --
+                  spMode: 'individual' | 'equal' (girder spacing input mode), Wcc (ft; 'equal' only: exterior girder spacing, ℄ to ℄ of the two
+                  exterior girders). In 'equal' the page writes S = Wcc / (nb − 1) into every bays entry (equalSpacing below); everything
+                  computed reads xs.bays as before, so Wcc and spMode change no result by themselves,
                   lldf: { gap (ft), kg: 'max' | 'avg' | 'simple', skewV: 'all' | 'ext', extMin: true | false } },
      -- added 2026-10-29 (shear and stiffeners PR), optional: a version 1 project without it reads as defaultStiffeners() --
      stiffeners: { layout: { web: 'stiffened' | 'unstiffened', mode: 'uniform' | 'bays', doRatio (uniform d_o/D),
@@ -220,6 +224,17 @@
   const OWNERS = ['AASHTO', 'RIDOT', 'MassDOT', 'CTDOT'];
 
   const isNum = v => typeof v === 'number' && isFinite(v);
+  /* equalSpacing(xs) (EQSP, 2026-11-09; engineer's definition 2026-11-09): equally spaced girders from the exterior girder spacing.
+     S = W_cc / (N_b − 1): W_cc the exterior girder spacing (℄ to ℄ of the two exterior girders, ft), N_b − 1 the number of bays.
+     -> { nb, Wcc, S (ft; NaN when nb < 2 or W_cc is not a number), bays: [S × (nb − 1)], step (SharedSteps form, id 'xs.eqS') }.
+     Geometry only (no code provision); the overhangs stay inputs: deck width out to out = oh_L + W_cc + oh_R. */
+  function equalSpacing(xs) {
+    const x = xs || {}, nb = Math.round(+x.nb), Wcc = x.Wcc == null || x.Wcc === '' ? NaN : +x.Wcc, ok = Number.isInteger(nb) && nb >= 2 && nb < 100;
+    const S = ok && isFinite(Wcc) ? Wcc / (nb - 1) : NaN, fm = (v, d) => isFinite(v) ? (+v).toFixed(d) : '\\text{—}';
+    const step = { id: 'xs.eqS', label: 'Girder spacing, girders equally spaced', sym: 'S', eq: '\\frac{W_{cc}}{N_{b} \\minus 1}', sub: `\\frac{${fm(Wcc, 3)}}{${ok ? nb : '\\text{—}'} \\minus 1}`,
+      value: S, unit: 'ft', d: 3, ref: '', note: 'W_cc: exterior girder spacing, centreline to centreline of the two exterior girders; N_b − 1 bays, all at S.' };
+    return { nb, Wcc, S, bays: ok ? new Array(nb - 1).fill(S) : [], step };
+  }
   /* validate(p): { errors: [{ path, msg }], warnings: [{ path, msg }] }. Errors stop the calculation; warnings do not. */
   function validate(p) {
     const errors = [], warnings = [], E = (path, msg) => errors.push({ path, msg }), W = (path, msg) => warnings.push({ path, msg });
@@ -279,6 +294,8 @@
       if (Number.isInteger(x.nb) && B.length !== x.nb - 1) E(`${xp}.bays`, `Enter ${x.nb - 1} girder spacings (one per bay); ${B.length} entered.`);
       B.forEach((v, i) => { if (!(isNum(v) && v > 0)) E(`${xp}.bays`, `Girder spacing ${i + 1} must be a positive number.`); });
       nn(x.ohL, `${xp}.ohL`, 'Left overhang'); nn(x.ohR, `${xp}.ohR`, 'Right overhang');
+      if (x.spMode != null && !['individual', 'equal'].includes(x.spMode)) E(`${xp}.spMode`, 'Girder spacing: choose individual spacings or equal spacing.');   // EQSP
+      if (x.spMode === 'equal') pos(x.Wcc, `${xp}.Wcc`, 'Exterior girder spacing (℄ to ℄ of the exterior girders)');
       const K = Array.isArray(x.skews) ? x.skews : [];
       if (K.length !== L.length + 1) E(`${xp}.skews`, `Enter ${L.length + 1} support skews (one per support line); ${K.length} entered.`);
       K.forEach((v, i) => { if (!(isNum(v) && Math.abs(v) < 90)) E(`${xp}.skews`, `Skew ${i + 1} must be a number of degrees between −90 and 90.`); });
@@ -451,5 +468,5 @@
      (ownerRules.owner) when it is not AASHTO, else '' (as before the owner card moved to the Project tab). Display only; nothing computed or saved. */
   const clientName = P => { const t = String(((P || {}).project || {}).owner == null ? '' : P.project.owner).trim(), o = ((P || {}).ownerRules || {}).owner;
     return t || (o && o !== 'AASHTO' ? o : ''); };
-  window.SBDModel = { clientName, SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, defaultXs, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, defaultWelds, validate, migrate, migrateNbList, legacyKind, importLegacy, exportJSON, importJSON, save, load };
+  window.SBDModel = { clientName, SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, defaultXs, equalSpacing, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, defaultWelds, validate, migrate, migrateNbList, legacyKind, importLegacy, exportJSON, importJSON, save, load };
 })();

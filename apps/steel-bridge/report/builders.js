@@ -74,7 +74,11 @@
     const regSteps = [];
     R.regions.forEach(rg => { regSteps.push(...rg.steps); gs.forEach(j => { if (rg.members[j]) regSteps.push(...rg.members[j].steps); }); });
     const geo = R.regions[0].geo;
+    const eq = P.xs && P.xs.spMode === 'equal' ? window.SBDModel.equalSpacing(P.xs) : null;   // EQSP (2026-11-09): girders equally spaced from the exterior girder spacing
     return { title: 'Cross-section, loads and live-load distribution', note: `Cross-section girder G${line + 1} carries the reported girder ${gName(B.girder)}${all ? '; every girder of the cross-section is worked' : ''}. As on the [[tab:loads|Loads & LLDF tab]].`, subs: [
+      ...(eq ? [sub('sp', 'Girder spacing (girders equally spaced)', [kv([['Number of girders $N_{b}$', String(eq.nb)], ['Exterior girder spacing $W_{cc}$ (℄ to ℄ of the exterior girders)', `${f(eq.Wcc, 3)} ft`],
+        ['Overhangs left / right', `${f(+P.xs.ohL, 2)} / ${f(+P.xs.ohR, 2)} ft`], ['Deck width out to out', `${f(+P.xs.ohL + eq.Wcc + +P.xs.ohR, 2)} ft`]]), steps('', [window.SharedSteps.step(eq.step)]),
+        note('Every bay takes S; the dead loads and distribution factors below use these spacings.')])] : []),
       sub('d', `Dead loads per girder (klf), ${LD.METHODS[D.method] || D.method}`, [tbl(['Girder', 'Class', 'Deck', 'Haunch', 'SIP', 'DC1', 'DC2', 'DW'],
         gs.map(i => [`G${i + 1}`, LD.CLS[D.cls[i]] || D.cls[i], N(D.deck[i], 4), N(D.haunch[i], 4), N(D.sip[i], 4), { ...N(D.dc1[i], 4), key: `dl.G${i + 1}.DC1` }, { ...N(D.dc2[i], 4), key: `dl.G${i + 1}.DC2` }, { ...N(D.dw[i], 4), key: `dl.G${i + 1}.DW` }])),
         kv([[`Girder steel, ${R.girderLabel} (average)`, `${f(R.steel.avg, 4)} klf`, `dl.steel.${R.girderId}.avg`], ['Deck width', `${f(D.Wd, 2)} ft`], ['Live-load faces L / R', `${f(R.ll.L.r, 2)} / ${f(R.ll.R.r, 2)} ft`, 'xs.rL']]),
