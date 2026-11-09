@@ -24,6 +24,15 @@
       .ad-lk{display:inline-block;padding:0 6px;border:1px solid #cbd5e1;border-radius:4px;color:#475569;font-size:8.5pt;} tr.ad-fx td{color:#64748b;} details.ad-pc summary{cursor:pointer;color:#2563EB;font-size:9pt;}
       .ad-spr .fRow{flex-wrap:wrap;} .ad-spr .unit{flex:1 1 220px;} .ad-cmp td,.ad-cmp th{padding:2px 8px;} .ad-cmp .ad-better{background:#e7f4ec;} .ad-cmp .ad-worse{background:#fbe1dd;}
       #inPanes .ad-vars{min-width:640px;}   /* ADIN: on the narrow input panel the variables table scrolls sideways in its .tscroll rather than squeezing the notes */
+      .ad-sum{margin:4px 0;font-size:9pt;} .ad-sum b{font-weight:600;} .ad-chips{display:flex;flex-wrap:wrap;gap:3px 4px;margin:2px 0 6px;}
+      .ad-chip{display:inline-block;padding:0 6px;border:1px solid #cbd5e1;border-radius:10px;font-size:8.5pt;color:#334155;text-decoration:none;background:#fff;line-height:1.6;}
+      .ad-chip.m-auto{border-color:#93c5fd;background:#eff6ff;} .ad-chip.m-lock{border-color:#cbd5e1;background:#f1f5f9;} .ad-chip.m-range{border-color:#fcd34d;background:#fffbeb;} .ad-chip:hover,.ad-chip:focus{outline:2px solid #2563EB;outline-offset:1px;}
+      dialog#adVarsDlg{width:min(1100px,90vw);max-width:1100px;max-height:90vh;padding:0;border:1px solid #94a3b8;border-radius:8px;box-shadow:0 12px 40px rgba(15,23,42,.35);overflow:hidden;}
+      dialog#adVarsDlg[open]{display:flex;flex-direction:column;} dialog#adVarsDlg::backdrop{background:rgba(15,23,42,.45);}
+      #adVarsDlg .ad-dh{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #e2e8f0;background:#f8fafc;}
+      #adVarsDlg .ad-dh h2{margin:0;font-size:12pt;font-family:var(--font-ui);} #adVarsDlg .ad-db{overflow:auto;padding:8px 14px 14px;flex:1 1 auto;}
+      #adVarsDlg tr.ad-hit td{background:#FFF7D6;} #adVarsDlg .ad-vars{min-width:760px;}   /* a narrow screen: the table scrolls sideways inside the dialog */
+      @media (max-width:700px){ dialog#adVarsDlg{width:100vw;max-width:none;height:100dvh;max-height:none;margin:0;border-radius:0;border:none;} }
       .ad-warn{display:inline-block;background:#FEF3C7;color:#92400E;border:1px solid #F59E0B;border-radius:3px;padding:0 4px;font-weight:600;font-size:8pt;margin-left:4px;} .alert.ad-wn{border-left-color:#F59E0B;background:#FFFBEB;} .ad-ck{display:flex;gap:6px;align-items:flex-start;margin:4px 0;} .ad-ck input{width:auto;margin-top:3px;}`;
     document.head.appendChild(st);
   }
@@ -91,7 +100,7 @@
       default: return '';
     }
   }
-  function varsHtml(P, s) {
+  function rowsHtml(P, s) {
     const a = ensure(P), VV = a.vars || {}, L = AD().layoutOf(P), MODE = { auto: 'Auto', lock: 'Lock', range: 'Range' };
     const sel = (key, q, V, inherit) => { const e = VV[key]; if (q.forced) return `<span class="ad-lk" title="${esc(q.forced)}">Lock</span>`;
       const cur = inherit && !(e && e.mode) ? '' : q.mode;
@@ -107,12 +116,34 @@
       if (V.span && !q.forced && q.mode !== 'lock') { const sp = supsOf(P); h += `<tr><td colspan="7" class="lft"><details class="ad-pc"${P.spans.lengths.some((_, k) => VV[`${V.id}#${k + 1}`]) ? ' open' : ''}><summary>Field splice locations: each span on its own</summary><table class="tbl"><tbody>${P.spans.lengths.map((Ls, k) => { const key = `${V.id}#${k + 1}`, qk = s.V[key] || { ...q, mode: q.mode };
         return row(V, key, qk, `Span ${k + 1} (${fmt(sp[k], 2)} to ${fmt(sp[k + 1], 2)} ft)`, true, k); }).join('')}</tbody></table></details></td></tr>`; }
  });
+    return h;
+  }
+  function varsHtml(P, s) {
+    const a = ensure(P);
     const nA = AD().VARS.filter(V => s.V[V.id].mode === 'auto').length, nL = AD().VARS.filter(V => s.V[V.id].mode === 'lock').length, nR = AD().VARS.length - nA - nL;
     return `<section class="sec"><div class="secHead">Auto design: design variables</div><div class="secBody">
       <p class="note">Every input Auto design can size: <b>Auto</b> sizes it (within the limits above, the owner's plate rules and the code checks), <b>Lock</b> keeps the project's current value, <b>Range</b> sizes it between min and max (and on the step, where asked). ${nA} Auto, ${nL} Lock, ${nR} Range. Default Auto; Lock where the tab's own automatic choice is off (stud zones or a weld size entered, splice auto-design off); the field splice locations default to Lock (the stations entered), Auto and Range only in New design. <span class="ad-lk">Lock</span> alone: an input Auto design does not size (the note says why). Details (stiffeners, studs, cross-frames, welds, splice plates) are sized on each finalist, on its own analysis, before its full check.</p>
       <div class="fRow"><label for="ohSym">Overhangs</label><select id="ohSym" data-ad="ohSym"><option value="sym"${s.ohSym !== 'asym' ? ' selected' : ''}>Symmetric (left = right)</option><option value="asym"${s.ohSym === 'asym' ? ' selected' : ''}>Left and right sized apart</option></select><span class="unit">the right one only when a plate girder stands on the right fascia line</span></div>
       <div class="fRow"><label for="ohMin">Minimum overhang</label><input type="text" id="ohMin" data-ad="ohMin" value="${esc(a.ohMin !== undefined ? a.ohMin : s.ohMin)}" placeholder="2.5" size="5"><span class="unit">ft (saved with the project; blank 2.5 ft). Auto and Range never go below it (a Range min below it is raised to it); Lock keeps the project's overhang; the owner's limits (RIDOT 9.4.1.4, CTDOT 9.7.1.5) still apply on top.</span></div>
-      <div class="tscroll"><table class="tbl ad-vars"><thead><tr><th class="lft">Variable</th><th>Mode</th><th>Min</th><th>Max</th><th>Step</th><th class="lft">Now</th><th class="lft">How it is sized</th></tr></thead><tbody>${h}</tbody></table></div>${splRulesBox(P, s, s.V.spl)}</div></section>`;
+      ${summaryHtml(P, s)}</div></section>`;
+  }
+  /* ADVD (2026-11-09, engineer: "Can the auto design design variables open in a pop-up window?"): the variables table and the field splice
+     placement rules are drawn in a dialog (varsDialog), not in the narrow input panel; the panel keeps a summary (one line per group and a chip
+     per variable, each chip opening the dialog at its row) and the Edit buttons. Same inputs, data attributes and handlers as before: the
+     dialog writes P.autodesign.vars / .splRules live, as the panel did. */
+  function varsTableHtml(P, s) {
+    return `<div class="tscroll"><table class="tbl ad-vars"><thead><tr><th class="lft">Variable</th><th>Mode</th><th>Min</th><th>Max</th><th>Step</th><th class="lft">Now</th><th class="lft">How it is sized</th></tr></thead><tbody>${rowsHtml(P, s)}</tbody></table></div>${splRulesBox(P, s, s.V.spl)}`;
+  }
+  /* the panel's summary: one line per group (its modes counted) with a chip per variable (a link to its row in the dialog), the splice rules line */
+  function summaryHtml(P, s) {
+    const MODE = { auto: 'Auto', lock: 'Locked', range: 'Range' }, grps = [];
+    AD().VARS.forEach(V => { let g = grps.find(q => q.n === V.grp); if (!g) grps.push(g = { n: V.grp, v: [] }); g.v.push(V); });
+    const cnt = vs => ['auto', 'lock', 'range'].map(m => [m, vs.filter(V => s.V[V.id].mode === m).length]).filter(q => q[1]).map(([m, n]) => `${n} ${MODE[m]}`).join(', ');
+    const spr = ((P.autodesign || {}).splRules) || {}, nSet = Object.keys(spr).filter(k => spr[k] !== '' && spr[k] != null).length;
+    return `<div class="ad-sum">${grps.map(g => `<div><b>${esc(g.n)}:</b> ${cnt(g.v)}</div><div class="ad-chips">${g.v.map(V => { const q = s.V[V.id], m = q.forced ? 'lock' : q.mode;
+        return `<a href="#" class="ad-chip m-${m}" data-advgo="${esc(V.id)}" title="${esc(V.label)}: ${MODE[m]}${q.forced ? ' (fixed)' : ''}. Click to edit.">${esc(V.label)}: ${MODE[m]}</a>`; }).join('')}</div>`).join('')}</div>
+      <div class="fRow"><button type="button" class="primary" data-advgo="" id="ad_vars_edit">Edit design variables…</button></div>
+      ${s.splR ? `<p class="note">Field splice placement rules: ${nSet ? `${nSet} entered, the others` : 'all'} at their defaults. <a href="#" data-advgo="#spr">Edit…</a></p>` : ''}`;
   }
   /* the field splice placement rules (P.autodesign.splRules; engine/splplace.js rules): each input with its default and where it comes from */
   function splRulesBox(P, s, q) {
@@ -217,10 +248,50 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
     return `<p class="note"><a href="#" data-adout="1">Results: Auto design output tab</a> (candidates, ranking, full checks, Apply).</p>` + inputsHtml(P) + varsHtml(P, AD().settings(P)) + runBar(P)
       + (S.err ? `<div class="alert err">${esc(S.err)}</div>` : '');
   }
+  /* ---------- the design variables dialog (ADVD) ---------- */
+  let CUR = null;   // { P, ctx } of the last draw of the input tab: the dialog writes there and redraws through it
+  const setAdv = (P, el) => { const a = ensure(P), path = el.dataset.adv, j = path.lastIndexOf('.'), key = path.slice(0, j), fld = path.slice(j + 1), val = el.value;   // as the panel's handler (unchanged)
+    a.vars = a.vars || {};
+    if (fld === 'mode' && val === '') delete a.vars[key];   // a field piece "as all pieces": its own entry removed
+    else { a.vars[key] = a.vars[key] || {}; a.vars[key][fld] = val; } };
+  const setAd = (P, el) => { const a = ensure(P), id = el.dataset.ad, val = el.type === 'checkbox' ? String(el.checked) : el.value, path = id.split('.'); if (path.length > 1 && !a[path[0]]) a[path[0]] = {}; const o = path.length > 1 ? a[path[0]] : a, k = path[path.length - 1];
+    o[k] = val === 'true' ? true : val === 'false' ? false : val; };
+  function dlg() {
+    let d = document.getElementById('adVarsDlg'); if (d) return d;
+    d = document.createElement('dialog'); d.id = 'adVarsDlg'; d.setAttribute('aria-labelledby', 'adVarsTitle');
+    d.innerHTML = '<div class="ad-dh"><h2 id="adVarsTitle">Auto design: design variables</h2><button type="button" id="adVarsClose">Close</button></div><div class="ad-db" id="adVarsBody"></div>';
+    document.body.appendChild(d);
+    d.querySelector('#adVarsClose').addEventListener('click', () => d.close());
+    d.addEventListener('close', () => { const b = document.getElementById('ad_vars_edit'); if (b) b.focus(); });
+    d.addEventListener('change', e => { if (!CUR) return; const el = e.target;
+      if (el.dataset.adv) setAdv(CUR.P, el); else if (el.dataset.ad) setAd(CUR.P, el); else return;
+      setTimeout(() => { if (CUR.ctx.changed) CUR.ctx.changed(true); }, 0); });   // as the panel: after the event; the input tab redraws and wire() refreshes the dialog
+    return d;
+  }
+  /* fill(): the dialog's table, keeping the focused input, the open per-piece lists and the scroll */
+  function fill() {
+    const d = document.getElementById('adVarsDlg'); if (!d || !CUR) return; const body = d.querySelector('#adVarsBody'), ae = document.activeElement;
+    const fk = ae && body.contains(ae) ? (ae.dataset.adv ? `[data-adv="${ae.dataset.adv}"]` : ae.id ? '#' + ae.id : null) : null, top = body.scrollTop;
+    const open = new Set([...body.querySelectorAll('details[open] > summary')].map(q => q.textContent));
+    body.innerHTML = `<p class="note"><b>Auto</b> sizes the variable (within the limits on the input tab, the owner's plate rules and the code checks), <b>Lock</b> keeps the project's current value, <b>Range</b> sizes it between min and max. Changes are saved as you make them (Undo / Redo as usual).</p>` + varsTableHtml(CUR.P, AD().settings(CUR.P));
+    body.querySelectorAll('details > summary').forEach(q => { if (open.has(q.textContent)) q.parentElement.open = true; });
+    body.scrollTop = top; if (fk) { const el = body.querySelector(fk); if (el) el.focus({ preventScroll: true }); }
+  }
+  /* openVars(go): opens the dialog; go = a variable id (its row is shown and its mode focused), '#spr' (the splice rules) or '' */
+  function openVars(go) {
+    const d = dlg(); fill(); if (!d.open) d.showModal();
+    const body = d.querySelector('#adVarsBody'); let el = null;
+    if (go === '#spr') { const q = body.querySelector('.ad-spr'); if (q) { q.open = true; el = q.querySelector('input'); } }
+    else if (go) { el = body.querySelector(`[data-adv="${go}.mode"]`) || body.querySelector(`[data-adv^="${go}#"]`); if (!el) { const r = [...body.querySelectorAll('tr')].find(t => (t.cells[0] || {}).textContent === ((AD().VARS.find(V => V.id === go) || {}).label)); el = r && r.cells[1]; } }
+    if (el) { const tr = el.closest('tr'); body.querySelectorAll('tr.ad-hit').forEach(t => t.classList.remove('ad-hit')); if (tr) tr.classList.add('ad-hit'); el.scrollIntoView({ block: 'center' }); if (el.focus) el.focus({ preventScroll: true }); }
+    else { const f = body.querySelector('select,input'); if (f) f.focus({ preventScroll: true }); }
+  }
   /* wire(host, ctx): the input tab's handlers, after each draw. ctx = { P (project), changed(redraw), showOut() (opens the output tab),
      done() (redraws the input tab and the output tab when a run ends) } */
   function wire(host, ctx) {
     if (!host) return; const P = ctx.P, on = (sel, ev, f) => host.querySelectorAll(sel).forEach(el => el.addEventListener(ev, f));
+    CUR = { P, ctx }; { const d = document.getElementById('adVarsDlg'); if (d && d.open) fill(); }   // ADVD: the open dialog follows the project (an edit, Undo, Redo)
+    on('[data-advgo]', 'click', e => { e.preventDefault(); openVars(e.currentTarget.dataset.advgo); });
     const redraw = () => { if (ctx.done) ctx.done(); };
     on('[data-ad]', 'change', e => { const a = ensure(P), id = e.target.dataset.ad, val = e.target.type === 'checkbox' ? String(e.target.checked) : e.target.value, path = id.split('.'); if (path.length > 1 && !a[path[0]]) a[path[0]] = {}; const o = path.length > 1 ? a[path[0]] : a, k = path[path.length - 1];
       o[k] = val === 'true' ? true : val === 'false' ? false : val;
@@ -257,5 +328,5 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
       const r = AD().apply(P, c); ['autodesign', ...AD().APPLY_KEYS].forEach(k => { if (r.project[k] === undefined) delete P[k]; else P[k] = r.project[k]; }); S.R = null; if (ctx.changed) ctx.changed(true); else redraw(); });
     on('#ad_undo', 'click', () => { const Q = AD().undo(P); if (!Q) return; ['autodesign', ...AD().APPLY_KEYS].forEach(k => { if (Q[k] === undefined) delete P[k]; else P[k] = Q[k]; }); if (ctx.changed) ctx.changed(true); else redraw(); });
   }
-  window.SBDAutoDesignUI = { inputs, wire, render, diffFrom };
+  window.SBDAutoDesignUI = { inputs, wire, render, diffFrom, openVars };
 })();
