@@ -49,6 +49,10 @@
                                    opt.spy (2026-11-01, optional): the nav tree highlights the heading being read and keeps it in view
                                    (scroll-spy on the scrolling column that holds the viewer, else the page).
                                    Returns { doc, print(), jump(key), go(anchorId) } (go: a section / subsection / step anchor id, e.g. 'rp-s3-2').
+                                   Search (RSX, 2026-11-09): the words typed are marked in the shown report (<mark class="rp-hit">, text nodes
+                                   only, never inside an equation), with a status ("12 matches in 5 sections", "3 of 12", "No matches for …"),
+                                   ▲ ▼ / Enter / Shift+Enter to step through them, Esc to clear; a lazy item not yet opened is searched in its
+                                   model text and opened when a step reaches it. Display only.
      print(doc)                 -> prints the whole report (every section open, lazy items filled), alone on the page
      ref(doc, key)              -> '§x.y' or null
      css()                      -> injects the viewer's styles (mount and print do it themselves)
@@ -253,6 +257,12 @@
 .rp-chip:has(input:checked){background:#e8eef6;border-color:#64748b;}
 .rp-sp{flex:1;}
 .rp-q{width:150px!important;} .rp-bar select{width:auto!important;}
+.rp-qw{display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px 6px;max-width:100%;min-width:0;} .rp-qw .rp-qb{min-width:28px;padding-left:6px!important;padding-right:6px!important;} .rp-qw .rp-qb[hidden]{display:none!important;}   /* RSX: search, ▲ ▼, status */
+.rp-qs{font-size:9pt;color:#334155;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;min-width:0;} .rp-qs:empty{display:none;} .rp-qs.rp-qno{color:#991B1B;background:#FEE2E2;border:1px solid #FCA5A5;border-radius:4px;padding:1px 6px;font-weight:600;}
+mark.rp-hit{background:#FDE68A;color:inherit;padding:0;border-radius:2px;box-shadow:0 0 0 1px #FDE68A;} mark.rp-hit.rp-cur{background:#F59E0B;box-shadow:0 0 0 2px #B45309;}
+.rp-doc .katex.rp-hitk{background:#FEF3C7;outline:1px dashed #D97706;outline-offset:1px;} .rp-doc .katex.rp-hitk.rp-cur{background:#FDE68A;outline:2px solid #B45309;}
+details.rp-lzq>summary{background:#FEF3C7;} details.rp-lzq.rp-cur>summary,details.rp-cur>summary{outline:2px solid #B45309;}
+.rp-toc a.rp-tochit{font-weight:800;color:#0F172A;border-left-color:#D97706;}
 .rp-body{display:grid;grid-template-columns:230px minmax(0,1fr);gap:16px;align-items:start;}
 .rp-toc{position:sticky;top:calc(var(--rp-stick,0px) + var(--rp-top,64px));max-height:calc(100vh - 150px - var(--rp-stick,0px) - var(--rp-top,64px));overflow:auto;border:1px solid #E4E7EB;border-radius:8px;padding:6px 2px;font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;scrollbar-width:thin;background:#fff;}
 .rp-toc a{display:block;padding:2px 9px;border-left:2px solid transparent;color:#475569;text-decoration:none;font-size:9pt;line-height:1.35;}
@@ -313,6 +323,7 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
   html:has(body.rp-printing),body.rp-printing{height:auto!important;overflow:visible!important;background:#fff!important;}
   body.rp-printing #rp-print{display:block!important;}
   .rp-bar,.rp-toc{display:none!important;}
+  mark.rp-hit{background:none!important;color:inherit!important;box-shadow:none!important;} .rp-doc .katex.rp-hitk{background:none!important;outline:none!important;} details.rp-lzq>summary{background:none!important;} details.rp-cur>summary{outline:none!important;}   /* RSX: search marks print plainly */
   .rp-go{font-family:inherit;font-size:inherit;color:#000;text-decoration:none;white-space:normal;}
   .rp-body{display:block;} .rp-sub{content-visibility:visible;}
   .rp-doc{border:0;padding:0;max-width:none;box-shadow:none;}
@@ -349,6 +360,7 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
   function setPage(doc) { let st = document.getElementById('rp-page'); if (!st) { st = document.createElement('style'); st.id = 'rp-page'; document.head.appendChild(st); } st.textContent = doc ? pageCss(doc) : ''; }
 
   /* ---------- the viewer ---------- */
+  const MAXMARK = 2000;   // RSX: the most search marks put in the page at once (the rest are counted)
   let LIVE = null;   // the mounted viewer (for Ctrl+P from the Report tab: running header, lazy items filled)
   function fillLazy(root, doc) {
     root.querySelectorAll('details.rp-lz').forEach(d => { if (!d.dataset.filled) { const it = doc.lazy[+d.dataset.rplz]; d.insertAdjacentHTML('beforeend', lazyBody(doc, it)); d.dataset.filled = '1'; } d.open = true; });
@@ -356,7 +368,7 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
   function mount(host, model, opt) {
     css(); opt = opt || {};
     const doc = build(model), closed = opt.closed || new Set();
-    host.innerHTML = `<div class="rp"><div class="rp-bar">${opt.controls || ''}<span class="rp-sp"></span><input type="search" class="rp-q" placeholder="Search the report" aria-label="Search the report">
+    host.innerHTML = `<div class="rp"><div class="rp-bar">${opt.controls || ''}<span class="rp-sp"></span><span class="rp-qw"><input type="search" class="rp-q" placeholder="Search the report" aria-label="Search the report" title="Enter: next match · Shift+Enter: previous · Esc: clear"><button type="button" class="rp-qb" data-rpq="-1" aria-label="Previous match" title="Previous match (Shift+Enter)" hidden>▲</button><button type="button" class="rp-qb" data-rpq="1" aria-label="Next match" title="Next match (Enter)" hidden>▼</button><span class="rp-qs" role="status" aria-live="polite"></span></span>
       <button type="button" data-rpact="exp">Expand all</button><button type="button" data-rpact="col">Collapse all</button><button type="button" class="primary" data-rpact="print">Print report</button></div>
       <div class="rp-body"><nav class="rp-toc" aria-label="Report contents">${doc.toc.map(s => `${s.part ? `<a href="#${s.part.id}" data-rpto="${s.part.id}" class="rp-l0">${esc(s.part.title)}</a>` : ''}<a href="#${s.id}" data-rpto="${s.id}" class="rp-l1">${s.n}. ${esc(s.title)}</a>${s.subs.map(q => `<a href="#${q.id}" data-rpto="${q.id}" class="rp-l2">${q.n} ${rich(doc, q.title, true)}</a>${(q.items || []).map(it => `<a href="#${it.anchor}" data-rpto="${it.anchor}" class="rp-l3">${rich(doc, it.title, true)}</a>${it.tops.map((t, k) => `<a href="#${t.anchor}" data-rpto="${t.anchor}" class="rp-l4">${k + 1}. ${esc(t.title)}</a>`).join('')}`).join('')}`).join('')}`).join('')}</nav>
       <article class="rp-doc">${html(doc, { lazy: true, closed })}</article></div></div>`;
@@ -368,7 +380,7 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
     const go = id => { const el = root.querySelector('#' + id); if (!el) return false; open(el); el.scrollIntoView({ block: 'start' }); flash(el); return true; };
     function jump(key) {
       const e = doc.index.get(key); if (!e) return false;
-      if (e.lz != null) { const d = art.querySelector(`details.rp-lz[data-rplz="${e.lz}"]`); if (d) { if (!d.dataset.filled) { d.insertAdjacentHTML('beforeend', lazyBody(doc, doc.lazy[e.lz])); d.dataset.filled = '1'; } d.open = true; } }
+      if (e.lz != null) { const d = art.querySelector(`details.rp-lz[data-rplz="${e.lz}"]`); if (d) { fillOne(d); d.open = true; } }
       return go(e.anchor);
     }
     root.addEventListener('click', e => {
@@ -377,25 +389,89 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
       const to = t.closest('[data-rpto]'); if (to) { e.preventDefault(); go(to.dataset.rpto); return; }
       const g = t.closest('[data-rpgoto]'); if (g) { e.preventDefault(); if (opt.onGoto) opt.onGoto(g.dataset.rpgoto); return; }
       const h = t.closest('.rp-h1,.rp-h2'); if (h && !t.closest('a')) { const box = h.parentElement; box.classList.toggle('rp-closed'); if (box.classList.contains('rp-closed')) closed.add(h.id); else closed.delete(h.id); return; }
+      const qb = t.closest('[data-rpq]'); if (qb) { step(+qb.dataset.rpq); return; }
       const a = t.closest('[data-rpact]'); if (!a) return;
       if (a.dataset.rpact === 'exp') { art.querySelectorAll('.rp-closed').forEach(x => x.classList.remove('rp-closed')); closed.clear(); }
       else if (a.dataset.rpact === 'col') art.querySelectorAll('.rp-sec').forEach(x => { x.classList.add('rp-closed'); closed.add(x.querySelector('.rp-h1').id); });
       else if (a.dataset.rpact === 'print') print(doc);
     });
-    art.addEventListener('toggle', e => { const d = e.target; if (d.matches && d.matches('details.rp-lz') && d.open && !d.dataset.filled) { d.insertAdjacentHTML('beforeend', lazyBody(doc, doc.lazy[+d.dataset.rplz])); d.dataset.filled = '1'; } }, true);
-    // search: hides the subsections (and sections) whose text does not contain every word typed
+    art.addEventListener('toggle', e => { const d = e.target; if (d.matches && d.matches('details.rp-lz') && d.open) fillOne(d); }, true);
+    /* search (RSX, 2026-11-09, display only): hides the subsections (and sections) whose text does not contain every word typed, as
+       before; the text of a lazy item not yet opened is its model text (lzText), so a hit inside it is found. In what stays shown, the
+       words are marked (<mark class="rp-hit">, text nodes only; an equation that holds a word gets class rp-hitk, a lazy item not yet
+       opened rp-lzq), counted in the status, the contents entries holding a hit made bold, and ▲ ▼ / Enter / Shift+Enter step through
+       the hits (opening the section, subsection or lazy item that holds one); Esc clears. */
+    const qIn = root.querySelector('.rp-q'), qSt = root.querySelector('.rp-qs'), qBt = Array.from(root.querySelectorAll('.rp-qb'));
+    const LZT = [], Q = { v: '', w: [], re: null, hits: [], cur: -1, more: 0, secs: 0 };
+    const lzText = i => { if (LZT[i] != null) return LZT[i]; const it = doc.lazy[i], F = ST().fmt, P = [it.title, it.caption];
+      if (it.type === 'table') [it.head || []].concat((it.rows || []).map(r => (Array.isArray(r) ? r : r.cells))).forEach(R => R.forEach(c => { const o = c && typeof c === 'object' ? c : { t: c }; P.push(rich(doc, o.t, false)); if (o.key) P.push(ref(doc, o.key)); }));
+      else { (it.topics || []).forEach(t => P.push(t.title, t.ref, t.chip)); (it.steps || []).forEach(st => P.push(st.label, st.ref, st.sym, st.eq, st.sub, typeof st.value === 'number' ? F(st.value, st.d) : st.value, st.unit, st.ok === true ? 'OK' : st.ok === false ? 'NG' : '', st.note ? noteSrc(st.note) : '')); }
+      return (LZT[i] = P.filter(x => x != null && x !== '').join('\n').toLowerCase()); };
+    const textOf = el => (el._rpq != null ? el._rpq : (el._rpq = [el.textContent].concat(Array.from(el.querySelectorAll('details.rp-lz'), d => lzText(+d.dataset.rplz))).join('\n').toLowerCase()));
+    function fillOne(d) {   // a lazy item filled (opened, a § link, or a search step); while a search is shown, its hits are marked
+      if (!d.dataset.filled) { d.insertAdjacentHTML('beforeend', lazyBody(doc, doc.lazy[+d.dataset.rplz])); d.dataset.filled = '1'; }
+      if (!d.classList.contains('rp-lzq')) return -1;
+      d.classList.remove('rp-lzq'); const k = Q.hits.indexOf(d); if (k < 0) return -1;
+      const H = []; Array.from(d.children).forEach(c => { if (c.tagName !== 'SUMMARY') markIn(c, H); });
+      Q.hits.splice(k, 1, ...(H.length ? H : [d])); if (Q.cur > k) Q.cur += Math.max(H.length, 1) - 1; status(); return k;
+    }
+    const SKIP = '.katex,svg,script,style,textarea,.rp-hide';
+    function markIn(el, H) {   // the hits in el, in document order, into H (marks wrapped up to MAXMARK; the rest counted in Q.more)
+      const w = Q.w, E = [], F = NodeFilter, tw = document.createTreeWalker(el, F.SHOW_ELEMENT | F.SHOW_TEXT, { acceptNode: n => {   // E: the hits, in document order
+        if (n.nodeType === 3) { Q.re.lastIndex = 0; if (Q.re.test(n.nodeValue)) E.push(n); return F.FILTER_SKIP; }
+        if (n.matches(SKIP)) { if (n.classList.contains('katex')) { const t = n.textContent.toLowerCase(); if (w.some(x => t.includes(x))) { n.classList.add('rp-hitk'); E.push(n); } } return F.FILTER_REJECT; }   // never inside an equation
+        if (n.matches('details.rp-lz:not([data-filled])') && w.some(x => lzText(+n.dataset.rplz).includes(x))) { n.classList.add('rp-lzq'); E.push(n); }
+        return F.FILTER_SKIP; } });
+      while (tw.nextNode());   // walked first, changed after
+      E.forEach(n => { if (n.nodeType === 1) { H.push(n); return; }
+        const s = n.nodeValue, f = document.createDocumentFragment(); let m, a = 0, k = 0; Q.re.lastIndex = 0;
+        while ((m = Q.re.exec(s))) { if (Q.nMark >= MAXMARK) { Q.more++; continue; } if (m.index > a) f.appendChild(document.createTextNode(s.slice(a, m.index)));
+          const mk = document.createElement('mark'); mk.className = 'rp-hit'; mk.textContent = m[0]; f.appendChild(mk); H.push(mk); Q.nMark++; k++; a = m.index + m[0].length; }
+        if (!k) return; if (a < s.length) f.appendChild(document.createTextNode(s.slice(a))); n.replaceWith(f); });
+    }
+    function unmark() {
+      const P = new Set(); art.querySelectorAll('mark.rp-hit').forEach(m => { P.add(m.parentNode); m.replaceWith(m.textContent); }); P.forEach(p => p.normalize());
+      art.querySelectorAll('.rp-hitk,.rp-lzq,.rp-cur').forEach(x => x.classList.remove('rp-hitk', 'rp-lzq', 'rp-cur')); root.querySelectorAll('.rp-toc .rp-tochit').forEach(a => a.classList.remove('rp-tochit'));
+    }
+    function status() {
+      const n = Q.hits.length + Q.more, lz = Q.hits.filter(h => h.classList && h.classList.contains('rp-lzq')).length;
+      qBt.forEach(b => { b.hidden = !Q.w.length; b.disabled = !Q.hits.length; });
+      qSt.className = 'rp-qs' + (Q.w.length && !n ? ' rp-qno' : '');
+      qSt.textContent = !Q.w.length ? '' : !n ? `No matches for “${Q.v.trim()}”` : (Q.cur >= 0 ? `${Q.cur + 1} of ${n.toLocaleString('en-US')}` : `${n.toLocaleString('en-US')} match${n === 1 ? '' : 'es'}`) + ` in ${Q.secs} section${Q.secs === 1 ? '' : 's'}`
+        + (lz ? ` (${lz.toLocaleString('en-US')} in unopened lists)` : '') + (Q.more ? ` (first ${MAXMARK.toLocaleString('en-US')} marked)` : '');
+      size();
+    }
     let qT = 0;
-    root.querySelector('.rp-q').addEventListener('input', e => { clearTimeout(qT); const v = e.target.value; qT = setTimeout(() => search(v), 150); });
+    qIn.addEventListener('input', e => { clearTimeout(qT); const v = e.target.value; qT = setTimeout(() => search(v), 150); });
+    qIn.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { if (!qIn.value && !Q.w.length) return; e.preventDefault(); clearTimeout(qT); qIn.value = ''; search(''); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (qT && qIn.value !== Q.v) { clearTimeout(qT); search(qIn.value); } step(e.shiftKey ? -1 : 1); }
+    });
+    function step(d) {
+      if (!Q.hits.length) return; let k = Q.cur < 0 ? (d > 0 ? 0 : Q.hits.length - 1) : (Q.cur + d + Q.hits.length) % Q.hits.length;
+      const prev = Q.hits[Q.cur]; if (prev && prev.classList) prev.classList.remove('rp-cur');
+      let el = Q.hits[k]; if (el.matches('details.rp-lzq')) { fillOne(el); el.open = true; if (d < 0 && Q.hits[k] !== el) { let j = k; while (j + 1 < Q.hits.length && el.contains(Q.hits[j + 1])) j++; k = j; } el = Q.hits[k]; }
+      Q.cur = k; open(el); for (let p = el.parentElement && el.parentElement.closest('details'); p; p = p.parentElement && p.parentElement.closest('details')) p.open = true;
+      el.classList.add('rp-cur'); el.scrollIntoView({ block: 'center' }); requestAnimationFrame(() => { if (Q.hits[Q.cur] === el) el.scrollIntoView({ block: 'center' }); });   // again once the subsections above it are laid out (content-visibility)
+      status();
+    }
     function search(v) {
-      const w = String(v || '').toLowerCase().split(/\s+/).filter(Boolean), has = el => { const t = (el._rpq || (el._rpq = el.textContent.toLowerCase())); return w.every(x => t.includes(x)); };
+      qT = 0; unmark(); Q.v = String(v || ''); Q.w = Q.v.toLowerCase().split(/\s+/).filter(Boolean); Q.hits = []; Q.cur = -1; Q.more = 0; Q.nMark = 0; Q.secs = 0;
+      const w = Q.w, has = el => { const t = textOf(el); return w.every(x => t.includes(x)); };
+      Q.re = w.length ? new RegExp(w.slice().sort((a, b) => b.length - a.length).map(x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'gi') : null;
       art.querySelectorAll('.rp-sec').forEach(sec => {
         const h1 = sec.querySelector('.rp-h1'), secHit = !w.length || has(h1); let any = false;
         sec.querySelectorAll('.rp-sub').forEach(sub => { const hit = !w.length || secHit || has(sub); sub.classList.toggle('rp-hide', !hit); any = any || hit;
           const a = root.querySelector(`.rp-toc [data-rpto="${sub.querySelector('.rp-h2').id}"]`); if (a) a.classList.toggle('rp-hide', !hit); });
         const show = !w.length || secHit || any; sec.classList.toggle('rp-hide', !show);
         const a = root.querySelector(`.rp-toc [data-rpto="${h1.id}"]`); if (a) a.classList.toggle('rp-hide', !show);
-        if (w.length && show) sec.classList.remove('rp-closed');
+        if (w.length && show) { sec.classList.remove('rp-closed');
+          const H = []; markIn(sec, H); if (!H.length) return; Q.hits.push(...H);
+          const S = new Set(H.map(h => (h.nodeType === 1 ? h : h.parentNode).closest('.rp-sub') || sec)); Q.secs += S.size;
+          S.forEach(x => { const id = (x.querySelector(x === sec ? '.rp-h1' : '.rp-h2') || {}).id, l = id && root.querySelector(`.rp-toc [data-rpto="${id}"]`); if (l) l.classList.add('rp-tochit'); });
+          if (a) a.classList.add('rp-tochit'); }
       });
+      status();
     }
     if (opt.spy) {   // scroll-spy: the last nav entry whose target is above the top of the reading area
       const toc = root.querySelector('.rp-toc'), links = Array.from(toc.querySelectorAll('a[data-rpto]'));
