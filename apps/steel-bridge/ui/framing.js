@@ -34,13 +34,35 @@
     return `<svg viewBox="0 0 ${W} ${H.toFixed(0)}" style="width:100%;height:auto;background:#fff;border:1px solid #e4e7eb;border-radius:4px" role="img" aria-label="Framing plan: girders, supports and cross-frames">${o}
       <text x="${pad}" y="${(H - 6).toFixed(0)}" font-size="9" fill="#475569">Plan, to scale along the bridge (vertical scale exaggerated). Blue: girders; brown: end cross-frames on the bearing lines; navy: intermediate cross-frames; red ticks: field splices.</text></svg>`;
   }
+  /* BRSEL (2026-11-09): the "Intermediate bracing" drop-down. braceOf(C): the choice shown for the saved fields: a diaphragm when
+     dia.on = 'yes' (type kept underneath), 'ch' when its shape is one of CF_CH, else 'w' (CF_DIA or custom W); otherwise the frame type.
+     setBrace(P, v): writes the choice back: a frame sets type and dia.on = 'no'; a diaphragm sets dia.on = 'yes' and leaves type alone;
+     a change of shape family puts back the shape last used in that family in this session, else the shape CF10 recommends (cfTypeRec),
+     else W21x44 / MC18x42.7. No other field is written. */
+  const BRACE = [['X', 'X-frame'], ['Kb', 'K-frame (diagonals to the bottom)'], ['Kt', 'K-frame (diagonals to the top)'], ['w', 'Rolled W diaphragm'], ['ch', 'Channel diaphragm']];
+  const isCh = shape => window.SBDCrossframes.CF_CH.some(s => s[0] === shape), SHP = new WeakMap();
+  function braceOf(C) { const q = C.dia || {}; return q.on === 'yes' ? (isCh(q.shape) ? 'ch' : 'w') : C.type; }
+  function setBrace(P, v) {
+    const C = ensure(P).crossframes, CF = window.SBDCrossframes;
+    if (v === 'X' || v === 'Kb' || v === 'Kt') { C.type = v; if (C.dia) C.dia.on = 'no'; return; }
+    if (v !== 'w' && v !== 'ch') return;
+    if (!C.dia) C.dia = window.SBDModel.defaultCrossframes().dia;
+    const q = C.dia, fam = isCh(q.shape) ? 'ch' : 'w'; q.on = 'yes'; if (fam === v) return;
+    const mem = SHP.get(C) || {}; mem[fam] = q.shape; SHP.set(C, mem);
+    let rec = null; try { const TR = CF.cfTypeRec(CF.inputsOf(P).p, CF.envOf(P)); rec = v === 'ch' ? TR.ch : TR.w; } catch (e) { rec = null; }
+    q.shape = mem[v] || rec || (v === 'ch' ? 'MC18x42.7' : 'W21x44');
+  }
   function inputs(P, h) {
     ensure(P); const F = P.framing, C = P.crossframes, CF = window.SBDCrossframes, FRM = window.SBDFraming;
     let L = null; try { L = FRM.compute(P); } catch (e) { L = { errors: [e.message] }; }
     const ang = [...Object.keys(CF.ANGLES).map(s => [s, s]), ['custom', 'Custom angle']], grs = Object.keys(CF.GD_GR).map(k => [k, k]);
     const mem = k => `${h.sel(`crossframes.mem.${k}.sec`, { top: 'Top chord', bot: 'Bottom chord', diag: 'Diagonals' }[k], ang)}${C.mem[k].sec === 'custom' ? `${h.num(`crossframes.mem.${k}.b1`, 'Connected leg', 'in')}${h.num(`crossframes.mem.${k}.b2`, 'Outstanding leg', 'in')}${h.num(`crossframes.mem.${k}.t`, 'Thickness', 'in')}` : ''}`;
     const usr = k => `${h.num(`crossframes.user.${k}.top`, 'Top chord', 'kip')}${h.num(`crossframes.user.${k}.bot`, 'Bottom chord', 'kip')}${h.num(`crossframes.user.${k}.diag`, 'Diagonals', 'kip')}`;
-    const shapes = [...CF.CF_DIA.map(s => [s[0], s[0]]), ...CF.CF_CH.map(s => [s[0], `${s[0]} (channel)`]), ['custom', 'Custom W']];
+    // BRSEL (2026-11-09): one "Intermediate bracing" drop-down in place of the Type select and the diaphragm switch; it maps onto the saved
+    // fields (crossframes.type, crossframes.dia.on, the family of crossframes.dia.shape); only the inputs of the choice are shown
+    const br = braceOf(C), dOn = br === 'w' || br === 'ch';
+    const conn = `${h.sel('crossframes.conn.d', 'Bolt diameter', [['0.875', '7/8 in'], ['1', '1 in']])}${h.sel('crossframes.conn.gr', 'Grade', [['A325', 'F3125 A325'], ['A490', 'F3125 A490']])}
+        ${h.sel('crossframes.conn.thr', 'Threads', [['incl', 'Included'], ['excl', 'Excluded']])}`;
     return h.card('Cross-frame layout (6.7.4.2.1)', `${h.num('framing.spacing', 'Cross-frame spacing s, at most', 'ft')}${h.num('framing.spPier', 'Spacing near interior supports s<sub>p</sub>', 'ft', { text: true })}${h.num('framing.pierLen', 'Pier region each side (blank: 0.25L)', 'ft', { text: true })}
         ${h.sel('framing.orient', 'Orientation', [['auto', 'Automatic: parallel to the skew where both supports ≤ 20°, else normal'], ['parallel', 'Parallel to the skew'], ['normal', 'Normal to the girders']])}
         ${h.sel('framing.arrange', 'Normal frames', [['contiguous', 'Contiguous'], ['staggered', 'Staggered'], ['stepped', 'Stepped (lines parallel to the bearings)']])}
@@ -51,33 +73,35 @@
         ${L && !L.errors.length ? plan(L) : `<div class="alert err">${esc((L && L.errors || []).join(' '))}</div>`}`)
       + h.card('Flange lateral bending from skew (C6.10.1)', `${h.num('framing.flSkI', 'f<sub>ℓ</sub>, interior girders', 'ksi')}${h.num('framing.flSkE', 'f<sub>ℓ</sub>, exterior girders', 'ksi')}${h.num('framing.flSkG', 'Load factor on f<sub>ℓ</sub>', '')}
         <p class="note">Used where any support is skewed more than 20°, in lieu of a refined analysis (as GirderDetail): the Flexure tab takes it with a hand-off file of this bridge.</p>`)
-      + h.card('Cross-frames: geometry and members', `${h.sel('crossframes.type', 'Type', [['X', 'X-frame'], ['Kb', 'K-frame, diagonals meet at the bottom chord'], ['Kt', 'K-frame, diagonals meet at the top chord']])}
-        ${h.num('crossframes.h', 'Chord work-point depth h (blank: from D)', 'in', { text: true })}${h.num('crossframes.dMinXF', 'Minimum girder depth for cross-frames', 'in')}
+      + h.card('Intermediate bracing (6.7.4.2)', `${h.sel('crossframes.type', 'Intermediate bracing', BRACE, br).replace('<select ', '<select style="width:200px;max-width:100%" ')}
+        ${h.num('crossframes.dMinXF', 'Minimum girder depth for cross-frames', 'in')}${dOn ? `${h.sel('crossframes.dia.shape', 'Shape', br === 'ch' ? CF.CF_CH.map(s => [s[0], s[0]]) : [...CF.CF_DIA.map(s => [s[0], s[0]]), ['custom', 'Custom W']])}
+        ${C.dia.shape === 'custom' ? `${h.num('crossframes.dia.d', 'Depth d', 'in')}${h.num('crossframes.dia.bf', 'Flange width', 'in')}${h.num('crossframes.dia.tf', 'Flange thickness', 'in')}${h.num('crossframes.dia.tw', 'Web thickness', 'in')}` : ''}
+        ${h.sel('crossframes.dia.gr', 'Grade', [['36', '36'], ['50', '50']])}
+        <h4 class="sub">End connections</h4>${conn}${h.num('crossframes.dia.nb', 'Bolts per end (one row)', '')}${h.num('crossframes.dia.pitch', 'Bolt pitch', 'in')}${h.num('crossframes.dia.ecc', 'Bolt line from the girder web', 'in')}
+        <h4 class="sub">End diaphragms (bearing lines)</h4>${h.sel('crossframes.dia.end', 'Jacking at the end diaphragms', [['no', 'No'], ['yes', 'Yes']])}${h.num('crossframes.dia.Rj', 'Jacking reaction R<sub>j</sub>', 'kip')}${h.num('crossframes.dia.aj', 'at a<sub>j</sub> from the girder', 'in')}
+        <p class="note">The diaphragm is the intermediate bracing (checks CFD) and the end diaphragm at the bearing lines (CFE); the angle checks CF1 to CF9 do not apply. S (largest girder spacing) and the girder depth d come from the project and the layout.</p>`
+        : `${h.num('crossframes.h', 'Chord work-point depth h (blank: from D)', 'in', { text: true })}
         ${h.sel('crossframes.primary', 'Primary members', [['auto', 'Automatic (yes where a support is skewed > 20°)'], ['no', 'No'], ['yes', 'Yes']])}
         ${h.sel('crossframes.gA', 'Angle grade', grs)}${h.sel('crossframes.gG', 'Gusset grade', grs)}${mem('top')}${mem('bot')}${mem('diag')}
-        <h4 class="sub">End connections</h4>${h.sel('crossframes.conn.d', 'Bolt diameter', [['0.875', '7/8 in'], ['1', '1 in']])}${h.sel('crossframes.conn.gr', 'Grade', [['A325', 'F3125 A325'], ['A490', 'F3125 A490']])}
-        ${h.sel('crossframes.conn.thr', 'Threads', [['incl', 'Included'], ['excl', 'Excluded']])}${h.num('crossframes.conn.n', 'Bolts per member end', '')}${h.num('crossframes.conn.s', 'Pitch', 'in')}${h.num('crossframes.conn.e', 'End distance', 'in')}${h.num('crossframes.conn.tg', 'Gusset thickness', 'in')}
-        <p class="note">S (largest girder spacing), the girder depth d and L<sub>b</sub> (largest unbraced length on any girder) come from the project and the layout.</p>`)
+        <h4 class="sub">End connections</h4>${conn}${h.num('crossframes.conn.n', 'Bolts per member end', '')}${h.num('crossframes.conn.s', 'Pitch', 'in')}${h.num('crossframes.conn.e', 'End distance', 'in')}${h.num('crossframes.conn.tg', 'Gusset thickness', 'in')}
+        <p class="note">S (largest girder spacing), the girder depth d and L<sub>b</sub> (largest unbraced length on any girder) come from the project and the layout.</p>`}`)
       + h.card('Wind on the exterior girder (3.8.1.2.1, 4.6.2.7.1)', `${h.num('crossframes.wind.V', 'Design wind speed V', 'mph')}${h.num('crossframes.wind.Kz', 'K<sub>z</sub>', '')}${h.num('crossframes.wind.G', 'Gust factor G', '')}${h.num('crossframes.wind.Cd', 'Drag coefficient C<sub>D</sub>', '')}`)
       + h.card('Stability bracing during deck placement (6.7.4.2.2)', `${h.sel('crossframes.sb.on', 'Check stability bracing', [['yes', 'Yes'], ['no', 'No']])}${h.sel('crossframes.sb.full', 'Depth and connection plates', [['auto', 'Automatic (h ≥ 0.8D: full depth)'], ['yes', '≥ 0.8 girder depth, full-depth plates (2.4)'], ['no', 'Otherwise (3.6)']])}
         ${h.num('crossframes.sb.Mu', 'Factored deck-placement M<sub>u</sub> (blank: analysis)', 'kip-ft', { text: true })}${h.num('crossframes.sb.Cb', 'C<sub>b</sub>', '')}
         ${h.num('crossframes.sb.bs', 'Connection plate b<sub>s</sub> (no connection-plate type)', 'in')}${h.num('crossframes.sb.tsp', 'Connection plate t<sub>s</sub>', 'in')}`)
-      + h.card('Member forces from a refined analysis (optional)', `<p class="note">Factored, tension positive, per member of the angle cross-frame (not used with a diaphragm). For each group choose whether they add to the forces the tab computes or replace them.</p>
+      + (dOn ? '' : h.card('Member forces from a refined analysis (optional)', `<p class="note">Factored, tension positive, per member of the angle cross-frame (not used with a diaphragm). For each group choose whether they add to the forces the tab computes or replace them.</p>
         <h4 class="sub">Strength I</h4>${usr('StrI')}${h.sel('crossframes.userMode.StrI', 'With the computed forces', [['add', 'Add to computed'], ['replace', 'Replace computed']])}
         <p class="note">${C.userMode.StrI === 'replace' ? 'The entered forces are the Strength design forces; the computed Strength III and V wind forces are not used.' : 'Strength I takes the entered forces; Strength III and V take the computed wind forces; each member is designed for the largest.'}</p>
         <h4 class="sub">Constructibility</h4>${usr('Con')}${h.sel('crossframes.userMode.Con', 'With the computed forces', [['add', 'Add to computed'], ['replace', 'Replace computed']])}
         <p class="note">${C.userMode.Con === 'replace' ? 'The entered forces are used alone; the stability bracing force is not added (CF7 not checked; CF8, the stiffness, still is).' : 'The stability bracing force from M<sub>br</sub> (6.7.4.2.2) is added to the entered forces.'}</p>
         <h4 class="sub">Fatigue ranges ΔP</h4>${usr('Fat')}<p class="note">Used alone: the tab computes no cross-frame force range (a line-girder analysis gives none).</p>
-        ${h.sel('crossframes.fatCat', 'Member end detail', [['B', 'Bolted, slip-critical (B)'], ['E', 'Welded end connection (E)'], ['Ep', 'Welded, eccentric (E′)']])}`)
-      + h.card('Diaphragm in place of the cross-frame', `${h.sel('crossframes.dia.on', 'Intermediate bracing used', [['no', 'Cross-frame (angles)'], ['yes', 'Diaphragm: channel or rolled W']])}${C.dia.on === 'yes' ? `${h.sel('crossframes.dia.shape', 'Shape', shapes)}
-        ${C.dia.shape === 'custom' ? `${h.num('crossframes.dia.d', 'Depth d', 'in')}${h.num('crossframes.dia.bf', 'Flange width', 'in')}${h.num('crossframes.dia.tf', 'Flange thickness', 'in')}${h.num('crossframes.dia.tw', 'Web thickness', 'in')}` : ''}
-        ${h.sel('crossframes.dia.gr', 'Grade', [['36', '36'], ['50', '50']])}${h.num('crossframes.dia.nb', 'Bolts per end (one row)', '')}${h.num('crossframes.dia.pitch', 'Bolt pitch', 'in')}${h.num('crossframes.dia.ecc', 'Bolt line from the girder web', 'in')}
-        ${h.sel('crossframes.dia.end', 'Jacking at the end diaphragms', [['no', 'No'], ['yes', 'Yes']])}${h.num('crossframes.dia.Rj', 'Jacking reaction R<sub>j</sub>', 'kip')}${h.num('crossframes.dia.aj', 'at a<sub>j</sub> from the girder', 'in')}` : ''}`)
+        ${h.sel('crossframes.fatCat', 'Member end detail', [['B', 'Bolted, slip-critical (B)'], ['E', 'Welded end connection (E)'], ['Ep', 'Welded, eccentric (E′)']])}`))   // angle cross-frame only (CF1 to CF9; not used with a diaphragm)
       + h.card('Cross-frame weight in DC1', `${h.sel('crossframes.weight.mode', 'Weight', [['auto', 'From the member sizes (or the diaphragm)'], ['ovr', 'Entered per frame'], ['off', 'Not included']])}${h.num('crossframes.weight.allow', 'Gusset plates and bolts', '%')}
         ${C.weight.mode === 'ovr' ? `${h.num('crossframes.weight.Wi', 'Intermediate frame', 'kip', { text: true })}${h.num('crossframes.weight.We', 'End frame (blank: same)', 'kip', { text: true })}` : ''}
         <p class="note">Each frame puts half its weight on each girder it connects, at that girder's own station, on the steel section (DC1; GirderDetail XF1). The Analysis tab uses these point loads.</p>`);
   }
   function onChange(el, P) {
+    if (el.dataset && el.dataset.path === 'crossframes.type' && el.dataset.kind === 'sel') { setBrace(P, el.value); return true; }   // BRSEL
     if (el.dataset && el.dataset.fr === 'splices') { ensure(P); P.framing.splices = el.value.split(/[,;\s]+/).map(Number).filter(v => isFinite(v) && v > 0).sort((a, b) => a - b); return true; }
     return false;
   }
@@ -173,5 +197,5 @@
     host.querySelectorAll('[data-cfgo]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const t = host.querySelector('#st-' + a.dataset.cfgo.replace(/[^\w.-]/g, '').replace(/\./g, '\\.')); if (t) { t.scrollIntoView({ block: 'center' }); t.style.background = '#FFF7D6'; } }));
   }
 
-  window.SBDFramingUI = { ensure, inputs, onChange, onClick, render, build, plan, TOPICS, groups };
+  window.SBDFramingUI = { ensure, braceOf, setBrace, inputs, onChange, onClick, render, build, plan, TOPICS, groups };
 })();
