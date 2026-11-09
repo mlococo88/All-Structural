@@ -4286,3 +4286,31 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
   - New page, no run yet: + Add splice station gives the built-in plates (top: 2 lines, g 3, g₀ 3, 3 rows, s 3, e_f 1.75, e_p 1.75, outer 16 × 0.5, inner 6.5 × 0.625).
 - **How verified:** new `tests/smoke/steel-bridge-splice-addrow.mjs` (the steps above, the saved row's keys and types, an edited t_o saved and changing FS1, 0 console errors). Also `tests/check-syntax.mjs`; engine tests `splices`, `autodesign-splices`, `custom-demands`, `handoffs`, `report`, `paths`, `tabgraphics-b`; smoke `steel-bridge-splices`, `-paths`, `-tabgraphics-b`, `-wiring`, `-report`.
 - **Open items:** SPERR open items 2 and 4 stand.
+
+## 2026-11-09 — PR: claude/sb-tab-errors (PR #1268: https://github.com/mlococo88/All-Structural/pull/1268) (SPERR2) — Flexure, Shear & stiffeners, Fatigue & studs, Rating, Welds and Constructibility: a Calculate that ends in an error shows the message instead of leaving the tab "out of date"   [display only; no result change]
+- **Follows:** SPERR (PR #1263), open item 1: the same hidden-error line on the other output tabs.
+- **Where:** `render()` of `ui/flexure.js`, `ui/shear.js`, `ui/fatigue.js`, `ui/rating.js`, `ui/welds.js`, `ui/constructibility.js`, anchor `stale = !S.R || S.key !== key(ctx)`; and `ui/flexure.js` `calc()`, anchor `const I = inputs(ctx); if (I.err) { S.err = I.err;`.
+- **Before (each of the six files):**
+  `stale = !S.R || S.key !== key(ctx)`
+- **After (each of the six files):**
+  `stale = (!S.R && !S.err) || S.key !== key(ctx)` with the comment `// SPERR2: a run that ended in an error is current (its message shows), not out of date` at the end of that line.
+- **Before (`ui/flexure.js` `calc()`):**
+  `const I = inputs(ctx); if (I.err) { S.err = I.err; return; }`
+- **After:**
+  `const I = inputs(ctx); if (I.err) { S.err = I.err; S.key = key(ctx); return; }   // SPERR2: the key of the run, so its error shows`
+- **Problem:** as SPERR: each tab's Calculate sets `S.err` and leaves `S.R = null` when the run returns an error, and `render()` counted every state without `S.R` as out of date and shows `S.err` only when not out of date. The error never showed; the "out of date … Calculate" bar stayed, and with the output-tab auto-run (#1260) the status stayed on "Calculating…" / "Inputs changed — updating…". On the Flexure tab the input errors (`inputs()`: Custom table errors, no hand-off file, a missing script) also returned before `S.key` was set, so that tab needed the key as well. Cases: Demands "Custom (entered)" with an empty table or a row error; "Hand-off file" with no file chosen; an analysis error; a calculation exception; the Rating tab's errors from the Flexure / Shear Custom tables.
+- **Results:** unchanged. The new condition differs from the old one only when `S.R` is null and `S.err` is set (a run that ended in an error); with valid inputs `S.R` is set and `S.err` is empty, so `stale`, the results and the graphics are drawn exactly as before. `S.key` is used only for `stale`.
+- **Governing provision:** none (display).
+- **Check case:** default project; on each tab, Demands "Custom (entered)", Custom table empty, Calculate (or the auto-run).
+  - Before: the bar "… results are out of date … Calculate" stays and nothing else is shown.
+  - After:
+    - Flexure: "Custom demands: No rows entered: enter the Flexure demands in the Custom table (or paste them from Excel)."
+    - Shear & stiffeners: "Custom demands: No rows entered: enter the Shear & stiffeners demands in the Custom table (or paste them from Excel)."
+    - Fatigue & studs: "Custom demands: No rows entered: enter the Fatigue & studs demands in the Custom table (or paste them from Excel)."
+    - Rating: "Flexure (Custom table of the Flexure tab): Custom demands: No rows entered: enter the Flexure demands in the Custom table (or paste them from Excel)."
+    - Welds: "Custom demands: No rows entered: enter the Welds demands in the Custom table (or paste them from Excel)."
+    - Constructibility: "Custom demands: No rows entered: enter the Constructibility demands in the Custom table (or paste them from Excel)."
+  - Back to the tab's first demand source: the same results as before.
+- **How verified:** new `tests/smoke/steel-bridge-taberrors.mjs` (each tab: default results, empty Custom table → message shown, not out of date, status not "Calculating…", back to results; 0 console errors). On main it fails at the first tab (Flexure stays out of date); with the fix it passes. Also `tests/check-syntax.mjs`; engine tests `flexure`, `shear`, `fatigue`, `rating`, `welds`, `constructibility`, `splices`, `custom-demands`, `handoffs`, `report`, `paths`, `gfxa`, `tabgraphics-b`; smoke `steel-bridge-splices`, `-paths`, `-tabgraphics-b`, `-wiring`, `-report`.
+- **Other copies:** none left in `apps/steel-bridge/ui/` (`ui/splices.js` was fixed in SPERR).
+- **Open items:** SPERR open items 2 and 4 stand (open item 3 was fixed in SPADD, PR #1269).

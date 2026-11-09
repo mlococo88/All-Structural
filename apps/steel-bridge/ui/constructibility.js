@@ -132,7 +132,7 @@
 
   function render(host, ctx) {
     css();
-    const P = ctx.P, g = P.girders[ctx.g] || P.girders[0], stale = !S.R || S.key !== key(ctx), ext = srcOf(P) === 'file' ? null : g.position === 'exterior', oh = ohInputs(P), GP = window.SBDConstr.projFactors(P), OG = ohOldGam(P);
+    const P = ctx.P, g = P.girders[ctx.g] || P.girders[0], stale = (!S.R && !S.err) || S.key !== key(ctx), ext = srcOf(P) === 'file' ? null : g.position === 'exterior', oh = ohInputs(P), GP = window.SBDConstr.projFactors(P), OG = ohOldGam(P);   // SPERR2: a run that ended in an error is current (its message shows), not out of date
     const opt = (v, t, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${t}</option>`;
     const AUI = window.SBDAnalysisUI, AN = window.SBDAnalysis;
     let h = (AUI && AUI.srcBar ? AUI.srcBar({ src: srcOf(P), auto: !S.src && !(window.SBDCustomDemands && window.SBDCustomDemands.srcGet(P, 'cn')), rd: AN && AN.ready ? AN.ready(P, P.girders[ctx.g] ? ctx.g : 0) : null, g: g.label || g.id, plName: S.plName }) : '')
