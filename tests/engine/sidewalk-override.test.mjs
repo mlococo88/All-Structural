@@ -16,7 +16,7 @@ test('deflSidewalk: auto = the cross-section (as before); yes / no override it; 
   // absent and 'auto': identical to before (no sidewalk in the built-in cross-section)
   const a0 = J(D()); assert.equal(a0.sw, false); assert.equal(a0.req, 800); assert.equal(a0.pref, 1000); assert.equal(a0.swHow, 'cross-section sidewalks');
   P.analysis = { ...(P.analysis || {}), deflSidewalk: 'auto' }; assert.deepEqual(J(D()), a0);
-  P.analysis.deflSidewalk = 'yes'; let o = D(); assert.equal(o.sw, true); assert.equal(o.req, 1000); assert.equal(o.pref, 0); assert.equal(o.swHow, 'entered (Analysis settings)');
+  P.analysis.deflSidewalk = 'yes'; let o = D(); assert.equal(o.sw, true); assert.equal(o.req, 1000); assert.equal(o.pref, 0); assert.equal(o.swHow, 'entered (Loads tab, Analysis settings)');
   assert.ok(Math.abs(12 * 110 / o.rq - 1.32) < 1e-12);
   // a sidewalk in the cross-section, overridden 'no'
   P.xs.sidewalks.L = { w: 6, t: 8, fence: null, fenceX: null }; P.analysis.deflSidewalk = 'auto'; assert.equal(D().sw, true);

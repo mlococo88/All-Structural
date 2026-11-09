@@ -72,6 +72,10 @@
                   (absent: the first exterior girder for position 'exterior', else the first interior girder)
      girders[i].loadsManual: { DC1wet, DC2, DW, CL, UT, UF (klf), xf: [{ x (ft), P (kip) }] } and girders[i].dfManual: { gM, gMpier,
                   gV, fatM, fatV, gDef }: entered values, used where the loads module gives none (CL and xf: the module has none yet)
+     girders[i].loadsOverride, girders[i].dfOverride (added 2026-11-09, analysis inputs moved to the Loads tab; optional, true | false): the
+                  "Override calculated value" boxes of the dead loads and the distribution factors. On: an entered value replaces the calculated
+                  one (a blank field keeps it); off: the entered values are not used. Absent: on exactly when the loads module gives none and
+                  a value is entered (as before). The cross-frame point loads (xf) and the construction live load (CL) do not take these.
      girders[i].dfPull (added 2026-11-01, B2 hand-offs; optional): { use, spans: [{ gM, gV, fatM, fatV }], piers: [{ gM }], source: { producer,
                   producerFile, producedAt, project, adoptedAt, line, girder, basis, basisLbl, fields } }: the factors pulled from LL & DL Distribution
                   (bridgeSuite.v1.lldf, ui/handoffs.js), laid over this girder's factors field by field (engine/analysis.js dfOf); absent: unchanged

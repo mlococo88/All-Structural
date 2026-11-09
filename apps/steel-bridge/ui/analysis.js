@@ -1,7 +1,8 @@
 /* apps/steel-bridge/ui/analysis.js — the Analysis card of Steel Bridge Design (window.SBDAnalysisUI).
    Classic script. Needs window.SBDAnalysis (engine/analysis.js), SharedSteps, SharedUnits.
-   draw(el, ctx): renders the analysis settings (written to the project: project.analysis, girder.loadsManual,
-   girder.dfManual), the Calculate button, the diagrams (plain SVG), the station table, the reactions, the LL deflection
+   inputs(P, gi) / onInputChange(el, P, gi) (AIN, 2026-11-09): the analysis inputs on the Loads input tab (project.analysis, girder.loadsManual,
+   girder.dfManual and the "Override calculated value" boxes girder.loadsOverride / girder.dfOverride), moved there from this tab.
+   draw(el, ctx): renders the girder line and the loads and factors used (read-only, linked to where each is worked), the Calculate button, the diagrams (plain SVG), the station table, the reactions, the LL deflection
    check (SA3), the deck placement sequence and the worked steps. ctx = { P, gi, changed() }. Results are kept until the
    project changes; then they are marked out of date (plan §5: no recalculation on every keystroke). */
 (function () {
@@ -14,41 +15,100 @@
   const wk = (id, t) => `<a class="wk" href="#st-${esc(id)}">${t || '§'}</a>`;
   const keyOf = (P, gi) => JSON.stringify([P, gi]);
 
-  /* ---------- settings ---------- */
-  function settingsHtml(P, gi) {
-    const S = AN().settings(P), g = P.girders[gi], Lm = g.loadsManual || {}, Dm = g.dfManual || {};
-    const num = (scope, k, label, unit, v) => `<div class="fRow"><label for="an_${scope}_${k}">${label}</label><input type="number" step="any" id="an_${scope}_${k}" data-an="${scope}" data-k="${k}" value="${v == null || v === '' || Number.isNaN(v) ? '' : esc(v)}"><span class="unit">${unit}</span></div>`;
+  /* ---------- inputs: the Loads input tab (AIN, 2026-11-09: moved from this tab; the stored paths are unchanged: project.analysis,
+     girder.loadsManual, girder.dfManual; new: girder.loadsOverride, girder.dfOverride, the "Override calculated value" boxes) ---------- */
+  const IM_SRC = 'AASHTO LRFD 10th Ed. Table 3.6.2.1-1';
+  const blank = v => v == null || v === '' || (typeof v === 'number' && Number.isNaN(v));
+  const numIn = (scope, k, label, unit, v, ph) => `<div class="fRow"><label for="an_${scope}_${k}">${label}</label><input type="number" step="any" id="an_${scope}_${k}" data-an="${scope}" data-k="${k}" value="${blank(v) ? '' : esc(v)}"${ph != null && ph !== '' ? ` placeholder="${esc(ph)}"` : ''}><span class="unit">${unit}</span></div>`;
+  const chk = (id, label, on) => `<div class="fRow"><label for="${id}">${label}</label><input type="checkbox" id="${id}" data-an="ov" data-k="${id === 'an_ov_l' ? 'loadsOverride' : 'dfOverride'}"${on ? ' checked' : ''}><span class="unit">off: the calculated value is used</span></div>`;
+  const kf = v => isFinite(v) ? f(v, 4) : '—';
+  /* ctxOf(P, gi): the girder, its loads module result, its loads and factors (engine/analysis.js), and whether each override is on */
+  function ctxOf(P, gi) {
+    const g = P.girders[gi], mod = g.loads && g.df ? null : AN().moduleOf(P, gi), M = mod && mod.G ? mod.G : null;
+    const LD = AN().loadsOf(P, g, mod), DF = AN().dfOf(P, g, P.spans.lengths.length, mod);
+    const rgOk = !!(mod && mod.R && mod.R.regions);
+    return { g, mod, M, LD, DF, ovL: AN().deadOverride(g, M), ovD: AN().dfOverride(g, rgOk), rgOk };
+  }
+  /* the calculated value of a dead load (the loads module), for the read-only column and the box's placeholder */
+  const calcL = (C, k) => C.M ? ({ DC1wet: C.M.DC1, DC2: C.M.DC2, DW: C.M.DW, UT: C.M.UT, UF: C.M.UF, PL: C.M.PL })[k] : null;
+  const calcD = (C, k) => { if (!C.rgOk || !C.mod) return null; const R = C.mod.R, j = C.mod.j, s0 = R.regions.find(r => r.id === 's0'), p1 = R.regions.find(r => r.id === 'p1');
+    if (!s0) return null; return k === 'gDef' ? s0.gDef : k === 'gMpier' ? (p1 ? p1.members[j].gM : null) : s0.members[j][k]; };
+  function inputs(P, gi) {
+    const S = AN().settings(P), A0 = P.analysis || {}, C = ctxOf(P, gi), g = C.g, Lm = g.loadsManual || {}, Dm = g.dfManual || {}, LD = C.LD, gl = esc(g.label || g.id);
     const sel = (k, label, opts) => `<div class="fRow"><label for="an_a_${k}">${label}</label><select id="an_a_${k}" data-an="a" data-k="${k}">${opts.map(([v, t]) => `<option value="${v}"${String(S[k] == null ? '' : S[k]) === v ? ' selected' : ''}>${t}</option>`).join('')}</select></div>`;
-    const mod = g.loads && g.df ? null : AN().moduleOf(P, gi), LD = AN().loadsOf(P, g, mod), DF = AN().dfOf(P, g, P.spans.lengths.length, mod);
-    const nb = P.xs ? Math.round(P.xs.nb) : 0, line = AN().lineOf(P, g);
-    const lineSel = nb > 0 ? `<div class="fRow"><label for="an_g_line">Cross-section girder (loads, factors)</label><select id="an_g_line" data-an="g" data-k="line">${[...Array(nb)].map((_, j) => `<option value="${j}"${j === line ? ' selected' : ''}>G${j + 1}${j === 0 || j === nb - 1 ? ' (exterior)' : ''}</option>`).join('')}</select></div>` : '';
-    return card('Analysis settings', `
-      ${num('a', 'im', 'IM, truck and tandem', '% (Table 3.6.2.1-1)', S.im)}${num('a', 'imf', 'IM, fatigue truck', '%', S.imf)}
+    const imSrc = (k, d) => blank(A0[k]) ? `blank: ${d} % (${IM_SRC})` : `entered (${IM_SRC}: ${d} %)`;
+    const line = C.mod && C.mod.j != null ? C.mod.j : AN().lineOf(P, g), see = '<a href="#" data-gotab="loads">Loads &amp; LLDF tab</a>';
+    let h = card('Analysis settings', `
+      ${numIn('a', 'im', 'IM, truck and tandem', `% — ${imSrc('im', 33)}`, A0.im, 33)}${numIn('a', 'imf', 'IM, fatigue truck', `% — ${imSrc('imf', 15)}`, A0.imf, 15)}
       ${sel('crack', 'Cracked zones (6.10.1.5)', [['none', 'None: deck effective over the whole length'], ['15', '15 % of the spans either side of each pier'], ['dl', 'Negative dead-load moment region']])}
-      ${num('a', 'deflLimit', 'LL deflection limit L/', '(2.5.2.6.2)', S.deflLimit)}
+      ${numIn('a', 'deflLimit', 'LL deflection limit L/', '(2.5.2.6.2)', S.deflLimit)}
       ${sel('deflSidewalk', 'Sidewalk or pedestrians, owner LL deflection limit (OWN19)', [['auto', 'Automatic: a sidewalk on the Cross-section tab'], ['yes', 'Yes'], ['no', 'No']])}
       ${sel('seq', 'Deck placement sequence (6.10.3.4.1)', [['on', 'On'], ['off', 'Off']])}${sel('seqMod', 'Hardened pours act with', [['n', 'n'], ['3n', '3n']])}
       <div class="fRow"><label for="an_a_seqCustom">Pours (optional)</label><input type="text" id="an_a_seqCustom" data-an="a" data-k="seqCustom" value="${esc(S.seqCustom)}" style="width:180px"><span class="unit">from–to per row (none: automatic)</span></div>
-      ${num('a', 'steelAllowPct', 'Girder steel detail allowance', '%', S.steelAllowPct)}
-      ${sel('haunchInStiffness', 'Haunch in the composite stiffness', [['', 'As the owner rule (OWN8)'], ['true', 'Yes'], ['false', 'No']])}`)
-      + card(`Dead loads, girder ${esc(g.label || g.id)}`, `${lineSel}<p class="note">Source: <b>${esc(LD.source)}</b>${LD.src.DC2 === 'module' ? ' (worked on the Loads &amp; LLDF tab)' : ''}. The values entered below are used only where the loads module gives none; the construction live load is entered here (not in the loads module yet).${LD.src.xf === 'module' && LD.xfInfo ? ` Cross-frame point loads: <b>${LD.xfInfo.n} frames, ${LD.xfInfo.tot.toFixed(2)} kip in all</b>, from the framing and the cross-frame weights of cross-section girder G${LD.xfInfo.line + 1} (<a href="#" data-goto="framing">Framing &amp; bracing tab</a>; the entry below is not used).` : ' The cross-frame point loads are entered here when the project has no framing.'}</p>
-      ${num('l', 'DC1wet', 'DC1 wet deck (deck, haunch, SIP, other)', 'klf', Lm.DC1wet)}${num('l', 'DC2', 'DC2 (barriers, curbs, …)', 'klf', Lm.DC2)}${num('l', 'DW', 'DW (wearing surface, utilities)', 'klf', Lm.DW)}
-      ${num('l', 'CL', 'Construction live load', 'klf', Lm.CL)}${num('l', 'UT', 'Existing utilities (steel section)', 'klf', Lm.UT)}
-      <div class="fRow"><label for="an_l_xf">Cross-frame point loads</label><input type="text" id="an_l_xf" data-an="l" data-k="xf" value="${esc((Lm.xf || []).map(q => `${q.x}:${q.P}`).join(', '))}" style="width:180px"><span class="unit">one load per row</span></div>`)
-      + card(`Live load distribution factors, girder ${esc(g.label || g.id)}`, `<p class="note">Source: <b>${esc(DF.src)}</b> (lanes per girder, multiple presence included; fatigue: one lane ÷ 1.2, 3.6.1.4.3b). ${DF.manual ? 'One value for every span; blank = 1.' : 'Worked on the Loads &amp; LLDF tab; the values below are used only when the loads module gives none.'}</p>
-      ${num('d', 'gM', 'g moment (spans)', '', Dm.gM)}${num('d', 'gMpier', 'g moment (pier regions)', 'blank = spans', Dm.gMpier)}${num('d', 'gV', 'g shear', '', Dm.gV)}
-      ${num('d', 'fatM', 'g fatigue moment', '', Dm.fatM)}${num('d', 'fatV', 'g fatigue shear', '', Dm.fatV)}${num('d', 'gDef', 'g deflection (all lanes, all girders)', '', Dm.gDef)}`);
+      ${numIn('a', 'steelAllowPct', 'Girder steel detail allowance', '%', S.steelAllowPct)}
+      ${sel('haunchInStiffness', 'Haunch in the composite stiffness', [['', 'As the owner rule (OWN8)'], ['true', 'Yes'], ['false', 'No']])}
+      <p class="note">Used by the <a href="#" data-gotab="an">Analysis tab</a> (moved here from it; saved as before).</p>`, 'an-settings');
+    // dead loads: the calculated values, the override box, the entered values
+    const rowsL = [['DC1wet', 'DC1 wet deck (deck, haunch, SIP, other)'], ['DC2', 'DC2 (barriers, curbs, …)'], ['DW', 'DW (wearing surface)'], ['UT', 'Existing utilities (steel section)']];
+    const xfStored = Array.isArray(Lm.xf) && Lm.xf.length, xfShow = xfStored && LD.src.xf !== 'module' && LD.src.xf !== 'girder';
+    h += card(`Dead loads for the analysis, girder ${gl}`, `<p class="note">Calculated: <b>${C.M ? `loads module, cross-section girder G${line + 1}` : 'none (the loads module gives none: ' + esc(C.mod && C.mod.errors ? C.mod.errors[0] : 'the cross-section is not complete') + ')'}</b>${C.M ? `, worked on the ${see} (girder G${line + 1})` : ''}. Used: <b>${esc(LD.source)}</b>.</p>
+      ${chk('an_ov_l', 'Override calculated value', C.ovL)}
+      ${C.ovL ? rowsL.map(([k, t]) => numIn('l', k, t, 'klf', Lm[k], isFinite(calcL(C, k)) ? f(calcL(C, k), 4) : '')).join('') + `<p class="note">Blank: the calculated value (in grey)${C.M ? '' : '; none here, so blank = 0'}.</p>` : `<p class="note">${rowsL.map(([k, t]) => `${t}: ${kf(LD[k])} klf`).join('; ')}.</p>`}
+      ${xfShow ? `<div class="fRow"><label for="an_l_xf">Cross-frame point loads (stored entry)</label><input type="text" id="an_l_xf" data-an="l" data-k="xf" value="${esc((Lm.xf || []).map(q => `${q.x}:${q.P}`).join(', '))}" style="width:180px"><span class="unit">one load per row</span></div>
+        <p class="note">Kept because this project stored it and has no framing: it is used until the framing is set (<a href="#" data-itgo="framing">Framing &amp; bracing tab</a>); then the frames give the point loads.</p>`
+        : `<p class="note">Cross-frame point loads: ${LD.src.xf === 'module' && LD.xfInfo ? `${LD.xfInfo.n} frames, ${LD.xfInfo.tot.toFixed(2)} kip in all, from the framing and the cross-frame weights (<a href="#" data-itgo="framing">Framing &amp; bracing tab</a>)` : LD.src.xf === 'girder' ? 'from the girder loads' : 'none (the project has no framing: <a href="#" data-itgo="framing">Framing &amp; bracing tab</a>)'}.</p>`}`, 'an-dead');
+    h += card(`Construction live load, girder ${gl}`, numIn('l', 'CL', 'Construction live load', 'klf', Lm.CL)
+      + '<p class="note">Entered per girder (not calculated yet); blank: 0. Used in the deck placement checks (Constructibility tab).</p>', 'an-cl');
+    // distribution factors
+    const rowsD = [['gM', 'g moment (spans)'], ['gMpier', 'g moment (pier regions)'], ['gV', 'g shear'], ['fatM', 'g fatigue moment'], ['fatV', 'g fatigue shear'], ['gDef', 'g deflection (all lanes, all girders)']];
+    const DF = C.DF, s0 = DF.spans[0] || {};
+    h += card(`Live load distribution factors for the analysis, girder ${gl}`, `<p class="note">Calculated: <b>${C.rgOk ? `loads module (LLDF), cross-section girder G${line + 1}` : 'none (the loads module gives none)'}</b>${C.rgOk ? `, worked on the ${see}` : ''}. Used: <b>${esc(DF.src)}</b> (lanes per girder, multiple presence included; fatigue: one lane ÷ 1.2, 3.6.1.4.3b).</p>
+      ${chk('an_ov_d', 'Override calculated value', C.ovD)}
+      ${C.ovD ? rowsD.map(([k, t]) => numIn('d', k, t, C.rgOk ? '' : k === 'gMpier' ? 'blank = spans' : 'blank = 1', Dm[k], C.rgOk && isFinite(calcD(C, k)) ? f(calcD(C, k), 3) : '')).join('') + `<p class="note">One value for every span. ${C.rgOk ? 'Blank: the calculated value (span 1 in grey; the pier g moment: blank = the entered span value, else calculated).' : ''}</p>`
+        : `<p class="note">Span 1: g<sub>M</sub> ${f(s0.gM, 3)}, g<sub>V</sub> ${f(s0.gV, 3)}, fatigue ${f(s0.fatM, 3)} / ${f(s0.fatV, 3)}, g<sub>Δ</sub> ${f(s0.gDef, 3)}${DF.piers.length ? `; pier 1 g<sub>M</sub> ${f(DF.piers[0].gM, 3)}` : ''} (every span: <a href="#" data-gotab="an">Analysis tab</a>).</p>`}`, 'an-df');
+    return h;
   }
-  function onInput(e, ctx) {
-    const el = e.target, sc = el.dataset.an, k = el.dataset.k; if (!sc) return;
-    const P = ctx.P, g = P.girders[ctx.gi];
+  /* onInputChange(el, P, gi): a change on the Loads input tab; true when it was one of these inputs (the project is changed) */
+  function onInputChange(el, P, gi) {
+    const sc = el.dataset && el.dataset.an, k = el.dataset && el.dataset.k; if (!sc || !k) return false;
+    const g = P.girders[gi];
     if (sc === 'a') { P.analysis = P.analysis || {}; const v = el.value; P.analysis[k] = el.tagName === 'SELECT' ? (v === 'true' ? true : v === 'false' ? false : v === '' ? null : v) : k === 'seqCustom' ? v : (v === '' ? null : Number(v)); }
-    else if (sc === 'g') { g.line = Number(el.value); }
+    else if (sc === 'ov') g[k] = !!el.checked;
     else if (sc === 'l') { g.loadsManual = g.loadsManual || {};
       if (k === 'xf') g.loadsManual.xf = el.value.split(/[,;]/).map(s => s.trim()).filter(Boolean).map(s => s.split(':').map(Number)).filter(q => q.length === 2 && q.every(isFinite)).map(([x, P_]) => ({ x, P: P_ }));
       else g.loadsManual[k] = el.value === '' ? null : Number(el.value); }
     else if (sc === 'd') { g.dfManual = g.dfManual || {}; g.dfManual[k] = el.value === '' ? null : Number(el.value); }
-    ctx.changed();
+    else return false;
+    return true;
+  }
+
+  /* ---------- this tab: the girder line and the loads and factors used, read-only, each linked to where it is worked (§6) ---------- */
+  function usedHtml(P, gi) {
+    const C = ctxOf(P, gi), g = C.g, LD = C.LD, DF = C.DF, S = AN().settings(P), A0 = P.analysis || {}, nb = P.xs ? Math.round(P.xs.nb) : 0, line = AN().lineOf(P, g);
+    const lineSel = nb > 0 ? `<div class="fRow"><label for="an_g_line">Cross-section girder (loads, factors)</label><select id="an_g_line" data-an="g" data-k="line">${[...Array(nb)].map((_, j) => `<option value="${j}"${j === line ? ' selected' : ''}>G${j + 1}${j === 0 || j === nb - 1 ? ' (exterior)' : ''}</option>`).join('')}</select></div>` : '';
+    const SRC = { girder: 'girder loads (hand-off)', module: 'calculated', manual: 'entered (override)', none: 'none' };
+    const j = C.mod && C.mod.j != null ? C.mod.j : line, G = `G${j + 1}`;
+    const where = (k, sid) => LD.src[k] === 'module' ? `<a href="#" data-gotab="loads" title="Loads &amp; LLDF tab, girder ${G}, step dl.${G}.${sid}">Loads &amp; LLDF, ${G} §</a>` : LD.src[k] === 'manual' || LD.src[k] === 'none' ? '<a href="#" data-goto="loads">Loads input tab</a>' : '';
+    const rows = [['DC1wet', 'DC1 wet deck (deck, haunch, SIP)', 'DC1'], ['DC2', 'DC2', 'DC2'], ['DW', 'DW', 'DW'], ['UT', 'Existing utilities', 'UT'], ['UF', 'Future utility allowance', 'UF'], ['PL', 'Pedestrian live load', 'PL'], ['CL', 'Construction live load', null]]
+      .filter(([k]) => k !== 'UF' && k !== 'PL' && k !== 'UT' || LD[k]);
+    const tr = (t, v, s, w) => `<tr><td class="lft">${t}</td><td>${v}</td><td class="lft">${s}</td><td class="lft">${w}</td></tr>`;
+    const xfTxt = LD.xf.length ? `${LD.xf.length} loads, ${f(LD.xf.reduce((a, q) => a + q.P, 0), 2)} kip in all` : 'none';
+    return card(`Loads and factors used, girder ${esc(g.label || g.id)} (read-only)`, `${lineSel}
+      <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Load (per girder)</th><th>w (klf)</th><th class="lft">Source</th><th class="lft">Worked</th></tr></thead><tbody>
+      ${rows.map(([k, t, sid]) => tr(t, kf(LD[k]), SRC[LD.src[k]] || LD.src[k], k === 'CL' ? (LD.src.CL === 'manual' || LD.src.CL === 'none' ? '<a href="#" data-goto="loads">Loads input tab</a>' : '') : where(k, sid))).join('')}
+      ${tr('Girder steel', 'by segment', `A<sub>s</sub> × 490 pcf × (1 + ${f(LD.steelAllowPct, 1)} %)`, wk('an.wst0'))}
+      ${tr('Cross-frame point loads', xfTxt, LD.src.xf === 'module' ? 'framing and cross-frame weights' : SRC[LD.src.xf] || LD.src.xf, LD.src.xf === 'module' ? '<a href="#" data-gotab="cf">Cross-frames tab</a>' : LD.src.xf === 'manual' ? '<a href="#" data-goto="loads">Loads input tab</a>' : '')}
+      </tbody></table></div>
+      <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Distribution factor</th>${DF.spans.map((_, i) => `<th>Span ${i + 1}</th>`).join('')}${DF.piers.map((_, k) => `<th>Pier ${k + 1}</th>`).join('')}</tr></thead><tbody>
+      ${[['gM', 'g moment'], ['gV', 'g shear'], ['fatM', 'g fatigue moment'], ['fatV', 'g fatigue shear'], ['gDef', 'g deflection']].map(([k, t]) => `<tr><td class="lft">${t}</td>${DF.spans.map(s => `<td>${f(s[k], 3)}</td>`).join('')}${DF.piers.map(p => `<td>${k === 'gM' ? f(p.gM, 3) : ''}</td>`).join('')}</tr>`).join('')}
+      </tbody></table></div>
+      <p class="note">Distribution factors: <b>${esc(DF.src)}</b>; ${C.rgOk && !DF.pulled ? `worked on the <a href="#" data-gotab="loads">Loads &amp; LLDF tab</a> (girder ${G}, regions s1… and p1…)` : 'entered or pulled: <a href="#" data-goto="loads">Loads input tab</a>'}. Dead loads: <b>${esc(LD.source)}</b>.
+      Settings: IM ${f(S.im, 0)} % truck and tandem, ${f(S.imf, 0)} % fatigue (${blank(A0.im) && blank(A0.imf) ? `${IM_SRC}, default` : `entered; ${IM_SRC}: 33 %, 15 %`}); cracked zones ${S.crack === 'none' ? 'none' : S.crack === '15' ? '15 % either side of each pier' : 'negative dead-load moment region'}; LL deflection L/${f(S.deflLimit, 0)}; deck placement sequence ${S.seq}.
+      Every input here is on the <a href="#" data-goto="loads">Loads input tab</a>.</p>`, 'an-used');
+  }
+  function onInput(e, ctx) {
+    const el = e.target; if (el.dataset.an !== 'g') return;
+    ctx.P.girders[ctx.gi].line = Number(el.value); ctx.changed();
   }
 
   /* ---------- SVG diagrams ---------- */
@@ -113,7 +173,7 @@
     if (R.lld) { const O = R.lld[0] && R.lld[0].own, ST = { pass: ['--pass', 'OK'], fail: ['--fail', 'Exceeds'], warn: ['--warn', 'Exceeds the preferred limit (warning)'], na: ['--warn', 'Reported, not checked (exterior)'] };
       h += card(`Live load deflection (SA3, ${O ? esc(O.cite) + ', mandatory; ' : ''}2.5.2.6.2)`, `<table class="tbl"><thead><tr><th>Span</th><th>x (ft)</th><th>Δ<sub>LL</sub> (in)</th><th>L/${R.lld[0] ? R.lld[0].ratio : R.settings.deflLimit} (in)</th>${O && O.pref ? `<th>L/${O.pref} preferred (in)</th>` : ''}<th>Ratio</th><th></th></tr></thead><tbody>
       ${R.lld.map(q => `<tr><td>${q.k + 1}</td><td>${f(q.x, 1)}</td><td>${f(q.d, 3)} ${wk('an.defl.LL' + (q.k + 1))}</td><td>${f(q.lim, 3)} ${wk('an.defl.lim' + (q.k + 1))}</td>${O && O.pref ? `<td>${f(q.limP, 3)} ${wk('an.defl.pref' + (q.k + 1))}</td>` : ''}<td>${f(q.d / q.lim, 2)}</td><td style="color:var(${ST[q.status][0]})">${ST[q.status][1]}</td></tr>`).join('')}</tbody></table>
-      <p class="note">${O ? `Owner rule ${esc(O.cite)} (OWN19): ${esc(O.rule.text)}. Sidewalk or pedestrians: ${O.sw ? 'yes' : 'no'} (${O.swHow === 'cross-section sidewalks' ? 'Cross-section tab' : 'entered in Analysis settings'}), so L/${O.req}${O.uR > O.req ? `; the entered L/${O.uR} is stricter and is used` : ''}.` : 'Optional criterion (2.5.2.6.2): the L/… entered above.'} Truck axles that do not add to the deflection are neglected (3.6.1.3.1).</p>`); }
+      <p class="note">${O ? `Owner rule ${esc(O.cite)} (OWN19): ${esc(O.rule.text)}. Sidewalk or pedestrians: ${O.sw ? 'yes' : 'no'} (${O.swHow === 'cross-section sidewalks' ? 'Cross-section tab' : 'entered on the Loads tab (Analysis settings)'}), so L/${O.req}${O.uR > O.req ? `; the entered L/${O.uR} is stricter and is used` : ''}.` : 'Optional criterion (2.5.2.6.2): the L/… entered above.'} Truck axles that do not add to the deflection are neglected (3.6.1.3.1).</p>`); }
     if (R.seq) { const Q = R.seq, fd = Math.max(...Q.fdk);
       h += card('Deck placement sequence (SA7, 6.10.3.4.1)', `<p class="note">Pours in order: ${Q.pours.map((q, k) => `${k + 1}: ${f(q.a, 1)}–${f(q.b, 1)} ft`).join('; ')}. Largest noncomposite moment M<sub>DCc</sub> ${f(Math.max(...Q.MDCc), 1)} kip-ft ${wk('an.seq.MDCc')}
         (deck at once ${f(Math.max(...R.st.DC1.M), 1)}). Deck tension in hardened pours ${f(fd, 3)} ksi vs φf<sub>r</sub> ${f(Q.phifr, 3)} ksi ${wk('an.seq.fdk')}.</p>`); }
@@ -137,11 +197,12 @@
     let h = `<div class="alert stale"${stale && !busy ? '' : ' hidden'}><span>${res ? 'Analysis results are out of date: inputs changed.' : 'The analysis has not been run.'} Live load takes a few seconds.</span><button type="button" class="primary" id="anCalc">Run analysis</button></div>`;
     if (busy) h += '<div class="alert">Calculating…</div>';
     h += `<p class="note">Girder <b>${esc(P.girders[gi].label || P.girders[gi].id)}</b> (choose the girder on the Girders &amp; plates tab). Unfactored effects per girder: DC1 (steel, then the wet deck) on the steel section, DC2 and DW on 3n, LL+IM on n (AASHTO LRFD 10th Ed. 4.6.2, 6.10.1.1.1, 6.10.1.5).</p>`;
-    h += settingsHtml(P, gi);
+    h += usedHtml(P, gi);
     if (res && !stale) h += resultsHtml(res);
     el.innerHTML = h;
     ST().wire(el, { onToggle: (k, open) => { if (open) OPEN.add(k); else OPEN.delete(k); } });
     { const sl = el.querySelector('#gfx_an'); if (sl && res && !stale && window.SBDGfxA) window.SBDGfxA.analysis(sl, { P, gi, R: res }); }
+    el.querySelectorAll('[data-gotab]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const b = document.querySelector(`#tabBar [data-otab="${a.dataset.gotab}"]`); if (b) b.click(); }));   // AIN: links to the other output tabs
     el.oninput = null; el.onchange = e => { if (e.target.id === 'an_view') { view = e.target.value; draw(el, ctx); return; } onInput(e, ctx); };
     el.onclick = e => { if (e.target.id !== 'anCalc') return; busy = true; draw(el, ctx);
       setTimeout(() => { try { res = AN().analyzeGirder(P, gi); } catch (err) { res = { errors: [String(err && err.message || err)] }; } resKey = keyOf(P, gi); busy = false; draw(el, ctx); }, 30); };
@@ -156,5 +217,5 @@
     const why = o.auto ? (an ? (rd.ok ? 'the default: the project is complete' : `the project is not complete: ${rd.why.map(esc).join(' ')}`) : o.src === 'example' && !rd.ok ? `the default while the project is not complete: ${rd.why.map(esc).join(' ')}` : 'the default') : 'as chosen below';
     return `<div class="srcBar${an && !rd.ok ? ' warn' : o.src === 'example' || o.src === 'custom' ? ' ex' : ''}" role="status"><span>Demands:</span> <b>${what}</b> <span class="srcWhy">(${why})</span></div>`;
   }
-  window.SBDAnalysisUI = { draw, srcBar, TOPICS, groups };
+  window.SBDAnalysisUI = { draw, srcBar, TOPICS, groups, inputs, onInputChange };
 })();
