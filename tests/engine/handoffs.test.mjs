@@ -9,11 +9,13 @@
 // 6. superReactions: the payload's shape (§4.4, GirderDetail's), the reactions of the plate girder's own line equal its analysis, the DW
 //    reactions of every girder sum to w_DW × L_total (statics), and a borrowed line's LL+IM reactions equal a full run of that line.
 import assert from 'node:assert/strict';
+// 7. superGeometry (GXF, 2026-11-09, HANDOFF.md §4.14): sgPayload of the default bridge (hand values), a curb edge, simple spans, per-support and
+//    per-span depths with a deeper pier segment, the shared check and content hash, refusals; saved projects compute as before.
 import path from 'node:path';
 import { loadShared, test, ROOT } from './harness.mjs';
 
 const E = f => path.join(ROOT, 'apps/steel-bridge', f);
-const W = loadShared('units.js', 'steps.js', 'vehicles.js', 'moving-load.js', 'lldf.js', ...['engine/model.js', 'engine/sections.js', 'engine/owners.js', 'engine/lldf.js', 'engine/loads.js',
+const W = loadShared('units.js', 'steps.js', 'vehicles.js', 'moving-load.js', 'lldf.js', 'handoff-store.js', ...['engine/model.js', 'engine/sections.js', 'engine/owners.js', 'engine/lldf.js', 'engine/loads.js',
   'engine/analysis.js', 'engine/framing.js', 'engine/crossframes.js', 'ui/handoffs.js'].map(E));
 const M = W.SBDModel, AN = W.SBDAnalysis, H = W.SBDHandoffs;
 const J = v => JSON.parse(JSON.stringify(v));
@@ -202,4 +204,41 @@ test('PDA-M7 pileResults group: R_n and R_n,up imported times the group reductio
   deq(q.set.map(s => [s.id, +s.to.toFixed(6)]), [['pile_Rn', 320], ['pile_phic', 0.5], ['pile_Rnup', 90], ['pile_phiup', 0.35]]);
   assert.equal(q.group.reduce, 0.8);
   deq(RWW.rwpxPlan(r, res({ reduce: 1, uplift: null }), cur, null).set.map(s => s.to), [400, 0.5, 150, 0.35], 'reduce 1: unchanged');
+});
+
+test('superGeometry: sgPayload of the default bridge (hand values) passes the shared §4.14 check', () => {
+  const P = M.defaultProject(), r = H.sgPayload(P), HS = W.SharedHandoffStore; assert.equal(r.ok, true, r.error); const p = r.payload;
+  deq(HS.checkGeometry(p), { ok: true, errors: [], warnings: [] });
+  assert.equal(p._schema, 'bridge-super-geometry'); assert.equal(p.producer, 'Steel Bridge Design'); deq(p.project, { name: 'New steel bridge', bridgeId: '' });
+  deq(p.spans, [110, 140, 110]); assert.equal(p.continuity, 'continuous');
+  deq(p.supports.map(s => [s.id, s.x, s.skew, s.joint, s.depth]), [['Abut. 1', 0, 0, 'end', 61.875], ['Pier 1', 110, 0, 'continuous', 63.5], ['Pier 2', 250, 0, 'continuous', 63.5], ['Abut. 2', 360, 0, 'end', 61.875]]);
+  assert.ok(p.supports.every(s => !('bearings' in s)));   // the app defines no bearing fixity: omitted
+  deq(p.girders, { count: 5, spacings: [9.5, 9.5, 9.5, 9.5], ohL: 3.25, ohR: 3.25 });
+  deq([p.edges.L.type, p.edges.L.width, p.edges.L.barrierWidth, p.edges.L.height], ['barrier', 1.5, 1.5, null]);
+  deq(p.deck, { ts: 8, total: 8.5, haunch: 2 });
+  // positive region 60 + 3/4 + 1 1/8 = 61.875 in; pier region 60 + 1 1/2 + 2 = 63.5 in; b_f max(16, 18) = 18; t_f max = 2; t_w = 9/16
+  deq([p.section.depth, p.section.bf, p.section.tf, p.section.tw], [63.5, 18, 2, 0.5625]);
+  deq(p.section.atSupports, [61.875, 63.5, 63.5, 61.875]); deq(p.section.spanMax, [63.5, 63.5, 63.5]);
+  assert.equal(p.contentHash, HS.geometryHash(p)); assert.equal(p.ownerRules.owner, 'AASHTO');
+  assert.match(r.sum, /^3 spans, 110–140–110 ft, 5 girders; skews 0\.00, 0\.00, 0\.00, 0\.00 deg/);
+  assert.equal(HS.pidOf(p.project), '~New steel bridge');
+});
+
+test('superGeometry: curb edge, simple spans, skews as entered, a deeper pier segment; refusals', () => {
+  const P = M.defaultProject(); P.spans.continuity = 'simple'; P.xs.skews = [-10, 12.5, 12.5, 30];
+  P.xs.edges.R = { type: 'curb', bw: 0, bwt: 0, cw: 12, ch: 10, rw: 0.05, rp: 0.75, rf: null, face: null };   // 10 in curb (< 12 in: mountable) -> the railing face 0.75 ft
+  P.girders[0].segments[3] = { ...P.girders[0].segments[3], D: 66 };   // x 232-272 (over pier 2 at 250 ft): 66 + 1.5 + 2 = 69.5 in
+  const p = H.sgPayload(P).payload;
+  deq(p.supports.map(s => [s.skew, s.joint, s.depth]), [[-10, 'end', 61.875], [12.5, 'joint', 63.5], [12.5, 'joint', 69.5], [30, 'end', 61.875]]);
+  deq(p.section.spanMax, [63.5, 69.5, 69.5]); assert.equal(p.section.depth, 69.5);
+  deq([p.edges.R.type, p.edges.R.width, p.edges.R.curbWidth, p.edges.R.curbHeight, p.edges.R.barrierWidth], ['curb', 0.75, 12, 10, null]); deq(p.edges.R.railing, { loadPoint: 0.75, trafficFace: null });
+  assert.match(p.edges.R.faceBasis, /railing face/); assert.equal(p.continuity, 'simple');
+  const Q = M.defaultProject(); Q.xs.skews = [0, 0]; assert.match(H.sgPayload(Q).error, /one skew for each of the 4 supports/);
+  const R = M.defaultProject(); R.girders[0].segments = R.girders[0].segments.slice(0, 2); assert.match(H.sgPayload(R).error, /plate girder segment/);
+  const S = M.defaultProject(); S.project.name = ''; deq(H.sgPayload(S).payload.project, { name: '', bridgeId: '' });
+});
+
+test('superGeometry: building the payload changes nothing in the project (saved data and results unchanged)', () => {
+  const P = M.defaultProject(), before = JSON.stringify(P), R0 = AN.analyzeGirder(P, 0); H.sgPayload(P);
+  assert.equal(JSON.stringify(P), before); const R1 = AN.analyzeGirder(P, 0); assert.equal(JSON.stringify(R1.st.DC1.R), JSON.stringify(R0.st.DC1.R));
 });
