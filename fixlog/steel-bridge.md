@@ -4102,7 +4102,7 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
 - **How verified:** main vs branch (`analyzeGirder` every station array, reactions, LL/fatigue envelopes, camber, M_DCc, and the Constructibility ratios): default project, a skewed (35°) 4-span 100-130-120-90 ft project with two girders, the default project with stored manual loads/factors (module works: ignored, as before), and one with manual loads/factors where the loads module gives none and no framing: all identical. New `tests/engine/analysis-overrides.test.mjs`. 0 console errors.
 - **Other copies:** none.
 
-## 2026-11-09 — PR: claude/sb-construction-ll (PR #PR2NUM: https://github.com/mlococo88/All-Structural/pull/PR2NUM) (CLC) — construction live load calculated, w_CL = q_CL × b_trib; optional finishing machine; old projects unchanged   [RESULT CHANGE for new projects: §4 callout]
+## 2026-11-09 — PR: claude/sb-construction-ll (PR #1259: https://github.com/mlococo88/All-Structural/pull/1259) (CLC) — construction live load calculated, w_CL = q_CL × b_trib; optional finishing machine; old projects unchanged   [RESULT CHANGE for new projects: §4 callout]
 - **Engineer:** 2026-11-09, decision C: "There is a lot of input on loading that the app should be able to calculate itself." The construction live load was the only analysis load entered by hand.
 - **Where:** `engine/analysis.js`:
   - `loadsOf()` CL: before `A.CL`, else `loadsManual.CL`, else 0. After: `A.CL`; else `loadsManual.CL` when `girder.clOverride` is on (absent: on when a value is entered); else `clOf(P, M).w` when `P.analysis.clCalc === true`; else 0.
