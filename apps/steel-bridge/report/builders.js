@@ -7,7 +7,9 @@
    station, worked steps opened on demand), include: { key: false } to leave a section out (default all) }.
    Section keys (SECTIONS, in the workflow order; the summary is put first):
      sum   Summary of governing ratios (links to each check)     proj  Project and owner        loads Cross-section, loads and LLDF
-     an    Analysis                                               sec   Section properties       flex  Flexure
+     an    Analysis                                               defl  Deflection (added 2026-11-09, DEFL: the LL deflection check and the
+                                                                        dead-load deflections and camber, moved from Analysis; the Deflection tab)
+     sec   Section properties                                     flex  Flexure
      shear Shear and stiffeners                                   fat   Fatigue and studs        cn    Constructibility (deck placement)
      frm   Framing and cross-frames                               spl   Field splices            wd    Welds (added 2026-10-30)
      rt    Load rating
@@ -16,7 +18,7 @@
 (function () {
   'use strict';
   const U = () => window.SharedUnits, f = (x, d) => U().fmt(x, d);
-  const SECTIONS = [['sum', 'Summary'], ['proj', 'Project & owner'], ['loads', 'Cross-section & loads'], ['an', 'Analysis'], ['sec', 'Section properties'], ['flex', 'Flexure'],
+  const SECTIONS = [['sum', 'Summary'], ['proj', 'Project & owner'], ['loads', 'Cross-section & loads'], ['an', 'Analysis'], ['defl', 'Deflection'], ['sec', 'Section properties'], ['flex', 'Flexure'],
     ['shear', 'Shear & stiffeners'], ['fat', 'Fatigue & studs'], ['cn', 'Constructibility'], ['frm', 'Framing & cross-frames'], ['spl', 'Splices'], ['wd', 'Welds'], ['rt', 'Rating']];
   const K = (scope, id) => (scope ? scope + '/' + id : String(id));
   const rc = r => !isFinite(r) ? '' : r > 1 + 1e-9 ? 'ng' : r >= 0.9 ? 'hi' : 'ok';
@@ -131,17 +133,41 @@
       sup.map((v, k) => [`${k === 0 ? 'Abut. 1' : k === sup.length - 1 ? 'Abut. 2' : 'Pier ' + k} (x = ${f(v, 1)} ft)`, N(rr(k, s.DC1), 2), N(rr(k, s.DC2), 2), N(rr(k, s.DW), 2), N(rr(k, s.CL), 2),
         ...(ll ? [{ ...N(A.llR[k].max, 2), key: 'an.R.LL.' + k }, N(A.llR[k].min, 2)] : [])])),
       note(`Statics: ${['DC1steel', 'DC1wet', 'DC2', 'DW', 'CL'].map(k => `${k} [[an.eq.${k}]]`).join(', ')}.${ll ? ' LL+IM: the reaction envelope × the larger $g_{V}$ of the adjacent spans; 90 % of two trucks + lane at interior supports (3.6.1.3.1).' : ''}`)]));
-    if (A.lld) { X.gov.push(...A.lld.map(q => ({ mod: 'Analysis', check: 'SA3 LL deflection, $\\Delta_{LL}$ ≤ L/' + q.ratio, loc: `span ${q.k + 1}, x = ${f(q.x, 1)} ft`, r: q.d / q.lim, key: 'an.defl.LL' + (q.k + 1), status: q.status, grp: 'Analysis: SA3 live-load deflection' })).filter(q => q.status !== 'na').sort((a, b) => b.r - a.r).slice(0, 1));
-      subs.push(sub('d', 'Live load deflection (SA3, 2.5.2.6.2)', [tbl(['Span', 'x (ft)', '$\\Delta_{LL}$ (in)', 'Limit (in)', 'Ratio', 'Status'], A.lld.map(q => [String(q.k + 1), N(q.x, 1), { ...N(q.d, 3), key: 'an.defl.LL' + (q.k + 1) }, { ...N(q.lim, 3), key: 'an.defl.lim' + (q.k + 1) },
-        { ...R3(q.d / q.lim), t: f(q.d / q.lim, 2) }, { pass: 'OK', fail: 'Exceeds', warn: 'Exceeds the preferred limit', na: 'Reported (exterior)' }[q.status] || q.status]))])); }
+    // DEFL (2026-11-09): the LL deflection check (SA3) and the dead-load deflections are in the Deflection section (defl() below)
+    if (DEFL_ON()) subs.push(sub('d', 'Deflection', [note(`The live load deflection check (SA3) and the dead-load deflections and camber are in the Deflection section${A.lld && A.lld.length ? ' [[an.defl.LL1]]' : ''} [[an.camber.s1]], as on the [[tab:defl|Deflection tab]].`)]));
     if (A.seq) { const Q = A.seq;
       subs.push(sub('q', 'Deck placement sequence (SA7, 6.10.3.4.1)', [kv([['Pours, in order', Q.pours.map((q, k) => `${k + 1}: ${f(q.a, 1)}–${f(q.b, 1)} ft`).join('; ')], ['Largest noncomposite moment $M_{DCc}$', `${f(Math.max(...Q.MDCc), 1)} kip-ft`, 'an.seq.MDCc'],
         ['Deck tension in hardened pours / $\\phi f_{r}$', `${f(Math.max(...Q.fdk), 3)} / ${f(Q.phifr, 3)} ksi`, 'an.seq.fdk']])])); }
     if (X.detail === 'all') subs.push(sub('t', 'Station table', [note('Stiffness-method results of the shared beam engine; their checks are the statics steps and the per-lane envelope × g (worked steps below).'),
       tbl(['x (ft)', '$M_{DC1}$', '$M_{DC2}$', '$M_{DW}$', ...(ll ? ['$M_{LL+IM}^{+}$', '$M_{LL+IM}^{-}$'] : []), '$V_{DC1}$', '$V_{DC2}$', '$V_{DW}$', ...(ll ? ['$V_{LL+IM}^{+}$', '$V_{LL+IM}^{-}$'] : [])],
         x.map((v, i) => [N(v, 2), N(s.DC1.M[i], 1), N(s.DC2.M[i], 1), N(s.DW.M[i], 1), ...(ll ? [N(ll.Mpos[i], 1), N(ll.Mneg[i], 1)] : []), N(Vr(s.DC1)[i], 1), N(Vr(s.DC2)[i], 1), N(Vr(s.DW)[i], 1), ...(ll ? [N(Vx(ll, 'pos')[i], 1), N(Vx(ll, 'neg')[i], 1)] : [])]), { caption: 'kip-ft, kip (shears just right of the station)' })]));
-    subs.push(sub('w', 'Worked steps', [gsteps('SBDAnalysisUI:x', '', A.steps)]));
+    subs.push(sub('w', 'Worked steps', [gsteps('SBDAnalysisUI:x', '', DEFL_ON() ? A.steps.filter(q => !DEFL_ID.test(q.id)) : A.steps)]));
     return { title: 'Analysis', subs };
+  }
+
+  /* ---------- 4a. deflection (DEFL, 2026-11-09): the Deflection tab's content, the analysis' own values (ui/deflection.js model) ---------- */
+  const DEFL_ID = /^an\.(defl\.|camber)/;   // the engine's LL deflection and camber steps: worked in this section (before: in Analysis)
+  // the section needs ui/deflection.js and engine/sheets.js (index.html loads both); a page or test without them keeps every analysis step
+  // in the Analysis section and has no Deflection section
+  const DEFL_ON = () => !!(window.SBDDeflectionUI && window.SBDSheets);
+  function defl(B, X) {
+    const A = B.an, DU = window.SBDDeflectionUI, Mo = DU && window.SBDSheets ? DU.model(A) : null; if (!Mo) throw new Error('the Deflection tab (ui/deflection.js, engine/sheets.js) is not loaded');
+    const subs = [], ST = { pass: 'OK', fail: 'Exceeds', warn: 'Exceeds the preferred limit', na: 'Reported (exterior)' }, S = A.settings, P = B.P, O = Mo.ll[0] && Mo.ll[0].own;
+    if (A.lld) { X.gov.push(...A.lld.map(q => ({ mod: 'Analysis', check: 'SA3 LL deflection, $\\Delta_{LL}$ ≤ L/' + q.ratio, loc: `span ${q.k + 1}, x = ${f(q.x, 1)} ft`, r: q.d / q.lim, key: 'an.defl.LL' + (q.k + 1), status: q.status, grp: 'Analysis: SA3 live-load deflection' })).filter(q => q.status !== 'na').sort((a, b) => b.r - a.r).slice(0, 1));
+      const why = O ? `Limit: owner rule ${O.cite} (OWN19, mandatory): ${O.rule.text}. Sidewalk or pedestrians: ${O.sw ? 'yes' : 'no'} (${O.swHow === 'cross-section sidewalks' ? 'a sidewalk on the cross-section' : 'entered on the Loads tab'}), so L/${O.req}${O.uR > O.req ? `; the entered L/${O.uR} is stricter and is used` : ''}.${O.rep ? ' Applied to the typical interior beam only: this girder is exterior, so it is reported, not checked.' : ''}`
+        : `Limit: no owner rule for the live load deflection (owner ${(P.ownerRules || {}).owner || 'AASHTO'}): the optional criterion of 2.5.2.6.2, L/${S.deflLimit} as entered (Loads tab).`;
+      subs.push(sub('d', 'Live load deflection (SA3, 2.5.2.6.2, 3.6.1.3.2)', [tbl(['Span', 'L (ft)', 'x (ft)', '$g_{\\Delta}$', 'Per lane (in)', 'Governing case', '$\\Delta_{LL}$ (in)', 'Limit (in)', 'D/C', 'Status'],
+        Mo.ll.map(q => [String(q.k + 1), N(q.L, 2), N(q.x, 1), N(q.gD, 3), N(q.perLane, 3), q.case || '—', { ...N(q.d, 3), key: 'an.defl.LL' + (q.k + 1) }, { ...N(q.lim, 3), key: 'an.defl.lim' + (q.k + 1) }, R3(q.dc), ST[q.status] || q.status])),
+        note(why),
+        note(`$\\Delta_{LL} = g_{\\Delta}\\max(\\Delta_{truck}(1 + IM),\\ 0.25\\Delta_{truck}(1 + IM) + \\Delta_{lane})$, IM ${f(S.im, 0)} % on the truck, per lane; D/C = $\\Delta_{LL}/\\Delta_{lim}$. $g_{\\Delta}$: all lanes loaded, all girders deflecting equally (2.5.2.6.2), ${A.df && A.df.src}; worked on the [[tab:loads|Loads & LLDF tab]]. Truck axles that do not add to the deflection are neglected (3.6.1.3.1).`)])); }
+    const c = A.camber, comps = Mo.comps, ser = comps.map(o => ({ name: o.k === 'wet' ? 'Wet deck' : o.name, y: o.y })).concat([{ name: 'Total', y: c.total, c: '#000000' }]);
+    const pts = X.detail === 'all' ? c.x.map((x, i) => ({ nm: '', x, v: Object.fromEntries(comps.map(o => [o.k, o.y[i]]).concat([['total', c.total[i]]])), node: i })) : Mo.pts.map(t => ({ nm: `Span ${t.k + 1}, ${t.q === 0 ? '0.0' : t.q === 10 ? '1.0' : '0.' + t.q}L`, x: t.x, v: t.v, node: t.node }));
+    subs.push(sub('c', 'Dead-load deflections and camber (6.7.2)', [{ type: 'figure', svg: chart(c.x, ser, { title: 'Dead-load deflections', unit: 'in', sup: A.sup, invert: true }), caption: 'Dead-load deflected shape (downward +, drawn down); in' },
+      tbl(['Span', 'x (ft)', ...comps.map(o => o.name), 'Total = camber (in)'], Mo.max.map(m => [String(m.k + 1), N(m.x, 2), ...comps.map(o => N(o.y[m.i], 3)), { ...N(m.total, 3), key: 'an.camber.s' + (m.k + 1) }]), { caption: 'Largest total of each span' }),
+      tbl(['Point', 'x (ft)', ...comps.map(o => o.name), 'Total'], pts.map(t => [t.nm, { t: f(t.x, 2) + (t.node < 0 ? ' *' : ''), n: true }, ...comps.map(o => N(t.v[o.k], 3)), N(t.v.total, 3)]), { caption: X.detail === 'all' ? 'Every analysis station; in, downward +' : 'Tenth points of each span; in, downward +' }),
+      note(`${X.detail === 'all' ? '' : '* Between two analysis stations: linear between them (as the Drawings camber table). '}Steel + cross-frames and the wet deck (the whole deck at once) on the steel section; DC2 + DW on 3n${A.crack.length ? ` with cracked zones ${A.crack.map(([a, b]) => `${f(a, 1)}–${f(b, 1)} ft`).join(', ')}` : ''}${c.ut ? '; existing utilities on the steel section' : ''}. Not included: the deck placement sequence, the future utility allowance, construction loads, creep and shrinkage, and the vertical profile (no profile input in this app).`)]));
+    subs.push(sub('w', 'Worked steps', [gsteps('SBDAnalysisUI:x', '', A.steps.filter(q => DEFL_ID.test(q.id)))]));
+    return { title: 'Deflection', note: 'From this girder\'s analysis, as on the [[tab:defl|Deflection tab]].', subs };
   }
 
   /* ---------- 5. section properties ---------- */
@@ -453,17 +479,19 @@
       errs.length ? note('Not in this report: ' + errs.map(([k, v]) => `${(SECTIONS.find(s => s[0] === k) || [k, k])[1]}: ${v}`).join('; '), true) : null])] };
   }
 
-  const BUILD = { proj, loads, an, sec, flex, shear, fat, cn, frm, spl, wd, rt };
-  const NEED = { loads: 'loads', an: 'an', sec: 'sec', flex: 'flex', shear: 'shear', fat: 'fat', cn: 'cn', frm: 'frm', spl: 'spl', wd: 'wd', rt: 'rating' };
+  const BUILD = { proj, loads, an, defl, sec, flex, shear, fat, cn, frm, spl, wd, rt };
+  const NEED = { loads: 'loads', an: 'an', defl: 'an', sec: 'sec', flex: 'flex', shear: 'shear', fat: 'fat', cn: 'cn', frm: 'frm', spl: 'spl', wd: 'wd', rt: 'rating' };
   function model(B, opt) {
     opt = opt || {};
     const inc = opt.include || null, on = k => !inc || inc[k] !== false, X = { detail: opt.detail === 'all' ? 'all' : 'gov', have: new Map(), gov: [], warn: [] };
     const P = B.P, p = P.project || {}, secs = [], built = [], dropped = [];
-    const dataOf = { loads: B.loads, an: B.src === 'file' ? B.pl : B.an, sec: B.sec, flex: B.flex, shear: B.shear, fat: B.fat, cn: B.cn, frm: B.frm, spl: B.spl, wd: B.wd, rt: B.rating };
+    const dataOf = { loads: B.loads, an: B.src === 'file' ? B.pl : B.an, defl: B.src === 'file' ? null : B.an, sec: B.sec, flex: B.flex, shear: B.shear, fat: B.fat, cn: B.cn, frm: B.frm, spl: B.spl, wd: B.wd, rt: B.rating };
     SECTIONS.forEach(([k, label]) => {
       if (k === 'sum') return;
       const want = on(k);
       if (k === 'proj') { if (want) secs.push({ id: k, ...proj(B, X) }); return; }
+      if (k === 'defl' && !DEFL_ON()) return;
+      if (k === 'defl' && B.src === 'file') { if (want) secs.push({ id: k, title: 'Deflection', subs: [sub('n', 'Not in this report', [note('Deflections are calculated from this project\'s analysis; this report takes its demands from a hand-off file. Choose "This project\'s analysis" to include them, or see the [[tab:defl|Deflection tab]].')])] }); return; }   // DEFL
       if (k === 'spl' && B.src === 'file') { if (want) secs.push({ id: k, title: 'Field splices', subs: [sub('n', 'Not in this report', [note('Field splices are designed from this project\'s analysis; this report takes its demands from a hand-off file. Choose "This project\'s analysis" to include them, or see the [[tab:spl|Field splices tab]].')])] }); return; }
       if (!dataOf[k]) { if (want) { built.push(k); secs.push({ id: k, title: label, subs: [sub('n', 'Not available', [note(B.err[k] || B.err[NEED[k]] || B.err.all || 'Not calculated.', true)])] }); } return; }
       // every module is built (the summary links to its governing check; references into it are found below); a section not chosen is dropped

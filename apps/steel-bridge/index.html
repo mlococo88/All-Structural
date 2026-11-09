@@ -42,6 +42,7 @@
 <script src="../../shared/moving-load.js"></script>
 <script src="engine/analysis.js"></script>
 <script src="ui/analysis.js"></script>
+<script src="ui/deflection.js"></script>
 <script src="engine/fatigue.js"></script>
 <script src="engine/studs.js"></script>
 <script src="ui/fatigue.js"></script>
@@ -210,7 +211,7 @@
       <div id="inPanes"></div>
     </aside>
     <main id="outputPanel">
-      <div id="tabBar" role="tablist"><button type="button" role="tab" aria-selected="true" data-otab="sec">Section properties</button><button type="button" role="tab" aria-selected="false" data-otab="flex">Flexure</button><button type="button" role="tab" aria-selected="false" data-otab="loads">Loads &amp; LLDF</button><button type="button" role="tab" aria-selected="false" data-otab="shear">Shear &amp; stiffeners</button><button type="button" role="tab" aria-selected="false" data-otab="fat">Fatigue &amp; studs</button><button type="button" role="tab" aria-selected="false" data-otab="an">Analysis</button><button type="button" role="tab" aria-selected="false" data-otab="cn">Constructibility</button><button type="button" role="tab" aria-selected="false" data-otab="cf">Cross-frames</button><button type="button" role="tab" aria-selected="false" data-otab="spl">Field splices</button><button type="button" role="tab" aria-selected="false" data-otab="rt">Rating</button><button type="button" role="tab" aria-selected="false" data-otab="wt">Welds</button><button type="button" role="tab" aria-selected="false" data-otab="rpt">Report</button><button type="button" role="tab" aria-selected="false" data-otab="dwg">Drawings</button><button type="button" role="tab" aria-selected="false" data-otab="ad">Auto design</button><button type="button" role="tab" aria-selected="false" data-otab="3d">3D view</button></div>
+      <div id="tabBar" role="tablist"><button type="button" role="tab" aria-selected="true" data-otab="sec">Section properties</button><button type="button" role="tab" aria-selected="false" data-otab="flex">Flexure</button><button type="button" role="tab" aria-selected="false" data-otab="loads">Loads &amp; LLDF</button><button type="button" role="tab" aria-selected="false" data-otab="shear">Shear &amp; stiffeners</button><button type="button" role="tab" aria-selected="false" data-otab="fat">Fatigue &amp; studs</button><button type="button" role="tab" aria-selected="false" data-otab="an">Analysis</button><button type="button" role="tab" aria-selected="false" data-otab="defl">Deflection</button><button type="button" role="tab" aria-selected="false" data-otab="cn">Constructibility</button><button type="button" role="tab" aria-selected="false" data-otab="cf">Cross-frames</button><button type="button" role="tab" aria-selected="false" data-otab="spl">Field splices</button><button type="button" role="tab" aria-selected="false" data-otab="rt">Rating</button><button type="button" role="tab" aria-selected="false" data-otab="wt">Welds</button><button type="button" role="tab" aria-selected="false" data-otab="rpt">Report</button><button type="button" role="tab" aria-selected="false" data-otab="dwg">Drawings</button><button type="button" role="tab" aria-selected="false" data-otab="ad">Auto design</button><button type="button" role="tab" aria-selected="false" data-otab="3d">3D view</button></div>
       <div id="autoBar" hidden><span id="autoMsg" role="status" aria-live="polite"></span><button type="button" id="bRerun" title="Calculate this tab again now">Re-run</button></div>
       <div id="out"></div>
     </main>
@@ -517,7 +518,7 @@
      the results are those of a manual run. The Re-run button presses it again on request. Auto design (heavy; its Run button on the Auto
      design input tab) and the Report (its Build button) stay manual. A run that leaves the tab out of date (an error) is not repeated until
      the project or the tab's choices change (autoLast). */
-  const AUTO_BTN = { sec: '#bCalc', loads: '#bCalc', flex: '#fx_calc', shear: '#sh_calc', an: '#anCalc', fat: '#fa_calc', cn: '#cn_calc', spl: '#sp_calc', rt: '#rt_calc', wt: '#wt_calc', dwg: '#dwg_calc' };
+  const AUTO_BTN = { sec: '#bCalc', loads: '#bCalc', flex: '#fx_calc', shear: '#sh_calc', an: '#anCalc', defl: '#df_calc', fat: '#fa_calc', cn: '#cn_calc', spl: '#sp_calc', rt: '#rt_calc', wt: '#wt_calc', dwg: '#dwg_calc' };
   const AUTO_MS = 600, autoLast = {};
   let autoT = null, autoNow = false, autoBusy = false, autoPend = false;
   const autoBtn = t => AUTO_BTN[t] ? $('out').querySelector(AUTO_BTN[t]) : null;
@@ -546,6 +547,7 @@
     if (ui.otab === 'flex') { window.SBDFlexureUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Flexure tab (ui/flexure.js)
     if (ui.otab === 'shear') { window.SBDShearUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Shear & stiffeners tab (ui/shear.js)
     if (ui.otab === 'an') { window.SBDAnalysisUI.draw($('out'), { P, gi: ui.g, changed: () => changed(false) }); return; }   // Analysis tab (ui/analysis.js)
+    if (ui.otab === 'defl') { window.SBDDeflectionUI.render($('out'), { P, g: ui.g, setG: gi => { ui.g = gi; ui.seg = 0; saveUi(); drawInputs(); markStale(); } }); return; }   // Deflection tab (ui/deflection.js; DEFL): its girder choice is ui.g, as the Girders & plates tab (i__g)
     if (ui.otab === 'fat') { window.SBDFatigueUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Fatigue & studs tab (ui/fatigue.js)
     if (ui.otab === 'cf') { window.SBDFramingUI.render($('out'), { P, g: ui.g }); return; }   // Cross-frames tab (ui/framing.js)
     if (ui.otab === 'spl') { window.SBDSplicesUI.render($('out'), { P, g: ui.g, changed: () => changed(true) }); return; }   // Field splices tab (ui/splices.js)
