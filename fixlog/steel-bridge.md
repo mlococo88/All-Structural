@@ -4173,6 +4173,21 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
   - Back to Flexure: nothing runs (one analysis in the cache).
   - Change f′c to 4.5 on Materials: "Inputs changed — updating…", then Flexure runs again (6.2 s).
   - Re-run: runs again.
+## 2026-11-09 — PR: claude/sb-advars-dialog (PR #1262: https://github.com/mlococo88/All-Structural/pull/1262) (ADVD) — Auto design input tab: the design variables (and the field splice placement rules) open in a dialog; the panel shows a summary   [display only; no result or saved-data change]
+- **Engineer:** 2026-11-09: "Can the auto design design variables open in a pop-up window? It currently doesn't fit in the available width of the input panel."
+- **Where:** `ui/autodesign.js`.
+  - `varsHtml(P, s)` was split. `rowsHtml(P, s)` holds the former row-building code, unchanged. `varsTableHtml(P, s)` is the table plus `splRulesBox()`, drawn in the dialog. `summaryHtml(P, s)` is in the panel: one line per group ("Flanges: 5 Auto, 1 Locked"), a chip per variable that opens the dialog at its row, "Edit design variables…" (`#ad_vars_edit`), and the splice-rules line with "Edit…".
+  - New `dlg()`, `fill()`, `openVars(go)` (exported). `CUR` holds the last `{ P, ctx }` of `wire()`. `wire()` refreshes an open dialog after every redraw (an edit, Undo, Redo) and wires `[data-advgo]`.
+  - CSS: `.ad-sum`, `.ad-chips`, `.ad-chip`, `dialog#adVarsDlg` (min(1100 px, 90vw), 90vh, scrolling inside; full screen at ≤ 700 px), `#adVarsDlg .ad-vars{min-width:760px}` (the table scrolls sideways inside the dialog on a phone).
+- **Dialog:** a native `<dialog>` opened with `showModal()`. Escape closes it, the page behind is inert (focus trapped), Close returns the focus to the Edit button. The inputs keep their `data-adv` / `data-ad` attributes, and `setAdv` / `setAd` write `P.autodesign.vars` / `.splRules` exactly as the panel's handlers did. Each change calls `ctx.changed(true)` (one Undo step), live, with no Apply.
+- **Links to a variable:** each chip (`data-advgo="<id>"`) opens the dialog with that row highlighted and its mode focused. "Edit…" of the splice rules (`#spr`) opens the rules. Today `SBDModel.validate` reports no error at `autodesign.vars.*` (checked), so there is no error marker to point there; `openVars(id)` is exported for one.
+- **Check case:** default project, Auto design input tab.
+  - Chip "Web thickness t_w: Auto" → the dialog opens with that row highlighted and its select focused.
+  - In the dialog: t_w Lock; D Range 54–72; shipping piece length 110 ft. Project JSON (localStorage) byte-identical to the same edits made in the panel on main (8274 chars).
+  - Undo removes the last edit in both.
+  - At 390 px the dialog is full screen (390 × 844) with no page horizontal scroll; at 1440 px it is 1100 px wide.
+- **Formulas, results, saved data:** none changed (§4, §5).
+- **How verified:** `node tests/check-syntax.mjs`; smoke `phone-layout` (input tabs at 390 px), `steel-bridge-*`; screenshots in the PR.
 - **Other copies:** none.
 
 ## 2026-11-09 — PR: claude/sb-splice-custom (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SPERR) — Field splices: a Calculate that ends in an error shows the message instead of leaving the tab "out of date"   [display only; no result change]
