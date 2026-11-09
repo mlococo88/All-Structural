@@ -4264,7 +4264,7 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
   3. With "Entered below", the Splices tab gives no way to add a row except "Keep these plates" on the output tab ("None entered.").
   4. The entered plate inputs have no `data-kind="num"`, so they are saved as text ("4", not 4). The engine reads both the same (`num()` / `+`; checked in Node on every field: the same checks and ratios). Left as is; no saved-format change.
 
-## 2026-11-09 — PR: claude/sb-equal-spacing (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (EQSP) — Cross-section: "Equal spacing" option, girders equally spaced from the exterior girder spacing   [new input mode; no result change for existing projects; saved data: two optional fields]
+## 2026-11-09 — PR: claude/sb-equal-spacing (PR #1270: https://github.com/mlococo88/All-Structural/pull/1270) (EQSP) — Cross-section: "Equal spacing" option, girders equally spaced from the exterior girder spacing   [new input mode; no result change for existing projects; saved data: two optional fields]
 - **Engineer (2026-11-09):** "I want a quicker way to space the girders. Rather than typing in each spacing, allow an option to set the exterior girder spacing and then allow the girders to be equally spaced."
 - **Engineer's definition (2026-11-09, not a pending decision):** the input is the exterior girder spacing W_cc, centreline to centreline of the two exterior girders (ft); S = W_cc / (N_b − 1), N_b − 1 = the number of bays. The overhang / deck-edge inputs stay as they are. (The old Preliminary sizing had the same "exterior" mode, `bridge.Wcc`, read by `engine/legacy.js fromPL`.)
 - **Saved data (CLAUDE.md §5):** two optional fields in `xs`, no key change, no migration needed:
