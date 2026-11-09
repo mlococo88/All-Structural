@@ -1,6 +1,7 @@
-/* apps/steel-bridge/ui/loads.js — the "Cross-section & loads" input tab and the "Loads & LLDF" output tab (window.SBDUiLoads).
+/* apps/steel-bridge/ui/loads.js — the cross-section and load inputs (the Cross-section and Loads input tabs, the support skews of the Bridge
+   layout tab and w_c for E_c on the Materials tab; TABR, 2026-11-09) and the "Loads & LLDF" output tab (window.SBDUiLoads).
    Classic script. Reads window.SBDModel, SBDOwners, SBDLoads, SBDLldf, SharedSteps, SharedUnits at call time. The page (index.html)
-   calls: ensure(P) before drawing the inputs; inputs(P, helpers) for the input pane; onChange / onClick from its input listeners
+   calls: ensure(P) before drawing the inputs; parts(P, helpers) for the input cards; onChange / onClick from its input listeners
    (true = handled, the page then saves and redraws); calc(P, g) when Calculate runs; output(R, ui, errors) for the output tab;
    onOutChange(e, ui) from the output listener. No storage of its own: the project is saved by the page (sbd2.* keys). */
 (function () {
@@ -21,9 +22,9 @@
   /* applyOwnerDefaults(P): the "Apply <DOT> defaults" button. The same assignments as before (deck.tsac sets the total deck thickness to t_s + the
      sacrificial thickness; xs.ws.psf also switches the wearing surface to weight mode); the inputs it changes are recorded, UI message only:
      { owner, changes: [{ tab, field, unit, from, to }], same: [{ tab, field }] } (same: already at the default). Nothing computed changes. */
-  const OD_LABEL = { 'materials.concrete.fc': ['Materials & deck', 'Concrete f′c', 'ksi'], 'deck.tdeck': ['Materials & deck', 'Total deck thickness', 'in'],
-    'materials.concrete.wcE': ['Cross-section & loads', 'w_c for E_c only', 'kcf'], 'xs.ws.psf': ['Cross-section & loads', 'Future wearing surface', 'psf'],
-    'xs.ws.mode': ['Cross-section & loads', 'Wearing surface entered as', ''], 'xs.dlMethod': ['Cross-section & loads', 'Dead load distribution', ''] };
+  const OD_LABEL = { 'materials.concrete.fc': ['Materials', 'Concrete f′c', 'ksi'], 'deck.tdeck': ['Cross-section', 'Total deck thickness', 'in'],
+    'materials.concrete.wcE': ['Materials', 'w_c for E_c only', 'kcf'], 'xs.ws.psf': ['Loads', 'Future wearing surface', 'psf'],
+    'xs.ws.mode': ['Loads', 'Wearing surface entered as', ''], 'xs.dlMethod': ['Loads', 'Dead load distribution', ''] };   // the input tab of each field (TABR, 2026-11-09)
   let lastOwnDef = null;
   function odText(path, v) {
     if (v == null || (typeof v === 'number' && !isFinite(v)) || v === '') return '(blank)';
@@ -56,7 +57,9 @@
       <p class="note">${esc(O().RULES.owners[o].manual)}. The owner's load rules (η, design load multiplier m, haunch in the section properties) are worked on the Loads &amp; LLDF tab.</p>
       ${defs.length ? `<p class="note">${esc(o)} defaults: ${defs.map(d => `${esc(d.label)} ${esc(d.show)} (${esc(d.cite)})`).join('; ')}.</p><button type="button" data-xsact="ownDef">Apply ${esc(o)} defaults</button>` : ''}`);
   }
-  function inputs(P, h) {
+  /* parts(P, h): the input cards of the cross-section and the loads, apart (TABR, 2026-11-09: the input tabs reorganised, display only; the
+     page puts them on the Bridge layout (skews), Cross-section, Materials (w_c for E_c) and Loads tabs; same paths, kinds and handlers) */
+  function parts(P, h) {
     const x = P.xs;
     const opt = (path, label, unit, note) => `<div class="fRow"><label for="i_${path}">${label}</label><input type="number" step="any" id="i_${path}" data-path="${path}" data-kind="xopt" value="${esc(get(P, path) == null ? '' : get(P, path))}" placeholder="${esc(note || '')}"><span class="unit">${unit || ''}</span></div>`;
     const list = (path, label, unit) => `<div class="fRow"><label for="i_${path}">${label}</label><input type="text" id="i_${path}" data-path="${path}" data-kind="xlist" value="${esc((get(P, path) || []).join(', '))}" style="width:180px"><span class="unit">${unit}</span></div>`;
@@ -76,18 +79,21 @@
     const ovl = `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Overlay</th><th>Entered as</th><th>psf</th><th>t<br>in</th><th>γ<br>kcf</th><th></th></tr></thead><tbody>
       ${(x.overlays || []).map((r, i) => `<tr>${cell(`xs.overlays.${i}.name`, 'text', r.name, 120)}${scell(`xs.overlays.${i}.mode`, [['psf', 'Weight (psf)'], ['thk', 'Thickness × unit weight']], r.mode)}${cell(`xs.overlays.${i}.psf`, 'xopt', r.psf == null ? '' : r.psf)}${cell(`xs.overlays.${i}.thk`, 'xopt', r.thk == null ? '' : r.thk)}${cell(`xs.overlays.${i}.gam`, 'xopt', r.gam == null ? '' : r.gam)}<td><button type="button" data-xsact="delOvl" data-i="${i}" title="Remove this overlay">×</button></td></tr>`).join('')}
       </tbody></table></div><button type="button" data-xsact="addOvl">Add overlay</button>`;
-    return h.card('Girders and deck', `${h.num('xs.nb', 'Number of girders N<sub>b</sub>', '')}${list('xs.bays', 'Girder spacings', 'left to right')}${h.num('xs.ohL', 'Left overhang (girder ℄ to deck edge)', 'ft')}${h.num('xs.ohR', 'Right overhang', 'ft')}
-        ${list('xs.skews', 'Support skews', 'one per support line')}${opt('materials.concrete.wcE', 'w<sub>c</sub> for E<sub>c</sub> only', 'kcf', 'blank = w_c')}
-        <p class="note">Deck thickness, haunch, f′c and w<sub>c</sub>: Materials &amp; deck tab. The total deck thickness above the structural slab is dead load only. The LLDF regions take their sections from the girder selected on the Girders &amp; plates tab.</p>`)
-      + h.card('Deck edges', `${edge('L')}<hr>${edge('R')}<p class="note">Distances from the deck edge. A curb lower than 12 in is mountable (the railing face governs); an entered edge to traffic face governs.</p>`)
-      + h.card('Sidewalks and median', `${sw('L')}${sw('R')}${h.num('xs.sidewalks.ped', 'Pedestrian load', 'psf')}${h.num('xs.median.w', 'Raised median width', 'ft')}${h.num('xs.median.t', 'Median thickness', 'in')}${h.sel('xs.median.joint', 'Longitudinal joint at the median', tf, String(!!x.median.joint))}${opt('xs.wcA', 'Curb / sidewalk / median concrete', 'kcf', 'blank = w_c')}
-        <p class="note">A sidewalk thinner than 12 in is mountable and does not move the live-load traffic face.</p>`)
-      + h.card('Wearing surface, forms and steel', `${h.sel('xs.ws.mode', 'Wearing surface entered as', [['psf', 'Weight (psf)'], ['thk', 'Thickness × unit weight']])}${x.ws.mode === 'thk' ? `${opt('xs.ws.thk', 'Wearing surface thickness', 'in')}${opt('xs.ws.gam', 'Wearing surface unit weight', 'kcf')}` : h.num('xs.ws.psf', 'Future wearing surface', 'psf')}
-        ${ovl}${h.num('xs.sip', 'Stay-in-place forms', 'psf')}${h.num('xs.allow', 'Steel detail allowance', '%')}`)
-      + h.card('Utilities and other line loads', extra)
-      + h.card('Distribution', `${h.sel('xs.dlMethod', 'Dead load distribution', Object.entries(LD().METHODS))}${h.num('xs.lldf.gap', 'Gap between adjacent trucks', 'ft')}
+    return {
+      girders: h.card('Girders and overhangs', `${h.num('xs.nb', 'Number of girders N<sub>b</sub>', '')}${list('xs.bays', 'Girder spacings', 'left to right')}${h.num('xs.ohL', 'Left overhang (girder ℄ to deck edge)', 'ft')}${h.num('xs.ohR', 'Right overhang', 'ft')}
+        <p class="note">Deck thickness, haunch and deck reinforcement: Deck card below. f′c and w<sub>c</sub>: Materials tab. Support skews: Bridge layout tab. The LLDF regions take their sections from the girder selected on the Girders &amp; plates tab.</p>`),
+      edges: h.card('Deck edges', `${edge('L')}<hr>${edge('R')}<p class="note">Distances from the deck edge. A curb lower than 12 in is mountable (the railing face governs); an entered edge to traffic face governs.</p>`),
+      sidewalks: h.card('Sidewalks and median', `${sw('L')}${sw('R')}${h.num('xs.sidewalks.ped', 'Pedestrian load', 'psf')}${h.num('xs.median.w', 'Raised median width', 'ft')}${h.num('xs.median.t', 'Median thickness', 'in')}${h.sel('xs.median.joint', 'Longitudinal joint at the median', tf, String(!!x.median.joint))}${opt('xs.wcA', 'Curb / sidewalk / median concrete', 'kcf', 'blank = w_c')}
+        <p class="note">A sidewalk thinner than 12 in is mountable and does not move the live-load traffic face.</p>`),
+      ws: h.card('Wearing surface, forms and steel', `${h.sel('xs.ws.mode', 'Wearing surface entered as', [['psf', 'Weight (psf)'], ['thk', 'Thickness × unit weight']])}${x.ws.mode === 'thk' ? `${opt('xs.ws.thk', 'Wearing surface thickness', 'in')}${opt('xs.ws.gam', 'Wearing surface unit weight', 'kcf')}` : h.num('xs.ws.psf', 'Future wearing surface', 'psf')}
+        ${ovl}${h.num('xs.sip', 'Stay-in-place forms', 'psf')}${h.num('xs.allow', 'Steel detail allowance', '%')}`),
+      extra: h.card('Utilities and other line loads', extra),
+      dist: h.card('Distribution', `${h.sel('xs.dlMethod', 'Dead load distribution', Object.entries(LD().METHODS))}${h.num('xs.lldf.gap', 'Gap between adjacent trucks', 'ft')}
         ${h.sel('xs.lldf.kg', 'K<sub>g</sub>', [['max', 'At the region section'], ['avg', 'Length-weighted over the region'], ['simple', 'Simplified terms (Table 4.6.2.2.1-3)']])}
-        ${h.sel('xs.lldf.skewV', 'Shear skew correction', [['all', 'All girders'], ['ext', 'Exterior girders only']])}${h.sel('xs.lldf.extMin', 'Exterior not less than interior', tf, String(!!x.lldf.extMin))}`);
+        ${h.sel('xs.lldf.skewV', 'Shear skew correction', [['all', 'All girders'], ['ext', 'Exterior girders only']])}${h.sel('xs.lldf.extMin', 'Exterior not less than interior', tf, String(!!x.lldf.extMin))}`),
+      skews: list('xs.skews', 'Support skews', 'one per support line'),
+      wcE: opt('materials.concrete.wcE', 'w<sub>c</sub> for E<sub>c</sub> only', 'kcf', 'blank = w_c')
+    };
   }
   /* onChange(el, P): the kinds this tab adds; true = handled */
   function onChange(el, P) {
@@ -179,5 +185,5 @@
   function after(el, P, R, ui) { if (R && !(R.errors && R.errors.length)) window.SharedSteps.wire(el, { onToggle: (k, open) => { if (open) OPEN.add(k); else OPEN.delete(k); } });
     const slot = el.querySelector('#gfx_ld'); if (!slot || !R || (R.errors && R.errors.length) || !window.SBDGfxA) return;
     window.SBDGfxA.loads(slot, { P, R, lg: Math.min(ui.lg || 0, R.dead.N - 1), lr: Math.min(ui.lr || 0, R.regions.length - 1) }); }
-  window.SBDUiLoads = { TOPICS, groups, after, ensure, ownerCard, inputs, onChange, onClick, takeOwnerDefaults, applyOwnerDefaults, calc, output, onOutChange, onOutClick };
+  window.SBDUiLoads = { TOPICS, groups, after, ensure, ownerCard, parts, onChange, onClick, takeOwnerDefaults, applyOwnerDefaults, calc, output, onOutChange, onOutClick };
 })();

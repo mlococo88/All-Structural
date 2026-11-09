@@ -201,7 +201,7 @@
       const regime = fin(lt.Lp) && fin(lt.Lr) ? (Lb * 12 <= lt.Lp ? 'L_b <= L_p: F_nc = plateau (no LTB reduction)' : Lb * 12 <= lt.Lr ? 'L_p < L_b <= L_r: inelastic LTB' : 'L_b > L_r: elastic LTB, F_cr') : '';
       D.text(t, 0, y - 0.3 * h, 0.9 * h, `C_b = ${nf(r.Cb, 3)}; F_nc: FLB ${nf(lt.FLB, 2)} KSI, LTB ${nf(lt.LTB, 2)} KSI; ${regime.toUpperCase()}`);
       D.text(t, 0, tf + 7 * h, 1.3 * h, 'UNBRACED LENGTH OF THE COMPRESSION FLANGE (LTB)');
-      return { D, title: 'Unbraced length (LTB) at the selected location', file: 'flexure-ltb', note: 'L_b, C_b, L_p, L_r and F_nc are the values of the location table (worked steps below); the brace points are the Framing tab\'s.' };
+      return { D, title: 'Unbraced length (LTB) at the selected location', file: 'flexure-ltb', note: 'L_b, C_b, L_p, L_r and F_nc are the values of the location table (worked steps below); the brace points are the Framing & bracing tab\'s.' };
     }, { key: 'fxc' });
     return H;
   }

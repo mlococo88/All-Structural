@@ -12,7 +12,7 @@
    f_ℓ during deck placement is saved in the project (P.constr.flC, ksi; added 2026-10-30, report wiring PR) and used by the Report tab.
    Since 2026-10-30 (paths PR, SB2-W1): blank or 0 (or absent) takes the skew value of C6.10.1 (1.25 × 10 / 7.5 ksi interior / exterior
    where a support is skewed more than 20°; before: 0), from engine/framing.js design(), the one source of the brace points and f_ℓ the
-   Flexure and Rating tabs use too; brace points from the Spans &amp; framing tab (as before). build(ctx) is the tab's calculation without the page
+   Flexure and Rating tabs use too; brace points from the Framing &amp; bracing tab (as before). build(ctx) is the tab's calculation without the page
    (the Report tab calls it). The demand source lives in memory for this page view (default: this project; the line at the top of the
    tab names the source in use).
 
@@ -52,7 +52,7 @@
   const flTxt = D => `f<sub>ℓ</sub> during deck placement ${D.flSrc === 'entered' ? `${fmt(D.fl, 2)} ksi as entered` : `from skew (C6.10.1; largest support skew ${fmt(D.flS.skMax, 1)}° ${D.flS.skMax > 20 + 1e-9 ? `&gt; 20°: γf<sub>ℓ,skew</sub> = ${esc(D.flS.steps[0].sub)} = ${fmt(D.fl, 2)} ksi` : '≤ 20°: 0'}; <a href="#" data-gotab="cf">Cross-frames tab</a>)`}`;
 
   /* build(ctx): the calculation without the page (the tab, the Report tab). ctx = { P, g, src: 'project' | 'file' (else the tab's own),
-     pl (hand-off payload; else the tab's file), plName }. Brace points and f_ℓ: engine/framing.js design() (the Spans &amp; framing tab; f_ℓ entered,
+     pl (hand-off payload; else the tab's file), plName }. Brace points and f_ℓ: engine/framing.js design() (the Framing &amp; bracing tab; f_ℓ entered,
      else from skew). Returns engine/constructibility.js girder() plus { what, ext, src, F (fromAnalysis / fromPayload), D (design) } or
      { err }. */
   /* arOf(P, g): the rows entered on this tab (ui/demands.js) in the shape engine/constructibility.js fromAnalysis reads of an analysis:
@@ -84,7 +84,7 @@
       F.locs = CD.keepAt(F.locs, A.xs); if (F.oh) F.oh.rows = C.ohRowsAt(F.supports, F.env, F.locs);   // the entered stations; the overhang rows among them
       F.custom = A.C;
       const gg = P.girders[g];
-      what = `Demands: entered (Custom), unfactored, on ${esc(gg.label || gg.id)}: ${A.C.rows.length} row(s), ${F.locs.length} location(s) checked (each entered station; both sides of a support or plate change there); M<sub>DC1</sub>, ${A.seq ? 'M<sub>DCc</sub> as entered' : 'no M<sub>DCc</sub> entered: M<sub>DC1</sub>'}, M<sub>CL</sub> linear between the rows; V<sub>DC1</sub>, V<sub>CL</sub> left and right of each row. Brace points: ${D.br ? "bearings and this girder's cross-frames from the Spans &amp; framing tab" : `bearings and cross-frames at most ${fmt(F.Lb, 2)} ft apart`}; the project's plates and stiffener panels; ${flTxt(D)}.`;
+      what = `Demands: entered (Custom), unfactored, on ${esc(gg.label || gg.id)}: ${A.C.rows.length} row(s), ${F.locs.length} location(s) checked (each entered station; both sides of a support or plate change there); M<sub>DC1</sub>, ${A.seq ? 'M<sub>DCc</sub> as entered' : 'no M<sub>DCc</sub> entered: M<sub>DC1</sub>'}, M<sub>CL</sub> linear between the rows; V<sub>DC1</sub>, V<sub>CL</sub> left and right of each row. Brace points: ${D.br ? "bearings and this girder's cross-frames from the Framing &amp; bracing tab" : `bearings and cross-frames at most ${fmt(F.Lb, 2)} ft apart`}; the project's plates and stiffener panels; ${flTxt(D)}.`;
     } else {
       const AR = window.SBDAnalysis.analyzeGirder(P, g, { ll: false });
       if (AR.errors && AR.errors.length) return { err: 'Analysis: ' + AR.errors.join(' ') };
@@ -93,7 +93,7 @@
       const gg = P.girders[g];
       what = `${esc(gg.label || gg.id)}: ${F.locs.length} locations from this project's analysis (dead loads; <a href="#" data-gotab="an">Analysis tab</a>): M<sub>DC1</sub>, V<sub>DC1</sub> (steel and the whole wet deck), `
         + (F.seq ? 'M<sub>DCc</sub> = the noncomposite envelope of the deck placement sequence (an.seq.MDCc)' : 'no pour sequence (simple spans, noncomposite, or the sequence off): M<sub>DC1</sub>')
-        + `, construction live load M<sub>CL</sub>, V<sub>CL</sub>${AR.loads && AR.loads.CL ? ` (w = ${fmt(AR.loads.CL, 3)} klf)` : ' (not entered: 0)'}. Brace points: ${D.br ? "bearings and this girder's cross-frames from the Spans &amp; framing tab" : `bearings and cross-frames at most ${fmt(F.Lb, 2)} ft apart`}; stiffener panels from the Stiffeners tab; ${flTxt(D)}.`
+        + `, construction live load M<sub>CL</sub>, V<sub>CL</sub>${AR.loads && AR.loads.CL ? ` (w = ${fmt(AR.loads.CL, 3)} klf)` : ' (not entered: 0)'}. Brace points: ${D.br ? "bearings and this girder's cross-frames from the Framing &amp; bracing tab" : `bearings and cross-frames at most ${fmt(F.Lb, 2)} ft apart`}; stiffener panels from the Stiffeners tab; ${flTxt(D)}.`
         + (AR.warnings && AR.warnings.length ? `<br>${AR.warnings.map(esc).join('<br>')}` : '');
     }
     const R = C.girder(F.locs, F.prj, { supports: F.supports, oh: F.oh });
@@ -146,7 +146,7 @@
       ${OHF.map(([k, l, u]) => `<div class="fRow"><label for="cn_oh_${k}">${l}</label><input type="number" step="any" id="cn_oh_${k}" data-oh="${k}" value="${esc(oh[k])}"><span class="unit">${u}</span></div>`).join('')}
       <div class="fRow"><label>γ<sub>DC</sub> / γ construction</label><span style="display:inline-block;min-width:8em;font-weight:600">${nf(GP.cdc)} / ${nf(GP.ccl)}</span><span class="unit">the deck placement factors above (3.4.2.1${GP.eta !== 1 ? `, × η ${fmt(GP.eta, 3)}` : ''}; <a href="#" data-cngoin="proj">owner η: Project tab</a>)</span></div>
       ${OG.length ? `<div class="alert">This project has bracket load factors saved from this card's former inputs that differ from the deck placement factors and are <b>no longer used</b>: ${OG.map(q => `${q.label} ${esc(q.was)} (now ${nf(q.now)})`).join('; ')}. They stay in the project file unchanged.</div>` : ''}
-      <div class="fRow"><button type="button" id="cn_oh_fill" title="Deck width carried by the brackets, overhang deck thickness and w_c from the Cross-section &amp; loads and Materials &amp; deck tabs">Fill from cross-section</button><span class="unit">${(() => { const F = window.SBDConstr.ohFill(P, ctx.g); return F.err ? esc(F.err) : `from the cross-section: w<sub>OH</sub> ${fmt(F.vals.wOH, 2)} in, t<sub>OH</sub> ${fmt(F.vals.tOH, 2)} in, w<sub>c</sub> ${fmt(F.vals.wc, 3)} kcf <details style="display:inline"><summary class="wk">§ worked</summary>${stepsHtml(F.steps)}</details>`; })()}</span></div>
+      <div class="fRow"><button type="button" id="cn_oh_fill" title="Deck width carried by the brackets, overhang deck thickness and w_c from the Cross-section and Materials tabs">Fill from cross-section</button><span class="unit">${(() => { const F = window.SBDConstr.ohFill(P, ctx.g); return F.err ? esc(F.err) : `from the cross-section: w<sub>OH</sub> ${fmt(F.vals.wOH, 2)} in, t<sub>OH</sub> ${fmt(F.vals.tOH, 2)} in, w<sub>c</sub> ${fmt(F.vals.wc, 3)} kcf <details style="display:inline"><summary class="wk">§ worked</summary>${stepsHtml(F.steps)}</details>`; })()}</span></div>
       <p class="note">GirderDetail's Deck overhang defaults (common planning values; confirm against the contractor's brackets and finishing machine). The deck weight is factored by γ<sub>DC</sub>, all other bracket loads by the construction factor. The deck slab and overhang design are not part of this app; only the girder's flange lateral bending is checked.</p></div></section>`;
     if (srcOf(P) === 'custom' && window.SBDCustomDemands) h += window.SBDCustomDemands.card(P, 'cn', ctx.g);   // the entered rows (ui/demands.js)
     h += `<div class="alert stale"${stale ? '' : ' hidden'}><span>Constructibility results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="cn_calc">Calculate</button></div>`;

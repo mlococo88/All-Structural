@@ -2,7 +2,7 @@
    engine/splices.js (bolted field splices, AASHTO LRFD 10th Ed. 6.13.6.1). Classic script; needs SharedSteps, SharedUnits, SBDModel,
    SBDOwners, SBDSections, SBDStiffeners, SBDAnalysis, SBDSplices.
 
-   Inputs (saved in the project, P.splices; engine/model.js): the field splice stations (P.framing.splices, shared with the Spans &amp; framing tab), the bolts, the edition of the
+   Inputs (saved in the project, P.splices; engine/model.js): the field splice stations (P.framing.splices, shared with the Framing &amp; bracing tab), the bolts, the edition of the
    design forces, the load factors and clearances, auto-design on or off, and entered plates per station (and girder).
    Output: for the girder chosen on the Girders tab, each splice: the demands at the splice from this project's analysis
    (engine/analysis.js; the Analysis tab), the auto-designed (or entered) plates and bolts, every check TF1–TF6, BF1–BF6, MT1, WS1–WS5,
@@ -50,7 +50,7 @@
   function inputs(P, h) {
     ensure(P); const Q = P.splices, gr = Object.keys(window.SBDModel.GRADES).map(k => [k, k]);
     const yn = [['incl', 'Included'], ['excl', 'Neglected']];
-    let s = h.card('Field splice stations (every girder)', `<div class="fRow"><label for="i_splx">Stations</label><input type="text" id="i_splx" data-kind="splx" value="${esc(((P.framing || {}).splices || []).join(', '))}" style="width:200px"><span class="unit">from the left end (also on the Spans &amp; framing tab)</span></div>
+    let s = h.card('Field splice stations (every girder)', `<div class="fRow"><label for="i_splx">Stations</label><input type="text" id="i_splx" data-kind="splx" value="${esc(((P.framing || {}).splices || []).join(', '))}" style="width:200px"><span class="unit">from the left end (also on the Framing &amp; bracing tab)</span></div>
       <p class="note">AASHTO LRFD 6.13.6.1.1: at or near the points of permanent-load contraflexure in continuous spans. Each splice is designed for the section on each side (0.01 ft left and right of the station) and the demands of this project's analysis there.</p>`)
       + h.card('Design basis', `${h.sel('splices.code', 'Design forces', [['10', 'AASHTO LRFD 10th Ed. (P_fy, flange couple, V_r)'], ['8', '8th Ed. method (controlling / noncontrolling flange, V_uw)']])}
         ${h.sel('splices.auto', 'Plates and bolts', [['true', 'Auto-design each splice (fewest bolts, then least plate)'], ['false', 'Entered below (per station)']])}
@@ -160,7 +160,7 @@
     const src = srcOf(P), CD = window.SBDCustomDemands, opt = (v, t) => `<option value="${v}"${src === v ? ' selected' : ''}>${t}</option>`;
     let h = `<section class="sec"><div class="secHead">Field splices (bolted, AASHTO LRFD 10th Ed. 6.13.6.1)</div><div class="secBody">
       ${CD ? `<div class="fRow"><label for="sp_src">Demands</label><select id="sp_src">${opt('analysis', "This project's analysis (Analysis tab)")}${opt('custom', 'Custom (entered)')}</select><span class="unit">saved with the project</span></div>` : ''}
-      <p class="note">${esc(g.label || g.id)}: splices at ${((P.framing || {}).splices || []).map(x => fmt(x, 2) + ' ft').join(', ') || '(none entered)'} (Splices or Spans &amp; framing tab). ${src === 'custom' ? 'Demands: entered (Custom), the row at each splice station (below).' : `Demands: this project's analysis (<a href="#" data-gotab="an">Analysis tab</a>), moments at the analysis station nearest the splice and shears the largest of the element containing it and its neighbours (GirderDetail's rule).`} Sections 0.01 ft each side; the smaller one (6.13.6.1.1) carries the design forces.</p></div></section>`;
+      <p class="note">${esc(g.label || g.id)}: splices at ${((P.framing || {}).splices || []).map(x => fmt(x, 2) + ' ft').join(', ') || '(none entered)'} (Splices or Framing &amp; bracing tab). ${src === 'custom' ? 'Demands: entered (Custom), the row at each splice station (below).' : `Demands: this project's analysis (<a href="#" data-gotab="an">Analysis tab</a>), moments at the analysis station nearest the splice and shears the largest of the element containing it and its neighbours (GirderDetail's rule).`} Sections 0.01 ft each side; the smaller one (6.13.6.1.1) carries the design forces.</p></div></section>`;
     { const O = oldGam(P); if (O.length) h += `<div class="alert">Load factors: the splices use the project's (Splices input tab); saved values of this tab's former inputs that differ are <b>no longer used</b>: ${O.map(q => `${tt(q.label)} ${esc(q.was)} (now ${fmt(q.now, 2)})`).join('; ')}.</div>`; }   // SPGAM
     if (src === 'custom' && CD) h += CD.card(P, 'spl', ctx.g);   // the entered rows (ui/demands.js)
     h += `<div class="alert stale"${stale ? '' : ' hidden'}><span>Splice results are out of date: inputs changed or nothing calculated yet. The auto-design takes a few seconds per splice.</span><button type="button" class="primary" id="sp_calc">Calculate</button></div>`;

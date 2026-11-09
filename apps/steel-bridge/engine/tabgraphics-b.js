@@ -476,7 +476,7 @@
   /* spliceStrip(list, P, opt) (SPLGFX, 2026-11-02): where the splices are on the girder, small: the girder as a line (schematic, not to scale vertically), the
      supports S1… and every field splice FS1… with a marker in the colour of its governing ratio (the Governing column of the tab's table, s.gov), the
      selected one boxed. Clicks: { k: 'fs', i } (the splice's index in the list). opt.sel: the selected index; opt.narrow: phone width (larger text, labels
-     without the station). The plates, plate sizes and cross-frames are on the Drawings tab and the Spans & framing plan; they are not repeated here. */
+     without the station). The plates, plate sizes and cross-frames are on the Drawings tab and the Framing & bracing plan; they are not repeated here. */
   function spliceStrip(list, P, opt) {
     opt = opt || {}; const sup = [0]; (P.spans.lengths || []).forEach(Ls => sup.push(+(sup[sup.length - 1] + +Ls).toFixed(6))); const Lt = sup[sup.length - 1] * 12;
     const { D, L } = newDrawing(Lt / (opt.narrow ? 34 : 70)), h = D.h, reg = [], X = ft => ft * 12, gh = 0.9 * h;

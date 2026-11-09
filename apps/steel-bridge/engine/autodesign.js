@@ -190,7 +190,7 @@
       Q.girders.forEach(g => { const ext = g.position === 'exterior'; g.beff = r4(12 * (ext ? S / 2 + (+xs.ohL >= +xs.ohR ? +xs.ohL : +xs.ohR) : S)); if (g.line != null && g.line >= L.nb) g.line = L.nb - 1; });
     }
     const segs = segmentsOf(L); Q.girders.forEach(g => { g.segments = clone(segs); });
-    // field splices: into the project's framing; a project without framing (the Spans & framing tab not set up) keeps none unless the layout has
+    // field splices: into the project's framing; a project without framing (the Framing & bracing tab not set up) keeps none unless the layout has
     // splices (before 2026-10-31 a default framing was always added, which moved the brace points from the stiffener layout's cross-frames)
     if (Q.framing || L.spl.length) { Q.framing = Q.framing || MD().defaultFraming(); Q.framing.splices = L.spl.slice(); }
     if (L.minLines != null) { Q.splices = Q.splices || MD().defaultSplices(); Q.splices.bolts = { ...(Q.splices.bolts || {}), minLines: L.minLines }; }
