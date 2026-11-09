@@ -16,6 +16,7 @@
   const GR = () => window.SBDGraphics, X_ = () => window.SharedDxf;
   const fin = v => typeof v === 'number' && isFinite(v);
   const nf = (v, d) => (fin(v) ? (+v).toFixed(d == null ? 2 : d) : '—');
+  const nz = (v, d) => nf(v, d).replace(/^-(0(\.0+)?)$/, '$1');   // QAO (2026-11-09): a readout never shows −0.0 (a moment of −0.00004 kip-ft)
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const S = { secCase: 'steel', loadCase: '', anSel: 0 };
 
@@ -157,7 +158,7 @@
       const Cm = [{ name: 'TOTAL (CAMBER)', pts: R.x.map((x, i) => [x, -R.camber.total[i]]), color: 7 }, { name: 'STEEL + CF', pts: R.x.map((x, i) => [x, -R.camber.steel[i]]), color: 5 }, { name: 'WET DECK', pts: R.x.map((x, i) => [x, -R.camber.wet[i]]), color: 30 }, { name: 'DC2 + DW', pts: R.x.map((x, i) => [x, -R.camber.sd[i]]), color: 3 }];
       mk('DEAD-LOAD DEFLECTION, IN (DOWNWARD DRAWN DOWN; CAMBER = TOTAL, UPWARD)', Cm, { ylab: 'IN', fy: v => nf(v, 2) });
       return { D: E.D, title: 'Girder elevation, moments and deflection', file: 'analysis-elevation', pick: (x, y) => nearest(R.x, E.pick(x, y)), selMark: k => E.selMark(R.x[k]),
-        readout: k => `x = ${nf(R.x[k], 2)} ft: M_DC1 ${nf(s.DC1.M[k], 1)}, M_DC2 ${nf(s.DC2.M[k], 1)}, M_DW ${nf(s.DW.M[k], 1)}${ll ? `, M_LL+IM ${nf(ll.Mneg[k], 0)} / ${nf(ll.Mpos[k], 0)}` : ''} kip-ft; camber ${nf(R.camber.total[k], 3)} in`, note: 'Stations, moments and deflections are the Analysis tab\'s results (the station table below); click a location to select it.' };
+        readout: k => `x = ${nf(R.x[k], 2)} ft: M_DC1 ${nz(s.DC1.M[k], 1)}, M_DC2 ${nz(s.DC2.M[k], 1)}, M_DW ${nz(s.DW.M[k], 1)}${ll ? `, M_LL+IM ${nz(ll.Mneg[k], 0)} / ${nz(ll.Mpos[k], 0)}` : ''} kip-ft; camber ${nz(R.camber.total[k], 3)} in`, note: 'Stations, moments and deflections are the Analysis tab\'s results (the station table below); click a location to select it.' };
     };
     const opts = R.x.map((x, i) => [String(i), `x = ${nf(x, 2)} ft`]), cur = String(Math.min(S.anSel, R.x.length - 1));
     const host = block(slot, { id: 'gfx_an', cases: opts, cur, caseLabel: 'Station', onCase: v => { S.anSel = +v; analysis(slot, o); } });

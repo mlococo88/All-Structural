@@ -158,6 +158,8 @@
      a drop-down widens into the free space of its row up to its longest choice, so its text is not cut at 110 px */
   .fRow>label:first-child{flex:0 1 auto;max-width:calc(100% - 150px);}
   .fRow>select{flex:1 1 110px;width:110px;min-width:110px;max-width:max-content;}
+  /* QAO (2026-11-09): the graphics' + − Fit buttons (shared/dxf.js viewer) sit in a strip above the drawing, so they never cover its title (display only) */
+  #out .sdx-view{padding-top:34px;}
   input[type=number],input[type=text],select{font-family:var(--font-ui);font-size:9.5pt;padding:3px 6px;border:1px solid var(--color-border);border-radius:4px;width:110px;background:#fff;color:var(--color-fg);}
   input:focus-visible,select:focus-visible{outline:none;border-color:var(--color-ring);box-shadow:0 0 0 2px rgba(37,99,235,.25);}
   input.bad{border-color:var(--fail);background:#FEF2F2;}

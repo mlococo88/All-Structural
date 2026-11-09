@@ -16,7 +16,7 @@
   const fmt = (x, d) => window.SharedUnits.fmt(x, d);
   const SP = () => window.SBDSplices;
   const S = { R: null, key: '', sel: 0, err: '', open: {}, d3: false };
-  const tt = t => esc(t).replace(/_\{?([A-Za-z0-9,]+)\}?/g, '<sub>$1</sub>');
+  const tt = t => esc(t).replace(/_\{?([A-Za-z0-9ℓ,]+)\}?/g, '<sub>$1</sub>');
   const cls = (r, st) => st === 'fail' ? 'sp-ng' : st === 'warn' ? 'sp-hi' : st === 'adv' ? 'sp-adv' : !isFinite(r) ? '' : r >= 0.9 ? 'sp-hi' : 'sp-ok';
   const ST = { pass: 'OK', fail: 'NG', warn: 'warning', adv: 'advisory', na: 'n/a' };
 
