@@ -17,9 +17,11 @@ try {
   await p.waitForSelector('#tabBar [data-otab="dwg"]');
   await p.click('#tabBar [data-otab="dwg"]');
   await p.waitForSelector('#dwg_calc');
-  const s0 = await p.evaluate(() => ({ n: document.querySelectorAll('#dwg_sheet option').length, svg: !!document.querySelector('.dwg-box svg'), miss: /Not in this set/.test(document.querySelector('#out').innerText) }));
-  assert.ok(s0.n >= 10 && s0.svg && s0.miss, JSON.stringify(s0));
-  await p.click('#dwg_calc');
+  // the sheet set without results (AUTO: the tab calculates them by itself as soon as it is selected, so this is built here, as the tab does without results)
+  const s0 = await p.evaluate(() => { const P = JSON.parse(localStorage.getItem('sbd2.project.current')) || window.SBDModel.defaultProject(), B = window.SBDSheets.build(window.SBDDrawings.model(P), null, { paper: 'D' });
+    return { n: B.sheets.length, svg: !!document.querySelector('.dwg-box svg') }; });
+  assert.ok(s0.n >= 10 && s0.n < 25 && s0.svg, JSON.stringify(s0));
+  // AUTO (2026-11-09): the tab calculates its results by itself once selected (no button press)
   await p.waitForFunction(() => /Results: calculated/.test(document.querySelector('#out').innerText), null, { timeout: 180000 });
   const s1 = await p.evaluate(() => ({ n: document.querySelectorAll('#dwg_sheet option').length, opts: [...document.querySelectorAll('#dwg_sheet option')].map(o => o.textContent) }));
   assert.equal(s1.n, 25, s1.opts.join(' | '));

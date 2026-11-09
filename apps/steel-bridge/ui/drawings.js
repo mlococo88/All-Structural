@@ -45,6 +45,12 @@
     S.key = keyOf(P); return S.RS;
   }
 
+  /* calcAsync(P, onStep): calc() with SBDSheets.resultsAsync (the same results, girder by girder) */
+  function calcAsync(P, onStep) {
+    S.err = ''; S.RS = null; const k = keyOf(P);
+    let G; try { G = window.SBDDrawings.model(P); if (G.errors.length) throw new Error(G.errors.join(' ')); } catch (e) { S.err = e.message; S.key = k; return Promise.resolve(null); }
+    return window.SBDSheets.resultsAsync(P, G, onStep).then(RS => { S.RS = RS; S.key = k; return RS; }, e => { S.err = e.message; S.key = k; return null; });
+  }
   function render(host, ctx) {
     css(); const P = ctx.P, ui = ctx.ui; ui.dwg = ui.dwg || {};
     const RS = results(P), stale = !RS && S.key && S.key !== keyOf(P);
@@ -112,7 +118,8 @@
     host.querySelector('#dwg_print1').addEventListener('click', () => prt(false));
     host.querySelector('#dwg_printAll').addEventListener('click', () => prt(true));
     const cb = host.querySelector('#dwg_calc');
-    cb.addEventListener('click', () => { cb.disabled = true; cb.textContent = 'Calculating…'; setTimeout(() => { calc(P); render(host, ctx); }, 30); });
+    // AUTO (2026-11-09): one plate girder at a time (SBDSheets.resultsAsync), the page responsive in between, the progress on the button
+    cb.addEventListener('click', () => { cb.disabled = true; cb.textContent = 'Calculating…'; calcAsync(P, (i, n) => { cb.textContent = `Calculating… girder ${i + 1} of ${n}`; }).then(() => { if (host.isConnected) render(host, ctx); }); });
   }
 
   window.SBDDrawingsUI = { render, results, calc, viewer: () => S.viewer };

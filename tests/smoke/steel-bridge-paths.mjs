@@ -17,7 +17,10 @@ try {
   await p.waitForSelector('#tabBar [data-otab="flex"]');
   assert.equal(await p.evaluate(() => window.SBDAnalysis.analyzeGirder.cached === true), true, 'the cache is installed');
   const size = () => p.evaluate(() => window.SBDReportData.cache.size);
-  const calc = async (tab, btn, sel) => { await p.click(`#tabBar [data-otab="${tab}"]`); await p.click(btn); await p.waitForSelector(sel, { timeout: 180000, state: 'attached' }); const er = await p.$eval('#out', o => (o.querySelector('.alert.err') || {}).textContent || ''); assert.equal(er, '', tab + ': ' + er); };
+  // AUTO (2026-11-09): an output tab runs itself when selected; settle() waits until it is no longer out of date and no run is pending
+  const settle = (t = 240000) => p.waitForFunction(() => !document.querySelector('#out .alert.stale:not([hidden])') && !/Calculating|updating/.test((document.querySelector('#autoMsg') || {}).textContent || '') && !/Calculating/.test(((document.querySelector('#out') || {}).innerText || '').slice(0, 400)), null, { timeout: t });
+  const calc = async (tab, btn, sel) => { await p.click(`#tabBar [data-otab="${tab}"]`); await settle(); await p.waitForSelector(sel, { timeout: 180000, state: 'attached' });   // AUTO: selecting the tab runs it (btn: the tab's Calculate button, not pressed)
+     const er = await p.$eval('#out', o => (o.querySelector('.alert.err') || {}).textContent || ''); assert.equal(er, '', tab + ': ' + er); };
   const t1 = Date.now(); await calc('flex', '#fx_calc', '#out .fx-list tr[data-fx]'); const tFlex = Date.now() - t1;
   assert.equal(await size(), 1);
   const t2 = Date.now();
@@ -29,7 +32,7 @@ try {
   // Welds: the demand line and the selector
   await p.click('#tabBar [data-otab="wt"]');
   const wbar = await p.evaluate(() => ({ bar: document.querySelector('#out .srcBar').innerText.trim(), opts: [...document.querySelectorAll('#wt_src option')].map(o => o.value) }));
-  assert.match(wbar.bar, /^Demands: This project's analysis/); assert.deepEqual(wbar.opts, ['analysis', 'file']);
+  assert.match(wbar.bar, /^Demands: This project's analysis/); assert.deepEqual(wbar.opts, ['analysis', 'custom', 'file']);   // Custom: the custom demands PR (2026-11-01) added it to the Welds tab
   // Flexure: f_ℓ entered is saved
   await p.click('#tabBar [data-otab="flex"]');
   await p.fill('#fx_fl', '2.5'); await p.dispatchEvent('#fx_fl', 'change'); await p.waitForTimeout(300);

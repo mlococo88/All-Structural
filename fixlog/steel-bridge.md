@@ -4144,3 +4144,33 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
   - for new projects, only M_CL / V_CL / R_CL and the constructibility ratios that use them differ.
   - New `tests/engine/construction-ll.test.mjs` (hand checks above). 0 console errors.
 - **Other copies:** none.
+
+## 2026-11-09 — PR: claude/sb-autorun (PR #1260: https://github.com/mlococo88/All-Structural/pull/1260) (AUTO) — an output tab runs itself when selected; inputs changed while open re-run it after 600 ms; Re-run button; Drawings calculated girder by girder   [display only; no result change]
+- **Engineer:** 2026-11-09: "Whenever I select a new output tab I have to press the button to re-run. Can it just be set up so that when an output tab is selected it just automatically re-runs?"
+- **Where:** `index.html`:
+  - The block `/* AUTO (2026-11-09 … */` before `drawOut()`: `AUTO_BTN` (each tab's own Calculate button: sec/loads `#bCalc`, flex `#fx_calc`, shear `#sh_calc`, an `#anCalc`, fat `#fa_calc`, cn `#cn_calc`, spl `#sp_calc`, rt `#rt_calc`, wt `#wt_calc`, dwg `#dwg_calc`), `autoRun()`, `autoWatch()` and `autoMsg()`.
+  - The old `drawOut()` was renamed `drawOut0()`; the new `drawOut()` = `drawOut0(); autoRun();`.
+  - A MutationObserver on `#out` handles a tab's own redraws.
+  - `#autoBar` holds the status (spinner, "Inputs changed — updating…", "Calculating…") and the **Re-run** button `#bRerun`.
+  - The tab bar and the `goto` links set `autoNow` (run at once).
+- **Rule:**
+  - When the tab draws itself as out of date (its own check: the project, girder and its choices against its last run), its button is pressed for the user. This happens at once on selecting the tab, and after 600 ms of quiet after an input change.
+  - A tab that is up to date is not re-run.
+  - A run that leaves the tab out of date (an error) is not repeated until the project or the tab's choices change (`autoLast`, the content key).
+  - **Manual:** Auto design (its Run on the Auto design input tab) and the Report (Build). The 3D view has no calculation.
+- **Drawings:** `engine/sheets.js` gets `resultsAsync(P, G, onStep)`: `results()` one plate girder at a time, with a timer between girders. It makes the same calls, in the same order, with the same memo. `ui/drawings.js` calculates through it (`calcAsync`) and shows "Calculating… girder i of n".
+- **Slow tabs (> 2 s on the default project):** Flexure 6.0 s, Shear 6.2, Fatigue 6.4, Analysis 6.1, Field splices 6.2, Rating 6.2, Welds 6.0, Drawings 6.7, when it is the first tab to run the girder analysis. The others then take it from the shared analysis cache, 0.1–0.7 s. Constructibility takes 0.4 s; Section and Loads under 0.1 s.
+  - A spinner is painted before the run starts.
+  - The one girder analysis is a single computation and cannot yield inside it without an engine change. The Drawings yield between plate girders.
+- **Tests (app right, tests stale):**
+  - `tests/smoke/steel-bridge-paths.mjs` failed on main: it pressed `#fx_calc` on the second Flexure visit, when the tab is up to date and the button hidden (the app correctly runs nothing). It also expected the Welds sources `['analysis', 'file']`, but the custom-demands PR (2026-11-01) added 'custom'. Now: select the tab and wait (`settle()`); the options are `['analysis', 'custom', 'file']`.
+  - `tests/smoke/steel-bridge-tabgraphics-b.mjs` failed on main: its double-click "fit" at the graphic's top-left landed on the sticky output tab bar (two rows of tabs since the Auto design and 3D tabs), which opened the Field splices tab, so the shear graphic was gone. Now: double-click below the tab bar.
+  - `steel-bridge-graphics`, `-wiring`, `-drawings` wait for the tab to run instead of pressing its button.
+- **Formulas, factors, units, code references, saved data:** none changed. The same results come from the same button and code path. The Drawings results from `resultsAsync` equal those of `results()` (default project, JSON compared, identical).
+- **Check case:** default project.
+  - Open Flexure: "Calculating…" appears, then the results, with no button press (6.0 s).
+  - Open Shear: results in 0.5 s.
+  - Back to Flexure: nothing runs (one analysis in the cache).
+  - Change f′c to 4.5 on Materials: "Inputs changed — updating…", then Flexure runs again (6.2 s).
+  - Re-run: runs again.
+- **Other copies:** none.
