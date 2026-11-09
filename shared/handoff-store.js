@@ -32,7 +32,9 @@
      group(entries) -> [ { pid, project, noProject, label, newest, entries } ] newest first
      match(groups, open { name, bridgeId }) -> pid | null   bridgeId match first (both non-blank), else name (case-insensitive)
      flush(o) -> Promise   retry the queued uploads
-     deviceName(storage, sync) -> the Cloud sync device name when sync is set up, else '' */
+     deviceName(storage, sync) -> the Cloud sync device name when sync is set up, else ''
+     Channel helpers: geometryHash(p) (HANDOFF.md §4.14 contentHash), checkGeometry(p) -> { ok, errors, warnings } (§4.14 checks),
+       summary(channel, p) -> the picker's one-line summary ("3 spans, 110–140–110 ft, 5 girders") */
 (function () {
   'use strict';
   const NS = 'bridgeSuite.v1.', DIR = 'handoffs', PEND = NS + 'handoffStore.pending';
@@ -213,6 +215,59 @@
     return null;
   }
 
+  /* ---------- channel helpers (HANDOFF.md §4.14, §4.4): the checks and the one-line summary the picker shows ---------- */
+  const isN = v => typeof v === 'number' && isFinite(v);
+  const GEO_UNITS = { length: 'ft', skew: 'deg', deck: 'in', section: 'in' };
+  /* geometryHash(p): the §4.14 content hash of a superGeometry payload (its geometry only; not the envelope or the notes) */
+  const geometryHash = p => contentHash({ spans: p.spans, supports: p.supports, girders: p.girders, edges: p.edges, deck: p.deck, section: p.section, ownerRules: p.ownerRules || null });
+  /* checkGeometry(p): HANDOFF.md §4.14 validation -> { ok, errors: [..], warnings: [..] } (receivers add their own limits) */
+  function checkGeometry(p) {
+    const E = [], W = [], vErr = validate(p, 'bridge-super-geometry', 1);
+    if (vErr) return { ok: false, errors: [vErr], warnings: W };
+    const u = p.units || {};
+    Object.keys(GEO_UNITS).forEach(k => { if (u[k] !== GEO_UNITS[k]) E.push(`unit of ${k} is "${u[k] == null ? 'not stated' : u[k]}"; expected ${GEO_UNITS[k]}`); });
+    ['curb', 'height'].forEach(k => { if (u[k] != null && u[k] !== 'in') E.push(`unit of ${k} is "${u[k]}"; expected in`); });
+    const sp = p.spans;
+    if (!Array.isArray(sp) || !sp.length || !sp.every(v => isN(v) && v > 0)) E.push('spans: every span must be a positive number (ft)');
+    const ns = Array.isArray(sp) ? sp.length : 0, S = p.supports;
+    if (!Array.isArray(S) || S.length !== ns + 1) E.push(`supports: expected ${ns + 1} (one more than the spans), got ${Array.isArray(S) ? S.length : 'none'}`);
+    else S.forEach((s, k) => { const id = (s && s.id) || `support ${k + 1}`;
+      if (!s || !isN(s.skew) || !(Math.abs(s.skew) < 90)) E.push(`${id}: skew must be a number of degrees between −90 and 90`);
+      if (s && s.x != null && !isN(s.x)) E.push(`${id}: x is not a number`);
+      if (s && ['end', 'continuous', 'joint'].indexOf(s.joint) < 0) E.push(`${id}: joint must be end, continuous or joint`);
+      if (s && s.depth != null && !(isN(s.depth) && s.depth > 0)) E.push(`${id}: depth must be a positive number (in)`);
+      if (s && s.bearings != null) { const b = s.bearings; if (!b || ['fixed', 'expansion'].indexOf(b.long) < 0 || ['fixed', 'free'].indexOf(b.trans) < 0) E.push(`${id}: bearings must be { long: fixed | expansion, trans: fixed | free }`); } });
+    const g = p.girders || {};
+    if (!(Number.isInteger(g.count) && g.count >= 1)) E.push('girders.count must be a whole number of 1 or more');
+    else if (!Array.isArray(g.spacings) || g.spacings.length !== g.count - 1 || !g.spacings.every(v => isN(v) && v > 0)) E.push(`girders.spacings: expected ${g.count - 1} positive spacings (ft)`);
+    ['ohL', 'ohR'].forEach(k => { if (!(isN(g[k]) && g[k] >= 0)) E.push(`girders.${k} must be zero or a positive number (ft)`); });
+    const ed = p.edges || {};
+    ['L', 'R'].forEach(sd => { const e = ed[sd]; if (!e) { E.push(`edges.${sd} is missing`); return; }
+      if (!(isN(e.width) && e.width >= 0)) E.push(`edges.${sd}.width must be zero or a positive number (ft)`);
+      if (e.height != null && !(isN(e.height) && e.height > 0)) E.push(`edges.${sd}.height must be a positive number (in) or null`); });
+    const d = p.deck || {};
+    if (!(isN(d.ts) && d.ts > 0)) E.push('deck.ts must be a positive number (in)');
+    if (!(isN(d.haunch) && d.haunch >= 0)) E.push('deck.haunch must be zero or a positive number (in)');
+    const c = p.section || {};
+    ['depth', 'bf', 'tf', 'tw'].forEach(k => { if (!(isN(c[k]) && c[k] > 0)) E.push(`section.${k} must be a positive number (in)`); });
+    if (c.atSupports != null && (!Array.isArray(c.atSupports) || c.atSupports.length !== ns + 1 || !c.atSupports.every(v => isN(v) && v > 0))) E.push('section.atSupports: one positive depth per support (in)');
+    if (c.spanMax != null && (!Array.isArray(c.spanMax) || c.spanMax.length !== ns || !c.spanMax.every(v => isN(v) && v > 0))) E.push('section.spanMax: one positive depth per span (in)');
+    if (!E.length && p.contentHash != null && p.contentHash !== geometryHash(p)) W.push('The content hash does not match the geometry (the file was edited after it was sent).');
+    return { ok: !E.length, errors: E, warnings: W };
+  }
+  const fmt = v => (Math.round(v * 100) / 100).toString();
+  /* summary(channel, p): one line for the picker, e.g. "3 spans, 110–140–110 ft, 5 girders" */
+  function summary(channel, p) {
+    try {
+      if (channel === 'superGeometry') { const n = p.spans.length, gc = p.girders && p.girders.count;
+        return `${n} span${n === 1 ? '' : 's'}, ${p.spans.map(fmt).join('–')} ft${gc ? `, ${gc} girder${gc === 1 ? '' : 's'}` : ''}`; }
+      if (channel === 'superReactions') { const S = p.supports || [], gl = new Set(); S.forEach(s => (s.girders || []).forEach(g => gl.add(g.label)));
+        const L = p.span && isN(p.span.length) ? `, ${fmt(p.span.length)} ft` : '';
+        return `reactions at ${S.length} support${S.length === 1 ? '' : 's'}${L}, ${gl.size} girder${gl.size === 1 ? '' : 's'}${p.allGirders ? '' : (p.girderLine && p.girderLine.label ? ` (${p.girderLine.label})` : '')}`; }
+    } catch (e) { /* below */ }
+    return '';
+  }
+
   window.SharedHandoffStore = { NS, DIR, PEND, norm, enc, fnv, contentHash, projectOf, pidOf, copyKey, cloudPath, fileText, write, send, flush, pending,
-    validate, local, cloud, group, list, match, deviceName };
+    validate, local, cloud, group, list, match, deviceName, geometryHash, checkGeometry, summary };
 })();

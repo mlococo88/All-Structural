@@ -102,3 +102,36 @@ test('handoff-store: sync on -> upload, update with sha, offline queued then sen
   // producers filter applies to GitHub too
   const l3 = await H.list(O(s, { fetch: gh.fetch, producers: ['girderdetail'] })); assert.equal(l3.groups.length, 0);
 });
+
+/* a §4.14 payload of the Steel Bridge app's default bridge (3 spans 110-140-110 ft, 5 girders at 9.5 ft) */
+function geo() {
+  const p = { _schema: 'bridge-super-geometry', schemaVersion: 1, producer: 'Steel Bridge Design', producerFile: 'apps/steel-bridge/index.html', producedAt: '2026-11-09T10:00:00.000Z',
+    project: { name: 'New steel bridge', bridgeId: '' }, units: { length: 'ft', skew: 'deg', deck: 'in', section: 'in', curb: 'in', height: 'in' }, notes: [],
+    spans: [110, 140, 110], continuity: 'continuous',
+    supports: [0, 110, 250, 360].map((x, k) => ({ id: k === 0 ? 'Abut. 1' : k === 3 ? 'Abut. 2' : `Pier ${k}`, x, skew: 0, joint: k === 0 || k === 3 ? 'end' : 'continuous', depth: k === 0 || k === 3 ? 61.875 : 63.5 })),
+    girders: { count: 5, spacings: [9.5, 9.5, 9.5, 9.5], ohL: 3.25, ohR: 3.25 },
+    edges: { L: { type: 'barrier', width: 1.5, height: null }, R: { type: 'barrier', width: 1.5, height: null } },
+    deck: { ts: 8, total: 8.5, haunch: 2 }, section: { depth: 63.5, bf: 18, tf: 2, tw: 0.5625, atSupports: [61.875, 63.5, 63.5, 61.875], spanMax: [63.5, 63.5, 63.5] } };
+  p.contentHash = H.geometryHash(p); return p;
+}
+test('handoff-store: checkGeometry accepts a §4.14 payload and refuses bad units, counts and numbers; summary lines', () => {
+  const p = geo(), ok = H.checkGeometry(p); assert.equal(ok.ok, true, ok.errors.join('; ')); assert.deepEqual(J(ok.warnings), []);
+  assert.equal(H.summary('superGeometry', p), '3 spans, 110–140–110 ft, 5 girders');
+  const bad = (f, rx) => { const q = geo(); f(q); const r = H.checkGeometry(q); assert.equal(r.ok, false); assert.match(r.errors.join('; '), rx); };
+  bad(q => { q.units.length = 'm'; }, /unit of length is "m"; expected ft/);
+  bad(q => { q.spans[1] = -5; }, /every span must be a positive/);
+  bad(q => { q.supports.pop(); }, /expected 4 \(one more than the spans\), got 3/);
+  bad(q => { q.supports[1].skew = 'x'; }, /Pier 1: skew must be a number/);
+  bad(q => { q.supports[1].joint = 'hinge'; }, /joint must be end, continuous or joint/);
+  bad(q => { q.supports[2].bearings = { long: 'fixed', trans: 'guided' }; }, /bearings must be/);
+  bad(q => { q.girders.spacings.pop(); }, /expected 4 positive spacings/);
+  bad(q => { q.edges.R.width = null; }, /edges.R.width/);
+  bad(q => { q.deck.ts = 0; }, /deck.ts/);
+  bad(q => { q.section.tw = NaN; }, /section.tw/);
+  bad(q => { q._schema = 'bridge-super-reactions'; }, /wrong data type/);
+  bad(q => { q.schemaVersion = 2; }, /newer format/);
+  const q = geo(); q.supports[1].bearings = { long: 'fixed', trans: 'fixed' }; q.contentHash = H.geometryHash(q); assert.equal(H.checkGeometry(q).ok, true);
+  const e = geo(); e.spans[0] = 111; const r = H.checkGeometry(e); assert.equal(r.ok, true); assert.match(r.warnings.join(''), /content hash does not match/);
+  assert.equal(H.summary('superReactions', { supports: [{ girders: [{ label: 'G1' }, { label: 'G2' }] }, { girders: [{ label: 'G1' }, { label: 'G2' }] }], span: { length: 120 }, allGirders: true }), 'reactions at 2 supports, 120 ft, 2 girders');
+  assert.equal(H.summary('superGeometry', {}), '');
+});

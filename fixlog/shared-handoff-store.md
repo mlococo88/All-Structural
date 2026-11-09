@@ -21,6 +21,9 @@ Loaded by: see `shared/README.md` (row `handoff-store.js`). Spec: `HANDOFF.md` �
     grouped by project id, newest `producedAt` first, the same payload once; no project → "earlier hand-off (no project)".
   - `match(groups, { name, bridgeId })`: the bridgeId (both non-blank, case-insensitive), else the name.
   - `fnv`, `contentHash(obj)` (FNV-1a of `JSON.stringify`, as HANDOFF.md §4.6), `deviceName(storage)` (the Cloud sync device name).
+  - Channel helpers shared by sender and receiver: `geometryHash(p)` (§4.14 `contentHash` over spans, supports, girders, edges, deck,
+    section, ownerRules), `checkGeometry(p)` (§4.14 checks: schema, units, counts, finite and positive numbers; a hash that no longer
+    matches is a warning), `summary(channel, p)` (the picker's line, e.g. "3 spans, 110–140–110 ft, 5 girders").
 - **Saved data (CLAUDE.md §5):** new keys only (`…by.<producer>.<project id>`, `bridgeSuite.v1.handoffStore.pending`); no existing key or
   format is read differently or written. The project id always contains `~`, so a per-project key never equals a channel's `.updatedAt`,
   `.adopted.<receiver>` or `.by.<producer>` key. With Cloud sync off: no request, no sync key.
@@ -35,7 +38,7 @@ Loaded by: see `shared/README.md` (row `handoff-store.js`). Spec: `HANDOFF.md` �
 - **Check case:** `{ name: " Route 9  over  Mill Brook ", bridgeId: "B-12-034" }` → id `B-12-034~Route 9 over Mill Brook`, key
   `bridgeSuite.v1.superGeometry.by.steelbridge.B-12-034~Route 9 over Mill Brook`, GitHub path
   `handoffs/superGeometry/steelbridge/B-12-034~Route 9 over Mill Brook.json`. `{ name: "A.b/c~d" }` → `~A%2Eb%2Fc%7Ed`.
-- **How verified:** `node tests/engine/run.mjs` (new `handoff-store.test.mjs`, 4 tests: ids, local listing and grouping, sync off, sync on
+- **How verified:** `node tests/engine/run.mjs` (new `handoff-store.test.mjs`, 5 tests: checkGeometry / summary; ids, local listing and grouping, sync off, sync on
   with upload / update / offline queue / merge of another device's copy / no download of an identical copy); `node tests/check-syntax.mjs`.
 - **Other copies:** none (shared file).
 - **Open items:** none.
