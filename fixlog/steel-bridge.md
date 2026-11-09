@@ -4263,3 +4263,26 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
   2. With "Plates and bolts: Entered below", a station without an entry is **not** auto-designed: `engine/splices.js` `girder()` runs `autoDesign` only when `S.auto && !I.own`. Such a station uses the module's built-in plates (`DEF`), and the list labels it "auto". The Splices tab note says "A station without an entry is auto-designed". Changing either changes results or wording; engineer to decide.
   3. With "Entered below", the Splices tab gives no way to add a row except "Keep these plates" on the output tab ("None entered.").
   4. The entered plate inputs have no `data-kind="num"`, so they are saved as text ("4", not 4). The engine reads both the same (`num()` / `+`; checked in Node on every field: the same checks and ratios). Left as is; no saved-format change.
+
+## 2026-11-09 — PR: claude/sb-splice-addrow (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SPADD) — Splices input tab: "+ Add splice station" for entered plates   [input only; no result change; no saved-format change]
+- **Follows:** SPERR (PR #1263), open item 3: with "Plates and bolts: Entered below" the Splices tab showed "None entered." and a row could only come from "Keep these plates" on the Field splices output tab.
+- **Where:** `ui/splices.js`:
+  - new helpers before `function inputs(`: `AD` (a WeakMap, girder object → Map(x → auto-designed p), page memory only), `near`, `girderOf`, `hasRow`, `platesAt`;
+  - `inputs(P, h)` → `inputs(P, h, ui)` (index.html already passes `ui`); under the entered-plates table, anchor `${rows || '<tr><td colspan="34">None entered.</td></tr>'}</tbody></table></div>`, the new `${add}` control: a station select `#i_spladd` (the stations of the girder chosen on the Girders tab without an entry) and the button `+ Add splice station` (`data-spladd`); the × button of each row (`data-spldel`, unchanged) gets a title "Remove this row"; the card's note names both controls (its last sentences unchanged);
+  - `onClick(e, P)` → `onClick(e, P, ui)` (index.html already passes `ui`): `[data-spladd]` pushes `{ x, g: gi, top, bot, web }` to `P.splices.plates`;
+  - `calc()`: after a run without error, `if (R.girder) { … if (q.design && q.p) m.set(+q.x, q.p); … AD.set(R.girder, m); }` (remembers the plates the tab auto-designed).
+- **Before:** `function inputs(P, h) {` … `${rows || '<tr><td colspan="34">None entered.</td></tr>'}</tbody></table></div>`);` and `function onClick(e, P) {` with only `[data-splgo]` and `[data-spldel]`.
+- **After:** see the code at the anchors (comment `SPADD`). The new row's prefill, in order: the plates the Field splices tab last auto-designed for that station of that girder (this page view); else the plates of the tab's last run of that girder; else GirderDetail's built-in plates (`engine/splices.js` `DEF.top`, `DEF.bot`, `DEF.web`).
+- **Saved data:** the row is the format "Keep these plates" already writes (`engine/model.js`: `plates: [ { x, g, top, bot, web } ]`, numbers and `inner` true/false). No new key, field or format.
+- **Not changed:**
+  - A station without an entry is calculated as before (SPERR open item 2: with "Entered below" it uses the built-in plates; the note's "A station without an entry is auto-designed" and the list's "auto" label are unchanged, for the engineer to decide).
+  - The entered plate inputs keep no `data-kind` (saved as text when edited, SPERR open item 4). With `data-kind="num"` an edited plate field of an existing project would be saved as a number (4, not "4") and a cleared field as null instead of "": a change to the saved format of existing projects, so it is left as is. The engine reads text and numbers the same (`num()` / `parseDim`).
+- **Governing provision:** none (input control); AASHTO LRFD 10th Ed. 6.13.6.1 calculations unchanged.
+- **Check case:** default project (auto-design on).
+  - Field splices tab: FS1 at 82.00 ft auto-designed, "auto: 50 bolts each side".
+  - Splices input tab, "Plates and bolts: Entered below": "None entered." and "Add a row for G1 [FS1 at 82.00 ft]  + Add splice station".
+  - + Add splice station: the row "82.00, G1" with the auto-designed plates; saved `{ x: 82, g: 0, top, bot, web }`; Field splices FS1: "entered: 50 bolts each side", the same governing check and ratio as the auto-design; FS1 no longer offered in the select.
+  - × on the row: "None entered." again; FS1 back on the built-in plates, as before.
+  - New page, no run yet: + Add splice station gives the built-in plates (top: 2 lines, g 3, g₀ 3, 3 rows, s 3, e_f 1.75, e_p 1.75, outer 16 × 0.5, inner 6.5 × 0.625).
+- **How verified:** new `tests/smoke/steel-bridge-splice-addrow.mjs` (the steps above, the saved row's keys and types, an edited t_o saved and changing FS1, 0 console errors). Also `tests/check-syntax.mjs`; engine tests `splices`, `autodesign-splices`, `custom-demands`, `handoffs`, `report`, `paths`, `tabgraphics-b`; smoke `steel-bridge-splices`, `-paths`, `-tabgraphics-b`, `-wiring`, `-report`.
+- **Open items:** SPERR open items 2 and 4 stand.
