@@ -4188,4 +4188,48 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
   - At 390 px the dialog is full screen (390 × 844) with no page horizontal scroll; at 1440 px it is 1100 px wide.
 - **Formulas, results, saved data:** none changed (§4, §5).
 - **How verified:** `node tests/check-syntax.mjs`; smoke `phone-layout` (input tabs at 390 px), `steel-bridge-*`; screenshots in the PR.
+## 2026-11-09 — PR: claude/geomxfer-sender (GXF-2) — "Send to Substructure Loading" with Geometry and Reactions: the new superGeometry hand-off and per-project copies of both channels   [no result change; saved data: new hand-off keys only]
+- **Why:** engineer decisions 2026-11-09 (new channel `superGeometry`, Steel Bridge app → Substructure Loading; "All hand-offs should be per
+  project"; sent copies through GitHub when Cloud sync is on). Spec: HANDOFF.md §4.14 and §5.1 (PR GXF-1, `shared/handoff-store.js`).
+- **Where:**
+  - `ui/handoffs.js`: new `sgSection(P, X)` and `sgPayload(P)` (anchor `function sgPayload(P) {`), exported on `window.SBDHandoffs` with `GEO`.
+    The card's row (anchor before: `data-ho="srSend">Send reactions to Substructure Loading</button>`) is now
+    `data-ho="subSend">Send to Substructure Loading</button>` with the boxes `data-ho-opt="geo"` (Geometry) and `data-ho-opt="rx"`
+    (Reactions), both ticked by default (kept while the page is open, not saved), and `data-ho="subFile"` Export hand-off (JSON).
+    `onClick` before: `if (a === 'srSend' || a === 'srFile') { const r = srPayload(P); … }` (publish `superReactions`, copy
+    `.by.girderdetail`, alert); after: `if (a === 'subSend' || a === 'subFile') { subSend(P, a === 'subFile'); return false; }`.
+    New `subSend(P, file)` (anchor `async function subSend(P, file) {`): builds every ticked channel first (nothing is sent when one
+    fails), adds the optional envelope field `device` (the Cloud sync device name, when set), publishes each with `BridgeXfer.publish`,
+    writes its `.by.<id>` copy (`superGeometry.by.steelbridge`; `superReactions.by.girderdetail`, as before), then
+    `SharedHandoffStore.send` (per-project copy `bridgeSuite.v1.<channel>.by.steelbridge.<project id>` and, with Cloud sync, the upload to
+    `handoffs/<channel>/steelbridge/<project id>.json`). Export: one file per ticked channel (each with `producedAt`).
+  - `index.html`: `<script src="../../shared/handoff-store.js"></script>` after `shared/github-sync.js`.
+- **Payload (`sgPayload`, inputs only, no analysis):** spans and continuity; per support `id`, `x`, `skew` (as entered: + = the right end of
+  the support line, looking ahead station, is ahead; from `engine/framing.js` `xb = sup + (y_i − y_c)·tan θ` with y from G1 to Gn),
+  `joint` (abutments `end`; piers `continuous`, or `joint` for simple spans), `depth` (deepest segment touching the station on any plate
+  girder); `girders` { count = `xs.nb`, `xs.bays`, `xs.ohL`, `xs.ohR` }; `edges` through `SBDLoads.edgeIn` (width = the traffic-face
+  distance the live load uses); `deck` { ts, total = tdeck, haunch }; `section` { largest total depth D + t_top + t_bot, largest b_f, t_f,
+  t_w (each on its own), `atSupports`, `spanMax` }; `ownerRules` (as the reactions); `contentHash` = `SharedHandoffStore.geometryHash`;
+  checked with `SharedHandoffStore.checkGeometry` before sending.
+- **Check case (default project):** spans 110–140–110 ft continuous; supports Abut. 1 (0 ft, end, 61.875 in), Pier 1 (110, continuous,
+  63.5), Pier 2 (250, continuous, 63.5), Abut. 2 (360, end, 61.875); skews 0; 5 girders at 9.5 ft, overhangs 3.25 / 3.25 ft; barriers
+  1.5 ft (traffic face 1.5 ft), height not sent; deck 8 in (total 8.5), haunch 2 in; section: positive region 60 + 0.75 + 1.125 =
+  61.875 in, pier region 60 + 1.5 + 2 = 63.5 in → depth 63.5, b_f max(16, 18) = 18, t_f 2, t_w 0.5625. Picker summary "3 spans,
+  110–140–110 ft, 5 girders". Project id `~New steel bridge`.
+- **Results:** none change: `sgPayload` reads the inputs only (Node test: the project JSON and the DC1 reactions are identical after it);
+  the reactions payload is built by `srPayload` exactly as before.
+- **Saved data (CLAUDE.md §5):** the project format is unchanged. New hand-off keys only: `bridgeSuite.v1.superGeometry`,
+  `.updatedAt`, `.by.steelbridge`, `bridgeSuite.v1.superGeometry.by.steelbridge.<project id>`, `bridgeSuite.v1.superReactions.by.steelbridge.<project id>`
+  (and `bridgeSuite.v1.handoffStore.pending` while sync is set up). The keys written before (`superReactions`, `.updatedAt`,
+  `.by.girderdetail`) are written as before, so Substructure Loading's current Pull keeps working.
+- **Decisions (pending engineer review):**
+  1. `project.bridgeId` is blank (the app has no Bridge ID field); the per-project id is then the project name alone.
+  2. Barrier height is not sent (the app has no barrier height input; the drawings' 34 in is a drawing default). Curb height and the
+     railing load point are sent for a curb edge, not as a barrier height.
+  3. No project name → no per-project copy (only the latest hand-off, listed by the receiver as "earlier hand-off (no project)").
+  4. Geometry and Reactions boxes are not saved with the project (both ticked each time the page opens).
+- **How verified:** `node tests/engine/run.mjs` (3 new tests in `handoffs.test.mjs`: default bridge hand values; curb edge, simple spans,
+  signed skews, a deeper pier segment, refusals; no change to the project or its results); new `tests/smoke/geometry-handoff.mjs`
+  (sender: nothing on load, both boxes ticked, both channels' keys and per-project copies identical to the published payload, Geometry
+  alone, no project name → no per-project copy; 0 console errors); steel-bridge smoke tests.
 - **Other copies:** none.
