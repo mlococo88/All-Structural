@@ -4507,6 +4507,49 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
 - **Other copies:** none.
 - **Open items:** other folder tools, and single-file tools that load `shared/*.js`, could get the same loader (follow-up).
 
+## 2026-11-09 — PR: claude/sb-wide-splitter (PR #1277: https://github.com/mlococo88/All-Structural/pull/1277) (SBW) — full screen width and a draggable splitter between the input and output panels   [display only; no result or saved-data change]
+- **Engineer:** 2026-11-09: "There is a lot of blank space on the sides of the app, we should fill the entire screen width. Also maybe it would be good to have the input/output panel width adjustable with a grab bar or something."
+- **Where:**
+  - `index.html` CSS, `#app` (anchor `#app{max-width:`): before `#app{max-width:1500px;margin:0 auto;` → after `#app{max-width:none;margin:0 auto;`.
+  - `index.html` CSS, `#inputPanel`: before `flex:0 0 33%;max-width:33%;` → after `flex:0 0 calc(100% * var(--sbIn,.33));max-width:calc(100% * var(--sbIn,.33));`; and in the DASH rules (anchor `DASH (2026-11-09): the left check summary column`) each `*.33)` → `*var(--sbIn,.33))` (e.g. `calc((100% - 240px)*.33)` → `calc((100% - 240px)*var(--sbIn,.33))`).
+  - `index.html` CSS: new block (anchor `SBW (2026-11-09): the full screen width`): `#sbSplit` hidden by default, shown as a 7 px flex bar with a dotted grip and `cursor:col-resize` at `min-width:900px`; `#main:has(#sbSplit) #inputPanel{border-right:none}`; `body.sbSplitDrag` cursor; `@media print{#sbSplit{display:none!important}}`.
+  - `index.html` HTML: `<div id="sbSplit" role="separator" aria-orientation="vertical" … tabindex="0">` between `#inputPanel` and `<main id="outputPanel">`.
+  - `index.html` CBUST loader (second list, after `'ui/detail3d.js'`): `'ui/splitter.js'`.
+  - New `ui/splitter.js` (`window.SBDSplitUI`: `KEY, DEF, MIN_IN, MIN_OUT, reset(), apply(), setPx(px)`): sets `--sbIn` on `#main` = clamped input width / (`#main` width − summary column width); pointer events with pointer capture; keys Left/Right 16 px (Shift 64), PageUp/PageDown 80, Home/End limits, Enter reset; double-click reset; ResizeObserver on `#main` and `#sbDashCol` re-clamps; after a user change (rAF) a window `resize` and a `sbd2:panelresize` event ({ input, output } px).
+- **Layout:** default share .33 (as before; no `--sbIn` set while no key). Minimums: input ≥ 300 px, output ≥ 480 px (for a dragged / keyed width; if the window is too narrow for both, the input keeps 300). At 1920 px: before app 1500 / summary 280 / input 403 / output 817 px; after 1920 / 280 / 541 / 1092 px. At 1440 px: 240 / 396 / 797 px (output 7 px less: the bar). Below 900 px (stacked): no bar, unchanged.
+- **Saved data:** new per-browser UI key `sbd2.splitRatio_v1` (the input share, 4 decimals; removed on reset); the app's `sbd2.` UI prefix as `sbd2.dashCollapsed_v1`. Not in the project, the autosave or the export. No existing key or format changed.
+- **Decisions (pending engineer review):** the default (no key) keeps the old layout exactly (no clamp, so 297 px at 900 px as before); no extra outer gutter (the panels' padding is the gutter); prose not line-length capped; SVG frames keep their drawn height until the tab redraws (the drawing re-fits by its viewBox).
+- **Formulas, factors, units, code references:** none changed (§4).
+- **Check case:** 1920×1080, default project: input 541 px (= .33 × (1920 − 280) = 541.2); drag +200 → 741 px, key ≈ 0.452 (741 / 1640); drag far right → output 480 px; far left → input 300 px; reload keeps the width; double-click → 541 px, key removed.
+- **How verified:** new `tests/smoke/steel-bridge-splitter.mjs` (32 checks); `tests/check-syntax.mjs`; `phone-layout --tool sbapp` (390, 768); smoke steel-bridge wiring, paths, report, graphics, drawings, scroll, summary, tabgraphics-b, deflection, dash; project-library; engine deflection-tab and steps-groups-tabs after the CBUST merge; 0 console errors.
+
+## 2026-11-09 — PR: sbqa-form-layout (PR #1278: https://github.com/mlococo88/All-Structural/pull/1278) — form rows: long labels wrap in their own column, drop-downs show their choice (QAF; display only)
+- **Problem (visual QA pass, engineer request 2026-11-09):** in `.fRow` form rows (every input tab and the option rows at the top of the
+  output tabs) the label kept its full one-line width, so a label longer than about 200 px pushed its input or its unit onto a line of its
+  own (Cross-section: "ft" under "Left overhang (girder ℄ to deck edge)", "in" under the deck rebar centroid inputs; 30 rows over the input
+  tabs at 1440 px, 32 at 390 px). Every drop-down was a fixed 110 px, so most choices were cut ("Individual sp", "Lightest stee",
+  "This project'", "AASHTO LRF"; 57 drop-downs at 1440 px).
+- **Where:** `apps/steel-bridge/index.html` `<style>`, right after `.fRow label{min-width:170px;font-size:10pt;}`, anchor `QAF (2026-11-09)`.
+  - Before: (no rule)
+  - After:
+    ```css
+    .fRow>label:first-child{flex:0 1 auto;max-width:calc(100% - 150px);}
+    .fRow>select{flex:1 1 110px;width:110px;min-width:110px;max-width:max-content;}
+    ```
+  - The first label of a row may take the row width less 150 px (a 110 px input, the gaps and a short unit) and wraps inside that; short
+    labels keep the 170 px minimum, so inputs stay where they were. A drop-down starts at 110 px and grows into the free space of its row,
+    never wider than its longest choice.
+- **Result:** rows with the input or unit on a line of its own 30 → 4 at 1440 px and 32 → 4 at 390 px. The 4 left are units wider than the
+  reserved space ("kip-ft", "trucks/day", "ft apart", "(2.5.2.6.2)"). Drop-downs with their choice cut 57 → 22 (1440 px): those with a very
+  long choice in a full row.
+- **Governing provision:** none (display only; no formula, factor, unit, code reference, key or saved data changed).
+- **Check case:** Cross-section tab at 1440 px: "Left overhang (girder ℄ to deck edge)" wraps to two lines and its input and "ft" sit on
+  the same line; Girder spacing shows "Individual spacings" in full.
+- **How verified:** headless Chromium, origin/main vs branch: the digit sequences of every input tab, every output tab and the built
+  Report are identical (default project); before/after screenshots; `node tests/check-syntax.mjs`; steel-bridge smoke tests; phone-layout
+  `sbapp`; project-library.
+- **Other copies:** none.
+
 ## 2026-11-09 — PR: sbqa-output-format (PR #TBD) — output tabs and Report: station not said twice, f_ℓ subscript, plain "2,000", graphic buttons above the title (QAO; display only)
 Visual QA pass (engineer request 2026-11-09). Display only: no formula, factor, unit, code reference, key or saved data changed. Digit
 sequences of every tab and the built Report, origin/main vs branch, default project and a 3-span 30° skewed 6-girder project: identical

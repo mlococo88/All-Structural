@@ -100,7 +100,8 @@
     'engine/tabgraphics-b.js',
     'ui/tabgraphics-b.js',
     'ui/view3d.js',
-    'ui/detail3d.js'
+    'ui/detail3d.js',
+    'ui/splitter.js'   // SBW (2026-11-09): the splitter between the input and output panels (display only)
   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
 })();
 </script>
@@ -118,7 +119,7 @@
   *{box-sizing:border-box;}
   html,body{height:100%;margin:0;}
   body{font-family:var(--font-doc);font-size:10pt;color:var(--ink);background:#efede8;}
-  #app{max-width:1500px;margin:0 auto;height:100vh;height:100dvh;display:flex;flex-direction:column;background:var(--paper);box-shadow:0 0 12px rgba(0,0,0,.12);}
+  #app{max-width:none;margin:0 auto;height:100vh;height:100dvh;display:flex;flex-direction:column;background:var(--paper);box-shadow:0 0 12px rgba(0,0,0,.12);}
   html,body{overflow:hidden;}
   #hdr{flex:0 0 auto;border-bottom:3px solid var(--navy-900);padding:9px 14px 8px;background:var(--color-primary);color:#fff;z-index:20;}
   #hdr .titleRow{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;}
@@ -128,7 +129,7 @@
   #hdr .allToolsLink{font-size:8.5pt;color:#C7D4E4;text-decoration:none;font-family:var(--font-ui);}
   #hdr .allToolsLink:hover{color:#fff;text-decoration:underline;}
   #main{flex:1 1 auto;display:flex;min-height:0;}
-  #inputPanel{flex:0 0 33%;max-width:33%;border-right:1px solid var(--color-border);overflow-y:auto;position:relative;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:var(--color-bg);padding:10px 12px 60px;font-family:var(--font-ui);font-size:9.5pt;}
+  #inputPanel{flex:0 0 calc(100% * var(--sbIn,.33));max-width:calc(100% * var(--sbIn,.33));border-right:1px solid var(--color-border);overflow-y:auto;position:relative;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:var(--color-bg);padding:10px 12px 60px;font-family:var(--font-ui);font-size:9.5pt;}
   #outputPanel{flex:1 1 67%;min-width:0;overflow-y:auto;position:relative;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:0 16px 80px;background:var(--paper);}
   @media screen and (max-width:899.98px){
     html,body{overflow:visible;height:auto;}
@@ -153,8 +154,15 @@
   .sec>.secBody{padding:8px 10px;}
   .fRow{display:flex;align-items:center;gap:6px;margin:4px 0;flex-wrap:wrap;}
   .fRow label{min-width:170px;font-size:10pt;}
+<<<<<<< HEAD
   /* QAO (2026-11-09): the graphics' + − Fit buttons (shared/dxf.js viewer) sit in a strip above the drawing, so they never cover its title (display only) */
   #out .sdx-view{padding-top:34px;}
+=======
+  /* QAF (2026-11-09): a long label wraps inside its own column instead of pushing its input or unit onto a line of their own (display only);
+     a drop-down widens into the free space of its row up to its longest choice, so its text is not cut at 110 px */
+  .fRow>label:first-child{flex:0 1 auto;max-width:calc(100% - 150px);}
+  .fRow>select{flex:1 1 110px;width:110px;min-width:110px;max-width:max-content;}
+>>>>>>> origin/main
   input[type=number],input[type=text],select{font-family:var(--font-ui);font-size:9.5pt;padding:3px 6px;border:1px solid var(--color-border);border-radius:4px;width:110px;background:#fff;color:var(--color-fg);}
   input:focus-visible,select:focus-visible{outline:none;border-color:var(--color-ring);box-shadow:0 0 0 2px rgba(37,99,235,.25);}
   input.bad{border-color:var(--fail);background:#FEF2F2;}
@@ -212,13 +220,13 @@
   #sbDashCol{display:none}
   @media screen and (min-width:1200px){
     #sbDashCol{display:block;flex:0 0 240px;width:240px;min-width:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;border-right:1px solid var(--color-border);background:var(--slate-50);padding:0 9px 40px;font-family:var(--font-ui);font-size:9pt;color:var(--ink)}
-    #inputPanel{flex-basis:calc((100% - 240px)*.33);max-width:calc((100% - 240px)*.33)}
+    #inputPanel{flex-basis:calc((100% - 240px)*var(--sbIn,.33));max-width:calc((100% - 240px)*var(--sbIn,.33))}
     body.sbDashColl #sbDashCol{flex-basis:42px;width:42px;padding:0 2px}
-    body.sbDashColl #inputPanel{flex-basis:calc((100% - 42px)*.33);max-width:calc((100% - 42px)*.33)}
+    body.sbDashColl #inputPanel{flex-basis:calc((100% - 42px)*var(--sbIn,.33));max-width:calc((100% - 42px)*var(--sbIn,.33))}
   }
   @media screen and (min-width:1500px){
-    #sbDashCol{flex-basis:280px;width:280px} #inputPanel{flex-basis:calc((100% - 280px)*.33);max-width:calc((100% - 280px)*.33)}
-    body.sbDashColl #sbDashCol{flex-basis:42px;width:42px} body.sbDashColl #inputPanel{flex-basis:calc((100% - 42px)*.33);max-width:calc((100% - 42px)*.33)}
+    #sbDashCol{flex-basis:280px;width:280px} #inputPanel{flex-basis:calc((100% - 280px)*var(--sbIn,.33));max-width:calc((100% - 280px)*var(--sbIn,.33))}
+    body.sbDashColl #sbDashCol{flex-basis:42px;width:42px} body.sbDashColl #inputPanel{flex-basis:calc((100% - 42px)*var(--sbIn,.33));max-width:calc((100% - 42px)*var(--sbIn,.33))}
   }
   #sbDashHead{position:sticky;top:0;z-index:3;background:var(--slate-50);display:flex;align-items:center;flex-wrap:wrap;gap:3px 7px;padding:8px 0 5px;border-bottom:1px solid var(--color-border)}
   #sbDashTtl{margin:0;font-size:9.5pt;letter-spacing:.05em;text-transform:uppercase;color:var(--accent)}
@@ -241,6 +249,20 @@
   #sbDashCol .sdList a.sd-fail{color:#991B1B;font-weight:700} #sbDashCol .sdList a.sd-review{color:#92400E} #sbDashCol .sdList a.sd-pass{color:#065F46} #sbDashCol .sdList a.sd-na,#sbDashCol .sdList a.sd-notrun{color:#64748b} #sbDashCol .sdOldV{font-style:italic}
   #sbDashCol .sdNote{font-size:8pt;color:#64748b;margin:6px 0}
   @media print{#sbDashCol{display:none!important}}
+  /* SBW (2026-11-09): the full screen width (no 1500 px cap) and the splitter between the input and output panels (ui/splitter.js).
+     --sbIn: the input panel's share of the width beside the check summary column (default .33; set on #main only after a drag, from the
+     per-browser UI key sbd2.splitRatio_v1). Shown only where the panels are side by side (900 px and wider); not printed. */
+  #sbSplit{display:none}
+  @media screen and (min-width:900px){
+    #sbSplit{display:flex;align-items:center;justify-content:center;flex:0 0 7px;width:7px;cursor:col-resize;touch-action:none;user-select:none;-webkit-user-select:none;background:var(--slate-100);border-left:1px solid var(--color-border);border-right:1px solid var(--color-border);z-index:5}
+    #sbSplit::before{content:"";width:3px;height:36px;border-radius:2px;background:radial-gradient(circle,#94A3B8 1px,transparent 1.3px) 0 0/3px 6px repeat-y}
+    #sbSplit:hover,#sbSplit.drag{background:#DBEAFE} #sbSplit:hover::before,#sbSplit.drag::before{background-image:radial-gradient(circle,var(--blue-600) 1px,transparent 1.3px)}
+    #sbSplit:focus-visible{outline:2px solid var(--color-ring);outline-offset:-2px;background:#DBEAFE}
+    #main:has(#sbSplit) #inputPanel{border-right:none}
+    body.sbSplitDrag,body.sbSplitDrag *{cursor:col-resize!important;user-select:none!important}
+    body.sbSplitDrag iframe,body.sbSplitDrag canvas{pointer-events:none}
+  }
+  @media print{#sbSplit{display:none!important}}
 </style>
 </head>
 <body>
@@ -271,6 +293,7 @@
       <div class="inTabs" role="tablist" id="inTabs"></div>
       <div id="inPanes"></div>
     </aside>
+    <div id="sbSplit" role="separator" aria-orientation="vertical" aria-controls="inputPanel outputPanel" aria-label="Width of the input and output panels (arrow keys move it, Home / End to the limits, double-click or Enter resets)" tabindex="0" title="Drag to change the width of the input and output panels; double-click to reset"></div><!-- SBW (2026-11-09): splitter, ui/splitter.js -->
     <main id="outputPanel">
       <div id="tabBar" role="tablist"><button type="button" role="tab" aria-selected="false" data-otab="sum">Summary</button><button type="button" role="tab" aria-selected="true" data-otab="sec">Section properties</button><button type="button" role="tab" aria-selected="false" data-otab="flex">Flexure</button><button type="button" role="tab" aria-selected="false" data-otab="loads">Loads &amp; LLDF</button><button type="button" role="tab" aria-selected="false" data-otab="shear">Shear &amp; stiffeners</button><button type="button" role="tab" aria-selected="false" data-otab="fat">Fatigue &amp; studs</button><button type="button" role="tab" aria-selected="false" data-otab="an">Analysis</button><button type="button" role="tab" aria-selected="false" data-otab="defl">Deflection</button><button type="button" role="tab" aria-selected="false" data-otab="cn">Constructibility</button><button type="button" role="tab" aria-selected="false" data-otab="cf">Cross-frames</button><button type="button" role="tab" aria-selected="false" data-otab="spl">Field splices</button><button type="button" role="tab" aria-selected="false" data-otab="rt">Rating</button><button type="button" role="tab" aria-selected="false" data-otab="wt">Welds</button><button type="button" role="tab" aria-selected="false" data-otab="rpt">Report</button><button type="button" role="tab" aria-selected="false" data-otab="dwg">Drawings</button><button type="button" role="tab" aria-selected="false" data-otab="ad">Auto design</button><button type="button" role="tab" aria-selected="false" data-otab="3d">3D view</button></div>
       <div id="autoBar" hidden><span id="autoMsg" role="status" aria-live="polite"></span><button type="button" id="bRerun" title="Calculate this tab again now">Re-run</button></div>
