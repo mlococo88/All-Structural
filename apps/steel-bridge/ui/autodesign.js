@@ -1,4 +1,5 @@
-/* apps/steel-bridge/ui/autodesign.js — the Auto design output tab (window.SBDAutoDesignUI), from engine/autodesign.js. Classic script.
+/* apps/steel-bridge/ui/autodesign.js — the Auto design input tab (its settings and Run; ADIN, 2026-11-09) and the Auto design output tab
+   (the results) (window.SBDAutoDesignUI), from engine/autodesign.js. Classic script.
    Needs SharedSteps, SharedUnits, SBDModel, SBDAutoDesign and every module the full check runs (see engine/autodesign.js).
 
    One panel: the inputs (saved in the project, P.autodesign: mode, objective, the designs to list (topN), the price list, the limits, the
@@ -6,7 +7,8 @@
    candidates (each passing every module on the full check), and Apply with one-step Undo (the design before Apply is kept in
    P.autodesign.undo). The result itself lives in memory for this page view.
 
-   render(host, ctx): ctx = { P (project), g (girder index), changed(redraw) (the project was changed: autosave and redraw) } */
+   inputs(P) / wire(host, ctx) for the input tab; render(host, ctx) for the output tab, ctx = { P (project), g (girder index), changed(redraw)
+   (the project was changed: autosave and redraw) } */
 (function () {
   'use strict';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -58,8 +60,8 @@
   function runBar(P) {
     return `<section class="sec"><div class="secBody">
       <div class="fRow"><button type="button" class="primary" id="ad_run"${S.running ? ' disabled' : ''}>Run Auto design</button><button type="button" id="ad_stop"${S.running ? '' : ' disabled'}>Stop</button>
-      ${P.autodesign && P.autodesign.undo ? '<button type="button" id="ad_undo">Undo the last Apply</button>' : ''}</div>
-      ${S.running || S.prog ? `<div class="ad-bar"><div style="width:${Math.round(100 * ((S.prog && S.prog.f) || 0))}%"></div></div><p class="note">${esc((S.prog && S.prog.msg) || '')}</p>` : ''}</div></section>`;
+</div>
+      ${bar()}<p class="note">The candidates, Apply and Undo the last Apply are on the <a href="#" data-adout="1">Auto design output tab</a>.</p></div></section>`;
   }
   /* ---------- the design variables (P.autodesign.vars; engine/autodesign.js VARS): Lock / Range / Auto for every sizable input ---------- */
   const frc = v => { const n = Math.round(+v * 16), w = Math.floor(n / 16), r = n % 16; if (!isFinite(n)) return '—'; if (!r) return String(w); let a = r, b = 16; while (a % 2 === 0) { a /= 2; b /= 2; } return `${w ? w + ' ' : ''}${a}/${b}`; };
@@ -195,32 +197,56 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
       <p class="note">Green: the better of the two (lower); red: the worse. The current design's full check is this run's (the Apply button writes the candidate chosen in the list above).</p></div></section>`;
     return h;
   }
-  function render(host, ctx) {
-    css(); const P = ctx.P;
-    let h = inputsHtml(P) + varsHtml(P, AD().settings(P)) + runBar(P);
-    if (S.err) h += `<div class="alert err">${esc(S.err)}</div>`;
-    if (S.R && !S.running) h += (S.key !== key(P) ? '<div class="alert">The project changed since this run: run again before applying.</div>' : '') + resultsHtml(P, S.R);
-    host.innerHTML = h;
-    const redraw = () => render(host, ctx), on = (sel, ev, f) => host.querySelectorAll(sel).forEach(el => el.addEventListener(ev, f));
+  /* ADIN (2026-11-09): the settings (the inputs, the design variables with Auto / Lock / Range, the limits and the owner's plate rules, Run)
+     are on the Auto design INPUT tab (inputs + wire); the OUTPUT tab (render) keeps the results: the candidate list and ranking, each
+     candidate's plates, details, checks and steps, the splice placement table, the compare view, Apply and Undo. Same fields, same
+     handlers as before (P.autodesign); nothing computed changes. A link on each tab opens the other. */
+  const bar = () => S.running || S.prog ? `<div class="ad-bar"><div style="width:${Math.round(100 * ((S.prog && S.prog.f) || 0))}%"></div></div><p class="note">${esc((S.prog && S.prog.msg) || '')}</p>` : '';
+  /* inputs(P): the Auto design input tab's HTML */
+  function inputs(P) {
+    css();
+    return `<p class="note"><a href="#" data-adout="1">Results: Auto design output tab</a> (candidates, ranking, full checks, Apply).</p>` + inputsHtml(P) + varsHtml(P, AD().settings(P)) + runBar(P)
+      + (S.err ? `<div class="alert err">${esc(S.err)}</div>` : '');
+  }
+  /* wire(host, ctx): the input tab's handlers, after each draw. ctx = { P (project), changed(redraw), showOut() (opens the output tab),
+     done() (redraws the input tab and the output tab when a run ends) } */
+  function wire(host, ctx) {
+    if (!host) return; const P = ctx.P, on = (sel, ev, f) => host.querySelectorAll(sel).forEach(el => el.addEventListener(ev, f));
+    const redraw = () => { if (ctx.done) ctx.done(); };
     on('[data-ad]', 'change', e => { const a = ensure(P), id = e.target.dataset.ad, val = e.target.value, path = id.split('.'); if (path.length > 1 && !a[path[0]]) a[path[0]] = {}; const o = path.length > 1 ? a[path[0]] : a, k = path[path.length - 1];
       o[k] = val === 'true' ? true : val === 'false' ? false : val;
-      setTimeout(() => { if (ctx.changed) ctx.changed(false); else redraw(); }, 0); });   // after the event (a change fires on blur, while a click is under way)
-    on('#ad_run', 'click', () => { S.running = true; S.stop = false; S.err = ''; S.R = null; S.sel = 0; S.cmp = ['cur', '0']; S.prog = { f: 0, msg: 'Starting…' }; const k = key(P); redraw();
-      AD().runChunked(JSON.parse(JSON.stringify(P)), {}, p => { S.prog = p; const bar = host.querySelector('.ad-bar>div'), nt = host.querySelector('.ad-bar + .note'); if (bar) bar.style.width = Math.round(100 * (p.f || 0)) + '%'; if (nt) nt.textContent = p.msg || ''; }, () => S.stop)
-        .then(R => { S.running = false; S.prog = R ? null : { f: 0, msg: 'Stopped.' }; S.R = R; S.key = k; redraw(); })
-        .catch(e => { S.running = false; S.prog = null; S.err = 'Auto design failed: ' + (e && e.message); redraw(); }); });
+      setTimeout(() => { if (ctx.changed) ctx.changed(true); }, 0); });   // after the event (a change fires on blur, while a click is under way); true: the tab is drawn again (fields that depend on the mode)
     on('[data-adv]', 'change', e => { const a = ensure(P), path = e.target.dataset.adv, j = path.lastIndexOf('.'), key = path.slice(0, j), fld = path.slice(j + 1), val = e.target.value;
       a.vars = a.vars || {};
       if (fld === 'mode' && val === '') delete a.vars[key];   // a field piece "as all pieces": its own entry removed
       else { a.vars[key] = a.vars[key] || {}; a.vars[key][fld] = val; }
-      setTimeout(() => { if (ctx.changed) ctx.changed(false); else redraw(); }, 0); });
-    on('[data-adcmp]', 'change', e => { const v = e.target.value, i = +e.target.dataset.adcmp; S.cmp[i] = v; redraw(); });
+      setTimeout(() => { if (ctx.changed) ctx.changed(true); }, 0); });
+    on('#ad_run', 'click', () => { S.running = true; S.stop = false; S.err = ''; S.R = null; S.sel = 0; S.cmp = ['cur', '0']; S.prog = { f: 0, msg: 'Starting…' }; const k = key(P); redraw(); if (ctx.showOut) ctx.showOut();
+      AD().runChunked(JSON.parse(JSON.stringify(P)), {}, p => { S.prog = p; document.querySelectorAll('.ad-bar>div').forEach(b => { b.style.width = Math.round(100 * (p.f || 0)) + '%'; }); document.querySelectorAll('.ad-bar + .note').forEach(nt => { nt.textContent = p.msg || ''; }); }, () => S.stop)
+        .then(R => { S.running = false; S.prog = R ? null : { f: 0, msg: 'Stopped.' }; S.R = R; S.key = k; redraw(); })
+        .catch(e => { S.running = false; S.prog = null; S.err = 'Auto design failed: ' + (e && e.message); redraw(); }); });
     on('#ad_stop', 'click', () => { S.stop = true; });
+    on('[data-adout]', 'click', e => { e.preventDefault(); if (ctx.showOut) ctx.showOut(); });
+  }
+  /* render(host, ctx): the Auto design output tab (the results) */
+  function render(host, ctx) {
+    css(); const P = ctx.P;
+    let h = `<p class="note"><a href="#" data-adin="ad">Settings: Auto design input tab</a> (mode, objective, prices, limits, the design variables with Auto / Lock / Range, Run).</p>`;
+    if (S.running || S.prog) h += `<section class="sec"><div class="secBody"><div class="fRow"><button type="button" id="ad_stop2"${S.running ? '' : ' disabled'}>Stop</button></div>${bar()}</div></section>`;
+    if (S.err) h += `<div class="alert err">${esc(S.err)}</div>`;
+    if (P.autodesign && P.autodesign.undo) h += '<div class="fRow"><button type="button" id="ad_undo">Undo the last Apply</button></div>';
+    if (S.R && !S.running) h += (S.key !== key(P) ? '<div class="alert">The project changed since this run: run again before applying.</div>' : '') + resultsHtml(P, S.R);
+    else if (!S.running) h += '<p class="note">No results yet: set the inputs and Run on the Auto design input tab. The results are kept for this page view.</p>';
+    host.innerHTML = h;
+    const redraw = () => render(host, ctx), on = (sel, ev, f) => host.querySelectorAll(sel).forEach(el => el.addEventListener(ev, f));
+    on('[data-adin]', 'click', e => { e.preventDefault(); const b = document.querySelector('#inTabs [data-itab="ad"]'); if (b) b.click(); });
+    on('#ad_stop2', 'click', () => { S.stop = true; });
+    on('[data-adcmp]', 'change', e => { const v = e.target.value, i = +e.target.dataset.adcmp; S.cmp[i] = v; redraw(); });
     on('[data-adsel]', 'click', e => { if (e.target.closest('[data-adgo]')) return; S.sel = +e.currentTarget.dataset.adsel; redraw(); });
     on('[data-adgo]', 'click', e => { e.preventDefault(); const b = document.querySelector(`#tabBar [data-otab="${e.currentTarget.dataset.adgo}"]`); if (b) b.click(); });
     on('#ad_apply', 'click', () => { const c = S.R && S.R.cands[S.sel]; if (!c) return; if (S.key !== key(P) && !confirm('The project changed since this run. Apply anyway?')) return;
       const r = AD().apply(P, c); ['autodesign', ...AD().APPLY_KEYS].forEach(k => { if (r.project[k] === undefined) delete P[k]; else P[k] = r.project[k]; }); S.R = null; if (ctx.changed) ctx.changed(true); else redraw(); });
     on('#ad_undo', 'click', () => { const Q = AD().undo(P); if (!Q) return; ['autodesign', ...AD().APPLY_KEYS].forEach(k => { if (Q[k] === undefined) delete P[k]; else P[k] = Q[k]; }); if (ctx.changed) ctx.changed(true); else redraw(); });
   }
-  window.SBDAutoDesignUI = { render, diffFrom };
+  window.SBDAutoDesignUI = { inputs, wire, render, diffFrom };
 })();
