@@ -3,6 +3,7 @@
    function its own output tab calls, with the same inputs, so the report shows the tab's numbers and steps:
      loads        ui/loads.js calc(P, g)                                   (Loads & LLDF tab)
      analysis     engine/analysis.js analyzeGirder(P, g)                   (Analysis tab)
+                  (also the Deflection section: the same analysis, ui/deflection.js model; DEFL, 2026-11-09)
      sections     engine/sections.js card() per plate segment, as index.html calc() (Section properties tab)
      flexure      ui/flexure.js build() (the Flexure tab): this app's analysis (its "This project's analysis" source, Appendix A6 where
                   permitted; since 2026-10-30, report wiring PR: before, the flexure of ui/rating.js build()), or the hand-off file. f_ℓ and
@@ -64,7 +65,7 @@
     try {
       const sup0 = [0]; P.spans.lengths.forEach(L => sup0.push(sup0[sup0.length - 1] + +L));
       if (on('loads') || on('proj')) B.loads = run('loads', () => { const R = W().SBDUiLoads.calc(P, g); return R.errors && R.errors.length ? { err: R.errors.map(e => e.msg || e).join(' ') } : R; });
-      if (src === 'analysis' && (on('an') || on('spl') || on('flex') || on('rt') || on('shear') || on('fat') || on('sum'))) B.an = run('an', () => { const A = AN.analyzeGirder(P, g); return A.errors && A.errors.length ? { err: 'Analysis: ' + A.errors.map(e => e.msg || e).join(' ') } : A; });
+      if (src === 'analysis' && (on('an') || on('defl') || on('spl') || on('flex') || on('rt') || on('shear') || on('fat') || on('sum'))) B.an = run('an', () => { const A = AN.analyzeGirder(P, g); return A.errors && A.errors.length ? { err: 'Analysis: ' + A.errors.map(e => e.msg || e).join(' ') } : A; });
       if (on('sec')) B.sec = run('sec', () => sections(P, g, B.an ? B.an.sup : pl ? (pl.member || {}).supports : sup0));
       if (on('rt') || on('flex') || on('sum')) B.rating = run('rt', () => W().SBDRatingUI.build(cu('rt') ? { P, g, src: 'custom' } : src === 'file' ? { P, g, pl } : { P, g, src: 'analysis' }));
       // flexure: the Flexure module (f_ℓ and brace points as the tab: engine/framing.js design); with the analysis the rating's flexure is

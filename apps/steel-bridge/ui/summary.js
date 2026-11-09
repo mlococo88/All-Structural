@@ -63,14 +63,16 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
   const notify = () => S.subs.forEach(f => { try { f(state()); } catch (e) { /* a listener's error does not stop the run */ } });
   function sync(P) {   // a new project state: the results of the last one are out of date
     const pk = pkOf(P); if (pk === S.pk) return;
+    if (S.list.some(G => G && Object.values(G.cells || {}).some(q => q.st !== 'notrun'))) S.prev = S.list;   // DASH: the last results, shown as out of date by the left summary
     S.pk = pk; S.parts = []; S.list = []; S.secs = null; S.run++; S.busy = false; S.prog = ''; clearTimeout(S.timer);
+    notify();
   }
   function recell(P, gi) { const L = S.list; try { L[gi] = SM().cells(P, gi, S.parts[gi] || {}); } catch (e) { L[gi] = { gi, label: (P.girders[gi] || {}).label || `G${gi + 1}`, cells: {}, warn: ['Summary error: ' + (e && e.message)], err: {} }; } }
   /* start(P, o): run the modules not yet run for this project state (o.mods: only those modules; o.all: every module again; o.delay ms) */
   function start(P, o) {
     o = o || {}; sync(P);
     if (o.all) { S.parts = []; S.list = []; S.run++; S.busy = false; }
-    if (S.busy && !o.mods) return;
+    if (S.busy) return;   // a run in progress covers every module not yet run of this project state
     const list = todo(P, o.mods); P.girders.forEach((g, gi) => { if (!S.list[gi]) recell(P, gi); });
     if (!list.length) { notify(); return; }
     const run = ++S.run; S.busy = true; S.err = ''; S.t0 = Date.now(); S.prog = o.delay ? 'Inputs changed — updating…' : `Running ${list[0].m.name}, ${S.list[list[0].gi].label} (1/${list.length})…`; draw(); notify();
@@ -85,12 +87,13 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
         if (run !== S.run) return;
         try { (S.parts[gi] = S.parts[gi] || {})[m.k] = SM().run(P, gi, m.k); } catch (e) { (S.parts[gi] = S.parts[gi] || {})[m.k] = { k: m.k, err: { [m.k]: 'Calculation error: ' + (e && e.message) } }; }
         recell(P, gi);
+        { const pf = S.pendFocus, q = pf && pf.gi === gi && S.list[gi].cells[pf.id]; if (q && q.st !== 'notrun') { S.pendFocus = null; focus(q); } }   // DASH: a chip of a module not run: its card once run
         setTimeout(() => step(k + 1), 0);
       }, 0));
     };
     clearTimeout(S.timer); S.timer = setTimeout(() => step(0), o.delay || 0);
   }
-  const state = () => ({ busy: S.busy, prog: S.prog, list: S.list, secs: S.secs, pk: S.pk, ov: SM().overall(S.ctx ? S.ctx.P : null, S.list.filter(Boolean)) });
+  const state = () => ({ busy: S.busy, prog: S.prog, list: S.list, prev: S.prev || null, secs: S.secs, pk: S.pk, ov: SM().overall(null, S.list.filter(Boolean)) });
   const subscribe = f => { S.subs.push(f); };
   function draw() { if (S.host && S.ctx && S.ctx.open && S.ctx.open() && S.host.isConnected) paint(S.host, S.ctx); }
 
@@ -113,6 +116,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
     const n = ++focusN, out = document.getElementById('out'), t0 = Date.now();
     const go = () => {
       if (n !== focusN) return;
+      const cur = document.querySelector('#tabBar [aria-selected="true"]'); if (c.tab && cur && cur.dataset.otab !== c.tab) return;   // another tab chosen since
       if (busyTab(out) && Date.now() - t0 < 120000) { setTimeout(go, 200); return; }
       const sel = rowSel(c.scope); if (sel) { const r = out.querySelector(sel); if (r && !r.classList.contains('sel')) r.click(); }
       setTimeout(() => {
@@ -128,10 +132,13 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
     };
     setTimeout(go, 50);
   }
-  function gotoCell(gi, id) {
-    const G = S.list[gi], c = G && G.cells[id], col = SM().COLS.find(q => q.id === id); if (!S.ctx || !col) return;
-    if (!c || c.st === 'notrun') { start(S.ctx.P, { mods: [SM().modOf(id).k] }); }
-    S.ctx.goto(col.tab, gi); if (c && c.st !== 'notrun') focus(c);
+  /* gotoCell(gi, id, cx): the cell's tab, girder and step (cx: the caller's { P, goto } when the Summary tab has not been drawn: the left
+     summary); a module not run yet is run (and its tab, selected, runs itself: #1260) */
+  function gotoCell(gi, id, cx) {
+    const X = cx || S.ctx, col = SM().COLS.find(q => q.id === id); if (!X || !col) return;
+    sync(X.P); const G = S.list[gi], c = G && G.cells[id];
+    if (!c || c.st === 'notrun') { S.pendFocus = { gi, id }; start(X.P, { mods: [SM().modOf(id).k] }); } else S.pendFocus = null;
+    X.goto(col.tab, gi); const c2 = (S.list[gi] || {}).cells; if (c2 && c2[id] && c2[id].st !== 'notrun') focus(c2[id]);
   }
 
   /* ---------- drawing ---------- */
@@ -237,5 +244,5 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
     if (!S.busy && todo(P).length) start(P, { delay: ctx.now ? 0 : AUTO_MS });
   }
 
-  window.SBDSummaryUI = { render, state, start, subscribe, focus, gotoCell, txt, rowSel };
+  window.SBDSummaryUI = { render, state, start, subscribe, focus, gotoCell, txt, rowSel, sync };
 })();
