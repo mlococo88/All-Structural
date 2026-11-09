@@ -4264,7 +4264,7 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
   3. With "Entered below", the Splices tab gives no way to add a row except "Keep these plates" on the output tab ("None entered.").
   4. The entered plate inputs have no `data-kind="num"`, so they are saved as text ("4", not 4). The engine reads both the same (`num()` / `+`; checked in Node on every field: the same checks and ratios). Left as is; no saved-format change.
 
-## 2026-11-09 — PR: claude/sb-splice-addrow (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SPADD) — Splices input tab: "+ Add splice station" for entered plates   [input only; no result change; no saved-format change]
+## 2026-11-09 — PR: claude/sb-splice-addrow (PR #1269: https://github.com/mlococo88/All-Structural/pull/1269) (SPADD) — Splices input tab: "+ Add splice station" for entered plates   [input only; no result change; no saved-format change]
 - **Follows:** SPERR (PR #1263), open item 3: with "Plates and bolts: Entered below" the Splices tab showed "None entered." and a row could only come from "Keep these plates" on the Field splices output tab.
 - **Where:** `ui/splices.js`:
   - new helpers before `function inputs(`: `AD` (a WeakMap, girder object → Map(x → auto-designed p), page memory only), `near`, `girderOf`, `hasRow`, `platesAt`;
