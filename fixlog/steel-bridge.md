@@ -4041,7 +4041,7 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
 - **Other copies:** GirderDetail (`Steel Bridge Design.html`, Cross-frames module) has the same split inputs; not changed (one tool per PR).
 - **Open items:** with a diaphragm the Cross-frames tab elevation still draws the angle frame (titled "diaphragm in use") and the truss member-force table (as on main).
 
-## 2026-11-09 — PR: claude/sb-input-tabs (PR #PRA) (TABR) — input tabs reorganised (display only; no result, saved key or format change)
+## 2026-11-09 — PR: claude/sb-input-tabs (PR #1255: https://github.com/mlococo88/All-Structural/pull/1255) (TABR) — input tabs reorganised (display only; no result, saved key or format change)
 - **Engineer (2026-11-09, approved):** reorganise the input tabs; the support skews were on Cross-section & loads and could not be found.
 - **New input tabs, in order (`index.html` `TABS`):** Project (`proj`) · Bridge layout (`layout`) · Cross-section (`xsec`) · Girders & plates (`gird`) · Materials (`mat`) · Framing & bracing (`framing`) · Loads (`loads`) · Stiffeners (`stf`) · Fatigue & studs (`fs`) · Splices (`spl`).
   - Bridge layout: card Spans (`spans.continuity`, `#i_spans`); card Support skews (`xs.skews`, moved from Cross-section & loads); card Plan (the framing plan SVG of `ui/framing.js plan()`, drawn by the new `SBDFramingUI.layoutPlan(P)`).
