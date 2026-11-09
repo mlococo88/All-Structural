@@ -4397,6 +4397,38 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
 - **Check case:** default project, 1440 px: 11 chips "not run"; Shear chip → Shear & stiffeners tab, G1, station x = 110.01 ft card flashed, chip 0.437 · G1 PASS; Run all → header "FAIL · max D/C 1.229", Governing: Flexure, Strength I, G1: D/C 1.229; Rating chip RF 0.61 · G1 FAIL.
 - **How verified:** `tests/smoke/steel-bridge-dash.mjs` (layout at 1199/1200/1440/1600 px, chips equal the Summary's data, links and flash, out of date, collapse key across a reload, print, 0 console errors); `tests/smoke/steel-bridge-summary.mjs`; `node tests/check-syntax.mjs`; smoke `steel-bridge-*`, `phone-layout`, `project-library`.
 - **Other copies:** none.
+
+
+
+## 2026-11-09 — PR: claude/sb-equal-spacing (PR #1270: https://github.com/mlococo88/All-Structural/pull/1270) (EQSP) — Cross-section: "Equal spacing" option, girders equally spaced from the exterior girder spacing   [new input mode; no result change for existing projects; saved data: two optional fields]
+- **Engineer (2026-11-09):** "I want a quicker way to space the girders. Rather than typing in each spacing, allow an option to set the exterior girder spacing and then allow the girders to be equally spaced."
+- **Engineer's definition (2026-11-09, not a pending decision):** the input is the exterior girder spacing W_cc, centreline to centreline of the two exterior girders (ft); S = W_cc / (N_b − 1), N_b − 1 = the number of bays. The overhang / deck-edge inputs stay as they are. (The old Preliminary sizing had the same "exterior" mode, `bridge.Wcc`, read by `engine/legacy.js fromPL`.)
+- **Saved data (CLAUDE.md §5):** two optional fields in `xs`, no key change, no migration needed:
+  - `xs.spMode`: `'individual'` | `'equal'`; absent = `'individual'` (every existing project, and a new project, which does not write it);
+  - `xs.Wcc` (ft), used only in `'equal'`.
+  In Equal mode the page writes S into every entry of `xs.bays`, the array the engine, framing, drawings, hand-off and report already read, so nothing computed reads the new fields (except the report's worked S).
+- **Where:**
+  1. `engine/model.js`: new `equalSpacing(xs)` (anchor `function equalSpacing(xs)`), exported on `window.SBDModel`; `validate()` after the anchor `nn(x.ohL, \`${xp}.ohL\`, 'Left overhang'); nn(x.ohR, \`${xp}.ohR\`, 'Right overhang');` adds:
+     `if (x.spMode != null && !['individual', 'equal'].includes(x.spMode)) E(\`${xp}.spMode\`, …);`
+     `if (x.spMode === 'equal') pos(x.Wcc, \`${xp}.Wcc\`, 'Exterior girder spacing (℄ to ℄ of the exterior girders)');`
+     `equalSpacing`: `S = ok && isFinite(Wcc) ? Wcc / (nb - 1) : NaN`, `bays: new Array(nb - 1).fill(S)`, step id `xs.eqS`, `S = \frac{W_{cc}}{N_{b} \minus 1}`.
+  2. `ui/loads.js` `parts()`, card "Girders and overhangs". Before:
+     `${h.num('xs.nb', 'Number of girders N<sub>b</sub>', '')}${list('xs.bays', 'Girder spacings', 'left to right')}`
+     After:
+     `${h.sel('xs.spMode', 'Girder spacing', [['individual', 'Individual spacings'], ['equal', 'Equal spacing']], x.spMode === 'equal' ? 'equal' : 'individual')}${h.num('xs.nb', …)}${x.spMode === 'equal' ? equalRows(P, h) : list('xs.bays', 'Girder spacings', 'left to right')}`
+     New `equalRows(P, h)`: the W_cc input, the worked step (symbolic → substituted → result), "S must be positive" alert, the LLDF range warning (reuses `SBDLldf.RANGE.S`, 3.5 ≤ S ≤ 16.0 ft, Table 4.6.2.2.2b-1, the Loads & LLDF tab's existing range check; no new check), the deck width out to out oh_L + W_cc + oh_R.
+  3. `ui/loads.js` `onChange()`: `xs.spMode` (to Equal: `W_cc = Σ bays` rounded to 1e-6 ft, then the bays recomputed; to Individual: the bays kept as editable entries), `xs.Wcc` (recompute), `xs.nb` (after its existing resize: recompute in Equal mode), `xs.ohL` / `xs.ohR` in Equal mode only (set as the page does, then redraw the deck width shown). Individual mode: unchanged.
+  4. `report/builders.js` `loads()`: in Equal mode only, a first sub-section "Girder spacing (girders equally spaced)": N_b, W_cc, overhangs, deck width and the worked step `xs.eqS`.
+- **Governing provision:** none (geometry input). No formula, factor, unit or code reference changed. The LLDF range limit shown is the existing one (AASHTO LRFD 10th Ed. Table 4.6.2.2.2b-1, `engine/lldf.js RANGE.S`).
+- **Check case (hand):** N_b = 4, W_cc = 40 ft, overhangs 3.25 ft: S = 40 / (4 − 1) = 13.333 ft; bays 13.333, 13.333, 13.333 ft; deck width = 3.25 + 40 + 3.25 = 46.50 ft (the same as before the change for that geometry). Built-in cross-section: N_b = 5, Σ bays = 4 × 9.5 = 38 ft → switching to Equal gives W_cc = 38, S = 38 / 4 = 9.5 ft, the bays unchanged. W_cc = 60 ft, N_b = 4: S = 20 ft > 16 ft → the LLDF range warning.
+- **Readers of the spacings (all read `xs.bays`, unchanged):** loads / LLDF (`engine/loads.js fromModel`), framing and cross-frames (`engine/framing.js modelOf`), the cross-section drawing and graphics, the geometry hand-off to Substructure Loading (`ui/handoffs.js`: `spacings: xs.bays`, `ohL`, `ohR`), auto design (`engine/autodesign.js projectWith`: keeps the out-to-out width, so an Equal project stays consistent), the report and the summary.
+- **How verified:**
+  - new `tests/engine/equal-spacing.test.mjs`: hand cases; `validate()` gives the same result with and without the new fields; the loads / LLDF / range results of an Equal project = those of an Individual project with the same spacings entered (deep equal).
+  - new `tests/smoke/steel-bridge-equal-spacing.mjs`: default Individual; Equal from Σ bays; N_b and W_cc recompute; worked S and deck width on screen; the Loads & LLDF, Analysis, Flexure and Cross-frames tab texts identical to an Individual project with the same spacings; back to Individual keeps the bays; W_cc = 0 error; S > 16 ft warning; 0 console errors.
+  - main-vs-branch probe (every output tab text incl. the report, three projects: built-in, unequal bays, N_b = 6 with 25° skews): identical; the built-in project saves identical text.
+  - `tests/check-syntax.mjs`; steel-bridge engine and smoke suites (see the PR).
+- **Other copies:** none.
+- **Open items:** none.
 ## 2026-11-09 — PR: claude/sb-summary-gfx (PR #1275: https://github.com/mlococo88/All-Structural/pull/1275) (GFXS) — Summary tab: cross-section and framing plan graphics   [display only; no result or saved-data change]
 - **Engineer:** 2026-11-09: "the Summary output tab must also show the cross-section graphic and the framing plan graphic", reusing the app's own drawing functions, near the top, side by side from about 1200 px and stacked on a phone, each with a link to the tab where it is drawn and edited. This is a follow-up to #1271.
 - **Where:** `ui/summary.js`:

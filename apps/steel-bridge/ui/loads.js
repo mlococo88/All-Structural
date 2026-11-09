@@ -80,7 +80,7 @@
       ${(x.overlays || []).map((r, i) => `<tr>${cell(`xs.overlays.${i}.name`, 'text', r.name, 120)}${scell(`xs.overlays.${i}.mode`, [['psf', 'Weight (psf)'], ['thk', 'Thickness × unit weight']], r.mode)}${cell(`xs.overlays.${i}.psf`, 'xopt', r.psf == null ? '' : r.psf)}${cell(`xs.overlays.${i}.thk`, 'xopt', r.thk == null ? '' : r.thk)}${cell(`xs.overlays.${i}.gam`, 'xopt', r.gam == null ? '' : r.gam)}<td><button type="button" data-xsact="delOvl" data-i="${i}" title="Remove this overlay">×</button></td></tr>`).join('')}
       </tbody></table></div><button type="button" data-xsact="addOvl">Add overlay</button>`;
     return {
-      girders: h.card('Girders and overhangs', `${h.num('xs.nb', 'Number of girders N<sub>b</sub>', '')}${list('xs.bays', 'Girder spacings', 'left to right')}${h.num('xs.ohL', 'Left overhang (girder ℄ to deck edge)', 'ft')}${h.num('xs.ohR', 'Right overhang', 'ft')}
+      girders: h.card('Girders and overhangs', `${h.sel('xs.spMode', 'Girder spacing', [['individual', 'Individual spacings'], ['equal', 'Equal spacing']], x.spMode === 'equal' ? 'equal' : 'individual')}${h.num('xs.nb', 'Number of girders N<sub>b</sub>', '')}${x.spMode === 'equal' ? equalRows(P, h) : list('xs.bays', 'Girder spacings', 'left to right')}${h.num('xs.ohL', 'Left overhang (girder ℄ to deck edge)', 'ft')}${h.num('xs.ohR', 'Right overhang', 'ft')}
         <p class="note">Deck thickness, haunch and deck reinforcement: Deck card below. f′c and w<sub>c</sub>: Materials tab. Support skews: Bridge layout tab. The LLDF regions take their sections from the girder selected on the Girders &amp; plates tab.</p>`),
       edges: h.card('Deck edges', `${edge('L')}<hr>${edge('R')}<p class="note">Distances from the deck edge. A curb lower than 12 in is mountable (the railing face governs); an entered edge to traffic face governs.</p>`),
       sidewalks: h.card('Sidewalks and median', `${sw('L')}${sw('R')}${h.num('xs.sidewalks.ped', 'Pedestrian load', 'psf')}${h.num('xs.median.w', 'Raised median width', 'ft')}${h.num('xs.median.t', 'Median thickness', 'in')}${h.sel('xs.median.joint', 'Longitudinal joint at the median', tf, String(!!x.median.joint))}${opt('xs.wcA', 'Curb / sidewalk / median concrete', 'kcf', 'blank = w_c')}
@@ -95,13 +95,32 @@
       wcE: opt('materials.concrete.wcE', 'w<sub>c</sub> for E<sub>c</sub> only', 'kcf', 'blank = w_c')
     };
   }
+  /* EQSP (2026-11-09; engineer's definition 2026-11-09): equal girder spacing. The engineer enters the exterior girder spacing W_cc (℄ to ℄ of
+     the two exterior girders); S = W_cc / (N_b − 1) (SBDModel.equalSpacing) is written into every xs.bays entry, which everything computed
+     reads as before. The overhangs stay inputs (deck width out to out = oh_L + W_cc + oh_R, shown). The S warning reuses the LLDF range of
+     applicability of the Loads & LLDF tab (SBDLldf.RANGE.S, Table 4.6.2.2.2b-1); no new check. */
+  function equalRows(P, h) {
+    const x = P.xs, Q = window.SBDModel.equalSpacing(x), st = Q.step, Wd = +x.ohL + Q.Wcc + +x.ohR, R = window.SBDLldf && window.SBDLldf.RANGE && window.SBDLldf.RANGE.S;
+    const out = R && isFinite(Q.S) && (Q.S < R[0] - 1e-9 || Q.S > R[1] + 1e-9);
+    return `${h.num('xs.Wcc', 'Exterior girder spacing W<sub>cc</sub>', 'ft, ℄ to ℄ of G1 and G' + (isFinite(Q.nb) ? Q.nb : 'n'))}
+      <ul class="steps"><li id="st-xs.eqS"><div class="lbl">${esc(st.label)}</div><div>${S().line(st, true)}</div></li></ul>
+      ${isFinite(Q.S) && !(Q.S > 0) ? '<div class="alert">The girder spacing S must be positive: enter an exterior girder spacing W<sub>cc</sub> greater than zero.</div>' : ''}
+      ${out ? `<div class="alert">S = ${f(Q.S, 3)} ft is outside the range of applicability of the LLDF equations, ${f(R[0], 1)} ft ≤ S ≤ ${f(R[1], 1)} ft (Table 4.6.2.2.2b-1; as the <a href="#" data-gotab="loads">Loads &amp; LLDF tab</a> checks).</div>` : ''}
+      <p class="note">All ${isFinite(Q.nb) && Q.nb >= 2 ? Q.nb - 1 : ''} bays take S; the per-bay spacings are written from it (choose Individual spacings to edit them, starting from these values). Deck width out to out = oh<sub>L</sub> + W<sub>cc</sub> + oh<sub>R</sub> = ${f(+x.ohL, 2)} + ${f(Q.Wcc, 2)} + ${f(+x.ohR, 2)} = ${f(Wd, 2)} ft.</p>`;
+  }
+  const applyEqual = P => { if (P.xs.spMode === 'equal') { const Q = window.SBDModel.equalSpacing(P.xs); if (Q.bays.length) P.xs.bays = Q.bays; } };
   /* onChange(el, P): the kinds this tab adds; true = handled */
   function onChange(el, P) {
     const path = el.dataset.path, k = el.dataset.kind; if (!path) return false;
     if (k === 'xlist') { setp(P, path, el.value.split(/[,;\s]+/).filter(Boolean).map(Number)); return true; }
     if (k === 'xopt') { setp(P, path, el.value.trim() === '' ? null : Number(el.value)); return true; }
     if (path === 'xs.nb') { const n = Math.round(Number(el.value)), B = P.xs.bays || []; P.xs.nb = n;
-      if (n >= 2 && n < 100) { const last = B.length ? B[B.length - 1] : 9.5; P.xs.bays = Array.from({ length: n - 1 }, (_, i) => i < B.length ? B[i] : last); } return true; }
+      if (n >= 2 && n < 100) { const last = B.length ? B[B.length - 1] : 9.5; P.xs.bays = Array.from({ length: n - 1 }, (_, i) => i < B.length ? B[i] : last); } applyEqual(P); return true; }
+    if (path === 'xs.spMode') {   // EQSP: to Equal, W_cc starts at the present Σ bays (the same girder lines when the bays are equal); back to Individual keeps the bays
+      P.xs.spMode = el.value === 'equal' ? 'equal' : 'individual';
+      if (P.xs.spMode === 'equal') { P.xs.Wcc = Math.round((P.xs.bays || []).reduce((a, v) => a + +v, 0) * 1e6) / 1e6; applyEqual(P); } return true; }
+    if ((path === 'xs.ohL' || path === 'xs.ohR') && P.xs.spMode === 'equal') { setp(P, path, el.value === '' ? NaN : Number(el.value)); return true; }   // EQSP: redraw the deck width shown
+    if (path === 'xs.Wcc') { P.xs.Wcc = el.value === '' ? NaN : Number(el.value); applyEqual(P); return true; }
     if (path === 'xs.median.joint' || path === 'xs.lldf.extMin') { setp(P, path, el.value === 'true'); return true; }
     return false;
   }
