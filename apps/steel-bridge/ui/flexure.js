@@ -188,7 +188,7 @@
   }
   function calc(ctx) {
     S.err = ''; S.R = null;
-    const I = inputs(ctx); if (I.err) { S.err = I.err; return; }
+    const I = inputs(ctx); if (I.err) { S.err = I.err; S.key = key(ctx); return; }   // SPERR2: the key of the run, so its error shows
     try { const R = window.SBDFlexure.girder(I.locs, I.prj, { supports: I.supports }); S.R = { ...R, what: I.what, custom: I.custom || null }; S.sel = R.gov ? R.rows.indexOf(R.gov) : 0; }
     catch (e) { S.err = 'Calculation error: ' + (e && e.message); }
     S.key = key(ctx);
@@ -206,7 +206,7 @@
   const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`;
   function render(host, ctx) {
     css();
-    const stale = !S.R || S.key !== key(ctx), src = srcOf(ctx), rd = rdOf(ctx);
+    const stale = (!S.R && !S.err) || S.key !== key(ctx), src = srcOf(ctx), rd = rdOf(ctx);   // SPERR2: a run that ended in an error is current (its message shows), not out of date
     const nc = ctx.P.deck.composite === false && src === 'example';
     const opt = (v, t, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${t}</option>`;
     const AUI = window.SBDAnalysisUI, gl = ctx.P.girders[ctx.g] || ctx.P.girders[0] || {};
