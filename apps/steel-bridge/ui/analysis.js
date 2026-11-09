@@ -2,8 +2,9 @@
    Classic script. Needs window.SBDAnalysis (engine/analysis.js), SharedSteps, SharedUnits.
    inputs(P, gi) / onInputChange(el, P, gi) (AIN, 2026-11-09): the analysis inputs on the Loads input tab (project.analysis, girder.loadsManual,
    girder.dfManual and the "Override calculated value" boxes girder.loadsOverride / girder.dfOverride), moved there from this tab.
-   draw(el, ctx): renders the girder line and the loads and factors used (read-only, linked to where each is worked), the Calculate button, the diagrams (plain SVG), the station table, the reactions, the LL deflection
-   check (SA3), the deck placement sequence and the worked steps. ctx = { P, gi, changed() }. Results are kept until the
+   draw(el, ctx): renders the girder line and the loads and factors used (read-only, linked to where each is worked), the Calculate button, the diagrams (plain SVG), the station table, the reactions, a one-line
+   deflection summary (DEFL, 2026-11-09: the LL deflection check SA3, the dead-load deflection diagram, the station table's deflection view
+   and the deflection and camber worked steps moved to the Deflection tab, ui/deflection.js), the deck placement sequence and the worked steps. ctx = { P, gi, changed() }. Results are kept until the
    project changes; then they are marked out of date (plan §5: no recalculation on every keystroke). */
 (function () {
   'use strict';
@@ -47,7 +48,7 @@
       <div class="fRow"><label for="an_a_seqCustom">Pours (optional)</label><input type="text" id="an_a_seqCustom" data-an="a" data-k="seqCustom" value="${esc(S.seqCustom)}" style="width:180px"><span class="unit">from–to per row (none: automatic)</span></div>
       ${numIn('a', 'steelAllowPct', 'Girder steel detail allowance', '%', S.steelAllowPct)}
       ${sel('haunchInStiffness', 'Haunch in the composite stiffness', [['', 'As the owner rule (OWN8)'], ['true', 'Yes'], ['false', 'No']])}
-      <p class="note">Used by the <a href="#" data-gotab="an">Analysis tab</a> (moved here from it; saved as before).</p>`, 'an-settings');
+      <p class="note">Used by the <a href="#" data-gotab="an">Analysis tab</a> (moved here from it; saved as before); the LL deflection limit, the sidewalk choice and the cracked zones also by the <a href="#" data-gotab="defl">Deflection tab</a>.</p>`, 'an-settings');
     // dead loads: the calculated values, the override box, the entered values
     const rowsL = [['DC1wet', 'DC1 wet deck (deck, haunch, SIP, other)'], ['DC2', 'DC2 (barriers, curbs, …)'], ['DW', 'DW (wearing surface)'], ['UT', 'Existing utilities (steel section)']];
     const xfStored = Array.isArray(Lm.xf) && Lm.xf.length, xfShow = xfStored && LD.src.xf !== 'module' && LD.src.xf !== 'girder';
@@ -169,12 +170,8 @@
     if (R.seq) Mser.push({ name: 'M_DCc (pour sequence)', y: R.seq.MDCc, c: '#7C3AED', dash: '2 2' });
     const Vser = [{ name: 'DC1', y: Vr(s.DC1) }, { name: 'DC2', y: Vr(s.DC2) }, { name: 'DW', y: Vr(s.DW) }];
     if (ll) Vser.push({ name: 'LL+IM max', y: Vx(ll, 'pos'), c: '#DC2626' }, { name: 'LL+IM min', y: Vx(ll, 'neg'), c: '#DC2626', dash: '4 3' });
-    const Dser = [{ name: 'Steel + cross-frames', y: R.camber.steel }, { name: 'Wet deck', y: R.camber.wet }, { name: 'DC2 + DW', y: R.camber.sd }];
-    if (R.camber.ut) Dser.push({ name: 'Utilities', y: R.camber.ut });
-    Dser.push({ name: 'Total (camber)', y: R.camber.total, c: '#0F172A', w: 2 });
     h += '<div id="gfx_an"></div>';   // graphic (ui/gfxa.js)
     h += card('Diagrams', `${chart(x, Mser, { title: 'Moments (unfactored, per girder; LL+IM with g)', unit: 'kip-ft', sup })}${chart(x, Vser, { title: 'Shears (V = sum of forces to the left, up +)', unit: 'kip', sup })}
-      ${chart(x, Dser, { title: 'Dead-load deflections (downward +, drawn down)', unit: 'in', sup, invert: true })}
       <p class="note">Stations: GirderDetail's grid, ${N} points. ${R.cont ? 'Continuous' : 'Simple spans'}; ${R.crack.length ? `cracked zones ${R.crack.map(([a, b]) => `${f(a, 1)}–${f(b, 1)} ft`).join(', ')} ${wk('an.crack')}` : 'no cracked zones'}. Engine: shared beam elements (stiffness method), loads applied exactly.</p>`, 'an-diag');
     // reactions
     const rr = (k, o) => o.R[k];
@@ -182,25 +179,23 @@
       ${sup.map((v, k) => `<tr><td class="lft">${k === 0 ? 'Abut. 1' : k === sup.length - 1 ? 'Abut. 2' : 'Pier ' + k} (x = ${f(v, 1)})</td><td>${f(rr(k, s.DC1), 2)}</td><td>${f(rr(k, s.DC2), 2)}</td><td>${f(rr(k, s.DW), 2)}</td><td>${f(rr(k, s.CL), 2)}</td>
         ${ll ? `<td>${f(R.llR[k].max, 2)} ${wk('an.R.LL.' + k)}${R.llR[k].two ? ' *' : ''}</td><td>${f(R.llR[k].min, 2)}</td>` : ''}</tr>`).join('')}</tbody></table></div>
       <p class="note">${ll ? '* 90 % of two design trucks + lane governs (3.6.1.3.1; on simple spans the summed pier reaction, engineer\'s decision 2026-10-29). ' : ''}Statics: ${['DC1steel', 'DC1wet', 'DC2', 'DW', 'CL'].map(k => wk('an.eq.' + k, k)).join(', ')}.</p>`);
-    if (R.lld) { const O = R.lld[0] && R.lld[0].own, ST = { pass: ['--pass', 'OK'], fail: ['--fail', 'Exceeds'], warn: ['--warn', 'Exceeds the preferred limit (warning)'], na: ['--warn', 'Reported, not checked (exterior)'] };
-      h += card(`Live load deflection (SA3, ${O ? esc(O.cite) + ', mandatory; ' : ''}2.5.2.6.2)`, `<table class="tbl"><thead><tr><th>Span</th><th>x (ft)</th><th>Δ<sub>LL</sub> (in)</th><th>L/${R.lld[0] ? R.lld[0].ratio : R.settings.deflLimit} (in)</th>${O && O.pref ? `<th>L/${O.pref} preferred (in)</th>` : ''}<th>Ratio</th><th></th></tr></thead><tbody>
-      ${R.lld.map(q => `<tr><td>${q.k + 1}</td><td>${f(q.x, 1)}</td><td>${f(q.d, 3)} ${wk('an.defl.LL' + (q.k + 1))}</td><td>${f(q.lim, 3)} ${wk('an.defl.lim' + (q.k + 1))}</td>${O && O.pref ? `<td>${f(q.limP, 3)} ${wk('an.defl.pref' + (q.k + 1))}</td>` : ''}<td>${f(q.d / q.lim, 2)}</td><td style="color:var(${ST[q.status][0]})">${ST[q.status][1]}</td></tr>`).join('')}</tbody></table>
-      <p class="note">${O ? `Owner rule ${esc(O.cite)} (OWN19): ${esc(O.rule.text)}. Sidewalk or pedestrians: ${O.sw ? 'yes' : 'no'} (${O.swHow === 'cross-section sidewalks' ? 'Cross-section tab' : 'entered on the Loads tab (Analysis settings)'}), so L/${O.req}${O.uR > O.req ? `; the entered L/${O.uR} is stricter and is used` : ''}.` : 'Optional criterion (2.5.2.6.2): the L/… entered above.'} Truck axles that do not add to the deflection are neglected (3.6.1.3.1).</p>`); }
+    // DEFL (2026-11-09): the LL deflection check and the dead-load deflections are on the Deflection tab (ui/deflection.js); one line here
+    { const D = window.SBDDeflectionUI && window.SBDDeflectionUI.summary(R);
+      if (D) h += card('Deflection', `<p class="note">${D.top ? `Live load: largest Δ<sub>LL</sub> / Δ<sub>lim</sub> = <b>${f(D.top.dc, 3)}</b> (span ${D.top.k + 1}, ${f(D.top.d, 3)} in vs L/${D.top.ratio} = ${f(D.top.lim, 3)} in; ${D.ok ? 'all spans pass' : 'exceeds'}). ` : ''}Dead-load camber: largest <b>${f(D.cm.total, 3)} in</b> (span ${D.cm.k + 1}, x = ${f(D.cm.x, 1)} ft). Worked, by span and at tenth points: <a href="#" data-gotab="defl">Deflection tab</a>.</p>`, 'an-defl'); }
     if (R.seq) { const Q = R.seq, fd = Math.max(...Q.fdk);
       h += card('Deck placement sequence (SA7, 6.10.3.4.1)', `<p class="note">Pours in order: ${Q.pours.map((q, k) => `${k + 1}: ${f(q.a, 1)}–${f(q.b, 1)} ft`).join('; ')}. Largest noncomposite moment M<sub>DCc</sub> ${f(Math.max(...Q.MDCc), 1)} kip-ft ${wk('an.seq.MDCc')}
         (deck at once ${f(Math.max(...R.st.DC1.M), 1)}). Deck tension in hardened pours ${f(fd, 3)} ksi vs φf<sub>r</sub> ${f(Q.phifr, 3)} ksi ${wk('an.seq.fdk')}.</p>`); }
     // station table
     const cols = {
       M: [['M_DC1 steel', s.DC1steel.M], ['M_DC1 wet', s.DC1wet.M], ['M_DC1', s.DC1.M], ['M_DC2', s.DC2.M], ['M_DW', s.DW.M], ...(ll ? [['M_LL+IM max', ll.Mpos], ['M_LL+IM min', ll.Mneg], ['M_FAT max', ft.Mpos], ['M_FAT min', ft.Mneg], ['g_M', ll.gM, 3]] : []), ['M_CL', s.CL.M], ...(R.seq ? [['M_DCc', R.seq.MDCc]] : [])],
-      V: [['V_DC1', Vr(s.DC1)], ['V_DC2', Vr(s.DC2)], ['V_DW', Vr(s.DW)], ...(ll ? [['V_LL+IM max', Vx(ll, 'pos')], ['V_LL+IM min', Vx(ll, 'neg')], ['V_FAT max', Vx(ft, 'pos')], ['V_FAT min', Vx(ft, 'neg')]] : []), ['V_CL', Vr(s.CL)]],
-      D: [['Δ steel', R.camber.steel, 3], ['Δ wet deck', R.camber.wet, 3], ['Δ DC2 + DW', R.camber.sd, 3], ...(R.camber.ut ? [['Δ utilities', R.camber.ut, 3]] : []), ['Δ total (camber)', R.camber.total, 3]] }[view];
-    const unit = { M: 'kip-ft', V: 'kip (just right of the station; at a support also just left, below; at the end just left)', D: 'in, downward +' }[view];
+      V: [['V_DC1', Vr(s.DC1)], ['V_DC2', Vr(s.DC2)], ['V_DW', Vr(s.DW)], ...(ll ? [['V_LL+IM max', Vx(ll, 'pos')], ['V_LL+IM min', Vx(ll, 'neg')], ['V_FAT max', Vx(ft, 'pos')], ['V_FAT min', Vx(ft, 'neg')]] : []), ['V_CL', Vr(s.CL)]] }[view];
+    const unit = { M: 'kip-ft', V: 'kip (just right of the station; at a support also just left, below; at the end just left)' }[view];
     const supSet = new Set(R.supIdx.slice(1, -1));
-    h += card('Station table', `<div class="fRow"><label for="an_view">Show</label><select id="an_view"><option value="M"${view === 'M' ? ' selected' : ''}>Moments</option><option value="V"${view === 'V' ? ' selected' : ''}>Shears</option><option value="D"${view === 'D' ? ' selected' : ''}>Dead-load deflections</option></select><span class="unit">${unit}</span></div>
+    h += card('Station table', `<div class="fRow"><label for="an_view">Show</label><select id="an_view"><option value="M"${view === 'M' ? ' selected' : ''}>Moments</option><option value="V"${view === 'V' ? ' selected' : ''}>Shears</option></select><span class="unit">${unit}</span></div>
       <div class="tscroll" style="max-height:420px;overflow-y:auto"><table class="tbl"><thead><tr><th>x (ft)</th>${cols.map(c => `<th>${esc(c[0])}</th>`).join('')}</tr></thead><tbody>
-      ${x.map((v, i) => `<tr${R.region[i] >= 1 ? ' style="background:#F8FAFC"' : ''}><td>${f(v, 2)}</td>${cols.map(c => `<td>${f(c[1][i], c[2] || (view === 'D' ? 3 : 1))}</td>`).join('')}</tr>${view === 'V' && supSet.has(i) ? `<tr><td>${f(v, 2)} left</td>${[['V', s.DC1.VL], ['', s.DC2.VL], ['', s.DW.VL], ...(ll ? [['', ll.VLpos], ['', ll.VLneg], ['', ft.VLpos], ['', ft.VLneg]] : []), ['', s.CL.VL]].map(c => `<td>${f(c[1][i], 1)}</td>`).join('')}</tr>` : ''}`).join('')}
-      </tbody></table></div><p class="note">Shaded rows: pier regions (negative permanent-load moment), where the pier g<sub>M</sub> and the 90 % two-truck case apply (3.6.1.3.1). Each key value is worked in the steps below.</p>`);
-    h += card('Worked steps', `<p class="note">AASHTO LRFD 10th Ed. (2024). Moments and shears are stiffness-method results of the shared beam engine on the stiffness of each stage; their checks are the statics steps and, for LL+IM, the per-lane envelope × g.</p>${ST().groupsHTML(groups('x', R.steps), { open: OPEN, item: q => `<li id="st-${esc(q.id)}"${q.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(q.label)}${q.ref ? `<span class="ref">${esc(q.ref)}</span>` : ''}</div><div>${ST().line(q, true)}</div>${q.note ? `<div class="nt">${esc(q.note)}</div>` : ''}</li>` })}`);
+      ${x.map((v, i) => `<tr${R.region[i] >= 1 ? ' style="background:#F8FAFC"' : ''}><td>${f(v, 2)}</td>${cols.map(c => `<td>${f(c[1][i], c[2] || 1)}</td>`).join('')}</tr>${view === 'V' && supSet.has(i) ? `<tr><td>${f(v, 2)} left</td>${[['V', s.DC1.VL], ['', s.DC2.VL], ['', s.DW.VL], ...(ll ? [['', ll.VLpos], ['', ll.VLneg], ['', ft.VLpos], ['', ft.VLneg]] : []), ['', s.CL.VL]].map(c => `<td>${f(c[1][i], 1)}</td>`).join('')}</tr>` : ''}`).join('')}
+      </tbody></table></div><p class="note">Shaded rows: pier regions (negative permanent-load moment), where the pier g<sub>M</sub> and the 90 % two-truck case apply (3.6.1.3.1). Each key value is worked in the steps below. Dead-load deflections at every station: <a href="#" data-gotab="defl">Deflection tab</a>.</p>`);
+    h += card('Worked steps', `<p class="note">AASHTO LRFD 10th Ed. (2024). Moments and shears are stiffness-method results of the shared beam engine on the stiffness of each stage; their checks are the statics steps and, for LL+IM, the per-lane envelope × g. The live-load deflection and camber steps are on the <a href="#" data-gotab="defl">Deflection tab</a>.</p>${ST().groupsHTML(groups('x', R.steps.filter(q => !/^an\.(defl\.|camber)/.test(q.id))), { open: OPEN, item: q => `<li id="st-${esc(q.id)}"${q.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(q.label)}${q.ref ? `<span class="ref">${esc(q.ref)}</span>` : ''}</div><div>${ST().line(q, true)}</div>${q.note ? `<div class="nt">${esc(q.note)}</div>` : ''}</li>` })}`);
     return h;
   }
 
@@ -229,5 +224,5 @@
     const why = o.auto ? (an ? (rd.ok ? 'the default: the project is complete' : `the project is not complete: ${rd.why.map(esc).join(' ')}`) : o.src === 'example' && !rd.ok ? `the default while the project is not complete: ${rd.why.map(esc).join(' ')}` : 'the default') : 'as chosen below';
     return `<div class="srcBar${an && !rd.ok ? ' warn' : o.src === 'example' || o.src === 'custom' ? ' ex' : ''}" role="status"><span>Demands:</span> <b>${what}</b> <span class="srcWhy">(${why})</span></div>`;
   }
-  window.SBDAnalysisUI = { draw, srcBar, TOPICS, groups, inputs, onInputChange };
+  window.SBDAnalysisUI = { draw, srcBar, TOPICS, groups, inputs, onInputChange, chart };   // chart: also the Deflection tab's diagram (DEFL)
 })();
