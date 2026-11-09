@@ -4665,7 +4665,7 @@ except the duplicated stations removed by fix 1 (listed there) and the Summary's
   `node tests/check-syntax.mjs`; steel-bridge smoke tests; phone-layout `sbapp`; project-library.
 - **Other copies:** none.
 
-## 2026-11-09 — PR: sbqa2-display-leftovers (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — the visual QA pass's reported leftovers on every tab (QA2; display only)
+## 2026-11-09 — PR: sbqa2-display-leftovers (PR #1282: https://github.com/mlococo88/All-Structural/pull/1282) — the visual QA pass's reported leftovers on every tab (QA2; display only)
 Engineer request (2026-11-09): every tab looks correct and professional. Display only: no formula, factor, unit, code reference, key or saved-data
 format changed. Anchor text `QA2` marks each change. New file `ui/sub.js` (in the first `document.write` loader of `index.html`, before the
 `ui/` files).
