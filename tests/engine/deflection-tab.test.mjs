@@ -14,7 +14,7 @@ import { test, loadShared, ROOT } from './harness.mjs';
 
 const SB = path.join(ROOT, 'apps/steel-bridge');
 const SK = /view3d|ui\/report|ui\/drawings|ui\/graphics|ui\/gfxa|ui\/tabgraphics|ui\/legacy|autodesign/;
-const FILES = [...fs.readFileSync(path.join(SB, 'index.html'), 'utf8').matchAll(/<script src="((?!http)[^"]+)"/g)].map(m => path.resolve(SB, m[1])).filter(f => !SK.test(f));
+const FILES = [...fs.readFileSync(path.join(SB, 'index.html'), 'utf8').matchAll(/(?:<script src="|^ *')((?!http)[^"'?]+\.js)["']/gm)].map(m => path.resolve(SB, m[1])).filter(f => !SK.test(f));
 
 function check(W, P, gi, nm) {
   const AN = W.SBDAnalysis, DU = W.SBDDeflectionUI, SH = W.SBDSheets;
