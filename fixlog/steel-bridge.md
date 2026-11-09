@@ -4549,3 +4549,68 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
   Report are identical (default project); before/after screenshots; `node tests/check-syntax.mjs`; steel-bridge smoke tests; phone-layout
   `sbapp`; project-library.
 - **Other copies:** none.
+## 2026-11-09 — PR: claude/sb-defl-per-girder (PR #1279: https://github.com/mlococo88/All-Structural/pull/1279) (DFG) — Deflection tab: every cross-section girder G1…Gn selectable, each with its own dead loads; camber of every girder (tenth points) on the tab and in the Report   [display only; no formula change; no saved-data change]
+- **Engineer:** 2026-11-09 (follow-up on #1274): "Deflections should also include camber; the camber is inclusive of DL deflections, so we need to be able to look at each girder individually. Right now it only allows me to look at G1."
+- **Root cause (reproduced):**
+  - The tab's girder selector listed `P.girders`. These are **plate girders** (sets of plates), not cross-section girders.
+  - The default project has one plate girder, labelled "G1", position interior. `engine/analysis.js lineOf` analyses it on cross-section girder **G2**. So the selector showed only "G1", and those results were in fact the interior girder G2's.
+  - With more plate girders (tested with an added exterior plate girder "GE" on line G1), the selector listed them and switching worked (`ui.g`, analysis cache keyed per girder).
+  - Cross-section girders without a plate girder of their own could not be shown. The engine analyses one cross-section line per plate girder.
+- **What exists in the engine (no STOP needed):**
+  - The loads module (`engine/loads.js`, via `SBDAnalysis.moduleOf`) already gives every cross-section girder its own dead loads: DC1 deck/haunch/SIP with the overhang for exterior girders, DC2 and DW shares by the chosen method, cross-frame point loads.
+  - `analyzeGirder` uses the line in the plate girder's "Cross-section girder" field (`girder.line`, an existing saved field, the Analysis tab's selector).
+  - g_Δ is one value for the bridge (all lanes, all girders, 2.5.2.6.2), the same for every line.
+- **Where:**
+  - `ui/deflection.js`, new block `/* ---------- girder lines (DFG …`:
+    - `nbOf(P)`.
+    - `plateOf(P, j)`: `SBDDrawings.plateGirderOf`, the Drawings' rule SB2-DW1. A line takes the plate girder whose `line` is j; else the first plate girder of the same position without a `line`; else the first.
+    - `lineRun(P, j, opt)`: the analysis of line j. On the plate girder's own line it is the plain `analyzeGirder(P, pg, opt)`. Otherwise it is `analyzeGirder(Q, pg, opt)`, where Q is a JSON copy of P with `Q.girders[pg].line = j`. These are the same engine calls with that line's inputs; P is not changed.
+    - `allLines(P)`: every line with `{ ll: false }`. The camber is computed before the live load, so it is the same (checked).
+    - `lineSel()` replaces `girderSel()`. The selector `#df_line` lists G1…Gn as "G1 (exterior) — plates of G1 (no plate girder of its own)". Choosing a line whose plate girder differs sets `ui.g` through `ctx.setG` (as before). The chosen line is kept in memory, reset when `ui.g` changes elsewhere (Girders & plates tab, Summary).
+    - `allHtml()`: new card "Camber of every girder (total dead-load deflection, tenth points)", `id="df-all"`. Girders are columns and tenth points are rows, plus the largest per girder. Each girder heading (`data-dfline`) opens that girder.
+  - `render()`: key `keyOf(P, gi) + '|' + j`. Calculate runs `lineRun(P, j)` and `allLines(P)`. An alert shows when the line has no plate girder of its own. It names the plate girder and b_eff used; when the positions differ (exterior line on an interior plate girder) it says the exterior b_eff and stiffness differ, and to add an exterior plate girder. A second alert shows when entered dead-load overrides of that plate girder apply to this line too.
+  - `dlHtml()`: "Camber = the total dead-load deflection = the sum of its components", with each span at 0.5L worked as components summed = total.
+  - `report/data.js`: `B.cam = SBDDeflectionUI.allLines(P)` when the Deflection section is wanted (this project's analysis). The LRU analysis cache gets room for every line: `2 × (plate girders + nb) + 4`, was `2 × plate girders + 4`.
+  - `report/builders.js` `defl()`: new sub "Camber of every girder (tenth points)", girders as columns.
+- **Formulas, factors, units, code references, saved data:** none changed. `engine/` and `shared/` are not touched. The extra lines are analysed by the same `analyzeGirder` with the existing per-line inputs. No new saved key or field. The project copy for a line is never saved.
+- **Main vs this branch:** plate girder G1 on its own line (G2) is unchanged. `SBDDeflectionUI.model`, `lld` and `camber` JSON on the default project are identical, main 196de67 vs this branch (probe script, 64,405 characters equal).
+- **Check case:** default project, camber at midspan (in, downward +), steel + wet deck + DC2/DW = total.
+
+  | Girder | DC1 wet (klf) | DC2 (klf) | DW (klf) | Span 1 (x = 55 ft) | Span 2 (x = 180 ft) | Span 3 (x = 305 ft) |
+  |---|---|---|---|---|---|---|
+  | G1 exterior | 0.9446 | 0.3411 | 0.2075 | 1.418 | 1.691 (= 0.268 + 1.080 + 0.344) | 1.418 |
+  | G2 interior (plate girder G1's own line; unchanged) | 1.1652 | 0.2505 | 0.2075 | 1.601 | 1.899 (= 0.280 + 1.332 + 0.287) | 1.601 |
+  | G3 | 1.1652 | 0.1600 | 0.2075 | — | 1.842 | — |
+
+  - G4 = G2 and G5 = G1 by symmetry.
+  - LL deflection: g_Δ 0.510 for every line, Δ_LL 0.512 / 0.700 / 0.512 in for each, because it does not depend on the dead loads (cracked zones "none").
+- **Decisions (pending engineer review):**
+  1. A line without a plate girder of its own takes that plate girder's plates **and its entered b_eff** (SB2-DW1). For the exterior lines of the default project, that is the interior b_eff of 114 in; the tab says so in an alert. The app has no exterior b_eff unless an exterior plate girder is added. Computing one would be a new calculation (§4), not done.
+  2. Dead loads or factors entered as overrides on a plate girder apply to every line that takes its plates (an alert says so). A plate girder with hand-off loads (`girder.loads`/`df`) cannot be moved to another line: that line shows an error.
+  3. The Summary tab and the Report summary rows stay per plate girder: the SA3 check is one per plate girder. Δ_LL does not depend on the line except with cracked zones "dl". The Summary's Deflection column opens this tab on that plate girder's own line.
+  4. The chosen line is kept for the page view only (not saved: no new `sbd2.ui` field).
+  5. As before: no vertical profile, no CTDOT OWN33 extra camber.
+- **How verified:**
+  - `tests/engine/deflection-tab.test.mjs`, new test, on the default project and a project with an added exterior plate girder (b_eff 96 in, line G1):
+    - every line's `lineRun` equals `analyzeGirder` with that line;
+    - its loads are the loads module's for that line (`mod.j === j`, DC1, DC2, DW);
+    - the overview camber equals each line's full analysis;
+    - exterior and interior cambers differ;
+    - the own line equals `analyzeGirder(P, 0)`;
+    - the Report table equals the tab.
+  - `tests/smoke/steel-bridge-deflection.mjs`, at 1440 px:
+    - 5 options, default G2;
+    - 5 overview columns;
+    - G1 and G3 selected (by the selector and by the overview link): each one's table, overview column and LL values equal `lineRun` in the page;
+    - G1 ≠ G2;
+    - 390 px layout.
+  - Browser probe with two plate girders: the options name each plate girder; choosing G1 sets `ui.g` to GE and G5 back to G1; the b_eff alert. 0 console errors.
+  - Updated for the extra dead-load runs (the Report's camber of every girder adds one `{ ll: false }` analysis per other girder line, cached):
+    - `tests/engine/report-wiring.test.mjs`: run counts, and the cache bound with the new formula;
+    - `tests/smoke/steel-bridge-paths.mjs`: cache size after the Report, 2 → 2 + 4.
+  - A bug the tests caught while editing was fixed before commit: a comment in `report/data.js` had swallowed the cache's pruning loop.
+  - After merging origin/main (#1275, #1270, #1276: the script loader; `ui/deflection.js` is in its list, no new file in this PR):
+    - `tests/check-syntax.mjs` passes;
+    - engine tests `deflection-tab`, `report`, `report-wiring`, `sb-summary`, `steps-groups-tabs`, `paths`, `equal-spacing` pass;
+    - smoke tests `steel-bridge-deflection`, `-report`, `-summary`, `phone-layout`, `-wiring`, `-drawings`, `-paths`, `-scroll --quick` pass, with 0 console errors.
+  - After merging #1277 (full width, splitter): `steel-bridge-deflection`, `phone-layout` and `steel-bridge-splitter` pass again.
