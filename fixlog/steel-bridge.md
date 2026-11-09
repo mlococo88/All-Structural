@@ -4422,4 +4422,10 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
 - **Formulas, factors, units, code references, saved data:** none changed (§4, §5).
 - **Check case:** default project, Summary tab, 1440 px: "Cross-section and framing plan" card after the verdict, two figures side by side (TYPICAL CROSS-SECTION, 5 girders at 9'-6"; plan with 3 spans, 5 girders). At 390 px they are stacked; page width 390 px.
 - **How verified:** `tests/smoke/steel-bridge-summary.mjs` block 7 (side by side / stacked, links, print, 0 console errors); `node tests/check-syntax.mjs`.
+- **Test fix (tests/smoke/steel-bridge-wiring.mjs, Constructibility step; regression report 2026-11-09):** "f_ℓ is not saved (undefined !== 1.5)" on origin/main.
+  - Root cause: a race in the test, present since #1260 (output tabs run themselves when selected). It was not caused by #1271. On 5e52138 (before #1271) the test failed 2 of 4 runs; on 1d9670b, 1 of 4.
+  - Mechanism: the test clicked the Constructibility tab and at once ran `fill('#cn_flC', '1.5')` and `dispatchEvent('change')`. The tab's own auto-run presses Calculate one frame later, which redraws the card. When that redraw fell between the fill and the change event, the typed value was lost with the old input. The change event then reached the new, empty input, and the handler (correctly) deleted `P.constr.flC`.
+  - App behaviour is right: a change event with an empty field means "from skew".
+  - Fix: wait for the tab to settle, fill, blur (the browser's own change event), wait for the saved value, settle again.
+  - Proof the app saves f_ℓ: 4 of 4 runs "constructibility f_ℓ saved 1.5", read from `sbd2.project.current` and from the input after the re-run.
 - **Other copies:** none.
