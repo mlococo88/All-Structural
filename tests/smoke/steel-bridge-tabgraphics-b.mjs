@@ -40,26 +40,28 @@ try {
     assert.ok(svgInfo.texts > 8 && svgInfo.shapes > 20, `${tab}/${name}: drawn ${JSON.stringify(svgInfo)}`);
     await p.$eval(gfx(name), s => s.scrollIntoView({ block: 'center' })); const box = await p.locator(`#out [data-gfxb="${name}"] .sdx-view`).boundingBox(); const v0 = await vb(name);
     await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await p.mouse.wheel(0, -500); await p.waitForTimeout(100);
-    assert.notEqual(await vb(name), v0, `${tab}/${name}: wheel zoom`); await p.mouse.dblclick(box.x + 40, box.y + 40); await p.waitForTimeout(100); assert.equal(await vb(name), v0, `${tab}/${name}: double-click fits`);
+    assert.notEqual(await vb(name), v0, `${tab}/${name}: wheel zoom`); const yTop = await p.evaluate(() => document.querySelector('#tabBar').getBoundingClientRect().bottom); await p.mouse.dblclick(box.x + 40, Math.max(box.y + 40, yTop + 20));   // below the sticky output tab bar (two rows of tabs: a tall graphic's top can be under it) await p.waitForTimeout(100); assert.equal(await vb(name), v0, `${tab}/${name}: double-click fits`);
     const txt = await p.evaluate(n => window.SBDTabGfxBUI.handles[n].dxf(), name); assert.ok(/SECTION/.test(txt) && /EOF/.test(txt) && /S-GRDR|S-ANNO-TEXT/.test(txt), `${tab}/${name}: DXF`);
     const dl = await p.$(`#out [data-gfxb="${name}"] [data-sbg="dxf"]`); assert.ok(dl, 'Download DXF button'); done.push(`${tab}/${name}`); return txt;
   };
   const selRow = async (attr, val) => assert.ok(await p.$(`#out tr[${attr}="${val}"].sel`), `row ${attr}=${val} selected`);
 
+  // AUTO (2026-11-09): an output tab runs itself when selected; settle() waits until it is no longer out of date and no run is pending
+  const settle = (t = 240000) => p.waitForFunction(() => !document.querySelector('#out .alert.stale:not([hidden])') && !/Calculating|updating/.test((document.querySelector('#autoMsg') || {}).textContent || '') && !/Calculating/.test(((document.querySelector('#out') || {}).innerText || '').slice(0, 400)), null, { timeout: t });
   // ---- Shear & stiffeners
-  await p.click('#tabBar [data-otab="shear"]'); await p.click('#sh_calc'); const t1 = await common('shear', 'shear'); await common('shear', 'shear-detail');
+  await p.click('#tabBar [data-otab="shear"]'); await settle(); const t1 = await common('shear', 'shear'); await common('shear', 'shear-detail');
   assert.ok(/S-RATIO-OK/.test(t1) && /S-GRDR-STIF/.test(t1)); await clickRegion('shear', 'pan', 30); await selRow('data-sh', 'pan:30'); await common('shear', 'shear'); await clickRegion('shear', 'bs', 1); await selRow('data-sh', 'bs:1');
   await clickRegion('shear', 'loc', 20); await selRow('data-sh', 'loc:20'); await shot('shear', '#out [data-gfxb="shear"]');
   // ---- Fatigue & studs
-  await p.click('#tabBar [data-otab="fat"]'); await p.click('#fa_calc'); await common('fat', 'fatigue'); await common('fat', 'fatigue-chart'); await clickRegion('fatigue', 'fa', 3); await selRow('data-fa', 'fa:3'); await clickRegion('fatigue-chart', 'fa', 5); await selRow('data-fa', 'fa:5'); await shot('fatigue-chart', '#out [data-gfxb="fatigue-chart"]'); await shot('fatigue', '#out [data-gfxb="fatigue"]');
+  await p.click('#tabBar [data-otab="fat"]'); await settle(); await common('fat', 'fatigue'); await common('fat', 'fatigue-chart'); await clickRegion('fatigue', 'fa', 3); await selRow('data-fa', 'fa:3'); await clickRegion('fatigue-chart', 'fa', 5); await selRow('data-fa', 'fa:5'); await shot('fatigue-chart', '#out [data-gfxb="fatigue-chart"]'); await shot('fatigue', '#out [data-gfxb="fatigue"]');
   // ---- Cross-frames
   await p.click('#tabBar [data-otab="cf"]'); const tcf = await common('cf', 'crossframe'); assert.ok(/S-GOV/.test(tcf), 'the governing members are on S-GOV'); await shot('crossframes', '#out [data-gfxb="crossframe"]');
   // ---- Welds
-  await p.click('#tabBar [data-otab="wt"]'); await p.click('#wt_calc'); await common('wt', 'welds'); await common('wt', 'weld-detail'); await clickRegion('welds', 'fw', 3); await selRow('data-wt', 'fw:3'); await clickRegion('welds', 'tr', 2); await selRow('data-wt', 'tr:2'); await shot('welds', '#out [data-gfxb="welds"]');
+  await p.click('#tabBar [data-otab="wt"]'); await settle(); await common('wt', 'welds'); await common('wt', 'weld-detail'); await clickRegion('welds', 'fw', 3); await selRow('data-wt', 'fw:3'); await clickRegion('welds', 'tr', 2); await selRow('data-wt', 'tr:2'); await shot('welds', '#out [data-gfxb="welds"]');
   // ---- Field splices
-  await p.click('#tabBar [data-otab="spl"]'); await p.click('#sp_calc'); const tsp = await common('spl', 'splice'); assert.ok(/S-GOV/.test(tsp), 'the governing group is on S-GOV'); await shot('splices', '#out [data-gfxb="splice"]');
+  await p.click('#tabBar [data-otab="spl"]'); await settle(); const tsp = await common('spl', 'splice'); assert.ok(/S-GOV/.test(tsp), 'the governing group is on S-GOV'); await shot('splices', '#out [data-gfxb="splice"]');
   // ---- Rating
-  await p.click('#tabBar [data-otab="rt"]'); await p.click('#rt_calc'); await common('rt', 'rating'); const rowsN = await p.evaluate(() => window.SBDTabGfxBUI.handles.rating.graphic.regions.length);
+  await p.click('#tabBar [data-otab="rt"]'); await settle(); await common('rt', 'rating'); const rowsN = await p.evaluate(() => window.SBDTabGfxBUI.handles.rating.graphic.regions.length);
   await clickRegion('rating', 'rt', await p.evaluate(() => window.SBDTabGfxBUI.handles.rating.graphic.regions[40].i)); assert.ok(await p.$('#out tr[data-rt].sel'), 'a rating row selected'); await shot('rating', '#out [data-gfxb="rating"]');
   // ---- Report: the summary section carries the figure
   await p.click('#tabBar [data-otab="rpt"]'); await p.click('#rp_build'); await p.waitForSelector('#out .rp-fig svg', { timeout: 240000 });
