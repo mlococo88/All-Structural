@@ -21,10 +21,12 @@ try {
     bars[t] = await p.evaluate(() => document.querySelector('#out .srcBar').innerText.trim());
     assert.match(bars[t], /^Demands: This project's analysis/, `${t}: ${bars[t]}`); assert.match(bars[t], /the default/, `${t}: ${bars[t]}`);
   }
+  // AUTO (2026-11-09): an output tab runs itself when selected; settle() waits until it is no longer out of date and no run is pending
+  const settle = (t = 240000) => p.waitForFunction(() => !document.querySelector('#out .alert.stale:not([hidden])') && !/Calculating|updating/.test((document.querySelector('#autoMsg') || {}).textContent || '') && !/Calculating/.test(((document.querySelector('#out') || {}).innerText || '').slice(0, 400)), null, { timeout: t });
   // Flexure with this project's analysis
   await p.click('#tabBar [data-otab="flex"]');
   assert.equal(await p.evaluate(() => document.getElementById('fx_src').value), 'analysis');
-  await p.click('#fx_calc');
+  await settle();   // AUTO: the tab ran when selected
   await p.waitForSelector('#out .fx-list tr[data-fx]', { timeout: 120000 });
   const fx = await p.evaluate(() => ({ rows: document.querySelectorAll('#out .fx-list tr[data-fx]').length, note: [...document.querySelectorAll('#out .secBody .note')].map(n => n.innerText).join(' | '), kErr: document.querySelectorAll('#out .katex-error').length }));
   assert.ok(fx.rows > 100, `${fx.rows} flexure locations`); assert.match(fx.note, /This project's analysis of G1/); assert.equal(fx.kErr, 0);
