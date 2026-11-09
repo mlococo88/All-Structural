@@ -4263,6 +4263,57 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
   2. With "Plates and bolts: Entered below", a station without an entry is **not** auto-designed: `engine/splices.js` `girder()` runs `autoDesign` only when `S.auto && !I.own`. Such a station uses the module's built-in plates (`DEF`), and the list labels it "auto". The Splices tab note says "A station without an entry is auto-designed". Changing either changes results or wording; engineer to decide.
   3. With "Entered below", the Splices tab gives no way to add a row except "Keep these plates" on the output tab ("None entered.").
   4. The entered plate inputs have no `data-kind="num"`, so they are saved as text ("4", not 4). The engine reads both the same (`num()` / `+`; checked in Node on every field: the same checks and ratios). Left as is; no saved-format change.
+
+## 2026-11-09 — PR: claude/sb-splice-addrow (PR #1269: https://github.com/mlococo88/All-Structural/pull/1269) (SPADD) — Splices input tab: "+ Add splice station" for entered plates   [input only; no result change; no saved-format change]
+- **Follows:** SPERR (PR #1263), open item 3: with "Plates and bolts: Entered below" the Splices tab showed "None entered." and a row could only come from "Keep these plates" on the Field splices output tab.
+- **Where:** `ui/splices.js`:
+  - new helpers before `function inputs(`: `AD` (a WeakMap, girder object → Map(x → auto-designed p), page memory only), `near`, `girderOf`, `hasRow`, `platesAt`;
+  - `inputs(P, h)` → `inputs(P, h, ui)` (index.html already passes `ui`); under the entered-plates table, anchor `${rows || '<tr><td colspan="34">None entered.</td></tr>'}</tbody></table></div>`, the new `${add}` control: a station select `#i_spladd` (the stations of the girder chosen on the Girders tab without an entry) and the button `+ Add splice station` (`data-spladd`); the × button of each row (`data-spldel`, unchanged) gets a title "Remove this row"; the card's note names both controls (its last sentences unchanged);
+  - `onClick(e, P)` → `onClick(e, P, ui)` (index.html already passes `ui`): `[data-spladd]` pushes `{ x, g: gi, top, bot, web }` to `P.splices.plates`;
+  - `calc()`: after a run without error, `if (R.girder) { … if (q.design && q.p) m.set(+q.x, q.p); … AD.set(R.girder, m); }` (remembers the plates the tab auto-designed).
+- **Before:** `function inputs(P, h) {` … `${rows || '<tr><td colspan="34">None entered.</td></tr>'}</tbody></table></div>`);` and `function onClick(e, P) {` with only `[data-splgo]` and `[data-spldel]`.
+- **After:** see the code at the anchors (comment `SPADD`). The new row's prefill, in order: the plates the Field splices tab last auto-designed for that station of that girder (this page view); else the plates of the tab's last run of that girder; else GirderDetail's built-in plates (`engine/splices.js` `DEF.top`, `DEF.bot`, `DEF.web`).
+- **Saved data:** the row is the format "Keep these plates" already writes (`engine/model.js`: `plates: [ { x, g, top, bot, web } ]`, numbers and `inner` true/false). No new key, field or format.
+- **Not changed:**
+  - A station without an entry is calculated as before (SPERR open item 2: with "Entered below" it uses the built-in plates; the note's "A station without an entry is auto-designed" and the list's "auto" label are unchanged, for the engineer to decide).
+  - The entered plate inputs keep no `data-kind` (saved as text when edited, SPERR open item 4). With `data-kind="num"` an edited plate field of an existing project would be saved as a number (4, not "4") and a cleared field as null instead of "": a change to the saved format of existing projects, so it is left as is. The engine reads text and numbers the same (`num()` / `parseDim`).
+- **Governing provision:** none (input control); AASHTO LRFD 10th Ed. 6.13.6.1 calculations unchanged.
+- **Check case:** default project (auto-design on).
+  - Field splices tab: FS1 at 82.00 ft auto-designed, "auto: 50 bolts each side".
+  - Splices input tab, "Plates and bolts: Entered below": "None entered." and "Add a row for G1 [FS1 at 82.00 ft]  + Add splice station".
+  - + Add splice station: the row "82.00, G1" with the auto-designed plates; saved `{ x: 82, g: 0, top, bot, web }`; Field splices FS1: "entered: 50 bolts each side", the same governing check and ratio as the auto-design; FS1 no longer offered in the select.
+  - × on the row: "None entered." again; FS1 back on the built-in plates, as before.
+  - New page, no run yet: + Add splice station gives the built-in plates (top: 2 lines, g 3, g₀ 3, 3 rows, s 3, e_f 1.75, e_p 1.75, outer 16 × 0.5, inner 6.5 × 0.625).
+- **How verified:** new `tests/smoke/steel-bridge-splice-addrow.mjs` (the steps above, the saved row's keys and types, an edited t_o saved and changing FS1, 0 console errors). Also `tests/check-syntax.mjs`; engine tests `splices`, `autodesign-splices`, `custom-demands`, `handoffs`, `report`, `paths`, `tabgraphics-b`; smoke `steel-bridge-splices`, `-paths`, `-tabgraphics-b`, `-wiring`, `-report`.
+- **Open items:** SPERR open items 2 and 4 stand.
+
+## 2026-11-09 — PR: claude/sb-tab-errors (PR #1268: https://github.com/mlococo88/All-Structural/pull/1268) (SPERR2) — Flexure, Shear & stiffeners, Fatigue & studs, Rating, Welds and Constructibility: a Calculate that ends in an error shows the message instead of leaving the tab "out of date"   [display only; no result change]
+- **Follows:** SPERR (PR #1263), open item 1: the same hidden-error line on the other output tabs.
+- **Where:** `render()` of `ui/flexure.js`, `ui/shear.js`, `ui/fatigue.js`, `ui/rating.js`, `ui/welds.js`, `ui/constructibility.js`, anchor `stale = !S.R || S.key !== key(ctx)`; and `ui/flexure.js` `calc()`, anchor `const I = inputs(ctx); if (I.err) { S.err = I.err;`.
+- **Before (each of the six files):**
+  `stale = !S.R || S.key !== key(ctx)`
+- **After (each of the six files):**
+  `stale = (!S.R && !S.err) || S.key !== key(ctx)` with the comment `// SPERR2: a run that ended in an error is current (its message shows), not out of date` at the end of that line.
+- **Before (`ui/flexure.js` `calc()`):**
+  `const I = inputs(ctx); if (I.err) { S.err = I.err; return; }`
+- **After:**
+  `const I = inputs(ctx); if (I.err) { S.err = I.err; S.key = key(ctx); return; }   // SPERR2: the key of the run, so its error shows`
+- **Problem:** as SPERR: each tab's Calculate sets `S.err` and leaves `S.R = null` when the run returns an error, and `render()` counted every state without `S.R` as out of date and shows `S.err` only when not out of date. The error never showed; the "out of date … Calculate" bar stayed, and with the output-tab auto-run (#1260) the status stayed on "Calculating…" / "Inputs changed — updating…". On the Flexure tab the input errors (`inputs()`: Custom table errors, no hand-off file, a missing script) also returned before `S.key` was set, so that tab needed the key as well. Cases: Demands "Custom (entered)" with an empty table or a row error; "Hand-off file" with no file chosen; an analysis error; a calculation exception; the Rating tab's errors from the Flexure / Shear Custom tables.
+- **Results:** unchanged. The new condition differs from the old one only when `S.R` is null and `S.err` is set (a run that ended in an error); with valid inputs `S.R` is set and `S.err` is empty, so `stale`, the results and the graphics are drawn exactly as before. `S.key` is used only for `stale`.
+- **Governing provision:** none (display).
+- **Check case:** default project; on each tab, Demands "Custom (entered)", Custom table empty, Calculate (or the auto-run).
+  - Before: the bar "… results are out of date … Calculate" stays and nothing else is shown.
+  - After:
+    - Flexure: "Custom demands: No rows entered: enter the Flexure demands in the Custom table (or paste them from Excel)."
+    - Shear & stiffeners: "Custom demands: No rows entered: enter the Shear & stiffeners demands in the Custom table (or paste them from Excel)."
+    - Fatigue & studs: "Custom demands: No rows entered: enter the Fatigue & studs demands in the Custom table (or paste them from Excel)."
+    - Rating: "Flexure (Custom table of the Flexure tab): Custom demands: No rows entered: enter the Flexure demands in the Custom table (or paste them from Excel)."
+    - Welds: "Custom demands: No rows entered: enter the Welds demands in the Custom table (or paste them from Excel)."
+    - Constructibility: "Custom demands: No rows entered: enter the Constructibility demands in the Custom table (or paste them from Excel)."
+  - Back to the tab's first demand source: the same results as before.
+- **How verified:** new `tests/smoke/steel-bridge-taberrors.mjs` (each tab: default results, empty Custom table → message shown, not out of date, status not "Calculating…", back to results; 0 console errors). On main it fails at the first tab (Flexure stays out of date); with the fix it passes. Also `tests/check-syntax.mjs`; engine tests `flexure`, `shear`, `fatigue`, `rating`, `welds`, `constructibility`, `splices`, `custom-demands`, `handoffs`, `report`, `paths`, `gfxa`, `tabgraphics-b`; smoke `steel-bridge-splices`, `-paths`, `-tabgraphics-b`, `-wiring`, `-report`.
+- **Other copies:** none left in `apps/steel-bridge/ui/` (`ui/splices.js` was fixed in SPERR).
+- **Open items:** SPERR open items 2 and 4 stand (open item 3 was fixed in SPADD, PR #1269).
 ## 2026-11-09 — PR: claude/sb-deflection-tab (PR #PRNUM: PRLINK) (DEFL) — Deflection output tab: the live-load deflection check and the dead-load deflections and camber gathered on one tab after Analysis; Report "Deflection" section; Analysis keeps a one-line summary   [display only; no result, saved key or format change]
 - **Engineer:** 2026-11-09: "The Steel Bridge Design app should have an output tab for deflection."
 - **Where:**
