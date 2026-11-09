@@ -249,11 +249,7 @@
   /* tabOf(path): the input tab that holds an input path (error dots, links). The tab drawn with that data-path when there is one, else these
      rules (paths not drawn now: another girder, a field shown only for another choice, one span of the list). */
   const TAB_RULES = [[/^splices/, 'spl'], [/^(fatigue|studs)/, 'fs'], [/^stiffeners/, 'stf'], [/^crossframes\.wind\b/, 'loads'], [/^(framing|crossframes)\b/, 'framing'],
-<<<<<<< HEAD
-    [/^(spans|xs\.skews)\b/, 'layout'], [/^xs\.(ws|overlays|sip|allow|extra|dlMethod|lldf)\b/, 'loads'], [/^(xs|deck)\b/, 'xsec'], [/^(project|ownerRules)\b/, 'proj'], [/^girders\b/, 'gird'], [/^autodesign\b/, 'ad']];
-=======
-    [/^(spans|xs\.skews)\b/, 'layout'], [/^(analysis\b|girders\.\d+\.(loadsManual|dfManual|loadsOverride|dfOverride|clOverride)\b)/, 'loads'], [/^xs\.(ws|overlays|sip|allow|extra|dlMethod|lldf)\b/, 'loads'], [/^(xs|deck)\b/, 'xsec'], [/^(project|ownerRules)\b/, 'proj'], [/^girders\b/, 'gird']];
->>>>>>> fd6d941 (wip2)
+    [/^(spans|xs\.skews)\b/, 'layout'], [/^(analysis\b|girders\.\d+\.(loadsManual|dfManual|loadsOverride|dfOverride|clOverride)\b)/, 'loads'], [/^xs\.(ws|overlays|sip|allow|extra|dlMethod|lldf)\b/, 'loads'], [/^(xs|deck)\b/, 'xsec'], [/^(project|ownerRules)\b/, 'proj'], [/^girders\b/, 'gird'], [/^autodesign\b/, 'ad']];
   const tabOf = p => { const el = p && document.querySelector(`#inPanes [data-path="${String(p).replace(/["\\]/g, '\\$&')}"]`), pn = el && el.closest('[data-pane]');
     if (pn) return pn.dataset.pane; const r = TAB_RULES.find(q => q[0].test(p || '')); return r ? r[1] : 'mat'; };
   // SB2-A7: the cross-section girder whose dead loads and distribution factors this plate girder takes (girders[i].line; blank = automatic,
