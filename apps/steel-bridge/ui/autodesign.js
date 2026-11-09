@@ -22,7 +22,8 @@
       .ad-ok{background:#e7f4ec;} .ad-hi{background:#fdf3d8;} .ad-cur td{font-style:italic;color:#475569;} .ad-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:2px 14px;}
       .ad-vars td,.ad-vars th{padding:2px 6px;vertical-align:top;} .ad-vars .nt{color:#475569;font-size:8.5pt;max-width:420px;} .ad-vars select{max-width:130px;} .ad-vars input{width:5em;} .ad-grp th{background:#f1f5f9;}
       .ad-lk{display:inline-block;padding:0 6px;border:1px solid #cbd5e1;border-radius:4px;color:#475569;font-size:8.5pt;} tr.ad-fx td{color:#64748b;} details.ad-pc summary{cursor:pointer;color:#2563EB;font-size:9pt;}
-      .ad-spr .fRow{flex-wrap:wrap;} .ad-spr .unit{flex:1 1 220px;} .ad-cmp td,.ad-cmp th{padding:2px 8px;} .ad-cmp .ad-better{background:#e7f4ec;} .ad-cmp .ad-worse{background:#fbe1dd;}`;
+      .ad-spr .fRow{flex-wrap:wrap;} .ad-spr .unit{flex:1 1 220px;} .ad-cmp td,.ad-cmp th{padding:2px 8px;} .ad-cmp .ad-better{background:#e7f4ec;} .ad-cmp .ad-worse{background:#fbe1dd;}
+      #inPanes .ad-vars{min-width:640px;}`;   /* ADIN: on the narrow input panel the variables table scrolls sideways in its .tscroll rather than squeezing the notes */
     document.head.appendChild(st);
   }
   const ensure = P => { if (!P.autodesign) P.autodesign = {}; const a = P.autodesign; a.cost = a.cost || {}; a.limits = a.limits || {}; a.change = a.change || {}; return a; };
