@@ -4337,3 +4337,16 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
 - **Check case:** default project, Summary tab: 7–9 s to "Up to date"; FAIL; 3 FAIL, 1 REVIEW, 10 PASS; governing Flexure Strength I, G1, x = 249.99 ft, GS7 1.229 (the Flexure tab's governing ratio); Inventory RF 0.61, Operating RF 0.79 (Rating tab). Cell "Shear" 0.437 → Shear & stiffeners tab, station x = 110.01 ft selected, step `sh.ok` flashed.
 - **How verified:** `tests/engine/sb-summary.test.mjs` (default project and a skewed three-span two-girder project: every cell `Object.is` the module's own value from each tab's `build()`); `tests/smoke/steel-bridge-summary.mjs` (links, cache, re-run, the Report link, old `ui.otab`, 390 px, 0 console errors); `node tests/check-syntax.mjs`; smoke `steel-bridge-*`, `phone-layout`, `project-library`.
 - **Other copies:** none.
+
+## 2026-11-09 — PR: report-search-ux (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — list-input observer skips the report viewer (RSX; display only)
+- **Where:** `ui/lists.js`, `start()`, anchor `new MutationObserver(ms =>`.
+  - Before: `new MutationObserver(ms => { if (ms.some(m => m.addedNodes.length)) upgrade(document); }).observe(document.body, { childList: true, subtree: true });`
+  - After: `new MutationObserver(ms => { if (ms.some(m => m.addedNodes.length && !(m.target.closest && m.target.closest('.rp')))) upgrade(document); }).observe(document.body, { childList: true, subtree: true });`
+- **Problem:** the shared report search (RSX, `fixlog/shared-report.md`, same PR) adds `<mark>` nodes inside the report text on each keystroke;
+  every added node made this observer re-scan the whole page (`upgrade(document)`, ~80–90 ms on a 380,000-element report). Nodes added inside
+  the report viewer (`.rp`: marks, the search status, lazy step lists) never hold a list input, so they are skipped. Mounting the report
+  (nodes added to its host, outside `.rp`) and every input tab still upgrade as before.
+- **Governing provision:** none (display only).
+- **Check case:** Report, governing detail, type `flange stress`: before ~100–200 ms per keystroke (callback + next frame); after ~35–90 ms.
+  The list inputs (Bridge layout spans, Girders & plates segments) still bind: `tests/smoke/list-input.mjs` / phone-layout `sbapp` (PR).
+- **Other copies:** none.

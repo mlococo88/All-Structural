@@ -402,7 +402,7 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
        opened rp-lzq), counted in the status, the contents entries holding a hit made bold, and ▲ ▼ / Enter / Shift+Enter step through
        the hits (opening the section, subsection or lazy item that holds one); Esc clears. */
     const qIn = root.querySelector('.rp-q'), qSt = root.querySelector('.rp-qs'), qBt = Array.from(root.querySelectorAll('.rp-qb'));
-    const TOC = new Map(Array.from(root.querySelectorAll('.rp-toc [data-rpto]'), a => [a.dataset.rpto, a])), LZT = [], Q = { v: '', w: [], re: null, hits: [], all: [], toc: [], cur: -1, more: 0, secs: 0 };
+    const TOC = new Map(Array.from(root.querySelectorAll('.rp-toc [data-rpto]'), a => [a.dataset.rpto, a])), LZT = [], Q = { v: '', w: [], re: null, hits: [], all: [], toc: [], cur: -1, seen: 0, full: false, secs: 0 };
     const lzText = i => { if (LZT[i] != null) return LZT[i]; const it = doc.lazy[i], F = ST().fmt, P = [it.title, it.caption];
       if (it.type === 'table') [it.head || []].concat((it.rows || []).map(r => (Array.isArray(r) ? r : r.cells))).forEach(R => R.forEach(c => { const o = c && typeof c === 'object' ? c : { t: c }; P.push(rich(doc, o.t, false)); if (o.key) P.push(ref(doc, o.key)); }));
       else { (it.topics || []).forEach(t => P.push(t.title, t.ref, t.chip)); (it.steps || []).forEach(st => P.push(st.label, st.ref, st.sym, st.eq, st.sub, typeof st.value === 'number' ? F(st.value, st.d) : st.value, st.unit, st.ok === true ? 'OK' : st.ok === false ? 'NG' : '', st.note ? noteSrc(st.note) : '')); }

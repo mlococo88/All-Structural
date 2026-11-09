@@ -281,3 +281,45 @@ Loaded by: `apps/steel-bridge/index.html` (Report tab, `ui/report.js`). Tests: `
 - **Open items (not converted here; per-tool follow-ups, decision pending engineer review):** other long step notes found by the survey:
   Spread Footing `p0.Lftg` (359 chars, ψ factors of the dowel development length); Stone Masonry Arch (13 notes over 300 chars, already written with
   inline "•" separators); BasePlateAnchorDesigner "where …" lists (8 over 300 chars, made from the tab's own lists); Steel Bridge `fx.a6.ok` (277 chars).
+
+## 2026-11-09 — PR: report-search-ux (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Report search: count, marks, step through hits, lazy items searched (RSX; display only)
+- **Engineer request (2026-11-09):** "The report searches are not easy to use. I type in a term and it's not clear if any results are found."
+- **Problem (before):** `mount()`'s `search(v)` only hid the subsections / sections (and their contents entries) whose `textContent` did not
+  contain every typed word. No count, no "no matches" message, no highlighting, no scroll to a hit. And it **missed real hits**: a lazy item
+  (`details.rp-lz`, filled only when opened) has only its summary in the page, so a word inside its steps or rows was not found. Example:
+  Steel Bridge app, Report, Detail "Every station" (3,738 lazy lists): typing `20.32` (a value inside the lazy list "x = 94.00 ft … GS4 Minimum
+  negative-flexure deck reinforcement") showed **0** subsections; after: 3 sections, 9 unopened lists, and Enter opens the first and marks it.
+  `content-visibility:auto` on `.rp-sub` does not affect `textContent`, so it caused no misses (only scrolling: see `step`). The per-element
+  text cache (`el._rpq`) also went stale when a lazy item was filled after the first search (now covered by the model text).
+- **Where (all in `mount()`, anchor `/* search (RSX, 2026-11-09`):**
+  - bar: before `<span class="rp-sp"></span><input type="search" class="rp-q" placeholder="Search the report" aria-label="Search the report">`
+    → after the same input (plus a `title` with the keys) inside `<span class="rp-qw">`, followed by `<button class="rp-qb" data-rpq="-1">▲</button>`,
+    `<button class="rp-qb" data-rpq="1">▼</button>` (both `hidden` while the box is empty) and `<span class="rp-qs" role="status" aria-live="polite">`.
+  - `jump()` and the `toggle` listener: the fill code `if (!d.dataset.filled) { d.insertAdjacentHTML('beforeend', lazyBody(…)); d.dataset.filled = '1'; }`
+    → `fillOne(d)` (same fill; while a search is shown, it also marks the hits in the newly filled item).
+  - new: `lzText(i)` (a lazy item's model text, cached: steps: label, ref, sym/eq/sub TeX, value through `SharedSteps.fmt`, unit, OK/NG, note;
+    tables: title, caption, every cell through `rich(…, false)`); `textOf(el)` = `el.textContent` + the `lzText` of every lazy item in it (replaces
+    `el._rpq || (el._rpq = el.textContent.toLowerCase())` in `has()`); `markIn`, `unmark`, `status`, `step`, `fillOne`; keydown on `.rp-q`.
+  - `search(v)`: the hide / show logic is unchanged except `has()` now uses `textOf()`; then, in each shown section, `markIn` wraps each
+    occurrence of any typed word in a text node in `<mark class="rp-hit">` (never inside `.katex`, `svg`, `script`, `style`, attributes or hidden
+    subsections). An equation (`.katex`) whose text holds a word gets class `rp-hitk` (outline; its markup is not touched); an unopened lazy item
+    whose model text holds a word gets `rp-lzq` (summary tinted). The walk stops after `MAXMARK = 1000` hits ("More than 1,000 matches …").
+    Contents entries of subsections / sections with hits get `rp-tochit` (bold). Status: "12 matches in 5 sections", "(3 in unopened lists)",
+    "3 of 12 …" while stepping, or "No matches for “xyz”" (red). Empty box: nothing shown (as before).
+  - `step(±1)` (▲ ▼, Enter / Shift+Enter): the next / previous hit gets `rp-cur`; closed sections / subsections and `<details>` around it are
+    opened (`open()`, as a § link does); an unopened lazy item is filled and opened and its own hits replace it in the list; scrolled to the
+    centre (twice: again on the next frame, after the `content-visibility` subsections above it are laid out). Esc clears the box and the search.
+  - the toc link lookups `root.querySelector(`.rp-toc [data-rpto="…"]`)` → a `Map` built once (`TOC`); marks and classes are kept in `Q.all` /
+    `Q.toc` and removed from there (`unmark`, then `normalize()` of their parents), so no page-wide query per keystroke.
+  - CSS after `.rp-q{…}`: `.rp-qw`, `.rp-qb`, `.rp-qs`, `.rp-qs.rp-qno`, `mark.rp-hit`, `.rp-cur`, `.katex.rp-hitk`, `details.rp-lzq`,
+    `.rp-toc a.rp-tochit`. Print (`@media print`): marks, equation outlines and the summary tint print plainly; the bar is hidden as before.
+    A `ResizeObserver` on the bar keeps `--rp-top` right when the status wraps it to another line.
+- **Governing provision:** none (display only). No formula, factor, unit, value, code reference, storage key or saved format changes; no new key
+  (the search is not stored).
+- **Check case:** Spread Footing (default project), Report, type `bearing`: before, subsections hidden, nothing else; after: "113 matches in
+  30 sections", 110 words marked (3 more in equations), Enter → "1 of 113 …" and the first mark is centred in view; `zqxjv` → "No matches for “zqxjv”";
+  Esc → box empty, nothing hidden, no mark. With an empty box the `.rp-doc` text of all 21 consumers is identical to origin/main (see the PR).
+- **How verified:** see the PR (headless Chromium, every consumer, main vs branch; per-keystroke timing; print emulation; tests).
+- **Other copies:** none (no tool has its own report search; the Prestressed Bridge Design Nomenclature tab has a variable filter, not a report search).
+- **Open items:** none for the calculations. Typing in the report search marks the Steel Bridge project "not saved" (its project chip listens to
+  every `input` event; also on main) — follow-up for that app, not changed here.
