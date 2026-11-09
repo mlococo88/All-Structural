@@ -71,7 +71,9 @@ test('Report: the Flexure section is the Flexure module\'s result; the rating li
   const at = B.rating.cap.get(B.rating.sum.gov.inv), cap = (M.sections.find(s => s.id === 'rt').subs.find(q => q.id === 'cap') || { items: [] }).items;
   assert.ok(fx.has(at)); assert.ok(!cap.some(it => it.title === `Capacity: flexure at ${at.name}`), 'the governing capacity is not re-worked in the rating section');
   assert.ok(M.sections.find(s => s.id === 'flex').subs.some(q => q.id === 'flex@' + B.flex.rows.indexOf(at)), 'it is worked in the Flexure section');
-  assert.equal(runs - n0, 1, 'the full analysis of this project state was cached by the first test: only the dead-load run (constructibility) is new');
+  // DFG (2026-11-09): the report's Deflection section adds the dead-load run of every cross-section girder line (camber of every girder); the
+  // constructibility's dead-load run is the plate girder's own line among them
+  assert.equal(runs - n0, Math.round(P.xs.nb), 'the full analysis of this project state was cached by the first test: only the dead-load runs (one per girder line, constructibility\'s among them) are new');
 });
 
 test('Default demand source: this project\'s analysis when the project is complete, else the example', () => {
@@ -116,7 +118,7 @@ test('Analysis cache: keyed by project state, girder and options; bounded', () =
   P.rating = { phiC: 0.95, phiS: 1 }; assert.equal(D.analysis(P, 0, { ll: false }, null, counted), a, 'the rating factors are not in the key'); assert.equal(runs, n0);
   P.deck.haunch += 0.5; const c = D.analysis(P, 0, { ll: false }, null, counted); assert.notEqual(c, a); assert.equal(runs, n0 + 1, 'a changed project runs again');
   assert.equal(JSON.stringify(c), JSON.stringify(ORIG(P, 0, { ll: false })), 'the cached result is the analysis of that state');
-  const max = 2 * P.girders.length + 4; for (let i = 0; i < max + 3; i++) { P.deck.haunch += 0.01; D.analysis(P, 0, { ll: false }, null, counted); }
+  const max = 2 * (P.girders.length + Math.round(P.xs.nb)) + 4; for (let i = 0; i < max + 3; i++) { P.deck.haunch += 0.01; D.analysis(P, 0, { ll: false }, null, counted); }   // DFG: room for every girder line
   assert.ok(D.cache.size <= max, `cache size ${D.cache.size} ≤ ${max}`);
 });
 
@@ -149,7 +151,7 @@ test('Every girder: governing ratio per girder per check group, the controlling 
   tex.forEach(t => assert.doesNotThrow(() => katex.renderToString(t, { throwOnError: true, strict: 'ignore' }), t));
   // cache: G1's analysis came from the earlier tests (same state as the built-in project + G2: a new key, so G1 runs once more), G2's
   // ran once; a second build of every girder, and the selected girder's report afterwards, run no analysis
-  assert.ok(nRun <= 4, `analysis runs for 2 girders: ${nRun}`);
+  assert.ok(nRun <= 4 + Math.round(P.xs.nb), `analysis runs for 2 girders: ${nRun}`);   // DFG: + the dead-load run of each girder line (camber of every girder, once per project state)
   const n1 = runs, t2 = Date.now(); P.girders.forEach((g, gi) => W.SBDReportData.compute(P, gi)); const t3 = Date.now();
   assert.equal(runs, n1, 'no analysis is run again');
   console.log(`       2 girders: ${grps.length} check groups; controlling girder ${top.G.label} (${top.q.mod}, ${top.q.r.toFixed(3)}); first build ${((t1 - t0) / 1000).toFixed(1)} s (${nRun} analysis runs), again ${((t3 - t2) / 1000).toFixed(1)} s (0 runs)`);

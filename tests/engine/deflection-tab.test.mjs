@@ -76,3 +76,36 @@ test('Deflection tab and report section show the engine\'s values (built-in proj
   assert.ok(b.R.crack.length > 0, 'cracked zones');
   console.log(`  skewed: ${b.Mo.ll.map(q => `span ${q.k + 1} Δ_LL ${q.d.toFixed(3)} / ${q.lim.toFixed(3)} in`).join('; ')}`);
 });
+
+// DFG (2026-11-09): every cross-section girder line G1…Gn is selectable; each is analysed with its own dead loads (loads module line j) on
+// the plates of its plate girder, by the same engine call (analyzeGirder with "Cross-section girder" = j in a copy); a plate girder's own
+// line is the plain analyzeGirder(P, pg) (G1 unchanged); every line's camber (ll: false) equals that line's full analysis camber.
+test('Deflection tab: every girder line, its own dead loads; the plate girder\'s own line unchanged; the camber of every girder', () => {
+  const W = loadShared(...FILES), M = W.SBDModel, AN = W.SBDAnalysis, DU = W.SBDDeflectionUI, J = o => JSON.parse(JSON.stringify(o)), js = JSON.stringify;
+  for (const [nm, P] of [['built-in', J(M.defaultProject())], ['two plate girders', (() => { const Q = J(M.defaultProject()); const e = J(Q.girders[0]); e.id = 'GE'; e.label = 'GE'; e.position = 'exterior'; e.beff = 96; e.line = 0; Q.girders.push(e); return Q; })()]]) {
+    const nb = DU.nbOf(P); assert.equal(nb, 5, nm);
+    const own = AN.lineOf(P, P.girders[0]), r0 = DU.lineRun(P, own);
+    assert.equal(r0.own, true); assert.equal(js(r0.R.camber), js(AN.analyzeGirder(P, 0).camber), `${nm}: own line = analyzeGirder(P, 0)`); assert.equal(js(r0.R.lld), js(AN.analyzeGirder(P, 0).lld));
+    const A = DU.allLines(P); assert.equal(A.length, nb);
+    const mid = [];
+    for (let j = 0; j < nb; j++) {
+      const r = DU.lineRun(P, j), pg = DU.plateOf(P, j), g = P.girders[pg]; assert.equal(r.pg, pg);
+      const Q = J(P); if (!r.own) Q.girders[pg].line = j;
+      const R = AN.analyzeGirder(r.own ? P : Q, pg), mod = AN.moduleOf(r.own ? P : Q, pg);
+      assert.equal(js(r.R.camber), js(R.camber), `${nm} G${j + 1}: the engine call`);
+      assert.equal(mod.j, j, `${nm} G${j + 1}: loads module line`);
+      assert.equal(r.R.loads.DC1wet, mod.G.DC1, `${nm} G${j + 1}: its own DC1 wet`); assert.equal(r.R.loads.DC2, mod.G.DC2); assert.equal(r.R.loads.DW, mod.G.DW);
+      assert.equal(js(A[j].camber), js(r.R.camber), `${nm} G${j + 1}: overview camber = the line's analysis`);
+      const Mo = DU.model(r.R); mid.push(Mo.pts.find(t => t.k === 1 && t.q === 5).v.total);
+      if (nm === 'two plate girders' && j === 0) { assert.equal(pg, 1); assert.equal(r.own, true); assert.equal(r.R.girder.beff, 96); }
+    }
+    assert.ok(Math.abs(mid[0] - mid[1]) > 1e-3, `${nm}: exterior and interior cambers differ`);
+    console.log(`  ${nm}: camber span 2 at 0.5L, G1…G${nb}: ${mid.map(v => v.toFixed(3)).join(', ')} in`);
+    // the report: the camber of every girder
+    const B = W.SBDReportData.compute(P, 0, { src: 'analysis' }), Mr = W.SBDReportBuild.model(B, { detail: 'gov' }), D = Mr.sections.find(s => s.id === 'defl');
+    const T = D.subs.find(q => q.id === 'all').items.find(it => it.type === 'table'); assert.equal(T.head.length, nb + 2);
+    const row = T.rows.find(r => r[0] === 'Span 2, 0.5L'); mid.forEach((v, j) => assert.equal(row[2 + j].t, W.SharedUnits.fmt(v, 3), `${nm}: report G${j + 1}`));
+    assert.equal(W.SharedReport.build(Mr).unresolved.length, 0);
+  }
+});
+
