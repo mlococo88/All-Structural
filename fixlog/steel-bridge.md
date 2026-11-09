@@ -4429,3 +4429,35 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
   - `tests/check-syntax.mjs`; steel-bridge engine and smoke suites (see the PR).
 - **Other copies:** none.
 - **Open items:** none.
+## 2026-11-09 — PR: claude/sb-summary-gfx (PR #1275: https://github.com/mlococo88/All-Structural/pull/1275) (GFXS) — Summary tab: cross-section and framing plan graphics   [display only; no result or saved-data change]
+- **Engineer:** 2026-11-09: "the Summary output tab must also show the cross-section graphic and the framing plan graphic", reusing the app's own drawing functions, near the top, side by side from about 1200 px and stacked on a phone, each with a link to the tab where it is drawn and edited. This is a follow-up to #1271.
+- **Where:** `ui/summary.js`:
+  - New `xsSvg(P)` and `gfxCard(P)` (anchor `GFXS (2026-11-09`), called in `paint()` after the verdict card (anchor `h += gfxCard(P);`).
+  - The click handler takes `[data-sumin]` and the plan's own `[data-itgo]` links: input tabs, through `ctx.inTab`.
+  - New CSS: `.sum-gfx`, `.sum-g1`, `.sum-gbox`.
+  - `index.html`: the Summary ctx gets `inTab(t)` (selects an input tab).
+- **Drawing functions called (no drawing code copied):**
+  - Cross-section: `SBDDrawings.model(P)` + `SBDDrawings.section(G, D, { k })`, the typical cross-section that `engine/sheets.js` draws on its Drawings sheet. It is previewed with `SBDGraphics.tightSvg` (as the Report's figures), with the drawing scale for a figure about 10 in wide (`scaleFor(width × 1.3, 10)`; the sheet uses 30 in) so its text reads at the figure's size.
+  - Framing plan: `SBDFramingUI.layoutPlan(P)`, the plan of the Bridge layout input tab, with its own link to the Framing & bracing tab.
+- **Links:**
+  - Cross-section: edited on the Cross-section input tab, drawn on the Drawings tab.
+  - Framing plan: edited on the Framing & bracing input tab, drawn on the Bridge layout input tab and the Cross-frames tab.
+- **Layout:**
+  - Two columns at screens of 1200 px and wider; one column below that (stacked; each SVG `max-width:100%`).
+  - At 390 px there is no page-level horizontal scroll and no graphic wider than the window.
+  - Each graphic is on a white box with dark ink (`color-scheme: light`). The app has no dark theme today; the box keeps the drawings legible if a browser or OS forces dark colours.
+  - Print: side by side, `break-inside: avoid`, colours kept.
+- **Also:** while the first run waits after the page opens on the Summary tab, the run status reads "Starting…" instead of "Inputs changed — updating…" (`S.first`).
+- **Decisions (pending engineer review):**
+  - The typical section is drawn with its sheet's general-notes block. That block is part of `section()`, and copying the drawing to leave it out is not allowed by the request.
+  - The framing plan is the Bridge layout tab's (`layoutPlan`), not the Cross-frames output tab's checks.
+- **Formulas, factors, units, code references, saved data:** none changed (§4, §5).
+- **Check case:** default project, Summary tab, 1440 px: "Cross-section and framing plan" card after the verdict, two figures side by side (TYPICAL CROSS-SECTION, 5 girders at 9'-6"; plan with 3 spans, 5 girders). At 390 px they are stacked; page width 390 px.
+- **How verified:** `tests/smoke/steel-bridge-summary.mjs` block 7 (side by side / stacked, links, print, 0 console errors); `node tests/check-syntax.mjs`.
+- **Test fix (tests/smoke/steel-bridge-wiring.mjs, Constructibility step; regression report 2026-11-09):** "f_ℓ is not saved (undefined !== 1.5)" on origin/main.
+  - Root cause: a race in the test, present since #1260 (output tabs run themselves when selected). It was not caused by #1271. On 5e52138 (before #1271) the test failed 2 of 4 runs; on 1d9670b, 1 of 4.
+  - Mechanism: the test clicked the Constructibility tab and at once ran `fill('#cn_flC', '1.5')` and `dispatchEvent('change')`. The tab's own auto-run presses Calculate one frame later, which redraws the card. When that redraw fell between the fill and the change event, the typed value was lost with the old input. The change event then reached the new, empty input, and the handler (correctly) deleted `P.constr.flC`.
+  - App behaviour is right: a change event with an empty field means "from skew".
+  - Fix: wait for the tab to settle, fill, blur (the browser's own change event), wait for the saved value, settle again.
+  - Proof the app saves f_ℓ: 4 of 4 runs "constructibility f_ℓ saved 1.5", read from `sbd2.project.current` and from the input after the re-run.
+- **Other copies:** none.

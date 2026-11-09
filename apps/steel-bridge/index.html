@@ -600,7 +600,7 @@
     /* Summary tab (ui/summary.js, 2026-11-09; display only): runs the modules out of date itself (now: selected now, else after 600 ms of quiet);
        goto(tab, gi): a cell's link opens that output tab with that girder selected (as the Girder select of the Girders & plates tab) */
     if (ui.otab === 'sum') { window.SBDSummaryUI.render($('out'), { P, ui, now: autoNow, open: () => ui.otab === 'sum',
-      goto: gotoOut,
+      goto: gotoOut, inTab: t => { ui.itab = t; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; },   // GFXS: the graphics' links to the input tabs
       report: () => { ui.rpt = ui.rpt || {}; ui.rpt.scope = 'all'; ui.otab = 'rpt'; saveUi(); drawOut(); $('outputPanel').scrollTop = 0; } }); return; }
     if (ui.otab === '3d') { window.SBD3DUI.render($('out'), { P, ui, saveUi }); return; }   // 3D view tab (ui/view3d.js)
     const g = P.girders[ui.g] || P.girders[0], s = g && g.segments[ui.seg];
