@@ -44,7 +44,7 @@
     { id: 'cf', grp: 'Cross-frames', head: 'Cross-frames / diaphragms', short: 'X-frames', tab: 'cf', what: 'CF1–CF11' },
     { id: 'spl', grp: 'Field splices', head: 'Field splices', short: 'Splices', tab: 'spl', what: 'flange, web' },
     { id: 'wd', grp: 'Welds', head: 'Welds', short: 'Welds', tab: 'wt', what: 'FW1–FW4, TR1–TR4' },
-    { id: 'defl', grp: 'Deflection', head: 'LL deflection', short: 'Defl.', tab: 'an', what: 'SA3' },
+    { id: 'defl', grp: 'Deflection', head: 'LL deflection', short: 'Defl.', tab: 'defl', what: 'SA3' },   // tab 'defl' since DEFL (2026-11-09): the Deflection tab works SA3 (before: 'an')
     { id: 'rtInv', grp: 'Rating', head: 'Rating, Inventory RF', short: 'RF Inv.', tab: 'rt', rf: true },
     { id: 'rtOpr', grp: 'Rating', head: 'Rating, Operating RF', short: 'RF Opr.', tab: 'rt', rf: true }];
   const GROUPS = [...new Set(COLS.map(c => c.grp))];
