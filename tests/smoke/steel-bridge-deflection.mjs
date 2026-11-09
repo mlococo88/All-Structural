@@ -6,7 +6,8 @@
 //      of the saved project, formatted as the tab formats it); the diagram has one line per component plus the total; the "every
 //      station" view lists every analysis station; each § link has its worked step on the tab;
 //   3. the Analysis tab keeps a one-line summary whose link opens the Deflection tab; its station table has no deflection view;
-//   4. the girder selector changes the girder of the app (ui.g, as the Girders & plates tab);
+//   4. the girder selector lists every cross-section girder G1…G5 (DFG); each shows its own analysis (SBDDeflectionUI.lineRun), the
+//      camber of every girder has 5 columns and its links select the girder;
 //   5. old saved ui.otab values ('an', 'sec', an unknown value) still open; 'defl' is kept across a reload;
 //   6. Report: built, has a "Deflection" section after "Analysis"; its link back opens the tab;
 //   7. at 390 px: no page-level horizontal scroll, the tables scroll inside their cards.
@@ -21,7 +22,7 @@ if (shots) fs.mkdirSync(shots, { recursive: true });
 const FILE = path.join(REPO, 'apps/steel-bridge/index.html'), t0 = Date.now();
 const settle = (p, t = 240000) => p.waitForFunction(() => !document.querySelector('#out .alert.stale:not([hidden])') && !/Calculating|updating/.test((document.querySelector('#autoMsg') || {}).textContent || '') && !/Calculating/.test(((document.querySelector('#out') || {}).innerText || '').slice(0, 400)), null, { timeout: t });
 
-let { b, p, errs, blocked } = await openPage(FILE, { vw: 1400, vh: 1000 });
+let { b, p, errs, blocked } = await openPage(FILE, { vw: 1440, vh: 1000 });
 try {
   await p.waitForSelector('#tabBar [data-otab="defl"]');
   const order = await p.$$eval('#tabBar [data-otab]', bs => bs.map(x => x.dataset.otab));
@@ -50,7 +51,7 @@ try {
   assert.deepEqual(r.bad, []); assert.equal(r.lines, r.comps, 'one line per component + total'); assert.deepEqual(r.links, [], 'every § link has its step on the tab'); assert.equal(r.kErr, 0);
   console.log('  default project: ' + r.ll.map(q => `span ${q.k}: Δ_LL ${q.d.toFixed(3)} in vs L/${q.ratio} = ${q.lim.toFixed(3)} in (D/C ${(q.d / q.lim).toFixed(3)}, ${q.status})`).join('; '));
   console.log('  camber at midspan: ' + r.mid.map(m => `span ${m.k} (x = ${m.x.toFixed(1)} ft) ${m.total.toFixed(3)} in`).join('; '));
-  if (shots) { await p.screenshot({ path: path.join(shots, 'deflection-desktop.png'), fullPage: false }); await p.$eval('#df-dl', e => e.scrollIntoView()); await p.screenshot({ path: path.join(shots, 'deflection-desktop-camber.png') }); }
+  if (shots) { await p.screenshot({ path: path.join(shots, 'deflection-1440.png'), fullPage: false }); }
   await p.selectOption('#df_view', 'all');
   assert.equal(await p.$$eval('#df-dl .tscroll', t => t[1].querySelectorAll('tbody tr').length), r.n, 'every station');
   await p.selectOption('#df_view', 't10');
@@ -60,12 +61,27 @@ try {
   assert.match(an.t, /Δ\s*LL\s*\/\s*Δ\s*lim = 0\.\d{3}/); assert.ok(!an.d && !an.card, 'deflection moved off the Analysis tab');
   await p.click('#an-defl a[data-gotab="defl"]'); await settle(p);
   assert.equal(await p.evaluate(() => document.querySelector('#tabBar [aria-selected="true"]').dataset.otab), 'defl');
-  // 4. girder selector
-  const ng = await p.$$eval('#df_g option', o => o.length);
-  if (ng > 1) { await p.selectOption('#df_g', '1'); await settle(p); await p.waitForSelector('#df-ll table', { timeout: 240000 });
-    const g = await p.evaluate(() => ({ ui: JSON.parse(localStorage.getItem('sbd2.ui')).g, inp: (document.getElementById('i__g') || {}).value, sel: document.getElementById('df_g').value }));
-    assert.equal(g.ui, 1); assert.equal(g.sel, '1'); if (g.inp != null) assert.equal(g.inp, '1');
-    await p.selectOption('#df_g', '0'); await settle(p); await p.waitForSelector('#df-ll table', { timeout: 240000 }); }
+  // 4. girder selector (DFG): every cross-section girder G1…G5; each shows its own analysis (lineRun); the camber of every girder
+  const opts = await p.$$eval('#df_line option', o => o.map(x => x.textContent));
+  assert.equal(opts.length, 5, opts.join(' | ')); assert.equal(await p.$eval('#df_line', e => e.value), '1', 'the plate girder G1 is on line G2');
+  const allCols = await p.$$eval('#df-all thead th a[data-dfline]', a => a.length); assert.equal(allCols, 5, 'camber of every girder: 5 columns');
+  const perLine = async j => p.evaluate(j => { const P = JSON.parse(localStorage.getItem('sbd2.project.current') || 'null') || window.SBDModel.defaultProject(), DU = window.SBDDeflectionUI, U = window.SharedUnits;
+    const r = DU.lineRun(P, j), Mo = DU.model(r.R), mid = Mo.pts.filter(t => t.q === 5).map(t => U.fmt(t.v.total, 3));
+    const tab = [...document.querySelectorAll('#df-dl .tscroll')[1].querySelectorAll('tbody tr')].filter(tr => /0\.5L/.test(tr.cells[0].innerText)).map(tr => tr.cells[tr.cells.length - 1].innerText.trim());
+    const all = [...document.querySelectorAll('#df-all tbody tr')].filter(tr => /0\.5L/.test(tr.cells[0].innerText)).map(tr => tr.cells[2 + j].innerText.trim());
+    const ll = [...document.querySelectorAll('#df-ll tbody tr')].map(tr => tr.cells[6].innerText.replace(/\s*§\s*$/, '').trim());
+    return { mid, tab, all, ll, llE: r.R.lld.map(q => U.fmt(q.d, 3)), head: document.querySelector('#df-dl .secHead').textContent, DC1: r.R.loads.DC1wet, raw: Mo.pts.filter(t => t.q === 5).map(t => t.v.total) }; }, j);
+  const L1 = await perLine(1);
+  assert.deepEqual(L1.tab, L1.mid); assert.deepEqual(L1.all, L1.mid); assert.deepEqual(L1.ll, L1.llE);
+  await p.selectOption('#df_line', '0'); await settle(p); await p.waitForSelector('#df-ll table', { timeout: 240000 });
+  const L0 = await perLine(0);
+  assert.match(L0.head, /G1 \(exterior\)/); assert.deepEqual(L0.tab, L0.mid); assert.deepEqual(L0.all, L0.mid); assert.deepEqual(L0.ll, L0.llE);
+  assert.notEqual(L0.DC1, L1.DC1, 'exterior and interior dead loads differ'); assert.notDeepEqual(L0.mid, L1.mid);
+  console.log(`  camber at midspan, G1 (exterior) ${L0.mid.join(' / ')} in vs G2 (interior, plate girder G1's own line) ${L1.mid.join(' / ')} in`);
+  if (shots) { await p.$eval('#df-all', e => { e.scrollIntoView(); document.getElementById('outputPanel').scrollTop -= 90; }); await p.screenshot({ path: path.join(shots, 'deflection-1440-all-girders.png') }); await p.$eval('#df-dl', e => e.scrollIntoView()); await p.screenshot({ path: path.join(shots, 'deflection-1440-G1-exterior.png') }); }
+  await p.click('#df-all thead a[data-dfline="2"]'); await settle(p); await p.waitForSelector('#df-ll table', { timeout: 240000 });
+  assert.equal(await p.$eval('#df_line', e => e.value), '2'); const L2 = await perLine(2); assert.deepEqual(L2.tab, L2.mid);
+  await p.selectOption('#df_line', '1'); await settle(p); await p.waitForSelector('#df-ll table', { timeout: 240000 });
   // 6. Report
   await p.click('#tabBar [data-otab="rpt"]'); await p.click('#rp_build'); await p.waitForSelector('.rp-doc .rp-h1', { timeout: 240000 });
   const secs = await p.$$eval('.rp-doc .rp-h1', h => h.map(x => x.textContent.trim()));
@@ -93,7 +109,7 @@ try {
     return { sw: se.scrollWidth, cw: se.clientWidth, x: window.scrollX, cards: [...document.querySelectorAll('#out .sec')].map(s => s.getBoundingClientRect().right).filter(r => r > window.innerWidth + 1).length,
       inner: [...document.querySelectorAll('#out .tscroll')].some(t => t.scrollWidth > t.clientWidth) }; });
   assert.ok(m.sw <= m.cw && m.x === 0, `page scrolls sideways at 390 px: ${JSON.stringify(m)}`); assert.equal(m.cards, 0, 'a card wider than the screen'); assert.ok(m.inner, 'the wide tables scroll inside their cards');
-  if (shots) { await p.$eval('#df-ll', e => e.scrollIntoView()); await p.screenshot({ path: path.join(shots, 'deflection-390.png'), fullPage: false }); await p.$eval('#df-dl', e => e.scrollIntoView()); await p.screenshot({ path: path.join(shots, 'deflection-390-camber.png') }); }
+  if (shots) { await p.$eval('#df-ll', e => e.scrollIntoView()); await p.screenshot({ path: path.join(shots, 'deflection-390.png'), fullPage: false }); await p.$eval('#df-dl', e => e.scrollIntoView()); await p.screenshot({ path: path.join(shots, 'deflection-390-camber.png') }); await p.$eval('#df-all', e => e.scrollIntoView()); await p.screenshot({ path: path.join(shots, 'deflection-390-all-girders.png') }); }
   assert.deepEqual(errs, [], 'console errors (390 px)');
 } finally { await b.close(); }
 if (blocked.size) console.log('  blocked: ' + [...blocked].join(', '));

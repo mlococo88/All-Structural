@@ -41,7 +41,7 @@
     const AN = W().SBDAnalysis, run = orig || RAW || AN.analyzeGirder, k = (pk || pkOf(P)) + '|' + gi + '|' + JSON.stringify(o || {});
     if (CACHE.has(k)) { const v = CACHE.get(k); CACHE.delete(k); CACHE.set(k, v); return v; }
     const v = run(P, gi, o); CACHE.set(k, v);
-    const max = 2 * ((P.girders || []).length || 1) + 4; while (CACHE.size > max) CACHE.delete(CACHE.keys().next().value);
+    const max = 2 * (((P.girders || []).length || 1) + Math.round(+((P.xs || {}).nb) || 0)) + 4; while (CACHE.size > max) CACHE.delete(CACHE.keys().next().value);   // DFG (2026-11-09): room for every girder line of the Deflection tab
     return v;
   }
   /* install(): every call of SBDAnalysis.analyzeGirder goes through the cache (once; returns false when already installed or no engine) */
@@ -66,6 +66,8 @@
       const sup0 = [0]; P.spans.lengths.forEach(L => sup0.push(sup0[sup0.length - 1] + +L));
       if (on('loads') || on('proj')) B.loads = run('loads', () => { const R = W().SBDUiLoads.calc(P, g); return R.errors && R.errors.length ? { err: R.errors.map(e => e.msg || e).join(' ') } : R; });
       if (src === 'analysis' && (on('an') || on('defl') || on('spl') || on('flex') || on('rt') || on('shear') || on('fat') || on('sum'))) B.an = run('an', () => { const A = AN.analyzeGirder(P, g); return A.errors && A.errors.length ? { err: 'Analysis: ' + A.errors.map(e => e.msg || e).join(' ') } : A; });
+      // DFG (2026-11-09): the camber of every girder line (the Deflection tab's lineRun: the same analysis, each line's own dead loads)
+      if (src === 'analysis' && on('defl') && W().SBDDeflectionUI && W().SBDDeflectionUI.allLines) B.cam = run('defl', () => W().SBDDeflectionUI.allLines(P));
       if (on('sec')) B.sec = run('sec', () => sections(P, g, B.an ? B.an.sup : pl ? (pl.member || {}).supports : sup0));
       if (on('rt') || on('flex') || on('sum')) B.rating = run('rt', () => W().SBDRatingUI.build(cu('rt') ? { P, g, src: 'custom' } : src === 'file' ? { P, g, pl } : { P, g, src: 'analysis' }));
       // flexure: the Flexure module (f_ℓ and brace points as the tab: engine/framing.js design); with the analysis the rating's flexure is
