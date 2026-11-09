@@ -4174,3 +4174,33 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
   - Change f′c to 4.5 on Materials: "Inputs changed — updating…", then Flexure runs again (6.2 s).
   - Re-run: runs again.
 - **Other copies:** none.
+
+## 2026-11-09 — PR: claude/sb-splice-custom (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SPERR) — Field splices: a Calculate that ends in an error shows the message instead of leaving the tab "out of date"   [display only; no result change]
+- **Engineer:** 2026-11-09: "I tried entering custom values in the field splice tab but nothing happened when I press Calculate."
+- **Where:** `ui/splices.js`, `render()`, anchor `stale = !S.R || S.key !== key(ctx)`.
+- **Before:**
+  `const P = ensure(ctx.P), g = P.girders[ctx.g] || P.girders[0], stale = !S.R || S.key !== key(ctx);`
+- **After:**
+  `const P = ensure(ctx.P), g = P.girders[ctx.g] || P.girders[0], stale = (!S.R && !S.err) || S.key !== key(ctx);   // SPERR: …`
+- **Problem:** `calc()` sets `S.err` and leaves `S.R = null` when `build()` returns an error. `render()` counted every state without `S.R` as out of date, and shows `S.err` only when not out of date, so the error never showed: the "out of date … Calculate" bar stayed and pressing Calculate changed nothing on screen. With the output-tab auto re-run (#1260) the status also stayed on "Calculating…". It happened for every error that `build()` returns for the whole girder:
+  - Demands "Custom (entered)" with an empty table ("No rows entered") or a row error (a row without x, two rows at one x, x outside the girder, a cell that is not a number);
+  - no field splice stations;
+  - an analysis error;
+  - a calculation exception.
+  The error is now shown under the bar. Present since the Field splices tab was added (the same line since #616); not caused by #1255–#1260.
+- **Not changed (inputs checked, all bound and used):** every entered plate field (top / bottom flange: lines, g, g₀, rows, s, e_f, e_p, b_o, t_o, inner, b_i, t_i; web: h, t, rows, s_v, cols, s_h, e_w, e_wp), the design basis, bolts and clearances, and the Custom demand cells each change the result after Calculate and are saved.
+- **Governing provision:** none (display); AASHTO LRFD 10th Ed. 6.13.6.1 calculations unchanged.
+- **Check case:** default project, Field splices tab, Demands "Custom (entered)", table empty, Calculate.
+  - Before: the bar "Splice results are out of date … Calculate" stays and nothing else is shown.
+  - After: "Custom demands: No rows entered: enter the Field splices demands in the Custom table (or paste them from Excel)."
+  - Then a row x = 82, M_DC1 = 500, V_DC1 = 50, M_LL+ = 1000, M_LL− = −1000, V_LL = 80: FS1 checked, governing DT3 1.000, the same before and after. With M_DC1 = 2500: governing TF3 (Con) 1.315, the same before and after.
+- **How verified:** new `tests/smoke/steel-bridge-splices.mjs`:
+  - On main it fails at the first Calculate: the tab stays out of date.
+  - With the fix it passes: the error messages are shown; M_DC1 changes FS1; each of the 44 entered plate / bolt / basis fields changes the FS1 result and is saved. 0 console errors.
+  - Also `tests/check-syntax.mjs`; engine tests `splices`, `custom-demands`, `handoffs`; smoke `steel-bridge-wiring`, `-paths`, `-tabgraphics-b`, `-report`.
+- **Other copies:** the same `stale = !S.R || S.key !== key(ctx)` line with `if (S.err && !stale)` is in `ui/flexure.js`, `ui/shear.js`, `ui/fatigue.js`, `ui/rating.js`, `ui/welds.js` and `ui/constructibility.js`. Not changed here (open item 1).
+- **Open items:**
+  1. The same hidden-error pattern on the other output tabs listed above. To fix on request.
+  2. With "Plates and bolts: Entered below", a station without an entry is **not** auto-designed: `engine/splices.js` `girder()` runs `autoDesign` only when `S.auto && !I.own`. Such a station uses the module's built-in plates (`DEF`), and the list labels it "auto". The Splices tab note says "A station without an entry is auto-designed". Changing either changes results or wording; engineer to decide.
+  3. With "Entered below", the Splices tab gives no way to add a row except "Keep these plates" on the output tab ("None entered.").
+  4. The entered plate inputs have no `data-kind="num"`, so they are saved as text ("4", not 4). The engine reads both the same (`num()` / `+`; checked in Node on every field: the same checks and ratios). Left as is; no saved-format change.
