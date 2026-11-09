@@ -65,6 +65,7 @@
 <script src="report/summary.js"></script><!-- Summary tab (2026-11-09): every girder's governing values from the modules (no DOM) -->
 <script src="ui/report.js"></script>
 <script src="ui/summary.js"></script>
+<script src="ui/dash.js"></script>
 <script src="ui/bridgexfer.js"></script>
 <script src="ui/handoffs.js"></script>
 <script src="ui/lists.js"></script>
@@ -182,6 +183,40 @@
   #toast[hidden]{display:none;} #toast.err{border-left-color:var(--fail);} #toast ul{margin:4px 0 6px;padding-left:18px;} #toast .tBtns{display:flex;gap:6px;justify-content:flex-end;margin-top:4px;} #toast .tFld{font-weight:600;} #toast .tArr{color:#475569;}
   @media print{ #hdrBtns,#toast,#libDlg,.inTabs,#tabBar,#autoBar,#inputPanel{display:none!important;} html,body{overflow:visible;height:auto;} #app{height:auto;box-shadow:none;} #outputPanel{overflow:visible;}
     .steps li{break-inside:avoid;} .katex,.katex *{-webkit-print-color-adjust:exact;print-color-adjust:exact;} .katex .frac-line,.katex .overline-line,.katex .underline-line{border-bottom-color:#000!important;min-height:1px;} .katex-display{overflow:visible;} }
+  /* DASH (2026-11-09): the left check summary column (ui/dash.js), as the other apps' (RW/SF/LP #984/#988/#991, GirderDetail #1196): at the far
+     left from 1200 px, 240 px (280 px from 1500 px), 42 px when shrunk; the input panel keeps a third of the rest. Not shown below 1200 px, not printed. */
+  #sbDashCol{display:none}
+  @media screen and (min-width:1200px){
+    #sbDashCol{display:block;flex:0 0 240px;width:240px;min-width:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;border-right:1px solid var(--color-border);background:var(--slate-50);padding:0 9px 40px;font-family:var(--font-ui);font-size:9pt;color:var(--ink)}
+    #inputPanel{flex-basis:calc((100% - 240px)*.33);max-width:calc((100% - 240px)*.33)}
+    body.sbDashColl #sbDashCol{flex-basis:42px;width:42px;padding:0 2px}
+    body.sbDashColl #inputPanel{flex-basis:calc((100% - 42px)*.33);max-width:calc((100% - 42px)*.33)}
+  }
+  @media screen and (min-width:1500px){
+    #sbDashCol{flex-basis:280px;width:280px} #inputPanel{flex-basis:calc((100% - 280px)*.33);max-width:calc((100% - 280px)*.33)}
+    body.sbDashColl #sbDashCol{flex-basis:42px;width:42px} body.sbDashColl #inputPanel{flex-basis:calc((100% - 42px)*.33);max-width:calc((100% - 42px)*.33)}
+  }
+  #sbDashHead{position:sticky;top:0;z-index:3;background:var(--slate-50);display:flex;align-items:center;flex-wrap:wrap;gap:3px 7px;padding:8px 0 5px;border-bottom:1px solid var(--color-border)}
+  #sbDashTtl{margin:0;font-size:9.5pt;letter-spacing:.05em;text-transform:uppercase;color:var(--accent)}
+  #sbDashTgl{margin:0;padding:0 7px;font-size:10pt;line-height:1.5}
+  #sbDashCol .sdC{display:inline-flex;gap:3px;flex-wrap:wrap} #sbDashCol .sdC span{font-size:7.5pt;font-weight:700;padding:0 4px;border:1px solid;border-radius:3px;white-space:nowrap}
+  #sbDashCol .sdF{color:#991B1B;background:#FEF2F2;border-color:var(--fail)} #sbDashCol .sdW{color:#92400E;background:#FFFBEB;border-color:var(--warn)} #sbDashCol .sdP{color:#065F46;background:#ECFDF5;border-color:var(--pass)} #sbDashCol .sdN{color:#475569;background:var(--slate-100);border-color:var(--slate-400)}
+  body.sbDashColl #sbDashHead{flex-direction:column;align-items:center;border-bottom:none} body.sbDashColl #sbDashTtl{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;margin:6px 0}
+  body.sbDashColl #sbDashCol .sdC{flex-direction:column;align-items:center} body.sbDashColl #sbDashCol .sdC span{font-size:7pt;padding:1px 2px;white-space:normal;text-align:center;width:36px}
+  #sbDashCol .sdVerd{margin:6px 0 2px;font-size:9.5pt} #sbDashCol .sdVerd b{padding:0 5px;border-radius:3px} #sbDashCol .sdVerd b.sd-fail{color:#fff;background:var(--fail)} #sbDashCol .sdVerd b.sd-pass{color:#fff;background:var(--pass)} #sbDashCol .sdVerd b.sd-review{color:#fff;background:var(--warn)}
+  #sbDashCol .sdGov{font-size:8.5pt;margin:2px 0;line-height:1.3} #sbDashCol .sdRun{font-size:8.5pt;color:#475569;margin:4px 0} #sbDashCol .sdOld{color:#92400E;font-size:8pt}
+  #sbDashCol .spin{display:inline-block;width:10px;height:10px;border:2px solid #CBD5E1;border-top-color:var(--color-primary);border-radius:50%;animation:sbspin .8s linear infinite;vertical-align:-1px;margin-right:5px}
+  #sbDash{display:flex;flex-direction:column;gap:3px;margin:6px 0}
+  #sbDashCol .sdChip{display:grid;grid-template-columns:18px minmax(0,1fr);border:1px solid var(--color-border);border-left:4px solid var(--slate-400);border-radius:4px;background:#fff}
+  #sbDashCol .sdChip.sd-pass{border-left-color:var(--pass)} #sbDashCol .sdChip.sd-fail{border-left-color:var(--fail);background:#FEF2F2} #sbDashCol .sdChip.sd-review{border-left-color:var(--warn);background:#FFFBEB} #sbDashCol .sdChip.sdOldC{opacity:.7}
+  #sbDashCol .sdX{border:none;background:none;padding:0;font-size:8pt;color:#475569;cursor:pointer}
+  #sbDashCol .sdMain{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 6px;padding:3px 5px 3px 0;color:var(--ink);text-decoration:none;min-width:0}
+  #sbDashCol .sdMain:hover .sdName{text-decoration:underline} #sbDashCol .sdName{font-weight:600;flex:1 1 auto} #sbDashCol .sdVal{font-variant-numeric:tabular-nums;white-space:nowrap} #sbDashCol .sdSt{font-size:7.5pt;font-weight:700;color:#475569}
+  #sbDashCol .sd-fail .sdSt{color:#991B1B} #sbDashCol .sd-pass .sdSt{color:#065F46} #sbDashCol .sd-review .sdSt{color:#92400E}
+  #sbDashCol .sdList{grid-column:2;margin:0 0 4px;padding:0 4px 0 0;list-style:none;font-size:8.5pt} #sbDashCol .sdList a{text-decoration:none} #sbDashCol .sdList a:hover{text-decoration:underline}
+  #sbDashCol .sdList a.sd-fail{color:#991B1B;font-weight:700} #sbDashCol .sdList a.sd-review{color:#92400E} #sbDashCol .sdList a.sd-pass{color:#065F46} #sbDashCol .sdList a.sd-na,#sbDashCol .sdList a.sd-notrun{color:#64748b} #sbDashCol .sdOldV{font-style:italic}
+  #sbDashCol .sdNote{font-size:8pt;color:#64748b;margin:6px 0}
+  @media print{#sbDashCol{display:none!important}}
 </style>
 </head>
 <body>
@@ -207,6 +242,7 @@
     </div>
   </header>
   <div id="main">
+    <aside id="sbDashCol" aria-label="Check summary"></aside><!-- DASH (2026-11-09): the check summary column, screens 1200 px and wider (ui/dash.js) -->
     <aside id="inputPanel">
       <div class="inTabs" role="tablist" id="inTabs"></div>
       <div id="inPanes"></div>
@@ -538,7 +574,9 @@
   }
   // a tab that calculates in steps (the Analysis tab, the Drawings) shows its own progress; the status clears when the tab is no longer out of date
   function autoWatch(t) { const b = autoBtn(t); if (autoStale(t, b) || /Calculating/.test(($('out').querySelector('.alert:not(.stale)') || {}).textContent || '') || (b && b.disabled)) { setTimeout(() => (ui.otab || 'sec') === t && autoWatch(t), 250); return; } autoMsg(t, ''); }
-  function drawOut() { drawOut0(); autoRun(); }
+  function drawOut() { drawOut0(); autoRun(); if (window.SBDDashUI) window.SBDDashUI.refresh(); }   // DASH: the left check summary follows the project
+  /* gotoOut(tab, gi): an output tab with girder gi selected (as the Girder select of the Girders & plates tab); the Summary tab's links and the left check summary */
+  function gotoOut(t, gi) { if (gi != null && gi !== ui.g && P.girders[gi]) { ui.g = gi; ui.seg = 0; stale = true; drawInputs(); } ui.otab = t; saveUi(); autoNow = true; drawOut(); $('outputPanel').scrollTop = 0; }
   $('bRerun').addEventListener('click', () => { const t = ui.otab || 'sec', b = autoBtn(t); if (!b) return; autoMsg(t, 'Calculating…'); requestAnimationFrame(() => setTimeout(() => { b.click(); autoWatch(t); }, 0)); });
   // a tab's own redraw (a choice on the tab: demand source, girder, options) runs it at once; skipped while a run is pending or running
   new MutationObserver(() => { if (autoBusy || autoPend) return; autoNow = true; autoRun(); }).observe($('out'), { childList: true });
@@ -560,7 +598,7 @@
     /* Summary tab (ui/summary.js, 2026-11-09; display only): runs the modules out of date itself (now: selected now, else after 600 ms of quiet);
        goto(tab, gi): a cell's link opens that output tab with that girder selected (as the Girder select of the Girders & plates tab) */
     if (ui.otab === 'sum') { window.SBDSummaryUI.render($('out'), { P, ui, now: autoNow, open: () => ui.otab === 'sum',
-      goto: (t, gi) => { if (gi != null && gi !== ui.g && P.girders[gi]) { ui.g = gi; ui.seg = 0; stale = true; drawInputs(); } ui.otab = t; saveUi(); autoNow = true; drawOut(); $('outputPanel').scrollTop = 0; },
+      goto: gotoOut,
       report: () => { ui.rpt = ui.rpt || {}; ui.rpt.scope = 'all'; ui.otab = 'rpt'; saveUi(); drawOut(); $('outputPanel').scrollTop = 0; } }); return; }
     if (ui.otab === '3d') { window.SBD3DUI.render($('out'), { P, ui, saveUi }); return; }   // 3D view tab (ui/view3d.js)
     const g = P.girders[ui.g] || P.girders[0], s = g && g.segments[ui.seg];
@@ -615,6 +653,7 @@
     loadAs(r.project, null, null); window.SBDLegacyUI.show(r.summary); });
 
   drawInputs(); calc();
+  if (window.SBDDashUI) window.SBDDashUI.init({ el: $('sbDashCol'), store, getP: () => P, ui: () => ui, goto: gotoOut });   // DASH (2026-11-09)
   { const lc = LIB.getCur(LS);   // which saved project the autosave belongs to (nothing to lose when it is a blank new project)
     if (L.source === 'saved' && lc) { const r = LIB.open(LS, lc); if (r.ok) cur = { id: lc, text: norm(r.project) }; }
     else if (L.source === 'default') cur = { id: null, text: norm(P) };
