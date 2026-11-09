@@ -328,5 +328,8 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
       const r = AD().apply(P, c); ['autodesign', ...AD().APPLY_KEYS].forEach(k => { if (r.project[k] === undefined) delete P[k]; else P[k] = r.project[k]; }); S.R = null; if (ctx.changed) ctx.changed(true); else redraw(); });
     on('#ad_undo', 'click', () => { const Q = AD().undo(P); if (!Q) return; ['autodesign', ...AD().APPLY_KEYS].forEach(k => { if (Q[k] === undefined) delete P[k]; else P[k] = Q[k]; }); if (ctx.changed) ctx.changed(true); else redraw(); });
   }
-  window.SBDAutoDesignUI = { inputs, wire, render, diffFrom, openVars };
+  /* lastWarns(P) (Summary tab, 2026-11-09; display only): the WARNING flags (c.propWarns) of the last Auto design run of this page view that
+     is not applied: [{ i (candidate index), warns: [{ label, r }] }], stale = the project changed since the run; null when there is none */
+  const lastWarns = P => (S.R && !S.running && S.R.cands ? { stale: S.key !== key(P), list: S.R.cands.map((c, i) => ({ i, warns: c.propWarns || [] })).filter(q => q.warns.length) } : null);
+  window.SBDAutoDesignUI = { inputs, wire, render, diffFrom, openVars, lastWarns };
 })();
