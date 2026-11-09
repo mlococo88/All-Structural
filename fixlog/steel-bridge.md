@@ -4460,4 +4460,18 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
   - App behaviour is right: a change event with an empty field means "from skew".
   - Fix: wait for the tab to settle, fill, blur (the browser's own change event), wait for the saved value, settle again.
   - Proof the app saves f_ℓ: 4 of 4 runs "constructibility f_ℓ saved 1.5", read from `sbd2.project.current` and from the input after the re-run.
+
+
+
+## 2026-11-09 — PR: report-search-ux (PR #1273: https://github.com/mlococo88/All-Structural/pull/1273) — list-input observer skips the report viewer (RSX; display only)
+- **Where:** `ui/lists.js`, `start()`, anchor `new MutationObserver(ms =>`.
+  - Before: `new MutationObserver(ms => { if (ms.some(m => m.addedNodes.length)) upgrade(document); }).observe(document.body, { childList: true, subtree: true });`
+  - After: `new MutationObserver(ms => { if (ms.some(m => m.addedNodes.length && !(m.target.closest && m.target.closest('.rp')))) upgrade(document); }).observe(document.body, { childList: true, subtree: true });`
+- **Problem:** the shared report search (RSX, `fixlog/shared-report.md`, same PR) adds `<mark>` nodes inside the report text on each keystroke;
+  every added node made this observer re-scan the whole page (`upgrade(document)`, ~80–90 ms on a 380,000-element report). Nodes added inside
+  the report viewer (`.rp`: marks, the search status, lazy step lists) never hold a list input, so they are skipped. Mounting the report
+  (nodes added to its host, outside `.rp`) and every input tab still upgrade as before.
+- **Governing provision:** none (display only).
+- **Check case:** Report, governing detail, type `flange stress`: before ~100–200 ms per keystroke (callback + next frame); after ~35–90 ms.
+  The list inputs (Bridge layout spans, Girders & plates segments) still bind: `tests/smoke/list-input.mjs` / phone-layout `sbapp` (PR).
 - **Other copies:** none.

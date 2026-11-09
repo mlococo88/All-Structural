@@ -33,7 +33,17 @@ try {
   await p.click('[data-rpact="exp"]'); assert.equal(await p.locator('.rp-doc .rp-closed').count(), 0);
   await p.fill('.rp-q', 'bearing stiffeners'); await p.waitForTimeout(400);
   const vis = await p.evaluate(() => [...document.querySelectorAll('.rp-doc .rp-sub')].filter(x => !x.closest('.rp-hide')).length);
-  assert.ok(vis > 0 && vis < 20, `search shows ${vis} subsections`); await p.fill('.rp-q', ''); await p.waitForTimeout(300);
+  assert.ok(vis > 0 && vis < 20, `search shows ${vis} subsections`);
+  // RSX (2026-11-09): the status counts the marked hits, Enter steps to one (in view, "1 of n"), a word not in the report says so, Esc clears
+  const sq = await p.evaluate(() => ({ st: document.querySelector('.rp-qs').textContent, marks: document.querySelectorAll('.rp-doc mark.rp-hit').length, toc: document.querySelectorAll('.rp-toc a.rp-tochit').length }));
+  assert.ok(/^[\d,]+ match(es)? in \d+ sections?/.test(sq.st) && sq.marks > 0 && sq.toc > 0, JSON.stringify(sq));
+  await p.focus('.rp-q'); await p.keyboard.press('Enter');
+  const sc = await p.evaluate(() => { const c = document.querySelector('.rp-doc .rp-cur'), r = c && c.getBoundingClientRect(); return { st: document.querySelector('.rp-qs').textContent, inView: !!r && r.top >= 0 && r.bottom <= innerHeight }; });
+  assert.ok(/^1 of /.test(sc.st) && sc.inView, JSON.stringify(sc));
+  await p.fill('.rp-q', 'zqxjvw'); await p.waitForTimeout(400);
+  assert.ok(/^No matches for/.test(await p.textContent('.rp-qs')), 'no-match status');
+  await p.focus('.rp-q'); await p.keyboard.press('Escape');
+  assert.deepEqual(await p.evaluate(() => [document.querySelector('.rp-q').value, document.querySelector('.rp-qs').textContent, document.querySelectorAll('.rp-doc mark.rp-hit,.rp-doc .rp-hide').length]), ['', '', 0], 'Esc clears the search');
   // 2. every station: lazy lists
   await p.selectOption('#rp_detail', 'all');
   await p.waitForSelector('.rp-doc details.rp-lz', { timeout: 120000 });
