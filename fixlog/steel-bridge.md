@@ -4397,3 +4397,29 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
 - **Check case:** default project, 1440 px: 11 chips "not run"; Shear chip → Shear & stiffeners tab, G1, station x = 110.01 ft card flashed, chip 0.437 · G1 PASS; Run all → header "FAIL · max D/C 1.229", Governing: Flexure, Strength I, G1: D/C 1.229; Rating chip RF 0.61 · G1 FAIL.
 - **How verified:** `tests/smoke/steel-bridge-dash.mjs` (layout at 1199/1200/1440/1600 px, chips equal the Summary's data, links and flash, out of date, collapse key across a reload, print, 0 console errors); `tests/smoke/steel-bridge-summary.mjs`; `node tests/check-syntax.mjs`; smoke `steel-bridge-*`, `phone-layout`, `project-library`.
 - **Other copies:** none.
+## 2026-11-09 — PR: claude/sb-summary-gfx (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (GFXS) — Summary tab: cross-section and framing plan graphics   [display only; no result or saved-data change]
+- **Engineer:** 2026-11-09: "the Summary output tab must also show the cross-section graphic and the framing plan graphic", reusing the app's own drawing functions, near the top, side by side from about 1200 px and stacked on a phone, each with a link to the tab where it is drawn and edited. This is a follow-up to #1271.
+- **Where:** `ui/summary.js`:
+  - New `xsSvg(P)` and `gfxCard(P)` (anchor `GFXS (2026-11-09`), called in `paint()` after the verdict card (anchor `h += gfxCard(P);`).
+  - The click handler takes `[data-sumin]` and the plan's own `[data-itgo]` links: input tabs, through `ctx.inTab`.
+  - New CSS: `.sum-gfx`, `.sum-g1`, `.sum-gbox`.
+  - `index.html`: the Summary ctx gets `inTab(t)` (selects an input tab).
+- **Drawing functions called (no drawing code copied):**
+  - Cross-section: `SBDDrawings.model(P)` + `SBDDrawings.section(G, D, { k })`, the typical cross-section that `engine/sheets.js` draws on its Drawings sheet. It is previewed with `SBDGraphics.tightSvg` (as the Report's figures), with the drawing scale for a figure about 10 in wide (`scaleFor(width × 1.3, 10)`; the sheet uses 30 in) so its text reads at the figure's size.
+  - Framing plan: `SBDFramingUI.layoutPlan(P)`, the plan of the Bridge layout input tab, with its own link to the Framing & bracing tab.
+- **Links:**
+  - Cross-section: edited on the Cross-section input tab, drawn on the Drawings tab.
+  - Framing plan: edited on the Framing & bracing input tab, drawn on the Bridge layout input tab and the Cross-frames tab.
+- **Layout:**
+  - Two columns at screens of 1200 px and wider; one column below that (stacked; each SVG `max-width:100%`).
+  - At 390 px there is no page-level horizontal scroll and no graphic wider than the window.
+  - Each graphic is on a white box with dark ink (`color-scheme: light`). The app has no dark theme today; the box keeps the drawings legible if a browser or OS forces dark colours.
+  - Print: side by side, `break-inside: avoid`, colours kept.
+- **Also:** while the first run waits after the page opens on the Summary tab, the run status reads "Starting…" instead of "Inputs changed — updating…" (`S.first`).
+- **Decisions (pending engineer review):**
+  - The typical section is drawn with its sheet's general-notes block. That block is part of `section()`, and copying the drawing to leave it out is not allowed by the request.
+  - The framing plan is the Bridge layout tab's (`layoutPlan`), not the Cross-frames output tab's checks.
+- **Formulas, factors, units, code references, saved data:** none changed (§4, §5).
+- **Check case:** default project, Summary tab, 1440 px: "Cross-section and framing plan" card after the verdict, two figures side by side (TYPICAL CROSS-SECTION, 5 girders at 9'-6"; plan with 3 spans, 5 girders). At 390 px they are stacked; page width 390 px.
+- **How verified:** `tests/smoke/steel-bridge-summary.mjs` block 7 (side by side / stacked, links, print, 0 console errors); `node tests/check-syntax.mjs`.
+- **Other copies:** none.

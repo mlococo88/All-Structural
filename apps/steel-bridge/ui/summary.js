@@ -53,6 +53,10 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
 .sum-flash{animation:sumflash 2.2s ease-out 1} @keyframes sumflash{0%,35%{box-shadow:0 0 0 3px #F59E0B;background-color:#FFF7D6}100%{box-shadow:0 0 0 0 rgba(245,158,11,0)}}
 @media (prefers-reduced-motion:reduce){.sum-flash{animation:none;outline:3px solid #F59E0B}}
 @media screen and (max-width:600px){table.sum-ov th{white-space:normal;width:auto;min-width:90px}}
+.sum-gfx{display:grid;grid-template-columns:minmax(0,1fr);gap:12px} @media screen and (min-width:1200px){.sum-gfx{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.sum-g1{margin:0;min-width:0} .sum-g1 figcaption{font-family:var(--font-ui);font-size:8.5pt;color:#475569;margin:0 0 4px} .sum-g1 .note{font-size:8.5pt}
+.sum-gbox{background:#fff;color:#0F172A;border:1px solid #e4e7eb;border-radius:4px;padding:4px;color-scheme:light;overflow:hidden} .sum-gbox svg{display:block;max-width:100%;height:auto}
+@media print{.sum-gfx{grid-template-columns:repeat(2,minmax(0,1fr))} .sum-g1{break-inside:avoid} .sum-gbox{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 @media print{.sum-run button{display:none}}`;
     document.head.appendChild(st);
   }
@@ -64,7 +68,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
   function sync(P) {   // a new project state: the results of the last one are out of date
     const pk = pkOf(P); if (pk === S.pk) return;
     if (S.list.some(G => G && Object.values(G.cells || {}).some(q => q.st !== 'notrun'))) S.prev = S.list;   // DASH: the last results, shown as out of date by the left summary
-    S.pk = pk; S.parts = []; S.list = []; S.secs = null; S.run++; S.busy = false; S.prog = ''; clearTimeout(S.timer);
+    S.first = !S.pk; S.pk = pk; S.parts = []; S.list = []; S.secs = null; S.run++; S.busy = false; S.prog = ''; clearTimeout(S.timer);
     notify();
   }
   function recell(P, gi) { const L = S.list; try { L[gi] = SM().cells(P, gi, S.parts[gi] || {}); } catch (e) { L[gi] = { gi, label: (P.girders[gi] || {}).label || `G${gi + 1}`, cells: {}, warn: ['Summary error: ' + (e && e.message)], err: {} }; } }
@@ -75,7 +79,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
     if (S.busy) return;   // a run in progress covers every module not yet run of this project state
     const list = todo(P, o.mods); P.girders.forEach((g, gi) => { if (!S.list[gi]) recell(P, gi); });
     if (!list.length) { notify(); return; }
-    const run = ++S.run; S.busy = true; S.err = ''; S.t0 = Date.now(); S.prog = o.delay ? 'Inputs changed — updating…' : `Running ${list[0].m.name}, ${S.list[list[0].gi].label} (1/${list.length})…`; draw(); notify();
+    const run = ++S.run; S.busy = true; S.err = ''; S.t0 = Date.now(); S.prog = o.delay ? (S.first ? 'Starting…' : 'Inputs changed — updating…') : `Running ${list[0].m.name}, ${S.list[list[0].gi].label} (1/${list.length})…`; draw(); notify();
     const step = k => {
       if (run !== S.run) return;
       if (pkOf(P) !== S.pk) { S.busy = false; return; }
@@ -170,6 +174,26 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
     const GB = window.SBDTabGfxB, GR = window.SBDGraphics, D = window.SharedDxf; if (!GB || !GR || !D || !Gs || !Gs.gov) return '';
     try { const g = GB.summary({ gov: Gs.gov }, P, { gi: Gs.gi }); return GR.tightSvg ? GR.tightSvg(g.D, { i0: g.i0, i1: g.i1, bg: '#fff', title: g.title, width: '100%' }) : D.toSVG(g.D, { bg: '#fff', width: '100%' }); } catch (e) { return ''; }
   }
+  /* GFXS (2026-11-09, engineer: "the Summary output tab must also show the cross-section graphic and the framing plan graphic"): the app's own
+     drawing functions, called as they are (no drawing code here): the typical cross-section of the Drawings tab (engine/drawings.js
+     model() + section(), as engine/sheets.js draws it on its sheet, previewed with SBDGraphics.tightSvg as the Report's figures) and the
+     framing plan of the Bridge layout input tab (ui/framing.js layoutPlan(P), which also links to the Framing & bracing tab). Display only. */
+  function xsSvg(P) {
+    const DW = window.SBDDrawings, GR = window.SBDGraphics, X = window.SharedDxf; if (!DW || !GR || !X) return '';
+    try { const G = DW.model(P); if (G.errors && G.errors.length) return `<div class="alert">${esc(G.errors.join(' '))}</div>`;
+      // the drawing's scale for a figure about 10 in wide (the Drawings sheet: 30 in), so that its text reads at the figure's size; the geometry is the sheet's
+      const wIn = ((G.ys[G.nb - 1] || 0) + (+G.deck.ohL || 0) + (+G.deck.ohR || 0)) * 12, D = X.drawing({ prefix: 'S-' });
+      DW.section(G, D, { k: DW.scaleFor(wIn * 1.3, 10) }); return GR.tightSvg(D, { bg: '#fff', width: '100%' }); }
+    catch (e) { return `<div class="alert">Cross-section: ${esc(e && e.message)}</div>`; }
+  }
+  function gfxCard(P) {
+    const xs = xsSvg(P), pl = window.SBDFramingUI && window.SBDFramingUI.layoutPlan ? window.SBDFramingUI.layoutPlan(P) : '';
+    if (!xs && !pl) return '';
+    return `<section class="sec" id="sum-gfx"><div class="secHead">Cross-section and framing plan</div><div class="secBody"><div class="sum-gfx">
+      <figure class="sum-g1" id="sum-xs"><figcaption><b>Typical cross-section</b> — edit on the <a href="#" data-sumin="xsec">Cross-section</a> input tab; drawn on the <a href="#" data-sumtab="dwg">Drawings</a> tab (its own sheet), as there.</figcaption><div class="sum-gbox">${xs}</div></figure>
+      <figure class="sum-g1" id="sum-plan"><figcaption><b>Framing plan</b> — edit on the <a href="#" data-sumin="framing">Framing &amp; bracing</a> input tab; drawn on the <a href="#" data-sumin="layout">Bridge layout</a> input tab and the <a href="#" data-sumtab="cf">Cross-frames</a> tab, as there.</figcaption><div class="sum-gbox">${pl}</div></figure>
+    </div></div></section>`;
+  }
   function paint(host, ctx) {
     const P = ctx.P, COLS = SM().COLS, list = P.girders.map((g, gi) => S.list[gi] || { gi, label: g.label || g.id || `G${gi + 1}`, cells: {}, warn: [], err: {} });
     const ov = SM().overall(P, list), n = ov.n, top = ov.gov, done = !todo(P).length;
@@ -189,6 +213,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
       <div class="sum-run">${S.busy ? `<span role="status" aria-live="polite"><span class="spin" aria-hidden="true"></span>${esc(S.prog)}</span>` : `<span role="status" aria-live="polite">${done ? `Up to date${S.secs != null ? ` (last run ${fmt(S.secs, 1)} s)` : ' (shown from the last run of this project state)'}.` : 'Out of date.'}</span>`}
         <button type="button" id="sum_rerun" title="Run every module of every girder again">Re-run all</button>
         <a href="#" id="sum_rpt" title="The Report tab, every girder: the governing ratios of each girder with the work of each girder's report">Report: every girder</a></div></div></section>`;
+    h += gfxCard(P);   // GFXS: near the top, after the verdict
     // project overview
     const gF = ui => Math.min(Math.max(0, +(ui && ui.g) || 0), P.girders.length - 1), fg = figure(P, list[gF(ctx.ui)]);
     h += `<section class="sec" id="sum-project"><div class="secHead">Project overview</div><div class="secBody">${overview(P, list)}
@@ -234,6 +259,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
         if (!S.ctx || !S.ctx.open()) return;
         const a = e.target.closest('[data-sumgo]'); if (a) { e.preventDefault(); const [gi, id] = a.dataset.sumgo.split('|'); gotoCell(+gi, id); return; }
         const w = e.target.closest('[data-sumwk]'); if (w) { e.preventDefault(); S.ctx.goto('an', +w.dataset.sumwk); focus({ step: 'an.eq.DC1steel' }); return; }
+        const ig = e.target.closest('[data-sumin], #sum-plan [data-itgo]'); if (ig) { e.preventDefault(); if (S.ctx.inTab) S.ctx.inTab(ig.dataset.sumin || ig.dataset.itgo); return; }   // GFXS: an input tab
         const t = e.target.closest('[data-sumtab]'); if (t) { e.preventDefault(); S.ctx.goto(t.dataset.sumtab, Math.min(+(S.ctx.ui.g || 0), S.ctx.P.girders.length - 1)); return; }
         if (e.target.id === 'sum_rerun') { start(S.ctx.P, { all: true }); return; }
         if (e.target.id === 'sum_rpt') { e.preventDefault(); if (S.ctx.report) S.ctx.report(); return; }
