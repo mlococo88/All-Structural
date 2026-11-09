@@ -249,7 +249,7 @@
   /* tabOf(path): the input tab that holds an input path (error dots, links). The tab drawn with that data-path when there is one, else these
      rules (paths not drawn now: another girder, a field shown only for another choice, one span of the list). */
   const TAB_RULES = [[/^splices/, 'spl'], [/^(fatigue|studs)/, 'fs'], [/^stiffeners/, 'stf'], [/^crossframes\.wind\b/, 'loads'], [/^(framing|crossframes)\b/, 'framing'],
-    [/^(spans|xs\.skews)\b/, 'layout'], [/^xs\.(ws|overlays|sip|allow|extra|dlMethod|lldf)\b/, 'loads'], [/^(xs|deck)\b/, 'xsec'], [/^(project|ownerRules)\b/, 'proj'], [/^girders\b/, 'gird'], [/^autodesign\b/, 'ad']];
+    [/^(spans|xs\.skews)\b/, 'layout'], [/^(analysis\b|girders\.\d+\.(loadsManual|dfManual|loadsOverride|dfOverride|clOverride)\b)/, 'loads'], [/^xs\.(ws|overlays|sip|allow|extra|dlMethod|lldf)\b/, 'loads'], [/^(xs|deck)\b/, 'xsec'], [/^(project|ownerRules)\b/, 'proj'], [/^girders\b/, 'gird'], [/^autodesign\b/, 'ad']];
   const tabOf = p => { const el = p && document.querySelector(`#inPanes [data-path="${String(p).replace(/["\\]/g, '\\$&')}"]`), pn = el && el.closest('[data-pane]');
     if (pn) return pn.dataset.pane; const r = TAB_RULES.find(q => q[0].test(p || '')); return r ? r[1] : 'mat'; };
   // SB2-A7: the cross-section girder whose dead loads and distribution factors this plate girder takes (girders[i].line; blank = automatic,
@@ -289,7 +289,8 @@
           ${g.segments.map((s, i) => `<tr class="${i === ui.seg ? 'sel' : ''}"><td><button type="button" data-seg="${i}" title="Show this segment's section properties">${i + 1}</button></td>${['x0', 'x1', 'D', 'tw', 'topB', 'topT', 'botB', 'botT'].map(k => `<td><input type="number" step="any" data-path="girders.${ui.g}.segments.${i}.${k}" data-kind="num" value="${esc(s[k])}" aria-label="segment ${i + 1} ${k}"></td>`).join('')}<td><button type="button" data-del="${i}" title="Remove this segment"${g.segments.length < 2 ? ' disabled' : ''}>×</button></td></tr>`).join('')}
           </tbody></table></div><button type="button" id="bAddSeg">Add segment</button><p class="note">Segments are contiguous: each starts where the one before ends. Plate thicknesses may be typed as decimals (0.5625).</p>`),
       framing: window.SBDFramingUI.inputs(P, { num, sel, card, esc }, ui),   // framing.* and crossframes.* (the wind card: Loads tab)
-      loads: xsp.ws + xsp.extra + xsp.dist + window.SBDFramingUI.windCard(P, { num, sel, card, esc }),
+      loads: xsp.ws + xsp.extra + xsp.dist + window.SBDFramingUI.windCard(P, { num, sel, card, esc })
+        + window.SBDAnalysisUI.inputs(P, Math.min(ui.g, P.girders.length - 1)),   // AIN (2026-11-09): the analysis inputs, moved here from the Analysis output tab
       stf: window.SBDShearUI.inputs(P, { num, sel, card, esc }, ui),
       fs: window.SBDFatigueUI.inputs(P, { num, sel, card, esc }, ui),
       spl: window.SBDSplicesUI.inputs(P, { num, sel, card, esc }, ui),
@@ -318,6 +319,7 @@
   $('inPanes').addEventListener('change', e => {
     const el = e.target;
     if (el.id === 'i__g') { ui.g = +el.value; ui.seg = 0; saveUi(); drawInputs(); markStale(); return; }
+    if (window.SBDAnalysisUI.onInputChange(el, P, Math.min(ui.g, P.girders.length - 1))) { changed(true); return; }   // AIN: the analysis inputs (ui/analysis.js)
     if (UL.onChange(el, P)) { changed(true); return; }
     if (el.dataset.kind === 'line') { const g = P.girders[ui.g]; if (el.value === '') delete g.line; else g.line = Number(el.value); changed(false); return; }   // SB2-A7
     if (window.SBDSplicesUI.onChange(el, P)) { changed(true); return; }
@@ -329,6 +331,7 @@
     changed(/segments\.\d+\.x1$/.test(el.dataset.path || '') || el.dataset.kind === 'spans' || /label$/.test(el.dataset.path || '') || /^(ownerRules|xs\.(edges\.[LR]\.type|ws\.mode)|stiffeners\.layout\.(mode|web)|framing\.|crossframes\.|splices\.auto|fatigue\.gam\.fI$)/.test(el.dataset.path || ''));   // fatigue.gam.fI: the studs' read-only γ on the same input tab (SCGAM)
   });
   $('inPanes').addEventListener('click', e => {
+    const og = e.target.closest('[data-gotab]'); if (og) { e.preventDefault(); const b = document.querySelector(`#tabBar [data-otab="${og.dataset.gotab}"]`); if (b) b.click(); return; }   // AIN: a link to an output tab
     const ig = e.target.closest('[data-itgo]'); if (ig) { e.preventDefault(); ui.itab = ig.dataset.itgo; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; return; }   // TABR: a link to another input tab
     if (UL.onClick(e, P)) { changed(true); const od = UL.takeOwnerDefaults(); if (od) showOwnDef(od); return; }
     if (window.SBDShearUI.onClick(e, P, ui)) { changed(true); return; }

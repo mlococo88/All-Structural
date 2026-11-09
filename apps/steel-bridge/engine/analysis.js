@@ -55,6 +55,9 @@
         { girder })) and SBDLoads.girder(result, line): DC1 (deck, haunch, SIP, DC1 rows), DC2, DW, UT, UF, the detail allowance
         xs.allow, and per region the factors gM, gV, fatM, fatV and gDef (spans 's<i>', piers 'p<k>')
      3. girder.loadsManual / girder.dfManual, entered: the same load fields; { gM, gMpier, gV, fatM, fatV, gDef } for every span
+     With the girder's "Override calculated value" on (girder.loadsOverride / girder.dfOverride, added 2026-11-09; see deadOverride), an
+     entered value comes before the module's (2 and 3 swap, field by field); off, the entered values are not used; absent (a project saved
+     before), on exactly when the module gives none and a value is entered, so that the results are those of before.
      The construction live load (CL) is not in the loads module yet: 1 or 3 only. The cross-frame point loads (xf): 1, else, when the project
      has framing and engine/framing.js and engine/crossframes.js are loaded, every frame of the layout on this girder's cross-section line
      (SBDCrossframes.pointLoads: GirderDetail's XF1 weight, W/2 per girder at its own stations), else 3.
@@ -98,13 +101,17 @@
      { DC1wet, DC2, DW, CL, UT, UF, PL, xf, steelAllowPct, src: { field: 'girder' | 'module' | 'manual' | 'none' }, source } */
   function loadsOf(P, g, mod) {
     const A = g.loads || null, M = mod && mod.G ? mod.G : null, B = g.loadsManual || null, o = { src: {} };
-    const fromM = { DC1wet: M && M.DC1, DC2: M && M.DC2, DW: M && M.DW, UT: M && M.UT, UF: M && M.UF };
-    ['DC1wet', 'DC2', 'DW', 'CL', 'UT', 'UF'].forEach(k => {
-      if (A && isNum(A[k])) { o[k] = A[k]; o.src[k] = 'girder'; } else if (M && isNum(fromM[k])) { o[k] = fromM[k]; o.src[k] = 'module'; }
-      else if (B && isNum(B[k])) { o[k] = B[k]; o.src[k] = 'manual'; } else { o[k] = 0; o.src[k] = 'none'; } });
-    // pedestrian load w_PL on this girder (3.6.1.6; the loads module's share of the sidewalk load, LLDF and DLs): explicit, module, entered
-    // (added 2026-10-30, sb-ped-owner PR: before, only read for a warning)
-    if (A && isNum(A.PL)) { o.PL = A.PL; o.src.PL = 'girder'; } else if (M && isNum(M.PL)) { o.PL = M.PL; o.src.PL = 'module'; } else if (B && isNum(B.PL)) { o.PL = B.PL; o.src.PL = 'manual'; } else { o.PL = 0; o.src.PL = 'none'; }
+    const fromM = { DC1wet: M && M.DC1, DC2: M && M.DC2, DW: M && M.DW, UT: M && M.UT, UF: M && M.UF, PL: M && M.PL };
+    // the dead-load override (girder.loadsOverride, added 2026-11-09, Loads tab "Override calculated value"): on, an entered value replaces the
+    // calculated one field by field (a blank field keeps the calculated value); off, the entered values are not used. Absent (a project saved
+    // before): on exactly when the loads module gives none and a value is entered, i.e. the entered values are used where they were before.
+    const ov = deadOverride(g, M);
+    o.override = ov;
+    ['DC1wet', 'DC2', 'DW', 'UT', 'UF', 'PL'].forEach(k => {
+      if (A && isNum(A[k])) { o[k] = A[k]; o.src[k] = 'girder'; } else if (ov && B && isNum(B[k])) { o[k] = B[k]; o.src[k] = 'manual'; }
+      else if (M && isNum(fromM[k])) { o[k] = fromM[k]; o.src[k] = 'module'; } else { o[k] = 0; o.src[k] = 'none'; } });
+    // construction live load: not in the loads module; explicit, else entered (as before)
+    if (A && isNum(A.CL)) { o.CL = A.CL; o.src.CL = 'girder'; } else if (B && isNum(B.CL)) { o.CL = B.CL; o.src.CL = 'manual'; } else { o.CL = 0; o.src.CL = 'none'; }
     // cross-frame point loads (XF1): explicit girder loads, else the framing and cross-frame weight (engine/framing.js, engine/crossframes.js;
     // added 2026-10-29 with the cross-frames PR, SB2-A6), else entered
     const CFm = !(A && Array.isArray(A.xf)) && P.framing && window.SBDCrossframes && window.SBDFraming ? window.SBDCrossframes.pointLoads(P, (P.girders || []).indexOf(g)) : null;
@@ -112,9 +119,15 @@
     o.xf = xf.filter(q => q && isNum(q.x) && isNum(q.P)).map(q => ({ x: q.x, P: q.P })); o.src.xf = A && Array.isArray(A.xf) ? 'girder' : CFm ? 'module' : B && Array.isArray(B.xf) ? 'manual' : 'none';
     if (CFm) o.xfInfo = { line: CFm.line, tot: CFm.tot, n: CFm.pts.length, kind: CFm.X.kind, allow: CFm.X.allow };
     o.steelAllowPct = A && isNum(A.steelAllowPct) ? A.steelAllowPct : M && isNum(mod.allow) ? mod.allow : settings(P).steelAllowPct;
-    o.source = A ? (A.source || 'girder loads') : M ? `loads module, cross-section girder G${mod.j + 1}` : B ? 'entered (manual)' : 'none entered';
+    o.source = A ? (A.source || 'girder loads') : M ? `loads module, cross-section girder G${mod.j + 1}${ov && ['DC1wet', 'DC2', 'DW', 'UT', 'UF', 'PL'].some(k => o.src[k] === 'manual') ? ', with entered overrides' : ''}` : B && g.loadsOverride !== false ? 'entered (manual)' : 'none entered';
     return o;
   }
+  /* deadOverride(g, M) / dfOverride(g, modOk): is the girder's "Override calculated value" on for its dead loads / distribution factors
+     (added 2026-11-09)? The saved flag (girder.loadsOverride / girder.dfOverride, true | false) when there is one; absent (every project
+     saved before): on when the loads module gives none (M / modOk false) and a value is entered, so such a project computes as before. */
+  const DEAD_K = ['DC1wet', 'DC2', 'DW', 'UT', 'UF', 'PL'], DF_K = ['gM', 'gMpier', 'gV', 'fatM', 'fatV', 'gDef'];
+  function deadOverride(g, M) { if (typeof g.loadsOverride === 'boolean') return g.loadsOverride; const B = g.loadsManual || {}; return !M && DEAD_K.some(k => isNum(B[k])); }
+  function dfOverride(g, modOk) { if (typeof g.dfOverride === 'boolean') return g.dfOverride; const B = g.dfManual || {}; return !modOk && DF_K.some(k => isNum(B[k])); }
   /* dfOf(project, g, ns, mod): distribution factors per span and pier (precedence in the header).
      { spans: [{ gM, gV, fatM, fatV, gDef }], piers: [{ gM }], src, manual } */
   function dfOf(P, g, ns, mod) {
@@ -133,10 +146,12 @@
     return { spans, piers, src, manual: false, pulled: true, base: B.src };
   }
   function dfBase(P, g, ns, mod) {
-    const D = g.df && Array.isArray(g.df.spans) && g.df.spans.length >= ns ? g.df : null, Mn = g.dfManual || {};
+    const D = g.df && Array.isArray(g.df.spans) && g.df.spans.length >= ns ? g.df : null;
+    const rgOk = mod && mod.R && mod.R.regions && [...Array(ns)].every((_, i) => mod.R.regions.some(r => r.id === 's' + i)), ov = dfOverride(g, !!rgOk);
+    const Mn = ov || (!rgOk && typeof g.dfOverride !== 'boolean') ? g.dfManual || {} : {};   // entered factors: used only with the override on (absent flag: as before)
     const man = k => isNum(Mn[k]) && Mn[k] > 0 ? Mn[k] : 1;
     if (D) {
-      const gDef = isNum(D.gDef) ? D.gDef : man('gDef');
+      const M0 = g.dfManual || {}, gDef = isNum(D.gDef) ? D.gDef : isNum(M0.gDef) && M0.gDef > 0 ? M0.gDef : 1;   // explicit factors: the entered g deflection as before
       const spans = D.spans.slice(0, ns).map(s => ({ gM: s.gM, gV: s.gV, fatM: s.fatM, fatV: s.fatV, gDef: isNum(s.gDef) ? s.gDef : gDef }));
       const piers = [...Array(Math.max(0, ns - 1))].map((_, k) => { const q = (D.piers || [])[k]; return { gM: q && isNum(q.gM) ? q.gM : spans[k].gM }; });
       return { spans, piers, src: D.source || 'girder factors', manual: false };
@@ -144,9 +159,12 @@
     if (mod && mod.R && mod.R.regions) {
       const rg = id => mod.R.regions.find(r => r.id === id), j = mod.j;
       if ([...Array(ns)].every((_, i) => rg('s' + i))) {
-        const spans = [...Array(ns)].map((_, i) => { const r = rg('s' + i), m = r.members[j]; return { gM: m.gM, gV: m.gV, fatM: m.fatM, fatV: m.fatV, gDef: r.gDef }; });
-        const piers = [...Array(Math.max(0, ns - 1))].map((_, k) => { const r = rg('p' + (k + 1)); return { gM: r ? r.members[j].gM : spans[k].gM }; });
-        return { spans, piers, src: `loads module (LLDF), cross-section girder G${j + 1}`, manual: false };
+        // override on (2026-11-09): an entered factor (> 0) replaces the module's for every span; a blank one keeps the module's; the pier
+        // g moment: entered, else the entered span g moment, else the module's (the entry's "blank = spans")
+        const e = k => ov && isNum(Mn[k]) && Mn[k] > 0 ? Mn[k] : null, used = ov && DF_K.some(k => e(k) != null);
+        const spans = [...Array(ns)].map((_, i) => { const r = rg('s' + i), m = r.members[j]; return { gM: e('gM') ?? m.gM, gV: e('gV') ?? m.gV, fatM: e('fatM') ?? m.fatM, fatV: e('fatV') ?? m.fatV, gDef: e('gDef') ?? r.gDef }; });
+        const piers = [...Array(Math.max(0, ns - 1))].map((_, k) => { const r = rg('p' + (k + 1)); return { gM: e('gMpier') ?? e('gM') ?? (r ? r.members[j].gM : spans[k].gM) }; });
+        return { spans, piers, src: `loads module (LLDF), cross-section girder G${j + 1}${used ? ', with entered overrides' : ''}`, manual: false, override: used };
       }
     }
     const sp = { gM: man('gM'), gV: man('gV'), fatM: man('fatM'), fatV: man('fatV'), gDef: man('gDef') };
@@ -164,7 +182,7 @@
   function deflOwner(P, g, S) {
     const O = window.SBDOwners, own = P.ownerRules && P.ownerRules.owner, r = O && own ? O.rule(own, 'defl.ll') : null; if (!r) return null;
     const xs = P.xs || (window.SBDModel && window.SBDModel.defaultXs ? window.SBDModel.defaultXs(P) : null), sw = (xs && xs.sidewalks) || {}, ov = S && S.deflSidewalk, on = ov === 'yes' ? true : ov === 'no' ? false : ['L', 'R'].some(k => sw[k] && +sw[k].w > 0);
-    const swHow = ov === 'yes' || ov === 'no' ? 'entered (Analysis settings)' : 'cross-section sidewalks';
+    const swHow = ov === 'yes' || ov === 'no' ? 'entered (Loads tab, Analysis settings)' : 'cross-section sidewalks';
     const v = r.value, req = on ? v.ped : v.veh, uR = +S.deflLimit > 0 ? +S.deflLimit : 0, rq = Math.max(req, uR), pref = !on && v.pref ? Math.max(v.pref, rq) : 0;
     const nb = xs ? Math.round(xs.nb) : 0, j = lineOf(P, g), ext = j === 0 || j === nb - 1;
     return { rule: r, cite: O.cite(r), sw: on, swHow, req, uR, rq, pref, rep: !!(v.intOnly && ext), line: j, ext };
@@ -225,9 +243,9 @@
 
     const LD = loadsOf(P, g, mod), DF = dfOf(P, g, ns, mod), warnings = [];
     if (mod && mod.errors) warnings.push(`Loads module: ${mod.errors[0]} The entered loads and factors are used.`);
-    if (LD.source === 'none entered') warnings.push('No dead loads for this girder: DC1 wet deck, DC2, DW and construction LL are 0 unless entered under Analysis settings. Only the girder steel is computed here.');
+    if (LD.source === 'none entered') warnings.push('No dead loads for this girder: DC1 wet deck, DC2, DW and construction LL are 0 unless entered on the Loads tab (Override calculated value). Only the girder steel is computed here.');
     if (DF.manual) warnings.push(`Live load distribution factors: ${DF.src}. LL+IM is per girder only with this girder's factors.`);
-    if (LD.src.CL === 'none') warnings.push('Construction live load not entered (Analysis settings): M_CL is 0.');
+    if (LD.src.CL === 'none') warnings.push('Construction live load not entered (Loads tab): M_CL is 0.');
     const allow = LD.steelAllowPct, plf = isNum(opt.steelPlf) ? opt.steelPlf : STEEL_PLF, wSteel = segs.map(s => s.As * plf / 1000 * (1 + allow / 100));
     const distSteel = segs.map((s, i) => [s.x0, s.x1, wSteel[i]]);
     const xfP = LD.xf.map(q => [q.x, q.P]);
@@ -445,10 +463,10 @@
     if (!L.length || !L.every(v => v > 0)) why.push('Span lengths are missing or not positive.');
     if (!why.length) {
       const S = settings(P);
-      if (!(S.im >= 0) || !(S.imf >= 0) || !(S.deflLimit > 0) || !['none', '15', 'dl'].includes(S.crack)) why.push('The analysis settings are not valid (Analysis tab).');
+      if (!(S.im >= 0) || !(S.imf >= 0) || !(S.deflLimit > 0) || !['none', '15', 'dl'].includes(S.crack)) why.push('The analysis settings are not valid (Loads tab).');
       const mod = g.loads && g.df ? null : moduleOf(P, gi), LD = loadsOf(P, g, mod), DF = dfOf(P, g, L.length, mod);
-      if (LD.source === 'none entered') why.push('No dead loads for this girder (Loads & LLDF, or Analysis settings).');
-      if (DF.manual && /^none entered/.test(DF.src)) why.push('No live-load distribution factors for this girder (Loads & LLDF, or Analysis settings).');
+      if (LD.source === 'none entered') why.push('No dead loads for this girder (Loads & LLDF, or entered on the Loads tab).');
+      if (DF.manual && /^none entered/.test(DF.src)) why.push('No live-load distribution factors for this girder (Loads & LLDF, or entered on the Loads tab).');
     }
     const v = { ok: !why.length, why };
     if (k) readyMemo = { k, v };
@@ -465,5 +483,5 @@
       R: (R.llR || []).map((r, k) => ({ max: r.max + (Q ? Q.R[k].max : 0), min: r.min + (Q ? Q.R[k].min : 0) })), pl: Q };
   }
 
-  window.SBDAnalysis = { DEF, STEEL_PLF, grid, settings, lineOf, deflOwner, moduleOf, loadsOf, dfOf, sbOf, analyzeGirder, pourRegions, ready, llPL };
+  window.SBDAnalysis = { DEF, STEEL_PLF, grid, settings, lineOf, deflOwner, moduleOf, loadsOf, dfOf, deadOverride, dfOverride, sbOf, analyzeGirder, pourRegions, ready, llPL };
 })();
