@@ -248,7 +248,7 @@
     if (R.SCC) c.push({ k: 'sc', i: 0, r: R.scGov ? R.scGov.it.r : 0 });
     return c.reduce((a, b) => (!a || b.r > a.r ? b : a), null) || { k: 'sc', i: 0 };
   }
-  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`;
+  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>`;
   const A = '10th Ed. Art. ', OPEN = new Set(), TPX = (...ks) => ks.map(k => window.SBDFlexureUI.TP[k]).filter(Boolean);
 
   /* ---------- topics of the worked steps (presentation spec A, 2026-10-31; as ui/shear.js): fatigue details, GS17 flanges, shear connectors; the flexure work they quote uses the topics of the Flexure tab ---------- */

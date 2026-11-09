@@ -220,7 +220,7 @@
   }
   const stepsHtml = list => `<ol class="steps">${list.map(s => stepLi(s, list)).join('')}</ol>`;
   /* one worked step; a "§id" in its note (engine/shear.js "See §p1.Vn.") becomes a link to that step of the same list (CLAUDE.md §6) */
-  const stepLi = (s, list) => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${noteHtml(s.note, list)}</div>` : ''}</li>`;
+  const stepLi = (s, list) => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${noteHtml(s.note, list)}</div>` : ''}</li>`;
   const noteHtml = (t, list) => esc(t).replace(/§([A-Za-z](?:[\w.]*\w)?)/g, (m, id) => { const q = (list || []).find(x => x.id === id || String(x.id).endsWith('.' + id)); return q ? `<a class="wk" href="#st-${esc(q.id)}" data-step="${esc(q.id)}">§${esc(id)}</a>` : m; });
 
   /* ---------- topics of the worked steps (presentation spec A, trial on this tab, 2026-10-31) ----------

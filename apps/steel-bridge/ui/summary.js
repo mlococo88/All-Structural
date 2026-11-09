@@ -27,7 +27,7 @@
   /* text of a check (report notation: $tex$, f_bu subscripts) as HTML, with SharedSteps' built-in renderer (not KaTeX: small cells) */
   const lite = t => { const w = window, K = w.katex; let h; try { if (K) w.katex = undefined; h = window.SharedSteps.toHTML(t); } catch (e) { h = esc(t); } finally { if (K) w.katex = K; } return h; };
   const txt = t => String(t == null ? '' : t).split(/(\$[^$]+\$)/).map(p => (p.length > 2 && p[0] === '$' && p[p.length - 1] === '$' ? lite(p.slice(1, -1))
-    : esc(p).replace(/_\{?([A-Za-z0-9,]+)\}?/g, '<sub>$1</sub>'))).join('');   // as the tabs' tt()
+    : esc(p).replace(/_\{?([A-Za-z0-9ℓ,]+)\}?/g, '<sub>$1</sub>'))).join('');   // as the tabs' tt() (QA2: ℓ too, f_ℓ, as QAO did in the tabs)
 
   function css() {
     if (document.getElementById('sbsum-css')) return;
@@ -38,7 +38,7 @@
 .sum-badge.fail{color:#991B1B;background:#FEF2F2;border-color:var(--fail)} .sum-badge.pass{color:#065F46;background:#ECFDF5;border-color:var(--pass)} .sum-badge.review{color:#92400E;background:#FFFBEB;border-color:var(--warn)} .sum-badge.none{color:#475569;background:var(--slate-100);border-color:var(--slate-400)}
 .sum-cnt{display:inline-flex;gap:5px;flex-wrap:wrap} .sum-cnt span{font-size:8.5pt;font-weight:700;padding:1px 6px;border:1px solid;border-radius:3px;white-space:nowrap}
 .sum-cnt .c-fail{color:#991B1B;background:#FEF2F2;border-color:var(--fail)} .sum-cnt .c-review{color:#92400E;background:#FFFBEB;border-color:var(--warn)} .sum-cnt .c-pass{color:#065F46;background:#ECFDF5;border-color:var(--pass)} .sum-cnt .c-na{color:#475569;background:var(--slate-100);border-color:var(--slate-400)}
-.sum-gov{margin:8px 0 2px;font-size:10pt} .sum-run{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px;font-family:var(--font-ui);font-size:9pt;color:#475569}
+.sum-gov{margin:8px 0 2px;font-size:10pt} .sum-gov .sum-low{display:block;margin-top:3px} .sum-run{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px;font-family:var(--font-ui);font-size:9pt;color:#475569}
 .sum-run .spin{display:inline-block;width:12px;height:12px;border:2px solid #CBD5E1;border-top-color:var(--color-primary);border-radius:50%;animation:sbspin .8s linear infinite;vertical-align:-2px;margin-right:6px}
 table.sum-tbl{width:auto;min-width:100%} table.sum-tbl th{font-family:var(--font-ui);font-size:8pt;font-weight:600;line-height:1.15;vertical-align:bottom} table.sum-tbl td{font-family:var(--font-ui);font-size:9pt;white-space:nowrap}
 table.sum-tbl td.s-pass{background:#ECFDF5} table.sum-tbl td.s-fail{background:#FEE2E2;font-weight:700} table.sum-tbl td.s-review{background:#FEF3C7} table.sum-tbl td.s-na,table.sum-tbl td.s-notrun{color:#64748b;background:#F8FAFC}
@@ -146,9 +146,11 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
   }
 
   /* ---------- drawing ---------- */
-  const vTxt = (c, col) => !c || c.st === 'notrun' ? 'not run' : c.st === 'na' ? 'n/a' : col.rf ? (isFinite(c.rf) ? fmt(c.rf, 2) : '—') : (isFinite(c.r) ? fmt(c.r, 3) : 'NaN');
+  // QA2 (2026-11-09): a ratio that is not a number shows ∞ (infinite) or — (not a number), the reason in the cell's tooltip; still counted REVIEW (report/summary.js, unchanged)
+  const vTxt = (c, col) => !c || c.st === 'notrun' ? 'not run' : c.st === 'na' ? 'n/a' : col.rf ? (isFinite(c.rf) ? fmt(c.rf, 2) : '—') : (isFinite(c.r) ? fmt(c.r, 3) : c.r === Infinity ? '∞' : '—');
   const cellHtml = (G, col, k0) => { const c = G.cells[col.id] || { st: 'notrun' };
-    const tip = c.st === 'na' ? c.why : c.st === 'notrun' ? 'Not run yet: click to run' : `${G.label}: ${c.check} — ${c.loc}${c.nWarn ? ` (${c.nWarn} warning item(s) on the tab)` : ''}`;
+    const nn = c.st !== 'na' && c.st !== 'notrun' && !col.rf && c.r != null && !isFinite(c.r) ? `${c.r === Infinity ? 'Infinite ratio' : 'Ratio not a number'}: the check could not be evaluated (counted as REVIEW; see its tab). ` : '';
+    const tip = c.st === 'na' ? c.why : c.st === 'notrun' ? 'Not run yet: click to run' : `${nn}${G.label}: ${c.check} — ${c.loc}${c.nWarn ? ` (${c.nWarn} warning item(s) on the tab)` : ''}`;
     return `<td class="s-${c.st}${k0 ? ' g0' : ''}" title="${esc(String(tip || '').replace(/\$|\{\}|[{}]|\\/g, ''))}"><a href="#" data-sumgo="${G.gi}|${col.id}">${vTxt(c, col)}</a></td>`; };
   function overview(P, list) {
     const M = window.SBDModel, G = M.GRADES, m = P.materials, d = P.deck, xs = P.xs || {}, U = window.SharedUnits, AN = window.SBDAnalysis;
@@ -165,7 +167,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
       ${kv('Plate girders designed', P.girders.map(g => `${esc(g.label || g.id)} (${esc(g.position)}${AN ? `, loads of G${AN.lineOf(P, g) + 1}` : ''})`).join(', '))}
       ${kv('Steel (A709)', `top ${esc(m.steel.top)}, bottom ${esc(m.steel.bot)}, web ${esc(m.steel.web)} (F<sub>y</sub> ${G[m.steel.top].Fy} / ${G[m.steel.bot].Fy} / ${G[m.steel.web].Fy} ksi)`)}
       ${kv('Deck', `${d.composite === false ? 'noncomposite' : 'composite'}, t<sub>s</sub> ${U.fmt(d.ts, 2)} in (total ${U.fmt(d.tdeck, 2)} in), haunch ${U.fmt(d.haunch, 2)} in, f′<sub>c</sub> ${U.fmt(m.concrete.fc, 2)} ksi`)}
-      ${kv('Owner', `${esc(M.clientName ? M.clientName(P) || '—' : '—')}; load rules ${esc(own)}`)}
+      ${kv('Owner', (() => { const cn = M.clientName ? M.clientName(P) : ''; return cn ? `${esc(cn)}; load rules ${esc(own)}` : `none entered; load rules ${esc(own)}`; })())}
       ${kv('Girder steel (DC1, with detail allowance)', wts.map(q => `${esc(q.G.label)} ${q.w != null ? U.fmt(q.w, 1) + ' kip ' + wk(q.G.gi) : 'not run'}`).join('; ') + (wAll != null && list.length > 1 ? `; total ${U.fmt(wAll, 1)} kip` : ''))}
     </tbody></table></div><p class="note">Girder steel: Σw<sub>s</sub>ℓ of each plate girder from its analysis (the plates × 490/144 lb/ft per in² × (1 + detail allowance)), as worked in the Analysis tab's DC1 equilibrium step (§). ${list.length > 1 ? 'The total is the sum of the plate girders listed.' : ''}${P.girders.length < (xs.nb || 0) ? ` The project has ${P.girders.length} plate girder(s) for ${xs.nb} girder lines.` : ''}</p>`;
     return h;
@@ -201,8 +203,8 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
     const bcls = verdict === 'FAIL' ? 'fail' : verdict === 'PASS' ? 'pass' : verdict === 'REVIEW' ? 'review' : 'none';
     const link = (G, col, c, t) => `<a href="#" data-sumgo="${G.gi}|${col.id}">${t}</a>`;
     const govTxt = top ? `<b>Governing:</b> ${esc(top.c.head)}, girder ${esc(top.G.label)}, ${txt(top.q.loc)}: ${txt(top.q.check)} — ${link(top.G, top.c, top.q, `${top.c.rf ? 'RF ' + fmt(top.q.rf, 2) : 'D/C ' + (isFinite(top.q.r) ? fmt(top.q.r, 3) : 'not a number')}`)}` : 'No check has run yet.';
-    const nanTxt = ov.nan.length ? ` <span class="note"><b>Not evaluated</b> (ratio not a number, REVIEW): ${ov.nan.map(z => `${esc(z.c.head)}, ${esc(z.G.label)} ${link(z.G, z.c, z.q, txt(z.q.loc))}`).join('; ')}.</span>` : '';
-    const low = ov.low && ov.low !== top ? ` <span class="note">Lowest rating factor: ${esc(ov.low.c.head.replace('Rating, ', ''))} ${link(ov.low.G, ov.low.c, ov.low.q, fmt(ov.low.q.rf, 2))} (${esc(ov.low.G.label)}, ${txt(ov.low.q.loc)}).</span>` : '';
+    const nanTxt = ov.nan.length ? `<span class="sum-low"><b>Not evaluated</b> (ratio not a number, REVIEW): ${ov.nan.map(z => `${esc(z.c.head)}, ${esc(z.G.label)} ${link(z.G, z.c, z.q, txt(z.q.loc))}`).join('; ')}.</span>` : '';
+    const low = ov.low && ov.low !== top ? `<span class="sum-low"><b>Lowest rating factor:</b> ${esc(ov.low.c.head.replace('Rating, ', ''))} ${link(ov.low.G, ov.low.c, ov.low.q, fmt(ov.low.q.rf, 2))} (${esc(ov.low.G.label)}, ${txt(ov.low.q.loc)}).</span>` : '';
     const AD = window.SBDAutoDesignUI && window.SBDAutoDesignUI.lastWarns ? window.SBDAutoDesignUI.lastWarns(P) : null;
     const cdTxt = (() => { const CD = window.SBDCustomDemands, ks = CD ? ['flex', 'shear', 'cn', 'fat', 'rt', 'spl', 'wt'].filter(k => CD.srcGet(P, k) === 'custom') : [];
       return ks.length ? `Custom (entered) demands where chosen on a tab: ${ks.map(k => esc(CD.SPECS[k].name)).join(', ')}; this project's analysis for the rest.` : "this project's analysis (Analysis tab) for every module."; })();

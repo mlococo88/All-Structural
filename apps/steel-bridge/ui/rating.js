@@ -164,7 +164,7 @@
     host.querySelectorAll('[data-rtgo]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); S.sel = +a.dataset.rtgo; redraw(); const t = host.querySelector('#rt-steps'); if (t) t.scrollIntoView({ block: 'start' }); }));
     if (S.R && !stale && !S.err && window.SBDTabGfxBUI) window.SBDTabGfxBUI.rating(host, ctx, S.R, S.sel, v => { S.sel = v.i; redraw(); });   // the graphic (ui/tabgraphics-b.js): a click selects that station's row
   }
-  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`;
+  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>`;
   const A = '10th Ed. Art. ', OPEN = new Set(), TPX = (...ks) => ks.map(k => window.SBDFlexureUI.TP[k]).filter(Boolean);
 
   /* ---------- topics of the worked steps (presentation spec A, 2026-10-31; as ui/shear.js): the rating factor from its load effects and capacity; the capacity work uses the Flexure / Shear topics ---------- */

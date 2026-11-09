@@ -133,7 +133,7 @@ test('Sheets: five hand-off payloads (each with its own cross-section), every sh
     const { G, B } = checkSet(P, f);
     // studs: per girder and zone ⌊L_own·12/p + 1⌋ × 3 (zones at the girder's own stations)
     const n = G.girders.reduce((a, g) => a + [[0, 30, 9], [30, 360, 12]].reduce((b, [x1, x2, p]) => b + Math.floor((FRM.toG(G.FR, g.i, G.sup, x2) - FRM.toG(G.FR, g.i, G.sup, x1)) * 12 / p + 1) * 3, 0), 0);
-    assert.equal(B.Q.rows.find(r => r[0] === 'SHEAR STUDS')[1], String(n), `${f}: studs`);
+    assert.equal(B.Q.rows.find(r => r[0] === 'SHEAR STUDS')[1], n.toLocaleString('en-US'), `${f}: studs`);   // QA2: thousands separators
   }
   console.log(`       sheets vs model: ${stats.cases} projects, ${stats.sheets} sheets; ${stats.bolts} splice bolts, ${stats.splPl} plan splice plates, ${stats.env} envelope points, ${stats.cam} camber points; largest coordinate difference ${stats.worst.toExponential(2)} in; ezdxf opened ${stats.ez} files with no audit error`);
 });
@@ -149,7 +149,7 @@ test('Hand check: built-in project sheets (FS1 bolts, weld quantities, plan spli
   // web 11 rows x 2 columns = 22 per side, 44; 24 + 32 + 44 = 100 at FS1; the quantities sum the 4 splice designs of the one plate girder
   // over the 5 girder lines (2000 for this project)
   assert.deepEqual([nf('top'), nf('bot'), 2 * F.web.bolts.length], [24, 32, 44]);
-  assert.equal(B.Q.rows.find(r => r[0] === 'H.S. BOLTS AT FIELD SPLICES')[1], '2000'); assert.equal('2000', String(5 * RS.pg[0].spl.list.reduce((a, s) => a + ['top', 'bot'].reduce((b, f) => b + 4 * s.R.fl[f].nr * s.R.fl[f].nl, 0) + 2 * s.R.web.bolts.length, 0)));
+  assert.equal(B.Q.rows.find(r => r[0] === 'H.S. BOLTS AT FIELD SPLICES')[1], '2,000'); assert.equal('2000', String(5 * RS.pg[0].spl.list.reduce((a, s) => a + ['top', 'bot'].reduce((b, f) => b + 4 * s.R.fl[f].nr * s.R.fl[f].nl, 0) + 2 * s.R.web.bolts.length, 0)));
   console.log(`       FS1: top ${F.fl.top.nr} rows x ${F.fl.top.nl} lines = ${nf('top')} bolts, bottom ${nf('bot')}, web 2 x ${F.web.bolts.length}; L_pl top ${F.fl.top.Lpl} in, b_o ${F.fl.top.bo} in`);
   // weld quantities: flange-to-web 5/16 in (Table 6.13.3.4-1: thicker part > 3/4 in) on every segment: 4 lines x 5 x 360 ft = 7200 ft =
   // 86,400 in; weld metal w^2/2 x L x 490/1728 = 0.048828 x 86,400 x 0.283565 = 1196.3 lb

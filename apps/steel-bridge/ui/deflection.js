@@ -109,7 +109,7 @@
   const isDefl = s => /^an\.(defl\.|camber)/.test(s.id);
   function stepsHtml(R) {
     const list = R.steps.filter(isDefl), G = AUI() && AUI().groups ? AUI().groups('x', list) : null;
-    const item = q => `<li id="st-${esc(q.id)}"${q.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(q.label)}${q.ref ? `<span class="ref">${esc(q.ref)}</span>` : ''}</div><div>${ST().line(q, true)}</div>${q.note ? `<div class="nt">${esc(q.note)}</div>` : ''}</li>`;
+    const item = q => `<li id="st-${esc(q.id)}"${q.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(q.label)}${q.ref ? `<span class="ref">${esc(q.ref)}</span>` : ''}</div><div>${ST().line(q, true)}</div>${q.note ? `<div class="nt">${window.SBDSub.html(q.note)}</div>` : ''}</li>`;
     return card('Worked steps', `<p class="note">AASHTO LRFD 10th Ed. (2024). The engine's own steps (the same ids as before; the analysis' other steps are on the <a href="#" data-gotab="an">Analysis tab</a>: the girder steel weight, the cracked zones, the stiffness of each segment).</p>${G ? ST().groupsHTML(G, { open: OPEN, item }) : `<ul class="steps">${list.map(item).join('')}</ul>`}`, 'df-steps');
   }
 

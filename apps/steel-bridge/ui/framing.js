@@ -13,6 +13,9 @@
   'use strict';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fmt = (x, d) => window.SharedUnits.fmt(x, d);
+  // QA2 (2026-11-09): the check table's large values (the CF8 stiffnesses, kip-in/rad) as whole numbers with thousands separators, as the item text (16,528);
+  // an infinite capacity (β_sec of a deep cross-frame) as ∞, not the next cell (the demand)
+  const big = x => Math.abs(x) >= 10000 ? window.SharedUnits.fmtInt(x) : fmt(x, 2);
   const cls = r => !isFinite(r) ? '' : r > 1 + 1e-9 ? 'fx-ng' : r >= 0.9 ? 'fx-hi' : 'fx-ok';
   const S = { key: '', R: null, sel: null };
 
@@ -125,7 +128,7 @@
     const fl = FRM.flSkew(L.m.skews, ext, P.framing), XF = CF.pointLoads(P, gi, { L }), br = FRM.girderBraces(P, gi, L);
     return { L, I, R, C, fl, XF, br, line, G, A };
   }
-  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`;
+  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>`;
   const A = '10th Ed. Art. ', OPEN = new Set(), TPX = (...ks) => ks.map(k => window.SBDFlexureUI.TP[k]).filter(Boolean);
 
   /* ---------- topics of the worked steps (presentation spec A, 2026-10-31; as ui/shear.js): framing layout, wind, torsional bracing, then each cross-frame member ---------- */
@@ -178,7 +181,7 @@
       ${XF ? `<details><summary class="note">Point loads (x ft : P kip)</summary><p class="note">${XF.pts.map(q => `${fmt(q.x, 2)} : ${fmt(q.P, 3)}${q.end ? ' (bearing line)' : ''}`).join('; ')}</p></details>` : ''}</div></section>`;
     // checks
     if (C) h += `<section class="sec"><div class="secHead">Checks (CF1 to CF11${C.some(c => c.id === 'CFD') ? ', CFD, CFE' : ''})</div><div class="secBody"><div class="tscroll"><table class="tbl"><thead><tr><th>Check</th><th class="lft">Item</th><th>Demand</th><th>Resistance / limit</th><th>Ratio</th><th>Status</th><th></th></tr></thead><tbody>
-      ${C.map(c => c.items.length ? c.items.map((it, j) => `<tr>${j === 0 ? `<td rowspan="${c.items.length}" title="${esc(c.ref)}"><b>${esc(c.id)}</b><br><span class="note">${esc(c.title)}</span></td>` : ''}<td class="lft">${esc(it.loc)}</td><td>${isFinite(it.demand) ? fmt(it.demand, 2) : esc((it.cells || [])[0] || '')}</td><td>${isFinite(it.capacity) ? fmt(it.capacity, 2) : esc((it.cells || [])[1] || '')}</td><td class="${cls(it.r)}">${isFinite(it.r) ? fmt(it.r, 3) : '—'}</td><td class="${it.st === 'fail' ? 'fx-ng' : it.st === 'warn' ? 'fx-hi' : it.st === 'na' ? 'fx-na' : 'fx-ok'}">${stName(it.st)}</td><td>${wk(it.step)}</td></tr>`).join('')
+      ${C.map(c => c.items.length ? c.items.map((it, j) => `<tr>${j === 0 ? `<td rowspan="${c.items.length}" title="${esc(c.ref)}"><b>${esc(c.id)}</b><br><span class="note">${esc(c.title)}</span></td>` : ''}<td class="lft">${esc(it.loc)}</td><td>${isFinite(it.demand) ? big(it.demand) : esc((it.cells || [])[0] || '')}</td><td>${isFinite(it.capacity) ? big(it.capacity) : it.capacity === Infinity ? '∞' : esc((it.cells || [])[1] || '')}</td><td class="${cls(it.r)}">${isFinite(it.r) ? fmt(it.r, 3) : '—'}</td><td class="${it.st === 'fail' ? 'fx-ng' : it.st === 'warn' ? 'fx-hi' : it.st === 'na' ? 'fx-na' : 'fx-ok'}">${stName(it.st)}</td><td>${wk(it.step)}</td></tr>`).join('')
         : `<tr><td title="${esc(c.ref)}"><b>${esc(c.id)}</b></td><td class="lft fx-na" colspan="6">${esc(c.title)}: ${esc(c.naWhy || 'n/a')}</td></tr>`).join('')}</tbody></table></div>
       <p class="note">References: ${C.map(c => `${esc(c.id)} ${esc(c.ref)}`).join('; ')}.</p></div></section>`;
     // member forces
