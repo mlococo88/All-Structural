@@ -4264,7 +4264,7 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
   3. With "Entered below", the Splices tab gives no way to add a row except "Keep these plates" on the output tab ("None entered.").
   4. The entered plate inputs have no `data-kind="num"`, so they are saved as text ("4", not 4). The engine reads both the same (`num()` / `+`; checked in Node on every field: the same checks and ratios). Left as is; no saved-format change.
 
-## 2026-11-09 — PR: claude/sb-tab-errors (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SPERR2) — Flexure, Shear & stiffeners, Fatigue & studs, Rating, Welds and Constructibility: a Calculate that ends in an error shows the message instead of leaving the tab "out of date"   [display only; no result change]
+## 2026-11-09 — PR: claude/sb-tab-errors (PR #1268: https://github.com/mlococo88/All-Structural/pull/1268) (SPERR2) — Flexure, Shear & stiffeners, Fatigue & studs, Rating, Welds and Constructibility: a Calculate that ends in an error shows the message instead of leaving the tab "out of date"   [display only; no result change]
 - **Follows:** SPERR (PR #1263), open item 1: the same hidden-error line on the other output tabs.
 - **Where:** `render()` of `ui/flexure.js`, `ui/shear.js`, `ui/fatigue.js`, `ui/rating.js`, `ui/welds.js`, `ui/constructibility.js`, anchor `stale = !S.R || S.key !== key(ctx)`; and `ui/flexure.js` `calc()`, anchor `const I = inputs(ctx); if (I.err) { S.err = I.err;`.
 - **Before (each of the six files):**
