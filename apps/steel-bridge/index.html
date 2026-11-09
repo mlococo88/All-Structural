@@ -244,12 +244,12 @@
   const sel = (path, label, opts, cur) => `<div class="fRow"><label for="i_${path}">${label}</label><select id="i_${path}" data-path="${path}" data-kind="sel">${opts.map(([v, t]) => `<option value="${esc(v)}"${String(cur !== undefined ? cur : get(path)) === String(v) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`;
   const card = (title, body) => `<section class="sec"><div class="secHead">${title}</div><div class="secBody">${body}</div></section>`;
   const grades = Object.keys(M.GRADES).map(k => [k, `${k} (F_y ${M.GRADES[k].Fy} ksi)`]);
-  const TABS = [['proj', 'Project'], ['layout', 'Bridge layout'], ['xsec', 'Cross-section'], ['gird', 'Girders & plates'], ['mat', 'Materials'], ['framing', 'Framing & bracing'], ['loads', 'Loads'], ['stf', 'Stiffeners'], ['fs', 'Fatigue & studs'], ['spl', 'Splices']];
+  const TABS = [['proj', 'Project'], ['layout', 'Bridge layout'], ['xsec', 'Cross-section'], ['gird', 'Girders & plates'], ['mat', 'Materials'], ['framing', 'Framing & bracing'], ['loads', 'Loads'], ['stf', 'Stiffeners'], ['fs', 'Fatigue & studs'], ['spl', 'Splices'], ['ad', 'Auto design']];   // ad: the Auto design settings and Run (ADIN, 2026-11-09; its results stay on the Auto design output tab)
   if (!TABS.some(t => t[0] === ui.itab)) ui.itab = 'proj';   // an unknown saved tab: the first one
   /* tabOf(path): the input tab that holds an input path (error dots, links). The tab drawn with that data-path when there is one, else these
      rules (paths not drawn now: another girder, a field shown only for another choice, one span of the list). */
   const TAB_RULES = [[/^splices/, 'spl'], [/^(fatigue|studs)/, 'fs'], [/^stiffeners/, 'stf'], [/^crossframes\.wind\b/, 'loads'], [/^(framing|crossframes)\b/, 'framing'],
-    [/^(spans|xs\.skews)\b/, 'layout'], [/^xs\.(ws|overlays|sip|allow|extra|dlMethod|lldf)\b/, 'loads'], [/^(xs|deck)\b/, 'xsec'], [/^(project|ownerRules)\b/, 'proj'], [/^girders\b/, 'gird']];
+    [/^(spans|xs\.skews)\b/, 'layout'], [/^xs\.(ws|overlays|sip|allow|extra|dlMethod|lldf)\b/, 'loads'], [/^(xs|deck)\b/, 'xsec'], [/^(project|ownerRules)\b/, 'proj'], [/^girders\b/, 'gird'], [/^autodesign\b/, 'ad']];
   const tabOf = p => { const el = p && document.querySelector(`#inPanes [data-path="${String(p).replace(/["\\]/g, '\\$&')}"]`), pn = el && el.closest('[data-pane]');
     if (pn) return pn.dataset.pane; const r = TAB_RULES.find(q => q[0].test(p || '')); return r ? r[1] : 'mat'; };
   // SB2-A7: the cross-section girder whose dead loads and distribution factors this plate girder takes (girders[i].line; blank = automatic,
@@ -292,7 +292,8 @@
       loads: xsp.ws + xsp.extra + xsp.dist + window.SBDFramingUI.windCard(P, { num, sel, card, esc }),
       stf: window.SBDShearUI.inputs(P, { num, sel, card, esc }, ui),
       fs: window.SBDFatigueUI.inputs(P, { num, sel, card, esc }, ui),
-      spl: window.SBDSplicesUI.inputs(P, { num, sel, card, esc }, ui)
+      spl: window.SBDSplicesUI.inputs(P, { num, sel, card, esc }, ui),
+      ad: ui.itab === 'ad' ? window.SBDAutoDesignUI.inputs(P) : ''   // drawn when open (P.autodesign; no data-path inputs: data-ad / data-adv, ui/autodesign.js wire)
     };
   }
   function drawInputs() {
@@ -301,6 +302,8 @@
     const p = panes();
     $('inPanes').innerHTML = TABS.map(([k]) => `<div class="pane" data-pane="${k}"${ui.itab === k ? '' : ' hidden'}>${p[k]}</div>`).join('');
     if (pb) pb.mount($('pbHost'));   // STDS-B
+    if (ui.itab === 'ad') window.SBDAutoDesignUI.wire(document.querySelector('#inPanes [data-pane="ad"]'), { P, changed: r => changed(r),
+      showOut: () => { ui.otab = 'ad'; saveUi(); drawOut(); }, done: () => { drawInputs(); if (ui.otab === 'ad') drawOut(); } });   // ADIN
     markErrors();
   }
   function markErrors() {
