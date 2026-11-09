@@ -4190,7 +4190,7 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
 - **How verified:** `node tests/check-syntax.mjs`; smoke `phone-layout` (input tabs at 390 px), `steel-bridge-*`; screenshots in the PR.
 - **Other copies:** none.
 
-## 2026-11-09 — PR: claude/sb-splice-custom (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SPERR) — Field splices: a Calculate that ends in an error shows the message instead of leaving the tab "out of date"   [display only; no result change]
+## 2026-11-09 — PR: claude/sb-splice-custom (PR #1263: https://github.com/mlococo88/All-Structural/pull/1263) (SPERR) — Field splices: a Calculate that ends in an error shows the message instead of leaving the tab "out of date"   [display only; no result change]
 - **Engineer:** 2026-11-09: "I tried entering custom values in the field splice tab but nothing happened when I press Calculate."
 - **Where:** `ui/splices.js`, `render()`, anchor `stale = !S.R || S.key !== key(ctx)`.
 - **Before:**
