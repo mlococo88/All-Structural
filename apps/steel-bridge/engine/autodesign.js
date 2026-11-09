@@ -49,7 +49,8 @@
     mode: 'new', objective: 'weight', topN: 8, matchLegacy: false,
     cost: { steel: 3.00, trans: 1500, splice: 6000, stiff: 150 },   // Preliminary sizing's price list (P.costs): $/lb, $ per transition, field splice, stiffener
     limits: { Dmin: '', Dmax: '', Dinc: '', twInc: 0.0625, tfInc: 0.125, bfInc: '', twMin: '', tfMin: '', bfMin: '', tfMax: 3.0, thkRatio: '', areaRatio: 0.5,
-      maxTrans: 2, minSeg: 10, lbRatio: 85, topConst: true, maxDb: 4, depthRule: true, sLo: '', sHi: '' },
+      maxTrans: 2, minSeg: 10, lbRatio: 85, topConst: true, maxDb: 4, depthRule: true, sLo: '', sHi: '',
+      depthWarn: true, propWarn: false },   // ADWN (2026-11-09): span-to-depth guidance (2.5.2.6.3) as a warning only (default yes); 6.10.2 proportion limits as a warning only (default no: enforced)
     nbList: '', change: { nb: '', D: '' }   // nbList: not read since 2026-11-02 (the variable nb alone; engine/model.js migrateNbList moves a saved list on load)
   };
   /* settings(P): DEF merged with P.autodesign, then the owner's plate rules where a limit is blank (OWN14 'default' rows of engine/owners.js:
@@ -65,7 +66,8 @@
       bfInc: pick('bfInc', 'def.incBf', 1), thkRatio: pick('thkRatio', 'def.thk', 2), sLo: pick('sLo', 'def.sLo', 6), sHi: pick('sHi', null, 12),
       twInc: num(L.twInc) > 0 ? +L.twInc : 0.0625, tfInc: num(L.tfInc) > 0 ? +L.tfInc : 0.125, tfMax: num(L.tfMax) > 0 ? +L.tfMax : 3, areaRatio: num(L.areaRatio) >= 0 ? +L.areaRatio : 0.5,
       maxTrans: num(L.maxTrans) >= 0 ? Math.min(3, Math.round(+L.maxTrans)) : 2, minSeg: num(L.minSeg) > 0 ? +L.minSeg : 10, lbRatio: num(L.lbRatio) > 0 ? +L.lbRatio : 85,
-      topConst: L.topConst !== false, maxDb: num(L.maxDb) >= 0 ? +L.maxDb : 4, depthRule: L.depthRule !== false, Dmin: num(L.Dmin), Dmax: num(L.Dmax) };
+      topConst: L.topConst !== false, maxDb: num(L.maxDb) >= 0 ? +L.maxDb : 4, depthRule: L.depthRule !== false, Dmin: num(L.Dmin), Dmax: num(L.Dmax),
+      depthWarn: L.depthWarn !== false, propWarn: L.propWarn === true };   // ADWN: absent in older saves = the defaults
     // a flange transition must save at least the owner's minimum weight (OWN29: MassDOT 3.6.5.6 1300 lb, RIDOT 6.4 800 lb), else cost.trans / cost.steel
     const rW = O ? O.rule(owner, 'flange.weld') : null; s.lim.weldLb = Math.max(+s.cost.steel > 0 ? +s.cost.trans / +s.cost.steel : 0, rW ? +rW.value.lb : 0); if (rW) cite.weldLb = O.cite(rW);
     // MassDOT 3.6.5.6 (T5): no more than 3 flange sizes between bolted splices
@@ -218,7 +220,11 @@
   /* ---------- 6.10.2 proportion limits and the depth rule (sizing rules, also reported) ---------- */
   function proportions(L, P, S) {
     const w = St().work('ad.prop'), n = St().n, out = []; const segs = segmentsOf(L), Ls = Math.max(...P.spans.lengths.map(Number)), cont = P.spans.continuity !== 'simple' && P.spans.lengths.length > 1;
-    const add = (id, label, sym, eq, sub, dem, cap, ref) => { const ok = dem <= cap + 1e-9; w.add({ id, label, sym, eq, sub, value: dem / cap, unit: '', d: 3, ref, ok }); out.push({ id, ok, r: dem / cap, step: 'ad.prop.' + id }); };
+    // ADWN (2026-11-09): a limit the settings make a warning only (S.lim.depthWarn: the span-to-depth guidance; S.lim.propWarn: the 6.10.2
+    // limits) does not reject the design; it is listed in warns ({ id, label, r, ref }) and its step says so. The check itself is unchanged.
+    const add = (id, label, sym, eq, sub, dem, cap, ref) => { const ok = dem <= cap + 1e-9, wo = !ok && (id === 'depth' ? !!S.lim.depthWarn : !!S.lim.propWarn);
+      w.add({ id, label, sym, eq, sub, value: dem / cap, unit: '', d: 3, ref, ok, ...(wo ? { note: `Not met: WARNING only (Auto design setting "${id === 'depth' ? 'span-to-depth guidance' : '6.10.2 proportion limits'} as warning only"); the design is not rejected for it.` } : {}) });
+      out.push({ id, ok, warn: wo, r: dem / cap, step: 'ad.prop.' + id, label, ref }); };
     segs.forEach((s, i) => { const k = i + 1, Iyc = s.topT * s.topB ** 3 / 12, Iyt = s.botT * s.botB ** 3 / 12;
       add(`w${k}`, `Segment ${k}: web slenderness`, '\\frac{D}{t_{w}}', '\\le 150', `\\frac{${n(s.D, 2)}}{${n(s.tw, 4)}} = ${n(s.D / s.tw, 1)} \\le 150`, s.D / s.tw, 150, `${ED} Eq. 6.10.2.1.1-1`);
       ['top', 'bot'].forEach(f => { const b = s[f + 'B'], t = s[f + 'T'], nm = f === 'top' ? 'top' : 'bottom';
@@ -228,7 +234,7 @@
       add(`i${k}`, `Segment ${k}: flange proportions`, '0.1 \\le \\frac{I_{yc}}{I_{yt}}', '\\le 10', `\\frac{I_{yc}}{I_{yt}} = \\frac{${n(Iyc, 1)}}{${n(Iyt, 1)}} = ${n(Iyc / Iyt, 3)}`, Math.max(0.1 / (Iyc / Iyt), (Iyc / Iyt) / 10), 1, `${ED} Eq. 6.10.2.2-4`); });
     if (S.lim.depthRule) { const tf = Math.min(...segs.map(s => s.topT + s.botT)), dg = L.D + tf, k = cont ? 0.027 : 0.033, need = k * Ls * 12;
       add('depth', 'Minimum depth of the steel I-beam portion (optional criterion, applied as Preliminary sizing does)', 'd_{min}', `${k}L`, `${k}(${n(Ls, 1)})(12) = ${n(need, 2)} \\le D + t_{ft} + t_{fb} = ${n(dg, 2)}`, need, dg, `${ED} Table 2.5.2.6.3-1`); }
-    return { ok: out.every(q => q.ok), items: out, steps: w.steps };
+    return { ok: out.every(q => q.ok || q.warn), items: out, steps: w.steps, warns: out.filter(q => q.warn).map(q => ({ id: q.id, label: q.label, r: q.r, ref: q.ref, step: q.step })) };
   }
 
   /* ---------- splice bolt fit: the flange width for nl gage lines each side of the web (engine/splices.js autoDesign needB, DT10) ---------- */
@@ -309,7 +315,11 @@
   function evaluate(P, opt) {
     opt = opt || {}; const full = opt.level === 'full', ctx = opt.ctx || {}, hits = [], fails = [], warns = [], mods = {}; let gov = null, nStiff = 0;
     const modGov = {};   // the governing item of each module (the compare view; the Apply test against the tabs)
-    const take = (o) => { if (!isFinite(o.r)) { if (o.fail && o.r === Infinity) { fails.push(o); modGov[o.mod] = o; } return; } if (!gov || o.r > gov.r) gov = o; if (!modGov[o.mod] || (isFinite(modGov[o.mod].r) && o.r > modGov[o.mod].r)) modGov[o.mod] = o; if (o.fail || o.r > 1 + 1e-9) fails.push(o); };
+    // ADWN (2026-11-09): with "6.10.2 proportion limits as warning only" (S.lim.propWarn), a flexure GS1–GS3 item over 1.0 is not a failure
+    // and does not set the governing ratio here; it is kept in propW (the candidate's WARNING flag) and in modGov (as the Flexure tab shows it)
+    const PW = opt.propWarn != null ? !!opt.propWarn : (((P.autodesign || {}).limits || {}).propWarn === true), propW = [];   // as settings(P).lim.propWarn
+    const take = (o) => { if (PW && o.mod === 'flexure' && /^GS[123]$/.test(o.id) && isFinite(o.r) && o.r > 1 + 1e-9) { propW.push(o); if (!modGov[o.mod] || o.r > modGov[o.mod].r) modGov[o.mod] = o; return; }
+      if (!isFinite(o.r)) { if (o.fail && o.r === Infinity) { fails.push(o); modGov[o.mod] = o; } return; } if (!gov || o.r > gov.r) gov = o; if (!modGov[o.mod] || (isFinite(modGov[o.mod].r) && o.r > modGov[o.mod].r)) modGov[o.mod] = o; if (o.fail || o.r > 1 + 1e-9) fails.push(o); };
     const v = MD().validate(P); if (v.errors.length) return { pass: false, ratio: Infinity, gov: { mod: 'model', id: 'input', title: v.errors[0].msg, r: Infinity }, hits, fails: [{ mod: 'model', title: v.errors[0].msg }], warns, nStiff, mods };
     const own = P.ownerRules || { owner: 'AASHTO', eta: {} };
     for (let gi = 0; gi < P.girders.length; gi++) {
@@ -392,7 +402,7 @@
       // live load deflection (optional, 2.5.2.6.2) only when the analysis settings ask for it: reported, not a pass/fail here
       if (R.lld) R.lld.forEach(q => { if (!q.ok) warns.push({ ...gm, mod: 'analysis', id: 'LLD', title: `Live load deflection, span ${q.k + 1}: ${q.d.toFixed(3)} in > L/${q.ratio}` }); });
     }
-    return { pass: !fails.length, ratio: gov ? gov.r : 0, gov, hits, fails, warns, nStiff: Math.round(nStiff), mods, modGov };
+    return { pass: !fails.length, ratio: gov ? gov.r : 0, gov, hits, fails, warns, nStiff: Math.round(nStiff), mods, modGov, propW };
   }
 
   /* ---------- flange sizing (Preliminary sizing sizeFlanges, on required areas at the analysis stations) ---------- */
@@ -603,7 +613,7 @@
   function depthList(P, S, L0) {
     const lim = S.lim, Lmax = Math.max(...P.spans.lengths.map(Number)), inc = lim.Dinc;
     let lo = lim.Dmin != null ? up(lim.Dmin, inc) : up(Lmax * 12 / 36, inc), hi = lim.Dmax != null ? Math.floor(lim.Dmax / inc + 1e-9) * inc : Math.floor(Lmax * 12 / 18 / inc) * inc;
-    if (lim.depthRule) lo = Math.max(lo, up(Lmax * 12 * (P.spans.continuity !== 'simple' && P.spans.lengths.length > 1 ? 0.027 : 0.033) - 2 * lim.tfMin, inc));
+    if (lim.depthRule && !lim.depthWarn) lo = Math.max(lo, up(Lmax * 12 * (P.spans.continuity !== 'simple' && P.spans.lengths.length > 1 ? 0.027 : 0.033) - 2 * lim.tfMin, inc));
     const qD = S.V ? S.V.D : { mode: 'auto' };
     if (qD.mode === 'lock') return { coarse: [r4(L0.D)], step: inc, lo: L0.D, hi: L0.D, inc: 1e9, locked: true };
     if (qD.mode === 'range') { const st = qD.step > 0 ? qD.step : inc; if (qD.min != null) lo = up(qD.min, st); if (qD.max != null) hi = Math.floor(qD.max / st + 1e-9) * st;
@@ -840,11 +850,14 @@
       return `${V ? V.label : id}${pc} ${q.mode === 'lock' ? 'locked' : `${q.min != null ? q.min : '…'} to ${q.max != null ? q.max : '…'}`}`; }).join('; ');
   }
   const modList = G => Object.entries(G || {}).map(([mod, o]) => ({ mod, id: o.id, title: o.title, r: o.r, x: o.x, gl: o.gl, tab: o.tab, step: o.step, fail: !!o.fail || o.r > 1 + 1e-9 }));
+  /* propWOf(E): the flexure GS1–GS3 items kept as warnings (ADWN), the largest ratio of each check id, as { id, label, r, ref, x, gl } */
+  const propWOf = E => { const m = {}; (E.propW || []).forEach(o => { if (!m[o.id] || o.r > m[o.id].r) m[o.id] = o; });
+    return Object.values(m).map(o => ({ id: 'flexure ' + o.id, label: o.title, r: o.r, ref: 'Art. 6.10.2', x: o.x, gl: o.gl, tab: 'flex' })); };
   function cand(o, E, S, P, det) {
     const Q = projectWith(P, o.L), pr = proportions(o.L, Q, S), c = costOf(o.L, S, E.nStiff), g = E.gov;
     const bf = o.L.spl.length ? [St().step({ id: 'ad.bolt', label: `Flange width for ${o.L.minLines || minLinesOf(P)} gage line(s) each side of the web at the field splices (DT10; owner edge distance)`, sym: 'b_{f,spl}', eq: '2(g_{0} + (n_{l} - 1)g + e_{min})', sub: '', value: Math.max(...o.L.web.map(p => boltFitWidth(P, p.tw, o.L.minLines || minLinesOf(P)))), unit: 'in', d: 2, ref: 'engine/splices.js autoDesign (DT10)' })] : [];
     return { L: o.L, segments: segmentsOf(o.L), cost: c, nb: o.L.nb, D: o.L.D, nTr: c.nTr, nSpl: c.nSpl, ratio: E.ratio, gov: g ? { mod: g.mod, id: g.id, title: g.title, r: g.r, x: g.x, gl: g.gl, step: g.step, tab: g.tab } : null,
-      warns: E.warns.slice(0, 10), minLines: o.L.minLines, steps: candSteps(o.L, S, c, [...pr.steps, ...bf, ...(o.job && o.job.spl && S.splPlan ? [...S.splPlan.steps, ...(o.splC ? o.splC.steps : [])] : [])]), prop: pr.ok, mods: modList(E.modGov),
+      warns: E.warns.slice(0, 10), minLines: o.L.minLines, steps: candSteps(o.L, S, c, [...pr.steps, ...bf, ...(o.job && o.job.spl && S.splPlan ? [...S.splPlan.steps, ...(o.splC ? o.splC.steps : [])] : [])]), prop: pr.ok, propWarns: [...(pr.warns || []), ...propWOf(E)], mods: modList(E.modGov),
       ...(o.job && o.job.spl && S.splPlan ? { spl: { how: (S.splPlan.lays[o.job.si] || {}).how || '', ref: S.splPlan.ref.spl, chk: o.splC ? o.splC.items : null } } : {}),
       det: det ? { inputs: Object.fromEntries(DET_KEYS.filter(k => det.Q[k] !== undefined).map(k => [k, clone(det.Q[k])])), rows: det.rows, notes: det.notes } : null };
   }
