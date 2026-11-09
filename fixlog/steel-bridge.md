@@ -4549,7 +4549,7 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
   Report are identical (default project); before/after screenshots; `node tests/check-syntax.mjs`; steel-bridge smoke tests; phone-layout
   `sbapp`; project-library.
 - **Other copies:** none.
-## 2026-11-09 — PR: claude/sb-defl-per-girder (PR #PRNUM: PRLINK) (DFG) — Deflection tab: every cross-section girder G1…Gn selectable, each with its own dead loads; camber of every girder (tenth points) on the tab and in the Report   [display only; no formula change; no saved-data change]
+## 2026-11-09 — PR: claude/sb-defl-per-girder (PR #1279: https://github.com/mlococo88/All-Structural/pull/1279) (DFG) — Deflection tab: every cross-section girder G1…Gn selectable, each with its own dead loads; camber of every girder (tenth points) on the tab and in the Report   [display only; no formula change; no saved-data change]
 - **Engineer:** 2026-11-09 (follow-up on #1274): "Deflections should also include camber; the camber is inclusive of DL deflections, so we need to be able to look at each girder individually. Right now it only allows me to look at G1."
 - **Root cause (reproduced):**
   - The tab's girder selector listed `P.girders`. These are **plate girders** (sets of plates), not cross-section girders.
