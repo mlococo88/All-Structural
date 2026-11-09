@@ -4337,7 +4337,7 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
 - **Check case:** default project, Summary tab: 7–9 s to "Up to date"; FAIL; 3 FAIL, 1 REVIEW, 10 PASS; governing Flexure Strength I, G1, x = 249.99 ft, GS7 1.229 (the Flexure tab's governing ratio); Inventory RF 0.61, Operating RF 0.79 (Rating tab). Cell "Shear" 0.437 → Shear & stiffeners tab, station x = 110.01 ft selected, step `sh.ok` flashed.
 - **How verified:** `tests/engine/sb-summary.test.mjs` (default project and a skewed three-span two-girder project: every cell `Object.is` the module's own value from each tab's `build()`); `tests/smoke/steel-bridge-summary.mjs` (links, cache, re-run, the Report link, old `ui.otab`, 390 px, 0 console errors); `node tests/check-syntax.mjs`; smoke `steel-bridge-*`, `phone-layout`, `project-library`.
 - **Other copies:** none.
-## 2026-11-09 — PR: claude/sb-summary-dash (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (DASH) — left check summary column, from 1200 px   [display only; no result or saved-data change]
+## 2026-11-09 — PR: claude/sb-summary-dash (PR #1272: https://github.com/mlococo88/All-Structural/pull/1272) (DASH) — left check summary column, from 1200 px   [display only; no result or saved-data change]
 - **Engineer:** 2026-11-09: "Maybe it's a left-justified summary panel with links to the sections each card is summarizing." Built after the Summary tab (SUMT), with the same data.
 - **Where:**
   - New `ui/dash.js` (`window.SBDDashUI`: `init(o)`, `refresh()`): the column `#sbDashCol`.
