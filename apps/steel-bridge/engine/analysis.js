@@ -66,10 +66,11 @@
   'use strict';
   const ED = 'AASHTO LRFD 10th Ed.';
   const ML = () => window.SharedMovingLoad, SEC = () => window.SBDSections, St = () => window.SharedSteps, VEH = () => window.SharedVehicles;
+  const CL_PSF = 20;   // construction live load (psf) when neither entered nor an owner rule (CLC, 2026-11-09; Decision pending engineer review)
   const STEEL_PLF = 490 / 144;   // lb/ft per in² of steel: 490 pcf / 144 = 3.4028 (Table 3.5.1-1; SB2-A2, 2026-10-29: GirderDetail's SA_PLF is 3.4)
   const DEF = { im: 33, imf: 15, crack: 'none', deflLimit: 800, seq: 'on', seqMod: 'n', seqCustom: '', steelAllowPct: 5, haunchInStiffness: null, deflSidewalk: 'auto' };
   const isNum = v => typeof v === 'number' && isFinite(v);
-  const n1 = x => St().n(x, 1), n2 = x => St().n(x, 2), n3 = x => St().n(x, 3), g0 = x => St().g(x, 0);
+  const n1 = x => St().n(x, 1), n2 = x => St().n(x, 2), n3 = x => St().n(x, 3), n4 = x => St().n(x, 4), g0 = x => St().g(x, 0);
 
   /* grid(spans): GirderDetail's node grid (sgBeam): each span in max(8, round(L)) equal parts. { xs, sup (node indices) } */
   function grid(spans) {
@@ -110,8 +111,13 @@
     ['DC1wet', 'DC2', 'DW', 'UT', 'UF', 'PL'].forEach(k => {
       if (A && isNum(A[k])) { o[k] = A[k]; o.src[k] = 'girder'; } else if (ov && B && isNum(B[k])) { o[k] = B[k]; o.src[k] = 'manual'; }
       else if (M && isNum(fromM[k])) { o[k] = fromM[k]; o.src[k] = 'module'; } else { o[k] = 0; o.src[k] = 'none'; } });
-    // construction live load: not in the loads module; explicit, else entered (as before)
-    if (A && isNum(A.CL)) { o.CL = A.CL; o.src.CL = 'girder'; } else if (B && isNum(B.CL)) { o.CL = B.CL; o.src.CL = 'manual'; } else { o.CL = 0; o.src.CL = 'none'; }
+    // construction live load (CLC, 2026-11-09): explicit; else entered with the girder's CL override on (girder.clOverride; absent: on when a
+    // value is entered, as every project saved before); else calculated, w_CL = q_CL × b_trib (clOf), when the project calculates it
+    // (analysis.clCalc, set on new projects); else none (a project saved before without an entry: 0, as before)
+    const CLc = clOf(P, M), ovC = typeof g.clOverride === 'boolean' ? g.clOverride : !!(B && isNum(B.CL));
+    o.cl = CLc; o.clOverride = ovC;
+    if (A && isNum(A.CL)) { o.CL = A.CL; o.src.CL = 'girder'; } else if (ovC && B && isNum(B.CL)) { o.CL = B.CL; o.src.CL = 'manual'; }
+    else if (CLc.on && isNum(CLc.w)) { o.CL = CLc.w; o.src.CL = 'calc'; } else { o.CL = 0; o.src.CL = 'none'; }
     // cross-frame point loads (XF1): explicit girder loads, else the framing and cross-frame weight (engine/framing.js, engine/crossframes.js;
     // added 2026-10-29 with the cross-frames PR, SB2-A6), else entered
     const CFm = !(A && Array.isArray(A.xf)) && P.framing && window.SBDCrossframes && window.SBDFraming ? window.SBDCrossframes.pointLoads(P, (P.girders || []).indexOf(g)) : null;
@@ -127,6 +133,37 @@
      saved before): on when the loads module gives none (M / modOk false) and a value is entered, so such a project computes as before. */
   const DEAD_K = ['DC1wet', 'DC2', 'DW', 'UT', 'UF', 'PL'], DF_K = ['gM', 'gMpier', 'gV', 'fatM', 'fatV', 'gDef'];
   function deadOverride(g, M) { if (typeof g.loadsOverride === 'boolean') return g.loadsOverride; const B = g.loadsManual || {}; return !M && DEAD_K.some(k => isNum(B[k])); }
+  /* clOf(project, M): the calculated construction live load of the girder (CLC, 2026-11-09). q_CL (psf): project.analysis.qCL; blank: the
+     owner's (engine/owners.js 'cll': CTDOT BDM V2 3.17CT, 50 psf), else 20 psf (AASHTO LRFD 10th Ed. Art. 3.4.2.1 gives no value; this app's
+     default, as the overhang bracket construction load of the Constructibility tab, 0.020 ksf). b_trib: the girder's tributary deck width of
+     the loads module (engine/loads.js dead(): half the bays either side, the overhang for an exterior girder), M = SBDLoads.girder(). w_CL =
+     q_CL / 1000 × b_trib (klf). on: project.analysis.clCalc === true (new projects; a project saved before has no flag and is not calculated).
+     Returns { on, q, qSrc, qCite, own (the owner's minimum, psf, or 0), trib, w (klf, NaN without the module) } */
+  function clOf(P, M) {
+    const a = (P && P.analysis) || {}, O = window.SBDOwners, own = P && P.ownerRules && P.ownerRules.owner, r = O && own ? O.rule(own, 'cll') : null;
+    const qE = a.qCL === '' || a.qCL == null ? NaN : Number(a.qCL), entered = isFinite(qE) && qE >= 0;
+    const q = entered ? qE : r && +r.value > 0 ? +r.value : CL_PSF, rm = O && own ? O.rule(own, 'cll.min') : null;
+    const qSrc = entered ? 'entered' : r ? 'owner' : 'default', qCite = r ? O.cite(r) : `${ED} Art. 3.4.2.1 (no value given): this app's default`;
+    const trib = M && isNum(M.trib) ? M.trib : NaN;
+    return { on: a.clCalc === true, q, qSrc, qCite, own: rm && +rm.value > 0 ? +rm.value : 0, ownCite: rm ? O.cite(rm) : '', trib, w: q / 1000 * trib };
+  }
+  /* fmOf(project, mod, j): the finishing machine (CLC, 2026-11-09; optional): a pair of equal point loads P_fm (kip each), one on each overhang
+     at e_fm (ft) from its deck edge, moving together along the bridge. Each load's share to the girders by the lever rule between the two
+     nearest girders (outside the exterior girder: P(1 + a/S) on it, −Pa/S on the next; AASHTO LRFD 10th Ed. Art. 4.6.2.2.1, as the loads
+     module's 'two'); P_j = the sum of the two shares on cross-section girder j. project.analysis.fm = { P, e }; absent or P ≤ 0: none.
+     Returns null or { P, e, Wd, ub, sh: [left, right shares], Pj } (Pj NaN without the loads module) */
+  function fmOf(P, mod, j) {
+    const a = (P && P.analysis) || {}, F = a.fm || {}, Pf = Number(F.P), e = F.e === '' || F.e == null ? 0 : Number(F.e);
+    if (!(Pf > 0) || !isFinite(e)) return null;
+    const D = mod && mod.R && mod.R.dead; if (!D || !(j >= 0)) return { P: Pf, e, Pj: NaN };
+    const ub = D.ub, N = ub.length, lever = x => { const r = ub.map(() => 0);
+      if (x <= ub[0]) { const S1 = ub[1] - ub[0], d = ub[0] - x; r[0] = Pf * (1 + d / S1); r[1] = -Pf * d / S1; }
+      else if (x >= ub[N - 1]) { const S1 = ub[N - 1] - ub[N - 2], d = x - ub[N - 1]; r[N - 1] = Pf * (1 + d / S1); r[N - 2] = -Pf * d / S1; }
+      else { let k = 0; while (k < N - 2 && ub[k + 1] < x) k++; const t = (x - ub[k]) / (ub[k + 1] - ub[k]); r[k] = Pf * (1 - t); r[k + 1] = Pf * t; }
+      return r; };
+    const xL = e, xR = D.Wd - e, sL = lever(xL)[j], sR = lever(xR)[j];
+    return { P: Pf, e, Wd: D.Wd, ub, xL, xR, S: [ub[1] - ub[0], ub[N - 1] - ub[N - 2]], sh: [sL, sR], Pj: sL + sR };
+  }
   function dfOverride(g, modOk) { if (typeof g.dfOverride === 'boolean') return g.dfOverride; const B = g.dfManual || {}; return !modOk && DF_K.some(k => isNum(B[k])); }
   /* dfOf(project, g, ns, mod): distribution factors per span and pier (precedence in the header).
      { spans: [{ gM, gV, fatM, fatV, gDef }], piers: [{ gM }], src, manual } */
@@ -245,7 +282,10 @@
     if (mod && mod.errors) warnings.push(`Loads module: ${mod.errors[0]} The entered loads and factors are used.`);
     if (LD.source === 'none entered') warnings.push('No dead loads for this girder: DC1 wet deck, DC2, DW and construction LL are 0 unless entered on the Loads tab (Override calculated value). Only the girder steel is computed here.');
     if (DF.manual) warnings.push(`Live load distribution factors: ${DF.src}. LL+IM is per girder only with this girder's factors.`);
-    if (LD.src.CL === 'none') warnings.push('Construction live load not entered (Loads tab): M_CL is 0.');
+    if (LD.src.CL === 'none') warnings.push(LD.cl.on ? 'Construction live load: the tributary deck width needs the loads module (complete cross-section); M_CL is 0.' : 'Construction live load not calculated (a project saved before 2026-11-09) and not entered: M_CL is 0. Loads tab: "Calculate the construction live load".');
+    if (LD.src.CL === 'calc' && LD.cl.own && LD.cl.q < LD.cl.own - 1e-9) warnings.push(`Construction live load q_CL = ${LD.cl.q} psf is below the owner's minimum ${LD.cl.own} psf (${LD.cl.ownCite}).`);
+    const FM = fmOf(P, mod, mod && mod.j != null ? mod.j : lineOf(P, g));
+    if (FM && !isNum(FM.Pj)) warnings.push('Finishing machine: its share to this girder needs the loads module (complete cross-section); it is not applied.');
     const allow = LD.steelAllowPct, plf = isNum(opt.steelPlf) ? opt.steelPlf : STEEL_PLF, wSteel = segs.map(s => s.As * plf / 1000 * (1 + allow / 100));
     const distSteel = segs.map((s, i) => [s.x0, s.x1, wSteel[i]]);
     const xfP = LD.xf.map(q => [q.x, q.P]);
@@ -289,6 +329,34 @@
     const cam = ML().camber(camberStages, { stations: xs });
     const camber = { x: cam.x, steel: cam.stages[0], wet: cam.stages[1], sd: cam.stages[2], ut: LD.UT ? cam.stages[3] : null, total: cam.total };
 
+    const pick = (R, get) => {   // (hoisted from the live-load block, 2026-11-09, unchanged) envelope at the stations: M at the node, V just right of the node, V just left at the supports and the end; get(ei): { max, min } (default R.res)
+      const node = x => { let lo = 0, hi = R.x.length - 1; while (hi - lo > 1) { const md = (lo + hi) >> 1; if (R.x[md] <= x) lo = md; else hi = md; } return Math.abs(R.x[lo] - x) <= Math.abs(R.x[hi] - x) ? lo : hi; };
+      const mOf = {}, vR = {}, vL = {}; R.effs.forEach((ef, ei) => { if (ef.t === 'M') { if (mOf[ef.node] === undefined) mOf[ef.node] = ei; } else if (ef.t === 'V') { if (ef.cutL) { if (vR[ef.el] === undefined) vR[ef.el] = ei; } else if (vL[ef.el + 1] === undefined) vL[ef.el + 1] = ei; } });
+      const res = get || (ei => R.res[ei]), o = { Mmax: [], Mmin: [], VRmax: [], VRmin: [], VLmax: [], VLmin: [], twoM: [] };
+      xs.forEach((x, i) => { const j = node(x), em = mOf[j], er = vR[j], el = vL[j];
+        const rm = em !== undefined ? res(em) : { max: 0, min: 0 }; o.Mmax.push(rm.max); o.Mmin.push(rm.min); o.twoM.push(em !== undefined && !!R.effs[em].neg);
+        const rr = er !== undefined ? res(er) : null, rl = el !== undefined ? res(el) : null;
+        o.VRmax.push(rr ? rr.max : 0); o.VRmin.push(rr ? rr.min : 0); o.VLmax.push(rl ? rl.max : rr ? rr.max : 0); o.VLmin.push(rl ? rl.min : rr ? rr.min : 0); });
+      o.R = R.effs.map((ef, ei) => { if (ef.t !== 'R') return null; const q = res(ei); return { q: ef.q, max: q.max, min: q.min, two: !!(q.maxG && /×2/.test(q.maxG.lab)) }; }).filter(Boolean).sort((a, b) => a.q - b.q);
+      return o; };
+    // finishing machine (CLC, 2026-11-09; fmOf): the girder's share P_j as one moving point load on the steel section I_s (the shared moving-load
+    // engine, a one-axle vehicle of 1 kip, no lane, no IM, × P_j). Added to the construction live load at each station with the sign of
+    // M_DC1 + M_CL,uniform (V: of V_DC1 + V_CL,uniform), so that it adds to the deck placement moment and shear; the reactions add the largest
+    // one. st.CLu keeps the uniform part (its statics check); st.CL is the sum, which every module reads as M_CL, V_CL.
+    let fm = null;
+    if (FM && isNum(FM.Pj) && Math.abs(FM.Pj) > 1e-12) {
+      const preSup = []; for (let i = 0; i < N - 1; i++) if (supIdx.includes(i + 1)) preSup.push((xs[i] + xs[i + 1]) / 2);
+      const mFM = { spans, E, segs: segsOf(sbS), stdLane: null, dirs: [1, -1], llf: 1, dfM: spans.map(() => 1), dfV: spans.map(() => 1), dfNeg: 0, step: 1, hStep: 2, simple: !cont,
+        scanKeys: [...xs, ...preSup], scanM: [...xs], scanV: true, negX: [], axles: [[1, 0]], short: 'Finishing machine', udl: { mode: 'none', w: 0 }, vK: 0, vMin: 0, vMax: 0, neglect: false,
+        secondary: '', multi: false, mScale: 1, mHmin: 50, mFixed: 0, imp: { method: 'const', val: 1, S: 6.5, bal: false, onUdl: false } };
+      const u = pick(ML().analyze(mFM, { vehicles: VEH().build().presets })), Pj = FM.Pj;
+      const rng = (mx, mn) => Pj >= 0 ? [Pj * mn, Pj * mx] : [Pj * mx, Pj * mn], add = (base, mx, mn, sg) => base.map((v, i) => { const [lo, hi] = rng(mx[i], mn[i]); return v + (sg[i] >= 0 ? hi : lo); });
+      const CLu = st.CL, sM = xs.map((_, i) => st.DC1steel.M[i] + st.DC1wet.M[i] + CLu.M[i]), sVR = xs.map((_, i) => st.DC1steel.VR[i] + st.DC1wet.VR[i] + CLu.VR[i]), sVL = xs.map((_, i) => st.DC1steel.VL[i] + st.DC1wet.VL[i] + CLu.VL[i]);
+      st.CLu = CLu;
+      st.CL = { x: CLu.x, M: add(CLu.M, u.Mmax, u.Mmin, sM), VR: add(CLu.VR, u.VRmax, u.VRmin, sVR), VL: add(CLu.VL, u.VLmax, u.VLmin, sVL), defl: CLu.defl, R: CLu.R.map((v, k) => v + (u.R[k] ? rng(u.R[k].max, u.R[k].min)[1] : 0)) };
+      fm = { ...FM, unit: u, M: st.CL.M.map((v, i) => v - CLu.M[i]), R: st.CL.R.map((v, k) => v - CLu.R[k]) };
+    }
+
     // live load (HL-93 and the fatigue truck, per lane, IM included, DF = 1 inside the engine; the factors are applied below)
     let ll = null, fat = null, lld = null, llR = null, ped = null;
     if (opt.ll !== false) {
@@ -305,16 +373,6 @@
       const mF = { ...base, axles: F.axles.map(a => [...a]), short: 'Fatigue', udl: { ...F.udl }, vK: 0, vMin: 0, vMax: 0, neglect: F.neglect, secondary: '', multi: false, mScale: 1, mHmin: 50, mFixed: 0,
         imp: { method: 'const', val: 1 + S.imf / 100, S: 6.5, bal: false, onUdl: false } };
       const RH = ML().analyze(mH, { vehicles: pre }), RF = ML().analyze(mF, { vehicles: pre });
-      const pick = (R, get) => {   // envelope at the stations: M at the node, V just right of the node, V just left at the supports and the end; get(ei): { max, min } (default R.res)
-        const node = x => { let lo = 0, hi = R.x.length - 1; while (hi - lo > 1) { const md = (lo + hi) >> 1; if (R.x[md] <= x) lo = md; else hi = md; } return Math.abs(R.x[lo] - x) <= Math.abs(R.x[hi] - x) ? lo : hi; };
-        const mOf = {}, vR = {}, vL = {}; R.effs.forEach((ef, ei) => { if (ef.t === 'M') { if (mOf[ef.node] === undefined) mOf[ef.node] = ei; } else if (ef.t === 'V') { if (ef.cutL) { if (vR[ef.el] === undefined) vR[ef.el] = ei; } else if (vL[ef.el + 1] === undefined) vL[ef.el + 1] = ei; } });
-        const res = get || (ei => R.res[ei]), o = { Mmax: [], Mmin: [], VRmax: [], VRmin: [], VLmax: [], VLmin: [], twoM: [] };
-        xs.forEach((x, i) => { const j = node(x), em = mOf[j], er = vR[j], el = vL[j];
-          const rm = em !== undefined ? res(em) : { max: 0, min: 0 }; o.Mmax.push(rm.max); o.Mmin.push(rm.min); o.twoM.push(em !== undefined && !!R.effs[em].neg);
-          const rr = er !== undefined ? res(er) : null, rl = el !== undefined ? res(el) : null;
-          o.VRmax.push(rr ? rr.max : 0); o.VRmin.push(rr ? rr.min : 0); o.VLmax.push(rl ? rl.max : rr ? rr.max : 0); o.VLmin.push(rl ? rl.min : rr ? rr.min : 0); });
-        o.R = R.effs.map((ef, ei) => { if (ef.t !== 'R') return null; const q = res(ei); return { q: ef.q, max: q.max, min: q.min, two: !!(q.maxG && /×2/.test(q.maxG.lab)) }; }).filter(Boolean).sort((a, b) => a.q - b.q);
-        return o; };
       const h = pick(RH), f = pick(RF);
       const gMat = i => region[i] >= 1 ? DF.piers[region[i] - 1].gM : DF.spans[spanOfX(sup, xs[i])].gM;
       const spR = i => spanOfX(sup, i < N - 1 ? (xs[i] + xs[i + 1]) / 2 : xs[i] - 1e-6), spL = i => spanOfX(sup, i > 0 ? (xs[i - 1] + xs[i]) / 2 : xs[i]);
@@ -377,7 +435,7 @@
     }
 
     const R = { errors: [], warnings, settings: S, fc: m.concrete.fc, h0, line: mod && mod.j != null ? mod.j : null, girder: g, gi, spans, sup, supIdx, cont, Lt, x: xs, n, nr, segs, plf, wSteel, loads: LD, df: DF, crack, sb: { s: sbS, c3: sb3, cn: sbN }, region,
-      st, camber, ll, fat, llR, lld, seq, pl: ped };
+      st, camber, ll, fat, llR, lld, seq, pl: ped, fm };
     R.steps = steps(R);
     return R;
   }
@@ -400,8 +458,18 @@
     const wsTot = R.segs.reduce((a, s, i) => a + R.wSteel[i] * (s.x1 - s.x0), 0), xfTot = L.xf.reduce((a, q) => a + q.P, 0);
     w.add({ id: 'eq.DC1steel', label: 'Equilibrium, DC1 girder steel and cross-frames: ΣR = Σw_s ℓ + ΣP', sym: '\\sum R', eq: '\\sum w_{s}\\ell + \\sum P_{xf}', sub: `${n2(wsTot)} + ${n2(xfTot)}`, value: tot('DC1steel'), unit: kip, d: 2, ref: 'Statics', ok: Math.abs(tot('DC1steel') - wsTot - xfTot) <= 1e-6 * Math.max(1, wsTot + xfTot) });
     [['DC1wet', 'DC1 wet deck (deck, haunch, SIP, other DC1)', 'w_{DC1}'], ['DC2', 'DC2', 'w_{DC2}'], ['DW', 'DW', 'w_{DW}'], ['CL', 'construction live load', 'w_{CL}']].forEach(([k, t, sy]) => {
-      const a = L[k] * R.Lt; w.add({ id: 'eq.' + k, label: `Equilibrium, ${t}: ΣR = wL`, sym: '\\sum R', eq: `${sy}L`, sub: `${St().n(L[k], 4)}(${n2(R.Lt)})`, value: tot(k), unit: kip, d: 2, ref: 'Statics', ok: Math.abs(tot(k) - a) <= 1e-6 * Math.max(1, a),
-        note: `w = ${St().n(L[k], 4)} klf (${{ girder: 'girder loads', module: 'loads module', manual: 'entered', none: 'none entered' }[L.src[k]]}).` }); });
+      const a = L[k] * R.Lt, sk = k === 'CL' && R.st.CLu ? 'CLu' : k; w.add({ id: 'eq.' + k, label: `Equilibrium, ${t}${sk === 'CLu' ? ' (uniform part)' : ''}: ΣR = wL`, sym: '\\sum R', eq: `${sy}L`, sub: `${St().n(L[k], 4)}(${n2(R.Lt)})`, value: tot(sk), unit: kip, d: 2, ref: 'Statics', ok: Math.abs(tot(sk) - a) <= 1e-6 * Math.max(1, a),
+        note: `w = ${St().n(L[k], 4)} klf (${{ girder: 'girder loads', module: 'loads module', manual: 'entered', none: 'none entered', calc: 'calculated, q_CL × b_trib' }[L.src[k]]}).` }); });
+    // construction live load and finishing machine (CLC, 2026-11-09): the calculated w_CL, the machine's share and its largest moments
+    if (L.src.CL === 'calc') { const C = L.cl, G = R.line != null ? `G${R.line + 1}` : 'the girder';
+      w.add({ id: 'CL.q', label: `Construction live load on the deck (${C.qSrc === 'entered' ? 'entered' : C.qSrc === 'owner' ? `owner rule, ${C.qCite}` : 'default'})`, sym: 'q_{CL}', eq: '', sub: '', value: C.q, unit: 'psf', d: 1, ref: C.qSrc === 'owner' ? C.qCite : `${ED} Art. 3.4.2.1`,
+        note: `AASHTO LRFD 10th Ed. Art. 3.4.2.1 requires the construction loads but gives no value.${C.qSrc === 'default' ? " 20 psf: this app's default (as the overhang bracket construction load of the Constructibility tab, 0.020 ksf)." : ''}${C.own ? ` Owner minimum ${C.own} psf (${C.ownCite}).` : ''}` });
+      w.add({ id: 'CL.w', label: `Construction live load on the girder (tributary deck width of cross-section girder ${G}, worked on the Loads & LLDF tab: dl.${G}.trib)`, sym: 'w_{CL}', eq: '\\frac{q_{CL}}{1000}b_{trib}', sub: `\\frac{${n1(C.q)}}{1000}(${n3(C.trib)})`, value: C.w, unit: 'klf', d: 4, ref: `${ED} Art. 3.4.2.1` }); }
+    if (R.fm) { const F = R.fm;
+      w.add({ id: 'fm.Pj', label: `Finishing machine: share of the pair of loads to this girder (lever rule; loads at ${n2(F.xL)} and ${n2(F.xR)} ft from the left deck edge)`, sym: 'P_{j}', eq: 'P_{fm}(\\text{share}_{L} + \\text{share}_{R})', sub: `${n2(F.P)}(${n4(F.sh[0] / F.P)} + ${n4(F.sh[1] / F.P)})`, value: F.Pj, unit: kip, d: 3, ref: `${ED} Art. 4.6.2.2.1, 3.4.2.1`,
+        note: 'Outside the exterior girder: P(1 + a/S) on it and −Pa/S on the next girder; between two girders: in proportion to the distances. Moved along the bridge on the steel section (I_s) as one point load; at each station the larger effect of the sign of M_DC1 + M_CL is added to M_CL (V likewise).' });
+      for (let k = 0; k < R.spans.length; k++) { const a = R.supIdx[k], b = R.supIdx[k + 1]; let ip = a; for (let i = a; i <= b; i++) if (Math.abs(F.M[i]) > Math.abs(F.M[ip])) ip = i;
+        w.add({ id: `fm.M.s${k + 1}`, label: `Finishing machine moment, span ${k + 1}, at x = ${n2(R.x[ip])} ft (added to M_CL)`, sym: 'M_{fm}', eq: 'P_{j}\\,\\eta_{M}', sub: `${n3(F.Pj)}(${n2(F.M[ip] / F.Pj)})`, value: F.M[ip], unit: kft, d: 1, ref: `${ED} Art. 3.4.2.1`, note: 'η_M: the moment influence-line ordinate (ft) at the machine\'s position, on I_s.' }); } }
     // key moments per span and pier
     const x = R.x, at = (arr, i) => arr[i];
     for (let k = 0; k < R.spans.length; k++) {
@@ -483,5 +551,5 @@
       R: (R.llR || []).map((r, k) => ({ max: r.max + (Q ? Q.R[k].max : 0), min: r.min + (Q ? Q.R[k].min : 0) })), pl: Q };
   }
 
-  window.SBDAnalysis = { DEF, STEEL_PLF, grid, settings, lineOf, deflOwner, moduleOf, loadsOf, dfOf, deadOverride, dfOverride, sbOf, analyzeGirder, pourRegions, ready, llPL };
+  window.SBDAnalysis = { DEF, STEEL_PLF, grid, settings, lineOf, deflOwner, moduleOf, loadsOf, dfOf, deadOverride, dfOverride, clOf, fmOf, sbOf, analyzeGirder, pourRegions, ready, llPL };
 })();

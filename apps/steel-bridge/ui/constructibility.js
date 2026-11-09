@@ -93,7 +93,7 @@
       const gg = P.girders[g];
       what = `${esc(gg.label || gg.id)}: ${F.locs.length} locations from this project's analysis (dead loads; <a href="#" data-gotab="an">Analysis tab</a>): M<sub>DC1</sub>, V<sub>DC1</sub> (steel and the whole wet deck), `
         + (F.seq ? 'M<sub>DCc</sub> = the noncomposite envelope of the deck placement sequence (an.seq.MDCc)' : 'no pour sequence (simple spans, noncomposite, or the sequence off): M<sub>DC1</sub>')
-        + `, construction live load M<sub>CL</sub>, V<sub>CL</sub>${AR.loads && AR.loads.CL ? ` (w = ${fmt(AR.loads.CL, 3)} klf)` : ' (not entered: 0)'}. Brace points: ${D.br ? "bearings and this girder's cross-frames from the Framing &amp; bracing tab" : `bearings and cross-frames at most ${fmt(F.Lb, 2)} ft apart`}; stiffener panels from the Stiffeners tab; ${flTxt(D)}.`
+        + `, construction live load M<sub>CL</sub>, V<sub>CL</sub>${AR.loads && AR.loads.CL ? ` (w = ${fmt(AR.loads.CL, 3)} klf${AR.loads.src.CL === 'calc' ? `, calculated q<sub>CL</sub> × b<sub>trib</sub> = ${fmt(AR.loads.cl.q, 0)} psf × ${fmt(AR.loads.cl.trib, 2)} ft, worked on the <a href="#" data-gotab="an">Analysis tab</a> (an.CL.w)` : ''}${AR.fm ? `; with the finishing machine, P<sub>j</sub> = ${fmt(AR.fm.Pj, 2)} kip moving (an.fm.*)` : ''})` : ' (not entered: 0; Loads tab)'}. Brace points: ${D.br ? "bearings and this girder's cross-frames from the Framing &amp; bracing tab" : `bearings and cross-frames at most ${fmt(F.Lb, 2)} ft apart`}; stiffener panels from the Stiffeners tab; ${flTxt(D)}.`
         + (AR.warnings && AR.warnings.length ? `<br>${AR.warnings.map(esc).join('<br>')}` : '');
     }
     const R = C.girder(F.locs, F.prj, { supports: F.supports, oh: F.oh });

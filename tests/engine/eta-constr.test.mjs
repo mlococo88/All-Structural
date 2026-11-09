@@ -11,7 +11,9 @@ const W = loadShared(...['units.js', 'steps.js', 'vehicles.js', 'moving-load.js'
   'engine/lldf.js', 'engine/loads.js', 'engine/shear.js', 'engine/stiffeners.js', 'engine/analysis.js', 'engine/fatigue.js', 'engine/studs.js', 'engine/framing.js', 'engine/crossframes.js',
   'engine/constructibility.js', 'engine/splices.js', 'ui/demands.js', 'ui/flexure.js', 'ui/shear.js', 'ui/framing.js', 'ui/splices.js', 'ui/constructibility.js'].map(E)));
 const J = v => JSON.parse(JSON.stringify(v)), near = (a, b, t, m) => assert.ok(Math.abs(a - b) <= t, `${m}: ${a} vs ${b}`);
-const proj = (ridot, ext) => { const P = W.SBDModel.defaultProject(); if (ridot) P.ownerRules = { owner: 'RIDOT', eta: { D: 'no', R: 'auto', I: 'yes' } }; if (ext) P.girders[0].position = 'exterior'; return P; };
+// CLC (2026-11-09): a new project calculates its construction live load; these hand values are for M_CL = 0, so the projects here keep the
+// former default (clCalc off, as a project saved before). The η factors on γ_CL are what this test checks.
+const proj = (ridot, ext) => { const P = W.SBDModel.defaultProject(); P.analysis.clCalc = false; if (ridot) P.ownerRules = { owner: 'RIDOT', eta: { D: 'no', R: 'auto', I: 'yes' } }; if (ext) P.girders[0].position = 'exterior'; return P; };
 
 test('Deck placement factors × the owner\'s η (not m): Constructibility, overhang brackets, Shear GS16, Cross-frames M_u, Splices (ETAC)', () => {
   const C = W.SBDConstr, L = W.SBDOwners.loadFactors('RIDOT', { I: 'yes' }, 5); assert.equal(L.etaC, 1.05); assert.equal(L.m, 1.2);

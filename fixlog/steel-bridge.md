@@ -4101,3 +4101,46 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
 - **Check case:** default project, G1 (cross-section G2): Loads tab, Dead loads: tick "Override calculated value", DC2 = 0.4 → Analysis: DC2 0.4000 klf "entered (override)", DC1 wet 1.1652 and DW 0.2075 klf "calculated"; untick → DC2 0.2505 klf (module). A project whose loads module gives none (no girder spacing) with DC1wet 1.1, DC2 0.25 entered opens with the box ticked and the same results.
 - **How verified:** main vs branch (`analyzeGirder` every station array, reactions, LL/fatigue envelopes, camber, M_DCc, and the Constructibility ratios): default project, a skewed (35°) 4-span 100-130-120-90 ft project with two girders, the default project with stored manual loads/factors (module works: ignored, as before), and one with manual loads/factors where the loads module gives none and no framing: all identical. New `tests/engine/analysis-overrides.test.mjs`. 0 console errors.
 - **Other copies:** none.
+
+## 2026-11-09 — PR: claude/sb-construction-ll (PR #1259: https://github.com/mlococo88/All-Structural/pull/1259) (CLC) — construction live load calculated, w_CL = q_CL × b_trib; optional finishing machine; old projects unchanged   [RESULT CHANGE for new projects: §4 callout]
+- **Engineer:** 2026-11-09, decision C: "There is a lot of input on loading that the app should be able to calculate itself." The construction live load was the only analysis load entered by hand.
+- **Where:** `engine/analysis.js`:
+  - `loadsOf()` CL: before `A.CL`, else `loadsManual.CL`, else 0. After: `A.CL`; else `loadsManual.CL` when `girder.clOverride` is on (absent: on when a value is entered); else `clOf(P, M).w` when `P.analysis.clCalc === true`; else 0.
+  - New `clOf(P, M)`: q_CL = `P.analysis.qCL`, else the owner rule `cll` (CTDOT BDM V2 3.17CT, 50 psf), else `CL_PSF` = 20 psf. b_trib = `SBDLoads.girder().trib`. w_CL = q_CL/1000 × b_trib.
+  - New `fmOf(P, mod, j)`: the finishing machine, a pair of P_fm loads at e_fm from each deck edge. The lever-rule share is P_j. In `analyzeGirder()`, a moving point load P_j on I_s (`ML().analyze`, one 1-kip axle, no lane, no IM). At each station the sign that adds to M_DC1 + M_CL,u (V likewise) is added to `st.CL`, and the largest reaction is added. `st.CLu` keeps the uniform part for its statics check. `pick()` was hoisted out of the live-load block, unchanged.
+  - Steps added: `an.CL.q`, `an.CL.w`, `an.fm.Pj`, `an.fm.M.s<k>`. Warning when q_CL is below the owner minimum (`cll.min`).
+- **Other files:**
+  - `engine/model.js`: `defaultProject()` gets `analysis: { clCalc: true }`. The header documents `clCalc`, `qCL`, `fm` and `girders[i].clOverride`.
+  - `ui/analysis.js`: the Construction live load card (Calculate box, q_CL, the derivation, Override box, entered klf) and the Finishing machine card. The Analysis tab shows the CL source and links to the steps.
+  - `ui/constructibility.js`: the demand line shows the calculated w_CL and links to its derivation.
+- **§4 callout:**
+  - **Load:** construction live load on the girder line, used in the deck placement checks GS14–GS16 (γ construction 1.50 × η).
+  - **Before:** w_CL = 0 unless entered.
+  - **After (new projects):** w_CL = q_CL/1000 × b_trib.
+  - **Basis:** AASHTO LRFD 10th Ed. Art. 3.4.2.1 requires construction loads at the Strength limit state but gives **no specific value**. q_CL = 20 psf is a *Decision (pending engineer review)*: this app's existing overhang-bracket construction load (`OH_DEF.qCL` 0.020 ksf, from GirderDetail's Deck overhang module). CTDOT BDM V2 3.17CT gives 50 psf (owner rule `cll`) and its minimum (`cll.min`).
+  - **Distribution:** b_trib is the tributary deck width (loads module, step `dl.Gj.trib`).
+  - **Finishing machine:** lever rule, AASHTO LRFD 4.6.2.2.1.
+- **Check case (default project, G1 on cross-section girder G2, interior):**
+  - b_trib = (9.5 + 9.5)/2 = 9.50 ft. w_CL = 20/1000 × 9.50 = **0.190 klf** (before 0). Statics ΣR = 0.190 × 360 = 68.40 kip.
+  - M_CL max 0 → 338.1 kip-ft.
+  - Constructibility: the governing GS14 at x = 77 ft goes 0.7866 → 0.7579. f_bu + f_ℓ/3 rises 7.384 → 7.461 ksi and φF_nc rises 9.388 → 9.844 ksi: the nonprismatic unbraced length (6.10.8.2.3c) sets F_e from the governing section's stress.
+  - Pier region (x = 250 ft, bottom flange): 0.4807 → 0.5570. x = 110 ft: 0.4719 → 0.5441.
+  - Exterior girder (G1): b_trib = 3.25 + 9.5/2 = 8.00 ft, w_CL = 0.160 klf, GS14 0.6204 → 0.5987.
+  - CTDOT: q = 50 psf, w = 0.475 klf (interior).
+- **Finishing machine check:** P = 3 kip each, e = 1 ft:
+  - a = 3.25 − 1 = 2.25 ft outside G1. G1 takes 3(1 + 2.25/9.5) = 3.7105 kip and G2 takes −0.7105 kip.
+  - Simple span 100 ft, G1: M = 3.7105 × 25 = 92.76 kip-ft added at midspan (plus wL²/8 = 0.16 × 100²/8 = 200.0).
+- **Saved data (§5):** new optional `analysis.clCalc`, `analysis.qCL`, `analysis.fm`, `girders[i].clOverride`.
+  - A project saved before has no `clCalc`, so it is not calculated: w_CL stays 0, or the entered `loadsManual.CL`, which stays as the override. Results are identical (checked below).
+  - A legacy import (`engine/legacy.js` `fromParts`) resets `P.analysis` as before. GirderDetail's construction LL arrives as `loadsManual.CL`, as before.
+- **Decisions (pending engineer review):**
+  1. 20 psf default when the owner gives none.
+  2. Old projects are not switched to calculated (the box is on the Loads tab).
+  3. The finishing machine is a pair of equal loads, one per overhang, moving together. Lever-rule shares include the uplift share on the first interior girder. The effect is taken with the sign that adds to the deck placement effect.
+  4. The overhang bracket checks (OH1–OH5) keep their own q_CL and P_fm inputs on the Constructibility tab. They are not fed from these to keep their saved values. To unify on request.
+  5. DC2, DW and utilities were already calculated by the loads module (barriers/curbs, wearing surface, cross-section added loads) whenever the cross-section is complete. Where it gives none, the cross-section is incomplete and nothing can be calculated, so no new DC2/DW/UT calculation was added.
+- **How verified:** main vs branch on the projects listed in the PR:
+  - identical for every project saved before (default and skewed 4-span without `clCalc`; the manual projects);
+  - for new projects, only M_CL / V_CL / R_CL and the constructibility ratios that use them differ.
+  - New `tests/engine/construction-ll.test.mjs` (hand checks above). 0 console errors.
+- **Other copies:** none.
