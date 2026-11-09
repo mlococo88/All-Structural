@@ -4506,3 +4506,30 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
   - Smoke tests: steel-bridge wiring, paths, report, graphics, drawings, summary, dash, deflection, equal-spacing, splice-addrow, taberrors, library, tabgraphics-b; phone-layout `sbapp`; project-library.
 - **Other copies:** none.
 - **Open items:** other folder tools, and single-file tools that load `shared/*.js`, could get the same loader (follow-up).
+
+## 2026-11-09 — PR: sbqa-form-layout (PR #TBD) — form rows: long labels wrap in their own column, drop-downs show their choice (QAF; display only)
+- **Problem (visual QA pass, engineer request 2026-11-09):** in `.fRow` form rows (every input tab and the option rows at the top of the
+  output tabs) the label kept its full one-line width, so a label longer than about 200 px pushed its input or its unit onto a line of its
+  own (Cross-section: "ft" under "Left overhang (girder ℄ to deck edge)", "in" under the deck rebar centroid inputs; 30 rows over the input
+  tabs at 1440 px, 32 at 390 px). Every drop-down was a fixed 110 px, so most choices were cut ("Individual sp", "Lightest stee",
+  "This project'", "AASHTO LRF"; 57 drop-downs at 1440 px).
+- **Where:** `apps/steel-bridge/index.html` `<style>`, right after `.fRow label{min-width:170px;font-size:10pt;}`, anchor `QAF (2026-11-09)`.
+  - Before: (no rule)
+  - After:
+    ```css
+    .fRow>label:first-child{flex:0 1 auto;max-width:calc(100% - 150px);}
+    .fRow>select{flex:1 1 110px;width:110px;min-width:110px;max-width:max-content;}
+    ```
+  - The first label of a row may take the row width less 150 px (a 110 px input, the gaps and a short unit) and wraps inside that; short
+    labels keep the 170 px minimum, so inputs stay where they were. A drop-down starts at 110 px and grows into the free space of its row,
+    never wider than its longest choice.
+- **Result:** rows with the input or unit on a line of its own 30 → 4 at 1440 px and 32 → 4 at 390 px. The 4 left are units wider than the
+  reserved space ("kip-ft", "trucks/day", "ft apart", "(2.5.2.6.2)"). Drop-downs with their choice cut 57 → 22 (1440 px): those with a very
+  long choice in a full row.
+- **Governing provision:** none (display only; no formula, factor, unit, code reference, key or saved data changed).
+- **Check case:** Cross-section tab at 1440 px: "Left overhang (girder ℄ to deck edge)" wraps to two lines and its input and "ft" sit on
+  the same line; Girder spacing shows "Individual spacings" in full.
+- **How verified:** headless Chromium, origin/main vs branch: the digit sequences of every input tab, every output tab and the built
+  Report are identical (default project); before/after screenshots; `node tests/check-syntax.mjs`; steel-bridge smoke tests; phone-layout
+  `sbapp`; project-library.
+- **Other copies:** none.
