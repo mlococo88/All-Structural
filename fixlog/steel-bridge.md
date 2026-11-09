@@ -4144,3 +4144,92 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
   - for new projects, only M_CL / V_CL / R_CL and the constructibility ratios that use them differ.
   - New `tests/engine/construction-ll.test.mjs` (hand checks above). 0 console errors.
 - **Other copies:** none.
+
+## 2026-11-09 — PR: claude/sb-autorun (PR #1260: https://github.com/mlococo88/All-Structural/pull/1260) (AUTO) — an output tab runs itself when selected; inputs changed while open re-run it after 600 ms; Re-run button; Drawings calculated girder by girder   [display only; no result change]
+- **Engineer:** 2026-11-09: "Whenever I select a new output tab I have to press the button to re-run. Can it just be set up so that when an output tab is selected it just automatically re-runs?"
+- **Where:** `index.html`:
+  - The block `/* AUTO (2026-11-09 … */` before `drawOut()`: `AUTO_BTN` (each tab's own Calculate button: sec/loads `#bCalc`, flex `#fx_calc`, shear `#sh_calc`, an `#anCalc`, fat `#fa_calc`, cn `#cn_calc`, spl `#sp_calc`, rt `#rt_calc`, wt `#wt_calc`, dwg `#dwg_calc`), `autoRun()`, `autoWatch()` and `autoMsg()`.
+  - The old `drawOut()` was renamed `drawOut0()`; the new `drawOut()` = `drawOut0(); autoRun();`.
+  - A MutationObserver on `#out` handles a tab's own redraws.
+  - `#autoBar` holds the status (spinner, "Inputs changed — updating…", "Calculating…") and the **Re-run** button `#bRerun`.
+  - The tab bar and the `goto` links set `autoNow` (run at once).
+- **Rule:**
+  - When the tab draws itself as out of date (its own check: the project, girder and its choices against its last run), its button is pressed for the user. This happens at once on selecting the tab, and after 600 ms of quiet after an input change.
+  - A tab that is up to date is not re-run.
+  - A run that leaves the tab out of date (an error) is not repeated until the project or the tab's choices change (`autoLast`, the content key).
+  - **Manual:** Auto design (its Run on the Auto design input tab) and the Report (Build). The 3D view has no calculation.
+- **Drawings:** `engine/sheets.js` gets `resultsAsync(P, G, onStep)`: `results()` one plate girder at a time, with a timer between girders. It makes the same calls, in the same order, with the same memo. `ui/drawings.js` calculates through it (`calcAsync`) and shows "Calculating… girder i of n".
+- **Slow tabs (> 2 s on the default project):** Flexure 6.0 s, Shear 6.2, Fatigue 6.4, Analysis 6.1, Field splices 6.2, Rating 6.2, Welds 6.0, Drawings 6.7, when it is the first tab to run the girder analysis. The others then take it from the shared analysis cache, 0.1–0.7 s. Constructibility takes 0.4 s; Section and Loads under 0.1 s.
+  - A spinner is painted before the run starts.
+  - The one girder analysis is a single computation and cannot yield inside it without an engine change. The Drawings yield between plate girders.
+- **Tests (app right, tests stale):**
+  - `tests/smoke/steel-bridge-paths.mjs` failed on main: it pressed `#fx_calc` on the second Flexure visit, when the tab is up to date and the button hidden (the app correctly runs nothing). It also expected the Welds sources `['analysis', 'file']`, but the custom-demands PR (2026-11-01) added 'custom'. Now: select the tab and wait (`settle()`); the options are `['analysis', 'custom', 'file']`.
+  - `tests/smoke/steel-bridge-tabgraphics-b.mjs` failed on main: its double-click "fit" at the graphic's top-left landed on the sticky output tab bar (two rows of tabs since the Auto design and 3D tabs), which opened the Field splices tab, so the shear graphic was gone. Now: double-click below the tab bar.
+  - `steel-bridge-graphics`, `-wiring`, `-drawings` wait for the tab to run instead of pressing its button.
+- **Formulas, factors, units, code references, saved data:** none changed. The same results come from the same button and code path. The Drawings results from `resultsAsync` equal those of `results()` (default project, JSON compared, identical).
+- **Check case:** default project.
+  - Open Flexure: "Calculating…" appears, then the results, with no button press (6.0 s).
+  - Open Shear: results in 0.5 s.
+  - Back to Flexure: nothing runs (one analysis in the cache).
+  - Change f′c to 4.5 on Materials: "Inputs changed — updating…", then Flexure runs again (6.2 s).
+  - Re-run: runs again.
+## 2026-11-09 — PR: claude/sb-advars-dialog (PR #1262: https://github.com/mlococo88/All-Structural/pull/1262) (ADVD) — Auto design input tab: the design variables (and the field splice placement rules) open in a dialog; the panel shows a summary   [display only; no result or saved-data change]
+- **Engineer:** 2026-11-09: "Can the auto design design variables open in a pop-up window? It currently doesn't fit in the available width of the input panel."
+- **Where:** `ui/autodesign.js`.
+  - `varsHtml(P, s)` was split. `rowsHtml(P, s)` holds the former row-building code, unchanged. `varsTableHtml(P, s)` is the table plus `splRulesBox()`, drawn in the dialog. `summaryHtml(P, s)` is in the panel: one line per group ("Flanges: 5 Auto, 1 Locked"), a chip per variable that opens the dialog at its row, "Edit design variables…" (`#ad_vars_edit`), and the splice-rules line with "Edit…".
+  - New `dlg()`, `fill()`, `openVars(go)` (exported). `CUR` holds the last `{ P, ctx }` of `wire()`. `wire()` refreshes an open dialog after every redraw (an edit, Undo, Redo) and wires `[data-advgo]`.
+  - CSS: `.ad-sum`, `.ad-chips`, `.ad-chip`, `dialog#adVarsDlg` (min(1100 px, 90vw), 90vh, scrolling inside; full screen at ≤ 700 px), `#adVarsDlg .ad-vars{min-width:760px}` (the table scrolls sideways inside the dialog on a phone).
+- **Dialog:** a native `<dialog>` opened with `showModal()`. Escape closes it, the page behind is inert (focus trapped), Close returns the focus to the Edit button. The inputs keep their `data-adv` / `data-ad` attributes, and `setAdv` / `setAd` write `P.autodesign.vars` / `.splRules` exactly as the panel's handlers did. Each change calls `ctx.changed(true)` (one Undo step), live, with no Apply.
+- **Links to a variable:** each chip (`data-advgo="<id>"`) opens the dialog with that row highlighted and its mode focused. "Edit…" of the splice rules (`#spr`) opens the rules. Today `SBDModel.validate` reports no error at `autodesign.vars.*` (checked), so there is no error marker to point there; `openVars(id)` is exported for one.
+- **Check case:** default project, Auto design input tab.
+  - Chip "Web thickness t_w: Auto" → the dialog opens with that row highlighted and its select focused.
+  - In the dialog: t_w Lock; D Range 54–72; shipping piece length 110 ft. Project JSON (localStorage) byte-identical to the same edits made in the panel on main (8274 chars).
+  - Undo removes the last edit in both.
+  - At 390 px the dialog is full screen (390 × 844) with no page horizontal scroll; at 1440 px it is 1100 px wide.
+- **Formulas, results, saved data:** none changed (§4, §5).
+- **How verified:** `node tests/check-syntax.mjs`; smoke `phone-layout` (input tabs at 390 px), `steel-bridge-*`; screenshots in the PR.
+## 2026-11-09 — PR: claude/geomxfer-sender (GXF-2) — "Send to Substructure Loading" with Geometry and Reactions: the new superGeometry hand-off and per-project copies of both channels   [no result change; saved data: new hand-off keys only]
+- **Why:** engineer decisions 2026-11-09 (new channel `superGeometry`, Steel Bridge app → Substructure Loading; "All hand-offs should be per
+  project"; sent copies through GitHub when Cloud sync is on). Spec: HANDOFF.md §4.14 and §5.1 (PR GXF-1, `shared/handoff-store.js`).
+- **Where:**
+  - `ui/handoffs.js`: new `sgSection(P, X)` and `sgPayload(P)` (anchor `function sgPayload(P) {`), exported on `window.SBDHandoffs` with `GEO`.
+    The card's row (anchor before: `data-ho="srSend">Send reactions to Substructure Loading</button>`) is now
+    `data-ho="subSend">Send to Substructure Loading</button>` with the boxes `data-ho-opt="geo"` (Geometry) and `data-ho-opt="rx"`
+    (Reactions), both ticked by default (kept while the page is open, not saved), and `data-ho="subFile"` Export hand-off (JSON).
+    `onClick` before: `if (a === 'srSend' || a === 'srFile') { const r = srPayload(P); … }` (publish `superReactions`, copy
+    `.by.girderdetail`, alert); after: `if (a === 'subSend' || a === 'subFile') { subSend(P, a === 'subFile'); return false; }`.
+    New `subSend(P, file)` (anchor `async function subSend(P, file) {`): builds every ticked channel first (nothing is sent when one
+    fails), adds the optional envelope field `device` (the Cloud sync device name, when set), publishes each with `BridgeXfer.publish`,
+    writes its `.by.<id>` copy (`superGeometry.by.steelbridge`; `superReactions.by.girderdetail`, as before), then
+    `SharedHandoffStore.send` (per-project copy `bridgeSuite.v1.<channel>.by.steelbridge.<project id>` and, with Cloud sync, the upload to
+    `handoffs/<channel>/steelbridge/<project id>.json`). Export: one file per ticked channel (each with `producedAt`).
+  - `index.html`: `<script src="../../shared/handoff-store.js"></script>` after `shared/github-sync.js`.
+- **Payload (`sgPayload`, inputs only, no analysis):** spans and continuity; per support `id`, `x`, `skew` (as entered: + = the right end of
+  the support line, looking ahead station, is ahead; from `engine/framing.js` `xb = sup + (y_i − y_c)·tan θ` with y from G1 to Gn),
+  `joint` (abutments `end`; piers `continuous`, or `joint` for simple spans), `depth` (deepest segment touching the station on any plate
+  girder); `girders` { count = `xs.nb`, `xs.bays`, `xs.ohL`, `xs.ohR` }; `edges` through `SBDLoads.edgeIn` (width = the traffic-face
+  distance the live load uses); `deck` { ts, total = tdeck, haunch }; `section` { largest total depth D + t_top + t_bot, largest b_f, t_f,
+  t_w (each on its own), `atSupports`, `spanMax` }; `ownerRules` (as the reactions); `contentHash` = `SharedHandoffStore.geometryHash`;
+  checked with `SharedHandoffStore.checkGeometry` before sending.
+- **Check case (default project):** spans 110–140–110 ft continuous; supports Abut. 1 (0 ft, end, 61.875 in), Pier 1 (110, continuous,
+  63.5), Pier 2 (250, continuous, 63.5), Abut. 2 (360, end, 61.875); skews 0; 5 girders at 9.5 ft, overhangs 3.25 / 3.25 ft; barriers
+  1.5 ft (traffic face 1.5 ft), height not sent; deck 8 in (total 8.5), haunch 2 in; section: positive region 60 + 0.75 + 1.125 =
+  61.875 in, pier region 60 + 1.5 + 2 = 63.5 in → depth 63.5, b_f max(16, 18) = 18, t_f 2, t_w 0.5625. Picker summary "3 spans,
+  110–140–110 ft, 5 girders". Project id `~New steel bridge`.
+- **Results:** none change: `sgPayload` reads the inputs only (Node test: the project JSON and the DC1 reactions are identical after it);
+  the reactions payload is built by `srPayload` exactly as before.
+- **Saved data (CLAUDE.md §5):** the project format is unchanged. New hand-off keys only: `bridgeSuite.v1.superGeometry`,
+  `.updatedAt`, `.by.steelbridge`, `bridgeSuite.v1.superGeometry.by.steelbridge.<project id>`, `bridgeSuite.v1.superReactions.by.steelbridge.<project id>`
+  (and `bridgeSuite.v1.handoffStore.pending` while sync is set up). The keys written before (`superReactions`, `.updatedAt`,
+  `.by.girderdetail`) are written as before, so Substructure Loading's current Pull keeps working.
+- **Decisions (pending engineer review):**
+  1. `project.bridgeId` is blank (the app has no Bridge ID field); the per-project id is then the project name alone.
+  2. Barrier height is not sent (the app has no barrier height input; the drawings' 34 in is a drawing default). Curb height and the
+     railing load point are sent for a curb edge, not as a barrier height.
+  3. No project name → no per-project copy (only the latest hand-off, listed by the receiver as "earlier hand-off (no project)").
+  4. Geometry and Reactions boxes are not saved with the project (both ticked each time the page opens).
+- **How verified:** `node tests/engine/run.mjs` (3 new tests in `handoffs.test.mjs`: default bridge hand values; curb edge, simple spans,
+  signed skews, a deeper pier segment, refusals; no change to the project or its results); new `tests/smoke/geometry-handoff.mjs`
+  (sender: nothing on load, both boxes ticked, both channels' keys and per-project copies identical to the published payload, Geometry
+  alone, no project name → no per-project copy; 0 console errors); steel-bridge smoke tests.
+- **Other copies:** none.

@@ -22,6 +22,7 @@
 <script src="../../shared/projects.js"></script>
 <script src="../../shared/projects-ui.js"></script>
 <script src="../../shared/github-sync.js"></script>
+<script src="../../shared/handoff-store.js"></script>   <!-- GXF (2026-11-09): per-project hand-off copies (HANDOFF.md §5.1), used by ui/handoffs.js -->
 <script src="engine/legacy.js"></script>
 <script src="ui/legacy.js"></script>
 <script src="engine/sections.js"></script>
@@ -117,6 +118,9 @@
   .inTabs button[aria-selected="true"],#tabBar button[aria-selected="true"]{background:var(--paper);font-weight:600;color:var(--color-primary);box-shadow:inset 0 3px 0 var(--color-secondary);}
   .inDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--fail);margin-left:6px;}
   .inTabs button.has-err .inDot{display:inline-block;}
+  #autoBar{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin:6px 0 2px;font-family:var(--font-ui);font-size:9pt;color:#475569;min-height:26px;} #autoBar[hidden]{display:none;}
+  #autoBar .spin{display:inline-block;width:12px;height:12px;border:2px solid #CBD5E1;border-top-color:var(--color-primary);border-radius:50%;animation:sbspin .8s linear infinite;vertical-align:-2px;margin-right:6px;}
+  @keyframes sbspin{to{transform:rotate(360deg);}} @media (prefers-reduced-motion:reduce){#autoBar .spin{animation:none;}}
   #tabBar{position:sticky;top:0;background:var(--paper);z-index:10;display:flex;gap:2px;border-bottom:2px solid var(--ink);padding:8px 0 0;flex-wrap:wrap;}
   .pane[hidden]{display:none!important;}
   .sec{border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface);margin:10px 0;overflow:hidden;box-shadow:0 1px 2px rgba(15,23,42,.04);}
@@ -174,7 +178,7 @@
   body dialog.spLib,#hdrBtns button.spChip[data-sp]{font-family:var(--font-ui);}
   #toast{position:fixed;right:14px;top:84px;max-width:min(520px,calc(100vw - 28px));max-height:60vh;overflow:auto;z-index:50;background:#fff;border:1px solid var(--slate-400);border-left:4px solid var(--navy-800);border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,.25);padding:8px 12px;font-family:var(--font-ui);font-size:9.5pt;}
   #toast[hidden]{display:none;} #toast.err{border-left-color:var(--fail);} #toast ul{margin:4px 0 6px;padding-left:18px;} #toast .tBtns{display:flex;gap:6px;justify-content:flex-end;margin-top:4px;} #toast .tFld{font-weight:600;} #toast .tArr{color:#475569;}
-  @media print{ #hdrBtns,#toast,#libDlg,.inTabs,#tabBar,#inputPanel{display:none!important;} html,body{overflow:visible;height:auto;} #app{height:auto;box-shadow:none;} #outputPanel{overflow:visible;}
+  @media print{ #hdrBtns,#toast,#libDlg,.inTabs,#tabBar,#autoBar,#inputPanel{display:none!important;} html,body{overflow:visible;height:auto;} #app{height:auto;box-shadow:none;} #outputPanel{overflow:visible;}
     .steps li{break-inside:avoid;} .katex,.katex *{-webkit-print-color-adjust:exact;print-color-adjust:exact;} .katex .frac-line,.katex .overline-line,.katex .underline-line{border-bottom-color:#000!important;min-height:1px;} .katex-display{overflow:visible;} }
 </style>
 </head>
@@ -207,6 +211,7 @@
     </aside>
     <main id="outputPanel">
       <div id="tabBar" role="tablist"><button type="button" role="tab" aria-selected="true" data-otab="sec">Section properties</button><button type="button" role="tab" aria-selected="false" data-otab="flex">Flexure</button><button type="button" role="tab" aria-selected="false" data-otab="loads">Loads &amp; LLDF</button><button type="button" role="tab" aria-selected="false" data-otab="shear">Shear &amp; stiffeners</button><button type="button" role="tab" aria-selected="false" data-otab="fat">Fatigue &amp; studs</button><button type="button" role="tab" aria-selected="false" data-otab="an">Analysis</button><button type="button" role="tab" aria-selected="false" data-otab="cn">Constructibility</button><button type="button" role="tab" aria-selected="false" data-otab="cf">Cross-frames</button><button type="button" role="tab" aria-selected="false" data-otab="spl">Field splices</button><button type="button" role="tab" aria-selected="false" data-otab="rt">Rating</button><button type="button" role="tab" aria-selected="false" data-otab="wt">Welds</button><button type="button" role="tab" aria-selected="false" data-otab="rpt">Report</button><button type="button" role="tab" aria-selected="false" data-otab="dwg">Drawings</button><button type="button" role="tab" aria-selected="false" data-otab="ad">Auto design</button><button type="button" role="tab" aria-selected="false" data-otab="3d">3D view</button></div>
+      <div id="autoBar" hidden><span id="autoMsg" role="status" aria-live="polite"></span><button type="button" id="bRerun" title="Calculate this tab again now">Re-run</button></div>
       <div id="out"></div>
     </main>
   </div>
@@ -505,7 +510,37 @@
   const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${ST.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`;
   const stepsHtml = list => ST.groupsHTML(window.SBDFlexureUI.groups('sec', list), { open: secOpen, item: stepLi });   // topics (SBDFlexureUI.TP), as the Flexure tab
   const wk = (id, txt) => `<a class="wk" href="#st-${id}">${txt || 'see work'}</a>`;
-  function drawOut() {
+  /* AUTO (2026-11-09, engineer: "when an output tab is selected it just automatically re-runs"): after an output tab is drawn, its own
+     Calculate button is pressed for the user when the tab shows its results as out of date (the tab's own check: the project, girder and the
+     tab's choices against its last run; nothing is recalculated when they are unchanged). Selecting the tab runs it at once; an input change
+     while the tab is open runs it after AUTO_MS of quiet ("Inputs changed — updating…"). The same button and code path as a manual press, so
+     the results are those of a manual run. The Re-run button presses it again on request. Auto design (heavy; its Run button on the Auto
+     design input tab) and the Report (its Build button) stay manual. A run that leaves the tab out of date (an error) is not repeated until
+     the project or the tab's choices change (autoLast). */
+  const AUTO_BTN = { sec: '#bCalc', loads: '#bCalc', flex: '#fx_calc', shear: '#sh_calc', an: '#anCalc', fat: '#fa_calc', cn: '#cn_calc', spl: '#sp_calc', rt: '#rt_calc', wt: '#wt_calc', dwg: '#dwg_calc' };
+  const AUTO_MS = 600, autoLast = {};
+  let autoT = null, autoNow = false, autoBusy = false, autoPend = false;
+  const autoBtn = t => AUTO_BTN[t] ? $('out').querySelector(AUTO_BTN[t]) : null;
+  const autoStale = (t, b) => !!b && (t === 'dwg' ? b.classList.contains('primary') && !b.disabled : !!(b.closest('.alert.stale') && !b.closest('.alert.stale').hidden));
+  const autoKey = t => t + '|' + ui.g + '|' + JSON.stringify(P) + '|' + [...$('out').querySelectorAll('select,input:not([type=file])')].filter(e => !e.closest('.alert')).map(e => e.id + '=' + (e.type === 'checkbox' ? e.checked : e.value)).join('&');
+  function autoMsg(t, busy) { const bar = $('autoBar'); bar.hidden = !AUTO_BTN[t]; $('autoMsg').innerHTML = busy ? `<span class="spin" aria-hidden="true"></span>${esc(busy)}` : ''; }
+  function autoRun() {
+    const t = ui.otab || 'sec', delay = autoNow ? 0 : AUTO_MS; autoNow = false; clearTimeout(autoT); autoPend = false; autoMsg(t, '');
+    if (autoBusy || !autoStale(t, autoBtn(t)) || autoLast[t] === autoKey(t)) return;
+    if (delay) autoMsg(t, 'Inputs changed — updating…');
+    autoPend = true;
+    autoT = setTimeout(() => { autoPend = false; if ((ui.otab || 'sec') !== t) return; const b = autoBtn(t); if (!autoStale(t, b)) return autoMsg(t, '');
+      const k = autoKey(t); if (autoLast[t] === k) return autoMsg(t, ''); autoLast[t] = k;
+      autoMsg(t, 'Calculating…'); autoBusy = true;
+      requestAnimationFrame(() => setTimeout(() => { try { b.click(); } finally { autoBusy = false; } if ((ui.otab || 'sec') === t) autoWatch(t); }, 0)); }, delay);
+  }
+  // a tab that calculates in steps (the Analysis tab, the Drawings) shows its own progress; the status clears when the tab is no longer out of date
+  function autoWatch(t) { const b = autoBtn(t); if (autoStale(t, b) || /Calculating/.test(($('out').querySelector('.alert:not(.stale)') || {}).textContent || '') || (b && b.disabled)) { setTimeout(() => (ui.otab || 'sec') === t && autoWatch(t), 250); return; } autoMsg(t, ''); }
+  function drawOut() { drawOut0(); autoRun(); }
+  $('bRerun').addEventListener('click', () => { const t = ui.otab || 'sec', b = autoBtn(t); if (!b) return; autoMsg(t, 'Calculating…'); requestAnimationFrame(() => setTimeout(() => { b.click(); autoWatch(t); }, 0)); });
+  // a tab's own redraw (a choice on the tab: demand source, girder, options) runs it at once; skipped while a run is pending or running
+  new MutationObserver(() => { if (autoBusy || autoPend) return; autoNow = true; autoRun(); }).observe($('out'), { childList: true });
+  function drawOut0() {
     document.querySelectorAll('#tabBar [data-otab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.otab === (ui.otab || 'sec'))));
     $('out').onchange = null; $('out').onclick = null;   // the Analysis tab's own handlers (ui/analysis.js sets them)
     if (ui.otab === 'flex') { window.SBDFlexureUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Flexure tab (ui/flexure.js)
@@ -518,8 +553,8 @@
     if (ui.otab === 'cn') { window.SBDConstrUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Constructibility tab (ui/constructibility.js)
     if (ui.otab === 'rt') { window.SBDRatingUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Rating tab (ui/rating.js)
     if (ui.otab === 'wt') { window.SBDWeldsUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Welds tab (ui/welds.js)
-    if (ui.otab === 'rpt') { ui.rpt = ui.rpt || {}; window.SBDReportUI.render($('out'), { P, g: ui.g, opts: ui.rpt, save: saveUi, goto: t => { ui.otab = t; saveUi(); drawOut(); $('outputPanel').scrollTop = 0; } }); return; }   // Report tab (ui/report.js; its choices kept in ui.rpt)
-    if (ui.otab === 'dwg') { window.SBDDrawingsUI.render($('out'), { P, g: ui.g, ui, saveUi, goto: t => { ui.otab = t; saveUi(); drawOut(); } }); return; }   // Drawings tab (ui/drawings.js)
+    if (ui.otab === 'rpt') { ui.rpt = ui.rpt || {}; window.SBDReportUI.render($('out'), { P, g: ui.g, opts: ui.rpt, save: saveUi, goto: t => { ui.otab = t; saveUi(); autoNow = true; drawOut(); $('outputPanel').scrollTop = 0; } }); return; }   // Report tab (ui/report.js; its choices kept in ui.rpt)
+    if (ui.otab === 'dwg') { window.SBDDrawingsUI.render($('out'), { P, g: ui.g, ui, saveUi, goto: t => { ui.otab = t; saveUi(); autoNow = true; drawOut(); } }); return; }   // Drawings tab (ui/drawings.js)
     if (ui.otab === '3d') { window.SBD3DUI.render($('out'), { P, ui, saveUi }); return; }   // 3D view tab (ui/view3d.js)
     const g = P.girders[ui.g] || P.girders[0], s = g && g.segments[ui.seg];
     let h = `<div class="alert stale"${stale ? '' : ' hidden'}><span>Results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="bCalc">Calculate</button></div>`;
@@ -551,7 +586,7 @@
   $('out').addEventListener('click', e => { const gt = e.target.closest && e.target.closest('[data-goto]'); if (gt) { e.preventDefault(); ui.itab = gt.dataset.goto; saveUi(); drawInputs(); return; }   // a link to an input tab
     if (e.target.id === 'bCalc') { calc(); return; } const id = UL.onOutClick(e, ui); if (id) { saveUi(); drawOut(); const t = ST.reveal($('out'), id.replace(/^st-/, '')) || $(id); if (t) { t.scrollIntoView({ block: 'center' }); t.style.background = '#FFF7D6'; } } });
   $('out').addEventListener('change', e => { if (e.target.id === 'o_region') { ui.region = e.target.value; saveUi(); calc(); } else if (UL.onOutChange(e, ui)) { saveUi(); drawOut(); } });
-  $('tabBar').addEventListener('click', e => { const b = e.target.closest('[data-otab]'); if (!b) return; ui.otab = b.dataset.otab; saveUi(); drawOut(); });
+  $('tabBar').addEventListener('click', e => { const b = e.target.closest('[data-otab]'); if (!b) return; ui.otab = b.dataset.otab; saveUi(); autoNow = true; drawOut(); });   // AUTO: selecting a tab runs it at once
 
   /* ---------- header ---------- */
   /* exportFile(Q): the .json download of Export JSON (STDS-B: also Save as > File on this computer, with the name typed there) */
