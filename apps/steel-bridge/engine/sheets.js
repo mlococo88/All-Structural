@@ -61,6 +61,24 @@
     } finally { if (AN) AN.analyzeGirder = orig; }
     return out;
   }
+  /* resultsAsync(P, G, onStep) (AUTO, 2026-11-09): results() one plate girder at a time, yielding to the page between them (a timer), so that
+     the page stays responsive and shows the progress; onStep(done, total) before each girder. The same calls in the same order with the same
+     memo as results(): the same results. Returns a Promise of results()'s value. */
+  function resultsAsync(P, G, onStep) {
+    const AN = window.SBDAnalysis, out = { pg: {}, pgs: [] };
+    const pgs = [...new Set(G.girders.map(g => g.pg))]; out.pgs = pgs;
+    const orig = AN && AN.analyzeGirder, memo = new Map();
+    const wrap = (P_, gi, o) => { if (P_ !== P) return orig(P_, gi, o); const k = gi + '|' + JSON.stringify(o || {}); if (!memo.has(k)) memo.set(k, orig(P_, gi, o)); return memo.get(k); };
+    const one = pg => { const r = { pg, err: {} };
+      try { const B = window.SBDReportData.compute(P, pg); r.B = B; Object.assign(r.err, B.err); r.an = B.an || null; r.spl = B.spl || null; r.fat = B.fat || null;
+        try { r.gov = window.SBDReportBuild.model(B).gov; } catch (e) { r.err.sum = e.message; } } catch (e) { r.err.all = e.message; }
+      try { const w = window.SBDWeldsUI.build({ P, g: pg }); if (w.err) r.err.wt = w.err; else r.wt = w; } catch (e) { r.err.wt = e.message; }
+      out.pg[pg] = r; };
+    return new Promise(res => { let i = 0;
+      const next = () => { if (i >= pgs.length) { res(out); return; } if (onStep) onStep(i, pgs.length);
+        setTimeout(() => { if (AN) AN.analyzeGirder = wrap; try { one(pgs[i]); } finally { if (AN) AN.analyzeGirder = orig; } i++; next(); }, 0); };
+      next(); });
+  }
   const resOf = (C, g) => (C.RS && C.RS.pg && C.RS.pg[g.pg]) || null;
   const toOwn = (G, i, x) => window.SBDFraming.toG(G.FR, i, G.sup, x);
   const linesOf = (G, pg) => G.girders.filter(g => g.pg === pg).map(g => g.label);
@@ -541,5 +559,5 @@
     return { D, sheets, miss: C.miss, Q: quantities(G, RS) };
   }
 
-  window.SBDSheets = { PAPER, GAM, results, env, tenths, at, quantities, weld, build, sheet, fwSize };
+  window.SBDSheets = { PAPER, GAM, results, resultsAsync, env, tenths, at, quantities, weld, build, sheet, fwSize };
 })();
