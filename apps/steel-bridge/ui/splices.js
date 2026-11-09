@@ -156,7 +156,7 @@
 
   function render(host, ctx) {
     css();
-    const P = ensure(ctx.P), g = P.girders[ctx.g] || P.girders[0], stale = !S.R || S.key !== key(ctx);
+    const P = ensure(ctx.P), g = P.girders[ctx.g] || P.girders[0], stale = (!S.R && !S.err) || S.key !== key(ctx);   // SPERR: a run that ended in an error is current (its message shows), not out of date
     const src = srcOf(P), CD = window.SBDCustomDemands, opt = (v, t) => `<option value="${v}"${src === v ? ' selected' : ''}>${t}</option>`;
     let h = `<section class="sec"><div class="secHead">Field splices (bolted, AASHTO LRFD 10th Ed. 6.13.6.1)</div><div class="secBody">
       ${CD ? `<div class="fRow"><label for="sp_src">Demands</label><select id="sp_src">${opt('analysis', "This project's analysis (Analysis tab)")}${opt('custom', 'Custom (entered)')}</select><span class="unit">saved with the project</span></div>` : ''}
