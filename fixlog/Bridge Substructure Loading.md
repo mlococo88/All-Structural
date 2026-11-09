@@ -2576,3 +2576,69 @@ function listTables() {
 - **Check case:** Project tab → the group reads "To Pile Designer and Shallow Foundation Design". Results are unchanged.
 - **How verified:** check-syntax; `node tests/engine/run.mjs handoffs` (10 / 10); page opened, 0 console errors.
 - **Other copies:** none.
+
+## 2026-11-09 — PR: claude/geomxfer-subloads (GXF-3) — Pull bridge geometry from the Steel Bridge app (superGeometry); project picker for the geometry and reactions pulls   [results change only when the user applies a pulled geometry; saved data: new optional fields]
+- **Why:** engineer decisions 2026-11-09: new channel `superGeometry` (Steel Bridge app → Substructure Loading) with a side-by-side review;
+  "All hand-offs should be per project" (Pull asks which project). Spec: HANDOFF.md §4.14, §5.1, §4.4 (per-project copies).
+- **Where:**
+  - `<script src="shared/handoff-store.js">` after `shared/github-sync.js` (anchor `GXF (2026-11-09): per-project hand-off copies`).
+  - New IIFE `patchGeoHandoff` before the foundation-loads hand-off (anchor `(function patchGeoHandoff() {`): `window.SubLoadsPicker`
+    (`open`, `newer`) and `window.SubLoadsGeoHandoff` (`pull`, `openGeo`, `plan`, `applyGeo`, `check`). Wrappers: `paneBridge` (buttons
+    "Pull geometry from Steel Bridge Design", "Import hand-off (JSON)", the new-data marker and the source line, after the note "One span
+    per row …"), `buildSide` (marker on the Bridge tab), `basisExtra` (report row "Bridge geometry").
+  - Reactions module (`patchRxHandoff`): `pull()` (anchor `GXF (2026-11-09): first ask which project`) opens the picker with
+    channel `superReactions`, producers `psbeam`, `mct`, `girderdetail`, `steelbridge`, the legacy keys it read before, ST-Girder copies
+    skipped (as before), then `openDialog(list, via, errs, pid)` with that project's copies; `openDialog` takes the new 4th argument `pid`;
+    `applyDialog` records `rec.pid` (optional) when a project was picked; `newOK` (the Reactions tab marker): per pulled project when the
+    last record has a `pid`, else the channel marker as before. Without `shared/handoff-store.js` the pull works as before.
+- **Mapping (on Apply only):** `P.br.spans` ← spans; `skews[k]` ← −skew (default "Convert": the app's + = right end ahead, SubLoads + = left
+  end ahead; "As sent" keeps the sign); `joint[k]` ← "joint" for a pier with an expansion joint, else "cont"; `bays`, `ohL`, `ohR`; `barL`,
+  `barR` ← the edges' traffic-face width; `barH` only when a height is sent (the app sends none: kept); `ts`, `haunch`; `d` ← the largest
+  total depth (default) or the depth at a support, the deepest in a span, or an entered value; `bf`, `tf`, `tw` ← the largest. Then
+  `syncSupports()` (unchanged): units kept by position, new piers copy the first pier's unit, removed piers are listed in the review.
+  Not changed: elevations, bearing fixity, unit inputs, reactions (the review warns when they do not match the incoming spans / girders),
+  `wc`, the wind and live-load settings.
+- **"Also update the live-load distribution girder data" (off by default):** the skew correction of the bearing live load (Table
+  4.6.2.2.3c-1) estimates K_g from `d`, `bf`, `tf`, `tw`, `haunch`, `ts` when `br.skKg` is blank (`skewKgEst`). Off: `br.skKg` = the K_g in
+  use before the pull (exact value), so that correction does not change with the section. On: `br.skKg` is not touched.
+- **Results (CLAUDE.md §4):** no formula, factor, unit or code reference changed. Opening a project computes exactly as before (nothing is
+  applied on load; a project without `P.geoSrc` / `rxSrc[].pid` reads and computes as before). The inputs change only on Apply.
+- **Worked example (default Steel Bridge app project → a new SubLoads project, renamed "New steel bridge"):**
+
+  | Input (Bridge tab) | Before (SubLoads default) | After pull |
+  |---|---|---|
+  | Spans (ft) | 110, 140, 110 | 110, 140, 110 |
+  | Skews (deg), 4 supports | 15, 15, 15, 15 | 0, 0, 0, 0 (−0 → 0) |
+  | Superstructure at piers | Continuous, Continuous | Continuous, Continuous |
+  | Girder spacings (ft) | 9.5 × 4 | 9.5 × 4 |
+  | Overhangs L / R (ft) | 3.25 / 3.25 | 3.25 / 3.25 |
+  | Barrier widths L / R (ft) | 1.5 / 1.5 | 1.5 / 1.5 (barrier face) |
+  | Barrier height (in) | 42 | 42 (not sent: kept) |
+  | Deck / haunch (in) | 8 / 2 | 8 / 2 |
+  | Girder depth d (in) | 63.000 | 63.500 = 60 + 1.5 + 2 (pier region, the largest; supports 61.875 / 63.5 / 63.5 / 61.875) |
+  | Flange width / thickness (in) | 16.000 / 1.250 | 18.000 / 2.000 (pier region bottom flange 18 × 2) |
+  | Web thickness (in) | 0.5625 | 0.5625 |
+  | Units | Abut. 1, Pier 1, Pier 2, Abut. 2 | the same (kept) |
+  | br.skKg (in⁴) | blank (estimated) | the K_g estimated before the pull, kept (box off) |
+
+  Depth to the bearing seat d_sup = (t_s + haunch + d)/12 = (8 + 2 + 63)/12 = 6.0833 ft before, (8 + 2 + 63.5)/12 = 6.1250 ft after,
+  so every bearing seat is 0.0417 ft (0.5 in) lower; the skews 15° → 0 move the bearing lines square. These follow from the inputs
+  (as if typed on the Bridge tab).
+- **Saved data (CLAUDE.md §5):** new optional fields `P.geoSrc` and `P.rxSrc[].pid`; `br.skKg` may be filled by Apply (an existing input).
+  No key or format changed. Keys read: the new per-project copies (§5.1), `bridgeSuite.v1.superGeometry`, `.by.steelbridge`; written:
+  `bridgeSuite.v1.superGeometry.adopted.subloads`.
+- **Decisions (pending engineer review):**
+  1. Skew sign converted by default (the app's convention from `engine/framing.js` `xb = sup + (y_i − y_c)·tan θ`, y from G1 left to right;
+     SubLoads `x = X + y·tan θ` with y + left). "As sent" offered in the dialog.
+  2. Preselection by project name only (SubLoads has no Bridge ID).
+  3. The "live-load distribution girder data" box is read as the K_g of SubLoads' skew correction (its only live-load use of the girder
+     section); off pins the K_g in use.
+  4. A pulled span count resizes the units and the reactions with SubLoads' existing rule (by position); the review lists removed units
+     and warns about the reactions.
+  5. The new-data marker reads this browser's copies only (no GitHub request on every redraw); the picker reads GitHub.
+- **How verified:** `node tests/smoke/geometry-handoff.mjs` (send from the app, then in SubLoads with two projects and a no-project copy:
+  marker, picker order and summaries, no preselection for another name, preselection by name, review rows, depth override, Apply,
+  `P.br` and `P.geoSrc`, saved; the reactions pull's picker and `rxSrc.pid`; a 2-span project removes Pier 2 and warns about the
+  reactions; 0 console errors); `node tests/smoke/phone-layout.mjs --tool bsl`; `node tests/smoke/project-library.mjs --tool bsl`;
+  `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`.
+- **Other copies:** none (the BridgeXfer block is unchanged).
