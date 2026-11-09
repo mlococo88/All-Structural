@@ -128,7 +128,7 @@
   const GRP = [['flexP', 'Flexure, positive (Strength I)'], ['flexN', 'Flexure, negative (Strength I)'], ['shear', 'Shear (Strength I)'], ['svc', 'Service II (permanent deformation)'], ['fat', 'Fatigue (owner target only)']];
   function render(host, ctx) {
     css();
-    const P = ctx.P, rt = ensure(P), stale = !S.R || S.key !== key(ctx), opt = (v, t, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${t}</option>`;
+    const P = ctx.P, rt = ensure(P), stale = (!S.R && !S.err) || S.key !== key(ctx), opt = (v, t, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${t}</option>`;   // SPERR2: a run that ended in an error is current (its message shows), not out of date
     const phc = PHI_C.some(([v]) => v === +rt.phiC) ? +rt.phiC : 'other', phs = PHI_S.findIndex(([v]) => v === +rt.phiS);
     const phsSel = phs < 0 ? -1 : S.phsI != null && PHI_S[S.phsI] && PHI_S[S.phsI][0] === +rt.phiS ? S.phsI : phs;   // φ_s repeats a value: the row chosen
     const AUI = window.SBDAnalysisUI, AN = window.SBDAnalysis, gl = P.girders[ctx.g] || P.girders[0] || {};
