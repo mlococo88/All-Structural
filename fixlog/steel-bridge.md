@@ -4475,3 +4475,34 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
 - **Check case:** Report, governing detail, type `flange stress`: before ~100–200 ms per keystroke (callback + next frame); after ~35–90 ms.
   The list inputs (Bridge layout spans, Girders & plates segments) still bind: `tests/smoke/list-input.mjs` / phone-layout `sbapp` (PR).
 - **Other copies:** none.
+
+## 2026-11-09 — PR: sb-cache-bust (PR #1276: https://github.com/mlococo88/All-Structural/pull/1276) — scripts load with ?v=<page Last-Modified> (CBUST; loading only)
+- **Problem:** GitHub Pages serves each file with `max-age=600`. After #1270 a browser loaded the new `index.html` with a stale cached `ui/loads.js`, so the "Girder spacing" drop-down (`[data-path="xs.spMode"]`) was missing. Any deploy could mix versions across the ~67 separate script tags.
+- **Where:** `index.html` `<head>`, anchor `CBUST (2026-11-09)`.
+  - Before: 57 static tags from `<script src="../../shared/units.js"></script>` to `<script src="ui/lists.js"></script>`, then (after the three.js CDN tags) 10 tags from `<script src="../../shared/dxf.js"></script>` to `<script src="ui/detail3d.js"></script>`.
+  - After: in both places, an inline script holding the same paths, in the same order, as a list (the tags' HTML comments are kept as `//` comments):
+    ```js
+    (function () {
+      var v = Date.parse(document.lastModified) || Date.now();
+      [ '../../shared/units.js', /* … same list … */ 'ui/lists.js' ]
+        .forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
+    })();
+    ```
+  - Also added, after the viewport meta: `<meta http-equiv="Cache-Control" content="no-cache">`. This is best effort only: Chrome, Edge and Firefox ignore it.
+  - KaTeX and three.js CDN tags: unchanged.
+- **Why `document.write`:** the written tags are parser-blocking classic scripts. They run in order, before the later inline app script and before DOMContentLoaded, exactly as the static tags did. `createElement` + `async=false` would not block the parser.
+- **Stamp:**
+  - Pages: `document.lastModified` is index.html's `Last-Modified`, i.e. the deploy time, so there is no manual bump.
+  - `file://`: the stamp is the file's date, and the query is ignored.
+  - No `Last-Modified` header: the browser reports the current time, so the scripts are fetched fresh.
+- **Tests changed:** `tests/engine/deflection-tab.test.mjs` and `tests/engine/steps-groups-tabs.test.mjs` read the script list with `/(?:<script src="|^ *')((?!http)[^"'?]+\.js)["']/gm` (before: `/<script src="((?!http)[^"]+)"/g`). They get the same 67 files in the same order.
+- **Governing provision:** none (loading only; no formula, factor, unit, code reference or saved data changed).
+- **Check case:** open `apps/steel-bridge/index.html` from `file://`, then in the console: `[...document.scripts].filter(s=>s.src&&!/^https/.test(s.src)).length` → 67, every `src` ending in `?v=<number>`.
+  - `window.SBD*` / `Shared*` keys: identical to origin/main, 67 = 67, including insertion order.
+  - 0 console errors.
+- **How verified:**
+  - Headless Chromium, main vs branch, on `file://` and over HTTP (a local server sending Last-Modified).
+  - `node tests/check-syntax.mjs`.
+  - Smoke tests: steel-bridge wiring, paths, report, graphics, drawings, summary, dash, deflection, equal-spacing, splice-addrow, taberrors, library, tabgraphics-b; phone-layout `sbapp`; project-library.
+- **Other copies:** none.
+- **Open items:** other folder tools, and single-file tools that load `shared/*.js`, could get the same loader (follow-up).
