@@ -4173,7 +4173,7 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
   - Back to Flexure: nothing runs (one analysis in the cache).
   - Change f′c to 4.5 on Materials: "Inputs changed — updating…", then Flexure runs again (6.2 s).
   - Re-run: runs again.
-## 2026-11-09 — PR: claude/sb-advars-dialog (PR #PR4NUM: https://github.com/mlococo88/All-Structural/pull/PR4NUM) (ADVD) — Auto design input tab: the design variables (and the field splice placement rules) open in a dialog; the panel shows a summary   [display only; no result or saved-data change]
+## 2026-11-09 — PR: claude/sb-advars-dialog (PR #1262: https://github.com/mlococo88/All-Structural/pull/1262) (ADVD) — Auto design input tab: the design variables (and the field splice placement rules) open in a dialog; the panel shows a summary   [display only; no result or saved-data change]
 - **Engineer:** 2026-11-09: "Can the auto design design variables open in a pop-up window? It currently doesn't fit in the available width of the input panel."
 - **Where:** `ui/autodesign.js`.
   - `varsHtml(P, s)` was split. `rowsHtml(P, s)` holds the former row-building code, unchanged. `varsTableHtml(P, s)` is the table plus `splRulesBox()`, drawn in the dialog. `summaryHtml(P, s)` is in the panel: one line per group ("Flanges: 5 Auto, 1 Locked"), a chip per variable that opens the dialog at its row, "Edit design variables…" (`#ad_vars_edit`), and the splice-rules line with "Edit…".
