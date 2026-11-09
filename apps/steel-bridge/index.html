@@ -138,6 +138,9 @@
     #inputPanel{flex:none;max-width:none;border-right:none;border-bottom:2px solid var(--ink);overflow:visible;padding-bottom:16px;}
     #outputPanel{flex:none;overflow:visible;}
     .inTabs{top:0;}
+    /* QAP (2026-11-09): on a phone the Report's and the Drawings' drop-downs (width:auto: as wide as their longest choice, up to 454 px) fit the
+       screen; the Report tab no longer scrolls the page 91 px sideways (display only) */
+    #out .rp-bar select,#out .dwg-bar select{max-width:calc(100vw - 48px);}
   }
   .inTabs{position:sticky;top:-10px;z-index:12;display:flex;flex-wrap:wrap;gap:2px;margin:-10px -12px 0;padding:8px 12px 0;background:var(--color-bg);border-bottom:2px solid var(--ink);}
   .inTabs button,#tabBar button{border:1px solid var(--color-border);border-bottom:none;border-radius:6px 6px 0 0;font-size:9pt;font-family:var(--font-ui);padding:5px 10px;background:var(--slate-100);color:#475569;}

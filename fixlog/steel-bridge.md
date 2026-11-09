@@ -4060,7 +4060,7 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
 - **Formulas, factors, units, code references:** none (§4). Pure display reorganisation.
 - **Check case:** default project → Bridge layout shows spans 110, 140, 110 ft and skews 0, 0, 0, 0°; Cross-section shows N_b 5, spacings 9.5 ft, overhangs 3.25 ft, deck t_s 8 in; Materials shows f′c, w_c, w_c for E_c; Loads ends with wind V 130 mph. Every result as on main.
 - **How verified:** headless origin/main (with BRSEL) vs branch, 3 projects (default; rolled W diaphragm with jacking; skews 30/25/25/30°): every input value and the data-path sets equal (246 paths; each drawn exactly once on the branch), autosaved and exported project JSON byte-identical, every output tab and the built Report: the numbers identical, text differing only in the tab names above. Every input-tab link (`data-itgo`, `data-goto`, `data-goin`, `data-splgo`, `data-cngoin`) lands on its tab; error dots on Materials, Cross-section, Girders & plates and Bridge layout; old `ui.itab` values fr / spans / xs / unknown open framing / layout / xsec / proj; 0 console errors. `node tests/check-syntax.mjs`: pass; `node tests/engine/run.mjs` with the steel-bridge test files: pass; smoke steel-bridge-report, -library, -wiring, -graphics, -drawings: pass; steel-bridge-paths (`#fx_calc` not visible on the second Flexure visit) and steel-bridge-tabgraphics-b (`[data-gfxb="shear"] svg`) fail the same way on origin/main (not changed here); `phone-layout.mjs --tool sbapp`: pass.
-- **Open items:** the Report output tab scrolls 91 px sideways at 390 px (on main too; not changed here), so the phone-layout entry covers the input tabs only.
+- **Open items:** the Report output tab scrolls 91 px sideways at 390 px (on main too; not changed here), so the phone-layout entry covers the input tabs only. (Closed 2026-11-09 by QAP below.)
 
 ## 2026-11-09 — PR: claude/sb-autodesign-input (PR #1256: https://github.com/mlococo88/All-Structural/pull/1256) (ADIN) — Auto design input tab (display only; no result, saved key or format change)
 - **Engineer (2026-11-09, approved):** move the Auto design SETTINGS out of the Auto design output tab onto a new input tab; the output tab keeps the results; a link between the two.
@@ -4648,3 +4648,19 @@ except the duplicated stations removed by fix 1 (listed there) and the Summary's
 - **How verified:** headless Chromium main vs branch digit probe (above); before/after screenshots; `node tests/check-syntax.mjs`;
   steel-bridge smoke tests; phone-layout `sbapp`; project-library.
 - **Other copies:** none (the `tt()` copies are the five files listed).
+
+## 2026-11-09 — PR: sbqa-phone-report (PR #1281: https://github.com/mlococo88/All-Structural/pull/1281) — Report tab fits a phone screen; phone-layout test covers the output tabs (QAP; display only)
+- **Problem (visual QA pass, engineer request 2026-11-09; open item of TABR):** at 390 px the Report tab scrolled the whole page 91 px
+  sideways: its "Demands" drop-down (`#rp_src`, `shared/report.js` `.rp-bar select{width:auto!important}`) is as wide as its longest choice
+  (454 px). The Drawings tab's sheet drop-down (376 px) was cut by its card at 390 px.
+- **Where:** `apps/steel-bridge/index.html`, inside `@media screen and (max-width:899.98px)`, after `.inTabs{top:0;}`, anchor `QAP (2026-11-09)`.
+  - Before: (no rule)
+  - After: `#out .rp-bar select,#out .dwg-bar select{max-width:calc(100vw - 48px);}`
+  - Shared file unchanged (the rule is scoped to this app's output panel).
+- **Test:** `tests/smoke/phone-layout.mjs`, tool `sbapp`: tabs `'#inTabs [data-itab]'` → `'#inTabs [data-itab], #tabBar [data-otab]'`, tabWait 900 → 1500:
+  every output tab is now opened and checked at 390 and 768 px too (29 views; on origin/main the Report fails at 390 px).
+- **Governing provision:** none (display only).
+- **Check case:** 390 × 844 px, Report tab: `document.scrollingElement.scrollWidth - clientWidth` 91 → 0; Drawings card 30 px clipped → 0.
+- **How verified:** headless Chromium main vs branch digit probe of every tab and the Report (identical); before/after screenshots;
+  `node tests/check-syntax.mjs`; steel-bridge smoke tests; phone-layout `sbapp`; project-library.
+- **Other copies:** none.
