@@ -10,7 +10,7 @@ import { projectFromPayload, readPayload } from './an-fixture.mjs';
 
 const SB = path.join(ROOT, 'apps/steel-bridge');
 const SK = /view3d|ui\/report|ui\/drawings|ui\/graphics|ui\/gfxa|ui\/tabgraphics|ui\/legacy|autodesign/;
-const FILES = [...fs.readFileSync(path.join(SB, 'index.html'), 'utf8').matchAll(/<script src="((?!http)[^"]+)"/g)].map(m => path.resolve(SB, m[1])).filter(f => !SK.test(f));
+const FILES = [...fs.readFileSync(path.join(SB, 'index.html'), 'utf8').matchAll(/(?:<script src="|^ *')((?!http)[^"'?]+\.js)["']/gm)].map(m => path.resolve(SB, m[1])).filter(f => !SK.test(f));
 
 test('SharedSteps.group with strip:false matches the whole id; reveal opens the topic of a step', () => {
   const S = loadShared('steps.js').SharedSteps, mk = (id, o) => S.step({ id, label: id, ...o });

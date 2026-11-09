@@ -9,6 +9,7 @@
 //   4. A skewed three-span project with two plate girders: two rows; the G2 link selects G2 (ui.g).
 //   5. An old saved ui.otab ('flex') still opens its tab; the Report's summary links to the Summary tab.
 //   6. At 390 px: no page-level horizontal scroll (the table scrolls inside its card).
+//   7. The cross-section and framing plan graphics (GFXS): side by side at 1440 px, stacked within 390 px, their links, printed.
 //   0 console errors.
 //   node tests/smoke/steel-bridge-summary.mjs [--shots <dir>]
 import path from 'path';
@@ -111,6 +112,32 @@ async function cellsMatch(p) {
     await p.waitForSelector('#out #fx_src');
     assert.equal(await p.evaluate(() => document.querySelector('#tabBar [aria-selected="true"]').dataset.otab), 'flex');
     console.log('  ok   an old saved ui.otab (flex) opens its tab');
+    allErrs.push(...errs);
+  } finally { await b.close(); }
+}
+
+{ // 7 (GFXS): the cross-section and framing plan graphics: the app's own drawings, side by side from 1200 px, stacked and fitting at 390 px,
+  //   links to the input tabs where they are edited and the tabs where they are drawn, printed
+  const { b, p, errs } = await openPage(FILE, { vw: 1440, vh: 1000, ls: { 'sbd2.ui': JSON.stringify({ otab: 'sum' }) } });
+  try {
+    await p.waitForSelector('#sum-xs svg'); await p.waitForSelector('#sum-plan svg');
+    const g = await p.evaluate(() => { const a = document.getElementById('sum-xs').getBoundingClientRect(), c = document.getElementById('sum-plan').getBoundingClientRect(), v = document.getElementById('sum-verdict').getBoundingClientRect(), o = document.getElementById('sum-project').getBoundingClientRect();
+      return { side: Math.abs(a.top - c.top) < 2 && c.left > a.right - 1, nearTop: a.top > v.top && a.top < o.top, txt: document.getElementById('sum-xs').textContent };});
+    assert.ok(g.side, 'side by side at 1440 px'); assert.ok(g.nearTop, 'after the verdict, before the overview'); assert.match(g.txt, /TYPICAL CROSS-SECTION/);
+    await p.evaluate(() => document.getElementById('sum-gfx').scrollIntoView()); await shot(p, 'gfx-1440');
+    await p.click('#sum-xs [data-sumin="xsec"]'); assert.equal(await p.evaluate(() => document.querySelector('#inTabs [aria-selected="true"]').dataset.itab), 'xsec');
+    await p.click('#sum-plan [data-sumin="framing"]'); assert.equal(await p.evaluate(() => document.querySelector('#inTabs [aria-selected="true"]').dataset.itab), 'framing');
+    await p.click('#sum-xs [data-sumtab="dwg"]'); await p.waitForFunction(() => document.querySelector('#tabBar [aria-selected="true"]').dataset.otab === 'dwg');
+    await p.click('#tabBar [data-otab="sum"]'); await p.waitForSelector('#sum-plan svg');
+    await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(300);
+    const ph = await p.evaluate(() => { const a = document.getElementById('sum-xs').getBoundingClientRect(), c = document.getElementById('sum-plan').getBoundingClientRect();
+      return { stacked: c.top >= a.bottom - 1, sw: document.documentElement.scrollWidth, w: innerWidth, over: [...document.querySelectorAll('#sum-gfx svg')].some(s => s.getBoundingClientRect().right > innerWidth) }; });
+    assert.ok(ph.stacked && ph.sw <= ph.w && !ph.over, JSON.stringify(ph));
+    await p.evaluate(() => document.getElementById('sum-gfx').scrollIntoView()); await shot(p, 'gfx-390');
+    await p.emulateMedia({ media: 'print' });
+    assert.ok(await p.evaluate(() => getComputedStyle(document.getElementById('sum-gfx')).display !== 'none' && document.querySelectorAll('#sum-gfx svg').length === 2));
+    await p.emulateMedia({ media: 'screen' });
+    console.log('  ok   cross-section and framing plan: side by side at 1440 px, stacked within 390 px, links to Cross-section / Framing & bracing / Drawings, printed');
     allErrs.push(...errs);
   } finally { await b.close(); }
 }

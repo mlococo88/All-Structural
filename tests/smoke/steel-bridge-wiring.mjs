@@ -35,7 +35,12 @@ try {
   assert.match(await p.evaluate(() => document.querySelector('#out .srcBar').innerText), /Example.*as chosen below/s);
   // Constructibility f_ℓ saved with the project
   await p.click('#tabBar [data-otab="cn"]');
-  await p.fill('#cn_flC', '1.5'); await p.dispatchEvent('#cn_flC', 'change'); await p.waitForTimeout(300);
+  // the tab runs itself when selected (#1260) and its Calculate redraws the card: wait for that first, else the value typed into the old
+  // input is lost and the change event lands on the new, empty one (f_ℓ deleted; a race since #1260, about half the runs)
+  await settle();
+  await p.fill('#cn_flC', '1.5'); await p.$eval('#cn_flC', e => e.blur());   // the browser's own change event
+  await p.waitForFunction(() => (JSON.parse(localStorage.getItem('sbd2.project.current') || '{}').constr || {}).flC === 1.5, null, { timeout: 10000 }).catch(() => {});
+  await settle();   // the input change re-runs the tab after 600 ms (#1260); the value shown is read after that redraw
   const fl = await p.evaluate(() => { const j = JSON.parse(localStorage.getItem('sbd2.project.current') || '{}'); return { saved: (j.constr || {}).flC, shown: document.getElementById('cn_flC').value }; });
   assert.equal(fl.saved, 1.5, JSON.stringify(fl)); assert.equal(fl.shown, '1.5');
   // Report: every girder

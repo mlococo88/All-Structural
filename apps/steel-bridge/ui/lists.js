@@ -49,7 +49,7 @@
     s.textContent = '.bad + [data-sli="host"] .sli{outline:1px solid #dc2626;outline-offset:2px;}';   // the module's error mark, on the table
     document.head.appendChild(s);
     upgrade(document);
-    new MutationObserver(ms => { if (ms.some(m => m.addedNodes.length)) upgrade(document); }).observe(document.body, { childList: true, subtree: true });
+    new MutationObserver(ms => { if (ms.some(m => m.addedNodes.length && !(m.target.closest && m.target.closest('.rp')))) upgrade(document); }).observe(document.body, { childList: true, subtree: true });   // RSX (2026-11-09): not for nodes added inside the report viewer (search marks and status, lazy items): it holds no list input
   }
   if (typeof document === 'undefined') { /* no page (Node test harness): nothing to bind */ }
   else if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();

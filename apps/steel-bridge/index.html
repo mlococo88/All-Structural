@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- CBUST (2026-11-09): ask browsers to revalidate this page. Best effort only: Chrome, Edge and Firefox ignore http-equiv Cache-Control;
+     the server's header (GitHub Pages: max-age=600) governs. The ?v= stamp below makes the scripts follow whichever index.html is loaded. -->
+<meta http-equiv="Cache-Control" content="no-cache">
 <title>Steel Bridge Design (new, in development)</title>
 <!-- Steel Bridge Design, rebuild (docs/REBUILD_PLAN.md §5). Plain HTML/JS/CSS, classic scripts, opens from file://.
      Engine: engine/*.js (no DOM). Shared: ../../shared/*.js. Saved data: localStorage keys sbd2.* only (engine/model.js). -->
@@ -10,80 +13,98 @@
      ("Steel Bridge Design.html"). Without it (offline, CDN blocked) the steps use the built-in renderer. -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
-<script src="../../shared/units.js"></script>
-<script src="../../shared/steps.js"></script>
-<script src="../../shared/list-input.js"></script>
-<script src="engine/model.js"></script>
-<script src="engine/demandfile.js"></script>
-<script src="engine/library.js"></script>
-<!-- STDS-B (2026-11-06): the standard save (shared/projects-ui.js projectBar: header chip, Save, Saved projects…, the "Save and open" card,
-     the standard Saved projects dialog) over engine/library.js (items by id, unchanged). ui/library.js (the app's own dialog) is no longer loaded and was deleted (2026-11-06).
-     GHS2 (2026-11-05): copy of the saved projects to a private GitHub repository (shared/github-sync.js; off until set up). -->
-<script src="../../shared/projects.js"></script>
-<script src="../../shared/projects-ui.js"></script>
-<script src="../../shared/github-sync.js"></script>
-<script src="../../shared/handoff-store.js"></script>   <!-- GXF (2026-11-09): per-project hand-off copies (HANDOFF.md §5.1), used by ui/handoffs.js -->
-<script src="engine/legacy.js"></script>
-<script src="ui/legacy.js"></script>
-<script src="engine/sections.js"></script>
-<script src="engine/proportions.js"></script>
-<script src="engine/flexure.js"></script>
-<script src="ui/demands.js"></script>
-<script src="ui/flexure.js"></script>
-<script src="engine/owners.js"></script>
-<script src="../../shared/lldf.js"></script>
-<script src="engine/lldf.js"></script>
-<script src="engine/loads.js"></script>
-<script src="ui/loads.js"></script>
-<script src="engine/shear.js"></script>
-<script src="engine/stiffeners.js"></script>
-<script src="ui/shear.js"></script>
-<script src="../../shared/vehicles.js"></script>
-<script src="../../shared/moving-load.js"></script>
-<script src="engine/analysis.js"></script>
-<script src="ui/analysis.js"></script>
-<script src="ui/deflection.js"></script>
-<script src="engine/fatigue.js"></script>
-<script src="engine/studs.js"></script>
-<script src="ui/fatigue.js"></script>
-<script src="engine/framing.js"></script>
-<script src="engine/crossframes.js"></script>
-<script src="ui/framing.js"></script>
-<script src="engine/constructibility.js"></script>
-<script src="ui/constructibility.js"></script>
-<script src="engine/splices.js"></script>
-<script src="ui/splices.js"></script>
-<script src="engine/splplace.js"></script>
-<script src="engine/autodesign.js"></script>
-<script src="ui/autodesign.js"></script>
-<script src="engine/rating.js"></script>
-<script src="ui/rating.js"></script>
-<script src="engine/welds.js"></script>
-<script src="ui/welds.js"></script>
-<script src="../../shared/report.js"></script>
-<script src="report/data.js"></script>
-<script src="report/builders.js"></script>
-<script src="report/summary.js"></script><!-- Summary tab (2026-11-09): every girder's governing values from the modules (no DOM) -->
-<script src="ui/report.js"></script>
-<script src="ui/summary.js"></script>
-<script src="ui/dash.js"></script>
-<script src="ui/bridgexfer.js"></script>
-<script src="ui/handoffs.js"></script>
-<script src="ui/lists.js"></script>
+<!-- CBUST (2026-11-09): the app's own scripts (apps/steel-bridge/*, ../../shared/*) are written here with ?v=<index.html Last-Modified>, so a
+     deploy (new index.html) also loads the new copy of every script instead of a cached one (GitHub Pages: max-age=600 per file).
+     document.write keeps them parser-blocking classic scripts, in this order, run before the rest of the page is parsed (same as the
+     static tags they replace). From file:// the stamp is the file's date and the query is ignored. CDN libraries stay static tags. -->
+<script>
+(function () {
+  var v = Date.parse(document.lastModified) || Date.now();   // CBUST: Last-Modified of this page (deploy time on Pages; file date on file://)
+  [
+    '../../shared/units.js',
+    '../../shared/steps.js',
+    '../../shared/list-input.js',
+    'engine/model.js',
+    'engine/demandfile.js',
+    'engine/library.js',
+    // STDS-B (2026-11-06): the standard save (shared/projects-ui.js projectBar: header chip, Save, Saved projects…, the "Save and open" card,
+    // the standard Saved projects dialog) over engine/library.js (items by id, unchanged). ui/library.js (the app's own dialog) is no longer loaded and was deleted (2026-11-06).
+    // GHS2 (2026-11-05): copy of the saved projects to a private GitHub repository (shared/github-sync.js; off until set up).
+    '../../shared/projects.js',
+    '../../shared/projects-ui.js',
+    '../../shared/github-sync.js',
+    '../../shared/handoff-store.js',   // GXF (2026-11-09): per-project hand-off copies (HANDOFF.md §5.1), used by ui/handoffs.js
+    'engine/legacy.js',
+    'ui/legacy.js',
+    'engine/sections.js',
+    'engine/proportions.js',
+    'engine/flexure.js',
+    'ui/demands.js',
+    'ui/flexure.js',
+    'engine/owners.js',
+    '../../shared/lldf.js',
+    'engine/lldf.js',
+    'engine/loads.js',
+    'ui/loads.js',
+    'engine/shear.js',
+    'engine/stiffeners.js',
+    'ui/shear.js',
+    '../../shared/vehicles.js',
+    '../../shared/moving-load.js',
+    'engine/analysis.js',
+    'ui/analysis.js',
+    'ui/deflection.js',
+    'engine/fatigue.js',
+    'engine/studs.js',
+    'ui/fatigue.js',
+    'engine/framing.js',
+    'engine/crossframes.js',
+    'ui/framing.js',
+    'engine/constructibility.js',
+    'ui/constructibility.js',
+    'engine/splices.js',
+    'ui/splices.js',
+    'engine/splplace.js',
+    'engine/autodesign.js',
+    'ui/autodesign.js',
+    'engine/rating.js',
+    'ui/rating.js',
+    'engine/welds.js',
+    'ui/welds.js',
+    '../../shared/report.js',
+    'report/data.js',
+    'report/builders.js',
+    'report/summary.js',   // Summary tab (2026-11-09): every girder's governing values from the modules (no DOM)
+    'ui/report.js',
+    'ui/summary.js',
+    'ui/dash.js',
+    'ui/bridgexfer.js',
+    'ui/handoffs.js',
+    'ui/lists.js'
+  ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
+})();
+</script>
 <!-- three.js for the 3D view: the same pinned files as GirderDetail ("Steel Bridge Design.html"), r128 + OrbitControls (CLAUDE.md §2) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js" defer></script>
-<script src="../../shared/dxf.js"></script>
-<script src="engine/drawings.js"></script>
-<script src="engine/sheets.js"></script>
-<script src="ui/drawings.js"></script>
-<script src="ui/graphics.js"></script>
-<script src="ui/gfxa.js"></script>
-<script src="engine/tabgraphics-b.js"></script>
-<script src="ui/tabgraphics-b.js"></script>
-<script src="ui/view3d.js"></script>
-<script src="ui/detail3d.js"></script>
-<script src="ui/splitter.js"></script><!-- SBW (2026-11-09): the splitter between the input and output panels (display only) -->
+<script>
+(function () {
+  var v = Date.parse(document.lastModified) || Date.now();   // CBUST: Last-Modified of this page (deploy time on Pages; file date on file://)
+  [
+    '../../shared/dxf.js',
+    'engine/drawings.js',
+    'engine/sheets.js',
+    'ui/drawings.js',
+    'ui/graphics.js',
+    'ui/gfxa.js',
+    'engine/tabgraphics-b.js',
+    'ui/tabgraphics-b.js',
+    'ui/view3d.js',
+    'ui/detail3d.js',
+    'ui/splitter.js'   // SBW (2026-11-09): the splitter between the input and output panels (display only)
+  ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
+})();
+</script>
 <style>
   /* layout: copied from BasePlateAnchorDesigner.html (tokens, #app, #hdr, #main, the two scrolling panels, tabs, cards) */
   :root{
@@ -616,7 +637,7 @@
     /* Summary tab (ui/summary.js, 2026-11-09; display only): runs the modules out of date itself (now: selected now, else after 600 ms of quiet);
        goto(tab, gi): a cell's link opens that output tab with that girder selected (as the Girder select of the Girders & plates tab) */
     if (ui.otab === 'sum') { window.SBDSummaryUI.render($('out'), { P, ui, now: autoNow, open: () => ui.otab === 'sum',
-      goto: gotoOut,
+      goto: gotoOut, inTab: t => { ui.itab = t; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; },   // GFXS: the graphics' links to the input tabs
       report: () => { ui.rpt = ui.rpt || {}; ui.rpt.scope = 'all'; ui.otab = 'rpt'; saveUi(); drawOut(); $('outputPanel').scrollTop = 0; } }); return; }
     if (ui.otab === '3d') { window.SBD3DUI.render($('out'), { P, ui, saveUi }); return; }   // 3D view tab (ui/view3d.js)
     const g = P.girders[ui.g] || P.girders[0], s = g && g.segments[ui.seg];

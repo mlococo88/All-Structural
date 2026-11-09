@@ -4429,3 +4429,80 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
   - `tests/check-syntax.mjs`; steel-bridge engine and smoke suites (see the PR).
 - **Other copies:** none.
 - **Open items:** none.
+## 2026-11-09 — PR: claude/sb-summary-gfx (PR #1275: https://github.com/mlococo88/All-Structural/pull/1275) (GFXS) — Summary tab: cross-section and framing plan graphics   [display only; no result or saved-data change]
+- **Engineer:** 2026-11-09: "the Summary output tab must also show the cross-section graphic and the framing plan graphic", reusing the app's own drawing functions, near the top, side by side from about 1200 px and stacked on a phone, each with a link to the tab where it is drawn and edited. This is a follow-up to #1271.
+- **Where:** `ui/summary.js`:
+  - New `xsSvg(P)` and `gfxCard(P)` (anchor `GFXS (2026-11-09`), called in `paint()` after the verdict card (anchor `h += gfxCard(P);`).
+  - The click handler takes `[data-sumin]` and the plan's own `[data-itgo]` links: input tabs, through `ctx.inTab`.
+  - New CSS: `.sum-gfx`, `.sum-g1`, `.sum-gbox`.
+  - `index.html`: the Summary ctx gets `inTab(t)` (selects an input tab).
+- **Drawing functions called (no drawing code copied):**
+  - Cross-section: `SBDDrawings.model(P)` + `SBDDrawings.section(G, D, { k })`, the typical cross-section that `engine/sheets.js` draws on its Drawings sheet. It is previewed with `SBDGraphics.tightSvg` (as the Report's figures), with the drawing scale for a figure about 10 in wide (`scaleFor(width × 1.3, 10)`; the sheet uses 30 in) so its text reads at the figure's size.
+  - Framing plan: `SBDFramingUI.layoutPlan(P)`, the plan of the Bridge layout input tab, with its own link to the Framing & bracing tab.
+- **Links:**
+  - Cross-section: edited on the Cross-section input tab, drawn on the Drawings tab.
+  - Framing plan: edited on the Framing & bracing input tab, drawn on the Bridge layout input tab and the Cross-frames tab.
+- **Layout:**
+  - Two columns at screens of 1200 px and wider; one column below that (stacked; each SVG `max-width:100%`).
+  - At 390 px there is no page-level horizontal scroll and no graphic wider than the window.
+  - Each graphic is on a white box with dark ink (`color-scheme: light`). The app has no dark theme today; the box keeps the drawings legible if a browser or OS forces dark colours.
+  - Print: side by side, `break-inside: avoid`, colours kept.
+- **Also:** while the first run waits after the page opens on the Summary tab, the run status reads "Starting…" instead of "Inputs changed — updating…" (`S.first`).
+- **Decisions (pending engineer review):**
+  - The typical section is drawn with its sheet's general-notes block. That block is part of `section()`, and copying the drawing to leave it out is not allowed by the request.
+  - The framing plan is the Bridge layout tab's (`layoutPlan`), not the Cross-frames output tab's checks.
+- **Formulas, factors, units, code references, saved data:** none changed (§4, §5).
+- **Check case:** default project, Summary tab, 1440 px: "Cross-section and framing plan" card after the verdict, two figures side by side (TYPICAL CROSS-SECTION, 5 girders at 9'-6"; plan with 3 spans, 5 girders). At 390 px they are stacked; page width 390 px.
+- **How verified:** `tests/smoke/steel-bridge-summary.mjs` block 7 (side by side / stacked, links, print, 0 console errors); `node tests/check-syntax.mjs`.
+- **Test fix (tests/smoke/steel-bridge-wiring.mjs, Constructibility step; regression report 2026-11-09):** "f_ℓ is not saved (undefined !== 1.5)" on origin/main.
+  - Root cause: a race in the test, present since #1260 (output tabs run themselves when selected). It was not caused by #1271. On 5e52138 (before #1271) the test failed 2 of 4 runs; on 1d9670b, 1 of 4.
+  - Mechanism: the test clicked the Constructibility tab and at once ran `fill('#cn_flC', '1.5')` and `dispatchEvent('change')`. The tab's own auto-run presses Calculate one frame later, which redraws the card. When that redraw fell between the fill and the change event, the typed value was lost with the old input. The change event then reached the new, empty input, and the handler (correctly) deleted `P.constr.flC`.
+  - App behaviour is right: a change event with an empty field means "from skew".
+  - Fix: wait for the tab to settle, fill, blur (the browser's own change event), wait for the saved value, settle again.
+  - Proof the app saves f_ℓ: 4 of 4 runs "constructibility f_ℓ saved 1.5", read from `sbd2.project.current` and from the input after the re-run.
+
+
+
+## 2026-11-09 — PR: report-search-ux (PR #1273: https://github.com/mlococo88/All-Structural/pull/1273) — list-input observer skips the report viewer (RSX; display only)
+- **Where:** `ui/lists.js`, `start()`, anchor `new MutationObserver(ms =>`.
+  - Before: `new MutationObserver(ms => { if (ms.some(m => m.addedNodes.length)) upgrade(document); }).observe(document.body, { childList: true, subtree: true });`
+  - After: `new MutationObserver(ms => { if (ms.some(m => m.addedNodes.length && !(m.target.closest && m.target.closest('.rp')))) upgrade(document); }).observe(document.body, { childList: true, subtree: true });`
+- **Problem:** the shared report search (RSX, `fixlog/shared-report.md`, same PR) adds `<mark>` nodes inside the report text on each keystroke;
+  every added node made this observer re-scan the whole page (`upgrade(document)`, ~80–90 ms on a 380,000-element report). Nodes added inside
+  the report viewer (`.rp`: marks, the search status, lazy step lists) never hold a list input, so they are skipped. Mounting the report
+  (nodes added to its host, outside `.rp`) and every input tab still upgrade as before.
+- **Governing provision:** none (display only).
+- **Check case:** Report, governing detail, type `flange stress`: before ~100–200 ms per keystroke (callback + next frame); after ~35–90 ms.
+  The list inputs (Bridge layout spans, Girders & plates segments) still bind: `tests/smoke/list-input.mjs` / phone-layout `sbapp` (PR).
+- **Other copies:** none.
+
+## 2026-11-09 — PR: sb-cache-bust (PR #1276: https://github.com/mlococo88/All-Structural/pull/1276) — scripts load with ?v=<page Last-Modified> (CBUST; loading only)
+- **Problem:** GitHub Pages serves each file with `max-age=600`. After #1270 a browser loaded the new `index.html` with a stale cached `ui/loads.js`, so the "Girder spacing" drop-down (`[data-path="xs.spMode"]`) was missing. Any deploy could mix versions across the ~67 separate script tags.
+- **Where:** `index.html` `<head>`, anchor `CBUST (2026-11-09)`.
+  - Before: 57 static tags from `<script src="../../shared/units.js"></script>` to `<script src="ui/lists.js"></script>`, then (after the three.js CDN tags) 10 tags from `<script src="../../shared/dxf.js"></script>` to `<script src="ui/detail3d.js"></script>`.
+  - After: in both places, an inline script holding the same paths, in the same order, as a list (the tags' HTML comments are kept as `//` comments):
+    ```js
+    (function () {
+      var v = Date.parse(document.lastModified) || Date.now();
+      [ '../../shared/units.js', /* … same list … */ 'ui/lists.js' ]
+        .forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
+    })();
+    ```
+  - Also added, after the viewport meta: `<meta http-equiv="Cache-Control" content="no-cache">`. This is best effort only: Chrome, Edge and Firefox ignore it.
+  - KaTeX and three.js CDN tags: unchanged.
+- **Why `document.write`:** the written tags are parser-blocking classic scripts. They run in order, before the later inline app script and before DOMContentLoaded, exactly as the static tags did. `createElement` + `async=false` would not block the parser.
+- **Stamp:**
+  - Pages: `document.lastModified` is index.html's `Last-Modified`, i.e. the deploy time, so there is no manual bump.
+  - `file://`: the stamp is the file's date, and the query is ignored.
+  - No `Last-Modified` header: the browser reports the current time, so the scripts are fetched fresh.
+- **Tests changed:** `tests/engine/deflection-tab.test.mjs` and `tests/engine/steps-groups-tabs.test.mjs` read the script list with `/(?:<script src="|^ *')((?!http)[^"'?]+\.js)["']/gm` (before: `/<script src="((?!http)[^"]+)"/g`). They get the same 67 files in the same order.
+- **Governing provision:** none (loading only; no formula, factor, unit, code reference or saved data changed).
+- **Check case:** open `apps/steel-bridge/index.html` from `file://`, then in the console: `[...document.scripts].filter(s=>s.src&&!/^https/.test(s.src)).length` → 67, every `src` ending in `?v=<number>`.
+  - `window.SBD*` / `Shared*` keys: identical to origin/main, 67 = 67, including insertion order.
+  - 0 console errors.
+- **How verified:**
+  - Headless Chromium, main vs branch, on `file://` and over HTTP (a local server sending Last-Modified).
+  - `node tests/check-syntax.mjs`.
+  - Smoke tests: steel-bridge wiring, paths, report, graphics, drawings, summary, dash, deflection, equal-spacing, splice-addrow, taberrors, library, tabgraphics-b; phone-layout `sbapp`; project-library.
+- **Other copies:** none.
+- **Open items:** other folder tools, and single-file tools that load `shared/*.js`, could get the same loader (follow-up).
