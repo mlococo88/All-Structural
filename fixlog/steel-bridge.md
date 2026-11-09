@@ -4550,7 +4550,7 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
   `sbapp`; project-library.
 - **Other copies:** none.
 
-## 2026-11-09 — PR: sbqa-output-format (PR #TBD) — output tabs and Report: station not said twice, f_ℓ subscript, plain "2,000", graphic buttons above the title (QAO; display only)
+## 2026-11-09 — PR: sbqa-output-format (PR #1280: https://github.com/mlococo88/All-Structural/pull/1280) — output tabs and Report: station not said twice, f_ℓ subscript, plain "2,000", graphic buttons above the title (QAO; display only)
 Visual QA pass (engineer request 2026-11-09). Display only: no formula, factor, unit, code reference, key or saved data changed. Digit
 sequences of every tab and the built Report, origin/main vs branch, default project and a 3-span 30° skewed 6-girder project: identical
 except the duplicated stations removed by fix 1 (listed there) and the Summary's "last run … s" timing.
