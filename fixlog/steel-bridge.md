@@ -4392,6 +4392,7 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
   - Collapse key `sbd2.dashCollapsed_v1` ('1' shrunk, '0' open): the app's own `sbd2.*` prefix (engine/model.js: "localStorage keys sbd2.* only") rather than `steelbridge_…`; UI state only, not in the project or the export.
   - After an input change the column keeps the last values, marked "out of date" (italic, faded), with "Run all"; it does not re-run everything after each edit (the girder analysis blocks the page for several seconds per girder). The Summary tab, when open, re-runs as before.
   - The column is placed at the far left as in the other apps (the input panel stays next to the output); the output area at 1200–1440 px is 643–804 px.
+  - The Deflection chip opens the Deflection tab (DEFL, #1274), through the Summary column's tab.
 - **Formulas, factors, units, code references, saved data:** none changed (§4, §5). New UI key only (above).
 - **Check case:** default project, 1440 px: 11 chips "not run"; Shear chip → Shear & stiffeners tab, G1, station x = 110.01 ft card flashed, chip 0.437 · G1 PASS; Run all → header "FAIL · max D/C 1.229", Governing: Flexure, Strength I, G1: D/C 1.229; Rating chip RF 0.61 · G1 FAIL.
 - **How verified:** `tests/smoke/steel-bridge-dash.mjs` (layout at 1199/1200/1440/1600 px, chips equal the Summary's data, links and flash, out of date, collapse key across a reload, print, 0 console errors); `tests/smoke/steel-bridge-summary.mjs`; `node tests/check-syntax.mjs`; smoke `steel-bridge-*`, `phone-layout`, `project-library`.
