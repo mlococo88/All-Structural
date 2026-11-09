@@ -4562,4 +4562,11 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
     - G1 ≠ G2;
     - 390 px layout.
   - Browser probe with two plate girders: the options name each plate girder; choosing G1 sets `ui.g` to GE and G5 back to G1; the b_eff alert. 0 console errors.
-  - Also TESTLIST.
+  - Updated for the extra dead-load runs (the Report's camber of every girder adds one `{ ll: false }` analysis per other girder line, cached):
+    - `tests/engine/report-wiring.test.mjs`: run counts, and the cache bound with the new formula;
+    - `tests/smoke/steel-bridge-paths.mjs`: cache size after the Report, 2 → 2 + 4.
+  - A bug the tests caught while editing was fixed before commit: a comment in `report/data.js` had swallowed the cache's pruning loop.
+  - After merging origin/main (#1275, #1270, #1276: the script loader; `ui/deflection.js` is in its list, no new file in this PR):
+    - `tests/check-syntax.mjs` passes;
+    - engine tests `deflection-tab`, `report`, `report-wiring`, `sb-summary`, `steps-groups-tabs`, `paths`, `equal-spacing` pass;
+    - smoke tests `steel-bridge-deflection`, `-report`, `-summary`, `phone-layout`, `-wiring`, `-drawings`, `-paths`, `-scroll --quick` pass, with 0 console errors.
