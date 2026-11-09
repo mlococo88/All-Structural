@@ -3,7 +3,7 @@
 Loaded by: see `shared/README.md` (row `handoff-store.js`). Spec: `HANDOFF.md` §5.1. Tests: `node tests/engine/run.mjs handoff-store`
 (Node; GitHub mocked by `tests/engine/gh-mock.mjs`).
 
-## 2026-11-09 — PR: claude/geomxfer-spec — created (new file): per-project hand-off copies, uploaded through Cloud sync (GXF-1)   [storage: new keys only; no calculation]
+## 2026-11-09 — PR: claude/geomxfer-spec (PR #1261: https://github.com/mlococo88/All-Structural/pull/1261) — created (new file): per-project hand-off copies, uploaded through Cloud sync (GXF-1)   [storage: new keys only; no calculation]
 - **Why:** engineer decisions 2026-11-09 (started 2026-11-09): "All hand-offs should be per project"; the sent copies go through the
   projects repository when Cloud sync is on (option 2); Pull asks which project. First channels: the new `superGeometry` (HANDOFF.md §4.14)
   and `superReactions` (§4.4); the others move one at a time later.
@@ -42,3 +42,7 @@ Loaded by: see `shared/README.md` (row `handoff-store.js`). Spec: `HANDOFF.md` �
   with upload / update / offline queue / merge of another device's copy / no download of an identical copy); `node tests/check-syntax.mjs`.
 - **Other copies:** none (shared file).
 - **Open items:** none.
+
+## 2026-11-09 — PR: claude/geomxfer-readme — shared/README.md row: the tools that load the file   [documentation only]
+- The row said "None yet"; it now names `apps/steel-bridge/index.html` (#1264), `Bridge Substructure Loading.html` (#1265) and
+  `Steel Bridge Design.html` (#1266). No code change.
