@@ -4615,6 +4615,40 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
     - smoke tests `steel-bridge-deflection`, `-report`, `-summary`, `phone-layout`, `-wiring`, `-drawings`, `-paths`, `-scroll --quick` pass, with 0 console errors.
   - After merging #1277 (full width, splitter): `steel-bridge-deflection`, `phone-layout` and `steel-bridge-splitter` pass again.
 
+## 2026-11-09 — PR: sbqa-output-format (PR #1280: https://github.com/mlococo88/All-Structural/pull/1280) — output tabs and Report: station not said twice, f_ℓ subscript, plain "2,000", graphic buttons above the title (QAO; display only)
+Visual QA pass (engineer request 2026-11-09). Display only: no formula, factor, unit, code reference, key or saved data changed. Digit
+sequences of every tab and the built Report, origin/main vs branch, default project and a 3-span 30° skewed 6-girder project: identical
+except the duplicated stations removed by fix 1 (listed there) and the Summary's "last run … s" timing.
+1. **Station said twice.** An analysis location is named "x = 249.99 ft", and the headings added ", x = <same> ft" again.
+   - `ui/flexure.js`: governing line `Governing: <b>${esc(gv.name)}</b>${gv.x != null ? ` (x = …)` : ''}` → `${gv.x != null && !/x = /.test(gv.name) ? … : ''}`;
+     the checks card heading `${esc(r.name)}${r.x != null ? `, x = …` : ''}: checks` → same test.
+   - `report/builders.js`: new `const at = (r, d) => r.x == null || /x = /.test(r.name) ? r.name : `${r.name}, x = ${f(r.x, d)} ft`;` (anchor `QAO`),
+     used in the Flexure proportions table location, the proportions summary row, the Flexure location sub-section titles and lazy titles,
+     and the Constructibility location sub-section titles and lazy titles (before: `${r.name}, x = ${f(r.x, 2)} ft` or the `r.x != null` form).
+     The Flexure summary row already did this (`/x = /.test(Gr.gov.name)`).
+   - Before: "Governing: x = 249.99 ft (x = 249.99 ft), GS7 …", card "x = 249.99 ft, x = 249.99 ft: checks", Report "7.3 x = 0.01 ft, x = 0.01 ft",
+     "10.2 x = 77.00 ft, x = 77.00 ft (governing)". After: "Governing: x = 249.99 ft, GS7 …", "x = 249.99 ft: checks", "7.3 x = 0.01 ft",
+     "10.2 x = 77.00 ft (governing)". A named location (the Example's "Pier 1") keeps ", x = 109.99 ft". Only these repeated digits change.
+2. **f_ℓ in check titles.** The title subscript helper `tt()` took `_` + `[A-Za-z0-9,]` only, so "f_ℓ/3" showed a raw underscore next to
+   "f<sub>bu</sub>". `ℓ` added to the class in `ui/flexure.js`, `ui/shear.js`, `ui/splices.js`, `ui/constructibility.js` and `report/builders.js`
+   (Report: `${}_{ℓ}$`, KaTeX's ℓ). After: "f<sub>bu</sub> + f<sub>ℓ</sub>/3 ≤ φ<sub>f</sub>F<sub>nc</sub>".
+3. **"2{,}000" in plain text.** `engine/fatigue.js` `setText` (the settings line of the Fatigue & studs tab and the Report) used the TeX
+   thousands formatter: "ADTT_SL = 0.85 × 2{,}000 = 1{,}700 trucks/day". New `const tx = q => String(q).replace(/\{,\}/g, ',')` (anchor `QAO`)
+   around `n0(s.ADTT)` and `n0(s.ADTTSL)`. After: "0.85 × 2,000 = 1,700 trucks/day". Same digits.
+4. **Rating table unit.** "kip-ft" broke over two lines in the narrow Unit column (`ui/rating.js`): `<td>${esc(q.unit || '')}</td>` →
+   `<td style="white-space:nowrap">…`.
+5. **Graphic buttons over the title.** The + − Fit buttons (shared/dxf.js viewer, top right) covered the end of titles that run to the right
+   edge ("GIRDER G1: FATIGUE STRESS RANGE gamma(Df) vs NOMINAL RESISTAN…", Welds "BOTTOM FLANGE-TO-WE…"). `index.html`: `#out .sdx-view{padding-top:34px;}`
+   (anchor `QAO`): the buttons sit in a 34 px strip above the drawing. Shared file unchanged.
+6. **"−0.0" readout.** The Analysis elevation readout showed "M_DC1 -0.0" at x = 0 (a moment of −0.00004 kip-ft). `ui/gfxa.js`: new
+   `nz = (v, d) => nf(v, d).replace(/^-(0(\.0+)?)$/, '$1')` for the readout's moments and camber. After: "M_DC1 0.0". Same digits.
+- **Governing provision:** none (display only).
+- **Check case:** default project, Flexure tab: governing line "Governing: x = 249.99 ft, GS7 Compression flange, f<sub>bu</sub> + f<sub>ℓ</sub>/3 …:
+  ratio 1.229"; Fatigue & studs governing card "ADTT_SL = 0.85 × 2,000 = 1,700 trucks/day".
+- **How verified:** headless Chromium main vs branch digit probe (above); before/after screenshots; `node tests/check-syntax.mjs`;
+  steel-bridge smoke tests; phone-layout `sbapp`; project-library.
+- **Other copies:** none (the `tt()` copies are the five files listed).
+
 ## 2026-11-09 — PR: sbqa-phone-report (PR #TBD) — Report tab fits a phone screen; phone-layout test covers the output tabs (QAP; display only)
 - **Problem (visual QA pass, engineer request 2026-11-09; open item of TABR):** at 390 px the Report tab scrolled the whole page 91 px
   sideways: its "Demands" drop-down (`#rp_src`, `shared/report.js` `.rp-bar select{width:auto!important}`) is as wide as its longest choice

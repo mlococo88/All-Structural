@@ -125,7 +125,8 @@
     const C = STUD, Asc = Math.PI * d ** 2 / 4, eq = C.A * (s.gI / (s.gII * C.th)) ** C.m / (365 * s.life * nn), lim = s.limit === 'I' ? 'I' : s.limit === 'II' ? 'II' : s.ADTTSL >= eq ? 'I' : 'II';
     const N = 365 * s.life * nn * s.ADTTSL, dFn = (C.A / N) ** (1 / C.m), ZrII = dFn * Asc;
     return { lim, gam: lim === 'I' ? gOwn : s.gII, Zr: lim === 'I' ? ZrI : ZrII, eq, N, dFn, Asc, ZrII, nn, s }; }
-  const setText = s => !s.ok ? 'the traffic inputs are incomplete, so Fatigue I is used' : `${s.limit === 'auto' ? 'limit state by ADTT' : `Fatigue ${s.limit} for every detail`}, ADTT_SL = ${n2(s.p)} × ${n0(s.ADTT)} = ${n0(s.ADTTSL)} trucks/day, design life ${n0(s.life)} years, γ_I = ${n2(s.gI)}, γ_II = ${n2(s.gII)}`;
+  const tx = q => String(q).replace(/\{,\}/g, ',');   // QAO (2026-11-09): plain text, not TeX: 2{,}000 -> 2,000
+  const setText = s => !s.ok ? 'the traffic inputs are incomplete, so Fatigue I is used' : `${s.limit === 'auto' ? 'limit state by ADTT' : `Fatigue ${s.limit} for every detail`}, ADTT_SL = ${n2(s.p)} × ${tx(n0(s.ADTT))} = ${tx(n0(s.ADTTSL))} trucks/day, design life ${n0(s.life)} years, γ_I = ${n2(s.gI)}, γ_II = ${n2(s.gII)}`;
 
   /* ---------- sections (GirderDetail secSet, rowDk) ---------- */
   /* secSet(D, s, dk): steel s, long-term c3 (3n), short-term cn (n), steel + rebar r. dk = { ts, hh, beff, n, Ar, dr } (in; dr: rebar depth from the top of the deck) */
