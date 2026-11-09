@@ -4145,7 +4145,7 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
   - New `tests/engine/construction-ll.test.mjs` (hand checks above). 0 console errors.
 - **Other copies:** none.
 
-## 2026-11-09 — PR: claude/sb-autorun (PR #PR3NUM: https://github.com/mlococo88/All-Structural/pull/PR3NUM) (AUTO) — an output tab runs itself when selected; inputs changed while open re-run it after 600 ms; Re-run button; Drawings calculated girder by girder   [display only; no result change]
+## 2026-11-09 — PR: claude/sb-autorun (PR #1260: https://github.com/mlococo88/All-Structural/pull/1260) (AUTO) — an output tab runs itself when selected; inputs changed while open re-run it after 600 ms; Re-run button; Drawings calculated girder by girder   [display only; no result change]
 - **Engineer:** 2026-11-09: "Whenever I select a new output tab I have to press the button to re-run. Can it just be set up so that when an output tab is selected it just automatically re-runs?"
 - **Where:** `index.html`:
   - The block `/* AUTO (2026-11-09 … */` before `drawOut()`: `AUTO_BTN` (each tab's own Calculate button: sec/loads `#bCalc`, flex `#fx_calc`, shear `#sh_calc`, an `#anCalc`, fat `#fa_calc`, cn `#cn_calc`, spl `#sp_calc`, rt `#rt_calc`, wt `#wt_calc`, dwg `#dwg_calc`), `autoRun()`, `autoWatch()` and `autoMsg()`.
