@@ -447,6 +447,7 @@
     return { title: 'Summary of governing ratios', subs: [sub('gov', `Girder ${gName(B.girder)}: governing demand / capacity of each check group`, [
       note(`Each ratio links to the step that works it. Ratio = demand / capacity (OK ≤ 1.0); rating factors RF (OK ≥ 1.0). Demands: ${B.src === 'file' ? `the hand-off file ${B.plName || ''} for flexure, shear, fatigue, constructibility and rating; this project for the rest` : B.custom ? `entered on the tab (Custom) for ${cdMods(B)}; this project's analysis for the rest` : "this project's analysis"}. ${ED}.`),
       top ? note(`Largest ratio: ${f(top.r, 3)} (${top.mod}, ${top.check}, ${top.loc})${top.key ? ` [[${top.key}]]` : ''}.`) : null,
+      note('Every girder at once, with the overall verdict and a link from each value to the tab that works it: the [[tab:sum|Summary tab]].'),   // Summary tab (2026-11-09)
       summaryFig(B, X),
       tbl(['Module', 'Check', 'Location', 'Ratio / RF', 'Status'], rows, { wide: true }),
       ...X.warn.map(w => note(w, true)),
@@ -524,6 +525,7 @@
     const subs = [sub('tbl', 'Governing ratio of each check group, every girder', [
       note(`Each cell is the governing demand / capacity ratio of that check group on that girder (OK ≤ 1.0), or its rating factor RF (OK ≥ 1.0), from the girder's own calculation report (Report tab, scope "Selected girder", where each value is worked). ◆ marks the controlling girder of each group (the largest ratio, the smallest RF). Demands: this project's analysis of each girder. ${ED}.`),
       top ? note(`Controlling girder: ${top.G.label}, largest ratio ${f(top.q.r, 3)} (${top.q.mod}, ${top.q.check}, ${top.q.loc}).`, top.q.r > 1 + 1e-9) : null,
+      note('The same values, with the overall verdict and a link from each value to the tab that works it: the [[tab:sum|Summary tab]].'),   // Summary tab (2026-11-09)
       low ? note(`Lowest rating factor: ${low.G.label}, ${low.q.check.replace(/,.*$/, '')} ${f(low.q.rf, 2)} (${low.q.loc}).`, low.q.rf < 1 - 1e-9) : null,
       tbl(head, rows, { wide: true }),
       errs.length ? note('Not in this summary: ' + errs.map(G => `${G.label}: ${Object.entries(G.err).map(([k, v]) => `${(SECTIONS.find(s => s[0] === k) || [k, k])[1]} ${v}`).join('; ')}`).join(' | '), true) : null])];

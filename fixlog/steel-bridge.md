@@ -4189,3 +4189,26 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
 - **Formulas, results, saved data:** none changed (§4, §5).
 - **How verified:** `node tests/check-syntax.mjs`; smoke `phone-layout` (input tabs at 390 px), `steel-bridge-*`; screenshots in the PR.
 - **Other copies:** none.
+## 2026-11-09 — PR: claude/sb-summary-tab (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SUMT) — Summary output tab, first in the output tab bar   [display only; no result or saved-data change]
+- **Engineer:** 2026-11-09: "There is no Summary output tab, we need to add one."
+- **Where:**
+  - New `report/summary.js` (`window.SBDSummary`, no DOM): `MODS` (run order), `COLS` (the columns), `run(P, gi, k)` (one module of one girder: `SBDReportData.compute(P, gi, { src: 'tabs', want: { [k]: true } })`), `cells(P, gi, parts)` (the module results through `SBDReportBuild.model(B, { detail: 'gov' })`, the Report's own governing rows; each column = the governing row of its group(s)), `overall(P, list)` (counts, governing check), `grpStat`, `weight(an)`.
+  - New `ui/summary.js` (`window.SBDSummaryUI`): the tab (`render`), the run (`start`: one module of one girder per timer tick, progress "Running Flexure and rating, G1 (2/8)…"), the links (`gotoCell`, `focus`: the tab's own row-selection attribute from the Report key's scope, then `SharedSteps.reveal` of the step, the card and the step flashed).
+  - `index.html`: the tab button `data-otab="sum"` first in `#tabBar`; the two `<script>` tags; `drawOut0()` branch `if (ui.otab === 'sum')` (anchor `Summary tab (ui/summary.js, 2026-11-09`), with `goto(tab, gi)` (sets `ui.g`, redraws the inputs) and `report()` (Report tab, scope "Every girder").
+  - `ui/autodesign.js`: new export `lastWarns(P)` (the WARNING flags `c.propWarns` of the last run not applied), read only.
+  - `report/builders.js` `summary()` and `allModel()`: one note each, "…: the [[tab:sum|Summary tab]]" (the Report already had a Summary section first, so it links to the tab; brief item 6).
+- **Columns (each the module's own governing value, exactly):** Flexure Strength I (GS5–GS10), Service II (GS12, GS13), proportions (GS1–GS4, GS22): the Flexure tab's checks over every location split by id, the same rule as `engine/flexure.js` `govern()`; their largest is the Flexure tab's governing ratio. Shear (web panels; GS11, GS16, GS18), Stiffeners (transverse, bearing), Fatigue (FA, GS17), Studs, Constructibility, Cross-frames, Field splices, Welds, LL deflection (SA3), Rating Inventory / Operating RF: the Report's governing groups.
+- **Status:** FAIL: ratio > 1.0 or RF < 1.0. REVIEW: a ratio that is not a number, or a module item with a Warning status (Welds TR4, a cross-frame warning, deflection over the owner's preferred limit). The governing check: the largest ratio that is a number (cells whose ratio is not a number listed apart as "Not evaluated").
+- **Decisions (pending engineer review):**
+  - Demands: this project's analysis, or Custom where a tab has "Custom (entered)" chosen (saved, `P.demandSrc`). A hand-off file or the Example chosen on a tab for the page view, and the Flexure tab's "6.10.8 only" choice, are page-view choices private to those tabs and are not used (said on the tab).
+  - Flexure split into three columns (Strength I, Service II, proportions) so that a GS1–GS4 governing ratio is not hidden in "Strength".
+  - Rating: RF < 1.0 counts as FAIL (Inventory and Operating).
+  - Welds / cross-frames: a Warning item makes the cell REVIEW; its value stays the governing ratio.
+  - The default output tab of a new browser stays Section properties (a first open does not start the full run); Summary is first in the bar.
+  - "Re-run all" runs every module again from the shared analysis cache (keyed by the project state, so it cannot be out of date).
+  - Girder steel: Σw_s ℓ of each plate girder from its analysis (DC1 girder steel with the detail allowance; the same expression as the Analysis tab's step `eq.DC1steel`, linked §); the total is the sum of the plate girders listed.
+  - Girder elevation: the Report's summary figure (`engine/tabgraphics-b.js` `summary`, plate segments and the governing checks), for the girder selected on the Girders & plates tab.
+- **Formulas, factors, units, code references, saved data:** none changed (§4, §5). UI state only: `ui.otab` may be `'sum'`; old values open their tab.
+- **Check case:** default project, Summary tab: 7–9 s to "Up to date"; FAIL; 3 FAIL, 1 REVIEW, 10 PASS; governing Flexure Strength I, G1, x = 249.99 ft, GS7 1.229 (the Flexure tab's governing ratio); Inventory RF 0.61, Operating RF 0.79 (Rating tab). Cell "Shear" 0.437 → Shear & stiffeners tab, station x = 110.01 ft selected, step `sh.ok` flashed.
+- **How verified:** `tests/engine/sb-summary.test.mjs` (default project and a skewed three-span two-girder project: every cell `Object.is` the module's own value from each tab's `build()`); `tests/smoke/steel-bridge-summary.mjs` (links, cache, re-run, the Report link, old `ui.otab`, 390 px, 0 console errors); `node tests/check-syntax.mjs`; smoke `steel-bridge-*`, `phone-layout`, `project-library`.
+- **Other copies:** none.
