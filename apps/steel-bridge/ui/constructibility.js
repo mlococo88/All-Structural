@@ -24,7 +24,7 @@
   const S = { src: null, pl: null, plName: '', R: null, key: '', sel: null, ohSel: 0, err: '', busy: false };
   // src null: the saved choice (P.demandSrc.cn, custom demands PR 2026-11-01), else the default, this project (no example on this tab)
   const srcOf = P => S.src || (window.SBDCustomDemands && P && window.SBDCustomDemands.srcGet(P, 'cn')) || 'project';
-  const tt = t => esc(t).replace(/_\{?([A-Za-z0-9,]+)\}?/g, '<sub>$1</sub>');
+  const tt = t => esc(t).replace(/_\{?([A-Za-z0-9ℓ,]+)\}?/g, '<sub>$1</sub>');
   const cls = r => Number.isNaN(r) || r === Infinity ? 'cn-ng' : !isFinite(r) ? '' : r > 1 + 1e-9 ? 'cn-ng' : r >= 0.9 ? 'cn-hi' : 'cn-ok';
   /* SB2-R2: the ratio of a check as shown; a non-finite ratio that is not "not applicable" carries its reason (c.ng: NG or error) */
   const rtx = c => !c ? '—' : isFinite(c.ratio) ? fmt(c.ratio, 3) : c.ng ? (Number.isNaN(c.ratio) ? esc(c.ng) : `∞ (${esc(c.ng)})`) : '—';

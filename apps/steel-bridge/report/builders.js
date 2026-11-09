@@ -26,7 +26,9 @@
   const R3 = (r, key) => ({ t: isFinite(r) ? f(r, 3) : '—', cls: rc(r), n: true, key });
   const N = (x, d) => ({ t: f(x, d), n: true });
   /* engine titles write subscripts as f_bu, D_{cp}: set them as notation */
-  const tt = t => String(t == null ? '' : t).replace(/_\{?([A-Za-z0-9,]+)\}?/g, (m, a) => `\${}_{${a}}$`);   // as the tabs' tt(): every _x a subscript
+  const tt = t => String(t == null ? '' : t).replace(/_\{?([A-Za-z0-9ℓ,]+)\}?/g, (m, a) => `\${}_{${a}}$`);   // as the tabs' tt(): every _x a subscript (QAO: ℓ too, f_ℓ)
+  /* QAO (2026-11-09): a location's name and station without saying the station twice (an analysis location is named "x = 249.99 ft") */
+  const at = (r, d) => r.x == null || /x = /.test(r.name) ? r.name : `${r.name}, x = ${f(r.x, d)} ft`;
   /* a tab's own description (HTML with <sub>, <b>, entities) as report text */
   const fromHtml = h => String(h == null ? '' : h).replace(/<sub>(.*?)<\/sub>/g, (m, a) => `$_{${a.replace(/<[^>]+>/g, '')}}$`).replace(/<br\s*\/?>/g, ' ').replace(/<[^>]+>/g, '')
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
@@ -222,19 +224,19 @@
       PS.gov.forEach(q => { if (!X.have.has(q.row)) X.have.set(q.row, scOf(q.row)); });
       subs.push(sub('prop', 'Cross-section proportions (6.10.2) and minimum deck reinforcement (6.10.1.7)', [
         note('Checked at every location with the flexure checks (GS1 web D/t_w ≤ 150; GS2 b_f/2t_f ≤ 12.0, b_f ≥ D/6, t_f ≥ 1.1t_w; GS3 0.1 ≤ I_yc/I_yt ≤ 10; GS4 A_r ≥ 0.01b_eff t_deck at negative-flexure locations, top layer ≥ 2/3 a warning; GS22 the owner\'s Appendix A6 rule, a warning). The largest ratio of each over the girder:'),
-        tbl(['Check', 'Location', 'Demand', 'Capacity', 'Ratio', ED], PS.gov.map(q => ({ cells: [`${q.id} ${tt(q.c.title)}`, `${q.row.name}${q.row.x != null ? `, x = ${f(q.row.x, 2)} ft` : ''}`, { t: `${f(q.c.demand, 2)} ${q.c.unit || ''}`, n: true }, { t: `${f(q.c.capacity, 2)} ${q.c.unit || ''}`, n: true },
+        tbl(['Check', 'Location', 'Demand', 'Capacity', 'Ratio', ED], PS.gov.map(q => ({ cells: [`${q.id} ${tt(q.c.title)}`, at(q.row, 2), { t: `${f(q.c.demand, 2)} ${q.c.unit || ''}`, n: true }, { t: `${f(q.c.capacity, 2)} ${q.c.unit || ''}`, n: true },
           { ...R3(q.c.ratio, K(scOf(q.row), q.c.step)), cls: rc(q.c.ratio) }, String(q.c.ref || '').replace(ED + ' ', '')] }))),
         PS.warn.length ? note(`Warnings: ${[...new Set(PS.warn.map(q => q.id))].map(id => { const L = PS.warn.filter(q => q.id === id); return `${id} at ${L.length} location(s), e.g. ${L[0].row.name}: ${L[0].c.na}`; }).join('; ')}`, true) : null]));
       const pg = PS.gov.reduce((b, q) => (!b || q.c.ratio > b.c.ratio ? q : b), null);
-      if (pg) X.gov.push({ mod: 'Flexure', grp: 'Cross-section proportions and minimum deck reinforcement (GS1–GS4)', check: `${pg.id} ${tt(pg.c.title)}`, loc: `${pg.row.name}${pg.row.x != null ? `, x = ${f(pg.row.x, 2)} ft` : ''}`, r: pg.c.ratio, key: K(scOf(pg.row), pg.c.step) });
+      if (pg) X.gov.push({ mod: 'Flexure', grp: 'Cross-section proportions and minimum deck reinforcement (GS1–GS4)', check: `${pg.id} ${tt(pg.c.title)}`, loc: at(pg.row, 2), r: pg.c.ratio, key: K(scOf(pg.row), pg.c.step) });
     }
     const one = r => [checksTbl(r, scOf(r)), kv([['$M_{u}$ / $M_{s}$', `${f(r.Mu, 1)} / ${f(r.Ms, 1)} kip-ft`, K(scOf(r), 'fx.Mu')], ['$D_{c}$ (Service II)', `${f(r.DcS, 3)} in`, K(scOf(r), 'fx.DcS')],
       ['Fatigue I Δf top / bottom', `${f(r.dfT, 2)} / ${f(r.dfB, 2)} ksi`, K(scOf(r), 'fx.fatT')]])];
     const detailed = all ? (Gr.gov ? [Gr.gov] : []) : [...new Set(govRows.concat(PS ? PS.gov.map(q => q.row) : []))].sort((a, b) => a.x - b.x);   // B3: the proportions' locations too (their links)
     const stF = r => (window.SBDFlexureUI.stepsOf ? window.SBDFlexureUI.stepsOf(Gr, r) : r.steps);   // with custom demands the step that names them first
     if (Gr.custom) subs.splice(1, 0, cdSub('flex', B));
-    detailed.forEach(r => subs.push(sub(scOf(r), `${r.name}${r.x != null ? `, x = ${f(r.x, 2)} ft` : ''}${r === Gr.gov ? ' (governing)' : ''}`, [...one(r), gsteps('SBDFlexureUI:x', scOf(r), stF(r), { title: 'Worked steps (flexure, then the section properties of this location)' })])));
-    if (all) subs.push(sub('every', 'Every location', rows.filter(r => r !== Gr.gov).map(r => gsteps('SBDFlexureUI:x', scOf(r), stF(r), { lazy: true, title: `${r.name}, x = ${f(r.x, 2)} ft: ${r.gov ? `${r.gov.id} ${tt(r.gov.title)}, ratio ${f(r.gov.ratio, 3)}` : ''}` }))));
+    detailed.forEach(r => subs.push(sub(scOf(r), `${at(r, 2)}${r === Gr.gov ? ' (governing)' : ''}`, [...one(r), gsteps('SBDFlexureUI:x', scOf(r), stF(r), { title: 'Worked steps (flexure, then the section properties of this location)' })])));
+    if (all) subs.push(sub('every', 'Every location', rows.filter(r => r !== Gr.gov).map(r => gsteps('SBDFlexureUI:x', scOf(r), stF(r), { lazy: true, title: `${at(r, 2)}: ${r.gov ? `${r.gov.id} ${tt(r.gov.title)}, ratio ${f(r.gov.ratio, 3)}` : ''}` }))));
     if (Gr.gov) X.gov.push({ mod: 'Flexure', grp: 'Flexure (Strength I, Service II, Fatigue I)', check: `${Gr.gov.gov.id} ${tt(Gr.gov.gov.title)}`, loc: /x = /.test(Gr.gov.name) ? Gr.gov.name : `${Gr.gov.name}, x = ${f(Gr.gov.x, 2)} ft`, r: Gr.gov.gov.ratio, key: K(scOf(Gr.gov), Gr.gov.gov.step) });
     return { title: 'Flexure', subs };
   }
@@ -332,8 +334,8 @@
     if (all) subs.push(sub('all', 'Results at every location', [tbl(['Location', 'x (ft)', '$M_{c}$ (kip-ft)', 'Flange in compression', 'Governing check', 'Ratio'], rows.map(r => ({ cells: [r.name, N(r.x, 2), N(r.Mc, 1), r.conC.lab, `${r.gov.id} ${tt(r.gov.title)}`, R3(r.gov.ratio, K(sc(r), r.gov.step))], cls: r === R.gov ? 'gov' : '' })))]));
     const one = r => [checksTbl(r, sc(r)), kv([['$M_{c}$', `${f(r.Mc, 1)} kip-ft`, K(sc(r), 'cn.Mc')], ['$L_{b}$ / $C_{b}$ (deck placement)', `${f(r.LbC, 2)} ft / ${f(r.CbCu, 3)}`, K(sc(r), 'cn.Cb')], ['$F_{nc}$ (FLB / LTB)', `${f(r.ltC.FLB, 2)} / ${f(r.ltC.LTB, 2)} ksi`, K(sc(r), 'cn.Fnc')]]),
       gsteps('SBDConstrUI:x', sc(r), window.SBDConstrUI.stepsOf(R, r), { title: 'Worked steps' })];
-    shown.filter(r => gset.has(r)).forEach(r => subs.push(sub(sc(r), `${r.name}, x = ${f(r.x, 2)} ft${r === R.gov ? ' (governing)' : ''}`, one(r))));
-    if (all) subs.push(sub('every', 'Every other location', rows.filter(r => !gset.has(r)).map(r => gsteps('SBDConstrUI:x', sc(r), window.SBDConstrUI.stepsOf(R, r), { lazy: true, title: `${r.name}, x = ${f(r.x, 2)} ft: ${r.gov.id}, ratio ${f(r.gov.ratio, 3)}` }))));
+    shown.filter(r => gset.has(r)).forEach(r => subs.push(sub(sc(r), `${at(r, 2)}${r === R.gov ? ' (governing)' : ''}`, one(r))));
+    if (all) subs.push(sub('every', 'Every other location', rows.filter(r => !gset.has(r)).map(r => gsteps('SBDConstrUI:x', sc(r), window.SBDConstrUI.stepsOf(R, r), { lazy: true, title: `${at(r, 2)}: ${r.gov.id}, ratio ${f(r.gov.ratio, 3)}` }))));
     if (R.oh && !(R.oh.errors && R.oh.errors.length)) { const O = R.oh;
       subs.push(sub('oh', 'Overhang brackets: flange lateral bending (exterior girder, OH1–OH5)', [kv([['$w_{u}$', `${f(O.wu, 4)} kip/ft`], ['$F_{\\ell}$ / $P_{\\ell}$', `${f(O.Fl, 4)} kip/ft / ${f(O.Pl, 3)} kip`, O.rows[0] ? K(oc(O.rows[0]), 'oh.Fl') : null]]),
         tbl(['Location', '$M_{u}$ (kip-ft)', '$M_{\\ell}$ (kip-in)', 'Governing', 'Ratio'], O.rows.map(o => [o.name, N(o.Mu, 1), N(o.Ml, 1), o.gov.id, R3(o.gov.ratio, K(oc(o), o.gov.step))])),

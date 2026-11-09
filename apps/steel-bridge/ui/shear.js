@@ -30,7 +30,7 @@
   // GirderDetail's built-in Girder section rows (GM.gs.def.rows): shears, unfactored, kip
   const EX = [{ name: 'Span 1, max. positive moment', x: 44, V: { DC1: 20, DC2: 3, DW: 3, LL: 40, CL: 3, f: 25, UT: 0, UF: 0 } },
     { name: 'Pier 1', x: 109.99, V: { DC1: 95, DC2: 14, DW: 16, LL: 105, CL: 12, f: 55, UT: 0, UF: 0 } }];
-  const tt = t => esc(t).replace(/_\{?([A-Za-z0-9,]+)\}?/g, '<sub>$1</sub>');
+  const tt = t => esc(t).replace(/_\{?([A-Za-z0-9ℓ,]+)\}?/g, '<sub>$1</sub>');
   const cls = r => Number.isNaN(r) || r === Infinity ? 'fx-ng' : !isFinite(r) ? '' : r > 1 + 1e-9 ? 'fx-ng' : r >= 0.9 ? 'fx-hi' : 'fx-ok';
   const rt3 = v => Number.isNaN(v) ? 'error: ratio is NaN' : v === Infinity ? '∞' : fmt(v, 3);   // SB2-R2
 
