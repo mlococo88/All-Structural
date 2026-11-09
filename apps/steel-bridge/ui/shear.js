@@ -263,8 +263,8 @@
     const gl = [];
     if (R.panels.gov && R.gm.dem) gl.push([R.panels.gov.r, `Panel ${fmt(R.panels.gov.p, 2)}–${fmt(R.panels.gov.q, 2)} ft${R.panels.gov.end ? ' (end panel)' : ''}: V<sub>u</sub> ≤ φ<sub>v</sub>V<sub>n</sub> (6.10.9)`, go('pan', R.panels.gov.i, 'pn.ok'), 'Web panels']);
     if (R.stGov) gl.push([R.stGov.gov.ratio, `${esc(R.stGov.name)}: ${esc(R.stGov.gov.id)} ${tt(R.stGov.gov.title)}`, go('loc', R.stations.indexOf(R.stGov), R.stGov.gov.step), 'Stations']);
-    if (R.tsGov) gl.push([R.tsGov.it.r, `${esc(R.tsGov.it.loc)}: ${esc(R.tsGov.c.id)} ${tt(R.tsGov.c.title)}`, go('ts', R.tsGov.i, R.tsGov.it.step), 'Transverse stiffeners']);
-    if (R.bsGov) gl.push([R.bsGov.it.r, `${esc(R.bsGov.it.loc)}: ${esc(R.bsGov.c.id)} ${tt(R.bsGov.c.title)}`, go('bs', R.bsGov.i, R.bsGov.it.step), 'Bearing stiffeners']);
+    if (R.tsGov) gl.push([R.tsGov.it.r, `${window.SBDSub.html(R.tsGov.it.loc)}: ${esc(R.tsGov.c.id)} ${tt(R.tsGov.c.title)}`, go('ts', R.tsGov.i, R.tsGov.it.step), 'Transverse stiffeners']);
+    if (R.bsGov) gl.push([R.bsGov.it.r, `${window.SBDSub.html(R.bsGov.it.loc)}: ${esc(R.bsGov.c.id)} ${tt(R.bsGov.c.title)}`, go('bs', R.bsGov.i, R.bsGov.it.step), 'Bearing stiffeners']);
     const top = gl.reduce((a, b) => (!a || b[0] > a[0] ? b : a), null);
     h += `<section class="sec"><div class="secHead">Shear &amp; stiffeners: governing</div><div class="secBody"><p class="note">${R.what}</p>
       ${top ? `<p>Governing ratio <b class="${cls(top[0])}">${fmt(top[0], 3)}</b>: ${top[1]} ${top[2]}</p>` : ''}

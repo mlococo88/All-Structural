@@ -149,7 +149,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
   // QA2 (2026-11-09): a ratio that is not a number shows ∞ (infinite) or — (not a number), the reason in the cell's tooltip; still counted REVIEW (report/summary.js, unchanged)
   const vTxt = (c, col) => !c || c.st === 'notrun' ? 'not run' : c.st === 'na' ? 'n/a' : col.rf ? (isFinite(c.rf) ? fmt(c.rf, 2) : '—') : (isFinite(c.r) ? fmt(c.r, 3) : c.r === Infinity ? '∞' : '—');
   const cellHtml = (G, col, k0) => { const c = G.cells[col.id] || { st: 'notrun' };
-    const nn = c.st !== 'na' && c.st !== 'notrun' && !col.rf && c.r != null && !isFinite(c.r) ? `${c.r === Infinity ? 'Infinite ratio' : 'Ratio not a number'}: the check could not be evaluated (counted as REVIEW; see its tab). ` : '';
+    const nn = c.st !== 'na' && c.st !== 'notrun' && !col.rf && c.r != null && !isFinite(c.r) ? 'Ratio not a finite number: the check has no finite demand / capacity ratio (counted as REVIEW; the reason is on its tab). ' : '';
     const tip = c.st === 'na' ? c.why : c.st === 'notrun' ? 'Not run yet: click to run' : `${nn}${G.label}: ${c.check} — ${c.loc}${c.nWarn ? ` (${c.nWarn} warning item(s) on the tab)` : ''}`;
     return `<td class="s-${c.st}${k0 ? ' g0' : ''}" title="${esc(String(tip || '').replace(/\$|\{\}|[{}]|\\/g, ''))}"><a href="#" data-sumgo="${G.gi}|${col.id}">${vTxt(c, col)}</a></td>`; };
   function overview(P, list) {

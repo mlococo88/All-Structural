@@ -141,7 +141,7 @@
     series.forEach((s, k) => { const pts = s.y.map((v, i) => isFinite(v) ? `${sx(xs[i]).toFixed(1)},${sy(v).toFixed(1)}` : null).filter(Boolean).join(' ');
       g += `<polyline fill="none" stroke="${s.c || COL[k % COL.length]}" stroke-width="${s.w || 1.4}"${s.dash ? ` stroke-dasharray="${s.dash}"` : ''} points="${pts}"/>`; });
     g += `<text x="${(l + W - r) / 2}" y="${H - 3}" text-anchor="middle" fill="#475569">x (ft)</text><text x="12" y="${(t + H - b) / 2}" transform="rotate(-90 12 ${(t + H - b) / 2})" text-anchor="middle" fill="#475569">${esc(o.unit)}</text></svg>`;
-    const leg = series.map((s, k) => `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px"><svg width="22" height="8" aria-hidden="true"><line x1="0" x2="22" y1="4" y2="4" stroke="${s.c || COL[k % COL.length]}" stroke-width="2"${s.dash ? ` stroke-dasharray="${s.dash}"` : ''}/></svg>${esc(s.name)}</span>`).join('');
+    const leg = series.map((s, k) => `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px"><svg width="22" height="8" aria-hidden="true"><line x1="0" x2="22" y1="4" y2="4" stroke="${s.c || COL[k % COL.length]}" stroke-width="2"${s.dash ? ` stroke-dasharray="${s.dash}"` : ''}/></svg>${window.SBDSub.html(s.name)}</span>`).join('');
     return `<figure style="margin:6px 0"><figcaption class="note" style="font-weight:600">${esc(o.title)}</figcaption>${g}<div class="note">${leg}</div></figure>`;
   }
 

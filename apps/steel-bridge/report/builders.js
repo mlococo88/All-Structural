@@ -26,7 +26,7 @@
   const R3 = (r, key) => ({ t: isFinite(r) ? f(r, 3) : '—', cls: rc(r), n: true, key });
   const N = (x, d) => ({ t: f(x, d), n: true });
   /* engine titles write subscripts as f_bu, D_{cp}: set them as notation */
-  const tt = t => String(t == null ? '' : t).replace(/_\{?([A-Za-z0-9ℓ,]+)\}?/g, (m, a) => `\${}_{${a}}$`);   // as the tabs' tt(): every _x a subscript (QAO: ℓ too, f_ℓ)
+  const tt = t => String(t == null ? '' : t).replace(/_\{?([A-Za-z0-9ℓ]+(?:,[A-Za-z0-9ℓ]+)*)\}?/g, (m, a) => `\${}_{${a}}$`);   // as the tabs' tt(): every _x a subscript (QAO: ℓ too, f_ℓ; QA2: a comma after it is not in it, "P_fy, inner")
   /* QAO (2026-11-09): a location's name and station without saying the station twice (an analysis location is named "x = 249.99 ft") */
   const at = (r, d) => r.x == null || /x = /.test(r.name) ? r.name : `${r.name}, x = ${f(r.x, d)} ft`;
   /* a tab's own description (HTML with <sub>, <b>, entities) as report text */
@@ -298,9 +298,9 @@
     const R = B.fat, FA = window.SBDFatigue, SC = window.SBDStuds, all = X.detail === 'all', subs = [], gl = [];
     const fk = i => 'fa@' + i, gk = i => 'gs17@' + i, ck = cid => (R.FC || []).find(c => c.id === cid) || { items: [] };
     const faI = R.faGov ? R.FR.rows.findIndex(r => R.faGov.it.step.startsWith(`fa${r.i}.`)) : -1;
-    if (R.faGov) gl.push({ g: 'Fatigue details', it: `${R.faGov.it.loc}: ${R.faGov.c.id} ${R.faGov.c.title}`, r: R.faGov.it.r, key: K(fk(faI), R.faGov.it.step) });
+    if (R.faGov) gl.push({ g: 'Fatigue details', it: `${R.faGov.it.loc}: ${R.faGov.c.id} ${tt(R.faGov.c.title)}`, r: R.faGov.it.r, key: K(fk(faI), R.faGov.it.step) });
     if (R.g17) gl.push({ g: 'Flanges, every station', it: `${R.g17.it.loc}: GS17 flange stress range (Category ${R.g17.it.cat}, Fatigue ${R.g17.it.lim})`, r: R.g17.it.r, key: K(gk(R.g17.i), R.g17.it.step) });
-    if (R.scGov) gl.push({ g: 'Studs', it: `${R.scGov.it.loc}: ${R.scGov.c.id} ${R.scGov.c.title}`, r: R.scGov.it.r, key: K('sc', R.scGov.it.step) });
+    if (R.scGov) gl.push({ g: 'Studs', it: `${R.scGov.it.loc}: ${R.scGov.c.id} ${tt(R.scGov.c.title)}`, r: R.scGov.it.r, key: K('sc', R.scGov.it.step) });
     gl.forEach(q => X.gov.push({ mod: 'Fatigue & studs', grp: 'Fatigue & studs: ' + q.g, check: q.it, loc: q.g, r: q.r, key: q.key }));
     subs.push(sub('gov', 'Governing items', [note(fromHtml(R.what)), note(FA.setText(R.set) + '. As on the [[tab:fat|Fatigue & studs tab]].'), tbl(['Group', 'Governing item', 'Ratio'], gl.map(q => [q.g, q.it, R3(q.r, q.key)])),
       R.FR.errors.length ? note('Fatigue: ' + R.FR.errors.join('; '), true) : null, R.SR.errors.length ? note('Shear connectors: ' + R.SR.errors.join('; '), true) : null]));
@@ -355,7 +355,7 @@
     let gov = null; (C || []).forEach(c => c.items.forEach(it => { if (isFinite(it.r) && (it.st === 'pass' || it.st === 'fail') && (!gov || it.r > gov.it.r)) gov = { c, it }; }));
     const svg = window.SBDFramingUI && window.SBDFramingUI.plan ? window.SBDFramingUI.plan(L) : '';
     const work = [...L.steps, ...fl.steps, ...(R.steps || [])], ids = new Set(work.map(t => t.id)), lk = id => (id && ids.has(id) ? id : null);   // an item's step, where the work has it
-    if (gov) X.gov.push({ mod: 'Cross-frames', grp: 'Cross-frames', check: `${gov.c.id} ${gov.c.title}`, loc: gov.it.loc, r: gov.it.r, key: lk(gov.it.step) });
+    if (gov) X.gov.push({ mod: 'Cross-frames', grp: 'Cross-frames', check: `${gov.c.id} ${tt(gov.c.title)}`, loc: tt(gov.it.loc), r: gov.it.r, key: lk(gov.it.step) });
     subs.push(sub('pl', 'Framing plan (6.7.4.2.1)', [svg ? { type: 'figure', svg, caption: 'Plan: girders, bearing lines, cross-frames and field splices' } : null,
       tbl(['Span', 'Skew θ (°)', 'Orientation', 'Frames', 'Spacing (ft)'], FR.orient.map(o => [String(o.k + 1), N(o.th, 2), o.o === 'normal' ? `normal, ${o.flat ? 'contiguous' : o.arr}` : 'parallel to the skew', String(o.n), { ...N(o.s, 3), key: `fr.k${o.k}.s` }])),
       tbl(['Girder', 'Intermediate frames', 'Largest $L_{b}$ (ft)', 'Brace points (ft)'], L.girders.map(g => ({ cells: [`G${g.i + 1}`, String(g.nInt), { ...N(g.lb, 2), key: `fr.g${g.i}.lb` }, g.braces.map(v => f(v, 2)).join(', ')], cls: g.i === line ? 'gov' : '' }))),
@@ -382,7 +382,7 @@
         return { type: 'figure', svg: GR.tightSvg(g.D, { i0: g.i0, i1: g.i1, bg: '#fff', title: g.title, width: isFinite(px) && px > 0 ? `${px}px` : '100%' }), caption }; } catch (e) { return null; } };
     // summary: the splice with the largest strength ratio
     const sg = G.list.reduce((b, s, k) => { const q = strGov(s.CK); return q && (!b || q.it.r > b.q.it.r) ? { s, q, k } : b; }, null);
-    if (sg) X.gov.push({ mod: 'Field splices', grp: 'Field splices', check: `${sg.q.c.id} ${tt(sg.q.c.title)}`, loc: `${sg.s.name}, ${sg.q.it.loc}`, r: sg.q.it.r, key: K('spl@' + sg.k, sg.q.it.step) });
+    if (sg) X.gov.push({ mod: 'Field splices', grp: 'Field splices', check: `${sg.q.c.id} ${tt(sg.q.c.title)}`, loc: `${sg.s.name}, ${tt(sg.q.it.loc)}`, r: sg.q.it.r, key: K('spl@' + sg.k, sg.q.it.step) });
     subs.push(sub('list', `Splices of ${gName(B.girder)}`, [G.custom ? note('Demands: entered (Custom) on the Field splices tab, the row at each splice station (table below).') : note("Demands: this project's analysis, moments at the analysis station nearest the splice and shears the largest of the element containing it and its neighbours (GirderDetail's rule); sections 0.01 ft each side, the smaller carries the design forces (6.13.6.1.1). As on the [[tab:spl|Field splices tab]]."),
       G.errors.length ? note(G.errors.join(' '), true) : null,
       G.list.length ? splFig(GB => GB.spliceStrip(G.list, B.P, {}), `Splice locations on girder ${gName(B.girder)}; marker colour: the governing ratio of each splice`) : null,

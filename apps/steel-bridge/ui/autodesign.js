@@ -141,7 +141,7 @@
     const cnt = vs => ['auto', 'lock', 'range'].map(m => [m, vs.filter(V => s.V[V.id].mode === m).length]).filter(q => q[1]).map(([m, n]) => `${n} ${MODE[m]}`).join(', ');
     const spr = ((P.autodesign || {}).splRules) || {}, nSet = Object.keys(spr).filter(k => spr[k] !== '' && spr[k] != null).length;
     return `<div class="ad-sum">${grps.map(g => `<div><b>${esc(g.n)}:</b> ${cnt(g.v)}</div><div class="ad-chips">${g.v.map(V => { const q = s.V[V.id], m = q.forced ? 'lock' : q.mode;
-        return `<a href="#" class="ad-chip m-${m}" data-advgo="${esc(V.id)}" title="${esc(V.label)}: ${MODE[m]}${q.forced ? ' (fixed)' : ''}. Click to edit.">${esc(V.label)}: ${MODE[m]}</a>`; }).join('')}</div>`).join('')}</div>
+        return `<a href="#" class="ad-chip m-${m}" data-advgo="${esc(V.id)}" title="${esc(V.label)}: ${MODE[m]}${q.forced ? ' (fixed)' : ''}. Click to edit.">${window.SBDSub.html(V.label)}: ${MODE[m]}</a>`; }).join('')}</div>`).join('')}</div>
       <div class="fRow"><button type="button" class="primary" data-advgo="" id="ad_vars_edit">Edit design variables…</button></div>
       ${s.splR ? `<p class="note">Field splice placement rules: ${nSet ? `${nSet} entered, the others` : 'all'} at their defaults. <a href="#" data-advgo="#spr">Edit…</a></p>` : ''}`;
   }
