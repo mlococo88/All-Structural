@@ -248,3 +248,9 @@ Plan: rotating in-depth code-compliance reviews (read-only) → fix PRs for clea
 ## 2026-11-08 — all note work complete
 - SF rename "Shallow Foundation Design" #1236–#1239; SF manual audit #1242–#1246; shared step-note lists #1240, ML warnings #1241; leftovers #1247 (Arch), #1248 (BP), #1249 (SF), #1250 (ML fatigue).
 - No agents running. Engineer left default-project FAILs as is. ST-Girder leftovers deferred (it lives inside SBD; new SB app on hold).
+
+## 2026-11-09 — engineer decisions for FUTURE hand-off work (not started; engineer: "I don't want to do it now")
+- New channel `superGeometry`: Steel Bridge Design → Substructure Loading (spans, joints, skews per support, girder count/spacings, overhangs, barriers, deck/haunch, girder section max + per-support depths, bearing fixity if defined, ownerRules). One "Send to Substructure Loading" button with Geometry / Reactions boxes. Receiver: pull dialog with side-by-side review; add/remove units when span count changes, keep existing; max girder depth (conservative for wind); elevations not carried; mismatch warning vs reactions. Open: update DF girder data? leave fixity if undefined (recommended)? also offer to abutment?
+- ALL hand-offs per project (engineer 2026-11-09): sender keeps one copy per project (name + bridgeId); Pull asks which project (newest first, bridgeId/name match preselected, shows date/device/summary); stale dot per pulled project.
+- Sent copies sync through GitHub (engineer chose option 2): hand-offs folder in the projects repo when Cloud sync is on; Pull merges local + GitHub copies; works locally without sync.
+- Spec goes into HANDOFF.md first when the engineer says start.
