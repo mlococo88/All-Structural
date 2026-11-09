@@ -4664,3 +4664,71 @@ except the duplicated stations removed by fix 1 (listed there) and the Summary's
 - **How verified:** headless Chromium main vs branch digit probe of every tab and the Report (identical); before/after screenshots;
   `node tests/check-syntax.mjs`; steel-bridge smoke tests; phone-layout `sbapp`; project-library.
 - **Other copies:** none.
+
+## 2026-11-09 — PR: sbqa2-display-leftovers (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — the visual QA pass's reported leftovers on every tab (QA2; display only)
+Engineer request (2026-11-09): every tab looks correct and professional. Display only: no formula, factor, unit, code reference, key or saved-data
+format changed. Anchor text `QA2` marks each change. New file `ui/sub.js` (in the first `document.write` loader of `index.html`, before the
+`ui/` files).
+1. **Flexure "Stress checks at x" chart** (`ui/gfxa.js` `flexure()`, mount `fxb`). Before: chart width `Math.max(150, 32 * n)` per chart (32 units =
+   5.3 text heights per check; 14 checks → 448 units: text ~7 px in a 765 px frame), the check key on the id's line (`q.id + ' ' + key`), title wrapped
+   at 42 characters. After: both charts on one width `w = Math.max(150, 3 * h * Math.max(nKsi, nRatio))`, the key on a second line under the id
+   (`keys()`), the gap between the charts 17 h → 13 h, the title wrapped to the chart width. Same values and order (the text ~13 px at 1440 px).
+2. **Constructibility overhang sketch, interior girder** (`ui/gfxa.js` `constr()`): before, `R.F.oh` null drew a frame with "OVERHANG BRACKETS: EXTERIOR
+   GIRDER, PROJECT SOURCE ONLY (INPUTS ABOVE)". After: no frame, a note "Overhang brackets apply to exterior girders; select G1 or Gn." (an exterior
+   plate girder with a GirderDetail file: "Overhang brackets are checked with the project as the source (not a GirderDetail file).").
+3. **Fatigue & studs graphics** (`engine/tabgraphics-b.js`, `ui/graphics.js`):
+   - Detail labels: `SBDGraphics.stack(items, o)` gets `o.leaders`: a flag goes further out than every flag placed before it (to its right) whose
+     leader x lies inside it, so no leader crosses a label (before: "F19 EXEMPT", "F2 0.70" were crossed). `fatigue()` `rowsOf` passes `leaders: true`.
+     Other callers of `stack()` unchanged.
+   - Chart text: "gamma(Df) vs NOMINAL RESISTANCE (DF)n" → "GAMMA(DELTA f) VS NOMINAL RESISTANCE (DELTA F)n"; legend "(DF)n RESISTANCE",
+     "gamma(Df) < 0.9 (DF)n", "0.9 TO 1.0 (DF)n" → "(DELTA F)n …", "GAMMA(DELTA f) < 0.9 (DELTA F)n", "0.9 TO 1.0 (DELTA F)n"; readout "GAMMA(DF) … (DF)n"
+     → "GAMMA(DELTA f) … (DELTA F)n". **Decision (pending engineer review):** the CAD-capital style of the elevation's own note ("GAMMA(DELTA f) /
+     (DELTA F)_n"), not Greek letters: the graphics' SVG preview (shared/dxf.js) prints a Greek letter as its DXF escape "\U+03B3".
+4. **Rating chart** (`engine/tabgraphics-b.js` `ratingChart()`): the support names drawn in a row above the plot (before: at the plot's top edge, over
+   the arrows of capped values), shifted beside a governing leader at the same station; the INV / OPR governing labels above that row on leaders from
+   their circles (before: beside the circle, over the curves); the title in two lines (wrapped at 30 characters) above them, so the phone view's
+   reading zoom shows it whole at 390 px. Same texts and values.
+5. **Underscores in screen text → subscripts.** `ui/sub.js` `SBDSub.html(t)`: escaped text with `X_ab` → `X<sub>ab</sub>` (regex
+   `/([A-Za-zΑ-Ωα-ωℓ)])_\{?([A-Za-z0-9ℓ]+(?:[,+][A-Za-z0-9ℓ]+)*)\}?/g`: "M_LL+IM", "f_ℓ,skew" whole; "P_fy, inner" without the comma). Used for:
+   the step labels and notes of every tab (`class="lbl">${esc(s.label)}` / `<div class="nt">${esc(s.note)}` → `SBDSub.html(...)`, 13 places), the
+   Analysis station-table headers (`<th>${esc(c[0])}</th>`) and chart legend, check titles and locations in the Cross-frames, Fatigue, Shear, Splices,
+   Welds and Rating tables (`esc(x.title)` / `esc(x.it.loc)`), the Flexure n/a cells, the Fatigue settings line, the Cross-frames M_u note, the Auto
+   design chips, the graphics' notes and readouts (`ui/graphics.js` `mount()`: `read.innerHTML = SBDSub.html(t)`). The topic result lines of the
+   worked steps ("Flange local buckling (λ_f = b_fc/2t_fc …)") are written by shared/steps.js: `SBDSub.fix()` (a MutationObserver on `#out`) puts
+   the subscripts into their own text nodes (never inside KaTeX). shared/steps.js unchanged. Summary `txt()` (ui/summary.js): `ℓ` added to the class
+   (as QAO did in the tabs). Report (`report/builders.js`): `tt()` no longer takes a trailing comma; applied to the Fatigue / studs and Cross-frames
+   governing titles and the Cross-frames and Field-splice governing locations ("n ≥ P/Q_r", "P_fy, Inner"). Not changed: drop-down choices
+   (`<option>` cannot hold a subscript) and the CAD graphics (capitals, SVG / DXF).
+6. **Cross-frames check table** (`ui/framing.js`): new `big = x => Math.abs(x) >= 10000 ? SharedUnits.fmtInt(x) : fmt(x, 2)` for the Demand and Capacity
+   cells; an infinite capacity shows "∞" (before: the cell fell back to `cells[1]`, the demand "16,528"). **Digits changed (CF8, default project):**
+   β_br 16527.87 / 1215374.92 → 16,528 / 1,215,375; β_sec 16527.87 / 16,528 → 16,528 / ∞; β_g 16527.87 / 471576.58 → 16,528 / 471,577;
+   β_T 16527.87 / 339750.34 → 16,528 / 339,750 (rounding to whole kip-in/rad; the engine's own cell text, unchanged, already had 16,528).
+7. **Drawings quantities** (`engine/sheets.js` `quantities()`): new `n0 = v => (Math.round(+v) || 0).toLocaleString('en-US')` for every quantity (the
+   table on the Drawings tab and on the Typical section sheet): "435385 LB" → "435,385 LB", "2000" → "2,000", "6080" → "6,080" (same digits).
+   `tests/engine/sheets.test.mjs` expects the separators.
+8. **Report tab** (`index.html`, CSS only; shared/report.js unchanged):
+   - `#out .rp-host{container-type:inline-size}`; on screen `#out .rp-doc{max-width:11in}` and, where the output panel is under 1000 px wide
+     (`@container`), the contents list above the report (`.rp-body` one column, `.rp-toc` static, 220 px) and the doc padding 0.3 in / 0.35 in.
+     At 1440 px: report 519 → 765 px wide.
+   - `@media print`: with the Report tab selected (`body:has(#tabBar [data-otab="rpt"][aria-selected="true"])`), `#hdr` and `#out .rp-host>:not(.rp)`
+     (the Demands bar) are not printed: Ctrl+P prints the report only, as Print report does.
+9. **Summary** (`ui/summary.js`, `ui/dash.js`): Owner row with no owner "—; load rules AASHTO" → "none entered; load rules AASHTO"; "Lowest rating
+   factor" and "Not evaluated" on their own lines in the line's font (`.sum-low`, was `.note` run on); a ratio that is not a finite number shows
+   "∞" (Infinity) or "—" (was "NaN") with the tooltip "Ratio not a finite number: the check has no finite demand / capacity ratio (counted as REVIEW;
+   the reason is on its tab)." The check summary column (`ui/dash.js` `vOf`) the same. Counting unchanged (report/summary.js). The cause of the
+   Constructibility ratio (F_nc = 0.91 ksi at 60° skew) is pending the engineer, not touched. `tests/smoke/steel-bridge-summary.mjs` expects ∞ / —.
+10. **3D view** drop-downs: `#out .v3d-bar select{width:auto;max-width:100%}` (were cut at 110 px: "Whole bridg", "Moment: Stre").
+11. **Header at 390 px:** Undo and Redo in `<span id="hdrUR">` (inline-flex, nowrap); the save chip goes before it (`chipBefore: $('hdrUR')`).
+    Before: the chip and Undo on one line, Redo alone on the next; after: the chip, then Undo Redo together.
+12. **Input rows** with a short unit on a line of its own at a 350 px panel (Framing "Factored deck-placement M_u" kip-ft, Stiffeners "Intermediate
+    cross-frames at most" ft apart, Fatigue "ADTT, one direction" trucks/day, Loads "LL deflection limit L/" (2.5.2.6.2)): for these four rows
+    (`.fRow:has(>[data-path=…])`), the label max 170 px, the input 84 px, the unit `nowrap`.
+- **Governing provision:** none (display only).
+- **Check case:** default project, 1440 px. Cross-frames tab, CF8 row "Web distortion, β_sec": Demand 16,528, Capacity ∞, ratio 0.000. Drawings tab,
+  Quantities: girder plates 435,385 LB. Default project with every support skew 60°: Summary, Constructibility cell "∞" (was "NaN"), tooltip as above.
+- **How verified:** headless Chromium probe, origin/main vs branch, default project, text of every input and output tab (with the graphics' SVG
+  text) and the built Report: digit sequences identical except item 6 (listed) and the "1" of "G1 or Gn" (item 2, new note); the Summary probe waits for
+  "Up to date". Before/after screenshots. `node tests/check-syntax.mjs`; engine tests; smoke tests steel-bridge-wiring, -paths, -report,
+  -graphics (updated: the interior-girder note, readout "Mc"), -drawings, -summary (updated), -dash, -deflection, -equal-spacing, -splice-addrow,
+  -taberrors, -library, -tabgraphics-b, -scroll --quick, -splitter; phone-layout `sbapp`; project-library: pass, 0 console errors.
+- **Other copies:** none (the tabs' `tt()` copies are unchanged; `ui/sub.js` is the app's one subscript helper for the new uses).
