@@ -46,6 +46,10 @@ node tests/compare.mjs --tool st --a a8bf5e7:stgirder.html --payload all      # 
 # Steel Bridge (apps/steel-bridge) Report tab: browser smoke test with print emulation (0 console errors, 0 KaTeX errors, links, print)
 node tests/smoke/steel-bridge-report.mjs
 
+# Steel Bridge Field splices with custom values: Custom demands (errors shown after Calculate, a changed value changes the result), every entered
+# plate / bolt / basis field changes the FS1 result and is saved (SPERR; about 6 min)
+node tests/smoke/steel-bridge-splices.mjs
+
 # Drawings "Print sheet" / "Print all sheets" (shared/dxf.js printSheets): headless print-to-PDF, 17 x 11 in pages, a known dimension
 # measured to scale on the PDF (pdfinfo, pdftocairo), the Report still printed by Ctrl+P (one entry per tool in TOOLS)
 node tests/smoke/dxf-print-sheets.mjs [--tool sf,...] [--out <dir for the PDFs>]

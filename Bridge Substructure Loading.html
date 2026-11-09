@@ -210,6 +210,7 @@ header { height: 54px; flex: none; display: flex; align-items: center; gap: 10px
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
 <script src="shared/github-sync.js"></script>   <!-- GHS (2026-11-05): copy of the saved projects to a private GitHub repository; off until set up -->
+<script src="shared/handoff-store.js"></script>   <!-- GXF (2026-11-09): per-project hand-off copies (HANDOFF.md §5.1): the project picker of the geometry and reactions pulls -->
 <script>
 /* BridgeXfer v1 — cross-tool hand-off helper. Spec: HANDOFF.md. Duplicated verbatim in each tool that sends or receives (CLAUDE.md §3). */
 (function(){
@@ -3456,7 +3457,9 @@ async function rxImport(file) {
   const isST = p => !!p && (p.producer === 'ST-Girder' || p.producerFile === 'stgirder.html' || /^ST-Girder\b/.test(String(p.producer || '')));
   const ST_MSG = 'ST-Girder is no longer a source of superstructure reactions (engineer decision 2026-10-19: ST-Girder is connected to GirderDetail only).';
   /* the latest payload on the channel is new for SubLoads, and not ST-Girder's */
-  const newOK = () => { if (!BX() || !BX().isNew(CH, RID)) return false; const r = BX().read(CH, SCH, 1); return !(r.ok && isST(r.payload)); };
+  const newOK = () => { const recs = Array.isArray(P.rxSrc) ? P.rxSrc : [], last = recs[recs.length - 1];   // GXF (2026-11-09): per pulled project
+    if (last && last.pid && window.SubLoadsPicker) return SubLoadsPicker.newer(CH, SCH, BY.concat(['steelbridge']), last.pid, last.producedAt, isST);
+    if (!BX() || !BX().isNew(CH, RID)) return false; const r = BX().read(CH, SCH, 1); return !(r.ok && isST(r.payload)); };
   const TOKIP = { kip: 1, kips: 1, k: 1, kn: 1 / 4.4482216152605, lb: 0.001, lbs: 0.001, lbf: 0.001 };   // force unit -> kip
   const TOFT = { ft: 1, feet: 1, m: 1 / 0.3048 };                                                          // length unit -> ft
   const LBL = { dc1: 'DC1', dc2: 'DC2', dw: 'DW', ut: 'UT', uf: 'UF' };
@@ -3539,9 +3542,9 @@ async function rxImport(file) {
   function gList(js) { return js.length ? js.map(j => `G${j + 1}`).join(', ') : 'none'; }
 
   /* ---------- dialog ---------- */
-  function openDialog(list, via, errs) {
+  function openDialog(list, via, errs, pid) {
     const G = MODEL.G; if (!G || G.E.length || !(P.rx.data || []).length) { flash('Fix the bridge input errors on the Summary tab first.', 'fail'); return; }
-    DLG = { list, via, errs: errs || [], pi: 0 }; pickSource(0);
+    DLG = { list, via, errs: errs || [], pi: 0, pid: pid || '' }; pickSource(0);   // pid: the project picked (GXF, 2026-11-09)
     let m = $('#rxh-modal'); if (!m) { m = document.createElement('div'); m.className = 'modal'; m.id = 'rxh-modal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); document.body.appendChild(m); }
     m.hidden = false; renderDialog();
   }
@@ -3611,6 +3614,7 @@ async function rxImport(file) {
     const p = D.p, rec = { producer: p.producer || '', producerFile: p.producerFile || '', producedAt: p.producedAt || '', project: p.project || null,
       girder: D.c.labels[D.gl], position: D.pos, mode: D.mode, via: D.via, adoptedAt: new Date().toISOString(), targets: Object.values(tg) };
     if (D.byN) { rec.girder = `${D.c.labels.join(', ')}, each to the girder with the same number`; rec.position = ''; rec.byNumber = true; }   // SRX (optional fields)
+    if (D.pid) rec.pid = D.pid;   // GXF (2026-11-09, optional): the project id pulled (HANDOFF.md §5.1)
     const os = ownSum(p); if (os) rec.ownerRules = os;   // SRX: recorded for information only
     if (D.c.hasU) rec.utilities = { ut: r3(pl.cells.filter(x => x.c0 === 'ut').reduce((a, x) => a + x.val, 0)), uf: r3(pl.cells.filter(x => x.c0 === 'uf').reduce((a, x) => a + x.val, 0)) };   // SRXU (optional)
     P.rxSrc = (Array.isArray(P.rxSrc) ? P.rxSrc : []).concat([rec]).slice(-20);
@@ -3620,6 +3624,13 @@ async function rxImport(file) {
     return true;
   }
   function pull() {
+    if (window.SubLoadsPicker && window.SharedHandoffStore) {   // GXF (2026-11-09): first ask which project (HANDOFF.md §5.1)
+      const NSx = 'bridgeSuite.v1.';
+      SubLoadsPicker.open({ channel: CH, schema: SCH, title: 'Pull superstructure reactions', producers: BY.concat(['steelbridge']), skip: isST,
+        legacy: [{ key: NSx + CH, via: 'latest hand-off' }].concat(BY.map(id => ({ key: `${NSx}${CH}.by.${id}`, via: `copy from ${id}`, producer: id }))),
+        empty: 'No superstructure reactions have been sent yet. In the Steel Bridge app (Send to Substructure Loading), PS-Beam, or GirderDetail (Steel Bridge Design, Structural analysis), send the reactions, then pull here.',
+        onPick: (g, errs, skipped) => { if (skipped.length) flash(stNote(skipped)); openDialog(g.entries.map(e => e.payload), g.pid ? `pull, project ${g.label}` : 'pull', errs, g.pid); } });
+      return; }
     const r = candidates();
     if (!r.list.length) { alert((r.errs.length ? `Cannot pull the reactions: ${r.errs.join('; ')}` : 'No superstructure reactions have been sent yet. In PS-Beam, or in GirderDetail (Steel Bridge Design, Structural analysis), click "Send reactions to Substructure Loading", then pull here.') + (r.st.length ? '\n\n' + stNote(r.st) : '')); return; }
     openDialog(r.list, 'pull', r.errs);
@@ -3722,6 +3733,199 @@ async function rxImport(file) {
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && DLG) closeDialog(); });
   window.addEventListener('storage', e => { if (e.key && e.key.indexOf('bridgeSuite.v1.' + CH) === 0 && P.ui.itab === 'rx') buildSide(); else if (e.key && e.key.indexOf('bridgeSuite.v1.' + CH) === 0) { const t = document.querySelector('.itab[data-pane="rx"]'); if (t) t.classList.toggle('bx-new', BX() ? BX().isNew(CH, RID) : false); } });
   window.SubLoadsRxHandoff = { candidates, check, openDialog, applyDialog, closeDialog, plan, pull, state: () => DLG, defTarget };   // used by tests; no effect on results
+})();
+/* ---------- project picker of the hand-off pulls and the bridge geometry hand-off (GXF, 2026-11-09; HANDOFF.md §4.14, §5.1) ----------
+   SubLoadsPicker: "Pull …" first asks WHICH PROJECT to pull from (shared/handoff-store.js list: this browser's per-project copies, the
+   legacy keys, and with Cloud sync the GitHub copies), newest first, with the bridgeId, project, date, device and a summary; the project
+   whose name matches this project's name is preselected (SubLoads has no Bridge ID field), otherwise nothing. Used by the geometry pull
+   and by the reactions pull above.
+   Geometry (channel superGeometry, receiver id subloads): Bridge tab "Pull geometry from Steel Bridge Design" (new-data marker per pulled
+   project) and "Import hand-off (JSON)". After the picker, a side-by-side review (current → incoming) and Apply. Mapping into P.br: spans,
+   skews (sign converted to SubLoads' convention by default), joints, bays, ohL, ohR, barL, barR, barH (only when sent), ts, haunch, d (the
+   largest depth by default; per support, per span or entered), bf, tf, tw; P.units resized by syncSupports (kept where a support still
+   exists). Not changed: elevations, bearing fixity, unit inputs, reactions. Option "Also update the live-load distribution girder data"
+   (off): off keeps the skew-correction K_g in use (pins br.skKg when it is estimated). Source: the new optional field P.geoSrc. Nothing is
+   applied without Apply; nothing on page load. */
+(function patchGeoHandoff() {
+  const NS = 'bridgeSuite.v1.', HS = () => window.SharedHandoffStore, BX = () => window.BridgeXfer;
+  const CH = 'superGeometry', SCH = 'bridge-super-geometry', PRODS = ['steelbridge'], RID = 'subloads';
+  const when = iso => { const d = new Date(iso); return isNaN(d) ? String(iso || '?') : d.toLocaleString(); };
+  const f3 = v => isFinite(v) ? (+v).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) : '—';
+  const r4 = v => Math.round(v * 1e4) / 1e4;
+  const modal = id => { let m = document.getElementById(id); if (!m) { m = document.createElement('div'); m.className = 'modal'; m.id = id; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); document.body.appendChild(m); } m.hidden = false; return m; };
+  const shut = id => { const m = document.getElementById(id); if (m) { m.hidden = true; m.innerHTML = ''; } };
+
+  /* ---------- the project picker ---------- */
+  let PK = null;   // { o, groups, errs, cloud, sel, skipped }
+  const openProject = () => ({ name: String((P.meta || {}).name || ''), bridgeId: '' });
+  async function open(o) {
+    PK = { o, groups: null, errs: [], cloud: '', sel: null, skipped: [] }; renderPicker();
+    let r; try { r = await HS().list({ storage: localStorage, channel: o.channel, schema: o.schema, maxVersion: 1, producers: o.producers, legacy: o.legacy || [], fetch: (u, i) => window.fetch(u, i) }); }
+    catch (e) { r = { groups: [], errors: [String(e && e.message || e)], cloud: 'off' }; }
+    if (!PK || PK.o !== o) return;
+    const skipped = [], groups = r.groups.map(g => { const es = g.entries.filter(e => { if (o.skip && o.skip(e.payload)) { skipped.push(e.payload); return false; } return true; }); return es.length ? { ...g, entries: es, newest: es[0] } : null; }).filter(Boolean);
+    PK.groups = groups; PK.errs = r.errors; PK.cloud = r.cloud; PK.skipped = skipped; PK.sel = HS().match(groups, openProject());
+    if (!groups.length) { shut('gxp-modal'); PK = null; alert((r.errors.length ? `Nothing can be pulled: ${r.errors.join('; ')}\n\n` : '') + o.empty); return; }
+    renderPicker();
+  }
+  function renderPicker() {
+    const m = modal('gxp-modal'), K = PK, o = K.o;
+    let h = `<div class="modal-box" style="width:min(760px,96vw)"><h2>${esc(o.title)}: which project?</h2>`;
+    if (!K.groups) { m.innerHTML = h + `<p>Reading the hand-offs${HS() && window.SharedGitHubSync ? ' (this browser, and GitHub when Cloud sync is set up)' : ''}…</p><div class="modal-foot"><button type="button" class="btn" id="gxp-cancel">Cancel</button></div></div>`; return; }
+    const op = openProject();
+    h += `<p>Newest first. ${K.sel != null ? `Preselected: the project named like this one ("${esc(op.name)}").` : `None matches this project's name${op.name ? ` ("${esc(op.name)}")` : ''}: pick one.`} ${K.cloud === 'off' ? 'Cloud sync is not set up: the copies sent in this browser only.' : K.cloud === 'ok' ? 'Copies sent from other devices (GitHub) are included.' : `GitHub could not be read (${esc(K.cloud)}): this browser's copies only.`}</p>`;
+    h += `<table class="mini-t" style="margin-top:6px"><thead><tr><th></th><th>Bridge ID</th><th>Project</th><th>Sent</th><th>Device</th><th>Summary</th></tr></thead><tbody>`;
+    K.groups.forEach((g, i) => { const n = g.newest, p = n.payload, dev = p.device ? esc(p.device) + (n.source === 'github' ? ' (GitHub)' : '') : n.source === 'github' ? 'GitHub' : 'this browser';
+      const prods = [...new Set(g.entries.map(e => e.payload.producer || '?'))];
+      h += `<tr data-gxp-row="${i}" style="cursor:pointer"><td><input type="radio" name="gxp" data-gxp="${i}"${K.sel === g.pid && K.sel != null ? ' checked' : ''} aria-label="${esc(g.label)}"></td><td>${esc(g.project.bridgeId || '—')}</td><td>${g.noProject ? `<i>${esc(g.label)}</i>` : esc(g.project.name || '—')}</td><td>${esc(when(p.producedAt))}</td><td>${dev}</td><td>${esc(HS().summary(o.channel, p) || '')}<br><small>${esc(prods.join(', '))}${g.entries.length > 1 ? `; ${g.entries.length} copies` : ''}</small></td></tr>`; });
+    h += `</tbody></table>`;
+    if (K.errs.length) h += `<p style="color:var(--warn);margin-top:6px">Not offered: ${esc(K.errs.join('; '))}</p>`;
+    const ok = K.sel != null && K.groups.some(g => g.pid === K.sel);
+    h += `<div class="modal-foot"><button type="button" class="btn" id="gxp-cancel">Cancel</button><button type="button" class="btn btn-primary" id="gxp-next"${ok ? '' : ' disabled'}>Next: review</button></div></div>`;
+    m.innerHTML = h;
+  }
+  function next() { const K = PK; if (!K || !K.groups) return; const g = K.groups.find(x => x.pid === K.sel); if (!g) return; shut('gxp-modal'); PK = null; K.o.onPick(g, K.errs, K.skipped); }
+  /* newer(channel, schema, producers, pid, producedAt, skip): a copy of that project in this browser newer than producedAt (no request) */
+  function newer(channel, schema, producers, pid, at, skip) {
+    if (!HS()) return false; const L = HS().local({ storage: localStorage, channel, schema, maxVersion: 1, producers });
+    return L.entries.some(e => e.pid === pid && !(skip && skip(e.payload)) && String(e.payload.producedAt || '') > String(at || ''));
+  }
+  window.SubLoadsPicker = { open, newer, state: () => PK, pick: pid => { if (PK) { PK.sel = pid; renderPicker(); } }, next };
+
+  /* ---------- geometry: check, plan, review, apply ---------- */
+  let GD = null;   // { p, via, pid, errs, depth: 'max'|'s<k>'|'p<i>'|'custom', depthIn, sign: 'flip'|'asis', lldf: false }
+  function check(p) {
+    const c = HS() ? HS().checkGeometry(p) : { ok: false, errors: ['the hand-off helper (shared/handoff-store.js) is not loaded'], warnings: [] }, E = c.errors.slice();
+    if (c.ok) p.supports.forEach((s, k) => { if (!(Math.abs(s.skew) < 60)) E.push(`${s.id || `support ${k + 1}`}: skew ${s.skew}° — SubLoads takes skews between −60° and 60°`); });
+    return { ok: !E.length, errors: E, warnings: c.warnings || [] };
+  }
+  function depthOf(D, p) { const c = p.section;
+    if (D.depth === 'custom') return num(D.depthIn);
+    if (/^s\d+$/.test(D.depth)) return (c.atSupports || [])[+D.depth.slice(1)];
+    if (/^p\d+$/.test(D.depth)) return (c.spanMax || [])[+D.depth.slice(1)];
+    return c.depth; }
+  /* plan(): the new P.br values and the review rows [{ lbl, cur, inc, chg }] */
+  function plan() {
+    const D = GD, p = D.p, b = P.br, ns = p.spans.length, n1 = ns + 1, n0 = P.units.length, sg = D.sign === 'asis' ? 1 : -1;
+    const nu = { spans: p.spans.map(r4), skews: p.supports.map(s => r4(sg * s.skew) || 0), joint: p.supports.map((s, k) => k === 0 || k === ns ? '' : s.joint === 'joint' ? 'joint' : 'cont'),
+      bays: p.girders.spacings.map(r4), ohL: r4(p.girders.ohL), ohR: r4(p.girders.ohR), barL: r4(p.edges.L.width), barR: r4(p.edges.R.width),
+      ts: r4(p.deck.ts), haunch: r4(p.deck.haunch), d: r4(depthOf(D, p)), bf: r4(p.section.bf), tf: r4(p.section.tf), tw: r4(p.section.tw) };
+    const hs = ['L', 'R'].map(sd => p.edges[sd].height).filter(v => typeof v === 'number' && isFinite(v) && v > 0); if (hs.length) nu.barH = r4(Math.max(...hs));
+    const err = []; if (!(nu.d > 2 * nu.tf)) err.push('The girder depth must be a positive number larger than twice the flange thickness.');
+    const L = v => Array.isArray(v) ? v.map(x => f2(num(x))).join(', ') : f2(num(v)), J = v => v === 'joint' ? 'Exp. joint' : v === 'cont' ? 'Continuous' : 'end';
+    const rows = [], row = (lbl, cur, inc, unit) => rows.push({ lbl, cur: cur + (unit ? ` ${unit}` : ''), inc: inc + (unit ? ` ${unit}` : ''), chg: cur !== inc });
+    row('Spans', L(b.spans), L(nu.spans), 'ft');
+    for (let k = 0; k < Math.max(n0, n1); k++) { const nm = k < n1 ? (k === 0 ? 'Abut. 1' : k === n1 - 1 ? 'Abut. 2' : `Pier ${k}`) : `(removed) ${P.units[k] ? P.units[k].name : ''}`;
+      row(`${esc(nm)}: skew`, k < b.skews.length ? f2(num(b.skews[k])) : '—', k < n1 ? f2(nu.skews[k]) : '—', '°');
+      if (k > 0 && k < n1 - 1 || (k > 0 && k < n0 - 1)) row(`${esc(nm)}: superstructure`, k < n0 ? J(k === 0 || k === n0 - 1 ? '' : b.joint[k] === 'joint' ? 'joint' : 'cont') : '—', k < n1 ? J(nu.joint[k]) : '—'); }
+    row('Girders', String(b.bays.length + 1), String(nu.bays.length + 1)); row('Girder spacings', L(b.bays), L(nu.bays), 'ft');
+    row('Left overhang', L(b.ohL), L(nu.ohL), 'ft'); row('Right overhang', L(b.ohR), L(nu.ohR), 'ft');
+    row('Left barrier width', L(b.barL), L(nu.barL), 'ft'); row('Right barrier width', L(b.barR), L(nu.barR), 'ft');
+    row('Barrier height', `${L(b.barH)} in`, nu.barH != null ? `${L(nu.barH)} in` : `${L(b.barH)} in (not sent: kept)`); if (nu.barH == null) rows[rows.length - 1].chg = false;
+    row('Deck thickness', L(b.ts), L(nu.ts), 'in'); row('Haunch', L(b.haunch), L(nu.haunch), 'in');
+    row('Girder depth', f3(num(b.d)), f3(nu.d), 'in'); row('Flange width', f3(num(b.bf)), f3(nu.bf), 'in'); row('Flange thickness', f3(num(b.tf)), f3(nu.tf), 'in'); row('Web thickness', f3(num(b.tw)), f3(nu.tw), 'in');
+    // units: kept / new / removed (syncSupports' rule)
+    const units = [];
+    for (let k = 0; k < n1; k++) { const nm = k === 0 ? 'Abut. 1' : k === n1 - 1 ? 'Abut. 2' : `Pier ${k}`;
+      if (k === 0) units.push(`${esc(P.units[0].name)}: kept`); else if (k === n1 - 1) units.push(`${esc(P.units[n0 - 1].name)}: kept (now support ${n1})`);
+      else if (k < n0 - 1) units.push(`${esc(P.units[k].name)}: kept`); else units.push(`<b>${nm}: new</b> (a copy of ${n0 > 2 ? esc(P.units[1].name) + '’s unit' : 'a default multi-column bent'})`); }
+    const removed = []; for (let k = n1 - 1; k < n0 - 1; k++) if (k > 0) removed.push(P.units[k].name);
+    // the live-load skew correction's K_g (Table 4.6.2.2.3c-1): estimated from the section unless entered
+    let kg = null; if (b.skCorr === 'yes' && !(num(b.skKg) > 0)) { const K0 = skewKgEst(); const sv = {}; ['d', 'bf', 'tf', 'tw', 'ts', 'haunch'].forEach(k => { sv[k] = b[k]; b[k] = nu[k]; }); const K1 = skewKgEst(); Object.assign(b, sv); kg = { K0: K0 && K0.Kg, K1: K1 && K1.Kg }; }
+    // reactions vs the incoming bridge
+    const warn = [], rx = P.rx.data || [], anyRx = rx.some(r => r.some(x => Object.keys(x).some(c => nz(x[c]) !== 0)));
+    if (anyRx && (rx.length !== n1 || (rx[0] || []).length !== nu.bays.length + 1)) warn.push(`The reactions on the Reactions tab are for ${rx.length} supports × ${(rx[0] || []).length} girders; the incoming bridge has ${n1} supports × ${nu.bays.length + 1} girders. The table is resized by position (each support's row stays at its number; new rows are zero): pull or enter the reactions again.`);
+    const lastRx = (Array.isArray(P.rxSrc) ? P.rxSrc : []).slice(-1)[0]; if (lastRx && lastRx.pid && lastRx.pid !== D.pid) warn.push(`The last reactions hand-off came from another project (${esc(lastRx.project && lastRx.project.name || lastRx.pid)}).`);
+    if (removed.length) warn.push(`Removed with their inputs: ${removed.map(esc).join(', ')}.`);
+    return { nu, rows, units, removed, kg, warn, err };
+  }
+  function openGeo(p, via, errs, pid) {
+    const c = check(p);
+    GD = { p, via, pid: pid || '', errs: errs || [], c, depth: 'max', depthIn: '', sign: 'flip', lldf: false };
+    renderGeo();
+  }
+  function renderGeo() {
+    const m = modal('gxg-modal'), D = GD, p = D.p, c = D.c, pr = HS() ? HS().projectOf(p) : { name: '', bridgeId: '' };
+    let h = `<div class="modal-box" style="width:min(860px,96vw)"><h2>Pull bridge geometry</h2><table class="mini-t"><tbody>
+      <tr><td class="lbl">Producer</td><td>${esc(p.producer || '?')}${p.producerFile ? ` (${esc(p.producerFile)})` : ''}</td></tr><tr><td class="lbl">Produced</td><td>${esc(when(p.producedAt))}${p.device ? `, on ${esc(p.device)}` : ''}; via ${esc(D.via)}</td></tr>
+      <tr><td class="lbl">Project</td><td>${esc([pr.bridgeId, pr.name].filter(Boolean).join(' — ') || '(not stated)')}</td></tr></tbody></table>`;
+    if (Array.isArray(p.notes) && p.notes.length) h += `<h3>Notes from ${esc(p.producer || 'the producer')}</h3><ul style="margin:0 0 0 18px;font-size:.85rem;color:var(--text-dim)">${p.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>`;
+    if (D.errs.length) h += `<p style="color:var(--warn);margin-top:6px">Not offered: ${esc(D.errs.join('; '))}</p>`;
+    if (!c.ok) { m.innerHTML = h + `<p style="color:var(--fail);margin-top:10px"><b>Refused:</b> ${esc(c.errors.join('; '))}. Nothing will be changed.</p><div class="modal-foot"><button type="button" class="btn" id="gxg-cancel">Close</button></div></div>`; return; }
+    const pl = plan(), sec = p.section;
+    if (c.warnings.length || pl.warn.length) h += `<p style="color:var(--warn);margin-top:6px">${c.warnings.concat(pl.warn).map(w => w).join('<br>')}</p>`;
+    h += `<h3>Girder depth to use</h3><p style="margin:0 0 4px">SubLoads uses one girder depth for every support (wind exposed depth, bearing seats, drawings). Sent (total depth, in): largest ${f3(sec.depth)}; at the supports ${p.supports.map((s, k) => `${esc(s.id)} ${f3((sec.atSupports || [])[k])}`).join(', ')}; deepest in each span ${(sec.spanMax || []).map((v, i) => `span ${i + 1} ${f3(v)}`).join(', ')}.</p>
+      <select data-gxg="depth"><option value="max"${D.depth === 'max' ? ' selected' : ''}>Largest, ${f3(sec.depth)} in (conservative for wind; default)</option>${(sec.atSupports || []).map((v, k) => `<option value="s${k}"${D.depth === 's' + k ? ' selected' : ''}>At ${esc(p.supports[k].id)}, ${f3(v)} in</option>`).join('')}${(sec.spanMax || []).map((v, i) => `<option value="p${i}"${D.depth === 'p' + i ? ' selected' : ''}>Deepest in span ${i + 1}, ${f3(v)} in</option>`).join('')}<option value="custom"${D.depth === 'custom' ? ' selected' : ''}>Entered (override)</option></select>${D.depth === 'custom' ? ` <input data-gxg="depthIn" value="${esc(D.depthIn)}" style="width:7em" aria-label="Girder depth, in"> in` : ''}`;
+    const anySk = p.supports.some(s => s.skew);
+    h += `<h3>Skew sign</h3><select data-gxg="sign"><option value="flip"${D.sign === 'flip' ? ' selected' : ''}>Convert: ${esc(p.producer || 'the sender')} + = right end ahead; SubLoads + = left end ahead (default)</option><option value="asis"${D.sign === 'asis' ? ' selected' : ''}>As sent (no sign change)</option></select>${anySk ? '' : ' <small>(every skew is 0)</small>'}${p.basis && p.basis.skew ? `<p style="margin:2px 0 0;font-size:.8rem">Sender: ${esc(p.basis.skew)}.</p>` : ''}`;
+    h += `<h3>Review</h3><div style="max-height:300px;overflow:auto"><table class="mini-t"><thead><tr><th>Input (Bridge tab)</th><th>Now</th><th>Incoming</th><th></th></tr></thead><tbody>${pl.rows.map(r => `<tr${r.chg ? ' style="font-weight:600"' : ''}><td class="lbl">${r.lbl}</td><td>${esc(r.cur)}</td><td>${esc(r.inc)}</td><td>${r.chg ? '<span style="color:var(--warn)">changes</span>' : ''}</td></tr>`).join('')}</tbody></table></div>`;
+    h += `<h3>Substructure units</h3><p style="margin:0">${pl.units.join('; ')}.</p>`;
+    h += `<h3>Live-load distribution</h3><label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="checkbox" data-gxg="lldf"${D.lldf ? ' checked' : ''}> Also update the live-load distribution girder data</label><p style="margin:2px 0 0;font-size:.85rem">${P.br.skCorr !== 'yes' ? 'The skew correction of the bearing live load is not applied in this project, so the girder data does not affect the live load.' : num(P.br.skKg) > 0 ? `K<sub>g</sub> is entered (${f0(num(P.br.skKg))} in⁴) and is kept either way.` : pl.kg && pl.kg.K0 ? (D.lldf ? `K<sub>g</sub> of the skew correction (Table 4.6.2.2.3c-1) will follow the new girder section: ${f0(pl.kg.K0)} → ${pl.kg.K1 ? f0(pl.kg.K1) : '—'} in⁴ (estimated).` : `Off: K<sub>g</sub> of the skew correction keeps its value now, ${f0(pl.kg.K0)} in⁴, entered as the girder K<sub>g</sub> (Live load section), so the live load does not change with the section (it would be ${pl.kg.K1 ? f0(pl.kg.K1) : '—'} in⁴).`) : 'K<sub>g</sub> cannot be estimated from the current girder shape.'}</p>`;
+    h += `<p style="margin-top:8px;font-size:.85rem">Not changed: deck elevations (not carried; a new support takes the last support's elevation), bearing fixity${p.supports.some(s => s.bearings) ? ' (sent, shown in the notes; not applied)' : ' (not sent)'}, every substructure unit input, the reactions, w<sub>c</sub>, the wind and live-load settings.</p>`;
+    if (pl.err.length) h += `<p style="color:var(--fail)">${esc(pl.err.join(' '))}</p>`;
+    h += `<div class="modal-foot"><button type="button" class="btn" id="gxg-cancel">Cancel</button><button type="button" class="btn btn-primary" id="gxg-apply"${pl.err.length ? ' disabled' : ''}>Apply</button></div></div>`;
+    m.innerHTML = h;
+  }
+  function applyGeo() {
+    const D = GD; if (!D || !D.c.ok) return false; const pl = plan(); if (pl.err.length) { flash(pl.err.join(' '), 'fail'); return false; }
+    const b = P.br, nu = pl.nu, p = D.p, before = {}; Object.keys(nu).forEach(k => { before[k] = clone(b[k]); });
+    let pinned = null; if (!D.lldf && pl.kg && pl.kg.K0 > 0) { pinned = pl.kg.K0; b.skKg = pinned; }   // off: K_g of the skew correction kept (exact value)
+    Object.keys(nu).forEach(k => { b[k] = Array.isArray(nu[k]) ? nu[k].slice() : nu[k]; });
+    syncSupports();
+    const pr = HS().projectOf(p);
+    P.geoSrc = { producer: String(p.producer || ''), producerFile: String(p.producerFile || ''), producedAt: String(p.producedAt || ''), project: pr, pid: D.pid || HS().pidOf(pr),
+      contentHash: p.contentHash || null, via: D.via, adoptedAt: new Date().toISOString(), fields: Object.keys(nu), depthChoice: D.depth === 'custom' ? `entered ${f3(nu.d)} in` : D.depth === 'max' ? 'largest' : D.depth,
+      depth: nu.d, skewSign: D.sign, lldf: !!D.lldf, ...(pinned ? { skKgKept: pinned } : {}), units: { added: pl.units.filter(u => /: new/.test(u)).length, removed: pl.removed } };
+    try { if (BX()) BX().markAdopted(CH, RID, p.producedAt || ''); } catch (e) { /* marker only */ }
+    shut('gxg-modal'); GD = null; buildSide(); recompute(); autosave();
+    flash(`Bridge geometry from ${P.geoSrc.producer} applied (${HS().summary(CH, p)}).`);
+    return true;
+  }
+  function pull() {
+    if (!HS()) { alert('The hand-off helper (shared/handoff-store.js) is not loaded; keep the whole folder together.'); return; }
+    open({ channel: CH, schema: SCH, title: 'Pull bridge geometry', producers: PRODS, legacy: [{ key: NS + CH, via: 'latest hand-off' }, { key: NS + CH + '.by.steelbridge', via: 'copy from steelbridge', producer: 'steelbridge' }],
+      empty: 'No bridge geometry has been sent yet. In the Steel Bridge app (apps/steel-bridge), Project tab, click "Send to Substructure Loading" with Geometry ticked, then pull here.',
+      onPick: (g, errs) => openGeo(g.newest.payload, g.pid ? `pull, project ${g.label}${g.newest.source === 'github' ? ' (GitHub)' : ''}` : 'pull', errs, g.pid) });
+  }
+  function importFile(file) {
+    if (!BX()) return; const fr = new FileReader();
+    fr.onload = () => { let p; try { p = JSON.parse(fr.result); } catch (e) { alert(`Cannot import ${file.name}: the file is not valid JSON.`); return; }
+      if (p && p._schema === 'bridge-super-reactions' && window.SubLoadsRxHandoff) { const v = BX().validate(p, 'bridge-super-reactions', 1); if (v) { alert(`Cannot import ${file.name}: ${v}`); return; } window.SubLoadsRxHandoff.openDialog([p], 'file: ' + file.name, []); return; }
+      openGeo(p, 'file: ' + file.name, []); };
+    fr.onerror = () => alert(`Could not read ${file.name}.`); fr.readAsText(file);
+  }
+  /* new-data marker: per pulled project (a newer copy of P.geoSrc.pid in this browser); before any pull, a copy that matches this project */
+  function isNewGeo() {
+    if (!HS()) return false; const s = P.geoSrc;
+    if (s && s.pid) return newer(CH, SCH, PRODS, s.pid, s.producedAt);
+    if (s) return false; const L = HS().local({ storage: localStorage, channel: CH, schema: SCH, maxVersion: 1, producers: PRODS });
+    return HS().match(HS().group(L.entries), openProject()) != null;
+  }
+  const srcLine = () => { const s = P.geoSrc; if (!s) return ''; const pr = s.project || {};
+    return `Bridge geometry from ${esc(s.producer)}${s.producerFile ? ` (${esc(s.producerFile)})` : ''}, project ${esc([pr.bridgeId, pr.name].filter(Boolean).join(' — ') || '(not stated)')}, produced ${esc(when(s.producedAt))}, pulled ${esc(when(s.adoptedAt))}: spans, skews${s.skewSign === 'asis' ? ' (sign as sent)' : ' (sign converted)'}, joints, girder spacings, overhangs, barrier widths, deck, haunch, girder depth ${f3(s.depth)} in (${esc(s.depthChoice)}) and flange / web${s.skKgKept ? `; skew-correction K<sub>g</sub> kept at ${f0(s.skKgKept)} in⁴` : s.lldf ? '; the live-load girder data follows the section' : ''}. Elevations, bearings and units are this tool's. Values may have been edited since.`; };
+  const pb = paneBridge; paneBridge = function () { const h = pb(), n = isNewGeo();
+    const btns = `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:2px 0 8px"><button type="button" class="btn btn-sm" id="geo-pull" title="Pull spans, skews, joints, girder layout, deck edges, deck and girder section sent by the Steel Bridge app (asks which project, then shows every change first)">Pull geometry from Steel Bridge Design</button><button type="button" class="btn btn-sm" id="geo-hf-imp" title="Import a superGeometry (or superReactions) hand-off JSON file (asks first)">Import hand-off (JSON)</button><input type="file" id="geo-hf-in" accept=".json,application/json" hidden>${n ? '<span class="rxh-new" id="geo-new">New data available</span>' : ''}</div>${P.geoSrc ? `<p class="note" style="padding:0 0 6px" id="geo-src">${srcLine()}</p>` : ''}`;
+    return h.replace('<p class="note">One span per row (Enter adds a row). Changing the number of spans adds or removes piers.</p>', m => m + btns); };
+  const bs = buildSide; buildSide = function () { bs(); const t = document.querySelector('.itab[data-pane="bridge"]'); if (t) { const n = isNewGeo(); t.classList.toggle('bx-new', n); t.title = n ? 'New bridge geometry is available to pull' : ''; } };
+  const be = basisExtra; basisExtra = function () { const h = be(); if (!P.geoSrc) return h; return h + `<tr><td class="lbl">Bridge geometry</td><td>${srcLine()}</td></tr>`; };
+  document.addEventListener('click', e => {
+    const t = e.target.closest ? e.target.closest('button, input, tr[data-gxp-row]') : null; if (!t) return;
+    if (t.id === 'geo-pull') pull();
+    else if (t.id === 'geo-hf-imp') { const i = document.getElementById('geo-hf-in'); if (i) i.click(); }
+    else if (t.id === 'gxp-cancel') { shut('gxp-modal'); PK = null; }
+    else if (t.id === 'gxp-next') next();
+    else if (t.dataset && t.dataset.gxpRow != null && PK && PK.groups) { PK.sel = PK.groups[+t.dataset.gxpRow].pid; renderPicker(); }
+    else if (t.id === 'gxg-cancel') { shut('gxg-modal'); GD = null; }
+    else if (t.id === 'gxg-apply') applyGeo();
+  });
+  document.addEventListener('change', e => { const t = e.target;
+    if (t.id === 'geo-hf-in' && t.files && t.files[0]) { importFile(t.files[0]); t.value = ''; return; }
+    if (!GD || !t.dataset || !t.dataset.gxg) return; const w = t.dataset.gxg;
+    if (w === 'depth') GD.depth = t.value; else if (w === 'depthIn') GD.depthIn = t.value; else if (w === 'sign') GD.sign = t.value; else if (w === 'lldf') GD.lldf = !!t.checked;
+    renderGeo(); });
+  document.addEventListener('keydown', e => { if (e.key !== 'Escape') return; if (PK) { shut('gxp-modal'); PK = null; } else if (GD) { shut('gxg-modal'); GD = null; } });
+  window.addEventListener('storage', e => { if (e.key && e.key.indexOf(NS + CH) === 0) { const t = document.querySelector('.itab[data-pane="bridge"]'); if (t) t.classList.toggle('bx-new', isNewGeo()); if (P.ui.itab === 'bridge') buildSide(); } });
+  window.SubLoadsGeoHandoff = { pull, openGeo, applyGeo, plan, check, state: () => GD, isNewGeo };   // used by tests; no effect on results
 })();
 /* ---------- foundation loads hand-off (HANDOFF.md §4.6, channel foundationLoads) ----------
    "Send foundation loads" opens a dialog: pick the unit, the level (reference point) and the limit states.

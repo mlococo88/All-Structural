@@ -22891,3 +22891,29 @@ Basis: AASHTO LRFD 10th Ed. (2024). Reference implementation: `lldf.html` `membe
 - **Check case:** ST-Girder, Rating tab, built-in girder: before one 909-character paragraph; after "Design-load rating on HL-93." in bold and 7 items (Strength / each rating factor / Flexure +M / Shear / Service II / RF ≥ 1.0 / Legal- and permit-vehicle), the same words in the same order.
 - **How verified:** `tests/compare.mjs --tool st` (A = a full main worktree; built-in girder and the `def15_AASHTO_G2` hand-off): every computed section identical (`st.session`, `st.status`, `st.checks`, `st.rating`, `st.governing`, `st.sections`, `st.stations`, `st.R`); the `st.tab.*` and `st.report.all` text differ only in line breaks: each tab's and the full report's text with white space removed identical (both cases); `--tool gd`: all sections identical; `tests/check-syntax.mjs` (compiles `st-src`). 0 console errors. 1440 and 390 px screenshots (Rating, Deck, Stresses): no note wider than its card.
 - **Other copies:** none.
+
+## 2026-11-09 — PR: claude/geomxfer-gd (GXF-4) — GirderDetail "Send reactions to Substructure Loading": also the per-project copy (HANDOFF.md §5.1)   [no result change; saved data: new hand-off key only]
+- **Why:** engineer decision 2026-11-09 "All hand-offs should be per project"; this PR applies it to GirderDetail's `superReactions` send
+  (send code only, as asked). Spec: HANDOFF.md §4.4 ("Per-project copies") and §5.1; shared helper `shared/handoff-store.js` (GXF-1).
+- **Where:**
+  - `<script src="shared/handoff-store.js"></script>` after `<script src="shared/github-sync.js"></script>` (head, before the BridgeXfer block).
+  - The `[data-gdsr]` click handler after `gdSrPayload` (anchor `document.addEventListener('click', e => { const t = e.target.closest && e.target.closest('[data-gdsr]');`).
+    Before (send branch): publish, write `.by.girderdetail`, `flash(...)`, `alert(\`Reactions sent to Substructure Loading (unfactored, kip,
+    DC1 / DC2 / DW per girder):\n\n${r.sum}\n\nIn Bridge Substructure Loading, Reactions tab, click "Pull from PS-Beam / GirderDetail".\`)`.
+    After: the optional envelope field `device` (the Cloud sync device name, when set) is added before publishing; publish and
+    `.by.girderdetail` exactly as before; then `SharedHandoffStore.send({ storage: localStorage, channel: 'superReactions', producer:
+    'girderdetail', payload: w.payload, fetch })` writes `bridgeSuite.v1.superReactions.by.girderdetail.<project id>` (project = the title
+    block's Project name and Bridge / structure No.) and, with Cloud sync set up, uploads `handoffs/superReactions/girderdetail/<project
+    id>.json`; the alert then says "kept for project …" (and the GitHub status) and that Substructure Loading asks which project first.
+    Export hand-off (JSON) is unchanged. Without `shared/handoff-store.js` the send is exactly as before.
+  - The header comment above `const GD_SR` names the per-project copy.
+- **Results / saved data:** none change (the payload is `gdSrPayload()` as before; nothing in the project or the analysis is touched).
+  New key only (`…by.girderdetail.<project id>`; `bridgeSuite.v1.handoffStore.pending` while sync is set up); the keys written before are
+  written as before, so older receivers keep working.
+- **Check case:** title block "Route 9 over Mill Brook", Bridge No. "B-12-034" → key
+  `bridgeSuite.v1.superReactions.by.girderdetail.B-12-034~Route 9 over Mill Brook`, equal to `bridgeSuite.v1.superReactions`; alert
+  "… kept for project "B-12-034 — Route 9 over Mill Brook" …".
+- **Decisions (pending engineer review):** none beyond GXF-1's key scheme.
+- **How verified:** new `tests/smoke/gd-reactions-handoff.mjs` (keys, same payload, project, alert; 0 console errors);
+  `node tests/compare.mjs --tool gd` (origin/main vs branch: identical); `node tests/smoke/sbd-standard-save.mjs`; `node tests/check-syntax.mjs`.
+- **Other copies:** none (the new Steel Bridge app writes its own per-project copy under producer id `steelbridge`, GXF-2).

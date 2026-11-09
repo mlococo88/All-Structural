@@ -19,6 +19,12 @@
       utilities, and the notes (LL+IM and pedestrian reactions, owner rules); also the copy bridgeSuite.v1.superReactions.by.girderdetail
       (the slot GirderDetail writes; this app replaces GirderDetail). A cross-section girder with no plate girder of its own takes the plates
       of the first plate girder of the same position (exterior: G1 and Gn), with its own loads and factors (girders[i].line = that girder).
+      Since 2026-11-09 (GXF) also the per-project copy bridgeSuite.v1.superReactions.by.steelbridge.<project id> and its GitHub upload
+      (shared/handoff-store.js, HANDOFF.md §5.1).
+   4. superGeometry (HANDOFF.md §4.14, schema bridge-super-geometry; added 2026-11-09, GXF): sgPayload, the bridge geometry from the inputs
+      (spans, skews, joints, girder layout, deck edges, deck, girder section) for Bridge Substructure Loading. One "Send to Substructure
+      Loading" button with the Geometry and Reactions boxes (both ticked by default) and "Export hand-off (JSON)"; click only. Keys: the
+      channel key, superGeometry.by.steelbridge and the per-project copy superGeometry.by.steelbridge.<project id> (§5.1).
    girderDemands (§4.9): GirderDetail → ST-Girder inside the old app; this app has both roles, so it neither sends nor pulls it (a hand-off
    file from GirderDetail still opens on the check tabs, engine/demandfile.js). Nothing is applied without the user's click and confirm. */
 (function () {
@@ -189,7 +195,66 @@
     return { ok: true, payload, sum: supports.map(s => `  ${s.id} (x = ${f2(s.x)} ft): ${s.girders.map(g => `${g.label} ${f2(g.DC1)} / ${f2(g.DC2)} / ${f2(g.DW)}${g.UT != null || g.UF != null ? ` (UT ${f2(g.UT || 0)}, UF ${f2(g.UF || 0)})` : ''}`).join(', ')}`).join('\n') };
   }
 
-  window.SBDHandoffs = { PRODUCER, FILE, RX, LLDF, SR, PM, pmFields, pmPayload, pmPlan, lldfPlan, lldfApply, lines, ownerRulesData, srPayload };
+  /* ---------- 4. superGeometry (HANDOFF.md §4.14, added 2026-11-09, GXF) ----------
+     sgPayload(P): the bridge geometry for Bridge Substructure Loading, read from the inputs only (no analysis): spans and continuity, each
+     support's station, skew (as entered) and joint, the girder layout, the deck edges (the traffic-face width the live load uses,
+     SBDLoads.edgeIn), the deck, and the girder section (total depth D + t_top + t_bot; the largest depth, flange width, flange thickness and
+     web thickness over every plate girder, the deepest section at each support and in each span). Bearing fixity is not sent (the app has
+     none). { ok, payload, sum } or { error } */
+  const GEO = { ch: 'superGeometry', schema: 'bridge-super-geometry', id: 'steelbridge' };
+  const HS = () => window.SharedHandoffStore;
+  function sgSection(P, X) {
+    const segs = []; (P.girders || []).forEach(g => (g.segments || []).forEach(s => { const D = +s.D, tT = +s.topT, tB = +s.botT, d = D + tT + tB;
+      if ([D, tT, tB, +s.tw, +s.topB, +s.botB, +s.x0, +s.x1].every(isNum)) segs.push({ g: g.label || g.id, x0: +s.x0, x1: +s.x1, d, bf: Math.max(+s.topB, +s.botB), tf: Math.max(tT, tB), tw: +s.tw }); }));
+    if (!segs.length) return null;
+    const mx = (a, k) => a.length ? Math.max(...a.map(s => s[k])) : null, E = 1e-6;
+    return { segs, depth: mx(segs, 'd'), bf: mx(segs, 'bf'), tf: mx(segs, 'tf'), tw: mx(segs, 'tw'),
+      atSupports: X.map(x => mx(segs.filter(s => s.x0 <= x + E && s.x1 >= x - E), 'd')),
+      spanMax: X.slice(1).map((xb, i) => mx(segs.filter(s => s.x0 < xb - E && s.x1 > X[i] + E), 'd')) };
+  }
+  function sgPayload(P) {
+    const errs = [], spans = ((P.spans || {}).lengths || []).map(Number), ns = spans.length, xs = P.xs || {}, nb = Math.round(+xs.nb);
+    if (!ns || !spans.every(v => isNum(v) && v > 0)) errs.push('Enter the span lengths (Bridge layout tab).');
+    if (!(nb >= 1)) errs.push('Define the cross-section (number of girders, Cross-section tab).');
+    const skews = (xs.skews || []).map(Number);
+    if (ns && (skews.length !== ns + 1 || !skews.every(isNum))) errs.push(`Enter one skew for each of the ${ns + 1} supports (Bridge layout tab).`);
+    const L = window.SBDLoads, ee = [], Ed = L && xs.edges ? L.edgeIn(xs.edges, ee) : null;
+    if (!Ed) errs.push('Define the deck edges (barrier or curb, Cross-section tab).'); else ee.forEach(e => errs.push(e));
+    if (errs.length) return { error: errs.join(' ') };
+    const cont = (P.spans || {}).continuity !== 'simple' && ns > 1, X = [0]; spans.forEach(s => X.push(r3(X[X.length - 1] + s)));
+    const sec = sgSection(P, X); if (!sec || sec.atSupports.some(v => v == null) || sec.spanMax.some(v => v == null)) return { error: 'Every support and span needs a plate girder segment (Girders & plates tab).' };
+    const sid = k => k === 0 ? 'Abut. 1' : k === ns ? 'Abut. 2' : `Pier ${k}`, d = P.deck || {}, r4 = v => Math.round(v * 1e4) / 1e4;
+    const edge = sd => { const q = Ed[sd], curb = q.type === 'curb';
+      return { type: q.type, width: r4(q.f), faceBasis: q.fby, barrierWidth: curb ? null : r4(q.bw), curbWidth: curb ? r4(q.cw) : null, curbHeight: curb ? r4(q.ch) : null, height: null,
+        railing: curb ? { loadPoint: r4(q.rp), trafficFace: q.rf == null ? null : r4(q.rf) } : null }; };
+    const ORD = ownerRulesData(P); if (ORD) delete ORD._L;
+    const supports = X.map((x, k) => ({ id: sid(k), x, skew: skews[k], joint: k === 0 || k === ns ? 'end' : cont ? 'continuous' : 'joint', depth: r4(sec.atSupports[k]) }));
+    const pr = P.project || {};
+    const payload = { _schema: GEO.schema, schemaVersion: 1, producer: PRODUCER, producerFile: FILE, project: { name: String(pr.name || ''), bridgeId: '' },
+      units: { length: 'ft', skew: 'deg', deck: 'in', section: 'in', curb: 'in', height: 'in' },
+      spans: spans.slice(), continuity: cont ? 'continuous' : 'simple', supports,
+      girders: { count: nb, spacings: (xs.bays || []).map(Number), ohL: +xs.ohL, ohR: +xs.ohR },
+      edges: { L: edge('L'), R: edge('R') },
+      deck: { ts: +d.ts, total: +d.tdeck, haunch: +d.haunch },
+      section: { depth: r4(sec.depth), bf: r4(sec.bf), tf: r4(sec.tf), tw: r4(sec.tw), atSupports: sec.atSupports.map(r4), spanMax: sec.spanMax.map(r4),
+        definition: 'total depth = web depth D + top flange thickness + bottom flange thickness; bf, tf, tw: the largest of each over every plate girder and segment (each on its own)' },
+      basis: { skew: 'as entered in Steel Bridge Design: the bearing of girder i is at x = x_support + (y_i - y_c) tan(skew), y from G1 toward Gn (left to right looking ahead station), so + = the right end of the support line is ahead station',
+        spans: 'span lengths of the line-girder model, bearing to bearing; stations x from the first support' },
+      ...(ORD ? { ownerRules: ORD } : {}),
+      notes: [
+        `From Steel Bridge Design (apps/steel-bridge) inputs: spans and continuity (Bridge layout), support skews (Bridge layout), girders, spacings and overhangs (Cross-section), deck edges (Cross-section; width = deck edge to the traffic face the live load uses: ${['L', 'R'].map(sd => `${sd === 'L' ? 'left' : 'right'} ${f2(Ed[sd].f)} ft, ${Ed[sd].fby}`).join('; ')}), deck thickness and haunch (Deck card), plates (Girders & plates).`,
+        `Girder section (in): total depth = web depth + both flange thicknesses. Largest over every plate girder: depth ${f3(sec.depth)}, flange width ${f3(sec.bf)}, flange thickness ${f3(sec.tf)}, web thickness ${f3(sec.tw)}. Deepest at each support: ${supports.map(s => `${s.id} ${f3(s.depth)}`).join(', ')}. Deepest in each span: ${sec.spanMax.map((v, i) => `span ${i + 1} ${f3(v)}`).join(', ')}.`,
+        'Skew: as entered here, + when the right end of the support line (looking ahead station) is ahead station.',
+        `Supports: ${cont ? 'continuous over the piers' : 'simple spans (an expansion joint at each pier)'}; the abutments are deck ends. Bearing fixity is not defined in Steel Bridge Design and is not sent. Elevations and the substructure are not carried.`,
+        'Barrier height: not an input of Steel Bridge Design (not sent). Curb height and the railing load point are sent for a curb edge.',
+        ...(ORD ? [`Owner load rules (${ORD.owner}) sent in ownerRules for information only.`] : [])] };
+    if (HS()) payload.contentHash = HS().geometryHash(payload);
+    const chk = HS() ? HS().checkGeometry(payload) : { ok: true, errors: [] };
+    if (!chk.ok) return { error: chk.errors.join('; ') };
+    return { ok: true, payload, sum: `${HS() ? HS().summary(GEO.ch, payload) : `${ns} spans`}; skews ${skews.map(f2).join(', ')} deg; overhangs ${f2(+xs.ohL)} / ${f2(+xs.ohR)} ft; deck ${f2(+d.ts)} in, haunch ${f2(+d.haunch)} in; girder depth ${f3(sec.depth)} in (largest)` };
+  }
+
+  window.SBDHandoffs = { PRODUCER, FILE, RX, LLDF, SR, GEO, PM, pmFields, pmPayload, pmPlan, lldfPlan, lldfApply, lines, ownerRulesData, srPayload, sgPayload };
 
   /* ---------- UI: one card on the Project tab ---------- */
   let ctx = null;   // { getP, changed, ui }: set by init (index.html)
@@ -202,8 +267,8 @@
       <p class="note">Shared project info (bridgeSuite.v1.projectMeta): project name, number, client, designer, checker and date with the other tools.</p>
       <div class="fRow"><button type="button" data-ho="lldfPull">Pull from LL &amp; DL <span class="badge"${isNew() ? '' : ' hidden'} data-ho-new>new data</span></button> <button type="button" data-ho="lldfFile">Import hand-off (JSON)</button>${u ? ` <button type="button" data-ho="lldfDrop">Stop using pulled factors</button>` : ''}<input type="file" data-ho="lldfInput" accept=".json,application/json" hidden></div>
       <p class="note">Fills the live load distribution factors of the plate girder selected on the Girders &amp; plates tab (${esc(g ? g.label || g.id : '')}, cross-section girder G${j + 1} of ${nb}) from those LL &amp; DL Distribution (lldf.html) publishes. You see what changes and confirm first.</p>${src}
-      <div class="fRow"><button type="button" data-ho="srSend">Send reactions to Substructure Loading</button> <button type="button" data-ho="srFile">Export hand-off (JSON)</button></div>
-      <p class="note">Runs this app's analysis for every girder (G1 to G${nb}) and sends each girder's unfactored DC1, DC2 and DW reactions at every support (kip; the Analysis tab's reactions) to Bridge Substructure Loading (Reactions tab, Pull from PS-Beam / GirderDetail). The MassDOT utilities go as their own values, the LL+IM and pedestrian reactions in the notes, and the owner's load rules for information. Opened as files, both tools must be in one folder and opened in Chrome or Edge; otherwise use Export hand-off (JSON) and Substructure Loading's Import hand-off (JSON).</p>
+      <div class="fRow"><button type="button" data-ho="subSend">Send to Substructure Loading</button> <label><input type="checkbox" data-ho-opt="geo"${SEND.geo ? ' checked' : ''}> Geometry</label> <label><input type="checkbox" data-ho-opt="rx"${SEND.rx ? ' checked' : ''}> Reactions</label> <button type="button" data-ho="subFile">Export hand-off (JSON)</button></div>
+      <p class="note"><b>Geometry</b> (bridgeSuite.v1.superGeometry): spans, support skews and joints, girder count, spacings and overhangs, the deck edges, the deck and haunch, and the girder section (largest depth, flange and web; the depth at each support and the deepest in each span), for Bridge Substructure Loading's Bridge tab (Pull geometry from Steel Bridge Design). <b>Reactions</b> (bridgeSuite.v1.superReactions): runs this app's analysis for every girder (G1 to G${nb}) and sends each girder's unfactored DC1, DC2 and DW reactions at every support (kip; the Analysis tab's reactions) for its Reactions tab (Pull from PS-Beam / GirderDetail); the MassDOT utilities go as their own values, the LL+IM and pedestrian reactions in the notes, the owner's load rules for information. Each send is kept for this project (${P.project && String(P.project.name || '').trim() ? `"${esc(String(P.project.name).trim())}"` : 'enter a project name on this tab first'}), so Substructure Loading can pull any project's latest; with Cloud sync (GitHub) set up the sent copies are also uploaded. Nothing is sent until you click. Opened as files, both tools must be in one folder and opened in Chrome or Edge; otherwise use Export hand-off (JSON) and Substructure Loading's Import hand-off (JSON).</p>
     </div></section>`;
   }
   let dlg = null, pend = null;
@@ -251,14 +316,37 @@
     if (a === 'lldfFile') { const f = b.parentNode.querySelector('[data-ho="lldfInput"]'); if (f) { f.value = ''; f.onchange = () => { const file = f.files && f.files[0]; if (!file) return;
       BX().importFile(file, LLDF.schema, LLDF.ver, r => { if (r.error) { alert(`Cannot import the hand-off file: ${r.error}`); return; } pend = { pl: r.payload, via: `file ${file.name}`, basis: 'type' }; showLldf(); }); }; f.click(); } return false; }
     if (a === 'lldfDrop') { const g = P.girders[ui.g || 0]; if (!g || !g.dfPull) return false; if (!confirm(`Stop using the factors pulled from LL & DL for ${g.label || g.id}? Its factors come from the Loads & LLDF tab again (Undo restores them).`)) return false; delete g.dfPull; return true; }
-    if (a === 'srSend' || a === 'srFile') { const r = srPayload(P); if (r.error) { alert(`Analysis: ${r.error}`); return false; }
-      if (a === 'srFile') { BX().exportFile(SR.ch, r.payload); return false; }
-      const w = BX().publish(SR.ch, r.payload, PRODUCER, FILE);
-      if (w.error) { alert(`Could not send the reactions: ${w.error}\n\nUse "Export hand-off (JSON)" and Substructure Loading's Import hand-off (JSON) instead.`); return false; }
-      try { localStorage.setItem(BX().NS + SR.ch + '.by.' + SR.id, JSON.stringify(w.payload)); } catch (er) { /* the channel key has it */ }   // per-producer copy (§4.4)
-      alert(`Reactions sent to Substructure Loading (unfactored, kip, DC1 / DC2 / DW per girder):\n\n${r.sum}\n\nIn Bridge Substructure Loading, Reactions tab, click "Pull from PS-Beam / GirderDetail".`); return false; }
+    if (a === 'subSend' || a === 'subFile') { subSend(P, a === 'subFile'); return false; }
     return false;
   }
-  function init(o) { ctx = o; window.addEventListener('storage', e => { if (!e.key || e.key.indexOf(BX().NS + LLDF.ch) === 0) document.querySelectorAll('[data-ho-new]').forEach(s => { s.hidden = !isNew(); }); }); }
+  /* GXF (2026-11-09): "Send to Substructure Loading" with the Geometry and Reactions boxes (both ticked by default; this page only, not saved).
+     Send: each ticked channel is built first (nothing is sent when one fails), then published (channel key, .updatedAt), its .by.<id> copy
+     (superGeometry.by.steelbridge; superReactions.by.girderdetail as before) and its per-project copy and GitHub upload (shared/handoff-store.js,
+     HANDOFF.md §5.1; producer id steelbridge). Export: one file per ticked channel. */
+  const SEND = { geo: true, rx: true };
+  async function subSend(P, file) {
+    const todo = [SEND.geo && 'geo', SEND.rx && 'rx'].filter(Boolean);
+    if (!todo.length) { alert('Tick Geometry, Reactions or both.'); return; }
+    const built = {}, errs = [];
+    todo.forEach(k => { const r = k === 'geo' ? sgPayload(P) : srPayload(P); if (r.error) errs.push(`${k === 'geo' ? 'Geometry' : 'Reactions (analysis)'}: ${r.error}`); else built[k] = r; });
+    if (errs.length) { alert(`Nothing was ${file ? 'exported' : 'sent'}.\n\n${errs.join('\n')}`); return; }
+    const dev = HS() ? HS().deviceName(localStorage) : '';
+    todo.forEach(k => { if (dev) built[k].payload.device = dev; });   // §5.1 optional envelope field
+    const CH = { geo: GEO, rx: SR };
+    if (file) { todo.forEach(k => { const c = CH[k]; BX().exportFile(c.ch, { ...built[k].payload, producedAt: new Date().toISOString() }); }); return; }
+    const out = [], pname = String((P.project || {}).name || '').trim();
+    for (const k of todo) {
+      const c = CH[k], w = BX().publish(c.ch, built[k].payload, PRODUCER, FILE);
+      if (w.error) { out.push(`${k === 'geo' ? 'Geometry' : 'Reactions'}: NOT sent: ${w.error} Use "Export hand-off (JSON)" instead.`); continue; }
+      try { localStorage.setItem(BX().NS + c.ch + '.by.' + c.id, JSON.stringify(w.payload)); } catch (er) { /* the channel key has it */ }   // per-producer copy (§4.4, §4.14)
+      let cl = '';
+      if (HS()) { const r = await HS().send({ storage: localStorage, channel: c.ch, producer: GEO.id, payload: w.payload, fetch: (u, i) => window.fetch(u, i) });
+        cl = !r.ok ? ` (the per-project copy was not saved: ${r.error})` : !r.pid ? '' : r.cloud && r.cloud.ok ? '; also uploaded to GitHub' : r.cloud && r.cloud.queued ? `; GitHub upload waiting (${r.cloud.error})` : ''; }
+      out.push(k === 'geo' ? `Geometry sent: ${built.geo.sum}${cl}.` : `Reactions sent (unfactored, kip, DC1 / DC2 / DW per girder)${cl}:\n${built.rx.sum}`);
+    }
+    alert(`${pname ? `Kept for project "${pname}".` : 'This project has no name, so the send is kept only as the latest hand-off (no project). Enter a project name on the Project tab to keep one copy per project.'}\n\n${out.join('\n\n')}\n\nIn Bridge Substructure Loading: Bridge tab, "Pull geometry from Steel Bridge Design"; Reactions tab, "Pull from PS-Beam / GirderDetail". Each asks which project first.`);
+  }
+  function init(o) { ctx = o; window.addEventListener('storage', e => { if (!e.key || e.key.indexOf(BX().NS + LLDF.ch) === 0) document.querySelectorAll('[data-ho-new]').forEach(s => { s.hidden = !isNew(); }); });
+    document.addEventListener('change', e => { const t = e.target; if (t && t.dataset && t.dataset.hoOpt) SEND[t.dataset.hoOpt] = !!t.checked; }); }
   window.SBDHandoffUI = { card, onClick, init };
 })();

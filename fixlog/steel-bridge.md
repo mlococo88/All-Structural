@@ -4188,7 +4188,81 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
   - At 390 px the dialog is full screen (390 × 844) with no page horizontal scroll; at 1440 px it is 1100 px wide.
 - **Formulas, results, saved data:** none changed (§4, §5).
 - **How verified:** `node tests/check-syntax.mjs`; smoke `phone-layout` (input tabs at 390 px), `steel-bridge-*`; screenshots in the PR.
+## 2026-11-09 — PR: claude/geomxfer-sender (GXF-2) — "Send to Substructure Loading" with Geometry and Reactions: the new superGeometry hand-off and per-project copies of both channels   [no result change; saved data: new hand-off keys only]
+- **Why:** engineer decisions 2026-11-09 (new channel `superGeometry`, Steel Bridge app → Substructure Loading; "All hand-offs should be per
+  project"; sent copies through GitHub when Cloud sync is on). Spec: HANDOFF.md §4.14 and §5.1 (PR GXF-1, `shared/handoff-store.js`).
+- **Where:**
+  - `ui/handoffs.js`: new `sgSection(P, X)` and `sgPayload(P)` (anchor `function sgPayload(P) {`), exported on `window.SBDHandoffs` with `GEO`.
+    The card's row (anchor before: `data-ho="srSend">Send reactions to Substructure Loading</button>`) is now
+    `data-ho="subSend">Send to Substructure Loading</button>` with the boxes `data-ho-opt="geo"` (Geometry) and `data-ho-opt="rx"`
+    (Reactions), both ticked by default (kept while the page is open, not saved), and `data-ho="subFile"` Export hand-off (JSON).
+    `onClick` before: `if (a === 'srSend' || a === 'srFile') { const r = srPayload(P); … }` (publish `superReactions`, copy
+    `.by.girderdetail`, alert); after: `if (a === 'subSend' || a === 'subFile') { subSend(P, a === 'subFile'); return false; }`.
+    New `subSend(P, file)` (anchor `async function subSend(P, file) {`): builds every ticked channel first (nothing is sent when one
+    fails), adds the optional envelope field `device` (the Cloud sync device name, when set), publishes each with `BridgeXfer.publish`,
+    writes its `.by.<id>` copy (`superGeometry.by.steelbridge`; `superReactions.by.girderdetail`, as before), then
+    `SharedHandoffStore.send` (per-project copy `bridgeSuite.v1.<channel>.by.steelbridge.<project id>` and, with Cloud sync, the upload to
+    `handoffs/<channel>/steelbridge/<project id>.json`). Export: one file per ticked channel (each with `producedAt`).
+  - `index.html`: `<script src="../../shared/handoff-store.js"></script>` after `shared/github-sync.js`.
+- **Payload (`sgPayload`, inputs only, no analysis):** spans and continuity; per support `id`, `x`, `skew` (as entered: + = the right end of
+  the support line, looking ahead station, is ahead; from `engine/framing.js` `xb = sup + (y_i − y_c)·tan θ` with y from G1 to Gn),
+  `joint` (abutments `end`; piers `continuous`, or `joint` for simple spans), `depth` (deepest segment touching the station on any plate
+  girder); `girders` { count = `xs.nb`, `xs.bays`, `xs.ohL`, `xs.ohR` }; `edges` through `SBDLoads.edgeIn` (width = the traffic-face
+  distance the live load uses); `deck` { ts, total = tdeck, haunch }; `section` { largest total depth D + t_top + t_bot, largest b_f, t_f,
+  t_w (each on its own), `atSupports`, `spanMax` }; `ownerRules` (as the reactions); `contentHash` = `SharedHandoffStore.geometryHash`;
+  checked with `SharedHandoffStore.checkGeometry` before sending.
+- **Check case (default project):** spans 110–140–110 ft continuous; supports Abut. 1 (0 ft, end, 61.875 in), Pier 1 (110, continuous,
+  63.5), Pier 2 (250, continuous, 63.5), Abut. 2 (360, end, 61.875); skews 0; 5 girders at 9.5 ft, overhangs 3.25 / 3.25 ft; barriers
+  1.5 ft (traffic face 1.5 ft), height not sent; deck 8 in (total 8.5), haunch 2 in; section: positive region 60 + 0.75 + 1.125 =
+  61.875 in, pier region 60 + 1.5 + 2 = 63.5 in → depth 63.5, b_f max(16, 18) = 18, t_f 2, t_w 0.5625. Picker summary "3 spans,
+  110–140–110 ft, 5 girders". Project id `~New steel bridge`.
+- **Results:** none change: `sgPayload` reads the inputs only (Node test: the project JSON and the DC1 reactions are identical after it);
+  the reactions payload is built by `srPayload` exactly as before.
+- **Saved data (CLAUDE.md §5):** the project format is unchanged. New hand-off keys only: `bridgeSuite.v1.superGeometry`,
+  `.updatedAt`, `.by.steelbridge`, `bridgeSuite.v1.superGeometry.by.steelbridge.<project id>`, `bridgeSuite.v1.superReactions.by.steelbridge.<project id>`
+  (and `bridgeSuite.v1.handoffStore.pending` while sync is set up). The keys written before (`superReactions`, `.updatedAt`,
+  `.by.girderdetail`) are written as before, so Substructure Loading's current Pull keeps working.
+- **Decisions (pending engineer review):**
+  1. `project.bridgeId` is blank (the app has no Bridge ID field); the per-project id is then the project name alone.
+  2. Barrier height is not sent (the app has no barrier height input; the drawings' 34 in is a drawing default). Curb height and the
+     railing load point are sent for a curb edge, not as a barrier height.
+  3. No project name → no per-project copy (only the latest hand-off, listed by the receiver as "earlier hand-off (no project)").
+  4. Geometry and Reactions boxes are not saved with the project (both ticked each time the page opens).
+- **How verified:** `node tests/engine/run.mjs` (3 new tests in `handoffs.test.mjs`: default bridge hand values; curb edge, simple spans,
+  signed skews, a deeper pier segment, refusals; no change to the project or its results); new `tests/smoke/geometry-handoff.mjs`
+  (sender: nothing on load, both boxes ticked, both channels' keys and per-project copies identical to the published payload, Geometry
+  alone, no project name → no per-project copy; 0 console errors); steel-bridge smoke tests.
 - **Other copies:** none.
+
+## 2026-11-09 — PR: claude/sb-splice-custom (PR #1263: https://github.com/mlococo88/All-Structural/pull/1263) (SPERR) — Field splices: a Calculate that ends in an error shows the message instead of leaving the tab "out of date"   [display only; no result change]
+- **Engineer:** 2026-11-09: "I tried entering custom values in the field splice tab but nothing happened when I press Calculate."
+- **Where:** `ui/splices.js`, `render()`, anchor `stale = !S.R || S.key !== key(ctx)`.
+- **Before:**
+  `const P = ensure(ctx.P), g = P.girders[ctx.g] || P.girders[0], stale = !S.R || S.key !== key(ctx);`
+- **After:**
+  `const P = ensure(ctx.P), g = P.girders[ctx.g] || P.girders[0], stale = (!S.R && !S.err) || S.key !== key(ctx);   // SPERR: …`
+- **Problem:** `calc()` sets `S.err` and leaves `S.R = null` when `build()` returns an error. `render()` counted every state without `S.R` as out of date, and shows `S.err` only when not out of date, so the error never showed: the "out of date … Calculate" bar stayed and pressing Calculate changed nothing on screen. With the output-tab auto re-run (#1260) the status also stayed on "Calculating…". It happened for every error that `build()` returns for the whole girder:
+  - Demands "Custom (entered)" with an empty table ("No rows entered") or a row error (a row without x, two rows at one x, x outside the girder, a cell that is not a number);
+  - no field splice stations;
+  - an analysis error;
+  - a calculation exception.
+  The error is now shown under the bar. Present since the Field splices tab was added (the same line since #616); not caused by #1255–#1260.
+- **Not changed (inputs checked, all bound and used):** every entered plate field (top / bottom flange: lines, g, g₀, rows, s, e_f, e_p, b_o, t_o, inner, b_i, t_i; web: h, t, rows, s_v, cols, s_h, e_w, e_wp), the design basis, bolts and clearances, and the Custom demand cells each change the result after Calculate and are saved.
+- **Governing provision:** none (display); AASHTO LRFD 10th Ed. 6.13.6.1 calculations unchanged.
+- **Check case:** default project, Field splices tab, Demands "Custom (entered)", table empty, Calculate.
+  - Before: the bar "Splice results are out of date … Calculate" stays and nothing else is shown.
+  - After: "Custom demands: No rows entered: enter the Field splices demands in the Custom table (or paste them from Excel)."
+  - Then a row x = 82, M_DC1 = 500, V_DC1 = 50, M_LL+ = 1000, M_LL− = −1000, V_LL = 80: FS1 checked, governing DT3 1.000, the same before and after. With M_DC1 = 2500: governing TF3 (Con) 1.315, the same before and after.
+- **How verified:** new `tests/smoke/steel-bridge-splices.mjs`:
+  - On main it fails at the first Calculate: the tab stays out of date.
+  - With the fix it passes: the error messages are shown; M_DC1 changes FS1; each of the 44 entered plate / bolt / basis fields changes the FS1 result and is saved. 0 console errors.
+  - Also `tests/check-syntax.mjs`; engine tests `splices`, `custom-demands`, `handoffs`; smoke `steel-bridge-wiring`, `-paths`, `-tabgraphics-b`, `-report`.
+- **Other copies:** the same `stale = !S.R || S.key !== key(ctx)` line with `if (S.err && !stale)` is in `ui/flexure.js`, `ui/shear.js`, `ui/fatigue.js`, `ui/rating.js`, `ui/welds.js` and `ui/constructibility.js`. Not changed here (open item 1).
+- **Open items:**
+  1. The same hidden-error pattern on the other output tabs listed above. To fix on request.
+  2. With "Plates and bolts: Entered below", a station without an entry is **not** auto-designed: `engine/splices.js` `girder()` runs `autoDesign` only when `S.auto && !I.own`. Such a station uses the module's built-in plates (`DEF`), and the list labels it "auto". The Splices tab note says "A station without an entry is auto-designed". Changing either changes results or wording; engineer to decide.
+  3. With "Entered below", the Splices tab gives no way to add a row except "Keep these plates" on the output tab ("None entered.").
+  4. The entered plate inputs have no `data-kind="num"`, so they are saved as text ("4", not 4). The engine reads both the same (`num()` / `+`; checked in Node on every field: the same checks and ratios). Left as is; no saved-format change.
 ## 2026-11-09 — PR: claude/sb-summary-tab (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SUMT) — Summary output tab, first in the output tab bar   [display only; no result or saved-data change]
 - **Engineer:** 2026-11-09: "There is no Summary output tab, we need to add one."
 - **Where:**

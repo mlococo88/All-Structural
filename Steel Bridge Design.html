@@ -1178,6 +1178,7 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
 <script src="shared/github-sync.js"></script>
+<script src="shared/handoff-store.js"></script>   <!-- GXF (2026-11-09): per-project copy of the reactions hand-off (HANDOFF.md §5.1, §4.4) -->
 <script>
 /* BridgeXfer v1 — cross-tool hand-off helper. Spec: HANDOFF.md. Duplicated verbatim in each tool that sends or receives (CLAUDE.md §3). */
 (function(){
@@ -18851,7 +18852,8 @@ document.addEventListener('click', e => { const t = e.target.closest && e.target
    factors (sa.dfSrc 'manual') belong to the selected girder only, so the other girders run with the LLDF and DLs module's factors (they change
    only LL+IM, which is listed in the notes, not sent as a load). LL+IM, the pedestrian load and the MassDOT utilities have no field in the schema:
    their reactions are listed in the notes. The owner load rules go in the optional field ownerRules (same object as §4.9). Writes the channel key
-   and the copy bridgeSuite.v1.superReactions.by.girderdetail. Nothing in this tool's inputs, results or saved data changes. */
+   and the copy bridgeSuite.v1.superReactions.by.girderdetail; since 2026-11-09 (GXF) also the per-project copy bridgeSuite.v1.superReactions.by.girderdetail.<project id>
+   and, with Cloud sync, its upload (shared/handoff-store.js, HANDOFF.md §5.1). Nothing in this tool's inputs, results or saved data changes. */
 const GD_SR = { ch: 'superReactions', schema: 'bridge-super-reactions', id: 'girderdetail', producer: 'GirderDetail', file: 'Steel Bridge Design.html' };   // SBD1: file renamed (was Steel Bridge Beam Modules.html)
 function gdSrUi() {
   const b = P && P.df && P.df.bridge, nb = b && b.ok ? b.nb : 0;
@@ -18896,11 +18898,18 @@ document.addEventListener('click', e => { const t = e.target.closest && e.target
   if (!window.BridgeXfer) { alert('The hand-off helper is not available in this browser.'); return; }
   const r = gdSrPayload(); if (r.error) { alert(`Structural analysis: ${r.error}`); return; }
   if (t.dataset.gdsr === 'file') { BridgeXfer.exportFile(GD_SR.ch, r.payload); flash('Reactions hand-off file saved.'); return; }
+  const HSx = window.SharedHandoffStore, dev = HSx ? HSx.deviceName(localStorage) : ''; if (dev) r.payload.device = dev;   // GXF (2026-11-09): optional envelope field (HANDOFF.md §5.1)
   const w = BridgeXfer.publish(GD_SR.ch, r.payload, GD_SR.producer, GD_SR.file);
   if (w.error) { alert(`Could not send the reactions: ${w.error}\n\nUse "Export hand-off (JSON)" and Substructure Loading's Import hand-off (JSON) instead.`); return; }
   try { localStorage.setItem(BridgeXfer.NS + GD_SR.ch + '.by.' + GD_SR.id, JSON.stringify(w.payload)); } catch (er) { }   // per-producer copy (§4.4 "two producers, one channel")
   flash(`Reactions of G1 to G${r.payload.supports[0].girders.length} sent to Substructure Loading.`);
-  alert(`Reactions sent to Substructure Loading (unfactored, kip, DC1 / DC2 / DW per girder):\n\n${r.sum}\n\nIn Bridge Substructure Loading, Reactions tab, click "Pull from PS-Beam / GirderDetail".`); });
+  const done = cl => alert(`Reactions sent to Substructure Loading (unfactored, kip, DC1 / DC2 / DW per girder)${cl}:\n\n${r.sum}\n\nIn Bridge Substructure Loading, Reactions tab, click "Pull from PS-Beam / GirderDetail" (it asks which project first).`);
+  if (!HSx) { done(''); return; }
+  // GXF (2026-11-09): the per-project copy bridgeSuite.v1.superReactions.by.girderdetail.<project id> and, with Cloud sync, its upload (HANDOFF.md §5.1)
+  HSx.send({ storage: localStorage, channel: GD_SR.ch, producer: GD_SR.id, payload: w.payload, fetch: (u, i) => window.fetch(u, i) }).then(x => {
+    const pn = [w.payload.project && w.payload.project.bridgeId, w.payload.project && w.payload.project.name].filter(Boolean).join(' — ');
+    done(!x.ok ? ` (the per-project copy was not saved: ${x.error})` : !x.pid ? ' (no project name or bridge No. in the title block: kept only as the latest hand-off, no project)' : `, kept for project "${pn}"${x.cloud && x.cloud.ok ? ', also uploaded to GitHub' : x.cloud && x.cloud.queued ? `, GitHub upload waiting (${x.cloud.error})` : ''}`); },
+    () => done('')); });
 /* stresses by construction stage at every node (tension +) */
 
 /* deck placement sequence (AASHTO LRFD 6.10.3.4): steel and other noncomposite load on the steel, then each pour's wet concrete on the
