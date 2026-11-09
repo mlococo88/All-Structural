@@ -134,6 +134,9 @@
         ...(ll ? [{ ...N(A.llR[k].max, 2), key: 'an.R.LL.' + k }, N(A.llR[k].min, 2)] : [])])),
       note(`Statics: ${['DC1steel', 'DC1wet', 'DC2', 'DW', 'CL'].map(k => `${k} [[an.eq.${k}]]`).join(', ')}.${ll ? ' LL+IM: the reaction envelope × the larger $g_{V}$ of the adjacent spans; 90 % of two trucks + lane at interior supports (3.6.1.3.1).' : ''}`)]));
     // DEFL (2026-11-09): the LL deflection check (SA3) and the dead-load deflections are in the Deflection section (defl() below)
+    if (!DEFL_ON() && A.lld) { govLL(A, X);   // without ui/deflection.js (some Node tests): as before DEFL
+      subs.push(sub('d', 'Live load deflection (SA3, 2.5.2.6.2)', [tbl(['Span', 'x (ft)', '$\\Delta_{LL}$ (in)', 'Limit (in)', 'Ratio', 'Status'], A.lld.map(q => [String(q.k + 1), N(q.x, 1), { ...N(q.d, 3), key: 'an.defl.LL' + (q.k + 1) }, { ...N(q.lim, 3), key: 'an.defl.lim' + (q.k + 1) },
+        { ...R3(q.d / q.lim), t: f(q.d / q.lim, 2) }, { pass: 'OK', fail: 'Exceeds', warn: 'Exceeds the preferred limit', na: 'Reported (exterior)' }[q.status] || q.status]))])); }
     if (DEFL_ON()) subs.push(sub('d', 'Deflection', [note(`The live load deflection check (SA3) and the dead-load deflections and camber are in the Deflection section${A.lld && A.lld.length ? ' [[an.defl.LL1]]' : ''} [[an.camber.s1]], as on the [[tab:defl|Deflection tab]].`)]));
     if (A.seq) { const Q = A.seq;
       subs.push(sub('q', 'Deck placement sequence (SA7, 6.10.3.4.1)', [kv([['Pours, in order', Q.pours.map((q, k) => `${k + 1}: ${f(q.a, 1)}–${f(q.b, 1)} ft`).join('; ')], ['Largest noncomposite moment $M_{DCc}$', `${f(Math.max(...Q.MDCc), 1)} kip-ft`, 'an.seq.MDCc'],
@@ -150,10 +153,12 @@
   // the section needs ui/deflection.js and engine/sheets.js (index.html loads both); a page or test without them keeps every analysis step
   // in the Analysis section and has no Deflection section
   const DEFL_ON = () => !!(window.SBDDeflectionUI && window.SBDSheets);
+  /* the summary row of the SA3 check (unchanged text and group; before DEFL in an()) */
+  const govLL = (A, X) => X.gov.push(...A.lld.map(q => ({ mod: 'Analysis', check: 'SA3 LL deflection, $\\Delta_{LL}$ ≤ L/' + q.ratio, loc: `span ${q.k + 1}, x = ${f(q.x, 1)} ft`, r: q.d / q.lim, key: 'an.defl.LL' + (q.k + 1), status: q.status, grp: 'Analysis: SA3 live-load deflection' })).filter(q => q.status !== 'na').sort((a, b) => b.r - a.r).slice(0, 1));
   function defl(B, X) {
     const A = B.an, DU = window.SBDDeflectionUI, Mo = DU && window.SBDSheets ? DU.model(A) : null; if (!Mo) throw new Error('the Deflection tab (ui/deflection.js, engine/sheets.js) is not loaded');
     const subs = [], ST = { pass: 'OK', fail: 'Exceeds', warn: 'Exceeds the preferred limit', na: 'Reported (exterior)' }, S = A.settings, P = B.P, O = Mo.ll[0] && Mo.ll[0].own;
-    if (A.lld) { X.gov.push(...A.lld.map(q => ({ mod: 'Analysis', check: 'SA3 LL deflection, $\\Delta_{LL}$ ≤ L/' + q.ratio, loc: `span ${q.k + 1}, x = ${f(q.x, 1)} ft`, r: q.d / q.lim, key: 'an.defl.LL' + (q.k + 1), status: q.status, grp: 'Analysis: SA3 live-load deflection' })).filter(q => q.status !== 'na').sort((a, b) => b.r - a.r).slice(0, 1));
+    if (A.lld) { govLL(A, X);
       const why = O ? `Limit: owner rule ${O.cite} (OWN19, mandatory): ${O.rule.text}. Sidewalk or pedestrians: ${O.sw ? 'yes' : 'no'} (${O.swHow === 'cross-section sidewalks' ? 'a sidewalk on the cross-section' : 'entered on the Loads tab'}), so L/${O.req}${O.uR > O.req ? `; the entered L/${O.uR} is stricter and is used` : ''}.${O.rep ? ' Applied to the typical interior beam only: this girder is exterior, so it is reported, not checked.' : ''}`
         : `Limit: no owner rule for the live load deflection (owner ${(P.ownerRules || {}).owner || 'AASHTO'}): the optional criterion of 2.5.2.6.2, L/${S.deflLimit} as entered (Loads tab).`;
       subs.push(sub('d', 'Live load deflection (SA3, 2.5.2.6.2, 3.6.1.3.2)', [tbl(['Span', 'L (ft)', 'x (ft)', '$g_{\\Delta}$', 'Per lane (in)', 'Governing case', '$\\Delta_{LL}$ (in)', 'Limit (in)', 'D/C', 'Status'],
@@ -473,6 +478,7 @@
     return { title: 'Summary of governing ratios', subs: [sub('gov', `Girder ${gName(B.girder)}: governing demand / capacity of each check group`, [
       note(`Each ratio links to the step that works it. Ratio = demand / capacity (OK ≤ 1.0); rating factors RF (OK ≥ 1.0). Demands: ${B.src === 'file' ? `the hand-off file ${B.plName || ''} for flexure, shear, fatigue, constructibility and rating; this project for the rest` : B.custom ? `entered on the tab (Custom) for ${cdMods(B)}; this project's analysis for the rest` : "this project's analysis"}. ${ED}.`),
       top ? note(`Largest ratio: ${f(top.r, 3)} (${top.mod}, ${top.check}, ${top.loc})${top.key ? ` [[${top.key}]]` : ''}.`) : null,
+      note('Every girder at once, with the overall verdict and a link from each value to the tab that works it: the [[tab:sum|Summary tab]].'),   // Summary tab (2026-11-09)
       summaryFig(B, X),
       tbl(['Module', 'Check', 'Location', 'Ratio / RF', 'Status'], rows, { wide: true }),
       ...X.warn.map(w => note(w, true)),
@@ -552,6 +558,7 @@
     const subs = [sub('tbl', 'Governing ratio of each check group, every girder', [
       note(`Each cell is the governing demand / capacity ratio of that check group on that girder (OK ≤ 1.0), or its rating factor RF (OK ≥ 1.0), from the girder's own calculation report (Report tab, scope "Selected girder", where each value is worked). ◆ marks the controlling girder of each group (the largest ratio, the smallest RF). Demands: this project's analysis of each girder. ${ED}.`),
       top ? note(`Controlling girder: ${top.G.label}, largest ratio ${f(top.q.r, 3)} (${top.q.mod}, ${top.q.check}, ${top.q.loc}).`, top.q.r > 1 + 1e-9) : null,
+      note('The same values, with the overall verdict and a link from each value to the tab that works it: the [[tab:sum|Summary tab]].'),   // Summary tab (2026-11-09)
       low ? note(`Lowest rating factor: ${low.G.label}, ${low.q.check.replace(/,.*$/, '')} ${f(low.q.rf, 2)} (${low.q.loc}).`, low.q.rf < 1 - 1e-9) : null,
       tbl(head, rows, { wide: true }),
       errs.length ? note('Not in this summary: ' + errs.map(G => `${G.label}: ${Object.entries(G.err).map(([k, v]) => `${(SECTIONS.find(s => s[0] === k) || [k, k])[1]} ${v}`).join('; ')}`).join(' | '), true) : null])];
