@@ -23,7 +23,7 @@ test('Apply defaults: the message lists tab, field, old and new', () => {
   const P = mk('CTDOT'), r = UL.applyOwnerDefaults(P), by = {}; r.changes.forEach(c => by[c.field] = c);
   assert.equal(r.owner, 'CTDOT');
   assert.equal(JSON.stringify(Object.keys(by).sort()), JSON.stringify(['Dead load distribution', 'Future wearing surface', 'w_c for E_c only']));
-  assert.equal(by['Future wearing surface'].to, '38.75'); assert.equal(by['Future wearing surface'].from, '25'); assert.equal(by['Future wearing surface'].tab, 'Cross-section & loads');
+  assert.equal(by['Future wearing surface'].to, '38.75'); assert.equal(by['Future wearing surface'].from, '25'); assert.equal(by['Future wearing surface'].tab, 'Loads');
   assert.equal(by['w_c for E_c only'].from, '(blank)'); assert.equal(by['w_c for E_c only'].to, '0.145');
   assert.match(by['Dead load distribution'].from, /^MassDOT/); assert.match(by['Dead load distribution'].to, /^Typical AASHTO/);
   // total deck thickness 8 + 0.5 sacrificial = 8.5 = the value already there, and the wearing surface is already in weight mode: not listed as changed
@@ -34,7 +34,7 @@ test('Apply defaults: the message lists tab, field, old and new', () => {
 });
 test('Apply defaults: a second click changes nothing and says so', () => {
   const P = mk('MassDOT'); const r1 = UL.applyOwnerDefaults(P); assert.equal(JSON.stringify(r1.changes.map(c => c.field)), JSON.stringify(['Concrete f′c']));
-  assert.equal(r1.changes[0].from, '4'); assert.equal(r1.changes[0].to, '5'); assert.equal(r1.changes[0].tab, 'Materials & deck');
+  assert.equal(r1.changes[0].from, '4'); assert.equal(r1.changes[0].to, '5'); assert.equal(r1.changes[0].tab, 'Materials');
   const r2 = UL.applyOwnerDefaults(P); assert.equal(r2.changes.length, 0); assert.equal(r2.same.length, 1);
   assert.equal(UL.applyOwnerDefaults(mk('AASHTO')).changes.length, 0);
 });

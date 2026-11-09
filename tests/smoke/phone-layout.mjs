@@ -34,6 +34,7 @@ const TOOLS = {
   lp: { file: 'Light Pole and Sign Post.html', tabs: '#lppInTabs .lppInTab, #tabBar button, #lppDashTgl', wait: 3000, tabWait: 800 },   // LPDC (2026-11-03): with the check summary's Hide / Show checks button
   index: { file: 'index.html', tabs: '#root>div>header+div>nav>button', wait: 8000, tabWait: 1200 },
   bgeo: { file: 'Bridge Geometry.html', tabs: '.tabbtn[data-tab]', wait: 3000, tabWait: 900 },   // BGX10 (2026-11-07): Bridge Geometry at 390 / 768 px   // the frames' own tabs: see the PHN fixlog entry (checked once by hand)
+  sbapp: { file: 'apps/steel-bridge/index.html', tabs: '#inTabs [data-itab]', wait: 3000, tabWait: 900 },   // TABR (2026-11-09): Steel Bridge app, every input tab (the output tabs: the Report scrolls 91 px sideways at 390 px on main too, open item in fixlog/steel-bridge.md)
 };
 
 const keys = args.tool ? String(args.tool).split(',') : Object.keys(TOOLS);

@@ -1,5 +1,5 @@
-/* apps/steel-bridge/ui/framing.js — the "Framing" input tab (cross-frame layout with a plan sketch, cross-frame members, wind, stability
-   bracing, diaphragm, weight in DC1) and the "Cross-frames" output tab (window.SBDFramingUI), from engine/framing.js and
+/* apps/steel-bridge/ui/framing.js — the "Framing & bracing" input tab (cross-frame layout with a plan sketch, cross-frame members, stability
+   bracing, diaphragm, weight in DC1; the wind card is drawn on the Loads input tab and the plan again on the Bridge layout tab) and the "Cross-frames" output tab (window.SBDFramingUI), from engine/framing.js and
    engine/crossframes.js. Classic script; needs SharedSteps, SharedUnits, SBDModel, SBDOwners, SBDSections, SBDFlexure, SBDFraming,
    SBDCrossframes; uses SBDAnalysis when loaded (the deck-placement moment of the stability bracing check).
 
@@ -69,10 +69,8 @@
         ${h.num('framing.supClear', 'Clear distance from the bearings', 'ft')}${h.num('framing.stagMin', 'Least offset between frames on one girder', 'ft')}
         <div class="fRow"><label for="fr_spl">Field splices</label><input type="text" id="fr_spl" data-fr="splices" value="${esc((F.splices || []).join(', '))}" style="width:180px"><span class="unit"></span></div>
         ${h.num('framing.spliceClear', 'Frames clear of splices and transitions', 'ft')}
-        <p class="note">Girders, spacings and support skews: Cross-section &amp; loads tab. The plates of every girder give the shop transitions. Frames normal to the girders at a support skewed more than 20° start at least max(clear, 4b<sub>f</sub>, 0.4s) from the obtuse bearing (C6.7.4.2.1); corner frames close longer panels. Owner rule xf.orient applies with the automatic orientation.</p>
+        <p class="note">Girders and spacings: Cross-section tab; support skews: Bridge layout tab. The plates of every girder give the shop transitions. Frames normal to the girders at a support skewed more than 20° start at least max(clear, 4b<sub>f</sub>, 0.4s) from the obtuse bearing (C6.7.4.2.1); corner frames close longer panels. Owner rule xf.orient applies with the automatic orientation.</p>
         ${L && !L.errors.length ? plan(L) : `<div class="alert err">${esc((L && L.errors || []).join(' '))}</div>`}`)
-      + h.card('Flange lateral bending from skew (C6.10.1)', `${h.num('framing.flSkI', 'f<sub>ℓ</sub>, interior girders', 'ksi')}${h.num('framing.flSkE', 'f<sub>ℓ</sub>, exterior girders', 'ksi')}${h.num('framing.flSkG', 'Load factor on f<sub>ℓ</sub>', '')}
-        <p class="note">Used where any support is skewed more than 20°, in lieu of a refined analysis (as GirderDetail): the Flexure tab takes it with a hand-off file of this bridge.</p>`)
       + h.card('Intermediate bracing (6.7.4.2)', `${h.sel('crossframes.type', 'Intermediate bracing', BRACE, br).replace('<select ', '<select style="width:200px;max-width:100%" ')}
         ${h.num('crossframes.dMinXF', 'Minimum girder depth for cross-frames', 'in')}${dOn ? `${h.sel('crossframes.dia.shape', 'Shape', br === 'ch' ? CF.CF_CH.map(s => [s[0], s[0]]) : [...CF.CF_DIA.map(s => [s[0], s[0]]), ['custom', 'Custom W']])}
         ${C.dia.shape === 'custom' ? `${h.num('crossframes.dia.d', 'Depth d', 'in')}${h.num('crossframes.dia.bf', 'Flange width', 'in')}${h.num('crossframes.dia.tf', 'Flange thickness', 'in')}${h.num('crossframes.dia.tw', 'Web thickness', 'in')}` : ''}
@@ -85,7 +83,8 @@
         ${h.sel('crossframes.gA', 'Angle grade', grs)}${h.sel('crossframes.gG', 'Gusset grade', grs)}${mem('top')}${mem('bot')}${mem('diag')}
         <h4 class="sub">End connections</h4>${conn}${h.num('crossframes.conn.n', 'Bolts per member end', '')}${h.num('crossframes.conn.s', 'Pitch', 'in')}${h.num('crossframes.conn.e', 'End distance', 'in')}${h.num('crossframes.conn.tg', 'Gusset thickness', 'in')}
         <p class="note">S (largest girder spacing), the girder depth d and L<sub>b</sub> (largest unbraced length on any girder) come from the project and the layout.</p>`}`)
-      + h.card('Wind on the exterior girder (3.8.1.2.1, 4.6.2.7.1)', `${h.num('crossframes.wind.V', 'Design wind speed V', 'mph')}${h.num('crossframes.wind.Kz', 'K<sub>z</sub>', '')}${h.num('crossframes.wind.G', 'Gust factor G', '')}${h.num('crossframes.wind.Cd', 'Drag coefficient C<sub>D</sub>', '')}`)
+      + h.card('Flange lateral bending from skew (C6.10.1)', `${h.num('framing.flSkI', 'f<sub>ℓ</sub>, interior girders', 'ksi')}${h.num('framing.flSkE', 'f<sub>ℓ</sub>, exterior girders', 'ksi')}${h.num('framing.flSkG', 'Load factor on f<sub>ℓ</sub>', '')}
+        <p class="note">Used where any support is skewed more than 20°, in lieu of a refined analysis (as GirderDetail): the Flexure tab takes it with a hand-off file of this bridge.</p>`)
       + h.card('Stability bracing during deck placement (6.7.4.2.2)', `${h.sel('crossframes.sb.on', 'Check stability bracing', [['yes', 'Yes'], ['no', 'No']])}${h.sel('crossframes.sb.full', 'Depth and connection plates', [['auto', 'Automatic (h ≥ 0.8D: full depth)'], ['yes', '≥ 0.8 girder depth, full-depth plates (2.4)'], ['no', 'Otherwise (3.6)']])}
         ${h.num('crossframes.sb.Mu', 'Factored deck-placement M<sub>u</sub> (blank: analysis)', 'kip-ft', { text: true })}${h.num('crossframes.sb.Cb', 'C<sub>b</sub>', '')}
         ${h.num('crossframes.sb.bs', 'Connection plate b<sub>s</sub> (no connection-plate type)', 'in')}${h.num('crossframes.sb.tsp', 'Connection plate t<sub>s</sub>', 'in')}`)
@@ -99,6 +98,14 @@
       + h.card('Cross-frame weight in DC1', `${h.sel('crossframes.weight.mode', 'Weight', [['auto', 'From the member sizes (or the diaphragm)'], ['ovr', 'Entered per frame'], ['off', 'Not included']])}${h.num('crossframes.weight.allow', 'Gusset plates and bolts', '%')}
         ${C.weight.mode === 'ovr' ? `${h.num('crossframes.weight.Wi', 'Intermediate frame', 'kip', { text: true })}${h.num('crossframes.weight.We', 'End frame (blank: same)', 'kip', { text: true })}` : ''}
         <p class="note">Each frame puts half its weight on each girder it connects, at that girder's own station, on the steel section (DC1; GirderDetail XF1). The Analysis tab uses these point loads.</p>`);
+  }
+  /* TABR (2026-11-09): the input tabs reorganised (display only). windCard(P, h): the wind card (crossframes.wind.*), drawn on the Loads input
+     tab; layoutPlan(P): the framing plan of the Framing & bracing tab, drawn again on the Bridge layout tab (the skews and spans in plan). */
+  function windCard(P, h) { ensure(P); return h.card('Wind on the exterior girder (3.8.1.2.1, 4.6.2.7.1)', `${h.num('crossframes.wind.V', 'Design wind speed V', 'mph')}${h.num('crossframes.wind.Kz', 'K<sub>z</sub>', '')}${h.num('crossframes.wind.G', 'Gust factor G', '')}${h.num('crossframes.wind.Cd', 'Drag coefficient C<sub>D</sub>', '')}`); }
+  function layoutPlan(P) {
+    ensure(P); let L = null; try { L = window.SBDFraming.compute(P); } catch (e) { L = { errors: [e.message] }; }
+    return (L && !L.errors.length ? plan(L) : `<div class="alert err">${esc((L && L.errors || []).join(' '))}</div>`)
+      + '<p class="note">Cross-frames, their spacing and orientation, and the field splices: <a href="#" data-itgo="framing">Framing &amp; bracing tab</a>.</p>';
   }
   function onChange(el, P) {
     if (el.dataset && el.dataset.path === 'crossframes.type' && el.dataset.kind === 'sel') { setBrace(P, el.value); return true; }   // BRSEL
@@ -143,7 +150,7 @@
     const p = R.p || {}, UM = R.UM || { StrI: 'add', Con: 'add' }, any = g => ['top', 'bot', 'diag'].some(k => +(((p.user || {})[g] || {})[k]) || 0) || UM[g] === 'replace';
     const part = (g, t) => any(g) ? `${t}: <b>${UM[g] === 'replace' ? 'Replace computed' : 'Add to computed'}</b> ${wk('cf.user.' + g)}` : '';
     const s = [part('StrI', 'Strength'), part('Con', 'Constructibility')].filter(Boolean);
-    return s.length ? ` Entered member forces (<a href="#" data-goto="spans">Spans &amp; framing tab</a>): ${s.join('; ')}.` : '';
+    return s.length ? ` Entered member forces (<a href="#" data-goto="framing">Framing &amp; bracing tab</a>): ${s.join('; ')}.` : '';
   }
   function results(B) {
     const { L, R, C, fl, XF, br, line, I } = B, FR = L.FR; let h = '';
@@ -197,5 +204,5 @@
     host.querySelectorAll('[data-cfgo]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const t = host.querySelector('#st-' + a.dataset.cfgo.replace(/[^\w.-]/g, '').replace(/\./g, '\\.')); if (t) { t.scrollIntoView({ block: 'center' }); t.style.background = '#FFF7D6'; } }));
   }
 
-  window.SBDFramingUI = { ensure, braceOf, setBrace, inputs, onChange, onClick, render, build, plan, TOPICS, groups };
+  window.SBDFramingUI = { ensure, braceOf, setBrace, inputs, windCard, layoutPlan, onChange, onClick, render, build, plan, TOPICS, groups };
 })();
