@@ -19,7 +19,9 @@ const FILE = path.join(REPO, 'apps/steel-bridge/index.html');
 const settle = (p, t = 240000) => p.waitForFunction(() => !document.querySelector('#out .alert.stale:not([hidden])') && !/Calculating|updating/.test((document.querySelector('#autoMsg') || {}).textContent || ''), null, { timeout: t });
 const saved = p => p.evaluate(() => JSON.parse(localStorage.getItem('sbd2.project.current') || '{}'));
 const setv = async (p, dp, v) => { const s = `#inPanes [data-path="${dp}"]`; await p.fill(s, String(v)); await p.dispatchEvent(s, 'change'); await p.waitForTimeout(200); };
-const tabText = async (p, k) => { await p.click(`#tabBar [data-otab="${k}"]`); await settle(p); await p.waitForTimeout(300); return p.evaluate(() => document.getElementById('out').innerText); };
+const tabText = async (p, k) => { await p.click(`#tabBar [data-otab="${k}"]`);
+  if (k === 'rpt') { await p.click('#rp_build'); await p.waitForSelector('.rp-doc .rp-tbl', { timeout: 600000 }); return p.evaluate(() => document.querySelector('.rp-doc').textContent); }
+  await settle(p); await p.waitForTimeout(300); return p.evaluate(() => document.getElementById('out').innerText); };
 const OUT = ['loads', 'an', 'flex', 'cf'];
 const allErrs = [];
 
