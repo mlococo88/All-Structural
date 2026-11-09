@@ -4397,7 +4397,7 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
 - **Check case:** default project, 1440 px: 11 chips "not run"; Shear chip → Shear & stiffeners tab, G1, station x = 110.01 ft card flashed, chip 0.437 · G1 PASS; Run all → header "FAIL · max D/C 1.229", Governing: Flexure, Strength I, G1: D/C 1.229; Rating chip RF 0.61 · G1 FAIL.
 - **How verified:** `tests/smoke/steel-bridge-dash.mjs` (layout at 1199/1200/1440/1600 px, chips equal the Summary's data, links and flash, out of date, collapse key across a reload, print, 0 console errors); `tests/smoke/steel-bridge-summary.mjs`; `node tests/check-syntax.mjs`; smoke `steel-bridge-*`, `phone-layout`, `project-library`.
 - **Other copies:** none.
-## 2026-11-09 — PR: claude/sb-summary-gfx (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (GFXS) — Summary tab: cross-section and framing plan graphics   [display only; no result or saved-data change]
+## 2026-11-09 — PR: claude/sb-summary-gfx (PR #1275: https://github.com/mlococo88/All-Structural/pull/1275) (GFXS) — Summary tab: cross-section and framing plan graphics   [display only; no result or saved-data change]
 - **Engineer:** 2026-11-09: "the Summary output tab must also show the cross-section graphic and the framing plan graphic", reusing the app's own drawing functions, near the top, side by side from about 1200 px and stacked on a phone, each with a link to the tab where it is drawn and edited. This is a follow-up to #1271.
 - **Where:** `ui/summary.js`:
   - New `xsSvg(P)` and `gfxCard(P)` (anchor `GFXS (2026-11-09`), called in `paint()` after the verdict card (anchor `h += gfxCard(P);`).
