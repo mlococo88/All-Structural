@@ -4649,7 +4649,7 @@ except the duplicated stations removed by fix 1 (listed there) and the Summary's
   steel-bridge smoke tests; phone-layout `sbapp`; project-library.
 - **Other copies:** none (the `tt()` copies are the five files listed).
 
-## 2026-11-09 — PR: sbqa-phone-report (PR #TBD) — Report tab fits a phone screen; phone-layout test covers the output tabs (QAP; display only)
+## 2026-11-09 — PR: sbqa-phone-report (PR #1281: https://github.com/mlococo88/All-Structural/pull/1281) — Report tab fits a phone screen; phone-layout test covers the output tabs (QAP; display only)
 - **Problem (visual QA pass, engineer request 2026-11-09; open item of TABR):** at 390 px the Report tab scrolled the whole page 91 px
   sideways: its "Demands" drop-down (`#rp_src`, `shared/report.js` `.rp-bar select{width:auto!important}`) is as wide as its longest choice
   (454 px). The Drawings tab's sheet drop-down (376 px) was cut by its card at 390 px.
