@@ -46,7 +46,7 @@ try {
   await p.waitForSelector('.rp-doc .rp-h1', { timeout: 180000 });
   const rp = await p.evaluate(() => ({ secs: [...document.querySelectorAll('.rp-doc .rp-h1')].map(h => h.textContent.trim()), kErr: document.querySelectorAll('.rp-doc .katex-error').length, text: document.querySelector('.rp-doc').innerText }));
   assert.ok(rp.secs.some(s => /Welds/.test(s)), rp.secs.join(' | ')); assert.equal(rp.kErr, 0); assert.ok(!/NaN|undefined|\[object/.test(rp.text), 'bad text');
-  assert.equal(await size(), 2, 'the report took the cached analyses');
+  assert.equal(await size(), 2 + 4, 'the report took the cached analyses');   // DFG (2026-11-09): + the dead-load runs of the other 4 girder lines (the report's camber of every girder; G2, plate girder G1's own line, was cached)
   assert.deepEqual(errs, [], 'console errors');
   console.log(`ok  cache: Flexure ${(tFlex / 1000).toFixed(1)} s (one analysis), then Rating + Shear + Fatigue + Welds ${(tOthers / 1000).toFixed(1)} s with no analysis; Welds line "${wbar.bar.replace(/\s+/g, ' ')}"; f_ℓ saved ${fl}; report sections: ${rp.secs.length} incl. Welds; 0 console errors (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
   if (blocked.size) console.log('    blocked requests:', [...blocked].join(', '));
