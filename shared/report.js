@@ -360,7 +360,7 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
   function setPage(doc) { let st = document.getElementById('rp-page'); if (!st) { st = document.createElement('style'); st.id = 'rp-page'; document.head.appendChild(st); } st.textContent = doc ? pageCss(doc) : ''; }
 
   /* ---------- the viewer ---------- */
-  const MAXMARK = 2000;   // RSX: the most search marks put in the page at once (the rest are counted)
+  const MAXMARK = 1000;   // RSX: a search stops marking (and counting) after about this many hits; the status then says "more than"
   let LIVE = null;   // the mounted viewer (for Ctrl+P from the Report tab: running header, lazy items filled)
   function fillLazy(root, doc) {
     root.querySelectorAll('details.rp-lz').forEach(d => { if (!d.dataset.filled) { const it = doc.lazy[+d.dataset.rplz]; d.insertAdjacentHTML('beforeend', lazyBody(doc, it)); d.dataset.filled = '1'; } d.open = true; });
@@ -402,7 +402,7 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
        opened rp-lzq), counted in the status, the contents entries holding a hit made bold, and ▲ ▼ / Enter / Shift+Enter step through
        the hits (opening the section, subsection or lazy item that holds one); Esc clears. */
     const qIn = root.querySelector('.rp-q'), qSt = root.querySelector('.rp-qs'), qBt = Array.from(root.querySelectorAll('.rp-qb'));
-    const LZT = [], Q = { v: '', w: [], re: null, hits: [], cur: -1, more: 0, secs: 0 };
+    const TOC = new Map(Array.from(root.querySelectorAll('.rp-toc [data-rpto]'), a => [a.dataset.rpto, a])), LZT = [], Q = { v: '', w: [], re: null, hits: [], all: [], toc: [], cur: -1, more: 0, secs: 0 };
     const lzText = i => { if (LZT[i] != null) return LZT[i]; const it = doc.lazy[i], F = ST().fmt, P = [it.title, it.caption];
       if (it.type === 'table') [it.head || []].concat((it.rows || []).map(r => (Array.isArray(r) ? r : r.cells))).forEach(R => R.forEach(c => { const o = c && typeof c === 'object' ? c : { t: c }; P.push(rich(doc, o.t, false)); if (o.key) P.push(ref(doc, o.key)); }));
       else { (it.topics || []).forEach(t => P.push(t.title, t.ref, t.chip)); (it.steps || []).forEach(st => P.push(st.label, st.ref, st.sym, st.eq, st.sub, typeof st.value === 'number' ? F(st.value, st.d) : st.value, st.unit, st.ok === true ? 'OK' : st.ok === false ? 'NG' : '', st.note ? noteSrc(st.note) : '')); }
@@ -412,35 +412,37 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
       if (!d.dataset.filled) { d.insertAdjacentHTML('beforeend', lazyBody(doc, doc.lazy[+d.dataset.rplz])); d.dataset.filled = '1'; }
       if (!d.classList.contains('rp-lzq')) return -1;
       d.classList.remove('rp-lzq'); const k = Q.hits.indexOf(d); if (k < 0) return -1;
-      const H = []; Array.from(d.children).forEach(c => { if (c.tagName !== 'SUMMARY') markIn(c, H); });
+      const H = [], full = Q.full; Q.full = false; Array.from(d.children).forEach(c => { if (c.tagName !== 'SUMMARY') markIn(c, H); }); Q.full = full;
       Q.hits.splice(k, 1, ...(H.length ? H : [d])); if (Q.cur > k) Q.cur += Math.max(H.length, 1) - 1; status(); return k;
     }
-    const SKIP = '.katex,svg,script,style,textarea,.rp-hide';
-    function markIn(el, H) {   // the hits in el, in document order, into H (marks wrapped up to MAXMARK; the rest counted in Q.more)
+    const SKIP = '.katex,svg,script,style,textarea,.rp-hide', BLK = /^(TR|LI|P|FIGURE)$/;
+    function markIn(el, H) {   // the hits in el, in document order, into H; the walk stops once MAXMARK hits are found (Q.full)
       const w = Q.w, E = [], F = NodeFilter, tw = document.createTreeWalker(el, F.SHOW_ELEMENT | F.SHOW_TEXT, { acceptNode: n => {   // E: the hits, in document order
-        if (n.nodeType === 3) { Q.re.lastIndex = 0; if (Q.re.test(n.nodeValue)) E.push(n); return F.FILTER_SKIP; }
-        if (n.matches(SKIP)) { if (n.classList.contains('katex')) { const t = n.textContent.toLowerCase(); if (w.some(x => t.includes(x))) { n.classList.add('rp-hitk'); E.push(n); } } return F.FILTER_REJECT; }   // never inside an equation
-        if (n.matches('details.rp-lz:not([data-filled])') && w.some(x => lzText(+n.dataset.rplz).includes(x))) { n.classList.add('rp-lzq'); E.push(n); }
+        if (Q.full) return F.FILTER_REJECT;
+        if (n.nodeType === 3) { const k = (n.nodeValue.match(Q.re) || []).length; if (k) { E.push(n); if ((Q.seen += k) >= MAXMARK) Q.full = true; } return F.FILTER_SKIP; }
+        if (BLK.test(n.tagName) || n.classList.contains('rp-step')) { const t = n._rpq != null ? n._rpq : (n._rpq = n.textContent.toLowerCase()); if (!w.some(x => t.includes(x))) return F.FILTER_REJECT; }   // a block without any word: not walked
+        if (n.matches(SKIP)) { if (n.classList.contains('katex')) { const t = n._rpq != null ? n._rpq : (n._rpq = n.textContent.toLowerCase()); if (w.some(x => t.includes(x))) { n.classList.add('rp-hitk'); E.push(n); if (++Q.seen >= MAXMARK) Q.full = true; } } return F.FILTER_REJECT; }   // never inside an equation
+        if (n.matches('details.rp-lz:not([data-filled])') && w.some(x => lzText(+n.dataset.rplz).includes(x))) { n.classList.add('rp-lzq'); E.push(n); if (++Q.seen >= MAXMARK) Q.full = true; }
         return F.FILTER_SKIP; } });
       while (tw.nextNode());   // walked first, changed after
-      E.forEach(n => { if (n.nodeType === 1) { H.push(n); return; }
+      E.forEach(n => { if (n.nodeType === 1) { H.push(n); Q.all.push(n); return; }
         const s = n.nodeValue, f = document.createDocumentFragment(); let m, a = 0, k = 0; Q.re.lastIndex = 0;
-        while ((m = Q.re.exec(s))) { if (Q.nMark >= MAXMARK) { Q.more++; continue; } if (m.index > a) f.appendChild(document.createTextNode(s.slice(a, m.index)));
-          const mk = document.createElement('mark'); mk.className = 'rp-hit'; mk.textContent = m[0]; f.appendChild(mk); H.push(mk); Q.nMark++; k++; a = m.index + m[0].length; }
+        while ((m = Q.re.exec(s))) { if (m.index > a) f.appendChild(document.createTextNode(s.slice(a, m.index)));
+          const mk = document.createElement('mark'); mk.className = 'rp-hit'; mk.textContent = m[0]; f.appendChild(mk); H.push(mk); Q.all.push(mk); k++; a = m.index + m[0].length; }
         if (!k) return; if (a < s.length) f.appendChild(document.createTextNode(s.slice(a))); n.replaceWith(f); });
     }
-    function unmark() {
-      const P = new Set(); art.querySelectorAll('mark.rp-hit').forEach(m => { P.add(m.parentNode); m.replaceWith(m.textContent); }); P.forEach(p => p.normalize());
-      art.querySelectorAll('.rp-hitk,.rp-lzq,.rp-cur').forEach(x => x.classList.remove('rp-hitk', 'rp-lzq', 'rp-cur')); root.querySelectorAll('.rp-toc .rp-tochit').forEach(a => a.classList.remove('rp-tochit'));
+    function unmark() {   // the marks and classes of the last search (kept in Q.all and Q.toc: no search of the whole page)
+      const P = new Set(); Q.all.forEach(m => { if (m.tagName === 'MARK') { if (m.parentNode) { P.add(m.parentNode); m.replaceWith(m.textContent); } } else m.classList.remove('rp-hitk', 'rp-lzq', 'rp-cur'); }); P.forEach(p => p.normalize());
+      Q.toc.forEach(a => a.classList.remove('rp-tochit')); Q.all = []; Q.toc = [];
     }
     function status() {
-      const n = Q.hits.length + Q.more, lz = Q.hits.filter(h => h.classList && h.classList.contains('rp-lzq')).length;
+      const n = Q.hits.length, lz = Q.hits.filter(h => h.classList && h.classList.contains('rp-lzq')).length;
       qBt.forEach(b => { b.hidden = !Q.w.length; b.disabled = !Q.hits.length; });
       qSt.className = 'rp-qs' + (Q.w.length && !n ? ' rp-qno' : '');
-      qSt.textContent = !Q.w.length ? '' : !n ? `No matches for “${Q.v.trim()}”` : (Q.cur >= 0 ? `${Q.cur + 1} of ${n.toLocaleString('en-US')}` : `${n.toLocaleString('en-US')} match${n === 1 ? '' : 'es'}`) + ` in ${Q.secs} section${Q.secs === 1 ? '' : 's'}`
-        + (lz ? ` (${lz.toLocaleString('en-US')} in unopened lists)` : '') + (Q.more ? ` (first ${MAXMARK.toLocaleString('en-US')} marked)` : '');
-      size();
+      qSt.textContent = !Q.w.length ? '' : !n ? `No matches for “${Q.v.trim()}”` : (Q.cur >= 0 ? `${Q.cur + 1} of ${n.toLocaleString('en-US')}` : `${Q.full ? 'More than ' + MAXMARK.toLocaleString('en-US') : n.toLocaleString('en-US')} match${n === 1 ? '' : 'es'}`) + ` in ${Q.secs} section${Q.secs === 1 ? '' : 's'}`
+        + (lz ? ` (${lz.toLocaleString('en-US')} in unopened lists)` : '') + (Q.full ? ` (first ${n.toLocaleString('en-US')} marked)` : '');
     }
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(size).observe(bar);   // the bar may wrap to another line with the status
     let qT = 0;
     qIn.addEventListener('input', e => { clearTimeout(qT); const v = e.target.value; qT = setTimeout(() => search(v), 150); });
     qIn.addEventListener('keydown', e => {
@@ -456,21 +458,22 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
       status();
     }
     function search(v) {
-      qT = 0; unmark(); Q.v = String(v || ''); Q.w = Q.v.toLowerCase().split(/\s+/).filter(Boolean); Q.hits = []; Q.cur = -1; Q.more = 0; Q.nMark = 0; Q.secs = 0;
+      qT = 0; unmark(); Q.v = String(v || ''); Q.w = Q.v.toLowerCase().split(/\s+/).filter(Boolean); Q.hits = []; Q.cur = -1; Q.seen = 0; Q.full = false; Q.secs = 0; let vis = 0;
       const w = Q.w, has = el => { const t = textOf(el); return w.every(x => t.includes(x)); };
       Q.re = w.length ? new RegExp(w.slice().sort((a, b) => b.length - a.length).map(x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'gi') : null;
       art.querySelectorAll('.rp-sec').forEach(sec => {
         const h1 = sec.querySelector('.rp-h1'), secHit = !w.length || has(h1); let any = false;
-        sec.querySelectorAll('.rp-sub').forEach(sub => { const hit = !w.length || secHit || has(sub); sub.classList.toggle('rp-hide', !hit); any = any || hit;
-          const a = root.querySelector(`.rp-toc [data-rpto="${sub.querySelector('.rp-h2').id}"]`); if (a) a.classList.toggle('rp-hide', !hit); });
+        sec.querySelectorAll('.rp-sub').forEach(sub => { const hit = !w.length || secHit || has(sub); sub.classList.toggle('rp-hide', !hit); any = any || hit; if (hit && w.length) vis++;
+          const a = TOC.get(sub.querySelector('.rp-h2').id); if (a) a.classList.toggle('rp-hide', !hit); });
         const show = !w.length || secHit || any; sec.classList.toggle('rp-hide', !show);
-        const a = root.querySelector(`.rp-toc [data-rpto="${h1.id}"]`); if (a) a.classList.toggle('rp-hide', !show);
+        const a = TOC.get(h1.id); if (a) a.classList.toggle('rp-hide', !show);
         if (w.length && show) { sec.classList.remove('rp-closed');
           const H = []; markIn(sec, H); if (!H.length) return; Q.hits.push(...H);
           const S = new Set(H.map(h => (h.nodeType === 1 ? h : h.parentNode).closest('.rp-sub') || sec)); Q.secs += S.size;
-          S.forEach(x => { const id = (x.querySelector(x === sec ? '.rp-h1' : '.rp-h2') || {}).id, l = id && root.querySelector(`.rp-toc [data-rpto="${id}"]`); if (l) l.classList.add('rp-tochit'); });
-          if (a) a.classList.add('rp-tochit'); }
+          S.forEach(x => { const id = (x.querySelector(x === sec ? '.rp-h1' : '.rp-h2') || {}).id, l = id && TOC.get(id); if (l) { l.classList.add('rp-tochit'); Q.toc.push(l); } });
+          if (a) { a.classList.add('rp-tochit'); Q.toc.push(a); } }
       });
+      if (Q.full) Q.secs = vis;   // the walk stopped early: the subsections shown
       status();
     }
     if (opt.spy) {   // scroll-spy: the last nav entry whose target is above the top of the reading area
