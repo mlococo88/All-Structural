@@ -47,7 +47,22 @@
   /* ---------- input tab ---------- */
   const PL_F = [['nl', 'lines'], ['g', 'g'], ['g0', 'g₀'], ['nr', 'rows'], ['s', 's'], ['ef', 'e_f'], ['ep', 'e_p'], ['bo', 'b_o'], ['to', 't_o'], ['bi', 'b_i'], ['ti', 't_i']];
   const WB_F = [['h', 'h'], ['t', 't'], ['nr', 'rows'], ['sv', 's_v'], ['nc', 'cols'], ['sh', 's_h'], ['ew', 'e_w'], ['ewp', 'e_wp']];
-  function inputs(P, h) {
+  /* SPADD (2026-11-09): "+ Add splice station" on the entered-plates table. The girder of the Girders tab (ui.g); its stations without an entry
+     (an entry at x for this girder or for every girder, as engine/splices.js inputsAt finds it). A new row is the stored format of "Keep these
+     plates" ({ x, g, top, bot, web }), prefilled with that station's plates from, in order: the last Field splices run of this girder that
+     auto-designed it (AD, kept for the page view only: switching to "Entered below" re-runs the tab without the auto-design); the last run of
+     this girder (the plates it used); GirderDetail's built-in plates (engine/splices.js DEF). Input only: the engine is not run here and a
+     station without an entry is calculated as before. */
+  const AD = new WeakMap();   // girder object → Map(x → p): the auto-designed plates of its last runs (calc)
+  const near = (m, x) => { for (const [k, v] of m) if (Math.abs(k - x) < 1e-6) return v; return null; };
+  const girderOf = (P, ui) => Math.max(0, Math.min(+((ui || {}).g) || 0, P.girders.length - 1));
+  const hasRow = (Q, x, gi) => (Q.plates || []).some(z => z && Math.abs(+z.x - x) < 1e-6 && (z.g == null || +z.g === gi));
+  function platesAt(P, gi, x) {
+    const ad = AD.get(P.girders[gi]), q = S.R && S.R.girder === P.girders[gi] && (S.R.list || []).find(s => s && s.p && Math.abs(+s.x - x) < 1e-6);
+    const src = (ad && near(ad, x)) || (q && q.p) || SP().DEF;
+    return { top: { ...src.top }, bot: { ...src.bot }, web: { ...src.web } };
+  }
+  function inputs(P, h, ui) {
     ensure(P); const Q = P.splices, gr = Object.keys(window.SBDModel.GRADES).map(k => [k, k]);
     const yn = [['incl', 'Included'], ['excl', 'Neglected']];
     let s = h.card('Field splice stations (every girder)', `<div class="fRow"><label for="i_splx">Stations</label><input type="text" id="i_splx" data-kind="splx" value="${esc(((P.framing || {}).splices || []).join(', '))}" style="width:200px"><span class="unit">from the left end (also on the Framing &amp; bracing tab)</span></div>
@@ -65,10 +80,12 @@
         ${h.num('splices.clr.cw', 'Inner plate clearance to the web plate', 'in')}${h.num('splices.clr.cv', 'Web plate clearance to each flange', 'in')}`);
     if (Q.auto === false) {
       const rows = (Q.plates || []).map((q, i) => `<tr><td>${fmt(+q.x, 2)}${q.g != null ? `, G${+q.g + 1}` : ''}</td>${['top', 'bot'].map(k => PL_F.map(([f]) => `<td><input type="number" step="any" data-path="splices.plates.${i}.${k}.${f}" value="${esc((q[k] || {})[f])}"></td>`).join('')
-        + `<td><select data-path="splices.plates.${i}.${k}.inner" data-kind="sel"><option value="true"${(q[k] || {}).inner ? ' selected' : ''}>yes</option><option value="false"${(q[k] || {}).inner ? '' : ' selected'}>no</option></select></td>`).join('')}${WB_F.map(([f]) => `<td><input type="number" step="any" data-path="splices.plates.${i}.web.${f}" value="${esc((q.web || {})[f])}"></td>`).join('')}<td><button type="button" data-spldel="${i}">×</button></td></tr>`).join('');
-      s += h.card('Entered plates and bolts (per station)', `<p class="note">Use "Keep these plates" on the Field splices output tab to copy a design here, then edit it. A station without an entry is auto-designed. Inches; lines and rows each side of the web / joint.</p>
+        + `<td><select data-path="splices.plates.${i}.${k}.inner" data-kind="sel"><option value="true"${(q[k] || {}).inner ? ' selected' : ''}>yes</option><option value="false"${(q[k] || {}).inner ? '' : ' selected'}>no</option></select></td>`).join('')}${WB_F.map(([f]) => `<td><input type="number" step="any" data-path="splices.plates.${i}.web.${f}" value="${esc((q.web || {})[f])}"></td>`).join('')}<td><button type="button" data-spldel="${i}" title="Remove this row" aria-label="Remove the row at ${fmt(+q.x, 2)} ft">×</button></td></tr>`).join('');
+      const gi = girderOf(P, ui), gl = P.girders[gi], xs = ((P.framing || {}).splices || []).map(Number).filter(v => isFinite(v)), free = xs.map((x, k) => ({ x, k })).filter(o => !hasRow(Q, o.x, gi));   // SPADD
+      const add = `<div class="fRow"><label for="i_spladd">Add a row for ${esc(gl.label || gl.id)}</label><select id="i_spladd" style="width:auto;min-width:160px"${free.length ? '' : ' disabled'}>${free.length ? free.map(o => `<option value="${o.x}">FS${o.k + 1} at ${fmt(o.x, 2)} ft</option>`).join('') : `<option value="">${xs.length ? 'Every station has an entry' : 'No field splice stations'}</option>`}</select><button type="button" data-spladd${free.length ? '' : ' disabled'}>+ Add splice station</button></div>`;
+      s += h.card('Entered plates and bolts (per station)', `<p class="note">"+ Add splice station" adds a row for the girder chosen on the Girders tab, prefilled with that station's plates from the Field splices tab: its auto-design when the tab last auto-designed it (this page view), else the plates of the tab's last run, else GirderDetail's built-in plates; or use "Keep these plates" on the Field splices output tab to copy a design here. Then edit it; × removes a row. A station without an entry is auto-designed. Inches; lines and rows each side of the web / joint.</p>
         <div class="tscroll"><table class="tbl"><thead><tr><th rowspan="2">x (ft)</th><th colspan="12">Top flange</th><th colspan="12">Bottom flange</th><th colspan="8">Web (each of 2 plates)</th><th rowspan="2"></th></tr>
-        <tr>${[0, 1].map(() => PL_F.map(([, l]) => `<th>${tt(l)}</th>`).join('') + '<th>inner</th>').join('')}${WB_F.map(([, l]) => `<th>${tt(l)}</th>`).join('')}</tr></thead><tbody>${rows || '<tr><td colspan="34">None entered.</td></tr>'}</tbody></table></div>`);
+        <tr>${[0, 1].map(() => PL_F.map(([, l]) => `<th>${tt(l)}</th>`).join('') + '<th>inner</th>').join('')}${WB_F.map(([, l]) => `<th>${tt(l)}</th>`).join('')}</tr></thead><tbody>${rows || '<tr><td colspan="34">None entered.</td></tr>'}</tbody></table></div>${add}`);
     }
     return s;
   }
@@ -76,10 +93,14 @@
     if (el.dataset.kind !== 'splx') return false;
     ensure(P); if (!P.framing) P.framing = window.SBDModel.defaultFraming(); P.framing.splices = el.value.split(/[,;\s]+/).map(Number).filter(v => isFinite(v) && v > 0).sort((a, b) => a - b); return true;
   }
-  function onClick(e, P) {
+  function onClick(e, P, ui) {
     const go = e.target.closest && e.target.closest('[data-splgo]');   // SPGAM: a link from the load factors to where each is set (no input change)
     if (go) { e.preventDefault(); const [k, v, fld] = go.dataset.splgo.split(':'), b = document.querySelector(k === 'out' ? `#tabBar [data-otab="${v}"]` : `#inTabs [data-itab="${v}"]`); if (b) b.click();
       const f = fld ? document.querySelector(`#inPanes [data-path="${fld}"]`) : null; if (f) { f.scrollIntoView({ block: 'center' }); f.focus(); } return false; }
+    const a = e.target.closest && e.target.closest('[data-spladd]');   // SPADD
+    if (a) { const sl = document.getElementById('i_spladd'), x = sl && sl.value !== '' ? +sl.value : NaN; if (!isFinite(x)) return false;
+      ensure(P); const Q = P.splices, gi = girderOf(P, ui); if (hasRow(Q, x, gi)) return false;
+      Q.plates = Q.plates || []; Q.plates.push({ x, g: gi, ...platesAt(P, gi, x) }); return true; }
     const d = e.target.closest && e.target.closest('[data-spldel]'); if (!d) return false;
     ensure(P); P.splices.plates.splice(+d.dataset.spldel, 1); return true;
   }
@@ -125,7 +146,8 @@
   }
   function calc(ctx) {
     S.err = ''; S.R = null;
-    try { const R = build(ctx); if (R.err) S.err = R.err; else { S.R = R; S.sel = Math.min(S.sel, Math.max(0, R.list.length - 1)); } }
+    try { const R = build(ctx); if (R.err) S.err = R.err; else { S.R = R; S.sel = Math.min(S.sel, Math.max(0, R.list.length - 1));
+      if (R.girder) { const m = AD.get(R.girder) || new Map(); R.list.forEach(q => { if (q.design && q.p) m.set(+q.x, q.p); }); AD.set(R.girder, m); } } }   // SPADD: remember the auto-designed plates (display state only)
     catch (e) { S.err = 'Calculation error: ' + (e && e.message); }
     S.key = key(ctx);
   }

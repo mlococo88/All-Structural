@@ -179,7 +179,7 @@
   }
   function render(host, ctx) {
     css();
-    const stale = !S.R || S.key !== key(ctx), opt = (v, t, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${t}</option>`;
+    const stale = (!S.R && !S.err) || S.key !== key(ctx), opt = (v, t, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${t}</option>`;   // SPERR2: a run that ended in an error is current (its message shows), not out of date
     const AUI = window.SBDAnalysisUI, gl = ctx.P.girders[ctx.g] || ctx.P.girders[0] || {}, src = srcOf(ctx);
     let h = (AUI && AUI.srcBar ? AUI.srcBar({ src, auto: !S.src && !(window.SBDCustomDemands && window.SBDCustomDemands.srcGet(ctx.P, 'shear')), rd: rdOf(ctx), g: gl.label || gl.id, plName: S.plName, example: 'GirderDetail built-in shears' }) : '')
       + `<section class="sec"><div class="secHead">Shear &amp; stiffeners: demands</div><div class="secBody">
