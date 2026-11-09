@@ -4587,3 +4587,4 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
     - `tests/check-syntax.mjs` passes;
     - engine tests `deflection-tab`, `report`, `report-wiring`, `sb-summary`, `steps-groups-tabs`, `paths`, `equal-spacing` pass;
     - smoke tests `steel-bridge-deflection`, `-report`, `-summary`, `phone-layout`, `-wiring`, `-drawings`, `-paths`, `-scroll --quick` pass, with 0 console errors.
+  - After merging #1277 (full width, splitter): `steel-bridge-deflection`, `phone-layout` and `steel-bridge-splitter` pass again.
