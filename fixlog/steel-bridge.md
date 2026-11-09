@@ -4507,7 +4507,7 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
 - **Other copies:** none.
 - **Open items:** other folder tools, and single-file tools that load `shared/*.js`, could get the same loader (follow-up).
 
-## 2026-11-09 — PR: sbqa-form-layout (PR #TBD) — form rows: long labels wrap in their own column, drop-downs show their choice (QAF; display only)
+## 2026-11-09 — PR: sbqa-form-layout (PR #1278: https://github.com/mlococo88/All-Structural/pull/1278) — form rows: long labels wrap in their own column, drop-downs show their choice (QAF; display only)
 - **Problem (visual QA pass, engineer request 2026-11-09):** in `.fRow` form rows (every input tab and the option rows at the top of the
   output tabs) the label kept its full one-line width, so a label longer than about 200 px pushed its input or its unit onto a line of its
   own (Cross-section: "ft" under "Left overhang (girder ℄ to deck edge)", "in" under the deck rebar centroid inputs; 30 rows over the input
