@@ -4338,7 +4338,7 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
 - **How verified:** `tests/engine/sb-summary.test.mjs` (default project and a skewed three-span two-girder project: every cell `Object.is` the module's own value from each tab's `build()`); `tests/smoke/steel-bridge-summary.mjs` (links, cache, re-run, the Report link, old `ui.otab`, 390 px, 0 console errors); `node tests/check-syntax.mjs`; smoke `steel-bridge-*`, `phone-layout`, `project-library`.
 - **Other copies:** none.
 
-## 2026-11-09 — PR: report-search-ux (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — list-input observer skips the report viewer (RSX; display only)
+## 2026-11-09 — PR: report-search-ux (PR #1273: https://github.com/mlococo88/All-Structural/pull/1273) — list-input observer skips the report viewer (RSX; display only)
 - **Where:** `ui/lists.js`, `start()`, anchor `new MutationObserver(ms =>`.
   - Before: `new MutationObserver(ms => { if (ms.some(m => m.addedNodes.length)) upgrade(document); }).observe(document.body, { childList: true, subtree: true });`
   - After: `new MutationObserver(ms => { if (ms.some(m => m.addedNodes.length && !(m.target.closest && m.target.closest('.rp')))) upgrade(document); }).observe(document.body, { childList: true, subtree: true });`

@@ -282,7 +282,7 @@ Loaded by: `apps/steel-bridge/index.html` (Report tab, `ui/report.js`). Tests: `
   Spread Footing `p0.Lftg` (359 chars, ψ factors of the dowel development length); Stone Masonry Arch (13 notes over 300 chars, already written with
   inline "•" separators); BasePlateAnchorDesigner "where …" lists (8 over 300 chars, made from the tab's own lists); Steel Bridge `fx.a6.ok` (277 chars).
 
-## 2026-11-09 — PR: report-search-ux (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Report search: count, marks, step through hits, lazy items searched (RSX; display only)
+## 2026-11-09 — PR: report-search-ux (PR #1273: https://github.com/mlococo88/All-Structural/pull/1273) — Report search: count, marks, step through hits, lazy items searched (RSX; display only)
 - **Engineer request (2026-11-09):** "The report searches are not easy to use. I type in a term and it's not clear if any results are found."
 - **Problem (before):** `mount()`'s `search(v)` only hid the subsections / sections (and their contents entries) whose `textContent` did not
   contain every typed word. No count, no "no matches" message, no highlighting, no scroll to a hit. And it **missed real hits**: a lazy item
