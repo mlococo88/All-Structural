@@ -683,6 +683,7 @@ var st=document.createElement('style'); st.textContent=css;
         <span class="refhint">The simplified constants permitted for preliminary design. The steps below always carry the real
           K<sub>g</sub> computed from the section, so the two are worth comparing rather than substituting.</span>
       </div>
+      <div id="llBasis" class="llNL lx-note" style="margin:6px 0 10px"></div><!-- LLASM (2026-11-10): basis of the factors, filled by run() -->
       <div id="steps"></div>
     </div>
 
@@ -1787,6 +1788,50 @@ const V=(s,d,v,u)=>({s,d,v:String(v),u:u||""}); // variable definition: symbol, 
 function llNL(lead,items,o){ o=o||{}; const L=o.ol?"ol":"ul", X=o.x||[];
   const li=(items||[]).map((x,i)=>x?'<li'+(X.indexOf(i)>=0?' class="llNLx"':'')+'>'+(Array.isArray(x)?'<b class="llNLk">'+x[0]+'</b> '+x[1]:x)+'</li>':'').join("");
   return (o.act||[]).filter(Boolean).map(a=>'<div class="llNLa">'+a+'</div>').join("")+(lead?'<div class="llNLl">'+lead+'</div>':"")+(li?'<'+L+' class="llNLu">'+li+'</'+L+'>':""); }
+/* LLASM (2026-11-10, CLAUDE.md §6, engineer's rule 2026-11-10): the basis and assumptions this tool applies, stated as notes where
+   they apply: the Spans & skew card, the girder section (n), the LL worked steps tab, and the matching Report sections (§1, §3, §4).
+   Each note says what the code does (shared/lldf.js memberDF / skewFactors, readInputs, nFromFc, govRegions). Text only: nothing
+   here is used in a calculation. Each function returns [lead, items] for llNL; LLASM.rep() gives the Report lines. */
+const LLASM={
+  skew:()=>["Skew (AASHTO LRFD 10th Ed. Art. 4.6.2.2.2e, 4.6.2.2.3c)",[
+    ["Sign:","ignored: |θ| and |θ<sub>V</sub>| are used (Tables 4.6.2.2.2e-1 and 4.6.2.2.3c-1 do not depend on it); a saved project keeps the value as entered."],
+    ["Moment and shear:","θ is used for the moment reduction, θ<sub>V</sub> for the shear correction; θ<sub>V</sub> left blank takes θ."],
+    ["One skew for every region:","the θ and θ<sub>V</sub> entered are used for the region shown and for every span and pier region in the DF hand-off. The per-span rule of Art. 4.6.2.2.2e (no moment reduction in a span whose two support lines differ by more than 10°, nor in a pier region where either adjacent span's do) is not applied automatically: enter θ = 0 for such a region. Where the support skews differ, θ<sub>V</sub> = the largest |θ| gives the obtuse-corner shear."],
+    ["Bridge Geometry hand-off:","sets θ = the smallest support |θ| (0 where adjacent supports differ by more than 10°) and θ<sub>V</sub> = the largest, for the whole bridge."],
+    ["Above 60°:","θ is taken as 60° for both the moment reduction and the shear correction (the limit of the tables; a note is shown)."],
+    ["Cast-in-place slab:","no skew factor is applied (Eq. 4.6.2.3-3 is not used; it is not greater than 1.0)."]]],
+  region:()=>["Continuous spans (Table C4.6.2.2.1-2)",[
+    ["Design span length L:","a span region (positive moment and shear) uses that span; a pier region (negative moment) uses the average of the two adjacent spans."],
+    ["Same section in every region:","the n, I, A and e<sub>g</sub> entered (so K<sub>g</sub>), the skew and the layout are used for every region; there is no separate negative-moment section."],
+    ["Results:","shown for the region selected; the DF hand-off sends the envelope of the span regions and, separately, of the pier regions."]]],
+  n:()=>["Modular ratio n = E<sub>B</sub>/E<sub>D</sub> (AASHTO LRFD 10th Ed. Eq. 4.6.2.2.1-2)",[
+    ["Concrete girder:","n = E<sub>c,girder</sub>/E<sub>c,deck</sub> from the two f′c, E<sub>c</sub> by Eq. 5.4.2.4-1 with K<sub>1</sub> = 1 and w<sub>c</sub> by Table 3.5.1-1, rounded to two decimals; set when a library section is picked or an f′c is edited. With an f′c blank, a library pick sets n = 1."],
+    ["Steel girder:","a library pick sets n = 8; the f′c are not used."],
+    ["n used:","K<sub>g</sub> = n(I + A·e<sub>g</sub><sup>2</sup>) uses the n shown. A typed n is kept (a note compares it with the f′c value); a section sent by a design app under its lock keeps the sent n; a project saved without f′c keeps its own n."]]],
+  ll:p=>{ const t=p.type, beam=BEAM_SLAB.has(t), it=[];
+    if(beam){
+      it.push(["Exterior girder, rigid cross-section:","the factor is not less than the rigid cross-section value (Art. 4.6.2.2.2d, Eq. C4.6.2.2.2d-1) for every exterior girder: moment and shear with two or more lanes, and fatigue with one lane. It is applied whether or not cross-frames or diaphragms are present (conservative where there are none)."]);
+      it.push(["d<sub>e</sub>:","below −1.0 ft it is taken as −1.0 ft; above 5.5 ft the actual d<sub>e</sub> is used (the e-factor is extrapolated, Table 4.6.2.2.2d-1; a note is shown)."]);
+      if(p.Nb===3) it.push(["N<sub>b</sub> = 3:","interior girder: moment the lesser of the equation and the lever rule, shear by the lever rule; exterior girder, two or more lanes: moment the lesser of e·g<sub>M,2</sub> (e times the interior equation) and the lever rule, shear by the lever rule (Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1, 4.6.2.2.3a-1, 4.6.2.2.3b-1)."]);
+    } else if(t==="bc"){
+      it.push(["d<sub>e</sub>:","below 0 it is taken as 0; above 4.5 ft the actual d<sub>e</sub> is used (the e-factors are extrapolated, Tables 4.6.2.2.2d-1 and 4.6.2.2.3b-1; a note is shown)."]);
+    } else if(BOX.has(t)){
+      it.push(["d<sub>e</sub>:","the actual d<sub>e</sub> is used; above 2.0 ft the e-factors are extrapolated (Tables 4.6.2.2.2d-1 and 4.6.2.2.3b-1; a note is shown)."]);
+    } else if(t==="d"){
+      it.push(["Exterior web, moment:","g = W<sub>e</sub>/14 with the skew reduction, for one and for two or more lanes (Table 4.6.2.2.2d-1)."]);
+      it.push(["d<sub>e</sub> (exterior web shear):","below −2.0 ft it is taken as −2.0 ft; above 5.0 ft the actual d<sub>e</sub> is used (Table 4.6.2.2.3b-1; a note is shown)."]);
+    } else if(t==="slab"){
+      it.push(["Strip width:","W = the physical edge-to-edge width of the bridge in W<sub>1</sub> and 12W/N<sub>L</sub>; N<sub>L</sub> from the clear roadway (Art. 4.6.2.3, Eqs. 4.6.2.3-1 and 4.6.2.3-2; Art. 3.6.1.1.1)."]);
+      it.push(["Skew:","the skew factor of Eq. 4.6.2.3-3 is not applied (it is not greater than 1.0, so leaving it out is conservative)."]);
+      it.push(["Units:","the factors are per 1-ft strip; the DF hand-off marks them as per-foot strip factors."]);
+    }
+    if(beam||t==="bc") it.push(["Lever rule, two or more lanes:","the governing of 2 to N<sub>L</sub> trucks, each with its multiple presence factor (Table 3.6.1.1.2-1), at the truck gaps entered (not less than 4 ft); used where S > "+(t==="bc"?"18":"16")+" ft"+(beam?" and for N<sub>b</sub> = 3":"")+"."]);
+    it.push(["Fatigue:","one lane loaded with the multiple presence factor 1.2 removed (÷ 1.2; Art. 3.6.1.4.3b, C3.6.1.1.2)"+(t==="d"?", the exterior webs' W<sub>e</sub>/14 included":"")+"."]);
+    return ["Basis of the live-load distribution factors (AASHTO LRFD 10th Ed. Art. 4.6.2.2"+(t==="slab"?", 4.6.2.3":"")+")",it]; },
+  /* the Report lines of a [lead, items] note: the lead, then "• lead words text" (as nlItems gives an llNL note) */
+  rep:n=>{ const s=x=>String(x).replace(/<sub>(.*?)<\/sub>/g,"_$1").replace(/<sup>(.*?)<\/sup>/g,"^$1").replace(/<[^>]*>/g,"");
+    return [{type:"note",text:s(n[0])}].concat(n[1].map(x=>({type:"note",text:"• "+s(Array.isArray(x)?x[0]+" "+x[1]:x)}))); }
+};
 
 /* The calculation engine (multiplePresence … memberDF, inputErrors, computeBridge) lives in shared/lldf.js (window.SharedLLDF,
    loaded above), moved there unchanged on 2026-10-29 (fixlog/lldf.md, fixlog/shared-lldf.md). The names stay global here, so the
@@ -2361,7 +2406,7 @@ let selectedMember=0;
 let truckShown="gov";   // "gov" or a truck count — controls Figure 2
 function showInputErrors(errs){
   $("summaryTable").innerHTML=`<tbody><tr><td style="color:var(--governs);font-weight:600;text-align:left;white-space:normal">Cannot compute the distribution factors — fix ${errs.length>1?"these inputs":"this input"}:<br>${errs.join("<br>")}</td></tr></tbody>`;
-  $("steps").innerHTML=""; $("leverSection").style.display="none"; $("applSection").style.display="none";
+  $("steps").innerHTML=""; $("llBasis").innerHTML=""; $("leverSection").style.display="none"; $("applSection").style.display="none";
   renderNotes(errs.map(m=>({msg:"Input error: "+m,level:"warn"})));
 }
 function run(){
@@ -2383,6 +2428,7 @@ function run(){
   renderLever(p,geo,md,la);
   renderApplicability(p,geo,Kg);
   renderNotes(warnings);
+  $("llBasis").innerHTML=llNL.apply(null,LLASM.ll(p));   // LLASM (2026-11-10): text only
   drawCrossSection(p,geo,md);
   drawLever(p,geo,md,la);
   if(window.lldfReportRefresh) window.lldfReportRefresh();   // LLRP
@@ -4120,7 +4166,7 @@ window.addEventListener('load',function(){
       ["Deck slab:",`<b>DC1 shown here = deck slab by tributary area only</b> (t<sub>s</sub>=${p.ts}″ × ${f3(concUW())} kcf) <i>plus</i> any DC1-category loads you add.`],
       ["Beam self-weight:",`<b>excluded</b> — the girder carries its own weight directly in the design app (PS-Beam), so including it here would double-count on handoff (for reference, this section would add ${f3(D.selfWt)} klf per beam at A = ${f2(p.A||0)} in² × ${D.steel?'0.490':'0.150'} kcf).`],
       ["Not auto-included:","diaphragms/haunch/soffit — add them as DC1 rows if required."],
-      ["Adjacent box/deck:","(§3.8.2) modifications are pending the rest of that manual page."],
+      ["Adjacent box/deck:","the further MassDOT §3.8.2 modifications are not applied: these loads are distributed by the methods above, with the beam classes of Fig. 3.8.1-1."],
       ["Worked steps:","step-by-step arithmetic for every load is in <b>§4D Dead Load Distribution</b> below."]],{x:[7]});
   }
   /* ===== 4D · dead-load distribution — step-by-step calculations ===== */
@@ -4567,6 +4613,8 @@ function model(){
     if(useLever) kv.push(["Gaps between adjacent trucks (wheel line to wheel line, ≥ 4 ft)",(p.truckGaps||[]).slice(0,Math.max(1,geo.NL-1)).map(function(g){ return N(Math.max(4,+g||4),1); }).join(", ")+" ft"]);
     if(p.fcGirder||p.fcDeck) kv.push(["f′c girder / deck",(p.fcGirder?N(p.fcGirder,1):"—")+" / "+(p.fcDeck?N(p.fcDeck,1):"—")+" ksi"]);
     var in1=[{type:"kv",rows:kv},{type:"note",text:"As entered in the [[tab:inputs|input panel]]. Every input, tab by tab, follows (1.2 on)."}];
+    in1.push.apply(in1,LLASM.rep(LLASM.skew()));   // LLASM (2026-11-10): the skew basis (Bridge tab, Spans & skew card)
+    if(p.spans.length>1) in1.push.apply(in1,LLASM.rep(LLASM.region()));   // LLASM: the continuous-span basis
     var spn=""; try{ spn=activeProjectName(); }catch(e){}
     if(spn) in1.push({type:"note",text:"Suite project: "+plain(spn)});
     var gsl=el("geomSrcLine"); if(gsl&&gsl.style.display!=="none"&&gsl.textContent.trim()) in1.push({type:"note",text:plain(ctlText(gsl))});   // hand-off source (HANDOFF.md §3.4)
@@ -4602,7 +4650,7 @@ function model(){
       wk.add({id:"Kg",label:"Longitudinal stiffness parameter",sym:"K_{g}",eq:"n(I + Ae_{g}^{2})",sub:N(p.n,3)+"("+SharedSteps.g(p.I,0)+" + "+N(p.A,2)+"("+N(p.eg,3)+")^{2})",value:Kg,unit:"in^{4}",d:0,ref:ED+" Eq. 4.6.2.2.1-1"});
       var ws=SharedSteps.work("");
       SS.skew(ws,{simple:false,L:p.L,ts:p.ts,geoSavg:geo.Savg,pier:false},skB,Kg);
-      subs.push({title:"Longitudinal stiffness parameter K_g",items:[one("kg",wk.steps,"Stiffness parameter",ED+" Eq. 4.6.2.2.1-1")]});
+      subs.push({title:"Longitudinal stiffness parameter K_g",items:[one("kg",wk.steps,"Stiffness parameter",ED+" Eq. 4.6.2.2.1-1")].concat(LLASM.rep(LLASM.n()))});   // LLASM (2026-11-10): the n basis (Girders tab)
       subs.push({title:"Skew factors",items:[one("sk",ws.steps,"Skew reduction and correction",ED+" Tables 4.6.2.2.2e-1, 4.6.2.2.3c-1"),
         {type:"note",text:"These factors multiply every girder's moment and shear factors (§4)."+(p.skewV!=null?" Separate skews: θ for the moment reduction, θ_V for the shear correction.":"")}]});
     }
@@ -4639,6 +4687,7 @@ function model(){
       truckShown=saveTS;
       if(figL){ var ms=R.members[Math.max(0,Math.min(selectedMember,p.Nb-1))]; drawLever(p,geo,ms,useLever?leverAll(p,geo,ms.j):null); }
     }
+    subs4.push({title:"Basis of the factors",items:LLASM.rep(LLASM.ll(p)).concat([{type:"note",text:"On the sheet: [[tab:steps|LL worked steps tab]]."}])});   // LLASM (2026-11-10): as on the LL worked steps tab (text only)
     secs.push({title:"Live-load distribution factors"+(slab?" (equivalent strip)":""),subs:subs4});
   }
   /* ---------- 5. Dead and pedestrian loads ---------- */
@@ -5181,10 +5230,13 @@ var projCard=c;
 c=card(P.project,"Shared project info and hand-offs"); move($("lxProjXfer"),c);
 c=card(P.bridge,"Cross-section type"); move($("bridgeType").closest(".typerow"),c); move(given.querySelector(":scope > .tblctl"),c);
 c=card(P.bridge,"Spans & skew"); [row("nSpans"),$("spanRows"),$("regionRow"),row("skew"),row("skewV")].forEach(function(n){ move(n,c); });
+c.appendChild(mk("div","lx-note llNL",llNL.apply(null,LLASM.skew())));   // LLASM (2026-11-10): the skew and span basis, stated (text only)
+c.appendChild(mk("div","lx-note llNL",llNL.apply(null,LLASM.region())));
 c=card(P.bridge,"Deck & overhangs"); move(row("ts"),c); move(grpWrap("OL"),c);
 c=card(P.girders,"Beam layout"); move(given.querySelector(":scope > .beamtable"),c);
 c=card(P.girders,"Girder section"); [row("stdSection"),row("depth"),row("beamShape")].forEach(function(n){ move(n,c); });
 c=card(P.girders,null); move($("sectRow"),c); move($("boxRow"),c);
+$("sectRow").appendChild(mk("div","lx-note llNL",llNL.apply(null,LLASM.n())));   // LLASM (2026-11-10): the n basis, inside #sectRow so it shows with the n row (beam-slab types)
 c=card(P.roadway,null); move(grpWrap("curbL"),c);
 c=card(P.roadway,"Sidewalks"); move(row("swIncL"),c); move(row("swIncR"),c);
 c=card(P.roadway,"Design lanes");
