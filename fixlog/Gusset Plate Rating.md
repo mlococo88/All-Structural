@@ -3506,7 +3506,7 @@ Engineer's decision 2026-11-10. This closes the open item of the GPASM entry (#1
   11. Compression alternatives new in the 4th Ed.: basic corner check (6A.6.12.6.7b, φ_bcc = 1.00) and truncated Whitmore (C6A.6.12.6.7); optional, not in the tool.
 - **Other copies:** none.
 
-## 2026-11-10 — PR: claude/gpr-mbe4-phi (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (G4A) — MBE 4th Edition (2026) resistance factors φ_c (Whitmore compression) 0.95 and φ_bs (block shear) 1.00; system factor φ_s = 0.90 for new projects   [§4 calculation change; engineer decisions 2026-11-10, items 1–3]
+## 2026-11-10 — PR: claude/gpr-mbe4-phi (PR #1353: https://github.com/mlococo88/All-Structural/pull/1353) (G4A) — MBE 4th Edition (2026) resistance factors φ_c (Whitmore compression) 0.95 and φ_bs (block shear) 1.00; system factor φ_s = 0.90 for new projects   [§4 calculation change; engineer decisions 2026-11-10, items 1–3]
 
 Part (a) of three (b: rivet and bolt shear, A325 F_ub; c: DL/LL resistance reduction and the slip check). Open items 1–3 of the citation pass #1344.
 - **Governing provisions (AASHTO MBE 4th Ed., 2026):**
