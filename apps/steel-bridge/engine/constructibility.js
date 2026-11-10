@@ -96,9 +96,17 @@
       else if (ok) { const sS = SEC().steelCore(plates(up ? { ...r, topB: b, topT: t } : { ...r, botB: b, botT: t })), fS = -fAt(r.Mc, sS, up ? sS.d : 0), DcS = Math.max(up ? sS.d - t - sS.yb : sS.yb - t, 1e-6), rtS = b / Math.sqrt(12 * (1 + DcS * r.tw / (3 * b * t)));
         const gR = nC.A, gA = gR && typeof gR === 'object' && gR.m === 'A' && +gR.ge > 0 ? gR : null;   // App. D6.6.2 Method A
         const gv = gsGovC(nC.G, r, up ? 'Ct' : 'Cb', { G, mat });   // NPG: the governing section (R_b = 1.0: the largest deck-placement f_bu in L_b)
-        const K = +nC.k > 0 ? Math.max(1, +nC.k) : 1, FeS = Math.PI ** 2 * ES / (LbiC / rtS) ** 2, fbu = Math.max(gv ? gv.f : r.conC.f, 0), ge = gA ? +gA.ge : fS > 0 ? FeS / (K * fS) : null, Fe = ge != null && fbu > 0 ? ge * fbu : FeS, rtE = LbiC / Math.PI * Math.sqrt(Fe / ES);
+        // SBGE (engineer decision 2026-11-10; AASHTO LRFD 10th Ed. 6.10.8.2.3c, C6.10.8.2.3c, App. D6.6): γ_e of the conservative bound passed directly
+        // from bracingC (nC.gB = min over the sections j of the L_b of F_e,j/f_max,j, from the factored moments this check uses), no longer rebuilt here
+        // as F_e,s/(K f_s). Was: K = f_max/f_x at the nearest station, K = 1 where f_x ≤ 0 (blank k), i.e. γ_e = F_e,s/f_s (unconservative near an
+        // inflection). A row without nC.gB (a hand-made row): K as given where k ≥ 1 and f_s > 0; otherwise (f_x ≤ 0 / k blank, or f_s ≤ 0) f_max is taken
+        // as the larger of f_bu,gov and f_s, the largest stress known in the L_b (conservative). No compression at all: F_e,s.
+        const gB = !gA && nC.gB && typeof nC.gB === 'object' && +nC.gB.ge > 0 ? nC.gB : null;
+        const K = +nC.k > 0 ? Math.max(1, +nC.k) : null, FeS = Math.PI ** 2 * ES / (LbiC / rtS) ** 2, fbu = Math.max(gv ? gv.f : r.conC.f, 0), fmx = Math.max(fbu, fS);
+        const gm = gA ? 'A' : gB ? 'bound' : K && fS > 0 ? 'K' : fmx > 0 ? 'fmax' : 'none';
+        const ge = gm === 'A' ? +gA.ge : gm === 'bound' ? +gB.ge : gm === 'K' ? FeS / (K * fS) : gm === 'fmax' ? FeS / fmx : null, Fe = ge != null && fbu > 0 ? ge * fbu : FeS, rtE = LbiC / Math.PI * Math.sqrt(Fe / ES);
         const m = LTB({ bfc: r.conC.b, tfc: r.conC.t, Dc: Math.max(r.DcC, 1e-6), tw: r.tw, Lb: LbiC, Cb: 1, Rb: 1, Rh: gv ? gv.Rh : r.RhC, Fyc: r.conC.Fy, Fyw, rt: rtE }); r.CbCu = 1;
-        r.ltC = { ...r.ltC, rt: m.rt, Lp: m.Lp, Lr: m.Lr, Fcr: m.Fcr, LTB: m.LTB, Fnc: Math.min(r.ltC.FLB, m.LTB), npr: { kind: 'ge', b, t, K, fS, rtS, FeS, ge, fbu, gv, Fe, rtE, Ir: +nC.Ir || null, A: gA, bw: gR && typeof gR === 'object' && gR.m === 'bound' ? String(gR.why || '') : null } }; } }
+        r.ltC = { ...r.ltC, rt: m.rt, Lp: m.Lp, Lr: m.Lr, Fcr: m.Fcr, LTB: m.LTB, Fnc: Math.min(r.ltC.FLB, m.LTB), npr: { kind: 'ge', b, t, K, fS, rtS, FeS, ge, gm, gB, fmx, fbu, gv, Fe, rtE, Ir: +nC.Ir || null, A: gA, bw: gR && typeof gR === 'object' && gR.m === 'bound' ? String(gR.why || '') : null } }; } }
     r.amC = FX().ampFl(r.flC, r.conC.f, r.conC.Fy, r.ltC.Lp, r.LbC * 12, r.CbCu, 1, r.ltC.Fcr); r.webC = FX().fcrw(r.D, r.tw, Math.max(r.DcC, 1e-6), r.RhC, r.conC.Fy, Fyw);
     r.VuC = G.cdc * r.VDC1 + G.ccl * r.VCL;
     r.flgA = r.botB * r.botT + r.topB * r.topT; r.sh = SH().webShear(r.D, r.tw, Fyw, r.do, r.flgA, r.end);
@@ -137,8 +145,15 @@
       sub: lt.lf <= lt.lpf ? `1.0(${n3(r.RhC)})(${n2(cF.Fy)})` : `\\left[1 - \\left(1 - \\frac{${n2(lt.Fyr)}}{${n3(r.RhC)}(${n2(cF.Fy)})}\\right)\\frac{${n2(lt.lf)} - ${n2(lt.lpf)}}{${n2(lt.lrf)} - ${n2(lt.lpf)}}\\right](1.0)(${n3(r.RhC)})(${n2(cF.Fy)})`, value: lt.FLB, unit: 'ksi', d: 3, ref: `${ED} Eqs. 6.10.8.2.2-1, -2`, note: 'R_b = 1.0 for deck placement (6.10.3.2.1).' });
     if (lt.npr && lt.npr.kind === 'ge') { const q = lt.npr;
       if (q.gv) w.add({ id: 'gov', label: `Governing section of the nonprismatic unbraced length${q.gv.x != null ? ` (x = ${n2(q.gv.x)} ft)` : ''}`, sym: 'f_{bu,gov}', eq: '\\frac{|M_{c}|(12)}{S}', sub: `M_{c} = ${n2(q.gv.gdc)}${pa(q.gv.MD)} + ${n2(q.gv.gcl)}${pa(q.gv.MCL)} = ${n2(q.gv.Mc)};\\ \\frac{${n2(Math.abs(q.gv.Mc))}(12)}{${g0(q.gv.S)}}`, value: q.gv.f, unit: 'ksi', d: 3, ref: `${ED} Art. 6.10.8.2.3c`, note: `${q.gv.MDc ? 'M_DCc (the pour-sequence envelope, as cn.Mc)' : 'M_DC1'} and M_CL at that section. R_h of that section ${n3(q.gv.Rh)}; R_b = 1.0.` });
-      w.add({ id: 'ge', label: q.A ? 'γ_e by App. D6.6.2 Method A (Preliminary sizing)' : 'γ_e, conservative bound', sym: '\\gamma_{e}', eq: q.A ? '\\frac{\\chi C_{be}}{(M_{u}/M_{e1})_{max}}' : '\\frac{F_{e,s}}{Kf_{s}}', sub: q.A ? `\\frac{${n4(+q.A.chi)}(${n3(+q.A.Cbe)})}{${n4(+q.A.rm)}}` : `\\frac{${n2(q.FeS)}}{${n3(q.K)}(${n2(q.fS)})}`, value: q.ge, unit: '', d: 4, ref: q.A ? `${ED} Eq. D6.6.2-1` : `${ED} Art. 6.10.8.2.3c`,
-        note: [q.bw ? 'Outside the D6.6.2.2 step limit: ' + q.bw + '.' : '', !q.A && r.kParts ? `K = f_max/f_x = ${n3(r.kParts.fm)}/${n3(r.kParts.fx)} (f_max: the largest stress in the ${cF.lab} flange over L_b; f_x: at the analysis station x = ${n2(r.kParts.x)} ft; K ≥ 1, 3 decimals), f_s at this location: all from the same moments, M_c of this check.${mUsed}` : ''].filter(Boolean).join(' ') });
+      // SBGE (2026-11-10): the bound γ_e as passed (min_j F_e,j/f_max,j); the K form only for a hand-made row without it; the f_max form where K is not usable
+      const gEq = q.gm === 'A' ? '\\frac{\\chi C_{be}}{(M_{u}/M_{e1})_{max}}' : q.gm === 'bound' ? '\\min_{j}\\frac{F_{e,j}}{f_{max,j}},\\ F_{e,j} = \\frac{\\pi^{2}E}{(L_{b}/r_{t,j})^{2}}' : q.gm === 'K' ? '\\frac{F_{e,s}}{Kf_{s}}' : '\\frac{F_{e,s}}{\\max(f_{bu,gov}, f_{s})}';
+      const gSub = q.gm === 'A' ? `\\frac{${n4(+q.A.chi)}(${n3(+q.A.Cbe)})}{${n4(+q.A.rm)}}` : q.gm === 'bound' ? `\\frac{\\pi^{2}(29{,}000)/(${n2(r.LbC * 12)}/${n4(+q.gB.rt)})^{2}}{${n3(+q.gB.fm)}} = \\frac{${n2(+q.gB.Fe)}}{${n3(+q.gB.fm)}}` : q.gm === 'K' ? `\\frac{${n2(q.FeS)}}{${n3(q.K)}(${n2(q.fS)})}` : q.gm === 'fmax' ? `\\frac{${n2(q.FeS)}}{\\max(${n2(q.fbu)}, ${n2(q.fS)})}` : '';
+      const gNote = q.gm === 'bound' ? `Section j${q.gB.x0 != null ? ` (${n2(+q.gB.x0)} to ${n2(+q.gB.x1)} ft of the unbraced length)` : ''}, ${cF.lab} flange ${n2(q.b)} × ${n3(q.t)}, r_t,j = ${n4(+q.gB.rt)} in: each section is taken as prismatic over the whole L_b at its largest compression stress f_max,j, from the moments of this check (M_c); the smallest ratio governs (γ_e rounded to 4 decimals). γ_e belongs to the unbraced length and is not rebuilt from the stress at this location, so f_x ≤ 0 or near 0 here does not enter (C6.10.8.2.3c).${mUsed}`
+        : q.gm === 'K' && r.kParts ? `K = f_max/f_x = ${n3(r.kParts.fm)}/${n3(r.kParts.fx)} (f_max: the largest stress in the ${cF.lab} flange over L_b; f_x: at the analysis station x = ${n2(r.kParts.x)} ft; K ≥ 1, 3 decimals), f_s at this location.${mUsed}`
+        : q.gm === 'K' ? 'K as given with the row (K ≥ 1), f_s at this location.'
+        : q.gm === 'fmax' ? 'No γ_e given and K = f_max/f_x not usable (f_x ≤ 0 or not given, or f_s ≤ 0): f_max taken as the larger of f_bu,gov and f_s, the largest stress known in the unbraced length (conservative; was K = 1).' : '';
+      w.add({ id: 'ge', label: q.gm === 'A' ? 'γ_e by App. D6.6.2 Method A (Preliminary sizing)' : 'γ_e, conservative bound', sym: '\\gamma_{e}', eq: gEq, sub: gSub, value: q.ge, unit: '', d: 4, ref: q.gm === 'A' ? `${ED} Eq. D6.6.2-1` : `${ED} Art. 6.10.8.2.3c, C6.10.8.2.3c; App. D6.6`,
+        note: [q.bw ? 'Outside the D6.6.2.2 step limit: ' + q.bw + '.' : '', gNote].filter(Boolean).join(' ') });
       w.add({ id: 'Fe', label: 'Elastic LTB stress of the nonprismatic unbraced length', sym: 'F_{e}', eq: '\\gamma_{e}f_{bu,gov}', sub: `${n4(q.ge)}(${n2(q.fbu)})`, value: q.Fe, unit: 'ksi', d: 3, ref: `${ED} Eq. 6.10.8.2.3c-2` });
       w.add({ id: 'rtE', label: 'Equivalent radius of gyration', sym: 'r_{t}', eq: '\\frac{L_{b}}{\\pi}\\sqrt{\\frac{F_{e}}{E}}', sub: `\\frac{${n2(r.LbC * 12)}}{\\pi}\\sqrt{\\frac{${n2(q.Fe)}}{29{,}000}}`, value: lt.rt, unit: 'in', d: 4, ref: `${ED} Eq. 6.10.8.2.3c-3` });
     } else w.add({ id: 'rt', label: `Effective radius of gyration for LTB${lt.npr ? ` (nonprismatic: 6.10.8.2.3c simplification, flange ${n2(lt.npr.b)} × ${n3(lt.npr.t)})` : ''}`, sym: 'r_{t}', eq: '\\frac{b_{fc}}{\\sqrt{12\\left(1 + \\frac{D_{c}t_{w}}{3b_{fc}t_{fc}}\\right)}}', sub: `\\frac{${n2(lt.npr ? lt.npr.b : cF.b)}}{\\sqrt{12\\left(1 + \\frac{${n3(Math.max(r.DcC, 1e-6))}(${n4(r.tw)})}{3(${n2(lt.npr ? lt.npr.b : cF.b)})(${n3(lt.npr ? lt.npr.t : cF.t)})}\\right)}}`, value: lt.rt, unit: 'in', d: 4, ref: `${ED} Eq. 6.10.8.2.3-9` });
@@ -171,13 +186,14 @@
      there (steel section). SBCON (engineer decision 2026-11-10): was 1.25M_DC1 + 1.5M_CL always (Preliminary sizing's T.Mc); GirderDetail
      keeps that (a deliberate difference).
      env = { xs, MDC1, MCL, MDCc (optional) } at the analysis stations; opt = { braces (ft: bearings and cross-frames), L (girder length),
-     secAt(x) -> plates, D, impl (optional fe* functions, for the parity test) }. Returns { LbC, CbC, nprC, seg }. */
+     secAt(x) -> plates, D, impl (optional fe* functions, for the parity test), G (the check's factors prj.G, so that the γ_e passed in nprC.gB
+     is on the factored basis of f_bu; SBGE 2026-11-10; default factors()) }. Returns { LbC, CbC, nprC, seg, cbParts, kParts, mSrc }. */
   function bracingC(x, env, opt) {
     const F = FX(), I = opt.impl || {}, feCb_ = I.feCb || F.feCb, feNpr_ = I.feNpr || F.feNpr, feGe_ = I.feGe || F.feGe, feGeA_ = I.feGeA || F.feGeA, feGov_ = I.feGov || F.feGov, feAt_ = I.feAt || F.feAt;
     // FONE (2026-11-01): γ from factors(), was 1.25, 1.5. SBCON (engineer decision 2026-11-10; AASHTO LRFD 10th Ed. 6.10.8.2.3c, C6.10.8.2.3c):
     // M_DCc where location() uses it (useDCc), so that the flange in compression, C_b (Eq. 6.10.8.2.3b-1) and the γ_e of a nonprismatic L_b
     // (K = f_max/f_x) come from the moments the check uses; was M_DC1 always (GirderDetail keeps M_DC1: a deliberate difference)
-    const xs = env.xs, N = xs.length, Lend = opt.L, C0 = factors(), dcc = xs.map((_, k) => !env.Mc && !!env.MDCc && useDCc(env.MDCc[k]));
+    const xs = env.xs, N = xs.length, Lend = opt.L, C0 = opt.G || factors(), dcc = xs.map((_, k) => !env.Mc && !!env.MDCc && useDCc(env.MDCc[k]));
     const Mc = env.Mc || xs.map((_, k) => C0.cdc * (dcc[k] ? +env.MDCc[k] : env.MDC1[k]) + C0.ccl * env.MCL[k]);
     const bp = [...new Set(opt.braces.map(v => +(+v).toFixed(3)))].sort((p1, p2) => p1 - p2).filter((v, k, arr) => k === 0 || v - arr[k - 1] > 0.25);
     const ib = bp.findIndex(v => Math.abs(v - x) < 0.25), Lg = bp[bp.length - 1], segs = [];
@@ -200,6 +216,8 @@
     let nprC = ''; if (cC && cC.n2.kind === 'simp') nprC = { kind: 'simp', fl: sgC > 0 ? 'top' : 'bottom', b: cC.n2.big[kb], t: cC.n2.big[kt], Ir: r3(cC.n2.Ir) };
     else if (cC && cC.n2.kind === 'ge') { const { A, mA, G } = cC.ge, fr = G ? fCon(G.s, i) : 0;
       nprC = { kind: 'ge', fl: sgC > 0 ? 'top' : 'bottom', b: G ? G.s[kb] : s[kb], t: G ? G.s[kt] : s[kt], k: G && fr > 0 && !mA ? r3(Math.max(1, G.fm / fr)) : '', Ir: r3(cC.n2.Ir), why: cC.n2.why, A: geRec(A),
+        // SBGE (2026-11-10): the bound γ_e itself (feGe: F_e,j = π²E/(L_b/r_t,j)² over f_max,j, the section j with the smallest ratio), for location()
+        ...(G && !mA ? { gB: { ge: +G.g.toFixed(4), Fe: r2(G.Fe), fm: r3(G.fm), rt: +G.rt.toFixed(4), x0: r2(cC.n2.pcs[G.j].x0), x1: r2(cC.n2.pcs[G.j].x1) } } : {}),
         ...(G ? { G: govRec(feGov_(cC.n2.pcs, xs, () => 1, fCon)) } : {}) }; }
     // SBCON (2026-11-10, show the work): the moments used (mSrc: 'DCc' where M_DCc is used at a station of the segment, else 'DC1'), the
     // C_b parts (Eq. 6.10.8.2.3b-1, as feCb) of a prismatic / simplified segment and K = f_max/f_x of the conservative γ_e bound
@@ -217,6 +235,7 @@
     const M = seq ? 'M_DCc (the pour-sequence envelope)' : 'M_DC1 (no pour sequence)';
     return [
       `C_b and γ_e: taken from the same factored moments this check uses, M_c = γ_DC ${M} + γ_CL M_CL, over the unbraced length. The flange in compression, C_b (Eq. 6.10.8.2.3b-1), and for a nonprismatic unbraced length the ratio K = f_max/f_x and the stress f_s of the conservative γ_e bound all come from that one moment diagram, so γ_e scales the design stresses at the governing section of the moments checked (AASHTO LRFD 10th Ed. 6.10.8.2.3c and C6.10.8.2.3c; App. D6.6).`,
+      'γ_e of a nonprismatic unbraced length, where App. D6.6.2 Method A does not apply: the conservative bound, the smallest over the sections of the unbraced length of F_e,j/f_max,j, each section taken as prismatic over the whole unbraced length at its largest compression stress f_max,j from the moments this check uses (6.10.8.2.3c, C6.10.8.2.3c: γ_e is one factor for the whole unbraced length that scales the stresses at the governing section; App. D6.6). It is computed once for the unbraced length and passed to every location in it, so a location where the flange stress is zero, near zero or of the other sign (f_x ≤ 0) does not change it. Only where no γ_e is available and K = f_max/f_x cannot be used is f_max taken as the largest stress known in the unbraced length (conservative; formerly K = 1 there, which was unconservative).',
       ...(seq ? ['M_DCc is the station-by-station envelope of the pour stages (6.10.3.4.1), not one load case. Near an inflection point of M_DC1 its sign can change between adjacent stations; each station is checked for the sign of its envelope value, so a smaller moment of the opposite sign from another pour stage is not checked at that station.',
         'Differs from GirderDetail (Steel Bridge Design.html): with a pour sequence GirderDetail takes the compression flange, C_b and K of the deck-placement check from M_DC1 while it checks M_DCc; this app takes them from M_DCc, the moments it checks (6.10.8.2.3c and C6.10.8.2.3c: γ_e scales the stresses of the one moment diagram checked). Where M_DCc differs from M_DC1 over an unbraced length the two tools give different C_b, F_nc and ratios.'] : []),
       'C_b by Eq. 6.10.8.2.3b-1: M_max is the largest moment compressing the flange in the unbraced length; M_A, M_B, M_C are taken as the absolute values of the deck-placement moment at the quarter points. Where the flange is in tension at a quarter point this can give C_b below 1.0, which is used as computed.'];
@@ -387,7 +406,7 @@
     const dem = SH().demands(pl), ts = ((g.details || {}).transverseStiffener || {}), doIn = opt.do != null ? +opt.do : (ts.spacings && +ts.spacings[0]) || 0, doFt = doIn / 12, cont = sup.length > 2, ends = cont ? [sup[0], sup[sup.length - 1]] : sup;
     const mat = { Fyt: +m.Fyf || 50, Fyb: +m.Fyf || 50, Fyw: +m.Fyw || 50 }, prj = { mat, G: opt.lf ? factorsOwner(opt.lf, opt.G) : factors(opt.G) };   // ETAC: opt.lf, the project's owner η (the app passes it)
     const at = A => x => FX().feAt(xs, A, x), D = Math.max(...zones.map(z => z.web.depth));
-    const locs = list.map(x => { const br = bracingC(x, env, { braces, L: Lend, secAt: zAt, D: zAt(x).D, impl: opt.impl, sp: Lb }), v = dem.at(x);
+    const locs = list.map(x => { const br = bracingC(x, env, { braces, L: Lend, secAt: zAt, D: zAt(x).D, impl: opt.impl, sp: Lb, G: prj.G }), v = dem.at(x);
       return { name: `x = ${x.toFixed(2)} ft`, x, plates: zAt(x), M: { DC1: at(env.MDC1)(x), DCc: hasDCc ? at(env.MDCc)(x) : 0, CL: at(env.MCL)(x) }, V: { DC1: v.DC1, CL: v.CL },
         LbC: br.LbC, CbC: br.CbC, Cb: 1, nprC: br.nprC, seg: br.seg, cbParts: br.cbParts, kParts: br.kParts, mSrc: br.mSrc, flC: opt.flC || 0, do: doIn, end: doIn > 0 && ends.some(s => Math.abs(x - s) <= doFt + 1e-6) }; });
     const ext = g.position === 'exterior', st = ((g.checks || {}).constr || {}).oh;
@@ -423,7 +442,7 @@
     const vAt = (S, x) => { const i = near(x), d = x - xs[i]; if (Math.abs(d) > 0.02) { const t = Math.max(0, Math.min(1, d > 0 ? d / (xs[i + 1] - xs[i]) : 1 + d / (xs[i] - xs[i - 1]))), a = d > 0 ? i : i - 1; return Math.abs(S.VR[a] * (1 - t) + S.VL[a + 1] * t); }
       return d < -1e-9 ? Math.abs(S.VL[i]) : d > 1e-9 ? Math.abs(S.VR[i]) : Math.max(Math.abs(S.VL[i]), Math.abs(S.VR[i])); };
     const at = A => x => FX().feAt(xs, A, x), Lb = +fr.Lb || 25;
-    const locs = list.map(x => { const br = bracingC(x, env, { braces, L: Lend, secAt: zAt, D: zAt(x).D, sp: Lb }), pn = panelAt(x);
+    const locs = list.map(x => { const br = bracingC(x, env, { braces, L: Lend, secAt: zAt, D: zAt(x).D, sp: Lb, G: prj.G }), pn = panelAt(x);
       return { name: `x = ${x.toFixed(2)} ft`, x, plates: zAt(x), M: { DC1: at(env.MDC1)(x), DCc: MDCc ? at(MDCc)(x) : 0, CL: at(env.MCL)(x) }, V: { DC1: vAt(st.DC1, x), CL: vAt(st.CL, x) },
         LbC: br.LbC, CbC: br.CbC, Cb: 1, nprC: br.nprC, seg: br.seg, cbParts: br.cbParts, kParts: br.kParts, mSrc: br.mSrc, flC: opt.flC || 0, do: pn ? pn.d : 0, end: pn ? pn.end : false }; });
     const ext = g.position === 'exterior';
