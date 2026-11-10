@@ -962,3 +962,6 @@ Line numbers are approximate; search for the anchor text. The tool file uses CRL
   - `#old` stays on the page and lists a sample old project file (21 values; allowables marked auto / override).
   - CBC with no hash still opens Beam Capacity; `#dev` opens Development & Splice.
   - tools.html now links to `Concrete%20Beam%20Capacity.html#asd`, and no longer to the old file.
+
+## 2026-11-10 — PR: claude/cbc-lap-cite-asd-ed (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (CBLC) — pointer only (no change to the redirect page)
+- ASD tab of Concrete Beam Capacity (`suite-frame-asd`, `ASD_REFS`): the basis line cites AASHTO Standard Specifications for Highway Bridges, 17th Edition (2002), instead of "Edition: verify (the tool’s code notes refer to the 17th Ed., 2002)" (engineer decision 2026-11-10). Articles and every rating value unchanged. Before/after and check are in `fixlog/Concrete Beam Capacity.md`, entry CBLC.

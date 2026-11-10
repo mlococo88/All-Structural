@@ -7225,7 +7225,7 @@ function normRptOpts(){ let o=S.ui.rptOpts; if(!o||!o.tabs) o=defaultRptOpts();
    the print header / &quot;Page X of Y&quot; footer (@page margin boxes, asdPageCSS, only while printing).
    Display only: every value shown is compute()'s. */
 const ASD_REFS=[
-  [&quot;AASHTO Std. Spec.&quot;,&quot;AASHTO Standard Specifications for Highway Bridges — Art. 8.15 (service load design: 8.15.2 allowable stresses, 8.15.3 flexure, 8.15.3.4 modular ratio), 8.7.1 (E_c), 8.10.1.1 / 8.10.1.2 (effective flange width). Edition: verify (the tool’s code notes refer to the 17th Ed., 2002).&quot;],
+  [&quot;AASHTO Std. Spec.&quot;,&quot;AASHTO Standard Specifications for Highway Bridges, 17th Edition (2002) — Art. 8.15 (service load design: 8.15.2 allowable stresses, 8.15.3 flexure, 8.15.3.4 modular ratio), 8.7.1 (E_c), 8.10.1.1 / 8.10.1.2 (effective flange width).&quot;],
   [&quot;AASHTO MBE&quot;,&quot;Manual for Bridge Evaluation — Section 6 Part B (allowable stress rating): rating factor RF = (C − M_DL)/M_LL+I; 6B.6.2.3 and Table 6B.6.2.3-1 (allowable stresses). Edition: verify.&quot;]];
 /* =====================================================================
    CBRX (2026-11-03): the D11 print report (buildReport -> #printReport, its &quot;Report Contents&quot; dialog, asdPageCSS) is retired;
@@ -8734,7 +8734,7 @@ function validate(inp,f){
     else if (!k.ok) w.push(`ACI 25.4.2.2 NOT satisfied: f_y ≥ 80,000 psi bars at ${fmt(inp.barSpc,2)} in. on center (&amp;lt; 6 in.) require K_tr ≥ 0.5d_b = ${fmt(k.req,3)} in.; provided K_tr = ${fmt(f.Ktr,3)} in. Add transverse reinforcement.`);
   }
   if (lapProhibited(inp,f)) w.push(f.AASHTO
-    ? `AASHTO 5.10.8.4.2a: lap splices shall not be used for bars larger than No. 11 (#${inp.barSize} here). Use mechanical connections or welded splices; the splice lengths shown for this bar size do not apply.`
+    ? `AASHTO 5.10.8.4.2a (tension): bars larger than No. 11 (#${inp.barSize} here) are not lap spliced in tension. AASHTO 5.10.8.4.5a (compression): #14 and #18 bars may be lap spliced in compression only to #11 and smaller bars, so a same-size lap is not permitted. Use mechanical connections or welded splices; the splice lengths shown for this bar size do not apply.`
     : `ACI 25.5.1.1: lap splices are not permitted for #${inp.barSize} bars. Use mechanical or welded splices. In compression, #14/#18 bars may be lap spliced only to #11 and smaller bars (25.5.5.3); the splice lengths shown for this bar size do not apply.`);
   if (!f.AASHTO &amp;&amp; f.psiRForced) w.push(`ACI Table 25.4.3.2: ψ_r = 1.0 applies only to No. 11 and smaller hooked bars; ψ_r = 1.6 is used for #${inp.barSize} although confining reinforcement is ticked.`);
   if (!f.AASHTO &amp;&amp; f.psiOForced) w.push(`ACI Table 25.4.3.2: ψ_o = 1.0 applies only to No. 11 and smaller hooked bars; ψ_o = 1.25 is used for #${inp.barSize}.`);
@@ -9240,7 +9240,7 @@ function tabCSplice(inp,f){
   if(f.AASHTO) return tabCSpliceAASHTO(inp,f,s);
   return hero(&quot;Compression Lap Splice&quot;,&quot;ACI 318-19 §25.5.5&quot;,`${fmt(s.lsc,2)} in`,&quot;Required l_sc&quot;)
   + (lapProhibited(inp,f)?(f.AASHTO
-      ? `<div class=&quot;warnbox&quot; style=&quot;border-left-color:var(--fail);background:var(--failbg)&quot;><b style=&quot;color:var(--fail)&quot;>Lap splice NOT permitted (${lapRef(f)}).</b> Lap splices shall not be used for bars larger than No. 11. Use a mechanical connection or welded splice. The length below is shown for reference only.</div>`
+      ? `<div class=&quot;warnbox&quot; style=&quot;border-left-color:var(--fail);background:var(--failbg)&quot;><b style=&quot;color:var(--fail)&quot;>Lap splice of #${inp.barSize} to #${inp.barSize} NOT permitted (AASHTO 5.10.8.4.5a).</b> In compression, #14 and #18 bars may be lap spliced only to #11 and smaller bars, so a same-size lap of #${inp.barSize} bars is not permitted. Use a mechanical connection or welded splice. The length below is shown for reference only.</div>`
       : `<div class=&quot;warnbox&quot; style=&quot;border-left-color:var(--fail);background:var(--failbg)&quot;><b style=&quot;color:var(--fail)&quot;>Lap splice of #${inp.barSize} to #${inp.barSize} NOT permitted (ACI 25.5.1.1).</b> In compression, #14/#18 bars may be lap spliced only to #11 and smaller bars (25.5.5.3), with l_sc per 25.5.5.2 (larger of l_dc of the larger bar and l_sc of the smaller bar). The length below is shown for reference only.</div>`):&quot;&quot;)
   + `<div class=&quot;narr&quot;>Compression lap splice length is a direct function of f_y and d_b. For f'c below 3,000 psi the
      length is increased by one-third (§25.5.5.1).</div>`
@@ -9417,7 +9417,7 @@ function buildDashboard(inp,f){
       val:!kHS.known?&quot;spacing?&quot;:(kHS.applies?fmt(f.Ktr,2)+&quot; / &quot;+fmt(kHS.req,2):&quot;s ≥ 6 in&quot;)});
   }
   if(lapProhibited(inp,f)){
-    checks.push({lbl:&quot;Lap splice permitted (&quot;+(f.AASHTO?&quot;5.10.8.4.2a&quot;:&quot;25.5.1.1&quot;)+&quot;)&quot;, ok:false, val:&quot;#&quot;+inp.barSize+&quot; N/P&quot;});
+    checks.push({lbl:&quot;Lap splice permitted (&quot;+(f.AASHTO?&quot;5.10.8.4.2a tension, 5.10.8.4.5a compression&quot;:&quot;25.5.1.1&quot;)+&quot;)&quot;, ok:false, val:&quot;#&quot;+inp.barSize+&quot; N/P&quot;});
   }
   if(f.AASHTO &amp;&amp; f.fc_ksi>10 &amp;&amp; !inp.lightweight) checks.push({lbl:&quot;#3 transverse @ 12 in (f'c > 10 ksi)&quot;, ok:false, val:&quot;verify&quot;});
   if(f.AASHTO &amp;&amp; f.fy_ksi>75) checks.push({lbl:&quot;Transverse reinf. (f_y > 75 ksi)&quot;, ok:false, val:&quot;verify&quot;});
@@ -9502,7 +9502,7 @@ function rbrDashMeta(lbl,f,val){
     ['ψ_t·ψ_e',{card:'tLd',ref:'ACI 318-19 25.4.2.4'}],
     ['Class A splice eligible',{card:'tsClassA',ref:A?'AASHTO 5.10.8.4.3a':'ACI 318-19 25.5.2.1',cond:val==='unknown'?'A_s,req not entered':'not eligible'}],
     ['K_tr ≥ 0.5d_b',{card:'tConf',ref:'ACI 318-19 25.4.2.2',cond:val==='spacing?'?'spacing not entered':'K_tr < 0.5d_b'}],
-    ['Lap splice permitted',{card:'tsLen',ref:lapRef(f),cond:'not permitted'}],
+    ['Lap splice permitted',{card:'tsLen',ref:A?'AASHTO 5.10.8.4.2a (tension), 5.10.8.4.5a (compression)':lapRef(f),cond:'not permitted'}],   /* CBLC: AASHTO cites both */
     ['#3 transverse',{card:'tLd',ref:'AASHTO 5.10.8.2.1, 5.10.8.4.3, 5.10.8.2.4b',cond:'verify'}],
     ['Transverse reinf.',{card:'tLd',ref:'AASHTO 5.10.8.2.1, 5.10.8.4, 5.10.8.2.4',cond:'verify'}]];
   const m=M.find(x=>lbl.indexOf(x[0])===0);
@@ -9886,7 +9886,7 @@ function rebarResultRows(inp,f,tab){
   const A=f.AASHTO, all=!tab, rows=[];
   const t=calcTension(inp,f), h=calcHook(inp,f), c=calcComp(inp,f), ts=calcTensSplice(inp,f,t), cs=calcCompSplice(inp,f);
   const e=classAEligible(inp,f), k=ktrHSCheck(inp,f), np=lapProhibited(inp,f);
-  const lapRow=()=>({lab:&quot;Lap splice permitted&quot;,msg:`#${inp.barSize}: not permitted; use a mechanical or welded splice (the length is for reference only)`,ref:lapRef(f),st:&quot;FAIL&quot;});
+  const lapRow=()=>({lab:&quot;Lap splice permitted&quot;,msg:`#${inp.barSize}: not permitted; use a mechanical or welded splice (the length is for reference only)`,ref:all&amp;&amp;A?&quot;AASHTO 5.10.8.4.2a (tension), 5.10.8.4.5a (compression)&quot;:lapRef(f),st:&quot;FAIL&quot;});   /* CBLC: one row covers both splices in the all-tabs summary */
   if(all) rows.push({lab:&quot;f′c within code range&quot;,msg:`f′<sub>c</sub> = ${fmt(inp.fc,0)} psi (2,500–${A?fmt(f.fcLimA*1000,0).replace(/(\d)(\d{3})$/,&quot;$1,$2&quot;):&quot;10,000&quot;} psi)`,
     ref:A?&quot;f′c ≤ 15 ksi (10 ksi lightweight), AASHTO 5.10.8.2.1, C5.10.8.2.4&quot;:&quot;√f′c limited to 100 psi, ACI 318-19 25.4.1.4&quot;,st:(inp.fc>=2500&amp;&amp;inp.fc<=(A?f.fcLimA*1000:10000))?&quot;PASS&quot;:&quot;FAIL&quot;});
   if(all &amp;&amp; A &amp;&amp; f.fc_ksi>10 &amp;&amp; !inp.lightweight) rows.push({lab:&quot;Transverse #3 bars @ 12 in. (f′c &amp;gt; 10 ksi)&quot;,msg:&quot;along l<sub>d</sub> and tension laps (≥ 3 bars); hook ties #3 @ ≤ 3d<sub>b</sub> (≥ 3): not checked by the tool&quot;,ref:&quot;AASHTO 5.10.8.2.1, 5.10.8.4.3, 5.10.8.2.4b&quot;,st:&quot;CHK&quot;});
