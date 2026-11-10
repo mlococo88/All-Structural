@@ -36,6 +36,12 @@ header{background:var(--sf);border-bottom:1px solid var(--bd);height:50px;displa
 #smdPrj .prow{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 #smdPrj .pshare{flex-direction:row;flex-wrap:wrap;gap:6px}
 #smdPrj .pshare .btn{font-size:11px;padding:4px 8px}
+/* HOC (2026-11-10): the Project tab's Hand-offs card */
+#smdHo .hoGrp{margin:8px 0 3px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#64748b}
+#smdHo .hoRow{border-top:1px solid #e2e8f0;padding:5px 0 3px;font-size:12px}
+#smdHo .hoRow .pshare{margin-top:4px}
+#smdHo .hoFrom{font-size:11px;color:#64748b}
+@media print{#smdHo{display:none!important}}
 .upd{display:none;align-items:center;gap:5px;font-size:10px;color:var(--mu);padding:3px 8px;background:#f1f5f9;border-radius:5px}
 .upd.show{display:flex}
 .spin{width:10px;height:10px;border:2px solid #e2e8f0;border-top-color:var(--bl);border-radius:50%;animation:sp .6s linear infinite}
@@ -399,12 +405,18 @@ a.wkA:hover{text-decoration:underline}
       <button class="btn btn-s" id="bEx" style="font-size:11px;padding:4px 10px" title="Save the project as a .json file (Ctrl+E)">Export JSON</button>
       <button class="btn btn-s" id="bIm" style="font-size:11px;padding:4px 10px" title="Open a .json project file of this tool">Import JSON</button>
       <input type="file" id="fIm" accept=".json" style="display:none">
-      <div class="fg"><label class="lbl">Shared project info</label>
-      <div class="pshare">
-        <button class="btn btn-s" type="button" onclick="bxUseProjectInfo()">Use shared project info</button>
-        <button class="btn btn-s" type="button" onclick="bxShareProjectInfo()">Share project info</button>
-      </div>
-      <p class="hint">Copy the project name from or to the other tools.</p></div>
+    </div>
+    <!-- HOC (2026-11-10, engineer decision: the hand-off card on the Project tab in every tool): Use / Share project info (were the "Shared project info"
+         field of the Project card; same buttons and handlers) as Receive / Send -->
+    <div class="slbl">Hand-offs</div>
+    <div class="card smdHo" id="smdHo">
+      <p class="hint" style="margin-top:0">Nothing changes until you confirm: "Use shared project info" shows what it will overwrite and asks first. "Share project info" sends the project name only when you click it.</p>
+      <div class="hoGrp">Receive from other tools</div>
+      <div class="hoRow"><b>Shared project info</b> <span class="hoFrom">from any tool, to the project name</span><div class="pshare">
+        <button class="btn btn-s" type="button" onclick="bxUseProjectInfo()">Use shared project info</button></div></div>
+      <div class="hoGrp">Send to other tools</div>
+      <div class="hoRow"><b>Shared project info</b> <span class="hoFrom">to every tool</span><div class="pshare">
+        <button class="btn btn-s" type="button" onclick="bxShareProjectInfo()">Share project info</button></div></div>
     </div>
   </div>
 
