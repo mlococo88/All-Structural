@@ -764,11 +764,23 @@ function kpeA114(phi,kh){ const T=KPE_A114, k=Math.max(0,kh), ph=Math.min(40,Mat
   return Object.assign(out,{phi:ph, j, f, K0, K1, K:K0+(K1-K0)*f}); }
 const iabHyp=x=>{ x=Math.max(0,Math.min(1,x)); return x/((1-IAB_RF)+IAB_RF*x); };
 const iabType=()=>{ const t=S.iab&&S.iab.type; return t==="integral"||t==="semi"?t:"conv"; };
+/* ABSH (2026-11-10, engineer request): backwall offset e — the back face of the backwall e (in, geom.bwOff) in front of the back face of the
+   stem (toward the bridge). Behind the backwall the stem rises at its full thickness to the shelf elevation, d_sh below the top of the backwall
+   (geom.shD, in; 0 = the approach slab thickness t of panel I-0b): a stem shelf of width e that the approach slab bears on (no corbel, no paving
+   notch). Conventional abutment only. null = no offset (e = 0, the default and every saved project without the field): the tool as before.
+   e, d, hSh, hC in ft: hSh = h_bw − d_sh (shelf above the seat), hC = d_sh (backwall cantilever above the shelf, its design section). */
+function bwOffGeo(){
+  const g=S.geom, e=Math.max(0,+g.bwOff||0)/12;
+  if(!(e>0)||iabType()!=="conv") return null;
+  const A=S.apSlab, apOn=!!(A&&A.on), dIn=(+g.shD>0)? +g.shD : (apOn? Math.max(0,+A.t||0)*12 : 0), d=dIn/12, hbw=+g.hbw;
+  const hSh=Math.max(0,hbw-d), zSeat=(+g.tf)+(+g.hstem), xb=(+g.Ltoe)+(+g.tsb);
+  return {e, eIn:e*12, dIn, d, dAuto:!(+g.shD>0), apOn, hSh, hC:Math.min(hbw,d), zSeat, zSh:zSeat+hSh, xStemBack:xb, xBwBack:xb-e, xBwFront:xb-e-(+g.tbw), xSh:xb-e/2}; }
 function defaultState(){
   return {
     proj:{name:"Example Single-Span Bridge", num:"", calcBy:"", date:new Date().toISOString().slice(0,10), chkBy:"", chkDate:""},
     geom:{
       hbw:5.00, tbw:1.50,           // backwall height/thickness (ft)
+      bwOff:0, shD:0,               // ABSH: backwall offset e, stem back face to backwall back face (in; 0 = flush); stem-shelf depth below the top of the backwall (in; 0 = approach slab t)
       hstem:14.00, tst:4.50, tsb:4.50, // stem height, top & bottom thickness (ft)
       brgSetback:1.25,              // bearing setback from front face of backwall (ft)
       endGap:4.0,                   // girder end to backwall face incl. opening movement (in); N provided = seat width − endGap [4.7.4.4]
@@ -1041,7 +1053,7 @@ ABUT_OWN.rules=[
   {owner:"RIDOT", id:"bw.min", kind:"shall-check", sec:"11.3.4 (p. 11-9)", text:"Minimum wall thickness at the top 15 in (applied to the backwall, the top of the abutment wall)",
     ev:C=>Object.assign(ownMinT(+C.g.tbw,1.25,"t<sub>bw</sub>"),{lim:"≥ 15 in (1.25 ft)"})},
   {owner:"RIDOT", id:"seat.w", kind:"should-warning", sec:"11.3.4 (p. 11-9)", text:"Beam seat width preferably at least 2'-6\" (and enough for the bearings and the AASHTO seismic support length)",
-    ev:C=>({st:ownGE(C.seatW,2.5)?"pass":"warn", val:`t<sub>st</sub> − t<sub>bw</sub> = ${fmt(C.seatW,2)} ft`, lim:"≥ 2.50 ft (preferred)", tex:`b_{seat} = t_{st}-t_{bw} = ${ownF(C.g.tst)}-${ownF(C.g.tbw)} = ${ownF(C.seatW)}\\ \\text{ft}`, link:OWN_LK.supp})},
+    ev:C=>({st:ownGE(C.seatW,2.5)?"pass":"warn", val:`t<sub>st</sub> − t<sub>bw</sub>${bwOffGeo()?" − e":""} = ${fmt(C.seatW,2)} ft`, lim:"≥ 2.50 ft (preferred)", tex:bwOffGeo()? `b_{seat} = t_{st}-t_{bw}-e = ${ownF(C.g.tst)}-${ownF(C.g.tbw)}-${ownF(bwOffGeo().e)} = ${ownF(C.seatW)}\\ \\text{ft}` : `b_{seat} = t_{st}-t_{bw} = ${ownF(C.g.tst)}-${ownF(C.g.tbw)} = ${ownF(C.seatW)}\\ \\text{ft}`, link:OWN_LK.supp})},
   {owner:"RIDOT", id:"pad.edge", kind:"shall-check", sec:"11.3.4 (p. 11-9)", text:"Bearing pad or masonry plate at least 2 in from the face of the beam seat",
     ev:C=>({st:ownGE(C.cFront,2)?"pass":"fail", val:`${fmt(C.cFront,1)} in`, lim:"≥ 2 in", tex:`c_{front} = (b_{seat}-a_{brg})\\cdot12-L_{pad}/2 = (${ownF(C.seatW)}-${ownF(C.g.brgSetback)})(12)-${ownF(+S.bearing.padL,1)}/2 = ${ownF(C.cFront,1)}\\ \\text{in}`, link:OWN_LK.seat})},
   {owner:"RIDOT", id:"gap", kind:"shall-check", sec:"11.3.4 (p. 11-9)", text:"Girder end (or diaphragm) to backwall at least the predicted superstructure movement plus 2 in",
@@ -1083,7 +1095,7 @@ ABUT_OWN.rules=[
     ev:C=>({st:"note", val:"free-draining backfill assumed (Assumption 1)", lim:"drainage system", link:OWN_LK.basis})},
   /* ---------------- CTDOT BRSDM, Release 1 (2024) ---------------- */
   {owner:"CTDOT", id:"brg.front", kind:"shall-check", sec:"V2 11.6.8.1CT (p. 11-3)", text:"At the seat, front face of the stem to the centerline of bearings at least 1.25 ft (9 in for butted deck units and box beams, V2 11.6.8.2CT)",
-    ev:C=>({st:ownGE(C.brgFront,1.25)?"pass":"fail", val:`${fmt(C.brgFront,2)} ft`, lim:"≥ 1.25 ft (girders)", tex:`a = b_{seat}-a_{brg} = (t_{st}-t_{bw})-a_{brg} = ${ownF(C.seatW)}-${ownF(C.g.brgSetback)} = ${ownF(C.brgFront)}\\ \\text{ft}`, link:OWN_LK.sketch})},
+    ev:C=>({st:ownGE(C.brgFront,1.25)?"pass":"fail", val:`${fmt(C.brgFront,2)} ft`, lim:"≥ 1.25 ft (girders)", tex:`a = b_{seat}-a_{brg} = (t_{st}-t_{bw}${bwOffGeo()?"-e":""})-a_{brg} = ${ownF(C.seatW)}-${ownF(C.g.brgSetback)} = ${ownF(C.brgFront)}\\ \\text{ft}`, link:OWN_LK.sketch})},
   {owner:"CTDOT", id:"bw.min", kind:"shall-check", sec:"V2 11.6.8.1CT (p. 11-3)", text:"Backwall thickness at least 1.25 ft",
     ev:C=>ownMinT(+C.g.tbw,1.25,"t<sub>bw</sub>")},
   {owner:"CTDOT", id:"frost", kind:"shall-check", sec:"V2 10.6.1.2, 10.7.1.2 (p. 10-3)", text:"Bottom of footing or pile cap at least 4 ft below finished grade (measured normal to grade); no minimum on competent rock",
@@ -1443,6 +1455,8 @@ function apLsRule(){ const A=S.apSlab, o=abutOwner();
 const VALID = {
   "geom.hbw":   {hard:[0.1,30], typ:[2,10],   msg:"Backwall height outside the typical 2–10 ft range."},
   "geom.tbw":   {hard:[0.25,10],typ:[0.75,3], msg:"Backwall thickness outside the typical 0.75–3 ft range."},
+  "geom.bwOff": {hard:[0,120],typ:[0,24], msg:"Backwall offset e outside the typical 0–24 in range."},   // ABSH
+  "geom.shD":   {hard:[0,120],typ:[0,24], msg:"Stem-shelf depth below the top of the backwall outside the typical 0–24 in range (0 = the approach slab thickness)."},
   "geom.hstem": {hard:[0.5,60], typ:[4,30],   msg:"Stem height outside the typical 4–30 ft range."},
   "geom.tst":   {hard:[0.5,20], typ:[2,8],    msg:"Stem top thickness outside the typical 2–8 ft range."},
   "geom.tsb":   {hard:[0.5,20], typ:[2,10],   msg:"Stem bottom thickness outside the typical 2–10 ft range."},
@@ -1568,7 +1582,7 @@ const VALID = {
 };
 /* APS: an approach-slab input is validated only while it is used (slab on; shelf inputs with a shelf; bars with the design on) */
 function apInUse(p){ if(!p.startsWith("apSlab.")) return true; const A=S.apSlab; if(!A||!A.on) return false; const k=p.slice(7);
-  if(["bS","hS","hE","aV","sSp","hSp","hN"].includes(k)) return A.sup==="shelf"&&!(+A.qEq>0);
+  if(["bS","hS","hE","aV","sSp","hSp","hN"].includes(k)) return A.sup==="shelf"&&!(+A.qEq>0)&&!bwOffGeo();   // ABSH: not used on the stem shelf
   if(["cov","aSp","dSp","tSp"].includes(k)) return !!A.des&&!(+A.qEq>0);
   if(k==="mu") return iabType()!=="conv"&&!(+A.qEq>0);
   return !(+A.qEq>0); }
@@ -1881,6 +1895,8 @@ function migrate(){
   if(S.ui.vmSel==="ls:Strength IV") S.ui.vmSel="ls:Strength I";   // Strength IV removed (3.4.1, C3.4.1)
   if(S.ui.d3Sel==="ls:Strength IV") S.ui.d3Sel="ls:Strength I";
   if(S.geom.Lftg===undefined) S.geom.Lftg=S.geom.Lab;   // footing length defaults to wall length (single-length model)
+  if(S.geom.bwOff===undefined) S.geom.bwOff=0;          // ABSH: backwall offset e (in); absent in a saved project = 0 (flush, as before)
+  if(S.geom.shD===undefined) S.geom.shD=0;              // ABSH: stem-shelf depth below the top of the backwall (in); 0 = the approach slab thickness
   if(S.mat.ag===undefined) S.mat.ag=0.75;                 // max aggregate size (in), 5.7.3.4.2
   if(S.factors.gpDCmaxS4===undefined) S.factors.gpDCmaxS4=1.50;   // Strength IV γDC max [T.3.4.1-2]
   if(S.factors.vWS3===undefined) S.factors.vWS3=0;                 // 0 = WS not scaled per limit state (previous behaviour)
@@ -2105,18 +2121,18 @@ function buildInputs(){
       ${inpRow("Width W, edge to edge (0 = L<sub>ab</sub>·cos θ)","apSlab.W","ft",{title:"Measured normal to the roadway, full width incl. shoulders and sidewalks. 0 = the abutment length L_ab × cos(skew). The number of design lanes comes from the clear roadway width of panel I-6b."})}
       ${inpRow("Wearing surface / overlay (DW)","apSlab.ws","ksf",{title:"e.g. 0.030 ksf ≈ 2.5 in of bituminous concrete. 0 = none."})}
       ${selRow("Skew of the slab ends","apSlab.skew",[["follow","Both ends follow the skew (parallelogram)"],["square","Far end square to the roadway"],["ct35","CTDOT 11.14.1CT: follow up to 35°, square above"]])}
-      ${selRow("Support at the abutment","apSlab.sup",[["shelf",(it==="conv"?"Backwall":"End diaphragm")+" shelf (paving notch): bracket on the back face"],["deck","Deck over the backwall (the slab bears on the deck end)"]],{rebuild:true})}
-      ${A.sup==="shelf"?inpRow("&nbsp;&nbsp;Shelf projection b<sub>S</sub> from the back face","apSlab.bS","in")+inpRow("&nbsp;&nbsp;Shelf depth at the face h<sub>S</sub>","apSlab.hS","in")+inpRow("&nbsp;&nbsp;Shelf depth at the outer edge h<sub>E</sub>","apSlab.hE","in")+inpRow("&nbsp;&nbsp;Slab reaction to the face a<sub>v</sub> (0 = b<sub>S</sub>/2)","apSlab.aV","in",{title:"Distance from the back face of the wall to the resultant of the slab reaction on the shelf. 0 = the middle of the shelf (uniform bearing over b_S)."}):""}
+      ${bwOffGeo()?`<div class="in-note"><b>Support at the abutment: stem shelf</b> behind the inset backwall (backwall offset e = ${fmt(+S.geom.bwOff,1)} in, panel I-1). The paving-notch / deck-end choice and the shelf (bracket) inputs are not used while e &gt; 0; they are kept for e = 0.</div>`:selRow("Support at the abutment","apSlab.sup",[["shelf",(it==="conv"?"Backwall":"End diaphragm")+" shelf (paving notch): bracket on the back face"],["deck","Deck over the backwall (the slab bears on the deck end)"]],{rebuild:true})}
+      ${A.sup==="shelf"&&!bwOffGeo()?inpRow("&nbsp;&nbsp;Shelf projection b<sub>S</sub> from the back face","apSlab.bS","in")+inpRow("&nbsp;&nbsp;Shelf depth at the face h<sub>S</sub>","apSlab.hS","in")+inpRow("&nbsp;&nbsp;Shelf depth at the outer edge h<sub>E</sub>","apSlab.hE","in")+inpRow("&nbsp;&nbsp;Slab reaction to the face a<sub>v</sub> (0 = b<sub>S</sub>/2)","apSlab.aV","in",{title:"Distance from the back face of the wall to the resultant of the slab reaction on the shelf. 0 = the middle of the shelf (uniform bearing over b_S)."}):""}
       ${selRow("Far-end support","apSlab.far",[["sleeper","Sleeper slab"],["soil","On the subbase (soil)"]])}
       ${it!=="conv"?inpRow("Friction coefficient μ of the sliding interface","apSlab.mu","–",{title:"Integral / semi-integral: the slab slides on its support (MassDOT 3.10.4, RIDOT 11.3.2) or drags on the subbase; F = μ × the slab's dead-load end reaction on the abutment (§1.4a). Default 0.60: concrete on clean gravel / coarse sand, AASHTO Table 3.11.5.3-1."}):""}
       ${(oo==="AASHTO"||oo==="RIDOT")?ck("apSlab.lsRed","Remove the final-state live-load surcharge LS (AASHTO 3.11.6.5: permitted with a slab supported on the abutment; the construction stage keeps it)"):`<div class="in-note">Live-load surcharge: removed in the final state with the slab (${esc(Lr.ref||"")}); the construction stage keeps it.</div>`}`;
-      if(A.sup==="shelf") body+=`<div class="subhead">Shelf reinforcement (bracket, ${it==="conv"?"Tab 5 §5.8":"Tab 10 §10.7"})</div>
+      if(A.sup==="shelf"&&!bwOffGeo()) body+=`<div class="subhead">Shelf reinforcement (bracket, ${it==="conv"?"Tab 5 §5.8":"Tab 10 §10.7"})</div>
       ${selRow("Primary tie (top, across the shelf)","apSlab.sBar",bo)}${inpRow("&nbsp;&nbsp;spacing along the wall","apSlab.sSp","in")}
       ${selRow("Closed ties (horizontal legs)","apSlab.hBar",bo)}${inpRow("&nbsp;&nbsp;spacing along the wall","apSlab.hSp","in")}${inpRow("&nbsp;&nbsp;legs within 2d<sub>e</sub>/3 below the tie","apSlab.hN","–",{step:1,title:"Number of horizontal legs of closed ties placed within 2d_e/3 below the primary tie (AASHTO 5.8.4.2.1, 5.8.4.2.2), each at the spacing above."})}`;
       body+=`<div class="subhead">Slab design (${it==="conv"?"Tab 5 §5.9":"Tab 10 §10.8"})</div>
       ${ck("apSlab.des","Design the approach slab (one-way simple span, HL-93 on the 4.6.2.3 strip)")}
       ${A.des?inpRow("&nbsp;&nbsp;Bottom clear cover","apSlab.cov","in")+selRow("&nbsp;&nbsp;Main bottom bars (along the roadway)","apSlab.aBar",bo)+inpRow("&nbsp;&nbsp;&nbsp;&nbsp;spacing","apSlab.aSp","in")+selRow("&nbsp;&nbsp;Bottom distribution bars (transverse)","apSlab.dBar",bo)+inpRow("&nbsp;&nbsp;&nbsp;&nbsp;spacing","apSlab.dSp","in")+selRow("&nbsp;&nbsp;Top bars, each way (S&amp;T)","apSlab.tBar",bo)+inpRow("&nbsp;&nbsp;&nbsp;&nbsp;spacing","apSlab.tSp","in"):""}
-      <div class="in-note">The slab reaction (DC, DW, HL-93 with IM) acts at the ${A.sup==="shelf"?"shelf":"deck end over the backwall"}${it==="semi"?" and reaches the lower abutment through the end diaphragm and the bearings":""}: Tab 1 §1.4a. ${it==="conv"?"It replaces the design truck wheel load on top of the backwall (panel I-9).":""}</div>`;
+      <div class="in-note">The slab reaction (DC, DW, HL-93 with IM) acts at the ${bwOffGeo()?"stem shelf, e/2 behind the backwall":A.sup==="shelf"?"shelf":"deck end over the backwall"}${it==="semi"?" and reaches the lower abutment through the end diaphragm and the bearings":""}: Tab 1 §1.4a. ${it==="conv"?"It replaces the design truck wheel load on top of the backwall (panel I-9).":""}</div>`;
     }
     html+=panel("in-apslab","I-0b","Approach Slab",body); }
 
@@ -2125,13 +2141,16 @@ function buildInputs(){
     <div class="subhead">Backwall</div>
     ${inpRow("Backwall height h<sub>bw</sub>","geom.hbw","ft")}
     ${inpRow("Backwall thickness t<sub>bw</sub>","geom.tbw","ft")}
+    ${iabType()==="conv"?inpRow("Offset, back face of abutment stem to back face of backwall e","geom.bwOff","in",{title:"0 = the backwall flush with the back face of the stem (as before). A positive value insets the backwall toward the bridge: the top of the stem behind it is a shelf (the stem at its full thickness, no corbel or paving notch) that the approach slab bears on."})
+      +(+g.bwOff>0?inpRow("&nbsp;&nbsp;Shelf depth below the top of the backwall d<sub>sh</sub> (0 = slab t)","geom.shD","in",{title:"The stem shelf (approach-slab seat) is d_sh below the top of the backwall. 0 = the approach slab thickness t of panel I-0b (the slab top at the top of the backwall)."})
+      +`<div class="in-note">${abNL("Backwall offset e (stem shelf):",[["Geometry:","the backwall's back face is e in front of the stem's back face; behind it the stem rises at its full thickness to the shelf, d<sub>sh</sub> below the top of the backwall. Bridge seat = t<sub>st</sub> − t<sub>bw</sub> − e; the bearing setback is still measured from the front face of the backwall."],["Approach slab:",'bears on the shelf at mid-width, e/2 behind the backwall (replaces the paving notch of panel I-0b): <span class="xlink" data-jump="tab-loads|o-ap">Tab 1 §1.4a</span>; bearing in <span class="xlink" data-jump="tab-struct|o-ap-shelf">Tab 5 §5.8</span>.'],["Loads:",'the backwall weight at its new centroid and the stem shelf e × h<sub>sh</sub> in the self-weight (<span class="xlink" data-jump="tab-loads|o-selfwt">Tab 1 §1.2</span>); they change the stem-base and footing moments through their lever arms.'],["Backwall design:",'section at the shelf elevation, cantilever h<sub>c</sub> = d<sub>sh</sub> (<span class="xlink" data-jump="tab-struct|o-str-Backwall">Tab 5 §5.1</span>).'],["Earth pressure:","on the virtual back plane at the heel for stability, and on the stem back face for the stem, as before."]])}</div>`:""):""}
     <div class="subhead">Stem (seat to top of footing)</div>
     ${inpRow("Stem height h<sub>stem</sub>","geom.hstem","ft")}
     ${inpRow("Stem thickness at top t<sub>st</sub>","geom.tst","ft",{title:"Includes the bridge seat width plus the backwall thickness. Back face is vertical; any taper is on the front face."})}
     ${inpRow("Stem thickness at bottom t<sub>sb</sub>","geom.tsb","ft")}
     ${inpRow("Bearing setback from backwall face","geom.brgSetback","ft")}
     ${inpRow("Girder end to backwall face g<sub>end</sub>","geom.endGap","in",{title:"Gap between the girder end and the backwall face, including the opening movement (thermal fall, creep, shrinkage). The provided support length N is the girder overlap on the seat = seat width − g_end [4.7.4.4, C4.7.4.4]. Default 4 in."})}
-    <div class="derived">Derived: bridge seat width = t<sub>st</sub> − t<sub>bw</sub> = <b>${fmt(derivedSeat)} ft</b> &nbsp;·&nbsp; seat elevation (above footing base) = <b>${fmt(g.tf+g.hstem)} ft</b><br>Bearing eccentricity from stem centerline e<sub>brg</sub> = t<sub>bw</sub> + setback − t<sub>sb</sub>/2 = <b>${fmt(g.tbw+g.brgSetback-g.tsb/2)} ft</b> ${(g.tbw+g.brgSetback-g.tsb/2)>=0?"(toward toe → adds stem moment)":"(toward heel → relieves stem moment)"}</div>
+    ${bwOffGeo()?`<div class="derived">${bwOffDerivedHTML()}</div>`:`<div class="derived">Derived: bridge seat width = t<sub>st</sub> − t<sub>bw</sub> = <b>${fmt(derivedSeat)} ft</b> &nbsp;·&nbsp; seat elevation (above footing base) = <b>${fmt(g.tf+g.hstem)} ft</b><br>Bearing eccentricity from stem centerline e<sub>brg</sub> = t<sub>bw</sub> + setback − t<sub>sb</sub>/2 = <b>${fmt(g.tbw+g.brgSetback-g.tsb/2)} ft</b> ${(g.tbw+g.brgSetback-g.tsb/2)>=0?"(toward toe → adds stem moment)":"(toward heel → relieves stem moment)"}</div>`}
     <div class="subhead">Footing</div>
     ${inpRow("Toe length L<sub>toe</sub>","geom.Ltoe","ft")}
     ${inpRow("Heel length L<sub>heel</sub>","geom.Lheel","ft")}
@@ -3328,8 +3347,13 @@ function computeAp(R){
   P.eBw=P.sup==="shelf"? tbw/2+P.av/12 : 0; P.eSh=shelf? tbw/2+P.xSh/12 : 0;
   P.x=it==="semi"? geo.xBrg : (P.sup==="shelf"? geo.xStemBack+P.av/12 : geo.xStemBack-tbw/2); P.xShT=it==="semi"? geo.xBrg : geo.xStemBack+P.xSh/12;
   P.zSlab=+g.tf+(+g.hstem)+(+g.hbw)-P.t/2;   // slab mid-depth above the footing base (inertia)
+  /* ABSH: backwall offset e > 0 (conventional) — the slab bears on the stem shelf behind the backwall (replaces the paving notch / deck end:
+     their inputs are not used): the reaction at the middle of the bearing width e, x = x_stem,back − e/2; no bracket weight; no couple on the
+     backwall (e_bw = 0: the reaction goes straight down into the stem); the slab mid-depth at the shelf elevation + t/2 (inertia on the wall). */
+  const OFF=geo.off;
+  if(OFF){ P.sup="stem"; P.stemShelf=true; P.bS=OFF.eIn; P.av=OFF.eIn/2; P.wSh=0; P.xSh=0; P.WSh=0; P.eBw=0; P.eSh=0; P.x=OFF.xSh; P.xShT=OFF.xSh; P.zSlab=OFF.zSh+P.t/2; }
   if(P.Lw>Lab+0.01) warn(`Approach slab: its width along the abutment W/cos θ = ${fmt(P.Lw,2)} ft exceeds L_ab = ${fmt(Lab,2)} ft — the whole slab reaction is applied to the abutment (panel I-0b).`);
-  if(shelf&&it!=="integral"&&P.t+P.hS/12>+g.hbw+1e-9) warn(`Approach slab shelf: slab thickness + shelf depth = ${fmt(P.t+P.hS/12,2)} ft exceeds the backwall height h_bw = ${fmt(+g.hbw,2)} ft — the shelf would be below the seat (panels I-0b, I-1).`);
+  if(shelf&&!OFF&&it!=="integral"&&P.t+P.hS/12>+g.hbw+1e-9) warn(`Approach slab shelf: slab thickness + shelf depth = ${fmt(P.t+P.hS/12,2)} ft exceeds the backwall height h_bw = ${fmt(+g.hbw,2)} ft — the shelf would be below the seat (panels I-0b, I-1).`);
   if(P.legacy){ P.qEq=+A.qEq; P.RDC=P.qEq*Lab; P.RDW=0; P.RLLim=0; P.RLL=0; P.qDC=P.qEq; P.qDW=0; P.qLL=0; P.qLLn=0; P.F=0; P.Wi=0; P.eqWall=false; P.eqSup=false; return P; }
   P.wDC=P.gc*P.t; P.wDW=P.ws;
   P.RDC=P.wDC*P.area/2; P.RDW=P.wDW*P.area/2;   // totals on the abutment (kip)
@@ -3344,7 +3368,7 @@ function computeAp(R){
   P.mu=Math.max(0,+A.mu||0); P.F=it!=="conv"? P.mu*(P.RDC+P.RDW) : 0;
   // Extreme Event I: the slab mass tributary to the abutment (its end reaction) × k_h — on the wall at the slab (shelf of a conventional
   // abutment) or with the superstructure share (semi-integral: on the end diaphragm; deck over the backwall)
-  P.Wi=P.RDC+P.RDW+P.WSh; P.eqWall=it==="conv"&&P.sup==="shelf"; P.eqSup=it==="semi"||(it==="conv"&&P.sup==="deck");
+  P.Wi=P.RDC+P.RDW+P.WSh; P.eqWall=it==="conv"&&(P.sup==="shelf"||P.sup==="stem"); P.eqSup=it==="semi"||(it==="conv"&&P.sup==="deck");   // ABSH: the stem shelf, as the paving notch
   return P; }
 
 /* ------------------------------------------------------------
@@ -3357,11 +3381,12 @@ function computeAll(){
 
   /* ===== C-1 Geometry derivations ===== */
   const B = g.Ltoe+g.tsb+g.Lheel;
-  const seatW = g.tst-g.tbw;
+  const OFF = bwOffGeo();                     // ABSH: backwall offset (null = flush, as before)
+  const seatW = OFF? g.tst-g.tbw-OFF.e : g.tst-g.tbw;   // ABSH: the seat in front of the inset backwall
   const zSeat = g.tf+g.hstem;                 // bearing elevation above footing base
-  const xStemBack = g.Ltoe+g.tsb;             // back face of stem (= back face of backwall)
+  const xStemBack = g.Ltoe+g.tsb;             // back face of stem (= back face of backwall; ABSH: the backwall's back face is e in front of it)
   const xStemTopFront = xStemBack-g.tst;      // front face of stem at top
-  const xBwFront = xStemBack-g.tbw;
+  const xBwFront = OFF? OFF.xBwFront : xStemBack-g.tbw;   // ABSH: x_stem,back − e − t_bw
   const xBrg = xBwFront-g.brgSetback;         // bearing line, from toe
   const hWedge = g.Lheel*Math.tan(deg2rad(+g.beta||0)); // sloping backfill: rise of the ground surface over the heel
   const H = g.tf+g.soilH+hWedge;              // retained height at virtual back plane (heel end)
@@ -3369,8 +3394,16 @@ function computeAll(){
   const xStemCenter = g.Ltoe+g.tsb/2;         // centroidal axis of the stem base section, from toe
   const eBrg = xStemCenter-xBrg;              // bearing offset from stem center; + = bearing toward toe (adds heel-face tension)
   R.geo={B,seatW,zSeat,xStemBack,xStemTopFront,xBwFront,xBrg,H,hTotal,xStemCenter,eBrg};
+  if(OFF){ R.geo.off=OFF;   // ABSH: input errors of the offset geometry (the results below are not valid while one shows)
+    if(OFF.e+g.tbw>g.tst+1e-9) warn(`Input error — Backwall offset: e + t_bw = ${fmt(OFF.eIn,1)} + ${fmt(g.tbw*12,1)} = ${fmt(OFF.eIn+g.tbw*12,1)} in exceeds the stem top thickness t_st = ${fmt(g.tst*12,1)} in (panel I-1): the backwall would overhang the front of the stem. Reduce e or t_bw, or increase t_st.`,"err");
+    else if(seatW<=1e-9) warn(`Input error — Backwall offset: the bridge seat width t_st − t_bw − e = 0 (panel I-1): no seat is left in front of the backwall for the bearings.`,"err");
+    if(!(OFF.d>0)) warn("Input error — Stem shelf: enter the shelf depth d_sh below the top of the backwall (panel I-1); with no approach slab (panel I-0b) there is no slab thickness to take it from.","err");
+    else if(OFF.d>g.hbw+1e-9) warn(`Input error — Stem shelf: the shelf depth d_sh = ${fmt(OFF.dIn,1)} in exceeds the backwall height h_bw = ${fmt(g.hbw*12,1)} in (panel I-1): the shelf would be below the bridge seat.`,"err");
+    const A=S.apSlab; if(OFF.apOn&&!OFF.dAuto&&Math.abs(OFF.dIn-(+A.t)*12)>0.01) warn(`Stem shelf: the shelf depth d_sh = ${fmt(OFF.dIn,1)} in differs from the approach slab thickness t = ${fmt((+A.t)*12,1)} in: the slab is taken on the shelf, its top ${fmt(Math.abs(OFF.dIn-(+A.t)*12),1)} in ${OFF.dIn>(+A.t)*12?"below":"above"} the top of the backwall (panels I-0b, I-1).`);
+    if(!OFF.apOn) warn("Stem shelf without an approach slab (panel I-0b): the backfill over the shelf (e × d_sh) is not added to the vertical earth load (it would act behind the stem centroid and relieve the stem; small). Turn the approach slab on if it bears on the shelf."); }
 
-  if(seatW<=0) warnFor("conv","Bridge seat width (t_st − t_bw) is ≤ 0 — backwall is thicker than the stem top. Geometry invalid.","err");
+  if(OFF&&seatW<=0){}   // ABSH: reported above
+  else if(seatW<=0) warnFor("conv","Bridge seat width (t_st − t_bw) is ≤ 0 — backwall is thicker than the stem top. Geometry invalid.","err");
   if(xBrg<xStemTopFront) warnFor("conv","Bearing line falls in front of the stem top front face — bearing is off the seat. Check setback/seat geometry.","err");
   else if(xBrg-xStemTopFront < 0.75) warnFor("conv","Bearing line is within 9 in of the front edge of the seat — verify edge distance and bearing detailing.");
   if(g.tst>g.tsb) warnFor("conv","Stem top thickness exceeds bottom thickness (negative front batter) — verify intent.");
@@ -3392,6 +3425,8 @@ function computeAll(){
   if(semiDia) R.diaSemi={W:Wdia0, add:WdiaAdd, inRx:!!(S.iab&&S.iab.diaRx), x:xBrg};
   if(!semiDia) parts.push({name:"Backwall", A:g.tbw*g.hbw, W:g.tbw*g.hbw*gcSub*Lab,
     x:xBwFront+g.tbw/2, y:g.tf+g.hstem+g.hbw/2, note:`t_bw·h_bw·γ_c·L_ab`});
+  // ABSH: the stem shelf behind the inset backwall — the stem at its full thickness from the seat up to the shelf: e × h_sh at x_stem,back − e/2
+  if(OFF&&OFF.hSh>0) parts.push({name:"Stem shelf (behind the backwall)", A:OFF.e*OFF.hSh, W:OFF.e*OFF.hSh*gcSub*Lab, x:OFF.xSh, y:zSeat+OFF.hSh/2, note:`e·h_sh·γ_c·L_ab`});
   // Stem: vertical back face; rectangular core (width t_st) + front batter triangle
   const Wrect=g.tst*g.hstem*gcSub*Lab, xrect=xStemBack-g.tst/2;
   parts.push({name:"Stem — rectangular core", A:g.tst*g.hstem, W:Wrect, x:xrect, y:g.tf+g.hstem/2, note:"t_st·h_stem·γ_c·L_ab"});
@@ -3608,7 +3643,7 @@ function computeAll(){
   /* APS: approach slab reaction (conventional: at the shelf / deck end over the backwall; semi-integral: on the end diaphragm, to the
      bearings at x_brg). DC includes the shelf; LL = the loaded lanes, without IM on the footing / piles when they are below ground
      (Vim = with IM, for the stem and seat), as the girder LL. Off in the construction stage (SUPER_GROUPS). */
-  if(R.ap&&iabType()!=="integral"){ const P=R.ap, sm=iabType()==="semi", at=sm?"end diaphragm (to the bearings)":P.sup==="shelf"?"shelf":"deck end over the backwall";
+  if(R.ap&&iabType()!=="integral"){ const P=R.ap, sm=iabType()==="semi", at=sm?"end diaphragm (to the bearings)":P.stemShelf?"stem shelf":P.sup==="shelf"?"shelf":"deck end over the backwall";
     groups.APdc={cls:"DC", V:P.RDC+P.WSh, Mv:P.RDC*P.x+P.WSh*P.xShT, Hx:0,Mh:0,Hy:0,Mt:0, desc:"Approach slab"+(P.WSh>0?" + shelf":"")+" — DC at the "+at+(P.legacy?" (equivalent dead load)":"")};
     if(P.RDW>0) groups.APdw={cls:"DW", V:P.RDW, Mv:P.RDW*P.x, Hx:0,Mh:0,Hy:0,Mt:0, desc:"Approach slab — wearing surface (DW)"};
     if(P.RLLim>0){ const V=(R.im&&R.im.on)? P.RLL : P.RLLim; groups.APll={cls:"LL", V, Mv:V*P.x, Hx:0,Mh:0,Hy:0,Mt:0, Vim:P.RLLim, desc:"Approach slab — HL-93 "+((R.im&&R.im.on)?"(IM removed: foundation below ground)":"+ IM")+", "+P.gov.n+" lane"+(P.gov.n>1?"s":"")}; } }
@@ -4354,8 +4389,12 @@ function computeAll(){
   }
 
   /* ---- Backwall ---- */
-  const hbwRet=Math.max(0,Math.min(g.hbw,g.soilH-g.hstem));
-  const heqBW=lsRem? 0 : interpHeq(hbwRet||g.hbw);   // APS: final-state LS removed with the approach slab
+  /* ABSH: backwall offset e > 0 — the design section is the base of the backwall at the shelf elevation (below it the backwall and the stem
+     shelf are one section, t_bw + e thick): cantilever height h_c = d_sh, retained height and the wheel-load strip from it. (MassDOT seismic stop:
+     the force stays at h_bw/2, conservative, on the t_bw section.) e = 0: h_c = h_bw, as before. */
+  const bwOFF=R.geo.off, hbwC=bwOFF? bwOFF.hC : g.hbw;
+  const hbwRet=bwOFF? Math.max(0,Math.min(hbwC,g.soilH-g.hstem-bwOFF.hSh)) : Math.max(0,Math.min(g.hbw,g.soilH-g.hstem));
+  const heqBW=lsRem? 0 : interpHeq(hbwRet||hbwC);   // APS: final-state LS removed with the approach slab
   const Mbw_EH=kah*gam*Math.pow(hbwRet,3)/6, Vbw_EH=kah*gam*hbwRet*hbwRet/2;
   const Mbw_LS=kah*gam*heqBW*hbwRet*hbwRet/2, Vbw_LS=kah*gam*heqBW*hbwRet;
   const esQ=+S.soil.esQ||0;
@@ -4370,7 +4409,7 @@ function computeAll(){
   // APS: with an approach slab on a conventional abutment the slab reaction replaces the wheel load on top of the backwall (below)
   const apB=(R.ap&&iabType()==="conv")? R.ap : null;
   const bwMode=apB? "slab" : (S.bwLL&&S.bwLL.mode==="off")?"off":"wheel";
-  const bwW={mode:bwMode, Pw:16, IM:0.33, m:1.20, X:g.hbw, E:45+10*g.hbw, sAx:72, e:g.tbw/2};
+  const bwW={mode:bwMode, Pw:16, IM:0.33, m:1.20, X:hbwC, E:45+10*hbwC, sAx:72, e:g.tbw/2};   // ABSH: X = h_c
   bwW.w1=bwW.Pw/bwW.E; bwW.w2=2*bwW.Pw/(bwW.E+bwW.sAx); bwW.two=bwW.w2>bwW.w1;
   bwW.wLL=bwMode!=="wheel"?0 : bwW.m*(1+bwW.IM)*Math.max(bwW.w1,bwW.w2)*12;   // kip/ft
   bwW.M=bwW.wLL*bwW.e;                                                       // kip-ft/ft, unfactored
@@ -4388,14 +4427,14 @@ function computeAll(){
     MuBW=Math.max(0,MuB0-(GP.DC[0]*MDC+GP.DW[0]*MDW)); MsBW=Math.max(0,MsB0-(MDC+MDW));
     const MuF=GP.DC[1]*MDC+GP.DW[1]*MDW+gLSbw*mBW*MLL-GP.EH[0]*Mbw_EH-GP.ES[0]*Mbw_ES, MsF=MDC+MDW+mBWs*MLL-Mbw_EH-Mbw_ES;
     apBw={MDC,MDW,MLL,MuB0,MsB0,MuF,MsF,front:MuF>1e-9,gDCmin:GP.DC[0],gDWmin:GP.DW[0],gDCmax:GP.DC[1],gDWmax:GP.DW[1],gEHmin:GP.EH[0],gESmin:GP.ES[0],gLL:gLSbw*mBW,mS:mBWs}; }
-  R.bwDem={hbwRet,heqBW,Mbw_EH,Vbw_EH,Mbw_LS,Vbw_LS,Mbw_ES,Vbw_ES,MuBW,VuBW,MsBW,wheel:bwW,
+  R.bwDem={hbwRet,heqBW,...(bwOFF?{hbwC}:{}),Mbw_EH,Vbw_EH,Mbw_LS,Vbw_LS,Mbw_ES,Vbw_ES,MuBW,VuBW,MsBW,wheel:bwW,
     lbl:`${gEH_max.toFixed(2)}·EH + ${gLSbw.toFixed(2)}·LS${bwMode!=="wheel"?"":` + ${(gLSbw*mBW).toFixed(2)}·LL (wheel on the backwall)`}${apBw?` − (${GP.DC[0].toFixed(2)}·DC + ${GP.DW[0].toFixed(2)}·DW) approach slab, slab LL off`:""} (Strength I)`, gLS:gLSbw, ...(apBw?{ap:apBw}:{})};
   R.checks.bwFlex=sectionCheck({name:"Backwall", h:g.tbw*12, cover:m.coverT, bar:S.reinf.bw.size,
     sp:+S.reinf.bw.sp, Mu:MuBW, Vu:VuBW, Ms:MsBW, lbl:R.bwDem.lbl, coated:!!S.reinf.coatBW,
-    bST:Math.min(Lab,g.hbw)*12, hST:g.tbw*12, betaMode:g.tbw*12<16?"simple":"general"});
+    bST:Math.min(Lab,hbwC)*12, hST:g.tbw*12, betaMode:g.tbw*12<16?"simple":"general"});
   if(apBw&&apBw.front) R.checks.bwFront=sectionCheck({name:"Backwall front face", h:g.tbw*12, cover:m.coverT, bar:S.reinf.bw.size,   // APS
     sp:+S.reinf.bw.sp, Mu:apBw.MuF, Vu:0, Ms:Math.max(0,apBw.MsF), lbl:`${GP.DC[1].toFixed(2)}·DC + ${GP.DW[1].toFixed(2)}·DW + ${(gLSbw*mBW).toFixed(2)}·LL approach slab − ${GP.EH[0].toFixed(2)}·EH (Strength I, front face)`, coated:!!S.reinf.coatBW,
-    bST:Math.min(Lab,g.hbw)*12, hST:g.tbw*12, betaMode:"simple", quiet:true});
+    bST:Math.min(Lab,hbwC)*12, hST:g.tbw*12, betaMode:"simple", quiet:true});
   /* ABR1 (2026-10-20): backwall at the extreme event, φ = 1.0 [1.3.2.1] against the nominal M_n, V_n of the backwall section (panel I-9 bars).
      (a) Extreme Event I [11.6.5.1, Table 3.4.1-1], when the M–O increment applies (Extreme Event I on, not a single-span bridge, C3.10.9.1):
          back face, 1.00·EH + ΔP_AE over the backwall's retained height (ΔK_h of the wall, at the ΔP_AE height ratio) + backwall inertia
@@ -4407,14 +4446,14 @@ function computeAll(){
   R.bwEE=null;
   if(iabType()==="conv"){ const L=LIMITS["Extreme Event I"], q=R.seis, out={};
     const bwSec=o=>sectionCheck(Object.assign({name:"Backwall", h:g.tbw*12, cover:m.coverT, bar:S.reinf.bw.size, sp:+S.reinf.bw.sp, Ms:0,
-      bST:Math.min(Lab,g.hbw)*12, hST:g.tbw*12, betaMode:g.tbw*12<16?"simple":"general", quiet:true},o));
+      bST:Math.min(Lab,hbwC)*12, hST:g.tbw*12, betaMode:g.tbw*12<16?"simple":"general", quiet:true},o));
     if(L&&q&&!q.single&&isFinite(q.dKh)){
       const gEH=eqEHfixed()!==null? eqEHfixed() : 1.0, gq=Math.max(0,+S.seismic.gEQll||0);
       // ABR3: increment at h/3 ("static" mode, 11.6.5.3) or the entered ratio; the 11.6.5.1 cases (f_P, f_I), the larger D/C governs
-      const dP0=0.5*q.dKh*gam*hbwRet*hbwRet, zP=eqZr()*hbwRet, Wi0=q.kh*g.tbw*g.hbw*m.gc, zI=g.hbw/2;
+      const dP0=0.5*q.dKh*gam*hbwRet*hbwRet, zP=eqZr()*hbwRet, Wi0=q.kh*g.tbw*hbwC*m.gc, zI=hbwC/2;   // ABSH: h_c
       for(const k of eqNC(q.fBk)){ const dP=k.fP*dP0, Wi=k.fI*Wi0;
         let Mu=gEH*Mbw_EH+dP*zP+Wi*zI+gq*(Mbw_LS+bwW.M)+Mbw_ES, Vu=gEH*Vbw_EH+dP+Wi+gq*Vbw_LS+Vbw_ES, apE=null;
-        if(apBw){ const Wa=apB.eqWall? k.fI*q.kh*(apB.qDC+apB.qDW+apB.wSh) : 0, zA=g.hbw-apB.t/2;   // APS: slab inertia on the shelf (× f_I), slab DL couple at 1.00 (relieving), slab LL off
+        if(apBw){ const Wa=apB.eqWall? k.fI*q.kh*(apB.qDC+apB.qDW+apB.wSh) : 0, zA=bwOFF? Math.max(0,hbwC-apB.t/2) : g.hbw-apB.t/2;   // APS: slab inertia on the shelf (× f_I), slab DL couple at 1.00 (relieving), slab LL off
           Mu=Math.max(0,Mu+Wa*zA-(apBw.MDC+apBw.MDW)); Vu+=Wa; apE={Wa,zA}; }
         const c=bwSec({Mu,Vu}), Mn=c.phiMn/c.phiF, Vn=c.Vc, r={gEH,gq,dKh:q.dKh,kh:q.kh,dP,zP,Wi,zI,Mu,Vu,Mn,Vn,dcM:Mu/Mn,dcV:Vu/Vn,c, nc:k.c, fP:k.fP, fI:k.fI, dP0, Wi0, ...(apE?{apE}:{})};
         if(!out.ee||Math.max(r.dcM,r.dcV)>Math.max(out.ee.dcM,out.ee.dcV)+1e-12) out.ee=r; }
@@ -4456,6 +4495,13 @@ function computeAll(){
       o.sec=sectionCheck({name:"Backwall shelf", h, cover:+m.coverT, bar:o.bar, sp:o.sp, Mu:Mu/12, Vu, Ms, bST:12*Math.max(1,P.Lload), hST:h, betaMode:h<16?"simple":"general", quiet:true, lbl:"Strength I — cantilever (a_v > d), 5.8.4.2.1"});
       o.AsReq=(isFinite(o.sec.AsReq)? o.sec.AsReq : NaN)+o.An; o.dcAs=isFinite(o.AsReq)? o.AsReq/o.As : 99; o.dcV=o.sec.dcShear; }
     R.apShelf=o; }
+  /* ABSH: approach slab on the stem shelf (backwall offset e > 0) — the shelf is stem concrete over the full stem below it: no bracket, no
+     shear plane (the reaction goes straight down into the stem). The bearing of the slab on the shelf is checked as the paving notch's
+     [5.6.5, Eq. 5.6.5-2]: q_b = V_u,slab / (12 e) ≤ φ_b·0.85 f'c·m, φ_b = 0.70, m = 1 (free edge, no confinement credit). Per ft, Strength I. */
+  if(R.ap&&R.ap.stemShelf&&!R.ap.legacy){ const P=R.ap, L1=LIMITS["Strength I"], fc=+m.fc;
+    const o={gDC:GP.DC[1], gDW:GP.DW[1], gLL:L1.LL*L1.mLL, e:P.bS, fc};
+    o.VuS=o.gDC*P.qDC+o.gDW*P.qDW+o.gLL*P.qLL; o.A1=P.bS*12; o.qb=o.VuS/o.A1; o.qR=0.70*0.85*fc; o.dcB=o.qb/o.qR;
+    R.apStemSh=o; }
 
   /* ---- APS: approach slab design — one-way simple span L_s (the longest strip), per ft of width: DC, DW (w L²/8, w L/2) and HL-93 per lane
      (the largest truck / tandem moment with IM 33 % + lane load; end reaction for the shear) over the equivalent strip of 4.6.2.3 (Eqs.
@@ -4552,11 +4598,11 @@ function computeAll(){
       else{ const sT=shp(Hs,mdS?0:cS), sS=shp(Hs,cS), T={V:(q.dKh+kA)*gam*sT.V, M:(q.dKh+kA)*gam*sT.M}, St={V:kA*gam*sS.V, M:kA*gam*sS.M};
         iA={V:Math.max(0,T.V-St.V), M:Math.max(0,T.M-St.M)}; iB={V:Math.max(0,0.5*T.V-St.V), M:Math.max(0,0.5*T.M-St.M)}; }
       if(q.single){ iA={V:0,M:0}; iB={V:0,M:0}; }   // single-span bridge: no M–O increment [C3.10.9.1]
-      const aCore=g.tst*g.hstem, aBat=Math.max(0,g.tsb-g.tst)*g.hstem/2, aBw=iabType()==="semi"? 0 : g.tbw*g.hbw, wallApf=aCore+aBat+aBw;   // ABR2: semi-integral — no end diaphragm (superstructure share)
+      const aCore=g.tst*g.hstem, aBat=Math.max(0,g.tsb-g.tst)*g.hstem/2, aBw=iabType()==="semi"? 0 : g.tbw*g.hbw, sOFF=R.geo.off, aSh=sOFF? sOFF.e*sOFF.hSh : 0, wallApf=aCore+aBat+aBw+aSh;   // ABR2: semi-integral — no end diaphragm (superstructure share)   // ABSH: + the stem shelf e·h_sh
       const Wi0=R.seis.kh*wallApf*m.gc;                   // kip per ft of wall (0 for a single-span bridge: k_h = 0, C3.10.9.1)
       // ABR1: inertia at the centroid of the wall above the stem base [11.6.5.1]: stem core at h_stem/2, front batter at h_stem/3,
       // backwall at h_stem + h_bw/2 (was all of it at h_stem/2)
-      const zWi=wallApf>0? (aCore*g.hstem/2+aBat*g.hstem/3+aBw*(g.hstem+g.hbw/2))/wallApf : g.hstem/2;
+      const zWi=wallApf>0? (aCore*g.hstem/2+aBat*g.hstem/3+aBw*(g.hstem+g.hbw/2)+(aSh>0? aSh*(g.hstem+sOFF.hSh/2) : 0))/wallApf : g.hstem/2;   // ABSH: stem shelf at h_stem + h_sh/2
       const sup=ns*(R.seis.EQsup/Lab);                    // superstructure inertia at the seat
       const cs=S.seismic.nonConc===false? [{c:"",i:iA,fI:1}] : [{c:"A",i:iA,fI:0.5},{c:"B",i:iB,fI:1}];
       const apIpf=(R.seis.apI||0)/Lab, zApS=R.ap? R.ap.zSlab-g.tf : 0;   // APS: approach slab inertia on the shelf (per ft, × f_I), arm above the stem base
@@ -4564,7 +4610,7 @@ function computeAll(){
       const best=all.reduce((b,x)=>(!b||x.Meq>b.Meq+1e-12)?x:b,null);
       Meq=best.Meq; Veq=best.Veq;
       eqT={dP:best.dP, zP:best.zP, MdP:best.MdP, nc:best.c, fI:best.fI, Wi0, iA, iB, mode:S.seismic.hEQmode==="ratio"?"ratio":"static", cS, mdS, kA, alt:all.filter(x=>x!==best),
-        dKh:R.seis.dKh, wallApf, Wi:best.Wi, sup, aCore, aBat, aBw, zWi, ...(apIpf>0?{apI:best.apI, apIpf, zApS}:{}),   // APS
+        dKh:R.seis.dKh, wallApf, Wi:best.Wi, sup, aCore, aBat, aBw, zWi, ...(aSh>0?{aSh, zSh:g.hstem+sOFF.hSh/2, WiSh:R.seis.kh*aSh*m.gc}:{}), ...(apIpf>0?{apI:best.apI, apIpf, zApS}:{}),   // APS
         WiC:R.seis.kh*aCore*m.gc, WiB:R.seis.kh*aBat*m.gc, WiW:R.seis.kh*aBw*m.gc};   // ABSW: terms for the worked M_u, V_u (display only)
     }
     let Mu=gEH_ls*MEH_ls+(L.LL?L.LL*MLS_ls:0)+gES_ls*MES_ls+HgirdPerFt*g.hstem + MeccPerFt + Meq;
@@ -4905,7 +4951,7 @@ function computeAll(){
     // sides, c = min(pad to seat front edge, pad to stem back face (under the backwall), half the clear distance to the next
     // pad, pad to the wall end). m = √(A2/A1) ≤ 2; m = 1 when the support is not wider than the pad on all sides (c ≤ 0).
     const posB=R.beamPos||[], Lin=bg.padL, Win=bg.padW;
-    const cFront=(seatW-g.brgSetback)*12-Lin/2, cBack=(g.brgSetback+g.tbw)*12-Lin/2;
+    const cFront=(seatW-g.brgSetback)*12-Lin/2, cBack=(R.geo.off? g.brgSetback+g.tbw+R.geo.off.e : g.brgSetback+g.tbw)*12-Lin/2;   // ABSH: + e to the stem back face
     function seatM(i){
       const y=posB[i]||0; let cT=(Lab/2-Math.abs(y))*12-Win/2, cTw="wall end";
       for(const j of [i-1,i+1]){ if(j<0||j>=posB.length) continue; const cj=(Math.abs(posB[j]-y)*12-Win)/2; if(cj<cT){ cT=cj; cTw="½ clear distance to girder "+(j+1)+" pad"; } }
@@ -5254,6 +5300,7 @@ function computeAll(){
     if(fpS.geom&&(fpS.geom.hwFr===null||fpS.geom.hwFr===undefined||fpS.geom.hwFr==="")) delete fpS.geom.hwFr;   // ABM6: balanced water leaves the Input ID unchanged              // OWNB: new inputs at their default leave it unchanged too
     if(fpS.factors&&fpS.factors.gpEHmaxR===1.35) delete fpS.factors.gpEHmaxR;
     if(fpS.constr&&fpS.constr.qC===0) delete fpS.constr.qC;
+    if(fpS.geom&&!(+fpS.geom.bwOff>0)){ delete fpS.geom.bwOff; delete fpS.geom.shD; }   // ABSH: no backwall offset leaves the Input ID unchanged
     if(fpS.constr&&fpS.constr.gC===1.5) delete fpS.constr.gC;
     if(fpS.reinf&&fpS.reinf.coatBW===false) delete fpS.reinf.coatBW;
     if(fpS.wing&&!fpS.wing.on) delete fpS.wing;
@@ -5397,6 +5444,7 @@ function computeAll(){
   { const tb=iabType()==="integral"? "tab-iab" : "tab-struct", F=R.checks.bwFront, H=R.apShelf, D=R.apDes;
     if(F&&iabType()==="conv"){ addD("apBwF","Backwall front face — approach-slab couple [5.6.3]",F.dcFlex,"tab-struct",F.lbl);
       addD("apBwFc","Backwall front face — crack control [5.6.7]",F.sMax>0? F.sp/F.sMax : (F.fss>0?99:0),"tab-struct","s ≤ s_max"); }
+    if(R.apStemSh){ const Q=R.apStemSh; addD("apSSB","Approach slab on the stem shelf — bearing [5.6.5]",Q.dcB,"tab-struct",`q_b = ${fmt(Q.qb,3)} ksi on e = ${fmt(Q.e,1)} in, φ_b = 0.70, m = 1`); }   // ABSH
     if(H){ const nm="Approach-slab shelf (bracket)", gv=`V_u = ${fmt(H.Vu,2)} kip/ft, N_uc = ${fmt(H.Nuc,2)} kip/ft, a_v = ${fmt(H.av,1)} in`;
       addD("apShAs",nm+" — primary tie A_s ["+(H.corbel?"5.8.4.2.2":"5.6.3, 5.8.4.2.1")+"]",H.dcAs,tb,`A_s,req = ${fmt(H.AsReq,3)} vs ${fmt(H.As,3)} in²/ft; `+gv);
       if(H.corbel){ addD("apShAh",nm+" — closed ties A_h [5.8.4.2.1, 5.8.4.2.2]",H.dcAh,tb,`A_h,req = ${fmt(H.AhReq,3)} vs ${fmt(H.Ah,3)} in²/ft`);
@@ -6279,7 +6327,7 @@ const DASH_ANCHOR={pileGrp:"o-pgrp",pileGrpUp:"o-pgrp",ts_stem:"o-ts",ts_bw:"o-t
   heelFlex:"o-str-Heel",heelShear:"o-str-Heel",heelMass:"o-str-Heel",heelFlexMin:"o-str-Heel",heelFlexCrack:"o-str-Heel",
   wJflex:"o-str-Wing junction",wJshear:"o-str-Wing junction",wJmin:"o-str-Wing junction",wJcrack:"o-str-Wing junction",wDev:"o-wing-ts",wTS:"o-wing-ts",   // WING
   wSflex:"o-str-Wingwall stem",wSshear:"o-str-Wingwall stem",wSmin:"o-str-Wingwall stem",wScrack:"o-str-Wingwall stem",wSlide:"o-wing-stab",wEcc:"o-wing-stab",wBrg:"o-wing-stab",
-  apBwF:"o-str-Backwall front face",apBwFc:"o-str-Backwall front face",apShAs:"o-ap-shelf",apShAh:"o-ap-shelf",apShV:"o-ap-shelf",apShB:"o-ap-shelf",apShE:"o-ap-shelf",   // APS
+  apBwF:"o-str-Backwall front face",apBwFc:"o-str-Backwall front face",apShAs:"o-ap-shelf",apShAh:"o-ap-shelf",apShV:"o-ap-shelf",apShB:"o-ap-shelf",apShE:"o-ap-shelf",apSSB:"o-ap-shelf",   // APS; ABSH
   apDF:"o-str-Approach slab",apDMin:"o-str-Approach slab",apDCr:"o-str-Approach slab",apDV:"o-str-Approach slab",apDD:"o-ap-des",apDT:"o-ap-des"};
 function gotoPanel(tab,anchor){
   activateTab(tab);
@@ -6496,11 +6544,12 @@ function renderTabLoads(R){
     <div class="figcap">To-scale cross-section; redraws as inputs change. Dimensions in feet. X measured from the toe.</div>
     ${varsTbl([
       ["B","Total footing width = L<sub>toe</sub> + t<sub>sb</sub> + L<sub>heel</sub>",geo.B,"ft"],
-      ["w_{seat}","Bridge seat width = t<sub>st</sub> − t<sub>bw</sub>",geo.seatW,"ft"],
+      ["w_{seat}","Bridge seat width = t<sub>st</sub> − t<sub>bw</sub>"+(geo.off?" − e":""),geo.seatW,"ft"],
       ["z_{brg}","Bearing (seat) elevation above footing base",geo.zSeat,"ft"],
       ["x_{brg}","Bearing line, from toe",geo.xBrg,"ft"],
       ["H","Retained height at heel plane = t<sub>f</sub> + h<sub>soil</sub>",geo.H,"ft"],
       ["H_{tot}","Total abutment height",geo.hTotal,"ft"]])}
+    ${geo.off?bwOffWorkHTML(R):""}
   `);
   /* --- self weights --- */
   let pw=`<table class="rtbl"><tr><th>Component</th><th>Formula</th><th>Area (ft²)</th><th>W (kip)</th><th>x̄ to toe (ft)</th><th>W·x̄ (kip·ft)</th></tr>`;
@@ -6726,9 +6775,10 @@ function apLoadsHTML(R){
   let h=`<div class="note-box">${abNL(`Model. The approach slab is a simple span of length L between the abutment and its far-end support (${P.far==="sleeper"?"sleeper slab":"the subbase"}).`,[
     ["Soil beneath:","it may settle away and lose its support, so it is not counted."],
     ["Basis:","AASHTO LRFD has no approach-slab article; the simple span is the usual DOT approach."],
-    ["Support at the abutment:",`<b>${P.sup==="shelf"?(it==="conv"?"backwall":"end-diaphragm")+" shelf (paving notch), a bracket on the back face":"deck over the backwall (the slab bears on the deck end)"}</b>; slab ends: ${AP_RULE_TXT[P.rule]}${A.skew==="ct35"?" (CTDOT 11.14.1CT rule at a skew of "+fmt(P.th,1)+"°)":""}.`],
+    ["Support at the abutment:",`<b>${P.stemShelf?"stem shelf behind the inset backwall (backwall offset e = "+fmt(P.bS,1)+" in, panel I-1): the stem at its full thickness, no corbel or paving notch":P.sup==="shelf"?(it==="conv"?"backwall":"end-diaphragm")+" shelf (paving notch), a bracket on the back face":"deck over the backwall (the slab bears on the deck end)"}</b>; slab ends: ${AP_RULE_TXT[P.rule]}${A.skew==="ct35"?" (CTDOT 11.14.1CT rule at a skew of "+fmt(P.th,1)+"°)":""}.`],
     ["Live-load surcharge:",`<b>${Lr.rem?"removed in the final state":"kept"}</b> — ${Lr.rem?esc(Lr.ref)+(Lr.auto?"":" (option, panel I-0b)")+"; the construction stage keeps it ("+wkLS+")":"the AASHTO 3.11.6.5 reduction is not taken (panel I-0b)"}; owner rule in ${ownLink}.`],
-    it==="conv"?["Backwall:","the slab reaction replaces the design truck wheel load on top of the backwall (Tab 5 §5.1)."]:null])}</div>`;
+    it==="conv"?["Backwall:","the slab reaction replaces the design truck wheel load on top of the backwall (Tab 5 §5.1)."]:null,
+    P.stemShelf?["Stem shelf:",`the slab bears on the stem top behind the backwall at the shelf elevation, d<sub>sh</sub> = ${fmt(R.geo.off.dIn,1)} in below the top of the backwall${R.geo.off.dAuto?" (= the slab thickness t)":""}; the paving-notch inputs of panel I-0b are not used.`]:null])}</div>`;
   h+=`<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start">${figBox("apslab",R)}</div>`;
   h+=eqB("Slab geometry and dead load","AASHTO LRFD 10th Ed. 3.5.1, Table 3.5.1-1; statics (simple span)",[
     `W = ${P.Wauto?`L_{ab}\\cos\\theta = (${t(+g.Lab)})\\cos ${t(P.th,1)}° = `:""}${t(P.W)}\\ \\text{ft}\\,, \\quad L = ${t(P.L)}\\ \\text{ft}\\,, \\quad t = ${t(P.t)}\\ \\text{ft}`,
@@ -6738,7 +6788,7 @@ function apLoadsHTML(R){
     `q_{DC} = w_{DC}\\dfrac{L_s}{2}\\cos\\theta = (${t(P.wDC,4)})\\dfrac{${t(P.Lmax)}}{2}\\cos ${t(P.th,1)}° = ${t(P.qDC,3)}\\ \\text{kip/ft}\\,, \\quad q_{DW} = ${t(P.qDW,3)}\\ \\text{kip/ft (per ft along the abutment, local)}`,
     ...(P.WSh>0?[`w_{sh} = \\gamma_c\\,b_S\\,\\dfrac{h_S + h_E}{2} = (${t(P.gc,3)})\\dfrac{${t(P.bS,1)}}{12}\\cdot\\dfrac{${t(P.hS,1)} + ${t(P.hE,1)}}{2(12)} = ${t(P.wSh,4)}\\ \\text{kip/ft at } \\bar x = \\dfrac{b_S(h_S + 2h_E)}{3(h_S + h_E)} = ${t(P.xSh,2)}\\ \\text{in};\\quad W_{sh} = w_{sh}\\min(W/\\cos\\theta,\\ L_{ab}) = ${t(P.WSh,2)}\\ \\text{kip}`]:[])],
     abNL("Strips of the slab span along the roadway.",[["Skew:",`per ft of the skewed abutment a strip reaction is × cos θ (θ = ${fmt(P.th,1)}°, panel I-1).`],
-      ["Totals:",`act on the abutment (stability, stem, ${it==="integral"?"integral cap and piles":"footing and piles"}).`],["Local values per ft:",`act on the ${P.sup==="shelf"?"shelf and the backwall":"deck end over the backwall"}.`],
+      ["Totals:",`act on the abutment (stability, stem, ${it==="integral"?"integral cap and piles":"footing and piles"}).`],["Local values per ft:",`act on the ${P.stemShelf?"stem shelf":P.sup==="shelf"?"shelf and the backwall":"deck end over the backwall"}.`],
       ["Length along the abutment:",`W/cos θ = ${fmt(P.Lw,2)} ft (L<sub>ab</sub> = ${fmt(+g.Lab,2)} ft).`]]));
   const e=P.hl;
   h+=eqB("HL-93 end reaction of one lane on the simple span L<sub>s</sub>","AASHTO LRFD 10th Ed. 3.6.1.2.2, 3.6.1.2.3, 3.6.1.2.4, 3.6.1.3.1, 3.6.2.1",[
@@ -6752,7 +6802,7 @@ function apLoadsHTML(R){
     ...(P.NL>1?[`E_M = 84 + 1.44\\sqrt{L_1W_1} = 84 + 1.44\\sqrt{(${t(P.L1)})(${t(P.W1m)})} = ${t(P.EMr,1)}\\ \\text{in} \\le \\dfrac{12W}{N_L} = \\dfrac{12(${t(P.W)})}{${P.NL}} = ${t(P.EMc,1)} \\Rightarrow E_M = ${t(P.EM,1)}\\ \\text{in}`]:[]),
     `w_{LL} = \\max\\!\\left(\\dfrac{R_L}{E_1/12}${P.NL>1?",\\ \\dfrac{R_L}{E_M/12}":""}\\right) = \\max\\!\\left(\\dfrac{${t(P.RlIM)}}{${t(P.E1/12,3)}}${P.NL>1?`,\\ \\dfrac{${t(P.RlIM)}}{${t(P.EM/12,3)}}`:""}\\right) = ${t(P.wLL,3)}\\ \\text{kip/ft of width (${P.multi?"multiple lanes":"one lane"})}`,
     `q_{LL} = w_{LL}\\cos\\theta = (${t(P.wLL,3)})\\cos ${t(P.th,1)}° = ${t(P.qLL,3)}\\ \\text{kip/ft along the abutment (with IM; without IM ${t(P.qLLn,3)})}`],
-    abNL("The strip widths include the multiple presence factor.",[["One-lane strip:","divided by 1.20 (C4.6.2.3; C3.6.1.1.2), so m is not applied again."],["This local intensity:","loads the "+(P.sup==="shelf"?"shelf and the backwall":"deck end")+" and the slab design."],["The total below:","loads the abutment."]]));
+    abNL("The strip widths include the multiple presence factor.",[["One-lane strip:","divided by 1.20 (C4.6.2.3; C3.6.1.1.2), so m is not applied again."],["This local intensity:","loads the "+(P.stemShelf?"stem shelf":P.sup==="shelf"?"shelf and the backwall":"deck end")+" and the slab design."],["The total below:","loads the abutment."]]));
   let lt=`<table class="rtbl"><tr><th>Lanes loaded n</th><th>m [T.3.6.1.1.2-1]</th><th>n·m·R<sub>L</sub> (kip)</th></tr>`;
   P.lanes.forEach(x=>{ lt+=`<tr${x===P.gov?' class="gov"':''}><td>${x.n}</td><td>${fmt(x.m,2)}</td><td>${fmt(x.R,2)}</td></tr>`; }); lt+="</table>";
   h+=eqB("Total live load on the abutment","AASHTO LRFD 10th Ed. 3.6.1.1.1, 3.6.1.1.2, 3.6.2.1",[
@@ -6765,6 +6815,7 @@ function apLoadsHTML(R){
       ["Permutations:","they also take it off with the girder LL reaction on, and off with it in the C11.5.6 cases (Tab 2)."]]))+lt;
   if(it!=="integral") h+=eqB("Point of application","statics",[
     it==="semi"? `x_{ap} = x_{brg} = ${t(P.x,3)}\\ \\text{ft from the toe (on the end diaphragm, carried by the girders to the bearings)}`
+    : P.stemShelf? `x_{ap} = x_{stem,back} - \\dfrac{e}{2} = ${t(R.geo.xStemBack,3)} - \\dfrac{${t(P.bS,2)}}{2(12)} = ${t(P.x,3)}\\ \\text{ft from the toe (mid-bearing of the stem shelf, width } e)\\,, \\quad e_{bw} = 0`
     : P.sup==="shelf"? `x_{ap} = x_{back} + a_v = ${t(R.geo.xStemBack,3)} + ${t(P.av,2)}/12 = ${t(P.x,3)}\\ \\text{ft from the toe}\\,, \\quad e_{bw} = \\dfrac{t_{bw}}{2} + a_v = \\dfrac{${t(+g.tbw)}}{2} + \\dfrac{${t(P.av,2)}}{12} = ${t(P.eBw,3)}\\ \\text{ft behind the backwall centroid}`
     : `x_{ap} = x_{back} - \\dfrac{t_{bw}}{2} = ${t(P.x,3)}\\ \\text{ft from the toe (on the backwall centroid: } e_{bw} = 0)`],
     `Load groups APdc${P.RDW>0?", APdw":""}, APll in §1.9 (the construction stage has no slab).`);
@@ -6776,7 +6827,7 @@ function apLoadsHTML(R){
       ["In the shelf:",`as N<sub>uc</sub> (${desTab[1]}).`],["Friction coefficient:",`μ = ${fmt(P.mu,2)} (panel I-0b).`]]));
   if(S.seismic.on&&R.seis) h+=eqB("Extreme Event I — slab inertia","AASHTO LRFD 10th Ed. 11.6.5.1, 3.10.9.1",[
     `W_{ap} = R_{DC} + R_{DW}${P.WSh>0?" + W_{sh}":""} = ${t(P.RDC,2)} + ${t(P.RDW,2)}${P.WSh>0?" + "+t(P.WSh,2):""} = ${t(P.Wi,2)}\\ \\text{kip (the slab mass tributary to the abutment)}`,
-    P.eqWall? `k_hW_{ap} = (${t(R.seis.kh,4)})(${t(P.Wi,2)}) = ${t((R.seis.kh||0)*P.Wi,2)}\\ \\text{kip at } z = t_f + h_{stem} + h_{bw} - t/2 = ${t(P.zSlab)}\\ \\text{ft}`
+    P.eqWall? `k_hW_{ap} = (${t(R.seis.kh,4)})(${t(P.Wi,2)}) = ${t((R.seis.kh||0)*P.Wi,2)}\\ \\text{kip at } z = ${P.stemShelf?"t_f + h_{stem} + h_{sh} + t/2":"t_f + h_{stem} + h_{bw} - t/2"} = ${t(P.zSlab)}\\ \\text{ft}`
     : it==="integral"? (R.iab&&R.iab.apEE? `F_{EQ} = \\min(k_hW,\\ F) = \\min((${t(R.iab.apEE.kh,4)})(${t(R.iab.apEE.W,2)}),\\ ${t(R.iab.apEE.Fcap,2)}) = ${t(R.iab.apEE.F,2)}\\ \\text{kip (friction cap)}` : `\\text{—}`)
     : `A_sW_{ap}\\cdot s_{EQ} = (${t(+S.seismic.As,3)})(${t(P.Wi,2)})(${t(R.seis.shEQ||1,2)}) = ${t((+S.seismic.As)*P.Wi*(R.seis.shEQ||1),2)}\\ \\text{kip (with the superstructure inertia, Tab 3 §3.6a)}`],
     P.eqWall? "On the shelf of the conventional backwall: with the wall inertia (× f<sub>I</sub> in the 11.6.5.1 cases), longitudinal and along the abutment (Tab 3 §3.6a, Tab 5 §5.1a, §5.2). Single-span bridge: k<sub>h</sub> = 0 (C3.10.9.1)."
@@ -6785,7 +6836,41 @@ function apLoadsHTML(R){
   return panel("o-ap","1.4a","Approach Slab — Loads on the Abutment",h);
 }
 /* shelf (bracket) panel: §5.8 (conventional, semi-integral) / §10.7 (integral) */
+/* ABSH: worked positions and lever arms of the inset backwall, the stem shelf and the slab reaction (Tab 1 §1.1; quoted in the Report) */
+function bwOffDerivedHTML(){ const g=S.geom, O=bwOffGeo(); if(!O) return "";
+  const seat=g.tst-g.tbw-O.e, eb=O.e+(+g.tbw)+(+g.brgSetback)-g.tsb/2;
+  return `Derived: bridge seat width = t<sub>st</sub> − t<sub>bw</sub> − e = <b>${fmt(seat)} ft</b> &nbsp;·&nbsp; seat elevation (above footing base) = <b>${fmt(g.tf+g.hstem)} ft</b> &nbsp;·&nbsp; shelf elevation = <b>${fmt(O.zSh)} ft</b> (d<sub>sh</sub> = ${fmt(O.dIn,1)} in${O.dAuto?" = slab t":""})<br>Bearing eccentricity from stem centerline e<sub>brg</sub> = e + t<sub>bw</sub> + setback − t<sub>sb</sub>/2 = <b>${fmt(eb)} ft</b> ${eb>=0?"(toward toe → adds stem moment)":"(toward heel → relieves stem moment)"}`; }
+function bwOffWorkHTML(R){
+  const O=R.geo.off, g=S.geom, t=fmtT, geo=R.geo, P=R.ap; if(!O) return "";
+  const xsc=geo.xStemCenter, xbw=geo.xBwFront+g.tbw/2, pb=R.parts.find(p=>p.name==="Backwall"), ps=R.parts.find(p=>/^Stem shelf/.test(p.name));
+  return eqB("Backwall offset e — positions and lever arms (x from the toe)","statics; panel I-1",[
+    `x_{bw,back} = x_{stem,back} - e = ${t(geo.xStemBack,3)} - \\dfrac{${t(O.eIn,2)}}{12} = ${t(O.xBwBack,3)}\\ \\text{ft}\\,, \\quad x_{bw,front} = x_{bw,back} - t_{bw} = ${t(O.xBwBack,3)} - ${t(+g.tbw,3)} = ${t(geo.xBwFront,3)}\\ \\text{ft}`,
+    `w_{seat} = t_{st} - t_{bw} - e = ${t(+g.tst)} - ${t(+g.tbw)} - ${t(O.e,3)} = ${t(geo.seatW,3)}\\ \\text{ft}\\,, \\quad x_{brg} = x_{bw,front} - a_{brg} = ${t(geo.xBwFront,3)} - ${t(+g.brgSetback)} = ${t(geo.xBrg,3)}\\ \\text{ft}`,
+    `\\bar x_{bw} = x_{bw,front} + \\dfrac{t_{bw}}{2} = ${t(geo.xBwFront,3)} + \\dfrac{${t(+g.tbw)}}{2} = ${t(xbw,3)}\\ \\text{ft}\\,, \\quad W_{bw} = ${t(pb?pb.W:0,2)}\\ \\text{kip (unchanged)}`,
+    `h_{sh} = h_{bw} - d_{sh} = ${t(+g.hbw)} - \\dfrac{${t(O.dIn,2)}}{12} = ${t(O.hSh,3)}\\ \\text{ft}\\,, \\quad z_{sh} = t_f + h_{stem} + h_{sh} = ${t(O.zSh,3)}\\ \\text{ft (shelf elevation above the footing base)}`,
+    ps? `W_{sh} = e\\,h_{sh}\\gamma_c L_{ab} = (${t(O.e,4)})(${t(O.hSh,3)})(${t(+S.mat.gc,3)})(${t(+g.Lab)}) = ${t(ps.W,2)}\\ \\text{kip at } \\bar x_{sh} = x_{stem,back} - \\dfrac{e}{2} = ${t(O.xSh,3)}\\ \\text{ft}` : `h_{sh} = 0:\\ \\text{no stem shelf above the seat}`,
+    ...(P? [`x_{ap} = x_{stem,back} - \\dfrac{e}{2} = ${t(P.x,3)}\\ \\text{ft (approach slab reaction, mid-bearing of the shelf; §1.4a)}`] : []),
+    `\\text{arms to the stem-base centroid } x_{sc} = ${t(xsc,3)}\\ \\text{ft (+ = toward the toe):}\\ \\ x_{sc}-\\bar x_{bw} = ${t(xsc-xbw,3)}${ps?`,\\ x_{sc}-\\bar x_{sh} = ${t(xsc-O.xSh,3)}`:""}${P?`,\\ x_{sc}-x_{ap} = ${t(xsc-P.x,3)}`:""},\\ x_{sc}-x_{brg} = ${t(xsc-geo.xBrg,3)}\\ \\text{ft}`],
+    abNL("Assumptions (engineer request 2026-11-10):",[["Shelf:","the stem at its full thickness carried up behind the backwall to the shelf (no corbel or paving notch); its weight is a stem part (§1.2)."],["Bearing setback:","measured from the front face of the backwall (panel I-1), so the bearing line moves e toward the toe with the backwall."],["Earth pressure:","stability on the virtual back plane at the heel and the stem on its back face, as before; the backwall's retained height is above the shelf (Tab 5 §5.1)."],["Moments:","these arms enter the stem-base eccentric moment (Tab 5 §5.2) and the footing / stability moments about the toe (Tab 2) through the load groups of §1.9."]]));
+}
+/* ABSH: the approach slab on the stem shelf (backwall offset e > 0): bearing only (the shelf is stem concrete, no bracket) */
+function apStemShHTML(R,no){
+  const H=R.apStemSh, P=R.ap, O=R.geo.off; if(!H||!P||!O) return "";
+  const t=fmtT;
+  let h=`<div class="note-box">${abNL("Stem shelf behind the inset backwall (backwall offset, panel I-1):",[
+    ["Geometry:",`width e = ${fmt(O.eIn,1)} in between the back face of the backwall and the back face of the stem, at the shelf elevation d<sub>sh</sub> = ${fmt(O.dIn,1)} in below the top of the backwall (h<sub>sh</sub> = ${fmt(O.hSh,3)} ft above the seat).`],
+    ["Basis:","the shelf is the stem at its full thickness carried up to the shelf elevation: the slab reaction goes straight down into the stem below, so there is no bracket action, no shear plane and no tie (5.8.4.2 does not apply). Its weight is in the stem self-weight (Tab 1, part \"Stem shelf\")."],
+    ["Checked here:","the bearing of the slab on the shelf, as for the paving notch [5.6.5]."],
+    ["Reinforcement:","the stem bars continue up into the shelf; no S1 / S2 shelf bars."]])}</div>`;
+  h+=eqB("Bearing of the slab on the stem shelf","AASHTO LRFD 10th Ed. 5.6.5 (Eq. 5.6.5-2), 5.5.4.2; Tables 3.4.1-1, 3.4.1-2",[
+    `V_{u,slab} = \\gamma_{DC}q_{DC} + \\gamma_{DW}q_{DW} + \\gamma_{LL}m\\,q_{LL} = ${t(H.gDC)}(${t(P.qDC,3)}) + ${t(H.gDW)}(${t(P.qDW,3)}) + ${t(H.gLL)}(${t(P.qLL,3)}) = ${t(H.VuS,3)}\\ \\text{kip/ft}`,
+    `q_b = \\dfrac{V_{u,slab}}{12\\,e} = \\dfrac{${t(H.VuS,3)}}{12(${t(H.e,2)})} = ${t(H.qb,4)}\\ \\text{ksi}\\,, \\quad q_R = \\varphi_b(0.85f'_c)m = 0.70(0.85)(${t(H.fc,1)})(1.0) = ${t(H.qR,3)}\\ \\text{ksi}`],
+    "q of §1.4a (local, per ft along the wall; LL with IM). The slab bears over the shelf width e (m = 1: no confinement credit at the free edge).");
+  h+=checkLine("Stem shelf bearing",`\\dfrac{q_b}{q_R} = \\dfrac{${t(H.qb,4)}}{${t(H.qR,3)}}`,H.dcB);
+  return panel("o-ap-shelf",no,"Approach Slab on the Stem Shelf — Bearing [5.6.5]",h);
+}
 function apShelfHTML(R,no){
+  if(R.apStemSh) return apStemShHTML(R,no);   // ABSH
   const H=R.apShelf, P=R.ap; if(!H||!P) return "";
   const t=fmtT, it=iabType(), wall=it==="conv"?"backwall":"end diaphragm", fc=H.fc, fy=H.fy;
   let h=`<div class="note-box">${abNL(`Shelf (paving notch) on the back face of the ${wall}:`,[
@@ -7613,7 +7698,15 @@ function renderTabStruct(R){
   const bd=R.bwDem, cB=R.checks.bwFlex, bw=bd.wheel||{mode:"off",M:0,wLL:0}, gLb=bd.gLS??+S.factors.llS1, esB=(bd.Mbw_ES||0)>0;
   // ABCHK: backwall live load (wheel on top of the backwall), worked here; quoted in M_u and M_s below
   const AB=bd.ap, Pa=R.ap;   // APS: approach-slab couple on the backwall (replaces the wheel load)
-  const bwWheelH= bw.mode==="slab"
+  const bwWheelH= (bw.mode==="slab"&&Pa&&Pa.stemShelf)   // ABSH: the slab on the stem shelf behind the inset backwall
+    ? eqB("Backwall — approach slab on the stem shelf (no couple on the backwall; replaces the wheel load)","statics; AASHTO LRFD 10th Ed. 3.6.1.2.2",[
+      `x_{ap} = x_{stem,back} - \\dfrac{e}{2} = ${fmtT(R.geo.xStemBack,3)} - \\dfrac{${fmtT(Pa.bS,2)}}{2(12)} = ${fmtT(Pa.x,3)}\\ \\text{ft from the toe (mid-bearing on the shelf)}`,
+      `e_{bw} = 0 \\;\\Rightarrow\\; M_{DC} = M_{DW} = M_{LL} = 0`],
+      abNL(`The slab bears on the stem shelf behind the backwall (backwall offset e = ${fmt(Pa.bS,1)} in, panel I-1; reaction worked in <span class="xlink" data-jump="tab-loads|o-ap">§1.4a</span>).`,[
+        ["Load path:","the reaction goes straight down into the stem; the backwall carries no part of it and gets no couple."],
+        ["No design truck wheel:","with the slab on, no wheel bears on top of the backwall (the slab carries it to the shelf)."],
+        ["Shelf bearing:",'checked in <span class="xlink" data-jump="tab-struct|o-ap-shelf">§5.8</span>.']]))
+    : bw.mode==="slab"
     ? eqB("Backwall — approach-slab reaction on the "+(Pa&&Pa.sup==="shelf"?"shelf (replaces the wheel load on top of the backwall)":"deck end over the backwall (replaces the wheel load)"),"AASHTO LRFD 10th Ed. Tables 3.4.1-1, 3.4.1-2; statics",AB?[
       `M_{DC} = q_{DC}\\,e_{bw} + w_{sh}\\,e_{sh} = (${fmtT(Pa.qDC,3)})(${fmtT(Pa.eBw,3)}) + (${fmtT(Pa.wSh,4)})(${fmtT(Pa.eSh,3)}) = ${fmtT(AB.MDC,3)}\\,, \\quad M_{DW} = (${fmtT(Pa.qDW,3)})(${fmtT(Pa.eBw,3)}) = ${fmtT(AB.MDW,3)}\\,, \\quad M_{LL} = (${fmtT(Pa.qLL,3)})(${fmtT(Pa.eBw,3)}) = ${fmtT(AB.MLL,3)}\\ \\text{kip-ft/ft}`,
       `e_{bw} = \\dfrac{t_{bw}}{2} + a_v = ${fmtT(Pa.eBw,3)}\\ \\text{ft},\\ e_{sh} = \\dfrac{t_{bw}}{2} + \\bar x_{sh} = ${fmtT(Pa.eSh,3)}\\ \\text{ft (behind the backwall centroid: front-face tension)}`]
@@ -7643,7 +7736,13 @@ function renderTabStruct(R){
     ["Designed for:",`the movement-induced pressure (K = ${fmt(R.iab.Kexp,3)}, ${intXl("o-iab-ep","Tab 10 §10.3")}) in ${intXl("o-str-"+c.name,"Tab 10 §10.5a")}.`],["Does not apply:","the cantilever backwall check (EH + LS fixed at the seat)."]]).replace("Integral abutment (panel I-0a).","Abutment type (panel I-0a).")+
       `<table class="rtbl"><tr><th>Member</th><th>M<sub>u</sub> / φM<sub>n</sub> (kip·ft/ft)</th><th>V<sub>u</sub> / φV<sub>n</sub> (kip/ft)</th><th>s / s<sub>max</sub> (in)</th></tr><tr><td class="lft">${c.name}</td><td>${fmt(c.Mu)} / ${fmt(c.phiMn)}</td><td>${fmt(c.Vu,3)} / ${fmt(c.phiVn)}</td><td>${fmt(c.sp,1)} / ${fmt(c.sMax,1)}</td></tr></table>`+intDashTbl(intDashRows(R,/^iabD/))); }
   else{
-  h+=sectionHTML(cB, bwWheelH + eqB("Backwall demands — EH + LS"+(bw.mode==="wheel"?" + wheel load":bw.mode==="slab"?" − approach-slab couple":"")+" over its own retained height, cantilever above the seat","AASHTO 3.11.5, 3.11.6.4; design basis §8.1",[
+  const bwOf=R.geo.off;   // ABSH: the design section at the shelf elevation
+  h+=sectionHTML(cB, bwWheelH + (bwOf? eqB("Backwall design section at the shelf elevation (backwall offset e)","statics; AASHTO LRFD 10th Ed. 3.11.5",[
+      `h_c = d_{sh} = ${fmtT(bwOf.dIn,2)}/12 = ${fmtT(bwOf.hC,3)}\\ \\text{ft}\\,, \\quad h_{sh} = h_{bw} - d_{sh} = ${fmtT(+g.hbw)} - ${fmtT(bwOf.d,3)} = ${fmtT(bwOf.hSh,3)}\\ \\text{ft above the seat}`,
+      `h = \\min(h_c,\\ H_{soil} - h_{stem} - h_{sh}) = \\min(${fmtT(bwOf.hC,3)},\\ ${fmtT(+g.soilH)} - ${fmtT(+g.hstem)} - ${fmtT(bwOf.hSh,3)}) = ${fmtT(bd.hbwRet,3)}\\ \\text{ft (retained height on the backwall)}`],
+      abNL("Below the shelf the backwall and the stem shelf behind it are one section, t<sub>bw</sub> + e thick: the backwall is a cantilever of height h<sub>c</sub> above the shelf, and its base there is the design section (t<sub>bw</sub> thick).",[
+        ["Wheel strip and inertia:","X = h<sub>c</sub> in the wheel-load strip; backwall inertia k<sub>h</sub>γ<sub>c</sub>t<sub>bw</sub>h<sub>c</sub> at h<sub>c</sub>/2 (§5.1c)."],
+        abutOwner()==="MassDOT"?["Seismic stop (MassDOT 3.4.8.1):","the force stays at h<sub>bw</sub>/2 on the t<sub>bw</sub> section (conservative)."]:null])) : "") + eqB("Backwall demands — EH + LS"+(bw.mode==="wheel"?" + wheel load":bw.mode==="slab"&&!(Pa&&Pa.stemShelf)?" − approach-slab couple":"")+" over its own retained height, cantilever above the "+(bwOf?"shelf":"seat"),"AASHTO 3.11.5, 3.11.6.4; design basis §8.1",[
       `M_{EH} = \\dfrac{k_{ah}\\gamma h^3}{6} = \\dfrac{(${fmtT(kah,4)})(${fmtT(s.gamma,3)})(${fmtT(bd.hbwRet)})^3}{6} = ${fmtT(bd.Mbw_EH)}\\ \\text{kip-ft/ft}`,
       `M_{LS} = \\dfrac{k_{ah}\\gamma h_{eq} h^2}{2} = \\dfrac{(${fmtT(kah,4)})(${fmtT(s.gamma,3)})(${fmtT(bd.heqBW)})(${fmtT(bd.hbwRet)})^2}{2} = ${fmtT(bd.Mbw_LS)}\\ \\text{kip-ft/ft}`,
       ...(esB?[`M_{ES} = \\dfrac{k_{ah}\\,q_{ES}\\,h^2}{2} = ${fmtT(bd.Mbw_ES)}\\ \\text{kip-ft/ft}`]:[]),
@@ -7719,7 +7818,7 @@ function renderTabStruct(R){
           : [`\\Delta P_{AE,wall} = \\tfrac{1}{2}\\Delta K_h\\gamma H_s^2 = \\tfrac{1}{2}(${fmtT(sEQ.dKh,4)})(${fmtT(s.gamma,3)})(${fmtT(sd.Hs)})^2 = ${fmtT(sEQ.iA.V,3)}\\ \\text{kip/ft at } H_s/3 = ${fmtT(sd.Hs/3)}\\ \\text{ft (as the static pressure, 11.6.5.3)}`]),
         ...(sEQ.nc&&sEQ.iA&&sEQ.iB? [`\\text{11.6.5.1 case A: } (V, M) = (${fmtT(sEQ.iA.V,3)},\\ ${fmtT(sEQ.iA.M)}) + 0.5k_hW\\,; \\quad \\text{case B: } (${fmtT(sEQ.iB.V,3)},\\ ${fmtT(sEQ.iB.M)}) + k_hW\\ \\ [\\max(0,\\ \\tfrac12 P_{AE} - P_A)] \\;\\Rightarrow\\; \\text{case ${sEQ.nc} (larger } M_{EQ})`] : []),
         `k_h W_{wall} = k_h\\gamma_c A_{wall} = (${fmtT(R.seis.kh,4)})(${fmtT(S.mat.gc,3)})(${fmtT(sEQ.wallApf,3)}) = ${fmtT(sEQ.Wi0??sEQ.Wi,3)}\\ \\text{kip/ft}${sEQ.nc?`\\ \\times f_I = ${fmtT(sEQ.fI,2)} \\Rightarrow ${fmtT(sEQ.Wi,3)}`:""}\\,, \\qquad EQ_{sup}/L_{ab} = ${fmtT(sEQ.sup,3)}\\ \\text{kip/ft at } h_{stem}`,
-        ...(sEQ.zWi!=null?[`z_{W} = \\dfrac{A_{core}\\tfrac{h_{stem}}{2} + A_{bat}\\tfrac{h_{stem}}{3} + A_{bw}\\left(h_{stem}+\\tfrac{h_{bw}}{2}\\right)}{A_{wall}} = \\dfrac{(${fmtT(sEQ.aCore,3)})(${fmtT(g.hstem/2,3)}) + (${fmtT(sEQ.aBat,3)})(${fmtT(g.hstem/3,3)}) + (${fmtT(sEQ.aBw,3)})(${fmtT(g.hstem+g.hbw/2,3)})}{${fmtT(sEQ.wallApf,3)}} = ${fmtT(sEQ.zWi,3)}\\ \\text{ft (inertia arm above the stem base)}`]:[]),
+        ...(sEQ.zWi!=null?[`z_{W} = \\dfrac{A_{core}\\tfrac{h_{stem}}{2} + A_{bat}\\tfrac{h_{stem}}{3} + A_{bw}\\left(h_{stem}+\\tfrac{h_{bw}}{2}\\right)${sEQ.aSh?" + A_{sh}\\left(h_{stem}+\\tfrac{h_{sh}}{2}\\right)":""}}{A_{wall}} = \\dfrac{(${fmtT(sEQ.aCore,3)})(${fmtT(g.hstem/2,3)}) + (${fmtT(sEQ.aBat,3)})(${fmtT(g.hstem/3,3)}) + (${fmtT(sEQ.aBw,3)})(${fmtT(g.hstem+g.hbw/2,3)})${sEQ.aSh?` + (${fmtT(sEQ.aSh,3)})(${fmtT(sEQ.zSh,3)})`:""}}{${fmtT(sEQ.wallApf,3)}} = ${fmtT(sEQ.zWi,3)}\\ \\text{ft (inertia arm above the stem base)}`]:[]),
         ...(sEQ.apI>0?[`k_hW_{ap}/L_{ab} = ${sEQ.nc?"f_I\\,":""}\\dfrac{k_hW_{ap}}{L_{ab}} = ${sEQ.nc?`(${fmtT(sEQ.fI,2)})`:""}(${fmtT(sEQ.apIpf,4)}) = ${fmtT(sEQ.apI,4)}\\ \\text{kip/ft at } z_{ap} = ${fmtT(sEQ.zApS,3)}\\ \\text{ft above the stem base (approach slab, §1.4a)}`]:[]),
         `M_{EQ} = ${fmtT(sEQ.MdP??sEQ.dP*sEQ.zP)} + (${fmtT(sEQ.Wi,3)})(${fmtT(sEQ.zWi??g.hstem/2,3)}) + (${fmtT(sEQ.sup,3)})(${fmtT(g.hstem)})${sEQ.apI>0?` + (${fmtT(sEQ.apI,4)})(${fmtT(sEQ.zApS,3)})`:""} = ${fmtT(sd.Meq)}\\,, \\qquad V_{EQ} = ${fmtT(sd.Veq,3)}\\ \\text{kip/ft}`]:[]),
       `M_u = ${fmtT(sd.gEH??R.GP.EH[1])}(${fmtT(sd.MEH??sd.Mst_EH)}) + ${fmtT(sGL)}(${fmtT(sd.MLS??sd.Mst_LS)})${sEsq>0?` + ${fmtT(sd.gES,2)}(${fmtT(sd.MES)})`:""} + ${fmtT(sd.HgirdPerFt*g.hstem)} + ${fmtT(sd.MeccPerFt)}${sd.MCS>0?` + ${fmtT(sd.MCS)}`:""}${sEQ?` + ${fmtT(sd.Meq)}`:""} = ${fmtT(sd.Mu)}\\ \\text{kip-ft/ft}`,
@@ -8406,7 +8505,7 @@ function stemProfAt(R,z){   // ABINT: one station of the profile (same expressio
       Mu=(sd.gEH??1)*k*gm*(h>c? h*h*h/6-(h*c*c/2-c*c*c/3) : 0) + (sd.gLL||0)*k*gm*(sd.heqL??sd.heqS)*hc*hc/2 + (sd.gES??1)*k*es*hc*hc/2
         + sd.HgirdPerFt*(g.hstem-z) + sd.MeccPerFt; }
     // ABR1: inertia by part above z — stem core uniform over h_stem, front batter (triangular, widest at the base), backwall above the stem
-    if(eq) Mu+= eq.dP*Math.max(0,eq.zP-z) + (eq.WiC!=null? eq.WiC*Math.pow(g.hstem-z,2)/(2*g.hstem) + eq.WiB*Math.pow(g.hstem-z,3)/(3*g.hstem*g.hstem) + eq.WiW*(g.hstem+g.hbw/2-z)
+    if(eq) Mu+= eq.dP*Math.max(0,eq.zP-z) + (eq.WiC!=null? eq.WiC*Math.pow(g.hstem-z,2)/(2*g.hstem) + eq.WiB*Math.pow(g.hstem-z,3)/(3*g.hstem*g.hstem) + eq.WiW*(g.hstem+g.hbw/2-z) + (eq.WiSh? eq.WiSh*(eq.zSh-z) : 0)   // ABSH: stem shelf
           : eq.Wi*Math.pow(g.hstem-z,2)/(2*g.hstem)) + eq.sup*(g.hstem-z);
     const tIn=(g.tsb-(g.tsb-g.tst)*z/g.hstem)*12, d=tIn-m.coverT-bar.db/2, As=bar.Ab*12/sp, a=As*m.fy/(0.85*m.fc*12);
     const b1=Math.max(0.65,0.85-0.05*Math.max(0,m.fc-4)), cc=a/b1, et=cc>1e-9?0.003*(d-cc)/cc:1;
@@ -10717,6 +10816,11 @@ function abrModel(){
         dcStep(w,"sx","bwStopF","Flexure","\\frac{M_{u}}{M_{n}}","\\frac{"+abrN(s.Mu)+"}{"+abrN(s.Mn)+"}","MassDOT LRFD Bridge Manual §3.4.8.1");
         w.add({id:"Vn",label:"Shear resistance, φ = 1.0",sym:"V_{n}",eq:"",sub:"",value:s.Vn,unit:"kip/ft",d:2});
         dcStep(w,"sx","bwStopV","Shear","\\frac{V_{u}}{V_{n}}","\\frac{"+abrN(s.Vu,3)+"}{"+abrN(s.Vn)+"}","MassDOT LRFD Bridge Manual §3.4.8.1"); }
+      const Q2=R.apStemSh; if(Q2&&has("apSSB")){ const w=topic(T,"apSS","Approach slab on the stem shelf (backwall offset)",ABR_AA+"Art. 5.6.5");   // ABSH
+        w.add({id:"Vu",label:"Factored slab reaction per ft, Strength I ("+abrN(Q2.gDC,2)+"·DC + "+abrN(Q2.gDW,2)+"·DW + "+abrN(Q2.gLL,2)+"·LL)",sym:"V_{u,slab}",eq:"\\gamma_{DC}q_{DC} + \\gamma_{DW}q_{DW} + \\gamma_{LL}m\\,q_{LL}",sub:abrN(Q2.gDC,2)+"\\cdot "+abrN(R.ap.qDC,3)+" + "+abrN(Q2.gDW,2)+"\\cdot "+abrN(R.ap.qDW,3)+" + "+abrN(Q2.gLL,2)+"\\cdot "+abrN(R.ap.qLL,3),value:Q2.VuS,unit:"kip/ft",d:3});
+        w.add({id:"qb",label:"Bearing stress of the slab on the shelf (width e = "+abrN(Q2.e,1)+" in)",sym:"q_{b}",eq:"\\frac{V_{u,slab}}{12e}",sub:"\\frac{"+abrN(Q2.VuS,3)+"}{"+abrN(Q2.A1,1)+"}",value:Q2.qb,unit:"ksi",d:4});
+        w.add({id:"qR",label:"Bearing resistance (φ_b = 0.70, m = 1)",sym:"q_{R}",eq:"0.70\\cdot 0.85 f^{\\prime}_{c}",sub:"0.70\\cdot 0.85\\cdot "+abrN(Q2.fc,1),value:Q2.qR,unit:"ksi",d:3,ref:ABR_AA+"Art. 5.6.5"});
+        dcStep(w,"sx","apSSB","Bearing","\\frac{q_{b}}{q_{R}}","\\frac{"+abrN(Q2.qb,4)+"}{"+abrN(Q2.qR,3)+"}",ABR_AA+"Art. 5.6.5"); }
       const H=R.apShelf; if(H&&has("apShAs")){ const w=topic(T,"apS","Approach-slab shelf (bracket)",ABR_AA+"Art. 5.8.4.2");
         w.add({id:"Vu",label:"Factored shear on the shelf, Strength I ("+abrN(H.gDC,2)+"·DC + "+abrN(H.gDW,2)+"·DW + "+abrN(H.gLL,2)+"·LL from the slab, + shelf weight)",sym:"V_{u}",eq:"V_{u,slab} + V_{u,shelf}",sub:abrN(H.VuS,3)+" + "+abrN(H.VuW,3),value:H.Vu,unit:"kip/ft",d:3});
         w.add({id:"Nuc",label:"Horizontal tension"+(H.slide?" (at least 0.2 V_u; slab friction)":" (at least 0.2 V_u)"),sym:"N_{uc}",eq:"\\max(0.2V_{u},\\,N_{fr})",sub:"\\max("+abrN(H.Nmin,3)+",\\,"+abrN(H.Nfr,3)+")",value:H.Nuc,unit:"kip/ft",d:3,ref:ABR_AA+"Art. 5.8.4.2.1"});
@@ -10944,7 +11048,7 @@ function updateDerivedInInputs(){
   // refresh derived readouts & computed beam-position cells without rebuilding (keeps focus)
   const g=S.geom;
   const dv=document.querySelectorAll("#inputCol .derived");
-  if(dv[0]) dv[0].innerHTML=`Derived: bridge seat width = t<sub>st</sub> − t<sub>bw</sub> = <b>${fmt(g.tst-g.tbw)} ft</b> &nbsp;·&nbsp; seat elevation (above footing base) = <b>${fmt(g.tf+g.hstem)} ft</b>`;
+  if(dv[0]) dv[0].innerHTML=bwOffGeo()? bwOffDerivedHTML() : `Derived: bridge seat width = t<sub>st</sub> − t<sub>bw</sub> = <b>${fmt(g.tst-g.tbw)} ft</b> &nbsp;·&nbsp; seat elevation (above footing base) = <b>${fmt(g.tf+g.hstem)} ft</b>`;
   if(dv[1]) dv[1].innerHTML=`Derived: total footing width B = L<sub>toe</sub> + t<sub>sb</sub> + L<sub>heel</sub> = <b>${fmt(g.Ltoe+g.tsb+g.Lheel)} ft</b>`;
   const pos=beamPositions();
   document.querySelectorAll("#inputCol table.itbl tr").forEach(tr=>{
@@ -10983,6 +11087,7 @@ document.addEventListener("input",ev=>{
 document.addEventListener("change",ev=>{
   const el=ev.target, p=el.dataset.path;
   if(!p) return;
+  if(p==="geom.bwOff"&&el.tagName!=="SELECT"){ buildInputs(); return; }   // ABSH: the shelf-depth row and panel I-0b's support follow e
   if(el.type==="checkbox"){ pushUndo(p); }
   if(el.tagName!=="SELECT") return;
   pushUndo(p);
