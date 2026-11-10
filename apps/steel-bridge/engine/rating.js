@@ -7,8 +7,12 @@
        method. RF = (C − γ_DC DC − γ_DW DW ± γ_P P)/(γ_LL (LL + IM)) (MBE Eq. 6A.4.2.1-1), C = φ_c φ_s φ R_n (Eq. 6A.4.2.1-2) with
        φ_c φ_s ≥ 0.85 (Eq. 6A.4.2.1-3) at the Strength limit state; design-load rating on HL-93, Strength I Inventory γ_LL = 1.75 and
        Operating 1.35, γ_DC = 1.25, γ_DW = 1.50 (Table 6A.4.2.2-1); flexure on a moment basis for a compact composite section in positive
-       flexure, else on a stress basis per flange; shear; Service II (6A.6.4.2.2): RF = (f_R − γ_D f_D)/(γ_LL f_LL), f_R = 0.95 R_h F_yf
-       (composite; 0.80 R_h F_yf noncomposite), γ_D = 1.0, γ_LL = 1.30 Inventory, 1.00 Operating. Every station, the lowest RF governs.
+       flexure, else on a stress basis per flange; shear; Service II (6A.6.4.2.2): RF = (f_R − γ_D f_D)/(γ_LL f_LL), f_R = 0.95 F_yf
+       (composite) or 0.80 R_h F_yf (noncomposite), γ_D = 1.0, γ_LL = 1.30 Inventory, 1.00 Operating. Every station, the lowest RF governs.
+       MBE 4th Ed. adoption (engineer standing rule 2026-11-10; deliberate differences from ST-Girder / GirderDetail, which keep the older form):
+         - Service II f_R (Art. 6A.6.4.2.2, p. 6-66): 0.95 F_yf for composite sections, no R_h (before: 0.95 R_h F_yf); noncomposite unchanged;
+         - shear (Art. 6A.4.2.4, p. 6-25): φ_s = 1.0 for shear at the Strength limit state, so C = φ_c φ_v V_n (before: φ_c φ_s φ_v V_n);
+           flexure keeps φ_c φ_s (≥ 0.85).
        The utilities (MassDOT; GD54c, ST-Girder's default): the future allowance with DC, the existing with DW, where they add (no relief).
        No legal or permit loads (ST-Girder has none).
      - GirderDetail's GS20 (OWN9): the owner's design rating target (inventory RF; and the fatigue RF = 1/ratio of GS17), reported only.
@@ -19,13 +23,13 @@
    The flange lateral bending f_ℓ of the design check is kept in the rating as a constant (the design check's value): M_u + f_ℓS_x/3,
    f_bu + f_ℓ/3, and f_f + f_ℓ/2 at Service II.
 
-   Code: AASHTO Manual for Bridge Evaluation (MBE), Section 6A. ST-Girder does not state the MBE edition; this engine cites the 3rd Ed.
-   (2018), whose article and equation numbers used here (6A.4.2.1, Tables 6A.4.2.2-1, 6A.4.2.3-1, 6A.4.2.4-1, 6A.6.4.2.2) are those of
-   the 2nd Ed. too. Resistances: AASHTO LRFD 10th Ed. (2024). φ_f = φ_v = 1.0 (6.5.4.2).
+   Code: AASHTO Manual for Bridge Evaluation (MBE), 4th Edition (2026), Section 6A (engineer decision 2026-11-10; until then the 3rd Ed.,
+   2018). The article, table and equation numbers used here (6A.4.2.1, Eqs. 6A.4.2.1-1 to -4, Tables 6A.4.2.2-1, 6A.4.2.3-1, 6A.4.2.4-1,
+   6A.6.4.2.2) were checked in the 4th Ed. on 2026-11-10. Resistances: AASHTO LRFD 10th Ed. (2024). φ_f = φ_v = 1.0 (6.5.4.2).
    Units: moments kip-ft, shears kip, stresses ksi (the stress of each component positive when it acts as the live load does). */
 (function () {
   'use strict';
-  const MBE = 'AASHTO MBE 3rd Ed.', ED = 'AASHTO LRFD 10th Ed.';
+  const MBE = 'AASHTO MBE 4th Ed. (2026)', ED = 'AASHTO LRFD 10th Ed.';
   const St = () => window.SharedSteps;
   const n2 = x => St().n(x, 2), n3 = x => St().n(x, 3), g1 = x => St().g(x, 1);
   const NONE = Infinity;   // no live-load effect: no rating (shown as —)
@@ -34,8 +38,9 @@
      1.35 Operating; Service II: γ_D 1.00, γ_LL 1.30 Inventory / 1.00 Operating. */
   function factors(over) { return { dc: 1.25, dw: 1.50, p: 1.00, inv: 1.75, opr: 1.35, sd: 1.00, sInv: 1.30, sOpr: 1.00, ...(over || {}) }; }
   /* phi(phiC, phiS): the condition factor φ_c (Table 6A.4.2.3-1) and system factor φ_s (Table 6A.4.2.4-1), 1.0 when not given;
-     v = max(φ_c φ_s, 0.85) (Eq. 6A.4.2.1-3), applied to the Strength capacities (flexure and shear, as ST-Girder). */
-  function phi(phiC, phiS) { const c = +phiC > 0 ? +phiC : 1, s = +phiS > 0 ? +phiS : 1, prod = c * s; return { phiC: c, phiS: s, prod, v: Math.max(prod, 0.85), floor: prod < 0.85 }; }
+     v = max(φ_c φ_s, 0.85) (Eq. 6A.4.2.1-3), applied to the Strength flexure capacities; vV = max(φ_c(1.0), 0.85), the shear capacities
+     (MBE 4th Ed. Art. 6A.4.2.4, p. 6-25: φ_s = 1.0 for shear at the Strength limit state; before 2026-11-10 shear took v, as ST-Girder). */
+  function phi(phiC, phiS) { const c = +phiC > 0 ? +phiC : 1, s = +phiS > 0 ? +phiS : 1, prod = c * s; return { phiC: c, phiS: s, prod, v: Math.max(prod, 0.85), floor: prod < 0.85, vV: Math.max(c, 0.85), floorV: c < 0.85 }; }
 
   /* rf(o): MBE Eq. 6A.4.2.1-1, RF = (C − γ_DC DC − γ_DW DW − γ_P P − F)/(γ_LL LL). o = { C, DC, DW, P (signed: + adds to the live-load
      effect), F (a constant demand already factored: the f_ℓ term), LL, gLL, gDC, gDW, gP }. No live-load effect (LL ≤ 1e-6): Infinity. */
@@ -52,7 +57,7 @@
      useCS (φ_c φ_s applies), RnSym, RnRef, RnStep, DC, DW, LL, F, Fnote, DCsym, DWsym, LLsym, parts, ref, quad (optional: k → margin,
      the load-dependent check) }. Adds C, inv, opr and the worked steps (lazy). */
   function make(q, G, ph) {
-    const sv = q.lim === 'Service II', cs = q.useCS ? ph.v : 1;
+    const sv = q.lim === 'Service II', cs = q.useCS ? (q.kind === 'shear' ? (ph.vV != null ? ph.vV : Math.max(ph.phiC, 0.85)) : ph.v) : 1;   // shear: φ_s = 1.0 (MBE 6A.4.2.4)
     q.cs = cs; q.C = cs * q.phiR * q.Rn;
     const g = sv ? { dc: G.sd, dw: G.sd, inv: G.sInv, opr: G.sOpr } : { dc: G.dc, dw: G.dw, inv: G.inv, opr: G.opr };
     q.g = g;
@@ -63,13 +68,16 @@
   }
   function worked(q, ph) {
     const w = St().work('rt'), sv = q.lim === 'Service II', u = q.unit, d = u === 'ksi' ? 3 : 1, nf = u === 'ksi' ? n3 : g1, g = q.g;
-    if (!sv && q.useCS) {
+    if (!sv && q.useCS && q.kind === 'shear') {
+      w.add({ id: 'phiCS', label: 'Condition and system factors (Strength, shear: φ_s = 1.0)', sym: '\\phi_{c}\\phi_{s}', eq: '\\max(\\phi_{c}(1.0), 0.85)', sub: `\\max(${n2(ph.phiC)}(1.00), 0.85)`, value: q.cs, unit: '', d: 3,
+        ref: `${MBE} Art. 6A.4.2.4 (p. 6-25); Eq. 6A.4.2.1-3; Table 6A.4.2.3-1`, note: `The system factor is taken as 1.0 for shear at the Strength limit state (MBE 4th Ed. Art. 6A.4.2.4); the entered φ_s = ${n2(ph.phiS)} applies to flexure only.` });
+    } else if (!sv && q.useCS) {
       w.add({ id: 'phiCS', label: 'Condition and system factors (Strength)', sym: '\\phi_{c}\\phi_{s}', eq: '\\max(\\phi_{c}\\phi_{s}, 0.85)', sub: `\\max(${n2(ph.phiC)}(${n2(ph.phiS)}), 0.85)`, value: ph.v, unit: '', d: 3,
         ref: `${MBE} Eq. 6A.4.2.1-3; Tables 6A.4.2.3-1, 6A.4.2.4-1`, note: ph.floor ? 'φ_cφ_s below 0.85: 0.85 is used (Eq. 6A.4.2.1-3).' : '' });
     }
     w.add({ id: 'Rn', label: q.RnLabel, sym: q.RnSym, eq: '', sub: '', value: q.Rn, unit: u, d, ref: q.RnRef, note: q.RnStep ? `Worked in the ${q.RnTab} steps below: see §${q.RnStep}.` : '' });
-    w.add({ id: 'C', label: sv ? 'Service II limit stress' : 'Capacity', sym: sv ? 'f_{R}' : 'C', eq: sv ? q.RnSym : q.useCS ? `\\phi_{c}\\phi_{s}\\phi R_{n}` : '\\phi R_{n}',
-      sub: sv ? nf(q.Rn) : q.useCS ? `${n3(q.cs)}(${n2(q.phiR)})(${nf(q.Rn)})` : `${n2(q.phiR)}(${nf(q.Rn)})`, value: q.C, unit: u, d, ref: sv ? `${MBE} Art. 6A.6.4.2.2; ${ED} Art. 6.10.4.2.2` : `${MBE} Eq. 6A.4.2.1-2` });
+    w.add(Object.assign({ id: 'C', label: sv ? 'Service II limit stress' : 'Capacity', sym: sv ? 'f_{R}' : 'C', eq: sv ? q.RnSym : q.useCS ? `\\phi_{c}\\phi_{s}\\phi R_{n}` : '\\phi R_{n}',
+      sub: sv ? (q.RnSub || nf(q.Rn)) : q.useCS ? `${n3(q.cs)}(${n2(q.phiR)})(${nf(q.Rn)})` : `${n2(q.phiR)}(${nf(q.Rn)})`, value: q.C, unit: u, d, ref: sv ? `${MBE} Art. 6A.6.4.2.2 (p. 6-66); ${ED} Art. 6.10.4.2.2` : `${MBE} Eq. 6A.4.2.1-2` }, sv && q.CNote ? { note: q.CNote } : {}));
     (q.parts || []).forEach(p => w.add({ ...p, unit: p.unit != null ? p.unit : u, d: p.d != null ? p.d : d }));
     w.add({ id: 'DC', label: 'Dead load DC (components and attachments)', sym: q.DCsym || 'DC', eq: q.DCeq || '', sub: q.DCsub || '', value: q.DC, unit: u, d, note: q.DCnote || '' });
     w.add({ id: 'DW', label: 'Dead load DW (wearing surface and utilities)', sym: q.DWsym || 'DW', eq: q.DWeq || '', sub: q.DWsub || '', value: q.DW, unit: u, d, note: q.DWnote || '' });
@@ -85,7 +93,7 @@
       w.add({ id: k, label: `${lab} rating factor, ${q.lim}`, sym: `RF_{${k === 'inv' ? 'inv' : 'op'}}`,
         eq: `\\frac{${sv ? 'f_{R}' : 'C'} - \\gamma_{${sv ? 'D' : 'DC'}}${q.DCsym || 'DC'} - \\gamma_{${sv ? 'D' : 'DW'}}${q.DWsym || 'DW'}${Ft}}{\\gamma_{LL}${q.LLsym || '(LL + IM)'}}`,
         sub: q.LL > 1e-6 ? `\\frac{${nf(q.C)} - ${n2(g.dc)}(${nf(q.DC)}) - ${n2(g.dw)}(${nf(q.DW)})${Fs}}{${n2(gl)}(${nf(q.LL)})}` : '',
-        value: isFinite(q[k]) ? q[k] : 'no live-load effect', unit: '', d: 3, ref: `${MBE} Eq. 6A.4.2.1-1, Table 6A.4.2.2-1${sv ? ', Art. 6A.6.4.2.2 (Eq. 6A.6.4.2.2-1)' : ''}` });
+        value: isFinite(q[k]) ? q[k] : 'no live-load effect', unit: '', d: 3, ref: `${MBE} Eq. 6A.4.2.1-1, Table 6A.4.2.2-1${sv ? ', Art. 6A.6.4.2.2 (Eq. 6A.4.2.1-4)' : ''}` });
     });
     return w.steps;
   }
@@ -163,7 +171,9 @@
 
   /* ---------- Service II (MBE 6A.6.4.2.2; LRFD 6.10.4.2.2) ---------- */
   /* service(r, opt): opt = { G, phi, mat: { Fyw } }; both flanges (Eqs. 6.10.4.2.2-1, -2; noncomposite -3) and, where 6.10.4.2.2 requires it, the web (Eq. -4:
-     f_c ≤ F_crw, D_c from the Service II stresses: the RF is the load factor at which f_c = F_crw). γ_D = 1.0, φ_c φ_s not applied. */
+     f_c ≤ F_crw, D_c from the Service II stresses: the RF is the load factor at which f_c = F_crw). γ_D = 1.0, φ_c φ_s not applied.
+     Flange limit f_R (MBE 4th Ed. Art. 6A.6.4.2.2, p. 6-66): 0.95 F_yf composite (negative flexure of continuous spans included), 0.80 R_h F_yf
+     noncomposite. Before 2026-11-10: 0.95 R_h F_yf composite (LRFD Eqs. 6.10.4.2.2-1, -2 and ST-Girder); the same where R_h = 1.0. */
   function service(r, opt) {
     const G = factors(opt && opt.G), ph = (opt && opt.phi) || phi(), out = [];
     if (r.factored) return out;
@@ -175,8 +185,10 @@
       const s1 = X => sg * (r.stg[X] ? r.stg[X][f] : 0);
       const DC = s1('DC1') + s1('DC2') + adds(s1('UF')), DW = s1('DW') + adds(s1('UT')), flat = r.nc ? (f === 'top' ? Math.max(r.flT || 0, 0) : Math.max(r.fl || 0, 0)) : f === 'bot' ? Math.max(r.fl || 0, 0) : 0;
       out.push(make({ ...base, key: 'sv' + T, title: `Service II, ${fn} flange (permanent deformation)`, ref: `${ED} Eq. 6.10.4.2.2-${r.nc ? 3 : f === 'top' ? 1 : 2}`,
-        Rn: coef * r.Rh * Fy, RnSym: `${coef.toFixed(2)}R_{h}F_{yf}`, RnLabel: `Service II flange stress limit (${r.nc ? 'noncomposite' : 'composite'})`, RnRef: `${ED} Eq. 6.10.4.2.2-${r.nc ? 3 : f === 'top' ? 1 : 2}`, RnStep: `fx.sv${f === 'top' ? 't' : 'b'}.ok`, RnTab: 'flexure',
-        parts: [{ id: 'Rh', label: 'Hybrid factor and flange yield strength', sym: 'R_{h},\\ F_{yf}', eq: '', sub: `${n3(r.Rh)},\\ ${n2(Fy)}`, value: coef * r.Rh * Fy, unit: 'ksi', d: 3, ref: `${ED} Art. 6.10.1.10.1` }],
+        Rn: r.nc ? coef * r.Rh * Fy : coef * Fy, RnSym: r.nc ? `${coef.toFixed(2)}R_{h}F_{yf}` : `${coef.toFixed(2)}F_{yf}`, RnSub: r.nc ? `${coef.toFixed(2)}(${n3(r.Rh)})(${n2(Fy)})` : `${coef.toFixed(2)}(${n2(Fy)})`,
+        RnLabel: `Service II flange stress limit f_R (${r.nc ? 'noncomposite: 0.80R_hF_yf' : 'composite: 0.95F_yf, no R_h'}; MBE 4th Ed. Art. 6A.6.4.2.2)`, RnRef: `${MBE} Art. 6A.6.4.2.2 (p. 6-66)`, RnStep: `fx.sv${f === 'top' ? 't' : 'b'}.ok`, RnTab: 'flexure',
+        CNote: r.nc ? '' : `MBE 4th Ed. Art. 6A.6.4.2.2 sets f_R = 0.95F_yf for composite sections, including negative flexure of continuous spans, without the hybrid factor of LRFD Eqs. 6.10.4.2.2-1 and -2 (R_h = ${n3(r.Rh)} here${Math.abs(r.Rh - 1) > 1e-12 ? '; the Flexure tab\'s design check keeps 0.95R_hF_yf' : ', so the limit equals the design check\'s'}).`,
+        parts: [{ id: 'Rh', label: r.nc ? 'Hybrid factor and flange yield strength' : 'Flange yield strength (R_h not applied, composite)', sym: r.nc ? 'R_{h},\\ F_{yf}' : 'F_{yf}', eq: '', sub: r.nc ? `${n3(r.Rh)},\\ ${n2(Fy)}` : n2(Fy), value: r.nc ? coef * r.Rh * Fy : coef * Fy, unit: 'ksi', d: 3, ref: r.nc ? `${ED} Art. 6.10.1.10.1` : `${MBE} Art. 6A.6.4.2.2` }],
         DC, DW, LL: Math.abs(fl), F: flat / 2, Fsym: '\\frac{1}{2}f_{\\ell}', Fnote: 'f_ℓ at Service II as the design check GS12 takes it.',
         DCsym: `f_{DC,${T}}`, DWsym: `f_{DW,${T}}`, LLsym: `f_{LL+IM,${T}}`, DCeq: `f_{DC1} + f_{DC2}${r.ut ? ' + f_{UF}' : ''}`, DCsub: `${n3(s1('DC1'))} + ${n3(s1('DC2'))}${r.ut ? ` + ${n3(adds(s1('UF')))}` : ''}`,
         DWsub: r.ut ? `${n3(s1('DW'))} + ${n3(adds(s1('UT')))}` : '', DCnote: `Unfactored stresses at the ${fn} of the steel, ${sg < 0 ? 'compression' : 'tension'} positive (the live-load direction), each on its own section.` }, G, ph));
@@ -202,7 +214,7 @@
 
   /* ---------- shear, Strength I ---------- */
   /* shear(r, opt): r = SBDShear.location result (its V_n: V_cr in an end panel, the tension field elsewhere when stiffened);
-     opt = { G, phi, cases }. C = φ_c φ_s φ_v V_n. cases (shearCases): the demands at the location in each direction of shear, each
+     opt = { G, phi, cases }. C = φ_c φ_v V_n: φ_s = 1.0 for shear (MBE 4th Ed. Art. 6A.4.2.4, p. 6-25; before 2026-11-10 C = φ_c φ_s φ_v V_n). cases (shearCases): the demands at the location in each direction of shear, each
      component as it acts in that direction (≥ 0: a permanent load that relieves is taken as 0, no relief); the lowest RF governs.
      Without cases: the location's magnitudes (DC = V_DC1 + V_DC2 + V_UF, DW = V_DW + V_UT, LL = the larger LL+IM envelope). */
   function shear(r, opt) {
@@ -277,5 +289,11 @@
     return res;
   }
 
-  window.SBDRating = { MBE, factors, phi, rf, kAt, flexure, service, shear, shearCases, noDoublePL, fatigue, target, girder };
+  /* BASIS: the MBE 4th Ed. basis notes shown on the Rating tab, the Summary tab, the left summary column and the Report (§6 / #1284;
+     plain text, HTML-safe). */
+  const BASIS = {
+    svc: 'Service II flange limit f_R = 0.95F_yf for composite sections (negative flexure included; no hybrid factor R_h) and 0.80R_hF_yf for noncomposite sections (MBE 4th Ed. Art. 6A.6.4.2.2, p. 6-66).',
+    shear: 'Shear at the Strength limit state takes the system factor φ_s = 1.0 (MBE 4th Ed. Art. 6A.4.2.4, p. 6-25): C = φ_cφ_vV_n; the entered φ_s applies to flexure (C = φ_cφ_sφ_fR_n, φ_cφ_s ≥ 0.85, Eq. 6A.4.2.1-3).' };
+  BASIS.short = 'Rating per MBE 4th Ed. (2026): Service II f_R = 0.95F_yf composite, 0.80R_hF_yf noncomposite (6A.6.4.2.2); φ_s = 1.0 on shear (6A.4.2.4).';
+  window.SBDRating = { MBE, BASIS, factors, phi, rf, kAt, flexure, service, shear, shearCases, noDoublePL, fatigue, target, girder };
 })();

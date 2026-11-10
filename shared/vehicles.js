@@ -29,8 +29,9 @@ const P={
   '315K':RL('315K CSX Rail Car (×3)',sp(78.75,[0,6,35.67,6,7.5,6,35.67,6,7.5,6,35.67,6]),0,0),
   'ES44AC':RL('ES44AC Locomotive (315K)',sp(72,[0,6.58,6.58,33.08,6.58,6.58,13.75,6.58,6.58,33.08,6.58,6.58]),6,5),
   // ── Rating vehicles (M1, added 2026-11-07). Axle data read from the figures reproduced in the RIDOT LRFR Guidelines (Sept 2022)
-  //    4.4.1.2 (AASHTO MBE Figs. D6A-1 to D6A-5, D6A-7, FAST Act EVs, RIPTA bus) and the CTDOT BDM (02/24) 1.3.6 (CT-TLC); the MBE
-  //    itself was not available. Gross weights checked against those documents and the MassDOT Bridge Manual 7.2.4.1 list.
+  //    4.4.1.2 (AASHTO MBE Figs. D6A-1 to D6A-5, D6A-7, FAST Act EVs, RIPTA bus) and the CTDOT BDM (02/24) 1.3.6 (CT-TLC). Type 3,
+  //    3S2, 3-3, Legal-Lane and SU4–SU7 checked against AASHTO MBE 4th Ed. (2026) Figs. D6A-1 to D6A-5 and D6A-7 (pp. 6-136 to
+  //    6-138), 2026-11-10. Gross weights checked against those documents and the MassDOT Bridge Manual 7.2.4.1 list.
   //    Highway vehicles (hwy:true: highway DF set), rating:true (not ticked by default in the multi-vehicle report list).
   //    IM 33 % on axles, none on the lane load (LRFD 3.6.2.1; MassDOT 7.2.4.6A: IM on all rating trucks); CT-TLC IM 0 (BDM 1.3.6).
   'H20-Legal':LG('Legal H20, LRFR (MBE; RIDOT 4.4.1.2) 40k',[[8,0],[32,14]]),

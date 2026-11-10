@@ -107,23 +107,23 @@ const track = (a, b) => { const d = Math.abs(a - b); if (d > stats.worst) stats.
 function checkDrawings(P, name) {
   const G = DW.model(P); deq(G.errors, [], `${name}: ${G.errors}`);
   const L = FRM.compute(P), FR = L.FR, nb = G.nb;
-  // girder count and spacing: the plan's girder centerlines at y = ys·12, from the Abut. 1 to the Abut. 2 bearing of each girder
-  const { R: Rp } = alone(G, D => DW.plan(G, D));
-  const cl = ents(Rp, 'S-GRDR-CNTR', 'LINE').map(lineXY).sort((a, b) => a[1] - b[1]);
+  // girder count and spacing: the plan's girder centerlines at y = (ys_nb − ys)·12 (SBFLIP: G1 at the top), from the Abut. 1 to the Abut. 2 bearing of each girder
+  const { R: Rp } = alone(G, D => DW.plan(G, D)), PY = y => (FR.ys[nb - 1] - y) * 12;
+  const cl = ents(Rp, 'S-GRDR-CNTR', 'LINE').map(lineXY).sort((a, b) => b[1] - a[1]);
   assert.equal(cl.length, nb, `${name}: girder centerlines`); assert.equal(nb, Math.round(P.xs.nb));
-  cl.forEach((c, i) => { const g = FR.girders[i]; assert.ok(track(c[1], FR.ys[i] * 12) < EPS && track(c[3], FR.ys[i] * 12) < EPS, `${name}: G${i + 1} y`);
+  cl.forEach((c, i) => { const g = FR.girders[i]; assert.ok(track(c[1], PY(FR.ys[i])) < EPS && track(c[3], PY(FR.ys[i])) < EPS, `${name}: G${i + 1} y`);
     assert.ok(track(c[0], g.x0 * 12) < EPS && track(c[2], (g.x0 + g.bear[g.bear.length - 1]) * 12) < EPS, `${name}: G${i + 1} bearings`); });
-  cl.slice(1).forEach((c, i) => close(c[1] - cl[i][1], P.xs.bays[i] * 12, EPS, `${name}: spacing ${i + 1}`));
+  cl.slice(1).forEach((c, i) => close(cl[i][1] - c[1], P.xs.bays[i] * 12, EPS, `${name}: spacing ${i + 1}`));
   stats.girders += nb;
   // cross-frames: every frame line on its work points (x_a on girder bay, x_c on girder bay + 1), intermediate and end frames on their layers
   const fl = [...ents(Rp, 'S-XFRM', 'LINE').map(e => ['int', ...lineXY(e)]), ...ents(Rp, 'S-XFRM-END', 'LINE').map(e => ['sup', ...lineXY(e)])];
   assert.equal(fl.length, FR.frames.length, `${name}: frame count`);
   const key = (t, a) => `${t}|${a.map(v => v.toFixed(2)).join(',')}`, have = new Map(); fl.forEach(f => { const k = key(f[0], f.slice(1)); have.set(k, (have.get(k) || 0) + 1); });
-  FR.frames.forEach(f => { const k = key(f.type === 'sup' ? 'sup' : 'int', [f.xa * 12, FR.ys[f.bay] * 12, f.xc * 12, FR.ys[f.bay + 1] * 12]); assert.ok(have.get(k) > 0, `${name}: frame ${k} not drawn`); have.set(k, have.get(k) - 1); });
+  FR.frames.forEach(f => { const k = key(f.type === 'sup' ? 'sup' : 'int', [f.xa * 12, PY(FR.ys[f.bay]), f.xc * 12, PY(FR.ys[f.bay + 1])]); assert.ok(have.get(k) > 0, `${name}: frame ${k} not drawn`); have.set(k, have.get(k) - 1); });
   stats.frames += FR.frames.length;
   // field splices: one tick per girder per splice at the girder's own station
   const sp = ents(Rp, 'S-SPLC', 'LINE').map(lineXY); assert.equal(sp.length, nb * L.m.splices.length, `${name}: splice ticks`);
-  FR.girders.forEach((g, i) => L.m.splices.forEach(s => { const x = (g.x0 + FRM.toG(FR, i, L.m.sup, s)) * 12; assert.ok(sp.some(q => Math.abs(q[0] - x) < EPS && Math.abs(q[1] - (g.y * 12 - Math.abs(q[3] - q[1]) / 2)) < EPS), `${name}: G${i + 1} splice at ${s}`); }));
+  FR.girders.forEach((g, i) => L.m.splices.forEach(s => { const x = (g.x0 + FRM.toG(FR, i, L.m.sup, s)) * 12; assert.ok(sp.some(q => Math.abs(q[0] - x) < EPS && Math.abs(q[1] - (PY(g.y) - Math.abs(q[3] - q[1]) / 2)) < EPS), `${name}: G${i + 1} splice at ${s}`); }));
   // plate breaks: every girder's elevation, the plate rectangles = the plate segments at the girder's own stations (toG); the last plate ends
   // at the girder's Abut. 2 bearing; the stiffeners drawn = connection plates + bearing stiffener plates + intermediate stiffeners
   for (let i = 0; i < nb; i++) {
@@ -182,8 +182,9 @@ test('Five hand-off payloads (each with its own cross-section): plan, elevation 
 test('Hand check: built-in project (110-140-110 ft, 5 girders at 9.5 ft, no skew, s = 25 ft, plates change at 88, 128, 232, 272 ft)', () => {
   const P = J(M.defaultProject()), G = DW.model(P), D = X.drawing({ prefix: 'S-' }); DW.plan(G, D);
   const R = X.parse(D.toDXF());
-  // girder centerlines at y = 0, 9.5, 19, 28.5, 38 ft = 0, 114, 228, 342, 456 in; each from x = 0 to 110 + 140 + 110 = 360 ft = 4320 in
-  deq(ents(R, 'S-GRDR-CNTR').map(e => [+e.get(20), +e.get(10), +e.get(11)]), [[0, 0, 4320], [114, 0, 4320], [228, 0, 4320], [342, 0, 4320], [456, 0, 4320]]);
+  // girder centerlines at y = 0, 9.5, 19, 28.5, 38 ft drawn at (38 − y)·12 = 456, 342, 228, 114, 0 in (SBFLIP: G1 at the top); each from x = 0
+  // to 110 + 140 + 110 = 360 ft = 4320 in
+  deq(ents(R, 'S-GRDR-CNTR').map(e => [+e.get(20), +e.get(10), +e.get(11)]), [[456, 0, 4320], [342, 0, 4320], [228, 0, 4320], [114, 0, 4320], [0, 0, 4320]]);
   // span 1: no skew, parallel frames, n = ⌈110/25⌉ − 1 = 4 per bay at 110/5 = 22 ft (22, 44, 66, 88 ft) in each of the 4 bays (16);
   // span 2: ⌈140/25⌉ − 1 = 5 at 140/6 = 23.333 ft; span 3 as span 1: 4 × (4 + 5 + 4) = 52 intermediate; end frames 4 supports × 4 bays = 16.
   // The frame at 88 ft falls on the flange transition at 88 ft (within the 2 ft splice and transition clearance), so the layout shifts the

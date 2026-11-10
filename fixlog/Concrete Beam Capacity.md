@@ -5540,3 +5540,239 @@ Frame: Beam Capacity (`suite-frame-capacity`).
 - **How verified:** headless probe origin/main (df4acbc) vs branch (`tests/lib.mjs openPage`, `#asd`): `compute()` JSON identical; page text of the suite, the Beam Capacity and Development & Splice frames identical; ASD frame text and `asdRptModel()` differ only in the citation strings above; 0 console errors. `node tests/check-syntax.mjs`; `project-library --tool asd` ALL PASS; `phone-layout --tool cbc --w 390` passed.
 - **Open items (for the engineer, not changed):** (1) the operating f_c warning fires above 0.60 f′c; 4th Ed. Table 6B.5.2.4.1-1 lists 1,900 psi operating for f′c 3,000–3,900 psi (0.633 f′c at 3,000 psi), so the default 1,900 psi warns at f′c = 3,000 psi although it is the tabulated MBE value; the warning text also calls 1,900 psi "a MassDOT value". Advisory text only; no rating factor depends on it. (2) Gr 50 steel has no automatic f_s,op; Table 6B.5.2.3-1 gives 32,500 psi operating, 20,000 psi inventory (the tool already uses 20,000 inventory for Gr 50).
 - **Other copies:** none.
+
+## 2026-11-10 — PR: claude/cbc-asd-mbe4-allow (PR #1352: https://github.com/mlococo88/All-Structural/pull/1352) (MBE4A) — ASD tab: operating f_c and every reinforcing-steel row automatic from AASHTO MBE 4th Ed. (2026) Tables 6B.5.2.4.1-1 and 6B.5.2.3-1   [calculation change; saved format: additive flag ovr.fc_op with migration]
+- **Engineer (2026-11-10):** approved calculation change; standing rule: load rating follows the AASHTO MBE 4th Ed. (2026). It closes the open items of #1341 (MBE 4th Ed. value differences, items 4 and 5).
+- **Governing provisions:** MBE 4th Ed. (2026) Art. 6B.5.2.3, Table 6B.5.2.3-1 (p. 6-173, reinforcing steel by grade / yield); Art. 6B.5.2.4.1, Table 6B.5.2.4.1-1 (p. 6-174, concrete in bending, operating column). Inventory f_c stays 0.40 f′c (Std. Spec. 17th Ed. 8.15.2.1.1, permitted by MBE 6B.5.2.4).
+- **Values, before → after:**
+  - f_c,op: entered (default 1,900 psi; warned above 0.60 f′c as "a MassDOT value") → automatic: f′c 2,000–2,400 → 1,200; 2,500–2,900 → 1,500; 3,000–3,900 → 1,900; 4,000–4,900 → 2,400; ≥ 5,000 → 3,000 psi. Between rows: the lower row. Below 2,000 psi: no rule, the entry stays (REVIEW notice).
+  - f_s (inv / op), by f_y: 33,000: none → 18,000 / 25,000; 36,000: none → 20,000 / 27,000; 40,000: 20,000 / 28,000 (unchanged); 50,000: 20,000 / none → 20,000 / 32,500; 60,000: 24,000 / 36,000 (unchanged).
+  - Notices: the "> 0.60 f′c" Summary warning, check-summary line and Report note → a REVIEW when an entered f_c,op exceeds the table value, or when f′c has no table row.
+- **Check case:** rectangular b = 14 in, d = 28.5 in, A_s = 4.00 in², f′c = 3,000 psi, M_DL = 100, M_LL+I = 60 kip-ft. E_c = 3,122,019 psi, n = 9, ρ = 0.010025, k = 0.3440, kd = 9.805 in, j = 0.8853, z = 25.232 in, C = ½ b kd = 68.64 in².
+  - Gr 40 (before = after): inv M_steel 168.21 → RF 1.137; op M_steel 235.49 → RF 2.258.
+  - Gr 50: f_s,op 28,000 → 32,500 psi; op M_steel = 4.00 × 32,500 × 25.232 / 12,000 = 235.49 → **273.34** kip-ft (M_conc 274.21); RF_op 2.258 → **2.889**. Inventory unchanged (RF 1.137).
+  - Gr 60 (before = after): inv M_conc 173.18 → RF 1.220; op M_conc 274.21 → RF 2.903.
+  - f_c,op = 1,900 psi before and after at f′c 3,000 (the table value; the warning no longer shows). At f′c 4,000: 1,900 → 2,400 psi.
+- **Saved data (§5):** no key renamed. `S.allow.ovr` gains `fc_op`. Migration in `mergeState`: a save without `ovr.fc_op` (made before MBE4A) keeps as entered (override) any value that had no automatic rule then (`autoAllowPre`: f_c,op always; f_s for f_y other than 40,000 / 60,000) when it differs from the new table value. Saves without flags: the existing rule (differs from automatic → override). Old autosaves and saved projects reopen with identical numbers.
+- **Where (inside the `srcdoc` of `suite-frame-asd`; decoded `&quot;` → `"`, `&amp;` → `&`, edited, re-encoded; CRLF kept). Each Before occurs once:**
+  Edit 1.
+  - Before:
+    ```js
+    /* Allowable stresses tied to f'c / fy (psi), auto unless the user overrides a field.
+       Inventory fc = 0.40 f'c (AASHTO Std. Spec. 8.15.2.1.1). fs: inventory 20,000 psi Gr 40/50,
+       24,000 psi Gr 60 (8.15.2.2); operating 28,000 psi Gr 40, 36,000 psi Gr 60 (MBE Table 6B.5.2.3-1).
+       Other grades: no rule, value stays as entered. Operating fc is never auto (MassDOT value). */
+    const AUTO_ALLOW=["fc_inv","fs_inv","fs_op"];
+    function autoAllow(fc,fy){
+      return {fc_inv: fc>0 ? +(0.40*fc).toFixed(1) : null,
+              fs_inv: (fy===40000||fy===50000)?20000:(fy===60000?24000:null),
+              fs_op:  fy===40000?28000:(fy===60000?36000:null)};
+    }
+    ```
+  - After:
+    ```js
+    /* Allowable stresses tied to f'c / fy (psi), auto unless the user overrides a field.
+       Inventory fc = 0.40 f'c (AASHTO Std. Spec. 8.15.2.1.1, permitted by MBE 4th Ed. 6B.5.2.4).
+       MBE4A (2026-11-10, engineer: AASHTO MBE 4th Ed. (2026)):
+       fs (inventory, operating) from MBE Table 6B.5.2.3-1 (p. 6-173), by the table's yield column:
+         fy 33,000 (structural or unknown grade, before 1954) 18,000 / 25,000; fy 36,000 (structural grade) 20,000 / 27,000;
+         fy 40,000 (Gr 40 billet, intermediate or unknown grade, after 1954) 20,000 / 28,000; fy 50,000 (Gr 50 rail or hard)
+         20,000 / 32,500; fy 60,000 (Gr 60) 24,000 / 36,000. Other fy: no rule, value stays as entered.
+       Operating fc from MBE Table 6B.5.2.4.1-1 (p. 6-174), operating column, by the f'c row: 2,000-2,400 -> 1,200;
+         2,500-2,900 -> 1,500; 3,000-3,900 -> 1,900; 4,000-4,900 -> 2,400; 5,000 or more -> 3,000. An f'c between two rows
+         (e.g. 2,450 or 3,950) takes the lower row; below 2,000 psi: no rule, value stays as entered. */
+    const AUTO_ALLOW=["fc_inv","fs_inv","fs_op","fc_op"];
+    const ASD_FS_TBL={33000:[18000,25000],36000:[20000,27000],40000:[20000,28000],50000:[20000,32500],60000:[24000,36000]};
+    function asdFcOpTbl(fc){ return fc>=5000?3000:fc>=4000?2400:fc>=3000?1900:fc>=2500?1500:fc>=2000?1200:null; }
+    function autoAllow(fc,fy){
+      const t=ASD_FS_TBL[fy]||null;
+      return {fc_inv: fc>0 ? +(0.40*fc).toFixed(1) : null,
+              fs_inv: t?t[0]:null,
+              fs_op:  t?t[1]:null,
+              fc_op:  asdFcOpTbl(fc)};
+    }
+    /* the rules before MBE4A (fs_op Gr 40 / 60 only, no f_c,op rule), used only to migrate saves made before it */
+    function autoAllowPre(fc,fy){
+      return {fc_inv: fc>0 ? +(0.40*fc).toFixed(1) : null,
+              fs_inv: (fy===40000||fy===50000)?20000:(fy===60000?24000:null),
+              fs_op:  fy===40000?28000:(fy===60000?36000:null), fc_op:null};
+    }
+    ```
+  Edit 2.
+  - Before:
+    ```js
+      if(!S.allow.ovr) S.allow.ovr={fc_inv:false,fs_inv:false,fs_op:false};
+    ```
+  - After:
+    ```js
+      if(!S.allow.ovr) S.allow.ovr={fc_inv:false,fs_inv:false,fs_op:false,fc_op:false};
+    ```
+  Edit 3.
+  - Before:
+    ```js
+        allow:{fc_inv:1200, fs_inv:20000, fc_op:1900, fs_op:28000, ovr:{fc_inv:false,fs_inv:false,fs_op:false}},
+    ```
+  - After:
+    ```js
+        allow:{fc_inv:1200, fs_inv:20000, fc_op:1900, fs_op:28000, ovr:{fc_inv:false,fs_inv:false,fs_op:false,fc_op:false}},
+    ```
+  Edit 4.
+  - Before:
+    ```js
+      const so=st.allow&&st.allow.ovr;
+      if(so && typeof so==="object") S.allow.ovr={fc_inv:!!so.fc_inv,fs_inv:!!so.fs_inv,fs_op:!!so.fs_op};
+      else { const a=autoAllow(+S.inherit.fc||0,+S.inherit.fy||0); S.allow.ovr={};
+        AUTO_ALLOW.forEach(k=>{ S.allow.ovr[k]=!!(st.allow && st.allow[k]!==undefined && a[k]!==null && +st.allow[k]!==a[k]); }); }
+    ```
+  - After:
+    ```js
+      const so=st.allow&&st.allow.ovr;
+      if(so && typeof so==="object"){ S.allow.ovr={fc_inv:!!so.fc_inv,fs_inv:!!so.fs_inv,fs_op:!!so.fs_op,fc_op:!!so.fc_op};
+        /* MBE4A: a save made before MBE4A has no fc_op flag. A value it kept as an input (no rule then: f_c,op always; f_s for
+           fy other than 40,000 / 60,000 psi) that differs from the new table value is kept as entered (an override). */
+        if(so.fc_op===undefined){ const a=autoAllow(+S.inherit.fc||0,+S.inherit.fy||0), p=autoAllowPre(+S.inherit.fc||0,+S.inherit.fy||0);
+          AUTO_ALLOW.forEach(k=>{ if(!S.allow.ovr[k] && p[k]===null && a[k]!==null && st.allow[k]!==undefined && +st.allow[k]!==a[k]) S.allow.ovr[k]=true; }); } }
+      else { const a=autoAllow(+S.inherit.fc||0,+S.inherit.fy||0); S.allow.ovr={};
+        AUTO_ALLOW.forEach(k=>{ S.allow.ovr[k]=!!(st.allow && st.allow[k]!==undefined && a[k]!==null && +st.allow[k]!==a[k]); }); }
+    ```
+  Edit 5.
+  - Before:
+    ```js
+        b.appendChild(cbNL("note","AASHTO 8.15.2 service-level allowables, set automatically from f'_c and f_y (auto):",[["f_c,inv:","f_c,inv = 0.40 f'_c."],
+          ["f_s,inv:","f_s,inv = 20,000 psi (Gr 40/50) or 24,000 psi (Gr 60)."],["f_s,op:","f_s,op = 28,000 psi (Gr 40) or 36,000 psi (Gr 60, MBE Table 6B.5.2.3-1)."],
+          ["Override:","typing a value overrides it."],["Operating f_c:","always the entered value."]]));   /* CBNL */
+    ```
+  - After:
+    ```js
+        b.appendChild(cbNL("note","Service-level allowables, set automatically from f'_c and f_y (auto); AASHTO MBE 4th Ed. (2026) 6B.5.2:",[["f_c,inv:","f_c,inv = 0.40 f'_c (Std. Spec. 8.15.2.1.1, which MBE 6B.5.2.4 permits)."],
+          ["f_c,op:","from the operating column of MBE Table 6B.5.2.4.1-1 (p. 6-174) for the f'_c row: 1,200 / 1,500 / 1,900 / 2,400 / 3,000 psi for f'_c 2,000–2,400 / 2,500–2,900 / 3,000–3,900 / 4,000–4,900 / 5,000 psi or more. An f'_c between two rows takes the lower row; below 2,000 psi there is no row."],
+          ["f_s,inv / f_s,op:","from MBE Table 6B.5.2.3-1 (p. 6-173) by the yield stress: f_y 33,000 psi 18,000 / 25,000; 36,000 psi 20,000 / 27,000; 40,000 psi (Gr 40) 20,000 / 28,000; 50,000 psi (Gr 50) 20,000 / 32,500; 60,000 psi (Gr 60) 24,000 / 36,000 psi. Other f_y: no table row, the value is entered."],
+          ["Override:","typing a value overrides it; a value entered in a saved project stays as entered."]]));   /* CBNL; MBE4A */
+    ```
+  Edit 6.
+  - Before:
+    ```js
+        fRow(b,"Concrete, f_{c,op} (input)",numIn(()=>S.allow.fc_op,v=>S.allow.fc_op=v,"50","fcOp"),"psi");
+    ```
+  - After:
+    ```js
+        fRow(b,"Concrete, f_{c,op}"+allowTag("fc_op"),numIn(()=>S.allow.fc_op,v=>{S.allow.fc_op=v;S.allow.ovr.fc_op=true;},"50","fcOp"),"psi");   /* MBE4A: auto from Table 6B.5.2.4.1-1 */
+    ```
+  Edit 7.
+  - Before:
+    ```js
+        rb.addEventListener("click",()=>{ S.allow.ovr={fc_inv:false,fs_inv:false,fs_op:false}; refresh(); });
+    ```
+  - After:
+    ```js
+        rb.addEventListener("click",()=>{ S.allow.ovr={fc_inv:false,fs_inv:false,fs_op:false,fc_op:false}; refresh(); });
+    ```
+  Edit 8.
+  - Before:
+    ```js
+      [["fs_inv","f<sub>s,inv</sub>"],["fs_op","f<sub>s,op</sub>"]].forEach(([k,lb])=>{
+        if(!(S.allow.ovr&&S.allow.ovr[k]) && aa[k]===null){
+          const wn=el("div","errBox");
+          wn.innerHTML="f<sub>y</sub> = "+grp(R.fy)+" psi has no automatic rule for "+lb+": the value used ("+grp(R.A[k])+
+            " psi) is the field's current entry and may be left from an earlier f<sub>y</sub>. Check it against AASHTO MBE Table 6B.5.2.3-1.";
+          pg.appendChild(wn);
+        }
+      });
+      /* operating f_c above 0.60 f'c (MBE 6B.5.2.4.1, Table 6B.5.2.4.1-1) */
+      if(R.A.fc_op>0.60*R.fc+1e-9){
+        const on=el("div","warnBox");
+        on.innerHTML="Operating f<sub>c</sub> = "+grp(R.A.fc_op)+" psi is greater than 0.60f&prime;<sub>c</sub> = "+fmt(0.60*R.fc,1)+
+          " psi (AASHTO MBE 6B.5.2.4.1, Table 6B.5.2.4.1-1). Confirm the owner's basis for this value (the 1,900 psi default is a MassDOT value).";
+        pg.appendChild(on);
+      }
+    ```
+  - After:
+    ```js
+      [["fs_inv","f<sub>s,inv</sub>"],["fs_op","f<sub>s,op</sub>"]].forEach(([k,lb])=>{
+        if(!(S.allow.ovr&&S.allow.ovr[k]) && aa[k]===null){
+          const wn=el("div","errBox");
+          wn.innerHTML="f<sub>y</sub> = "+grp(R.fy)+" psi has no automatic rule for "+lb+": the value used ("+grp(R.A[k])+
+            " psi) is the field's current entry and may be left from an earlier f<sub>y</sub>. Check it against AASHTO MBE Table 6B.5.2.3-1.";
+          pg.appendChild(wn);
+        }
+      });
+      /* MBE4A: operating f_c against MBE 4th Ed. Table 6B.5.2.4.1-1 (was: a warning above 0.60 f'c) */
+      if(!(S.allow.ovr&&S.allow.ovr.fc_op) && aa.fc_op===null){
+        const wn=el("div","errBox");
+        wn.innerHTML="f&prime;<sub>c</sub> = "+grp(R.fc)+" psi is below the first row (2,000 psi) of AASHTO MBE Table 6B.5.2.4.1-1, so f<sub>c,op</sub> has no automatic value: the value used ("+
+          grp(R.A.fc_op)+" psi) is the field's current entry and may be left from an earlier f&prime;<sub>c</sub>. Confirm the owner's basis for it.";
+        pg.appendChild(wn);
+      } else if(aa.fc_op!==null && R.A.fc_op>aa.fc_op+1e-9){
+        const on=el("div","warnBox");
+        on.innerHTML="Operating f<sub>c</sub> = "+grp(R.A.fc_op)+" psi (entered) is greater than the AASHTO MBE 4th Ed. Table 6B.5.2.4.1-1 operating value for f&prime;<sub>c</sub> = "+
+          grp(R.fc)+" psi, "+grp(aa.fc_op)+" psi. The entered value is used; confirm the owner's basis for it.";
+        pg.appendChild(on);
+      }
+    ```
+  Edit 9.
+  - Before:
+    ```js
+          R.A.fc_op>0.60*R.fc+1e-9?['Operating $f_{c}$:','operating $f_{c}$ = '+grp(R.A.fc_op)+' psi is greater than 0.60$f^{\\prime}_{c}$ = '+fmt(0.60*R.fc,1)+' psi (AASHTO MBE 6B.5.2.4.1, Table 6B.5.2.4.1-1): confirm the owner\'s basis.']:null])])}]});
+    ```
+  - After:
+    ```js
+          asdFcOpNote(R)])])}]});
+    ```
+  Edit 10.
+  - Before:
+    ```js
+          ['Dead load moment $M_{DL}$',{t:F(R.L.m_dl),n:true},'kip-ft'],['Live load moment $M_{LL+I}$',{t:F(R.L.m_ll),n:true},'kip-ft']]}]}]});
+    ```
+  - After:
+    ```js
+          ['Dead load moment $M_{DL}$',{t:F(R.L.m_dl),n:true},'kip-ft'],['Live load moment $M_{LL+I}$',{t:F(R.L.m_ll),n:true},'kip-ft']]},
+          ...cbrNL('Allowable stresses: AASHTO MBE 4th Ed. (2026) 6B.5.2, set automatically from $f^{\\prime}_{c}$ and $f_{y}$ unless entered. [[tab:tabInputEcho|On screen: Input Echo tab; the rules are on the Allowables input card]]',asdAllowBasis(R))]}]});   /* MBE4A */
+    ```
+  Edit 11.
+  - Before:
+    ```js
+    function asdRptModel(){
+    ```
+  - After:
+    ```js
+    /* MBE4A (2026-11-10): the allowable-stress basis of each value, for the Report (the Allowables card states the same rules) */
+    function asdAllowBasis(R){
+      const a=autoAllow(R.fc,R.fy), o=(S.allow&&S.allow.ovr)||{}, src=k=>o[k]?'entered (override)':(a[k]!==null?'automatic':'entered (no table row)');
+      return [['$f_{c}$ (inventory):','0.40$f^{\\prime}_{c}$ (Std. Spec. 8.15.2.1.1, permitted by MBE 6B.5.2.4); '+grp(R.A.fc_inv)+' psi, '+src('fc_inv')+'.'],
+        ['$f_{c}$ (operating):','MBE Table 6B.5.2.4.1-1 (p. 6-174), operating column, row of $f^{\\prime}_{c}$ = '+grp(R.fc)+' psi'+(a.fc_op!==null?' ('+grp(a.fc_op)+' psi; between two rows the lower row is used)':' (none: below 2,000 psi)')+'; '+grp(R.A.fc_op)+' psi, '+src('fc_op')+'.'],
+        ['$f_{s}$ (inventory, operating):','MBE Table 6B.5.2.3-1 (p. 6-173), row of $f_{y}$ = '+grp(R.fy)+' psi'+(a.fs_op!==null?' ('+grp(a.fs_inv)+' / '+grp(a.fs_op)+' psi)':' (none)')+'; '+grp(R.A.fs_inv)+' psi, '+src('fs_inv')+' / '+grp(R.A.fs_op)+' psi, '+src('fs_op')+'.']];
+    }
+    function asdFcOpNote(R){ const a=autoAllow(R.fc,R.fy);
+      if(a.fc_op===null) return ['Operating $f_{c}$:','$f^{\\prime}_{c}$ = '+grp(R.fc)+' psi is below the first row of AASHTO MBE Table 6B.5.2.4.1-1: operating $f_{c}$ = '+grp(R.A.fc_op)+' psi is the entered value; confirm the owner\'s basis.'];
+      return R.A.fc_op>a.fc_op+1e-9?['Operating $f_{c}$:','operating $f_{c}$ = '+grp(R.A.fc_op)+' psi (entered) is greater than the AASHTO MBE 4th Ed. Table 6B.5.2.4.1-1 value '+grp(a.fc_op)+' psi for $f^{\\prime}_{c}$ = '+grp(R.fc)+' psi: confirm the owner\'s basis.']:null; }
+    function asdRptModel(){
+    ```
+  Edit 12.
+  - Before:
+    ```js
+      if(R.A.fc_op>0.60*R.fc+1e-9) out.push({name:'Operating f_c',st:'warn',short:'f_c,op > 0.60f′c',
+        text:'Operating f_c = '+grp(R.A.fc_op)+' psi > 0.60f′c = '+fmt(0.60*R.fc,1)+' psi; confirm the owner’s basis for this value.',
+        ref:'AASHTO MBE 6B.5.2.4.1, Table 6B.5.2.4.1-1',tab:'tabSummary',card:null});
+    ```
+  - After:
+    ```js
+      /* MBE4A: operating f_c against Table 6B.5.2.4.1-1 (was: above 0.60f'c) */
+      if(!(S.allow.ovr&&S.allow.ovr.fc_op)&&aa.fc_op===null) out.push({name:'Allowable f_c,op',st:'warn',short:'no row for f′c',
+        text:'f′c = '+grp(R.fc)+' psi is below the first row of Table 6B.5.2.4.1-1: the value used ('+grp(R.A.fc_op)+' psi) is the field’s current entry; confirm the owner’s basis.',
+        ref:'AASHTO MBE Table 6B.5.2.4.1-1',tab:'tabSummary',card:null});
+      else if(aa.fc_op!==null&&R.A.fc_op>aa.fc_op+1e-9) out.push({name:'Operating f_c',st:'warn',short:'f_c,op > Table value',
+        text:'Operating f_c = '+grp(R.A.fc_op)+' psi (entered) > MBE Table 6B.5.2.4.1-1 value '+grp(aa.fc_op)+' psi for f′c = '+grp(R.fc)+' psi; confirm the owner’s basis for this value.',
+        ref:'AASHTO MBE 6B.5.2.4.1, Table 6B.5.2.4.1-1',tab:'tabSummary',card:null});
+    ```
+  Edit 13.
+  - Before:
+    ```js
+       a steel allowable with no grade rule; operating f_c above 0.60f'c), from the same tests
+    ```
+  - After:
+    ```js
+       a steel allowable with no grade rule; operating f_c with no table row or above the Table 6B.5.2.4.1-1 value, MBE4A), from the same tests
+    ```
+- **How verified:** probe origin/main vs branch (headless, `tests/lib.mjs openPage`), driven through the Beam Capacity frame, 120 cases (ACI / AASHTO × f′c 1.8–6.0 ksi × f_y 33, 36, 40, 50, 60, 80 ksi): Beam Capacity and Development & Splice frame text identical in every case; ASD `compute()` changes only as listed above (f_c,op outside 3,000–3,900 psi; f_y 33,000 / 36,000 / 50,000 steel). 0 console errors. New `tests/smoke/cbc-asd-mbe4.mjs` ALL PASS (1400 / 390 px); check-syntax; phone-layout `--tool cbc`; project-library `--tool cbc` pass; project-library `--tool asd` reports only the intended differences (default project f′c 4,000: f_c,op 1,900 → 2,400 and M_conc,op; the new `ovr.fc_op` flag on reopened old data, values identical).
+- **Decisions (pending engineer review):** (1) an f′c between two rows takes the lower row; (2) steel rows are matched by the table's yield column; (3) an entered f_c,op is flagged only when above the table value; (4) values with no rule in old saves are kept as entered when they differ from the table (an untouched default cannot be told from an entry); (5) f_c,inv stays 0.40 f′c and n stays per Std. Spec. 8.15.3.4 (the table's inventory and n columns are not adopted; at f′c 3,500 psi 0.40 f′c = 1,400 psi vs 1,200 psi in the table).
+- **Other copies:** none (the standalone ASD page is a redirect).
