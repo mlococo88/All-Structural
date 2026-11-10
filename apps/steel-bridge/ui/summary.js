@@ -200,17 +200,17 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
     if (!xs && !pl) return '';
     return `<section class="sec" id="sum-gfx"><div class="secHead">Cross-section and framing plan</div><div class="secBody"><div class="sum-gfx">
       <figure class="sum-g1" id="sum-xs"><figcaption><b>Typical cross-section</b> — edit on the <a href="#" data-sumin="xsec">Cross-section</a> input tab; drawn on the <a href="#" data-sumtab="dwg">Drawings</a> tab (its own sheet), as there.</figcaption><div class="sum-gbox">${xs}</div></figure>
-      <figure class="sum-g1" id="sum-plan"><figcaption><b>Framing plan</b> — edit on the <a href="#" data-sumin="framing">Framing &amp; bracing</a> input tab; drawn on the <a href="#" data-sumin="layout">Bridge layout</a> input tab and the <a href="#" data-sumtab="cf">Cross-frames</a> tab, as there.</figcaption><div class="sum-gbox">${pl}</div></figure>
+      <figure class="sum-g1" id="sum-plan"><figcaption><b>Framing plan</b> — edit on the <a href="#" data-sumin="framing">Framing &amp; bracing</a> input tab; drawn on the <a href="#" data-sumin="layout">Bridge layout</a> input tab and the <a href="#" data-sumtab="cf">${window.SBDFramingUI && window.SBDFramingUI.isDia(P) ? 'Diaphragms' : 'Cross-frames'}</a> tab, as there.</figcaption><div class="sum-gbox">${pl}</div></figure>
     </div></div></section>`;
   }
   function paint(host, ctx) {
-    const P = ctx.P, COLS = SM().COLS, list = P.girders.map((g, gi) => S.list[gi] || { gi, label: g.label || g.id || `G${gi + 1}`, cells: {}, warn: [], err: {} });
+    const P = ctx.P, COLS = SM().COLS.map(c => SM().label(c, P)), LB = c => SM().label(c, P), list = P.girders.map((g, gi) => S.list[gi] || { gi, label: g.label || g.id || `G${gi + 1}`, cells: {}, warn: [], err: {} });
     const ov = SM().overall(P, list), n = ov.n, top = ov.gov, done = !todo(P).length;
     const verdict = !done && !n.fail && !n.review ? (n.pass ? 'INCOMPLETE' : '—') : ov.verdict;
     const bcls = verdict === 'FAIL' ? 'fail' : verdict === 'PASS' ? 'pass' : verdict === 'REVIEW' ? 'review' : 'none';
     const link = (G, col, c, t) => `<a href="#" data-sumgo="${G.gi}|${col.id}">${t}</a>`;
-    const govTxt = top ? `<b>Governing:</b> ${esc(top.c.head)}, girder ${esc(top.G.label)}, ${txt(top.q.loc)}: ${txt(top.q.check)} — ${link(top.G, top.c, top.q, `${top.c.rf ? 'RF ' + fmt(top.q.rf, 2) : 'D/C ' + (isFinite(top.q.r) ? fmt(top.q.r, 3) : 'not a number')}`)}` : 'No check has run yet.';
-    const nanTxt = ov.nan.length ? `<span class="sum-low"><b>Not evaluated</b> (ratio not finite, REVIEW): ${ov.nan.map(z => `${esc(z.c.head)}, ${esc(z.G.label)} ${link(z.G, z.c, z.q, txt(z.q.loc))}: ${txt(z.q.check)} — <span title="${esc(NF_WHY[nfTxt(z.q.r)])}">ratio ${nfTxt(z.q.r)}</span>`).join('; ')}.</span>` : '';
+    const govTxt = top ? `<b>Governing:</b> ${esc(LB(top.c).head)}, girder ${esc(top.G.label)}, ${txt(top.q.loc)}: ${txt(top.q.check)} — ${link(top.G, top.c, top.q, `${top.c.rf ? 'RF ' + fmt(top.q.rf, 2) : 'D/C ' + (isFinite(top.q.r) ? fmt(top.q.r, 3) : 'not a number')}`)}` : 'No check has run yet.';
+    const nanTxt = ov.nan.length ? `<span class="sum-low"><b>Not evaluated</b> (ratio not finite, REVIEW): ${ov.nan.map(z => `${esc(LB(z.c).head)}, ${esc(z.G.label)} ${link(z.G, z.c, z.q, txt(z.q.loc))}: ${txt(z.q.check)} — <span title="${esc(NF_WHY[nfTxt(z.q.r)])}">ratio ${nfTxt(z.q.r)}</span>`).join('; ')}.</span>` : '';
     const low = ov.low && ov.low !== top ? `<span class="sum-low"><b>Lowest rating factor:</b> ${esc(ov.low.c.head.replace('Rating, ', ''))} ${link(ov.low.G, ov.low.c, ov.low.q, fmt(ov.low.q.rf, 2))} (${esc(ov.low.G.label)}, ${txt(ov.low.q.loc)}).</span>` : '';
     const AD = window.SBDAutoDesignUI && window.SBDAutoDesignUI.lastWarns ? window.SBDAutoDesignUI.lastWarns(P) : null;
     const cdTxt = (() => { const CD = window.SBDCustomDemands, ks = CD ? ['flex', 'shear', 'cn', 'fat', 'rt', 'spl', 'wt'].filter(k => CD.srcGet(P, k) === 'custom') : [];

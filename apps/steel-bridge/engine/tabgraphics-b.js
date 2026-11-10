@@ -531,7 +531,7 @@
   /* ====================================================================================================== */
   /* Report summary                                                                                          */
   /* ====================================================================================================== */
-  const MODS = { Analysis: 'AN', Flexure: 'FLEX', 'Shear & stiffeners': 'SHEAR', 'Fatigue & studs': 'FAT', 'Cross-frames': 'XF', 'Field splices': 'SPL', Welds: 'WELD', Rating: 'RATING', Constructibility: 'CONSTR' };
+  const MODS = { Analysis: 'AN', Flexure: 'FLEX', 'Shear & stiffeners': 'SHEAR', 'Fatigue & studs': 'FAT', 'Cross-frames': 'XF', Diaphragms: 'DIA', 'Field splices': 'SPL', Welds: 'WELD', Rating: 'RATING', Constructibility: 'CONSTR' };
   const sumLabel = q => { const t = asc(q.check), id = /\b(GS\d+|TS\d+|CP\d+|BS\d+|FA\d+|SC\d+|CF\d+|FW\d|TR\d|BF\d|TF\d|WS\d|SA\d+|DT\d+|MT\d)\b/.exec(t), inv = /^Inventory/i.test(t) ? 'INV' : /^Operating/i.test(t) ? 'OPR' : '';
     return `${MODS[q.mod] || up(q.mod).slice(0, 8)} ${inv || (id ? id[1] : /^Panel/i.test(t) ? 'PANEL' : up(t).slice(0, 10))}`; };
   /* summary(M, P, opt): M = SBDReportBuild.model() result (its gov rows: the governing check of each group with its location). A small elevation with

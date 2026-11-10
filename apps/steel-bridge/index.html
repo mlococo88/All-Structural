@@ -679,6 +679,7 @@
      Welds inputs, a Custom demand table, …) is drawn for the fix, out of date and with its Calculate button off (hostFix). */
   function drawOut0() {
     const E = icErr = IC().collect(P).errors, t = ui.otab || 'sec';
+    { const b = document.querySelector('#tabBar [data-otab="cf"]'), t = window.SBDFramingUI.isDia(P) ? 'Diaphragms' : 'Cross-frames'; if (b && b.textContent !== t) b.textContent = t; }   // SBDIA (2026-11-10): the tab's name with a diaphragm as the bracing
     if (E.length && !E.some(e => e.host === t)) {
       document.querySelectorAll('#tabBar [data-otab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.otab === t)));
       $('out').onchange = null; $('out').onclick = null; $('out').innerHTML = ICU().blocked(E, icO()); return; }
