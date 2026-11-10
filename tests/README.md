@@ -46,6 +46,10 @@ node tests/compare.mjs --tool st --a a8bf5e7:stgirder.html --payload all      # 
 # Steel Bridge (apps/steel-bridge) Report tab: browser smoke test with print emulation (0 console errors, 0 KaTeX errors, links, print)
 node tests/smoke/steel-bridge-report.mjs
 
+# Steel Bridge remaining fatigue life (MBE 4th Ed. Section 7): turn the evaluation on, Example demands, the Category E gusset's Y_REM,
+# an entered g, the Summary / left column notes, the Report subsection, 390 px, 0 console errors
+node tests/smoke/steel-bridge-fatlife.mjs
+
 # Steel Bridge Field splices with custom values: Custom demands (errors shown after Calculate, a changed value changes the result), every entered
 # plate / bolt / basis field changes the FS1 result and is saved (SPERR; about 6 min)
 node tests/smoke/steel-bridge-splices.mjs
