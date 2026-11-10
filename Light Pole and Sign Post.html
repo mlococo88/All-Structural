@@ -145,6 +145,10 @@
   .card>.card-h{display:flex;align-items:baseline;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--slate-100);font-family:var(--font-ui)}
   .card-h .num{font-family:var(--font-ui);font-size:8.5pt;font-weight:700;color:var(--accent);letter-spacing:.05em}
   .card-h h2{font-family:var(--font-ui);font-size:8.5pt;margin:0;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--slate-700);line-height:1.4}
+  /* HOC (2026-11-10): the Project tab's Hand-offs card */
+  #lppHoCard .lppHoGrp{margin:8px 0 3px;font-family:var(--font-ui);font-size:8pt;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--slate-700)}
+  #lppHoCard .lppHoRow{border-top:1px solid var(--line);padding:6px 0 4px}
+  #lppHoCard .lppHoFrom{font-size:12px;color:#5b6676}
   .card-h .hint{margin-left:auto;font-size:8pt;color:#64748B;text-align:right}
   .card-toggle{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:8.5pt;color:var(--slate-600);cursor:pointer;user-select:none}
   .card-toggle input{width:15px;height:15px;accent-color:var(--blue-600);cursor:pointer}
@@ -789,6 +793,26 @@
         <input type="file" id="pbImportFile" accept=".json,application/json" style="display:none">
       </div>
     </section>
+    <!-- HOC (2026-11-10, engineer decision: the hand-off card on the Project tab in every tool): the anchorGroup send and the
+         anchorGroupResult import moved here from the Anchorage card (Anchors tab); same ids and handlers; the result chips stay there -->
+    <section class="card" id="lppHoCard">
+      <div class="card-h"><h2>Hand-offs</h2></div>
+      <div class="card-body">
+        <p class="tbl-note" style="margin-top:0">Nothing here changes an input: the anchors are sent only when you click, and the Anchorage app's result is shown (Anchorage tab, Summary), never applied to an input.</p>
+        <div class="lppHoGrp">Receive from other tools</div>
+        <div class="lppHoRow"><b>Anchor design result</b> <span class="lppHoFrom">from the Base Plate &amp; Anchor Bolt Designer (bridgeSuite.v1.anchorGroupResult)</span>
+          <div style="margin-top:4px"><button class="btn mini ghost" id="lpAnchImportRes" type="button">Import result (JSON)</button><input type="file" id="lpAnchResFile" accept=".json,application/json" style="display:none"></div>
+          <p class="tbl-note" style="margin:4px 0 0 0"><b>Status:</b> <span id="lppHoAgrSt"></span> Shown per anchor group on the <a href="#" data-go-otab="anchors">Anchorage tab</a>.</p></div>
+        <div class="lppHoGrp">Send to other tools</div>
+        <div class="lppHoRow"><b>Anchor groups</b> <span class="lppHoFrom">to the Base Plate &amp; Anchor Bolt Designer (bridgeSuite.v1.anchorGroup)</span>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px">
+          <button class="btn mini" id="lpAnchSend" type="button">Send anchors to the Anchorage app</button>
+          <button class="btn mini ghost" id="lpAnchExport" type="button">Export hand-off (JSON)</button>
+          <a class="btn mini ghost" href="BasePlateAnchorDesigner.html" target="_blank" rel="noopener">Open Anchorage app ↗</a>
+          </div>
+          <p class="tbl-note" id="lpAnchStatus" style="margin:8px 0 0 0"></p></div>
+      </div>
+    </section>
   </div>
 
   <!-- ================= RESULTS (logical top-down order) ================= -->
@@ -1046,15 +1070,9 @@
       <div class="card-h"><span class="num">A</span><h2>Anchorage</h2><span class="hint">anchor design in the Anchorage app · HANDOFF.md §4.11 / §4.12</span></div>
       <div class="card-body">
         <div class="tbl-note lpNL" style="margin-top:0"><div class="lpNLl">Send to the Base Plate &amp; Anchor Bolt Designer, which designs the anchorage:</div><ul class="lpNLu"><li><b class="lpNLk">Sent:</b> the anchor groups (one per post), the base plate, the shaft and every LRFD combination (ice combinations included; B₂·M; torsion).</li><li><b class="lpNLk">Basis:</b> factored, Light Pole sign convention (lightPole-v1), lb / lb-ft / in / psi.</li></ul></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <button class="btn mini" id="lpAnchSend" type="button">Send anchors to the Anchorage app</button>
-          <button class="btn mini ghost" id="lpAnchExport" type="button">Export hand-off (JSON)</button>
-          <a class="btn mini ghost" href="BasePlateAnchorDesigner.html" target="_blank" rel="noopener">Open Anchorage app ↗</a>
-        </div>
-        <p class="tbl-note" id="lpAnchStatus" style="margin:8px 0 0 0"></p>
+        <p class="tbl-note" style="margin:0">Send / receive data: <a href="#" data-go-ho="1">Project tab → Hand-offs</a> (Send anchors to the Anchorage app, Export hand-off (JSON), Import result (JSON); HOC 2026-11-10).</p>
         <div id="lpAnchResult" style="margin-top:8px"></div>
         <div class="tbl-note lpNL" style="margin:8px 0 0 0"><div class="lpNLl">Anchor design is done in the Anchorage app (Base Plate &amp; Anchor Bolt Designer).</div><ul class="lpNLu"><li><b class="lpNLk">Workflow:</b> send the anchors with the button above and design them there; the governing anchor D/C comes back here.</li><li><b class="lpNLk">This tool</b> no longer checks the anchor rods (engineer, 2026-11-01).</li><li><b class="lpNLk">Anchor inputs</b> (card 7) are kept: they are sent to the Anchorage app and feed the base-plate check.</li></ul></div>
-        <div style="margin-top:6px"><button class="btn mini ghost" id="lpAnchImportRes" type="button">Import result (JSON)</button><input type="file" id="lpAnchResFile" accept=".json,application/json" style="display:none"></div>
       </div>
     </section>
     <section class="card poleOnly" data-tab="anchors">
@@ -7895,6 +7913,7 @@ function lppAnchorChipHTML(groupId){
   return `<span class="lpAgChip" data-state="${c.state}" style="display:inline-block;border:1px solid ${col};color:${col};border-radius:3px;padding:2px 7px;font-size:12px">${lppEsc(c.text)}</span>`;
 }
 function lppAnchorCardRefresh(){
+  lppHoAgrStatus();   // HOC: the Hand-offs card's status line
   const box=$('lpAnchResult'); if(!box||!LPP_ANCH) return;
   box.innerHTML=LPP_ANCH.groups.map(g=>`<div style="margin:3px 0"><b>${lppEsc(g.label)}:</b> ${lppAnchorChipHTML(g.id)}</div>`).join('');
   if(typeof lppDashRender==='function') lppDashRender();   // LPDC: the Anchors line follows a new Anchorage-app result
@@ -7908,6 +7927,12 @@ if($('lpAnchResFile')) $('lpAnchResFile').addEventListener('change',e=>{
 });
 window.addEventListener('storage',e=>{ if(e.key&&e.key.indexOf('bridgeSuite.v1.anchorGroupResult')===0){ lppAnchorCardRefresh(); if(LPP_SUMCTX) renderSummary(LPP_SUMCTX); } });
 window.addEventListener('focus',()=>{ lppAnchorCardRefresh(); if(LPP_SUMCTX&&$('page-summary')&&$('page-summary').classList.contains('on')) renderSummary(LPP_SUMCTX); });
+/* HOC (2026-11-10): the Hand-offs card's result status (from lppAnchorResult, as the chips; nothing stored) and its links */
+function lppHoAgrStatus(){ const e=$('lppHoAgrSt'); if(!e) return; const R=lppAnchorResult();
+  e.textContent=!R? 'nothing available yet (no result from the Anchorage app).' : R.error? 'the stored result cannot be read: '+R.error+'.' : 'result from '+(R.payload.producer||'the Anchorage app')+', '+(R.payload.producedAt? new Date(R.payload.producedAt).toLocaleString() : '?')+(R.via==='file'?' (imported file, this session)':'')+'.'; }
+document.addEventListener('click',e=>{ const a=e.target&&e.target.closest&&e.target.closest('[data-go-ho],[data-go-otab]'); if(!a) return; e.preventDefault();
+  if(a.dataset.goOtab){ const t=document.querySelector('#tabBar [data-tab="'+a.dataset.goOtab+'"]'); if(t) t.click(); return; }
+  lppSetInTab('proj',true); const c=$('lppHoCard'); if(c) c.scrollIntoView({block:'start'}); });
 function lppAnchorStatus(msg){ const e=$('lpAnchStatus'); if(e) e.textContent=msg||''; }
 if($('lpAnchSend')) $('lpAnchSend').addEventListener('click',()=>{
   const r=lppAnchorPayload(); if(r.error){ lppAnchorStatus(r.error); return; }
