@@ -11,6 +11,10 @@
 //    Gr 60: inv M_conc 173.18 (RF 1.220), op M_conc 274.21 (RF 2.903)               (before = after)
 //  - A typed value is an override and stays; a save made before MBE4A keeps a value that had no rule then as entered.
 //  - The "> 0.60 f'c" warning and "MassDOT value" wording are gone; tab and Report state the table basis.
+//  - MBE4B (2026-11-10, engineer): f_c,inv automatic from Table 6B.5.2.4.1-1, inventory column (800 / 1,000 / 1,200 / 1,600 /
+//    2,000 psi; lower row between rows; below 2,000 psi no rule, entry kept). Before: 0.40 f'c. n stays Std. Spec. 8.15.3.4.
+//    Hand check, same beam at f'c = 3,500 psi (n = 9 as at 3,000): f_c,inv 1,400 -> 1,200 psi; Gr 60 inventory M_all
+//    201.85 (steel) -> 173.18 (concrete), RF 1.697 -> 1.220; Gr 40 / 50 inventory RF 1.137 (steel) unchanged.
 //  - 0 console errors; no sideways scroll at 390 px.
 //   node tests/smoke/cbc-asd-mbe4.mjs [--file <Concrete Beam Capacity.html>]
 import path from 'path';
@@ -52,6 +56,30 @@ for (const vw of [1400, 390]) {
   r = await run(3000, 60000);
   ok(r.A.fs_inv === 24000 && r.A.fs_op === 36000 && near(r.Mci, 173.18) && near(r.rfi, 1.220, 0.001) && near(r.Mco, 274.21) && near(r.rfo, 2.903, 0.001) && r.co === 'Concrete',
     `Gr 60: inv ${r.Mci.toFixed(2)} RF ${r.rfi.toFixed(3)}, op ${r.Mco.toFixed(2)} RF ${r.rfo.toFixed(3)} (173.18/1.220, 274.21/2.903, concrete)`);
+  // MBE4B: f_c,inv from the inventory column
+  r = await run(3500, 60000);
+  ok(r.n === 9 && r.A.fc_inv === 1200 && !r.ovr.fc_inv && near(r.Mci, 173.18) && near(r.Msi, 201.85) && r.ci === 'Concrete' && near(r.rfi, 1.220, 0.001) && near(r.rfo, 2.903, 0.001),
+    `f'c 3,500 Gr 60: f_c,inv ${r.A.fc_inv} (1,200; before 1,400), inv ${r.Mci.toFixed(2)} ${r.ci} RF ${r.rfi.toFixed(3)} (173.18 concrete, 1.220; before 201.85 steel, 1.697)`);
+  r = await run(3500, 40000);
+  ok(r.A.fc_inv === 1200 && near(r.Msi, 168.21) && near(r.rfi, 1.137, 0.001) && r.ci === 'Steel', `f'c 3,500 Gr 40: inv RF ${r.rfi.toFixed(3)} (1.137, unchanged)`);
+  ok(r.html.includes('800 / 1,200 psi for f\'_c 2,000–2,400') && r.html.includes('Std. Spec. 8.15.3.4; MBE 6B.5.2.4 permits the Art. 8.15 method'), 'Allowables card: inventory column and n basis');
+  ok(r.rpt.includes('inventory column, row of') && r.rpt.includes('= 3,500 psi (1,200 psi; between two rows') && r.rpt.includes('Modular ratio n:'), 'Report: inventory basis and n note');
+  for (const [fc, v] of [[2000, 800], [2450, 800], [2500, 1000], [3000, 1200], [3950, 1200], [4000, 1600], [5000, 2000], [8000, 2000]]) {
+    r = await run(fc, 60000); ok(r.A.fc_inv === v && !r.ovr.fc_inv, `f'c ${fc}: f_c,inv ${r.A.fc_inv} (${v})`); }
+  r = await run(1800, 60000);
+  ok(r.A.fc_inv === 1200 && r.dash.includes('Allowable f_c,inv') && r.rpt.includes('inventory $f_{c}$ = 1,200 psi is the entered value'), 'f\'c 1,800: no inventory row, entry kept (1,200), REVIEW and Report note');
+  await run(3500, 60000);
+  await f.evaluate(() => { const i = document.querySelector('[data-fkey="fcInv"]'); i.value = '1400'; i.dispatchEvent(new Event('input', { bubbles: true })); });
+  r = await f.evaluate(() => ({ A: { ...S.allow }, ovr: { ...S.allow.ovr }, dash: JSON.stringify(asdDashItems()), rpt: JSON.stringify(asdRptModel()) }));
+  ok(r.A.fc_inv === 1400 && r.ovr.fc_inv && r.dash.includes('f_c,inv > Table value') && r.rpt.includes('inventory $f_{c}$ = 1,400 psi (entered)'), 'typed f_c,inv 1,400 at f\'c 3,500: override, REVIEW (> 1,200)');
+  r = await f.evaluate(() => { mergeState({ allow: { fc_inv: 1400, fs_inv: 24000, fc_op: 1900, fs_op: 36000 }, inherit: { ...S.inherit, fc: 3500, fy: 60000 } }); applyAutoAllow(); return { A: { ...S.allow }, ovr: { ...S.allow.ovr } }; });
+  ok(r.A.fc_inv === 1200 && !r.ovr.fc_inv, 'save without flags, f_c,inv = 0.40 f\'c (automatic then): follows the table (1,200)');
+  r = await f.evaluate(() => { mergeState({ allow: { fc_inv: 1300, fs_inv: 24000, fc_op: 1900, fs_op: 36000 }, inherit: { ...S.inherit, fc: 3500, fy: 60000 } }); applyAutoAllow(); return { A: { ...S.allow }, ovr: { ...S.allow.ovr } }; });
+  ok(r.A.fc_inv === 1300 && r.ovr.fc_inv, 'save without flags, f_c,inv entered (1,300): kept');
+  r = await f.evaluate(() => { mergeState({ allow: { fc_inv: 1400, fs_inv: 24000, fc_op: 1900, fs_op: 36000, ovr: { fc_inv: false, fs_inv: false, fs_op: false, fc_op: false } }, inherit: { ...S.inherit, fc: 3500, fy: 60000 } }); applyAutoAllow(); return { A: { ...S.allow }, ovr: { ...S.allow.ovr } }; });
+  ok(r.A.fc_inv === 1200 && !r.ovr.fc_inv, 'MBE4A save, f_c,inv automatic: follows the table (1,200)');
+  r = await f.evaluate(() => { mergeState({ allow: { fc_inv: 1400, fs_inv: 24000, fc_op: 1900, fs_op: 36000, ovr: { fc_inv: true, fs_inv: false, fs_op: false, fc_op: false } }, inherit: { ...S.inherit, fc: 3500, fy: 60000 } }); applyAutoAllow(); return { A: { ...S.allow }, ovr: { ...S.allow.ovr } }; });
+  ok(r.A.fc_inv === 1400 && r.ovr.fc_inv, 'saved f_c,inv override: kept (1,400)');
   for (const [fy, fi, fo] of [[33000, 18000, 25000], [36000, 20000, 27000]]) { r = await run(3000, fy); ok(r.A.fs_inv === fi && r.A.fs_op === fo, `f_y ${fy}: ${r.A.fs_inv}/${r.A.fs_op} (${fi}/${fo})`); }
   for (const [fc, v] of [[2000, 1200], [2450, 1200], [2500, 1500], [2900, 1500], [3950, 1900], [4000, 2400], [4900, 2400], [5000, 3000], [8000, 3000]]) {
     r = await run(fc, 60000); ok(r.A.fc_op === v && !r.ovr.fc_op, `f'c ${fc}: f_c,op ${r.A.fc_op} (${v})`); }
