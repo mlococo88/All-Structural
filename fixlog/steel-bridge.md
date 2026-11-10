@@ -5765,7 +5765,7 @@ index 10a32fd..16f867d 100644
   3. Remaining fatigue life (FA5, FA6; `engine/fatigue.js`): 4th Ed. 7.2.2 (p. 7-2) takes (Δf)_eff = R_pR_sΔf with Δf the factored Fatigue II (0.80) stress range and the new multiple presence factor R_p (Eq. 7.2.2.1-1, ≥ 1.0, longitudinal members, p. 7-3); 7.2.4 (pp. 7-5, 7-6) takes (Δf)_max = R_p × the factored Fatigue I (1.75) range for a calculated range (2.2(Δf)_eff for WIM data); 7.2.5.1 (pp. 7-6, 7-7) computes the remaining life from N_av − N_1 with the first-year and present ADTT (Eqs. 7.2.5.1-1 to -4). The app uses (Δf)_eff = R_s × the unfactored fatigue-truck range, (Δf)_max = 2(Δf)_eff, and the single-ADTT growth formula. Its fatigue references ("AASHTO MBE 7.2.2 / 7.2.4 / 7.2.5", no edition) are left as they were.
 - **Other copies:** ST-Girder in `Steel Bridge Design.html` (st-src) carries the same rating method; see its own PR.
 
-## 2026-11-10 — PR: claude/sb-mbe4-fr-shear (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Rating: MBE 4th Ed. Service II f_R and φ_s = 1.0 on shear   [calculation change, approved: engineer standing rule 2026-11-10]
+## 2026-11-10 — PR: claude/sb-mbe4-fr-shear (PR #1354: https://github.com/mlococo88/All-Structural/pull/1354) — Rating: MBE 4th Ed. Service II f_R and φ_s = 1.0 on shear   [calculation change, approved: engineer standing rule 2026-11-10]
 - **Engineer (2026-11-10):** for load rating, always use the AASHTO MBE 4th Edition (2026); adopt it where the tool differs (items 1 and 2 of the open items of PR #1349 above).
 - **Where (to re-apply by hand), `apps/steel-bridge/engine/rating.js`:**
   - `function phi(phiC, phiS)`: return adds `vV: Math.max(c, 0.85), floorV: c < 0.85` (the shear factor, φ_s = 1.0).
