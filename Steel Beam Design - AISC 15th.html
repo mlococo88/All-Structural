@@ -3354,6 +3354,9 @@ function buildDeriveTab(pg){
    ===================================================================== */
 function buildAnalysisTab(pg){
   comboSelector(pg);
+  pg.appendChild(el('div','hint sbNL',sbNL('Strength combinations are those of the Load Combinations input.',[   /* SBASM (2026-11-10): SW3 and Q3 basis */
+    ['Preset "ASCE 7 LRFD basics" (ASCE 7-16 \u00A72.3.1):','L is taken at 1.0 where it is a companion load (the 0.5L exception is not used); 1.2D + 1.6S + 0.5W is included only when cases SL and WL both exist.'],
+    ['Roof live load:','a building-load import that brings L\u1D63, or the preset with an LR case, adds the \u00A72.3.1 combinations with L\u1D63 (L at 1.0) when no active combination includes it.']])));
   const c=curCombo();if(!c)return;
   mkSection('anDia','Diagrams \u2014 '+c.name,body=>{
     ['plotV','plotM'].forEach(id=>{const d=el('div','plotHold');d.id=id;body.appendChild(d);});
@@ -3530,7 +3533,8 @@ const PROP_LABELS={Wt:['Weight','lb/ft'],A:['Area','in\u00B2'],d:['Depth d','in'
 function buildSectionTab(pg){
   const p=AN.sect;
   if(!p){pg.appendChild(el('div','errBox','No section resolved.'));return;}
-  pg.appendChild(el('div','note','<b>'+p.lbl+'</b> \u2014 '+famMeta(p._fam).name+' \u00B7 '+p.mat.name+' (F\u1D67 = '+p.mat.Fy+' ksi, F\u1D64 = '+p.mat.Fu+' ksi) \u00B7 source: '+DBVER+'. Slenderness ratios shown are recomputed from the resolved geometry.'));
+  pg.appendChild(el('div','note','<b>'+p.lbl+'</b> \u2014 '+famMeta(p._fam).name+' \u00B7 '+p.mat.name+' (F\u1D67 = '+p.mat.Fy+' ksi, F\u1D64 = '+p.mat.Fu+' ksi) \u00B7 source: '+DBVER+'. Slenderness ratios shown are recomputed from the resolved geometry.'+
+    (p.mat.id==='A500C_P'?' A500 Gr. C round: F\u1D67 = 46 ksi, the ASTM A500-13 value that AISC 360-16 references (Table C-A3.1); later A500 editions give 50 ksi.':'')));   /* SBASM (2026-11-10): L3 basis */
   AN.warns.forEach(w=>pg.appendChild(sbWarnEl(w)));
   mkSection('sctFig','Cross Section',body=>{
     xsecBlock(body,p,{id:'xsecSect',title:p.lbl+'  \u00B7  '+p.mat.name+'  \u00B7  '+fmt(p.Wt,1)+' lb/ft',height:380});
@@ -3541,7 +3545,8 @@ function buildSectionTab(pg){
     body.appendChild(el('div','note','h/t\u1D65 = '+fmt(f13.h,3)+'/'+fmt(p.tw,4)+' = <b>'+fmt(p.htw,1)+'</b>; \u03BB\u1D63 = 5.70\u221A(E/F\u1D67) = 5.70\u221A(29000/'+p.mat.Fy+') = '+fmt(f13.lamR,1)+
       ' \u2192 web '+(f13.slender?'<b>slender</b>: Eq. F13-3 / F13-4 apply':'not slender: Eq. F13-3 / F13-4 do not apply')+
       '. '+(f13.stiffened?'Transverse stiffeners at a = '+fmt(S.design.stiff.a,2)+' in, a/h = '+fmt(f13.ah,3)+'.':'No transverse stiffeners (unstiffened girder).')+
-      ' \u00A7F13.2 Eq. F13-2 is for singly symmetric members (not modelled).'));
+      ' \u00A7F13.2 Eq. F13-2 is for singly symmetric members (not modelled).'+
+      ' The h/t\u1D65 \u2264 260 limit (unstiffened girders) and the a\u1D65 \u2264 10 limit are applied to every section checked here, slender web or not; an unstiffened slender web is checked against Eq. F13-4 (no stiffeners: a/h > 1.5) as well as 260.'));   /* SBASM (2026-11-10): M2 basis */
     const t=el('table','tbl');const hd=el('tr');['Limit','Value','Limit value','Ratio','Status'].forEach(x=>hd.appendChild(el('th',null,x)));t.appendChild(hd);
     f13.L.forEach(x=>{const tr=el('tr');[x.lab+(x.id==='F13-3'||x.id==='F13-4'?' (Eq. '+x.id+')':''),fmt(x.v,2),
       x.id==='F13-3'?'12.0\u221A(29000/'+p.mat.Fy+') = '+fmt(x.lim,1):x.id==='F13-4'?'0.40\u00B729000/'+p.mat.Fy+' = '+fmt(x.lim,1):fmt(x.lim,0),
@@ -3590,7 +3595,7 @@ function buildSectionTab(pg){
         Wno:'W\u2099\u2092 = b\u2093h\u2092/4 = '+f3(p.Wno)+' in\u00B2 (AISC DG 9)',
         Sw1:'S_w1 = t\u2093b\u2093\u00B2h\u2092/16 = '+f3(p.Sw1)+' in\u2074 (AISC DG 9)',
         Wt:'Wt = 490/144\u00B7A = 3.403\u00B7'+f3(p.A)+' = '+fmt(p.Wt,1)+' lb/ft (steel 490 pcf)'};
-      body.appendChild(el('div','hint sbNL',sbNL('Built-up section: properties computed from the plates (welds neglected; AISC 360-16 Table B4.1b note on h, \u00A7F2.2):',
+      body.appendChild(el('div','hint sbNL',sbNL('Built-up section: properties computed from the plates (doubly symmetric, equal flanges; welds neglected; AISC 360-16 Table B4.1b note on h, \u00A7F2.2):',
         Object.keys(E).filter(k=>p._src[k]==='plates').map(k=>E[k]))));   /* SBNL: one item per property */
     }
     if(p._kind==='I'||p._kind==='C')body.appendChild(el('div','hint sbNL',sbNL('<b>h clear</b> is the clear web depth driving h/t\u1D65 and, where transverse stiffeners are entered, a/h.',[['Value:','backed out of the tabulated h/t\u1D65 at database thickness.'],['To model a built-up plate girder,','override it together with d, t\u1D65, b\u1DA0 and t\u1DA0.']])));
@@ -4555,12 +4560,12 @@ MANUAL.p0.blocks=[
 {key:'Analysis demands (M\u2093, V\u2093, reactions) come from the beam model. Axial force, minor-axis moment/shear, and torsion are <b>manual per-combination inputs</b> \u2014 the model is planar and cannot generate them. They are flagged with imported-value styling everywhere they appear.'},
 {h:'0.2 What this app does NOT do'},
 {ul:[
-'<b>No axial/lateral analysis.</b> P\u1D64, M\u1D64\u1D67, V\u1D64\u1D67, T\u1D64 are user-entered per combination, and second-order amplification (B2) must already be included in them. The app performs no P-\u0394/P-\u03B4 amplification.',
+'<b>No axial/lateral analysis.</b> P\u1D64, M\u1D64\u1D67, V\u1D64\u1D67, T\u1D64 are user-entered per combination, and second-order amplification (B2) must already be included in them. The app performs no P-\u0394 amplification; in beam mode with axial compression the analysis M\u1D64\u2093 is amplified for P-\u03B4 by B\u2081 (Appendix 8) in the \u00A7H1 interaction.',
 '<b>No axial checks on channels.</b> Singly symmetric flexural-torsional buckling (E4 for C/MC) is out of scope; entering P\u1D64 on a channel raises an explicit block, never a silent pass.',
-'<b>No torsion on open sections.</b> I- and C-shape torsion requires AISC Design Guide 9 and is refused with a message; HSS torsion is checked per H3.',
-'<b>No sidesway web buckling check (J10.4).</b> It depends on flange rotational restraint conditions not modeled here \u2014 verify separately where the compression flange is not restrained against rotation.',
-'<b>No tension checks</b> (member is a beam/beam-column in compression by scope).',
-'<b>No composite action, moving/pattern load automation, unbalanced snow generation, support settlement, springs, haunches, vibration, ponding, fatigue, or fire checks.</b> Pattern live load on continuous beams remains the user\u2019s responsibility (\u00A70.3).',
+'<b>No open-section torsion without a stated case.</b> I- and C-shape torsion is checked by AISC Design Guide 9 and \u00A7H3.3 only when a torsion case is entered in the Torsion input; otherwise it is reported N/A. HSS torsion is checked per H3.',
+'<b>No sidesway web buckling check (J10.4) in member mode.</b> In beam mode it is checked at compressive point loads (Concentrated Forces tab).',
+'<b>No block shear or connection checks.</b> Axial tension (P\u1D64 < 0) is checked for \u00A7D2 yielding and rupture and in the \u00A7H1.2 interaction; block shear (\u00A7J4.3) and the end connection are not.',
+'<b>No moving/pattern load automation, unbalanced snow generation, support settlement, springs, haunches, vibration, ponding, fatigue, or fire checks.</b> Pattern live load on continuous beams remains the user\u2019s responsibility (\u00A70.3).',
 '<b>No noncompact/slender-element channels, slender-web HSS in flexure, or round sections beyond D/t = 0.45E/F\u1D67</b> \u2014 each raises an explicit block.'
 ]},
 {h:'0.3 Known limitations and assumptions'},
@@ -5433,7 +5438,9 @@ function buildVxTab(pg){
   const D=dOrNull(pg),p=AN.sect;if(!D)return;
   mkSection('vxCap','Major-Axis Shear Strength',body=>{
     if(p._kind==='P'&&!isMember())
-      body.appendChild(el('div','note','Round sections: V\u2099 depends on L\u1D65 (maximum-shear to zero-shear distance), which varies by combination \u2014 derived in each section below.'));
+      body.appendChild(el('div','note sbNL',sbNL('Round sections: V\u2099 depends on L\u1D65 (maximum-shear to zero-shear distance), which varies by combination \u2014 derived in each section below.',[   /* SBASM (2026-11-10): E3 rule stated */
+        ['L\u1D65:','from the station of largest |V| to the first point of zero shear in that span, searched in the direction of decreasing |V|: a zero of the shear diagram, or a point load whose jump crosses V = 0 (AISC 360-16 \u00A7G5, Eq. G5-2a).'],
+        ['Supports:','a reaction jump is never taken as the point of zero shear. With no zero before the end of the span, L\u1D65 runs to the span end (a longer L\u1D65 gives a lower F\u1D9C\u02B3: conservative).']])));
     else{
       stiffBlock(body,p,D.shearX,D);
       /* TFAH (2026-11-08): with the TFA option applied, the G2.1 note no longer says G2.2 is not used (display only) */
@@ -5658,6 +5665,10 @@ function buildJ10Tab(pg){
     body.appendChild(t);
     const w0=locs[0];
     if(w0&&typeof j10Worked==='function')j10Worked(body,p,w0);
+    if(!isMember())body.appendChild(el('div','note sbNL',sbNL('Concentrated forces (beam mode):',[   /* SBASM (2026-11-10): H1 and M3 basis */
+      ['Point loads:','all point loads at the same x, of any load case, are one location; its R\u1D64 is the factored sum \u03A3\u03B3\u00B7P of the combination (AISC 360-16 \u00A7J10.2, \u00A7J10.3).'],
+      ['Direction:','a downward point load or an upward support reaction is a compressive force on the web (web local yielding, web local crippling and, at point loads, \u00A7J10.4); an upward point load or an uplift reaction is a tensile force (web local yielding and \u00A7J10.1).'],
+      ['End distance:','measured from the nearer end of the beam.']])));
     body.appendChild(el('div','hint',isMember()?'<b>Sidesway web buckling (J10.4) is not checked in member mode</b> \u2014 verify separately where the flanges are not restrained at the load.':
       'Web sidesway buckling (\u00A7J10.4) and flange local bending (\u00A7J10.1): see the section below (point loads and tensile forces).'));
   },pg);
@@ -5731,7 +5742,10 @@ function j10More(pg,D,p){
 function buildInterTab(pg){
   const D=dOrNull(pg);if(!D)return;
   mkSection('itBasis','Interaction Basis',body=>{
-    body.appendChild(el('div','note sbNL',sbNL('M\u1D63\u2093/M\u1D9C\u2093 is taken as the <b>governing major-axis flexural DCR</b> across all regions.',[['Why this is safe:','each region is already divided by its own capacity, so the composition is safe.'],['HSS torsion:','where T\u1D64 > 0.2\u03C6T\u2099 on an HSS, Eq. H3-6 replaces H1 and brings the shear ratio in with it.']])));
+    body.appendChild(el('div','note sbNL',sbNL('M\u1D63\u2093/M\u1D9C\u2093 is taken as the <b>governing major-axis flexural DCR</b> across all regions.',[['Why this is safe:','each region is already divided by its own capacity, so the composition is safe.'],['HSS torsion:','where T\u1D64 > 0.2\u03C6T\u2099 on an HSS, Eq. H3-6 replaces H1 and brings the shear ratio in with it.'],
+      isMember()?null:['Second-order (P-\u03B4):','in beam mode, where P\u1D64 is compression, the ratio is the governing flexure DCR \u00D7 B\u2081 = C\u2098/(1 \u2212 P\u1D63/P\u2091\u2081) \u2265 1 (AISC 360-16 \u00A7C1, Appendix 8), with C\u2098 = 1.0, EI* = EI and L\u1D9C\u2081 = the compression effective length L\u1D9C\u2093; the M\u2093 flexure check itself is not amplified.'],
+      ['Entered moments:',(isMember()?'M\u1D64\u2093 and M\u1D64\u1D67 are':'M\u1D64\u1D67 is')+' entered and taken as already including second-order effects.'],
+      D.compActive?['Composite action:','the ratio is the bare-steel governing flexure DCR, not the composite ratio of the M\u2093 tab (conservative where the composite strength is the larger).']:null])));   /* SBASM (2026-11-10): M4 and D11 basis stated */
     body.appendChild(eqBlock({title:'Equations used',ref:'\u00A7H1.1, \u00A7H3.2',
       lines:['\\tfrac{P_r}{P_c}\\ge 0.2:\\quad \\tfrac{P_r}{P_c}+\\tfrac{8}{9}\\left(\\tfrac{M_{rx}}{M_{cx}}+\\tfrac{M_{ry}}{M_{cy}}\\right)\\le 1.0\\qquad\\text{(H1-1a)}',
         '\\tfrac{P_r}{P_c}< 0.2:\\quad \\tfrac{P_r}{2P_c}+\\left(\\tfrac{M_{rx}}{M_{cx}}+\\tfrac{M_{ry}}{M_{cy}}\\right)\\le 1.0\\qquad\\text{(H1-1b)}',
@@ -5853,7 +5867,7 @@ function tfaBlock(body,p,t,sh){
     'V_n=0.6F_yA_w\\left[C_{v2}+\\tfrac{1-C_{v2}}{1.15\\left(a/h+\\sqrt{1+(a/h)^2}\\right)}\\right]='+fmt(t.VnTFA,1)+'\\ \\text{kip}');
   lines.push('\\phi V_n=0.90\\times\\max(V_{n,G2.1}='+fmt(sh.Vn,1)+',\\ V_{n,G2.2}='+fmt(t.VnTFA,1)+')=\\mathbf{'+fmt(0.9*t.Vn,1)+'\\ \\text{kip}}\\quad\\text{(interior panels)}');
   body.appendChild(eqBlock({title:'Interior panels with tension field action (option on)',ref:'§G2.2, Eq. '+t.eq,lines}));
-  body.appendChild(el('div','hint','Panels within a = '+fmt(t.a,1)+' in of a support or member end are end panels and keep §G2.1. The stiffener requirement above is shown on the §G2.1 basis (Vᶜ₁ of G2.1), which gives the larger ρᵥ.'));
+  body.appendChild(el('div','hint','Panels within a = '+fmt(t.a,1)+' in of any support (interior supports of a continuous beam included) or of a member end are end panels and keep §G2.1. The stiffener requirement above is shown on the §G2.1 basis (Vᶜ₁ of G2.1), which gives the larger ρᵥ.'));
 }
 /* TFA (2026-11-07, option, default off): AISC 360-16 Sec. G2.2, interior web panels with a/h <= 3 of I-shapes:
    h/t_w <= 1.10 sqrt(k_v E/F_y): V_n = 0.6 F_y A_w (G2-6); otherwise V_n = 0.6 F_y A_w [C_v2 + (1 - C_v2)/(1.15 sqrt(1 + (a/h)^2))]
@@ -5973,7 +5987,8 @@ function stiffBlock(body,p,sh,D){
   const Vr=(D&&D.perCombo&&D.perCombo.length)?Math.max.apply(null,D.perCombo.map(C=>Math.abs(C.Vu||0))):null;
   const req=stiffenerReq(p,S.design.stiff,Vr,sh);
   if(req)mkSection('vxStReq','Stiffener Proportioning (\u00A7G2.3, no tension field action)',body2=>{
-    body2.appendChild(el('div','note','The tool does <b>not</b> design the stiffener plate. These are the \u00A7G2.3 requirements the plate you provide must satisfy; size it and verify against the Specification directly.'));
+    body2.appendChild(el('div','note','The tool does <b>not</b> design the stiffener plate. These are the \u00A7G2.3 requirements the plate you provide must satisfy; size it and verify against the Specification directly.'+
+      (req.rhoW!=null?' \u03C1\u1D65 is not capped at 1.0: a panel with V\u1D63 > V\u1D9C\u2081 already fails the shear check.':'')));   /* SBASM (2026-11-10): M1 basis */
     const IL=['j=\\tfrac{2.5}{(a/h)^2}-2\\ \\ge 0.5=\\max\\left(\\tfrac{2.5}{'+fmt(req.ah,3)+'^2}-2,\\ 0.5\\right)=\\mathbf{'+fmt(req.j,3)+'}',
         'I_{st2}=j\\,b_p\\,t_w^3='+fmt(req.j,3)+'\\times '+fmt(req.b,2)+'\\times '+fmt(p.tw,4)+'^3=\\mathbf{'+fmt(req.Ist2,4)+'}\\ \\text{in}^4\\quad\\text{(G2-15)}',
         'I_{st1}=\\tfrac{h^4\\rho_{st}^{1.3}}{40}\\left(\\tfrac{F_{yw}}{E}\\right)^{1.5}=\\tfrac{'+fmt(webH(p),2)+'^4\\times '+fmt(req.rhoSt,2)+'^{1.3}}{40}\\left(\\tfrac{'+p.mat.Fy+'}{29000}\\right)^{1.5}=\\mathbf{'+fmt(req.Ist1,4)+'}\\ \\text{in}^4\\quad\\text{(G2-14)}'];
@@ -10488,6 +10503,11 @@ function buildConstrSections(pg,p,r,which){
     mkSection('cpDefl','Composite and Construction-Stage Deflections',body=>{
       body.appendChild(el('div','note','Pre-composite deflection uses the bare steel I\u2093 = '+fmt(p.Ix,0)+
         ' in\u2074; everything applied after the concrete cures uses the lower-bound I\u1D38\u1D2E = '+fmt(cs.ILB,0)+' in\u2074.'));
+      {const il=inhVal('LL',k.LL),isd=(k.superDL!=null&&k.superDL!=='');   /* SBASM (2026-11-10): CD1 basis */
+      body.appendChild(el('div','note sbNL',sbNL('Basis of the composite deflections:',[
+        ['Model:','a simple span of the composite span L under uniform loads, \u0394 = 5wL\u2074/(384EI).'],
+        ['Live load:',(il.own?'the entered pressure':il.v!=null?'blank, so the '+il.src:'blank, with nothing to inherit: none')+'; w = tributary width \u00D7 pressure'+((k.LLpct==null||k.LLpct===''||+k.LLpct===100)?', used in full (100 %, the default).':', at the entered percentage.')],
+        ['Superimposed dead:',isd?'as entered (default 0 psf); it is not taken from the tributary generator\u2019s DL, which may include the slab.':'blank, so it is inherited from the tributary generator\u2019s DL (see the note on the slab weight).']])));}
       const t=el('table','tbl');
       const hd=el('tr');['Deflection','I used (in\u2074)','\u0394 (in)','Limit (in)','DCR','Status'].forEach(h=>hd.appendChild(el('th',null,h)));t.appendChild(hd);
       const row=(nm,I,d,lim,dcr)=>{
@@ -10633,6 +10653,10 @@ function buildMxTab(pg){
       flexCapBlock(body,p,D.capTop,'Compression flange'+(D.LbTop>0?'':' \u2014 continuously braced'));
     }else{
       body.appendChild(el('div','note','Evaluated at the bracing entered for each flange with C\u1D47 = 1; the per-combination sections then apply the demand, and in calculated-C\u1D47 mode re-evaluate LTB with the worst-window C\u1D47.'));
+      body.appendChild(el('div','note sbNL',sbNL('Moment regions and C\u1D47:',[   /* SBASM (2026-11-10): L5 and SBD-O5 basis */
+        ['Regions:','each combination\u2019s moment diagram is split where M changes sign, at the zero of M interpolated between stations. The compression flange is the top flange where M > 0 and the bottom flange where M < 0, each with its own L\u1D47.'],
+        ['Inflection points:','not taken as brace points.'],
+        (S.design.CbMode==='calc')?['Calculated C\u1D47:','a window of length L\u1D47 (at most the region length) is moved through each region, C\u1D47 by Eq. F1-1 from the moments in the window, and the window with the largest DCR is kept. The window stays inside its region; C\u1D47 = 1.0 in a window that reaches a free (cantilever) end.']:['C\u1D47:','1.0 in every region (C\u1D47 basis "unity", conservative).']])));
       flexCapBlock(body,p,D.capTop,'Top flange in compression (M > 0)'+(S.bracing.topCont?' \u2014 continuously braced':(D.LbTopDefaulted?' \u2014 L\u1D47 defaulted':'')));
       body.appendChild(el('div',null,'<hr style="border:none;border-top:1px solid var(--line);margin:8px 0">'));
       flexCapBlock(body,p,D.capBot,'Bottom flange in compression (M < 0)'+(D.LbBotDefaulted?' \u2014 L\u1D47 defaulted to support-to-support':''));
