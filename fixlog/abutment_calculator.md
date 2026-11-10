@@ -17038,3 +17038,13 @@ Engineer decision 2026-11-10 (geometry). AASHTO LRFD 10th Ed. (2024): 5.6.5 / Fi
   - `abutment-stem-shelf`, `abutment-pile-mat-level`, `abutment-panel-scroll`, `project-library --tool abutment`, `dxf-print-sheets --tool ab`, `check-syntax`;
   - 0 console errors; 390 px.
 - **Other copies:** none.
+
+## 2026-11-10 — ABGRT: input tab "Girders" renamed "Girders & Reactions" (display only)
+- **Request (engineer, 2026-11-10):** "The girders tab should be girders and reactions."
+- **Change:** `ABUT_IN_TABS`, anchor `['gird','Girders']`:
+  - before: `['gird','Girders']`
+  - after: `['gird','Girders & Reactions']`
+  The tab id `gird` and the saved input-tab key `abutcalc_inputTab_v1` are unchanged, so saved projects and the remembered tab still work. The panels in the tab are unchanged: I-5 Girders — Layout & Reaction Matrix, the distribution panel, and the longitudinal panel.
+- **Provisions / values:** none (§4 not affected).
+- **Check case:** open the tool; the input tab bar shows "Girders & Reactions" and the tab holds panel I-5.
+- **PR:** https://github.com/mlococo88/All-Structural/pull/1385
