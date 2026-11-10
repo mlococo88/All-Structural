@@ -93,6 +93,15 @@ See `AUDIT.md` for the current inventory, known issues, and the work plan, and
   where it is worked (another tab, module or report section), link to that
   derivation: an in-app link to the tab, module or card on screen, and a
   "see §x.y" reference in the printed calculation report.
+- State assumptions in the tool (engineer's rule, 2026-11-10): every
+  assumption or decision a change makes (including each "Decision (pending
+  engineer review)" in a PR or fixlog entry) is also stated as a note in the
+  tool, in the section it applies to: the tab or card on screen and the
+  matching section of the calculation report. The note says what the code
+  actually does, cites the governing provision where there is one
+  (paraphrased), and does not say "pending engineer review". Purely UI or
+  implementation choices with no engineering meaning (storage keys, layout)
+  need no note.
 
 ## 7. Scope of changes
 
