@@ -491,7 +491,7 @@
   <div class="hdrInfo">
     <div class="sub" id="appSub">A pole carrying splayed catenary lighting cables plus its own wind. Each cable's dead, wind, ice, and wind-on-ice loads resolve to horizontal and vertical pole reactions; the unbalanced pull drives the IBC §1807.3 embedment and the ACI 318 shaft. Wind is enveloped at the worst direction for each component independently.</div>
   </div>
-  <div class="lppScope" id="lppScope"><b>Scope (this mode):</b> IBC 2021 · ASCE 7-16 (adopted by IBC 2021; ice t<sub>d</sub> by the ASCE 7-22 Ch. 10 form) · AISC 360-16 · ACI 318-19 — non-highway light poles and sign supports (site, parking, sports and private signs). AASHTO LRFDLTS highway supports have their own mode (code switch above the Light pole / Sign switch); do not use this mode for them.</div>
+  <div class="lppScope" id="lppScope"><b>Scope (this mode):</b> IBC 2021 · ASCE 7-16 (adopted by IBC 2021; ice per ASCE 7-16 Ch. 10, t<sub>d</sub> by §10.4.6) · AISC 360-16 · ACI 318-19 — non-highway light poles and sign supports (site, parking, sports and private signs). AASHTO LRFDLTS highway supports have their own mode (code switch above the Light pole / Sign switch); do not use this mode for them.</div>
 </header>
 
 <div class="wrap">
@@ -654,14 +654,14 @@
     <section class="card ibcOnly" id="iceCard">
       <div class="card-h"><span class="num">5</span><h2>Ice &amp; wind-on-ice</h2><span class="hint">ASCE 7 Ch.10</span></div>
       <div class="card-body">
-        <div class="row"><label>Radial ice thickness, t<span class="note">nominal ice thickness from the ASCE 7-22 ice map (Ch. 10) for the structure's Risk Category. The tool's t<sub>d</sub>(z) follows the ASCE 7-22 form; with an ASCE 7-16 map value, check the ASCE 7-16 Ch. 10 design-thickness equation and its map basis (not verified here)</span></label><div class="ctl"><input id="tIce" type="number" value="0.5" step="0.25"><span class="unit">in</span></div></div>
-        <div class="row"><label>Ice thickness basis<span class="note">map value: t<sub>d</sub>(z) = t·f<sub>z</sub>·K<sub>zt</sub><sup>0.35</sup>·I<sub>i</sub> per height (ASCE 7-22 §10.4.6); uniform: t used at every height as entered</span></label><div class="ctl"><select id="iceBasis" class="combo-sel"><option value="map" selected>Map value t → t_d(z) (ASCE 7-22 Ch. 10)</option><option value="design">Uniform design t_d (as entered)</option></select></div></div>
-        <div class="row" id="rowIceIi"><label>Ice importance factor, I<sub>i</sub><span class="note">1.0 when t is read from the ASCE 7-22 map for the structure's Risk Category (the maps include the risk level)</span></label><div class="ctl"><input id="iceIi" type="number" value="1.0" step="0.05"><span class="unit">—</span></div></div>
+        <div class="row"><label>Radial ice thickness, t<span class="note">nominal ice thickness from the ASCE 7-16 maps (Figs. 10.4-2 to 10.4-6, 500-year MRI; §10.4.2). With the map basis the tool takes t<sub>d</sub> = t·I<sub>i</sub>·f<sub>z</sub>·K<sub>zt</sub><sup>0.35</sup> (ASCE 7-16 §10.4.6, Eq. 10.4-5)</span></label><div class="ctl"><input id="tIce" type="number" value="0.5" step="0.25"><span class="unit">in</span></div></div>
+        <div class="row"><label>Ice thickness basis<span class="note">map value: t<sub>d</sub>(z) = t·f<sub>z</sub>·K<sub>zt</sub><sup>0.35</sup>·I<sub>i</sub> per height (ASCE 7-16 §10.4.6, Eq. 10.4-4 and 10.4-5); uniform: t used at every height as entered</span></label><div class="ctl"><select id="iceBasis" class="combo-sel"><option value="map" selected>Map value t → t_d(z) (ASCE 7-16 §10.4.6)</option><option value="design">Uniform design t_d (as entered)</option></select></div></div>
+        <div class="row" id="rowIceIi"><label>Ice importance factor, I<sub>i</sub><span class="note">on the ice thickness, from ASCE 7-16 Table 1.5-2 for the Risk Category (§10.4.4): 0.80 (I), 1.00 (II), 1.15 (III), 1.25 (IV)</span></label><div class="ctl"><input id="iceIi" type="number" value="1.0" step="0.05"><span class="unit">—</span></div></div>
         <p class="tbl-note" id="iceNote" style="margin:-4px 0 8px 0"></p>
         <p class="tbl-note" id="iceMigNote" style="margin:0 0 8px 0;display:none;color:#b45309"></p>
         <div class="row"><label>Ice density</label><div class="ctl"><input id="iceDen" type="number" value="56" step="1"><span class="unit">pcf</span></div></div>
         <div class="row"><label>Wind-on-ice speed, V<sub>ice</sub><span class="note">concurrent gust, ASCE 7 ice-wind map</span></label><div class="ctl"><input id="Vice" type="number" value="50" step="1"><span class="unit">mph</span></div></div>
-        <div class="row"><label>Cable drag coeff., C<sub>f,cable</sub><span class="note">~1.1 round cylinder</span></label><div class="ctl"><input id="cfCable" type="number" value="1.1" step="0.05"><span class="unit">—</span></div></div>
+        <div class="row"><label>Cable drag coeff., C<sub>f,cable</sub><span class="note">~1.1 round cylinder; the entered cable C<sub>f</sub> is also used for the ice case (ASCE 7-16 §10.5.5 gives 1.2 for ice-covered cables; kept as entered by engineer's decision)</span></label><div class="ctl"><input id="cfCable" type="number" value="1.1" step="0.05"><span class="unit">—</span></div></div>
       </div>
     </section>
 
@@ -969,7 +969,7 @@
     <section class="card" id="signComboCard" data-tab="loading" style="display:none">
       <div class="card-h"><span class="num">3b</span><h2>Load combinations — per-post demand</h2><span class="hint">non-ice ASCE 7 combinations</span></div>
       <div class="card-body">
-        <div class="tbl-note lpNL"><div class="lpNLl">Every combination applies.</div><ul class="lpNLu"><li><b class="lpNLk">Ice:</b> the atmospheric-ice ones included (ice on the sign panel and posts, ASCE 7-22 Ch. 10, added 2026-11-01).</li><li><b class="lpNLk">Envelope:</b> each combination is enveloped over the applicable Fig. 29.3-1 load cases and wind directions, per post.</li><li><b class="lpNLk">Governing rows</b> (largest M) are highlighted for each design family.</li></ul></div>
+        <div class="tbl-note lpNL"><div class="lpNLl">Every combination applies.</div><ul class="lpNLu"><li><b class="lpNLk">Ice:</b> the atmospheric-ice ones included (ice on the sign panel and posts, ASCE 7-16 Ch. 10, added 2026-11-01).</li><li><b class="lpNLk">Envelope:</b> each combination is enveloped over the applicable Fig. 29.3-1 load cases and wind directions, per post.</li><li><b class="lpNLk">Governing rows</b> (largest M) are highlighted for each design family.</li></ul></div>
         <table class="tbl" id="sgComboTbl"></table>
       </div>
     </section>
@@ -1675,7 +1675,7 @@ function cfPoleWorkedHTML(inp){
   return H;
 }
 
-// ---- ice design thickness by height, ASCE 7-22 §10.4.6 (added 2026-11-01, LP-R8; engineer decision) ----
+// ---- ice design thickness by height, ASCE 7-16 §10.4.6 (Eq. 10.4-4, 10.4-5) (added 2026-11-01, LP-R8; engineer decision) ----
 // The entered t is the nominal (map) thickness: t_d(z) = t·f_z·(K_zt)^0.35·I_i, f_z = (z/33)^0.10 for 0 < z ≤ 900 ft
 // (Eq. 10.4-4/10.4-5). Basis "design" (saves made before 2026-11-01): t_d = t at every height (the old behaviour).
 // Used for the mast (per strip) and the fixtures (at their mount height). The cables keep the entered t (engineer,
@@ -1689,7 +1689,7 @@ function iceFz(z){ return Math.pow(Math.min(Math.max(z,0),900)/33,0.10); }
 // Worked step (tab and report): the design ice thickness by height
 function iceWorkedHTML(inp, pw, fxs){
   const g=t=>`\\[${t}\\]`;
-  let H=`<div class="step-label">Design ice thickness t<sub>d</sub>(z) <span class="eq-ref">[ASCE 7-22 §10.4.6, Eq. 10.4-4, 10.4-5]</span></div>`;
+  let H=`<div class="step-label">Design ice thickness t<sub>d</sub>(z) <span class="eq-ref">[ASCE 7-16 §10.4.6, Eq. 10.4-4, 10.4-5]</span></div>`;
   if(inp.iceBasis!=='map'){
     H+=`<p class="eq-why">Basis: uniform design thickness (as entered): t<sub>d</sub> = t = ${fmt(inp.tIce,3)} in at every height (mast and fixtures). Cables always use the entered t.</p>`;
     return H;
@@ -1905,7 +1905,7 @@ function signWind(inp){
     const eC=B/2 - xR;
     caseC={bands, F:Ftot, e:eC, factor:cc.factor, xR};
   }
-  // ---- atmospheric ice on the sign (added 2026-11-01, engineer decision; ASCE 7-22 Ch. 10) ----
+  // ---- atmospheric ice on the sign (added 2026-11-01, engineer decision; ASCE 7-16 Ch. 10) ----
   // Panel: flat vertical plate. Ice volume per ASCE 7-16 §10.4.1 (flat plates, Eq. 10.4-2): V_i = π·t_d·A_s, A_s = the area of one
   // side, × 0.8 for a vertical plate (π applied, engineer 2026-11-10; before: 0.8·A_s·t_d), t_d at the panel centroid height (§10.4.6). Wind on ice (§10.5): the projected panel grows by t_d on every
   // edge, (B + 2t_d)(s + 2t_d), at V_ice with the sign K_d and G. C_f of the iced sign (§10.5.2, engineer 2026-11-10): Fig. 29.3-1 Case A/B
@@ -2614,7 +2614,7 @@ manPart("p0","0. Read This First",[
  ["IBC 2021 Table 1806.2 &amp; §1806.3.4","Presumptive lateral and vertical bearing by soil class; the isolated-pole increase"],
  ["ASCE 7-16 Ch. 26","Velocity pressure, exposure, directionality, gust effect"],
  ["ASCE 7-16 Ch. 29","Solid sign force coefficients and load cases (Fig. 29.3-1); other structures"],
- ["ASCE 7-22 Ch. 10","Atmospheric ice: radial glaze thickness, density, concurrent wind speed"],
+ ["ASCE 7-16 Ch. 10","Atmospheric ice: radial glaze thickness (§10.4), density (§10.4.1), concurrent wind speed and wind on ice (§10.5)"],
  ["ACI 318-19 Ch. 10, 20, 22, 25","Shaft reinforcement limits, cover, P\u2013M strength, shear, tie detailing"],
  ["ACI 318-19 Ch. 17","Cast-in anchor tension and shear limit states and interaction"],
  ["AISC 360-16 §E3, F7, F8, H1.1","Section classification, flexural and compressive strength, combined forces"],
@@ -2729,7 +2729,7 @@ manPart("p2","2. Input Reference",[
 
 {h:"2.6 Ice (light pole, and sign panel and posts since 2026-11-01)"},
 {tbl:{head:["Input","Units","Feeds","Notes"],rows:[
- ["Radial ice thickness, t","in","Ice weight on cable, mast and fixtures; iced projected widths","Nominal thickness from the ASCE 7-22 ice map (Ch. 10) for the site and Risk Category. With the basis \"Map value\" the tool computes t<sub>d</sub>(z) = t·f<sub>z</sub>·K<sub>zt</sub><sup>0.35</sup>·I<sub>i</sub> for the mast and fixtures; cables use t as entered. Zero disables all ice cases."],
+ ["Radial ice thickness, t","in","Ice weight on cable, mast and fixtures; iced projected widths","Nominal thickness from the ASCE 7-16 maps for the site (Figs. 10.4-2 to 10.4-6, §10.4.2); I<sub>i</sub> from Table 1.5-2 for the Risk Category (§10.4.4). With the basis \"Map value\" the tool computes t<sub>d</sub>(z) = t·f<sub>z</sub>·K<sub>zt</sub><sup>0.35</sup>·I<sub>i</sub> for the mast and fixtures; cables use t as entered. Zero disables all ice cases."],
  ["Ice density","lb/ft\u00b3","Ice weight","56 lb/ft\u00b3 is the ASCE 7 value for glaze ice."],
  ["Concurrent wind speed, V<sub>ice</sub>","mph","Wind-on-ice pressure","Much lower than the basic speed \u2014 ASCE 7 pairs a reduced wind with the ice case because the two extremes do not coincide. Typically 30\u201350 mph."]
 ]}},
@@ -3221,7 +3221,7 @@ manPart("pA","A. Notation &amp; References",[
 {h:"A.2 References"},
 {ul:[
  "International Code Council. <i>International Building Code</i>, 2021. §1806 (presumptive load-bearing values) and §1807.3 (embedded posts and poles).",
- "American Society of Civil Engineers. <i>ASCE/SEI 7-16, Minimum Design Loads and Associated Criteria for Buildings and Other Structures</i> (adopted by IBC 2021). Ch. 2 (combinations), Ch. 26 (wind general), Ch. 29 (other structures and appurtenances). Ice: the design thickness t<sub>d</sub>(z) follows the ASCE 7-22 Ch. 10 form (maps by Risk Category, I<sub>i</sub>); not verified against ASCE 7-16 Ch. 10. K<sub>d</sub> = 1.0 for round and multi-sided masts is the ASCE 7-22 value, kept as a conservative choice (ASCE 7-16 Table 26.6-1: 0.95).",
+ "American Society of Civil Engineers. <i>ASCE/SEI 7-16, Minimum Design Loads and Associated Criteria for Buildings and Other Structures</i> (adopted by IBC 2021). Ch. 2 (combinations), Ch. 26 (wind general), Ch. 29 (other structures and appurtenances). Ice: Ch. 10, the design thickness t<sub>d</sub> = t·I<sub>i</sub>·f<sub>z</sub>·K<sub>zt</sub><sup>0.35</sup> (§10.4.6, Eq. 10.4-4 and 10.4-5; maps Figs. 10.4-2 to 10.4-6; I<sub>i</sub> Table 1.5-2, §10.4.4). K<sub>d</sub> = 1.0 for round and multi-sided masts is the ASCE 7-22 value, kept as a conservative choice (ASCE 7-16 Table 26.6-1: 0.95).",
  "American Concrete Institute. <i>ACI 318-19, Building Code Requirements for Structural Concrete.</i> Ch. 10, 17, 20, 22, 25.",
  "American Institute of Steel Construction. <i>ANSI/AISC 360-16, Specification for Structural Steel Buildings.</i> Ch. E, F, H.",
  "AASHTO. <i>Standard Specifications for Structural Supports for Highway Signs, Luminaires, and Traffic Signals</i> (LTS). Article 13.6 and Commentary C13.6.1.1.",
@@ -3388,7 +3388,7 @@ function signLoadPathHTML(inp,sw,pw,postGovList){
   const two=nP===2;
   let H='';
   H+=`<div class="eq-why lpNL">${lpNL('Complete load path from the panel to each post\'s groundline demand:',[['Steps:','geometry and lever arms, the dead-load (axial) path, the wind-case force split between posts, and the shear/moment assembly.'],['Same computation:','every number here is the same computation that feeds the Shaft tab — the governing P, M, N below match the foundation demand exactly.']])}</div>`;   // LPNL
-  H+=`<div class="flag lpNL" style="background:#fdf8ee;border-color:#e0c48a;color:#7a5a1e;margin:8px 0">${lpNL('Ice on signs (added 2026-11-01).',[['Applied:','atmospheric ice (ASCE 7-22 Ch. 10) is applied to the sign.'],['Panel ice weight:',`${fmt(sw.WiPanel,0)} lb (flat plate, §10.4.1).`],['Post ice:',`${fmt(sw.WiPost,0)} lb per post.`],['Wind:','on the iced panel (B + 2t<sub>d</sub>)(s + 2t<sub>d</sub>) and posts at V<sub>ice</sub> in the ice combinations.'],['Worked in','the sign wind section.']])}</div>`;
+  H+=`<div class="flag lpNL" style="background:#fdf8ee;border-color:#e0c48a;color:#7a5a1e;margin:8px 0">${lpNL('Ice on signs (added 2026-11-01).',[['Applied:','atmospheric ice (ASCE 7-16 Ch. 10) is applied to the sign.'],['Panel ice weight:',`${fmt(sw.WiPanel,0)} lb (flat plate, §10.4.1).`],['Post ice:',`${fmt(sw.WiPost,0)} lb per post.`],['Wind:','on the iced panel (B + 2t<sub>d</sub>)(s + 2t<sub>d</sub>) and posts at V<sub>ice</sub> in the ice combinations.'],['Worked in','the sign wind section.']])}</div>`;
 
   // ---- 1 · geometry & lever arms ----
   H+=step(`1 · Panel geometry &amp; lever arms`);
@@ -4224,7 +4224,7 @@ function anchorsAllCombos(inp, cands){
 const LPP_GC=150;   // pcf, reinforced normal-weight concrete: AASHTO LRFD 10th Ed. Table 3.5.1-1 (0.145 kcf, f'c ≤ 5 ksi) + C3.5.1 (+0.005 kcf for the reinforcement)
 // nominal wind and weight of the projection (IBC mode): ASCE 7-16 §29.4 (F = q_z G C_f A_f), q_z by Eq. 26.10-1 at z = p/2 with the
 // pole's K_d (K_z per Table 26.10-1, z < 15 ft taken at 15 ft), C_f by Fig. 29.4-1 at h/D = p/b: a round shaft on the "rough" row
-// (concrete), a square shaft on the square row. Ice (ASCE 7-22 Ch. 10): t_d at p/2 (§10.4.6 when the map basis is used), radial on the
+// (concrete), a square shaft on the square row. Ice (ASCE 7-16 Ch. 10): t_d at p/2 (§10.4.6 when the map basis is used), radial on the
 // shaft faces (weight) and the iced width b + 2t_d (wind on ice at V_ice).
 function lppShaftProj(inp){
   const p=inp.pProj; if(!(p>0)) return null;
@@ -4360,7 +4360,7 @@ function calcSign(inp){
   const sw=signWind(inp);
 
   // evaluate all combos -> per-post governing demand
-  // 2026-11-01: ice on the sign panel and posts (ASCE 7-22 Ch. 10) → every combination applies, the ice ones included
+  // 2026-11-01: ice on the sign panel and posts (ASCE 7-16 Ch. 10) → every combination applies, the ice ones included
   // (before: only the non-ice combinations; signs carried no ice)
   const SIGN_COMBO_KEYS=COMBO_KEYS.slice();
   const allCombos=SIGN_COMBO_KEYS.map(k=>evalSignCombo(k,inp,pw,sw));
@@ -4756,7 +4756,7 @@ function buildSignReport(inp,sw,pw,allCombos,postDesigns,poleSeg){
   // 2. load combinations per post (the Loading tab's own table)
   if($('sgComboTbl')&&$('sgComboTbl').innerHTML){
     H+=`<details class="rpt-sec" data-old="2" open><summary><span class="tag">2</span><h3>Load combinations — per-post demand</h3><span class="arw">▶</span></summary><div class="rpt-body">`;
-    H+=`<div class="eq-why lpNL">${lpNL('Every combination applies.',[['Ice:','the atmospheric-ice ones included (ice on the sign panel and posts, ASCE 7-22 Ch. 10, added 2026-11-01).'],['Envelope:','each combination is enveloped over the applicable Fig. 29.3-1 load cases and wind directions, per post.'],['Governing row','of each family (largest M on any post) is marked.']])}</div>`;   // LPNL
+    H+=`<div class="eq-why lpNL">${lpNL('Every combination applies.',[['Ice:','the atmospheric-ice ones included (ice on the sign panel and posts, ASCE 7-16 Ch. 10, added 2026-11-01).'],['Envelope:','each combination is enveloped over the applicable Fig. 29.3-1 load cases and wind directions, per post.'],['Governing row','of each family (largest M on any post) is marked.']])}</div>`;   // LPNL
     H+=`<table class="tbl">${$('sgComboTbl').innerHTML}</table>`;
     if(nPost===2){
       H+=eqB('Two-post force split',
@@ -4989,7 +4989,7 @@ function lppCalcIbc(){
   const comps=cablesEnabled?cables.map(c=>cableComponents(c,inp)):[];
   const fxs=fixtures.map(x=>fixtureComponents(x,inp));
   const pw=poleWindNominal(inp);
-  if($('iceNote')) $('iceNote').textContent = inp.iceBasis==='map' ? `t_d = t·f_z·K_zt^0.35·I_i: ${fmt(iceTd(inp,lppZg(inp,inp.H)),3)} in at the top (${fmt(lppZg(inp,inp.H),1)} ft), ${fmt(iceTd(inp,lppZg(inp,inp.H/2)),3)} in at mid-height (ASCE 7-22 §10.4.6). Cables use t = ${fmt(inp.tIce,3)} in.` : `Uniform: t_d = t = ${fmt(inp.tIce,3)} in at every height.`;
+  if($('iceNote')) $('iceNote').textContent = inp.iceBasis==='map' ? `t_d = t·f_z·K_zt^0.35·I_i: ${fmt(iceTd(inp,lppZg(inp,inp.H)),3)} in at the top (${fmt(lppZg(inp,inp.H),1)} ft), ${fmt(iceTd(inp,lppZg(inp,inp.H/2)),3)} in at mid-height (ASCE 7-16 §10.4.6). Cables use t = ${fmt(inp.tIce,3)} in.` : `Uniform: t_d = t = ${fmt(inp.tIce,3)} in at every height.`;
   renderWindExample(pw,inp,fxs);
   renderCableExample(comps,inp);
   const allCombos=COMBO_KEYS.map(k=>evalCombo(k,inp,comps,fxs,pw));
@@ -5919,7 +5919,7 @@ function cableWorkedHTML(comps,inp){
     'Wind pressure on the cables, q_W and q_Wi',
     ['Each cable sees wind pressure computed from the same velocity-pressure form as the pole, evaluated at that cable\'s attachment height h_c.',[['Two conditions','apply from different ASCE 7 maps:',['the primary wind (bare cable), which carries the gust factor G;','the concurrent wind-on-ice, which uses the lower ice-wind speed V_ice and the same gust factor G (ASCE 7-16 §10.5 → Ch. 26–31; G per §26.11).']],['C_f','is the cable drag coefficient.']]],   // LPNL
     `q_W=0.00256\\,K_z(h_c)K_{zt}K_d\\,G\\,C_{f}\\,V^2\\qquad q_{Wi}=0.00256\\,K_z(h_c)K_{zt}K_d\\,G\\,C_{f}\\,V_{ice}^2`,
-    ['Evaluated per cable below.',[['Height:','higher attachment heights give slightly larger K_z and thus pressure.'],inp.Gcable!==undefined?['Cables:',`G = ${n(inp.Gcable,3)}, the flexible G_f with h = H = ${n(inp.H,2)} ft (engineer, 2026-11-03), not the G = ${n(inp.G,3)} (h = H + p) of the pole and fixtures.`]:null]],   // LPNL
+    ['Evaluated per cable below.',[['Height:','higher attachment heights give slightly larger K_z and thus pressure.'],['Ice case:','the entered cable C_f is also used for the ice case (ASCE 7-16 §10.5.5 gives 1.2 for ice-covered cables; kept as entered by engineer\'s decision).'],inp.Gcable!==undefined?['Cables:',`G = ${n(inp.Gcable,3)}, the flexible G_f with h = H = ${n(inp.H,2)} ft (engineer, 2026-11-03), not the G = ${n(inp.G,3)} (h = H + p) of the pole and fixtures.`]:null]],   // LPNL
     'ASCE 7 Ch. 26 &amp; 10');
   H+=`<table class="matrix"><thead><tr><th>Cable</th><th>Attachment height<span class="sym">h_c (ft)</span></th><th>Exposure coeff.<span class="sym">K_z(h_c)</span></th><th>Wind pressure, bare<span class="sym">q_W (psf)</span></th><th>Wind pressure, iced<span class="sym">q_Wi (psf)</span></th></tr></thead><tbody>`;
   comps.forEach((cp,i)=>{H+=`<tr><th>C${i+1}</th><td>${n(cp.c.hc,1)}</td><td>${n(cp.KzC,3)}</td><td>${n(cp.qW,2)}</td><td>${n(cp.qWI,2)}</td></tr>`;});
@@ -6024,11 +6024,11 @@ function fixtureWorkedHTML(fxs, inp){
   H+=`<p class="eq-why">The wind force uses the fixture's effective projected area (EPA), which bundles its drag coefficient; velocity pressure is evaluated at the mount height h with the gust factor G. Full EPA is taken as exposed for any wind azimuth.</p>`;
   H+=g(`q_z(h)K_dG = 0.00256\\,K_z(h)K_{zt}K_e V^2\\cdot K_d\\,G = 0.00256(${fmt(fg.Kzf,3)})(${fmt(inp.Kzt,2)})(1.00)(${inp.V})^2(${fmt(inp.Kd,2)})(${fmt(inp.G,2)}) = ${fmt(fg.qz,2)}\\ \\text{psf}`);
   H+=g(`F_w = q_z\\,EPA\\,C_f = ${fmt(fg.qz,2)}(${fmt(fg.x.epa,2)})(${fmt(inp.cfLum,2)}) = ${fmt(fg.Fw,0)}\\ \\text{lb}`);
-  H+=step(`2 · Iced fixture wind ${ref('ASCE 7-22 Ch. 10')}`);
+  H+=step(`2 · Iced fixture wind ${ref('ASCE 7-16 §10.5')}`);
   H+=`<p class="eq-why">Under the wind-on-ice case the fixture face grows by the radial ice thickness t on every edge (face modeled as a square of side √EPA), and the concurrent wind speed V_ice applies with the same gust factor G:</p>`;
   H+=g(`EPA_i = \\left(\\sqrt{EPA}+2t\\right)^2 = \\left(${fmt(fg.side,2)}+2(${fmt(tft,3)})\\right)^2 = ${fmt(fg.epaI,2)}\\ \\text{ft}^2`);
   H+=g(`q_{zi}K_dG = 0.00256\\,K_z K_{zt} K_e V_{ice}^2\\cdot K_d\\,G = ${fmt(fg.qzi,2)}\\ \\text{psf}\\qquad F_{wi} = q_{zi}\\,EPA_i\\,C_f = ${fmt(fg.qzi,2)}(${fmt(fg.epaI,2)})(${fmt(inp.cfLum,2)}) = ${fmt(fg.Fwi,0)}\\ \\text{lb}`);
-  H+=step(`3 · Ice weight ${ref('ASCE 7-22 Ch. 10')}`);
+  H+=step(`3 · Ice weight ${ref('ASCE 7-16 §10.4.1')}`);
   H+=`<p class="eq-why">Ice forms a glaze skin of radial thickness t over the wetted surface — both faces of the catch area plus a perimeter band over the catch depth d_ice:</p>`;
   H+=g(`A_{surf} = 2A_{ice}+4\\sqrt{EPA}\\,d_{ice} = 2(${fmt(fg.x.aIce,2)})+4(${fmt(fg.side,2)})(${fmt(fg.x.tIce,2)}) = ${fmt(fg.surf,2)}\\ \\text{ft}^2`);
   H+=g(`W_{ice} = \\gamma_{ice}\\,t\\,A_{surf} = ${fmt(inp.iceDen,0)}(${fmt(tft,3)})(${fmt(fg.surf,2)}) = ${fmt(fg.Wice,0)}\\ \\text{lb}`);
@@ -7054,7 +7054,7 @@ function lprModel(){
   secs.push({title:'Project and scope',subs:[{title:'Project',items:[{type:'kv',rows:[
     ['Project',activeProject||'Untitled'],['Structure',$('appTitle')?$('appTitle').textContent:''],
     ['Scope',$('lppScope')?$('lppScope').textContent.replace(/^Scope \(this mode\):\s*/,''):''],
-    ['Codes','IBC 2021 §1807.3 · ASCE/SEI 7-16 (Ch. 2, 26, 29; ice t_d by the ASCE 7-22 Ch. 10 form) · AISC 360-16 · ACI 318-19 · AASHTO LRFDLTS (base plate bending-line method)'],
+    ['Codes','IBC 2021 §1807.3 · ASCE/SEI 7-16 (Ch. 2, 10, 26, 29; ice t_d by §10.4.6) · AISC 360-16 · ACI 318-19 · AASHTO LRFDLTS (base plate bending-line method)'],
     ['Units','lb, ft, in, psf / ksf unless noted'],
     ['Mode',$('appEyebrow')?$('appEyebrow').textContent:''],
     ['Prepared with','Light Pole and Sign Post, by Mario Lococo · '+new Date().toLocaleString()]]},
@@ -7093,7 +7093,7 @@ function lprModel(){
           S({id:'zF',label:'Height of the resultant',sym:'\\bar{z}_{F}',eq:'\\frac{M_{pole}}{F_{pole}}',sub:'\\frac{'+N(pw.Mpole,0)+'}{'+N(pw.Fpole,0)+'}',value:pw.zF,unit:'ft'})].concat(pw.rectDir?[   // LPH2: rectangular pole, depth face
           S({id:'Fpd',label:'Mast wind on the depth face (wind toward 90° / 270°)',sym:'F_{pole,90}',eq:'\\sum q_{z}(z_{i})K_{d}G\\,C_{f}\\,d(z_{i})\\,\\Delta z',sub:'',value:pw.Fd,unit:'lb',d:0}),
           S({id:'Mpd',label:'Its moment at the base (any azimuth: |cos φ|·M_pole + |sin φ|·M_pole,90)',sym:'M_{pole,90}',eq:'\\sum F_{i}z_{i}',sub:'',value:pw.Md,unit:'lb-ft',d:0})]:[])},
-        {title:'Design ice thickness',ref:'ASCE 7-22 §10.4.6',steps:[
+        {title:'Design ice thickness',ref:'ASCE 7-16 §10.4.6',steps:[
           S({id:'td',label:inp.iceBasis==='map'?'Design ice at the top (t_d = t f_z K_zt^0.35 I_i; cables use t)':'Uniform design ice (as entered)',sym:'t_{d}(H)',eq:inp.iceBasis==='map'?'t\\,f_{z}K_{zt}^{0.35}I_{i}':'t',sub:'',value:pw.tdTop,unit:'in',d:3}),
           S({id:'Wim',label:'Ice on the mast',sym:'W_{ice,mast}',eq:'\\sum \\gamma_{ice}A_{ring}(t_{d})\\Delta z',sub:'',value:pw.WiceMast,unit:'lb',d:1})]}])]});
       if(fxs.length) subs.push({title:'Fixtures and arms',items:[{type:'table',head:['Fixture','h (ft)','θ (°)','a (ft)','q_zK_dG (psf)','F_w (lb)','F_w,ice (lb)','W_ice (lb)','F_arm,max (lb)'],
@@ -7213,7 +7213,7 @@ function lprModel(){
     {title:'Assumptions',items:[
       'Wind toward 0°, 90°, 180° and 270° only; arms or fixtures off these axes are flagged (the results may be unconservative).',
       'K_d (source "Per component", ASCE 7-16 Table 26.6-1): round mast or post 1.0 (the ASCE 7-22 value, conservative against 0.95), square or rectangular 0.90, solid sign panel 0.85; cables and fixtures take the mast value (the table has no row for them; conservative). With the source "Single value" the entered K_d applies to every component.',   // ASM (2026-11-10)
-      'Cables: catenary pull model as on the Loading tab; cable ice uses the entered thickness t.',
+      'Cables: catenary pull model as on the Loading tab; cable ice uses the entered thickness t; the entered cable C_f is also used for the ice case (ASCE 7-16 §10.5.5 gives 1.2 for ice-covered cables; kept as entered by engineer\'s decision).',
       'Anchor rods (ACI 318-19 Ch. 17) are not checked in this tool; they are designed in the Anchorage app. The soil torsional resistance is not checked.',
       LPP_BP_VERIFY,
       'Shaft V_c: A_cv = 0.8A_g; ρ_w from half the longitudinal bars; N_u/6A_g neglected.'].map(t=>t===LPP_BP_VERIFY?lprNL(...lppBpVerifyNL(x=>x)):[{type:'note',text:t}]).reduce((a,b)=>a.concat(b),[])},   // LPNL
@@ -7511,7 +7511,7 @@ function lpdBuild(cx){   // cx: the sign context of the active code mode (lpsvDa
   sheet('plate', 'BASE PLATE', k=>lpdPlate(D,L,k,ctx));
   sheet('notes', 'GENERAL NOTES', ()=>{
     const inp=ctx.inp, st=ctx.stacks;
-    const notes=ctx.code==='lts'?lpsvLtsNotes(ctx):['DESIGN: IBC 2021 §1807.3 (EMBEDMENT), ASCE 7-16 (WIND, COMBINATIONS; ICE BY THE ASCE 7-22 CH. 10 FORM), AISC 360-16 (POLE / POST), ACI 318-19 (SHAFT); BASE PLATE BY THE AASHTO LRFDLTS BENDING-LINE METHOD (DOUBLE-NUT). NOT FOR AASHTO LRFDLTS HIGHWAY SUPPORTS.',
+    const notes=ctx.code==='lts'?lpsvLtsNotes(ctx):['DESIGN: IBC 2021 §1807.3 (EMBEDMENT), ASCE 7-16 (WIND, COMBINATIONS, ICE CH. 10), AISC 360-16 (POLE / POST), ACI 318-19 (SHAFT); BASE PLATE BY THE AASHTO LRFDLTS BENDING-LINE METHOD (DOUBLE-NUT). NOT FOR AASHTO LRFDLTS HIGHWAY SUPPORTS.',
       'EMBEDMENT d = '+st.map(s=>fmt(s.found.d,2)+'\'').join(' / ')+' BELOW GRADE (IBC §1807.3, '+(constraint==='non'?'NON-CONSTRAINED':'CONSTRAINED')+'), SHAFT '+(inp.shaftShape==='square'?'':'DIA. ')+fmt(inp.b,2)+'\''+(inp.shaftShape==='square'?' SQUARE':'')+'.',
       'CONCRETE f\'c = '+fmt(inp.fc,0)+' PSI; REINFORCEMENT f_y = '+fmt(inp.fy,0)+' PSI; CLEAR COVER '+fmt(inp.cover,1)+'".',
       'BASIC WIND SPEED V = '+fmt(inp.V,0)+' MPH, EXPOSURE '+inp.expo+'.'+(' ICE t = '+fmt(inp.tIce,2)+'" ('+(inp.iceBasis==='map'?'MAP VALUE, t_d BY HEIGHT':'UNIFORM')+'), V_ice = '+fmt(inp.Vice,0)+' MPH.'),
@@ -8327,7 +8327,7 @@ function applyState(st){
   { const mn=$('iceMigNote');
     if($('iceBasis') && (!st.inputs || st.inputs.iceBasis===undefined)){
       $('iceBasis').value='design';
-      if(mn){ mn.textContent='Older save: the ice thickness basis was not an input when this project was saved. It opens as "Uniform design t_d" (t used at every height, as before), so results are unchanged. Select "Map value" to apply the ASCE 7-22 height factor f_z, K_zt^0.35 and I_i (§10.4.6).'; mn.style.display=''; }
+      if(mn){ mn.textContent='Older save: the ice thickness basis was not an input when this project was saved. It opens as "Uniform design t_d" (t used at every height, as before), so results are unchanged. Select "Map value" to apply the ASCE 7-16 height factor f_z, K_zt^0.35 and I_i (§10.4.6).'; mn.style.display=''; }
     } else if(mn){ mn.style.display='none'; mn.textContent=''; }
     if($('iceIi') && (!st.inputs || st.inputs.iceIi===undefined)) $('iceIi').value='1.0'; }
   // damping ratio for G_f (added 2026-10-12): older saves have none → default 0.005
