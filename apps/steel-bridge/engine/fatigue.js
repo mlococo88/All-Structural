@@ -25,6 +25,10 @@
    bracing is diaphragms: rows from the analysis say so), rule(id) (default SBDOwners.rule(owner, id)), cite(r) }. Rules used:
    fat.catC (OWN25, CTDOT: connection plate details Category C), fat.cat (OWN39, RIDOT: FA7).
 
+   Remaining fatigue life (FA5, FA6): AASHTO MBE 4th Ed. (2026) Section 7 since 2026-11-10 (engineer standing rule; a deliberate difference
+   from GirderDetail, which keeps the older method: (Δf)_eff = R_s Δf unfactored, (Δf)_max = 2(Δf)_eff, one present ADTT_SL growing at g from
+   the first year). evaluate() below; the inputs ev (EV_DEF) are optional, a missing one takes its default.
+
    Units: in, kip, ksi, kip-ft (sagging +); stations ft. E = 29,000 ksi. */
 (function () {
   'use strict';
@@ -96,6 +100,36 @@
       { name: 'Span 1 cross-frame at 0.4L: connection plate weld toe on bottom flange', src: 'manual', x: 44, n: '1', det: 'Cp-stiff', cat: "C'", mode: 'M', loc: 'bfi', yo: 0, D: 60, tw: 0.5625, topB: 16, topT: 0.75, botB: 16, botT: 1.125, MfP: 620, MfN: -150, MD1: 1450, MD2: 450, dfP: 0, dfN: 0, fDL: 0, Vp: 0, Vf: 0, do: 0 },
       { name: 'Span 2: lateral gusset welded to web, 20 in above bottom flange', src: 'manual', x: 180, n: '1', det: 'E-att', cat: 'E', mode: 'M', loc: 'wb', yo: 20, D: 60, tw: 0.5625, topB: 16, topT: 0.75, botB: 16, botT: 1.25, MfP: 700, MfN: -180, MD1: 1600, MD2: 500, dfP: 0, dfN: 0, fDL: 0, Vp: 0, Vf: 0, do: 0 },
       { name: 'Pier 1: top flange at flange-to-web weld', src: 'manual', x: 110, n: '1.5', det: 'B-weld', cat: 'B', mode: 'M', loc: 'tfo', yo: 0, D: 60, tw: 0.5625, topB: 18, topT: 1.5, botB: 18, botT: 2, MfP: 120, MfN: -520, MD1: -2300, MD2: -710, dfP: 0, dfN: 0, fDL: 0, Vp: 125, Vf: 55, do: 90 }] };
+  /* ---------- remaining fatigue life, MBE 4th Ed. (2026) Section 7 (2026-11-10) ----------
+     EV_DEF: the evaluation inputs and their defaults (a saved or GirderDetail-shaped ev without a field takes it from here):
+       on 'yes' | 'no'; yearOpen, yearEval (a = yearEval − yearOpen, the present age); ADTT = (ADTT_SL)_PRESENT (present, single lane, trucks/day);
+       ADTT0 = (ADTT_SL)_0, the first year in service ('' = ADTT/(1 + g)^a: the past growth equal to g); g = expected annual growth (percent);
+       ADTTall = [ADTT]_PRESENT, all directions and lanes, for R_p ('' = ADTT/p, LRFD Eq. 3.6.1.4.2-1 inverted); nL = striped lanes (R_p);
+       Rp ('' = Eq. 7.2.2.1-1); spans (ft, the bridge's spans: L of R_p is the span holding the detail) or L (ft, one value for every detail);
+       wim 'no' | 'yes' ((Δf)_max = 2.2(Δf)_eff with R_s = 1.0, 7.2.4); Rs = R_saR_st (Table 7.2.2.1-1); ADTTlim = (ADTT_SL)_LIMIT ('' = no
+       limit check, Eq. 7.2.5.1-5); target (years required); level 'min' | 'E1' | 'E2' | 'mean'; rrE1, rrE2, rrMean (eight R_R values, A … E′;
+       '' = Table 7.2.5.1-1). */
+  const EV_DEF = { on: 'no', yearOpen: 1968, yearEval: 2026, ADTT: 1500, ADTT0: '', g: 2.0, ADTTall: '', nL: 2, Rp: '', L: '', wim: 'no', Rs: 1.0, ADTTlim: '', target: 25, level: 'min', rrE1: '', rrE2: '', rrMean: '' };
+  /* RR_TAB: MBE 4th Ed. Table 7.2.5.1-1 (p. 7-9), resistance factor R_R for the minimum, Evaluation 1, Evaluation 2 and mean lives (A … E′) */
+  const RR_TAB = { min: [1, 1, 1, 1, 1, 1, 1, 1], E1: [1.5, 1.3, 1.3, 1.3, 1.3, 1.3, 1.2, 1.3], E2: [2.2, 1.7, 1.6, 1.7, 1.7, 1.7, 1.4, 1.6], mean: [2.9, 2.0, 1.9, 2.1, 2.1, 2.0, 1.6, 1.9] };
+  const MBE7 = 'AASHTO MBE 4th Ed. (2026)';
+  const blank = v => v == null || (typeof v === 'string' && !v.trim()) || (typeof v === 'number' && Number.isNaN(v));
+  /* evIn(ev): ev with every missing field from EV_DEF */
+  const evIn = ev => { const o = { ...EV_DEF }; Object.keys(ev || {}).forEach(k => { if (ev[k] !== undefined) o[k] = ev[k]; }); return o; };
+  /* Rp(L, ADTT, nL): MBE 4th Ed. Eq. 7.2.2.1-1 (p. 7-3), longitudinal members: max(0.988 + 6.87e-5 L + 4.01e-6 [ADTT]_PRESENT + 0.0107/n_L, 1.0) */
+  const RpEq = (L, T, nL) => Math.max(0.988 + 6.87e-5 * L + 4.01e-6 * T + 0.0107 / nL, 1.0);
+  /* N1(n, a, T0, Tp): Eq. 7.2.5.1-3 (p. 7-7): cycles consumed over the present age a */
+  const N1of = (n, a, T0, Tp) => Math.abs(Tp - T0) <= 1e-9 * Math.max(1, Tp) ? 365 * n * (a + 1) * Tp : 365 * n * Tp * ((1 - T0 / Tp) / ((Tp / T0) ** (1 / a) - 1) + 1);
+  /* yRem(Nav, N1, n, Tp, g, lim): Eq. 7.2.5.1-4 (p. 7-7); with (ADTT_SL)_LIMIT (lim > 0) and (ADTT_SL)_FUTURE = Tp(1 + g)^Y_REM (Eq. 7.2.5.1-6) above
+     it, Eqs. 7.2.5.1-7 and -8 (p. 7-8). g = 0: the limit g → 0 of Eq. 7.2.5.1-4, (N_av − N_1)/(365 n Tp). Returns { Y, fut, YL, lim0 (Y of -4) } */
+  function yRem(Nav, N1, n, Tp, g, lim) {
+    if (!(Nav > N1)) return { Y: 0, none: true };
+    const X = (Nav - N1) / (365 * n * Tp), Y0 = g > 0 ? Math.log10(g / (1 + g) * X + 1) / Math.log10(1 + g) : X, fut = Tp * (1 + g) ** Y0;
+    if (!(lim > 0) || !(fut > lim + 1e-9)) return { Y: Y0, Y0, fut };
+    const YL = g > 0 ? Math.log10(lim / Tp) / Math.log10(1 + g) : 0;
+    const Y = (Nav - N1) / (365 * n * lim) - (g > 0 ? ((1 + g) ** YL - 1) / (g * (1 + g) ** (YL - 1)) : 0) + YL;
+    return { Y, Y0, fut, YL, limited: true };
+  }
   const faRR = s => { const v = String(s || '').split(/[,\s]+/).filter(Boolean).map(Number); return v.length === 8 && v.every(x => x > 0) ? Object.fromEntries(CATS.map((c, i) => [c, v[i]])) : null; };
 
   /* ---------- bridge-wide settings and limit state ---------- */
@@ -138,6 +172,34 @@
   }
   function rowDk(dk, r) { const o = {}; if (r.beff > 0) o.beff = r.beff; if (r.Ar != null && r.Ar >= 0) o.Ar = r.Ar; if (r.dr != null && r.dr >= 0) o.dr = r.dr; return Object.keys(o).length ? { ...dk, ...o } : dk; }
 
+  /* evalRow(r, ev, o): the MBE 4th Ed. Section 7 evaluation of one detail row (its cat, A, th, nn, df = the unfactored fatigue-truck range,
+     x in ft), o = { gI, gII (Fatigue I and II load factors, Table 3.4.1-1), p (lane fraction) }. Returns { err } or the evaluation:
+       a = present age; L (span of R_p); T (present ADTT_SL), T0 (first-year ADTT_SL), Tall ([ADTT]_PRESENT for R_p), gg = g as a decimal;
+       Rp (Eq. 7.2.2.1-1 or entered), dfII = γ_II Δf (factored Fatigue II range), dfe = R_p R_s γ_II Δf (Eq. 7.2.2-1, p. 7-2);
+       dfmax = R_p γ_I Δf (calculated range, 7.2.4, p. 7-6) or, with WIM data, 2.2 R_p γ_II Δf (2.2(Δf)_eff with R_s = 1.0); inf = dfmax ≤ (ΔF)_TH (Eq. 7.2.4-1);
+       lives[level] = { RR (entered or Table 7.2.5.1-1), tab (true: from the table), Nav = R_R A/(Δf)_eff³ (Eq. 7.2.5.1-2), N1 (Eq. 7.2.5.1-3),
+       ok = N_av > N_1 (Eq. 7.2.5.1-1), Yrem (Eq. 7.2.5.1-4, or -8 under the ADTT limit), Y = Y_REM + a, rem = Y_REM (the remaining life compared
+       with the target), fut, YL, limited }. */
+  function evalRow(r, ev, o) {
+    const a = nm(ev.yearEval) - nm(ev.yearOpen), gg = nm(ev.g) / 100, Rs = nm(ev.Rs), T = nm(ev.ADTT);
+    const T0 = blank(ev.ADTT0) ? T / (1 + gg) ** a : nm(ev.ADTT0), Tall = blank(ev.ADTTall) ? T / o.p : nm(ev.ADTTall), nL = nm(ev.nL);
+    let L = NaN, Lsrc = '';
+    if (Array.isArray(ev.spans) && ev.spans.length) { let x0 = 0; const xs = +r.x; for (let k = 0; k < ev.spans.length; k++) { const Lk = +ev.spans[k]; if (xs <= x0 + Lk + 1e-6 || k === ev.spans.length - 1) { L = Lk; Lsrc = `span ${k + 1}`; break; } x0 += Lk; } }
+    if (!(L > 0) && !blank(ev.L)) { L = nm(ev.L); Lsrc = 'entered'; }
+    const RpE = blank(ev.Rp) ? null : nm(ev.Rp);
+    if (RpE == null && !(L > 0)) return { err: 'R_p (MBE Eq. 7.2.2.1-1) needs the span length L: enter it, or R_p.' };
+    const RpC = L > 0 ? RpEq(L, Tall, nL) : null, Rp = RpE != null ? RpE : RpC;
+    const dfII = o.gII * r.df, dfe = Rp * Rs * dfII, wim = ev.wim === 'yes', dfmax = wim ? 2.2 * Rp * dfII : Rp * o.gI * r.df;
+    const q = { a, g: gg, Rs, T, T0, T0def: blank(ev.ADTT0), Tall, TallDef: blank(ev.ADTTall), nL, L, Lsrc, Rp, RpC, RpE, dfII, dfe, wim, dfmax, gI: o.gI, gII: o.gII, inf: dfmax <= r.th, lives: {},
+      lim: blank(ev.ADTTlim) ? null : nm(ev.ADTTlim) };
+    const ci = CATS.indexOf(r.cat);
+    [['min', null], ['E1', ev.rrE1], ['E2', ev.rrE2], ['mean', ev.rrMean]].forEach(([k, s]) => {
+      const ent = k === 'min' ? null : (faRR(s) || {})[r.cat], RR = ent || RR_TAB[k][ci];
+      const Nav = dfe > 0 ? RR * r.A / dfe ** 3 : Infinity, N1 = N1of(r.nn, a, T0, T), Yr = !isFinite(Nav) ? { Y: Infinity, Y0: Infinity } : yRem(Nav, N1, r.nn, T, gg, q.lim || 0);
+      q.lives[k] = { RR, tab: !ent, Nav, N1, ok: Nav > N1, Yrem: Yr.Y, Y0: Yr.Y0, fut: Yr.fut, YL: Yr.YL, limited: !!Yr.limited, Y: Yr.Y + a, rem: Yr.Y }; });
+    return q;
+  }
+
   /* ---------- the Fatigue module (GM.fa) ---------- */
   /* compute(p, env): GM.fa.compute(p). p as DEFAULT (rows: SPEC fields, optional ut: { MUT, MUF, VUT, VUF }). Returns { errors } or
      { errors: [], MR, dk, rows, ADTTSL, gI, gII, life, Fyw, p, ev, env }. Per row: cat, A, th, nn, ADTTeq, lim, N, dFn, gam, res; mode 'M':
@@ -148,9 +210,13 @@
     if (g('p') > 1) errors.push('Lane fraction p cannot exceed 1.0.');
     const rows = numRows(p.rows, SPEC, 'Detail', errors); if (!rows.length) errors.push('Add at least one detail.');
     if (E.dia) rows.forEach(r => { if (r.src === 'analysis') r.name = r.name.replace(/\bcross-frame\b/g, 'diaphragm'); });
-    const ev = p.ev || DEFAULT.ev, evOn = ev.on === 'yes';
+    const ev = evIn(p.ev || DEFAULT.ev), evOn = ev.on === 'yes';
     if (evOn) { ['yearOpen', 'yearEval', 'ADTT', 'Rs', 'target'].forEach(k => { if (!(nm(ev[k]) >= 0)) errors.push(`Evaluation "${k}" must be zero or positive.`); }); if (!(nm(ev.yearEval) > nm(ev.yearOpen))) errors.push('Year of evaluation must be after the year opened.'); if (!(nm(ev.g) >= 0)) errors.push('Growth rate must be zero or positive.');
-      ['rrE1', 'rrE2', 'rrMean'].forEach(k => { if (String(ev[k] || '').trim() && !faRR(ev[k])) errors.push(`R_R ${k.slice(2)}: enter eight positive values (A, B, B′, C, C′, D, E, E′).`); }); }
+      ['rrE1', 'rrE2', 'rrMean'].forEach(k => { if (String(ev[k] || '').trim() && !faRR(ev[k])) errors.push(`R_R ${k.slice(2)}: enter eight positive values (A, B, B′, C, C′, D, E, E′).`); });
+      // MBE 4th Ed. inputs (2026-11-10): optional, blank = the default of EV_DEF
+      [['ADTT0', 'First-year ADTT_SL'], ['ADTTall', 'Present ADTT, all lanes'], ['Rp', 'R_p'], ['L', 'Span length L'], ['ADTTlim', 'ADTT_SL limit']].forEach(([k, t]) => { if (!blank(ev[k]) && !(nm(ev[k]) > 0)) errors.push(`Evaluation: ${t} must be positive (or blank for the default).`); });
+      if (!(nm(ev.nL) >= 1)) errors.push('Evaluation: the number of striped lanes n_L must be at least 1.');
+      if (!blank(ev.ADTTlim) && nm(ev.ADTTlim) < nm(ev.ADTT)) errors.push('Evaluation: the ADTT_SL limit must be at least the present ADTT_SL.'); }
     if (errors.length) return { errors };
     const MR = SEC().modularRatio(g('fc'), g('wc'), g('K1'), p.nRule), dk = { ts: g('ts'), hh: hP(E, g('hh')), beff: g('beff'), n: MR.n, Ar: g('Ar'), dr: g('dr') };
     const gI = nm(p.gam.fI), gII = nm(p.gam.fII), ADTTSL = g('p') * g('ADTT'), life = g('life'), Fyw = GRADES[p.gW].Fy;
@@ -179,16 +245,12 @@
       r.exempt = r.hasDL && r.fDL < 0 && -r.fDL >= 2 * r.fLLt;
       r.dem = r.gam * r.df;
       if (r.Vf > 0 && r.do > 0) { r.sh = SH().webShear(r.D, r.tw, Fyw, r.do, r.topB * r.topT + r.botB * r.botT, false); r.Vu = r.Vp + gI * r.Vf; if (utOn(p.rows[r.i])) { r.VUTF = UT(p.rows[r.i], 'VUT') + UT(p.rows[r.i], 'VUF'); r.Vu += r.VUTF; } }
-      if (evOn) { const a = nm(ev.yearEval) - nm(ev.yearOpen), gg = nm(ev.g) / 100, Rs = nm(ev.Rs), T = nm(ev.ADTT);
-        r.ev = { a, g: gg, Rs, dfe: Rs * r.df, lives: {} }; r.ev.dfmax = 2 * r.ev.dfe; r.ev.inf = r.ev.dfmax <= r.th;
-        const lv = { min: 1.0, E1: (faRR(ev.rrE1) || {})[r.cat], E2: (faRR(ev.rrE2) || {})[r.cat], mean: (faRR(ev.rrMean) || {})[r.cat] };
-        Object.entries(lv).forEach(([k, RR]) => { if (!RR) return; const base = RR * r.A / (365 * r.nn * T * r.ev.dfe ** 3);
-          const Y = r.ev.dfe <= 0 ? Infinity : gg > 0 ? Math.log10(base * gg / (1 + gg) ** (a - 1) + 1) / Math.log10(1 + gg) : base;
-          r.ev.lives[k] = { RR, base, Y, rem: Y - a }; }); }
+      if (evOn) { const q = evalRow(r, ev, { gI, gII, p: g('p') }); if (q.err) errors.push(`${r.name}: ${q.err}`); else r.ev = q; }
     });
     if (errors.length) return { errors };
     return { errors: [], MR, dk, rows, ADTTSL, gI, gII, life, Fyw, p, env: E,
-      ev: evOn ? { on: true, yearOpen: nm(ev.yearOpen), yearEval: nm(ev.yearEval), ADTT: nm(ev.ADTT), g: nm(ev.g), Rs: nm(ev.Rs), target: nm(ev.target), level: ev.level } : { on: false } };
+      ev: evOn ? { on: true, yearOpen: nm(ev.yearOpen), yearEval: nm(ev.yearEval), ADTT: nm(ev.ADTT), g: nm(ev.g), Rs: nm(ev.Rs), target: nm(ev.target), level: ev.level,
+        ADTT0: blank(ev.ADTT0) ? null : nm(ev.ADTT0), ADTTall: blank(ev.ADTTall) ? null : nm(ev.ADTTall), nL: nm(ev.nL), Rp: blank(ev.Rp) ? null : nm(ev.Rp), wim: ev.wim === 'yes', ADTTlim: blank(ev.ADTTlim) ? null : nm(ev.ADTTlim), method: 'MBE 4th Ed.' } : { on: false } };
   }
 
   /* checks(R): GM.fa.checks(R). Each check { id, grp, title, ref, items: [{ loc, r, st, demand, capacity, step }], naWhy, status, gov }. */
@@ -211,12 +273,12 @@
       if (!c.items.length) c.naWhy = 'No connection plates or lateral bracing.'; out.add(c); }
     if (R.ev.on) {
       const V = R.ev;
-      { const c = { id: 'FA5', grp: G3, title: 'Infinite fatigue life, (Δf)_max ≤ (ΔF)_TH', ref: 'AASHTO MBE 7.2.4', items: [] };
+      { const c = { id: 'FA5', grp: G3, title: 'Infinite fatigue life, (Δf)_max ≤ (ΔF)_TH', ref: `${MBE7} Art. 7.2.4 (pp. 7-5, 7-6)`, items: [] };
         R.rows.forEach(r => c.items.push({ ...rc(L(r), r.ev.dfmax, r.th, `fa${r.i}.inf`), st: r.ev.inf ? 'pass' : 'warn', loc: `${L(r)}${r.ev.inf ? '' : ' (finite life, see FA6)'}` })); out.add(c); }
       { const lvl = V.level, LN = { min: 'minimum', E1: 'Evaluation 1', E2: 'Evaluation 2', mean: 'mean' };
-        const c = { id: 'FA6', grp: G3, title: 'Remaining fatigue life', ref: 'AASHTO MBE 7.2.5', items: [] };
+        const c = { id: 'FA6', grp: G3, title: 'Remaining fatigue life', ref: `${MBE7} Art. 7.2.5.1 (pp. 7-6 to 7-8)`, items: [] };
         R.rows.filter(r => !r.ev.inf).forEach(r => { const q = r.ev.lives[lvl];
-          if (!q) { c.items.push({ loc: `${L(r)}: R_R for the ${LN[lvl]} life not entered`, st: 'na', step: `fa${r.i}.life` }); return; }
+          if (!q) { c.items.push({ loc: `${L(r)}: R_R for the ${LN[lvl]} life not entered`, st: 'na', step: `fa${r.i}.life` }); return; }   // not reached since 2026-11-10 (Table 7.2.5.1-1 when blank)
           c.items.push({ loc: L(r), demand: V.target, capacity: q.rem, r: q.rem > 0 ? V.target / q.rem : Infinity, st: q.rem >= V.target ? 'pass' : 'fail', step: `fa${r.i}.life` }); });
         if (!c.items.length) c.naWhy = 'Every detail has infinite fatigue life (FA5).'; out.add(c); }
     }
@@ -258,11 +320,37 @@
     if (r.sh) { w.add({ id: 'Vu', label: 'Special fatigue loading: unfactored permanent shear plus the Fatigue I shear', sym: 'V_{u}', eq: `V_{perm}${r.VUTF != null ? ' + V_{UT+UF}' : ''} + \\gamma_{I}V_{fat}`, sub: `${n2(r.Vp)}${r.VUTF != null ? ` + ${n2(r.VUTF)}` : ''} + ${n2(R.gI)}(${n2(r.Vf)})`, value: r.Vu, unit: 'kip', d: 2, ref: `${ED} Art. 6.10.5.3` });
       w.add({ id: 'Vcr', label: `Shear buckling resistance (d_o = ${n2(r.do)} in, k = ${n3(r.sh.k)})`, sym: 'V_{cr}', eq: 'CV_{p}', sub: `${n3(r.sh.C)}(${n2(r.sh.Vp)})`, value: r.sh.Vcr, unit: 'kip', d: 2, ref: `${ED} Eq. 6.10.9.3.3-1` });
       w.add({ id: 'okV', label: 'Special fatigue requirement for webs (FA3)', sym: 'V_{u} \\le V_{cr}', eq: '', sub: `${n2(r.Vu)} ${lt[okS(r.Vu, r.sh.Vcr)]} ${n2(r.sh.Vcr)}`, value: r.Vu / r.sh.Vcr, unit: '', d: 3, ref: `${ED} Eq. 6.10.5.3-1`, ok: okS(r.Vu, r.sh.Vcr) }); }
-    if (r.ev) { const V = R.ev;
-      w.add({ id: 'dfe', label: 'Effective stress range', sym: '(\\Delta f)_{eff}', eq: 'R_{s}\\Delta f', sub: `${n2(r.ev.Rs)}(${n2(r.df)})`, value: r.ev.dfe, unit: 'ksi', d: 2, ref: 'AASHTO MBE 7.2.2' });
-      w.add({ id: 'inf', label: 'Infinite life (FA5)', sym: '(\\Delta f)_{max} = 2(\\Delta f)_{eff} \\le (\\Delta F)_{TH}', eq: '', sub: `2(${n2(r.ev.dfe)}) = ${n2(r.ev.dfmax)} ${lt[r.ev.inf]} ${n2(r.th)}`, value: r.ev.dfmax / r.th, unit: '', d: 3, ref: 'AASHTO MBE 7.2.4', ok: r.ev.inf });
-      if (!r.ev.inf) { const q = r.ev.lives[V.level];
-        w.add({ id: 'life', label: `Remaining fatigue life, ${V.level} level (FA6)`, sym: 'Y - a', eq: '\\frac{\\log\\left[\\frac{R_{R}Ag}{365n(ADTT)_{SL}(\\Delta f)_{eff}^{3}(1+g)^{a-1}} + 1\\right]}{\\log(1+g)} - a', sub: q ? `${isFinite(q.Y) ? n2(q.Y) : '\\infty'} - ${n0(r.ev.a)}` : 'R_{R}\\ \\text{not entered}', value: q ? q.rem : NaN, unit: '\\text{years}', d: 1, ref: 'AASHTO MBE 7.2.5', ok: q ? q.rem >= V.target : undefined, note: `Required ${n0(V.target)} years; present ADTT_SL ${n0(V.ADTT)}, g = ${n2(V.g)}%/yr, a = ${n0(r.ev.a)} years.` }); } }
+    if (r.ev) { const V = R.ev, e = r.ev, lv = e.lives[V.level], LNM = { min: 'minimum', E1: 'Evaluation 1', E2: 'Evaluation 2', mean: 'mean' }[V.level];
+      w.add({ id: 'Rp', label: 'Multiple presence factor, longitudinal member', sym: 'R_{p}', eq: e.RpE != null ? '' : '\\max\\left(0.988 + 6.87\\times10^{-5}L + 4.01\\times10^{-6}[ADTT]_{PRESENT} + \\frac{0.0107}{n_{L}},\\ 1.0\\right)',
+        sub: e.RpE != null ? '\\text{entered}' : `\\max\\left(0.988 + 6.87\\times10^{-5}(${n2(e.L)}) + 4.01\\times10^{-6}(${n0(e.Tall)}) + \\frac{0.0107}{${n0(e.nL)}},\\ 1.0\\right)`, value: e.Rp, unit: '', d: 4, ref: `${MBE7} Eq. 7.2.2.1-1 (p. 7-3)`,
+        note: e.RpE != null ? `Entered${e.RpC != null ? ` (Eq. 7.2.2.1-1 would give ${n3(e.RpC)})` : ''}.` : `L = ${n2(e.L)} ft (${e.Lsrc === 'entered' ? 'entered' : `the ${e.Lsrc} holding the detail`}); [ADTT]_PRESENT = ${n0(e.Tall)} trucks/day, all directions and lanes${e.TallDef ? ' (not entered: present ADTT_SL / p, LRFD Eq. 3.6.1.4.2-1 inverted; enter the all-direction total for a two-way bridge)' : ''}; n_L = ${n0(e.nL)} striped lanes. The equation was developed for 2 ≤ n_L ≤ 4 and 30 < L < 220 ft (C7.2.2.1).` });
+      w.add({ id: 'dfII', label: 'Factored calculated stress range, Fatigue II (fatigue truck, single lane)', sym: '\\gamma_{II}\\Delta f', eq: '\\gamma_{II}\\Delta f', sub: `${n2(e.gII)}(${n2(r.df)})`, value: e.dfII, unit: 'ksi', d: 3, ref: `${MBE7} Art. 7.2.2 (p. 7-2); ${ED} Table 3.4.1-1` });
+      w.add({ id: 'dfe', label: 'Effective stress range', sym: '(\\Delta f)_{eff}', eq: 'R_{p}R_{s}\\gamma_{II}\\Delta f', sub: `${n3(e.Rp)}(${n2(e.Rs)})(${n3(e.dfII)})`, value: e.dfe, unit: 'ksi', d: 3, ref: `${MBE7} Eq. 7.2.2-1 (p. 7-2); R_s Table 7.2.2.1-1 (p. 7-3)` });
+      w.add({ id: 'dfmax', label: `Maximum stress range (${e.wim ? 'truck weight from a weigh-in-motion study: 2.2(Δf)_eff with R_s = 1.0' : 'calculated range: R_p × the Fatigue I factored range'})`, sym: '(\\Delta f)_{max}',
+        eq: e.wim ? '2.2R_{p}(1.0)\\gamma_{II}\\Delta f' : 'R_{p}\\gamma_{I}\\Delta f', sub: e.wim ? `2.2(${n3(e.Rp)})(1.0)(${n3(e.dfII)})` : `${n3(e.Rp)}(${n2(e.gI)})(${n2(r.df)})`, value: e.dfmax, unit: 'ksi', d: 3, ref: `${MBE7} Art. 7.2.4 (p. 7-6)` });
+      w.add({ id: 'inf', label: 'Infinite life (FA5)', sym: '(\\Delta f)_{max} \\le (\\Delta F)_{TH}', eq: '', sub: `${n3(e.dfmax)} ${lt[e.inf]} ${n2(r.th)}`, value: e.dfmax / r.th, unit: '', d: 3, ref: `${MBE7} Eqs. 7.2.4-1, -2 (p. 7-5)`, ok: e.inf,
+        note: e.inf ? 'Y = ∞ (Eq. 7.2.4-2): the remaining life is not computed.' : 'Finite life: the remaining life is estimated (7.2.5).' });
+      if (!e.inf) {
+        w.add({ id: 'RR', label: `Resistance factor, ${LNM} life, Category ${r.cat}`, sym: 'R_{R}', eq: '', sub: '', value: lv.RR, unit: '', d: 2, ref: `${MBE7} Table 7.2.5.1-1 (p. 7-9)`, note: lv.tab ? 'From Table 7.2.5.1-1 (no value entered).' : 'As entered.' });
+        w.add({ id: 'Nav', label: 'Number of initially available fatigue stress cycles', sym: 'N_{av}', eq: '\\frac{R_{R}A}{(\\Delta f)_{eff}^{3}}', sub: `\\frac{${n2(lv.RR)}(${(r.A / 1e8).toFixed(1)}\\times10^{8})}{(${n3(e.dfe)})^{3}}`, value: lv.Nav, unit: '\\text{cycles}', d: 0, ref: `${MBE7} Eq. 7.2.5.1-2 (p. 7-6)` });
+        w.add({ id: 'T0', label: 'Average daily trucks in a single lane: first year in service and present year', sym: '(ADTT_{SL})_{0},\\ (ADTT_{SL})_{PRESENT}', eq: e.T0def ? '\\frac{(ADTT_{SL})_{PRESENT}}{(1+g)^{a}}' : '', sub: e.T0def ? `\\frac{${n0(e.T)}}{(1 + ${n3(e.g)})^{${n0(e.a)}}}` : '', value: `${n0(e.T0)}, ${n0(e.T)}`, unit: '\\text{trucks/day}', d: 0, ref: `${MBE7} Art. 7.2.5.1 (p. 7-7)`,
+          note: `${e.T0def ? 'First-year ADTT_SL not entered: taken as the present value grown back over the present age at g (the past growth equal to g, as the method of before took it). ' : ''}Present age a = ${n0(e.a)} years; expected growth g = ${n3(e.g)} per year.` });
+        const eqN1 = Math.abs(e.T - e.T0) <= 1e-9 * Math.max(1, e.T);
+        w.add({ id: 'N1', label: 'Fatigue stress cycles consumed over the present age', sym: 'N_{1}', eq: eqN1 ? '365n(a + 1)(ADTT_{SL})_{PRESENT}' : '365n(ADTT_{SL})_{PRESENT}\\left[\\frac{1 - \\frac{(ADTT_{SL})_{0}}{(ADTT_{SL})_{PRESENT}}}{\\left(\\frac{(ADTT_{SL})_{PRESENT}}{(ADTT_{SL})_{0}}\\right)^{1/a} - 1} + 1\\right]',
+          sub: eqN1 ? `365(${r.nn})(${n0(e.a)} + 1)(${n0(e.T)})` : `365(${r.nn})(${n0(e.T)})\\left[\\frac{1 - \\frac{${n2(e.T0)}}{${n0(e.T)}}}{\\left(\\frac{${n0(e.T)}}{${n2(e.T0)}}\\right)^{1/${n0(e.a)}} - 1} + 1\\right]`, value: lv.N1, unit: '\\text{cycles}', d: 0, ref: `${MBE7} Eq. 7.2.5.1-3 (p. 7-7)` });
+        w.add({ id: 'Nck', label: 'Remaining fatigue life at the present age', sym: 'N_{av} \\gt N_{1}', eq: '', sub: `${n0(lv.Nav)} ${lv.ok ? '\\gt' : '\\le'} ${n0(lv.N1)}`, value: lv.ok ? 'yes' : 'no: no remaining life', unit: '', d: 0, ref: `${MBE7} Eq. 7.2.5.1-1 (p. 7-6)`, ok: lv.ok });
+        if (lv.ok) {
+          w.add({ id: 'Yrem0', label: 'Estimated remaining fatigue life', sym: 'Y_{REM}', eq: e.g > 0 ? '\\frac{\\log\\left[\\left(\\frac{g}{1+g}\\right)\\left(\\frac{N_{av} - N_{1}}{365n(ADTT_{SL})_{PRESENT}}\\right) + 1\\right]}{\\log(1+g)}' : '\\frac{N_{av} - N_{1}}{365n(ADTT_{SL})_{PRESENT}}',
+            sub: e.g > 0 ? `\\frac{\\log\\left[\\left(\\frac{${n3(e.g)}}{1 + ${n3(e.g)}}\\right)\\left(\\frac{${n0(lv.Nav)} - ${n0(lv.N1)}}{365(${r.nn})(${n0(e.T)})}\\right) + 1\\right]}{\\log(1 + ${n3(e.g)})}` : `\\frac{${n0(lv.Nav)} - ${n0(lv.N1)}}{365(${r.nn})(${n0(e.T)})}`, value: lv.Y0, unit: '\\text{years}', d: 2, ref: `${MBE7} Eq. 7.2.5.1-4 (p. 7-7)`,
+            note: e.g > 0 ? '' : 'g = 0: the limit of Eq. 7.2.5.1-4 as g → 0 (C7.2.5.1 suggests a very small positive g instead; the result is the same to the precision shown).' });
+          if (e.lim != null) {
+            w.add({ id: 'fut', label: 'Single-lane ADTT in the year the remaining life is reached, against the highway limit', sym: '(ADTT_{SL})_{FUTURE} \\le (ADTT_{SL})_{LIMIT}', eq: '(ADTT_{SL})_{PRESENT}(1+g)^{Y_{REM}}', sub: `${n0(e.T)}(1 + ${n3(e.g)})^{${n2(lv.Y0)}} = ${n0(lv.fut)} ${lv.limited ? '\\gt' : '\\le'} ${n0(e.lim)}`, value: lv.fut, unit: '\\text{trucks/day}', d: 0, ref: `${MBE7} Eqs. 7.2.5.1-5, -6 (p. 7-8)`, ok: !lv.limited });
+            if (lv.limited) w.add({ id: 'Ylim', label: 'Remaining life with the traffic held at the limit after it is reached', sym: 'Y_{REM}', eq: '\\frac{N_{av} - N_{1}}{365n(ADTT_{SL})_{LIMIT}} - \\frac{(1+g)^{(Y_{ADTT})_{LIMIT}} - 1}{g(1+g)^{(Y_{ADTT})_{LIMIT} - 1}} + (Y_{ADTT})_{LIMIT}',
+              sub: `(Y_{ADTT})_{LIMIT} = \\frac{\\log(${n0(e.lim)}/${n0(e.T)})}{\\log(1 + ${n3(e.g)})} = ${n2(lv.YL)}`, value: lv.Yrem, unit: '\\text{years}', d: 2, ref: `${MBE7} Eqs. 7.2.5.1-7, -8 (p. 7-8)`,
+              note: 'The exponent of the second denominator is read as (Y_ADTT)_LIMIT − 1, which makes Eq. 7.2.5.1-8 continuous with Eq. 7.2.5.1-4 at the limit.' });
+          } }
+        w.add({ id: 'life', label: `Remaining fatigue life, ${LNM} level (FA6)`, sym: 'Y_{REM} \\ge Y_{required}', eq: '', sub: `${isFinite(lv.rem) ? n2(lv.rem) : '\\infty'} ${lv.rem >= V.target ? '\\ge' : '\\lt'} ${n0(V.target)}`, value: lv.rem, unit: '\\text{years}', d: 1, ref: `${MBE7} Art. 7.2.5.1 (pp. 7-6 to 7-8)`, ok: lv.rem >= V.target,
+          note: `Total fatigue life Y = Y_REM + a = ${isFinite(lv.Y) ? n2(lv.Y) : '∞'} years; required remaining life ${n0(V.target)} years.` }); } }
     return w.steps;
   }
 
@@ -329,5 +417,7 @@
     return rows;
   }
 
-  window.SBDFatigue = { ES, CAT, CATS, STUD, DET, LOC, SPEC, DEFAULT, faRR, settings, supports, nAt, nRange, limitState, studLimit, setText, secSet, rowDk, compute, checks, steps, flange, detailsFromPayload };
+  /* EV_BASIS: the basis note of the remaining-life evaluation (Fatigue & studs tab, its input card, the Report, the Summary and the left column) */
+  const EV_BASIS = 'Remaining fatigue life (FA5, FA6) per MBE 4th Ed. (2026) Section 7: (Δf)_eff = R_pR_s × the factored Fatigue II range (Eq. 7.2.2-1), R_p by Eq. 7.2.2.1-1; (Δf)_max = R_p × the factored Fatigue I range (2.2(Δf)_eff with WIM truck weights); remaining life from N_av − N_1 with the first-year and present single-lane ADTT and the growth rate g (Eqs. 7.2.5.1-1 to -8); R_R from Table 7.2.5.1-1 unless entered.';
+  window.SBDFatigue = { ES, CAT, CATS, EV_DEF, RR_TAB, EV_BASIS, evIn, RpEq, N1of, yRem, evalRow, STUD, DET, LOC, SPEC, DEFAULT, faRR, settings, supports, nAt, nRange, limitState, studLimit, setText, secSet, rowDk, compute, checks, steps, flange, detailsFromPayload };
 })();
