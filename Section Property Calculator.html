@@ -4446,7 +4446,7 @@ function buildPartPane(P) {
       fRow(body, 'Density ρ', numIn(() => SPC.partRho(pt), v => { pt.rho = v; }, 'pp_rho', { k: 'rho', min: 0, geo: true }), un('rho'), 'For the weight per length only (Properties → Weight). n does not change the weight.');
       fRow(body, 'Density preset', selIn(RHO_PRESETS(), () => '', v => { if (v) { pushUndo(); pt.rho = +v; } }, 'pp_rhoP', false), '', 'Typical values — use the actual material density where it matters.');
     } else body.appendChild(el('div', 'hint', 'A hole removes weight at the density of the solid part it lies in.'));
-    if (SPC.TYPES[pt.type].hole) chkRow(body, 'Hole / cut-out (negative area)', chkIn(() => pt.hole, v => { pt.hole = v; }, 'pp_hole', true, true, GD), 'A hole removes area from the part it lies in and takes that part\'s modulus ratio n (its own n is not used).');
+    if (SPC.TYPES[pt.type].hole) chkRow(body, 'Hole / cut-out (negative area)', chkIn(() => pt.hole, v => { pt.hole = v; }, 'pp_hole', true, true, GD), 'A hole removes area from the part it lies in and takes that part\'s modulus ratio n (its own n is not used). It must lie wholly inside the material: a hole partly outside it (or in the void of a tube) is an error and no results are shown; holes are not clipped.');
   });
   mkSec(P, 'ppProps', 'This part\'s own properties', body => {
     const s = el('div'); s.setAttribute('data-live', 'part'); body.appendChild(s);
@@ -6025,7 +6025,7 @@ function partsTable() {
 function buildCalc(pg) {
   const L = un('L'), A = un('A'), I = un('I');
   mkSec(pg, 'cTab', 'Parallel-axis table (each part about its own centroid, then transferred)', body => {
-    body.appendChild(el('div', 'hint spNL', spNL('Units: ' + L + ', ' + A + ', ' + un('S') + ', ' + I + '.', [['Holes', 'have negative A.'], ['Columns with n', 'are transformed (multiplied by the modulus ratio n).'], ['Distances:', 'd<sub>x</sub> = x̄<sub>i</sub> − x̄, d<sub>y</sub> = ȳ<sub>i</sub> − ȳ.']])));
+    body.appendChild(el('div', 'hint spNL', spNL('Units: ' + L + ', ' + A + ', ' + un('S') + ', ' + I + '.', [['Holes', 'have negative A; a hole takes the n of the part it lies in and must lie wholly inside the material (one partly outside it, or in the void of a tube, is an error and no results are shown; holes are not clipped).'], ['Columns with n', 'are transformed (multiplied by the modulus ratio n).'], ['Distances:', 'd<sub>x</sub> = x̄<sub>i</sub> − x̄, d<sub>y</sub> = ȳ<sub>i</sub> − ȳ.']])));
     const rows = R.rows.map(r => [r.lbl, String(+r.n.toPrecision(4)), nf(r.A, 'A'), nf(r.nA, 'A'), nf(r.x, 'L'), nf(r.y, 'L'), nf(r.Ax, 'S'), nf(r.Ay, 'S'), nf(r.Ixo, 'I'), nf(r.Iyo, 'I'), nf(r.Ixyo, 'I'), nf(r.dx, 'L'), nf(r.dy, 'L'), nf(r.Ady2, 'I'), nf(r.Adx2, 'I'), nf(r.Adxdy, 'I')]);
     const sm = k => R.rows.reduce((s, r) => s + r[k], 0);
     rows.push({ cls: 'gov', cells: [{ h: '<b>Σ</b>' }, '', '', { h: '<b>' + nf(sm('nA'), 'A') + '</b>' }, '', '', { h: '<b>' + nf(sm('Ax'), 'S') + '</b>' }, { h: '<b>' + nf(sm('Ay'), 'S') + '</b>' }, { h: '<b>' + nf(sm('Ixo'), 'I') + '</b>' }, { h: '<b>' + nf(sm('Iyo'), 'I') + '</b>' }, { h: '<b>' + nf(sm('Ixyo'), 'I') + '</b>' }, '', '', { h: '<b>' + nf(sm('Ady2'), 'I') + '</b>' }, { h: '<b>' + nf(sm('Adx2'), 'I') + '</b>' }, { h: '<b>' + nf(sm('Adxdy'), 'I') + '</b>' }] });
@@ -6099,10 +6099,12 @@ function buildPlas(pg) {
 }
 
 /* ---- Torsion tab ---- */
+/* SPASM (2026-11-10, CLAUDE.md §6): a solid S, C, MC or ST part present: the Torsion tab and Report §8 state that torsion keeps the average-t_f centre-line model (D-SPH2-4). Display only. */
+function spcSlopedTors() { return !!(R && R.parts && R.parts.some(q => !q.pt.hole && q.pt.type === 'shape' && q.pt.p && /^(S|C|MC|ST)$/.test(q.pt.p.fam))); }
 function buildTors(pg) {
   const T = R.tors, I = un('I'), L = un('L');
   pg.appendChild(el('div', 'warnBox spNL', spNL('<b>Thin-wall approximation — verify.</b>', [['Model:', 'St. Venant J and the warping constant C<sub>w</sub> are computed on the centre-line model of the plates (thin-walled beam theory, e.g. AISC Design Guide 9, Seaburg &amp; Carter 1997; Vlasov).'],
-    ['Fillets', 'are neglected.'], ['Results', 'are approximate; for thick or stocky parts, check by another method.']])));
+    ['Fillets', 'are neglected.'], spcSlopedTors() ? ['S, C, MC and ST shapes:', 'J, C<sub>w</sub> and the shear centre use the centre-line model with the average flange thickness t<sub>f</sub>; the flange slope, root fillets and toe radii of the area model are not in it, so J is below the AISC tabulated J.'] : null, ['Results', 'are approximate; for thick or stocky parts, check by another method.']])));
   (T.warn || []).forEach(w => { const nl = (T.warnNL || {})[w]; pg.appendChild(nl ? el('div', 'warnBox spNL', spNL(esc(nl[0]), nl[1].map(x => [esc(x[0]), esc(x[1])]), { act: nl[2].map(esc) })) : el('div', 'warnBox', esc(w))); });   /* SPNL: T.warnNL = display only */
   (T.notes || []).forEach(w => pg.appendChild(el('div', 'note', esc(w))));
   mkSec(pg, 'tCon', 'Contacts (parts that touch are connected for torsion)', body => {
@@ -6215,7 +6217,7 @@ function buildQ(pg) {
    PHASE 2a: weight and coating area, buckling / LTB parameters, Wagner β,
    kern, Mohr's circle, inertia ellipse, stresses
    ===================================================================== */
-const VFY2 = (t) => `<span class="badge vfy" title="${esc(t || 'Interpretation or reference to be verified by the engineer')}">verify</span>`;
+const VFY2 = (t) => `<span class="badge vfy" title="${esc(t || 'Check this item independently before relying on it')}">verify</span>`;
 // results computed on demand from R (cached on R; recomputed whenever R is)
 function ext(k) {
   if (!R || !R.ok) return null;
@@ -6364,7 +6366,7 @@ function buildCalcP2a(pg) {
   });
   mkSec(pg, 'cWag', 'Wagner monosymmetry constant β<sub>x</sub>', body => {
     if (!wg.ok) { body.appendChild(el('div', 'note', 'β<sub>x</sub>: n/a — ' + esc(wg.why || 'shear centre n/a'))); return; }
-    calc(body, { title: 'Monosymmetry constant about the major principal axis 1', ref: 'Trahair & Bradford; Kitipornchai & Trahair (1980); SSRC Guide', badge: VFY2('Sign convention and the standard\'s use of β to be confirmed by the engineer'), lines: [
+    calc(body, { title: 'Monosymmetry constant about the major principal axis 1', ref: 'Trahair & Bradford; Kitipornchai & Trahair (1980); SSRC Guide', badge: VFY2('Sign convention: positive when the larger flange is in compression (Trahair & Bradford). Informational: no check in this tool uses β; check the sign convention of the method you use it in'), lines: [
       TX`\beta_x=\frac{1}{I_1}\int_A v\,(u^2+v^2)\,dA-2v_o\quad(u\ \text{along axis 1},\ v\ \text{along axis 2},\ \text{from the centroid})`,
       TX`\int_A v\,(u^2+v^2)\,dA=${nt(wg.int1 * uf('I') * uf('L'), 'n')}\ \text{${un('L')}}^5,\quad I_1=${nt(wg.I1, 'I')}\ \text{${un('I')}},\quad v_o=${nt(wg.vo, 'L')}\ \text{${L}}`,
       TX`\beta_{x,(+v\ \text{in tension})}=\frac{${nt(wg.int1 * uf('I') * uf('L'), 'n')}}{${nt(wg.I1, 'I')}}-2\times${nt(wg.vo, 'L')}=${nt(wg.b1, 'L')}\ \text{${L}}`,
@@ -6637,9 +6639,9 @@ function buildSF(pg) {
   list.forEach(c => { const i = S.contacts.indexOf(c); mkSec(pg, 'sfDet' + (PRMODE ? i : ''), 'Connection #' + (i + 1) + ': ' + esc(c.la + ' — ' + c.lb), body => sfDetail(body, S, c, vals[i])); });
   mkSec(pg, 'sfNot', 'Connector checks: what is and is not checked', body => {
     body.appendChild(el('ul', 'manList', [   /* SPNL (2026-11-08): {nl} = a long item as a bold lead and a list */
-      { nl: spNL('Fasteners: the strength per fastener (' + (asd ? 'R<sub>n</sub>/Ω' : 'φR<sub>n</sub>') + ', shear, bearing / tear-out, slip-critical as applicable) is entered by you per AISC 360-16 J3 or AASHTO LRFD 6.13.2 ' + VFY2() + '.',
+      { nl: spNL('Fasteners: the strength per fastener (' + (asd ? 'R<sub>n</sub>/Ω' : 'φR<sub>n</sub>') + ', shear, bearing / tear-out, slip-critical as applicable) is entered by you per AISC 360-16 J3 or AASHTO LRFD 6.13.2 ' + VFY2('Strength per fastener is your input; spacing limits not checked') + '.',
         [['Required spacing', 's<sub>req</sub> = n<sub>l</sub>·' + (asd ? 'R<sub>n</sub>/Ω' : 'φR<sub>n</sub>') + '/q along the member.'], ['D/C', '= s/s<sub>req</sub>.']]) },
-      { nl: spNL('Fillet welds: ' + (asd ? 'R<sub>n</sub>/Ω' : 'φR<sub>n</sub>') + ' per unit length = ' + (asd ? '0.60F<sub>EXX</sub>·0.707w/Ω, Ω = 2.00' : 'φ·0.60F<sub>EXX</sub>·0.707w, φ = 0.75') + ' (AISC 360-16 J2.4 and Table J2.5, load parallel to the weld axis, no directional increase) ' + VFY2() + '.',
+      { nl: spNL('Fillet welds: ' + (asd ? 'R<sub>n</sub>/Ω' : 'φR<sub>n</sub>') + ' per unit length = ' + (asd ? '0.60F<sub>EXX</sub>·0.707w/Ω, Ω = 2.00' : 'φ·0.60F<sub>EXX</sub>·0.707w, φ = 0.75') + ' (AISC 360-16 J2.4 and Table J2.5, load parallel to the weld axis, no directional increase) ' + VFY2('Weld metal strength per AISC 360-16 J2.4 / Table J2.5. Not checked: minimum and maximum weld size (Table J2.4, J2.2b) and base metal (J4.2)') + '.',
         [['Intermittent welds:', 'length L<sub>w</sub> at pitch p (L<sub>w</sub>/p of the length is welded).']]) },
       { nl: spNL('<b>Not checked</b> (verify separately):', [['Welds:', 'minimum fillet weld size (AISC 360-16 Table J2.4) and maximum size along edges (J2.2b); minimum length of intermittent welds (J2.2b); base metal shear at the fusion face (J2.4, J4.2).'],
         ['Fasteners:', 'minimum and maximum fastener spacing and edge distance (J3.3, J3.4, J3.5).'],
@@ -7038,7 +7040,7 @@ function buildManual(pg) {
   H('Elastic properties');
   UL(['Polygon integrals (Green\'s theorem): A = ½Σ(x<sub>i</sub>y<sub>i+1</sub> − x<sub>i+1</sub>y<sub>i</sub>), ∫x² dA, ∫y² dA, ∫xy dA by the standard vertex formulas; circles exact. Each part about its own centroid, then the parallel-axis theorem (Calc detail tab).',
     'Section moduli S = I/c with c to the extreme material fibre; principal axes from Mohr\'s circle, θ<sub>p</sub> = ½·atan2(−2I<sub>xy</sub>, I<sub>x</sub> − I<sub>y</sub>) from +x to the major axis; S<sub>1</sub>, S<sub>2</sub> and Z<sub>1</sub>, Z<sub>2</sub> about the principal axes.',
-    'Overlapping parts are counted twice (a warning names them). Use holes for cut-outs.']);
+    'Overlapping parts are counted twice (a warning names them). Use holes for cut-outs: a hole takes the n of the part it lies in and must lie wholly inside the material (one partly outside it, or in the void of a tube, is an error and no results are shown; holes are not clipped).']);
   H('Plastic properties');
   UL([NL('The plastic neutral axis divides the (n-weighted) area in half.', [['Found', 'by bisection, using the exact area of each polygon (clipped by the line) and circle (circular segment) on one side.'], ['Z', '= Σ|first moment| about the PNA.'],
     ['Computed', 'for x, y and the principal axes.'], ['PNA in a gap:', 'where the PNA falls in a gap without material, Z is the same anywhere in the gap.']])]);
@@ -7101,7 +7103,7 @@ function buildManual(pg) {
       ['SPC-NOTES:', 'project, units, basis, the tool\'s A, x̄, ȳ, I<sub>x</sub>, I<sub>y</sub>, I<sub>xy</sub>, I<sub>1</sub>, I<sub>2</sub>, θ<sub>p</sub>, the expected MASSPROP readout and the steps.'], ['SPC-LABELS:', 'part labels; off.']]),
     NL('<b>Coordinate basis</b> (remembered in this browser):', [['Section centroid at 0,0 (default):', 'MASSPROP "Moments of inertia" X, Y and "Product of inertia" XY are then the centroidal I<sub>x</sub>, I<sub>y</sub>, I<sub>xy</sub>.'],
       ['Or the tool\'s own origin:', 'MASSPROP "Centroid" = x̄, ȳ and its moments are about 0,0.'],
-      ['Axes:', '+x right, +y up; product of inertia = ∫xy dA, the sign the tool uses and, as understood, the sign MASSPROP uses (check once: a 1 × 1 square with a corner at 0,0 in the first quadrant gives XY = +0.25).']]),
+      ['Axes:', '+x right, +y up; product of inertia = ∫xy dA, the sign the tool uses; check once that MASSPROP uses the same sign: a 1 × 1 square with a corner at 0,0 in the first quadrant gives XY = +0.25.']]),
     NL('<b>Steps:</b>', ['UCS World.', 'REGION (select the objects on SPC-PARTS, SPC-PARTS-N, SPC-HOLES).', 'UNION the material regions (touching parts union cleanly; separate pieces become one composite region).',
       'SUBTRACT the hole regions.', 'MASSPROP. Compare Area, Centroid, Moments of inertia, Product of inertia and Principal moments.'], { ol: true }),
     NL('<b>Differences to expect:</b>', [['Unweighted:', 'MASSPROP is unweighted (compare with every n = 1, or use the unweighted values in the notes).'],
@@ -7809,7 +7811,7 @@ function sprModel() {
   const paRows = R.rows.map(r => [r.lbl, String(+r.n.toPrecision(4)), sprC(r.nA, 'A'), sprC(r.x, 'L'), sprC(r.y, 'L'), sprC(r.Ixo, 'I'), sprC(r.Iyo, 'I'), sprC(r.Ixyo, 'I'), sprC(r.dx, 'L'), sprC(r.dy, 'L'), sprC(r.Ady2, 'I'), sprC(r.Adx2, 'I'), sprC(r.Adxdy, 'I')]);
   paRows.push({ cls: 'gov', cells: ['Σ', '', sprC(sm('nA'), 'A'), '', '', sprC(sm('Ixo'), 'I'), sprC(sm('Iyo'), 'I'), sprC(sm('Ixyo'), 'I'), '', '', sprC(sm('Ady2'), 'I'), sprC(sm('Adx2'), 'I'), sprC(sm('Adxdy'), 'I')] });
   secs.push({ title: 'Area, centroid and moments of inertia', subs: [
-    { title: 'Area, centroid and moments of inertia', items: [sprTopics(T3), ...sprNL('Each part about its own centroid (in the section x–y directions), then transferred: d_x = $\\bar{x}_{i}$ − x̄, d_y = $\\bar{y}_{i}$ − ȳ.', [['Holes', 'have negative A.'], ['Steps:', 'the same steps are on the Calc detail tab[[tab:calc| ↗]].']])] },
+    { title: 'Area, centroid and moments of inertia', items: [sprTopics(T3), ...sprNL('Each part about its own centroid (in the section x–y directions), then transferred: d_x = $\\bar{x}_{i}$ − x̄, d_y = $\\bar{y}_{i}$ − ȳ.', [['Holes', 'have negative A; a hole takes the n of the part it lies in and must lie wholly inside the material (one partly outside it, or in the void of a tube, is an error and no results are shown; holes are not clipped).'], ['Steps:', 'the same steps are on the Calc detail tab[[tab:calc| ↗]].']])] },
     { title: 'Parallel-axis table (' + R.rows.length + ' parts)', items: [{ type: 'table', wide: true, lazy: true, title: 'Parallel-axis table', head: ['Part', 'n', 'n·A_i', '$\\bar{x}_{i}$', '$\\bar{y}_{i}$', 'n·I_xo', 'n·I_yo', 'n·I_xyo', 'd_x', 'd_y', 'n·A·d_y²', 'n·A·d_x²', 'n·A·d_x d_y'], rows: paRows }] }] });
   /* ---------- 4.–6. ---------- */
   let mohr = ''; try { mohr = mohrSVG(R.Ix, R.Iy, R.Ixy); } catch (e) { mohr = ''; }
@@ -7820,7 +7822,7 @@ function sprModel() {
     R.anyN ? ['Composite girder:', 'for the plastic moment of a composite girder use AASHTO LRFD 10th Ed. (2024) Appendix D6.1 or AISC 360-16 Sections I3.2a and I1.2a (plastic stress distribution; concrete at 0.85f′_c in compression only, concrete in tension neglected).'] : null,
     ['Steps:', 'the same steps are on the Plastic tab[[tab:plas| ↗]].']])] }] });
   const t6 = T6.filter(t => t.steps.length);
-  secs.push({ title: 'Torsion, buckling parameters and weight', subs: [{ title: 'Torsion, buckling parameters and weight', items: (t6.length ? [sprTopics(t6)] : []).concat(sprNL('Thin-wall approximation — verify: J and C_w are computed on the centre-line model of the plates (thin-walled beam theory, AISC Design Guide 9; Vlasov).', [['Fillets:', 'fillets are neglected.'],
+  secs.push({ title: 'Torsion, buckling parameters and weight', subs: [{ title: 'Torsion, buckling parameters and weight', items: (t6.length ? [sprTopics(t6)] : []).concat(sprNL('Thin-wall approximation — verify: J and C_w are computed on the centre-line model of the plates (thin-walled beam theory, AISC Design Guide 9; Vlasov).', [['Fillets:', 'fillets are neglected.'], spcSlopedTors() ? ['S, C, MC and ST shapes:', 'J, C_w and the shear centre use the centre-line model with the average flange thickness t_f; the flange slope, root fillets and toe radii of the area model are not in it, so J is below the AISC tabulated J.'] : null, R.anyHole ? ['Holes:', 'ignored in the torsion model (gross section).'] : null,
     isNum(T.J) ? null : ['J:', 'n/a — ' + (T.why || '') + '.'], isNum(T.Cw) ? null : ['C_w:', 'n/a — ' + (T.cwWhy || '') + '.'], ['Worked', 'on the Torsion tab[[tab:tors| ↗]].']], { warn: true })) }] });
   /* ---------- 7. Notes and references ---------- */
   const notes = [];
