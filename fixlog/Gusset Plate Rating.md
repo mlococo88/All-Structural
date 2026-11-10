@@ -3670,3 +3670,9 @@ Follows G4A–G4C (#1353, #1355, #1357); open items 2 (part) and 3 of #1357.
   - `check-syntax` pass; `phone-layout --tool gusset --w 390` pass; 0 console errors on every tab and the Report.
   - `project-library --tool gusset`: the 4 "identical to main" checks differ only by `R.p.FvR0L`, the LFR fastener-shear capacities and RFs, and their text, as intended; all other checks pass.
 - **Other copies:** none.
+
+## 2026-11-10 — PR: claude/hoc-gusset (PR #TBD) — Project tab "Hand-offs" section; Use / Share project info moved there from the Calculation header (HOC; engineer decision 2026-11-10: the hand-off card on the Project tab in every tool)   [display only; no computed value, payload, storage key or saved-data format change]
+- **Where:** `paneProject()`: the row `<div class="proj-row" style="grid-template-columns: 1fr 1fr"><button … id="bx-pm-use" …>…<button … id="bx-pm-share" …>…</div>` at the end of `#sec-meta` is replaced by the close of `#sec-meta` and a new section `${secHd('sec-ho', 'Hand-offs')}` / `<div class="sec-body one-col gpHo" id="sec-ho">`: a note (nothing changes until you confirm); "Receive from other tools": Shared project info (`#bx-pm-use`); "Send to other tools": Shared project info (`#bx-pm-share`). Same ids; the delegated click handler (`closest('#bx-pm-use,#bx-pm-share')`) is unchanged. The new section collapses like the others.
+- CSS after `.proj-row {…}`: `.gpHo .gpHoGrp`, `.gpHoRow`, `.gpHoRow .proj-row`, `.gpHoFrom`.
+- **Provisions:** none. **Check case:** main vs branch probe (seeded `projectMeta`; Use shared project info → Share project info): the dialogs, the Calculation header values and all localStorage keys byte-identical (times normalised): `projectMeta(.updatedAt)`, the autosave.
+- **Saved data (§5):** none. **Decisions (pending engineer review):** the section sits right under the Calculation header, so no link is left there. **Other copies:** none.
