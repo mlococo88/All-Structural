@@ -127,7 +127,8 @@ async function cellsMatch(p) {
   //   (the cross-section narrower and centred only where its height would pass the cap, its aspect kept), resized with the window, the left
   //   column and the splitter; stacked and fitting at 390 px; links to the input tabs where they are edited and the tabs where they are drawn; printed full width
   const { b, p, errs } = await openPage(FILE, { vw: 1440, vh: 1000, ls: { 'sbd2.ui': JSON.stringify({ otab: 'sum' }) } });
-  const lay = () => p.evaluate(() => { const r = e => e.getBoundingClientRect(), a = r(document.getElementById('sum-xs')), c = r(document.getElementById('sum-plan')), bx = [...document.querySelectorAll('#sum-gfx .sum-gbox')].map(r), sv = [...document.querySelectorAll('#sum-gfx .sum-gbox > svg')].map(e => { const q = r(e), vb = e.getAttribute('viewBox').split(/[\s,]+/).map(Number); return { w: q.width, h: q.height, l: q.left, ar: vb[2] / vb[3] }; });
+  const lay = () => p.evaluate(() => { const r = e => e.getBoundingClientRect(), a = r(document.getElementById('sum-xs')), c = r(document.getElementById('sum-plan')), bx = [...document.querySelectorAll('#sum-gfx .sum-gbox')].map(r), sv = [...document.querySelectorAll('#sum-gfx .sum-gbox')].map(b => [...b.querySelectorAll('svg')].find(e => getComputedStyle(e).display !== 'none')).map(e => {   // SKP: the plan's SVG inside its scroll box (.fp-sc)
+ const q = r(e), vb = e.getAttribute('viewBox').split(/[\s,]+/).map(Number); return { w: q.width, h: q.height, l: q.left, ar: vb[2] / vb[3] }; });
     const cap = Math.max(360, Math.min(760, 0.8 * innerHeight));
     return { stacked: c.top >= a.bottom - 1, full: Math.abs(a.width - c.width) < 1 && Math.abs(a.width - r(document.querySelector('#sum-gfx .secBody')).width) < 30,
       plan: Math.abs(sv[1].w - (bx[1].width - 10)) < 3, xs: sv[0].h <= cap + 1 && (Math.abs(sv[0].w - (bx[0].width - 10)) < 3 || sv[0].h > cap - 2) && Math.abs(sv[0].w / sv[0].h - sv[0].ar) < 0.02 * sv[0].ar,
@@ -159,12 +160,12 @@ async function cellsMatch(p) {
     await p.click('#tabBar [data-otab="sum"]'); await p.waitForSelector('#sum-plan svg');
     await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(300);
     const ph = await p.evaluate(() => { const a = document.getElementById('sum-xs').getBoundingClientRect(), c = document.getElementById('sum-plan').getBoundingClientRect();
-      return { stacked: c.top >= a.bottom - 1, sw: document.documentElement.scrollWidth, w: innerWidth, over: [...document.querySelectorAll('#sum-gfx svg')].some(s => s.getBoundingClientRect().right > innerWidth) }; });
+      return { stacked: c.top >= a.bottom - 1, sw: document.documentElement.scrollWidth, w: innerWidth, over: [...document.querySelectorAll('#sum-xs svg, #sum-plan .fp-sc')].some(s => s.getBoundingClientRect().right > innerWidth) }; });   // SKP: the true-scale plan scrolls sideways in its box (.fp-sc) at 390 px
     assert.ok(ph.stacked && ph.sw <= ph.w && !ph.over, JSON.stringify(ph));
     await p.evaluate(() => document.getElementById('sum-gfx').scrollIntoView()); await shot(p, 'gfx-390');
     await p.setViewportSize({ width: 1920, height: 1080 }); await p.waitForTimeout(250);   // the cross-section narrowed by its cap on screen; full width in print
     await p.emulateMedia({ media: 'print' }); await p.waitForTimeout(100);
-    const pr = await p.evaluate(() => { const g = document.getElementById('sum-gfx'), bx = [...g.querySelectorAll('.sum-gbox')].map(e => e.getBoundingClientRect()), sv = [...g.querySelectorAll('.sum-gbox > svg')].map(e => e.getBoundingClientRect());
+    const pr = await p.evaluate(() => { const g = document.getElementById('sum-gfx'), bx = [...g.querySelectorAll('.sum-gbox')].map(e => e.getBoundingClientRect()), sv = [...g.querySelectorAll('.sum-gbox')].map(b => [...b.querySelectorAll('svg')].find(e => getComputedStyle(e).display !== 'none').getBoundingClientRect());
       return { shown: getComputedStyle(g).display !== 'none', n: sv.length, stacked: bx[1].top >= bx[0].bottom - 1, full: sv.every((s, i) => Math.abs(s.width - (bx[i].width - 10)) < 3) }; });
     assert.ok(pr.shown && pr.n === 2 && pr.stacked && pr.full, 'print: ' + JSON.stringify(pr));
     await p.emulateMedia({ media: 'screen' });

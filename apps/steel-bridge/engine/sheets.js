@@ -137,13 +137,17 @@
   }
 
   /* ---------- weld symbol (GirderDetail dxfWeld): leader to (x, y), reference line, fillet triangle(s) or CJP groove, size ---------- */
-  function weld(D, l, x, y, size, both, type, note, dir) {
-    type = type || 'fillet'; dir = dir || 1; const h = D.h, rx = x + dir * 3 * h, ry = y + 3 * h, L = 5 * h, x1 = rx + dir * L;
-    D.line(l, x, y, rx, ry); D.line(l, rx, ry, x1, ry); D.line(l, x, y, x + dir * 0.6 * h, y + 0.3 * h); D.line(l, x, y, x + dir * 0.3 * h, y + 0.6 * h);
+  /* SBXS (2026-11-10): o (optional; the typical section only): { rise (the reference line's height above y; negative: below; default 3 h),
+     wrap (the note on a second line under the reference line, from the leader's end) }. Without o: as before. */
+  function weld(D, l, x, y, size, both, type, note, dir, o) {
+    o = o || {}; type = type || 'fillet'; dir = dir || 1; const h = D.h, rx = x + dir * 3 * h, ry = y + (o.rise == null ? 3 * h : o.rise), L = 5 * h, x1 = rx + dir * L;
+    const sg = ry >= y ? 1 : -1;   // the arrowhead along the leader
+    D.line(l, x, y, rx, ry); D.line(l, rx, ry, x1, ry); D.line(l, x, y, x + dir * 0.6 * h, y + sg * 0.3 * h); D.line(l, x, y, x + dir * 0.3 * h, y + sg * 0.6 * h);
     const mx = rx + dir * L * 0.55, s = 0.8 * h;
     const sym = up => type === 'cjp' ? D.pline(l, [[mx - s / 2, ry + up * s], [mx, ry], [mx + s / 2, ry + up * s]], false) : D.pline(l, [[mx, ry], [mx, ry + up * s], [mx + s, ry]], true);
-    sym(-1); if (both) sym(1); if (size) D.text(l, mx - (dir > 0 ? 1.2 : -1.2) * h, ry - 1.2 * h, h * 0.75, size, 2);
-    if (note) D.text(l, dir > 0 ? x1 + 0.4 * h : x1 - 0.4 * h, ry - 0.35 * h, h * 0.7, note, dir > 0 ? 0 : 2);
+    sym(-1); if (both) sym(1); if (size) D.text(l, o.rise != null && dir < 0 ? mx - 0.4 * h : mx - (dir > 0 ? 1.2 : -1.2) * h, ry - 1.2 * h, h * 0.75, size, 2);   // SBXS (with o): leftwards, the size left of the fillet, not on it
+    if (note && o.wrap) D.text(l, rx, ry - 2.4 * h, h * 0.7, note, dir > 0 ? 0 : 2);
+    else if (note) D.text(l, dir > 0 ? x1 + 0.4 * h : x1 - 0.4 * h, ry - 0.35 * h, h * 0.7, note, dir > 0 ? 0 : 2);
   }
   const sheetNo = (C, pre) => { const i = C.list.findIndex(t => t.startsWith(pre)); return i >= 0 ? `SHEET ${i + 1}` : ''; };
 
@@ -220,7 +224,16 @@
     const G = C.G, h = D.h, i0 = D.mark(); DW().section(G, D, { k: D.k });
     const lt = D.layer('ANNO-TEXT', 7), sec = G.girders.map(g => g.segs[0]), tTop = Math.max(...sec.map(s => s.topT)), j = Math.min(1, G.nb - 1), s = sec[j], x = G.ys[j] * 12;
     const yt = -(tTop - s.topT), w = fwSize(C.P, s);
-    weld(D, lt, x + s.tw / 2, yt - s.topT, dIn(w), true, 'fillet', 'FLANGE-TO-WEB, TOP'); weld(D, lt, x + s.tw / 2, yt - s.topT - s.D, dIn(w), true, 'fillet', 'FLANGE-TO-WEB, BOT.');
+    /* SBXS: the two weld symbols in the bays either side of the girder (top: to the right, leader down from the top flange; bottom: to
+       the left, leader up from the bottom flange), so they cannot overlap each other, inside the web depth and clear of the girder
+       labels; the note under the reference line where the bay is too narrow for it at the end (was: both to the right, leaders up, the
+       top one into the deck, the notes across the next girder) */
+    const yTj = yt - s.topT, yBj = yTj - s.D, yLo = Math.min(...sec.map(q => -(tTop - q.topT) - q.topT - q.D - q.botT)) - 2.9 * h;   // the lowest point: clear of the girder spacing texts
+    const nT = 'FLANGE-TO-WEB, TOP', nB = 'FLANGE-TO-WEB, BOT.', tl = n => n.length * 0.68 * 0.7 * h;
+    const room = d => { const i = j + d; if (i < 0 || i >= G.nb) return Infinity; const q = sec[i]; return Math.abs(G.ys[i] * 12 - x) - Math.max(q.topB, q.botB) / 2 - s.tw / 2 - 0.6 * h; };
+    const wT = 8.4 * h + tl(nT) > room(1), wB = 8.4 * h + tl(nB) > room(-1);
+    const rT = -Math.max(1.0 * h, Math.min(3 * h, yTj - yLo - (wT ? 2.5 : 1.3) * h)), rB = Math.max(1.0 * h, Math.min(3 * h, s.D - 1.0 * h));
+    weld(D, lt, x + s.tw / 2, yTj, dIn(w), true, 'fillet', nT, 1, { rise: rT, wrap: wT }); weld(D, lt, x - s.tw / 2, yBj, dIn(w), true, 'fillet', nB, -1, { rise: rB, wrap: wB });
     const b = D.bbox(i0), Q = quantities(G, C.RS), T = DW().table, tb = D.layer('TABL', 7);
     const T1 = T(D, tb, b[2] + 8 * h, b[3], ['ITEM', 'QUANTITY', 'UNIT'], Q.rows, 'ESTIMATED QUANTITIES (WHOLE BRIDGE)');
     T(D, tb, b[2] + 8 * h, T1.y - 2 * h, ['WELD', 'SIZE', 'LINES', 'LENGTH (FT)', 'WELD METAL (LB)'], Q.welds.map(q => [q.k, dIn(q.w), String(q.lines), f0(q.Lft), f0(q.wt)]).concat([['TOTAL', '', '', f0(Q.welds.reduce((a, q) => a + q.Lft, 0)), f0(Q.welds.reduce((a, q) => a + q.wt, 0))]]),
