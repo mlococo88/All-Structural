@@ -5174,7 +5174,7 @@ format changed. Anchor text `QA2` marks each change. New file `ui/sub.js` (in th
 - **Other copies:** none.
 - **How verified:** `tests/check-syntax.mjs`; smoke steel-bridge-summary, steel-bridge-dash, phone-layout --tool sbapp (0 console errors); before / after screenshots at 1440 and 1920 px.
 
-## 2026-11-10 — PR: claude/sb-diaphragm-checks (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Diaphragms: channel flexure per 6.12.2.2.5, axial checks under the wind force F_w, fatigue row wording (SBDX)   [CALCULATION CHANGE, approved by the engineer 2026-11-10: "yes do all three"]
+## 2026-11-10 — PR: claude/sb-diaphragm-checks (PR #1306: https://github.com/mlococo88/All-Structural/pull/1306) — Diaphragms: channel flexure per 6.12.2.2.5, axial checks under the wind force F_w, fatigue row wording (SBDX)   [CALCULATION CHANGE, approved by the engineer 2026-11-10: "yes do all three"]
 - **Request:** the three items raised in #1297: (1) an axial check of the diaphragm under F_w (compression 6.9, tension 6.8; the member's own length and K, basis stated); (2) channels: the channel flexural provisions in place of the 6.10.8 I-section approximation (W diaphragms keep 6.10.8); (3) fatigue rows: "connection plate at cross-frame" in diaphragm wording when a diaphragm is selected.
 - **Article numbering note:** in the 10th Edition the channel provisions are Art. **6.12.2.2.5** (Channels); 6.12.2.2.4 is Tees and Double Angles. 6.12.2.2.5 is used.
 - **Where:**
