@@ -8,6 +8,8 @@
 //    t_st = t_sb = 5.5 ft, the rest the default project. Before (e = 0, paving notch) and after (e = 10 in) against values worked by hand.
 //    ABBF (engineer decision 2026-11-10): the bearings stay where they are with e = 0 (x_brg = x_stem,back − t_bw − setback); only the seat
 //    between the bearing line and the inset backwall narrows (a_bw = setback − e). The hand-check values below follow that decision.
+//    ABBF2 (2026-11-10): the bearing is entered as a_f from the stem front face; this hand check gives it by the setback (1.25 ft, as a
+//    project saved before a_f: brgFront removed, a_f = t_st − t_bw − setback = 2.25 ft).
 // 3. Input errors: e + t_bw > t_st; e > 0 with no slab and no d_sh. Semi-integral / integral ignore e.
 // 4. Drawings (DXF valid, the section has the shelf outline), 3D (the slab top at the top of the backwall), Report builds;
 //    no console errors; no horizontal scroll at 390 px.
@@ -69,7 +71,7 @@ console.log(`1. e = 0: identical to ${REF} (${sha})`);
 console.log('2. Hand check: 2\'-0" backwall, e = 10 in, slab seat 9 in below the top');
 { const o = await openPage(FB, { vw: 1400, vh: 1000 }), p = o.p; await ready(p);
   const r = await p.evaluate(() => {
-    const setup = e => { S.apSlab.on = true; S.apSlab.t = 0.75; S.geom.tbw = 2.0; S.geom.tst = 5.5; S.geom.tsb = 5.5; S.geom.bwOff = e; S.geom.shD = e > 0 ? 9 : 0; migrate(); recalcAll(); };
+    const setup = e => { S.apSlab.on = true; S.apSlab.t = 0.75; S.geom.tbw = 2.0; S.geom.tst = 5.5; S.geom.tsb = 5.5; delete S.geom.brgFront; S.geom.bwOff = e; S.geom.shD = e > 0 ? 9 : 0; migrate(); recalcAll(); };
     const perm = l => window.LAST_R.permTables['Strength I'].find(x => x.lbl === l);
     const P1 = '0.90·DC + 0.65·DW + 1.00·EV + 1.50·EH + 1.75·(BR,LS), LL reaction off + 1.00·TU/CR/SH';
     const pick = () => { const R = window.LAST_R, G = R.groups, c = R.checks, q = perm(P1);
