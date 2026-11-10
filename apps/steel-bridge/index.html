@@ -355,7 +355,8 @@
     return {
       proj: card('Save and open', '<div id="pbHost"></div>')   // STDS-B: the standard card (projectBar, mounted after each redraw)
         + card('Project', ['name', 'number', 'owner', 'designer', 'checker', 'date'].map(k => num('project.' + k, k === 'owner' ? 'Client name (title block, optional)' : k[0].toUpperCase() + k.slice(1), '', { text: true })).join('')
-          + '<p class="note">Client name: blank = the selected DOT\'s name (Bridge owner (DOT) rules, below) is used in the title block, the report and the drawings.</p>')
+          + '<p class="note">Client name: blank = the selected DOT\'s name (Bridge owner (DOT) rules, below) is used in the title block, the report and the drawings.</p>'
+          + (window.SBDInputCheck ? `<p class="note">${esc(window.SBDInputCheck.NOTE)}</p>` : ''))   // SBINV: the input check rule (engineer rule 2026-11-10: decisions noted in the app)
         + UL.ownerCard(P, { num, sel, card, esc })   // moved here from the Cross-section & loads tab (UI only)
         + (window.SBDHandoffUI ? window.SBDHandoffUI.card(P, ui) : ''),   // B2: hand-offs to and from the other tools (ui/handoffs.js)
       // TABR (2026-11-09): the input tabs reorganised, display only (every input keeps its data-path, kind and handler; nothing computed changes)
@@ -662,7 +663,7 @@
     const out = $('out'), b = autoBtn(t), st = b && b.closest('.alert.stale');
     if (!st || st.hidden) { out.onchange = null; out.onclick = null; out.innerHTML = ICU().blocked(E, icO()); return; }   // results on screen: not while an error exists
     b.disabled = true; const sp = st.querySelector('span'); if (sp) sp.textContent = 'Results not shown: fix the inputs listed above.';
-    out.insertAdjacentHTML('afterbegin', ICU().banner(E, icO()));
+    out.insertAdjacentHTML('afterbegin', ICU().banner(E, icO()) + '<p class="note ic-note">This tab is shown so that the field marked on it can be fixed; its results stay withheld until every input error is fixed.</p>');
     markErrors();   // the fields of this tab
   }
   function drawTab() {

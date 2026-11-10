@@ -97,7 +97,8 @@
     css();
     return `<div class="alert err ic-banner" role="alert" id="icBanner"><b>${count(errors.length)}</b><ul>${errors.map((e, i) => `<li><a href="#" data-icgo="${i}"><span class="ic-where">${esc(where(e, o))}</span>: ${esc(e.msg)}</a></li>`).join('')}</ul></div>`;
   }
-  function blocked(errors, o) { return banner(errors, o) + '<p class="ic-none" id="icNone">Results not shown: fix the inputs above.</p>'; }
+  const note = () => window.SBDInputCheck && window.SBDInputCheck.NOTE ? `<p class="note ic-note">${esc(window.SBDInputCheck.NOTE)}</p>` : '';   // engineer rule 2026-11-10: the decision noted
+  function blocked(errors, o) { return banner(errors, o) + '<p class="ic-none" id="icNone">Results not shown: fix the inputs above.</p>' + note(); }
   /* dash(errors, o): the left check summary column while errors exist (no verdict, no values) */
   function dash(errors, o) {
     css();
@@ -110,5 +111,5 @@
     if (isList(el) || el.type === 'hidden' || el.offsetParent === null) { setTimeout(() => { const c = (e.cell != null && cellIn(el, e.cell)) || (el.nextElementSibling && el.nextElementSibling.querySelector && el.nextElementSibling.querySelector('input.sli-in')) || el; go(c); }, 0); return true; }
     go(el); return true;
   }
-  window.SBDInputCheckUI = { css, mark, banner, blocked, dash, fieldsOf, focus, labelOf, where };
+  window.SBDInputCheckUI = { css, mark, banner, blocked, dash, fieldsOf, focus, labelOf, where, note };
 })();

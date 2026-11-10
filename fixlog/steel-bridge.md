@@ -4712,6 +4712,15 @@ except the duplicated stations removed by fix 1 (listed there) and the Summary's
   7. The Loads input tab's "Calculated / Used" dead-load lines (input panel) stay; with a loads error they say "none (the loads module gives none: …)".
   8. Entered splice plates with auto-design on are still used by the engine (inputsAt `own`), so they block; the message says to show them with
      "Entered below". Stiffener types are checked whether the web is stiffened or not, as the model already did.
+- **Notes in the app (engineer rule 2026-11-10: every assumption or decision is noted in the app and the Report):** one text,
+  `SBDInputCheck.NOTE` ("Input check: results are shown only while no blocking input error exists. … Warnings (LLDF range, proportion limits,
+  D/t_w > 150, N_b = 3, Auto design) do not block. A Custom demand table and the Constructibility bracket inputs are checked on their own tab …
+  An entered q_CL or finishing machine load below zero blocks (decision pending engineer review)."), shown as a `.note` on the Project input
+  tab (after the Client name note), under the blocked output view, and in the Report's Project section (`report/builders.js`, after
+  `p.notes ? note(p.notes) : null,`). A tab drawn for the fix of its own field adds "This tab is shown so that the field marked on it can be
+  fixed; its results stay withheld until every input error is fixed." `ui/analysis.js`: the construction live load and finishing machine
+  cards' notes end with "… below zero is an input error and withholds every result (decision pending engineer review)." These are the only
+  text changes to valid projects' pages and Report.
 - **Governing provision:** none (no calculation changed).
 - **Check case:** default project; Cross-section tab, left sidewalk width 6 ft, railing / fence 0.05 klf, position blank. Before: every tab
   computed (DC2 without sidewalk and fence, LLDF 1), Summary verdict shown. After: banner "1 input needs fixing before results can be shown —

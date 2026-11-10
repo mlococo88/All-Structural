@@ -175,5 +175,11 @@
   }
   const blocked = P => collect(P).errors.length > 0;
 
-  window.SBDInputCheck = { collect, blocked, hostOf, loadsPath };
+  /* NOTE: the rule and its decisions as the user sees them (engineer rule 2026-11-10: every assumption or decision is noted in the app): the
+     Project input tab, the blocked output view and the Report's Project section show this text */
+  const NOTE = 'Input check: results are shown only while no blocking input error exists. While one exists, every output tab, the Report, the Drawings, '
+    + 'the 3D view, the Substructure Loading send and Auto design are withheld and the errors are listed with links to their fields. Warnings (LLDF range, '
+    + 'proportion limits, D/t_w > 150, N_b = 3, Auto design) do not block. A Custom demand table and the Constructibility bracket inputs are checked on their '
+    + 'own tab (that module alone shows no results). An entered q_CL or finishing machine load below zero blocks (decision pending engineer review).';
+  window.SBDInputCheck = { collect, blocked, hostOf, loadsPath, NOTE };
 })();
