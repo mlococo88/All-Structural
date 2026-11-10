@@ -5611,3 +5611,7 @@ index 2650570..15de47e 100644
 - **Saved data (§5):** none (the `ui.g` choice is the existing UI state).
 - **Decisions (pending engineer review):** (1) the per-girder LL & DL pull keeps a plate-girder selector in the card (the same choice as the Girders & plates tab), rather than a link back to that tab. (2) "Last sent" is read from this browser's per-project copies (no new record is stored); another browser's sends are not shown. (3) No other tab of this app had hand-off controls, so no "Project tab → Hand-offs" link was needed.
 - **Other copies:** none.
+
+## 2026-11-10 — PR: claude/handoffs-card-subloads (PR #TBD) — "Send to Substructure Loading" alert names the receiver's new place (HOC, cross-tool with Bridge Substructure Loading)   [text only]
+- **Where:** `apps/steel-bridge/ui/handoffs.js` `async function subSend(P, file)`, last `alert(…)`: `In Bridge Substructure Loading: Bridge tab, "Pull geometry from Steel Bridge Design"; Reactions tab, "Pull from PS-Beam / GirderDetail". Each asks which project first.` → `In Bridge Substructure Loading: Project tab, Hand-offs card, "Pull geometry from Steel Bridge Design" and "Pull from PS-Beam / GirderDetail". Each asks which project first.`
+- **Provisions / computed values / saved data:** none. **Other copies:** none.
