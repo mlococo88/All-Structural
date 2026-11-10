@@ -21,7 +21,7 @@
   'use strict';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fmt = (x, d) => window.SharedUnits.fmt(x, d);
-  const S = { src: null, pl: null, plName: '', R: null, key: '', sel: null, ohSel: 0, err: '', busy: false };
+  const S = { src: null, pl: null, plName: '', R: null, key: '', sel: null, ohSel: 0, err: '', busy: false, cs: 0 };   // SBTS: cs 1 = the worked steps of the other sign case
   // src null: the saved choice (P.demandSrc.cn, custom demands PR 2026-11-01), else the default, this project (no example on this tab)
   const srcOf = P => S.src || (window.SBDCustomDemands && P && window.SBDCustomDemands.srcGet(P, 'cn')) || 'project';
   const tt = t => esc(t).replace(/_\{?([A-Za-z0-9ℓ,]+)\}?/g, '<sub>$1</sub>');
@@ -100,7 +100,7 @@
     return { ...R, what, ext: F.ext, src, F, D, custom: F.custom || null };
   }
   function calc(ctx) {
-    S.err = ''; S.R = null; S.sel = null; S.ohSel = 0;
+    S.err = ''; S.R = null; S.sel = null; S.ohSel = 0; S.cs = 0;
     try { const R = build(ctx); if (R.err) S.err = R.err; else { S.R = R; S.sel = R.gov ? R.rows.indexOf(R.gov) : 0; } }
     catch (e) { S.err = 'Calculation error: ' + (e && e.message); }
     S.key = key(ctx);
@@ -127,7 +127,10 @@
     { key: 'ohc', title: 'OH1 to OH5: checks', ref: A + '6.10.3.2', ids: /^oh\..*\.ok$/ }] };
   const groups = (kind, list) => window.SharedSteps.group(list, TOPICS[kind || 'x'](), { strip: false });
   const stepsHtml = (list, kind) => window.SharedSteps.groupsHTML(groups(kind, list), { open: OPEN, item: stepLi });
-  const ckRows = (checks, gov) => checks.map(c => `<tr${gov === c ? ' class="cn-gov"' : ''}><td class="lft">${esc(c.id)} ${tt(c.title)}</td><td>${fmt(c.demand, 2)} ${esc(c.unit)}</td><td>${fmt(c.capacity, 2)} ${esc(c.unit)}</td><td class="${cls(c.ratio)}">${rtx(c)}</td><td class="lft">${esc(c.ref.replace('AASHTO LRFD 10th Ed. ', ''))}</td><td><a class="wk" href="#st-${esc(c.step)}">§</a></td></tr>`).join('');
+  // SBTS: cs (0 the reported case, 1 the other sign case) on the § link, so that it shows that case's worked steps first
+  const csA = cs => (cs == null ? '' : ` data-cncase="${cs}"`);
+  const ckRows = (checks, gov, cs) => checks.map(c => `<tr${gov === c ? ' class="cn-gov"' : ''}><td class="lft">${esc(c.id)} ${tt(c.title)}</td><td>${fmt(c.demand, 2)} ${esc(c.unit)}</td><td>${fmt(c.capacity, 2)} ${esc(c.unit)}</td><td class="${cls(c.ratio)}">${rtx(c)}</td><td class="lft">${esc(c.ref.replace('AASHTO LRFD 10th Ed. ', ''))}</td><td><a class="wk" href="#st-${esc(c.step)}"${csA(cs)}>§</a></td></tr>`).join('');
+  const sgn = q => (q && q.side > 0 ? 'positive' : 'negative');
   const ckHead = '<thead><tr><th class="lft">Check</th><th>Demand</th><th>Capacity</th><th>Ratio</th><th class="lft">AASHTO LRFD 10th Ed.</th><th></th></tr></thead>';
 
   function render(host, ctx) {
@@ -142,7 +145,7 @@
       <div class="fRow"><label for="cn_flC">f<sub>ℓ</sub> during deck placement (first order; blank or 0: from skew, C6.10.1)</label><input type="number" step="any" min="0" id="cn_flC" value="${flOf(P) || ''}" placeholder="${fmt(window.SBDFraming.design(P, ctx.g).fl, 2)} (skew)"><span class="unit">ksi (GS14, GS15; saved with the project)</span></div>
       <p class="note">M<sub>c</sub> = ${nf(GP.cdc)}M<sub>DCc</sub> + ${nf(GP.ccl)}M<sub>CL</sub> and V<sub>u</sub> = ${nf(GP.cdc)}V<sub>DC1</sub> + ${nf(GP.ccl)}V<sub>CL</sub> on the noncomposite steel section (AASHTO LRFD 10th Ed. 3.4.2.1, 6.10.3.4.1${GP.eta !== 1 ? `; 1.25 and 1.50 × the owner's η = ${fmt(GP.eta, 3)}, <a href="#" data-cngoin="proj">Project tab</a>; m not applied` : ''}); φ<sub>f</sub> = φ<sub>v</sub> = 1.0.
       GS14: Eqs. 6.10.3.2.1-1, -2 (F<sub>nc</sub> from 6.10.8.2 with R<sub>b</sub> = 1.0); GS15: Eq. 6.10.3.2.1-3 and 6.10.3.2.2-1; GS16: Eq. 6.10.3.3-1.${ext ? ' Exterior girder: OH1–OH5 with the overhang bracket loads below (C6.10.3.4).' : ''} The demand source (a hand-off file is not) and f<sub>ℓ</sub> entered is.</p>
-      ${window.SBDConstr.notes(S.R && S.R.F ? S.R.F.locs.some(L => L.M.DCc !== 0) : true).map(t => `<p class="note">${esc(t)}</p>`).join('')}</div></section>`;
+      ${window.SBDConstr.notes(S.R && S.R.F ? S.R.F.locs.some(L => L.M.DCc !== 0) : true, S.R && S.R.F ? !!S.R.F.sides : srcOf(P) === 'project').map(t => `<p class="note">${esc(t)}</p>`).join('')}</div></section>`;
     if (ext) h += `<section class="sec"><div class="secHead">Overhang brackets, exterior girder (saved with the project)</div><div class="secBody">
       ${OHF.map(([k, l, u]) => `<div class="fRow"><label for="cn_oh_${k}">${l}</label><input type="number" step="any" id="cn_oh_${k}" data-oh="${k}" value="${esc(oh[k])}"><span class="unit">${u}</span></div>`).join('')}
       <div class="fRow"><label>γ<sub>DC</sub> / γ construction</label><span style="display:inline-block;min-width:8em;font-weight:600">${nf(GP.cdc)} / ${nf(GP.ccl)}</span><span class="unit">the deck placement factors above (3.4.2.1${GP.eta !== 1 ? `, × η ${fmt(GP.eta, 3)}` : ''}; <a href="#" data-cngoin="proj">owner η: Project tab</a>)</span></div>
@@ -154,7 +157,8 @@
     if (S.err && !stale) h += `<div class="alert err">${esc(S.err)}</div>`;
     else if (S.R && !stale) {
       const R = S.R, rows = R.rows, ga = R.govAll;
-      const cell = o => !o ? '<td>—</td>' : o.row.checks && o.row.conC ? `<td class="${cls(o.ratio)}" data-cnsel="${rows.indexOf(o.row)}" title="${esc(o.check.id + ' ' + o.check.key + ' at ' + fmt(o.row.x, 2) + ' ft')}">${rtx(o.check)}<br><span class="cn-na">${fmt(o.row.x, 2)} ft</span></td>`
+      const oth = o => !!(o.cs && o.cs !== o.row);   // SBTS: the item comes from the other (non-governing) sign case of that location
+      const cell = o => !o ? '<td>—</td>' : o.row.checks && o.row.conC ? `<td class="${cls(o.ratio)}" data-cnsel="${rows.indexOf(o.row)}"${oth(o) ? ' data-cncase="1"' : ''} title="${esc(o.check.id + ' ' + o.check.key + ' at ' + fmt(o.row.x, 2) + ' ft' + (o.row.alt ? `, ${sgn(o.cs)} M_DCc case` : ''))}">${rtx(o.check)}<br><span class="cn-na">${fmt(o.row.x, 2)} ft${o.row.alt ? `, ${sgn(o.cs)} case` : ''}</span></td>`
         : `<td class="${cls(o.ratio)}" data-ohsel="${R.oh.rows.indexOf(o.row)}">${rtx(o.check)}<br><span class="cn-na">${esc(o.check.id)}, ${fmt(o.row.x, 2)} ft</span></td>`;
       h += '<div id="gfx_cn"></div>';   // graphics (ui/gfxa.js)
       h += `<section class="sec"><div class="secHead">Constructibility results</div><div class="secBody"><p class="note">${R.what}</p>
@@ -162,16 +166,20 @@
         ${R.oh && R.oh.errors && R.oh.errors.length ? `<div class="alert err">Overhang brackets: ${esc(R.oh.errors.join(' '))}</div>` : ''}
         <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Span</th><th>Top flange in compression (GS14, GS15 web)</th><th>Bottom flange in compression</th><th>Tension flange (GS15)</th><th>Shear (GS16)</th>${R.oh ? '<th>Overhang OH1–OH4</th><th>f<sub>ℓ</sub> ≤ 0.6F<sub>y</sub> (OH5)</th>' : ''}</tr></thead><tbody>
         ${R.spans.map(s => `<tr><td class="lft">${s.span}</td>${cell(s.top)}${cell(s.bot)}${cell(s.tens)}${cell(s.shear)}${R.oh ? cell(s.oh) + cell(s.ohfl) : ''}</tr>`).join('')}</tbody></table></div>
-        <p class="note">Each cell: the largest ratio in the span and the station; click it for the checks and the worked steps.</p>
+        <p class="note">Each cell: the largest ratio in the span and the station; click it for the checks and the worked steps.${rows.some(q => q.alt) ? ' Where both signs of the deck-placement moment occur at a station, both cases count here; the cell names the case.' : ''}</p>
         <div class="tscroll cn-list"><table class="tbl"><thead><tr><th class="lft">Location</th><th>x (ft)</th><th>M<sub>c</sub> (kip-ft)</th><th>Flange in compression</th><th class="lft">Governing check</th><th>Ratio</th></tr></thead><tbody>
-        ${rows.map((r, i) => `<tr data-cnsel="${i}" class="${i === S.sel ? 'sel' : ''}${r === R.gov ? ' cn-gov' : ''}"><td class="lft">${esc(r.name)}</td><td>${fmt(r.x, 2)}</td><td>${fmt(r.Mc, 1)}</td><td>${r.conC.lab}</td><td class="lft">${esc(r.gov.id)} ${tt(r.gov.title)}</td><td class="${cls(r.gov.ratio)}">${rtx(r.gov)}</td></tr>`).join('')}
+        ${rows.map((r, i) => `<tr data-cnsel="${i}" class="${i === S.sel ? 'sel' : ''}${r === R.gov ? ' cn-gov' : ''}"><td class="lft">${esc(r.name)}</td><td>${fmt(r.x, 2)}</td><td>${fmt(r.Mc, 1)}</td><td>${r.conC.lab}${r.alt ? `<br><span class="cn-na">${sgn(r)} case; ${sgn(r.alt)} also checked</span>` : ''}</td><td class="lft">${esc(r.gov.id)} ${tt(r.gov.title)}</td><td class="${cls(r.gov.ratio)}">${rtx(r.gov)}</td></tr>`).join('')}
         </tbody></table></div></div></section>`;
       const r = rows[S.sel] || rows[0];
       if (r) {
-        h += `<section class="sec"><div class="secHead">${esc(r.name)}: deck placement checks</div><div class="secBody"><div class="tscroll"><table class="tbl">${ckHead}<tbody>${ckRows(r.checks, r.gov)}</tbody></table></div>
-          <div class="kv"><div><span>M<sub>c</sub></span><span>${fmt(r.Mc, 1)} kip-ft <a class="wk" href="#st-cn.Mc">§</a></span></div><div><span>L<sub>b</sub> / C<sub>b</sub> (deck placement)</span><span>${fmt(r.LbC, 2)} ft / ${fmt(r.CbCu, 3)}${r.ltC.npr ? ` (nonprismatic, ${r.ltC.npr.kind === 'ge' ? '6.10.8.2.3c' : 'simplification'})` : ''} <a class="wk" href="#st-cn.Cb">§</a></span></div>
-          <div><span>F<sub>nc</sub> (FLB / LTB)</span><span>${fmt(r.ltC.FLB, 2)} / ${fmt(r.ltC.LTB, 2)} ksi <a class="wk" href="#st-cn.Fnc">§</a></span></div><div><span>Panel</span><span>${r.do > 0 ? `d<sub>o</sub> = ${fmt(r.do, 1)} in${r.end ? ', end panel' : ''}` : 'unstiffened'}</span></div></div></div></section>
-          <section class="sec"><div class="secHead">Worked steps, ${esc(r.name)}</div><div class="secBody"><p class="note">AASHTO LRFD 10th Ed. (2024); y up from the bottom of the steel; tension +. The steel section properties are worked on the Section properties tab (sec.s).</p>${stepsHtml(stepsOf(R, r))}</div></section>`;
+        // SBTS (2026-11-10): both sign cases of the deck-placement moment at this location; the reported (governing) case first, the other below
+        const two = !!r.alt, cs0 = two ? 0 : null, rs = two && S.cs ? r.alt : r;
+        const kvOf = (q, cs) => `<div class="kv"><div><span>M<sub>c</sub></span><span>${fmt(q.Mc, 1)} kip-ft <a class="wk" href="#st-cn.Mc"${csA(cs)}>§</a></span></div><div><span>L<sub>b</sub> / C<sub>b</sub> (deck placement)</span><span>${fmt(q.LbC, 2)} ft / ${fmt(q.CbCu, 3)}${q.ltC.npr ? ` (nonprismatic, ${q.ltC.npr.kind === 'ge' ? '6.10.8.2.3c' : 'simplification'})` : ''} <a class="wk" href="#st-cn.Cb"${csA(cs)}>§</a></span></div>
+          <div><span>F<sub>nc</sub> (FLB / LTB)</span><span>${fmt(q.ltC.FLB, 2)} / ${fmt(q.ltC.LTB, 2)} ksi <a class="wk" href="#st-cn.Fnc"${csA(cs)}>§</a></span></div>${cs === 1 ? '' : `<div><span>Panel</span><span>${q.do > 0 ? `d<sub>o</sub> = ${fmt(q.do, 1)} in${q.end ? ', end panel' : ''}` : 'unstiffened'}</span></div>`}</div>`;
+        h += `<section class="sec"><div class="secHead">${esc(r.name)}: deck placement checks</div><div class="secBody">${two ? `<p class="note">Both signs of the deck-placement moment occur here and both are checked (6.10.3.4.1). Reported: the ${sgn(r)}-moment case (it governs), ${r.conC.lab} flange in compression.</p>` : ''}<div class="tscroll"><table class="tbl">${ckHead}<tbody>${ckRows(r.checks, r.gov, cs0)}</tbody></table></div>
+          ${kvOf(r, cs0)}
+          ${two ? `<h4 class="sub">Also checked: the ${sgn(r.alt)}-moment case, ${r.alt.conC.lab} flange in compression (not governing)</h4><div class="tscroll"><table class="tbl">${ckHead}<tbody>${ckRows(r.alt.checks, r.alt.gov, 1)}</tbody></table></div>${kvOf(r.alt, 1)}` : ''}</div></section>
+          <section class="sec"><div class="secHead">Worked steps, ${esc(r.name)}${two ? `, ${sgn(rs)}-moment case${rs === r ? ' (governing)' : ' (not governing)'}` : ''}</div><div class="secBody">${two ? `<p class="fRow"><button type="button" id="cn_case">Show the worked steps of the ${sgn(rs === r ? r.alt : r)}-moment case</button></p>` : ''}<p class="note">AASHTO LRFD 10th Ed. (2024); y up from the bottom of the steel; tension +. The steel section properties are worked on the Section properties tab (sec.s).</p>${stepsHtml(stepsOf(R, rs))}</div></section>`;
       }
       if (R.oh && !(R.oh.errors && R.oh.errors.length)) { const O = R.oh, q = O.rows[S.ohSel] || O.rows[0];
         h += `<section class="sec"><div class="secHead">Overhang brackets: flange lateral bending (exterior girder, OH1–OH5)</div><div class="secBody">
@@ -182,7 +190,7 @@
     }
     host.innerHTML = h;
     window.SharedSteps.wire(host, { onToggle: (k, open) => { if (open) OPEN.add(k); else OPEN.delete(k); } });
-    { const sl = host.querySelector('#gfx_cn'); if (sl && S.R && !stale && !S.err && window.SBDGfxA) window.SBDGfxA.constr(sl, { P, gi: ctx.g, R: S.R, sel: S.sel, onSelect: k => { S.sel = k; redraw(); } }); }
+    { const sl = host.querySelector('#gfx_cn'); if (sl && S.R && !stale && !S.err && window.SBDGfxA) window.SBDGfxA.constr(sl, { P, gi: ctx.g, R: S.R, sel: S.sel, onSelect: k => { S.sel = k; S.cs = 0; redraw(); } }); }
     const on = (sel, ev, f) => host.querySelectorAll(sel).forEach(el => el.addEventListener(ev, f));
     const redraw = () => render(host, ctx);
     on('#cn_src', 'change', e => { const v = e.target.value; S.src = v === 'file' ? 'file' : null;   // saved with the project (P.demandSrc.cn), a file for the page view
@@ -201,7 +209,11 @@
       rd.onload = () => { try { const j = JSON.parse(String(rd.result)), ck = window.SBDDemandFile.check(j); if (!ck.ok) throw new Error(ck.error); const pl = ck.pl;   // B1: GirderDetail hand-offs only (engine/demandfile.js)
         S.pl = pl; S.plName = f.name; S.err = ''; } catch (er) { alert('Cannot read this file: ' + er.message); /* nothing changed: the previous file, if any, stays */ } redraw(); };
       rd.readAsText(f); });
-    on('[data-cnsel]', 'click', e => { S.sel = +e.currentTarget.dataset.cnsel; redraw(); const t = host.querySelector('.cn-list tr.sel'); if (t) t.scrollIntoView({ block: 'nearest' }); });
+    on('#cn_case', 'click', () => { S.cs = S.cs ? 0 : 1; redraw(); });   // SBTS: the other sign case's worked steps
+    // SBTS: a § link of the other case (or of the reported case while the other is shown): switch the steps shown, then follow the same link
+    on('a[data-cncase]', 'click', e => { const a = e.currentTarget, cs = +a.dataset.cncase, hr = a.getAttribute('href'); if (cs === (S.cs ? 1 : 0)) return;
+      e.preventDefault(); S.cs = cs; redraw(); const b = host.querySelector(`a[data-cncase="${cs}"][href="${hr}"]`); if (b) b.click(); });
+    on('[data-cnsel]', 'click', e => { S.sel = +e.currentTarget.dataset.cnsel; S.cs = e.currentTarget.dataset.cncase === '1' ? 1 : 0; redraw(); const t = host.querySelector('.cn-list tr.sel'); if (t) t.scrollIntoView({ block: 'nearest' }); });
     on('[data-ohsel]', 'click', e => { S.ohSel = +e.currentTarget.dataset.ohsel; redraw(); });
     on('[data-gotab]', 'click', e => { e.preventDefault(); const b = document.querySelector(`#tabBar [data-otab="${e.currentTarget.dataset.gotab}"]`); if (b) b.click(); });
   }

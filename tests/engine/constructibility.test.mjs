@@ -22,6 +22,10 @@
 //      location; where M_DCc agrees the ratios are identical. Since SBCON (2026-11-10) C_b,C and nprC come from M_DCc too, so they are
 //      keyed to the M_DCc difference over the unbraced segment: identical where M_DCc agrees at every station of the segment.
 //   5. Hand checks (arithmetic in the comments).
+//   SBTS (engineer decision 2026-11-10, a deliberate difference from GirderDetail): on the project path (fromAnalysis, both sides of this app's
+//   pour envelope known) the app checks both signs of the deck-placement moment at every location, each with C_b / γ_e from its own side of
+//   the envelope (tests/engine/constr-twosign.test.mjs); GirderDetail checks one M_DCc per station. The payload path above has one M_DCc per
+//   station like GirderDetail, so cases 1–4 compare the same single case as before; the fromAnalysis test below stays within its tolerance.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';

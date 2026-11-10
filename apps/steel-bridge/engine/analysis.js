@@ -430,7 +430,10 @@
         xs.forEach((x, i) => { if (inP(x, q)) compN[i] = 1; }); done.push([q.a, q.b]); stages.push({ name: `Pour ${k + 1} (${n1(q.a)} to ${n1(q.b)} ft)`, M, q }); });
       const eP = Array.from(envP).map(v => Math.max(v, 0)), eN = Array.from(envN).map(v => Math.min(v, 0));
       const fr = 0.24 * Math.sqrt(m.concrete.fc), phifr = 0.9 * fr;
-      seq = { pours, stages, cum: Array.from(cum), envP: eP, envN: eN, fdk: Array.from(fdk), nr: nrS, fr, phifr,
+      // SBTS (2026-11-10): envPr / envNr, the pour-stage envelopes before the clip at 0 (the largest / smallest noncomposite moment of the
+      // stages while the station is not yet composite), for Constructibility's sign cases (6.10.8.2.3b: M_A, M_B, M_C from the envelope value
+      // with the largest compression in the flange, or the smallest tension where it is never in compression). New fields; nothing else changes.
+      seq = { pours, stages, cum: Array.from(cum), envP: eP, envN: eN, envPr: Array.from(envP), envNr: Array.from(envN), fdk: Array.from(fdk), nr: nrS, fr, phifr,
         MDCc: Array.from(MD).map((v, i) => v >= 0 ? Math.max(v, eP[i]) : Math.min(v, eN[i])) };
     }
 

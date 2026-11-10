@@ -244,7 +244,12 @@ const cnRows = (P, g) => { const AR = W.SBDAnalysis.analyzeGirder(P, g, { ll: fa
 test('Constructibility: custom rows = this project\'s dead-load analysis give the same locations, checks, overhang checks and steps', () => {
   const P1 = W.SBDModel.defaultProject(); P1.girders[0].position = 'exterior';   // the overhang checks OH1–OH5 too
   for (const [tag, P, g] of VARIANTS().concat([['built-in, G1 exterior', P1, 0]])) {
-    const A = W.SBDConstrUI.build({ P, g, src: 'project' }); assert.ok(!A.err, tag + ': ' + A.err);
+    // SBTS (2026-11-10): the project path checks both signs of the pour envelope (seq.envPr / envNr); entered rows carry one M_DCc per station,
+    // so they are compared with the project path on that single-M_DCc basis (the analysis without envPr / envNr). The two-sign rows are counted.
+    const A2 = W.SBDConstrUI.build({ P, g, src: 'project' }), AN = W.SBDAnalysis, an0 = AN.analyzeGirder;
+    AN.analyzeGirder = (...a) => { const R = an0(...a); if (R && R.seq) { delete R.seq.envPr; delete R.seq.envNr; } return R; };
+    let A; try { A = W.SBDConstrUI.build({ P, g, src: 'project' }); } finally { AN.analyzeGirder = an0; } assert.ok(!A.err, tag + ': ' + A.err); assert.ok(!A.F.sides);
+    const n2s = A2.rows.filter(r => r.cases).length, nDif = A2.rows.filter((r, i) => r.gov.ratio !== A.rows[i].gov.ratio).length;
     const Pc = J(P); setRows(Pc, 'cn', g, cnRows(P, g));
     const F = W.SBDConstrUI.build({ P: Pc, g, src: 'custom' }); assert.ok(!F.err, tag + ': ' + F.err); assert.match(F.what, /^Demands: entered \(Custom\)/);
     assert.equal(F.rows.length, A.rows.length, tag + ' locations'); let n = 0, maxd = 0;
@@ -254,7 +259,7 @@ test('Constructibility: custom rows = this project\'s dead-load analysis give th
       sA.forEach((s, k) => { assert.equal(sF[k + 1].id, s.id); if (typeof s.value === 'number') close(sF[k + 1].value, s.value, `${tag} ${r.name} ${s.id}`); }); });
     if (A.oh) { assert.equal(F.oh.rows.length, A.oh.rows.length); F.oh.rows.forEach((o, i) => o.checks.forEach((c, j) => { if (isFinite(c.ratio)) { close(c.ratio, A.oh.rows[i].checks[j].ratio, `${tag} ${o.name} ${c.id}`); n++; } })); }
     assert.equal(F.govAll.ratio, A.govAll.ratio);
-    console.log(`       ${tag}: ${F.rows.length} locations${A.oh ? `, ${A.oh.rows.length} overhang rows` : ''}, ${n} ratios equal (largest difference ${maxd}); governing ${F.govAll.check.id} ${F.govAll.ratio.toFixed(4)}`);
+    console.log(`       ${tag}: ${F.rows.length} locations${A.oh ? `, ${A.oh.rows.length} overhang rows` : ''}, ${n} ratios equal (largest difference ${maxd}); governing ${F.govAll.check.id} ${F.govAll.ratio.toFixed(4)}; project path with both signs (SBTS): ${n2s} locations with two cases, ${nDif} governing ratios differ from the one-M_DCc basis`);
   }
 });
 

@@ -90,7 +90,8 @@ async function cellsMatch(p) {
     const s0 = Date.now(); await upToDate(p); const runS = (Date.now() - s0) / 1000;
     const r = await cellsMatch(p); assert.equal(r.n, 2);
     // SBCON (2026-11-10): Constructibility finite on both girders (was ∞, shown "NaN": F_nc 0.91 ksi at G1 x = 130.00, 0.16 ksi at G2 x = 70.00);
-    // both now govern on GS15 tension at x = 100.01 ft (engine values 0.5129, 0.6392)
+    // both govern on GS15 tension at x = 100.01 ft (engine values 0.5129, 0.6392); SBTS (2026-11-10, both signs of the pour envelope checked):
+    // unchanged on this project
     const cn = await p.evaluate(() => window.SBDSummaryUI.state().list.map(G => G.cells.cn.r));
     assert.ok(cn.every(v => isFinite(v)), `Constructibility finite: ${cn}`); assert.deepEqual(cn.map(v => +v.toFixed(3)), [0.513, 0.639], `Constructibility G1, G2: ${cn}`);
     await shot(p, 'sum-skewed-1440');
