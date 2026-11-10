@@ -261,7 +261,8 @@ test('Sign ice: t_d at the panel centroid; W_i = 56·0.8·π·72·t_d/12; F_A,i 
   // ASCE 7-16 Eq. 10.4-2, V_i = π·t_d·A_s × 0.8 (vertical plate); π applied 2026-11-10 (was 56·0.8·72·t_d/12 = 122.4 lb)
   near(sw.WiPanel, 56 * 0.8 * Math.PI * 72 * sw.tdP / 12, 1e-9, 'panel ice'); near(sw.WiPanel, 384.7, 0.05, 'panel ice');
   near(sw.qhI, 0.00256 * sw.Kzh * 0.85 * 0.85 * 50 * 50, 1e-9, 'q_hi');
-  near(sw.F_Ai, sw.qhI * sw.cfAB * (12 + 2 * sw.tdP / 12) * (6 + 2 * sw.tdP / 12), 1e-9, 'F_A,i');
+  // C_f of the iced sign from the dimensions including ice (ASCE 7-16 §10.5.2; 2026-11-10, was the bare sw.cfAB)
+  near(sw.F_Ai, sw.qhI * sw.cfABI * (12 + 2 * sw.tdP / 12) * (6 + 2 * sw.tdP / 12), 1e-9, 'F_A,i');
   assert.ok(sw.F_Ai < 0.3 * sw.F_A, 'wind on ice (50 mph) well below the bare wind');
 });
 
@@ -280,5 +281,25 @@ test('Sign panel ice, Eq. 10.4-2 with π: sign1 (B 12 × s 6 ft, t 0.5 in map, z
   const sw2 = lp.call('signWind', lpDefaultInp({ mode: 'sign', signPosts: 1, H: 16, poleTaper: false, poleDiaBase: 6.0, poleTwBase: 0.1875, iceBasis: 'design', tIce: 0.5 }));
   near(sw2.WiPanel, 422.2, 0.05, 'W_i (uniform t_d = 0.5 in)');
   // the wind on the iced panel does not change with the ice weight
-  near(sw.F_Ai, sw.qhI * sw.cfAB * (12 + 2 * sw.tdP / 12) * (6 + 2 * sw.tdP / 12), 1e-9, 'F_A,i unchanged form');
+  near(sw.F_Ai, sw.qhI * sw.cfABI * (12 + 2 * sw.tdP / 12) * (6 + 2 * sw.tdP / 12), 1e-9, 'F_A,i form');
+});
+
+/* ---------- iced sign C_f from the dimensions including ice, ASCE 7-16 §10.5.2 (engineer, 2026-11-10) ---------- */
+test('Iced sign C_f (§10.5.2): sign1 t_d 0.4555 in: B_i 12.0759, s_i 6.0759, h_i 16.0380 ft; B/s 1.9875, s/h 0.37885 → C_f,i 1.7608 (bare 1.7625); F_A,i 514.55 → 514.06 lb', () => {
+  const lp = lpEngine();
+  const base = { mode: 'sign', signPosts: 1, H: 16, poleTaper: false, poleDiaBase: 6.0, poleTwBase: 0.1875, iceBasis: 'map', iceIi: 1, tIce: 0.5 };
+  const sw = lp.call('signWind', lpDefaultInp(base));
+  const td = 0.5 * Math.pow(13 / 33, 0.1) / 12;   // ft
+  near(sw.BI, 12 + 2 * td, 1e-12, 'B_i'); near(sw.sI, 6 + 2 * td, 1e-12, 's_i'); near(sw.hI, 16 + td, 1e-12, 'h_i');
+  near(sw.bsI, 1.98750, 5e-6, 'B_i/s_i'); near(sw.shI, 0.378846, 5e-7, 's_i/h_i');
+  // Fig. 29.3-1, linear: row s/h 0.3 = 1.80 (B/s 1 and 2); row 0.5 = 1.75 − 0.98750(0.05) = 1.700625; s/h: 1.80 − (0.078846/0.2)(0.099375) = 1.760823
+  near(sw.cfAB, 1.7625, 1e-12, 'bare C_f unchanged');
+  near(sw.cfABI, 1.760823, 5e-6, 'C_f,i');
+  near(sw.F_Ai, 3.97894 * 1.760823 * 73.37234, 0.01, 'F_A,i'); near(sw.F_Ai, 514.06, 0.01, 'F_A,i');
+  near(sw.qhI * sw.cfAB * sw.AsI, 514.55, 0.01, 'F_A,i with the bare C_f (before)');
+  near(sw.F_A, 2671.06, 0.01, 'bare F_A unchanged');
+  near(sw.caseC.FI, sw.caseC.F * sw.F_Ai / sw.F_A, 1e-9, 'Case C iced: scaled by F_A,i/F_A');
+  // a manual C_f is used as entered for the iced sign too
+  const swm = lp.call('signWind', lpDefaultInp({ ...base, signCfMode: 'manual', signCfMan: 1.5 }));
+  near(swm.cfABI, 1.5, 0, 'manual C_f,i'); near(swm.F_Ai, swm.qhI * 1.5 * swm.AsI, 1e-9, 'manual F_A,i');
 });
