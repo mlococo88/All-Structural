@@ -87,8 +87,8 @@
   /* ================= #8 Constructibility: overhang bracket (exterior girder) =================
      As the CAD drawing (ui/gfxa.js ohGraphic): the girder's top flange and web (broken), the overhang slab from the girder centre line, the bracket (strut, hanger,
      deck form), a, h_b, w_OH, t_OH dimensioned, the two loads. Decision (DETC, pending engineer review): the values are read from the bracket inputs the tab
-     uses (R.F.oh.p: a, h_b, w_OH, t_OH, P_fm and γ_DC); the CAD drawing reads R.F.oh.a ... (absent), so it has only ever drawn its "inputs above" note: its
-     Download DXF is kept as it is (byte for byte, the rule of this rollout) and the difference is raised in the PR. */
+     uses (R.F.oh.p: a, h_b, w_OH, t_OH, P_fm and γ_DC). SBBDXF (2026-11-10, engineer decision): the CAD drawing (Download DXF) reads the same inputs R.F.oh.p
+     (it read R.F.oh.a ..., absent, and only ever drew its "inputs above" note). */
   function bracketModel(P, gi, oh) {
     const sg = P.girders[gi].segments[0], p = (oh && oh.p) || {}, a = +p.a, hb = +p.hb, wOH = +p.wOH, tOH = +p.tOH;
     if (![a, hb, wOH, tOH].every(fin)) return null;
