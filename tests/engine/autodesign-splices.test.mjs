@@ -2,7 +2,10 @@
 // in engine/autodesign.js (the variable 'spl': Lock / Range / Auto).
 //   1. Saved data: a project saved before (no vars.spl, no splRules) reads the variable as Lock, round-trips unchanged, and its Auto design
 //      result is identical to the one origin/main gave (tests/projects/sbd2-autodesign/splvar_lock_ref.json, recorded with main's code at
-//      69a382b by the same quick run: New design with N_b, overhang locked and D 66–70 in, and Refine; screen only).
+//      69a382b by the same quick run: New design with N_b, overhang locked and D 66–70 in, and Refine; screen only). Re-recorded
+//      2026-11-10 (SBCON: Constructibility C_b / γ_e from the M_DCc the check uses): the New design candidates change (the default project's
+//      false Constructibility 0.758 at x = 77 no longer drives the plates; best candidate 446,421 → 424,888 lb, governing GS7 x = 110.01
+//      0.957 → GS9 x = 249.99 0.934); the Refine result is unchanged.
 //   2. Hand check of the placement rule on the built-in 110-140-110 ft unit: the permanent-load points of contraflexure (interpolated) and
 //      the stations (rounded to the foot); the rule's other branches on hand-made inputs (simple spans: odd equal pieces and MassDOT's
 //      quarter points; the shipping weight split; the minimum distance from a support; merging; symmetry).
