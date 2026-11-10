@@ -185,7 +185,7 @@
       <label for="v3d_dg">Diagram</label><select id="v3d_dg">${DG.map(([k, l]) => opt(k, l, st.dg)).join('')}</select>
       <label>Scale <input type="range" id="v3d_dsc" min="0.25" max="4" step="0.25" value="${+st.dsc || 1}" style="width:90px"></label><label><input type="checkbox" id="v3d_eng"${st.eng !== false ? ' checked' : ''}> + moment down</label>
       ${RS ? '' : `<button type="button" id="v3d_calc">Calculate results</button>`}</div>
-      <div class="v3d-bar">${LAY.map(([k, l]) => `<label><input type="checkbox" data-v3d="${k}"${ui.v3d.lay[k] ? ' checked' : ''}> ${esc(l)}</label>`).join('')}
+      <div class="v3d-bar">${LAY.map(([k, l]) => `<label><input type="checkbox" data-v3d="${k}"${ui.v3d.lay[k] ? ' checked' : ''}> ${esc(k === 'xf' && window.SBDFramingUI && window.SBDFramingUI.isDia(ctx.P) ? 'Diaphragms' : l)}</label>`).join('')}
       <span style="flex:1"></span><button type="button" id="v3d_reset">Reset view</button><button type="button" id="v3d_png">Save PNG</button></div>`;
     if (typeof THREE === 'undefined' && document.readyState === 'loading') {   // three.js is loaded with defer: it runs after the page's own script
       host.innerHTML = '<p class="note">Loading the 3D library…</p>'; document.addEventListener('DOMContentLoaded', () => { if (host.isConnected && ctx.ui.otab === '3d') render(host, ctx); }, { once: true }); return; }
