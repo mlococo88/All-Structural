@@ -3693,10 +3693,10 @@ const IXASM_RT = {
     ['Permit:', 'routine or annual permits only, MBE Table 6A.4.5.4.2a-1. The column is chosen by GVW/AL of the rated vehicle (its axle weights over the front-to-rear axle length; ≤ 2.0, 2.0 to 3.0, ≥ 3.0 kip/ft, not interpolated between columns; a vehicle without axles takes the ≤ 2.0 column), the row by ADTT (≥ 5000, 1000, ≤ 100, linear between). Special or limited-crossing permits are not tabulated: enter their γ_LL with "Override auto values".']]},
   phi: {lead:'Resistance-factor basis:', items:[
     ['φ_c·φ_s:', 'not taken below 0.85 (MBE Eq. 6A.4.2.1-3); where the product is lower, the effective φ_s is raised to meet 0.85.'],
-    ['φ_s on shear:', 'the system factor multiplies the shear capacity as well as the flexural capacities (C_V = φ_c·φ_s·φ_v·V_n), which is conservative where φ_s < 1.0.']]},
+    ['φ_s on shear:', 'taken as 1.0 for shear at the strength limit state (MBE 4th Ed. Art. 6A.4.2.4, p. 6-25), so C_V = φ_c·φ_v·V_n; the system factor of the table multiplies the flexural capacities only. The same factors are used for an LFR rating in this tool.']]},
   post: 'Posted: AASHTO Legal Type 3, Type 3-3 and Type 3S2. The posting vehicles SU4 to SU7 and EV2 / EV3 are rated in Multi-Vehicle but not posted. The posting box of the AASHTO Rating step shows when the rated vehicle\'s governing RF is below 1.0.',
-  sv2: 'One section modulus per sense carries DC, DW and LL alike (the zone\'s Sx⁺ for M⁺, Sx⁻ for M⁻): the stresses are not staged on the noncomposite, long-term (3n) and short-term (n) sections of AASHTO LRFD 10th Ed. Art. 6.10.1.1.1a. The DC and DW stresses enter both checks with their magnitude |M|.',
-  ps3: 'f_t = 0.19√f\'c (moderate) or 0.0948√f\'c (severe) is used with λ = 1.0 (normal-weight concrete) and without the upper limits of AASHTO LRFD 10th Ed. Table 5.9.2.3.2b-1 (0.6 ksi moderate, 0.3 ksi severe), which matter only above f\'c of about 10 ksi. One Sb (bottom fiber, M⁺) and one St (top fiber, M⁻) per zone carry DC, DW and LL alike; fpe is the entered effective prestress at the fiber (no losses are computed).',
+  sv2: 'One section modulus per sense carries DC, DW and LL alike (the zone\'s Sx⁺ for M⁺, Sx⁻ for M⁻): the stresses are not staged on the noncomposite, long-term (3n) and short-term (n) sections of AASHTO LRFD 10th Ed. Art. 6.10.1.1.1a. The DC and DW stresses enter both checks with their magnitude |M|. Stress limit f_R (MBE 4th Ed. Art. 6A.6.4.2.2, p. 6-66): 0.95·Fyf for a composite section, negative-moment regions of continuous spans included, and 0.80·Rh·Fyf for a noncomposite section. The section type is the zone type (a Composite zone is composite; Steel Calc and every other zone type are noncomposite) unless the "Section for f_R" box of the Service II step sets it for every zone. The same limit is used for an LFR rating (the overload limits of MBE Art. L6B.2.5 are 0.80·Fy noncomposite and 0.95·Fy composite).',
+  ps3: 'f_t = 0.19√f\'c (moderate) or 0.0948√f\'c (severe) is used with λ = 1.0 (normal-weight concrete) and without the upper limits of AASHTO LRFD 10th Ed. Table 5.9.2.3.2b-1 (0.6 ksi moderate, 0.3 ksi severe), which matter only above f\'c of about 10 ksi. One Sb (bottom fiber, M⁺) and one St (top fiber, M⁻) per zone carry DC, DW and LL alike; fpe is the entered effective prestress at the fiber (no losses are computed). γ_LL: MBE 4th Ed. Table 6A.4.2.2-2 (p. 6-24) at the design-load inventory level, 1.0 when the prestress losses are the refined estimates of AASHTO LRFD Art. 5.9.3.4 taken with the elastic gain (the "Prestress losses" box of the PS Service III step) and 0.8 otherwise; 1.0 for legal loads (MBE Art. 6A.5.4.2.2a); the same value is used at other levels and for permits, where the MBE requires no Service III check, and 0.8 for an LFR rating. A γ_LL typed in the box is used as entered; a project saved before 2026-11-10 keeps the 0.8 it stored.',
 };
 /* IXASM: computed capacity-zone types (zone cards and Report §4). */
 const IXASM_ZN = {
@@ -11856,6 +11856,9 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
   const serviceIILLposLC  = R.serviceIILLposLC ?? '';
   const serviceIILLnegLC  = R.serviceIILLnegLC ?? '';
   const serviceIIRh       = R.serviceIIRh      ?? 1.0;
+  // Section type for the Service II flange-stress limit f_R (MBE 4th Ed. Art. 6A.6.4.2.2, p. 6-66), MBE4 2026-11-10:
+  // 'zone' (absent: by zone type, a Composite zone is composite and every other zone noncomposite) | 'composite' | 'noncomposite'.
+  const serviceIISection  = R.serviceIISection ?? 'zone';
 
   // Fatigue inputs
   const fatigueLCpos      = R.fatigueLCpos      ?? '';
@@ -11875,8 +11878,17 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
   const ps3DwLC      = R.ps3DwLC      ?? '';
   const ps3LLposLC   = R.ps3LLposLC   ?? '';
   const ps3LLnegLC   = R.ps3LLnegLC   ?? '';
-  const ps3GamLL     = R.ps3GamLL     ?? 0.8;
   const ps3Exposure  = R.ps3Exposure  ?? 'moderate';
+  // PS Service III γ_LL (MBE4, 2026-11-10). MBE 4th Ed. Table 6A.4.2.2-2 (p. 6-24), design-load inventory: 1.0 for components
+  // rated with the refined time-dependent losses of LRFD Art. 5.9.3.4 taken with the elastic gain, 0.8 for all others;
+  // legal loads 1.0 (Art. 6A.5.4.2.2a). ps3Losses: 'other' (absent) | 'refined'. ps3GamLL: a number is the value entered
+  // (a saved project keeps its stored value, 0.8 by the old default); null / blank = the value above (new projects).
+  const ps3Losses    = R.ps3Losses    ?? 'other';
+  const ps3GamLLAuto = ratingMethod!=='LRFR' ? 0.8
+    : ratingCategory==='Legal' ? 1.0 : (ps3Losses==='refined' ? 1.0 : 0.8);
+  const ps3GamLLIn   = (R.ps3GamLL!=null && R.ps3GamLL!=='' && +R.ps3GamLL>0) ? +R.ps3GamLL : null;
+  const ps3GamLL     = ps3GamLLIn ?? ps3GamLLAuto;
+  const [ps3GamDraft, setPs3GamDraft] = useState(null);   // the γ_LL box while typing ("0.", "") until blur
 
   // Setters — all write through to cfg.rating
   const setRatingMethod     = v => setRating('method',v);
@@ -12361,6 +12373,10 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
   // Rounded UP at 6 decimals so φc·φs never lands a hair under 0.85.
   const phiCSfloored = phiC>0 && phiC*phiSsel < 0.85;
   const phiS = phiCSfloored ? Math.ceil(0.85/phiC*1e6)/1e6 : phiSsel;
+  // Shear: φ_s = 1.0 at the strength limit state (MBE 4th Ed. Art. 6A.4.2.4, p. 6-25), so C_V = φ_c·φ_v·V_n; φ_s above
+  // multiplies the flexural capacities only. Raised only if φ_c alone were below the 0.85 floor of Eq. 6A.4.2.1-3, as
+  // for flexure. Was φ_c·φ_s·φ_v·V_n (MBE4, 2026-11-10).
+  const phiSV = (phiC>0 && phiC<0.85) ? Math.ceil(0.85/phiC*1e6)/1e6 : 1.0;
   // PS-concrete zones with no Mn⁻ entered fall back to the 0.7·Mn⁺ placeholder in capAt().
   const psNegPlaceholder = capZones.filter(z=>z.type==='psconc'&&!z.MnNeg);
   // Steel Calc / Composite zones still on the unchecked Fy·Zx / 0.6·Fy·Aw (no plates or Lb).
@@ -12371,7 +12387,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
   const firstZone = capAt(totalBridgeForCap/2);
   const CmnPosPreview = phiC * phiS * ratingPhiF * firstZone.MnPos;
   const CmnNegPreview = phiC * phiS * ratingPhiF * firstZone.MnNeg;
-  const CvnPreview    = phiC * phiS * ratingPhiV * firstZone.Vn;
+  const CvnPreview    = phiC * phiSV * ratingPhiV * firstZone.Vn;
 
   const ratingData = useMemo(()=>{
     if ((!ratingDcLC&&!ratingDwLC)||!ratingLLposLC||!rows.length) return [];
@@ -12415,7 +12431,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
       const cap = capAt(xPos);
       const CmnPos = phiC * phiS * ratingPhiF * cap.MnPos;
       const CmnNeg = phiC * phiS * ratingPhiF * cap.MnNeg;
-      const Cvn    = phiC * phiS * ratingPhiV * cap.Vn;
+      const Cvn    = phiC * phiSV * ratingPhiV * cap.Vn;
 
       // RF = (C - γDC*DC - γDW*DW) / (γLL * LL * LLscale)
       const rfMpos = mbeRF(CmnPos, gamDC, Mdc, gamDW, Mdw, gamLL, Mllpos*ratingLLScale);
@@ -12476,15 +12492,19 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
 
   const govOperating = operatingData.length ? operatingData.reduce((a,b)=>a.rfGov<b.rfGov?a:b,operatingData[0]) : null;
 
-  // ── Service II — AASHTO LRFD 6.10.4.2 / MBE 6A.4.2.1 ────────────────────
-  // Stress check: f_DC + f_DW + 1.3·f_LL ≤ 0.95·Rh·Fyf
-  // Rating factor:  RF = (0.95·Rh·Fyf − f_DC − f_DW) / (1.3·f_LL)
+  // ── Service II — AASHTO LRFD 6.10.4.2 / MBE 6A.4.2.1, 6A.6.4.2.2 ─────────
+  // Stress check: f_DC + f_DW + γ_LL·f_LL ≤ f_R  (f_R = 0.95·Fyf composite, 0.80·Rh·Fyf noncomposite)
+  // Rating factor:  RF = (f_R − f_DC − f_DW) / (γ_LL·f_LL)
   // The check and the rating factor are two different numbers -- the stress
   // sum says pass/fail, the RF says by how much live load may be scaled.
   // f = M·12 / Sx  (moment in ft·k, Sx in in³, stress in ksi)
   // Sx is taken from cap zone SxPos/SxNeg fields; Fyf from zone Fy field
   // γLL for Service II, MBE Table 6A.4.2.2-1 (steel): design Inventory 1.30, design
   // Operating 1.00, legal 1.30, permit 1.00 (was 1.30 for every level, sweep IDX-O6).
+  // f_R, MBE 4th Ed. Art. 6A.6.4.2.2 (p. 6-66): 0.95·Fyf for composite sections (negative-moment regions of continuous
+  // spans included), 0.80·Rh·Fyf for noncomposite sections. Was 0.95·Rh·Fyf for every section (MBE4, 2026-11-10).
+  const sv2Composite = z => serviceIISection==='composite' || (serviceIISection!=='noncomposite' && z?.type==='composite');
+  const sv2Limit     = (z, Fyf) => sv2Composite(z) ? 0.95*Fyf : 0.80*(serviceIIRh||1.0)*Fyf;
   const serviceIIGamLL = ratingMethod!=='LRFR' ? SERVICE_II_FACTORS.LL
     : ratingCategory==='Permit' ? 1.00 : ratingCategory==='Legal' ? 1.30
     : (ratingLevel==='Operating' ? 1.00 : 1.30);
@@ -12515,7 +12535,8 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
       const SxPos = zDes ? zDes.SxPos : (z?.SxPos  || 0);
       const SxNeg = zDes ? zDes.SxNeg : (z?.SxNeg  || 0);
       const Rh    = serviceIIRh || 1.0;
-      const limit = 0.95 * Rh * Fyf; // ksi
+      const comp  = sv2Composite(z);
+      const limit = sv2Limit(z, Fyf); // ksi: 0.95·Fyf composite, 0.80·Rh·Fyf noncomposite (MBE 4th Ed. 6A.6.4.2.2)
 
       const toStress = (M, Sx) => Sx>0 ? Math.abs(M)*12/Sx : null;
 
@@ -12555,7 +12576,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
         : null;
 
       return {
-        node, pos:xPos, SxPos, SxNeg, Fyf, Rh, limit:+limit.toFixed(2),
+        node, pos:xPos, SxPos, SxNeg, Fyf, Rh, comp, limit:+limit.toFixed(2),
         fDCpos:fDCpos!=null?+fDCpos.toFixed(3):null,
         fDWpos:fDWpos!=null?+fDWpos.toFixed(3):null,
         fLLpos:fLLpos!=null?+fLLpos.toFixed(3):null,
@@ -12568,7 +12589,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
       };
     }).filter(p=>p.rfGov!=null);
   },[origRows, capZones, nodePositions, serviceIIDcLC, serviceIIDwLC,
-     serviceIILLposLC, serviceIILLnegLC, serviceIIRh, serviceIIGamLL, serviceIIScale, serviceIIScaleNeg]);
+     serviceIILLposLC, serviceIILLnegLC, serviceIIRh, serviceIISection, serviceIIGamLL, serviceIIScale, serviceIIScaleNeg]);
 
   const govServiceII = serviceIIData.length
     ? serviceIIData.reduce((a,b)=>a.rfGov<b.rfGov?a:b, serviceIIData[0])
@@ -13381,7 +13402,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
         const cap = capAt(xPos);
         const CmnPos = phiC * phiS * ratingPhiF * cap.MnPos;
         const CmnNeg = phiC * phiS * ratingPhiF * cap.MnNeg;
-        const Cvn    = phiC * phiS * ratingPhiV * cap.Vn;
+        const Cvn    = phiC * phiSV * ratingPhiV * cap.Vn;
 
         const p = { Mdc, Mdw, Vdc, Vdw, Mllpos, Mllneg, Vll, CmnPos, CmnNeg, Cvn };
         const inv = computeNodeRF(p, gamDC, gamDW, vGamLLinv, ratingLLScale*vIMr, ratingLLScaleMn*vIMr, ratingLLScaleV*vIMr);
@@ -13428,7 +13449,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
       ratingData, nodePositions, govRating,
       ratingMethod, ratingLimitState, ratingLevel, ratingCategory,
       gamDC, gamDW, gamLL, ratingLLScale, ratingLLScaleMn, ratingLLScaleV, dfSplit, ratingEta,
-      phiC, phiS, ratingPhiF, ratingPhiV,
+      phiC, phiS, phiSV, ratingPhiF, ratingPhiV,
       ratingDcLC, ratingDwLC, ratingLLposLC, ratingLLnegLC,
       ratingVehicleTon, ratingVehicleName,
       capAt,
@@ -13444,7 +13465,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
      shows while this step is not mounted, so the values are those of the last Results / Rating step shown, as reportState):
      the Report Card's values (IdxRatingCard), the "Print AREMA Report" arguments (generateAremaReport) and the RF chart's data. */
   const idxCardP = {cfg, govRating, govOperating, ratingMethod, ratingLimitState, ratingCategory, ratingLevel, ratingDcLC, ratingDwLC, ratingLLposLC,
-    gamDC, gamDW, gamLL, gamLL_op, ratingLLScale, phiC, phiS, ratingPhiF, ratingPhiV, ratingVehicleName, ratingVehicleTon,
+    gamDC, gamDW, gamLL, gamLL_op, ratingLLScale, phiC, phiS, phiSV, ratingPhiF, ratingPhiV, ratingVehicleName, ratingVehicleTon,
     govAsdN, govAsdX, govAsdM, aremaCalcX, capZones, setStep, setRatingSubTab, setRatingLLOpen};
   useEffect(()=>{
     IXX.rx = {
@@ -14384,7 +14405,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
 
           {/* Rating equation preview */}
           <div style={{marginTop:'12px',padding:'8px 12px',background:'#f0f9ff',border:'1px solid #bfdbfe',borderRadius:'5px',fontSize:'11.5px',fontFamily:'monospace',color:'#1e40af'}}>
-            RF = (φ_c·φ_s·φ·Rn − {gamDC}·DC − {gamDW}·DW) / ({gamLL} · LL · ×{ratingLLScale.toFixed(4)}) · η not used (MBE 6A)
+            RF = (φ_c·φ_s·φ·Rn − {gamDC}·DC − {gamDW}·DW) / ({gamLL} · LL · ×{ratingLLScale.toFixed(4)}) · φ_s = {phiSV} on shear (MBE 4th Ed. 6A.4.2.4) · η not used (MBE 6A)
           </div>
         </div>
 
@@ -14566,7 +14587,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
               {phiCSfloored&&<div style={{color:'#b45309',fontWeight:600,marginBottom:'3px'}}>
                 ⚠ φ_c·φ_s = {phiC}·{phiSsel} = {(phiC*phiSsel).toFixed(3)} &lt; 0.85 → floored at 0.85 (MBE Eq. 6A.4.2.1-3); effective φ_s = {phiS}
               </div>}
-              φ_c={phiC} · φ_s={phiS} · φ_f={ratingPhiF} · φ_v={ratingPhiV}
+              φ_c={phiC} · φ_s={phiS} (flexure; {phiSV} on shear, MBE 4th Ed. 6A.4.2.4) · φ_f={ratingPhiF} · φ_v={ratingPhiV}
               {capZones.length===1&&<> → C_M+={CmnPosPreview.toFixed(1)} ft·k &nbsp; C_M−={CmnNegPreview.toFixed(1)} ft·k &nbsp; C_V={CvnPreview.toFixed(1)} kips</>}
               {capZones.length>1&&<> · {capZones.length} capacity zones defined</>}
             </div>
@@ -14636,7 +14657,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
               const cap=capAt((parseFloat(z.startX)+parseFloat(z.endX))/2);
               const effMnPos=phiC*phiS*ratingPhiF*cap.MnPos;
               const effMnNeg=phiC*phiS*ratingPhiF*cap.MnNeg;
-              const effVn   =phiC*phiS*ratingPhiV*cap.Vn;
+              const effVn   =phiC*phiSV*ratingPhiV*cap.Vn;
               // Find overlapping section zone
               const mid=(parseFloat(z.startX)+parseFloat(z.endX))/2;
               const matchSec=cfg?.sectionZones?.find(sz=>mid>=parseFloat(sz.startX)&&mid<parseFloat(sz.endX));
@@ -14787,7 +14808,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                         ))}
                         {(z.SxPos>0||z.SxNeg>0)&&(
                           <div style={{gridColumn:'1/-1',fontSize:'9.5px',fontFamily:'monospace',color:'#1e40af',marginTop:'2px'}}>
-                            Stress limit 0.95·Rh·Fyf = {(0.95*1.0*(z.Fy||50)).toFixed(1)} ksi
+                            Service II stress limit f_R = {sv2Composite(z)?'0.95·Fyf (composite)':'0.80·Rh·Fyf (noncomposite)'} = {sv2Limit(z, z.Fy||50).toFixed(1)} ksi (MBE 4th Ed. 6A.6.4.2.2)
                           </div>
                         )}
                       </div>
@@ -14934,7 +14955,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                             <br/>
                             Mn⁺ = {MnPos.toFixed(1)} ft·k &nbsp;·&nbsp; Mn⁻ = {MnNeg.toFixed(1)} ft·k &nbsp;·&nbsp; Vn = {Vn.toFixed(1)} kips
                             <br/>
-                            <span style={STYLES.dimText}>φMn⁺ = {(phiC*phiS*ratingPhiF*MnPos).toFixed(1)} &nbsp; φVn = {(phiC*phiS*ratingPhiV*Vn).toFixed(1)}</span>
+                            <span style={STYLES.dimText}>φMn⁺ = {(phiC*phiS*ratingPhiF*MnPos).toFixed(1)} &nbsp; φVn = {(phiC*phiSV*ratingPhiV*Vn).toFixed(1)}</span>
                           </> : <>
                             Mn⁺ cannot be computed — enter d, tw and Zx⁺ (or the four flange plate dimensions),
                             plus f&#39;c, beff and ts. Nothing is being assumed in their place.
@@ -15677,7 +15698,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                       const Vn    = computePSVn(z);
                       const {fps,a} = computePSfps(z);
                       const effMnP = phiC*phiS*ratingPhiF*MnPos;
-                      const effVn2 = phiC*phiS*ratingPhiV*Vn;
+                      const effVn2 = phiC*phiSV*ratingPhiV*Vn;
                       return <>
                         φMn = {effMnP.toFixed(1)} ft·k &nbsp;·&nbsp; φVn = {effVn2.toFixed(1)} kips
                         <span style={STYLES.dimText}> &nbsp;(fps={fps.toFixed(1)} ksi · a={a.toFixed(2)} in)</span>
@@ -16501,7 +16522,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                   <div style={{padding:'8px 14px',background:'#f0fdf4',borderTop:'1px solid #bbf7d0',
                     fontSize:'10px',fontFamily:'monospace',color:'#166534'}}>
                     ✓ Rating computed using actual MIDAS beam force output per vehicle — not proportional scaling.
-                    φ_c={phiC} · φ_s={phiS} · φ_f={ratingPhiF} · φ_v={ratingPhiV} · LL scale ×{ratingLLScale.toFixed(4)}
+                    φ_c={phiC} · φ_s={phiS} (flexure; {phiSV} on shear, MBE 4th Ed. 6A.4.2.4) · φ_f={ratingPhiF} · φ_v={ratingPhiV} · LL scale ×{ratingLLScale.toFixed(4)}
                   </div>
                 </div>
               )}
@@ -16563,8 +16584,9 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                 <div style={{fontSize:'13px',fontWeight:'600',color:'#111827',marginBottom:'4px'}}>Service II — Flange Stress Check</div>
                 <div style={{fontSize:'11px',fontFamily:'monospace',color:'#6b7280',marginBottom:'12px',
                   padding:'7px 10px',background:'#f0f9ff',border:'1px solid #bfdbfe',borderRadius:'5px'}}>
-                  AASHTO LRFD 6.10.4.2 · f_DC + f_DW + γ_LL·f_LL ≤ 0.95·Rh·Fyf · f = M·12/Sx (ksi)
-                  <br/>MBE 6A.4.2.1 · RF = (0.95·Rh·Fyf − f_DC − f_DW) / (γ_LL·f_LL) · γ_LL = {serviceIIGamLL} (MBE Table 6A.4.2.2-1: Inv 1.30 · Op 1.00 · Legal 1.30 · Permit 1.00)
+                  AASHTO LRFD 6.10.4.2 · f_DC + f_DW + γ_LL·f_LL ≤ f_R · f = M·12/Sx (ksi)
+                  <br/>MBE 4th Ed. 6A.6.4.2.2 (p. 6-66) · f_R = 0.95·Fyf composite (negative-moment regions included) · 0.80·Rh·Fyf noncomposite
+                  <br/>MBE 6A.4.2.1 · RF = (f_R − f_DC − f_DW) / (γ_LL·f_LL) · γ_LL = {serviceIIGamLL} (MBE Table 6A.4.2.2-1: Inv 1.30 · Op 1.00 · Legal 1.30 · Permit 1.00)
                   <br/>f_LL = M_LL × {serviceIIScale.toFixed(4)} (g·(1+IM)·m·F₁·F₂ from the Inputs tab{serviceIICarriesIM?'; IM already in the MCT':''}){Math.abs(serviceIIScaleNeg-serviceIIScale)>1e-6?<> · hogging × {serviceIIScaleNeg.toFixed(4)} (g⁻)</>:null}
                   &nbsp;·&nbsp; <strong>Sx must be entered in the Capacity Zones above</strong>
                   <br/>{IXASM_RT.sv2}
@@ -16596,7 +16618,19 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                   <input type="number" step="0.05" min="0.5" max="1.0" value={serviceIIRh}
                     onChange={e=>setRating('serviceIIRh',parseFloat(e.target.value)||1.0)}
                     style={{...INP2,width:'80px',fontFamily:'monospace',fontWeight:'600'}}/>
-                  <span style={STYLES.monoMed}>1.0 for homogeneous sections · AASHTO 6.10.1.10.1</span>
+                  <span style={STYLES.monoMed}>1.0 for homogeneous sections · AASHTO 6.10.1.10.1 · used in f_R of noncomposite sections only</span>
+                </div>
+
+                {/* Section type for f_R (MBE 4th Ed. 6A.6.4.2.2) */}
+                <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'16px',flexWrap:'wrap'}}>
+                  <span style={{fontSize:'11px',fontFamily:'monospace',color:'#374151'}}>Section for f_R</span>
+                  <select value={serviceIISection} onChange={e=>setRating('serviceIISection',e.target.value)}
+                    style={{...INP2,width:'auto',maxWidth:'100%',fontFamily:'monospace',fontSize:'11px'}}>
+                    <option value="zone">By zone type (Composite zone → composite; other zones → noncomposite)</option>
+                    <option value="composite">Composite, every zone: f_R = 0.95·Fyf</option>
+                    <option value="noncomposite">Noncomposite, every zone: f_R = 0.80·Rh·Fyf</option>
+                  </select>
+                  <span style={STYLES.monoMed}>MBE 4th Ed. Art. 6A.6.4.2.2</span>
                 </div>
 
                 {/* No Sx warning */}
@@ -16629,7 +16663,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                     <table style={{width:'100%',borderCollapse:'collapse',fontSize:'11px',fontFamily:'monospace'}}>
                       <thead>
                         <tr style={STYLES.bgLight}>
-                          {['Node','Pos (ft)','Sx⁺ (in³)','Sx⁻ (in³)','Fyf (ksi)','Limit (ksi)',
+                          {['Node','Pos (ft)','Sx⁺ (in³)','Sx⁻ (in³)','Fyf (ksi)','Section','f_R (ksi)',
                             'f_DC (ksi)','f_DW (ksi)','f_LL (ksi)','Demand M⁺ (ksi)','RF M⁺',
                             'f_LL neg (ksi)','Demand M⁻ (ksi)','RF M⁻','RF Gov','Status'].map(h=>(
                             <th key={h} style={{padding:'5px 8px',textAlign:'left',fontWeight:'500',color:'#6b7280',
@@ -16648,6 +16682,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                               <td style={{padding:'5px 8px',color:'#1d4ed8'}}>{p.SxPos||'—'}</td>
                               <td style={{padding:'5px 8px',color:'#7c3aed'}}>{p.SxNeg||'—'}</td>
                               <td style={STYLES.padding5}>{p.Fyf}</td>
+                              <td style={STYLES.padding5} title={p.comp?'f_R = 0.95·Fyf':'f_R = 0.80·Rh·Fyf'}>{p.comp?'composite':'noncomposite'}</td>
                               <td style={{padding:'5px 8px',fontWeight:'600',color:'#059669'}}>{p.limit}</td>
                               <td style={STYLES.padding5}>{p.fDCpos??'—'}</td>
                               <td style={STYLES.padding5}>{p.fDWpos??'—'}</td>
@@ -16672,7 +16707,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                   </div>
                   <div style={{padding:'6px 12px',background:'#f9fafb',borderTop:'1px solid #e5e7eb',
                     fontSize:'9.5px',fontFamily:'monospace',color:'#9ca3af'}}>
-                    γ_DC=1.0 · γ_DW=1.0 · γ_LL={serviceIIGamLL} · LL × {serviceIIScale.toFixed(4)} · Rh={serviceIIRh} · limit = 0.95·Rh·Fyf · f = M·12/Sx
+                    γ_DC=1.0 · γ_DW=1.0 · γ_LL={serviceIIGamLL} · LL × {serviceIIScale.toFixed(4)} · Rh={serviceIIRh} · f_R = 0.95·Fyf composite, 0.80·Rh·Fyf noncomposite (MBE 4th Ed. 6A.6.4.2.2) · f = M·12/Sx
                   </div>
                 </>)}
               </div>
@@ -16945,7 +16980,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                         const Mn  = computePSMn(z);
                         const Vn  = computePSVn(z);
                         const phi_Mn = phiC*phiS*ratingPhiF*Mn;
-                        const phi_Vn = phiC*phiS*ratingPhiV*Vn;
+                        const phi_Vn = phiC*phiSV*ratingPhiV*Vn;
                         const colors=['#1d4ed8','#059669','#7c3aed','#dc2626','#ea580c'];
                         const col = colors[i%colors.length];
                         return (
@@ -17067,7 +17102,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                     <div style={{marginTop:'6px',fontSize:'9.5px',fontFamily:'monospace',color:'#9ca3af',
                       padding:'5px 10px',background:'#f9fafb',border:'1px solid #e5e7eb',borderRadius:'4px'}}>
                       γ_DC={gamDC} · γ_DW={gamDW} · γ_LL={gamLL} · LL scale ×{ratingLLScale.toFixed(4)}
-                      · φ_c={phiC} · φ_s={phiS} · φ_f={ratingPhiF} · φ_v={ratingPhiV}
+                      · φ_c={phiC} · φ_s={phiS} (flexure; {phiSV} on shear, MBE 4th Ed. 6A.4.2.4) · φ_f={ratingPhiF} · φ_v={ratingPhiV}
                       · AASHTO 5.6.3 / MBE 6A.5
                     </div>
                   </>) : (
@@ -17092,6 +17127,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                   &nbsp;·&nbsp; RF = (f_t + fpe − fDC − fDW) / (γ_LL · fLL) &nbsp;·&nbsp; f_t = concrete tension limit (LRFD Table 5.9.2.3.2b-1), not the modulus of rupture
                   &nbsp;·&nbsp; f_LL = M_LL × {ps3Scale.toFixed(4)} (g·(1+IM)·m·F₁·F₂{ps3CarriesIM?'; IM already in the MCT':''}) &nbsp;·&nbsp;
                   <strong>Requires PS Concrete zones with Sb, St, fpe defined above</strong>
+                  <br/>γ_LL = {ps3GamLL} {ps3GamLLIn!=null?'(entered)':'(MBE 4th Ed.)'} · MBE 4th Ed. Table 6A.4.2.2-2 (p. 6-24), design-load inventory: 1.0 with the refined losses of LRFD Art. 5.9.3.4 taken with the elastic gain, 0.8 otherwise · legal loads 1.0 (Art. 6A.5.4.2.2a)
                 </div>
 
                 {/* No PS zones warning */}
@@ -17124,14 +17160,28 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
 
                 {/* γ_LL and exposure */}
                 <div style={{display:'flex',gap:'20px',alignItems:'center',marginBottom:'16px',flexWrap:'wrap'}}>
-                  <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',maxWidth:'100%',minWidth:0}}>
                     <span style={{fontSize:'11px',fontFamily:'monospace',color:'#374151'}}>γ_LL (Service III)</span>
-                    <input type="number" step="0.05" min="0" max="2" value={ps3GamLL}
-                      onChange={e=>setRating('ps3GamLL',parseFloat(e.target.value)||0.8)}
+                    <input type="number" step="0.05" min="0" max="2" value={ps3GamDraft ?? (ps3GamLLIn ?? '')}
+                      placeholder={String(ps3GamLLAuto)}
+                      onChange={e=>{ const t=e.target.value, v=parseFloat(t); setPs3GamDraft(t);
+                        if (t==='') setRating('ps3GamLL',null); else if (v>0) setRating('ps3GamLL',v); }}
+                      onBlur={()=>setPs3GamDraft(null)}
                       style={{...INP2,width:'72px',fontFamily:'monospace',fontWeight:'700'}}/>
                     <span style={STYLES.monoMed}>
-                      LRFR: Inventory=0.8 · Operating=1.0 &nbsp;|&nbsp; LFR: 1.0
+                      {ps3GamLLIn!=null
+                        ? <>entered; MBE 4th Ed. value {ps3GamLLAuto.toFixed(1)} · <button onClick={()=>{ setPs3GamDraft(null); setRating('ps3GamLL',null); }}
+                            style={{border:'1px solid #ddd6fe',background:'#fff',color:'#7c3aed',borderRadius:'4px',padding:'1px 6px',cursor:'pointer',fontSize:'10px'}}>use it</button></>
+                        : <>blank = MBE 4th Ed. value {ps3GamLLAuto.toFixed(1)}</>}
                     </span>
+                  </div>
+                  <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',maxWidth:'100%',minWidth:0}}>
+                    <span style={{fontSize:'11px',fontFamily:'monospace',color:'#374151'}}>Prestress losses</span>
+                    <select value={ps3Losses} onChange={e=>setRating('ps3Losses',e.target.value)}
+                      style={{...INP2,width:'auto',maxWidth:'100%',fontFamily:'monospace',fontSize:'11px'}}>
+                      <option value="other">Other (approximate or lump-sum, or no elastic gain) → γ_LL 0.8</option>
+                      <option value="refined">Refined, LRFD 5.9.3.4, with elastic gain → γ_LL 1.0</option>
+                    </select>
                   </div>
                   <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
                     <span style={{fontSize:'11px',fontFamily:'monospace',color:'#374151'}}>Exposure</span>
@@ -17246,7 +17296,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
 
                   <div style={{padding:'6px 12px',background:'#f9fafb',borderTop:'1px solid #e5e7eb',
                     fontSize:'9.5px',fontFamily:'monospace',color:'#9ca3af'}}>
-                    γ_LL={ps3GamLL} · LL × {ps3Scale.toFixed(4)} · f_t={ps3Exposure==='severe'?'0.0948':'0.19'}√f'c tension limit ({ps3Exposure}) · limit=f_t+fpe · all stresses in ksi · f=M·12/Sb
+                    γ_LL={ps3GamLL} ({ps3GamLLIn!=null?'entered':'MBE 4th Ed. Table 6A.4.2.2-2 / 6A.5.4.2.2a'}) · LL × {ps3Scale.toFixed(4)} · f_t={ps3Exposure==='severe'?'0.0948':'0.19'}√f'c tension limit ({ps3Exposure}) · limit=f_t+fpe · all stresses in ksi · f=M·12/Sb
                     &nbsp;·&nbsp; MBE 6A.5.4.2
                     <div style={{marginTop:'3px',color:'#6b7280'}}>{IXASM_RT.ps3}</div>
                   </div>
@@ -19699,7 +19749,7 @@ const DEFAULT_CFG = {
     fatigueZoneCategories:{},
     // PS Concrete — Service III
     ps3DcLC:'', ps3DwLC:'', ps3LLposLC:'', ps3LLnegLC:'',
-    ps3GamLL:0.8,    // AASHTO MBE 6A.5.4.2 — 0.8 for Inventory, 1.0 for Operating
+    ps3GamLL:null,   // null = MBE 4th Ed. Table 6A.4.2.2-2 / Art. 6A.5.4.2.2a value (ps3GamLLAuto); a number = entered (saved projects hold 0.8)
     ps3Exposure:'moderate', // 'moderate' | 'severe'
   },
   // ── AREMA Built-Up Section (defined in Step 3, used in Step 8 rating) ──────
@@ -19964,7 +20014,7 @@ function idxrModel(cfg, rs, rows, zones, combos){
     /* every node worked (IDRP-F, engineer's decision 2026-11-01): capacities C = φ_c φ_s φ R_n (R_n from capAt at the node, as the
        app rates it) and the three rating factors, all values from ratingData */
     const nodeWork=g0=>{ const x0=g0.pos, cap=typeof rs.capAt==='function'?rs.capAt(x0):null, wg=S.work('');
-    const C=(id,lab,sym,Mn,phi,val)=>wg.add({id,label:lab,sym,eq:'\\phi_{c}\\phi_{s}\\phi\\,R_{n}',sub:cap?N(rs.phiC,2)+'('+N(rs.phiS,2)+')('+N(phi,2)+')('+N(Mn,1)+')':'',value:val,unit:id==='Cv'?'kip':'kip-ft',d:1,ref:MBE+' Eq. 6A.4.2.1-1'});
+    const C=(id,lab,sym,Mn,phi,val)=>wg.add({id,label:lab,sym,eq:'\\phi_{c}\\phi_{s}\\phi\\,R_{n}',sub:cap?N(rs.phiC,2)+'('+N(id==='Cv'?(rs.phiSV??1):rs.phiS,2)+')('+N(phi,2)+')('+N(Mn,1)+')':'',value:val,unit:id==='Cv'?'kip':'kip-ft',d:1,ref:MBE+' Eq. 6A.4.2.1-1'+(id==='Cv'&&(rs.phiSV??1)!==rs.phiS?'; φ_s = '+N(rs.phiSV??1,2)+' on shear, Art. 6A.4.2.4':'')});
     C('Cp','Capacity, positive moment','C_{M+}',cap&&cap.MnPos,rs.ratingPhiF,g0.CmnPos); C('Cn','Capacity, negative moment','C_{M-}',cap&&cap.MnNeg,rs.ratingPhiF,g0.CmnNeg); C('Cv','Capacity, shear','C_{V}',cap&&cap.Vn,rs.ratingPhiV,g0.Cvn);
     const RF=(id,lab,Cv,D,W,L,k,val)=>{ if(val==null) return; wg.add({id,label:lab,sym:'RF',eq:'\\frac{C - \\gamma_{DC}DC - \\gamma_{DW}DW}{\\gamma_{LL}(LL)}',sub:'\\frac{'+N(Cv,1)+' - '+N(rs.gamDC,2)+'('+N(D,2)+') - '+N(rs.gamDW,2)+'('+N(W,2)+')}{'+N(rs.gamLL,2)+'('+N(L,2)+')('+N(k,4)+')}',value:val,unit:'',d:3,ref:MBE+' Eq. 6A.4.2.1-1',note:val>=1?'RF ≥ 1.0':'RF < 1.0'}); };
     RF('RFp','Rating factor, positive moment',g0.CmnPos,g0.Mdc,g0.Mdw,g0.Mllpos,rs.ratingLLScale,g0.rfMpos);
@@ -20197,7 +20247,7 @@ function ixxPrintAny(){
 /* IXRX (2026-11-03): the AASHTO Rating "Report Card" sub-tab's card, moved here unchanged from StepResults (the same JSX, the same
    values: StepResults passes them as idxCardP), so the Report step renders the same card, hidden, and reads it (ixxApply). */
 function IdxRatingCard({id, cfg, govRating, govOperating, ratingMethod, ratingLimitState, ratingCategory, ratingLevel, ratingDcLC, ratingDwLC, ratingLLposLC,
-    gamDC, gamDW, gamLL, gamLL_op, ratingLLScale, phiC, phiS, ratingPhiF, ratingPhiV, ratingVehicleName, ratingVehicleTon,
+    gamDC, gamDW, gamLL, gamLL_op, ratingLLScale, phiC, phiS, phiSV, ratingPhiF, ratingPhiV, ratingVehicleName, ratingVehicleTon,
     govAsdN, govAsdX, govAsdM, aremaCalcX, capZones, setStep, setRatingSubTab, setRatingLLOpen}){
   const now = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
   const govInv = govRating;
@@ -20251,7 +20301,7 @@ function IdxRatingCard({id, cfg, govRating, govOperating, ratingMethod, ratingLi
     </div>
     <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'8px',marginBottom:'20px'}}>
       {[['γ_DC',gamDC],['γ_DW',gamDW],['γ_LL (Inv)',gamLL],['γ_LL (Op)',gamLL_op.toFixed(2)],['LL Scale',ratingLLScale.toFixed(4)],
-        ['φ_c',phiC],['φ_s',phiS],['φ_f',ratingPhiF],['φ_v',ratingPhiV],['η','not used']
+        ['φ_c',phiC],['φ_s (M / V)',phiS+' / '+(phiSV??1)],['φ_f',ratingPhiF],['φ_v',ratingPhiV],['η','not used']
       ].map(([l,v])=>(
         <div key={l} style={{background:'#f8fafc',border:'1px solid #e5e7eb',borderRadius:'5px',padding:'6px 8px',textAlign:'center'}}>
           <div style={{fontSize:'9.5px',color:'#6b7280',fontFamily:'monospace',textTransform:'uppercase'}}>{l}</div>
@@ -20435,6 +20485,7 @@ function idxGenArgs(cfg, mctOutput, rows, zones, combos, rs, chartImages){
     capAt:            rs.capAt            || null,
     phiC:             rs.phiC             ?? 1,
     phiS:             rs.phiS             ?? 1,
+    phiSV:            rs.phiSV            ?? 1,
     ratingPhiF:       rs.ratingPhiF       ?? 1,
     ratingPhiV:       rs.ratingPhiV       ?? 1,
     gamDC:            rs.gamDC            ?? 1.25,
@@ -20461,7 +20512,7 @@ function idxGenArgs(cfg, mctOutput, rows, zones, combos, rs, chartImages){
 }
 // ── Report Generator ─────────────────────────────────────────────────────────
 function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
-    ratingCapZones, resultsCombos, capAt, phiC, phiS, ratingPhiF, ratingPhiV,
+    ratingCapZones, resultsCombos, capAt, phiC, phiS, phiSV, ratingPhiF, ratingPhiV,
     gamDC, gamDW, gamLL, ratingLLScale, ratingLLScaleMn, ratingLLScaleV, dfSplit,
     ratingVehicleTon, ratingVehicleName,
     ratingDcLC, ratingDwLC, ratingLLposLC, ratingLLnegLC,
@@ -20731,7 +20782,8 @@ function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
             <tr><td>LL Scale — shear</td><td class="mono">×${(ratingLLScaleV||ratingLLScale||1).toFixed(4)}</td></tr>`:''}
             <tr><td>η Load Modifier</td><td class="mono">not used (MBE 6A LRFR has no η)</td></tr>
             <tr><td>φ_c (condition)</td><td class="mono">${phiC}</td></tr>
-            <tr><td>φ_s (system; effective, φ_c·φ_s ≥ 0.85 per MBE Eq. 6A.4.2.1-3)</td><td class="mono">${phiS}</td></tr>
+            <tr><td>φ_s (system, flexure; effective, φ_c·φ_s ≥ 0.85 per MBE Eq. 6A.4.2.1-3)</td><td class="mono">${phiS}</td></tr>
+            <tr><td>φ_s on shear (MBE 4th Ed. Art. 6A.4.2.4: 1.0 at the strength limit state)</td><td class="mono">${phiSV}</td></tr>
             <tr><td>φ_f (flexure)</td><td class="mono">${ratingPhiF}</td></tr>
             <tr><td>φ_v (shear)</td><td class="mono">${ratingPhiV}</td></tr>
           </tbody>
@@ -20763,7 +20815,7 @@ function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
           const cap = capAt ? capAt((parseFloat(z.startX)+parseFloat(z.endX))/2) : {MnPos:z.MnPos,MnNeg:z.MnNeg,Vn:z.Vn};
           const pMnP=(phiC*phiS*ratingPhiF*cap.MnPos).toFixed(1);
           const pMnN=(phiC*phiS*ratingPhiF*cap.MnNeg).toFixed(1);
-          const pVn=(phiC*phiS*ratingPhiV*cap.Vn).toFixed(1);
+          const pVn=(phiC*phiSV*ratingPhiV*cap.Vn).toFixed(1);
           return `<tr>
             <td>${i+1}</td>
             <td class="mono">${parseFloat(z.startX).toFixed(3)}</td>
@@ -20792,11 +20844,11 @@ function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
     const sM=ratingLLScale||1, sMn=ratingLLScaleMn??sM, sV=ratingLLScaleV??sM;
     const n2=v=>(+v||0).toFixed(2), U={m:'\\ \\text{ft}\\cdot\\text{k}', v:'\\ \\text{kips}'};
     const acts=[
-      {id:'w-mpos', rf:'rfMpos', t:'Positive flexure M⁺', C:'CmnPos', Rn:'MnPos', phi:ratingPhiF, ps:'\\varphi_f', rs:'M_n^{+}', D:'Mdc', W:'Mdw', L:'Mllpos', s:sM, u:U.m,
+      {id:'w-mpos', rf:'rfMpos', t:'Positive flexure M⁺', C:'CmnPos', Rn:'MnPos', phi:ratingPhiF, fs:phiS, ps:'\\varphi_f', rs:'M_n^{+}', D:'Mdc', W:'Mdw', L:'Mllpos', s:sM, u:U.m,
         lc:`DC = |M| from "${ratingDcLC||'—'}", DW = |M| from "${ratingDwLC||'(none)'}", LL = sagging M from "${ratingLLposLC||'—'}"`},
-      {id:'w-mneg', rf:'rfMneg', t:'Negative flexure M⁻', C:'CmnNeg', Rn:'MnNeg', phi:ratingPhiF, ps:'\\varphi_f', rs:'M_n^{-}', D:'Mdc', W:'Mdw', L:'Mllneg', s:sMn, u:U.m,
+      {id:'w-mneg', rf:'rfMneg', t:'Negative flexure M⁻', C:'CmnNeg', Rn:'MnNeg', phi:ratingPhiF, fs:phiS, ps:'\\varphi_f', rs:'M_n^{-}', D:'Mdc', W:'Mdw', L:'Mllneg', s:sMn, u:U.m,
         lc:`DC = |M| from "${ratingDcLC||'—'}", DW = |M| from "${ratingDwLC||'(none)'}", LL = hogging |M| from "${ratingLLnegLC||ratingLLposLC||'—'}"`},
-      {id:'w-v', rf:'rfV', t:'Shear V', C:'Cvn', Rn:'Vn', phi:ratingPhiV, ps:'\\varphi_v', rs:'V_n', D:'Vdc', W:'Vdw', L:'Vll', s:sV, u:U.v,
+      {id:'w-v', rf:'rfV', t:'Shear V', C:'Cvn', Rn:'Vn', phi:ratingPhiV, fs:phiSV, ps:'\\varphi_v', rs:'V_n', D:'Vdc', W:'Vdw', L:'Vll', s:sV, u:U.v,
         lc:`DC = |V| from "${ratingDcLC||'—'}", DW = |V| from "${ratingDwLC||'(none)'}", LL = larger |V| of "${ratingLLposLC||'—'}" and "${ratingLLnegLC||ratingLLposLC||'—'}"`},
     ];
     return acts.map(a=>{
@@ -20810,7 +20862,7 @@ function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
       const rf=p[a.rf];
       rateResults.push({label:`${a.t} (${rateLbl})`, val:'RF = '+rf.toFixed(3), ref:`${rateRef}; node ${p.node}, x = ${p.pos.toFixed(2)} ft`, see:a.id, ok:rf>=1});
       const eqC = Rn!=null&&isFinite(Rn)
-        ? `C = \\varphi_c\\,\\varphi_s\\,${a.ps}\\,${a.rs} = ${phiC}\\times ${phiS}\\times ${a.phi}\\times ${(+Rn).toFixed(1)} = ${p[a.C]}${a.u}`
+        ? `C = \\varphi_c\\,\\varphi_s\\,${a.ps}\\,${a.rs} = ${phiC}\\times ${a.fs}\\times ${a.phi}\\times ${(+Rn).toFixed(1)} = ${p[a.C]}${a.u}`
         : `C = \\varphi_c\\,\\varphi_s\\,${a.ps}\\,${a.rs} = ${p[a.C]}${a.u}`;
       const eqR = `RF = \\frac{C-\\gamma_{DC}\\,DC-\\gamma_{DW}\\,DW}{\\gamma_{LL}\\,s\\,LL} = \\frac{${p[a.C]}-${gamDC}\\times ${n2(p[a.D])}-${gamDW}\\times ${n2(p[a.W])}}{${gamLL}\\times ${(+a.s).toFixed(4)}\\times ${n2(p[a.L])}} = ${rf.toFixed(3)}`;
       return `<h3 data-cid="${a.id}">Worked Rating Factor — ${a.t} at Node ${p.node} (x = ${p.pos.toFixed(2)} ft)</h3>

@@ -5996,3 +5996,147 @@ Frame: Beam Capacity (`suite-frame-capacity`).
   1. n stays per Std. Spec. 8.15.3.4, because 6B.5.2.4 permits the Art. 8.15 method and the table's n is optional ("may be varied"). If the table n were adopted, n at f′c 3,000 would go from 9 to 10. That would give k = 0.3586 and z = 25.093 in, and the Gr 40 inventory RF would go from 1.137 to 1.121.
   2. Below 2,000 psi the entered value stays (as the decision says). On a new project this is 1,200 psi, against 0.40 f′c before (720 at 1,800). The REVIEW notice flags it.
 - **Other copies:** none.
+
+## 2026-11-10 — PR: claude/cbc-asd-lowfc (PR #1365: https://github.com/mlococo88/All-Structural/pull/1365) (MBE4C) — ASD tab: f′c below 2,000 psi (no row in MBE Table 6B.5.2.4.1-1): automatic f_c,inv = 0.40 f′c and f_c,op = 0.60 f′c   [calculation change, f′c < 2,000 psi only; no saved key or format change]
+- **Engineer (2026-11-10, follow-up on #1363, decision 2):** below f′c = 2,000 psi a new project took a leftover entry (1,200 / 1,900 psi). That was less conservative than intended.
+- **Governing provisions:** AASHTO Std. Spec. 17th Ed. (2002) 8.15.2.1.1 (0.40 f′c); AASHTO MBE 4th Ed. (2026) Table 6B.5.2.4.1-1 (p. 6-174), whose lowest row is 2,000–2,400 psi: 800 / 1,200 psi.
+- **Values, before → after (f′c < 2,000 psi only):**
+  - f_c,inv: the field's entry (default 1,200) → **0.40 f′c**.
+  - f_c,op: the field's entry (default 1,900) → **0.60 f′c**.
+  - Both are now automatic. The REVIEW notice stays and now states the rule used. A typed override stays as entered and is named in the notice.
+- **Why 0.60 f′c for operating:** the two candidate rules give the same value. The lowest row scaled by f′c/2,000 is 1,200 × f′c/2,000 = 0.60 f′c, and likewise 800 × f′c/2,000 = 0.40 f′c for inventory. Below 2,000 psi, 0.60 f′c is under 1,200 psi, so a cap at the lowest row is never reached. It is also at or below the pre-#1352 default of 1,900 psi.
+- **Check case:** b = 14 in, d = 28.5 in, A_s = 4.00 in², M_DL = 100, M_LL+I = 60 kip-ft, f′c = 1,800 psi.
+  - E_c = 57,000√1,800 = 2,418,305 psi; n = 29,000,000 / 2,418,305 = 11.99 → 12.
+  - ρn = 0.12030; k = 0.3847; kd = 10.965 in; z = 24.845 in; C = ½ × 14 × 10.965 = 76.76 in².
+  - **Before:** f_c,inv 1,200, f_c,op 1,900 psi.
+    - Gr 40: inv M_all 165.63 (steel), RF 1.094; op 231.89 (steel), RF 2.198.
+    - Gr 60: inv 190.70 (concrete), RF 1.512; op 298.14 (steel), RF 3.302.
+  - **After:** f_c,inv = 0.40 × 1,800 = 720 psi; f_c,op = 0.60 × 1,800 = 1,080 psi.
+    - M_conc,inv = 76.76 × 720 × 24.845 / 12,000 = 114.42 kip-ft, RF (114.42 − 100)/60 = **0.240**.
+    - M_conc,op = 76.76 × 1,080 × 24.845 / 12,000 = 171.63 kip-ft, RF **1.194**.
+    - Concrete governs for Gr 40, 50 and 60.
+- **Saved data (§5):** no key and no format change; handled as in #1352.
+  - A typed value (override) stays.
+  - Values flagged automatic follow the rule.
+  - Saves made before #1352 keep an f_c,op that differs from the rule as entered.
+- **Where (inside the `srcdoc` of `suite-frame-asd`; decoded, edited, re-encoded; CRLF kept; each Before occurs once):**
+  Edit 1.
+  - Before:
+    ```js
+    function autoAllow(fc,fy){
+      const t=ASD_FS_TBL[fy]||null;
+      return {fc_inv: asdFcInvTbl(fc),
+              fs_inv: t?t[0]:null,
+              fs_op:  t?t[1]:null,
+              fc_op:  asdFcOpTbl(fc)};
+    }
+    ```
+  - After:
+    ```js
+    /* MBE4C (2026-11-10, engineer): below the first row of Table 6B.5.2.4.1-1 (f'c < 2,000 psi) the automatic values are
+       f_c,inv = 0.40 f'c (Std. Spec. 8.15.2.1.1) and f_c,op = 0.60 f'c (the lowest row, 800 / 1,200 psi at 2,000 psi, scaled by
+       f'c/2,000, which is the same 0.40 / 0.60 f'c); a REVIEW notice stays. Before: no rule, the field's entry (default 1,200 / 1,900). */
+    function asdBelowTbl(fc){ return fc>0 && fc<2000; }
+    function autoAllow(fc,fy){
+      const t=ASD_FS_TBL[fy]||null, lo=asdBelowTbl(fc);
+      return {fc_inv: lo ? +(0.40*fc).toFixed(1) : asdFcInvTbl(fc),
+              fs_inv: t?t[0]:null,
+              fs_op:  t?t[1]:null,
+              fc_op:  lo ? +(0.60*fc).toFixed(1) : asdFcOpTbl(fc)};
+    }
+    ```
+  Edit 2.
+  - Before:
+    ```js
+          ["n:","n = E_s/E_c
+    ```
+  - After:
+    ```js
+          ["f'_c below 2,000 psi:","no table row: f_c,inv = 0.40 f'_c (Std. Spec. 8.15.2.1.1) and f_c,op = 0.60 f'_c (the lowest row scaled by f'_c/2,000), automatic, with a REVIEW notice."],
+          ["n:","n = E_s/E_c
+    ```
+  Edit 3.
+  - Before:
+    ```js
+      [["fc_inv","f<sub>c,inv</sub>","Inventory","inventory"],["fc_op","f<sub>c,op</sub>","Operating","operating"]].forEach(([k,lb,Lv,lv])=>{
+      if(!(S.allow.ovr&&S.allow.ovr[k]) && aa[k]===null){
+        const wn=el("div","errBox");
+        wn.innerHTML="f&prime;<sub>c</sub> = "+grp(R.fc)+" psi is below the first row (2,000 psi) of AASHTO MBE Table 6B.5.2.4.1-1, so "+lb+" has no automatic value: the value used ("+
+          grp(R.A[k])+" psi) is the field's current entry and may be left from an earlier f&prime;<sub>c</sub>. Confirm the owner's basis for it.";
+        pg.appendChild(wn);
+      } else if(aa[k]!==null && R.A[k]>aa[k]+1e-9){
+        const on=el("div","warnBox");
+        on.innerHTML=Lv+" f<sub>c</sub> = "+grp(R.A[k])+" psi (entered) is greater than the AASHTO MBE 4th Ed. Table 6B.5.2.4.1-1 "+lv+" value for f&prime;<sub>c</sub> = "+
+          grp(R.fc)+" psi, "+grp(aa[k])+" psi. The entered value is used; confirm the owner's basis for it.";
+        pg.appendChild(on);
+      }
+      });
+    ```
+  - After:
+    ```js
+      [["fc_inv","f<sub>c,inv</sub>","Inventory","inventory","0.40"],["fc_op","f<sub>c,op</sub>","Operating","operating","0.60"]].forEach(([k,lb,Lv,lv,cf])=>{
+      const ov=!!(S.allow.ovr&&S.allow.ovr[k]);
+      if(asdBelowTbl(R.fc)){   /* MBE4C: below the table, 0.40 / 0.60 f'c */
+        const wn=el("div","errBox");
+        wn.innerHTML="f&prime;<sub>c</sub> = "+grp(R.fc)+" psi is below the first row (2,000 psi) of AASHTO MBE Table 6B.5.2.4.1-1: "+lb+" = "+cf+"f&prime;<sub>c</sub> = "+grp(aa[k])+
+          " psi is used automatically"+(k==="fc_inv"?" (Std. Spec. 8.15.2.1.1)":" (the lowest row, 1,200 psi at 2,000 psi, scaled by f&prime;<sub>c</sub>/2,000)")+
+          (ov?"; the entered value "+grp(R.A[k])+" psi is used instead":"")+". Confirm the owner's basis for it.";
+        pg.appendChild(wn);
+      } else if(aa[k]!==null && R.A[k]>aa[k]+1e-9){
+        const on=el("div","warnBox");
+        on.innerHTML=Lv+" f<sub>c</sub> = "+grp(R.A[k])+" psi (entered) is greater than the AASHTO MBE 4th Ed. Table 6B.5.2.4.1-1 "+lv+" value for f&prime;<sub>c</sub> = "+
+          grp(R.fc)+" psi, "+grp(aa[k])+" psi. The entered value is used; confirm the owner's basis for it.";
+        pg.appendChild(on);
+      }
+      });
+    ```
+  Edit 4.
+  - Before:
+    ```js
+    +(a.fc_inv!==null?' ('+grp(a.fc_inv)+' psi; between two rows the lower row is used)':' (none: below 2,000 psi)')+
+    ```
+  - After:
+    ```js
+    +(asdBelowTbl(R.fc)?' (none: below 2,000 psi; 0.40$f^{\\prime}_{c}$ = '+grp(a.fc_inv)+' psi, Std. Spec. 8.15.2.1.1)':' ('+grp(a.fc_inv)+' psi; between two rows the lower row is used)')+
+    ```
+  Edit 5.
+  - Before:
+    ```js
+    +(a.fc_op!==null?' ('+grp(a.fc_op)+' psi; between two rows the lower row is used)':' (none: below 2,000 psi)')+
+    ```
+  - After:
+    ```js
+    +(asdBelowTbl(R.fc)?' (none: below 2,000 psi; 0.60$f^{\\prime}_{c}$ = '+grp(a.fc_op)+' psi, the lowest row scaled by $f^{\\prime}_{c}$/2,000)':' ('+grp(a.fc_op)+' psi; between two rows the lower row is used)')+
+    ```
+  Edit 6.
+  - Before:
+    ```js
+      if(a[k]===null) return [Lv+' $f_{c}$:','$f^{\\prime}_{c}$ = '+grp(R.fc)+' psi is below the first row of AASHTO MBE Table 6B.5.2.4.1-1: '+lv+' $f_{c}$ = '+grp(R.A[k])+' psi is the entered value; confirm the owner\'s basis.'];
+    ```
+  - After:
+    ```js
+      if(asdBelowTbl(R.fc)) return [Lv+' $f_{c}$:','$f^{\\prime}_{c}$ = '+grp(R.fc)+' psi is below the first row of AASHTO MBE Table 6B.5.2.4.1-1: '+lv+' $f_{c}$ = '+(k==='fc_inv'?'0.40':'0.60')+'$f^{\\prime}_{c}$ = '+grp(a[k])+' psi is used automatically'+((S.allow.ovr||{})[k]?' (the entered '+grp(R.A[k])+' psi is used instead)':'')+'; confirm the owner\'s basis.'];   /* MBE4C */
+    ```
+  Edit 7.
+  - Before:
+    ```js
+      if(!(S.allow.ovr&&S.allow.ovr[k])&&aa[k]===null) out.push({name:'Allowable '+lb,st:'warn',short:'no row for f′c',
+        text:'f′c = '+grp(R.fc)+' psi is below the first row of Table 6B.5.2.4.1-1: the value used ('+grp(R.A[k])+' psi) is the field’s current entry; confirm the owner’s basis.',
+    ```
+  - After:
+    ```js
+      if(asdBelowTbl(R.fc)) out.push({name:'Allowable '+lb,st:'warn',short:'no row for f′c',   /* MBE4C */
+        text:'f′c = '+grp(R.fc)+' psi is below the first row of Table 6B.5.2.4.1-1: '+lb+' = '+(k==='fc_inv'?'0.40':'0.60')+'f′c = '+grp(aa[k])+' psi (automatic)'+((S.allow.ovr&&S.allow.ovr[k])?'; the entered '+grp(R.A[k])+' psi is used':'')+'; confirm the owner’s basis.',
+    ```
+- **How verified:**
+  - Probe origin/main vs branch, headless, driven through the Beam Capacity frame: 88 cases, ACI / AASHTO × f′c 1.0, 1.5, 1.8, 1.99, 2.0, 2.45, 3.0, 3.5, 4.0, 5.0, 6.0 ksi × f_y 33, 40, 50, 60 ksi.
+  - Only f′c < 2,000 psi changes. f_c,inv / f_c,op go from 1,200 / 1,900 psi to:
+    - 1.0 ksi: 400 / 600
+    - 1.5 ksi: 600 / 900
+    - 1.8 ksi: 720 / 1,080
+    - 1.99 ksi: 796 / 1,194
+  - With those, M_conc and, where concrete then governs, M_all and RF.
+  - f′c ≥ 2,000 psi: identical. Beam Capacity and Development & Splice frames: identical (Beam Capacity apart from the check-summary panel's order and open state).
+  - 0 console errors.
+  - Tests: `tests/smoke/cbc-asd-mbe4.mjs` extended (1,800 psi hand check at Gr 40 / 60, rows 1,000 / 1,500 / 1,990 psi, overrides): ALL PASS at 1400 / 390 px. check-syntax, phone-layout `--tool cbc`, project-library `--tool asd` / `--tool cbc`: pass.
+- **Other copies:** none.
