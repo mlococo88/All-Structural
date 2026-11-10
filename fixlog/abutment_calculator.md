@@ -17049,6 +17049,29 @@ Engineer decision 2026-11-10 (geometry). AASHTO LRFD 10th Ed. (2024): 5.6.5 / Fi
 - **Check case:** open the tool; the input tab bar shows "Girders & Reactions" and the tab holds panel I-5.
 - **PR:** https://github.com/mlococo88/All-Structural/pull/1385
 
+## 2026-11-10 — ABRT: reaction matrix Table view, panel I-5 (entry only, no computed value changes)
+- **Request (engineer, 2026-11-10):** "The reaction should allow for a tabular input as well."
+- **PR:** https://github.com/mlococo88/All-Structural/pull/1391
+- **Change:** panel I-5, under the "Reaction matrix" subhead, a two-button switch "Per load type" (the existing view, the default, unchanged) / "Table".
+  - Table: one row per girder G1…GN; one column per load type and component, in `RX_CELLS` order: DC P, DW P, LL+IM P, BR V_x, TU V_x, CR/SH V_x, WS P/V_x/V_y, WL P/V_x/V_y (12 columns, kip in the header, load-type group headers). Σ row = the sum over the girders as entered (before the panel I-6 shares). Calculated BR / TU / CR·SH V_x (panel I-6b on) show "calc", read-only, as in the per-load-type view. The girder column is sticky; the table scrolls sideways inside its wrapper (the input column is 348 px wide at 1440 px).
+  - Both views edit `S.rx[type][i].{P,Vx,Vy}` directly (same paths `rx.<type>.<i>.<c>`, same Undo key); a typed value is stored as `Number(text)` as in the number inputs; blank = 0 as before.
+  - Typing: a non-number marks the cell `bad` (`aria-invalid`, the input-tab error marker via `abutInputTabMarks`) and is not stored.
+  - Paste (anchored at the focused cell): lines = rows; cells split at tabs (Excel) or else at commas (CSV). All or nothing: rejected with a message, nothing changed, when a cell is text (header, units), a cell is blank, the block runs past the last girder or the last column, or it covers a calculated column. One Undo step per paste.
+  - Copy table (TSV): a header line ("Girder", "DC P (kip)", …) and one line per girder; calculated cells as "calc"; no Σ line.
+  - Keys: ↑/↓ and Enter / Shift+Enter move by row; ←/→ move by column when the caret is at the edge or the value is all selected; Tab as usual.
+- **Anchors / code:** CSS after `table.itbl td.ro{…}` (`.rxv-seg`, `.rxg-wrap`, `table.itbl.rxgrid …`); new functions after `const RX_CELLS = …` (`abRxMode`, `abRxModeSet`, `RXG_COLS`, `rxgCalc`, `rxSegHTML`, `rxgSum`, `rxGridHTML`); the I-5 panel body: `${selRow("Load type being edited",…)} … btnRxApplyAll` is now inside `${abRxMode()==="table"? <note + rxGridHTML()> : <the same four lines as before>}` after `${rxSegHTML()}`; handlers before `/* ---------- comparison dialog ---------- */` (`rxgNum`, `rxgParse`, `rxgPaste`, `rxgTSV`, `rxgCopy` and document listeners for click / focusin / mouseup / focusout / input / paste / keydown, keyed on `data-rxg` / `data-rxmode`). The existing `table.itbl` paste handler only takes `type=number` inputs, so it does not see the Table's text inputs.
+- **Saved data (§5):** no change to the project format; `S.ui.rxView` unchanged. New per-browser key `abutcalc_rxEntry_v1` = `"girder"` | `"table"` (the view only).
+- **Provisions / values:** none (§4 not affected).
+- **Decisions (pending engineer review):**
+  - one table for the whole abutment (the matrix has no per-bearing-line dimension; one bearing line per abutment), all 12 columns, sideways scroll inside the table rather than column groups behind a selector;
+  - shared/list-input.js not used (a row list with + Add / ×, its paste splits rows and drops extra columns); the Steel Bridge custom-demand paste skips bad cells. A tool-local grid with all-or-nothing paste instead; no shared file changed;
+  - a blank cell in a pasted block is an error (enter 0), a typed blank is 0 as in the existing view;
+  - the copy carries headers (for Excel); to paste back, select the numbers only;
+  - the card note on paste format and units is on the card only: the Report's girder reaction matrix is unchanged.
+- **Check case:** N = 5, paste at G1 DC P the 5 × 12 block row i = [80+i, 11+i, 60+2i, 3.25, 2.5+i/10, 1.5, 4, 1.25, 2.5, −1.5, 0.5, 1+i], then type 66.125 in G4 LL+IM P; the same values typed in the per-load-type view give the same `S.rx` and the same Input ID (5C237CBE-91F3) and dashboard D/C.
+- **How verified:** `tests/smoke/abutment-rx-table.mjs` (new): toggle and remembered view, layout, typing both ways, 5 × 12 TSV and 2 × 3 CSV paste, 7 rejected pastes, bad-cell marking, keys, copy, same results vs the old entry, saved project opens with the same Input ID as on main, Pull from SubLoads shown in the Table, 390 px, 0 console errors; `check-syntax`, `abutment-pile-group-parity`, `abutment-panel-scroll`, `abutment-elevations`, `abutment-drawings`, `project-library --tool abutment`, `geometry-handoff`, engine `handoffs` and `handoff-store`.
+- **Other copies:** none.
+
 ## 2026-11-10 — PR: fix/abutment-slab-shelf-drawing (PR #1387: https://github.com/mlococo88/All-Structural/pull/1387) (ABSS) — Approach slab on the stem shelf drawn t thick with its top at shelf + t (a dimensioned step when d_sh ≠ t); Extreme Event I backwall: slab inertia arm t/2 above the shelf   [§4 calculation change, e > 0 with d_sh ≠ t and the EE-I M–O backwall check only; no saved key or format change]
 - **Engineer report (2026-11-10):** "The approach slab thickness is not correct in the drawing if I include the shelf depth below backwall." Photo of sheet 1 at e = 10 in, d_sh = 30 in, t = 15 in: slab drawn 2'-6" thick; "D_SH = 2'-6"" inside the slab; the BEARING label across a dimension line.
 - **Root cause:** `abdwBuild` drew the slab from the shelf (`shY = G.ySh`) up to the top of the backwall (`G.yTop`), so its thickness was d_sh. The tab figure, 3D view and elevations card already used shelf + t. Section A-A of the approach-slab sheet drew the backwall top at the slab top (wall height t above the shelf, not d_sh).
