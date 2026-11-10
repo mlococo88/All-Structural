@@ -10097,7 +10097,7 @@ function rbrComp(inp,f){
   const gov=c.gov==='8in'?'the 8 in. minimum governs':(c.gov==='eqA'?'expression (a) governs':'expression (b) governs');
   const exS=inp.useExcess?[rbS({id:'excess',label:'Excess reinforcement factor',sym:f.AASHTO?'\\lambda_{er}':'\\text{factor}',value:f.excess,unit:'',d:3,note:'see §excess'})]:[];
   const tail=r=>[
-    rbS({id:'ldccalc',label:'Larger expression'+(inp.useExcess?', times the excess reinforcement factor':'')+(f.AASHTO?', divided by λ':''),sym:'l_{dc,calc}',eq:'\\max(l_{dc,a},\\, l_{dc,b})'+(inp.useExcess?'\\cdot \\frac{A_{s,req}}{A_{s,prov}}':'')+(f.AASHTO?'\\, /\\, \\lambda':''),
+    rbS({id:'ldccalc',label:'Larger expression'+(inp.useExcess?', times the excess reinforcement factor':'')+(f.AASHTO?', divided by λ; λ_rc taken as 1.0 (the reduction for spirals or hoops of 5.10.8.2.2b is not applied: conservative)':''),sym:'l_{dc,calc}',eq:'\\max(l_{dc,a},\\, l_{dc,b})'+(inp.useExcess?'\\cdot \\frac{A_{s,req}}{A_{s,prov}}':'')+(f.AASHTO?'\\, /\\, \\lambda':''),
       sub:'\\max('+rbN(c.a)+',\\, '+rbN(c.b)+')'+(inp.useExcess?'\\times '+rbN(f.excess,3):'')+(f.AASHTO?'\\, /\\, '+rbN(f.lambda):''),value:c.ldc_calc,unit:'in'}),
     rbS({id:'ldc',label:'Compression development length (8 in. minimum)',sym:'l_{dc}',eq:'\\max(l_{dc,calc},\\, 8\\, \\text{in.})',sub:'\\max('+rbN(c.ldc_calc)+',\\, 8)',value:c.ldc,unit:'in',ref:r,note:gov})];
   if(!f.AASHTO){
