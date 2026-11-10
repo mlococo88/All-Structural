@@ -68,7 +68,7 @@ try {
     const info = await p.$eval(sel, s => ({ texts: s.querySelectorAll('text').length, shapes: s.querySelectorAll('line,polyline,polygon,circle,rect').length })); assert.ok(info.texts > 8 && info.shapes > 20, `${tab}/${name}: drawn ${JSON.stringify(info)}`);
     assert.equal(await p.$(`#out [data-gfxb="${name}"] .sdx-btns`), null, `${tab}/${name}: no zoom buttons`);
     await p.evaluate(() => { window.__dxf = []; window.__dl0 = window.__dl0 || window.SharedDxf.download; window.SharedDxf.download = t => window.__dxf.push(t); });
-    await p.$eval(`#out [data-gfxb="${name}"] [data-vadxf]`, b => b.click()); const txt = await p.evaluate(() => window.__dxf[0] || ''); assert.ok(/SECTION/.test(txt) && /EOF/.test(txt) && /S-GRDR|S-ANNO-TEXT/.test(txt), `${tab}/${name}: DXF`);
+    await p.$eval(`#out [data-gfxb="${name}"] [data-vadxf]`, b => b.click()); const txt = await p.evaluate(() => { window.SharedDxf.download = window.__dl0; return window.__dxf[0] || ''; }); assert.ok(/SECTION/.test(txt) && /EOF/.test(txt) && /S-GRDR|S-ANNO-TEXT/.test(txt), `${tab}/${name}: DXF`);
     const bx = await p.locator(sel).boundingBox(); await p.mouse.move(bx.x + bx.width * 0.5, bx.y + bx.height * 0.5); await p.waitForTimeout(80);
     done.push(`${tab}/${name}`); return txt; };
   const selRow = async (attr, val) => assert.ok(await p.$(`#out tr[${attr}="${val}"].sel`), `row ${attr}=${val} selected`);
