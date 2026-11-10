@@ -45,7 +45,7 @@ try {
     assert.equal(String((await saved(p)).splices.plates[0].bot.to), String(v0 + 0.125)); assert.notEqual(await fs1(p), withRow, 'edited t_o changes FS1');
     await p.click('#inPanes [data-spldel="0"]'); await p.waitForTimeout(800); await settle(p);
     assert.deepEqual((await saved(p)).splices.plates, []); assert.match(await p.locator('#inPanes').innerText(), /None entered\./);
-    const builtIn = await fs1(p); assert.match(builtIn, /FS1.*auto:/, builtIn);
+    const builtIn = await fs1(p); assert.match(builtIn, /FS1.*built-in:/, builtIn);   // "Entered below" with no entry: the built-in plates (not auto-designed)
     msg.push(`ok  auto-designed FS1 copied by "+ Add splice station": "${withRow.slice(0, 90)}…" (equals the auto-designed result); t_o edit saved and changes FS1; × removes the row`);
   });
   await one(async p => {

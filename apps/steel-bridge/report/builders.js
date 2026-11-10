@@ -387,8 +387,9 @@
       G.errors.length ? note(G.errors.join(' '), true) : null,
       G.list.length ? splFig(GB => GB.spliceStrip(G.list, B.P, {}), `Splice locations on girder ${gName(B.girder)}; marker colour: the governing ratio of each splice`) : null,
       tbl(['Splice', 'Plates and bolts', 'Governing', 'Ratio', 'Largest strength ratio', 'Status'], G.list.map((s, k) => { const fl = s.R && s.R.fl, gv = s.gov, q = strGov(s.CK), bad = s.CK ? s.CK.filter(c => c.status === 'fail').length : 0;
-        return [s.name, fl ? `${s.own ? 'entered' : 'auto'}: ${fl.top.n + fl.bot.n + s.R.web.nw} bolts each side` : '—', gv ? `${gv.c.id} ${gv.it.loc}` : s.R && s.R.errors.length ? s.R.errors[0] : '', gv ? R3(gv.it.r, K('spl@' + k, gv.it.step)) : '—',
-          q ? { ...R3(q.it.r, K('spl@' + k, q.it.step)), t: `${q.c.id}: ${f(q.it.r, 3)}` } : '—', s.CK ? (bad ? `${bad} check${bad > 1 ? 's' : ''} NG` : 'OK') : 'input error']; }))]));
+        return [s.name, fl ? `${s.own ? 'entered' : s.design ? 'auto' : 'built-in'}: ${fl.top.n + fl.bot.n + s.R.web.nw} bolts each side` : '—', gv ? `${gv.c.id} ${gv.it.loc}` : s.R && s.R.errors.length ? s.R.errors[0] : '', gv ? R3(gv.it.r, K('spl@' + k, gv.it.step)) : '—',
+          q ? { ...R3(q.it.r, K('spl@' + k, q.it.step)), t: `${q.c.id}: ${f(q.it.r, 3)}` } : '—', s.CK ? (bad ? `${bad} check${bad > 1 ? 's' : ''} NG` : 'OK') : 'input error']; })),
+      note(`Plates and bolts (Splices input tab): ${B.P.splices && B.P.splices.auto === false ? 'as entered for each station and girder ("entered"); a station without an entry is not auto-designed: it is checked with GirderDetail\'s built-in splice plates and bolts ("built-in")' : 'auto-designed at each station, fewest bolts and then least plate ("auto"), except where an entry exists for that station and girder ("entered")'}. AASHTO LRFD 10th Ed. Art. 6.13.6.1.`)]));
     G.list.forEach((s, k) => { const R = s.R, sc = 'spl@' + k, d = s.p.dem, items = [];
       if (s.warn && s.warn.length) items.push(note(s.warn.join(' '), true));
       items.push(kv([['$M_{DC1}$ / $M_{DC2}$ / $M_{DW}$', `${f(d.MDC1, 1)} / ${f(d.MDC2, 1)} / ${f(d.MDW, 1)} kip-ft`], ['$M_{LL+IM}^{+}$ / $M_{LL+IM}^{-}$', `${f(d.MLLp, 1)} / ${f(d.MLLn, 1)} kip-ft`], ['$M_{CL}$', `${f(d.MCL, 1)} kip-ft`],
