@@ -16625,7 +16625,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                 <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'16px',flexWrap:'wrap'}}>
                   <span style={{fontSize:'11px',fontFamily:'monospace',color:'#374151'}}>Section for f_R</span>
                   <select value={serviceIISection} onChange={e=>setRating('serviceIISection',e.target.value)}
-                    style={{...INP2,width:'auto',fontFamily:'monospace',fontSize:'11px'}}>
+                    style={{...INP2,width:'auto',maxWidth:'100%',fontFamily:'monospace',fontSize:'11px'}}>
                     <option value="zone">By zone type (Composite zone → composite; other zones → noncomposite)</option>
                     <option value="composite">Composite, every zone: f_R = 0.95·Fyf</option>
                     <option value="noncomposite">Noncomposite, every zone: f_R = 0.80·Rh·Fyf</option>
@@ -17178,7 +17178,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                   <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
                     <span style={{fontSize:'11px',fontFamily:'monospace',color:'#374151'}}>Prestress losses</span>
                     <select value={ps3Losses} onChange={e=>setRating('ps3Losses',e.target.value)}
-                      style={{...INP2,width:'auto',fontFamily:'monospace',fontSize:'11px'}}>
+                      style={{...INP2,width:'auto',maxWidth:'100%',fontFamily:'monospace',fontSize:'11px'}}>
                       <option value="other">Other (approximate or lump-sum, or no elastic gain) → γ_LL 0.8</option>
                       <option value="refined">Refined, LRFD 5.9.3.4, with elastic gain → γ_LL 1.0</option>
                     </select>
