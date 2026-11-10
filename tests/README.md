@@ -293,7 +293,7 @@ Volatile values are normalized before comparing: ISO time stamps and dates (`202
 
 1. `git fetch origin main`, check out `origin/main` (a clean worktree), run `node tests/smoke/list-input.mjs --out <dir>`.
 2. For every failing part, compare `<dir>/<part>-<case>-A.json` with `-B.json` field by field. Only text fields (page / tab / input-panel text) may differ, and only in display text. Every result, input and saved-data field (e.g. `tabR`, `AN`, `S`, `P`, `C`, `R`, `M`, `saved`, `stored`, `savedText`) must be identical.
-3. If so, set `BASE` to that `origin/main` commit (and say which differences were accepted in the comment above it and in the PR). Run the script again: it must pass.
+3. If so, set `BASE` to that `origin/main` commit (and say which differences were accepted in the comment above it and in the PR). Run the script again: it must pass. To re-baseline one part only, give its entry a `base` commit (with the same comment) instead; `bsl` has one (2026-11-10).
 4. A difference in a result, an input or saved data is never re-baselined: raise it.
 
 ## Baselines (`baselines/`)

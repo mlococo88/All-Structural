@@ -2871,3 +2871,36 @@ function listTables() {
   - New: `tests/smoke/bsl-inputcheck.mjs`.
   - Passing: `check-syntax`, `phone-layout --tool bsl`, `project-library --tool bsl`, `bsl-barge-collision`, `bsl-layout`, `geometry-handoff`, `abutment-rx-table`, `engine/run.mjs handoffs`.
 - **Other copies:** none.
+
+## 2026-11-10 — PR: fix/bsl-open-none-foundation (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — opening a project with fewer supports (OPN); abutment with Foundation "None" (ABNF)   [no change for any project without a no-footing abutment; §4 change for abutments with Foundation "None"]
+- **OPN, the problem.** `openProject` drew the open tab (`showTab(P.ui.tab)`) before `recompute()`, so the tab was drawn from the old `MODEL` (old supports) with the new `P`. With fewer supports and the Summary tab showing, `summaryHtml` read `P.units[k].name` for a support that no longer exists and threw. Import JSON caught every error as "… is not a readable JSON file". Undo / Redo (`SharedProjects.history` `set`) and New project had the same order. The Saved projects dialog and the Cloud sync load (`shared/projects-ui.js` `loadIt`: `ctx.open(u.name)`) both call the `open` callback, which is `openProject`.
+- **OPN, where / before / after:**
+  - `openProject`, anchor `syncSupports(); V3.homed = false; buildTabs(); buildSide();`
+    - before: `syncSupports(); V3.homed = false; buildTabs(); buildSide(); showTab(P.ui.tab); recompute(); autosave(); flash(`Opened ${file}.`);`
+    - after: `if (!(P.ui.sel >= 0 && P.ui.sel < P.units.length)) P.ui.sel = 0;` then `syncSupports(); V3.homed = false; buildTabs(); buildSide(); recompute(); showTab(P.ui.tab); autosave(); flash(`Opened ${file}.`);`
+  - history `set` (anchor `const h = SharedProjects.history(`): `… buildSide(); showTab(P.ui.tab); recompute(); autosave();` → `… buildSide(); recompute(); showTab(P.ui.tab); autosave();`
+  - projectBar `newProject`: `… buildSide(); showTab(P.ui.tab || 'summary'); recompute(); autosave();` → `… buildSide(); recompute(); showTab(P.ui.tab || 'summary'); autosave();`
+  - `#file-in` reader (anchor `t.id === 'file-in'`): `JSON.parse` and `openProject` are now in separate `try` blocks. A parse error still says "… is not a readable JSON file."; an error after a valid parse says "… could not be opened (<error name>: <message>)."
+- **ABNF, the problem.** For an abutment with Foundation "None", `unitGeo` sets no `R.ftgBot` and the unit has no bottom-of-footing resultant. `earthAbut` still used `zb = R.ftgBot` (undefined) for the footing-level items, so their elevations were NaN. They never entered a combination (no bottom-of-footing index), but the Earth loads tab, its load diagram and the Report wrote NaN into the SVGs (default project with both abutments on "None": 160 console errors). `earthAbut` also took `t_f = nz(u.ftg.t)`, the hidden footing thickness, into the retained height H used for h_eq. The abutment hand-off (`abutExportData`) sent `bottomOfFooting: 0` (r3 of undefined), footingWidth and footingThickness from the hidden inputs.
+- **ABNF, where / before / after:**
+  - `earthAbut`, anchor `const tf = `:
+    - before: `const tf = nz(u.ftg.t), zb = R.ftgBot, zt = …, H = tf + soilH, …` · `W = nz(u.ftg.W)` · `const it = [], add = o => it.push(o);`
+    - after: `const noF = u.ftg.type === 'none';` · `const tf = noF ? 0 : nz(u.ftg.t), zb = noF ? nz(u.topFtg) : R.ftgBot, …` · `W = noF ? 0 : nz(u.ftg.W)` · `add = o => { if (!(noF && o.sec === 'bot')) it.push(o); }`
+  - `earthHtml`: the H fact reads "Retained height H, base of the stem to grade (no footing)" and a note "No footing (Foundation "None"): …" is shown (also in the Report, which prints this tab).
+  - `patchEarthDwg` `loadSets`: with no footing the "eh" diagram shows the stem-level items (`sec !== 'bot'`), with vertical loads at `nz(u.topFtg) + soilH`, titled "Earth loads on the stem and backwall (no footing): …".
+  - `abutExportData`: after the `r.err` line, `if (u.ftg.type === 'none') { out.push({ name: u.name, error: 'Foundation "None": there is no footing to export (the abutment calculator designs an abutment on a footing).' }); return; }`
+  - `HANDOFF.md` §4.5: one sentence.
+- **Governing provision (ABNF):** AASHTO LRFD 10th Ed. 3.11.6.4 and Table 3.11.6.4.1-1 (h_eq by abutment height, interpolated). With no footing the abutment height is taken from the base of the stem (top-of-footing El.) to grade; the water table input is measured from the same elevation.
+- **Check case (ABNF):** default project, Abut. 1 Foundation "None". soil height 125.0 − 108.0 = 17.0 ft; k_a = 0.30726; γ = 0.120 kcf; L = 46.070 ft; h_eq table 4 / 3 / 2 ft at H = 5 / 10 / 20 ft.
+  - before: H = t_f + 17.0 = 3.0 + 17.0 = 20.0 ft → h_eq = 2.0 ft; LS on the stem = 0.30726 × 0.120 × 2.0 × 17.0 × 46.070 = 57.754 kip at El. 116.5.
+  - after: H = 17.0 ft → h_eq = 3 + (2 − 3) × 7/10 = 2.3 ft; LS on the stem = 0.30726 × 0.120 × 2.3 × 17.0 × 46.070 = 66.417 kip (+8.663 kip). The construction-stage surcharge on the stem changes the same way (57.754 → 66.417 kip).
+  - Strength I, top of footing: V_l max 524.632 → 539.792 kip (+1.75 × 8.663 = 15.160); M_l max 5,066.642 → 5,195.506 kip-ft (+1.75 × 8.663 × (116.5 − 108.0) = 128.864). Axial unchanged (1,395.540 / 529.845). Service I V_l max 361.293 → 369.956; EE I V_l max 275.399 → 279.731 (γ_EQ 0.5). More conservative.
+  - The footing-level items (10 of them) are no longer listed; no combination used them.
+- **How verified:** main-vs-branch probe (the 5 projects of `bsl-inputcheck.mjs` plus "abutment with footing, water table 4 ft, ES" and "both abutments None"): `combine`, `comboComps`, the abutment payload, `MODEL.C`, every output tab of every unit, the strip and the Report text: 6 projects identical (359 items); only the "None" project differs (combine/comps of the two abutments, their Earth loads / Combinations tabs, Summary, the abutment payload). Console errors on that project: main 160, branch 0.
+- **Tests:** new `tests/smoke/bsl-open-nofooting.mjs` (both regressions, the hand check, 0 console errors; 11 failures against main). `tests/smoke/bsl-inputcheck.mjs`: the probe no longer requires the Report to gain the §1.4 lines (the reference has them since #1399). `tests/smoke/list-input.mjs` `bsl` re-baselined to 5d8eeba (`base` field; `tests/README.md`).
+- **Saved data (§5):** none changed.
+- **Decisions (pending engineer review):**
+  1. Foundation "None" on an abutment is a valid computed state (the input offers it; `unitGeo` and the unit model already handle it: results stop at the top of footing). Not an input error.
+  2. With no footing, H (for h_eq) and the water table are measured from the base of the stem (t_f = 0), not with the hidden footing thickness.
+  3. An abutment with Foundation "None" is left out of the abutment hand-off and the "Export abutments" file with an error entry, rather than sent with footing fields of 0.
+- **Other copies:** none.

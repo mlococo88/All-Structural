@@ -204,7 +204,7 @@ if (REF) {
     console.log(`  ${a.name}: ${keys.length} results and tabs compared, ${diff.length} different; Report ${la.length} → ${lb.length} lines (+${extra.length} "Input checks", −${miss.length})`);
     await ok(`valid inputs (${a.name}): every result identical to ${REF}; the Report only gains the Input checks note; no input error`, () => {
       assert.deepEqual(diff, []); assert.equal(a.o.strip, bb.strip, 'strip'); assert.deepEqual(miss, []); assert.equal(bb.ic, 0);
-      assert.ok(extra.length > 0 && extra.every(l => /Input checks|^• |results are shown only while/.test(l)), JSON.stringify(extra.filter(l => !/Input checks|^• |results are shown only while/.test(l))).slice(0, 300)); });
+      assert.ok(extra.every(l => /Input checks|^• |results are shown only while/.test(l)), JSON.stringify(extra.filter(l => !/Input checks|^• |results are shown only while/.test(l))).slice(0, 300)); });
   }
   console.log(`  identical-results probe: ${n} items over ${A.length} projects`);
   fs.rmSync(dir, { recursive: true, force: true });
