@@ -39,6 +39,11 @@
     const s = g.segs.find(q => x >= q.x0 - 1e-9 && x <= q.x1 + 1e-9) || g.segs[g.segs.length - 1], F = window.SharedDxf.frac;
     return `web ${F(s.D)} × ${F(s.tw)}, flanges ${F(s.topB)} × ${F(s.topT)} top, ${F(s.botB)} × ${F(s.botT)} bottom`;
   }
+  /* the plate segments in words (screen and print: the old elevation's plate labels; the read-out has the plates at the pointer) */
+  function platesCap(g) {
+    const F = window.SharedDxf.frac;
+    return `<p class="vk-cap">Plate segments (x, ft): ${g.segs.map(s => `${nf(s.x0, 2)} to ${nf(s.x1, 2)}: web ${F(s.D)} × ${F(s.tw)}, top flange ${F(s.topB)} × ${F(s.topT)}, bottom flange ${F(s.botB)} × ${F(s.botT)}`).join('; ')}.</p>`;
+  }
   const fail = (slot, msg) => { slot.innerHTML = `<div class="note">${esc(msg)}</div>`; return null; };
   /* chips: one group per chart; html with a line sample of the series */
   const chipGroup = (key, label, list) => ({ label, items: list.map(q => ({ key: key + ':' + q.key, html: `${VA().swatch(q.ci, q.dash)} ${q.html}`, on: !(S.hide[key] || {})[q.key] })) });
@@ -71,7 +76,7 @@
       chips: () => [chipGroup('anM', 'Moments', MS), chipGroup('anC', 'Deflection', CS)], onChip,
       hint: 'Point at (or tap) the graphic to read the station; click or tap to select it.',
       caption: prLegend(MS) + prLegend(CS) + `<p class="vk-cap">Stations, moments and deflections are the Analysis tab's results (the station table below); click (or tap) a location to select it. Deflection is drawn downward (the camber values with their sign changed); the camber is the total, upward.</p>`,
-      notes: `<p class="vk-note">${NOTE_EL}</p>`, dxf: A.build, file: 'analysis-elevation' });
+      notes: platesCap(g) + `<p class="vk-note">${NOTE_EL}</p>`, dxf: A.build, file: 'analysis-elevation' });
     const sl = slot.querySelector('#gfx_an_c'); if (sl) sl.addEventListener('change', () => { A.setSel(+sl.value); re(); });
     return H;
   }
@@ -96,7 +101,7 @@
       pickX: x => nearest(xs, x), snap: x => { const k = nearest(xs, x); return fin(xr[k]) ? xr[k] : x; }, onSelect: k => o.onSelect && o.onSelect(k),
       legend: VA().legend('ratio'), hint: 'Point at (or tap) a band to read its location; click or tap to select it.',
       caption: `<p class="vk-cap">One band per location of the results table (the stretch to the mid-points of its neighbours); neighbouring bands of one colour class are merged and show their largest ratio; the flag marks the largest of all. Numbers are the table rows. Green below 0.90, amber 0.90 to 1.00, red above 1.00 or NG (the classes of the table).</p>`,
-      notes: `<p class="vk-note">${NOTE_EL}</p>`, dxf: A.build, file: 'flexure-elevation' });
+      notes: platesCap(g) + `<p class="vk-note">${NOTE_EL}</p>`, dxf: A.build, file: 'flexure-elevation' });
   }
   /* the stress checks of the selected location: the flange checks in ksi (demand vs capacity) and the ratio of every check, 1.0 marked */
   function flexChecks(slot, o, A) {
@@ -132,8 +137,8 @@
       at, pickX: x => nearest(xr, x), snap: x => xr[nearest(xr, x)], onSelect: k => o.onSelect && o.onSelect(k),
       chips: () => (MS.length ? [chipGroup('cnM', 'Envelope', MS)] : []), onChip, legend: VA().legend('ratio'), hint: 'Point at (or tap) the graphic to read a location; click or tap to select it.',
       caption: (MS.length ? prLegend(MS) : '') + table + `<p class="vk-cap">Pours, M<sub>DCc</sub> and M<sub>DC1</sub> are the Analysis results the checks use (Analysis tab, deck placement sequence); the band row is the governing deck-placement ratio at each location of the table (green below 0.90, amber 0.90 to 1.00, red above 1.00 or NG). Click (or tap) a location to select it.</p>`,
-      notes: `<p class="vk-note">${NOTE_EL}</p>`, dxf: A.build, file: 'constructibility-pours' });
+      notes: platesCap(g) + `<p class="vk-note">${NOTE_EL}</p>`, dxf: A.build, file: 'constructibility-pours' });
   }
 
-  window.SBDAlongGfx = { geo, plates, analysis, flexure, flexChecks, constr, clsG, _S: S };
+  window.SBDAlongGfx = { geo, plates, platesCap, analysis, flexure, flexChecks, constr, clsG, _S: S };
 })();
