@@ -4898,7 +4898,7 @@ format changed. Anchor text `QA2` marks each change. New file `ui/sub.js` (in th
   Decision (pending engineer review): C_b and γ_e from the per-station M_DCc envelope (not one load case); Eq. 6.10.8.2.3b-1 refers
   to the envelope values that compress the flange, which this follows.
 
-## 2026-11-10 — PR: sb-constr-gamma-e (PR #PRNUM2: https://github.com/mlococo88/All-Structural/pull/PRNUM2) — Constructibility: γ_e of a nonprismatic deck-placement unbraced length passed directly, not rebuilt from K (SBGE; engineer decision 2026-11-10; changes computed values)
+## 2026-11-10 — PR: claude/sb-constr-gamma-e-v2 (PR #1288: https://github.com/mlococo88/All-Structural/pull/1288) — Constructibility: γ_e of a nonprismatic deck-placement unbraced length passed directly, not rebuilt from K (SBGE; engineer decision 2026-11-10; changes computed values)
 - **Problem:** `location()` rebuilt the conservative-bound γ_e at each location as F_e,s/(K f_s), K = f_max/f_x at the analysis station
   nearest the location (from `bracingC`). (a) Where M_c = 0 at that station (f_x ≤ 0: e.g. a station at a bearing or an inflection point),
   K was blank and taken as 1, so γ_e = F_e,s/f_s with the small stress at the location: γ_e and F_nc far too high (unconservative).
