@@ -16884,3 +16884,55 @@ After:
 
 ### Saved data
 - No key, input or format change; defRev and Input IDs unchanged. A saved `piles.clrTop` is kept but changes no result.
+
+## 2026-11-10 — PR: claude/abutment-punch-pilehead (PR #1377: https://github.com/mlococo88/All-Structural/pull/1377) (ABPH) — Pile punching credits only the concrete above the pile head (corrects ABPM #1375); the bottom mat at c_F stays for flexure   [§4 calculation change, pile mode only; no saved key or format change]
+
+Engineer decision (2026-11-10), correcting #1375: for embedded piles the punching cone starts at the pile top, so the concrete below the pile head is not credited. h_p = t_f − e_pile; d_v from the depth above the pile head: 0.72h_p, or 0.9d_e where there is a valid d_e above the pile head. Kept from #1375: the single bottom mat at c_F for toe flexure, shear, crack control and the drawings; the I-7 clear cover greyed out.
+
+### Code basis (AASHTO LRFD 10th Ed. 2024, paraphrased)
+- 5.12.8.6.1: two-way critical section at no closer than 0.5d_v from the perimeter of the reaction area, perimeter b_0 a minimum. 5.12.8.6.3 (Eq. 5.12.8.6.3-1): V_n with b_0 and d_v. Neither article addresses a pile cap whose reinforcement is below the pile head.
+- 5.7.2.8: d_v is the lever arm between the flexural tension and compression resultants, not to be taken less than the larger of 0.9d_e and 0.72h. Above an embedded pile head with the bottom mat below it there is no tension reinforcement in the section (the top bars over a pile are on the compression face), so there is no d_e; d_v takes the floor on depth, 0.72h_p. With the mat at or above the pile head (c_F ≥ e_pile) it crosses the cone and d_e = the toe d.
+- Top mat: the model's top bars (heel D1, top cover) are on the compression face over a pile reaction and are not a d_e. No mat over the pile heads is modelled, so the I-7 clear cover stays unused.
+
+### ABPH-1. Punching (`computeAll`, C-13, anchor `ABPH (2026-11-10, engineer decision correcting ABPM #1375)`)
+Before (ABPM):
+```js
+    const tF=R.checks.toeFlex, hP=g.tf*12;               // in
+    const deF=tF.d;                                      // the footing design's d (Tab 5 §5.3), in
+    const dvF=tF.dv;                                     // = max(0.9d_e, 0.72h_p), in
+    if(!(deF>0)) warnFor("conv",`Punching shear: no effective depth (t_f − c_F − d_b/2 = ${fmt(deF,1)} in) — check panels I-1, I-2.`,"err");
+```
+After:
+```js
+    const hP=g.tf*12-embP;                               // concrete above the pile head, in
+    const matAbove=+m.coverF>=embP-1e-9;                 // the bottom mat at or above the pile head: it crosses the cone
+    const deF=matAbove? R.checks.toeFlex.d : null;       // else no tension reinforcement above the pile head
+    const dvF=matAbove? Math.max(0.9*deF,0.72*hP) : 0.72*hP;   // in [5.7.2.8]
+    if(!(hP>0)) warnFor("conv",`Punching shear: no concrete above the pile heads (h_p = t_f − e_pile = ${fmt(hP,1)} in) — check panels I-1, I-7.`,"err");
+```
+`R.checks.punching` gains `matAbove`; `de` is null when the mat is below the pile head.
+
+### ABPH-2. Thin footing (`pileCapThin`)
+Limit unchanged from ABPM (t_f ≤ e_pile + 2 in, i.e. h_p ≤ 2 in); comment and message now state the pile-head-based depth ("punching depth above the pile heads h_p = t_f − embedment, d_v = 0.72h_p > 0"). The "no effective depth" error is on h_p again (was the toe d under ABPM; t_f − e_pile − c_top − d_b before).
+
+### ABPH-3. Display
+- Tab 4 §4.6: "Shear depth above the pile head": h_p = t_f − e_pile; d_v = 0.72h_p (or d_e and max(…) when the mat is at or above the pile head); basis list (cone from the pile top, 5.7.2.8 reasoning, bottom mat for flexure, I-7 not used).
+- Report worksheet: steps h_p (and d_e when the mat is above the pile head) and d_v; basis note reworded. Input echo "(not used: no mat over the pile heads, see §4.6)".
+- Panel I-7: embedment tooltip (sets the punching depth h_p), clear-cover tooltip, basis note. Tab 5 §5.3 toe note: punching uses the concrete above the pile heads; this mat is not credited there. Warning "Pile cap …" w2: "Punching uses the concrete above the pile heads only, h_p = t_f − … in". defRev 3 / 4 notices reworded.
+- Sheet "joint", pile in the footing: C1 label "(FLEXURE, TAB 5 5.3)"; new dimension "H_P <> (PUNCHING)" from the pile top to the footing top; notes "ONE BOTTOM MAT … FOR THE FOOTING FLEXURE" and "PUNCHING (TAB 4 4.6) CREDITS ONLY THE CONCRETE ABOVE THE PILE HEAD, H_P = T_F - EMBEDMENT; THE BOTTOM MAT IS NOT CREDITED."
+
+### Check cases (f′c 4 ksi, #8 toe d_b 1.0, c_F 3 in, HP 12 in, β_c 1, V_n = 0.126√f′c b_0 d_v, φ 0.9) — pre-#1375 / #1375 / after
+- Default on piles (t_f 36, e 12, c_top 3; V_u 200.97 kip): h_p 24 / 36 / 24 in; d_e 20.0 / 32.5 / none; d_v 18.00 / 29.25 / 17.28 in; b_0 120 / 165 / 117.12 in; V_n 544.32 / 1216.22 / 510.01 kip; φV_n 489.89 / 1094.59 / 459.01; D/C 0.410 / 0.184 / 0.438.
+- Variant (t_f 42, e 18, c_top 4; V_u 208.79): h_p 24 / 42 / 24; d_e 19.0 / 38.5 / none; d_v 17.28 / 34.65 / 17.28; b_0 117.12 / 186.6 / 117.12; V_n 510.01 / 1629.35 / 510.01; φV_n 459.01 / 1466.42 / 459.01; D/C 0.455 (pile 1) / 0.142 (pile 2) / 0.455 (pile 1).
+- t_f 18 in (e 12, c_top 3; V_u 178.81): h_p 6 / 18 / 6; d_e 2.0 / 14.5 / none; d_v 4.32 / 13.05 / 4.32; b_0 65.28 / 100.2 / 65.28; V_n 71.07 / 329.52 / 71.07; φV_n 63.96 / 296.57 / 63.96; D/C 2.80 FAIL / 0.60 PASS / 2.80 FAIL.
+- e_pile 0, c_top 2.5 (mat above the pile head): D/C 0.184 in all three.
+
+### How verified
+- Probes vs pre-#1375 (30fd288) and vs main (#1375), 10 cases; abutment-pile-group-parity vs both; tests/smoke/abutment-pile-mat-level.mjs updated (hand checks above); check-syntax; project-library --tool abutment; abutment-drawings; abutment-panel-scroll; abutment-stem-shelf (only its pile parity vs main differs, in punching, as intended).
+
+### Decisions (pending engineer review)
+- "Mat at or above the pile head" is c_F ≥ e_pile (bar bottom face at or above the pile top); then d_e = the toe d (t_f − c_F − d_b/2).
+- Thin-footing limit kept at h_p ≤ 2 in.
+
+### Saved data
+- No key, input or format change; defRev and Input IDs unchanged. A saved `piles.clrTop` stays unused.
