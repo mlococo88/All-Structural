@@ -16,8 +16,8 @@
      VK.grad(id, y0, y1, frac)        a vertical gradient (user space y0 top .. y1 bottom), compression colour above frac, tension below, faint at frac
      VK.stack(items, gap, ymax)       items [{ py }] sorted, each given ty >= its py and >= gap below the previous one (and <= ymax, pushing up)
      VK.niceStep(span, n)             1 / 2 / 5 x 10^k step for about n divisions
-     VK.ruler({ x, Y, y0, y1, step, title, ticks: [{ y, label, sel }], labels })   a y ruler (scale on the left of x) with marker ticks
-     VK.diagram({ segs: [{ ya, yb, fa, fb }], x0, kx, Y, grad, badges, fmt, xmin, xmax, gap })   a value diagram along y: area of each
+     VK.ruler({ x, Y, y0, y1, step, title, titleDy, ticks: [{ y, label, title, sel }], labels, labelDx })   a y ruler (scale on the left of x) with marker ticks
+     VK.diagram({ segs: [{ ya, yb, fa, fb }], x0, kx, Y, yMin, yMax, grad, badges, fmt, xmin, xmax, gap })   a value diagram along y: area of each
                                       segment split at zero, gradient fill on screen, grey compression / hatched tension in print, profile line,
                                       zero line and value badges (badges: true) stacked apart per side
      VK.readout(svg, { at(y user units of the SVG) -> null | [line1, line2], x0, x1, out (element for the text, aria-live) })
@@ -26,7 +26,8 @@
                                       the splitter); stops by itself when el leaves the page
      VK.print(el, before, after)      before() on beforeprint and after() on afterprint while el is on the page
      VK.DXF_NOTE                      the note that Download DXF is the CAD line drawing (the shaded graphic is screen and print only)
-   The palette, the print mode and the forced-colours rules apply inside an element of class vk (the card body of the graphic).
+   The palette, the print mode and the forced-colours rules apply inside an element of class vk (the card body of the graphic). Classes set on it
+   by the graphic from its own width: vk-narrow (phone layout: tiles 3 across, segmented control full width), vk-t3 (tiles 3 across).
    Fix log: fixlog/steel-bridge.md (SECC, 2026-11-10). */
 (function () {
   'use strict';
@@ -68,7 +69,7 @@
 .vk svg .bc{fill:#EFF4FF;stroke:#BFD3FB;} .vk svg .bt{fill:#FDF1EA;stroke:#F2C7AE;} .vk svg text.vc,.vk svg text.cc{fill:var(--vk-ct);} .vk svg text.vt,.vk svg text.tt{fill:var(--vk-tt);} .vk svg text.vc,.vk svg text.vt{font-size:11px;font-weight:600;}
 .vk svg .hl{stroke:var(--vk-ink);stroke-width:.6;stroke-dasharray:3 3;} .vk svg .tip{fill:var(--vk-ink);opacity:.88;} .vk svg .vk-hov text{fill:#fff;font-size:11px;} .vk svg .vk-hov{pointer-events:none;}
 @media (max-width:760px){.vk-tiles{grid-template-columns:repeat(3,minmax(0,1fr));} .vk-seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;} .vk-seg button{padding:5px 4px;line-height:1.25;}}
-.vk.vk-narrow .vk-tiles{grid-template-columns:repeat(3,minmax(0,1fr));} .vk.vk-narrow .vk-seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;} .vk.vk-narrow .vk-seg button{padding:5px 4px;line-height:1.25;}
+.vk.vk-narrow .vk-tiles,.vk.vk-t3 .vk-tiles{grid-template-columns:repeat(3,minmax(0,1fr));} .vk.vk-narrow .vk-tile b{font-size:10.5pt;white-space:normal;} .vk.vk-narrow .vk-seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;} .vk.vk-narrow .vk-seg button{padding:5px 4px;line-height:1.25;}
 @media print{.vk{--vk-steel:#9A9A9A;--vk-deck:#fff;--vk-deck-l:#000;--vk-rebar:#000;--vk-c:#000;--vk-t:#000;--vk-ct:#000;--vk-tt:#000;--vk-acc:#000;--vk-ink:#000;--vk-mut:#333;--vk-faint:#666;}
   .vk .vk-seg,.vk .vk-chips,.vk .vk-read,.vk .vk-hd button,.vk .vk-noprint{display:none!important;} .vk .vk-cap.vk-pr{display:block;} .vk-tile{background:#fff;border-color:#999;} .vk-tile a.wk{display:none;}
   .vk svg .pc{fill:#D4D4D4;} .vk svg .pt{fill:url(#vk-ht);} .vk svg .vk-gf{fill:none!important;} .vk svg .nat{fill:#777;} .vk svg .bc,.vk svg .bt{fill:#fff;stroke:#000;} .vk svg .stl{stroke:#000;stroke-width:.6;} .vk svg .vk-hov{display:none;}
@@ -111,7 +112,7 @@
   function ruler(o) {
     const Y = o.Y, x = o.x, out = [L(x, Y(o.y0), x, Y(o.y1), 'ext')], st = o.step || niceStep(o.y1 - o.y0, 7);
     for (let y = Math.ceil(o.y0 / st - 1e-9) * st; y <= o.y1 + 1e-9; y += st) out.push(L(x - 4, Y(y), x, Y(y), 'ext'), T(x - 6, Y(y) + 3.5, fx(y, st < 1 ? 1 : 0), { a: 'end', cls: 'xs' }));
-    if (o.title) out.push(T(x, Y(o.y1) - 24, o.title, { a: 'middle', cls: 'xs' }));
+    if (o.title) out.push(T(x, Y(o.y1) - (o.titleDy || 24), o.title, { a: 'middle', cls: 'xs' }));
     const tk = (o.ticks || []).filter(q => fin(q.y));
     tk.forEach(q => out.push(`<path d="M${r2(x + 1)} ${r2(Y(q.y))} l7 -4 v8 z" class="nat${q.sel ? ' sel' : ''}"><title>${esc(q.title || q.label || '')}</title></path>`));
     if (o.labels) stack(tk.map(q => ({ py: Y(q.y) + 3.5, q })), 12).forEach(s => out.push(T(x - (o.labelDx || 26), s.ty, esc(s.q.label), { a: 'end', cls: 'xs' + (s.q.sel ? ' selt' : '') })));

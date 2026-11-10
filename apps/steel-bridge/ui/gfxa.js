@@ -98,7 +98,7 @@
   function secSvg(m, W, show) {
     const VK = window.SBDVizKit, U = window.SharedUnits, nar = W < 600, s = m.s, H = m.H;
     const rul = nar ? 40 : 84, gap = nar ? 10 : Math.max(24, Math.min(56, W * 0.03)), SW = nar ? Math.max(130, Math.min(170, W * 0.4)) : Math.max(280, Math.min(400, W * 0.3)), rm = nar ? 2 : 12;
-    const hMax = nar ? 250 : Math.max(280, Math.min(360, W * 0.26)), topM = 42, botM = 32, avail = Math.max(60, W - rul - gap - SW - rm);
+    const hMax = nar ? 250 : Math.max(280, Math.min(360, W * 0.26)), topM = nar ? 50 : 42, botM = 32, avail = Math.max(60, W - rul - gap - SW - rm);
     const halfMin = Math.max(s.topB, s.botB) / 2 + (m.comp ? 6 : 3), halfFull = m.comp ? m.be / 2 : halfMin, kH = hMax / H;
     const half = Math.max(halfMin, Math.min(halfFull, avail / (2 * kH))), k = Math.min(kH, avail / (2 * half)), broken = m.comp && half < m.be / 2 - 1e-6;
     const Wc = rul + 2 * half * k + gap + SW + rm, ox = Math.max(0, (W - Wc) / 2);
@@ -108,7 +108,7 @@
     o.push(VK.grad('vk-sgr', Y(H), Y(0), (H - m.sc.yb) / H));
     // ruler with every neutral axis as a tick
     const xr = ox + rul - (nar ? 6 : 12);
-    o.push(VK.ruler({ x: xr, Y, y0: 0, y1: H, title: 'y, in', labels: !nar, ticks: m.axes.map(a => ({ y: a.y, label: a.tag, title: `${a.name}: ${U.fmt(a.y, 3)} in`, sel: a.key === m.key })) }));
+    o.push(VK.ruler({ x: xr, Y, y0: 0, y1: H, title: 'y, in', titleDy: nar ? 34 : 24, labels: !nar, ticks: m.axes.map(a => ({ y: a.y, label: a.tag, title: `${a.name}: ${U.fmt(a.y, 3)} in`, sel: a.key === m.key })) }));
     // the section: deck (broken ends when narrower than b_eff), haunch, steel, bars
     const p = s, yw0 = p.botT, yw1 = yw0 + p.D, d = m.d, y1 = d + m.hh, y2 = H;
     if (m.comp) { const zz = (x, sg) => { const ym = (y1 + y2) / 2, a = (y2 - y1) * 0.18; return [[x, y2], [x, ym + a], [x + sg * a * 0.9, ym + a * 0.35], [x - sg * a * 0.9, ym - a * 0.35], [x, ym - a], [x, y1]]; };
@@ -145,22 +145,22 @@
     const tone = v => (v > 0 ? 'c' : v < 0 ? 't' : ''), go = '<a class="wk" href="#" data-vkgo="secc-wk" title="Worked below the graphic">§</a>';
     const tl = [{ label: 'ȳ', value: U.fmt(sc.yb, 3), unit: 'in', link: wk(`sec.${m.id}.yb`) }, { label: 'I', value: U.fmtInt(sc.I), unit: 'in⁴', link: wk(`sec.${m.id}.I`) },
       { label: sb('S_top / S_bot'), value: `${U.fmtInt(sc.St)} / ${U.fmtInt(sc.Sb)}`, unit: 'in³', link: wk(`sec.${m.id}.St`) },
-      { label: 'f, top of steel', value: sgnF(top), unit: 'ksi', tone: tone(top), link: go }, { label: 'f, bottom of steel', value: sgnF(bot), unit: 'ksi', tone: tone(bot), link: go },
-      dk ? { label: 'f, top of deck', value: sgnF(dk.fb), unit: 'ksi', tone: tone(dk.fb), link: go } : { label: 'A', value: U.fmt(sc.A, 2), unit: 'in²', link: wk(`sec.${m.id}.A`) }];
+      { label: 'f top of steel', value: sgnF(top), unit: 'ksi', tone: tone(top), link: go }, { label: 'f bottom of steel', value: sgnF(bot), unit: 'ksi', tone: tone(bot), link: go },
+      dk ? { label: 'f top of deck', value: sgnF(dk.fb), unit: 'ksi', tone: tone(dk.fb), link: go } : { label: 'A', value: U.fmt(sc.A, 2), unit: 'in²', link: wk(`sec.${m.id}.A`) }];
     const nf3 = v => U.fmt(v, 3), kd = m.key === 'n' ? 'n' : '3n';
     const wl = (lab, y, q) => `<li>f, ${lab} = 1000 × 12 (${nf3(y)} − ${nf3(sc.yb)}) / ${U.fmtInt(sc.I)}${q.k !== 1 ? ` / ${U.fmt(m.f, 3)}` : ''} = <b>${sgnF(m.ff(y) * q.k)} ksi</b></li>`;
     const worked = `<ul class="vk-cap" id="secc-wk" style="margin:4px 0 0;padding-left:18px">${wl('top of steel', m.d, m.segs[0])}${wl('bottom of steel', 0, m.segs[0])}${dk ? wl('bottom of deck', dk.ya, dk) + wl('top of deck', dk.yb, dk) : ''}</ul>`;
     const barT = m.bars.map(([w, q]) => `${U.fmt(q.A, 2)} in² ${w}`).join(', ');
     const cap = `<p class="vk-cap">${esc(m.C.long)}. <i>f</i> = <i>M</i>(<i>y</i> − ȳ)/<i>I</i>, <i>M</i> = 1000 kip-ft (× 12 in/ft), with ȳ, <i>I</i> of the ${m.key === 'steel' ? 'steel' : m.key === '3n' ? 'long-term 3n' : 'short-term n'} section, A = ${U.fmt(sc.A, 2)} in²${dk ? `; deck ÷ ${kd} = ${U.fmt(m.f, 3)}` : ''}.`
       + `${m.comp ? ` Bars ${barT || 'none'}; haunch ${U.fmt(m.hh, 2)} in, ${sb('t_s')} ${U.fmt(m.ts, 2)} in,` : ''} d ${nf3(m.d)} in. PNA ${sb('y_p')} = ${nf3(c.yp)} in (${sb('M_p')} = ${U.fmt(c.Mp, 1)} kip-ft, ${c.region === 'pos' ? 'positive' : 'negative'} flexure).</p>${worked}`
-      + `<p class="vk-cap vk-pr">Neutral axes: ${m.axes.map(a => `${a.short} ${nf3(a.y)} in`).join(' · ')}.</p>`;
+      + `<p class="vk-cap vk-pr">Neutral axes (y from the bottom of the steel): ${m.axes.map(a => `${esc(a.name)} ${nf3(a.y)} in`).join(' · ')}.</p>`;
     const note = `<p class="vk-note">Stress diagram: a unit moment <i>M</i> = 1000 kip-ft (positive: compression at the top) on the section the selected load case acts on (DC1: steel; DC2, DW: long-term 3n; LL+IM: short-term n), f = <i>M</i>(<i>y</i> − ȳ)/<i>I</i> with the table's <i>I</i> and ȳ; compression + (blue), tension − (orange); deck stress ÷ n or 3n. y is measured up from the bottom of the steel. The haunch is not part of the composite section (it raises the slab), so no stress is drawn in it. Bars are drawn at their depths at a schematic spacing; their areas are the deck input's.${c.region === 'neg' ? ' Negative-flexure region: the same positive unit moment is drawn (as before this change); the signs reverse under a negative moment.' : ''}</p><p class="vk-note">${esc(VK.DXF_NOTE)}</p>`;
     const chips = VK.chips({ label: 'Also show', items: m.axes.map(a => ({ key: a.key, html: `${esc(a.short)} <small>${nf3(a.y)}</small>`, on: !!S.secShow[a.key], fixed: a.key === m.key, title: a.name })) });
     slot.innerHTML = `<div class="vk" id="secc"><div class="vk-hd"><h3>Section and neutral axes<small>${esc(g.label || g.id || '')}, segment ${o.seg || 1} · stress per 1000 kip-ft</small></h3><button type="button" data-secdxf title="The CAD line drawing of this section">Download DXF</button></div>`
       + (m.comp ? VK.seg({ label: 'Load case of the stress diagram', items: Object.keys(SEC_CASES).map(k => [k, esc(SEC_CASES[k].btn)]), cur: m.key }) : '')
       + VK.tiles(tl) + `<div class="vk-fig"></div><p class="vk-read" aria-live="polite" data-hint="Point at (or tap) the section to read y and f(y)."></p>${chips}${cap}${note}</div>`;
     const root = slot.querySelector('.vk'), fig = root.querySelector('.vk-fig'), out = root.querySelector('.vk-read');
-    const draw = w => { const W = w > 0 ? w : 900, q = secSvg(m, W, S.secShow); fig.innerHTML = q.svg; root.classList.toggle('vk-narrow', q.nar); VK.readout(fig.querySelector('svg'), { at: q.at, x0: q.x0, x1: q.x1, out }); };
+    const draw = w => { const W = w > 0 ? w : 900, q = secSvg(m, W, S.secShow); fig.innerHTML = q.svg; root.classList.toggle('vk-narrow', q.nar); root.classList.toggle('vk-t3', W < 860); VK.readout(fig.querySelector('svg'), { at: q.at, x0: q.x0, x1: q.x1, out }); };
     VK.fit(fig, draw);
     VK.print(fig, () => { if (fig.clientWidth < 760) draw(760); }, () => draw(fig.clientWidth));   // a phone-width page prints the wide layout
     VK.wire(slot, { seg: v => { if (!SEC_CASES[v]) return; S.secCase = v; section(slot, o); }, chip: v => { S.secShow[v] = !S.secShow[v]; section(slot, o); } });
