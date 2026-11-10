@@ -4715,7 +4715,7 @@ format changed. Anchor text `QA2` marks each change. New file `ui/sub.js` (in th
 9. **Summary** (`ui/summary.js`, `ui/dash.js`): Owner row with no owner "—; load rules AASHTO" → "none entered; load rules AASHTO"; "Lowest rating
    factor" and "Not evaluated" on their own lines in the line's font (`.sum-low`, was `.note` run on); a ratio that is not a finite number shows
    "∞" (Infinity) or "—" (was "NaN") with the tooltip "Ratio not a finite number: the check has no finite demand / capacity ratio (counted as REVIEW;
-   the reason is on its tab)." The check summary column (`ui/dash.js` `vOf`) the same. Counting unchanged (report/summary.js). The cause of the
+   the reason is on its tab)." The check summary column (`ui/dash.js` `vOf`) the same. Per the engineer's rule of 2026-11-10 (a decision that changes what a value means is noted in the app), the Summary's "Counts" note adds: "A cell showing ∞ or — (not a rating factor): that check's demand / capacity ratio is not a finite number (∞: no finite capacity for the demand; —: not a number); it is counted as REVIEW, and the reason is on its tab (the cell's tooltip says so)." The Report's summary is unchanged: it already writes "not evaluated (ratio not a number)". Counting unchanged (report/summary.js). The cause of the
    Constructibility ratio (F_nc = 0.91 ksi at 60° skew) is pending the engineer, not touched. `tests/smoke/steel-bridge-summary.mjs` expects ∞ / —.
 10. **3D view** drop-downs: `#out .v3d-bar select{width:auto;max-width:100%}` (were cut at 110 px: "Whole bridg", "Moment: Stre").
 11. **Header at 390 px:** Undo and Redo in `<span id="hdrUR">` (inline-flex, nowrap); the save chip goes before it (`chipBefore: $('hdrUR')`).
