@@ -5601,7 +5601,7 @@ index 2650570..15de47e 100644
 - **Open items:** (a) the DXF framing plan has G1 at the bottom (y up), the mirror of the SVG plan, 3D view and section; the skew angle itself is right; not changed. (b) On paper B the section sheet does not fit at any scale (k = 1200, on main too).
 - **Other copies:** none.
 
-## 2026-11-10 — PR: claude/sb-plan-flip (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Drawings: framing plan and erection diagram sheets drawn with G1 at the top (SBFLIP; drawing only, engineer decision 2026-11-10)
+## 2026-11-10 — PR: claude/sb-plan-flip (PR #1348: https://github.com/mlococo88/All-Structural/pull/1348) — Drawings: framing plan and erection diagram sheets drawn with G1 at the top (SBFLIP; drawing only, engineer decision 2026-11-10)
 - **Problem:** the DXF framing plan (`engine/drawings.js plan()`, sheet "FRAMING PLAN") and the erection diagram (`engine/sheets.js erect()`, sheet "ERECTION DIAGRAM AND GIRDER LAYOUT") drew G1 at the bottom (Y = y·12, y up). With stations increasing to the right, that is the mirror image of the screen plan (Framing tab, Summary, Report), the 3D view and the typical section, which all show G1 on top (found in #1343, open item (a)). Engineer decision 2026-11-10: G1 at the top, G_nb at the bottom, stations to the right, on the sheet and its DXF.
 - **Change (drawing only; no computed value, saved data or tab-graphic DXF changes):**
   - `plan()`: `Y = y => y * 12` → `Y = y => (wid - y) * 12` (wid = y of G_nb), with `yT = Y(G.ys[0])` (G1, top) and `yB = Y(wid)` (G_nb, bottom). The x of every point is unchanged (`FR.xb(k, i) = sup_k + (y_i − y_c) tan θ_k`), so a + skew puts the G_nb (lower) end ahead-station, as the screen plan.
