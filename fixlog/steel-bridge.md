@@ -4945,3 +4945,37 @@ format changed. Anchor text `QA2` marks each change. New file `ui/sub.js` (in th
 - **Other copies:** GirderDetail ("Steel Bridge Design.html") keeps F_e,s/(K f_s) with K = 1 where k is blank; not changed (engineer
   decision 2026-11-10: new app only; a deliberate difference).
 - **Open items:** the M_DCc envelope sign jump near M_DC1 inflections and C_b < 1.0 from `feCb` (see the SBCON entry).
+
+## 2026-11-10 — PR: claude/sb-constr-twosign (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Constructibility: both signs of the pour envelope checked; C_b and γ_e per sign case from its own side of the envelope (SBTS; engineer decision 2026-11-10, items 1 and 3; changes computed values)
+- **Problem:** (1) With the pour sequence on, the M_DCc envelope (`engine/analysis.js` `seq.MDCc`) takes the positive side where M_DC1 ≥ 0 and
+  the negative side elsewhere. Near an inflection of M_DC1 the pour stages give large moments of the other sign that were never checked
+  (skewed 100-130-100 G2 x = 71 ft: only M_c = −73.81 kip-ft was checked; the pour stages give M_DCc+ = 408.45 kip-ft, M_c = +499.86).
+  (2) C_b and γ_e came from that station-by-station envelope, which switches side between adjacent stations: not one load case.
+- **Where:** `apps/steel-bridge/engine/constructibility.js`.
+  - `fromAnalysis`, anchor `// SBTS (engineer decision 2026-11-10, items 1 and 3`: `env.MDCp = max(M_DC1, seq.envP)`, `env.MDCn = min(M_DC1, seq.envN)`
+    at every station (`F.sides`). Each location: `side` = sign of M_DC1 there, `M.DCc` = that side (was `at(seq.MDCc)(x)`; identical at a
+    station), and `alt = { side: −side, DCc: other side, ...bracingC(x, env, { side: −side }) }` where the other side is > 0.01 kip-ft (`SIDE0`).
+  - `bracingC(x, env, opt)`: `opt.side` = ±1 takes `Mc = γ_DC·MDCp|MDCn + γ_CL·M_CL` (was `γ_DC·(useDCc(MDCc[k]) ? MDCc[k] : MDC1[k]) + γ_CL·M_CL`);
+    `govRec` records the side's M_DCc with `side`; `gsGovC` uses a side's M_DCc as recorded (0 included). Returns `side`.
+  - `location(L, prj)`: the former body is `locCase`; with `L.alt` both cases are computed (`locCase(L)`, `locCase({ ...L, ...L.alt, M.DCc: alt.DCc })`),
+    the larger governing ratio is returned (`L.side` on a tie) with `.cases` and `.alt`. Without `L.alt`: unchanged.
+  - `girder()`: the span results take the checks of both cases (`o.cs` = the case).
+  - `worked()` cn.Mc names the case and both cases' M_c and ratios; cn.Cb / cn.ge name the side diagram. `notes(seq, sides)`: the two-sign
+    note and the basis note replace the open-item note; a file / entered rows (one M_DCc per station): a note that one case is checked.
+  - `ui/constructibility.js`: the location list names the case; the detail shows the other case's checks with its § links and a button for
+    its worked steps. `report/builders.js` §Constructibility: the other case's checks and worked steps (scope `cn@i~`), span cells name the case.
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.10.3.4.1 (the girder is checked for the moments of the deck placement sequence);
+  6.10.3.2.1, 6.10.3.2.2 (GS14, GS15); 6.10.1.6 (f_ℓ amplification, per case); 6.10.8.2.3 and C6.10.8.2.3 (C_b, Eq. 6.10.8.2.3b-1, from the
+  moment gradient of the unbraced length); 6.10.8.2.3c and C6.10.8.2.3c, App. D6.6 (γ_e scales the design stresses of the moments checked).
+- **Basis (item 3):** each sign case takes C_b and γ_e from its own side of the envelope over the whole unbraced length. Decision (pending
+  engineer review): the diagram of the governing single pour stage was not used, because no single stage gives the largest moment of either
+  sign at every station of an unbraced length; the side envelope is the one used by the check at each station of that sign case.
+- **Decision (pending engineer review):** M_CL is taken as given at the location in both cases (as before); a case's M_c can then take the
+  other sign where M_CL outweighs a small pour moment, and its flange in compression follows M_c. A side smaller than 0.01 kip-ft is zero.
+- **Check case (skewed 100-130-100, G2 x = 71.00 ft, tests/engine/constr-twosign.test.mjs):** positive case M_c = 1.25(408.45) + 1.50(−7.14) =
+  499.86 kip-ft; steel section ȳ = 26.495 in, I = 40,759 in⁴: f_bu = 499.86(12)(62.000 − 26.495)/40,759 = 5.225 ksi (top flange); f_ℓ = 12.50 ksi;
+  GS14 yielding (5.225 + 12.50)/50 = **0.3545** (governs); F_nc = 41.91 ksi (γ_e 9.7961). Negative case as before: M_c = −73.81, GS15 tension
+  0.2654. Before: 0.2654 (only the negative case).
+- **Other projects / stations:** see PR. Pour sequence off: 0 rows changed (byte-identical probe). A hand-off file or Custom demands
+  (one M_DCc per station): unchanged.
+- **Other copies:** GirderDetail ("Steel Bridge Design.html") not changed (engineer decision: new app only); it checks one M_DCc per station.
