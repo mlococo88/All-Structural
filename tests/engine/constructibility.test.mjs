@@ -102,9 +102,19 @@ function cmp(list, where) {
     stats.diffs.push(`${where} ${k}: ${a} vs GirderDetail ${b}`);
   }
 }
+/* SBGE (engineer decision 2026-11-10, a deliberate difference from GirderDetail): this app passes γ_e of a nonprismatic deck-placement L_b
+   directly (nprC.gB) and, for a row without it where K is blank (f_x ≤ 0), takes f_max = max(f_bu,gov, f_s) where GirderDetail takes K = 1.
+   The parity rows are fed without gB (gdBasis), so the K path is compared exactly; a row on the f_max path (sbgeRow) has its γ_e-dependent
+   values (γ_e, F_e, r_t, L_p, L_r, F_cr, F_nc, AF, GS14) skipped, counted, and checked to be no less conservative (F_nc ≤ GirderDetail's). */
+const gdBasis = L => L.nprC && typeof L.nprC === 'object' && L.nprC.gB ? { ...L, nprC: (({ gB, ...q }) => q)(L.nprC) } : L;
+const sbge = { rows: 0, lower: 0, worst: { d: 0 } };
+const GEDEP = new Set(['ltC.LTB', 'ltC.Fnc', 'ltC.rt', 'ltC.Lp', 'ltC.Lr', 'ltC.Fcr', 'npr.K', 'npr.ge', 'npr.Fe', 'npr.rtE', 'amC.AF', 'amC.fl']);
+const sbgeRow = o => !!(o.ltC.npr && o.ltC.npr.kind === 'ge' && o.ltC.npr.gm === 'fmax');
 /* row values and GS14–GS16 items of GirderDetail (R, CK) against this engine's rows (mine, same order) */
 function cmpGS(R, CK, mine, where) {
-  R.rows.forEach((r, i) => { const o = mine[i], L = [];
+  R.rows.forEach((r, i) => { const o = mine[i], L = [], sk = sbgeRow(o);
+    if (sk) { sbge.rows++; assert.ok(o.ltC.Fnc <= r.ltC.Fnc + 1e-9, `${where} ${r.name}: SBGE F_nc ${o.ltC.Fnc} not above GirderDetail's ${r.ltC.Fnc}`); if (o.ltC.Fnc < r.ltC.Fnc - 1e-9) sbge.lower++;
+      if (r.ltC.Fnc - o.ltC.Fnc > sbge.worst.d) sbge.worst = { d: r.ltC.Fnc - o.ltC.Fnc, what: `${where} ${r.name}: F_nc ${r.ltC.Fnc.toFixed(3)} -> ${o.ltC.Fnc.toFixed(3)} ksi` }; }
     for (const k of ['Mc', 'DcC', 'RhC', 'CbCu', 'VuC']) L.push([k, o[k], r[k]]);
     L.push(['con.top', o.con.top, r.con.top], ['con.bot', o.con.bot, r.con.bot], ['conC.lab', o.conC.lab, r.conC.lab], ['conC.f', o.conC.f, r.conC.f], ['conT.f', o.conT.f, r.conT.f]);
     for (const k of ['FLB', 'LTB', 'Fnc', 'rt', 'Lp', 'Lr', 'Fcr', 'Fyr']) L.push(['ltC.' + k, o.ltC[k], r.ltC[k]]);
@@ -112,13 +122,13 @@ function cmpGS(R, CK, mine, where) {
     if (r.ltC.npr && r.ltC.npr.kind === 'ge') { for (const k of ['fS', 'rtS', 'FeS', 'ge', 'fbu', 'Fe', 'rtE', 'K']) L.push(['npr.' + k, o.ltC.npr[k], r.ltC.npr[k]]);
       L.push(['npr.gv', !!o.ltC.npr.gv, !!r.ltC.npr.gv]); if (r.ltC.npr.gv) for (const k of ['f', 'S', 'Mc', 'Dc', 'Rh', 'MD']) L.push(['npr.gv.' + k, o.ltC.npr.gv[k], r.ltC.npr.gv[k]]); }
     L.push(['amC.AF', o.amC.AF, r.amC.AF], ['amC.fl', o.amC.fl, r.amC.fl], ['webC.F', o.webC.F, r.webC.F], ['webC.k', o.webC.k, r.webC.k], ['sh.Vcr', o.sh.Vcr, r.sh.Vcr], ['sh.C', o.sh.C, r.sh.C]);
-    cmp(L, `${where} ${r.name}`); });
+    cmp(sk ? L.filter(e => !GEDEP.has(e[0])) : L, `${where} ${r.name}`); });
   // items in GirderDetail's order: GS14 yield, buckling (per row; a warning line where γ_e is a bound outside the step limit is skipped), GS15 web, tension, GS16
   const order = { GS14: ['yield', 'buckling'], GS15: ['web', 'tension'], GS16: ['shear'] }; let n = 0;
   for (const id of ['GS14', 'GS15', 'GS16']) { const c = CK.find(q => q.id === id), items = c.items.filter(it => isFinite(it.r)), keys = order[id];
     cmp([[`${id} n`, items.length, mine.length * keys.length]], where);
     items.forEach((it, j) => { const o = mine[Math.floor(j / keys.length)], q = o && o.checks.find(x => x.id === id && x.key === keys[j % keys.length]); if (!q) { stats.diffs.push(`${where} ${id} item ${j} missing`); return; }
-      cmp([[`${id} ${o.name} ${q.key} r`, q.ratio, it.r], [`${id} ${o.name} ${q.key} st`, q.ok ? 'pass' : 'fail', it.st]], where); n++; }); }
+      if (!(id === 'GS14' && sbgeRow(o))) cmp([[`${id} ${o.name} ${q.key} r`, q.ratio, it.r], [`${id} ${o.name} ${q.key} st`, q.ok ? 'pass' : 'fail', it.st]], where); n++; }); }
   return n;
 }
 /* this engine's overhang rows -> GirderDetail's GM.oh, compared */
@@ -143,7 +153,7 @@ test('parity with GirderDetail GS14–GS16 on the rows Preliminary sizing sends 
       for (const [vn, p] of [['', clone(fx.P.gs)], [' (M_DCc, f_l, V_CL)', seqVariant(clone(fx.P.gs))]]) {
         const where = fx.f.replace(/\.json$/, '') + vn, { R, CK } = G.gs(clone(p));
         if (!vn) R.rows.forEach((r, i) => { const q = fx.gd.gs.rows[i]; if (!(r.VuC === q.VuC || Math.abs(r.VuC - q.VuC) <= 1e-12 * Math.abs(q.VuC))) nodeDiff++; });   // Node = browser (V_u of deck placement, recorded)
-        const prj = prjOf(p), mine = p.rows.map(r => C.location(locOf(r), prj));
+        const prj = prjOf(p), mine = p.rows.map(r => C.location(gdBasis(locOf(r)), prj));
         nItems += cmpGS(R, CK, mine, where); nRows += R.rows.length; nGe += R.rows.filter(r => r.ltC.npr && r.ltC.npr.kind === 'ge').length;
         mine.forEach(o => { const ids = new Set(o.steps.map(s => s.id)); o.checks.forEach(c => assert.ok(ids.has(c.step), `${where} missing step ${c.step}`)); });
       }
@@ -151,6 +161,7 @@ test('parity with GirderDetail GS14–GS16 on the rows Preliminary sizing sends 
   }
   console.log(`       ${fixtures.length} recorded inputs × 2, ${nRows} rows (${nGe} with a nonprismatic 'ge' deck-placement L_b), ${nItems} GS14–GS16 items, ${stats.vals} values; Node = browser V_uC (${nodeDiff} differ); ${stats.diffs.length - s0} differ; largest relative difference ${stats.worst.rel.toExponential(2)}`);
   stats.diffs.slice(s0, s0 + 20).forEach(s => console.log('       ' + s));
+  console.log(`       SBGE (deliberate difference): ${sbge.rows} rows with K blank on the f_max rule (GirderDetail: K = 1), ${sbge.lower} with a lower F_nc; largest decrease ${sbge.worst.d.toFixed(3)} ksi${sbge.worst.what ? ` (${sbge.worst.what})` : ''}`);
   assert.equal(nodeDiff, 0); assert.equal(stats.diffs.length - s0, 0); assert.ok(nGe > 300, 'nonprismatic rows covered');
 });
 
@@ -163,19 +174,22 @@ const gdModP = (d0, pl, rows) => { const m = pl.girderDetail.materials, g = Stri
   return { ...clone(d0), gT: g, gB: g, gW: gw, rows }; };
 
 test('parity with GirderDetail GS14–GS16 at every station of the 100 gd_*.json payloads, the payload\'s M_DCc fed in; Deck overhang OH1–OH5 (GM.oh)', () => {
-  const G = gd(), d0 = G.ctx.GM.gs.def, t0 = Date.now(); let nLoc = 0, nItems = 0, nOH = 0, nCase = 0, seq = 0; const s0 = stats.diffs.length;
+  const G = gd(), d0 = G.ctx.GM.gs.def, t0 = Date.now(); let nLoc = 0, nItems = 0, nOH = 0, nCase = 0, seq = 0, nApp = 0, nAppD = 0, appW = { d: 0 }; const s0 = stats.diffs.length, b0 = sbge.rows;
   for (const f of payloads) {
     const pl = readPayload(f), F = C.fromPayload(pl);
     if (F.locs.some(L => L.M.DCc !== 0)) seq++;
     for (const [vn, fn] of f.endsWith('_G1.json') ? [['', L => L], [' (f_l 4)', L => ({ ...L, flC: 4 })]] : [['', L => L]]) {
       const locs = F.locs.map(fn), { R, CK } = G.gs(gdModP(d0, pl, locs.map((L, i) => gdRowOf(d0, L, i))), { base: true });
-      const mine = locs.map(L => C.location(L, F.prj)); nItems += cmpGS(R, CK, mine, f + vn); nLoc += locs.length; nCase++;
+      const mine = locs.map(L => C.location(gdBasis(L), F.prj)); nItems += cmpGS(R, CK, mine, f + vn); nLoc += locs.length; nCase++;
+      // SBGE: as this app checks (γ_e passed directly, nprC.gB): counted against the K basis above, not failed
+      locs.forEach((L, i) => { if (!(L.nprC && L.nprC.gB)) return; const a = C.location(L, F.prj), b = mine[i]; nApp++; if (Math.abs(a.ltC.Fnc - b.ltC.Fnc) > 1e-9) { nAppD++; const d = a.gov.ratio - b.gov.ratio; if (Math.abs(d) > Math.abs(appW.d)) appW = { d, what: `${f}${vn} ${L.name}: F_nc ${b.ltC.Fnc.toFixed(3)} -> ${a.ltC.Fnc.toFixed(3)} ksi, ratio ${b.gov.ratio.toFixed(4)} -> ${a.gov.ratio.toFixed(4)}` }; } });
     }
     if (F.oh) { const def = clone(G.ctx.GM.oh.def), p = { ...def, gF: F.prj.mat.Fyt === 70 ? 'HPS70W' : '50W', gW: F.prj.mat.Fyw === 70 ? 'HPS70W' : '50W', rows: F.oh.rows.map(r => ({ name: r.name, D: r.D, tw: r.tw, topB: r.topB, topT: r.topT, botB: r.botB, botT: r.botT, Lb: r.Lb, MDC1: r.MDC1, MCL: r.MCL })) };
       const { R, CK } = G.oh(p), mine = C.overhang(F.oh.rows, { ...C.OH_DEF }, { Fyf: F.prj.mat.Fyt, Fyw: F.prj.mat.Fyw }); nOH += cmpOH(R, CK, mine, f + ' OH'); }
   }
   console.log(`       ${nCase} cases (${seq} payloads with a pour-sequence M_DCc), ${nLoc} locations, ${nItems} GS14–GS16 items, ${nOH} OH1–OH5 items in ${((Date.now() - t0) / 1000).toFixed(1)} s; ${stats.diffs.length - s0} differ; largest relative difference so far ${stats.worst.rel.toExponential(2)}`);
   stats.diffs.slice(s0, s0 + 20).forEach(s => console.log('       ' + s));
+  console.log(`       SBGE (deliberate difference): ${sbge.rows - b0} rows with K blank (f_x ≤ 0) on the f_max rule, F_nc never above GirderDetail's; as this app checks (γ_e passed directly): F_nc differs at ${nAppD} of ${nApp} nonprismatic locations, largest ratio change ${appW.d.toFixed(4)}${appW.what ? ` (${appW.what})` : ''}`);
   assert.equal(stats.diffs.length - s0, 0); assert.ok(nLoc > 30000); assert.ok(nOH > 500); assert.ok(seq >= 80);
 });
 

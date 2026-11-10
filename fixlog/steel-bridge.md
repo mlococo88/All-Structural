@@ -4897,3 +4897,51 @@ format changed. Anchor text `QA2` marks each change. New file `ui/sub.js` (in th
   C_b and γ_e from the moments checked; the M_DCc envelope (items 1); C_b by Eq. 6.10.8.2.3b-1 can be below 1.0 (item 2); the difference from GirderDetail.
   Decision (pending engineer review): C_b and γ_e from the per-station M_DCc envelope (not one load case); Eq. 6.10.8.2.3b-1 refers
   to the envelope values that compress the flange, which this follows.
+
+## 2026-11-10 — PR: sb-constr-gamma-e (PR #PRNUM2: https://github.com/mlococo88/All-Structural/pull/PRNUM2) — Constructibility: γ_e of a nonprismatic deck-placement unbraced length passed directly, not rebuilt from K (SBGE; engineer decision 2026-11-10; changes computed values)
+- **Problem:** `location()` rebuilt the conservative-bound γ_e at each location as F_e,s/(K f_s), K = f_max/f_x at the analysis station
+  nearest the location (from `bracingC`). (a) Where M_c = 0 at that station (f_x ≤ 0: e.g. a station at a bearing or an inflection point),
+  K was blank and taken as 1, so γ_e = F_e,s/f_s with the small stress at the location: γ_e and F_nc far too high (unconservative).
+  (b) f_s and F_e,s were for a mixed section (the compression flange of the governing section j, the rest of the location's section), so
+  γ_e differed from F_e,j/f_max,j of section j (up to −6 % on the default project: unconservative) and varied from location to location
+  within one unbraced length.
+- **Where:** `apps/steel-bridge/engine/constructibility.js`.
+  - `bracingC`, anchor `// SBGE (2026-11-10): the bound γ_e itself`: new `nprC.gB = { ge: +G.g.toFixed(4), Fe, fm, rt, x0, x1 }` from
+    `feGe` (min over the sections j of F_e,j/f_max,j). `C0 = opt.G || factors()` (was `factors()`), and `fromPayload` / `fromAnalysis`
+    pass `G: prj.G`, so that γ_e is on the same factored basis (the owner's η) as f_bu,gov.
+  - `location()`, anchor `const gB = !gA && nC.gB`:
+    - Before: `const K = +nC.k > 0 ? Math.max(1, +nC.k) : 1, ..., ge = gA ? +gA.ge : fS > 0 ? FeS / (K * fS) : null`
+    - After: `K = +nC.k > 0 ? Math.max(1, +nC.k) : null`, `fmx = Math.max(fbu, fS)`,
+      `gm = gA ? 'A' : gB ? 'bound' : K && fS > 0 ? 'K' : fmx > 0 ? 'fmax' : 'none'`,
+      `ge = A: gA.ge | bound: gB.ge | K: FeS/(K fS) | fmax: FeS/fmx | none: null` (F_e = γ_e f_bu,gov as before).
+  - `worked()` cn.ge: the bound worked as min_j F_e,j/f_max,j with values and the rule; `SBDConstr.notes()`: the γ_e rule as a note
+    (Constructibility tab and Report §Constructibility).
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.10.8.2.3c (Eqs. 6.10.8.2.3c-1 to -3) and C6.10.8.2.3c (γ_e is one constant for the
+  unbraced length by which the design stresses at the governing section are scaled to the elastic LTB level); App. D6.6.1, D6.6.2
+  (Method A with C_be = 1.0 and χ = 1 bounds it); 6.10.1.6 (amplification uses F_cr from this); 6.10.3.2.1 (GS14).
+- **Rule for f_x ≤ 0 or near 0:** γ_e is computed once for the unbraced length (the bound above) and passed to every location in it, so
+  the stress at the location or its nearest station does not enter. A row given without γ_e (a hand-made row): K as given where K ≥ 1
+  and f_s > 0; otherwise f_max = max(f_bu,gov, f_s), the largest stress known in the unbraced length (conservative; was K = 1).
+  Decision (pending engineer review): the conservative bound (each section prismatic over the whole L_b at its largest stress) is kept
+  as the method where Method A does not apply; this PR only passes it on unchanged.
+- **Check case 1 (regression, tests/engine/constr-gamma-e.test.mjs):** L_b 0–20 ft, section change at 10 ft, M_DC1 = 4x(80 − x)/2, M_CL = 0.
+  Small section top 12 × 0.625, web 60 × 0.5, bottom 16 × 1.0: f_max = 3000(12)(35.497)/29,507 = 43.31 ksi, r_t = 2.6002 in,
+  F_e,j = π²(29,000)/(240/2.6002)² = 33.59 ksi, γ_e = 33.59/43.31 = 0.7757; f_bu,gov = 25.50 ksi (large section, x = 20);
+  F_e = 0.7757(25.50) = 19.78 ksi, r_t = 1.9951 in, L_r = 180.4 in < 240 in: F_nc = 19.78 ksi at x = 0.30, 5.00 and 19.70 ft.
+  Before: x = 0.30 (nearest station x = 0, M = 0, K = 1): γ_e = 33.59/0.863 = 38.93, F_e = 992.7, F_nc = 49.03 ksi; x = 19.70: γ_e 0.7946,
+  F_nc 20.26 ksi.
+- **Check case 2 (default project, G1 x = 249.99 ft, the governing Constructibility row):** L_b 250.00–274.20 ft = 290.4 in, bottom flange.
+  Section j (272.00–274.20 ft): r_t,j = 4.0790 in, F_e,j = π²(29,000)/(290.4/4.079)² = 56.47 ksi, f_max,j = 33.423 ksi, γ_e = 1.6895.
+  f_bu,gov = 18.573 ksi; F_e = 31.379 ksi; r_t = (290.4/π)√(31.379/29,000) = 3.0407 in; L_p = 80.55, L_r = 274.97 in < 290.4:
+  F_nc = 31.38 ksi; GS14 = 18.566/31.38 = 0.592. Before: F_e,s/(K f_s) = 53.650/(1 × 29.896) = 1.7946 (mixed section), F_nc 33.33, 0.557.
+- **Changes on the probed projects:** default G1 101 of 367 rows (pour sequence on or off); governing Constructibility 0.557 → 0.592
+  (x = 249.99/250.01). Largest decrease −0.003 (x = 68: γ_e 4.321 → 4.513, now one γ_e for the L_b). Skewed 100-130-100: 76–78 rows
+  with a new γ_e, no ratio changed (G1 x = 130: γ_e 19.776 → 19.772, F_nc 45.58 ksi). Same with no skew: 97–98 rows, largest +0.007
+  (G2 x = 99.99, F_nc 38.24 → 37.64 ksi).
+- **Parity tests:** `tests/engine/constructibility.test.mjs` feeds the GirderDetail parity rows without `gB` (`gdBasis`), so the K path is
+  still compared exactly (0 differences); rows on the f_max rule are counted and must not have F_nc above GirderDetail's.
+- **How verified:** probe of every location, PR 1 vs this branch (default, skewed, no skew; pour sequence on and off); `node tests/check-syntax.mjs`;
+  `node tests/engine/run.mjs`; steel-bridge smoke tests.
+- **Other copies:** GirderDetail ("Steel Bridge Design.html") keeps F_e,s/(K f_s) with K = 1 where k is blank; not changed (engineer
+  decision 2026-11-10: new app only; a deliberate difference).
+- **Open items:** the M_DCc envelope sign jump near M_DC1 inflections and C_b < 1.0 from `feCb` (see the SBCON entry).
