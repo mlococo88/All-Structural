@@ -523,7 +523,7 @@ Pole / sign-post anchorage designed in the Base Plate & Anchor Bolt Designer ins
 
 ### 4.13 Abutment ↔ elastomeric bearing module (postMessage, not a storage channel; documented 2026-11-07)
 
-`abutment_calculator.html` opens `elastomeric_design_module.html` (window name `edm`) and the two talk by `postMessage` with `app:"abutment-edm"`: the module sends `EDM_READY`, the abutment answers `INIT` `{ bearing:{ padL, padW, G, hrt }, loads:{ Pdl, Pll, deltaS, thetaLL }, thermal:{…}, girders:[…] }`, and **"↩ Send Pad to Abutment"** sends `PAD`:
+`abutment_calculator.html` opens `elastomeric_design_module.html` (window name `edm`) and the two talk by `postMessage` with `app:"abutment-edm"`: the module sends `EDM_READY`, the abutment answers `INIT` `{ bearing:{ padL, padW, G, hrt }, loads:{ Pdl, Pll, deltaS, thetaLL }, thermal:{…}, girders:[…] }`, and **"↩ Send Pad to Abutment"** (the module's Project tab, "Hand-offs" panel since 2026-11-10, HOC; before, "Checks and hand-off") sends `PAD`:
 
 ```js
 { G,            // ksi: the G of the pad shear force, i.e. the least favourable (upper) value — Method B (1 + tol)·specified G (MassDOT 0.184), Method A / plain the highest G of the durometer range (since 2026-11-07, H1; before: the specified G)

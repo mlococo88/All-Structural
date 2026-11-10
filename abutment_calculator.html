@@ -251,6 +251,25 @@ table.itbl td{border:1px solid var(--line-lt);padding:1px 2px;text-align:center;
 table.itbl input[type=number]{width:100%;border:none;background:transparent;text-align:center;padding:2px 1px;}
 table.itbl input[type=number]:focus{outline:1px solid var(--navy-lt);background:#fff;}
 table.itbl td.ro{background:var(--panel);color:#333;}
+/* ABRT (2026-11-10): reaction matrix Table view (panel I-5): one row per girder, one column per load type and component */
+.rxv-seg{display:inline-flex;border:1px solid var(--line);border-radius:3px;overflow:hidden;margin:2px 0 4px;}
+.rxv-seg button{border:0;background:#fff;color:var(--navy);padding:3px 10px;font-size:0.8rem;cursor:pointer;}
+.rxv-seg button+button{border-left:1px solid var(--line);}
+.rxv-seg button[aria-pressed="true"]{background:var(--navy);color:#fff;}
+.rxg-wrap{overflow-x:auto;max-width:100%;}
+table.itbl.rxgrid{width:100%;font-size:0.78rem;}
+table.itbl.rxgrid th{padding:1px 2px;font-size:0.74rem;line-height:1.15;}
+table.itbl.rxgrid th .u{font-weight:normal;color:#555;}
+table.itbl.rxgrid tbody th,table.itbl.rxgrid tfoot th{background:var(--panel);}
+table.itbl.rxgrid tbody th,table.itbl.rxgrid tfoot th,table.itbl.rxgrid thead tr:first-child th:first-child{position:sticky;left:0;z-index:1;}   /* girder labels stay in view while the table scrolls sideways */
+table.itbl.rxgrid td{padding:0;}
+table.itbl.rxgrid input{width:100%;min-width:3.3em;border:none;background:transparent;text-align:right;padding:2px 3px;font:inherit;}
+table.itbl.rxgrid input:focus{outline:1.5px solid var(--navy-lt);background:#fff;}
+table.itbl.rxgrid input.bad{background:var(--fail-bg);outline:1px solid var(--fail);}
+table.itbl.rxgrid tfoot td{background:var(--panel);font-weight:600;text-align:right;padding:2px 3px;white-space:nowrap;}
+table.itbl.rxgrid td.ro{padding:2px 3px;}
+.rxg-msg{font-size:0.8rem;min-height:1.1em;margin:2px 0;color:#333;}
+.rxg-msg.err{color:var(--fail);font-weight:600;}
 .mini-btn{font-size:0.8rem;padding:1px 8px;border:1px solid var(--line);background:var(--paper);border-radius:2px;}
 
 /* ================= TABS ================= */
@@ -2041,6 +2060,46 @@ function seedExampleReactions(){
 /* ---------- which matrix cells apply per load type (per design basis §2.2) ---------- */
 const RX_CELLS = {DC:["P"],DW:["P"],LL:["P"],BR:["Vx"],TU:["Vx"],CRSH:["Vx"],WS:["P","Vx","Vy"],WL:["P","Vx","Vy"]};
 
+/* ABRT (2026-11-10, engineer request: "The reaction should allow for a tabular input as well."): Table view of the reaction matrix
+   (panel I-5). The same S.rx[type][girder].{P,Vx,Vy} as the per-load-type view (saved data unchanged); one row per girder, one column
+   per (load type, component) in RX_CELLS order; computed BR / TU / CR·SH V_x columns (panel I-6b) read-only. The chosen view is a
+   per-browser preference (abutcalc_rxEntry_v1), not project data. Display and entry only: nothing computed changes. */
+const ABRT_KEY="abutcalc_rxEntry_v1";
+let abRxModeCur=null;
+function abRxMode(){ if(abRxModeCur) return abRxModeCur; let v=""; try{ v=localStorage.getItem(ABRT_KEY)||""; }catch(e){} return abRxModeCur=(v==="table"?"table":"girder"); }
+function abRxModeSet(v){ abRxModeCur=(v==="table"?"table":"girder"); try{ localStorage.setItem(ABRT_KEY,abRxModeCur); }catch(e){} }
+const RXG_COLS = LOAD_TYPES.flatMap(t=>["P","Vx","Vy"].filter(c=>RX_CELLS[t].includes(c)).map(c=>[t,c]));
+const RXG_LT = {DC:"DC",DW:"DW",LL:"LL+IM",BR:"BR",TU:"TU",CRSH:"CR/SH",WS:"WS",WL:"WL"};
+const RXG_CH = {P:"P",Vx:"V<sub>x</sub>",Vy:"V<sub>y</sub>"};
+function rxgCalc(t,c){ const L=S.longit||{}; return c==="Vx"&&((t==="BR"&&L.computeBR)||(t==="TU"&&L.computeTU)||(t==="CRSH"&&L.computeCRSH)); }
+function rxSegHTML(){ const m=abRxMode();
+  return `<div class="rxv-seg" role="group" aria-label="Reaction entry view"><button type="button" data-rxmode="girder" aria-pressed="${m==="girder"}" title="One load type at a time: P, V_x, V_y per girder">Per load type</button><button type="button" data-rxmode="table" aria-pressed="${m==="table"}" title="All load types in one table: one row per girder, one column per load type; paste from Excel or CSV">Table</button></div>`; }
+function rxgSum(j){ const [t,c]=RXG_COLS[j]; return (S.rx[t]||[]).reduce((a,r)=>a+(+r[c]||0),0); }
+function rxGridHTML(){
+  const N=S.beams.N;
+  let h=`<div class="in-note">Table: one row per girder, one column per load type; unfactored, at the bearings, kip. Paste: select a cell and paste a block from Excel or a CSV file (tab- or comma-separated, numbers only); it fills right and down from that cell. A block that runs past the last girder or column, covers a calculated cell, or holds text or a blank cell is rejected and nothing changes. Σ = the sum over the girders as entered, before the shares of panel I-6.</div>`;
+  h+=`<div class="rxg-wrap"><table class="itbl rxgrid" id="rxGrid" aria-label="Girder reaction matrix, kip"><thead><tr><th rowspan="2" scope="col">Girder</th>`;
+  LOAD_TYPES.forEach(t=>{ const n=RX_CELLS[t].length; h+=`<th colspan="${n}" scope="colgroup" title="${esc(LT_LABEL[t])}">${RXG_LT[t]}</th>`; });
+  h+=`</tr><tr>`;
+  RXG_COLS.forEach(([t,c])=>{ h+=`<th scope="col">${RXG_CH[c]} <span class="u">(kip)</span></th>`; });
+  h+=`</tr></thead><tbody>`;
+  for(let i=0;i<N;i++){
+    h+=`<tr><th scope="row">G${i+1}</th>`;
+    RXG_COLS.forEach(([t,c],j)=>{
+      h+= rxgCalc(t,c)
+        ? `<td class="ro" title="Calculated in panel I-6b">calc</td>`
+        : `<td><input type="text" inputmode="decimal" autocomplete="off" spellcheck="false" data-rxg="${t}.${i}.${c}" data-r="${i}" data-c="${j}" value="${esc(String(S.rx[t][i][c]))}" aria-label="${RXG_LT[t]} ${c} (kip), girder G${i+1}"></td>`;
+    });
+    h+=`</tr>`;
+  }
+  h+=`</tbody><tfoot><tr><th scope="row">Σ</th>`;
+  RXG_COLS.forEach(([t,c],j)=>{ h+= rxgCalc(t,c)?`<td title="Calculated in panel I-6b">calc</td>`:`<td data-rxsum="${j}">${fmt(rxgSum(j))}</td>`; });
+  h+=`</tr></tfoot></table></div>
+    <div class="rxg-msg" id="rxgMsg" role="status" aria-live="polite"></div>
+    <button class="mini-btn" id="btnRxCopy" title="Copy the table (headers and one line per girder, tab-separated) to paste into Excel">Copy table (TSV)</button>`;
+  return h;
+}
+
 /* ============ BUILD THE INPUT COLUMN ============ */
 function buildInputs(){
   if(S.geom.HsupMode==="user"&&(S.geom.HsupUser==null||!isFinite(+S.geom.HsupUser))) S.geom.HsupUser=+(S.geom.hstem+S.geom.hbw).toFixed(2);   // optional field, set only when "Entered value" is picked
@@ -2315,10 +2374,14 @@ function buildInputs(){
     <div class="svgbox" id="beamSketchIn"></div>
     <div class="figcap">Live plan view — beam positions (QC sketch)</div>
     <div class="subhead">Reaction matrix — per girder, per load type <span style="font-weight:normal">(unfactored, at bearings)</span></div>
+    ${rxSegHTML()}
+    ${abRxMode()==="table"?`
+    <div class="in-note">Sign convention: P + downward; V<sub>x</sub> + pushing the abutment toward the toe (away from backfill); V<sub>y</sub> + transverse (+Y). Enter the governing signed values; wind should be entered in its governing direction. [Design basis §0.3, §2.2]</div>
+    ${rxGridHTML()}`:`
     ${selRow("Load type being edited","ui.rxView",LOAD_TYPES.map(t=>[t,LT_LABEL[t]]),{rebuild:true})}
     <div class="in-note">Sign convention: P + downward; V<sub>x</sub> + pushing the abutment toward the toe (away from backfill); V<sub>y</sub> + transverse (+Y). Enter the governing signed values; wind should be entered in its governing direction. [Design basis §0.3, §2.2]</div>
     ${rxTbl}
-    <button class="mini-btn" id="btnRxApplyAll">Copy beam 1 values to all beams (this load type)</button>
+    <button class="mini-btn" id="btnRxApplyAll">Copy beam 1 values to all beams (this load type)</button>`}
   `);
 
   /* ---- I-6 Longitudinal distribution ---- */
@@ -11778,6 +11841,100 @@ document.addEventListener("click",ev=>{
   }
   if(ev.target.id==="btnTornado"){ ev.target.textContent="Running…"; setTimeout(()=>{ runTornado(); },30); }
   if(ev.target.id==="btnSelfTest"||ev.target.id==="btnSelfTest2"){ runSelfTest(); recalcAll(); }
+});
+
+/* ABRT (2026-11-10): reaction matrix Table view (panel I-5): view toggle, typing, paste (validated, all or nothing), copy, keys */
+function rxgNum(s){ const t=String(s==null?"":s).replace(/−/g,"-").trim();
+  if(t==="") return {ok:true,v:0,blank:true};
+  if(!/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(t)) return {ok:false};
+  const v=Number(t); return isFinite(v)?{ok:true,v}:{ok:false}; }
+function rxgMsg(txt,err){ const m=document.getElementById("rxgMsg"); if(!m) return; m.textContent=txt||""; m.classList.toggle("err",!!err); }
+function rxgSums(){ document.querySelectorAll("#rxGrid [data-rxsum]").forEach(td=>{ td.textContent=fmt(rxgSum(+td.dataset.rxsum)); }); }
+function rxgCell(r,c){ return document.querySelector(`#rxGrid input[data-r="${r}"][data-c="${c}"]`); }
+/* parse a pasted block: rows by line, cells by tab (Excel) or else by comma (CSV). Returns {rows} or {err}. */
+function rxgParse(text){
+  const lines=String(text==null?"":text).replace(/\r\n?/g,"\n").split("\n");
+  while(lines.length&&lines[lines.length-1].trim()==="") lines.pop();
+  if(!lines.length) return {err:"nothing to paste"};
+  const sep=lines.some(l=>l.indexOf("\t")>=0)?"\t":",";
+  const rows=[];
+  for(let r=0;r<lines.length;r++){
+    const cells=lines[r].split(sep), row=[];
+    for(let c=0;c<cells.length;c++){ const raw=cells[c].trim(), n=rxgNum(raw);
+      if(raw==="") return {err:`blank cell at line ${r+1}, column ${c+1} of the pasted block (enter 0 for no load)`};
+      if(!n.ok) return {err:`"${raw.length>24?raw.slice(0,24)+"…":raw}" at line ${r+1}, column ${c+1} of the pasted block is not a number (paste numbers only, without headers or units)`};
+      row.push(n.v); }
+    rows.push(row);
+  }
+  return {rows};
+}
+/* apply a parsed block at girder r0, column c0; all or nothing */
+function rxgPaste(r0,c0,text){
+  const P=rxgParse(text), N=S.beams.N, NC=RXG_COLS.length;
+  if(P.err){ rxgMsg("Paste rejected, nothing changed: "+P.err+".",true); return false; }
+  const nr=P.rows.length, nc=Math.max(...P.rows.map(r=>r.length));
+  const at=`G${r0+1} ${RXG_LT[RXG_COLS[c0][0]]} ${RXG_COLS[c0][1]}`;
+  if(r0+nr>N){ rxgMsg(`Paste rejected, nothing changed: the block has ${nr} rows; from ${at} only ${N-r0} girder row${N-r0===1?"":"s"} remain (N = ${N}).`,true); return false; }
+  if(c0+nc>NC){ rxgMsg(`Paste rejected, nothing changed: the block has ${nc} columns; from ${at} only ${NC-c0} load-type column${NC-c0===1?"":"s"} remain.`,true); return false; }
+  for(let r=0;r<nr;r++) for(let c=0;c<P.rows[r].length;c++){ const [t,k]=RXG_COLS[c0+c];
+    if(rxgCalc(t,k)){ rxgMsg(`Paste rejected, nothing changed: the block covers ${RXG_LT[t]} V_x, which is calculated in panel I-6b (turn the calculation off there to enter it).`,true); return false; } }
+  pushUndo("rxgrid-paste:"+Date.now());
+  for(let r=0;r<nr;r++) for(let c=0;c<P.rows[r].length;c++){ const [t,k]=RXG_COLS[c0+c], i=r0+r;
+    setPath(S,`rx.${t}.${i}.${k}`,P.rows[r][c]);
+    const el=rxgCell(i,c0+c); if(el){ el.value=String(P.rows[r][c]); el.classList.remove("bad"); el.removeAttribute("aria-invalid"); el.title=""; } }
+  rxgSums(); abutInputTabMarks(); scheduleSave(); scheduleRecalc();
+  rxgMsg(`Pasted ${nr} × ${nc} values from ${at}.`,false);
+  const ss=document.getElementById("saveStatus"); if(ss) ss.textContent="pasted "+(nr*nc)+" reaction values";
+  return true;
+}
+function rxgTSV(){
+  const head=["Girder"].concat(RXG_COLS.map(([t,c])=>`${RXG_LT[t]} ${c} (kip)`)).join("\t");
+  const lines=[head];
+  for(let i=0;i<S.beams.N;i++) lines.push(["G"+(i+1)].concat(RXG_COLS.map(([t,c])=>rxgCalc(t,c)?"calc":String(S.rx[t][i][c]))).join("\t"));
+  return lines.join("\n")+"\n";
+}
+function rxgCopy(){
+  const txt=rxgTSV(), done=()=>rxgMsg(`Copied the table (${S.beams.N} girders × ${RXG_COLS.length} columns, with headers, tab-separated).`,false);
+  const fall=()=>{ const ta=document.createElement("textarea"); ta.value=txt; ta.setAttribute("readonly",""); ta.style.position="fixed"; ta.style.left="-9999px";
+    document.body.appendChild(ta); ta.select(); let ok=false; try{ ok=document.execCommand("copy"); }catch(e){} ta.remove();
+    if(ok) done(); else rxgMsg("Copy is blocked by this browser: select the table and copy it by hand.",true); };
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done,fall); return; } }catch(e){}
+  fall();
+}
+document.addEventListener("click",ev=>{
+  const b=ev.target.closest&&ev.target.closest("[data-rxmode]");
+  if(b){ if(b.dataset.rxmode!==abRxMode()){ abRxModeSet(b.dataset.rxmode); buildInputs(); const nb=document.querySelector(`[data-rxmode="${abRxMode()}"]`); if(nb) nb.focus(); } return; }
+  if(ev.target.id==="btnRxCopy") rxgCopy();
+});
+document.addEventListener("focusin",ev=>{ const el=ev.target; if(el&&el.dataset&&el.dataset.rxg){ el.select(); el._rxgSel=true; } });
+document.addEventListener("mouseup",ev=>{ const el=ev.target; if(el&&el._rxgSel){ el._rxgSel=false; if(el.selectionStart===el.selectionEnd) el.select(); } });   // a click keeps the whole value selected
+document.addEventListener("focusout",ev=>{ const el=ev.target; if(el&&el._rxgSel) el._rxgSel=false; });
+document.addEventListener("input",ev=>{
+  const el=ev.target, k=el&&el.dataset&&el.dataset.rxg; if(!k) return;
+  const n=rxgNum(el.value), [t,i,c]=k.split(".");
+  if(!n.ok){ el.classList.add("bad"); el.setAttribute("aria-invalid","true");
+    el.title="Not a number: not used. The value in use is still "+S.rx[t][+i][c]+" kip."; abutInputTabMarks(); return; }
+  el.classList.remove("bad"); el.removeAttribute("aria-invalid"); el.title="";
+  pushUndo("rx."+k); setPath(S,"rx."+k,n.v);
+  rxgSums(); abutInputTabMarks(); scheduleSave(); scheduleRecalc();
+});
+document.addEventListener("paste",ev=>{
+  const el=ev.target, k=el&&el.dataset&&el.dataset.rxg; if(!k) return;
+  ev.preventDefault();
+  const text=(ev.clipboardData||window.clipboardData).getData("text");
+  rxgPaste(+el.dataset.r,+el.dataset.c,text);
+});
+document.addEventListener("keydown",ev=>{
+  const el=ev.target, k=el&&el.dataset&&el.dataset.rxg; if(!k||ev.altKey||ev.ctrlKey||ev.metaKey) return;
+  const r=+el.dataset.r, c=+el.dataset.c, len=el.value.length, a=el.selectionStart, z=el.selectionEnd, all=(a===0&&z===len);
+  let dr=0, dc=0;
+  if(ev.key==="ArrowUp"||(ev.key==="Enter"&&ev.shiftKey)) dr=-1;
+  else if(ev.key==="ArrowDown"||ev.key==="Enter") dr=1;
+  else if(ev.key==="ArrowLeft"&&!ev.shiftKey&&(all||(a===0&&z===0))) dc=-1;
+  else if(ev.key==="ArrowRight"&&!ev.shiftKey&&(all||(a===len&&z===len))) dc=1;
+  else return;
+  ev.preventDefault();
+  for(let rr=r+dr, cc=c+dc; rr>=0&&rr<S.beams.N&&cc>=0&&cc<RXG_COLS.length; rr+=dr, cc+=dc){ const n=rxgCell(rr,cc); if(n){ n.focus(); n.select(); return; } }
 });
 
 /* ---------- comparison dialog ---------- */
