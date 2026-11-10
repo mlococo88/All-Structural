@@ -154,6 +154,10 @@
   #prjPane .prjGrp{margin:2px 0 10px;}
   #prjPane .prjGrp>b{display:block;font-family:var(--font-ui);font-size:9pt;}
   #prjPane .prjGrp button{margin:2px 4px 2px 0;}
+  #projMetaBtns .prjGrp{border-top:1px solid #d5dce5;padding-top:5px;}
+  #projMetaBtns .prjGrp>b{display:inline;}
+  #projMetaBtns .hoFrom{font-size:8.5pt;color:#555;}
+  #projMetaBtns .hoGrp{margin:8px 0 3px;font-size:8pt;font-weight:bold;letter-spacing:.05em;text-transform:uppercase;color:#555;}
   #prjPane .note{margin:2px 0 6px;}
   #inputPanel #projGrid{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:0;}
   #inputPanel #projGrid label,#inputPanel #projGrid label span{color:#334155;}
@@ -432,17 +436,29 @@
         <div id="projGrid"></div>
         <div class="note">Printed on the Report (the project name also on the DXF).</div>
       </div></div>
-      <div class="sec" id="projMetaBtns"><div class="secHead"><h2 class="secTitle">Shared project info and hand-offs</h2></div><div class="secBody">
-        <div class="prjGrp"><b>Project info</b><div class="note">Copy the title block from or to the other tools.</div>
+      <!-- HOC (2026-11-10): "Shared project info and hand-offs" laid out as Receive / Send with status and last received / sent; the
+           anchor-group result send moved here from the group bar under the header (same button id, created by bpGroupBar) (display only) -->
+      <div class="sec" id="projMetaBtns"><div class="secHead"><h2 class="secTitle">Hand-offs</h2></div><div class="secBody">
+        <div class="note">Nothing changes until you confirm: each pull or import first shows what it will change, and what you apply is recorded with this project (saved with it and printed in the Report).</div>
+        <div class="hoGrp">Receive from other tools</div>
+        <div class="prjGrp"><b>Shared project info</b> <span class="hoFrom">from any tool</span><div>
         <button id="btnUseProjMeta" title="Fill the project fields from project info shared by another tool">Use shared project info</button>
-        <button id="btnShareProjMeta" title="Make these project fields available to the other tools">Share project info</button>
-        </div>
-        <div class="prjGrp"><b>Loads and anchor groups from other tools</b><div class="note">Support reactions (Steel Beam Design) or pole / sign anchor groups (Light Pole and Sign Post), or a hand-off file of either.</div>
+        </div></div>
+        <div class="prjGrp"><b>Support reactions</b> <span class="hoFrom">from Steel Beam Design</span><div>
         <button id="btnPullMemberReactions" type="button" onclick="bxPullMemberReactions()" title="Import unfactored support reactions from Steel Beam Design into the ASCE 7-22 service loads (HANDOFF.md, channel memberReactions)">Pull from Steel Beam<span id="bxMrNew" style="display:none;color:#b45309;font-weight:bold"> &#9679; new data available</span></button>
+        </div><div class="note"><b>Status:</b> <span id="bxMrSt"></span> <b>Last received:</b> <span id="bxMrSrc" style="font-style:italic"></span></div></div>
+        <div class="prjGrp"><b>Anchor groups</b> <span class="hoFrom">from Light Pole and Sign Post</span><div>
         <button id="btnPullAnchorGroup" type="button" onclick="bxPullAnchorGroup()" title="Import pole / sign anchor groups from the Light Pole and Sign Post tool (HANDOFF.md, channel anchorGroup)">Pull from Light Pole<span id="bxAgNew" style="display:none;color:#b45309;font-weight:bold"> &#9679; new data available</span></button>
+        </div><div class="note"><b>Status:</b> <span id="bxAgSt"></span> <b>Last received:</b> <span id="bxAgSrc" style="font-style:italic"></span></div></div>
+        <div class="prjGrp"><b>Hand-off file</b> <span class="hoFrom">support reactions or anchor groups</span><div>
         <button id="btnImportMemberReactions" type="button" onclick="document.getElementById('bxMrFile').click()" title="A hand-off file: support reactions (memberReactions) or anchor groups (anchorGroup)">Import hand-off (JSON)</button><input type="file" id="bxMrFile" accept=".json,application/json" style="display:none" onchange="bxImportHandoff(event)">
-        <span id="bxMrSrc" style="font-size:9pt;font-style:italic"></span> <span id="bxAgSrc" style="font-size:9pt;font-style:italic"></span>
-        </div>
+        </div></div>
+        <div class="hoGrp">Send to other tools</div>
+        <div class="prjGrp"><b>Shared project info</b> <span class="hoFrom">to every tool</span><div>
+        <button id="btnShareProjMeta" title="Make these project fields available to the other tools">Share project info</button>
+        </div></div>
+        <div class="prjGrp"><b>Anchor group results</b> <span class="hoFrom">to Light Pole and Sign Post</span><div class="note">The governing D/C of every anchor group, once anchor groups have been pulled from Light Pole.</div><div id="bxAgResHost"></div>
+        <div class="note"><b>Last sent:</b> <span id="bxAgResSent"></span></div></div>
       </div></div>
       <div class="sec"><div class="secHead"><h2 class="secTitle">Hilti PROFIS and DXF</h2></div><div class="secBody">
         <div class="prjRow">
@@ -18286,7 +18302,9 @@ manPart("pA","A. Notation & References",[
   }
   function refreshBar(){
     var nd=document.getElementById('bxMrNew'); if(nd) nd.style.display=BridgeXfer.isNew(CH,RID)?'inline':'none';
-    var sl=document.getElementById('bxMrSrc'); if(sl) sl.textContent=sourceLine();
+    var sl=document.getElementById('bxMrSrc'); if(sl) sl.textContent=sourceLine()? sourceLine()+'.' : 'none.';
+    // HOC (2026-11-10): the Hand-offs status line (the marker's isNew; nothing stored)
+    var st=document.getElementById('bxMrSt'); if(st){ var up=''; try{ up=localStorage.getItem(BridgeXfer.NS+CH+'.updatedAt')||''; }catch(e){} st.textContent=BridgeXfer.isNew(CH,RID)? 'new data available.' : up? 'no new data since the last pull.' : 'nothing available (Steel Beam Design has not sent).'; }
   }
   window.bxPullMemberReactions=function(){
     var r=BridgeXfer.read(CH,SCHEMA,MAXV);
@@ -18356,9 +18374,25 @@ function bpGroupBar(){
   } else host.appendChild(el("span","note","one group (this design)"));
   const add=el("button",null,"+ Add group"); add.type="button"; add.title="Add another anchor group to this project (e.g. the second post of a two-post sign), starting as a copy of this one";
   add.addEventListener("click",bpGroupAdd); host.appendChild(add);
-  if(S.bxSrc && S.bxSrc.anchorGroup){ const b=el("button",null,"Send result to Light Pole"); b.type="button"; b.id="btnSendAgResult";
-    b.title="Publish the governing D/C of every anchor group on channel anchorGroupResult (HANDOFF.md §4.12)"; b.addEventListener("click",()=>bxAg.sendResult(true)); host.appendChild(b); }
+  // HOC (2026-11-10): the button is in the Project tab's Hand-offs card (#bxAgResHost); the bar keeps a link to it
+  if(bpHoRes(host) && document.getElementById("bxAgResHost")){ const l=el("a","note","Send/receive data: Project tab \u2192 Hand-offs"); l.href="#"; l.dataset.goHo="1"; host.appendChild(l); }
 }
+/* HOC (2026-11-10): "Last sent" of the anchor-group results (read only: the channel key when this tool sent it) and the
+   "Project tab → Hand-offs" link (opens the Project tab with the card in view) */
+function bpHoSent(){ const e=document.getElementById("bxAgResSent"); if(!e) return; let p=null; try{ p=JSON.parse(localStorage.getItem("bridgeSuite.v1.anchorGroupResult")||"null"); }catch(x){}
+  const d=p&&p.producer==="Base Plate & Anchor Bolt Designer"&&p.producedAt? new Date(p.producedAt) : null;
+  e.textContent=d&&!isNaN(d)? d.toLocaleString()+((p.project&&p.project.name)?" ("+p.project.name+")":"")+", from this browser." : "nothing sent from this browser yet."; }
+/* bpHoRes(fallback): the "Send result to Light Pole" button (as before: shown when an anchor-group hand-off was imported) in the card's
+   #bxAgResHost (or the fallback host when the card is absent); true when the button is shown */
+function bpHoRes(fallback){ const rh=document.getElementById("bxAgResHost"); if(rh) rh.innerHTML="";
+  let on=false;
+  if(S.bxSrc && S.bxSrc.anchorGroup){ const b=el("button",null,"Send result to Light Pole"); b.type="button"; b.id="btnSendAgResult";
+    b.title="Publish the governing D/C of every anchor group on channel anchorGroupResult (HANDOFF.md §4.12)"; b.addEventListener("click",()=>{ bxAg.sendResult(true); bpHoSent(); }); (rh||fallback).appendChild(b); on=true; }
+  else if(rh) rh.appendChild(el("span","note","Not available: no anchor groups have been pulled into this project."));
+  bpHoSent(); return on; }
+setTimeout(()=>{ try{ const rh=document.getElementById("bxAgResHost"); if(rh&&!rh.childNodes.length) bpHoRes(null); }catch(e){} },0);
+document.addEventListener("click",ev=>{ const l=ev.target&&ev.target.closest&&ev.target.closest("[data-go-ho]"); if(!l) return; ev.preventDefault();
+  bpadSetInTab("project",true); const c=document.getElementById("projMetaBtns"); if(c) c.scrollIntoView({block:"start"}); });
 /* governing results of one group, computed in its own state (S and CC restored afterwards) */
 function bpGroupResultFor(i){
   const saveS=S, saveCC=CC;
@@ -18583,7 +18617,9 @@ function bpGroupResultFor(i){
   }
   function refreshBar(){
     var nd=document.getElementById('bxAgNew'); if(nd) nd.style.display=BridgeXfer.isNew(CH,RID)?'inline':'none';
-    var sl=document.getElementById('bxAgSrc'); if(sl) sl.textContent=sourceLine();
+    var sl=document.getElementById('bxAgSrc'); if(sl) sl.textContent=sourceLine()? sourceLine()+'.' : 'none.';
+    // HOC (2026-11-10): the Hand-offs status line (the marker's isNew; nothing stored)
+    var st=document.getElementById('bxAgSt'); if(st){ var up=''; try{ up=localStorage.getItem(BridgeXfer.NS+CH+'.updatedAt')||''; }catch(e){} st.textContent=BridgeXfer.isNew(CH,RID)? 'new data available.' : up? 'no new data since the last pull.' : 'nothing available (Light Pole and Sign Post has not sent).'; }
   }
   window.bxPullAnchorGroup=function(){
     var r=BridgeXfer.read(CH,SCHEMA,MAXV);
