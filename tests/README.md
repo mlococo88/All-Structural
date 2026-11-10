@@ -219,6 +219,15 @@ The solver is inline in the tool, so the test drives the page headless (file://)
 
 Exit code 0 when every check passes. The test takes about 10 s. Run against the review's base (a84df4f), it fails on the closed-form fixed-end forces, combination 3 and pattern loading, as it should.
 
+## Shear and Moment Diagrams: cantilever deflection limit (`smd-cantilever-defl.mjs`, added 2026-11-10, SMCL)
+
+```bash
+node tests/smd-cantilever-defl.mjs                                   # the working tree
+node tests/smd-cantilever-defl.mjs --file "<path>/Shear and Moment Diagrams.html"
+```
+
+Engineer's decision 2026-11-10 (open item O3 closed): a cantilever overhang, an end span whose outer end node is Free, is checked against l = 2 × its length (IBC 2018 Table 1604.3 footnote i); every other span keeps its own length. Drives the page headless through `applyProject`, `deflSpans`, `updStats`, `renderKaTeX` and `smrModel` and checks by hand values: a 10 ft cantilever with P = 10 kip at the tip (δ = PL³/3EI = 0.039911 ft against 2L/360 = 0.055556 ft, ratio 0.7184 OK; was L/360, 1.4368 NG), the "Cantilever overhang" template with a W18×50 (tip δ = 1683/EI = 0.010446 ft against 12/360; span 1 keeps 16/360), a left cantilever, a 3-span beam with a right overhang, two cantilevers off one fixed support, and three beams with no Free end (every span L/x, no "2L" shown); the result card, the Engineering Calculations panel and the Report quote 2L, and the "Span length:" note states the basis; no console errors. Run against the tool before SMCL, it fails, as it should.
+
 ## Base Plate & Anchor Designer: PROFIS export (`bpad-profis.mjs`)
 
 ```bash

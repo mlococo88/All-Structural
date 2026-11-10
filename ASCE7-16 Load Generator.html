@@ -2533,7 +2533,9 @@ function renderEncl(host){
     "lies within 1 mile of the coastal mean high water line with V \u2265 130 mph, or",
     "has V \u2265 140 mph anywhere.",
     ["Wind speed used:","the Risk Category II value for Risk Category II and III buildings, and the Risk Category III value for Risk "+
-    "Category IV buildings and Risk Category III health care facilities."]]);
+    "Category IV buildings and Risk Category III health care facilities."],
+    S.jur==="MA"?["Massachusetts:","the hurricane-prone test uses the community's tabulated Risk Category II speed; the ASCE 7-16 Sec. 26.2 "+   /* ASM */
+    "definitions are applied as written, with no 780 CMR change to them."]:null]);
   dtable(b,null,["Test","Basis","Result"],[
     [{v:"Hurricane-prone region: Atlantic coast, Risk Category II V > 115 mph"},{v:d.Vii!==null?"Risk Category II map value "+R2(d.Vii)+" > 115":"V = "+R2(R.site.V)+" mph as entered > 115"},{v:YN(d.hurricaneProne)}],
     [{v:"Wind speed on the governing basis"},{v:d.Vii!==null?"Risk Category "+d.Vbasis+" map value":"speed entered (Risk Category "+S.risk+")"},{v:R2(d.Vdbr)+" mph"}],
@@ -2617,7 +2619,9 @@ function renderEncl(host){
     ["Permitted alternative:","Sec. 27.3.1 permits q<sub>i</sub> "+
     "to be evaluated at the height of the highest opening for partially enclosed buildings where that opening could affect "+
     "the internal pressure."],
-    ["Applied here:","using q<sub>h</sub> is the simpler and generally more conservative choice, and it is what is applied here."]]);
+    ["Applied here:","using q<sub>h</sub> is the simpler and generally more conservative choice, and it is what is applied here."],
+    e.cls==="Partially Enclosed"?["Not applied:","the ASCE 7-16 Sec. 26.13.1.1 reduction factor R<sub>i</sub> for a partially enclosed building with a single "+   /* ASM */
+    "unpartitioned volume; GC<sub>pi</sub> is used unreduced (R<sub>i</sub> = 1.0, conservative)."]:null]);
   if(e.degenerate) noteNL(b,"Every opening area entered is zero.",[   /* A7NL */
     ["Classification:","correct for a fully sealed envelope, "+
     "but no wall was tested against a real opening."]],"w",{act:["Confirm the schedule was meant to be blank."]});
@@ -2706,6 +2710,8 @@ function renderSnow(host){
         [{v:"Leeward side, peak at the ridge"},{v:R2(ub.leewardPeak),cls:"hl"}],
         [{v:"Surcharge extends from the ridge"},{v:R2(ub.surchargeLen)+" ft"}]],
         "The surcharge is rectangular in plan projection, of intensity p_sur, extending L_sur horizontally from the ridge down the leeward slope.");
+      if(ub.surchargeLen>ub.W) note(b,"L<sub>sur</sub> is longer than W, the eave-to-ridge distance: it is reported as computed and not truncated at the eave; "+   /* ASM */
+        "the surcharge acts on the leeward slope only, up to the eave.","k");
     }
   }
 
@@ -2743,6 +2749,9 @@ function renderSnow(host){
       eq(sb,"Exemption check","ASCE 7-16 Sec. 7.7.1","\\dfrac{h_c}{h_b} \\ge 0.2",
         "\\dfrac{"+R2(d.hc)+"}{"+R2(d.hb)+"} = "+RN(d.hcOverHb,3),
         "\\text{"+(d.hcOverHb>=0.2?"Drift required":"Drift not required")+"}");
+      if(d.kind==="adjacent") note(sb,"Basis (ASCE 7-16 Sec. 7.7.2, adjacent structure): a drift is generated here only where the separation s is less than both 20 ft and 6h "+   /* ASM */
+        "(h = the height difference of the roofs); at a larger separation no drift, leeward or windward, is generated at this location. "+
+        "Where it is generated, the windward drift (width 4h<sub>d</sub>, or the capped width) is not truncated at the edge of the lower roof (conservative).","k");
       if(!d.required){ note(sb,esc(d.reason),"k"); return; }
       if(d.kind==="lower"){
         eq(sb,"Leeward drift height","ASCE 7-16 Fig. 7.6-1","h_{d,lee} = 0.43\\,l_u^{1/3}(p_g+10)^{1/4} - 1.5",
@@ -3044,6 +3053,8 @@ function renderWalls(host){
     ["Wind normal to the ridge","(θ ≥ 10°): the roof term is q<sub>h</sub>G(C<sub>p,windward</sub> − C<sub>p,leeward</sub>) on the "+
     "projected roof area, enveloped over both windward values with the largest roof |Cₚ| as a floor;"],
     ["Wind parallel to the ridge","of a gable or monoslope: the end wall above the eave is wall;"],
+    ["Wind parallel to the ridge","of a hip roof (θ ≥ 10°): the hip-end planes take the normal-to-ridge coefficients, and the roof term is formed "+   /* ASM */
+    "the same way, windward minus leeward with the largest roof |Cₚ| as a floor;"],
     ["Otherwise:","the largest magnitude roof Cₚ for the direction acts on the projected roof area."],
     ["Internal pressure:","excluded because it cancels on the net force."],
     ["Manual:","these choices are stated in the manual."]]);
@@ -3167,7 +3178,8 @@ function renderRoof(host){
         [{v:"Leeward hip end"}].concat(t.lw.per.map(v=>({v:RN(v,3)}))).concat([{v:RN(c.hipEnd.lw,3),cls:"hl"}])]);
       cb.appendChild(el("div","cap a7NL",a7NL("The hip-end planes face along the ridge, so for wind parallel to the ridge they are windward and leeward roof surfaces at the roof slope.",[   /* A7NL */
         ["Coefficients:","they take the Fig. 27.3-1 normal-to-ridge coefficients (both windward values, same-sign interpolation)."],
-        ["Side slopes:","keep the distance-band values."]],{act:["Decision pending engineer review (common practice and the Commentary, verify)."]})));
+        ["Side slopes:","keep the distance-band values."],
+        ["Basis:","ASCE 7-16 Commentary C27.3 and common practice. The 3-D model shades the whole roof with the distance-band values for this direction (display only)."]])));   /* ASM */
     }
     dtable(cb,"Design roof pressures",
       ["Surface / band","C\u209a","p with +GC\u209a\u1d62 (psf)","p with \u2212GC\u209a\u1d62 (psf)"],
@@ -3279,7 +3291,9 @@ function renderElem(host){
       if(e.Dsq!==undefined) eq(eb,"Round section: roughness rows apply only where D\u221Aq_z > 2.5 (D in ft, q_z in psf)","Fig. 29.4-1",
         "D\\sqrt{q_z}","D\\sqrt{q_z} = "+R2(e.D)+"\\sqrt{"+R2(e.q.q)+"}","D\\sqrt{q_z} = "+RN(e.Dsq,3)+(e.cfLow!==undefined?"\\ \\le 2.5:\\ C_f = \\max("+RN(e.cfSel,3)+",\\ "+RN(e.cfLow,3)+") = "+RN(e.cf,3):(e.Dsq>2.5?"\\ > 2.5":"")));
     }
-    note(eb,"Reference height for the velocity pressure: <b>"+esc(e.zRefNote)+"</b>, z = "+R2(e.zRef)+" ft. K\u2094 = "+R2(e.kd)+" from Table 26.6-1 for this element type.");
+    note(eb,"Reference height for the velocity pressure: <b>"+esc(e.zRefNote)+"</b>, z = "+R2(e.zRef)+" ft. K\u2094 = "+R2(e.kd)+" from Table 26.6-1 for this element type."+
+      (e.type!=="wall"&&/^Hexagonal/.test(e.section||"")?" The Fig. 29.4-1 row \u201CHexagonal or octagonal\u201D covers both shapes; Table 26.6-1 gives 0.95 for hexagonal "+   /* ASM */
+      "and 1.00 for octagonal, so 1.00 is used (conservative for a hexagonal member).":""));
     eq(eb,"Velocity pressure at the element","Eq. 26.10-1","q_z = 0.00256\\,K_zK_{zt}K_dK_eV^2",
       "q_z = 0.00256("+RN(e.q.kz,4)+")("+RN(w.kzt.kzt,4)+")("+R2(e.kd)+")("+RN(w.ke,4)+")("+R2(w.V)+")^2",
       "q_z = "+R2(e.q.q)+"\\ \\text{psf}");
@@ -3415,6 +3429,10 @@ function renderSeis(host){
   if(q.elf && (q.elf.siteE || q.elf.rows.length)){   /* A7M3, A7M4 */
     const fx=x=>"T = \\max(T_{used},\\ C_uT_a) = "+RN(q.elf.T,3)+"\\ \\text{s},\\quad T_s = S_{D1}/S_{DS} = "+RN(q.elf.Ts,3)+"\\ \\text{s}";
     eq(b,"Period used for the ELF permission checks","ASCE 7-16 Sec. 11.4.6, 12.6","T_s = S_{D1}/S_{DS}",fx(),"T_s = "+RN(q.elf.Ts,3)+"\\ \\text{s}");
+    noteNL(b,"Basis of the ELF permission checks:",[   /* ASM */
+      ["Period:","T is the larger of the period used for C<sub>s</sub> and C<sub>u</sub>T<sub>a</sub> (conservative: a longer T is less likely to meet T \u2264 T\u209b or T < 3.5T\u209b)."],
+      q.elf.rows.length?["Stories:","\u201Cnot exceeding two stories above the base\u201D (Table 12.6-1) is taken as the number of levels with weight in the level schedule."]:null,
+      ["Blocked:","a check that is not met is shown as Blocked; the wind and snow results are not affected."]],"k");
     if(q.elf.siteE) note(b,"<b>Sec. 11.4.8 Exception 3</b> (Site Class E, S\u2081 \u2265 0.2, no site-specific analysis): the equivalent lateral force procedure is permitted only where T \u2264 T\u209b. "+
       "T = "+RN(q.elf.T,3)+" s "+(q.elf.siteE.ok?"\u2264":">")+" T\u209b = "+RN(q.elf.Ts,3)+" s: "+(q.elf.siteE.ok?"<b>permitted</b>.":"<b>not permitted</b>; a site-specific ground motion analysis is required."),q.elf.siteE.ok?"k":"e");
     if(q.elf.rows.length){
@@ -3458,7 +3476,8 @@ function renderSeis(host){
       "W = "+R2(q.Wt)+"\\ \\text{kip}");
     noteNL(b,"Sec. 12.7.2: where the flat roof snow load exceeds 30 psf, 20 % of the uniform design snow load is part of W.",[   /* A7NL */
       ["Taken here","as 0.2 × the balanced design snow pₛ = "+R2(z.ps)+
-      " psf (with the minimum and rain-on-snow where they apply) over the plan area, and added to W and to the weight of the highest level"+(z.level?" ("+esc(z.level)+")":"")+"."]],
+      " psf (with the minimum and rain-on-snow where they apply) over the plan area, and added to W and to the weight of the highest level"+(z.level?" ("+esc(z.level)+")":"")+"."],
+      ["Trigger:","the design flat roof snow load p<sub>f,des</sub> (Snow tab, with the 780 CMR Table 1604.11 minimum where it applies) exceeds 30 psf."]],   /* ASM */
       "w",{act:["If the entered W already includes it, tick the box on the Seismic input tab."]});
   } else if(q.snowWincl) note(b,"Flat roof snow load "+R2(q.snowWincl.pf)+" psf > 30 psf: the entered W and level weights are stated to include 20 % of the design snow load (Sec. 12.7.2).","k");
   eq(b,"Seismic base shear","ASCE 7-16 Eq. 12.8-1","V = C_s\\,W",
@@ -4376,7 +4395,7 @@ It is evaluated at every height the calculation needs it: at each level of the w
 leeward wall, the side walls and the roof, and at each Chapter 29 element&rsquo;s own reference height. There is no topographic
 height input for that reason, and the velocity pressure table reports K<sub>zt</sub> alongside K<sub>z</sub> at each height.</p>
 <h4>1.3.6 Interpretation of Sec. 27.1.5</h4>
-<div class="a7NL"><div class="a7NLl">The minimum is written as a force on projected areas, not as a pressure floor on individual surfaces.</div><ul class="a7NLu"><li><b class="a7NLk">Projected areas:</b> the app computes the projected areas from the building silhouette normal to each wind direction, takes the wall term as B &times; h<sub>e</sub> and the roof term as everything above the eave line, and compares the total against 16A<sub>wall</sub> + 8A<sub>roof</sub>.</li><li><b class="a7NLk">Internal pressure:</b> the computed force excludes internal pressure, because it acts on both faces and cancels on the net.</li><li><b class="a7NLk">Wind normal to the ridge</b> (&theta; &ge; 10&deg;): the roof contribution is q<sub>h</sub>G(C<sub>p,windward</sub> &minus; C<sub>p,leeward</sub>) on the projected roof area, because windward-slope pressure and leeward-slope suction both push downwind; both windward values of Fig. 27.3-1 are tried, and the largest roof |C<sub>p</sub>| on the projected area (the method used before) is the floor: windward-slope suction is not credited as relief (decision pending engineer review).</li><li><b class="a7NLk">Monoslope:</b> treated as one plane: from the low eave it is a windward roof with the wall strip above the high eave leeward; from the high side that strip is a windward wall (0.8 at q<sub>h</sub>) and the roof is leeward.</li><li><b class="a7NLk">Wind parallel to the ridge</b> of a gable or monoslope: the silhouette above the eave is the end wall: it takes the wall coefficients (0.8 q<sub>z</sub> windward, C<sub>p</sub>(L/B) leeward) and counts as wall area at 16 psf.</li><li><b class="a7NLk">Remaining cases</b> (a hip roof parallel to its ridge, &theta; &lt; 10&deg;): the largest magnitude roof C<sub>p</sub> for that direction acts on the projected roof area (A7H1, 2026-11-07).</li><li><b class="a7NLk">Where the minimum governs:</b> the app reports the scale factor rather than silently rewriting the surface pressures, so the reviewer sees both numbers.</li></ul></div>
+<div class="a7NL"><div class="a7NLl">The minimum is written as a force on projected areas, not as a pressure floor on individual surfaces.</div><ul class="a7NLu"><li><b class="a7NLk">Projected areas:</b> the app computes the projected areas from the building silhouette normal to each wind direction, takes the wall term as B &times; h<sub>e</sub> and the roof term as everything above the eave line, and compares the total against 16A<sub>wall</sub> + 8A<sub>roof</sub>.</li><li><b class="a7NLk">Internal pressure:</b> the computed force excludes internal pressure, because it acts on both faces and cancels on the net.</li><li><b class="a7NLk">Wind normal to the ridge</b> (&theta; &ge; 10&deg;): the roof contribution is q<sub>h</sub>G(C<sub>p,windward</sub> &minus; C<sub>p,leeward</sub>) on the projected roof area, because windward-slope pressure and leeward-slope suction both push downwind; both windward values of Fig. 27.3-1 are tried, and the largest roof |C<sub>p</sub>| on the projected area (the method used before) is the floor: windward-slope suction is not credited as relief (conservative).</li><li><b class="a7NLk">Monoslope:</b> treated as one plane: from the low eave it is a windward roof with the wall strip above the high eave leeward; from the high side that strip is a windward wall (0.8 at q<sub>h</sub>) and the roof is leeward.</li><li><b class="a7NLk">Wind parallel to the ridge</b> of a gable or monoslope: the silhouette above the eave is the end wall: it takes the wall coefficients (0.8 q<sub>z</sub> windward, C<sub>p</sub>(L/B) leeward) and counts as wall area at 16 psf.</li><li><b class="a7NLk">Hip roof, wind parallel to the ridge</b> (&theta; &ge; 10&deg;): the hip-end planes take the normal-to-ridge coefficients of Fig. 27.3-1, and the roof term is formed in the same way, with the same floor.</li><li><b class="a7NLk">Remaining cases</b> (&theta; &lt; 10&deg;): the largest magnitude roof C<sub>p</sub> for that direction acts on the projected roof area (A7H1, 2026-11-07).</li><li><b class="a7NLk">Where the minimum governs:</b> the app reports the scale factor rather than silently rewriting the surface pressures, so the reviewer sees both numbers.</li></ul></div>
 <h4>1.3.7 q<sub>i</sub> is always taken as q<sub>h</sub></h4>
 <p>Sec. 27.3.1 permits q<sub>i</sub> for a partially enclosed building to be evaluated at the height of the highest opening. Using q<sub>h</sub> throughout is simpler and generally more conservative, and is what is applied.</p>
 <h4>1.3.8 Mean roof height</h4>

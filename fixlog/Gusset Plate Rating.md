@@ -3464,3 +3464,20 @@ From the code-compliance review of 2026-11-07 (LOW findings L3 to L7).
 - **How verified:** headless Chromium, origin/main 78a8609 vs the branch, 8 projects (default, RIDOT, spliced, spliced RIDOT, slip on, partial planes off, LFR only, LRFR only): every capacity, RF and warning identical; main's digit sequence of every pane, tab and Report is an ordered subsequence of the branch's (only exception: the removed "(M5)" label). `check-syntax`, `project-library --tool gusset`, `phone-layout --tool gusset` pass; 390 px no sideways scroll; 0 console errors.
 - **Open item (not changed, §4):** the LFR fastener-shear row cites Std. Spec. Table 10.56A for φF<sub>v</sub> also for unknown-origin rivets (23.8 ksi is a judgment value, M6).
 - **Saved data:** none changed. **Other copies:** none.
+
+## 2026-11-10 — PR: gusset-m6-cite (PR #1318: https://github.com/mlococo88/All-Structural/pull/1318) — LFR fastener shear of unknown-origin rivets cites the engineer's judgment value (M6), not Std. Spec. Table 10.56A   [§4 code-reference text only; no result, saved key or format change]
+
+Engineer's decision 2026-11-10. This closes the open item of the GPASM entry (#1294).
+- **Where:** `capFS()` (anchor `wr('φF<sub>v</sub>', 'Design shear strength per plane (φ included)'`), the end of `capFS()` (anchor `return { C, phi: q.phi, sym, subst, where,`), and `checkBody()` (anchor `[q.sym, q.subst], q.where);`).
+- **Before / After:**
+  1. Where row source: `f2(z.rn.phF), 'ksi', 'Std. Spec. Table 10.56A')))` → `f2(z.rn.phF), 'ksi', z.keys.includes('FvR0L') ? 'Engineer\'s judgment for rivets of unknown origin (decision M6); no table basis' : 'Std. Spec. Table 10.56A')))`.
+  2. `return { C, phi: q.phi, sym, subst, where, keys: [...new Set(parts.flatMap(z => z.keys))], parts }; }` → a new line `const r0 = meth === 'lfr' && parts.some(z => z.keys.includes('FvR0L')), ref = r0 ? (parts.every(z => z.keys.includes('FvR0L')) ? 'FHWA-IF-09-014; φFv: engineer\'s judgment for rivets of unknown origin (M6), no table basis' : 'FHWA-IF-09-014; Std. Spec. Table 10.56A; φFv of rivets of unknown origin: engineer\'s judgment (M6), no table basis') : undefined;`, then the same return statement with `, ...(ref ? { ref } : {})` added after `parts`.
+  3. `checkBody()`: `'verify')}`, c.ref[meth], [q.sym, q.subst], q.where);` → `'verify')}`, q.ref || c.ref[meth], [q.sym, q.subst], q.where);`. This affects the Checks tab cards and the Report, which both use `checkBody`.
+- **Governing provision:** AASHTO Std. Spec. 17th Ed. (2002) Table 10.56A covers A502 Grade 1/2 rivets and A325/A490 bolts and has no value for unknown-origin rivets. 23.8 ksi = 30 × 23/29 is the judgment value of decision M6 (#1051), the ratio from MBE 3rd Ed. Table 6A.6.12.5.1-1. Grades r1, r2, A325 and A490 keep the Table 10.56A citation.
+- **Check case:** default project, L2-U1 fastener shear, LFR: C = 48 × 23.8 × 0.6013 = 686.9 kip, before and after. Mixed grades: C = (48)(23.8)(0.6013) + (48)(30.0)(0.6013) = 1552.8 kip, before and after. The 23.8 row cites the judgment value and the 30.0 row cites Table 10.56A.
+- **How verified:**
+  - Headless main vs branch on the default project and a mixed-grade project. `R` differs only in the source strings of the r0 φF<sub>v</sub> rows, plus the new `ref` field. The numbers in every check card and in the Report are identical.
+  - 0 console errors.
+  - `check-syntax` and `phone-layout --tool gusset` pass.
+  - `project-library --tool gusset`: the 4 "identical to main" checks show exactly these text differences. All other checks pass.
+- **Saved data:** none changed. **Other copies:** none.
