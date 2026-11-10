@@ -58,10 +58,12 @@
     put(host, 'fatigue', ctx, TX => TX.fatigue(R, ctx.P, { gi: gi(ctx), sel }), onSel);
     put(host, 'fatigue-chart', ctx, TX => TX.fatigueChart(R, ctx.P, { gi: gi(ctx), sel }), onSel);
   }
-  function crossframe(host, ctx, B) { put(host, 'crossframe', ctx, TX => TX.crossframe(B, ctx.P, { dia: !!(window.SBDCrossframes && ctx.P.crossframes && window.SBDCrossframes.cfDiaOn(ctx.P.crossframes)) })); }
+  function crossframe(host, ctx, B) { const o = { dia: !!(window.SBDCrossframes && ctx.P.crossframes && window.SBDCrossframes.cfDiaOn(ctx.P.crossframes)) };
+    putDet(host, 'crossframe', ctx, TX => TX.crossframe(B, ctx.P, o), 'crossframe', { B, opt: o }) || put(host, 'crossframe', ctx, TX => TX.crossframe(B, ctx.P, o)); }
   function welds(host, ctx, B, sel, onSel) {
     put(host, 'welds', ctx, TX => TX.welds(B, ctx.P, { gi: gi(ctx), sel }), onSel);
-    put(host, 'weld-detail', ctx, TX => TX.weldDetail(B, ctx.P, { i: sel && sel.k === 'fw' ? sel.i : undefined }));
+    const oW = { i: sel && sel.k === 'fw' ? sel.i : undefined };
+    putDet(host, 'weld-detail', ctx, TX => TX.weldDetail(B, ctx.P, oW), 'weld', { B, opt: oW }) || put(host, 'weld-detail', ctx, TX => TX.weldDetail(B, ctx.P, oW));
   }
   /* splice (SPLGFX, 2026-11-02): the location strip (all splices, the selected one boxed; a click selects) and the detail of the selected splice, its frame at most
      60 % of the window high (the drawing is wide: it fits the card width at a reading scale) */

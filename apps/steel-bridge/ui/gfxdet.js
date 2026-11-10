@@ -9,6 +9,8 @@
      bracket(slot, { P, gi, oh, dxf })      Constructibility: the overhang bracket sketch (exterior girder), oh = R.F.oh (its inputs p)
      stiff(slot, { R, opt, dxf, file })     Shear & stiffeners: the transverse stiffener (R = SBDShearUI.build result; opt.i its row)
      bear(slot, { R, opt, dxf, file })      Shear & stiffeners: the bearing stiffener (opt.i its row)
+     crossframe(slot, { B, opt, dxf, file }) Cross-frames: the cross-frame elevation (B = SBDFramingUI.build result; opt.dia: diaphragm in use)
+     weld(slot, { B, opt, dxf, file })      Welds: the flange-to-web weld size detail (B = SBDWeldsUI.build result; opt.i the location)
    Fix log: fixlog/steel-bridge.md (DETC, 2026-11-10). */
 (function () {
   'use strict';
@@ -222,5 +224,83 @@
       cap: legend() + `<p class="vk-cap">C: ${sb(n1)}</p><p class="vk-cap">${sb(n2)}</p><p class="vk-cap">${sb(n3)}</p>` });
   }
 
-  window.SBDGfxDet = { ltb, ltbModel, bracket, bracketModel, stiff, stiffModel, bear, bearModel };
+  /* ================= #14 Cross-frames: the cross-frame elevation =================
+     As engine/tabgraphics-b.js crossframe (B = SBDFramingUI.build result): the bay between two girders looking along them, the members of the truss model at their
+     work points, each numbered; the members of the governing check's group (top chord, bottom chord or diagonals) highlighted; S and h dimensioned (the CAD
+     drawing's measured text); the members table (largest factored forces of the combinations) as a table under the figure. */
+  function cfModel(B, opt) {
+    const R = B.R, N = R.N; if (!N || !R.frames) return null;
+    let gov = null; (B.C || []).forEach(c => c.items.forEach(it => { if (fin(it.r) && (it.st === 'pass' || it.st === 'fail') && (!gov || it.r > gov.it.r)) gov = { c, it }; }));
+    const mg = gov && /^cf\.(top|bot|diag)\b/.exec(gov.it.step || ''), grp = mg ? mg[1] : null, I = B.I.p;
+    const rows = R.frames.map((e, i) => { const mx = (R.combos || []).reduce((m, c) => ({ T: Math.max(m.T, c.f[i].T), C: Math.max(m.C, c.f[i].Cc) }), { T: 0, C: 0 });
+      return { i, e, on: grp === e.k, sec: (R.mem && R.mem[e.k] && R.mem[e.k].name) || '', L: f1(e.L), T: f1(mx.T), C: f1(mx.C) }; });
+    return { R, N, I, S: I.S, dg: I.dg, hw: I.h, gov, grp, rows, line: B.line || 0, dia: !!opt.dia };
+  }
+  function cfSvg(m, W) {
+    const K = VK(), Sc = K.scene(), nar = W < 560, S = m.S, dg = m.dg, hw = m.hw, y0 = (hw - dg) / 2, fl = Math.min(8, S * 0.07), nx = n => m.N[n][0], ny = n => m.N[n][1];
+    // girders (schematic I-shapes at the work-point depth's girder depth d), deck
+    [0, S].forEach((x, k) => { Sc.rect(x - fl, y0 + dg, x + fl, y0 + dg + 1.1, 'dt-st'); Sc.rect(x - fl, y0 - 1.1, x + fl, y0, 'dt-st'); Sc.rect(x - 0.35, y0, x + 0.35, y0 + dg, 'dt-st');
+      Sc.text(x, y0 - 1.1, `G${m.line + k + 1}`, { dy: 18, a: 'middle', sz: 12, w: true }); });
+    Sc.rect(-16, y0 + dg + 1.1, S + 16, y0 + dg + 1.1 + Math.max(3, hw * 0.08), 'dt-cc');
+    // the members, their numbers beside them (as the CAD drawing: chords above / below, diagonals at 0.27 of their length on the normal)
+    m.rows.forEach(q => { const e = q.e, a = [nx(e.a), ny(e.a)], b = [nx(e.b), ny(e.b)]; Sc.line(a[0], a[1], b[0], b[1], q.on ? 'dt-gov' : 'dt-mem', q.on ? { sw: 3.2 } : {}); });
+    m.rows.forEach(q => { const e = q.e, a = [nx(e.a), ny(e.a)], b = [nx(e.b), ny(e.b)], t = e.k === 'diag' ? 0.27 : 0.5, p = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], side = e.k === 'top' ? 1 : e.k === 'bot' ? -1 : 0;
+      const ln2 = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, nrm = [(b[1] - a[1]) / ln2, -(b[0] - a[0]) / ln2], sg = nrm[0] >= 0 ? 1 : -1, dx = side ? 0 : sg * nrm[0] * 16, dy = side ? -side * 14 : -sg * nrm[1] * 16;
+      Sc.raw(T => { const px = T.X(p[0]) + dx, py = T.Y(p[1]) + dy; return `<circle cx="${r2(px)}" cy="${r2(py)}" r="8.5" class="${q.on ? 'dt-band' : 'dt-pl'}" fill="${q.on ? '#2563EB' : '#fff'}" stroke="${q.on ? 'none' : '#475569'}" stroke-width="1"/>${tx(px, py + 4, String(q.i + 1), { a: 'middle', sz: 11, w: true, cls: q.on ? 'dt-w' : 'dt-t' })}`
+        + `<rect x="${r2(px - 11)}" y="${r2(py - 11)}" width="22" height="22" class="dt-reg" fill="transparent" data-dtr="${esc(`${q.i + 1} ${q.e.lbl} ${q.sec}: L ${q.L} in, T ${q.T} kip, C ${q.C} kip${q.on ? ' (governing group)' : ''}`)}"/>`; },
+        T => { const px = T.X(p[0]) + dx, py = T.Y(p[1]) + dy; return [[px - 10, py - 10], [px + 10, py + 10]]; }); });
+    Sc.dimH(0, S, y0 - 1.1, -38, `S = ${X_().fmtFtIn(S)}`, { yr: y0 - 1.1 });
+    Sc.dimV(0, hw, -fl, -18, `h = ${X_().fmtFtIn(hw)}`, { xr: 0 });
+    return { svg: Sc.render({ W, maxH: nar ? 300 : 340, label: 'Cross-frame elevation with the members numbered' }).svg, nar };
+  }
+  function crossframe(slot, o) {
+    const K = VK(); let m = null; try { m = cfModel(o.B, o.opt || {}); } catch (e) { m = null; }
+    if (!m) { slot.innerHTML = '<p class="note">No cross-frame model.</p>'; return null; }
+    const g = m.gov, gl = g ? `Governing check: ${g.c.id} ${g.it.loc}, ratio ${f3(g.it.r)}${m.grp ? ' (members highlighted)' : ' (not a member check)'}` : 'No governing check';
+    const tbl = `<div class="vk-tblw"><table class="vk-tbl"><caption style="text-align:left;font-size:9pt;color:var(--vk-mut);caption-side:top;padding:0 0 2px">Members (largest factored forces of the combinations)</caption><thead><tr><th>No.</th><th>Member</th><th>Section</th><th>L (in)</th><th>T (kip)</th><th>C (kip)</th><th></th></tr></thead><tbody>`
+      + m.rows.map(q => `<tr${q.on ? ' class="gov"' : ''}><td>${q.i + 1}</td><td>${esc(q.e.lbl)}</td><td>${esc(q.sec)}</td><td class="n">${q.L}</td><td class="n">${q.T}</td><td class="n">${q.C}</td><td>${q.on ? 'Governs' : ''}</td></tr>`).join('') + '</tbody></table></div>';
+    return K.detCard(slot, { id: 'dt-cf', title: `Cross-frame elevation, type ${esc(m.I.type)}${m.dia ? ' (diaphragm in use: see the diaphragm checks)' : ''}`, sub: sb(`Looking along the girders; work-point depth h = ${f2(m.hw)} in, girder depth d = ${f2(m.dg)} in, S = ${f2(m.S)} in.`),
+      dxf: o.dxf, file: o.file, top: `<p class="vk-cap" style="margin:0 0 6px;${g && m.grp ? 'color:var(--vk-acc);font-weight:600' : ''}">${sb(gl)}</p>`,
+      draw: W => { const q = cfSvg(m, W); return { html: q.svg, nar: q.nar }; }, hint: 'Point at (or tap) a member number to read its forces.', tbl,
+      notes: ['Members at their work points (the truss model of the Cross-frames tab); girders and deck schematic. Highlighted: the members of the governing check\'s group.'] });
+  }
+
+  /* ================= #16 Welds: the flange-to-web fillet weld size detail =================
+     As engine/tabgraphics-b.js weldDetail (location opt.i, else the one with the largest ratio): the T joint of each flange with the fillet weld w on both sides of the web,
+     drawn 6 times larger than the plates (the CAD drawing's SC), the flange broken; the minimum size of Table 6.13.3.4-1, the demand v_u and the resistance R_r. */
+  function weldModel(B, opt) {
+    const R = B.R; let r = R.fw.find(q => q.i === opt.i);
+    if (!r) { let best = null; B.C.forEach(c => c.items.forEach(it => { const mm = /^wf(\d+)\./.exec(it.step || ''); if (mm && typeof it.r === 'number' && (!best || it.r > best.r)) best = { r: it.r, i: +mm[1] }; })); r = R.fw.find(q => q.i === (best ? best.i : 0)) || R.fw[0]; }
+    return r ? { r } : null;
+  }
+  function weldSvg(m, W) {
+    const K = VK(), S = K.scene(), nar = W < 600, r = m.r, SC = 6;
+    const part = (x0, y0, flb, flt, wmin, vu, tag, down) => {   // down: the flange below the web (bottom flange)
+      const fw = 44, cx = x0 + fw / 2, tf = flt * SC, tw = r.tw * SC, w = r.w * SC, dw = 26, sg = down ? -1 : 1, yF0 = down ? y0 - tf : y0, yF1 = down ? y0 : y0 + tf;
+      S.rect(x0, yF0, x0 + fw, yF1, 'dt-st'); zz(S, x0, yF0 - 1.5, yF1 + 1.5, 1.6); zz(S, x0 + fw, yF0 - 1.5, yF1 + 1.5, 1.6);
+      S.rect(cx - tw / 2, down ? y0 : y0 - dw, cx + tw / 2, down ? y0 + dw : y0, 'dt-st');
+      [-1, 1].forEach(sx => { const x = cx + sx * tw / 2; S.poly([[x, y0], [x + sx * w, y0], [x, y0 - sg * w]], 'dt-weld'); });
+      S.region(cx - tw / 2 - w, Math.min(y0, y0 - sg * w), cx + tw / 2 + w, Math.max(y0, y0 - sg * w), `Fillet weld w = ${dIn(r.w)} each side; minimum ${dIn(wmin)} (Table 6.13.3.4-1)`);
+      const yt = down ? yF0 : yF1, yb = down ? y0 + dw : y0 - dw;
+      S.dimH(x0, x0 + fw, yt, down ? -18 : 18, `b_f = ${dIn(flb)} (broken)`);
+      S.dimV(yF0, yF1, x0, -16, `t_f = ${dIn(flt)}`);
+      S.dimH(cx - tw / 2, cx + tw / 2, yb, down ? 18 : -18, `t_w = ${dIn(r.tw)}`);
+      S.callout(cx + tw / 2 + w * 0.4, y0 - sg * w * 0.4, 30, sg * 22, `w = ${dIn(r.w)}`, { sz: 11 });
+      const yl = down ? yF0 : yb, dy0 = down ? 36 : 40, tl = [tag, `Min. size (Table 6.13.3.4-1): ${dIn(wmin)};`, `used w = ${dIn(r.w)}`, `v_u = ${f3(vu)} kip/in; R_r = ${f3(r.Rw)} kip/in`];
+      if (!down) S.text(x0 - 4, yF1, tag, { dy: -40, sz: 12, w: true, up: true, maxw: nar ? W - 20 : W * 0.45 });
+      tl.slice(down ? 0 : 1).forEach((q, i) => S.text(x0 - 4, yl, q, { dy: dy0 + i * 16, sz: i === 0 && down ? 12 : 11, w: i === 0 && down }));
+    };
+    part(0, 0, r.topB, r.topT, r.wminT, r.vuT, `Top flange-to-web weld, ${r.name}`, false);
+    if (nar) part(0, -110, r.botB, r.botT, r.wminB, r.vuB, 'Bottom flange-to-web weld', true); else part(80, -20, r.botB, r.botT, r.wminB, r.vuB, 'Bottom flange-to-web weld', true);
+    return { svg: S.render({ W, maxH: nar ? 720 : 360, label: 'Flange-to-web fillet weld size detail' }).svg, nar };
+  }
+  function weld(slot, o) {
+    const K = VK(); let m = null; try { m = weldModel(o.B, o.opt || {}); } catch (e) { m = null; }
+    if (!m) { slot.innerHTML = '<p class="note">No flange-to-web weld location.</p>'; return null; }
+    return K.detCard(slot, { id: 'dt-wd', title: 'Weld size detail', sub: `${esc(m.r.name)} · flange-to-web fillet welds`, dxf: o.dxf, file: o.file,
+      draw: W => { const q = weldSvg(m, W); return { html: q.svg, nar: q.nar }; }, hint: 'Point at (or tap) a weld to read its size.',
+      notes: ['Two fillet welds (one each side of the web) per flange; the sketch is drawn 6 times larger than the plates (sizes as dimensioned), not to scale along the web.'] });
+  }
+
+  window.SBDGfxDet = { ltb, ltbModel, bracket, bracketModel, stiff, stiffModel, bear, bearModel, crossframe, cfModel, weld, weldModel };
 })();
