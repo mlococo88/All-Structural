@@ -77,7 +77,7 @@ function cmp(list, where) {
 const ROWK = ['name', 'cat', 'A', 'th', 'nn', 'ADTTeq', 'lim', 'N', 'dFn', 'gam', 'res', 'y', 'd', 'fP', 'fN', 'df', 'fD1', 'fD2', 'fDL', 'hasDL', 'fLLt', 'exempt', 'dem', 'Vu', 'VUTF', 'fUT', 'fUF'];
 function itemPairs(mine, theirs) {
   const out = [], P = (k, a, b) => out.push([k, a, b]);
-  theirs = theirs.filter(c => c.id !== 'FA5' && c.id !== 'FA6'); mine = mine.filter(c => c.id !== 'FA5' && c.id !== 'FA6');   // MBE 4th Ed. (2026-11-10): not compared, see cmpFa
+  theirs = theirs.filter(c => !['FA5', 'FA6', 'FA8'].includes(c.id)); mine = mine.filter(c => !['FA5', 'FA6', 'FA8'].includes(c.id));   // MBE 4th Ed. (2026-11-10): not compared, see cmpFa
   P('check ids', mine.map(c => c.id).join(), theirs.map(c => c.id).join());
   theirs.forEach(c => { const m = mine.find(x => x.id === c.id); if (!m) return;
     P(`${c.id} n`, m.items.length, c.items.length); P(`${c.id} status`, m.status, c.status); P(`${c.id} gov`, m.gov, c.gov); P(`${c.id} na`, !!m.naWhy, !!c.naWhy);
