@@ -35,12 +35,24 @@
     return H;
   }
   const gi = ctx => (ctx.P.girders[ctx.g] ? ctx.g : 0);
+  /* DETC (2026-11-10): the detail drawings and the splice graphics in the option C screen style (ui/gfxdet.js, window.SBDGfxDet[det]); Download DXF exports the CAD
+     drawing make(TX) (wrap()'s graphic, unchanged); handles[name] keeps { el, graphic, dxf() } for the tests. Without the kit: put() (the CAD viewer) as before. */
+  function putDet(host, name, ctx, make, det, args) {
+    const el = host.querySelector(`[data-gfxb="${name}"]`), D = window.SBDGfxDet, TX = T(), K = window.SBDVizKit; if (!el) return true;
+    if (!D || !D[det] || !K || !K.detCard || !TX || !GR()) return false;
+    let g = null; const cad = () => g || (g = wrap(make(TX), `${slug(ctx.P)}_${name}`));
+    const H = D[det](el, { ...args, dxf: cad, file: `${slug(ctx.P)}_${name}` });
+    const hs = window.SBDTabGfxBUI.handles = window.SBDTabGfxBUI.handles || {};
+    if (H) hs[name] = { el: H.el, get graphic() { return cad(); }, dxf: () => cad().D.toDXF({ ltscale: 1 }), select: H.select || (() => {}) }; else delete hs[name];
+    return true;
+  }
 
   function shear(host, ctx, R, sel, onSel) {
     put(host, 'shear', ctx, TX => TX.shear(R, ctx.P, { gi: gi(ctx), sel }), onSel);
     // the stiffener details follow the selection: the selected transverse stiffener / bearing, else the governing one (2026-10-31)
-    put(host, 'shear-detail', ctx, TX => TX.shearDetail(R, ctx.P, { i: sel && sel.k === 'ts' ? sel.i : undefined }));
-    put(host, 'shear-bearing', ctx, TX => TX.shearBearing(R, ctx.P, { i: sel && sel.k === 'bs' ? sel.i : undefined }));
+    const oTs = { i: sel && sel.k === 'ts' ? sel.i : undefined }, oBs = { i: sel && sel.k === 'bs' ? sel.i : undefined };
+    putDet(host, 'shear-detail', ctx, TX => TX.shearDetail(R, ctx.P, oTs), 'stiff', { R, opt: oTs }) || put(host, 'shear-detail', ctx, TX => TX.shearDetail(R, ctx.P, oTs));
+    putDet(host, 'shear-bearing', ctx, TX => TX.shearBearing(R, ctx.P, oBs), 'bear', { R, opt: oBs }) || put(host, 'shear-bearing', ctx, TX => TX.shearBearing(R, ctx.P, oBs));
   }
   function fatigue(host, ctx, R, sel, onSel) {
     put(host, 'fatigue', ctx, TX => TX.fatigue(R, ctx.P, { gi: gi(ctx), sel }), onSel);

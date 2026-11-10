@@ -233,9 +233,11 @@
     S.circ = (x, y, r, cls, o) => shape([[x - r, y - r], [x + r, y + r]], T => `<circle cx="${r2(T.X(x))}" cy="${r2(T.Y(y))}" r="${r2(Math.max(0.6, r * T.k))}"${attrs(cls, o)}/>`);
     S.dot = (x, y, rp, cls, o) => { g(x, y); it.push({ f: T => `<circle cx="${r2(T.X(x))}" cy="${r2(T.Y(y))}" r="${r2(rp)}"${attrs(cls, o)}/>`, b: T => [[T.X(x) - rp, T.Y(y) - rp], [T.X(x) + rp, T.Y(y) + rp]] }); return S; };
     /* text at a model point, offset (dx, dy) in px (screen: dy down); o = { a: start | middle | end, cls, sz, w (bold), rot } */
-    S.text = (x, y, t, o) => { o = o || {}; const sz = o.sz || 12, a = o.a || 'start', dx = o.dx || 0, dy = o.dy || 0, w = TW(t, sz), lift = o.vc ? sz * 0.35 : 0;
-      it.push({ f: T => `<text x="${r2(T.X(x) + dx)}" y="${r2(T.Y(y) + dy + lift)}"${a !== 'start' ? ` text-anchor="${a}"` : ''} class="${o.cls || 'dt-t'}${o.halo ? ' halo' : ''}" style="font-size:${sz}px"${o.w ? ' font-weight="600"' : ''} fill="${o.fill || (/dt-m/.test(o.cls || '') ? DPAL.muted : /dt-g/.test(o.cls || '') ? DPAL.gov : DPAL.ink)}">${st(t)}</text>`,
-        b: T => { const X0 = T.X(x) + dx - (a === 'middle' ? w / 2 : a === 'end' ? w : 0), Y0 = T.Y(y) + dy + lift; return [[X0, Y0 - sz * 0.85], [X0 + w, Y0 + sz * 0.25]]; } }); return S; };
+    S.text = (x, y, t, o) => { o = o || {}; const sz = o.sz || 12, a = o.a || 'start', lift = o.vc ? sz * 0.35 : 0, lh = sz * 1.25;
+      let L = [String(t)]; if (o.maxw && TW(t, sz) > o.maxw) { L = []; let cur = ''; String(t).split(' ').forEach(w => { if (cur && TW(cur + ' ' + w, sz) > o.maxw) { L.push(cur); cur = w; } else cur = cur ? cur + ' ' + w : w; }); if (cur) L.push(cur); }
+      L.forEach((q, i) => { const dx = o.dx || 0, dy = (o.dy || 0) + (o.up ? -(L.length - 1 - i) : i) * lh, w = TW(q, sz);
+        it.push({ f: T => `<text x="${r2(T.X(x) + dx)}" y="${r2(T.Y(y) + dy + lift)}"${a !== 'start' ? ` text-anchor="${a}"` : ''} class="${o.cls || 'dt-t'}${o.halo ? ' halo' : ''}" style="font-size:${sz}px"${o.w ? ' font-weight="600"' : ''} fill="${o.fill || (/dt-m/.test(o.cls || '') ? DPAL.muted : /dt-g/.test(o.cls || '') ? DPAL.gov : DPAL.ink)}">${st(q)}</text>`,
+          b: T => { const X0 = T.X(x) + dx - (a === 'middle' ? w / 2 : a === 'end' ? w : 0), Y0 = T.Y(y) + dy + lift; return [[X0, Y0 - sz * 0.85], [X0 + w, Y0 + sz * 0.25]]; } }); }); return S; };
     /* a horizontal dimension x0..x1 at the model line y, drawn off px above (off > 0) or below (off < 0), extension lines from yr (model; default y), label centred */
     S.dimH = (x0, x1, y, off, label, o) => { o = o || {}; const yr = o.yr != null ? o.yr : y; g(x0, yr); g(x1, yr); const sz = o.sz || 11;
       it.push({ f: T => { const yy = T.Y(y) - off, a = T.X(x0), b = T.X(x1), e = T.Y(yr), s = Math.sign(off) || 1, tk = 3.5;
@@ -270,9 +272,11 @@
       o = o || {}; const W = o.W || 700, pad = o.pad != null ? o.pad : 6, gw = Math.max(geo[2] - geo[0], 1e-6), gh = Math.max(geo[3] - geo[1], 1e-6), maxH = o.maxH || 420;
       const mk = k => ({ k, X: x => (x - geo[0]) * k, Y: y => (geo[3] - y) * k });
       const ext = T => { const e = [0, 0, gw * T.k, gh * T.k]; it.forEach(q => { if (!q.b) return; q.b(T).forEach(p => { if (fin(p[0]) && fin(p[1])) { e[0] = Math.min(e[0], p[0]); e[1] = Math.min(e[1], p[1]); e[2] = Math.max(e[2], p[0]); e[3] = Math.max(e[3], p[1]); } }); }); return e; };
-      let k = Math.min((W - 2 * pad) / gw, maxH / gh), T = mk(k), e = ext(T);
-      for (let i = 0; i < 4; i++) { const extra = (e[2] - e[0]) - gw * k, kw = (W - 2 * pad - extra) / gw, extraH = (e[3] - e[1]) - gh * k, kh = (maxH - extraH) / gh, k2 = Math.max(o.minK || 1e-6, Math.min(kw, kh > 0 ? kh : kw));
-        if (Math.abs(k2 - k) < 1e-4 * k) break; k = k2; T = mk(k); e = ext(T); }
+      // the largest k at which everything (texts at their px size) fits W - 2 pad wide and maxH high: bisection (the extents grow with k)
+      const fits = k => { const q = ext(mk(k)); return q[2] - q[0] <= W - 2 * pad + 0.5 && q[3] - q[1] <= maxH + 0.5; };
+      let k = Math.min((W - 2 * pad) / gw, maxH / gh);
+      if (!fits(k)) { let lo = k * 1e-3, hi = k; if (!fits(lo)) k *= 0.6; else { for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (fits(m)) lo = m; else hi = m; } k = lo; } }   // texts wider than W alone: the SVG scales down
+      k = Math.max(o.minK || 0, k); const T = mk(k), e = ext(T);
       if (o.minH && (e[3] - e[1]) < o.minH) { const m = (o.minH - (e[3] - e[1])) / 2; e[1] -= m; e[3] += m; }
       const w = Math.max(W, e[2] - e[0] + 2 * pad), x0 = e[0] - pad - (w - (e[2] - e[0] + 2 * pad)) / 2, h = Math.ceil(e[3] - e[1] + 2 * pad);
       const body = it.filter(q => !q.last).map(q => q.f(T)).join('') + it.filter(q => q.last).map(q => q.f(T)).join('');

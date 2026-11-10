@@ -7,6 +7,8 @@
    API (each mounts a card into slot; o.dxf() builds the CAD graphic for Download DXF)
      ltb(slot, { r, dxf })                  Flexure: the unbraced length (L_b) of the selected location, L_p and L_r to one scale, the LTB regime highlighted
      bracket(slot, { P, gi, oh, dxf })      Constructibility: the overhang bracket sketch (exterior girder), oh = R.F.oh (its inputs p)
+     stiff(slot, { R, opt, dxf, file })     Shear & stiffeners: the transverse stiffener (R = SBDShearUI.build result; opt.i its row)
+     bear(slot, { R, opt, dxf, file })      Shear & stiffeners: the bearing stiffener (opt.i its row)
    Fix log: fixlog/steel-bridge.md (DETC, 2026-11-10). */
 (function () {
   'use strict';
@@ -116,5 +118,109 @@
       notes: [sb('Dimensions from the overhang-bracket inputs (a, h_b, w_OH, t_OH); loads are the tab\'s OH1–OH5 inputs. Schematic. The slab is drawn from the girder centre line; the web is shown broken.')] });
   }
 
-  window.SBDGfxDet = { ltb, ltbModel, bracket, bracketModel };
+  /* ---------- shared pieces of the detail drawings of engine/tabgraphics-b.js (the same formats: sizes to 1/16 in, toFixed digits) ---------- */
+  const frac = v => X_().frac(v), dIn = v => `${frac(v)} in`, f1 = v => (+v).toFixed(1), f2 = v => (+v).toFixed(2), f3 = v => (+v).toFixed(3);
+  const rcls = r => (Number.isNaN(r) || r === Infinity ? 'ng' : !fin(r) ? 'na' : r > 1 + 1e-9 ? 'ng' : r >= 0.9 ? 'hi' : 'ok');   // engine/tabgraphics-b.js rcls: the tables' classes
+  const RW = { ok: 'below 0.90', hi: '0.90 to 1.00', ng: 'above 1.00 or NG', na: 'no ratio' };
+  const legend = () => `<p class="vk-cap" style="margin-top:4px"><span style="display:inline-block;width:10px;height:10px;background:#DCFCE7;border:1px solid #15803D;vertical-align:-1px"></span> ratio below 0.90 &nbsp;<span style="display:inline-block;width:10px;height:10px;background:#FEF3C7;border:1px solid #B45309;vertical-align:-1px"></span> 0.90 to 1.00 &nbsp;<span style="display:inline-block;width:10px;height:10px;background:#FEE2E2;border:1px solid #B91C1C;vertical-align:-1px"></span> above 1.00 or NG (the classes of the tables)</p>`;
+  const zz = (S, x, y0, y1, amp, cls) => { const n = 6, p = []; for (let i = 0; i <= n; i++) p.push([x + (i % 2 ? 0.5 : -0.5) * amp * (i === 0 || i === n ? 0 : 1), y0 + (y1 - y0) * i / n]); S.pline(p, cls || 'dt-ol'); };   // a break line (as brkV)
+
+  /* ================= #10 Shear & stiffeners: the transverse stiffener (or connection plate) at one location =================
+     As engine/tabgraphics-b.js shearDetail (the same row: opt.i, else the governing row): A the two web panels beside it in elevation, to scale, each filled by its
+     V_u/(φ_v V_n); B the plan section through the plate, enlarged k times in the same drawing (the CAD drawing's k). */
+  function stiffModel(R, opt) {
+    const rows = (R.TS && !R.TS.errors.length && R.TS.rows) || []; let i = opt.i != null && rows[opt.i] ? opt.i : R.tsGov ? R.tsGov.i : 0; if (!(i >= 0) || !rows[i]) i = 0;
+    const r = rows[i]; if (!r) return null; const t = r.t;
+    return { r, i, t, Dw: r.D, tw: r.tw, tfc: r.tfc || 0.75, tft: r.tft || 0.75, nm: `${r.type === 'B' ? 'CP' : 'TS'}${i + 1}`, cp: t.role === 'cp', sides: +t.sides === 2 ? 2 : 1,
+      k: Math.max(1, Math.min(8, Math.round(0.45 * r.D / (2 * t.bt + r.tw)))), pan: [[0, r.do1, r.p1], [r.do1, r.do1 + r.do2, r.p2]].map(([a, b, q]) => ({ a, b, q, rr: q && q.phVn > 0 ? q.Vu / q.phVn : NaN })) };
+  }
+  function stiffSvg(m, W) {
+    const K = VK(), S = K.scene(), nar = W < 640, r = m.r, t = m.t, Dw = m.Dw, x1 = r.do1, x2 = r.do1 + r.do2, e0 = -8, e1 = x2 + 8;
+    // A: the panels (ratio fill), flanges, neighbours dashed, this stiffener solid
+    m.pan.forEach((P, k) => { const c = rcls(P.rr); S.rect(P.a, 0, P.b, Dw, 'dt-' + c); const cx = (P.a + P.b) / 2;
+      [`Panel ${k + 1}${P.q && P.q.end ? ' (end panel)' : ''}`, `d_o/D = ${f2((P.b - P.a) / Dw)}`, fin(P.rr) ? `V_u/φ_v V_n = ${f3(P.rr)}` : ''].filter(Boolean).forEach((q, j) => S.text(cx, Dw * 0.62, q, { a: 'middle', dy: j * (nar ? 13 : 15), sz: nar ? 9.5 : 11, w: j === 2 }));
+      S.region(P.a, 0, P.b, Dw, `Panel ${k + 1}: d_o/D = ${f2((P.b - P.a) / Dw)}${fin(P.rr) ? `, Vu/(φv Vn) = ${f3(P.rr)} (${RW[c]})` : ''}`); });
+    S.rect(e0, Dw, e1, Dw + m.tfc, 'dt-st'); S.rect(e0, -m.tft, e1, 0, 'dt-st'); zz(S, e0, -m.tft - 1, Dw + m.tfc + 1, 3); zz(S, e1, -m.tft - 1, Dw + m.tfc + 1, 3);
+    [0, x2].forEach(x => S.rect(x - t.tp / 2, 0, x + t.tp / 2, Dw, 'dt-hid'));
+    const yb = m.cp ? 0 : t.gap; S.rect(x1 - t.tp / 2, yb, x1 + t.tp / 2, Dw, 'dt-st', { sw: 0 }); S.rect(x1 - Math.max(t.tp, 0.6) / 2, yb, x1 + Math.max(t.tp, 0.6) / 2, Dw, 'dt-st');
+    S.text(x1, Dw, m.nm, { dx: 4, dy: 14, sz: nar ? 10 : 11, w: true });
+    S.dimH(0, x1, Dw + m.tfc, 18, `d_o1 = ${f2(r.do1)} in (${f2(r.do1 / Dw)}D)`); S.dimH(x1, x2, Dw + m.tfc, nar ? 36 : 18, `d_o2 = ${f2(r.do2)} in (${f2(r.do2 / Dw)}D)`);
+    S.dimV(0, Dw, e0, -16, `D = ${dIn(Dw)}`);
+    if (!m.cp && t.gap > 0) S.callout(x1 + t.tp / 2, t.gap, 34, -14, `g = ${dIn(t.gap)} (weld cutoff)`, { sz: 10.5 });
+    S.text(e0, Dw + m.tfc, `A · ${r.name} (${m.nm}, type ${r.type}): web panels, elevation to scale`, { dy: nar ? -62 : -44, sz: 12, w: true, up: true, maxw: W - 20 });
+    // B: plan section through the plate, enlarged k times (sizes in true inches), beside A (or under it on a phone)
+    const k = m.k, sv = v => v * k, fb = Math.max(r.bfc || 0, 2 * t.bt + m.tw + 2) * k, half = 0.55 * fb, bx = nar ? (e0 + e1) / 2 : e1 + 70, by = nar ? -m.tft - 30 - fb / 2 : Dw * 0.5;
+    S.rect(bx - half, by - sv(m.tw) / 2, bx + half, by + sv(m.tw) / 2, 'dt-st'); S.rect(bx - half, by - fb / 2, bx + half, by + fb / 2, 'dt-hid');
+    [1, -1].slice(0, m.sides).forEach(sg => { const ya = sg > 0 ? by + sv(m.tw) / 2 : by - sv(m.tw) / 2 - sv(t.bt), yz = ya + sv(t.bt); S.rect(bx - sv(t.tp) / 2, ya, bx + sv(t.tp) / 2, yz, 'dt-st', { fill: '#475569' });
+      [-1, 1].forEach(sx => { const x = bx + sx * sv(t.tp) / 2, y = sg > 0 ? by + sv(m.tw) / 2 : by - sv(m.tw) / 2, w = sv(t.w); S.poly([[x, y], [x + sx * w, y], [x, y + sg * w]], 'dt-weld'); }); });
+    S.dimV(by + sv(m.tw) / 2, by + sv(m.tw) / 2 + sv(t.bt), bx + half, 16, `b_t = ${dIn(t.bt)}`, { xr: bx + sv(t.tp) / 2 });
+    S.callout(bx - sv(t.tp) / 2, by + sv(m.tw) / 2 + sv(t.bt) * 0.7, nar ? -40 : -34, nar ? 10 : -2, `PL ${frac(t.bt)} × ${frac(t.tp)} (t_p = ${dIn(t.tp)})`, { sz: 10.5 });
+    S.callout(bx + half * 0.7, by - sv(m.tw) / 2, 18, 22, `Web t_w = ${dIn(m.tw)}`, { sz: 10.5 });
+    S.text(bx - half, by + fb / 2, `B · Plan section (enlarged ×${k})`, { dy: -14, sz: 12, w: true, up: true, maxw: W - 20 });
+    S.region(bx - sv(t.tp) / 2, by - fb / 2, bx + sv(t.tp) / 2, by + fb / 2, `${m.nm}: PL ${frac(t.bt)} × ${frac(t.tp)}, ${m.sides === 2 ? 'pair' : 'one plate'}; fillet weld ${dIn(t.w)} to the web`);
+    return { svg: S.render({ W, maxH: nar ? 640 : 380, label: `Transverse stiffener ${m.nm}: web panels and plan section` }).svg, nar };
+  }
+  function stiff(slot, o) {
+    const K = VK(); let m = null; try { m = stiffModel(o.R, o.opt || {}); } catch (e) { m = null; }
+    if (!m) { slot.innerHTML = '<p class="note">No transverse stiffener or connection plate in the layout.</p>'; return null; }
+    const t = m.t, r = m.r;
+    const n1 = `${m.cp ? 'Connection plate, welded to both flanges' : `Intermediate stiffener: tight fit at the compression flange, web weld stops g = ${dIn(t.gap)} short of the tension flange`}; ${m.sides === 2 ? 'pair' : 'one plate'} ${frac(t.bt)} × ${frac(t.tp)}; web ${dIn(m.Dw)} × ${dIn(m.tw)}; panels filled by V_u/(φ_v V_n) of TS4 (6.10.9.3); dashed: the neighbouring stiffeners. I_t = ${f2(r.It)} in⁴, I_req = ${f2(r.Ireq)} in⁴.`;
+    const n2 = `Fillet weld ${dIn(t.w)} to the web, both sides of the plate${m.cp ? `; ${dIn(t.wf)} to the flanges` : ''}; flange outline dashed.`;
+    return K.detCard(slot, { id: 'dt-ts', title: `Transverse stiffener ${m.nm}`, sub: `${esc(r.name)} · type ${esc(r.type)}`, dxf: o.dxf, file: o.file,
+      draw: W => { const q = stiffSvg(m, W); return { html: q.svg, nar: q.nar }; }, hint: 'Point at (or tap) a panel or the plate to read its values.',
+      cap: legend() + `<p class="vk-cap">${sb(n1)}</p><p class="vk-cap">B: ${sb(n2)}</p>` });
+  }
+
+  /* ================= #11 Shear & stiffeners: the bearing stiffener at one bearing =================
+     As engine/tabgraphics-b.js shearBearing (the same row: opt.i, else the governing row): C the girder section at the bearing, to scale, the plates filled by the
+     row's largest ratio; D the effective column of 6.10.11.2.4 in plan at mid-depth, enlarged k times in the same drawing, filled by R_u/P_r. */
+  function bearModel(R, opt) {
+    const rows = R.BS.rows || []; let i = opt.i != null && rows[opt.i] ? opt.i : R.bsGov ? R.bsGov.i : 0; if (!(i >= 0) || !rows[i]) i = 0;
+    const r = rows[i]; if (!r) return null;
+    const t = R.BS.types[r.type], Dw = R.D, sp0 = R.gm.sup || [], xs0 = R.gm.dem && sp0[i] != null ? Math.min(Math.max(sp0[i], 0.01), sp0[sp0.length - 1] - 0.01) : null;
+    const tft = xs0 != null && R.gm.zAt(xs0).topT > 0 ? R.gm.zAt(xs0).topT : 0.75, h = Math.max(1.4, Math.min(4, (Dw + 6) / 30));
+    const grp = (t.np - 1) * t.sp + t.tp, L0 = -(r.strip9 + grp / 2), L1 = grp / 2 + r.sEnd, k = Math.max(1, Math.min(8, Math.round(30 * h / Math.max(1, L1 - L0 + 12))));
+    return { r, i, t, Dw, tw: r.tw, tfb: r.tfb || 1, bfb: r.bfb, bft: r.bft || r.bfb, tft, c: t.c || 0, nm: `BS${i + 1}`, rr: Math.max(r.Ru / r.Rsb, r.Ru / r.Pr, r.Ru / r.Rweld), cr: r.Ru / r.Pr, grp, L0, L1, k };
+  }
+  function bearSvg(m, W) {
+    const K = VK(), S = K.scene(), nar = W < 640, r = m.r, t = m.t, Dw = m.Dw, tw = m.tw, c = m.c, cl = 'dt-' + rcls(m.rr), wmax = Math.max(m.bft, m.bfb);
+    // C: the section at the bearing
+    S.rect(-m.bft / 2, Dw, m.bft / 2, Dw + m.tft, 'dt-st'); S.rect(-tw / 2, 0, tw / 2, Dw, 'dt-st'); S.rect(-m.bfb / 2, -m.tfb, m.bfb / 2, 0, 'dt-st');
+    S.rect(-m.bfb / 2 - 1, -m.tfb - 3, m.bfb / 2 + 1, -m.tfb, 'dt-brg');
+    [1, -1].forEach(sg => { const xi = sg * tw / 2, xo = sg * (tw / 2 + t.bt); S.poly([[xi, c], [xi + sg * c, 0], [xo, 0], [xo, Dw], [xi + sg * c, Dw], [xi, Dw - c]], cl, { sw: 1 }); });
+    S.region(-tw / 2 - t.bt, 0, tw / 2 + t.bt, Dw, `${m.nm}: largest ratio ${f3(m.rr)} (${RW[rcls(m.rr)]}): Ru = ${f1(r.Ru)} kip; (Rsb)r = ${f1(r.Rsb)}; Pr = ${f1(r.Pr)}; Rr welds = ${f1(r.Rweld)} kip`);
+    S.dimH(tw / 2, tw / 2 + t.bt, Dw + m.tft, 18, `b_t = ${dIn(t.bt)}`, { yr: Dw });
+    S.dimV(0, Dw, -wmax / 2, -16, `D = ${dIn(Dw)}`, { xr: -tw / 2 - t.bt });
+    S.callout(m.bfb / 2 + 1, -m.tfb - 1.5, 22, 8, 'Bearing', { sz: 10.5 });
+    S.text(-wmax / 2, Dw + m.tft, `C · ${r.name} (${m.nm}, type ${r.type}): section at the bearing, to scale`, { dy: -40, sz: 12, w: true, up: true, maxw: nar ? W - 20 : W * 0.45 });
+    // D: the effective column in plan at mid-depth, enlarged k times
+    const k = m.k, sv = v => v * k, L0 = m.L0, L1 = m.L1, grp = m.grp, ox = nar ? -wmax / 2 : wmax / 2 + 40, oy = nar ? -m.tfb - 3 - 40 - sv(t.bt + tw / 2) : Dw * 0.55, X = v => ox + sv(v - (L0 - 6)), Y = v => oy + sv(v);
+    const xmax = r.ed > 0 ? grp / 2 - t.tp / 2 + r.ed : L1 + 6, ccl = 'dt-' + rcls(m.cr);
+    S.rect(X(L0), Y(-tw / 2), X(L1), Y(tw / 2), ccl, { sw: 1 });
+    S.line(X(L0 - 6), Y(-tw / 2), X(xmax), Y(-tw / 2), 'dt-ol'); S.line(X(L0 - 6), Y(tw / 2), X(xmax), Y(tw / 2), 'dt-ol'); zz(S, X(L0 - 6), Y(-tw / 2) - 4, Y(tw / 2) + 4, 3);
+    if (r.ed > 0) { S.line(X(xmax), Y(-t.bt - tw / 2 - 1), X(xmax), Y(t.bt + tw / 2 + 1), 'dt-ol', { sw: 1.6 }); S.text(X(xmax), Y(t.bt + tw / 2), 'Girder end', { dx: 5, sz: 10.5, cls: 'dt-m' }); }
+    else zz(S, X(xmax), Y(-tw / 2) - 4, Y(tw / 2) + 4, 3);
+    for (let q = 0; q < t.np; q++) { const xc = -grp / 2 + t.tp / 2 + q * t.sp; [1, -1].forEach(sg => { const ya = sg > 0 ? tw / 2 : -tw / 2 - t.bt; S.rect(X(xc - t.tp / 2), Y(ya), X(xc + t.tp / 2), Y(ya + t.bt), ccl, { sw: 1 }); }); }
+    S.region(X(L0), Y(-tw / 2 - t.bt), X(L1), Y(tw / 2 + t.bt), `Effective column (6.10.11.2.4): ${f2(r.Ltot)} in, A = ${f2(r.A)} in²; Ru/Pr = ${f3(m.cr)} (${RW[rcls(m.cr)]})`);
+    const yd = Y(-tw / 2 - t.bt);
+    S.dimH(X(L0), X(-grp / 2), yd, -20, `9t_w = ${f2(r.strip9)} in`, { yr: Y(-tw / 2) });
+    if (t.np > 1) S.dimH(X(-grp / 2 + t.tp / 2), X(-grp / 2 + t.tp / 2 + (t.np - 1) * t.sp), yd, -42, `${t.np - 1} @ ${f2(t.sp)} in`, { yr: Y(-tw / 2 - t.bt) });
+    S.dimH(X(grp / 2), X(L1), yd, nar && t.np < 2 ? -38 : -20, `${f2(r.sEnd)} in`, { yr: Y(-tw / 2) });
+    S.dimH(X(L0), X(L1), yd, t.np > 1 ? -64 : nar ? -58 : -44, `Effective column ${f2(r.Ltot)} in, A = ${f2(r.A)} in^2`, { yr: Y(-tw / 2) });
+    S.text(X(L0 - 6), Y(t.bt + tw / 2), `D · Effective column, plan at mid-depth (enlarged ×${k})`, { dy: -16, sz: 12, w: true, up: true, maxw: nar ? W - 20 : W * 0.45 });
+    return { svg: S.render({ W, maxH: nar ? 640 : 380, label: `Bearing stiffener ${m.nm}: section at the bearing and the effective column` }).svg, nar };
+  }
+  function bear(slot, o) {
+    const K = VK(); let m = null; try { m = bearModel(o.R, o.opt || {}); } catch (e) { m = null; }
+    if (!m) { slot.innerHTML = '<p class="note">No bearing stiffener.</p>'; return null; }
+    const t = m.t, r = m.r, conn = ({ milled: 'milled to bear on the bottom flange', cjp: 'CJP groove weld to the bottom flange', fillet: 'fillet welds to the bottom flange (not permitted)' })[t.conn] || '';
+    const n1 = `${t.np} pair${t.np > 1 ? 's' : ''} of plates ${frac(t.bt)} × ${frac(t.tp)}, one each side of the web; clip ${dIn(m.c)} at the flange-to-web welds; fillet welds ${dIn(t.w)} to the web; ${conn}; web ${dIn(m.tw)}; bottom flange ${frac(m.bfb)} × ${frac(m.tfb)}.`;
+    const n2 = `R_u = ${f1(r.Ru)} kip; bearing (R_sb)_r = ${f1(r.Rsb)}; column P_r = ${f1(r.Pr)}; welds R_r = ${f1(r.Rweld)} kip; largest ratio ${f3(m.rr)} (plates filled in its colour).`;
+    const n3 = `D: filled, the effective column of 6.10.11.2.4 (plates and web strips), in the colour of R_u/P_r = ${f3(m.cr)}; web strips from the result (9t_w each side, s_end to the girder end).`;
+    return K.detCard(slot, { id: 'dt-bs', title: `Bearing stiffener ${m.nm}`, sub: `${esc(r.name)} · type ${esc(r.type)}`, dxf: o.dxf, file: o.file,
+      draw: W => { const q = bearSvg(m, W); return { html: q.svg, nar: q.nar }; }, hint: 'Point at (or tap) the plates or the effective column to read the values.',
+      cap: legend() + `<p class="vk-cap">C: ${sb(n1)}</p><p class="vk-cap">${sb(n2)}</p><p class="vk-cap">${sb(n3)}</p>` });
+  }
+
+  window.SBDGfxDet = { ltb, ltbModel, bracket, bracketModel, stiff, stiffModel, bear, bearModel };
 })();
