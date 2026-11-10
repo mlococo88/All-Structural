@@ -100,6 +100,7 @@
     'ui/drawings.js',
     'ui/graphics.js',
     'ui/vizkit.js',   // SECC (2026-11-10): the data-viz pieces of the Section properties graphic (palette, controls, tiles, ruler, diagram, read-out; display only)
+    'ui/gfxdet.js',   // DETC (2026-11-10): the detail drawings and plans in the same style (screen and print; Download DXF stays the CAD drawing; display only)
     'ui/vizalong.js',   // SBVZB (2026-11-10): the along-girder data-viz pieces (elevation, bands, charts, read-out; display only)
     'ui/alonggfx.js',   // SBVZB: the along-girder screen graphics of the tabs (display only; Download DXF unchanged)
     'ui/gfxa.js',
@@ -678,6 +679,7 @@
      Welds inputs, a Custom demand table, …) is drawn for the fix, out of date and with its Calculate button off (hostFix). */
   function drawOut0() {
     const E = icErr = IC().collect(P).errors, t = ui.otab || 'sec';
+    { const b = document.querySelector('#tabBar [data-otab="cf"]'), t = window.SBDFramingUI.isDia(P) ? 'Diaphragms' : 'Cross-frames'; if (b && b.textContent !== t) b.textContent = t; }   // SBDIA (2026-11-10): the tab's name with a diaphragm as the bracing
     if (E.length && !E.some(e => e.host === t)) {
       document.querySelectorAll('#tabBar [data-otab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.otab === t)));
       $('out').onchange = null; $('out').onclick = null; $('out').innerHTML = ICU().blocked(E, icO()); return; }
