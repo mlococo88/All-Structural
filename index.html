@@ -3705,6 +3705,11 @@ const IXASM_ZN = {
   ps: 'β₁ is always taken from f\'c (AASHTO LRFD 10th Ed. Art. 5.6.2.2); a value typed in the β₁ box is shown but not used. Mild steel is taken at fs = fy (tension) and f\'s = fy (compression), and counts only with its depth (ds, ds\') entered.',
   arema: 'Fb_N is kept between 0.10·Fy and 0.55·Fy (the lower bound is set in this tool); an Fb entered as an override is used as entered.',
 };
+/* IXPSD (2026-11-10, display only): the PS Service III tension limit as the check (psServiceIIIData, frCoeff) uses it, for the
+   PS Conc card and Report §4; and the note on the PS card's Dt input (z.d), which only the PS Strength I ductility line reads. */
+function ixpsFt(fc, exposure){ const sev=exposure==='severe', k=sev?0.0948:0.19;
+  return {k, ks:sev?'0.0948':'0.19', exp:sev?'Severe':'Moderate', ft:k*Math.sqrt(fc||5)}; }
+const IXPSD_DT = 'Dt (in), optional: the depth the ductility line of the PS Strength I step compares the neutral-axis depth c with (the line shows c as Dp and checks Dp ≤ 0.42·Dt). For the c/de ≤ 0.42 reinforcement limit of earlier LRFD editions, enter de (extreme compression fiber to the centroid of the tensile force); that limit was removed in the 2006 interim revisions (AASHTO LRFD 10th Ed. C5.6.2.1), so the line is for information and changes no capacity or rating factor. Blank or 0: the line is not shown, as before this box existed. The box holds the zone\'s stored depth d, so a zone switched from Steel Calc or Composite shows the steel depth kept from that type.';
 function IxNL({lead,items,act}) {
   return (<>
     {(act||[]).filter(Boolean).map((a,i)=><div key={'a'+i} style={{fontWeight:700,color:'#b45309',margin:'0 0 3px'}}>{a}</div>)}
@@ -15000,6 +15005,17 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                       ))}
                     </div>
 
+                    {/* IXPSD: Dt for the PS Strength I ductility line (reads z.d; blank or 0 = line not shown, as before) */}
+                    <div style={{display:'grid',gridTemplateColumns:'minmax(72px,1fr) 4fr',gap:'6px',alignItems:'start'}}>
+                      <div>
+                        <div style={STYLES.monoTiny}>Dt (in) ductility</div>
+                        <input type="number" step={0.5} style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px'}}
+                          value={z.d||''} placeholder="blank"
+                          onChange={e=>updateCapZone(z.id,'d',parseFloat(e.target.value)||0)}/>
+                      </div>
+                      <div style={{fontSize:'8.5px',fontFamily:'monospace',color:'#9ca3af',minWidth:0,overflowWrap:'anywhere'}}>{IXPSD_DT}</div>
+                    </div>
+
                     {/* Row 4: Shear reinforcement + section moduli */}
                     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px'}}>
                       <div style={{padding:'7px 10px',background:'#fff7ed',border:'1px solid #fed7aa',borderRadius:'4px'}}>
@@ -15048,7 +15064,9 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                           ))}
                         </div>
                         <div style={{marginTop:'4px',fontSize:'8px',fontFamily:'monospace',color:'#9ca3af'}}>
-                          f_t = 0.19√f'c = {(0.19*Math.sqrt(z.fc||5)).toFixed(3)} ksi (tension limit, not f_r) &nbsp;·&nbsp; limit = f_t+fpe = {((0.19*Math.sqrt(z.fc||5))+(z.fpe||0)).toFixed(3)} ksi
+                          {(()=>{ const t=ixpsFt(z.fc,ps3Exposure); return <>   {/* IXPSD: the coefficient the check uses (frCoeff) */}
+                          f_t = {t.ks}√f'c = {t.ft.toFixed(3)} ksi ({t.exp} exposure; tension limit of LRFD Table 5.9.2.3.2b-1, not f_r) &nbsp;·&nbsp; limit = f_t+fpe = {(t.ft+(z.fpe||0)).toFixed(3)} ksi
+                          </>; })()}
                         </div>
                       </div>
                     </div>
@@ -19895,6 +19913,16 @@ function ixasmZoneNotes(zones){
   if(has('arema')) it.push(['AREMA:',IXASM_ZN.arema]);
   return it.length?ixasmNotes({lead:'Basis of the computed zone types:',items:it}):[];
 }
+/* IXPSD: per PS Conc zone, the Service III tension limit with the coefficient the check uses, and Dt of the ductility line */
+function ixpsdNotes(cfg, zones){
+  const ps=(zones||[]).map((z,i)=>[z,i]).filter(([z])=>z.type==='psconc'); if(!ps.length) return [];
+  const ex=(cfg&&cfg.rating&&cfg.rating.ps3Exposure)||'moderate', f=(v,d)=>(+v).toFixed(d);
+  return [{type:'note',text:'PS Conc zones, as on the zone cards of the [[tab:AASHTO Rating|AASHTO Rating step]]:'},
+    ...ps.map(([z,i])=>{ const t=ixpsFt(z.fc,ex);
+      return {type:'note',text:'• Zone '+(i+1)+' ('+z.startX+'–'+z.endX+' ft): f_t = '+t.ks+'√f′c = '+t.ks+'√'+f(z.fc||5,2)+' = '+t.ft.toFixed(3)+' ksi ('+t.exp+' exposure; tension limit of AASHTO LRFD 10th Ed. Table 5.9.2.3.2b-1, not f_r); limit = f_t + fpe = '+(t.ft+(z.fpe||0)).toFixed(3)+' ksi. '+
+        (+z.d>0?'Dt = '+f(z.d,2)+' in: the PS Strength I ductility line checks Dp = c ≤ 0.42·Dt = '+(0.42*z.d).toFixed(3)+' in.':'Dt blank: the PS Strength I ductility line is not shown.')}; }),
+    {type:'note',text:'• Dt: '+IXPSD_DT}];
+}
 function idxrModel(cfg, rs, rows, zones, combos){
   const S=window.SharedSteps, N=(x,d)=>S.n(x,d), secs=[];
   const plain=s=>String(s==null?'':s).replace(/<[^>]*>/g,'').replace(/\$/g,'').replace(/\[\[/g,'[ [');
@@ -19969,7 +19997,7 @@ function idxrModel(cfg, rs, rows, zones, combos){
   /* ---------- 4. Capacity zones ---------- */
   if((zones||[]).length) secs.push({title:'Capacity zones',subs:[{title:'Nominal resistances by zone',items:[{type:'table',head:['From (ft)','To (ft)','Type','M_n+ (kip-ft)','M_n− (kip-ft)','V_n (kip)','F_y (ksi)'],rows:zones.map(z=>[cell(+z.startX,2),cell(+z.endX,2),plain(z.type),cell(+z.MnPos,1),cell(+z.MnNeg,1),cell(+z.Vn,1),cell(+z.Fy,0)])},
     {type:'note',text:'Zones of a computed type (quick-calc, AREMA, design hand-off) show their entered values here; the resistance used at a node is C/(φ_c φ_s φ) in §3. Entered on the [[tab:AASHTO Rating|AASHTO Rating step]].'},
-    ...ixasmZoneNotes(zones)]}]});
+    ...ixasmZoneNotes(zones), ...ixpsdNotes(cfg, zones)]}]});
   /* ---------- 5. Notes and references ---------- */
   secs.push({title:'Notes and references',subs:[{title:'Notes',items:[{type:'note',text:'Retired report windows:'},   /* IXNL: a lead and "• " lines */
       {type:'note',text:'• Retired (IXRX, 2026-11-03): the report windows of "Generate Report" (sidebar), "Print AREMA Report" (AREMA Rating step) and the Report Card (AASHTO Rating step).'},
