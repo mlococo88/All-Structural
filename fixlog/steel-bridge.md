@@ -4849,3 +4849,51 @@ format changed. Anchor text `QA2` marks each change. New file `ui/sub.js` (in th
 - **How verified:** main (365dfb8) vs branch, headless (`tests/lib.mjs openPage`): built-in project, every input and output tab and the built Report (`.rp-doc` text): 158,740 digit groups each side, identical; the same project with q_CL −5 and P_fm −2 (blocked), 28 views: 1,885 digit groups each side, identical; the only differing lines are the 3 sentences above (and the Summary run-time display); 0 console errors. `node tests/check-syntax.mjs`; engine tests, every steel-bridge file by name (54 files): origin/main 4 failed (`deflection-tab` 2, `steps-groups-tabs` 2, all `document is not defined` at `ui/splitter.js`), branch 324 passed, 0 failed (`report`, `report-wiring`, `sb-summary` pass on both); smoke `steel-bridge-splitter` (32 checks, 0 failed), `steel-bridge-invalid`, `steel-bridge-report`, `phone-layout --tool sbapp`: pass, 0 console errors.
 - **Other copies:** none.
 - **Open items:** none new.
+
+## 2026-11-10 — PR: claude/sb-constr-mdcc-pr1 (PR #1287: https://github.com/mlococo88/All-Structural/pull/1287) — Constructibility: C_b, the compression flange and the nonprismatic γ_e from the M_DCc the check uses (SBCON; engineer decision 2026-11-10; changes computed values)
+- **Problem:** with the pour sequence on (M_DCc ≠ M_DC1), `bracingC()` built the deck-placement LTB data (the flange in compression,
+  C_b,C by Eq. 6.10.8.2.3b-1, and for a nonprismatic L_b the ratio K = f_max/f_x of the conservative γ_e bound) from 1.25M_DC1 + 1.5M_CL,
+  while `location()` checks 1.25M_DCc + 1.5M_CL. γ_e = F_e,s/(K f_s) then mixes two moment diagrams. Near an M_DC1 inflection f_x → 0,
+  K → ∞ and F_nc collapses (skewed 100-130-100 project G1 x = 130.00: F_nc 0.91 ksi, GS14 ∞, "NaN" on the Summary). Unconservative in
+  prismatic bays where the flatter M_DCc envelope lowers C_b; overly conservative (and non-finite) at nonprismatic L_b near inflections.
+- **Where:** `apps/steel-bridge/engine/constructibility.js`, `bracingC`, anchor `C0 = factors(), dcc = xs.map(`.
+  - Before: `Mc = env.Mc || xs.map((_, k) => C0.cdc * env.MDC1[k] + C0.ccl * env.MCL[k]);`
+  - After: `dcc = xs.map((_, k) => !env.Mc && !!env.MDCc && useDCc(env.MDCc[k]));`
+    `Mc = env.Mc || xs.map((_, k) => C0.cdc * (dcc[k] ? +env.MDCc[k] : env.MDC1[k]) + C0.ccl * env.MCL[k]);`
+  - Also (display, no value changes): `bracingC` returns `cbParts` (M_max, M_A, M_B, M_C), `kParts` (f_max, f_x) and `mSrc`
+    ('DCc' | 'DC1'); `fromPayload` / `fromAnalysis` pass them on; `location()` keeps them (`r.seg`, `r.cbParts`, `r.kParts`, `r.mSrc`);
+    `worked()` works C_b (cn.Cb: 12.5M_max/(2.5M_max + 3M_A + 4M_B + 3M_C) with values), states the moments used in cn.Cb, cn.gov and
+    cn.ge (K = f_max/f_x with values). New `SBDConstr.notes(seq)`: the assumptions, shown as notes on the Constructibility tab
+    (`ui/constructibility.js`, after the M_c note) and in Report §Constructibility, "Governing ratio of each span" (`report/builders.js` cn()).
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.10.8.2.3c (Eqs. 6.10.8.2.3c-1 to -3) and C6.10.8.2.3c (γ_e scales the design
+  stresses at the governing section), App. D6.6; 6.10.8.2.3b (Eq. 6.10.8.2.3b-1, C_b from the factored moments that compress the
+  flange); 6.10.3.2.1 (GS14); 6.10.1.6 (Eq. 6.10.1.6-4, amplification); 6.10.3.4.1 (pour sequence).
+- **Check case:** skewed project of tests/smoke/steel-bridge-summary.mjs, G1 x = 130.00 ft (bottom flange 18 × 1.25, L_b = 15.47 ft =
+  185.64 in, segment 115.47–130.94 ft): f_s = 3.302 ksi, F_e,s = π²(29,000)/(185.64/4.7231)² = 185.27 ksi, f_bu,gov = 7.043 ksi (x = 120).
+  Before: K = 432.55, γ_e = 185.27/(432.55 × 3.302) = 0.1297, F_e = 0.913 ksi, r_t = 0.332 in, F_nc = 0.91 ksi, AF ∞, GS14 ∞.
+  After: K = 9.368/3.302 = 2.837, γ_e = 185.27/(2.837 × 3.302) = 19.776, F_e = 19.776 × 7.043 = 139.28 ksi, r_t = (185.64/π)√(139.28/29,000)
+  = 4.0951 in, L_p = 108.48 in, L_r = 370.32 in, F_nc = [1 − 0.3(185.64 − 108.48)/(370.32 − 108.48)](50) = 45.58 ksi, AF 1.0,
+  GS14 buckling (3.302 + 9.38/3)/45.58 = 0.141, yielding (3.302 + 9.38)/50 = 0.254.
+  Default project: Constructibility governing 0.758 (x = 77.00, F_nc 9.84) → 0.557 (x = 249.99, unchanged row).
+  Skewed G2 x = 70.00 (top flange): K 599.8 → 1.222, γ_e 0.0200 → 9.797, F_nc 0.16 → 41.91 ksi, ratio ∞ → 0.368 (GS14 yielding).
+  Same project with no skew, G2 x = 200.00: K 148.0 → 1.396, γ_e 0.113 → 11.970, F_nc 0.78 → 42.41 ksi, GS14 6.114 (false FAIL) → 0.112.
+  Prismatic bays (C_b by Eq. 6.10.8.2.3b-1 from the flatter M_DCc envelope): skewed G2 x = 171–188 (segment 170.49–193.00 ft, top flange),
+  1.25M + 1.5M_CL M_max, M_A, M_B, M_C = 1236.2, 1138.1, 974.8, 746.6 (M_DC1) → 1379.1, 1337.0, 1229.7, 1057.6 kip-ft (M_DCc);
+  C_b = 12.5(1236.2)/[2.5(1236.2) + 3(1138.1) + 4(974.8) + 3(746.6)] = 1.222 → 12.5(1379.1)/[2.5(1379.1) + 3(1337.0) + 4(1229.7) + 3(1057.6)]
+  = 1.109; F_nc 46.74 → 43.44 ksi; GS14 yielding at x = 171 0.5597 → 0.5676, largest +0.013 at x = 186 (0.4812 → 0.4942). Default project
+  x = 47–67: C_b 1.198 → 1.103, F_nc 46.74 → 43.80, GS14 at x = 47 0.4320 → 0.4609 (+0.029, the largest increase on the projects probed).
+  Rows changed (any GS14–GS16 ratio): default 184 of 367; skewed G1 136, G2 146 of 337; no skew G1 147, G2 148 of 337. Pour sequence off:
+  0 rows changed on every project.
+- **How verified:** probe of every location (default, skewed, same with no skew; pour sequence on and off) main vs branch; pour sequence
+  off: identical. Re-baselined tests/engine/eta-constr.test.mjs (x = 77.00 hand values) and constructibility.test.mjs cases 3 and 4;
+  `node tests/check-syntax.mjs`; steel-bridge engine tests; smoke summary, dash, wiring, report, paths, taberrors, deflection.
+- **Other copies:** GirderDetail ("Steel Bridge Design.html") Preliminary sizing T.Mc builds C_b,C and nprC from 1.25M_DC1 + 1.5M_CL;
+  **not changed, a deliberate difference (engineer decision 2026-11-10: fix in the new app only)**. Parity test case 3 now compares both
+  bases (M_DC1 basis: 606 of 1200 governing items as GirderDetail's, as before; this app: 452 of 1200).
+- **Open items:** (1) M_DCc is a per-station envelope; near M_DC1 inflections its sign jumps (skewed G2 x = 70/71/72: +565.8 / −73.8 /
+  −488.3 kip-ft), so the opposite-sign pour moment is never checked there. (2) `feCb` takes |M| at the quarter points even where the
+  flange is in tension, so C_b can be < 1.0 (0.83–0.90 seen). (3) K = 1 fallback when f_x ≤ 0 (follow-up PR, γ_e passed directly).
+  In-app notes (Constructibility tab, after the M_c note, and Report §Constructibility, "Governing ratio of each span", from `SBDConstr.notes`):
+  C_b and γ_e from the moments checked; the M_DCc envelope (items 1); C_b by Eq. 6.10.8.2.3b-1 can be below 1.0 (item 2); the difference from GirderDetail.
+  Decision (pending engineer review): C_b and γ_e from the per-station M_DCc envelope (not one load case); Eq. 6.10.8.2.3b-1 refers
+  to the envelope values that compress the flange, which this follows.
