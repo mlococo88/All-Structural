@@ -6712,8 +6712,9 @@ function renderTabLoads(R){
       "W_{EV} = \\left[\\gamma\\,(h_{soil}-h_{w,s}) + (\\gamma-\\gamma_w)\\,h_{w,s}\\right] L_{heel}\\,L_{ab}",
       `W_{EV} = \\left[${fmtT(S.soil.gamma,3)}\\,(${fmtT(R.EV.dry)}) + ${fmtT(S.soil.gamma-GAMMA_W,4)}\\,(${fmtT(R.EV.sub)})\\right](${fmtT(g.Lheel)})(${fmtT(g.Lab)})`,
       ...(R.EV.Wwedge>0?[`\\text{slope wedge: } \\tfrac{1}{2}\\gamma\\,L_{heel}\\,(L_{heel}\\tan\\beta)\\,L_{ab} = \\tfrac{1}{2}(${fmtT(S.soil.gamma,3)})(${fmtT(g.Lheel)})(${fmtT(R.EV.hWedge)})(${fmtT(g.Lab)}) = ${fmtT(R.EV.Wwedge)}\\ \\text{kip at } ${fmtT(R.EV.xWedge)}\\ \\text{ft}`]:[]),
-      `W_{EV} = ${fmtT(R.EV.W)}\\ \\text{kip} \\quad\\text{at } \\bar{x} = ${fmtT(R.EV.x)}\\ \\text{ft from toe}`])}
-  `);
+      `W_{EV} = ${fmtT(R.EV.W)}\\ \\text{kip} \\quad\\text{at } \\bar{x} = ${fmtT(R.EV.x)}\\ \\text{ft from toe}`],
+      R.ap?`Soil over the heel to the full soil height h<sub>soil</sub> (engineer decision 2026-11-10): the approach slab (its dead load on the abutment, <span class="xlink" data-jump="tab-loads|o-ap">§1.4a</span>)${R.ap.REV>0?" and the fill on it (EV, d<sub>sh</sub> − t)":""} ${R.ap.REV>0?"are":"is"} not deducted where ${R.ap.REV>0?"they lie":"it lies"} within h<sub>soil</sub> over the heel, so that volume is counted twice (conservative).`:"")}
+  `);   // ABEV
   /* --- earth pressure --- */
   const s=S.soil, E=R.EH, CW=R.coul, dC=CW?CW.delta:+s.delta;   // CLMB: δ used on the virtual back
   const coulCase=(s.method==="coulomb"&&CW)? eqB(`Coulomb: heel case — ${CW.longHeel?"long heel (shear zone not cut by the stem): δ = β":"short heel (shear zone cut by the stem): δ = soil-on-soil input"}`,"AASHTO C3.11.5.3, Fig. C3.11.5.3-1",[
@@ -11361,7 +11362,7 @@ function abrModel(){
       w.add({id:"Pp",label:"Passive force on the footing front (D_e = D_f − d_n = "+abrN(De)+" ft)",sym:"P_{p}",eq:"\\frac{1}{2} k_{p}\\gamma_{f} D_{e}^{2} L_{ftg}",sub:"\\frac{1}{2}\\cdot "+abrN(pv.kp,3)+"\\cdot "+abrN(fn.gammaF,3)+"\\cdot "+abrN(De)+"^{2}\\cdot "+abrN(Lftg),value:pv.Pp,unit:"kip",d:1}); }
     const parts=R.parts||[];
     const subs=[{title:"Self-weight of the abutment",items:[{type:"table",head:["Part","Basis","W (kip)","x from toe (ft)"],rows:parts.map(p=>[p.name,p.note||"",abrCell(p.W,1),abrCell(p.x)]).concat([[{t:"Total DC (substructure)"},"",abrCell(parts.reduce((a,p)=>a+p.W,0),1),""]])}]},
-      {title:"Earth pressure, surcharge and soil weight",items:[abrTopics("ld",T,{title:"Worked steps"}),{type:"note",text:"As on "+abrTab("tab-loads")+". The load combinations, every γ_p permutation and the governing case of each check are on "+abrTab("tab-comb")+"; the governing case is named with each check below."}]}];
+      {title:"Earth pressure, surcharge and soil weight",items:[abrTopics("ld",T,{title:"Worked steps"}),{type:"note",text:"As on "+abrTab("tab-loads")+". The load combinations, every γ_p permutation and the governing case of each check are on "+abrTab("tab-comb")+"; the governing case is named with each check below."}].concat(R.ap?[{type:"note",text:"Soil over the heel (EV) to the full soil height h_soil (engineer decision 2026-11-10): the approach slab (its dead load on the abutment, see §1.4a, "+abrTab("tab-loads","o-ap")+")"+(R.ap.REV>0?" and the fill on it (EV, d_sh − t) are":" is")+" not deducted where "+(R.ap.REV>0?"they lie":"it lies")+" within h_soil over the heel, so that volume is counted twice (conservative). Worked on "+abrTab("tab-loads","o-selfwt")+" §1.2."}]:[])}];   // ABEV
     if(R.seis&&!R.seis.single){ const q=R.seis;
       subs.push({title:"Seismic earth pressure and inertia (Extreme Event I)",items:[{type:"table",head:["Quantity","Value"],rows:[["k_h / k_v",abrN(q.kh,3)+" / "+abrN(q.kv,3)],["Seismic earth pressure coefficient K_AE",abrN(q.KAE,4)],
         ["P_AE (kip/ft) / increment ΔP_AE,h (kip/ft)",abrN(q.PAE,3)+" / "+abrN(q.dPAEh,3)],["Wall inertia W_i (kip)",abrN(q.WiW,1)]]},{type:"note",text:"Mononobe–Okabe, AASHTO LRFD 10th Ed. Art. 11.6.5 and Appendix A11; worked on "+abrTab("tab-loads")+"."}]}); }
