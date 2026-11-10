@@ -6,6 +6,7 @@
 
    API (each mounts a card into slot; o.dxf() builds the CAD graphic for Download DXF)
      ltb(slot, { r, dxf })                  Flexure: the unbraced length (L_b) of the selected location, L_p and L_r to one scale, the LTB regime highlighted
+     bracket(slot, { P, gi, oh, dxf })      Constructibility: the overhang bracket sketch (exterior girder), oh = R.F.oh (its inputs p)
    Fix log: fixlog/steel-bridge.md (DETC, 2026-11-10). */
 (function () {
   'use strict';
@@ -75,5 +76,45 @@
       notes: [sb("L_b, C_b, L_p, L_r and F_nc are the values of the location table (worked steps below); the brace points are the Framing & bracing tab's. Shaded ranges of L_b: plateau (L_b ≤ L_p), inelastic LTB (L_p < L_b ≤ L_r), elastic LTB (L_b > L_r), AASHTO LRFD 6.10.8.2.3; the range of this location's L_b is outlined.")] });
   }
 
-  window.SBDGfxDet = { ltb, ltbModel };
+  /* ================= #8 Constructibility: overhang bracket (exterior girder) =================
+     As the CAD drawing (ui/gfxa.js ohGraphic): the girder's top flange and web (broken), the overhang slab from the girder centre line, the bracket (strut, hanger,
+     deck form), a, h_b, w_OH, t_OH dimensioned, the two loads. Decision (DETC, pending engineer review): the values are read from the bracket inputs the tab
+     uses (R.F.oh.p: a, h_b, w_OH, t_OH, P_fm and γ_DC); the CAD drawing reads R.F.oh.a ... (absent), so it has only ever drawn its "inputs above" note: its
+     Download DXF is kept as it is (byte for byte, the rule of this rollout) and the difference is raised in the PR. */
+  function bracketModel(P, gi, oh) {
+    const sg = P.girders[gi].segments[0], p = (oh && oh.p) || {}, a = +p.a, hb = +p.hb, wOH = +p.wOH, tOH = +p.tOH;
+    if (![a, hb, wOH, tOH].every(fin)) return null;
+    return { sg, a, hb, wOH, tOH, ys: 0 + (+((P.deck || {}).haunch) || 0), Dw: Math.min(+sg.D, 40), gdc: ((p.gam || {}).dc), Pfm: p.Pfm };
+  }
+  function bracketSvg(m, W) {
+    const K = VK(), S = K.scene(), sg = m.sg, ys = m.ys, nar = W < 560;
+    S.rect(-sg.topB / 2, -sg.topT, sg.topB / 2, 0, 'dt-st'); S.rect(-sg.tw / 2, -sg.topT - m.Dw, sg.tw / 2, -sg.topT, 'dt-st');
+    const yb = -sg.topT - m.Dw, z = Math.max(1.2, sg.tw * 1.5); S.pline([[-sg.tw / 2 - z, yb + 0.6], [-sg.tw / 4, yb - 0.6], [sg.tw / 4, yb + 0.6], [sg.tw / 2 + z, yb - 0.6]], 'dt-ol');   // the web, broken
+    S.line(0, -sg.topT - m.Dw - 4, 0, ys + m.tOH + 4, 'dt-cl');
+    S.rect(0, ys, m.wOH, ys + m.tOH, 'dt-cc');
+    S.line(0, -m.hb, m.a, ys, 'dt-mem'); S.line(m.a, ys - 0.06 * m.hb, m.a, ys, 'dt-mem'); S.line(0, ys, m.a, ys, 'dt-mem'); S.line(0, -m.hb, 0, 0, 'dt-mem');
+    S.dot(0, -m.hb, 3, 'dt-wh', { fill: '#334155' }); S.dot(m.a, ys, 3, 'dt-wh', { fill: '#334155' });
+    S.dimH(0, m.a, -m.hb, -26, `a = ${nf(m.a, 1)} in`, { yr: -m.hb });
+    S.dimV(-m.hb, ys, -sg.topB / 2, -30, `h_b = ${nf(m.hb + ys, 1)} in`, { xr: 0 });
+    S.dimH(0, m.wOH, ys + m.tOH, 18, `w_OH = ${nf(m.wOH, 1)} in`);
+    S.dimV(ys, ys + m.tOH, m.wOH, 22, `t_OH = ${nf(m.tOH, 1)} in`);
+    const yt = ys + m.tOH, q = m.wOH * 0.28; S.arrow(q, yt, 58); S.arrow(m.wOH - 0.02 * m.wOH, yt, 96);
+    S.text(q, yt, `Deck and forms (γ_DC ${nf(m.gdc, 2)})`, { dx: -6, dy: -48, a: 'end', sz: 11 });
+    const f1 = `Finishing machine ${nf(m.Pfm, 1)} kip;`, f2 = 'screed, rail, walkway, constr. LL';
+    if (nar) { S.text(m.wOH, yt, f1, { dx: -6, dy: -100, a: 'end', sz: 11 }); S.text(m.wOH, yt, f2, { dx: -6, dy: -86, a: 'end', sz: 11 }); }
+    else S.text(m.wOH, yt, `${f1} ${f2}`, { dx: 6, dy: -88, sz: 11 });
+    S.callout(m.a * 0.5, -m.hb * 0.5 + ys * 0.5, nar ? 34 : 60, 18, ['Bracket (schematic,', 'contractor-designed)'], { sz: 10.5, cls: 'dt-m' });
+    S.region(0, -m.hb, m.a, ys, 'Bracket: horizontal projection a, vertical projection h_b (the tab\'s inputs)'.replace(/_/g, ''));
+    const R = S.render({ W, maxH: nar ? 360 : 340, label: 'Overhang bracket sketch, exterior girder' });
+    return { svg: R.svg, nar };
+  }
+  function bracket(slot, o) {
+    const K = VK(); let m = null; try { m = bracketModel(o.P, o.gi, o.oh); } catch (e) { m = null; }
+    if (!m) { slot.innerHTML = '<p class="note">Overhang brackets: exterior girder, project source only (inputs above).</p>'; return null; }
+    return K.detCard(slot, { id: 'dt-oh', title: 'Overhang bracket (exterior girder), schematic', sub: 'Dimensions are the overhang bracket inputs of the tab; bracket members schematic (contractor-designed)', dxf: o.dxf,
+      draw: W => { const q = bracketSvg(m, W); return { html: q.svg, nar: q.nar }; },
+      notes: [sb('Dimensions from the overhang-bracket inputs (a, h_b, w_OH, t_OH); loads are the tab\'s OH1–OH5 inputs. Schematic. The slab is drawn from the girder centre line; the web is shown broken.')] });
+  }
+
+  window.SBDGfxDet = { ltb, ltbModel, bracket, bracketModel };
 })();
