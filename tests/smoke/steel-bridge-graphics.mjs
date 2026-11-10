@@ -2,6 +2,7 @@
 // Browser smoke test of the output-tab graphics (ui/graphics.js, window.SBDGraphics), headless Chromium (tests/lib.mjs openPage):
 // PR 1 (helper): a graphic mounted on the app page with the built-in project: the SVG appears with the layers, the wheel zooms,
 // a click selects (onSelect) and moves the highlight, a drag does not select, double-click fits, Download DXF produces a valid file;
+// SECC: the Section properties graphic (ui/vizkit.js style): load-case buttons update the tiles, the axis and the stress values (steel +10.78 / −9.04 ksi);
 // 0 console errors. Screenshots into the folder SHOTS when it is set.
 //   node tests/smoke/steel-bridge-graphics.mjs
 import path from 'path';
@@ -115,7 +116,7 @@ try {
   const ov = await p.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth, w: document.querySelector('#gfx_fx .gfx-a .sdx-view').getBoundingClientRect().width })); assert.ok(ov.sw <= ov.cw + 2, 'phone width: no horizontal scroll ' + JSON.stringify(ov));
   await shot('tab-flexure-phone');
   assert.deepEqual(errs, [], 'console errors');
-  console.log(`ok  graphics (helper and the five tabs): ${i0.texts} texts, ${i0.lines} lines; wheel zoom, click select (${sel.sel[0].toFixed(1)} ft), drag pan, double-click fit, DXF download`);
+  console.log(`ok  graphics (helper and the five tabs; Section properties: 3 cases, tiles, chips, read-out, DXF, resize): ${i0.texts} texts, ${i0.lines} lines; wheel zoom, click select (${sel.sel[0].toFixed(1)} ft), drag pan, double-click fit, DXF download`);
   if (blocked.size) console.log('    blocked requests:', [...blocked].join(', '));
 } catch (e) {
   console.log('FAIL', e.message, '\n console errors:', errs.slice(0, 5)); await shot('FAIL'); process.exitCode = 1;
