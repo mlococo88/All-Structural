@@ -3734,7 +3734,129 @@ function StepHeader({title,sub,icon}) {
   </div>);
 }
 
-function StepProject({cfg,set}) {
+/* HOC (2026-11-10, engineer decision: the hand-off card on the Project step in every tool): the LL & DL distribution-factor panel,
+   moved from the AASHTO Rating step's Live Load Scale Factors (same JSX, Apply these / padlock handlers and lock path; display only).
+   StepResults still reads lldfResolveMCT() for its fatigue g_fat button. */
+function IxHoLLDF({cfg,set}) {
+  const appLockTick=BLU.useLocks?BLU.useLocks():0;
+  const [lldfTick,setLldfTick]=useState(0);
+  useEffect(()=>{
+    const bump=()=>setLldfTick(t=>t+1);
+    const onS=e=>{ if(!e.key||e.key===LLDF_KEY||e.key==='bridgeSuite.v1.designBeam') bump(); };
+    window.addEventListener('storage',onS);
+    const offBeam=window.BridgeBeam?window.BridgeBeam.onChange(bump):null;
+    return ()=>{ window.removeEventListener('storage',onS); if(offBeam) offBeam(); };
+  },[]);
+  const R = cfg.rating || {};
+  const ratingLLFactors  = R.llFactors   ?? DEFAULT_RATING_LL_FACTORS;
+  const dfFac    = ratingLLFactors.find(f=>f.id==='df');
+  const dfOn     = !!(dfFac&&dfFac.enabled&&+dfFac.value>0);
+  const dfBase   = dfOn ? +dfFac.value : 0;
+  const dfShear  = R.dfShear!=null ? +R.dfShear : null;
+  const lldfFeed = useMemo(()=>lldfResolveMCT(),
+    [appLockTick, lldfTick, R.llFactors, R.dfShear, R.dfNeg]);
+  const lldfChanLocked = !!(BL&&BL.isLocked('lldf'));
+  // Locked means the numbers below are already the published ones. Unlocked and
+  // matching means the engineer typed the same thing. Unlocked and different is
+  // the case worth shouting about: two g values for one girder, no warning.
+  const lldfDisagrees = !lldfChanLocked && !lldfFeed.why && dfOn &&
+    (Math.abs(lldfFeed.gM-dfBase)>0.0005 ||
+     (dfShear!=null && Math.abs(lldfFeed.gV-dfShear)>0.0005));
+  const lldfUnused = !lldfChanLocked && !lldfFeed.why && !dfOn;
+
+  // One-shot pull. The locked path lives at the root and runs itself; this is
+  // the button for engineers who want the numbers once without the standing
+  // subscription.
+  const applyLLDFFeed = () => {
+    const r=lldfResolveMCT();
+    if(r.why){ alert(r.why); return; }
+    set('rating', {...(cfg.rating||{}),
+      llFactors: llFactorsWithDF(ratingLLFactors, r.gM),
+      dfShear: r.gV, dfNeg: r.gMneg});
+    if(BL) BL.log({channel:'lldf', app:LOCK_APP, source:r.src,
+      text:'applied g = '+r.gM.toFixed(4)+' (+M) / '+r.gMneg.toFixed(4)+' (−M) / '+r.gV.toFixed(4)+' (V)'});
+  };
+  const onToggleLLDFLock = (on) => {
+    if(!BL) return;
+    if(on){
+      const r=lldfResolveMCT();
+      if(r.why){ alert(r.why+'\n\nCompute the factors in the LL & DL app and send them, then lock.'); return; }
+      BL.saveSnap(LOCK_APP,'lldf',{llFactors:ratingLLFactors, dfShear:R.dfShear??null, dfNeg:R.dfNeg??null});
+      // Clear the applied signature before locking: lock() notifies the root,
+      // which adopts on the spot. Leaving a stale signature would suppress it.
+      LLDF_SIG.v='';
+      BL.lock('lldf',LOCK_APP);
+      BL.toast('Distribution factors locked','The rating g factors follow the LL & DL Distribution app from now on — positive moment, hogging moment and shear each get their own.');
+    }else{
+      BL.unlock('lldf',LOCK_APP);
+      LLDF_SIG.v='';
+      const snap=BL.takeSnap(LOCK_APP,'lldf');
+      if(snap&&snap.data&&snap.data.llFactors){
+        const had=snap.data.llFactors.find(f=>f.id==='df');
+        if(window.confirm('Distribution factors unlocked.\n\nRestore the g values you had before locking?\n\n  g = '+
+            (had&&had.enabled?(+had.value).toFixed(4):'off')+
+            (snap.data.dfShear!=null?('   g_V = '+(+snap.data.dfShear).toFixed(4)):'')))
+          set('rating', {...(cfg.rating||{}), llFactors:snap.data.llFactors,
+            dfShear:snap.data.dfShear, dfNeg:snap.data.dfNeg});
+        else BL.toast('Distribution factors unlocked','Manual control — the current g values were kept.');
+      }else BL.toast('Distribution factors unlocked','Manual control restored.');
+      BL.log({channel:'lldf', app:LOCK_APP, source:'LL & DL Distribution', text:'auto-import OFF'});
+    }
+  };
+
+  return (
+      <div style={{padding:'9px 11px',marginBottom:'10px',borderRadius:'6px',
+        background:lldfChanLocked?'#ecfdf5':(lldfDisagrees?'#fef2f2':(lldfFeed.why?'#f9fafb':'#eff6ff')),
+        border:`1px solid ${lldfChanLocked?'#a7f3d0':(lldfDisagrees?'#fca5a5':(lldfFeed.why?'#e5e7eb':'#bfdbfe'))}`,
+        borderLeft:`3px solid ${lldfChanLocked?'#059669':(lldfDisagrees?'#dc2626':(lldfFeed.why?'#d1d5db':'#1d4ed8'))}`}}>
+        <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',marginBottom:lldfFeed.why?0:'7px'}}>
+          <span style={{fontSize:'11px',fontWeight:'600',color:'#111827'}}>
+            Distribution factors — LL &amp; DL Distribution app
+          </span>
+          {!lldfFeed.why&&(
+            <span style={{fontSize:'9.5px',fontFamily:'monospace',color:'#6b7280'}}>
+              {lldfFeed.src}{lldfFeed.at?' · '+String(lldfFeed.at).slice(0,16).replace('T',' '):''}
+            </span>
+          )}
+          {!lldfFeed.why&&BLU.LockToggle&&(
+            <span style={{marginLeft:'auto'}}><BLU.LockToggle ch="lldf" onToggle={onToggleLLDFLock}/></span>
+          )}
+        </div>
+        {lldfFeed.why
+          ? <div style={{fontSize:'10px',fontFamily:'monospace',color:'#9ca3af',whiteSpace:'pre-line',marginTop:'4px'}}>{lldfFeed.why}</div>
+          : (<>
+              <div style={{display:'flex',gap:'14px',flexWrap:'wrap',fontSize:'11px',fontFamily:'monospace',color:'#1e40af',marginBottom:'6px'}}>
+                <span>g<sub>M+</sub> = <b>{lldfFeed.gM.toFixed(4)}</b></span>
+                <span>g<sub>M−</sub> = <b>{lldfFeed.gMneg.toFixed(4)}</b>{lldfFeed.hasNeg?'':' (= g_M+, no hogging data)'}</span>
+                <span>g<sub>V</sub> = <b>{lldfFeed.gV.toFixed(4)}</b></span>
+              </div>
+              {lldfChanLocked
+                ? <div style={{fontSize:'10px',color:'#047857',lineHeight:'1.6'}}>
+                    <b>Locked — following the LL &amp; DL app.</b> All three factors reload
+                    themselves whenever the distribution is re-run or the shared design beam
+                    moves; you do not need to come back to this panel.
+                  </div>
+                : <div style={{display:'flex',gap:'8px',alignItems:'center',flexWrap:'wrap'}}>
+                    <button onClick={applyLLDFFeed}
+                      style={{background:'#1d4ed8',color:'#fff',border:'none',borderRadius:'5px',
+                        padding:'4px 11px',fontSize:'10.5px',fontFamily:'monospace',fontWeight:'600',cursor:'pointer'}}>
+                      ← Apply these
+                    </button>
+                    <span style={{fontSize:'10px',color:lldfDisagrees?'#b91c1c':'#6b7280',lineHeight:'1.6'}}>
+                      {lldfDisagrees
+                        ? <><b>These disagree with the g values in use (AASHTO Rating step, Live Load Scale Factors).</b> The rating is running on a hand-typed factor while a computed one sits unread — apply it, or lock the channel so it stays applied.</>
+                        : (lldfUnused
+                            ? <>The g factor (AASHTO Rating step, Live Load Scale Factors) is switched off, so the rating is distributing nothing. Apply these, or lock the channel to keep them current.</>
+                            : <>In agreement with the factors in use. Lock the channel to keep it that way.</>)}
+                    </span>
+                  </div>}
+            </>)}
+      </div>
+  );
+}
+function ixGoHandoffs(setStep){ setStep(0); setTimeout(()=>{ const c=document.getElementById('ix-ho'); if(c) c.scrollIntoView({block:'start'}); },60); }   // HOC
+
+function StepProject({cfg,set,dlLocked,onToggleDLLock,hoSends}) {
   const today = new Date();
   const todayStr = `${today.getFullYear()}/${today.getMonth()+1}/${today.getDate()}`;
   const MIDAS_VERSIONS = ['9.5.5','9.5.0','9.4.0','9.3.0','9.2.0','9.1.0','9.0.0','8.8.5','8.8.0'];
@@ -3764,9 +3886,28 @@ function StepProject({cfg,set}) {
     {window.SharedBridgeSuite&&<div className="ix-pbcard" style={{maxWidth:'860px',border:'1px solid #e5e7eb',borderRadius:'8px',background:'#fff',padding:'10px 14px',marginBottom:'14px'}}>
       <div style={{fontSize:'13px',fontWeight:600,color:'#111827',marginBottom:'6px'}}>Save and open <span style={{fontSize:'11px',fontWeight:400,color:'#6b7280'}}>— one Bridge Suite project for the MCT generator, LL &amp; DL Distribution and Prestressed Bridge Design</span></div>
       <div className="ix-pbhost" ref={el=>{ if(el&&window.IXPB) window.IXPB.mount(el); }}/></div>}
-    <div className="bx-projbtns" style={{display:'flex',gap:'8px',flexWrap:'wrap',maxWidth:'860px',marginBottom:'6px'}}>
-      <button style={BXB} onClick={bxUse} title="Fill these fields from the project info shared by another tool (asks first; never blanks a field)">Use shared project info</button>
-      <button style={BXB} onClick={bxShare} title="Share this project's name, bridge ID, client, location, engineer and date with the other tools">Share project info</button>
+    {/* HOC (2026-11-10, engineer decision: the hand-off card on the Project step in every tool): Use / Share project info (were a row here),
+        the LL & DL distribution-factor and dead-load panels (were in the AASHTO Rating step and the Loads step) and the sidebar's
+        Design Hand-off / Send geometry buttons, as Receive / Send; same handlers, panels and padlocks (display only) */}
+    <div id="ix-ho" className="ix-hocard" style={{maxWidth:'860px',border:'1px solid #e5e7eb',borderRadius:'8px',background:'#fff',padding:'10px 14px',marginBottom:'14px'}}>
+      <div style={{fontSize:'13px',fontWeight:600,color:'#111827',marginBottom:'4px'}}>Hand-offs</div>
+      <div style={{fontSize:'11px',color:'#6b7280',lineHeight:1.5}}>Nothing changes until you confirm: "Use shared project info" asks first, the distribution factors and dead loads apply only on "Apply these" / "Import into load cases" (or while you keep a channel locked), and each send goes out only when you click it (or while its padlock is locked).</div>
+      <div style={IXHO_GRP}>Receive from other tools</div>
+      <div style={IXHO_ROW}><b>Shared project info</b> <span style={IXHO_FROM}>from any tool</span>
+        <div className="bx-projbtns" style={{display:'flex',gap:'8px',flexWrap:'wrap',marginTop:'4px'}}>
+          <button style={BXB} onClick={bxUse} title="Fill these fields from the project info shared by another tool (asks first; never blanks a field)">Use shared project info</button></div></div>
+      <div style={IXHO_ROW}><b>Distribution factors</b> <span style={IXHO_FROM}>from LL &amp; DL Distribution, to the rating g factors (AASHTO Rating step)</span>
+        <div style={{marginTop:'4px'}}><IxHoLLDF cfg={cfg} set={set}/></div></div>
+      <div style={IXHO_ROW}><b>Dead load</b> <span style={IXHO_FROM}>from LL &amp; DL Distribution, to the dead-load cases (Loads step)</span>
+        {(cfg.geomMode||'beam')==='gfs'
+          ? <div style={{fontSize:'11px',color:'#6b7280',marginTop:'4px'}}>Not used in GFS mode (the Static Loads step has no LL &amp; DL dead-load import).</div>
+          : <LLDFDeadLoads deadLoads={cfg.deadLoads||[]} setLoads={v=>set('deadLoads',v)} dlLocked={dlLocked} onToggleLock={onToggleDLLock}
+              empty={<div style={{fontSize:'11px',color:'#6b7280',marginTop:'4px'}}>Status: nothing sent from LL &amp; DL Distribution in this browser yet.</div>}/>}</div>
+      <div style={IXHO_GRP}>Send to other tools</div>
+      <div style={IXHO_ROW}><b>Shared project info</b> <span style={IXHO_FROM}>to every tool</span>
+        <div style={{display:'flex',gap:'8px',flexWrap:'wrap',marginTop:'4px'}}>
+          <button style={BXB} onClick={bxShare} title="Share this project's name, bridge ID, client, location, engineer and date with the other tools">Share project info</button></div></div>
+      {hoSends}
     </div>
     <div style={{display:'flex',gap:'28px',flexWrap:'wrap',maxWidth:'860px'}}>
 
@@ -4514,6 +4655,9 @@ function buildGFSElementMap(cfg, mctText) {
   return map;
 }
 
+const IXHO_GRP={margin:'10px 0 3px',fontSize:'10px',fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',color:'#6b7280'};   // HOC
+const IXHO_ROW={borderTop:'1px solid #e5e7eb',padding:'6px 0 4px',fontSize:'12px',color:'#111827'};
+const IXHO_FROM={fontSize:'11px',color:'#6b7280'};
 function StepGeometry({cfg,set}) {
   const totalLen=cfg.spans.reduce((a,b)=>a+b,0);
   const geomMode = cfg.geomMode || 'beam';
@@ -6716,7 +6860,7 @@ function readDLPayload(){
   }catch(e){ return null; }
 }
 
-function LLDFDeadLoads({deadLoads,setLoads,dlLocked,onToggleLock}) {
+function LLDFDeadLoads({deadLoads,setLoads,dlLocked,onToggleLock,empty}) {   // HOC: empty = what to show when nothing is published (the Hand-offs card)
   const [dl,setDL]=useState(()=>readDLPayload());
   const [,setTick]=useState(0);
   const [note,setNote]=useState('');
@@ -6735,7 +6879,7 @@ function LLDFDeadLoads({deadLoads,setLoads,dlLocked,onToggleLock}) {
       window.removeEventListener('focus',re); document.removeEventListener('visibilitychange',re);
       if(off) off(); };
   },[]);
-  if(!dl) return null;
+  if(!dl) return empty||null;
 
   const dead=(dl.cases||[]).filter(c=>c.key==='DC1'||c.key==='DC2'||c.key==='DW');
   const ped =(dl.cases||[]).find(c=>c.key==='PL');
@@ -6951,7 +7095,7 @@ const LLDF_MCT_DIG={g:4, gNeg:4, gV:4};
    signature. A ref in either component would be invisible to the other. */
 const LLDF_SIG={v:''};
 
-function StepLoads({cfg,set,dlLocked,onToggleDLLock}) {
+function StepLoads({cfg,set,dlLocked,onToggleDLLock,setStep}) {   // HOC: setStep for the Hand-offs link
   if ((cfg.geomMode||'beam')==='gfs') {
     return <div><StepHeader icon="⬇" title="Static Loads" sub="Self-weight + dead loads on girders / floorbeams / stringers"/>
       <GFSLoads cfg={cfg} set={set}/></div>;
@@ -6991,8 +7135,8 @@ function StepLoads({cfg,set,dlLocked,onToggleDLLock}) {
       Load case type (DC or DW) determines which γ factor is applied in AASHTO combinations.
     </InfoBox>
 
-    <LLDFDeadLoads deadLoads={deadLoads} setLoads={setLoads}
-      dlLocked={dlLocked} onToggleLock={onToggleDLLock}/>
+    {/* HOC (2026-11-10): the LL & DL dead-load panel (Import into load cases, padlock) is in the Project step's Hand-offs card */}
+    <div style={{marginTop:'14px',fontSize:'11px',color:'#6b7280'}}>Dead load from LL &amp; DL Distribution: send/receive data in <a href="#" onClick={e=>{e.preventDefault();ixGoHandoffs(setStep);}} style={{color:'#1d4ed8'}}>Project step → Hand-offs</a>.</div>
 
     <div style={{marginTop:'14px',background:'#fff',border:'1px solid #e5e7eb',borderRadius:'8px',overflow:'hidden',marginBottom:'10px'}}>
       {/* Table header */}
@@ -12317,54 +12461,6 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
   // storage event fires, via the appLockTick / lldfTick subscriptions.
   const lldfFeed = useMemo(()=>lldfResolveMCT(),
     [appLockTick, lldfTick, R.llFactors, R.dfShear, R.dfNeg]);
-  const lldfChanLocked = !!(BL&&BL.isLocked('lldf'));
-  // Locked means the numbers below are already the published ones. Unlocked and
-  // matching means the engineer typed the same thing. Unlocked and different is
-  // the case worth shouting about: two g values for one girder, no warning.
-  const lldfDisagrees = !lldfChanLocked && !lldfFeed.why && dfOn &&
-    (Math.abs(lldfFeed.gM-dfBase)>0.0005 ||
-     (dfShear!=null && Math.abs(lldfFeed.gV-dfShear)>0.0005));
-  const lldfUnused = !lldfChanLocked && !lldfFeed.why && !dfOn;
-
-  // One-shot pull. The locked path lives at the root and runs itself; this is
-  // the button for engineers who want the numbers once without the standing
-  // subscription.
-  const applyLLDFFeed = () => {
-    const r=lldfResolveMCT();
-    if(r.why){ alert(r.why); return; }
-    set('rating', {...(cfg.rating||{}),
-      llFactors: llFactorsWithDF(ratingLLFactors, r.gM),
-      dfShear: r.gV, dfNeg: r.gMneg});
-    if(BL) BL.log({channel:'lldf', app:LOCK_APP, source:r.src,
-      text:'applied g = '+r.gM.toFixed(4)+' (+M) / '+r.gMneg.toFixed(4)+' (−M) / '+r.gV.toFixed(4)+' (V)'});
-  };
-  const onToggleLLDFLock = (on) => {
-    if(!BL) return;
-    if(on){
-      const r=lldfResolveMCT();
-      if(r.why){ alert(r.why+'\n\nCompute the factors in the LL & DL app and send them, then lock.'); return; }
-      BL.saveSnap(LOCK_APP,'lldf',{llFactors:ratingLLFactors, dfShear:R.dfShear??null, dfNeg:R.dfNeg??null});
-      // Clear the applied signature before locking: lock() notifies the root,
-      // which adopts on the spot. Leaving a stale signature would suppress it.
-      LLDF_SIG.v='';
-      BL.lock('lldf',LOCK_APP);
-      BL.toast('Distribution factors locked','The rating g factors follow the LL & DL Distribution app from now on — positive moment, hogging moment and shear each get their own.');
-    }else{
-      BL.unlock('lldf',LOCK_APP);
-      LLDF_SIG.v='';
-      const snap=BL.takeSnap(LOCK_APP,'lldf');
-      if(snap&&snap.data&&snap.data.llFactors){
-        const had=snap.data.llFactors.find(f=>f.id==='df');
-        if(window.confirm('Distribution factors unlocked.\n\nRestore the g values you had before locking?\n\n  g = '+
-            (had&&had.enabled?(+had.value).toFixed(4):'off')+
-            (snap.data.dfShear!=null?('   g_V = '+(+snap.data.dfShear).toFixed(4)):'')))
-          set('rating', {...(cfg.rating||{}), llFactors:snap.data.llFactors,
-            dfShear:snap.data.dfShear, dfNeg:snap.data.dfNeg});
-        else BL.toast('Distribution factors unlocked','Manual control — the current g values were kept.');
-      }else BL.toast('Distribution factors unlocked','Manual control restored.');
-      BL.log({channel:'lldf', app:LOCK_APP, source:'LL & DL Distribution', text:'auto-import OFF'});
-    }
-  };
 
   const phiC = PHI_CONDITION[ratingCondKey]??1.0;
   const phiSsel = ratingSysKey==='Custom' ? ratingPhiSCustom : (PHI_SYSTEM[ratingSysKey]??1.0);
@@ -14261,53 +14357,9 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                   These multiply the LL result before the RF denominator — LL_effective = LL × g × (1+IM/100) × m × F₁ × F₂
                 </div>
 
-                {/* ── Distribution factors from the LL & DL Distribution app ── */}
-                <div style={{padding:'9px 11px',marginBottom:'10px',borderRadius:'6px',
-                  background:lldfChanLocked?'#ecfdf5':(lldfDisagrees?'#fef2f2':(lldfFeed.why?'#f9fafb':'#eff6ff')),
-                  border:`1px solid ${lldfChanLocked?'#a7f3d0':(lldfDisagrees?'#fca5a5':(lldfFeed.why?'#e5e7eb':'#bfdbfe'))}`,
-                  borderLeft:`3px solid ${lldfChanLocked?'#059669':(lldfDisagrees?'#dc2626':(lldfFeed.why?'#d1d5db':'#1d4ed8'))}`}}>
-                  <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',marginBottom:lldfFeed.why?0:'7px'}}>
-                    <span style={{fontSize:'11px',fontWeight:'600',color:'#111827'}}>
-                      Distribution factors — LL &amp; DL Distribution app
-                    </span>
-                    {!lldfFeed.why&&(
-                      <span style={{fontSize:'9.5px',fontFamily:'monospace',color:'#6b7280'}}>
-                        {lldfFeed.src}{lldfFeed.at?' · '+String(lldfFeed.at).slice(0,16).replace('T',' '):''}
-                      </span>
-                    )}
-                    {!lldfFeed.why&&BLU.LockToggle&&(
-                      <span style={{marginLeft:'auto'}}><BLU.LockToggle ch="lldf" onToggle={onToggleLLDFLock}/></span>
-                    )}
-                  </div>
-                  {lldfFeed.why
-                    ? <div style={{fontSize:'10px',fontFamily:'monospace',color:'#9ca3af',whiteSpace:'pre-line',marginTop:'4px'}}>{lldfFeed.why}</div>
-                    : (<>
-                        <div style={{display:'flex',gap:'14px',flexWrap:'wrap',fontSize:'11px',fontFamily:'monospace',color:'#1e40af',marginBottom:'6px'}}>
-                          <span>g<sub>M+</sub> = <b>{lldfFeed.gM.toFixed(4)}</b></span>
-                          <span>g<sub>M−</sub> = <b>{lldfFeed.gMneg.toFixed(4)}</b>{lldfFeed.hasNeg?'':' (= g_M+, no hogging data)'}</span>
-                          <span>g<sub>V</sub> = <b>{lldfFeed.gV.toFixed(4)}</b></span>
-                        </div>
-                        {lldfChanLocked
-                          ? <div style={{fontSize:'10px',color:'#047857',lineHeight:'1.6'}}>
-                              <b>Locked — following the LL &amp; DL app.</b> All three factors reload
-                              themselves whenever the distribution is re-run or the shared design beam
-                              moves; you do not need to come back to this panel.
-                            </div>
-                          : <div style={{display:'flex',gap:'8px',alignItems:'center',flexWrap:'wrap'}}>
-                              <button onClick={applyLLDFFeed}
-                                style={{background:'#1d4ed8',color:'#fff',border:'none',borderRadius:'5px',
-                                  padding:'4px 11px',fontSize:'10.5px',fontFamily:'monospace',fontWeight:'600',cursor:'pointer'}}>
-                                ← Apply these
-                              </button>
-                              <span style={{fontSize:'10px',color:lldfDisagrees?'#b91c1c':'#6b7280',lineHeight:'1.6'}}>
-                                {lldfDisagrees
-                                  ? <><b>These disagree with the g values in use below.</b> The rating is running on a hand-typed factor while a computed one sits unread — apply it, or lock the channel so it stays applied.</>
-                                  : (lldfUnused
-                                      ? <>The g factor below is switched off, so the rating is distributing nothing. Apply these, or lock the channel to keep them current.</>
-                                      : <>In agreement with the factors in use. Lock the channel to keep it that way.</>)}
-                              </span>
-                            </div>}
-                      </>)}
+                {/* HOC (2026-11-10): the LL & DL distribution-factor panel (Apply these, padlock) is in the Project step's Hand-offs card */}
+                <div style={{fontSize:'10.5px',color:'#6b7280',marginBottom:'10px',fontFamily:'monospace'}}>
+                  Distribution factors from the LL &amp; DL Distribution app: send/receive data in <a href="#" onClick={e=>{e.preventDefault();ixGoHandoffs(setStep);}} style={{color:'#1d4ed8'}}>Project step → Hand-offs</a>.
                 </div>
                 {mctCarriesIM&&(
                   <div style={{fontSize:'10.5px',padding:'8px 11px',marginBottom:'10px',background:'#fffbeb',
@@ -22548,8 +22600,62 @@ function App() {
   // One-time notice for stale library data in the loaded project (sweep IDX-O15).
   const staleNotes=useMemo(()=>staleProjectNotes(cfg),[cfg.rating&&cfg.rating.vehicleName,cfg.rating&&cfg.rating.vehicleTon,cfg.loadCombos,cfg.aremaSection]);
   const [staleDismissed,setStaleDismissed]=useState(false);
-  const steps=[<StepProject cfg={cfg} set={set}/>,<StepGeometry cfg={cfg} set={set}/>,
-    <StepSections cfg={cfg} set={set}/>,<StepLoads cfg={cfg} set={set} dlLocked={dlLocked} onToggleDLLock={onToggleDLLock}/>,
+  /* HOC (2026-11-10): the sidebar's Design Hand-off and Send geometry buttons (same JSX, handlers and padlocks), shown in the
+     Project step's Hand-offs card under "Send to other tools" */
+  const hoSends=(<>
+    <div style={IXHO_ROW}><b>MIDAS demands</b> <span style={IXHO_FROM}>to Prestressed Bridge Design (opens it in a new tab)</span>
+      <div style={{maxWidth:'420px',marginTop:'4px'}}>
+      {[{k:'psbeam',label:'Prestressed Bridge Design',icon:'🅿',accent:'#0e7490',light:'#ecfeff',border:'#a5f3fc'}].map(b=>{
+        // Solid orange = this is the app the locked channel is feeding. Being
+        // the locked target must NOT take away the button that opens the app --
+        // the click opens it either way. Stopping the auto-send is the padlock
+        // chip's job below, not this button's; fusing the two meant you had to
+        // unlock just to look at the app it was feeding.
+        const live=demandsLocked&&demandsKind()===b.k;
+        return (
+        <button key={b.k} onClick={()=>{ if(live) openPBD(); else publishToDesign(b.k); }}
+          title={live
+            ? 'Open '+b.label+' in a new tab. It stays locked — every re-paste of MIDAS results keeps flowing to it; use the 🔒 Locked chip to stop.'
+            : 'Publish the current MIDAS demands to shared storage and open '+b.label+' in a new tab.'}
+          style={{background:live?'#ea580c':'transparent',border:'1px solid '+(live?'#ea580c':'transparent'),borderRadius:'6px',color:live?'#fff':'#6b7280',
+            padding:'8px 10px',textAlign:'left',cursor:'pointer',fontSize:'12px',
+            fontFamily:"'IBM Plex Sans',sans-serif",fontWeight:live?'600':'400',
+            display:'flex',alignItems:'center',gap:'9px',width:'100%',transition:'all 0.12s'}}
+          onMouseEnter={e=>{if(live)return;e.currentTarget.style.background=b.light;e.currentTarget.style.borderColor=b.border;e.currentTarget.style.color=b.accent;}}
+          onMouseLeave={e=>{if(live)return;e.currentTarget.style.background='transparent';e.currentTarget.style.borderColor='transparent';e.currentTarget.style.color='#6b7280';}}>
+          <span style={{width:'20px',height:'20px',borderRadius:'50%',flexShrink:0,
+            background:live?'rgba(255,255,255,0.22)':'#f3f4f6',
+            border:'1px solid '+(live?'rgba(255,255,255,0.45)':'#e5e7eb'),display:'flex',alignItems:'center',justifyContent:'center',
+            fontSize:'10px',color:live?'#fff':b.accent}}>{live?'\ud83d\udd12':b.icon}</span>
+          <span style={{lineHeight:1.2}}>{live?('Auto-sending demands \u2192 '+b.label):b.label}
+            <span style={{color:live?'rgba(255,255,255,0.8)':'#9ca3af',fontSize:'9.5px'}}>{' \u2197'}</span></span>
+        </button>);
+      })}
+      {BLU.LockToggle&&<div style={{display:'flex',justifyContent:'flex-end',paddingRight:'4px'}}>
+        <BLU.LockToggle ch="demands" onToggle={toggleDemandsLock}/></div>}
+      </div></div>
+    <div style={IXHO_ROW}><b>Geometry</b> <span style={IXHO_FROM}>to LL &amp; DL Distribution</span>
+      <div style={{maxWidth:'420px',marginTop:'4px'}}>
+      <button onClick={()=>{ if(geomLocked) toggleGeomLock(false); else publishLLDFGeom(true); }}
+        title={geomLocked
+          ? "Locked: every change to spans, girder count, spacing or skew is sent to the LL & DL Distribution app automatically and applied there without prompting. Click to stop."
+          : "Push this model's layout (span lengths, and in GFS mode the girder count, spacing and skew) to the LL & DL Distribution app. It shows a prefill banner; your section stiffness there is left untouched."}
+        style={{background:geomLocked?'#ea580c':'transparent',
+          border:geomLocked?'1px solid #ea580c':'1px dashed #e5e7eb',borderRadius:'6px',
+          color:geomLocked?'#fff':'#7c3aed',
+          padding:'6px 10px',textAlign:'left',cursor:'pointer',fontSize:'11px',marginTop:'2px',
+          fontFamily:"'IBM Plex Sans',sans-serif",display:'flex',alignItems:'center',gap:'9px',width:'100%'}}>
+        <span style={{width:'20px',textAlign:'center',flexShrink:0}}>{geomLocked?'\ud83d\udd12':'⤳'}</span>
+        <span style={{lineHeight:1.2}}>{geomLocked?'Auto-sending geometry to LL & DL':'Send geometry to LL & DL'}</span>
+      </button>
+      {BLU.LockToggle&&<div style={{display:'flex',justifyContent:'flex-end'}}>
+        <BLU.LockToggle ch="geometry" onToggle={toggleGeomLock}/></div>}
+      {lldfGeomMsg&&<div style={{fontSize:'10px',fontFamily:'monospace',color:'#5b21b6',background:'#f5f3ff',
+        border:'1px solid #ddd6fe',borderRadius:'5px',padding:'5px 8px',lineHeight:1.45,marginTop:'2px'}}>{lldfGeomMsg}</div>}
+      </div></div>
+  </>);
+  const steps=[<StepProject cfg={cfg} set={set} dlLocked={dlLocked} onToggleDLLock={onToggleDLLock} hoSends={hoSends}/>,<StepGeometry cfg={cfg} set={set}/>,
+    <StepSections cfg={cfg} set={set}/>,<StepLoads cfg={cfg} set={set} dlLocked={dlLocked} onToggleDLLock={onToggleDLLock} setStep={setStep}/>,
     <StepMovingLoads cfg={cfg} set={set}/>,<StepCombos cfg={cfg} set={set}/>,
     <StepGenerate mctOutput={mctOutput} downloadMCT={downloadMCT} cfg={cfg}/>,
     <Step3DView cfg={cfg} rows={resultsRows} mctOutput={mctOutput}/>,
@@ -22657,37 +22763,10 @@ function App() {
               {label}
             </button>);
           })}
-          {/* ── Design hand-off: send analysis demands to the design apps via shared storage ── */}
+          {/* HOC (2026-11-10): the Design Hand-off (Prestressed Bridge Design) and Send geometry to LL & DL buttons, with their padlocks, are in the Project step's Hand-offs card */}
           <div style={{fontSize:'9.5px',fontFamily:'monospace',color:'#9ca3af',textTransform:'uppercase',
-            letterSpacing:'0.1em',margin:'10px 0 6px',paddingLeft:'8px',borderTop:'1px solid #f3f4f6',paddingTop:'10px'}}>Design Hand-off</div>
-          {[{k:'psbeam',label:'Prestressed Bridge Design',icon:'🅿',accent:'#0e7490',light:'#ecfeff',border:'#a5f3fc'}].map(b=>{
-            // Solid orange = this is the app the locked channel is feeding. Being
-            // the locked target must NOT take away the button that opens the app --
-            // the click opens it either way. Stopping the auto-send is the padlock
-            // chip's job below, not this button's; fusing the two meant you had to
-            // unlock just to look at the app it was feeding.
-            const live=demandsLocked&&demandsKind()===b.k;
-            return (
-            <button key={b.k} onClick={()=>{ if(live) openPBD(); else publishToDesign(b.k); }}
-              title={live
-                ? 'Open '+b.label+' in a new tab. It stays locked — every re-paste of MIDAS results keeps flowing to it; use the 🔒 Locked chip to stop.'
-                : 'Publish the current MIDAS demands to shared storage and open '+b.label+' in a new tab.'}
-              style={{background:live?'#ea580c':'transparent',border:'1px solid '+(live?'#ea580c':'transparent'),borderRadius:'6px',color:live?'#fff':'#6b7280',
-                padding:'8px 10px',textAlign:'left',cursor:'pointer',fontSize:'12px',
-                fontFamily:"'IBM Plex Sans',sans-serif",fontWeight:live?'600':'400',
-                display:'flex',alignItems:'center',gap:'9px',width:'100%',transition:'all 0.12s'}}
-              onMouseEnter={e=>{if(live)return;e.currentTarget.style.background=b.light;e.currentTarget.style.borderColor=b.border;e.currentTarget.style.color=b.accent;}}
-              onMouseLeave={e=>{if(live)return;e.currentTarget.style.background='transparent';e.currentTarget.style.borderColor='transparent';e.currentTarget.style.color='#6b7280';}}>
-              <span style={{width:'20px',height:'20px',borderRadius:'50%',flexShrink:0,
-                background:live?'rgba(255,255,255,0.22)':'#f3f4f6',
-                border:'1px solid '+(live?'rgba(255,255,255,0.45)':'#e5e7eb'),display:'flex',alignItems:'center',justifyContent:'center',
-                fontSize:'10px',color:live?'#fff':b.accent}}>{live?'\ud83d\udd12':b.icon}</span>
-              <span style={{lineHeight:1.2}}>{live?('Auto-sending demands \u2192 '+b.label):b.label}
-                <span style={{color:live?'rgba(255,255,255,0.8)':'#9ca3af',fontSize:'9.5px'}}>{' \u2197'}</span></span>
-            </button>);
-          })}
-          {BLU.LockToggle&&<div style={{display:'flex',justifyContent:'flex-end',paddingRight:'4px'}}>
-            <BLU.LockToggle ch="demands" onToggle={toggleDemandsLock}/></div>}
+            letterSpacing:'0.1em',margin:'10px 0 4px',paddingLeft:'8px',borderTop:'1px solid #f3f4f6',paddingTop:'10px'}}>Design Hand-off</div>
+          <div style={{fontSize:'11px',color:'#6b7280',padding:'0 8px 4px',lineHeight:1.4}}>Send/receive data: <a href="#" onClick={e=>{e.preventDefault();ixGoHandoffs(setStep);}} style={{color:'#1d4ed8'}}>Project → Hand-offs</a></div>
           {/* ── LL & DL Distribution — embedded AASHTO 4.6.2.2 + MassDOT §3.5.3 calculator ── */}
           <button onClick={()=>openEmbed(embedApp==='lldf'?null:'lldf')} title="Live-load distribution factors (AASHTO LRFD 4.6.2.2) and dead-load distribution to each beam (MassDOT §3.5.3) — computes both and sends them to the design apps."
             style={{background:embedApp==='lldf'?'#fdf4ff':'transparent',border:`1px solid ${embedApp==='lldf'?'#f0abfc':'transparent'}`,
@@ -22701,22 +22780,6 @@ function App() {
               fontSize:'10px',color:embedApp==='lldf'?'#fff':'#a21caf'}}>Ⓛ</span>
             <span style={{lineHeight:1.2}}>LL &amp; DL Distribution</span>
           </button>
-          <button onClick={()=>{ if(geomLocked) toggleGeomLock(false); else publishLLDFGeom(true); }}
-            title={geomLocked
-              ? "Locked: every change to spans, girder count, spacing or skew is sent to the LL & DL Distribution app automatically and applied there without prompting. Click to stop."
-              : "Push this model's layout (span lengths, and in GFS mode the girder count, spacing and skew) to the LL & DL Distribution app. It shows a prefill banner; your section stiffness there is left untouched."}
-            style={{background:geomLocked?'#ea580c':'transparent',
-              border:geomLocked?'1px solid #ea580c':'1px dashed #e5e7eb',borderRadius:'6px',
-              color:geomLocked?'#fff':'#7c3aed',
-              padding:'6px 10px',textAlign:'left',cursor:'pointer',fontSize:'11px',marginTop:'2px',
-              fontFamily:"'IBM Plex Sans',sans-serif",display:'flex',alignItems:'center',gap:'9px',width:'100%'}}>
-            <span style={{width:'20px',textAlign:'center',flexShrink:0}}>{geomLocked?'\ud83d\udd12':'⤳'}</span>
-            <span style={{lineHeight:1.2}}>{geomLocked?'Auto-sending geometry to LL & DL':'Send geometry to LL & DL'}</span>
-          </button>
-          {BLU.LockToggle&&<div style={{display:'flex',justifyContent:'flex-end'}}>
-            <BLU.LockToggle ch="geometry" onToggle={toggleGeomLock}/></div>}
-          {lldfGeomMsg&&<div style={{fontSize:'10px',fontFamily:'monospace',color:'#5b21b6',background:'#f5f3ff',
-            border:'1px solid #ddd6fe',borderRadius:'5px',padding:'5px 8px',lineHeight:1.45,marginTop:'2px'}}>{lldfGeomMsg}</div>}
           <div style={{marginTop:'auto',paddingTop:'12px',borderTop:'1px solid #f3f4f6',display:'flex',flexDirection:'column',gap:'5px'}}>
             <div style={{fontSize:'10px',fontFamily:'monospace',color:'#9ca3af',marginBottom:'4px',paddingLeft:'2px'}}>
               {cfg.selectedVehicles.length} vehicle{cfg.selectedVehicles.length!==1?'s':''}&nbsp;·&nbsp;{mctOutput.split('\n').length} lines

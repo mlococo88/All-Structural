@@ -16973,3 +16973,68 @@ Engineer decision 2026-11-10 (geometry). AASHTO LRFD 10th Ed. (2024): 5.6.5 / Fi
 - A pad running into the inset backwall (c_bw < 0) is an input error; no clearance beyond 0 required.
 - N provided keeps g_end from the inset backwall face (girder end to seat front edge): 12(t_st − t_bw − e) − g_end. The girder-end overhang past the pad is not checked (as with e = 0).
 - The girder-end gap error compares g_end with a_bw = setback − e when e > 0.
+## 2026-11-10 — PR: claude/abutment-elevations-2 (PR #1383: https://github.com/mlococo88/All-Structural/pull/1383) (ABEL2) — bearing height, girder + haunch + deck, pile length for the elevations (display only)
+- **Engineer decision (2026-11-10):** "add those inputs so the full set of elevations shows". This adds the three levels #1374 (ABEL) could not derive.
+- **Where (all in `abutment_calculator.html`):**
+  - `defaultState()`:
+    - geom: after `elSeat:null,` add `elBrgH:null, elGird:null, elHaunch:null, elDeck:null,` (in).
+    - piles: before `embed:12.0, clrTop:3.0,` add `elLpile:null,` (ft, total including the embedment).
+  - Fingerprint (C-21): after the ABEL `elSeat` line, delete each of these keys when it is null / undefined / "", so the Input ID is unchanged when they are blank.
+  - New helpers after `function abElevOn()`:
+    - `abElNum(path,pos)` (null when blank; pos requires > 0);
+    - `abElInRow` (a data-blank input row);
+    - `abElPdLen()` (Pile Designer's pile: `S.pileRes.pile.stickup` + `S.pileRes.geo.toe` + embed/12; H-pile only);
+    - `abElLpInHTML()` (the panel I-7 note and a "Use" button, `data-abel-use`).
+  - Panel I-1: after `<div class="in-note" id="abElevIn">`, the four rows (not for an integral abutment). Panel I-7: before the embedment row, the pile length row and `#abElLpIn` (refreshed in `updateDerivedInInputs`).
+  - A document click listener for `[data-abel-use]`, before the `.p-head` listener: it sets `S.piles.elLpile` on a click only.
+  - pileResults import (`S.pileRes.geo`): `...(g.pileType==="iab"? {pileType:"iab", toe:…} : {})` becomes `… : num(g.static.toeDepth)? { toe:g.static.toeDepth } : {}` (additive).
+  - `abElev()`, non-integral branch:
+    - before the `seat` row: `deck`, `gTop` (dwg:false) and `brgTop` rows;
+    - the deck flags: against the top (and against the approach-slab top when it is not level with the top), and semi-integral d_g vs 12·`iab.dg`;
+    - notes for blank inputs.
+    - After the `bof` row, pile footing: `pileTop` (dwg:false) and `tip`, at x = B/2 + min active pile x. Pile Designer length flag.
+    - The old notes "Pile tips: not shown (no pile length input)", "Bearing top: not shown (no total bearing height)" and "Deck surface: not shown (no girder depth…)" are removed. Integral keeps a bearing note.
+    - The Pile Designer tip El. comparison now uses the tip row for a pile footing too ("L_pile of panel I-7").
+  - `abElevInHTML` parts `["deck","top","seat",bof|boc,"tip"]`. `ABEL_SN` gains deck, brgTop, gTop, pileTop. `abElevSvg` takes `opt.sfx`. `abElevPanelHTML` gains `lk["I-7"]` and a longer source note.
+  - `drawXsec`:
+    - `worldH` includes the deck mark;
+    - with tips: `mb` + 34 and `eL` 215, and the tips are drawn at `-100/sc` with " (below, not to scale)".
+  - `abdwGeo`: `G.brgH`, and `G.padH = h_brg` when entered.
+  - `abdwBuild`:
+    - section sheet: the bearing label y is moved clear of the left elevation lines; the label reads "(TOTAL HEIGHT …, PANEL I-1)"; a pile footing's tip mark is at its front pile row (was `G.b/2` NaN); notes for the deck and the tips;
+    - seat sheet: TOP OF BEARING and TOP OF DECK AT CL BRG;
+    - pile-in-the-footing view: TOP OF PILES and PILE TIPS (BELOW, NOT TO SCALE), at the right.
+  - The Drawings tab "Values:" note names the entered bearing height.
+  - 3D:
+    - `abBrgH3D()` gives the pad height in `build3D` and `d3SemiParts` (0.5 ft when blank);
+    - the conventional `abElev3D` maps `tip` to `-pileLen`.
+  - Report input echo: the four inputs and L_pile when entered.
+- **Levels (in → ft /12):**
+  - brgTop = El_seat + h_brg/12;
+  - gTop = El_brg + d_g/12;
+  - deck = El_brg + (d_g + h_h + t_d)/12;
+  - pileTop = El_bof + e/12;
+  - tip = pileTop − L_pile.
+- **Provisions / formulas / factors / units:** none changed (§4). `LAST_R` is identical with the new fields blank and set. Blank = the levels are not shown and the Input ID is unchanged.
+- **Check case:** seat 52.00, bearing 6 in, girder 54 + haunch 2 + deck 8 in, 40 ft piles with 12 in embedment, built-in geometry, pile footing:
+  - top of bearing 52.50, top of girder 57.00, deck 57.83, top of backwall 57.00 (flagged: deck 0.83 ft above);
+  - top of footing 38.00, bottom 35.00, pile tops 36.00, tips −4.00.
+- **Existing calculations that could use these (reported, not connected):**
+  - the longitudinal forces at z_seat (the bearing height; the 3.6.4 couple);
+  - `iab.dg` (owner screening);
+  - the pile depth to fixity / buckling length / Matlock–Reese (pile length);
+  - the SubLoads bearing height and elevations (unused in the import).
+- **Decisions (pending engineer review):**
+  - L_pile is the total length including the embedment;
+  - the deck needs all four inputs (haunch 0 allowed);
+  - no camber, grade or cross slope;
+  - the slab top stays as in #1374, with mismatches flagged;
+  - Pile Designer length = stick-up + toe + embedment, offered and never applied automatically.
+- **Saved data:** new optional keys `geom.elBrgH`, `geom.elGird`, `geom.elHaunch`, `geom.elDeck`, `piles.elLpile`, and `S.pileRes.geo.toe` (H-pile, new imports); none renamed.
+- **How verified:**
+  - `tests/smoke/abutment-elevations.mjs` section 6 (new), and vs main;
+  - `abutment-drawings` (base cases with every new input; 250 sheet drawings, 0 overlaps);
+  - `abutment-pile-group-parity` 14/14;
+  - `abutment-stem-shelf`, `abutment-pile-mat-level`, `abutment-panel-scroll`, `project-library --tool abutment`, `dxf-print-sheets --tool ab`, `check-syntax`;
+  - 0 console errors; 390 px.
+- **Other copies:** none.

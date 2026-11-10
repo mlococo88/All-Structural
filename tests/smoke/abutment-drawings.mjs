@@ -12,6 +12,7 @@
 //      overlaps another text (tests/engine/overlap.mjs textOverlaps, the Steel Bridge app's check; title block apart).
 //      ABEL (2026-11-10): the same projects again with a beam seat elevation (panel I-1): the "EL." marks stay clear of every other text.
 //      ABSS (2026-11-10): the engineer's case e = 10 in, d_sh = 30 in, t = 15 in (and d_sh < t): also no text of sheet 1 crossed by a dimension (without the EL. marks; with them the sheet drops to 3/16" and the seat dimensions crowd, as before).
+//      ABEL2 (2026-11-10): and again with the bearing height, girder + haunch + deck and pile length (top of bearing / deck, pile tips).
 //   3. The Drawings tab opens, previews, picks a sheet (per-browser key abutcalc_dwgSheet_v1, not in S), "Download DXF" saves a valid file;
 //      no horizontal scroll at 390 px; no console errors.
 //   node tests/smoke/abutment-drawings.mjs
@@ -82,9 +83,14 @@ console.log('2. Drawings: sheets, DXF validity, no overlapping text');
     'stem shelf d_sh 12 in < slab t 15 in, e = 10 in (ABSS)': () => { S.apSlab.on = true; S.apSlab.t = 1.25; S.geom.bwOff = 10; S.geom.shD = 12; },
     'stem shelf, no slab, pile footing (ABSH)': () => { S.fnd.branch = 'pile'; S.geom.bwOff = 8; S.geom.shD = 12; },
     'semi-integral + slab': () => { S.iab.type = 'semi'; S.apSlab.on = true; }, 'integral + slab': () => { S.iab.type = 'integral'; S.apSlab.on = true; } };
+  const base = { ...cases };
   // ABEL (2026-11-10): every case again with a beam seat elevation (the EL. marks on the section and detail sheets), plus water in front and D_f
   for (const [nm, su] of Object.entries({ ...cases, 'water both sides, passive D_f': () => { S.geom.hw = 6; S.geom.hwFr = 2; S.fnd.usePassive = true; } }))
     cases[nm + ', seat El. 52.00'] = eval('() => { (' + su.toString() + ')(); S.geom.elSeat = 52; }');   // a source text: withCase sends it to the page
+  // ABEL2 (2026-11-10): the base cases again with the display-only bearing height 6 in, girder 54 + haunch 2 + deck 8 in and 40 ft piles (top of
+  // bearing, top of deck, pile tips and pile heads marked on the section, seat and joint sheets)
+  for (const [nm, su] of Object.entries(base))
+    cases[nm + ', seat El. 52.00 + bearing, deck, pile length'] = eval('() => { (' + su.toString() + ')(); S.geom.elSeat = 52; S.geom.elBrgH = 6; S.geom.elGird = 54; S.geom.elHaunch = 2; S.geom.elDeck = 8; S.piles.elLpile = 40; }');
   let n = 0;
   for (const [nm, su] of Object.entries(cases)) {
     const r = await withCase(p, su, () => { const B = abdwBuild(window.LAST_R), t = B.D.toDXF({ ltscale: 1 }), G = B.G;
