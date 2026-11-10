@@ -4989,3 +4989,32 @@ format changed. Anchor text `QA2` marks each change. New file `ui/sub.js` (in th
 - **Other projects / stations:** see PR. Pour sequence off: 0 rows changed (byte-identical probe). A hand-off file or Custom demands
   (one M_DCc per station): unchanged.
 - **Other copies:** GirderDetail ("Steel Bridge Design.html") not changed (engineer decision: new app only); it checks one M_DCc per station.
+
+## 2026-11-10 — PR: claude/sb-constr-cb-min (PR #1290: https://github.com/mlococo88/All-Structural/pull/1290) — Constructibility: C_b not taken below 1.0 (SBCB; engineer decision 2026-11-10, item 2; changes computed values)
+- **Open-item note removed:** the SBCON entry's open item 2 (C_b < 1.0 from `feCb`) is resolved here; PR #1289 resolved items 1 and 3.
+- **Problem:** Eq. 6.10.8.2.3b-1 as applied (`feCb`: M_max the largest moment compressing the flange, M_A, M_B, M_C the absolute values at the
+  quarter points) gives C_b < 1.0 where the flange is in tension over part of the unbraced length (0.217 at skewed G1 x = 153, negative case;
+  0.525–0.90 with the pour sequence off). It was used as computed, so F_nc dropped below the uniform-moment value.
+- **Where:** `apps/steel-bridge/engine/constructibility.js` (`const CB_MIN = 1.0`).
+  - `bracingC`, anchor `// SBCB (2026-11-10): Cb = max(1.0, Eq. 6.10.8.2.3b-1)`: before `Cb: n2_.kind === 'ge' ? 1 : feCb_(xs, Mc, p0, p1, sgC)`;
+    after `Cb: n2_.kind === 'ge' ? 1 : Math.max(CB_MIN, feCb_(...))`, `Cb0` the unbounded value (also in `cbParts.Cb0`). The segment choice
+    (largest L/C_b) uses the bounded value.
+  - `locCase` (C_b of a row): before `r.CbCu = r.CbC > 0 ? r.CbC : r.Cb`; after `r.CbRaw = r.CbC > 0 ? r.CbC : r.Cb; r.CbCu = Math.max(CB_MIN, r.CbRaw)`
+    (F_nc, and the 6.10.1.6 amplification limit 1.2L_p√(C_bR_b/(f_bu/F_yc)) through `ampFl`).
+  - `overhang()`: before `Cb = +q.Cb`; after `Cb = Math.max(CB_MIN, +q.Cb)` (an entered value below 1.0 is raised; the worked LTB label says so).
+  - `worked()` cn.Cb: `max(1.0, 12.5M_max/(…) = value)`, and the note gives the unbounded value where the bound applies. `notes()`: the
+    "used as computed" note is replaced by the bound and its basis.
+  - `engine/flexure.js` `feCb` is not changed (the Flexure tab's own C_b is out of scope).
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.10.8.2.3b (Eq. 6.10.8.2.3b-1, definitions of M_max, M_A, M_B, M_C); C6.10.8.2.3b (C_b has a
+  base value of 1.0 for a constant moment and may be taken as 1.0 conservatively in all but the unusual cases named); 6.10.8.2.3 (F_nc,LTB);
+  6.10.1.6 (amplification limit with C_b).
+- **Check case (skewed G1 x = 153.00 ft, negative case, tests/engine/constr-cb-min.test.mjs):** L_b 130.94–153.46 ft = 270.12 in, top flange 16 × 0.75
+  (M_c = 1.25(−85.21) + 1.50(86.01) = +22.52 kip-ft). Eq. 6.10.8.2.3b-1 = 12.5(28.30)/[2.5(28.30) + 3(266.35) + 4(150.83) + 3(52.58)] = 0.217 →
+  C_b = 1.0. r_t = 3.7183 in, L_p = 98.50, L_r = 336.24 in: F_nc = [1 − 0.3(171.62/237.74)](50) = 39.172 ksi; GS14 (0.235 + 9.38/3)/39.172 = 0.0858.
+  Before: F_nc = 0.217(39.172) = 8.50 ksi, 0.3955 (governed the location). The location now reports the positive case, 0.3837 (GS14 yield).
+- **Rows changed:** pour sequence on: the reported row changes at 1 location (skewed G1 x = 153); a non-governing case changes at 2 (default),
+  5 (skewed G1), 1 (skewed G2), 5 (no skew G1) locations. Governing Constructibility unchanged on all five projects.
+- **Pour sequence off (not unchanged, listed):** GS14 buckling ratios drop at default 0, skewed G1 3 (x = 70–72: C_b 0.525 → 1.0, F_nc 23.42 → 44.61),
+  skewed G2 5 (x = 126–130: 0.88 → 1.0), no skew G1 12 and G2 12 (x = 70–75, 255–260: 0.89–0.90 → 1.0) locations; no governing ratio of a location
+  or of a project changes.
+- **Other copies:** GirderDetail ("Steel Bridge Design.html") uses C_b as computed; not changed (new app only; a deliberate difference).
