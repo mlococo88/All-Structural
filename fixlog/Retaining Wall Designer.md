@@ -6759,7 +6759,7 @@ None: no computed value changes. Only worked-step text (tab and Report).
 - **Other copies:** none.
 - **Open items:** none new. The fix-log and PR wording "pending engineer review" is left as written (history).
 
-## 2026-11-10 — PR: claude/massdot-edition-rwall (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (RWMED) — MassDOT Bridge Manual cited as the Hundredth Anniversary Edition   [text only; no result, saved key or format change]
+## 2026-11-10 — PR: claude/massdot-edition-rwall (PR #1339: https://github.com/mlococo88/All-Structural/pull/1339) (RWMED) — MassDOT Bridge Manual cited as the Hundredth Anniversary Edition   [text only; no result, saved key or format change]
 - **Engineer (2026-11-10):** every MassDOT LRFD Bridge Manual citation marked "edition: verify" (or similar) cites the Hundredth Anniversary Edition (reference copy: `structural_references/MassDOT Bridge Manual - Hundredth Edition.pdf`).
 - **Where (to re-apply by hand):**
   1. `const RW_REFS = {`, `AASHTO:` list (Report references, AASHTO basis). Before: `['MassDOT LRFD Bridge Manual', 'Part I §3.3.2.2 (heel top steel, variable-height wall), §3.3.2.4 and Table 3.3.2-1 (vehicular collision on walls), when selected; edition: verify'],` After: `['MassDOT LRFD Bridge Manual, Hundredth Anniversary Edition', 'Part I §3.3.2.2 (heel top steel, variable-height wall), §3.3.2.4 and Table 3.3.2-1 (vehicular collision on walls), when selected'],`
