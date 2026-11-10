@@ -6,6 +6,8 @@
 //    equivalent dead load, semi-integral, integral, water + Coulomb); a saved project without the fields opens with the same results.
 // 2. Hand check (the engineer's plan detail): 2'-0" backwall, e = 10 in, slab seat d_sh = 9 in below the top, approach slab t = 9 in,
 //    t_st = t_sb = 5.5 ft, the rest the default project. Before (e = 0, paving notch) and after (e = 10 in) against values worked by hand.
+//    ABBF (engineer decision 2026-11-10): the bearings stay where they are with e = 0 (x_brg = x_stem,back − t_bw − setback); only the seat
+//    between the bearing line and the inset backwall narrows (a_bw = setback − e). The hand-check values below follow that decision.
 // 3. Input errors: e + t_bw > t_st; e > 0 with no slab and no d_sh. Semi-integral / integral ignore e.
 // 4. Drawings (DXF valid, the section has the shelf outline), 3D (the slab top at the top of the backwall), Report builds;
 //    no console errors; no horizontal scroll at 390 px.
@@ -75,13 +77,15 @@ console.log('2. Hand check: 2\'-0" backwall, e = 10 in, slab seat 9 in below the
         DCsub: [G.DCsub.V, G.DCsub.Mv], APdc: [G.APdc.V, G.APdc.Mv], APdw: [G.APdw.V, G.APdw.Mv], DCsup: [G.DCsup.V, G.DCsup.Mv], DW: [G.DW.V, G.DW.Mv],
         stem: { Mu: R.stemDem.Mu, Mecc: R.stemDem.MeccPerFt, Pv: R.stemDem.Pv, Map: R.stemDem.Map, Mself: R.stemDem.MselfEccTot, gDC: R.stemDem.gDCe },
         P1: q ? { V: q.V, Mv: q.Mv, Mh: q.Mh, xbar: q.xbar, e: q.e } : null, ecc: c.ecc.dc, sliding: c.sliding.dc, bearing: c.bearing.dc, stemFlex: c.stemFlex.dcFlex,
-        seat: c.seat.Nprov, bw: { hRet: R.bwDem.hbwRet, MuBW: R.bwDem.MuBW }, ss: R.apStemSh, shelf: !!R.apShelf, err: WARNINGS.filter(w => w.level === 'err').map(w => w.msg) }; };
-    setup(0); const a = pick(); setup(10); const b = pick(); return { a, b };
+        seat: c.seat.Nprov, bs: { cFront: c.bearingSeat.cFront, cBack: c.bearingSeat.cBack, m: c.bearingSeat.m, dc: c.bearingSeat.dc }, bw: { hRet: R.bwDem.hbwRet, MuBW: R.bwDem.MuBW }, ss: R.apStemSh, shelf: !!R.apShelf, err: WARNINGS.filter(w => w.level === 'err').map(w => w.msg) }; };
+    setup(0); const a = pick(); setup(10); const b = pick(); S.geom.brgSetback = 1.75; setup(10); const v = pick(); return { a, b, v };
   });
-  const { a, b } = r, gc = 0.150, Lab = 44, e = 10 / 12;
+  const { a, b, v } = r, gc = 0.150, Lab = 44, e = 10 / 12;
   // geometry (ft from the toe): x_stem,back = L_toe + t_sb = 3.5 + 5.5 = 9.0
   check(near(a.geo.xBwFront, 7.0) && near(a.geo.xBrg, 5.75) && near(a.geo.seatW, 3.5) && near(a.geo.eBrg, 0.5), `before: x_bw,front = 9 − 2 = 7.000, x_brg = 7 − 1.25 = 5.750, seat 3.500, e_brg 0.500 (${a.geo.xBwFront}, ${a.geo.xBrg}, ${a.geo.seatW}, ${a.geo.eBrg})`);
-  check(near(b.geo.xBwFront, 9 - e - 2) && near(b.geo.xBrg, 9 - e - 2 - 1.25) && near(b.geo.seatW, 5.5 - 2 - e) && near(b.geo.eBrg, e + 2 + 1.25 - 2.75), `after: x_bw,front = 9 − 0.8333 − 2 = 6.1667, x_brg = 4.9167, seat 5.5 − 2 − 0.8333 = 2.6667, e_brg = 1.3333 (${b.geo.xBwFront.toFixed(4)}, ${b.geo.xBrg.toFixed(4)}, ${b.geo.seatW.toFixed(4)}, ${b.geo.eBrg.toFixed(4)})`);
+  // ABBF: was x_brg = x_bw,front − setback = 4.9167, e_brg = 1.3333 (#1373); now the bearing line of e = 0
+  check(near(b.geo.xBwFront, 9 - e - 2) && near(b.geo.xBrg, 9 - 2 - 1.25) && near(b.geo.seatW, 5.5 - 2 - e) && near(b.geo.eBrg, 0.5), `after: x_bw,front = 9 − 0.8333 − 2 = 6.1667, x_brg = 9 − 2 − 1.25 = 5.750 (as e = 0), seat 5.5 − 2 − 0.8333 = 2.6667, e_brg = 6.25 − 5.75 = 0.500 (${b.geo.xBwFront.toFixed(4)}, ${b.geo.xBrg.toFixed(4)}, ${b.geo.seatW.toFixed(4)}, ${b.geo.eBrg.toFixed(4)})`);
+  check(near(b.geo.off.aBw, 1.25 - e) && near(b.geo.off.cBw, 15 - 10 - 18 / 2), `a_bw = setback − e = 15 − 10 = 5.0 in; c_bw = 5.0 − 18/2 = −4.0 in (the 18 in pad runs into the backwall) (${(b.geo.off.aBw * 12).toFixed(2)}, ${b.geo.off.cBw.toFixed(2)})`);
   // self-weight
   const bwA = a.parts.find(x => x.n === 'Backwall'), bwB = b.parts.find(x => x.n === 'Backwall'), sh = b.parts.find(x => /^Stem shelf/.test(x.n));
   check(near(bwA.W, 2 * 5 * gc * Lab) && near(bwA.x, 8.0) && near(bwB.W, 66) && near(bwB.x, 9 - e - 1), `backwall W = 2 × 5 × 0.150 × 44 = 66.00 kip at x̄ 8.000 → 7.1667 (${bwB.x.toFixed(4)})`);
@@ -90,23 +94,27 @@ console.log('2. Hand check: 2\'-0" backwall, e = 10 in, slab seat 9 in below the
   // approach slab: R_DC = 0.150 × 0.75 × 44 × 16/2 = 39.60 kip; before at x = 9 + 6/12 = 9.5 (+ notch 6.60 kip at 9.4583); after at 9 − e/2 = 8.5833, no notch
   check(a.ap.sup === 'shelf' && near(a.ap.x, 9.5) && near(a.ap.WSh, 6.6) && near(a.APdc[1], 39.6 * 9.5 + 6.6 * (9 + 5.5 / 12)), `before: slab R_DC 39.60 kip at 9.500 + notch 6.60 kip at 9.4583 → APdc M_v ${a.APdc[1].toFixed(3)} = 438.625`);
   check(b.ap.sup === 'stem' && near(b.ap.x, 9 - e / 2) && b.ap.WSh === 0 && b.ap.eBw === 0 && near(b.APdc[1], 39.6 * (9 - e / 2)), `after: R_DC 39.60 kip at x_ap = 9 − 0.4167 = 8.5833 (mid-bearing), no notch, e_bw = 0 → APdc M_v ${b.APdc[1].toFixed(3)} = 339.900`);
-  check(near(b.DCsup[1], 510 * (9 - e - 3.25)) && near(a.DCsup[1], 510 * 5.75), `girder DC 510 kip: M_v 510 × 5.75 = 2932.5 → 510 × 4.9167 = 2507.5 (${b.DCsup[1].toFixed(2)})`);
+  check(near(b.DCsup[1], 510 * 5.75) && near(a.DCsup[1], 510 * 5.75), `girder DC 510 kip: M_v 510 × 5.75 = 2932.5, unchanged by e (bearings fixed; #1373 had 510 × 4.9167 = 2507.5) (${b.DCsup[1].toFixed(2)})`);
   // stem base (Strength I governing, per ft): M_ecc = [P_v(x_sc − x_brg) + γ_DC ΣW(x_sc − x̄) + M_ap]/L_ab, x_sc = 6.25
   const meA = (1302 * 0.5 + 0.9 * (-115.5) + (0.9 * (39.6 * 6.25 + 6.6 * 6.25 - 438.625) + 1.5 * (10.56 * 6.25 - 100.32))) / 44;
-  const meB = (1480.5 * (6.25 - (9 - e - 3.25)) + 1.25 * (66 * (6.25 - (9 - e - 1)) + 23.375 * (6.25 - (9 - e / 2))) + (1.25 * (39.6 * 6.25 - 339.9) + 1.5 * (10.56 * 6.25 - 90.64))) / 44;
-  check(near(a.stem.Mecc, meA) && near(b.stem.Mecc, meB), `stem M_ecc = ${a.stem.Mecc.toFixed(4)} (hand ${meA.toFixed(4)}, γ_DC 0.90) → ${b.stem.Mecc.toFixed(4)} (hand ${meB.toFixed(4)}, γ_DC 1.25) kip-ft/ft`);
+  const meB = (1480.5 * (6.25 - 5.75) + 1.25 * (66 * (6.25 - (9 - e - 1)) + 23.375 * (6.25 - (9 - e / 2))) + (1.25 * (39.6 * 6.25 - 339.9) + 1.5 * (10.56 * 6.25 - 90.64))) / 44;
+  check(near(a.stem.Mecc, meA) && near(b.stem.Mecc, meB), `stem M_ecc = ${a.stem.Mecc.toFixed(4)} (hand ${meA.toFixed(4)}, γ_DC 0.90) → ${b.stem.Mecc.toFixed(4)} (hand ${meB.toFixed(4)}, γ_DC 1.25; #1373: 38.1304 with the arm 1.3333) kip-ft/ft`);
   check(near(b.stem.Mu - a.stem.Mu, meB - meA), `stem M_u ${a.stem.Mu.toFixed(3)} → ${b.stem.Mu.toFixed(3)} kip-ft/ft (Δ = ΔM_ecc = ${(meB - meA).toFixed(3)}; EH, LS, BR unchanged)`);
-  // footing: the same Strength I permutation (0.90 DC, 0.65 DW, LL off): ΔV = 0.9(23.375 − 6.6), ΔM_v = 0.9(145.635 − 98.725 − 425) + 0.65(−60 − 9.68)
-  const dV = 0.9 * (23.375 - 6.6), dMv = 0.9 * ((-66 * e + 23.375 * (9 - e / 2)) + (339.9 - 438.625) + (-510 * e)) + 0.65 * (-72 * e + (90.64 - 100.32));
+  // footing: the same Strength I permutation (0.90 DC, 0.65 DW, LL off): ΔV = 0.9(23.375 − 6.6), ΔM_v = 0.9(145.635 − 98.725) + 0.65(−9.68)
+  // (ABBF: the girder DC / DW terms −510e and −72e of #1373 drop out, the bearings no longer move)
+  const dV = 0.9 * (23.375 - 6.6), dMv = 0.9 * ((-66 * e + 23.375 * (9 - e / 2)) + (339.9 - 438.625)) + 0.65 * (90.64 - 100.32);
   check(a.P1 && b.P1 && near(b.P1.V - a.P1.V, dV) && near(b.P1.Mv - a.P1.Mv, dMv) && near(b.P1.Mh, a.P1.Mh), `footing, Strength I (0.90·DC, LL off): ΔV = ${dV.toFixed(4)} kip, ΔM_v = ${dMv.toFixed(3)} kip-ft (tool ${(b.P1.V - a.P1.V).toFixed(4)}, ${(b.P1.Mv - a.P1.Mv).toFixed(3)}); M_h unchanged`);
   check(near(a.P1.e, 7 - (a.P1.Mv - a.P1.Mh) / a.P1.V) && near(b.P1.e, 7 - (b.P1.Mv - b.P1.Mh) / b.P1.V), `e = B/2 − (M_v − M_h)/V: ${a.P1.e.toFixed(4)} → ${b.P1.e.toFixed(4)} ft (e_lim = 14/3 = 4.667)`);
-  check(near(a.ecc, 0.34564, 1e-4) && near(b.ecc, 0.40999, 1e-4) && near(a.sliding, 1.00414, 1e-4) && near(b.sliding, 0.98842, 1e-4) && near(a.bearing, 0.77651, 1e-4) && near(b.bearing, 0.83657, 1e-4),
+  // ABBF: #1373 had eccentricity 0.40999 (LL-on, e = 1.9133 ft), bearing 0.83657; sliding does not depend on M_v (0.98842 both)
+  check(near(a.ecc, 0.34564, 1e-4) && near(b.ecc, 0.35078, 1e-4) && near(a.sliding, 1.00414, 1e-4) && near(b.sliding, 0.98842, 1e-4) && near(a.bearing, 0.77651, 1e-4) && near(b.bearing, 0.79172, 1e-4),
     `dashboard: eccentricity ${a.ecc.toFixed(4)} → ${b.ecc.toFixed(4)}, sliding ${a.sliding.toFixed(4)} → ${b.sliding.toFixed(4)}, bearing ${a.bearing.toFixed(4)} → ${b.bearing.toFixed(4)}`);
-  check(near(b.seat, (5.5 - 2 - e) * 12 - 4) && near(a.seat, 38), `support length N provided = seat × 12 − 4 = 38 → ${b.seat.toFixed(2)} in`);
+  check(near(b.seat, (5.5 - 2 - e) * 12 - 4) && near(a.seat, 38), `support length N provided = 12(t_st − t_bw − e) − g_end (girder end g_end in front of the inset backwall to the seat front edge) = 38 → ${b.seat.toFixed(2)} in (as #1373)`);
+  check(near(b.bs.cFront, 18) && near(b.bs.cBack, 30) && near(b.bs.dc, a.bs.dc), `seat bearing: c_front = (5.5 − 2 − 1.25)(12) − 9 = 18 in, c_back = (1.25 + 2)(12) − 9 = 30 in, D/C ${b.bs.dc.toFixed(4)}: as e = 0 (#1373: 8 / 40 in, 0.1353)`);
   check(near(b.bw.hRet, 0.75) && a.bw.hRet === 5, `backwall retained height above its design section: 5.00 → min(d_sh, 19 − 14 − 4.25) = 0.75 ft`);
   const VuS = 1.25 * 0.9 + 1.5 * 0.24 + 1.75 * 6.354871;   // γ_DC q_DC + γ_DW q_DW + γ_LL q_LL (q of §1.4a: 0.900, 0.240, 6.3549 kip/ft)
   check(b.ss && near(b.ss.qb, b.ss.VuS / 120) && near(b.ss.qR, 0.7 * 0.85 * 4) && !b.shelf && near(VuS, b.ss.VuS), `stem-shelf bearing q_b = V_u,slab/(12e) = ${b.ss.VuS.toFixed(3)}/120 = ${b.ss.qb.toFixed(4)} ksi ≤ 2.38 ksi (D/C ${b.ss.dcB.toFixed(4)}); no bracket checks`);
-  check(!a.err.length && !b.err.length, `no input errors (${[...a.err, ...b.err].join(' | ')})`);
+  check(!a.err.length && b.err.length === 1 && /bearing pad runs into the inset backwall/.test(b.err[0]), `e = 0: no input errors; e = 10 in: only the pad / backwall input error (${b.err.join(' | ').slice(0, 110)})`);
+  check(!v.err.length && near(v.geo.xBrg, 9 - 2 - 1.75) && near(v.geo.off.cBw, 21 - 10 - 9) && near(v.geo.eBrg, 1.0), `setback 1.75 ft: x_brg = 5.25, c_bw = 21 − 10 − 9 = 2.0 in, no input error (${v.err.join(' | ')})`);
   check(!o.errs.length, `console errors: ${o.errs.length}`);
   await o.b.close(); }
 
