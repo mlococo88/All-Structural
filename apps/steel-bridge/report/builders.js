@@ -366,25 +366,27 @@
   /* ---------- 10. framing and cross-frames ---------- */
   function frm(B, X) {
     const { L, R, C, fl, XF, br, line, I } = B.frm, FR = L.FR, subs = [];
+    // SBDIA (2026-11-10): with a diaphragm as the intermediate bracing: "diaphragms" in the titles, only the checks made (CF10, CF11, CFD, CFE), no truss member forces (as the tab)
+    const FUI = window.SBDFramingUI, dOn = !!(FUI && FUI.isDia && FUI.isDia(I.p)), bn = dOn ? 'diaphragms' : 'cross-frames';
     let gov = null; (C || []).forEach(c => c.items.forEach(it => { if (isFinite(it.r) && (it.st === 'pass' || it.st === 'fail') && (!gov || it.r > gov.it.r)) gov = { c, it }; }));
-    const svg = window.SBDFramingUI && window.SBDFramingUI.plan ? window.SBDFramingUI.plan(L) : '';
+    const svg = window.SBDFramingUI && window.SBDFramingUI.plan ? window.SBDFramingUI.plan(L, dOn) : '';
     const work = [...L.steps, ...fl.steps, ...(R.steps || [])], ids = new Set(work.map(t => t.id)), lk = id => (id && ids.has(id) ? id : null);   // an item's step, where the work has it
-    if (gov) X.gov.push({ mod: 'Cross-frames', grp: 'Cross-frames', check: `${gov.c.id} ${tt(gov.c.title)}`, loc: tt(gov.it.loc), r: gov.it.r, key: lk(gov.it.step) });
-    subs.push(sub('pl', 'Framing plan (6.7.4.2.1)', [svg ? { type: 'figure', svg, caption: 'Plan: girders, bearing lines, cross-frames and field splices' } : null,
+    if (gov) X.gov.push({ mod: dOn ? 'Diaphragms' : 'Cross-frames', grp: 'Cross-frames', check: `${gov.c.id} ${tt(gov.c.title)}`, loc: tt(gov.it.loc), r: gov.it.r, key: lk(gov.it.step) });
+    subs.push(sub('pl', 'Framing plan (6.7.4.2.1)', [svg ? { type: 'figure', svg, caption: `Plan: girders, bearing lines, ${bn} and field splices` } : null,
       tbl(['Span', 'Skew θ (°)', 'Orientation', 'Frames', 'Spacing (ft)'], FR.orient.map(o => [String(o.k + 1), N(o.th, 2), o.o === 'normal' ? `normal, ${o.flat ? 'contiguous' : o.arr}` : 'parallel to the skew', String(o.n), { ...N(o.s, 3), key: `fr.k${o.k}.s` }])),
       tbl(['Girder', 'Intermediate frames', 'Largest $L_{b}$ (ft)', 'Brace points (ft)'], L.girders.map(g => ({ cells: [`G${g.i + 1}`, String(g.nInt), { ...N(g.lb, 2), key: `fr.g${g.i}.lb` }, g.braces.map(v => f(v, 2)).join(', ')], cls: g.i === line ? 'gov' : '' }))),
-      note(`The reported girder takes cross-section girder G${line + 1}: its brace points are the $L_{b}$ points of the flexure and the cross-frame bays of the stiffener panels (${br ? br.ints.length : 0} intermediate frames). As on the [[tab:cf|Cross-frames tab]].`),
+      note(`The reported girder takes cross-section girder G${line + 1}: its brace points are the $L_{b}$ points of the flexure and the ${dOn ? 'diaphragm' : 'cross-frame'} bays of the stiffener panels (${br ? br.ints.length : 0} intermediate ${dOn ? 'diaphragms' : 'frames'}). As on the [[tab:cf|${dOn ? 'Diaphragms' : 'Cross-frames'} tab]].`),
       note(`Orientation: ${(B.P.framing || {}).orient === 'parallel' ? 'parallel to the skew' : (B.P.framing || {}).orient === 'normal' ? 'normal to the girders' : 'automatic, parallel to the skew in a span whose supports are both skewed 20° or less, else normal to the girders (6.7.4.2.1); an owner rule xf.orient, where the owner has one, decides for the whole bridge'} (Framing & bracing tab). At a support skewed more than 20° the first normal frame is at least max(clear distance, $4b_{f}$, 0.4s) from the bearing (C6.7.4.2.1). Each frame puts half its weight on each girder it connects, at that girder's station, on the steel section (DC1).`)]));
-    subs.push(sub('fl', 'Flange lateral bending from skew and cross-frame loads', [kv([[`$f_{\\ell}$ from skew, G${line + 1} (C6.10.1)`, `${f(fl.fl, 2)} ksi`, 'flsk.fl'], [`Cross-frame point loads on G${line + 1}`, XF ? `${XF.pts.length}, ${f(XF.tot, 2)} kip` : 'not included']])]));
-    if (C) subs.push(sub('ck', `Checks (CF1 to CF11${C.some(c => c.id === 'CFD') ? ', CFD, CFE' : ''})`, [kv([['S (largest spacing)', `${f(I.p.S, 2)} in`], ['h / d', `${f(I.p.h, 2)} / ${f(I.p.dg, 2)} in`, 'cf.dg'], ['$L_{b}$ (largest)', `${f(I.p.Lb, 2)} ft`, 'cf.Lb']]),
+    subs.push(sub('fl', `Flange lateral bending from skew and ${dOn ? 'diaphragm' : 'cross-frame'} loads`, [kv([[`$f_{\\ell}$ from skew, G${line + 1} (C6.10.1)`, `${f(fl.fl, 2)} ksi`, 'flsk.fl'], [`${dOn ? 'Diaphragm' : 'Cross-frame'} point loads on G${line + 1}`, XF ? `${XF.pts.length}, ${f(XF.tot, 2)} kip` : 'not included']])]));
+    if (C) subs.push(sub('ck', FUI && FUI.ckHead ? FUI.ckHead(C, dOn) : `Checks (CF1 to CF11${C.some(c => c.id === 'CFD') ? ', CFD, CFE' : ''})`, [kv([['S (largest spacing)', `${f(I.p.S, 2)} in`], ['h / d', `${f(I.p.h, 2)} / ${f(I.p.dg, 2)} in`, 'cf.dg'], ['$L_{b}$ (largest)', `${f(I.p.Lb, 2)} ft`, 'cf.Lb']]),
       R.errors && R.errors.length ? note(R.errors.join(' '), true) : null,
       tbl(['Check', 'Item', 'Demand', 'Resistance / limit', 'Ratio', 'Status'], C.flatMap(c => c.items.length ? c.items.map(it => [`${c.id} ${c.title}`, it.loc, isFinite(it.demand) ? N(it.demand, 2) : (it.cells || [])[0] || '', isFinite(it.capacity) ? N(it.capacity, 2) : (it.cells || [])[1] || '',
         isFinite(it.r) ? R3(it.r, lk(it.step)) : { t: '—', key: lk(it.step) }, { pass: 'OK', fail: 'Fail', warn: 'Warning', adv: 'Advisory', na: 'n/a' }[it.st] || it.st]) : [[`${c.id} ${c.title}`, { t: c.naWhy || 'n/a', cls: 'na' }, '', '', '', 'n/a']])),
       C.some(c => c.id === 'CFD') ? note('Diaphragm bracing (Framing & bracing tab): checks CFD (intermediate) and CFE (end diaphragms at the bearing lines); the angle checks CF1 to CF9 and member forces entered from a refined analysis do not apply.') : null,
       note(`References: ${C.map(c => `${c.id} ${c.ref}`).join('; ')}.`)]));
-    if (R.frames) subs.push(sub('mf', 'Member forces (truss model)', [tbl(['Member', 'Length (in)', 'per kip of $F_{w}$', ...R.combos.map(c => `${c.id} T / C (kip)`)], R.frames.map((e, i) => [e.lbl, N(e.L, 2), { ...N(e.unit, 3), key: `cf.tr${i}` }, ...R.combos.map(c => c.off ? 'not used' : `${f(c.f[i].T, 2)} / ${f(c.f[i].Cc, 2)}`)]))]));
+    if (R.frames && !dOn) subs.push(sub('mf', 'Member forces (truss model)', [tbl(['Member', 'Length (in)', 'per kip of $F_{w}$', ...R.combos.map(c => `${c.id} T / C (kip)`)], R.frames.map((e, i) => [e.lbl, N(e.L, 2), { ...N(e.unit, 3), key: `cf.tr${i}` }, ...R.combos.map(c => c.off ? 'not used' : `${f(c.f[i].T, 2)} / ${f(c.f[i].Cc, 2)}`)]))]));
     subs.push(sub('w', 'Worked steps', [gsteps('SBDFramingUI:x', '', work)]));
-    return { title: 'Framing and cross-frames', subs };
+    return { title: dOn ? 'Framing and diaphragms' : 'Framing and cross-frames', subs };
   }
 
   /* ---------- 11. field splices ---------- */
@@ -498,6 +500,9 @@
      Drawings-tab format, as a static SVG figure (display only: the rows of the table below); none when the graphics modules are not loaded */
   function summaryFig(B, X) {
     const G = window.SBDTabGfxB, D = window.SharedDxf; if (!G || !D || !window.SBDGraphics) return null;
+    // SBVZB (2026-11-10): the figure in the data-viz style (ui/alonggfx.js summarySvg: static SVG with its style inside, prints grey / hatched); the old drawing without it
+    const AG = window.SBDAlongGfx, sv = AG && window.SBDVizAlong ? AG.summarySvg({ gov: X.gov }, B.P, B.g) : '';
+    if (sv) return { type: 'figure', svg: sv, caption: `Governing check of each group along girder ${gName(B.girder)} (the rows of the table below; ratio, or rating factor RF). Green below 0.90, amber 0.90 to 1.00, red above 1.00 or NG (RF below 1.0); not to scale vertically.` };
     try { const g = G.summary({ gov: X.gov }, B.P, { gi: B.g }); return { type: 'figure', svg: (window.SBDGraphics && window.SBDGraphics.tightSvg ? window.SBDGraphics.tightSvg : (DD, o) => D.toSVG(DD, o))(g.D, { i0: g.i0, i1: g.i1, bg: '#fff', title: g.title, width: '100%' }), caption: `Governing check of each group along girder ${gName(B.girder)} (the rows of the table below; ratio, or rating factor RF).` }; }
     catch (e) { return null; }
   }
