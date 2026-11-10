@@ -5789,7 +5789,7 @@ index 10a32fd..16f867d 100644
 - **Open items:** Decision (pending engineer review): the Service II f_ℓ/2 term is kept (6A.6.4.2.2 makes it optional for straight girders at the Owner's discretion). The Flexure tab's design check GS12 keeps LRFD 0.95R_hF_yf (design, not rating).
 - **Other copies:** ST-Girder in `Steel Bridge Design.html` (superseded; not changed by instruction).
 
-## 2026-11-10 — PR: claude/sb-mbe4-fatlife (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Remaining fatigue life by the MBE 4th Ed. Section 7, and its inputs on the Fatigue & studs tab   [calculation change, approved: engineer standing rule 2026-11-10]
+## 2026-11-10 — PR: claude/sb-mbe4-fatlife (PR #1362: https://github.com/mlococo88/All-Structural/pull/1362) — Remaining fatigue life by the MBE 4th Ed. Section 7, and its inputs on the Fatigue & studs tab   [calculation change, approved: engineer standing rule 2026-11-10]
 - **Engineer (2026-11-10):** load rating and evaluation follow the AASHTO MBE 4th Edition (2026); item 3 of the open items of PR #1349 (above).
 - **Where (to re-apply by hand):**
   - `engine/fatigue.js`: new `EV_DEF`, `RR_TAB` (Table 7.2.5.1-1), `RpEq` (Eq. 7.2.2.1-1), `N1of` (Eq. 7.2.5.1-3), `yRem` (Eqs. 7.2.5.1-4 to -8), `evalRow(r, ev, o)`, `EV_BASIS`; `compute()`: `const ev = p.ev || DEFAULT.ev` → `const ev = evIn(p.ev || DEFAULT.ev)` with the optional inputs validated; per row, before:
