@@ -2872,7 +2872,7 @@ function listTables() {
   - Passing: `check-syntax`, `phone-layout --tool bsl`, `project-library --tool bsl`, `bsl-barge-collision`, `bsl-layout`, `geometry-handoff`, `abutment-rx-table`, `engine/run.mjs handoffs`.
 - **Other copies:** none.
 
-## 2026-11-10 — PR: fix/bsl-open-none-foundation (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — opening a project with fewer supports (OPN); abutment with Foundation "None" (ABNF)   [no change for any project without a no-footing abutment; §4 change for abutments with Foundation "None"]
+## 2026-11-10 — PR: fix/bsl-open-none-foundation (PR #1400: https://github.com/mlococo88/All-Structural/pull/1400) — opening a project with fewer supports (OPN); abutment with Foundation "None" (ABNF)   [no change for any project without a no-footing abutment; §4 change for abutments with Foundation "None"]
 - **OPN, the problem.** `openProject` drew the open tab (`showTab(P.ui.tab)`) before `recompute()`, so the tab was drawn from the old `MODEL` (old supports) with the new `P`. With fewer supports and the Summary tab showing, `summaryHtml` read `P.units[k].name` for a support that no longer exists and threw. Import JSON caught every error as "… is not a readable JSON file". Undo / Redo (`SharedProjects.history` `set`) and New project had the same order. The Saved projects dialog and the Cloud sync load (`shared/projects-ui.js` `loadIt`: `ctx.open(u.name)`) both call the `open` callback, which is `openProject`.
 - **OPN, where / before / after:**
   - `openProject`, anchor `syncSupports(); V3.homed = false; buildTabs(); buildSide();`
@@ -2898,6 +2898,7 @@ function listTables() {
   - The footing-level items (10 of them) are no longer listed; no combination used them.
 - **How verified:** main-vs-branch probe (the 5 projects of `bsl-inputcheck.mjs` plus "abutment with footing, water table 4 ft, ES" and "both abutments None"): `combine`, `comboComps`, the abutment payload, `MODEL.C`, every output tab of every unit, the strip and the Report text: 6 projects identical (359 items); only the "None" project differs (combine/comps of the two abutments, their Earth loads / Combinations tabs, Summary, the abutment payload). Console errors on that project: main 160, branch 0.
 - **Tests:** new `tests/smoke/bsl-open-nofooting.mjs` (both regressions, the hand check, 0 console errors; 11 failures against main). `tests/smoke/bsl-inputcheck.mjs`: the probe no longer requires the Report to gain the §1.4 lines (the reference has them since #1399). `tests/smoke/list-input.mjs` `bsl` re-baselined to 5d8eeba (`base` field; `tests/README.md`).
+- **Not touched:** `list-input.mjs --part smd` (Shear and Moment Diagrams) fails on main against `BASE` 6c3b1bc (2 failures: result fields such as `tabR[1].V` 0.511 → 2.071, `tabR[1].t` "User" → "Tenth"); unrelated to SubLoads, left for that tool.
 - **Saved data (§5):** none changed.
 - **Decisions (pending engineer review):**
   1. Foundation "None" on an abutment is a valid computed state (the input offers it; `unitGeo` and the unit model already handle it: results stop at the top of footing). Not an input error.
