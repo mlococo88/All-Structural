@@ -9,7 +9,9 @@
 //   4. A skewed three-span project with two plate girders: two rows; the G2 link selects G2 (ui.g).
 //   5. An old saved ui.otab ('flex') still opens its tab; the Report's summary links to the Summary tab.
 //   6. At 390 px: no page-level horizontal scroll (the table scrolls inside its card).
-//   7. The cross-section and framing plan graphics (GFXS): side by side at 1440 px, stacked within 390 px, their links, printed.
+//   7. The cross-section and framing plan graphics (GFXS; SBSF 2026-11-10: stacked at every width, each the card's width, the cross-section's
+//      height capped with its aspect kept): at 1200 / 1440 / 1920 px, the left column open and collapsed, the splitter dragged wide and narrow
+//      (resized on 'sbd2:panelresize'), within 390 px, their links, printed at full page width.
 //   0 console errors.
 //   node tests/smoke/steel-bridge-summary.mjs [--shots <dir>]
 import path from 'path';
@@ -121,15 +123,36 @@ async function cellsMatch(p) {
   } finally { await b.close(); }
 }
 
-{ // 7 (GFXS): the cross-section and framing plan graphics: the app's own drawings, side by side from 1200 px, stacked and fitting at 390 px,
-  //   links to the input tabs where they are edited and the tabs where they are drawn, printed
+{ // 7 (GFXS; SBSF): the cross-section and framing plan graphics: the app's own drawings, stacked at every width, each as wide as the card
+  //   (the cross-section narrower and centred only where its height would pass the cap, its aspect kept), resized with the window, the left
+  //   column and the splitter; stacked and fitting at 390 px; links to the input tabs where they are edited and the tabs where they are drawn; printed full width
   const { b, p, errs } = await openPage(FILE, { vw: 1440, vh: 1000, ls: { 'sbd2.ui': JSON.stringify({ otab: 'sum' }) } });
+  const lay = () => p.evaluate(() => { const r = e => e.getBoundingClientRect(), a = r(document.getElementById('sum-xs')), c = r(document.getElementById('sum-plan')), bx = [...document.querySelectorAll('#sum-gfx .sum-gbox')].map(r), sv = [...document.querySelectorAll('#sum-gfx .sum-gbox > svg')].map(e => { const q = r(e), vb = e.getAttribute('viewBox').split(/[\s,]+/).map(Number); return { w: q.width, h: q.height, l: q.left, ar: vb[2] / vb[3] }; });
+    const cap = Math.max(360, Math.min(760, 0.8 * innerHeight));
+    return { stacked: c.top >= a.bottom - 1, full: Math.abs(a.width - c.width) < 1 && Math.abs(a.width - r(document.querySelector('#sum-gfx .secBody')).width) < 30,
+      plan: Math.abs(sv[1].w - (bx[1].width - 10)) < 3, xs: sv[0].h <= cap + 1 && (Math.abs(sv[0].w - (bx[0].width - 10)) < 3 || sv[0].h > cap - 2) && Math.abs(sv[0].w / sv[0].h - sv[0].ar) < 0.02 * sv[0].ar,
+      centred: Math.abs((sv[0].l + sv[0].w / 2) - (bx[0].left + bx[0].width / 2)) < 2, sw: document.documentElement.scrollWidth, w: innerWidth, cw: a.width, xw: sv[0].w, xh: sv[0].h }; });
+  const ok = (g, m) => assert.ok(g.stacked && g.full && g.plan && g.xs && g.centred && g.sw <= g.w, m + ' ' + JSON.stringify(g));
   try {
     await p.waitForSelector('#sum-xs svg'); await p.waitForSelector('#sum-plan svg');
-    const g = await p.evaluate(() => { const a = document.getElementById('sum-xs').getBoundingClientRect(), c = document.getElementById('sum-plan').getBoundingClientRect(), v = document.getElementById('sum-verdict').getBoundingClientRect(), o = document.getElementById('sum-project').getBoundingClientRect();
-      return { side: Math.abs(a.top - c.top) < 2 && c.left > a.right - 1, nearTop: a.top > v.top && a.top < o.top, txt: document.getElementById('sum-xs').textContent };});
-    assert.ok(g.side, 'side by side at 1440 px'); assert.ok(g.nearTop, 'after the verdict, before the overview'); assert.match(g.txt, /TYPICAL CROSS-SECTION/);
-    await p.evaluate(() => document.getElementById('sum-gfx').scrollIntoView()); await shot(p, 'gfx-1440');
+    const g = await p.evaluate(() => { const a = document.getElementById('sum-xs').getBoundingClientRect(), v = document.getElementById('sum-verdict').getBoundingClientRect(), o = document.getElementById('sum-project').getBoundingClientRect();
+      return { nearTop: a.top > v.top && a.top < o.top, txt: document.getElementById('sum-xs').textContent };});
+    assert.ok(g.nearTop, 'after the verdict, before the overview'); assert.match(g.txt, /TYPICAL CROSS-SECTION/);
+    const seen = [];
+    for (const [vw, vh] of [[1200, 900], [1440, 1000], [1920, 1080]]) {
+      await p.setViewportSize({ width: vw, height: vh }); await p.waitForTimeout(250); let L = await lay(); ok(L, `${vw} px`); seen.push(`${vw}: ${Math.round(L.cw)}`);
+      if (vw === 1440) { await p.evaluate(() => document.getElementById('sum-gfx').scrollIntoView()); await shot(p, 'gfx-1440'); }
+      if (await p.evaluate(() => getComputedStyle(document.getElementById('sbDashCol')).display !== 'none')) {
+        const w0 = L.cw; await p.click('#sbDashTgl'); await p.waitForTimeout(250); L = await lay(); ok(L, `${vw} px, left column collapsed`); assert.ok(L.cw > w0 + 100, 'wider with the column collapsed');
+        await p.click('#sbDashTgl'); await p.waitForTimeout(250); ok(await lay(), `${vw} px, left column open again`);
+      }
+      for (const k of ['End', 'Home']) {   // the splitter at its limits (keyboard; the app fires 'sbd2:panelresize')
+        const w0 = (await lay()).cw; await p.focus('#sbSplit'); await p.keyboard.press(k); await p.waitForTimeout(250); L = await lay(); ok(L, `${vw} px, splitter ${k}`); assert.notEqual(Math.round(L.cw), Math.round(w0), 'resized with the splitter');
+      }
+      await p.focus('#sbSplit'); await p.keyboard.press('Enter'); await p.waitForTimeout(250);
+    }
+    await p.evaluate(() => localStorage.removeItem('sbd2.dashCollapsed_v1'));
+    await p.setViewportSize({ width: 1440, height: 1000 }); await p.waitForTimeout(250);
     await p.click('#sum-xs [data-sumin="xsec"]'); assert.equal(await p.evaluate(() => document.querySelector('#inTabs [aria-selected="true"]').dataset.itab), 'xsec');
     await p.click('#sum-plan [data-sumin="framing"]'); assert.equal(await p.evaluate(() => document.querySelector('#inTabs [aria-selected="true"]').dataset.itab), 'framing');
     await p.click('#sum-xs [data-sumtab="dwg"]'); await p.waitForFunction(() => document.querySelector('#tabBar [aria-selected="true"]').dataset.otab === 'dwg');
@@ -139,10 +162,13 @@ async function cellsMatch(p) {
       return { stacked: c.top >= a.bottom - 1, sw: document.documentElement.scrollWidth, w: innerWidth, over: [...document.querySelectorAll('#sum-gfx svg')].some(s => s.getBoundingClientRect().right > innerWidth) }; });
     assert.ok(ph.stacked && ph.sw <= ph.w && !ph.over, JSON.stringify(ph));
     await p.evaluate(() => document.getElementById('sum-gfx').scrollIntoView()); await shot(p, 'gfx-390');
-    await p.emulateMedia({ media: 'print' });
-    assert.ok(await p.evaluate(() => getComputedStyle(document.getElementById('sum-gfx')).display !== 'none' && document.querySelectorAll('#sum-gfx svg').length === 2));
+    await p.setViewportSize({ width: 1920, height: 1080 }); await p.waitForTimeout(250);   // the cross-section narrowed by its cap on screen; full width in print
+    await p.emulateMedia({ media: 'print' }); await p.waitForTimeout(100);
+    const pr = await p.evaluate(() => { const g = document.getElementById('sum-gfx'), bx = [...g.querySelectorAll('.sum-gbox')].map(e => e.getBoundingClientRect()), sv = [...g.querySelectorAll('.sum-gbox > svg')].map(e => e.getBoundingClientRect());
+      return { shown: getComputedStyle(g).display !== 'none', n: sv.length, stacked: bx[1].top >= bx[0].bottom - 1, full: sv.every((s, i) => Math.abs(s.width - (bx[i].width - 10)) < 3) }; });
+    assert.ok(pr.shown && pr.n === 2 && pr.stacked && pr.full, 'print: ' + JSON.stringify(pr));
     await p.emulateMedia({ media: 'screen' });
-    console.log('  ok   cross-section and framing plan: side by side at 1440 px, stacked within 390 px, links to Cross-section / Framing & bracing / Drawings, printed');
+    console.log(`  ok   cross-section and framing plan: stacked, full card width (${seen.join(', ')} px card), left column open / collapsed, splitter wide / narrow, within 390 px, links, printed full width`);
     allErrs.push(...errs);
   } finally { await b.close(); }
 }

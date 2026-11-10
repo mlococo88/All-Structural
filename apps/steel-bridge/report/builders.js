@@ -502,6 +502,9 @@
      Drawings-tab format, as a static SVG figure (display only: the rows of the table below); none when the graphics modules are not loaded */
   function summaryFig(B, X) {
     const G = window.SBDTabGfxB, D = window.SharedDxf; if (!G || !D || !window.SBDGraphics) return null;
+    // SBVZB (2026-11-10): the figure in the data-viz style (ui/alonggfx.js summarySvg: static SVG with its style inside, prints grey / hatched); the old drawing without it
+    const AG = window.SBDAlongGfx, sv = AG && window.SBDVizAlong ? AG.summarySvg({ gov: X.gov }, B.P, B.g) : '';
+    if (sv) return { type: 'figure', svg: sv, caption: `Governing check of each group along girder ${gName(B.girder)} (the rows of the table below; ratio, or rating factor RF). Green below 0.90, amber 0.90 to 1.00, red above 1.00 or NG (RF below 1.0); not to scale vertically.` };
     try { const g = G.summary({ gov: X.gov }, B.P, { gi: B.g }); return { type: 'figure', svg: (window.SBDGraphics && window.SBDGraphics.tightSvg ? window.SBDGraphics.tightSvg : (DD, o) => D.toSVG(DD, o))(g.D, { i0: g.i0, i1: g.i1, bg: '#fff', title: g.title, width: '100%' }), caption: `Governing check of each group along girder ${gName(B.girder)} (the rows of the table below; ratio, or rating factor RF).` }; }
     catch (e) { return null; }
   }

@@ -53,10 +53,10 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
 .sum-flash{animation:sumflash 2.2s ease-out 1} @keyframes sumflash{0%,35%{box-shadow:0 0 0 3px #F59E0B;background-color:#FFF7D6}100%{box-shadow:0 0 0 0 rgba(245,158,11,0)}}
 @media (prefers-reduced-motion:reduce){.sum-flash{animation:none;outline:3px solid #F59E0B}}
 @media screen and (max-width:600px){table.sum-ov th{white-space:normal;width:auto;min-width:90px}}
-.sum-gfx{display:grid;grid-template-columns:minmax(0,1fr);gap:12px} @media screen and (min-width:1200px){.sum-gfx{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.sum-gfx{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
 .sum-g1{margin:0;min-width:0} .sum-g1 figcaption{font-family:var(--font-ui);font-size:8.5pt;color:#475569;margin:0 0 4px} .sum-g1 .note{font-size:8.5pt}
-.sum-gbox{background:#fff;color:#0F172A;border:1px solid #e4e7eb;border-radius:4px;padding:4px;color-scheme:light;overflow:hidden} .sum-gbox svg{display:block;max-width:100%;height:auto}
-@media print{.sum-gfx{grid-template-columns:repeat(2,minmax(0,1fr))} .sum-g1{break-inside:avoid} .sum-gbox{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+.sum-gbox{background:#fff;color:#0F172A;border:1px solid #e4e7eb;border-radius:4px;padding:4px;color-scheme:light;overflow:hidden} .sum-gbox svg{display:block;width:100%;max-width:100%;height:auto;margin:0 auto}
+@media print{.sum-gfx{grid-template-columns:minmax(0,1fr)} .sum-g1{break-inside:avoid} .sum-gbox{-webkit-print-color-adjust:exact;print-color-adjust:exact} .sum-gbox svg{width:100%!important}}
 @media print{.sum-run button{display:none}}`;
     document.head.appendChild(st);
   }
@@ -179,6 +179,8 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
   }
   function figure(P, Gs) {
     const GB = window.SBDTabGfxB, GR = window.SBDGraphics, D = window.SharedDxf; if (!GB || !GR || !D || !Gs || !Gs.gov) return '';
+    // SBVZB (2026-11-10): the figure in the data-viz style (ui/alonggfx.js summarySvg: static SVG, prints grey / hatched); the old drawing when that file is not loaded
+    if (window.SBDAlongGfx && window.SBDVizAlong) { const sv = window.SBDAlongGfx.summarySvg({ gov: Gs.gov }, P, Gs.gi); if (sv) return sv; }
     try { const g = GB.summary({ gov: Gs.gov }, P, { gi: Gs.gi }); return GR.tightSvg ? GR.tightSvg(g.D, { i0: g.i0, i1: g.i1, bg: '#fff', title: g.title, width: '100%' }) : D.toSVG(g.D, { bg: '#fff', width: '100%' }); } catch (e) { return ''; }
   }
   /* GFXS (2026-11-09, engineer: "the Summary output tab must also show the cross-section graphic and the framing plan graphic"): the app's own
@@ -200,6 +202,26 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
       <figure class="sum-g1" id="sum-xs"><figcaption><b>Typical cross-section</b> — edit on the <a href="#" data-sumin="xsec">Cross-section</a> input tab; drawn on the <a href="#" data-sumtab="dwg">Drawings</a> tab (its own sheet), as there.</figcaption><div class="sum-gbox">${xs}</div></figure>
       <figure class="sum-g1" id="sum-plan"><figcaption><b>Framing plan</b> — edit on the <a href="#" data-sumin="framing">Framing &amp; bracing</a> input tab; drawn on the <a href="#" data-sumin="layout">Bridge layout</a> input tab and the <a href="#" data-sumtab="cf">${window.SBDFramingUI && window.SBDFramingUI.isDia(P) ? 'Diaphragms' : 'Cross-frames'}</a> tab, as there.</figcaption><div class="sum-gbox">${pl}</div></figure>
     </div></div></section>`;
+  }
+  /* SBSF (2026-11-10, engineer: "show the cross section and framing plan in full width, not side by side"): the two figures stacked at every
+     width, each as wide as the card; a figure whose height at that width would pass the cap (the cross-section: about square) is drawn
+     narrower, centred, its aspect kept (cap: 80 % of the window height, 360 to 760 px). Run after each paint and again on a width change
+     (window resize, the splitter's 'sbd2:panelresize', and a ResizeObserver on the card for the left column's collapse; rAF-throttled). Print: full page width (CSS). Display only. */
+  const GFX_CAP = () => Math.max(360, Math.min(760, 0.8 * (window.innerHeight || 900)));
+  function sizeGfx(el) {
+    el.querySelectorAll('.sum-gbox > svg').forEach(s => { const vb = (s.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number), bx = s.parentNode.clientWidth - 8;
+      if (!(vb[2] > 0 && vb[3] > 0) || !(bx > 0)) { s.style.width = ''; return; }
+      const w = Math.min(bx, GFX_CAP() * vb[2] / vb[3]); s.style.width = w < bx - 1 ? Math.floor(w) + 'px' : ''; });
+  }
+  let gfxBound = false, gfxRaf = 0, gfxRO = null, gfxW = -1;
+  function fitGfx(host) {
+    const el = host.querySelector('#sum-gfx'); if (el) sizeGfx(el); gfxW = el ? el.clientWidth : -1;
+    const run = () => { gfxRaf = 0; const e = S.host && S.host.isConnected && S.host.querySelector('#sum-gfx'); if (e) { gfxW = e.clientWidth; sizeGfx(e); } };
+    const later = () => { if (!gfxRaf) gfxRaf = requestAnimationFrame(run); };
+    // also a width change with no window event (the left check summary column collapsed or opened): ResizeObserver on the card
+    if (typeof ResizeObserver === 'function') { if (!gfxRO) gfxRO = new ResizeObserver(en => { if (en.some(x => x.target.isConnected && x.target.clientWidth !== gfxW)) later(); }); gfxRO.disconnect(); if (el) gfxRO.observe(el); }
+    if (gfxBound) return; gfxBound = true;
+    window.addEventListener('resize', later); window.addEventListener('sbd2:panelresize', later);
   }
   function paint(host, ctx) {
     const P = ctx.P, COLS = SM().COLS.map(c => SM().label(c, P)), LB = c => SM().label(c, P), list = P.girders.map((g, gi) => S.list[gi] || { gi, label: g.label || g.id || `G${gi + 1}`, cells: {}, warn: [], err: {} });
@@ -255,7 +277,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
       <p><b>Warnings</b>${warns.length ? '' : ': none.'}</p>${warns.length ? `<ul class="sum-list">${warns.map(w => `<li>${w}</li>`).join('')}</ul>` : ''}
       <p><b>Owner rules</b>${on.length ? '' : ': AASHTO, no owner modifier.'}</p>${on.length ? `<ul class="sum-list">${on.map(w => `<li>${w} <a href="#" data-sumtab="loads">Loads &amp; LLDF tab</a></li>`).join('')}</ul>` : ''}
     </div></section>`;
-    host.innerHTML = h;
+    host.innerHTML = h; fitGfx(host);   // SBSF
   }
 
   function render(host, ctx) {
