@@ -51,7 +51,9 @@
      -- added 2026-10-29 (fatigue and studs PR), optional: a version 1 project without them reads as defaultFatigue() / defaultStuds() --
      fatigue:   { limit: 'auto' | 'I' | 'II', ADTT (one direction, trucks/day), p (lane fraction), life (years), gam: { fI, fII },
                   catT, catB (detail category of the top / bottom flange for GS17: 'A' … "E'"), negSec: 'cracked' | 'uncracked',
-                  dist: { cp: 'yes' | 'no' | 'na', lat: 'yes' | 'no', latLoc: 'flange' | 'web', latStiff: 'yes' | 'no', latDist (in), latBf (in), skew: 'yes' | 'no' } },
+                  dist: { cp: 'yes' | 'no' | 'na', lat: 'yes' | 'no', latLoc: 'flange' | 'web', latStiff: 'yes' | 'no', latDist (in), latBf (in), skew: 'yes' | 'no' },
+                  ev (added 2026-11-10, optional; absent = no evaluation, as before): { on, yearOpen, yearEval, ADTT (present ADTT_SL), ADTT0, g (%), ADTTall,
+                      nL, Rp, wim, Rs, ADTTlim, target, level, rrE1, rrE2, rrMean } — the MBE 4th Ed. remaining fatigue life (engine/fatigue.js EV_DEF) },
      studs:     { d (in: 0.75, 0.875, 1), h (in), st (transverse spacing, in), Fu (ksi), Qn10 (kip; 0 = Eq. 6.10.10.4.3-1), gamFat (γ Fatigue I; not used since 2026-11-01, SCGAM: the studs take fatigue.gam.fI; kept),
                   skew: 'auto' | 'yes' | 'no' (F_fat = F_rc/w on skewed > 20° or curved bridges; auto: from the support skews), Frc (kip), wv (in),
                   splX ('82, 145': field splice stations, ft), splL (top splice plate length, ft), splC (clearance at each plate end, in),
@@ -325,7 +327,14 @@
       if (!['auto', 'I', 'II'].includes(F.limit)) E('fatigue.limit', 'Fatigue limit state: choose by ADTT, Fatigue I or Fatigue II.');
       pos(F.ADTT, 'fatigue.ADTT', 'ADTT'); if (!(isNum(F.p) && F.p > 0 && F.p <= 1)) E('fatigue.p', 'Lane fraction p must be more than 0 and at most 1.0.');
       pos(F.life, 'fatigue.life', 'Design life'); pos((F.gam || {}).fI, 'fatigue.gam.fI', 'γ Fatigue I'); pos((F.gam || {}).fII, 'fatigue.gam.fII', 'γ Fatigue II');
-      ['catT', 'catB'].forEach(k => { if (!CATS.includes(F[k])) E(`fatigue.${k}`, 'Choose a detail category.'); }); }
+      ['catT', 'catB'].forEach(k => { if (!CATS.includes(F[k])) E(`fatigue.${k}`, 'Choose a detail category.'); });
+      // added 2026-11-10 (MBE 4th Ed. remaining fatigue life), optional: checked only when the evaluation is on (engine/fatigue.js EV_DEF)
+      const V = F.ev; if (V && V.on === 'yes') { const opt = (k, t) => { const v = V[k]; if (!(v == null || String(v).trim() === '' || (Number(v) > 0 && isFinite(Number(v))))) E(`fatigue.ev.${k}`, `${t} must be a positive number, or blank for the default.`); };
+        pos(V.yearOpen, 'fatigue.ev.yearOpen', 'Year opened'); pos(V.yearEval, 'fatigue.ev.yearEval', 'Year of evaluation'); if (isNum(V.yearOpen) && isNum(V.yearEval) && !(V.yearEval > V.yearOpen)) E('fatigue.ev.yearEval', 'Year of evaluation must be after the year opened.');
+        pos(V.ADTT, 'fatigue.ev.ADTT', 'Present ADTT_SL'); nn(V.g, 'fatigue.ev.g', 'Growth rate g'); pos(V.Rs, 'fatigue.ev.Rs', 'R_s'); nn(V.target, 'fatigue.ev.target', 'Required remaining life');
+        if (!(isNum(V.nL) && V.nL >= 1)) E('fatigue.ev.nL', 'Striped lanes n_L must be at least 1.');
+        [['ADTT0', 'First-year ADTT_SL'], ['ADTTall', 'Present ADTT, all lanes'], ['Rp', 'R_p'], ['ADTTlim', 'ADTT_SL limit']].forEach(([k, t]) => opt(k, t));
+        ['rrE1', 'rrE2', 'rrMean'].forEach(k => { const t = String(V[k] || '').trim(); if (t) { const v = t.split(/[,\s]+/).map(Number); if (!(v.length === 8 && v.every(x => x > 0))) E(`fatigue.ev.${k}`, 'Enter eight positive values (A, B, B′, C, C′, D, E, E′), or leave blank for Table 7.2.5.1-1.'); } }); } }
     if (p.studs != null) { const Q = p.studs || {};
       if (![0.75, 0.875, 1].includes(+Q.d)) E('studs.d', 'Stud diameter: 3/4, 7/8 or 1 in.');
       pos(Q.h, 'studs.h', 'Stud height'); pos(Q.st, 'studs.st', 'Transverse spacing'); pos(Q.Fu, 'studs.Fu', 'Stud F_u'); nn(Q.Qn10, 'studs.Qn10', 'Q_n entered');

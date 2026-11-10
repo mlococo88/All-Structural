@@ -63,6 +63,10 @@ body{font-family:var(--font-doc);font-size:10pt;color:var(--ink);background:#efe
 #prjPane .prjGrp{margin:2px 0 10px}
 #sbSaveCard .spCard,#hdrActs button[data-sp]{font-family:var(--font-ui)}#sbSaveCard .spCard{font-size:9pt}   /* STDS: the Save and open card and the header chip in the UI font */
 #prjPane .prjGrp>b{display:block;font-family:var(--font-ui);font-size:9pt}
+#projShare .prjGrp{border-top:1px solid #D6DEE8;padding-top:5px}
+#projShare .prjGrp>b{display:inline}
+#projShare .hoFrom{font-family:var(--font-ui);font-size:8pt;color:#555}
+#projShare .hoGrp{margin:8px 0 3px;font-family:var(--font-ui);font-size:7.5pt;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#555}
 #projShare button{font-family:var(--font-ui);font-size:9pt;padding:3px 9px;border:1px solid var(--accent);border-radius:4px;background:#fff;color:var(--accent);cursor:pointer}
 #projShare button:hover{background:#EFF4FA}
 #inputPanel #projGrid{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:0}
@@ -276,17 +280,24 @@ textarea{min-height:64px;resize:vertical;font-family:var(--font-doc);font-size:1
         <div id="projGrid"></div>
         <div class="hint">Printed on the Report and the Excel calculation sheet.</div>
       </div></div>
-      <div class="sec"><div class="secHead"><span class="secTitle">Shared project info and hand-offs</span></div><div class="secBody" id="projShare">
-        <div class="prjGrp"><b>Project info</b><div class="hint">Copy the title block from or to the other tools.</div><div class="btnRow">
-        <button type="button" onclick="bxUseProjectInfo()">Use shared project info</button>
-        <button type="button" onclick="bxShareProjectInfo()">Share project info</button></div></div>
-        <div class="prjGrp"><b>Loads from ASCE 7-16 Load Generator</b><div class="hint">Nominal area loads (psf) as line loads, or its hand-off file.</div><div class="btnRow">
+      <!-- HOC (2026-11-10): "Shared project info and hand-offs" laid out as Receive / Send with status and last received / sent (display only;
+           the same buttons and handlers) -->
+      <div class="sec"><div class="secHead"><span class="secTitle">Hand-offs</span></div><div class="secBody" id="projShare">
+        <div class="hint">Nothing changes until you confirm: each pull or import first shows what it will change, and what you apply is recorded with this project (saved with it and printed in the Report).</div>
+        <div class="hoGrp">Receive from other tools</div>
+        <div class="prjGrp"><b>Shared project info</b> <span class="hoFrom">from any tool</span><div class="btnRow">
+        <button type="button" onclick="bxUseProjectInfo()">Use shared project info</button></div></div>
+        <div class="prjGrp"><b>Building loads</b> <span class="hoFrom">from the ASCE 7-16 Load Generator</span><div class="hint">Nominal area loads (psf) as line loads, or its hand-off file.</div><div class="btnRow">
         <button type="button" onclick="bxPullBuildingLoads()" title="Import nominal area loads (psf) from the ASCE 7-16 Load Generator as line loads (HANDOFF.md, channel buildingLoads)">Pull from ASCE 7-16<span id="bxBldNew" style="display:none;color:#FDE68A;font-weight:700"> &#9679; new data available</span></button>
         <button type="button" onclick="document.getElementById('bxBldFile').click()">Import hand-off (JSON)</button><input type="file" id="bxBldFile" accept=".json,application/json" style="display:none" onchange="bxImportBuildingLoads(event)">
-        <span id="bxBldSrc" style="font-family:var(--font-ui);font-size:8pt;color:#C7D4E4;align-self:center"></span></div></div>
-        <div class="prjGrp"><b>Support reactions to other tools</b><div class="hint">Unfactored reactions by load type for Base Plate and Shallow Foundation Design, or as a file.</div><div class="btnRow">
+        </div><div class="hint"><b>Status:</b> <span id="bxBldSt"></span> <b>Last received:</b> <span id="bxBldSrc"></span></div></div>
+        <div class="hoGrp">Send to other tools</div>
+        <div class="prjGrp"><b>Shared project info</b> <span class="hoFrom">to every tool</span><div class="btnRow">
+        <button type="button" onclick="bxShareProjectInfo()">Share project info</button></div></div>
+        <div class="prjGrp"><b>Support reactions</b> <span class="hoFrom">to Base Plate and Shallow Foundation Design</span><div class="hint">Unfactored reactions by load type for Base Plate and Shallow Foundation Design, or as a file.</div><div class="btnRow">
         <button type="button" onclick="bxSendMemberReactions('send')" title="Publish the unfactored support reactions by load type for the base plate and shallow foundation design tools (HANDOFF.md, channel memberReactions)">Send to other tools</button>
-        <button type="button" onclick="bxSendMemberReactions('export')" title="Save the same support-reaction hand-off as a JSON file">Export hand-off (JSON)</button></div></div>
+        <button type="button" onclick="bxSendMemberReactions('export')" title="Save the same support-reaction hand-off as a JSON file">Export hand-off (JSON)</button></div>
+        <div class="hint"><b>Last sent:</b> <span id="bxMrSent"></span></div></div>
       </div></div>
     </div></div>
     <div id="outputPanel">
@@ -12016,8 +12027,14 @@ function colCurveFig(p,cc,D,Pu){
   }
   function refreshBar(){
     var nd=document.getElementById('bxBldNew'); if(nd) nd.style.display=BridgeXfer.isNew(CH,RID)?'inline':'none';
-    var sl=document.getElementById('bxBldSrc'); if(sl) sl.textContent=sourceLine();
+    var sl=document.getElementById('bxBldSrc'); if(sl) sl.textContent=sourceLine()? sourceLine()+'.' : 'none.';
+    // HOC (2026-11-10): the Hand-offs status line (the marker's isNew; nothing stored) and the memberReactions "Last sent" (read only)
+    var st=document.getElementById('bxBldSt'); if(st){ var up=''; try{ up=localStorage.getItem(BridgeXfer.NS+CH+'.updatedAt')||''; }catch(e){} st.textContent=BridgeXfer.isNew(CH,RID)? 'new data available.' : up? 'no new data since the last pull.' : 'nothing available (the ASCE 7-16 Load Generator has not sent).'; }
+    var ms=document.getElementById('bxMrSent'); if(ms){ var mp=null; try{ mp=JSON.parse(localStorage.getItem(BridgeXfer.NS+'memberReactions')||'null'); }catch(e){}
+      ms.textContent=mp&&mp.producer==='Steel Beam Designer'&&mp.producedAt? when(mp.producedAt)+((mp.project&&mp.project.name)?' ('+mp.project.name+')':'')+', from this browser.' : 'nothing sent from this browser yet.'; }
   }
+  window.sbHoRefresh=refreshBar;
+  document.addEventListener('click',function(e){ if(e.target&&e.target.closest&&e.target.closest('#bxMrGo')) setTimeout(refreshBar,0); });
   window.bxPullBuildingLoads=function(){
     var r=BridgeXfer.read(CH,SCHEMA,MAXV);
     if(!r.ok){ alert('Pull from ASCE 7-16: '+r.error+(r.empty?'\n\nIn the ASCE 7-16 Load Generator, click "Send to other tools" first.':'')); return null; }

@@ -930,7 +930,7 @@ const segBtns = (path, opts) => { const v = getK(path); return `<div class="seg"
 /* ---------- side panes ---------- */
 function paneProject() {
   return sec('Project', fld('Project name', 'meta.name', '', 'text', { full: true }) + fld('Project number', 'meta.num', '', 'text') + fld('Date', 'meta.date', '', 'text') + fld('Designed by', 'meta.by', '', 'text') + fld('Checked by', 'meta.chk', '', 'text')
-      + `<div class="fld full" style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn btn-sm" id="bx-pm-use" title="Fill these fields from the project info shared by another tool">Use shared project info</button><button type="button" class="btn btn-sm" id="bx-pm-share" title="Share these project fields with the other tools">Share project info</button></div>`)
+      /* HOC (2026-11-10): Use / Share shared project info moved to the Project tab's Hand-offs card (same ids and handlers) */)
     + sec('Design basis', `<div class="fld full"><label>Specification</label><div class="in"><input readonly tabindex="-1" value="AASHTO LRFD Bridge Design Specifications, 10th Edition (2024)"></div></div>`, { one: true })
     + `<p class="note">Loads follow Section 3. Owner amendments: MassDOT is selectable on the Bridge tab (Owner requirements) and changes the items listed in the Manual; RIDOT and CTDOT amendments are not included.</p>`
     + sec('Engineering assumptions', fld('Printed with the report', 'meta.notes', '', 'area', { full: true }), { one: true });
@@ -3442,7 +3442,7 @@ async function rxImport(file) {
 { const cvh = cvHtml; cvHtml = function () { const h = cvh(), k = P.ui.sel, u = P.units[k]; if (!u || !u.cv || u.cv.on !== 'yes') return h; let parts = []; try { parts = hitParts(MODEL.G, MODEL.UG, k, num(u.cv.mhw), u.cv.hit); } catch (e) { }
     if (parts && parts.length) return h; return h.replace('<div class="card-b">', `<div class="card-b"><p style="color:var(--fail);margin-bottom:8px">The impact elevation El. ${f2(num(u.cv.mhw))} does not meet any column, wall, or cap of ${esc(u.name)}, so no vessel force is applied. Enter the mean high water elevation on the Units tab.</p>`); }; }
 /* ---------- superstructure reactions hand-off (HANDOFF.md §4.4, channel superReactions) ----------
-   Reactions tab: "Pull from PS-Beam / GirderDetail" (with a new-data marker) and "Import hand-off (JSON)". ST-Girder is
+   Reactions tab (since 2026-11-10, HOC: the Project tab's Hand-offs card, hoRow): "Pull from PS-Beam / GirderDetail" (with a new-data marker) and "Import hand-off (JSON)". ST-Girder is
    not a source since 2026-10-19 (engineer decision: it is connected to GirderDetail only): a payload from ST-Girder is
    not listed, adopted or imported. GirderDetail (Steel Bridge Design, formerly Steel Bridge Beam Modules) sends every girder of the bridge
    (optional field allGirders, SRX 2026-10-19): by default each source girder Gi goes to SubLoads girder Gi; its
@@ -3656,10 +3656,10 @@ async function rxImport(file) {
   const pr = paneRx; paneRx = function () {
     let h = pr(); const isNew = newOK(); let latest = null;
     if (isNew) { const r = BX().read(CH, SCH, 1); if (r.ok) latest = r.payload; }
-    const btns = `<button type="button" class="btn btn-sm" id="rx-pull" title="Pull the unfactored girder reactions sent by PS-Beam (one girder line) or GirderDetail (every girder) (asks first)">Pull from PS-Beam / GirderDetail</button><button type="button" class="btn btn-sm" id="rx-hf-imp" title="Import a superReactions hand-off JSON file (asks first)">Import hand-off (JSON)</button><input type="file" id="rx-hf-in" accept=".json,application/json" hidden>${isNew ? `<span class="rxh-new">New data available${latest ? `: ${esc(latest.producer || '')}, ${esc(when(latest.producedAt))}` : ''}</span>` : ''}${stOld().length ? `<span class="rxh-new" title="${esc(stNote(stOld()))}">ST-Girder reactions in this browser are not offered</span>` : ''}`;
+    const btns = `<span class="note" data-ho-link style="padding:0;align-self:center">Send/receive data: <a href="#" data-go-ho>Project tab → Hand-offs</a></span>`;   // HOC (2026-11-10): the Pull / Import buttons are in the Project tab's Hand-offs card (hoRow below)
     h = h.replace('id="rx-clear">Clear all</button>', 'id="rx-clear">Clear all</button>' + btns);
     const recs = Array.isArray(P.rxSrc) ? P.rxSrc : [];
-    if (recs.length) h = h.replace(/(id="rx-hf-in"[^>]*>[\s\S]*?<\/div>)/, `$1<p class="note" style="padding:6px 0 0"><b>Hand-off sources</b> (values may have been edited since):<br>${recs.map(r => srcText(r)).join('<br>')}</p>`);
+    if (recs.length) h = h.replace(/(data-ho-link[\s\S]*?<\/div>)/, `$1<p class="note" style="padding:6px 0 0"><b>Hand-off sources</b> (values may have been edited since):<br>${recs.map(r => srcText(r)).join('<br>')}</p>`);
     let pos = 0; (P.units || []).forEach((u, k) => { const rs = recsFor(k), tag = `<div class="sec-h">${esc(u.name)}`; let i = h.indexOf(tag, pos);
       while (i >= 0 && !/[< ]/.test(h.charAt(i + tag.length))) i = h.indexOf(tag, i + 1);   // "Pier 1" must not match "Pier 10"
       if (i < 0) return; const e = h.indexOf('</div>', i); pos = e;
@@ -3703,7 +3703,18 @@ async function rxImport(file) {
     e.preventDefault(); e.stopImmediatePropagation(); const [, , k, j0, c0] = t.dataset.k.split('.'), cols = ['ut', 'uf', 'uta', 'ufa'], ci = cols.indexOf(c0), row = P.rx.data[+k]; let n = 0;
     txt.replace(/\r/g, '').split('\n').filter(l => l.trim() !== '').forEach((l, a) => { const r = row[+j0 + a]; if (!r) return; l.split('\t').forEach((v, b) => { const c = cols[ci + b], x = num(v.replace(/,/g, '')); if (c && isFinite(x)) { r[c] = x; n++; } }); });
     buildSide(); recompute(); autosave(); flash(`Pasted ${n} utility value${n === 1 ? '' : 's'} into ${esc(P.units[+k].name)}.`); }, true);
-  const bs = buildSide; buildSide = function () { bs(); const t = document.querySelector('.itab[data-pane="rx"]'); if (t) { const n = newOK(); t.classList.toggle('bx-new', n); t.title = n ? 'New superstructure reactions are available to pull' : ''; } };
+  // HOC (2026-11-10): the new-data marker is on the Project tab (the Hand-offs card holds the Pull button): slHdr show() sets it from newOK()
+  /* hoRow(): the Reactions row of the Project tab's Hand-offs card: the buttons that were on the Reactions tab (same ids, same handlers),
+     the status (newOK) and the last pull (P.rxSrc, the same text as the Reactions tab's "Hand-off sources") */
+  function hoRow() {
+    const isNew = newOK(); let latest = null;
+    if (isNew) { const r = BX().read(CH, SCH, 1); if (r.ok) latest = r.payload; }
+    const recs = Array.isArray(P.rxSrc) ? P.rxSrc : [], last = recs[recs.length - 1];
+    const btns = `<button type="button" class="btn btn-sm" id="rx-pull" title="Pull the unfactored girder reactions sent by PS-Beam (one girder line) or GirderDetail (every girder) (asks first)">Pull from PS-Beam / GirderDetail</button><button type="button" class="btn btn-sm" id="rx-hf-imp" title="Import a superReactions hand-off JSON file (asks first)">Import hand-off (JSON)</button><input type="file" id="rx-hf-in" accept=".json,application/json" hidden>${isNew ? `<span class="rxh-new">New data available${latest ? `: ${esc(latest.producer || '')}, ${esc(when(latest.producedAt))}` : ''}</span>` : ''}${stOld().length ? `<span class="rxh-new" title="${esc(stNote(stOld()))}">ST-Girder reactions in this browser are not offered</span>` : ''}`;
+    return `<div class="slHoRow"><div class="slHoWho"><b>Superstructure reactions</b> <span class="note" style="padding:0">from the Steel Bridge app, PS-Beam or GirderDetail (bridgeSuite.v1.superReactions)</span></div>
+      <div class="slRow" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${btns}</div>
+      <p class="note" style="padding:2px 0 0"><b>Status:</b> ${isNew ? 'new data available' : last ? 'no newer copy of the pulled project' : 'no copy for this project yet'}. <b>Last received:</b> ${last ? srcText(last) : 'none'}. Applied to the <a href="#" data-go-itab="rx">Reactions tab</a> after the review.</p></div>`;
+  }
   /* SRX (2026-10-19): the Summary tab (and the report's Summary chapter) names the hand-off sources under the units table; nothing when none is recorded */
   const sh = summaryHtml; summaryHtml = function () { const h = sh(), recs = Array.isArray(P.rxSrc) ? P.rxSrc : []; if (!recs.length) return h;
     return h.replace('DC and DW are the superstructure reactions summed over the girders (kip, unfactored).', `DC and DW are the superstructure reactions summed over the girders (kip, unfactored). Reactions hand-off (values may have been edited since; see the Reactions tab): ${recs.map(r => srcText(r)).join('; ')}.`); };
@@ -3733,15 +3744,15 @@ async function rxImport(file) {
     renderDialog();
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && DLG) closeDialog(); });
-  window.addEventListener('storage', e => { if (e.key && e.key.indexOf('bridgeSuite.v1.' + CH) === 0 && P.ui.itab === 'rx') buildSide(); else if (e.key && e.key.indexOf('bridgeSuite.v1.' + CH) === 0) { const t = document.querySelector('.itab[data-pane="rx"]'); if (t) t.classList.toggle('bx-new', BX() ? BX().isNew(CH, RID) : false); } });
-  window.SubLoadsRxHandoff = { candidates, check, openDialog, applyDialog, closeDialog, plan, pull, state: () => DLG, defTarget };   // used by tests; no effect on results
+  window.addEventListener('storage', e => { if (e.key && e.key.indexOf('bridgeSuite.v1.' + CH) === 0) buildSide(); });   // HOC: the Hand-offs card and the Project tab marker
+  window.SubLoadsRxHandoff = { candidates, check, openDialog, applyDialog, closeDialog, plan, pull, state: () => DLG, defTarget, newOK, hoRow };   // used by tests; no effect on results
 })();
 /* ---------- project picker of the hand-off pulls and the bridge geometry hand-off (GXF, 2026-11-09; HANDOFF.md §4.14, §5.1) ----------
    SubLoadsPicker: "Pull …" first asks WHICH PROJECT to pull from (shared/handoff-store.js list: this browser's per-project copies, the
    legacy keys, and with Cloud sync the GitHub copies), newest first, with the bridgeId, project, date, device and a summary; the project
    whose name matches this project's name is preselected (SubLoads has no Bridge ID field), otherwise nothing. Used by the geometry pull
    and by the reactions pull above.
-   Geometry (channel superGeometry, receiver id subloads): Bridge tab "Pull geometry from Steel Bridge Design" (new-data marker per pulled
+   Geometry (channel superGeometry, receiver id subloads): Bridge tab (since 2026-11-10, HOC: the Project tab's Hand-offs card, hoRow) "Pull geometry from Steel Bridge Design" (new-data marker per pulled
    project) and "Import hand-off (JSON)". After the picker, a side-by-side review (current → incoming) and Apply. Mapping into P.br: spans,
    skews (sign converted to SubLoads' convention by default), joints, bays, ohL, ohR, barL, barR, barH (only when sent), ts, haunch, d (the
    largest depth by default; per support, per span or entered), bf, tf, tw; P.units resized by syncSupports (kept where a support still
@@ -3905,10 +3916,14 @@ async function rxImport(file) {
   }
   const srcLine = () => { const s = P.geoSrc; if (!s) return ''; const pr = s.project || {};
     return `Bridge geometry from ${esc(s.producer)}${s.producerFile ? ` (${esc(s.producerFile)})` : ''}, project ${esc([pr.bridgeId, pr.name].filter(Boolean).join(' — ') || '(not stated)')}, produced ${esc(when(s.producedAt))}, pulled ${esc(when(s.adoptedAt))}: spans, skews${s.skewSign === 'asis' ? ' (sign as sent)' : ' (sign converted)'}, joints, girder spacings, overhangs, barrier widths, deck, haunch, girder depth ${f3(s.depth)} in (${esc(s.depthChoice)}) and flange / web${s.skKgKept ? `; skew-correction K<sub>g</sub> kept at ${f0(s.skKgKept)} in⁴` : s.lldf ? '; the live-load girder data follows the section' : ''}. Elevations, bearings and units are this tool's. Values may have been edited since.`; };
-  const pb = paneBridge; paneBridge = function () { const h = pb(), n = isNewGeo();
-    const btns = `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:2px 0 8px"><button type="button" class="btn btn-sm" id="geo-pull" title="Pull spans, skews, joints, girder layout, deck edges, deck and girder section sent by the Steel Bridge app (asks which project, then shows every change first)">Pull geometry from Steel Bridge Design</button><button type="button" class="btn btn-sm" id="geo-hf-imp" title="Import a superGeometry (or superReactions) hand-off JSON file (asks first)">Import hand-off (JSON)</button><input type="file" id="geo-hf-in" accept=".json,application/json" hidden>${n ? '<span class="rxh-new" id="geo-new">New data available</span>' : ''}</div>${P.geoSrc ? `<p class="note" style="padding:0 0 6px" id="geo-src">${srcLine()}</p>` : ''}`;
+  const pb = paneBridge; paneBridge = function () { const h = pb();
+    const btns = `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:2px 0 8px"><span class="note" data-ho-link style="padding:0;align-self:center">Send/receive data: <a href="#" data-go-ho>Project tab → Hand-offs</a></span></div>${P.geoSrc ? `<p class="note" style="padding:0 0 6px" id="geo-src">${srcLine()}</p>` : ''}`;   // HOC (2026-11-10): the Pull / Import buttons are in the Project tab's Hand-offs card (hoRow)
     return h.replace('<p class="note">One span per row (Enter adds a row). Changing the number of spans adds or removes piers.</p>', m => m + btns); };
-  const bs = buildSide; buildSide = function () { bs(); const t = document.querySelector('.itab[data-pane="bridge"]'); if (t) { const n = isNewGeo(); t.classList.toggle('bx-new', n); t.title = n ? 'New bridge geometry is available to pull' : ''; } };
+  // HOC (2026-11-10): the new-data marker is on the Project tab (slHdr show(), from isNewGeo()); hoRow(): the Geometry row of the Hand-offs card
+  function hoRow() { const n = isNewGeo(), s = P.geoSrc;
+    return `<div class="slHoRow"><div class="slHoWho"><b>Bridge geometry</b> <span class="note" style="padding:0">from the Steel Bridge app (bridgeSuite.v1.superGeometry)</span></div>
+      <div class="slRow" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><button type="button" class="btn btn-sm" id="geo-pull" title="Pull spans, skews, joints, girder layout, deck edges, deck and girder section sent by the Steel Bridge app (asks which project, then shows every change first)">Pull geometry from Steel Bridge Design</button><button type="button" class="btn btn-sm" id="geo-hf-imp" title="Import a superGeometry (or superReactions) hand-off JSON file (asks first)">Import hand-off (JSON)</button><input type="file" id="geo-hf-in" accept=".json,application/json" hidden>${n ? '<span class="rxh-new" id="geo-new">New data available</span>' : ''}</div>
+      <p class="note" style="padding:2px 0 0"><b>Status:</b> ${n ? 'new data available' : s ? 'no newer copy of the pulled project' : 'no copy for this project yet'}. <b>Last received:</b> ${s ? srcLine() : 'none.'} Applied to the <a href="#" data-go-itab="bridge">Bridge tab</a> after the review.</p></div>`; }
   const be = basisExtra; basisExtra = function () { const h = be(); if (!P.geoSrc) return h; return h + `<tr><td class="lbl">Bridge geometry</td><td>${srcLine()}</td></tr>`; };
   document.addEventListener('click', e => {
     const t = e.target.closest ? e.target.closest('button, input, tr[data-gxp-row]') : null; if (!t) return;
@@ -3926,8 +3941,8 @@ async function rxImport(file) {
     if (w === 'depth') GD.depth = t.value; else if (w === 'depthIn') GD.depthIn = t.value; else if (w === 'sign') GD.sign = t.value; else if (w === 'lldf') GD.lldf = !!t.checked;
     renderGeo(); });
   document.addEventListener('keydown', e => { if (e.key !== 'Escape') return; if (PK) { shut('gxp-modal'); PK = null; } else if (GD) { shut('gxg-modal'); GD = null; } });
-  window.addEventListener('storage', e => { if (e.key && e.key.indexOf(NS + CH) === 0) { const t = document.querySelector('.itab[data-pane="bridge"]'); if (t) t.classList.toggle('bx-new', isNewGeo()); if (P.ui.itab === 'bridge') buildSide(); } });
-  window.SubLoadsGeoHandoff = { pull, openGeo, applyGeo, plan, check, state: () => GD, isNewGeo };   // used by tests; no effect on results
+  window.addEventListener('storage', e => { if (e.key && e.key.indexOf(NS + CH) === 0) buildSide(); });   // HOC: the Hand-offs card and the Project tab marker
+  window.SubLoadsGeoHandoff = { pull, openGeo, applyGeo, plan, check, state: () => GD, isNewGeo, hoRow };   // used by tests; no effect on results
 })();
 /* ---------- foundation loads hand-off (HANDOFF.md §4.6, channel foundationLoads) ----------
    "Send foundation loads" opens a dialog: pick the unit, the level (reference point) and the limit states.
@@ -4564,23 +4579,60 @@ window.addEventListener('beforeprint', () => {
   const hold = document.createElement('div'); hold.id = 'slPrjHold'; hold.hidden = true; document.body.appendChild(hold);
   const pane = document.createElement('div'); pane.id = 'slPrjPane';
   const G = (title, hint, ids) => `<div class="slGrp"><b>${title}</b><p class="note">${hint}</p><div class="slRow" data-ids="${ids}"></div></div>`;
-  pane.innerHTML = sec('Project files and hand-offs',
-    G('To the abutment calculator', 'Unfactored abutment reactions per girder and geometry: a JSON file, or sent to "Pull from SubLoads".', 'btn-abx btn-abx-send btn-abx-hf')
-    + G('To Pile Designer and Shallow Foundation Design', 'Factored and service loads at the bottom of a unit, per limit state.', 'btn-fdx')
-    + G('Drawings', 'The bridge and its units as a DXF file.', 'btn-dxf'));
+  /* HOC (2026-11-10, engineer request "the push/pull should probably all be in the Project tab"): the card "Project files and hand-offs"
+     becomes "Hand-offs" (Receive from other tools / Send to other tools) and "Project files" (DXF). Receive: Use shared project info (moved
+     from the Project card), Bridge geometry (moved from the Bridge tab) and Superstructure reactions (moved from the Reactions tab): the same
+     buttons, ids and document-level handlers, rows rebuilt at each show() (SubLoadsGeoHandoff.hoRow, SubLoadsRxHandoff.hoRow). Send: Share
+     project info, the abutment calculator and the foundation loads (the same nodes as before), with the last send from this browser read
+     from the channel keys (read only). The Bridge and Reactions tabs keep a link "Send/receive data: Project tab → Hand-offs". Display only. */
+  const R = (who, from, body) => `<div class="slHoRow"><div class="slHoWho"><b>${who}</b> <span class="note" style="padding:0">${from}</span></div>${body}</div>`;
+  pane.innerHTML = '<div id="slHo">' + sec('Hand-offs',
+    '<p class="note" style="padding:0 0 4px">Nothing changes here until you click: each pull asks which project, then shows every change for you to confirm before it is applied, and the source of what you applied is saved with this project (and printed in the report). Each tool keeps the hand-offs sent to it per project.</p>'
+    + '<div class="slHoGrp">Receive from other tools</div>'
+    + R('Shared project info', 'from any tool (bridgeSuite.v1.projectMeta)', '<div class="slRow" style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn btn-sm" id="bx-pm-use" title="Fill these fields from the project info shared by another tool">Use shared project info</button></div>')
+    + '<div id="slHoRecv"></div>'
+    + '<div class="slHoGrp">Send to other tools</div>'
+    + R('Shared project info', 'to every tool', '<div class="slRow" style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn btn-sm" id="bx-pm-share" title="Share these project fields with the other tools">Share project info</button></div>')
+    + R('Abutment loads', 'to the abutment calculator (bridgeSuite.v1.abutmentLoads)', '<p class="note" style="padding:0">Unfactored abutment reactions per girder and geometry: a JSON file, or sent to "Pull from SubLoads".</p><div class="slRow" data-ids="btn-abx-send btn-abx-hf btn-abx"></div><p class="note" style="padding:2px 0 0" id="slHoSentAbx"></p>')
+    + R('Foundation loads', 'to Pile Designer and Shallow Foundation Design (bridgeSuite.v1.foundationLoads)', '<p class="note" style="padding:0">Factored and service loads at the bottom of a unit, per limit state (the dialog asks which unit).</p><div class="slRow" data-ids="btn-fdx"></div><p class="note" style="padding:2px 0 0" id="slHoSentFdx"></p>'), { one: true })
+    + '</div>' + sec('Project files', G('Drawings', 'The bridge and its units as a DXF file.', 'btn-dxf'));
+  const hoCss = document.createElement('style'); hoCss.textContent = '#slHo .slHoGrp{margin:8px 0 2px;font-size:.72rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted,#64748b)}#slHo .slHoRow{border-top:1px solid var(--line,#e2e8f0);padding:6px 0 4px}#slHo .slHoWho{font-size:.85rem}#slHo .slRow{display:flex;gap:6px;flex-wrap:wrap;align-items:center}';
+  document.head.appendChild(hoCss);
+  const sentTxt = (key, what) => { let p = null; try { p = JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { p = null; }
+    if (!p || p.producer !== 'Bridge Substructure Loading' || !p.producedAt) return `<b>Last sent:</b> nothing sent from this browser yet.`;
+    const d = new Date(p.producedAt), pr = p.project || {};
+    return `<b>Last sent</b> (from this browser): ${isNaN(d) ? esc(p.producedAt) : esc(d.toLocaleString())}${what ? `, ${esc(what(p))}` : ''}${pr.name ? `, project "${esc(pr.name)}"` : ''}.`; };
+  const showHo = () => {
+    const rv = pane.querySelector('#slHoRecv');
+    if (rv) rv.innerHTML = (window.SubLoadsGeoHandoff && SubLoadsGeoHandoff.hoRow ? SubLoadsGeoHandoff.hoRow() : '') + (window.SubLoadsRxHandoff && SubLoadsRxHandoff.hoRow ? SubLoadsRxHandoff.hoRow() : '');
+    const a = pane.querySelector('#slHoSentAbx'), f = pane.querySelector('#slHoSentFdx');
+    if (a) a.innerHTML = sentTxt('bridgeSuite.v1.abutmentLoads', p => `${(p.abutments || []).filter(x => !x.error).length} abutment(s)`);
+    if (f) f.innerHTML = sentTxt('bridgeSuite.v1.foundationLoads.by.subloads', p => `${(p.element && p.element.label) || 'unit'}, ${(p.cases || []).length} case(s)`);
+    let n = false; try { n = !!((window.SubLoadsGeoHandoff && SubLoadsGeoHandoff.isNewGeo()) || (window.SubLoadsRxHandoff && SubLoadsRxHandoff.newOK && SubLoadsRxHandoff.newOK())); } catch (e) { n = false; }
+    const tp = document.querySelector('.itab[data-pane="project"]'); if (tp) { tp.classList.toggle('bx-new', n); tp.title = n ? 'New data from another tool is available to pull (Hand-offs)' : ''; }
+  };
   pane.querySelectorAll('[data-ids]').forEach(r => r.dataset.ids.split(' ').forEach(id => { const b = $id(id); if (b) r.appendChild(b); }));
   hold.appendChild(pane);
   /* STDS (2026-11-05): the standard "Save and open" card (SLPL.pb), first in the Project tab, parked with the pane during rebuilds */
   const saveSec = document.createElement('div'); saveSec.id = 'slSaveSec'; saveSec.innerHTML = sec('Save and open', '', { one: true }); hold.appendChild(saveSec);
   if (window.SLPL && SLPL.pb) SLPL.pb.mount(saveSec.querySelector('.sec-body'));
   const show = () => {
-    const sb = $id('sidebar'), u = sb && sb.querySelector('#bx-pm-use'), body = u && u.closest('.sec-body');
+    showHo();
+    const sb = $id('sidebar'), u = sb && sb.querySelector('[data-k="meta.name"]'), body = u && u.closest('.sec-body');
     if (P.ui.itab === 'project' && body) { body.after(pane); const h0 = body.previousElementSibling; if (h0) h0.before(saveSec); else body.before(saveSec); } else { hold.appendChild(pane); hold.appendChild(saveSec); }
     const v = [P.meta && P.meta.name, P.meta && P.meta.num].map(x => String(x == null ? '' : x).trim()).filter(Boolean);
     t.textContent = ''; if (v.length) t.textContent = v.join(' \u00b7 '); else { const s = document.createElement('span'); s.className = 'hdrNone'; s.textContent = '(untitled: enter it in the Project tab)'; t.appendChild(s); }
   };
   const bs = buildSide; buildSide = function () { hold.appendChild(pane); hold.appendChild(saveSec); const r = bs.apply(this, arguments); show(); return r; };
   document.addEventListener('input', e => { const k = e.target && e.target.dataset && e.target.dataset.k; if (k === 'meta.name' || k === 'meta.num') setTimeout(show, 0); });
+  /* HOC: the links "Project tab → Hand-offs" (Bridge and Reactions tabs) open the Project tab at the card; the card's tab links go back;
+     a send refreshes the "Last sent" lines */
+  document.addEventListener('click', e => {
+    const l = e.target.closest && e.target.closest('[data-go-ho], #slHo [data-go-itab]'); if (!l) { const id = e.target && e.target.id; if (id === 'btn-abx-send' || id === 'fdx-send') setTimeout(showHo, 0); return; }
+    e.preventDefault(); P.ui.itab = l.dataset.goItab || 'project'; buildSide(); autosave();
+    const sb = $id('sidebar'), c = l.dataset.goItab ? null : $id('slHo');
+    if (c) c.scrollIntoView({ block: 'start' }); else if (sb && getComputedStyle(sb).overflowY !== 'visible') sb.scrollTop = 0;
+  });
   a.addEventListener('click', e => {
     e.preventDefault(); P.ui.itab = 'project'; buildSide(); autosave();
     const i = document.querySelector('#sidebar [data-k="meta.name"]'); if (!i) return;

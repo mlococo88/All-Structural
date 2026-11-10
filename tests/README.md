@@ -46,6 +46,10 @@ node tests/compare.mjs --tool st --a a8bf5e7:stgirder.html --payload all      # 
 # Steel Bridge (apps/steel-bridge) Report tab: browser smoke test with print emulation (0 console errors, 0 KaTeX errors, links, print)
 node tests/smoke/steel-bridge-report.mjs
 
+# Steel Bridge remaining fatigue life (MBE 4th Ed. Section 7): turn the evaluation on, Example demands, the Category E gusset's Y_REM,
+# an entered g, the Summary / left column notes, the Report subsection, 390 px, 0 console errors
+node tests/smoke/steel-bridge-fatlife.mjs
+
 # Steel Bridge Field splices with custom values: Custom demands (errors shown after Calculate, a changed value changes the result), every entered
 # plate / bolt / basis field changes the FS1 result and is saved (SPERR; about 6 min)
 node tests/smoke/steel-bridge-splices.mjs
@@ -68,6 +72,10 @@ node tests/smoke/retaining-wall-checks.mjs [--file <file or git ref>]
 
 # Phone / tablet layout (PHN): at 390 and 768 px the page never scrolls sideways, on load and on every tab (one entry per tool in TOOLS)
 node tests/smoke/phone-layout.mjs [--tool smd,...] [--file <file or git ref>] [--w 390,768]
+
+# Gusset Plate Rating: the MBE 4th Edition (2026) values adopted 2026-11-10 (hand-check values of the default project and the validation model;
+# a project saved before keeps its φ_s; owner RIDOT; Validation tab; 0 console errors). ~1 min
+node tests/smoke/gusset-mbe4.mjs
 
 # LL & DL Distribution (lldf.html): two-panel layout (inputs / results in tabs; page never scrolls; links open the right tab; the
 # Dead load tab with the 4D steps; Ctrl+P prints the Report from every tab; 390 px stacked; inside index.html's frame). ~7 min
