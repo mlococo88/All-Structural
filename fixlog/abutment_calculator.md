@@ -17093,6 +17093,48 @@ Engineer decision 2026-11-10 (geometry). AASHTO LRFD 10th Ed. (2024): 5.6.5 / Fi
 - **How verified:** main-vs-branch probe of every numeric leaf of `LAST_R` (default; slab; photo case; photo case with EE-I; d_sh = t with EE-I; e = 0 with EE-I): only `R.bwEE.ee.*` and the two dashboard D/C rows in the photo case with EE-I differ. Tests: `check-syntax`; `abutment-stem-shelf` (new section 5, hand check); `abutment-drawings` (new variants d_sh 30 > t 15 and d_sh 12 < t 15: 0 text overlaps, no text crossed by a dimension on sheet 1); `abutment-elevations`; `abutment-pile-group-parity` 14/14; `project-library --tool abutment`; `abutment-panel-scroll`; 0 console errors; 390 px.
 - **Other copies:** none.
 
+## 2026-11-10 — PR: abutment-brg-front (PR #1395: https://github.com/mlococo88/All-Structural/pull/1395) (ABBF2) — CL bearing entered from the front face of the stem, a_f
+- **Engineer request (2026-11-10):** "How do I adjust the location of the CL of bearing, it's currently within the backwall. I need a dimension from the front face of abutment to the CL of brg."
+- **Change (input definition only, no result change):**
+  - Panel I-1: the row `inpRow("Bearing setback from backwall face","geom.brgSetback","ft",…)` is replaced by `inpRow("CL bearing from front face of stem (at seat) a<sub>f</sub>","geom.brgFront","ft",…)`.
+  - Under it is `<div class="derived" id="abBrgDer">${abBrgDerHTML()}</div>`, showing a_brg = t_st − t_bw − a_f, a_bw and a note on the bearing line.
+  - `updateDerivedInInputs` selects `#inputCol .derived:not(#abBrgDer)` (keeps the old indices) and refreshes `#abBrgDer` by its id.
+- **Saved data / migration (§5):**
+  - New `geom.brgFront`.
+  - `abBrgSync()` is defined before `defaultState()` and called at the top of `migrate()` and `computeAll()`:
+    - with no brgFront: `brgFront = round6(tst − tbw − brgSetback)`, and brgSetback is kept as saved;
+    - if brgSetback alone changed on the same geom object: brgFront follows it;
+    - otherwise, if they are inconsistent: `brgSetback = round9(tst − tbw − brgFront)`.
+  - `defaultState()` unchanged (`brgSetback:1.25`, no brgFront).
+  - Input ID: `if(fpS.geom) delete fpS.geom.brgFront;`.
+  - SubLoads apply: after the non-layout items, `if(items.some(it=>it.paths.includes("geom.brgSetback"))&&S.geom) delete S.geom.brgFront;`.
+- **Solver:** `const xBrg = (xStemBack-g.tbw)-g.brgSetback;` is unchanged (comment: = x_stemTopFront + a_f). The CTDOT `brgFront` in the owner context is unchanged.
+- **Text (values unchanged):**
+  - Input errors "bearing line is at or behind the inset backwall" and "bearing pad runs into the inset backwall" now give a_bw = t_st − t_bw − e − a_f with its four terms.
+  - "Check setback/seat geometry" → "Check a_f (…panel I-1)".
+  - VALID `geom.brgSetback` msg names t_st − t_bw − a_f.
+  - CTDOT brg.front: val `a<sub>f</sub> = … ft (panel I-1)`, tex `a_{f} = …` (entered).
+  - RIDOT pad.edge tex `c_{front} = 12\,a_{f}-L_{pad}/2`.
+  - Tab 5 §5.6 notes c_front / c_back; seat-plan figure tips; panel I-1 offset note "Bearings:"; `bwOffWorkHTML` x_brg and a_bw lines and note; Report Geometry rows, offset table row and notes; inputs echo row.
+- **Shown / worked (§6):**
+  - `abBrgWorkHTML(R)` in Tab 1 §1.1 after the variables table (not for integral): a_f; x_stem,top,front = x_stem,back − t_st; x_brg = x_stem,top,front + a_f; a_brg = t_st − t_bw − a_f; a_bw.
+  - `drawXsec`: dimension `a_f=…'` at the seat.
+  - Drawings: `dH([G.xstF,G.ySeat],[G.xBrg,…],…,"<> (A_F)")` on sheet 1 and on the seat detail.
+  - Report: the a_f, a_brg and x_brg rows and a "Bearing line:" basis note.
+- **Provisions:** none changed. CTDOT BRSDM V2 11.6.8.1CT (front face of the stem to the CL of bearings ≥ 1.25 ft) is the same quantity, now quoted as a_f.
+- **Check case:**
+  - Defaults: t_st 4.50, t_bw 1.50, setback 1.25 → a_f = 1.75 ft; x_stem,top,front = 3.50 + 4.50 − 4.50 = 3.50; x_brg = 5.25 ft before and after.
+  - a_f = 2.00 → x_brg 5.50, setback 1.00. Then t_st = 5.00 → x_brg = 3.00 + 2.00 = 5.00, setback 1.50.
+  - Engineer's case e = 19 in: a_bw = 54 − 18 − 19 − 21 = −4.0 in (input error, as before); with a_f = 1.25 ft, a_bw = +2.0 in.
+- **Decisions (pending engineer review):**
+  - the bearing line stays fixed relative to the stem front face when t_st, t_bw or e change (before: fixed relative to the flush backwall face);
+  - the setback form of x_brg is kept for bit-identical results;
+  - a writer of brgSetback alone moves a_f;
+  - the setback range warning is kept on the derived setback.
+- **How verified:**
+  - `tests/smoke/abutment-brg-front.mjs` (new): main vs branch on 7 cases. Without brgFront, LAST_R and the Input ID are identical apart from the owner-row display strings; with a_f entered, within 1e-9. It also covers the save/load regression, the a_f input, the writer rule, the error text, CTDOT, the DXF (A_F) label, Tab 1, the Report and 390 px.
+  - check-syntax, abutment-stem-shelf (setup removes brgFront: hand check given by the setback), drawings, elevations, pile-group-parity, rx-table (main opened without brgFront), panel-scroll, `project-library --tool abutment`.
+
 ## 2026-11-10 — PR: abut-shelf-fill (PR #1396: https://github.com/mlococo88/All-Structural/pull/1396) (ABFL) — Fill over the approach slab on the stem shelf (d_sh > t) loaded as vertical earth load EV   [§4 calculation change, e > 0 with d_sh > t only; no saved key or format change]
 - **Engineer decision (2026-11-10):** "Yes, use fill". With d_sh > t, the step d_sh − t between the slab top and the top of the backwall is backfill on the slab and is loaded automatically. #1387 had only an advisory warning (add it to DW by hand). Also decided: the backwall earth pressure stays over the full height above the shelf, and d_sh < t stays a warning (both unchanged).
 - **Governing provisions:** AASHTO LRFD 10th Ed. (2024):

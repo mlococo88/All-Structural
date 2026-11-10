@@ -167,11 +167,13 @@ const cellSel = (r, c) => `#rxGrid input[data-r="${r}"][data-c="${c}"]`;
   const seed = await (async () => { const o = await openPage(FILE, { vw: 1440, vh: 900 }); await ready(o.p);
     const st = await o.p.evaluate(() => { S.beams.N = 4; migrate(); S.rx.DC.forEach((r, i) => r.P = 90 + i); S.rx.WS[2].Vy = -2.75; return JSON.stringify(S); });
     await o.b.close(); return st; })();
-  const open = async f => { const o = await openPage(f, { vw: 1440, vh: 900, ls: { abutcalc_v1_autosave: seed, abutcalc_rxEntry_v1: 'table' } }); await ready(o.p); await settle(o.p);
+  // ABBF2: main does not know geom.brgFront (a_f, derived from the setback and left out of the Input ID here): main opens the seed without it
+  const seedMain = (() => { const j = JSON.parse(seed); if (j.geom) delete j.geom.brgFront; return JSON.stringify(j); })();
+  const open = async (f, sd = seed) => { const o = await openPage(f, { vw: 1440, vh: 900, ls: { abutcalc_v1_autosave: sd, abutcalc_rxEntry_v1: 'table' } }); await ready(o.p); await settle(o.p);
     const r = await o.p.evaluate(() => ({ rx: JSON.stringify(S.rx), fp: LAST_R.fingerprint, ui: JSON.stringify(S.ui) })); allErrs.push(...o.errs); await o.b.close(); return r; };
   const br = await open(FILE);
   check(br.rx === JSON.stringify(JSON.parse(seed).rx), 'saved project: reactions open unchanged');
-  if (mainFile) { const mn = await open(mainFile); fs.unlinkSync(mainFile);
+  if (mainFile) { const mn = await open(mainFile, seedMain); fs.unlinkSync(mainFile);
     check(br.fp === mn.fp && br.ui === mn.ui, `saved project: same Input ID as on main (${br.fp} / ${mn.fp}); S.ui unchanged (view not stored in the project)`); }
   else console.log('skip main comparison (origin/main not available)');
 }
