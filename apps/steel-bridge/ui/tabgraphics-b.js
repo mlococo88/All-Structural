@@ -43,27 +43,41 @@
     const file = `${slug(ctx.P)}_${name}`, H = AG[viz](el, { ...o2, build: () => wrap(make(TX), file), file });
     if (H) (window.SBDTabGfxBUI.handles = window.SBDTabGfxBUI.handles || {})[name] = H; return true;
   }
+  /* DETC (2026-11-10): the detail drawings and the splice graphics in the option C screen style (ui/gfxdet.js, window.SBDGfxDet[det]); Download DXF exports the CAD
+     drawing make(TX) (wrap()'s graphic, unchanged); handles[name] keeps { el, graphic, dxf() } for the tests. Without the kit: put() (the CAD viewer) as before. */
+  function putDet(host, name, ctx, make, det, args) {
+    const el = host.querySelector(`[data-gfxb="${name}"]`), D = window.SBDGfxDet, TX = T(), K = window.SBDVizKit; if (!el) return true;
+    if (!D || !D[det] || !K || !K.detCard || !TX || !GR()) return false;
+    let g = null; const cad = () => g || (g = wrap(make(TX), `${slug(ctx.P)}_${name}`));
+    const H = D[det](el, { ...args, dxf: cad, file: `${slug(ctx.P)}_${name}` });
+    const hs = window.SBDTabGfxBUI.handles = window.SBDTabGfxBUI.handles || {};
+    if (H) hs[name] = { el: H.el, get graphic() { return cad(); }, dxf: () => cad().D.toDXF({ ltscale: 1 }), select: H.select || (() => {}) }; else delete hs[name];
+    return true;
+  }
 
   function shear(host, ctx, R, sel, onSel) {
     if (!putC(host, 'shear', ctx, TX => TX.shear(R, ctx.P, { gi: gi(ctx), sel }), 'shear', { P: ctx.P, gi: gi(ctx), R, sel, onSel })) put(host, 'shear', ctx, TX => TX.shear(R, ctx.P, { gi: gi(ctx), sel }), onSel);
     // the stiffener details follow the selection: the selected transverse stiffener / bearing, else the governing one (2026-10-31)
-    put(host, 'shear-detail', ctx, TX => TX.shearDetail(R, ctx.P, { i: sel && sel.k === 'ts' ? sel.i : undefined }));
-    put(host, 'shear-bearing', ctx, TX => TX.shearBearing(R, ctx.P, { i: sel && sel.k === 'bs' ? sel.i : undefined }));
+    const oTs = { i: sel && sel.k === 'ts' ? sel.i : undefined }, oBs = { i: sel && sel.k === 'bs' ? sel.i : undefined };
+    putDet(host, 'shear-detail', ctx, TX => TX.shearDetail(R, ctx.P, oTs), 'stiff', { R, opt: oTs }) || put(host, 'shear-detail', ctx, TX => TX.shearDetail(R, ctx.P, oTs));
+    putDet(host, 'shear-bearing', ctx, TX => TX.shearBearing(R, ctx.P, oBs), 'bear', { R, opt: oBs }) || put(host, 'shear-bearing', ctx, TX => TX.shearBearing(R, ctx.P, oBs));
   }
   function fatigue(host, ctx, R, sel, onSel) {
     if (!putC(host, 'fatigue', ctx, TX => TX.fatigue(R, ctx.P, { gi: gi(ctx), sel }), 'fatigue', { P: ctx.P, gi: gi(ctx), R, sel, onSel })) put(host, 'fatigue', ctx, TX => TX.fatigue(R, ctx.P, { gi: gi(ctx), sel }), onSel);
     if (!putC(host, 'fatigue-chart', ctx, TX => TX.fatigueChart(R, ctx.P, { gi: gi(ctx), sel }), 'fatigueChart', { P: ctx.P, gi: gi(ctx), R, sel, onSel })) put(host, 'fatigue-chart', ctx, TX => TX.fatigueChart(R, ctx.P, { gi: gi(ctx), sel }), onSel);
   }
-  function crossframe(host, ctx, B) { put(host, 'crossframe', ctx, TX => TX.crossframe(B, ctx.P, { dia: !!(window.SBDCrossframes && ctx.P.crossframes && window.SBDCrossframes.cfDiaOn(ctx.P.crossframes)) })); }
+  function crossframe(host, ctx, B) { const o = { dia: !!(window.SBDCrossframes && ctx.P.crossframes && window.SBDCrossframes.cfDiaOn(ctx.P.crossframes)) };
+    putDet(host, 'crossframe', ctx, TX => TX.crossframe(B, ctx.P, o), 'crossframe', { B, opt: o }) || put(host, 'crossframe', ctx, TX => TX.crossframe(B, ctx.P, o)); }
   function welds(host, ctx, B, sel, onSel) {
     if (!putC(host, 'welds', ctx, TX => TX.welds(B, ctx.P, { gi: gi(ctx), sel }), 'welds', { P: ctx.P, gi: gi(ctx), R: B, sel, onSel })) put(host, 'welds', ctx, TX => TX.welds(B, ctx.P, { gi: gi(ctx), sel }), onSel);
-    put(host, 'weld-detail', ctx, TX => TX.weldDetail(B, ctx.P, { i: sel && sel.k === 'fw' ? sel.i : undefined }));
+    const oW = { i: sel && sel.k === 'fw' ? sel.i : undefined };
+    putDet(host, 'weld-detail', ctx, TX => TX.weldDetail(B, ctx.P, oW), 'weld', { B, opt: oW }) || put(host, 'weld-detail', ctx, TX => TX.weldDetail(B, ctx.P, oW));
   }
   /* splice (SPLGFX, 2026-11-02): the location strip (all splices, the selected one boxed; a click selects) and the detail of the selected splice, its frame at most
      60 % of the window high (the drawing is wide: it fits the card width at a reading scale) */
   function splice(host, ctx, s, list, sel, onSel) {
     if (list && list.length) put(host, 'splice-strip', ctx, TX => TX.spliceStrip(list, ctx.P, { sel, narrow: window.innerWidth < 700 }), onSel ? v => { if (v && v.k === 'fs') onSel(v.i); } : null, { minPx: 60, phoneZoom: false });
-    if (s) put(host, 'splice', ctx, TX => TX.splice(s, {}), null, { maxVh: 60 });
+    if (s) putDet(host, 'splice', ctx, TX => TX.splice(s, {}), 'splice', { s }) || put(host, 'splice', ctx, TX => TX.splice(s, {}), null, { maxVh: 60 });
   }
   function rating(host, ctx, B, sel, onSel) { if (!putC(host, 'rating', ctx, TX => TX.ratingChart(B, ctx.P, { gi: gi(ctx), sel }), 'rating', { P: ctx.P, gi: gi(ctx), R: B, sel, onSel })) put(host, 'rating', ctx, TX => TX.ratingChart(B, ctx.P, { gi: gi(ctx), sel }), onSel); }
 

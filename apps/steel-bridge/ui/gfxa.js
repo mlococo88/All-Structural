@@ -318,8 +318,13 @@
       return { D, title: `Stress checks at ${r.name}`, file: 'flexure-checks', note: 'Demand and capacity of the checks in the location table (checks in ksi); ratios of every check with 1.0 marked.' };
     };
     if (viz) viz.flexChecks(B, o, { build: bldB }); else G.mount(B, bldB, { key: 'fxb' });
-    // unbraced length (LTB) sketch
-    G.mount(C, () => {
+    // unbraced length (LTB) sketch. DETC (2026-11-10): the screen graphic is the option C style (ui/gfxdet.js SBDGfxDet.ltb); Download DXF is ltbGraphic(r), unchanged
+    if (window.SBDGfxDet && window.SBDVizKit && window.SBDVizKit.detCard) window.SBDGfxDet.ltb(C, { r, dxf: () => ltbGraphic(r) }); else G.mount(C, () => ltbGraphic(r), { key: 'fxc' });
+    return H;
+  }
+  /* the LTB sketch of location row r as the CAD drawing (the Download DXF of the Flexure tab's unbraced-length graphic) */
+  function ltbGraphic(r) {
+    const G = GR(); {
       const lt = r.lt || {}, Lb = r.Lb, sg = r.seg, h = Math.max(Lb || 20, 20) * 12 * 0.025, D = G.newDrawing(h), t = D.layer('ANNO-TEXT', 7), ly = { f: D.layer('GRDR-PLAT', 4), b: D.layer('BRNG', 8), dm: D.layer('DIMS', 7), s: D.layer('SEL', 5), a: D.layer('LTB-LP', 3), c: D.layer('LTB-LR', 30), d: D.layer('LTB-LB', 1) };
       if (!fin(Lb) || !sg) { D.text(t, 0, 0, h, 'UNBRACED LENGTH NOT AVAILABLE FOR THIS LOCATION'); return { D, title: 'Unbraced length', file: 'flexure-ltb' }; }
       const xa = 0, xb = (sg.xb - sg.xa) * 12, xm = (r.x - sg.xa) * 12, tf = h * 0.5;
@@ -333,8 +338,7 @@
       D.text(t, 0, y - 0.3 * h, 0.9 * h, `C_b = ${nf(r.Cb, 3)}; F_nc: FLB ${nf(lt.FLB, 2)} KSI, LTB ${nf(lt.LTB, 2)} KSI; ${regime.toUpperCase()}`);
       D.text(t, 0, tf + 7 * h, 1.3 * h, 'UNBRACED LENGTH OF THE COMPRESSION FLANGE (LTB)');
       return { D, title: 'Unbraced length (LTB) at the selected location', file: 'flexure-ltb', note: 'L_b, C_b, L_p, L_r and F_nc are the values of the location table (worked steps below); the brace points are the Framing & bracing tab\'s.' };
-    }, { key: 'fxc' });
-    return H;
+    }
   }
 
   /* ================= Constructibility ================= */
@@ -367,8 +371,14 @@
     const oh = R.F && R.F.oh;
     // QA2 (2026-11-09): no bracket sketch to draw (interior girder, or a GirderDetail file): a short note, not an empty frame with a title
     if (!oh) { B.innerHTML = `<p class="note">${(P.girders[o.gi] || {}).position === 'exterior' ? 'Overhang brackets are checked with the project as the source (not a GirderDetail file).' : 'Overhang brackets apply to exterior girders; select G1 or Gn.'}</p>`; return H; }
-    G.mount(B, () => {
-      const gg = P.girders[o.gi], sg = gg.segments[0], a = +(oh || {}).a, hb = +(oh || {}).hb, wOH = +(oh || {}).wOH, tOH = +(oh || {}).tOH;
+    // DETC (2026-11-10): the screen sketch is the option C style (ui/gfxdet.js SBDGfxDet.bracket, drawn from the bracket inputs R.F.oh.p); Download DXF is ohGraphic, unchanged
+    if (window.SBDGfxDet && window.SBDVizKit && window.SBDVizKit.detCard) window.SBDGfxDet.bracket(B, { P, gi: o.gi, oh, dxf: () => ohGraphic(P, o.gi, R) }); else G.mount(B, () => ohGraphic(P, o.gi, R), { key: 'cnb' });
+    return H;
+  }
+  /* the overhang bracket sketch as the CAD drawing (the Download DXF of the Constructibility tab's bracket graphic); R = the tab's result */
+  function ohGraphic(P, gi, R) {
+    const G = GR(), oh = R.F && R.F.oh; {
+      const gg = P.girders[gi], sg = gg.segments[0], a = +(oh || {}).a, hb = +(oh || {}).hb, wOH = +(oh || {}).wOH, tOH = +(oh || {}).tOH;
       const h = Math.max(sg.topB, wOH || 30) * 0.05, D = G.newDrawing(h), t = D.layer('ANNO-TEXT', 7), ly = { g: D.layer('GRDR', 5), dk: D.layer('DECK', 7), br: D.layer('BRACKET', 30), ld: D.layer('LOAD', 1), dm: D.layer('DIMS', 7) };
       if (!oh || ![a, hb, wOH, tOH].every(fin)) { D.text(t, 0, 0, h, 'OVERHANG BRACKETS: EXTERIOR GIRDER, PROJECT SOURCE ONLY (INPUTS ABOVE)'); return { D, title: 'Overhang bracket', file: 'overhang-bracket' }; }
       const Dw = Math.min(+sg.D, 40), x0 = 0; D.rect(ly.g, -sg.topB / 2, -sg.topT, sg.topB / 2, 0); D.rect(ly.g, -sg.tw / 2, -sg.topT - Dw, sg.tw / 2, -sg.topT); D.line(ly.g, -sg.topB * 0.5, -sg.topT - Dw, sg.topB * 0.5, -sg.topT - Dw, D.ltype('HIDDEN'));
@@ -379,9 +389,8 @@
       arrow(D, ly.ld, x0 + wOH - 0.2 * h, ys + tOH + 7 * h, ys + tOH, h); D.text(t, x0 + wOH, ys + tOH + 7.2 * h, 0.7 * h, `FINISHING MACHINE ${nf(oh.Pfm, 1)} KIP; SCREED, RAIL, WALKWAY, CONSTR. LL`, 2);
       D.text(t, -sg.topB / 2, ys + tOH + 11 * h, 1.2 * h, 'OVERHANG BRACKET (EXTERIOR GIRDER), SCHEMATIC'); D.text(t, -sg.topB / 2, ys + tOH + 9.2 * h, 0.7 * h, 'DIMENSIONS ARE THE OVERHANG BRACKET INPUTS OF THE TAB; BRACKET MEMBERS SCHEMATIC (CONTRACTOR-DESIGNED)');
       return { D, title: 'Overhang bracket sketch (exterior girder)', file: 'overhang-bracket', note: 'Dimensions from the overhang-bracket inputs (a, h_b, w_OH, t_OH); loads are the tab\'s OH1–OH5 inputs. Schematic.' };
-    }, { key: 'cnb' });
-    return H;
+    }
   }
 
-  window.SBDGfxA = { section, secModel, loads, analysis, flexure, constr, secGraphic, loadsGraphic };
+  window.SBDGfxA = { section, secModel, loads, analysis, flexure, constr, secGraphic, loadsGraphic, ltbGraphic, ohGraphic };
 })();

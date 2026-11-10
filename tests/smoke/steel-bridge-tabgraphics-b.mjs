@@ -35,7 +35,19 @@ try {
       const sv = H.el, m = sv.getScreenCTM(), q = sv.createSVGPoint(); q.x = (r.x0 + r.x1) / 2 - ox; q.y = oy - (r.y0 + r.y1) / 2; const c = q.matrixTransform(m); return { x: c.x, y: c.y }; }, [name, k, i]);
     await p.mouse.click(pt2.x, pt2.y); await p.waitForTimeout(700);
   };
+  // DETC (2026-11-10): the detail drawings and the splice (shear-detail, shear-bearing, crossframe, weld-detail, splice) are option C cards (ui/gfxdet.js): an SVG fitted
+  // to the card (no zoom buttons, no viewer), shapes and texts drawn, Download DXF = the CAD drawing (handles[name].dxf(), the same text the download saves)
+  const commonDet = async (tab, name) => {
+    const s0 = `#out [data-gfxb="${name}"] .vk-det`; await p.waitForSelector(s0 + ' svg', { timeout: 240000 });
+    const info = await p.$eval(s0, r => ({ texts: r.querySelectorAll('svg text').length, shapes: r.querySelectorAll('svg line,svg polyline,svg polygon,svg circle,svg rect').length, zoom: r.querySelectorAll('.sdx-btns,.sdx-view').length,
+      w: r.querySelector('svg').getBoundingClientRect().width, cw: r.clientWidth }));
+    assert.ok(info.texts > 5 && info.shapes > 8 && info.zoom === 0 && info.w <= info.cw + 1, `${tab}/${name}: card ${JSON.stringify(info)}`);
+    const [dl] = await Promise.all([p.waitForEvent('download'), p.click(s0 + ' [data-vkdxf]')]); const txt = fs.readFileSync(await dl.path(), 'utf8');
+    assert.equal(txt, await p.evaluate(n => window.SBDTabGfxBUI.handles[n].dxf(), name), `${tab}/${name}: Download DXF = the CAD drawing`); assert.ok(/SECTION/.test(txt) && /EOF/.test(txt) && /S-ANNO-TEXT/.test(txt), `${tab}/${name}: DXF`);
+    done.push(`${tab}/${name}`); return txt;
+  };
   const common = async (tab, name, extra) => {   // zoom and DXF on the mounted graphic `name`
+    await p.waitForSelector(`#out [data-gfxb="${name}"] svg`, { timeout: 240000 }); if (await p.$(`#out [data-gfxb="${name}"] .vk-det`)) return commonDet(tab, name);
     await p.waitForSelector(gfx(name), { timeout: 240000 });
     const svgInfo = await p.$eval(gfx(name), s => ({ texts: s.querySelectorAll('text').length, shapes: s.querySelectorAll('line,polyline,polygon,circle').length }));
     assert.ok(svgInfo.texts > 8 && svgInfo.shapes > 20, `${tab}/${name}: drawn ${JSON.stringify(svgInfo)}`);
@@ -64,7 +76,7 @@ try {
   // AUTO (2026-11-09): an output tab runs itself when selected; settle() waits until it is no longer out of date and no run is pending
   const settle = (t = 240000) => p.waitForFunction(() => !document.querySelector('#out .alert.stale:not([hidden])') && !/Calculating|updating/.test((document.querySelector('#autoMsg') || {}).textContent || '') && !/Calculating/.test(((document.querySelector('#out') || {}).innerText || '').slice(0, 400)), null, { timeout: t });
   // ---- Shear & stiffeners
-  await p.click('#tabBar [data-otab="shear"]'); await settle(); const t1 = await commonV('shear', 'shear'); await common('shear', 'shear-detail');
+  await p.click('#tabBar [data-otab="shear"]'); await settle(); const t1 = await commonV('shear', 'shear'); await common('shear', 'shear-detail'); await common('shear', 'shear-bearing');
   assert.ok(/S-RATIO-OK/.test(t1) && /S-GRDR-STIF/.test(t1)); await clickV('shear', 'pan', 30); await selRow('data-sh', 'pan:30'); await commonV('shear', 'shear'); await clickV('shear', 'bs', 1); await selRow('data-sh', 'bs:1');
   await clickV('shear', 'loc', 20); await selRow('data-sh', 'loc:20'); await shot('shear', '#out [data-gfxb="shear"]');
   // ---- Fatigue & studs

@@ -173,3 +173,147 @@
 
   window.SBDVizKit = { css, PAL, fx, sgn, esc, sub, seg, chips, tiles, wire, T, L, PG, PL, defs, grad, stack, niceStep, ruler, diagram, readout, fit, print, DXF_NOTE };
 })();
+
+/* ---------- detail drawings and plans (DETC, 2026-11-10: families (c) details and (d) plans of the option C rollout) ----------
+   A separate block, so other graphics can extend the kit beside it. Adds to window.SBDVizKit (display only; nothing here computes an engineering value):
+     VK.DPAL                          the detail palette: steel / plate / steel line, concrete, bars, bolt and weld (one colour), load, ratio fills ok / hi / ng, governing (C's accent)
+     VK.detCss()                      the style sheet of the detail classes (dt-…): screen colours, print grey + hatch, forced colours (calls VK.css())
+     VK.st(text)                      SVG text from plain text with "_" subscripts (L_b, d_o1, R_u/P_r: the rule of ui/sub.js), escaped
+     VK.scene()                       a drawing in model units (y up) drawn at a width in px: S.rect / poly / pline / line / circ (model radius) / dot (px radius) / text / dimH /
+                                      dimV / callout / arrow / region; S.render({ W, maxH, minH, pad, label }) -> { svg, k, X, Y, w, h } (text at its px size, the model scaled to fit)
+     VK.detRead(root, out)            hover (mouse) and tap read-out of the regions (data-dtr) of the SVGs in root, written to out (aria-live)
+     VK.detCard(slot, o)              the card: header (title, small subtitle, Download DXF = o.dxf(), the CAD line drawing), optional segmented control, the figure redrawn
+                                      at the card width (VK.fit: resize and sbd2:panelresize; print at 760 px when narrower), read-out line, caption and notes, DXF note
+     VK.DXF_NOTE_D                    the Download DXF note of a detail drawing
+   Each shape carries its colours as attributes as well as its class, so a figure is right without the style sheet (the Report's static figures). Fix log: DETC. */
+(function () {
+  'use strict';
+  const VK = window.SBDVizKit; if (!VK) return;
+  const esc = VK.esc, r2 = v => +(+v).toFixed(2), fin = v => typeof v === 'number' && isFinite(v);
+  const DPAL = { steel: '#64748B', plate: '#A7B3C2', line: '#475569', conc: '#ECE7DC', concLine: '#C9C0AD', bar: '#8A5A44', bolt: '#B45309', load: '#1E3A5F', dim: '#64748B',
+    ok: '#DCFCE7', okL: '#15803D', hi: '#FEF3C7', hiL: '#B45309', ng: '#FEE2E2', ngL: '#B91C1C', gov: '#2563EB', ink: '#0F172A', muted: '#475569', faint: '#94A3B8' };
+  const DXF_NOTE_D = 'Download DXF gives the CAD line drawing of this graphic (drafting layers, dimensions and notes, as before); the shaded graphic above is for the screen and the printout only.';
+  /* class -> [fill, stroke, stroke-width] (the attributes; the style sheet repeats them and adds print and forced colours) */
+  const STY = { 'dt-st': [DPAL.steel, 'none', 0], 'dt-pl': [DPAL.plate, DPAL.line, 0.8], 'dt-cc': [DPAL.conc, DPAL.concLine, 0.8], 'dt-bar': [DPAL.bar, 'none', 0], 'dt-bolt': [DPAL.bolt, 'none', 0],
+    'dt-weld': [DPAL.bolt, 'none', 0], 'dt-brg': ['#334155', 'none', 0], 'dt-ok': [DPAL.ok, DPAL.okL, 0.8], 'dt-hi': [DPAL.hi, DPAL.hiL, 0.8], 'dt-ng': [DPAL.ng, DPAL.ngL, 0.8], 'dt-na': ['#F1F5F9', DPAL.faint, 0.8],
+    'dt-gov': ['none', DPAL.gov, 2.2], 'dt-govf': ['#DBEAFE', DPAL.gov, 1.4], 'dt-ol': ['none', DPAL.line, 0.9], 'dt-hid': ['none', DPAL.line, 0.8], 'dt-cl': ['none', DPAL.faint, 0.8], 'dt-mem': ['none', '#334155', 2.4],
+    'dt-ld': ['none', DPAL.load, 1.4], 'dt-ldh': [DPAL.load, 'none', 0], 'dt-dim': ['none', DPAL.dim, 0.7], 'dt-ext': ['none', '#CBD5E1', 0.6], 'dt-lane': ['#EEF2F7', '#CBD5E1', 0.6], 'dt-sel': ['#EFF4FF', DPAL.gov, 1.4],
+    'dt-wh': ['#0F172A', 'none', 0], 'dt-il': ['none', '#7C3AED', 1.4], 'dt-ilf': ['#F3EEFF', 'none', 0], 'dt-tf': ['none', '#15803D', 1], 'dt-reg': ['transparent', 'none', 0], 'dt-band': [DPAL.gov, 'none', 0] };
+  const DASH = { 'dt-hid': '4 3', 'dt-cl': '9 3 2 3', 'dt-tf': '6 3', 'dt-il': '', 'dt-ext': '' };
+  const attrs = (cls, o) => { o = o || {}; const s = STY[cls.split(' ')[0]] || ['none', DPAL.ink, 1], f = o.fill || s[0], k = o.stroke || s[1], w = o.sw != null ? o.sw : s[2], d = o.dash != null ? o.dash : DASH[cls.split(' ')[0]];
+    return ` class="${cls}" fill="${f}" stroke="${k}"${w ? ` stroke-width="${w}"` : ''}${d ? ` stroke-dasharray="${d}"` : ''}${o.op != null ? ` opacity="${o.op}"` : ''}`; };
+  function detCss() {
+    VK.css(); if (typeof document === 'undefined' || document.getElementById('vk-det-css')) return;
+    const st = document.createElement('style'); st.id = 'vk-det-css';
+    st.textContent = `.vk svg text.dt-t{fill:var(--vk-ink);} .vk svg text.dt-m{fill:var(--vk-mut);} .vk svg text.dt-g{fill:var(--vk-acc);font-weight:600;} .vk svg text.dt-h{font-weight:600;}
+.vk svg text.dt-tok{fill:${DPAL.okL};} .vk svg text.dt-thi{fill:${DPAL.hiL};} .vk svg text.dt-tng{fill:${DPAL.ngL};} .vk svg text.dt-w{fill:#fff;font-weight:600;}
+.vk svg [data-dtr]{cursor:pointer;} .vk svg .dt-reg.on{fill:rgba(37,99,235,.10);stroke:${DPAL.gov};stroke-width:1;} .vk .vk-figs{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start;} .vk .vk-figs>div{min-width:0;}
+.vk .vk-figs h4{margin:0 0 2px;font-size:9.5pt;font-weight:600;color:var(--vk-ink);} .vk .vk-figs h4 small{font-weight:400;color:var(--vk-mut);margin-left:4px;}
+.vk table.vk-tbl{border-collapse:collapse;font-size:9pt;margin:8px 0 0;font-variant-numeric:tabular-nums;} .vk table.vk-tbl th,.vk table.vk-tbl td{border-bottom:1px solid var(--vk-line);padding:3px 8px;text-align:left;white-space:nowrap;} .vk table.vk-tbl th{color:var(--vk-mut);font-weight:600;}
+.vk table.vk-tbl td.n{text-align:right;} .vk table.vk-tbl tr.gov td{color:var(--vk-acc);font-weight:600;} .vk .vk-tblw{max-width:100%;overflow-x:auto;}
+@media print{.vk svg .dt-st{fill:#9A9A9A;stroke:#000;stroke-width:.6;} .vk svg .dt-pl{fill:#D4D4D4;stroke:#000;} .vk svg .dt-cc{fill:#fff;stroke:#000;} .vk svg .dt-bar,.vk svg .dt-bolt,.vk svg .dt-weld,.vk svg .dt-brg,.vk svg .dt-wh,.vk svg .dt-ldh,.vk svg .dt-band{fill:#000;}
+  .vk svg .dt-ok{fill:#fff;stroke:#000;} .vk svg .dt-hi{fill:#D4D4D4;stroke:#000;} .vk svg .dt-ng{fill:url(#vk-ht);stroke:#000;} .vk svg .dt-na{fill:#fff;stroke:#666;} .vk svg .dt-gov{stroke:#000;stroke-width:2.6;} .vk svg .dt-govf{fill:#fff;stroke:#000;stroke-width:2;}
+  .vk svg .dt-ol,.vk svg .dt-hid,.vk svg .dt-mem,.vk svg .dt-ld,.vk svg .dt-dim,.vk svg .dt-il,.vk svg .dt-tf{stroke:#000;} .vk svg .dt-cl,.vk svg .dt-ext{stroke:#666;} .vk svg .dt-lane,.vk svg .dt-sel,.vk svg .dt-ilf{fill:#fff;stroke:#666;}
+  .vk svg text.dt-t,.vk svg text.dt-m,.vk svg text.dt-g,.vk svg text.dt-tok,.vk svg text.dt-thi,.vk svg text.dt-tng{fill:#000;stroke:none;} .vk svg .dt-reg.on{fill:none;stroke:none;} .vk table.vk-tbl tr.gov td{color:#000;}}
+@media (forced-colors:active){.vk svg .dt-st,.vk svg .dt-bolt,.vk svg .dt-weld,.vk svg .dt-brg,.vk svg .dt-wh{fill:GrayText;} .vk svg .dt-pl,.vk svg .dt-cc,.vk svg .dt-ok,.vk svg .dt-hi,.vk svg .dt-ng,.vk svg .dt-lane{fill:Canvas;stroke:CanvasText;}
+  .vk svg .dt-gov,.vk svg .dt-govf{stroke:Highlight;} .vk svg .dt-ol,.vk svg .dt-mem,.vk svg .dt-dim,.vk svg .dt-ld{stroke:CanvasText;} .vk svg text.dt-t,.vk svg text.dt-m,.vk svg text.dt-tok,.vk svg text.dt-thi,.vk svg text.dt-tng{fill:CanvasText;} .vk svg text.dt-g{fill:Highlight;}}`;
+    document.head.appendChild(st);
+  }
+  /* plain text with "_" subscripts (the rule of ui/sub.js) -> SVG text content; ^2 / ^4 as superscripts */
+  const RE = /([A-Za-zΑ-Ωα-ωℓφ)])_\{?([A-Za-z0-9ℓ]+(?:[,+][A-Za-z0-9ℓ]+)*)\}?/g;
+  const st = t => esc(t).replace(RE, '$1<tspan baseline-shift="sub" font-size="0.75em">$2</tspan>').replace(/\^(\d)/g, '<tspan baseline-shift="super" font-size="0.7em">$1</tspan>');
+  const plain = t => String(t == null ? '' : t).replace(RE, '$1$2').replace(/\^(\d)/g, '$1');
+  const TW = (t, sz) => plain(t).length * sz * 0.56;   // the UI font's average advance (estimate for the layout; the figure keeps a margin)
+
+  /* ---------- the scene: model units, y up; drawn at a width W (px) with every text at its own px size ---------- */
+  function scene() {
+    const it = [], geo = [Infinity, Infinity, -Infinity, -Infinity], g = (x, y) => { if (fin(x) && fin(y)) { geo[0] = Math.min(geo[0], x); geo[1] = Math.min(geo[1], y); geo[2] = Math.max(geo[2], x); geo[3] = Math.max(geo[3], y); } };
+    const S = { items: it, geo };
+    const shape = (pts, f) => { pts.forEach(p => g(p[0], p[1])); it.push({ f, b: T => pts.map(p => [T.X(p[0]), T.Y(p[1])]) }); return S; };
+    S.poly = (p, cls, o) => shape(p, T => `<polygon points="${p.map(q => r2(T.X(q[0])) + ',' + r2(T.Y(q[1]))).join(' ')}"${attrs(cls, o)}/>`);
+    S.rect = (x0, y0, x1, y1, cls, o) => S.poly([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], cls, o);
+    S.pline = (p, cls, o) => shape(p, T => `<polyline points="${p.map(q => r2(T.X(q[0])) + ',' + r2(T.Y(q[1]))).join(' ')}"${attrs(cls, { fill: 'none', ...(o || {}) })}/>`);
+    S.line = (x1, y1, x2, y2, cls, o) => shape([[x1, y1], [x2, y2]], T => `<line x1="${r2(T.X(x1))}" y1="${r2(T.Y(y1))}" x2="${r2(T.X(x2))}" y2="${r2(T.Y(y2))}"${attrs(cls, o)}/>`);
+    S.circ = (x, y, r, cls, o) => shape([[x - r, y - r], [x + r, y + r]], T => `<circle cx="${r2(T.X(x))}" cy="${r2(T.Y(y))}" r="${r2(Math.max(0.6, r * T.k))}"${attrs(cls, o)}/>`);
+    S.dot = (x, y, rp, cls, o) => { g(x, y); it.push({ f: T => `<circle cx="${r2(T.X(x))}" cy="${r2(T.Y(y))}" r="${r2(rp)}"${attrs(cls, o)}/>`, b: T => [[T.X(x) - rp, T.Y(y) - rp], [T.X(x) + rp, T.Y(y) + rp]] }); return S; };
+    /* text at a model point, offset (dx, dy) in px (screen: dy down); o = { a: start | middle | end, cls, sz, w (bold), rot } */
+    S.text = (x, y, t, o) => { o = o || {}; const sz = o.sz || 12, a = o.a || 'start', lift = o.vc ? sz * 0.35 : 0, lh = sz * 1.25;
+      let L = [String(t)]; if (o.maxw && TW(t, sz) > o.maxw) { L = []; let cur = ''; String(t).split(' ').forEach(w => { if (cur && TW(cur + ' ' + w, sz) > o.maxw) { L.push(cur); cur = w; } else cur = cur ? cur + ' ' + w : w; }); if (cur) L.push(cur); }
+      L.forEach((q, i) => { const dx = o.dx || 0, dy = (o.dy || 0) + (o.up ? -(L.length - 1 - i) : i) * lh, w = TW(q, sz);
+        it.push({ f: T => `<text x="${r2(T.X(x) + dx)}" y="${r2(T.Y(y) + dy + lift)}"${a !== 'start' ? ` text-anchor="${a}"` : ''} class="${o.cls || 'dt-t'}${o.halo ? ' halo' : ''}" style="font-size:${sz}px"${o.w ? ' font-weight="600"' : ''} fill="${o.fill || (/dt-m/.test(o.cls || '') ? DPAL.muted : /dt-g/.test(o.cls || '') ? DPAL.gov : DPAL.ink)}">${st(q)}</text>`,
+          b: T => { const X0 = T.X(x) + dx - (a === 'middle' ? w / 2 : a === 'end' ? w : 0), Y0 = T.Y(y) + dy + lift; return [[X0, Y0 - sz * 0.85], [X0 + w, Y0 + sz * 0.25]]; } }); }); return S; };
+    /* a horizontal dimension x0..x1 at the model line y, drawn off px above (off > 0) or below (off < 0), extension lines from yr (model; default y), label centred */
+    S.dimH = (x0, x1, y, off, label, o) => { o = o || {}; const yr = o.yr != null ? o.yr : y; g(x0, yr); g(x1, yr); const sz = o.sz || 11;
+      it.push({ f: T => { const yy = T.Y(y) - off, a = T.X(x0), b = T.X(x1), e = T.Y(yr), s = Math.sign(off) || 1, tk = 3.5;
+          return `<line x1="${r2(a)}" y1="${r2(e - s * 2)}" x2="${r2(a)}" y2="${r2(yy - s * 4)}"${attrs('dt-ext')}/><line x1="${r2(b)}" y1="${r2(e - s * 2)}" x2="${r2(b)}" y2="${r2(yy - s * 4)}"${attrs('dt-ext')}/>`
+            + `<line x1="${r2(a)}" y1="${r2(yy)}" x2="${r2(b)}" y2="${r2(yy)}"${attrs('dt-dim')}/><line x1="${r2(a - tk)}" y1="${r2(yy + tk)}" x2="${r2(a + tk)}" y2="${r2(yy - tk)}"${attrs('dt-dim', { sw: 1 })}/><line x1="${r2(b - tk)}" y1="${r2(yy + tk)}" x2="${r2(b + tk)}" y2="${r2(yy - tk)}"${attrs('dt-dim', { sw: 1 })}/>`
+            + (label ? `<text x="${r2((a + b) / 2)}" y="${r2(yy - 4)}" text-anchor="middle" class="dt-t halo" style="font-size:${sz}px" fill="${DPAL.ink}">${st(label)}</text>` : ''); },
+        b: T => { const yy = T.Y(y) - off, w = label ? TW(label, sz) : 0, c = (T.X(x0) + T.X(x1)) / 2; return [[Math.min(T.X(x0), c - w / 2), Math.min(yy - 4 - sz, T.Y(yr))], [Math.max(T.X(x1), c + w / 2), Math.max(yy + 4, T.Y(yr))]]; } }); return S; };
+    /* a vertical dimension y0..y1 at the model line x, drawn off px to the right (off > 0) or left (off < 0), extension lines from xr; label horizontal beside it */
+    S.dimV = (y0, y1, x, off, label, o) => { o = o || {}; const xr = o.xr != null ? o.xr : x; g(xr, y0); g(xr, y1); const sz = o.sz || 11;
+      it.push({ f: T => { const xx = T.X(x) + off, a = T.Y(y0), b = T.Y(y1), e = T.X(xr), s = Math.sign(off) || 1, tk = 3.5, lx = xx + s * 6;
+          return `<line x1="${r2(e + s * 2)}" y1="${r2(a)}" x2="${r2(xx + s * 4)}" y2="${r2(a)}"${attrs('dt-ext')}/><line x1="${r2(e + s * 2)}" y1="${r2(b)}" x2="${r2(xx + s * 4)}" y2="${r2(b)}"${attrs('dt-ext')}/>`
+            + `<line x1="${r2(xx)}" y1="${r2(a)}" x2="${r2(xx)}" y2="${r2(b)}"${attrs('dt-dim')}/><line x1="${r2(xx - tk)}" y1="${r2(a + tk)}" x2="${r2(xx + tk)}" y2="${r2(a - tk)}"${attrs('dt-dim', { sw: 1 })}/><line x1="${r2(xx - tk)}" y1="${r2(b + tk)}" x2="${r2(xx + tk)}" y2="${r2(b - tk)}"${attrs('dt-dim', { sw: 1 })}/>`
+            + (label ? `<text x="${r2(lx)}" y="${r2((a + b) / 2 + sz * 0.35)}"${s < 0 ? ' text-anchor="end"' : ''} class="dt-t halo" style="font-size:${sz}px" fill="${DPAL.ink}">${st(label)}</text>` : ''); },
+        b: T => { const xx = T.X(x) + off, s = Math.sign(off) || 1, w = label ? TW(label, sz) + 6 : 0, m = (T.Y(y0) + T.Y(y1)) / 2; return [[Math.min(xx, T.X(xr), s < 0 ? xx - w : xx), Math.min(T.Y(y1), m - sz)], [Math.max(xx, T.X(xr), s > 0 ? xx + w : xx), Math.max(T.Y(y0), m + sz)]]; } }); return S; };
+    /* a callout: a dot at the model point, a leader (dx, dy px) and the label (lines: an array) at its end */
+    S.callout = (x, y, dx, dy, lines, o) => { o = o || {}; g(x, y); const L = [].concat(lines), sz = o.sz || 11, a = dx < 0 ? 'end' : 'start', lh = sz * 1.3;
+      it.push({ f: T => { const px = T.X(x), py = T.Y(y), ex = px + dx, ey = py + dy, tx = ex + (dx < 0 ? -4 : 4);
+          return `<circle cx="${r2(px)}" cy="${r2(py)}" r="2"${attrs(o.gov ? 'dt-band' : 'dt-wh', o.gov ? {} : { fill: DPAL.line })}/><polyline points="${r2(px)},${r2(py)} ${r2(ex)},${r2(ey)} ${r2(tx)},${r2(ey)}"${attrs('dt-dim', { fill: 'none', stroke: o.gov ? DPAL.gov : DPAL.line })}/>`
+            + L.map((t, i) => `<text x="${r2(tx + (dx < 0 ? -2 : 2))}" y="${r2(ey + sz * 0.35 + (i - (L.length - 1) / 2) * lh)}"${a === 'end' ? ' text-anchor="end"' : ''} class="${o.cls || 'dt-t'} halo" style="font-size:${sz}px" fill="${o.gov ? DPAL.gov : DPAL.ink}">${st(t)}</text>`).join(''); },
+        b: T => { const px = T.X(x), py = T.Y(y), ex = px + dx + (dx < 0 ? -6 : 6), ey = py + dy, w = Math.max(...L.map(t => TW(t, sz))), hh = L.length * lh / 2 + 2;
+          return [[Math.min(px, dx < 0 ? ex - w : ex), Math.min(py, ey - hh)], [Math.max(px, dx < 0 ? ex : ex + w), Math.max(py, ey + hh)]]; } }); return S; };
+    /* a load arrow down to the model point (len px), its head filled */
+    S.arrow = (x, y, len, o) => { o = o || {}; g(x, y); it.push({ f: T => { const px = T.X(x), py = T.Y(y); return `<line x1="${r2(px)}" y1="${r2(py - len)}" x2="${r2(px)}" y2="${r2(py - 6)}"${attrs(o.cls || 'dt-ld')}/><polygon points="${r2(px)},${r2(py)} ${r2(px - 3.5)},${r2(py - 7)} ${r2(px + 3.5)},${r2(py - 7)}"${attrs(o.head || 'dt-ldh')}/>`; },
+      b: T => [[T.X(x) - 4, T.Y(y) - len], [T.X(x) + 4, T.Y(y)]] }); return S; };
+    /* a read-out region (transparent; hover / tap shows text) over a model rectangle, at least 12 px wide and high */
+    S.region = (x0, y0, x1, y1, text) => { it.push({ f: T => { let a = T.X(Math.min(x0, x1)), b = T.X(Math.max(x0, x1)), c = T.Y(Math.max(y0, y1)), d = T.Y(Math.min(y0, y1)); if (b - a < 12) { const m = (a + b) / 2; a = m - 6; b = m + 6; } if (d - c < 12) { const m = (c + d) / 2; c = m - 6; d = m + 6; }
+      return `<rect x="${r2(a)}" y="${r2(c)}" width="${r2(b - a)}" height="${r2(d - c)}" rx="2"${attrs('dt-reg')} data-dtr="${esc(text)}"><title>${esc(text)}</title></rect>`; }, b: null, last: true }); return S; };
+    /* raw SVG (px) built from the transform: f(T) -> string, b(T) -> [[x0, y0], [x1, y1]] */
+    S.raw = (f, b) => { it.push({ f, b }); return S; };
+    /* render at width W: k from the geometry, then the px extents of every item (texts and dimensions included) set the final scale and the viewBox */
+    S.render = o => {
+      o = o || {}; const W = o.W || 700, pad = o.pad != null ? o.pad : 6, gw = Math.max(geo[2] - geo[0], 1e-6), gh = Math.max(geo[3] - geo[1], 1e-6), maxH = o.maxH || 420;
+      const mk = k => ({ k, X: x => (x - geo[0]) * k, Y: y => (geo[3] - y) * k });
+      const ext = T => { const e = [0, 0, gw * T.k, gh * T.k]; it.forEach(q => { if (!q.b) return; q.b(T).forEach(p => { if (fin(p[0]) && fin(p[1])) { e[0] = Math.min(e[0], p[0]); e[1] = Math.min(e[1], p[1]); e[2] = Math.max(e[2], p[0]); e[3] = Math.max(e[3], p[1]); } }); }); return e; };
+      // the largest k at which everything (texts at their px size) fits W - 2 pad wide and maxH high: bisection (the extents grow with k)
+      const fits = k => { const q = ext(mk(k)); return q[2] - q[0] <= W - 2 * pad + 0.5 && q[3] - q[1] <= maxH + 0.5; };
+      let k = Math.min((W - 2 * pad) / gw, maxH / gh);
+      if (!fits(k)) { let lo = k * 1e-3, hi = k; if (!fits(lo)) k *= 0.6; else { for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (fits(m)) lo = m; else hi = m; } k = lo; } }   // texts wider than W alone: the SVG scales down
+      k = Math.max(o.minK || 0, k); const T = mk(k), e = ext(T);
+      if (o.minH && (e[3] - e[1]) < o.minH) { const m = (o.minH - (e[3] - e[1])) / 2; e[1] -= m; e[3] += m; }
+      const w = Math.max(W, e[2] - e[0] + 2 * pad), x0 = e[0] - pad - (w - (e[2] - e[0] + 2 * pad)) / 2, h = Math.ceil(e[3] - e[1] + 2 * pad);
+      const body = it.filter(q => !q.last).map(q => q.f(T)).join('') + it.filter(q => q.last).map(q => q.f(T)).join('');
+      return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${r2(x0)} ${r2(e[1] - pad)} ${r2(w)} ${h}" role="img" aria-label="${esc(o.label || '')}" font-family="Inter, Arial, sans-serif" style="background:#fff">${VK.defs()}${body}</svg>`,
+        k, X: T.X, Y: T.Y, w, h };
+    };
+    return S;
+  }
+
+  /* hover (mouse) and tap read-out of the regions [data-dtr] in root, written to out; the region is outlined */
+  function detRead(root, out) {
+    if (!root || root.__dtr) return; root.__dtr = true; let cur = null;
+    const set = el => { if (cur && cur !== el) cur.classList.remove('on'); cur = el; if (el) { el.classList.add('on'); if (out) out.textContent = el.getAttribute('data-dtr'); } else if (out) out.textContent = ''; };
+    root.addEventListener('pointermove', e => { if (e.pointerType !== 'mouse') return; const t = e.target.closest && e.target.closest('[data-dtr]'); set(t && root.contains(t) ? t : null); });
+    root.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') set(null); });
+    root.addEventListener('click', e => { const t = e.target.closest && e.target.closest('[data-dtr]'); if (t && root.contains(t)) set(t); });
+  }
+
+  /* the card of a detail drawing. o = { id, title, sub (html), seg: { label, items: [[key, html]], cur, on(key) }, draw(W) -> { html (the figure: one or more SVGs), nar },
+     dxf() -> the SBDGraphics graphic of the CAD line drawing (Download DXF), file, hint (read-out hint; none: no read-out line), cap (html), notes [html], tbl (html) } -> { el, fig, redraw } */
+  function detCard(slot, o) {
+    detCss();
+    slot.innerHTML = `<div class="vk vk-det"${o.id ? ` id="${esc(o.id)}"` : ''}><div class="vk-hd"><h3>${o.title}${o.sub ? `<small>${o.sub}</small>` : ''}</h3><button type="button" data-vkdxf title="The CAD line drawing of this graphic">Download DXF</button></div>`
+      + (o.seg && o.seg.items.length > 1 ? VK.seg({ label: o.seg.label, items: o.seg.items, cur: o.seg.cur }) : '') + (o.top || '')
+      + `<div class="vk-fig"></div>${o.hint ? `<p class="vk-read" aria-live="polite" data-hint="${esc(o.hint)}"></p>` : ''}${o.tbl || ''}${o.cap || ''}${(o.notes || []).map(n => `<p class="vk-note">${n}</p>`).join('')}<p class="vk-note">${esc(DXF_NOTE_D)}</p></div>`;
+    const root = slot.querySelector('.vk'), fig = root.querySelector('.vk-fig'), out = root.querySelector('.vk-read');
+    const draw = w => { const W = w > 0 ? w : 900, q = o.draw(W); fig.innerHTML = q.html; root.classList.toggle('vk-narrow', !!q.nar); };
+    VK.fit(fig, draw); VK.print(fig, () => { if (fig.clientWidth < 760) draw(760); }, () => draw(fig.clientWidth));
+    detRead(fig, out);
+    if (o.seg) VK.wire(root, { seg: k => o.seg.on(k) });
+    root.querySelector('[data-vkdxf]').addEventListener('click', () => { try { const g = o.dxf(); window.SBDGraphics.download(g, o.file || g.file || g.title); } catch (e) { alert('The DXF could not be made: ' + e.message); } });
+    return { el: root, fig, redraw: () => draw(fig.clientWidth) };
+  }
+
+  Object.assign(VK, { DPAL, DXF_NOTE_D, detCss, st, plain, TW, scene, detRead, detCard });
+})();
