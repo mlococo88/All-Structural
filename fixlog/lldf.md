@@ -2093,7 +2093,7 @@ index 219cc2c..a3e337e 100644
 - **Other copies:** none.
 - **Open items:** none new.
 
-## 2026-11-10 — PR: claude/massdot-edition-lldf (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (LLMED / LLRIG) — MassDOT edition cited; rigid cross-section step note states what the tool does   [text only; no result, saved key or format change]
+## 2026-11-10 — PR: claude/massdot-edition-lldf (PR #1332: https://github.com/mlococo88/All-Structural/pull/1332) (LLMED / LLRIG) — MassDOT edition cited; rigid cross-section step note states what the tool does   [text only; no result, saved key or format change]
 - **Engineer (2026-11-10):** (1) every MassDOT LRFD Bridge Manual citation marked "edition: verify" cites the Hundredth Anniversary Edition (reference copy: `structural_references/MassDOT Bridge Manual - Hundredth Edition.pdf`); (2) the rigid cross-section worked-step note says what the tool does: the rigid floor is applied to every exterior girder.
 - **Where (to re-apply by hand):**
   1. Report `model()`, §8.1 references table (anchor `["MassDOT LRFD Bridge Manual`). Before:
