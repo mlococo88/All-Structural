@@ -1735,7 +1735,7 @@ Engineer's decision 2026-11-10.
 - **MassDOT edition (References row "edition: verify"): not changed.** `structural_references/MassDOT Bridge Manual - Hundredth Edition.pdf` is Bridge Manual – Part I, Hundredth Anniversary Edition (1920–2020), written to AASHTO LRFD 9th Ed. (§3.1.1.1). It has no revision date on any page. It cites the 2023 MassDOT Standard Specifications, so it is a revision later than 2020. Its PDF was created 2024-06. A cover markup says to check the 2025 revisions. The revision is ambiguous, so "verify" stays. **Decision (pending engineer review):** which revision to cite.
 - **Saved data:** none changed. **Other copies:** none.
 
-## 2026-11-10 — PR: claude/massdot-edition-edm (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (EDMED) — MassDOT Bridge Manual cited as the Hundredth Anniversary Edition   [text only; no result, saved key or format change]
+## 2026-11-10 — PR: claude/massdot-edition-edm (PR #1333: https://github.com/mlococo88/All-Structural/pull/1333) (EDMED) — MassDOT Bridge Manual cited as the Hundredth Anniversary Edition   [text only; no result, saved key or format change]
 - **Engineer (2026-11-10):** every MassDOT LRFD Bridge Manual citation marked "edition: verify" cites the Hundredth Anniversary Edition (reference copy: `structural_references/MassDOT Bridge Manual - Hundredth Edition.pdf`).
 - **Where (to re-apply by hand):** `const EDM_REFS=[` (Report references table), last row (anchor `["MassDOT LRFD Bridge Manual`).
   Before: `["MassDOT LRFD Bridge Manual (written to the AASHTO LRFD 9th Ed.)","Part I §3.5.7, elastomeric bearings (§3.5.7.2 to §3.5.7.10; Figs 3.5.7-2 to 3.5.7-5); edition: verify"]`
