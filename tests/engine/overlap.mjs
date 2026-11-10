@@ -51,3 +51,23 @@ export function swatchOverlaps(D, X) {
   textBoxes(D, X).forEach(b => sw.forEach(r => { const d = depth(b.poly, r); if (d > 0.05 * b.hh) out.push({ a: b, b: { s: '[legend swatch]', x: r[0][0], y: r[0][1] }, depth: d }); }));
   return out;
 }
+
+// SBXS (2026-11-10): the lines of a drawing that cross a text box. textLineHits(D, X): [{ s (the text), e (the entity), seg }] for every LINE,
+// polyline edge and dimension line / extension line / tick that enters a text's box (the box shortened 2 % of the height at each end, as
+// textBoxes), except the lines of the text's own dimension.
+const segsOf = (e, X) => e.t === 'LINE' ? [e.pts] : e.t === 'PL' ? e.pts.map((p, i) => [p, e.pts[(i + 1) % e.pts.length]]).slice(0, e.closed ? e.pts.length : e.pts.length - 1)
+  : e.t === 'DIM' ? X.dimGeo(e).g.filter(q => q.t === 'LINE').map(q => q.pts) : [];
+function segHitsPoly(poly, [a, b]) {
+  const side = (p, q, r) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+  const inside = p => { let sg = 0; for (let i = 0; i < poly.length; i++) { const c = side(poly[i], poly[(i + 1) % poly.length], p); if (Math.abs(c) < 1e-12) return false; if (!sg) sg = Math.sign(c); else if (Math.sign(c) !== sg) return false; } return true; };
+  if (inside(a) || inside(b)) return true;
+  for (let i = 0; i < poly.length; i++) { const p = poly[i], q = poly[(i + 1) % poly.length], d1 = side(a, b, p), d2 = side(a, b, q), d3 = side(p, q, a), d4 = side(p, q, b);
+    if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) return true; }
+  return false;
+}
+export function textLineHits(D, X) {
+  const out = [];
+  textBoxes(D, X).forEach(bx => D.E.forEach((e, i) => { if (i === bx.src) return; segsOf(e, X).forEach(sg => { if (segHitsPoly(bx.poly, sg)) out.push({ s: bx.s, x: bx.x, y: bx.y, e: `${e.t} ${e.l || ''}`, seg: sg }); }); }));
+  return out;
+}
+export const describeHit = o => `"${o.s}" (${o.x.toFixed(0)}, ${o.y.toFixed(0)}) crossed by ${o.e} (${o.seg[0].map(v => v.toFixed(1))})-(${o.seg[1].map(v => v.toFixed(1))})`;

@@ -5234,6 +5234,371 @@ format changed. Anchor text `QA2` marks each change. New file `ui/sub.js` (in th
 - **Decisions (pending engineer review):** the CAD layout is kept as originally written (the load arrows at mid w_OH and at the slab edge; no girder centre line), not re-laid-out to the screen sketch.
 - **Other copies:** none.
 
+## 2026-11-10 — PR: claude/sb-skew-xsec (PR #1343: https://github.com/mlococo88/All-Structural/pull/1343) — Framing plan at true scale with θ labels (SKP); typical cross-section re-laid out with no overlaps (SBXS). Display and the section sheet's DXF only.
+- **Request:** engineer report 2026-11-10: "The bearing line skew seems off" (the framing plan of the Framing & bracing tab) and "The cross section graphic dimension lines are overlapping a lot and doesn't look good" (the typical section of the Drawings tab and the Summary).
+- **Problem (SKP):** `ui/framing.js plan()` stretched or squeezed the width to `Hp = clamp(60, 2.2·W·s_x, 260)` px. The drawn angle was `atan(tan θ·s_x/s_y)`. On 11 girders at 4 ft with θ = 30°: 13.33° on 110-140-110 ft, 23.90° at 100 ft, 33.29° at 60 ft and 40.84° at 40 ft. After: 30.00° in every case. The engine is correct: `xb(k, i) = sup_k + (y_i − y_c) tan θ_k`, so Δx G1→G11 = 40 tan 30° = 23.094 ft. Nothing was changed in `engine/framing.js`.
+- **Where:** `ui/framing.js` `function plan(L, dOn, opt)` (new `planSvg`, `PLAN`, the document change listener for `[data-fpex]`); its callers `plan(L, dOn, { ui: true })` in `inputs`, `layoutPlan` and `results`. `ui/summary.js` `sizeGfx` and its CSS. `index.html` CSS `.fp-sc` / `.fp-ex`. `engine/drawings.js` `function section(G, D, opt)`, `function appDraw(G, D, xL, xR, yTop)`, new `tW`, `runsOf`, `hitX`, `chainFit`, `segBox` and `vdim`. `engine/sheets.js` `function weld(...)` (new optional `o`) and the weld calls in `function section(D, C)`.
+- **Before / after (exact; re-apply with `git apply` or by hand):**
+```diff
+diff --git a/apps/steel-bridge/engine/drawings.js b/apps/steel-bridge/engine/drawings.js
+index 2f1bfbc..f64549d 100644
+--- a/apps/steel-bridge/engine/drawings.js
++++ b/apps/steel-bridge/engine/drawings.js
+@@ -258,25 +258,85 @@
+   }
+ 
+   /* ---------- 3: typical cross-section (GirderDetail dxfSection + dxfApp) ---------- */
++  /* SBXS (2026-11-10, engineer: "the cross section graphic dimension lines are overlapping a lot and doesn't look good"): laid out again so
++     that no text overlaps another text and no line (extension line, dimension line, leader, outline) crosses a text. Display and DXF only
++     (the engineer asked for this drawing to be fixed: its DXF changes; every other drawing is unchanged). The same quantities are dimensioned:
++       - left of the deck edge, in four columns 3 text heights apart, inside out: web depth D, girder depth, haunch, deck (slab) thickness
++         (were: girder and haunch on the left, web between G1 and G2, deck on the right). A text longer than its dimension (less 0.8 h) is
++         written beyond the end of the dimension, its dimension line extended to it: below the girder (web, girder) or above the deck
++         (haunch, deck), where no extension line of the other columns reaches;
++       - girder spacing and the out-to-out width under the girders (were above the deck, where their extension lines ran through the
++         appurtenance callouts): the spacing chain from the deck edges and below the girder labels (the centerline is the extension line),
++         the out-to-out under it; the bottom flange dimension under those, its plate size written beside it, past its right extension line,
++         where it is wider than the flange (it was centred across both extension lines);
++       - the deck-edge chain over the barriers, sidewalks and railings: a text that does not fit its piece goes on a row above the chain
++         with a leader to the piece (rows 1.5 h apart, no two texts on a row closer than 0.6 h, no leader through a text);
++       - the appurtenance callouts above the chain zone, fanned out: each leader drops to a point of its item clear of the chain's texts and
++         extension lines and at least 1.6 h from the other leaders, the rows 1.9 h apart (text 0.7 h), the items nearest the middle lowest.
++     h = the text height of the drawing (0.1 in plotted × the scale). Text widths are estimated at 0.68 h per character (Arial-like). */
++  const tW = (s, hh) => X_().str(s).length * 0.68 * hh;
++  const runsOf = v => { const s = [...new Set(v.map(q => +q.toFixed(4)))].sort((a, b) => a - b), out = []; let i = 0;   // as SharedDxf chainH (n@s)
++    while (i < s.length - 1) { const d = s[i + 1] - s[i]; let j = i + 1; while (j < s.length - 1 && Math.abs((s[j + 1] - s[j]) - d) < 1e-3) j++; out.push([s[i], s[j], j - i, d]); i = j; } return out; };
++  const hitX = (a0, a1, xs) => xs.some(x => Array.isArray(x) ? a1 > x[0] && a0 < x[1] : x > a0 && x < a1);   // xs: x or [x0, x1]
++  /* chainFit(D, l, pts, y, dir, o): a horizontal chain through y of the points pts = [[x, yref], …] (n@s runs as chainH), each run's text
++     inside its run where it fits (its width + 0.8 h, clear of o.obst, the x or [x0, x1] of lines and texts crossing the text band), else on a row beyond the
++     chain (dir +1 above, −1 below) with a leader. o.txt(a, b, n, d): the text of a run (default the measured length or n@s). Returns
++     { edge (the outermost y used), boxes [[x0, y0, x1, y1]] (texts), lines [x] (extension lines and leaders) } */
++  function chainFit(D, l, pts, y, dir, o) {
++    o = o || {}; const h = D.h, k = D.k, ref = new Map(pts.map(p => [+p[0].toFixed(4), p[1]])), obst = o.obst || [], boxes = [], lines = [], out = [];
++    runsOf(pts.map(p => p[0])).forEach(([a, b, n, d]) => { const t = o.txt ? o.txt(a, b, n, d) : n > 1 ? `${n}@${D.fmt(d)}` : D.fmt(b - a), w = tW(t, h), mid = (a + b) / 2;
++      lines.push(a, b); const fits = w + 0.8 * h <= b - a && !hitX(mid - w / 2 - 0.3 * h, mid + w / 2 + 0.3 * h, obst);
++      D.dim(l, [a, ref.get(+a.toFixed(4))], [b, ref.get(+b.toFixed(4))], [a, y], 0, fits ? t : ' ');
++      if (fits) boxes.push([mid - w / 2, y + 0.06 * k, mid + w / 2, y + 0.07 * k + 0.82 * h]); else out.push({ t, w, mid }); });
++    let edge = dir > 0 ? y + 0.12 * k : y - 0.12 * k; const rows = [];
++    out.forEach(q => { for (let r = 0; r < 40; r++) {
++      const yb = dir > 0 ? y + 1.6 * h + 1.5 * h * r : y - 2.4 * h - 1.5 * h * r, ly = yb + (dir > 0 ? -0.15 * h : 0.95 * h);   // text baseline (its box 0.1 h below to 0.82 h above); leader end
++      for (const off of [0, 1, -1, 2, -2, 3, -3, 4, -4, 6, -6, 8, -8]) { const c = q.mid + off * 0.5 * q.w, B = { x0: c - q.w / 2, x1: c + q.w / 2, y0: yb - 0.1 * h, y1: yb + 0.82 * h };
++        if (hitX(B.x0 - 0.3 * h, B.x1 + 0.3 * h, obst) || rows.some(p => (p.r === r && B.x0 < p.x1 + 0.6 * h && B.x1 > p.x0 - 0.6 * h) || (p.r < r && segBox(q.mid, y, c, ly, p)) || (p.r > r && segBox(p.lx, y, p.c, p.ly, B)))) continue;
++        rows.push({ r, ...B, lx: q.mid, c, ly }); D.line(l, q.mid, y, c, ly); D.text(l, c, yb, h, q.t, 1); boxes.push([B.x0, B.y0, B.x1, B.y1]); lines.push(q.mid);
++        edge = dir > 0 ? Math.max(edge, B.y1) : Math.min(edge, B.y0); return; } } });
++    return { edge, boxes, lines };
++  }
++  // does the segment (x0, y0)-(x1, y1) pass through the box b (x0, x1, y0, y1)?
++  function segBox(ax, ay, bx, by, b) {
++    const n = 24; for (let i = 0; i <= n; i++) { const t = i / n, x = ax + (bx - ax) * t, y = ay + (by - ay) * t; if (x > b.x0 && x < b.x1 && y > b.y0 && y < b.y1) return true; } return false;
++  }
++  /* vdim(D, l, p1, p2, x, txt, out): a vertical dimension in the column x; its text inside where it fits (width + 0.8 h), else beyond the
++     end out ('lo': below p1, the text ending 0.8 h under yOut; 'hi': above p2, starting 0.8 h over yOut) with the dimension line extended */
++  function vdim(D, l, p1, p2, x, txt, out, yOut) {
++    const h = D.h, k = D.k, t = X_().str(txt.replace('<>', D.fmt(Math.abs(p2[1] - p1[1])))), w = tW(t, h);
++    if (w + 0.8 * h <= Math.abs(p2[1] - p1[1])) { D.dim(l, p1, p2, [x, p1[1]], 90, txt); return; }
++    D.dim(l, p1, p2, [x, p1[1]], 90, ' ');
++    if (out === 'lo') { const ye = yOut - 0.8 * h; D.line(l, x, p1[1], x, ye - w); D.text(l, x - 0.07 * k, ye, h, t, 2, 90); }
++    else { const ye = yOut + 0.8 * h; D.line(l, x, p2[1], x, ye + w); D.text(l, x - 0.07 * k, ye, h, t, 0, 90); }
++  }
+   function section(G, D, opt) {
+     opt = opt || {}; const dk = G.deck, nb = G.nb, xg = G.ys.map(y => y * 12), W = xg[nb - 1], xL = -dk.ohL * 12, xR = W + dk.ohR * 12;
+     D.k = opt.k || scaleFor((xR - xL) * 1.3, 30); D.h = TXT * D.k; const h = D.h, i0 = D.mark();
+     const ly = { g: D.layer('GRDR', 5), dk: D.layer('DECK', 7), d: D.layer('DIMS', 7), t: D.layer('ANNO-TEXT', 7), c: D.layer('CNTR', 8) }, cl = D.ltype('CENTER');
+-    const ts = dk.ts, hh = dk.haunch, sec = G.girders.map(g => g.segs[0]), tTop = Math.max(...sec.map(s => s.topT)), yT = 0;
+-    D.rect(ly.dk, xL, yT + hh, xR, yT + hh + ts);
+-    const yA = appDraw(G, D, xL, xR, yT + hh + ts), yDk = yT + hh + ts + yA;
++    const ts = dk.ts, hh = dk.haunch, sec = G.girders.map(g => g.segs[0]), tTop = Math.max(...sec.map(s => s.topT)), yT = 0, yDT = yT + hh + ts;
++    D.rect(ly.dk, xL, yT + hh, xR, yDT);
++    const yA = appDraw(G, D, xL, xR, yDT), yDk = yDT + yA;
+     let yBot = 0;
+     xg.forEach((x, i) => { const s = sec[i], yt = yT - (tTop - s.topT), yb = yt - s.topT - s.D - s.botT; yBot = Math.min(yBot, yb);
+       D.rect(ly.g, x - s.topB / 2, yt - s.topT, x + s.topB / 2, yt); D.rect(ly.g, x - s.tw / 2, yt - s.topT - s.D, x + s.tw / 2, yt - s.topT); D.rect(ly.g, x - s.botB / 2, yb, x + s.botB / 2, yt - s.topT - s.D);
+       D.line(ly.dk, x - s.topB / 2, yt, x - s.topB / 2, yT + hh); D.line(ly.dk, x + s.topB / 2, yt, x + s.topB / 2, yT + hh); });
+-    xg.forEach((x, i) => { D.line(ly.c, x, yT + hh + ts + 2 * h, x, yBot - 2 * h, cl); D.text(ly.t, x, yBot - 3.8 * h, h, G.girders[i].label, 1); });
+-    D.chainH(ly.d, [xL, ...xg, xR], yDk + 4 * h, yT + hh + ts); D.dimH(ly.d, xL, xR, yDk + 7 * h, yT + hh + ts, '<> OUT-TO-OUT OF DECK');
+-    D.dimV(ly.d, yT + hh, yT + hh + ts, xR + 3 * h, xR, 'DECK <>'); if (hh > 0) D.dimV(ly.d, yT, yT + hh, xL - 3 * h, -sec[0].topB / 2, 'HAUNCH <>');
+-    const s0 = sec[0], yb0 = yT - (tTop - s0.topT) - s0.topT - s0.D - s0.botT;
+-    D.dimV(ly.d, yb0, yT - (tTop - s0.topT), -s0.topB / 2 - 4 * h, -s0.botB / 2, 'GIRDER <>'); D.dimV(ly.d, yb0 + s0.botT, yb0 + s0.botT + s0.D, s0.topB / 2 + 3 * h, s0.tw / 2, 'WEB <>');
+-    D.dimH(ly.d, -s0.botB / 2, s0.botB / 2, yBot - 7.5 * h, yb0, `BOT. FL. ${dIn(s0.botB)} x ${dIn(s0.botT)}`);
+-    D.text(ly.t, xL, yDk + 11 * h, h * 1.6, 'TYPICAL CROSS-SECTION');
+-    D.text(ly.t, xL, yDk + 9.3 * h, h * 0.8, `SECTION AT CL BRG. ABUT. 1 (FIRST PLATE SEGMENT OF EACH GIRDER); SEE THE PLATE SCHEDULE FOR OTHER PLATES. SCALE ${SCALE_NAME[D.k]} WHEN PLOTTED.`);
++    // girder centerlines and labels; under them the girder spacing (from the deck edges), the out-to-out width and the bottom flange
++    xg.forEach((x, i) => { D.line(ly.c, x, yDT + 2 * h, x, yBot - h, cl); D.text(ly.t, x, yBot - 2.3 * h, h, G.girders[i].label, 1); });
++    const s0 = sec[0], yt0 = yT - (tTop - s0.topT), yb0 = yt0 - s0.topT - s0.D - s0.botT, fl = [-s0.botB / 2, s0.botB / 2];
++    const x0 = Math.min(xL, -Math.max(s0.topB, s0.botB) / 2), col = j => x0 - (3 + 3 * j) * h, cols = [[col(3) - 0.2 * D.k, col(0) + 0.05 * D.k]];   // the left columns (their texts below the girder)
++    const yS = yBot - 4.6 * h, C1 = chainFit(D, ly.d, [[xL, yT + hh], ...xg.map(x => [x, yBot - 2.8 * h]), [xR, yT + hh]], yS, -1, { obst: [...fl, xL, xR, ...cols] });   // the out-to-out extension lines (xL, xR) and the bottom flange's (fl) pass through its rows
++    const yO = C1.edge - 1.9 * h, C2 = chainFit(D, ly.d, [[xL, yT + hh], [xR, yT + hh]], yO, -1, { obst: [...fl, ...cols], txt: () => `${D.fmt(xR - xL)} OUT-TO-OUT OF DECK` });
++    const yF = C2.edge - 1.9 * h, bt = `BOT. FL. ${dIn(s0.botB)} x ${dIn(s0.botT)}`, bw = tW(bt, h);
++    if (bw + 0.8 * h <= s0.botB) D.dimH(ly.d, fl[0], fl[1], yF, yb0, bt);
++    else { D.dimH(ly.d, fl[0], fl[1], yF, yb0, ' '); D.line(ly.d, fl[1], yF, fl[1] + 1.2 * h + bw, yF); D.text(ly.t, fl[1] + 1.2 * h, yF + 0.07 * D.k, h, bt); }
++    // left of the deck edge: web, girder, haunch and deck in four columns
++    vdim(D, ly.d, [-s0.botB / 2, yb0 + s0.botT], [-s0.topB / 2, yt0 - s0.topT], col(0), 'WEB <>', 'lo', yb0);
++    vdim(D, ly.d, [-s0.botB / 2, yb0], [-s0.topB / 2, yt0], col(1), 'GIRDER <>', 'lo', yb0);
++    if (hh > 0) vdim(D, ly.d, [-s0.topB / 2, yT], [xL, yT + hh], col(2), 'HAUNCH <>', 'hi', yDT);
++    vdim(D, ly.d, [xL, yT + hh], [xL, yDT], col(3), 'DECK <>', 'hi', yDT);
++    D.text(ly.t, xL, yDk + 4 * h, h * 1.6, 'TYPICAL CROSS-SECTION');
++    D.text(ly.t, xL, yDk + 2.3 * h, h * 0.8, `SECTION AT CL BRG. ABUT. 1 (FIRST PLATE SEGMENT OF EACH GIRDER); SEE THE PLATE SCHEDULE FOR OTHER PLATES. SCALE ${SCALE_NAME[D.k]} WHEN PLOTTED.`);
+     // general notes (GirderDetail dxfSection; the data of this project)
+     const P = G.P, bo = (P.splices || {}).bolts || {}, sc = P.studs || {};
+     const lines = ['DESIGN SPECIFICATION: AASHTO LRFD BRIDGE DESIGN SPECIFICATIONS, 10TH EDITION (2024). LIVE LOAD: HL-93.',
+@@ -288,33 +348,59 @@
+       'WELDING: AASHTO/AWS D1.5 BRIDGE WELDING CODE. FLANGE BUTT SPLICES CJP, GROUND FLUSH AND SMOOTH IN THE DIRECTION OF STRESS.',
+       'ALL DIMENSIONS TO BE VERIFIED AGAINST THE CONTRACT DRAWINGS. GENERATED BY STEEL BRIDGE DESIGN (NEW).'];
+     if (G.app && G.app.items.some(a => a.sch)) lines.push('BARRIER, RAILING AND FENCE SHAPES AND HEIGHTS ARE SCHEMATIC.');
+-    notes(D, ly.t, xL, yBot - 12 * h, 'GENERAL NOTES', lines, 90);
++    notes(D, ly.t, xL, yF - 4.5 * h, 'GENERAL NOTES', lines, 90);
+     return { id: 'sec', title: 'Typical cross-section', i0, i1: D.mark(), k: D.k, h: D.h };
+   }
+-  /* appurtenances on the section (GirderDetail dxfApp); returns the height used above the deck top */
++  /* appurtenances on the section (GirderDetail dxfApp); returns the height used above the deck top. SBXS: the deck-edge chain with chainFit;
++     the callouts fanned out above it (see section) */
+   function appDraw(G, D, xL, xR, yTop) {
+     const A = G.app ? G.app.items : []; if (!A.length) return 0;
+     const h = D.h, X = x => xL + x * 12, ly = { b: D.layer('DECK-BARR', 8), c: D.layer('DECK-CURB', 8), r: D.layer('DECK-RAIL', 1), s: D.layer('DECK-SDWK', 9), m: D.layer('DECK-MEDN', 9), w: D.layer('DECK-WSRF', 3), t: D.layer('ANNO-TEXT', 7), d: D.layer('DIMS', 7) };
+-    const kl = L => L ? ` (${f3(L.plf)} KLF ${L.cat}${L.ovr ? ', OVERRIDE' : ''})` : '', labs = []; let top = 0, ovY = 0, nW = 0;
++    const kl = L => L ? ` (${f3(L.plf)} KLF ${L.cat}${L.ovr ? ', OVERRIDE' : ''})` : '', labs = []; let top = 0, ovY = 0;
++    // labs: { s, y (anchor height), a0, a1 (the anchor may be anywhere from a0 to a1 on the item's top), pt (a railing: the anchor at its post) }
+     A.forEach(a => { const y0 = yTop + a.y0;
+       if (a.k === 'sw' || a.k === 'med' || a.k === 'curb') { D.rect(a.k === 'sw' ? ly.s : a.k === 'med' ? ly.m : ly.c, X(a.x0), y0, X(a.x1), y0 + a.h);
+         if (a.k === 'med' && a.joint) D.line(ly.m, X((a.x0 + a.x1) / 2), y0 + a.h + h, X((a.x0 + a.x1) / 2), yTop - 1.5 * h, D.ltype('HIDDEN'));
+-        labs.push({ x: X((a.x0 + a.x1) / 2), y: y0 + a.h, s: a.k === 'sw' ? `${a.sd === 'L' ? 'LEFT' : 'RIGHT'} SIDEWALK ${dFI((a.x1 - a.x0) * 12)} x ${dIn(a.h)}${kl(a.L)}` : a.k === 'med' ? `RAISED MEDIAN ${dFI((a.x1 - a.x0) * 12)} x ${dIn(a.h)}${kl(a.L)}${a.joint ? ', LONGIT. JOINT' : ''}` : `CURB ${dIn((a.x1 - a.x0) * 12)} x ${dIn(a.h)}${kl(a.L)}` }); }
++        labs.push({ a0: X(a.x0), a1: X(a.x1), y: y0 + a.h, s: a.k === 'sw' ? `${a.sd === 'L' ? 'LEFT' : 'RIGHT'} SIDEWALK ${dFI((a.x1 - a.x0) * 12)} x ${dIn(a.h)}${kl(a.L)}` : a.k === 'med' ? `RAISED MEDIAN ${dFI((a.x1 - a.x0) * 12)} x ${dIn(a.h)}${kl(a.L)}${a.joint ? ', LONGIT. JOINT' : ''}` : `CURB ${dIn((a.x1 - a.x0) * 12)} x ${dIn(a.h)}${kl(a.L)}` }); }
+       else if (a.k === 'bar') { const w = (a.x1 - a.x0) * 12, s = a.sd === 'L' ? 1 : -1, x0 = a.sd === 'L' ? X(a.x0) : X(a.x1), P_ = (f, g) => [x0 + s * f * w, y0 + g * a.h];
+         D.pline(ly.b, [P_(0, 0), P_(0, 1), P_(0.42, 1), P_(0.62, 0.3), P_(1, 0.12), P_(1, 0)], true);
+-        labs.push({ x: X((a.x0 + a.x1) / 2), y: y0 + a.h, s: `BARRIER ${dFI(w)} AT DECK${kl(a.L)}, SHAPE AND HEIGHT SCHEMATIC` }); }
++        labs.push({ a0: Math.min(x0, x0 + s * 0.42 * w), a1: Math.max(x0, x0 + s * 0.42 * w), y: y0 + a.h, s: `BARRIER ${dFI(w)} AT DECK${kl(a.L)}, SHAPE AND HEIGHT SCHEMATIC` }); }
+       else if (a.k === 'rail' || a.k === 'fence') { const x = X(a.x); D.line(ly.r, x, y0, x, y0 + a.h); D.line(ly.r, x - 3, y0 + a.h - 1.5, x + 3, y0 + a.h - 1.5); D.line(ly.r, x - 3, y0 + a.h * 0.55, x + 3, y0 + a.h * 0.55);
+-        labs.push({ x, y: y0 + a.h, s: `${a.k === 'rail' ? 'RAILING' : 'SIDEWALK RAILING OR FENCE'} AT ${dFI((a.sd === 'L' ? a.x : G.app.Wd - a.x) * 12)} FROM DECK EDGE${kl(a.L)}, HEIGHT SCHEMATIC` }); }
++        labs.push({ a0: x, a1: x, pt: true, y: y0 + a.h, s: `${a.k === 'rail' ? 'RAILING' : 'SIDEWALK RAILING OR FENCE'} AT ${dFI((a.sd === 'L' ? a.x : G.app.Wd - a.x) * 12)} FROM DECK EDGE${kl(a.L)}, HEIGHT SCHEMATIC` }); }
+       else { const t = a.h > 0 ? a.h : 0, yb = yTop + ovY, x0 = X(a.x0), x1 = X(a.x1), q = a.L && a.L.q != null ? a.L.q : a.L ? a.L.plf * 1000 / (a.x1 - a.x0) : 0;
+         if (t > 0) { D.rect(ly.w, x0, yb, x1, yb + t); ovY += t; } else { D.line(ly.w, x0, yb + 0.5, x1, yb + 0.5, D.ltype('HIDDEN')); ovY += 0.5; }
+-        labs.push({ x: x0 + (0.2 + 0.06 * nW++) * (x1 - x0), y: yb + Math.max(t, 0.5), s: `${a.k === 'ws' ? 'FUTURE WEARING SURFACE' : X_().str(a.L.desc).toUpperCase()} ${t > 0 ? `${dIn(t)} x ${f0(a.L.gam * 1000)} PCF = ` : ''}${Math.abs(q - Math.round(q)) < 0.05 ? f0(q) : q.toFixed(1)} PSF${kl(a.L)}${t > 0 ? '' : ', THICKNESS NOT SET (LINE ONLY)'}` }); }
++        labs.push({ a0: x0, a1: x1, y: yb + Math.max(t, 0.5), ws: true, s: `${a.k === 'ws' ? 'FUTURE WEARING SURFACE' : X_().str(a.L.desc).toUpperCase()} ${t > 0 ? `${dIn(t)} x ${f0(a.L.gam * 1000)} PCF = ` : ''}${Math.abs(q - Math.round(q)) < 0.05 ? f0(q) : q.toFixed(1)} PSF${kl(a.L)}${t > 0 ? '' : ', THICKNESS NOT SET (LINE ONLY)'}` }); }
+       top = Math.max(top, a.y0 + (a.h || 0)); });
++    // the deck-edge chain: deck edges, item edges, railings
+     const xs = [xL, xR]; A.forEach(a => { if (a.x0 != null && a.k !== 'ws' && a.k !== 'ovl') xs.push(X(a.x0), X(a.x1)); else if (a.x != null) xs.push(X(a.x)); });
+-    const yC = yTop + top + 1.5 * h; D.chainH(ly.d, xs, yC, yTop);
+-    const th = h * 0.7, mid = (xL + xR) / 2, Lh = labs.filter(q => q.x < mid).sort((p, q) => p.x - q.x), Rh = labs.filter(q => q.x >= mid).sort((p, q) => q.x - p.x), tw = q => q.s.length * th * 0.95 + th;
+-    const clash = Lh.length && Rh.length && Math.max(...Lh.map(q => q.x + tw(q))) > Math.min(...Rh.map(q => q.x - tw(q))), off = clash ? Lh.length : 0, nr = clash ? Lh.length + Rh.length : Math.max(Lh.length, Rh.length);
+-    [Lh, Rh].forEach((Gr, s) => Gr.forEach((q, i) => { const yl = yC + 2.2 * h + (Gr.length - 1 - i + (s ? off : 0)) * 2.1 * th; D.line(ly.t, q.x, q.y, q.x, yl + 0.4 * th); D.line(ly.t, q.x, yl + 0.4 * th, q.x + (s ? -0.6 : 0.6) * th, yl + 0.4 * th); D.text(ly.t, q.x + (s ? -0.8 : 0.8) * th, yl, th, q.s, s ? 2 : 0); }));
+-    return top + 1.5 * h + 2.2 * h + nr * 2.1 * th + h;
++    const yC = yTop + top + 1.5 * h, C = chainFit(D, ly.d, xs.map(x => [x, yTop]), yC, 1, {});
++    // the callouts. Leaders: each clear of the chain's texts (0.3 h), its extension lines and leaders (0.6 h), the deck edges and the other
++    // callouts' leaders (1.6 h apart); on the item's top where it can be (nearest its middle), else the nearest free point, reached by a
++    // sloped leg under the chain; the wearing surface and overlays (any point along the deck, not through a barrier, sidewalk, curb or
++    // median) last. Texts: rows 1.9 h apart above the chain zone (text 0.7 h); the callouts nearest the middle of the deck lowest, each on
++    // the lowest row where its text clears the texts on that row and the leaders passing through it, and its leader clears the texts
++    // below; texts towards the middle (left of the middle: written to the right of the leader). Where that cannot be done, every text to
++    // the right of its leader, the leftmost highest (always possible).
++    const th = h * 0.7, mid = (xL + xR) / 2, yK = yC - 0.6 * h, yR = C.edge + 1.6 * h, gap = 1.9 * h;
++    const clr = x => !C.boxes.some(b => x > b[0] - 0.3 * h && x < b[2] + 0.3 * h) && !C.lines.some(v => Math.abs(x - v) < 0.6 * h) && x > xL + 0.6 * h && x < xR - 0.6 * h;
++    const own = A.filter(a => a.k !== 'ws' && a.k !== 'ovl' && a.x0 != null).map(a => [X(a.x0), X(a.x1)]), taken = [];
++    [...labs.filter(q => !q.ws).sort((p, q) => (p.a0 + p.a1) - (q.a0 + q.a1)), ...labs.filter(q => q.ws)].forEach(q => {
++      const c = (q.a0 + q.a1) / 2, st = 0.25 * h, cand = [], ok = x => clr(x) && taken.every(t => Math.abs(t - x) >= 1.6 * h) && (!q.ws || !own.some(([u, v]) => x > u - 0.3 * h && x < v + 0.3 * h));
++      for (let x = q.a0 + (q.pt ? 0 : 0.4 * h); x <= q.a1 - (q.pt ? 0 : 0.4 * h) + 1e-9; x += st) cand.push(x);
++      cand.sort((u, v) => Math.abs(u - c) - Math.abs(v - c)); for (let d = st; d <= xR - xL; d += st) cand.push(q.a0 - d, q.a1 + d);
++      q.xf = cand.find(ok); if (q.xf == null) q.xf = c; taken.push(q.xf); q.ax = Math.min(q.a1, Math.max(q.a0, q.xf)); q.w = tW(q.s, th); });
++    const place = (list, leftOf) => { const put = [];
++      for (const q of list) { const left = leftOf(q), x0 = left ? q.xf + 0.8 * th : q.xf - 0.8 * th - q.w, o = { xf: q.xf, left, x0, x1: x0 + q.w }; let r = 0;
++        for (; r < 60; r++) if (put.every(p => p.r === r ? (o.x1 + 0.6 * h < p.x0 || o.x0 - 0.6 * h > p.x1) : p.r < r ? !(o.xf > p.x0 - 0.3 * h && o.xf < p.x1 + 0.3 * h) : !(p.xf > o.x0 - 0.3 * h && p.xf < o.x1 + 0.3 * h))) break;
++        if (r === 60) return null; put.push({ q, ...o, r }); }
++      return put; };
++    const put = place(labs.slice().sort((p, q) => Math.abs(p.xf - mid) - Math.abs(q.xf - mid)), q => q.xf <= mid ? q.xf + 0.8 * th + q.w <= xR || q.xf - 0.8 * th - q.w < xL : q.xf - 0.8 * th - q.w < xL && q.xf + 0.8 * th + q.w <= xR)
++      || place(labs.slice().sort((p, q) => q.xf - p.xf), () => true);
++    put.forEach(p => { const q = p.q, yl = yR + p.r * gap;
++      if (Math.abs(q.ax - q.xf) < 1e-6) D.line(ly.t, q.xf, q.y, q.xf, yl + 0.4 * th); else { D.line(ly.t, q.ax, q.y, q.xf, yK); D.line(ly.t, q.xf, yK, q.xf, yl + 0.4 * th); }
++      D.line(ly.t, q.xf, yl + 0.4 * th, q.xf + (p.left ? 0.6 : -0.6) * th, yl + 0.4 * th); D.text(ly.t, p.left ? p.x0 : p.x1, yl, th, q.s, p.left ? 0 : 2); });
++    const nr = put.length ? Math.max(...put.map(q => q.r)) + 1 : 0;
++    return (yR - yTop) + nr * gap + h;
+   }
+ 
+   /* all(G, opt): the three drawings in one model space (plan at the origin, the elevation of girder opt.gi below it, the section below
+diff --git a/apps/steel-bridge/engine/sheets.js b/apps/steel-bridge/engine/sheets.js
+index 24f5269..10a32fd 100644
+--- a/apps/steel-bridge/engine/sheets.js
++++ b/apps/steel-bridge/engine/sheets.js
+@@ -137,13 +137,17 @@
+   }
+ 
+   /* ---------- weld symbol (GirderDetail dxfWeld): leader to (x, y), reference line, fillet triangle(s) or CJP groove, size ---------- */
+-  function weld(D, l, x, y, size, both, type, note, dir) {
+-    type = type || 'fillet'; dir = dir || 1; const h = D.h, rx = x + dir * 3 * h, ry = y + 3 * h, L = 5 * h, x1 = rx + dir * L;
+-    D.line(l, x, y, rx, ry); D.line(l, rx, ry, x1, ry); D.line(l, x, y, x + dir * 0.6 * h, y + 0.3 * h); D.line(l, x, y, x + dir * 0.3 * h, y + 0.6 * h);
++  /* SBXS (2026-11-10): o (optional; the typical section only): { rise (the reference line's height above y; negative: below; default 3 h),
++     wrap (the note on a second line under the reference line, from the leader's end) }. Without o: as before. */
++  function weld(D, l, x, y, size, both, type, note, dir, o) {
++    o = o || {}; type = type || 'fillet'; dir = dir || 1; const h = D.h, rx = x + dir * 3 * h, ry = y + (o.rise == null ? 3 * h : o.rise), L = 5 * h, x1 = rx + dir * L;
++    const sg = ry >= y ? 1 : -1;   // the arrowhead along the leader
++    D.line(l, x, y, rx, ry); D.line(l, rx, ry, x1, ry); D.line(l, x, y, x + dir * 0.6 * h, y + sg * 0.3 * h); D.line(l, x, y, x + dir * 0.3 * h, y + sg * 0.6 * h);
+     const mx = rx + dir * L * 0.55, s = 0.8 * h;
+     const sym = up => type === 'cjp' ? D.pline(l, [[mx - s / 2, ry + up * s], [mx, ry], [mx + s / 2, ry + up * s]], false) : D.pline(l, [[mx, ry], [mx, ry + up * s], [mx + s, ry]], true);
+-    sym(-1); if (both) sym(1); if (size) D.text(l, mx - (dir > 0 ? 1.2 : -1.2) * h, ry - 1.2 * h, h * 0.75, size, 2);
+-    if (note) D.text(l, dir > 0 ? x1 + 0.4 * h : x1 - 0.4 * h, ry - 0.35 * h, h * 0.7, note, dir > 0 ? 0 : 2);
++    sym(-1); if (both) sym(1); if (size) D.text(l, o.rise != null && dir < 0 ? mx - 0.4 * h : mx - (dir > 0 ? 1.2 : -1.2) * h, ry - 1.2 * h, h * 0.75, size, 2);   // SBXS (with o): leftwards, the size left of the fillet, not on it
++    if (note && o.wrap) D.text(l, rx, ry - 2.4 * h, h * 0.7, note, dir > 0 ? 0 : 2);
++    else if (note) D.text(l, dir > 0 ? x1 + 0.4 * h : x1 - 0.4 * h, ry - 0.35 * h, h * 0.7, note, dir > 0 ? 0 : 2);
+   }
+   const sheetNo = (C, pre) => { const i = C.list.findIndex(t => t.startsWith(pre)); return i >= 0 ? `SHEET ${i + 1}` : ''; };
+ 
+@@ -220,7 +224,16 @@
+     const G = C.G, h = D.h, i0 = D.mark(); DW().section(G, D, { k: D.k });
+     const lt = D.layer('ANNO-TEXT', 7), sec = G.girders.map(g => g.segs[0]), tTop = Math.max(...sec.map(s => s.topT)), j = Math.min(1, G.nb - 1), s = sec[j], x = G.ys[j] * 12;
+     const yt = -(tTop - s.topT), w = fwSize(C.P, s);
+-    weld(D, lt, x + s.tw / 2, yt - s.topT, dIn(w), true, 'fillet', 'FLANGE-TO-WEB, TOP'); weld(D, lt, x + s.tw / 2, yt - s.topT - s.D, dIn(w), true, 'fillet', 'FLANGE-TO-WEB, BOT.');
++    /* SBXS: the two weld symbols in the bays either side of the girder (top: to the right, leader down from the top flange; bottom: to
++       the left, leader up from the bottom flange), so they cannot overlap each other, inside the web depth and clear of the girder
++       labels; the note under the reference line where the bay is too narrow for it at the end (was: both to the right, leaders up, the
++       top one into the deck, the notes across the next girder) */
++    const yTj = yt - s.topT, yBj = yTj - s.D, yLo = Math.min(...sec.map(q => -(tTop - q.topT) - q.topT - q.D - q.botT)) - 2.9 * h;   // the lowest point: clear of the girder spacing texts
++    const nT = 'FLANGE-TO-WEB, TOP', nB = 'FLANGE-TO-WEB, BOT.', tl = n => n.length * 0.68 * 0.7 * h;
++    const room = d => { const i = j + d; if (i < 0 || i >= G.nb) return Infinity; const q = sec[i]; return Math.abs(G.ys[i] * 12 - x) - Math.max(q.topB, q.botB) / 2 - s.tw / 2 - 0.6 * h; };
++    const wT = 8.4 * h + tl(nT) > room(1), wB = 8.4 * h + tl(nB) > room(-1);
++    const rT = -Math.max(1.0 * h, Math.min(3 * h, yTj - yLo - (wT ? 2.5 : 1.3) * h)), rB = Math.max(1.0 * h, Math.min(3 * h, s.D - 1.0 * h));
++    weld(D, lt, x + s.tw / 2, yTj, dIn(w), true, 'fillet', nT, 1, { rise: rT, wrap: wT }); weld(D, lt, x - s.tw / 2, yBj, dIn(w), true, 'fillet', nB, -1, { rise: rB, wrap: wB });
+     const b = D.bbox(i0), Q = quantities(G, C.RS), T = DW().table, tb = D.layer('TABL', 7);
+     const T1 = T(D, tb, b[2] + 8 * h, b[3], ['ITEM', 'QUANTITY', 'UNIT'], Q.rows, 'ESTIMATED QUANTITIES (WHOLE BRIDGE)');
+     T(D, tb, b[2] + 8 * h, T1.y - 2 * h, ['WELD', 'SIZE', 'LINES', 'LENGTH (FT)', 'WELD METAL (LB)'], Q.welds.map(q => [q.k, dIn(q.w), String(q.lines), f0(q.Lft), f0(q.wt)]).concat([['TOTAL', '', '', f0(Q.welds.reduce((a, q) => a + q.Lft, 0)), f0(Q.welds.reduce((a, q) => a + q.wt, 0))]]),
+diff --git a/apps/steel-bridge/index.html b/apps/steel-bridge/index.html
+index 3246f62..8a3a20a 100644
+--- a/apps/steel-bridge/index.html
++++ b/apps/steel-bridge/index.html
+@@ -205,6 +205,7 @@
+   table.tbl td input{width:62px;font-size:9pt;padding:1px 3px;text-align:right;}
+   table.tbl tr.sel{background:#eef4fb;}
+   .tscroll{overflow-x:auto;}
++  .fp-sc{overflow-x:auto;max-width:100%;} .fp-ex{display:block;font-family:var(--font-ui);font-size:9pt;margin:2px 0 4px;} @media print{.fp-sc svg{min-width:0!important;}}   /* SKP: the framing plan (ui/framing.js plan) */
+   /* this app */
+   .note{font-size:9pt;color:#475569;margin:4px 0;}
+   .alert{border:1px solid var(--color-border);border-left:4px solid var(--warn);background:#FFFBEB;padding:6px 9px;margin:8px 0;font-family:var(--font-ui);font-size:9pt;}
+diff --git a/apps/steel-bridge/ui/framing.js b/apps/steel-bridge/ui/framing.js
+index b2c9360..ee0740d 100644
+--- a/apps/steel-bridge/ui/framing.js
++++ b/apps/steel-bridge/ui/framing.js
+@@ -23,20 +23,56 @@
+   function ensure(P) { const M = window.SBDModel; if (!P.framing) P.framing = M.defaultFraming(); if (!P.crossframes) P.crossframes = M.defaultCrossframes();
+     if (!P.crossframes.userMode) P.crossframes.userMode = { StrI: 'add', Con: 'add' };   // CFRM (2026-11-01): absent in older projects = 'add', today's behaviour
+     return P; }
+-  /* plan(L): the framing plan as SVG: girders (blue), support lines (skewed), end and intermediate cross-frames, field splices (ticks) */
+-  function plan(L, dOn) {   // dOn (SBDIA): the bracing is a diaphragm: the caption and label say so (the drawing is the same)
+-    const FR = L.FR, m = L.m, W = 720, pad = 34, ys = FR.ys, yMax = ys[ys.length - 1];
+-    const xs0 = Math.min(...FR.girders.map(g => g.x0)), xs1 = Math.max(...FR.girders.map(g => g.x0 + g.bear[g.bear.length - 1])), sx = (W - 2 * pad) / Math.max(xs1 - xs0, 1);
+-    const Hp = Math.max(60, Math.min(260, yMax * sx * 2.2)), sy = Hp / Math.max(yMax, 1), X = x => pad + (x - xs0) * sx, Y = y => 22 + y * sy;
++  /* plan(L, dOn, opt): the framing plan as SVG: girders (blue), support lines (skewed), end and intermediate cross-frames, field splices (ticks).
++     dOn (SBDIA): the bracing is a diaphragm: the caption and label say so (the drawing is the same).
++     SKP (2026-11-10, engineer: "the bearing line skew seems off"): the plan was drawn to scale along the bridge only, its width stretched to
++     a height of 60 to 260 px (2.2 times the length scale, less when capped), so a support line's drawn angle was not the skew (a 30° skew
++     drew at 13° on the 360 ft built-in bridge and at 41° on a 40 ft span). Now one scale in both directions, so the bearing lines are drawn
++     at the true skew, measured from the normal to the girders as engine/framing.js places the bearings (x = x_support + (y − y_c) tan θ),
++     each labelled θ; the support lines run through the end bearings (extended along the line, not vertically). Display only.
++     The scale: the plan 720 units wide, or wider so that the girder lines are at least 14 units apart (labels 9 units), or narrower so
++     that it is at most 560 units tall. vex > 1: the width exaggerated vex times (angles not to scale; θ labels the true skew).
++     opt.ui (screens): the plan in a box that scrolls sideways, at least 82 % of its drawn width (its text at least 7.4 px), and, where the
++     true-scale plan is long and thin (length over width > 5), a check box "Exaggerate the width" (the choice kept for the session, not
++     saved). Without opt.ui (the Report): the true-scale SVG alone, as wide as its frame. */
++  const PLAN = { ex: false };
++  function planSvg(L, dOn, vex, ui) {
++    const FR = L.FR, m = L.m, pad = 34, ys = FR.ys, nb = ys.length, yMax = ys[nb - 1];
++    const xs0 = Math.min(...FR.girders.map(g => g.x0)), xs1 = Math.max(...FR.girders.map(g => g.x0 + g.bear[g.bear.length - 1])), Lx = Math.max(xs1 - xs0, 1);
++    const bayMin = nb > 1 ? Math.min(...ys.slice(1).map((y, i) => y - ys[i])) : 1;
++    let sx = Math.max((720 - 2 * pad) / Lx, nb > 1 ? 14 / Math.max(bayMin * vex, 1e-6) : 0);
++    if (yMax * sx * vex > 560) sx = Math.max(560 / (yMax * vex), 1e-6);
++    const sy = sx * vex, W = Math.max(2 * pad + Lx * sx, 240), t0 = 30, X = x => pad + (x - xs0) * sx, Y = y => t0 + y * sy, E = 8;
++    const f1 = v => (Math.abs(v - Math.round(v)) < 0.005 ? String(Math.round(v)) : v.toFixed(2).replace(/0$/, '')).replace('-', '−');
+     let o = '';
+-    m.sup.forEach((_, k) => o += `<line x1="${X(FR.xb(k, 0)).toFixed(1)}" y1="${(Y(0) - 8).toFixed(1)}" x2="${X(FR.xb(k, ys.length - 1)).toFixed(1)}" y2="${(Y(yMax) + 8).toFixed(1)}" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="5 3"/><text x="${X(FR.xb(k, 0)).toFixed(1)}" y="12" font-size="9" text-anchor="middle" fill="#475569">${k === 0 ? 'Abut. 1' : k === m.sup.length - 1 ? 'Abut. 2' : 'Pier ' + k}</text>`);
++    const ends = m.sup.map((_, k) => { const ax = X(FR.xb(k, 0)), ay = Y(0), bx = X(FR.xb(k, nb - 1)), by = Y(yMax), len = Math.hypot(bx - ax, by - ay) || 1, ux = (bx - ax) / len, uy = (by - ay) / len;
++      return { k, ax: ax - ux * E, ay: ay - uy * E, bx: bx + ux * E, by: by + uy * E }; });
++    // θ labels under the lower ends; where two would be closer than 56 units, every other one a line lower
++    let low = 0; ends.forEach((q, i) => { q.row = i && Math.abs(q.bx - ends[i - 1].bx) < 56 && !ends[i - 1].row ? 1 : 0; if (q.row) low = 1; });
++    ends.forEach(q => { const k = q.k, nm = k === 0 ? 'Abut. 1' : k === m.sup.length - 1 ? 'Abut. 2' : 'Pier ' + k;
++      o += `<line x1="${q.ax.toFixed(1)}" y1="${q.ay.toFixed(1)}" x2="${q.bx.toFixed(1)}" y2="${q.by.toFixed(1)}" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="5 3"/><text x="${q.ax.toFixed(1)}" y="${(q.ay - 5).toFixed(1)}" font-size="9" text-anchor="middle" fill="#475569">${nm}</text>`
++        + `<text x="${q.bx.toFixed(1)}" y="${(q.by + 11 + q.row * 11).toFixed(1)}" font-size="9" text-anchor="middle" fill="#0F172A" data-skew="${k}">θ = ${f1(+m.skews[k] || 0)}°</text>`; });
+     FR.frames.forEach(f => o += `<line x1="${X(f.xa).toFixed(1)}" y1="${Y(ys[f.bay]).toFixed(1)}" x2="${X(f.xc).toFixed(1)}" y2="${Y(ys[f.bay + 1]).toFixed(1)}" stroke="${f.type === 'sup' ? '#B45309' : '#16304F'}" stroke-width="${f.type === 'sup' ? 2.2 : 1.3}"/>`);
+     FR.girders.forEach(g => { o += `<line x1="${X(g.x0).toFixed(1)}" y1="${Y(g.y).toFixed(1)}" x2="${X(g.x0 + g.bear[g.bear.length - 1]).toFixed(1)}" y2="${Y(g.y).toFixed(1)}" stroke="#2563EB" stroke-width="2.4"/><text x="${(pad - 6)}" y="${(Y(g.y) + 3).toFixed(1)}" font-size="9" text-anchor="end" fill="#1E3A5F">G${g.i + 1}</text>`;
+       m.splices.forEach(s => { const xg = g.x0 + s; o += `<line x1="${X(xg).toFixed(1)}" y1="${(Y(g.y) - 4).toFixed(1)}" x2="${X(xg).toFixed(1)}" y2="${(Y(g.y) + 4).toFixed(1)}" stroke="#DC2626" stroke-width="1.6"/>`; }); });
+-    const H = Y(yMax) + 26;
+-    return `<svg viewBox="0 0 ${W} ${H.toFixed(0)}" style="width:100%;height:auto;background:#fff;border:1px solid #e4e7eb;border-radius:4px" role="img" aria-label="Framing plan: girders, supports and ${dOn ? 'diaphragms' : 'cross-frames'}">${o}
+-      <text x="${pad}" y="${(H - 6).toFixed(0)}" font-size="9" fill="#475569">Plan, to scale along the bridge (vertical scale exaggerated). Blue: girders; brown: end ${dOn ? 'diaphragms' : 'cross-frames'} on the bearing lines; navy: intermediate ${dOn ? 'diaphragms' : 'cross-frames'}; red ticks: field splices.</text></svg>`;
++    const yc = Math.max(Y(yMax) + E, ...ends.map(q => q.by)) + 11 + low * 11, H = yc + 30, bw = dOn ? 'diaphragms' : 'cross-frames';
++    const cap1 = vex > 1 ? `Plan, width exaggerated ×${f1(vex)}: the angles are not to scale; θ is the true skew of each support line.` : 'Plan, true scale in both directions: each support line is drawn at its skew θ from the normal to the girders.';
++    return `<svg viewBox="0 0 ${W.toFixed(0)} ${H.toFixed(0)}" style="width:100%;${ui ? `min-width:${Math.round(0.82 * W)}px;` : ''}height:auto;background:#fff;border:1px solid #e4e7eb;border-radius:4px${ui ? `;display:${(vex > 1) === PLAN.ex ? 'block' : 'none'}` : ''}" role="img" aria-label="Framing plan: girders, supports and ${bw}"${ui ? ` data-fpv="${vex > 1 ? 'x' : 't'}"` : ''}>${o}
++      <text x="${pad}" y="${(yc + 12).toFixed(0)}" font-size="9" fill="#475569">${cap1}</text>
++      <text x="${pad}" y="${(yc + 23).toFixed(0)}" font-size="9" fill="#475569">Blue: girders; brown: end ${bw} on the bearing lines; navy: intermediate ${bw}; red ticks: field splices.</text></svg>`;
+   }
++  function plan(L, dOn, opt) {
++    if (!(opt && opt.ui)) return planSvg(L, dOn, 1, false);
++    const FR = L.FR, ys = FR.ys, wid = ys[ys.length - 1], Lx = Math.max(...FR.girders.map(g => g.x0 + g.bear[g.bear.length - 1])) - Math.min(...FR.girders.map(g => g.x0));
++    const r = wid > 0 ? Lx / wid : 0, vex = r > 5 ? Math.min(4, Math.round(r / 5 * 2) / 2 + 0.5) : 1;   // offered for a long, thin plan: about a fifth of the length tall, at most ×4
++    return `<div class="fp-plan">${vex > 1 ? `<label class="fp-ex"><input type="checkbox" data-fpex${PLAN.ex ? ' checked' : ''}> Exaggerate the width ×${String(vex)} (long bridge; the angles are then not to scale)</label>` : ''}
++      <div class="fp-sc">${planSvg(L, dOn, 1, true).replace('display:none', vex > 1 ? 'display:none' : 'display:block')}${vex > 1 ? planSvg(L, dOn, vex, true) : ''}</div></div>`;
++  }
++  if (typeof document !== 'undefined' && document.addEventListener) document.addEventListener('change', e => {   // SKP: the "Exaggerate the width" check box, every plan on the page
++    const c = e.target; if (!c || !c.matches || !c.matches('[data-fpex]')) return; PLAN.ex = !!c.checked;
++    document.querySelectorAll('[data-fpex]').forEach(q => { q.checked = PLAN.ex; });
++    document.querySelectorAll('svg[data-fpv]').forEach(s => { s.style.display = (s.dataset.fpv === 'x') === PLAN.ex ? 'block' : 'none'; });
++  });
+   /* BRSEL (2026-11-09): the "Intermediate bracing" drop-down. braceOf(C): the choice shown for the saved fields: a diaphragm when
+      dia.on = 'yes' (type kept underneath), 'ch' when its shape is one of CF_CH, else 'w' (CF_DIA or custom W); otherwise the frame type.
+      setBrace(P, v): writes the choice back: a frame sets type and dia.on = 'no'; a diaphragm sets dia.on = 'yes' and leaves type alone;
+@@ -73,7 +109,7 @@
+         <div class="fRow"><label for="fr_spl">Field splices</label><input type="text" id="fr_spl" data-fr="splices" value="${esc((F.splices || []).join(', '))}" style="width:180px"><span class="unit"></span></div>
+         ${h.num('framing.spliceClear', 'Frames clear of splices and transitions', 'ft')}
+         <p class="note">Girders and spacings: Cross-section tab; support skews: Bridge layout tab. The plates of every girder give the shop transitions. Frames normal to the girders at a support skewed more than 20° start at least max(clear, 4b<sub>f</sub>, 0.4s) from the obtuse bearing (C6.7.4.2.1); corner frames close longer panels. Owner rule xf.orient applies with the automatic orientation.</p>
+-        ${L && !L.errors.length ? plan(L, dOn) : `<div class="alert err">${esc((L && L.errors || []).join(' '))}</div>`}`)
++        ${L && !L.errors.length ? plan(L, dOn, { ui: true }) : `<div class="alert err">${esc((L && L.errors || []).join(' '))}</div>`}`)
+       + h.card('Intermediate bracing (6.7.4.2)', `${h.sel('crossframes.type', 'Intermediate bracing', BRACE, br).replace('<select ', '<select style="width:200px;max-width:100%" ')}
+         ${h.num('crossframes.dMinXF', 'Minimum girder depth for cross-frames', 'in')}${dOn ? `${h.sel('crossframes.dia.shape', 'Shape', br === 'ch' ? CF.CF_CH.map(s => [s[0], s[0]]) : [...CF.CF_DIA.map(s => [s[0], s[0]]), ['custom', 'Custom W']])}
+         ${C.dia.shape === 'custom' ? `${h.num('crossframes.dia.d', 'Depth d', 'in')}${h.num('crossframes.dia.bf', 'Flange width', 'in')}${h.num('crossframes.dia.tf', 'Flange thickness', 'in')}${h.num('crossframes.dia.tw', 'Web thickness', 'in')}` : ''}
+@@ -108,7 +144,7 @@
+   function layoutPlan(P) {
+     ensure(P); let L = null; try { L = window.SBDFraming.compute(P); } catch (e) { L = { errors: [e.message] }; }
+     const dOn = isDia(P);
+-    return (L && !L.errors.length ? plan(L, dOn) : `<div class="alert err">${esc((L && L.errors || []).join(' '))}</div>`)
++    return (L && !L.errors.length ? plan(L, dOn, { ui: true }) : `<div class="alert err">${esc((L && L.errors || []).join(' '))}</div>`)
+       + `<p class="note">${dOn ? 'Diaphragms' : 'Cross-frames'}, their spacing and orientation, and the field splices: <a href="#" data-itgo="framing">Framing &amp; bracing tab</a>.</p>`;
+   }
+   function onChange(el, P) {
+@@ -199,7 +235,7 @@
+     h += dOn ? `<section class="sec"><div class="secHead">Diaphragms: elevation</div><div class="secBody">${diaSvg(B)}</div></section>`   // SBDIA: the diaphragm, not the X / K truss
+       : `<section class="sec"><div class="secHead">Cross-frames: elevation</div><div class="secBody"><div data-gfxb="crossframe"></div></div></section>`;   // drawn by ui/tabgraphics-b.js from the results below
+     // layout
+-    h += `<section class="sec"><div class="secHead">Framing (6.7.4.2.1)</div><div class="secBody">${plan(L, dOn)}
++    h += `<section class="sec"><div class="secHead">Framing (6.7.4.2.1)</div><div class="secBody">${plan(L, dOn, { ui: true })}
+       <div class="tscroll"><table class="tbl"><thead><tr><th>Span</th><th>Skew θ (°)</th><th class="lft">Orientation</th><th>Frames</th><th>Spacing (ft)</th><th>Conflicts</th><th></th></tr></thead><tbody>
+       ${FR.orient.map(o => `<tr><td>${o.k + 1}</td><td>${fmt(o.th, 2)}</td><td class="lft">${o.o === 'normal' ? `normal, ${o.flat ? 'contiguous' : esc(o.arr)}` : 'parallel to the skew'}</td><td>${o.n}</td><td>${fmt(o.s, 3)}</td><td class="${o.conflicts ? 'fx-hi' : ''}">${o.conflicts || 0}</td><td>${wk(`fr.k${o.k}.s`)}</td></tr>`).join('')}</tbody></table></div>
+       <div class="tscroll"><table class="tbl"><thead><tr><th>Girder</th><th>Intermediate frames</th><th>Largest L<sub>b</sub> (ft)</th><th class="lft">Brace points (own stations, ft)</th><th></th></tr></thead><tbody>
+diff --git a/apps/steel-bridge/ui/summary.js b/apps/steel-bridge/ui/summary.js
+index 2650570..15de47e 100644
+--- a/apps/steel-bridge/ui/summary.js
++++ b/apps/steel-bridge/ui/summary.js
+@@ -55,8 +55,8 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
+ @media screen and (max-width:600px){table.sum-ov th{white-space:normal;width:auto;min-width:90px}}
+ .sum-gfx{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+ .sum-g1{margin:0;min-width:0} .sum-g1 figcaption{font-family:var(--font-ui);font-size:8.5pt;color:#475569;margin:0 0 4px} .sum-g1 .note{font-size:8.5pt}
+-.sum-gbox{background:#fff;color:#0F172A;border:1px solid #e4e7eb;border-radius:4px;padding:4px;color-scheme:light;overflow:hidden} .sum-gbox svg{display:block;width:100%;max-width:100%;height:auto;margin:0 auto}
+-@media print{.sum-gfx{grid-template-columns:minmax(0,1fr)} .sum-g1{break-inside:avoid} .sum-gbox{-webkit-print-color-adjust:exact;print-color-adjust:exact} .sum-gbox svg{width:100%!important}}
++.sum-gbox{background:#fff;color:#0F172A;border:1px solid #e4e7eb;border-radius:4px;padding:4px;color-scheme:light;overflow:hidden} .sum-gbox svg{display:block;width:100%;max-width:100%;height:auto;margin:0 auto} .sum-gbox .fp-sc svg{max-width:none}
++@media print{.sum-gfx{grid-template-columns:minmax(0,1fr)} .sum-g1{break-inside:avoid} .sum-gbox{-webkit-print-color-adjust:exact;print-color-adjust:exact} .sum-gbox svg{width:100%!important;min-width:0!important}}
+ @media print{.sum-run button{display:none}}`;
+     document.head.appendChild(st);
+   }
+@@ -209,7 +209,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
+      (window resize, the splitter's 'sbd2:panelresize', and a ResizeObserver on the card for the left column's collapse; rAF-throttled). Print: full page width (CSS). Display only. */
+   const GFX_CAP = () => Math.max(360, Math.min(760, 0.8 * (window.innerHeight || 900)));
+   function sizeGfx(el) {
+-    el.querySelectorAll('.sum-gbox > svg').forEach(s => { const vb = (s.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number), bx = s.parentNode.clientWidth - 8;
++    el.querySelectorAll('.sum-gbox > svg, .sum-gbox .fp-sc > svg').forEach(s => { const vb = (s.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number), bx = s.closest('.sum-gbox').clientWidth - 8;   // SKP: the framing plan in its scroll box
+       if (!(vb[2] > 0 && vb[3] > 0) || !(bx > 0)) { s.style.width = ''; return; }
+       const w = Math.min(bx, GFX_CAP() * vb[2] / vb[3]); s.style.width = w < bx - 1 ? Math.floor(w) + 'px' : ''; });
+   }
+```
+- **Provisions:** none. No formula, factor, unit, reference or computed value changes.
+- **Check case:** 11 girders at 4 ft, a 40 ft span, θ = 30°. The Abut. 1 line runs from (X(−11.547), Y(0)) to (X(11.547), Y(40)) with s_x = s_y, so atan(23.094/40) = 30.00° (before: 40.84°). Typical section, built-in and 11-girder projects, sheet 1:32 and Summary 1:96: 0 texts over texts and 0 lines through a text (before: 6 to 24). The section sheet's plot scale is unchanged (1:32 and 1:24).
+- **Baseline:** new `tests/baselines/dxf-sheets.json` (each sheet as its own DXF, recorded on origin/main 122e4f5's parent afa735f). Only the 10 `|sec` entries were re-recorded (engineer-requested exception); the other 148 sheets and all plot scales are unchanged.
+- **How verified:** new tests `tests/engine/framing-plan.test.mjs` and `tests/engine/dxf-sheets.test.mjs`; the engine tests drawings, sheets, dxf-detc, framing, graphics, report and crossframes; the smoke tests steel-bridge-drawings, -summary, -graphics, -dxf-unchanged and phone-layout --tool sbapp; check-syntax.
+- **Saved data (§5):** none (the exaggeration toggle is not stored).
+- **Decisions (pending engineer review):** the girder spacing and out-to-out dimensions below the girders; the deck dimension on the left; a scrolling plan box; the exaggerated view offered only when L/W > 5.
+- **Open items:** (a) the DXF framing plan has G1 at the bottom (y up), the mirror of the SVG plan, 3D view and section; the skew angle itself is right; not changed. (b) On paper B the section sheet does not fit at any scale (k = 1200, on main too).
 ## 2026-11-10 — PR: claude/handoffs-card-steel-bridge (PR #1346: https://github.com/mlococo88/All-Structural/pull/1346) — Project tab: the hand-off card becomes "Hand-offs" with "Receive from other tools" and "Send to other tools" (HOC; engineer request 2026-11-10 "the push/pull should probably all be in the Project tab")   [display only; no computed value, payload, storage key or saved-data format change]
 - **Where:** `apps/steel-bridge/ui/handoffs.js` `function card(P, ui)` (anchor `/* ---------- UI: one card on the Project tab ---------- */`): rewritten. Same buttons and `data-ho` actions (`pmUse`, `pmShare`, `lldfPull`, `lldfFile`, `lldfInput`, `lldfDrop`, `subSend`, `subFile`, `goAn`), same `data-ho-opt` boxes, same `onClick`, confirms and the LL & DL review dialog; `id="sbdHo"` kept. Card title "Other tools (hand-offs)" → "Hand-offs". Rows: Receive — Shared project info (from any tool), Live load distribution factors (from LL & DL Distribution); Send — Shared project info (to every tool), Geometry and reactions (to Bridge Substructure Loading). New helpers `lastSent(P, ch)` (reads this browser's per-project copy `SharedHandoffStore.copyKey(ch, 'steelbridge', pid)`, read only) and `lldfAt()` (reads `bridgeSuite.v1.lldf.updatedAt`, read only).
   - LL & DL row: a plate-girder select `id="i__gHo"` (shown when the project has more than one plate girder) next to the button; it sets the same `ui.g` as the Girders & plates tab's `i__g`. `apps/steel-bridge/index.html`: `if (el.id === 'i__g') {` → `if (el.id === 'i__g' || el.id === 'i__gHo') {`.
