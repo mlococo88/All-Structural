@@ -4054,14 +4054,16 @@ function computeAll(I, opts = {}) {
 
   // Required bond length (geotechnical): STL / (dh*pi*beta*phi)
   const perFt_bond = dh * PI * beta_ksi * 12; // kip per ft of bond (nominal)
-  // PDA-L6 (2026-11-07): the bond demand includes the factored pile self-weight, gamma_DC W_pile (gamma_DC = 1.25, Table 3.4.1-2;
+  // PDA-L6 (2026-11-07): the bond demand of the geotechnical check includes the factored pile self-weight, gamma_DC W_pile (gamma_DC = 1.25, Table 3.4.1-2;
   // STL is taken to exclude it). W_pile = grout-filled hole (casing OD over the cased length, d_h below) at 0.150 kcf plus the
   // steel (casing over the cased length, bar over the full length) at 0.490 - 0.150 kcf. Uplift: the weight is not credited.
   const Wself = (0.150 * (PI * OD * OD / 4 * (I.Lcased || 0) + PI * dh * dh / 4 * Math.max((I.Lcased || 0) - (I.Lplunge || 0) + (I.LbProvided || 0) - (I.Lcased || 0), 0))
     + (0.490 - 0.150) * (PI * (OD * OD - Math.pow(OD - 2 * (I.tc || 0), 2)) / 4 * (I.Lcased || 0) + (I.Ab || 0) * ((I.Lcased || 0) - (I.Lplunge || 0) + (I.LbProvided || 0)))) / 144;   // kip
   const gDCself = 1.25;
   const geoDemand = STL > 0 ? STL + gDCself * Wself : STL;
-  const Lb_req = geoDemand / (perFt_bond * phi_geo); // ft, required EFFECTIVE bond (PDA-L6: STL + gamma_DC W_pile)
+  // PDLB (2026-11-10, engineer): no pile weight in the required bond length: L_b,req = STL / (q_b phi_geo) (Eq. 10.9.3.5.2-1 inverted at STL).
+  // Before (PDA-L6): geoDemand / (perFt_bond * phi_geo). The geotechnical check R.geo.pass (phi P_n >= STL + gamma_DC W_pile) is unchanged.
+  const Lb_req = STL / (perFt_bond * phi_geo); // ft, required EFFECTIVE bond (STL only, pile weight not added)
   // Grout-to-ground bond: since PDA-D8 the plunge length is included (it transfers load to the ground,
   // 10.9.3.10.4); the effective bond length below is L_bond less any bond above the design scour line.   (PDA-L4: comment only)
   const Lb_total = L_bond;                       // total drilled bond zone (entered)
@@ -11698,7 +11700,8 @@ function PrintReport({
     label: "Required bond length",
     eq: `L_{b,req} = \\dfrac{STL}{\\phi_{geo}\\,q_b} = \\dfrac{${fmt(I.STL, 0)}}{${fmt(r.geo.phi_geo, 2)}(${fmt(r.geo.perFt_bond, 2)})}`,
     result: `= ${fmt(r.geo.Lb_req, 1)}\\ \\text{ft}`,
-    cite: "Eq. 10.9.3.5.2-1"
+    cite: "Eq. 10.9.3.5.2-1",
+    note: "The pile self-weight is not included in the required bond length; L_b,req is based on STL only (engineer\u2019s decision, 2026-11-10). The factored weight \u03b3_DC W_pile is still added to the geotechnical bond resistance check, \u03c6_geo P_n \u2265 STL + \u03b3_DC W_pile."   // PDLB (2026-11-10)
   }), /*#__PURE__*/React.createElement(Calc, {
     label: "Effective bond length",
     eq: r.geo.Lb_scour > 0   // PDA-D12: bond above the design scour line removed (10.7.3.6); PDA-D8: plunge included (10.9.3.10.4)
@@ -16381,11 +16384,11 @@ function pdrModel(I, r, pyRes, pcr, sel) {
     add("geo", sub("01 Geotechnical bond resistance", [pdrItem("geo", [{ title: "Bond resistance", ref: AA("Art. 10.9.3.5"), steps: [
       pdrS("beta", "Bond stress (Table C10.9.3.5.2-1)", "\\beta", "", "", g.beta_ksf, "ksf", 2, { note: "= " + fmt(g.beta_ksf * 1000 / 144, 1) + " psi" }),
       pdrS("qb", "Nominal bond per unit length", "q_{b}", "d_{h}\\,\\pi\\,\\beta", pdrN(g.dh, 3) + "\\,\\pi\\,(" + pdrN(g.beta_ksi, 4) + ")", g.perFt_bond, "kip/ft", 2),
-      pdrS("Wp", "Factored pile self-weight added to the demand (\u03b3_DC = 1.25; grout-filled hole + steel)", "\\gamma_{DC}W_{pile}", "", pdrN(g.gDCself, 2) + "(" + pdrN(g.Wself, 2) + ")", g.gDCself * g.Wself, "kip", 2, { ref: AA("Table 3.4.1-2") }),   // PDA-L6
-      pdrS("Lreq", "Required bond length", "L_{b,req}", "\\frac{STL + \\gamma_{DC}W_{pile}}{\\phi_{geo}\\,q_{b}}", "\\frac{" + pdrN(g.demand, 1) + "}{" + pdrN(g.phi_geo, 2) + "(" + pdrN(g.perFt_bond, 2) + ")}", g.Lb_req, "ft", 1, { ref: AA("Eq. 10.9.3.5.2-1") }),
+      pdrS("Lreq", "Required bond length (pile self-weight not included: STL only)", "L_{b,req}", "\\frac{STL}{\\phi_{geo}\\,q_{b}}", "\\frac{" + pdrN(I.STL, 1) + "}{" + pdrN(g.phi_geo, 2) + "(" + pdrN(g.perFt_bond, 2) + ")}", g.Lb_req, "ft", 1, { ref: AA("Eq. 10.9.3.5.2-1") }),   // PDLB (2026-11-10)
       pdrS("Leff", "Effective bond length" + (g.Lb_scour > 0 ? " (bond above the design scour line removed, 10.7.3.6)" : " (plunge included, 10.9.3.10.4)"), "L_{b,eff}", g.Lb_scour > 0 ? "L_{bond} \\minus L_{scour}" : "L_{bond}", g.Lb_scour > 0 ? pdrN(g.Lb_total, 1) + " \\minus " + pdrN(g.Lb_scour, 1) : "", g.Lb_eff, "ft", 1),
       pdrS("Pn", "Nominal resistance", "P_{n}", "d_{h}\\,\\pi\\,\\beta\\,L_{b,eff}", "", g.Pn_geo, "kip", 1),
-      pdrS("dc", "Geotechnical: \u03c6_geo P_n \u2265 STL + \u03b3_DC W_pile", "\\frac{STL + \\gamma_{DC}W_{pile}}{\\phi_{geo}P_{n}}", "", "\\frac{" + pdrN(g.demand, 0) + "}{" + pdrN(g.phiPn_geo, 1) + "}", g.phiPn_geo > 0 ? g.demand / g.phiPn_geo : Infinity, "", 3, { ok: !!g.pass })] }]), note("Pile self-weight: STL is taken as the factored axial load at the pile head without the pile weight; \u03b3_DC W_pile (\u03b3_DC = 1.25, the maximum of AASHTO LRFD 10th Ed. Table 3.4.1-2) is added to the bond demand and the required bond length. Uplift does not credit the pile weight (conservative); the group checks (\u03b7, block) use STL."), goto("geo", "Geotechnical tab")]));   // ASM
+      pdrS("Wp", "Factored pile self-weight added to the geotechnical demand (not to L_b,req; \u03b3_DC = 1.25; grout-filled hole + steel)", "\\gamma_{DC}W_{pile}", "", pdrN(g.gDCself, 2) + "(" + pdrN(g.Wself, 2) + ")", g.gDCself * g.Wself, "kip", 2, { ref: AA("Table 3.4.1-2") }),   // PDA-L6; PDLB: after Pn (not used by L_b,req)
+      pdrS("dc", "Geotechnical: \u03c6_geo P_n \u2265 STL + \u03b3_DC W_pile", "\\frac{STL + \\gamma_{DC}W_{pile}}{\\phi_{geo}P_{n}}", "", "\\frac{" + pdrN(g.demand, 0) + "}{" + pdrN(g.phiPn_geo, 1) + "}", g.phiPn_geo > 0 ? g.demand / g.phiPn_geo : Infinity, "", 3, { ok: !!g.pass })] }]), note("Pile self-weight: STL is taken as the factored axial load at the pile head without the pile weight; \u03b3_DC W_pile (\u03b3_DC = 1.25, the maximum of AASHTO LRFD 10th Ed. Table 3.4.1-2) is added to the demand of the geotechnical check (\u03c6_geo P_n \u2265 STL + \u03b3_DC W_pile). The pile self-weight is not included in the required bond length; L_b,req is based on STL only (engineer\u2019s decision, 2026-11-10). Uplift does not credit the pile weight (conservative); the group checks (\u03b7, block) use STL."), goto("geo", "Geotechnical tab")]));   // ASM
     const lat = [pdrS("M", "Maximum moment (" + (I.lateralSource === "py" ? "built-in nonlinear p-y" : I.lateralSource === "input" ? "external LPILE" : "linear estimate") + ")", "M_{max}", "", "", r.MmaxUsed != null ? r.MmaxUsed : I.Mmax, "kip-ft", 1)];
     if (r.casingExt.checked) { lat.push(pdrS("tip", "Casing tip below grade", "L_{cased} \\minus e_{stickup}", "", pdrN(I.Lcased, 1) + " \\minus " + pdrN(I.solverFree, 1), r.casingExt.tipBelowGrade, "ft", 1),
       pdrS("z", "Moment-decay depth (|M| \u2264 5% M_max)", "z_{M \\to 0}", "", "", r.casingExt.zDecay || 0, "ft", 1, { note: r.casingExt.Mtip != null ? "moment at the casing tip \u2248 " + fmt(r.casingExt.Mtip, 1) + " kip-ft (" + fmt((r.casingExt.MtipFrac || 0) * 100, 0) + "% M_max)" : "" }),
@@ -20122,7 +20125,8 @@ function App() {
   }), /*#__PURE__*/React.createElement(DerivLine, {
     label: "Required bond length",
     tex: `L_{b,req}=\\dfrac{STL}{d_h\\pi\\beta\\,\\phi_{geo}}=\\dfrac{${fmt(I.STL, 0)}}{${fmt(r.geo.perFt_bond, 2)}\\cdot${fmt(r.geo.phi_geo, 2)}}=${fmt(r.geo.Lb_req, 1)}\\text{ ft}`
-  }), /*#__PURE__*/React.createElement(DerivLine, {
+  }), /*#__PURE__*/React.createElement("p", { className: "text-[9px] text-slate-500 mb-2 leading-snug" }, "The pile self-weight is not included in the required bond length; L_b,req is based on STL only (engineer\u2019s decision, 2026-11-10). The factored weight \u03b3_DC W_pile is still added to the geotechnical bond resistance check, \u03c6_geo P_n \u2265 STL + \u03b3_DC W_pile."),   // PDLB (2026-11-10)
+  /*#__PURE__*/React.createElement(DerivLine, {
     label: "Effective bond length",
     tex: `L_{b,eff}=L_{bond}${r.geo.Lb_scour > 0 ? "-L_{scour}" : ""}=${fmt(r.geo.Lb_total, 1)}${r.geo.Lb_scour > 0 ? "-" + fmt(r.geo.Lb_scour, 1) : ""}=${fmt(r.geo.Lb_eff, 1)}\\text{ ft}\\;${r.geo.Lb_eff >= r.geo.Lb_req ? '\\geq' : '<'}\\;L_{b,req}`   // PDA-D12
   }), /*#__PURE__*/React.createElement(DerivLine, {
@@ -20133,7 +20137,7 @@ function App() {
   }, /*#__PURE__*/React.createElement(CheckRow, {
     pass: r.geo.pass,
     tex: `\\phi_{geo}P_n = ${fmt(r.geo.phiPn_geo, 1)}\\text{ kip} \\;${r.geo.pass ? ' \\geq ' : ' < '}\\; STL+\\gamma_{DC}W_{pile}=${fmt(I.STL, 0)}+${fmt(r.geo.gDCself, 2)}(${fmt(r.geo.Wself, 2)})=${fmt(r.geo.demand, 1)}\\text{ kip}`
-  }), /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mt-2 leading-snug pdNL" }, pdNL("Pile self-weight in the bond demand:", [["STL", "is taken as the factored axial load at the pile head without the pile weight; the factored weight γ_DC W_pile (γ_DC = 1.25, the maximum of AASHTO LRFD 10th Ed. Table 3.4.1-2) is added to this check and to the required bond length."], ["W_pile:", "the grout-filled hole and the steel (casing over the cased length, bar over the full length)."], ["Not added:", "uplift does not credit the pile weight (conservative); the group checks (η, block) use STL."]])))))), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Module, {
+  }), /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mt-2 leading-snug pdNL" }, pdNL("Pile self-weight in the bond demand:", [["STL", "is taken as the factored axial load at the pile head without the pile weight; the factored weight γ_DC W_pile (γ_DC = 1.25, the maximum of AASHTO LRFD 10th Ed. Table 3.4.1-2) is added to this check. It is not added to the required bond length, which uses STL only (engineer\u2019s decision, 2026-11-10)."], ["W_pile:", "the grout-filled hole and the steel (casing over the cased length, bar over the full length)."], ["Not added:", "uplift does not credit the pile weight (conservative); the group checks (η, block) use STL."]])))))), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Module, {
     idx: "02",
     title: "Lateral Analysis — Maximum Moment",
     code: "p-y / LPILE · free-head",

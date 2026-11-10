@@ -20333,3 +20333,44 @@ Cross-tool PR with the Retaining Wall Designer (Phase 8f, HANDOFF.md §4.6 / §4
 - **How verified:** headless Chromium (`tests/lib.mjs openPage`), origin/main (78a8609, a full worktree so the shared files load) vs branch, 5 projects (default micropile; micropile + clay S_u 400 psf, 3×3 group at 2.5D, T_u 40, joint efficiency 50 %, scour 2 ft; micropile, no stickup, Buckling switched on with added length 4 ft, 2×3 group, T_u 40; H-pile, stickup 10 ft, group, T_u 30; integral abutment): every input rail tab, every output tab (modules expanded) and the built Report (`.rp-doc`): digit sequences compared token by token (difflib): nothing removed or changed; the only inserted digits are the note text listed in the PR (article / table numbers and edition 10, 1.25, 62.4, 120, 3B, 25 %, 0.465, 0.15, 1.0, Module 03 / 10). The added notes found in the branch text; "pending" / "Decision" absent from every tab and the Report. Console: only the Tailwind CDN request the test kit does not serve, as on main. 390 px: no sideways scroll. `node tests/check-syntax.mjs "Pile Designer.html"`; `tests/engine/run.mjs handoffs pile-group` (22 pass); `tests/smoke/retwall-pile-handoff.mjs` (all passed); `tests/smoke/pile-library.mjs`: library checks pass, its two "page text identical vs main" checks show the new note text (autosaved inputs identical), as in earlier display PRs.
 - **Other copies:** none.
 - **Open items:** (1) Geotechnical tab, Module 01 DerivLine "Required bond length" shows `L_b,req = STL/(d_h π β φ_geo)` with the STL value, while the result (and the Report step geo/Lreq) uses STL + γ_DC W_pile (PDA-L6): default 86/(…) is printed as 27.6 ft. Display mismatch, not changed here (it changes displayed numbers). (2) The Module 11 "group load case shown" sentence (the first non-zero group case) is on the Group tab and in the printed group section; not exercised by the probe projects (no cap loads).
+
+## 2026-11-10 — PR: pile-bond-no-weight (PR #1311: https://github.com/mlococo88/All-Structural/pull/1311) (PDLB) — required bond length L_b,req uses STL only; the pile self-weight is not added   [calculation change, approved]
+- **Engineer (2026-11-10):** "No pile weight in bond length; add a note in the app that it's not included." (Open item (1) of #1298.)
+- **Provision:** AASHTO LRFD 10th Ed. Art. 10.9.3.5.2, Eq. 10.9.3.5.2-1 (bond resistance, solved for the bond length); the γ_DC = 1.25 term (Table 3.4.1-2, PDA-L6 #1041) is no longer in L_b,req.
+- **Where / before → after:**
+  1. `computeAll`, anchor `// PDLB (2026-11-10, engineer)`:
+     - Before: `const Lb_req = geoDemand / (perFt_bond * phi_geo); // ft, required EFFECTIVE bond (PDA-L6: STL + gamma_DC W_pile)`
+     - After: `const Lb_req = STL / (perFt_bond * phi_geo); // ft, required EFFECTIVE bond (STL only, pile weight not added)`
+     - The PDA-L6 comment now says "the bond demand of the geotechnical check includes…".
+     - `Wself`, `geoDemand`, `R.geo.pass` and `R.geo.demand` are unchanged.
+  2. App, Geotechnical tab, Module 01, after the DerivLine "Required bond length" (anchor `// PDLB (2026-11-10)`): new `<p>` note "The pile self-weight is not included in the required bond length; L_b,req is based on STL only (engineer's decision, 2026-11-10). The factored weight γ_DC W_pile is still added to the geotechnical bond resistance check, φ_geo P_n ≥ STL + γ_DC W_pile."
+  3. App, Module 01 `pdNL("Pile self-weight in the bond demand:"`, item STL:
+     - Before: "…is added to this check and to the required bond length."
+     - After: "…is added to this check. It is not added to the required bond length, which uses STL only (engineer's decision, 2026-11-10)."
+  4. `PrintReport`, Calc "Required bond length": `note:` with the text of item 2.
+  5. `pdrModel`, sub "01 Geotechnical bond resistance":
+     - Step `Lreq`: before `"\\frac{STL + \\gamma_{DC}W_{pile}}{\\phi_{geo}\\,q_{b}}"` substituted with `g.demand`; after `"\\frac{STL}{\\phi_{geo}\\,q_{b}}"` substituted with `I.STL`. The label adds "(pile self-weight not included: STL only)".
+     - Step `Wp`: moved from before `Lreq` to after `Pn`. Label "Factored pile self-weight added to the geotechnical demand (not to L_b,req; …)".
+     - Section note: "…is added to the demand of the geotechnical check (φ_geo P_n ≥ STL + γ_DC W_pile). The pile self-weight is not included in the required bond length; L_b,req is based on STL only (engineer's decision, 2026-11-10). Uplift…"
+- **Check case (default):**
+  - q_b = 7.000π(0.017361)(12) = 4.581 kip/ft, so φq_b = 3.207 kip/ft.
+  - W_pile = 1.966 kip.
+  - L_b,req: before (86 + 1.25·1.966)/3.207 = 27.58 ft; after 86/3.207 = 26.82 ft.
+  - L_b,eff = 27.0 ft: the check goes from 1.02 NG to 0.99 OK.
+  - Geotechnical check 86.59 < 88.46 kip: D/C 1.022 NG, unchanged.
+  - allPass: unchanged.
+- **Check case (clay, 3×3 group, T_u 40, STL 120, OD 9.625 in, L_bond 30 ft):** L_b,req 28.42 → 27.21 ft (ratio 0.95 → 0.91, OK). Geotechnical D/C 0.947, unchanged.
+- **Unchanged (verified):**
+  - The geotechnical check and envelope `geoR` still include 1.25 W_pile.
+  - Structural, bearing, punching, buckling and CFST checks use STL (never the weight).
+  - Uplift does not credit the weight.
+  - The group checks use STL.
+  - `pileResults` hand-off (P_n, φ), drawings, and allPass / Run-all-cases pass. The old L_b check equalled `geo.pass`, which now implies the new one.
+- **How verified:** headless Chromium, main vs branch, two projects (`computeAll` and every output tab's text). Only `Lb_req`, `Lb_geoReq_ok`, the lines listed above, and the Report rows / steps that quote them changed.
+  - check-syntax: pass.
+  - `tests/engine/run.mjs handoffs pile-group`: pass.
+  - `retwall-pile-handoff`: pass.
+  - `pile-library`: pass. Its PDLB masks apply only while main predates PDLB.
+  - 390 px: no sideways scroll.
+  - 0 page errors.
+- **Other copies:** none.
