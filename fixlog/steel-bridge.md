@@ -4831,7 +4831,7 @@ format changed. Anchor text `QA2` marks each change. New file `ui/sub.js` (in th
 - **Other copies:** none.
 - **Open items:** (1) `ui/splitter.js` touches `document` at load, so the Node engine tests `report`, `steps-groups-tabs`, `deflection-tab` fail on origin/main (since #1277); not changed here. (2) With a diaphragm the Cross-frames tab elevation still draws the angle frame (BRSEL open item). (3) Constructibility notes left to the Constructibility PR in progress (CLC decision 4 is stated on the Loads tab and in the Report Analysis section).
 
-## 2026-11-10 — PR: sb-constr-mdcc (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Constructibility: C_b, the compression flange and the nonprismatic γ_e from the M_DCc the check uses (SBCON; engineer decision 2026-11-10; changes computed values)
+## 2026-11-10 — PR: claude/sb-constr-mdcc-pr1 (PR #1287: https://github.com/mlococo88/All-Structural/pull/1287) — Constructibility: C_b, the compression flange and the nonprismatic γ_e from the M_DCc the check uses (SBCON; engineer decision 2026-11-10; changes computed values)
 - **Problem:** with the pour sequence on (M_DCc ≠ M_DC1), `bracingC()` built the deck-placement LTB data (the flange in compression,
   C_b,C by Eq. 6.10.8.2.3b-1, and for a nonprismatic L_b the ratio K = f_max/f_x of the conservative γ_e bound) from 1.25M_DC1 + 1.5M_CL,
   while `location()` checks 1.25M_DCc + 1.5M_CL. γ_e = F_e,s/(K f_s) then mixes two moment diagrams. Near an M_DC1 inflection f_x → 0,
