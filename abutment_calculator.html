@@ -10622,7 +10622,9 @@ function abrModel(){
       ["Bearing setback from the backwall front face",abrCell(+g.brgSetback),"ft"],["Wall length L_ab / footing length L_ftg",abrN(Lab)+" / "+abrN(Lftg),"ft"],
       ["Soil height over the heel / backfill slope β",abrN(g.soilH)+" ft / "+abrN(+g.beta||0,1)+"°",""],["Water table above the footing base h_w",abrCell(+g.hw||0),"ft"],
       ["Span length / skew",abrN(g.spanL,1)+" ft / "+abrN(+g.skew||0,1)+"°",""],["Retained height at the heel H",abrCell(R.geo.H),"ft"]];
-    subs.push({title:"Geometry",items:[{type:"table",head:["Quantity","Value","Unit"],rows:gr},{type:"note",text:"Entered on the input tabs; derived values as on "+abrTab("tab-loads")+"."}]});
+    const OFr=R.geo.off;   // ABSH: backwall offset
+    if(OFr) gr.push(["Backwall offset e (stem back face to backwall back face) / stem-shelf depth d_sh below the top",abrN(OFr.eIn,1)+" / "+abrN(OFr.dIn,1)+(OFr.dAuto?" (= slab t)":""),"in"],["Bridge seat width t_st − t_bw − e",abrCell(R.geo.seatW),"ft"]);
+    subs.push({title:"Geometry",items:[{type:"table",head:["Quantity","Value","Unit"],rows:gr},{type:"note",text:"Entered on the input tabs; derived values as on "+abrTab("tab-loads")+"."}].concat(OFr?[{type:"note",text:"Backwall offset (engineer request 2026-11-10): the backwall's back face is e in front of the stem's back face; behind it the stem rises at its full thickness to the stem shelf, d_sh below the top of the backwall (no corbel or paving notch). The approach slab bears on the shelf at mid-width e/2; the bearing setback is measured from the backwall's front face; the backwall is designed at the shelf elevation. Positions and lever arms: see Loads, \"Backwall offset\" ("+abrTab("tab-loads")+" §1.1)."}]:[])});
     const mr=[["Concrete f′c / unit weight γ_c",abrN(fc,1)+" ksi / "+abrN(m.gc,3)+" kcf",""],["Reinforcement f_y ("+(m.rebar||"A615")+")",abrCell(fy,1),"ksi"],["Cover: footing / walls",abrN(m.coverF,2)+" / "+abrN(m.coverT,2),"in"],
       ["Backfill γ / φ",abrN(gam,3)+" kcf / "+abrN(S.soil.phi,1)+"°",""],["Earth pressure method / state",(S.soil.method||"rankine")+" / "+(R.Ksel?R.Ksel.eff:"—"),""],
       ["Foundation",fn.branch==="pile"?"pile-supported":"spread footing on "+fn.matl,""]];
@@ -10665,6 +10667,14 @@ function abrModel(){
     if(R.seis&&!R.seis.single){ const q=R.seis;
       subs.push({title:"Seismic earth pressure and inertia (Extreme Event I)",items:[{type:"table",head:["Quantity","Value"],rows:[["k_h / k_v",abrN(q.kh,3)+" / "+abrN(q.kv,3)],["Seismic earth pressure coefficient K_AE",abrN(q.KAE,4)],
         ["P_AE (kip/ft) / increment ΔP_AE,h (kip/ft)",abrN(q.PAE,3)+" / "+abrN(q.dPAEh,3)],["Wall inertia W_i (kip)",abrN(q.WiW,1)]]},{type:"note",text:"Mononobe–Okabe, AASHTO LRFD 10th Ed. Art. 11.6.5 and Appendix A11; worked on "+abrTab("tab-loads")+"."}]}); }
+    if(R.geo.off){ const O=R.geo.off, xsc=R.geo.xStemCenter, xbw=R.geo.xBwFront+(+g.tbw)/2, ps=parts.find(p=>/^Stem shelf/.test(p.name)), P=R.ap;   // ABSH
+      const rows=[["x_bw,back = x_stem,back − e",abrN(R.geo.xStemBack,3)+" − "+abrN(O.e,4),abrCell(O.xBwBack,3),"ft"],["x_bw,front = x_bw,back − t_bw",abrN(O.xBwBack,3)+" − "+abrN(+g.tbw,3),abrCell(R.geo.xBwFront,3),"ft"],
+        ["x_brg = x_bw,front − setback",abrN(R.geo.xBwFront,3)+" − "+abrN(+g.brgSetback,3),abrCell(R.geo.xBrg,3),"ft"],["Backwall centroid x̄_bw = x_bw,front + t_bw/2",abrN(R.geo.xBwFront,3)+" + "+abrN(+g.tbw/2,3),abrCell(xbw,3),"ft"],
+        ["Shelf height above the seat h_sh = h_bw − d_sh",abrN(+g.hbw,3)+" − "+abrN(O.d,3),abrCell(O.hSh,3),"ft"]];
+      if(ps) rows.push(["Stem shelf W_sh = e·h_sh·γ_c·L_ab at x̄_sh = x_stem,back − e/2",abrN(O.e,4)+"·"+abrN(O.hSh,3)+"·"+abrN(+S.mat.gc,3)+"·"+abrN(Lab),abrCell(ps.W,2)+" kip at "+abrN(O.xSh,3)+" ft",""]);
+      if(P) rows.push(["Approach slab reaction x_ap = x_stem,back − e/2 (mid-bearing)",abrN(R.geo.xStemBack,3)+" − "+abrN(O.e/2,4),abrCell(P.x,3),"ft"]);
+      rows.push(["Arms to the stem-base centroid x_sc = "+abrN(xsc,3)+" ft (+ toward the toe): backwall / shelf / slab / bearing","",abrN(xsc-xbw,3)+(ps?" / "+abrN(xsc-O.xSh,3):"")+(P?" / "+abrN(xsc-P.x,3):"")+" / "+abrN(xsc-R.geo.xBrg,3),"ft"]);
+      subs.push({title:"Backwall offset e: positions and lever arms",items:[{type:"table",head:["Quantity","Substitution","Value","Unit"],rows},{type:"note",text:"Worked on "+abrTab("tab-loads")+" §1.1. These arms enter the stem-base eccentric moment (Structural design, stem) and the footing and stability moments about the toe through the load groups. The shelf is stem concrete: only the bearing of the slab on it is checked (5.6.5; Structural design). Earth pressure acts on the virtual back plane at the heel for stability and on the stem back face for the stem, as before; the backwall retains the soil above the shelf."}]}); }
     secs.push({title:"Loads",subs});
   }
   /* ---------- 4. External stability / foundation (lower abutment) ---------- */
