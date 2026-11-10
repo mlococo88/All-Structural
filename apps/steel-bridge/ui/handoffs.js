@@ -370,7 +370,7 @@
         cl = !r.ok ? ` (the per-project copy was not saved: ${r.error})` : !r.pid ? '' : r.cloud && r.cloud.ok ? '; also uploaded to GitHub' : r.cloud && r.cloud.queued ? `; GitHub upload waiting (${r.cloud.error})` : ''; }
       out.push(k === 'geo' ? `Geometry sent: ${built.geo.sum}${cl}.` : `Reactions sent (unfactored, kip, DC1 / DC2 / DW per girder)${cl}:\n${built.rx.sum}`);
     }
-    alert(`${pname ? `Kept for project "${pname}".` : 'This project has no name, so the send is kept only as the latest hand-off (no project). Enter a project name on the Project tab to keep one copy per project.'}\n\n${out.join('\n\n')}\n\nIn Bridge Substructure Loading: Bridge tab, "Pull geometry from Steel Bridge Design"; Reactions tab, "Pull from PS-Beam / GirderDetail". Each asks which project first.`);
+    alert(`${pname ? `Kept for project "${pname}".` : 'This project has no name, so the send is kept only as the latest hand-off (no project). Enter a project name on the Project tab to keep one copy per project.'}\n\n${out.join('\n\n')}\n\nIn Bridge Substructure Loading: Project tab, Hand-offs card, "Pull geometry from Steel Bridge Design" and "Pull from PS-Beam / GirderDetail". Each asks which project first.`);
   }
   function init(o) { ctx = o; window.addEventListener('storage', e => { if (!e.key || e.key.indexOf(BX().NS + LLDF.ch) === 0) document.querySelectorAll('[data-ho-new]').forEach(s => { s.hidden = !isNew(); }); });
     document.addEventListener('change', e => { const t = e.target; if (t && t.dataset && t.dataset.hoOpt) SEND[t.dataset.hoOpt] = !!t.checked; }); }
