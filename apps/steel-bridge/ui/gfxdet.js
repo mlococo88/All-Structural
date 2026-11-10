@@ -13,6 +13,7 @@
      weld(slot, { B, opt, dxf, file })      Welds: the flange-to-web weld size detail (B = SBDWeldsUI.build result; opt.i the location)
      lldf(slot, { P, R, lg, lr, cs, onCase(k), dxf(use) })   Loads & LLDF: the cross-section with lanes and wheels of the LLDF case (segmented control)
      strip(slot, { list, P, sel, onSel(i), dxf, file })     Field splices: the splice locations; stripFigure(list, P, W): the Report's static figure
+     diaphragm(B)                           Cross-frames (diaphragm in use): the intermediate diaphragm elevation as an HTML string (ui/framing.js diaSvg)
      splice(slot, { s, dxf, file })         Field splices: the splice detail (s = one entry of the splice list); spliceFigure(s, W): the Report's static figure (HTML string)
    Fix log: fixlog/steel-bridge.md (DETC, 2026-11-10). */
 (function () {
@@ -458,6 +459,30 @@
   }
   function stripFigure(list, P, W) { const m = stripModel(list, P); VK().detCss(); return `<div class="vk vk-det" style="max-width:${W || 760}px">${stripSvg(m, W || 760, -1, false)}${STRIP_CAP.replace('; the selected splice in blue', '')}</div>`; }
 
-  window.SBDGfxDet = { lldf, lldfModel, strip, stripModel, stripFigure, ltb, ltbModel, bracket, bracketModel, stiff, stiffModel, bear, bearModel, crossframe, cfModel, weld, weldModel, splice, spliceModel, spliceFigure,
+  /* ================= Cross-frames tab, diaphragm in use (SBDIA, #1297): the intermediate diaphragm elevation =================
+     As ui/framing.js diaSvg (its own inline SVG, no DXF): the bay between two girders, the connection plates, the diaphragm (nominal shape centred on the girder
+     depth), the bolt rows; the same numbers (SharedUnits.fmt digits). A static figure (the tab's HTML string): a wide and a narrow drawing, the card's width
+     picks one (container query); print shows the wide one. */
+  function diaphragm(B) {
+    const CF = window.SBDCrossframes, U = window.SharedUnits, fmt = (v, d) => U.fmt(v, d), p = B.I.p, q = p.dia || {}, Xs = CF.cfDiaSec(q), g = CF.cfDiaGap(q), S0 = +p.S, dg = +p.dg, D = B.R.DIA && B.R.DIA.i;
+    const bf = 16, tfl = 1, nb = Math.max(2, Math.round(+q.nb || 2)), sp = +q.pitch || 3, ec = +q.ecc || 3.5, bs = 5, yT = dg - (dg - Xs.d) / 2, yB = yT - Xs.d;   // y up from the bottom flange
+    const draw = W => { const Sc = VK().scene(), nar = W < 560;
+      [0, S0].forEach((xg, k) => { Sc.rect(xg - bf / 2, dg - tfl, xg + bf / 2, dg, 'dt-st'); Sc.rect(xg - bf / 2, 0, xg + bf / 2, tfl, 'dt-st'); Sc.rect(xg - 0.35, tfl, xg + 0.35, dg - tfl, 'dt-st');
+        const sg = k ? -1 : 1; Sc.rect(Math.min(xg, xg + sg * bs), tfl + 1, Math.max(xg, xg + sg * bs), dg - tfl - 1, 'dt-pl', { fill: '#E2E8F0', stroke: '#94A3B8' }); });
+      Sc.rect(g, yB, S0 - g, yT, 'dt-st'); Sc.line(g, yT - Xs.tf, S0 - g, yT - Xs.tf, 'dt-ol', { stroke: '#E2E8F0', sw: 0.8 }); Sc.line(g, yB + Xs.tf, S0 - g, yB + Xs.tf, 'dt-ol', { stroke: '#E2E8F0', sw: 0.8 });
+      [ec, S0 - ec].forEach(xb => { for (let i = 0; i < nb; i++) Sc.circ(xb, dg / 2 + (i - (nb - 1) / 2) * sp, 0.5, 'dt-bolt'); });
+      Sc.text(S0 / 2, yT, `${Xs.nm_} ${Xs.chS ? 'channel' : 'rolled W'} diaphragm, d = ${fmt(Xs.d, 2)} in`, { dy: -8, a: 'middle', sz: 12, w: true, maxw: nar ? W * 0.55 : W - 20, up: true });
+      Sc.dimH(0, S0, 0, -22, `S = ${fmt(S0, 2)} in`); Sc.dimV(0, dg, -bf / 2, -14, `d = ${fmt(dg, 2)} in`, { xr: -bf / 2 });
+      Sc.region(g, yB, S0 - g, yT, `Diaphragm ${Xs.nm_}, d = ${fmt(Xs.d, 2)} in${D ? `; φf Mn = ${fmt(D.Mn, 0)} kip-in, φv Vn = ${fmt(D.Vn, 2)} kip` : ''}`);
+      return Sc.render({ W, maxH: nar ? 260 : 320, label: 'Diaphragm elevation' }).svg; };
+    VK().detCss();
+    const cap = `${nb} bolts each end at ${fmt(sp, 2)} in, ${fmt(ec, 2)} in from the web; diaphragm centred on the girder depth${D ? `; φ_f M_n = ${fmt(D.Mn, 0)} kip-in, φ_v V_n = ${fmt(D.Vn, 2)} kip` : ''}.`;
+    if (typeof document !== 'undefined' && !document.getElementById('vk-dia-css')) { const st = document.createElement('style'); st.id = 'vk-dia-css';
+      st.textContent = '.vk-dia{container-type:inline-size;} .vk-dia .dn{display:none;} @container (max-width:560px){.vk-dia .dw{display:none;} .vk-dia .dn{display:block;}} @media print{.vk-dia .dw{display:block!important;} .vk-dia .dn{display:none!important;}}'; document.head.appendChild(st); }
+    return `<div class="vk vk-det vk-dia"><div class="vk-hd"><h3>Intermediate diaphragm, elevation<small>Looking along the girders; S = largest girder spacing; nominal dimensions</small></h3></div><div class="vk-fig"><div class="dw">${draw(720)}</div><div class="dn">${draw(360)}</div></div>`
+      + `<p class="vk-cap">${sb(cap)}</p><p class="vk-note">Intermediate diaphragm looking along the girders (connection plates light grey, bolts amber), nominal dimensions. Checks CFD (intermediate) and CFE (end diaphragms at the bearing lines) below; the details sheet is on the Drawings tab.</p></div>`;
+  }
+
+  window.SBDGfxDet = { diaphragm, lldf, lldfModel, strip, stripModel, stripFigure, ltb, ltbModel, bracket, bracketModel, stiff, stiffModel, bear, bearModel, crossframe, cfModel, weld, weldModel, splice, spliceModel, spliceFigure,
     _svg: { lldfSvg, stripSvg, ltbSvg, bracketSvg, stiffSvg, bearSvg, cfSvg, weldSvg, spliceSvg } };   // _svg: the SVG builders (tests)
 })();
