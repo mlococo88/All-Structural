@@ -52,6 +52,7 @@
   const rhOf = (s, q, mat) => SEC().hybrid(plates(q), s, { Fyt: mat.Fyt, Fyb: mat.Fyb, Fyw: mat.Fyw }, 'cn').Rh;   // GirderDetail rhFactor on the steel section
   /* the M_DCc rule of GirderDetail: used when it is a number other than 0 (blank, 0 or missing: M_DC1) */
   const useDCc = v => v !== '' && v != null && isFinite(+v) && +v !== 0;
+  const CB_MIN = 1.0;   // SBCB (engineer decision 2026-11-10): the lower bound of C_b for deck placement and the overhang checks (6.10.8.2.3b, C6.10.8.2.3b)
   const SIDE0 = 0.01;   // SBTS: an opposite-sign side of the pour envelope smaller than 0.01 kip-ft is taken as none (round-off; no second case)
 
   /* gsGovC(o, r, kind, X): GirderDetail gsGov, kinds 'Ct' / 'Cb' (deck placement, top / bottom flange): f_bu, D_c and R_h of the
@@ -101,7 +102,9 @@
     r.conC = up ? { lab: 'top', b: r.topB, t: r.topT, Fy: Fyt, f: Math.max(-r.con.top, 0) } : { lab: 'bottom', b: r.botB, t: r.botT, Fy: Fyb, f: Math.max(-r.con.bot, 0) };
     r.conT = up ? { lab: 'bottom', Fy: Fyb, f: Math.max(r.con.bot, 0) } : { lab: 'top', Fy: Fyt, f: Math.max(r.con.top, 0) };
     r.DcC = up ? (d - r.topT) - s.yb : s.yb - r.botT; r.RhC = rhOf(s, r, mat);
-    r.CbCu = r.CbC > 0 ? r.CbC : r.Cb;   // C_b for deck placement (CB1): Eq. 6.10.8.2.3b-1 from the deck-placement moments; C_b where blank
+    // C_b for deck placement (CB1): Eq. 6.10.8.2.3b-1 from the deck-placement moments; C_b where blank. SBCB (engineer decision 2026-11-10;
+    // AASHTO LRFD 10th Ed. 6.10.8.2.3b, C6.10.8.2.3b): not taken below 1.0 (was used as given, e.g. 0.648 from |M| of a flange in tension)
+    r.CbRaw = r.CbC > 0 ? r.CbC : r.Cb; r.CbCu = Math.max(CB_MIN, r.CbRaw);
     const LTB = FX().ltbFnc;
     r.ltC = LTB({ bfc: r.conC.b, tfc: r.conC.t, Dc: Math.max(r.DcC, 1e-6), tw: r.tw, Lb: r.LbC * 12, Cb: r.CbCu, Rb: 1, Rh: r.RhC, Fyc: r.conC.Fy, Fyw });
     // nonprismatic deck-placement unbraced length (CB2): nprC for the flange M_c compresses (steel section)
@@ -155,9 +158,11 @@
     // SBCON (2026-11-10): C_b worked from bracingC's parts, with the moments used (the M_c this check uses: M_DCc where given)
     const geK = lt.npr && lt.npr.kind === 'ge', cbP = !geK && r.cbParts && r.CbC > 0 ? r.cbParts : null, mN = r.mSrc === 'DCc' ? 'M_DCc' : 'M_DC1';
     const mUsed = r.mSrc ? ` Moments over the unbraced segment${r.seg ? ` ${n2(r.seg.xa)} to ${n2(r.seg.xb)} ft` : ''}: 1.25${mN} + 1.50M_CL (${r.mSrc === 'DCc' ? r.side ? `the ${sN(r)}-side envelope of M_DCc at every station of the unbraced length, one moment diagram of this sign case, as M_c of this check (cn.Mc)` : 'the pour-sequence envelope M_DCc, as M_c of this check (cn.Mc)' : 'no pour sequence: M_DC1'}; a common factor such as the owner's η does not change C_b or K).` : '';
-    w.add({ id: 'Cb', label: geK ? 'Moment gradient modifier: nonprismatic unbraced length' : 'Moment gradient modifier for deck placement (from the deck-placement moments of the unbraced length)', sym: 'C_{b}', eq: geK ? '1.0' : cbP ? '\\frac{12.5M_{max}}{2.5M_{max} + 3M_{A} + 4M_{B} + 3M_{C}}' : '',
-      sub: cbP ? `\\frac{12.5(${n2(cbP.Mx)})}{2.5(${n2(cbP.Mx)}) + 3(${n2(cbP.MA)}) + 4(${n2(cbP.MB)}) + 3(${n2(cbP.MC)})}` : '', value: r.CbCu, unit: '', d: 3, ref: geK ? `${ED} Eq. 6.10.8.2.3c-1` : `${ED} Eq. 6.10.8.2.3b-1`,
-      note: `L_b = ${n2(r.LbC)} ft (deck-placement unbraced length).${cbP ? ` M_max: the largest moment compressing the ${cF.lab} flange; M_A, M_B, M_C: |M| at the quarter points (kip-ft); C_b rounded to 3 decimals.` : ''}${geK ? '' : mUsed}` });
+    // SBCB (2026-11-10): C_b = max(1.0, Eq. 6.10.8.2.3b-1), the value before the bound worked and stated
+    const cbLow = !geK && r.CbRaw < CB_MIN - 1e-12, cb0 = cbP && cbP.Cb0 != null ? cbP.Cb0 : r.CbRaw;
+    w.add({ id: 'Cb', label: geK ? 'Moment gradient modifier: nonprismatic unbraced length' : 'Moment gradient modifier for deck placement (from the deck-placement moments of the unbraced length)', sym: 'C_{b}', eq: geK ? '1.0' : cbP ? '\\max\\left(1.0,\\ \\frac{12.5M_{max}}{2.5M_{max} + 3M_{A} + 4M_{B} + 3M_{C}}\\right)' : cbLow ? '\\max(1.0,\\ C_{b,given})' : '',
+      sub: cbP ? `\\max\\left(1.0,\\ \\frac{12.5(${n2(cbP.Mx)})}{2.5(${n2(cbP.Mx)}) + 3(${n2(cbP.MA)}) + 4(${n2(cbP.MB)}) + 3(${n2(cbP.MC)})} = ${n3(cb0)}\\right)` : cbLow ? `\\max(1.0,\\ ${n3(r.CbRaw)})` : '', value: r.CbCu, unit: '', d: 3, ref: geK ? `${ED} Eq. 6.10.8.2.3c-1` : `${ED} Eq. 6.10.8.2.3b-1; C6.10.8.2.3b`,
+      note: `L_b = ${n2(r.LbC)} ft (deck-placement unbraced length).${cbP ? ` M_max: the largest moment compressing the ${cF.lab} flange; M_A, M_B, M_C: |M| at the quarter points (kip-ft); C_b rounded to 3 decimals.` : ''}${geK ? '' : ` C_b is not taken below 1.0 (engineer decision 2026-11-10; C6.10.8.2.3b: 1.0 is the base value for a constant moment and may conservatively be used in any case)${cbLow || (cbP && cb0 < CB_MIN) ? `: Eq. 6.10.8.2.3b-1 gives ${n3(cb0)} here, so 1.0 is used` : ''}.`}${geK ? '' : mUsed}` });
     w.add({ id: 'Fyr', label: 'Compression-flange stress at the onset of nominal yielding', sym: 'F_{yr}', eq: '\\max(\\min(0.7F_{yc}, F_{yw}), 0.5F_{yc})', sub: `\\max(\\min(0.7(${n2(cF.Fy)}), ${n2(r.mat.Fyw)}), 0.5(${n2(cF.Fy)}))`, value: lt.Fyr, unit: 'ksi', d: 2, ref: `${ED} Art. 6.10.8.2.2` });
     w.add({ id: 'FLB', label: `Flange local buckling (λ_f = b_fc/2t_fc = ${n2(lt.lf)}, λ_pf = ${n2(lt.lpf)}, λ_rf = ${n2(lt.lrf)})`, sym: 'F_{nc,FLB}', eq: lt.lf <= lt.lpf ? 'R_{b}R_{h}F_{yc}' : '\\left[1 - \\left(1 - \\frac{F_{yr}}{R_{h}F_{yc}}\\right)\\frac{\\lambda_{f} - \\lambda_{pf}}{\\lambda_{rf} - \\lambda_{pf}}\\right]R_{b}R_{h}F_{yc}',
       sub: lt.lf <= lt.lpf ? `1.0(${n3(r.RhC)})(${n2(cF.Fy)})` : `\\left[1 - \\left(1 - \\frac{${n2(lt.Fyr)}}{${n3(r.RhC)}(${n2(cF.Fy)})}\\right)\\frac{${n2(lt.lf)} - ${n2(lt.lpf)}}{${n2(lt.lrf)} - ${n2(lt.lpf)}}\\right](1.0)(${n3(r.RhC)})(${n2(cF.Fy)})`, value: lt.FLB, unit: 'ksi', d: 3, ref: `${ED} Eqs. 6.10.8.2.2-1, -2`, note: 'R_b = 1.0 for deck placement (6.10.3.2.1).' });
@@ -231,7 +236,8 @@
     const geSeg = (np, p0, p1, LbIn, rtF, fF) => { const ks = []; for (let k = 0; k < N; k++) if (xs[k] >= p0 - 1e-6 && xs[k] <= p1 + 1e-6) ks.push(k);
       const A = feGeA_(np.pcs, np.tr, p0, p1, LbIn, opt.D, xs, rtF, fF), mA = !!(A && A.ok); return { A, mA, G: mA ? A : feGe_(np.pcs, LbIn, rtF, fF, ks) }; };
     const byGe = (u, v) => u.ge && v.ge && u.ge.G && v.ge.G ? u.ge.G.g - v.ge.G.g : null;
-    const cC = segs.map(([p0, p1]) => { const L = p1 - p0, n2_ = feNpr_(p0, p1, secAt, q => sgC * feAt_(xs, Mc, q)); return { p0, p1, L, n2: n2_, Cb: n2_.kind === 'ge' ? 1 : feCb_(xs, Mc, p0, p1, sgC), ge: n2_.kind === 'ge' ? geSeg(n2_, p0, p1, L * 12, rtC, fCon) : null }; })
+    // SBCB (2026-11-10): Cb = max(1.0, Eq. 6.10.8.2.3b-1) for the segment choice and C_b,C; Cb0 as the equation gives it, for the worked step
+    const cC = segs.map(([p0, p1]) => { const L = p1 - p0, n2_ = feNpr_(p0, p1, secAt, q => sgC * feAt_(xs, Mc, q)); return { p0, p1, L, n2: n2_, Cb: n2_.kind === 'ge' ? 1 : Math.max(CB_MIN, feCb_(xs, Mc, p0, p1, sgC)), Cb0: n2_.kind === 'ge' ? 1 : feCb_(xs, Mc, p0, p1, sgC), ge: n2_.kind === 'ge' ? geSeg(n2_, p0, p1, L * 12, rtC, fCon) : null }; })
       .sort((u, v) => byGe(u, v) ?? v.L / v.Cb - u.L / u.Cb)[0], CbC = cC ? cC.Cb : 1, LbCN = cC ? cC.L : opt.sp;
     const geRec = A => !A ? '' : A.ok ? { m: 'A', ge: +A.g.toFixed(4), Cbe: r3(A.Cbe), chi: +A.chi.toFixed(4), dS: r3(A.dS), rm: +A.rm.toFixed(4), rA: +A.rA.toFixed(4), rB: +A.rB.toFixed(4), rC: +A.rC.toFixed(4), sA: A.sA ? 1 : 0, sB: A.sB ? 1 : 0, sC: A.sC ? 1 : 0, xm: r2(A.xm), Fe1: r2(A.Fe1), fm: r2(A.fm), Imx: r3(A.Imx) } : { m: 'bound', why: A.why, Imx: r3(A.Imx) };
     const govRec = gv => { if (!gv) return ''; const at = A => A[gv.i] * (1 - gv.t) + A[gv.i + 1] * gv.t, o = { x: r2(gv.x), topB: gv.s.topB, topT: gv.s.topT, botB: gv.s.botB, botT: gv.s.botT, tw: gv.s.tw };
@@ -247,7 +253,7 @@
     let cbParts = null, kParts = null, mSrc = 'DC1';
     if (cC) { for (let k = 0; k < N; k++) if (dcc[k] && xs[k] >= cC.p0 - 1e-6 && xs[k] <= cC.p1 + 1e-6) { mSrc = 'DCc'; break; }
       if (cC.n2.kind !== 'ge') { const at = q => feAt_(xs, Mc, q), L0 = cC.p1 - cC.p0; let Mx = 0; for (let k = 0; k <= 40; k++) Mx = Math.max(Mx, sgC * at(cC.p0 + L0 * k / 40));
-        if (Mx > 0) { const q = f => Math.abs(at(cC.p0 + L0 * f)); cbParts = { Mx, MA: q(0.25), MB: q(0.5), MC: q(0.75) }; } }
+        if (Mx > 0) { const q = f => Math.abs(at(cC.p0 + L0 * f)); cbParts = { Mx, MA: q(0.25), MB: q(0.5), MC: q(0.75), Cb0: +cC.Cb0.toFixed(3) }; } }   // SBCB: Cb0 before the 1.0 bound
       else if (cC.ge.G && !cC.ge.mA) kParts = { fm: cC.ge.G.fm, fx: fCon(cC.ge.G.s, i), x: xs[i] }; }
     return { LbC: r2(LbCN), CbC: +CbC.toFixed(3), nprC, seg: cC ? { xa: cC.p0, xb: cC.p1 } : null, cbParts, kParts, mSrc, side: sd };
   }
@@ -267,7 +273,7 @@
       ...(seq ? [two
         ? 'Differs from GirderDetail (Steel Bridge Design.html): with a pour sequence GirderDetail checks one M_DCc value per station (the side of the sign of M_DC1) and takes the compression flange, C_b and K from M_DC1; this app checks both signs of the pour envelope, each with C_b and γ_e from its own side of the envelope (6.10.3.4.1; 6.10.8.2.3c and C6.10.8.2.3c). Near inflection points and wherever M_DCc differs from M_DC1 over an unbraced length the two tools give different C_b, F_nc and ratios.'
         : 'Differs from GirderDetail (Steel Bridge Design.html): with a pour sequence GirderDetail takes the compression flange, C_b and K of the deck-placement check from M_DC1 while it checks M_DCc; this app takes them from M_DCc, the moments it checks (6.10.8.2.3c and C6.10.8.2.3c: γ_e scales the stresses of the one moment diagram checked). Where M_DCc differs from M_DC1 over an unbraced length the two tools give different C_b, F_nc and ratios.'] : []),
-      'C_b by Eq. 6.10.8.2.3b-1: M_max is the largest moment compressing the flange in the unbraced length; M_A, M_B, M_C are taken as the absolute values of the deck-placement moment at the quarter points. Where the flange is in tension at a quarter point this can give C_b below 1.0, which is used as computed.'];
+      'C_b by Eq. 6.10.8.2.3b-1 is not taken below 1.0 (engineer decision 2026-11-10), for deck placement and for the overhang checks. M_max is the largest moment compressing the flange in the unbraced length and M_A, M_B, M_C the absolute values of the deck-placement moment at the quarter points (6.10.8.2.3b), so where the flange is in tension over part of the unbraced length the equation can give less than 1.0. C6.10.8.2.3b gives 1.0 as the base value of C_b for a constant moment and allows 1.0 conservatively in any case (except the unusual cases it names), so a value below 1.0 is not used: C_b = max(1.0, Eq. 6.10.8.2.3b-1), in F_nc (6.10.8.2.3), in the choice of the governing segment and in the f_ℓ amplification limit (6.10.1.6). An overhang C_b entered below 1.0 is raised to 1.0.'];
   }
 
   /* ---------- deck overhang brackets, exterior girder (GirderDetail GM.oh) ---------- */
@@ -313,7 +319,8 @@
     ['wOH', 'tOH', 'qForm', 'wScreed', 'wRail', 'wWalk', 'qCL', 'bCL', 'Pfm'].forEach(k => { if (!(+q[k] >= 0)) errors.push(`"${k}" must be zero or positive.`); });
     if (!rows.length) errors.push('No location.');
     if (errors.length) return { errors };
-    const Fyf = mat.Fyf, Fyw = mat.Fyw, Rh = +q.Rh, Cb = +q.Cb, gd = B.gd, gc = B.gc, Fl = B.Fl, Pl = B.Pl;
+    // SBCB (2026-11-10): C_b ≥ 1.0 (an entered value below 1.0 is raised to 1.0; 6.10.8.2.3b, C6.10.8.2.3b)
+    const Fyf = mat.Fyf, Fyw = mat.Fyw, Rh = +q.Rh, Cb = Math.max(CB_MIN, +q.Cb), gd = B.gd, gc = B.gc, Fl = B.Fl, Pl = B.Pl;
     const out = rows.map(r0 => { const r = { ...r0 }, s = SEC().steelCore(plates(r)), Mu = gd * r.MDC1 + gc * r.MCL; r.s = s; r.Mu = Mu;
       r.fTop = -Mu * 12 * (s.d - s.yb) / s.I; r.fBot = Mu * 12 * s.yb / s.I;       // extreme fibers, tension +
       const pos = Mu >= 0, c = pos ? { b: r.topB, t: r.topT, f: -r.fTop, lab: 'top' } : { b: r.botB, t: r.botT, f: -r.fBot, lab: 'bottom' }, tf = pos ? { b: r.botB, t: r.botT, f: r.fBot, lab: 'bottom' } : { b: r.topB, t: r.topT, f: r.fTop, lab: 'top' };
@@ -338,7 +345,7 @@
         ...[c, tf].map(f => ck({ id: 'OH5', key: 'fl.' + f.lab, flange: f.lab, title: `Flange lateral bending, ${f.lab} flange, f_ℓ ≤ 0.6F_yf`, ref: `${ED} Eq. 6.10.1.6-1`, demand: f.fl, capacity: 0.6 * Fyf, step: `oh.fl.${f.lab}.ok`, ...(r.und && f === c ? { ng: FX().AMP_NG } : {}) }))];
       r.gov = FX().govern(r.checks);   // SB2-R2
       return r; });
-    const R = { ...B, errors: [], rows: out, Rh, Cb, Fyf, Fyw };
+    const R = { ...B, errors: [], rows: out, Rh, Cb, CbIn: +q.Cb, Fyf, Fyw };   // SBCB: CbIn as entered
     out.forEach(r => Object.defineProperty(r, 'steps', { enumerable: false, configurable: true, get() { const st = ohWorked(R, r); Object.defineProperty(r, 'steps', { value: st, enumerable: false }); return st; } }));
     return R;
   }
@@ -361,7 +368,7 @@
     w.add({ id: 'Dc', label: 'Depth of the web in compression, steel section', sym: 'D_{c}', eq: '', sub: '', value: r.Dc, unit: 'in', d: 3, ref: `${ED} App. D6.3.1` });
     w.add({ id: 'rt', label: 'Effective radius of gyration for LTB', sym: 'r_{t}', eq: '\\frac{b_{fc}}{\\sqrt{12\\left(1 + \\frac{D_{c}t_{w}}{3b_{fc}t_{fc}}\\right)}}', sub: `\\frac{${n2(c.b)}}{\\sqrt{12\\left(1 + \\frac{${n3(r.Dc)}(${n4(r.tw)})}{3(${n2(c.b)})(${n3(c.t)})}\\right)}}`, value: r.rt, unit: 'in', d: 4, ref: `${ED} Eq. 6.10.8.2.3-9` });
     w.add({ id: 'FLB', label: `Flange local buckling (λ_f = ${n2(r.lf)}, λ_pf = ${n2(r.lpf)}, λ_rf = ${n2(r.lrf)}; F_yr = ${n2(r.Fyr)} ksi)`, sym: 'F_{nc,FLB}', eq: '', sub: '', value: r.FncF, unit: 'ksi', d: 3, ref: `${ED} Eqs. 6.10.8.2.2-1, -2`, note: 'R_b = 1.0 (6.10.3.2.1).' });
-    w.add({ id: 'LTB', label: `Lateral-torsional buckling (L_p = ${n2(r.Lp)} in, L_r = ${n2(r.Lr)} in, L_b = ${n2(r.LbIn)} in, C_b = ${n2(R.Cb)})`, sym: 'F_{nc,LTB}', eq: '', sub: '', value: r.FncL, unit: 'ksi', d: 3, ref: `${ED} Eqs. 6.10.8.2.3-1, -2, -3` });
+    w.add({ id: 'LTB', label: `Lateral-torsional buckling (L_p = ${n2(r.Lp)} in, L_r = ${n2(r.Lr)} in, L_b = ${n2(r.LbIn)} in, C_b = ${n2(R.Cb)}${R.CbIn < CB_MIN ? `, entered ${n2(R.CbIn)} raised to 1.0: C_b is not taken below 1.0, C6.10.8.2.3b` : ''})`, sym: 'F_{nc,LTB}', eq: '', sub: '', value: r.FncL, unit: 'ksi', d: 3, ref: `${ED} Eqs. 6.10.8.2.3-1, -2, -3` });
     w.add({ id: 'AF', label: r.ampReq ? 'Amplification of the compression-flange f_ℓ' : 'Amplification of the compression-flange f_ℓ: not required', sym: 'AF', eq: r.ampReq ? '\\frac{0.85}{1 - f_{bu}/F_{cr}} \\ge 1.0' : '1.0', sub: r.ampReq ? `\\frac{0.85}{1 - ${n2(r.fbu)}/${n2(r.Fcr)}}` : '', value: r.AF, unit: '', d: 4, ref: `${ED} Eq. 6.10.1.6-4`, note: 'No amplification of the tension flange.' });
     w.add({ id: 'k', label: 'Bend-buckling coefficient', sym: 'k', eq: '\\frac{9}{(D_{c}/D)^{2}}', sub: `\\frac{9}{(${n3(r.Dc)}/${n3(r.D)})^{2}}`, value: r.k, unit: '', d: 3, ref: `${ED} Eq. 6.10.1.9.1-2` });
     w.add({ id: 'Fcrw', label: 'Web bend-buckling resistance', sym: 'F_{crw}', eq: '\\frac{0.9Ek}{(D/t_{w})^{2}} \\le \\min(R_{h}F_{yc}, \\frac{F_{yw}}{0.7})', sub: `\\frac{0.9(29{,}000)(${n3(r.k)})}{(${n3(r.D)}/${n4(r.tw)})^{2}}`, value: r.Fcrw, unit: 'ksi', d: 3, ref: `${ED} Eq. 6.10.1.9.1-1` });
