@@ -4990,7 +4990,8 @@ format changed. Anchor text `QA2` marks each change. New file `ui/sub.js` (in th
   (one M_DCc per station): unchanged.
 - **Other copies:** GirderDetail ("Steel Bridge Design.html") not changed (engineer decision: new app only); it checks one M_DCc per station.
 
-## 2026-11-10 — PR: claude/sb-constr-cb-min (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Constructibility: C_b not taken below 1.0 (SBCB; engineer decision 2026-11-10, item 2; changes computed values)
+## 2026-11-10 — PR: claude/sb-constr-cb-min (PR #1290: https://github.com/mlococo88/All-Structural/pull/1290) — Constructibility: C_b not taken below 1.0 (SBCB; engineer decision 2026-11-10, item 2; changes computed values)
+- **Open-item note removed:** the SBCON entry's open item 2 (C_b < 1.0 from `feCb`) is resolved here; PR #1289 resolved items 1 and 3.
 - **Problem:** Eq. 6.10.8.2.3b-1 as applied (`feCb`: M_max the largest moment compressing the flange, M_A, M_B, M_C the absolute values at the
   quarter points) gives C_b < 1.0 where the flange is in tension over part of the unbraced length (0.217 at skewed G1 x = 153, negative case;
   0.525–0.90 with the pour sequence off). It was used as computed, so F_nc dropped below the uniform-moment value.
