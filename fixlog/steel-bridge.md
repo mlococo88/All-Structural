@@ -4682,7 +4682,7 @@ format changed. Anchor text `QA2` marks each change. New file `ui/sub.js` (in th
      Other callers of `stack()` unchanged.
    - Chart text: "gamma(Df) vs NOMINAL RESISTANCE (DF)n" → "GAMMA(DELTA f) VS NOMINAL RESISTANCE (DELTA F)n"; legend "(DF)n RESISTANCE",
      "gamma(Df) < 0.9 (DF)n", "0.9 TO 1.0 (DF)n" → "(DELTA F)n …", "GAMMA(DELTA f) < 0.9 (DELTA F)n", "0.9 TO 1.0 (DELTA F)n"; readout "GAMMA(DF) … (DF)n"
-     → "GAMMA(DELTA f) … (DELTA F)n". **Decision (pending engineer review):** the CAD-capital style of the elevation's own note ("GAMMA(DELTA f) /
+     → "GAMMA(DELTA f) … (DELTA F)n". Display choice (notation only, no engineering meaning, so no in-app note under CLAUDE.md §6): the CAD-capital style of the elevation's own note ("GAMMA(DELTA f) /
      (DELTA F)_n"), not Greek letters: the graphics' SVG preview (shared/dxf.js) prints a Greek letter as its DXF escape "\U+03B3".
 4. **Rating chart** (`engine/tabgraphics-b.js` `ratingChart()`): the support names drawn in a row above the plot (before: at the plot's top edge, over
    the arrows of capped values), shifted beside a governing leader at the same station; the INV / OPR governing labels above that row on leaders from
@@ -4714,9 +4714,15 @@ format changed. Anchor text `QA2` marks each change. New file `ui/sub.js` (in th
      (the Demands bar) are not printed: Ctrl+P prints the report only, as Print report does.
 9. **Summary** (`ui/summary.js`, `ui/dash.js`): Owner row with no owner "—; load rules AASHTO" → "none entered; load rules AASHTO"; "Lowest rating
    factor" and "Not evaluated" on their own lines in the line's font (`.sum-low`, was `.note` run on); a ratio that is not a finite number shows
-   "∞" (Infinity) or "—" (was "NaN") with the tooltip "Ratio not a finite number: the check has no finite demand / capacity ratio (counted as REVIEW;
-   the reason is on its tab)." The check summary column (`ui/dash.js` `vOf`) the same. Per the engineer's rule of 2026-11-10 (a decision that changes what a value means is noted in the app), the Summary's "Counts" note adds: "A cell showing ∞ or — (not a rating factor): that check's demand / capacity ratio is not a finite number (∞: no finite capacity for the demand; —: not a number); it is counted as REVIEW, and the reason is on its tab (the cell's tooltip says so)." The Report's summary is unchanged: it already writes "not evaluated (ratio not a number)". Counting unchanged (report/summary.js). The cause of the
-   Constructibility ratio (F_nc = 0.91 ksi at 60° skew) is pending the engineer, not touched. `tests/smoke/steel-bridge-summary.mjs` expects ∞ / —.
+   "∞" for Infinity ("−∞" for −Infinity) and keeps "NaN" only for a true NaN (before: "NaN" for every one): `nfTxt(r)`. Each such cell is a link
+   to its tab (as every cell) and its tooltip gives the reason (`NF_WHY`), e.g. for ∞: "Ratio ∞: the demand / capacity ratio is infinite (the
+   capacity, or a factor in it such as the 6.10.1.6 flange lateral bending amplification, is zero or has no finite value for this demand). The work
+   is on its tab (click). (Counted as REVIEW.)". The "Not evaluated" line now reads "(ratio not finite, REVIEW): <group>, <girder> <location link>:
+   <check> — ratio ∞" (before: "(ratio not a number, REVIEW): <group>, <girder> <location link>"). The check summary column (`ui/dash.js` `vOf`)
+   the same (∞ / −∞ / NaN). Per CLAUDE.md §6 (2026-11-10), the Summary's "Counts" note adds: "A ratio cell showing ∞ (or −∞ / NaN): that check's
+   demand / capacity ratio has no finite value (∞: infinite, e.g. a capacity, or a factor in it such as the 6.10.1.6 amplification, that is zero or
+   not finite for the demand; NaN: not a number, e.g. 0 / 0); it is counted as REVIEW, and its tooltip and link give the reason and the work on its tab." The Report's summary is unchanged: it already writes "not evaluated (ratio not a number)". Counting unchanged (report/summary.js). The cause of the
+   Constructibility ratio (F_nc = 0.91 ksi at 60° skew) is pending the engineer, not touched. `tests/smoke/steel-bridge-summary.mjs` expects ∞ / −∞ / NaN.
 10. **3D view** drop-downs: `#out .v3d-bar select{width:auto;max-width:100%}` (were cut at 110 px: "Whole bridg", "Moment: Stre").
 11. **Header at 390 px:** Undo and Redo in `<span id="hdrUR">` (inline-flex, nowrap); the save chip goes before it (`chipBefore: $('hdrUR')`).
     Before: the chip and Undo on one line, Redo alone on the next; after: the chip, then Undo Redo together.
@@ -4727,7 +4733,8 @@ format changed. Anchor text `QA2` marks each change. New file `ui/sub.js` (in th
 - **Check case:** default project, 1440 px. Cross-frames tab, CF8 row "Web distortion, β_sec": Demand 16,528, Capacity ∞, ratio 0.000. Drawings tab,
   Quantities: girder plates 435,385 LB. Default project with every support skew 60°: Summary, Constructibility cell "∞" (was "NaN"), tooltip as above.
 - **How verified:** headless Chromium probe, origin/main vs branch, default project, text of every input and output tab (with the graphics' SVG
-  text) and the built Report: digit sequences identical except item 6 (listed) and the "1" of "G1 or Gn" (item 2, new note); the Summary probe waits for
+  text) and the built Report: digit sequences identical except item 6 (listed), the "1" of "G1 or Gn" (item 2, new note) and the "6.10.1.6" and "0 / 0" of the Summary's new
+  Counts note (item 9); the Summary probe waits for
   "Up to date". Before/after screenshots. `node tests/check-syntax.mjs`; engine tests; smoke tests steel-bridge-wiring, -paths, -report,
   -graphics (updated: the interior-girder note, readout "Mc"), -drawings, -summary (updated), -dash, -deflection, -equal-spacing, -splice-addrow,
   -taberrors, -library, -tabgraphics-b, -scroll --quick, -splitter; phone-layout `sbapp`; project-library: pass, 0 console errors.
