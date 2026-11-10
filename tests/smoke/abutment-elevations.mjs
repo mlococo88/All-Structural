@@ -8,6 +8,11 @@
 //   4. Field blank: no card, no labels, no "EL." text, and (with a main worktree given) Tab 1, the section, the DXF and the Report
 //      are identical to main; a saved project without the field opens with it blank.
 //   5. 0 console errors; no horizontal scroll at 390 px with the card shown.
+//   6. ABEL2 (2026-11-10, engineer decision): the display-only bearing height, girder depth + haunch + deck (panel I-1) and pile length (panel I-7).
+//      Hand check: seat El. 52.00, bearing 6 in, girder 54 + haunch 2 + deck 8 in, 40 ft piles with 12 in embedment: top of bearing 52.50,
+//      top of girder 57.00, top of deck 57.83, pile heads 36.00, tips -4.00 (card, section, Drawings, 3D, Report); the deck / backwall
+//      mismatch flagged; Pile Designer's length offered (not applied) and its tip compared; LAST_R identical with the fields blank and set;
+//      blank = no new rows; a project saved without the keys opens with them blank; 390 px.
 //   node tests/smoke/abutment-elevations.mjs [<main worktree root, for the blank-field comparison with main>]
 import path from 'path';
 import { openPage, REPO } from '../lib.mjs';
@@ -125,6 +130,74 @@ console.log('5. Saved project without the field; 390 px');
   check(b.v === 52 && b.sw <= b.cw, `typed 52: stored ${b.v}; no horizontal page scroll (${b.sw} <= ${b.cw})`);
   await p.fill('input[data-path="geom.elSeat"]', ''); await p.waitForFunction(() => !document.querySelector('#tab-loads [data-cid="o-elev"]'), null, { timeout: 20000 });
   check(await p.evaluate(() => S.geom.elSeat === null), 'cleared: stored null, card gone');
+  check(!o.errs.length, `console errors: ${o.errs.length} ${o.errs.slice(0, 3).join(' | ')}`);
+  await o.b.close(); }
+console.log('6. ABEL2: bearing height, girder + haunch + deck, pile length (display only)');
+{ const o = await openPage(path.join(REPO, 'abutment_calculator.html'), { vw: 1400, vh: 1000 }), p = o.p; await ready(p);
+  await p.evaluate(() => activateTab('tab-3d')); await p.waitForFunction(() => typeof D3 !== 'undefined' && D3.group, null, { timeout: 30000 }); await p.evaluate(() => activateTab('tab-loads'));
+  const HC = () => { S.geom.elSeat = 52; S.geom.elBrgH = 6; S.geom.elGird = 54; S.geom.elHaunch = 2; S.geom.elDeck = 8; S.fnd.branch = 'pile'; S.piles.embed = 12; S.piles.elLpile = 40; };
+  // seat 52.00; top of bearing 52.00 + 6/12 = 52.50; top of girder 52.50 + 54/12 = 57.00; top of deck 52.50 + (54 + 2 + 8)/12 = 52.50 + 5.3333 = 57.83;
+  // top of backwall 52.00 + 5.00 = 57.00; top of footing 52.00 − 14.00 = 38.00; bottom 38.00 − 3.00 = 35.00; pile heads 35.00 + 12/12 = 36.00; tips 36.00 − 40.00 = −4.00
+  const want = { top: 57.00, deck: 57.8333, gTop: 57.00, brgTop: 52.50, seat: 52.00, tof: 38.00, bof: 35.00, pileTop: 36.00, tip: -4.00, fill: 57.00 };
+  const c2 = await withCase(p, HC, probe);
+  if (c2.err) check(false, c2.err);
+  else {
+    const bad = Object.entries(want).filter(([k, v]) => !near(c2.rows[k], v));
+    check(!bad.length && Object.keys(c2.rows).length === Object.keys(want).length, `hand check: ${Object.entries(c2.rows).map(([k, v]) => k + ' ' + v.toFixed(2)).join(', ')}${bad.length ? ' — WRONG: ' + bad.map(b => b[0]).join(',') : ''}`);
+    check(c2.cardRows.length === Object.keys(want).length && c2.cardRows.every(([k, t]) => near(+t, +want[k].toFixed(2))), `card §1.1a: ${c2.cardRows.map(r => r.join(' ')).join(' | ')}`);
+    check(c2.flags.length === 1 && /Top of deck at the bearing line El\. 57\.83 is above the top of the backwall El\. 57\.00 by 0\.83 ft/.test(c2.flags[0]), `deck / backwall mismatch flagged: ${JSON.stringify(c2.flags)}`);
+    check(c2.svg.includes('Top of deck El. 57.83') && c2.svg.includes('Top of bearing El. 52.50') && c2.svg.includes('Pile tips El. -4.00 (below, not to scale)'), `§1.1 section labels: ${c2.svg.join(' | ')}`);
+    check(/Top of deck at the bearing line El\. 57\.83/.test(c2.inLine) && /Pile tips El\. -4\.00/.test(c2.inLine), `panel I-1 line: ${c2.inLine}`);
+    check(['deck', 'brgTop', 'tip'].every(k => c2.l3.some(t => t.split(' ').includes(k))), `3D labels: ${c2.l3.join(' | ')}`);
+  }
+  const dx = await withCase(p, HC, () => abdwBuild(window.LAST_R).D.toDXF({ ltscale: 1 }));
+  const has = t => typeof dx === 'string' && dx.includes(t);
+  check(['TOP OF DECK EL. 57.83', 'TOP OF BEARING EL. 52.50', 'PILE TIPS EL. -4.00', 'TOP OF DECK AT CL BRG EL. 57.83', 'TOP OF PILES EL. 36.00', 'PILE TIPS (BELOW, NOT TO SCALE) EL. -4.00', 'TOTAL HEIGHT 6"'].every(has),
+    `Drawings: section (deck, bearing, tips), seat detail (bearing, deck), pile in the footing (pile heads, tips), bearing drawn at 6 in`);
+  const rp = await withCase(p, HC, () => { activateTab('tab-rpt'); const t = document.getElementById('tab-rpt').textContent.replace(/\s+/g, ' '); activateTab('tab-loads');
+    return { deck: /Top of deck at the bearing line \(bearing \+ girder \+ haunch \+ deck\) ?57\.83/.test(t), tip: /Pile tips ?-4\.00/.test(t), echo: /Total bearing height h_brg \(display only/.test(t) && /Pile length L_pile, total/.test(t) }; });
+  check(!rp.err && rp.deck && rp.tip && rp.echo, `Report: elevations table rows and the input echo (${JSON.stringify(rp)})`);
+  // semi-integral: deck vs the top of the end diaphragm; girder depth vs panel I-0a
+  const cs = await withCase(p, () => { S.geom.elSeat = 52; S.iab.type = 'semi'; S.iab.dg = 4.0; S.geom.elBrgH = 6; S.geom.elGird = 48; S.geom.elHaunch = 0; S.geom.elDeck = 6; }, () => abElev(window.LAST_R));
+  check(!cs.err && near(cs.rows.find(r => r.k === 'deck').el, 57.00) && !cs.flags.length, `semi-integral: 52.00 + (6 + 48 + 0 + 6)/12 = 57.00 = top of end diaphragm, no flag (${JSON.stringify(cs.flags || cs.err)})`);
+  const cs2 = await withCase(p, () => { S.geom.elSeat = 52; S.iab.type = 'semi'; S.iab.dg = 4.0; S.geom.elBrgH = 6; S.geom.elGird = 54; S.geom.elHaunch = 2; S.geom.elDeck = 8; }, () => abElev(window.LAST_R).flags);
+  check(!cs2.err && cs2.length === 2 && cs2.some(t => /end diaphragm El\. 57\.00/.test(t)) && cs2.some(t => /Girder depth .* 54\.00 in .* 48\.00 in/.test(t)), `semi-integral flags: ${JSON.stringify(cs2)}`);
+  // approach slab on a stem shelf, slab top below the backwall: both compared
+  const ca = await withCase(p, () => { S.geom.elSeat = 52; S.geom.elBrgH = 6; S.geom.elGird = 54; S.geom.elHaunch = 2; S.geom.elDeck = 8; S.fnd.branch = 'pile'; S.piles.embed = 12; S.piles.elLpile = 40; S.apSlab.on = true; S.apSlab.t = 0.75; S.geom.tbw = 2; S.geom.tst = 5.5; S.geom.tsb = 5.5; S.geom.bwOff = 10; S.geom.shD = 12; }, () => abElev(window.LAST_R).flags);
+  check(!ca.err && ca.some(t => /above the top of the backwall El\. 57\.00/.test(t)) && ca.some(t => /above the top of the approach slab El\. 56\.75/.test(t)), `approach slab top not at the backwall: deck compared with both (${ca.length} flags)`);
+  // partial entries: bearing only; girder without deck; pile footing without a length
+  const pa = await withCase(p, () => { S.geom.elSeat = 52; S.geom.elBrgH = 6; S.geom.elGird = 54; S.fnd.branch = 'pile'; }, () => { const E = abElev(window.LAST_R); return { k: E.rows.map(r => r.k), n: E.notes.join(' ') }; });
+  check(!pa.err && pa.k.includes('brgTop') && pa.k.includes('gTop') && !pa.k.includes('deck') && !pa.k.includes('tip') && /Top of deck: not shown/.test(pa.n) && /Pile tips: not shown \(enter the pile length/.test(pa.n), `partial: ${pa.k && pa.k.join(',')}`);
+  // Pile Designer: its pile length offered (not applied) and its tip compared
+  const pd = await withCase(p, () => { S.geom.elSeat = 52; S.geom.elBrgH = 6; S.geom.elGird = 54; S.geom.elHaunch = 2; S.geom.elDeck = 8; S.fnd.branch = 'pile'; S.piles.embed = 12; S.piles.elLpile = 40; S.piles.elLpile = null; S.pileRes = { pile: { stickup: 0 }, geo: { toe: 39, minPen: { zMin: 30, tipElMin: 5, tipElCtrl: -6, ctrl: 41 } } }; }, () => {
+    const sug = abElLpInHTML(), b = document.querySelector('[data-abel-use]'); const before = S.piles.elLpile; b && b.click(); const E = abElev(window.LAST_R);
+    return { sug, before, after: S.piles.elLpile, tip: (E.rows.find(r => r.k === 'tip') || {}).el, flags: E.flags }; });
+  check(!pd.err && /stick-up 0\.00 \+ toe depth 39\.00 \+ embedment 1\.00 = <b>40\.00 ft/.test(pd.sug) && pd.before === null && pd.after === 40 && near(pd.tip, -4) && pd.flags.some(t => /controlling.*El\. -6\.00 differs from the pile tips derived here, El\. -4\.00 \(L<sub>pile<\/sub> of panel I-7\)/.test(t)),
+    `Pile Designer: suggestion 39 + 0 + 1 = 40 ft, blank until "Use" (${pd.before} -> ${pd.after}), tip El. -6.00 vs -4.00 flagged`);
+  const pd2 = await withCase(p, () => { S.geom.elSeat = 52; S.geom.elBrgH = 6; S.geom.elGird = 54; S.geom.elHaunch = 2; S.geom.elDeck = 8; S.fnd.branch = 'pile'; S.piles.embed = 12; S.piles.elLpile = 40; S.piles.elLpile = 45; S.pileRes = { pile: { stickup: 0 }, geo: { toe: 39 } }; }, () => ({ L: S.piles.elLpile, f: abElev(window.LAST_R).flags, s: abElLpInHTML() }));
+  check(!pd2.err && pd2.L === 45 && pd2.f.some(t => /Pile length L<sub>pile<\/sub> = 45\.00 ft .* differs from Pile Designer's pile/.test(t)) && /your entry is kept/.test(pd2.s), `an entered length is kept (45) and the difference flagged`);
+  // invariance: LAST_R identical with the new fields blank and set
+  const inv = await p.evaluate(() => { const snap = () => JSON.stringify(window.LAST_R, (k, v) => typeof v === 'number' && !isFinite(v) ? String(v) : v).replace(/"fingerprint":"[^"]*"/, '');
+    const out = []; for (const su of [() => { S.fnd.branch = 'pile'; }, () => { S.iab.type = 'semi'; S.fnd.branch = 'pile'; S.apSlab.on = true; }, () => {}]) {
+      const st = JSON.parse(JSON.stringify(S)); su(); migrate(); recalcAll(); const a = snap(), fa = window.LAST_R.fingerprint;
+      S.geom.elBrgH = 6; S.geom.elGird = 54; S.geom.elHaunch = 2; S.geom.elDeck = 8; S.piles.elLpile = 40; recalcAll(); const b = snap();
+      S.geom.elBrgH = null; S.geom.elGird = null; S.geom.elHaunch = null; S.geom.elDeck = null; S.piles.elLpile = null; recalcAll(); const fb = window.LAST_R.fingerprint;
+      out.push({ same: a === b, fa, fb }); Object.keys(S).forEach(k => delete S[k]); Object.assign(S, st); recalcAll(); } return out; });
+  inv.forEach((r, i) => check(r.same && r.fa === r.fb, `case ${i}: LAST_R identical with the new fields blank and set; Input ID unchanged when cleared (${r.fa} / ${r.fb})`));
+  SAVED = await p.evaluate(() => { const st = JSON.parse(JSON.stringify(S)); ['elBrgH', 'elGird', 'elHaunch', 'elDeck'].forEach(k => delete st.geom[k]); delete st.piles.elLpile; st.geom.elSeat = 52; st.fnd.branch = 'pile'; st.proj.name = 'Saved without ABEL2'; return JSON.stringify(st); });
+  check(!o.errs.length, `console errors: ${o.errs.length} ${o.errs.slice(0, 3).join(' | ')}`);
+  await o.b.close();
+}
+{ const o = await openPage(path.join(REPO, 'abutment_calculator.html'), { vw: 390, vh: 900, ls: { abutcalc_v1_autosave: SAVED } }), p = o.p; await ready(p);
+  const a = await p.evaluate(() => ({ nm: S.proj.name, k: abElev(window.LAST_R).rows.map(r => r.k),
+    inp: ['geom.elBrgH', 'geom.elGird', 'geom.elHaunch', 'geom.elDeck', 'piles.elLpile'].map(q => (document.querySelector(`input[data-path="${q}"]`) || { value: 'MISSING' }).value) }));
+  check(a.nm === 'Saved without ABEL2' && a.inp.every(v => v === '') && !a.k.some(k => ['deck', 'brgTop', 'gTop', 'pileTop', 'tip'].includes(k)), `saved project without the keys: inputs blank (${a.inp.join(',')}), no new levels (${a.k.join(',')})`);
+  for (const [q, v] of [['geom.elBrgH', '6'], ['geom.elGird', '54'], ['geom.elHaunch', '2'], ['geom.elDeck', '8'], ['piles.elLpile', '40']])
+    await p.evaluate(([q, v]) => { const e = document.querySelector(`input[data-path="${q}"]`); e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); }, [q, v]);   // panel I-7 may be scrolled out at 390 px
+  await p.waitForFunction(() => document.querySelector('#abElevTbl tr[data-el="tip"]'), null, { timeout: 20000 });
+  await p.evaluate(() => { activateTab('tab-loads'); document.querySelector('[data-cid="o-elev"]').scrollIntoView(); });
+  const b = await p.evaluate(() => ({ v: [S.geom.elBrgH, S.geom.elGird, S.geom.elHaunch, S.geom.elDeck, S.piles.elLpile], sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
+  check(b.v.join() === '6,54,2,8,40' && b.sw <= b.cw, `typed at 390 px: stored ${b.v.join(',')}; no horizontal page scroll (${b.sw} <= ${b.cw})`);
   check(!o.errs.length, `console errors: ${o.errs.length} ${o.errs.slice(0, 3).join(' | ')}`);
   await o.b.close(); }
 console.log(fails ? `\n${fails} FAILED` : '\nall ok');

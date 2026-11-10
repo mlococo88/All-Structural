@@ -793,6 +793,7 @@ function defaultState(){
       spanL:80.0, skew:0.0,         // span length & skew (for min support length)
       hw:0.0,                       // water table height above BOTTOM of footing (ft); 0 = none
       elSeat:null,                  // ABEL (2026-11-10): beam seat elevation (ft), display only: every elevation shown is derived from it and the heights; null = none shown
+      elBrgH:null, elGird:null, elHaunch:null, elDeck:null,   // ABEL2 (2026-11-10): display only (elevations, Tab 1 §1.1a; conventional / semi-integral): total bearing height seat to underside of girder, girder depth, haunch, deck thickness (in); null = not entered (level not shown); no calculation reads them
       hwFr:null                     // ABM6: water level in front of the wall, above the bottom of footing (ft); null = same as h_w (balanced, no WA) [3.11.3]
     },
     mat:{fc:4.0, gc:0.150, fy:60.0, coverF:3.0, coverT:2.0, ag:0.75, // ksi, kcf, ksi, in (footing / wall+top), max aggregate size (in) for the 5.7.3.4.2 s_xe
@@ -835,6 +836,7 @@ function defaultState(){
       offX:0.0, offY:0.0,
       Rn:330.0, phiC:0.65, RnUp:100.0, phiUp:0.50, etaG:0,   // ABL2 (2026-11-07): new-project φ without a static load test [T.10.5.5.2.3-1: dynamic testing QC 0.65; uplift, dynamic test with signal matching 0.50] (was 0.70 / 0.60)   // ABM7: etaG = group efficiency η for 10.7.3.9 (0 = not entered: REVIEW row)
       pileSize:12.0, pileShape:"hp",  // width/diameter (in); 'square' | 'round' | 'hp' — punching perimeter
+      elLpile:null,                   // ABEL2 (2026-11-10): pile length, pile footing (ft, total, including the embedment), display only: the pile tip elevation of Tab 1 §1.1a; null = not entered; no calculation reads it
       embed:12.0, clrTop:3.0,         // pile embedment into the footing (in); clear cover from the pile top to the bottom mat (in) — punching depth [5.12.8.6]
       dd:0.0, gDD:1.10,                   // drag load DR per pile (kip) and γDR for structural strength [T.3.4.1-1 note: 1.10 structural, 0.00 geotechnical]
       strSec:"", Fy:50.0, drive:"good", pipeT:0.5, PrUser:0,  // ABCHK: pile structural resistance [10.7.3.13]: HP designation ("" = lightest HP of the pile size), F_y (ksi),
@@ -2158,6 +2160,11 @@ function buildInputs(){
     <div class="in-row"><label title="Optional. The elevation of the beam seat (bridge seat${iabType()==="integral"?"; integral abutment: the seat of panel I-0a, h_c above the bottom of the cap":""}). Every other elevation is derived from it and the heights of the geometry inputs (Tab 1 §1.1a). Blank = no elevations shown. Display only: no result depends on it.">Beam seat elevation El<sub>seat</sub> (blank = none)</label>
       <input type="number" step="any" data-path="geom.elSeat" data-blank="1" value="${abElevOn()?S.geom.elSeat:""}"><span class="unit">ft</span></div>
     <div class="in-note" id="abElevIn">${abElevInHTML()}</div>
+    ${iabType()!=="integral"?`<div class="in-note">Superstructure at the bearing line, for the elevations only (Tab 1 §1.1a: top of bearing, top of deck; blank = not shown; no check uses them):</div>`
+      +abElInRow("&nbsp;&nbsp;Total bearing height h<sub>brg</sub> (blank = none)","geom.elBrgH","in","Masonry plate + elastomer + sole plate, from the beam seat to the underside of the girder. Display only: the top of bearing / bottom of girder elevation. Not h_rt of panel I-6 (the elastomer only, used for the pad shear); no calculation reads it.")
+      +abElInRow("&nbsp;&nbsp;Girder depth d<sub>g</sub> (blank = none)","geom.elGird","in","Girder depth at the bearing. Display only: the top of deck elevation."+(iabType()==="semi"?" Separate from the girder depth of panel I-0a (owner screening, Tab 10); a difference is flagged.":"")+" No calculation reads it.")
+      +abElInRow("&nbsp;&nbsp;Haunch h<sub>h</sub> (blank = none; 0 = no haunch)","geom.elHaunch","in","Haunch (girder top to deck underside) at the bearing. Display only: the top of deck elevation.")
+      +abElInRow("&nbsp;&nbsp;Deck thickness t<sub>d</sub> (blank = none)","geom.elDeck","in","Deck slab thickness, including any integral wearing surface. Display only: the top of deck elevation.") : ""}
     <div class="subhead">Footing</div>
     ${inpRow("Toe length L<sub>toe</sub>","geom.Ltoe","ft")}
     ${inpRow("Heel length L<sub>heel</sub>","geom.Lheel","ft")}
@@ -2415,6 +2422,8 @@ function buildInputs(){
       <div class="subhead">Pile section (for punching-shear perimeter)</div>
       ${selRow("Pile shape","piles.pileShape",[["hp","H-pile (square envelope)"],["square","Square / precast"],["round","Round / pipe / drilled"]],{rebuild:true})}
       ${inpRow("Pile size / diameter","piles.pileSize","in",{title:"Governs the loaded area and the two-way (punching) shear critical perimeter through the footing, and the width over which each pile load is spread for the toe one-way shear at d_v. [AASHTO 5.12.8.6]"})}
+      ${abElInRow("Pile length L<sub>pile</sub>, total incl. the embedment (blank = none)","piles.elLpile","ft","Total pile length, pile head (inside the footing) to tip. Display only: the pile tip elevation of Tab 1 §1.1a = bottom of footing + embedment − L_pile. No calculation reads it (the depth to fixity and the lateral solution are separate inputs).")}
+      <div class="in-note" id="abElLpIn">${abElLpInHTML()}</div>
       ${inpRow("Pile embedment into the footing","piles.embed","in",{title:"Length of pile inside the footing above its bottom face: sets the pile top (drawings, head fixity) and the punching depth, which is measured above the pile head: h_p = t_f − embedment, d_v = 0.72h_p (Tab 4 §4.6). The bottom mat stays at the footing cover c_F (panel I-2) and runs between the pile heads, for flexure (toe design, Tab 5 §5.3)."})}
       ${inpRow("Clear cover, pile top to bottom mat (not used)","piles.clrTop","in",{dis:true,title:"Not used: the bottom mat is at the footing cover c_F of panel I-2, between the pile heads, for flexure; the punching depth is the concrete above the pile head (engineer decisions 2026-11-10). No mat over the pile heads is modelled. A saved value is kept."})}
       <div class="in-note">${abNL("Bottom mat and punching depth over the piles (engineer decisions 2026-11-10):",[["Bottom mat:","at the footing cover c<sub>F</sub> of panel I-2, running between the pile heads, for the toe flexure, shear and crack control (Tab 5 §5.3)."],["Punching:","the cone starts at the pile top, so only the concrete above the pile head counts: h<sub>p</sub> = t<sub>f</sub> − embedment, d<sub>v</sub> = 0.72h<sub>p</sub>; the bottom mat is below the pile head and is not credited (Tab 4 §4.6)."],["Clear cover input:","greyed out; no mat over the pile heads is modelled. A saved value is kept but changes no result."]])}</div>
@@ -5317,6 +5326,8 @@ function computeAll(){
     const fpS=JSON.parse(JSON.stringify(Object.assign({},S,{ui:undefined, own:abutOwner()==="AASHTO"?undefined:S.own})));   // OWNA: owner AASHTO leaves the Input ID unchanged
     if(fpS.soil&&fpS.soil.Kmode==="active") delete fpS.soil.Kmode;
     if(fpS.geom&&(fpS.geom.elSeat===null||fpS.geom.elSeat===undefined||fpS.geom.elSeat==="")) delete fpS.geom.elSeat;   // ABEL: no seat elevation leaves the Input ID unchanged
+    ["elBrgH","elGird","elHaunch","elDeck"].forEach(q=>{ if(fpS.geom&&(fpS.geom[q]===null||fpS.geom[q]===undefined||fpS.geom[q]==="")) delete fpS.geom[q]; });   // ABEL2: blank leaves the Input ID unchanged
+    if(fpS.piles&&(fpS.piles.elLpile===null||fpS.piles.elLpile===undefined||fpS.piles.elLpile==="")) delete fpS.piles.elLpile;   // ABEL2
     if(fpS.geom&&(fpS.geom.hwFr===null||fpS.geom.hwFr===undefined||fpS.geom.hwFr==="")) delete fpS.geom.hwFr;   // ABM6: balanced water leaves the Input ID unchanged              // OWNB: new inputs at their default leave it unchanged too
     if(fpS.factors&&fpS.factors.gpEHmaxR===1.35) delete fpS.factors.gpEHmaxR;
     if(fpS.constr&&fpS.constr.qC===0) delete fpS.constr.qC;
@@ -8765,6 +8776,21 @@ function svgApShelf(R){
    or bottom of the pile cap of an integral abutment; ft), side "F" (front face) / "B" (back face) for the section labels, x the face
    (ft from the toe / the cap front face), dwg false = table only. abs: an absolute elevation received from another tool (not derived). */
 function abElevOn(){ const v=S.geom&&S.geom.elSeat; return v!==null&&v!==undefined&&v!==""&&isFinite(+v); }
+/* ABEL2 (2026-11-10, engineer decision "add those inputs so the full set of elevations shows"): display-only inputs for the levels #1374 could
+   not derive: total bearing height, girder depth, haunch and deck thickness (panel I-1, conventional / semi-integral; in) and the pile length of
+   a pile footing (panel I-7; ft, total, including the embedment). Blank (null, absent) = the level is not shown. No calculation reads them. */
+function abElNum(path,pos){ const v=getPath(S,path); if(v===null||v===undefined||v===""||!isFinite(+v)) return null; const n=+v; return pos? (n>0?n:null) : (n>=0?n:null); }
+function abElInRow(label,path,unit,title){ const v=getPath(S,path), ok=v!==null&&v!==undefined&&v!==""&&isFinite(+v);
+  return `<div class="in-row"><label title="${esc(title)}">${label}</label>
+      <input type="number" step="any" data-path="${path}" data-blank="1" value="${ok?v:""}"><span class="unit">${unit}</span></div>`; }
+/* Pile Designer's pile (pileResults, pile footing): head-to-toe length = stick-up above grade + toe depth below grade (its model's pile head is the
+   underside of the footing), + this footing's embedment = the total length. Only a record imported with the toe depth (since ABEL2) has it. */
+function abElPdLen(){ const s=S.pileRes, gg=s&&s.geo, pl=s&&s.pile; if(!gg||gg.pileType==="iab"||!(isFinite(+gg.toe)&&+gg.toe>0)) return null;
+  const st=(pl&&isFinite(+pl.stickup))? +pl.stickup : 0, emb=Math.max(0,+S.piles.embed||0)/12; return {toe:+gg.toe, st, emb, L:+gg.toe+st+emb}; }
+function abElLpInHTML(){ const P=abElPdLen(), L=abElNum("piles.elLpile",true);
+  let t="Display only: the pile tip elevation of Tab 1 §1.1a = bottom of footing + embedment − L (with the beam seat elevation of panel I-1). Blank = not shown. Not used by any check.";
+  if(P) t+=` Pile Designer's pile: stick-up ${fmt(P.st,2)} + toe depth ${fmt(P.toe,2)} + embedment ${fmt(P.emb,2)} = <b>${fmt(P.L,2)} ft</b>`+(L===null? ` <button type="button" class="mini-btn" data-abel-use="${P.L}">Use ${fmt(P.L,2)} ft</button>` : Math.abs(L-P.L)>0.05? " (your entry is kept)." : " (as entered).");
+  return t; }
 function abElev(R){
   if(!abElevOn()||!R||!R.geo) return null;
   const g=S.geom, E0=+g.elSeat, it=iabType(), integ=!!(it==="integral"&&R.iab&&R.iab.integ), semi=it==="semi", f=x=>fmt(x,2);
@@ -8795,9 +8821,29 @@ function abElev(R){
     else if(P){ add({k:"apTop",lab:"Top of the approach slab at the abutment (as drawn: level with the top of the "+(semi?"end diaphragm":"backwall")+")",el:top,how:`El<sub>top</sub> = ${f(top)}`,y:tf+hs+hbw,side:"B",x:R.geo.xStemBack,src:"I-0b"});
       if(P.sup==="shelf"){ add({k:"apSeat",lab:"Approach slab seat (top of the shelf)",el:top-P.t,how:`El<sub>top</sub> − t = ${f(top)} − ${f(P.t)}`,y:tf+hs+hbw-P.t,side:"B",x:R.geo.xStemBack,src:"I-0b"});
         add({k:"shBot",lab:"Bottom of the shelf at the back face",el:top-P.t-P.hS/12,how:`El<sub>shelf</sub> − h<sub>S</sub> = ${f(top-P.t)} − ${f(P.hS/12)}`,y:tf+hs+hbw-P.t-P.hS/12,side:"B",x:R.geo.xStemBack,src:"I-0b",dwg:false}); } }
+    // ABEL2: the superstructure at the bearing line (panel I-1 display-only inputs, in): top of bearing, top of girder, top of deck
+    const hb=abElNum("geom.elBrgH"), dg=abElNum("geom.elGird",true), hh=abElNum("geom.elHaunch"), td=abElNum("geom.elDeck",true), fi=x=>fmt(x,2);
+    if(hb!==null){ const eb=E0+hb/12, yb=tf+hs+hb/12;
+      if(dg!==null&&hh!==null&&td!==null){ const sd=dg+hh+td, ed=eb+sd/12;
+        add({k:"deck",lab:"Top of deck at the bearing line (bearing + girder + haunch + deck)",el:ed,how:`El<sub>brg</sub> + (d<sub>g</sub> + h<sub>h</sub> + t<sub>d</sub>)/12 = ${f(eb)} + (${fi(dg)} + ${fi(hh)} + ${fi(td)})/12 = ${f(eb)} + ${fmt(sd/12,4)}`,y:yb+sd/12,side:"F",x:R.geo.xBrg,src:"I-1"});
+        const ap=rows.find(r=>r.k==="apTop"), cmp=[[top,topNm.toLowerCase()]];
+        if(ap){ if(Math.abs(ap.el-top)<0.005) cmp[0][1]+=" and the top of the approach slab"; else cmp.push([ap.el,"top of the approach slab"]); }
+        cmp.forEach(([el,nm])=>{ const d=ed-el; if(Math.abs(d)>0.005) flags.push(`Top of deck at the bearing line El. ${f(ed)} is ${d>0?"above":"below"} the ${nm} El. ${f(el)} by ${f(Math.abs(d))} ft (${fmt(Math.abs(d)*12,2)} in): h<sub>brg</sub> + d<sub>g</sub> + h<sub>h</sub> + t<sub>d</sub> = ${fi(hb+sd)} in${nm.startsWith("top of the approach slab")?"":" vs h<sub>bw</sub> = "+fi(hbw*12)+" in"} (panel I-1${ap?", I-0b":""}).`); });
+        notes.push("Top of deck: at the bearing line, straight up from the seat (bearing + girder + haunch + deck); camber, grade and cross slope are not included. The approach slab stays drawn at the "+(OFF&&P?"stem shelf + t":"top of the "+(semi?"end diaphragm":"backwall"))+" (#1374); a difference is flagged."); }
+      else notes.push("Top of deck: not shown (enter the girder depth, haunch and deck thickness, panel I-1).");
+      if(dg!==null) add({k:"gTop",lab:"Top of girder at the bearing line",el:eb+dg/12,how:`El<sub>brg</sub> + d<sub>g</sub>/12 = ${f(eb)} + ${fi(dg)}/12`,y:yb+dg/12,side:"F",x:R.geo.xBrg,src:"I-1",dwg:false});
+      add({k:"brgTop",lab:"Top of bearing / bottom of girder",el:eb,how:`El<sub>seat</sub> + h<sub>brg</sub>/12 = ${f(E0)} + ${fi(hb)}/12`,y:yb,side:"F",x:R.geo.xBrg,src:"I-1"}); }
+    else notes.push("Top of bearing and top of deck: not shown (enter the total bearing height, panel I-1; h<sub>rt</sub> of panel I-6 is the elastomer only).");
+    if(semi&&dg!==null&&+S.iab.dg>0&&Math.abs(dg-12*S.iab.dg)>0.05) flags.push(`Girder depth d<sub>g</sub> = ${fi(dg)} in (panel I-1, elevations only) differs from the girder depth ${fi(12*S.iab.dg)} in (${fmt(+S.iab.dg,2)} ft) of panel I-0a used by the owner screening of Tab 10; check both.`);
     add({k:"seat",lab:"Beam seat (bridge seat; top of the stem)",el:E0,how:"entered (panel I-1)",y:tf+hs,side:"F",x:R.geo.xStemTopFront,src:"I-1"});
     add({k:"tof",lab:"Top of the footing (bottom of the stem)",el:tof,how:`El<sub>seat</sub> − h<sub>stem</sub> = ${f(E0)} − ${f(hs)}`,y:tf,side:"F",x:0,src:"I-1"});
     add({k:"bof",lab:"Bottom of the footing",el:base,how:`El<sub>tof</sub> − t<sub>f</sub> = ${f(tof)} − ${f(tf)}`,y:0,side:"F",x:0,src:"I-1"});
+    if(fnd.branch==="pile"){ const Lp=abElNum("piles.elLpile",true), emb=Math.max(0,+S.piles.embed||0), act=(S.piles.coords||[]).filter(c=>c.active!==false), xP=act.length? R.geo.B/2+Math.min(...act.map(c=>+c.x||0)) : 0;   // ABEL2: pile tips (panel I-7)
+      if(Lp!==null){ const ept=base+emb/12;
+        add({k:"pileTop",lab:"Top of the piles (pile heads, the embedment above the bottom of the footing)",el:ept,how:`El<sub>bof</sub> + e<sub>pile</sub>/12 = ${f(base)} + ${fmt(emb,2)}/12`,y:emb/12,side:"F",x:xP,src:"I-7",dwg:false});
+        add({k:"tip",lab:"Pile tips",el:ept-Lp,how:`El<sub>pile top</sub> − L<sub>pile</sub> = ${f(ept)} − ${f(Lp)}`,y:emb/12-Lp,side:"F",x:xP,src:"I-7"});
+        const PD=abElPdLen(); if(PD&&Math.abs(PD.L-Lp)>0.05) flags.push(`Pile length L<sub>pile</sub> = ${f(Lp)} ft (panel I-7) differs from Pile Designer's pile, stick-up + toe depth + embedment = ${f(PD.st)} + ${f(PD.toe)} + ${f(PD.emb)} = ${f(PD.L)} ft; check the length and the pile head datum.`); }
+      else notes.push("Pile tips: not shown (enter the pile length, panel I-7)."); }
     const soilH=+g.soilH||0, gr=tof+soilH;
     add({k:"fill",lab:"Backfill surface at the back face (soil height over the heel)"+((+g.beta||0)>0?", rising at β = "+fmt(+g.beta,1)+"° over the heel":""),el:gr,how:`El<sub>tof</sub> + h<sub>soil</sub> = ${f(tof)} + ${f(soilH)}`,y:tf+soilH,side:"B",x:R.geo.xStemBack,src:"I-1"});
     const oo=abutOwner(), dfIn=(oo!=="AASHTO"&&!(fnd.branch==="spread"&&fnd.usePassive))||(fnd.branch==="spread"&&(fnd.usePassive||(fnd.qnMode==="soil"&&fnd.matl==="soil")));
@@ -8811,17 +8857,15 @@ function abElev(R){
     if(hwF!==null&&(hw>0||hwF>0)){ const w=add({k:"wtF",lab:"Water level in front of the wall",el:base+hwF,how:`El<sub>bof</sub> + h<sub>w,f</sub> = ${f(base)} + ${f(hwF)}`,y:hwF,side:"F",x:xf(hwF),src:"I-1"});
       if(w.el>top+0.005) flags.push(`Water level in front El. ${f(w.el)} is above the ${topNm.toLowerCase()} El. ${f(top)}.`); }
     if(gr>top+0.005) flags.push(`Backfill surface El. ${f(gr)} is above the ${topNm.toLowerCase()} El. ${f(top)} (h<sub>soil</sub> &gt; h<sub>stem</sub> + h<sub>bw</sub>).`);
-    if(fnd.branch==="pile") notes.push("Pile tips: not shown (the tool has no pile length input for a pile footing).");
   }
-  notes.push("Bearing top: not shown (the tool has no total bearing height; h<sub>rt</sub> of panel I-6 is the elastomer thickness only).");
-  if(!integ) notes.push("Deck surface: not shown for a "+(semi?"semi-integral":"conventional")+" abutment (no girder depth or deck thickness input).");
+  if(integ) notes.push("Bearing top: not shown for an integral abutment (the girders are cast into the end diaphragm; the deck surface is h<sub>d</sub> above the seat).");
   // absolute elevations received from Pile Designer (minimum penetration, 10.7.6): shown as sent, compared with the derived levels
-  if(pr&&(integ||fnd.branch==="pile")){ const ref=integ? rows.find(r=>r.k==="tip") : null, bot=base;
+  if(pr&&(integ||fnd.branch==="pile")){ const ref=rows.find(r=>r.k==="tip"), bot=base;   // ABEL2: the pile footing's tips too (panel I-7)
     [["tipElCtrl","Pile tip, controlling (Pile Designer, as sent)"],["tipElMin","Pile tip, minimum penetration (Pile Designer, as sent)"]].forEach(([q,lab])=>{ const v=+pr[q];
       if(pr[q]===null||pr[q]===undefined||pr[q]===""||!isFinite(v)) return;
       add({k:q,lab,el:v,how:"absolute elevation received from Pile Designer (not derived from the seat)",abs:true,dwg:false,src:"Pile Designer"});
       if(v>=bot-0.005) flags.push(`${lab}: El. ${f(v)} is not below the bottom of the ${integ?"pile cap":"footing"} El. ${f(bot)}; check that both tools use the same vertical datum.`);
-      else if(ref&&q==="tipElCtrl"&&Math.abs(v-ref.el)>0.05) flags.push(`${lab}: El. ${f(v)} differs from the pile tips derived here, El. ${f(ref.el)} (L<sub>pile</sub> of panel I-0a); check the pile length and the datum.`); }); }
+      else if(ref&&q==="tipElCtrl"&&Math.abs(v-ref.el)>0.05) flags.push(`${lab}: El. ${f(v)} differs from the pile tips derived here, El. ${f(ref.el)} (L<sub>pile</sub> of panel ${integ?"I-0a":"I-7"}); check the pile length and the datum.`); }); }
   return {E0, base, top, topNm, integ, semi, rows, flags, notes};
 }
 /* panel I-1: the elevations in one line under the input (from the last results; the card of Tab 1 §1.1a has them worked) */
@@ -8829,7 +8873,7 @@ function abElevInHTML(){
   if(!abElevOn()) return "Blank: no elevations (the tool works in heights). With a value, Tab 1 §1.1a lists every elevation derived from it.";
   const Ev=window.LAST_R? abElev(window.LAST_R) : null; if(!Ev) return "";
   const pick=k=>Ev.rows.find(r=>r.k===k);
-  const parts=["top","seat",Ev.integ?"boc":"bof",Ev.integ?"tip":null].filter(Boolean).map(pick).filter(Boolean).map(r=>r.lab.replace(/ \(.*$/,"")+" El. <b>"+fmt(r.el,2)+"</b>");
+  const parts=["deck","top","seat",Ev.integ?"boc":"bof","tip"].filter(Boolean).map(pick).filter(Boolean).map(r=>r.lab.replace(/ \(.*$/,"")+" El. <b>"+fmt(r.el,2)+"</b>");
   return parts.join(" · ")+` — all levels worked in <span class="xlink" data-jump="tab-loads|o-elev">Tab 1 §1.1a</span>`+(Ev.flags.length?` <b style="color:#b45309">⚠ ${Ev.flags.length} elevation conflict${Ev.flags.length>1?"s":""}</b>`:"")+".";
 }
 /* the elevation in the drawings' and figures' style */
@@ -8841,12 +8885,13 @@ function abElevSvg(Ev,X,Y,col,opt){ opt=opt||{}; const mk=abElevMarks(Ev,opt.kee
     L.forEach(({m,py})=>{ const ty=Math.max(py-3,prev+13); prev=ty; const cx=col[sd], fx=X(opt.xOf?opt.xOf(m):m.x);
       s+=`<line x1="${fx}" y1="${py}" x2="${cx}" y2="${py}" stroke="#6a1b9a" stroke-width="0.8" stroke-dasharray="3 2"/>`
         +`<polygon points="${cx-4.5},${py-7.5} ${cx+4.5},${py-7.5} ${cx},${py}" fill="none" stroke="#6a1b9a" stroke-width="1.1"/>`
-        +`<text x="${sd==="F"?cx-8:cx+8}" y="${ty}" text-anchor="${sd==="F"?"end":"start"}" font-size="${opt.fs||10.5}" font-family="Times New Roman" fill="#6a1b9a" data-el="${m.ks.join(" ")}">${opt.short?"":esc(m.nm)+" "}${abElT(m.el)}</text>`; }); });
+        +`<text x="${sd==="F"?cx-8:cx+8}" y="${ty}" text-anchor="${sd==="F"?"end":"start"}" font-size="${opt.fs||10.5}" font-family="Times New Roman" fill="#6a1b9a" data-el="${m.ks.join(" ")}">${opt.short?"":esc(m.nm)+" "}${abElT(m.el)}${opt.sfx?esc(opt.sfx(m)):""}</text>`; }); });
   return s; }
 /* the short names on the sections and sheets */
 const ABEL_SN={top:E=>E.integ?"Deck surface":E.semi?"Top of end diaphragm":"Top of backwall", apTop:()=>"Top of approach slab", apSeat:()=>"Approach slab seat",
   seat:()=>"Beam seat", tof:()=>"Top of footing", bof:()=>"Bottom of footing", fill:()=>"Backfill", front:()=>"Finished grade", grade:()=>"Finished grade",
-  stShelf:()=>"Stem shelf",   wt:E=>E.rows.some(r=>r.k==="wtF")?"Water behind":"Water table", wtF:()=>"Water in front", boc:()=>"Bottom of cap", tip:()=>"Pile tips"};
+  stShelf:()=>"Stem shelf",   wt:E=>E.rows.some(r=>r.k==="wtF")?"Water behind":"Water table", wtF:()=>"Water in front", boc:()=>"Bottom of cap", tip:()=>"Pile tips",
+  deck:()=>"Top of deck", brgTop:()=>"Top of bearing", gTop:()=>"Top of girder", pileTop:()=>"Top of piles"};   // ABEL2
 /* the rows to annotate on a section: same side and same elevation merged into one label */
 function abElevMarks(Ev,keep){
   const out=[]; if(!Ev) return out;
@@ -8857,13 +8902,13 @@ function abElevMarks(Ev,keep){
 /* Tab 1 §1.1a: the elevations card (conventional, semi-integral and integral) */
 function abElevPanelHTML(R){
   const Ev=abElev(R); if(!Ev) return "";
-  const lk={"I-0":"panel I-0","I-0a":"panel I-0a","I-0b":"panel I-0b","I-1":"panel I-1","I-4":"panel I-4","Pile Designer":"Pile Designer hand-off (panel "+(Ev.integ?"I-0a":"I-7")+")"};
+  const lk={"I-0":"panel I-0","I-0a":"panel I-0a","I-0b":"panel I-0b","I-1":"panel I-1","I-4":"panel I-4","I-7":"panel I-7","Pile Designer":"Pile Designer hand-off (panel "+(Ev.integ?"I-0a":"I-7")+")"};
   let t=`<table class="rtbl" id="abElevTbl"><tr><th>Level</th><th>Elevation (ft)</th><th>Worked</th><th>From</th></tr>`;
   Ev.rows.forEach(r=>{ t+=`<tr${r.k==="seat"?' class="gov"':""} data-el="${r.k}"><td class="lft">${r.lab}</td><td><b>${fmt(r.el,2)}</b></td><td class="lft">${r.abs?r.how:r.k==="seat"?r.how:r.how+" = <b>"+fmt(r.el,2)+"</b>"}</td><td class="lft">${lk[r.src]||esc(r.src)}</td></tr>`; });
   t+=`</table>`;
   const fl=Ev.flags.length? `<div class="warn-item" id="abElevFlags">${abNL("⚠ Elevation conflicts ("+Ev.flags.length+"):",Ev.flags)}</div>` : "";
   return panel("o-elev","1.1a","Elevations — From the Beam Seat Elevation",
-    `<div class="note-box small" id="abElevNote">All elevations here are derived from the beam seat elevation El. ${fmt(Ev.E0,2)} ft (panel I-1) and the geometry inputs (heights and thicknesses of panels I-0a, I-0b and I-1; D<sub>f</sub> of panel I-0 / I-4); an elevation sent by Pile Designer is shown as received. The calculation uses heights, not elevations: no result depends on them.</div>
+    `<div class="note-box small" id="abElevNote">All elevations here are derived from the beam seat elevation El. ${fmt(Ev.E0,2)} ft (panel I-1) and the geometry inputs (heights and thicknesses of panels I-0a, I-0b and I-1, with the bearing height, girder depth, haunch and deck thickness entered there for the elevations; the pile length and embedment of panel I-7; D<sub>f</sub> of panel I-0 / I-4); an elevation sent by Pile Designer is shown as received. The calculation uses heights, not elevations: no result depends on them.</div>
     ${fl}${t}<div class="in-note">${Ev.notes.join(" ")}</div>
     <div class="figcap">Shown on the cross-section (<span class="xlink" data-jump="tab-loads|o-sketch">§1.1</span>), the Drawings sheets (section and details), the 3D view with dimensions on, and the Report.</div>`);
 }
@@ -8872,9 +8917,11 @@ function drawXsec(){
   const g=S.geom, geo=window.LAST_R?window.LAST_R.geo:{B:g.Ltoe+g.tsb+g.Lheel,xBrg:0};
   const B=g.Ltoe+g.tsb+g.Lheel, Htot=g.tf+g.hstem+g.hbw;
   const soilTop=g.tf+g.soilH;
-  const worldH=Math.max(Htot,soilTop)+1;
-  const Ev=window.LAST_R? abElev(window.LAST_R) : null, eL=Ev?170:0, eR=Ev?260:0;   // ABEL: room for the elevation labels (none without a seat elevation)
-  const ml=84+eL,mr=96,mt=46,mb=88, drawW=560;
+  const Ev=window.LAST_R? abElev(window.LAST_R) : null;
+  const EvDk=Ev&&Ev.rows.find(r=>r.k==="deck"), EvTip=Ev&&Ev.rows.find(r=>r.k==="tip");   // ABEL2: the top of deck above the wall; the pile tips below the dimensions
+  const eL=Ev?(EvTip?215:170):0, eR=Ev?260:0;   // ABEL: room for the elevation labels (none without a seat elevation)
+  const worldH=Math.max(Htot,soilTop,EvDk?EvDk.y:0)+1;
+  const ml=84+eL,mr=96,mt=46,mb=88+(EvTip?34:0), drawW=560;
   const sc=Math.min(drawW/B,(420)/worldH);
   const W=ml+mr+eR+B*sc, Hpx=mt+mb+worldH*sc;
   const X=x=>ml+x*sc, Y=y=>mt+(worldH-y)*sc; // y up from footing base
@@ -8972,7 +9019,7 @@ function drawXsec(){
   // top: seat + backwall
   s+=dimH(X(xsb-g.tst),X(xbwF),Y(Htot)-18,"seat "+fmt(OFx? g.tst-g.tbw-OFx.e : g.tst-g.tbw)+"'");
   s+=dimH(X(xbwF),X(xbwB),Y(Htot)-18,fmt(g.tbw)+"'");
-  if(Ev) s+=abElevSvg(Ev,X,Y,{F:X(0)-76,B:X(B)+104});   // ABEL: elevation labels (Tab 1 §1.1a)
+  if(Ev) s+=abElevSvg(Ev,X,Y,{F:X(0)-76,B:X(B)+104},EvTip?{yOf:m=>m.ks.includes("tip")?-100/sc:m.y,xOf:m=>m.ks.includes("tip")?0:m.x,sfx:m=>m.ks.includes("tip")?" (below, not to scale)":""}:{});   // ABEL: elevation labels (Tab 1 §1.1a); ABEL2: the pile tips under the dimensions
   s+=`</svg>`;
   el.innerHTML=s;
 }
@@ -9380,6 +9427,7 @@ function d3Label(text, cls){
 
 /* ABEL (2026-11-10): the elevations of Tab 1 §1.1a in the 3D view (dimensions on): a line from the face to the label at the end z of the wall,
    front-face levels to the left (toward the span), back-face levels to the right; yOf maps a mark to the model's y (the drawn pile tip) */
+const abBrgH3D=()=>{ const v=abElNum("geom.elBrgH",true); return v!==null? v/12 : 0.5; };   // ABEL2: the 3D bearing pad height, ft (0.5 schematic when no bearing height is entered)
 function abElev3D(grp,P,Ev,z,xF,xB,yOf){
   const mat=new THREE.LineBasicMaterial({color:0x6a1b9a});
   abElevMarks(Ev).forEach(m=>{ const y=yOf(m), f=m.side==="F", xa=f?xF:xB;
@@ -9472,7 +9520,7 @@ function d3ApSlab(R,M,xb,yTop,th,Lab){
 }
 // semi-integral: end diaphragm (h_bw × t_bw, panel I-1) cast around the girder ends, on the bearings at the seat; the lower abutment is drawn by build3D
 function d3SemiParts(R,T,o){
-  const M=d3Mats(T), padH=0.5, seatY=o.tf+o.hstem, yTop=seatY+o.hbw, x0=o.xBwFront-o.cx, x1=o.xStemBack-o.cx, yB=seatY+padH, th=+S.geom.skew||0;
+  const M=d3Mats(T), padH=abBrgH3D(), seatY=o.tf+o.hstem, yTop=seatY+o.hbw, x0=o.xBwFront-o.cx, x1=o.xStemBack-o.cx, yB=seatY+padH, th=+S.geom.skew||0;
   d3Add(d3SecGeo([[x0,yB],[x1,yB],[x1,yTop],[x0,yTop]],o.Lab),M.diaph,M.ed);   // moves with the superstructure; its bottom at the girder bottoms (on the bearings)
   const td=Math.min(0.7,0.3*o.hbw);
   d3Super(R,M,{xRef:o.xBrg-o.cx, xEnd:x0+Math.min(1.0,0.6*(x1-x0)), xDeck:x0, Ls:o.xBwFront+Math.max(4,0.3*o.B), yTop, td, dg:yTop-td-yB, th, Lab:o.Lab});
@@ -9613,7 +9661,7 @@ function build3D(R){
   }
   // ---------- bearing pads + girder load arrows ----------
   const pb=perBearingLoads(R,sel), pos=R.beamPos||beamPositions();
-  const padH=0.5, seatY=tf+hstem, padL=(+S.bearing.padL||18)/12, padW=(+S.bearing.padW||24)/12;
+  const padH=abBrgH3D(), seatY=tf+hstem, padL=(+S.bearing.padL||18)/12, padW=(+S.bearing.padW||24)/12;   // ABEL2: the total bearing height when entered
   // normalization reference across visible force components
   let maxF=1e-6;
   pb.beams.forEach(b=>{ if(T.P)maxF=Math.max(maxF,Math.abs(b.P)); if(T.Vx)maxF=Math.max(maxF,Math.abs(b.Vx)); if(T.Vy)maxF=Math.max(maxF,Math.abs(b.Vy)); });
@@ -9667,7 +9715,7 @@ function build3D(R){
     addDim(P(B,yb0,-Lftg/2),P(B,yb0,Lftg/2),'L_ftg = '+fmt(Lftg)+' ft');   // footing length, at the heel edge
     addDim(P(0,tf,-Lab/2),P(0,tf,Lab/2),'L_ab = '+fmt(Lab)+' ft');           // wall length, at the toe base of the stem
     const l=d3Label('H = '+fmt(tf+g.hstem+g.hbw)+' ft','dim'); l.position.copy(P(0,(tf+g.hstem+g.hbw)/2,-Math.max(Lab,Lftg)/2)); grp.add(l);
-    const Ev=abElev(R); if(Ev) abElev3D(grp,P,Ev,Math.max(Lab,Lftg)/2,-0.6,B+0.6,m=>m.y);   // ABEL
+    const Ev=abElev(R); if(Ev) abElev3D(grp,P,Ev,Math.max(Lab,Lftg)/2,-0.6,B+0.6,m=>m.ks.includes("tip")?-pileLen:m.y);   // ABEL; ABEL2: a pile footing's tips at the drawn tip
   }
 
   // ---------- frame camera ----------
@@ -9793,7 +9841,8 @@ async function captureD3(R){
         the shelf bars S1 / S2 and the approach-slab bars P1–P3 when designed), the development lengths of Tab 5 as the to-scale figure
         (svgRebarDims), and the bar table. Integral abutment: the section and a reference to its schedule (Tab 5 §5.7), bars not drawn.
    Display and export only: geometry and values from the inputs and the computed results (window.LAST_R); nothing here is used by a
-   calculation. The section's pile length and bearing height are schematic and labelled.
+   calculation. The section's pile length and bearing height are schematic and labelled (ABEL2: the bearing at the total bearing height of panel
+   I-1 when it is entered for the elevations).
    Saved: the chosen sheet, per browser, key abutcalc_dwgSheet_v1 (written only when a sheet is picked; not in S, the autosave or Export
    JSON). The tab itself is not stored in S.ui.tab (as the Report tab): ABDW.on.
    ===================================================================== */
@@ -9808,7 +9857,8 @@ function abdwGeo(R){
   if(G.integ){ const I=S.iab; G.b=f(I.b); G.hc=f(I.hc); G.hd=f(I.hd); G.B=G.b; G.tf=0; G.xb=G.b; G.yTop=G.hc+G.hd; G.Lftg=G.Lab; }
   else{ G.B=f(R.geo.B); G.tf=f(g.tf); G.Ltoe=f(g.Ltoe); G.tsb=f(g.tsb); G.tst=f(g.tst); G.hstem=f(g.hstem); G.tbw=f(g.tbw); G.hbw=f(g.hbw);
     G.xb=G.Ltoe+G.tsb; G.xbwF=G.xb-G.tbw; G.xstF=G.xb-G.tst; G.ySeat=G.tf+G.hstem; G.yTop=G.ySeat+G.hbw; G.xBrg=f(R.geo.xBrg);
-    G.Lftg=f(+g.Lftg||g.Lab); G.soilH=f(g.soilH); G.hw=f(g.hw); G.padH=6; }   // padH: the 3D view's 0.5 ft bearing (schematic)
+    G.Lftg=f(+g.Lftg||g.Lab); G.soilH=f(g.soilH); G.hw=f(g.hw); G.padH=6;   // padH: the 3D view's 0.5 ft bearing (schematic)
+    const hbE=abElNum("geom.elBrgH",true); G.brgH=hbE; if(hbE!==null) G.padH=hbE; }   // ABEL2: the total bearing height entered (panel I-1, display only) draws the bearing at its height
   // ABSH: backwall offset e — the backwall's back face x_bwB = x_b − e, the stem shelf behind it up to y_sh; the slab starts at x_s (= x_b without e)
   G.off=null; G.xbwB=G.xb; G.xs=G.xb;
   if(!G.integ&&!G.semi&&R.geo.off){ const O=R.geo.off; G.off={e:O.eIn, d:O.dIn, hSh:f(O.hSh)}; G.xbwB=G.xb-O.eIn; G.xbwF=G.xbwB-G.tbw; G.ySh=G.ySeat+f(O.hSh); G.xs=G.xbwB; }
@@ -9956,7 +10006,9 @@ function abdwBuild(R){
       const ym=G.tf+G.hstem*0.45, xf=G.Ltoe+(G.xstF-G.Ltoe)*(ym-G.tf)/G.hstem; free(L.txt,(xf+G.xb)/2,ym,h,"STEM",1);
       if(!G.semi&&G.hbw>tw("BACKWALL",h)+0.2*k) free(L.txt,(G.xbwF+G.xbwB)/2+0.4*h,G.ySeat+G.hbw*0.5-(G.ap&&G.ap.shelf?0.3*G.ap.hS:0),h,"BACKWALL",1,90);
       lead(G.xstF+0.3*(G.xbwF-G.xstF),G.ySeat,G.xstF-0.35*k,G.ySeat+0.25*k,"BRIDGE SEAT",2);
-      lead(G.xBrg,G.ySeat+G.padH,G.xstF-0.35*k,G.ySeat+0.75*k,"BEARING "+(+S.bearing.padL||18)+" x "+(+S.bearing.padW||24)+" IN (HEIGHT SCHEMATIC)",2);
+      const yBl=(()=>{ const ys=EV? ELM.filter(m=>m.side==="F"&&!m.ks.includes("tip")).map(m=>m.y*12) : [];   // ABEL2: the bearing label clear of the elevation lines at the left (as before without them)
+        for(const c of [0.75,0.45,1.05,1.35,1.65]){ const y=G.ySeat+c*k; if(ys.every(v=>Math.abs(v-(y+0.05*k))>0.13*k)) return y; } return G.ySeat+0.75*k; })();
+      lead(G.xBrg,G.ySeat+G.padH,G.xstF-0.35*k,yBl,"BEARING "+(+S.bearing.padL||18)+" x "+(+S.bearing.padW||24)+" IN "+(G.brgH!=null?"(TOTAL HEIGHT "+IN(G.brgH)+", PANEL I-1)":"(HEIGHT SCHEMATIC)"),2);
       if(G.semi) lead(G.xbwF,G.yTop-0.5*(G.yTop-G.ySeat),G.xstF-0.35*k,G.yTop+0.1*k,"END DIAPHRAGM ON THE BEARINGS",2);
       D.line(L.cl,G.xBrg,G.ySeat-0.15*k,G.xBrg,G.yTop+0.75*k); D.text(L.txt,G.xBrg,G.yTop+0.82*k,h,"CL BRG.",1); }
     if(G.off){ lead(G.xb-G.off.e/2,G.ySh-0.25*(G.ySh-G.ySeat),G.xb+0.6*k,G.ySh-0.9*k,"STEM SHELF"+(G.ap?" (APPROACH SLAB SEAT)":"")+", E = "+IN(G.off.e)+", "+IN(G.off.d)+" BELOW TOP;\nSTEM BARS CONTINUE UP; NO CORBEL",0);
@@ -9972,7 +10024,7 @@ function abdwBuild(R){
     else if(G.wingKind) free(L.txt,xR,G.yTop+0.35*k,h,G.wingKind==="inline"?"IN-LINE WINGWALLS: NOT IN THIS SECTION":"INDEPENDENT WINGWALLS: NOT IN THIS SECTION",2,0,1);
     if(pxs.length){ const x=pxs[pxs.length-1]+G.pd/2; lead(x,-Lp*0.45,Math.max(G.B,x)+0.45*k,-Lp*0.45,G.pileTxt+"\nPILE LENGTH NOT TO SCALE",0); }
     if(EV){ const cF=-1.45*k, cB=G.xb+0.35*k;   // ABEL: every level of Tab 1 §1.1a: front-face levels in a column at the left, back-face levels on their line behind the wall (the tips at the drawn tip)
-      ELM.forEach(m=>{ const tip=m.ks.includes("tip"), y=tip? -Lp : m.y*12, xF=tip? G.b/2-G.pd/2 : m.x*12;
+      ELM.forEach(m=>{ const tip=m.ks.includes("tip"), y=tip? -Lp : m.y*12, xF=tip? (G.integ? G.b/2-G.pd/2 : pxs.length? pxs[0]-G.pd/2 : 0) : m.x*12;   // ABEL2: a pile footing's tips at its front pile row
         elev(m,xF,y,m.side==="F"?cF:cB,m.side); }); }
     // view title and notes
     const bb=D.bbox(i0v), yt=bb[1]-0.35*k;
@@ -9981,6 +10033,8 @@ function abdwBuild(R){
     if(G.ap&&G.skew>0.05) notes.push("SKEW THETA = "+G.skew.toFixed(1)+"°: THE APPROACH SLAB IS SHOWN NORMAL TO THE ABUTMENT (L COS THETA, SHORTEST STRIP).");
     if(G.apLegacy) notes.push("APPROACH SLAB: EQUIVALENT DEAD LOAD ONLY (PANEL I-0B), NOT DRAWN.");
     if(EV) notes.push("ELEVATIONS (FT) DERIVED FROM THE BEAM SEAT ELEVATION EL. "+EV.E0.toFixed(2)+" (PANEL I-1) AND THE HEIGHTS OF THE INPUTS: SEE TAB 1 1.1A.");
+    if(EV&&elOf("deck")) notes.push("TOP OF DECK AT THE CL BRG. = SEAT + BEARING + GIRDER + HAUNCH + DECK (PANEL I-1); SUPERSTRUCTURE NOT DRAWN.");   // ABEL2
+    if(EV&&!G.integ&&elOf("tip")) notes.push("PILE TIPS = BOTTOM OF FOOTING + EMBEDMENT - PILE LENGTH (PANEL I-7), MARKED AT THE DRAWN TIP.");   // ABEL2
     if(G.off) notes.push("BACKWALL INSET E = "+IN(G.off.e)+" FROM THE STEM BACK FACE (PANEL I-1): STEM SHELF AT FULL STEM THICKNESS"+(G.ap?", APPROACH SLAB SEAT (TAB 1 1.4A)":"")+"; BACKWALL DESIGNED AT THE SHELF (TAB 5 5.1).");   // ABSH
     notes.forEach((t,i)=>D.text(L.txt,bb[0],yt-0.32*k-i*0.18*k,0.08*k,t,0));
     return {known:null};
@@ -10244,7 +10298,7 @@ function abdwBuild(R){
           free(L.txt,x1+0.1*k,G.yTop+0.15*k,h,"APPROACH SLAB (SHEET 4)",0,0,1); }
         D.rect(L.brg,G.xBrg-padL/2,G.ySeat,G.xBrg+padL/2,y0);
         D.line(L.cl,G.xBrg,G.ySeat-0.2*k,G.xBrg,G.yTop+1.3*k); D.text(L.txt,G.xBrg,G.yTop+1.38*k,h,"CL BRG.",1);
-        lead(G.xBrg-padL/2,y0-G.padH/2,xf(yb)-0.5*k,y0+0.3*k,"BEARING "+padL+" x "+padW+" IN, H_RT = "+IN(+S.bearing.hrt||0)+"\n(PAD HEIGHT SCHEMATIC)",2,hb);
+        lead(G.xBrg-padL/2,y0-G.padH/2,xf(yb)-0.5*k,y0+0.3*k,"BEARING "+padL+" x "+padW+" IN, H_RT = "+IN(+S.bearing.hrt||0)+"\n"+(G.brgH!=null?"(TOTAL HEIGHT "+IN(G.brgH)+", PANEL I-1)":"(PAD HEIGHT SCHEMATIC)"),2,hb);
         let xg=null; if(!G.semi){ xg=G.xbwF-(+S.geom.endGap||0); if(xg>G.xstF){ D.line(L.hid,xg,y0,xg,Math.min(G.yTop,y0+18)); lead(xg,y0+12,xf(yb)-0.5*k,y0+1.0*k,"GIRDER END (END GAP "+IN(+S.geom.endGap||0)+")",2,hb); } else xg=null; }
         const yD=G.yTop+0.45*k; dH([G.xstF,G.ySeat],[G.xBrg,y0],yD); dH([G.xBrg,y0],[G.xbwF,G.yTop],yD); dH([G.xbwF,G.yTop],[G.xbw,G.yTop],yD);
         if(xg!==null&&Cs) dH([G.xstF,G.ySeat],[xg,y0],G.yTop+0.9*k,"N = <> PROV.; "+f1(Cs.NreqP)+" REQ. (TAB 3 3.5)");
@@ -10266,7 +10320,8 @@ function abdwBuild(R){
         lead(xa+2,yF,xf(yb)-0.5*k,G.ySeat-0.35*k,"F1 "+bl(S.bearing.seatBar,S.bearing.seatSp)+" SEAT MAT, BOTH WAYS,\nPAD + 1'-0\" EACH SIDE (TAB 5 5.7)",2,hb);
         if(EV){ const cF=xf(yb)-0.6*k, cB=G.xbw+(ap?(sh?ap.bS:0)+24:0)+0.6*k;   // ABEL
           elev(elOf("seat"),G.xstF,G.ySeat,cF,"F","BRIDGE SEAT"); elev(elOf("top"),G.xbwF,G.yTop,cF,"F",G.semi?"TOP OF END DIAPHRAGM":"TOP OF BACKWALL");
-          if(shY!=null&&(sh||G.off)) elev(elOf("apSeat"),G.off?G.xb:G.xbw+ap.bS,shY,cB,"B","APPROACH SLAB SEAT"); }
+          if(shY!=null&&(sh||G.off)) elev(elOf("apSeat"),G.off?G.xb:G.xbw+ap.bS,shY,cB,"B","APPROACH SLAB SEAT");
+          { const mb=elOf("brgTop"), md=elOf("deck"); if(mb) elev(mb,G.xBrg-padL/2,mb.y*12,cF,"F","TOP OF BEARING"); if(md&&md!==mb&&md!==elOf("top")) elev(md,G.xBrg,md.y*12,cF,"F","TOP OF DECK AT CL BRG"); } }   // ABEL2
       }};
       const bb=views([v,noteView(["SEAT WIDTH, BEARING SETBACK AND END GAP FROM PANEL I-1; SUPPORT LENGTH N: TAB 3 3.5; BEARING ON THE SEAT: TAB 5 5.6; BARS: TAB 5 5.7.",
         "COVER "+IN(cT)+" (PANEL I-2). ANCHOR BOLTS, KEEPER BLOCKS, SHEAR KEYS AND BEARING ANCHORAGE: NOT MODELLED BY THE TOOL, DETAILER TO CONFIRM.",
@@ -10313,6 +10368,8 @@ function abdwBuild(R){
             if(G.tf<=top+0.01&&G.tf>emb) dV([pd/2,emb],[pd/2,G.tf],wv+0.35*k,"H_P <> (PUNCHING)"); }   // ABPH: punching depth above the pile head
           lead(-pd/2,yP*0.5,-wv-0.4*k,yP*0.6,G.pileTxt,2,hb);
           free(L.txt,0,Math.min(top,hc)-0.3*k,h,G.integ?"PILE CAP":"FOOTING",1);
+          if(EV){ const rr=k2=>{ const r=EV.rows.find(q=>q.k===k2); return r? {el:r.el,nm:"",ks:[k2]} : null; };   // ABEL2: the pile top and the tips (at the break) of Tab 1 §1.1a
+            elev(rr("pileTop"),pd/2,emb,wv+1.0*k,"B","TOP OF PILES",hb); elev(rr("tip"),pd/2,yP,wv+1.0*k,"B","PILE TIPS (BELOW, NOT TO SCALE)",hb); }   // at the right, beyond the dimensions (the leaders are at the left)
         }, notes:G.integ?["CAP AND DIAPHRAGM BARS: TAB 5 5.7 (INTEGRAL SCHEDULE). PILE HEAD DETAILS: DETAILER TO CONFIRM."]
           :["ONE BOTTOM MAT AT THE FOOTING COVER "+IN(cF)+" (PANEL I-2) FOR THE FOOTING FLEXURE (TAB 5 5.3); BARS PASS BETWEEN THE PILE HEADS, CLEARANCE TO THE PILES: DETAILER TO CONFIRM.","PUNCHING (TAB 4 4.6) CREDITS ONLY THE CONCRETE ABOVE THE PILE HEAD, H_P = T_F - EMBEDMENT; THE BOTTOM MAT IS NOT CREDITED.","PILE HEAD ANCHORAGE: NOT MODELLED BY THE TOOL, DETAILER TO CONFIRM."]}); }
       let bb=null; const i0s=i0v;   // the views side by side, else one under the other
@@ -10421,7 +10478,7 @@ function abdwRender(R){
       ["Layers:","AB-CONC, AB-JOINT, AB-HIDDEN, AB-BEARING, AB-CENTER, AB-APPROACH-SLAB, AB-WING-BEYOND, AB-PILE, AB-PILE-TEXT, AB-SOIL, AB-WATER, AB-REBAR, AB-REBAR-TEXT, AB-LEADER, AB-DIMS, AB-TEXT, AB-TABLE, AB-TBLK, AB-BRDR."],
       ["Detail sheets:","after the section, plan and reinforcement sheets, the ones that apply: approach slab and shelf (plan at the skew, section A-A along the roadway, shelf detail, bar table), bridge seat, stem-footing joint / pile embedment, wingwall, general notes and materials. A view at another scale gives its scale in its title (the title block: the first view's). What the tool does not size is noted “detailer to confirm”, not drawn to a size."],   /* ABD2 */
       ["Title block:","from the Project panel (project, number, calculated by, date, checked by, checked date; a blank field prints “—”)."],
-      ["Values:","geometry and bars from the inputs and the results as computed (nothing new is calculated); the pile length and the bearing height in the section are schematic."]])+'</div>'
+      ["Values:","geometry and bars from the inputs and the results as computed (nothing new is calculated); the pile length and the bearing height in the section are schematic"+(B.G&&B.G.brgH!=null?" (the bearing: drawn at the total bearing height of panel I-1, entered for the elevations)":"")+"."]])+'</div>'
     +'<div class="abdwHead"><b>'+(B.S.indexOf(cur)+1)+'. '+esc(cur.title)+'</b> · scale '+esc(cur.scale)+(cur.over?' · <span style="color:#c62828">does not fit the sheet even at the smallest scale</span>':"")+'</div>'
     +'<div class="abdwBox"></div><div class="figcap">Wheel: zoom about the cursor · drag: pan · pinch · double-click: fit · + / − / Fit buttons.</div>'
     +'<div class="abdwScroll"><table class="rtbl abdwIdx"><tr><th>No.</th><th>Sheet</th><th>Scale</th><th>Worked in</th></tr>'+B.S.map((s,j)=>
@@ -11562,6 +11619,7 @@ function updateDerivedInInputs(){
   const dv=document.querySelectorAll("#inputCol .derived");
   if(dv[0]) dv[0].innerHTML=bwOffGeo()? bwOffDerivedHTML() : `Derived: bridge seat width = t<sub>st</sub> − t<sub>bw</sub> = <b>${fmt(g.tst-g.tbw)} ft</b> &nbsp;·&nbsp; seat elevation (above footing base) = <b>${fmt(g.tf+g.hstem)} ft</b>`;
   { const ei=document.getElementById("abElevIn"); if(ei) ei.innerHTML=abElevInHTML(); }   // ABEL
+  { const ei=document.getElementById("abElLpIn"); if(ei) ei.innerHTML=abElLpInHTML(); }   // ABEL2
   if(dv[1]) dv[1].innerHTML=`Derived: total footing width B = L<sub>toe</sub> + t<sub>sb</sub> + L<sub>heel</sub> = <b>${fmt(g.Ltoe+g.tsb+g.Lheel)} ft</b>`;
   const pos=beamPositions();
   document.querySelectorAll("#inputCol table.itbl tr").forEach(tr=>{
@@ -11625,6 +11683,9 @@ document.addEventListener("change",ev=>{
   if(el.dataset.rebuild){ buildInputs(); }
   scheduleRecalc();
 });
+/* ABEL2: "Use" Pile Designer's pile length (panel I-7) — only on a click; a value entered is kept */
+document.addEventListener("click",ev=>{ const b=ev.target.closest&&ev.target.closest("[data-abel-use]"); if(!b) return;
+  const v=+b.dataset.abelUse; if(!(v>0)) return; pushUndo("piles.elLpile"); S.piles.elLpile=+v.toFixed(2); buildInputs(); recalcAll(); scheduleSave(); });
 document.addEventListener("click",ev=>{
   const head=ev.target.closest(".p-head");
   if(head && !ev.target.closest("#rp-print")){
@@ -11911,6 +11972,7 @@ function inputEchoHTML(){
     ["Soil height over heel / backfill slope β",fmt(g.soilH)+" / "+fmt(g.beta,1)+"°","ft / deg"],
     ["Water table above footing base",g.hw,"ft"],
     ...(abElevOn()?[["Beam seat elevation (display only: the elevations of Tab 1 §1.1a)",fmt(+g.elSeat,2),"ft"]]:[]),   // ABEL
+    ...(iabType()!=="integral"?[["Total bearing height h_brg","geom.elBrgH"],["Girder depth d_g","geom.elGird"],["Haunch h_h","geom.elHaunch"],["Deck thickness t_d","geom.elDeck"]].filter(q=>abElNum(q[1])!==null).map(q=>[q[0]+" (display only: Tab 1 §1.1a)",fmt(abElNum(q[1]),2),"in"]):[]),   // ABEL2
     ["Span length / skew",fmt(g.spanL)+" / "+fmt(g.skew,1)+"°","ft / deg"]].concat(
     itg?[]:g.HsupMode==="single"?[["Support-length H [4.7.4.4]","0 (single span)","ft"]]:g.HsupMode==="user"?[["Support-length H [4.7.4.4] (entered)",fmt(+g.HsupUser||0),"ft"]]:[]));
   h+="<h3>Materials</h3>"+echoRows([
@@ -11940,6 +12002,7 @@ function inputEchoHTML(){
     ["Rn,up / φup",fmt(p.RnUp)+" / "+fmt(p.phiUp),"kip / –"],
     ["Pile section (punching)",(p.pileShape||"hp")+", "+fmt(p.pileSize,1)+" in",""],
     ["Pile embedment / clear cover pile top to bottom mat (not used: no mat over the pile heads, see §4.6)",fmt(+p.embed,1)+" / "+fmt(+p.clrTop,1),"in"],   // ABPM
+    ...(abElNum("piles.elLpile",true)!==null?[["Pile length L_pile, total (display only: the pile tip elevation, Tab 1 §1.1a)",fmt(abElNum("piles.elLpile",true),2),"ft"]]:[]),   // ABEL2
     ["Drag load DR / γDR (structural; 0 geotechnical)",fmt(+p.dd||0,0)+" / "+fmt(+p.gDD,2),"kip / –"],
     ["Pile structural section [10.7.3.13]",(p.pileShape==="square"?"square / precast, Pr = "+fmt(+p.PrUser||0,1)+" kip":(p.pileShape==="round"?"unfilled steel pipe, t = "+fmt(+p.pipeT,3)+" in":hpAuto(p)+(p.strSec?"":" (automatic)"))+", Fy = "+fmt(+p.Fy,1)+" ksi, "+(p.drive==="severe"?"severe driving":"good driving")),""]]);
   if(!itg) h+="<h3>Longitudinal distribution</h3>"+echoRows([
@@ -12894,7 +12957,7 @@ document.addEventListener("DOMContentLoaded",init);
       stateAtImport:sl.level, casesRunAt:p.casesRunAt||null, fields, prev, byLS:pl.byLS,
       choices:{ geo:!!st.geo, rn:st.rn, mom:!!st.mom, df:!!st.df, iab:!!st.iab, im:st.im },
       pile:p.pile? { type:p.pile.type||"", designation:(p.pile.section&&p.pile.section.designation)||"", axis:p.pile.axis||null, head:p.pile.head||"", stickup:p.pile.stickup } : null,
-      geo:g&&g.static? { Rn:g.static.Rn, phi:g.static.phi, RnUp:g.static.RnUp, phiUp:g.static.phiUp, method:(g.method&&g.method.label)||"", ...(g.pileType==="iab"? { pileType:"iab", toe:g.static.toeDepth } : {}), field:g.field? { RnReq:g.field.RnReq, phi:g.field.phi, Rndr:g.field.Rndr, RndrEOD:g.field.RndrEOD, label:g.field.label } : null,   // PDA-IAB: pileType, toe (integral pile, ft below the cap)
+      geo:g&&g.static? { Rn:g.static.Rn, phi:g.static.phi, RnUp:g.static.RnUp, phiUp:g.static.phiUp, method:(g.method&&g.method.label)||"", ...(g.pileType==="iab"? { pileType:"iab", toe:g.static.toeDepth } : num(g.static.toeDepth)? { toe:g.static.toeDepth } : {}),   // ABEL2: the H-pile toe depth below grade too (the suggested pile length of panel I-7, display only) field:g.field? { RnReq:g.field.RnReq, phi:g.field.phi, Rndr:g.field.Rndr, RndrEOD:g.field.RndrEOD, label:g.field.label } : null,   // PDA-IAB: pileType, toe (integral pile, ft below the cap)
         minPen:g.minPen? { zMin:g.minPen.zMin, governs:g.minPen.governs||"", tipElMin:g.minPen.tipElMin, ctrl:g.minPen.controllingTipDepth, tipElCtrl:g.minPen.tipElControlling } : null } : null,
       fixity:p.fixity? { Lf:p.fixity.Lf, method:p.fixity.method||"", Lf_davisson:p.fixity.Lf_davisson } : null,
       struct:p.structural? { phiPn:p.structural.phiPn, phiMn:p.structural.phiMn, phiVn:p.structural.phiVn, axis:p.structural.axis } : null,
