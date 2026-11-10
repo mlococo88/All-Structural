@@ -58,6 +58,27 @@ test('gfxa: Section properties graphic (both regions, all load cases): layers, n
   }
 });
 
+// SECC (2026-11-10): the screen graphic (option C, ui/vizkit.js) takes its numbers from secModel; they are the values the DXF line drawing (secGraphic) prints:
+// the stress at each end of each stressed part (steel; deck ÷ n or 3n), the selected case's section and every neutral axis at the table's values
+test('gfxa: Section properties screen graphic (secModel) = the DXF drawing\'s stresses and axes, every case and region', () => {
+  let n = 0;
+  for (const [name, P] of projects()) for (const region of ['pos', 'neg']) {
+    const R = secResult(P, 0, 0, region), c = R.c;
+    for (const cs of ['steel', '3n', 'n']) { const m = GA.secModel(P, R, cs), g = GA.secGraphic(P, R, cs, 1);
+      const dxf = g.D.E.filter(e => e.t === 'TEXT' && / KSI$/.test(e.s)).map(e => e.s.replace(/ KSI$/, '')).sort();
+      const viz = m.segs.flatMap(q => [q.fa, q.fb]).map(v => v.toFixed(2)).sort();
+      assert.deepEqual(viz, dxf, `${name} ${region} ${cs}: stresses`);
+      const sec = { steel: c.s, '3n': c.c3, n: c.cn }[c.comp ? cs : 'steel']; assert.equal(m.sc, sec, `${name} ${cs}: section`);
+      assert.equal(m.segs.length, c.comp && cs !== 'steel' ? 2 : 1);
+      const ax = Object.fromEntries(m.axes.map(a => [a.key, a.y])); assert.equal(ax.steel, c.s.yb); assert.equal(ax.pna, c.yp); if (c.comp) { assert.equal(ax.n, c.cn.yb); assert.equal(ax['3n'], c.c3.yb); }
+      n++; }
+  }
+  // the built-in project, steel case: +10.78 top, −9.04 bottom of steel (per 1000 kip-ft)
+  const P0 = projects()[0][1], m0 = GA.secModel(P0, secResult(P0, 0, 0, 'pos'), 'steel');
+  assert.equal(m0.segs[0].fb.toFixed(2), '10.78'); assert.equal(m0.segs[0].fa.toFixed(2), '-9.04');
+  assert.ok(n >= 36, 'cases ' + n);
+});
+
 test('gfxa: Loads & LLDF graphic: lane lines, wheels at the lever-rule values, every girder and region', () => {
   let n = 0;
   for (const [name, P] of projects()) { const R = W.SBDUiLoads.calc(P, 0); if (R.errors && R.errors.length) { console.log('       loads:', name, R.errors[0]); continue; }

@@ -2,10 +2,11 @@
    Drawings-tab format (window.SBDGfxA). Classic script. Display and export only: every graphic is drawn from the results the tab's own
    tables show (the tab passes them in); nothing is recomputed. The one derived quantity is stated where it is drawn: the stress diagram of
    the Section properties tab is per 1000 kip-ft of unit moment (f = M (y − ȳ) / I with the I and ȳ of the table).
-   Needs ui/graphics.js (SBDGraphics), shared/dxf.js, engine/drawings.js (SBDDrawings.model, for the plates, supports and cross-frames).
+   Needs ui/graphics.js (SBDGraphics), ui/vizkit.js (SBDVizKit, the Section properties graphic), shared/dxf.js, engine/drawings.js (SBDDrawings.model, for the plates, supports and cross-frames).
 
    Each function takes the element to draw into (slot) and what the tab has:
-     section(slot, { P, R })                        R = the tab's results (index.html calc(): c, s, nr, lf, g)
+     section(slot, { P, R, seg })                   R = the tab's results (index.html calc(): c, s, nr, lf, g). SECC (2026-11-10): the screen graphic is the
+                                                    data-viz style of ui/vizkit.js (SBDVizKit); Download DXF is secGraphic (the line drawing), unchanged
      loads(slot, { P, R, lg, lr })                  R = SBDUiLoads.calc(); lg girder, lr region (the tab's selectors)
      analysis(slot, { P, gi, R })                   R = analyzeGirder() result kept by ui/analysis.js
      flexure(slot, { P, gi, R, sel, onSelect })     R = the Flexure tab's result (rows); sel = the selected row; onSelect(row index)
@@ -69,10 +70,103 @@
     D.text(t, xl - 0.5 * h, H + 6 * h, 1.3 * h, `SECTION PROPERTIES: ${(R.g.label || R.g.id || '').toString().toUpperCase()}, SEGMENT ${seg || 1}`); void ib;
     return { D, title: 'Section and neutral axes, stress diagram', file: 'section-properties', note: `Drawn from the tab's section properties (y up from the bottom of the steel). Stress diagram: a unit moment of 1000 kip-ft on the section the load case acts on, f = M(y − ȳ)/I with the table's I and ȳ (deck stress ÷ n or 3n).` };
   }
+  /* ================= Section properties: the screen graphic (SECC, 2026-11-10: the engineer's mockup option C, built with ui/vizkit.js) =================
+     A filled section (steel, deck, haunch, bars) with a y ruler marking every neutral axis; the selected load case's elastic NA drawn across it and labelled;
+     a segmented control for the load case (the choices and the state of the former selector: S.secCase, kept for the page session); six stat tiles; the
+     stress diagram of the selected case with a gradient through zero at ȳ; chips for the other axes (S.secShow, page session; nothing stored); hover / tap
+     read-out of y and f(y). Every number is one the tab already has (R) or the stress per 1000 kip-ft that secGraphic draws, by the same expression:
+     f = 1000 · 12 (y − ȳ) / I on the case's section, the deck value × 1 / (n or 3n). Download DXF is secGraphic (the CAD line drawing), unchanged. */
+  const SEC_CASES = { steel: { id: 's', btn: 'DC1 · steel', long: 'DC1: steel section' }, '3n': { id: 'c3', btn: 'DC2, DW · long-term 3n', long: 'DC2, DW: long-term composite (3n)' },
+    n: { id: 'cn', btn: 'LL+IM · short-term n', long: 'LL+IM: short-term composite (n)' } };
+  S.secShow = {};
+  function secModel(P, R, cs) {
+    const c = R.c, s = R.s, OW = window.SBDOwners, deck = P.deck, comp = c.comp, d = c.s.d;
+    // the geometry of secGraphic (same haunch rule, deck and bars)
+    const hh = comp ? (OW && R.lf ? OW.haunchInProps(deck.haunch, R.lf) : deck.haunch) : 0, ts = comp ? +deck.ts : 0, be = comp ? +R.g.beff : 0, rb = deck.rebar || {}, H = d + hh + ts;
+    const key = comp && SEC_CASES[cs] ? cs : 'steel', f = key === 'steel' ? 1 : key === '3n' ? 3 * R.nr.n : R.nr.n, sc = key === 'steel' ? c.s : key === '3n' ? c.c3 : c.cn, M = 1000;
+    const ff = y => M * 12 * (y - sc.yb) / sc.I;   // as secGraphic: per 1000 kip-ft, compression +
+    const segs = [{ ya: 0, yb: d, k: 1, mat: 'steel' }]; if (comp && f > 1) segs.push({ ya: d + hh, yb: H, k: 1 / f, mat: 'deck' });
+    segs.forEach(q => { q.fa = ff(q.ya) * q.k; q.fb = ff(q.yb) * q.k; });
+    const bars = comp ? [['top', rb.top, d + hh + ts - (rb.top || {}).c], ['bottom', rb.bot, d + hh + (rb.bot || {}).c]].filter(([, q, y]) => q && q.A > 0 && fin(y)) : [];
+    const axes = [{ key: 'pna', short: 'PNA', tag: 'PNA', name: `Plastic NA (${c.region === 'pos' ? 'positive' : 'negative'} flexure)`, y: c.yp, step: `pl.${c.region}.yp`, dash: '' },
+      ...(comp ? [{ key: 'n', short: 'ENA, n', tag: 'n', name: 'Elastic NA, short-term (n)', y: c.cn.yb, step: 'sec.cn.yb', dash: '7 3' },
+        { key: '3n', short: 'ENA, 3n', tag: '3n', name: 'Elastic NA, long-term (3n)', y: c.c3.yb, step: 'sec.c3.yb', dash: '10 3 2 3' }] : []),
+      { key: 'steel', short: 'ENA, steel', tag: 'steel', name: 'Elastic NA, steel section', y: c.s.yb, step: 'sec.s.yb', dash: '2 2.5' }].filter(a => fin(a.y));
+    return { c, s, comp, d, hh, ts, be, H, key, f, sc, id: SEC_CASES[key].id, ff, segs, bars, axes, C: SEC_CASES[key] };
+  }
+  /* the SVG at width W (px): ruler, section, axes, stress diagram */
+  function secSvg(m, W, show) {
+    const VK = window.SBDVizKit, U = window.SharedUnits, nar = W < 600, s = m.s, H = m.H;
+    const rul = nar ? 40 : 84, gap = nar ? 10 : Math.max(24, Math.min(56, W * 0.03)), SW = nar ? Math.max(130, Math.min(170, W * 0.4)) : Math.max(280, Math.min(400, W * 0.3)), rm = nar ? 2 : 12;
+    const hMax = nar ? 250 : Math.max(280, Math.min(360, W * 0.26)), topM = nar ? 50 : 42, botM = 32, avail = Math.max(60, W - rul - gap - SW - rm);
+    const halfMin = Math.max(s.topB, s.botB) / 2 + (m.comp ? 6 : 3), halfFull = m.comp ? m.be / 2 : halfMin, kH = hMax / H;
+    const half = Math.max(halfMin, Math.min(halfFull, avail / (2 * kH))), k = Math.min(kH, avail / (2 * half)), broken = m.comp && half < m.be / 2 - 1e-6;
+    const Wc = rul + 2 * half * k + gap + SW + rm, ox = Math.max(0, (W - Wc) / 2);
+    const X = x => ox + rul + (x + half) * k, Y = y => topM + (H - y) * k, Hp = Math.ceil(topM + H * k + botM), o = [VK.defs()];
+    const fv = m.segs.flatMap(q => [q.fa, q.fb]), fmin = Math.min(0, ...fv), fmax = Math.max(0, ...fv), span = Math.max(fmax - fmin, 1e-9);
+    const sx = X(half) + gap, lr = nar ? 46 : 60, rr = nar ? 48 : 64, kx = (SW - lr - rr) / span, x0 = sx + lr + (-fmin) * kx;
+    o.push(VK.grad('vk-sgr', Y(H), Y(0), (H - m.sc.yb) / H));
+    // ruler with every neutral axis as a tick
+    const xr = ox + rul - (nar ? 6 : 12);
+    o.push(VK.ruler({ x: xr, Y, y0: 0, y1: H, title: 'y, in', titleDy: nar ? 34 : 24, labels: !nar, ticks: m.axes.map(a => ({ y: a.y, label: a.tag, title: `${a.name}: ${U.fmt(a.y, 3)} in`, sel: a.key === m.key })) }));
+    // the section: deck (broken ends when narrower than b_eff), haunch, steel, bars
+    const p = s, yw0 = p.botT, yw1 = yw0 + p.D, d = m.d, y1 = d + m.hh, y2 = H;
+    if (m.comp) { const zz = (x, sg) => { const ym = (y1 + y2) / 2, a = (y2 - y1) * 0.18; return [[x, y2], [x, ym + a], [x + sg * a * 0.9, ym + a * 0.35], [x - sg * a * 0.9, ym - a * 0.35], [x, ym - a], [x, y1]]; };
+      const dk = broken ? [[-half, y1], [half, y1], ...zz(half, 1).reverse(), [-half, y2], ...zz(-half, -1)] : [[-half, y1], [half, y1], [half, y2], [-half, y2]];
+      o.push(VK.PG(dk.map(([x, y]) => [X(x), Y(y)]), 'dk'));
+      if (m.hh > 0) o.push(VK.PG([[-p.topB / 2, d], [p.topB / 2, d], [p.topB / 2, y1], [-p.topB / 2, y1]].map(([x, y]) => [X(x), Y(y)]), 'hn')); }
+    o.push(VK.PG([[-p.botB / 2, 0], [p.botB / 2, 0], [p.botB / 2, yw0], [p.tw / 2, yw0], [p.tw / 2, yw1], [p.topB / 2, yw1], [p.topB / 2, d], [-p.topB / 2, d], [-p.topB / 2, yw1], [-p.tw / 2, yw1], [-p.tw / 2, yw0], [-p.botB / 2, yw0]].map(([x, y]) => [X(x), Y(y)]), 'stl'));
+    const r = Math.max(1.6, Math.min(3, 0.42 * k));
+    m.bars.forEach(([, , y]) => { for (let x = 4.5; x < half - 2; x += 9) [x, -x].forEach(xx => o.push(`<circle cx="${X(xx).toFixed(2)}" cy="${Y(y).toFixed(2)}" r="${r.toFixed(2)}" class="rb"/>`)); });
+    if (m.comp) o.push(VK.T(X(0), Y(H) - 10, `${VK.sub('b', 'eff')} ${U.fmt(m.be, 2)} in${broken ? ' · deck shown broken' : ''}`, { a: 'middle', cls: 'xs' }), VK.L(X(-half), Y(H) - 6, X(half), Y(H) - 6, 'ext'));
+    // neutral axes: the selected case's ENA strong and labelled; the others only when their chip is on
+    const sel = m.axes.find(a => a.key === m.key), lab = [];
+    m.axes.forEach(a => { if (a === sel || !show[a.key]) return; o.push(VK.L(X(-half), Y(a.y), X(half), Y(a.y), 'naoth', a.dash ? ` stroke-dasharray="${a.dash}"` : '')); lab.push({ py: Y(a.y) + 3.5, a }); });
+    VK.stack(lab, 12).forEach(q => o.push(VK.T(X(half) + 4, q.ty, `${q.a.short} ${U.fmt(q.a.y, 3)}`, { cls: 'xs halo' })));
+    if (sel) { o.push(VK.L(X(-half), Y(sel.y), x0 + fmax * kx + 8, Y(sel.y), 'nasel'));
+      const t = `ȳ = ${U.fmt(sel.y, 3)} in`, w = t.length * 6.6 + 14, px = X(-half) + 6, py = Y(sel.y) - 9;
+      o.push(`<rect x="${px.toFixed(2)}" y="${py.toFixed(2)}" width="${w.toFixed(2)}" height="18" rx="9" class="pill"/>`, VK.T(px + w / 2, py + 13, t, { a: 'middle', cls: 'pillt' })); }
+    // the stress diagram of the selected case
+    o.push(VK.diagram({ segs: m.segs, x0, kx, Y, grad: 'vk-sgr', badges: true, yMin: 0, yMax: H, xmin: sx - 6, xmax: W - 1, fmt: v => sgnF(v) }));
+    o.push(VK.T(sx + SW, Y(H) - 14, 'Compression →', { a: 'end', cls: 'xs cc' }), VK.T(sx, Y(0) + 20, '← Tension', { cls: 'xs tt' }));
+    return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${Math.round(W)} ${Hp}" role="img" aria-label="Section, neutral axes and the stress diagram of ${esc(m.C.long)}">${o.join('')}</svg>`,
+      at: py => { const y = H - (py - topM) / k; if (!(y >= -1e-9 && y <= H + 1e-9)) return null; const q = m.segs.find(g => y >= g.ya - 1e-9 && y <= g.yb + 1e-9);
+        const where = q ? q.mat : y > d && y < d + m.hh ? 'haunch' : 'deck';
+        return [`y = ${U.fmt(y, 2)} in · ${where}`, q ? `f = ${sgnF(m.ff(y) * q.k)} ksi` : where === 'haunch' ? 'haunch: not part of the section' : 'deck: not stressed in this case']; },
+      x0: X(-half), x1: sx + SW, nar };
+  }
+  const sgnF = v => { const t = window.SharedUnits.fmt(Math.abs(v), 2); return /^[0.]+$/.test(t) ? t : (v > 0 ? '+' : '−') + t; };   // the tab's fmt digits, signed (U+2212)
   function section(slot, o) {
-    const cur = o.R.c.comp ? S.secCase : 'steel';
-    const host = block(slot, { id: 'gfx_sec', cases: o.R.c.comp ? [['steel', 'DC1: steel section'], ['3n', 'DC2, DW: long-term (3n)'], ['n', 'LL+IM: short-term (n)']] : null, cur, caseLabel: 'Stress diagram, load case', onCase: v => { S.secCase = v; section(slot, o); } });
-    return GR().mount(host, () => secGraphic(o.P, o.R, cur, o.seg), { key: 'sec' });
+    const VK = window.SBDVizKit, U = window.SharedUnits, Sb = window.SBDSub, sb = t => (Sb ? Sb.html(t) : esc(t));
+    if (!VK) return GR().mount(block(slot, {}), () => secGraphic(o.P, o.R, o.R.c.comp ? S.secCase : 'steel', o.seg), { key: 'sec' });   // without the kit: the line drawing
+    VK.css(); let m;
+    try { m = secModel(o.P, o.R, o.R.c.comp ? S.secCase : 'steel'); } catch (e) { slot.innerHTML = `<div class="alert err">The graphic could not be drawn: ${esc(e.message)}</div>`; return null; }
+    const g = o.R.g || {}, c = m.c, sc = m.sc, wk = (id, t) => `<a class="wk" href="#st-${id}" title="Worked steps">${t || '§'}</a>`, top = m.segs[0].fb, bot = m.segs[0].fa, dk = m.segs[1];
+    const tone = v => (v > 0 ? 'c' : v < 0 ? 't' : ''), go = '<a class="wk" href="#" data-vkgo="secc-wk" title="Worked below the graphic">§</a>';
+    const tl = [{ label: 'ȳ', value: U.fmt(sc.yb, 3), unit: 'in', link: wk(`sec.${m.id}.yb`) }, { label: 'I', value: U.fmtInt(sc.I), unit: 'in⁴', link: wk(`sec.${m.id}.I`) },
+      { label: sb('S_top / S_bot'), value: `${U.fmtInt(sc.St)} / ${U.fmtInt(sc.Sb)}`, unit: 'in³', link: wk(`sec.${m.id}.St`) },
+      { label: 'f top of steel', value: sgnF(top), unit: 'ksi', tone: tone(top), link: go }, { label: 'f bottom of steel', value: sgnF(bot), unit: 'ksi', tone: tone(bot), link: go },
+      dk ? { label: 'f top of deck', value: sgnF(dk.fb), unit: 'ksi', tone: tone(dk.fb), link: go } : { label: 'A', value: U.fmt(sc.A, 2), unit: 'in²', link: wk(`sec.${m.id}.A`) }];
+    const nf3 = v => U.fmt(v, 3), kd = m.key === 'n' ? 'n' : '3n';
+    const wl = (lab, y, q) => `<li>f, ${lab} = 1000 × 12 (${nf3(y)} − ${nf3(sc.yb)}) / ${U.fmtInt(sc.I)}${q.k !== 1 ? ` / ${U.fmt(m.f, 3)}` : ''} = <b>${sgnF(m.ff(y) * q.k)} ksi</b></li>`;
+    const worked = `<ul class="vk-cap" id="secc-wk" style="margin:4px 0 0;padding-left:18px">${wl('top of steel', m.d, m.segs[0])}${wl('bottom of steel', 0, m.segs[0])}${dk ? wl('bottom of deck', dk.ya, dk) + wl('top of deck', dk.yb, dk) : ''}</ul>`;
+    const barT = m.bars.map(([w, q]) => `${U.fmt(q.A, 2)} in² ${w}`).join(', ');
+    const cap = `<p class="vk-cap">${esc(m.C.long)}. <i>f</i> = <i>M</i>(<i>y</i> − ȳ)/<i>I</i>, <i>M</i> = 1000 kip-ft (× 12 in/ft), with ȳ, <i>I</i> of the ${m.key === 'steel' ? 'steel' : m.key === '3n' ? 'long-term 3n' : 'short-term n'} section, A = ${U.fmt(sc.A, 2)} in²${dk ? `; deck ÷ ${kd} = ${U.fmt(m.f, 3)}` : ''}.`
+      + `${m.comp ? ` Bars ${barT || 'none'}; haunch ${U.fmt(m.hh, 2)} in, ${sb('t_s')} ${U.fmt(m.ts, 2)} in,` : ''} d ${nf3(m.d)} in. PNA ${sb('y_p')} = ${nf3(c.yp)} in (${sb('M_p')} = ${U.fmt(c.Mp, 1)} kip-ft, ${c.region === 'pos' ? 'positive' : 'negative'} flexure).</p>${worked}`
+      + `<p class="vk-cap vk-pr">Neutral axes (y from the bottom of the steel): ${m.axes.map(a => `${esc(a.name)} ${nf3(a.y)} in`).join(' · ')}.</p>`;
+    const note = `<p class="vk-note">Stress diagram: a unit moment <i>M</i> = 1000 kip-ft (positive: compression at the top) on the section the selected load case acts on (DC1: steel; DC2, DW: long-term 3n; LL+IM: short-term n), f = <i>M</i>(<i>y</i> − ȳ)/<i>I</i> with the table's <i>I</i> and ȳ; compression + (blue), tension − (orange); deck stress ÷ n or 3n. y is measured up from the bottom of the steel. The haunch is not part of the composite section (it raises the slab), so no stress is drawn in it. Bars are drawn at their depths at a schematic spacing; their areas are the deck input's.${c.region === 'neg' ? ' Negative-flexure region: the same positive unit moment is drawn (as before this change); the signs reverse under a negative moment.' : ''}</p><p class="vk-note">${esc(VK.DXF_NOTE)}</p>`;
+    const chips = VK.chips({ label: 'Also show', items: m.axes.map(a => ({ key: a.key, html: `${esc(a.short)} <small>${nf3(a.y)}</small>`, on: !!S.secShow[a.key], fixed: a.key === m.key, title: a.name })) });
+    slot.innerHTML = `<div class="vk" id="secc"><div class="vk-hd"><h3>Section and neutral axes<small>${esc(g.label || g.id || '')}, segment ${o.seg || 1} · stress per 1000 kip-ft</small></h3><button type="button" data-secdxf title="The CAD line drawing of this section">Download DXF</button></div>`
+      + (m.comp ? VK.seg({ label: 'Load case of the stress diagram', items: Object.keys(SEC_CASES).map(k => [k, esc(SEC_CASES[k].btn)]), cur: m.key }) : '')
+      + VK.tiles(tl) + `<div class="vk-fig"></div><p class="vk-read" aria-live="polite" data-hint="Point at (or tap) the section to read y and f(y)."></p>${chips}${cap}${note}</div>`;
+    const root = slot.querySelector('.vk'), fig = root.querySelector('.vk-fig'), out = root.querySelector('.vk-read');
+    const draw = w => { const W = w > 0 ? w : 900, q = secSvg(m, W, S.secShow); fig.innerHTML = q.svg; root.classList.toggle('vk-narrow', q.nar); root.classList.toggle('vk-t3', W < 860); VK.readout(fig.querySelector('svg'), { at: q.at, x0: q.x0, x1: q.x1, out }); };
+    VK.fit(fig, draw);
+    VK.print(fig, () => { if (fig.clientWidth < 760) draw(760); }, () => draw(fig.clientWidth));   // a phone-width page prints the wide layout
+    VK.wire(slot, { seg: v => { if (!SEC_CASES[v]) return; S.secCase = v; section(slot, o); }, chip: v => { S.secShow[v] = !S.secShow[v]; section(slot, o); } });
+    root.querySelector('[data-secdxf]').addEventListener('click', () => { try { GR().download(secGraphic(o.P, o.R, m.key, o.seg)); } catch (e) { alert('The DXF could not be made: ' + e.message); } });
+    root.querySelectorAll('[data-vkgo]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const t = root.querySelector('#' + a.dataset.vkgo); if (t) { t.scrollIntoView({ block: 'nearest' }); t.style.background = '#FFF7D6'; } }));
+    return { model: m, el: root };
   }
 
   /* ================= Loads & LLDF ================= */
@@ -254,5 +348,5 @@
     return H;
   }
 
-  window.SBDGfxA = { section, loads, analysis, flexure, constr, secGraphic, loadsGraphic };
+  window.SBDGfxA = { section, secModel, loads, analysis, flexure, constr, secGraphic, loadsGraphic };
 })();
