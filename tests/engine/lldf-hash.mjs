@@ -100,6 +100,14 @@ export const ADDED = ['ecc'];
 //   LLSW (2026-11-01): the CIP slab strip width (Art. 4.6.2.3) uses W = the physical edge-to-edge width, not the clear roadway width.
 //   LLDF-D (2026-11-01): type (d) exterior web fatigue moment factor W_e/14 x r_M / 1.2 (Art. 3.6.1.4.3b; was without / 1.2).
 export const CHANGED = [/^slab /, /^d sk/];
+// Text-only edits made on purpose after the move (engineer's decisions); the old text is mapped to the new in the "before" outputs, so
+// every number and every other string is still compared bit for bit:
+//   LLRIG (2026-11-10): the rigid cross-section step note (memberSteps, Eq. C4.6.2.2.2d-1) states what the tool does, the rigid floor
+//   applied to every exterior girder (was "Required only for EXTERIOR beams ... with cross-frames or diaphragms"). No value changes.
+export const TEXT = [
+  ['Required only for EXTERIOR beams of types a/e/k with cross-frames or diaphragms; the exterior DF shall not be less than this. ★ = governing lane count.',
+   'Applied by this tool to every exterior girder, whether or not cross-frames or diaphragms are present (Art. 4.6.2.2.2d; conservative where there are none): the exterior DF is not less than this. ★ = governing lane count.']];
+const retext = v => typeof v === 'string' ? TEXT.reduce((s, [a, b]) => s === a ? b : s, v) : Array.isArray(v) ? v.map(retext) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, retext(x)])) : v;
 const hash = o => crypto.createHash('sha256').update(JSON.stringify(o, (k, v) => ADDED.includes(k) ? undefined : v)).digest('hex');
 
 export function run(rev = BASE_REV) {
@@ -107,7 +115,7 @@ export function run(rev = BASE_REV) {
   const newHtml = fs.readFileSync(path.join(ROOT, 'lldf.html'), 'utf8');
   const A = context(oldHtml, false), B = context(newHtml, true);
   const C = cases(A.__E.SECTIONS, A.__E.boxJest, A.__E.rectJ);
-  const ra = runAll(A, C), rb = runAll(B, C), diffs = [];
+  const ra = runAll(A, C).map(o => o.steps ? { ...o, steps: retext(o.steps) } : o), rb = runAll(B, C), diffs = [];
   let nOut = 0;
   const changed = [], keep = o => !CHANGED.some(re => re.test(o.name));
   ra.forEach((a, i) => { const b = rb[i]; for (const k of Object.keys(a)) { nOut++; if (hash(a[k]) !== hash(b[k])) (keep(a) ? diffs : changed).push(`${a.name}: ${k}`); } });

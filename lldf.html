@@ -2068,7 +2068,7 @@ function memberSteps(p,geo,Kg,skew,md){
     const rig=md.rig, trialTex=rig.trials.map(t=>`n_L{=}${t.n}\\!:\\ g=${f2(t.m)}\\!\\left(\\frac{${t.n}}{${p.Nb}}+\\frac{${f2(rig.Xext)}\\times ${f2(t.sumE)}}{${f1(rig.sumX2)}}\\right)=${f3(t.g)}${t.n===rig.nLoaded?"\\;\\bigstar":""}`).join("\\\\");
     add("Exterior — rigid cross-section (rigid-body rotation) method",
       `\\begin{aligned} R_n&=\\frac{n_L}{N_b}+\\frac{X_{ext}\\sum e}{\\sum x^2}\\\\ ${trialTex}\\\\ g^{ext}_{rigid}&=\\boxed{${f3(rig.g)}}\\end{aligned}`,
-      "C4.6.2.2.2d-1","Required only for EXTERIOR beams of types a/e/k with cross-frames or diaphragms; the exterior DF shall not be less than this. ★ = governing lane count.",
+      "C4.6.2.2.2d-1","Applied by this tool to every exterior girder, whether or not cross-frames or diaphragms are present (Art. 4.6.2.2.2d; conservative where there are none): the exterior DF is not less than this. ★ = governing lane count.",
       [V("N_b","number of beams",p.Nb,""),V("X_{ext}","c.g. → exterior beam",f2(rig.Xext),"ft"),V("\\sum x^2","Σ squared beam distances",f1(rig.sumX2),"ft²")]);
     n3Step(); skewSteps(); fatStep(); govStep(); return S;
   }
@@ -4776,8 +4776,8 @@ function model(){
   /* ---------- 8. References ---------- */
   secs.push({title:"References",subs:[{title:"Codes and references cited",items:[{type:"table",head:["Reference","Provisions used"],rows:[
     ["AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)","Art. 3.6.1.1.1, Table 3.6.1.1.2-1, Art. 3.6.1.3.1, Art. 3.6.1.4.3b, C3.6.1.1.2; Art. 4.6.2.2 (Tables 4.6.2.2.1-1, 4.6.2.2.1-3, C4.6.2.2.1-2, 4.6.2.2.2b-1, 4.6.2.2.2d-1, 4.6.2.2.2e-1, 4.6.2.2.3a-1, 4.6.2.2.3b-1, 4.6.2.2.3c-1; Eqs. 4.6.2.2.1-1, 4.6.2.2.1-2, C4.6.2.2.2d-1); Art. 4.6.2.3, Eqs. 4.6.2.3-1 and 4.6.2.3-2 (equivalent strip, CIP slab); Art. 4.6.3 (refined analysis, referred to only); Table 3.5.1-1 and Eq. 5.4.2.4-1 (w_c and E_c, modular ratio n)"],
-    ["MassDOT LRFD Bridge Manual Part I","§3.5.3 (3.5.3.3–3.5.3.5, Fig. 3.5.3-1; dead-load distribution, pile-cap analogy), §3.8 (3.8.1.3, 3.8.2, Fig. 3.8.1-1; adjacent beam systems); edition: verify"],
-    ["MassDOT LRFD Bridge Manual Part II","Dwg 10.1.5 (deck beam sections); edition: verify"]]}]}]});
+    ["MassDOT LRFD Bridge Manual, Hundredth Anniversary Edition, Part I","§3.5.3 (3.5.3.3–3.5.3.5, Fig. 3.5.3-1; dead-load distribution, pile-cap analogy), §3.8 (3.8.1.3, 3.8.2, Fig. 3.8.1-1; adjacent beam systems)"],
+    ["MassDOT LRFD Bridge Manual, Hundredth Anniversary Edition, Part II","Dwg 10.1.5 (deck beam sections)"]]}]}]});
   var pj=meta("mProject"), st=meta("mStruct"), by=meta("mBy"), dt=meta("mDate"), ck=meta("mChk");
   return {title:"Live Load & Dead Load Distribution — Calculation Report",subtitle:pj||"Untitled",code:"AASHTO LRFD 10th Ed. (2024), Art. 4.6.2.2 · MassDOT Bridge Manual Part I §3.5.3",
     info:[["Project",pj],["Structure No.",st],["Calculated by",by],["Date",dt],["Checked by",ck],["Checked date",""]],
