@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Gusset Plate Rating: MBE 4th Edition (2026) values adopted by the engineer's decisions of 2026-11-10 (regression test, headless Chromium,
-// tests/lib.mjs openPage). Holds the hand-check values of the fix log entries (fixlog/Gusset Plate Rating.md, G4A, G4B, G4C, G4D):
+// tests/lib.mjs openPage). Holds the hand-check values of the fix log entries (fixlog/Gusset Plate Rating.md, G4A, G4B, G4C, G4D, G4E):
 //   (a) φ_c (Whitmore compression) 0.95, φ_bs (block shear) 1.00, φ_s 0.90 for new projects (MBE 4th Ed. 6A.6.3, 6A.4.2.4, 6A.6.12.6);
 //       a project saved with φ_s = 1.0 keeps it and gets the notice; owner RIDOT keeps the LRFD 10th Ed. 6.5.4.2 values (φ_bs 0.80).
 //   (b) rivets φ_sF_uR_1R_2R_3mA_r (Eq. 6A.6.12.5.1-1); bolts φ_s 0.48 / 0.38 F_ub, × 0.80 above 50 in (Eqs. 6A.6.12.6.2-1, -2);
@@ -9,6 +9,7 @@
 //       design load at the operating level only (γ_LL 1.00), legal 1.30 (Table 6A.4.2.2-1). (fix log G4C)
 //   (d) fastener shear and bearing of the design load rated at the operating level only (6A.6.12.2, 6A.6.12.5); filler λ = A_f/A_p
 //       (Eqs. 6A.6.12.5.1-3, 6A.6.12.6.2-3). (fix log G4D)
+//   (e) LFR rivets of unknown origin φF_v = 25.0 ksi (engineer decision M6, 2026-11-10: 30 × 50/60); an entered value is kept. (fix log G4E)
 //   Validation tab: every hand value matches. 0 console errors.
 //   node tests/smoke/gusset-mbe4.mjs
 import path from 'path';
@@ -30,6 +31,7 @@ const VARS = {
   slipLegal: 'P => { P.slip = { on: true, cls: "A" }; P.members.forEach(m => { m.fast.grade = "A325"; m.F.LL.push(m.F.LL[0] * 0.8); }); P.ll.push({ name: "Legal 3S2", kind: "legal", use: "lrfr", gL: 1.45 }); return P; }',
   slipGov: 'P => { P.slip = { on: true, cls: "A" }; P.members.forEach(m => { m.fast.grade = "A325"; m.fast.d = 0.625; }); return P; }',
   heavyDL: 'P => { P.members.forEach(m => { m.F.DC *= 4; m.F.DW *= 4; }); return P; }',
+  m6ovr: 'P => { P.code = { FvR0L: 23.8 }; return P; }',
   filler: 'P => { P.members.forEach(m => { if (m.role === "web") m.fast.tf = 0.375; }); return P; }',
   fillerLoss: 'P => { P.members.forEach(m => { if (m.role === "web") m.fast.tf = 0.375; }); P.plates.loss = { mode: "thk", per: [0, 0.125] }; return P; }',
   fillerArea: 'P => { P.members.forEach(m => { if (m.role === "web") { m.fast.tf = 0.375; m.fast.Af = 9; m.fast.Ap = 6; } }); return P; }',
@@ -82,6 +84,10 @@ ok('(b) A325 1 1/8 in, threads included: L2-U1-FS = 0.80 × 48 × 0.38 × 105 ×
 ok('(b) long riveted joint (L = 51 in): L2-U1-FS = 0.80 × 144 × 33.5 × 0.6013 × 0.75 = 1740.46 kip', () => near(A.r.longRiv.cap['L2-U1-FS|lrfr|+'], 1740.462, 0.01, 'FS'));
 ok('(b) long bolted joint (L = 51 in, A325 7/8 in): L2-U1-FS = 0.80 × 144 × 0.48 × 120 × 0.6013 × 0.80 = 3192.06 kip', () => near(A.r.longBolt.cap['L2-U1-FS|lrfr|+'], 3192.059, 0.01, 'FS'));
 ok('(b) project with a 3rd Ed. rivet value entered: 3rd Ed. form kept (531.09 kip) and warning', () => { near(A.r.riv3.cap['L2-U1-FS|lrfr|+'], 531.086, 0.01, 'FS'); assert.ok(A.r.riv3.warn.some(w => /MBE 3rd Ed\. form/.test(w))); });
+// ---- (e) M6 ----
+ok('(e) LFR L2-U1-FS = 48 × 25.0 × 0.6013 = 721.58 kip (686.95 at 23.8); LFR Inventory RF (721.58 − 1.3 × 174)/(2.17 × 115) = 1.985; governing LFR stays SP3-Y 1.164', () => { near(d.cap['L2-U1-FS|lfr|+'], 721.585, 0.01, 'FS'); near(d.rf['L2-U1-FS|2'], (721.585 - 1.3 * 174) / (2.17 * 115), 5e-4, 'RF'); assert.equal(d.gov[2].id, 'SP3-Y'); near(d.gov[2].RF, 1.1645, 5e-4, 'gov'); });
+ok('(e) filler project LFR Inventory L2-U1-FS = (505.11 − 226.2)/249.55 = 1.118 (1.021 at 23.8)', () => { assert.equal(A.r.filler.gov[2].id, 'L2-U1-FS'); near(A.r.filler.gov[2].RF, 1.1176, 5e-4, 'RF'); });
+ok('(e) a project with 23.8 ksi entered keeps it: L2-U1-FS LFR 686.95 kip', () => near(A.r.m6ovr.cap['L2-U1-FS|lfr|+'], 686.949, 0.01, 'FS'));
 // ---- validation model ----
 ok('validation: D-FS 0.80 × 16 × (0.67 × 60 × 0.6013) × 0.955 = 295.49 kip', () => near(v.cap['D-FS|lrfr|+'], 295.49, 0.02, 'D-FS'));
 ok('validation: D-WB 408.87 kip, D-BS 670.48 kip', () => { near(v.cap['D-WB|lrfr|-'], 408.87, 0.02, 'D-WB'); near(v.cap['D-BS|lrfr|+'], 670.48, 0.02, 'D-BS'); });
