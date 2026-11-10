@@ -20374,3 +20374,14 @@ Cross-tool PR with the Retaining Wall Designer (Phase 8f, HANDOFF.md §4.6 / §4
   - 390 px: no sideways scroll.
   - 0 page errors.
 - **Other copies:** none.
+
+## 2026-11-10 — PR: claude/massdot-edition-pile (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (PDMED) — MassDOT Bridge Manual cited as the Hundredth Anniversary Edition   [text only; no result, saved key or format change]
+- **Engineer (2026-11-10):** every MassDOT LRFD Bridge Manual citation marked "edition: verify" cites the Hundredth Anniversary Edition (reference copy: `structural_references/MassDOT Bridge Manual - Hundredth Edition.pdf`). Other "edition: verify" markers (AISC SCM, FHWA GEC 12) are left as they are.
+- **Where (to re-apply by hand):** `function pileRefs(I)`, IAB branch, first row (anchor `["MassDOT BM", "MassDOT LRFD Bridge Manual`). Used by the References table on screen and in the Report (`add("basis", sub("References", …pileRefs(I)…))`).
+  Before: `["MassDOT BM", "MassDOT LRFD Bridge Manual Part I, §3.10 Integral Abutment Bridges — §3.10.2, §3.10.10, §3.10.11.1–.5, Tables 3.10.11-1 to -4; edition: verify"],`
+  After: `["MassDOT BM", "MassDOT LRFD Bridge Manual, Hundredth Anniversary Edition, Part I, §3.10 Integral Abutment Bridges — §3.10.2, §3.10.10, §3.10.11.1–.5, Tables 3.10.11-1 to -4"],`
+- **Governing provision:** MassDOT LRFD Bridge Manual, Hundredth Anniversary Edition, Part I §3.10 (§3.10.2, §3.10.10, §3.10.11.1–.5, Tables 3.10.11-1 to -4 checked present in the reference copy).
+- **Formulas, factors, units:** none changed; code-reference change is the MassDOT edition only. **Saved data:** none (§5).
+- **Check case:** pile type Integral abutment (IAB), defaults: References row "MassDOT BM" reads "MassDOT LRFD Bridge Manual, Hundredth Anniversary Edition, Part I, §3.10 …" with no "edition: verify"; every value unchanged.
+- **How verified:** check-syntax; pile-library smoke (ALL PASS); project-library does not run this tool (its entry says so). Headless probe origin/main vs branch, default (micropile) and IAB (autosave seeded with pileType "iab"): page text on load, after the Report tab and the whole body text without scripts: numeric token sequences identical (189 / 339 / 4,538 and 73 / 142 / 750); only the reference row differs; console errors: the same one blocked CDN request in main and branch; 390 px: no horizontal scroll.
+- **Other copies:** none. **Open items:** none.
