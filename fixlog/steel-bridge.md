@@ -4664,3 +4664,18 @@ except the duplicated stations removed by fix 1 (listed there) and the Summary's
 - **How verified:** headless Chromium main vs branch digit probe of every tab and the Report (identical); before/after screenshots;
   `node tests/check-syntax.mjs`; steel-bridge smoke tests; phone-layout `sbapp`; project-library.
 - **Other copies:** none.
+
+## 2026-11-10 — DRAFT branch claude/sb-constr-npr-mdcc-draft (NOT APPROVED, no PR) — Constructibility: nonprismatic γ_e / C_b from the M_DCc the check uses (SBCON)
+- **Problem:** with a pour sequence (M_DCc ≠ M_DC1), `bracingC()` built nprC (K = f_max/f_x), C_b,C and the compression flange from
+  1.25M_DC1 + 1.5M_CL, while `location()` checks 1.25M_DCc + 1.5M_CL. γ_e = F_e,S/(K f_S) mixes the two diagrams; near an M_DC1 inflection
+  point K → ∞ and F_nc collapses (skewed 100-130-100 G1 x = 130.00: K 432.5, γ_e 0.130, F_nc 0.91 ksi, GS14 ∞ "NaN" on the Summary).
+- **Where:** `apps/steel-bridge/engine/constructibility.js`, `bracingC`, anchor `C0 = factors(), Mc = env.Mc ||`.
+  - Before: `Mc = env.Mc || xs.map((_, k) => C0.cdc * env.MDC1[k] + C0.ccl * env.MCL[k]);`
+  - After: `Mc = env.Mc || xs.map((_, k) => C0.cdc * (env.MDCc && useDCc(env.MDCc[k]) ? +env.MDCc[k] : env.MDC1[k]) + C0.ccl * env.MCL[k]);`
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.10.8.2.3c (Eqs. 6.10.8.2.3c-1 to -3; γ_e by D6.6 scales the design stresses at the
+  governing section), 6.10.8.2.3b (Eq. 6.10.8.2.3b-1, C_b), 6.10.3.2.1, 6.10.1.6 (Eq. 6.10.1.6-4).
+- **Check case:** skewed project of tests/smoke/steel-bridge-summary.mjs, G1, x = 130.00 ft: K 432.55 → 2.837; γ_e 0.1297 → 19.78;
+  F_e 0.913 → 139.29 ksi; r_t 0.332 → 4.095 in; F_nc 0.91 → 45.58 ksi; AF ∞ → 1; GS14 buckling ∞ → 0.141, yielding ∞ → 0.254.
+  Default project G1 x = 77.00: F_nc 9.84 → 40.00 ksi, Constructibility governing 0.758 → 0.557 (x = 249.99).
+- **Tests needing re-baselining if approved:** tests/engine/eta-constr.test.mjs (x = 77 hand values), constructibility.test.mjs case 4 (SB2-A1 keyed C_b).
+- **Other copies:** GirderDetail ("Steel Bridge Design.html") Preliminary sizing T.Mc (lines 6114/6121, 16768/19290) has the same logic; not changed.
