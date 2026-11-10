@@ -20,11 +20,18 @@ test('Deck placement factors × the owner\'s η (not m): Constructibility, overh
   const G = C.factorsOwner(L); near(G.cdc, 1.3125, 1e-12, 'γ_DC'); near(G.ccl, 1.575, 1e-12, 'γ_CL');
   assert.equal(C.factorsOwner({ eta: 1.05, m: 1.2 }).cdc, 1.25);   // a GirderDetail lf (no etaC): as GirderDetail, no η on construction
   assert.equal(W.SBDShear.factorsOwner({ eta: 1.05, etaN: 1, m: 1.2 }).cdc, 1.25); near(W.SBDShear.factorsOwner(L).ccl, 1.575, 1e-12, 'shear γ_CL');
-  // GS14 at x = 77.00 ft: M_c = γ_DC M_DCc + γ_CL M_CL = 1.25(548.020) + 1.50(0) = 685.02 → 1.3125(548.020) = 719.28 kip-ft; f_bu 7.3845 → 7.7537 ksi;
-  // F_nc 9.3877 ksi: 0.7866 → 0.8259
+  // GS14 at x = 77.00 ft: M_c = γ_DC M_DCc + γ_CL M_CL = 1.25(548.020) + 1.50(0) = 685.02 → 1.3125(548.020) = 719.28 kip-ft; f_bu 7.3845 → 7.7537 ksi.
+  // Nonprismatic L_b 68.20–90.20 ft (22.00 ft = 264 in; conservative γ_e bound, 6.10.8.2.3c), top flange 16 × 0.75, steel section S_top = 1113.19 in³.
+  // SBCON (engineer decision 2026-11-10): K, f_s and f_bu,gov all from M_c = 1.25M_DCc + 1.5M_CL (was K from 1.25M_DC1: K 10.253, γ_e 0.7642, F_nc 9.3877,
+  // ratios 0.7866 / 0.8259). Now: K = f_max/f_x = 1.612; F_e,s = π²(29,000)/(264/3.75345)² = 57.856 ksi; f_bu,gov = 1.25(911.7)(12)/1113.19 = 12.285 ksi
+  // (x = 68.20, η 1); γ_e = 57.856/(1.612 · 7.3845) = 4.8604; F_e = 4.8604(12.285) = 59.709 ksi; r_t = (264/π)√(59.709/29,000) = 3.8131 in;
+  // L_p = 1.1(3.8131)√580 = 101.01 in, L_r = π(3.8131)√(29,000/35) = 344.82 in; F_nc,LTB = [1 − 0.3(264 − 101.01)/(344.82 − 101.01)](50) = 39.972 ksi
+  // (< F_nc,FLB 46.739). GS14 = 7.3845/39.972 = 0.1847. With η = 1.05, f_s and f_bu,gov both × 1.05, so γ_e f_bu,gov and F_nc are unchanged:
+  // 7.7537/39.972 = 0.1940.
   const a = W.SBDConstrUI.build({ P: J(proj(false)), g: 0, src: 'project' }), b = W.SBDConstrUI.build({ P: J(proj(true)), g: 0, src: 'project' });
   const ra = a.rows.find(r => /77\.00/.test(r.name)), rb = b.rows.find(r => /77\.00/.test(r.name)), gs = r => r.checks.find(c => c.id === 'GS14' && c.key === 'buckling');
-  near(ra.Mc, 685.02, 0.01, 'M_c AASHTO'); near(rb.Mc, 719.28, 0.01, 'M_c RIDOT'); near(gs(ra).ratio, 0.7866, 1e-4, 'GS14 AASHTO'); near(gs(rb).ratio, 0.8259, 1e-4, 'GS14 RIDOT');
+  near(ra.Mc, 685.02, 0.01, 'M_c AASHTO'); near(rb.Mc, 719.28, 0.01, 'M_c RIDOT'); near(gs(ra).ratio, 0.1847, 1e-4, 'GS14 AASHTO'); near(gs(rb).ratio, 0.1940, 1e-4, 'GS14 RIDOT');
+  near(ra.ltC.npr.K, 1.612, 1e-9, 'K'); near(ra.ltC.npr.ge, 4.8604, 1e-4, 'γ_e'); near(ra.ltC.Fnc, 39.972, 1e-3, 'F_nc AASHTO'); near(rb.ltC.Fnc, 39.972, 1e-3, 'F_nc RIDOT (η cancels)');
   // overhang brackets, exterior: w_u = γ_DC(0.28125) + γ_CL(0.025 + 0.085 + 0.025 + 0.125 + 0.050) = 0.81656 (η 1) → 1.3125(0.28125) + 1.575(0.31) = 0.85739 kip/ft
   const oa = W.SBDConstrUI.build({ P: J(proj(false, true)), g: 0, src: 'project' }).oh, ob = W.SBDConstrUI.build({ P: J(proj(true, true)), g: 0, src: 'project' }).oh;
   near(oa.wu, 0.81656, 1e-5, 'w_u'); near(ob.wu, 0.85739, 1e-5, 'w_u η'); near(ob.Pl, 1.575 * 3 * 36 / 54, 1e-9, 'P_ℓ');
