@@ -4,6 +4,8 @@
 //    f'c = 2.5 ksi: l_c = 0.5 x 1.33 x 60 x 1.000 = 39.90 in (before 40.00 in); f_y = 80 ksi: 1.33 x (0.9 x 80 - 24) x 1.000 = 63.84 in.
 //  - f'c >= 3.0 ksi (AASHTO) and ACI mode are unchanged: #8 at 3.0 ksi = 30.00 in; ACI #8 at 2,500 psi = 4/3 x 30 = 40.00 in.
 //  - #14/#18: the same-size compression lap N/P banner, the Report step and the bar-schedule footnote cite 5.10.8.4.5a.
+//  - CBLC: validation notice, dashboard check and link, all-tabs summary row cite 5.10.8.4.2a (tension), 5.10.8.4.5a (compression);
+//    ASD basis cites the Standard Specifications 17th Edition (2002).
 //  - Tab and Report show the basis note; 0 console errors; no sideways scroll at 390 px.
 //   node tests/smoke/rebar-comp-lap.mjs [--file <Concrete Beam Capacity.html>]
 import path from 'path';
@@ -40,7 +42,18 @@ for (const vw of [1400, 390]) {
   await set(f, { codeSel: 'ACI', fc: '2500' }, 'csplice'); await p.waitForTimeout(300); r = await get(f);
   ok(near(r.lsc, 40), `ACI #8 f'c 2,500 psi: l_sc = ${r.lsc} (40.00, unchanged: ACI 25.5.5.1 one-third)`);
   await set(f, { codeSel: 'AASHTO', barSize: '14', fc: '4000' }, 'csplice'); await p.waitForTimeout(300); r = await get(f);
-  // (the validation notice above the tab still cites 5.10.8.4.2a: open item, not in this change)
+  // CBLC (2026-11-10): the validation notice, dashboard check, its link entry and the all-tabs summary row cite 5.10.8.4.2a for
+  // tension and 5.10.8.4.5a for compression
+  const lc = await f.evaluate(() => { const inp = readInputs(), fa = computeFactors(inp);
+    return { body: document.body.textContent.replace(/\s+/g, ' '), dash: document.getElementById('dashboard').textContent.replace(/\s+/g, ' '),
+      meta: rbrDashMeta('Lap splice permitted (x)', fa, '').ref, all: rebarResultRows(inp, fa, null).filter(x => x.lab === 'Lap splice permitted').map(x => x.ref),
+      ts: rebarResultRows(inp, fa, 'tsplice').filter(x => x.lab === 'Lap splice permitted').map(x => x.ref),
+      cs: rebarResultRows(inp, fa, 'csplice').filter(x => x.lab === 'Lap splice permitted').map(x => x.ref) }; });
+  ok(lc.body.includes('AASHTO 5.10.8.4.2a (tension): bars larger than No. 11 (#14 here) are not lap spliced in tension. AASHTO 5.10.8.4.5a (compression): #14 and #18 bars may be lap spliced in compression only to #11 and smaller bars'), 'validation notice: tension 5.10.8.4.2a, compression 5.10.8.4.5a');
+  ok(lc.dash.includes('Lap splice permitted (5.10.8.4.2a tension, 5.10.8.4.5a compression)'), 'dashboard check cites both articles');
+  ok(lc.meta === 'AASHTO 5.10.8.4.2a (tension), 5.10.8.4.5a (compression)', 'dashboard link entry: ' + lc.meta);
+  ok(lc.all.length === 1 && lc.all[0] === 'AASHTO 5.10.8.4.2a (tension), 5.10.8.4.5a (compression)', 'all-tabs summary row: ' + lc.all.join());
+  ok(lc.ts.join() === 'AASHTO 5.10.8.4.2a' && lc.cs.join() === 'AASHTO 5.10.8.4.5a', 'per-tab rows unchanged: tension 5.10.8.4.2a, compression 5.10.8.4.5a');
   ok(r.text.includes('Lap splice of #14 to #14 NOT permitted (AASHTO 5.10.8.4.5a). In compression, #14 and #18 bars may be lap spliced only to #11 and smaller bars') && !r.text.includes('NOT permitted (AASHTO 5.10.8.4.2a)'), '#14 compression banner cites 5.10.8.4.5a');
   ok(r.rbr.includes('"id":"lapOK","label":"Lap splice of #14 to #14 permitted"') && r.rbr.includes('5.10.8.4.5a (#14 and #18 lap spliced in compression only to #11 and smaller)'), 'Report: compression N/P step cites 5.10.8.4.5a');
   await set(f, {}, 'batch'); await p.waitForTimeout(300); r = await get(f);
@@ -50,6 +63,11 @@ for (const vw of [1400, 390]) {
   const sw = await f.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   const sw2 = await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   ok(sw <= 0 && sw2 <= 0, `no sideways page scroll (frame ${sw}, page ${sw2})`);
+  if (vw === 1400) { // CBLC: ASD tab basis cites the 17th Edition (2002)
+    const af = await (await p.$('#suite-frame-asd')).contentFrame();
+    const refs = await af.evaluate(() => JSON.stringify(ASD_REFS));
+    ok(refs.includes('AASHTO Standard Specifications for Highway Bridges, 17th Edition (2002) — Art. 8.15') && !refs.includes('the tool’s code notes refer'), 'ASD basis: 17th Edition (2002)');
+  }
   ok(errs.length === 0, 'console errors: ' + errs.length + (errs.length ? ' ' + errs.slice(0, 2).join(' | ') : ''));
   await b.close();
 }
