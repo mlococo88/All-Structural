@@ -562,7 +562,7 @@
     }
     if (on('sum')) secs.unshift({ id: 'sum', ...summary(B, X, built) });
     const girder = B.girder;
-    return { title: 'Steel Bridge Design', subtitle: `Calculation report: girder ${gName(girder)}${p.name ? ', ' + p.name : ''}`, code: `${ED}; MBE (load rating). ${X.detail === 'all' ? 'Every station worked.' : 'Governing location of each check worked.'}`,
+    return { title: 'Steel Bridge Design', subtitle: `Calculation report: girder ${gName(girder)}${p.name ? ', ' + p.name : ''}`, code: `${ED}; MBE 4th Ed. (2026) (load rating). ${X.detail === 'all' ? 'Every station worked.' : 'Governing location of each check worked.'}`,
       info: [['Project No', p.number], ['Computed by', p.designer], ['Date', p.date], ['Project', p.name], ['Checked by', p.checker], ['Owner', window.SBDModel.clientName(P)]],
       head: { left: `${p.name || 'Steel Bridge Design'}${p.number ? ' (' + p.number + ')' : ''}\nGirder ${gName(girder)}`, right: `Computed by: ${p.designer || '—'}  Date: ${p.date || '—'}\nChecked by: ${p.checker || '—'}`, foot: `Steel Bridge Design, ${ED}` },
       sections: secs, gov: X.gov };
@@ -605,7 +605,7 @@
       tbl(['Module', 'Check', 'Location', 'Ratio / RF', 'Status'], (G.rows || []).map(q => q.rf != null
         ? [q.mod, q.check, q.loc, { t: `RF ${isFinite(q.rf) ? f(q.rf, 2) : '—'}`, n: true, cls: !isFinite(q.rf) ? '' : q.rf < 1 - 1e-9 ? 'ng' : q.rf < 1.1 ? 'hi' : 'ok' }, isFinite(q.rf) ? (q.rf >= 1 - 1e-9 ? 'OK' : 'RF < 1') : '—']
         : { cells: [q.mod, q.check, q.loc, R3(q.r), q.status === 'warn' ? 'Warning' : okT(q.r)], cls: q.r > 1 + 1e-9 ? 'gov' : '' }), { wide: true })]));
-    return { title: 'Steel Bridge Design', subtitle: `Calculation report: every girder (governing ratios)${p.name ? ', ' + p.name : ''}`, code: `${ED}; MBE (load rating). Governing ratio of each check group, every girder; each value is worked in that girder's own report.`,
+    return { title: 'Steel Bridge Design', subtitle: `Calculation report: every girder (governing ratios)${p.name ? ', ' + p.name : ''}`, code: `${ED}; MBE 4th Ed. (2026) (load rating). Governing ratio of each check group, every girder; each value is worked in that girder's own report.`,
       info: [['Project No', p.number], ['Computed by', p.designer], ['Date', p.date], ['Project', p.name], ['Checked by', p.checker], ['Owner', window.SBDModel.clientName(P)]],
       head: { left: `${p.name || 'Steel Bridge Design'}${p.number ? ' (' + p.number + ')' : ''}\nEvery girder`, right: `Computed by: ${p.designer || '—'}  Date: ${p.date || '—'}\nChecked by: ${p.checker || '—'}`, foot: `Steel Bridge Design, ${ED}` },
       sections: [{ id: 'all', title: 'Summary of every girder', subs }, { id: 'per', title: 'Governing checks of each girder', subs: per }], top, low, ctl: C };

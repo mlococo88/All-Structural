@@ -3122,7 +3122,7 @@ qualified engineer before it is relied upon. Nothing in this program relieves th
 Allowable Stress method at the Inventory level. It implements:</p>
 <ul>
 <li><b>MassDOT Bridge Manual, Part I, Chapter 7, §7.2.7</b> — Special Instructions for Load Ratings of Stone Masonry Arches, including<ul class="arNLu"><li>the modeling requirements of §7.2.7.2B,</li><li>the dead load provisions of §7.2.7.3B and §7.2.7.4B,</li><li>the lateral earth pressure of §7.2.7.5B,</li><li>the influence line requirements of §7.2.7.7B,</li><li>live load positioning per §7.2.7.8B,</li><li>the eccentricity and kern provisions of §7.2.7.9B and §7.2.7.10B,</li><li>the allowable stress direction of §7.2.7.11B,</li><li>and the iterative rating procedure of §7.2.7.12 and Figure 7.2.7-1.</li></ul></li>
-<li><b>AASHTO Manual for Bridge Evaluation, Art. 6A.9.1</b> — unreinforced masonry arches evaluated by the
+<li><b>AASHTO Manual for Bridge Evaluation, 4th Edition (2026), Art. 6A.9.1</b> — unreinforced masonry arches evaluated by the
 Allowable Stress method, and <b>Art. 6B.5.2.6</b> for allowable compressive stresses in masonry.</li>
 <li><b>AASHTO Standard Specifications, Art. 6.4</b> — distribution of wheel loads through fill, and
 <b>Art. 3.8.2.3</b> — impact as a function of fill depth.</li>
@@ -3133,7 +3133,7 @@ internal direct-stiffness solver generating the influence coefficients and dead 
 <h3>1.2 What this app does NOT do</h3>
 <p>This list is intended to be exhaustive, not illustrative. Each exclusion states what the user must do instead.</p>
 <ul>
-<li><b>No Operating level rating.</b> MBE Art. 6A.9.1 gives no Operating allowable stress for unreinforced
+<li><b>No Operating level rating.</b> MBE Art. 6B.5.2.6 (by Art. 6A.9.1.3) gives no Operating allowable stress for unreinforced
 masonry, so none is computed. EV2 and EV3 are rated at the Inventory stress level and reported at both levels
 per §7.2.7.11B, which is a reporting convention and not an Operating capacity check.</li>
 <li><b>No posting analysis.</b> When a legal vehicle rates below 1.0 the program says so but does not compute a
@@ -3951,9 +3951,9 @@ and cars the tonnage is the actual vehicle weight and is the meaningful figure.<
 <ol>
 <li>Massachusetts Department of Transportation, <i>LRFD Bridge Manual, Part I</i>, Chapter 7 — Load Rating,
 §7.2.7 Special Instructions for Load Ratings of Stone Masonry Arches, including Figure 7.2.7-1.</li>
-<li>AASHTO, <i>Manual for Bridge Evaluation</i>, Art. 6A.9.1 — evaluation of unreinforced masonry arches by the
+<li>AASHTO, <i>Manual for Bridge Evaluation</i>, 4th Edition (2026), Art. 6A.9.1 — evaluation of unreinforced masonry arches by the
 Allowable Stress method.</li>
-<li>AASHTO, <i>Manual for Bridge Evaluation</i>, Art. 6B.5.2.6 — allowable stresses in masonry; Art. 6B.7 — posting.</li>
+<li>AASHTO, <i>Manual for Bridge Evaluation</i>, 4th Edition (2026), Art. 6B.5.2.6 — allowable stresses in masonry (Inventory level only; Table 6B.5.2.6-1); Art. 6B.7 — posting.</li>
 <li>AASHTO, <i>Standard Specifications for Highway Bridges</i>, Art. 6.4 — distribution of wheel loads through
 fill; Art. 3.8.2.3 — impact by depth of fill; Art. 3.24.3 — slab distribution for shallow fill.</li>
 <li>Boothby, T. E., <i>Load Rating of Masonry Arch Bridges</i>, Journal of Bridge Engineering — elastic frame
@@ -7865,10 +7865,10 @@ function validate(p,M,results){
 
   // permanent N/A items — honest check states (§8, §4)
   add("na","Operating level rating",
-    R.arNL("AASHTO MBE Art. 6A.9.1 evaluates unreinforced masonry arches at the Inventory level only; no Operating "+   /* ARNL */
+    R.arNL("AASHTO MBE Art. 6A.9.1 evaluates unreinforced masonry arches by allowable stress and Art. 6B.5.2.6 gives masonry allowables at the Inventory level only; no Operating "+   /* ARNL */
     "allowable stress is given for masonry.",[
       ["EV2/EV3","are rated at the Inventory stress level and reported at "+
-    "both levels per §7.2.7.11B — that reporting convention is not an Operating capacity check."]]),"MBE 6A.9.1");
+    "both levels per §7.2.7.11B — that reporting convention is not an Operating capacity check."]]),"MBE 6A.9.1.3, 6B.5.2.6");
   /* SLD (S-2, 2026-11-07): the friction check replaces the old "not a rating check" N/A row. Advisory: it never
      changes a rating factor; a D/C over 1 is flagged for the engineer. */
   {
@@ -13899,8 +13899,8 @@ function drawReportFigures(rh,p){
 const ARCH_REFS=[
   ["MassDOT BM Pt. I","MassDOT LRFD Bridge Manual, Hundredth Anniversary Edition, Part I, Ch. 7 Load Rating: §7.2.7 Special Instructions for Load Ratings of "+
     "Stone Masonry Arches (§7.2.7.2B–§7.2.7.12, Fig. 7.2.7-1); §7.2.4.1B rating vehicles; §7.2.4.6B impact."],
-  ["AASHTO MBE","Manual for Bridge Evaluation: Art. 6A.9.1 (masonry arches, Allowable Stress, Inventory level only); "+
-    "Art. 6B.5.2.6 (allowable stress in masonry); Art. 6B.7 (posting). Edition: verify."],
+  ["AASHTO MBE","Manual for Bridge Evaluation, 4th Edition (2026): Art. 6A.9.1 (masonry arches, Allowable Stress); "+
+    "Art. 6B.5.2.6 (allowable stress in masonry, Inventory level only; Table 6B.5.2.6-1); Art. 6B.7 (posting)."],
   ["AASHTO Std. Spec.","Standard Specifications for Highway Bridges: Art. 6.4, 6.4.1, 6.4.2 (wheel loads through fill); "+
     "Art. 3.8.2.3 (impact by depth of fill); Art. 3.24.3, 3.24.3.2, 3.24.10 and 3.30 (shallow-fill distribution width, "+
     "tire contact); Art. 3.6.3 and 3.12.1 (lanes, reduction in load intensity, side-by-side trucks). Edition: verify "+
@@ -14375,7 +14375,7 @@ function arxAfter(secs,cardKey){
   secs.push({title:"Certification",subs:[{title:"Signatures",items:[].concat(un?[{type:"note",warn:true,text:"Not signed: this package has blank "+[!by?"computed by":"",!ck?"checked by":""].filter(Boolean).join(" and ")+" fields. Complete the title block before issuing."}]:[],
     [{type:"table",head:["","Name","","Date"],rows:[["Computed by",by||"",'Date',v("tbDate")],["Signature","","",""],["Checked by",ck||"","Date",v("tbChkDate")],["Signature","","",""],["Seal","","",""]]},
      {type:"note",text:"The engineer of record is responsible for the inputs, the assumptions, the interpretation of the governing codes and the resulting decision. This program is an engineering aid and its output must be reviewed before it is relied upon. Produced with Stone Arch LR "+BUILD_ID+"."},
-     {type:"note",text:"This calculation was produced with Stone Arch LR by Mario Lococo. The program is an engineering aid, not a substitute for engineering judgment. The engineer of record is responsible for the inputs, the assumptions, the interpretation of the governing codes, and the design. Results are Inventory level only; AASHTO MBE Art. 6A.9.1 provides no Operating allowable stress for unreinforced masonry. Independent verification of the frame analysis is recommended before the rating is issued."}])}]});
+     {type:"note",text:"This calculation was produced with Stone Arch LR by Mario Lococo. The program is an engineering aid, not a substitute for engineering judgment. The engineer of record is responsible for the inputs, the assumptions, the interpretation of the governing codes, and the design. Results are Inventory level only; AASHTO MBE Art. 6B.5.2.6 (by Art. 6A.9.1.3) provides no Operating allowable stress for unreinforced masonry. Independent verification of the frame analysis is recommended before the rating is issued."}])}]});
 }
 /* the report bar's Include boxes: the retired dialog's choices (rptSel) */
 function arxControls(){

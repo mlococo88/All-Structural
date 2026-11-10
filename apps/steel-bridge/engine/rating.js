@@ -19,13 +19,13 @@
    The flange lateral bending f_ℓ of the design check is kept in the rating as a constant (the design check's value): M_u + f_ℓS_x/3,
    f_bu + f_ℓ/3, and f_f + f_ℓ/2 at Service II.
 
-   Code: AASHTO Manual for Bridge Evaluation (MBE), Section 6A. ST-Girder does not state the MBE edition; this engine cites the 3rd Ed.
-   (2018), whose article and equation numbers used here (6A.4.2.1, Tables 6A.4.2.2-1, 6A.4.2.3-1, 6A.4.2.4-1, 6A.6.4.2.2) are those of
-   the 2nd Ed. too. Resistances: AASHTO LRFD 10th Ed. (2024). φ_f = φ_v = 1.0 (6.5.4.2).
+   Code: AASHTO Manual for Bridge Evaluation (MBE), 4th Edition (2026), Section 6A (engineer decision 2026-11-10; until then the 3rd Ed.,
+   2018). The article, table and equation numbers used here (6A.4.2.1, Eqs. 6A.4.2.1-1 to -4, Tables 6A.4.2.2-1, 6A.4.2.3-1, 6A.4.2.4-1,
+   6A.6.4.2.2) were checked in the 4th Ed. on 2026-11-10. Resistances: AASHTO LRFD 10th Ed. (2024). φ_f = φ_v = 1.0 (6.5.4.2).
    Units: moments kip-ft, shears kip, stresses ksi (the stress of each component positive when it acts as the live load does). */
 (function () {
   'use strict';
-  const MBE = 'AASHTO MBE 3rd Ed.', ED = 'AASHTO LRFD 10th Ed.';
+  const MBE = 'AASHTO MBE 4th Ed. (2026)', ED = 'AASHTO LRFD 10th Ed.';
   const St = () => window.SharedSteps;
   const n2 = x => St().n(x, 2), n3 = x => St().n(x, 3), g1 = x => St().g(x, 1);
   const NONE = Infinity;   // no live-load effect: no rating (shown as —)
@@ -85,7 +85,7 @@
       w.add({ id: k, label: `${lab} rating factor, ${q.lim}`, sym: `RF_{${k === 'inv' ? 'inv' : 'op'}}`,
         eq: `\\frac{${sv ? 'f_{R}' : 'C'} - \\gamma_{${sv ? 'D' : 'DC'}}${q.DCsym || 'DC'} - \\gamma_{${sv ? 'D' : 'DW'}}${q.DWsym || 'DW'}${Ft}}{\\gamma_{LL}${q.LLsym || '(LL + IM)'}}`,
         sub: q.LL > 1e-6 ? `\\frac{${nf(q.C)} - ${n2(g.dc)}(${nf(q.DC)}) - ${n2(g.dw)}(${nf(q.DW)})${Fs}}{${n2(gl)}(${nf(q.LL)})}` : '',
-        value: isFinite(q[k]) ? q[k] : 'no live-load effect', unit: '', d: 3, ref: `${MBE} Eq. 6A.4.2.1-1, Table 6A.4.2.2-1${sv ? ', Art. 6A.6.4.2.2 (Eq. 6A.6.4.2.2-1)' : ''}` });
+        value: isFinite(q[k]) ? q[k] : 'no live-load effect', unit: '', d: 3, ref: `${MBE} Eq. 6A.4.2.1-1, Table 6A.4.2.2-1${sv ? ', Art. 6A.6.4.2.2 (Eq. 6A.4.2.1-4)' : ''}` });
     });
     return w.steps;
   }
