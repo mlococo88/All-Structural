@@ -2906,7 +2906,7 @@ function listTables() {
   3. An abutment with Foundation "None" is left out of the abutment hand-off and the "Export abutments" file with an error entry, rather than sent with footing fields of 0.
 - **Other copies:** none.
 
-## 2026-11-10 — PR: fix/bsl-scour-zero (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — scour El. 0.0 is El. 0.0; only a blank scour El. means the ground line (SCZ; engineer decision 2026-11-10)   [§4: changes results only where a design or check scour El. of exactly 0.0 is entered]
+## 2026-11-10 — PR: fix/bsl-scour-zero (PR #1401: https://github.com/mlococo88/All-Structural/pull/1401) — scour El. 0.0 is El. 0.0; only a blank scour El. means the ground line (SCZ; engineer decision 2026-11-10)   [§4: changes results only where a design or check scour El. of exactly 0.0 is entered]
 - **Problem.** `waterCase` (stream pressure WA, both floods) took `zs = nz(scour) || nz(u.ground)`, so an entered scour El. of 0.0 was replaced by the ground line. `scourDrop` (the unit model's scoured ground for soil-fixed bents and shafts) uses `num()`, which treats 0.0 as a real elevation. For the same input, the stream pressure stopped at the ground while the frame was scoured to El. 0.0. Less conservative for the stream pressure.
 - **Where / before / after:**
   - `waterCase`, anchor `const W = nz(fl === 'c' ? w.wseC : w.wse)`:
