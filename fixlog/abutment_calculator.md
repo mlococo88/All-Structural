@@ -17211,7 +17211,7 @@ Engineer decision 2026-11-10 (geometry). AASHTO LRFD 10th Ed. (2024): 5.6.5 / Fi
   - Every KaTeX line renders on all tabs; 0 console errors; 390 px.
 - **Other copies:** none.
 
-## 2026-11-10 — PR: abut-heel-ev-note (PR #__PR__: https://github.com/mlococo88/All-Structural/pull/__PR__) (ABEV) — Note: soil over the heel taken to the full soil height without deducting the approach slab or the fill on it   [display/text only; no calculation, saved key or format change]
+## 2026-11-10 — PR: abut-heel-ev-note (PR #1397: https://github.com/mlococo88/All-Structural/pull/1397) (ABEV) — Note: soil over the heel taken to the full soil height without deducting the approach slab or the fill on it   [display/text only; no calculation, saved key or format change]
 - **Engineer decision (2026-11-10):** leave as is. The vertical earth load EV of the soil over the heel runs to the full soil height `geom.soilH`, so it overlaps the volume the approach slab (its DC reaction on the abutment) and, since #1396 (ABFL), the fill on the slab (EV, d_sh − t) occupy over the heel. That volume is counted twice: conservative. Closes the "Open item (not changed)" of the ABFL entry.
 - **Verified in the code:** `computeAll`, anchor `/* EV — soil over heel (buoyant below WT) */`: `Wev0=( S.soil.gamma*(g.soilH-hwSoil) + (S.soil.gamma-GAMMA_W)*hwSoil )*g.Lheel*Lab` with no deduction for the slab (`R.ap`) or the fill (`R.ap.REV`). The slab's dead load and the fill go to the abutment separately (load groups APdc / APdw / APev, §1.4a). Only the 3D view stops the backfill under the slab (AB3A, display).
 - **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 3.5.1 (dead load of earth fill, EV), already cited on the block.
