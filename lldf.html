@@ -58,6 +58,11 @@
   #inputPanel .lx-btns{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 2px}
   #inputPanel .lx-grp{margin:2px 0 10px}
   #inputPanel .lx-grp>b{display:block;font:700 11.5px var(--body);color:#34404d}
+  /* HOC (2026-11-10): the Project tab's Hand-offs card */
+  #lxProjXfer .lx-grp{border-top:1px solid #e1e6ec;padding-top:5px}
+  #lxProjXfer .lx-grp>b{display:inline}
+  #lxProjXfer .lx-hoFrom{font-size:11px;color:var(--muted)}
+  #lxProjXfer .lx-hoGrp{margin:10px 0 4px;font:700 10px var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
   #inputPanel .lx-btns .btn:not(.xlink){background:#fff;color:#1f2a37;border-color:#c6c4bd;font-weight:600}
   #inputPanel .lx-btns .btn:not(.xlink):hover{background:#eef2f7}
   #inputPanel #projLabel{color:#1f2a37!important}
@@ -465,20 +470,29 @@ var st=document.createElement('style'); st.textContent=css;
         <button class="btn sm" id="projImport" title="Load a calculation from a JSON file">Import JSON</button>
         <input type="file" id="projFile" accept="application/json,.json" style="display:none" /></div>
       </div>
+      <!-- HOC (2026-11-10, engineer decision: the hand-off card on the Project tab in every tool): "Shared project info and hand-offs" laid out
+           as Receive / Send with the last adopted geometry and the last sends (display only; same buttons, ids and handlers) -->
       <div id="lxProjXfer">
-        <div class="lx-grp"><b>Project info</b><div class="lx-note">Copy the title block from or to the other tools.</div><div class="lx-btns">
-        <button class="btn sm" id="bxProjUse" title="Fill Project, Structure No., Calc. by, Checked and Date from the project info shared by another tool (asks first; never blanks a field)">Use shared project info</button>
-        <button class="btn sm" id="bxProjShare" title="Share this calculation's project info with the other tools">Share project info</button></div></div>
-        <div class="lx-grp"><b>Girder layout</b><div class="lx-note">Spans, spacing, skew and overhangs sent by Bridge Geometry or a design app, or its hand-off file.</div><div class="lx-btns">
+        <div class="lx-note" style="margin-top:0">Nothing changes until you confirm: "Use shared project info" asks first, and a geometry pull or import only raises the prefill banner, which lists what it will overwrite; nothing is applied until you click Prefill there. The adopted geometry source is saved with the calculation and printed under the title block.</div>
+        <div class="lx-hoGrp">Receive from other tools</div>
+        <div class="lx-grp"><b>Shared project info</b> <span class="lx-hoFrom">from any tool</span><div class="lx-btns">
+        <button class="btn sm" id="bxProjUse" title="Fill Project, Structure No., Calc. by, Checked and Date from the project info shared by another tool (asks first; never blanks a field)">Use shared project info</button></div></div>
+        <div class="lx-grp"><b>Girder layout</b> <span class="lx-hoFrom">from Bridge Geometry or a design app</span><div class="lx-note">Spans, spacing, skew and overhangs sent by Bridge Geometry or a design app, or its hand-off file.</div><div class="lx-btns">
         <button class="btn sm" id="bxGeomPull" title="Review the girder layout another tool has sent (spans, spacing, skew, overhangs) and choose whether to apply it">Pull geometry</button>
         <button class="btn sm" id="bxGeomImport" title="Load a geometry hand-off file (bridge-lldf-geometry JSON) exported by Bridge Geometry or a design app">Import hand-off (JSON)</button>
-        <input type="file" id="bxGeomFile" accept="application/json,.json" style="display:none" /></div></div>
-        <div class="lx-grp"><b>Distribution factors</b><div class="lx-note">To the MCT Generator and the prestressed app (or as a file); the padlock sends on every recalculation.</div><div class="lx-btns">
+        <input type="file" id="bxGeomFile" accept="application/json,.json" style="display:none" /></div>
+        <div class="lx-note"><b>Status / last received:</b> <span id="lxHoGeom"></span></div></div>
+        <div class="lx-hoGrp">Send to other tools</div>
+        <div class="lx-grp"><b>Shared project info</b> <span class="lx-hoFrom">to every tool</span><div class="lx-btns">
+        <button class="btn sm" id="bxProjShare" title="Share this calculation's project info with the other tools">Share project info</button></div></div>
+        <div class="lx-grp"><b>Distribution factors</b> <span class="lx-hoFrom">to the MCT Generator, PS-Beam and the other DF receivers</span><div class="lx-note">To the MCT Generator and the prestressed app (or as a file); the padlock sends on every recalculation.</div><div class="lx-btns">
         <button class="btn" id="sendDFBtn" title="Publish the computed distribution factors to shared storage so the MCT Generator and PS-Beam can pull them">⇄ Send DFs to Design Apps</button>
         <button class="btn" id="exportDFBtn" title="Download the DF hand-off (the same data as Send DFs) as a JSON file, for 'Import hand-off (JSON)' in another tool or a calc package">⇩ Export DF hand-off (JSON)</button>
-        <button class="btn" id="openPSBtn" title="Open the prestressed concrete design app (pull the DFs there with 'Pull from LL &amp; DL Distribution')">PS ↗</button></div></div>
-        <div class="lx-grp"><b>Dead load</b><div class="lx-note">The design beam's distributed dead load to the MCT Loads tab.</div><div class="lx-btns">
-        <button class="btn" id="sendDLBtn" title="Publish the selected design beam's distributed dead load (DC1 / DC2 / DW, and pedestrian LL if any) so the MCT Generator's Loads tab can import it as beam UDLs">⇄ Send DL to MCT Loads</button></div></div>
+        <button class="btn" id="openPSBtn" title="Open the prestressed concrete design app (pull the DFs there with 'Pull from LL &amp; DL Distribution')">PS ↗</button></div>
+        <div class="lx-note"><b>Last sent:</b> <span id="lxHoDF"></span></div></div>
+        <div class="lx-grp"><b>Dead load</b> <span class="lx-hoFrom">to the MCT Generator (Loads tab) and PS-Beam</span><div class="lx-note">The design beam's distributed dead load to the MCT Loads tab.</div><div class="lx-btns">
+        <button class="btn" id="sendDLBtn" title="Publish the selected design beam's distributed dead load (DC1 / DC2 / DW, and pedestrian LL if any) so the MCT Generator's Loads tab can import it as beam UDLs">⇄ Send DL to MCT Loads</button></div>
+        <div class="lx-note"><b>Last sent:</b> <span id="lxHoDL"></span></div></div>
       </div>
     </div>
     <div class="titleblock">
@@ -3673,6 +3687,7 @@ function paintGeomPull(){
   b.title=g?('Geometry sent by '+(g.producer||'a design app')+' at '+fmtWhen(g.producedAt)+(_geomNewFlag(g)?' — new data available, not yet adopted here':' — already adopted or dismissed')+'. Click to review it before applying.')
            :'Nothing has been sent on the geometry channel yet. Use "Send to LL & DL" in Bridge Geometry (or a design app).';
   b.style.fontWeight=_geomNewFlag(g)?'700':'';
+  try{ lxHoLines(); }catch(e){}   // HOC
 }
 function pullGeom(){
   if(!window.BridgeXfer){ alert('Hand-off helper is not available in this browser.'); return; }
@@ -3727,6 +3742,21 @@ function paintLinkBtns(){
       ? ('LOCKED — every recalculation republishes automatically and the design apps adopt it immediately. Last sent '+(when||'—')+'. Click the padlock to unlock.')
       : (row[3]+(has?('  ·  last sent '+when):''));
   });
+  try{ lxHoLines(); }catch(e){}   // HOC
+}
+
+/* HOC (2026-11-10): the Hand-offs card's status lines (read only: the adopted geomSource in the saved state, and the channel keys
+   this tool writes, in this browser; nothing stored) */
+function lxHoLines(){
+  var gs=state&&state.geomSource, e=$('lxHoGeom');
+  if(e){ var g=null; try{ g=_geomAvail(); }catch(x){}
+    e.textContent=(gs&&gs.producer?'adopted from '+gs.producer+', '+fmtWhen(gs.producedAt)+(gs.project?' ('+gs.project+')':'')+'.':'nothing adopted yet.')
+      +(g&&_geomNewFlag(g)?' New data from '+(g.producer||'a design app')+', '+fmtWhen(g.producedAt)+', not yet adopted.':''); }
+  [['lxHoDF','lldf'],['lxHoDL','dlLoads']].forEach(function(r){ var el=$(r[0]); if(!el) return; var p=null;
+    try{ p=JSON.parse(localStorage.getItem('bridgeSuite.v1.'+r[1])||'null'); }catch(x){}
+    var mine=p&&p.producedAt&&/^LL & DL/.test(String(p.producer||''));
+    el.textContent=(mine?fmtWhen(p.producedAt)+(p.project?' ('+(typeof p.project==='string'?p.project:(p.project.name||''))+')':'')+', from this browser.':'nothing sent from this browser yet.')
+      +(BLK&&BLK.isLocked(r[1])?' Locked: sends on every recalculation.':''); });
 }
 
 /* Auto-republish, debounced, whenever a locked channel's inputs change. */
@@ -5227,7 +5257,7 @@ c=card(P.project,"Save and open"); move($("lxProjFile"),c);   /* BSS (2026-11-06
 c=card(P.project,"Title block"); move(HOME.querySelector(".titleblock .tb-meta"),c);   /* LDHD: the Project tab (was the Bridge tab's "Project" card) */
 c.appendChild(mk("p","lx-note","Printed on the Report and the calculation sheet."));
 var projCard=c;
-c=card(P.project,"Shared project info and hand-offs"); move($("lxProjXfer"),c);
+c=card(P.project,"Hand-offs"); c.id="lxHoCard"; move($("lxProjXfer"),c);   /* HOC (2026-11-10): was "Shared project info and hand-offs" */
 c=card(P.bridge,"Cross-section type"); move($("bridgeType").closest(".typerow"),c); move(given.querySelector(":scope > .tblctl"),c);
 c=card(P.bridge,"Spans & skew"); [row("nSpans"),$("spanRows"),$("regionRow"),row("skew"),row("skewV")].forEach(function(n){ move(n,c); });
 c.appendChild(mk("div","lx-note llNL",llNL.apply(null,LLASM.skew())));   // LLASM (2026-11-10): the skew and span basis, stated (text only)

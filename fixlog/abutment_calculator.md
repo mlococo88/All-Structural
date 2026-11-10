@@ -16937,6 +16937,42 @@ Limit unchanged from ABPM (t_f ≤ e_pile + 2 in, i.e. h_p ≤ 2 in); comment an
 ### Saved data
 - No key, input or format change; defRev and Input IDs unchanged. A saved `piles.clrTop` stays unused.
 
+## 2026-11-10 — PR: claude/abut-brg-fixed (PR #1382: https://github.com/mlococo88/All-Structural/pull/1382) (ABBF) — Backwall offset e: the bearings stay where they are with e = 0; only the seat behind them narrows   [§4 calculation change, e > 0 only; no saved key or format change]
+
+Engineer decision (2026-11-10), revising ABSH #1373 decision 4: keep the bearings fixed and only narrow the seat. The bearing line is measured from the stem back face as if the backwall were not inset; only the run from the bearing line to the inset backwall's front face shrinks by e.
+
+### ABBF-1. Calculation (`computeAll`)
+- C-1. Before: `const xBrg = xBwFront-g.brgSetback;` After: `const xBrg = (xStemBack-g.tbw)-g.brgSetback;` (same value when e = 0).
+- C-1, inside `if(OFF){…}` before `if(!OFF.apOn) warn("Stem shelf without an approach slab`: `OFF.aBw=g.brgSetback-OFF.e; OFF.cBw=OFF.aBw*12-(+S.bearing.padL||0)/2;` and the input errors (`"err"`): a_bw ≤ 0 ("the bearing line is at or behind the inset backwall's front face"), else c_bw < 0 ("the bearing pad runs into the inset backwall").
+- C-9. Before: `if(endGap>=g.brgSetback*12) warnFor(…,"err");` After: with `R.geo.off`, the same error against `R.geo.off.aBw*12` (a_bw = setback − e); else as before. N_prov unchanged: `seatW*12-endGap` = 12(t_st − t_bw − e) − g_end.
+- C-15. Before: `cFront=(seatW-g.brgSetback)*12-Lin/2, cBack=(R.geo.off? g.brgSetback+g.tbw+R.geo.off.e : g.brgSetback+g.tbw)*12-Lin/2;` After: `cFront=((R.geo.off? g.tst-g.tbw : seatW)-g.brgSetback)*12-Lin/2, cBack=(g.brgSetback+g.tbw)*12-Lin/2;`
+- Owner-check context. Before: `brgFront=seatW-g.brgSetback` After: `brgFront=(R.geo.off? g.tst-g.tbw : seatW)-g.brgSetback`; texts of RIDOT pad.edge and CTDOT brg.front.
+
+### ABBF-2. Display
+- Panel I-1 basis note: "the bearing setback is still measured from the front face of the backwall" removed; "Bearings (engineer decision 2026-11-10)" and "Support length" (link Tab 3 §3.5) added; setback row tooltip (e > 0); `bwOffDerivedHTML`: e_brg = t_bw + setback − t_sb/2, a_bw, c_bw.
+- Tab 1 §1.1 `bwOffWorkHTML`: x_brg = x_stem,back − t_bw − a_brg; a_bw, c_bw worked; assumption "moves e toward the toe" replaced.
+- Tab 3 §3.5: N_prov expression with − e and the N basis note (e > 0). `svgSeatPlan`: shelf strip, pad at the fixed bearing line, c_back to the stem back face, c_bw dimension.
+- Report: Geometry basis note; Loads lever-arm rows x_brg and a_bw / c_bw.
+- Drawings, DXF, 3D, elevations: follow `R.geo.xBrg` (no code change).
+
+### Governing provisions
+Engineer decision 2026-11-10 (geometry). AASHTO LRFD 10th Ed. (2024): 5.6.5 / Fig. 5.6.5-1 (seat A2 edge distances), 4.7.4.4 / C4.7.4.4 (support length), 11.6.3.3, 10.6.3.1, 10.6.3.4 (through the moments). CTDOT BRSDM V2 11.6.8.1CT, RIDOT BDM 11.3.4 (owner checks).
+
+### Check case (default project, t_bw = 2.0 ft, t_st = t_sb = 5.5 ft, slab on t = 0.75 ft, e = 10 in, d_sh = 9 in; columns e = 0 / #1373 / after)
+- x_brg 5.750 / 4.9167 / 5.750 ft; seat 3.500 / 2.6667 / 2.6667 ft; e_brg 0.500 / 1.3333 / 0.500 ft; a_bw 15 / 15 / 5 in; c_bw = 5 − 18/2 = −4.0 in → input error (pad runs into the backwall).
+- N provided 38 / 28 / 28 in. Girder DC M_v 2932.5 / 2507.5 / 2932.5 kip-ft.
+- Stem M_ecc = [1480.5(0.5) + 1.25(−115.0417) − 152.46]/44 = 10.0906 (8.1973 / 38.1304 / 10.0906); M_u 81.087 / 111.020 / 82.980; flexure D/C 0.2164 / 0.2963 / 0.2214.
+- Footing Strength I (0.90 DC, LL off): ΔM_v vs e = 0 = 0.9(145.635 − 98.725) + 0.65(−9.68) = +35.927 kip-ft; e 1.6130 / 1.8598 / 1.6370 ft. Eccentricity D/C 0.3456 / 0.4100 / 0.3508; sliding 1.0041 / 0.9884 / 0.9884; bearing 0.7765 / 0.8366 / 0.7917; toe flexure 0.2812 / 0.3161 / 0.2897.
+- Seat bearing c_front / c_back 18/30 / 8/40 / 18/30 in; q_b/q_R 0.1200 / 0.1353 / 0.1200.
+- Variant setback 1.75 ft: x_brg 5.25, c_bw = 21 − 10 − 9 = 2.0 in, no error.
+
+### How verified
+- e = 0 identical to origin/main (abutment-stem-shelf §1, 10 projects + saved project; abutment-pile-group-parity 14/14). abutment-stem-shelf hand-check values updated (see PR); check-syntax, project-library --tool abutment, abutment-drawings, abutment-elevations, abutment-pile-mat-level, abutment-panel-scroll; 0 console errors; 390 px.
+
+### Decisions (pending engineer review)
+- A pad running into the inset backwall (c_bw < 0) is an input error; no clearance beyond 0 required.
+- N provided keeps g_end from the inset backwall face (girder end to seat front edge): 12(t_st − t_bw − e) − g_end. The girder-end overhang past the pad is not checked (as with e = 0).
+- The girder-end gap error compares g_end with a_bw = setback − e when e > 0.
 ## 2026-11-10 — PR: claude/abutment-elevations-2 (PR #1383: https://github.com/mlococo88/All-Structural/pull/1383) (ABEL2) — bearing height, girder + haunch + deck, pile length for the elevations (display only)
 - **Engineer decision (2026-11-10):** "add those inputs so the full set of elevations shows". This adds the three levels #1374 (ABEL) could not derive.
 - **Where (all in `abutment_calculator.html`):**
