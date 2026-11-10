@@ -4664,3 +4664,61 @@ except the duplicated stations removed by fix 1 (listed there) and the Summary's
 - **How verified:** headless Chromium main vs branch digit probe of every tab and the Report (identical); before/after screenshots;
   `node tests/check-syntax.mjs`; steel-bridge smoke tests; phone-layout `sbapp`; project-library.
 - **Other copies:** none.
+
+## 2026-11-10 — PR: sb-invalid-input (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — invalid inputs are marked and block every result (SBINV)
+- **Problem (QA, engineer decision 2026-11-09: "Invalid input should be highlighted so the user can fix; results should not be displayed"):** with a
+  sidewalk fence load entered and its position left blank, the loads module refused its input (engine/loads.js `xsIn`), but every other tab still
+  ran with zero dead loads and unit LLDF (engine/analysis.js `loadsOf` / `dfOf`: "Nothing entered: loads 0 and factors 1") and showed a full
+  verdict ("FAIL … 32 PASS"); the only sign was a note inside each tab. Unconservative: dead loads and distribution were silently missing.
+- **Where / what (display and gating only; no formula, factor, unit, code reference, key or saved format changed):**
+  - `engine/inputcheck.js` (new, `window.SBDInputCheck`): `collect(P)` → `{ errors: [{ path, msg, src, cell?, host? }], warnings }`, cached by the
+    project text. Sources: `SBDModel.validate` (paths as before; `demandSrc` split per module; list rows of spans, bays and skews in `cell`); the
+    loads module's own input checks (`SBDLoads.compute(fromModel(P, { girder: 0 }))`, each message given its field by `loadsPath`, e.g.
+    "Left sidewalk railing or fence: its position …" → `xs.sidewalks.L.fenceX`; "The bridge is incomplete …" only when the model checks have no
+    error); the analysis settings checks of `analyzeGirder` (IM, IM fatigue, L/…, cracked zones); the stiffener type checks of
+    `SBDStiffeners.transverse` / `bearing` not in the model; the entered cross-frame members, connection, d_min and user forces of
+    `SBDCrossframes.compute`; the entered splice plates of `SBDSplices.compute` (entries a station uses). Engine messages are used verbatim.
+  - `ui/inputcheck.js` (new, `window.SBDInputCheckUI`): `mark` (field `input.bad`/`select.bad` red outline, message beside it in `.alert.err`;
+    list rows `input.sli-in.ic-cell`; table cells: message under the table), `banner`, `blocked`, `dash`, `fieldsOf`, `focus`.
+  - `index.html`: both added to the first `document.write` loader (anchor `SBINV`). `markErrors()` before:
+    `const v = M.validate(P), bad = new Set(v.errors.map(e => e.path)); … b.classList.toggle('has-err', errTabs.has(b.dataset.itab))`; after:
+    `const v = IC().collect(P); icErr = v.errors; ICU().mark(v.errors, icO()); …` with a count in each input tab's `.inDot`. New `gotoErr(e)`
+    (banner link: the input tab, the girder/segment of the field, focus). `drawOut0()` is now the gate: with errors, every output tab shows
+    `ICU().blocked(...)`; the old body is `drawTab()`; `hostFix(t, E)` for a tab that holds an errored field (Calculate off, no results).
+    `autoRun()`: `if (IC().blocked(P)) { $('autoBar').hidden = true; return; }`. `#out` click: `[data-icgo]` → `gotoErr`.
+  - `ui/dash.js` `draw()`: the error list instead of the verdict while errors exist; `init(o)` takes `fix(i)`, `errUi()`.
+  - `ui/handoffs.js` `subSend()`: "Nothing was sent / exported: N inputs need fixing first" while errors exist.
+  - `ui/autodesign.js` `runBar()` / `#ad_run`: Run off with `#ad_blocked` "Auto design cannot run: N inputs need fixing first"; the click refuses too.
+- **Classification of the existing messages (blocking error / warning):**
+  - Blocking: every `errors` entry of `SBDModel.validate`; the loads module input checks (truck gap, added line loads, sidewalk / median /
+    pedestrian, appurtenance w_c, sidewalk fences, wearing surface by thickness, overlays, deck edges, load overrides, incomplete bridge);
+    the analysis settings checks; the stiffener type checks; the entered cross-frame checks; the entered splice plate checks.
+  - Warnings (unchanged, not blocking): model `warnings` (D/t_w > 150, N_b = 3); LLDF range of applicability and the equal-spacing S range
+    note; proportion limits; analysis warnings (loads module message, no dead loads, manual factors, construction LL notes, finishing machine);
+    Auto design warnings; owner-rule notices.
+  - Left in their tab (the module refuses its own results, as before): Custom demand table rows (ui/demands.js `rowsOf`; the table is on the
+    output tab), Constructibility overhang bracket inputs (on the output tab), stiffener plate thinner than the sacrificial thickness (owner
+    rule), the hand-off file sources, derived values (S, d_g, L_b of the cross-frames; splice demands at a station).
+- **Decisions (pending engineer review):**
+  1. New blocking checks: an entered construction live load q_CL < 0 (clOf would take the owner's / 20 psf default) and an entered
+     finishing machine load P_fm < 0 (fmOf would apply none).
+  2. Inputs that live on an output tab (Flexure and Constructibility f_ℓ, Rating φ, the Welds inputs, the Custom demand tables' shape, the
+     demand source choices): that tab is drawn for the fix, with the banner, out of date and its Calculate off; every other tab is blocked.
+  3. Graphics: every output tab is blocked, the Drawings and the 3D view included (they carry dimensions and values); the geometry graphics on
+     the input tabs (Bridge layout plan, Framing & bracing plan) stay, with their own error when their inputs are invalid.
+  4. Custom demand table row errors stay in their tab (see above).
+  5. "Share project info" (names only) and the pulls (receiving) still work; the Substructure Loading send and export are refused.
+  6. Errors clear when the entry is committed (Enter, Tab, leaving the field), as every input of the app; then the open tab re-runs (#1260).
+  7. The Loads input tab's "Calculated / Used" dead-load lines (input panel) stay; with a loads error they say "none (the loads module gives none: …)".
+  8. Entered splice plates with auto-design on are still used by the engine (inputsAt `own`), so they block; the message says to show them with
+     "Entered below". Stiffener types are checked whether the web is stiffened or not, as the model already did.
+- **Governing provision:** none (no calculation changed).
+- **Check case:** default project; Cross-section tab, left sidewalk width 6 ft, railing / fence 0.05 klf, position blank. Before: every tab
+  computed (DC2 without sidewalk and fence, LLDF 1), Summary verdict shown. After: banner "1 input needs fixing before results can be shown —
+  Cross-section › Left fence from deck edge: … (0 < x ≤ 6 ft)", the field outlined, "Cross-section 1", no verdict anywhere. Position 3 ft:
+  results identical to the same three values entered validly in a fresh page.
+- **How verified:** main vs branch probe of every output tab's text, the left column and the built Report (default project and a skewed
+  three-span two-girder project): identical except the Summary's "last run … s"; `tests/smoke/steel-bridge-invalid.mjs` (new);
+  `node tests/check-syntax.mjs`; the steel-bridge smoke tests; phone-layout `sbapp`; project-library `sbapp`; 0 console errors.
+- **Saved data:** no key or format changed; a saved project with an invalid field loads unchanged and shows its errors.
+- **Other copies:** none.

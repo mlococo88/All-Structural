@@ -121,7 +121,7 @@
     Q.plates.forEach((q, i) => {
       if (!q || typeof q !== 'object') return;
       const k = xs.findIndex(x => Math.abs(+q.x - x) < 1e-6); if (k < 0 || (q.g != null && !(+q.g >= 0 && +q.g < nG))) return;   // an entry no station uses: not computed
-      const who = `FS${k + 1} entry${q.g != null ? ` (G${+q.g + 1})` : ''}`, base = `splices.plates.${i}`;
+      const who = `FS${k + 1} entry${q.g != null ? ` (G${+q.g + 1})` : ''}${Q.auto === false ? '' : ' (shown with Plates and bolts "Entered below")'}`, base = `splices.plates.${i}`;
       const has = (o, f) => o && o[f] !== undefined;
       ['top', 'bot'].forEach(fl => { const f = q[fl]; if (!f || typeof f !== 'object') return; const T = fl === 'top' ? 'Top' : 'Bottom';
         ['nl', 'nr'].forEach(z => { if (has(f, z) && !(Number.isInteger(+f[z]) && +f[z] >= 1)) add('splices', `${base}.${fl}.${z}`, `${who}: ${T} flange splice: "${z}" must be a whole number of at least 1.`); });
