@@ -2359,7 +2359,7 @@ function calcAll(inp) {
     Pe_inc = Math.max(0, Pae - Pa_MO);
     // Acts at 0.6H′ from base (Seed & Whitman / ASCE 7 commentary)
     Mo_seis = Pe_inc * (0.6 * Hq);
-    if (inp.basis !== 'AASHTO') warnings.push(`Seismic: ΔPe = ${f(Pe_inc/1000,3)} k/ft acting at 0.6H${Hq > H_ret + 1e-9 ? '′' : (h_p > 0 ? '_ret' : '')} = ${f(0.6*Hq,2)} ft; in the overturning and sliding checks at 0.7ΔP_E (FS ≥ 1.1, Stability Steps 4 and 5) and in bearing and eccentricity at 1.0ΔP_E (Step 6). Verify with geotechnical engineer.`);   // ASM (2026-11-10): was "Add to O.T. check." (the checks include it, RWIB / RW2H1)   // RWE1: ACI branch only (AASHTO: Extreme Event I)
+    if (inp.basis !== 'AASHTO') warnings.push(`Seismic: ΔPe = ${f(Pe_inc/1000,3)} k/ft acting at 0.6H${Hq > H_ret + 1e-9 ? '′' : (h_p > 0 ? '_ret' : '')} = ${f(0.6*Hq,2)} ft; ${inp.fnd && inp.fnd.type === 'pile' ? 'in the pile combinations at 0.7ΔP_E (Piles tab, Pile Step 2)' : 'in the overturning and sliding checks at 0.7ΔP_E (FS ≥ 1.1, Stability Steps 4 and 5) and in bearing and eccentricity at 1.0ΔP_E (Step 6)'}. Verify with geotechnical engineer.`);   // ASM (2026-11-10): was "Add to O.T. check." (the checks include it, RWIB / RW2H1)   // RWE1: ACI branch only (AASHTO: Extreme Event I)
   }
 
   // ── Column / beam loads (per linear foot of wall) ─────────────
@@ -6816,7 +6816,7 @@ function renderFooting(r) {
     h += `<div class="alert info" style="margin:4px 0 8px;">${rwNL('ℹ Footing on piles:', [   // ASM (2026-11-10): RWPL 8d, RW2H3
       ['Rows:', 'a pile row loads the heel when its centre is behind the back face of the stem and the toe when it is in front of the front face; a row under the stem loads neither.'],
       ['One-way shear:', 'at the stem face, with every pile row in front of or behind the face counted in full; the partial count of piles near the critical section is not used (conservative).'],
-      hp.water ? ['Water:', `the heel takes the pile reactions of V − γ<sub>U</sub>U with the uplift on its underside (${r.isAASHTO ? 'γ<sub>WA</sub> = 1.0, without η' : 'γ<sub>U</sub> = 0.9'}); the toe and the punching checks keep the pile reactions of the total vertical load (conservative).`] : null])}</div>`;
+      hp.water ? ['Water:', `the heel takes the pile reactions of V − γ<sub>U</sub>·U with the uplift on its underside (${r.isAASHTO ? 'γ<sub>WA</sub> = 1.0, without η' : 'γ<sub>U</sub> = 0.9'}); the toe and the punching checks keep the pile reactions of the total vertical load (conservative).`] : null])}</div>`;
   } else {
   if (upHs) h += rwUpTabEq(upHs.filter(o => !/^M/.test(o.id)));
   else h += eq('Factored upward bearing (varies linearly along heel)',
