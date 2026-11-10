@@ -2740,7 +2740,12 @@ function buildBend(pg) {
       where: [['M', `${R.legacyBend ? 'largest |M|' : (sign > 0 ? 'largest positive moment' : 'largest negative moment')} in ${spanLab(i)}, ${esc(c.name)}`, f0(Mv), 'ft-lb', tbcLink('anaPeaks', 'Analysis Results tab')], ['S', 'section modulus', f3(R.S), 'in³', tbcLink('dvSect', 'Design Values tab')]],
       result: `f<sub>b</sub> = ${f0(c.fb)} psi` });
   });
-  mkSec(pg, 'bCL', 'Beam stability factor C<sub>L</sub>', body => clBlock(body, c, i, sign));
+  mkSec(pg, 'bCL', 'Beam stability factor C<sub>L</sub>', body => { clBlock(body, c, i, sign);
+    body.appendChild(el('div', 'hint', tbNL('Beam stability basis (NDS 2018 3.3.3):', [   // TBASM (2026-11-10): assumptions stated where they apply
+      ['R<sub>B</sub> ≤ 50', '(3.3.3.7) is enforced for an edge only in a span where that edge is in compression in some combination: the top edge where positive moment occurs, the bottom edge where negative moment occurs (with "same as top edge", either). A moment that is only numerical round-off counts as zero.'],
+      ['l<sub>e</sub>:', 'a single span with uniform load only takes the Table 3.3.3 uniform-load row; a span with point loads, a continuous beam or a cantilever takes the general rule of footnote 1 (not less than the cantilever rows).'],
+      R.isGL ? ['Glulam:', 'F<sub>bE</sub> uses E<sub>y,min</sub> (3.3.3.8); a custom glulam with no E<sub>y,min</sub> entered takes E<sub>x,min</sub> × ' + GL_EYMIN_RATIO.toFixed(4) + ', the lowest E<sub>y,min</sub>/E<sub>x,min</sub> ratio of the built-in Table 5A combinations.'] : null])));
+  });
   if (!sawnOnly()) mkSec(pg, 'bCV', R.isGL ? 'Volume factor C<sub>V</sub> (glulam)' : 'Size factor C<sub>V</sub> (SCL)', body => cvBlock(body, c, i, sign));
   mkSec(pg, 'bCap', 'Adjusted bending design value and check', body => {
     const CL = c.CL;
@@ -2788,6 +2793,10 @@ function buildShear(pg) {
         : 'Point loads within d of a support are included at full value (the NDS 3.4.3.1(b) x/d reduction is not used; it can be ticked on the Loads tab; fix log O4).' });
     calc(body, { title: 'Shear stress', ref: 'NDS 3.4.2, Eq. 3.4-2',
       lines: [T`f_v = \frac{3V}{2A} = \frac{1.5 \times ${f0(c.Vd)}}{${f3(R.A)}} = ${f1(c.fv)}\ \text{psi}`], result: `f<sub>v</sub> = ${f1(c.fv)} psi` });
+    if (R.shearXd) body.appendChild(el('div', 'hint', tbNL('x/d reduction (NDS 2018 3.4.3.1(b)), as applied:', [   // TBASM (2026-11-10)
+      'Only downward point loads within d of a support are reduced, with x measured from the support point (conservative compared with the support face).',
+      'The reduced design shear is used only where it is lower than the shear with the full loads.',
+      'Reactions, bearing, the notched-end check, moments and deflections use the full loads.'])));
   });
   mkSec(pg, 'sCap', 'Adjusted shear design value and check', body => {
     calc(body, { title: 'Adjusted shear design value', ref: 'NDS Table ' + (R.isGL ? '5.3.1' : R.isSCL ? '8.3.1' : '4.3.1') + (isLRFD() ? ', App. N' : ''),
@@ -2808,6 +2817,12 @@ function buildShear(pg) {
         ['', 'f<sub>v,n</sub> ≤ F′<sub>v</sub> C<sub>n</sub> is V ≤ V′<sub>r</sub> = (2/3) F′<sub>v</sub> b d<sub>e</sub> written as a stress on b d<sub>n</sub>', '', '', VFY],
         ...(R.isGL ? [['C_{vr}', 'shear reduction factor at notches (glulam; kept for compression-face notches, conservative)', String(R.Cvr), '', 'NDS 5.3.10 ' + VFY]] : [])],
       result: `Notched-end ratio ${f3(c.r_vn)}` });
+    body.appendChild(el('div', 'hint', tbNL('Notch basis:', [   // TBASM (2026-11-10): TBN1 / O8 decisions as the code applies them
+      'The same notch face and depth are taken at both end supports (one input).',
+      ...(R.notchFace === 'comp' ? ['e not entered is taken as e = d<sub>n</sub>, the largest value (net section; conservative).',
+        'The tension-face depth limit (' + (R.isGL ? 'the lesser of d/10 and 3 in., NDS 2018 5.4.4.1' : 'd/4, NDS 2018 4.4.3.2') + ') is applied to the compression-face notch as well (conservative).',
+        R.isGL ? 'Glulam C<sub>vr</sub> (NDS 2018 5.3.10) is kept on the compression-face check (conservative).' : null] : []),
+      'An interior notch is an input error and is not checked (NDS 2018 4.4.3.1, 5.4.4.1).'])));
   });
   else if (R.hasNotch) mkSec(pg, 'sNotch', 'Notched ends (tension face at the end supports)', body => {
     calc(body, { title: 'Notch factor and shear at the notched end', ref: R.isGL ? 'NDS 3.4.3.2(a), Eq. 3.4-3; C_vr NDS 5.3.10; notch limit NDS 5.4.4.1' : 'NDS 3.4.3.2(a), Eq. 3.4-3; notch limit NDS 4.4.3.2', status: stCls(c.r_vn),
@@ -2818,6 +2833,12 @@ function buildShear(pg) {
       where: [['R', 'largest |reaction| at a notched end support (full reaction, not V at d), ' + esc(c.name), f0(c.Rmax), 'lb', tbcLink('anaReac', 'Analysis Results tab')], ['n', 'notch depth', g4(R.notch), 'in.', 'input'],
         ...(R.isGL ? [['C_{vr}', 'shear reduction factor at notches (glulam)', String(R.Cvr), '', 'NDS 5.3.10 ' + VFY]] : [])],
       result: `Notched-end ratio ${f3(c.r_vn)}` });
+    body.appendChild(el('div', 'hint', tbNL('Notch basis:', [   // TBASM (2026-11-10): TBN1 / O8 decisions as the code applies them
+      'The same notch face and depth are taken at both end supports (one input).',
+      ...(R.notchFace === 'comp' ? ['e not entered is taken as e = d<sub>n</sub>, the largest value (net section; conservative).',
+        'The tension-face depth limit (' + (R.isGL ? 'the lesser of d/10 and 3 in., NDS 2018 5.4.4.1' : 'd/4, NDS 2018 4.4.3.2') + ') is applied to the compression-face notch as well (conservative).',
+        R.isGL ? 'Glulam C<sub>vr</sub> (NDS 2018 5.3.10) is kept on the compression-face check (conservative).' : null] : []),
+      'An interior notch is an input error and is not checked (NDS 2018 4.4.3.1, 5.4.4.1).'])));
   });
   mkSec(pg, 'sCombos', 'Shear ratio by combination', body => {
     body.appendChild(tblEl(['Combination', tfHead(), 'V (lb)', 'x (ft)', 'f<sub>v</sub> (psi)', 'F′<sub>v</sub> (psi)', 'f<sub>v</sub>/F′<sub>v</sub>', ...(R.hasNotch ? ['R notch (lb)', 'f<sub>v,n</sub>/(F′<sub>v</sub>C<sub>n</sub>)'] : []), 'Ratio'],
@@ -2881,7 +2902,12 @@ function buildBearX(pg) {
       B.map(o => ({ cls: o === top ? 'gov' : '', cells: [bearXName(o.e), g4(o.e.lb), f3(o.e.Cb), f1(o.e.Fcp_p), o.k.name, f0(o.e.R), f1(o.e.fcp), { cls: stCls(o.e.r), h: f3(o.e.r) }] })), { left: [0, 4] }));
     body.appendChild(el('div', 'hint', tbNL('Supporting member (fix log TBB1): the beam bears on a softer member (plate, ledger, beam below).', [   // TBNL
       ['Its F<sub>c⊥</sub>', 'is the input value × C<sub>M</sub> (0.67 in wet service, sawn lumber) × C<sub>t</sub> of the beam' + (isLRFD() ? ' × K<sub>F</sub> φ<sub>c</sub>' : '') + '; C<sub>b</sub> = 1.0 (conservative).'],
-      ['Point loads:', 'checked on the beam where a bearing length is entered for the load.'], 'The post, hanger or member that delivers the load is not checked here.'])));
+      ['Supporting member:', 'the beam\'s reaction on the contact area b × l<sub>b</sub>; it is taken as sawn lumber for wet service, so for a glulam support enter its value with this in mind (glulam C<sub>M</sub> for F<sub>c⊥</sub> is lower).'],   // TBASM (2026-11-10)
+      ['Point loads:', 'checked on the beam where a bearing length is entered for the load.'],
+      ['At one location', 'the point loads are added in each combination and bear on the shortest l<sub>b</sub> entered there; a net upward load counts as zero.'],   // TBASM
+      ['Under a point load', 'F′<sub>c⊥</sub> takes C<sub>b</sub> (NDS 2018 3.10.4) when the load is at least 3 in. from both member ends, else C<sub>b</sub> = 1.0' + (R.isGL ? '; glulam uses the compression-face F<sub>c⊥x</sub> (load on the top face).' : '.')],   // TBASM
+      'The bearing ratio of a combination is the largest of the beam at its supports, each supporting member and each point-load bearing.',   // TBASM
+      'The post, hanger or member that delivers the load is not checked here.'])));
   });
 }
 
@@ -2910,8 +2936,8 @@ function buildDefl(pg) {
       result: `Total deflection ratio ${f3(d.r_dTL)} (L/${f0(d.perSpan[d.spanTL].Lref / d.Dtot)})` });
     calc(body, { title: 'IBC Table 1604.3 footnote d quantity (information only, not a check)' + (R.nS > 1 ? ' (' + spanLab(d.spanIBC) + ')' : ''), ref: 'IBC 2018 Table 1604.3 footnote d',
       lines: [T`\Delta_{IBC} = ${g4(d.cIBC)}\,\Delta_D + \Delta_{LL} = ${f3(d.Dibc)}\ \text{in.}`, T`\frac{\Delta_{IBC}}{L/${g4(d.TLdiv)}} = ${f3(d.r_dIBC)}`],
-      where: [['', 'creep component: immediate deflection from ' + (d.cIBC === 1 ? 'D (not dry at installation or in use)' : '0.5D (dry at installation and in use)'), g4(d.cIBC), '', 'IBC 2018 Table 1604.3 footnote d']],
-      result: 'Information only (fix log TBL1, decision pending engineer review): the check above uses Δ<sub>T</sub> = K<sub>cr</sub>Δ<sub>D</sub> + Δ<sub>LL</sub>, which includes the immediate dead-load deflection and is more conservative than this footnote-d quantity.' });
+      where: [['', 'creep component: immediate deflection from ' + (d.cIBC === 1 ? 'D (not dry at installation or in use)' : '0.5D (dry at installation and in use)') + '; this tool takes the member as not dry when Wet service is ticked or K<sub>cr</sub> ≥ 2', g4(d.cIBC), '', 'IBC 2018 Table 1604.3 footnote d']],
+      result: 'Information only (IBC 2018 Table 1604.3 footnote d; fix log TBL1): the check above uses Δ<sub>T</sub> = K<sub>cr</sub>Δ<sub>D</sub> + Δ<sub>LL</sub>, which includes the immediate dead-load deflection and is more conservative than this footnote-d quantity.' });
     body.appendChild(el('div', 'hint', 'The total check uses K<sub>cr</sub>·Δ<sub>D</sub> + Δ<sub>LL</sub> against the total limit (fix log F10, O7: K<sub>cr</sub> applies to dead load only; no sustained live load).'));
   });
   mkSec(pg, 'dfSpans', 'Deflection by span', body => {
@@ -2962,7 +2988,7 @@ function buildRefv(pg) {
     body.appendChild(el('div', 'hint', tbNL('Values in psi.', [['Added', 'in Phase 2 (fix log R3, open item O3).'], ['Size class from the section:', 'Beams and Stringers when d − b > 2 in., else Posts and Timbers.'],   // TBNL
       ['C<sub>F</sub>', '= (12/d)<sup>1/9</sup> for d > 12 in. (NDS 4.3.6.2); C<sub>r</sub> does not apply.'],
       ['Flat use (load on the wide face), Table 4D footnote:', 'Beams and Stringers F<sub>b</sub> × ' + T4D_FLAT_FB['SS'] + ' (SS), ' + T4D_FLAT_FB['No.1'] + ' (No.1), ' + T4D_FLAT_FB['No.2'].toFixed(2) + ' (No.2), and E, E<sub>min</sub> × ' + T4D_FLAT_E['SS'].toFixed(2) + ' (SS), ' + T4D_FLAT_E['No.1'].toFixed(2) + ' (No.1), ' + T4D_FLAT_E['No.2'].toFixed(2) + ' (No.2; fix log TBF1) ' + VFY + '; Posts and Timbers 1.00; Southern Pine timbers take the Beams and Stringers factors (conservative).'],
-      ['Wet service:', 'F<sub>c⊥</sub> × 0.67 only.'], 'Spruce-Pine-Fir timbers, Dense grades and Stud are not built in (Manual values).'])));
+      ['Wet service:', 'F<sub>c⊥</sub> × 0.67 only; applied to the Southern Pine timbers too, whose tabulated F<sub>c⊥</sub> may already be a wet-service value (conservative).'], 'Spruce-Pine-Fir timbers, Dense grades and Stud are not built in (Manual values).'])));
   });
   mkSec(pg, 'rvGL', 'NDS Supplement 2018 Table 5A — structural glued laminated softwood timber (bending about x–x)', body => {
     const rows = Object.keys(GLULAM_5A).map(k => {
@@ -3542,7 +3568,7 @@ function tbrModel() {
         tbrS({ id: 'df.limTL', label: 'Limit (L = ' + (gTL.cant ? 'twice the cantilever length' : 'span length') + ')', sym: '\\frac{L}{n_{TL}}', eq: '', sub: '\\frac{' + f1(gTL.Lref) + '}{' + g4(d.TLdiv) + '}', value: d.TLlim, unit: 'in', d: 3, ref: 'IBC 2018 Table 1604.3' }),
         tbrS({ id: 'df.rTL', label: 'Total deflection check (L/' + f0(gTL.Lref / d.Dtot) + ')', sym: '\\frac{\\Delta_{T}}{L/n_{TL}}', eq: '', sub: '\\frac{' + f3(d.Dtot) + '}{' + f3(d.TLlim) + '}', value: d.r_dTL, unit: '', d: 3, ref: TB_NDS + '3.5.2; IBC 2018 Table 1604.3', ok: d.r_dTL <= 1 })] },
       { title: 'IBC Table 1604.3 footnote d quantity (information only)', ref: 'IBC 2018 Table 1604.3 footnote d', steps: [   // TBL1
-        tbrS({ id: 'df.IBC', label: 'Creep component (immediate deflection from ' + (d.cIBC === 1 ? 'D' : '0.5D') + ') + short-term live/snow deflection' + (R.nS > 1 ? ', ' + spanLab(d.spanIBC) : '') + '; ratio to L/' + g4(d.TLdiv) + ' = ' + f3(d.r_dIBC) + '. Information only: the total check uses K_cr Δ_D + Δ_LL (more conservative).', sym: '\\Delta_{IBC}', eq: g4(d.cIBC) + '\\,\\Delta_{D} + \\Delta_{LL}', sub: '', value: d.Dibc, unit: 'in', d: 3, ref: 'IBC 2018 Table 1604.3 footnote d' })] }];
+        tbrS({ id: 'df.IBC', label: 'Creep component (immediate deflection from ' + (d.cIBC === 1 ? 'D' : '0.5D') + ') + short-term live/snow deflection' + (R.nS > 1 ? ', ' + spanLab(d.spanIBC) : '') + '; ratio to L/' + g4(d.TLdiv) + ' = ' + f3(d.r_dIBC) + '. Information only: the total check uses K_cr Δ_D + Δ_LL (more conservative).', sym: '\\Delta_{IBC}', eq: g4(d.cIBC) + '\\,\\Delta_{D} + \\Delta_{LL}', sub: '', value: d.Dibc, unit: 'in', d: 3, ref: 'IBC 2018 Table 1604.3 footnote d', note: 'The member is taken as not dry at installation or in use (immediate D) when Wet service is ticked or K_cr ≥ 2, else as dry (0.5D).' })] }];   // TBASM
     secs.push({ title: 'Deflection', subs: [{ title: 'Deflection checks (service loads)', items: [tbrTopics(T), { type: 'note', text: 'The deflected shapes are plotted on the Deflection tab[[tab:defl| ↗]].' }] },
       { title: 'Deflection by span', items: [{ type: 'table', wide: true, head: ['Span', 'L for limit (in.)', 'Δ_D (in.)', 'LL case', 'Δ_LL (in.)', 'L/n_LL (in.)', 'Ratio', 'TL case', 'Δ_T (in.)', 'L/n_TL (in.)', 'Ratio'],
         rows: d.perSpan.map(e => [spanLab(e.span) + (e.cant ? ' (cantilever)' : ''), tbrCell(e.Lref, 1), tbrCell(e.dD, 3), e.trName, tbrCell(e.Dtr, 3), tbrCell(e.LLlim, 3), tbrDC(e.r_dLL), e.totName, tbrCell(e.Dtot, 3), tbrCell(e.TLlim, 3), tbrDC(e.r_dTL)]) }] }] });
