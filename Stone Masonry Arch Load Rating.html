@@ -386,6 +386,11 @@ a.wkA{color:var(--blue);text-decoration:none;border-bottom:1px dotted var(--blue
 #saPrjPane #tblk{grid-template-columns:repeat(2,minmax(0,1fr));min-width:0}
 #saPrjPane .bx-pm{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
 #saPrjPane .saHint{font-size:.93rem;color:var(--soft);font-style:italic;margin-top:4px}
+/* HOC (2026-11-10): the Project tab's Hand-offs card */
+#saHo .saHoGrp{margin:8px 0 3px;font-size:.8rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--soft)}
+#saHo .saHoRow{border-top:1px solid #e2e8f0;padding:5px 0 3px}
+#saHo .saHoFrom{font-size:.9rem;color:var(--soft)}
+@media print{#saHo{display:none !important;}}
 @media print{#hdrActs .bx-pm{display:none !important;}}
 @media(max-width:700px){#hdrActs{margin-left:0;justify-content:flex-start;flex:1 1 100%}#hdrProj{flex:1 1 100%;max-width:none}}
 @media(max-width:420px){#saPrjPane #tblk{grid-template-columns:minmax(0,1fr)}}
@@ -526,9 +531,13 @@ a.wkA{color:var(--blue);text-decoration:none;border-bottom:1px dotted var(--blue
     <div><label>Checked date</label><input id="tbChkDate" type="text"></div>
   </div>
   <div class="saHint">Printed on the report cover, running header and footer.</div></div></div>
-  <div class="pnl"><div class="hd"><span>Shared project info</span></div><div class="bd">
-  <div class="bx-pm"><button type="button" id="bx-pm-use" title="Fill the title block from the project info shared by another tool">Use shared project info</button><button type="button" id="bx-pm-share" title="Share the title block with the other tools">Share project info</button></div>
-  <div class="saHint">Copy the title block from or to the other tools.</div></div></div>
+  <!-- HOC (2026-11-10, engineer decision: the hand-off card on the Project tab in every tool): "Shared project info" laid out as Receive / Send (same ids and handler) -->
+  <div class="pnl" id="saHo"><div class="hd"><span>Hand-offs</span></div><div class="bd">
+  <div class="saHint" style="margin-top:0">Nothing changes until you confirm: "Use shared project info" lists the title-block fields it will overwrite and asks first. "Share project info" sends the title block only when you click it.</div>
+  <div class="saHoGrp">Receive from other tools</div>
+  <div class="saHoRow"><b>Shared project info</b> <span class="saHoFrom">from any tool, to the title block</span><div class="bx-pm"><button type="button" id="bx-pm-use" title="Fill the title block from the project info shared by another tool">Use shared project info</button></div></div>
+  <div class="saHoGrp">Send to other tools</div>
+  <div class="saHoRow"><b>Shared project info</b> <span class="saHoFrom">to every tool</span><div class="bx-pm"><button type="button" id="bx-pm-share" title="Share the title block with the other tools">Share project info</button></div></div></div></div>
 </div></div>
 
 <div id="wrap">
