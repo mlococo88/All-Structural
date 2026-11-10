@@ -4690,6 +4690,15 @@ except the duplicated stations removed by fix 1 (listed there) and the Summary's
   = 4.0951 in, L_p = 108.48 in, L_r = 370.32 in, F_nc = [1 − 0.3(185.64 − 108.48)/(370.32 − 108.48)](50) = 45.58 ksi, AF 1.0,
   GS14 buckling (3.302 + 9.38/3)/45.58 = 0.141, yielding (3.302 + 9.38)/50 = 0.254.
   Default project: Constructibility governing 0.758 (x = 77.00, F_nc 9.84) → 0.557 (x = 249.99, unchanged row).
+  Skewed G2 x = 70.00 (top flange): K 599.8 → 1.222, γ_e 0.0200 → 9.797, F_nc 0.16 → 41.91 ksi, ratio ∞ → 0.368 (GS14 yielding).
+  Same project with no skew, G2 x = 200.00: K 148.0 → 1.396, γ_e 0.113 → 11.970, F_nc 0.78 → 42.41 ksi, GS14 6.114 (false FAIL) → 0.112.
+  Prismatic bays (C_b by Eq. 6.10.8.2.3b-1 from the flatter M_DCc envelope): skewed G2 x = 171–188 (segment 170.49–193.00 ft, top flange),
+  1.25M + 1.5M_CL M_max, M_A, M_B, M_C = 1236.2, 1138.1, 974.8, 746.6 (M_DC1) → 1379.1, 1337.0, 1229.7, 1057.6 kip-ft (M_DCc);
+  C_b = 12.5(1236.2)/[2.5(1236.2) + 3(1138.1) + 4(974.8) + 3(746.6)] = 1.222 → 12.5(1379.1)/[2.5(1379.1) + 3(1337.0) + 4(1229.7) + 3(1057.6)]
+  = 1.109; F_nc 46.74 → 43.44 ksi; GS14 yielding at x = 171 0.5597 → 0.5676, largest +0.013 at x = 186 (0.4812 → 0.4942). Default project
+  x = 47–67: C_b 1.198 → 1.103, F_nc 46.74 → 43.80, GS14 at x = 47 0.4320 → 0.4609 (+0.029, the largest increase on the projects probed).
+  Rows changed (any GS14–GS16 ratio): default 184 of 367; skewed G1 136, G2 146 of 337; no skew G1 147, G2 148 of 337. Pour sequence off:
+  0 rows changed on every project.
 - **How verified:** probe of every location (default, skewed, same with no skew; pour sequence on and off) main vs branch; pour sequence
   off: identical. Re-baselined tests/engine/eta-constr.test.mjs (x = 77.00 hand values) and constructibility.test.mjs cases 3 and 4;
   `node tests/check-syntax.mjs`; steel-bridge engine tests; smoke summary, dash, wiring, report, paths, taberrors, deflection.
@@ -4699,5 +4708,7 @@ except the duplicated stations removed by fix 1 (listed there) and the Summary's
 - **Open items:** (1) M_DCc is a per-station envelope; near M_DC1 inflections its sign jumps (skewed G2 x = 70/71/72: +565.8 / −73.8 /
   −488.3 kip-ft), so the opposite-sign pour moment is never checked there. (2) `feCb` takes |M| at the quarter points even where the
   flange is in tension, so C_b can be < 1.0 (0.83–0.90 seen). (3) K = 1 fallback when f_x ≤ 0 (follow-up PR, γ_e passed directly).
+  In-app notes (Constructibility tab, after the M_c note, and Report §Constructibility, "Governing ratio of each span", from `SBDConstr.notes`):
+  C_b and γ_e from the moments checked; the M_DCc envelope (items 1); C_b by Eq. 6.10.8.2.3b-1 can be below 1.0 (item 2); the difference from GirderDetail.
   Decision (pending engineer review): C_b and γ_e from the per-station M_DCc envelope (not one load case); Eq. 6.10.8.2.3b-1 refers
   to the envelope values that compress the flange, which this follows.
