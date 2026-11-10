@@ -5524,7 +5524,7 @@ Frame: Beam Capacity (`suite-frame-capacity`).
 - **Decisions (pending engineer review):** the dashboard check's link still opens the Tension Splice card (one link per check); the dead `tabCSplice()` AASHTO banner was made consistent rather than removed (no deletion of code, minimal diff).
 - **Other copies:** none (the standalone rebar and ASD pages are redirects).
 
-## 2026-11-10 — PR: claude/mbe4-cbc (PR #TBD) — ASD tab: AASHTO MBE cited as the 4th Edition (2026); allowable-stress article numbers corrected   [text only; no result, saved key or format change]
+## 2026-11-10 — PR: claude/mbe4-cbc (PR #1341: https://github.com/mlococo88/All-Structural/pull/1341) — ASD tab: AASHTO MBE cited as the 4th Edition (2026); allowable-stress article numbers corrected   [text only; no result, saved key or format change]
 - **Engineer (2026-11-10):** the tools follow the AASHTO Manual for Bridge Evaluation, 4th Edition (2026) (reference copy: `structural_references/MBE 4th Edition - 2026 - part 1.pdf`). Every MBE citation in the tool was checked against it.
 - **Where (to re-apply by hand), ASD frame (escaped `srcdoc` block, `&quot;` in the file):**
   - `function autoAllow` header comment: `36,000 psi Gr 60 (MBE 6B.6.2.3).` → `36,000 psi Gr 60 (MBE Table 6B.5.2.3-1).`
