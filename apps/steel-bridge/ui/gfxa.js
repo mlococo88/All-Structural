@@ -286,8 +286,13 @@
       G.chart({ D, at: [0, y2], w, hgt, h, cats: rt.map(q => q.id), series: [{ name: 'RATIO', kind: 'bars', color: 5, pts: rt.map((q, i) => [i, q.ratio]) }], limits: [{ y: 1, label: 'RATIO = 1.0' }], fy: v => nf(v, 2), legend: 'below' }); keys(rt, y2); ttl('CHECK RATIOS (ALL CHECKS OF THE LOCATION)', y2);
       return { D, title: `Stress checks at ${r.name}`, file: 'flexure-checks', note: 'Demand and capacity of the checks in the location table (checks in ksi); ratios of every check with 1.0 marked.' };
     }, { key: 'fxb' });
-    // unbraced length (LTB) sketch
-    G.mount(C, () => {
+    // unbraced length (LTB) sketch. DETC (2026-11-10): the screen graphic is the option C style (ui/gfxdet.js SBDGfxDet.ltb); Download DXF is ltbGraphic(r), unchanged
+    if (window.SBDGfxDet && window.SBDVizKit && window.SBDVizKit.detCard) window.SBDGfxDet.ltb(C, { r, dxf: () => ltbGraphic(r) }); else G.mount(C, () => ltbGraphic(r), { key: 'fxc' });
+    return H;
+  }
+  /* the LTB sketch of location row r as the CAD drawing (the Download DXF of the Flexure tab's unbraced-length graphic) */
+  function ltbGraphic(r) {
+    const G = GR(); {
       const lt = r.lt || {}, Lb = r.Lb, sg = r.seg, h = Math.max(Lb || 20, 20) * 12 * 0.025, D = G.newDrawing(h), t = D.layer('ANNO-TEXT', 7), ly = { f: D.layer('GRDR-PLAT', 4), b: D.layer('BRNG', 8), dm: D.layer('DIMS', 7), s: D.layer('SEL', 5), a: D.layer('LTB-LP', 3), c: D.layer('LTB-LR', 30), d: D.layer('LTB-LB', 1) };
       if (!fin(Lb) || !sg) { D.text(t, 0, 0, h, 'UNBRACED LENGTH NOT AVAILABLE FOR THIS LOCATION'); return { D, title: 'Unbraced length', file: 'flexure-ltb' }; }
       const xa = 0, xb = (sg.xb - sg.xa) * 12, xm = (r.x - sg.xa) * 12, tf = h * 0.5;
@@ -301,8 +306,7 @@
       D.text(t, 0, y - 0.3 * h, 0.9 * h, `C_b = ${nf(r.Cb, 3)}; F_nc: FLB ${nf(lt.FLB, 2)} KSI, LTB ${nf(lt.LTB, 2)} KSI; ${regime.toUpperCase()}`);
       D.text(t, 0, tf + 7 * h, 1.3 * h, 'UNBRACED LENGTH OF THE COMPRESSION FLANGE (LTB)');
       return { D, title: 'Unbraced length (LTB) at the selected location', file: 'flexure-ltb', note: 'L_b, C_b, L_p, L_r and F_nc are the values of the location table (worked steps below); the brace points are the Framing & bracing tab\'s.' };
-    }, { key: 'fxc' });
-    return H;
+    }
   }
 
   /* ================= Constructibility ================= */
@@ -348,5 +352,5 @@
     return H;
   }
 
-  window.SBDGfxA = { section, secModel, loads, analysis, flexure, constr, secGraphic, loadsGraphic };
+  window.SBDGfxA = { section, secModel, loads, analysis, flexure, constr, secGraphic, loadsGraphic, ltbGraphic };
 })();
