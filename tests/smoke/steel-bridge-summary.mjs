@@ -128,10 +128,11 @@ async function cellsMatch(p) {
   //   column and the splitter; stacked and fitting at 390 px; links to the input tabs where they are edited and the tabs where they are drawn; printed full width
   const { b, p, errs } = await openPage(FILE, { vw: 1440, vh: 1000, ls: { 'sbd2.ui': JSON.stringify({ otab: 'sum' }) } });
   const lay = () => p.evaluate(() => { const r = e => e.getBoundingClientRect(), a = r(document.getElementById('sum-xs')), c = r(document.getElementById('sum-plan')), bx = [...document.querySelectorAll('#sum-gfx .sum-gbox')].map(r), sv = [...document.querySelectorAll('#sum-gfx .sum-gbox')].map(b => [...b.querySelectorAll('svg')].find(e => getComputedStyle(e).display !== 'none')).map(e => {   // SKP: the plan's SVG inside its scroll box (.fp-sc)
- const q = r(e), vb = e.getAttribute('viewBox').split(/[\s,]+/).map(Number); return { w: q.width, h: q.height, l: q.left, ar: vb[2] / vb[3] }; });
+ const q = r(e), vb = e.getAttribute('viewBox').split(/[\s,]+/).map(Number); return { w: q.width, h: q.height, l: q.left, ar: vb[2] / vb[3], mw: parseFloat(getComputedStyle(e).minWidth) || 0 }; });
     const cap = Math.max(360, Math.min(760, 0.8 * innerHeight));
     return { stacked: c.top >= a.bottom - 1, full: Math.abs(a.width - c.width) < 1 && Math.abs(a.width - r(document.querySelector('#sum-gfx .secBody')).width) < 30,
-      plan: Math.abs(sv[1].w - (bx[1].width - 10)) < 3, xs: sv[0].h <= cap + 1 && (Math.abs(sv[0].w - (bx[0].width - 10)) < 3 || sv[0].h > cap - 2) && Math.abs(sv[0].w / sv[0].h - sv[0].ar) < 0.02 * sv[0].ar,
+      plan: Math.abs(sv[1].w - Math.max(bx[1].width - 10, sv[1].mw)) < 3,   // SKP: the card width, or its legible minimum in a box that scrolls sideways
+ xs: sv[0].h <= cap + 1 && (Math.abs(sv[0].w - (bx[0].width - 10)) < 3 || sv[0].h > cap - 2) && Math.abs(sv[0].w / sv[0].h - sv[0].ar) < 0.02 * sv[0].ar,
       centred: Math.abs((sv[0].l + sv[0].w / 2) - (bx[0].left + bx[0].width / 2)) < 2, sw: document.documentElement.scrollWidth, w: innerWidth, cw: a.width, xw: sv[0].w, xh: sv[0].h }; });
   const ok = (g, m) => assert.ok(g.stacked && g.full && g.plan && g.xs && g.centred && g.sw <= g.w, m + ' ' + JSON.stringify(g));
   try {
