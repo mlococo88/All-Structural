@@ -45,6 +45,10 @@ h3{font-size:13px;margin:8px 0 4px 0}
 .sfdXg{margin:2px 0 8px 0}
 .sfdXg>b{display:block;font-size:11px;margin-bottom:1px}
 .sfdXg .note{margin:1px 0 2px 0}
+#sec-xfer .sfdXg{border-top:1px solid #d5dce5;padding-top:4px}
+#sec-xfer .sfdXg>b{display:inline}
+.sfdHoFrom{font-size:10px;color:#555}
+.sfdHoGrp{margin:8px 0 3px;font-size:10px;font-weight:bold;letter-spacing:.05em;text-transform:uppercase;color:#555}
 @media screen and (max-width:899.98px){#sfdHdrA{justify-content:flex-start}#sfdHdrProj{flex:1 1 100%;max-width:none}}
 /* SFPR (2026-11-03; review E6): printed Report: the last step of a topic does not go to a page alone (the table scroll-box rule
    moved to shared/report.js, RPTW) */
@@ -354,21 +358,25 @@ a.wkA:hover{text-decoration:underline}
 </details>
 
 <details class="sec noprint" id="sec-xfer" open>   <!-- SFHD (2026-11-05): moved here from the page header; same buttons, ids and handlers -->
-<summary>Shared project info and hand-offs</summary>
+<summary>Hand-offs</summary>   <!-- HOC (2026-11-10): "Shared project info and hand-offs" laid out as Receive / Send, with status and last received (display only) -->
 <div class="secbody">
- <div class="sfdXg"><b>Project info</b><div class="note">Copy the title block from or to the other tools.</div>
+ <div class="note">Nothing changes until you confirm: each pull or import first shows what it will change and asks which pedestal; what you apply is recorded with this project (saved with it and printed in the Report).</div>
+ <div class="sfdHoGrp">Receive from other tools</div>
+ <div class="sfdXg"><b>Shared project info</b> <span class="sfdHoFrom">from any tool</span><div class="note">Fills the title block.</div>
  <button id="btnUseProjMeta" title="Fill the title block from project info shared by another tool">Use shared project info</button>
- <button id="btnShareProjMeta" title="Make this title block available to the other tools">Share project info</button>
- </div>
- <div class="sfdXg"><b>Support reactions (Steel Beam Design)</b><div class="note">Unfactored reactions into one pedestal's loads by type.</div>
+ <div class="sfdXg"><b>Support reactions</b> <span class="sfdHoFrom">from Steel Beam Design</span><div class="note">Unfactored reactions into one pedestal's loads by type.</div>
  <button id="btnPullMemberReactions" type="button" onclick="bxPullMemberReactions()" title="Import unfactored support reactions from Steel Beam Design into one pedestal's loads by type (HANDOFF.md, channel memberReactions)">Pull from Steel Beam<span id="bxMrNew" style="display:none;color:#b45309;font-weight:bold"> &#9679; new data available</span></button>
  <button id="btnImportMemberReactions" type="button" onclick="document.getElementById('bxMrFile').click()">Import hand-off (JSON)</button><input type="file" id="bxMrFile" accept=".json,application/json" style="display:none" onchange="bxImportMemberReactions(event)">
- <span id="bxMrSrc" style="font-size:11px;font-style:italic"></span>
+ <div class="note"><b>Status:</b> <span id="bxMrSt"></span> <b>Last received:</b> <span id="bxMrSrc" style="font-size:11px;font-style:italic"></span></div>
  </div>
- <div class="sfdXg"><b>Foundation loads (Abutment / Substructure Loading)</b><div class="note">One factored case into one pedestal's direct factored loads.</div>
+ <div class="sfdXg"><b>Foundation loads</b> <span class="sfdHoFrom">from the abutment calculator or Bridge Substructure Loading</span><div class="note">One factored case into one pedestal's direct factored loads.</div>
  <button id="btnPullFoundationLoads" type="button" onclick="bxPullFoundationLoads()" title="Import one factored foundation-load case (Strength / Extreme Event, top of footing) from the abutment calculator or Bridge Substructure Loading into one pedestal's Direct factored loads (HANDOFF.md, channel foundationLoads)">Pull from Abutment / SubLoads<span id="bxFlNew" style="display:none;color:#b45309;font-weight:bold"> &#9679; new data available</span></button>
  <button id="btnImportFoundationLoads" type="button" onclick="document.getElementById('bxFlFile').click()" title="Import a foundationLoads hand-off JSON file">Import hand-off (JSON)</button><input type="file" id="bxFlFile" accept=".json,application/json" style="display:none" onchange="bxImportFoundationLoads(event)">
- <span id="bxFlSrc" style="font-size:11px;font-style:italic"></span>
+ <div class="note"><b>Status:</b> <span id="bxFlSt"></span> <b>Last received:</b> <span id="bxFlSrc" style="font-size:11px;font-style:italic"></span></div>
+ </div>
+ <div class="sfdHoGrp">Send to other tools</div>
+ <div class="sfdXg"><b>Shared project info</b> <span class="sfdHoFrom">to every tool</span><div class="note">Shares the title block.</div>
+ <button id="btnShareProjMeta" title="Make this title block available to the other tools">Share project info</button>
  </div>
 </div>
 </details>
@@ -10309,7 +10317,9 @@ buildManualTab();
   }
   function refreshBar(){
     var nd=document.getElementById('bxMrNew'); if(nd) nd.style.display=BridgeXfer.isNew(CH,RID)?'inline':'none';
-    var sl=document.getElementById('bxMrSrc'); if(sl) sl.textContent=sourceLine();
+    var sl=document.getElementById('bxMrSrc'); if(sl) sl.textContent=sourceLine()? sourceLine()+'.' : 'none.';
+    // HOC (2026-11-10): the Hand-offs status line (the same isNew as the marker; nothing stored)
+    var st=document.getElementById('bxMrSt'); if(st){ var up=''; try{ up=localStorage.getItem(BridgeXfer.NS+CH+'.updatedAt')||''; }catch(e){} st.textContent=BridgeXfer.isNew(CH,RID)? 'new data available.' : up? 'no new data since the last pull.' : 'nothing available (Steel Beam Design has not sent).'; }
   }
   window.bxPullMemberReactions=function(){
     var r=BridgeXfer.read(CH,SCHEMA,MAXV);
@@ -10564,7 +10574,9 @@ buildManualTab();
   }
   function refreshBar(){
     var nd=document.getElementById('bxFlNew'); if(nd) nd.style.display=BridgeXfer.isNew(CH,RID)?'inline':'none';
-    var sl=document.getElementById('bxFlSrc'); if(sl) sl.textContent=sourceLine();
+    var sl=document.getElementById('bxFlSrc'); if(sl) sl.textContent=sourceLine()? sourceLine()+'.' : 'none.';
+    // HOC (2026-11-10): the Hand-offs status line (the same isNew as the marker; nothing stored)
+    var st=document.getElementById('bxFlSt'); if(st){ var up=''; try{ up=localStorage.getItem(BridgeXfer.NS+CH+'.updatedAt')||''; }catch(e){} st.textContent=BridgeXfer.isNew(CH,RID)? 'new data available.' : up? 'no new data since the last pull.' : 'nothing available (no foundation loads sent yet).'; }
   }
   window.bxPullFoundationLoads=function(){
     var list=candidates();
