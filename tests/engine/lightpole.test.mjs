@@ -252,14 +252,33 @@ test('Breakout group form, the engineer\'s check case (default before arm wind: 
 });
 
 /* ---------- ice on sign panels (engineer, 2026-11-01) ---------- */
-test('Sign ice: t_d at the panel centroid; W_i = 56·0.8·72·t_d/12; F_A,i = q_hi·C_f·(B+2t_d)(s+2t_d) at V_ice', () => {
+test('Sign ice: t_d at the panel centroid; W_i = 56·0.8·π·72·t_d/12; F_A,i = q_hi·C_f·(B+2t_d)(s+2t_d) at V_ice', () => {
   const lp = lpEngine();
   const inp = lpDefaultInp({ mode: 'sign', signPosts: 1, H: 16, poleTaper: false, poleDiaBase: 6.0, poleTwBase: 0.1875, iceBasis: 'map', iceIi: 1, tIce: 0.5 });
   const sw = lp.call('signWind', inp);
   // z_c = 13 ft: t_d = 0.5·(13/33)^0.1 = 0.4555 in
   near(sw.tdP, 0.5 * Math.pow(13 / 33, 0.1), 1e-12, 't_d'); near(sw.tdP, 0.4555, 0.0001, 't_d');
-  near(sw.WiPanel, 56 * 0.8 * 72 * sw.tdP / 12, 1e-9, 'panel ice'); near(sw.WiPanel, 122.4, 0.1, 'panel ice');
+  // ASCE 7-16 Eq. 10.4-2, V_i = π·t_d·A_s × 0.8 (vertical plate); π applied 2026-11-10 (was 56·0.8·72·t_d/12 = 122.4 lb)
+  near(sw.WiPanel, 56 * 0.8 * Math.PI * 72 * sw.tdP / 12, 1e-9, 'panel ice'); near(sw.WiPanel, 384.7, 0.05, 'panel ice');
   near(sw.qhI, 0.00256 * sw.Kzh * 0.85 * 0.85 * 50 * 50, 1e-9, 'q_hi');
   near(sw.F_Ai, sw.qhI * sw.cfAB * (12 + 2 * sw.tdP / 12) * (6 + 2 * sw.tdP / 12), 1e-9, 'F_A,i');
   assert.ok(sw.F_Ai < 0.3 * sw.F_A, 'wind on ice (50 mph) well below the bare wind');
+});
+
+/* ---------- sign panel ice with the π of ASCE 7-16 Eq. 10.4-2 (engineer, 2026-11-10) ---------- */
+test('Sign panel ice, Eq. 10.4-2 with π: sign1 (B 12 × s 6 ft, t 0.5 in map, z_c 13 ft): t_d 0.4555 in, V_i = 0.8·π·0.4555/12·72 = 6.869 ft³, W_i = 56·6.869 = 384.7 lb (was 122.4)', () => {
+  const lp = lpEngine();
+  const inp = lpDefaultInp({ mode: 'sign', signPosts: 1, H: 16, poleTaper: false, poleDiaBase: 6.0, poleTwBase: 0.1875, iceBasis: 'map', iceIi: 1, tIce: 0.5 });
+  const sw = lp.call('signWind', inp);
+  near(sw.As, 72, 1e-9, 'A_s (one side)');
+  const Vi = 0.8 * Math.PI * (sw.tdP / 12) * sw.As;
+  near(Vi, 6.869, 0.0005, 'V_i');
+  near(sw.WiPanel, 56 * Vi, 1e-9, 'W_i = γ V_i');
+  near(sw.WiPanel, 384.67, 0.005, 'W_i');
+  near(sw.WiPanel / (56 * 0.8 * sw.As * sw.tdP / 12), Math.PI, 1e-12, 'ratio to the old 0.8·A_s·t_d form = π');
+  // uniform basis, t_d = t = 0.5 in: 56·0.8·π·72·0.5/12 = 422.2 lb
+  const sw2 = lp.call('signWind', lpDefaultInp({ mode: 'sign', signPosts: 1, H: 16, poleTaper: false, poleDiaBase: 6.0, poleTwBase: 0.1875, iceBasis: 'design', tIce: 0.5 }));
+  near(sw2.WiPanel, 422.2, 0.05, 'W_i (uniform t_d = 0.5 in)');
+  // the wind on the iced panel does not change with the ice weight
+  near(sw.F_Ai, sw.qhI * sw.cfAB * (12 + 2 * sw.tdP / 12) * (6 + 2 * sw.tdP / 12), 1e-9, 'F_A,i unchanged form');
 });

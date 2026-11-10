@@ -1906,8 +1906,8 @@ function signWind(inp){
     caseC={bands, F:Ftot, e:eC, factor:cc.factor, xR};
   }
   // ---- atmospheric ice on the sign (added 2026-11-01, engineer decision; ASCE 7-22 Ch. 10) ----
-  // Panel: flat vertical plate. Ice volume per ASCE 7-16 §10.4.1 (flat plates, Eq. 10.4-2): the area of one side × t_d × 0.8 for a
-  // vertical plate (taken without the factor π printed in Eq. 10.4-2), t_d at the panel centroid height (§10.4.6). Wind on ice (§10.5): the projected panel grows by t_d on every
+  // Panel: flat vertical plate. Ice volume per ASCE 7-16 §10.4.1 (flat plates, Eq. 10.4-2): V_i = π·t_d·A_s, A_s = the area of one
+  // side, × 0.8 for a vertical plate (π applied, engineer 2026-11-10; before: 0.8·A_s·t_d), t_d at the panel centroid height (§10.4.6). Wind on ice (§10.5): the projected panel grows by t_d on every
   // edge, (B + 2t_d)(s + 2t_d), same C_f, at V_ice with the sign K_d and G; Cases B and C keep their eccentricity, scaled by the
   // same factor. Posts: radial ice t_d (§10.4.1, cylinder) on the whole post (weight) and the iced width D + 2t_d for the exposed
   // drag at V_ice.
@@ -1917,7 +1917,7 @@ function signWind(inp){
   const F_Ai=qhI*cfAB*AsI;
   const iceScale = F_A>0 ? F_Ai/F_A : 0;
   if(caseC) caseC.FI=caseC.F*iceScale;
-  const WiPanel=inp.iceDen*0.8*As*tdPft;                   // lb (total panel ice)
+  const WiPanel=inp.iceDen*Math.PI*0.8*As*tdPft;           // lb (total panel ice; V_i = 0.8·π·t_d·A_s, Eq. 10.4-2; π added 2026-11-10)
   let FpostI=0, MpostI=0;
   postStrips.forEach(st=>{ const td=iceTd(inp,lppZg(inp,st.z));
     st.FI=0.00256*Kz(lppZg(inp,st.z),inp.expo)*inp.Kzt*inp.Kd*inp.G*inp.Vice*inp.Vice*cfPost*((postW_in+2*td)/12)*dzp; FpostI+=st.FI; MpostI+=st.FI*st.z; });
@@ -6086,8 +6086,8 @@ function signWindWorkedHTML(sw, inp){
   H+=cfPoleWorkedHTML(inp);   // post drag C_f (used for the exposed post below the panel)
   if(sw.F_Ai!==undefined){
     H+=step(`Ice on the sign ${ref('ASCE 7-16 §10.4.1, §10.4.6, §10.5')}`);
-    H+=`<div class="eq-why lpNL">${lpNL('Ice on the sign:',[['Design ice thickness',`at the panel centroid (z = ${fmt(sw.zc,2)} ft) and at the post mid-height;`],['Panel ice volume','per ASCE 7-16 §10.4.1 for a flat plate (Eq. 10.4-2, A<sub>s</sub> = area of one side, × 0.8 permitted for a vertical plate); the tool takes V<sub>i</sub> = 0.8A<sub>s</sub>t<sub>d</sub>, without the factor π printed in Eq. 10.4-2;'],['Wind','on the iced panel on (B + 2t<sub>d</sub>)(s + 2t<sub>d</sub>) with the same C<sub>f</sub> at V<sub>ice</sub>;'],['Cases B/C','scaled by the same factor;'],['Posts:','radial ice on the whole post and the iced width for the exposed drag.']])}</div>`;   // LPNL
-    H+=g(`t_d = ${fmt(sw.tdP,3)}\\ \\text{in}\\qquad W_{i,panel} = \\gamma_{ice}(0.8)A_s\\,t_d = ${fmt(inp.iceDen,0)}(0.8)(${fmt(sw.As,1)})\\left(\\tfrac{${fmt(sw.tdP,3)}}{12}\\right) = ${fmt(sw.WiPanel,1)}\\ \\text{lb}`);
+    H+=`<div class="eq-why lpNL">${lpNL('Ice on the sign:',[['Design ice thickness',`at the panel centroid (z = ${fmt(sw.zc,2)} ft) and at the post mid-height;`],['Panel ice volume','per ASCE 7-16 §10.4.1 for a flat plate (Eq. 10.4-2, A<sub>s</sub> = area of one side, × 0.8 permitted for a vertical plate); the tool takes V<sub>i</sub> = 0.8πt<sub>d</sub>A<sub>s</sub>, with the factor π of Eq. 10.4-2 applied;'],['Wind','on the iced panel on (B + 2t<sub>d</sub>)(s + 2t<sub>d</sub>) with the same C<sub>f</sub> at V<sub>ice</sub>;'],['Cases B/C','scaled by the same factor;'],['Posts:','radial ice on the whole post and the iced width for the exposed drag.']])}</div>`;   // LPNL
+    H+=g(`t_d = ${fmt(sw.tdP,3)}\\ \\text{in}\\qquad W_{i,panel} = \\gamma_{ice}(0.8)\\,\\pi\\,t_d\\,A_s = ${fmt(inp.iceDen,0)}(0.8)\\,\\pi\\,(${fmt(sw.As,1)})\\left(\\tfrac{${fmt(sw.tdP,3)}}{12}\\right) = ${fmt(sw.WiPanel,1)}\\ \\text{lb}`);
     H+=g(`q_{hi}K_dG = 0.00256(${fmt(sw.Kzh,3)})(${fmt(inp.Kzt,2)})(1.00)(${fmt(inp.Vice,0)})^2(${fmt(inp.KdSign,2)})(${fmt(inp.G,2)}) = ${fmt(sw.qhI,2)}\\ \\text{psf}\\qquad A_{s,i} = (B+2t_d)(s+2t_d) = ${fmt(sw.AsI,2)}\\ \\text{ft}^2`);
     H+=g(`F_{A,i} = q_{hi}K_dG\\,C_f\\,A_{s,i} = ${fmt(sw.qhI,2)}(${fmt(sw.cfAB,3)})(${fmt(sw.AsI,2)}) = ${fmt(sw.F_Ai,0)}\\ \\text{lb}${sw.caseC?`\\qquad F_{C,i} = ${fmt(sw.caseC.FI,0)}\\ \\text{lb}`:''}`);
     H+=g(`W_{i,post} = \\gamma_{ice}\\frac{\\pi[(D/2+t_d)^2-(D/2)^2]}{144}h = ${fmt(sw.WiPost,1)}\\ \\text{lb/post}\\ (t_d = ${fmt(sw.tdPost,3)}\\text{ in})\\qquad F_{post,i} = ${fmt(sw.FpostI,1)}\\ \\text{lb/post}`);

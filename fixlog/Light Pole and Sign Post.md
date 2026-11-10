@@ -2696,3 +2696,26 @@ Engineer's decision 2026-11-10 (the tool's basis is ASCE 7-16). This closes open
   3. §10.5.2 takes C_f from the sign dimensions including ice; the tool keeps the bare-panel C_f.
   4. The other "ASCE 7-22 Ch. 10" citations (scope line, ice inputs, "Ice on signs" flag, t_d step "ASCE 7-22 §10.4.6") are not changed.
 - **Saved data:** none changed. **Other copies:** none.
+
+## 2026-11-10 — PR: lightpole-sign-ice-pi (PR #1331: https://github.com/mlococo88/All-Structural/pull/1331) — sign panel ice volume takes the π of ASCE 7-16 Eq. 10.4-2   [§4 calculation change: sign-panel ice weight and what derives from it; no cable value, saved key or format change]
+
+Engineer's decision 2026-11-10. This closes open item (1) of the entry above.
+- **Provision:** ASCE 7-16 §10.4.1, Eq. 10.4-2: V_i = π t_d A_s; A_s = area of one side of a flat plate; V_i may be multiplied by 0.8 for a vertical plate. Re-read from `structural_references/ASCE 7-16.pdf`, printed p. 70, by decompressing the content streams (the PDF is truncated): the glyph before t_d in Eq. 10.4-2 is the same glyph as in A_s = π r² (Eq. 10.4-3).
+- **Before / After (`Light Pole and Sign Post.html`):**
+  1. `signWind()`, anchor `const WiPanel=`: `const WiPanel=inp.iceDen*0.8*As*tdPft;                   // lb (total panel ice)` → `const WiPanel=inp.iceDen*Math.PI*0.8*As*tdPft;           // lb (total panel ice; V_i = 0.8·π·t_d·A_s, Eq. 10.4-2; π added 2026-11-10)`.
+  2. `signWind()`, the comment above it: `the area of one side × t_d × 0.8 for a` / `// vertical plate (taken without the factor π printed in Eq. 10.4-2), t_d at the panel centroid height (§10.4.6).` → `V_i = π·t_d·A_s, A_s = the area of one` / `// side, × 0.8 for a vertical plate (π applied, engineer 2026-11-10; before: 0.8·A_s·t_d), t_d at the panel centroid height (§10.4.6).`
+  3. `signWindWorkedHTML()` (Loading tab and Report §1), "Panel ice volume" note: `the tool takes V<sub>i</sub> = 0.8A<sub>s</sub>t<sub>d</sub>, without the factor π printed in Eq. 10.4-2;` → `the tool takes V<sub>i</sub> = 0.8πt<sub>d</sub>A<sub>s</sub>, with the factor π of Eq. 10.4-2 applied;`.
+  4. `signWindWorkedHTML()`, the worked step: `W_{i,panel} = \\gamma_{ice}(0.8)A_s\\,t_d = ${fmt(inp.iceDen,0)}(0.8)(${fmt(sw.As,1)})` → `W_{i,panel} = \\gamma_{ice}(0.8)\\,\\pi\\,t_d\\,A_s = ${fmt(inp.iceDen,0)}(0.8)\\,\\pi\\,(${fmt(sw.As,1)})`.
+- **Check case (sign1: default monopost sign, B = 12 ft, s = 6 ft, A_s = 72.0 ft², t = 0.5 in map basis, K_zt = 1, I_i = 1, γ = 56 pcf):** z_c = 13 ft, t_d = 0.5(13/33)^0.10 = 0.4555 in.
+  - Before: V_i = 0.8(72.0)(0.4555/12) = 2.187 ft³; W_i,panel = 56(2.187) = 122.4 lb.
+  - After: V_i = 0.8π(0.4555/12)(72.0) = 6.869 ft³; W_i,panel = 56(6.869) = 384.7 lb (+262.2 lb; the decision memo's 384.6 is 122.4 × π from the rounded 122.4).
+  - Post axial (monopost): 1.2D + 1.0D_i (+1.0W_i) 880.7 → 1,142.9 lb; 0.9D + 1.0D_i + 1.0W_i 704.8 → 967.0 lb; D + 0.7D_i (+0.7W_i) 710.3 → 893.9 lb; 0.6D + 0.7D_i + 0.7W_i 475.8 → 659.3 lb (each + factor × 262.2).
+  - Soil bearing (governing D + 0.7D_i): N 710 → 894 lb, q = N/7.07 ft² = 0.10 → 0.13 ksf (5 % → 6 % of 2.00 ksf).
+  - B₂ in the ice combinations: 1.2D + 1.0D_i + 1.0W_i 1.0276 → 1.0361; 0.9D + 1.0D_i + 1.0W_i 1.0219 → 1.0303 (the governing B₂ 1.022, 1.2D + 1.0W, unchanged).
+  - Anchors, 1.2D + 1.0D_i + 1.0W_i (not governing): P_u 881 → 1,143 lb, B₂M 88,883 → 89,619 lb·in, T_max 3,557 → 3,544 lb, breakout D/C 0.311 → 0.308. Governing anchor, post, shaft and embedment results (wind combinations) unchanged.
+  - Anchorage hand-off (`bridgeSuite.v1.anchorGroup`, format unchanged): the ice combinations carry the new P and B₂·M (e.g. 1.2D + 1.0D_i + 1.0W_i, 0°, Case C: P 880.7 → 1,142.9 lb, Mx 7,406.9 → 7,468.2 lb·ft); inputsHash changes for sign projects, so an earlier Anchorage result shows as stale.
+- **Not changed (listed, other ice on flat parts):** luminaire/fixture ice (`fixtureComponents()`, γ t_d (2A_ice + 4·side·depth), a wrapped prism, not the Eq. 10.4-2 term); arms carry no ice weight (iced wind only); the LRFDLTS engine's panel ice (`apps/light-pole/lts-engine.js` `gravity()`, γ t B s, Owner-specified ice, LRFDLTS Art. 3.7, not ASCE 7-16 Eq. 10.4-2) and its fixture ice (2·EPA·t).
+- **How verified:**
+  - `node tests/lightpole-compare.mjs` (30 cases, exact) vs origin/main: every pole case (results, 363–1,578 cable numbers each, text, drawings) identical; the 11 sign cases differ only in WiPanel, the ice-combination axial, B₂ of the ice combinations, the ice-combination anchor rows and soil bearing, plus the text lines above; 0 console errors. The LRFDLTS sign cases differ in the same IBC-path values (the IBC sign path also runs in that mode; its Table 1806.2 soil-bearing row shows in the LRFDLTS Summary); the LRFDLTS engine's results are unchanged.
+  - `tests/engine/run.mjs lightpole` (44 pass; the sign-ice expectation 122.4 → 384.7, new regression test), `check-syntax`, `phone-layout --tool lp`, `lightpole-anchor-handoff`, `lightpole-signviews` pass. Report §1 shows the π step; 390 px, no horizontal scroll.
+- **Saved data:** none changed. **Other copies:** none. **Cable results:** unchanged (sign mode has no cables; the cable path never reads `signWind()`).
