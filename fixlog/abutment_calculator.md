@@ -16829,3 +16829,58 @@ Engineer request (2026-11-10, paraphrased): add the input "Offset, back face of 
 - **Decisions (pending engineer review):** slab top = top of the backwall (ABSH: shelf + t); no bearing top (no total bearing height), no conventional deck surface, no pile-footing tips (no inputs); front grade only when D_f is in use; the Pile Designer tip El. is not converted; an entered elevation changes the Input ID; approach-slab sheet: marks on the shelf detail, not on section A-A.
 - **How verified:** `tests/smoke/abutment-elevations.mjs` (new), `abutment-drawings` (every project again with El. 52.00: 169 sheet drawings, 0 text overlaps), `abutment-pile-group-parity` 14/14 vs main, `abutment-stem-shelf`, `project-library --tool abutment`, `abutment-panel-scroll`, `dxf-print-sheets --tool ab`, `check-syntax`; 0 console errors; 390 px.
 - **Other copies:** none.
+
+## 2026-11-10 — PR: claude/abutment-pile-mat-level (PR #1375: https://github.com/mlococo88/All-Structural/pull/1375) (ABPM) — Pile punching uses the footing design's bottom mat (c_F, panel I-2); the I-7 clear cover pile top to bottom mat greyed out and unused   [§4 calculation change, pile mode only; no saved key or format change]
+
+Engineer decision (2026-11-10): "Yes, same bottom mat." The pile punching and pile-cap checks use the bottom-mat level of the footing design (I-2 bottom cover c_F, the d of the footing flexure and shear design). Follows #1372 (the pile detail drew the mat at the I-7 clear distance) and ABPB #1158.
+
+### ABPM-1. Punching (`computeAll`, C-13, anchor `ABPM (2026-11-10, engineer decision "Yes, same bottom mat")`)
+Before:
+```js
+    const embP=Math.max(0,+p.embed||0), clrP=Math.max(0,+p.clrTop||0);
+    const hP=g.tf*12-embP;                               // in
+    const deF=hP-clrP-dbF;                               // footing effective depth over the pile heads, in
+    const dvF=Math.max(0.9*deF,0.72*hP);                 // in
+    if(!(deF>0)) warnFor("conv",`Punching shear: no effective depth above the pile heads (t_f − embedment − clear cover − d_b = ${fmt(deF,1)} in) — check panel I-7.`,"err");
+```
+After:
+```js
+    const embP=Math.max(0,+p.embed||0), clrP=Math.max(0,+p.clrTop||0);
+    const tF=R.checks.toeFlex, hP=g.tf*12;               // in
+    const deF=tF.d;                                      // the footing design's d (Tab 5 §5.3), in
+    const dvF=tF.dv;                                     // = max(0.9d_e, 0.72h_p), in
+    if(!(deF>0)) warnFor("conv",`Punching shear: no effective depth (t_f − c_F − d_b/2 = ${fmt(deF,1)} in) — check panels I-1, I-2.`,"err");
+```
+`R.checks.punching` gains `cF:+m.coverF` (display). b_0, V_n, φ, V_u are unchanged in form.
+
+### ABPM-2. Thin footing (`pileCapThin`, `collectInputWarnings`, `markFieldValidity`)
+- `lim=e+c+2` with `c=clrTop` → `c=0, lim=e+2`; the message drops "+ clear cover" and the d_e formula; only t_f and the embedment are marked red.
+
+### ABPM-3. I-7 input greyed out
+- `inpRow` takes `{dis:true}` (adds `disabled`); CSS `.in-row input:disabled{opacity:.55;cursor:not-allowed;}`. `piles.clrTop` row: label "Clear cover, pile top to bottom mat (not used)", `dis:true`, new tooltip; a basis note (abNL) under it. `apInUse("piles.clrTop")` → false (no range warning); `markFieldValidity` skips disabled inputs. The embedment tooltip is reworded.
+- Saved value kept in S, the Report input echo ("… (not used: one bottom mat at c_F, see §4.6)") and the Pile Designer hand-off `clearTop` (unread by receivers).
+
+### ABPM-4. Display
+- Tab 4 §4.6: h_p = t_f, d_e = t_f − c_F − d_b/2, d_v; basis list (one mat level, link to Tab 5 §5.3; d_b = toe bar C1; the clear cover is not used, with the old formula). Tab 5 §5.3 toe pile note: "Punching uses this same d and d_v". Warning "Pile cap …" w2 → "Punching uses the same bottom mat: d = t_f − c_F − d_b/2 (Tab 4 §4.6; engineer decision 2026-11-10)."
+- Report worksheet: step d_e "Effective depth to the bottom mat of the footing design …" (`h_p − c_F − d_b/2`); a note "Punching depth basis (engineer decision 2026-11-10): …" after the topic.
+- Sheet "joint", view "PILE IN THE FOOTING": C1 drawn at c_F + d_b/2 (broken at the pile when the pile head projects above it), CLR. dimension 0 → c_F, label "C1 … BOTTOM AT THE FOOTING COVER (PANEL I-2), BETWEEN THE PILE HEADS (FOOTING DESIGN AND PUNCHING)"; note 1 → "ONE BOTTOM MAT AT THE FOOTING COVER … (PANEL I-2) FOR THE FOOTING DESIGN (TAB 5 5.3) AND THE PUNCHING CHECK (TAB 4 4.6); …". Was: a mat at e_pile + c_top + d_b/2 labelled "BOTTOM MAT OVER THE PILES AT THE CLEAR DISTANCE OF PANEL I-7".
+- defRev 3 / 4 one-time notices reworded (they described a mat over the pile heads).
+
+### Governing provisions
+- Engineer decision 2026-11-10 (mat level). AASHTO LRFD 10th Ed. (2024): Art. 5.12.8.6.1, 5.12.8.6.3 (Eq. 5.12.8.6.3-1), 5.7.2.8, 5.6.3.2.
+
+### Check cases
+- Default switched to piles (f′c 4; t_f 36, c_F 3, e 12, c_top 3, #8; HP 12, interior): d_e 20.0 → 32.5 in; h_p 24 → 36; d_v 18.0 → 29.25; b_0 120 → 165 in; V_n 544.32 → 1216.22 kip; φV_n 489.89 → 1094.59; V_u 200.97; D/C 0.410 → 0.184.
+- Variant (t_f 42, e 18, c_top 4): d_e 19.0 → 38.5; d_v 17.28 → 34.65; b_0 117.12 → 186.6; V_n 510.01 → 1629.35; D/C 0.455 (pile 1) → 0.142 (pile 2). Round D 12: 0.522 → 0.234.
+- e_pile 0, c_top = c_F − d_b/2 = 2.5: identical before/after. Spread: identical.
+
+### How verified
+- Headless probe main vs branch (10 cases); abutment-pile-group-parity (spread identical; pile cases differ only in checks.punching.*, dash, nFail); new tests/smoke/abutment-pile-mat-level.mjs; check-syntax; project-library --tool abutment; abutment-drawings; abutment-panel-scroll; abutment-stem-shelf (only its pile parity vs main differs, in punching, as intended).
+
+### Decisions (pending engineer review)
+- d_punch = the toe d to the C1 bar centroid (− d_b/2), per the decision; the two-layer average would be 0.5 in less.
+- Thin-footing limit t_f > e_pile + 2 in.
+- The I-7 clear cover is greyed out, not kept as a detailing check (no meaning with the mat between the pile heads).
+
+### Saved data
+- No key, input or format change; defRev and Input IDs unchanged. A saved `piles.clrTop` is kept but changes no result.

@@ -230,6 +230,7 @@ header.app-head{
 .in-row input:focus,.in-row select:focus{outline:1.5px solid var(--navy-lt);}
 .in-row input.bad{border-color:var(--fail);background:var(--fail-bg);}
 .in-row input.warnf{border-color:var(--warn);background:var(--warn-bg);}
+.in-row input:disabled{opacity:.55;cursor:not-allowed;}   /* ABPM: kept but unused input (panel I-7 clear cover) */
 .in-row .own-src,.chk-own .own-src{grid-column:1/-1;margin:-3px 0 2px 0;font:600 10px/1.35 ui-sans-serif,system-ui,sans-serif;color:#1C4FC4;letter-spacing:.01em}
 .own-src.ovr{color:#9a3412}
 .in-row input.ownv,.in-row select.ownv{border-color:#1C4FC4;background:#eef3ff}
@@ -1582,7 +1583,8 @@ const VALID = {
   "apSlab.tSp":{hard:[2,24], typ:[4,18], msg:"Bar spacing outside the typical 4–18 in range."}
 };
 /* APS: an approach-slab input is validated only while it is used (slab on; shelf inputs with a shelf; bars with the design on) */
-function apInUse(p){ if(!p.startsWith("apSlab.")) return true; const A=S.apSlab; if(!A||!A.on) return false; const k=p.slice(7);
+function apInUse(p){ if(p==="piles.clrTop") return false;   // ABPM: kept in the save, not used (greyed out in panel I-7)
+  if(!p.startsWith("apSlab.")) return true; const A=S.apSlab; if(!A||!A.on) return false; const k=p.slice(7);
   if(["bS","hS","hE","aV","sSp","hSp","hN"].includes(k)) return A.sup==="shelf"&&!(+A.qEq>0)&&!bwOffGeo();   // ABSH: not used on the stem shelf
   if(["cov","aSp","dSp","tSp"].includes(k)) return !!A.des&&!(+A.qEq>0);
   if(k==="mu") return iabType()!=="conv"&&!(+A.qEq>0);
@@ -1593,8 +1595,9 @@ function inpRow(label, path, unit, o={}){
   const step = o.step ?? "any";
   const title = o.title ? ` title="${esc(o.title)}"` : "";
   const ot=ownTagHTML(path)||pxrTagHTML(path), oc=ot&&!/ovr/.test(ot)?' class="ownv"':'';   // OWNB: owner default highlight; PXR: value from Pile Designer
+  const dis=o.dis?" disabled":"";   // ABPM: a kept but unused input, greyed out
   return `<div class="in-row"><label${title}>${label}</label>
-    <input type="number" step="${step}" data-path="${path}" value="${v}"${oc}>
+    <input type="number" step="${step}" data-path="${path}" value="${v}"${oc}${dis}>
     <span class="unit">${unit||"&nbsp;"}</span>${ot}</div>`;
 }
 function selRow(label, path, options, o={}){
@@ -1940,7 +1943,7 @@ function migrate(){
     if(S.piles.embed===undefined||S.piles.clrTop===undefined){
       if(S.piles.embed===undefined) S.piles.embed=12.0;
       if(S.piles.clrTop===undefined) S.piles.clrTop=3.0;
-      if(S.fnd.branch==="pile") add.push("Pile embedment into the footing 12 in and clear cover from the pile top to the bottom mat 3 in (new inputs, panel I-7): the punching-shear depth is now measured to the bottom mat above the pile heads [5.12.8.6] — check them");
+      if(S.fnd.branch==="pile") add.push("Pile embedment into the footing 12 in (new input, panel I-7) — check it. The bottom mat is at the footing cover c_F between the pile heads, for the footing design and the punching shear alike [5.12.8.6]");   // ABPM (was: the punching depth measured to a mat over the pile heads)
     }
     S.meta.defRev=3;
     if(add.length) DEFAULTS_NOTICE=(DEFAULTS_NOTICE||[]).concat(add);
@@ -1949,7 +1952,7 @@ function migrate(){
   // pile toe d over the pile heads; single-span Extreme Event I without M–O / wall inertia [C3.10.9.1].
   if(!(S.meta.defRev>=4)){
     const add=[];
-    if(S.fnd.branch==="pile") add.push("Pile-supported footing: the toe flexure, one-way shear and crack control now use the depth to the bottom mat above the pile heads, d = t_f − embedment − clear cover − d_b (panel I-7; Tab 5 §5.3)");
+    if(S.fnd.branch==="pile") add.push("Pile-supported footing: the bottom mat is at the footing cover c_F between the pile heads; the toe design and the punching shear use d = t_f − c_F − d_b/2 (Tab 5 §5.3, Tab 4 §4.6)");   // ABPM (was: d to a mat above the pile heads, changed by ABPB #1158 and ABPM)
     if(S.seismic.on&&S.geom.HsupMode==="single") add.push("Single-span bridge: Extreme Event I no longer includes the M–O seismic earth pressure or the wall / soil-block inertia [C3.10.9.1] (Tab 3 §3.6a)");
     S.meta.defRev=4;
     if(add.length) DEFAULTS_NOTICE=(DEFAULTS_NOTICE||[]).concat(add);
@@ -2412,8 +2415,9 @@ function buildInputs(){
       <div class="subhead">Pile section (for punching-shear perimeter)</div>
       ${selRow("Pile shape","piles.pileShape",[["hp","H-pile (square envelope)"],["square","Square / precast"],["round","Round / pipe / drilled"]],{rebuild:true})}
       ${inpRow("Pile size / diameter","piles.pileSize","in",{title:"Governs the loaded area and the two-way (punching) shear critical perimeter through the footing, and the width over which each pile load is spread for the toe one-way shear at d_v. [AASHTO 5.12.8.6]"})}
-      ${inpRow("Pile embedment into the footing","piles.embed","in",{title:"Length of pile inside the footing above its bottom face. The punching-shear depth is measured above the pile heads (Tab 4 §4.6). The bottom mat stays at the footing cover c_F and runs between the pile heads (toe design, Tab 5 §5.3)."})}
-      ${inpRow("Clear cover, pile top to bottom mat","piles.clrTop","in",{title:"Clear cover over the pile heads used for the punching depth only: d_e = t_f − embedment − this cover − d_b (Tab 4 §4.6). The bottom mat itself is at the footing cover c_F, between the pile heads (toe d, Tab 5 §5.3)."})}
+      ${inpRow("Pile embedment into the footing","piles.embed","in",{title:"Length of pile inside the footing above its bottom face: sets the pile top (drawings, head fixity). The bottom mat stays at the footing cover c_F (panel I-2) and runs between the pile heads; the toe design (Tab 5 §5.3) and the punching check (Tab 4 §4.6) use that same d."})}
+      ${inpRow("Clear cover, pile top to bottom mat (not used)","piles.clrTop","in",{dis:true,title:"Not used: the bottom mat is at the footing cover c_F of panel I-2, between the pile heads, for the footing design and the punching check alike (engineer decision 2026-11-10). A saved value is kept."})}
+      <div class="in-note">${abNL("Bottom mat over the piles (engineer decision 2026-11-10):",[["One mat level:","the bottom bars are at the footing cover c<sub>F</sub> of panel I-2 and run between the pile heads; the toe flexure and shear (Tab 5 §5.3) and the punching shear at the piles (Tab 4 §4.6) use the same d = t<sub>f</sub> − c<sub>F</sub> − d<sub>b</sub>/2."],["Clear cover input:","greyed out; it only set a notional mat over the pile heads for punching. A saved value is kept but changes no result."],["Embedment:","still sets the pile top."]])}</div>
       <div class="subhead">Pile structural resistance [10.7.3.13, 6.9.4, 6.15]</div>
       ${p.pileShape==="square"
         ? inpRow("Factored structural resistance P<sub>r</sub> (each pile)","piles.PrUser","kip",{title:"Square / precast pile: factored axial structural resistance from its own design (5.6.4.4 / 10.7.3.13.2). 0 = not checked (Tab 4 §4.4a)."})
@@ -2600,21 +2604,23 @@ function markFieldValidity(){
     const p=el.dataset.path; if(!p||!VALID[p]) return;
     const v=Number(el.value), r=VALID[p];
     el.classList.remove("bad","warnf");
+    if(el.disabled) return;   // ABPM: a greyed-out (unused) input is not flagged
     if(!isFinite(v)||v<r.hard[0]||v>r.hard[1]) el.classList.add("bad");
     else if(v<r.typ[0]||v>r.typ[1]) el.classList.add("warnf");
   });
-  if(pileCapThin()) document.querySelectorAll('#inputCol input[data-path="geom.tf"],#inputCol input[data-path="piles.embed"],#inputCol input[data-path="piles.clrTop"]').forEach(el=>{ el.classList.remove("warnf"); el.classList.add("bad"); });   // ABPB
+  if(pileCapThin()) document.querySelectorAll('#inputCol input[data-path="geom.tf"],#inputCol input[data-path="piles.embed"]').forEach(el=>{ el.classList.remove("warnf"); el.classList.add("bad"); });   // ABPB
   abutInputTabMarks();
 }
-/* ABPB (2026-11-07): pile-supported footing too thin over the pile heads — t_f ≤ e_pile + c_top + 2 in (2 in for the bars) leaves no
-   depth over the pile heads for the punching check (C-13, d_e = t_f − e_pile − c_top − d_b > 0). Returns the numbers, or null when fine. */
+/* ABPB (2026-11-07): pile-supported footing too thin over the pile heads. ABPM (2026-11-10): t_f ≤ e_pile + 2 in (2 in for the
+   bars over the pile heads); the clear cover pile top to bottom mat (piles.clrTop) no longer enters (was t_f ≤ e_pile + c_top + 2 in),
+   since the bottom mat is at c_F between the pile heads and punching uses the footing design's d. Returns the numbers, or null when fine. */
 function pileCapThin(){
   if(!S.fnd||S.fnd.branch!=="pile"||iabType()==="integral") return null;
-  const tIn=(+S.geom.tf||0)*12, e=Math.max(0,+S.piles.embed||0), c=Math.max(0,+S.piles.clrTop||0), lim=e+c+2;
+  const tIn=(+S.geom.tf||0)*12, e=Math.max(0,+S.piles.embed||0), c=0, lim=e+2;
   return tIn>lim+1e-9? null : {tIn, e, c, lim};
 }
 function collectInputWarnings(){
-  { const th=pileCapThin(); if(th) warn(`Input error — Footing too thin over the pile heads: t_f = ${fmt(th.tIn,2)} in must exceed the pile embedment ${fmt(th.e,2)} in + clear cover ${fmt(th.c,2)} in + 2 in for the bars = ${fmt(th.lim,2)} in (depth over the pile heads d_e = t_f − embedment − clear − d_b > 0, Tab 4 §4.6). Increase t_f (panel I-1) or reduce the pile embedment (panel I-7); the punching and toe results below are not valid.`,"err"); }   // ABPB
+  { const th=pileCapThin(); if(th) warn(`Input error — Footing too thin over the pile heads: t_f = ${fmt(th.tIn,2)} in must exceed the pile embedment ${fmt(th.e,2)} in + 2 in for the bars over the pile heads = ${fmt(th.lim,2)} in (Tab 4 §4.6). Increase t_f (panel I-1) or reduce the pile embedment (panel I-7); the punching and toe results below are not valid.`,"err"); }   // ABPB; ABPM: the clear cover term removed
   for(const [p,r] of Object.entries(VALID)){
     if(!apInUse(p)) continue;   // APS
     const v=Number(getPath(S,p));
@@ -4827,7 +4833,7 @@ function computeAll(){
   // ABPB (2026-11-07, engineer instruction): on a pile-supported footing the toe (bottom) mat stays at the bottom cover c_F and
   // runs between the pile heads, as on a spread footing: d = t_f − c_F − d_b/2, h = t_f for d_v and β_s [5.6.3.2, 5.7.2.8, 5.6.7].
   // Was (defRev 4 to 11): the mat lifted onto the pile heads, d = t_f − e_pile − c_top − d_b, h_p = t_f − e_pile. The punching
-  // depth over the pile heads (C-13) is unchanged. pileBot: display only (the mat between the pile heads).
+  // depth over the pile heads (C-13) was unchanged by ABPB; ABPM (2026-11-10) makes C-13 use this d. pileBot: display only.
   const toePileB=fn.branch==="pile"? {cF:+m.coverF, embP:Math.max(0,+S.piles.embed||0), clrP:Math.max(0,+S.piles.clrTop||0)} : null;
   R.checks.toeFlex=sectionCheck({name:"Toe", h:g.tf*12, cover:m.coverF, bar:S.reinf.toe.size,
     sp:+S.reinf.toe.sp, Mu:toeDem.Mu, Vu:toeDem.Vu, Ms:footSvc.toe, lbl:toeDem.lbl,
@@ -4836,7 +4842,7 @@ function computeAll(){
   if(toePileB && toeDem.src==="pile" && Math.abs(R.checks.toeFlex.dv/12-toeDem.dvT)>1e-9) warnFor("conv",`Toe: internal mismatch of d_v between the shear section (${fmt(toeDem.dvT*12)} in) and the shear resistance (${fmt(R.checks.toeFlex.dv)} in) — report this.`,"err");
   if(toePileB){ const w0=`Pile cap: the bottom bars are at the footing cover c_F = ${fmt(toePileB.cF,2)} in and pass between the pile heads, which project ${fmt(toePileB.embP,2)} in into the footing.`,
       w1=`Detail the bars to clear the piles (bar spacing against the pile width D = ${fmt(+S.piles.pileSize||0,1)} in; field adjustment of bars at a pile).`,
-      w2=`Punching uses the depth over the pile heads, t_f − ${fmt(toePileB.embP+toePileB.clrP,2)} in − d_b (Tab 4 §4.6).`;
+      w2=`Punching uses the same bottom mat: d = t_f − c_F − d_b/2 (Tab 4 §4.6; engineer decision 2026-11-10).`;   // ABPM (was: the depth over the pile heads, t_f − e_pile − c_top − d_b)
     warnFor("conv",w0+" "+w1+" "+w2,"warn",[w0,[w1,w2]]); }   // ABNL: msg as before (the same three sentences); nl for the warning list only
   R.checks.heelFlex=sectionCheck({name:"Heel", h:g.tf*12, cover:m.coverF, bar:S.reinf.heel.size,
     sp:+S.reinf.heel.sp, Mu:heelDem.Mu, Vu:heelDem.Vu, Ms:footSvc.heel, lbl:heelDem.lbl,
@@ -4870,13 +4876,16 @@ function computeAll(){
   if(fn.branch==="pile" && R.pile && R.pile.n>0 && R.checks.pileComp && R.checks.pileComp.det){
     const p=S.piles, act=activePiles();
     const dbF=BARS[S.reinf.toe.size].db;
-    // bottom mat above the pile heads: d_e from the top of the footing to the centroid of the bottom mat (two orthogonal
-    // layers of d_b: centroid d_b above the bottom of the mat), h_p = footing thickness above the pile heads [5.12.8.6, 5.7.2.8]
+    // ABPM (2026-11-10, engineer decision "Yes, same bottom mat"): the punching depth uses the bottom mat of the footing design,
+    // at the footing cover c_F (panel I-2) between the pile heads: d_e = d of the toe design = t_f − c_F − d_b/2, h_p = t_f,
+    // d_v = max(0.9d_e, 0.72h_p) = d_v of the toe [5.12.8.6, 5.7.2.8]. The pile embedment still sets the pile top (drawings,
+    // head fixity); the clear cover pile top to bottom mat (panel I-7, piles.clrTop) is kept in the save but no longer used.
+    // Was (#1158 and before): d_e = t_f − e_pile − c_top − d_b, h_p = t_f − e_pile (a notional mat over the pile heads).
     const embP=Math.max(0,+p.embed||0), clrP=Math.max(0,+p.clrTop||0);
-    const hP=g.tf*12-embP;                               // in
-    const deF=hP-clrP-dbF;                               // footing effective depth over the pile heads, in
-    const dvF=Math.max(0.9*deF,0.72*hP);                 // in
-    if(!(deF>0)) warnFor("conv",`Punching shear: no effective depth above the pile heads (t_f − embedment − clear cover − d_b = ${fmt(deF,1)} in) — check panel I-7.`,"err");
+    const tF=R.checks.toeFlex, hP=g.tf*12;               // in
+    const deF=tF.d;                                      // the footing design's d (Tab 5 §5.3), in
+    const dvF=tF.dv;                                     // = max(0.9d_e, 0.72h_p), in
+    if(!(deF>0)) warnFor("conv",`Punching shear: no effective depth (t_f − c_F − d_b/2 = ${fmt(deF,1)} in) — check panels I-1, I-2.`,"err");
     const sPile=+p.pileSize;                             // H-pile / square: square-envelope side; round: diameter D (in)
     const rnd=p.pileShape==="round";                     // ABH1 (2026-11-07): round / pipe / drilled pile: circular critical section of diameter D + d_v [5.12.8.6.1]
     const betaC=1.0;                                     // reaction area long/short ratio (≈1)
@@ -4909,7 +4918,7 @@ function computeAll(){
       if(dc>gov.dc){ let no=0,t=c; for(const cc of S.piles.coords){no++; if(cc===t)break;}
         gov={dc, Vu, Vn, b0:b0in, dv:dvF, de:deF, pile:no, sides, spanX:spanX*12, spanY:spanY*12, arcF}; }
     });
-    R.checks.punching={...gov, sPile, betaC, vnCoef, embed:embP, clrTop:clrP, hP, db:dbF, ls:R.checks.pileComp.ls, lbl:det.c?.lbl, rnd};
+    R.checks.punching={...gov, sPile, betaC, vnCoef, embed:embP, clrTop:clrP, hP, db:dbF, cF:+m.coverF, ls:R.checks.pileComp.ls, lbl:det.c?.lbl, rnd};
     // overlapping-perimeter flag (group punching / beam shear governs — hand check)
     let minSp=Infinity;
     for(let i=0;i<act.length;i++)for(let j=i+1;j<act.length;j++){
@@ -7525,14 +7534,13 @@ function renderTabFound(R){
     h+=panel("o-punch","4.6","Two-Way (Punching) Shear at Piles [AASHTO 5.12.8.6]",`
       ${govNote((pnc.lbl||"")+" — "+(pnc.ls||"")+" (governing pile "+pnc.pile+", "+(pnc.rnd? fmt(100*pnc.arcF,0)+" % of the circular critical section inside the footing)" : pnc.sides+"-sided critical section)"))}
       ${abutWorkedIn([["tab-found","o-pileform","4.2 Axial Pile Reactions","V_u (pile reaction)"]])}
-      ${eqB("Footing effective depth & shear depth over the pile heads","AASHTO 5.12.8.6, 5.7.2.8",[
-        `h_p = t_f - e_{pile} = ${fmtT(g.tf*12,1)} - ${fmtT(pnc.embed,1)} = ${fmtT(pnc.hP,1)}\\ \\text{in}`,
-        `d_e = h_p - c_{top} - d_b = ${fmtT(pnc.hP,1)} - ${fmtT(pnc.clrTop,2)} - ${fmtT(pnc.db,3)} = ${fmtT(pnc.de)}\\ \\text{in}`,
+      ${eqB("Footing effective depth & shear depth (the bottom mat of the footing design)","AASHTO 5.12.8.6, 5.7.2.8",[
+        `h_p = t_f = ${fmtT(pnc.hP,1)}\\ \\text{in}`,
+        `d_e = t_f - c_F - \\dfrac{d_b}{2} = ${fmtT(pnc.hP,1)} - ${fmtT(pnc.cF,2)} - \\dfrac{${fmtT(pnc.db,3)}}{2} = ${fmtT(pnc.de)}\\ \\text{in}`,
         `d_v = \\max(0.9d_e,\\,0.72h_p) = \\max(0.9(${fmtT(pnc.de)}),\\,0.72(${fmtT(pnc.hP,1)})) = ${fmtT(pnc.dv)}\\ \\text{in}`],
-        abNL("Depths for the shear around a pile:",[["e_pile","= pile embedment into the footing; c_top = clear cover over the pile heads (panel I-7)."],
-          ["d_e:","measured from the top of the footing to a notional mat centroid c_top + d_b above the pile heads (two orthogonal layers)."],
-          ["h_p:","the footing thickness above the pile heads: a conservative depth for the shear around a pile."],
-          ["Bottom mat:","stays at the footing cover c_F and runs between the pile heads (Tab 5 §5.3; engineer instruction 2026-11-07)."]]))}
+        abNL("Depths for the shear around a pile (engineer decision 2026-11-10: the same bottom mat):",[["One mat level:",`the bottom bars C1 are at the footing cover c<sub>F</sub> (panel I-2) and run between the pile heads, which project e<sub>pile</sub> = ${fmt(pnc.embed,1)} in into the footing (panel I-7); d_e and d_v are those of the toe design (<span class="xlink" data-jump="tab-struct|o-str-Toe">Tab 5 §5.3</span>).`],
+          ["d_b:","the toe bar C1, as in the footing flexure and shear design."],
+          ["Clear cover, pile top to bottom mat (panel I-7):","not used (greyed out; a saved value is kept). Until 2026-11-10 it set a notional mat over the pile heads, d_e = t_f − e_pile − c_top − d_b with h_p = t_f − e_pile."]]))}
       ${pnc.rnd? eqB("Critical perimeter at d_v/2 from the pile face (round pile: circle of diameter D + d_v, edge-truncated)","AASHTO 5.12.8.6.1, 5.12.8.6.3",[
         `b_0 = \\pi\\,(D+d_v)\\,f_{arc} = \\pi\\,(${fmtT(pnc.sPile,1)}+${fmtT(pnc.dv)})\\,(${fmtT(pnc.arcF,3)}) = ${fmtT(pnc.b0,1)}\\ \\text{in}`],
         "D = pile diameter (panel I-7). The critical section is the circle at d_v/2 from the pile face (the minimum perimeter not closer than 0.5d_v, 5.12.8.6.1). f_arc = share of that circle inside the footing plan (1.0 for an interior pile); the part beyond a footing edge is not counted (C5.12.8.6.3).")
@@ -7622,7 +7630,7 @@ function sectionHTML(c, demHTML, secNo, title, shearHTML){   // ABR1: shearHTML 
       `A_s = A_b\\,\\dfrac{12}{s} = (${fmtT(BARS[c.bar].Ab)})\\dfrac{12}{${fmtT(c.sp,1)}} = ${fmtT(c.As)}\\ \\text{in}^2/\\text{ft} \\qquad(\\#${c.bar}\\ @\\ ${fmt(c.sp,1)}\\ \\text{in})`,
       `d = h - c_{cl} - d_b/2 = ${fmtT(c.h,1)} - ${fmtT(c.cover,2)} - ${fmtT(BARS[c.bar].db/2,3)} = ${fmtT(c.d)}\\ \\text{in}`],
       c.pileBot?abNL("Pile-supported footing:",[["Bottom mat:",`stays at the footing cover c<sub>cl</sub> = c<sub>F</sub> = ${fmt(c.pileBot.cF,2)} in (panel I-2) and runs between the pile heads, which project e<sub>pile</sub> = ${fmt(c.pileBot.embP,2)} in into the footing (panel I-7); detail the bars to clear the piles (engineer instruction, 2026-11-07).`],
-        ["Depth below:","h = t<sub>f</sub> in d<sub>v</sub>, d<sub>c</sub> and β<sub>s</sub>."],["Punching",'keeps the depth over the pile heads (<span class="xlink" data-jump="tab-found|o-punch">Tab 4, §4.6</span>).']]):"")}
+        ["Depth below:","h = t<sub>f</sub> in d<sub>v</sub>, d<sub>c</sub> and β<sub>s</sub>."],["Punching",'uses this same d and d<sub>v</sub> (<span class="xlink" data-jump="tab-found|o-punch">Tab 4, §4.6</span>; engineer decision 2026-11-10).']]):"")}
     ${eqB("Stress block & factored resistance","AASHTO 5.6.3.2.2, 5.5.4.2",[
       "a = \\dfrac{A_s f_y}{0.85 f'_c b}\\,, \\qquad \\varphi M_n = \\varphi\\,A_s f_y (d - a/2)",
       `a = \\dfrac{(${fmtT(c.As)})(${fmtT(m.fy,1)})}{0.85(${fmtT(m.fc,1)})(12)} = ${fmtT(c.a)}\\ \\text{in}`,
@@ -10285,17 +10293,19 @@ function abdwBuild(R){
           lead(G.xb+0.5*(xr-G.xb),yD,G.xb+0.6*k,G.tf-1.1*k,"D1 "+bl(rf.heel.size,rf.heel.sp)+" TOP",0,hb);
           if(EV){ elev(elOf("tof"),xl,G.tf,xl-0.5*k,"F","TOP OF FOOTING"); elev(elOf("bof"),xl,0,xl-0.5*k,"F","BOTTOM OF FOOTING"); }   // ABEL
         }, notes:["SHEAR KEY: NOT MODELLED BY THE TOOL (NONE SHOWN). DOWEL HOOK TAIL AND BEND: DETAILER TO CONFIRM."]}); }
-      if(pil||G.integ){ const emb=G.emb, pd=G.pd||12, hc=G.integ?G.hc:G.tf, top=Math.min(hc,emb+30), wv=pd/2+24, clr=+S.piles.clrTop||0;
+      if(pil||G.integ){ const emb=G.emb, pd=G.pd||12, hc=G.integ?G.hc:G.tf, top=Math.min(hc,emb+30), wv=pd/2+24;
         V.push({title:(G.integ?"PILE IN THE CAP":"PILE IN THE FOOTING")+" - SCALE "+abdwScName(k), draw:()=>{
           D.line(L.conc,-wv,0,wv,0); brk(-wv,0,-wv,top); brk(wv,0,wv,top); if(top>=hc-0.01) D.line(L.conc,-wv,hc,wv,hc); else brk(-wv,top,wv,top);
           const yP=-30; D.line(L.pile,-pd/2,yP,-pd/2,emb); D.line(L.pile,pd/2,yP,pd/2,emb); D.line(L.pile,-pd/2,emb,pd/2,emb); brk(-pd/2,yP,pd/2,yP,L.pile);
           dV([pd/2,0],[pd/2,emb],wv+0.35*k,"EMBED. <>");
-          if(!G.integ&&clr>0){ const yM=emb+clr+db(rf.toe.size)/2; if(yM<G.tf){ D.line(L.bar,-wv+2,yM,wv-2,yM); dV([pd/2,emb],[pd/2,emb+clr],wv+0.35*k,"CLR. <>");
-            lead(-wv*0.6,yM,-wv-0.4*k,yM+0.35*k,"BOTTOM MAT OVER THE PILES AT THE CLEAR DISTANCE\nOF PANEL I-7 (PUNCHING, TAB 4 4.6)",2,hb); } }
+          if(!G.integ){ const yM=cF+db(rf.toe.size)/2;   // ABPM (2026-11-10): one bottom mat, at the footing cover c_F (panel I-2), between the pile heads
+            if(yM<G.tf){ if(yM+db(rf.toe.size)/2>emb){ D.line(L.bar,-wv+2,yM,wv-2,yM); } else { D.line(L.bar,-wv+2,yM,-pd/2-1,yM); D.line(L.bar,pd/2+1,yM,wv-2,yM); }
+              dV([-wv,0],[-wv,cF],-wv-0.35*k,"CLR. <>",true);
+              lead(-wv*0.6,yM,-wv-0.4*k,yM+0.35*k,"C1 "+bl(rf.toe.size,rf.toe.sp)+" BOTTOM AT THE FOOTING COVER (PANEL I-2),\nBETWEEN THE PILE HEADS (FOOTING DESIGN AND PUNCHING)",2,hb); } }
           lead(-pd/2,yP*0.5,-wv-0.4*k,yP*0.6,G.pileTxt,2,hb);
           free(L.txt,0,Math.min(top,hc)-0.3*k,h,G.integ?"PILE CAP":"FOOTING",1);
         }, notes:G.integ?["CAP AND DIAPHRAGM BARS: TAB 5 5.7 (INTEGRAL SCHEDULE). PILE HEAD DETAILS: DETAILER TO CONFIRM."]
-          :["FOOTING DESIGN (TAB 5) TAKES THE BOTTOM COVER AS "+IN(cF)+" (PANEL I-2); MAT LEVEL OVER THE PILES: DETAILER TO CONFIRM.","PILE HEAD ANCHORAGE: NOT MODELLED BY THE TOOL, DETAILER TO CONFIRM."]}); }
+          :["ONE BOTTOM MAT AT THE FOOTING COVER "+IN(cF)+" (PANEL I-2) FOR THE FOOTING DESIGN (TAB 5 5.3) AND THE PUNCHING CHECK (TAB 4 4.6); BARS PASS BETWEEN THE PILE HEADS, CLEARANCE TO THE PILES: DETAILER TO CONFIRM.","PILE HEAD ANCHORAGE: NOT MODELLED BY THE TOOL, DETAILER TO CONFIRM."]}); }
       let bb=null; const i0s=i0v;   // the views side by side, else one under the other
       for(const lay of [[V],V.map(v=>[v])]){ D.E.length=i0s; bb=views(lay); if((bb[2]-bb[0])/k<=AW&&(bb[3]-bb[1])/k<=AH) break; }
       return {known:null,bb};
@@ -11267,14 +11277,14 @@ function abrModel(){
           w.add({id:"VnT",label:"Shear resistance, transverse H",sym:"V_{n,T}",eq:"",sub:"",value:pf.VnT,unit:"kip",d:1});
           dcStep(w,"fd","pileV","Pile shear, "+v.ls+" (H per pile = H/n)","\\max\\left(\\frac{|H_{x}|}{V_{n,L}},\\,\\frac{|H_{y}|}{V_{n,T}}\\right)","\\max\\left(\\frac{"+abrN(Math.abs(v.Hx),2)+"}{"+abrN(pf.VnL,1)+"},\\,\\frac{"+abrN(Math.abs(v.Hy),2)+"}{"+abrN(pf.VnT,1)+"}\\right)",ABR_AA+"Art. 6.10.9.2"); } }
       const pu=C.punching; if(pu&&has("punching")){ const w=topic(T,"pun","Punching shear at the governing pile (pile "+pu.pile+")",ABR_AA+"Art. 5.12.8.6");
-        w.add({id:"de",label:"Effective depth over the pile heads (h_p = "+abrN(pu.hP,1)+" in, clear cover "+abrN(pu.clrTop,1)+" in, two layers of d_b)",sym:"d_{e}",eq:"h_{p} \\minus c \\minus d_{b}",sub:abrN(pu.hP,1)+" \\minus "+abrN(pu.clrTop,1)+" \\minus "+abrN(pu.db,3),value:pu.de,unit:"in",d:2});
+        w.add({id:"de",label:"Effective depth to the bottom mat of the footing design (h_p = t_f = "+abrN(pu.hP,1)+" in, footing cover c_F = "+abrN(pu.cF,2)+" in, panel I-2; the same d as the toe, Tab 5 §5.3)",sym:"d_{e}",eq:"h_{p} \\minus c_{F} \\minus \\frac{d_{b}}{2}",sub:abrN(pu.hP,1)+" \\minus "+abrN(pu.cF,2)+" \\minus \\frac{"+abrN(pu.db,3)+"}{2}",value:pu.de,unit:"in",d:2});   // ABPM (was h_p − c_top − d_b over the pile heads)
         w.add({id:"dv",label:"Effective shear depth",sym:"d_{v}",eq:"\\max(0.9 d_{e},\\,0.72 h_{p})",sub:"\\max(0.9\\cdot "+abrN(pu.de)+",\\,0.72\\cdot "+abrN(pu.hP,1)+")",value:pu.dv,unit:"in",d:2,ref:ABR_AA+"Art. 5.7.2.8"});
         if(pu.rnd) w.add({id:"b0",label:"Critical perimeter at d_v/2 from the round pile (circle of diameter D + d_v; "+abrN(100*pu.arcF,0)+" % inside the footing)",sym:"b_{0}",eq:"\\pi\\,(D + d_{v})\\,f_{arc}",sub:"\\pi\\cdot ("+abrN(pu.sPile,1)+" + "+abrN(pu.dv,2)+")\\cdot "+abrN(pu.arcF,3),value:pu.b0,unit:"in",d:1});   // ABH1
         else w.add({id:"b0",label:"Critical perimeter at d_v/2 from the pile ("+pu.sides+" sides inside the footing)",sym:"b_{0}",eq:"",sub:"",value:pu.b0,unit:"in",d:1});
         w.add({id:"Vn",label:"Nominal two-way shear resistance (β_c = "+abrN(pu.betaC,1)+")",sym:"V_{n}",eq:"\\left(0.063 + \\frac{0.126}{\\beta_{c}}\\right)\\sqrt{f^{\\prime}_{c}}\\,b_{0} d_{v} \\le 0.126\\sqrt{f^{\\prime}_{c}}\\,b_{0} d_{v}",sub:abrN(pu.vnCoef,3)+"\\cdot "+sq(fc)+"\\cdot "+abrN(pu.b0,1)+"\\cdot "+abrN(pu.dv),value:pu.Vn,unit:"kip",d:1,ref:ABR_AA+"Eq. 5.12.8.6.3-1"});
         w.add({id:"Vu",label:"Pile reaction ("+(pu.ls||"")+")",sym:"V_{u}",eq:"",sub:"",value:pu.Vu,unit:"kip",d:1});
         dcStep(w,"fd","punching","Punching shear","\\frac{V_{u}}{0.9 V_{n}}","\\frac{"+abrN(pu.Vu,1)+"}{0.9\\cdot "+abrN(pu.Vn,1)+"}",ABR_AA+"Art. 5.12.8.6"); }
-      if(T.length) addSub("Foundation and piles",{title:"Pile structural checks and punching",items:[abrTopics("fd",T,{title:"Worked steps"}),{type:"note",text:"As on "+abrTab("tab-found","o-pilestr")+"."}]}); }
+      if(T.length) addSub("Foundation and piles",{title:"Pile structural checks and punching",items:[abrTopics("fd",T,{title:"Worked steps"}),{type:"note",text:"As on "+abrTab("tab-found","o-pilestr")+"."}].concat(pu&&has("punching")?[{type:"note",text:"Punching depth basis (engineer decision 2026-11-10): one bottom-mat level, at the footing cover c_F of panel I-2 between the pile heads, for the footing design and the punching check; d_e and d_v are those of the toe ("+abrTab("tab-struct","o-str-Toe")+"). The clear cover pile top to bottom mat of panel I-7 is not used (a saved value is kept); the pile embedment still sets the pile top."}]:[])}); }   // ABPM
     /* structural: stem dowels, backwall at the extreme event / seismic stop, approach-slab shelf and slab reinforcement */
     { const T=[], tbS=iabType()==="integral"?"tab-iab":"tab-struct";
       const dw=C.dowel; if(dw&&has("dowelDev")){ let w=topic(T,"dwD","Stem dowels: development into the footing",ABR_AA+"Art. "+(dw.hook?"5.10.8.2.4":"5.10.8.2.1a"));
@@ -11918,7 +11928,7 @@ function inputEchoHTML(){
     ["Rn / φc",fmt(p.Rn)+" / "+fmt(p.phiC),"kip / –"],
     ["Rn,up / φup",fmt(p.RnUp)+" / "+fmt(p.phiUp),"kip / –"],
     ["Pile section (punching)",(p.pileShape||"hp")+", "+fmt(p.pileSize,1)+" in",""],
-    ["Pile embedment / clear cover pile top to bottom mat",fmt(+p.embed,1)+" / "+fmt(+p.clrTop,1),"in"],
+    ["Pile embedment / clear cover pile top to bottom mat (not used: one bottom mat at c_F, see §4.6)",fmt(+p.embed,1)+" / "+fmt(+p.clrTop,1),"in"],   // ABPM
     ["Drag load DR / γDR (structural; 0 geotechnical)",fmt(+p.dd||0,0)+" / "+fmt(+p.gDD,2),"kip / –"],
     ["Pile structural section [10.7.3.13]",(p.pileShape==="square"?"square / precast, Pr = "+fmt(+p.PrUser||0,1)+" kip":(p.pileShape==="round"?"unfilled steel pipe, t = "+fmt(+p.pipeT,3)+" in":hpAuto(p)+(p.strSec?"":" (automatic)"))+", Fy = "+fmt(+p.Fy,1)+" ksi, "+(p.drive==="severe"?"severe driving":"good driving")),""]]);
   if(!itg) h+="<h3>Longitudinal distribution</h3>"+echoRows([
