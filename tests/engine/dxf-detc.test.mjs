@@ -6,6 +6,8 @@
 // location), #17 splice strip, #18 field splice (every splice), #2 LLDF cross-section (every girder, region and case).
 // The LTB sketch and the bracket are taken from the tab functions with SBDGraphics.mount recorded (the path main has); where the branch exports the
 // builder (SBDGfxA.ltbGraphic, constrOhGraphic) its DXF is checked to be the same text.
+// SBBDXF (2026-11-10, engineer decision): the one exception is #8 the overhang bracket. Its CAD builder read R.F.oh.a ... (absent; the inputs are R.F.oh.p),
+// so its DXF only ever held an "inputs above" note; it now draws the bracket from R.F.oh.p. Only the three "|oh" baseline entries were re-recorded.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -58,4 +60,15 @@ test('DETC: the DXF of every detail drawing and plan is unchanged from origin/ma
   if (process.env.RECORD_DXF) { fs.writeFileSync(BASE, JSON.stringify(got, null, 0).replace(/,"/g, ',\n"') + '\n'); console.log(`       recorded ${n} DXF hashes in ${path.relative(ROOT, BASE)}`); return; }
   const want = JSON.parse(fs.readFileSync(BASE, 'utf8')), diff = Object.keys(want).filter(k => want[k] !== got[k]), miss = Object.keys(want).filter(k => !(k in got));
   assert.deepEqual(miss, [], 'cases not built'); assert.deepEqual(diff, [], 'DXF changed'); console.log(`       ${n} DXF texts identical to origin/main`);
+});
+
+test('SBBDXF: the overhang bracket DXF draws the bracket from the inputs R.F.oh.p (not the "inputs above" note)', () => {
+  for (const [name, P] of projects()) {
+    const CN = W.SBDConstrUI.build({ P, g: 0 }); if (CN.err || !CN.F || !CN.F.oh) continue;
+    const p = CN.F.oh.p, t = GA.ohGraphic(P, 0, CN).D.toDXF({ ltscale: 1 }), ys = +P.deck.haunch || 0;
+    assert.ok(!/INPUTS ABOVE/.test(t), `${name}: no note`);
+    [`a = ${(+p.a).toFixed(1)} IN`, `h_b = ${(+p.hb + ys).toFixed(1)} IN`, `w_OH = ${(+p.wOH).toFixed(1)} IN`, `t_OH = ${(+p.tOH).toFixed(1)} IN`, `GAMMA_DC ${(+p.gam.dc).toFixed(2)}`, `FINISHING MACHINE ${(+p.Pfm).toFixed(1)} KIP`]
+      .forEach(s => assert.ok(t.includes(s), `${name}: ${s}`));
+    ['GRDR', 'DECK', 'BRACKET', 'LOAD', 'DIMS'].forEach(l => assert.ok(new RegExp(`\\n *8\\r?\\n[A-Z]*-?${l}\\r?\\n`).test(t), `${name}: entities on layer ${l}`));
+  }
 });

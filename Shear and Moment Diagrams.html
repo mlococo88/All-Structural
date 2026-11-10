@@ -666,7 +666,7 @@ const SMD_DEFL_LIM='deflection limit L/x is user-selected (IBC 2018 Table 1604.3
 const SMD_DEFL_TXT='The '+SMD_DEFL_LIM+'; '+SMD_DEFL_CHK+'.';   /* unchanged text (was the Report step notes; SMNL-2 (2026-11-08): those notes are now SMD_DEFL_NOTE list notes) */
 /* SMNL-2 (2026-11-08): the deflection step notes of the Report as list notes (shared/steps.js { lead, items }; shared/report.js renders them):
    the same words as SMD_DEFL_TXT, split as on the Analysis view (Limit / Load basis); pre: items put before them (the envelope note) */
-const SMD_DEFL_SPAN='each span is checked against its own length L, and a cantilever overhang against the overhang length. IBC 2018 Table 1604.3 footnote i takes l as twice the cantilever length; the overhang length itself gives the smaller, more conservative limit';   /* SMASM (2026-11-10): open item O3 stated as it is */
+const SMD_DEFL_SPAN='each span is checked against its own length L; a cantilever overhang (an end span whose outer end node is Free) is checked against twice its length, 2L, since IBC 2018 Table 1604.3 footnote i takes l for a cantilever as twice the cantilever length';   /* SMASM (2026-11-10): open item O3 stated as it was; SMCL (2026-11-10, engineer's decision): O3 closed, cantilever l = 2L */
 const SMD_DEFL_NOTE=(lead,pre)=>({lead,items:(pre||[]).concat([['Limit:','the '+SMD_DEFL_LIM+'.'],['Span length:',SMD_DEFL_SPAN+'.'],['Load basis:',SMD_DEFL_CHK+'.']])});
 function smdSolveLoads(){
   const n=spans.length,fl=[],out=[],fin=v=>typeof v==='number'&&isFinite(v),r3=v=>+(+v).toFixed(4);
@@ -893,10 +893,12 @@ function deflSpans(){
   if(!deD.length)return[];
   return spans.map((sp,i)=>{const xa=nodeX[i],xb=nodeX[i+1];let dm=0,dx=xa,dk=-1;
     deD.forEach((p,k)=>{if(p.x>=xa-1e-9&&p.x<=xb+1e-9&&Math.abs(p.y)>dm){dm=Math.abs(p.y);dx=p.x;dk=k;}});
-    const allow=defLim>0?sp.L/defLim:0;
+    /* SMCL (2026-11-10, engineer's decision; IBC 2018 Table 1604.3 footnote i): a cantilever overhang (end span with a Free outer end) uses l = 2L */
+    const cant=(i===0&&nodes[0]&&nodes[0].t==='free')||(i===spans.length-1&&nodes[i+1]&&nodes[i+1].t==='free'),Ll=cant?2*sp.L:sp.L;
+    const allow=defLim>0?Ll/defLim:0;
     // envelope: combination that governs δ at that station
     const c=envOn&&env&&env.D&&dk>=0?(Math.abs(env.D.mn[dk].y)>Math.abs(env.D.mx[dk].y)?env.D.mnC[dk]:env.D.mxC[dk]):null;
-    return{i,L:sp.L,dm,x:dx,allow,ratio:allow>0?dm/allow:0,ok:allow>0?dm<=allow:true,c};});
+    return{i,L:sp.L,Ll,cant,dm,x:dx,allow,ratio:allow>0?dm/allow:0,ok:allow>0?dm<=allow:true,c};});
 }
 function deflGov(){const a=deflSpans();return a.length?a.reduce((b,s2)=>s2.ratio>b.ratio?s2:b,a[0]):null;}
 /* ---- D11 links (CLAUDE.md §6, 2026-10-18): the result cards above the diagrams quote values that are
@@ -1016,7 +1018,7 @@ function updStats(){
       h+=`<div class="sc ${ok?'ctm':'crd'}"><div class="sc-l"><span style="text-transform:none">σ</span> env</div><div class="sc-v">${sg.toFixed(2)}</div><div class="sc-u">${fu}/${lu}²${smdStrAlt(sg)}${Fbv>0?` / ${Fbv} ${ok?'✓':'✗'}`:''}</div></div>`;dI.push({n:'σ env',v:`${sg.toFixed(2)} ${fu}/${lu}²`,st:Fbv>0?(ok?'pass':'fail'):'na',d:`${fu}/${lu}²${smdStrAlt(sg)}${Fbv>0?` / ${Fbv} ${ok?'✓':'✗'}`:''}`,c:(wk[1]||[])[1]});}   /* SMD8; SMLS */
     if(deD.length){const dm=Math.max(...deD.map(p=>Math.abs(p.y)));
       let lim='',ok=true;
-      if(defLim>0){const gv=deflGov();ok=deflSpans().every(s2=>s2.ok);lim=` / span ${gv.i+1}: L/${defLim}=${gv.allow.toFixed(4)} ${ok?'✓':'✗'}`;}
+      if(defLim>0){const gv=deflGov();ok=deflSpans().every(s2=>s2.ok);lim=` / span ${gv.i+1}: ${gv.cant?'2L':'L'}/${defLim}=${gv.allow.toFixed(4)} ${ok?'✓':'✗'}`;}
       h+=`<div class="sc ${ok?'cam':'crd'}"><div class="sc-l">|<span style="text-transform:none">δ</span>| env</div><div class="sc-v">${dm.toFixed(4)}</div><div class="sc-u">${lu}${lim}</div></div>`;dI.push({n:'|δ| env',v:`${dm.toFixed(4)} ${lu}`,st:defLim>0?(ok?'pass':'fail'):'na',d:lim?lim.replace(/^ \/ /,''):'',c:(wk[1]||[])[1]});}   /* SMLS */
   } else {
     const mv=shD.length?Math.max(...shD.map(p=>Math.abs(p.y))):0;
@@ -1027,7 +1029,7 @@ function updStats(){
       h+=`<div class="sc ${ok?'ctm':'crd'}"><div class="sc-l"><span style="text-transform:none">σ</span> max</div><div class="sc-v">${sg.toFixed(2)}</div><div class="sc-u">${fu}/${lu}²${smdStrAlt(sg)}${Fbv>0?` / ${Fbv} ${ok?'✓':'✗'}`:''}</div></div>`;dI.push({n:'σ max',v:`${sg.toFixed(2)} ${fu}/${lu}²`,st:Fbv>0?(ok?'pass':'fail'):'na',d:`${fu}/${lu}²${smdStrAlt(sg)}${Fbv>0?` / ${Fbv} ${ok?'✓':'✗'}`:''}`,c:(wk[2]||[])[1]});}   /* SMD8; SMLS */
     if(deD.length){const dm=Math.max(...deD.map(p=>Math.abs(p.y)));
       let lim='',ok=true;
-      if(defLim>0){const gv=deflGov();ok=deflSpans().every(s2=>s2.ok);lim=` / span ${gv.i+1}: L/${defLim}=${gv.allow.toFixed(4)} ${ok?'✓':'✗'}`;}
+      if(defLim>0){const gv=deflGov();ok=deflSpans().every(s2=>s2.ok);lim=` / span ${gv.i+1}: ${gv.cant?'2L':'L'}/${defLim}=${gv.allow.toFixed(4)} ${ok?'✓':'✗'}`;}
       h+=`<div class="sc ${ok?'cam':'crd'}"><div class="sc-l"><span style="text-transform:none">δ</span> max</div><div class="sc-v">${dm.toFixed(4)}</div><div class="sc-u">${lu}${lim}<br>${curName().replace(/[<>&]/g,'')}</div></div>`;dI.push({n:'δ max',v:`${dm.toFixed(4)} ${lu}`,st:defLim>0?(ok?'pass':'fail'):'na',d:(lim?lim.replace(/^ \/ /,'')+'<br>':'')+curName().replace(/[<>&]/g,''),c:(wk[2]||[])[1]});}   /* SMLS */   /* SMDL: the analysed combination; SMD8: δ not upper-cased */
   }
   h+=smdWorkedIn();   /* D11 links */
@@ -1500,7 +1502,7 @@ function drawDefl(){
   nodeX.slice(1,-1).forEach(nx=>{const xp=tx(nx);ctx.strokeStyle='rgba(100,116,139,.2)';ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(xp,PT);ctx.lineTo(xp,H-PB);ctx.stroke();ctx.setLineDash([]);});
   // limit line
   if(defLim>0)deflSpans().forEach(s2=>{const lim=s2.allow;if(lim<=mx){const y=ty(lim),x1=tx(nodeX[s2.i]),x2=tx(nodeX[s2.i+1]);ctx.strokeStyle='#dc2626';ctx.setLineDash([6,3]);ctx.lineWidth=1.3;ctx.beginPath();ctx.moveTo(x1,y);ctx.lineTo(x2,y);ctx.stroke();ctx.setLineDash([]);
-    ctx.fillStyle='#dc2626';ctx.font='bold 9px system-ui';ctx.textAlign='left';ctx.fillText(`L/${defLim}=${lim.toFixed(4)}`,x1+4,y-4);}});
+    ctx.fillStyle='#dc2626';ctx.font='bold 9px system-ui';ctx.textAlign='left';ctx.fillText(`${s2.cant?'2L':'L'}/${defLim}=${lim.toFixed(4)}`,x1+4,y-4);}});
   const gr=ctx.createLinearGradient(0,PT,0,PT+gH);gr.addColorStop(0,'rgba(8,145,178,.03)');gr.addColorStop(1,'rgba(8,145,178,.15)');
   if(DS.length>1)DS.forEach((d,q)=>{ctx.beginPath();ctx.strokeStyle=q?'#dc2626':'#2563eb';ctx.lineWidth=2;ctx.lineJoin='round';d.forEach((p,i)=>i===0?ctx.moveTo(tx(p.x),ty(p.y)):ctx.lineTo(tx(p.x),ty(p.y)));ctx.stroke();});
   else{
@@ -1635,7 +1637,7 @@ function plotDefl(){
     if(defLim>0)deflSpans().forEach(s2=>{const lim=s2.allow;
       shapes.push({type:'line',xref:'x',x0:nodeX[s2.i],x1:nodeX[s2.i+1],y0:lim,y1:lim,
         line:{color:'#dc2626',width:1.3,dash:'dash'}});
-      anns.push({xref:'x',x:nodeX[s2.i],y:lim,text:`limit L/${defLim} = ${lim.toFixed(4)} ${lu}`,
+      anns.push({xref:'x',x:nodeX[s2.i],y:lim,text:`limit ${s2.cant?'2L':'L'}/${defLim} = ${lim.toFixed(4)} ${lu}`,
         showarrow:false,xanchor:'left',yanchor:'bottom',font:{size:9,color:'#dc2626',family:PFONT.family}});});
     const mP=deD.reduce((m,p)=>p.y>m.y?p:m,deD[0]);
     if(mP.y>1e-9)anns.push({x:mP.x,y:mP.y,text:`δ = ${mP.y.toFixed(5)} ${lu}`,showarrow:true,arrowhead:0,
@@ -1717,7 +1719,7 @@ function renderKaTeX(){
     if(secOn&&Iv>0&&cv>0)s3+=`<div class="bxr">${kb(`\\sigma_{\\text{env}}=\\frac{|M|_{\\text{env}}\\cdot c}{I}=\\boxed{${(mm*cv/Iv).toFixed(4)}\\,\\text{${fu}/${lu}^2}}`)}</div>`;
     if(deD.length){const dm=Math.max(...deD.map(p2=>Math.abs(p2.y)));
       s3+=`<div class="bxb">${pNL('<strong>Deflection envelope</strong> — δ by double integration of M/EI for each enabled combination, enveloped point-wise.',[['Load basis:','a factored combination gives a factored deflection: for a service-level check, enable only service combinations or use single-combination mode.'],['Limit:','the limit L/x is user-selected (IBC 2018 Table 1604.3).'],['Span length:',SMD_DEFL_SPAN+'.']])}${kb(`|\\delta|_{\\text{env}}=\\boxed{${dm.toFixed(6)}\\,\\text{${lu}}}`)}`;
-      if(defLim>0)deflSpans().forEach(s2=>{s3+=kb(`\\text{Span ${s2.i+1}: }|\\delta|_{\\max}=${s2.dm.toFixed(5)}\\;${s2.ok?'\\le':'>'}\\;L_{${s2.i+1}}/${defLim}=${s2.L}/${defLim}=${s2.allow.toFixed(5)}\\,\\text{${lu}}\\;\\Rightarrow\\;${s2.ok?'\\text{OK}\\;\\checkmark':'\\text{NG}\\;\\times'}\\;\\text{(${s2.c&&COMBOS[s2.c]?COMBOS[s2.c].name:''})}`);});
+      if(defLim>0)deflSpans().forEach(s2=>{s3+=kb(`\\text{Span ${s2.i+1}: }|\\delta|_{\\max}=${s2.dm.toFixed(5)}\\;${s2.ok?'\\le':'>'}\\;${s2.cant?'2':''}L_{${s2.i+1}}/${defLim}=${s2.cant?'2\\times '+s2.L:s2.L}/${defLim}=${s2.allow.toFixed(5)}\\,\\text{${lu}}\\;\\Rightarrow\\;${s2.ok?'\\text{OK}\\;\\checkmark':'\\text{NG}\\;\\times'}\\;\\text{(${s2.c&&COMBOS[s2.c]?COMBOS[s2.c].name:''})}`);});
       s3+=`</div>`;}
     html+=sec(N++,'Envelope Results — All Combinations',s3);
     // reactions
@@ -1776,7 +1778,7 @@ function renderKaTeX(){
       if(deD.length){const dm=Math.max(...deD.map(p2=>Math.abs(p2.y)));
         const dp=deD.reduce((m,q)=>Math.abs(q.y)>Math.abs(m.y)?q:m,deD[0]),dw=smdDwork(dp.x);   /* SMW: worked at the governing x; SMDL: the combination stated */
         s6+=`<div class="bxb">${pNL(`<strong>Deflection</strong> for ${curName().replace(/[<>&]/g,'')} — double integration of M/EI.`,[['Boundary conditions:','δ=0 at supports (cantilever: δ=0 and slope=0 at the fixed support).'],['Limit:','the '+SMD_DEFL_LIM+'.'],['Span length:',SMD_DEFL_SPAN+'.'],['Load basis:',SMD_DEFL_CHK+'.']])}${dw?kb(`\\delta(x)=\\frac{-F_2(x)+C_1x+C_2}{EI},\\;F_2(x)=\\int_0^x\\!\\int_0^x M\\,dx\\,dx`)+kb(dw.xb!=null?`C_1=\\frac{F_2(${dw.xb})-F_2(${dw.xa})}{${dw.xb}-${dw.xa}}=${dw.C1.toPrecision(6)},\\;C_2=F_2(${dw.xa})-C_1\\,${dw.xa}=${dw.C2.toPrecision(6)}`:`C_1=F_1(${dw.xa})=${dw.C1.toPrecision(6)},\\;C_2=F_2(${dw.xa})-C_1\\,${dw.xa}=${dw.C2.toPrecision(6)}`)+kb(`x=${dp.x.toFixed(3)}:\\;\\delta=\\frac{-(${dw.F2.toPrecision(6)})+${dw.C1.toPrecision(6)}\\times${dp.x.toFixed(3)}+(${dw.C2.toPrecision(6)})}{${dw.EI.toPrecision(6)}}=${dw.v.toFixed(6)}\\,\\text{${lu}}`):''}${kb(`\\delta_{\\max}=\\boxed{${dm.toFixed(6)}\\,\\text{${lu}}}`)}`;
-        if(defLim>0)deflSpans().forEach(s2=>{s6+=kb(`\\text{Span ${s2.i+1}: }\\delta_{\\max}=${s2.dm.toFixed(5)}\\;${s2.ok?'\\le':'>'}\\;L_{${s2.i+1}}/${defLim}=${s2.L}/${defLim}=${s2.allow.toFixed(5)}\\,\\text{${lu}}\\;\\Rightarrow\\;${s2.ok?'\\text{OK}\\;\\checkmark':'\\text{NG}\\;\\times'}`);});
+        if(defLim>0)deflSpans().forEach(s2=>{s6+=kb(`\\text{Span ${s2.i+1}: }\\delta_{\\max}=${s2.dm.toFixed(5)}\\;${s2.ok?'\\le':'>'}\\;${s2.cant?'2':''}L_{${s2.i+1}}/${defLim}=${s2.cant?'2\\times '+s2.L:s2.L}/${defLim}=${s2.allow.toFixed(5)}\\,\\text{${lu}}\\;\\Rightarrow\\;${s2.ok?'\\text{OK}\\;\\checkmark':'\\text{NG}\\;\\times'}`);});
         s6+=`</div>`;}
       html+=sec(N++,'Section Analysis',s6);
     } else if(secOn)html+=sec(N++,'Section Analysis',`<div class="bxr">${p('<strong>E and I must both be greater than 0.</strong> A blank, zero or negative value was entered, so deflection and section results are not computed.')}</div>`);
@@ -2458,8 +2460,8 @@ function smrModel(){
         T.push({title:'Shear stress',ref:w?'AISC 360-16 Sec. G2.1':'solid rectangle',res:/\.tau$/,steps:[smrS({id:'env.tau',label:w?`Average web shear for the envelope |V| (${shpW.nm}: A_w = d t_w)`:'Shear stress for the envelope |V|, solid rectangle',sym:'\\tau_{env}',eq:w?'\\frac{|V|_{env}}{d\\,t_{w}}':'\\frac{3|V|_{env}}{2A}',sub:w?`\\frac{${vm.toFixed(3)}}{${shpW.d.toPrecision(4)} \\times ${shpW.tw.toPrecision(4)}}`:`\\frac{3 \\times ${vm.toFixed(3)}}{2 \\times ${Av}}`,value:tq.val,unit:`${fu}/${lu}^{2}`,d:4})]});
         res.push(['τ envelope = '+tbrStrip(tq.lbl),{t:tq.val.toFixed(4)+` ${fu}/${lu}²`+smdStrAlt(tq.val),n:true,key:'sm/env.tau'},'—','—']);}}
     if(deD.length){const dm=Math.max(...deD.map(p2=>Math.abs(p2.y))),st=[smrS({id:'env.dm',label:'Largest |δ| over the enabled combinations (double integration of M/EI per combination)',sym:'|\\delta|_{env}',eq:'',sub:'',value:dm,unit:lu,d:6,note:SMD_DEFL_NOTE('A factored combination gives a factored deflection:',[['For a service-level check:','enable only service combinations, or use single-combination mode.']])})];   /* SMNL-2: was 'A factored … mode. '+SMD_DEFL_TXT */   /* SMDL */
-      if(defLim>0)deflSpans().forEach(s2=>{st.push(smrS({id:'env.dr'+s2.i,label:`Span ${s2.i+1}: |δ|max = ${s2.dm.toFixed(5)} ${lu}${s2.c&&COMBOS[s2.c]?' ('+COMBOS[s2.c].name+')':''} against L/${defLim} = ${s2.L}/${defLim} = ${s2.allow.toFixed(5)} ${lu}`,sym:'\\frac{\\delta_{max}}{L/'+defLim+'}',eq:'',sub:`\\frac{${s2.dm.toFixed(5)}}{${s2.allow.toFixed(5)}}`,value:s2.ratio,unit:'',d:3,ok:s2.ok}));
-        res.push([`δ max, span ${s2.i+1}`,{t:s2.dm.toFixed(6)+' '+lu,n:true},`L/${defLim} = ${s2.allow.toFixed(5)} ${lu}`,smrDC(s2.ratio,s2.ok,'sm/env.dr'+s2.i)]);});
+      if(defLim>0)deflSpans().forEach(s2=>{st.push(smrS({id:'env.dr'+s2.i,label:`Span ${s2.i+1}: |δ|max = ${s2.dm.toFixed(5)} ${lu}${s2.c&&COMBOS[s2.c]?' ('+COMBOS[s2.c].name+')':''} against ${s2.cant?'2L':'L'}/${defLim} = ${s2.cant?'2 × '+s2.L:s2.L}/${defLim} = ${s2.allow.toFixed(5)} ${lu}${s2.cant?' (cantilever overhang: l = 2L, IBC 2018 Table 1604.3 footnote i)':''}`,sym:'\\frac{\\delta_{max}}{'+(s2.cant?'2L':'L')+'/'+defLim+'}',eq:'',sub:`\\frac{${s2.dm.toFixed(5)}}{${s2.allow.toFixed(5)}}`,value:s2.ratio,unit:'',d:3,ok:s2.ok}));
+        res.push([`δ max, span ${s2.i+1}`,{t:s2.dm.toFixed(6)+' '+lu,n:true},`${s2.cant?'2L':'L'}/${defLim} = ${s2.allow.toFixed(5)} ${lu}`,smrDC(s2.ratio,s2.ok,'sm/env.dr'+s2.i)]);});
       else res.push(['|δ| envelope',{t:dm.toFixed(6)+' '+lu,n:true,key:'sm/env.dm'},'—','—']);
       T.push({title:'Deflection',ref:defLim>0?'limit L/'+defLim+' (user input)':'',res:/\.dm$/,steps:st});}
     aSubs.push({title:'Envelope results — all enabled combinations',items:[{type:'note',text:'Each enabled combination is solved independently by the direct stiffness method; the envelope is taken point-wise at the analysis stations.'+(smdMixedEnv()?' '+SMD_MIXED_TXT:'')},
@@ -2506,8 +2508,8 @@ function smrModel(){
         res.push(['τ max = '+tbrStrip(tq.lbl),{t:tq.val.toFixed(4)+` ${fu}/${lu}²`+smdStrAlt(tq.val),n:true,key:'sm/tau'},'—','—']);}
       if(SS.length)T.push({title:'Section stresses',ref:'σ = M c / I',res:/sig$/,steps:SS});
       if(deD.length){const dm=Math.max(...deD.map(p2=>Math.abs(p2.y))),dp=deD.reduce((m,q)=>Math.abs(q.y)>Math.abs(m.y)?q:m,deD[0]),dw=smdDwork(dp.x),DS=[smrS({id:'dm',label:`Largest deflection for ${curName()}, at x = ${dp.x.toFixed(3)} ${lu} (double integration of M/EI: F2 = ∫∫M dx dx from x = 0; δ = 0 at the supports, cantilever: δ = 0 and slope = 0 at the fixed support${dw?`; C1 = ${dw.C1.toPrecision(6)}, C2 = ${dw.C2.toPrecision(6)}, F2(x) = ${dw.F2.toPrecision(6)}`:''})`,sym:'\\delta_{max}',eq:dw?'\\frac{-F_{2}(x)+C_{1}x+C_{2}}{EI}':'',sub:dw?`\\frac{-(${dw.F2.toPrecision(6)})+${dw.C1.toPrecision(6)} \\times ${dp.x.toFixed(3)}+(${dw.C2.toPrecision(6)})}{${dw.EI.toPrecision(6)}}`:'',value:dm,unit:lu,d:6,note:SMD_DEFL_NOTE('Deflection limit and load basis:')})];   /* SMNL-2: was note:SMD_DEFL_TXT */   /* SMW, SMDL */
-        if(defLim>0)deflSpans().forEach(s2=>{DS.push(smrS({id:'dr'+s2.i,label:`Span ${s2.i+1}: δmax = ${s2.dm.toFixed(5)} ${lu} at x = ${s2.x.toFixed(3)} against L/${defLim} = ${s2.L}/${defLim} = ${s2.allow.toFixed(5)} ${lu}`,sym:'\\frac{\\delta_{max}}{L/'+defLim+'}',eq:'',sub:`\\frac{${s2.dm.toFixed(5)}}{${s2.allow.toFixed(5)}}`,value:s2.ratio,unit:'',d:3,ok:s2.ok}));
-          res.push([`δ max, span ${s2.i+1}`,{t:s2.dm.toFixed(6)+' '+lu,n:true},`L/${defLim} = ${s2.allow.toFixed(5)} ${lu}`,smrDC(s2.ratio,s2.ok,'sm/dr'+s2.i)]);});
+        if(defLim>0)deflSpans().forEach(s2=>{DS.push(smrS({id:'dr'+s2.i,label:`Span ${s2.i+1}: δmax = ${s2.dm.toFixed(5)} ${lu} at x = ${s2.x.toFixed(3)} against ${s2.cant?'2L':'L'}/${defLim} = ${s2.cant?'2 × '+s2.L:s2.L}/${defLim} = ${s2.allow.toFixed(5)} ${lu}${s2.cant?' (cantilever overhang: l = 2L, IBC 2018 Table 1604.3 footnote i)':''}`,sym:'\\frac{\\delta_{max}}{'+(s2.cant?'2L':'L')+'/'+defLim+'}',eq:'',sub:`\\frac{${s2.dm.toFixed(5)}}{${s2.allow.toFixed(5)}}`,value:s2.ratio,unit:'',d:3,ok:s2.ok}));
+          res.push([`δ max, span ${s2.i+1}`,{t:s2.dm.toFixed(6)+' '+lu,n:true},`${s2.cant?'2L':'L'}/${defLim} = ${s2.allow.toFixed(5)} ${lu}`,smrDC(s2.ratio,s2.ok,'sm/dr'+s2.i)]);});
         else res.push(['δ max',{t:dm.toFixed(6)+' '+lu,n:true,key:'sm/dm'},'—','—']);
         T.push({title:'Deflection',ref:defLim>0?'limit L/'+defLim+' per span (user input)':'',res:/dm$/,steps:DS});}
     } else if(secOn)aSubs.push({title:'Section analysis',items:[{type:'note',warn:true,text:'E and I must both be greater than 0: a blank, zero or negative value was entered, so deflection and section results are not computed.'}]});
