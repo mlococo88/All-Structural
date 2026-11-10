@@ -5612,6 +5612,143 @@ index 2650570..15de47e 100644
 - **Decisions (pending engineer review):** (1) the per-girder LL & DL pull keeps a plate-girder selector in the card (the same choice as the Girders & plates tab), rather than a link back to that tab. (2) "Last sent" is read from this browser's per-project copies (no new record is stored); another browser's sends are not shown. (3) No other tab of this app had hand-off controls, so no "Project tab → Hand-offs" link was needed.
 - **Other copies:** none.
 
+## 2026-11-10 — PR: claude/sb-plan-flip (PR #1348: https://github.com/mlococo88/All-Structural/pull/1348) — Drawings: framing plan and erection diagram sheets drawn with G1 at the top (SBFLIP; drawing only, engineer decision 2026-11-10)
+- **Problem:** the DXF framing plan (`engine/drawings.js plan()`, sheet "FRAMING PLAN") and the erection diagram (`engine/sheets.js erect()`, sheet "ERECTION DIAGRAM AND GIRDER LAYOUT") drew G1 at the bottom (Y = y·12, y up). With stations increasing to the right, that is the mirror image of the screen plan (Framing tab, Summary, Report), the 3D view and the typical section, which all show G1 on top (found in #1343, open item (a)). Engineer decision 2026-11-10: G1 at the top, G_nb at the bottom, stations to the right, on the sheet and its DXF.
+- **Change (drawing only; no computed value, saved data or tab-graphic DXF changes):**
+  - `plan()`: `Y = y => y * 12` → `Y = y => (wid - y) * 12` (wid = y of G_nb), with `yT = Y(G.ys[0])` (G1, top) and `yB = Y(wid)` (G_nb, bottom). The x of every point is unchanged (`FR.xb(k, i) = sup_k + (y_i − y_c) tan θ_k`), so a + skew puts the G_nb (lower) end ahead-station, as the screen plan.
+  - Annotations moved to keep the drawing a true mirror with readable text (no text is mirrored; all rotation 0): G1's cross-frame chain `Y(0) − 3h` → `yT + 3h`; spans "SPAN k = … (G1)" `Y(0) − 6h` → `yT + 6h`; G_nb's chain `Y(wid) + 3h` → `yB − 3h`; field-splice chain `Y(wid) + 6h` → `yB − 6h`, FS labels `Y(wid) + 8.4h` → `yB − 9.2h` (under the splice extension lines); support-line leader and "CL BRG. ABUT. 1 / CL PIER k / CL BRG. ABUT. 2" from the G_nb end up to `Y(wid) + 10h` → from the G1 end up to `yT + 10h`; "SKEW θ°" from beyond the G1 end → beyond the G_nb end (below the plan); title, scale note and RIDOT note `Y(wid) + 14h / 12.4h / 16h` → `yT + …`; framing tables `Y(0) − 10h` → `yB − 11h`; the out-to-out dimension `dimV(Y(0), Y(wid))` → `dimV(yB, yT)`.
+  - Kept on the same side of each girder as before (toward the next girder): connection plates `gy + q.side·(b_t + 0.3)` → `gy − q.side·(b_t + 0.3)`; intermediate stiffeners `sg = i === 0 ? 1 : -1` → `i === 0 ? -1 : 1`; the G1 top-flange labels `Y(g0.y) + b_f/2 + 0.8h` → `Y(g0.y) − b_f/2 − 1.5h`; the X and E tags `dy = 1` → `dy = −1`.
+  - `erect()`: `Y = y => y * 12` → `Y = y => (G.ys[nb − 1] − y) * 12`; FS labels (along G_nb) `Y(g.y) + 2h` → `Y(g.y) − 2.9h`; title and note above G1 (`Y(G.ys[0]) + 7h / 5.3h`); tables `Y(0) − 6h` → `Y(G.ys[nb − 1]) − 6h`. The work-point table (X along the girders, Y toward G_nb, in ft) is data and is unchanged.
+  - `erect()` support lines: before, they ran on 2h past G1 and G_nb in y only, `line(xb(k,0), Y(y_1) − 2h, xb(k,nb−1), Y(y_nb) + 2h)`, which drew a skewed line at less than its skew (11-girder bridge at 30°: 16.10°). After: extended 2h along the line itself, so the drawn angle is the skew. **Decision (pending engineer review):** fixed here because the task asks for the skew to be drawn correctly on every plan sheet; it is drawing geometry only.
+- **Exact code:** before / after (`git diff` of the two engine files):
+```diff
+diff --git a/apps/steel-bridge/engine/drawings.js b/apps/steel-bridge/engine/drawings.js
+index f64549d..fdc291a 100644
+--- a/apps/steel-bridge/engine/drawings.js
++++ b/apps/steel-bridge/engine/drawings.js
+@@ -157,17 +157,23 @@
+   const brgType = (G, k) => { const B = ((G.stf || {}).bearing || {}).types || {}; return (k === 0 || k === G.sup.length - 1 ? B.A : B.B) || { np: 1, bt: 7, tp: 0.75, sp: 0 }; };
+   const tsType = (G, r) => (((G.stf || {}).transverse || {}).types || {})[r] || { bt: 6, tp: 0.5 };
+ 
+-  /* ---------- 1: framing plan (GirderDetail dxfPlan) ---------- */
++  /* ---------- 1: framing plan (GirderDetail dxfPlan) ----------
++     SBFLIP (2026-11-10, engineer): G1 at the top, G_nb at the bottom, stations increasing to the right, as the screen plan, the 3D view and
++     the cross-section: the plan is mirrored about the bridge axis, Y(y) = (y_nb − y)·12 (G1 at y = y_nb·12, G_nb at 0). The x of every point
++     is unchanged, so a + skew still puts the G_nb (lower) end of a support line ahead-station. Text is placed, never mirrored; the
++     annotations along G1 (its cross-frame chain, the spans, the support labels) are above the plan, those along G_nb (its chain, the
++     field splices, the skew labels) below it, and the connection plates, stiffeners, top-flange labels and tags stay on the same side of
++     each girder as before (toward the next girder). */
+   function plan(G, D, opt) {
+     opt = opt || {};
+     const FR = G.FR, nb = G.nb, wid = G.ys[nb - 1], Lx = Math.max(...G.girders.map(g => g.x0 + g.bear[g.bear.length - 1])) - Math.min(...G.girders.map(g => g.x0));
+     D.k = opt.k || scaleFor(Lx * 12 * 1.15, 30); D.h = TXT * D.k; const h = D.h, i0 = D.mark();
+     const ly = { g: D.layer('GRDR', 5), b: D.layer('BRNG-CNTR', 8), x: D.layer('XFRM', 3), xe: D.layer('XFRM-END', 6), s: D.layer('SPLC', 1), d: D.layer('DIMS', 7), t: D.layer('ANNO-TEXT', 7), tb: D.layer('TABL', 7) };
+-    const cl = D.ltype('CENTER'), X = x => x * 12, Y = y => y * 12, sup = G.sup, BW = bwName(G);
+-    sup.forEach((xs, k) => { const ax = X(FR.xb(k, 0)), ay = Y(G.ys[0]), bx = X(FR.xb(k, nb - 1)), by = Y(wid), L = Math.hypot(bx - ax, by - ay) || 1, ux = (bx - ax) / L, uy = (by - ay) / L, ex = 3 * h;
++    const cl = D.ltype('CENTER'), X = x => x * 12, Y = y => (wid - y) * 12, yT = Y(G.ys[0]), yB = Y(wid), sup = G.sup, BW = bwName(G);   // SBFLIP: yT = G1 (top), yB = G_nb (bottom)
++    sup.forEach((xs, k) => { const ax = X(FR.xb(k, 0)), ay = yT, bx = X(FR.xb(k, nb - 1)), by = yB, L = Math.hypot(bx - ax, by - ay) || 1, ux = (bx - ax) / L, uy = (by - ay) / L, ex = 3 * h;
+       D.line(ly.b, ax - ux * ex, ay - uy * ex, bx + ux * ex, by + uy * ex, cl);
+-      D.line(ly.b, bx + ux * ex, by + uy * ex, bx + ux * ex, Y(wid) + 10 * h, cl); D.text(ly.t, bx + ux * ex, Y(wid) + 10.6 * h, h, k === 0 ? 'CL BRG. ABUT. 1' : k === sup.length - 1 ? 'CL BRG. ABUT. 2' : `CL PIER ${k}`, 1);
+-      D.text(ly.t, ax - ux * ex * 1.6, ay - uy * ex * 1.6 - 1.2 * h, h * 0.8, `SKEW ${f2(G.skews[k])}%%d`, 1); });
++      D.line(ly.b, ax - ux * ex, ay - uy * ex, ax - ux * ex, yT + 10 * h, cl); D.text(ly.t, ax - ux * ex, yT + 10.6 * h, h, k === 0 ? 'CL BRG. ABUT. 1' : k === sup.length - 1 ? 'CL BRG. ABUT. 2' : `CL PIER ${k}`, 1);
++      D.text(ly.t, bx + ux * ex * 1.6, by + uy * ex * 1.6 - 1.2 * h, h * 0.8, `SKEW ${f2(G.skews[k])}%%d`, 1); });
+     FR.frames.forEach(f => D.line(f.type === 'sup' ? ly.xe : ly.x, X(f.xa), Y(G.ys[f.bay]), X(f.xc), Y(G.ys[f.bay + 1])));
+     // RIDOT stepped (GirderDetail 2026-10-19): CL roadway, W.P.s, the intermediate lines parallel to CL of bearings, spacing along CL roadway
+     if (FR.orient && FR.orient.some(o => o.stp)) { const yc = Y(FR.yc), lxl = D.layer('XFRM-LINE', 3);
+@@ -176,35 +182,35 @@
+       FR.orient.forEach(o => { if (!o.stp) return; const k = o.k, Lc = o.stp.Lc, at = (t, i) => { const f = t / Lc; return (1 - f) * FR.xb(k, i) + f * FR.xb(k + 1, i); };
+         o.stp.ln.forEach(t => D.line(lxl, X(at(t, 0)), Y(G.ys[0]), X(at(t, nb - 1)), Y(G.ys[nb - 1]), cl));
+         D.chainH(ly.d, [sup[k], ...o.stp.ln.map(t => sup[k] + t), sup[k + 1]].map(X), yc + 2 * h, yc); });
+-      D.text(ly.t, Math.min(...sup.map((_, k) => Math.min(X(FR.xb(k, 0)), X(FR.xb(k, nb - 1))))), Y(wid) + 16 * h, h * 0.75, `INTERMEDIATE ${BW} LINES PARALLEL TO CL OF BEARINGS (TYP.), ONE NORMAL TO THE GIRDERS IN EACH BAY. SPACING MEASURED ALONG CL ROADWAY. W.P. = CL ROADWAY ON CL BEARING.`); }
++      D.text(ly.t, Math.min(...sup.map((_, k) => Math.min(X(FR.xb(k, 0)), X(FR.xb(k, nb - 1))))), yT + 16 * h, h * 0.75, `INTERMEDIATE ${BW} LINES PARALLEL TO CL OF BEARINGS (TYP.), ONE NORMAL TO THE GIRDERS IN EACH BAY. SPACING MEASURED ALONG CL ROADWAY. W.P. = CL ROADWAY ON CL BEARING.`); }
+     const lf = D.layer('GRDR-FLNG', 5), lst = D.layer('GRDR-STIF', 30), lbr = D.layer('BRNG', 8), gcl = D.layer('GRDR-CNTR', 8), cp = tsType(G, 'B'), ts = tsType(G, 'A');
+     G.girders.forEach((g, i) => { const gy = Y(g.y), S = g.segs;
+       S.forEach((s, k) => { const x0 = X(g.x0 + s.s0), x1 = X(g.x0 + s.s1), hb = s.topB / 2; D.line(lf, x0, gy - hb, x1, gy - hb); D.line(lf, x0, gy + hb, x1, gy + hb);
+         const bj = k ? Math.max(hb, S[k - 1].topB / 2) : hb; D.line(lf, x0, gy - bj, x0, gy + bj); if (k === S.length - 1) D.line(lf, x1, gy - hb, x1, gy + hb); });
+-      g.cps.forEach(q => { const x = X(g.x0 + q.s); D.rect(lst, x - cp.tp / 2, gy, x + cp.tp / 2, gy + q.side * (cp.bt + 0.3)); });
++      g.cps.forEach(q => { const x = X(g.x0 + q.s); D.rect(lst, x - cp.tp / 2, gy, x + cp.tp / 2, gy - q.side * (cp.bt + 0.3)); });   // SBFLIP: G(i+1) is below
+       g.bear.forEach((b, k) => { const bs = brgType(G, k), xc = X(g.x0 + b), sp = +bs.sp || 0, np = Math.max(1, Math.round(+bs.np || 1)), grp = (np - 1) * sp;
+         for (let q = 0; q < np; q++) { const x = xc - grp / 2 + q * sp; [-1, 1].forEach(sg => D.rect(lst, x - bs.tp / 2, gy, x + bs.tp / 2, gy + sg * (bs.bt + 0.3))); }
+         D.rect(lbr, xc - 0.6 * h, gy - 0.6 * h, xc + 0.6 * h, gy + 0.6 * h); });
+-      const sg = i === 0 ? 1 : -1; g.stiff.forEach(s => D.rect(lst, X(g.x0 + s) - ts.tp / 2, gy, X(g.x0 + s) + ts.tp / 2, gy + sg * (ts.bt + 0.3)));
++      const sg = i === 0 ? -1 : 1; g.stiff.forEach(s => D.rect(lst, X(g.x0 + s) - ts.tp / 2, gy, X(g.x0 + s) + ts.tp / 2, gy + sg * (ts.bt + 0.3)));
+       D.line(gcl, X(g.x0), gy, X(g.x0 + g.bear[g.bear.length - 1]), gy, cl); D.text(ly.t, X(g.x0 + g.bear[g.bear.length - 1]) + 2 * h, gy - h / 2, h, g.label);
+       g.spl.forEach(s => D.line(ly.s, X(g.x0 + s), gy - h * 0.8, X(g.x0 + s), gy + h * 0.8));
+       g.spl.forEach((s, k) => { const R = splR(opt.RS, g, k); if (R) D.rect(D.layer('SPLC-PLAT', 1), X(g.x0 + s) - R.fl.top.Lpl / 2, gy - R.fl.top.bo / 2, X(g.x0 + s) + R.fl.top.Lpl / 2, gy + R.fl.top.bo / 2); }); });
+     // dimensions: girder spacing, cross-frames along G1 and Gn, splices along Gn, spans along G1
+     const xMin = Math.min(...sup.map((_, k) => Math.min(X(FR.xb(k, 0)), X(FR.xb(k, nb - 1))))), g0 = G.girders[0], gN = G.girders[nb - 1];
+-    D.chainV(ly.d, G.ys.map(Y), xMin - 4 * h, X(g0.x0) - h); D.dimV(ly.d, Y(0), Y(wid), xMin - 8 * h, null, '<> CL-CL EXT. GIRDERS');
+-    D.chainH(ly.d, [...g0.bear.map(b => X(g0.x0 + b)), ...g0.cps.filter(q => q.side > 0).map(q => X(g0.x0 + q.s))], Y(0) - 3 * h, Y(0));
+-    D.chainH(ly.d, [...gN.bear.map(b => X(gN.x0 + b)), ...gN.cps.filter(q => q.side < 0).map(q => X(gN.x0 + q.s))], Y(wid) + 3 * h, Y(wid));
+-    if (gN.spl.length) { D.chainH(ly.d, [X(gN.x0 + gN.bear[0]), ...gN.spl.map(s => X(gN.x0 + s)), X(gN.x0 + gN.bear[gN.bear.length - 1])], Y(wid) + 6 * h, Y(wid));
+-      gN.spl.forEach((s, k) => D.text(ly.t, X(gN.x0 + s), Y(wid) + 8.4 * h, h * 0.8, `FS${k + 1}`, 1)); }
+-    G.spans.forEach((_, k) => D.dimH(ly.d, X(g0.x0 + g0.bear[k]), X(g0.x0 + g0.bear[k + 1]), Y(0) - 6 * h, Y(0), `SPAN ${k + 1} = <> (G1)`));
++    D.chainV(ly.d, G.ys.map(Y), xMin - 4 * h, X(g0.x0) - h); D.dimV(ly.d, yB, yT, xMin - 8 * h, null, '<> CL-CL EXT. GIRDERS');
++    D.chainH(ly.d, [...g0.bear.map(b => X(g0.x0 + b)), ...g0.cps.filter(q => q.side > 0).map(q => X(g0.x0 + q.s))], yT + 3 * h, yT);
++    D.chainH(ly.d, [...gN.bear.map(b => X(gN.x0 + b)), ...gN.cps.filter(q => q.side < 0).map(q => X(gN.x0 + q.s))], yB - 3 * h, yB);
++    if (gN.spl.length) { D.chainH(ly.d, [X(gN.x0 + gN.bear[0]), ...gN.spl.map(s => X(gN.x0 + s)), X(gN.x0 + gN.bear[gN.bear.length - 1])], yB - 6 * h, yB);
++      gN.spl.forEach((s, k) => D.text(ly.t, X(gN.x0 + s), yB - 9.2 * h, h * 0.8, `FS${k + 1}`, 1)); }
++    G.spans.forEach((_, k) => D.dimH(ly.d, X(g0.x0 + g0.bear[k]), X(g0.x0 + g0.bear[k + 1]), yT + 6 * h, yT, `SPAN ${k + 1} = <> (G1)`));
+     { const f = FR.frames.find(q => q.type !== 'sup' && q.bay === 0), fe = FR.frames.find(q => q.type === 'sup' && q.bay === 0);
+-      if (f) tag(D, ly.t, X((f.xa + f.xc) / 2), Y((G.ys[0] + G.ys[1]) / 2), 'X', `INTERMEDIATE ${BW}`);
+-      if (fe) tag(D, ly.t, X((fe.xa + fe.xc) / 2), Y((G.ys[0] + G.ys[1]) / 2), 'E', `END ${BW}`, -1, 1); }
+-    D.text(ly.t, xMin, Y(wid) + 14 * h, h * 1.6, 'FRAMING PLAN');
+-    D.text(ly.t, xMin, Y(wid) + 12.4 * h, h * 0.75, `TOP FLANGES, CONNECTION PLATES, BEARING STIFFENERS AND INTERMEDIATE STIFFENERS SHOWN TO SCALE. SQUARE = BEARING. SCALE ${SCALE_NAME[D.k]} WHEN PLOTTED.`);
+-    g0.segs.forEach(s => D.text(ly.t, X(g0.x0 + (s.s0 + s.s1) / 2), Y(g0.y) + s.topB / 2 + 0.8 * h, h * 0.7, `TOP FL. ${frac(s.topB)} x ${frac(s.topT)}`, 1));
++      if (f) tag(D, ly.t, X((f.xa + f.xc) / 2), Y((G.ys[0] + G.ys[1]) / 2), 'X', `INTERMEDIATE ${BW}`, 1, -1);
++      if (fe) tag(D, ly.t, X((fe.xa + fe.xc) / 2), Y((G.ys[0] + G.ys[1]) / 2), 'E', `END ${BW}`, -1, -1); }
++    D.text(ly.t, xMin, yT + 14 * h, h * 1.6, 'FRAMING PLAN');
++    D.text(ly.t, xMin, yT + 12.4 * h, h * 0.75, `TOP FLANGES, CONNECTION PLATES, BEARING STIFFENERS AND INTERMEDIATE STIFFENERS SHOWN TO SCALE. SQUARE = BEARING. SCALE ${SCALE_NAME[D.k]} WHEN PLOTTED.`);
++    g0.segs.forEach(s => D.text(ly.t, X(g0.x0 + (s.s0 + s.s1) / 2), Y(g0.y) - s.topB / 2 - 1.5 * h, h * 0.7, `TOP FL. ${frac(s.topB)} x ${frac(s.topT)}`, 1));
+     // framing data tables
+-    const y = Y(0) - 10 * h, rows = G.girders.map(g => [g.label, ...G.spans.map((_, k) => dFI(X(g.bear[k + 1] - g.bear[k]))), dFI(X(g.bear[g.bear.length - 1] - g.bear[0])), ...g.spl.map(s => dFI(X(s - g.bear[0]))), String(g.cps.length)]);
++    const y = yB - 11 * h, rows = G.girders.map(g => [g.label, ...G.spans.map((_, k) => dFI(X(g.bear[k + 1] - g.bear[k]))), dFI(X(g.bear[g.bear.length - 1] - g.bear[0])), ...g.spl.map(s => dFI(X(s - g.bear[0]))), String(g.cps.length)]);
+     const t1 = table(D, ly.tb, xMin, y, ['GIRDER', ...G.spans.map((_, k) => `SPAN ${k + 1}`), 'TOTAL', ...G.splices.map((_, k) => `FS${k + 1} FROM BRG.`), BW === 'DIAPHRAGM' ? 'INT. DIAPHRAGMS' : 'INT. X-FRAMES'], rows, 'GIRDER LENGTHS ALONG GIRDER CL (CL BRG. TO CL BRG.) AND FIELD SPLICE LOCATIONS');
+     table(D, ly.tb, xMin, t1.y - h, ['GIRDER', `INTERMEDIATE ${BW} LOCATIONS FROM CL BRG. ABUT. 1, ALONG GIRDER`], G.girders.flatMap(g => { const L = g.cps.map(q => dFI(X(q.s - g.bear[0]))), out = []; for (let i = 0; i < Math.max(1, L.length); i += 12) out.push([i ? '' : g.label, L.slice(i, i + 12).join(', ')]); return out; }), `${BW} LOCATIONS`);
+     return { id: 'plan', title: 'Framing plan', i0, i1: D.mark(), k: D.k, h: D.h };
+diff --git a/apps/steel-bridge/engine/sheets.js b/apps/steel-bridge/engine/sheets.js
+index 10a32fd..16f867d 100644
+--- a/apps/steel-bridge/engine/sheets.js
++++ b/apps/steel-bridge/engine/sheets.js
+@@ -164,19 +164,22 @@
+ 
+   /* ---------- erection diagram, shipping pieces, girder layout (dxfErect) ---------- */
+   const wtAt = (S, a, b) => S.reduce((v, s) => v + Math.max(0, Math.min(b, s.s1) - Math.max(a, s.s0)) * 12 * (s.topB * s.topT + s.botB * s.botT + s.D * s.tw), 0) * GAM / 1000;
++  /* SBFLIP (2026-11-10, engineer): drawn as the framing plan (DW.plan), G1 at the top, G_nb at the bottom, stations to the right:
++     Y(y) = (y_nb − y)·12; the support lines run past G1 and G_nb by 2h, the FS marks below G_nb, the title above G1, the tables below */
+   function erect(D, C) {
+-    const G = C.G, FR = G.FR, h = D.h, ly = { g: D.layer('GRDR-CNTR', 8), b: D.layer('BRNG-CNTR', 8), s: D.layer('SPLC', 1), t: D.layer('ANNO-TEXT', 7), tb: D.layer('TABL', 7) }, cl = D.ltype('CENTER'), X = x => x * 12, Y = y => y * 12, nb = G.nb, T = DW().table;
+-    G.sup.forEach((_, k) => D.line(ly.b, X(FR.xb(k, 0)), Y(G.ys[0]) - 2 * h, X(FR.xb(k, nb - 1)), Y(G.ys[nb - 1]) + 2 * h, cl));
++    const G = C.G, FR = G.FR, h = D.h, ly = { g: D.layer('GRDR-CNTR', 8), b: D.layer('BRNG-CNTR', 8), s: D.layer('SPLC', 1), t: D.layer('ANNO-TEXT', 7), tb: D.layer('TABL', 7) }, cl = D.ltype('CENTER'), X = x => x * 12, nb = G.nb, Y = y => (G.ys[nb - 1] - y) * 12, T = DW().table;
++    G.sup.forEach((_, k) => { const ax = X(FR.xb(k, 0)), ay = Y(G.ys[0]), bx = X(FR.xb(k, nb - 1)), by = Y(G.ys[nb - 1]), L = Math.hypot(bx - ax, by - ay) || 1, ux = (bx - ax) / L, uy = (by - ay) / L, ex = 2 * h;   // SBFLIP: run on past G1 and G_nb along the line (true skew)
++      D.line(ly.b, ax - ux * ex, ay - uy * ex, bx + ux * ex, by + uy * ex, cl); });
+     const allow = +(window.SBDAnalysis ? window.SBDAnalysis.settings(C.P).steelAllowPct : 0) || 0, Lc = n => String.fromCharCode(65 + n), pcs = [];
+     G.girders.forEach((g, i) => { const S = g.segs, beg = S[0].s0, end = S[S.length - 1].s1, cuts = [beg, ...g.spl, end];
+       D.line(ly.g, X(g.x0 + beg), Y(g.y), X(g.x0 + end), Y(g.y));
+       for (let q = 0; q < cuts.length - 1; q++) { const mk = `${g.label}-${Lc(q)}`, w = wtAt(S, cuts[q], cuts[q + 1]); pcs.push([mk, g.label, dFI(X(cuts[q] - beg)), dFI(X(cuts[q + 1] - beg)), dFI(X(cuts[q + 1] - cuts[q])), f2(w), f2(w * (1 + allow / 100))]);
+         D.text(ly.t, X(g.x0 + (cuts[q] + cuts[q + 1]) / 2), Y(g.y) + 0.5 * h, h * 0.9, mk, 1); }
+-      g.spl.forEach((s, k) => { D.line(ly.s, X(g.x0 + s), Y(g.y) - h, X(g.x0 + s), Y(g.y) + h); if (i === nb - 1) D.text(ly.t, X(g.x0 + s), Y(g.y) + 2 * h, h * 0.9, `FS${k + 1}`, 1); }); });
++      g.spl.forEach((s, k) => { D.line(ly.s, X(g.x0 + s), Y(g.y) - h, X(g.x0 + s), Y(g.y) + h); if (i === nb - 1) D.text(ly.t, X(g.x0 + s), Y(g.y) - 2.9 * h, h * 0.9, `FS${k + 1}`, 1); }); });
+     const xr = Math.min(...G.sup.map((_, k) => Math.min(X(FR.xb(k, 0)), X(FR.xb(k, nb - 1))))), BW = DW().bwName(G);
+-    D.text(ly.t, xr, Y(G.ys[nb - 1]) + 7 * h, 1.6 * h, 'ERECTION DIAGRAM');
+-    D.text(ly.t, xr, Y(G.ys[nb - 1]) + 5.3 * h, 0.8 * h, `PIECE MARKS SHOWN. SUGGESTED SEQUENCE: SET THE PIECES OF ADJACENT GIRDERS IN PAIRS, INSTALL ${BW}S BETWEEN THEM, AND COMPLETE FIELD SPLICES BEFORE RELEASING THE CRANE; ERECTION PLAN BY THE CONTRACTOR.`);
+-    const y = Y(0) - 6 * h, heavy = Math.max(...pcs.map(p => +p[5]));
++    D.text(ly.t, xr, Y(G.ys[0]) + 7 * h, 1.6 * h, 'ERECTION DIAGRAM');
++    D.text(ly.t, xr, Y(G.ys[0]) + 5.3 * h, 0.8 * h, `PIECE MARKS SHOWN. SUGGESTED SEQUENCE: SET THE PIECES OF ADJACENT GIRDERS IN PAIRS, INSTALL ${BW}S BETWEEN THEM, AND COMPLETE FIELD SPLICES BEFORE RELEASING THE CRANE; ERECTION PLAN BY THE CONTRACTOR.`);
++    const y = Y(G.ys[nb - 1]) - 6 * h, heavy = Math.max(...pcs.map(p => +p[5]));
+     const T1 = T(D, ly.tb, xr, y, ['MARK', 'GIRDER', 'FROM', 'TO', 'LENGTH', 'PLATES (KIP)', `WITH ${f0(allow)}% DETAIL ALLOWANCE (KIP)`], pcs.map(p => +p[5] === heavy ? [...p.slice(0, 6), p[6] + ' (HEAVIEST)'] : p), 'SHIPPING PIECES (STATIONS FROM GIRDER END; STEEL AT 490 PCF; ALLOWANCE OF THE ANALYSIS TAB)');
+     const tot = G.girders.map(g => [g.label, f2(pcs.filter(p => p[1] === g.label).reduce((a, p) => a + +p[5], 0))]);
+     const T2 = T(D, ly.tb, xr + T1.w + 8 * h, y, ['GIRDER', 'PLATE WEIGHT (KIP)'], [...tot, ['TOTAL', f2(tot.reduce((a, r) => a + +r[1], 0))]], 'STEEL BY GIRDER');
+```
+- **Governing provision:** none (drawing presentation; no AASHTO value involved).
+- **Check case (built-in project, 5 girders at 9.5 ft, plot scale 1" = 20', h = 24 in):**
+  - 0° skew: girder centerlines G1…G5 at y = 0, 114, 228, 342, 456 in → 456, 342, 228, 114, 0 in. Abut. 1 support line (0, −72)–(0, 528) → (0, 528)–(0, −72). Tag G1 at (4368, −12) → (4368, 444); G5 at (4368, 444) → (4368, −12).
+  - 30° skew: G1 to G5 = 4 × 9.5 = 38 ft = 456 in; x of the Abut. 1 line at G1 = (0 − 19) tan 30° × 12 = −131.64 in, at G5 = +131.64 in (Δx = 456 tan 30° = 263.27 in). Before: line (−167.64, −62.35)–(167.64, 518.35), G1 end at the bottom. After: (−167.64, 518.35)–(167.64, −62.35), G1 end at the top, G5 end at the bottom and 263.27 in ahead; angle from the normal to the girders atan(263.27 / 456) = 30.00°, + with the lower (G5) end ahead, as the screen plan.
+- **How verified:** new test in `tests/engine/dxf-sheets.test.mjs` (SBFLIP: the plan and erection sheets of 10 projects, skews 0, ±30, 45, mixed 10/−20/30/0 and the dxf-sheets projects: G1's centerline above G_nb's with the bay spacings, girder tags in order, support labels above G1 and skew labels below G_nb, every text unrotated, each of 80 support lines at its entered skew with the sign, hand-check values; it fails on origin/main). `tests/engine/drawings.test.mjs`: the plan coordinates checked at (y_nb − y)·12. `tests/baselines/dxf-sheets.json`: only the `|plan` and `|erect` entries re-recorded (`RECORD_DXF=plan,erect`; a full re-record differs from origin/main in those 20 entries only; every plot scale unchanged). check-syntax; engine drawings, sheets, dxf-sheets (the section overlap test: 0 overlaps), dxf-detc, framing-plan; smoke steel-bridge-drawings, steel-bridge-dxf-unchanged (every tab-graphic DXF byte-identical to origin/main). Text/line crossings on the plan sheet (tests/engine/overlap.mjs, built-in with 2 splices): 0°: 18 line-through-text and 1 text-over-text after vs 28 and 1 on origin/main; 30°: 19 and 1 vs 21 and 1 (all present before the change: dimension ends at the skew labels, cross-frames through the tags and top-flange labels); erection sheet 0 and 0.
+- **Saved data (§5):** none.
+- **Open items:** the plan sheet's existing crossings above (skew labels on the chain-dimension ends, cross-frame lines through the tags and top-flange labels) are unchanged in kind; not fixed here.
+- **Other copies:** none (GirderDetail `dxfPlan` in `Steel Bridge Design.html` is the old tool and is not changed).
+
 ## 2026-11-10 — PR: claude/mbe4-sbapp (PR #1349: https://github.com/mlococo88/All-Structural/pull/1349) — Rating: AASHTO MBE cited as the 4th Edition (2026)   [text only; no result, saved key or format change]
 - **Engineer (2026-11-10):** the tools follow the AASHTO Manual for Bridge Evaluation, 4th Edition (2026) (reference copy: `structural_references/MBE 4th Edition - 2026 - part 1.pdf`, `-part 2.pdf`).
 - **Where (to re-apply by hand):**
