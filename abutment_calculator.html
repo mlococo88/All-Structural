@@ -9097,6 +9097,13 @@ function d3Wings(R,T,cmat,edgeMat,xb,yTop,Lab){ const grp=D3.group;
    Tab 10 section figure uses (panel I-0a: b, h_c, h_d, piles; panel I-1: L_ab, skew, h_bw, t_bw; panel I-0b approach slab; panel I-13 wings).
    Skew: the girders, the deck and the approach slab run at θ (panel I-1) to the normal of the abutment; the piles stay square to the abutment
    (weak axis = web parallel to the abutment CL, spaced along it). The plan sense of the skew is schematic (the inputs give its magnitude). */
+/* AB3A (2026-11-10): the approach slab layer of the 3D view (toggle "Approach slab"). Per-browser UI key abutcalc_d3ApSlab_v1 ('0' = hidden,
+   '1' or absent = shown); not in S, so the project, the autosave and Export JSON are unchanged. The slab is drawn only while panel I-0b has it
+   on (R.ap from computeAp, not the equivalent-dead-load-only form); display only. */
+const AB3A_KEY="abutcalc_d3ApSlab_v1";
+let ab3aShow=null;
+function d3ApShow(){ if(ab3aShow===null){ try{ ab3aShow=localStorage.getItem(AB3A_KEY)!=="0"; }catch(e){ ab3aShow=true; } } return ab3aShow; }
+function d3ApSet(on){ ab3aShow=!!on; try{ localStorage.setItem(AB3A_KEY,on?"1":"0"); }catch(e){} }
 function d3Add(geo,mat,edgeMat){ const ms=new THREE.Mesh(geo,mat); D3.group.add(ms); if(edgeMat) D3.group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo),edgeMat)); return ms; }
 // a plan polygon [[x, z], …] (world) extruded vertically from y0 to y0 + h
 function d3PlanGeo(pts,y0,h){ const sh=new THREE.Shape(); sh.moveTo(pts[0][0],-pts[0][1]); pts.slice(1).forEach(q=>sh.lineTo(q[0],-q[1])); sh.closePath();
@@ -9141,7 +9148,7 @@ function d3SemiParts(R,T,o){
   d3Add(d3SecGeo([[x0,yB],[x1,yB],[x1,yTop],[x0,yTop]],o.Lab),M.diaph,M.ed);   // moves with the superstructure; its bottom at the girder bottoms (on the bearings)
   const td=Math.min(0.7,0.3*o.hbw);
   d3Super(R,M,{xRef:o.xBrg-o.cx, xEnd:x0+Math.min(1.0,0.6*(x1-x0)), xDeck:x0, Ls:o.xBwFront+Math.max(4,0.3*o.B), yTop, td, dg:yTop-td-yB, th, Lab:o.Lab});
-  if(S.apSlab&&S.apSlab.on) d3ApSlab(R,M,x1,yTop,th,o.Lab);
+  if(S.apSlab&&S.apSlab.on&&d3ApShow()) d3ApSlab(R,M,x1,yTop,th,o.Lab);   // AB3A: the layer toggle
   if(T.dims){ const l=d3Label('end diaphragm (on bearings)','dim'); l.position.set((x0+x1)/2,yTop+0.9,-o.Lab/2); D3.group.add(l); }
 }
 // integral abutment: pile cap + end diaphragm (one wall, b × (h_c + h_d)) with the girders cast in, on one row of H-piles; no seat, no bearings
@@ -9154,7 +9161,7 @@ function build3DIntegral(R){
   d3Add(d3SecGeo([[-cx,hc],[b-cx,hc],[b-cx,H],[-cx,H]],Lab),M.wall,M.ed);
   const td=Math.min(0.7,0.3*hd), Ls=Math.max(6,Math.min(12,1.5*H));
   d3Super(R,M,{xRef:0, xEnd:-cx+Math.min(1.0,0.5*b), xDeck:-cx, Ls, yTop:H, td, dg:Math.min(+I.dg||hd-td,hd-td+0.5*hc), th, Lab});
-  const ap=(S.apSlab&&S.apSlab.on)? d3ApSlab(R,M,b-cx,H,th,Lab) : null;
+  const ap=(S.apSlab&&S.apSlab.on&&d3ApShow())? d3ApSlab(R,M,b-cx,H,th,Lab) : null;   // AB3A: the layer toggle
   d3Wings(R,T,M.conc,M.ed||new THREE.LineBasicMaterial({color:0x555550}),b-cx,H,Lab);
   // soil: backfill behind the wall (below the approach slab) and the fill in front over D_front
   if(T.soil){ const sw=Math.max(6,ap? R.ap.L : 8), sh2=H-(ap? R.ap.t+(R.ap.sup==="shelf"? R.ap.hS/12 : 0) : 0);
@@ -9216,7 +9223,7 @@ function build3D(R){
   const B=R.geo.B, Lab=g.Lab, Lftg=(+g.Lftg||g.Lab), tf=g.tf, hstem=g.hstem, hbw=g.hbw, soilH=g.soilH;
   const xStemBack=g.Ltoe+g.tsb, xBwFront=xStemBack-g.tbw, xStemTopFront=xStemBack-g.tst, xBrg=R.geo.xBrg;
   const cx=B/2;                                  // center offset (longitudinal)
-  const grp=D3.group; d3ClearGroup();
+  const grp=D3.group; d3ClearGroup(); D3.apSlab=null;   // AB3A
   const P=(xl,y,zt)=> new THREE.Vector3(xl-cx, y, zt);
 
   // ---------- concrete: footing (length L_ftg) and wall (stem+backwall, length L_ab) extruded separately ----------
@@ -9240,9 +9247,13 @@ function build3D(R){
     addBlock(wsh,Lab);
     d3Wings(R,T,cmat,edgeMat,xStemBack-cx,tf+hstem+hbw,Lab);   // AB3D: the wing block moved to d3Wings (same objects, same order)
     if(semi) d3SemiParts(R,T,{cx,tf,hstem,hbw,Lab,xStemBack,xBwFront,xBrg,B});   // AB3D: semi-integral end diaphragm, girders, deck, approach slab
+    // AB3A (2026-11-10): conventional abutment, the approach slab of panel I-0b behind the backwall: its top at the top of the backwall (the
+    // roadway level of the model, as computeAp's z_slab = t_f + h_stem + h_bw − t/2), on the paving-notch shelf (b_S × h_S / h_E) or on the deck end
+    if(!semi&&S.apSlab&&S.apSlab.on&&d3ApShow()){ const M=d3Mats(T); D3.apSlab=d3ApSlab(R,M,xStemBack-cx,tf+hstem+hbw,+g.skew||0,Lab);
+      if(D3.apSlab&&T.dims){ const l=d3Label('approach slab L = '+fmt(R.ap.L)+' ft, t = '+fmt(R.ap.t)+' ft','dim'); l.position.copy(P(xStemBack+0.35*R.ap.L,tf+hstem+hbw+0.7,Lab/2)); grp.add(l); } }
   }
   // ---------- soil block ----------
-  if(T.soil){ const sw=B-xStemBack, sd=Lab, sh2=soilH;
+  if(T.soil){ const sw=B-xStemBack, sd=Lab, sh2=(!semi&&D3.apSlab)? Math.min(soilH,hstem+hbw-R.ap.t) : soilH;   // AB3A: the backfill stops under the approach slab
     if(sw>0&&sh2>0){ const geo=new THREE.BoxGeometry(sw,sh2,sd);
       const mat=new THREE.MeshLambertMaterial({color:0xd9c48f,transparent:true,opacity:0.24,depthWrite:false});
       const mesh=new THREE.Mesh(geo,mat); mesh.position.set((xStemBack+B)/2-cx, tf+sh2/2, 0); grp.add(mesh);
@@ -9326,8 +9337,9 @@ function build3D(R){
 
   // ---------- frame camera ----------
   const yTop=tf+hstem+hbw, yBot=(S.fnd.branch==="pile"&&T.piles)? -pileLen : -0.8;
-  const cY=(yTop+yBot)/2, span=Math.max(B,Lab,Lftg,yTop-yBot);
-  const center=new THREE.Vector3(0,cY,0);
+  const xR=D3.apSlab? Math.max(B,D3.apSlab.xEnd+cx) : B;   // AB3A: the frame takes in the approach slab
+  const cY=(yTop+yBot)/2, span=Math.max(xR,Lab,Lftg,yTop-yBot);
+  const center=new THREE.Vector3(xR/2-cx,cY,0);
   D3.controls.target.copy(center);
   D3.controls.minDistance=span*0.4; D3.controls.maxDistance=span*6;
   D3.modelSpan=span; D3.modelCenter=center.clone();
@@ -9386,7 +9398,7 @@ function renderTab3D(R){
             <div class="d3-panel"><h4>Show / hide</h4>
               ${tog('P','Girder P (vertical)')}${tog('Vx','Girder Vx (long.)')}${tog('Vy','Girder Vy (trans.)')}
               ${tog('eh','Earth pressure')}${tog('ls','Surcharge')}${tog('piles','Piles')}
-              ${tog('soil','Soil block')}${tog('water','Water table')}${tog('dims','Dimensions / labels')}${tog('wire','Concrete wireframe')}
+              ${tog('soil','Soil block')}${tog('water','Water table')}${tog('ap','Approach slab')}${tog('dims','Dimensions / labels')}${tog('wire','Concrete wireframe')}
             </div>
             <div class="d3-panel" style="margin-top:8px;"><h4>Legend</h4><div class="d3-legend" id="d3legend"></div></div>
           </div>
@@ -9395,8 +9407,9 @@ function renderTab3D(R){
     // wire controls (local — not via global handlers)
     const selEl=host.querySelector('select[data-d3sel]'); selEl.value=S.ui.d3Sel||"ls:Strength I";
     selEl.addEventListener('change',()=>{ S.ui.d3Sel=selEl.value; scheduleSave(); if(window.LAST_R) build3D(window.LAST_R); });
-    host.querySelectorAll('input[data-d3tog]').forEach(cb=>{ cb.checked=!!S.ui.d3Tog[cb.dataset.d3tog];
-      cb.addEventListener('change',()=>{ S.ui.d3Tog[cb.dataset.d3tog]=cb.checked; scheduleSave(); if(window.LAST_R) build3D(window.LAST_R); }); });
+    host.querySelectorAll('input[data-d3tog]').forEach(cb=>{ const ap=cb.dataset.d3tog==="ap";   // AB3A: the approach slab layer is a per-browser key, not S.ui.d3Tog
+      cb.checked=ap? d3ApShow() : !!S.ui.d3Tog[cb.dataset.d3tog];
+      cb.addEventListener('change',()=>{ if(ap) d3ApSet(cb.checked); else{ S.ui.d3Tog[cb.dataset.d3tog]=cb.checked; scheduleSave(); } if(window.LAST_R) build3D(window.LAST_R); }); });
     host.querySelectorAll('button[data-d3view]').forEach(b=>b.addEventListener('click',()=>setD3View(b.dataset.d3view)));
     host.querySelector('button[data-d3full]').addEventListener('click',()=>{
       const c=document.getElementById('d3canvas'); c.classList.toggle('d3-full');
@@ -9405,8 +9418,10 @@ function renderTab3D(R){
   } else {
     // scaffold exists — sync control values
     const selEl=host.querySelector('select[data-d3sel]'); if(selEl) selEl.value=S.ui.d3Sel||"ls:Strength I";
-    host.querySelectorAll('input[data-d3tog]').forEach(cb=>{ cb.checked=!!S.ui.d3Tog[cb.dataset.d3tog]; });
+    host.querySelectorAll('input[data-d3tog]').forEach(cb=>{ cb.checked=cb.dataset.d3tog==="ap"? d3ApShow() : !!S.ui.d3Tog[cb.dataset.d3tog]; });   // AB3A
   }
+  { const cb=host.querySelector('input[data-d3tog="ap"]'); if(cb){ const on=apOn()&&!(S.apSlab&&+S.apSlab.qEq>0); cb.disabled=!on;   // AB3A: no slab drawn (off, or the equivalent dead load only)
+    cb.parentNode.title=on?"Approach slab of panel I-0b":"No approach slab to draw (panel I-0b: off, or the equivalent dead load only)"; cb.parentNode.style.opacity=on?"":"0.55"; } }
 }
 
 // isometric snapshot for the PDF report
