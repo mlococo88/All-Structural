@@ -27,6 +27,7 @@
 <script src="shared/steps.js"></script>
 <script src="shared/pile-group.js"></script>   <!-- 8h (2026-11-07): rigid-cap pile-group statics (pileReaction, C-8 group properties), shared with the Retaining Wall Designer -->
 <script src="shared/report.js"></script>
+<script src="shared/dxf.js"></script>   <!-- ABDW (2026-11-10): the Drawings tab (DXF sheets, preview and print), shared DXF R12 writer -->
 <!-- PLIB (2026-11-02): saved-project rename / duplicate, Redo and Ctrl+Z / Ctrl+Y, shared with the other tools -->
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
@@ -133,6 +134,15 @@ header.app-head{
    « shrinks it to a 42 px strip. Below 1200 px nothing changes; hidden in print (the Report is printed). */
 #abDashCol{display:none}
 @media print{#abDashCol{display:none!important}}
+/* ABDW (2026-11-10): the Drawings tab */
+.abdwBar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 8px;font-size:13px;}
+.abdwBar select{width:auto;max-width:100%;}
+.abdwHead{margin:10px 0 6px;font-size:13px;}
+.abdwBox{border:1px solid var(--line);border-radius:4px;overflow:hidden;}
+.abdwBox>.sdx-view{height:auto!important;aspect-ratio:17/11;max-height:62vh;}
+.abdwScroll{overflow-x:auto;max-width:100%;margin-top:10px;}
+.abdwIdx tr[data-abdw]{cursor:pointer;} .abdwIdx tr.on td{background:#eef4fb;font-weight:600;}
+@media print{#tab-dwg{display:none!important}}
 @media screen and (min-width:1200px){
  body.abDashWide .main{grid-template-columns:280px minmax(340px,1fr) 2fr}
  body.abDashWide.abDashColl .main{grid-template-columns:42px minmax(340px,1fr) 2fr}
@@ -6372,18 +6382,21 @@ function renderWarnings(){
 const TABS=[["tab-loads","1 · Geometry & Loads"],["tab-comb","2 · Load Combinations"],
   ["tab-stab","3 · External Stability"],["tab-found","4 · Foundation / Piles"],["tab-struct","5 · Structural Design"],
   ["tab-vm","6 · V &amp; M Diagrams"],["tab-3d","7 · 3D View"],["tab-tables","8 · Detailed Tables"],["tab-wing","9 · Wingwalls"],["tab-iab","10 · Integral / Semi-integral"]];
+const TAB_DWG=["tab-dwg","11 · Drawings"];   /* ABDW (2026-11-10): the Drawings tab (not in TABS: not stored in S.ui.tab, not in the Report) */
 function buildTabs(){
-  ABRP.on=false;   /* ABRP: a rebuilt tab bar shows the saved tab */
+  ABRP.on=false; ABDW.on=false;   /* ABRP: a rebuilt tab bar shows the saved tab (ABDW: also not the Drawings tab) */
   document.getElementById("tabbar").innerHTML=TABS.map(([id,l])=>
     `<div class="tab${S.ui.tab===id?" active":""}" data-tab="${id}">${l}</div>`).join("")
+    +`<div class="tab" data-tab="${TAB_DWG[0]}" title="Drawing sheets: preview, DXF download, print">${TAB_DWG[1]}</div>`   /* ABDW */
     +`<div class="tab" data-tab="tab-rpt" title="Calculation report: worked steps, navigation, print">Report</div>`;   /* ABRP: Report tab (not in TABS) */
   document.getElementById("tabpages").innerHTML=TABS.map(([id])=>
-    `<div class="tabpage${S.ui.tab===id?" active":""}" id="${id}"></div>`).join("")+`<div class="tabpage" id="tab-rpt"></div>`;
+    `<div class="tabpage${S.ui.tab===id?" active":""}" id="${id}"></div>`).join("")+`<div class="tabpage" id="tab-dwg"></div><div class="tabpage" id="tab-rpt"></div>`;   /* ABDW: + tab-dwg */
   document.querySelectorAll("#tabbar .tab").forEach(t=>t.addEventListener("click",()=>activateTab(t.dataset.tab)));
 }
 function activateTab(id){
   if(id==="tab-rpt"){ abrShow(); return; }   /* ABRP: the Report tab is shown on top of the saved tab and never stored in S.ui.tab */
-  ABRP.on=false;
+  if(id==="tab-dwg"){ abdwShow(); return; }   /* ABDW: the Drawings tab, as the Report tab (not stored in S.ui.tab) */
+  ABRP.on=false; ABDW.on=false;
   S.ui.tab=id; scheduleSave();
   document.querySelectorAll("#tabbar .tab").forEach(t=>t.classList.toggle("active",t.dataset.tab===id));
   document.querySelectorAll(".tabpage").forEach(p=>p.classList.toggle("active",p.id===id));
@@ -9135,6 +9148,13 @@ function d3Wings(R,T,cmat,edgeMat,xb,yTop,Lab){ const grp=D3.group;
    Tab 10 section figure uses (panel I-0a: b, h_c, h_d, piles; panel I-1: L_ab, skew, h_bw, t_bw; panel I-0b approach slab; panel I-13 wings).
    Skew: the girders, the deck and the approach slab run at θ (panel I-1) to the normal of the abutment; the piles stay square to the abutment
    (weak axis = web parallel to the abutment CL, spaced along it). The plan sense of the skew is schematic (the inputs give its magnitude). */
+/* AB3A (2026-11-10): the approach slab layer of the 3D view (toggle "Approach slab"). Per-browser UI key abutcalc_d3ApSlab_v1 ('0' = hidden,
+   '1' or absent = shown); not in S, so the project, the autosave and Export JSON are unchanged. The slab is drawn only while panel I-0b has it
+   on (R.ap from computeAp, not the equivalent-dead-load-only form); display only. */
+const AB3A_KEY="abutcalc_d3ApSlab_v1";
+let ab3aShow=null;
+function d3ApShow(){ if(ab3aShow===null){ try{ ab3aShow=localStorage.getItem(AB3A_KEY)!=="0"; }catch(e){ ab3aShow=true; } } return ab3aShow; }
+function d3ApSet(on){ ab3aShow=!!on; try{ localStorage.setItem(AB3A_KEY,on?"1":"0"); }catch(e){} }
 function d3Add(geo,mat,edgeMat){ const ms=new THREE.Mesh(geo,mat); D3.group.add(ms); if(edgeMat) D3.group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo),edgeMat)); return ms; }
 // a plan polygon [[x, z], …] (world) extruded vertically from y0 to y0 + h
 function d3PlanGeo(pts,y0,h){ const sh=new THREE.Shape(); sh.moveTo(pts[0][0],-pts[0][1]); pts.slice(1).forEach(q=>sh.lineTo(q[0],-q[1])); sh.closePath();
@@ -9179,7 +9199,7 @@ function d3SemiParts(R,T,o){
   d3Add(d3SecGeo([[x0,yB],[x1,yB],[x1,yTop],[x0,yTop]],o.Lab),M.diaph,M.ed);   // moves with the superstructure; its bottom at the girder bottoms (on the bearings)
   const td=Math.min(0.7,0.3*o.hbw);
   d3Super(R,M,{xRef:o.xBrg-o.cx, xEnd:x0+Math.min(1.0,0.6*(x1-x0)), xDeck:x0, Ls:o.xBwFront+Math.max(4,0.3*o.B), yTop, td, dg:yTop-td-yB, th, Lab:o.Lab});
-  if(S.apSlab&&S.apSlab.on) d3ApSlab(R,M,x1,yTop,th,o.Lab);
+  if(S.apSlab&&S.apSlab.on&&d3ApShow()) d3ApSlab(R,M,x1,yTop,th,o.Lab);   // AB3A: the layer toggle
   if(T.dims){ const l=d3Label('end diaphragm (on bearings)','dim'); l.position.set((x0+x1)/2,yTop+0.9,-o.Lab/2); D3.group.add(l); }
 }
 // integral abutment: pile cap + end diaphragm (one wall, b × (h_c + h_d)) with the girders cast in, on one row of H-piles; no seat, no bearings
@@ -9192,7 +9212,7 @@ function build3DIntegral(R){
   d3Add(d3SecGeo([[-cx,hc],[b-cx,hc],[b-cx,H],[-cx,H]],Lab),M.wall,M.ed);
   const td=Math.min(0.7,0.3*hd), Ls=Math.max(6,Math.min(12,1.5*H));
   d3Super(R,M,{xRef:0, xEnd:-cx+Math.min(1.0,0.5*b), xDeck:-cx, Ls, yTop:H, td, dg:Math.min(+I.dg||hd-td,hd-td+0.5*hc), th, Lab});
-  const ap=(S.apSlab&&S.apSlab.on)? d3ApSlab(R,M,b-cx,H,th,Lab) : null;
+  const ap=(S.apSlab&&S.apSlab.on&&d3ApShow())? d3ApSlab(R,M,b-cx,H,th,Lab) : null;   // AB3A: the layer toggle
   d3Wings(R,T,M.conc,M.ed||new THREE.LineBasicMaterial({color:0x555550}),b-cx,H,Lab);
   // soil: backfill behind the wall (below the approach slab) and the fill in front over D_front
   if(T.soil){ const sw=Math.max(6,ap? R.ap.L : 8), sh2=H-(ap? R.ap.t+(R.ap.sup==="shelf"? R.ap.hS/12 : 0) : 0);
@@ -9254,7 +9274,7 @@ function build3D(R){
   const B=R.geo.B, Lab=g.Lab, Lftg=(+g.Lftg||g.Lab), tf=g.tf, hstem=g.hstem, hbw=g.hbw, soilH=g.soilH;
   const xStemBack=g.Ltoe+g.tsb, xBwFront=xStemBack-g.tbw, xStemTopFront=xStemBack-g.tst, xBrg=R.geo.xBrg;
   const cx=B/2;                                  // center offset (longitudinal)
-  const grp=D3.group; d3ClearGroup();
+  const grp=D3.group; d3ClearGroup(); D3.apSlab=null;   // AB3A
   const P=(xl,y,zt)=> new THREE.Vector3(xl-cx, y, zt);
 
   // ---------- concrete: footing (length L_ftg) and wall (stem+backwall, length L_ab) extruded separately ----------
@@ -9278,9 +9298,13 @@ function build3D(R){
     addBlock(wsh,Lab);
     d3Wings(R,T,cmat,edgeMat,xStemBack-cx,tf+hstem+hbw,Lab);   // AB3D: the wing block moved to d3Wings (same objects, same order)
     if(semi) d3SemiParts(R,T,{cx,tf,hstem,hbw,Lab,xStemBack,xBwFront,xBrg,B});   // AB3D: semi-integral end diaphragm, girders, deck, approach slab
+    // AB3A (2026-11-10): conventional abutment, the approach slab of panel I-0b behind the backwall: its top at the top of the backwall (the
+    // roadway level of the model, as computeAp's z_slab = t_f + h_stem + h_bw − t/2), on the paving-notch shelf (b_S × h_S / h_E) or on the deck end
+    if(!semi&&S.apSlab&&S.apSlab.on&&d3ApShow()){ const M=d3Mats(T); D3.apSlab=d3ApSlab(R,M,xStemBack-cx,tf+hstem+hbw,+g.skew||0,Lab);
+      if(D3.apSlab&&T.dims){ const l=d3Label('approach slab L = '+fmt(R.ap.L)+' ft, t = '+fmt(R.ap.t)+' ft','dim'); l.position.copy(P(xStemBack+0.35*R.ap.L,tf+hstem+hbw+0.7,Lab/2)); grp.add(l); } }
   }
   // ---------- soil block ----------
-  if(T.soil){ const sw=B-xStemBack, sd=Lab, sh2=soilH;
+  if(T.soil){ const sw=B-xStemBack, sd=Lab, sh2=(!semi&&D3.apSlab)? Math.min(soilH,hstem+hbw-R.ap.t) : soilH;   // AB3A: the backfill stops under the approach slab
     if(sw>0&&sh2>0){ const geo=new THREE.BoxGeometry(sw,sh2,sd);
       const mat=new THREE.MeshLambertMaterial({color:0xd9c48f,transparent:true,opacity:0.24,depthWrite:false});
       const mesh=new THREE.Mesh(geo,mat); mesh.position.set((xStemBack+B)/2-cx, tf+sh2/2, 0); grp.add(mesh);
@@ -9364,8 +9388,9 @@ function build3D(R){
 
   // ---------- frame camera ----------
   const yTop=tf+hstem+hbw, yBot=(S.fnd.branch==="pile"&&T.piles)? -pileLen : -0.8;
-  const cY=(yTop+yBot)/2, span=Math.max(B,Lab,Lftg,yTop-yBot);
-  const center=new THREE.Vector3(0,cY,0);
+  const xR=D3.apSlab? Math.max(B,D3.apSlab.xEnd+cx) : B;   // AB3A: the frame takes in the approach slab
+  const cY=(yTop+yBot)/2, span=Math.max(xR,Lab,Lftg,yTop-yBot);
+  const center=new THREE.Vector3(xR/2-cx,cY,0);
   D3.controls.target.copy(center);
   D3.controls.minDistance=span*0.4; D3.controls.maxDistance=span*6;
   D3.modelSpan=span; D3.modelCenter=center.clone();
@@ -9424,7 +9449,7 @@ function renderTab3D(R){
             <div class="d3-panel"><h4>Show / hide</h4>
               ${tog('P','Girder P (vertical)')}${tog('Vx','Girder Vx (long.)')}${tog('Vy','Girder Vy (trans.)')}
               ${tog('eh','Earth pressure')}${tog('ls','Surcharge')}${tog('piles','Piles')}
-              ${tog('soil','Soil block')}${tog('water','Water table')}${tog('dims','Dimensions / labels')}${tog('wire','Concrete wireframe')}
+              ${tog('soil','Soil block')}${tog('water','Water table')}${tog('ap','Approach slab')}${tog('dims','Dimensions / labels')}${tog('wire','Concrete wireframe')}
             </div>
             <div class="d3-panel" style="margin-top:8px;"><h4>Legend</h4><div class="d3-legend" id="d3legend"></div></div>
           </div>
@@ -9433,8 +9458,9 @@ function renderTab3D(R){
     // wire controls (local — not via global handlers)
     const selEl=host.querySelector('select[data-d3sel]'); selEl.value=S.ui.d3Sel||"ls:Strength I";
     selEl.addEventListener('change',()=>{ S.ui.d3Sel=selEl.value; scheduleSave(); if(window.LAST_R) build3D(window.LAST_R); });
-    host.querySelectorAll('input[data-d3tog]').forEach(cb=>{ cb.checked=!!S.ui.d3Tog[cb.dataset.d3tog];
-      cb.addEventListener('change',()=>{ S.ui.d3Tog[cb.dataset.d3tog]=cb.checked; scheduleSave(); if(window.LAST_R) build3D(window.LAST_R); }); });
+    host.querySelectorAll('input[data-d3tog]').forEach(cb=>{ const ap=cb.dataset.d3tog==="ap";   // AB3A: the approach slab layer is a per-browser key, not S.ui.d3Tog
+      cb.checked=ap? d3ApShow() : !!S.ui.d3Tog[cb.dataset.d3tog];
+      cb.addEventListener('change',()=>{ if(ap) d3ApSet(cb.checked); else{ S.ui.d3Tog[cb.dataset.d3tog]=cb.checked; scheduleSave(); } if(window.LAST_R) build3D(window.LAST_R); }); });
     host.querySelectorAll('button[data-d3view]').forEach(b=>b.addEventListener('click',()=>setD3View(b.dataset.d3view)));
     host.querySelector('button[data-d3full]').addEventListener('click',()=>{
       const c=document.getElementById('d3canvas'); c.classList.toggle('d3-full');
@@ -9443,8 +9469,10 @@ function renderTab3D(R){
   } else {
     // scaffold exists — sync control values
     const selEl=host.querySelector('select[data-d3sel]'); if(selEl) selEl.value=S.ui.d3Sel||"ls:Strength I";
-    host.querySelectorAll('input[data-d3tog]').forEach(cb=>{ cb.checked=!!S.ui.d3Tog[cb.dataset.d3tog]; });
+    host.querySelectorAll('input[data-d3tog]').forEach(cb=>{ cb.checked=cb.dataset.d3tog==="ap"? d3ApShow() : !!S.ui.d3Tog[cb.dataset.d3tog]; });   // AB3A
   }
+  { const cb=host.querySelector('input[data-d3tog="ap"]'); if(cb){ const on=apOn()&&!(S.apSlab&&+S.apSlab.qEq>0); cb.disabled=!on;   // AB3A: no slab drawn (off, or the equivalent dead load only)
+    cb.parentNode.title=on?"Approach slab of panel I-0b":"No approach slab to draw (panel I-0b: off, or the equivalent dead load only)"; cb.parentNode.style.opacity=on?"":"0.55"; } }
 }
 
 // isometric snapshot for the PDF report
@@ -9461,6 +9489,342 @@ async function captureD3(R){
   let url=null; try{ url=D3.renderer.domElement.toDataURL('image/png'); }catch(e){ url=null; }
   document.querySelectorAll('.tabpage').forEach(p=>p.classList.toggle('active',p.id===wasActive));
   return url;
+}
+</script>
+<script>
+/* =====================================================================
+   DRAWINGS tab (ABDW, 2026-11-10, engineer request "We need to add the DXF export and preview as well"): drawing sheets, 11 x 17
+   (B-size) at a standard architectural plot scale, as the Retaining Wall Designer (RWDW), Spread Footing (SFDW), Light Pole (LPDW),
+   Concrete Beam Capacity (CBDW) and Base Plate & Anchor Designer (BPDW): one DXF R12 file (shared/dxf.js SharedDxf.drawing -> toDXF),
+   each sheet a 17 x 11 in sheet at its plot scale inside its border (SharedDxf.sheetBorder) and title block, side by side in model space,
+   full size in inches (section: x from the toe, y up from the footing base; plan: x from the toe, y along the abutment from its centre);
+   previewed from the same entities (SharedDxf.sheetSVG, SharedDxf.viewer) and printed one 11 x 17 landscape page per sheet at its plot
+   scale (SharedDxf.printSheets).
+     1. ABUTMENT SECTION: footing, stem, backwall (semi-integral: lower abutment and end diaphragm on the bearings; integral: pile cap and
+        end diaphragm), bridge seat and bearing, approach slab with its shelf (paving notch) and far-end support, attached U-wingwall
+        beyond, piles (pile footing / integral row), backfill and water table, dimensions.
+     2. FOOTING PLAN: footing (integral: pile cap) outline, stem, seat and backwall lines, CL bearing with the bearings, pile layout with the
+        pile numbers of Tab 4 §4.1 and the pile dimensions (spread footing: the outline only).
+     3. REINFORCEMENT: the bars of the Tab 5 §5.7 schedule on the section (A1 with its dowel hook and lap, B1, C1, D1, the S&T bars entered,
+        the shelf bars S1 / S2 and the approach-slab bars P1–P3 when designed), the development lengths of Tab 5 as the to-scale figure
+        (svgRebarDims), and the bar table. Integral abutment: the section and a reference to its schedule (Tab 5 §5.7), bars not drawn.
+   Display and export only: geometry and values from the inputs and the computed results (window.LAST_R); nothing here is used by a
+   calculation. The section's pile length and bearing height are schematic and labelled.
+   Saved: the chosen sheet, per browser, key abutcalc_dwgSheet_v1 (written only when a sheet is picked; not in S, the autosave or Export
+   JSON). The tab itself is not stored in S.ui.tab (as the Report tab): ABDW.on.
+   ===================================================================== */
+const ABDW_SC=[[4,'3" = 1\'-0"'],[6,'2" = 1\'-0"'],[8,'1 1/2" = 1\'-0"'],[12,'1" = 1\'-0"'],[16,'3/4" = 1\'-0"'],[24,'1/2" = 1\'-0"'],[32,'3/8" = 1\'-0"'],[48,'1/4" = 1\'-0"'],[64,'3/16" = 1\'-0"'],[96,'1/8" = 1\'-0"'],[192,'1/16" = 1\'-0"']];
+const ABDW={W:17,H:11,m:0.375,tbH:1.0,key:"abutcalc_dwgSheet_v1",cur:null,B:null,on:false};
+const abdwScName=k=>(ABDW_SC.find(q=>q[0]===k)||[0,"1:"+k])[1];
+/* the geometry of the drawings, inches (from the inputs and R.geo / R.ap / R.iab, as the 3D view and the Tab 5 figures) */
+function abdwGeo(R){
+  const g=S.geom, it=iabType(), f=v=>(+v||0)*12, G={it, semi:it==="semi"};
+  G.integ=!!(it==="integral"&&R.iab&&R.iab.integ&&R.iab.pile);
+  G.Lab=f(g.Lab); G.skew=Math.max(0,+g.skew||0);
+  if(G.integ){ const I=S.iab; G.b=f(I.b); G.hc=f(I.hc); G.hd=f(I.hd); G.B=G.b; G.tf=0; G.xb=G.b; G.yTop=G.hc+G.hd; G.Lftg=G.Lab; }
+  else{ G.B=f(R.geo.B); G.tf=f(g.tf); G.Ltoe=f(g.Ltoe); G.tsb=f(g.tsb); G.tst=f(g.tst); G.hstem=f(g.hstem); G.tbw=f(g.tbw); G.hbw=f(g.hbw);
+    G.xb=G.Ltoe+G.tsb; G.xbwF=G.xb-G.tbw; G.xstF=G.xb-G.tst; G.ySeat=G.tf+G.hstem; G.yTop=G.ySeat+G.hbw; G.xBrg=f(R.geo.xBrg);
+    G.Lftg=f(+g.Lftg||g.Lab); G.soilH=f(g.soilH); G.hw=f(g.hw); G.padH=6; }   // padH: the 3D view's 0.5 ft bearing (schematic)
+  const P=R.ap; G.apLegacy=!!(P&&P.legacy);
+  G.ap=(P&&!P.legacy)? {L:P.L*12, Ln:P.L*12*P.cs, t:P.t*12, sup:P.sup, shelf:P.sup==="shelf", bS:P.bS, hS:P.hS, hE:P.hE, far:P.far, rule:P.rule, W:P.W*12} : null;
+  // piles: a pile footing (active piles, numbered as Tab 4 §4.1) or the integral row
+  G.piles=[]; G.pileTxt="";
+  if(G.integ){ const Pp=R.iab.pile, sk=Pp.sk, I=S.iab; G.pd=Pp.weak? sk.bf : sk.d; G.pw=Pp.weak? sk.d : sk.bf; G.emb=Math.max(0,+I.embed||0);
+    Pp.xs.forEach((z,i)=>G.piles.push({no:i+1, x:G.b/2, y:z*12})); G.pileShape="hp";
+    G.pileTxt=sk.k+" ("+(Pp.weak?"WEAK":"STRONG")+" AXIS), N = "+Pp.n+" @ "+SharedDxf.fmtFtIn(f(I.sp))+", EMBEDDED "+SharedDxf.fmtIn(G.emb); }
+  else if(S.fnd.branch==="pile"&&Array.isArray(S.piles.coords)&&R.pile){ const d=+S.piles.pileSize||12; G.pd=d; G.pw=d; G.emb=Math.max(0,+S.piles.embed||0); G.pileShape=S.piles.pileShape||"hp";
+    S.piles.coords.forEach((c,i)=>{ if(c.active) G.piles.push({no:i+1, x:G.B/2+c.x*12, y:c.y*12}); });
+    G.pileTxt=({hp:"HP",square:"SQUARE",round:"ROUND"}[G.pileShape]||"")+" PILES "+SharedDxf.fmtIn(d)+", N = "+G.piles.length+" ACTIVE, EMBEDDED "+SharedDxf.fmtIn(G.emb); }
+  // attached U-wingwalls (panel I-13): seen beyond the section, behind the back face (the 3D view's outline)
+  const W=R.wing, w=S.wing; G.wing=null;
+  if(w&&w.on&&W){ const att=W.type==="attached"; G.wingKind=att?(w.orient==="inline"?"inline":"U"):"indep";
+    if(att&&w.orient!=="inline") G.wing={L:W.L*12, pts:[[0,-W.H0*12],[0,0],[W.L*12,W.bT*W.L*12],[W.L*12,(-W.H0+W.dB*W.L)*12]]}; }
+  return G;
+}
+function abdwBuild(R){
+  if(!window.SharedDxf) throw new Error("shared/dxf.js is not loaded");
+  if(!R||!R.geo) throw new Error("no results");
+  const D=SharedDxf.drawing({prefix:"AB-"}), SH=[], P=S.proj||{}, G=abdwGeo(R), FI=SharedDxf.fmtFtIn, IN=SharedDxf.fmtIn;
+  const AS=s=>String(s==null?"":s).replace(/≥/g,">=").replace(/≤/g,"<=").replace(/φ/g,"PHI").replace(/θ/g,"THETA").replace(/ℓ/g,"L").replace(/[–—−]/g,"-").replace(/·/g,"; ").replace(/§/g,"").replace(/&amp;/g,"&");
+  const T0=D.text, D0=D.dim; D.text=(l,x,y,hh,s,j,rot)=>T0(l,x,y,hh,AS(s),j,rot); D.dim=(l,p1,p2,b,ang,txt)=>D0(l,p1,p2,b,ang,txt==null?txt:AS(txt));
+  const L={conc:D.layer("CONC",7), cj:D.layer("JOINT",8,"HIDDEN"), hid:D.layer("HIDDEN",8,"HIDDEN"), brg:D.layer("BEARING",6), cl:D.layer("CENTER",1,"CENTER"),
+    ap:D.layer("APPROACH-SLAB",7), wing:D.layer("WING-BEYOND",8,"HIDDEN"), pile:D.layer("PILE",4), pid:D.layer("PILE-TEXT",4), soil:D.layer("SOIL",30), wat:D.layer("WATER",4),
+    bar:D.layer("REBAR",5), bmk:D.layer("REBAR-TEXT",5), ldr:D.layer("LEADER",5), dim:D.layer("DIMS",3), txt:D.layer("TEXT",7), tbl:D.layer("TABLE",7), tb:D.layer("TBLK",7), br:D.layer("BRDR",7)};
+  const own=abutOwner(), basis="AASHTO LRFD 10TH ED. (2024)"+(own!=="AASHTO"?" + "+own:"");
+  const AW=ABDW.W-2*ABDW.m-0.5, AH=ABDW.H-2*ABDW.m-ABDW.tbH-0.6;
+  let ox=0, i0v=0;
+  /* text boxes (axis-aligned, a generous Arial width estimate) of the view drawn so far: the free-label placer keeps every label clear */
+  const tw=(s,hh)=>String(s).length*hh*0.74;
+  function boxOf(e){ const s=e.s, hh=e.hh, w=tw(s,hh), x=e.pts[0][0], y=e.pts[0][1], sh=e.j===2?-w:e.j===1?-w/2:0, m=0.15*hh, r=(e.rot||0)*Math.PI/180, c=Math.cos(r), sn=Math.sin(r);
+    const P2=(u,v)=>[x+u*c-v*sn,y+u*sn+v*c], q=[P2(sh-m,-0.12*hh-m),P2(sh+w+m,-0.12*hh-m),P2(sh+w+m,0.85*hh+m),P2(sh-m,0.85*hh+m)];
+    return [Math.min(...q.map(p=>p[0])),Math.min(...q.map(p=>p[1])),Math.max(...q.map(p=>p[0])),Math.max(...q.map(p=>p[1]))]; }
+  function boxes(){ const out=[]; for(let i=i0v;i<D.E.length;i++){ const e=D.E[i]; if(e.t==="TEXT"&&String(e.s).trim()) out.push(boxOf(e)); else if(e.t==="DIM") SharedDxf.dimGeo(e).g.forEach(q=>{ if(q.t==="TEXT"&&String(q.s).trim()) out.push(boxOf(q)); }); } return out; }
+  const hit=(a,B)=>B.some(b=>a[0]<b[2]&&a[2]>b[0]&&a[1]<b[3]&&a[3]>b[1]);
+  /* a label at (x, y), moved down / up in steps of 1.5 heights to the first free place (dir 0: both ways, -1 down only, 1 up only) */
+  function free(l,x,y,hh,s,j,rot,dir){ const B=boxes(), st=1.5*hh, tries=[0]; for(let n=1;n<=14;n++){ if(dir!==1) tries.push(-n*st); if(dir!==-1) tries.push(n*st); }
+    const ver=Math.abs((rot||0)-90)<1;
+    for(const dy of tries){ const e={s:AS(s),hh,j:j||0,rot:rot||0,pts:[[ver?x-dy:x,ver?y:y+dy]]}; e.s=SharedDxf.str(e.s); if(!hit(boxOf(e),B)){ D.text(l,e.pts[0][0],e.pts[0][1],hh,s,j,rot); return e.pts[0]; } }
+    D.text(l,x,y,hh,s,j,rot); return [x,y]; }
+  /* a leader from (x, y) to a label at (xt, yt) (placed clear of the other texts), text left (j 0) or right (j 2) of the shoulder */
+  function lead(x,y,xt,yt,s,j,hh){ hh=hh||D.h; const lines=String(s).split("\n"), dx=(j===2?-1:1)*0.12*D.k;
+    const B=boxes(), st=1.5*hh; let yy=yt;
+    for(let n=0;n<=28;n++){ const dy=n===0?0:(n%2?-1:1)*Math.ceil(n/2)*st, ok=lines.every((q,i)=>!hit(boxOf({s:SharedDxf.str(AS(q)),hh,j,rot:0,pts:[[xt+dx+(j===2?-0.04:0.04)*D.k,yt+dy-0.04*D.k-i*1.45*hh]]}),B));
+      if(ok){ yy=yt+dy; break; } }
+    D.line(L.ldr,x,y,xt,yy); D.line(L.ldr,xt,yy,xt+dx,yy);
+    lines.forEach((q,i)=>D.text(L.bmk,xt+dx+(j===2?-0.04:0.04)*D.k,yy-0.04*D.k-i*1.45*hh,hh,q,j)); }
+  /* dimensions whose text does not fit between the extension lines get it beside them (as RWDW dHs / dVs), clear of the other texts */
+  function dH(p1,p2,y,lab){ const len=Math.abs(p2[0]-p1[0]); if(len<0.5) return; const t=(lab||"<>").replace("<>",D.fmt(len));
+    if(len>=tw(SharedDxf.str(AS(t)),D.h)+0.12*D.k){ D.dim(L.dim,p1,p2,[p1[0],y],0,lab); return; }
+    D.dim(L.dim,p1,p2,[p1[0],y],0," "); free(L.dim,(p1[0]+p2[0])/2,y-0.2*D.k,D.h,t,1,0,-1); }
+  function dV(p1,p2,x,lab,left){ const len=Math.abs(p2[1]-p1[1]); if(len<0.5) return; const t=(lab||"<>").replace("<>",D.fmt(len));
+    if(len>=tw(SharedDxf.str(AS(t)),D.h)+0.12*D.k){ D.dim(L.dim,p1,p2,[x,p1[1]],90,lab); return; }
+    D.dim(L.dim,p1,p2,[x,p1[1]],90," "); free(L.dim,x+(left?-0.1:0.1)*D.k,(p1[1]+p2[1])/2-0.04*D.k,D.h,t,left?2:0); }
+  function chainH(xs,y,yref){ for(let i=1;i<xs.length;i++) dH([xs[i-1],yref],[xs[i],yref],y); }
+  function chainV(ys,x,xref,left){ for(let i=1;i<ys.length;i++) dV([xref,ys[i-1]],[xref,ys[i]],x,null,left); }
+  /* one sheet: content(k) draws at scale k around any origin; the smallest k (largest scale) of ks it fits is used (RWDW sheet) */
+  function sheet(id,title,content,ks,src){
+    const i0=D.mark(); let k=null, over=false, ret=null;
+    for(const kk of ks){ D.E.length=i0; i0v=i0; D.k=kk; D.h=0.09*kk; ret=content(kk)||null; const b=D.bbox(i0);
+      if(!isFinite(b[0])||((b[2]-b[0])/kk<=AW&&(b[3]-b[1])/kk<=AH)){ k=kk; break; } }
+    if(k===null){ k=ks[ks.length-1]; over=true; }
+    const Pk=k, b=D.bbox(i0), W=ABDW.W*Pk, H=ABDW.H*Pk, m=ABDW.m*Pk, tb=ABDW.tbH*Pk;
+    const cx=ox+W/2, cy=m+tb+0.3*Pk+(AH*Pk)/2;
+    if(isFinite(b[0])) D.move(i0,cx-(b[0]+b[2])/2,cy-(b[1]+b[3])/2);
+    const iC=D.mark(); D.k=Pk; D.h=0.1*Pk;
+    SharedDxf.sheetBorder(D,L.br,ox,W,H,Pk); D.rect(L.br,ox+m,m,ox+W-m,H-m);
+    const x0=ox+m, y0=m, w=(ABDW.W-2*ABDW.m)*Pk, rr=tb/2, sc=abdwScName(k);
+    D.rect(L.tb,x0,y0,x0+w,y0+tb); D.line(L.tb,x0,y0+rr,x0+w,y0+rr);
+    // the Project tab fields (panel Project: name, number, calculated by, date, checked by, checked date), as the Report's header
+    const row1=[["PROJECT",P.name,4.25],["PROJECT NO.",P.num,2],["CALCULATED BY",P.calcBy,2],["DATE",P.date,1.75],["CHECKED BY",P.chkBy,2],["CHECKED DATE",P.chkDate,1.75],["SCALE",sc,2.5]];
+    const row2=[["SHEET TITLE",title,5],["DESIGN BASIS",basis,4.25],["DRAWN BY","BRIDGE ABUTMENT CALCULATOR",4],["SHEET","?",3]];
+    let sheetEnt=null;
+    [[row1,y0+rr],[row2,y0]].forEach(([row,yb])=>{ let x=x0; row.forEach(([lab,val,cw],ci)=>{
+      D.text(L.tb,x+0.05*Pk,yb+rr-0.11*Pk,0.065*Pk,lab,0);
+      const mx=Math.floor((cw-0.12)/(0.13*0.9)); D.text(L.tb,x+0.05*Pk,yb+0.1*Pk,0.13*Pk,String(val==null||val===""?"—":val).toUpperCase().slice(0,mx),0);
+      if(lab==="SHEET") sheetEnt=D.E[D.E.length-1];
+      x+=cw*Pk; if(ci<row.length-1) D.line(L.tb,x,yb,x,yb+rr); }); });
+    const sh={id,title,k,i0,iC,i1:D.mark(),ox,W,H,over,sheetEnt,src,scale:sc,known:ret&&ret.known}; SH.push(sh); ox+=W+1*Pk; return sh;
+  }
+  function table(x0,y0,head,rows,hh){
+    const rh=hh*2, cw=head.map((hd,c)=>Math.max(String(hd).length,...rows.map(rw=>String(rw[c]==null?"":rw[c]).length))*hh*0.82+1.9*hh);
+    const tot=cw.reduce((p,q)=>p+q,0); let y=y0; const line=yy=>D.line(L.tbl,x0,yy,x0+tot,yy);
+    line(y); [head,...rows].forEach((rw,ri)=>{ let x=x0; rw.forEach((v,c)=>{ D.text(L.tbl,x+0.8*hh,y-rh+0.6*hh,hh,String(v==null?"":v),0); x+=cw[c]; }); y-=rh; line(y); if(ri===0) line(y+0.12*hh); });
+    let x=x0; [0,...cw].forEach(w=>{ x+=w; D.line(L.tbl,x,y0,x,y); }); return {w:tot,h:y0-y};
+  }
+  const shY=G.ap? G.yTop-G.ap.t : null;   // the slab bottom = the top of the shelf
+  /* concrete in section: footing + stem (+ backwall) or the integral wall; the shelf on the back face; the end diaphragm (semi) */
+  function concrete(slabLen){
+    if(G.integ){ const pts=[[0,0],[G.b,0]]; if(G.ap&&G.ap.shelf) pts.push([G.b,shY-G.ap.hS],[G.b+G.ap.bS,shY-G.ap.hE],[G.b+G.ap.bS,shY],[G.b,shY]);
+      pts.push([G.b,G.yTop],[0,G.yTop]); D.pline(L.conc,pts,true); D.line(L.cj,0,G.hc,G.b,G.hc); }
+    else{ const pts=[[0,0],[G.B,0],[G.B,G.tf],[G.xb,G.tf]];
+      if(G.semi) pts.push([G.xb,G.ySeat],[G.xstF,G.ySeat]);
+      else{ if(G.ap&&G.ap.shelf) pts.push([G.xb,shY-G.ap.hS],[G.xb+G.ap.bS,shY-G.ap.hE],[G.xb+G.ap.bS,shY],[G.xb,shY]); pts.push([G.xb,G.yTop],[G.xbwF,G.yTop],[G.xbwF,G.ySeat],[G.xstF,G.ySeat]); }
+      pts.push([G.Ltoe,G.tf],[0,G.tf]); D.pline(L.conc,pts,true); D.line(L.cj,G.Ltoe,G.tf,G.xb,G.tf);
+      const y0=G.ySeat+G.padH; D.rect(L.brg,G.xBrg-(+S.bearing.padL||18)/2,G.ySeat,G.xBrg+(+S.bearing.padL||18)/2,y0);
+      if(G.semi){ const pts2=[[G.xbwF,y0],[G.xb,y0]]; if(G.ap&&G.ap.shelf) pts2.push([G.xb,shY-G.ap.hS],[G.xb+G.ap.bS,shY-G.ap.hE],[G.xb+G.ap.bS,shY],[G.xb,shY]);
+        pts2.push([G.xb,G.yTop],[G.xbwF,G.yTop]); D.pline(L.conc,pts2,true); } }
+    if(G.ap){ const x1=G.xb+Math.min(G.ap.Ln,slabLen==null?G.ap.Ln:slabLen); D.rect(L.ap,G.xb,shY,x1,G.yTop);
+      if(slabLen!=null&&slabLen<G.ap.Ln){ const zz=0.12*D.k; D.pline(L.ap,[[x1+zz,G.yTop+zz],[x1,G.yTop-G.ap.t*0.35],[x1+zz,G.yTop-G.ap.t*0.65],[x1,shY-zz]],false); } }
+  }
+  function piles(Lp,bars){
+    const xs=G.integ? [G.b/2] : [...new Set(G.piles.map(p=>p.x.toFixed(3)))].map(Number);
+    xs.forEach(x=>{ const a=x-G.pd/2, b=x+G.pd/2, e=Math.min(G.emb,G.integ?G.yTop:G.tf);
+      D.line(L.pile,a,0,a,-Lp); D.line(L.pile,b,0,b,-Lp); D.line(L.hid,a,0,a,e); D.line(L.hid,b,0,b,e); D.line(L.hid,a,e,b,e);
+      const zz=0.08*D.k; D.pline(L.pile,[[a,-Lp],[x-G.pd/4,-Lp+zz],[x+G.pd/4,-Lp-zz],[b,-Lp]],false); });
+    return xs; }
+
+  /* ---------- sheet 1: abutment section ---------- */
+  sheet("sec","ABUTMENT SECTION",k=>{
+    const h=D.h, Lp=G.piles.length? Math.max(48,0.35*G.yTop) : 0, xR=Math.max(G.B,G.ap?G.xb+G.ap.Ln:0,G.wing?G.xb+G.wing.L:0);
+    concrete(null);
+    let pxs=[]; if(G.piles.length) pxs=piles(Lp);
+    if(G.wing) D.pline(L.wing,G.wing.pts.map(p=>[G.xb+p[0],G.yTop+p[1]]),true);
+    // backfill (no slab: the grade at h_soil over the heel) and the water table
+    if(!G.integ&&!G.ap&&G.soilH>0){ const yg=G.tf+G.soilH; D.line(L.soil,G.xb,yg,xR+24,yg); for(let x=G.xb+0.1*k;x<xR+24-0.05*k;x+=0.2*k) D.line(L.soil,x,yg,x-0.08*k,yg-0.08*k); }
+    if(!G.integ&&G.hw>0){ const y=G.hw, xt=xR+12, s=0.08*k; D.line(L.wat,G.xb,y,xR+24,y); D.pline(L.wat,[[xt-s,y+s*1.1],[xt+s,y+s*1.1],[xt,y]],true); }
+    // dimensions: footing (or cap) below, heights at the left, seat / backwall / slab at the top
+    const yD=-Lp-0.45*k;
+    if(G.integ){ dH([0,0],[G.b,0],yD); chainV([0,G.hc,G.yTop],-0.5*k,0,true); dV([0,0],[0,G.yTop],-1.0*k,null,true); }
+    else{ chainH([0,G.Ltoe,G.xb,G.B],yD,0); dH([0,0],[G.B,0],yD-0.4*k);
+      D.dim(L.dim,[0,0],[0,G.tf],[-0.5*k,0],90); dV([0,G.tf],[G.xstF,G.ySeat],-0.5*k,null,true);
+      if(!G.semi) dV([G.xstF,G.ySeat],[G.xbwF,G.yTop],-0.5*k,null,true); else dV([G.xstF,G.ySeat],[G.xbwF,G.yTop],-0.5*k,null,true);
+      dV([0,0],[G.xbwF,G.yTop],-1.0*k,null,true);
+      const yT=G.yTop+0.45*k; dH([G.xstF,G.ySeat],[G.xBrg,G.ySeat],yT); dH([G.xBrg,G.ySeat],[G.xbwF,G.yTop],yT); dH([G.xbwF,G.yTop],[G.xb,G.yTop],yT); }
+    if(G.ap){ const yT=G.yTop+0.45*k; dH([G.xb,G.yTop],[G.xb+G.ap.Ln,G.yTop],yT,G.skew>0.05?"<> (L = "+FI(G.ap.L)+" ALONG THE ROADWAY)":null);
+      dV([G.xb+G.ap.Ln,shY],[G.xb+G.ap.Ln,G.yTop],G.xb+G.ap.Ln+0.4*k); }
+    // labels
+    if(G.integ){ free(L.txt,G.b/2,Math.max(G.hc*0.5,Math.min(G.emb+0.25*k,G.hc*0.8)),h,"PILE CAP",1); free(L.txt,G.b/2,G.hc+G.hd/2,h,"END DIAPHRAGM",1,0); }
+    else{ free(L.txt,(G.Ltoe+G.xb)/2+(G.tsb>G.tst?-0.25*(G.tsb-G.tst):0),G.tf/2-0.4*h,h,"FOOTING",1);
+      const ym=G.tf+G.hstem*0.45, xf=G.Ltoe+(G.xstF-G.Ltoe)*(ym-G.tf)/G.hstem; free(L.txt,(xf+G.xb)/2,ym,h,"STEM",1);
+      if(!G.semi&&G.hbw>tw("BACKWALL",h)+0.2*k) free(L.txt,(G.xbwF+G.xb)/2+0.4*h,G.ySeat+G.hbw*0.5-(G.ap&&G.ap.shelf?0.3*G.ap.hS:0),h,"BACKWALL",1,90);
+      lead(G.xstF+0.3*(G.xbwF-G.xstF),G.ySeat,G.xstF-0.35*k,G.ySeat+0.25*k,"BRIDGE SEAT",2);
+      lead(G.xBrg,G.ySeat+G.padH,G.xstF-0.35*k,G.ySeat+0.75*k,"BEARING "+(+S.bearing.padL||18)+" x "+(+S.bearing.padW||24)+" IN (HEIGHT SCHEMATIC)",2);
+      if(G.semi) lead(G.xbwF,G.yTop-0.5*(G.yTop-G.ySeat),G.xstF-0.35*k,G.yTop+0.1*k,"END DIAPHRAGM ON THE BEARINGS",2);
+      D.line(L.cl,G.xBrg,G.ySeat-0.15*k,G.xBrg,G.yTop+0.75*k); D.text(L.txt,G.xBrg,G.yTop+0.82*k,h,"CL BRG.",1); }
+    if(G.ap){ free(L.txt,G.xb+G.ap.Ln/2,G.yTop-G.ap.t/2-0.42*h,h,"APPROACH SLAB",1);
+      if(G.ap.shelf) lead(G.xb+G.ap.bS,shY-G.ap.hE,G.xb+G.ap.bS+0.4*k,shY-G.ap.hE-0.45*k,"SHELF (PAVING NOTCH) B_S = "+IN(G.ap.bS)+", H_S = "+IN(G.ap.hS)+", H_E = "+IN(G.ap.hE),0);
+      else free(L.txt,G.xb+0.1*k,shY-0.3*k,h,"SLAB BEARS ON THE DECK END OVER THE "+(G.integ||G.semi?"END DIAPHRAGM":"BACKWALL"),0);
+      free(L.txt,G.xb+G.ap.Ln,shY-0.3*k,h,G.ap.far==="sleeper"?"FAR END ON A SLEEPER SLAB (NOT MODELLED)":"FAR END ON THE SUBBASE",2,0,-1); }
+    if(!G.integ) free(L.soil,G.xb+(G.B-G.xb)/2,G.tf+0.3*k,h,"BACKFILL",1);
+    if(!G.integ&&G.hw>0) free(L.wat,xR+0.1*k,G.hw+0.12*k,h,"WATER TABLE",2);
+    if(G.wing) lead(G.xb+G.wing.L,G.yTop+G.wing.pts[3][1],G.xb+G.wing.L+0.4*k,G.yTop+G.wing.pts[3][1]-0.3*k,"U-WINGWALL BEYOND, L = "+FI(G.wing.L),0);
+    else if(G.wingKind) free(L.txt,xR,G.yTop+0.35*k,h,G.wingKind==="inline"?"IN-LINE WINGWALLS: NOT IN THIS SECTION":"INDEPENDENT WINGWALLS: NOT IN THIS SECTION",2,0,1);
+    if(pxs.length){ const x=pxs[pxs.length-1]+G.pd/2; lead(x,-Lp*0.45,Math.max(G.B,x)+0.45*k,-Lp*0.45,G.pileTxt+"\nPILE LENGTH NOT TO SCALE",0); }
+    // view title and notes
+    const bb=D.bbox(i0v), yt=bb[1]-0.35*k;
+    D.text(L.txt,(bb[0]+bb[2])/2,yt,0.12*k,(G.integ?"INTEGRAL ABUTMENT":G.semi?"SEMI-INTEGRAL ABUTMENT":"ABUTMENT")+" SECTION, NORMAL TO THE ABUTMENT - SCALE "+abdwScName(k),1);
+    const notes=["DIMENSIONS FROM THE INPUTS (PANELS I-0A, I-0B, I-1, I-13) AND TAB 1 1.1; LOADS AND CHECKS: SEE THE CALCULATION REPORT."];
+    if(G.ap&&G.skew>0.05) notes.push("SKEW THETA = "+G.skew.toFixed(1)+"°: THE APPROACH SLAB IS SHOWN NORMAL TO THE ABUTMENT (L COS THETA, SHORTEST STRIP).");
+    if(G.apLegacy) notes.push("APPROACH SLAB: EQUIVALENT DEAD LOAD ONLY (PANEL I-0B), NOT DRAWN.");
+    notes.forEach((t,i)=>D.text(L.txt,bb[0],yt-0.32*k-i*0.18*k,0.08*k,t,0));
+    return {known:null};
+  },[16,24,32,48,64,96,192],[["tab-loads","o-sketch","§1.1 cross-section"]].concat(G.ap?[["tab-loads","o-ap","§1.4a approach slab"]]:[]));
+
+  /* ---------- sheet 2: footing plan with the pile layout ---------- */
+  sheet("plan",G.integ?"PILE CAP PLAN AND PILE LAYOUT":(G.piles.length?"FOOTING PLAN AND PILE LAYOUT":"FOOTING PLAN"),k=>{
+    // plan coordinates on the sheet: u (right) along the abutment from its centre, v (up) from the toe across the footing (toe at the bottom)
+    const h=D.h, yF=G.Lftg/2, yW=G.Lab/2;
+    D.rect(L.conc,-yF,0,yF,G.B);   // the footing / cap outline (known rectangle: L_ftg x B)
+    if(!G.integ){ [G.Ltoe,G.xstF,G.xbwF,G.xb].forEach(v=>D.line(L.conc,-yW,v,yW,v));
+      if(Math.abs(G.Lab-G.Lftg)>0.5){ D.line(L.conc,-yW,G.Ltoe,-yW,G.xb); D.line(L.conc,yW,G.Ltoe,yW,G.xb); }
+      D.line(L.cl,-yF-0.4*k,G.xBrg,yF+0.4*k,G.xBrg); D.text(L.txt,-yF-0.48*k,G.xBrg-0.4*h,h,"CL BRG.",2);
+      const pl=(+S.bearing.padL||18), pw=(+S.bearing.padW||24);
+      (R.beamPos||beamPositions()).forEach(z=>{ const y=z*12; if(Math.abs(y)>yW+0.01) return; D.rect(L.brg,y-pw/2,G.xBrg-pl/2,y+pw/2,G.xBrg+pl/2); }); }
+    // piles (below the footing: hidden), numbered as Tab 4 §4.1
+    const pw=G.pw||G.pd, ph=Math.min(0.07*k,0.42*Math.min(G.pd||12,pw||12));
+    G.piles.forEach(p=>{ if(G.pileShape==="round") D.circle(L.pile,p.y,p.x,G.pd/2); else D.rect(L.pile,p.y-pw/2,p.x-G.pd/2,p.y+pw/2,p.x+G.pd/2,"HIDDEN");
+      D.text(L.pid,p.y,p.x-ph*0.4,ph,String(p.no),1); });
+    // dimensions: pile columns along the abutment below, pile rows across the footing at the right
+    const xs=[...new Set(G.piles.map(p=>+p.x.toFixed(3)))].sort((a,b)=>a-b), ys=[...new Set(G.piles.map(p=>+p.y.toFixed(3)))].sort((a,b)=>a-b);
+    let vd=-0.45*k; if(ys.length){ chainH([-yF,...ys.filter(y=>y>-yF+0.5&&y<yF-0.5),yF],vd,0); vd-=0.4*k; }
+    dH([-yF,0],[yF,0],vd,G.integ?"<> (L_AB)":"<> (L_FTG)");
+    let ud=yF+0.45*k; if(xs.length){ chainV([0,...xs.filter(x=>x>0.5&&x<G.B-0.5),G.B],ud,yF); ud+=0.45*k; }
+    if(!G.integ){ chainV([0,G.Ltoe,G.xb,G.B],ud,yF); ud+=0.45*k; }
+    dV([yF,0],[yF,G.B],ud);
+    if(!G.integ&&Math.abs(G.Lab-G.Lftg)>0.5) dH([-yW,G.xb],[yW,G.xb],G.B+0.45*k,"<> (L_AB)");
+    // labels
+    if(!G.integ){ lead(-yW*0.55,(G.Ltoe+G.xb)/2,-yW*0.55-0.3*k,G.B+0.55*k,"STEM; BRIDGE SEAT; BACKWALL ABOVE",2);
+      free(L.txt,-yF-0.15*k,0.15*k,h,"TOE",2); free(L.txt,-yF-0.15*k,G.B-0.4*h-0.1*k,h,"HEEL",2);
+      if(!G.piles.length) free(L.txt,0,G.Ltoe/2-0.4*h,h,"SPREAD FOOTING",1); }
+    const bb=D.bbox(i0v), yt=bb[1]-0.35*k;
+    D.text(L.txt,(bb[0]+bb[2])/2,yt,0.12*k,(G.integ?"PILE CAP PLAN":"FOOTING PLAN")+" - SCALE "+abdwScName(k),1);
+    const notes=[]; if(G.piles.length) notes.push("PILES (HIDDEN, BELOW THE "+(G.integ?"CAP":"FOOTING")+"): "+G.pileTxt+"; NUMBERS AS TAB 4 "+(G.integ?"(INTEGRAL PILES)":"4.1")+".");
+    if(!G.integ&&S.fnd.branch==="pile") { const om=S.piles.coords.length-G.piles.length; if(om>0) notes.push(om+" PILE POSITION"+(om>1?"S":"")+" OMITTED IN TAB 4 ARE NOT DRAWN."); }
+    if(!G.integ) notes.push("BEARINGS AT THE GIRDER LINES OF PANEL I-5 ("+(+S.bearing.padL||18)+" x "+(+S.bearing.padW||24)+" IN).");
+    notes.forEach((t,i)=>D.text(L.txt,bb[0],yt-0.32*k-i*0.18*k,0.08*k,t,0));
+    return {known:{what:(G.integ?"pile cap L_ab x b = ":"footing L_ftg x B = ")+(G.Lftg/12)+" x "+(G.B/12)+" ft", w:G.Lftg/k, h:G.B/k}};
+  },[16,24,32,48,64,96,192],G.integ?[["tab-iab","o-iab-pile","§10.4 integral piles"]]:[["tab-found",G.piles.length?"o-pilelay":"o-pile-na",G.piles.length?"§4.1 pile layout":"§4.1 foundation"]]);
+
+  /* ---------- sheet 3: reinforcement ---------- */
+  sheet("bars","REINFORCEMENT",k=>{
+    const h=D.h, hb=0.085*k, slabShow=G.ap? Math.min(G.ap.Ln,60) : 0, R2=x=>Math.max(x,0.02*k);
+    concrete(G.ap? slabShow : null);
+    const rows=[];
+    if(G.integ){ free(L.txt,G.b/2,G.yTop/2,h,"INTEGRAL WALL",1);
+      rows.push(["—","—","—","INTEGRAL ABUTMENT BARS: NOT DRAWN, SEE TAB 5 5.7","5.7"]); }
+    else{ const m=S.mat, rf=S.reinf, cT=+m.coverT, cF=+m.coverF, db=s=>(BARS[s]||{db:0}).db, C=R.checks, dw=C.dowel, bl=(s,sp)=>"#"+s+" @ "+(+sp)+'"';
+      const xA=G.xb-cT-db(rf.stem.size)/2, yC=cF+db(rf.toe.size)/2, yD=G.tf-cF-db(rf.heel.size)/2;
+      // A1: dowel (hooked into the bottom mat, or straight) lapped with the stem bar; stem bar above (svgRebarDims)
+      const hookY=cF+2*db(rf.toe.size), lap=dw?(dw.lapProv>0?dw.lapProv:dw.lapReq):0, hook=rf.dwlEnd!=="straight";
+      D.pline(L.bar,hook?[[xA-12*db(rf.stem.size),hookY],[xA,hookY],[xA,G.tf+lap]]:[[xA,hookY],[xA,G.tf+lap]],false);
+      const xA2=xA-db(rf.stem.size)-0.5; D.line(L.bar,xA2,G.tf+1,xA2,G.ySeat-2);
+      lead(xA2,G.tf+G.hstem*0.62,G.B+0.5*k,G.tf+G.hstem*0.62,"A1 "+bl(rf.stem.size,rf.stem.sp)+" STEM, BACK FACE",0,hb);
+      if(dw) lead(xA,hookY+0.3*(G.tf-hookY),G.B+0.5*k,G.tf+0.55*k,"A1 DOWEL "+(hook?"STD. 90° HOOK":"STRAIGHT")+", L_DH = "+(+dw.ldh).toFixed(1)+'" ('+(+dw.lAv).toFixed(1)+'" AVAIL.)\nLAP '+(+lap).toFixed(1)+'"'+(dw.lapProv>0?"":" REQ.")+" WITH THE STEM BARS",0,hb);
+      if(dw&&lap>0) dV([xA,G.tf],[xA,G.tf+lap],G.xb+0.3*k,"LAP <>");
+      // B1: backwall back face (semi-integral: the end diaphragm bars, Tab 10)
+      if(!G.semi){ const xB=G.xb-cT-db(rf.bw.size)/2-db(rf.stem.size); D.line(L.bar,xB,G.yTop-cT,xB,G.ySeat-12);
+        lead(xB,G.ySeat+G.hbw*0.7,G.B+0.5*k,G.yTop+0.25*k,"B1 "+bl(rf.bw.size,rf.bw.sp)+" BACKWALL, BACK FACE",0,hb); }
+      // C1 toe bottom, D1 heel top (ℓ_d past the stem faces as Tab 5)
+      const xC1=G.xb+(C.toeFlex?C.toeFlex.ld:0), xD0=G.Ltoe-(C.heelFlex?C.heelFlex.ld:0);
+      D.line(L.bar,3,yC,Math.min(xC1,G.B-3),yC); D.line(L.bar,Math.max(xD0,3),yD,G.B-3,yD);
+      lead(0.45*G.Ltoe,yC,-0.5*k,-0.35*k,"C1 "+bl(rf.toe.size,rf.toe.sp)+" TOE, BOTTOM",2,hb);
+      lead(G.xb+0.6*(G.B-G.xb),yD,G.B+0.5*k,G.tf+0.15*k,"D1 "+bl(rf.heel.size,rf.heel.sp)+" HEEL, TOP",0,hb);
+      if(C.toeFlex) dH([G.xb,0],[xC1,0],-0.75*k,"C1 L_D PAST THE STEM <>");
+      if(C.heelFlex) dH([xD0,G.tf],[G.Ltoe,G.tf],G.tf+0.55*k,"D1 L_D <>");
+      // S&T bars entered (panel I-9): stem and backwall horizontal each face, footing longitudinal top and bottom (dots)
+      const dots=(o,x,y)=>D.circle(L.bar,x,y,R2(db(o.size)/2));
+      if(rf.stemH&&rf.stemH.size!=="0"&&+rf.stemH.sp>0){ const sp=+rf.stemH.sp, d=db(rf.stemH.size);
+        for(let y=G.tf+sp/2;y<G.ySeat-cT;y+=sp){ const xf=G.Ltoe+(G.xstF-G.Ltoe)*(y-G.tf)/G.hstem; dots(rf.stemH,xf+cT+d/2,y); dots(rf.stemH,xA2-db(rf.stem.size)/2-d/2,y); }
+        const ym=G.tf+G.hstem*0.5, xf=G.Ltoe+(G.xstF-G.Ltoe)*(ym-G.tf)/G.hstem; lead(xf+cT,ym,-0.5*k,ym,"STEM HORIZ. "+bl(rf.stemH.size,rf.stemH.sp)+" EACH FACE",2,hb); }
+      if(!G.semi&&rf.bwH&&rf.bwH.size!=="0"&&+rf.bwH.sp>0){ const sp=+rf.bwH.sp, d=db(rf.bwH.size);
+        for(let y=G.ySeat+sp/2;y<G.yTop-cT;y+=sp){ dots(rf.bwH,G.xbwF+cT+d/2,y); dots(rf.bwH,G.xb-cT-db(rf.bw.size)-db(rf.stem.size)-d/2,y); }
+        lead(G.xbwF+cT,G.ySeat+G.hbw*0.5,-0.5*k,G.ySeat+G.hbw*0.5,"BACKWALL HORIZ. "+bl(rf.bwH.size,rf.bwH.sp)+" EACH FACE",2,hb); }
+      if(rf.ftgL&&rf.ftgL.size!=="0"&&+rf.ftgL.sp>0){ const sp=+rf.ftgL.sp, d=db(rf.ftgL.size);
+        for(let x=cF+d/2;x<=G.B-cF;x+=sp){ dots(rf.ftgL,x,yC+db(rf.toe.size)/2+d/2); dots(rf.ftgL,x,yD-db(rf.heel.size)/2-d/2); }
+        lead(cF+d/2,yD-db(rf.heel.size)/2-d/2,-0.5*k,G.tf+0.3*k,"FOOTING LONGIT. "+bl(rf.ftgL.size,rf.ftgL.sp)+" TOP AND BOTTOM",2,hb); }
+      rows.push(["A1","#"+rf.stem.size,(+rf.stem.sp)+'"',"STEM BACK FACE, VERT.; DOWEL ("+(hook?"HOOKED":"STRAIGHT")+")","5.2, 5.2A"]);
+      if(G.semi) rows.push(["B1","#"+S.iab.hBar,(+S.iab.hSp)+'"',"END DIAPHRAGM HORIZ., EA. FACE (NOT DRAWN)","10.5A"]);
+      else rows.push(["B1","#"+rf.bw.size,(+rf.bw.sp)+'"',"BACKWALL BACK FACE, VERT., LAPPED WITH A1","5.1"]);
+      rows.push(["C1","#"+rf.toe.size,(+rf.toe.sp)+'"',"TOE, BOTTOM TRANSVERSE","5.3"],["D1","#"+rf.heel.size,(+rf.heel.sp)+'"',"HEEL, TOP TRANSVERSE","5.4"]);
+      [["stemH","STEM HORIZ., EACH FACE"],["bwH","BACKWALL HORIZ., EACH FACE"],["ftgL","FOOTING LONGIT., TOP AND BOTTOM"]].forEach(([kk,t])=>{ const o=rf[kk]; if(G.semi&&kk==="bwH") return;
+        rows.push(["—",o&&o.size!=="0"?"#"+o.size:"—",o&&o.size!=="0"?(+o.sp)+'"':"—",t+(o&&o.size!=="0"?"":" (NOT ENTERED, PANEL I-9)"),"5.7"]); });
+      rows.push(["F1","#"+S.bearing.seatBar,(+S.bearing.seatSp)+'"',"BEARING-SEAT MAT, BOTH WAYS (NOT DRAWN)","5.7"]);
+      G.cov="COVERS: WALL "+IN(cT)+", FOOTING "+IN(cF)+". ";
+    }
+    // approach-slab shelf (S1, S2) and slab bars (P1–P3), Tab 5 §5.8 / §5.9 (integral: Tab 10 §10.7 / §10.8)
+    const Hs=R.apShelf, Ds=R.apDes, A=S.apSlab, sec=G.integ?"10.":"5.";
+    if(G.ap&&Hs&&G.ap.shelf){ const dbs=(BARS[Hs.bar]||{db:0.625}).db, yT=shY-Hs.cov-dbs/2, xw=(G.integ?0:G.xbwF)+Hs.cov;
+      D.line(L.bar,xw,yT,G.xb+G.ap.bS-Hs.cov,yT);
+      const dbt=(BARS[Hs.tieBar]||{db:0.5}).db, zone=2*Hs.d/3, n=Math.min(Hs.nT,6);
+      for(let i=1;i<=n;i++){ const yy=yT-Math.min(zone,Hs.h-Hs.cov)*i/(n+0.0001)*0.98; D.line(L.bar,xw+dbt,yy,G.xb+Math.max(Hs.cov,G.ap.bS-Hs.cov),yy); }
+      lead(G.xb+G.ap.bS-Hs.cov,yT,G.xb+G.ap.bS+0.6*k,shY+0.9*k,"S1 #"+Hs.bar+" @ "+(+Hs.sp)+'" SHELF PRIMARY TIE',0,hb);
+      if(n) lead(G.xb+G.ap.bS*0.5,yT-Math.min(zone,Hs.h-Hs.cov)*0.5,G.xb+G.ap.bS+0.6*k,shY-G.ap.hE-0.2*k,"S2 "+Hs.nT+" x #"+Hs.tieBar+" @ "+(+Hs.tieSp)+'" CLOSED TIES',0,hb);
+      rows.push(["S1","#"+Hs.bar,(+Hs.sp)+'"',"SHELF, PRIMARY TIE",sec+(G.integ?"7":"8")],["S2","#"+Hs.tieBar,(+Hs.tieSp)+'"',"SHELF, "+Hs.nT+" CLOSED-TIE LEGS IN 2D_E/3",sec+(G.integ?"7":"8")]); }
+    if(G.ap&&Ds){ const da=BARS[A.aBar].db, dd=BARS[A.dBar].db, dt=BARS[A.tBar].db, yA=shY+(+A.cov)+da/2, x1=G.xb+slabShow;
+      D.line(L.bar,G.xb+2,yA,x1-1,yA); for(let x=G.xb+(+A.dSp)/2;x<x1-1;x+=+A.dSp) D.circle(L.bar,x,yA+da/2+dd/2,R2(dd/2));
+      const yTp=G.yTop-(+A.cov)-dt/2; D.line(L.bar,G.xb+2,yTp,x1-1,yTp); for(let x=G.xb+(+A.tSp)/2;x<x1-1;x+=+A.tSp) D.circle(L.bar,x,yTp-dt/2-dt/2,R2(dt/2));
+      lead(x1-0.3*slabShow,yTp,x1+0.6*k,G.yTop+0.55*k,"P3 #"+A.tBar+" @ "+(+A.tSp)+'" TOP, EACH WAY',0,hb);
+      lead(x1-0.5*slabShow,yA,x1+0.6*k,G.yTop+0.2*k,"P1 #"+A.aBar+" @ "+(+A.aSp)+'" BOTTOM, MAIN\nP2 #'+A.dBar+" @ "+(+A.dSp)+'" BOTTOM, DISTRIB.',0,hb);
+      rows.push(["P1","#"+A.aBar,(+A.aSp)+'"',"APPR. SLAB, BOTTOM MAIN (ROADWAY)",sec+(G.integ?"8":"9")],["P2","#"+A.dBar,(+A.dSp)+'"',"APPR. SLAB, BOTTOM DISTRIB. (TRANSV.)",sec+(G.integ?"8":"9")],["P3","#"+A.tBar,(+A.tSp)+'"',"APPR. SLAB, TOP EACH WAY (S&T)",sec+(G.integ?"8":"9")]); }
+    let bb=D.bbox(i0v), yt=bb[1]-0.35*k;
+    D.text(L.txt,(bb[0]+bb[2])/2,yt,0.12*k,"REINFORCEMENT SECTION"+(G.ap?" (APPROACH SLAB PARTIAL)":"")+" - SCALE "+abdwScName(k),1);
+    const nt=[(G.cov||"")+"BARS AS ENTERED (PANELS I-0B, I-9) AND CHECKED IN TAB 5; L_D, L_DH AND THE LAP AS TAB 5 5.2A-5.4. BAR LENGTHS, SPLICES AND BENDS: DETAILER."];
+    nt.forEach((t,i)=>D.text(L.txt,bb[0],yt-0.3*k-i*0.18*k,0.08*k,t,0));
+    table(bb[2]+0.4*k,bb[3],["MARK","BAR","SPACING","LOCATION","TAB "+(G.integ?"5/10":"5")],rows,0.07*k);
+    return {known:null};
+  },[16,24,32,48,64,96,192],G.integ?[["tab-struct","o-int-bars","§5.7 integral reinforcement"]]:[["tab-struct","o-rebar","§5.7 reinforcement schedule"]]);
+
+  SH.forEach((s,j)=>{ s.sheetEnt.s=SharedDxf.str((j+1)+" OF "+SH.length); });
+  return {D,S:SH,G};
+}
+function abdwShow(){
+  ABDW.on=true; ABRP.on=false;
+  document.querySelectorAll("#tabbar .tab").forEach(t=>t.classList.toggle("active",t.dataset.tab==="tab-dwg"));
+  document.querySelectorAll("#tabpages .tabpage").forEach(p=>p.classList.toggle("active",p.id==="tab-dwg"));
+  abdwRender(window.LAST_R);
+}
+function abdwRender(R){
+  const T=document.getElementById("tab-dwg"); if(!T) return;
+  if(!R){ T.innerHTML='<div class="note-box">Calculating…</div>'; return; }
+  if(!window.SharedDxf){ T.innerHTML='<div class="note-box">shared/dxf.js is not loaded: keep the shared folder next to this file.</div>'; return; }
+  let B; try{ B=abdwBuild(R); }catch(e){ console.warn(e); T.innerHTML='<div class="note-box">The drawings could not be drawn: '+esc(e&&e.message)+'</div>'; return; }
+  ABDW.B=B;
+  let want=ABDW.cur; if(!want){ try{ want=localStorage.getItem(ABDW.key)||""; }catch(e){ want=""; } }
+  const cur=B.S.find(s=>s.id===want)||B.S[0]; ABDW.cur=cur.id;
+  T.innerHTML=panel("o-dwg","11.1","Drawings — DXF Sheets, Preview and Print",
+    '<div class="abdwBar"><label>Sheet <select id="abdwSheet">'+B.S.map((s,j)=>'<option value="'+s.id+'"'+(s===cur?" selected":"")+'>'+(j+1)+'. '+esc(s.title)+'</option>').join("")+'</select></label> '
+    +'<button type="button" class="mini-btn" id="abdwDxf">Download DXF ('+B.S.length+' sheets)</button> '
+    +'<button type="button" class="mini-btn" id="abdwPrint1" title="Print the sheet shown: one 11 x 17 in landscape page at its plot scale">Print sheet</button> '
+    +'<button type="button" class="mini-btn" id="abdwPrintAll" title="Print every sheet: one 11 x 17 in landscape page per sheet, each at its plot scale">Print all sheets ('+B.S.length+')</button></div>'
+    +'<div class="note-box">'+esc(SharedDxf.PRINT_NOTE)+'</div>'
+    +'<div class="note-box">'+abNL("One DXF file (AutoCAD R12, model space, full size in inches):",[["Sheets:","each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side."],
+      ["Layers:","AB-CONC, AB-JOINT, AB-HIDDEN, AB-BEARING, AB-CENTER, AB-APPROACH-SLAB, AB-WING-BEYOND, AB-PILE, AB-PILE-TEXT, AB-SOIL, AB-WATER, AB-REBAR, AB-REBAR-TEXT, AB-LEADER, AB-DIMS, AB-TEXT, AB-TABLE, AB-TBLK, AB-BRDR."],
+      ["Title block:","from the Project panel (project, number, calculated by, date, checked by, checked date; a blank field prints “—”)."],
+      ["Values:","geometry and bars from the inputs and the results as computed (nothing new is calculated); the pile length and the bearing height in the section are schematic."]])+'</div>'
+    +'<div class="abdwHead"><b>'+(B.S.indexOf(cur)+1)+'. '+esc(cur.title)+'</b> · scale '+esc(cur.scale)+(cur.over?' · <span style="color:#c62828">does not fit the sheet even at the smallest scale</span>':"")+'</div>'
+    +'<div class="abdwBox"></div><div class="figcap">Wheel: zoom about the cursor · drag: pan · pinch · double-click: fit · + / − / Fit buttons.</div>'
+    +'<div class="abdwScroll"><table class="rtbl abdwIdx"><tr><th>No.</th><th>Sheet</th><th>Scale</th><th>Worked in</th></tr>'+B.S.map((s,j)=>
+      '<tr data-abdw="'+s.id+'"'+(s===cur?' class="on"':"")+'><td>'+(j+1)+'</td><td class="lft">'+esc(s.title)+'</td><td>'+esc(s.scale)+'</td><td class="lft">'+(s.src&&s.src.length?abutWorkedIn(s.src):"—")+'</td></tr>').join("")+'</table></div>');
+  SharedDxf.viewer(T.querySelector(".abdwBox"),SharedDxf.sheetSVG(B.D,cur),{height:"62vh"});
+  const pick=id=>{ ABDW.cur=id; try{ localStorage.setItem(ABDW.key,id); }catch(e){} abdwRender(window.LAST_R); };
+  T.querySelector("#abdwSheet").addEventListener("change",e=>pick(e.target.value));
+  T.querySelectorAll("tr[data-abdw]").forEach(tr=>tr.addEventListener("click",e=>{ if(e.target.closest(".xlink")) return; pick(tr.dataset.abdw); }));
+  T.querySelector("#abdwDxf").addEventListener("click",()=>{ const txt=B.D.toDXF({ltscale:1}), chk=SharedDxf.validate(txt);
+    if(!chk.ok){ alert("The DXF file failed its structure check:\n"+chk.errors.slice(0,8).join("\n")); return; }
+    SharedDxf.download(txt,String((S.proj&&S.proj.name)||"abutment").replace(/[^\w\-]+/g,"_")+"_abutment_sheets.dxf"); });
+  const prt=list=>SharedDxf.printSheets(list.map(s=>({svg:SharedDxf.sheetSVG(B.D,s),title:s.title})),{paper:[ABDW.W,ABDW.H]});
+  T.querySelector("#abdwPrint1").addEventListener("click",()=>prt([cur]));
+  T.querySelector("#abdwPrintAll").addEventListener("click",()=>prt(B.S));
 }
 </script>
 
@@ -10050,7 +10414,8 @@ function abxWire(T){ T.querySelectorAll("input[data-abxopt]").forEach(cb=>cb.add
 /* Print: from any tab the Report is shown (not saved: ABRP.on), printed, and the tab of before comes back after printing */
 function abrPrintPrep(){
   if(ABRP.on||!window.LAST_R||!window.SharedReport) return false;
-  ABRX.back=S.ui.tab; abrShow(); return true;
+  if(document.body.classList.contains("sdx-printing")) return false;   /* ABDW: the drawing sheets print alone (SharedDxf.printSheets) */
+  ABRX.back=ABDW.on?"tab-dwg":S.ui.tab; abrShow(); return true;
 }
 async function abrPrintAny(){
   if(!window.LAST_R||!window.SharedReport||!window.SharedSteps){ window.print(); return; }
@@ -10494,7 +10859,7 @@ function abPanelLayout(){ return !!(window.matchMedia&&window.matchMedia("screen
 window.addEventListener("scroll",()=>{ if(abPanelLayout()&&(window.scrollY||window.scrollX)) window.scrollTo(0,0); },{passive:true});
 /* the Report tab is shown on top of the saved tab (S.ui.tab is not changed, so nothing new is saved) */
 function abrShow(){
-  ABRP.on=true;
+  ABRP.on=true; ABDW.on=false;   /* ABDW */
   document.querySelectorAll("#tabbar .tab").forEach(t=>t.classList.toggle("active",t.dataset.tab==="tab-rpt"));
   document.querySelectorAll("#tabpages .tabpage").forEach(p=>p.classList.toggle("active",p.id==="tab-rpt"));
   abrRender();
@@ -10561,6 +10926,7 @@ function recalcAll(){
   updateDirty();
   const fp=document.getElementById("fpBadge"); if(fp) fp.textContent="Input ID "+(R.fingerprint||"—");
   if(ABRP.on) abrRender();   /* ABRP: the Report tab follows the inputs while it is shown */
+  if(ABDW.on) abdwRender(R);   /* ABDW: the Drawings tab too */
 }
 function updateDerivedInInputs(){
   // refresh derived readouts & computed beam-position cells without rebuilding (keeps focus)

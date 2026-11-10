@@ -129,6 +129,17 @@ const TOOLS = {
     reportOpen: async p => { await p.waitForTimeout(500); },
     report: /Retaining Wall|Calculation Report/i,
   },
+  ab: {   // ABDW (2026-11-10): the Drawings tab of the Bridge Abutment Calculator (not stored in S.ui.tab, as its Report tab); the known
+          // rectangle is the footing L_ftg x B of the default project on the FOOTING PLAN sheet. Ctrl+P prints the Report (ABRX).
+    file: 'abutment_calculator.html', label: 'Bridge Abutment Calculator',
+    open: async p => { await p.waitForFunction(() => window.LAST_R && typeof abdwShow === 'function', null, { timeout: 60000 }); await p.click('#tabbar .tab[data-tab="tab-dwg"]');
+      await p.waitForSelector('#abdwPrint1'); await p.selectOption('#abdwSheet', 'plan'); await p.waitForSelector('#abdwPrint1'); },
+    one: '#abdwPrint1', all: '#abdwPrintAll',
+    n: p => p.evaluate(() => ABDW.B.S.length),
+    known: p => p.evaluate(() => { const s = ABDW.B.S.find(q => q.id === ABDW.cur); return { what: s.known.what + ' on ' + s.title + ' at ' + s.scale + ' (1:' + s.k + ')', w: s.known.w, h: s.known.h }; }),
+    reportOpen: async p => { await p.click('#tabbar .tab[data-tab="tab-rpt"]'); await p.waitForTimeout(6000); },
+    report: /Abutment|Calculation Report/i,
+  },
 };
 
 let fails = 0; const check = (ok, m) => { console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${m}`); if (!ok) fails++; };
