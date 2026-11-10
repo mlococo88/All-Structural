@@ -313,6 +313,12 @@
   #pdPrjBlock .pd-projShare button { border-color: var(--blue-600, #2563eb); background: #fff; color: var(--blueprint, #14304a); }
   #pdPrjBlock .pd-projShare button:hover { background: #EFF4FA; }
   #pdPrjBlock .pd-prjHint { font-family: var(--f-ui); font-size: 10px; color: #94a3b8; margin: 3px 0 0; line-height: 1.35; }
+  /* HOC (2026-11-10): the Hand-offs panel (PdHandoffsPanel) */
+  #pdHoPanel .pd-hoGrp { font-family: var(--f-ui); font-size: 9.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #64748b; margin: 8px 0 3px; }
+  #pdHoPanel .pd-hoRow { border-top: 1px solid #e2e8f0; padding: 5px 0 3px; font-family: var(--f-ui); font-size: 11.5px; }
+  #pdHoPanel .pd-hoFrom { font-size: 10px; color: #64748b; }
+  #pdHoPanel .pd-prjHint { color: #64748b; }
+  button.pd-hoLink { background: none; border: 0; padding: 0; font: inherit; color: var(--blueprint2, #1c4f73); text-decoration: underline; cursor: pointer; }
 
   /* OK / NG badges (light, as the recent tools) */
   .app-shell .pd-pill { background: #E8F7F0 !important; color: #065F46 !important; border: 1px solid #7FD1B0; border-radius: 4px; letter-spacing: .4px; font-family: var(--f-ui); }
@@ -1234,7 +1240,11 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
   (function(){ if(document.getElementById('pfxCss')) return; var st=document.createElement('style'); st.id='pfxCss';
     st.textContent='.pfx-mk{background-color:#fff8e1 !important;box-shadow:inset 3px 0 0 #b45309 !important}.pfx-badge{font-size:7.5px;padding:0 4px;border-radius:2px;color:#fff;background:#b45309;margin-left:4px;vertical-align:middle}';
     (document.head||document.documentElement).appendChild(st); })();
-  function refreshBar(){ var n=BridgeXfer.isNew(CH,RID); ['pfxNew','pfxNewIab'].forEach(function(id){ var nd=document.getElementById(id); if(nd) nd.hidden=!n; }); }
+  function refreshBar(){ var n=BridgeXfer.isNew(CH,RID); ['pfxNew','pfxNewIab'].forEach(function(id){ var nd=document.getElementById(id); if(nd) nd.hidden=!n; });
+    // HOC (2026-11-10): the Hand-offs card's status line (the marker's isNew; nothing stored)
+    var ps=document.getElementById('pxrSentTxt'); if(ps){ var sp=null; try{ sp=JSON.parse(localStorage.getItem(BridgeXfer.NS+'pileResults')||'null'); }catch(e){}   // "Last sent" (read only)
+      ps.textContent=sp&&sp.producer==='Pile Designer'&&sp.producedAt? new Date(sp.producedAt).toLocaleString()+((sp.project&&sp.project.name)?' ('+sp.project.name+')':'')+', from this browser.' : 'nothing sent from this browser yet.'; }
+    var st=document.getElementById('pfxSt'); if(st){ var up=''; try{ up=localStorage.getItem(BridgeXfer.NS+CH+'.updatedAt')||''; }catch(e){} st.textContent=n? 'new data available.' : up? 'no new data since the last pull.' : 'nothing available (no foundation loads sent yet).'; } }
   function pull(I,setter){
     var list=candidates();
     if(!list.length){ var r=BridgeXfer.read(CH,SCHEMA,MAXV);
@@ -8257,32 +8267,8 @@ function LoadsGroupPanel({ I, set, setI, r, cases, activeIdx, casesCard }) {
         : "Any pile-group layout and cap loads already entered are kept, but not applied, while single pile is selected."),
       e("div", { className: "mt-3 pt-2 border-t border-slate-200" },
         e("div", { className: "text-[11.5px] font-medium text-[var(--blueprint)] mb-1" }, "Foundation loads from another tool"),
-        e("div", { className: "flex flex-wrap gap-2 no-print" },
-          e("button", {
-            type: "button",
-            id: "pfxPull",
-            onClick: () => PileFoundationXfer.pull(I, setI),
-            title: "Pull foundation load cases sent by the abutment calculator or Bridge Substructure Loading (channel foundationLoads; asks first, nothing changes until you import)",
-            className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white"
-          }, "Pull from Abutment / SubLoads", e("span", {
-            id: "pfxNew",
-            hidden: true,
-            style: { color: "#b45309", fontWeight: 700 }
-          }, " ● new data")),
-          e("button", {
-            type: "button",
-            id: "pfxImp",
-            onClick: () => { const f = document.getElementById("pfxFile"); if (f) f.click(); },
-            title: "Import a foundationLoads hand-off JSON file (asks first)",
-            className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white"
-          }, "Import hand-off (JSON)"),
-          e("input", {
-            type: "file",
-            id: "pfxFile",
-            accept: ".json,application/json",
-            style: { display: "none" },
-            onChange: ev => PileFoundationXfer.importFile(ev, I, setI)
-          })),
+        // HOC (2026-11-10): Pull from Abutment / SubLoads and Import hand-off (JSON) are in the Project tab's Hand-offs card (PdHandoffsPanel)
+        e("div", { className: "text-[9.5px] no-print" }, "Send/receive data: ", e("button", { type: "button", className: "pd-hoLink underline text-[var(--blueprint2)]", "data-go-ho": "1", onClick: () => window.pdGotoHo && window.pdGotoHo() }, "Project tab \u2192 Hand-offs")),
         e("div", { className: "text-[9px] text-slate-400 leading-snug mt-1 pdNL" }, pdNL("From the abutment calculator or Bridge Substructure Loading (hand-off channel foundationLoads).", [
           ["Where the cases go:", "the dialog lists the cases and asks where they go: the pile group workspace (a footing / pile-cap resultant; the default) or the single-pile load-case table."],
           ["From the abutment calculator (pile footing):", "it can also adopt the abutment's pile layout and H-pile section, so each pile's reaction is the abutment's, or import its per-pile governing loads (largest / smallest pile per limit state) as single-pile rows."],
@@ -8292,15 +8278,7 @@ function LoadsGroupPanel({ I, set, setI, r, cases, activeIdx, casesCard }) {
           id: "pfxSrc",
           className: "text-[9px] text-slate-500 italic leading-snug mt-1"
         }, PileFoundationXfer.sourceLine(I)),
-        // PXR (2026-10-20): pile results back to the abutment calculator (channel pileResults, HANDOFF.md §4.10)
-        e("div", { className: "flex flex-wrap gap-2 no-print mt-2" },
-          e("button", {
-            type: "button",
-            id: "pxrSend",
-            onClick: () => PileResultsXfer.open(),
-            title: "Send this tool's pile results to the abutment calculator (channel pileResults): geotechnical and structural resistance, depth to fixity, and per case (Run all cases) the p-y maximum moment, its depth, head deflection and rotation. The dialog previews them and also offers Export hand-off (JSON).",
-            className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white"
-          }, "Send pile results to the abutment")))),
+        null)),
     grp && e(Panel, { title: "Pile group workspace", sub: "layout, cap loads and rigid-cap distribution" },
       e("div", { id: "pd-grpws" }, e(GroupWorkspaceBody, { I, set, cap: r.capDist, g: r.group, rail: true, cases, activeIdx }))),
     e(Panel, { title: grp ? "Design load cases (per pile)" : "LRFD load cases (per pile)", sub: grp ? "your rows + one computed Group ▦ row per group case · the active case drives every module" : "the active case drives every module" },
@@ -18573,48 +18551,36 @@ function App() {
     value: I.projDate || "",
     placeholder: "Date (blank = today)",
     onChange: v => setStr('projDate', v)
-  })), /*#__PURE__*/React.createElement("p", { className: "pd-prjHint" }, "Printed on the report cover, running header and footer."), /*#__PURE__*/React.createElement("div", {
-    className: "pd-projShare no-print"
-  }, /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => {
-      const patch = ProjMetaUI.use(PILE_PROJ_MAP, I, "pileDesigner");
-      if (patch) setI(s => ({
-        ...s,
-        ...patch
-      }));
-    },
-    title: "Fill the project info from project info shared by another tool"
-  }, "Use shared project info"), /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => ProjMetaUI.share(PILE_PROJ_MAP, pileProjShareValues(I), "Pile Designer", "Pile Designer.html"),
-    title: "Make this project info available to the other tools"
-  }, "Share project info")), /*#__PURE__*/React.createElement("p", { className: "pd-prjHint" }, "Copy the title block from or to the other tools."))), /*#__PURE__*/React.createElement(Panel, {
+  })), /*#__PURE__*/React.createElement("p", { className: "pd-prjHint" }, "Printed on the report cover, running header and footer.")), /*#__PURE__*/React.createElement(PdHandoffsPanel, { I, setI, setRailTab, useBtn: /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: () => {
+        const patch = ProjMetaUI.use(PILE_PROJ_MAP, I, "pileDesigner");
+        if (patch) setI(s => ({
+          ...s,
+          ...patch
+        }));
+      },
+      title: "Fill the project info from project info shared by another tool"
+    }, "Use shared project info"), shareBtn: /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: () => ProjMetaUI.share(PILE_PROJ_MAP, pileProjShareValues(I), "Pile Designer", "Pile Designer.html"),
+      title: "Make this project info available to the other tools"
+    }, "Share project info") })), /*#__PURE__*/React.createElement(Panel, {
     title: "Project Info",
     sub: "Project, job no., subject, by / chk: in the Title block above"
   }, /*#__PURE__*/React.createElement("div", {
     className: "text-[10px] text-slate-500 leading-snug"
   }, I.pileType === "iab"
     ? "Integral-abutment mode takes the gravity load per pile in the Abutment tab; the abutment calculator's integral-abutment data (an Integral abutment) is pulled there. Foundation load cases are not used in this mode."
-    : ["Foundation loads from the abutment calculator or Bridge Substructure Loading are pulled in the ", /*#__PURE__*/React.createElement("button", { key: "b", type: "button", onClick: () => gotoLoadsTab(setRailTab), className: "underline text-[var(--blueprint2)]" }, "Loads & group tab \u2192")])), /*#__PURE__*/(I.pileType === "iab") && /*#__PURE__*/React.createElement(Panel, {
+    : ["Foundation loads from the abutment calculator or Bridge Substructure Loading are pulled with the Hand-offs card above into the ", /*#__PURE__*/React.createElement("button", { key: "b", type: "button", onClick: () => gotoLoadsTab(setRailTab), className: "underline text-[var(--blueprint2)]" }, "Loads & group tab \u2192")])), /*#__PURE__*/(I.pileType === "iab") && /*#__PURE__*/React.createElement(Panel, {
     title: "Integral Abutment Pile \u2014 Simplified Method"
   }, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-2 leading-snug pdNL" }, pdNL("MassDOT Bridge Manual Part I §3.10.11.", [["Inputs:", "pick the section, MassDOT soil type, and skew; enter the factored gravity load per pile (DL+LL)."], ["Capacity", "is read from Tables 3.10.11-2/-3 (thermal & skew effects pre-computed)."]])),
     /*#__PURE__*/React.createElement("div", { className: "mb-2 pb-2 border-b border-slate-200 no-print" },
-      /*#__PURE__*/React.createElement("div", { className: "flex flex-wrap gap-2" },
-        /*#__PURE__*/React.createElement("button", { type: "button", id: "pfxPullIab", onClick: () => PileFoundationXfer.pull(I, setI),
-          title: "Pull the integral-abutment data sent by the abutment calculator (channel foundationLoads): gravity load per pile, \u03b4T, skew, section, owner preset and eligibility inputs. Asks first; nothing changes until you import.",
-          className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white" }, "Pull from Abutment",
-          /*#__PURE__*/React.createElement("span", { id: "pfxNewIab", hidden: true, style: { color: "#b45309", fontWeight: 700 } }, " \u25cf new data")),
-        /*#__PURE__*/React.createElement("button", { type: "button", id: "pfxImpIab", onClick: () => { const f = document.getElementById("pfxFileIab"); if (f) f.click(); },
-          title: "Import a foundationLoads hand-off JSON file from the abutment calculator (asks first)",
-          className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white" }, "Import hand-off (JSON)"),
-        /*#__PURE__*/React.createElement("input", { type: "file", id: "pfxFileIab", accept: ".json,application/json", style: { display: "none" }, onChange: ev => PileFoundationXfer.importFile(ev, I, setI) })),
+      // HOC (2026-11-10): Pull from Abutment, Import hand-off (JSON) and Send results to the abutment are in the Project tab's Hand-offs card
+      /*#__PURE__*/React.createElement("div", { className: "text-[9.5px]" }, "Send/receive data: ", /*#__PURE__*/React.createElement("button", { type: "button", className: "pd-hoLink underline text-[var(--blueprint2)]", "data-go-ho": "1", onClick: () => window.pdGotoHo && window.pdGotoHo() }, "Project tab \u2192 Hand-offs")),
       /*#__PURE__*/React.createElement("p", { className: "text-[9px] text-slate-400 leading-snug mt-1" }, "From the abutment calculator with the abutment type Integral (its Tab 10). Fields set from the hand-off are marked (amber) until you change them."),
       I.foundationSrc && I.foundationSrc.target === "iab" && /*#__PURE__*/React.createElement("div", { id: "pfxSrcIab", className: "text-[9px] text-slate-500 italic leading-snug mt-1" }, PileFoundationXfer.sourceLine(I)),
-      /*#__PURE__*/React.createElement("div", { className: "flex flex-wrap gap-2 mt-1" },   // PXR (2026-10-20): results back to the abutment calculator
-        /*#__PURE__*/React.createElement("button", { type: "button", id: "pxrSendIab", onClick: () => PileResultsXfer.open(),
-          title: "Send the integral-abutment results to the abutment calculator (channel pileResults): the gravity D/C, and with Tier 2 the pile-head moments and the interaction D/C. Previews first; also Export hand-off (JSON).",
-          className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white" }, "Send results to the abutment"))),
+      null),
     /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-3 mb-2" },
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Pile section"),
@@ -21505,6 +21471,44 @@ function Stat({
   }, label), /*#__PURE__*/React.createElement("span", {
     className: "text-white font-semibold"
   }, v));
+}
+/* HOC (2026-11-10, engineer decision: the hand-off card on the Project tab in every tool): Receive / Send. The buttons are the ones that
+   were in the Title block (Use / Share), the Loads & group panel (pfxPull, pfxImp, pfxFile, pxrSend) and the Integral abutment panel
+   (pfxPullIab, pfxImpIab, pfxFileIab, pxrSendIab): the same ids, titles and handlers; the integral-abutment set is shown in that mode.
+   Status: PileFoundationXfer.refreshBar fills #pfxSt (the marker's isNew); "Last received": PileFoundationXfer.sourceLine; "Last sent":
+   bridgeSuite.v1.pileResults when this tool sent it (read only). Display only. */
+function PdHandoffsPanel({ I, setI, setRailTab, useBtn, shareBtn }) {
+  const e = React.createElement, iab = I.pileType === "iab", sfx = iab ? "Iab" : "";
+  window.pdGotoHo = () => { setRailTab("project"); setTimeout(() => { const el = document.getElementById("pdHoPanel"); if (el) el.scrollIntoView({ block: "start", behavior: "auto" }); }, 0); };
+  const cls = "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white";
+  const grp = t => e("div", { className: "pd-hoGrp" }, t);
+  const row = (who, from, body) => e("div", { className: "pd-hoRow" }, e("div", null, e("b", null, who), " ", e("span", { className: "pd-hoFrom" }, from)), body);
+  return e("div", { id: "pdHoPanel" }, e(Panel, { title: "Hand-offs", sub: "receive from and send to the other tools", collapsible: false },
+    e("p", { className: "pd-prjHint" }, "Nothing changes until you confirm: each pull or import first shows what it will change, and what you apply is recorded with this project (saved with it and printed in the report)."),
+    grp("Receive from other tools"),
+    row("Shared project info", "from any tool", e("div", { className: "pd-projShare no-print" }, useBtn)),
+    row(iab ? "Integral-abutment data" : "Foundation loads", iab ? "from the abutment calculator (Integral)" : "from the abutment calculator, Bridge Substructure Loading or the Retaining Wall Designer",
+      e("div", null,
+        e("div", { className: "flex flex-wrap gap-2 no-print" },
+          e("button", { type: "button", id: "pfxPull" + sfx, onClick: () => PileFoundationXfer.pull(I, setI),
+            title: iab ? "Pull the integral-abutment data sent by the abutment calculator (channel foundationLoads): gravity load per pile, \u03b4T, skew, section, owner preset and eligibility inputs. Asks first; nothing changes until you import."
+              : "Pull foundation load cases sent by the abutment calculator or Bridge Substructure Loading (channel foundationLoads; asks first, nothing changes until you import)", className: cls },
+            iab ? "Pull from Abutment" : "Pull from Abutment / SubLoads", e("span", { id: "pfxNew" + sfx, hidden: true, style: { color: "#b45309", fontWeight: 700 } }, " \u25cf new data")),
+          e("button", { type: "button", id: "pfxImp" + sfx, onClick: () => { const f = document.getElementById("pfxFile" + sfx); if (f) f.click(); },
+            title: iab ? "Import a foundationLoads hand-off JSON file from the abutment calculator (asks first)" : "Import a foundationLoads hand-off JSON file (asks first)", className: cls }, "Import hand-off (JSON)"),
+          e("input", { type: "file", id: "pfxFile" + sfx, accept: ".json,application/json", style: { display: "none" }, onChange: ev => PileFoundationXfer.importFile(ev, I, setI) })),
+        e("p", { className: "pd-prjHint" }, e("b", null, "Status: "), e("span", { id: "pfxSt" }), " ", e("b", null, "Last received: "), I.foundationSrc ? PileFoundationXfer.sourceLine(I) + "." : "none.", " Goes to the ",
+          e("button", { type: "button", className: "pd-hoLink underline text-[var(--blueprint2)]", onClick: () => iab ? setRailTab("pile") : gotoLoadsTab(setRailTab) }, iab ? "Pile tab (Integral Abutment Pile)" : "Loads & group tab"), "."))),
+    grp("Send to other tools"),
+    row("Shared project info", "to every tool", e("div", { className: "pd-projShare no-print" }, shareBtn)),
+    row("Pile results", "to the abutment calculator and the Retaining Wall Designer (bridgeSuite.v1.pileResults)",
+      e("div", null,
+        e("div", { className: "flex flex-wrap gap-2 no-print" },
+          e("button", { type: "button", id: "pxrSend" + sfx, onClick: () => PileResultsXfer.open(),
+            title: iab ? "Send the integral-abutment results to the abutment calculator (channel pileResults): the gravity D/C, and with Tier 2 the pile-head moments and the interaction D/C. Previews first; also Export hand-off (JSON)."
+              : "Send this tool's pile results to the abutment calculator (channel pileResults): geotechnical and structural resistance, depth to fixity, and per case (Run all cases) the p-y maximum moment. Previews first; also Export hand-off (JSON).", className: cls },
+            iab ? "Send results to the abutment" : "Send pile results to the abutment")),
+        e("p", { className: "pd-prjHint" }, e("b", null, "Last sent: "), e("span", { id: "pxrSentTxt" }))))));
 }
 function Panel({
   title,
