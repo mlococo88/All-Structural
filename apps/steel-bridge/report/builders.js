@@ -401,7 +401,9 @@
     if (sg) X.gov.push({ mod: 'Field splices', grp: 'Field splices', check: `${sg.q.c.id} ${tt(sg.q.c.title)}`, loc: `${sg.s.name}, ${tt(sg.q.it.loc)}`, r: sg.q.it.r, key: K('spl@' + sg.k, sg.q.it.step) });
     subs.push(sub('list', `Splices of ${gName(B.girder)}`, [G.custom ? note('Demands: entered (Custom) on the Field splices tab, the row at each splice station (table below).') : note("Demands: this project's analysis, moments at the analysis station nearest the splice and shears the largest of the element containing it and its neighbours (GirderDetail's rule); sections 0.01 ft each side, the smaller carries the design forces (6.13.6.1.1). As on the [[tab:spl|Field splices tab]]."),
       G.errors.length ? note(G.errors.join(' '), true) : null,
-      G.list.length ? splFig(GB => GB.spliceStrip(G.list, B.P, {}), `Splice locations on girder ${gName(B.girder)}; marker colour: the governing ratio of each splice`) : null,
+      G.list.length ? (() => { const cap17 = `Splice locations on girder ${gName(B.girder)}; marker colour: the governing ratio of each splice`;   // DETC: the option C figure of the tab (ui/gfxdet.js), else the CAD drawing
+        try { if (window.SBDGfxDet && window.SBDVizKit && window.SBDVizKit.scene) return { type: 'figure', svg: window.SBDGfxDet.stripFigure(G.list, B.P, 760), caption: cap17 }; } catch (e) { /* the CAD figure */ }
+        return splFig(GB => GB.spliceStrip(G.list, B.P, {}), cap17); })() : null,
       tbl(['Splice', 'Plates and bolts', 'Governing', 'Ratio', 'Largest strength ratio', 'Status'], G.list.map((s, k) => { const fl = s.R && s.R.fl, gv = s.gov, q = strGov(s.CK), bad = s.CK ? s.CK.filter(c => c.status === 'fail').length : 0;
         return [s.name, fl ? `${s.own ? 'entered' : s.design ? 'auto' : 'built-in'}: ${fl.top.n + fl.bot.n + s.R.web.nw} bolts each side` : '—', gv ? `${gv.c.id} ${gv.it.loc}` : s.R && s.R.errors.length ? s.R.errors[0] : '', gv ? R3(gv.it.r, K('spl@' + k, gv.it.step)) : '—',
           q ? { ...R3(q.it.r, K('spl@' + k, q.it.step)), t: `${q.c.id}: ${f(q.it.r, 3)}` } : '—', s.CK ? (bad ? `${bad} check${bad > 1 ? 's' : ''} NG` : 'OK') : 'input error']; })),

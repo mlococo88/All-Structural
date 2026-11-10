@@ -103,9 +103,15 @@ try {
     await p.selectOption('#o_region', 'pos'); await settle(); await p.waitForSelector('#gfx_sec .vk svg', { timeout: 180000 }); }
   assert.deepEqual(errs, [], 'console errors (section)');
   // Loads & LLDF
-  await tab('loads'); await settle(); await chk('tab-loads', '#gfx_ld', 15);
-  const cases = await p.evaluate(() => [...document.querySelectorAll('#gfx_ld_c option')].map(o => o.value)); assert.ok(cases.length >= 2, 'LLDF cases ' + cases);
-  await p.selectOption('#gfx_ld_c', cases[cases.length - 1]); await p.waitForTimeout(150); await chk('tab-loads-case', '#gfx_ld', 15);
+  // DETC (2026-11-10): the LLDF cross-section is an option C card (ui/gfxdet.js): a segmented control for the case, wheels redrawn, Download DXF = loadsGraphic of the case
+  await tab('loads'); await settle(); await p.waitForSelector('#gfx_ld .vk-det svg', { timeout: 180000 });
+  const ldState = () => p.evaluate(() => { const r = document.querySelector('#gfx_ld .vk-det'); return { cases: [...r.querySelectorAll('[data-vkseg]')].map(b => [b.dataset.vkseg, b.getAttribute('aria-pressed')]), wheels: r.querySelectorAll('svg circle.dt-wh').length,
+    texts: r.querySelectorAll('svg text').length, zoom: r.querySelectorAll('.sdx-view').length, il: r.querySelectorAll('svg .dt-il').length }; });
+  const l0 = await ldState(); assert.ok(l0.cases.length >= 2 && l0.texts > 15 && l0.zoom === 0 && l0.wheels >= 2 && l0.il > 0, 'LLDF card ' + JSON.stringify(l0)); await shot('tab-loads'); await print('tab-loads');
+  const lastCase = l0.cases[l0.cases.length - 1][0]; await p.click(`#gfx_ld [data-vkseg="${lastCase}"]`); await p.waitForTimeout(200);
+  const l1 = await ldState(); assert.equal(l1.cases.find(c => c[0] === lastCase)[1], 'true', 'LLDF case selected'); if (lastCase === 'rigid') assert.equal(l1.il, 0, 'rigid: no influence line'); await shot('tab-loads-case');
+  { const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#gfx_ld [data-vkdxf]')]); const txt = fs.readFileSync(await dl.path(), 'utf8');
+    assert.ok(/S-LANE/.test(txt) && /S-LL-WHEEL/.test(txt) && /EOF/.test(txt), 'LLDF DXF (the CAD drawing)'); }
   // SBVZB (2026-11-10): Analysis, Flexure and Constructibility graphics in the data-viz style (ui/vizalong.js, ui/alonggfx.js): a card fitted to its width (no
   // zoom buttons), hover / tap read-out, click selects the tab's location, series chips, Download DXF = the old drawing (tests/smoke/steel-bridge-dxf-unchanged.mjs)
   const chkV = async (name, sel, minTexts) => { await p.waitForSelector(sel + ' .va-card svg', { timeout: 180000 }); const n = await p.evaluate(s => document.querySelectorAll(s + ' .va-card svg text').length, sel); assert.ok(n >= minTexts, `${name}: ${n} texts`);

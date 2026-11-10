@@ -11,6 +11,8 @@
      bear(slot, { R, opt, dxf, file })      Shear & stiffeners: the bearing stiffener (opt.i its row)
      crossframe(slot, { B, opt, dxf, file }) Cross-frames: the cross-frame elevation (B = SBDFramingUI.build result; opt.dia: diaphragm in use)
      weld(slot, { B, opt, dxf, file })      Welds: the flange-to-web weld size detail (B = SBDWeldsUI.build result; opt.i the location)
+     lldf(slot, { P, R, lg, lr, cs, onCase(k), dxf(use) })   Loads & LLDF: the cross-section with lanes and wheels of the LLDF case (segmented control)
+     strip(slot, { list, P, sel, onSel(i), dxf, file })     Field splices: the splice locations; stripFigure(list, P, W): the Report's static figure
      splice(slot, { s, dxf, file })         Field splices: the splice detail (s = one entry of the splice list); spliceFigure(s, W): the Report's static figure (HTML string)
    Fix log: fixlog/steel-bridge.md (DETC, 2026-11-10). */
 (function () {
@@ -360,6 +362,102 @@
   function spliceFigure(s, W) { const m = spliceModel(s); if (!m) return null; const t = spliceTexts(m); VK().detCss();
     return `<div class="vk vk-det" style="max-width:${W || 760}px"><p class="vk-cap" style="margin:0 0 4px">${sb(t.gov)}</p>${spliceSvg(m, W || 760).svg}<p class="vk-cap">${esc(t.bolts)}</p></div>`; }
 
-  window.SBDGfxDet = { ltb, ltbModel, bracket, bracketModel, stiff, stiffModel, bear, bearModel, crossframe, cfModel, weld, weldModel, splice, spliceModel, spliceFigure,
-    _svg: { ltbSvg, bracketSvg, stiffSvg, bearSvg, cfSvg, weldSvg, spliceSvg } };   // _svg: the SVG builders (tests)
+  /* ================= (d) plans ================= */
+  /* #2 Loads & LLDF: the cross-section with the lanes and the wheel positions of the selected LLDF case (as ui/gfxa.js loadsGraphic: the same cases, wheels, lanes,
+     traffic faces, appurtenances of the drawings model, girder spacing chain and, for the lever rule, the influence line of the girder with its ordinates). */
+  function lldfModel(P, R, lg, lr, cs) {
+    const M = window.SBDDrawings.model(P); if (M.errors && M.errors.length) return { errors: M.errors };
+    const rg = R.regions[lr], mem = rg.members[lg], geo = rg.geo, Wd = R.dead.Wd, ts = +P.deck.ts, nb = R.dead.N, ohL = (P.xs && +P.xs.ohL) || 0, pos = geo.pos.map(p => ohL + p), hh = +P.deck.haunch || 0;
+    const opts = [];
+    if (mem.lever1) opts.push(['lever1', 'Lever rule, one lane (' + nf(mem.lever1.df, 4) + ')']);
+    if (mem.alt && mem.alt.l2) opts.push(['lever2', `Lever rule, ${mem.alt.l2.N} trucks (${nf(mem.alt.l2.df, 4)})`]);
+    if (mem.rig && mem.rig.ecc) opts.push(['rigid', `Rigid cross-section, ${mem.rig.nLoaded} lane${mem.rig.nLoaded > 1 ? 's' : ''} (${nf(mem.rig.g, 4)})`]);
+    const use = opts.some(q => q[0] === cs) ? cs : (opts[0] || ['none'])[0], deL = geo.deL, deR = geo.deR, lw = geo.laneW, NL = geo.NL; let wheels = [], desc = '';
+    if (use === 'lever1') { wheels = mem.lever1.wheels; desc = `One lane, lever rule: g = m R = ${nf(mem.lever1.m, 2)} × ${nf(mem.lever1.R, 4)} = ${nf(mem.lever1.df, 4)}`; }
+    else if (use === 'lever2') { wheels = mem.alt.l2.wheels; desc = `${mem.alt.l2.N} trucks, lever rule: g = m R = ${nf(mem.alt.l2.m, 2)} × ${nf(mem.alt.l2.R, 4)} = ${nf(mem.alt.l2.df, 4)}`; }
+    else if (use === 'rigid') { const rg2 = mem.rig, left = rg2.side !== 'R'; for (let i = 0; i < rg2.nLoaded; i++) { const e0 = left ? deL + i * lw : Wd - deR - i * lw; wheels.push(...(left ? [e0 + 2, e0 + 8] : [e0 - 2, e0 - 8])); }
+      desc = `Rigid cross-section, ${rg2.nLoaded} lane(s) loaded: g = m R = ${nf(rg2.m, 2)} × ${nf(rg2.R, 4)} = ${nf(rg2.g, 4)}`; }
+    const side = use === 'rigid' && mem.rig ? mem.rig.side : 'L';
+    const lanes = []; for (let i = 0; i < NL; i++) { const a = side === 'R' ? Wd - deR - (i + 1) * lw : deL + i * lw; lanes.push([a, a + lw, i]); }
+    const f = x => { const j = lg, l = pos[j - 1], c0 = pos[j], r = pos[j + 1], ext = (x0, x1, v0, v1, xx) => v0 + (v1 - v0) * (xx - x0) / (x1 - x0);
+      if (x <= c0 && j > 0) return x < l ? 0 : (x - l) / (c0 - l); if (x <= c0) return nb > 1 ? ext(c0, r, 1, 0, x) : 1; if (j < nb - 1) return x > r ? 0 : (r - x) / (r - c0); return ext(l, c0, 0, 1, x); };
+    // the girder-spacing chain: the CAD drawing's own dimensions (SharedDxf chainH: runs n@s, its measured text)
+    const Dc = X_().drawing({ prefix: 'S-' }), lc = Dc.layer('DIMS', 7); Dc.chainH(lc, [0, ...pos.map(x => x * 12), Wd * 12], 10, 0); const chain = Dc.E.filter(e => e.t === 'DIM').map(e => [e.pts[0][0], e.pts[1][0], e.s]);
+    return { M, rg, mem, geo, Wd, ts, nb, pos, hh, opts, use, wheels, desc, lanes, deL, deR, lw, NL, lg, f, chain, lever: use === 'lever1' || use === 'lever2' };
+  }
+  function lldfSvg(m, W) {
+    const K = VK(), S = K.scene(), nar = W < 600, X = x => x * 12, hh = m.hh, ts = m.ts, yd = hh + ts, Wd = m.Wd, G = m.M.girders;
+    S.rect(0, hh, X(Wd), yd, 'dt-cc');
+    let top = 0, yBot = 0; const sz = nar ? 10 : 11;
+    m.pos.forEach((x, i) => { const s = G[Math.min(i, G.length - 1)].segs[0], cx = X(x), y0 = -s.topT - s.D - s.botT, on = i === m.lg, o = on ? { fill: '#2563EB' } : {};
+      if (on) S.rect(cx - s.botB / 2 - 6, y0 - 3, cx + s.botB / 2 + 6, yd + 3, 'dt-sel', { stroke: 'none', fill: '#DBEAFE' });
+      S.rect(cx - s.topB / 2, 0, cx + s.topB / 2, hh, 'dt-cc'); S.poly([[cx - s.botB / 2, y0], [cx + s.botB / 2, y0], [cx + s.botB / 2, y0 + s.botT], [cx + s.tw / 2, y0 + s.botT], [cx + s.tw / 2, -s.topT], [cx + s.topB / 2, -s.topT], [cx + s.topB / 2, 0], [cx - s.topB / 2, 0], [cx - s.topB / 2, -s.topT], [cx - s.tw / 2, -s.topT], [cx - s.tw / 2, y0 + s.botT], [cx - s.botB / 2, y0 + s.botT]], 'dt-st', o);
+      S.text(cx, y0, `G${i + 1}`, { dy: 15, a: 'middle', sz: 12, w: true, cls: on ? 'dt-g' : 'dt-t' }); yBot = Math.min(yBot, y0); });
+    (m.M.app ? m.M.app.items : []).forEach(a => { const y0 = yd + (a.y0 || 0);
+      if (a.x0 != null && a.k !== 'ws' && a.k !== 'ovl') { const h = a.k === 'bar' ? 34 : a.h; S.rect(X(a.x0), y0, X(a.x1), y0 + h, 'dt-cc', { fill: '#D6CFC0' }); top = Math.max(top, (a.y0 || 0) + h);
+        S.text(X((a.x0 + a.x1) / 2), y0 + h, a.k === 'sw' ? 'Sidewalk' : a.k === 'med' ? 'Median' : a.k === 'curb' ? 'Curb' : 'Barrier', { dy: -5, a: 'middle', sz: 10, cls: 'dt-m' }); }
+      else if (a.x != null) { S.line(X(a.x), y0, X(a.x), y0 + a.h, 'dt-ol', { sw: 1.6 }); top = Math.max(top, (a.y0 || 0) + a.h); S.text(X(a.x), y0 + a.h, a.k === 'rail' ? 'Railing' : 'Fence', { dy: -5, a: 'middle', sz: 10, cls: 'dt-m' }); } });
+    // traffic faces, lanes and wheels: rows in px above the top of the appurtenances
+    const yA = yd + top, rW = 54, rL = rW + 26, tL = `Traffic face d_e = ${nf(m.deL, 2)} ft`, tR = `d_e = ${nf(m.deR, 2)} ft`;
+    [[m.deL, tL, 'start', 4], [Wd - m.deR, tR, 'end', -4]].forEach(([x, t, a, dx]) => { S.raw(T => { const px = T.X(X(x)), y1 = T.Y(yA) - rL - 18; return `<line x1="${r2(px)}" y1="${r2(T.Y(yd))}" x2="${r2(px)}" y2="${r2(y1)}" class="dt-tf" fill="none" stroke="#15803D" stroke-width="1" stroke-dasharray="6 3"/>` + tx(px + dx, y1 + 2, t, { a, sz: 10, cls: 'dt-tok' }); },
+      T => { const px = T.X(X(x)), y1 = T.Y(yA) - rL - 18, w = K.TW(t, 10); return [[a === 'end' ? px - w - 4 : px, y1 - 10], [a === 'end' ? px : px + w + 4, T.Y(yd)]]; }); });
+    m.lanes.forEach(([a, b, i]) => S.raw(T => { const x0 = T.X(X(a)), x1 = T.X(X(b)), y = T.Y(yA) - rL; return `<rect x="${r2(x0 + 1)}" y="${r2(y - 9)}" width="${r2(x1 - x0 - 2)}" height="18" rx="3" class="dt-lane" fill="#EEF2F7" stroke="#CBD5E1"/>` + tx((x0 + x1) / 2, y + 4, `Lane ${i + 1}`, { a: 'middle', sz, cls: 'dt-m' })
+      + `<rect x="${r2(x0)}" y="${r2(y - 9)}" width="${r2(x1 - x0)}" height="18" class="dt-reg" fill="transparent" data-dtr="${esc(`Lane ${i + 1}: ${nf(m.lw, 2)} ft`)}"/>`; }, T => [[T.X(X(a)), T.Y(yA) - rL - 10], [T.X(X(b)), T.Y(yA) - rL + 10]]));
+    m.wheels.forEach(w => S.raw(T => { const px = T.X(X(w)), py = T.Y(yd), yt = T.Y(yA) - rW; return `<circle cx="${r2(px)}" cy="${r2(yt)}" r="6" class="dt-wh" fill="#0F172A"/><line x1="${r2(px)}" y1="${r2(yt + 6)}" x2="${r2(px)}" y2="${r2(py - 7)}" class="dt-ld" stroke="#1E3A5F" stroke-width="1.4"/><polygon points="${r2(px)},${r2(py)} ${r2(px - 3.5)},${r2(py - 7)} ${r2(px + 3.5)},${r2(py - 7)}" class="dt-ldh" fill="#1E3A5F"/>`; },
+      T => [[T.X(X(w)) - 7, T.Y(yA) - rW - 7], [T.X(X(w)) + 7, T.Y(yd)]]));
+    // the girder-spacing chain under the girders (the CAD drawing's text)
+    m.chain.forEach(([a, b, t], i) => S.dimH(a, b, yBot, -46, t, { yr: yBot }));
+    // lever rule: the influence line of the girder, its ordinates under the wheels and 1.0 / 0 at the girders, in a band under the chain
+    if (m.lever) { const xs = [0, ...m.pos, Wd].sort((p, q) => p - q), vmax = Math.max(1, ...xs.map(m.f)), U = 56, lg = m.lg, gp = [[m.pos[lg], 1]].concat(lg > 0 ? [[m.pos[lg - 1], 0]] : [], lg < m.nb - 1 ? [[m.pos[lg + 1], 0]] : []).filter(([x]) => x >= 0 && x <= Wd);
+      S.raw(T => { const y0 = T.Y(yBot) + 92 + vmax * U, Yv = v => y0 - v * U, o = [];
+        o.push(`<polygon points="${xs.map(x => r2(T.X(X(x))) + ',' + r2(Yv(m.f(x)))).join(' ')} ${r2(T.X(X(Wd)))},${r2(y0)} ${r2(T.X(0))},${r2(y0)}" class="dt-ilf" fill="#F3EEFF"/>`,
+          `<line x1="${r2(T.X(0))}" y1="${r2(y0)}" x2="${r2(T.X(X(Wd)))}" y2="${r2(y0)}" class="dt-ext" stroke="#CBD5E1"/>`, `<polyline points="${xs.map(x => r2(T.X(X(x))) + ',' + r2(Yv(m.f(x)))).join(' ')}" class="dt-il" fill="none" stroke="#7C3AED" stroke-width="1.4"/>`);
+        gp.forEach(([x, v]) => { const px = T.X(X(x)); o.push(`<circle cx="${r2(px)}" cy="${r2(Yv(v))}" r="3.5" class="dt-pl" fill="#fff" stroke="#7C3AED"/>`, tx(px + 6, Yv(v) - 6, nf(v, 1), { sz: 10, cls: 'dt-m' })); });
+        const lab = m.wheels.map(w => ({ px: T.X(X(w)), v: m.f(w) })); lab.forEach((q, i) => { o.push(`<line x1="${r2(q.px)}" y1="${r2(y0)}" x2="${r2(q.px)}" y2="${r2(Yv(q.v))}" class="dt-il" stroke="#7C3AED" stroke-width="1" stroke-dasharray="3 2"/><circle cx="${r2(q.px)}" cy="${r2(Yv(q.v))}" r="3" fill="#7C3AED" class="dt-band"/>`,
+          tx(q.px + 5, Yv(q.v) + 14 + (i % 2) * 12, nf(q.v, 3), { sz: 10.5, w: true }), `<rect x="${r2(q.px - 7)}" y="${r2(Yv(q.v) - 7)}" width="14" height="14" class="dt-reg" fill="transparent" data-dtr="${esc(`Wheel: ordinate ${nf(q.v, 3)} of the G${lg + 1} influence line`)}"/>`); });
+        const ilt = [`Influence line of G${lg + 1} (lever rule: 1.0 at G${lg + 1}, 0 at the adjacent girder);`, 'ordinates under the wheels']; (nar ? ilt : [ilt.join(' ')]).forEach((t, i) => o.push(tx(T.X(0), T.Y(yBot) + 78 - (nar ? 13 : 0) + i * 13, t, { sz: nar ? 9.5 : 10.5, cls: 'dt-m' })));
+        return o.join(''); }, T => { const y0 = T.Y(yBot) + 92 + vmax * U; return [[T.X(0), T.Y(yBot) + 66], [T.X(X(Wd)) + 30, y0 + 30]]; }); }
+    return { svg: S.render({ W, maxH: nar ? 420 : 460, label: 'Cross-section with the lanes and the wheel positions of the LLDF case' }).svg, nar };
+  }
+  function lldf(slot, o) {
+    const K = VK(); let m = null; try { m = lldfModel(o.P, o.R, o.lg, o.lr, o.cs); } catch (e) { slot.innerHTML = `<div class="alert err">The graphic could not be drawn: ${esc(e.message)}</div>`; return null; }
+    if (m.errors) { slot.innerHTML = `<div class="note">${esc(m.errors.join(' '))}</div>`; return null; }
+    const notes = [m.desc || 'No lever-rule or rigid case for this girder', `N_L = ${m.NL} lanes of ${nf(m.lw, 2)} ft; governing g_M = ${nf(m.mem.gM, 4)}, g_V = ${nf(m.mem.gV, 4)}`, 'Wheels 6 ft apart, outer wheel 2 ft from the traffic face or lane edge'];
+    const H = K.detCard(slot, { id: 'dt-ld', title: 'Cross-section: lanes and wheel positions of the LLDF cases', sub: `LLDF: girder G${o.lg + 1}, ${esc(m.rg.label || '')}`, dxf: () => o.dxf(m.use), file: 'lldf-cross-section',
+      seg: m.opts.length ? { label: 'LLDF case', items: m.opts.map(([k, t]) => [k, esc(t)]), cur: m.use, on: k => o.onCase(k) } : null,
+      top: `<p class="vk-cap" style="margin:0 0 6px;color:var(--vk-ink);font-weight:600">${sb(notes[0])}</p>`,
+      draw: W => { const q = lldfSvg(m, W); return { html: q.svg, nar: q.nar }; }, hint: 'Point at (or tap) a lane or a wheel ordinate to read it.',
+      cap: `<p class="vk-cap">${sb(notes[1])}. ${esc(notes[2])}.</p>`,
+      notes: [esc('Wheel and lane positions are the ones the distribution-factor worked steps use (shared/lldf.js lever rule and rigid cross-section); the rigid-section lanes are placed from the traffic face of the governing side. Appurtenances as the Drawings tab. The selected girder is blue; girders, deck and appurtenances to scale.')] });
+    if (H) H.model = m; return H;
+  }
+
+  /* #17 Field splices: where the splices are on the girder (also the Report's figure): the girder as a bar (schematic depth), the supports S1…, each splice FS1… a
+     marker in the colour of its governing ratio (the tab's Governing column, s.gov), the selected one in C's accent; a click selects it (onSel(i)). */
+  function stripModel(list, P) { const sup = [0]; (P.spans.lengths || []).forEach(Ls => sup.push(+(sup[sup.length - 1] + +Ls).toFixed(6)));
+    return { sup, L: sup[sup.length - 1], list: (list || []).map((s, i) => { const gv = s.gov, r = gv ? (gv.it.st === 'fail' && !(gv.it.r > 1) ? Infinity : gv.it.r) : NaN; return { s, i, x: s.x, gv, r, c: rcls(r) }; }) }; }
+  function stripSvg(m, W, sel, interactive) {
+    const nar = W < 600, ml = 18, mr = 18, X = ft => ml + ft / m.L * (W - ml - mr), yG = 50, gh = 12, o = [], FILL = { ok: ['#DCFCE7', '#15803D'], hi: ['#FEF3C7', '#B45309'], ng: ['#FEE2E2', '#B91C1C'], na: ['#F1F5F9', '#94A3B8'] };
+    o.push(box(X(0), yG, X(m.L) - X(0), gh, 'dt-st', C('dt-st')));
+    m.sup.forEach((x, k) => { const px = X(x); o.push(`<polygon points="${r2(px)},${yG + gh} ${r2(px - 6)},${yG + gh + 10} ${r2(px + 6)},${yG + gh + 10}" class="dt-ldh"${C('dt-ldh')}/>`, tx(px, yG + gh + 24, `S${k + 1}`, { a: 'middle', sz: 11, cls: 'dt-m' })); });
+    const rows = []; let maxRow = 0;
+    m.list.forEach(q => { const px = X(q.x), on = q.i === sel, lab = nar ? `FS${q.i + 1}` : `FS${q.i + 1} ${f2(q.x)} ft`, w = VK().TW(lab, 11) + 14; let row = 0; while (rows[row] != null && rows[row] > px - w / 2 - 4) row++; rows[row] = px + w / 2; maxRow = Math.max(maxRow, row);
+      const ty = yG - 14 - row * 22, fc = FILL[q.c];
+      o.push(ln(px, ty + 4, px, yG + gh + 3, on ? 'dt-gov' : 'dt-dim', on ? C('dt-gov') + ' stroke-width="1.6"' : C('dt-dim')), `<rect x="${r2(px - 4)}" y="${yG - 3}" width="8" height="${gh + 6}" rx="2" class="dt-${q.c}" fill="${fc[0]}" stroke="${on ? '#2563EB' : fc[1]}" stroke-width="${on ? 2 : 1.2}"/>`);
+      o.push(`<rect x="${r2(px - w / 2)}" y="${r2(ty - 13)}" width="${r2(w)}" height="18" rx="9" class="${on ? 'pill' : 'dt-pl'}" fill="${on ? '#2563EB' : '#fff'}" stroke="${on ? 'none' : '#CBD5E1'}"/>`, tx(px, ty, lab, { a: 'middle', sz: 11, w: on, cls: on ? 'dt-w' : 'dt-t' }));
+      if (interactive) o.push(`<rect x="${r2(px - Math.max(w / 2, 10))}" y="${r2(ty - 15)}" width="${r2(Math.max(w, 20))}" height="${r2(yG + gh + 6 - ty + 15)}" class="dt-reg" fill="transparent" data-fs="${q.i}" data-dtr="${esc(`${q.s.name}${q.gv ? `: governing ${q.gv.c.id} ${q.gv.it.loc}, ratio ${f3(q.gv.it.r)}` : ''}`)}" style="cursor:pointer"/>`); });
+    const y0 = Math.min(0, yG - 14 - maxRow * 22 - 18), H = yG + gh + 32 - y0;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 ${y0} ${Math.round(W)} ${Math.ceil(H)}" role="img" aria-label="Splice locations on the girder" font-family="Inter, Arial, sans-serif" style="background:#fff">${o.join('')}</svg>`;
+  }
+  const STRIP_CAP = '<p class="vk-cap" style="margin-top:2px">Marker colour: the governing ratio of the splice (table below): <span style="color:#15803D">below 0.90</span>, <span style="color:#B45309">0.90 to 1.00</span>, <span style="color:#B91C1C">above 1.00 or NG</span>; the selected splice in blue. Girder schematic (not to scale vertically).</p>';
+  function strip(slot, o) {
+    const K = VK(), m = stripModel(o.list, o.P); let sel = o.sel;
+    const H = K.detCard(slot, { id: 'dt-fs', title: 'Splice locations', sub: 'Click (or tap) a splice to select it', dxf: o.dxf, file: o.file, draw: W => ({ html: stripSvg(m, W, sel, true), nar: W < 600 }), hint: 'Point at a splice to read its governing check.', cap: STRIP_CAP });
+    H.fig.addEventListener('click', e => { const t = e.target.closest && e.target.closest('[data-fs]'); if (!t) return; sel = +t.getAttribute('data-fs'); H.redraw(); if (o.onSel) o.onSel(sel); });
+    H.select = v => { sel = v; H.redraw(); }; return H;
+  }
+  function stripFigure(list, P, W) { const m = stripModel(list, P); VK().detCss(); return `<div class="vk vk-det" style="max-width:${W || 760}px">${stripSvg(m, W || 760, -1, false)}${STRIP_CAP.replace('; the selected splice in blue', '')}</div>`; }
+
+  window.SBDGfxDet = { lldf, lldfModel, strip, stripModel, stripFigure, ltb, ltbModel, bracket, bracketModel, stiff, stiffModel, bear, bearModel, crossframe, cfModel, weld, weldModel, splice, spliceModel, spliceFigure,
+    _svg: { lldfSvg, stripSvg, ltbSvg, bracketSvg, stiffSvg, bearSvg, cfSvg, weldSvg, spliceSvg } };   // _svg: the SVG builders (tests)
 })();

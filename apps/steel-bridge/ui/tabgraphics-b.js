@@ -68,7 +68,8 @@
   /* splice (SPLGFX, 2026-11-02): the location strip (all splices, the selected one boxed; a click selects) and the detail of the selected splice, its frame at most
      60 % of the window high (the drawing is wide: it fits the card width at a reading scale) */
   function splice(host, ctx, s, list, sel, onSel) {
-    if (list && list.length) put(host, 'splice-strip', ctx, TX => TX.spliceStrip(list, ctx.P, { sel, narrow: window.innerWidth < 700 }), onSel ? v => { if (v && v.k === 'fs') onSel(v.i); } : null, { minPx: 60, phoneZoom: false });
+    if (list && list.length) putDet(host, 'splice-strip', ctx, TX => TX.spliceStrip(list, ctx.P, { sel, narrow: window.innerWidth < 700 }), 'strip', { list, P: ctx.P, sel, onSel: onSel ? i => onSel(i) : null })
+      || put(host, 'splice-strip', ctx, TX => TX.spliceStrip(list, ctx.P, { sel, narrow: window.innerWidth < 700 }), onSel ? v => { if (v && v.k === 'fs') onSel(v.i); } : null, { minPx: 60, phoneZoom: false });
     if (s) putDet(host, 'splice', ctx, TX => TX.splice(s, {}), 'splice', { s }) || put(host, 'splice', ctx, TX => TX.splice(s, {}), null, { maxVh: 60 });
   }
   function rating(host, ctx, B, sel, onSel) { put(host, 'rating', ctx, TX => TX.ratingChart(B, ctx.P, { gi: gi(ctx), sel }), onSel); }

@@ -56,3 +56,19 @@ test('DETC: detail drawings (c): LTB sketch, overhang bracket, stiffeners, cross
   }
   console.log(`       ${st.cards} cards, ${st.nums} numbers of the CAD drawings found in them`); assert.ok(st.cards > 40, 'cards');
 });
+
+test('DETC: plans (d): LLDF cross-section (every girder, region and case) and splice strip: every CAD number shown, Download DXF = the CAD drawing', () => {
+  let n = 0;
+  for (const [name, P, pl] of projects()) {
+    const LR = W.SBDUiLoads.calc(P, 0); if (LR.errors && LR.errors.length) continue;
+    LR.regions.forEach((rg, lr) => rg.members.forEach((mm, lg) => { const g0 = GA.loadsGraphic(P, LR, lg, lr, ''); [['', g0], ...g0.opts.map(([k]) => [k, GA.loadsGraphic(P, LR, lg, lr, k)])].forEach(([k, g]) => {
+      // the CAD drawing's notes are upper case with "x" for ×; its numbers are the same
+      check(`${name} lldf G${lg + 1} ${lr} ${k}`, g, () => GD.lldf(slot(), { P, R: LR, lg, lr, cs: k, onCase() {}, dxf: use => GA.loadsGraphic(P, LR, lg, lr, use) })); n++; }); }));
+    if (!pl) { const AR = W.SBDAnalysis.analyzeGirder(P, 0), Gs = W.SBDSplices.girder(P, 0, AR, { env: W.SBDSplicesUI.envOf(P) });
+      Gs.list.forEach((s, i) => { const g = GB.spliceStrip(Gs.list, P, { sel: i }); card = null; const H = { fig: { addEventListener() {} }, redraw() {} }; VK.detCard = (sl, o) => { card = o; return H; };
+        GD.strip(slot(), { list: Gs.list, P, sel: i, dxf: () => GB.spliceStrip(Gs.list, P, { sel: i }) }); VK.detCard = (sl, o) => { card = o; return { el: {} }; };
+        const q = card.draw(900).html, have = toks(q); [...cadNums(g)].forEach(t => assert.ok(have.has(t), `${name} strip: "${t}"`)); assert.equal(card.dxf().D.toDXF({ ltscale: 1 }), g.D.toDXF({ ltscale: 1 }), 'strip DXF');
+        assert.ok(/^<div class="vk vk-det"/.test(GD.stripFigure(Gs.list, P, 760)), 'report strip figure'); n++; }); }
+  }
+  assert.ok(n > 100, 'cases ' + n); console.log(`       ${n} plan cards`);
+});
