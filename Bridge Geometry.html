@@ -46,6 +46,10 @@
   #cur_name.bgLink { cursor: pointer; }
   #cur_name.bgLink:hover { text-decoration: underline; }
   #pane-project .prjRow { display:flex; gap:8px; flex-wrap:wrap; margin:6px 0 2px; }
+  /* HOC (2026-11-10): the Project tab's hand-offs card */
+  #pane-project .bgHoGrp { margin:8px 0 3px; font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-soft); }
+  #pane-project .bgHoRow { border-top:1px solid var(--vellum-edge); padding:5px 0 3px; font-size:12px; }
+  #pane-project .bgHoFrom { font-size:11px; color:var(--ink-soft); }
   /* STDS (2026-11-06): the standard save controls (shared/projects-ui.js projectBar): bar chip, the "save and open" card, Load example */
   .projbar button.spChip { flex:0 0 auto; max-width:100%; white-space:nowrap; }
   #bgSaveCard .spCard button { font:inherit; font-size:12px; padding:4px 10px; border:1px solid var(--graphite); background:#fff; color:var(--ink); border-radius:3px; cursor:pointer; }
@@ -646,12 +650,21 @@
       </div>
     </fieldset>
     <fieldset>
-      <legend>hand-off to LL &amp; DL Distribution</legend>
-      <p class="note" style="margin-top:0;">Spans, girder spacing, skew and overhangs for the LL &amp; DL Distribution tool, or the same hand-off as a file.</p>
+      <!-- HOC (2026-11-10, engineer decision: the hand-off card on the Project tab in every tool): "hand-off to LL & DL Distribution"
+           laid out as Receive / Send with the shared project info status and the last send (display only; same buttons and handlers) -->
+      <legend>hand-offs</legend>
+      <p class="note" style="margin-top:0;">Nothing changes until you confirm: "Send to LL &amp; DL" first shows the values and choices it will send, and LL &amp; DL asks again before applying anything. This tool's inputs are never changed by another tool.</p>
+      <div class="bgHoGrp">Receive from other tools</div>
+      <div class="bgHoRow"><b>Shared project info</b> <span class="bgHoFrom">from any tool</span>
+        <p class="note" style="margin:2px 0 0;">Read only, for the drawing title block (Drawings tab); no input of this tool is filled from it. <b>Status:</b> <span id="bgHoPm"></span></p></div>
+      <div class="bgHoGrp">Send to other tools</div>
+      <div class="bgHoRow"><b>Geometry</b> <span class="bgHoFrom">to LL &amp; DL Distribution</span>
+      <p class="note" style="margin:2px 0 0;">Spans, girder spacing, skew and overhangs for the LL &amp; DL Distribution tool, or the same hand-off as a file.</p>
       <div class="prjRow">
         <button class="sm ghost" id="bgx_send" type="button" title="Send spans, girder spacing, skew and overhangs to the LL &amp; DL Distribution tool (lldf.html). You review the values and choices first; LL &amp; DL asks again before applying anything.">Send to LL &amp; DL</button>
         <button class="sm ghost" id="bgx_export" type="button" title="Download the same LL &amp; DL geometry hand-off as a JSON file (for another browser or device, or the calc package).">Export hand-off (JSON)</button>
       </div>
+      <p class="note" style="margin:2px 0 0;"><b>Last sent:</b> <span id="bgHoSent"></span></p></div>
     </fieldset>
   </section>
 
@@ -5724,6 +5737,7 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
         if(res.error){ alert('Not sent: '+res.error); return; }
         dlg.style.display='none';
         setStatus('sent to LL & DL — open lldf.html and click "Pull from Bridge Geometry"');
+        hoLines();   // HOC
       });
       dlg.querySelector('#bgx_do_export').addEventListener('click',()=>{
         const r=refresh(); if(!r) return;
@@ -5748,6 +5762,16 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
   const bs=document.getElementById('bgx_send'), be=document.getElementById('bgx_export');
   if(bs) bs.addEventListener('click',openDlg);
   if(be) be.addEventListener('click',openDlg);
+  /* HOC (2026-11-10): the hand-offs card's status lines, read from the channel keys in this browser (nothing stored) */
+  function hoLines(){
+    const rd=k=>{ try{ return JSON.parse(localStorage.getItem('bridgeSuite.v1.'+k)||'null'); }catch(e){ return null; } };
+    const t=iso=>{ const d=new Date(iso); return isNaN(d)?String(iso||'?'):d.toLocaleString(); };
+    const g=rd('lldfGeom'), e1=document.getElementById('bgHoSent');
+    if(e1) e1.textContent=g&&g.producer==='Bridge Geometry'&&g.producedAt? t(g.producedAt)+((g.project&&g.project.name)?' ('+g.project.name+')':'')+', from this browser.' : 'nothing sent from this browser yet.';
+    const m=rd('projectMeta'), e2=document.getElementById('bgHoPm');
+    if(e2) e2.textContent=m&&m._schema==='bridge-project-meta'&&m.fields? 'shared by '+(m.producer||'another tool')+', '+t(m.producedAt)+(m.fields.projectName?' ('+m.fields.projectName+')':'')+'.' : 'none shared in this browser.';
+  }
+  hoLines(); window.addEventListener('storage',hoLines); window.addEventListener('focus',hoLines);
 })();
 </script>
 <script>
