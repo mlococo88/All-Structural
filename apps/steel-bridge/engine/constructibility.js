@@ -211,6 +211,16 @@
     return { LbC: r2(LbCN), CbC: +CbC.toFixed(3), nprC, seg: cC ? { xa: cC.p0, xb: cC.p1 } : null, cbParts, kParts, mSrc };
   }
 
+  /* notes(seq): the assumptions of the deck-placement LTB data (engineer's rule 2026-11-10: every assumption is a note on the tab card and in
+     the Report section), plain text; seq: the pour sequence is in use (M_DCc). One source for ui/constructibility.js and report/builders.js. */
+  function notes(seq) {
+    const M = seq ? 'M_DCc (the pour-sequence envelope)' : 'M_DC1 (no pour sequence)';
+    return [
+      `C_b and γ_e: taken from the same factored moments this check uses, M_c = γ_DC ${M} + γ_CL M_CL, over the unbraced length. The flange in compression, C_b (Eq. 6.10.8.2.3b-1), and for a nonprismatic unbraced length the ratio K = f_max/f_x and the stress f_s of the conservative γ_e bound all come from that one moment diagram, so γ_e scales the design stresses at the governing section of the moments checked (AASHTO LRFD 10th Ed. 6.10.8.2.3c and C6.10.8.2.3c; App. D6.6).`,
+      ...(seq ? ['M_DCc is the station-by-station envelope of the pour stages (6.10.3.4.1), not one load case. Near an inflection point of M_DC1 its sign can change between adjacent stations; each station is checked for the sign of its envelope value, so a smaller moment of the opposite sign from another pour stage is not checked at that station.'] : []),
+      'C_b by Eq. 6.10.8.2.3b-1: M_max is the largest moment compressing the flange in the unbraced length; M_A, M_B, M_C are taken as the absolute values of the deck-placement moment at the quarter points. Where the flange is in tension at a quarter point this can give C_b below 1.0, which is used as computed.'];
+  }
+
   /* ---------- deck overhang brackets, exterior girder (GirderDetail GM.oh) ---------- */
   /* GirderDetail's Deck overhang module inputs (GM.oh.def): bracket a, h_b (in); deck width carried wOH (in), overhang thickness tOH (in),
      w_c (kcf), forms qForm (ksf), screed rail, railing, walkway (klf), construction LL qCL (ksf) over bCL (in), finishing machine Pfm (kip
@@ -420,5 +430,5 @@
     return { prj, locs, env, supports: sup, braces, oh, ext, Lb, D, seq: !!MDCc };
   }
 
-  window.SBDConstr = { ES, OH_DEF, ohFill, factors, factorsOwner, lfOf, projFactors, gsGovC, location, bracingC, ohLoads, overhang, girder, ohRowsAt, stationList, fromPayload, fromAnalysis };
+  window.SBDConstr = { ES, OH_DEF, notes, ohFill, factors, factorsOwner, lfOf, projFactors, gsGovC, location, bracingC, ohLoads, overhang, girder, ohRowsAt, stationList, fromPayload, fromAnalysis };
 })();
