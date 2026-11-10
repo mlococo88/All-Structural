@@ -5820,7 +5820,7 @@ index 10a32fd..16f867d 100644
 - **Decisions (pending engineer review):** [ADTT]_PRESENT default ADTT_SL/p (one direction); n_L default 2 (the lower bound of the equation's range; the striped lanes are not in the project); g = 0 takes the exact g → 0 limit of Eq. 7.2.5.1-4; the exponent "(Y_ADTT)_LIMIT−1" of Eq. 7.2.5.1-8 read as (Y_ADTT)_LIMIT − 1 (continuity with Eq. 7.2.5.1-4); FA2 (LRFD net tension) kept, the MBE 7.2.3 fatigue-prone check (2.2(Δf)_tension > f_DL,comp) not added.
 - **Other copies:** GirderDetail in `Steel Bridge Design.html` (superseded; not changed).
 
-## 2026-11-10 — PR: claude/sb-mbe4-prone (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Remaining fatigue life: the MBE 4th Ed. Art. 7.2.3 fatigue-prone check (FA8)   [calculation change, approved: engineer standing rule 2026-11-10]
+## 2026-11-10 — PR: claude/sb-mbe4-prone (PR #1368: https://github.com/mlococo88/All-Structural/pull/1368) — Remaining fatigue life: the MBE 4th Ed. Art. 7.2.3 fatigue-prone check (FA8)   [calculation change, approved: engineer standing rule 2026-11-10]
 - **Engineer (2026-11-10):** add the MBE 4th Ed. Art. 7.2.3 check left out of #1362, exactly per the article.
 - **Provision (verified in `MBE 4th Edition - 2026 -part 2.pdf`, p. 7-5):** Art. 7.2.3, Eq. 7.2.3-1: a detail is prone to load-induced fatigue only if it sees net tension; fatigue damage need only be evaluated where 2.2(Δf)_tension > f_dead-load compression, with (Δf)_tension the tensile portion of the effective stress range of Art. 7.2.2 and f_dead-load compression the unfactored compressive stress at the detail due to dead load. C7.2.3: 2.2 is the assumed ratio of the maximum to the effective stress range.
 - **Where (to re-apply by hand):**
