@@ -52,14 +52,16 @@
   const rhOf = (s, q, mat) => SEC().hybrid(plates(q), s, { Fyt: mat.Fyt, Fyb: mat.Fyb, Fyw: mat.Fyw }, 'cn').Rh;   // GirderDetail rhFactor on the steel section
   /* the M_DCc rule of GirderDetail: used when it is a number other than 0 (blank, 0 or missing: M_DC1) */
   const useDCc = v => v !== '' && v != null && isFinite(+v) && +v !== 0;
+  const SIDE0 = 0.01;   // SBTS: a side of the pour envelope smaller than 0.01 kip-ft is taken as zero (round-off; no opposite-sign case)
 
   /* gsGovC(o, r, kind, X): GirderDetail gsGov, kinds 'Ct' / 'Cb' (deck placement, top / bottom flange): f_bu, D_c and R_h of the
      governing section of a nonprismatic deck-placement unbraced length (o = nprC.G: x, plates, MDC1, MCL, MDCc there). */
+  // SBTS (2026-11-10): o.side (a side diagram of the pour envelope, bracingC opt.side): its M_DCc as recorded, 0 included
   function gsGovC(o, r, kind, X) {
     const pl = ['topB', 'topT', 'botB', 'botT', 'tw'], mk = ['MDC1', 'MCL'];
     if (!o || typeof o !== 'object' || !pl.every(k => +o[k] > 0) || !mk.every(k => o[k] !== '' && o[k] != null && isFinite(+o[k]))) return null;
     const q = { ...r, topB: +o.topB, topT: +o.topT, botB: +o.botB, botT: +o.botT, tw: +o.tw }, s = SEC().steelCore(plates(q)), x = o.x != null && isFinite(+o.x) ? +o.x : null;
-    const up = kind === 'Ct', MD = useDCc(o.MDCc) ? +o.MDCc : +o.MDC1, MCL = +o.MCL, G = X.G, Mc = G.cdc * MD + G.ccl * MCL;
+    const up = kind === 'Ct', MD = o.side && o.MDCc !== '' && o.MDCc != null && isFinite(+o.MDCc) ? +o.MDCc : useDCc(o.MDCc) ? +o.MDCc : +o.MDC1, MCL = +o.MCL, G = X.G, Mc = G.cdc * MD + G.ccl * MCL;
     const f = -fAt(Mc, s, up ? s.d : 0), S = up ? s.I / (s.d - s.yb) : s.I / s.yb;
     return { kind, x, q, MD, MDc: MD !== +o.MDC1, MCL, gdc: G.cdc, gcl: G.ccl, Mc, S, f, Dc: Math.max(up ? s.d - q.topT - s.yb : s.yb - q.botT, 0), Rb: 1, Rh: rhOf(s, q, X.mat) };
   }
@@ -74,13 +76,26 @@
            flC (ksi, first-order f_ℓ during deck placement, default 0), do (in, transverse stiffener spacing, 0 = unstiffened), end (end panel) }
      prj = { mat: { Fyt, Fyb, Fyw }, G: factors() }
      Returns the row (GirderDetail's field names: Mc, con, conC, conT, DcC, RhC, CbCu, ltC, amC, webC, VuC, sh) with checks [{ id, key,
-     title, demand, capacity, ratio, ok, ref, unit, step }], gov (largest ratio) and the worked steps (lazy). */
+     title, demand, capacity, ratio, ok, ref, unit, step }], gov (largest ratio) and the worked steps (lazy).
+     SBTS (engineer decision 2026-11-10, items 1 and 3; AASHTO LRFD 10th Ed. 6.10.3.2, 6.10.3.4.1, 6.10.1.6, 6.10.8.2.3): L.side (+1 / −1)
+     names the sign case of L.M.DCc, and L.alt = { side, DCc, LbC, CbC, nprC, seg, cbParts, kParts, mSrc } the other sign case at the same
+     location (the largest deck-placement moment of the opposite sign, with its own C_b / γ_e data from bracingC(side)). Both cases are
+     checked, each with its own flange in compression, f_bu, f_ℓ amplification and F_nc; the row returned is the governing case (largest
+     governing ratio; the case of L.side on a tie), with .cases = [L.side case, L.alt case] and .alt = the other one. Without L.alt: one case,
+     as before. */
   function location(L, prj) {
+    const A = L.alt && typeof L.alt === 'object' && (A0 => A0.side === 1 || A0.side === -1)(L.alt) ? L.alt : null, r0 = locCase(L, prj);
+    if (!A) return r0;
+    const r1 = locCase({ ...L, ...A, M: { ...(L.M || {}), DCc: A.DCc }, alt: null }, prj), gr = FX().gr, g1 = gr(r1.gov) > gr(r0.gov), R = g1 ? r1 : r0, O = g1 ? r0 : r1;
+    [r0, r1].forEach(q => { q.cases = [r0, r1]; q.alt = q === R ? O : R; q.caseGov = q === R; });
+    return R;
+  }
+  function locCase(L, prj) {
     const G = factors(prj.G), p = plates(L.plates), mat = prj.mat, Fyt = mat.Fyt, Fyb = mat.Fyb, Fyw = mat.Fyw, M = L.M || {}, V = L.V || {}, num = v => +v || 0;
     const s = SEC().steelCore(p), d = s.d;
     const r = { name: L.name, x: L.x, ...p, MDC1: num(M.DC1), MDCc: useDCc(M.DCc) ? +M.DCc : 0, MCL: num(M.CL), VDC1: num(V.DC1), VCL: num(V.CL),
       LbC: +L.LbC, CbC: +L.CbC || 0, Cb: L.Cb != null && +L.Cb > 0 ? +L.Cb : 1, flC: num(L.flC), do: num(L.do), end: !!L.end, s, d, G, mat,
-      seg: L.seg || null, cbParts: L.cbParts || null, kParts: L.kParts || null, mSrc: L.mSrc || null };   // SBCON: bracingC's C_b and K parts, for the worked steps
+      seg: L.seg || null, cbParts: L.cbParts || null, kParts: L.kParts || null, mSrc: L.mSrc || null, side: L.side === 1 || L.side === -1 ? L.side : 0 };   // SBCON: bracingC's C_b and K parts, for the worked steps
     // constructibility (steel section)
     r.Mc = G.cdc * (r.MDCc !== 0 ? r.MDCc : r.MDC1) + G.ccl * r.MCL; const up = r.Mc >= 0; r.con = { top: fAt(r.Mc, s, d), bot: fAt(r.Mc, s, 0), up };
     r.conC = up ? { lab: 'top', b: r.topB, t: r.topT, Fy: Fyt, f: Math.max(-r.con.top, 0) } : { lab: 'bottom', b: r.botB, t: r.botT, Fy: Fyb, f: Math.max(-r.con.bot, 0) };
@@ -127,16 +142,19 @@
   /* worked(r): the steps of one location (ids cn.*), then the steel section's (sec.s.*) */
   function worked(r) {
     const w = St().work('cn'), G = r.G, s = r.s, cF = r.conC, tF = r.conT, lt = r.ltC, up = r.con.up, tbl = `${ED} Art. 3.4.2.1`;
-    const seq = r.MDCc !== 0;
-    w.add({ id: 'Mc', label: 'Deck placement factored moment, noncomposite steel section', sym: 'M_{c}', eq: `\\gamma_{DC}M_{${seq ? 'DCc' : 'DC1'}} + \\gamma_{CL}M_{CL}`, sub: `${nf(G.cdc)}${pa(seq ? r.MDCc : r.MDC1)} + ${nf(G.ccl)}${pa(r.MCL)}`, value: r.Mc, unit: 'kip-ft', d: 1, ref: tbl,
-      note: (seq ? `M_DCc: the noncomposite moment envelope of the deck placement sequence (Art. 6.10.3.4.1; Analysis tab, an.seq.MDCc); M_DC1 with the deck cast at once = ${n2(r.MDC1)} kip-ft.` : 'M_DC1: steel and the whole wet deck on the steel section (no pour sequence given).') + etaNote(G) });
+    const seq = r.MDCc !== 0, sN = q => (q.side > 0 ? 'positive' : 'negative');
+    // SBTS (2026-11-10): the sign case of this row and, where both signs occur, the other case and which governs (6.10.3.4.1)
+    const csN = !(seq && r.side) ? '' : ` M_DCc of this case: the ${sN(r)}-side envelope, the largest ${sN(r)} noncomposite moment of the deck placement sequence here (M_DC1 and every pour stage).`
+      + (r.cases ? ` Both signs occur here and both are checked: ${r.cases.map(q => `${sN(q)} case M_c = ${n2(q.Mc)} kip-ft, ${q.gov ? `${q.gov.id} ratio ${n3(q.gov.ratio)}` : 'no check'}`).join('; ')}. The ${sN(r.caseGov ? r : r.alt)} case governs and is the one reported for this location.` : ` No pour stage gives a ${r.side > 0 ? 'negative' : 'positive'} moment here: one case.`);
+    w.add({ id: 'Mc', label: `Deck placement factored moment, noncomposite steel section${seq && r.side ? ` (${sN(r)}-moment case)` : ''}`, sym: 'M_{c}', eq: `\\gamma_{DC}M_{${seq ? 'DCc' : 'DC1'}} + \\gamma_{CL}M_{CL}`, sub: `${nf(G.cdc)}${pa(seq ? r.MDCc : r.MDC1)} + ${nf(G.ccl)}${pa(r.MCL)}`, value: r.Mc, unit: 'kip-ft', d: 1, ref: tbl,
+      note: (seq ? `M_DCc: the noncomposite moment envelope of the deck placement sequence (Art. 6.10.3.4.1; Analysis tab, an.seq.MDCc); M_DC1 with the deck cast at once = ${n2(r.MDC1)} kip-ft.${csN}` : 'M_DC1: steel and the whole wet deck on the steel section (no pour sequence given).') + etaNote(G) });
     ['top', 'bot'].forEach(k => w.add({ id: 'f.' + k, label: `Stress, ${k === 'top' ? 'top' : 'bottom'} of steel (tension +)`, sym: `f_{${k}}`, eq: '\\frac{-M_{c}(12)(y - \\bar{y})}{I}', sub: `\\frac{-${pa(r.Mc)}(12)(${n3(k === 'top' ? r.d : 0)} - ${n3(s.yb)})}{${g0(s.I)}}`, value: r.con[k], unit: 'ksi', d: 2, ref: `${ED} Art. 6.10.1.1.1a`, note: 'Steel section: see sec.s.yb, sec.s.I.' }));
     w.add({ id: 'fbu', label: `Compression flange: the ${cF.lab} flange (M_c ${up ? '≥' : '<'} 0)`, sym: 'f_{bu}', eq: `\\max(-f_{${up ? 'top' : 'bot'}}, 0)`, sub: n2(-r.con[up ? 'top' : 'bot']), value: cF.f, unit: 'ksi', d: 2, ref: `${ED} Art. 6.10.3.2.1`, note: 'Stress at the extreme fiber of the flange (conservative).' });
     w.add({ id: 'Dc', label: 'Depth of the web in compression, steel section', sym: 'D_{c}', eq: up ? '(d - t_{ft}) - \\bar{y}' : '\\bar{y} - t_{fb}', sub: up ? `(${n3(r.d)} - ${n3(r.topT)}) - ${n3(s.yb)}` : `${n3(s.yb)} - ${n3(r.botT)}`, value: r.DcC, unit: 'in', d: 3, ref: `${ED} App. D6.3.1` });
     w.add({ id: 'Rh', label: 'Hybrid factor, steel section', sym: 'R_{h}', eq: '', sub: '', value: r.RhC, unit: '', d: 3, ref: `${ED} Art. 6.10.1.10.1` });
     // SBCON (2026-11-10): C_b worked from bracingC's parts, with the moments used (the M_c this check uses: M_DCc where given)
     const geK = lt.npr && lt.npr.kind === 'ge', cbP = !geK && r.cbParts && r.CbC > 0 ? r.cbParts : null, mN = r.mSrc === 'DCc' ? 'M_DCc' : 'M_DC1';
-    const mUsed = r.mSrc ? ` Moments over the unbraced segment${r.seg ? ` ${n2(r.seg.xa)} to ${n2(r.seg.xb)} ft` : ''}: 1.25${mN} + 1.50M_CL (${r.mSrc === 'DCc' ? 'the pour-sequence envelope M_DCc, as M_c of this check (cn.Mc)' : 'no pour sequence: M_DC1'}; a common factor such as the owner's η does not change C_b or K).` : '';
+    const mUsed = r.mSrc ? ` Moments over the unbraced segment${r.seg ? ` ${n2(r.seg.xa)} to ${n2(r.seg.xb)} ft` : ''}: 1.25${mN} + 1.50M_CL (${r.mSrc === 'DCc' ? r.side ? `the ${sN(r)}-side envelope of M_DCc at every station of the unbraced length, one moment diagram of this sign case, as M_c of this check (cn.Mc)` : 'the pour-sequence envelope M_DCc, as M_c of this check (cn.Mc)' : 'no pour sequence: M_DC1'}; a common factor such as the owner's η does not change C_b or K).` : '';
     w.add({ id: 'Cb', label: geK ? 'Moment gradient modifier: nonprismatic unbraced length' : 'Moment gradient modifier for deck placement (from the deck-placement moments of the unbraced length)', sym: 'C_{b}', eq: geK ? '1.0' : cbP ? '\\frac{12.5M_{max}}{2.5M_{max} + 3M_{A} + 4M_{B} + 3M_{C}}' : '',
       sub: cbP ? `\\frac{12.5(${n2(cbP.Mx)})}{2.5(${n2(cbP.Mx)}) + 3(${n2(cbP.MA)}) + 4(${n2(cbP.MB)}) + 3(${n2(cbP.MC)})}` : '', value: r.CbCu, unit: '', d: 3, ref: geK ? `${ED} Eq. 6.10.8.2.3c-1` : `${ED} Eq. 6.10.8.2.3b-1`,
       note: `L_b = ${n2(r.LbC)} ft (deck-placement unbraced length).${cbP ? ` M_max: the largest moment compressing the ${cF.lab} flange; M_A, M_B, M_C: |M| at the quarter points (kip-ft); C_b rounded to 3 decimals.` : ''}${geK ? '' : mUsed}` });
@@ -193,8 +211,13 @@
     // FONE (2026-11-01): γ from factors(), was 1.25, 1.5. SBCON (engineer decision 2026-11-10; AASHTO LRFD 10th Ed. 6.10.8.2.3c, C6.10.8.2.3c):
     // M_DCc where location() uses it (useDCc), so that the flange in compression, C_b (Eq. 6.10.8.2.3b-1) and the γ_e of a nonprismatic L_b
     // (K = f_max/f_x) come from the moments the check uses; was M_DC1 always (GirderDetail keeps M_DC1: a deliberate difference)
-    const xs = env.xs, N = xs.length, Lend = opt.L, C0 = opt.G || factors(), dcc = xs.map((_, k) => !env.Mc && !!env.MDCc && useDCc(env.MDCc[k]));
-    const Mc = env.Mc || xs.map((_, k) => C0.cdc * (dcc[k] ? +env.MDCc[k] : env.MDC1[k]) + C0.ccl * env.MCL[k]);
+    // SBTS (engineer decision 2026-11-10, item 3; AASHTO LRFD 10th Ed. 6.10.8.2.3b, 6.10.8.2.3c and C6.10.8.2.3c): opt.side = +1 / −1 takes
+    // the positive-side / negative-side envelope of the pour stages (env.MDCp = max(M_DC1, envP), env.MDCn = min(M_DC1, envN) at every
+    // station; fromAnalysis), one consistent moment diagram of one sign case over the unbraced length, for the check of that sign. Was the
+    // station-by-station M_DCc, which takes the positive side at one station and the negative side at the next (not one load case).
+    const sd = !env.Mc && (opt.side === 1 || opt.side === -1) && env.MDCp && env.MDCn ? opt.side : 0, MS = sd > 0 ? env.MDCp : sd < 0 ? env.MDCn : null;
+    const xs = env.xs, N = xs.length, Lend = opt.L, C0 = opt.G || factors(), dcc = xs.map((_, k) => !env.Mc && (MS ? true : !!env.MDCc && useDCc(env.MDCc[k])));
+    const Mc = env.Mc || xs.map((_, k) => C0.cdc * (MS ? +MS[k] : dcc[k] ? +env.MDCc[k] : env.MDC1[k]) + C0.ccl * env.MCL[k]);
     const bp = [...new Set(opt.braces.map(v => +(+v).toFixed(3)))].sort((p1, p2) => p1 - p2).filter((v, k, arr) => k === 0 || v - arr[k - 1] > 0.25);
     const ib = bp.findIndex(v => Math.abs(v - x) < 0.25), Lg = bp[bp.length - 1], segs = [];
     if (ib >= 0) { if (ib > 0) segs.push([bp[ib - 1], bp[ib]]); if (ib < bp.length - 1) segs.push([bp[ib], bp[ib + 1]]); }
@@ -212,7 +235,7 @@
       .sort((u, v) => byGe(u, v) ?? v.L / v.Cb - u.L / u.Cb)[0], CbC = cC ? cC.Cb : 1, LbCN = cC ? cC.L : opt.sp;
     const geRec = A => !A ? '' : A.ok ? { m: 'A', ge: +A.g.toFixed(4), Cbe: r3(A.Cbe), chi: +A.chi.toFixed(4), dS: r3(A.dS), rm: +A.rm.toFixed(4), rA: +A.rA.toFixed(4), rB: +A.rB.toFixed(4), rC: +A.rC.toFixed(4), sA: A.sA ? 1 : 0, sB: A.sB ? 1 : 0, sC: A.sC ? 1 : 0, xm: r2(A.xm), Fe1: r2(A.Fe1), fm: r2(A.fm), Imx: r3(A.Imx) } : { m: 'bound', why: A.why, Imx: r3(A.Imx) };
     const govRec = gv => { if (!gv) return ''; const at = A => A[gv.i] * (1 - gv.t) + A[gv.i + 1] * gv.t, o = { x: r2(gv.x), topB: gv.s.topB, topT: gv.s.topT, botB: gv.s.botB, botT: gv.s.botT, tw: gv.s.tw };
-      [['MDC1', 'MDC1'], ['MCL', 'MCL'], ['MDCc', 'MDCc']].forEach(([k, a]) => { if (env[a]) o[k] = r1(at(env[a])); }); return o; };
+      [['MDC1', 'MDC1'], ['MCL', 'MCL'], ['MDCc', MS ? (sd > 0 ? 'MDCp' : 'MDCn') : 'MDCc']].forEach(([k, a]) => { if (env[a]) o[k] = r1(at(env[a])); }); if (MS) o.side = sd; return o; };   // SBTS: the side's M_DCc
     let nprC = ''; if (cC && cC.n2.kind === 'simp') nprC = { kind: 'simp', fl: sgC > 0 ? 'top' : 'bottom', b: cC.n2.big[kb], t: cC.n2.big[kt], Ir: r3(cC.n2.Ir) };
     else if (cC && cC.n2.kind === 'ge') { const { A, mA, G } = cC.ge, fr = G ? fCon(G.s, i) : 0;
       nprC = { kind: 'ge', fl: sgC > 0 ? 'top' : 'bottom', b: G ? G.s[kb] : s[kb], t: G ? G.s[kt] : s[kt], k: G && fr > 0 && !mA ? r3(Math.max(1, G.fm / fr)) : '', Ir: r3(cC.n2.Ir), why: cC.n2.why, A: geRec(A),
@@ -226,18 +249,24 @@
       if (cC.n2.kind !== 'ge') { const at = q => feAt_(xs, Mc, q), L0 = cC.p1 - cC.p0; let Mx = 0; for (let k = 0; k <= 40; k++) Mx = Math.max(Mx, sgC * at(cC.p0 + L0 * k / 40));
         if (Mx > 0) { const q = f => Math.abs(at(cC.p0 + L0 * f)); cbParts = { Mx, MA: q(0.25), MB: q(0.5), MC: q(0.75) }; } }
       else if (cC.ge.G && !cC.ge.mA) kParts = { fm: cC.ge.G.fm, fx: fCon(cC.ge.G.s, i), x: xs[i] }; }
-    return { LbC: r2(LbCN), CbC: +CbC.toFixed(3), nprC, seg: cC ? { xa: cC.p0, xb: cC.p1 } : null, cbParts, kParts, mSrc };
+    return { LbC: r2(LbCN), CbC: +CbC.toFixed(3), nprC, seg: cC ? { xa: cC.p0, xb: cC.p1 } : null, cbParts, kParts, mSrc, side: sd };
   }
 
-  /* notes(seq): the assumptions of the deck-placement LTB data (engineer's rule 2026-11-10: every assumption is a note on the tab card and in
-     the Report section), plain text; seq: the pour sequence is in use (M_DCc). One source for ui/constructibility.js and report/builders.js. */
-  function notes(seq) {
-    const M = seq ? 'M_DCc (the pour-sequence envelope)' : 'M_DC1 (no pour sequence)';
+  /* notes(seq, sides): the assumptions of the deck-placement LTB data (engineer's rule 2026-11-10: every assumption is a note on the tab card and
+     in the Report section), plain text; seq: the pour sequence is in use (M_DCc); sides: both sides of the pour envelope are known (this
+     project's analysis; SBTS 2026-11-10), so both signs are checked. One source for ui/constructibility.js and report/builders.js. */
+  function notes(seq, sides) {
+    const M = seq ? 'M_DCc (the pour-sequence envelope)' : 'M_DC1 (no pour sequence)', two = !!(seq && sides);
     return [
-      `C_b and γ_e: taken from the same factored moments this check uses, M_c = γ_DC ${M} + γ_CL M_CL, over the unbraced length. The flange in compression, C_b (Eq. 6.10.8.2.3b-1), and for a nonprismatic unbraced length the ratio K = f_max/f_x and the stress f_s of the conservative γ_e bound all come from that one moment diagram, so γ_e scales the design stresses at the governing section of the moments checked (AASHTO LRFD 10th Ed. 6.10.8.2.3c and C6.10.8.2.3c; App. D6.6).`,
+      ...(two ? [
+        'Both signs of the deck-placement moment (engineer decision 2026-11-10): at every location the largest positive and the largest negative noncomposite moment of the deck placement sequence are both checked (6.10.3.4.1: the girder is checked for the moments of the pour sequence; each extreme is taken over M_DC1 with the deck cast at once and every pour stage). Each case is M_c = γ_DC M_DCc + γ_CL M_CL with the construction live load as given at the location, and each has its own flange in compression, f_bu, amplified f_ℓ (6.10.1.6) and F_nc in GS14 and GS15 (6.10.3.2). The case with the larger ratio governs and is the one reported; both count for the span results. A location where the pour stages give one sign only (the other side smaller than 0.01 kip-ft) has one case. Where M_CL outweighs a small pour moment a case\'s M_c can take the other sign; its flange in compression then follows M_c.',
+        'Basis of C_b and γ_e (engineer decision 2026-11-10): each sign case takes C_b (Eq. 6.10.8.2.3b-1) and, for a nonprismatic unbraced length, the conservative γ_e bound from its own moment diagram over the whole unbraced length: the positive-side envelope (at every station the larger of M_DC1 and the largest pour-stage moment, not less than 0) for the positive case, the negative-side envelope for the negative case, factored as the check (γ_DC M_DCc + γ_CL M_CL). Each diagram belongs to one sign case at every station, so the moment gradient in C_b and the stresses that γ_e scales come from the moments that case checks (6.10.8.2.3 and C6.10.8.2.3: C_b reflects the moment gradient of the unbraced length; 6.10.8.2.3c and C6.10.8.2.3c: γ_e scales the design stresses at the governing section of the moments checked; App. D6.6). Formerly the station-by-station M_DCc envelope was used, which takes the positive side at one station and the negative side at the next near an inflection point of M_DC1 and so is not one load case. The diagram of a single pour stage was not used: no single stage gives the largest moment of either sign everywhere in the unbraced length.']
+        : [`C_b and γ_e: taken from the same factored moments this check uses, M_c = γ_DC ${M} + γ_CL M_CL, over the unbraced length. The flange in compression, C_b (Eq. 6.10.8.2.3b-1), and for a nonprismatic unbraced length the ratio K = f_max/f_x and the stress f_s of the conservative γ_e bound all come from that one moment diagram, so γ_e scales the design stresses at the governing section of the moments checked (AASHTO LRFD 10th Ed. 6.10.8.2.3c and C6.10.8.2.3c; App. D6.6).`]),
       'γ_e of a nonprismatic unbraced length, where App. D6.6.2 Method A does not apply: the conservative bound, the smallest over the sections of the unbraced length of F_e,j/f_max,j, each section taken as prismatic over the whole unbraced length at its largest compression stress f_max,j from the moments this check uses (6.10.8.2.3c, C6.10.8.2.3c: γ_e is one factor for the whole unbraced length that scales the stresses at the governing section; App. D6.6). It is computed once for the unbraced length and passed to every location in it, so a location where the flange stress is zero, near zero or of the other sign (f_x ≤ 0) does not change it. Only where no γ_e is available and K = f_max/f_x cannot be used is f_max taken as the largest stress known in the unbraced length (conservative; formerly K = 1 there, which was unconservative).',
-      ...(seq ? ['M_DCc is the station-by-station envelope of the pour stages (6.10.3.4.1), not one load case. Near an inflection point of M_DC1 its sign can change between adjacent stations; each station is checked for the sign of its envelope value, so a smaller moment of the opposite sign from another pour stage is not checked at that station.',
-        'Differs from GirderDetail (Steel Bridge Design.html): with a pour sequence GirderDetail takes the compression flange, C_b and K of the deck-placement check from M_DC1 while it checks M_DCc; this app takes them from M_DCc, the moments it checks (6.10.8.2.3c and C6.10.8.2.3c: γ_e scales the stresses of the one moment diagram checked). Where M_DCc differs from M_DC1 over an unbraced length the two tools give different C_b, F_nc and ratios.'] : []),
+      ...(seq && !sides ? ['One M_DCc value per station (a hand-off file or entered rows): only the envelope value of each station is given, not both sides of the pour envelope, so each location is checked for the sign of that value, and C_b and γ_e come from that M_DCc over the unbraced length. Near an inflection point of M_DC1 a smaller pour moment of the opposite sign is not in the data and is not checked; with this project\'s analysis as the source both signs are checked (6.10.3.4.1).'] : []),
+      ...(seq ? [two
+        ? 'Differs from GirderDetail (Steel Bridge Design.html): with a pour sequence GirderDetail checks one M_DCc value per station (the side of the sign of M_DC1) and takes the compression flange, C_b and K from M_DC1; this app checks both signs of the pour envelope, each with C_b and γ_e from its own side of the envelope (6.10.3.4.1; 6.10.8.2.3c and C6.10.8.2.3c). Near inflection points and wherever M_DCc differs from M_DC1 over an unbraced length the two tools give different C_b, F_nc and ratios.'
+        : 'Differs from GirderDetail (Steel Bridge Design.html): with a pour sequence GirderDetail takes the compression flange, C_b and K of the deck-placement check from M_DC1 while it checks M_DCc; this app takes them from M_DCc, the moments it checks (6.10.8.2.3c and C6.10.8.2.3c: γ_e scales the stresses of the one moment diagram checked). Where M_DCc differs from M_DC1 over an unbraced length the two tools give different C_b, F_nc and ratios.'] : []),
       'C_b by Eq. 6.10.8.2.3b-1: M_max is the largest moment compressing the flange in the unbraced length; M_A, M_B, M_C are taken as the absolute values of the deck-placement moment at the quarter points. Where the flange is in tension at a quarter point this can give C_b below 1.0, which is used as computed.'];
   }
 
@@ -349,9 +378,11 @@
     const rows = locs.map(L => location(L, prj)), sup = opt.supports || null, spans = [];
     const spOf = x => { if (!sup || x == null) return 1; let k = 0; while (k < sup.length - 2 && x > sup[k + 1] + 1e-9) k++; return k + 1; };
     const gr = FX().gr, best = {}, put = (sp, k, o) => { const b = best[sp] = best[sp] || {}; if (!b[k] || gr(b[k]) < gr(o)) b[k] = o; };
-    rows.forEach(r => { const sp = spOf(r.x), cf = r.conC.lab === 'top' ? 'top' : 'bot';
-      r.checks.forEach(c => { const o = { ratio: c.ratio, row: r, check: c };
-        if (c.id === 'GS16') put(sp, 'shear', o); else if (c.key === 'tension') put(sp, 'tens', o); else put(sp, cf, o); }); });
+    // SBTS (2026-11-10): both sign cases of a location (r.cases) count for the span's governing items, each under its own flange in
+    // compression; o.row is the location's reported row, o.cs the case the check belongs to (o.cs !== o.row: the other, non-governing case)
+    rows.forEach(r => { const sp = spOf(r.x); (r.cases || [r]).forEach(q => { const cf = q.conC.lab === 'top' ? 'top' : 'bot';
+      q.checks.forEach(c => { const o = { ratio: c.ratio, row: r, check: c, cs: q };
+        if (c.id === 'GS16') put(sp, 'shear', o); else if (c.key === 'tension') put(sp, 'tens', o); else put(sp, cf, o); }); }); });
     const nS = sup ? sup.length - 1 : 1;
     for (let k = 1; k <= nS; k++) { const b = best[k] || {}; spans.push({ span: k, top: b.top || null, bot: b.bot || null, tens: b.tens || null, shear: b.shear || null }); }
     let oh = null;
@@ -431,7 +462,12 @@
     const chg = segs.slice(0, -1).map(s => s.x1).filter(x => { const a = zAt(x - 0.01), b = zAt(x + 0.01); return ['D', 'tw', 'topB', 'topT', 'botB', 'botT'].some(k => a[k] !== b[k]); });
     const list = stationList(xs, sup, chg, Lend);
     const st = AR.st, MDCc = AR.seq ? AR.seq.MDCc : null;
-    const env = { xs, MDC1: st.DC1.M, MCL: st.CL.M, ...(MDCc ? { MDCc } : {}) };
+    // SBTS (engineer decision 2026-11-10, items 1 and 3; AASHTO LRFD 10th Ed. 6.10.3.4.1, 6.10.3.2): the two sides of the pour envelope at
+    // every station, MDCp = max(M_DC1, envP) ≥ 0 and MDCn = min(M_DC1, envN) ≤ 0 (seq.MDCc is MDCp where M_DC1 ≥ 0, else MDCn). Only with
+    // this project's analysis (seq.envP / envN); a hand-off file or entered rows give one M_DCc per station (one case, as before).
+    const sides = !!(MDCc && AR.seq.envP && AR.seq.envN && AR.seq.envP.length === xs.length && AR.seq.envN.length === xs.length);
+    const env = { xs, MDC1: st.DC1.M, MCL: st.CL.M, ...(MDCc ? { MDCc } : {}),
+      ...(sides ? { MDCp: xs.map((_, i) => Math.max(st.DC1.M[i], AR.seq.envP[i])), MDCn: xs.map((_, i) => Math.min(st.DC1.M[i], AR.seq.envN[i])) } : {}) };
     const ly = (P.stiffeners || {}).layout || {}, fr = ly.frames || {}, SB = window.SBDStiffeners;
     const ints = Array.isArray(fr.at) ? fr.at.map(Number) : SB ? SB.framesDefault(sup, +fr.Lb || 25) : [];
     const braces = opt && opt.braces ? opt.braces : [...sup, ...ints];   // opt.braces: the project's framing (engine/framing.js forGirder; SB2-O9)
@@ -442,12 +478,17 @@
     const vAt = (S, x) => { const i = near(x), d = x - xs[i]; if (Math.abs(d) > 0.02) { const t = Math.max(0, Math.min(1, d > 0 ? d / (xs[i + 1] - xs[i]) : 1 + d / (xs[i] - xs[i - 1]))), a = d > 0 ? i : i - 1; return Math.abs(S.VR[a] * (1 - t) + S.VL[a + 1] * t); }
       return d < -1e-9 ? Math.abs(S.VL[i]) : d > 1e-9 ? Math.abs(S.VR[i]) : Math.max(Math.abs(S.VL[i]), Math.abs(S.VR[i])); };
     const at = A => x => FX().feAt(xs, A, x), Lb = +fr.Lb || 25;
-    const locs = list.map(x => { const br = bracingC(x, env, { braces, L: Lend, secAt: zAt, D: zAt(x).D, sp: Lb, G: prj.G }), pn = panelAt(x);
-      return { name: `x = ${x.toFixed(2)} ft`, x, plates: zAt(x), M: { DC1: at(env.MDC1)(x), DCc: MDCc ? at(MDCc)(x) : 0, CL: at(env.MCL)(x) }, V: { DC1: vAt(st.DC1, x), CL: vAt(st.CL, x) },
-        LbC: br.LbC, CbC: br.CbC, Cb: 1, nprC: br.nprC, seg: br.seg, cbParts: br.cbParts, kParts: br.kParts, mSrc: br.mSrc, flC: opt.flC || 0, do: pn ? pn.d : 0, end: pn ? pn.end : false }; });
+    // SBTS: at each location the sign case of M_DC1 there (sd; its side value as M_DCc, the value seq.MDCc gives at a station) and, where the
+    // other side is not zero (|M| > SIDE0 kip-ft, round-off), the opposite-sign case (alt) with its own bracingC data from that side's diagram
+    const brOf = (x, side) => bracingC(x, env, { braces, L: Lend, secAt: zAt, D: zAt(x).D, sp: Lb, G: prj.G, ...(side ? { side } : {}) });
+    const brF = br => ({ LbC: br.LbC, CbC: br.CbC, nprC: br.nprC, seg: br.seg, cbParts: br.cbParts, kParts: br.kParts, mSrc: br.mSrc });
+    const locs = list.map(x => { const pn = panelAt(x), MD = at(env.MDC1)(x), sd = sides ? (MD >= 0 ? 1 : -1) : 0, br = brOf(x, sd);
+      const vP = sides ? at(env.MDCp)(x) : 0, vN = sides ? at(env.MDCn)(x) : 0, vA = sd > 0 ? vN : vP, alt = sd && Math.abs(vA) > SIDE0 ? { side: -sd, DCc: vA, ...brF(brOf(x, -sd)) } : null;
+      return { name: `x = ${x.toFixed(2)} ft`, x, plates: zAt(x), M: { DC1: MD, DCc: sd ? (sd > 0 ? vP : vN) : MDCc ? at(MDCc)(x) : 0, CL: at(env.MCL)(x) }, V: { DC1: vAt(st.DC1, x), CL: vAt(st.CL, x) },
+        Cb: 1, ...brF(br), ...(sd ? { side: sd } : {}), ...(alt ? { alt } : {}), flC: opt.flC || 0, do: pn ? pn.d : 0, end: pn ? pn.end : false }; });
     const ext = g.position === 'exterior';
     const oh = ext ? { rows: ohRowsAt(sup, env, locs), p: { ...(opt.oh || (P.constr && P.constr.oh) || {}), gam: { dc: prj.G.cdc, cl: prj.G.ccl } }, mat: { Fyf: Math.min(mat.Fyt, mat.Fyb), Fyw: mat.Fyw } } : null;   // ETAC: bracket γ = the deck placement factors (one source; P.constr.oh.gam kept, unused)
-    return { prj, locs, env, supports: sup, braces, oh, ext, Lb, D, seq: !!MDCc };
+    return { prj, locs, env, supports: sup, braces, oh, ext, Lb, D, seq: !!MDCc, sides };
   }
 
   window.SBDConstr = { ES, OH_DEF, notes, ohFill, factors, factorsOwner, lfOf, projFactors, gsGovC, location, bracingC, ohLoads, overhang, girder, ohRowsAt, stationList, fromPayload, fromAnalysis };

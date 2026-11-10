@@ -334,23 +334,28 @@
   /* ---------- 9. constructibility ---------- */
   function cn(B, X) {
     const R = B.cn, rows = R.rows, all = X.detail === 'all', subs = [], sc = r => 'cn@' + rows.indexOf(r), oc = r => 'cnoh@' + R.oh.rows.indexOf(r);
-    const keyOf = o => !o ? null : o.row.checks && o.row.conC ? K(sc(o.row), o.check.step) : R.oh ? K(oc(o.row), o.check.step) : null;
+    // SBTS (2026-11-10): the other sign case of a location (r.alt, not governing) has its steps under the scope sc(r) + '~'
+    const sca = r => sc(r) + '~', oth = o => !!(o && o.cs && o.cs !== o.row), sgn = q => (q && q.side > 0 ? 'positive' : 'negative');
+    const keyOf = o => !o ? null : o.row.checks && o.row.conC ? K(oth(o) ? sca(o.row) : sc(o.row), o.check.step) : R.oh ? K(oc(o.row), o.check.step) : null;
     const gset = new Set(); R.spans.forEach(s => ['top', 'bot', 'tens', 'shear'].forEach(k => { if (s[k] && s[k].row.conC) gset.add(s[k].row); })); if (R.gov) gset.add(R.gov);
     const shown = all ? rows : rows.filter(r => gset.has(r));
-    const cell = o => !o ? '—' : { ...R3(o.ratio, keyOf(o)), t: `${f(o.ratio, 3)} (${o.row.conC ? '' : o.check.id + ', '}${f(o.row.x, 2)} ft)` };
+    const cell = o => !o ? '—' : { ...R3(o.ratio, keyOf(o)), t: `${f(o.ratio, 3)} (${o.row.conC ? '' : o.check.id + ', '}${f(o.row.x, 2)} ft${o.row.conC && o.row.alt ? `, ${sgn(o.cs)} case` : ''})` };
     const ga = R.govAll;
     if (ga) X.gov.push({ mod: 'Constructibility', grp: 'Constructibility (deck placement)', check: `${ga.check.id} ${tt(ga.check.title)}`, loc: `x = ${f(ga.row.x, 2)} ft`, r: ga.ratio, key: keyOf(ga) });
     const wh = R.custom ? fromHtml(R.what) : B.src === 'file' ? `${B.plName || 'Hand-off file'}: ${R.F.locs.length} stations; $M_{DCc}$, $M_{CL}$, $V_{DC1}$, $V_{CL}$ from the file.` : `${gName(B.girder)}: ${R.F.locs.length} locations from this project's analysis (dead loads): $M_{DC1}$, $V_{DC1}$, ${R.F.seq ? '$M_{DCc}$ the noncomposite envelope of the deck placement sequence [[an.seq.MDCc]]' : 'no pour sequence ($M_{DC1}$)'}, construction live load $M_{CL}$, $V_{CL}$.`;
     subs.push(sub('gov', 'Governing ratio of each span', [note(`${wh} $M_{c}$ = 1.25$M_{DCc}$ + 1.50$M_{CL}$, $V_{u}$ = 1.25$V_{DC1}$ + 1.50$V_{CL}$ on the noncomposite steel section (3.4.2.1, 6.10.3.4.1); $\\phi_{f}$ = $\\phi_{v}$ = 1.0; ${R.D ? flNote(B, R.D, '[[tab:cn|Constructibility tab]]').replace('$f_{\\ell}$', '$f_{\\ell}$ during deck placement') : ''}.`),
       tbl(['Span', 'Top flange in compression', 'Bottom flange in compression', 'Tension flange', 'Shear (GS16)', ...(R.oh ? ['Overhang OH1–OH4', 'OH5'] : [])], R.spans.map(s => [String(s.span), cell(s.top), cell(s.bot), cell(s.tens), cell(s.shear), ...(R.oh ? [cell(s.oh), cell(s.ohfl)] : [])])),
-      ...window.SBDConstr.notes(R.F.locs.some(L => L.M.DCc !== 0)).map(t => note(t)),
+      ...window.SBDConstr.notes(R.F.locs.some(L => L.M.DCc !== 0), !!R.F.sides).map(t => note(t)),
       R.oh && R.oh.errors && R.oh.errors.length ? note('Overhang brackets: ' + R.oh.errors.join(' '), true) : null]));
     if (R.custom) subs.push(cdSub('cn', B));
-    if (all) subs.push(sub('all', 'Results at every location', [tbl(['Location', 'x (ft)', '$M_{c}$ (kip-ft)', 'Flange in compression', 'Governing check', 'Ratio'], rows.map(r => ({ cells: [r.name, N(r.x, 2), N(r.Mc, 1), r.conC.lab, `${r.gov.id} ${tt(r.gov.title)}`, R3(r.gov.ratio, K(sc(r), r.gov.step))], cls: r === R.gov ? 'gov' : '' })))]));
-    const one = r => [checksTbl(r, sc(r)), kv([['$M_{c}$', `${f(r.Mc, 1)} kip-ft`, K(sc(r), 'cn.Mc')], ['$L_{b}$ / $C_{b}$ (deck placement)', `${f(r.LbC, 2)} ft / ${f(r.CbCu, 3)}`, K(sc(r), 'cn.Cb')], ['$F_{nc}$ (FLB / LTB)', `${f(r.ltC.FLB, 2)} / ${f(r.ltC.LTB, 2)} ksi`, K(sc(r), 'cn.Fnc')]]),
-      gsteps('SBDConstrUI:x', sc(r), window.SBDConstrUI.stepsOf(R, r), { title: 'Worked steps' })];
+    if (all) subs.push(sub('all', 'Results at every location', [tbl(['Location', 'x (ft)', '$M_{c}$ (kip-ft)', 'Flange in compression', 'Governing check', 'Ratio'], rows.map(r => ({ cells: [r.name, N(r.x, 2), N(r.Mc, 1), r.alt ? `${r.conC.lab} (${sgn(r)} case; ${sgn(r.alt)} also checked)` : r.conC.lab, `${r.gov.id} ${tt(r.gov.title)}`, R3(r.gov.ratio, K(sc(r), r.gov.step))], cls: r === R.gov ? 'gov' : '' })))]));
+    const one1 = (r, s, ttl) => [checksTbl(r, s), kv([['$M_{c}$', `${f(r.Mc, 1)} kip-ft`, K(s, 'cn.Mc')], ['$L_{b}$ / $C_{b}$ (deck placement)', `${f(r.LbC, 2)} ft / ${f(r.CbCu, 3)}`, K(s, 'cn.Cb')], ['$F_{nc}$ (FLB / LTB)', `${f(r.ltC.FLB, 2)} / ${f(r.ltC.LTB, 2)} ksi`, K(s, 'cn.Fnc')]]),
+      gsteps('SBDConstrUI:x', s, window.SBDConstrUI.stepsOf(R, r), { title: ttl })];
+    const one = r => !r.alt ? one1(r, sc(r), 'Worked steps') : [note(`Both signs of the deck-placement moment occur here and both are checked (6.10.3.4.1): the ${sgn(r)}-moment case governs (${r.conC.lab} flange in compression) and is reported; the ${sgn(r.alt)}-moment case (${r.alt.conC.lab} flange in compression) follows.`),
+      ...one1(r, sc(r), `Worked steps, ${sgn(r)}-moment case (governing)`), ...one1(r.alt, sca(r), `Worked steps, ${sgn(r.alt)}-moment case (not governing)`)];
     shown.filter(r => gset.has(r)).forEach(r => subs.push(sub(sc(r), `${at(r, 2)}${r === R.gov ? ' (governing)' : ''}`, one(r))));
-    if (all) subs.push(sub('every', 'Every other location', rows.filter(r => !gset.has(r)).map(r => gsteps('SBDConstrUI:x', sc(r), window.SBDConstrUI.stepsOf(R, r), { lazy: true, title: `${at(r, 2)}: ${r.gov.id}, ratio ${f(r.gov.ratio, 3)}` }))));
+    if (all) subs.push(sub('every', 'Every other location', rows.filter(r => !gset.has(r)).flatMap(r => [gsteps('SBDConstrUI:x', sc(r), window.SBDConstrUI.stepsOf(R, r), { lazy: true, title: `${at(r, 2)}${r.alt ? `, ${sgn(r)}-moment case` : ''}: ${r.gov.id}, ratio ${f(r.gov.ratio, 3)}` }),
+      ...(r.alt ? [gsteps('SBDConstrUI:x', sca(r), window.SBDConstrUI.stepsOf(R, r.alt), { lazy: true, title: `${at(r, 2)}, ${sgn(r.alt)}-moment case (not governing): ${r.alt.gov.id}, ratio ${f(r.alt.gov.ratio, 3)}` })] : [])])));
     if (R.oh && !(R.oh.errors && R.oh.errors.length)) { const O = R.oh;
       subs.push(sub('oh', 'Overhang brackets: flange lateral bending (exterior girder, OH1–OH5)', [kv([['$w_{u}$', `${f(O.wu, 4)} kip/ft`], ['$F_{\\ell}$ / $P_{\\ell}$', `${f(O.Fl, 4)} kip/ft / ${f(O.Pl, 3)} kip`, O.rows[0] ? K(oc(O.rows[0]), 'oh.Fl') : null]]),
         tbl(['Location', '$M_{u}$ (kip-ft)', '$M_{\\ell}$ (kip-in)', 'Governing', 'Ratio'], O.rows.map(o => [o.name, N(o.Mu, 1), N(o.Ml, 1), o.gov.id, R3(o.gov.ratio, K(oc(o), o.gov.step))])),
