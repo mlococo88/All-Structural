@@ -4665,17 +4665,39 @@ except the duplicated stations removed by fix 1 (listed there) and the Summary's
   `node tests/check-syntax.mjs`; steel-bridge smoke tests; phone-layout `sbapp`; project-library.
 - **Other copies:** none.
 
-## 2026-11-10 — DRAFT branch claude/sb-constr-npr-mdcc-draft (NOT APPROVED, no PR) — Constructibility: nonprismatic γ_e / C_b from the M_DCc the check uses (SBCON)
-- **Problem:** with a pour sequence (M_DCc ≠ M_DC1), `bracingC()` built nprC (K = f_max/f_x), C_b,C and the compression flange from
-  1.25M_DC1 + 1.5M_CL, while `location()` checks 1.25M_DCc + 1.5M_CL. γ_e = F_e,S/(K f_S) mixes the two diagrams; near an M_DC1 inflection
-  point K → ∞ and F_nc collapses (skewed 100-130-100 G1 x = 130.00: K 432.5, γ_e 0.130, F_nc 0.91 ksi, GS14 ∞ "NaN" on the Summary).
-- **Where:** `apps/steel-bridge/engine/constructibility.js`, `bracingC`, anchor `C0 = factors(), Mc = env.Mc ||`.
+## 2026-11-10 — PR: sb-constr-mdcc (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Constructibility: C_b, the compression flange and the nonprismatic γ_e from the M_DCc the check uses (SBCON; engineer decision 2026-11-10; changes computed values)
+- **Problem:** with the pour sequence on (M_DCc ≠ M_DC1), `bracingC()` built the deck-placement LTB data (the flange in compression,
+  C_b,C by Eq. 6.10.8.2.3b-1, and for a nonprismatic L_b the ratio K = f_max/f_x of the conservative γ_e bound) from 1.25M_DC1 + 1.5M_CL,
+  while `location()` checks 1.25M_DCc + 1.5M_CL. γ_e = F_e,s/(K f_s) then mixes two moment diagrams. Near an M_DC1 inflection f_x → 0,
+  K → ∞ and F_nc collapses (skewed 100-130-100 project G1 x = 130.00: F_nc 0.91 ksi, GS14 ∞, "NaN" on the Summary). Unconservative in
+  prismatic bays where the flatter M_DCc envelope lowers C_b; overly conservative (and non-finite) at nonprismatic L_b near inflections.
+- **Where:** `apps/steel-bridge/engine/constructibility.js`, `bracingC`, anchor `C0 = factors(), dcc = xs.map(`.
   - Before: `Mc = env.Mc || xs.map((_, k) => C0.cdc * env.MDC1[k] + C0.ccl * env.MCL[k]);`
-  - After: `Mc = env.Mc || xs.map((_, k) => C0.cdc * (env.MDCc && useDCc(env.MDCc[k]) ? +env.MDCc[k] : env.MDC1[k]) + C0.ccl * env.MCL[k]);`
-- **Governing provision:** AASHTO LRFD 10th Ed. 6.10.8.2.3c (Eqs. 6.10.8.2.3c-1 to -3; γ_e by D6.6 scales the design stresses at the
-  governing section), 6.10.8.2.3b (Eq. 6.10.8.2.3b-1, C_b), 6.10.3.2.1, 6.10.1.6 (Eq. 6.10.1.6-4).
-- **Check case:** skewed project of tests/smoke/steel-bridge-summary.mjs, G1, x = 130.00 ft: K 432.55 → 2.837; γ_e 0.1297 → 19.78;
-  F_e 0.913 → 139.29 ksi; r_t 0.332 → 4.095 in; F_nc 0.91 → 45.58 ksi; AF ∞ → 1; GS14 buckling ∞ → 0.141, yielding ∞ → 0.254.
-  Default project G1 x = 77.00: F_nc 9.84 → 40.00 ksi, Constructibility governing 0.758 → 0.557 (x = 249.99).
-- **Tests needing re-baselining if approved:** tests/engine/eta-constr.test.mjs (x = 77 hand values), constructibility.test.mjs case 4 (SB2-A1 keyed C_b).
-- **Other copies:** GirderDetail ("Steel Bridge Design.html") Preliminary sizing T.Mc (lines 6114/6121, 16768/19290) has the same logic; not changed.
+  - After: `dcc = xs.map((_, k) => !env.Mc && !!env.MDCc && useDCc(env.MDCc[k]));`
+    `Mc = env.Mc || xs.map((_, k) => C0.cdc * (dcc[k] ? +env.MDCc[k] : env.MDC1[k]) + C0.ccl * env.MCL[k]);`
+  - Also (display, no value changes): `bracingC` returns `cbParts` (M_max, M_A, M_B, M_C), `kParts` (f_max, f_x) and `mSrc`
+    ('DCc' | 'DC1'); `fromPayload` / `fromAnalysis` pass them on; `location()` keeps them (`r.seg`, `r.cbParts`, `r.kParts`, `r.mSrc`);
+    `worked()` works C_b (cn.Cb: 12.5M_max/(2.5M_max + 3M_A + 4M_B + 3M_C) with values), states the moments used in cn.Cb, cn.gov and
+    cn.ge (K = f_max/f_x with values). New `SBDConstr.notes(seq)`: the assumptions, shown as notes on the Constructibility tab
+    (`ui/constructibility.js`, after the M_c note) and in Report §Constructibility, "Governing ratio of each span" (`report/builders.js` cn()).
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.10.8.2.3c (Eqs. 6.10.8.2.3c-1 to -3) and C6.10.8.2.3c (γ_e scales the design
+  stresses at the governing section), App. D6.6; 6.10.8.2.3b (Eq. 6.10.8.2.3b-1, C_b from the factored moments that compress the
+  flange); 6.10.3.2.1 (GS14); 6.10.1.6 (Eq. 6.10.1.6-4, amplification); 6.10.3.4.1 (pour sequence).
+- **Check case:** skewed project of tests/smoke/steel-bridge-summary.mjs, G1 x = 130.00 ft (bottom flange 18 × 1.25, L_b = 15.47 ft =
+  185.64 in, segment 115.47–130.94 ft): f_s = 3.302 ksi, F_e,s = π²(29,000)/(185.64/4.7231)² = 185.27 ksi, f_bu,gov = 7.043 ksi (x = 120).
+  Before: K = 432.55, γ_e = 185.27/(432.55 × 3.302) = 0.1297, F_e = 0.913 ksi, r_t = 0.332 in, F_nc = 0.91 ksi, AF ∞, GS14 ∞.
+  After: K = 9.368/3.302 = 2.837, γ_e = 185.27/(2.837 × 3.302) = 19.776, F_e = 19.776 × 7.043 = 139.28 ksi, r_t = (185.64/π)√(139.28/29,000)
+  = 4.0951 in, L_p = 108.48 in, L_r = 370.32 in, F_nc = [1 − 0.3(185.64 − 108.48)/(370.32 − 108.48)](50) = 45.58 ksi, AF 1.0,
+  GS14 buckling (3.302 + 9.38/3)/45.58 = 0.141, yielding (3.302 + 9.38)/50 = 0.254.
+  Default project: Constructibility governing 0.758 (x = 77.00, F_nc 9.84) → 0.557 (x = 249.99, unchanged row).
+- **How verified:** probe of every location (default, skewed, same with no skew; pour sequence on and off) main vs branch; pour sequence
+  off: identical. Re-baselined tests/engine/eta-constr.test.mjs (x = 77.00 hand values) and constructibility.test.mjs cases 3 and 4;
+  `node tests/check-syntax.mjs`; steel-bridge engine tests; smoke summary, dash, wiring, report, paths, taberrors, deflection.
+- **Other copies:** GirderDetail ("Steel Bridge Design.html") Preliminary sizing T.Mc builds C_b,C and nprC from 1.25M_DC1 + 1.5M_CL;
+  **not changed, a deliberate difference (engineer decision 2026-11-10: fix in the new app only)**. Parity test case 3 now compares both
+  bases (M_DC1 basis: 606 of 1200 governing items as GirderDetail's, as before; this app: 452 of 1200).
+- **Open items:** (1) M_DCc is a per-station envelope; near M_DC1 inflections its sign jumps (skewed G2 x = 70/71/72: +565.8 / −73.8 /
+  −488.3 kip-ft), so the opposite-sign pour moment is never checked there. (2) `feCb` takes |M| at the quarter points even where the
+  flange is in tension, so C_b can be < 1.0 (0.83–0.90 seen). (3) K = 1 fallback when f_x ≤ 0 (follow-up PR, γ_e passed directly).
+  Decision (pending engineer review): C_b and γ_e from the per-station M_DCc envelope (not one load case); Eq. 6.10.8.2.3b-1 refers
+  to the envelope values that compress the flange, which this follows.
