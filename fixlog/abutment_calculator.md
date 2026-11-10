@@ -16885,7 +16885,7 @@ After:
 ### Saved data
 - No key, input or format change; defRev and Input IDs unchanged. A saved `piles.clrTop` is kept but changes no result.
 
-## 2026-11-10 — PR: claude/abutment-punch-pilehead (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (ABPH) — Pile punching credits only the concrete above the pile head (corrects ABPM #1375); the bottom mat at c_F stays for flexure   [§4 calculation change, pile mode only; no saved key or format change]
+## 2026-11-10 — PR: claude/abutment-punch-pilehead (PR #1377: https://github.com/mlococo88/All-Structural/pull/1377) (ABPH) — Pile punching credits only the concrete above the pile head (corrects ABPM #1375); the bottom mat at c_F stays for flexure   [§4 calculation change, pile mode only; no saved key or format change]
 
 Engineer decision (2026-11-10), correcting #1375: for embedded piles the punching cone starts at the pile top, so the concrete below the pile head is not credited. h_p = t_f − e_pile; d_v from the depth above the pile head: 0.72h_p, or 0.9d_e where there is a valid d_e above the pile head. Kept from #1375: the single bottom mat at c_F for toe flexure, shear, crack control and the drawings; the I-7 clear cover greyed out.
 
