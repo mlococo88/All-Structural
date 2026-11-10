@@ -405,7 +405,8 @@ if (!process.env.RW_AUD || 'RWPT'.startsWith(process.env.RW_AUD)) for (const [na
     const P = document.getElementById('tab-piles');
     out.titles = [...P.querySelectorAll('.card-title')].map(e => e.textContent);
     out.kx = P.querySelectorAll('.eq-math .katex-display').length; out.eq = P.querySelectorAll('.eq-math').length; out.kerr = P.querySelectorAll('.katex-error').length;
-    out.btns = ['rwpxSendOpen()', 'rwpxPullOpen()'].every(f => P.querySelector(`button[onclick="${f}"]`)) && !!P.querySelector('input[type=file][onchange="rwpxImportFile(this)"]');
+    // HOC (2026-11-10): the Send / Pull / Import buttons are in the Project tab's Hand-offs block; the Piles tab card links to it
+    out.btns = !!P.querySelector('[data-go-ho]') && ['rwpxSendOpen()', 'rwpxPullOpen()'].every(f => document.querySelector(`#rwHo button[onclick="${f}"]`)) && !!document.querySelector('#rwHo input[type=file][onchange="rwpxImportFile(this)"]');
     out.ckRows = P.querySelectorAll('.card:nth-of-type(4) tbody tr').length;
     out.comb = P.querySelectorAll('table.rwpt-comb tbody tr').length === window._R.pile.comb.length && P.querySelectorAll('table.rwpt-comb tr.rwpt-gov').length >= 1;   // RWPT2
     out.fig = P.querySelectorAll('.rwpt-fig svg').length >= 2 && P.querySelectorAll('.rwpt-fig .sdx-view').length >= 2;

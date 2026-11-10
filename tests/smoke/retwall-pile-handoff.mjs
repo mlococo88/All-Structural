@@ -19,7 +19,7 @@ await rw.waitForFunction(() => window._R, null, { timeout: 60000 });
 await rw.evaluate(() => { const set = (id, v) => { const el = document.getElementById(id); if (el.type === 'checkbox') el.checked = v; else el.value = v; el.dispatchEvent(new Event('change', { bubbles: true })); };
   set('design_basis', 'AASHTO'); onBasisChange(); set('fnd_type', 'pile'); set('tf', '36'); syncConditionalUI(); onInputChange(); });
 await rw.waitForTimeout(800);
-const itab = await rw.$('#itabs .itab[data-pane="wall"]'); if (itab) await itab.click();
+const itab = await rw.$('#itabs .itab[data-pane="project"]'); if (itab) await itab.click();   // HOC (2026-11-10): the hand-off buttons are in the Project tab's Hand-offs block
 await rw.locator('#pxr_send').scrollIntoViewIfNeeded();
 console.log('1. Retaining Wall Designer: send');
 const R0 = await rw.evaluate(() => ({ Rn: _R.inp.fnd.Rn, phic: _R.inp.fnd.phic, comb: _R.pile.comb.map(c => ({ key: c.key, Pmax: c.L.Pmax, Pmin: c.L.Pmin, h: c.L.rows[0].h, iMax: c.L.iMax })) }));
@@ -55,7 +55,7 @@ check(RES && RES.geotechnical && RES.geotechnical.static && RES.geotechnical.sta
 check(RES && Array.isArray(RES.cases) && RES.cases.length > 0, 'pileResults: ' + (RES && RES.cases ? RES.cases.length : 0) + ' cases run');
 check(!pdErr.length, 'Pile Designer: no page errors ' + JSON.stringify(pdErr.slice(0, 3)));
 console.log('3. Retaining Wall Designer: pull pile results, stale check');
-await rw.bringToFront(); { const it = await rw.$('#itabs .itab[data-pane="wall"]'); if (it) await it.click(); } await rw.click('#pxr_pull'); await rw.waitForSelector('#rwpx-ov');
+await rw.bringToFront(); { const it = await rw.$('#itabs .itab[data-pane="project"]'); if (it) await it.click(); } await rw.click('#pxr_pull'); await rw.waitForSelector('#rwpx-ov');
 const pullTxt = await rw.evaluate(() => document.getElementById('rwpx-ov').innerText);
 check(/CURRENT/.test(pullTxt), 'pull dialog: status CURRENT');
 await rw.click('#rwpx-btns button:has-text("Import")'); await rw.waitForTimeout(800);
