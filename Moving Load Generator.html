@@ -822,7 +822,8 @@ document.body.insertAdjacentHTML('beforeend',`<div id="rptModal" class="mdl hidd
   <h3>Print Report</h3>
   <p class="hint">Each selected vehicle is analyzed with its own preset rules (uniform load, impact method, variable spacing, secondary vehicle, multi-vehicle case). Spans, girder section, distribution factors, LLF, and step sizes are shared.</p>
   <div class="g2"><div class="f"><label>Project</label><input id="rProj"></div><div class="f"><label>Computed by</label><input id="rBy"></div></div>
-  <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" id="bxProjUse" type="button" title="Fill Project and Computed by from the project info shared by another tool (asks first; never blanks a field)">Use shared project info</button><button class="btn" id="bxProjShare" type="button" title="Share Project and Computed by with the other tools">Share project info</button></div>
+  <div id="bxProjBtns" style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" id="bxProjUse" type="button" title="Fill Project and Computed by from the project info shared by another tool (asks first; never blanks a field)">Use shared project info</button><button class="btn" id="bxProjShare" type="button" title="Share Project and Computed by with the other tools">Share project info</button></div>
+  <p class="hint">Send/receive data: <a href="#" data-go-ho="1">Project tab → Hand-offs</a> (Use shared project info, Share project info).</p>
   <div class="lbl">Vehicles</div><div id="rVeh" class="rveh"></div>
   <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" id="rAll">All presets</button><button class="btn" id="rNone">None</button><button class="btn" id="rHwy">Highway</button><button class="btn" id="rRail">Rail</button></div>
   <label class="chk"><input type="checkbox" id="rFac" checked>Factored per girder (uncheck for unfactored per lane)</label>
@@ -1845,8 +1846,9 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
   /* ---- sidebar buttons + source line ---- */
   var hint=[].slice.call(el('dfT').parentNode.querySelectorAll('p.hint')).filter(function(x){ return /multiple presence/.test(x.textContent); })[0];
   (hint||el('dfNeg').closest('.f')).insertAdjacentHTML('afterend',
-    '<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" id="lxPull" type="button" title="Fill the highway DF inputs from the distribution factors sent by LL &amp; DL Distribution (lldf). Shows what will change and asks first.">⇄ Pull from LL &amp; DL Distribution <span id="lxNew" class="hidden" style="background:#f59e0b;color:#fff;border-radius:8px;padding:0 6px;margin-left:3px;font-size:10px">new</span></button>'+
+    '<div id="lxBtns" style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" id="lxPull" type="button" title="Fill the highway DF inputs from the distribution factors sent by LL &amp; DL Distribution (lldf). Shows what will change and asks first.">⇄ Pull from LL &amp; DL Distribution <span id="lxNew" class="hidden" style="background:#f59e0b;color:#fff;border-radius:8px;padding:0 6px;margin-left:3px;font-size:10px">new</span></button>'+
     '<button class="btn" id="lxImport" type="button" title="Load a DF hand-off JSON file exported from LL &amp; DL Distribution">Import hand-off (JSON)</button></div>'+
+    '<p class="hint">Send/receive data: <a href="#" data-go-ho="1">Project tab → Hand-offs</a> (Pull from LL &amp; DL Distribution, Import hand-off (JSON)).</p>'+   // HOC (2026-11-10): the buttons are moved there by the MLHD block
     '<div id="lxSrc" class="hint" style="color:#475569"></div>');
   function srcText(){
     if(!SRC) return '';
@@ -1859,6 +1861,7 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
   function paint(){
     var n=el('lxNew'); if(n) n.classList.toggle('hidden',!(window.BridgeXfer&&BridgeXfer.isNew(CH,RID)));
     var s=el('lxSrc'); if(s) s.textContent=SRC?srcText():'';
+    var h=el('lxLast'); if(h) h.textContent=SRC?when(SRC.producedAt)+(SRC.project?' ('+SRC.project+')':'')+', '+SRC.girderLabel+'. Details under Factors.':'nothing pulled yet.';   // HOC: Hand-offs card (Project tab)
   }
   el('lxPull').onclick=function(){
     if(!window.BridgeXfer){ alert('Hand-off is not available in this browser.'); return; }
@@ -1914,7 +1917,7 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
 
   paint();
   if(SRC) run();   // re-render so a restored fatigue warning shows the lldf g_fat (results unchanged)
-  window.MLGlldf={ openDlg:openDlg, apply:apply, refresh:refresh, validate:validate, makePlan:makePlan, src:function(){ return SRC; }, srcText:srcText };
+  window.MLGlldf={ paint:paint, openDlg:openDlg, apply:apply, refresh:refresh, validate:validate, makePlan:makePlan, src:function(){ return SRC; }, srcText:srcText };
 })();
 </script>
 <script>
@@ -1931,13 +1934,33 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
      Import JSON = #mlgSave / #mlgOpen); was "Project file (JSON)": Save JSON · Open JSON · New */
   d.innerHTML='<summary>Project</summary><div class="pb">'
     +'<div class="f" style="margin-bottom:8px"><label>Save and open</label><div id="mlgSaveCard"></div></div>'
+    /* HOC (2026-11-10, engineer decision: the hand-off card on the Project tab in every tool): Use / Share project info (moved from the
+       Print Report dialog) and the LL & DL DF pull / import (moved from Factors & Analysis); same nodes, ids and handlers, as Receive / Send */
+    +'<div class="f mlgHo" id="mlgHo" style="margin-bottom:8px"><label>Hand-offs</label>'
+    +'<p class="hint" style="margin:0 0 4px">Nothing changes until you confirm: "Use shared project info" asks first, and a DF pull or import shows what it will overwrite and applies only on "Apply". The DF source is saved with the project and printed in the report.</p>'
+    +'<div class="mlgHoGrp">Receive from other tools</div>'
+    +'<div class="mlgHoRow"><b>Shared project info</b> <span class="mlgHoFrom">from any tool (Print Report: Project, Computed by)</span><div class="mlgHoBtns" data-ids="bxProjUse"></div></div>'
+    +'<div class="mlgHoRow"><b>Distribution factors</b> <span class="mlgHoFrom">from LL &amp; DL Distribution</span><div class="mlgHoBtns" data-ids="lxPull lxImport"></div>'
+    +'<p class="hint" style="margin:3px 0 0"><b>Status / last received:</b> <span id="lxLast">nothing pulled yet.</span></p></div>'
+    +'<div class="mlgHoGrp">Send to other tools</div>'
+    +'<div class="mlgHoRow"><b>Shared project info</b> <span class="mlgHoFrom">to every tool</span><div class="mlgHoBtns" data-ids="bxProjShare"></div></div>'
+    +'</div>'
     +G('Benchmarks','Load a published example (replaces the current inputs) and compare the results with it.','bmBtn cfBtn')
     +'</div>';
   Array.prototype.forEach.call(d.querySelectorAll('[data-ids]'),function(r){ r.getAttribute('data-ids').split(' ').forEach(function(id){ var b=document.getElementById(id); if(b){ b.className='btn'; r.appendChild(b); } }); });
+  ['bxProjBtns','lxBtns'].forEach(function(id){ var e=document.getElementById(id); if(e&&!e.children.length) e.remove(); });   // HOC: the emptied old button rows
   A.appendChild(d);
+  if(window.MLGlldf&&MLGlldf.paint) MLGlldf.paint();   // HOC: fill the card's status line
+  /* HOC: "Project tab → Hand-offs" links (Print Report dialog, Factors) */
+  document.addEventListener('click',function(e){ var a=e.target&&e.target.closest&&e.target.closest('[data-go-ho]'); if(!a) return; e.preventDefault();
+    var m=document.getElementById('rptModal'); if(m) m.classList.add('hidden');
+    var t=document.getElementById('mlgInTab_proj'); if(t) t.click(); var c=document.getElementById('mlgHo'); if(c) setTimeout(function(){ c.scrollIntoView({block:'start'}); },0); });
   if(window.MLPL&&MLPL.pb){ MLPL.pb.mount(document.getElementById('mlgSaveCard')); MLPL.pb.el.card.querySelectorAll('button[data-sp]').forEach(function(b){ b.classList.add('btn'); }); }
   ['mlgSave','mlgOpen'].forEach(function(id){ var b=document.getElementById(id); if(b) b.className='btn'; });
-  document.head.insertAdjacentHTML('beforeend','<style>@media print{#mlgPrjSec,#mlgInPane_proj{display:none!important}}</style>');
+  document.head.insertAdjacentHTML('beforeend','<style>@media print{#mlgPrjSec,#mlgInPane_proj{display:none!important}}'
+    +'.mlgHoGrp{margin:8px 0 3px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#64748b}'
+    +'.mlgHoRow{border-top:1px solid #e2e8f0;padding:5px 0 3px;font-size:12px}.mlgHoFrom{font-size:11px;color:#64748b}'
+    +'.mlgHoBtns{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}</style>');   // HOC
 })();
 </script>
 <script>
