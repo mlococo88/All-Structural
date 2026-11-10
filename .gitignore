@@ -1,0 +1,2 @@
+# Local symlinks created by test runs (a symlink outside the repo breaks the GitHub Pages build)
+tests/libs/libs
