@@ -8042,12 +8042,13 @@ function drawRebarSketch(){
   const ml=56,mr=56,mt=30,mb=40, sc=Math.min(500/B,330/Htot);
   const W=ml+mr+B*sc, Hpx=mt+mb+Htot*sc;
   const X=x=>ml+x*sc, Y=y=>mt+(Htot-y)*sc;
-  const xsb=g.Ltoe+g.tsb, xbwF=xsb-g.tbw, cvr=0.25;
+  const OFr=window.LAST_R&&window.LAST_R.geo&&window.LAST_R.geo.off, xsb=g.Ltoe+g.tsb, xbwF=OFr? OFr.xBwFront : xsb-g.tbw, xbwB=xbwF+g.tbw, cvr=0.25;   // ABSH
   let s=`<svg viewBox="0 0 ${W} ${Hpx}" width="${Math.min(640,W)}">${svgDefs()}`;
   const conc='fill="#f2f2ec" stroke="#666" stroke-width="1.2"';
   s+=`<rect x="${X(0)}" y="${Y(g.tf)}" width="${B*sc}" height="${g.tf*sc}" ${conc}/>`;
   s+=`<polygon points="${X(g.Ltoe)},${Y(g.tf)} ${X(xsb)},${Y(g.tf)} ${X(xsb)},${Y(g.tf+g.hstem)} ${X(xsb-g.tst)},${Y(g.tf+g.hstem)}" ${conc}/>`;
   s+=`<rect x="${X(xbwF)}" y="${Y(Htot)}" width="${g.tbw*sc}" height="${g.hbw*sc}" ${conc}/>`;
+  if(OFr&&OFr.hSh>0) s+=`<rect x="${X(xbwB)}" y="${Y(OFr.zSh)}" width="${OFr.e*sc}" height="${OFr.hSh*sc}" ${conc}/>`;   // ABSH: stem shelf
   const bar=(x1,y1,x2,y2,col)=>`<line x1="${X(x1)}" y1="${Y(y1)}" x2="${X(x2)}" y2="${Y(y2)}" stroke="${col}" stroke-width="2.4" stroke-linecap="round"/>`;
   const lbl=(x,y,t,col)=>`<text x="${X(x)}" y="${Y(y)}" font-size="12" font-weight="bold" font-family="Times New Roman" fill="${col}">${t}</text>`;
   // pile-supported footing (display only): pile heads embedded e_pile into the footing, projecting through the bottom mat (C1,
@@ -8061,11 +8062,11 @@ function drawRebarSketch(){
       s+=`<rect x="${X(x0)}" y="${Y(emb)}" width="${(x1-x0)*sc}" height="${(emb+0.6)*sc}" fill="#d9d4c7" stroke="#888" stroke-width="1" stroke-dasharray="3 2"/>`; });
   }
   // A1 stem back-face vertical with hook into footing
-  s+=bar(xsb-cvr,g.tf+g.hstem, xsb-cvr, yBot,"#c62828");
+  s+=bar(xsb-cvr,OFr? OFr.zSh-0.2 : g.tf+g.hstem, xsb-cvr, yBot,"#c62828");
   s+=bar(xsb-cvr,yBot, xsb-cvr-1.0, yBot,"#c62828");
   s+=lbl(xsb+0.25,g.tf+g.hstem*0.55,"A1","#c62828");
   // B1 backwall
-  s+=bar(xsb-cvr,Htot-0.15, xsb-cvr, g.tf+g.hstem-1.2,"#1f3a5f");
+  s+=bar(xbwB-cvr,Htot-0.15, xbwB-cvr, OFr? OFr.zSh-1.2 : g.tf+g.hstem-1.2,"#1f3a5f");
   s+=lbl(xsb+0.25,g.tf+g.hstem+g.hbw*0.5,"B1","#1f3a5f");
   // C1 toe bottom (at c_F; between the pile heads on a pile-supported footing)
   s+=bar(cvr,yBot+0.08, g.Ltoe+g.tsb+1.0, yBot+0.08,"#1a7f37");
@@ -8551,12 +8552,13 @@ function svgStemCapacity(R){
 function svgRebarDims(R){
   const g=S.geom, m=S.mat, B=g.Ltoe+g.tsb+g.Lheel, Ht=g.tf+g.hstem+g.hbw, dw=R.checks.dowel, rf=S.reinf;
   const W=680, mL=70, mR=150, mT=58, mB=92, sc=Math.min((W-mL-mR)/B,(560-mT-mB)/Ht), Hp=mT+mB+Ht*sc;
-  const X=x=>mL+x*sc, Y=y=>mT+(Ht-y)*sc, xsb=g.Ltoe+g.tsb, xbwF=xsb-g.tbw;
+  const X=x=>mL+x*sc, Y=y=>mT+(Ht-y)*sc, xsb=g.Ltoe+g.tsb, OFr=R.geo.off, xbwF=OFr? OFr.xBwFront : xsb-g.tbw;   // ABSH
   const conc='fill="#f2f2ec" stroke="#555" stroke-width="1.2"';
   let b=svgT(10,18,"Reinforcement section — to scale, bar marks of the schedule",{b:1,fs:12});
   b+=`<rect x="${X(0)}" y="${Y(g.tf)}" width="${B*sc}" height="${g.tf*sc}" ${conc}/>`;
   b+=`<polygon points="${X(g.Ltoe)},${Y(g.tf)} ${X(xsb)},${Y(g.tf)} ${X(xsb)},${Y(g.tf+g.hstem)} ${X(xsb-g.tst)},${Y(g.tf+g.hstem)}" ${conc}/>`;
   b+=`<rect x="${X(xbwF)}" y="${Y(Ht)}" width="${g.tbw*sc}" height="${g.hbw*sc}" ${conc}/>`;
+  if(OFr&&OFr.hSh>0) b+=`<rect x="${X(xbwF+g.tbw)}" y="${Y(OFr.zSh)}" width="${OFr.e*sc}" height="${OFr.hSh*sc}" ${conc}/>`;   // ABSH: stem shelf
   const cT=m.coverT/12, cF=m.coverF/12, onP=S.fnd.branch==="pile";
   const yBot=cF;   // ABPB (2026-11-07): the bottom mat at c_F on piles too, between the pile heads (was embedment + clear)
   if(onP&&Array.isArray(S.piles.coords)){   // ABPB: pile heads projecting e_pile into the footing through the bottom mat (display only)
@@ -8576,7 +8578,7 @@ function svgRebarDims(R){
   const hookY=yBot+2*BARS[rf.toe.size].db/12, lap=(dw&&dw.lapProv>0?dw.lapProv:(dw?dw.lapReq:0))/12;
   b+=L(xA,hookY,xA,g.tf+lap,"#c62828",ia(tDw,"tab-struct|o-str-dowel"))+L(xA,hookY,xA-12*BARS[rf.stem.size].db/12-0.4,hookY,"#c62828",ia(tDw,"tab-struct|o-str-dowel"));
   b+=L(xA-0.08,g.tf+0.05,xA-0.08,g.tf+g.hstem-0.2,"#7a1f1f",ia(tA1,"tab-struct|o-str-Stem"));
-  b+=L(xbwF+g.tbw-cT,Ht-0.15,xbwF+g.tbw-cT,g.tf+g.hstem-1.0,"#1f3a5f",ia(tB1,"tab-struct|o-str-Backwall"));
+  b+=L(xbwF+g.tbw-cT,Ht-0.15,xbwF+g.tbw-cT,OFr? OFr.zSh-1.0 : g.tf+g.hstem-1.0,"#1f3a5f",ia(tB1,"tab-struct|o-str-Backwall"));
   b+=L(0.25,yBot+0.05,xsb+(R.checks.toeFlex.ld/12),yBot+0.05,"#1a7f37",ia(tC1,"tab-struct|o-str-Toe"));
   b+=L(g.Ltoe-(R.checks.heelFlex.ld/12),g.tf-cF,B-0.25,g.tf-cF,"#b8860b",ia(tD1,"tab-struct|o-str-Heel"));
   // callouts
@@ -8593,7 +8595,7 @@ function svgRebarDims(R){
   b+=dimH(X(0),X(g.Ltoe),Y(0)+50,`toe ${fmt(g.Ltoe,2)}'`)+dimH(X(g.Ltoe),X(xsb),Y(0)+50,`${fmt(g.tsb,2)}'`)+dimH(X(xsb),X(B),Y(0)+50,`heel ${fmt(g.Lheel,2)}'`);
   b+=dimH(X(0),X(B),Y(0)+74,`B = ${fmt(B,2)}'`);
   b+=dimV(Y(g.tf),Y(0),X(0)-14,`t_f ${fmt(g.tf,2)}'`)+dimV(Y(g.tf+g.hstem),Y(g.tf),X(0)-14,`h_stem ${fmt(g.hstem,2)}'`)+dimV(Y(Ht),Y(g.tf+g.hstem),X(0)-14,`h_bw ${fmt(g.hbw,2)}'`);
-  b+=dimH(X(xbwF),X(xsb),Y(Ht)-12,`t_bw ${fmt(g.tbw,2)}'`)+dimH(X(xsb-g.tst),X(xsb),Y(g.tf+g.hstem)+14,`t_st ${fmt(g.tst,2)}'`,12);
+  b+=dimH(X(xbwF),X(xbwF+g.tbw),Y(Ht)-12,`t_bw ${fmt(g.tbw,2)}'`)+dimH(X(xsb-g.tst),X(xsb),Y(g.tf+g.hstem)+14,`t_st ${fmt(g.tst,2)}'`,12);
   b+=svgT(X(B)+8,Y(g.tf)+12,`covers: wall ${fmt(m.coverT,1)}", footing ${fmt(m.coverF,1)}"`,{fs:9.5,c:"#555"});
   if(onP) b+=svgT(X(B)+8,Y(g.tf)+26,`bottom mat at c_F, between`,{fs:9.5,c:"#555"})+svgT(X(B)+8,Y(g.tf)+38,`the pile heads (emb. ${fmt(+S.piles.embed||0,1)}")`,{fs:9.5,c:"#555"});
   return svgWrap(W,Hp,b,680);
@@ -8616,7 +8618,7 @@ function svgSeatPlan(R){
   const X=x=>mL+x*sc, Y=y=>mT+(halfY+y)*sc, xc=seatIn-g.brgSetback*12;
   const J="tab-struct|o-str-bearing";
   let b=svgT(10,18,isGov?`Bearing seat plan — girder ${bs.pgirder} (governing q_b/q_R)`:`Bearing seat plan — girder ${bs.pgirder} (selected; governing: girder ${R.checks.bearingSeat.pgirder})`,{b:1,fs:12});
-  b+=`<rect x="${X(0)}" y="${Y(-halfY)}" width="${seatIn*sc}" height="${2*halfY*sc}" fill="#f2f2ec" stroke="#555"${FIG_STATIC?"":fia(`Bridge seat: width ${fF(R.geo.seatW,2)} ft = ${fF(seatIn,1)} in (t_st − t_bw); bearing setback ${fF(g.brgSetback,2)} ft from the backwall`,J)}/>`;
+  b+=`<rect x="${X(0)}" y="${Y(-halfY)}" width="${Math.max(0,seatIn)*sc}" height="${2*halfY*sc}" fill="#f2f2ec" stroke="#555"${FIG_STATIC?"":fia(`Bridge seat: width ${fF(R.geo.seatW,2)} ft = ${fF(seatIn,1)} in (t_st − t_bw); bearing setback ${fF(g.brgSetback,2)} ft from the backwall`,J)}/>`;
   b+=`<rect x="${X(seatIn)}" y="${Y(-halfY)}" width="${tbwIn*sc}" height="${2*halfY*sc}" fill="#dcdcd4" stroke="#555"/>`;
   b+=svgT(X(seatIn+tbwIn/2),Y(-halfY)-6,"backwall",{a:"middle",fs:10,c:"#555"})+svgT(X(0),Y(-halfY)-6,"seat front edge",{fs:10,c:"#555"});
   if(c>0) b+=`<rect x="${X(xc-Lp/2-c)}" y="${Y(-Wp/2-c)}" width="${(Lp+2*c)*sc}" height="${(Wp+2*c)*sc}" fill="rgba(31,58,95,0.06)" stroke="#1f3a5f" stroke-dasharray="6 3"${FIG_STATIC?"":fia(`A₂ (Fig. 5.6.5-1 concept), concentric with the pad\nA₂ = (L_pad + 2c)(W_pad + 2c) = (${fF(Lp,1)} + 2·${fF(c,1)})(${fF(Wp,1)} + 2·${fF(c,1)}) = ${fF(bs.A2,0)} in²\nm = √(A₂/A₁) = √(${fF(bs.A2,0)}/${fF(bs.A1,0)}) = ${fF(bs.mRaw,3)} ≤ 2 → m = ${fF(bs.m,3)}`,J)}/>`;
@@ -8660,7 +8662,7 @@ function svgApSlab(R){
   const P=R.ap; if(!P) return "";
   const g=S.geom, it=iabType(), I=S.iab, sh=P.sup==="shelf";
   const tw=it==="integral"? +I.b : +g.tbw, hw=it==="integral"? (+I.hd)+(+I.hc)*0.35 : Math.min(+g.hbw,6), Ls=P.Lmax, ts=P.t;
-  const bS=sh? P.bS/12 : 0, hS=P.hS/12, hE=P.hE/12, av=sh? P.av/12 : 0;
+  const ss=!!P.stemShelf, bS=sh? P.bS/12 : 0, hS=P.hS/12, hE=P.hE/12, av=(sh||ss)? P.av/12 : 0;   // ABSH: ss = the stem shelf (width e = P.bS in)
   const Wd=660, Hd=340, mL=40, mR=46, mT=74, mB=58, left=tw+2.2, right=Ls+2.2, sc=Math.min((Wd-mL-mR)/(left+right),(Hd-mT-mB)/(hw+0.6));
   const X=x=>mL+(x+left)*sc, Y=y=>mT-y*sc;   // x = 0 at the back face of the wall (+ toward the approach); y = 0 at the roadway surface (+ up)
   const desT=it==="integral"? "tab-iab" : "tab-struct", J0="tab-loads|o-ap", wall=it==="integral"?"end diaphragm":it==="semi"?"end diaphragm":"backwall";
@@ -8676,7 +8678,11 @@ function svgApSlab(R){
   const wTop=(P.sup==="deck"&&it!=="integral")? -0.7 : 0;
   b+=fg(`${wall[0].toUpperCase()+wall.slice(1)}: t = ${fF(tw)} ft`+(it==="conv"?`\nslab couple on the backwall: M = q·e_bw, e_bw = ${fF(P.eBw,3)} ft (front-face tension) — Tab 5 §5.1`:""),it==="conv"?"tab-struct|o-str-Backwall":(it==="integral"?"tab-iab|o-iab-cap":"tab-iab|o-iab-cap"),
     `<rect x="${X(-tw)}" y="${Y(wTop)}" width="${tw*sc}" height="${(hw+wTop)*sc}" ${conc}/>`+svgT(X(-tw/2),Y(-hw)-6,wall,{a:"middle",fs:10}));
-  // shelf
+  // shelf (ABSH: the stem shelf below the slab, width e, down into the stem)
+  if(ss){ const e=P.bS/12, Q=R.apStemSh;
+    b+=fg(`Stem shelf: the stem at its full thickness behind the backwall, width e = ${fF(P.bS,1)} in (panel I-1)`+(Q?`\nbearing: q_b = ${fF(Q.qb,4)} ksi vs q_R = ${fF(Q.qR,3)} ksi (D/C ${fF(Q.dcB,3)}) — Tab 5 §5.8`:""),desT+"|o-ap-shelf",
+      `<rect x="${X(0)}" y="${Y(-ts)}" width="${e*sc}" height="${Math.max(0,hw-ts)*sc}" ${conc}/>`+svgT(X(e)+4,Y(-ts-0.5)+4,"stem shelf",{fs:9.5,c:"#555"}))
+      +dimH(X(0),X(e),Y(0)-30,`e ${fmt(P.bS,1)}"`); }
   if(sh){ const H=R.apShelf, shTip=`Shelf (paving notch) — bracket: b_S = ${fF(P.bS,1)} in, h = ${fF(P.hS,1)} in at the face, h_E = ${fF(P.hE,1)} in`+(H?`\nV_u = ${fF(H.Vu,3)} kip/ft, N_uc = ${fF(H.Nuc,3)} kip/ft, a_v = ${fF(H.av,2)} in ${H.corbel?"≤":">"} d = ${fF(H.d,2)} in\nA_s,req = ${fF(H.AsReq,4)} vs A_s = ${fF(H.As,4)} in²/ft (D/C ${fF(H.dcAs,3)})`:"");
     b+=fg(shTip,desT+"|o-ap-shelf",`<polygon points="${X(0)},${Y(-ts)} ${X(bS)},${Y(-ts)} ${X(bS)},${Y(-ts-hE)} ${X(0)},${Y(-ts-hS)}" ${conc}/>`); }
   // slab
@@ -8737,7 +8743,7 @@ function drawXsec(){
   const sc=Math.min(drawW/B,(420)/worldH);
   const W=ml+mr+B*sc, Hpx=mt+mb+worldH*sc;
   const X=x=>ml+x*sc, Y=y=>mt+(worldH-y)*sc; // y up from footing base
-  const xsb=g.Ltoe+g.tsb, xbwF=xsb-g.tbw;
+  const OFx=window.LAST_R&&window.LAST_R.geo&&window.LAST_R.geo.off, xsb=g.Ltoe+g.tsb, xbwF=OFx? OFx.xBwFront : xsb-g.tbw, xbwB=OFx? OFx.xBwBack : xsb;   // ABSH: inset backwall
   let s=`<svg viewBox="0 0 ${W} ${Hpx}" width="${Math.min(660,W)}">${svgDefs()}`;
   // soil over heel
   s+=`<polygon points="${X(xsb)},${Y(g.tf)} ${X(B)},${Y(g.tf)} ${X(B)},${Y(soilTop)} ${X(xsb)},${Y(soilTop)}" fill="#e9ddbe" stroke="#b7a97e" stroke-width="1"/>`;
@@ -8762,6 +8768,7 @@ function drawXsec(){
     s+=`<text x="${X(xbwF+g.tbw/2)}" y="${Y(Htot)-4}" text-anchor="middle" font-size="10.5" font-family="Times New Roman" fill="#1f3a5f">end diaphragm</text>`;
     s+=`<polygon points="${X(xsb)},${Y(Htot)} ${X(xsb)+pw},${Y(zs)} ${X(xsb)},${Y(zs)}" fill="rgba(31,58,95,0.14)" stroke="#1f3a5f" stroke-width="1"/>`
       +`<text x="${X(xsb)+pw+3}" y="${Y((Htot+zs)/2)}" font-size="10" font-family="Times New Roman" fill="#1f3a5f">K_exp·γ·h = ${fmt(pB,2)} ksf (§10.3)</text>`; }
+  if(!semiX&&OFx&&OFx.hSh>0) s+=`<rect x="${X(xbwB)}" y="${Y(OFx.zSh)}" width="${OFx.e*sc}" height="${OFx.hSh*sc}" ${conc}/><line x1="${X(xbwF)}" y1="${Y(OFx.zSh)}" x2="${X(xbwB)}" y2="${Y(OFx.zSh)}" stroke="#c62828" stroke-width="1.6" stroke-dasharray="4 2"/><text x="${X(xsb)+4}" y="${Y(OFx.zSh)+12}" font-size="10" font-family="Times New Roman" fill="#333">stem shelf e = ${fmt(OFx.eIn,1)}"</text>`;   // ABSH
   // bearing
   const xb=geo.xBrg??(xbwF-g.brgSetback);
   s+=`<rect x="${X(xb)-6}" y="${Y(g.tf+g.hstem)-8}" width="12" height="8" fill="#8a8a80" stroke="#333"/>
@@ -8779,8 +8786,8 @@ function drawXsec(){
   }
   // APS: approach slab on the backwall shelf (or the deck end), drawn over the backfill (section only; loads in §1.4a)
   { const P=window.LAST_R&&window.LAST_R.ap;
-    if(P&&!P.legacy){ const ts=P.t, x1=xsb+Math.min(P.Lmax,B-xsb+mr/sc*0.6), sh=P.sup==="shelf", bS=P.bS/12, hS=P.hS/12, hE=P.hE/12, yT=Htot;
-      s+=`<rect x="${X(xsb)}" y="${Y(yT)}" width="${(x1-xsb)*sc}" height="${ts*sc}" fill="#cfd8dc" stroke="#546e7a" stroke-width="1.2"/>`;
+    if(P&&!P.legacy){ const ts=P.t, x1=xsb+Math.min(P.Lmax,B-xsb+mr/sc*0.6), sh=P.sup==="shelf", bS=P.bS/12, hS=P.hS/12, hE=P.hE/12, yT=OFx? OFx.zSh+ts : Htot;
+      s+=`<rect x="${X(xbwB)}" y="${Y(yT)}" width="${(x1-xbwB)*sc}" height="${ts*sc}" fill="#cfd8dc" stroke="#546e7a" stroke-width="1.2"/>`;
       if(sh) s+=`<polygon points="${X(xsb)},${Y(yT-ts)} ${X(xsb+bS)},${Y(yT-ts)} ${X(xsb+bS)},${Y(yT-ts-hE)} ${X(xsb)},${Y(yT-ts-hS)}" fill="#dcdcd4" stroke="#333" stroke-width="1.2"/>`;
       s+=`<text x="${X((xsb+x1)/2)}" y="${Y(yT)-4}" text-anchor="middle" font-size="10.5" font-family="Times New Roman" fill="#37474f">approach slab L = ${fmt(P.Lmax,1)}'${x1<xsb+P.Lmax-1e-6?" (cut)":""}</text>`; } }
   // LS surcharge band (equivalent soil height h_eq above surface) when a live-load surcharge is present
@@ -8828,8 +8835,8 @@ function drawXsec(){
   // right: soil height
   s+=dimV(Y(soilTop),Y(g.tf),X(B)+34,"h_soil="+fmt(g.soilH)+"'");
   // top: seat + backwall
-  s+=dimH(X(xsb-g.tst),X(xbwF),Y(Htot)-18,"seat "+fmt(g.tst-g.tbw)+"'");
-  s+=dimH(X(xbwF),X(xsb),Y(Htot)-18,fmt(g.tbw)+"'");
+  s+=dimH(X(xsb-g.tst),X(xbwF),Y(Htot)-18,"seat "+fmt(OFx? g.tst-g.tbw-OFx.e : g.tst-g.tbw)+"'");
+  s+=dimH(X(xbwF),X(xbwB),Y(Htot)-18,fmt(g.tbw)+"'");
   s+=`</svg>`;
   el.innerHTML=s;
 }
@@ -8847,13 +8854,14 @@ function drawFBD(){
   const sc=Math.min(drawW/B,380/worldH);
   const W=ml+mr+B*sc, Hpx=mt+mb+worldH*sc;
   const X=x=>ml+x*sc, Y=y=>mt+(worldH-y)*sc;
-  const xsb=g.Ltoe+g.tsb, xbwF=xsb-g.tbw;
+  const OFr=window.LAST_R&&window.LAST_R.geo&&window.LAST_R.geo.off, xsb=g.Ltoe+g.tsb, xbwF=OFr? OFr.xBwFront : xsb-g.tbw;   // ABSH
   let s=`<svg viewBox="0 0 ${W} ${Hpx}" width="${Math.min(720,W)}">${svgDefs()}`;
   // outline (light)
   s+=`<polygon points="${X(xsb)},${Y(g.tf)} ${X(B)},${Y(g.tf)} ${X(B)},${Y(soilTop)} ${X(xsb)},${Y(soilTop)}" fill="#f0e8cf" stroke="#c8bb92"/>`;
   s+=`<rect x="${X(0)}" y="${Y(g.tf)}" width="${B*sc}" height="${g.tf*sc}" fill="#e9e9e2" stroke="#666"/>`;
   s+=`<polygon points="${X(g.Ltoe)},${Y(g.tf)} ${X(xsb)},${Y(g.tf)} ${X(xsb)},${Y(g.tf+g.hstem)} ${X(xsb-g.tst)},${Y(g.tf+g.hstem)}" fill="#e9e9e2" stroke="#666"/>`;
   s+=`<rect x="${X(xbwF)}" y="${Y(Htot)}" width="${g.tbw*sc}" height="${g.hbw*sc}" fill="#e9e9e2" stroke="#666"/>`;
+  if(OFr&&OFr.hSh>0) s+=`<rect x="${X(xbwF+g.tbw)}" y="${Y(OFr.zSh)}" width="${OFr.e*sc}" height="${OFr.hSh*sc}" fill="#e9e9e2" stroke="#666"/>`;   // ABSH: stem shelf
   // vertical force arrows (down) at group x̄ — staggered labels
   const vRows=L.rows.filter(r=>Math.abs(r.V)>0.05);
   vRows.forEach((r,i)=>{
@@ -9384,6 +9392,7 @@ function build3D(R){
   const g=S.geom, T=S.ui.d3Tog, sel=S.ui.d3Sel||"ls:Strength I";
   const B=R.geo.B, Lab=g.Lab, Lftg=(+g.Lftg||g.Lab), tf=g.tf, hstem=g.hstem, hbw=g.hbw, soilH=g.soilH;
   const xStemBack=g.Ltoe+g.tsb, xBwFront=xStemBack-g.tbw, xStemTopFront=xStemBack-g.tst, xBrg=R.geo.xBrg;
+  const OF=semi? null : R.geo.off;   // ABSH: backwall offset — the inset backwall and the stem shelf behind it
   const cx=B/2;                                  // center offset (longitudinal)
   const grp=D3.group; d3ClearGroup(); D3.apSlab=null;   // AB3A
   const P=(xl,y,zt)=> new THREE.Vector3(xl-cx, y, zt);
@@ -9402,6 +9411,9 @@ function build3D(R){
     // stem + backwall — sits on the footing, out-of-plane length L_ab
     const wsh=new THREE.Shape();
     if(semi){ wsh.moveTo(...pt(g.Ltoe,tf)); wsh.lineTo(...pt(xStemTopFront,tf+hstem)); wsh.lineTo(...pt(xStemBack,tf+hstem)); wsh.lineTo(...pt(xStemBack,tf)); wsh.closePath(); }   // AB3D: semi-integral, the lower abutment stops at the seat (no backwall)
+    else if(OF){ wsh.moveTo(...pt(g.Ltoe,tf)); wsh.lineTo(...pt(xStemTopFront,tf+hstem)); wsh.lineTo(...pt(OF.xBwFront,tf+hstem));
+      wsh.lineTo(...pt(OF.xBwFront,tf+hstem+hbw)); wsh.lineTo(...pt(OF.xBwBack,tf+hstem+hbw)); wsh.lineTo(...pt(OF.xBwBack,OF.zSh));
+      wsh.lineTo(...pt(xStemBack,OF.zSh)); wsh.lineTo(...pt(xStemBack,tf)); wsh.closePath(); }
     else{
     wsh.moveTo(...pt(g.Ltoe,tf)); wsh.lineTo(...pt(xStemTopFront,tf+hstem)); wsh.lineTo(...pt(xBwFront,tf+hstem));
     wsh.lineTo(...pt(xBwFront,tf+hstem+hbw)); wsh.lineTo(...pt(xStemBack,tf+hstem+hbw)); wsh.lineTo(...pt(xStemBack,tf+hstem));
@@ -9411,8 +9423,9 @@ function build3D(R){
     if(semi) d3SemiParts(R,T,{cx,tf,hstem,hbw,Lab,xStemBack,xBwFront,xBrg,B});   // AB3D: semi-integral end diaphragm, girders, deck, approach slab
     // AB3A (2026-11-10): conventional abutment, the approach slab of panel I-0b behind the backwall: its top at the top of the backwall (the
     // roadway level of the model, as computeAp's z_slab = t_f + h_stem + h_bw − t/2), on the paving-notch shelf (b_S × h_S / h_E) or on the deck end
-    if(!semi&&S.apSlab&&S.apSlab.on&&d3ApShow()){ const M=d3Mats(T); D3.apSlab=d3ApSlab(R,M,xStemBack-cx,tf+hstem+hbw,+g.skew||0,Lab);
+    if(!semi&&S.apSlab&&S.apSlab.on&&d3ApShow()){ const M=d3Mats(T); D3.apSlab=d3ApSlab(R,M,(OF?OF.xBwBack:xStemBack)-cx,OF?OF.zSh+R.ap.t:tf+hstem+hbw,+g.skew||0,Lab);   // ABSH: on the stem shelf, from the backwall's back face
       if(D3.apSlab&&T.dims){ const l=d3Label('approach slab L = '+fmt(R.ap.L)+' ft, t = '+fmt(R.ap.t)+' ft','dim'); l.position.copy(P(xStemBack+0.35*R.ap.L,tf+hstem+hbw+0.7,Lab/2)); grp.add(l); } }
+    if(OF&&T.dims){ const l=d3Label('stem shelf e = '+fmt(OF.eIn,1)+' in, '+fmt(OF.dIn,1)+' in below the top','dim'); l.position.copy(P(xStemBack-OF.e/2,OF.zSh+0.4,-Lab/2-0.3)); grp.add(l); }   // ABSH
   }
   // ---------- soil block ----------
   if(T.soil){ const sw=B-xStemBack, sd=Lab, sh2=(!semi&&D3.apSlab)? Math.min(soilH,hstem+hbw-R.ap.t) : soilH;   // AB3A: the backfill stops under the approach slab
@@ -9636,6 +9649,9 @@ function abdwGeo(R){
   else{ G.B=f(R.geo.B); G.tf=f(g.tf); G.Ltoe=f(g.Ltoe); G.tsb=f(g.tsb); G.tst=f(g.tst); G.hstem=f(g.hstem); G.tbw=f(g.tbw); G.hbw=f(g.hbw);
     G.xb=G.Ltoe+G.tsb; G.xbwF=G.xb-G.tbw; G.xstF=G.xb-G.tst; G.ySeat=G.tf+G.hstem; G.yTop=G.ySeat+G.hbw; G.xBrg=f(R.geo.xBrg);
     G.Lftg=f(+g.Lftg||g.Lab); G.soilH=f(g.soilH); G.hw=f(g.hw); G.padH=6; }   // padH: the 3D view's 0.5 ft bearing (schematic)
+  // ABSH: backwall offset e — the backwall's back face x_bwB = x_b − e, the stem shelf behind it up to y_sh; the slab starts at x_s (= x_b without e)
+  G.off=null; G.xbwB=G.xb; G.xs=G.xb;
+  if(!G.integ&&!G.semi&&R.geo.off){ const O=R.geo.off; G.off={e:O.eIn, d:O.dIn, hSh:f(O.hSh)}; G.xbwB=G.xb-O.eIn; G.xbwF=G.xbwB-G.tbw; G.ySh=G.ySeat+f(O.hSh); G.xs=G.xbwB; }
   const P=R.ap; G.apLegacy=!!(P&&P.legacy);
   G.ap=(P&&!P.legacy)? {L:P.L*12, Ln:P.L*12*P.cs, t:P.t*12, sup:P.sup, shelf:P.sup==="shelf", bS:P.bS, hS:P.hS, hE:P.hE, far:P.far, rule:P.rule, W:P.W*12} : null;
   // piles: a pile footing (active piles, numbered as Tab 4 §4.1) or the integral row
@@ -9722,19 +9738,21 @@ function abdwBuild(R){
     line(y); [head,...rows].forEach((rw,ri)=>{ let x=x0; rw.forEach((v,c)=>{ D.text(L.tbl,x+0.8*hh,y-rh+0.6*hh,hh,String(v==null?"":v),0); x+=cw[c]; }); y-=rh; line(y); if(ri===0) line(y+0.12*hh); });
     let x=x0; [0,...cw].forEach(w=>{ x+=w; D.line(L.tbl,x,y0,x,y); }); return {w:tot,h:y0-y};
   }
-  const shY=G.ap? G.yTop-G.ap.t : null;   // the slab bottom = the top of the shelf
+  const shY=G.ap? (G.off? G.ySh : G.yTop-G.ap.t) : null;   // the slab bottom = the top of the shelf (ABSH: the stem shelf)
   /* concrete in section: footing + stem (+ backwall) or the integral wall; the shelf on the back face; the end diaphragm (semi) */
   function concrete(slabLen){
     if(G.integ){ const pts=[[0,0],[G.b,0]]; if(G.ap&&G.ap.shelf) pts.push([G.b,shY-G.ap.hS],[G.b+G.ap.bS,shY-G.ap.hE],[G.b+G.ap.bS,shY],[G.b,shY]);
       pts.push([G.b,G.yTop],[0,G.yTop]); D.pline(L.conc,pts,true); D.line(L.cj,0,G.hc,G.b,G.hc); }
     else{ const pts=[[0,0],[G.B,0],[G.B,G.tf],[G.xb,G.tf]];
       if(G.semi) pts.push([G.xb,G.ySeat],[G.xstF,G.ySeat]);
+      else if(G.off) pts.push([G.xb,G.ySh],[G.xbwB,G.ySh],[G.xbwB,G.yTop],[G.xbwF,G.yTop],[G.xbwF,G.ySeat],[G.xstF,G.ySeat]);   // ABSH: the stem shelf, the inset backwall
       else{ if(G.ap&&G.ap.shelf) pts.push([G.xb,shY-G.ap.hS],[G.xb+G.ap.bS,shY-G.ap.hE],[G.xb+G.ap.bS,shY],[G.xb,shY]); pts.push([G.xb,G.yTop],[G.xbwF,G.yTop],[G.xbwF,G.ySeat],[G.xstF,G.ySeat]); }
       pts.push([G.Ltoe,G.tf],[0,G.tf]); D.pline(L.conc,pts,true); D.line(L.cj,G.Ltoe,G.tf,G.xb,G.tf);
+      if(G.off) D.line(L.cj,G.xbwF,G.ySh,G.xbwB,G.ySh);   // ABSH: construction joint at the base of the backwall (the shelf elevation)
       const y0=G.ySeat+G.padH; D.rect(L.brg,G.xBrg-(+S.bearing.padL||18)/2,G.ySeat,G.xBrg+(+S.bearing.padL||18)/2,y0);
       if(G.semi){ const pts2=[[G.xbwF,y0],[G.xb,y0]]; if(G.ap&&G.ap.shelf) pts2.push([G.xb,shY-G.ap.hS],[G.xb+G.ap.bS,shY-G.ap.hE],[G.xb+G.ap.bS,shY],[G.xb,shY]);
         pts2.push([G.xb,G.yTop],[G.xbwF,G.yTop]); D.pline(L.conc,pts2,true); } }
-    if(G.ap){ const x1=G.xb+Math.min(G.ap.Ln,slabLen==null?G.ap.Ln:slabLen); D.rect(L.ap,G.xb,shY,x1,G.yTop);
+    if(G.ap){ const x1=G.xs+Math.min(G.ap.Ln,slabLen==null?G.ap.Ln:slabLen); D.rect(L.ap,G.xs,shY,x1,G.yTop);
       if(slabLen!=null&&slabLen<G.ap.Ln){ const zz=0.12*D.k; D.pline(L.ap,[[x1+zz,G.yTop+zz],[x1,G.yTop-G.ap.t*0.35],[x1+zz,G.yTop-G.ap.t*0.65],[x1,shY-zz]],false); } }
   }
   function piles(Lp,bars){
@@ -9746,7 +9764,7 @@ function abdwBuild(R){
 
   /* ---------- sheet 1: abutment section ---------- */
   sheet("sec","ABUTMENT SECTION",k=>{
-    const h=D.h, Lp=G.piles.length? Math.max(48,0.35*G.yTop) : 0, xR=Math.max(G.B,G.ap?G.xb+G.ap.Ln:0,G.wing?G.xb+G.wing.L:0);
+    const h=D.h, Lp=G.piles.length? Math.max(48,0.35*G.yTop) : 0, xR=Math.max(G.B,G.ap?G.xs+G.ap.Ln:0,G.wing?G.xb+G.wing.L:0);
     concrete(null);
     let pxs=[]; if(G.piles.length) pxs=piles(Lp);
     if(G.wing) D.pline(L.wing,G.wing.pts.map(p=>[G.xb+p[0],G.yTop+p[1]]),true);
@@ -9760,22 +9778,26 @@ function abdwBuild(R){
       D.dim(L.dim,[0,0],[0,G.tf],[-0.5*k,0],90); dV([0,G.tf],[G.xstF,G.ySeat],-0.5*k,null,true);
       if(!G.semi) dV([G.xstF,G.ySeat],[G.xbwF,G.yTop],-0.5*k,null,true); else dV([G.xstF,G.ySeat],[G.xbwF,G.yTop],-0.5*k,null,true);
       dV([0,0],[G.xbwF,G.yTop],-1.0*k,null,true);
-      const yT=G.yTop+0.45*k; dH([G.xstF,G.ySeat],[G.xBrg,G.ySeat],yT); dH([G.xBrg,G.ySeat],[G.xbwF,G.yTop],yT); dH([G.xbwF,G.yTop],[G.xb,G.yTop],yT); }
-    if(G.ap){ const yT=G.yTop+0.45*k; dH([G.xb,G.yTop],[G.xb+G.ap.Ln,G.yTop],yT,G.skew>0.05?"<> (L = "+FI(G.ap.L)+" ALONG THE ROADWAY)":null);
-      dV([G.xb+G.ap.Ln,shY],[G.xb+G.ap.Ln,G.yTop],G.xb+G.ap.Ln+0.4*k); }
+      const yT=G.yTop+0.45*k; dH([G.xstF,G.ySeat],[G.xBrg,G.ySeat],yT); dH([G.xBrg,G.ySeat],[G.xbwF,G.yTop],yT); dH([G.xbwF,G.yTop],[G.xbwB,G.yTop],yT);
+      if(G.off){ dH([G.xbwB,G.ySh],[G.xb,G.ySh],yT+(G.ap?0.4*k:0),"E = <>"); dV([G.xb,G.ySh],[G.xb,G.yTop],G.xb+0.3*k,"D_SH = <>"); } }   // ABSH
+    if(G.ap){ const yT=G.yTop+0.45*k; dH([G.xs,G.yTop],[G.xs+G.ap.Ln,G.yTop],yT,G.skew>0.05?"<> (L = "+FI(G.ap.L)+" ALONG THE ROADWAY)":null);
+      dV([G.xs+G.ap.Ln,shY],[G.xs+G.ap.Ln,G.yTop],G.xs+G.ap.Ln+0.4*k); }
     // labels
     if(G.integ){ free(L.txt,G.b/2,Math.max(G.hc*0.5,Math.min(G.emb+0.25*k,G.hc*0.8)),h,"PILE CAP",1); free(L.txt,G.b/2,G.hc+G.hd/2,h,"END DIAPHRAGM",1,0); }
     else{ free(L.txt,(G.Ltoe+G.xb)/2+(G.tsb>G.tst?-0.25*(G.tsb-G.tst):0),G.tf/2-0.4*h,h,"FOOTING",1);
       const ym=G.tf+G.hstem*0.45, xf=G.Ltoe+(G.xstF-G.Ltoe)*(ym-G.tf)/G.hstem; free(L.txt,(xf+G.xb)/2,ym,h,"STEM",1);
-      if(!G.semi&&G.hbw>tw("BACKWALL",h)+0.2*k) free(L.txt,(G.xbwF+G.xb)/2+0.4*h,G.ySeat+G.hbw*0.5-(G.ap&&G.ap.shelf?0.3*G.ap.hS:0),h,"BACKWALL",1,90);
+      if(!G.semi&&G.hbw>tw("BACKWALL",h)+0.2*k) free(L.txt,(G.xbwF+G.xbwB)/2+0.4*h,G.ySeat+G.hbw*0.5-(G.ap&&G.ap.shelf?0.3*G.ap.hS:0),h,"BACKWALL",1,90);
       lead(G.xstF+0.3*(G.xbwF-G.xstF),G.ySeat,G.xstF-0.35*k,G.ySeat+0.25*k,"BRIDGE SEAT",2);
       lead(G.xBrg,G.ySeat+G.padH,G.xstF-0.35*k,G.ySeat+0.75*k,"BEARING "+(+S.bearing.padL||18)+" x "+(+S.bearing.padW||24)+" IN (HEIGHT SCHEMATIC)",2);
       if(G.semi) lead(G.xbwF,G.yTop-0.5*(G.yTop-G.ySeat),G.xstF-0.35*k,G.yTop+0.1*k,"END DIAPHRAGM ON THE BEARINGS",2);
       D.line(L.cl,G.xBrg,G.ySeat-0.15*k,G.xBrg,G.yTop+0.75*k); D.text(L.txt,G.xBrg,G.yTop+0.82*k,h,"CL BRG.",1); }
-    if(G.ap){ free(L.txt,G.xb+G.ap.Ln/2,G.yTop-G.ap.t/2-0.42*h,h,"APPROACH SLAB",1);
-      if(G.ap.shelf) lead(G.xb+G.ap.bS,shY-G.ap.hE,G.xb+G.ap.bS+0.4*k,shY-G.ap.hE-0.45*k,"SHELF (PAVING NOTCH) B_S = "+IN(G.ap.bS)+", H_S = "+IN(G.ap.hS)+", H_E = "+IN(G.ap.hE),0);
+    if(G.off){ lead(G.xb-G.off.e/2,G.ySh-0.25*(G.ySh-G.ySeat),G.xb+0.6*k,G.ySh-0.9*k,"STEM SHELF"+(G.ap?" (APPROACH SLAB SEAT)":"")+", E = "+IN(G.off.e)+", "+IN(G.off.d)+" BELOW TOP;\nSTEM BARS CONTINUE UP; NO CORBEL",0);
+      lead((G.xbwF+G.xbwB)/2,G.ySh,G.xstF-0.35*k,G.ySh+0.3*k,"CONSTR. JOINT",2); }   // ABSH
+    if(G.ap){ free(L.txt,G.xs+G.ap.Ln/2,G.yTop-G.ap.t/2-0.42*h,h,"APPROACH SLAB",1);
+      if(G.off){}
+      else if(G.ap.shelf) lead(G.xb+G.ap.bS,shY-G.ap.hE,G.xb+G.ap.bS+0.4*k,shY-G.ap.hE-0.45*k,"SHELF (PAVING NOTCH) B_S = "+IN(G.ap.bS)+", H_S = "+IN(G.ap.hS)+", H_E = "+IN(G.ap.hE),0);
       else free(L.txt,G.xb+0.1*k,shY-0.3*k,h,"SLAB BEARS ON THE DECK END OVER THE "+(G.integ||G.semi?"END DIAPHRAGM":"BACKWALL"),0);
-      free(L.txt,G.xb+G.ap.Ln,shY-0.3*k,h,G.ap.far==="sleeper"?"FAR END ON A SLEEPER SLAB (NOT MODELLED)":"FAR END ON THE SUBBASE",2,0,-1); }
+      free(L.txt,G.xs+G.ap.Ln,shY-0.3*k,h,G.ap.far==="sleeper"?"FAR END ON A SLEEPER SLAB (NOT MODELLED)":"FAR END ON THE SUBBASE",2,0,-1); }
     if(!G.integ) free(L.soil,G.xb+(G.B-G.xb)/2,G.tf+0.3*k,h,"BACKFILL",1);
     if(!G.integ&&G.hw>0) free(L.wat,xR+0.1*k,G.hw+0.12*k,h,"WATER TABLE",2);
     if(G.wing) lead(G.xb+G.wing.L,G.yTop+G.wing.pts[3][1],G.xb+G.wing.L+0.4*k,G.yTop+G.wing.pts[3][1]-0.3*k,"U-WINGWALL BEYOND, L = "+FI(G.wing.L),0);
@@ -9787,6 +9809,7 @@ function abdwBuild(R){
     const notes=["DIMENSIONS FROM THE INPUTS (PANELS I-0A, I-0B, I-1, I-13) AND TAB 1 1.1; LOADS AND CHECKS: SEE THE CALCULATION REPORT."];
     if(G.ap&&G.skew>0.05) notes.push("SKEW THETA = "+G.skew.toFixed(1)+"°: THE APPROACH SLAB IS SHOWN NORMAL TO THE ABUTMENT (L COS THETA, SHORTEST STRIP).");
     if(G.apLegacy) notes.push("APPROACH SLAB: EQUIVALENT DEAD LOAD ONLY (PANEL I-0B), NOT DRAWN.");
+    if(G.off) notes.push("BACKWALL INSET E = "+IN(G.off.e)+" FROM THE STEM BACK FACE (PANEL I-1): STEM SHELF AT FULL STEM THICKNESS"+(G.ap?", APPROACH SLAB SEAT (TAB 1 1.4A)":"")+"; BACKWALL DESIGNED AT THE SHELF (TAB 5 5.1).");   // ABSH
     notes.forEach((t,i)=>D.text(L.txt,bb[0],yt-0.32*k-i*0.18*k,0.08*k,t,0));
     return {known:null};
   },[16,24,32,48,64,96,192],[["tab-loads","o-sketch","§1.1 cross-section"]].concat(G.ap?[["tab-loads","o-ap","§1.4a approach slab"]]:[]));
@@ -9796,7 +9819,7 @@ function abdwBuild(R){
     // plan coordinates on the sheet: u (right) along the abutment from its centre, v (up) from the toe across the footing (toe at the bottom)
     const h=D.h, yF=G.Lftg/2, yW=G.Lab/2;
     D.rect(L.conc,-yF,0,yF,G.B);   // the footing / cap outline (known rectangle: L_ftg x B)
-    if(!G.integ){ [G.Ltoe,G.xstF,G.xbwF,G.xb].forEach(v=>D.line(L.conc,-yW,v,yW,v));
+    if(!G.integ){ (G.off?[G.Ltoe,G.xstF,G.xbwF,G.xbwB,G.xb]:[G.Ltoe,G.xstF,G.xbwF,G.xb]).forEach(v=>D.line(L.conc,-yW,v,yW,v));   // ABSH: + the backwall back face
       if(Math.abs(G.Lab-G.Lftg)>0.5){ D.line(L.conc,-yW,G.Ltoe,-yW,G.xb); D.line(L.conc,yW,G.Ltoe,yW,G.xb); }
       D.line(L.cl,-yF-0.4*k,G.xBrg,yF+0.4*k,G.xBrg); D.text(L.txt,-yF-0.48*k,G.xBrg-0.4*h,h,"CL BRG.",2);
       const pl=(+S.bearing.padL||18), pw=(+S.bearing.padW||24);
@@ -9814,7 +9837,7 @@ function abdwBuild(R){
     dV([yF,0],[yF,G.B],ud);
     if(!G.integ&&Math.abs(G.Lab-G.Lftg)>0.5) dH([-yW,G.xb],[yW,G.xb],G.B+0.45*k,"<> (L_AB)");
     // labels
-    if(!G.integ){ lead(-yW*0.55,(G.Ltoe+G.xb)/2,-yW*0.55-0.3*k,G.B+0.55*k,"STEM; BRIDGE SEAT; BACKWALL ABOVE",2);
+    if(!G.integ){ lead(-yW*0.55,(G.Ltoe+G.xb)/2,-yW*0.55-0.3*k,G.B+0.55*k,G.off?"STEM; BRIDGE SEAT; BACKWALL ABOVE; STEM SHELF BEHIND IT (E = "+IN(G.off.e)+")":"STEM; BRIDGE SEAT; BACKWALL ABOVE",2);
       free(L.txt,-yF-0.15*k,0.15*k,h,"TOE",2); free(L.txt,-yF-0.15*k,G.B-0.4*h-0.1*k,h,"HEEL",2);
       if(!G.piles.length) free(L.txt,0,G.Ltoe/2-0.4*h,h,"SPREAD FOOTING",1); }
     const bb=D.bbox(i0v), yt=bb[1]-0.35*k;
@@ -9838,13 +9861,13 @@ function abdwBuild(R){
       // A1: dowel (hooked into the bottom mat, or straight) lapped with the stem bar; stem bar above (svgRebarDims)
       const hookY=cF+2*db(rf.toe.size), lap=dw?(dw.lapProv>0?dw.lapProv:dw.lapReq):0, hook=rf.dwlEnd!=="straight";
       D.pline(L.bar,hook?[[xA-12*db(rf.stem.size),hookY],[xA,hookY],[xA,G.tf+lap]]:[[xA,hookY],[xA,G.tf+lap]],false);
-      const xA2=xA-db(rf.stem.size)-0.5; D.line(L.bar,xA2,G.tf+1,xA2,G.ySeat-2);
+      const xA2=xA-db(rf.stem.size)-0.5; D.line(L.bar,xA2,G.tf+1,xA2,G.off? G.ySh-cT : G.ySeat-2);   // ABSH: the stem bars continue up into the shelf
       lead(xA2,G.tf+G.hstem*0.62,G.B+0.5*k,G.tf+G.hstem*0.62,"A1 "+bl(rf.stem.size,rf.stem.sp)+" STEM, BACK FACE",0,hb);
       if(dw) lead(xA,hookY+0.3*(G.tf-hookY),G.B+0.5*k,G.tf+0.55*k,"A1 DOWEL "+(hook?"STD. 90° HOOK":"STRAIGHT")+", L_DH = "+(+dw.ldh).toFixed(1)+'" ('+(+dw.lAv).toFixed(1)+'" AVAIL.)\nLAP '+(+lap).toFixed(1)+'"'+(dw.lapProv>0?"":" REQ.")+" WITH THE STEM BARS",0,hb);
       if(dw&&lap>0) dV([xA,G.tf],[xA,G.tf+lap],G.xb+0.3*k,"LAP <>");
       // B1: backwall back face (semi-integral: the end diaphragm bars, Tab 10)
-      if(!G.semi){ const xB=G.xb-cT-db(rf.bw.size)/2-db(rf.stem.size); D.line(L.bar,xB,G.yTop-cT,xB,G.ySeat-12);
-        lead(xB,G.ySeat+G.hbw*0.7,G.B+0.5*k,G.yTop+0.25*k,"B1 "+bl(rf.bw.size,rf.bw.sp)+" BACKWALL, BACK FACE",0,hb); }
+      if(!G.semi){ const xB=G.off? G.xbwB-cT-db(rf.bw.size)/2 : G.xb-cT-db(rf.bw.size)/2-db(rf.stem.size); D.line(L.bar,xB,G.yTop-cT,xB,G.off? G.ySh-12 : G.ySeat-12);   // ABSH: at the inset back face, into the shelf
+        lead(xB,G.off? G.ySh+0.6*(G.yTop-G.ySh) : G.ySeat+G.hbw*0.7,G.B+0.5*k,G.yTop+0.25*k,"B1 "+bl(rf.bw.size,rf.bw.sp)+" BACKWALL, BACK FACE",0,hb); }
       // C1 toe bottom, D1 heel top (ℓ_d past the stem faces as Tab 5)
       const xC1=G.xb+(C.toeFlex?C.toeFlex.ld:0), xD0=G.Ltoe-(C.heelFlex?C.heelFlex.ld:0);
       D.line(L.bar,3,yC,Math.min(xC1,G.B-3),yC); D.line(L.bar,Math.max(xD0,3),yD,G.B-3,yD);
@@ -9858,12 +9881,12 @@ function abdwBuild(R){
         for(let y=G.tf+sp/2;y<G.ySeat-cT;y+=sp){ const xf=G.Ltoe+(G.xstF-G.Ltoe)*(y-G.tf)/G.hstem; dots(rf.stemH,xf+cT+d/2,y); dots(rf.stemH,xA2-db(rf.stem.size)/2-d/2,y); }
         const ym=G.tf+G.hstem*0.5, xf=G.Ltoe+(G.xstF-G.Ltoe)*(ym-G.tf)/G.hstem; lead(xf+cT,ym,-0.5*k,ym,"STEM HORIZ. "+bl(rf.stemH.size,rf.stemH.sp)+" EACH FACE",2,hb); }
       if(!G.semi&&rf.bwH&&rf.bwH.size!=="0"&&+rf.bwH.sp>0){ const sp=+rf.bwH.sp, d=db(rf.bwH.size);
-        for(let y=G.ySeat+sp/2;y<G.yTop-cT;y+=sp){ dots(rf.bwH,G.xbwF+cT+d/2,y); dots(rf.bwH,G.xb-cT-db(rf.bw.size)-db(rf.stem.size)-d/2,y); }
+        for(let y=G.ySeat+sp/2;y<G.yTop-cT;y+=sp){ dots(rf.bwH,G.xbwF+cT+d/2,y); dots(rf.bwH,G.off? G.xbwB-cT-db(rf.bw.size)-d/2 : G.xb-cT-db(rf.bw.size)-db(rf.stem.size)-d/2,y); }
         lead(G.xbwF+cT,G.ySeat+G.hbw*0.5,-0.5*k,G.ySeat+G.hbw*0.5,"BACKWALL HORIZ. "+bl(rf.bwH.size,rf.bwH.sp)+" EACH FACE",2,hb); }
       if(rf.ftgL&&rf.ftgL.size!=="0"&&+rf.ftgL.sp>0){ const sp=+rf.ftgL.sp, d=db(rf.ftgL.size);
         for(let x=cF+d/2;x<=G.B-cF;x+=sp){ dots(rf.ftgL,x,yC+db(rf.toe.size)/2+d/2); dots(rf.ftgL,x,yD-db(rf.heel.size)/2-d/2); }
         lead(cF+d/2,yD-db(rf.heel.size)/2-d/2,-0.5*k,G.tf+0.3*k,"FOOTING LONGIT. "+bl(rf.ftgL.size,rf.ftgL.sp)+" TOP AND BOTTOM",2,hb); }
-      rows.push(["A1","#"+rf.stem.size,(+rf.stem.sp)+'"',"STEM BACK FACE, VERT.; DOWEL ("+(hook?"HOOKED":"STRAIGHT")+")","5.2, 5.2A"]);
+      rows.push(["A1","#"+rf.stem.size,(+rf.stem.sp)+'"',"STEM BACK FACE, VERT.; DOWEL ("+(hook?"HOOKED":"STRAIGHT")+")"+(G.off?"; UP INTO THE SHELF":""),"5.2, 5.2A"]);
       if(G.semi) rows.push(["B1","#"+S.iab.hBar,(+S.iab.hSp)+'"',"END DIAPHRAGM HORIZ., EA. FACE (NOT DRAWN)","10.5A"]);
       else rows.push(["B1","#"+rf.bw.size,(+rf.bw.sp)+'"',"BACKWALL BACK FACE, VERT., LAPPED WITH A1","5.1"]);
       rows.push(["C1","#"+rf.toe.size,(+rf.toe.sp)+'"',"TOE, BOTTOM TRANSVERSE","5.3"],["D1","#"+rf.heel.size,(+rf.heel.sp)+'"',"HEEL, TOP TRANSVERSE","5.4"]);
@@ -9881,9 +9904,9 @@ function abdwBuild(R){
       lead(G.xb+G.ap.bS-Hs.cov,yT,G.xb+G.ap.bS+0.6*k,shY+0.9*k,"S1 #"+Hs.bar+" @ "+(+Hs.sp)+'" SHELF PRIMARY TIE',0,hb);
       if(n) lead(G.xb+G.ap.bS*0.5,yT-Math.min(zone,Hs.h-Hs.cov)*0.5,G.xb+G.ap.bS+0.6*k,shY-G.ap.hE-0.2*k,"S2 "+Hs.nT+" x #"+Hs.tieBar+" @ "+(+Hs.tieSp)+'" CLOSED TIES',0,hb);
       rows.push(["S1","#"+Hs.bar,(+Hs.sp)+'"',"SHELF, PRIMARY TIE",sec+(G.integ?"7":"8")],["S2","#"+Hs.tieBar,(+Hs.tieSp)+'"',"SHELF, "+Hs.nT+" CLOSED-TIE LEGS IN 2D_E/3",sec+(G.integ?"7":"8")]); }
-    if(G.ap&&Ds){ const da=BARS[A.aBar].db, dd=BARS[A.dBar].db, dt=BARS[A.tBar].db, yA=shY+(+A.cov)+da/2, x1=G.xb+slabShow;
-      D.line(L.bar,G.xb+2,yA,x1-1,yA); for(let x=G.xb+(+A.dSp)/2;x<x1-1;x+=+A.dSp) D.circle(L.bar,x,yA+da/2+dd/2,R2(dd/2));
-      const yTp=G.yTop-(+A.cov)-dt/2; D.line(L.bar,G.xb+2,yTp,x1-1,yTp); for(let x=G.xb+(+A.tSp)/2;x<x1-1;x+=+A.tSp) D.circle(L.bar,x,yTp-dt/2-dt/2,R2(dt/2));
+    if(G.ap&&Ds){ const da=BARS[A.aBar].db, dd=BARS[A.dBar].db, dt=BARS[A.tBar].db, yA=shY+(+A.cov)+da/2, x1=G.xs+slabShow;
+      D.line(L.bar,G.xs+2,yA,x1-1,yA); for(let x=G.xs+(+A.dSp)/2;x<x1-1;x+=+A.dSp) D.circle(L.bar,x,yA+da/2+dd/2,R2(dd/2));
+      const yTp=G.yTop-(+A.cov)-dt/2; D.line(L.bar,G.xs+2,yTp,x1-1,yTp); for(let x=G.xs+(+A.tSp)/2;x<x1-1;x+=+A.tSp) D.circle(L.bar,x,yTp-dt/2-dt/2,R2(dt/2));
       lead(x1-0.3*slabShow,yTp,x1+0.6*k,G.yTop+0.55*k,"P3 #"+A.tBar+" @ "+(+A.tSp)+'" TOP, EACH WAY',0,hb);
       lead(x1-0.5*slabShow,yA,x1+0.6*k,G.yTop+0.2*k,"P1 #"+A.aBar+" @ "+(+A.aSp)+'" BOTTOM, MAIN\nP2 #'+A.dBar+" @ "+(+A.dSp)+'" BOTTOM, DISTRIB.',0,hb);
       rows.push(["P1","#"+A.aBar,(+A.aSp)+'"',"APPR. SLAB, BOTTOM MAIN (ROADWAY)",sec+(G.integ?"8":"9")],["P2","#"+A.dBar,(+A.dSp)+'"',"APPR. SLAB, BOTTOM DISTRIB. (TRANSV.)",sec+(G.integ?"8":"9")],["P3","#"+A.tBar,(+A.tSp)+'"',"APPR. SLAB, TOP EACH WAY (S&T)",sec+(G.integ?"8":"9")]); }
