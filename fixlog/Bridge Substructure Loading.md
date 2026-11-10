@@ -2812,3 +2812,62 @@ function listTables() {
   - Report worked-step labels still read "M_t". `shared/report.js` prints step labels with `esc()`, so a shared-file change is needed.
   - Geometry labels at 390 px are still about 3–5 px (planned restyle).
 - **Other copies:** none.
+
+## 2026-11-10 — PR: fix/bsl-inputcheck (PR #1399: https://github.com/mlococo88/All-Structural/pull/1399) — input check: invalid inputs highlighted, results blocked (SLIC; engineer request 2026-11-10, the Steel Bridge rule of #1283)   [no computed value changes for valid inputs; invalid inputs now block the results]
+- **Where (all in `Bridge Substructure Loading.html`):**
+  - **New block** at the end of the first `<script>`, just before `</script>\n<script>\n/* ---------- start ---------- */`. It contains:
+    - `let IC_LIST = {}`;
+    - `const IC = (function () { … })()`: `RULES` (one row per numeric input: tab, path, label, unit, range, `when` mirroring the input pane), `collect()`, `test()`, `rangeText()`, `banner()`, `rangeItems()`;
+    - `(function slicWire() { … })()`. It wraps these functions:
+      - `markBad`: field marks, tab and unit counts, Derived box, totals, "Suggested" and the Hand-offs note;
+      - `recompute`: calls the marks after;
+      - `listTables`: keeps the invalid list text;
+      - `renderTab`: the blocked view, Manual excepted;
+      - `slrRender`: the blocked Report;
+      - `renderStrip`: a 118 px placeholder;
+      - `paneProject`: adds the "Input checks" note `#icRanges`;
+      - `slxAdd`: adds the Report §1.4 "Input checks".
+    - It also adds:
+      - a window capture click listener that holds `btn-dxf`, `btn-print`, `btn-abx`, `btn-abx-send`, `btn-abx-hf`, `btn-fdx`, `fdx-send`, `fdx-export` and `v3-png`;
+      - document listeners for the `[data-icgo]` / `[data-icranges]` links and the list `input` / `change` events;
+      - `window.SubLoadsInputCheck`.
+  - **`geo()`:**
+    - before: `` E.push(`Support ${k + 1}: skew must be between −60° and 60°.`) ``
+    - after: `` E.push(`${(P.units[k] && P.units[k].name) || `Support ${k + 1}`}: skew must be between −60° and 60°.`) ``
+    - Text only. The range is unchanged.
+  - **`listTables()`:** the column spec `{ label: sym, unit: 'ft', min: 0, minExclusive: true, width: '6.5em' }` gains `lenient: true`. The tool already read "12ft" as 12; the cell now warns instead of showing an error.
+  - **HANDOFF.md** §4.5 and the SubLoads foundation loads sender: one sentence each on the held sends.
+- **Ranges:** the table in the PR (also generated on the Project tab and in Report §1.4 from `RULES`).
+- **Provisions:**
+  - No formula, factor or reference is changed.
+  - The C_H bound 1.05–1.25 follows AASHTO LRFD 10th Ed. 3.14.7, as in the existing field title.
+- **Check case:**
+  - Default project, Pier 1 Strength I max axial at the bottom of the footing: 3,494.163 kip before and after.
+  - With cap width −4.5 ft, main showed 3,400.6 kip silently. The branch shows "Units › Pier 1 › Cap width (normal to line): must be greater than 0 ft (entered −4.5)" and no results.
+  - Main-vs-branch probe (`tests/smoke/bsl-inputcheck.mjs`, `origin/main` by `git archive`):
+    - 5 projects, 305 items (`combine`, `comboComps`, `MODEL.C`, the abutment payload, every output tab of every unit, the strip);
+    - 0 differences;
+    - the Report gains only §1.4 (7 lines).
+- **Saved data (§5):** none changed. The invalid list text is held in memory only. Old projects with invalid values open, show the errors and keep the values.
+- **Decisions (pending engineer review):**
+  1. The ranges in the table.
+  2. Blank is an error unless the label or note gives it a meaning; reaction cells: blank = 0.
+  3. Cross checks: T_Min < T_Max; a speed is required with a curve radius; S_a all 22 or none; β < φ.
+  4. A blank vessel impact elevation, lanes = 0, negative unit μ and DAF ≤ 0 become errors.
+  5. Sends, DXF, Print and Export abutments are held (block, not warn); pulls work.
+  6. Invalid list text is not saved.
+  7. The Derived box, totals and suggested lanes are hidden while blocked.
+- **`nz || default` reported (entered 0 legitimate, overwritten; not changed):**
+  - `waterCase` scour El. 0 → ground;
+  - `gSoil` 0 → 0.120;
+  - earth-load γ 0 → the Table 3.4.1-2 values;
+  - `gEHEQ` 0 → 1;
+  - `plP` 0 → 0.075.
+  - The others (`wc`, `fc`, `deckFc`, `Ifac`, `CDsup`/`CDsub`, `Gf`, `alpha`, `iceB`, `CH`, `gamma`, `hEQr`) are invalid at 0 and are now input errors.
+- **Raised, not changed:**
+  - `openProject` renders before `recompute()`. It throws when the new project has fewer supports and Summary is shown; Import then says "not a readable JSON file".
+  - An abutment with Foundation "None" gives NaN SVG on the Earth loads tab and in the Report.
+- **Tests:**
+  - New: `tests/smoke/bsl-inputcheck.mjs`.
+  - Passing: `check-syntax`, `phone-layout --tool bsl`, `project-library --tool bsl`, `bsl-barge-collision`, `bsl-layout`, `geometry-handoff`, `abutment-rx-table`, `engine/run.mjs handoffs`.
+- **Other copies:** none.
