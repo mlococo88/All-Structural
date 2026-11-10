@@ -15,6 +15,7 @@
    (detail { input, output } px) so anything that sizes itself to its container redraws; the 3D views also watch their own box. */
 (function () {
   'use strict';
+  if (typeof document === 'undefined') return;   // loaded without a page (the Node engine tests): nothing to do (2026-11-10)
   const KEY = 'sbd2.splitRatio_v1', DEF = 0.33, MIN_IN = 300, MIN_OUT = 480, MQ = '(min-width:900px)';
   const S = { want: null, el: null, main: null, inp: null, out: null, dash: null, mq: null, raf: 0, lastOut: -1, user: false };
   const ls = () => { try { return window.localStorage; } catch (e) { return null; } };
