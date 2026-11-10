@@ -2671,3 +2671,28 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 - **How verified:** `node tests/lightpole-compare.mjs --a origin/main` (30 cases): results identical, **cable values identical** in all 16 cabled cases, drawings identical, 0 console errors; only the text lines above differ. Headless probe origin/main vs branch, 24 cases (IBC and LRFDLTS, pole, monopost, two-post, rectangular, constrained, flexible with p, deep, arms): text of every output tab (innerText and textContent), the input panel, the check panel and the Report: 432 files, 334 identical, 242,619 digit groups; the only removed digits are those of "review M4, 2026-11-07" and "open item N2" (and one tokenizer join of the added "§25.2.3." with the next step number "2"); the added digits are the note text (318-19, 10.3.1.2, 0.5, 1, 2, 5.0, 10, 5.12.9.5.2, 25.2.3, 7-16, 26.6-1, 7-22, 1.0, 0.95, 0.90, 0.85, 4, 15, 1806.3.3, 1.00 (φ), 10.4.2.1, 3.9.4.2). `node tests/check-syntax.mjs`; `node tests/engine/run.mjs lightpole` (43 passed); smoke `phone-layout --tool lp` (390 / 768 px, pass), `lightpole-anchor-handoff` (ALL PASS), `lightpole-signviews` (ALL PASS); 390 px: no horizontal scroll.
 - **Other copies:** none.
 - **Open items (not changed):** (1) citations still marked "verify" in the app text: wind-on-ice "ASCE 7-22 §10.5 → Ch. 26–29, verify" (cable worked note, Manual), sign panel ice volume "as read — verify" (sign ice note); the tool's wind basis is ASCE 7-16, so these are code-reference questions (§4), not wording. (2) N4: with the isolated-pole factor the constrained S₃ can reach 2 × 15 × the tabulated value; the stricter reading caps at 15 × (now stated on screen, item 9). (3) Earlier code comments with "Decision (pending engineer review)" (LPLB CSS, `lppShaftFlowMsg`, `kdComponents`, lts-engine slope) are not shown in the app and are left.
+
+## 2026-11-10 — PR: lightpole-ice-cite (PR #1324: https://github.com/mlococo88/All-Structural/pull/1324) — wind-on-ice and sign panel ice volume cite ASCE 7-16 Ch. 10; "verify" removed   [§4 code-reference text only; no result, cable value, saved key or format change]
+
+Engineer's decision 2026-11-10 (the tool's basis is ASCE 7-16). This closes open item (1) of the entry above.
+- **Source:** `structural_references/ASCE 7-16.pdf`, printed pp. 70–71: §10.4.1 (Eq. 10.4-1 to 10.4-3, 0.8 for vertical plates), §10.4.6 (Eq. 10.4-5), §10.5, §10.5.2 and §10.5.5. The PDF is truncated and will not open in a viewer, so its content streams were decompressed and read. In Eq. 10.4-2 the symbol-font glyph before t_d is the same glyph as in A_s = π r² (Eq. 10.4-3), so Eq. 10.4-2 reads V_i = π t_d A_s.
+- **Before / After (`Light Pole and Sign Post.html`):**
+  1. Cables, `qWI` comment: `// wind-on-ice, WITH gust G (ASCE 7-22 §10.5 → Ch. 26–29, verify)` → `// wind-on-ice, WITH gust G (ASCE 7-16 §10.5 → Ch. 26–31; G per §26.11)`.
+  2. Mast strip comment: `(ASCE 7-22 §10.5 → Ch. 26–29, verify).` → `(ASCE 7-16 §10.5 → Ch. 26–31; G per §26.11).`
+  3. Sign ice comment: `Ice volume per §10.4.1 (flat plates): the area of one side × t_d × 0.8 for a vertical plate` / `// (as read; verify), t_d at` → `Ice volume per ASCE 7-16 §10.4.1 (flat plates, Eq. 10.4-2): the area of one side × t_d × 0.8 for a` / `// vertical plate (taken without the factor π printed in Eq. 10.4-2), t_d at`.
+  4. Fixtures, `qzi` comment: `(ASCE 7-22 §10.5, verify)` → `(ASCE 7-16 §10.5 → Ch. 26–31)`.
+  5. `renderManual()`, "Wind-on-ice:" item: `(ASCE 7-22 §10.5 refers the wind load to Chapters 26–29, verify).` → `(ASCE 7-16 §10.5 refers the wind load on ice-covered structures to Chapters 26 through 31; G per §26.11).`
+  6. `cableWorkedHTML()` (Loading tab and Report): `(ASCE 7-22 §10.5 → Ch. 26–29, verify).` → `(ASCE 7-16 §10.5 → Ch. 26–31; G per §26.11).`
+  7. `signWindWorkedHTML()` (Loading tab and Report), step: `ref('ASCE 7-22 §10.4.1, §10.4.6, §10.5')` → `ref('ASCE 7-16 §10.4.1, §10.4.6, §10.5')`.
+  8. `signWindWorkedHTML()`, the "Panel ice volume" note: `'per §10.4.1 for a flat plate (one side × t<sub>d</sub> × 0.8 for a vertical plate, as read — verify);'` → `'per ASCE 7-16 §10.4.1 for a flat plate (Eq. 10.4-2, A<sub>s</sub> = area of one side, × 0.8 permitted for a vertical plate); the tool takes V<sub>i</sub> = 0.8A<sub>s</sub>t<sub>d</sub>, without the factor π printed in Eq. 10.4-2;'`.
+- **Check case (sign1, unchanged):** t_d = 0.456 in. W_i,panel = 56(0.8)(72.0)(0.456/12) = 122.4 lb. F_A,i = 3.98(1.763)(73.37) = 515 lb. Cable values: identical.
+- **How verified:**
+  - `node tests/lightpole-compare.mjs` (30 cases, exact): results, cable values and drawings identical; only these text lines differ; 0 console errors.
+  - Report tab (`#lprHost`), pole and sign modes: only these lines differ.
+  - `check-syntax` passes. `phone-layout --tool lp --w 390` passes.
+- **Decision (pending engineer review), open calc items (not changed, §4):**
+  1. Eq. 10.4-2 includes π and the tool omits it: sign1 panel ice 122.4 lb, or 384.6 lb with π.
+  2. ASCE 7-16 §10.5.5 sets C_f = 1.2 for iced cables; the tool uses C_f,cable (default 1.1).
+  3. §10.5.2 takes C_f from the sign dimensions including ice; the tool keeps the bare-panel C_f.
+  4. The other "ASCE 7-22 Ch. 10" citations (scope line, ice inputs, "Ice on signs" flag, t_d step "ASCE 7-22 §10.4.6") are not changed.
+- **Saved data:** none changed. **Other copies:** none.
