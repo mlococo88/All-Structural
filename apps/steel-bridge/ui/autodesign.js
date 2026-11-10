@@ -159,7 +159,9 @@
      (the ratio is of the enforced checks; the flag shows the largest warned ratio so it is not hidden) and in the What governs column */
   const wFlag = c => (c.propWarns || []).length ? ` <span class="ad-warn" title="${esc(c.propWarns.map(w => `${w.label}: ${fmt(w.r, 3)}`).join('; '))}">WARNING ${fmt(Math.max(...c.propWarns.map(w => w.r)), 3)}</span>` : '';
   const wTxt = c => (c.propWarns || []).length ? `; <span class="ad-warn">WARNING</span> ${c.propWarns.map(w => esc(`${w.label} ${fmt(w.r, 3)}`)).join('; ')}` : '';
-  const govTxt = g => g ? `${esc(g.mod)} ${esc(g.id)}${g.x != null ? `, x = ${fmt(g.x, 2)} ft` : ''}${g.gl ? `, ${esc(g.gl)}` : ''}` : '—';
+  // SBDIA (2026-11-10): with a diaphragm as the intermediate bracing the module reads "diaphragms" (display only; DIA set by render)
+  let DIA = false; const modTxt = m => DIA && m === 'cross-frames' ? 'diaphragms' : m;
+  const govTxt = g => g ? `${esc(modTxt(g.mod))} ${esc(g.id)}${g.x != null ? `, x = ${fmt(g.x, 2)} ft` : ''}${g.gl ? `, ${esc(g.gl)}` : ''}` : '—';
 const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R - o.L) > 1e-9 ? ' / ' + fmt(o.R, 2) : ''}` : 'as now'; };
   /* diffFrom(c, c1): what candidate c changes against candidate #1 (c1), in words, for the list's "Differs from #1" column (2026-11-02, display
      only): girder count, depth, overhangs, field splice stations, splice gage lines, web and flange plates (thicknesses, widths, cut points),
@@ -187,7 +189,7 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
     h += `<div class="tscroll"><table class="tbl ad-list"><thead><tr><th>#</th><th>N<sub>b</sub></th><th>D (in)</th><th>Weight (lb, all girders)</th><th>Cost ($)</th><th>Transitions</th><th>Splices</th><th>Gage lines</th><th>Overhang (ft)</th><th>Governing ratio</th><th class="lft">What governs</th><th class="lft">Differs from #1 in</th></tr></thead><tbody>
       <tr class="ad-cur"><td>now</td><td>${c0.L.nb}</td><td>${fmt(c0.L.D, 2)}</td><td>${fmt(c0.cost.w, 0)}</td><td>${fmt(c0.cost.total, 0)}</td><td>${c0.cost.nTr}</td><td>${c0.cost.nSpl}</td><td></td><td>${fmt(+(P.xs || {}).ohL, 2)}${Math.abs(+(P.xs || {}).ohR - +(P.xs || {}).ohL) > 1e-9 ? ' / ' + fmt(+(P.xs || {}).ohR, 2) : ''}</td><td>${c0.E ? fmt(c0.E.ratio, 3) : ''}</td><td class="lft">current design${c0.E && !c0.E.pass ? ' (fails the screen)' : ''}</td><td></td></tr>
       ${R.cands.map((c, i) => `<tr data-adsel="${i}"${i === S.sel ? ' class="sel"' : ''}><td>${i + 1}</td><td>${c.nb}</td><td>${fmt(c.D, 2)}</td><td>${fmt(c.cost.w, 0)}</td><td>${fmt(c.cost.total, 0)}</td><td>${c.nTr}</td><td>${c.nSpl}</td><td>${c.minLines || 'as set'}</td><td>${ohT(c.L)}</td>
-        <td class="${cls(c.ratio)}">${fmt(c.ratio, 3)}${wFlag(c)}</td><td class="lft">${c.gov && c.gov.tab ? `<a href="#" data-adgo="${esc(c.gov.tab)}" title="Open the ${esc(TABN[c.gov.tab] || '')} tab">${govTxt(c.gov)}</a>` : govTxt(c.gov)}${c.gov ? `: ${esc(c.gov.title)}` : ''}${wTxt(c)}</td><td class="lft">${i ? esc(diffFrom(c, R.cands[0])) : '—'}</td></tr>`).join('')}</tbody></table></div>
+        <td class="${cls(c.ratio)}">${fmt(c.ratio, 3)}${wFlag(c)}</td><td class="lft">${c.gov && c.gov.tab ? `<a href="#" data-adgo="${esc(c.gov.tab)}" title="Open the ${esc(DIA && c.gov.tab === 'cf' ? 'Diaphragms' : TABN[c.gov.tab] || '')} tab">${govTxt(c.gov)}</a>` : govTxt(c.gov)}${c.gov ? `: ${esc(c.gov.title)}` : ''}${wTxt(c)}</td><td class="lft">${i ? esc(diffFrom(c, R.cands[0])) : '—'}</td></tr>`).join('')}</tbody></table></div>
       <p class="note">Every candidate listed passed every module on the full check (the analysis with its own stiffness; flexure, shear and stiffeners, fatigue and studs, constructibility, cross-frames, field splices, rating, welds; its details sized first)${R.cands.some(c => (c.propWarns || []).length) ? ', except the limits set to "as warning only" on the input tab: a candidate with a <span class="ad-warn">WARNING</span> misses one of them (the span-to-depth guidance, AASHTO LRFD 10th Ed. Art. 2.5.2.6.3, or a 6.10.2 proportion limit); its governing ratio is that of the checks enforced, and the flag gives the largest warned ratio' : ''}. ${R.rejected.length ? `${R.rejected.length} finalist(s) failed the full check and were dropped (below).` : ''}${(R.twins || []).length ? ` ${R.twins.length} one-gage-line design${R.twins.length > 1 ? 's' : ''} not listed: the same plates, transitions and splices as a listed design with the splices' own gage lines, and no saving in weight or cost (N<sub>b</sub> ${R.twins.map(t => `${t.nb}, D ${fmt(t.D, 2)} in`).join('; ')}).` : ''} Click a row for its plates and steps.</p></div></section>`;
     const c = R.cands[S.sel];
     if (c) {
@@ -230,7 +232,7 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
       <tr class="ad-grp"><th colspan="3" class="lft">Governing ratio of each module (click: the tab with its steps)</th></tr>
       ${mods.map(m => { const a = modR(A, m), b = modR(B, m), f = q => q ? `${q.tab ? `<a href="#" data-adgo="${esc(q.tab)}">` : ''}${isFinite(q.r) ? fmt(q.r, 3) : 'fail'} ${esc(q.id)}${q.tab ? '</a>' : ''}` : '—';
         const ra = a ? a.r : NaN, rb = b ? b.r : NaN, cls = (x, y) => !isFinite(x) || !isFinite(y) || Math.abs(x - y) < 1e-9 ? '' : x < y ? ' class="ad-better"' : ' class="ad-worse"';
-        return `<tr><td class="lft">${esc(MODN[m] || m)}</td><td${cls(ra, rb)}>${f(a)}</td><td${cls(rb, ra)}>${f(b)}</td></tr>`; }).join('')}
+        return `<tr><td class="lft">${esc(DIA && m === 'cross-frames' ? 'Diaphragms' : MODN[m] || m)}</td><td${cls(ra, rb)}>${f(a)}</td><td${cls(rb, ra)}>${f(b)}</td></tr>`; }).join('')}
       <tr class="ad-grp"><th colspan="3" class="lft">Details</th></tr>
       ${[...new Set([...((A.det || {}).rows || []), ...((B.det || {}).rows || [])].map(r => r.label))].map(lb => { const v = X => { const r = ((X.det || {}).rows || []).find(q => q.label === lb); return r ? esc(r.value) : X.cur ? 'as entered' : 'unchanged (as entered)'; }; return `<tr><td class="lft">${esc(lb)}</td><td>${v(A)}</td><td>${v(B)}</td></tr>`; }).join('')}
       </tbody></table></div>
@@ -313,7 +315,7 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
   }
   /* render(host, ctx): the Auto design output tab (the results) */
   function render(host, ctx) {
-    css(); const P = ctx.P;
+    css(); const P = ctx.P; DIA = !!(window.SBDFramingUI && window.SBDFramingUI.isDia && window.SBDFramingUI.isDia(P));
     let h = `<p class="note"><a href="#" data-adin="ad">Settings: Auto design input tab</a> (mode, objective, prices, limits, the design variables with Auto / Lock / Range, Run).</p>`;
     if (S.running || S.prog) h += `<section class="sec"><div class="secBody"><div class="fRow"><button type="button" id="ad_stop2"${S.running ? '' : ' disabled'}>Stop</button></div>${bar()}</div></section>`;
     if (S.err) h += `<div class="alert err">${esc(S.err)}</div>`;

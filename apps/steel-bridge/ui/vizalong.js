@@ -14,7 +14,10 @@
                    boxes: [{ x0, x1, cls: gov | sel }] (outlines in the web), welds (true: the flange-to-web weld lines), above: [part], below: [part] }
                  parts (from the girder outward): { t: 'flags', items: [{ x, y (as marks), text, cls, reg }] }, { t: 'dims', items: [{ x0, x1, texts: [first that fits] }] },
                    { t: 'boxes', items: [{ x0, x1, texts }] }, { t: 'cells', label, items: [{ x0, x1, cls, top, bottom, sel, reg }], note }
-               { kind: 'band', label, items: [{ x0, x1, cls, text, sel, reg }], flag: { x, text, cls } }
+               { kind: 'band', label, items: [{ x0, x1, cls, text, sel, reg }], flag: { x, text, cls }, areas: [{ x0, x1, reg }] (click areas), selBox: { x0, x1 } }
+               { kind: 'text', lines: [text] }
+               elev also takes areas: [{ x0, x1, pad (px), reg }] (click / read-out areas over the web), webLabels: [{ x0, x1, text, cls }], marks' dx (px) and small;
+               chart also takes rings: [{ x, y }] (the selected point)
                { kind: 'chart', key, label, h, series: [{ key, name, pts: [[x, y, cls]], kind: line | points, ci (colour 0..5), dash, cls }], hidden: { key: true },
                    yr, cap, fy (tick format), limits: [{ y, label }], labels: [{ x, y, text }], gov: [{ x, y, text }], links: [{ x, y0, y1 }], supNames: [text] }
          R = { svg, regs: [{ x0, y0, x1, y1, v, lab, pri }] (px; click and read-out areas), rows: [{ key, y0, y1, yv(py) }], X(ft), FT(px), top, axisY, W, H }
@@ -105,8 +108,9 @@ svg.va-mini{display:inline-block;width:24px;height:8px;vertical-align:middle;} .
     items.map((q, i) => i).sort((a, b) => items[b].lx - items[a].lx || a - b).forEach(i => { const q = items[i];
       if (q.lx + q.w > xmax) { q.bx0 = q.lx - q.w; q.flip = true; } else q.bx0 = q.lx; q.bx1 = q.bx0 + q.w;
       for (let r = 0; r < 60; r++) {
-        const clash = placed.some(p => (p.row === r && q.bx0 < p.bx1 + gap && q.bx1 + gap > p.bx0) || (p.row < r && q.lx > p.bx0 - 2 && q.lx < p.bx1 + 2) || (p.row > r && p.lx > q.bx0 - 2 && p.lx < q.bx1 + 2));
-        if (!clash) { q.row = r; placed.push(q); break; } } });
+        const clash = placed.some(p => (p.row === r && q.bx0 < p.bx1 + gap && q.bx1 + gap > p.bx0) || (Math.abs(p.lx - q.lx) > 1 && ((p.row < r && q.lx > p.bx0 - 2 && q.lx < p.bx1 + 2) || (p.row > r && p.lx > q.bx0 - 2 && p.lx < q.bx1 + 2))));
+        if (!clash) { q.row = r; placed.push(q); break; } }
+      if (q.row == null) { q.row = placed.length ? Math.max(...placed.map(p => p.row)) + 1 : 0; placed.push(q); } });   // leaders at one x share their line
     return items.length ? Math.max(...items.map(q => q.row || 0)) + 1 : 0;
   }
 
@@ -138,12 +142,12 @@ svg.va-mini{display:inline-block;width:24px;height:8px;vertical-align:middle;} .
     const hasFs = (g.spl || []).length > 0, segAt = x => segs.find(s => x >= s.x0 - 1e-9 && x <= s.x1 + 1e-9) || (x < segs[0].x0 ? segs[0] : segs[segs.length - 1]);
     // the parts above and below: heights first (flags need their rows)
     const prep = (parts, dir) => (parts || []).filter(Boolean).map(p => { const q = { p };
-      if (p.t === 'flags') { p.items.forEach(it => { it.lx = X(it.x); it.w = tw(it.text, 11) + 4; }); q.n = placeFlags(p.items, c.xmax); q.h = q.n ? q.n * 15 + 6 : 0; }
+      if (p.t === 'flags') { p.items.forEach(it => { it.lx = X(it.x) + (it.dx || 0); it.w = tw(it.text, 11) + 4; }); q.n = placeFlags(p.items, c.xmax); q.h = q.n ? q.n * 15 + 6 : 0; }
       else if (p.t === 'dims') q.h = 22; else if (p.t === 'boxes') q.h = 26; else if (p.t === 'cells') q.h = 14 + 30 + (p.label ? 16 : 0) + (p.note ? 14 : 0); else q.h = 0; q.dir = dir; return q; });
     const ab = prep(row.above, -1), be = prep(row.below, 1), hAb = ab.reduce((s, q) => s + q.h, 0), hBe = be.reduce((s, q) => s + q.h, 0);
     const deckTop = y0 + hAb + (hasFs ? 14 : 4), yTopFl = deckTop + dk + (dk ? 2 : 0), yb = yTopFl + tmax + webMax;   // yb: the bottom of the deepest web (all webs sit on one line, as the CAD elevation)
     const yW = s => yb - s.D * kv, out = c.out, bpx = s => fp(s.botT), bmax = Math.max(...segs.map(bpx));
-    const yAt = (x, yIn) => { const s = segAt(x); if (yIn === 'mid' || yIn == null) return yb - s.D * kv / 2; if (yIn < 0) return yb + bpx(s) * Math.min(1, -yIn / (s.botT || 1));
+    const yAt = (x, yIn) => { const s = segAt(x); if (yIn === 'mid' || yIn == null) return yb - s.D * kv / 2; if (yIn === 'top') return yW(s); if (yIn < 0) return yb + bpx(s) * Math.min(1, -yIn / (s.botT || 1));
       if (yIn > s.D) return yW(s) - fp(s.topT) * Math.min(1, (yIn - s.D) / (s.topT || 1)); return yb - yIn * kv; };
     // deck, girder (web, ratio fill, flanges), plate breaks, cross-frames, stiffeners, welds, splices, supports
     if (dk) out.push(R(X(g.L0), deckTop, X(g.L1) - X(g.L0), dk, 'dk'));
@@ -164,12 +168,15 @@ svg.va-mini{display:inline-block;width:24px;height:8px;vertical-align:middle;} .
       if (u) out.push(T((a + b) / 2, yb + bmax + 20, esc(u), 'xs', 'middle')); });
     if (row.webText !== false) segs.forEach(s => { const t = `${fr(s.D)} × ${fr(s.tw)}`, a = X(s.x0), b = X(s.x1); if (tw(t, 10.5) <= (b - a) - 8 && s.D * kv > 16) out.push(T((a + b) / 2, yb - s.D * kv / 2 + 4, esc(t), 'xs halo', 'middle')); });
     // girder regions and the read-out of the plates: the whole girder (the builder's at(x) answers)
-    (row.marks || []).forEach(q => { const x = X(q.x), yy = yAt(q.x, q.y), cl = 'mk-' + (q.cls || 'na');
-      if (q.shape === 'diamond') out.push(PG([[x, yy - 5.5], [x + 5.5, yy], [x, yy + 5.5], [x - 5.5, yy]], cl)); else out.push(C(x, yy, 4.5, cl));
+    // click / read-out areas over the web (panels, stiffeners: pad px each side) and texts centred in the web where they fit (a panel's ratio)
+    (row.areas || []).forEach(q => { const s = segAt(Math.min(Math.max((q.x0 + q.x1) / 2, g.L0 + 1e-6), g.L1 - 1e-6)), pd = q.pad || 0; reg(c, q.reg, X(q.x0) - pd, yW(s), X(q.x1) + pd, yb); });
+    (row.webLabels || []).forEach(q => { const s = segAt((q.x0 + q.x1) / 2), a = X(q.x0), b = X(q.x1); if (tw(q.text, 10.5) <= (b - a) - 4 && s.D * kv > 14) out.push(T((a + b) / 2, yb - s.D * kv * 0.3, esc(q.text), 't-' + (q.cls || 'na') + ' b halo', 'middle', ' font-size="10.5"')); });
+    (row.marks || []).forEach(q => { const x = X(q.x) + (q.dx || 0), yy = yAt(q.x, q.y), cl = 'mk-' + (q.cls || 'na');
+      if (q.shape === 'diamond') out.push(PG([[x, yy - 5.5], [x + 5.5, yy], [x, yy + 5.5], [x - 5.5, yy]], cl)); else out.push(C(x, yy, q.small ? 3.2 : 4.5, cl));
       if (q.gov) out.push(C(x, yy, 8, 'ring-gov')); if (q.sel) out.push(C(x, yy, q.gov ? 11 : 8.5, 'ring-sel'));
       reg(c, q.reg, x - 7, yy - 7, x + 7, yy + 7); });
     // parts above (upward from the deck / FS tags) and below (downward from the supports' labels)
-    const yUp0 = deckTop - (hasFs ? 14 : 4), yDn0 = yb + bmax + 26;
+    const yUp0 = deckTop - (hasFs ? 14 : 4), yDn0 = yb + bmax + 30;
     const part = (q, yNear) => { const p = q.p, d = q.dir;   // yNear: the edge of the part next to the girder
       if (p.t === 'flags') { p.items.forEach(it => { const yb2 = yNear + d * (8 + it.row * 15) + (d < 0 ? 0 : 9), ym = yAt(it.x, it.y), cls = it.cls ? 't-' + it.cls : '';
           out.push(L(it.lx, ym + d * 6, it.lx, d < 0 ? yb2 + 3 : yb2 - 10, 'ld'), T(it.flip ? it.lx - 3 : it.lx + 3, yb2, sub(it.text), cls + ' halo', it.flip ? 'end' : null, ' font-size="11"'));
@@ -180,10 +187,12 @@ svg.va-mini{display:inline-block;width:24px;height:8px;vertical-align:middle;} .
       if (p.t === 'boxes') p.items.forEach(it => { const a = X(it.x0), b = X(it.x1), t = (it.texts || []).find(s => tw(s, 11) <= (b - a) * 0.92);
         out.push(R(a + 0.5, yy + 4, b - a - 1, 18, 'bx')); if (t) out.push(T((a + b) / 2, yy + 17, esc(t), 'm', 'middle', ' font-size="11"')); reg(c, it.reg, a, yy + 4, b, yy + 22); });
       if (p.t === 'cells') { let yc = yy; if (p.label) { out.push(T(c.left, yc + 11, esc(p.label), 'xs')); yc += 16; }
-        const yC = yc + 15; p.items.forEach(it => { const a = X(it.x0), b = X(it.x1); out.push(R(a, yC, b - a, 14, 'c-' + (it.cls || 'na')));
+        const yC = yc + 15, all = p.items.length > 1 && p.items.every(it => it.sel);
+        if (all) out.push(R(X(p.items[0].x0) - 2, yC - 2, X(p.items[p.items.length - 1].x1) - X(p.items[0].x0) + 4, 18, 'ring-sel'));
+        p.items.forEach(it => { const a = X(it.x0), b = X(it.x1); out.push(R(a, yC, b - a, 14, 'c-' + (it.cls || 'na')));
           if (it.top && tw(it.top, 10.5) <= (b - a) * 0.96) out.push(T((a + b) / 2, yC - 3, esc(it.top), 'xs', 'middle'));
           if (it.bottom && tw(it.bottom, 10.5) <= (b - a) * 0.96) out.push(T((a + b) / 2, yC + 25, esc(it.bottom), 'xs', 'middle'));
-          if (it.sel) out.push(R(a - 1, yC - 1, b - a + 2, 16, 'ring-sel')); reg(c, it.reg, a, yC - 12, b, yC + 28); });
+          if (it.sel && !all) out.push(R(a - 1, yC - 1, b - a + 2, 16, 'ring-sel')); reg(c, it.reg, a, yC - 12, b, yC + 28); });
         if (p.note) out.push(T(c.W - c.right, yC + 42, esc(p.note), 'xs', 'end')); } };
     let yu = yUp0; ab.forEach(q => { part(q, yu); yu -= q.h; });
     let yd = yDn0; be.forEach(q => { part(q, yd); yd += q.h; });
@@ -196,6 +205,8 @@ svg.va-mini{display:inline-block;width:24px;height:8px;vertical-align:middle;} .
     (row.items || []).forEach(it => { const a = X(it.x0), b = X(it.x1); out.push(R(a, yy, b - a, h, 'c-' + (it.cls || 'na')));
       if (it.text && tw(it.text, 10.5) <= (b - a) - 6) out.push(T((a + b) / 2, yy + 13, esc(it.text), 't-' + (it.cls || 'na') + ' b', 'middle', ' font-size="10.5"'));
       if (it.sel) out.push(R(a - 1, yy - 2, b - a + 2, h + 4, 'ring-sel')); reg(c, it.reg, a, yy, b, yy + h); });
+    (row.areas || []).forEach(q => reg(c, q.reg, X(q.x0), yy, X(q.x1), yy + h));
+    if (row.selBox) out.push(R(X(row.selBox.x0) - 1, yy - 2, X(row.selBox.x1) - X(row.selBox.x0) + 2, h + 4, 'ring-sel'));
     let hh = h + 4;
     if (row.flag && fin(row.flag.x)) { const x = X(row.flag.x), w = tw(row.flag.text, 11), fl = x + 4 + w > c.xmax; out.push(L(x, yy + h, x, yy + h + 12, 'ld'), T(fl ? x - 3 : x + 3, yy + h + 22, sub(row.flag.text), 't-' + (row.flag.cls || 'gov') + ' halo', fl ? 'end' : null, ' font-size="11"')); hh += 22; }
     return { h: hh, top: yy, bot: yy + h };
@@ -205,7 +216,7 @@ svg.va-mini{display:inline-block;width:24px;height:8px;vertical-align:middle;} .
   KIND.chart = (row, c, y0) => {
     const X = c.X, out = c.out, nar = c.nar, h = row.h || (nar ? 130 : 170), names = row.supNames ? 16 : 0, top = y0 + 6 + names, bot = top + h, xa = c.left, xb = c.W - c.right;
     const vals = []; (row.series || []).forEach(s => s.pts.forEach(p => { if (fin(p[1])) vals.push(row.cap != null ? Math.min(p[1], row.cap) : p[1]); })); (row.limits || []).forEach(q => { if (fin(q.y)) vals.push(q.y); });
-    let yr = row.yr; if (!yr) { const lo = Math.min(0, ...(vals.length ? vals : [0])), hi = Math.max(...(vals.length ? vals : [1]), lo + 1e-9), st0 = niceStep(hi - lo, nar ? 3 : 4); yr = [Math.floor(lo / st0 - 1e-9) * st0, Math.ceil(hi / st0 - 1e-9) * st0]; if (yr[1] <= yr[0]) yr = [yr[0], yr[0] + st0]; }
+    let yr = row.yr; if (!yr) { const lo = Math.min(0, ...(vals.length ? vals : [0])), hi = Math.max(...(vals.length ? vals : [1]), lo + 1e-9), st0 = niceStep(hi - lo, nar ? 3 : 4); yr = [Math.floor(lo / st0 + 1e-9) * st0, Math.ceil(hi / st0 - 1e-9) * st0]; if (yr[1] <= yr[0]) yr = [yr[0], yr[0] + st0]; }
     const Y = v => bot - (v - yr[0]) / (yr[1] - yr[0]) * h, st = row.ystep || niceStep(yr[1] - yr[0], nar ? 3 : 4), fy = row.fy || (v => fmtT(v, st));
     for (let t = Math.ceil(yr[0] / st - 1e-9) * st; t <= yr[1] + 1e-9; t += st) out.push(L(xa, Y(t), xb, Y(t), 'gr'), T(xa - 5, Y(t) + 3.5, fy(t), 'xs', 'end'));
     out.push(L(xa, top, xa, bot, 'ax'), L(xa, bot, xb, bot, 'ax'));
@@ -229,11 +240,12 @@ svg.va-mini{display:inline-block;width:24px;height:8px;vertical-align:middle;} .
     const placed = []; (row.labels || []).slice().sort((a, b) => b.x - a.x).forEach(q => { if (!fin(q.y)) return; const x = X(q.x) + 3, w = tw(q.text, 10.5), y = Y(Math.min(q.y, cap)) - 7; let yb2 = y;
       for (let k = 0; k < 30; k++) { yb2 = y - k * 12; const bx = [x, yb2 - 10, x + w, yb2 + 2]; if (!placed.some(b => bx[2] + 2 > b[0] && bx[0] < b[2] + 2 && bx[3] > b[1] && bx[1] < b[3])) { placed.push(bx); break; } }
       if (yb2 < y - 1) out.push(L(x - 3, y + 2, x - 3, yb2 + 1, 'ld')); out.push(T(x, yb2, esc(q.text), 'xs halo')); });
+    (row.rings || []).forEach(q => { if (fin(q.y)) out.push(C(X(q.x), Y(Math.max(yr[0], Math.min(q.y, cap))), 8, 'ring-sel')); });
     (row.gov || []).forEach(q => { if (!fin(q.y)) return; const x = X(q.x), yy = Y(Math.max(yr[0], Math.min(q.y, cap))); out.push(C(x, yy, 7, 'ring-gov')); });
     if (row.govLabels && row.govLabels.length) { const its = row.govLabels.map(q => ({ ...q, lx: X(q.x), w: tw(q.text, 11) + 4 })); const n = placeFlags(its, c.xmax);
       its.forEach(it => { const yb2 = top - 8 - it.row * 15 - names; out.push(L(it.lx, Y(Math.max(yr[0], Math.min(it.y, cap))) - 8, it.lx, yb2 + 3, 'ld'), T(it.flip ? it.lx - 3 : it.lx + 3, yb2, sub(it.text), 't-gov halo', it.flip ? 'end' : null, ' font-size="11"')); });
       void n; }
-    (row.regs || []).forEach(q => reg(c, q, X(q.x0), top, X(q.x1), bot));
+    (row.regs || []).forEach(q => reg(c, q, X(q.x0), fin(q.y1v) ? Math.max(top, Y(Math.min(q.y1v, cap)) - 8) : top, X(q.x1), fin(q.y0v) ? Math.min(bot, Y(q.y0v) + 8) : bot));   // y0v / y1v: the value range of the area (else the plot height)
     return { h: h + 8 + names, top, bot, yv: py => yr[0] + (bot - py) / h * (yr[1] - yr[0]) };
   };
   /* a chart with flags above it: the flags need room above the plot, so they are measured first and the plot is moved down by their rows */
@@ -242,6 +254,9 @@ svg.va-mini{display:inline-block;width:24px;height:8px;vertical-align:middle;} .
     const its = row.govLabels.map(q => ({ lx: c.X(q.x), w: tw(q.text, 11) + 4 })), n = placeFlags(its, c.xmax), dy = n * 15 + 4, q = chart0(row, c, y0 + dy);
     return { ...q, h: q.h + dy };
   };
+
+  /* lines of text under the rows (the checks that have no location) */
+  KIND.text = (row, c, y0) => { const ls = (row.lines || []).flatMap(t => wrapPx(t, c.W - c.left - c.right, 10.5)); ls.forEach((t, i) => c.out.push(T(c.left, y0 + 12 + i * 14, sub(t), 'xs'))); return { h: ls.length * 14 + 4 }; };
 
   /* ---------- category bars (horizontal): one row per item, the panels side by side when there is room ---------- */
   function hbars(sp, W) {

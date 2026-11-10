@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SBVZB (2026-11-10): Shear, Fatigue (both), Welds and Rating are data-viz cards (fitted, click areas, Download DXF = the old drawing).
 // Browser smoke test of the tab graphics B (engine/tabgraphics-b.js, ui/tabgraphics-b.js) in apps/steel-bridge/index.html, built-in project (with one field
 // splice), headless Chromium (tests/lib.mjs openPage). For each of the Shear & stiffeners, Fatigue & studs, Cross-frames, Welds, Field splices, Rating
 // tabs and the Report summary: calculate, the graphic appears (SVG with text and lines), the wheel zooms, a click on the graphic selects the tab's own
@@ -34,7 +35,19 @@ try {
       const sv = H.el, m = sv.getScreenCTM(), q = sv.createSVGPoint(); q.x = (r.x0 + r.x1) / 2 - ox; q.y = oy - (r.y0 + r.y1) / 2; const c = q.matrixTransform(m); return { x: c.x, y: c.y }; }, [name, k, i]);
     await p.mouse.click(pt2.x, pt2.y); await p.waitForTimeout(700);
   };
+  // DETC (2026-11-10): the detail drawings and the splice (shear-detail, shear-bearing, crossframe, weld-detail, splice) are option C cards (ui/gfxdet.js): an SVG fitted
+  // to the card (no zoom buttons, no viewer), shapes and texts drawn, Download DXF = the CAD drawing (handles[name].dxf(), the same text the download saves)
+  const commonDet = async (tab, name) => {
+    const s0 = `#out [data-gfxb="${name}"] .vk-det`; await p.waitForSelector(s0 + ' svg', { timeout: 240000 });
+    const info = await p.$eval(s0, r => ({ texts: r.querySelectorAll('svg text').length, shapes: r.querySelectorAll('svg line,svg polyline,svg polygon,svg circle,svg rect').length, zoom: r.querySelectorAll('.sdx-btns,.sdx-view').length,
+      w: r.querySelector('svg').getBoundingClientRect().width, cw: r.clientWidth }));
+    assert.ok(info.texts > 5 && info.shapes > 8 && info.zoom === 0 && info.w <= info.cw + 1, `${tab}/${name}: card ${JSON.stringify(info)}`);
+    const [dl] = await Promise.all([p.waitForEvent('download'), p.click(s0 + ' [data-vkdxf]')]); const txt = fs.readFileSync(await dl.path(), 'utf8');
+    assert.equal(txt, await p.evaluate(n => window.SBDTabGfxBUI.handles[n].dxf(), name), `${tab}/${name}: Download DXF = the CAD drawing`); assert.ok(/SECTION/.test(txt) && /EOF/.test(txt) && /S-ANNO-TEXT/.test(txt), `${tab}/${name}: DXF`);
+    done.push(`${tab}/${name}`); return txt;
+  };
   const common = async (tab, name, extra) => {   // zoom and DXF on the mounted graphic `name`
+    await p.waitForSelector(`#out [data-gfxb="${name}"] svg`, { timeout: 240000 }); if (await p.$(`#out [data-gfxb="${name}"] .vk-det`)) return commonDet(tab, name);
     await p.waitForSelector(gfx(name), { timeout: 240000 });
     const svgInfo = await p.$eval(gfx(name), s => ({ texts: s.querySelectorAll('text').length, shapes: s.querySelectorAll('line,polyline,polygon,circle').length }));
     assert.ok(svgInfo.texts > 8 && svgInfo.shapes > 20, `${tab}/${name}: drawn ${JSON.stringify(svgInfo)}`);
@@ -44,25 +57,39 @@ try {
     const txt = await p.evaluate(n => window.SBDTabGfxBUI.handles[n].dxf(), name); assert.ok(/SECTION/.test(txt) && /EOF/.test(txt) && /S-GRDR|S-ANNO-TEXT/.test(txt), `${tab}/${name}: DXF`);
     const dl = await p.$(`#out [data-gfxb="${name}"] [data-sbg="dxf"]`); assert.ok(dl, 'Download DXF button'); done.push(`${tab}/${name}`); return txt;
   };
+  // SBVZB (2026-11-10): shear, fatigue, fatigue-chart, welds and rating are data-viz cards (ui/vizalong.js): a fitted SVG (no zoom buttons), click areas in
+  // px (H.R.regs, value { k, i }), Download DXF = the old drawing (SharedDxf.download captured); tests/smoke/steel-bridge-dxf-unchanged.mjs checks it byte for byte
+  const VIZ = new Set(['shear', 'fatigue', 'fatigue-chart', 'welds', 'rating']);
+  const clickV = async (name, k, i) => { await p.evaluate(n => window.SBDTabGfxBUI.handles[n].el.scrollIntoView({ block: 'center' }), name); await p.waitForTimeout(100);
+    const pt = await p.evaluate(([n, k, i]) => { const H = window.SBDTabGfxBUI.handles[n], r = H.R.regs.find(q => q.v && q.v.k === k && q.v.i === i); if (!r) return null; const sv = H.el.querySelector('.vk-fig svg'), m = sv.getScreenCTM(), q = sv.createSVGPoint();
+      q.x = (r.x0 + r.x1) / 2; q.y = (r.y0 + r.y1) / 2; const c = q.matrixTransform(m); return { x: c.x, y: c.y }; }, [name, k, i]);
+    assert.ok(pt, `region ${k}:${i} of ${name}`); await p.mouse.click(pt.x, pt.y); await p.waitForTimeout(700); };
+  const commonV = async (tab, name) => { const sel = `#out [data-gfxb="${name}"] .va-card .vk-fig svg`; await p.waitForSelector(sel, { timeout: 240000 });
+    const info = await p.$eval(sel, s => ({ texts: s.querySelectorAll('text').length, shapes: s.querySelectorAll('line,polyline,polygon,circle,rect').length })); assert.ok(info.texts > 8 && info.shapes > 20, `${tab}/${name}: drawn ${JSON.stringify(info)}`);
+    assert.equal(await p.$(`#out [data-gfxb="${name}"] .sdx-btns`), null, `${tab}/${name}: no zoom buttons`);
+    await p.evaluate(() => { window.__dxf = []; window.__dl0 = window.__dl0 || window.SharedDxf.download; window.SharedDxf.download = t => window.__dxf.push(t); });
+    await p.$eval(`#out [data-gfxb="${name}"] [data-vadxf]`, b => b.click()); const txt = await p.evaluate(() => { window.SharedDxf.download = window.__dl0; return window.__dxf[0] || ''; }); assert.ok(/SECTION/.test(txt) && /EOF/.test(txt) && /S-GRDR|S-ANNO-TEXT/.test(txt), `${tab}/${name}: DXF`);
+    const bx = await p.locator(sel).boundingBox(); await p.mouse.move(bx.x + bx.width * 0.5, bx.y + bx.height * 0.5); await p.waitForTimeout(80);
+    done.push(`${tab}/${name}`); return txt; };
   const selRow = async (attr, val) => assert.ok(await p.$(`#out tr[${attr}="${val}"].sel`), `row ${attr}=${val} selected`);
 
   // AUTO (2026-11-09): an output tab runs itself when selected; settle() waits until it is no longer out of date and no run is pending
   const settle = (t = 240000) => p.waitForFunction(() => !document.querySelector('#out .alert.stale:not([hidden])') && !/Calculating|updating/.test((document.querySelector('#autoMsg') || {}).textContent || '') && !/Calculating/.test(((document.querySelector('#out') || {}).innerText || '').slice(0, 400)), null, { timeout: t });
   // ---- Shear & stiffeners
-  await p.click('#tabBar [data-otab="shear"]'); await settle(); const t1 = await common('shear', 'shear'); await common('shear', 'shear-detail');
-  assert.ok(/S-RATIO-OK/.test(t1) && /S-GRDR-STIF/.test(t1)); await clickRegion('shear', 'pan', 30); await selRow('data-sh', 'pan:30'); await common('shear', 'shear'); await clickRegion('shear', 'bs', 1); await selRow('data-sh', 'bs:1');
-  await clickRegion('shear', 'loc', 20); await selRow('data-sh', 'loc:20'); await shot('shear', '#out [data-gfxb="shear"]');
+  await p.click('#tabBar [data-otab="shear"]'); await settle(); const t1 = await commonV('shear', 'shear'); await common('shear', 'shear-detail'); await common('shear', 'shear-bearing');
+  assert.ok(/S-RATIO-OK/.test(t1) && /S-GRDR-STIF/.test(t1)); await clickV('shear', 'pan', 30); await selRow('data-sh', 'pan:30'); await commonV('shear', 'shear'); await clickV('shear', 'bs', 1); await selRow('data-sh', 'bs:1');
+  await clickV('shear', 'loc', 20); await selRow('data-sh', 'loc:20'); await shot('shear', '#out [data-gfxb="shear"]');
   // ---- Fatigue & studs
-  await p.click('#tabBar [data-otab="fat"]'); await settle(); await common('fat', 'fatigue'); await common('fat', 'fatigue-chart'); await clickRegion('fatigue', 'fa', 3); await selRow('data-fa', 'fa:3'); await clickRegion('fatigue-chart', 'fa', 5); await selRow('data-fa', 'fa:5'); await shot('fatigue-chart', '#out [data-gfxb="fatigue-chart"]'); await shot('fatigue', '#out [data-gfxb="fatigue"]');
+  await p.click('#tabBar [data-otab="fat"]'); await settle(); await commonV('fat', 'fatigue'); await commonV('fat', 'fatigue-chart'); await clickV('fatigue', 'fa', 3); await selRow('data-fa', 'fa:3'); await clickV('fatigue-chart', 'fa', 5); await selRow('data-fa', 'fa:5'); await shot('fatigue-chart', '#out [data-gfxb="fatigue-chart"]'); await shot('fatigue', '#out [data-gfxb="fatigue"]');
   // ---- Cross-frames
   await p.click('#tabBar [data-otab="cf"]'); const tcf = await common('cf', 'crossframe'); assert.ok(/S-GOV/.test(tcf), 'the governing members are on S-GOV'); await shot('crossframes', '#out [data-gfxb="crossframe"]');
   // ---- Welds
-  await p.click('#tabBar [data-otab="wt"]'); await settle(); await common('wt', 'welds'); await common('wt', 'weld-detail'); await clickRegion('welds', 'fw', 3); await selRow('data-wt', 'fw:3'); await clickRegion('welds', 'tr', 2); await selRow('data-wt', 'tr:2'); await shot('welds', '#out [data-gfxb="welds"]');
+  await p.click('#tabBar [data-otab="wt"]'); await settle(); await commonV('wt', 'welds'); await common('wt', 'weld-detail'); await clickV('welds', 'fw', 3); await selRow('data-wt', 'fw:3'); await clickV('welds', 'tr', 2); await selRow('data-wt', 'tr:2'); await shot('welds', '#out [data-gfxb="welds"]');
   // ---- Field splices
   await p.click('#tabBar [data-otab="spl"]'); await settle(); const tsp = await common('spl', 'splice'); assert.ok(/S-GOV/.test(tsp), 'the governing group is on S-GOV'); await shot('splices', '#out [data-gfxb="splice"]');
   // ---- Rating
-  await p.click('#tabBar [data-otab="rt"]'); await settle(); await common('rt', 'rating'); const rowsN = await p.evaluate(() => window.SBDTabGfxBUI.handles.rating.graphic.regions.length);
-  await clickRegion('rating', 'rt', await p.evaluate(() => window.SBDTabGfxBUI.handles.rating.graphic.regions[40].i)); assert.ok(await p.$('#out tr[data-rt].sel'), 'a rating row selected'); await shot('rating', '#out [data-gfxb="rating"]');
+  await p.click('#tabBar [data-otab="rt"]'); await settle(); await commonV('rt', 'rating'); const rowsN = await p.evaluate(() => window.SBDTabGfxBUI.handles.rating.R.regs.length); assert.ok(rowsN > 40, 'rating click areas');
+  await clickV('rating', 'rt', await p.evaluate(() => window.SBDTabGfxBUI.handles.rating.R.regs[40].v.i)); assert.ok(await p.$('#out tr[data-rt].sel'), 'a rating row selected'); await shot('rating', '#out [data-gfxb="rating"]');
   // ---- Report: the summary section carries the figure
   await p.click('#tabBar [data-otab="rpt"]'); await p.click('#rp_build'); await p.waitForSelector('#out .rp-fig svg', { timeout: 240000 });
   const fig = await p.$eval('#out .rp-fig svg', s => ({ texts: s.querySelectorAll('text').length, w: s.getBoundingClientRect().width })); assert.ok(fig.texts > 10 && fig.w > 300, JSON.stringify(fig)); done.push('rpt/summary figure');
@@ -70,8 +97,8 @@ try {
   // phone width: the graphics fit without a horizontal page scroll
   await p.setViewportSize({ width: 390, height: 800 }); await p.waitForTimeout(400);
   // a viewport resize must not mark a result out of date (the lazily created defaults of the Rating tab were what changed the project key of the other tabs): every calculated tab is still current
-  for (const [t, nm] of [['shear', 'shear'], ['fat', 'fatigue'], ['wt', 'welds'], ['spl', 'splice'], ['rt', 'rating']]) { await p.click(`#tabBar [data-otab="${t}"]`); await p.waitForTimeout(250); assert.equal(await p.$('#out .alert.stale:not([hidden])'), null, `${t}: not out of date after the resize`); await p.waitForSelector(gfx(nm)); }
-  await p.click('#tabBar [data-otab="shear"]'); await p.waitForSelector(gfx('shear')); await p.waitForTimeout(300);
+  for (const [t, nm] of [['shear', 'shear'], ['fat', 'fatigue'], ['wt', 'welds'], ['spl', 'splice'], ['rt', 'rating']]) { await p.click(`#tabBar [data-otab="${t}"]`); await p.waitForTimeout(250); assert.equal(await p.$('#out .alert.stale:not([hidden])'), null, `${t}: not out of date after the resize`); await p.waitForSelector(VIZ.has(nm) ? `#out [data-gfxb="${nm}"] .va-card svg` : gfx(nm)); }
+  await p.click('#tabBar [data-otab="shear"]'); await p.waitForSelector('#out [data-gfxb="shear"] .va-card svg'); await p.waitForTimeout(300);
   assert.equal(await p.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1), false, 'no horizontal scroll at phone width'); await shot('shear-phone', '#out [data-gfxb="shear"]');
   assert.deepEqual(errs, [], 'console errors');
   console.log(`ok  tab graphics B: ${done.length} graphics (${done.join(', ')}); wheel zoom, double-click fit, click-to-select, DXF, print; ${((Date.now() - t0) / 1000).toFixed(0)} s`);
