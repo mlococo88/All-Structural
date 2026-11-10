@@ -56,6 +56,10 @@ body{font-family:var(--font-doc);font-size:10pt;color:var(--ink);background:#efe
 #hdrProj:hover{color:#fff;text-decoration:underline}
 #hdrProj .hdrNone{font-style:italic;opacity:.8}
 #prjPane .secHead{cursor:default}
+/* HOC (2026-11-10): the Project tab's Hand-offs section */
+#prjPane #tbcHo .hoRow{border-top:1px solid #d5dce5;padding:5px 0 3px;font-family:var(--font-ui);font-size:9pt}
+#prjPane #tbcHo .hoFrom{font-size:8.5pt;color:#555}
+#prjPane #tbcHo .hoGrp{margin:8px 0 3px;font-family:var(--font-ui);font-size:8pt;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#555}
 #tbSaveCard .spCard{font-family:var(--font-ui);font-size:9pt}   /* STDS: the Save and open card in the panel's UI font */
 #inputPanel #projGrid{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:0}
 #inputPanel #projGrid label{color:#475569}
@@ -299,11 +303,15 @@ a.wkA:hover{text-decoration:underline}
         <div id="projGrid"></div>
         <div class="hint">Printed on the Report.</div>
       </div></div>
-      <div class="sec"><div class="secHead"><span class="secTitle">Shared project info</span></div><div class="secBody" id="projShare">
-        <div class="btnRow">
-        <button type="button" class="btn sm" id="btnUseShared" title="Fill the project fields from project info shared by another tool">Use shared project info</button>
-        <button type="button" class="btn sm" id="btnShare" title="Make these project fields available to the other tools">Share project info</button></div>
-        <div class="hint">Copy the title block from or to the other tools.</div>
+      <!-- HOC (2026-11-10, engineer decision: the hand-off card on the Project tab in every tool): "Shared project info" laid out as Receive / Send (same ids and handlers) -->
+      <div class="sec" id="tbcHo"><div class="secHead"><span class="secTitle">Hand-offs</span></div><div class="secBody" id="projShare">
+        <div class="hint">Nothing changes until you confirm: "Use shared project info" lists the title-block fields it will overwrite and asks first. "Share project info" sends the title block only when you click it.</div>
+        <div class="hoGrp">Receive from other tools</div>
+        <div class="hoRow"><b>Shared project info</b> <span class="hoFrom">from any tool, to the title block</span><div class="btnRow">
+        <button type="button" class="btn sm" id="btnUseShared" title="Fill the project fields from project info shared by another tool">Use shared project info</button></div></div>
+        <div class="hoGrp">Send to other tools</div>
+        <div class="hoRow"><b>Shared project info</b> <span class="hoFrom">to every tool</span><div class="btnRow">
+        <button type="button" class="btn sm" id="btnShare" title="Make these project fields available to the other tools">Share project info</button></div></div>
       </div></div>
     </div></div>
     <div id="outputPanel">
