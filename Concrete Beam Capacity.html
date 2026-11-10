@@ -555,12 +555,15 @@ body dialog.spLib{font-family:var(--font-ui)}
         <div id=&quot;projGrid&quot;></div>
         <div class=&quot;note&quot;>Printed on the Report and the drawing sheets (DXF title block).</div>
       </div></div>
-      <div class=&quot;sec&quot; id=&quot;prjShareSec&quot;><div class=&quot;secHead&quot;><h2 class=&quot;secTitle&quot;>Shared project info</h2></div><div class=&quot;secBody&quot;>
-        <div class=&quot;prjBtns&quot;>
-        <button type=&quot;button&quot; class=&quot;b&quot; id=&quot;btnUseProjInfo&quot; title=&quot;Fill the title blocks of all three tabs from the shared project info&quot;>Use shared project info</button>
-        <button type=&quot;button&quot; class=&quot;b&quot; id=&quot;btnShareProjInfo&quot; title=&quot;Share this tab's title block with the other tools&quot;>Share project info</button>
-        </div>
-        <div class=&quot;note&quot;>Copy the title block from or to the other tools (all three tabs of this suite are filled).</div>
+      <!-- HOC (2026-11-10, engineer decision: the hand-off card on the Project tab in every tool): Shared project info laid out as Receive / Send (display only; same buttons, ids and handlers) -->
+      <div class=&quot;sec&quot; id=&quot;prjShareSec&quot;><div class=&quot;secHead&quot;><h2 class=&quot;secTitle&quot;>Hand-offs</h2></div><div class=&quot;secBody&quot;>
+        <div class=&quot;note&quot;>Nothing changes until you confirm: &quot;Use shared project info&quot; lists the fields it will overwrite in all three tabs and asks first. &quot;Share project info&quot; sends only this tab&#39;s title block, when you click it.</div>
+        <div style=&quot;margin:8px 0 3px;font-size:8pt;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#555&quot;>Receive from other tools</div>
+        <div style=&quot;border-top:1px solid #d5dce5;padding:5px 0 3px&quot;><b>Shared project info</b> <span style=&quot;font-size:8.5pt;color:#555&quot;>from any tool, to the title blocks of all three tabs</span><div class=&quot;prjBtns&quot;>
+        <button type=&quot;button&quot; class=&quot;b&quot; id=&quot;btnUseProjInfo&quot; title=&quot;Fill the title blocks of all three tabs from the shared project info&quot;>Use shared project info</button></div></div>
+        <div style=&quot;margin:8px 0 3px;font-size:8pt;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#555&quot;>Send to other tools</div>
+        <div style=&quot;border-top:1px solid #d5dce5;padding:5px 0 3px&quot;><b>Shared project info</b> <span style=&quot;font-size:8.5pt;color:#555&quot;>this tab&#39;s title block, to every tool</span><div class=&quot;prjBtns&quot;>
+        <button type=&quot;button&quot; class=&quot;b&quot; id=&quot;btnShareProjInfo&quot; title=&quot;Share this tab's title block with the other tools&quot;>Share project info</button></div></div>
       </div></div>
     </div></div>
     <div id=&quot;outputWrap&quot;>
@@ -6307,12 +6310,15 @@ body dialog.spLib{font-family:var(--font-ui)}
         <div id=&quot;projGrid&quot;></div>
         <div class=&quot;note&quot;>Printed on the Report.</div>
       </div></div>
-      <div class=&quot;sec&quot; id=&quot;prjShareSec&quot;><div class=&quot;secHead&quot;><h2 class=&quot;secTitle&quot;>Shared project info</h2></div><div class=&quot;secBody&quot;>
-        <div class=&quot;prjBtns&quot;>
-        <button type=&quot;button&quot; class=&quot;b&quot; id=&quot;btnUseProjInfo&quot; title=&quot;Fill the title blocks of all three tabs from the shared project info&quot;>Use shared project info</button>
-        <button type=&quot;button&quot; class=&quot;b&quot; id=&quot;btnShareProjInfo&quot; title=&quot;Share this tab's title block with the other tools&quot;>Share project info</button>
-        </div>
-        <div class=&quot;note&quot;>Copy the title block from or to the other tools (all three tabs of this suite are filled).</div>
+      <!-- HOC (2026-11-10, engineer decision: the hand-off card on the Project tab in every tool): Shared project info laid out as Receive / Send (display only; same buttons, ids and handlers) -->
+      <div class=&quot;sec&quot; id=&quot;prjShareSec&quot;><div class=&quot;secHead&quot;><h2 class=&quot;secTitle&quot;>Hand-offs</h2></div><div class=&quot;secBody&quot;>
+        <div class=&quot;note&quot;>Nothing changes until you confirm: &quot;Use shared project info&quot; lists the fields it will overwrite in all three tabs and asks first. &quot;Share project info&quot; sends only this tab&#39;s title block, when you click it.</div>
+        <div style=&quot;margin:8px 0 3px;font-size:8pt;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#555&quot;>Receive from other tools</div>
+        <div style=&quot;border-top:1px solid #d5dce5;padding:5px 0 3px&quot;><b>Shared project info</b> <span style=&quot;font-size:8.5pt;color:#555&quot;>from any tool, to the title blocks of all three tabs</span><div class=&quot;prjBtns&quot;>
+        <button type=&quot;button&quot; class=&quot;b&quot; id=&quot;btnUseProjInfo&quot; title=&quot;Fill the title blocks of all three tabs from the shared project info&quot;>Use shared project info</button></div></div>
+        <div style=&quot;margin:8px 0 3px;font-size:8pt;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#555&quot;>Send to other tools</div>
+        <div style=&quot;border-top:1px solid #d5dce5;padding:5px 0 3px&quot;><b>Shared project info</b> <span style=&quot;font-size:8.5pt;color:#555&quot;>this tab&#39;s title block, to every tool</span><div class=&quot;prjBtns&quot;>
+        <button type=&quot;button&quot; class=&quot;b&quot; id=&quot;btnShareProjInfo&quot; title=&quot;Share this tab's title block with the other tools&quot;>Share project info</button></div></div>
       </div></div>
     </div></div>
     <div id=&quot;outputWrap&quot;>
@@ -8517,11 +8523,16 @@ function buildInputPanel(){
       <div class=&quot;field&quot;><label>Calc Date</label><input id=&quot;calcDate2&quot; type=&quot;date&quot; value=&quot;${today}&quot; style=&quot;display:none&quot;></div>
       <div class=&quot;field&quot;><label>Checked Date</label><input id=&quot;chkDate&quot; type=&quot;date&quot;></div>
     </div>
-    <div class=&quot;btnrow&quot; id=&quot;prjShareRow&quot; style=&quot;margin-top:8px;&quot;><!-- HDR (2026-11-05): moved here from the suite's top bar -->
-      <button type=&quot;button&quot; class=&quot;btn small&quot; id=&quot;btnUseProjInfo&quot; title=&quot;Fill the title blocks of all three tabs from the shared project info&quot;>Use shared project info</button>
-      <button type=&quot;button&quot; class=&quot;btn small&quot; id=&quot;btnShareProjInfo&quot; title=&quot;Share this tab's title block with the other tools&quot;>Share project info</button>
-    </div>
-    <div class=&quot;hint&quot; id=&quot;prjShareHint&quot;>Copy the title block from or to the other tools (all three tabs of this suite are filled).</div>`)}
+    <!-- HOC (2026-11-10): Hand-offs, Receive / Send (display only; same buttons, ids and handlers; HDR 2026-11-05: moved here from the suite's top bar) -->
+    <div id=&quot;prjShareRow&quot; style=&quot;margin-top:10px;&quot;><div style=&quot;font-weight:700;&quot;>Hand-offs</div>
+      <div class=&quot;hint&quot; id=&quot;prjShareHint&quot;>Nothing changes until you confirm: &quot;Use shared project info&quot; lists the fields it will overwrite in all three tabs and asks first. &quot;Share project info&quot; sends only this tab&#39;s title block, when you click it.</div>
+      <div style=&quot;margin:8px 0 3px;font-size:8pt;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#555&quot;>Receive from other tools</div>
+      <div style=&quot;border-top:1px solid #d5dce5;padding:5px 0 3px&quot;><b>Shared project info</b> <span style=&quot;font-size:8.5pt;color:#555&quot;>from any tool, to the title blocks of all three tabs</span><div class=&quot;btnrow&quot;>
+      <button type=&quot;button&quot; class=&quot;btn small&quot; id=&quot;btnUseProjInfo&quot; title=&quot;Fill the title blocks of all three tabs from the shared project info&quot;>Use shared project info</button></div></div>
+      <div style=&quot;margin:8px 0 3px;font-size:8pt;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#555&quot;>Send to other tools</div>
+      <div style=&quot;border-top:1px solid #d5dce5;padding:5px 0 3px&quot;><b>Shared project info</b> <span style=&quot;font-size:8.5pt;color:#555&quot;>this tab&#39;s title block, to every tool</span><div class=&quot;btnrow&quot;>
+      <button type=&quot;button&quot; class=&quot;btn small&quot; id=&quot;btnShareProjInfo&quot; title=&quot;Share this tab's title block with the other tools&quot;>Share project info</button></div></div>
+    </div>`)}
 
   ${panel(&quot;B&quot;,&quot;Design Code &amp;amp; Material&quot;,true,`
     <div class=&quot;field&quot;><label>Design Code</label>
