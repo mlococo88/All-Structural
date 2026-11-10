@@ -58,6 +58,7 @@
     return { title: 'Project and owner', subs: [
       sub('p', 'Project', [kv([['Project', p.name || '—'], ['Project No', p.number || '—'], ['Client / owner', window.SBDModel.clientName(P) || '—'], ['Computed by', p.designer || '—'], ['Checked by', p.checker || '—'], ['Date', p.date || '—']]),
         p.notes ? note(p.notes) : null,
+        window.SBDInputCheck ? note(window.SBDInputCheck.NOTE) : null,   // SBINV (engineer rule 2026-11-10: decisions noted in the app and the report)
         kv([['Spans', `${P.spans.lengths.map(L => f(+L, 2)).join(' + ')} ft (${P.spans.continuity === 'simple' || P.spans.lengths.length < 2 ? 'simple spans' : 'continuous'})`],
           ['Girder reported', `${gName(g)}, ${g.position}; cross-section girder G${line + 1} (dead loads and distribution factors)`], ['$b_{eff}$', `${f(g.beff, 2)} in`],
           ['Design specification', ED], ['Demands', B.src === 'file' ? `hand-off file ${B.plName || ''} (GirderDetail → ST-Girder), where a module takes it (see each section)` : B.custom ? `entered on the tab (Custom) for ${cdMods(B)} (see each section); this project's analysis (Analysis tab) for the rest` : "this project's analysis (Analysis tab)"]])]),
