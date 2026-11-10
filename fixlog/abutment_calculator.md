@@ -17092,3 +17092,79 @@ Engineer decision 2026-11-10 (geometry). AASHTO LRFD 10th Ed. (2024): 5.6.5 / Fi
   - Tab section figure: a red step mark and text when the slab top is not at the top of the backwall. 3D: the shelf label gives the slab-top step.
 - **How verified:** main-vs-branch probe of every numeric leaf of `LAST_R` (default; slab; photo case; photo case with EE-I; d_sh = t with EE-I; e = 0 with EE-I): only `R.bwEE.ee.*` and the two dashboard D/C rows in the photo case with EE-I differ. Tests: `check-syntax`; `abutment-stem-shelf` (new section 5, hand check); `abutment-drawings` (new variants d_sh 30 > t 15 and d_sh 12 < t 15: 0 text overlaps, no text crossed by a dimension on sheet 1); `abutment-elevations`; `abutment-pile-group-parity` 14/14; `project-library --tool abutment`; `abutment-panel-scroll`; 0 console errors; 390 px.
 - **Other copies:** none.
+
+## 2026-11-10 — PR: abut-shelf-fill (PR #1396: https://github.com/mlococo88/All-Structural/pull/1396) (ABFL) — Fill over the approach slab on the stem shelf (d_sh > t) loaded as vertical earth load EV   [§4 calculation change, e > 0 with d_sh > t only; no saved key or format change]
+- **Engineer decision (2026-11-10):** "Yes, use fill". With d_sh > t, the step d_sh − t between the slab top and the top of the backwall is backfill on the slab and is loaded automatically. #1387 had only an advisory warning (add it to DW by hand). Also decided: the backwall earth pressure stays over the full height above the shelf, and d_sh < t stays a warning (both unchanged).
+- **Governing provisions:** AASHTO LRFD 10th Ed. (2024):
+  - Art. 3.3.2: EV is the vertical pressure from the dead load of earth fill.
+  - Art. 3.5.1: dead loads include earth cover.
+  - Table 3.4.1-2: EV, retaining walls and abutments, 1.35 / 1.00.
+  - Table 3.4.1-1: 1.00 at Service I and Extreme Event I.
+  - Art. 11.6.5.1: inertia.
+- **Where (all in `abutment_calculator.html`):**
+  - `computeAp`, after the anchor `P.qDC=P.wDC*P.Lmax/2*P.cs; P.qDW=`. New code, absent before:
+    `if(OFF&&OFF.dIn-P.t*12>0.01){ P.hF=OFF.d-P.t; P.gs=+S.soil.gamma; P.wEV=P.gs*P.hF; P.REV=P.wEV*P.area/2; P.qEV=P.wEV*P.Lmax/2*P.cs; P.zF=OFF.zSh+P.t+P.hF/2; }`
+  - `computeAp`, after `P.Wi=P.RDC+P.RDW+P.WSh; …`:
+    `if(P.REV>0){ P.Wi0=P.Wi; P.zSlab0=P.zSlab; P.Wi=P.Wi0+P.REV; P.zSlab=(P.Wi0*P.zSlab0+P.REV*P.zF)/P.Wi; }` (EQap, the transverse EQ and the stem EQ read Wi / zSlab).
+  - `computeAll` load groups, after `groups.APdw`:
+    `if(P.REV>0) groups.APev={cls:"EV", V:P.REV, Mv:P.REV*P.x, …}`.
+    - `SUPER_GROUPS` gets `"APev"` (no slab in the construction stage).
+    - `GRP_OF.EV` was `["EV"]` and is now `["EV","APev"]`.
+  - `stemEcc`:
+    - new `const evs=groups.APev? (L.perm?[GP.EV[1],GP.EV[0]]:[1]) : [null];`
+    - loop `… for(const apL of aps) for(const gEV of evs){`
+    - `Map` gets `+ (gEV!==null? gEV*(groups.APev.V*xSc-groups.APev.Mv) : 0)`
+    - result gets `gEV`; the stem record gets `gEVe`.
+  - `buildVM` (non-permutation Mecc): `+ (groups.APev? fEVmax*(groups.APev.V*R.geo.xStemCenter-groups.APev.Mv) : 0)`.
+  - Shear friction (`const apDC=groups.APdc? …`): `Pc` gets `+(apEV? gEVc*ns*apEV/Lab : 0)`, where `gEVc` = GP.EV[0] (1.00 when not permuted).
+  - `R.apStemSh`:
+    - Before: `o.VuS=o.gDC*P.qDC+o.gDW*P.qDW+o.gLL*P.qLL;`
+    - After: the same, then `if(P.qEV>0){ o.gEV=GP.EV[1]; o.VuS+=o.gEV*P.qEV; }`
+  - `R.apDes`:
+    - `const Mu=…` becomes `let Mu=…`
+    - `const fl=P.wEV>0? {MEV:P.wEV*Ls*Ls/8, VEV:P.wEV*Ls/2, gEV:GP.EV[1]} : null; if(fl){ Mu+=fl.gEV*fl.MEV; Vu+=fl.gEV*fl.VEV; Ms+=fl.MEV; }`
+    - label gets `γ·EV (fill)`; `R.apDes` gets `...(fl||{})`.
+  - Backwall EE-I (`apBw` branch):
+    - Before: `Mu=Math.max(0,Mu+Wa*zA-(apBw.MDC+apBw.MDW)); Vu+=Wa; apE={Wa,zA};`
+    - After: `const fE=(Wa>0&&apB.qEV>0)? {Wf:k.fI*q.kh*apB.qEV, zF:Math.min(hbwC,apB.t+apB.hF/2)} : null; Mu=Math.max(0,Mu+Wa*zA+(fE? fE.Wf*fE.zF : 0)-(apBw.MDC+apBw.MDW)); Vu+=Wa; if(fE) Vu+=fE.Wf; apE=fE? {Wa,zA,...fE} : {Wa,zA};`
+  - Input checks: the `else if(OFF.apOn&&!OFF.dAuto&&stp>0.01) warn(\`Stem shelf: the shelf depth d_sh … not modelled as a load …\`)` line is removed.
+  - Display:
+    - panel I-1 note "Approach slab top";
+    - Tab 1 §1.4a: "Slab top" note, the new eqB "Fill on the slab", the load-group line (APev), the seismic W_ap and combined-centroid z lines;
+    - worked lines in §5.8 (V_u,slab), §5.9 (M_EV, M_u, M_s, V_u), §5.2 (M_ap), §5.5 (P_c), §5.1a (k_hW_F, M_u, V_u);
+    - Report: geometry note and the shelf-bearing topic;
+    - the §1.4a figure label and tooltip;
+    - drawing notes (sheet 1, approach-slab sheet): "THE FILL OVER THE SLAB IS LOADED ON IT AS EV (TAB 1 1.4A)". No hatch.
+- **Check case (default project; slab on, t = 1.25 ft, L = 16 ft, W = 44 ft, θ = 0; e = 10 in, d_sh = 30 in; γ_s = 0.120 kcf):**
+  - Fill load:
+    - h_F = 1.250 ft; w_EV = 0.120(1.25) = 0.150 ksf
+    - R_EV = 0.150(44)(16)/2 = 52.80 kip; q_EV = 0.150(8) = 1.200 kip/ft (before: none)
+  - Shelf bearing: V_u,slab 13.356 → 13.356 + 1.35(1.2) = 14.976 kip/ft; D/C 0.0468 → 0.0524.
+  - Slab design:
+    - M_u 48.313 → 48.313 + 1.35(4.8) = 54.793; V_u 13.356 → 14.976; M_s 29.459 → 34.259
+    - flexure D/C 0.5993 → 0.6797
+  - Stem (γ_EV = 1.00 governs, the fill relieves the back face):
+    - M_ap −180.29 → −180.29 + 52.8(−1.8333) = −277.09
+    - M_ecc 11.0727 → 8.8727; M_u 83.962 → 81.762
+  - Shear friction: P_c 21.5806 → 22.7806.
+  - EE-I (k_h = 0.075, f_I = 1.0):
+    - W_ap 76.56 → 129.36 kip; z 20.125 → (76.56·20.125 + 52.8·21.375)/129.36 = 20.635 ft
+    - backwall M_u 0.23032 → 0.23032 + 0.090(1.875) = 0.39907; V_u 0.2879 → 0.3779
+  - Stability (spread): bearing D/C 0.8525 → 0.8638; eccentricity D/C 0.4306 → 0.4287. Full list in the PR.
+- **Decisions (pending engineer review):**
+  1. EV, not ES or DW.
+  2. Dry γ_s.
+  3. The fill is included in the slab design.
+  4. γ_EV permuted max/min in the stem eccentricity.
+  5. The shear-friction clamp at γ_EV,min.
+  6. Seismic: combined centroid for the wall and stem; a separate term at the fill mid-depth for the backwall.
+  7. The advisory warning is removed; a step under 0.01 in is ignored.
+  8. Drawings: notes text only.
+- **Open item (not changed):** the EV soil column over the heel runs to the full soil height, so it overlaps the volume the slab and fill occupy over the heel. This predates this PR and already applies to the slab DC.
+- **How verified:**
+  - Main-vs-branch probe of every numeric leaf of `LAST_R`:
+    - d_sh = t, d_sh blank, d_sh < t, e = 0 and the default project: identical (0 leaves);
+    - the photo case (± EE-I), piles with skew, and d_sh = 36 in with piles and EE-I: changed results listed in the PR.
+  - Tests: `check-syntax`; `abutment-stem-shelf` (new section 6 hand check + Report; section 5 reads the slab-only height and M_u); `abutment-drawings`; `abutment-elevations`; `abutment-pile-group-parity` 14/14; `project-library --tool abutment`; `abutment-panel-scroll`.
+  - Every KaTeX line renders on all tabs; 0 console errors; 390 px.
+- **Other copies:** none.
