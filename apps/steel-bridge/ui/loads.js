@@ -103,7 +103,7 @@
     const x = P.xs, Q = window.SBDModel.equalSpacing(x), st = Q.step, Wd = +x.ohL + Q.Wcc + +x.ohR, R = window.SBDLldf && window.SBDLldf.RANGE && window.SBDLldf.RANGE.S;
     const out = R && isFinite(Q.S) && (Q.S < R[0] - 1e-9 || Q.S > R[1] + 1e-9);
     return `${h.num('xs.Wcc', 'Exterior girder spacing W<sub>cc</sub>', 'ft, ℄ to ℄ of G1 and G' + (isFinite(Q.nb) ? Q.nb : 'n'))}
-      <ul class="steps"><li id="st-xs.eqS"><div class="lbl">${esc(st.label)}</div><div>${S().line(st, true)}</div></li></ul>
+      <ul class="steps"><li id="st-xs.eqS"><div class="lbl">${window.SBDSub.html(st.label)}</div><div>${S().line(st, true)}</div></li></ul>
       ${isFinite(Q.S) && !(Q.S > 0) ? '<div class="alert">The girder spacing S must be positive: enter an exterior girder spacing W<sub>cc</sub> greater than zero.</div>' : ''}
       ${out ? `<div class="alert">S = ${f(Q.S, 3)} ft is outside the range of applicability of the LLDF equations, ${f(R[0], 1)} ft ≤ S ≤ ${f(R[1], 1)} ft (Table 4.6.2.2.2b-1; as the <a href="#" data-gotab="loads">Loads &amp; LLDF tab</a> checks).</div>` : ''}
       <p class="note">All ${isFinite(Q.nb) && Q.nb >= 2 ? Q.nb - 1 : ''} bays take S; the per-bay spacings are written from it (choose Individual spacings to edit them, starting from these values). Deck width out to out = oh<sub>L</sub> + W<sub>cc</sub> + oh<sub>R</sub> = ${f(+x.ohL, 2)} + ${f(Q.Wcc, 2)} + ${f(+x.ohR, 2)} = ${f(Wd, 2)} ft.</p>`;
@@ -145,7 +145,7 @@
       return R;
     } catch (e) { return { errors: [`The loads could not be computed: ${e.message}`] }; }
   }
-  const stepLi = s => `<li id="st-${esc(s.id)}"><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${S().line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`;
+  const stepLi = s => `<li id="st-${esc(s.id)}"><div class="lbl">${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${S().line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>`;
   const A = '10th Ed. Art. ', OPEN = new Set(), TPX = (...ks) => ks.map(k => window.SBDFlexureUI.TP[k]).filter(Boolean);
 
   /* ---------- topics of the worked steps (presentation spec A, 2026-10-31; as ui/shear.js): owner rules, geometry, dead loads, then the live-load distribution factors by sub-article ---------- */

@@ -203,7 +203,7 @@
     return { ...window.SBDFlexure.girder(I.locs, I.prj, { supports: I.supports }), prj: I.prj, what: I.what, fl: I.fl, flS: I.flS, frB: I.frB, D: I.D, custom: I.custom || null };
   }
 
-  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`;
+  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>`;
   function render(host, ctx) {
     css();
     const stale = (!S.R && !S.err) || S.key !== key(ctx), src = srcOf(ctx), rd = rdOf(ctx);   // SPERR2: a run that ended in an error is current (its message shows), not out of date
@@ -240,7 +240,7 @@
       if (r) {
         h += `<section class="sec"><div class="secHead">${esc(r.name)}${r.x != null && !/x = /.test(r.name) ? `, x = ${fmt(r.x, 2)} ft` : ''}: checks</div><div class="secBody"><div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Check</th><th>Demand</th><th>Capacity</th><th>Ratio</th><th class="lft">AASHTO LRFD 10th Ed.</th><th></th></tr></thead><tbody>
           ${r.checks.map(c => isFinite(c.ratio) || c.ng ? `<tr${r.gov === c ? ' class="fx-gov"' : ''}><td class="lft">${esc(c.id)} ${tt(c.title)}${c.inUse ? '' : ' <span class="fx-na">(not the method in use)</span>'}</td><td>${fmt(c.demand, 2)} ${esc(c.unit)}</td><td>${fmt(c.capacity, 2)} ${esc(c.unit)}</td><td class="${c.inUse || c.ng ? cls(c.ratio) : ''}">${rtx(c)}</td><td class="lft">${esc(c.ref.replace('AASHTO LRFD 10th Ed. ', ''))}</td><td><a class="wk" href="#st-${esc(c.step)}">§</a></td></tr>`
-            : `<tr><td class="lft">${esc(c.id)} ${tt(c.title)}</td><td colspan="3" class="lft fx-na">${esc(c.na || '')}</td><td class="lft">${esc(c.ref.replace('AASHTO LRFD 10th Ed. ', ''))}</td><td>${c.step ? `<a class="wk" href="#st-${esc(c.step)}">§</a>` : ''}</td></tr>`).join('')}
+            : `<tr><td class="lft">${esc(c.id)} ${tt(c.title)}</td><td colspan="3" class="lft fx-na">${window.SBDSub.html(c.na || '')}</td><td class="lft">${esc(c.ref.replace('AASHTO LRFD 10th Ed. ', ''))}</td><td>${c.step ? `<a class="wk" href="#st-${esc(c.step)}">§</a>` : ''}</td></tr>`).join('')}
           </tbody></table></div>
           <div class="kv"><div><span>M<sub>u</sub> / M<sub>s</sub></span><span>${fmt(r.Mu, 1)} / ${fmt(r.Ms, 1)} kip-ft <a class="wk" href="#st-fx.Mu">§</a></span></div>
           ${r.p7 ? `<div><span>Section</span><span>${r.below ? 'PNA below the web' : r.compact ? 'compact' : 'noncompact'} <a class="wk" href="#st-fx.cmp">§</a></span></div>` : `<div><span>F<sub>nc</sub> (FLB / LTB)</span><span>${fmt(r.lt.FLB, 2)} / ${fmt(r.lt.LTB, 2)} ksi <a class="wk" href="#st-fx.Fnc">§</a></span></div><div><span>App. A6</span><span>${r.A6.ok ? (r.useA6 ? 'permitted, used' : 'permitted, not selected') : 'not permitted'} <a class="wk" href="#st-fx.a6.ok">§</a></span></div>`}
