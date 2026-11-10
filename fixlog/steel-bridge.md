@@ -4727,7 +4727,8 @@ except the duplicated stations removed by fix 1 (listed there) and the Summary's
   Cross-section › Left fence from deck edge: … (0 < x ≤ 6 ft)", the field outlined, "Cross-section 1", no verdict anywhere. Position 3 ft:
   results identical to the same three values entered validly in a fresh page.
 - **How verified:** main vs branch probe of every output tab's text, the left column and the built Report (default project and a skewed
-  three-span two-girder project): identical except the Summary's "last run … s"; `tests/smoke/steel-bridge-invalid.mjs` (new);
+  three-span two-girder project): identical except the Summary's "last run … s"; the built Report's full text (collapsed sections included)
+  identical except the added input check note in §2.1; `tests/smoke/steel-bridge-invalid.mjs` (new);
   `node tests/check-syntax.mjs`; the steel-bridge smoke tests; phone-layout `sbapp`; project-library `sbapp`; 0 console errors.
 - **Saved data:** no key or format changed; a saved project with an invalid field loads unchanged and shows its errors.
 - **Other copies:** none.
