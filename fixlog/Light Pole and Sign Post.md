@@ -2720,7 +2720,7 @@ Engineer's decision 2026-11-10. This closes open item (1) of the entry above.
   - `tests/engine/run.mjs lightpole` (44 pass; the sign-ice expectation 122.4 → 384.7, new regression test), `check-syntax`, `phone-layout --tool lp`, `lightpole-anchor-handoff`, `lightpole-signviews` pass. Report §1 shows the π step; 390 px, no horizontal scroll.
 - **Saved data:** none changed. **Other copies:** none. **Cable results:** unchanged (sign mode has no cables; the cable path never reads `signWind()`).
 
-## 2026-11-10 — PR: lightpole-sign-ice-cf (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — iced sign C_f from the dimensions including ice (ASCE 7-16 §10.5.2)   [§4 calculation change: wind on the iced sign only; no cable value, saved key or format change]
+## 2026-11-10 — PR: lightpole-sign-ice-cf (PR #1334: https://github.com/mlococo88/All-Structural/pull/1334) — iced sign C_f from the dimensions including ice (ASCE 7-16 §10.5.2)   [§4 calculation change: wind on the iced sign only; no cable value, saved key or format change]
 
 Engineer's decision 2026-11-10. This closes open item (3) of the #1324 entry.
 - **Provision:** ASCE 7-16 §10.5.2 (printed p. 71): for ice-covered solid freestanding walls and solid signs, C_f is taken from Fig. 29.3-1 using the dimensions of the wall or sign including ice. §10.5 also grows the projected area by t_d on every free edge. Re-read from `structural_references/ASCE 7-16.pdf` content streams.
