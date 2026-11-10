@@ -5745,7 +5745,8 @@ function buildInterTab(pg){
     body.appendChild(el('div','note sbNL',sbNL('M\u1D63\u2093/M\u1D9C\u2093 is taken as the <b>governing major-axis flexural DCR</b> across all regions.',[['Why this is safe:','each region is already divided by its own capacity, so the composition is safe.'],['HSS torsion:','where T\u1D64 > 0.2\u03C6T\u2099 on an HSS, Eq. H3-6 replaces H1 and brings the shear ratio in with it.'],
       isMember()?null:['Second-order (P-\u03B4):','in beam mode, where P\u1D64 is compression, the ratio is the governing flexure DCR \u00D7 B\u2081 = C\u2098/(1 \u2212 P\u1D63/P\u2091\u2081) \u2265 1 (AISC 360-16 \u00A7C1, Appendix 8), with C\u2098 = 1.0, EI* = EI and L\u1D9C\u2081 = the compression effective length L\u1D9C\u2093; the M\u2093 flexure check itself is not amplified.'],
       ['Entered moments:',(isMember()?'M\u1D64\u2093 and M\u1D64\u1D67 are':'M\u1D64\u1D67 is')+' entered and taken as already including second-order effects.'],
-      D.compActive?['Composite action:','the ratio is the bare-steel governing flexure DCR, not the composite ratio of the M\u2093 tab (conservative where the composite strength is the larger).']:null])));   /* SBASM (2026-11-10): M4 and D11 basis stated */
+      D.compActive?['Composite action:','the ratio is the governing flexure DCR of the M\u2093 tab: against the composite \u03c6M\u2099 (Chapter I, \u00a7I3.2a) in positive-moment regions, and against the bare steel section (Chapter F, \u00a7I3.2b) in negative-moment regions, where the slab is in tension and is not counted'+
+        (isMember()?' (member check mode takes M\u1d64\u2093 as positive, so the composite strength is used)':'')+'. P\u1d9c stays the noncomposite strength (Chapter D / E). Basis: AISC 360-16 Commentary I7 (collector beams) permits the Chapter H equations with the noncomposite axial strength and the composite flexural strength; \u00a7I5(a) and (b) and \u00a7I2 address encased and filled composite members, not a steel beam with a slab on steel anchors.']:null])));   /* SBASM (2026-11-10): M4 basis stated; SBH1C (2026-11-10): composite basis */
     body.appendChild(eqBlock({title:'Equations used',ref:'\u00A7H1.1, \u00A7H3.2',
       lines:['\\tfrac{P_r}{P_c}\\ge 0.2:\\quad \\tfrac{P_r}{P_c}+\\tfrac{8}{9}\\left(\\tfrac{M_{rx}}{M_{cx}}+\\tfrac{M_{ry}}{M_{cy}}\\right)\\le 1.0\\qquad\\text{(H1-1a)}',
         '\\tfrac{P_r}{P_c}< 0.2:\\quad \\tfrac{P_r}{2P_c}+\\left(\\tfrac{M_{rx}}{M_{cx}}+\\tfrac{M_{ry}}{M_{cy}}\\right)\\le 1.0\\qquad\\text{(H1-1b)}',
@@ -5781,8 +5782,9 @@ function buildInterTab(pg){
     if(C.torsBlocked)body.appendChild(sbWarnEl('Torsion: '+C.torsBlocked,'errBox'));
     const tm=C.inter.terms,lines=[];
     if(tm.P)lines.push('\\tfrac{P_r}{P_c}=\\tfrac{'+fmt(Math.abs(C.man.Pu),1)+'}{'+fmt(C.phiPn||C.phiPt||0,0)+'}='+fmt(tm.P,3)+(C.dcrPt!=null?'\\ \\text{(tension, \u00A7H1.2)}':''));
-    if(C.B1)lines.push('\\tfrac{M_{rx}}{M_{cx}}=B_1\\times'+fmt(C.B1.rx0,3)+'='+fmt(C.B1.B1,3)+'\\times'+fmt(C.B1.rx0,3)+'='+fmt(tm.Mx,3)+'\\ \\text{(governing flexure DCR}\\times B_1)');
-    else lines.push('\\tfrac{M_{rx}}{M_{cx}}='+fmt(tm.Mx,3)+'\\ \\text{(governing flexure DCR)}');
+    const cb=(D.compActive&&C.flexGov)?(C.flexGov.basis==='composite'?', composite §I3.2a':', bare steel §I3.2b'):'';   /* SBH1C: basis of the governing region */
+    if(C.B1)lines.push('\\tfrac{M_{rx}}{M_{cx}}=B_1\\times'+fmt(C.B1.rx0,3)+'='+fmt(C.B1.B1,3)+'\\times'+fmt(C.B1.rx0,3)+'='+fmt(tm.Mx,3)+'\\ \\text{(governing flexure DCR'+cb+'}\\times B_1)');
+    else lines.push('\\tfrac{M_{rx}}{M_{cx}}='+fmt(tm.Mx,3)+'\\ \\text{(governing flexure DCR'+cb+')}');
     if(tm.My)lines.push('\\tfrac{M_{ry}}{M_{cy}}=\\tfrac{'+fmt(Math.abs(C.man.Muy),1)+'}{'+fmt(C.phiMny||0,1)+'}='+fmt(tm.My,3));
     /* M4: worked B1 */
     if(C.B1){const b=C.B1;body.appendChild(eqBlock({title:'Second-order amplification of M\u1D64\u2093 (P-\u03B4)',ref:'\u00A7C1, App. 8 Eq. A-8-3, A-8-5',
@@ -9569,6 +9571,7 @@ function applyCompositeToRegions(A,D){
       }else{anyNeg=true;r.basis='steel';}
     });
     C.flexGov=(C.regions||[]).reduce((m,r)=>r.dcr>(m?m.dcr:-1)?r:m,null);
+    if(C.inter)interComposite(C);   /* SBH1C (2026-11-10) */
   });
   D.compAnyPos=anyPos;D.compAnyNeg=anyNeg;
   /* governing positive-moment result, for the Composite tab */
@@ -9577,6 +9580,22 @@ function applyCompositeToRegions(A,D){
     if(r.basis==='composite'&&(!g||r.dcr>g.dcr))g={dcr:r.dcr,Mu:r.Mu,name:C.name,r};
   }));
   D.compGov=g;
+}
+/* SBH1C (2026-11-10, engineer's decision, closes the D11 open item): with composite action on, the Chapter H interaction
+   takes M_rx/M_cx from the governing flexure DCR after the composite pass: the Chapter I composite phiMn (Sec. I3.2a) in
+   the positive-moment regions, the bare steel (Chapter F, Sec. I3.2b) in the negative-moment regions. P_c stays the
+   noncomposite Chapter D / E strength (AISC 360-16 Commentary I7, collector beams: Chapter H interaction with the
+   noncomposite axial strength and the composite flexural strength; Sec. I5 (a)/(b) and I2 address encased and filled
+   composite members only). The B1 of M4 is kept (P_e1 with the bare-steel I_x). Before: the interaction kept the
+   bare-steel governing flexure DCR formed before the composite pass. Nothing new is computed: the same equations, re-formed. */
+function interComposite(C){
+  const t=C.inter.terms,rp=t.P,ry=t.My,rx0=C.flexGov?C.flexGov.dcr:0;
+  C.interSteel={eq:C.inter.eq,value:C.inter.value,Mx:t.Mx};
+  let rx=rx0;
+  if(C.B1){C.B1.rx0Steel=C.B1.rx0;C.B1.rx0=rx0;rx=rx0*C.B1.B1;}
+  if(C.inter.eq==='H3-6')C.inter={eq:'H3-6',value:(rp+rx+ry)+Math.pow(t.V+t.T,2),terms:{P:rp,Mx:rx,My:ry,V:t.V,T:t.T}};
+  else if(rp>=0.2)C.inter={eq:'H1-1a',value:rp+8/9*(rx+ry),terms:{P:rp,Mx:rx,My:ry}};
+  else C.inter={eq:'H1-1b',value:rp/2+(rx+ry),terms:{P:rp,Mx:rx,My:ry}};
 }
 /* =====================================================================
    INDEPENDENT REFERENCE CHECKS — ENERCALC (AISC 360-16, LRFD)
