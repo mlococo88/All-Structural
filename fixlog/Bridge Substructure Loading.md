@@ -2699,3 +2699,62 @@ function listTables() {
 - **Open items (found, not changed):**
   1. RIDOT BDM (2026) 2.2.1.5 / 2.4 and 3.8 refer to the AASHTO Guide Specifications and Commentary for Vessel Collision Design of Highway Bridges. The Guide Specifications' barge equations are, as far as known, the R_B = B_B/35 form that the tool used before; the Guide Specifications are not in the reference folder and were not checked. RIDOT is not an owner option in this tool (MassDOT only), so nothing is applied; if RIDOT is added, decide whether its vessel collision follows the Guide Specifications' R_B.
   2. For B_B > 35 ft the result is now lower than before (e.g. −27 % at 50 ft); a wide barge is not covered by the 10th Ed. standard hopper barge and should be entered as a design force.
+
+## 2026-11-10 — PR: fix/bsl-barge-width-floor (PR #PRNUM: PRURL) (BVF) — barge force scaled by R_B = max(1.0, B_B/35): never reduced for a non-35 ft barge; Barge width input restored (engineer's decision 2026-11-10 after #1320; §4 result change for B_B > 35 ft)
+- **Engineer (2026-11-10), after #1320:** "for non-35 ft barges, NEVER reduce the force." Restore the Barge width input. Use R_B = max(1.0, B_B/35) in the Guide Specifications form: a_B divided by R_B, and P_B from Eqs. 3.14.11-1 / -2 multiplied by R_B.
+- **Where:** `vesselForce(u)`, anchor `const W = nz(c.W), V = nz(c.Vs), CH = nz(c.CH) || 1.05,`.
+  - Before (#1320): `const W = nz(c.W), V = nz(c.Vs), CH = nz(c.CH) || 1.05, KE = CH * W * V * V / 29.2, aB = (Math.sqrt(1 + KE / 5672) - 1) * 10.2, F = aB < 0.34 ? 4112 * aB : 1349 + 110 * aB;`
+  - After: `const W = nz(c.W), V = nz(c.Vs), CH = nz(c.CH) || 1.05, BB = nz(c.BB), RB = Math.max(1, BB / 35), KE = CH * W * V * V / 29.2, aB0 = (Math.sqrt(1 + KE / 5672) - 1) * 10.2, aB = aB0 / RB, F = aB < 0.34 ? 4112 * aB * RB : (1349 + 110 * aB) * RB;`
+  - The returned object adds `aB0` and `RB`. The worked line `how` shows the steps a_B,35 (Eq. 3.14.12-1) → R_B = max(1.0, B_B/35) with values → a_B = a_B,35/R_B → P_B = (Eq. 3.14.11-1 or -2) × R_B with values.
+  - A code comment `// BVF (2026-11-10, …)` replaces the BVC comment.
+- **Clamp placement (decision asked for by the engineer):** the clamp is on R_B, not on the final P_B. This form never gives less than the 35 ft value, for every B_B ≥ 35, in both branches. With a = a_B,35 and R = R_B ≥ 1:
+  - a ≥ 0.34 and a/R ≥ 0.34: P_B = 1349R + 110a ≥ 1349 + 110a. Dividing a_B by R_B is offset exactly by the × R_B on the 110a term, so dividing does not lower P_B.
+  - a ≥ 0.34 but a/R < 0.34: P_B = 4112a. This is at least 1349 + 110a whenever a ≥ 1349/4002 = 0.337 ft, which always holds here.
+  - a < 0.34: P_B = 4112a, the same as the 35 ft value.
+  - A numeric scan (KE 0 to 200,000 kip-ft, B_B 35 to 200 ft) found min(P_B − P_B,35) = −5×10⁻¹³ kip, i.e. floating-point round-off. A clamp on the final P_B was therefore not needed.
+- **Display (§6):**
+  - **Units pane:** `fld('Barge width B<sub>B</sub>', `${p}.cv.BB`, 'ft')` is restored between "Impact speed V" and "C_H". It reads the saved `u.cv.BB`; a new unit gets the default 35 from `fillCol`, as before. The Collision note's `Barge:` item now reads: `the 10th Ed. standard 35 ft hopper barge (3.14.11, 3.14.12), scaled by B<sub>B</sub>/35 for a wider barge (Guide Specifications), never reduced for a narrower one.`
+  - **`cvHtml` basis note** (Vessel collision tab, and the Report's Vessel collision section of each unit):
+    - Before: `Barge: P<sub>B</sub> follows … (Eqs. 3.14.11-1, -2), with no barge width ratio; for another barge, or a deeper head log (C3.14.11), enter the design force directly.`
+    - After: `Barge: P<sub>B</sub> follows the 10th Ed. barge equations for the standard 35 ft hopper barge, KE (Eq. 3.14.7-1), a<sub>B</sub> (Eq. 3.14.12-1) and P<sub>B</sub> (Eqs. 3.14.11-1, -2). For a wider barge it is scaled by the width ratio R<sub>B</sub> = B<sub>B</sub>/35 of the AASHTO Guide Specifications for Vessel Collision (a<sub>B</sub> divided by R<sub>B</sub>, P<sub>B</sub> multiplied by it); for a narrower barge R<sub>B</sub> is taken as 1.0, so the force is never below the 35 ft hopper barge value (engineer's decision, 2026-11-10). The Guide Specifications are not in the reference folder: the ratio is taken from their known form, as reproduced in UF/FDOT report 2010/68901. For a deeper head log (C3.14.11), enter the design force directly.`
+  - **Manual, `PENDING` and `METHODS.cv`:** the same basis, in short form.
+  - **`SL_REFS` "Other" row:** gains `AASHTO Guide Specifications and Commentary for Vessel Collision Design of Highway Bridges (barge width ratio R<sub>B</sub> = B<sub>B</sub>/35; not in the reference folder, form as reproduced in UF/FDOT report 2010/68901, as noted on the Vessel collision tab); `. This restores UF/FDOT 2010/68901, which was the cited source of the R_B form before #1320.
+- **Governing provision:**
+  - AASHTO LRFD 10th Ed. (2024) Eqs. 3.14.7-1, 3.14.12-1, 3.14.11-1 and 3.14.11-2 (standard 35 ft hopper barge).
+  - The width ratio R_B = B_B/35 is from the AASHTO Guide Specifications and Commentary for Vessel Collision Design of Highway Bridges, in its known form as reproduced in UF/FDOT report 2010/68901. The Guide Specifications are not in the reference folder.
+  - The 1.0 floor on R_B is the engineer's decision of 2026-11-10.
+- **Check cases** (W = 1,700 t, V = 6.0 ft/s, C_H = 1.05; KE = 1.05 × 1700 × 36/29.2 = 2,200.68 kip-ft; a_B,35 = 10.2[(1 + 2200.68/5672)^½ − 1] = 10.2 × 0.178130 = 1.8169 ft):
+
+  | B_B | R_B | a_B (ft) | P_B now | Main before #1320 | #1320 |
+  |---|---|---|---|---|---|
+  | 35 ft | 1.000 | 1.8169 | 1349 + 110 × 1.8169 = **1,548.9 kip** | 1,548.9 | 1,548.9 |
+  | 50 ft | 1.4286 | 1.2719 | (1349 + 139.90) × 1.4286 = **2,127.0 kip** | 2,127.0 | 1,548.9 |
+  | 20 ft | max(1.0, 0.571) = 1.000 | 1.8169 | **1,548.9 kip** (no reduction) | 970.7 | 1,548.9 |
+
+  - Small energy (W = 200 t, V = 2 ft/s, B_B = 50 ft): KE = 28.767 kip-ft, a_B,35 = 0.025833 ft, a_B = 0.018083 ft < 0.34, P_B = 4112 × 0.018083 × 1.4286 = 106.23 kip (Eq. 3.14.11-1 × R_B). This is the same in all three versions.
+  - **Governing force on Pier 1** (default project, impact El. 108.0, each column in turn), Extreme Event II at B_B = 50 ft, #1320 → now (the same as before #1320):
+    - Resultant, bottom of footing: V_t ±1,552.7 → ±2,130.8 kip; V_l ±788.6 → ±1,077.7 kip; M_t ±19,082.8 → ±25,442.4 kip-ft; M_l ±8,845.7 → ±12,025.5 kip-ft.
+    - Column 1 base: V_t +1,152.9 / −1,179.0 → +1,585.8 / −1,611.9 kip; M_t +5,265.1 / −5,396.3 → +7,242.0 / −7,373.2 kip-ft.
+    - The column axial minimum at Columns 1 and 3 is governed by Extreme Event II again (285.8 kip at Column 1 base).
+    - At B_B = 35 and 20 ft, nothing changes from #1320.
+- **What changes downstream** (barge type with B_B > 35 ft only, compared with #1320): the same list as #1320, in reverse:
+  - the Vessel collision tab;
+  - that unit's Extreme Event II results and envelope;
+  - the Summary;
+  - the Report (Governing design forces, the unit's sections, the worked effects at the resultant);
+  - the load diagrams, 3D view and DXF CV value;
+  - that unit's Extreme Event II cases in the `foundationLoads` hand-off.
+
+  Barges of 35 ft or narrower, ships and entered forces are unchanged from #1320.
+- **Saved data (§5):** no key or format change. `u.cv.BB` is read again, so old projects keep their value. **Saved projects with a barge wider than 35 ft change results** from #1320: they return to the force they had before #1320. Saved projects with a barge narrower than 35 ft keep the #1320 result, i.e. the 35 ft value. Before #1320 they had a lower force. A blank or zero B_B gives R_B = 1.0 (the standard barge).
+- **How verified:** headless comparison of three versions (main before #1320, 1296a50; origin/main with #1320, 4d95dd6; this branch) at B_B = 20, 35 and 50 ft. Compared: `combine(k)` and `comboComps(k, c)` for every unit and limit state, the text of every tab for every unit, and `SharedReport.text`.
+  - At B_B = 35 and 20 ft, the branch's numbers equal #1320's.
+  - At B_B = 50 ft, the branch's numbers equal those before #1320, and against #1320 only Pier 1 Extreme Event II and its envelope change.
+  - The text differs only in the worked line, the basis note, the Manual and the references.
+
+  Tests: `tests/smoke/bsl-barge-collision.mjs` is updated (the hand checks above, the worked line, the notes, the Units-pane input showing the saved B_B, the Report, 0 console errors). `check-syntax`, `phone-layout --tool bsl`, `project-library --tool bsl`, `geometry-handoff` and `engine/run.mjs handoffs` pass. At 390 px the Vessel collision tab does not scroll sideways.
+- **Other copies:** none.
+- **Decisions (pending engineer review):**
+  1. The clamp is on R_B, not on the final P_B (shown above to give P_B ≥ the 35 ft value in both branches).
+  2. The worked line always shows R_B, even when R_B = 1.000.
+- **Open items:** the Guide Specifications text is still unchecked (not in the reference folder). Their edition and the exact form of R_B (including whether the Guide Specifications apply R_B to a_B) should be confirmed against a copy.
