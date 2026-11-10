@@ -8572,7 +8572,8 @@ function buildInputPanel(){
       <button class=&quot;btn small&quot; id=&quot;rbImportBtn&quot; onclick=&quot;if(RBPL&amp;&amp;RBPL.pb)RBPL.pb.importJSON();else document.getElementById('importFile').click()&quot;>Import JSON</button>
       <input id=&quot;importFile&quot; type=&quot;file&quot; accept=&quot;application/json&quot; style=&quot;display:none&quot; onchange=&quot;importJSON(event)&quot;>
     </div>
-    <button class=&quot;btn primary&quot; id=&quot;rbPrintBtn&quot; onclick=&quot;printReport()&quot;>Print / PDF Report</button>`)}
+    <button class=&quot;btn primary&quot; id=&quot;rbPrintBtn&quot; onclick=&quot;printReport()&quot;>Print / PDF Report</button>
+    <div class=&quot;hint&quot; style=&quot;margin-top:6px&quot;>A project saved before an input existed opens with that input's default: compression &amp;psi;<sub>r</sub> = 1.0, no bar spacing, &amp;lambda; = 0.75, &amp;beta;<sub>t</sub> = 0 and R blank (minimum standard bend).</div>`)}
   `;
 }
 
@@ -8715,7 +8716,7 @@ function validate(inp,f){
     if (f.lam_rlcf_capped) w.push(`λ_rl·λ_cf = ${fmt(f.lam_rl*f.lam_cf,2)} exceeds 1.7; capped (AASHTO 5.10.8.2.1b).`);
     if (f.lam_rc_bounded) w.push(`λ_rc = ${fmt(f.lam_rc_raw,3)} fell outside 0.3–1.0 and was bounded (AASHTO Eq. 5.10.8.2.1c-1).`);
     if (f.betaTAdj) w.push(`β_t must be between −1 and 0 (AASHTO 5.10.8.2.1c); β_t = ${fmt(f.betaT,2)} is used.`);
-    if (f.bigHook) w.push(`AASHTO 5.10.8.2.4: standard hook provisions apply to #11 and smaller bars; the hook length shown for #${inp.barSize} is outside their scope.`);
+    if (f.bigHook) w.push(`AASHTO 5.10.8.2.4: standard hook provisions apply to #11 and smaller bars; the hook length shown for #${inp.barSize} is outside their scope (computed with the same equations, with no increase applied).`);
     { const hk = calcHook(inp,f);
       if (hk.Rentered &amp;&amp; hk.R < hk.Rmin - 1e-9) w.push(`Bend radius R = ${fmt(hk.R,3)} in. is less than the minimum standard bend for #${inp.barSize} (R = D/2 + d_b/2 = ${fmt(hk.Rmin,3)} in., Table 5.10.2.3-1); the entered R is used.`);
       if (hk.num <= 0) w.push(`Hook: F_h/A_b = ${fmt(hk.Fh/f.Ab,2)} ksi ≥ λ_er·f_y; the straight portion l_d of Eq. 5.10.8.2.1a-2 is taken as 0.`); }
@@ -8958,7 +8959,7 @@ function tabTensionAASHTO(inp,f,t,forPrint){
         `${fmt(f.lam_rl,1)}\\times ${fmt(f.lam_cf,1)} = ${fmt(f.lam_rl*f.lam_cf,2)}`,
         `= ${fmt(f.lam_rlcf_cap,2)}`))
   + subsec(&quot;3. Confinement Factor&quot;,&quot;§5.10.8.2.1c&quot;,
-      note(`<div class=&quot;rbNLp rbNL&quot;><div class=&quot;rbNLl&quot;>λ_rc rewards cover, bar spacing and transverse steel crossing the splitting plane.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>No transverse steel:</b> with no transverse steel and β_t = 0 it reduces to d_b/c_b.</li><li><b class=&quot;rbNLk&quot;>k_tr:</b> k_tr = A_tr/(s·n) here has no factor of 40 (unlike ACI's K_tr), and is scaled by 1.67·n_s.</li><li><b class=&quot;rbNLk&quot;>β_t:</b> β_t (negative) credits permanent compression across the splitting plane; 0 is conservative.</li><li><b class=&quot;rbNLk&quot;>Bounds:</b> the result is bounded between 0.3 and 1.0.</li></ul></div>`)
+      note(`<div class=&quot;rbNLp rbNL&quot;><div class=&quot;rbNLl&quot;>λ_rc rewards cover, bar spacing and transverse steel crossing the splitting plane.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>No transverse steel:</b> with no transverse steel and β_t = 0 it reduces to d_b/c_b.</li><li><b class=&quot;rbNLk&quot;>k_tr:</b> k_tr = A_tr/(s·n) here has no factor of 40 (unlike ACI's K_tr), and is scaled by 1.67·n_s.</li><li><b class=&quot;rbNLk&quot;>β_t:</b> β_t (negative) credits permanent compression across the splitting plane; 0 is conservative.</li><li><b class=&quot;rbNLk&quot;>Bounds:</b> the result is bounded between 0.3 and 1.0.</li><li><b class=&quot;rbNLk&quot;>E_c and n_s:</b> E_c is taken from Eq. 5.4.2.4-1 with K_1 = 1.0 and the normal weight w_c of Table 3.5.1-1, also for lightweight concrete; there it overestimates E_c, so n_s and the k_tr credit are smaller (conservative).</li></ul></div>`)
       + aashtoRcBlock(inp,f,f.ktr_a,f.lam_rc_raw,f.lam_rc))
   + subsec(&quot;4. Development Length&quot;,&quot;Eq. 5.10.8.2.1a-1&quot;,
       eqBlock(&quot;Tension development length&quot;,&quot;Eq. 5.10.8.2.1a-1&quot;,
@@ -9173,7 +9174,7 @@ function tabComp(inp,f){
 /* ---- AASHTO compression branch (AASHTO LRFD 10th Ed. 5.10.8.2.2a; numbered 5.10.8.2.5 in the tool before 2026-10-19) ---- */
 function tabCompAASHTO(inp,f,c){
   return hero(&quot;Compression Development&quot;,&quot;AASHTO LRFD 10th Ed. (2024) §5.10.8.2.2a&quot;,`${fmt(c.ldc,2)} in`,&quot;Required l_dc&quot;)
-  + `<div class=&quot;narr rbNL&quot;><div class=&quot;rbNLl&quot;>AASHTO compression development takes the larger of two expressions (ksi units), then applies the applicable modification factors, with an 8 in floor.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>As in ACI:</b> the splitting mechanism is absent so the length is short.</li><li><b class=&quot;rbNLk&quot;>λ_er and λ:</b> this tool applies λ_er and λ (Eq. 5.10.8.2.2a-1 divides by λ, the concrete density modification factor of §5.4.2.8: the entered value for lightweight concrete, 1.0 for normalweight).</li><li><b class=&quot;rbNLk&quot;>λ_rc:</b> λ_rc = 1.0 (no reduction for spirals or hoops, §5.10.8.2.2b).</li></ul></div>`
+  + `<div class=&quot;narr rbNL&quot;><div class=&quot;rbNLl&quot;>AASHTO compression development takes the larger of two expressions (ksi units), then applies the applicable modification factors, with an 8 in floor.</div><ul class=&quot;rbNLu&quot;><li><b class=&quot;rbNLk&quot;>As in ACI:</b> the splitting mechanism is absent so the length is short.</li><li><b class=&quot;rbNLk&quot;>λ_er and λ:</b> this tool applies λ_er and λ (Eq. 5.10.8.2.2a-1 divides by λ, the concrete density modification factor of §5.4.2.8: the entered value for lightweight concrete, 1.0 for normalweight).</li><li><b class=&quot;rbNLk&quot;>λ_rc:</b> λ_rc = 1.0 (no reduction for spirals or hoops, §5.10.8.2.2b).</li><li><b class=&quot;rbNLk&quot;>f'c:</b> √f'c is taken with f'c not more than 10 ksi, a limit of this tool (§5.10.8.2.2a states none); a higher f'c gives no further reduction (conservative).</li></ul></div>`
   + subsec(&quot;1. Governing Expressions&quot;,&quot;§5.10.8.2.2a&quot;, varTable([
       [&quot;f_y&quot;,&quot;Yield strength&quot;,fmt(f.fy_ksi,1),&quot;ksi&quot;],
       [&quot;f'_c&quot;,&quot;Concrete strength&quot;,fmt(f.fc_ksi,2),&quot;ksi&quot;],
