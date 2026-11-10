@@ -281,6 +281,8 @@
       return { D: E.D, title: 'Girder elevation, moments and deflection', file: 'analysis-elevation', pick: (x, y) => nearest(R.x, E.pick(x, y)), selMark: k => E.selMark(R.x[k]),
         readout: k => `x = ${nf(R.x[k], 2)} ft: M_DC1 ${nz(s.DC1.M[k], 1)}, M_DC2 ${nz(s.DC2.M[k], 1)}, M_DW ${nz(s.DW.M[k], 1)}${ll ? `, M_LL+IM ${nz(ll.Mneg[k], 0)} / ${nz(ll.Mpos[k], 0)}` : ''} kip-ft; camber ${nz(R.camber.total[k], 3)} in`, note: 'Stations, moments and deflections are the Analysis tab\'s results (the station table below); click a location to select it.' };
     };
+    // SBVZB (2026-11-10): the screen graphic in the data-viz style (ui/alonggfx.js); Download DXF exports build(), unchanged
+    if (window.SBDAlongGfx && window.SBDVizAlong && window.SBDVizKit) return window.SBDAlongGfx.analysis(slot, o, { build, getSel: () => S.anSel, setSel: k => { S.anSel = k; } });
     const opts = R.x.map((x, i) => [String(i), `x = ${nf(x, 2)} ft`]), cur = String(Math.min(S.anSel, R.x.length - 1));
     const host = block(slot, { id: 'gfx_an', cases: opts, cur, caseLabel: 'Station', onCase: v => { S.anSel = +v; analysis(slot, o); } });
     return G.mount(host, build, { key: 'an', selected: +cur, onSelect: k => { S.anSel = k; const sl = slot.querySelector('select'); if (sl) sl.value = String(k); } });
@@ -298,10 +300,12 @@
       const items = rows.map((q, i) => ({ x: fin(q.x) ? Math.max(E.L0, Math.min(E.L1, q.x)) : E.L0, ratio: q.gov ? q.gov.ratio : NaN, ok: q.gov ? !(q.gov.ng && !fin(q.gov.ratio)) : false, label: `GOVERNS (ROW ${i + 1})` })); G.ratioLayer(E, G.mergeBands(items, { x0: E.L0, x1: E.L1 }), { what: 'FLEXURE', flag: true });
       return { D: E.D, title: 'Girder elevation coloured by governing ratio', file: 'flexure-elevation', pick: (x, y) => nearest(xr.map(v => (fin(v) ? v : 1e9)), E.pick(x, y)), selMark: k => E.selMark(xr[k]), readout: k => `${rows[k].name}: ${rows[k].gov ? `${rows[k].gov.id} ratio ${fin(rows[k].gov.ratio) ? nf(rows[k].gov.ratio, 3) : 'NG'}` : 'no check'}`, note: 'One band per location of the results table (the tributary stretch to the mid-points of its neighbours); numbers are the table rows. Click a band to select the location.' };
     };
-    const H = G.mount(A, bld, { key: 'fx', selected: sel, onSelect: k => o.onSelect && o.onSelect(k) });
+    // SBVZB (2026-11-10): the screen graphics in the data-viz style (ui/alonggfx.js); Download DXF exports bld() and bldB(), unchanged
+    const viz = window.SBDVizAlong && window.SBDVizKit && window.SBDAlongGfx;
+    const H = viz ? viz.flexure(A, o, { build: bld }) : G.mount(A, bld, { key: 'fx', selected: sel, onSelect: k => o.onSelect && o.onSelect(k) });
     // f_bu vs F_nc (and every check's demand and capacity) at the selected location
     const flangeCk = (r.checks || []).filter(q => q.unit === 'ksi' && fin(q.demand) && fin(q.capacity) && q.inUse !== false);
-    G.mount(B, () => {
+    const bldB = () => {
       // QA2 (2026-11-09): both charts on one width of 3 text heights per check (was 32 units = 5.3 text heights each, and the two charts of different widths), the
       // check key on a second line under its id, so the frame shows the text at a legible size
       const h = 6, hgt = 50, D = G.newDrawing(h), rt = (r.checks || []).filter(q => fin(q.ratio)), w = Math.max(150, 3 * h * Math.max(flangeCk.length, rt.length));
@@ -312,7 +316,8 @@
       const y2 = -(hgt + 13 * h);
       G.chart({ D, at: [0, y2], w, hgt, h, cats: rt.map(q => q.id), series: [{ name: 'RATIO', kind: 'bars', color: 5, pts: rt.map((q, i) => [i, q.ratio]) }], limits: [{ y: 1, label: 'RATIO = 1.0' }], fy: v => nf(v, 2), legend: 'below' }); keys(rt, y2); ttl('CHECK RATIOS (ALL CHECKS OF THE LOCATION)', y2);
       return { D, title: `Stress checks at ${r.name}`, file: 'flexure-checks', note: 'Demand and capacity of the checks in the location table (checks in ksi); ratios of every check with 1.0 marked.' };
-    }, { key: 'fxb' });
+    };
+    if (viz) viz.flexChecks(B, o, { build: bldB }); else G.mount(B, bldB, { key: 'fxb' });
     // unbraced length (LTB) sketch
     G.mount(C, () => {
       const lt = r.lt || {}, Lb = r.Lb, sg = r.seg, h = Math.max(Lb || 20, 20) * 12 * 0.025, D = G.newDrawing(h), t = D.layer('ANNO-TEXT', 7), ly = { f: D.layer('GRDR-PLAT', 4), b: D.layer('BRNG', 8), dm: D.layer('DIMS', 7), s: D.layer('SEL', 5), a: D.layer('LTB-LP', 3), c: D.layer('LTB-LR', 30), d: D.layer('LTB-LB', 1) };
@@ -338,7 +343,7 @@
     const rows = R.rows, xr = rows.map(q => q.x), sel = Math.min(o.sel || 0, rows.length - 1), AR = R.F && R.F.AR, sq = AR && AR.seq;
     slot.innerHTML = '<div class="gfx-a"></div><div class="gfx-b"></div>';
     const A = slot.querySelector('.gfx-a'), B = slot.querySelector('.gfx-b');
-    const H = G.mount(A, () => {
+    const bldA = () => {
       const E = GR().elevation(P, o.gi); if (E.errors.length) return { errors: E.errors };
       const D = E.D, h = E.h, t = E.ly.t, items = rows.map((q, i) => ({ x: q.x, ratio: q.gov ? q.gov.ratio : NaN, ok: q.gov ? !(q.gov.ng && !fin(q.gov.ratio)) : false, label: `GOVERNS (ROW ${i + 1})` })), lp = D.layer('POUR', 30);
       // the pours in order over the elevation: an outlined box per pour with its number (the limits are in the sequence table below)
@@ -354,7 +359,10 @@
         window.SBDDrawings.table(D, E.ly.t, E.X(E.L0), y - 0.5 * h, ['POUR (ORDER)', 'FROM, FT', 'TO, FT', 'LENGTH, FT'], sq.pours.map((p, k) => [String(k + 1), nf(p.a, 1), nf(p.b, 1), nf(p.b - p.a, 1)]), 'DECK PLACEMENT SEQUENCE: POURS IN THE ORDER PLACED'); }
       return { D, title: 'Deck pour sequence and moment envelope', file: 'constructibility-pours', pick: (x, y) => nearest(xr, E.pick(x, y)), selMark: k => E.selMark(xr[k]), readout: k => `${rows[k].name}: M_c = ${nf(rows[k].Mc, 1)} kip-ft; ${rows[k].gov ? `${rows[k].gov.id} ratio ${fin(rows[k].gov.ratio) ? nf(rows[k].gov.ratio, 3) : 'NG'}` : ''}`,
         note: 'Pours, M_DCc and M_DC1 are the Analysis results the checks use (Analysis tab, deck placement sequence); the band row is the governing deck-placement ratio at each location of the table.' };
-    }, { key: 'cn', selected: sel, onSelect: k => o.onSelect && o.onSelect(k) });
+    };
+    // SBVZB (2026-11-10): the screen graphic in the data-viz style (ui/alonggfx.js); Download DXF exports bldA(), unchanged
+    const viz = window.SBDVizAlong && window.SBDVizKit && window.SBDAlongGfx;
+    const H = viz ? viz.constr(A, o, { build: bldA }) : G.mount(A, bldA, { key: 'cn', selected: sel, onSelect: k => o.onSelect && o.onSelect(k) });
     // overhang bracket sketch (exterior girder, project source)
     const oh = R.F && R.F.oh;
     // QA2 (2026-11-09): no bracket sketch to draw (interior girder, or a GirderDetail file): a short note, not an empty frame with a title
