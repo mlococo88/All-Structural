@@ -23,20 +23,56 @@
   function ensure(P) { const M = window.SBDModel; if (!P.framing) P.framing = M.defaultFraming(); if (!P.crossframes) P.crossframes = M.defaultCrossframes();
     if (!P.crossframes.userMode) P.crossframes.userMode = { StrI: 'add', Con: 'add' };   // CFRM (2026-11-01): absent in older projects = 'add', today's behaviour
     return P; }
-  /* plan(L): the framing plan as SVG: girders (blue), support lines (skewed), end and intermediate cross-frames, field splices (ticks) */
-  function plan(L, dOn) {   // dOn (SBDIA): the bracing is a diaphragm: the caption and label say so (the drawing is the same)
-    const FR = L.FR, m = L.m, W = 720, pad = 34, ys = FR.ys, yMax = ys[ys.length - 1];
-    const xs0 = Math.min(...FR.girders.map(g => g.x0)), xs1 = Math.max(...FR.girders.map(g => g.x0 + g.bear[g.bear.length - 1])), sx = (W - 2 * pad) / Math.max(xs1 - xs0, 1);
-    const Hp = Math.max(60, Math.min(260, yMax * sx * 2.2)), sy = Hp / Math.max(yMax, 1), X = x => pad + (x - xs0) * sx, Y = y => 22 + y * sy;
+  /* plan(L, dOn, opt): the framing plan as SVG: girders (blue), support lines (skewed), end and intermediate cross-frames, field splices (ticks).
+     dOn (SBDIA): the bracing is a diaphragm: the caption and label say so (the drawing is the same).
+     SKP (2026-11-10, engineer: "the bearing line skew seems off"): the plan was drawn to scale along the bridge only, its width stretched to
+     a height of 60 to 260 px (2.2 times the length scale, less when capped), so a support line's drawn angle was not the skew (a 30° skew
+     drew at 13° on the 360 ft built-in bridge and at 41° on a 40 ft span). Now one scale in both directions, so the bearing lines are drawn
+     at the true skew, measured from the normal to the girders as engine/framing.js places the bearings (x = x_support + (y − y_c) tan θ),
+     each labelled θ; the support lines run through the end bearings (extended along the line, not vertically). Display only.
+     The scale: the plan 720 units wide, or wider so that the girder lines are at least 14 units apart (labels 9 units), or narrower so
+     that it is at most 560 units tall. vex > 1: the width exaggerated vex times (angles not to scale; θ labels the true skew).
+     opt.ui (screens): the plan in a box that scrolls sideways, at least 82 % of its drawn width (its text at least 7.4 px), and, where the
+     true-scale plan is long and thin (length over width > 5), a check box "Exaggerate the width" (the choice kept for the session, not
+     saved). Without opt.ui (the Report): the true-scale SVG alone, as wide as its frame. */
+  const PLAN = { ex: false };
+  function planSvg(L, dOn, vex, ui) {
+    const FR = L.FR, m = L.m, pad = 34, ys = FR.ys, nb = ys.length, yMax = ys[nb - 1];
+    const xs0 = Math.min(...FR.girders.map(g => g.x0)), xs1 = Math.max(...FR.girders.map(g => g.x0 + g.bear[g.bear.length - 1])), Lx = Math.max(xs1 - xs0, 1);
+    const bayMin = nb > 1 ? Math.min(...ys.slice(1).map((y, i) => y - ys[i])) : 1;
+    let sx = Math.max((720 - 2 * pad) / Lx, nb > 1 ? 14 / Math.max(bayMin * vex, 1e-6) : 0);
+    if (yMax * sx * vex > 560) sx = Math.max(560 / (yMax * vex), 1e-6);
+    const sy = sx * vex, W = Math.max(2 * pad + Lx * sx, 240), t0 = 30, X = x => pad + (x - xs0) * sx, Y = y => t0 + y * sy, E = 8;
+    const f1 = v => (Math.abs(v - Math.round(v)) < 0.005 ? String(Math.round(v)) : v.toFixed(2).replace(/0$/, '')).replace('-', '−');
     let o = '';
-    m.sup.forEach((_, k) => o += `<line x1="${X(FR.xb(k, 0)).toFixed(1)}" y1="${(Y(0) - 8).toFixed(1)}" x2="${X(FR.xb(k, ys.length - 1)).toFixed(1)}" y2="${(Y(yMax) + 8).toFixed(1)}" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="5 3"/><text x="${X(FR.xb(k, 0)).toFixed(1)}" y="12" font-size="9" text-anchor="middle" fill="#475569">${k === 0 ? 'Abut. 1' : k === m.sup.length - 1 ? 'Abut. 2' : 'Pier ' + k}</text>`);
+    const ends = m.sup.map((_, k) => { const ax = X(FR.xb(k, 0)), ay = Y(0), bx = X(FR.xb(k, nb - 1)), by = Y(yMax), len = Math.hypot(bx - ax, by - ay) || 1, ux = (bx - ax) / len, uy = (by - ay) / len;
+      return { k, ax: ax - ux * E, ay: ay - uy * E, bx: bx + ux * E, by: by + uy * E }; });
+    // θ labels under the lower ends; where two would be closer than 56 units, every other one a line lower
+    let low = 0; ends.forEach((q, i) => { q.row = i && Math.abs(q.bx - ends[i - 1].bx) < 56 && !ends[i - 1].row ? 1 : 0; if (q.row) low = 1; });
+    ends.forEach(q => { const k = q.k, nm = k === 0 ? 'Abut. 1' : k === m.sup.length - 1 ? 'Abut. 2' : 'Pier ' + k;
+      o += `<line x1="${q.ax.toFixed(1)}" y1="${q.ay.toFixed(1)}" x2="${q.bx.toFixed(1)}" y2="${q.by.toFixed(1)}" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="5 3"/><text x="${q.ax.toFixed(1)}" y="${(q.ay - 5).toFixed(1)}" font-size="9" text-anchor="middle" fill="#475569">${nm}</text>`
+        + `<text x="${q.bx.toFixed(1)}" y="${(q.by + 11 + q.row * 11).toFixed(1)}" font-size="9" text-anchor="middle" fill="#0F172A" data-skew="${k}">θ = ${f1(+m.skews[k] || 0)}°</text>`; });
     FR.frames.forEach(f => o += `<line x1="${X(f.xa).toFixed(1)}" y1="${Y(ys[f.bay]).toFixed(1)}" x2="${X(f.xc).toFixed(1)}" y2="${Y(ys[f.bay + 1]).toFixed(1)}" stroke="${f.type === 'sup' ? '#B45309' : '#16304F'}" stroke-width="${f.type === 'sup' ? 2.2 : 1.3}"/>`);
     FR.girders.forEach(g => { o += `<line x1="${X(g.x0).toFixed(1)}" y1="${Y(g.y).toFixed(1)}" x2="${X(g.x0 + g.bear[g.bear.length - 1]).toFixed(1)}" y2="${Y(g.y).toFixed(1)}" stroke="#2563EB" stroke-width="2.4"/><text x="${(pad - 6)}" y="${(Y(g.y) + 3).toFixed(1)}" font-size="9" text-anchor="end" fill="#1E3A5F">G${g.i + 1}</text>`;
       m.splices.forEach(s => { const xg = g.x0 + s; o += `<line x1="${X(xg).toFixed(1)}" y1="${(Y(g.y) - 4).toFixed(1)}" x2="${X(xg).toFixed(1)}" y2="${(Y(g.y) + 4).toFixed(1)}" stroke="#DC2626" stroke-width="1.6"/>`; }); });
-    const H = Y(yMax) + 26;
-    return `<svg viewBox="0 0 ${W} ${H.toFixed(0)}" style="width:100%;height:auto;background:#fff;border:1px solid #e4e7eb;border-radius:4px" role="img" aria-label="Framing plan: girders, supports and ${dOn ? 'diaphragms' : 'cross-frames'}">${o}
-      <text x="${pad}" y="${(H - 6).toFixed(0)}" font-size="9" fill="#475569">Plan, to scale along the bridge (vertical scale exaggerated). Blue: girders; brown: end ${dOn ? 'diaphragms' : 'cross-frames'} on the bearing lines; navy: intermediate ${dOn ? 'diaphragms' : 'cross-frames'}; red ticks: field splices.</text></svg>`;
+    const yc = Math.max(Y(yMax) + E, ...ends.map(q => q.by)) + 11 + low * 11, H = yc + 30, bw = dOn ? 'diaphragms' : 'cross-frames';
+    const cap1 = vex > 1 ? `Plan, width exaggerated ×${f1(vex)}: the angles are not to scale; θ is the true skew of each support line.` : 'Plan, true scale in both directions: each support line is drawn at its skew θ from the normal to the girders.';
+    return `<svg viewBox="0 0 ${W.toFixed(0)} ${H.toFixed(0)}" style="width:100%;${ui ? `min-width:${Math.round(0.82 * W)}px;` : ''}height:auto;background:#fff;border:1px solid #e4e7eb;border-radius:4px${ui ? `;display:${(vex > 1) === PLAN.ex ? 'block' : 'none'}` : ''}" role="img" aria-label="Framing plan: girders, supports and ${bw}"${ui ? ` data-fpv="${vex > 1 ? 'x' : 't'}"` : ''}>${o}
+      <text x="${pad}" y="${(yc + 12).toFixed(0)}" font-size="9" fill="#475569">${cap1}</text>
+      <text x="${pad}" y="${(yc + 23).toFixed(0)}" font-size="9" fill="#475569">Blue: girders; brown: end ${bw} on the bearing lines; navy: intermediate ${bw}; red ticks: field splices.</text></svg>`;
   }
+  function plan(L, dOn, opt) {
+    if (!(opt && opt.ui)) return planSvg(L, dOn, 1, false);
+    const FR = L.FR, ys = FR.ys, wid = ys[ys.length - 1], Lx = Math.max(...FR.girders.map(g => g.x0 + g.bear[g.bear.length - 1])) - Math.min(...FR.girders.map(g => g.x0));
+    const r = wid > 0 ? Lx / wid : 0, vex = r > 5 ? Math.min(4, Math.round(r / 5 * 2) / 2 + 0.5) : 1;   // offered for a long, thin plan: about a fifth of the length tall, at most ×4
+    return `<div class="fp-plan">${vex > 1 ? `<label class="fp-ex"><input type="checkbox" data-fpex${PLAN.ex ? ' checked' : ''}> Exaggerate the width ×${String(vex)} (long bridge; the angles are then not to scale)</label>` : ''}
+      <div class="fp-sc">${planSvg(L, dOn, 1, true).replace('display:none', vex > 1 ? 'display:none' : 'display:block')}${vex > 1 ? planSvg(L, dOn, vex, true) : ''}</div></div>`;
+  }
+  if (typeof document !== 'undefined' && document.addEventListener) document.addEventListener('change', e => {   // SKP: the "Exaggerate the width" check box, every plan on the page
+    const c = e.target; if (!c || !c.matches || !c.matches('[data-fpex]')) return; PLAN.ex = !!c.checked;
+    document.querySelectorAll('[data-fpex]').forEach(q => { q.checked = PLAN.ex; });
+    document.querySelectorAll('svg[data-fpv]').forEach(s => { s.style.display = (s.dataset.fpv === 'x') === PLAN.ex ? 'block' : 'none'; });
+  });
   /* BRSEL (2026-11-09): the "Intermediate bracing" drop-down. braceOf(C): the choice shown for the saved fields: a diaphragm when
      dia.on = 'yes' (type kept underneath), 'ch' when its shape is one of CF_CH, else 'w' (CF_DIA or custom W); otherwise the frame type.
      setBrace(P, v): writes the choice back: a frame sets type and dia.on = 'no'; a diaphragm sets dia.on = 'yes' and leaves type alone;
@@ -73,7 +109,7 @@
         <div class="fRow"><label for="fr_spl">Field splices</label><input type="text" id="fr_spl" data-fr="splices" value="${esc((F.splices || []).join(', '))}" style="width:180px"><span class="unit"></span></div>
         ${h.num('framing.spliceClear', 'Frames clear of splices and transitions', 'ft')}
         <p class="note">Girders and spacings: Cross-section tab; support skews: Bridge layout tab. The plates of every girder give the shop transitions. Frames normal to the girders at a support skewed more than 20° start at least max(clear, 4b<sub>f</sub>, 0.4s) from the obtuse bearing (C6.7.4.2.1); corner frames close longer panels. Owner rule xf.orient applies with the automatic orientation.</p>
-        ${L && !L.errors.length ? plan(L, dOn) : `<div class="alert err">${esc((L && L.errors || []).join(' '))}</div>`}`)
+        ${L && !L.errors.length ? plan(L, dOn, { ui: true }) : `<div class="alert err">${esc((L && L.errors || []).join(' '))}</div>`}`)
       + h.card('Intermediate bracing (6.7.4.2)', `${h.sel('crossframes.type', 'Intermediate bracing', BRACE, br).replace('<select ', '<select style="width:200px;max-width:100%" ')}
         ${h.num('crossframes.dMinXF', 'Minimum girder depth for cross-frames', 'in')}${dOn ? `${h.sel('crossframes.dia.shape', 'Shape', br === 'ch' ? CF.CF_CH.map(s => [s[0], s[0]]) : [...CF.CF_DIA.map(s => [s[0], s[0]]), ['custom', 'Custom W']])}
         ${C.dia.shape === 'custom' ? `${h.num('crossframes.dia.d', 'Depth d', 'in')}${h.num('crossframes.dia.bf', 'Flange width', 'in')}${h.num('crossframes.dia.tf', 'Flange thickness', 'in')}${h.num('crossframes.dia.tw', 'Web thickness', 'in')}` : ''}
@@ -108,7 +144,7 @@
   function layoutPlan(P) {
     ensure(P); let L = null; try { L = window.SBDFraming.compute(P); } catch (e) { L = { errors: [e.message] }; }
     const dOn = isDia(P);
-    return (L && !L.errors.length ? plan(L, dOn) : `<div class="alert err">${esc((L && L.errors || []).join(' '))}</div>`)
+    return (L && !L.errors.length ? plan(L, dOn, { ui: true }) : `<div class="alert err">${esc((L && L.errors || []).join(' '))}</div>`)
       + `<p class="note">${dOn ? 'Diaphragms' : 'Cross-frames'}, their spacing and orientation, and the field splices: <a href="#" data-itgo="framing">Framing &amp; bracing tab</a>.</p>`;
   }
   function onChange(el, P) {
@@ -199,7 +235,7 @@
     h += dOn ? `<section class="sec"><div class="secHead">Diaphragms: elevation</div><div class="secBody">${diaSvg(B)}</div></section>`   // SBDIA: the diaphragm, not the X / K truss
       : `<section class="sec"><div class="secHead">Cross-frames: elevation</div><div class="secBody"><div data-gfxb="crossframe"></div></div></section>`;   // drawn by ui/tabgraphics-b.js from the results below
     // layout
-    h += `<section class="sec"><div class="secHead">Framing (6.7.4.2.1)</div><div class="secBody">${plan(L, dOn)}
+    h += `<section class="sec"><div class="secHead">Framing (6.7.4.2.1)</div><div class="secBody">${plan(L, dOn, { ui: true })}
       <div class="tscroll"><table class="tbl"><thead><tr><th>Span</th><th>Skew θ (°)</th><th class="lft">Orientation</th><th>Frames</th><th>Spacing (ft)</th><th>Conflicts</th><th></th></tr></thead><tbody>
       ${FR.orient.map(o => `<tr><td>${o.k + 1}</td><td>${fmt(o.th, 2)}</td><td class="lft">${o.o === 'normal' ? `normal, ${o.flat ? 'contiguous' : esc(o.arr)}` : 'parallel to the skew'}</td><td>${o.n}</td><td>${fmt(o.s, 3)}</td><td class="${o.conflicts ? 'fx-hi' : ''}">${o.conflicts || 0}</td><td>${wk(`fr.k${o.k}.s`)}</td></tr>`).join('')}</tbody></table></div>
       <div class="tscroll"><table class="tbl"><thead><tr><th>Girder</th><th>Intermediate frames</th><th>Largest L<sub>b</sub> (ft)</th><th class="lft">Brace points (own stations, ft)</th><th></th></tr></thead><tbody>

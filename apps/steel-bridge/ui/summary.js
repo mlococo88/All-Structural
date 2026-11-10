@@ -55,8 +55,8 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
 @media screen and (max-width:600px){table.sum-ov th{white-space:normal;width:auto;min-width:90px}}
 .sum-gfx{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
 .sum-g1{margin:0;min-width:0} .sum-g1 figcaption{font-family:var(--font-ui);font-size:8.5pt;color:#475569;margin:0 0 4px} .sum-g1 .note{font-size:8.5pt}
-.sum-gbox{background:#fff;color:#0F172A;border:1px solid #e4e7eb;border-radius:4px;padding:4px;color-scheme:light;overflow:hidden} .sum-gbox svg{display:block;width:100%;max-width:100%;height:auto;margin:0 auto}
-@media print{.sum-gfx{grid-template-columns:minmax(0,1fr)} .sum-g1{break-inside:avoid} .sum-gbox{-webkit-print-color-adjust:exact;print-color-adjust:exact} .sum-gbox svg{width:100%!important}}
+.sum-gbox{background:#fff;color:#0F172A;border:1px solid #e4e7eb;border-radius:4px;padding:4px;color-scheme:light;overflow:hidden} .sum-gbox svg{display:block;width:100%;max-width:100%;height:auto;margin:0 auto} .sum-gbox .fp-sc svg{max-width:none}
+@media print{.sum-gfx{grid-template-columns:minmax(0,1fr)} .sum-g1{break-inside:avoid} .sum-gbox{-webkit-print-color-adjust:exact;print-color-adjust:exact} .sum-gbox svg{width:100%!important;min-width:0!important}}
 @media print{.sum-run button{display:none}}`;
     document.head.appendChild(st);
   }
@@ -209,7 +209,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
      (window resize, the splitter's 'sbd2:panelresize', and a ResizeObserver on the card for the left column's collapse; rAF-throttled). Print: full page width (CSS). Display only. */
   const GFX_CAP = () => Math.max(360, Math.min(760, 0.8 * (window.innerHeight || 900)));
   function sizeGfx(el) {
-    el.querySelectorAll('.sum-gbox > svg').forEach(s => { const vb = (s.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number), bx = s.parentNode.clientWidth - 8;
+    el.querySelectorAll('.sum-gbox > svg, .sum-gbox .fp-sc > svg').forEach(s => { const vb = (s.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number), bx = s.closest('.sum-gbox').clientWidth - 8;   // SKP: the framing plan in its scroll box
       if (!(vb[2] > 0 && vb[3] > 0) || !(bx > 0)) { s.style.width = ''; return; }
       const w = Math.min(bx, GFX_CAP() * vb[2] / vb[3]); s.style.width = w < bx - 1 ? Math.floor(w) + 'px' : ''; });
   }

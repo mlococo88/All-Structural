@@ -258,25 +258,85 @@
   }
 
   /* ---------- 3: typical cross-section (GirderDetail dxfSection + dxfApp) ---------- */
+  /* SBXS (2026-11-10, engineer: "the cross section graphic dimension lines are overlapping a lot and doesn't look good"): laid out again so
+     that no text overlaps another text and no line (extension line, dimension line, leader, outline) crosses a text. Display and DXF only
+     (the engineer asked for this drawing to be fixed: its DXF changes; every other drawing is unchanged). The same quantities are dimensioned:
+       - left of the deck edge, in four columns 3 text heights apart, inside out: web depth D, girder depth, haunch, deck (slab) thickness
+         (were: girder and haunch on the left, web between G1 and G2, deck on the right). A text longer than its dimension (less 0.8 h) is
+         written beyond the end of the dimension, its dimension line extended to it: below the girder (web, girder) or above the deck
+         (haunch, deck), where no extension line of the other columns reaches;
+       - girder spacing and the out-to-out width under the girders (were above the deck, where their extension lines ran through the
+         appurtenance callouts): the spacing chain from the deck edges and below the girder labels (the centerline is the extension line),
+         the out-to-out under it; the bottom flange dimension under those, its plate size written beside it, past its right extension line,
+         where it is wider than the flange (it was centred across both extension lines);
+       - the deck-edge chain over the barriers, sidewalks and railings: a text that does not fit its piece goes on a row above the chain
+         with a leader to the piece (rows 1.5 h apart, no two texts on a row closer than 0.6 h, no leader through a text);
+       - the appurtenance callouts above the chain zone, fanned out: each leader drops to a point of its item clear of the chain's texts and
+         extension lines and at least 1.6 h from the other leaders, the rows 1.9 h apart (text 0.7 h), the items nearest the middle lowest.
+     h = the text height of the drawing (0.1 in plotted × the scale). Text widths are estimated at 0.68 h per character (Arial-like). */
+  const tW = (s, hh) => X_().str(s).length * 0.68 * hh;
+  const runsOf = v => { const s = [...new Set(v.map(q => +q.toFixed(4)))].sort((a, b) => a - b), out = []; let i = 0;   // as SharedDxf chainH (n@s)
+    while (i < s.length - 1) { const d = s[i + 1] - s[i]; let j = i + 1; while (j < s.length - 1 && Math.abs((s[j + 1] - s[j]) - d) < 1e-3) j++; out.push([s[i], s[j], j - i, d]); i = j; } return out; };
+  const hitX = (a0, a1, xs) => xs.some(x => Array.isArray(x) ? a1 > x[0] && a0 < x[1] : x > a0 && x < a1);   // xs: x or [x0, x1]
+  /* chainFit(D, l, pts, y, dir, o): a horizontal chain through y of the points pts = [[x, yref], …] (n@s runs as chainH), each run's text
+     inside its run where it fits (its width + 0.8 h, clear of o.obst, the x or [x0, x1] of lines and texts crossing the text band), else on a row beyond the
+     chain (dir +1 above, −1 below) with a leader. o.txt(a, b, n, d): the text of a run (default the measured length or n@s). Returns
+     { edge (the outermost y used), boxes [[x0, y0, x1, y1]] (texts), lines [x] (extension lines and leaders) } */
+  function chainFit(D, l, pts, y, dir, o) {
+    o = o || {}; const h = D.h, k = D.k, ref = new Map(pts.map(p => [+p[0].toFixed(4), p[1]])), obst = o.obst || [], boxes = [], lines = [], out = [];
+    runsOf(pts.map(p => p[0])).forEach(([a, b, n, d]) => { const t = o.txt ? o.txt(a, b, n, d) : n > 1 ? `${n}@${D.fmt(d)}` : D.fmt(b - a), w = tW(t, h), mid = (a + b) / 2;
+      lines.push(a, b); const fits = w + 0.8 * h <= b - a && !hitX(mid - w / 2 - 0.3 * h, mid + w / 2 + 0.3 * h, obst);
+      D.dim(l, [a, ref.get(+a.toFixed(4))], [b, ref.get(+b.toFixed(4))], [a, y], 0, fits ? t : ' ');
+      if (fits) boxes.push([mid - w / 2, y + 0.06 * k, mid + w / 2, y + 0.07 * k + 0.82 * h]); else out.push({ t, w, mid }); });
+    let edge = dir > 0 ? y + 0.12 * k : y - 0.12 * k; const rows = [];
+    out.forEach(q => { for (let r = 0; r < 40; r++) {
+      const yb = dir > 0 ? y + 1.6 * h + 1.5 * h * r : y - 2.4 * h - 1.5 * h * r, ly = yb + (dir > 0 ? -0.15 * h : 0.95 * h);   // text baseline (its box 0.1 h below to 0.82 h above); leader end
+      for (const off of [0, 1, -1, 2, -2, 3, -3, 4, -4, 6, -6, 8, -8]) { const c = q.mid + off * 0.5 * q.w, B = { x0: c - q.w / 2, x1: c + q.w / 2, y0: yb - 0.1 * h, y1: yb + 0.82 * h };
+        if (hitX(B.x0 - 0.3 * h, B.x1 + 0.3 * h, obst) || rows.some(p => (p.r === r && B.x0 < p.x1 + 0.6 * h && B.x1 > p.x0 - 0.6 * h) || (p.r < r && segBox(q.mid, y, c, ly, p)) || (p.r > r && segBox(p.lx, y, p.c, p.ly, B)))) continue;
+        rows.push({ r, ...B, lx: q.mid, c, ly }); D.line(l, q.mid, y, c, ly); D.text(l, c, yb, h, q.t, 1); boxes.push([B.x0, B.y0, B.x1, B.y1]); lines.push(q.mid);
+        edge = dir > 0 ? Math.max(edge, B.y1) : Math.min(edge, B.y0); return; } } });
+    return { edge, boxes, lines };
+  }
+  // does the segment (x0, y0)-(x1, y1) pass through the box b (x0, x1, y0, y1)?
+  function segBox(ax, ay, bx, by, b) {
+    const n = 24; for (let i = 0; i <= n; i++) { const t = i / n, x = ax + (bx - ax) * t, y = ay + (by - ay) * t; if (x > b.x0 && x < b.x1 && y > b.y0 && y < b.y1) return true; } return false;
+  }
+  /* vdim(D, l, p1, p2, x, txt, out): a vertical dimension in the column x; its text inside where it fits (width + 0.8 h), else beyond the
+     end out ('lo': below p1, the text ending 0.8 h under yOut; 'hi': above p2, starting 0.8 h over yOut) with the dimension line extended */
+  function vdim(D, l, p1, p2, x, txt, out, yOut) {
+    const h = D.h, k = D.k, t = X_().str(txt.replace('<>', D.fmt(Math.abs(p2[1] - p1[1])))), w = tW(t, h);
+    if (w + 0.8 * h <= Math.abs(p2[1] - p1[1])) { D.dim(l, p1, p2, [x, p1[1]], 90, txt); return; }
+    D.dim(l, p1, p2, [x, p1[1]], 90, ' ');
+    if (out === 'lo') { const ye = yOut - 0.8 * h; D.line(l, x, p1[1], x, ye - w); D.text(l, x - 0.07 * k, ye, h, t, 2, 90); }
+    else { const ye = yOut + 0.8 * h; D.line(l, x, p2[1], x, ye + w); D.text(l, x - 0.07 * k, ye, h, t, 0, 90); }
+  }
   function section(G, D, opt) {
     opt = opt || {}; const dk = G.deck, nb = G.nb, xg = G.ys.map(y => y * 12), W = xg[nb - 1], xL = -dk.ohL * 12, xR = W + dk.ohR * 12;
     D.k = opt.k || scaleFor((xR - xL) * 1.3, 30); D.h = TXT * D.k; const h = D.h, i0 = D.mark();
     const ly = { g: D.layer('GRDR', 5), dk: D.layer('DECK', 7), d: D.layer('DIMS', 7), t: D.layer('ANNO-TEXT', 7), c: D.layer('CNTR', 8) }, cl = D.ltype('CENTER');
-    const ts = dk.ts, hh = dk.haunch, sec = G.girders.map(g => g.segs[0]), tTop = Math.max(...sec.map(s => s.topT)), yT = 0;
-    D.rect(ly.dk, xL, yT + hh, xR, yT + hh + ts);
-    const yA = appDraw(G, D, xL, xR, yT + hh + ts), yDk = yT + hh + ts + yA;
+    const ts = dk.ts, hh = dk.haunch, sec = G.girders.map(g => g.segs[0]), tTop = Math.max(...sec.map(s => s.topT)), yT = 0, yDT = yT + hh + ts;
+    D.rect(ly.dk, xL, yT + hh, xR, yDT);
+    const yA = appDraw(G, D, xL, xR, yDT), yDk = yDT + yA;
     let yBot = 0;
     xg.forEach((x, i) => { const s = sec[i], yt = yT - (tTop - s.topT), yb = yt - s.topT - s.D - s.botT; yBot = Math.min(yBot, yb);
       D.rect(ly.g, x - s.topB / 2, yt - s.topT, x + s.topB / 2, yt); D.rect(ly.g, x - s.tw / 2, yt - s.topT - s.D, x + s.tw / 2, yt - s.topT); D.rect(ly.g, x - s.botB / 2, yb, x + s.botB / 2, yt - s.topT - s.D);
       D.line(ly.dk, x - s.topB / 2, yt, x - s.topB / 2, yT + hh); D.line(ly.dk, x + s.topB / 2, yt, x + s.topB / 2, yT + hh); });
-    xg.forEach((x, i) => { D.line(ly.c, x, yT + hh + ts + 2 * h, x, yBot - 2 * h, cl); D.text(ly.t, x, yBot - 3.8 * h, h, G.girders[i].label, 1); });
-    D.chainH(ly.d, [xL, ...xg, xR], yDk + 4 * h, yT + hh + ts); D.dimH(ly.d, xL, xR, yDk + 7 * h, yT + hh + ts, '<> OUT-TO-OUT OF DECK');
-    D.dimV(ly.d, yT + hh, yT + hh + ts, xR + 3 * h, xR, 'DECK <>'); if (hh > 0) D.dimV(ly.d, yT, yT + hh, xL - 3 * h, -sec[0].topB / 2, 'HAUNCH <>');
-    const s0 = sec[0], yb0 = yT - (tTop - s0.topT) - s0.topT - s0.D - s0.botT;
-    D.dimV(ly.d, yb0, yT - (tTop - s0.topT), -s0.topB / 2 - 4 * h, -s0.botB / 2, 'GIRDER <>'); D.dimV(ly.d, yb0 + s0.botT, yb0 + s0.botT + s0.D, s0.topB / 2 + 3 * h, s0.tw / 2, 'WEB <>');
-    D.dimH(ly.d, -s0.botB / 2, s0.botB / 2, yBot - 7.5 * h, yb0, `BOT. FL. ${dIn(s0.botB)} x ${dIn(s0.botT)}`);
-    D.text(ly.t, xL, yDk + 11 * h, h * 1.6, 'TYPICAL CROSS-SECTION');
-    D.text(ly.t, xL, yDk + 9.3 * h, h * 0.8, `SECTION AT CL BRG. ABUT. 1 (FIRST PLATE SEGMENT OF EACH GIRDER); SEE THE PLATE SCHEDULE FOR OTHER PLATES. SCALE ${SCALE_NAME[D.k]} WHEN PLOTTED.`);
+    // girder centerlines and labels; under them the girder spacing (from the deck edges), the out-to-out width and the bottom flange
+    xg.forEach((x, i) => { D.line(ly.c, x, yDT + 2 * h, x, yBot - h, cl); D.text(ly.t, x, yBot - 2.3 * h, h, G.girders[i].label, 1); });
+    const s0 = sec[0], yt0 = yT - (tTop - s0.topT), yb0 = yt0 - s0.topT - s0.D - s0.botT, fl = [-s0.botB / 2, s0.botB / 2];
+    const x0 = Math.min(xL, -Math.max(s0.topB, s0.botB) / 2), col = j => x0 - (3 + 3 * j) * h, cols = [[col(3) - 0.2 * D.k, col(0) + 0.05 * D.k]];   // the left columns (their texts below the girder)
+    const yS = yBot - 4.6 * h, C1 = chainFit(D, ly.d, [[xL, yT + hh], ...xg.map(x => [x, yBot - 2.8 * h]), [xR, yT + hh]], yS, -1, { obst: [...fl, xL, xR, ...cols] });   // the out-to-out extension lines (xL, xR) and the bottom flange's (fl) pass through its rows
+    const yO = C1.edge - 1.9 * h, C2 = chainFit(D, ly.d, [[xL, yT + hh], [xR, yT + hh]], yO, -1, { obst: [...fl, ...cols], txt: () => `${D.fmt(xR - xL)} OUT-TO-OUT OF DECK` });
+    const yF = C2.edge - 1.9 * h, bt = `BOT. FL. ${dIn(s0.botB)} x ${dIn(s0.botT)}`, bw = tW(bt, h);
+    if (bw + 0.8 * h <= s0.botB) D.dimH(ly.d, fl[0], fl[1], yF, yb0, bt);
+    else { D.dimH(ly.d, fl[0], fl[1], yF, yb0, ' '); D.line(ly.d, fl[1], yF, fl[1] + 1.2 * h + bw, yF); D.text(ly.t, fl[1] + 1.2 * h, yF + 0.07 * D.k, h, bt); }
+    // left of the deck edge: web, girder, haunch and deck in four columns
+    vdim(D, ly.d, [-s0.botB / 2, yb0 + s0.botT], [-s0.topB / 2, yt0 - s0.topT], col(0), 'WEB <>', 'lo', yb0);
+    vdim(D, ly.d, [-s0.botB / 2, yb0], [-s0.topB / 2, yt0], col(1), 'GIRDER <>', 'lo', yb0);
+    if (hh > 0) vdim(D, ly.d, [-s0.topB / 2, yT], [xL, yT + hh], col(2), 'HAUNCH <>', 'hi', yDT);
+    vdim(D, ly.d, [xL, yT + hh], [xL, yDT], col(3), 'DECK <>', 'hi', yDT);
+    D.text(ly.t, xL, yDk + 4 * h, h * 1.6, 'TYPICAL CROSS-SECTION');
+    D.text(ly.t, xL, yDk + 2.3 * h, h * 0.8, `SECTION AT CL BRG. ABUT. 1 (FIRST PLATE SEGMENT OF EACH GIRDER); SEE THE PLATE SCHEDULE FOR OTHER PLATES. SCALE ${SCALE_NAME[D.k]} WHEN PLOTTED.`);
     // general notes (GirderDetail dxfSection; the data of this project)
     const P = G.P, bo = (P.splices || {}).bolts || {}, sc = P.studs || {};
     const lines = ['DESIGN SPECIFICATION: AASHTO LRFD BRIDGE DESIGN SPECIFICATIONS, 10TH EDITION (2024). LIVE LOAD: HL-93.',
@@ -288,33 +348,59 @@
       'WELDING: AASHTO/AWS D1.5 BRIDGE WELDING CODE. FLANGE BUTT SPLICES CJP, GROUND FLUSH AND SMOOTH IN THE DIRECTION OF STRESS.',
       'ALL DIMENSIONS TO BE VERIFIED AGAINST THE CONTRACT DRAWINGS. GENERATED BY STEEL BRIDGE DESIGN (NEW).'];
     if (G.app && G.app.items.some(a => a.sch)) lines.push('BARRIER, RAILING AND FENCE SHAPES AND HEIGHTS ARE SCHEMATIC.');
-    notes(D, ly.t, xL, yBot - 12 * h, 'GENERAL NOTES', lines, 90);
+    notes(D, ly.t, xL, yF - 4.5 * h, 'GENERAL NOTES', lines, 90);
     return { id: 'sec', title: 'Typical cross-section', i0, i1: D.mark(), k: D.k, h: D.h };
   }
-  /* appurtenances on the section (GirderDetail dxfApp); returns the height used above the deck top */
+  /* appurtenances on the section (GirderDetail dxfApp); returns the height used above the deck top. SBXS: the deck-edge chain with chainFit;
+     the callouts fanned out above it (see section) */
   function appDraw(G, D, xL, xR, yTop) {
     const A = G.app ? G.app.items : []; if (!A.length) return 0;
     const h = D.h, X = x => xL + x * 12, ly = { b: D.layer('DECK-BARR', 8), c: D.layer('DECK-CURB', 8), r: D.layer('DECK-RAIL', 1), s: D.layer('DECK-SDWK', 9), m: D.layer('DECK-MEDN', 9), w: D.layer('DECK-WSRF', 3), t: D.layer('ANNO-TEXT', 7), d: D.layer('DIMS', 7) };
-    const kl = L => L ? ` (${f3(L.plf)} KLF ${L.cat}${L.ovr ? ', OVERRIDE' : ''})` : '', labs = []; let top = 0, ovY = 0, nW = 0;
+    const kl = L => L ? ` (${f3(L.plf)} KLF ${L.cat}${L.ovr ? ', OVERRIDE' : ''})` : '', labs = []; let top = 0, ovY = 0;
+    // labs: { s, y (anchor height), a0, a1 (the anchor may be anywhere from a0 to a1 on the item's top), pt (a railing: the anchor at its post) }
     A.forEach(a => { const y0 = yTop + a.y0;
       if (a.k === 'sw' || a.k === 'med' || a.k === 'curb') { D.rect(a.k === 'sw' ? ly.s : a.k === 'med' ? ly.m : ly.c, X(a.x0), y0, X(a.x1), y0 + a.h);
         if (a.k === 'med' && a.joint) D.line(ly.m, X((a.x0 + a.x1) / 2), y0 + a.h + h, X((a.x0 + a.x1) / 2), yTop - 1.5 * h, D.ltype('HIDDEN'));
-        labs.push({ x: X((a.x0 + a.x1) / 2), y: y0 + a.h, s: a.k === 'sw' ? `${a.sd === 'L' ? 'LEFT' : 'RIGHT'} SIDEWALK ${dFI((a.x1 - a.x0) * 12)} x ${dIn(a.h)}${kl(a.L)}` : a.k === 'med' ? `RAISED MEDIAN ${dFI((a.x1 - a.x0) * 12)} x ${dIn(a.h)}${kl(a.L)}${a.joint ? ', LONGIT. JOINT' : ''}` : `CURB ${dIn((a.x1 - a.x0) * 12)} x ${dIn(a.h)}${kl(a.L)}` }); }
+        labs.push({ a0: X(a.x0), a1: X(a.x1), y: y0 + a.h, s: a.k === 'sw' ? `${a.sd === 'L' ? 'LEFT' : 'RIGHT'} SIDEWALK ${dFI((a.x1 - a.x0) * 12)} x ${dIn(a.h)}${kl(a.L)}` : a.k === 'med' ? `RAISED MEDIAN ${dFI((a.x1 - a.x0) * 12)} x ${dIn(a.h)}${kl(a.L)}${a.joint ? ', LONGIT. JOINT' : ''}` : `CURB ${dIn((a.x1 - a.x0) * 12)} x ${dIn(a.h)}${kl(a.L)}` }); }
       else if (a.k === 'bar') { const w = (a.x1 - a.x0) * 12, s = a.sd === 'L' ? 1 : -1, x0 = a.sd === 'L' ? X(a.x0) : X(a.x1), P_ = (f, g) => [x0 + s * f * w, y0 + g * a.h];
         D.pline(ly.b, [P_(0, 0), P_(0, 1), P_(0.42, 1), P_(0.62, 0.3), P_(1, 0.12), P_(1, 0)], true);
-        labs.push({ x: X((a.x0 + a.x1) / 2), y: y0 + a.h, s: `BARRIER ${dFI(w)} AT DECK${kl(a.L)}, SHAPE AND HEIGHT SCHEMATIC` }); }
+        labs.push({ a0: Math.min(x0, x0 + s * 0.42 * w), a1: Math.max(x0, x0 + s * 0.42 * w), y: y0 + a.h, s: `BARRIER ${dFI(w)} AT DECK${kl(a.L)}, SHAPE AND HEIGHT SCHEMATIC` }); }
       else if (a.k === 'rail' || a.k === 'fence') { const x = X(a.x); D.line(ly.r, x, y0, x, y0 + a.h); D.line(ly.r, x - 3, y0 + a.h - 1.5, x + 3, y0 + a.h - 1.5); D.line(ly.r, x - 3, y0 + a.h * 0.55, x + 3, y0 + a.h * 0.55);
-        labs.push({ x, y: y0 + a.h, s: `${a.k === 'rail' ? 'RAILING' : 'SIDEWALK RAILING OR FENCE'} AT ${dFI((a.sd === 'L' ? a.x : G.app.Wd - a.x) * 12)} FROM DECK EDGE${kl(a.L)}, HEIGHT SCHEMATIC` }); }
+        labs.push({ a0: x, a1: x, pt: true, y: y0 + a.h, s: `${a.k === 'rail' ? 'RAILING' : 'SIDEWALK RAILING OR FENCE'} AT ${dFI((a.sd === 'L' ? a.x : G.app.Wd - a.x) * 12)} FROM DECK EDGE${kl(a.L)}, HEIGHT SCHEMATIC` }); }
       else { const t = a.h > 0 ? a.h : 0, yb = yTop + ovY, x0 = X(a.x0), x1 = X(a.x1), q = a.L && a.L.q != null ? a.L.q : a.L ? a.L.plf * 1000 / (a.x1 - a.x0) : 0;
         if (t > 0) { D.rect(ly.w, x0, yb, x1, yb + t); ovY += t; } else { D.line(ly.w, x0, yb + 0.5, x1, yb + 0.5, D.ltype('HIDDEN')); ovY += 0.5; }
-        labs.push({ x: x0 + (0.2 + 0.06 * nW++) * (x1 - x0), y: yb + Math.max(t, 0.5), s: `${a.k === 'ws' ? 'FUTURE WEARING SURFACE' : X_().str(a.L.desc).toUpperCase()} ${t > 0 ? `${dIn(t)} x ${f0(a.L.gam * 1000)} PCF = ` : ''}${Math.abs(q - Math.round(q)) < 0.05 ? f0(q) : q.toFixed(1)} PSF${kl(a.L)}${t > 0 ? '' : ', THICKNESS NOT SET (LINE ONLY)'}` }); }
+        labs.push({ a0: x0, a1: x1, y: yb + Math.max(t, 0.5), ws: true, s: `${a.k === 'ws' ? 'FUTURE WEARING SURFACE' : X_().str(a.L.desc).toUpperCase()} ${t > 0 ? `${dIn(t)} x ${f0(a.L.gam * 1000)} PCF = ` : ''}${Math.abs(q - Math.round(q)) < 0.05 ? f0(q) : q.toFixed(1)} PSF${kl(a.L)}${t > 0 ? '' : ', THICKNESS NOT SET (LINE ONLY)'}` }); }
       top = Math.max(top, a.y0 + (a.h || 0)); });
+    // the deck-edge chain: deck edges, item edges, railings
     const xs = [xL, xR]; A.forEach(a => { if (a.x0 != null && a.k !== 'ws' && a.k !== 'ovl') xs.push(X(a.x0), X(a.x1)); else if (a.x != null) xs.push(X(a.x)); });
-    const yC = yTop + top + 1.5 * h; D.chainH(ly.d, xs, yC, yTop);
-    const th = h * 0.7, mid = (xL + xR) / 2, Lh = labs.filter(q => q.x < mid).sort((p, q) => p.x - q.x), Rh = labs.filter(q => q.x >= mid).sort((p, q) => q.x - p.x), tw = q => q.s.length * th * 0.95 + th;
-    const clash = Lh.length && Rh.length && Math.max(...Lh.map(q => q.x + tw(q))) > Math.min(...Rh.map(q => q.x - tw(q))), off = clash ? Lh.length : 0, nr = clash ? Lh.length + Rh.length : Math.max(Lh.length, Rh.length);
-    [Lh, Rh].forEach((Gr, s) => Gr.forEach((q, i) => { const yl = yC + 2.2 * h + (Gr.length - 1 - i + (s ? off : 0)) * 2.1 * th; D.line(ly.t, q.x, q.y, q.x, yl + 0.4 * th); D.line(ly.t, q.x, yl + 0.4 * th, q.x + (s ? -0.6 : 0.6) * th, yl + 0.4 * th); D.text(ly.t, q.x + (s ? -0.8 : 0.8) * th, yl, th, q.s, s ? 2 : 0); }));
-    return top + 1.5 * h + 2.2 * h + nr * 2.1 * th + h;
+    const yC = yTop + top + 1.5 * h, C = chainFit(D, ly.d, xs.map(x => [x, yTop]), yC, 1, {});
+    // the callouts. Leaders: each clear of the chain's texts (0.3 h), its extension lines and leaders (0.6 h), the deck edges and the other
+    // callouts' leaders (1.6 h apart); on the item's top where it can be (nearest its middle), else the nearest free point, reached by a
+    // sloped leg under the chain; the wearing surface and overlays (any point along the deck, not through a barrier, sidewalk, curb or
+    // median) last. Texts: rows 1.9 h apart above the chain zone (text 0.7 h); the callouts nearest the middle of the deck lowest, each on
+    // the lowest row where its text clears the texts on that row and the leaders passing through it, and its leader clears the texts
+    // below; texts towards the middle (left of the middle: written to the right of the leader). Where that cannot be done, every text to
+    // the right of its leader, the leftmost highest (always possible).
+    const th = h * 0.7, mid = (xL + xR) / 2, yK = yC - 0.6 * h, yR = C.edge + 1.6 * h, gap = 1.9 * h;
+    const clr = x => !C.boxes.some(b => x > b[0] - 0.3 * h && x < b[2] + 0.3 * h) && !C.lines.some(v => Math.abs(x - v) < 0.6 * h) && x > xL + 0.6 * h && x < xR - 0.6 * h;
+    const own = A.filter(a => a.k !== 'ws' && a.k !== 'ovl' && a.x0 != null).map(a => [X(a.x0), X(a.x1)]), taken = [];
+    [...labs.filter(q => !q.ws).sort((p, q) => (p.a0 + p.a1) - (q.a0 + q.a1)), ...labs.filter(q => q.ws)].forEach(q => {
+      const c = (q.a0 + q.a1) / 2, st = 0.25 * h, cand = [], ok = x => clr(x) && taken.every(t => Math.abs(t - x) >= 1.6 * h) && (!q.ws || !own.some(([u, v]) => x > u - 0.3 * h && x < v + 0.3 * h));
+      for (let x = q.a0 + (q.pt ? 0 : 0.4 * h); x <= q.a1 - (q.pt ? 0 : 0.4 * h) + 1e-9; x += st) cand.push(x);
+      cand.sort((u, v) => Math.abs(u - c) - Math.abs(v - c)); for (let d = st; d <= xR - xL; d += st) cand.push(q.a0 - d, q.a1 + d);
+      q.xf = cand.find(ok); if (q.xf == null) q.xf = c; taken.push(q.xf); q.ax = Math.min(q.a1, Math.max(q.a0, q.xf)); q.w = tW(q.s, th); });
+    const place = (list, leftOf) => { const put = [];
+      for (const q of list) { const left = leftOf(q), x0 = left ? q.xf + 0.8 * th : q.xf - 0.8 * th - q.w, o = { xf: q.xf, left, x0, x1: x0 + q.w }; let r = 0;
+        for (; r < 60; r++) if (put.every(p => p.r === r ? (o.x1 + 0.6 * h < p.x0 || o.x0 - 0.6 * h > p.x1) : p.r < r ? !(o.xf > p.x0 - 0.3 * h && o.xf < p.x1 + 0.3 * h) : !(p.xf > o.x0 - 0.3 * h && p.xf < o.x1 + 0.3 * h))) break;
+        if (r === 60) return null; put.push({ q, ...o, r }); }
+      return put; };
+    const put = place(labs.slice().sort((p, q) => Math.abs(p.xf - mid) - Math.abs(q.xf - mid)), q => q.xf <= mid ? q.xf + 0.8 * th + q.w <= xR || q.xf - 0.8 * th - q.w < xL : q.xf - 0.8 * th - q.w < xL && q.xf + 0.8 * th + q.w <= xR)
+      || place(labs.slice().sort((p, q) => q.xf - p.xf), () => true);
+    put.forEach(p => { const q = p.q, yl = yR + p.r * gap;
+      if (Math.abs(q.ax - q.xf) < 1e-6) D.line(ly.t, q.xf, q.y, q.xf, yl + 0.4 * th); else { D.line(ly.t, q.ax, q.y, q.xf, yK); D.line(ly.t, q.xf, yK, q.xf, yl + 0.4 * th); }
+      D.line(ly.t, q.xf, yl + 0.4 * th, q.xf + (p.left ? 0.6 : -0.6) * th, yl + 0.4 * th); D.text(ly.t, p.left ? p.x0 : p.x1, yl, th, q.s, p.left ? 0 : 2); });
+    const nr = put.length ? Math.max(...put.map(q => q.r)) + 1 : 0;
+    return (yR - yTop) + nr * gap + h;
   }
 
   /* all(G, opt): the three drawings in one model space (plan at the origin, the elevation of girder opt.gi below it, the section below
