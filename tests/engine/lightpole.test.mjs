@@ -303,3 +303,14 @@ test('Iced sign C_f (§10.5.2): sign1 t_d 0.4555 in: B_i 12.0759, s_i 6.0759, h_
   const swm = lp.call('signWind', lpDefaultInp({ ...base, signCfMode: 'manual', signCfMan: 1.5 }));
   near(swm.cfABI, 1.5, 0, 'manual C_f,i'); near(swm.F_Ai, swm.qhI * 1.5 * swm.AsI, 1e-9, 'manual F_A,i');
 });
+
+/* ---------- ice citations: ASCE 7-16 Ch. 10, the tool's basis (engineer, 2026-11-10; text only) ---------- */
+test('No ASCE 7-22 Ch. 10 citation remains; the iced-cable C_f note is on the Loading tab, the input and the Report', async () => {
+  const fs = await import('node:fs');
+  const { LP_FILE } = await import('./lp-source.mjs');
+  const html = fs.readFileSync(LP_FILE, 'utf8');
+  const left = html.match(/7-22[^\n]{0,40}?(Ch\. 10|CH\. 10|§10\.|ice map)/g) || [];
+  assert.deepEqual(left, [], 'ASCE 7-22 Ch. 10 citations left');
+  const note = 'is also used for the ice case (ASCE 7-16 §10.5.5 gives 1.2 for ice-covered cables; kept as entered by engineer';
+  assert.ok((html.split(note).length - 1) >= 3, 'cable C_f note: input, cableWorkedHTML, Report assumptions');
+});
