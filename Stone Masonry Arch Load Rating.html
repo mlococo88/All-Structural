@@ -11679,8 +11679,8 @@ function buildOutput(p){
       "axis (the radial bed joint at the node)."],
         ["Where:","It is evaluated at every section and every vehicle position, with each "+
       "vehicle's live load at its reported rating factor (the load the rating says the arch carries), including impact."],
-        ["Vehicle checked:","a vehicle whose reported rating is governed by the lane loading is checked as its truck at "+
-      "that rating factor; an HS20 governed by a longer rear-axle spacing is checked with that spacing."],
+        (p.loadMode!=="rail")?["Vehicle checked:","a vehicle whose reported rating is governed by the lane loading is checked as its truck at "+
+      "that rating factor; an HS20 governed by a longer rear-axle spacing is checked with that spacing."]:null,
         ["Advisory:","It is reported beside the rating and does <b>not</b> change any rating factor."],
         ["&mu; =",nfx(C.mu,2)+
       " (input; 0.6 is a common judgment value for stone on stone or mortared joints in masonry arch assessment, "+
@@ -11726,10 +11726,10 @@ function buildOutput(p){
       "&lambda;."],
         ["Not a rating:","The elastic §7.2.7 rating stands; &lambda; carries no safety factor and ignores crushing, so it is only "+
       "a check that the elastic rating is not above the collapse load."],
-        ["Vehicles:","each selected truck as listed (HS20 with V = 14 ft; the lane loading is not swept); &lambda; is compared with "+
-      "the vehicle's reported rating factor."],
-        ["Flag:","REVIEW on the dashboard only where &lambda; is below the elastic rating factor; no minimum ratio of &lambda; "+
-      "to the rating factor is required."]]));
+        ["Vehicles:","each selected vehicle as listed"+((p.loadMode!=="rail")?" (HS20 with V = 14 ft; the lane loading is not swept)":"")+
+      "; &lambda; is compared with the vehicle's reported rating factor."],
+        ["Flag:","the dashboard shows REVIEW where &lambda; is below the elastic rating factor (FAIL where dead load alone forms a "+
+      "mechanism); no minimum ratio of &lambda; to the rating factor is required."]]));
     if(C.dlRun)mh+=msg("err","Dead load alone forms a mechanism",
       `Hinges at ${C.dlRun.n.map((i,k)=>esc(CALC.secTag(Mh,i))+" ("+["intrados","extrados","axis"][C.dlRun.f[k]]+")").join(", ")}: `+
       `the dead load does positive work (P<sub>D</sub> = ${nfx(C.dlRun.PD,3)} k·ft/ft per unit rotation), so no thrust line `+
