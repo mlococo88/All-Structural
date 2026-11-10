@@ -208,6 +208,12 @@
   .fp-sc{overflow-x:auto;max-width:100%;} .fp-ex{display:block;font-family:var(--font-ui);font-size:9pt;margin:2px 0 4px;} @media print{.fp-sc svg{min-width:0!important;}}   /* SKP: the framing plan (ui/framing.js plan) */
   /* this app */
   .note{font-size:9pt;color:#475569;margin:4px 0;}
+  /* HOC (2026-11-10): the Project tab's Hand-offs card (ui/handoffs.js) */
+  #sbdHo .hoGrp{margin:10px 0 2px;font-family:var(--font-ui);font-size:8.5pt;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#334155;}
+  #sbdHo .hoRow{border-top:1px solid var(--color-border);padding:6px 0 2px;}
+  #sbdHo .hoWho{font-size:10pt;}
+  #sbdHo .hoTool{color:#475569;font-size:9pt;}
+  #sbdHo .fRow label{min-width:0;}
   .alert{border:1px solid var(--color-border);border-left:4px solid var(--warn);background:#FFFBEB;padding:6px 9px;margin:8px 0;font-family:var(--font-ui);font-size:9pt;}
   .alert.err{border-left-color:var(--fail);background:#FEF2F2;}
   .stale{display:flex;align-items:center;gap:10px;}
@@ -455,7 +461,7 @@
   $('inTabs').addEventListener('click', e => { const b = e.target.closest('[data-itab]'); if (!b) return; ui.itab = b.dataset.itab; saveUi(); drawInputs(); });
   $('inPanes').addEventListener('change', e => {
     const el = e.target;
-    if (el.id === 'i__g') { ui.g = +el.value; ui.seg = 0; saveUi(); drawInputs(); markStale(); return; }
+    if (el.id === 'i__g' || el.id === 'i__gHo') { ui.g = +el.value; ui.seg = 0; saveUi(); drawInputs(); markStale(); return; }
     if (window.SBDAnalysisUI.onInputChange(el, P, Math.min(ui.g, P.girders.length - 1))) { changed(true); return; }   // AIN: the analysis inputs (ui/analysis.js)
     if (UL.onChange(el, P)) { changed(true); return; }
     if (el.dataset.kind === 'line') { const g = P.girders[ui.g]; if (el.value === '') delete g.line; else g.line = Number(el.value); changed(false); return; }   // SB2-A7

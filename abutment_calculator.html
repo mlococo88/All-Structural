@@ -181,6 +181,20 @@ header.app-head{
  body.abDashWide .main{grid-template-columns:240px minmax(340px,1fr) 2fr}
  body.abDashWide.abDashColl .main{grid-template-columns:42px minmax(340px,1fr) 2fr}
 }
+/* ABSC (2026-11-10, engineer: "the input and output panels should scroll independently"; as Spread Footing SFSC): wider than the
+   stacked breakpoint (1100 px) the header stays put and the input column, the output column and the left summary panel each fill the
+   window height below it and scroll on their own; the page itself does not scroll (abPanelLayout() resets any page scroll). The columns
+   are position:relative so KaTeX's hidden MathML spans stay inside them. 1100 px and narrower (stacked, phone) and print: unchanged. */
+@media screen and (min-width:1100.02px){
+ body{height:100vh;height:100dvh;overflow:hidden}
+ .wrap{height:100vh;height:100dvh;display:flex;flex-direction:column;box-sizing:border-box;padding-bottom:0}
+ .wrap>header.app-head{flex:0 0 auto}
+ .main{flex:1 1 auto;min-height:0;grid-template-rows:minmax(0,1fr);align-items:stretch;overflow:hidden}
+ .col-in,.col-out{position:relative;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;box-sizing:border-box;padding-bottom:24px;
+   scrollbar-width:thin;scrollbar-color:#c2c6b8 transparent}
+ .col-in{padding-right:6px}
+ body.abDashWide #abDashCol{max-height:none;min-height:0}
+}
 
 /* ================= COLLAPSIBLE PANELS ================= */
 .panel{
@@ -294,7 +308,13 @@ table.itbl td.ro{background:var(--panel);color:#333;}
 .eq-title{font-weight:bold;font-size:0.95rem;}
 .eq-title .ref{font-weight:normal;font-style:italic;color:var(--ref);font-size:0.85rem;margin-left:8px;}
 .eq-line{margin:3px 0 3px 18px;text-align:left;overflow-x:auto;padding:1px 0;}
+/* ABSC (2026-11-10, engineer: "lots of very small scroll bars on the equations"): an equation line (inline KaTeX) wraps at its = and
+   operator signs; it has no vertical scroll (its tall fractions and roots got a few px of scroll before) and room above and below for
+   them; a horizontal scroll bar appears only when one unbreakable piece is wider than the panel, thin and shown on hover. Display only. */
+@media screen{.eq-line{overflow-y:hidden;padding:0.5em 2px 0.4em 0;line-height:1.5;scrollbar-width:thin;scrollbar-color:transparent transparent}
+ .eq-line:hover,.eq-line:focus-within{scrollbar-color:#b9bdb0 transparent}}   /* screen only: print unchanged */
 .eq-line .katex{font-size:1.05em;}
+@media screen{.eq-line .katex{font-size:calc(1.05em * var(--abfit,1))}}   /* ABSC: abEqFit() scale */
 .eq-note{font-size:0.85rem;color:#555;font-style:italic;margin-left:18px;}
 table.vtbl{border-collapse:collapse;margin:5px 0 5px 18px;font-size:0.85rem;}
 table.vtbl th{background:var(--panel-h);border:1px solid var(--line);padding:1px 8px;font-size:0.8rem;color:var(--navy);}
@@ -1638,7 +1658,8 @@ function abutSetInTab(t,remember){
     abutInTabSet(t);
     /* keep the tab strip in view when switching from far down a long pane */
     const bar=document.getElementById('abutInTabs'), col=document.getElementById('inputCol');
-    if(bar&&col){ const top=col.getBoundingClientRect().top; if(top<0) window.scrollBy(0,top); }
+    if(bar&&col){ if(abPanelLayout()){ if(col.scrollTop>0) col.scrollTop=0; }   /* ABSC: the input column scrolls on its own */
+      else { const top=col.getBoundingClientRect().top; if(top<0) window.scrollBy(0,top); } }
   }
 }
 function abutInTabKey(e){
@@ -5431,7 +5452,23 @@ function renderMathIn(el){
     try{ katex.render(n.dataset.tex,n,{throwOnError:false,displayMode:false}); }
     catch(e){ n.textContent=n.dataset.tex; }
   });
+  abEqFit(el);   /* ABSC */
 }
+/* ABSC (2026-11-10): an equation line a little wider than its panel (an unbreakable \text note; KaTeX itself wraps a line at its = and
+   operator signs) is scaled down to fit, to 80 % at most, through --abfit (screen only: print keeps the full size). Wider than that it
+   keeps its own thin horizontal scroll bar. Lines in hidden tabs (no width) are left alone and fitted when shown, or when the output
+   column changes width. Display only. */
+function abEqFit(root){
+  const L=[...(root||document).querySelectorAll(".eq-line.ktx")].filter(n=>n.clientWidth>0);
+  L.forEach(n=>n.style.removeProperty("--abfit"));
+  for(let k=0;k<2;k++){   /* two passes: the padding and the struts do not scale with the font */
+    const W=L.map(n=>[n,n.clientWidth,n.scrollWidth]).filter(([,c,w])=>w>c+1);
+    if(!W.length) return;
+    W.forEach(([n,c,w])=>{ const f=(+n.style.getPropertyValue("--abfit")||1)*c/w*0.995; if(f>=0.8) n.style.setProperty("--abfit",f.toFixed(3)); });
+  }
+}
+if(window.ResizeObserver) window.addEventListener("DOMContentLoaded",()=>{ const P=document.querySelector(".col-out"); if(!P) return; let w0=0, q=0;
+  new ResizeObserver(()=>{ if(P.clientWidth===w0) return; w0=P.clientWidth; cancelAnimationFrame(q); q=requestAnimationFrame(()=>abEqFit(document.querySelector("#tabpages .tabpage.active"))); }).observe(P); });
 
 /* ================= TAB 9 — WINGWALLS (WING, 2026-10-20) =================
    Every value is from computeWing() (R.wing); worked symbolic → substituted → result. */
@@ -6367,6 +6404,7 @@ function activateTab(id){
     if(TAB_STALE[id]) renderTabContent(id);   // lazy: build now if the last recalc skipped it
     else drawChartsFor(id,window.LAST_R);
   }
+  abEqFit(document.getElementById(id));   /* ABSC: equations of a tab that was hidden when it was built */
 }
 
 /* ---- Owner requirements card (OWNA): each owner rule, its section, the value checked (worked) and the result ---- */
@@ -10811,7 +10849,14 @@ function abrRender(){
   abxWire(T); abxImages(window.LAST_R);   /* ABRX: the Include boxes; the chart images and the 3D snapshot (then rebuilt) */
 }
 /* [[tab:<tab id>~<panel id>|…]] links of the report: the tool's tab and panel (gotoPanel) */
-function abrGoto(name){ const [t,c]=String(name).split("~"); gotoPanel(t,c||null); if(!c){ const b=document.getElementById("tabbar"); if(b) window.scrollTo(0,b.getBoundingClientRect().top+window.scrollY-10); } }
+function abrGoto(name){ const [t,c]=String(name).split("~"); gotoPanel(t,c||null); if(!c){ const b=document.getElementById("tabbar"); if(!b) return;
+  const P=document.querySelector(".col-out");   /* ABSC: in the two-panel layout scroll the output column to the tab bar, never the page */
+  if(abPanelLayout()&&P) P.scrollTop+=b.getBoundingClientRect().top-P.getBoundingClientRect().top; else window.scrollTo(0,b.getBoundingClientRect().top+window.scrollY-10); } }
+/* ABSC (2026-11-10): two-panel screen layout (wider than 1100 px: body height 100vh, overflow hidden; the input, output and summary
+   columns scroll). The page must stay at scroll 0 there: it has no scroll bar, so a page scrolled by a scrollIntoView, find-in-page or
+   focus could not be scrolled back. Any page scroll is reset. */
+function abPanelLayout(){ return !!(window.matchMedia&&window.matchMedia("screen and (min-width:1100.02px)").matches); }
+window.addEventListener("scroll",()=>{ if(abPanelLayout()&&(window.scrollY||window.scrollX)) window.scrollTo(0,0); },{passive:true});
 /* the Report tab is shown on top of the saved tab (S.ui.tab is not changed, so nothing new is saved) */
 function abrShow(){
   ABRP.on=true; ABDW.on=false;   /* ABDW */
