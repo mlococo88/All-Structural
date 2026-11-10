@@ -373,22 +373,24 @@
     const oh = R.F && R.F.oh;
     // QA2 (2026-11-09): no bracket sketch to draw (interior girder, or a GirderDetail file): a short note, not an empty frame with a title
     if (!oh) { B.innerHTML = `<p class="note">${(P.girders[o.gi] || {}).position === 'exterior' ? 'Overhang brackets are checked with the project as the source (not a GirderDetail file).' : 'Overhang brackets apply to exterior girders; select G1 or Gn.'}</p>`; return H; }
-    // DETC (2026-11-10): the screen sketch is the option C style (ui/gfxdet.js SBDGfxDet.bracket, drawn from the bracket inputs R.F.oh.p); Download DXF is ohGraphic, unchanged
+    // DETC (2026-11-10): the screen sketch is the option C style (ui/gfxdet.js SBDGfxDet.bracket, drawn from the bracket inputs R.F.oh.p); Download DXF is ohGraphic
     if (window.SBDGfxDet && window.SBDVizKit && window.SBDVizKit.detCard) window.SBDGfxDet.bracket(B, { P, gi: o.gi, oh, dxf: () => ohGraphic(P, o.gi, R) }); else G.mount(B, () => ohGraphic(P, o.gi, R), { key: 'cnb' });
     return H;
   }
-  /* the overhang bracket sketch as the CAD drawing (the Download DXF of the Constructibility tab's bracket graphic); R = the tab's result */
+  /* the overhang bracket sketch as the CAD drawing (the Download DXF of the Constructibility tab's bracket graphic); R = the tab's result.
+     SBBDXF (2026-11-10, engineer decision): the inputs are read from the bracket inputs R.F.oh.p (a, h_b, w_OH, t_OH, P_fm, γ_DC), the values the screen sketch
+     (ui/gfxdet.js bracketModel) uses; it read R.F.oh.a ... (absent), so the DXF only ever held its "inputs above" note. Drawing only; no computed value changes. */
   function ohGraphic(P, gi, R) {
-    const G = GR(), oh = R.F && R.F.oh; {
-      const gg = P.girders[gi], sg = gg.segments[0], a = +(oh || {}).a, hb = +(oh || {}).hb, wOH = +(oh || {}).wOH, tOH = +(oh || {}).tOH;
+    const G = GR(), oh = R.F && R.F.oh, p = (oh && oh.p) || {}; {
+      const gg = P.girders[gi], sg = gg.segments[0], a = +p.a, hb = +p.hb, wOH = +p.wOH, tOH = +p.tOH;
       const h = Math.max(sg.topB, wOH || 30) * 0.05, D = G.newDrawing(h), t = D.layer('ANNO-TEXT', 7), ly = { g: D.layer('GRDR', 5), dk: D.layer('DECK', 7), br: D.layer('BRACKET', 30), ld: D.layer('LOAD', 1), dm: D.layer('DIMS', 7) };
       if (!oh || ![a, hb, wOH, tOH].every(fin)) { D.text(t, 0, 0, h, 'OVERHANG BRACKETS: EXTERIOR GIRDER, PROJECT SOURCE ONLY (INPUTS ABOVE)'); return { D, title: 'Overhang bracket', file: 'overhang-bracket' }; }
       const Dw = Math.min(+sg.D, 40), x0 = 0; D.rect(ly.g, -sg.topB / 2, -sg.topT, sg.topB / 2, 0); D.rect(ly.g, -sg.tw / 2, -sg.topT - Dw, sg.tw / 2, -sg.topT); D.line(ly.g, -sg.topB * 0.5, -sg.topT - Dw, sg.topB * 0.5, -sg.topT - Dw, D.ltype('HIDDEN'));
       const ys = 0 + (+((P.deck || {}).haunch) || 0); D.rect(ly.dk, x0, ys, x0 + wOH, ys + tOH);   // overhang slab from the girder centerline
       D.line(ly.br, x0, -hb, a, ys, D.ltype('CONTINUOUS')); D.line(ly.br, a, ys - 0.8 * h, a, ys); D.line(ly.br, x0, ys, a, ys); D.line(ly.br, x0, -hb, x0, 0);
       D.dimH(ly.dm, x0, a, -hb - 3 * h, -hb, `a = ${nf(a, 1)} IN`); D.dimV(ly.dm, -hb, ys, -sg.topB / 2 - 4 * h, x0, `h_b = ${nf(hb + ys, 1)} IN`); D.dimH(ly.dm, x0, x0 + wOH, ys + tOH + 3 * h, ys + tOH, `w_OH = ${nf(wOH, 1)} IN`); D.dimV(ly.dm, ys, ys + tOH, x0 + wOH + 3 * h, x0 + wOH, `t_OH = ${nf(tOH, 1)} IN`);
-      const q = x0 + wOH * 0.5; arrow(D, ly.ld, q, ys + tOH + 2.2 * h, ys + tOH, h); D.text(t, q, ys + tOH + 2.4 * h, 0.7 * h, `DECK AND FORMS (GAMMA_DC ${nf(((oh || {}).gam || {}).dc, 2)})`, 1);
-      arrow(D, ly.ld, x0 + wOH - 0.2 * h, ys + tOH + 7 * h, ys + tOH, h); D.text(t, x0 + wOH, ys + tOH + 7.2 * h, 0.7 * h, `FINISHING MACHINE ${nf(oh.Pfm, 1)} KIP; SCREED, RAIL, WALKWAY, CONSTR. LL`, 2);
+      const q = x0 + wOH * 0.5; arrow(D, ly.ld, q, ys + tOH + 2.2 * h, ys + tOH, h); D.text(t, q, ys + tOH + 2.4 * h, 0.7 * h, `DECK AND FORMS (GAMMA_DC ${nf((p.gam || {}).dc, 2)})`, 1);
+      arrow(D, ly.ld, x0 + wOH - 0.2 * h, ys + tOH + 7 * h, ys + tOH, h); D.text(t, x0 + wOH, ys + tOH + 7.2 * h, 0.7 * h, `FINISHING MACHINE ${nf(p.Pfm, 1)} KIP; SCREED, RAIL, WALKWAY, CONSTR. LL`, 2);
       D.text(t, -sg.topB / 2, ys + tOH + 11 * h, 1.2 * h, 'OVERHANG BRACKET (EXTERIOR GIRDER), SCHEMATIC'); D.text(t, -sg.topB / 2, ys + tOH + 9.2 * h, 0.7 * h, 'DIMENSIONS ARE THE OVERHANG BRACKET INPUTS OF THE TAB; BRACKET MEMBERS SCHEMATIC (CONTRACTOR-DESIGNED)');
       return { D, title: 'Overhang bracket sketch (exterior girder)', file: 'overhang-bracket', note: 'Dimensions from the overhang-bracket inputs (a, h_b, w_OH, t_OH); loads are the tab\'s OH1–OH5 inputs. Schematic.' };
     }
