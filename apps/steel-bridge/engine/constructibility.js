@@ -12,7 +12,8 @@
        Eq. 6.10.3.2.1-3; tension flange Eq. 6.10.3.2.2-1), GS16 (web shear Eq. 6.10.3.3-1);
      - gsGov kinds 'Ct' / 'Cb' (the governing section of a nonprismatic deck-placement unbraced length, NPG);
      - Preliminary sizing's row builder (gsRow, anchor `// C_b for deck placement (CB1`): L_b,C, C_b,C and nprC from the
-       deck-placement moment M_c = 1.25M_DC1 + 1.5M_CL of the unbraced segment(s) containing the location (bracingC);
+       deck-placement moment M_c = 1.25M_DCc + 1.5M_CL (M_DC1 where M_DCc is not given; SBCON 2026-11-10, was 1.25M_DC1 + 1.5M_CL
+       as GirderDetail) of the unbraced segment(s) containing the location (bracingC);
      - the hand-off of the deck-placement result (gdStConstr): the governing item per span of each group (compression top
        flange, compression bottom flange, tension flange, shear) and, for an exterior girder, the Deck overhang module rows at
        the largest 1.25M_DC1 + 1.5M_CL of each span;
@@ -78,7 +79,8 @@
     const G = factors(prj.G), p = plates(L.plates), mat = prj.mat, Fyt = mat.Fyt, Fyb = mat.Fyb, Fyw = mat.Fyw, M = L.M || {}, V = L.V || {}, num = v => +v || 0;
     const s = SEC().steelCore(p), d = s.d;
     const r = { name: L.name, x: L.x, ...p, MDC1: num(M.DC1), MDCc: useDCc(M.DCc) ? +M.DCc : 0, MCL: num(M.CL), VDC1: num(V.DC1), VCL: num(V.CL),
-      LbC: +L.LbC, CbC: +L.CbC || 0, Cb: L.Cb != null && +L.Cb > 0 ? +L.Cb : 1, flC: num(L.flC), do: num(L.do), end: !!L.end, s, d, G, mat };
+      LbC: +L.LbC, CbC: +L.CbC || 0, Cb: L.Cb != null && +L.Cb > 0 ? +L.Cb : 1, flC: num(L.flC), do: num(L.do), end: !!L.end, s, d, G, mat,
+      seg: L.seg || null, cbParts: L.cbParts || null, kParts: L.kParts || null, mSrc: L.mSrc || null };   // SBCON: bracingC's C_b and K parts, for the worked steps
     // constructibility (steel section)
     r.Mc = G.cdc * (r.MDCc !== 0 ? r.MDCc : r.MDC1) + G.ccl * r.MCL; const up = r.Mc >= 0; r.con = { top: fAt(r.Mc, s, d), bot: fAt(r.Mc, s, 0), up };
     r.conC = up ? { lab: 'top', b: r.topB, t: r.topT, Fy: Fyt, f: Math.max(-r.con.top, 0) } : { lab: 'bottom', b: r.botB, t: r.botT, Fy: Fyb, f: Math.max(-r.con.bot, 0) };
@@ -124,13 +126,19 @@
     w.add({ id: 'fbu', label: `Compression flange: the ${cF.lab} flange (M_c ${up ? '≥' : '<'} 0)`, sym: 'f_{bu}', eq: `\\max(-f_{${up ? 'top' : 'bot'}}, 0)`, sub: n2(-r.con[up ? 'top' : 'bot']), value: cF.f, unit: 'ksi', d: 2, ref: `${ED} Art. 6.10.3.2.1`, note: 'Stress at the extreme fiber of the flange (conservative).' });
     w.add({ id: 'Dc', label: 'Depth of the web in compression, steel section', sym: 'D_{c}', eq: up ? '(d - t_{ft}) - \\bar{y}' : '\\bar{y} - t_{fb}', sub: up ? `(${n3(r.d)} - ${n3(r.topT)}) - ${n3(s.yb)}` : `${n3(s.yb)} - ${n3(r.botT)}`, value: r.DcC, unit: 'in', d: 3, ref: `${ED} App. D6.3.1` });
     w.add({ id: 'Rh', label: 'Hybrid factor, steel section', sym: 'R_{h}', eq: '', sub: '', value: r.RhC, unit: '', d: 3, ref: `${ED} Art. 6.10.1.10.1` });
-    w.add({ id: 'Cb', label: lt.npr && lt.npr.kind === 'ge' ? 'Moment gradient modifier: nonprismatic unbraced length' : 'Moment gradient modifier for deck placement (from the deck-placement moments of the unbraced length)', sym: 'C_{b}', eq: lt.npr && lt.npr.kind === 'ge' ? '1.0' : '', sub: '', value: r.CbCu, unit: '', d: 3, ref: lt.npr && lt.npr.kind === 'ge' ? `${ED} Eq. 6.10.8.2.3c-1` : `${ED} Eq. 6.10.8.2.3b-1`, note: `L_b = ${n2(r.LbC)} ft (deck-placement unbraced length).` });
+    // SBCON (2026-11-10): C_b worked from bracingC's parts, with the moments used (the M_c this check uses: M_DCc where given)
+    const geK = lt.npr && lt.npr.kind === 'ge', cbP = !geK && r.cbParts && r.CbC > 0 ? r.cbParts : null, mN = r.mSrc === 'DCc' ? 'M_DCc' : 'M_DC1';
+    const mUsed = r.mSrc ? ` Moments over the unbraced segment${r.seg ? ` ${n2(r.seg.xa)} to ${n2(r.seg.xb)} ft` : ''}: 1.25${mN} + 1.50M_CL (${r.mSrc === 'DCc' ? 'the pour-sequence envelope M_DCc, as M_c of this check (cn.Mc)' : 'no pour sequence: M_DC1'}; a common factor such as the owner's η does not change C_b or K).` : '';
+    w.add({ id: 'Cb', label: geK ? 'Moment gradient modifier: nonprismatic unbraced length' : 'Moment gradient modifier for deck placement (from the deck-placement moments of the unbraced length)', sym: 'C_{b}', eq: geK ? '1.0' : cbP ? '\\frac{12.5M_{max}}{2.5M_{max} + 3M_{A} + 4M_{B} + 3M_{C}}' : '',
+      sub: cbP ? `\\frac{12.5(${n2(cbP.Mx)})}{2.5(${n2(cbP.Mx)}) + 3(${n2(cbP.MA)}) + 4(${n2(cbP.MB)}) + 3(${n2(cbP.MC)})}` : '', value: r.CbCu, unit: '', d: 3, ref: geK ? `${ED} Eq. 6.10.8.2.3c-1` : `${ED} Eq. 6.10.8.2.3b-1`,
+      note: `L_b = ${n2(r.LbC)} ft (deck-placement unbraced length).${cbP ? ` M_max: the largest moment compressing the ${cF.lab} flange; M_A, M_B, M_C: |M| at the quarter points (kip-ft); C_b rounded to 3 decimals.` : ''}${geK ? '' : mUsed}` });
     w.add({ id: 'Fyr', label: 'Compression-flange stress at the onset of nominal yielding', sym: 'F_{yr}', eq: '\\max(\\min(0.7F_{yc}, F_{yw}), 0.5F_{yc})', sub: `\\max(\\min(0.7(${n2(cF.Fy)}), ${n2(r.mat.Fyw)}), 0.5(${n2(cF.Fy)}))`, value: lt.Fyr, unit: 'ksi', d: 2, ref: `${ED} Art. 6.10.8.2.2` });
     w.add({ id: 'FLB', label: `Flange local buckling (λ_f = b_fc/2t_fc = ${n2(lt.lf)}, λ_pf = ${n2(lt.lpf)}, λ_rf = ${n2(lt.lrf)})`, sym: 'F_{nc,FLB}', eq: lt.lf <= lt.lpf ? 'R_{b}R_{h}F_{yc}' : '\\left[1 - \\left(1 - \\frac{F_{yr}}{R_{h}F_{yc}}\\right)\\frac{\\lambda_{f} - \\lambda_{pf}}{\\lambda_{rf} - \\lambda_{pf}}\\right]R_{b}R_{h}F_{yc}',
       sub: lt.lf <= lt.lpf ? `1.0(${n3(r.RhC)})(${n2(cF.Fy)})` : `\\left[1 - \\left(1 - \\frac{${n2(lt.Fyr)}}{${n3(r.RhC)}(${n2(cF.Fy)})}\\right)\\frac{${n2(lt.lf)} - ${n2(lt.lpf)}}{${n2(lt.lrf)} - ${n2(lt.lpf)}}\\right](1.0)(${n3(r.RhC)})(${n2(cF.Fy)})`, value: lt.FLB, unit: 'ksi', d: 3, ref: `${ED} Eqs. 6.10.8.2.2-1, -2`, note: 'R_b = 1.0 for deck placement (6.10.3.2.1).' });
     if (lt.npr && lt.npr.kind === 'ge') { const q = lt.npr;
-      if (q.gv) w.add({ id: 'gov', label: `Governing section of the nonprismatic unbraced length${q.gv.x != null ? ` (x = ${n2(q.gv.x)} ft)` : ''}`, sym: 'f_{bu,gov}', eq: '\\frac{|M_{c}|(12)}{S}', sub: `M_{c} = ${n2(q.gv.gdc)}${pa(q.gv.MD)} + ${n2(q.gv.gcl)}${pa(q.gv.MCL)} = ${n2(q.gv.Mc)};\\ \\frac{${n2(Math.abs(q.gv.Mc))}(12)}{${g0(q.gv.S)}}`, value: q.gv.f, unit: 'ksi', d: 3, ref: `${ED} Art. 6.10.8.2.3c`, note: `R_h of that section ${n3(q.gv.Rh)}; R_b = 1.0.` });
-      w.add({ id: 'ge', label: q.A ? 'γ_e by App. D6.6.2 Method A (Preliminary sizing)' : 'γ_e, conservative bound', sym: '\\gamma_{e}', eq: q.A ? '\\frac{\\chi C_{be}}{(M_{u}/M_{e1})_{max}}' : '\\frac{F_{e,s}}{Kf_{s}}', sub: q.A ? `\\frac{${n4(+q.A.chi)}(${n3(+q.A.Cbe)})}{${n4(+q.A.rm)}}` : `\\frac{${n2(q.FeS)}}{${n3(q.K)}(${n2(q.fS)})}`, value: q.ge, unit: '', d: 4, ref: q.A ? `${ED} Eq. D6.6.2-1` : `${ED} Art. 6.10.8.2.3c`, note: q.bw ? 'Outside the D6.6.2.2 step limit: ' + q.bw : '' });
+      if (q.gv) w.add({ id: 'gov', label: `Governing section of the nonprismatic unbraced length${q.gv.x != null ? ` (x = ${n2(q.gv.x)} ft)` : ''}`, sym: 'f_{bu,gov}', eq: '\\frac{|M_{c}|(12)}{S}', sub: `M_{c} = ${n2(q.gv.gdc)}${pa(q.gv.MD)} + ${n2(q.gv.gcl)}${pa(q.gv.MCL)} = ${n2(q.gv.Mc)};\\ \\frac{${n2(Math.abs(q.gv.Mc))}(12)}{${g0(q.gv.S)}}`, value: q.gv.f, unit: 'ksi', d: 3, ref: `${ED} Art. 6.10.8.2.3c`, note: `${q.gv.MDc ? 'M_DCc (the pour-sequence envelope, as cn.Mc)' : 'M_DC1'} and M_CL at that section. R_h of that section ${n3(q.gv.Rh)}; R_b = 1.0.` });
+      w.add({ id: 'ge', label: q.A ? 'γ_e by App. D6.6.2 Method A (Preliminary sizing)' : 'γ_e, conservative bound', sym: '\\gamma_{e}', eq: q.A ? '\\frac{\\chi C_{be}}{(M_{u}/M_{e1})_{max}}' : '\\frac{F_{e,s}}{Kf_{s}}', sub: q.A ? `\\frac{${n4(+q.A.chi)}(${n3(+q.A.Cbe)})}{${n4(+q.A.rm)}}` : `\\frac{${n2(q.FeS)}}{${n3(q.K)}(${n2(q.fS)})}`, value: q.ge, unit: '', d: 4, ref: q.A ? `${ED} Eq. D6.6.2-1` : `${ED} Art. 6.10.8.2.3c`,
+        note: [q.bw ? 'Outside the D6.6.2.2 step limit: ' + q.bw + '.' : '', !q.A && r.kParts ? `K = f_max/f_x = ${n3(r.kParts.fm)}/${n3(r.kParts.fx)} (f_max: the largest stress in the ${cF.lab} flange over L_b; f_x: at the analysis station x = ${n2(r.kParts.x)} ft; K ≥ 1, 3 decimals), f_s at this location: all from the same moments, M_c of this check.${mUsed}` : ''].filter(Boolean).join(' ') });
       w.add({ id: 'Fe', label: 'Elastic LTB stress of the nonprismatic unbraced length', sym: 'F_{e}', eq: '\\gamma_{e}f_{bu,gov}', sub: `${n4(q.ge)}(${n2(q.fbu)})`, value: q.Fe, unit: 'ksi', d: 3, ref: `${ED} Eq. 6.10.8.2.3c-2` });
       w.add({ id: 'rtE', label: 'Equivalent radius of gyration', sym: 'r_{t}', eq: '\\frac{L_{b}}{\\pi}\\sqrt{\\frac{F_{e}}{E}}', sub: `\\frac{${n2(r.LbC * 12)}}{\\pi}\\sqrt{\\frac{${n2(q.Fe)}}{29{,}000}}`, value: lt.rt, unit: 'in', d: 4, ref: `${ED} Eq. 6.10.8.2.3c-3` });
     } else w.add({ id: 'rt', label: `Effective radius of gyration for LTB${lt.npr ? ` (nonprismatic: 6.10.8.2.3c simplification, flange ${n2(lt.npr.b)} × ${n3(lt.npr.t)})` : ''}`, sym: 'r_{t}', eq: '\\frac{b_{fc}}{\\sqrt{12\\left(1 + \\frac{D_{c}t_{w}}{3b_{fc}t_{fc}}\\right)}}', sub: `\\frac{${n2(lt.npr ? lt.npr.b : cF.b)}}{\\sqrt{12\\left(1 + \\frac{${n3(Math.max(r.DcC, 1e-6))}(${n4(r.tw)})}{3(${n2(lt.npr ? lt.npr.b : cF.b)})(${n3(lt.npr ? lt.npr.t : cF.t)})}\\right)}}`, value: lt.rt, unit: 'in', d: 4, ref: `${ED} Eq. 6.10.8.2.3-9` });
@@ -158,15 +166,19 @@
   }
 
   /* ---------- unbraced length for deck placement (Preliminary sizing gsRow, CB1 / CB2 / SKX / NPG) ---------- */
-  /* bracingC(x, env, opt): L_b,C, C_b,C and nprC of the location at x, from the deck-placement moment M_c = 1.25M_DC1 + 1.5M_CL
-     (Preliminary sizing's T.Mc) of the unbraced segment(s) containing x, for the flange M_c compresses there (steel section).
+  /* bracingC(x, env, opt): L_b,C, C_b,C and nprC of the location at x, from the deck-placement moment M_c = 1.25M_DCc + 1.5M_CL that
+     location() checks (M_DC1 where M_DCc is not given: useDCc) of the unbraced segment(s) containing x, for the flange M_c compresses
+     there (steel section). SBCON (engineer decision 2026-11-10): was 1.25M_DC1 + 1.5M_CL always (Preliminary sizing's T.Mc); GirderDetail
+     keeps that (a deliberate difference).
      env = { xs, MDC1, MCL, MDCc (optional) } at the analysis stations; opt = { braces (ft: bearings and cross-frames), L (girder length),
      secAt(x) -> plates, D, impl (optional fe* functions, for the parity test) }. Returns { LbC, CbC, nprC, seg }. */
   function bracingC(x, env, opt) {
     const F = FX(), I = opt.impl || {}, feCb_ = I.feCb || F.feCb, feNpr_ = I.feNpr || F.feNpr, feGe_ = I.feGe || F.feGe, feGeA_ = I.feGeA || F.feGeA, feGov_ = I.feGov || F.feGov, feAt_ = I.feAt || F.feAt;
-    // FONE (2026-11-01): γ from factors(), was 1.25, 1.5. SBCON (DRAFT, not approved): M_DCc where location() uses it (useDCc), so that the
-    // flange in compression, C_b and the γ_e of a nonprismatic L_b (6.10.8.2.3c, K = f_max/f_x) come from the moments the check uses; was M_DC1 always
-    const xs = env.xs, N = xs.length, Lend = opt.L, C0 = factors(), Mc = env.Mc || xs.map((_, k) => C0.cdc * (env.MDCc && useDCc(env.MDCc[k]) ? +env.MDCc[k] : env.MDC1[k]) + C0.ccl * env.MCL[k]);
+    // FONE (2026-11-01): γ from factors(), was 1.25, 1.5. SBCON (engineer decision 2026-11-10; AASHTO LRFD 10th Ed. 6.10.8.2.3c, C6.10.8.2.3c):
+    // M_DCc where location() uses it (useDCc), so that the flange in compression, C_b (Eq. 6.10.8.2.3b-1) and the γ_e of a nonprismatic L_b
+    // (K = f_max/f_x) come from the moments the check uses; was M_DC1 always (GirderDetail keeps M_DC1: a deliberate difference)
+    const xs = env.xs, N = xs.length, Lend = opt.L, C0 = factors(), dcc = xs.map((_, k) => !env.Mc && !!env.MDCc && useDCc(env.MDCc[k]));
+    const Mc = env.Mc || xs.map((_, k) => C0.cdc * (dcc[k] ? +env.MDCc[k] : env.MDC1[k]) + C0.ccl * env.MCL[k]);
     const bp = [...new Set(opt.braces.map(v => +(+v).toFixed(3)))].sort((p1, p2) => p1 - p2).filter((v, k, arr) => k === 0 || v - arr[k - 1] > 0.25);
     const ib = bp.findIndex(v => Math.abs(v - x) < 0.25), Lg = bp[bp.length - 1], segs = [];
     if (ib >= 0) { if (ib > 0) segs.push([bp[ib - 1], bp[ib]]); if (ib < bp.length - 1) segs.push([bp[ib], bp[ib + 1]]); }
@@ -189,7 +201,14 @@
     else if (cC && cC.n2.kind === 'ge') { const { A, mA, G } = cC.ge, fr = G ? fCon(G.s, i) : 0;
       nprC = { kind: 'ge', fl: sgC > 0 ? 'top' : 'bottom', b: G ? G.s[kb] : s[kb], t: G ? G.s[kt] : s[kt], k: G && fr > 0 && !mA ? r3(Math.max(1, G.fm / fr)) : '', Ir: r3(cC.n2.Ir), why: cC.n2.why, A: geRec(A),
         ...(G ? { G: govRec(feGov_(cC.n2.pcs, xs, () => 1, fCon)) } : {}) }; }
-    return { LbC: r2(LbCN), CbC: +CbC.toFixed(3), nprC, seg: cC ? { xa: cC.p0, xb: cC.p1 } : null };
+    // SBCON (2026-11-10, show the work): the moments used (mSrc: 'DCc' where M_DCc is used at a station of the segment, else 'DC1'), the
+    // C_b parts (Eq. 6.10.8.2.3b-1, as feCb) of a prismatic / simplified segment and K = f_max/f_x of the conservative γ_e bound
+    let cbParts = null, kParts = null, mSrc = 'DC1';
+    if (cC) { for (let k = 0; k < N; k++) if (dcc[k] && xs[k] >= cC.p0 - 1e-6 && xs[k] <= cC.p1 + 1e-6) { mSrc = 'DCc'; break; }
+      if (cC.n2.kind !== 'ge') { const at = q => feAt_(xs, Mc, q), L0 = cC.p1 - cC.p0; let Mx = 0; for (let k = 0; k <= 40; k++) Mx = Math.max(Mx, sgC * at(cC.p0 + L0 * k / 40));
+        if (Mx > 0) { const q = f => Math.abs(at(cC.p0 + L0 * f)); cbParts = { Mx, MA: q(0.25), MB: q(0.5), MC: q(0.75) }; } }
+      else if (cC.ge.G && !cC.ge.mA) kParts = { fm: cC.ge.G.fm, fx: fCon(cC.ge.G.s, i), x: xs[i] }; }
+    return { LbC: r2(LbCN), CbC: +CbC.toFixed(3), nprC, seg: cC ? { xa: cC.p0, xb: cC.p1 } : null, cbParts, kParts, mSrc };
   }
 
   /* ---------- deck overhang brackets, exterior girder (GirderDetail GM.oh) ---------- */
@@ -359,7 +378,7 @@
     const at = A => x => FX().feAt(xs, A, x), D = Math.max(...zones.map(z => z.web.depth));
     const locs = list.map(x => { const br = bracingC(x, env, { braces, L: Lend, secAt: zAt, D: zAt(x).D, impl: opt.impl, sp: Lb }), v = dem.at(x);
       return { name: `x = ${x.toFixed(2)} ft`, x, plates: zAt(x), M: { DC1: at(env.MDC1)(x), DCc: hasDCc ? at(env.MDCc)(x) : 0, CL: at(env.MCL)(x) }, V: { DC1: v.DC1, CL: v.CL },
-        LbC: br.LbC, CbC: br.CbC, Cb: 1, nprC: br.nprC, seg: br.seg, flC: opt.flC || 0, do: doIn, end: doIn > 0 && ends.some(s => Math.abs(x - s) <= doFt + 1e-6) }; });
+        LbC: br.LbC, CbC: br.CbC, Cb: 1, nprC: br.nprC, seg: br.seg, cbParts: br.cbParts, kParts: br.kParts, mSrc: br.mSrc, flC: opt.flC || 0, do: doIn, end: doIn > 0 && ends.some(s => Math.abs(x - s) <= doFt + 1e-6) }; });
     const ext = g.position === 'exterior', st = ((g.checks || {}).constr || {}).oh;
     const ohP = opt.oh ? { ...opt.oh, gam: { dc: prj.G.cdc, cl: prj.G.ccl } } : (st && st.inputs ? { Rh: st.inputs.Rh, Cb: st.inputs.Cb, gam: { dc: st.inputs.gDC, cl: st.inputs.gCL }, a: st.inputs.a, hb: st.inputs.hb, loads: { wu: st.inputs.wu, Fl: st.inputs.Fl, Pl: st.inputs.Pl } } : { gam: { dc: prj.G.cdc, cl: prj.G.ccl } });   // ETAC: the bracket factors = the deck placement factors (a file's stored loads as given)
     const oh = ext ? { rows: ohRowsAt(sup, env, locs), p: ohP, mat: { Fyf: st && st.inputs && +st.inputs.Fy || mat.Fyt, Fyw: mat.Fyw } } : null;
@@ -395,7 +414,7 @@
     const at = A => x => FX().feAt(xs, A, x), Lb = +fr.Lb || 25;
     const locs = list.map(x => { const br = bracingC(x, env, { braces, L: Lend, secAt: zAt, D: zAt(x).D, sp: Lb }), pn = panelAt(x);
       return { name: `x = ${x.toFixed(2)} ft`, x, plates: zAt(x), M: { DC1: at(env.MDC1)(x), DCc: MDCc ? at(MDCc)(x) : 0, CL: at(env.MCL)(x) }, V: { DC1: vAt(st.DC1, x), CL: vAt(st.CL, x) },
-        LbC: br.LbC, CbC: br.CbC, Cb: 1, nprC: br.nprC, seg: br.seg, flC: opt.flC || 0, do: pn ? pn.d : 0, end: pn ? pn.end : false }; });
+        LbC: br.LbC, CbC: br.CbC, Cb: 1, nprC: br.nprC, seg: br.seg, cbParts: br.cbParts, kParts: br.kParts, mSrc: br.mSrc, flC: opt.flC || 0, do: pn ? pn.d : 0, end: pn ? pn.end : false }; });
     const ext = g.position === 'exterior';
     const oh = ext ? { rows: ohRowsAt(sup, env, locs), p: { ...(opt.oh || (P.constr && P.constr.oh) || {}), gam: { dc: prj.G.cdc, cl: prj.G.ccl } }, mat: { Fyf: Math.min(mat.Fyt, mat.Fyb), Fyw: mat.Fyw } } : null;   // ETAC: bracket γ = the deck placement factors (one source; P.constr.oh.gam kept, unused)
     return { prj, locs, env, supports: sup, braces, oh, ext, Lb, D, seq: !!MDCc };
