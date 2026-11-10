@@ -2905,3 +2905,32 @@ function listTables() {
   2. With no footing, H (for h_eq) and the water table are measured from the base of the stem (t_f = 0), not with the hidden footing thickness.
   3. An abutment with Foundation "None" is left out of the abutment hand-off and the "Export abutments" file with an error entry, rather than sent with footing fields of 0.
 - **Other copies:** none.
+
+## 2026-11-10 — PR: fix/bsl-scour-zero (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — scour El. 0.0 is El. 0.0; only a blank scour El. means the ground line (SCZ; engineer decision 2026-11-10)   [§4: changes results only where a design or check scour El. of exactly 0.0 is entered]
+- **Problem.** `waterCase` (stream pressure WA, both floods) took `zs = nz(scour) || nz(u.ground)`, so an entered scour El. of 0.0 was replaced by the ground line. `scourDrop` (the unit model's scoured ground for soil-fixed bents and shafts) uses `num()`, which treats 0.0 as a real elevation. For the same input, the stream pressure stopped at the ground while the frame was scoured to El. 0.0. Less conservative for the stream pressure.
+- **Where / before / after:**
+  - `waterCase`, anchor `const W = nz(fl === 'c' ? w.wseC : w.wse)`:
+    - before: `zs = nz(fl === 'c' ? w.scourC : w.scour) || nz(u.ground)`
+    - after: `zsIn = num(fl === 'c' ? w.scourC : w.scour), zs = isFinite(zsIn) ? zsIn : nz(u.ground)` (blank, i.e. non-finite `num()`, means the ground line)
+  - The other readers of `w.scour` / `w.scourC` already use `num()`, so 0.0 is real there and they are unchanged. These are `scourDrop`, the `checks()` water messages (scour above ground, check-flood scour shallower), and the input check (`{ any: true, blank: true }`). The Water tab heading, the debris raft depth and the strip use `waterCase`'s `zs`.
+  - §6 notes:
+    - `waterHtml`: a new first list item, "Scour elevation: a blank scour elevation means the ground line (El. …); an entered 0.0 is El. 0.0, not blank (3.7.3 …)". It is a separate item so the C_D replace in the wrapper below still matches. The Report prints this tab, so it carries the note.
+    - Units pane water note: "Blank scour elevations default to the ground line; an entered 0.0 is El. 0.0, not blank."
+- **Governing provision:** AASHTO LRFD 10th Ed. 3.7.3 (stream pressure p = C_D V²/1000 over the wetted pier, down to the scoured bed; Table 3.7.3.1-1 for C_D).
+- **Check case:** default project, Pier 1, with these inputs:
+  - multi-column bent on a footing: ground El. 104.5, top of footing El. 101.0, bottom El. 97.0;
+  - three round columns, D = 3.5 ft; footing 14 ft wide normal to the flow;
+  - design flood WSE 110.0, V = 8 ft/s, design scour El. 0.0; flow along the line (C_L = 0);
+  - check flood WSE 112.0, V = 10 ft/s, scour blank.
+  - p, column = 0.7 × 8² / 1000 = 0.0448 ksf; p, footing = 1.4 × 8² / 1000 = 0.0896 ksf.
+  - before: scour taken as El. 104.5. Wetted column = 110.0 − 104.5 = 5.5 ft → 0.0448 × 3.5 × 5.5 = 0.862 kip each; footing 0. Total 2.587 kip.
+  - after: scour El. 0.0. Each column is wet from its bottom, El. 101.0: 9.0 ft → 1.411 kip. Footing 101.0 − 97.0 = 4.0 ft → 0.0896 × 14 × 4.0 = 5.018 kip. Total 9.251 kip.
+  - Buoyancy is not affected (5.403 kip per column, 154.943 kip footing). The check flood (blank scour) is unchanged at El. 104.5.
+  - Strength I V_t max at the bottom of footing: 40.461 → 47.125 kip (+1.0 × 6.664).
+- **How verified:** main-vs-branch probe of 10 projects (`combine`, `comboComps`, the abutment payload, `MODEL.C`, every output tab of every unit, the strip, the Report text):
+  - The 8 projects without a 0.0 scour have identical results. These are default, wall-water-barge (scour 92 / 91), pile-ham-ship-massdot, abut-earth-seismic, mcb-rect-indiv-joint-sidewalk, abut-footing-hw, abut-NONE, and a pier in water with both scours blank. Only the Water tab text gains the note line.
+  - "Design scour 0.0" (the check case) changes `combine` / `comboComps` of Pier 1, its Water and Combinations tabs, and the Summary.
+  - "Pile bent, check scour 0.0" changes `combine` / `comboComps` of the bent and its Water and Combinations tabs. The check-flood stream pressure goes down to El. 0.0 instead of 108.0, matching the frame, which `scourDrop` already scoured to El. 0.0.
+- **Tests:** new `tests/smoke/bsl-scour-zero.mjs` with the hand-check values (blank, 0 and "0.0"), the notes and 0 console errors; it fails 3 checks on main.
+- **Saved data (§5):** none changed (a saved 0 or "0.0" now reads as El. 0.0, the engineer's decision).
+- **Other copies:** none.
