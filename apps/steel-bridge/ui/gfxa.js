@@ -134,7 +134,7 @@
     o.push(VK.PG([[-p.botB / 2, 0], [p.botB / 2, 0], [p.botB / 2, yw0], [p.tw / 2, yw0], [p.tw / 2, yw1], [p.topB / 2, yw1], [p.topB / 2, d], [-p.topB / 2, d], [-p.topB / 2, yw1], [-p.tw / 2, yw1], [-p.tw / 2, yw0], [-p.botB / 2, yw0]].map(([x, y]) => [X(x), Y(y)]), 'stl'));
     const r = Math.max(1.6, Math.min(3, 0.42 * k));
     m.bars.forEach(([, , y]) => { for (let x = 4.5; x < half - 2; x += 9) [x, -x].forEach(xx => o.push(`<circle cx="${X(xx).toFixed(2)}" cy="${Y(y).toFixed(2)}" r="${r.toFixed(2)}" class="rb"/>`)); });
-    if (m.comp) o.push(VK.T(X(0), Y(H) - 10, `${VK.sub('b', 'eff')} ${U.fmt(m.be, 2)} in${broken ? ' · deck shown broken' : ''}${m.neg ? ' · concrete not effective (cracked)' : ''}`, { a: 'middle', cls: 'xs' }), VK.L(X(-half), Y(H) - 6, X(half), Y(H) - 6, 'ext'));
+    if (m.comp) o.push(VK.T(X(0), Y(H) - 10, `${VK.sub('b', 'eff')} ${U.fmt(m.be, 2)} in${m.neg && nar ? (broken ? ' · broken, cracked' : ' · cracked') : (broken ? ' · deck shown broken' : '') + (m.neg ? ' · concrete not effective (cracked)' : '')}`, { a: 'middle', cls: 'xs' }), VK.L(X(-half), Y(H) - 6, X(half), Y(H) - 6, 'ext'));
     // neutral axes: the selected case's ENA strong and labelled; the others only when their chip is on
     const sel = m.axes.find(a => a.key === m.key), lab = [];
     m.axes.forEach(a => { if (a === sel || !show[a.key]) return; o.push(VK.L(X(-half), Y(a.y), X(half), Y(a.y), 'naoth', a.dash ? ` stroke-dasharray="${a.dash}"` : '')); lab.push({ py: Y(a.y) + 3.5, a }); });
@@ -168,11 +168,11 @@
     const nf3 = v => U.fmt(v, 3), kd = m.key === 'n' ? 'n' : '3n';
     const Mt = m.neg ? '(−1000)' : '1000';   // SECN: the negative unit moment in the negative-flexure region
     const wl = (lab, y, q) => `<li>f, ${lab} = ${Mt} × 12 (${nf3(y)} − ${nf3(sc.yb)}) / ${U.fmtInt(sc.I)}${q.k !== 1 ? ` / ${U.fmt(m.f, 3)}` : ''} = <b>${sgnF(m.ff(y) * q.k)} ksi</b></li>`;
-    const wr = b => `<li>f, ${b.w} rebar = ${Mt} × 12 (${nf3(b.y)} ${wk(`sec.cr.${b.id}`, '§')} − ${nf3(sc.yb)}) / ${U.fmtInt(sc.I)} = <b>${sgnF(b.f)} ksi</b></li>`;
+    const wr = b => `<li>f, ${b.w} rebar (y = ${sb(b.id === 'yRt' ? 'y_rt' : 'y_rb')} ${wk(`sec.cr.${b.id}`, '§')}) = ${Mt} × 12 (${nf3(b.y)} − ${nf3(sc.yb)}) / ${U.fmtInt(sc.I)} = <b>${sgnF(b.f)} ksi</b></li>`;
     const worked = `<ul class="vk-cap" id="secc-wk" style="margin:4px 0 0;padding-left:18px">${wl('top of steel', m.d, m.segs[0])}${wl('bottom of steel', 0, m.segs[0])}${dk ? wl('bottom of deck', dk.ya, dk) + wl('top of deck', dk.yb, dk) : ''}${m.rebar.map(wr).join('')}</ul>`;
     const barT = m.bars.map(([w, q]) => `${U.fmt(q.A, 2)} in² ${w}`).join(', ');
     const cap = m.neg ? `<p class="vk-cap">${esc(m.C.long)}. <i>f</i> = <i>M</i>(<i>y</i> − ȳ)/<i>I</i>, <i>M</i> = −1000 kip-ft (negative unit moment, × 12 in/ft), with ȳ, <i>I</i> of the ${m.key === 'cr' ? 'steel + rebar' : 'steel'} section, A = ${U.fmt(sc.A, 2)} in²; deck concrete not effective in negative flexure (not in the section; no stress drawn).`
-      + `${m.comp ? ` Bars ${barT || 'none'}${m.key === 'cr' ? ' (in the section, at the depths of sec.cr)' : ' (not in the DC1 steel section)'}; haunch ${U.fmt(m.hh, 2)} in, ${sb('t_s')} ${U.fmt(m.ts, 2)} in,` : ''} d ${nf3(m.d)} in. PNA ${sb('y_p')} = ${nf3(c.yp)} in (${sb('M_p')} = ${U.fmt(c.Mp, 1)} kip-ft, negative flexure).</p>${worked}`
+      + `${m.comp ? ` Bars ${barT || 'none'}${m.key === 'cr' ? ' (in the section)' : ' (not in the DC1 steel section)'}; haunch ${U.fmt(m.hh, 2)} in, ${sb('t_s')} ${U.fmt(m.ts, 2)} in,` : ''} d ${nf3(m.d)} in. PNA ${sb('y_p')} = ${nf3(c.yp)} in (${sb('M_p')} = ${U.fmt(c.Mp, 1)} kip-ft, negative flexure).</p>${worked}`
       + `<p class="vk-cap vk-pr">Neutral axes (y from the bottom of the steel): ${m.axes.map(a => `${esc(a.name)} ${nf3(a.y)} in`).join(' · ')}.</p>`
       : `<p class="vk-cap">${esc(m.C.long)}. <i>f</i> = <i>M</i>(<i>y</i> − ȳ)/<i>I</i>, <i>M</i> = 1000 kip-ft (× 12 in/ft), with ȳ, <i>I</i> of the ${m.key === 'steel' ? 'steel' : m.key === '3n' ? 'long-term 3n' : 'short-term n'} section, A = ${U.fmt(sc.A, 2)} in²${dk ? `; deck ÷ ${kd} = ${U.fmt(m.f, 3)}` : ''}.`
       + `${m.comp ? ` Bars ${barT || 'none'}; haunch ${U.fmt(m.hh, 2)} in, ${sb('t_s')} ${U.fmt(m.ts, 2)} in,` : ''} d ${nf3(m.d)} in. PNA ${sb('y_p')} = ${nf3(c.yp)} in (${sb('M_p')} = ${U.fmt(c.Mp, 1)} kip-ft, ${c.region === 'pos' ? 'positive' : 'negative'} flexure).</p>${worked}`
