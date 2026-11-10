@@ -258,6 +258,11 @@ select option { background: #fff; color: var(--text); }
 /* project block */
 .proj-box { padding: 2px 16px 16px; display: flex; flex-direction: column; gap: 8px; }
 .proj-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+/* HOC (2026-11-10): the Project tab's Hand-offs section */
+.gpHo .gpHoGrp { margin: 6px 0 2px; font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #64748b; }
+.gpHo .gpHoRow { border-top: 1px solid #e2e8f0; padding: 5px 0 3px; font-size: 12px; }
+.gpHo .gpHoRow .proj-row { margin-top: 4px; }
+.gpHo .gpHoFrom { font-size: 11px; color: #64748b; }
 .proj-btn {
   height: 30px; padding: 0 8px; border-radius: var(--r);
   border: 1px solid var(--border-hi); background: var(--surface);
@@ -3181,7 +3186,13 @@ function paneProject() { return `
   <div class="sec-body one-col" id="sec-meta">${fld('Project name', 'meta.projectName', '', 'text')}<div class="pair">${fld('Bridge ID', 'meta.bridgeId', '', 'text')}${fld('Job / project no.', 'meta.jobNo', '', 'text')}</div>
     <div class="pair">${fld('Client', 'meta.client', '', 'text')}${fld('Location', 'meta.location', '', 'text')}</div>${fld('Joint (panel point)', 'meta.joint', '', 'text')}${fld('Subject', 'meta.subject', '', 'text')}
     <div class="pair">${fld('Prepared by', 'meta.preparedBy', '', 'text')}${fld('Date', 'meta.prepDate', '', 'text')}</div><div class="pair">${fld('Checked by', 'meta.checkedBy', '', 'text')}${fld('Checked date', 'meta.chkDate', '', 'text')}</div>
-    <div class="proj-row" style="grid-template-columns: 1fr 1fr"><button type="button" id="bx-pm-use" class="proj-btn" title="Fill this header from the project info shared by another tool">Use shared project info</button><button type="button" id="bx-pm-share" class="proj-btn" title="Share this header's project info with the other tools">Share project info</button></div></div>
+    </div>
+  ${secHd('sec-ho', 'Hand-offs')}<!-- HOC (2026-11-10, engineer decision: the hand-off card on the Project tab in every tool): Use / Share project info (were a row at the end of the Calculation header; same ids, delegated handler) as Receive / Send -->
+  <div class="sec-body one-col gpHo" id="sec-ho"><div class="hint">Nothing changes until you confirm: "Use shared project info" lists the header fields it will overwrite and asks first. "Share project info" sends this header only when you click it.</div>
+    <div class="gpHoGrp">Receive from other tools</div>
+    <div class="gpHoRow"><b>Shared project info</b> <span class="gpHoFrom">from any tool, to the Calculation header</span><div class="proj-row" style="grid-template-columns: 1fr"><button type="button" id="bx-pm-use" class="proj-btn" title="Fill this header from the project info shared by another tool">Use shared project info</button></div></div>
+    <div class="gpHoGrp">Send to other tools</div>
+    <div class="gpHoRow"><b>Shared project info</b> <span class="gpHoFrom">to every tool</span><div class="proj-row" style="grid-template-columns: 1fr"><button type="button" id="bx-pm-share" class="proj-btn" title="Share this header's project info with the other tools">Share project info</button></div></div></div>
   ${secHd('sec-asm', 'Engineering assumptions')}
   <div class="sec-body one-col" id="sec-asm">${fld('Assumptions (printed in the report)', 'assumptions', '', 'area')}</div>`; }
 
