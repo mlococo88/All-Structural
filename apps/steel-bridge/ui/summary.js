@@ -179,6 +179,8 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
   }
   function figure(P, Gs) {
     const GB = window.SBDTabGfxB, GR = window.SBDGraphics, D = window.SharedDxf; if (!GB || !GR || !D || !Gs || !Gs.gov) return '';
+    // SBVZB (2026-11-10): the figure in the data-viz style (ui/alonggfx.js summarySvg: static SVG, prints grey / hatched); the old drawing when that file is not loaded
+    if (window.SBDAlongGfx && window.SBDVizAlong) { const sv = window.SBDAlongGfx.summarySvg({ gov: Gs.gov }, P, Gs.gi); if (sv) return sv; }
     try { const g = GB.summary({ gov: Gs.gov }, P, { gi: Gs.gi }); return GR.tightSvg ? GR.tightSvg(g.D, { i0: g.i0, i1: g.i1, bg: '#fff', title: g.title, width: '100%' }) : D.toSVG(g.D, { bg: '#fff', width: '100%' }); } catch (e) { return ''; }
   }
   /* GFXS (2026-11-09, engineer: "the Summary output tab must also show the cross-section graphic and the framing plan graphic"): the app's own

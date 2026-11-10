@@ -35,6 +35,14 @@
     return H;
   }
   const gi = ctx => (ctx.P.girders[ctx.g] ? ctx.g : 0);
+  /* SBVZB (2026-11-10): the graphics along the girder (shear, fatigue, fatigue-chart, welds, rating) on screen in the data-viz style (ui/alonggfx.js
+     SBDAlongGfx[viz], ui/vizalong.js); Download DXF exports the old drawing, wrap(make(TX)), unchanged. false when the style's files are not loaded (put() is used) */
+  function putC(host, name, ctx, make, viz, o2) {
+    const el = host.querySelector(`[data-gfxb="${name}"]`), AG = window.SBDAlongGfx, TX = T(); if (!el) return true;
+    if (!AG || !window.SBDVizAlong || !window.SBDVizKit || !TX || !GR()) return false;
+    const file = `${slug(ctx.P)}_${name}`, H = AG[viz](el, { ...o2, build: () => wrap(make(TX), file), file });
+    if (H) (window.SBDTabGfxBUI.handles = window.SBDTabGfxBUI.handles || {})[name] = H; return true;
+  }
   /* DETC (2026-11-10): the detail drawings and the splice graphics in the option C screen style (ui/gfxdet.js, window.SBDGfxDet[det]); Download DXF exports the CAD
      drawing make(TX) (wrap()'s graphic, unchanged); handles[name] keeps { el, graphic, dxf() } for the tests. Without the kit: put() (the CAD viewer) as before. */
   function putDet(host, name, ctx, make, det, args) {
@@ -48,20 +56,20 @@
   }
 
   function shear(host, ctx, R, sel, onSel) {
-    put(host, 'shear', ctx, TX => TX.shear(R, ctx.P, { gi: gi(ctx), sel }), onSel);
+    if (!putC(host, 'shear', ctx, TX => TX.shear(R, ctx.P, { gi: gi(ctx), sel }), 'shear', { P: ctx.P, gi: gi(ctx), R, sel, onSel })) put(host, 'shear', ctx, TX => TX.shear(R, ctx.P, { gi: gi(ctx), sel }), onSel);
     // the stiffener details follow the selection: the selected transverse stiffener / bearing, else the governing one (2026-10-31)
     const oTs = { i: sel && sel.k === 'ts' ? sel.i : undefined }, oBs = { i: sel && sel.k === 'bs' ? sel.i : undefined };
     putDet(host, 'shear-detail', ctx, TX => TX.shearDetail(R, ctx.P, oTs), 'stiff', { R, opt: oTs }) || put(host, 'shear-detail', ctx, TX => TX.shearDetail(R, ctx.P, oTs));
     putDet(host, 'shear-bearing', ctx, TX => TX.shearBearing(R, ctx.P, oBs), 'bear', { R, opt: oBs }) || put(host, 'shear-bearing', ctx, TX => TX.shearBearing(R, ctx.P, oBs));
   }
   function fatigue(host, ctx, R, sel, onSel) {
-    put(host, 'fatigue', ctx, TX => TX.fatigue(R, ctx.P, { gi: gi(ctx), sel }), onSel);
-    put(host, 'fatigue-chart', ctx, TX => TX.fatigueChart(R, ctx.P, { gi: gi(ctx), sel }), onSel);
+    if (!putC(host, 'fatigue', ctx, TX => TX.fatigue(R, ctx.P, { gi: gi(ctx), sel }), 'fatigue', { P: ctx.P, gi: gi(ctx), R, sel, onSel })) put(host, 'fatigue', ctx, TX => TX.fatigue(R, ctx.P, { gi: gi(ctx), sel }), onSel);
+    if (!putC(host, 'fatigue-chart', ctx, TX => TX.fatigueChart(R, ctx.P, { gi: gi(ctx), sel }), 'fatigueChart', { P: ctx.P, gi: gi(ctx), R, sel, onSel })) put(host, 'fatigue-chart', ctx, TX => TX.fatigueChart(R, ctx.P, { gi: gi(ctx), sel }), onSel);
   }
   function crossframe(host, ctx, B) { const o = { dia: !!(window.SBDCrossframes && ctx.P.crossframes && window.SBDCrossframes.cfDiaOn(ctx.P.crossframes)) };
     putDet(host, 'crossframe', ctx, TX => TX.crossframe(B, ctx.P, o), 'crossframe', { B, opt: o }) || put(host, 'crossframe', ctx, TX => TX.crossframe(B, ctx.P, o)); }
   function welds(host, ctx, B, sel, onSel) {
-    put(host, 'welds', ctx, TX => TX.welds(B, ctx.P, { gi: gi(ctx), sel }), onSel);
+    if (!putC(host, 'welds', ctx, TX => TX.welds(B, ctx.P, { gi: gi(ctx), sel }), 'welds', { P: ctx.P, gi: gi(ctx), R: B, sel, onSel })) put(host, 'welds', ctx, TX => TX.welds(B, ctx.P, { gi: gi(ctx), sel }), onSel);
     const oW = { i: sel && sel.k === 'fw' ? sel.i : undefined };
     putDet(host, 'weld-detail', ctx, TX => TX.weldDetail(B, ctx.P, oW), 'weld', { B, opt: oW }) || put(host, 'weld-detail', ctx, TX => TX.weldDetail(B, ctx.P, oW));
   }
@@ -71,7 +79,7 @@
     if (list && list.length) put(host, 'splice-strip', ctx, TX => TX.spliceStrip(list, ctx.P, { sel, narrow: window.innerWidth < 700 }), onSel ? v => { if (v && v.k === 'fs') onSel(v.i); } : null, { minPx: 60, phoneZoom: false });
     if (s) putDet(host, 'splice', ctx, TX => TX.splice(s, {}), 'splice', { s }) || put(host, 'splice', ctx, TX => TX.splice(s, {}), null, { maxVh: 60 });
   }
-  function rating(host, ctx, B, sel, onSel) { put(host, 'rating', ctx, TX => TX.ratingChart(B, ctx.P, { gi: gi(ctx), sel }), onSel); }
+  function rating(host, ctx, B, sel, onSel) { if (!putC(host, 'rating', ctx, TX => TX.ratingChart(B, ctx.P, { gi: gi(ctx), sel }), 'rating', { P: ctx.P, gi: gi(ctx), R: B, sel, onSel })) put(host, 'rating', ctx, TX => TX.ratingChart(B, ctx.P, { gi: gi(ctx), sel }), onSel); }
 
   window.SBDTabGfxBUI = { shear, fatigue, crossframe, welds, splice, rating, wrap };
 })();
