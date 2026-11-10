@@ -3609,7 +3609,7 @@ Part (c) of three (a: #1353, G4A; b: #1355, G4B). Open items 7 and 8 of #1344.
   - `project-library --tool gusset`: the 4 "results identical to main" checks differ, as intended (the new `R.p` keys, every LRFR strength C, RF and equation text with R_DL); all other checks pass.
 - **Other copies:** none.
 
-## 2026-11-10 — PR: claude/gpr-mbe4-brg-fill (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (G4D) — MBE 4th Edition (2026): fastener checks of the design load at the operating level (6A.6.12.2); filler factor λ = A_f/A_p (Eqs. 6A.6.12.5.1-3, 6A.6.12.6.2-3)   [§4 calculation change; engineer's standing rule 2026-11-10: adopt the MBE 4th Ed.]
+## 2026-11-10 — PR: claude/gpr-mbe4-brg-fill (PR #1358: https://github.com/mlococo88/All-Structural/pull/1358) (G4D) — MBE 4th Edition (2026): fastener checks of the design load at the operating level (6A.6.12.2); filler factor λ = A_f/A_p (Eqs. 6A.6.12.5.1-3, 6A.6.12.6.2-3)   [§4 calculation change; engineer's standing rule 2026-11-10: adopt the MBE 4th Ed.]
 
 Follows G4A–G4C (#1353, #1355, #1357); open items 2 (part) and 3 of #1357.
 - **Governing provisions (AASHTO MBE 4th Ed., 2026), text verified:**
