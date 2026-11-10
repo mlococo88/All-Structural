@@ -94,7 +94,7 @@ test('gfxa: Flexure graphics: bands coloured by the table ratios; stress checks 
 test('gfxa: Constructibility graphics: pours, M_DCc envelope, overhang bracket', () => {
   let nPour = 0;
   for (const [name, P] of projects()) { const R = W.SBDConstrUI.build({ P, g: 0 }); if (R.err) continue;
-    const gs = run(GA.constr, { P, gi: 0, R, sel: 0 }); assert.equal(gs.length, 2, name); gs.forEach((g, i) => finite(g.D, `${name} cn${i}`));
+    const gs = run(GA.constr, { P, gi: 0, R, sel: 0 }); assert.equal(gs.length, R.F && R.F.oh ? 2 : 1, name);   // QA2: no bracket sketch (a note) without overhang inputs (interior girder) gs.forEach((g, i) => finite(g.D, `${name} cn${i}`));
     const sq = R.F.AR && R.F.AR.seq; if (sq) { nPour++; const pr = gs[0].D.E.filter(e => e.l === 'S-POUR' && e.t === 'PL' && e.closed); assert.equal(pr.length, sq.pours.length, `${name}: one rectangle per pour`);
       pr.forEach((r, k) => { assert.ok(Math.abs(r.pts[0][0] - sq.pours[k].a * 12) < 1e-6 && Math.abs(r.pts[1][0] - sq.pours[k].b * 12) < 1e-6, `${name}: pour ${k + 1} stations`); }); has(finite(gs[0].D, name), ['S-CHART-S1', 'S-CHART-S2'], name); } }
   assert.ok(nPour >= 1, 'a project with a pour sequence');

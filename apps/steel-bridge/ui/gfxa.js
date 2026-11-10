@@ -181,11 +181,15 @@
     // f_bu vs F_nc (and every check's demand and capacity) at the selected location
     const flangeCk = (r.checks || []).filter(q => q.unit === 'ksi' && fin(q.demand) && fin(q.capacity) && q.inUse !== false);
     G.mount(B, () => {
-      const h = 6, hgt = 50, D = G.newDrawing(h), cats = flangeCk.map(q => q.id + (q.key ? ' ' + q.key.toUpperCase() : '')), mk = (name, f, col) => ({ name, kind: 'bars', color: col, pts: flangeCk.map((q, i) => [i, f(q)]) });
-      const w = Math.max(150, 32 * flangeCk.length), ttl = (t, y0) => G.wrap(t, 42).forEach((q, i, a) => D.text(D.layer('ANNO-TEXT', 7), 0, y0 + hgt + 1.4 * h + (a.length - 1 - i) * 1.4 * h, 1.1 * h, q));
-      G.chart({ D, at: [0, 0], w, hgt, h, cats, series: [mk('DEMAND', q => q.demand, 5), mk('CAPACITY', q => q.capacity, 3)], ylab: 'KSI', fy: v => nf(v, 0), legend: 'below' }); ttl(`STRESS CHECKS (KSI) AT ${String(r.name).toUpperCase()}: DEMAND (f_bu ...) VS CAPACITY (phi F_nc ...)`, 0);
-      const rt = (r.checks || []).filter(q => fin(q.ratio)), w2 = Math.max(150, 32 * rt.length), y2 = -(hgt + 17 * h);
-      G.chart({ D, at: [0, y2], w: w2, hgt, h, cats: rt.map(q => q.id + (q.key ? ' ' + q.key.toUpperCase() : '')), series: [{ name: 'RATIO', kind: 'bars', color: 5, pts: rt.map((q, i) => [i, q.ratio]) }], limits: [{ y: 1, label: 'RATIO = 1.0' }], fy: v => nf(v, 2), legend: 'below' }); ttl('CHECK RATIOS (ALL CHECKS OF THE LOCATION)', y2);
+      // QA2 (2026-11-09): both charts on one width of 3 text heights per check (was 32 units = 5.3 text heights each, and the two charts of different widths), the
+      // check key on a second line under its id, so the frame shows the text at a legible size
+      const h = 6, hgt = 50, D = G.newDrawing(h), rt = (r.checks || []).filter(q => fin(q.ratio)), w = Math.max(150, 3 * h * Math.max(flangeCk.length, rt.length));
+      const keys = (L, y0) => L.forEach((q, i) => { if (q.key) D.text(D.layer('ANNO-TEXT', 7), (i + 0.5) / L.length * w, y0 - 2.7 * h, 0.8 * h, q.key.toUpperCase(), 1); });
+      const mk = (name, f, col) => ({ name, kind: 'bars', color: col, pts: flangeCk.map((q, i) => [i, f(q)]) });
+      const ttl = (t, y0) => G.wrap(t, Math.max(42, Math.floor(w / (0.62 * 1.1 * h)))).forEach((q, i, a) => D.text(D.layer('ANNO-TEXT', 7), 0, y0 + hgt + 1.4 * h + (a.length - 1 - i) * 1.4 * h, 1.1 * h, q));
+      G.chart({ D, at: [0, 0], w, hgt, h, cats: flangeCk.map(q => q.id), series: [mk('DEMAND', q => q.demand, 5), mk('CAPACITY', q => q.capacity, 3)], ylab: 'KSI', fy: v => nf(v, 0), legend: 'below' }); keys(flangeCk, 0); ttl(`STRESS CHECKS (KSI) AT ${String(r.name).toUpperCase()}: DEMAND (f_bu ...) VS CAPACITY (phi F_nc ...)`, 0);
+      const y2 = -(hgt + 13 * h);
+      G.chart({ D, at: [0, y2], w, hgt, h, cats: rt.map(q => q.id), series: [{ name: 'RATIO', kind: 'bars', color: 5, pts: rt.map((q, i) => [i, q.ratio]) }], limits: [{ y: 1, label: 'RATIO = 1.0' }], fy: v => nf(v, 2), legend: 'below' }); keys(rt, y2); ttl('CHECK RATIOS (ALL CHECKS OF THE LOCATION)', y2);
       return { D, title: `Stress checks at ${r.name}`, file: 'flexure-checks', note: 'Demand and capacity of the checks in the location table (checks in ksi); ratios of every check with 1.0 marked.' };
     }, { key: 'fxb' });
     // unbraced length (LTB) sketch
@@ -232,6 +236,8 @@
     }, { key: 'cn', selected: sel, onSelect: k => o.onSelect && o.onSelect(k) });
     // overhang bracket sketch (exterior girder, project source)
     const oh = R.F && R.F.oh;
+    // QA2 (2026-11-09): no bracket sketch to draw (interior girder, or a GirderDetail file): a short note, not an empty frame with a title
+    if (!oh) { B.innerHTML = `<p class="note">${(P.girders[o.gi] || {}).position === 'exterior' ? 'Overhang brackets are checked with the project as the source (not a GirderDetail file).' : 'Overhang brackets apply to exterior girders; select G1 or Gn.'}</p>`; return H; }
     G.mount(B, () => {
       const gg = P.girders[o.gi], sg = gg.segments[0], a = +(oh || {}).a, hb = +(oh || {}).hb, wOH = +(oh || {}).wOH, tOH = +(oh || {}).tOH;
       const h = Math.max(sg.topB, wOH || 30) * 0.05, D = G.newDrawing(h), t = D.layer('ANNO-TEXT', 7), ly = { g: D.layer('GRDR', 5), dk: D.layer('DECK', 7), br: D.layer('BRACKET', 30), ld: D.layer('LOAD', 1), dm: D.layer('DIMS', 7) };

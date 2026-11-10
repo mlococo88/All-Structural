@@ -39,7 +39,7 @@
          H = { select(v), viewer, el, graphic, dxf() }
      Text hierarchy and layout helpers (polish PR): G.TXT = { title 1.3, note 0.85, label 0.8, small 0.72, dim 0.72 } x the drawing's text height h (h is ELEVH = 2.4 % of the length
          for a girder elevation); no text is smaller than 0.72 h and the dimension text is G.TXT.dim x h (ticks scale with it). G.textW(s, hh) the Arial advance width; G.wrap(s, n) lines
-         of at most n characters; G.stack(items, o) rows for left-aligned flags on leaders; G.declutter(items, o) free baselines for labels; G.mergeBands(items, { x0, x1 }) neighbours of
+         of at most n characters; G.stack(items, o) rows for left-aligned flags on leaders (o.leaders: no leader crosses a flag); G.declutter(items, o) free baselines for labels; G.mergeBands(items, { x0, x1 }) neighbours of
          one colour class as one band (ratioLayer opts.flag marks the band of the largest ratio); G.tightSvg(D, o) the static SVG cut to the drawn extents (Report figure).
          chart(): o.legend 'below' puts the legend in rows under the plot (automatic for long plots), o.legendExtra [{ text, arrow }], a line leaving the scale is cut at the top edge and
          shown by a dashed cap and an arrow; o.vlabel 'bottom'. mount(): the view is fitted to the drawing's drawn extents (getBBox) and the frame takes its aspect (200 px to 88 % of the window).
@@ -76,6 +76,9 @@
   function stack(items, o) {
     const gap = (o && o.gap) || 0, rows = [], out = [];
     items.map((q, i) => i).sort((a, b) => items[b].x - items[a].x || a - b).forEach(i => { const q = items[i]; let r = 0;
+      // QA2 (2026-11-09) o.leaders: each flag hangs on a leader from its x through the rows before its own; a flag goes below (further out than) every placed flag
+      // whose leader x falls inside it, so no leader crosses a label
+      if (o && o.leaders) out.forEach((lv, k) => { if (lv != null && items[k].x >= q.x - 1e-9 && items[k].x <= q.x + q.w + gap) r = Math.max(r, lv + 1); });
       for (; ; r++) { const R = rows[r] || (rows[r] = []); if (R.every(b => q.x + q.w + gap <= b.x || q.x >= b.x + b.w + gap)) { R.push(q); out[i] = r; break; } } });
     return out;
   }
@@ -309,7 +312,7 @@
     try { g = build(); } catch (e) { el.innerHTML = `<div class="alert err">The graphic could not be drawn: ${esc(e.message)}</div>`; return null; }
     if (!g || !g.D || (g.errors && g.errors.length)) { el.innerHTML = `<div class="note">${esc(g && g.errors ? g.errors.join(' ') : 'No graphic.')}</div>`; return null; }
     const D = g.D, b = D.bbox(), pad = 0.02 * Math.max(b[2] - b[0], b[3] - b[1]), ox = b[0] - pad, oy = b[3] + pad;   // toSVG's mapping
-    el.innerHTML = `<div class="sbg"><div class="sbg-bar"><b>${esc(g.title || '')}</b><span class="sbg-read" aria-live="polite"></span><button type="button" data-sbg="dxf">Download DXF</button></div><div class="sbg-box"></div><p class="sbg-hint">Pinch or double-tap to zoom; drag to pan.</p>${g.note ? `<p class="sbg-note">${esc(g.note)}</p>` : ''}</div>`;
+    el.innerHTML = `<div class="sbg"><div class="sbg-bar"><b>${esc(g.title || '')}</b><span class="sbg-read" aria-live="polite"></span><button type="button" data-sbg="dxf">Download DXF</button></div><div class="sbg-box"></div><p class="sbg-hint">Pinch or double-tap to zoom; drag to pan.</p>${g.note ? `<p class="sbg-note">${window.SBDSub ? window.SBDSub.html(g.note) : esc(g.note)}</p>` : ''}</div>`;
     const read = el.querySelector('.sbg-read'), box = el.querySelector('.sbg-box');
     const H = { graphic: g, dxf: () => D.toDXF({ ltscale: 1 }) };
     let svg = X_().toSVG(D, { title: g.title }); const mobile = window.innerWidth < 700;
@@ -350,7 +353,7 @@
     if (opts.selected != null) H.select(opts.selected);
     // click (not drag) to select; hover for the readout (mouse)
     const at = ev => { const m = sv.getScreenCTM(); if (!m) return null; const p = sv.createSVGPoint(); p.x = ev.clientX; p.y = ev.clientY; const q = p.matrixTransform(m.inverse()); return [q.x + ox, oy - q.y]; };
-    let down = null; const show = v => { read.textContent = v != null && g.readout ? g.readout(v) : (opts.selected != null && g.readout ? g.readout(opts.selected) : ''); };
+    let down = null; const show = v => { const t = v != null && g.readout ? g.readout(v) : (opts.selected != null && g.readout ? g.readout(opts.selected) : ''); if (window.SBDSub) read.innerHTML = window.SBDSub.html(t); else read.textContent = t; };   // QA2: subscripts (M_DC1)
     sv.addEventListener('pointerdown', ev => { down = { x: ev.clientX, y: ev.clientY, t: Date.now() }; });
     sv.addEventListener('pointerup', ev => { if (!down || Math.hypot(ev.clientX - down.x, ev.clientY - down.y) > 5 || Date.now() - down.t > 600) { down = null; return; } down = null;
       const p = at(ev); if (!p || !g.pick) return; const v = g.pick(p[0], p[1]); if (v == null) return; H.select(v); opts.selected = v; show(v); if (opts.onSelect) opts.onSelect(v); });

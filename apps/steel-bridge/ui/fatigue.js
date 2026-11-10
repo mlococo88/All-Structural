@@ -55,7 +55,7 @@
         ${h.sel('studs.skew', 'Radial term F<sub>fat</sub> = F<sub>rc</sub>/w', [['auto', 'Auto: a support skewed more than 20°'], ['yes', 'Yes (skewed > 20° or curved)'], ['no', 'No']])}${h.num('studs.Frc', 'Cross-frame force range F<sub>rc</sub>', 'kip')}${h.num('studs.wv', 'Effective deck length w', 'in')}
         ${h.num('studs.splX', 'Field splice stations (no studs over the plates)', '', { text: true })}${h.num('studs.splL', 'Top splice plate length', 'ft')}${h.num('studs.splC', 'Clearance at each plate end', 'in')}
         ${h.sel('studs.beffMode', 'b<sub>eff</sub> for the studs', [['girder', 'Each girder its own b_eff (6.10.10; default)'], ['bridge', 'Bridge-wide, as GirderDetail (one set of zones)']])}
-        <p class="note">GirderDetail checks one set of pitch zones and strength regions for the whole bridge, with one b<sub>eff</sub> (the girder with the largest fatigue shear range, usually the exterior). "Each girder its own b<sub>eff</sub>" is an option, off by default; the difference is reported on the output tab. Splice stations: comma separated; with a hand-off file and none entered, the file's splice gaps are used.</p>`)
+        <p class="note">GirderDetail checks one set of pitch zones and strength regions for the whole bridge, with one b<sub>eff</sub> (the girder with the largest fatigue shear range, usually the exterior). This app's default is "Each girder its own b<sub>eff</sub>": the pitch (AASHTO LRFD 10th Ed. Art. 6.10.10.1.2) and the strength (Art. 6.10.10.4.2) take the girder's own b<sub>eff</sub> (in its composite section); "Bridge-wide" is GirderDetail's envelope. The difference is reported on the output tab. Splice stations: comma separated; with a hand-off file and none entered, the file's splice gaps are used.</p>`)
       + h.card('Pitch zones', `${Z.length ? `<div class="tscroll"><table class="tbl"><thead><tr><th>From (ft)</th><th>To (ft)</th><th>Studs per row</th><th>Pitch (in)</th><th></th></tr></thead><tbody>
           ${Z.map((z, i) => `<tr>${['x1', 'x2', 'nr', 'p'].map(k => `<td><input type="number" step="${k === 'nr' ? 1 : 'any'}" data-path="studs.zones.${i}.${k}" data-kind="num" value="${esc(z[k])}" aria-label="zone ${i + 1} ${k}"></td>`).join('')}<td><button type="button" data-fzdel="${i}" title="Remove this zone">×</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="note">No zones entered: the hand-off file\'s pitch zones (or GirderDetail\'s built-in zones in the example) are used.</p>'}
         <button type="button" id="fz_add">Add zone</button>${Z.length ? ' <button type="button" id="fz_clear">Clear (use the file\'s zones)</button>' : ''}
@@ -248,7 +248,7 @@
     if (R.SCC) c.push({ k: 'sc', i: 0, r: R.scGov ? R.scGov.it.r : 0 });
     return c.reduce((a, b) => (!a || b.r > a.r ? b : a), null) || { k: 'sc', i: 0 };
   }
-  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`;
+  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>`;
   const A = '10th Ed. Art. ', OPEN = new Set(), TPX = (...ks) => ks.map(k => window.SBDFlexureUI.TP[k]).filter(Boolean);
 
   /* ---------- topics of the worked steps (presentation spec A, 2026-10-31; as ui/shear.js): fatigue details, GS17 flanges, shear connectors; the flexure work they quote uses the topics of the Flexure tab ---------- */
@@ -279,12 +279,12 @@
     const FA = window.SBDFatigue, SC = window.SBDStuds;
     let h = '';
     const gl = [];
-    if (R.faGov) gl.push([R.faGov.it.r, `${esc(R.faGov.it.loc)}: ${esc(R.faGov.c.id)} ${esc(R.faGov.c.title)}`, go('fa', R.FR.rows.findIndex(r => R.faGov.it.step.startsWith(`fa${r.i}.`)), R.faGov.it.step), 'Fatigue details']);
-    if (R.g17) gl.push([R.g17.it.r, `${esc(R.g17.it.loc)}: GS17 flange stress range (Category ${ct(R.g17.it.cat)}, Fatigue ${R.g17.it.lim})`, go('gs', R.g17.i, R.g17.it.step), 'Flanges, every station']);
-    if (R.scGov) gl.push([R.scGov.it.r, `${esc(R.scGov.it.loc)}: ${esc(R.scGov.c.id)} ${esc(R.scGov.c.title)}`, go('sc', 0, R.scGov.it.step), 'Studs']);
+    if (R.faGov) gl.push([R.faGov.it.r, `${window.SBDSub.html(R.faGov.it.loc)}: ${esc(R.faGov.c.id)} ${window.SBDSub.html(R.faGov.c.title)}`, go('fa', R.FR.rows.findIndex(r => R.faGov.it.step.startsWith(`fa${r.i}.`)), R.faGov.it.step), 'Fatigue details']);
+    if (R.g17) gl.push([R.g17.it.r, `${window.SBDSub.html(R.g17.it.loc)}: GS17 flange stress range (Category ${ct(R.g17.it.cat)}, Fatigue ${R.g17.it.lim})`, go('gs', R.g17.i, R.g17.it.step), 'Flanges, every station']);
+    if (R.scGov) gl.push([R.scGov.it.r, `${window.SBDSub.html(R.scGov.it.loc)}: ${esc(R.scGov.c.id)} ${window.SBDSub.html(R.scGov.c.title)}`, go('sc', 0, R.scGov.it.step), 'Studs']);
     const top = gl.reduce((a, b) => (!a || b[0] > a[0] ? b : a), null);
     h += `<section class="sec"><div class="secHead">Fatigue &amp; studs: governing</div><div class="secBody"><p class="note">${R.what}</p>
-      <p class="note">${esc(FA.setText(R.set))}.</p>
+      <p class="note">${window.SBDSub.html(FA.setText(R.set))}.</p>
       ${top ? `<p>Governing ratio <b class="${cls(top[0])}">${fmt(top[0], 3)}</b>: ${top[1]} ${top[2]}</p>` : ''}
       <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Group</th><th class="lft">Governing item</th><th>Ratio</th><th></th></tr></thead><tbody>
       ${gl.map(q => `<tr><td class="lft">${q[3]}</td><td class="lft">${q[1]}</td><td class="${cls(q[0])}">${rt3(q[0])}</td><td>${q[2]}</td></tr>`).join('')}</tbody></table></div>
@@ -295,7 +295,7 @@
       h += `<section class="sec"><div class="secHead">Fatigue details (FA1, FA2, FA3; 6.6.1.2, 6.10.5.3)</div><div class="secBody"><p class="note">ADTT<sub>SL</sub> = ${fmt(R.FR.ADTTSL, 0)} trucks/day. Each detail: Fatigue I where ADTT<sub>SL</sub> is at least its infinite-life equivalent, else Fatigue II. Exempt: net compression under the permanent loads (FA2).</p>
         <div class="tscroll fx-list"><table class="tbl"><thead><tr><th class="lft">Detail</th><th>Cat.</th><th>n</th><th>Limit state</th><th>γ(Δf) (ksi)</th><th>(ΔF)<sub>n</sub> (ksi)</th><th>FA1</th><th>FA3</th></tr></thead><tbody>
         ${R.FR.rows.map((r, i) => { const a = ck('FA1').items[i], v = ck('FA3').items.find(it => it.step === `fa${r.i}.okV`); return `<tr data-fa="fa:${i}" class="${S.sel && S.sel.k === 'fa' && S.sel.i === i ? 'sel' : ''}"><td class="lft">${esc(r.name)}${r.exempt ? ' (exempt)' : ''}</td><td>${ct(r.cat)}</td><td>${r.nn}</td><td>Fatigue ${r.lim}</td><td>${fmt(r.dem, 2)}</td><td>${fmt(r.res, 2)}</td><td class="${r.exempt ? 'fx-ok' : cls(a.r)}">${r.exempt ? 'exempt' : fmt(a.r, 3)}</td>${v ? `<td class="${cls(v.r)}">${fmt(v.r, 3)}</td>` : '<td class="fx-na">n/a</td>'}</tr>`; }).join('')}
-        </tbody></table></div><p class="note">${C.filter(c => !['FA1', 'FA2', 'FA3'].includes(c.id)).map(c => `${esc(c.id)} ${esc(c.title)}: ${c.items.length ? c.items.map(it => `${esc(it.loc)} — ${{ pass: 'OK', fail: 'fails', warn: 'warning', na: 'n/a' }[it.st]}`).join('; ') : esc(c.naWhy)}`).join('. ')}.</p></div></section>`; }
+        </tbody></table></div><p class="note">${C.filter(c => !['FA1', 'FA2', 'FA3'].includes(c.id)).map(c => `${esc(c.id)} ${window.SBDSub.html(c.title)}: ${c.items.length ? c.items.map(it => `${window.SBDSub.html(it.loc)} — ${{ pass: 'OK', fail: 'fails', warn: 'warning', na: 'n/a' }[it.st]}`).join('; ') : esc(c.naWhy)}`).join('. ')}.</p></div></section>`; }
     // GS17
     if (R.gs17) h += `<section class="sec"><div class="secHead">Flange stress range at every station (GS17; 6.6.1.2, 6.10.5.1)</div><div class="secBody"><p class="note">Top flange Category ${ct(R.cats.T)}, bottom flange Category ${ct(R.cats.B)}; the Fatigue I ranges are those of the Flexure tab; n by station (Table 6.6.1.2.5-1).</p>
       <div class="tscroll fx-list"><table class="tbl"><thead><tr><th class="lft">Station</th><th>n</th><th>Top: limit state</th><th>Top ratio</th><th>Bottom: limit state</th><th>Bottom ratio</th></tr></thead><tbody>
@@ -314,7 +314,7 @@
         <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Region</th><th>P (kip)</th><th>n required</th><th>n provided</th><th>SC2</th><th>SC6 (splices)</th></tr></thead><tbody>
         ${Sr.regions.map((r, i) => { const a = ck('SC2').items[i], b = ck('SC6').items.find(it => it.step === `scr${r.i}.net`);
           return `<tr><td class="lft">${esc(r.name)} ${go('sc', 0, `scr${r.i}.ok`)}</td><td>${fmt(r.P, 1)}</td><td>${fmt(r.nreq, 2)}</td><td>${r.nprov}${r.lost ? ` − ${r.lost}` : ''}</td><td class="${cls(a.r)}">${fmt(a.r, 3)}</td>${b ? `<td class="${cls(b.r)}">${fmt(b.r, 3)}</td>` : '<td class="fx-na">n/a</td>'}</tr>`; }).join('')}
-        </tbody></table></div><p class="note">${C.filter(c => ['SC5', 'SC7'].includes(c.id)).map(c => `${esc(c.id)} ${esc(c.title)}: ${c.items.map(it => `${esc(it.loc)} — ${it.st === 'pass' ? 'OK' : 'fails'}`).join('; ')}`).join('. ')}. ${ck('SC6').naWhy ? 'SC6: ' + esc(ck('SC6').naWhy) : ''}</p></div></section>`; }
+        </tbody></table></div><p class="note">${C.filter(c => ['SC5', 'SC7'].includes(c.id)).map(c => `${esc(c.id)} ${window.SBDSub.html(c.title)}: ${c.items.map(it => `${window.SBDSub.html(it.loc)} — ${it.st === 'pass' ? 'OK' : 'fails'}`).join('; ')}`).join('. ')}. ${ck('SC6').naWhy ? 'SC6: ' + esc(ck('SC6').naWhy) : ''}</p></div></section>`; }
     // worked steps of the selection
     const sel = S.sel || { k: 'sc', i: 0 }; let title = '', list = [];
     if (sel.k === 'fa' && R.FR.rows && R.FR.rows[sel.i]) { const r = R.FR.rows[sel.i]; title = r.name; list = stepsOf(R, 'fa', r); }

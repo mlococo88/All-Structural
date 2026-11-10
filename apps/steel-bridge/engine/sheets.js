@@ -127,10 +127,11 @@
       zonesOf(g).forEach(z => { const x1 = Math.max(nm(z.x1), 0), x2 = Math.min(nm(z.x2), G.sup[G.sup.length - 1]); if (!(x2 > x1) || !(+z.p > 0)) return; const L = (toOwn(G, g.i, x2) - toOwn(G, g.i, x1)) * 12; nStud += Math.floor(L / +z.p + 1) * Math.max(1, +z.nr || 1); });
     });
     const tr = []; (RS ? RS.pgs : []).forEach(pg => { const w = RS.pg[pg].wt; if (w) w.R.tr.forEach(r => G.girders.filter(g => g.pg === pg).forEach(() => tr.push(r))); });
-    rows.push(['GIRDER PLATES, STRUCTURAL STEEL (NO DETAIL ALLOWANCE)', f0(lb), 'LB'], ['CONNECTION PLATES', String(nCp), 'EA'], ['INTERMEDIATE TRANSVERSE STIFFENERS', String(nSt), 'EA'], ['BEARING STIFFENER PLATES', String(nBs), 'EA'],
-      ['FIELD SPLICES (ALL GIRDERS)', String(nSpl), 'EA']);
-    if (nSpl) rows.push(['H.S. BOLTS AT FIELD SPLICES', okBolt ? String(nBolt) : 'SPLICES NOT DESIGNED', okBolt ? 'EA' : '']);
-    rows.push(['SHEAR STUDS', String(nStud), 'EA']); if (RS) rows.push(['SHOP FLANGE BUTT SPLICES (CJP)', String(tr.length), 'EA']);
+    const n0 = v => (Math.round(+v) || 0).toLocaleString('en-US');   // QA2 (2026-11-09): the quantities with thousands separators (435,385 LB; same rounding as before)
+    rows.push(['GIRDER PLATES, STRUCTURAL STEEL (NO DETAIL ALLOWANCE)', n0(lb), 'LB'], ['CONNECTION PLATES', n0(nCp), 'EA'], ['INTERMEDIATE TRANSVERSE STIFFENERS', n0(nSt), 'EA'], ['BEARING STIFFENER PLATES', n0(nBs), 'EA'],
+      ['FIELD SPLICES (ALL GIRDERS)', n0(nSpl), 'EA']);
+    if (nSpl) rows.push(['H.S. BOLTS AT FIELD SPLICES', okBolt ? n0(nBolt) : 'SPLICES NOT DESIGNED', okBolt ? 'EA' : '']);
+    rows.push(['SHEAR STUDS', n0(nStud), 'EA']); if (RS) rows.push(['SHOP FLANGE BUTT SPLICES (CJP)', n0(tr.length), 'EA']);
     [...fw.values()].filter(q => q.L > 1e-9).forEach(q => welds.push({ ...q, Lft: q.L / 12, wt: q.w * q.w / 2 * q.L * GAM }));
     return { rows, welds, lb, nStud, nBolt, nSpl, tr };
   }

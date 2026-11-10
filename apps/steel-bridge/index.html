@@ -34,6 +34,7 @@
     '../../shared/projects-ui.js',
     '../../shared/github-sync.js',
     '../../shared/handoff-store.js',   // GXF (2026-11-09): per-project hand-off copies (HANDOFF.md §5.1), used by ui/handoffs.js
+    'ui/sub.js',   // QA2 (2026-11-09): SBDSub.html, the subscripts of screen text (display only)
     'engine/legacy.js',
     'ui/legacy.js',
     'engine/sections.js',
@@ -71,6 +72,7 @@
     'ui/rating.js',
     'engine/welds.js',
     'ui/welds.js',
+    'engine/inputcheck.js',   // SBINV (2026-11-10): every blocking input error in one list (collect); no results are shown while one exists
     '../../shared/report.js',
     'report/data.js',
     'report/builders.js',
@@ -80,6 +82,7 @@
     'ui/dash.js',
     'ui/bridgexfer.js',
     'ui/handoffs.js',
+    'ui/inputcheck.js',   // SBINV: the field marks, the tab counts and the banner (display only)
     'ui/lists.js'
   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
 })();
@@ -126,6 +129,7 @@
   #hdr h1{font-size:15pt;margin:0;letter-spacing:.4px;font-family:var(--font-ui);font-weight:600;color:#fff;}
   #hdr .byline{font-size:9pt;color:#C7D4E4;margin-top:1px;font-family:var(--font-ui);}
   #hdrBtns{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+  #hdrUR{display:inline-flex;gap:6px;align-items:center;white-space:nowrap;}
   #hdr .allToolsLink{font-size:8.5pt;color:#C7D4E4;text-decoration:none;font-family:var(--font-ui);}
   #hdr .allToolsLink:hover{color:#fff;text-decoration:underline;}
   #main{flex:1 1 auto;display:flex;min-height:0;}
@@ -161,8 +165,26 @@
      a drop-down widens into the free space of its row up to its longest choice, so its text is not cut at 110 px */
   .fRow>label:first-child{flex:0 1 auto;max-width:calc(100% - 150px);}
   .fRow>select{flex:1 1 110px;width:110px;min-width:110px;max-width:max-content;}
+  /* QA2 (2026-11-09): four rows whose short unit still went onto a line of its own at a 350 px panel (kip-ft, ft apart, trucks/day, (2.5.2.6.2)):
+     the label keeps the 170 px column (a long one wraps in it), the input is 84 px, the unit stays on the input's line (display only) */
+  .fRow:has(>[data-path="crossframes.sb.Mu"],>[data-path="stiffeners.layout.frames.Lb"],>[data-path="fatigue.ADTT"],>#an_a_deflLimit)>label:first-child{max-width:170px;}
+  .fRow:has(>[data-path="crossframes.sb.Mu"],>[data-path="stiffeners.layout.frames.Lb"],>[data-path="fatigue.ADTT"],>#an_a_deflLimit)>input{width:84px;}
+  .fRow:has(>[data-path="crossframes.sb.Mu"],>[data-path="stiffeners.layout.frames.Lb"],>[data-path="fatigue.ADTT"],>#an_a_deflLimit)>.unit{white-space:nowrap;}
   /* QAO (2026-11-09): the graphics' + − Fit buttons (shared/dxf.js viewer) sit in a strip above the drawing, so they never cover its title (display only) */
   #out .sdx-view{padding-top:34px;}
+  /* QA2 (2026-11-09; display only): the Report tab.
+     - On screen, the report sizes to the output panel, not the window: where the panel is narrower than 1000 px (1440 px screens beside the
+       input panel) the contents list goes above the report, as shared/report.js does below a 1000 px window, and the report takes the panel's
+       width (it was ~500 px beside a 230 px list); it may be wider than 8.5 in on a wide panel. shared/report.js unchanged; print unchanged.
+     - Ctrl+P on the Report tab prints the report only, as "Print report" does: the app header and the Demands bar are not printed. */
+  #out .rp-host{container-type:inline-size;}
+  /* QA2 (2026-11-09): the 3D view's drop-downs (View, Diagram) as wide as their choice ("Whole bridge", "Moment: Strength I"), not cut at 110 px */
+  #out .v3d-bar select{width:auto;max-width:100%;}
+  @media screen{
+    #out .rp-doc{max-width:11in;}
+    @container (max-width:999.98px){ #out .rp-body{grid-template-columns:minmax(0,1fr);} #out .rp-toc{position:static;max-height:220px;} #out .rp-doc{padding:0.3in 0.35in 0.5in;} }
+  }
+  @media print{ body:has(#tabBar [data-otab="rpt"][aria-selected="true"]) #hdr,body:has(#tabBar [data-otab="rpt"][aria-selected="true"]) #out .rp-host>:not(.rp){display:none!important;} }
   input[type=number],input[type=text],select{font-family:var(--font-ui);font-size:9.5pt;padding:3px 6px;border:1px solid var(--color-border);border-radius:4px;width:110px;background:#fff;color:var(--color-fg);}
   input:focus-visible,select:focus-visible{outline:none;border-color:var(--color-ring);box-shadow:0 0 0 2px rgba(37,99,235,.25);}
   input.bad{border-color:var(--fail);background:#FEF2F2;}
@@ -276,8 +298,10 @@
         <a class="allToolsLink" href="../../tools.html" title="Open the list of all tools">&larr; All tools</a>
       </div>
       <div id="hdrBtns">
+        <span id="hdrUR"><!-- QA2 (2026-11-09): Undo and Redo kept together when the header wraps (phone) -->
         <button type="button" id="bUndo" title="Undo the last input change (Ctrl+Z)" disabled>Undo</button>
         <button type="button" id="bRedo" title="Redo (Ctrl+Y or Ctrl+Shift+Z)" disabled>Redo</button>
+        </span>
         <input type="file" id="fImport" accept=".json,application/json" hidden>
       </div>
       <div id="pbMove" hidden><!-- STDS-B: moved into the Project tab's "Save and open" card at start-up (they were in the header) -->
@@ -353,7 +377,8 @@
     return {
       proj: card('Save and open', '<div id="pbHost"></div>')   // STDS-B: the standard card (projectBar, mounted after each redraw)
         + card('Project', ['name', 'number', 'owner', 'designer', 'checker', 'date'].map(k => num('project.' + k, k === 'owner' ? 'Client name (title block, optional)' : k[0].toUpperCase() + k.slice(1), '', { text: true })).join('')
-          + '<p class="note">Client name: blank = the selected DOT\'s name (Bridge owner (DOT) rules, below) is used in the title block, the report and the drawings.</p>')
+          + '<p class="note">Client name: blank = the selected DOT\'s name (Bridge owner (DOT) rules, below) is used in the title block, the report and the drawings.</p>'
+          + (window.SBDInputCheck ? `<p class="note">${esc(window.SBDInputCheck.NOTE)}</p>` : ''))   // SBINV: the input check rule (engineer rule 2026-11-10: decisions noted in the app)
         + UL.ownerCard(P, { num, sel, card, esc })   // moved here from the Cross-section & loads tab (UI only)
         + (window.SBDHandoffUI ? window.SBDHandoffUI.card(P, ui) : ''),   // B2: hand-offs to and from the other tools (ui/handoffs.js)
       // TABR (2026-11-09): the input tabs reorganised, display only (every input keeps its data-path, kind and handler; nothing computed changes)
@@ -397,13 +422,30 @@
       showOut: () => { ui.otab = 'ad'; saveUi(); drawOut(); }, done: () => { drawInputs(); if (ui.otab === 'ad') drawOut(); } });   // ADIN
     markErrors();
   }
+  /* SBINV (2026-11-10; engineer 2026-11-09: "Invalid input should be highlighted so the user can fix; results should not be displayed"):
+     the blocking input errors (engine/inputcheck.js collect: the model checks, the loads module's input checks and those of the other
+     engines on the entered values) mark their fields (ui/inputcheck.js) and count on their input tab; while one exists no output tab shows
+     results (drawOut0). Its warnings are the model's, as before. */
+  const IC = () => window.SBDInputCheck, ICU = () => window.SBDInputCheckUI, icO = () => ({ P, ui, tabOf });
+  let icErr = [];   // the errors listed now (the banner's links are their indices)
   function markErrors() {
-    const v = M.validate(P), bad = new Set(v.errors.map(e => e.path));
-    document.querySelectorAll('#inPanes [data-path]').forEach(el => el.classList.toggle('bad', bad.has(el.dataset.path)));
-    const $s = $('i_spans'); if ($s) $s.classList.toggle('bad', [...bad].some(p => p.startsWith('spans.lengths')));
-    const errTabs = new Set(v.errors.map(e => tabOf(e.path)));
-    document.querySelectorAll('#inTabs [data-itab]').forEach(b => b.classList.toggle('has-err', errTabs.has(b.dataset.itab)));
+    const v = IC().collect(P); icErr = v.errors;
+    ICU().mark(v.errors, icO());
+    const cnt = {}; v.errors.forEach(e => { if (e.host) return; const t = tabOf(e.path); cnt[t] = (cnt[t] || 0) + 1; });
+    document.querySelectorAll('#inTabs [data-itab]').forEach(b => { const n = cnt[b.dataset.itab] || 0, d = b.querySelector('.inDot');
+      b.classList.toggle('has-err', n > 0); if (d) d.textContent = n ? String(n) : '';
+      if (n) b.title = `${n} input${n > 1 ? 's' : ''} to fix on this tab`; else b.removeAttribute('title'); });
     return v;
+  }
+  /* gotoErr(e): a banner link: the field's input tab (its girder and segment when the field is one girder's), scrolled to and focused; a
+     field on an output tab (e.host): that tab */
+  function gotoErr(e) {
+    if (!e) return;
+    if (e.host) { ui.otab = e.host; saveUi(); drawOut(); $('outputPanel').scrollTop = 0; setTimeout(() => ICU().focus(e, icO()), 0); return; }
+    const m = e.path.match(/^girders\.(\d+)(?:\.segments\.(\d+))?/), gi = m ? +m[1] : null;
+    if (gi != null && P.girders[gi] && gi !== ui.g) { ui.g = gi; ui.seg = m[2] != null ? Math.min(+m[2], P.girders[gi].segments.length - 1) : 0; stale = true; }
+    ui.itab = tabOf(e.path); saveUi(); drawInputs(); drawOut();
+    ICU().focus(e, icO());
   }
   $('inTabs').addEventListener('click', e => { const b = e.target.closest('[data-itab]'); if (!b) return; ui.itab = b.dataset.itab; saveUi(); drawInputs(); });
   $('inPanes').addEventListener('change', e => {
@@ -556,7 +598,7 @@
     importFile: () => $('fImport').click(),
     exportOne: v => { const i = vItem(v); if (!i) return; const t = LIB.text(LS, i.id); if (t != null) SPUI.download(String(i.name || 'steel-bridge').replace(/[^\w.-]+/g, '_') + '.sbd2.json', t); },
     fileButtons: [B_EX, B_IM], extras: [B_OLD],
-    header: $('hdrBtns'), chipBefore: $('bUndo'), card: true,
+    header: $('hdrBtns'), chipBefore: $('hdrUR'), card: true,
     /* HDRS (2026-11-06, engineer: every app's header as in Spread Footing #884): the header has the chip only (no Save / Saved
        projects… buttons: they are in the "Save and open" card; Ctrl+S / Ctrl+Shift+S work from anywhere). A chip click opens the Project input tab (its tab button is clicked) and brings the card into view. */
     headerSave: false, chipClick: () => { const t = document.querySelector('#inTabs [data-itab="proj"]'); if (t) t.click(); const c = $('pbHost'); if (c) c.scrollIntoView({ block: 'nearest' }); }, chipHint: 'the Project tab (Save and open)',
@@ -611,6 +653,7 @@
   function autoMsg(t, busy) { const bar = $('autoBar'); bar.hidden = !AUTO_BTN[t]; $('autoMsg').innerHTML = busy ? `<span class="spin" aria-hidden="true"></span>${esc(busy)}` : ''; }
   function autoRun() {
     const t = ui.otab || 'sec', delay = autoNow ? 0 : AUTO_MS; autoNow = false; clearTimeout(autoT); autoPend = false; autoMsg(t, '');
+    if (IC().blocked(P)) { $('autoBar').hidden = true; return; }   // SBINV: nothing runs while an input error exists; the change that fixes it runs the tab
     if (autoBusy || !autoStale(t, autoBtn(t)) || autoLast[t] === autoKey(t)) return;
     if (delay) autoMsg(t, 'Inputs changed — updating…');
     autoPend = true;
@@ -627,7 +670,25 @@
   $('bRerun').addEventListener('click', () => { const t = ui.otab || 'sec', b = autoBtn(t); if (!b) return; autoMsg(t, 'Calculating…'); requestAnimationFrame(() => setTimeout(() => { b.click(); autoWatch(t); }, 0)); });
   // a tab's own redraw (a choice on the tab: demand source, girder, options) runs it at once; skipped while a run is pending or running
   new MutationObserver(() => { if (autoBusy || autoPend) return; autoNow = true; autoRun(); }).observe($('out'), { childList: true });
+  /* SBINV: while a blocking input error exists every output tab (the Summary, each module, the Report, the Drawings, the 3D view) shows the
+     banner and "Results not shown" instead of its results. A tab that holds an errored field itself (e.host: Flexure f_ℓ, Rating φ, the
+     Welds inputs, a Custom demand table, …) is drawn for the fix, out of date and with its Calculate button off (hostFix). */
   function drawOut0() {
+    const E = icErr = IC().collect(P).errors, t = ui.otab || 'sec';
+    if (E.length && !E.some(e => e.host === t)) {
+      document.querySelectorAll('#tabBar [data-otab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.otab === t)));
+      $('out').onchange = null; $('out').onclick = null; $('out').innerHTML = ICU().blocked(E, icO()); return; }
+    drawTab();
+    if (E.length) hostFix(t, E);
+  }
+  function hostFix(t, E) {
+    const out = $('out'), b = autoBtn(t), st = b && b.closest('.alert.stale');
+    if (!st || st.hidden) { out.onchange = null; out.onclick = null; out.innerHTML = ICU().blocked(E, icO()); return; }   // results on screen: not while an error exists
+    b.disabled = true; const sp = st.querySelector('span'); if (sp) sp.textContent = 'Results not shown: fix the inputs listed above.';
+    out.insertAdjacentHTML('afterbegin', ICU().banner(E, icO()) + '<p class="note ic-note">This tab is shown so that the field marked on it can be fixed; its results stay withheld until every input error is fixed.</p>');
+    markErrors();   // the fields of this tab
+  }
+  function drawTab() {
     document.querySelectorAll('#tabBar [data-otab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.otab === (ui.otab || 'sec'))));
     $('out').onchange = null; $('out').onclick = null;   // the Analysis tab's own handlers (ui/analysis.js sets them)
     if (ui.otab === 'flex') { window.SBDFlexureUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Flexure tab (ui/flexure.js)
@@ -676,7 +737,8 @@
     ST.wire($('out'), { onToggle: (k, open) => { if (open) secOpen.add(k); else secOpen.delete(k); } });
     if (window.SBDGfxA && $('gfx_sec') && R && !stale && !R.errors) window.SBDGfxA.section($('gfx_sec'), { P, R, seg: ui.seg + 1 });   // graphic (ui/gfxa.js)
   }
-  $('out').addEventListener('click', e => { const gt = e.target.closest && e.target.closest('[data-goto]'); if (gt) { e.preventDefault(); ui.itab = gt.dataset.goto; saveUi(); drawInputs(); return; }   // a link to an input tab
+  $('out').addEventListener('click', e => { const ig = e.target.closest && e.target.closest('[data-icgo]'); if (ig) { e.preventDefault(); gotoErr(icErr[+ig.dataset.icgo]); return; }   // SBINV: a banner link
+    const gt = e.target.closest && e.target.closest('[data-goto]'); if (gt) { e.preventDefault(); ui.itab = gt.dataset.goto; saveUi(); drawInputs(); return; }   // a link to an input tab
     if (e.target.id === 'bCalc') { calc(); return; } const id = UL.onOutClick(e, ui); if (id) { saveUi(); drawOut(); const t = ST.reveal($('out'), id.replace(/^st-/, '')) || $(id); if (t) { t.scrollIntoView({ block: 'center' }); t.style.background = '#FFF7D6'; } } });
   $('out').addEventListener('change', e => { if (e.target.id === 'o_region') { ui.region = e.target.value; saveUi(); calc(); } else if (UL.onOutChange(e, ui)) { saveUi(); drawOut(); } });
   $('tabBar').addEventListener('click', e => { const b = e.target.closest('[data-otab]'); if (!b) return; ui.otab = b.dataset.otab; saveUi(); autoNow = true; drawOut(); });   // AUTO: selecting a tab runs it at once
@@ -701,7 +763,7 @@
     loadAs(r.project, null, null); window.SBDLegacyUI.show(r.summary); });
 
   drawInputs(); calc();
-  if (window.SBDDashUI) window.SBDDashUI.init({ el: $('sbDashCol'), store, getP: () => P, ui: () => ui, goto: gotoOut });   // DASH (2026-11-09)
+  if (window.SBDDashUI) window.SBDDashUI.init({ el: $('sbDashCol'), store, getP: () => P, ui: () => ui, goto: gotoOut, fix: i => gotoErr(icErr[i]), errUi: icO });   // DASH (2026-11-09)
   { const lc = LIB.getCur(LS);   // which saved project the autosave belongs to (nothing to lose when it is a blank new project)
     if (L.source === 'saved' && lc) { const r = LIB.open(LS, lc); if (r.ok) cur = { id: lc, text: norm(r.project) }; }
     else if (L.source === 'default') cur = { id: null, text: norm(P) };

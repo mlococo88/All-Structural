@@ -109,7 +109,7 @@
   const isDefl = s => /^an\.(defl\.|camber)/.test(s.id);
   function stepsHtml(R) {
     const list = R.steps.filter(isDefl), G = AUI() && AUI().groups ? AUI().groups('x', list) : null;
-    const item = q => `<li id="st-${esc(q.id)}"${q.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(q.label)}${q.ref ? `<span class="ref">${esc(q.ref)}</span>` : ''}</div><div>${ST().line(q, true)}</div>${q.note ? `<div class="nt">${esc(q.note)}</div>` : ''}</li>`;
+    const item = q => `<li id="st-${esc(q.id)}"${q.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(q.label)}${q.ref ? `<span class="ref">${esc(q.ref)}</span>` : ''}</div><div>${ST().line(q, true)}</div>${q.note ? `<div class="nt">${window.SBDSub.html(q.note)}</div>` : ''}</li>`;
     return card('Worked steps', `<p class="note">AASHTO LRFD 10th Ed. (2024). The engine's own steps (the same ids as before; the analysis' other steps are on the <a href="#" data-gotab="an">Analysis tab</a>: the girder steel weight, the cracked zones, the stiffness of each segment).</p>${G ? ST().groupsHTML(G, { open: OPEN, item }) : `<ul class="steps">${list.map(item).join('')}</ul>`}`, 'df-steps');
   }
 
@@ -162,7 +162,12 @@
     const errs = A.filter(a => a.err).map(a => `G${a.j + 1}: ${esc(a.err)}`);
     return card('Camber of every girder (total dead-load deflection, tenth points)', `<div class="tscroll" style="max-height:440px;overflow-y:auto"><table class="tbl"><thead><tr>${head}</tr></thead><tbody>${rows}${mx}</tbody></table></div>
       ${errs.length ? `<div class="alert err">${errs.join('<br>')}</div>` : ''}
-      <p class="note">in, downward +; camber = Δ<sub>steel</sub> + Δ<sub>wet</sub> + Δ<sub>DC2+DW</sub>${A.some(a => a.camber && a.camber.ut) ? ' + Δ<sub>UT</sub>' : ''} of each girder (its own dead loads: deck and overhang, DC2 and DW shares, cross-frame point loads; the plates of its plate girder). Each girder at the same fraction of its span (centerline spans). Click a girder to see its components, LL deflection and worked steps. Excludes the vertical profile.</p>`, 'df-all');
+      <p class="note">in, downward +; camber = Δ<sub>steel</sub> + Δ<sub>wet</sub> + Δ<sub>DC2+DW</sub>${A.some(a => a.camber && a.camber.ut) ? ' + Δ<sub>UT</sub>' : ''} of each girder (its own dead loads: deck and overhang, DC2 and DW shares, cross-frame point loads; the plates of its plate girder). Each girder at the same fraction of its span (centerline spans). Click a girder to see its components, LL deflection and worked steps. Excludes the vertical profile.</p>
+      <p class="note"><b>Basis:</b></p><ul class="note" style="margin:4px 0 0 18px;padding:0">
+      <li>A girder with no plate girder of its own takes the plates and the effective flange width b<sub>eff</sub> of the plate girder named on the girder selector (as the Drawings, SB2-DW1): an exterior girder on an interior plate girder has the interior b<sub>eff</sub>, so its composite stiffness is not its own (add an exterior plate girder on the <a href="#" data-goto="gird">Girders &amp; plates tab</a>).</li>
+      <li>Dead loads or distribution factors entered as overrides on the Loads tab for a plate girder apply to every girder that takes its plates.</li>
+      <li>A tenth point between two analysis stations takes the value linear between them (stations about 1 ft apart).</li>
+      <li>The LL deflection check (SA3) is reported once per plate girder, on its own girder, in the Summary tab and the Report summary.</li></ul>`, 'df-all');
   }
 
   function render(el, ctx) {

@@ -13,7 +13,8 @@
    shows "not run"; its chip runs it (the Summary's run, through the shared analysis cache) and opens its tab, which runs itself (#1260).
    After an input change the last values stay, marked out of date, until the modules run again (the Summary tab, "Run all", a chip).
 
-   init(o): o = { el (the column), store (localStorage or null), getP(), ui(), goto(tab, gi) }; refresh() after the page draws. */
+   init(o): o = { el (the column), store (localStorage or null), getP(), ui(), goto(tab, gi), fix(i) and errUi() (SBINV: the input error links) };
+   refresh() after the page draws. */
 (function () {
   'use strict';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -21,7 +22,7 @@
   const D = { o: null, open: new Set(), coll: false };
   const SM = () => window.SBDSummary, SU = () => window.SBDSummaryUI, fmt = (x, d) => window.SharedUnits.fmt(x, d);
   const LBL = { pass: 'PASS', fail: 'FAIL', review: 'REVIEW', na: 'n/a', notrun: 'not run' };
-  const vOf = (q, c) => !q ? '—' : q.st === 'notrun' ? 'not run' : q.st === 'na' ? 'n/a' : c.rf ? (isFinite(q.rf) ? 'RF ' + fmt(q.rf, 2) : '—') : (isFinite(q.r) ? fmt(q.r, 3) : 'NaN');
+  const vOf = (q, c) => !q ? '—' : q.st === 'notrun' ? 'not run' : q.st === 'na' ? 'n/a' : c.rf ? (isFinite(q.rf) ? 'RF ' + fmt(q.rf, 2) : '—') : (isFinite(q.r) ? fmt(q.r, 3) : q.r === Infinity ? '∞' : q.r === -Infinity ? '−∞' : 'NaN');   // QA2: as the Summary table (∞ added; NaN only for a true NaN)
   const rd = k => { try { return D.o.store ? D.o.store.getItem(k) : null; } catch (e) { return null; } };
   const wr = (k, v) => { try { if (D.o.store) D.o.store.setItem(k, v); } catch (e) { /* not kept */ } };
 
@@ -38,6 +39,10 @@
   function draw() {
     const o = D.o; if (!o || !o.el) return;
     const P = o.getP(); if (!P || !SU() || !SM()) return;
+    // SBINV (2026-11-10): while a blocking input error exists (engine/inputcheck.js) the column shows the errors (links to the fields), no verdict or value
+    const IE = window.SBDInputCheck && window.SBDInputCheckUI && o.errUi ? window.SBDInputCheck.collect(P).errors : [];
+    if (IE.length) { o.el.innerHTML = `<div id="sbDashHead"><button type="button" id="sbDashTgl" aria-expanded="${!D.coll}" title="${D.coll ? 'Show the check summary' : 'Shrink the check summary to a strip'}">${D.coll ? '»' : '«'}</button><h2 id="sbDashTtl">Check summary</h2><span class="sdC"><span class="sdF">${IE.length} to fix</span></span></div>`
+      + (D.coll ? '' : window.SBDInputCheckUI.dash(IE, o.errUi())); return; }
     SU().sync(P);
     const { st, list } = view(P), ov = SM().overall(P, list), n = ov.n, anyOld = list.some(G => Object.keys(G.old).length), top = ov.top;
     const nRun = list.reduce((a, G) => a + Object.values(G.cells).filter(q => q.st !== 'notrun').length, 0);
@@ -66,6 +71,7 @@
       const t = e.target.closest('button, a'); if (!t) return;
       if (t.id === 'sbDashTgl') { setColl(!D.coll); return; }
       e.preventDefault();
+      if (t.dataset.icgo != null) { if (o.fix) o.fix(+t.dataset.icgo); return; }   // SBINV: an input error's link
       if (t.dataset.sdx) { const k = t.dataset.sdx; if (D.open.has(k)) D.open.delete(k); else D.open.add(k); draw(); return; }
       if (t.id === 'sbDashRun') { SU().start(o.getP()); return; }
       if (t.dataset.sdtab) { o.goto(t.dataset.sdtab, null); return; }

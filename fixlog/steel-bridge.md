@@ -4665,6 +4665,172 @@ except the duplicated stations removed by fix 1 (listed there) and the Summary's
   `node tests/check-syntax.mjs`; steel-bridge smoke tests; phone-layout `sbapp`; project-library.
 - **Other copies:** none.
 
+## 2026-11-09 — PR: sbqa2-display-leftovers (PR #1282: https://github.com/mlococo88/All-Structural/pull/1282) — the visual QA pass's reported leftovers on every tab (QA2; display only)
+Engineer request (2026-11-09): every tab looks correct and professional. Display only: no formula, factor, unit, code reference, key or saved-data
+format changed. Anchor text `QA2` marks each change. New file `ui/sub.js` (in the first `document.write` loader of `index.html`, before the
+`ui/` files).
+1. **Flexure "Stress checks at x" chart** (`ui/gfxa.js` `flexure()`, mount `fxb`). Before: chart width `Math.max(150, 32 * n)` per chart (32 units =
+   5.3 text heights per check; 14 checks → 448 units: text ~7 px in a 765 px frame), the check key on the id's line (`q.id + ' ' + key`), title wrapped
+   at 42 characters. After: both charts on one width `w = Math.max(150, 3 * h * Math.max(nKsi, nRatio))`, the key on a second line under the id
+   (`keys()`), the gap between the charts 17 h → 13 h, the title wrapped to the chart width. Same values and order (the text ~13 px at 1440 px).
+2. **Constructibility overhang sketch, interior girder** (`ui/gfxa.js` `constr()`): before, `R.F.oh` null drew a frame with "OVERHANG BRACKETS: EXTERIOR
+   GIRDER, PROJECT SOURCE ONLY (INPUTS ABOVE)". After: no frame, a note "Overhang brackets apply to exterior girders; select G1 or Gn." (an exterior
+   plate girder with a GirderDetail file: "Overhang brackets are checked with the project as the source (not a GirderDetail file).").
+3. **Fatigue & studs graphics** (`engine/tabgraphics-b.js`, `ui/graphics.js`):
+   - Detail labels: `SBDGraphics.stack(items, o)` gets `o.leaders`: a flag goes further out than every flag placed before it (to its right) whose
+     leader x lies inside it, so no leader crosses a label (before: "F19 EXEMPT", "F2 0.70" were crossed). `fatigue()` `rowsOf` passes `leaders: true`.
+     Other callers of `stack()` unchanged.
+   - Chart text: "gamma(Df) vs NOMINAL RESISTANCE (DF)n" → "GAMMA(DELTA f) VS NOMINAL RESISTANCE (DELTA F)n"; legend "(DF)n RESISTANCE",
+     "gamma(Df) < 0.9 (DF)n", "0.9 TO 1.0 (DF)n" → "(DELTA F)n …", "GAMMA(DELTA f) < 0.9 (DELTA F)n", "0.9 TO 1.0 (DELTA F)n"; readout "GAMMA(DF) … (DF)n"
+     → "GAMMA(DELTA f) … (DELTA F)n". Display choice (notation only, no engineering meaning, so no in-app note under CLAUDE.md §6): the CAD-capital style of the elevation's own note ("GAMMA(DELTA f) /
+     (DELTA F)_n"), not Greek letters: the graphics' SVG preview (shared/dxf.js) prints a Greek letter as its DXF escape "\U+03B3".
+4. **Rating chart** (`engine/tabgraphics-b.js` `ratingChart()`): the support names drawn in a row above the plot (before: at the plot's top edge, over
+   the arrows of capped values), shifted beside a governing leader at the same station; the INV / OPR governing labels above that row on leaders from
+   their circles (before: beside the circle, over the curves); the title in two lines (wrapped at 30 characters) above them, so the phone view's
+   reading zoom shows it whole at 390 px. Same texts and values.
+5. **Underscores in screen text → subscripts.** `ui/sub.js` `SBDSub.html(t)`: escaped text with `X_ab` → `X<sub>ab</sub>` (regex
+   `/([A-Za-zΑ-Ωα-ωℓ)])_\{?([A-Za-z0-9ℓ]+(?:[,+][A-Za-z0-9ℓ]+)*)\}?/g`: "M_LL+IM", "f_ℓ,skew" whole; "P_fy, inner" without the comma). Used for:
+   the step labels and notes of every tab (`class="lbl">${esc(s.label)}` / `<div class="nt">${esc(s.note)}` → `SBDSub.html(...)`, 13 places), the
+   Analysis station-table headers (`<th>${esc(c[0])}</th>`) and chart legend, check titles and locations in the Cross-frames, Fatigue, Shear, Splices,
+   Welds and Rating tables (`esc(x.title)` / `esc(x.it.loc)`), the Flexure n/a cells, the Fatigue settings line, the Cross-frames M_u note, the Auto
+   design chips, the graphics' notes and readouts (`ui/graphics.js` `mount()`: `read.innerHTML = SBDSub.html(t)`). The topic result lines of the
+   worked steps ("Flange local buckling (λ_f = b_fc/2t_fc …)") are written by shared/steps.js: `SBDSub.fix()` (a MutationObserver on `#out`) puts
+   the subscripts into their own text nodes (never inside KaTeX). shared/steps.js unchanged. Summary `txt()` (ui/summary.js): `ℓ` added to the class
+   (as QAO did in the tabs). Report (`report/builders.js`): `tt()` no longer takes a trailing comma; applied to the Fatigue / studs and Cross-frames
+   governing titles and the Cross-frames and Field-splice governing locations ("n ≥ P/Q_r", "P_fy, Inner"). Not changed: drop-down choices
+   (`<option>` cannot hold a subscript) and the CAD graphics (capitals, SVG / DXF).
+6. **Cross-frames check table** (`ui/framing.js`): new `big = x => Math.abs(x) >= 10000 ? SharedUnits.fmtInt(x) : fmt(x, 2)` for the Demand and Capacity
+   cells; an infinite capacity shows "∞" (before: the cell fell back to `cells[1]`, the demand "16,528"). **Digits changed (CF8, default project):**
+   β_br 16527.87 / 1215374.92 → 16,528 / 1,215,375; β_sec 16527.87 / 16,528 → 16,528 / ∞; β_g 16527.87 / 471576.58 → 16,528 / 471,577;
+   β_T 16527.87 / 339750.34 → 16,528 / 339,750 (rounding to whole kip-in/rad; the engine's own cell text, unchanged, already had 16,528).
+7. **Drawings quantities** (`engine/sheets.js` `quantities()`): new `n0 = v => (Math.round(+v) || 0).toLocaleString('en-US')` for every quantity (the
+   table on the Drawings tab and on the Typical section sheet): "435385 LB" → "435,385 LB", "2000" → "2,000", "6080" → "6,080" (same digits).
+   `tests/engine/sheets.test.mjs` expects the separators.
+8. **Report tab** (`index.html`, CSS only; shared/report.js unchanged):
+   - `#out .rp-host{container-type:inline-size}`; on screen `#out .rp-doc{max-width:11in}` and, where the output panel is under 1000 px wide
+     (`@container`), the contents list above the report (`.rp-body` one column, `.rp-toc` static, 220 px) and the doc padding 0.3 in / 0.35 in.
+     At 1440 px: report 519 → 765 px wide.
+   - `@media print`: with the Report tab selected (`body:has(#tabBar [data-otab="rpt"][aria-selected="true"])`), `#hdr` and `#out .rp-host>:not(.rp)`
+     (the Demands bar) are not printed: Ctrl+P prints the report only, as Print report does.
+9. **Summary** (`ui/summary.js`, `ui/dash.js`): Owner row with no owner "—; load rules AASHTO" → "none entered; load rules AASHTO"; "Lowest rating
+   factor" and "Not evaluated" on their own lines in the line's font (`.sum-low`, was `.note` run on); a ratio that is not a finite number shows
+   "∞" for Infinity ("−∞" for −Infinity) and keeps "NaN" only for a true NaN (before: "NaN" for every one): `nfTxt(r)`. Each such cell is a link
+   to its tab (as every cell) and its tooltip gives the reason (`NF_WHY`), e.g. for ∞: "Ratio ∞: the demand / capacity ratio is infinite (the
+   capacity, or a factor in it such as the 6.10.1.6 flange lateral bending amplification, is zero or has no finite value for this demand). The work
+   is on its tab (click). (Counted as REVIEW.)". The "Not evaluated" line now reads "(ratio not finite, REVIEW): <group>, <girder> <location link>:
+   <check> — ratio ∞" (before: "(ratio not a number, REVIEW): <group>, <girder> <location link>"). The check summary column (`ui/dash.js` `vOf`)
+   the same (∞ / −∞ / NaN). Per CLAUDE.md §6 (2026-11-10), the Summary's "Counts" note adds: "A ratio cell showing ∞ (or −∞ / NaN): that check's
+   demand / capacity ratio has no finite value (∞: infinite, e.g. a capacity, or a factor in it such as the 6.10.1.6 amplification, that is zero or
+   not finite for the demand; NaN: not a number, e.g. 0 / 0); it is counted as REVIEW, and its tooltip and link give the reason and the work on its tab." The Report's summary is unchanged: it already writes "not evaluated (ratio not a number)". Counting unchanged (report/summary.js). The cause of the
+   Constructibility ratio (F_nc = 0.91 ksi at 60° skew) is pending the engineer, not touched. `tests/smoke/steel-bridge-summary.mjs` expects ∞ / −∞ / NaN.
+10. **3D view** drop-downs: `#out .v3d-bar select{width:auto;max-width:100%}` (were cut at 110 px: "Whole bridg", "Moment: Stre").
+11. **Header at 390 px:** Undo and Redo in `<span id="hdrUR">` (inline-flex, nowrap); the save chip goes before it (`chipBefore: $('hdrUR')`).
+    Before: the chip and Undo on one line, Redo alone on the next; after: the chip, then Undo Redo together.
+12. **Input rows** with a short unit on a line of its own at a 350 px panel (Framing "Factored deck-placement M_u" kip-ft, Stiffeners "Intermediate
+    cross-frames at most" ft apart, Fatigue "ADTT, one direction" trucks/day, Loads "LL deflection limit L/" (2.5.2.6.2)): for these four rows
+    (`.fRow:has(>[data-path=…])`), the label max 170 px, the input 84 px, the unit `nowrap`.
+- **Governing provision:** none (display only).
+- **Check case:** default project, 1440 px. Cross-frames tab, CF8 row "Web distortion, β_sec": Demand 16,528, Capacity ∞, ratio 0.000. Drawings tab,
+  Quantities: girder plates 435,385 LB. Default project with every support skew 60°: Summary, Constructibility cell "∞" (was "NaN"), tooltip as above.
+- **How verified:** headless Chromium probe, origin/main vs branch, default project, text of every input and output tab (with the graphics' SVG
+  text) and the built Report: digit sequences identical except item 6 (listed), the "1" of "G1 or Gn" (item 2, new note) and the "6.10.1.6" and "0 / 0" of the Summary's new
+  Counts note (item 9); the Summary probe waits for
+  "Up to date". Before/after screenshots. `node tests/check-syntax.mjs`; engine tests; smoke tests steel-bridge-wiring, -paths, -report,
+  -graphics (updated: the interior-girder note, readout "Mc"), -drawings, -summary (updated), -dash, -deflection, -equal-spacing, -splice-addrow,
+  -taberrors, -library, -tabgraphics-b, -scroll --quick, -splitter; phone-layout `sbapp`; project-library: pass, 0 console errors.
+- **Other copies:** none (the tabs' `tt()` copies are unchanged; `ui/sub.js` is the app's one subscript helper for the new uses).
+
+## 2026-11-10 — PR: sb-invalid-input (PR #1283: https://github.com/mlococo88/All-Structural/pull/1283) — invalid inputs are marked and block every result (SBINV)
+- **Problem (QA, engineer decision 2026-11-09: "Invalid input should be highlighted so the user can fix; results should not be displayed"):** with a
+  sidewalk fence load entered and its position left blank, the loads module refused its input (engine/loads.js `xsIn`), but every other tab still
+  ran with zero dead loads and unit LLDF (engine/analysis.js `loadsOf` / `dfOf`: "Nothing entered: loads 0 and factors 1") and showed a full
+  verdict ("FAIL … 32 PASS"); the only sign was a note inside each tab. Unconservative: dead loads and distribution were silently missing.
+- **Where / what (display and gating only; no formula, factor, unit, code reference, key or saved format changed):**
+  - `engine/inputcheck.js` (new, `window.SBDInputCheck`): `collect(P)` → `{ errors: [{ path, msg, src, cell?, host? }], warnings }`, cached by the
+    project text. Sources: `SBDModel.validate` (paths as before; `demandSrc` split per module; list rows of spans, bays and skews in `cell`); the
+    loads module's own input checks (`SBDLoads.compute(fromModel(P, { girder: 0 }))`, each message given its field by `loadsPath`, e.g.
+    "Left sidewalk railing or fence: its position …" → `xs.sidewalks.L.fenceX`; "The bridge is incomplete …" only when the model checks have no
+    error); the analysis settings checks of `analyzeGirder` (IM, IM fatigue, L/…, cracked zones); the stiffener type checks of
+    `SBDStiffeners.transverse` / `bearing` not in the model; the entered cross-frame members, connection, d_min and user forces of
+    `SBDCrossframes.compute`; the entered splice plates of `SBDSplices.compute` (entries a station uses). Engine messages are used verbatim.
+  - `ui/inputcheck.js` (new, `window.SBDInputCheckUI`): `mark` (field `input.bad`/`select.bad` red outline, message beside it in `.alert.err`;
+    list rows `input.sli-in.ic-cell`; table cells: message under the table), `banner`, `blocked`, `dash`, `fieldsOf`, `focus`.
+  - `index.html`: both added to the first `document.write` loader (anchor `SBINV`). `markErrors()` before:
+    `const v = M.validate(P), bad = new Set(v.errors.map(e => e.path)); … b.classList.toggle('has-err', errTabs.has(b.dataset.itab))`; after:
+    `const v = IC().collect(P); icErr = v.errors; ICU().mark(v.errors, icO()); …` with a count in each input tab's `.inDot`. New `gotoErr(e)`
+    (banner link: the input tab, the girder/segment of the field, focus). `drawOut0()` is now the gate: with errors, every output tab shows
+    `ICU().blocked(...)`; the old body is `drawTab()`; `hostFix(t, E)` for a tab that holds an errored field (Calculate off, no results).
+    `autoRun()`: `if (IC().blocked(P)) { $('autoBar').hidden = true; return; }`. `#out` click: `[data-icgo]` → `gotoErr`.
+  - `ui/dash.js` `draw()`: the error list instead of the verdict while errors exist; `init(o)` takes `fix(i)`, `errUi()`.
+  - `ui/handoffs.js` `subSend()`: "Nothing was sent / exported: N inputs need fixing first" while errors exist.
+  - `ui/autodesign.js` `runBar()` / `#ad_run`: Run off with `#ad_blocked` "Auto design cannot run: N inputs need fixing first"; the click refuses too.
+- **Classification of the existing messages (blocking error / warning):**
+  - Blocking: every `errors` entry of `SBDModel.validate`; the loads module input checks (truck gap, added line loads, sidewalk / median /
+    pedestrian, appurtenance w_c, sidewalk fences, wearing surface by thickness, overlays, deck edges, load overrides, incomplete bridge);
+    the analysis settings checks; the stiffener type checks; the entered cross-frame checks; the entered splice plate checks.
+  - Warnings (unchanged, not blocking): model `warnings` (D/t_w > 150, N_b = 3); LLDF range of applicability and the equal-spacing S range
+    note; proportion limits; analysis warnings (loads module message, no dead loads, manual factors, construction LL notes, finishing machine);
+    Auto design warnings; owner-rule notices.
+  - Left in their tab (the module refuses its own results, as before): Custom demand table rows (ui/demands.js `rowsOf`; the table is on the
+    output tab), Constructibility overhang bracket inputs (on the output tab), stiffener plate thinner than the sacrificial thickness (owner
+    rule), the hand-off file sources, derived values (S, d_g, L_b of the cross-frames; splice demands at a station).
+- **Decisions (pending engineer review):**
+  1. New blocking checks: an entered construction live load q_CL < 0 (clOf would take the owner's / 20 psf default) and an entered
+     finishing machine load P_fm < 0 (fmOf would apply none).
+  2. Inputs that live on an output tab (Flexure and Constructibility f_ℓ, Rating φ, the Welds inputs, the Custom demand tables' shape, the
+     demand source choices): that tab is drawn for the fix, with the banner, out of date and its Calculate off; every other tab is blocked.
+  3. Graphics: every output tab is blocked, the Drawings and the 3D view included (they carry dimensions and values); the geometry graphics on
+     the input tabs (Bridge layout plan, Framing & bracing plan) stay, with their own error when their inputs are invalid.
+  4. Custom demand table row errors stay in their tab (see above).
+  5. "Share project info" (names only) and the pulls (receiving) still work; the Substructure Loading send and export are refused.
+  6. Errors clear when the entry is committed (Enter, Tab, leaving the field), as every input of the app; then the open tab re-runs (#1260).
+  7. The Loads input tab's "Calculated / Used" dead-load lines (input panel) stay; with a loads error they say "none (the loads module gives none: …)".
+  8. Entered splice plates with auto-design on are still used by the engine (inputsAt `own`), so they block; the message says to show them with
+     "Entered below". Stiffener types are checked whether the web is stiffened or not, as the model already did.
+- **Notes in the app (engineer rule 2026-11-10: every assumption or decision is noted in the app and the Report):** one text,
+  `SBDInputCheck.NOTE` ("Input check: results are shown only while no blocking input error exists. … Warnings (LLDF range, proportion limits,
+  D/t_w > 150, N_b = 3, Auto design) do not block. A Custom demand table and the Constructibility bracket inputs are checked on their own tab …
+  An entered q_CL or finishing machine load below zero blocks (decision pending engineer review)."), shown as a `.note` on the Project input
+  tab (after the Client name note), under the blocked output view, and in the Report's Project section (`report/builders.js`, after
+  `p.notes ? note(p.notes) : null,`). A tab drawn for the fix of its own field adds "This tab is shown so that the field marked on it can be
+  fixed; its results stay withheld until every input error is fixed." `ui/analysis.js`: the construction live load and finishing machine
+  cards' notes end with "… below zero is an input error and withholds every result (decision pending engineer review)." These are the only
+  text changes to valid projects' pages and Report.
+- **Governing provision:** none (no calculation changed).
+- **Check case:** default project; Cross-section tab, left sidewalk width 6 ft, railing / fence 0.05 klf, position blank. Before: every tab
+  computed (DC2 without sidewalk and fence, LLDF 1), Summary verdict shown. After: banner "1 input needs fixing before results can be shown —
+  Cross-section › Left fence from deck edge: … (0 < x ≤ 6 ft)", the field outlined, "Cross-section 1", no verdict anywhere. Position 3 ft:
+  results identical to the same three values entered validly in a fresh page.
+- **How verified:** main vs branch probe of every output tab's text, the left column and the built Report (default project and a skewed
+  three-span two-girder project): identical except the Summary's "last run … s"; the built Report's full text (collapsed sections included)
+  identical except the added input check note in §2.1; `tests/smoke/steel-bridge-invalid.mjs` (new);
+  `node tests/check-syntax.mjs`; the steel-bridge smoke tests; phone-layout `sbapp`; project-library `sbapp`; 0 console errors.
+- **Saved data:** no key or format changed; a saved project with an invalid field loads unchanged and shows its errors.
+- **Other copies:** none.
+## 2026-11-10 — PR: claude/sb-assume-notes (PR #1285: https://github.com/mlococo88/All-Structural/pull/1285) (SBASM) — assumptions and decisions stated as notes on the tabs and in the Report (CLAUDE.md §6, engineer's rule 2026-11-10)   [display / text only; no result, saved key or format change]
+- **Engineer (2026-11-10, #1284):** every assumption or decision is stated in the tool where it applies (the tab card and the matching Report section), saying what the code does and citing the provision, without "pending engineer review".
+- **Audit:** every "Decision (pending engineer review)" and engineer's decision / definition of the entries #1254–#1281 above, and the PR bodies of #1254 onward, checked against the app's notes and the code. The table is in the PR. Items already stated were left as they are; UI-only items (storage keys, splitter, tab order, which tab opens) need no note.
+- **Where (each a note or a note sentence; the anchor is the text before the change, all before → after in the PR diff):**
+  1. `ui/splices.js` `inputs()`, card "Entered plates and bolts (per station)". Before: `A station without an entry is auto-designed.` After: `A station without an entry is not auto-designed: it is checked with GirderDetail's built-in splice plates and bolts (listed as "built-in" on the Field splices tab); add a row for it, or choose Auto-design above.` (**wrong wording corrected to what the code does**: `engine/splices.js girder()` auto-designs only when `S.auto && !I.own`; otherwise `inputsAt()` keeps `clone(DEF)`. SPERR open item 2, closed.)
+  2. `ui/splices.js` `render()` list and `report/builders.js` `spl()` list: the plates label. Before: `${s.own ? 'entered' : 'auto'}`. After: `${s.own ? 'entered' : s.design ? 'auto' : 'built-in'}` (`s.design` is set only when the station was auto-designed). Plus a note under each list: "Plates and bolts (Splices input tab): auto-designed at each station, fewest bolts and then least plate ("auto"), except where an entry exists for that station and girder ("entered")" or, with "Entered below", "as entered …; a station without an entry is not auto-designed: it is checked with GirderDetail's built-in splice plates and bolts ("built-in")". AASHTO LRFD 10th Ed. Art. 6.13.6.1.
+  3. `ui/loads.js` Loads & LLDF tab, dead-load card. Before: `the cross-frames (not in this version; GirderDetail adds them as point loads from its Cross-frames module).` After: `the cross-frames (point loads from the framing and the cross-frame weights, Framing & bracing tab); both are added in the analysis (Analysis tab).` (**stale note corrected**: the cross-frame point loads have entered DC1 in the analysis since SB2-A6; the Report already said so.)
+  4. `ui/loads.js` distribution-factor card, after the note `Span regions: …`; `report/builders.js` `loads()` sub "Live-load distribution factors": a Basis list / note: skews as |θ| (Tables 4.6.2.2.2e-1, 4.6.2.2.3c-1; SB2-O23); moment skew reduction judged per span, none in a span whose support lines differ by more than 10° and none in a pier region where either adjacent span's do (Art. 4.6.2.2.2e; SB2-O19); exterior fatigue factor not less than the rigid cross-section value, one lane ÷ 1.2 (Art. 4.6.2.2.2d, Eq. C4.6.2.2.2d-1, Art. 3.6.1.4.3b). The Report note also gives the span / pier region rule the tab already had.
+  5. `ui/analysis.js` Loads input tab, card "Construction live load", last note: + `AASHTO LRFD 10th Ed. Art. 3.4.2.1 requires construction loads but gives no value: q_CL left blank is the owner's value, else 20 psf (this app's default, the overhang bracket construction load). A project saved before this calculation (2026-11-09) is not switched to it: tick the box above. The overhang bracket checks keep their own q_CL (Constructibility tab, OH inputs).` Card "Finishing machine": `Each girder takes its lever-rule share and` → `Each girder takes its lever-rule share (AASHTO LRFD 10th Ed. Art. 4.6.2.2.1): with a load outside the exterior girder, P(1 + a/S) on it and the uplift −Pa/S on the first interior girder; the share moves …` (CLC decisions 1–4).
+  6. `report/builders.js`: new `clNote(A)` (anchor `the construction live load basis (CLC, 2026-11-09)`), the last item of the Analysis sub "Settings and loads": the source of w_CL (calculated with q_CL and its source, § an.CL.w; entered; hand-off; or none, "not calculated: a project saved before the calculation was added"), the finishing machine basis (§ an.fm.Pj, only when there is one) and the bracket checks' own q_CL and P_fm.
+  7. `ui/deflection.js` `allHtml()` (card "Camber of every girder") and `report/builders.js` `defl()` sub "Camber of every girder": a girder with no plate girder of its own takes that plate girder's plates **and b_eff** (exterior on interior: the interior b_eff); dead-load / factor overrides of a plate girder apply to every girder that takes its plates; a tenth point between two stations is linear between them; (tab) SA3 is reported once per plate girder in the Summary and the Report summary (DFG decisions 1–3).
+  8. `report/builders.js` `defl()`: the no-owner-rule limit note + "2.5.2.6.2 gives L/800 for vehicular load and L/1000 for vehicular and pedestrian load; with no owner rule the sidewalk setting does not change the limit, so L/1000 applies only when entered." (DEFL decision 3); the loading note + "the larger of the two cases is kept at each section and named (Governing case); the two are not listed side by side." (DEFL decision 2); the dead-load note, CTDOT only, + "The CTDOT extra camber of L/100 on simple spans (owner rule OWN33, BRSDM V1B) is not applied." (DEFL decision 4; the tab already said these three).
+  9. `ui/autodesign.js` output tab, note under the candidate list: `its details sized first)` + (when a candidate has a WARNING) `, except the limits set to "as warning only" …: its governing ratio is that of the checks enforced, and the flag gives the largest warned ratio` (ADWN decision 2; span-to-depth AASHTO LRFD 10th Ed. Art. 2.5.2.6.3).
+  10. `ui/framing.js` diaphragm note: + `and member forces entered from a refined analysis do not apply` and + `On a change between a rolled W and a channel, the shape starts at the one last used in that family on this page, else the shape that check CF10 recommends for the girder depth, else W21x44 / MC18x42.7: a starting choice, checked by CFD like any other.` (BRSEL decisions 2, 4.) `report/builders.js` `frm()`: with a diaphragm, a note in the checks sub (CFD / CFE; CF1–CF9 and entered member forces do not apply).
+  11. `report/builders.js` `frm()` sub "Framing plan": a note: the orientation (automatic: parallel where both supports ≤ 20°, else normal, 6.7.4.2.1; an owner rule xf.orient decides for the whole bridge), the first normal frame at least max(clear, 4b_f, 0.4s) from a support skewed > 20° (C6.7.4.2.1), half of each frame's weight on each girder it connects, on the steel section (DC1) — as the Framing & bracing tab states.
+  12. `report/builders.js` `summary()` and `allModel()`: the Summary-tab note + "There a rating factor RF < 1.0 counts as FAIL, and a check with a Warning status (welds, cross-frames, deflection over the owner's preferred limit) as REVIEW." (SUMT decisions.)
+  13. `ui/fatigue.js` Fatigue & studs input, studs card. Before: `"Each girder its own b<sub>eff</sub>" is an option, off by default;` After: `This app's default is "Each girder its own b<sub>eff</sub>": the pitch (AASHTO LRFD 10th Ed. Art. 6.10.10.1.2) and the strength (Art. 6.10.10.4.2) take the girder's own b<sub>eff</sub> (in its composite section); "Bridge-wide" is GirderDetail's envelope.` (**note contradicted the code**: `engine/model.js defaultStuds()` has `beffMode: 'girder'` since SB2-F1, and the drop-down says "default".)
+- **Test text:** `tests/smoke/steel-bridge-splice-addrow.mjs`: after the row is removed with "Entered below", FS1 is labelled `built-in:` (was `auto:`).
+- **Formulas, factors, units, code references, saved data:** none changed (§4, §5). No engine file changed.
+- **Check case:** default project. Splices input, "Entered below", no row: Field splices FS1 "built-in: 50 bolts each side" (was "auto: …"), the same ratios. Loads & LLDF tab: "… cross-frames (point loads from the framing …)". Report, Analysis "Settings and loads": "Construction live load (3.4.2.1 …): calculated, w_CL = q_CL × b_trib §, q_CL = 20.0 psf (this app's default …)".
+- **How verified:** main (644a27c, same app as origin/main 1c3fd15) vs branch, headless, four projects (default; "Entered below"; CTDOT with a W24x55 diaphragm, skews 30/25/25/30°, finishing machine 3 kip at 1 ft; a project without `clCalc`): every input tab, every output tab except Report / Auto design / 3D / Drawings, and the built Report (governing detail): the digit sequences identical except the inserted note text (article numbers, 20 psf, 2026-11-09, L/800 / L/1000, W21x44 / MC18x42.7, 20°, 4b_f, 0.4s, 1.0; listed in the PR); 0 unresolved Report references; 0 console errors. The Summary tab compared after "Up to date": identical digits. `node tests/check-syntax.mjs`; engine `report`, `steps-groups-tabs`, `report-wiring`, `deflection-tab`, `sb-summary` (pass; they fail on origin/main too at `ui/splitter.js` in Node, so they were run with that one line made Node-safe in the working copy only, not committed); smoke as in the PR.
+- **Other copies:** none.
+- **Open items:** (1) `ui/splitter.js` touches `document` at load, so the Node engine tests `report`, `steps-groups-tabs`, `deflection-tab` fail on origin/main (since #1277); not changed here. (2) With a diaphragm the Cross-frames tab elevation still draws the angle frame (BRSEL open item). (3) Constructibility notes left to the Constructibility PR in progress (CLC decision 4 is stated on the Loads tab and in the Report Analysis section).
+
 ## 2026-11-10 — PR: sb-constr-mdcc (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Constructibility: C_b, the compression flange and the nonprismatic γ_e from the M_DCc the check uses (SBCON; engineer decision 2026-11-10; changes computed values)
 - **Problem:** with the pour sequence on (M_DCc ≠ M_DC1), `bracingC()` built the deck-placement LTB data (the flange in compression,
   C_b,C by Eq. 6.10.8.2.3b-1, and for a nonprismatic L_b the ratio K = f_max/f_x of the conservative γ_e bound) from 1.25M_DC1 + 1.5M_CL,

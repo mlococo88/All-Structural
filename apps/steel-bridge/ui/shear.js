@@ -220,7 +220,7 @@
   }
   const stepsHtml = list => `<ol class="steps">${list.map(s => stepLi(s, list)).join('')}</ol>`;
   /* one worked step; a "§id" in its note (engine/shear.js "See §p1.Vn.") becomes a link to that step of the same list (CLAUDE.md §6) */
-  const stepLi = (s, list) => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${noteHtml(s.note, list)}</div>` : ''}</li>`;
+  const stepLi = (s, list) => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${noteHtml(s.note, list)}</div>` : ''}</li>`;
   const noteHtml = (t, list) => esc(t).replace(/§([A-Za-z](?:[\w.]*\w)?)/g, (m, id) => { const q = (list || []).find(x => x.id === id || String(x.id).endsWith('.' + id)); return q ? `<a class="wk" href="#st-${esc(q.id)}" data-step="${esc(q.id)}">§${esc(id)}</a>` : m; });
 
   /* ---------- topics of the worked steps (presentation spec A, trial on this tab, 2026-10-31) ----------
@@ -263,8 +263,8 @@
     const gl = [];
     if (R.panels.gov && R.gm.dem) gl.push([R.panels.gov.r, `Panel ${fmt(R.panels.gov.p, 2)}–${fmt(R.panels.gov.q, 2)} ft${R.panels.gov.end ? ' (end panel)' : ''}: V<sub>u</sub> ≤ φ<sub>v</sub>V<sub>n</sub> (6.10.9)`, go('pan', R.panels.gov.i, 'pn.ok'), 'Web panels']);
     if (R.stGov) gl.push([R.stGov.gov.ratio, `${esc(R.stGov.name)}: ${esc(R.stGov.gov.id)} ${tt(R.stGov.gov.title)}`, go('loc', R.stations.indexOf(R.stGov), R.stGov.gov.step), 'Stations']);
-    if (R.tsGov) gl.push([R.tsGov.it.r, `${esc(R.tsGov.it.loc)}: ${esc(R.tsGov.c.id)} ${tt(R.tsGov.c.title)}`, go('ts', R.tsGov.i, R.tsGov.it.step), 'Transverse stiffeners']);
-    if (R.bsGov) gl.push([R.bsGov.it.r, `${esc(R.bsGov.it.loc)}: ${esc(R.bsGov.c.id)} ${tt(R.bsGov.c.title)}`, go('bs', R.bsGov.i, R.bsGov.it.step), 'Bearing stiffeners']);
+    if (R.tsGov) gl.push([R.tsGov.it.r, `${window.SBDSub.html(R.tsGov.it.loc)}: ${esc(R.tsGov.c.id)} ${tt(R.tsGov.c.title)}`, go('ts', R.tsGov.i, R.tsGov.it.step), 'Transverse stiffeners']);
+    if (R.bsGov) gl.push([R.bsGov.it.r, `${window.SBDSub.html(R.bsGov.it.loc)}: ${esc(R.bsGov.c.id)} ${tt(R.bsGov.c.title)}`, go('bs', R.bsGov.i, R.bsGov.it.step), 'Bearing stiffeners']);
     const top = gl.reduce((a, b) => (!a || b[0] > a[0] ? b : a), null);
     h += `<section class="sec"><div class="secHead">Shear &amp; stiffeners: governing</div><div class="secBody"><p class="note">${R.what}</p>
       ${top ? `<p>Governing ratio <b class="${cls(top[0])}">${fmt(top[0], 3)}</b>: ${top[1]} ${top[2]}</p>` : ''}
