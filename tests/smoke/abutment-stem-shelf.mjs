@@ -11,6 +11,9 @@
 // 3. Input errors: e + t_bw > t_st; e > 0 with no slab and no d_sh. Semi-integral / integral ignore e.
 // 4. Drawings (DXF valid, the section has the shelf outline), 3D (the slab top at the top of the backwall), Report builds;
 //    no console errors; no horizontal scroll at 390 px.
+// 5. ABSS: d_sh = 30 in > t = 15 in — the slab drawn t thick; EE-I backwall slab arm t/2; d_sh < t a check-input warning.
+// 6. ABFL (engineer decision 2026-11-10): the step d_sh − t over the slab loaded as fill (EV): hand check of w_EV, R_EV, q_EV, the shelf
+//    bearing, the slab design, the stem eccentricity, the shear-friction clamp, the EE-I slab mass and the backwall; none when d_sh ≤ t or blank.
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -154,7 +157,7 @@ console.log('4. Drawings, 3D, Report, 390 px');
 console.log('5. ABSS (engineer report 2026-11-10): d_sh = 30 in > t = 15 in, e = 10 in — the slab t thick on the shelf, its top 15 in below the top of the backwall');
 { const o = await openPage(FB, { vw: 1400, vh: 1000 }), p = o.p; await p.waitForFunction(() => window.LAST_R, null, { timeout: 60000 });
   const run = su => p.evaluate(su => { const s0 = JSON.stringify(S); eval(su); recalcAll(); const R = window.LAST_R, P = R.ap, O = R.geo.off, ee = R.bwEE && R.bwEE.ee;
-    const r = { RDC: P.RDC, qDC: P.qDC, qDW: P.qDW, wDC: P.wDC, zSh: O.zSh, zSlab: P.zSlab, hC: O.hC, hSh: O.hSh, ee: ee ? { Mu: ee.Mu, Wa: ee.apE.Wa, zA: ee.apE.zA } : null, W: WARNINGS.map(w => w.level + '|' + w.msg),
+    const r = { RDC: P.RDC, qDC: P.qDC, qDW: P.qDW, wDC: P.wDC, zSh: O.zSh, zSlab: P.zSlab0 ?? P.zSlab, hC: O.hC, hSh: O.hSh, ee: ee ? { Mu: ee.Mu - (ee.apE.Wf || 0) * (ee.apE.zF || 0), Wa: ee.apE.Wa, zA: ee.apE.zA } : null,   // ABFL: the slab's own height and M_u without the fill term (the fill: section 6) W: WARNINGS.map(w => w.level + '|' + w.msg),
       sec: (() => { const B = abdwBuild(R); const sh = B.S.find(x => x.id === 'sec'); return B.D.E.slice(sh.i0, sh.iC).filter(e => e.t === 'PL' && /APPROACH-SLAB/.test(e.l)).map(e => e.pts.map(q => q[1])); })() };
     const st = JSON.parse(s0); Object.keys(S).forEach(k => delete S[k]); Object.assign(S, st); recalcAll(); return r; }, su);
   const base = 'S.apSlab.on = true; S.apSlab.t = 1.25; S.geom.bwOff = 10; S.geom.shD = 30;';
@@ -165,7 +168,7 @@ console.log('5. ABSS (engineer report 2026-11-10): d_sh = 30 in > t = 15 in, e =
     `slab weight from t: w_DC ${a.wDC}, q_DC ${a.qDC}; shelf h_sh ${a.hSh}, z_sh ${a.zSh}; EQ slab height z = z_sh + t/2 = ${a.zSlab}; backwall h_c = d_sh ${a.hC}`);
   const ys = a.sec.flat(), yT = Math.max(...ys), yB = Math.min(...ys);   // sheet units (in): the slab outline on sheet 1
   check(near(yT - yB, 15, 1e-6), `sheet 1: the slab drawn t = 15 in thick (${(yT - yB).toFixed(3)} in), not d_sh`);
-  check(a.W.some(w => /^warn\|Stem shelf: the shelf depth d_sh = 30\.0 in exceeds .* t = 15\.0 in.*not modelled as a load/.test(w)), 'advisory: d_sh > t, the pavement / fill over the slab not modelled');
+  check(!a.W.some(w => /Stem shelf: the shelf depth d_sh = 30\.0 in exceeds/.test(w)), 'ABFL: d_sh > t raises no advisory warning (the fill over the slab is now loaded, section 6)');
   const e = await run(base + ' S.seismic.on = true; S.geom.HsupMode = "wall";');
   // Extreme Event I backwall: W_a = f_I k_h (q_DC + q_DW) = 1.0(0.075)(1.500 + 0.240) = 0.1305 kip/ft at z_A = t/2 = 0.625 ft above the shelf
   // (was d_sh − t/2 = 1.875 ft): M_u 0.39344 -> 0.39344 − 0.1305(1.875 − 0.625) = 0.23032 kip-ft/ft
@@ -174,6 +177,40 @@ console.log('5. ABSS (engineer report 2026-11-10): d_sh = 30 in > t = 15 in, e =
   check(u.W.some(w => /^warn\|Check input — Stem shelf: the shelf depth d_sh = 12\.0 in is less than .* 3\.0 in ABOVE/.test(w)) && !u.W.some(w => /^err\|.*Stem shelf: the shelf depth/.test(w)), 'd_sh < t: a check-input warning (not an input error), the slab top 3 in above the backwall');
   const q = await run('S.apSlab.on = true; S.apSlab.t = 1.25; S.geom.bwOff = 10; S.geom.shD = 0;');
   check(!q.W.some(w => /Stem shelf: the shelf depth/.test(w)), 'd_sh = 0 (= t): no step warning');
+  check(!o.errs.length, `console errors: ${o.errs.length}`);
+  await o.b.close(); }
+
+console.log('6. ABFL (engineer decision 2026-11-10, "use fill"): d_sh = 30 in > t = 15 in, e = 10 in — the step d_sh − t over the slab loaded as fill (EV)');
+{ const o = await openPage(FB, { vw: 1400, vh: 1000 }), p = o.p; await p.waitForFunction(() => window.LAST_R, null, { timeout: 60000 });
+  const run = su => p.evaluate(su => { const s0 = JSON.stringify(S); eval(su); recalcAll(); const R = window.LAST_R, P = R.ap, ee = R.bwEE && R.bwEE.ee;
+    const r = { hF: P.hF, gs: P.gs, wEV: P.wEV, REV: P.REV, qEV: P.qEV, zF: P.zF, Wi: P.Wi, zSlab: P.zSlab, APev: R.groups.APev ? { V: R.groups.APev.V, Mv: R.groups.APev.Mv, cls: R.groups.APev.cls } : null, x: P.x,
+      VuS: R.apStemSh && R.apStemSh.VuS, sMu: R.apDes && R.apDes.Mu, sVu: R.apDes && R.apDes.Vu, sMs: R.apDes && R.apDes.Ms, Map: R.stemDem.Map, Mecc: R.stemDem.MeccPerFt, stMu: R.stemDem.Mu, gEVe: R.stemDem.gEVe,
+      Pc: R.checks.shearFric && R.checks.shearFric.Pc, apI: R.seis && R.seis.apI, ee: ee ? { Mu: ee.Mu, Vu: ee.Vu, Wf: ee.apE.Wf, zF: ee.apE.zF } : null,
+      W: WARNINGS.map(w => w.level + '|' + w.msg) };
+    let html = ''; try { html = document.body.innerHTML; } catch (e) {} r.noDW = !/put its weight in the slab|include it in the (slab )?wearing surface/.test(html);
+    const st = JSON.parse(s0); Object.keys(S).forEach(k => delete S[k]); Object.assign(S, st); recalcAll(); return r; }, su);
+  const base = 'S.apSlab.on = true; S.apSlab.t = 1.25; S.geom.bwOff = 10; S.geom.shD = 30;';
+  const a = await run(base);
+  // hand check (default project: γ_s = 0.120 kcf, W = L_ab = 44 ft, L = 16 ft, θ = 0, t_sb = 4.5 ft, γ_EV = 1.35 / 1.00, γ_DC = 1.25 / 0.90):
+  // h_F = 30/12 − 1.25 = 1.25 ft; w_EV = 0.120(1.25) = 0.150 ksf; R_EV = 0.150(44)(16)/2 = 52.80 kip; q_EV = 0.150(16)/2 = 1.200 kip/ft
+  check(near(a.hF, 1.25) && near(a.gs, 0.12) && near(a.wEV, 0.15) && near(a.REV, 52.8) && near(a.qEV, 1.2), `fill: h_F ${a.hF}, γ_s ${a.gs}, w_EV ${a.wEV} ksf, R_EV ${a.REV} kip, q_EV ${a.qEV} kip/ft (hand 1.25, 0.120, 0.150, 52.80, 1.200)`);
+  check(a.APev && a.APev.cls === 'EV' && near(a.APev.V, 52.8) && near(a.APev.Mv, 52.8 * a.x), `load group APev: EV, V = ${a.APev && a.APev.V} kip at x_ap = ${a.x.toFixed(4)} ft`);
+  // stem shelf bearing: V_u,slab = 13.356 (main) + 1.35(1.200) = 14.976 kip/ft
+  check(near(a.VuS, 13.35602 + 1.62, 1e-5), `stem shelf V_u,slab ${a.VuS.toFixed(4)} (hand 13.356 + 1.35·1.200 = 14.976)`);
+  // slab design: M_EV = 0.150(16)²/8 = 4.800; M_u 48.313 + 1.35(4.8) = 54.793; V_u 13.356 + 1.35(1.2) = 14.976; M_s 29.459 + 4.8 = 34.259
+  check(near(a.sMu, 48.31329 + 6.48, 1e-5) && near(a.sVu, 13.35602 + 1.62, 1e-5) && near(a.sMs, 29.45903 + 4.8, 1e-5), `slab design M_u ${a.sMu.toFixed(3)} (54.793), V_u ${a.sVu.toFixed(3)} (14.976), M_s ${a.sMs.toFixed(3)} (34.259)`);
+  // stem: x_sc − x_ap = −4.5/2 + 10/24 = −1.8333 ft; γ_EV = 1.00 governs (relieves the back face): M_ap −180.29 + 1.00(52.8)(−1.8333) = −277.09;
+  // M_ecc 11.0727 − 96.8/44 = 8.8727; stem M_u 83.962 − 2.200 = 81.762 kip-ft/ft
+  check(a.gEVe === 1 && near(a.Map, -180.29 - 96.8, 1e-5) && near(a.Mecc, 11.07272 - 2.2, 1e-5) && near(a.stMu, 83.96208 - 2.2, 1e-5), `stem: γ_EV ${a.gEVe}, M_ap ${a.Map.toFixed(3)} (−277.09), M_ecc ${a.Mecc.toFixed(4)} (8.8727), M_u ${a.stMu.toFixed(3)} (81.762)`);
+  check(near(a.Pc, 21.58057 + 1.2, 1e-5), `shear friction P_c ${a.Pc.toFixed(4)} (21.5806 + 1.00·52.8/44 = 22.7806)`);
+  check(!a.W.some(w => /Stem shelf: the shelf depth d_sh = 30/.test(w)) && a.noDW, 'no advisory warning; no note tells the user to add the fill to DW');
+  const e = await run(base + ' S.seismic.on = true; S.geom.HsupMode = "wall";');
+  // EE-I: W_ap = 66.0 + 10.56 + 52.8 = 129.36 kip at z = (76.56·20.125 + 52.8·21.375)/129.36 = 20.635 ft; k_hW_ap = 0.075(129.36) = 9.702 kip
+  // backwall: W_F = 1.0(0.075)(1.200) = 0.090 kip/ft at min(2.5, 1.25 + 1.25/2) = 1.875 ft: M_u 0.23032 + 0.16875 = 0.39907, V_u 0.28790 + 0.090 = 0.37790
+  check(near(e.Wi, 129.36) && near(e.zSlab, (76.56 * 20.125 + 52.8 * 21.375) / 129.36, 1e-6) && near(e.apI, 9.702), `EE-I slab + fill mass W_ap ${e.Wi} kip at z ${e.zSlab.toFixed(4)} (20.6352), k_hW_ap ${e.apI.toFixed(3)} (9.702)`);
+  check(e.ee && near(e.ee.Wf, 0.09) && near(e.ee.zF, 1.875) && near(e.ee.Mu, 0.23032 + 0.16875, 1e-4) && near(e.ee.Vu, 0.28790 + 0.09, 1e-4), `EE-I backwall: W_F ${e.ee && e.ee.Wf} at ${e.ee && e.ee.zF} ft, M_u ${e.ee && e.ee.Mu.toFixed(5)} (hand 0.39907), V_u ${e.ee && e.ee.Vu.toFixed(5)} (0.37790)`);
+  for (const [lbl, su] of [['d_sh = t', 'S.apSlab.on = true; S.apSlab.t = 1.25; S.geom.bwOff = 10; S.geom.shD = 15;'], ['d_sh blank', 'S.apSlab.on = true; S.apSlab.t = 1.25; S.geom.bwOff = 10; S.geom.shD = 0;'], ['d_sh < t', 'S.apSlab.on = true; S.apSlab.t = 1.25; S.geom.bwOff = 10; S.geom.shD = 12;']]) {
+    const q = await run(su); check(q.REV === undefined && !q.APev && q.ee === null && q.gEVe === undefined, `${lbl}: no fill load (no R_EV, no APev group)`); }
   check(!o.errs.length, `console errors: ${o.errs.length}`);
   await o.b.close(); }
 
