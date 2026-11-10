@@ -504,7 +504,7 @@
     // applications (C10.4.2.1: eccentric dead load of single or unbalanced arms) → a check when momentLoad, information otherwise.
     // Before: information only in every case (Q-B4, 2026-11-02). Decision (pending engineer review).
     checks.push({ key: 'slope', label: 'Vertical support, moment loads: slope at the top, Service I', value: govS.slope, limit: lim.slope, unit: 'in/ft', applies: momentLoad,
-      ref: ref('Art. 10.4.2.1 (p. 10-1, 2017): 0.35 in/ft'), flag: momentLoad ? 'Checked: the arm-mounted fixtures put an unbalanced dead-load moment on the pole (moment load application, Art. 10.4.2.1 / C10.4.2.1; review M4, 2026-11-07, pending engineer review).' : 'Information only: no unbalanced arm-mounted dead load (not a moment load application, C10.4.2.1).' });
+      ref: ref('Art. 10.4.2.1 (p. 10-1, 2017): 0.35 in/ft'), flag: momentLoad ? 'Checked: the arm-mounted fixtures put an unbalanced dead-load moment on the pole (a moment load application, Art. 10.4.2.1 / C10.4.2.1).' : 'Information only: no unbalanced arm-mounted dead load (not a moment load application, C10.4.2.1).' });
     checks.forEach(c => { c.ratio = c.value / c.limit; c.ok = !c.applies || c.ratio <= 1; });
     return { B, rows: res, gov, govS, checks, momentLoad, slopeDL: Math.hypot(s0x, s0y) * 12 };
   }
