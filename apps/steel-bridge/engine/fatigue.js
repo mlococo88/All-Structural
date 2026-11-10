@@ -190,7 +190,12 @@
     if (RpE == null && !(L > 0)) return { err: 'R_p (MBE Eq. 7.2.2.1-1) needs the span length L: enter it, or R_p.' };
     const RpC = L > 0 ? RpEq(L, Tall, nL) : null, Rp = RpE != null ? RpE : RpC;
     const dfII = o.gII * r.df, dfe = Rp * Rs * dfII, wim = ev.wim === 'yes', dfmax = wim ? 2.2 * Rp * dfII : Rp * o.gI * r.df;
+    // fatigue-prone detail (MBE 4th Ed. Art. 7.2.3, Eq. 7.2.3-1, p. 7-5; 2026-11-10): evaluated only where 2.2(Δf)_tension > f_dead-load compression;
+    // (Δf)_tension = the tensile portion of (Δf)_eff = R_pR_sγ_II × the unfactored live-load tension at the detail (f+ or f−, the Fatigue details
+    // stresses, tension +; entered stresses: the larger entered range), f_DL,c = the unfactored dead-load compression (−f_DL where f_DL < 0, else 0)
+    const ft0 = r.mode === 'M' ? Math.max(r.fP, r.fN, 0) : Math.max(+r.dfP || 0, +r.dfN || 0), dft = Rp * Rs * o.gII * ft0, fdc = r.hasDL ? Math.max(-r.fDL, 0) : 0;
     const q = { a, g: gg, Rs, T, T0, T0def: blank(ev.ADTT0), Tall, TallDef: blank(ev.ADTTall), nL, L, Lsrc, Rp, RpC, RpE, dfII, dfe, wim, dfmax, gI: o.gI, gII: o.gII, inf: dfmax <= r.th, lives: {},
+      ft0, dft, fdc, prone: 2.2 * dft > fdc,
       lim: blank(ev.ADTTlim) ? null : nm(ev.ADTTlim) };
     const ci = CATS.indexOf(r.cat);
     [['min', null], ['E1', ev.rrE1], ['E2', ev.rrE2], ['mean', ev.rrMean]].forEach(([k, s]) => {
@@ -273,14 +278,16 @@
       if (!c.items.length) c.naWhy = 'No connection plates or lateral bracing.'; out.add(c); }
     if (R.ev.on) {
       const V = R.ev;
+      { const c = { id: 'FA8', grp: G3, title: 'Fatigue-prone detail, 2.2(Δf)_tension > f_DL,compression', ref: `${MBE7} Art. 7.2.3, Eq. 7.2.3-1 (p. 7-5)`, items: [] };   // 2026-11-10
+        R.rows.forEach(r => c.items.push({ loc: `${L(r)}: ${r.ev.prone ? 'fatigue-prone, evaluated (FA5, FA6)' : 'not fatigue-prone, not evaluated'}`, st: 'pass', prone: r.ev.prone, step: `fa${r.i}.prone` })); out.add(c); }
       { const c = { id: 'FA5', grp: G3, title: 'Infinite fatigue life, (Δf)_max ≤ (ΔF)_TH', ref: `${MBE7} Art. 7.2.4 (pp. 7-5, 7-6)`, items: [] };
-        R.rows.forEach(r => c.items.push({ ...rc(L(r), r.ev.dfmax, r.th, `fa${r.i}.inf`), st: r.ev.inf ? 'pass' : 'warn', loc: `${L(r)}${r.ev.inf ? '' : ' (finite life, see FA6)'}` })); out.add(c); }
+        R.rows.forEach(r => !r.ev.prone ? c.items.push({ loc: `${L(r)} (not fatigue-prone, 7.2.3: not evaluated)`, st: 'pass', step: `fa${r.i}.prone` }) : c.items.push({ ...rc(L(r), r.ev.dfmax, r.th, `fa${r.i}.inf`), st: r.ev.inf ? 'pass' : 'warn', loc: `${L(r)}${r.ev.inf ? '' : ' (finite life, see FA6)'}` })); out.add(c); }
       { const lvl = V.level, LN = { min: 'minimum', E1: 'Evaluation 1', E2: 'Evaluation 2', mean: 'mean' };
         const c = { id: 'FA6', grp: G3, title: 'Remaining fatigue life', ref: `${MBE7} Art. 7.2.5.1 (pp. 7-6 to 7-8)`, items: [] };
-        R.rows.filter(r => !r.ev.inf).forEach(r => { const q = r.ev.lives[lvl];
+        R.rows.filter(r => r.ev.prone && !r.ev.inf).forEach(r => { const q = r.ev.lives[lvl];
           if (!q) { c.items.push({ loc: `${L(r)}: R_R for the ${LN[lvl]} life not entered`, st: 'na', step: `fa${r.i}.life` }); return; }   // not reached since 2026-11-10 (Table 7.2.5.1-1 when blank)
           c.items.push({ loc: L(r), demand: V.target, capacity: q.rem, r: q.rem > 0 ? V.target / q.rem : Infinity, st: q.rem >= V.target ? 'pass' : 'fail', step: `fa${r.i}.life` }); });
-        if (!c.items.length) c.naWhy = 'Every detail has infinite fatigue life (FA5).'; out.add(c); }
+        if (!c.items.length) c.naWhy = 'Every detail has infinite fatigue life (FA5) or is not fatigue-prone (FA8, MBE 7.2.3).'; out.add(c); }
     }
     { const rC = E.rule('fat.cat');   // OWN39 (RIDOT BDM 6.3.1): primary members only with Category A, B and C′ details (warning)
       if (rC) { const okC = rC.value.ok, c = { id: 'FA7', grp: G2, title: 'Owner: detail categories on primary members', ref: E.cite(rC), src: 'DOT', items: [] };
@@ -326,6 +333,10 @@
         note: e.RpE != null ? `Entered${e.RpC != null ? ` (Eq. 7.2.2.1-1 would give ${n3(e.RpC)})` : ''}.` : `L = ${n2(e.L)} ft (${e.Lsrc === 'entered' ? 'entered' : `the ${e.Lsrc} holding the detail`}); [ADTT]_PRESENT = ${n0(e.Tall)} trucks/day, all directions and lanes${e.TallDef ? ' (not entered: present ADTT_SL / p, LRFD Eq. 3.6.1.4.2-1 inverted; enter the all-direction total for a two-way bridge)' : ''}; n_L = ${n0(e.nL)} striped lanes. The equation was developed for 2 ≤ n_L ≤ 4 and 30 < L < 220 ft (C7.2.2.1).` });
       w.add({ id: 'dfII', label: 'Factored calculated stress range, Fatigue II (fatigue truck, single lane)', sym: '\\gamma_{II}\\Delta f', eq: '\\gamma_{II}\\Delta f', sub: `${n2(e.gII)}(${n2(r.df)})`, value: e.dfII, unit: 'ksi', d: 3, ref: `${MBE7} Art. 7.2.2 (p. 7-2); ${ED} Table 3.4.1-1` });
       w.add({ id: 'dfe', label: 'Effective stress range', sym: '(\\Delta f)_{eff}', eq: 'R_{p}R_{s}\\gamma_{II}\\Delta f', sub: `${n3(e.Rp)}(${n2(e.Rs)})(${n3(e.dfII)})`, value: e.dfe, unit: 'ksi', d: 3, ref: `${MBE7} Eq. 7.2.2-1 (p. 7-2); R_s Table 7.2.2.1-1 (p. 7-3)` });
+      w.add({ id: 'prone', label: 'Fatigue-prone detail (FA8): only a detail in net tension is evaluated', sym: '2.2(\\Delta f)_{tension} \\gt f_{DL,compression}', eq: '(\\Delta f)_{tension} = R_{p}R_{s}\\gamma_{II}f_{LL,t}',
+        sub: `2.2(${n3(e.Rp)})(${n2(e.Rs)})(${n2(e.gII)})(${n3(e.ft0)}) = ${n3(2.2 * e.dft)} ${e.prone ? '\\gt' : '\\le'} ${n3(e.fdc)}`, value: e.prone ? 'yes: fatigue-prone, evaluated' : 'no: not fatigue-prone, not evaluated', unit: '', d: 0, ref: `${MBE7} Art. 7.2.3, Eq. 7.2.3-1 (p. 7-5)`,
+        note: `f_LL,t = ${n3(e.ft0)} ksi, the unfactored live-load tension at the detail (${r.mode === 'M' ? 'the larger of f+ and f−, tension +' : 'the larger entered range'}); f_DL,compression = ${n3(e.fdc)} ksi, the unfactored dead-load compression at the detail (${r.hasDL ? `f_DL = ${n3(r.fDL)} ksi, tension +` : 'no permanent stress: 0'}). The 2.2 is the assumed ratio of the maximum to the effective stress range (C7.2.3).` });
+      if (!e.prone) return w.steps;
       w.add({ id: 'dfmax', label: `Maximum stress range (${e.wim ? 'truck weight from a weigh-in-motion study: 2.2(Δf)_eff with R_s = 1.0' : 'calculated range: R_p × the Fatigue I factored range'})`, sym: '(\\Delta f)_{max}',
         eq: e.wim ? '2.2R_{p}(1.0)\\gamma_{II}\\Delta f' : 'R_{p}\\gamma_{I}\\Delta f', sub: e.wim ? `2.2(${n3(e.Rp)})(1.0)(${n3(e.dfII)})` : `${n3(e.Rp)}(${n2(e.gI)})(${n2(r.df)})`, value: e.dfmax, unit: 'ksi', d: 3, ref: `${MBE7} Art. 7.2.4 (p. 7-6)` });
       w.add({ id: 'inf', label: 'Infinite life (FA5)', sym: '(\\Delta f)_{max} \\le (\\Delta F)_{TH}', eq: '', sub: `${n3(e.dfmax)} ${lt[e.inf]} ${n2(r.th)}`, value: e.dfmax / r.th, unit: '', d: 3, ref: `${MBE7} Eqs. 7.2.4-1, -2 (p. 7-5)`, ok: e.inf,
@@ -418,6 +429,6 @@
   }
 
   /* EV_BASIS: the basis note of the remaining-life evaluation (Fatigue & studs tab, its input card, the Report, the Summary and the left column) */
-  const EV_BASIS = 'Remaining fatigue life (FA5, FA6) per MBE 4th Ed. (2026) Section 7: (Δf)_eff = R_pR_s × the factored Fatigue II range (Eq. 7.2.2-1), R_p by Eq. 7.2.2.1-1; (Δf)_max = R_p × the factored Fatigue I range (2.2(Δf)_eff with WIM truck weights); remaining life from N_av − N_1 with the first-year and present single-lane ADTT and the growth rate g (Eqs. 7.2.5.1-1 to -8); R_R from Table 7.2.5.1-1 unless entered.';
+  const EV_BASIS = 'Remaining fatigue life (FA5, FA6) per MBE 4th Ed. (2026) Section 7: only fatigue-prone details are evaluated, 2.2(Δf)_tension > the dead-load compression (Eq. 7.2.3-1, FA8); (Δf)_eff = R_pR_s × the factored Fatigue II range (Eq. 7.2.2-1), R_p by Eq. 7.2.2.1-1; (Δf)_max = R_p × the factored Fatigue I range (2.2(Δf)_eff with WIM truck weights); remaining life from N_av − N_1 with the first-year and present single-lane ADTT and the growth rate g (Eqs. 7.2.5.1-1 to -8); R_R from Table 7.2.5.1-1 unless entered.';
   window.SBDFatigue = { ES, CAT, CATS, EV_DEF, RR_TAB, EV_BASIS, evIn, RpEq, N1of, yRem, evalRow, STUD, DET, LOC, SPEC, DEFAULT, faRR, settings, supports, nAt, nRange, limitState, studLimit, setText, secSet, rowDk, compute, checks, steps, flange, detailsFromPayload };
 })();
