@@ -16754,3 +16754,54 @@ Engineer instruction (2026-11-07, paraphrased): "same deal for the abutment" as 
 - **Check case:** built-in project, panel I-0b on, pile footing, skew 30°: sheet 4 at 1/8" = 1'-0", L = 16'-0" along the roadway, W = 38'-1 1/4" (= 44 cos 30°), 44'-0" along the abutment, shelf 12 / 15 / 9 in, S1 #5 @ 9" est. 2'-6", P1 #8 @ 6" ℓ_d 31.5"; sheet 5 N prov. 2'-8" (36 − 4 in) vs 12.4" req.; sheet 6 A1 ℓ_dh 20.7" req., 31.0" avail.; 3D slab plan extents 13.856 × 52.000 ft (L cos θ × (W/cos θ + L sin θ)), shelf 12 × 15 in under the slab along 44 ft.
 - **How verified:** `abutment-drawings` (extended: 3D skew extents and shelf, conventional / semi-integral / integral; 9 projects, 66 sheet drawings, expected sheet list, N OF M, 0 text overlaps, fit, DXF valid; tab at 1440 / 390 px), `dxf-print-sheets --tool ab` (Print all 7 pages), `abutment-pile-group-parity` main vs branch (14 / 14), main-vs-branch probe (6 projects: LAST_R, S and the sheet 1–3 entities identical apart from the sheet count), `project-library --tool abutment`, `abutment-panel-scroll`, `tests/engine/run.mjs handoffs`, `pile-group`, check-syntax.
 - **Other copies:** none.
+## 2026-11-10 — PR: claude/abut-stem-shelf (PR #1373: https://github.com/mlococo88/All-Structural/pull/1373) (ABSH) — Backwall offset e: the backwall inset toward the bridge, the stem shelf behind it carries the approach slab   [calc change: new input, default 0 = no change] [§4 callout in the PR]
+
+Engineer request (2026-11-10, paraphrased): add the input "Offset, back face of abutment stem to back face of backwall", default 0 in. A positive value insets the backwall toward the bridge; the stem at its full thickness rises behind it to a shelf that the approach slab bears on (no separate corbel or paving notch). Plan detail: 2'-0" backwall, slab seat 9 in below the top on the stem top behind it, 10 in shelf, 5S@12 backwall bars, 6C@12 stem bars continuing up, construction joint.
+
+### ABSH-1. Inputs and saved data
+- `defaultState().geom`: new `bwOff:0` (e, in) and `shD:0` (d_sh, the shelf depth below the top of the backwall, in; 0 = the approach slab thickness t). Anchor `ABSH: backwall offset e, stem back face to backwall back face`.
+- `migrate()`: `if(S.geom.bwOff===undefined) S.geom.bwOff=0; if(S.geom.shD===undefined) S.geom.shD=0;` (a saved project without the fields = e = 0, identical results). No key renamed, no format change.
+- Input ID (C-21): `if(fpS.geom&&!(+fpS.geom.bwOff>0)){ delete fpS.geom.bwOff; delete fpS.geom.shD; }` — e = 0 leaves the Input ID unchanged.
+- Panel I-1 (conventional abutment only): the two rows (d_sh shown when e > 0), a basis note, the derived seat line `t_st − t_bw − e` and `e_brg = e + t_bw + setback − t_sb/2` (`bwOffDerivedHTML`, also in `updateDerivedInInputs`). A change of e rebuilds the inputs (`change` handler, anchor `ABSH: the shelf-depth row and panel I-0b's support follow e`).
+- Panel I-0b: with e > 0 the support choice (paving notch / deck end) and the bracket inputs are replaced by a note ("stem shelf"); `apInUse` does not validate them. Validation ranges `geom.bwOff`, `geom.shD`: hard 0–120 in, typical 0–24 in.
+
+### ABSH-2. Calculation (`bwOffGeo`, `computeAll`, `computeAp`)
+- `bwOffGeo()` (after `iabType`): null when e = 0 or the abutment is not conventional; else `{e, eIn, dIn, d, dAuto, hSh = h_bw − d_sh, hC = d_sh, zSh = t_f + h_stem + h_sh, xBwBack = x_stem,back − e, xBwFront = x_bwBack − t_bw, xSh = x_stem,back − e/2}`.
+- C-1 geometry. Before: `const seatW = g.tst-g.tbw;` … `const xBwFront = xStemBack-g.tbw;` After: `const OFF = bwOffGeo(); const seatW = OFF? g.tst-g.tbw-OFF.e : g.tst-g.tbw;` … `const xBwFront = OFF? OFF.xBwFront : xStemBack-g.tbw;` (the bearing line `xBrg = xBwFront − setback` follows). `R.geo.off = OFF` when set.
+- Input errors (`"err"`): e + t_bw > t_st; seat width 0; e > 0 with no slab and d_sh = 0; d_sh > h_bw. Warnings: d_sh ≠ slab t; no slab (the fill over the shelf, e × d_sh, is not added to EV — it would relieve).
+- C-2 self-weight, after the Backwall part: `if(OFF&&OFF.hSh>0) parts.push({name:"Stem shelf (behind the backwall)", A:OFF.e*OFF.hSh, W:OFF.e*OFF.hSh*gcSub*Lab, x:OFF.xSh, y:zSeat+OFF.hSh/2, note:"e·h_sh·γ_c·L_ab"});` The backwall part's x = xBwFront + t_bw/2 moves with xBwFront. Through `R.parts` both reach DCsub (stability, footing, piles), the stem M_ecc and the seismic wall inertia (stability).
+- `computeAp`: after `P.zSlab=…`: `if(OFF){ P.sup="stem"; P.stemShelf=true; P.bS=OFF.eIn; P.av=OFF.eIn/2; P.wSh=0; P.xSh=0; P.WSh=0; P.eBw=0; P.eSh=0; P.x=OFF.xSh; P.xShT=OFF.xSh; P.zSlab=OFF.zSh+P.t/2; }`; `P.eqWall` true for "stem" (slab inertia on the wall, as the notch). The notch warning (t + h_S > h_bw) is skipped with e > 0.
+- Backwall (Tab 5 §5.1): `hbwC = OFF? OFF.hC : g.hbw`; `hbwRet = OFF? max(0, min(hbwC, h_soil − h_stem − h_sh)) : (as before)`; `heqBW = interpHeq(hbwRet||hbwC)`; wheel strip X = E-argument = hbwC; S&T width `min(L_ab, hbwC)`; EE I backwall inertia `k_h γ_c t_bw hbwC` at `hbwC/2`; slab inertia arm `max(0, hbwC − t/2)`. The MassDOT seismic stop keeps `h_bw/2` (conservative). The slab couple on the backwall is 0 (e_bw = 0), so no front-face check; no wheel load (slab on).
+- Stem EE I inertia: `aSh = e·h_sh` added to `wallApf`, at `h_stem + h_sh/2` in `zWi` (+0 when e = 0).
+- Seat bearing A2 (5.6.5): `cBack = (setback + t_bw + e)·12 − L_pad/2` with e > 0.
+- New `R.apStemSh` (only when set): bearing of the slab on the stem shelf, q_b = V_u,slab/(12e), q_R = 0.70·0.85f′c (5.6.5, m = 1); dashboard `apSSB`, Tab 5 §5.8 `apStemShHTML`, Report topic. No bracket checks (the shelf is stem concrete; no shear plane or tie).
+
+### ABSH-3. Display, drawings
+- Tab 1 §1.1: `bwOffWorkHTML` (positions, seat, bearing line, backwall and shelf centroids, slab reaction, arms to x_sc); §1.4a: support "stem shelf", `x_ap = x_stem,back − e/2`; z of the slab inertia. Tab 5 §5.1: "Backwall design section at the shelf elevation" and the stem-shelf slab block; §5.2 EQ z_W with A_sh. Owner seat checks: `t_st − t_bw − e`.
+- Report: Geometry rows and basis note; Loads "Backwall offset e: positions and lever arms"; Structural design topic "Approach slab on the stem shelf".
+- Drawings tab / DXF (`abdwGeo`: `G.off`, `G.xbwB`, `G.ySh`, `G.xs`): section outline with the stem shelf, construction joint at the base of the backwall, E and D_SH dimensions, labels; plan line at the backwall's back face; reinforcement: A1 stem bars up into the shelf, B1 at the inset back face, no S1 / S2. 3D: the stepped wall section and the slab from the backwall's back face. In-app figures (§1.1 section, §1.4a slab, §5.7 sketches, FBD) draw the inset backwall and the shelf.
+
+### Governing provisions
+- Engineer request 2026-11-10 (geometry and load path).
+- AASHTO LRFD 10th Ed. (2024): Art. 3.5.1 (DC), Table 3.4.1-1/-2 (γ unchanged), 11.6.3.3 (eccentricity), 10.6.3.1 / 10.6.3.4 (bearing, sliding), 5.6.3 / 5.7.3 (backwall and stem sections), 5.6.5 (Eq. 5.6.5-2, slab bearing on the shelf; seat bearing), 4.7.4.4 (support length from the seat width), 11.6.5.1 (inertia).
+
+### Check case (hand check: default project with t_bw = 2.0 ft, t_st = t_sb = 5.5 ft, approach slab on with t = 0.75 ft; e = 10 in, d_sh = 9 in)
+- Geometry (x from the toe, x_stem,back = 3.5 + 5.5 = 9.0 ft): x_bw,front 7.000 → 6.1667; x_brg 5.750 → 4.9167; seat 3.500 → 2.6667 ft; e_brg 0.500 → 1.3333 ft; N provided 38 → 28 in.
+- Backwall 66.00 kip at x̄ 8.000 → 7.1667. Stem shelf (new): 0.8333 × 4.25 × 0.150 × 44 = 23.375 kip at 8.5833. ΣDC_sub 851.40 → 874.775 kip, M_v 5644.65 → 5790.285 kip-ft.
+- Approach slab: R_DC 39.60 kip at 9.500 + notch 6.60 kip at 9.4583 (APdc M_v 438.625) → 39.60 kip at 8.5833, no notch (339.900); DW 10.56 kip M_v 100.32 → 90.64; LL 124.62 kip M_v 1183.88 → 1069.64. Girder DC 510 kip M_v 2932.5 → 2507.5.
+- Stem base (Strength I, per ft): M_ecc = [P_v(x_sc − x_brg) + γ_DC ΣW(x_sc − x̄) + M_ap]/L_ab: before [1302(0.5) + 0.9(−115.5) − 186.3675]/44 = 8.1973; after (γ_DC 1.25 governs) [1480.5(1.3333) + 1.25(−115.0417) − 152.46]/44 = 38.1304. M_u 81.087 → 111.020 kip-ft/ft; stem flexure D/C 0.2164 → 0.2963.
+- Footing, Strength I 0.90·DC + 0.65·DW + 1.00·EV + 1.50·EH + 1.75·(BR,LS), LL off: ΔV = 0.9(23.375 − 6.6) = 15.0975 kip; ΔM_v = 0.9(145.635 − 98.725 − 425) + 0.65(−60 − 9.68) = −385.573 kip-ft; e = 1.6130 → 1.8598 ft. Governing eccentricity D/C 0.3456 → 0.4100 (now the LL-on permutation, e = 1.9133 ft); sliding 1.0041 → 0.9884; bearing 0.7765 → 0.8366.
+- Backwall: retained height 5.00 → 0.75 ft above the shelf. Shelf bearing: V_u = 1.25(0.900) + 1.5(0.240) + 1.75(6.3549) = 12.606 kip/ft, q_b = 12.606/120 = 0.1051 ksi, D/C 0.0441 (was the bracket checks of the notch).
+
+### How verified
+- `tests/smoke/abutment-stem-shelf.mjs` (new): e = 0 identical to origin/main (LAST_R, warnings, Input ID) over 10 projects + a saved project without the fields; the hand check above; input errors; DXF valid; 3D slab top; Report; 390 px; no console errors. `abutment-drawings.mjs` gains two e > 0 projects (no text overlaps).
+- check-syntax, abutment-pile-group-parity (14/14), project-library --tool abutment, abutment-drawings, abutment-panel-scroll, dxf-print-sheets --tool ab, tests/engine/handoffs.test.mjs.
+
+### Decisions (pending engineer review)
+- The offset applies to the conventional abutment only (semi-integral end diaphragm and integral wall ignore it).
+- e > 0 replaces both support options of panel I-0b (paving notch and deck end) with the stem shelf; their inputs are kept for e = 0.
+- The shelf elevation is a new input d_sh (0 = the slab thickness t), since the tool had no shelf elevation of its own (the notch top was the backwall top − t).
+- The bearing setback stays measured from the backwall's front face, so the bearing line moves e toward the toe with the backwall.
+- The backwall design section is at the shelf (cantilever d_sh); the section below it (t_bw + e) is not checked separately. The MassDOT seismic stop keeps its force at h_bw/2 on the t_bw section (conservative).
+- With no approach slab the fill over the shelf is not added to EV (warning). The slab inertia acts on the backwall at its mid-depth above the shelf.
+- Construction joint drawn at the base of the backwall (shelf elevation), consistent with the design section.

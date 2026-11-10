@@ -76,6 +76,8 @@ console.log('2. Drawings: sheets, DXF validity, no overlapping text');
     'pile footing, 30° skew, no wings': () => { S.fnd.branch = 'pile'; S.geom.skew = 30; S.wing.on = false; },
     'slab on the deck, 25° skew, far end on soil': () => { S.apSlab.on = true; S.apSlab.sup = 'deck'; S.geom.skew = 25; S.apSlab.far = 'soil'; },
     'water table, in-line wings': () => { S.geom.hw = 6; S.wing.orient = 'inline'; }, 'pile footing, one pile omitted': () => { S.fnd.branch = 'pile'; recalcAll(); S.piles.coords[3].active = false; },
+    'stem shelf: backwall offset e = 10 in + slab (ABSH)': () => { S.apSlab.on = true; S.apSlab.t = 0.75; S.geom.tbw = 2; S.geom.tst = 5.5; S.geom.tsb = 5.5; S.geom.bwOff = 10; S.geom.shD = 9; },
+    'stem shelf, no slab, pile footing (ABSH)': () => { S.fnd.branch = 'pile'; S.geom.bwOff = 8; S.geom.shD = 12; },
     'semi-integral + slab': () => { S.iab.type = 'semi'; S.apSlab.on = true; }, 'integral + slab': () => { S.iab.type = 'integral'; S.apSlab.on = true; } };
   // ABEL (2026-11-10): every case again with a beam seat elevation (the EL. marks on the section and detail sheets), plus water in front and D_f
   for (const [nm, su] of Object.entries({ ...cases, 'water both sides, passive D_f': () => { S.geom.hw = 6; S.geom.hwFr = 2; S.fnd.usePassive = true; } }))

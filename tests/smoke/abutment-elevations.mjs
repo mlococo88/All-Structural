@@ -57,6 +57,16 @@ console.log('1. Hand check, seat El. 52.00');
   else { const bad = Object.entries(wi).filter(([k, v]) => !near(ci.rows[k], v));
     check(!bad.length && Object.keys(ci.rows).length === Object.keys(wi).length, `integral: ${Object.entries(ci.rows).map(([k, v]) => k + ' ' + v.toFixed(2)).join(', ')}${bad.length ? ' — WRONG: ' + bad.map(b => b[0]).join(',') : ''}`);
     check(ci.card && ci.l3.length >= 4 && /PILE TIPS EL\. 18\.00/.test(ci.dxfEl.join(' ')) && ci.svg.includes('El. 48.00'), `integral: card, drawing tip mark, section label (${ci.svg.join(' | ')})`); }
+  // ABSH stem shelf (the engineer's detail): t_bw 2 ft, e = 10 in, d_sh = 9 in, slab t = 9 in, t_st = t_sb = 5.5 ft:
+  // shelf = 52.00 + (5.00 − 0.75) = 56.25 = the approach slab seat; slab top = 56.25 + 0.75 = 57.00 = the top of the backwall
+  const ws = { top: 57.00, apTop: 57.00, apSeat: 56.25, seat: 52.00, tof: 38.00, bof: 35.00, fill: 57.00 };
+  const cw = await withCase(p, () => { S.geom.elSeat = 52; S.apSlab.on = true; S.apSlab.t = 0.75; S.geom.tbw = 2; S.geom.tst = 5.5; S.geom.tsb = 5.5; S.geom.bwOff = 10; S.geom.shD = 9; }, probe);
+  if (cw.err) check(false, cw.err);
+  else { const bad = Object.entries(ws).filter(([k, v]) => !near(cw.rows[k], v));
+    check(!bad.length && Object.keys(cw.rows).length === Object.keys(ws).length && !cw.flags.length && /APPROACH SLAB SEAT EL\. 56\.25/.test(cw.dxfEl.join(' ')) && cw.svg.includes('Approach slab seat El. 56.25'),
+      `stem shelf (backwall offset e = 10 in, d_sh = 9 in): ${Object.entries(cw.rows).map(([k, v]) => k + ' ' + v.toFixed(2)).join(', ')}${bad.length ? ' — WRONG: ' + bad.map(b => b[0]).join(',') : ''}; drawing / section marks`); }
+  const cw2 = await withCase(p, () => { S.geom.elSeat = 52; S.apSlab.on = true; S.apSlab.t = 0.75; S.geom.tbw = 2; S.geom.tst = 5.5; S.geom.tsb = 5.5; S.geom.bwOff = 10; S.geom.shD = 12; }, probe);
+  check(!cw2.err && near(cw2.rows.apSeat, 56.00) && near(cw2.rows.apTop, 56.75) && cw2.flags.some(t => /not level with the top of the backwall El\. 57\.00/.test(t)), `stem shelf d_sh = 12 in with a 9 in slab: seat 56.00, slab top 56.75, flagged (${JSON.stringify(cw2.flags)})`);
   // semi-integral: the top of the end diaphragm
   const cs = await withCase(p, () => { S.geom.elSeat = 100.5; S.iab.type = 'semi'; }, probe);
   check(!cs.err && near(cs.rows.top, 105.5) && near(cs.rows.tof, 86.5) && near(cs.rows.bof, 83.5) && /TOP OF END DIAPHRAGM EL\. 105\.50/.test(cs.dxfEl.join(' ')), `semi-integral, seat El. 100.50: top of end diaphragm ${cs.rows && cs.rows.top}, footing ${cs.rows && cs.rows.tof} / ${cs.rows && cs.rows.bof}`);
