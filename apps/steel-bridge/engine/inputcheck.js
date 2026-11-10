@@ -180,6 +180,6 @@
   const NOTE = 'Input check: results are shown only while no blocking input error exists. While one exists, every output tab, the Report, the Drawings, '
     + 'the 3D view, the Substructure Loading send and Auto design are withheld and the errors are listed with links to their fields. Warnings (LLDF range, '
     + 'proportion limits, D/t_w > 150, N_b = 3, Auto design) do not block. A Custom demand table and the Constructibility bracket inputs are checked on their '
-    + 'own tab (that module alone shows no results). An entered q_CL or finishing machine load below zero blocks (decision pending engineer review).';
+    + 'own tab (that module alone shows no results). An entered q_CL or finishing machine load below zero is a blocking input error.';
   window.SBDInputCheck = { collect, blocked, hostOf, loadsPath, NOTE };
 })();

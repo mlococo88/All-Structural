@@ -4831,6 +4831,25 @@ format changed. Anchor text `QA2` marks each change. New file `ui/sub.js` (in th
 - **Other copies:** none.
 - **Open items:** (1) `ui/splitter.js` touches `document` at load, so the Node engine tests `report`, `steps-groups-tabs`, `deflection-tab` fail on origin/main (since #1277); not changed here. (2) With a diaphragm the Cross-frames tab elevation still draws the angle frame (BRSEL open item). (3) Constructibility notes left to the Constructibility PR in progress (CLC decision 4 is stated on the Loads tab and in the Report Analysis section).
 
+## 2026-11-10 — PR: fix/sbapp-splitter-node-guard (PR #1286: https://github.com/mlococo88/All-Structural/pull/1286) — `ui/splitter.js` a no-op without a page (Node engine tests); input-check notes say what the app does   [display / load guard only; no result, saved key or format change]
+- **Problem 1:** `ui/splitter.js` (#1277) runs `document.readyState` at load, so the Node engine tests that load the app's scripts from `index.html` failed on origin/main (365dfb8): `ReferenceError: document is not defined` at `ui/splitter.js:102` (`steps-groups-tabs`, `deflection-tab`; SBASM open item 1).
+- **Where 1:** `apps/steel-bridge/ui/splitter.js`, the IIFE, anchor `'use strict';` followed by `const KEY = 'sbd2.splitRatio_v1'`.
+  - Before: `  'use strict';` / `  const KEY = 'sbd2.splitRatio_v1', …`
+  - After: `  'use strict';` / `  if (typeof document === 'undefined') return;   // loaded without a page (the Node engine tests): nothing to do (2026-11-10)` / `  const KEY = …`
+  - In a browser `document` always exists: the guard never fires, the splitter is unchanged (`window.SBDSplitUI` is not defined under Node; nothing there reads it).
+- **Problem 2:** the input-check notes of #1283 said "(decision pending engineer review)" in the app and the Report; CLAUDE.md §6 (#1284) says a note states what the code does, without that phrase.
+- **Where 2 (text only):**
+  1. `ui/analysis.js`, card "Construction live load" (`'an-cl'`). Before: `An entered q<sub>CL</sub> below zero is an input error and withholds every result (decision pending engineer review).` After: `An entered q<sub>CL</sub> below zero is an input error: every result is withheld until q<sub>CL</sub> is zero, positive or blank.`
+  2. `ui/analysis.js`, card "Finishing machine" (`'an-fm'`). Before: `A load P<sub>fm</sub> below zero is an input error and withholds every result (decision pending engineer review).` After: `A load P<sub>fm</sub> below zero is an input error: every result is withheld until P<sub>fm</sub> is zero, positive or blank.`
+  3. `engine/inputcheck.js` `NOTE` (Project input tab, the blocked output view, Report §1 Project), last sentence. Before: `An entered q_CL or finishing machine load below zero blocks (decision pending engineer review).` After: `An entered q_CL or finishing machine load below zero is a blocking input error.`
+  - Code comments with the phrase (`engine/inputcheck.js` header and the q_CL check, `engine/analysis.js` `CL_PSF`) are not shown in the app and are unchanged. The decision itself (a negative q_CL / P_fm blocks every result) is recorded in the sb-invalid-input entry above, wording unchanged.
+- **Governing provision:** none changed (AASHTO LRFD 10th Ed. Art. 3.4.2.1 is cited as before).
+- **Formulas, factors, units, code references, saved data:** none changed (§4, §5).
+- **Check case:** default project, Loads input tab, enter q_CL = −5 psf and P_fm = −2 kip: the check summary lists both fields and every output tab shows "Results not shown", as before; the Project tab note ends "… below zero is a blocking input error."; no number anywhere changes.
+- **How verified:** main (365dfb8) vs branch, headless (`tests/lib.mjs openPage`): built-in project, every input and output tab and the built Report (`.rp-doc` text): 158,740 digit groups each side, identical; the same project with q_CL −5 and P_fm −2 (blocked), 28 views: 1,885 digit groups each side, identical; the only differing lines are the 3 sentences above (and the Summary run-time display); 0 console errors. `node tests/check-syntax.mjs`; engine tests, every steel-bridge file by name (54 files): origin/main 4 failed (`deflection-tab` 2, `steps-groups-tabs` 2, all `document is not defined` at `ui/splitter.js`), branch 324 passed, 0 failed (`report`, `report-wiring`, `sb-summary` pass on both); smoke `steel-bridge-splitter` (32 checks, 0 failed), `steel-bridge-invalid`, `steel-bridge-report`, `phone-layout --tool sbapp`: pass, 0 console errors.
+- **Other copies:** none.
+- **Open items:** none new.
+
 ## 2026-11-10 — PR: claude/sb-constr-mdcc-pr1 (PR #1287: https://github.com/mlococo88/All-Structural/pull/1287) — Constructibility: C_b, the compression flange and the nonprismatic γ_e from the M_DCc the check uses (SBCON; engineer decision 2026-11-10; changes computed values)
 - **Problem:** with the pour sequence on (M_DCc ≠ M_DC1), `bracingC()` built the deck-placement LTB data (the flange in compression,
   C_b,C by Eq. 6.10.8.2.3b-1, and for a nonprismatic L_b the ratio K = f_max/f_x of the conservative γ_e bound) from 1.25M_DC1 + 1.5M_CL,
