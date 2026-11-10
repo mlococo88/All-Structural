@@ -5217,3 +5217,19 @@ format changed. Anchor text `QA2` marks each change. New file `ui/sub.js` (in th
 - **Decisions (pending engineer review):** K = 1.0 (not 0.75 of 4.6.2.5); U = A_web/A_g; R_p = 1.0; the 6.9.2.2 interaction uses the compressive resistance and M_w without amplification; thin-walled J and C_w (the AISC tabulated values, which C6.12.2.2.5 allows, are not in the app's shape table); the end diaphragms (CFE) get the same axial items.
 - **Other copies:** none (GirderDetail's own diaphragm checks are not changed; the parity test documents the difference).
 - **How verified:** main (b2eccd4) vs branch, headless: X, K (bottom), K (top) with 30° skews: checks, worked step values, DC1 point loads, truss forces, DC1 moments, tab text, Summary cells and Report text identical (Summary text differs only in the run time); channel and W: values above. check-syntax; engine sb-diaphragm (11), crossframes, framing, sb-summary, report, tex; smoke steel-bridge-diaphragm, summary, report, phone-layout --tool sbapp; 0 console errors.
+
+## 2026-11-10 — PR: fix/sb-bracket-dxf (PR #PRNUM: PRURL) — Constructibility: the overhang bracket Download DXF draws the bracket (SBBDXF; drawing only, engineer decision 2026-11-10)
+- **Request:** engineer decision 2026-11-10: fix the overhang bracket DXF. The CAD builder `ohGraphic` read `R.F.oh.a` (absent; the inputs are `R.F.oh.p`), so its Download DXF only ever held the note "OVERHANG BRACKETS: EXTERIOR GIRDER, PROJECT SOURCE ONLY (INPUTS ABOVE)". It now draws the girder, overhang slab, bracket, the dimensions a, h_b, w_OH, t_OH and the two load arrows, from the values the on-screen sketch uses (`ui/gfxdet.js bracketModel`: `R.F.oh.p`). An explicit exception to the earlier "don't change the DXF" rule, approved by the engineer.
+- **Where:** `apps/steel-bridge/ui/gfxa.js` `function ohGraphic(P, gi, R)`:
+  - `const G = GR(), oh = R.F && R.F.oh; {` → `const G = GR(), oh = R.F && R.F.oh, p = (oh && oh.p) || {}; {`
+  - `a = +(oh || {}).a, hb = +(oh || {}).hb, wOH = +(oh || {}).wOH, tOH = +(oh || {}).tOH;` → `a = +p.a, hb = +p.hb, wOH = +p.wOH, tOH = +p.tOH;`
+  - `` `DECK AND FORMS (GAMMA_DC ${nf(((oh || {}).gam || {}).dc, 2)})` `` → `` `DECK AND FORMS (GAMMA_DC ${nf((p.gam || {}).dc, 2)})` ``
+  - `` `FINISHING MACHINE ${nf(oh.Pfm, 1)} KIP; `` → `` `FINISHING MACHINE ${nf(p.Pfm, 1)} KIP; ``
+  - comments: the header of `ohGraphic`, the DETC line in `constr` ("Download DXF is ohGraphic, unchanged" → "... is ohGraphic"), and the bracket block comment in `ui/gfxdet.js`.
+  - Geometry and layers of the drawing are as they were written (never reached before): layers GRDR, DECK, BRACKET, LOAD, DIMS, ANNO-TEXT.
+- **Provisions:** none; no formula, factor, unit or reference changes. No computed value changes (the bracket checks OH1–OH5 do not use this builder).
+- **Check case (built-in project, G1 exterior; R.F.oh.p: a = 36, h_b = 54, w_OH = 30, t_OH = 9 in, γ_DC = 1.25, P_fm = 3.0 kip; haunch 2 in):** before: DXF text = the one note (1752 chars). After: `a = 36.0 IN`, `h_b = 56.0 IN` (54 + haunch 2, as the screen sketch), `w_OH = 30.0 IN`, `t_OH = 9.0 IN`, `DECK AND FORMS (GAMMA_DC 1.25)`, `FINISHING MACHINE 3.0 KIP; ...` (8051 chars).
+- **Baseline:** `tests/baselines/dxf-detc.json`: only the three `|oh` entries re-recorded (`8e9b6ba5ad010a684cc9b1f1` → `c15f728d84e9214e60c5ee86`); every other entry unchanged. New test in `tests/engine/dxf-detc.test.mjs` (the dimension and load texts, the five layers, no note).
+- **Saved data (§5):** none.
+- **Decisions (pending engineer review):** the CAD layout is kept as originally written (the load arrows at mid w_OH and at the slab edge; no girder centre line), not re-laid-out to the screen sketch.
+- **Other copies:** none.
