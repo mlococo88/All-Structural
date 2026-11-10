@@ -250,6 +250,12 @@ select option { background: #fff; color: var(--text); }
 /* project block */
 .proj-box { padding: 2px 16px 16px; display: flex; flex-direction: column; gap: 8px; }
 .proj-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+/* HOC (2026-11-10): the Project tab's Hand-offs block */
+.rwHo { margin: 8px 0; }
+.rwHo .rwHoTitle { font-weight: 700; font-size: 12px; margin-bottom: 2px; }
+.rwHo .rwHoGrp { margin: 8px 0 3px; font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #64748b; }
+.rwHo .rwHoRow { border-top: 1px solid #e2e8f0; padding: 5px 0 3px; font-size: 12px; }
+.rwHo .rwHoFrom { font-size: 11px; color: #64748b; }
 .proj-btn {
   height: 30px; padding: 0 8px; border-radius: var(--r);
   border: 1px solid var(--border-hi); background: var(--surface);
@@ -1117,7 +1123,25 @@ body.rwDashColl #rwDash { display: none; }
       <input type="text" id="proj_chk" placeholder="Name, PE"></div>
     <div class="ig"><label for="proj_chkdate">Checked Date <span class="lbl-note">optional</span></label><!-- RWTB (2026-11-06): title-block checked date -->
       <input type="text" id="proj_chkdate" placeholder="e.g. 2026-11-06"></div>
-    <div class="proj-row" style="grid-template-columns: 1fr 1fr"><button type="button" id="bx-pm-use" class="proj-btn" title="Fill these fields from the project info shared by another tool">Use shared project info</button><button type="button" id="bx-pm-share" class="proj-btn" title="Share these project fields with the other tools">Share project info</button></div>
+    <!-- HOC (2026-11-10, engineer decision: the hand-off card on the Project tab in every tool): Use / Share project info and the Pile
+         Designer hand-off (moved from the Wall tab's Foundation card; same ids and handlers), as Receive / Send -->
+    <div id="rwHo" class="rwHo">
+      <div class="rwHoTitle">Hand-offs</div>
+      <div class="hint">Nothing changes until you confirm: each pull or import first shows what it will change, and what you apply is recorded with this project (saved with it and printed in the Report).</div>
+      <div class="rwHoGrp">Receive from other tools</div>
+      <div class="rwHoRow"><b>Shared project info</b> <span class="rwHoFrom">from any tool</span><div class="proj-row" style="grid-template-columns: 1fr"><button type="button" id="bx-pm-use" class="proj-btn" title="Fill these fields from the project info shared by another tool">Use shared project info</button></div></div>
+      <div class="rwHoRow"><b>Pile results</b> <span class="rwHoFrom">from Pile Designer (pile-supported footing)</span>
+        <div class="pile-only" style="display:none"><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px"><button type="button" class="btn" id="pxr_pull" onclick="rwpxPullOpen()" title="Pull Pile Designer's results (channel pileResults): R_n and φ, and per combination its p-y results; with the stale check">Pull pile results</button>
+        <label class="btn" style="cursor:pointer" title="Import a pile-results hand-off file exported by Pile Designer">Import pile results (JSON)<input type="file" accept=".json,application/json" style="display:none" onchange="rwpxImportFile(this)"></label></div>
+        <div class="hint"><b>Status / last received:</b> <span id="pxr_status"></span> Details on the <a href="#" data-go-otab="piles">Piles tab</a>.</div></div>
+        <div class="hint rwHoNoPile">Available with a pile-supported footing (Wall tab, Foundation).</div></div>
+      <div class="rwHoGrp">Send to other tools</div>
+      <div class="rwHoRow"><b>Shared project info</b> <span class="rwHoFrom">to every tool</span><div class="proj-row" style="grid-template-columns: 1fr"><button type="button" id="bx-pm-share" class="proj-btn" title="Share these project fields with the other tools">Share project info</button></div></div>
+      <div class="rwHoRow"><b>Foundation loads</b> <span class="rwHoFrom">to Pile Designer (pile-supported footing)</span>
+        <div class="pile-only" style="display:none"><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px"><button type="button" class="btn" id="pxr_send" onclick="rwpxSendOpen()" title="Send the pile combinations, a wall segment of the pile rows and the per-pile governing loads to Pile Designer (channel foundationLoads)">Send to Pile Designer</button></div>
+        <div class="hint"><b>Last sent:</b> <span id="rwHoSent"></span></div></div>
+        <div class="hint rwHoNoPile">Available with a pile-supported footing (Wall tab, Foundation).</div></div>
+    </div>
     <div class="ig"><label for="proj_notes">Notes / Description</label>
       <textarea id="proj_notes" rows="2" placeholder="Optional scope notes…"></textarea></div>
     <hr class="sec-divider">
@@ -1221,12 +1245,7 @@ body.rwDashColl #rwDash { display: none; }
     <div class="hint pile-only" id="hint_pile_cap" style="display:none">Enter the capacities from the geotechnical report or from Pile Designer. The defaults are placeholders.</div>
     <!-- RWPX (2026-11-07, Phase 8f): hand-off with Pile Designer (HANDOFF.md §4.6 / §4.10); pile_pxr = the pulled-results record (saved only when filled) -->
     <div class="pile-only" style="display:none;margin-top:6px">
-      <div style="display:flex;flex-wrap:wrap;gap:6px">
-        <button type="button" class="btn" id="pxr_send" onclick="rwpxSendOpen()" title="Send the pile combinations, a wall segment of the pile rows and the per-pile governing loads to Pile Designer (channel foundationLoads)">Send to Pile Designer</button>
-        <button type="button" class="btn" id="pxr_pull" onclick="rwpxPullOpen()" title="Pull Pile Designer's results (channel pileResults): R_n and φ, and per combination its p-y results; with the stale check">Pull pile results</button>
-        <label class="btn" style="cursor:pointer" title="Import a pile-results hand-off file exported by Pile Designer">Import pile results (JSON)<input type="file" accept=".json,application/json" style="display:none" onchange="rwpxImportFile(this)"></label>
-      </div>
-      <div class="hint" id="pxr_status"></div>
+      <div class="hint">Send/receive data: <a href="#" data-go-ho="1">Project tab → Hand-offs</a> (Send to Pile Designer, Pull pile results, Import pile results (JSON)).</div>   <!-- HOC (2026-11-10): the buttons and the status line are in the Project tab's Hand-offs block -->
       <textarea id="pile_pxr" style="display:none" aria-hidden="true" tabindex="-1"></textarea>
     </div>
   </div>
@@ -4413,6 +4432,7 @@ function rwPileUI() {
     const m = /pile-row-(\d)/.exec(e.className), show = pile && !(e.classList.contains('aci-only') && isA) && !(e.classList.contains('aashto-only') && !isA) && !(m && +m[1] > nr);
     e.style.display = show ? '' : 'none';
   });
+  document.querySelectorAll('.rwHoNoPile').forEach(e => { e.style.display = pile ? 'none' : ''; });   // HOC
   // RWPT (2026-11-07): the Piles output tab is shown for a pile-supported footing only; leaving pile mode while it is open opens Stability
   const tb = el('tabbtn-piles');
   if (tb) { tb.style.display = pile ? '' : 'none';
@@ -5646,12 +5666,10 @@ function rwptHandoff(r) {
   return `<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Pile Designer Hand-off</span><span class="card-ref">HANDOFF.md §4.6 / §4.10 · channels foundationLoads, pileResults</span></div><div class="card-body">
     <div style="overflow-x:auto"><table class="tbl"><tbody><tr><td class="lbl">Loads sent</td><td>${sentTxt}</td></tr><tr><td class="lbl">Results received</td><td>${recTxt}</td></tr></tbody></table></div>${imp}${cs}
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
-      <button type="button" class="btn" onclick="rwpxSendOpen()" title="Send the pile combinations, a wall segment of the pile rows and the per-pile governing loads to Pile Designer (channel foundationLoads)">Send to Pile Designer</button>
-      <button type="button" class="btn" onclick="rwpxPullOpen()" title="Pull Pile Designer's results (channel pileResults): R_n and φ, and per combination its p-y results; with the stale check">Pull pile results</button>
-      <label class="btn" style="cursor:pointer" title="Import a pile-results hand-off file exported by Pile Designer">Import pile results (JSON)<input type="file" accept=".json,application/json" style="display:none" onchange="rwpxImportFile(this)"></label>
+      <span class="hint" style="align-self:center">Send/receive data: <a href="#" data-go-ho="1">Project tab → Hand-offs</a></span>
       ${rec ? '<button type="button" class="btn" onclick="rwpxClear()" title="Clear the Pile Designer results record (the imported input values stay)">Clear results record</button>' : ''}
     </div>
-    <div class="note">The same buttons as the Foundation card (Wall tab). The pile-to-cap tension connection, the pile length and its structural design are by Pile Designer / the engineer.</div></div></div>`;
+    <div class="note">Send to Pile Designer, Pull pile results and Import pile results (JSON) are in the Project tab's Hand-offs block. The pile-to-cap tension connection, the pile length and its structural design are by Pile Designer / the engineer.</div></div></div>`;
 }
 function renderStabilitySoil(r) {
   const el = document.getElementById('tab-stability');
@@ -13571,10 +13589,17 @@ function rwpxCheck(inp, r) {
   return out;
 }
 function rwpxPaint(r) {
+  // HOC (2026-11-10): the Hand-offs block's "Last sent" (read only: the by.retwall copy this tool writes)
+  const hs = document.getElementById('rwHoSent'); if (hs) { let sp = null; try { sp = JSON.parse(localStorage.getItem('bridgeSuite.v1.foundationLoads.by.retwall') || 'null'); } catch (e) { sp = null; }
+    hs.textContent = sp && sp.producedAt ? rwpxWhen(sp.producedAt) + (sp.project && sp.project.name ? ' (' + sp.project.name + ')' : '') + ', from this browser.' : 'nothing sent from this browser yet.'; }
   const el = document.getElementById('pxr_status'); if (!el) return;
   const rec = rwpxRec(), st = r && r.pxr;
   el.innerHTML = rec ? 'Pile Designer results pulled ' + rwpxEsc(rwpxWhen(rec.producedAt)) + ': <b' + (st && st.status === 'stale' ? ' style="color:#b42318"' : '') + '>' + rwpxEsc(st ? st.status.toUpperCase() : '—') + '</b>' + (st ? ' (' + rwpxEsc(st.why) + ')' : '') + '. ' + (Object.keys(rec.fields || {}).length ? 'Imported: ' + Object.entries(rec.fields).map(([k, v]) => rwpxEsc(k.replace('pile_', '')) + ' = ' + rwpxEsc(v)).join(', ') + '.' : 'No input imported (reference only).') + ' <a href="#" onclick="rwpxClear();return false">Clear</a>' : '';
+  if (!el.innerHTML) el.textContent = 'nothing pulled yet.';   // HOC
 }
+document.addEventListener('click', e => { const a = e.target && e.target.closest && e.target.closest('[data-go-ho],[data-go-otab]'); if (!a) return; e.preventDefault();   // HOC links
+  if (a.dataset.goOtab) { const t = document.getElementById('tabbtn-' + a.dataset.goOtab); if (t) t.click(); return; }
+  const t = document.getElementById('itab-project'); if (t) t.click(); const c = document.getElementById('rwHo'); if (c) setTimeout(() => c.scrollIntoView({ block: 'start' }), 0); });
 function rwpxModal(title, body, btns) {
   const old = document.getElementById('rwpx-ov'); if (old) old.remove();
   const ov = document.createElement('div'); ov.id = 'rwpx-ov'; ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 8px';
