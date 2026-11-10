@@ -2392,7 +2392,7 @@ function tensionBreakoutGroup(nT, ca_min, eccX, eccY, tensPts, condA){
         "\\phi N_{cbg}=\\phi\\frac{A_{Nc}}{A_{Nco}}\\psi_{ec,N}\\psi_{ed,N}\\psi_{c,N}\\psi_{cp,N}N_b",
         "\\phi N_{cbg}="+fmt(phi)+"\\times"+fmt(ANcRatio,3)+"\\times"+fmt(psi_ec,2)+"\\times"+fmt(psi_ed,3)+"\\times"+fmt(psi_c,2)+"\\times"+fmt(psi_cp,2)+"\\times"+fmt(Nb,2)+
           "="+fmt(phi*Ncbg,2)+"\\ \\text{kip}"],
-       vars:[["\\phi",fmt(phi,2),(condA===true)?"Condition A — supplementary reinforcement crosses the failure surface (intercept check passes), Table 17.5.3":(S.tRebar.present?"Condition B — reinforcement present but its intercept check does not pass, Table 17.5.3":"Condition B, no supplementary reinforcement, Table 17.5.3")]]}
+       vars:[["\\phi",fmt(phi,2),(condA===true)?"Condition A — supplementary reinforcement crosses the failure surface (the intercept check credits at least one bar), Table 17.5.3":(S.tRebar.present?"Condition B — reinforcement present but its intercept check does not pass, Table 17.5.3":"Condition B, no supplementary reinforcement, Table 17.5.3")]]}
     ]))};
 }
 
@@ -2638,7 +2638,7 @@ function sideFaceBlowoutEdges(combo, nT, condA){
   out.steps=[{title:"Side-face blowout — every edge closer than 0.4h_ef",ref:"ACI 318-19 §17.6.4.1, §17.6.4.2",
     lines:["0.4h_{ef}="+fmt(0.4*hef,2)+"\\ \\text{in}"].concat(ev.map(o=>"\\text{edge }"+o.name+":\\ c_{a1}="+fmt(o.c,3)+"\\ \\text{in},\\ N_{ua}=\\sum T_{row}="+fmt(o.dem,3)+"\\ \\text{kip}\\ ("+o.nTen+"\\ \\text{in tension}),\\ \\phi N_{sbg}="+fmt(o.obj.phiNsb,3)+"\\ \\text{kip}\\Rightarrow "+fmt(o.dcr,3)))
       .concat(["\\text{governing: edge }"+(gov? gov.name : (ev.find(o=>Math.abs(o.c-ca1)<1e-9)||{name:"(nearest)"}).name)]),
-    vars:[["rule","","each edge within 0.4h_ef is checked with its own c_a1, c_a2 and row spacing against the tension of the anchor row nearest that edge; the largest ratio governs"]]}]
+    vars:[["rule","","each edge within 0.4h_ef is checked with its own c_a1, c_a2 and row spacing against the tension of the anchor row nearest that edge; the largest ratio governs. In the tension envelope of the T–V interaction the side-face blowout ratio is not taken below the whole group's ΣT on the nearest edge's φN_sb (conservative)"]]}]
     .concat(out.steps||[]);
   return out;
 }
@@ -3081,7 +3081,7 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset, condA, rowPts){
             : "0.7+0.3\\frac{c_{a2}}{1.5c_{a1}}=0.7+0.3\\times\\frac{"+fmt(ca2,3)+"}{1.5\\times"+fmt(ca1,3)+"}="+fmt(psi_edV,4)),
         "\\psi_{h,V}="+fmt(psi_hVg,4),
         "\\psi_{c,V}="+fmt(psi_cV,3)],
-       vars:[["\\psi_{ec,V}","1.000","shear eccentricity (e'_V = 0 for this model)"],
+       vars:[["\\psi_{ec,V}","1.000","shear eccentricity: e'_V = 0, the anchors of the row take equal shares of the shear (with torsion the torsion step applies ψ_ec,V, §17.7.2.3, to φV_cbg)"],
              ["\\psi_{ed,V}",fmt(psi_edV,4),ca2>=1.5*ca1?"far from the perpendicular edge":"reduced by the near perpendicular edge (corner)"],
              ["\\psi_{c,V}",fmt(psi_cV,3),psi_cV_why],
              ["\\psi_{h,V}",fmt(psi_hVg,4),psi_hVg>1?"thin member: \\sqrt{1.5c_{a1}/h_a} (h_a < 1.5c_{a1})":"h_a \\ge 1.5c_{a1} \\Rightarrow 1.0"]]},
@@ -3091,7 +3091,7 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset, condA, rowPts){
         "V_{cbg}=\\frac{A_{Vc}}{A_{Vc0}}\\,\\psi_{ec,V}\\,\\psi_{ed,V}\\,\\psi_{c,V}\\,\\psi_{h,V}\\,V_b",
         "V_{cbg}="+fmt(AVcRatio,4)+"\\times1.000\\times"+fmt(psi_edV,4)+"\\times"+fmt(psi_cV,3)+"\\times"+fmt(psi_hVg,4)+"\\times"+fmt(Vb,3)+"="+fmt(Vcbg,3)+"\\ \\text{kip}",
         "\\phi V_{cbg}="+fmt(phi,2)+"\\times"+fmt(Vcbg,3)+"="+fmt(phi*Vcbg,3)+"\\ \\text{kip}"],
-       vars:[["\\phi",fmt(phi,2),(condA===true)?"Condition A — hairpins cross the failure surface (intercept check passes), Table 17.5.3":(S.vRebar.present?"Condition B — reinforcement present but its intercept check does not pass, Table 17.5.3":"Condition B, no supplementary reinforcement, Table 17.5.3")],
+       vars:[["\\phi",fmt(phi,2),(condA===true)?"Condition A — hairpins cross the failure surface (the intercept check credits at least one leg), Table 17.5.3":(S.vRebar.present?"Condition B — reinforcement present but its intercept check does not pass, Table 17.5.3":"Condition B, no supplementary reinforcement, Table 17.5.3")],
              ["governing edge",gov.name,"checked all edges the shear pushes toward; this one gave the lowest capacity"]]}
     ]};
 }
@@ -3359,7 +3359,8 @@ function bpSeisBannerText(){
   if(Z.on){
     let t="<b>SEISMIC DESIGN CATEGORY "+Z.sdc+" — ACI 318-19 &sect;17.10 applied.</b> 0.75 on the concrete-governed tension strengths (pullout, concrete breakout, side-face blowout) in every combination (&sect;17.10.5.4; the &sect;17.10.5.1 20&nbsp;% exemption is not taken). "+
       "Tension: &sect;17.10.5.3 option "+BP_SEIS_T[Z.tOpt]+(Z.tOpt==="a"? " — checked as \"Seismic Ductility\"; the detailing of (a)(iii)–(vi) (stretch length &ge; 8d<sub>a</sub>, buckling, f<sub>uta</sub>/f<sub>ya</sub> &ge; 1.3 where threaded) is the engineer's" : " — the combinations entered must be these loads (not generated by this tool)")+". "+
-      "Shear: &sect;17.10.6.3 option "+BP_SEIS_V[Z.vOpt]+" — the combinations entered must be these loads; shear strength per &sect;17.7 (no reduction).";
+      "Shear: &sect;17.10.6.3 option "+BP_SEIS_V[Z.vOpt]+" — the combinations entered must be these loads; shear strength per &sect;17.7 (no reduction; the &sect;17.10.6.1 20&nbsp;% exemption is not taken). "+
+      "Anchor reinforcement in SDC C–F (&sect;17.10.4) is not checked by this tool: it is the engineer's.";
     if(!S.conc.cracked) t+=" <b>Uncracked concrete is selected:</b> &sect;17.10.5.4 takes the concrete as cracked unless it is demonstrated to stay uncracked.";
     return {cls:"warnBox", html:t};
   }
@@ -3951,7 +3952,7 @@ function comboCapacities(cc, combo){
           "\\text{resultant: }"+fmt(baseV,3)+"/"+fmt(sbk.phiVcbg,3)+"="+fmt(baseD,3)+"\\ \\text{(edge "+sbk.govEdge+")}"]
           .concat(comps.map(o=>"V_"+o.ax+"\\text{ alone (toward "+o.edge+", "+caseTxt(o)+"; edge "+o.sb.govEdge+"): }"+fmt(o.dem,3)+"/"+fmt(o.sb.phiVcbg,3)+"="+fmt(o.dcr,3)))
           .concat(["\\text{governing: }"+(govC? "V_"+govC.ax+"\\text{ alone}" : "\\text{the resultant}")]),
-        vars:[["rule","","each shear component is checked toward the edge it pushes toward (Fig. R17.7.2.1b cases) and parallel to the two side edges (§17.7.2.1(c)); the resultant check is kept as a further candidate; the largest ratio governs"]]};
+        vars:[["rule","","each shear component is checked toward the edge it pushes toward (Fig. R17.7.2.1b cases) and parallel to the two side edges (§17.7.2.1(c)); the resultant check is kept as a further candidate; the largest ratio governs. The perpendicular and parallel components on one edge are not combined by an interaction: each is checked alone, as R17.7.2.1 describes"]]};
       sbkComp={baseD, comps, gov:govC? govC.ax : "res"};
       if(govC){
         sbkUse=Object.assign({},govC.sb,{component:{ax:govC.ax,V:govC.V,dem:govC.dem,caseId:govC.caseId,dcr:govC.dcr,baseD}});
@@ -4137,7 +4138,7 @@ function plateBendingLTS(combo, cc){
   const dcr=P.t>0? tReq/P.t : Infinity;
   return {lts:true,phi,Fy,BC,Dp,round,n,Prod,govN:gov?gov.n:null,govT:gov?gov.t:0,m,beff,Mu,tReq,tp:P.t,dcr,Tu_per:Prod,
     steps:[
-      {title:"Circular base plate — bending line at the pole face (double-nut base)",ref:"AASHTO LRFDLTS 2nd Ed., base plates of double-nut connections (bending-line method; article to be confirmed)",
+      {title:"Circular base plate — bending line at the pole face (double-nut base)",ref:"bending-line method at the pole face, double-nut base: an engineering method (common practice), not an AASHTO LRFDLTS article; LRFDLTS 1st Ed. (2015, 2017 Interim) Art. 5.6.3 only requires the base-plate thickness to be considered",
        lines:[
         "m=\\frac{BC-D_{pole}}{2}=\\frac{"+fmt(BC,3)+"-"+fmt(Dp,3)+"}{2}="+fmt(m,3)+"\\ \\text{in}",
         "b_{eff}=\\frac{\\pi D_{pole}}{n}=\\frac{\\pi\\times"+fmt(Dp,3)+"}{"+n+"}="+fmt(beff,3)+"\\ \\text{in}",
@@ -4271,7 +4272,7 @@ function plateBending(combo, cc){
           .concat(st.map(o=>"\\text{side }"+o.nm+":\\ \\ell="+fmt(o.ell,3)+"\\ \\text{in},\\ M_{max}=\\int_0^{\\ell}\\sigma\\,u\\,du="+fmt(o.M,3)+"\\ \\text{kip-in/in}"))
           .concat(["t=\\sqrt{\\frac{4M_{max}}{\\phi F_y}}=\\sqrt{\\frac{4\\times"+fmt(g.M,3)+"}{"+fmt(phi,2)+"\\times"+fmt(Fy,0)+"}}="+fmt(tB,3)+"\\ \\text{in}\\ "+(bGov? "\\text{(governs the compression side)}" : "\\text{(DG1 governs)}")]),
         vars:[["u","in","distance from the column face along the strip; the strip with the largest moment is used (rigid plate, per unit width)"],
-              ["rule","larger","the compression side takes the larger of the per-axis DG1 thickness and this one (decision pending engineer review)"]]};
+              ["rule","larger","the compression side takes the larger of the per-axis DG1 thickness and this one (conservative); the elastic bearing field has no stress cap, so σ_max may exceed φf_p where DG1 would spread the pressure plastically"]]};
     } }
   const cant=Math.max(m,n,lam_nprime,...(eccSides? eccSides.map(o=>o.ell) : []));   /* BPH2: the longest side */
   /* BPH2: worked step for an eccentric column (moment transfer and the cantilever per side) */
@@ -4283,7 +4284,7 @@ function plateBending(combo, cc){
         "M_{y}=M_{y,0}-P\\,e_x="+fmt(ce.My0,2)+"-("+fmt(ce.P,2)+")("+fmt(ecx,3)+")="+fmt(ce.My0+ce.dMy,2)+"\\ \\text{kip-in}",
         "T=T_0+e_xV_y-e_yV_x="+fmt(ce.T0,2)+"+"+fmt(ce.dT,2)+"="+fmt(ce.T0+ce.dT,2)+"\\ \\text{kip-in}"]
         .concat(eccSides.map(o=>"\\ell("+o.nm+")="+(o.ax==="N"? "m"+(o.nm==="+y"?"-e_y":"+e_y") : "n"+(o.nm==="+x"?"-e_x":"+e_x"))+"="+fmt(o.ell,3)+"\\ \\text{in};\\ "+(o.comp?"\\text{compressed edge}":"\\text{far edge}")+",\\ q="+fmt(o.q,3)+"\\ \\text{ksi on }"+fmt(o.a,2)+"\\text{–}"+fmt(o.b,2)+"\\ \\text{in}:\\ M="+fmt(o.M,3)+"\\ \\text{kip-in/in},\\ t=\\sqrt{4M/(\\phi F_y)}="+fmt(o.t,3)+"\\ \\text{in}")),
-      vars:[["P","tension +","axial load at the column centroid"],["M_{side}","q[(ℓ−a)² − (ℓ−b)²]/2","bearing block of that axis beyond the side's critical section ([a, b] measured from that plate edge)"]]}; }
+      vars:[["P","tension +","axial load at the column centroid"],["M_{side}","q[(ℓ−a)² − (ℓ−b)²]/2","bearing block of that axis beyond the side's critical section ([a, b] measured from that plate edge)"],["q","ksi","the DG1 bearing stress of that axis; with e ≤ N/6 the trapezoid peak over the full length, so the far side is loaded by the peak as well (conservative: the linear pressure there is lower)"],["T","kip-in","the shear at the column centroid also twists the anchor group (e_xV_y − e_yV_x added to T, so the anchor shears include that torsion)"]]}; }
 
   /* tension side — arm to the nearest DG1 critical section */
   /* BPM4 (2026-11-07): the anchor forces of the SAME force model as the anchor checks (combo.perAnchor: neutral-axis or
@@ -8045,7 +8046,8 @@ function buildPlateTab(pg){
   const c=CC.combos[S.detailCombo];
   if(bpCircPlate()){   /* BC-1: circular plate of a double-nut pole base — no DG1 bearing; bending line (LRFDLTS) */
     mkSection("pbClass","1. Circular Base Plate — Model",body=>{
-      body.appendChild(el("div","note","Circular base plate Ø"+fmt(S.plate.D,2)+"″ × "+fmt(S.plate.t,3)+"″ on a double-nut (leveling-nut) base with an open stand-off. There is no bearing block: the anchor rods carry tension and compression (elastic bolt group, worked on the Anchor Bolts tab), and every rod force loads the plate through its nut. AISC DG1 (rectangular plate bearing on concrete) is not used. The plate is checked by the AASHTO LRFDLTS bending-line method (as the Light Pole and Sign Post tool, LP-5). The concrete bearing check does not apply."));
+      body.appendChild(el("div","note","Circular base plate Ø"+fmt(S.plate.D,2)+"″ × "+fmt(S.plate.t,3)+"″ on a double-nut (leveling-nut) base with an open stand-off. There is no bearing block: the anchor rods carry tension and compression (elastic bolt group, worked on the Anchor Bolts tab), and every rod force loads the plate through its nut. AISC DG1 (rectangular plate bearing on concrete) is not used. The plate is checked by the AASHTO LRFDLTS bending-line method (as the Light Pole and Sign Post tool, LP-5). The concrete bearing check does not apply."+
+        ((Math.abs(S.plate.exc_x||0)>1e-9||Math.abs(S.plate.exc_y||0)>1e-9)? " Column eccentricity: the moment P·e and the torsion from the shear reach the anchor rods; the bending line is taken with the pole concentric with the bolt circle." : "")));
     },pg);
   } else
   mkSection("pbClass","1. Eccentricity Classification (DG1)",body=>{
@@ -11037,6 +11039,7 @@ function buildDrawingsTab(pg){
       [['Sheets:','each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side.'],
        ['Layers:','BP-CONCRETE, BP-GROUT, BP-PLATE, BP-COLUMN, BP-ANCHOR, BP-NUT-WASHER, BP-THREAD, BP-HOLE, BP-REBAR, BP-REBAR-T, BP-REBAR-V, BP-CENTER, BP-SECTION, BP-DIMS, BP-TEXT, BP-LEADER, BP-TABLE, BP-TBLK, BP-BRDR.'],
        ['Export DXF:','the <b>Export DXF</b> button on the Project tab (plan and section for drafting) is unchanged.'],
+       ['Sections:','A-A and B-B are cut through the plate centre (A-A along x, B-B along y) with every anchor and bar projected onto them; the movable section cuts of the input drawings are not used, and the breakout surfaces are not drawn.'],
        ['Title block:','the Project fields (Project, Job #, Prepared by, Date, Checked by, Checked date)'+((typeof bpGroupsOn==="function"&&bpGroupsOn())?'; the sheets show the anchor group selected in the group picker':'')+'.']])+'</div>'+
     '<div class="bpdwHead"><b>'+(B.S.indexOf(cur)+1)+'. '+esc(cur.title)+'</b> · scale '+esc(scTxt(cur))+(cur.over?' · <span style="color:var(--fail)">does not fit the sheet even at the smallest scale</span>':'')+'</div>'+
     '<div class="bpdwBox"></div><div class="note">Wheel: zoom about the cursor · drag: pan · pinch · double-click: fit · + / − / Fit buttons.</div>'+
@@ -13547,7 +13550,7 @@ function validateInputs(){
     if(bpCircPlate() && !(soC.hasStandoff && !soC.groutFilled)) errs.push({block:true, code:"model", msg:"A circular base plate is modelled as a double-nut (leveling-nut) pole base: the rods carry tension and compression, there is no bearing block. Select the stand-off type “with clamping” (double nut) or “without clamping”."});
     if(bpCircPlate()){ const cd=colDims(); const Dp=(!S.col.custom && S.col.shapeType!=="W" && hssOf(S.col.shape).kind==="HSSround")? cd.b : Math.min(cd.b,cd.d);
       if(bpCircPattern() && Dp>=(+A.BC||0)) errs.push({block:true, code:"geometry", msg:"The pole ("+fmt(Dp,2)+"″) is not inside the bolt circle (BC = "+fmt(A.BC,2)+"″): the bending line at the pole face needs BC > D_pole."});
-      if(Math.abs(P.exc_x||0)>1e-9 || Math.abs(P.exc_y||0)>1e-9) warns.push("Column eccentricity on a circular plate: the moment P·e (and the torsion from the shear) is carried to the anchors and the bearing, but the bending-line check of the plate takes the pole concentric with the bolt circle.");   /* BPH2 */
+      if(Math.abs(P.exc_x||0)>1e-9 || Math.abs(P.exc_y||0)>1e-9) warns.push("Column eccentricity on a circular plate: the moment P·e (and the torsion from the shear) is carried to the anchor rods (a circular plate has no bearing block), but the bending-line check of the plate takes the pole concentric with the bolt circle.");   /* BPH2 */
       if(S.col.custom || S.col.shapeType==="W" || hssOf(S.col.shape).kind!=="HSSround") warns.push("Circular plate: the pole is not a round HSS; the bending line uses D_pole = the smaller of the column width and depth.");
     }
     if(S.tRebar.present || S.vRebar.present) errs.push({block:true, code:"model", msg:"Anchor reinforcement (tension or shear rebar) is not available with the bolt-circle layout in this version: the rebar layouts are built on anchor rows of a rectangular grid. Turn off Tension / Shear Reinforcement (concrete breakout is then checked as plain concrete, Condition B)."});
