@@ -152,7 +152,7 @@ tr.pier td{background:#f8fafc;font-weight:600}
       <li><b class="mlNLk">Axle loads and spacings:</b> from the AASHTO MBE figures as reproduced in the RIDOT LRFR Guidelines (Sept 2022) 4.4.1.2 (Type 3, 3S2, 3-3, H20, SU4–SU7, EV2, EV3, lane-type models, RIPTA bus) and the CTDOT BDM (02/24) 1.3.6 (CT-TLC).</li>
       <li><b class="mlNLk">MassDOT:</b> the MassDOT Bridge Manual 7.2.4.1 rating list (H20, Type 3, 3S2, HS20, SU4–SU7, EV2, EV3) uses the same vehicles.</li>
       <li><b class="mlNLk">Impact:</b> IM 33 % on axles (LRFD 3.6.2.1; MassDOT 7.2.4.6A), none on the 0.2 klf legal lane load; CT-TLC IM 0 and one-lane DF ÷ 1.2 per BDM 1.3.6.</li>
-      <li><b class="mlNLk">Lane-type model:</b> applies to spans over 200 ft (D6A-4) and, as two vehicles 30 ft or more apart, to negative moment and interior reactions (D6A-5).</li>
+      <li><b class="mlNLk">Lane-type model:</b> applies to spans over 200 ft (D6A-4) and, as two vehicles 30 ft or more apart, to negative moment and interior reactions (D6A-5). This tool applies the single-vehicle case at any span length when the preset is chosen; the two-vehicle case tries every clear gap from 30 ft up; the D6A-5 lane load, shown without a value in the reproduced figure, is taken as the D6A-4 value, 0.2 klf.</li>
       <li><b class="mlNLk">LLF and DFs:</b> enter the rating load factor (MBE / owner) as the LLF and the matching DFs: they are not set by the preset.</li></ul></div>
   </div></details>
 
@@ -178,7 +178,7 @@ tr.pier td{background:#f8fafc;font-weight:600}
     <div class="hint mlNL" id="stdLaneH"><div class="mlNLl">Std. Spec. lane loading, a separate case:</div><ul class="mlNLu">
       <li><b class="mlNLk">Loads:</b> AASHTO Std. Spec. 17th Ed. Art. 3.7.1.1, Fig. 3.7.6B (H20 / HS20: 0.64 k/ft + 18 k for moment, 26 k for shear and reactions).</li>
       <li><b class="mlNLk">Continuous spans:</b> Art. 3.11.3 (negative moment in continuous spans: a second, equal P moment in one other span).</li>
-      <li><b class="mlNLk">Pattern:</b> the uniform load is patterned on the influence line.</li>
+      <li><b class="mlNLk">Pattern:</b> the uniform load is patterned on the influence line (only the parts that add, part spans included): slightly more than the Art. 3.11.3 wording of spans loaded uniformly (conservative).</li>
       <li><b class="mlNLk">Envelope:</b> enveloped with the truck (truck OR lane, not both); impact is applied to the lane case.</li>
       <li><b class="mlNLk">DFs:</b> DFs here are per lane: a Std. Spec. wheel-line DF (e.g. S/5.5) must be divided by 2.</li></ul></div>
     <label class="chk"><input type="checkbox" id="pedOn">Pedestrian load PL with the vehicles (LRFD 3.6.1.6)</label>
@@ -208,11 +208,11 @@ tr.pier td{background:#f8fafc;font-weight:600}
     </div>
     <div class="hint mlNL"><div class="mlNLl">Multi-vehicle case (two vehicles):</div><ul class="mlNLu">
       <li><b class="mlNLk">Applies only to:</b> negative moment between points of contraflexure (unit load on all spans) and interior support reactions.</li>
-      <li><b class="mlNLk">Headway:</b> the clear distance from the rear axle of the lead vehicle to the front axle of the following one, swept up to twice the longest span.</li>
+      <li><b class="mlNLk">Headway:</b> the clear distance from the rear axle of the lead vehicle to the front axle of the following one, swept up to twice the longest span (at most the bridge length).</li>
       <li><b class="mlNLk">Uniform load:</b> the lane or uniform load is included and scaled with the vehicles.</li></ul></div>
-    <div class="hint mlNL" id="mlgMultiNote"><div class="mlNLa">Decision (pending engineer review): keep both choices below (conservative).</div><div class="mlNLl">90 % case (LRFD 10th Ed. Art. 3.6.1.3.1):</div><ul class="mlNLu">
+    <div class="hint mlNL" id="mlgMultiNote"><div class="mlNLl">90 % case (LRFD 10th Ed. Art. 3.6.1.3.1), as this tool applies it (both choices conservative):</div><ul class="mlNLu">
       <li><b class="mlNLk">Lane load:</b> the 90 % lane load is placed only on the parts of the influence line that add to the effect (C3.6.1.3.1), not on all spans as the 10th Ed. article text reads; this gives the larger (conservative) result.</li>
-      <li><b class="mlNLk">Truck positions:</b> the two trucks are not forced into adjacent spans: every headway from the minimum up to twice the longest span is tried, which covers the adjacent-span placements and more (conservative).</li></ul></div>
+      <li><b class="mlNLk">Truck positions:</b> the two trucks are not forced into adjacent spans: every headway from the minimum up to twice the longest span (at most the bridge length) is tried, which covers the adjacent-span placements and more (conservative).</li></ul></div>
   </div></details>
 
   <details open><summary>Impact</summary><div class="pb">
@@ -231,7 +231,7 @@ tr.pier td{background:#f8fafc;font-weight:600}
       <li><b class="mlNLk">Negative moment:</b> mean of the two spans adjacent to the nearest interior support.</li>
       <li><b class="mlNLk">Shear:</b> loaded length from the section to the far reaction of its span (+V: to the right support, −V: to the left support).</li>
       <li><b class="mlNLk">Reactions:</b> mean of the adjacent spans.</li>
-      <li><b class="mlNLk">Verify:</b> the shear and reaction L for continuous spans.</li></ul></div>
+      <li><b class="mlNLk">Continuous spans:</b> Art. 3.8.2.2 does not say how the shear loaded length runs across continuous spans; this tool stops it at the far reaction of the section's own span, and takes the mean of the adjacent spans for a reaction.</li></ul></div>
     <label class="chk"><input type="checkbox" id="impUdl">Apply impact to uniform load</label>
   </div></details>
 
@@ -244,7 +244,7 @@ tr.pier td{background:#f8fafc;font-weight:600}
     <div class="lbl">Distribution factors (per lane or track → girder)</div>
     <div id="dfT" class="pb" style="padding:0;gap:5px"></div>
     <div class="f"><label>Negative moment DF (blank = span DF)</label><input id="dfNeg" type="number" step="0.01" placeholder="Same as span"></div>
-    <p class="hint">LRFD DFs already include multiple presence (except lever rule). Pier sections use the larger adjacent-span DF; reactions use the larger adjacent shear DF.</p>
+    <p class="hint">LRFD DFs already include multiple presence (except lever rule). Pier sections use the larger adjacent-span DF; reactions use the larger adjacent shear DF. An entered negative-moment DF is used for every negative moment, including the reversal moments in positive-moment regions (usually conservative).</p>
     <div class="lbl" style="margin-top:4px">LRFD fatigue truck DFs (blank = use the highway DFs above)</div>
     <div class="g3"><div class="f"><label>DF moment</label><input id="fDFm" type="number" step="0.01" placeholder="Same"></div><div class="f"><label>DF shear</label><input id="fDFv" type="number" step="0.01" placeholder="Same"></div><div class="f"><label>Neg. M DF</label><input id="fDFn" type="number" step="0.01" placeholder="Fatigue M"></div></div>
     <p class="hint">Used only for the LRFD Fatigue Truck preset (here and in the report): one-lane DF ÷ 1.2, LRFD 3.6.1.4.3b and C3.6.1.1.2. They replace the span DFs for every span.</p>
@@ -252,7 +252,7 @@ tr.pier td{background:#f8fafc;font-weight:600}
       <div class="f"><label>Position step (ft)</label><input id="step" type="number" value="1" step="0.25"></div>
       <div class="f"><label>Spacing / headway step (ft)</label><input id="hStep" type="number" value="2" step="0.5"></div>
     </div>
-    <p class="hint" id="mlgStepNote">Besides the position grid, every axle is also placed exactly on each moment section and at each shear cut, for every spacing and headway (H1, 2026-11-07), so a section off the grid does not miss its governing position.</p>
+    <p class="hint" id="mlgStepNote">Besides the position grid, every axle is also placed exactly on each moment section and at each shear cut, for every spacing and headway (H1, 2026-11-07), so a section off the grid does not miss its governing position. An axle standing exactly at a shear cut is counted on the side of the shear jump that gives the extreme value (the limit as it approaches from either side).</p>
     <div class="hint mlNL" id="mlgBasis" data-txt="Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024): HL-93 and fatigue truck (Art. 3.6.1.2–3.6.1.4), load factors (Table 3.4.1-1), IM (Art. 3.6.2). HS20 / H20: AASHTO Standard Specifications for Highway Bridges, 17th Ed. (2002), Art. 3.7, 3.8, 3.11. Rail: AREMA Manual Ch. 8 / 15 (edition per owner)."><div class="mlNLl">Basis:</div><ul class="mlNLu"><!-- MLNL: data-txt keeps the one-line text the reports quote (Code basis, cover, References) -->
       <li><b class="mlNLk">LRFD:</b> AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024): HL-93 and fatigue truck (Art. 3.6.1.2–3.6.1.4), load factors (Table 3.4.1-1), IM (Art. 3.6.2).</li>
       <li><b class="mlNLk">HS20 / H20:</b> AASHTO Standard Specifications for Highway Bridges, 17th Ed. (2002), Art. 3.7, 3.8, 3.11.</li>
@@ -718,7 +718,7 @@ $('stepCard').insertAdjacentHTML('afterend',`<div class="card" id="deflCard">
     </div></div>
   <canvas id="cD" style="height:240px"></canvas>
   <div class="tw"><table><thead><tr><th>Span</th><th>L (ft)</th><th>Max ↓ δ (in)</th><th>@ x (ft)</th><th>Allowable L/N (in)</th><th>Ratio</th><th>Max ↑ δ (in)</th><th>Governing ↓</th></tr></thead><tbody id="dB"></tbody></table></div>
-  <div class="hint mlNL" style="padding:8px 14px"><div class="mlNLl">Deflection DF and limit:</div><ul class="mlNLu"><li><b class="mlNLk">Deflection DF:</b> typically (number of lanes × multiple presence) ÷ number of girders, assuming all girders deflect equally (LRFD 2.5.2.6.2).</li><li><b class="mlNLk">Limit:</b> AREMA commonly limits live load plus impact deflection to L/640; confirm the owner's criterion.</li><li><b class="mlNLk">Plot:</b> blue = max downward, teal = max upward.</li></ul></div>
+  <div class="hint mlNL" style="padding:8px 14px"><div class="mlNLl">Deflection DF and limit:</div><ul class="mlNLu"><li><b class="mlNLk">Deflection DF:</b> typically (number of lanes × multiple presence) ÷ number of girders, assuming all girders deflect equally (LRFD 2.5.2.6.2).</li><li><b class="mlNLk">Vehicle:</b> the selected vehicle alone (not the "also envelope with" vehicle or the two-vehicle case), every axle included (axles that reduce the deflection are not neglected); no pedestrian load (LRFD 3.6.1.3.2: vehicular load).</li><li><b class="mlNLk">Limit:</b> AREMA commonly limits live load plus impact deflection to L/640; confirm the owner's criterion.</li><li><b class="mlNLk">Plot:</b> blue = max downward, teal = max upward.</li></ul></div>
 </div>`);
 
 // ═══════════ LIVE LOAD DEFLECTION ═══════════
@@ -2158,7 +2158,7 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
       s2el.appendChild(mk('div','cr-note mlNL',mlNL('Vehicle rules:',[['Axles that do not contribute:',(m.neglect?'neglected (LRFD 3.6.1.3.1)':'always included')+'.'],
         ['Travel:',(m.dirs&&m.dirs.length>1?'both directions':'one direction')+'.'],['Vehicle:',(m.rail?'rail vehicle (rail DF set)':'highway vehicle')+'.'],
         mv2?['Two-vehicle case ('+m.mScale+' ×):','uniform load on the parts of the influence line that add only (C3.6.1.3.1; the 10th Ed. Art. 3.6.1.3.1 text reads all spans), vehicles not limited to adjacent spans; both conservative.']:null],
-        {act:[mv2?'Decision (pending engineer review): the two-vehicle case below.':null]})));
+        {})));
     });
     body.appendChild(s2el);
 
@@ -2358,7 +2358,12 @@ function mlrModel(){
       ...(R.ped?[['Pedestrian load (LRFD 3.6.1.6)',`w_PL = ${R.ped.w} k/ft on this girder line, DF_PL = ${R.ped.df}; patterned on the contributing influence-line area A, no impact, in every vehicle case (not reduced in the 90 % case); in the per-lane envelope as w_PL·A·DF_PL / g`]]:[]),
       ['Tables in this report',fac?`factored per girder (γ_LL ${m.llf} × DF), as the View selector`:'unfactored per lane, including impact, as the View selector'],
       ['Code basis',basis]]},
-      {type:'note',text:'Set in the input panel. The results on screen: [[tab:card:cM|Results]].'}]});
+      {type:'note',text:'Set in the input panel. The results on screen: [[tab:card:cM|Results]].'},
+      ...[{type:'note',text:'Analysis basis:'},   /* MLASM (2026-11-10, CLAUDE.md §6): the recorded assumptions, as the code applies them */
+        {type:'note',text:'• Axle placement: besides the position grid, each axle is also placed exactly on every moment section and at every shear cut; an axle exactly at a shear cut is counted on the side of the shear jump that gives the extreme (AASHTO LRFD 10th Ed. Art. 3.6.1.3.1).'},
+        {type:'note',text:'• Distribution factors: a pier section takes the larger adjacent-span DF and a reaction the larger adjacent shear DF'+(m.dfNeg>0?'; the negative-moment DF is used for every negative moment, including the reversal moments in positive-moment regions.':'.')},
+        ...(m.multi&&m.spans.length>1?[{type:'note',text:'• Two-vehicle case: negative moment between points of contraflexure and interior reactions only; the uniform load on the parts of the influence line that add only (C3.6.1.3.1; the 10th Ed. Art. 3.6.1.3.1 text reads all spans); headways from the minimum up to twice the longest span (at most the bridge length), the vehicles not limited to adjacent spans; both conservative.'}]:[]),
+        ...(m.stdLane?[{type:'note',text:'• Std. Spec. lane loading: the uniform load is patterned on the parts of the influence line that add (part spans included), slightly more than the Art. 3.11.3 wording of spans loaded uniformly (conservative).'}]:[])]]});
     let c=0;
     const segRows=m.segs.map((s,i)=>{const last=i===m.segs.length-1,len=last?Math.max(0,Lt-c):Math.max(0,Math.min(s.len,Lt-c)),p=props(s,dk),a=c;c+=len;
       return [String(i+1),`${a.toFixed(1)}–${(a+len).toFixed(1)}`,`${s.bt} × ${s.tt}`,`${s.D} × ${s.tw}`,`${s.bb} × ${s.tb}`,{t:p.A.toFixed(1),n:true},{t:p.yb.toFixed(2),n:true},
@@ -2379,6 +2384,7 @@ function mlrModel(){
     secs.push({title:'Vehicle',subs:[{title:vName,items:[svg?{type:'figure',svg,caption:'Vehicle as analyzed (axle 1 is the lead axle)'}:{type:'note',text:''},
       {type:'note',text:vi.textContent.replace(/\s+/g,' ').trim()},
       {type:'table',head:['Axle','Load (kips)','Spacing from previous (ft)','Distance from axle 1 (ft)'],rows:ax},
+      ...(P[m.short]&&P[m.short].rating?[{type:'note',text:'Rating vehicle: '+(m.short==='CT-TLC'?'the preset sets IM 0 (CTDOT BDM 1.3.6)':'the preset sets IM 33 % on the axles'+(m.short==='Legal-Lane'?' and none on the lane load':'')+' (AASHTO LRFD 10th Ed. Art. 3.6.2.1)')+(m.short==='Legal-Lane'?'; the lane-type model applies at any span when chosen, its two-vehicle case with every clear gap from 30 ft up; the lane load is the D6A-4 value, 0.2 klf, also for D6A-5 (shown without a value in the reproduced figure)':'')+'; the rating LLF and DFs are those entered (not set by the preset).'}]:[]),
       {type:'note',text:'Axles that do not contribute: '+(m.neglect?'neglected (AASHTO LRFD 10th Ed. Art. 3.6.1.3.1)':'always included')+' · travel: '+(m.dirs.length>1?'both directions':'one direction')+'. On screen: [[tab:card:cVeh|Vehicle Configuration]].'}]}]});
   }
   /* ---------- 3. Load factors and impact ---------- */
@@ -2390,7 +2396,7 @@ function mlrModel(){
       .concat(m.spans.map((_,k)=>SharedSteps.step({id:'gm'+k,label:`Moment distribution factor, span ${k+1}`,sym:'g_{M}',value:m.dfM[k],unit:'',d:3})))
       .concat(m.spans.map((_,k)=>SharedSteps.step({id:'gv'+k,label:`Shear distribution factor, span ${k+1}`,sym:'g_{V}',value:m.dfV[k],unit:'',d:3})))
       .concat(m.dfNeg>0?[SharedSteps.step({id:'gn',label:'Negative moment distribution factor',sym:'g_{M}^{\\minus}',value:m.dfNeg,unit:'',d:3})]:[])});
-    secs.push({title:'Load factors and impact',subs:[{title:'Factors used',items:[mlrTopics('fac',T),{type:'note',text:'Multiple presence is included in the distribution factors entered (AASHTO LRFD 10th Ed. Art. 3.6.1.1.2), not applied again.'}]}]});
+    secs.push({title:'Load factors and impact',subs:[{title:'Factors used',items:[mlrTopics('fac',T),{type:'note',text:'Multiple presence is included in the distribution factors entered (AASHTO LRFD 10th Ed. Art. 3.6.1.1.2), not applied again.'}].concat(m.imp.method==='std'?[{type:'note',text:'Std. Spec. impact length L (Art. 3.8.2.2), as this tool applies it: positive moment, the span; negative moment, the mean of the two spans adjacent to the nearest interior support; shear, from the section to the far reaction of its own span (+V: right, −V: left); a reaction, the mean of the adjacent spans. The steps above show the span value.'}]:[])}]});
   }
   /* ---------- 4. Governing live load effects ---------- */
   {
@@ -2430,7 +2436,7 @@ function mlrModel(){
         SharedSteps.step({id:'d'+k,label:'Maximum downward deflection (service, LLF not applied)',sym:'\\delta',value:d,unit:'in',d:3,note:'at x = '+c[3]+' ft; '+c[7]}),
         SharedSteps.step({id:'a'+k,label:'Allowable deflection',sym:'\\delta_{allow}',eq:'\\frac{12\\, L}{N}',sub:'\\frac{12\\cdot '+mlrTx(c[1])+'}{'+N+'}',value:al,unit:'in',d:3}),
         SharedSteps.step({id:'r'+k,label:'Deflection ratio',sym:'\\frac{|\\delta|}{\\delta_{allow}}',sub:'\\frac{'+mlrN(Math.abs(d),3)+'}{'+mlrN(al,3)+'}',value:ra,unit:'',d:2,ok:ra<=1+1e-9})]};});
-    items.push(mlrTopics('dfl',T),{type:'note',text:`Load case: ${$('dCase').selectedOptions[0].text}; deflection DF ${num('dDF',1)}; ${$('dIM').checked?'with':'without'} impact; limit L/${N}. Values as on the [[tab:card:dB|Live Load Deflection card]] (3 decimals).`});
+    items.push(mlrTopics('dfl',T),{type:'note',text:`Load case: ${$('dCase').selectedOptions[0].text}; deflection DF ${num('dDF',1)}; ${$('dIM').checked?'with':'without'} impact; limit L/${N}. Values as on the [[tab:card:dB|Live Load Deflection card]] (3 decimals).`},{type:'note',text:'The selected vehicle alone (not the secondary vehicle or the two-vehicle case), every axle included (none neglected); no pedestrian load (AASHTO LRFD 10th Ed. Art. 3.6.1.3.2: vehicular load).'});
     secs.push({title:'Live load deflection',subs:[{title:'Deflection by span',items}]});
   }
   secs.forEach(sc=>sc.subs.forEach(q=>{q.items=q.items.filter(it=>!(it.type==='note'&&!String(it.text||'').trim()));}));   // no empty notes
