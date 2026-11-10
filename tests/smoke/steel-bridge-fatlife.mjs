@@ -4,7 +4,8 @@
 //   2. The button turns it on with the defaults ; the fields and the basis note show.
 //   3. Fatigue & studs output tab, Example demands, Calculate: the "Remaining fatigue life" section, the Category E gusset finite with
 //      Y_REM = 58.1 years, OK; its row opens the worked steps with the remaining-life topic. An entered value (g = 0) changes Y_REM to 86.3.
-//   4. Summary and left column notes name the evaluation; the Report (Build) has the remaining-life subsection.
+//   4. Summary and left column notes name the evaluation; the Report (Build) has the remaining-life subsection, with details that are not
+//      fatigue-prone (MBE 7.2.3, FA8).
 //   5. 390 px: no page-level horizontal scroll on the input and output tabs. 0 console errors.
 //   node tests/smoke/steel-bridge-fatlife.mjs
 import path from 'path';
@@ -28,6 +29,7 @@ try {
   await calc();
   const row = await p.evaluate(() => { const tr = [...document.querySelectorAll('#fa-ev tbody tr')].find(t => /gusset/.test(t.textContent)); return [...tr.cells].map(c => c.textContent.trim()); });
   assert.equal(row[6], 'finite'); assert.equal(row[8], '58.1'); assert.equal(row[9], 'OK');
+  assert.match(await p.evaluate(() => document.getElementById('fa-ev').textContent), /FA8 \(Art\. 7\.2\.3, Eq\. 7\.2\.3-1/);   // the fatigue-prone check (2026-11-10)
   await p.evaluate(() => [...document.querySelectorAll('#fa-ev tbody tr')].find(t => /gusset/.test(t.textContent)).click());
   await p.waitForFunction(() => /Remaining fatigue life \(MBE 4th Ed\. Section 7\)/.test(document.getElementById('out').textContent) && /N_\{?av|Nav|initially available/.test(document.getElementById('out').textContent));
   console.log(`  ok   output tab: Category E gusset ${row.slice(6).join(' / ')}; its steps shown`);
@@ -38,11 +40,13 @@ try {
   // Summary and the left column
   await p.click('#tabBar [data-otab="sum"]');
   await p.waitForFunction(() => /remaining fatigue life \(FA6, MBE 4th Ed\. Section 7/.test(document.getElementById('out').textContent), null, { timeout: 60000 });
-  assert.match(await p.evaluate(() => document.getElementById('sbDashCol').textContent), /remaining fatigue life \(FA6, MBE 4th Ed\. Section 7\)/);
+  assert.match(await p.evaluate(() => document.getElementById('sbDashCol').textContent), /remaining fatigue life \(FA6, MBE 4th Ed\. Section 7; fatigue-prone details only, 7\.2\.3\)/);
   console.log('  ok   Summary and left column notes');
   // Report
   await p.click('#tabBar [data-otab="rpt"]'); await p.waitForSelector('#rp_build'); await p.click('#rp_build');
   await p.waitForFunction(() => /Remaining fatigue life \(FA5, FA6; MBE 4th Ed\. Section 7\)/.test(document.getElementById('out').textContent), null, { timeout: 300000 });
+  // the Report runs this project's analysis: the four bottom-flange transitions over the piers are not fatigue-prone (MBE 7.2.3)
+  assert.match(await p.evaluate(() => document.getElementById('out').textContent), /not fatigue-prone \(7\.2\.3\)/);
   console.log('  ok   Report: remaining-life subsection');
   // 390 px
   await p.setViewportSize({ width: 390, height: 900 });
