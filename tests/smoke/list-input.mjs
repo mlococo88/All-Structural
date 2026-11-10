@@ -143,6 +143,12 @@ const TOOLS = {
   },
   bsl: {   // Bridge Substructure Loading: span lengths and girder spacings (arrays P.br.spans / P.br.bays), committed when the focus leaves
     file: 'Bridge Substructure Loading.html', a: 'f4a6996', values: { spans: '110, 150, 120, 95', bays: '9, 9.5, 10' },
+    // base: re-baselined 2026-11-10 (OPN/ABNF PR) to origin/main 5d8eeba. Differences from BASE 6c3b1bc checked commit by commit
+    // (default and custom case: combine() of every unit, P.br, the numbers of every output tab): results change only at the
+    // three merged §4 PRs #1093 (K_Z = G = 1.0 for Strength V / Service I wind), #1123 (γEQ 0.5 for new projects, skew
+    // correction of bearing LL: P.br.gEQ 0 -> 0.5, skCorr -> 'yes', skKg -> '') and #1127 (E_c per Eq. 5.4.2.4-1, wind Z per
+    // 3.8.1.2.1); the other 14 commits change display text only (reworded Summary / Dead load notes, Report §1.4, labels).
+    base: '5d8eeba',
     expect: '{"spans":[110,150,120,95],"bays":[9,9.5,10]}',
     setup: async p => { await p.waitForTimeout(2500); await p.click('.itab[data-pane="bridge"]'); await p.waitForTimeout(400); },
     typeOld: async (p, v) => { for (const k of ['spans', 'bays']) { await p.evaluate(([k, v]) => { const i = document.getElementById('f_' + k); i.value = v;
@@ -426,7 +432,7 @@ function showDiff(x, y) {
 }
 async function tool(key) {
   const T = TOOLS[key]; console.log(`${key}: ${T.file}`);
-  const A = refDir(args.a || (args.orig ? T.a : BASE), T.file, T.archive), B = path.join(REPO, T.file);
+  const A = refDir(args.a || (args.orig ? T.a : (T.base || BASE)), T.file, T.archive), B = path.join(REPO, T.file);   // T.base: a part re-baselined on its own
   const run = async (file, side, kase) => {
     const { b, p, errs, blocked } = await openPage(file, { vw: 1400, vh: 1000, timeout: T.timeout });
     try {

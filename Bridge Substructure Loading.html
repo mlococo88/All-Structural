@@ -1163,7 +1163,10 @@ document.addEventListener('change', e => {
     setK(t.dataset.list, a); syncSupports(); recompute(); buildSide(); autosave(); }
   else if (t.dataset && t.dataset.v3 != null) { P.ui.v3[t.dataset.v3] = t.checked; v3Layers(); autosave(); }
   else if (t.id === 'v3-focus') { P.ui.v3.focus = t.value; v3Focus(t.value === 'all' ? 'all' : +t.value); autosave(); }
-  else if (t.id === 'file-in' && t.files[0]) { const f = t.files[0]; const rd = new FileReader(); rd.onload = () => { try { const j = JSON.parse(rd.result); openProject(j, f.name); if (window.SLPL && SLPL.pb && j && j.app === APP) SLPL.pb.setCurrent(null); /* STDS: an imported file is not a saved project */ } catch (err) { flash(`${f.name} is not a readable JSON file.`, 'fail'); } t.value = ''; }; rd.readAsText(f); }
+  else if (t.id === 'file-in' && t.files[0]) { const f = t.files[0]; const rd = new FileReader(); rd.onload = () => { let j; try { j = JSON.parse(rd.result); } catch (err) { flash(`${f.name} is not a readable JSON file.`, 'fail'); t.value = ''; return; }
+    try { openProject(j, f.name); if (window.SLPL && SLPL.pb && j && j.app === APP) SLPL.pb.setCurrent(null); /* STDS: an imported file is not a saved project */ }
+    catch (err) { flash(`${f.name} could not be opened (${(err && err.name) || 'Error'}: ${(err && err.message) || err}).`, 'fail'); }   // OPN: a valid JSON file is never called unreadable
+    t.value = ''; }; rd.readAsText(f); }
 });
 document.addEventListener('click', e => {
   const t = e.target.closest('button, [data-k]'); const g = e.target.closest('#strip-host .u');
@@ -1191,7 +1194,8 @@ function migEHEQ(j) { if (j && j.br && j.br.ehEQmode === undefined) j.br.ehEQmod
 function openProject(j, file) {
   if (!j || j.app !== APP) return flash(`${file} is not a SubLoads project.`, 'fail');
   migEHEQ(j); const d = defP(); P = { ...d, ...j, meta: { ...d.meta, ...j.meta }, br: { ...d.br, ...j.br }, rx: { ...d.rx, ...j.rx }, ui: { ...d.ui, ...(j.ui || {}), v3: { ...d.ui.v3, ...((j.ui || {}).v3 || {}) } } };
-  syncSupports(); V3.homed = false; buildTabs(); buildSide(); showTab(P.ui.tab); recompute(); autosave(); flash(`Opened ${file}.`);
+  if (!(P.ui.sel >= 0 && P.ui.sel < P.units.length)) P.ui.sel = 0;
+  syncSupports(); V3.homed = false; buildTabs(); buildSide(); recompute(); showTab(P.ui.tab); autosave(); flash(`Opened ${file}.`);   // OPN (2026-11-10): MODEL rebuilt before the open tab is drawn (it used the old supports)
 }
 function exportDxf() {
   const G = MODEL.G, UG = MODEL.UG; if (!G || G.E.length) return flash('Fix the input errors on the Summary tab first.', 'fail');
@@ -2747,6 +2751,7 @@ function abutExportData() {
   G.sup.forEach((S, k) => {
     const u = P.units[k]; if (u.type !== 'abut') return;
     const R = UG[k], r = unitRes(k); if (r.err) { out.push({ name: u.name, error: r.err }); return; }
+    if (u.ftg.type === 'none') { out.push({ name: u.name, error: 'Foundation "None": there is no footing to export (the abutment calculator designs an abutment on a footing).' }); return; }   // ABNF (2026-11-10): was sent with bottomOfFooting 0 and the hidden footing inputs
     const f = R.front, row = S.rows[0], nb = row.brg.length, UM = r.UM, defs = UM.defs;
     const toToe = Hn => f * Hn;                                          // + toward the span (toward the toe)
     const perGirder = lc => row.brg.map(p => { const h = (lc.rows || [])[0] || { Hn: 0, Ht: 0 }; return { P: r3(lc.V ? lc.V[0][p.j] : 0), Vx: r3(toToe(h.Hn) / nb), Vy: r3(h.Ht / nb) }; });
@@ -2900,9 +2905,13 @@ function heqOf(e, H) { const pts = [[5, nz(e.heq5)], [10, nz(e.heq10)], [20, nz(
 /* forces on one abutment: items {cls, nm, sec: 'top'|'bot'|'both', H (toward span, kip), z (elevation), W (down, kip), o (offset ahead of CL bearing)} */
 function earthAbut(k) {
   const u = fillEarth(P.units[k]), R = MODEL.UG[k], e = u.earth, a = u.abut, UM = unitRes(k).UM, AB = UM.AB, L = R.capLen;
-  const tf = nz(u.ftg.t), zb = R.ftgBot, zt = nz(u.topFtg), soilH = num(e.soilH) > 0 ? num(e.soilH) : R.bwTop - zt, H = tf + soilH, hw = Math.max(0, nz(e.hw)), gam = nz(e.gamma) || 0.120;
-  const K = kaOf(e), ka = K.ka, ci = Math.cos(rad(K.iota)), si = Math.sin(rad(K.iota)), W = nz(u.ftg.W), heelW = Math.max(0, W - nz(a.toe) - nz(a.stemT)), oHeel = (AB.bk + AB.heelEnd) / 2;
-  const it = [], add = o => it.push(o);
+  /* ABNF (2026-11-10): Foundation "None": no footing, so the retained height starts at the base of the stem (t_f = 0, z_b = top of
+     footing El.) and the footing-level items (virtual back plane, heel soil, footing inertia) do not apply; the unit has no
+     bottom-of-footing resultant, so they never entered a combination. Before: t_f = the hidden footing thickness, z_b undefined (NaN). */
+  const noF = u.ftg.type === 'none';
+  const tf = noF ? 0 : nz(u.ftg.t), zb = noF ? nz(u.topFtg) : R.ftgBot, zt = nz(u.topFtg), soilH = num(e.soilH) > 0 ? num(e.soilH) : R.bwTop - zt, H = tf + soilH, hw = Math.max(0, nz(e.hw)), gam = nz(e.gamma) || 0.120;
+  const K = kaOf(e), ka = K.ka, ci = Math.cos(rad(K.iota)), si = Math.sin(rad(K.iota)), W = noF ? 0 : nz(u.ftg.W), heelW = Math.max(0, W - nz(a.toe) - nz(a.stemT)), oHeel = (AB.bk + AB.heelEnd) / 2;
+  const it = [], add = o => { if (!(noF && o.sec === 'bot')) it.push(o); };
   const VP = layerEH(ka, gam, H, hw), ST = layerEH(ka, gam, soilH, hw - tf);
   add({ cls: 'EH', nm: 'Active earth on the virtual back plane, horizontal', sec: 'bot', H: VP.Pa * ci * L, z: zb + VP.z });
   add({ cls: 'EH', nm: 'Active earth on the virtual back plane, vertical', sec: 'bot', W: VP.Pa * si * L, o: AB.heelEnd });
@@ -3007,8 +3016,8 @@ function earthHtml() {
   const tbl = its => `<div class="tscroll"><table class="tbl"><thead><tr><th>Load</th><th>Class</th><th>Section</th><th class="right">Horizontal toward span (kip)</th><th class="right">At El.</th><th class="right">Vertical (kip)</th></tr></thead><tbody>${its.map(i => `<tr><td>${esc(i.nm)}</td><td>${i.cls.replace(/c$/, ' (constr.)')}</td><td>${i.sec === 'top' ? 'stem (top of footing)' : i.sec === 'bot' ? 'footing (bottom)' : 'both'}</td><td class="val">${i.H ? f1(i.H) : ''}</td><td class="val">${i.H ? f2(i.z) : ''}</td><td class="val">${i.W ? f1(i.W) : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="dim">None.</td></tr>'}</tbody></table></div>`;
   let h = `<div class="card"><div class="card-h"><h2>Earth loads: ${esc(u.name)}</h2><span class="sub">${u.type === 'abut' ? 'Active earth pressure, surcharges, soil, and the seismic increment (3.11, 11.6.5)' : 'Soil over the footing (EV)'}</span></div><div class="card-b">${unitChips()}`;
   if (u.type === 'abut') { const e = u.earth, K = E.K;
-    h += `<div class="facts"><div class="fact"><b>${isFinite(K.ka) ? f3(K.ka) : 'n/a'}</b><span>k<sub>a</sub>, ${K.how || ''} (resultant at ${f1(K.iota)}°)</span></div><div class="fact"><b>${f2(E.H)} ft</b><span>Retained height H, bottom of footing to grade</span></div><div class="fact"><b>${f2(E.soilH)} ft</b><span>Soil height on the stem</span></div><div class="fact"><b>${f2(E.heq)} ft</b><span>h<sub>eq</sub> (Table 3.11.6.4.1-1)</span></div><div class="fact"><b>${f2(E.L)} ft</b><span>Stem length along the skew</span></div><div class="fact"><b>${E.hw > 0 ? f2(E.hw) + ' ft' : 'none'}</b><span>Water table above bottom of footing</span></div></div>
-      ${K.err ? `<p style="color:var(--fail);margin-top:8px">${esc(K.err)}</p>` : ''}${E.seis.err ? `<p style="color:var(--warn);margin-top:8px">${esc(E.seis.err)}</p>` : ''}
+    h += `<div class="facts"><div class="fact"><b>${isFinite(K.ka) ? f3(K.ka) : 'n/a'}</b><span>k<sub>a</sub>, ${K.how || ''} (resultant at ${f1(K.iota)}°)</span></div><div class="fact"><b>${f2(E.H)} ft</b><span>Retained height H, ${u.ftg.type === 'none' ? 'base of the stem to grade (no footing)' : 'bottom of footing to grade'}</span></div><div class="fact"><b>${f2(E.soilH)} ft</b><span>Soil height on the stem</span></div><div class="fact"><b>${f2(E.heq)} ft</b><span>h<sub>eq</sub> (Table 3.11.6.4.1-1)</span></div><div class="fact"><b>${f2(E.L)} ft</b><span>Stem length along the skew</span></div><div class="fact"><b>${E.hw > 0 ? f2(E.hw) + ' ft' : 'none'}</b><span>Water table above bottom of footing</span></div></div>
+      ${u.ftg.type === 'none' ? `<p class="note" style="padding:8px 0 0"><b>No footing (Foundation "None"):</b> the earth loads act on the stem and backwall only, from the top-of-footing elevation (the base of the stem, El. ${f2(E.zt)}) to grade. H, h<sub>eq</sub> and the water table are measured from that elevation. The footing-level items (virtual back plane, soil over the heel, footing inertia) do not apply: the unit has no bottom-of-footing resultant. The abutment is not sent to the abutment calculator, which designs an abutment on a footing.</p>` : ''}${K.err ? `<p style="color:var(--fail);margin-top:8px">${esc(K.err)}</p>` : ''}${E.seis.err ? `<p style="color:var(--warn);margin-top:8px">${esc(E.seis.err)}</p>` : ''}
       <div class="note slNL" style="padding:8px 0 0">${slNL('Backfill and earth pressures:', [['Soil:', `γ = ${f3(E.gam)} kcf, φ = ${f1(nz(e.phi))}°, β = ${f1(nz(e.beta))}°${e.method === 'coulomb' ? `, δ = ${f1(nz(e.delta))}°` : ''}.`], ['Active pressure', 'k<sub>a</sub>γ with moist soil above the water table and buoyant below (balanced groundwater, no net hydrostatic thrust).'], ['Stem and footing:', 'the stem is loaded over the soil height on its back; the footing-level resultant uses the virtual back plane through the heel end with the soil over the heel (EV).'], ['Live load surcharge', 'k<sub>a</sub>γh<sub>eq</sub> over the height; its vertical part over the heel counts only where it increases the effect.'], ['Seismic:', `${E.seis.KAE ? `k<sub>h</sub> = ${f2(nz(P.br.khR))} × k<sub>h0</sub> = ${f2(nz(P.br.khR))} × ${f3(eqSite().kh0)} = ${f3(E.seis.kh)} (k<sub>h0</sub>: ${eqLnk('Seismic tab')}), k<sub>v</sub> = ${f2(E.seis.kv)}, θ = ${f2(E.seis.thDeg)}°, K<sub>AE</sub> = ${f3(E.seis.KAE)}, ΔP<sub>AE</sub> = ${f1(E.seis.dPAE)} kip at ${f2(E.seis.hr)}H, plus wall and soil-block inertia (Extreme Event I, static EH with ${eqEHfixed() !== null ? `γ<sub>EH</sub> = ${f2(eqEHfixed())} (agency policy)` : 'γ<sub>EH</sub> = 1.00 (Table 3.4.1-1)'}).` : 'no seismic earth increment (no ground motion, or M-O not applicable).'}`], ['Construction stage:', `fill ${f2(E.hfC)} ft above the footing, dry, no superstructure or approach slab, γ<sub>LS</sub> = ${f2(nz(e.gLLc))}.`], E.asl ? ['Approach slab:', `${f2(E.asl.wd)} ft wide × ${f2(E.asl.Ls)} ft long × ${f1(E.asl.t * 12)} in, ${f0(E.asl.pct * 100)}% of its weight = ${f1(E.asl.Wdc)} kip (DC) on the backwall ledge${E.asl.LL ? `; live load ${f1(E.asl.per)} kip per lane (simple-span end reaction, IM on truck or tandem) × ${E.asl.lanes} lane${E.asl.lanes > 1 ? 's' : ''} × MPF ${f2(E.asl.mpf)} = ${f1(E.asl.LL)} kip (LL)` : ''}.`] : null])}</div>`; }
   else h += `<p style="max-width:80ch">${E.items.length ? `Soil ${f2(E.dS)} ft deep over the footing at γ<sub>s</sub> = ${f3(E.gs)} kcf${E.sub > 0 ? ` (buoyant for the ${f2(E.sub)} ft below the design flood level: γ<sub>eff</sub> = (${f3(E.gs)} × ${f2(E.dS - E.sub)} + (${f3(E.gs)} − ${f3(GAMMA_W)}) × ${f2(E.sub)}) / ${f2(E.dS)} = ${f3(E.gEff)} kcf, EV = ${f1(E.items.reduce((a, i) => a + i.W, 0))} kip; dry, with no water: ${f1(E.items.reduce((a, i) => a + (i.Wdry || 0), 0))} kip. The combinations take the design flood with the buoyant EV or no water with the dry EV, whichever governs each effect)` : ''}, less the column or wall area.` : 'No soil over this footing (ground at or below the top of footing, or no footing).'}</p>`;
   h += tbl(E.items.filter(i => Math.abs(i.H || 0) + Math.abs(i.W || 0) > 0.005)) + '</div></div>';
@@ -3042,10 +3051,11 @@ function earthHtml() {
 /* earth loads in the load diagrams, 3D view, and DXF sheets */
 (function patchEarthDwg() {
   const ls = loadSets; loadSets = function (k) { const sets = ls(k); try { const EL = earthLoads(k); if (EL && !EL.err && EL.E.items.length) { const u = P.units[k], E = EL.E, R = MODEL.UG[k], f = E.f || 1;
-      const pick = u.type === 'abut' ? E.items.filter(i => i.sec !== 'top' && /^(EH|EV|LSh|LSv|ES|ASdc|ASll)$/.test(i.cls)) : E.items;
-      const items = pick.map(i => ({ z: i.H ? i.z : (u.type === 'abut' ? R.ftgBot + nz(u.ftg.t) + (E.soilH || 0) : nz(u.topFtg) + (E.dS || 0) / 2), s: 0, o: i.o || 0, Ht: 0, Hn: i.H ? f * i.H : 0, dn: i.W || 0, lab: i.nm.replace(/ on the virtual back plane| over the heel/g, '').replace(/, (horizontal|vertical)$/, '') })).filter(i => Math.abs(i.Hn) + i.dn > 0.05);
+      const noF = u.type === 'abut' && u.ftg.type === 'none';   // ABNF: no footing: the stem-level loads, at the base of the stem
+      const pick = u.type === 'abut' ? E.items.filter(i => i.sec !== (noF ? 'bot' : 'top') && /^(EH|EV|LSh|LSv|ES|ASdc|ASll)$/.test(i.cls)) : E.items;
+      const items = pick.map(i => ({ z: i.H ? i.z : (u.type === 'abut' ? (noF ? nz(u.topFtg) : R.ftgBot + nz(u.ftg.t)) + (E.soilH || 0) : nz(u.topFtg) + (E.dS || 0) / 2), s: 0, o: i.o || 0, Ht: 0, Hn: i.H ? f * i.H : 0, dn: i.W || 0, lab: i.nm.replace(/ on the virtual back plane| over the heel/g, '').replace(/, (horizontal|vertical)$/, '') })).filter(i => Math.abs(i.Hn) + i.dn > 0.05);
       const vs = items.filter(i => i.dn > 0.05 && Math.abs(i.Hn) < 0.05), span = (R.capLen || 20) * 0.8; vs.forEach((i, j) => { i.s = -span / 2 + (j + 0.5) * span / vs.length; });   // spread the vertical loads along the line so their labels do not overlap
-      if (items.length) sets.push({ id: 'eh', title: u.type === 'abut' ? 'Earth loads at the footing level: EH, EV, LS, ES, approach slab (horizontal toward the span)' : 'Soil over the footing, EV', items }); } } catch (e) { } return sets; };
+      if (items.length) sets.push({ id: 'eh', title: u.type === 'abut' ? (noF ? 'Earth loads on the stem and backwall (no footing): EH, LS, ES, approach slab (horizontal toward the span)' : 'Earth loads at the footing level: EH, EV, LS, ES, approach slab (horizontal toward the span)') : 'Soil over the footing, EV', items }); } } catch (e) { } return sets; };
   const rt = renderTab; renderTab = function () { rt(); if (P.ui.tab === 'earth') { const el = document.getElementById('tab-earth'); if (el && typeof diagramCard === 'function' && !/Fix the/.test(el.textContent.slice(0, 200))) { try { el.insertAdjacentHTML('beforeend', diagramCard(P.ui.sel, ['eh'])); } catch (e) { } } } };
 })();
 /* =====================================================================
@@ -4885,7 +4895,7 @@ const IC = (function () {
     set: t => { const j = JSON.parse(t), ui = P.ui, d = defP(); migEHEQ(j);
       P = { ...d, ...j, meta: { ...d.meta, ...j.meta }, br: { ...d.br, ...j.br }, rx: { ...d.rx, ...j.rx }, ui };
       if (!(P.ui.sel >= 0 && P.ui.sel < P.units.length)) P.ui.sel = 0;
-      syncSupports(); buildTabs(); buildSide(); showTab(P.ui.tab); recompute(); autosave(); } });
+      syncSupports(); buildTabs(); buildSide(); recompute(); showTab(P.ui.tab); autosave(); } });   // OPN: MODEL first
   let ST = null; try { ST = window.localStorage; } catch (e) { /* none */ }
   const store = SharedProjects.mapStore(ST, LIB);
   /* STDS (2026-11-05): the standard save (shared/projects-ui.js projectBar) over subloads_projects_v1 ({ name: P }, unchanged). Replaces
@@ -4903,7 +4913,7 @@ const IC = (function () {
   const pb = SharedProjectsUI.projectBar({ store, storage: ST, label: 'Bridge Substructure Loading', omit: ['ui'],
     getState: () => P, snapshot: () => snap(P), snapOf: n => { const j = store.get(n); return j && j.app === APP ? snap(merged(j)) : null; },
     open: n => { const j = store.get(n); if (!j) return false; openProject(JSON.parse(JSON.stringify(j)), n); return true; },
-    newProject: () => { const v = P.ui; P = defP(); P.ui.itab = v.itab; P.ui.tab = v.tab; syncSupports(); V3.homed = false; buildTabs(); buildSide(); showTab(P.ui.tab || 'summary'); recompute(); autosave(); },   // the default project; the open tabs are kept
+    newProject: () => { const v = P.ui; P = defP(); P.ui.itab = v.itab; P.ui.tab = v.tab; syncSupports(); V3.homed = false; buildTabs(); buildSide(); recompute(); showTab(P.ui.tab || 'summary'); autosave(); },   // the default project; the open tabs are kept (OPN: MODEL first)
     displayName: () => P.meta && P.meta.name || '',
     exportFile: n => download(`${n ? String(n).replace(/[^\w-]+/g, '_') : fname()}.subloads.json`, JSON.stringify(P, null, 1), 'application/json'),
     importFile: () => $('#file-in').click(),
