@@ -52,7 +52,7 @@
   const rhOf = (s, q, mat) => SEC().hybrid(plates(q), s, { Fyt: mat.Fyt, Fyb: mat.Fyb, Fyw: mat.Fyw }, 'cn').Rh;   // GirderDetail rhFactor on the steel section
   /* the M_DCc rule of GirderDetail: used when it is a number other than 0 (blank, 0 or missing: M_DC1) */
   const useDCc = v => v !== '' && v != null && isFinite(+v) && +v !== 0;
-  const SIDE0 = 0.01;   // SBTS: a side of the pour envelope smaller than 0.01 kip-ft is taken as zero (round-off; no opposite-sign case)
+  const SIDE0 = 0.01;   // SBTS: an opposite-sign side of the pour envelope smaller than 0.01 kip-ft is taken as none (round-off; no second case)
 
   /* gsGovC(o, r, kind, X): GirderDetail gsGov, kinds 'Ct' / 'Cb' (deck placement, top / bottom flange): f_bu, D_c and R_h of the
      governing section of a nonprismatic deck-placement unbraced length (o = nprC.G: x, plates, MDC1, MCL, MDCc there). */
@@ -212,7 +212,7 @@
     // M_DCc where location() uses it (useDCc), so that the flange in compression, C_b (Eq. 6.10.8.2.3b-1) and the γ_e of a nonprismatic L_b
     // (K = f_max/f_x) come from the moments the check uses; was M_DC1 always (GirderDetail keeps M_DC1: a deliberate difference)
     // SBTS (engineer decision 2026-11-10, item 3; AASHTO LRFD 10th Ed. 6.10.8.2.3b, 6.10.8.2.3c and C6.10.8.2.3c): opt.side = +1 / −1 takes
-    // the positive-side / negative-side envelope of the pour stages (env.MDCp = max(M_DC1, envP), env.MDCn = min(M_DC1, envN) at every
+    // the positive-side / negative-side envelope of the pour stages (env.MDCp = max(M_DC1, envPr), env.MDCn = min(M_DC1, envNr) at every
     // station; fromAnalysis), one consistent moment diagram of one sign case over the unbraced length, for the check of that sign. Was the
     // station-by-station M_DCc, which takes the positive side at one station and the negative side at the next (not one load case).
     const sd = !env.Mc && (opt.side === 1 || opt.side === -1) && env.MDCp && env.MDCn ? opt.side : 0, MS = sd > 0 ? env.MDCp : sd < 0 ? env.MDCn : null;
@@ -260,7 +260,7 @@
     return [
       ...(two ? [
         'Both signs of the deck-placement moment (engineer decision 2026-11-10): at every location the largest positive and the largest negative noncomposite moment of the deck placement sequence are both checked (6.10.3.4.1: the girder is checked for the moments of the pour sequence; each extreme is taken over M_DC1 with the deck cast at once and every pour stage). Each case is M_c = γ_DC M_DCc + γ_CL M_CL with the construction live load as given at the location, and each has its own flange in compression, f_bu, amplified f_ℓ (6.10.1.6) and F_nc in GS14 and GS15 (6.10.3.2). The case with the larger ratio governs and is the one reported; both count for the span results. A location where the pour stages give one sign only (the other side smaller than 0.01 kip-ft) has one case. Where M_CL outweighs a small pour moment a case\'s M_c can take the other sign; its flange in compression then follows M_c.',
-        'Basis of C_b and γ_e (engineer decision 2026-11-10): each sign case takes C_b (Eq. 6.10.8.2.3b-1) and, for a nonprismatic unbraced length, the conservative γ_e bound from its own moment diagram over the whole unbraced length: the positive-side envelope (at every station the larger of M_DC1 and the largest pour-stage moment, not less than 0) for the positive case, the negative-side envelope for the negative case, factored as the check (γ_DC M_DCc + γ_CL M_CL). Each diagram belongs to one sign case at every station, so the moment gradient in C_b and the stresses that γ_e scales come from the moments that case checks (6.10.8.2.3 and C6.10.8.2.3: C_b reflects the moment gradient of the unbraced length; 6.10.8.2.3c and C6.10.8.2.3c: γ_e scales the design stresses at the governing section of the moments checked; App. D6.6). Formerly the station-by-station M_DCc envelope was used, which takes the positive side at one station and the negative side at the next near an inflection point of M_DC1 and so is not one load case. The diagram of a single pour stage was not used: no single stage gives the largest moment of either sign everywhere in the unbraced length.']
+        'Basis of C_b and γ_e (engineer decision 2026-11-10): each sign case takes C_b (Eq. 6.10.8.2.3b-1) and, for a nonprismatic unbraced length, the conservative γ_e bound from its own moment diagram over the whole unbraced length: the positive-side envelope (at every station the larger of M_DC1 and the largest pour-stage moment) for the positive case, the negative-side envelope (the smaller of M_DC1 and the most negative pour-stage moment) for the negative case, factored as the check (γ_DC M_DCc + γ_CL M_CL). Each diagram belongs to one sign case at every station, so the moment gradient in C_b and the stresses that γ_e scales come from the moments that case checks (6.10.8.2.3b: M_max, M_A, M_B and M_C are taken from the envelope values that give the largest compression in the flange considered, or the least tension where it is never in compression, which is what each side envelope gives for its flange; C6.10.8.2.3b: C_b accounts for the moment gradient between brace points; 6.10.8.2.3c and C6.10.8.2.3c: γ_e scales the design stresses at the governing section of the moments checked; App. D6.6). Formerly the station-by-station M_DCc envelope was used, which takes the positive side at one station and the negative side at the next near an inflection point of M_DC1 and so is not one load case. The diagram of a single pour stage was not used: no single stage gives the largest moment of either sign everywhere in the unbraced length.']
         : [`C_b and γ_e: taken from the same factored moments this check uses, M_c = γ_DC ${M} + γ_CL M_CL, over the unbraced length. The flange in compression, C_b (Eq. 6.10.8.2.3b-1), and for a nonprismatic unbraced length the ratio K = f_max/f_x and the stress f_s of the conservative γ_e bound all come from that one moment diagram, so γ_e scales the design stresses at the governing section of the moments checked (AASHTO LRFD 10th Ed. 6.10.8.2.3c and C6.10.8.2.3c; App. D6.6).`]),
       'γ_e of a nonprismatic unbraced length, where App. D6.6.2 Method A does not apply: the conservative bound, the smallest over the sections of the unbraced length of F_e,j/f_max,j, each section taken as prismatic over the whole unbraced length at its largest compression stress f_max,j from the moments this check uses (6.10.8.2.3c, C6.10.8.2.3c: γ_e is one factor for the whole unbraced length that scales the stresses at the governing section; App. D6.6). It is computed once for the unbraced length and passed to every location in it, so a location where the flange stress is zero, near zero or of the other sign (f_x ≤ 0) does not change it. Only where no γ_e is available and K = f_max/f_x cannot be used is f_max taken as the largest stress known in the unbraced length (conservative; formerly K = 1 there, which was unconservative).',
       ...(seq && !sides ? ['One M_DCc value per station (a hand-off file or entered rows): only the envelope value of each station is given, not both sides of the pour envelope, so each location is checked for the sign of that value, and C_b and γ_e come from that M_DCc over the unbraced length. Near an inflection point of M_DC1 a smaller pour moment of the opposite sign is not in the data and is not checked; with this project\'s analysis as the source both signs are checked (6.10.3.4.1).'] : []),
@@ -463,11 +463,13 @@
     const list = stationList(xs, sup, chg, Lend);
     const st = AR.st, MDCc = AR.seq ? AR.seq.MDCc : null;
     // SBTS (engineer decision 2026-11-10, items 1 and 3; AASHTO LRFD 10th Ed. 6.10.3.4.1, 6.10.3.2): the two sides of the pour envelope at
-    // every station, MDCp = max(M_DC1, envP) ≥ 0 and MDCn = min(M_DC1, envN) ≤ 0 (seq.MDCc is MDCp where M_DC1 ≥ 0, else MDCn). Only with
-    // this project's analysis (seq.envP / envN); a hand-off file or entered rows give one M_DCc per station (one case, as before).
-    const sides = !!(MDCc && AR.seq.envP && AR.seq.envN && AR.seq.envP.length === xs.length && AR.seq.envN.length === xs.length);
+    // every station, MDCp = max(M_DC1, envPr) and MDCn = min(M_DC1, envNr), the pour-stage envelopes before their clip at 0 (seq.MDCc is MDCp
+    // where M_DC1 ≥ 0, else MDCn: identical values there). MDCp is the moment with the largest compression in the top flange at the station,
+    // or the smallest tension where it is never in compression (6.10.8.2.3b, M_A, M_B, M_C, M_max); MDCn likewise for the bottom flange. Only
+    // with this project's analysis (seq.envPr / envNr); a hand-off file or entered rows give one M_DCc per station (one case, as before).
+    const Q = AR.seq || {}, okA = A => Array.isArray(A) && A.length === xs.length, sides = !!(MDCc && okA(Q.envPr) && okA(Q.envNr));
     const env = { xs, MDC1: st.DC1.M, MCL: st.CL.M, ...(MDCc ? { MDCc } : {}),
-      ...(sides ? { MDCp: xs.map((_, i) => Math.max(st.DC1.M[i], AR.seq.envP[i])), MDCn: xs.map((_, i) => Math.min(st.DC1.M[i], AR.seq.envN[i])) } : {}) };
+      ...(sides ? { MDCp: xs.map((_, i) => Math.max(st.DC1.M[i], Q.envPr[i])), MDCn: xs.map((_, i) => Math.min(st.DC1.M[i], Q.envNr[i])) } : {}) };
     const ly = (P.stiffeners || {}).layout || {}, fr = ly.frames || {}, SB = window.SBDStiffeners;
     const ints = Array.isArray(fr.at) ? fr.at.map(Number) : SB ? SB.framesDefault(sup, +fr.Lb || 25) : [];
     const braces = opt && opt.braces ? opt.braces : [...sup, ...ints];   // opt.braces: the project's framing (engine/framing.js forGirder; SB2-O9)
@@ -479,11 +481,11 @@
       return d < -1e-9 ? Math.abs(S.VL[i]) : d > 1e-9 ? Math.abs(S.VR[i]) : Math.max(Math.abs(S.VL[i]), Math.abs(S.VR[i])); };
     const at = A => x => FX().feAt(xs, A, x), Lb = +fr.Lb || 25;
     // SBTS: at each location the sign case of M_DC1 there (sd; its side value as M_DCc, the value seq.MDCc gives at a station) and, where the
-    // other side is not zero (|M| > SIDE0 kip-ft, round-off), the opposite-sign case (alt) with its own bracingC data from that side's diagram
+    // other side is of the opposite sign (beyond SIDE0 kip-ft, round-off), the opposite-sign case (alt) with its own bracingC data from that side's diagram
     const brOf = (x, side) => bracingC(x, env, { braces, L: Lend, secAt: zAt, D: zAt(x).D, sp: Lb, G: prj.G, ...(side ? { side } : {}) });
     const brF = br => ({ LbC: br.LbC, CbC: br.CbC, nprC: br.nprC, seg: br.seg, cbParts: br.cbParts, kParts: br.kParts, mSrc: br.mSrc });
     const locs = list.map(x => { const pn = panelAt(x), MD = at(env.MDC1)(x), sd = sides ? (MD >= 0 ? 1 : -1) : 0, br = brOf(x, sd);
-      const vP = sides ? at(env.MDCp)(x) : 0, vN = sides ? at(env.MDCn)(x) : 0, vA = sd > 0 ? vN : vP, alt = sd && Math.abs(vA) > SIDE0 ? { side: -sd, DCc: vA, ...brF(brOf(x, -sd)) } : null;
+      const vP = sides ? at(env.MDCp)(x) : 0, vN = sides ? at(env.MDCn)(x) : 0, vA = sd > 0 ? vN : vP, alt = sd && sd * vA < -SIDE0 ? { side: -sd, DCc: vA, ...brF(brOf(x, -sd)) } : null;
       return { name: `x = ${x.toFixed(2)} ft`, x, plates: zAt(x), M: { DC1: MD, DCc: sd ? (sd > 0 ? vP : vN) : MDCc ? at(MDCc)(x) : 0, CL: at(env.MCL)(x) }, V: { DC1: vAt(st.DC1, x), CL: vAt(st.CL, x) },
         Cb: 1, ...brF(br), ...(sd ? { side: sd } : {}), ...(alt ? { alt } : {}), flC: opt.flC || 0, do: pn ? pn.d : 0, end: pn ? pn.end : false }; });
     const ext = g.position === 'exterior';

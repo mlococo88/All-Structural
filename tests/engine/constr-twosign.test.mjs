@@ -1,6 +1,6 @@
 // SBTS (engineer decision 2026-11-10, items 1 and 3; AASHTO LRFD 10th Ed. 6.10.3.4.1, 6.10.3.2, 6.10.1.6, 6.10.8.2.3, 6.10.8.2.3c and
 // C6.10.8.2.3c): with this project's pour sequence, Constructibility checks at every location both the largest positive and the largest
-// negative noncomposite moment of the pour envelope (MDCp = max(M_DC1, envP), MDCn = min(M_DC1, envN)), each with its own flange in
+// negative noncomposite moment of the pour envelope (MDCp = max(M_DC1, envPr), MDCn = min(M_DC1, envNr), the stage envelopes before their clip at 0), each with its own flange in
 // compression, f_bu, f_ℓ amplification and F_nc, and with C_b / γ_e from its own side of the envelope over the unbraced length. The governing
 // case is reported. Regression: the station-by-station M_DCc took one side by the sign of M_DC1, so near an inflection the opposite-sign pour
 // moment was never checked (skewed 100-130-100 G2 x = 71 ft: only M_c = −73.81 kip-ft was checked, the +499.86 kip-ft of the pour stages not).
@@ -43,7 +43,7 @@ test('two-sign check at skewed G2 x = 71 ft: the positive pour moment is checked
 
 test('C_b and γ_e per sign case from that side of the envelope (bracingC side), and one case without a pour sequence (SBTS)', () => {
   const R = run(), env = R.F.env; assert.ok(env.MDCp && env.MDCn);
-  env.xs.forEach((x, i) => { assert.ok(env.MDCp[i] >= 0 && env.MDCn[i] <= 0); assert.equal(R.F.env.MDC1[i] >= 0 ? env.MDCp[i] : env.MDCn[i], env.MDCc[i], `seq.MDCc is the side of M_DC1 at ${x}`); });
+  env.xs.forEach((x, i) => { assert.ok(env.MDCp[i] >= env.MDCn[i]); assert.equal(R.F.env.MDC1[i] >= 0 ? env.MDCp[i] : env.MDCn[i], env.MDCc[i], `seq.MDCc is the side of M_DC1 at ${x}`); });
   const L = R.F.locs.find(q => Math.abs(q.x - 71) < 0.006); assert.equal(L.side, -1); assert.equal(L.alt.side, 1);
   const bp = W.SBDConstr.bracingC(71, env, { braces: R.F.braces, L: R.F.AR.Lt, secAt: x => R.F.locs.reduce((b, q) => Math.abs(q.x - x) < Math.abs(b.x - x) ? q : b).plates, D: 60, sp: 25, G: R.F.prj.G, side: 1 });
   assert.equal(bp.side, 1); assert.equal(bp.mSrc, 'DCc');

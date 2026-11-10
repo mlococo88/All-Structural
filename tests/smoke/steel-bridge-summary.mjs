@@ -90,11 +90,10 @@ async function cellsMatch(p) {
     const s0 = Date.now(); await upToDate(p); const runS = (Date.now() - s0) / 1000;
     const r = await cellsMatch(p); assert.equal(r.n, 2);
     // SBCON (2026-11-10): Constructibility finite on both girders (was ∞, shown "NaN": F_nc 0.91 ksi at G1 x = 130.00, 0.16 ksi at G2 x = 70.00);
-    // both then governed on GS15 tension at x = 100.01 ft (engine values 0.5129, 0.6392). SBTS (2026-11-10): both signs of the pour envelope
-    // are checked; G2 now governs at x = 130.00 ft on the positive-moment case (GS14 buckling 0.6817: M_c = −0.70 kip-ft, f_ℓ 12.50 ksi,
-    // C_b = 0.143 from Eq. 6.10.8.2.3b-1 as computed, F_nc 6.12 ksi); G1 unchanged
+    // both govern on GS15 tension at x = 100.01 ft (engine values 0.5129, 0.6392); SBTS (2026-11-10, both signs of the pour envelope checked):
+    // unchanged on this project
     const cn = await p.evaluate(() => window.SBDSummaryUI.state().list.map(G => G.cells.cn.r));
-    assert.ok(cn.every(v => isFinite(v)), `Constructibility finite: ${cn}`); assert.deepEqual(cn.map(v => +v.toFixed(3)), [0.513, 0.682], `Constructibility G1, G2: ${cn}`);
+    assert.ok(cn.every(v => isFinite(v)), `Constructibility finite: ${cn}`); assert.deepEqual(cn.map(v => +v.toFixed(3)), [0.513, 0.639], `Constructibility G1, G2: ${cn}`);
     await shot(p, 'sum-skewed-1440');
     await p.click('#sum-table a[data-sumgo="1|shear"]');
     await p.waitForFunction(() => document.querySelector('#tabBar [aria-selected="true"]').dataset.otab === 'shear' && document.querySelector('#out .sum-flash'), null, { timeout: 60000 });
