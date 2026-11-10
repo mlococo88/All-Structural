@@ -46,6 +46,7 @@
         ${h.sel('fatigue.catT', 'Top flange category (GS17)', CATS.map(c => [c, ct(c)]))}${h.sel('fatigue.catB', 'Bottom flange category (GS17)', CATS.map(c => [c, ct(c)]))}
         ${h.sel('fatigue.negSec', 'Negative-moment section at the details', [['cracked', 'Steel + reinforcement (conservative)'], ['uncracked', 'Short-term composite (deck effective)']])}
         <p class="note">ADTT<sub>SL</sub> = p × ADTT (3.6.1.4.2). These settings apply to the whole bridge: the details (FA1), the flange stress range (GS17) and the studs (SC1) use Fatigue I or II as decided here, as GirderDetail's Fatigue module does.</p>`)
+      + evCard(P, h)
       + h.card('Distortion-induced fatigue (6.6.1.3)', `${h.sel('fatigue.dist.cp', 'Connection plates attached to both flanges', [['yes', 'Yes'], ['no', 'No'], ['na', 'No connection plates']])}${h.sel('fatigue.dist.skew', 'Skewed or oblique welded attachments', [['no', 'No'], ['yes', 'Yes']])}
         ${h.sel('fatigue.dist.lat', 'Lateral bracing', [['no', 'None'], ['yes', 'Yes']])}${h.sel('fatigue.dist.latLoc', 'Lateral connection plates on', [['flange', 'Flange'], ['web', 'Web']])}
         ${h.sel('fatigue.dist.latStiff', 'Web stiffened at the plate', [['yes', 'Yes'], ['no', 'No']])}${h.num('fatigue.dist.latDist', 'Vertical distance from flange', 'in')}${h.num('fatigue.dist.latBf', 'Flange width at the plate', 'in')}`)
@@ -61,8 +62,29 @@
         <button type="button" id="fz_add">Add zone</button>${Z.length ? ' <button type="button" id="fz_clear">Clear (use the file\'s zones)</button>' : ''}
         <p class="note">Stations from the left end of the girder. The plates of each zone are taken at its middle; V<sub>f</sub> from the demands (see the output tab).</p>`);
   }
+  /* evCard(P, h) (2026-11-10): the remaining fatigue life of an existing bridge, MBE 4th Ed. (2026) Section 7 (engine/fatigue.js evalRow).
+     P.fatigue.ev is optional: absent (every project saved before) or on = 'no', no evaluation, as before; "Evaluate" creates it with the
+     defaults of SBDFatigue.EV_DEF. Blank optional fields take the defaults stated beside them. */
+  function evCard(P, h) {
+    const V = P.fatigue.ev, FA = window.SBDFatigue;
+    if (!V || V.on !== 'yes') return h.card('Remaining fatigue life (MBE 4th Ed. Section 7)', `<p class="note">Not evaluated${V ? ' (turned off; the values entered are kept)' : ''}. For an existing bridge: the infinite-life check (FA5) and the remaining fatigue life (FA6) of every fatigue detail, by the AASHTO MBE 4th Ed. (2026) Section 7 method.</p>
+      <button type="button" id="fev_on">Evaluate remaining fatigue life</button>`);
+    return h.card('Remaining fatigue life (MBE 4th Ed. Section 7)', `${h.num('fatigue.ev.yearOpen', 'Year opened to traffic', '')}${h.num('fatigue.ev.yearEval', 'Year of evaluation', '')}
+      ${h.num('fatigue.ev.ADTT', 'Present ADTT<sub>SL</sub>, single lane', 'trucks/day')}${h.num('fatigue.ev.ADTT0', 'First-year ADTT<sub>SL</sub> (blank: present/(1+g)<sup>a</sup>)', 'trucks/day', { text: true })}
+      ${h.num('fatigue.ev.g', 'Expected annual growth g', '%/yr')}${h.num('fatigue.ev.ADTTlim', 'ADTT<sub>SL</sub> limit (blank: not checked)', 'trucks/day', { text: true })}
+      ${h.num('fatigue.ev.ADTTall', '[ADTT]<sub>PRESENT</sub>, all directions and lanes, for R<sub>p</sub> (blank: present ADTT<sub>SL</sub>/p)', 'trucks/day', { text: true })}${h.num('fatigue.ev.nL', 'Striped lanes n<sub>L</sub> (R<sub>p</sub>)', '')}
+      ${h.num('fatigue.ev.Rp', 'R<sub>p</sub> entered (blank: Eq. 7.2.2.1-1)', '', { text: true })}
+      ${h.sel('fatigue.ev.wim', 'Truck weight', [['no', 'LRFD fatigue truck (3.6.1.4): (Δf)max = Rp × Fatigue I range'], ['yes', 'Weigh-in-motion study: (Δf)max = 2.2(Δf)eff with Rs = 1.0']])}
+      ${h.num('fatigue.ev.Rs', 'R<sub>s</sub> = R<sub>sa</sub>R<sub>st</sub> (Table 7.2.2.1-1)', '')}
+      ${h.sel('fatigue.ev.level', 'Fatigue life level', [['min', 'Minimum'], ['E1', 'Evaluation 1'], ['E2', 'Evaluation 2'], ['mean', 'Mean']])}${h.num('fatigue.ev.target', 'Required remaining life', 'years')}
+      ${h.num('fatigue.ev.rrE1', 'R<sub>R</sub> Evaluation 1 (blank: Table 7.2.5.1-1)', '', { text: true })}${h.num('fatigue.ev.rrE2', 'R<sub>R</sub> Evaluation 2 (blank: Table 7.2.5.1-1)', '', { text: true })}${h.num('fatigue.ev.rrMean', 'R<sub>R</sub> mean (blank: Table 7.2.5.1-1)', '', { text: true })}
+      <p class="note">${esc(FA.EV_BASIS)} Defaults: a blank first-year ADTT<sub>SL</sub> is the present value grown back at g over the present age (the past growth equal to g, as the earlier method assumed); a blank [ADTT]<sub>PRESENT</sub> is the present ADTT<sub>SL</sub>/p (one direction: enter the two-direction total for a two-way bridge); L of R<sub>p</sub> is the span holding each detail; R<sub>s</sub> 1.0 is simplified analysis with the LRFD fatigue truck (0.95 refined analysis or WIM, 0.90 both). Δf is the unfactored fatigue-truck range of each detail (the Fatigue details table); γ<sub>I</sub>, γ<sub>II</sub> are the Traffic card's. R<sub>R</sub>: eight values A, B, B′, C, C′, D, E, E′.</p>
+      <button type="button" id="fev_off">Turn off the evaluation</button>`);
+  }
   function onClick(e, P) {
     ensure(P); const Z = P.studs.zones, t = e.target;
+    if (t.id === 'fev_on') { const FA = window.SBDFatigue; P.fatigue.ev = P.fatigue.ev ? { ...P.fatigue.ev, on: 'yes' } : { ...JSON.parse(JSON.stringify(FA.EV_DEF)), on: 'yes' }; return true; }
+    if (t.id === 'fev_off') { if (P.fatigue.ev) P.fatigue.ev.on = 'no'; return true; }
     if (t.id === 'fz_add') { const L = (P.spans.lengths || []).reduce((a, b) => a + (+b || 0), 0), x1 = Z.length ? Z[Z.length - 1].x2 : 0; Z.push({ x1, x2: Math.min(L || x1 + 10, x1 + 10), nr: 3, p: 12 }); return true; }
     if (t.id === 'fz_clear') { P.studs.zones = []; return true; }
     const d = t.closest && t.closest('[data-fzdel]'); if (d) { Z.splice(+d.dataset.fzdel, 1); return true; }
@@ -156,7 +178,7 @@
     const plSpl = pl ? (((pg.details || {}).studs || {}).results || {}).gaps || [] : [];
     const rows = pl ? FA.detailsFromPayload(pl, { frames, stiffened: !P.stiffeners || P.stiffeners.layout.web !== 'unstiffened', splices: splX.length ? splX : plSpl.map(q => q.x) }) : JSON.parse(JSON.stringify(FA.DEFAULT.rows));
     if (CU && Array.isArray(rows)) { const x0 = Math.min(...CU.xs), x1 = Math.max(...CU.xs); rows.splice(0, rows.length, ...rows.filter(r => +r.x >= x0 - 1e-6 && +r.x <= x1 + 1e-6)); }
-    const faIn = { limit: F.limit, gam: { ...F.gam }, ADTT: F.ADTT, p: F.p, life: F.life, gW: m.steel.web, negSec: F.negSec, dist: { ...F.dist }, ev: { on: 'no' },
+    const faIn = { limit: F.limit, gam: { ...F.gam }, ADTT: F.ADTT, p: F.p, life: F.life, gW: m.steel.web, negSec: F.negSec, dist: { ...F.dist }, ev: F.ev && F.ev.on === 'yes' ? { ...F.ev, spans } : { on: 'no' },   // MBE 4th Ed. evaluation (2026-11-10): P.fatigue.ev, optional; spans for R_p's L
       ts: pl ? dk.ts : P.deck.ts, hh: pl ? dk.haunch : P.deck.haunch, beff: pl ? dk.beff : G.beff, fc: pl ? +pm.fc : m.concrete.fc, wc: pl ? +pm.wc || 0.15 : m.concrete.wc, K1: pl ? 1 : m.concrete.K1, nRule: pl ? 'exact' : m.concrete.nRule,
       Ar: pl ? +dk.Ar || 0 : (P.deck.rebar.top.A || 0) + (P.deck.rebar.bot.A || 0), dr: pl ? dk.ts / 2 : P.deck.ts / 2, rows };
     const FR = FA.compute(faIn, { owner: own.owner, lf, dia: !!(window.SBDCrossframes && P.crossframes && window.SBDCrossframes.cfDiaOn(P.crossframes)) }), FC = FR.errors.length ? null : FA.checks(FR);
@@ -260,6 +282,7 @@
     { key: 'fres', title: 'Nominal fatigue resistance', ref: A + '6.6.1.2.5', ids: /^fa\d+\.res$/ },
     { key: 'fnet', title: 'Net-tension rule', ref: A + '6.6.1.2.1', ids: /^fa\d+\.net$/ },
     { key: 'fok', title: 'Check, load-induced fatigue', ref: A + '6.6.1.2.2', ids: /^fa\d+\.ok/ },
+    { key: 'fev', title: 'Remaining fatigue life (MBE 4th Ed. Section 7)', ref: 'AASHTO MBE 4th Ed. (2026) Arts. 7.2.2 to 7.2.5', ids: /^fa\d+\.(Rp|dfII|dfe|dfmax|inf|RR|Nav|T0|N1|Nck|Yrem0|fut|Ylim|life)$/, res: /\.life$/ },
     { key: 'gT', title: 'GS17: top flange stress range', ref: A + '6.10.5.1, 6.6.1.2', ids: /^gs\d+\.(n|T\.)/ },
     { key: 'gB', title: 'GS17: bottom flange stress range', ref: A + '6.10.5.1, 6.6.1.2', ids: /^gs\d+\.B\./ },
     { key: 'sgeo', title: 'Stud dimensions, cover and penetration', ref: A + '6.10.10.1.4', ids: /^sc\.(Asc|hd|cov|pen)$/ },
@@ -296,6 +319,14 @@
         <div class="tscroll fx-list"><table class="tbl"><thead><tr><th class="lft">Detail</th><th>Cat.</th><th>n</th><th>Limit state</th><th>γ(Δf) (ksi)</th><th>(ΔF)<sub>n</sub> (ksi)</th><th>FA1</th><th>FA3</th></tr></thead><tbody>
         ${R.FR.rows.map((r, i) => { const a = ck('FA1').items[i], v = ck('FA3').items.find(it => it.step === `fa${r.i}.okV`); return `<tr data-fa="fa:${i}" class="${S.sel && S.sel.k === 'fa' && S.sel.i === i ? 'sel' : ''}"><td class="lft">${esc(r.name)}${r.exempt ? ' (exempt)' : ''}</td><td>${ct(r.cat)}</td><td>${r.nn}</td><td>Fatigue ${r.lim}</td><td>${fmt(r.dem, 2)}</td><td>${fmt(r.res, 2)}</td><td class="${r.exempt ? 'fx-ok' : cls(a.r)}">${r.exempt ? 'exempt' : fmt(a.r, 3)}</td>${v ? `<td class="${cls(v.r)}">${fmt(v.r, 3)}</td>` : '<td class="fx-na">n/a</td>'}</tr>`; }).join('')}
         </tbody></table></div><p class="note">${C.filter(c => !['FA1', 'FA2', 'FA3'].includes(c.id)).map(c => `${esc(c.id)} ${window.SBDSub.html(c.title)}: ${c.items.length ? c.items.map(it => `${window.SBDSub.html(it.loc)} — ${{ pass: 'OK', fail: 'fails', warn: 'warning', na: 'n/a' }[it.st]}`).join('; ') : esc(c.naWhy)}`).join('. ')}.</p></div></section>`; }
+    // remaining fatigue life (MBE 4th Ed. Section 7; 2026-11-10)
+    if (!R.FR.errors.length && R.FR.ev.on) { const V = R.FR.ev, C = R.FC, ck = id => C.find(c => c.id === id) || { items: [] }, LN = { min: 'minimum', E1: 'Evaluation 1', E2: 'Evaluation 2', mean: 'mean' }[V.level];
+      h += `<section class="sec" id="fa-ev"><div class="secHead">Remaining fatigue life (FA5, FA6; MBE 4th Ed. Section 7)</div><div class="secBody"><p class="note">${esc(window.SBDFatigue.EV_BASIS)}</p>
+        <p class="note">Present age a = ${fmt(V.yearEval - V.yearOpen, 0)} years; present ADTT<sub>SL</sub> ${fmt(V.ADTT, 0)}${V.ADTT0 != null ? `, first year ${fmt(V.ADTT0, 0)}` : ' (first year: present/(1+g)<sup>a</sup>)'}; g = ${fmt(V.g, 2)} %/yr${V.ADTTlim != null ? `; ADTT<sub>SL</sub> limit ${fmt(V.ADTTlim, 0)}` : ''}; R<sub>s</sub> = ${fmt(V.Rs, 2)}; ${V.wim ? 'weigh-in-motion truck weights' : 'LRFD fatigue truck'}; ${LN} life; required ${fmt(V.target, 0)} years. Inputs: the Fatigue &amp; studs input tab.</p>
+        <div class="tscroll fx-list"><table class="tbl"><thead><tr><th class="lft">Detail</th><th>Cat.</th><th>R<sub>p</sub></th><th>(Δf)<sub>eff</sub> (ksi)</th><th>(Δf)<sub>max</sub> (ksi)</th><th>(ΔF)<sub>TH</sub> (ksi)</th><th>FA5</th><th>R<sub>R</sub></th><th>Y<sub>REM</sub> (years)</th><th>FA6</th></tr></thead><tbody>
+        ${R.FR.rows.map((r, i) => { const e = r.ev, lv = e.lives[V.level], f6 = ck('FA6').items.find(it => it.step === `fa${r.i}.life`);
+          return `<tr data-fa="fa:${i}" class="${S.sel && S.sel.k === 'fa' && S.sel.i === i ? 'sel' : ''}"><td class="lft">${esc(r.name)}</td><td>${ct(r.cat)}</td><td>${fmt(e.Rp, 3)}</td><td>${fmt(e.dfe, 2)}</td><td>${fmt(e.dfmax, 2)}</td><td>${fmt(r.th, 2)}</td><td class="${e.inf ? 'fx-ok' : 'fx-hi'}">${e.inf ? 'infinite' : 'finite'}</td><td>${e.inf ? '' : fmt(lv.RR, 2)}</td><td>${e.inf ? '∞' : fmt(lv.rem, 1)}</td>${f6 ? stCell(f6.st) : '<td class="fx-na">n/a</td>'}</tr>`; }).join('')}
+        </tbody></table></div><p class="note">Click a row for its work (the steps below the fatigue checks). FA6 fails where Y<sub>REM</sub> is less than the required remaining life; its ratio (required / Y<sub>REM</sub>) counts in the governing fatigue ratio.</p></div></section>`; }
     // GS17
     if (R.gs17) h += `<section class="sec"><div class="secHead">Flange stress range at every station (GS17; 6.6.1.2, 6.10.5.1)</div><div class="secBody"><p class="note">Top flange Category ${ct(R.cats.T)}, bottom flange Category ${ct(R.cats.B)}; the Fatigue I ranges are those of the Flexure tab; n by station (Table 6.6.1.2.5-1).</p>
       <div class="tscroll fx-list"><table class="tbl"><thead><tr><th class="lft">Station</th><th>n</th><th>Top: limit state</th><th>Top ratio</th><th>Bottom: limit state</th><th>Bottom ratio</th></tr></thead><tbody>
