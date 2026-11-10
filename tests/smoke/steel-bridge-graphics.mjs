@@ -3,6 +3,7 @@
 // PR 1 (helper): a graphic mounted on the app page with the built-in project: the SVG appears with the layers, the wheel zooms,
 // a click selects (onSelect) and moves the highlight, a drag does not select, double-click fits, Download DXF produces a valid file;
 // SECC: the Section properties graphic (ui/vizkit.js style): load-case buttons update the tiles, the axis and the stress values (steel +10.78 / −9.04 ksi);
+// SECN: the negative region: steel (DC1) and steel + rebar (DC2, DW, LL) under −1000 kip-ft (−6.66 / +7.88, bars −8.42 / −7.54 ksi), deck hatched and cracked;
 // SBVZB: the Analysis, Flexure and Constructibility graphics (ui/vizalong.js style): read-out, click select, chips, resize, no zoom buttons;
 // 0 console errors. Screenshots into the folder SHOTS when it is set.
 //   node tests/smoke/steel-bridge-graphics.mjs
@@ -85,6 +86,21 @@ try {
   // the width follows the panel (resize / sbd2:panelresize)
   { const w0 = await p.evaluate(() => document.querySelector('#gfx_sec svg').viewBox.baseVal.width); await p.setViewportSize({ width: 1100, height: 1000 }); await p.waitForTimeout(300);
     const w1 = await p.evaluate(() => document.querySelector('#gfx_sec svg').viewBox.baseVal.width); assert.notEqual(w1, w0, 'section redrawn at the new width'); await p.setViewportSize({ width: 1400, height: 1000 }); await p.waitForTimeout(300); }
+  // SECN (engineer decision 2026-11-10): negative-flexure region: the buttons are the region's sections (steel DC1; steel + rebar DC2, DW, LL), under −1000 kip-ft:
+  // top flange and bars in tension (orange, −), bottom flange in compression (blue, +); bar stresses badged; the deck hatched and cracked, no deck stress
+  { await p.selectOption('#o_region', 'neg'); await settle(); await p.waitForSelector('#gfx_sec .vk svg', { timeout: 180000 });
+    assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll('#gfx_sec [data-vkseg]')].map(b => b.dataset.vkseg + ': ' + b.textContent)), ['steel: Steel (DC1)', 'cr: Steel + rebar (DC2, DW, LL)'], 'negative region: buttons');
+    const NEG = { steel: { yb: '28.213', I: '37,472', top: '−10.78', bot: '+9.04', last: '63.75', badges: ['+9.04', '−10.78'] }, cr: { yb: '33.535', I: '51,050', top: '−6.66', bot: '+7.88', last: '−8.42', badges: ['+7.88', '−6.66', '−7.54', '−8.42'] } };
+    for (const cs of ['cr', 'steel', 'cr']) { await p.click(`#gfx_sec [data-vkseg="${cs}"]`); await p.waitForTimeout(150); const st = await secState(), e = NEG[cs];
+      assert.deepEqual(st.pressed, [cs]); assert.deepEqual([st.tiles[0], st.tiles[1], st.tiles[3], st.tiles[4], st.tiles[5]], [e.yb, e.I, e.top, e.bot, e.last], `negative ${cs}: tiles ${st.tiles}`);
+      assert.deepEqual(st.badges, e.badges.slice().sort(), `negative ${cs}: stress values`);
+      const tone = await p.evaluate(() => [...document.querySelectorAll('#gfx_sec svg text.vt')].map(t => t.textContent)); assert.ok(tone.every(t => t.startsWith('−')), 'tension badges are the orange ones');
+      assert.equal(await p.evaluate(() => document.querySelectorAll('#gfx_sec svg [style*="vk-sgh"]').length), 2, 'deck and haunch hatched');
+      assert.ok(await p.evaluate(() => document.querySelectorAll('#gfx_sec svg .crk').length >= 2), 'deck cracks');
+      assert.equal(await p.evaluate(() => document.querySelectorAll('#gfx_sec svg .gpt').length), cs === 'cr' ? 2 : 0, `negative ${cs}: bar stems`);
+      assert.match(await p.textContent('#gfx_sec .vk'), /not effective in negative flexure/); assert.match(await p.textContent('#gfx_sec .vk'), /6\.10\.1\.1\.1c/); await shot('tab-section-neg-' + cs); }
+    { const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#gfx_sec [data-secdxf]')]); assert.ok(/EOF/.test(fs.readFileSync(await dl.path(), 'utf8')), 'negative-region DXF (unchanged drawing)'); }
+    await p.selectOption('#o_region', 'pos'); await settle(); await p.waitForSelector('#gfx_sec .vk svg', { timeout: 180000 }); }
   assert.deepEqual(errs, [], 'console errors (section)');
   // Loads & LLDF
   await tab('loads'); await settle(); await chk('tab-loads', '#gfx_ld', 15);
