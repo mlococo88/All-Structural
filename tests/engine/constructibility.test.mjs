@@ -22,6 +22,8 @@
 //      location; where M_DCc agrees the ratios are identical. Since SBCON (2026-11-10) C_b,C and nprC come from M_DCc too, so they are
 //      keyed to the M_DCc difference over the unbraced segment: identical where M_DCc agrees at every station of the segment.
 //   5. Hand checks (arithmetic in the comments).
+//   SBCB (engineer decision 2026-11-10, a deliberate difference): this app does not take C_b below 1.0 (deck placement and the overhang checks);
+//   GirderDetail uses Eq. 6.10.8.2.3b-1 as computed. Case 3 recomputes GirderDetail's stored items with C_b < 1.0 at C_b = 1.0 and counts them.
 //   SBTS (engineer decision 2026-11-10, a deliberate difference from GirderDetail): on the project path (fromAnalysis, both sides of this app's
 //   pour envelope known) the app checks both signs of the deck-placement moment at every location, each with C_b / γ_e from its own side of
 //   the envelope (tests/engine/constr-twosign.test.mjs); GirderDetail checks one M_DCc per station. The payload path above has one M_DCc per
@@ -198,7 +200,7 @@ test('parity with GirderDetail GS14–GS16 at every station of the 100 gd_*.json
 });
 
 test('the stored hand-off girderDetail.checks.constr (GirderDetail\'s own governing items per span, and OH1–OH5 with its bracket loads) recomputed from the stored inputs', () => {
-  let n = 0, nOH = 0, worst = { d: 0 }, same = 0, tot = 0, sameN = 0, nSb = 0, upSb = { d: 0 }; const why = {};
+  let n = 0, nOH = 0, worst = { d: 0 }, same = 0, tot = 0, sameN = 0, nSb = 0, upSb = { d: 0 }, nCb = 0, cbW = { d: 0 }; const why = {};
   const chk = (a, b, tol, what) => { const d = Math.abs(a - b); if (d > worst.d) worst = { d, what }; assert.ok(d <= tol, `${what}: ${a} vs stored ${b}`); };
   for (const f of payloads) {
     const pl = readPayload(f), st = pl.girderDetail.checks.constr, m = pl.girderDetail.materials, mat = { Fyt: +m.Fyf, Fyb: +m.Fyf, Fyw: +m.Fyw }, ts = (pl.girderDetail.details.transverseStiffener || {}).spacings || [0];
@@ -215,7 +217,11 @@ test('the stored hand-off girderDetail.checks.constr (GirderDetail\'s own govern
         if (key !== 'shear') chk(r.Mc, o.Mc, 2e-3, w + ' Mc');
         if (o.kind === 'yield' || o.kind === 'web' || o.kind === 'tension') { const q = r.checks.find(c => c.key === o.kind); chk(q.demand, o.dem, 2e-4, w + ' demand'); chk(q.capacity, o.cap, 2e-4, w + ' capacity'); chk(q.ratio, o.r, 1.2e-4, w + ' ratio'); }
         else if (o.kind === 'buckling') { const q = r.checks.find(c => c.key === 'buckling'); chk(q.demand, o.dem, 2e-4, w + ' demand'); chk(r.ltC.FLB, o.FLB, 2e-4, w + ' FLB');
-          if (!o.npr) { chk(r.ltC.LTB, o.LTB, 2e-3, w + ' LTB'); chk(q.ratio, o.r, 1.2e-4, w + ' ratio'); chk(r.ltC.rt, o.rt, 1e-4, w + ' rt'); chk(r.ltC.Lp, o.Lp, 1e-3, w + ' Lp'); } }
+          // SBCB (engineer decision 2026-11-10; a deliberate difference): GirderDetail uses C_b < 1.0 as computed, this app C_b = max(1.0, C_b).
+          // F_nc,LTB is C_b times the C_b = 1 value below the R_bR_hF_yc cap (Eqs. 6.10.8.2.3-2, -3), so the app's value is GirderDetail's / C_b, capped
+          if (!o.npr && o.Cb != null && +o.Cb < 1) { const cap = r.RhC * r.conC.Fy, lt = Math.min(o.LTB / o.Cb, cap); assert.equal(r.CbCu, 1, w + ' C_b bound'); assert.equal(r.CbRaw, +o.Cb, w + ' C_b as given');
+            chk(r.ltC.LTB, lt, 2e-3 / o.Cb, w + ' LTB (C_b 1.0)'); chk(q.ratio, q.demand / Math.min(o.FLB, lt), 1.2e-4, w + ' ratio (C_b 1.0)'); assert.ok(q.ratio <= o.r + 1e-9, w + ' ratio not above GirderDetail\'s'); nCb++; if (o.r - q.ratio > cbW.d) cbW = { d: o.r - q.ratio, w, cb: +o.Cb, a: o.r, b: q.ratio }; }
+          else if (!o.npr) { chk(r.ltC.LTB, o.LTB, 2e-3, w + ' LTB'); chk(q.ratio, o.r, 1.2e-4, w + ' ratio'); chk(r.ltC.rt, o.rt, 1e-4, w + ' rt'); chk(r.ltC.Lp, o.Lp, 1e-3, w + ' Lp'); } }
         else { chk(r.VuC, o.dem, 5e-3, w + ' V_u'); chk(r.sh.C, o.C, 1e-4, w + ' C'); chk(r.sh.Vp, o.Vp, 1e-4, w + ' V_p'); chk(o.cap, o.C * o.Vp, 0.05, w + ' V_cr'); }
         n++;
         // the governing location found here (payload brace points, SB2-O9) against GirderDetail's (its own framing)
@@ -223,7 +229,7 @@ test('the stored hand-off girderDetail.checks.constr (GirderDetail\'s own govern
         if (bN && Math.abs(bN.row.x - o.x) < 0.006 && Math.abs(bN.ratio - o.r) <= 1.2e-4) sameN++;
         if (b && bN && (Math.abs(b.row.x - bN.row.x) > 0.006 || Math.abs(b.ratio - bN.ratio) > 1e-9)) { nSb++; if (bN.ratio - b.ratio > upSb.d) upSb = { d: bN.ratio - b.ratio, f, k, key, a: b.ratio, b: bN.ratio }; }
         if (b && Math.abs(b.row.x - o.x) < 0.006 && Math.abs(b.ratio - o.r) <= 1.2e-4) same++;
-        else { const c = !b ? 'none' : Math.abs(b.row.LbC - o.LbC) > 0.01 || (o.Cb != null && Math.abs(b.row.CbCu - o.Cb) > 1e-3) ? 'L_b,C or C_b,C differ (brace points every ≤ L_b here, GirderDetail\'s own framing; SB2-O9)'
+        else { const c = !b ? 'none' : o.Cb != null && +o.Cb < 1 && key !== 'shear' ? 'GirderDetail C_b < 1.0, this app 1.0 (SBCB, deliberate)' : Math.abs(b.row.LbC - o.LbC) > 0.01 || (o.Cb != null && Math.abs(b.row.CbCu - o.Cb) > 1e-3) ? 'L_b,C or C_b,C differ (brace points every ≤ L_b here, GirderDetail\'s own framing; SB2-O9)'
             : key === 'shear' ? 'V_DC1, V_CL at the station (payload shears; GirderDetail its element shear, SB2-A3)'
             : Math.abs(b.row.x - o.x) < 0.006 && Math.abs(b.row.Mc - o.Mc) <= 2e-3 * Math.abs(o.Mc) ? 'M_c at the station (payload moments linear between stations; GirderDetail its own analysis there)' : 'other';
           why[c] = (why[c] || 0) + 1; }
@@ -238,6 +244,7 @@ test('the stored hand-off girderDetail.checks.constr (GirderDetail\'s own govern
         const b = Gm.spans[k][key]; assert.ok(b && Math.abs(b.row.x - o.x) < 0.006, `${w}: OH row at ${b && b.row.x} vs stored ${o.x}`); }
     });
   }
+  console.log(`       SBCB (deliberate difference): ${nCb} stored items where GirderDetail used C_b < 1.0, recomputed with C_b = 1.0 (F_nc,LTB = GirderDetail's / C_b, capped); largest ratio decrease ${cbW.d.toFixed(4)}${cbW.w ? ` (${cbW.w}: C_b ${cbW.cb}, ${cbW.a.toFixed(4)} -> ${cbW.b.toFixed(4)})` : ''}`);
   console.log(`       ${n} stored GS14–GS16 governing items and ${nOH} OH items recomputed; largest |difference| ${worst.d.toExponential(2)} (${worst.what}; the payload rounds to 0.001 / 0.0001)`);
   console.log(`       with L_b,C, C_b,C, nprC from 1.25M_DC1 + 1.5M_CL (as GirderDetail): governing location and ratio per span and group as GirderDetail's own: ${same} of ${tot}; otherwise: ${Object.entries(why).map(([k, v]) => `${v} ${k}`).join(', ')}`);
   console.log(`       as this app checks (C_b,C, nprC from M_DCc, SBCON; a deliberate difference from GirderDetail): ${sameN} of ${tot} as GirderDetail's own; ${nSb} governing items differ from the M_DC1 basis, largest increase ${upSb.d.toFixed(4)}${upSb.f ? ` (${upSb.f} span ${upSb.k + 1} ${upSb.key}: ${upSb.a.toFixed(4)} -> ${upSb.b.toFixed(4)})` : ''}`);
