@@ -6317,7 +6317,7 @@ function sfdWallRhoBlocks(b,w){
   'V_n = \\min\\left[('+f3(g.ac)+'\\cdot '+f2(w.lam)+'\\cdot '+f2(w.sq)+' + '+sfdRhoTxt(w.hz.rho)+'\\cdot '+f2(w.fyt)+')\\cdot '+f2(w.Acv)+',\\; 8\\cdot '+f2(w.sq)+'\\cdot '+f2(w.Acv)+'\\right]/1000 = \\min('+f2(g.vc+g.vs)+',\\;'+f2(g.vmax)+') = '+f2(g.vn)+'\\;\\mathrm{k}',
   w.hz.need?'V_u = '+f2(g.Vin)+'\\;\\mathrm{k};\\quad \\phi V_n:\\;\\text{input needed (REVIEW)}':
   '\\phi V_n = 0.75\\cdot '+f2(g.vn)+' = '+f2(g.phiVn)+'\\;\\mathrm{k};\\quad \\frac{V_u}{\\phi V_n} = \\frac{'+f2(g.Vin)+'}{'+f2(g.phiVn)+'} = \\mathbf{'+f3(g.vr)+'}'+(w.vOK?'\\;\\checkmark':'\\;\\text{NG}')));
-  b.appendChild(sfwUl([['V<sub>u</sub>','the factored shear along \u2113<sub>w</sub> ('+w.dir+'), every LRFD combination; '+(w.hz.need?'the largest is shown':'the governing ratio is shown')],...(w.hz.need?[['Input needed','<b>'+SFWH_IN+'</b> (\u03c1<sub>t</sub>f<sub>yt</sub> term)']]:[]),['\u03b1<sub>c</sub>','from h<sub>w</sub>/\u2113<sub>w</sub> (11.5.4.3); 2(1 + N<sub>u</sub>/(500A<sub>g</sub>)) \u2265 0 under net axial tension (11.5.4.4)'],['\u03c1<sub>t</sub>, f<sub>yt</sub>','the provided horizontal ratio; f<sub>yt</sub> \u2264 60 000 psi (Table 20.2.2.4(a))'],['\u221af\u2032<sub>c</sub>','\u2264 100 psi (conservative)'],...(w.hwlw<2?[['Strut-and-tie','the alternative of 11.5.4.1 (h<sub>w</sub>/\u2113<sub>w</sub> < 2) is not used']]:[])]));}
+  b.appendChild(sfwUl([['V<sub>u</sub>','the factored shear along \u2113<sub>w</sub> ('+w.dir+'), every LRFD combination; '+(w.hz.need?'the largest is shown':'the governing ratio is shown')],...(w.hz.need?[['Input needed','<b>'+SFWH_IN+'</b> (\u03c1<sub>t</sub>f<sub>yt</sub> term)']]:[]),['\u03b1<sub>c</sub>','from h<sub>w</sub>/\u2113<sub>w</sub> (11.5.4.3); 2(1 + N<sub>u</sub>/(500A<sub>g</sub>)) \u2265 0 under net axial tension (11.5.4.4)'],['\u03c1<sub>t</sub>, f<sub>yt</sub>','the provided horizontal ratio; f<sub>yt</sub> \u2264 60 000 psi (Table 20.2.2.4(a))'],['\u221af\u2032<sub>c</sub>','\u2264 100 psi (conservative)'],['Section','the in-plane shear at the wall base, at the interface with the footing (the one section the tool checks)'],...(w.hwlw<2?[['Strut-and-tie','the alternative of 11.5.4.1 (h<sub>w</sub>/\u2113<sub>w</sub> < 2) is not used']]:[])]));}
  {const sv=t=>t==='v'?'3t, 18'+(w.shReq?', \\ell_w/3':''):'3t, 18'+(w.shReq?', \\ell_w/5':'');   /* SFWC-3 */
   b.appendChild(eqBlock('Wall: bar spacing and layers','ACI 318-19 11.7.2.1, 11.7.3.1, 11.7.2.3',
    's_{v} \\le \\min('+sv('v')+'),\\qquad s_{h} \\le \\min('+sv('h')+'),\\qquad t \\gt 10\\;\\mathrm{in} \\Rightarrow \\text{two layers}',
@@ -7939,6 +7939,7 @@ function renderFootingDesign(){
    '\\varepsilon_t \\ge \\varepsilon_{ty} + 0.003 = '+sfdF5(des.epsTC),
    '\\text{bottom}: \\varepsilon_t = '+sfdF5(des.capBot.eps_t)+(des.strip&&des.strip.applies?',\\;\\text{strips}: '+des.strip.rows.map(r=>sfdF5(r.cap.eps_t)).join(',\\;'):'')+(des.topProvided&&des.MuNeg>0.01?',\\;\\text{top}: '+sfdF5(des.capTop.eps_t):''),
    (des.tcBotOK&&des.tcStripOK&&des.tcTopOK)?'\\text{tension-controlled}\\;\\checkmark':'\\text{NG: not tension-controlled (reduce } A_s\\text{ or increase } d)'));
+  if(P2.fy<60000)b.appendChild(el('div','note','Below Grade 60 this tool keeps ε_ty = 0.002, the value ACI 318-19 21.2.2.1 permits for Grade 60, rather than the smaller f_y/E_s: the larger ε_ty never gives a higher φ (conservative).'));
   if(des.strip&&des.strip.applies){const st=des.strip;   /* SFTX */
    b.appendChild(eqBlock('Transverse strip under each pedestal (combined footing)','ACI 318-19 13.3.4.1, 13.3.4.3, 22.3; strip width c + d centred on the pedestal',
     'b_s = c + d,\\quad M_{u,strip} = \\int_{face}^{edge} w(s)(s-s_f)\\,ds - \\sum P_{u,j}(s_j-s_f),\\quad \\phi M_{n,strip} = \\phi A_s b_s f_y (d-a/2)',
@@ -8080,7 +8081,8 @@ function renderFootingDesign(){
   ['√(A₂/A₁):','is built as the largest figure <b>geometrically similar to and concentric with</b> A₁ that fits inside the footing (ACI 318-19 22.8.3.2), further limited by the 1:2 frustum over the footing depth and by the code ceiling of 2.0.'],
   ['At a footing edge:','a bearing area that already reaches a footing edge cannot expand at all in that direction, so the whole similar figure is locked at 1.00 regardless of how much plan area is left elsewhere.'],
   ['Pedestal side:','the footing value is then compared with the pedestal’s own bearing strength, φ0.85f′<sub>c</sub>A₁ with no increase, and the lesser is φP<sub>nb</sub> (ACI 318-19 16.3.3.4, Table 22.8.3.2 (c)): with one f′<sub>c</sub>, the pedestal side governs whenever √(A₂/A₁) &gt; 1.'],
-  ['Bearing patch (h = 0):','has no supported concrete member and uses the footing value.']])));
+  ['Bearing patch (h = 0):','has no supported concrete member and uses the footing value.'],
+  P2.bearing.some(z=>z.excess)?['Beyond φP<sub>nb</sub>:','the dowels carry the excess compression (ACI 318-19 16.3.1.2(a)) at φ = 0.65 (compression-controlled, Table 21.2.2) with the project f<sub>y</sub>: A<sub>s,req</sub> = (P<sub>u</sub> − φP<sub>nb</sub>)/(0.65f<sub>y</sub>).']:null])));
  { const bc=P2.bandChk;
    if(bc&&bc.applies){
     const nb=secPanel(T,'o-fd-band','5.7  Short-Direction Band Reinforcement (ACI 318-19 13.3.3.3) \u2014 advisory');
