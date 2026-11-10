@@ -2697,7 +2697,7 @@ Engineer's decision 2026-11-10 (the tool's basis is ASCE 7-16). This closes open
   4. The other "ASCE 7-22 Ch. 10" citations (scope line, ice inputs, "Ice on signs" flag, t_d step "ASCE 7-22 §10.4.6") are not changed.
 - **Saved data:** none changed. **Other copies:** none.
 
-## 2026-11-10 — PR: lightpole-sign-ice-pi (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — sign panel ice volume takes the π of ASCE 7-16 Eq. 10.4-2   [§4 calculation change: sign-panel ice weight and what derives from it; no cable value, saved key or format change]
+## 2026-11-10 — PR: lightpole-sign-ice-pi (PR #1331: https://github.com/mlococo88/All-Structural/pull/1331) — sign panel ice volume takes the π of ASCE 7-16 Eq. 10.4-2   [§4 calculation change: sign-panel ice weight and what derives from it; no cable value, saved key or format change]
 
 Engineer's decision 2026-11-10. This closes open item (1) of the entry above.
 - **Provision:** ASCE 7-16 §10.4.1, Eq. 10.4-2: V_i = π t_d A_s; A_s = area of one side of a flat plate; V_i may be multiplied by 0.8 for a vertical plate. Re-read from `structural_references/ASCE 7-16.pdf`, printed p. 70, by decompressing the content streams (the PDF is truncated): the glyph before t_d in Eq. 10.4-2 is the same glyph as in A_s = π r² (Eq. 10.4-3).
