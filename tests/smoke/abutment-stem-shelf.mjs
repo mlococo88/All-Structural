@@ -157,7 +157,7 @@ console.log('4. Drawings, 3D, Report, 390 px');
 console.log('5. ABSS (engineer report 2026-11-10): d_sh = 30 in > t = 15 in, e = 10 in — the slab t thick on the shelf, its top 15 in below the top of the backwall');
 { const o = await openPage(FB, { vw: 1400, vh: 1000 }), p = o.p; await p.waitForFunction(() => window.LAST_R, null, { timeout: 60000 });
   const run = su => p.evaluate(su => { const s0 = JSON.stringify(S); eval(su); recalcAll(); const R = window.LAST_R, P = R.ap, O = R.geo.off, ee = R.bwEE && R.bwEE.ee;
-    const r = { RDC: P.RDC, qDC: P.qDC, qDW: P.qDW, wDC: P.wDC, zSh: O.zSh, zSlab: P.zSlab0 ?? P.zSlab, hC: O.hC, hSh: O.hSh, ee: ee ? { Mu: ee.Mu - (ee.apE.Wf || 0) * (ee.apE.zF || 0), Wa: ee.apE.Wa, zA: ee.apE.zA } : null,   // ABFL: the slab's own height and M_u without the fill term (the fill: section 6) W: WARNINGS.map(w => w.level + '|' + w.msg),
+    const r = { RDC: P.RDC, qDC: P.qDC, qDW: P.qDW, wDC: P.wDC, zSh: O.zSh, zSlab: P.zSlab0 ?? P.zSlab, hC: O.hC, hSh: O.hSh, ee: ee ? { Mu: ee.Mu - (ee.apE.Wf || 0) * (ee.apE.zF || 0), Wa: ee.apE.Wa, zA: ee.apE.zA } : null, W: WARNINGS.map(w => w.level + '|' + w.msg),   // ABFL: the slab's own height and M_u without the fill term (the fill: section 6)
       sec: (() => { const B = abdwBuild(R); const sh = B.S.find(x => x.id === 'sec'); return B.D.E.slice(sh.i0, sh.iC).filter(e => e.t === 'PL' && /APPROACH-SLAB/.test(e.l)).map(e => e.pts.map(q => q[1])); })() };
     const st = JSON.parse(s0); Object.keys(S).forEach(k => delete S[k]); Object.assign(S, st); recalcAll(); return r; }, su);
   const base = 'S.apSlab.on = true; S.apSlab.t = 1.25; S.geom.bwOff = 10; S.geom.shD = 30;';
@@ -211,6 +211,9 @@ console.log('6. ABFL (engineer decision 2026-11-10, "use fill"): d_sh = 30 in > 
   check(e.ee && near(e.ee.Wf, 0.09) && near(e.ee.zF, 1.875) && near(e.ee.Mu, 0.23032 + 0.16875, 1e-4) && near(e.ee.Vu, 0.28790 + 0.09, 1e-4), `EE-I backwall: W_F ${e.ee && e.ee.Wf} at ${e.ee && e.ee.zF} ft, M_u ${e.ee && e.ee.Mu.toFixed(5)} (hand 0.39907), V_u ${e.ee && e.ee.Vu.toFixed(5)} (0.37790)`);
   for (const [lbl, su] of [['d_sh = t', 'S.apSlab.on = true; S.apSlab.t = 1.25; S.geom.bwOff = 10; S.geom.shD = 15;'], ['d_sh blank', 'S.apSlab.on = true; S.apSlab.t = 1.25; S.geom.bwOff = 10; S.geom.shD = 0;'], ['d_sh < t', 'S.apSlab.on = true; S.apSlab.t = 1.25; S.geom.bwOff = 10; S.geom.shD = 12;']]) {
     const q = await run(su); check(q.REV === undefined && !q.APev && q.ee === null && q.gEVe === undefined, `${lbl}: no fill load (no R_EV, no APev group)`); }
+  const rr = await p.evaluate(async base => { eval(base); recalcAll(); abrShow(); await new Promise(r => setTimeout(r, 2500)); const t = document.body.textContent;
+    return { note: /loaded on the slab as vertical earth load EV/.test(t) && /R_EV = w_EV·W·L̄\/2 = 52\.80 kip/.test(t) && /see §1\.4a/.test(t), blk: /Fill on the slab \(stem shelf deeper than the slab/.test(t), dw: /include it in the slab wearing surface/.test(t) }; }, base);
+  check(rr.note && rr.blk && !rr.dw, `Report: geometry note with the worked fill (R_EV = 52.80 kip, see §1.4a) ${rr.note}, §1.4a fill block ${rr.blk}, no DW advice ${!rr.dw}`);
   check(!o.errs.length, `console errors: ${o.errs.length}`);
   await o.b.close(); }
 

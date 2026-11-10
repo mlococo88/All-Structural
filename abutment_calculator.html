@@ -6852,9 +6852,10 @@ function apLoadsHTML(R){
       ["Totals:",`act on the abutment (stability, stem, ${it==="integral"?"integral cap and piles":"footing and piles"}).`],["Local values per ft:",`act on the ${P.stemShelf?"stem shelf":P.sup==="shelf"?"shelf and the backwall":"deck end over the backwall"}.`],
       ["Length along the abutment:",`W/cos θ = ${fmt(P.Lw,2)} ft (L<sub>ab</sub> = ${fmt(+g.Lab,2)} ft).`]]));
   if(P.REV>0) h+=eqB("Fill on the slab (stem shelf deeper than the slab, d<sub>sh</sub> &gt; t)","AASHTO LRFD 10th Ed. 3.3.2 (EV), 3.5.1, Table 3.4.1-2 (EV, retaining walls and abutments); statics (simple span)",[   // ABFL
-    `h_F = d_{sh} - t = \\dfrac{${t(R.geo.off.dIn,1)}}{12} - ${t(P.t)} = ${t(P.hF,3)}\\ \\text{ft (the step from the slab top to the top of the backwall)}`,
+    `h_F = d_{sh} - t = \\dfrac{${t(R.geo.off.dIn,1)}}{12} - ${t(P.t)} = ${t(P.hF,3)}\\ \\text{ft}`,
     `w_{EV} = \\gamma_s h_F = (${t(P.gs,3)})(${t(P.hF,3)}) = ${t(P.wEV,4)}\\ \\text{ksf}`,
-    `R_{EV} = w_{EV}\\dfrac{W\\bar L}{2} = (${t(P.wEV,4)})\\dfrac{(${t(P.W)})(${t(P.Lmean)})}{2} = ${t(P.REV,2)}\\ \\text{kip (total on the abutment)}\\,, \\quad q_{EV} = w_{EV}\\dfrac{L_s}{2}\\cos\\theta = (${t(P.wEV,4)})\\dfrac{${t(P.Lmax)}}{2}\\cos ${t(P.th,1)}° = ${t(P.qEV,3)}\\ \\text{kip/ft (local)}`],
+    `R_{EV} = w_{EV}\\dfrac{W\\bar L}{2} = (${t(P.wEV,4)})\\dfrac{(${t(P.W)})(${t(P.Lmean)})}{2} = ${t(P.REV,2)}\\ \\text{kip (total on the abutment)}`,
+    `q_{EV} = w_{EV}\\dfrac{L_s}{2}\\cos\\theta = (${t(P.wEV,4)})\\dfrac{${t(P.Lmax)}}{2}\\cos ${t(P.th,1)}° = ${t(P.qEV,3)}\\ \\text{kip/ft (local)}`],
     abNL("The step between the slab top and the top of the backwall is backfill on the slab (engineer decision 2026-11-10).",[
       ["Unit weight:",`γ<sub>s</sub> = ${fmt(P.gs,3)} kcf, the backfill of panel I-3 (dry: the fill is at the top of the backfill).`],
       ["Load type:",`the weight of earth fill on a component is a vertical earth load EV [3.3.2; 3.5.1, earth cover]; it takes γ<sub>EV</sub> = ${fmt(R.GP.EV[1],2)} / ${fmt(R.GP.EV[0],2)} at the strength limit states (Table 3.4.1-2, retaining walls and abutments) and 1.00 at Service I and Extreme Event I.`],
@@ -6936,7 +6937,7 @@ function apStemShHTML(R,no){
     ["Checked here:","the bearing of the slab on the shelf, as for the paving notch [5.6.5]."],
     ["Reinforcement:","the stem bars continue up into the shelf; no S1 / S2 shelf bars."]])}</div>`;
   h+=eqB("Bearing of the slab on the stem shelf","AASHTO LRFD 10th Ed. 5.6.5 (Eq. 5.6.5-2), 5.5.4.2; Tables 3.4.1-1, 3.4.1-2",[
-    H.gEV? `V_{u,slab} = \\gamma_{DC}q_{DC} + \\gamma_{DW}q_{DW} + \\gamma_{EV}q_{EV} + \\gamma_{LL}m\\,q_{LL} = ${t(H.gDC)}(${t(P.qDC,3)}) + ${t(H.gDW)}(${t(P.qDW,3)}) + ${t(H.gEV)}(${t(P.qEV,3)}) + ${t(H.gLL)}(${t(P.qLL,3)}) = ${t(H.VuS,3)}\\ \\text{kip/ft (q_{EV}: fill on the slab, §1.4a)}`   // ABFL
+    H.gEV? `V_{u,slab} = \\gamma_{DC}q_{DC} + \\gamma_{DW}q_{DW} + \\gamma_{EV}q_{EV} + \\gamma_{LL}m\\,q_{LL} = ${t(H.gDC)}(${t(P.qDC,3)}) + ${t(H.gDW)}(${t(P.qDW,3)}) + ${t(H.gEV)}(${t(P.qEV,3)}) + ${t(H.gLL)}(${t(P.qLL,3)}) = ${t(H.VuS,3)}\\ \\text{kip/ft}\\quad(q_{EV}\\text{: fill on the slab, §1.4a})`   // ABFL
     : `V_{u,slab} = \\gamma_{DC}q_{DC} + \\gamma_{DW}q_{DW} + \\gamma_{LL}m\\,q_{LL} = ${t(H.gDC)}(${t(P.qDC,3)}) + ${t(H.gDW)}(${t(P.qDW,3)}) + ${t(H.gLL)}(${t(P.qLL,3)}) = ${t(H.VuS,3)}\\ \\text{kip/ft}`,
     `q_b = \\dfrac{V_{u,slab}}{12\\,e} = \\dfrac{${t(H.VuS,3)}}{12(${t(H.e,2)})} = ${t(H.qb,4)}\\ \\text{ksi}\\,, \\quad q_R = \\varphi_b(0.85f'_c)m = 0.70(0.85)(${t(H.fc,1)})(1.0) = ${t(H.qR,3)}\\ \\text{ksi}`],
     "q of §1.4a (local, per ft along the wall; LL with IM). The slab bears over the shelf width e (m = 1: no confinement credit at the free edge).");
