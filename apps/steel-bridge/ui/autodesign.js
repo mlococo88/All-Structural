@@ -71,8 +71,9 @@
       </div></section>`;
   }
   function runBar(P) {
-    return `<section class="sec"><div class="secBody">
-      <div class="fRow"><button type="button" class="primary" id="ad_run"${S.running ? ' disabled' : ''}>Run Auto design</button><button type="button" id="ad_stop"${S.running ? '' : ' disabled'}>Stop</button>
+    const IE = window.SBDInputCheck ? window.SBDInputCheck.collect(P).errors : [];   // SBINV (2026-11-10): Run is refused while an input error exists
+    return `<section class="sec"><div class="secBody">${IE.length ? `<div class="alert err" id="ad_blocked">Auto design cannot run: ${IE.length} input${IE.length > 1 ? 's need' : ' needs'} fixing first (marked in red on their tabs and listed above the results).</div>` : ''}
+      <div class="fRow"><button type="button" class="primary" id="ad_run"${S.running || IE.length ? ' disabled' : ''}>Run Auto design</button><button type="button" id="ad_stop"${S.running ? '' : ' disabled'}>Stop</button>
 </div>
       ${bar()}<p class="note">The candidates, Apply and Undo the last Apply are on the <a href="#" data-adout="1">Auto design output tab</a>.</p></div></section>`;
   }
@@ -301,7 +302,9 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
       if (fld === 'mode' && val === '') delete a.vars[key];   // a field piece "as all pieces": its own entry removed
       else { a.vars[key] = a.vars[key] || {}; a.vars[key][fld] = val; }
       setTimeout(() => { if (ctx.changed) ctx.changed(true); }, 0); });
-    on('#ad_run', 'click', () => { S.running = true; S.stop = false; S.err = ''; S.R = null; S.sel = 0; S.cmp = ['cur', '0']; S.prog = { f: 0, msg: 'Starting…' }; const k = key(P); redraw(); if (ctx.showOut) ctx.showOut();
+    on('#ad_run', 'click', () => { const IE = window.SBDInputCheck ? window.SBDInputCheck.collect(P).errors : [];   // SBINV (2026-11-10): no run while an input error exists
+      if (IE.length) { alert(`Auto design cannot run: ${IE.length} input${IE.length > 1 ? 's need' : ' needs'} fixing first.\n\n${IE.slice(0, 12).map(e => '- ' + e.msg).join('\n')}`); return; }
+      S.running = true; S.stop = false; S.err = ''; S.R = null; S.sel = 0; S.cmp = ['cur', '0']; S.prog = { f: 0, msg: 'Starting…' }; const k = key(P); redraw(); if (ctx.showOut) ctx.showOut();
       AD().runChunked(JSON.parse(JSON.stringify(P)), {}, p => { S.prog = p; document.querySelectorAll('.ad-bar>div').forEach(b => { b.style.width = Math.round(100 * (p.f || 0)) + '%'; }); document.querySelectorAll('.ad-bar + .note').forEach(nt => { nt.textContent = p.msg || ''; }); }, () => S.stop)
         .then(R => { S.running = false; S.prog = R ? null : { f: 0, msg: 'Stopped.' }; S.R = R; S.key = k; redraw(); })
         .catch(e => { S.running = false; S.prog = null; S.err = 'Auto design failed: ' + (e && e.message); redraw(); }); });

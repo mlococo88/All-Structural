@@ -325,6 +325,9 @@
      HANDOFF.md §5.1; producer id steelbridge). Export: one file per ticked channel. */
   const SEND = { geo: true, rx: true };
   async function subSend(P, file) {
+    // SBINV (2026-11-10): nothing is sent or exported while the project has a blocking input error (engine/inputcheck.js; the banner lists them)
+    const IE = window.SBDInputCheck ? window.SBDInputCheck.collect(P).errors : [];
+    if (IE.length) { alert(`Nothing was ${file ? 'exported' : 'sent'}: ${IE.length} input${IE.length > 1 ? 's need' : ' needs'} fixing first.\n\n${IE.slice(0, 12).map(e => '- ' + e.msg).join('\n')}${IE.length > 12 ? `\n… and ${IE.length - 12} more (listed above the results).` : ''}`); return; }
     const todo = [SEND.geo && 'geo', SEND.rx && 'rx'].filter(Boolean);
     if (!todo.length) { alert('Tick Geometry, Reactions or both.'); return; }
     const built = {}, errs = [];
