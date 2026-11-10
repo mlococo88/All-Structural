@@ -17160,7 +17160,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
 
                 {/* γ_LL and exposure */}
                 <div style={{display:'flex',gap:'20px',alignItems:'center',marginBottom:'16px',flexWrap:'wrap'}}>
-                  <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',maxWidth:'100%',minWidth:0}}>
                     <span style={{fontSize:'11px',fontFamily:'monospace',color:'#374151'}}>γ_LL (Service III)</span>
                     <input type="number" step="0.05" min="0" max="2" value={ps3GamDraft ?? (ps3GamLLIn ?? '')}
                       placeholder={String(ps3GamLLAuto)}
@@ -17175,7 +17175,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                         : <>blank = MBE 4th Ed. value {ps3GamLLAuto.toFixed(1)}</>}
                     </span>
                   </div>
-                  <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',maxWidth:'100%',minWidth:0}}>
                     <span style={{fontSize:'11px',fontFamily:'monospace',color:'#374151'}}>Prestress losses</span>
                     <select value={ps3Losses} onChange={e=>setRating('ps3Losses',e.target.value)}
                       style={{...INP2,width:'auto',maxWidth:'100%',fontFamily:'monospace',fontSize:'11px'}}>
