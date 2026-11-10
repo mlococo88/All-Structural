@@ -176,6 +176,13 @@ textarea{width:100%;min-height:90px;font-family:inherit;font-size:13px;border:1p
 #edmPrjPane .prjGrp>b{display:block;font-size:13px}
 #edmPrjPane .prjHint{font-size:12px;color:#555;font-style:italic;margin:1px 0 3px}
 #edmPrjPane .prjRow{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+/* HOC (2026-11-10): the Project tab's Hand-offs panel (the same group styles as #edmPrjPane) */
+#edmHoPane .p-head{cursor:default}
+#edmHoPane .prjGrp{margin:2px 0 8px;border-top:1px solid #e2e8f0;padding-top:5px}
+#edmHoPane .prjHint{font-size:12px;color:#555;font-style:italic;margin:1px 0 3px}
+#edmHoPane .prjRow{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+#edmHoPane .hoFrom{font-size:12px;color:#555}
+#edmHoPane .hoGrp{margin:8px 0 3px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#555}
 @media(max-width:900px){#hdrProj{flex:1 1 100%;max-width:none}}
 /* STDS (2026-11-06): the standard save controls (shared/projects-ui.js projectBar): header chip and the "Save and open" card */
 .toolbar button.spChip{flex:0 0 auto;max-width:100%;white-space:nowrap}
@@ -314,11 +321,23 @@ textarea{width:100%;min-height:90px;font-family:inherit;font-size:13px;border:1p
   <button id="btnExport" title="Download inputs as JSON backup">Export JSON</button>
   <button id="btnImport" title="Load inputs from JSON">Import JSON</button>
   <input type="file" id="importFile" accept="application/json" style="display:none"></div></div></div>
-<div class="panel" id="edmPrjPane" data-cid="edm-prj"><div class="p-head">Checks and hand-off</div><div class="p-body">
+<!-- HOC (2026-11-10, engineer decision: the hand-off card on the Project tab in every tool): Use / Share project info (were in the title block) and
+     Send Pad to Abutment (was in "Checks and hand-off"), same ids and handlers, as Receive / Send. No data-cid: its open / closed state is not saved. -->
+<div class="panel" id="edmHoPane"><div class="p-head">Hand-offs</div><div class="p-body">
+  <div class="prjHint" style="margin-top:0">Nothing changes until you confirm: "Use shared project info" lists the title-block fields it will overwrite and asks first. The pad goes to the Abutment app only when you click "Send Pad to Abutment".</div>
+  <div class="hoGrp">Receive from other tools</div>
+  <div class="prjGrp"><b>Shared project info</b> <span class="hoFrom">from any tool, to the title block</span><div class="prjRow toolbar" style="padding:0;border:0;background:none">
+  <button type="button" id="bx-pm-use" title="Fill this title block from the project info shared by another tool">Use shared project info</button></div></div>
+  <div class="prjGrp"><b>Bearing loads</b> <span class="hoFrom">from the Abutment app</span><div class="prjHint">Filled in when the Abutment app opens this module (no button). <b>Status:</b> <span id="edmHoLink"></span></div></div>
+  <div class="hoGrp">Send to other tools</div>
+  <div class="prjGrp"><b>Shared project info</b> <span class="hoFrom">to every tool</span><div class="prjRow toolbar" style="padding:0;border:0;background:none">
+  <button type="button" id="bx-pm-share" title="Share this title block with the other tools">Share project info</button></div></div>
+  <div class="prjGrp"><b>Pad</b> <span class="hoFrom">to the Abutment app</span><div class="prjHint">Sends the designed pad back to the Abutment app that opened this one (a JSON file when opened on its own). It sends the G of the shear force (Method B G<sub>max</sub>; Method A and plain pads the highest G of the durometer range) with H<sub>bu</sub>, and is not sent while an input error stands. When the Abutment app opens this module again with that same G, the specified G (panel I-3) is not changed.</div><div class="prjRow toolbar" style="padding:0;border:0;background:none">
+  <button id="btnSendBack" title="Send the designed pad back to the Abutment app (if opened from it)">↩ Send Pad to Abutment</button></div></div>
+</div></div>
+<div class="panel" id="edmPrjPane" data-cid="edm-prj"><div class="p-head">Checks</div><div class="p-body">
   <div class="prjGrp"><b>Self-test</b><div class="prjHint">The built-in MassDOT benchmark check of the calculation engine.</div><div class="prjRow toolbar" style="padding:0;border:0;background:none">
   <button id="btnSelfTest" title="Run the built-in MassDOT benchmark self-test">Self-Test</button></div></div>
-  <div class="prjGrp"><b>Pad to the Abutment app</b><div class="prjHint">Sends the designed pad back to the Abutment app that opened this one (a JSON file when opened on its own). It sends the G of the shear force (Method B G<sub>max</sub>; Method A and plain pads the highest G of the durometer range) with H<sub>bu</sub>, and is not sent while an input error stands. When the Abutment app opens this module again with that same G, the specified G (panel I-3) is not changed.</div><div class="prjRow toolbar" style="padding:0;border:0;background:none">
-  <button id="btnSendBack" title="Send the designed pad back to the Abutment app (if opened from it)">↩ Send Pad to Abutment</button></div></div>
 </div></div></div>
 <div class="layout">
   <aside id="edmSumCol" aria-label="Design summary"><!-- EDSC (2026-11-08): the check chips as a left column on screens 1200 px and wider -->
@@ -464,7 +483,7 @@ function buildInputs(){
     ${inpRow("Project name","proj.name","")}${inpRow("Project no.","proj.num","")}
     ${inpRow("Calculated by","proj.calcBy","")}${inpRow("Date","proj.date","")}
     ${inpRow("Checked by","proj.chkBy","")}${inpRow("Checked date","proj.chkDate","")}`.replace(/type="number"/g,'type="text"')
-    +`<div class="in-row bx-pm-row" style="gap:6px;flex-wrap:wrap"><button type="button" class="mini-btn" id="bx-pm-use" title="Fill this title block from the project info shared by another tool">Use shared project info</button><button type="button" class="mini-btn" id="bx-pm-share" title="Share this title block with the other tools">Share project info</button></div>`);
+    +`<div class="in-row bx-pm-row" style="gap:6px;flex-wrap:wrap"><span class="hint">Send/receive data: <a href="#" data-go-ho="1">Project tab → Hand-offs</a> (Use shared project info, Share project info).</span></div>`);   // HOC (2026-11-10): the buttons are in the Hand-offs panel (#edmHoPane)
   // pad type & method
   h+=panel("in-type","I-1","Bearing Type & Design Method",`
     ${selRow("Pad type","padType",[["circRein","Steel-reinforced — circular (MassDOT default)"],["rectRein","Steel-reinforced — rectangular (approval)"],["plain","Plain (unreinforced) 1×5 pad"]],{rebuild:true})}
@@ -531,7 +550,7 @@ function buildInputs(){
   // assumptions
   h+=panel("in-assum","I-7","Engineering Assumptions",`
     <textarea data-path="assumptions">${esc(S.assumptions)}</textarea>`);
-  { const hd=document.getElementById("edmPrjHold"); ["edmSavePane","edmPrjPane"].forEach(id=>{ const pj=document.getElementById(id); if(pj&&hd&&pj.parentNode!==hd)hd.appendChild(pj); }); }   /* EDHD: keep them out of the rebuild (STDS: and the Save and open card) */
+  { const hd=document.getElementById("edmPrjHold"); ["edmSavePane","edmHoPane","edmPrjPane"].forEach(id=>{ const pj=document.getElementById(id); if(pj&&hd&&pj.parentNode!==hd)hd.appendChild(pj); }); }   /* EDHD: keep them out of the rebuild (STDS: and the Save and open card) */
   document.getElementById("inputPanel").innerHTML=h;
   edmInputTabs();   // move the cards just built into the input tabs
   edmHdrProj();   /* EDHD */
@@ -574,6 +593,7 @@ function edmInputTabs(){
     panes[k]=pn;
   });
   { const pj=document.getElementById("edmPrjPane"),tb=P.querySelector('[data-cid="in-proj"]'); if(pj)P.insertBefore(pj,tb?tb.nextSibling:P.firstChild); }   /* EDHD: after the title block */
+  { const ho=document.getElementById("edmHoPane"),pj=document.getElementById("edmPrjPane"); if(ho&&pj&&pj.parentNode===P)P.insertBefore(ho,pj); }   /* HOC (2026-11-10): Hand-offs after the title block, before Checks */
   { const sv=document.getElementById("edmSavePane"); if(sv)P.insertBefore(sv,P.firstChild); }   /* STDS (2026-11-06): Save and open, first in the Project tab */
   // move the built nodes; a node not in the map stays with the card before it
   let cur="project";
@@ -1685,6 +1705,12 @@ function sendPadBack(){ const R=LAST;
   else { const blob=new Blob([JSON.stringify(payload.payload,null,2)],{type:"application/json"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="edm_pad_result.json"; a.click(); URL.revokeObjectURL(a.href); document.getElementById("saveStatus").textContent="no linked window — pad exported as JSON"; }
 }
 document.getElementById("btnSendBack").addEventListener("click",sendPadBack);
+/* HOC (2026-11-10): the Hand-offs panel's Abutment status (a copy of the header's #linkStatus, read only) and the "Project tab → Hand-offs" link */
+(function(){ const src=document.getElementById("linkStatus"),dst=document.getElementById("edmHoLink");
+  const cp=()=>{ if(src&&dst) dst.textContent=(src.textContent||"Standalone")+"."; };
+  cp(); if(src&&window.MutationObserver) new MutationObserver(cp).observe(src,{childList:true,characterData:true,subtree:true}); })();
+document.addEventListener("click",ev=>{ const a=ev.target.closest&&ev.target.closest("[data-go-ho]"); if(!a) return; ev.preventDefault();
+  const t=document.getElementById("edmInTab_project"); if(t) t.click(); const c=document.getElementById("edmHoPane"); if(c) setTimeout(()=>c.scrollIntoView({block:"start"}),0); });
 /* ---- self-test vs MassDOT worked examples ---- */
 function runSelfTest(){
   const rows=[]; const chk=(name,got,exp,tol)=>{ const pass=Math.abs(got-exp)<=(tol||0.005); rows.push({name,got,exp,pass}); };
