@@ -2643,7 +2643,7 @@ function listTables() {
   `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`.
 - **Other copies:** none (the BridgeXfer block is unchanged).
 
-## 2026-11-10 — PR: asm-notes-bsl (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SLASM) — assumptions and decisions stated as notes on the tabs and in the Report (CLAUDE.md §6, engineer's rule 2026-11-10)   [display / text only; no result, saved key or format change]
+## 2026-11-10 — PR: asm-notes-bsl (PR #1309: https://github.com/mlococo88/All-Structural/pull/1309) (SLASM) — assumptions and decisions stated as notes on the tabs and in the Report (CLAUDE.md §6, engineer's rule 2026-11-10)   [display / text only; no result, saved key or format change]
 - **Engineer (2026-11-10, #1284):** every assumption or decision is stated in the tool where it applies (the tab card and the matching Report section), saying what the code does and citing the provision, without "pending engineer review".
 - **Audit:** every "Decision (pending engineer review)" and every engineer's decision / definition in this log (#20 to #1265), and the bodies of the PRs it links, checked against the tool's notes and the code. The table is in the PR. Items already stated were left as they are. The Report's calculation package (§10 onward) reproduces the tab cards, so a note added to a tab card is also in the Report.
 - **Where (anchor = the text before the change):**
