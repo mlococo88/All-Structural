@@ -77,6 +77,7 @@ function cmp(list, where) {
 const ROWK = ['name', 'cat', 'A', 'th', 'nn', 'ADTTeq', 'lim', 'N', 'dFn', 'gam', 'res', 'y', 'd', 'fP', 'fN', 'df', 'fD1', 'fD2', 'fDL', 'hasDL', 'fLLt', 'exempt', 'dem', 'Vu', 'VUTF', 'fUT', 'fUF'];
 function itemPairs(mine, theirs) {
   const out = [], P = (k, a, b) => out.push([k, a, b]);
+  theirs = theirs.filter(c => c.id !== 'FA5' && c.id !== 'FA6'); mine = mine.filter(c => c.id !== 'FA5' && c.id !== 'FA6');   // MBE 4th Ed. (2026-11-10): not compared, see cmpFa
   P('check ids', mine.map(c => c.id).join(), theirs.map(c => c.id).join());
   theirs.forEach(c => { const m = mine.find(x => x.id === c.id); if (!m) return;
     P(`${c.id} n`, m.items.length, c.items.length); P(`${c.id} status`, m.status, c.status); P(`${c.id} gov`, m.gov, c.gov); P(`${c.id} na`, !!m.naWhy, !!c.naWhy);
@@ -89,7 +90,8 @@ function cmpFa(m, g, where) {
   g.rows.forEach((r, i) => { const o = m.rows[i], L = ROWK.map(k => [k, o[k], r[k]]);
     if (r.sh || o.sh) ['k', 'C', 'Vp', 'Vcr'].forEach(k => L.push([`sh.${k}`, (o.sh || {})[k], (r.sh || {})[k]]));
     if (r.S) ['s', 'c3', 'cn', 'r'].forEach(s => ['yb', 'I'].forEach(k => L.push([`S.${s}.${k}`, o.S[s][k], r.S[s][k]])));
-    if (r.ev || o.ev) { ['dfe', 'dfmax', 'inf'].forEach(k => L.push([`ev.${k}`, (o.ev || {})[k], (r.ev || {})[k]])); Object.keys((r.ev || {}).lives || {}).forEach(k => ['Y', 'rem'].forEach(q => L.push([`ev.${k}.${q}`, o.ev.lives[k] && o.ev.lives[k][q], r.ev.lives[k][q]]))); }
+    // the remaining fatigue life (r.ev, FA5, FA6) is not compared since 2026-11-10: this engine takes the MBE 4th Ed. Section 7 method, GirderDetail
+    // keeps the older one (a deliberate difference; tests/engine/fatigue-mbe4.test.mjs checks the 4th Ed. values by hand)
     cmp(L, `${where} row ${i}`); });
 }
 const browserItems = CK => CK.map(c => [c.id, c.items.map(it => [it.loc, it.r ?? null, it.st]), c.naWhy || '']);
@@ -130,7 +132,8 @@ test('parity with GirderDetail Fatigue (FA1–FA7) on the recorded inputs of the
       g.R.rows.forEach((r, i) => { const b = fx.gd.fa.rows[i]; ['cat', 'lim', 'gam', 'res', 'df', 'dem', 'fDL', 'fLLt', 'exempt'].forEach(k => nb(r[k], b[k], `${where} fa ${i} ${k}`)); nb(r.Vu ?? null, b.Vu, `${where} fa ${i} Vu`); });
       browserItems(g.C).forEach(([id, its], j) => its.forEach((it, i) => { nb(it[1], fx.gd.fa.checks[j][1][i][1], `${where} ${id} ${i}`); nb(it[2], fx.gd.fa.checks[j][1][i][2], `${where} ${id} ${i} st`); }));
     }
-    const m = FA.compute(clone(P.fa), E); cmpFa(m, g.R, where); if (!m.errors.length && g.C) cmp(itemPairs(FA.checks(m), g.C), where + ' checks'); nR += g.R.rows ? g.R.rows.length : 0;
+    // MBE 4th Ed. remaining life (2026-11-10): the evaluation cases are compared with the evaluation off here (their other values), unless GirderDetail rejects the inputs
+    const evOn = P.fa.ev && P.fa.ev.on === 'yes' && !g.R.errors.length, m = FA.compute(evOn ? { ...clone(P.fa), ev: { on: 'no' } } : clone(P.fa), E); cmpFa(m, g.R, where); if (!m.errors.length && g.C) cmp(itemPairs(FA.checks(m), g.C), where + ' checks'); nR += g.R.rows ? g.R.rows.length : 0;
     // the worked steps render, and every check item's step id exists
     if (!m.errors.length) { const C = FA.checks(m); m.rows.forEach(r => { const ids = new Set(FA.steps(m, r).map(s => s.id)); C.forEach(c => c.items.filter(it => it.step && it.step.startsWith(`fa${r.i}.`) && !/\.(own)$/.test(it.step)).forEach(it => assert.ok(ids.has(it.step), `${where}: step ${it.step}`))); }); }
   }

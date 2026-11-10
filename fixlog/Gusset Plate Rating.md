@@ -3634,3 +3634,39 @@ Follows G4A–G4C (#1353, #1355, #1357); open items 2 (part) and 3 of #1357.
 - **Saved projects (§5):** fastener-shear and bearing checks of the design load are no longer in the LRFR Inventory rating; where one of them governed Inventory, the Inventory RF rises. The filler factor changes only where the gusset plates differ in thickness after section loss (less conservative than t_f/t_min) or where areas are entered.
 - **How verified:** headless probe origin/main (with G4A–G4C) vs the branch, the 21 projects plus the two filler variants; `tests/smoke/gusset-mbe4.mjs` extended with the hand checks above: ALL PASS; `check-syntax` pass; `phone-layout --tool gusset --w 390` pass; every tab and the Report render with 0 console errors; `project-library --tool gusset`: the 4 "identical to main" checks differ by the two new empty fields per member and the LRFR Inventory rating of the FS / BR checks (now not rated), as intended; all other checks pass.
 - **Other copies:** none.
+
+## 2026-11-10 — PR: claude/gpr-m6-25 (PR #1361: https://github.com/mlococo88/All-Structural/pull/1361) (G4E) — LFR rivets of unknown origin: φF_v 23.8 → 25.0 ksi (engineer decision M6, 2026-11-10)   [§4 calculation change]
+
+- **Engineer decision (2026-11-10):** φF_v = 30 ksi (A502 Grade 1, AASHTO Std. Spec. 17th Ed. Table 10.56A) × 50/60 = 25.0 ksi, where 50/60 is the ratio of the MBE 4th Ed. LRFR tensile strengths of unknown-origin and Grade 1 rivets (Table 6A.6.12.5.1-1, p. 6-82). This is a judgment value with no table basis in the MBE 4th Ed.: Table 6B.5.2.1-3 (p. 6-170) lists only A502 Grade 1 / A141 and Grade 2. It replaces 23.8 ksi = 30 × 23/29 (the MBE 3rd Ed. ratio, M6 of 2026-11-07, #1051, cited in #1318). Closes the open item of G4B (#1355).
+- **LRFR rivets of unknown origin (unchanged):** F_u = 50 ksi, MBE 4th Ed. Table 6A.6.12.5.1-1 (φ_sF_uR_1 = 27 ksi at R_2 = 1), with no separate assumption in the tool (G4B).
+- **Where and before / after (`Gusset Plate Rating.html`):**
+  1. `PARAMS` row `FvR0L` (anchor `['FvR0L', 'lfr', 'LFR fastener strengths'`):
+     - Description: `… built before 1936 or of unknown origin` → `… unknown type and origin`.
+     - Default: `23.8` → `25.0`.
+     - Reference: `Judgment, consistent with MBE 3rd Ed. Table 6A.6.12.5.1-1 (verify FHWA-IF-09-014 / MBE 6B; not in references)` → `Engineer's judgment (decision M6, 2026-11-10): 30 ksi × MBE 4th Ed. Table 6A.6.12.5.1-1 ratio 50/60; no table basis in the MBE 4th Ed.`
+     - "Least certain" flag: 1 → 0.
+     - Note: rewritten with the basis, Table 6B.5.2.1-3 and the history (30 → 23.8 → 25.0 ksi).
+     - New confirmation `engineer decision 2026-11-10`.
+  2. `capFS()` φF_v row source (unknown-origin rivets) and the `ref` of the LFR card: they name the basis, 30 ksi × 50/60 (MBE 4th Ed. LRFR ratio), with no table basis (Table 6B.5.2.1-3: Grade 1 / Grade 2 only).
+  3. `methodHtml()` Fastener shear, LFR item: rewritten with the value and basis. `crBasis()` (Report §1): new item "Rivets of unknown origin (LFR):" (value used; the default is the engineer's judgment value 30 × 50/60, with no table basis), shown when LFR is active and a member has unknown rivets.
+- **Saved projects (§5):** a value entered for `FvR0L` on the Code parameters tab is stored in `P.code` and kept, for example 23.8 entered stays 23.8. Projects without one take 25.0 ksi. No key or format change.
+- **Hand check, default project, L2-U1-FS (LFR):** unknown-origin rivets, 7/8 in (A_b = 0.6013 in²), N = 48; L_j = 15 in ≤ 50 in, so R_L = 1.0; no filler, so R_F = 1.0.
+  - Capacity: C = 48 × 23.8 × 0.6013 = 686.95 kip → 48 × 25.0 × 0.6013 = **721.58 kip**.
+  - Demand: D = 150 + 24 = 174 kip; HS20 LL = 115 kip.
+  - Inventory RF = (C − 1.3 × 174)/(2.17 × 115): (686.95 − 226.2)/249.55 = **1.846** → (721.58 − 226.2)/249.55 = **1.985**.
+  - Operating RF (A_2 1.3, 149.5): **3.082 → 3.314**.
+  - LFR governing check: SP3-Y 1.16 / 1.94, unchanged. LRFR: no change.
+  - Filler project (3/8 in fillers, R_F 0.700): L2-U1-FS 480.86 → 505.11 kip. LFR Inventory (governing) **1.021 → 1.118**; Operating **1.703 → 1.866**.
+- **RF changes, the 21 projects of G4A (governing):**
+  - Spliced and spliced RIDOT: LFR Inventory / Operating −0.402 / −0.670 → −0.364 / −0.607 (L1-L2-FS).
+  - Fillers: LFR 1.021 / 1.703 → 1.118 / 1.866 (L2-U1-FS).
+  - Every other project: no governing change. The LFR fastener-shear capacities of unknown rivets rise by 25/23.8, and with them their check RFs. LRFR: no change anywhere.
+  - Two extra filler variants:
+    - Areas entered: LFR 0.814 / 1.359 → 0.901 / 1.504.
+    - Unequal plates: the check RFs change, the governing RF does not.
+- **How verified:**
+  - Headless probe origin/main vs branch over the 21 projects plus the 2 filler variants: only LFR unknown-rivet fastener-shear capacities and their RFs differ.
+  - `tests/smoke/gusset-mbe4.mjs` extended with the hand checks above, including an entered 23.8 being kept: ALL PASS.
+  - `check-syntax` pass; `phone-layout --tool gusset --w 390` pass; 0 console errors on every tab and the Report.
+  - `project-library --tool gusset`: the 4 "identical to main" checks differ only by `R.p.FvR0L`, the LFR fastener-shear capacities and RFs, and their text, as intended; all other checks pass.
+- **Other copies:** none.
