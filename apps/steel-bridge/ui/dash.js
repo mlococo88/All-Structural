@@ -22,7 +22,7 @@
   const D = { o: null, open: new Set(), coll: false };
   const SM = () => window.SBDSummary, SU = () => window.SBDSummaryUI, fmt = (x, d) => window.SharedUnits.fmt(x, d);
   const LBL = { pass: 'PASS', fail: 'FAIL', review: 'REVIEW', na: 'n/a', notrun: 'not run' };
-  const vOf = (q, c) => !q ? '—' : q.st === 'notrun' ? 'not run' : q.st === 'na' ? 'n/a' : c.rf ? (isFinite(q.rf) ? 'RF ' + fmt(q.rf, 2) : '—') : (isFinite(q.r) ? fmt(q.r, 3) : 'NaN');
+  const vOf = (q, c) => !q ? '—' : q.st === 'notrun' ? 'not run' : q.st === 'na' ? 'n/a' : c.rf ? (isFinite(q.rf) ? 'RF ' + fmt(q.rf, 2) : '—') : (isFinite(q.r) ? fmt(q.r, 3) : q.r === Infinity ? '∞' : q.r === -Infinity ? '−∞' : 'NaN');   // QA2: as the Summary table (∞ added; NaN only for a true NaN)
   const rd = k => { try { return D.o.store ? D.o.store.getItem(k) : null; } catch (e) { return null; } };
   const wr = (k, v) => { try { if (D.o.store) D.o.store.setItem(k, v); } catch (e) { /* not kept */ } };
 

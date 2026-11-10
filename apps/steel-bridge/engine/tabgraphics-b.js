@@ -308,7 +308,7 @@
     // details in the upper half of the web take rows above the girder, the others rows under the station axis
     const GRX = window.SBDGraphics, tw = (str, hh) => GRX.textW(str, hh), hl = h * 0.8, ent = rows.map((r, i) => { const s = segAt(G, Math.min(Math.max(+r.x, 1e-6), G.L - 1e-6)), y = (FLOC[r.loc] || FLOC.bfo)(F, s, v, r), q = fa1[i], rat = r.exempt ? NaN : q ? q.r : NaN, txt = `F${i + 1} ${r.exempt ? 'EXEMPT' : f2(rat)}`;
       return { i, r, y, x: X(+r.x), rat, txt, top: y > s.D * v / 2, w: tw(txt, Math.max(hl, 0.72 * h)) + 0.5 * h }; });
-    const rowsOf = grp => { const g = ent.filter(q => q.top === grp), lv = GRX.stack(g.map(q => ({ x: q.x, w: q.w })), { gap: 0.4 * h }); g.forEach((q, k) => { q.lvl = lv[k]; }); return g.length ? Math.max(...lv) + 1 : 0; };
+    const rowsOf = grp => { const g = ent.filter(q => q.top === grp), lv = GRX.stack(g.map(q => ({ x: q.x, w: q.w })), { gap: 0.4 * h, leaders: true }); g.forEach((q, k) => { q.lvl = lv[k]; }); return g.length ? Math.max(...lv) + 1 : 0; };
     const nTop = rowsOf(true), nBot = rowsOf(false), rowB = F.alloc((2.2 + 1.5 * nBot) * h), yTopL = F.yTop + 3 * h;
     ent.forEach(q => { const { i, r, y, x, rat } = q, lay = r.exempt ? L.na : L[rcls(rat)];
       D.circle(lay, x, F.yB + y, 0.55 * h);
@@ -339,15 +339,15 @@
     const byC = { ok: [], hi: [], ng: [], na: [] }; rows.forEach((r, i) => { if (fin(r.dem)) byC[r.exempt ? 'na' : rcls(fa1[i] ? fa1[i].r : NaN)].push([+r.x * 12, r.dem]); });
     const C = chartOver({ at: [0, 0], w: Lin, hgt: Lin * 0.16, h, xr: [0, Lin], yr: [0, ymax], ystep: ys, xstep: niceStep(0, G.L, 10) * 12, fx: v => String(Math.round(v / 12)), fy: v => (+v.toFixed(2)).toString(), file: 'fatigue-chart',
  xlab: 'STATION ALONG THE GIRDER (FT)', ylab: 'STRESS RANGE (KSI)',
-      legend: 'below', vlabel: 'bottom', series: [{ name: '(DF)n RESISTANCE', kind: 'points', pts: rows.filter(r => fin(r.res)).map(r => [+r.x * 12, r.res]), color: 5 }, { name: 'gamma(Df) < 0.9 (DF)n', kind: 'points', pts: byC.ok, color: 3 }, { name: '0.9 TO 1.0 (DF)n', kind: 'points', pts: byC.hi, color: 2 },
+      legend: 'below', vlabel: 'bottom', series: [{ name: '(DELTA F)n RESISTANCE', kind: 'points', pts: rows.filter(r => fin(r.res)).map(r => [+r.x * 12, r.res]), color: 5 }, { name: 'GAMMA(DELTA f) < 0.9 (DELTA F)n', kind: 'points', pts: byC.ok, color: 3 }, { name: '0.9 TO 1.0 (DELTA F)n', kind: 'points', pts: byC.hi, color: 2 },
         { name: '> 1.0 (NG)', kind: 'points', pts: byC.ng, color: 1 }, { name: 'EXEMPT (FA2)', kind: 'points', pts: byC.na, color: 9 }], vlines: G.sup.map((x, k) => ({ x: x * 12, label: supName(k, G.sup.length) })) });
     const D = C.D, L = layersOf(D), reg = [], hh = C.h;
     // the detail labels F1.. sit above their points, set left-aligned in the lowest free place (SBDGraphics.declutter), on a leader when lifted
     const lab = rows.map((r, i) => ({ x: C.X(+r.x * 12) + 0.2 * hh, y: C.Y(Math.max(r.dem || 0, r.res || 0)) + 0.9 * hh, w: TW(`F${i + 1}`, hh * 0.8, hh) + 0.4 * hh, hh: Math.max(hh * 0.8, 0.72 * hh) })), by = window.SBDGraphics.declutter(lab, { gap: 0.3 * hh });
-    D.text(L.t, 0, Math.max(C.plot[3], ...by.map((q, i) => q + 0.9 * lab[i].hh)) + 1.2 * hh, hh * 1.1, `GIRDER ${(P.girders[opt.gi || 0] || {}).label || 'G1'}: FATIGUE STRESS RANGE gamma(Df) vs NOMINAL RESISTANCE (DF)n`);   // above the highest label
+    D.text(L.t, 0, Math.max(C.plot[3], ...by.map((q, i) => q + 0.9 * lab[i].hh)) + 1.2 * hh, hh * 1.1, `GIRDER ${(P.girders[opt.gi || 0] || {}).label || 'G1'}: FATIGUE STRESS RANGE GAMMA(DELTA f) VS NOMINAL RESISTANCE (DELTA F)n`);   // above the highest label
     rows.forEach((r, i) => { const x = C.X(+r.x * 12); if (fin(r.res) && fin(r.dem)) D.line(L.c, x, C.Y(r.dem), x, C.Y(r.res), D.ltype('DASHED')); D.text(L.t, lab[i].x, by[i], lab[i].hh, `F${i + 1}`, 0); if (by[i] > lab[i].y + 0.1 * hh) D.line(L.t, x, lab[i].y - 0.9 * hh, x, by[i]);
       if (opt.sel && opt.sel.k === 'fa' && opt.sel.i === i) D.circle(L.sel, x, C.Y(r.dem), 1.4 * hh);
-      const ya = C.Y(Math.min(r.dem || 0, r.res || 0)), yb = C.Y(Math.max(r.dem || 0, r.res || 0)); reg.push({ k: 'fa', i, x0: x - 0.55 * hh, y0: Math.max(C.plot[1], ya - 0.8 * hh), x1: x + 0.55 * hh, y1: Math.min(C.plot[3], yb + 0.8 * hh), lab: `F${i + 1} ${up(r.name)}: GAMMA(DF) ${f2(r.dem)} / (DF)n ${f2(r.res)} KSI` }); });
+      const ya = C.Y(Math.min(r.dem || 0, r.res || 0)), yb = C.Y(Math.max(r.dem || 0, r.res || 0)); reg.push({ k: 'fa', i, x0: x - 0.55 * hh, y0: Math.max(C.plot[1], ya - 0.8 * hh), x1: x + 0.55 * hh, y1: Math.min(C.plot[3], yb + 0.8 * hh), lab: `F${i + 1} ${up(r.name)}: GAMMA(DELTA f) ${f2(r.dem)} / (DELTA F)n ${f2(r.res)} KSI` }); });
     return base('fatigueChart', 'Fatigue stress range along the girder', D, 0, reg);
   }
 
@@ -506,11 +506,19 @@
     const cap = opt.cap || 5, ser = [['flex', 'inv', 5, undefined, 'INVENTORY, FLEXURE'], ['shear', 'inv', 3, undefined, 'INVENTORY, SHEAR'], ['flex', 'opr', 5, 'DASHED', 'OPERATING, FLEXURE'], ['shear', 'opr', 3, 'DASHED', 'OPERATING, SHEAR']];
     const data = ser.map(q => rfSeries(B.rows, q[0], q[1])); let ymax = 0; data.forEach(s => s.forEach(p => { if (fin(p[1])) ymax = Math.max(ymax, Math.min(p[1], cap)); })); ymax = Math.max(2, Math.ceil(ymax * 1.05 * 2) / 2);
     const C = chartOver({ at: [0, 0], w: Lin, hgt: Lin * 0.16, h, xr: [0, Lg], yr: [0, ymax], ystep: ymax > 6 ? 1 : 0.5, xstep: niceStep(0, Lg, 10), file: 'rating-chart', xlab: 'STATION ALONG THE GIRDER (FT)', ylab: 'RATING FACTOR RF',
-      title: `GIRDER ${(P.girders[opt.gi || 0] || {}).label || 'G1'}: LOAD RATING FACTOR ALONG THE GIRDER (LRFR)`, vlines: sup.map((x, k) => ({ x, label: supName(k, sup.length) })), limits: [{ y: 1, label: 'RF = 1.0', color: 1 }], legend: 'below', legendExtra: [{ text: `SCALE CAPPED AT RF ${ymax}: ARROW AND DASHED CAP = VALUE ABOVE THE SCALE`, arrow: true }],
+      vlines: sup.map(x => ({ x })), limits: [{ y: 1, label: 'RF = 1.0', color: 1 }], legend: 'below', legendExtra: [{ text: `SCALE CAPPED AT RF ${ymax}: ARROW AND DASHED CAP = VALUE ABOVE THE SCALE`, arrow: true }],
       series: ser.map((q, k) => ({ name: q[4], kind: 'line', pts: data[k], color: q[2], lt: q[3] })) });
     const D = C.D, L = layersOf(D), hh = C.h;
-    const gl = []; ['inv', 'opr'].forEach(k => { const g = B.sum && B.sum.gov && B.sum.gov[k]; if (g && fin(g.x) && fin(g[k])) { const yy = C.Y(Math.min(Math.max(g[k], 0), ymax)); D.circle(L.gov, C.X(g.x), yy, 1.1 * hh); const txt = `${k === 'inv' ? 'INV' : 'OPR'} RF ${f2(g[k])} AT ${f1(g.x)} FT`; gl.push({ x: C.X(g.x) + 1.4 * hh, y: yy + 0.6 * hh, w: TW(txt, hh * 0.85, hh) + 0.4 * hh, hh: hh * 0.85, txt }); } });
-    window.SBDGraphics.declutter(gl, { gap: 0.3 * hh }).forEach((yb, i) => D.text(L.gov, gl[i].x, yb, gl[i].hh, gl[i].txt, 0));
+    // QA2 (2026-11-09): the support names in a row above the plot (not over the capped-value arrows at its top edge), the governing INV / OPR labels above them
+    // on leaders from their circles (not over the curves), the title in two lines above everything (it fits a phone screen at the reading zoom)
+    const pt = C.plot[3], ys = pt + 0.5 * hh, gl = [], tv = C.h * 0.7;
+    ['inv', 'opr'].forEach(k => { const g = B.sum && B.sum.gov && B.sum.gov[k]; if (g && fin(g.x) && fin(g[k])) { const xx = C.X(g.x), yy = C.Y(Math.min(Math.max(g[k], 0), ymax)); D.circle(L.gov, xx, yy, 1.1 * hh); const txt = `${k === 'inv' ? 'INV' : 'OPR'} RF ${f2(g[k])} AT ${f1(g.x)} FT`, w = TW(txt, hh * 0.85, hh) + 0.4 * hh;
+      gl.push({ x: Math.min(xx + 0.4 * hh, C.plot[2] - w), y: pt + 2.2 * hh, w, hh: hh * 0.85, txt, xx, yy }); } });
+    const gy = window.SBDGraphics.declutter(gl, { gap: 0.3 * hh }), ttop = Math.max(pt + 1.6 * hh, ...gy.map(y => y + 1.0 * hh)) + 0.6 * hh;
+    sup.forEach((x, k) => { const xs = C.X(x), nm = supName(k, sup.length), hw = TW(nm, tv, hh) / 2 + 0.5 * hh, hit = gl.some(q => Math.abs(q.xx - xs) < hw), last = k === sup.length - 1;   // clear of a leader at the support
+      D.text(L.t, hit ? xs + (last ? -0.4 : 0.4) * hh : xs, ys, tv, nm, k === 0 ? 0 : last ? 2 : hit ? 0 : 1); });
+    window.SBDGraphics.wrap(`GIRDER ${(P.girders[opt.gi || 0] || {}).label || 'G1'}: LOAD RATING FACTOR ALONG THE GIRDER (LRFR)`, 30).forEach((q, i, a) => D.text(L.t, C.plot[0], ttop + (a.length - 1 - i) * 1.45 * hh, 1.1 * hh, q));
+    gl.forEach((q, i) => { D.line(L.gov, q.xx, q.yy + 1.1 * hh, q.xx, gy[i] - 0.2 * hh); D.text(L.gov, q.x, gy[i], q.hh, q.txt, 0); });
     // click regions: one band per station, selecting the row with the smallest Inventory RF there (flexure or shear): the Rating tab's S.sel is a row index
     const best = new Map(); B.rows.forEach((r, i) => { if ((r.kind !== 'flex' && r.kind !== 'shear') || !fin(r.x) || r.oos) return; const k = +r.x.toFixed(3), v = fin(r.inv) ? r.inv : Infinity; if (!best.has(k) || v < best.get(k).v) best.set(k, { v, i }); });
     const xs = [...best.keys()].sort((a, b) => a - b), reg = [];

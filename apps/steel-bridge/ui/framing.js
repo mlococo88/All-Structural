@@ -13,6 +13,9 @@
   'use strict';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fmt = (x, d) => window.SharedUnits.fmt(x, d);
+  // QA2 (2026-11-09): the check table's large values (the CF8 stiffnesses, kip-in/rad) as whole numbers with thousands separators, as the item text (16,528);
+  // an infinite capacity (β_sec of a deep cross-frame) as ∞, not the next cell (the demand)
+  const big = x => Math.abs(x) >= 10000 ? window.SharedUnits.fmtInt(x) : fmt(x, 2);
   const cls = r => !isFinite(r) ? '' : r > 1 + 1e-9 ? 'fx-ng' : r >= 0.9 ? 'fx-hi' : 'fx-ok';
   const S = { key: '', R: null, sel: null };
 
@@ -125,7 +128,7 @@
     const fl = FRM.flSkew(L.m.skews, ext, P.framing), XF = CF.pointLoads(P, gi, { L }), br = FRM.girderBraces(P, gi, L);
     return { L, I, R, C, fl, XF, br, line, G, A };
   }
-  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`;
+  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>`;
   const A = '10th Ed. Art. ', OPEN = new Set(), TPX = (...ks) => ks.map(k => window.SBDFlexureUI.TP[k]).filter(Boolean);
 
   /* ---------- topics of the worked steps (presentation spec A, 2026-10-31; as ui/shear.js): framing layout, wind, torsional bracing, then each cross-frame member ---------- */
@@ -157,11 +160,11 @@
     // governing
     let gov = null; (C || []).forEach(c => c.items.forEach(it => { if (isFinite(it.r) && (it.st === 'pass' || it.st === 'fail') && (!gov || it.r > gov.it.r)) gov = { c, it }; }));
     h += `<section class="sec"><div class="secHead">Cross-frames: governing</div><div class="secBody">
-      ${gov ? `<p>Governing ratio <b class="${cls(gov.it.r)}">${fmt(gov.it.r, 3)}</b>: ${esc(gov.c.id)} ${esc(gov.c.title)}, ${esc(gov.it.loc)} ${wk(gov.it.step)}</p>` : ''}
+      ${gov ? `<p>Governing ratio <b class="${cls(gov.it.r)}">${fmt(gov.it.r, 3)}</b>: ${esc(gov.c.id)} ${window.SBDSub.html(gov.c.title)}, ${window.SBDSub.html(gov.it.loc)} ${wk(gov.it.step)}</p>` : ''}
       ${R.errors && R.errors.length ? `<div class="alert err">${R.errors.map(esc).join('<br>')}</div>` : ''}
       <div class="kv"><div><span>S (largest spacing)</span><span>${fmt(I.p.S, 2)} in</span></div><div><span>h / d</span><span>${fmt(I.p.h, 2)} / ${fmt(I.p.dg, 2)} in ${wk('cf.dg')}</span></div><div><span>L<sub>b</sub> (largest on any girder)</span><span>${fmt(I.p.Lb, 2)} ft ${wk('cf.Lb')}</span></div>
       <div><span>Deck placement M<sub>u</sub></span><span>${fmt(+I.p.sb.Mu, 1)} kip-ft</span></div><div><span>Stability span L, frames n</span><span>${fmt(I.p.sb.L, 2)} ft, ${I.p.sb.n}</span></div>${R.W ? `<div><span>F<sub>w</sub> Strength III / V</span><span>${fmt(R.W.III.Fw, 2)} / ${fmt(R.W.V.Fw, 2)} kip ${wk('cf.wIII.Fw')}</span></div>` : ''}</div>
-      <p class="note">M<sub>u</sub>: ${esc(I.src.Mu || '')}; ${esc(I.src.sb || '')}.${umNote(R)}</p></div></section>`;
+      <p class="note">M<sub>u</sub>: ${window.SBDSub.html(I.src.Mu || '')}; ${window.SBDSub.html(I.src.sb || '')}.${umNote(R)}</p></div></section>`;
     h += `<section class="sec"><div class="secHead">Cross-frames: elevation</div><div class="secBody"><div data-gfxb="crossframe"></div></div></section>`;   // drawn by ui/tabgraphics-b.js from the results below
     // layout
     h += `<section class="sec"><div class="secHead">Framing (6.7.4.2.1)</div><div class="secBody">${plan(L)}
@@ -178,8 +181,8 @@
       ${XF ? `<details><summary class="note">Point loads (x ft : P kip)</summary><p class="note">${XF.pts.map(q => `${fmt(q.x, 2)} : ${fmt(q.P, 3)}${q.end ? ' (bearing line)' : ''}`).join('; ')}</p></details>` : ''}</div></section>`;
     // checks
     if (C) h += `<section class="sec"><div class="secHead">Checks (CF1 to CF11${C.some(c => c.id === 'CFD') ? ', CFD, CFE' : ''})</div><div class="secBody"><div class="tscroll"><table class="tbl"><thead><tr><th>Check</th><th class="lft">Item</th><th>Demand</th><th>Resistance / limit</th><th>Ratio</th><th>Status</th><th></th></tr></thead><tbody>
-      ${C.map(c => c.items.length ? c.items.map((it, j) => `<tr>${j === 0 ? `<td rowspan="${c.items.length}" title="${esc(c.ref)}"><b>${esc(c.id)}</b><br><span class="note">${esc(c.title)}</span></td>` : ''}<td class="lft">${esc(it.loc)}</td><td>${isFinite(it.demand) ? fmt(it.demand, 2) : esc((it.cells || [])[0] || '')}</td><td>${isFinite(it.capacity) ? fmt(it.capacity, 2) : esc((it.cells || [])[1] || '')}</td><td class="${cls(it.r)}">${isFinite(it.r) ? fmt(it.r, 3) : '—'}</td><td class="${it.st === 'fail' ? 'fx-ng' : it.st === 'warn' ? 'fx-hi' : it.st === 'na' ? 'fx-na' : 'fx-ok'}">${stName(it.st)}</td><td>${wk(it.step)}</td></tr>`).join('')
-        : `<tr><td title="${esc(c.ref)}"><b>${esc(c.id)}</b></td><td class="lft fx-na" colspan="6">${esc(c.title)}: ${esc(c.naWhy || 'n/a')}</td></tr>`).join('')}</tbody></table></div>
+      ${C.map(c => c.items.length ? c.items.map((it, j) => `<tr>${j === 0 ? `<td rowspan="${c.items.length}" title="${esc(c.ref)}"><b>${esc(c.id)}</b><br><span class="note">${window.SBDSub.html(c.title)}</span></td>` : ''}<td class="lft">${window.SBDSub.html(it.loc)}</td><td>${isFinite(it.demand) ? big(it.demand) : esc((it.cells || [])[0] || '')}</td><td>${isFinite(it.capacity) ? big(it.capacity) : it.capacity === Infinity ? '∞' : esc((it.cells || [])[1] || '')}</td><td class="${cls(it.r)}">${isFinite(it.r) ? fmt(it.r, 3) : '—'}</td><td class="${it.st === 'fail' ? 'fx-ng' : it.st === 'warn' ? 'fx-hi' : it.st === 'na' ? 'fx-na' : 'fx-ok'}">${stName(it.st)}</td><td>${wk(it.step)}</td></tr>`).join('')
+        : `<tr><td title="${esc(c.ref)}"><b>${esc(c.id)}</b></td><td class="lft fx-na" colspan="6">${window.SBDSub.html(c.title)}: ${esc(c.naWhy || 'n/a')}</td></tr>`).join('')}</tbody></table></div>
       <p class="note">References: ${C.map(c => `${esc(c.id)} ${esc(c.ref)}`).join('; ')}.</p></div></section>`;
     // member forces
     if (R.frames) h += `<section class="sec"><div class="secHead">Member forces (truss model)</div><div class="secBody"><div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Member</th><th>Length (in)</th><th>per kip of F<sub>w</sub></th>${R.combos.map(c => `<th>${esc(c.id)} T / C (kip)</th>`).join('')}</tr></thead><tbody>
