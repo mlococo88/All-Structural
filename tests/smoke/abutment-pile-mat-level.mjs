@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Abutment calculator (abutment_calculator.html): one bottom-mat level on piles (ABPM, engineer decision 2026-11-10, "Yes, same bottom mat").
 //   node tests/smoke/abutment-pile-mat-level.mjs [file]   (default: abutment_calculator.html in this tree)
-// 1. Hand check: the punching check (Tab 4 §4.6) uses the footing design's d and d_v (toe, Tab 5 §5.3), d_e = t_f − c_F − d_b/2,
-//    h_p = t_f, on the default project switched to piles (t_f 36 in, c_F 3, e_pile 12, c_top 3, #8 toe) and on a variant
-//    (t_f 42 in, e_pile 18, c_top 4).
+// ABPH (2026-11-10, engineer decision correcting ABPM #1375): punching credits only the concrete above the pile head.
+// 1. Hand check: Tab 4 §4.6, h_p = t_f − e_pile; mat below the pile head: d_v = 0.72h_p; mat at or above it: d_v = max(0.9·toe d, 0.72h_p).
+//    Default switched to piles (t_f 36 in, c_F 3, e_pile 12, c_top 3, #8 toe), variant (t_f 42 in, e_pile 18, c_top 4), t_f 18 in,
+//    and e_pile 0. The toe d stays on the mat at c_F (ABPM).
 // 2. The clear cover pile top to bottom mat (panel I-7, piles.clrTop) changes no result (kept in S, input greyed out, not flagged).
 // 3. Thin footing: input error at t_f ≤ e_pile + 2 in (the clear cover no longer enters).
 // 4. The pile embedment detail (sheet "joint") draws one bottom mat, at the footing cover; Tab 4 §4.6 and the Report state the basis.
@@ -24,15 +25,21 @@ const run = (c) => p.evaluate((c) => { const S0 = JSON.parse(JSON.stringify(S));
     thin: !!pileCapThin(), json: JSON.stringify(R, (k, v) => ['clrTop', 'clrP', 'fingerprint'].includes(k) ? undefined : typeof v === 'number' && !isFinite(v) ? String(v) : v) };   // the echoed input and the Input ID (every input is part of it) excluded
   Object.keys(S).forEach(k => delete S[k]); Object.assign(S, S0); recalcAll(); return out; }, c);
 
-console.log('1. Hand check');
+console.log('1. Hand check (ABPH, 2026-11-10: punching on the concrete above the pile head; the toe keeps the mat at c_F)');
 const d0 = await run({});
-check(d0.pu && near(d0.pu.de, 32.5) && near(d0.pu.hP, 36) && near(d0.pu.dv, 29.25) && near(d0.pu.de, d0.toe.d, 1e-9) && near(d0.pu.dv, d0.toe.dv, 1e-9),
-  `default on piles: d_e = 36 − 3 − 1.0/2 = 32.50 in (= toe d), h_p = 36, d_v = max(29.25, 25.92) = 29.25 in (= toe d_v): ${JSON.stringify(d0.pu)}`);
-check(near(d0.pu.b0, 165, 0.01) && near(d0.pu.Vn, 1216.215, 0.01) && near(0.9 * d0.pu.Vn, 1094.59, 0.01) && near(d0.pu.Vu, 200.97, 0.01) && near(d0.pu.dc, 0.1836, 0.0001),
-  `default: b_0 = 4(12 + 29.25) = 165.0 in, V_n = 0.126·√4·165·29.25 = 1216.22 kip, φV_n = 1094.59, V_u 200.97, D/C 0.184 (was 0.410)`);
+check(d0.pu && d0.pu.de === null && near(d0.pu.hP, 24) && near(d0.pu.dv, 17.28) && near(d0.toe.d, 32.5),
+  `default on piles: h_p = 36 − 12 = 24.0 in, mat below the pile head (no d_e), d_v = 0.72·24 = 17.28 in; toe d stays 32.50: ${JSON.stringify(d0.pu)}`);
+check(near(d0.pu.b0, 117.12, 0.01) && near(d0.pu.Vn, 510.006, 0.01) && near(0.9 * d0.pu.Vn, 459.005, 0.01) && near(d0.pu.Vu, 200.97, 0.01) && near(d0.pu.dc, 0.4378, 0.0001),
+  `default: b_0 = 4(12 + 17.28) = 117.12 in, V_n = 0.126·√4·117.12·17.28 = 510.01 kip, φV_n = 459.01, V_u 200.97, D/C 0.438 (pre-#1375 0.410, #1375 0.184)`);
 const d1 = await run({ tf: 3.5, embed: 18, clr: 4 });
-check(d1.pu && near(d1.pu.de, 38.5) && near(d1.pu.hP, 42) && near(d1.pu.dv, 34.65) && near(d1.pu.b0, 186.6) && near(d1.pu.Vn, 1629.354, 0.01) && near(d1.pu.dc, 0.1424, 0.0001) && d1.pu.pile === 2,
-  `variant t_f 42, e 18, c_top 4: d_e 38.50, d_v 34.65, b_0 186.6, V_n 1629.35 kip, D/C 0.142 at pile 2 (was 0.455, pile 1): ${JSON.stringify(d1.pu)}`);
+check(d1.pu && d1.pu.de === null && near(d1.pu.hP, 24) && near(d1.pu.dv, 17.28) && near(d1.pu.b0, 117.12) && near(d1.pu.Vn, 510.006, 0.01) && near(d1.pu.dc, 0.4549, 0.0001) && d1.pu.pile === 1,
+  `variant t_f 42, e 18, c_top 4: h_p 24, d_v 17.28, b_0 117.12, V_n 510.01 kip, D/C 0.455 at pile 1 (pre-#1375 the same; #1375 0.142): ${JSON.stringify(d1.pu)}`);
+const d2 = await run({ tf: 1.5 });
+check(d2.pu && near(d2.pu.hP, 6) && near(d2.pu.dv, 4.32) && near(d2.pu.b0, 65.28) && near(d2.pu.Vn, 71.066, 0.01) && near(d2.pu.dc, 2.7957, 0.0005),
+  `t_f 18 in: h_p 6, d_v 4.32, b_0 65.28, V_n 71.07 kip, D/C 2.80 FAIL (pre-#1375 2.80; #1375 0.60): ${JSON.stringify(d2.pu)}`);
+const d3 = await run({ embed: 0, clr: 2.5 });
+check(d3.pu && near(d3.pu.hP, 36) && near(d3.pu.de, 32.5) && near(d3.pu.dv, 29.25) && near(d3.pu.dc, 0.1836, 0.0001),
+  `pile head at the footing bottom (e 0, mat above it): d_e = toe d 32.50, d_v = max(29.25, 25.92) = 29.25, D/C 0.184 (all three versions): ${JSON.stringify(d3.pu)}`);
 
 console.log('2. The clear cover of panel I-7 changes no result');
 for (const [nm, a, b] of [['pile default', { clr: 3 }, { clr: 7.5 }], ['pile variant', { tf: 3.5, embed: 18, clr: 4 }, { tf: 3.5, embed: 18, clr: 0 }], ['spread', { branch: 'spread', clr: 3 }, { branch: 'spread', clr: 9 }]]) {
@@ -45,7 +52,7 @@ check(inp.dis && !inp.bad && inp.val === 40 && !inp.err, `the input is greyed ou
 
 console.log('3. Thin footing');
 const t1 = await run({ tf: 14.5 / 12 }), t2 = await run({ tf: 13.9 / 12 });
-check(!t1.thin && t2.thin, `t_f 14.5 in > 12 + 2: no input error; t_f 13.9 in: input error (was at t_f ≤ 17 in with c_top 3)`);
+check(!t1.thin && t2.thin, `t_f 14.5 in: h_p 2.5 > 2 in, no input error; t_f 13.9 in: input error (pre-#1375 at t_f ≤ 17 in with c_top 3)`);
 
 console.log('4. Drawing and notes');
 const dw = await p.evaluate(async () => { const S0 = JSON.stringify(S); S.fnd.branch = 'pile'; recalcAll(); activateTab('tab-dwg'); await new Promise(r => setTimeout(r, 800));
@@ -53,11 +60,11 @@ const dw = await p.evaluate(async () => { const S0 = JSON.stringify(S); S.fnd.br
   const txt = E.map(e => e.s || '').join(' | '), all = B.D.E.map(e => e.s || '').join(' | ');
   activateTab('tab-found'); await new Promise(r => setTimeout(r, 300)); const pun = (document.querySelector('[data-cid="o-punch"]') || {}).textContent || '';
   Object.keys(S).forEach(k => delete S[k]); Object.assign(S, JSON.parse(S0)); recalcAll(); activateTab('tab-loads');
-  return { has: !!s, one: /BOTTOM AT THE FOOTING COVER \(PANEL I-2\)/.test(txt), old: /CLEAR DISTANCE/.test(txt), note: /ONE BOTTOM MAT AT THE FOOTING COVER/.test(all), pun: /engineer decision 2026-11-10/.test(pun) && /not used/.test(pun) }; });
-check(dw.has && dw.one && !dw.old && dw.note && dw.pun, `sheet "joint": the bottom mat labelled at the footing cover, no "clear distance" mat; Tab 4 §4.6 states the basis: ${JSON.stringify(dw)}`);
+  return { has: !!s, one: /BOTTOM AT THE FOOTING COVER \(PANEL I-2\)/.test(txt), old: /CLEAR DISTANCE/.test(txt), note: /ONE BOTTOM MAT AT THE FOOTING COVER/.test(all) && /PUNCHING \(TAB 4 4\.6\) CREDITS ONLY THE CONCRETE ABOVE THE PILE HEAD/.test(all), hp: /H_P/.test(txt), pun: /punching cone starts at its top/.test(pun) && /not used/.test(pun) }; });
+check(dw.has && dw.one && !dw.old && dw.note && dw.hp && dw.pun, `sheet "joint": the bottom mat labelled at the footing cover, no "clear distance" mat; Tab 4 §4.6 states the basis: ${JSON.stringify(dw)}`);
 await p.evaluate(() => { S.fnd.branch = 'pile'; recalcAll(); buildInputs(); });
 const rep = await p.evaluate(async () => { abrShow(); await new Promise(r => setTimeout(r, 2500)); const t = document.body.textContent;
-  return { basis: /Punching depth basis \(engineer decision 2026-11-10\)/.test(t), de: /Effective depth to the bottom mat of the footing design/.test(t), inp: /not used: one bottom mat at c_F, see §4\.6/.test(t) }; });
+  return { basis: /Punching depth basis \(engineer decision 2026-11-10\)/.test(t), de: /Concrete above the pile head/.test(t) && /the floor of 5\.7\.2\.8/.test(t), inp: /not used: no mat over the pile heads, see §4\.6/.test(t) }; });
 check(rep.basis && rep.de && rep.inp, `Report: the punching depth basis note, the worked d_e and the input echo (${JSON.stringify(rep)})`);
 
 check(!o.errs.length, `console errors: ${o.errs.length} ${JSON.stringify(o.errs.slice(0, 3))}`);
