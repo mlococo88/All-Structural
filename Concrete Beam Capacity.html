@@ -6365,7 +6365,7 @@ function lsGet(k){ try{return localStorage.getItem(k);}catch(e){return null;} }
 function lsSet(k,v){ try{localStorage.setItem(k,v);return true;}catch(e){return false;} }
 /* Allowable stresses tied to f'c / fy (psi), auto unless the user overrides a field.
    Inventory fc = 0.40 f'c (AASHTO Std. Spec. 8.15.2.1.1). fs: inventory 20,000 psi Gr 40/50,
-   24,000 psi Gr 60 (8.15.2.2); operating 28,000 psi Gr 40, 36,000 psi Gr 60 (MBE 6B.6.2.3).
+   24,000 psi Gr 60 (8.15.2.2); operating 28,000 psi Gr 40, 36,000 psi Gr 60 (MBE Table 6B.5.2.3-1).
    Other grades: no rule, value stays as entered. Operating fc is never auto (MassDOT value). */
 const AUTO_ALLOW=[&quot;fc_inv&quot;,&quot;fs_inv&quot;,&quot;fs_op&quot;];
 function autoAllow(fc,fy){
@@ -6701,7 +6701,7 @@ function buildInput(){
   /* 3. Allowable stresses */
   mkSection(&quot;inAllow&quot;,NT(&quot;Allowable Stresses&quot;),b=>{
     b.appendChild(cbNL(&quot;note&quot;,&quot;AASHTO 8.15.2 service-level allowables, set automatically from f'_c and f_y (auto):&quot;,[[&quot;f_c,inv:&quot;,&quot;f_c,inv = 0.40 f'_c.&quot;],
-      [&quot;f_s,inv:&quot;,&quot;f_s,inv = 20,000 psi (Gr 40/50) or 24,000 psi (Gr 60).&quot;],[&quot;f_s,op:&quot;,&quot;f_s,op = 28,000 psi (Gr 40) or 36,000 psi (Gr 60, MBE 6B.6.2.3).&quot;],
+      [&quot;f_s,inv:&quot;,&quot;f_s,inv = 20,000 psi (Gr 40/50) or 24,000 psi (Gr 60).&quot;],[&quot;f_s,op:&quot;,&quot;f_s,op = 28,000 psi (Gr 40) or 36,000 psi (Gr 60, MBE Table 6B.5.2.3-1).&quot;],
       [&quot;Override:&quot;,&quot;typing a value overrides it.&quot;],[&quot;Operating f_c:&quot;,&quot;always the entered value.&quot;]]));   /* CBNL */
     b.appendChild(el(&quot;div&quot;,&quot;grpMini&quot;,&quot;Inventory&quot;));
     fRow(b,&quot;Concrete, f_{c,inv}&quot;+allowTag(&quot;fc_inv&quot;),numIn(()=>S.allow.fc_inv,v=>{S.allow.fc_inv=v;S.allow.ovr.fc_inv=true;},&quot;50&quot;,&quot;fcInv&quot;),&quot;psi&quot;);
@@ -6926,15 +6926,15 @@ function buildSummaryTab(pg){
     if(!(S.allow.ovr&amp;&amp;S.allow.ovr[k]) &amp;&amp; aa[k]===null){
       const wn=el(&quot;div&quot;,&quot;errBox&quot;);
       wn.innerHTML=&quot;f<sub>y</sub> = &quot;+grp(R.fy)+&quot; psi has no automatic rule for &quot;+lb+&quot;: the value used (&quot;+grp(R.A[k])+
-        &quot; psi) is the field's current entry and may be left from an earlier f<sub>y</sub>. Check it against AASHTO MBE Table 6B.6.2.3-1.&quot;;
+        &quot; psi) is the field's current entry and may be left from an earlier f<sub>y</sub>. Check it against AASHTO MBE Table 6B.5.2.3-1.&quot;;
       pg.appendChild(wn);
     }
   });
-  /* operating f_c above 0.60 f'c (MBE 6B.6.2.3) */
+  /* operating f_c above 0.60 f'c (MBE 6B.5.2.4.1, Table 6B.5.2.4.1-1) */
   if(R.A.fc_op>0.60*R.fc+1e-9){
     const on=el(&quot;div&quot;,&quot;warnBox&quot;);
     on.innerHTML=&quot;Operating f<sub>c</sub> = &quot;+grp(R.A.fc_op)+&quot; psi is greater than 0.60f&amp;prime;<sub>c</sub> = &quot;+fmt(0.60*R.fc,1)+
-      &quot; psi (AASHTO MBE 6B.6.2.3). Confirm the owner's basis for this value (the 1,900 psi default is a MassDOT value).&quot;;
+      &quot; psi (AASHTO MBE 6B.5.2.4.1, Table 6B.5.2.4.1-1). Confirm the owner's basis for this value (the 1,900 psi default is a MassDOT value).&quot;;
     pg.appendChild(on);
   }
 
@@ -7226,7 +7226,7 @@ function normRptOpts(){ let o=S.ui.rptOpts; if(!o||!o.tabs) o=defaultRptOpts();
    Display only: every value shown is compute()'s. */
 const ASD_REFS=[
   [&quot;AASHTO Std. Spec.&quot;,&quot;AASHTO Standard Specifications for Highway Bridges, 17th Edition (2002) — Art. 8.15 (service load design: 8.15.2 allowable stresses, 8.15.3 flexure, 8.15.3.4 modular ratio), 8.7.1 (E_c), 8.10.1.1 / 8.10.1.2 (effective flange width).&quot;],
-  [&quot;AASHTO MBE&quot;,&quot;Manual for Bridge Evaluation — Section 6 Part B (allowable stress rating): rating factor RF = (C − M_DL)/M_LL+I; 6B.6.2.3 and Table 6B.6.2.3-1 (allowable stresses). Edition: verify.&quot;]];
+  [&quot;AASHTO MBE&quot;,&quot;Manual for Bridge Evaluation, 4th Edition (2026) — Section 6 Part B (allowable stress rating): rating factor RF = (C − M_DL)/M_LL+I (Eq. 6B.4.1-1 with A1 = A2 = 1.0, 6B.4.2); Table 6B.5.2.3-1 (reinforcing steel) and 6B.5.2.4.1, Table 6B.5.2.4.1-1 (concrete in bending) (allowable stresses).&quot;]];
 /* =====================================================================
    CBRX (2026-11-03): the D11 print report (buildReport -> #printReport, its &quot;Report Contents&quot; dialog, asdPageCSS) is retired;
    what it printed is in the suite's Report tab. The dialog's choices are the Include boxes of the Report bar (the same field
@@ -7423,7 +7423,7 @@ function asdRptModel(){
       S.mode.inv?[['Inventory',{t:F(R.M_inv),n:true,key:'an/inv.M'},R.ctrl_inv,{t:isFinite(R.rf_inv)?F(R.rf_inv):'—',n:true,key:'an/inv.RF'},isFinite(R.rf_inv)?{t:R.rf_inv>=1?'PASS':'FAIL',cls:R.rf_inv>=1?'ok':'ng'}:{t:'N/A',cls:'na'}]]:[],
       S.mode.op?[['Operating',{t:F(R.M_op),n:true,key:'an/op.M'},R.ctrl_op,{t:isFinite(R.rf_op)?F(R.rf_op):'—',n:true,key:'an/op.RF'},isFinite(R.rf_op)?{t:R.rf_op>=1?'PASS':'FAIL',cls:R.rf_op>=1?'ok':'ng'}:{t:'N/A',cls:'na'}]]:[])},
     ...cbrNL('Scope: singly reinforced flexure only (working stress, AASHTO Std. Spec. 8.15).',[['Compression steel','(8.15.3) is ignored.'],['Shear:','ASD shear (8.15.5) is not checked.'],['Pass:','a rating level passes when RF ≥ 1.00. [[tab:tabAnalysis|On screen: Analysis tab]]'],   /* CBNL */
-      R.A.fc_op>0.60*R.fc+1e-9?['Operating $f_{c}$:','operating $f_{c}$ = '+grp(R.A.fc_op)+' psi is greater than 0.60$f^{\\prime}_{c}$ = '+fmt(0.60*R.fc,1)+' psi (AASHTO MBE 6B.6.2.3): confirm the owner\'s basis.']:null])])}]});
+      R.A.fc_op>0.60*R.fc+1e-9?['Operating $f_{c}$:','operating $f_{c}$ = '+grp(R.A.fc_op)+' psi is greater than 0.60$f^{\\prime}_{c}$ = '+fmt(0.60*R.fc,1)+' psi (AASHTO MBE 6B.5.2.4.1, Table 6B.5.2.4.1-1): confirm the owner\'s basis.']:null])])}]});
   const RX=asdRxSel(), TABOF={'Inputs':'tabInputEcho','Analysis and rating':'tabAnalysis'};   /* CBRX: the Include boxes (S.ui.rptOpts) */
   secs.forEach(s=>{ s.tab=TABOF[s.title]; });
   return {title:'ASD Beam Rating',code:'AASHTO Std. Spec. 8.15 (working stress); AASHTO MBE 6B',proj:P,refs:ASD_REFS,sections:secs.filter(s=>!(s.tab&amp;&amp;RX.tabs[s.tab]===false))};
@@ -7459,12 +7459,12 @@ function asdDashItems(){
   const aa=autoAllow(+S.inherit.fc||0,+S.inherit.fy||0);
   [['fs_inv','f_s,inv'],['fs_op','f_s,op']].forEach(([k,lb])=>{
     if(!(S.allow.ovr&amp;&amp;S.allow.ovr[k])&amp;&amp;aa[k]===null) out.push({name:'Allowable '+lb,st:'warn',short:'no rule for f_y',
-      text:'f_y = '+grp(R.fy)+' psi has no automatic rule for '+lb+': the value used ('+grp(R.A[k])+' psi) is the field’s current entry; check it against Table 6B.6.2.3-1.',
-      ref:'AASHTO MBE Table 6B.6.2.3-1',tab:'tabSummary',card:null});
+      text:'f_y = '+grp(R.fy)+' psi has no automatic rule for '+lb+': the value used ('+grp(R.A[k])+' psi) is the field’s current entry; check it against Table 6B.5.2.3-1.',
+      ref:'AASHTO MBE Table 6B.5.2.3-1',tab:'tabSummary',card:null});
   });
   if(R.A.fc_op>0.60*R.fc+1e-9) out.push({name:'Operating f_c',st:'warn',short:'f_c,op > 0.60f′c',
     text:'Operating f_c = '+grp(R.A.fc_op)+' psi > 0.60f′c = '+fmt(0.60*R.fc,1)+' psi; confirm the owner’s basis for this value.',
-    ref:'AASHTO MBE 6B.6.2.3',tab:'tabSummary',card:null});
+    ref:'AASHTO MBE 6B.5.2.4.1, Table 6B.5.2.4.1-1',tab:'tabSummary',card:null});
   out.forEach(it=>{ const tn=asdTabName(it.tab); it.where=tn?'→ '+tn+(it.card?' · '+ASD_CARDS[it.card]:''):''; });
   if((ASDCE||[]).length) out.push({name:'Inherited from Beam Capacity',st:'warn',short:'Beam Capacity input error',cap:true,   /* CBST */
     text:'Values inherited from Beam Capacity are the last ones sent before its input error; correct Beam Capacity first. (Beam Capacity: '+ASDCE.join(' ')+')',
