@@ -102,8 +102,8 @@
         // inflection). A row without nC.gB (a hand-made row): K as given where k ≥ 1 and f_s > 0; otherwise (f_x ≤ 0 / k blank, or f_s ≤ 0) f_max is taken
         // as the larger of f_bu,gov and f_s, the largest stress known in the L_b (conservative). No compression at all: F_e,s.
         const gB = !gA && nC.gB && typeof nC.gB === 'object' && +nC.gB.ge > 0 ? nC.gB : null;
-        const K = +nC.k > 0 ? Math.max(1, +nC.k) : null, FeS = Math.PI ** 2 * ES / (LbiC / rtS) ** 2, fbu = Math.max(gv ? gv.f : r.conC.f, 0), fmx = Math.max(fbu, fS);
-        const gm = gA ? 'A' : gB ? 'bound' : K && fS > 0 ? 'K' : fmx > 0 ? 'fmax' : 'none';
+        const kOk = +nC.k > 0, K = kOk ? Math.max(1, +nC.k) : 1, FeS = Math.PI ** 2 * ES / (LbiC / rtS) ** 2, fbu = Math.max(gv ? gv.f : r.conC.f, 0), fmx = Math.max(fbu, fS);
+        const gm = gA ? 'A' : gB ? 'bound' : kOk && fS > 0 ? 'K' : fmx > 0 ? 'fmax' : 'none';
         const ge = gm === 'A' ? +gA.ge : gm === 'bound' ? +gB.ge : gm === 'K' ? FeS / (K * fS) : gm === 'fmax' ? FeS / fmx : null, Fe = ge != null && fbu > 0 ? ge * fbu : FeS, rtE = LbiC / Math.PI * Math.sqrt(Fe / ES);
         const m = LTB({ bfc: r.conC.b, tfc: r.conC.t, Dc: Math.max(r.DcC, 1e-6), tw: r.tw, Lb: LbiC, Cb: 1, Rb: 1, Rh: gv ? gv.Rh : r.RhC, Fyc: r.conC.Fy, Fyw, rt: rtE }); r.CbCu = 1;
         r.ltC = { ...r.ltC, rt: m.rt, Lp: m.Lp, Lr: m.Lr, Fcr: m.Fcr, LTB: m.LTB, Fnc: Math.min(r.ltC.FLB, m.LTB), npr: { kind: 'ge', b, t, K, fS, rtS, FeS, ge, gm, gB, fmx, fbu, gv, Fe, rtE, Ir: +nC.Ir || null, A: gA, bw: gR && typeof gR === 'object' && gR.m === 'bound' ? String(gR.why || '') : null } }; } }
