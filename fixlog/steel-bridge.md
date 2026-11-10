@@ -5174,7 +5174,7 @@ format changed. Anchor text `QA2` marks each change. New file `ui/sub.js` (in th
 - **Other copies:** none.
 - **How verified:** `tests/check-syntax.mjs`; smoke steel-bridge-summary, steel-bridge-dash, phone-layout --tool sbapp (0 console errors); before / after screenshots at 1440 and 1920 px.
 
-## 2026-11-10 — PR: sbd-gfx-plans (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — plans in the option C style: Loads & LLDF cross-section, splice location strip (also the Report figure); the diaphragm elevation of the Cross-frames tab (SBDIA, #1297) restyled with them (DETC, part 2)   [display only; no computed value, formula, saved key or format change; every Download DXF byte-identical]
+## 2026-11-10 — PR: sbd-gfx-plans (PR #1305: https://github.com/mlococo88/All-Structural/pull/1305) — plans in the option C style: Loads & LLDF cross-section, splice location strip (also the Report figure); the diaphragm elevation of the Cross-frames tab (SBDIA, #1297) restyled with them (DETC, part 2)   [display only; no computed value, formula, saved key or format change; every Download DXF byte-identical]
 - **Request:** engineer decision 2026-11-10 (option C rollout), family (d) plans: #2 LLDF cross-section with lanes and wheel positions, #17 splice location strip. Coordinator (same day): restyle the diaphragm elevation added by #1297 with the cross-frame elevation (#14, done in #1295).
 - **Where:**
   - `apps/steel-bridge/ui/gfxdet.js`: new `lldf`, `lldfModel`, `lldfSvg` (anchor `/* ================= (d) plans`), `strip`, `stripModel`, `stripSvg`, `stripFigure` (Report), `diaphragm(B)` (anchor `diaphragm in use (SBDIA, #1297)`); API lines in the header.
