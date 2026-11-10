@@ -4,9 +4,12 @@
 //   1. 3D view: no approach slab (panel I-0b off, or the equivalent dead load only) -> no slab mesh and the "Approach slab" layer toggle
 //      disabled; slab on -> the slab drawn (conventional, semi-integral, integral) with its top at the top of the backwall / wall, and the
 //      toggle hides it; the toggle is a per-browser key (abutcalc_d3ApSlab_v1), S (the saved project) is unchanged by it.
-//   2. Drawings: for 9 projects (spread / pile footing, slab on / off, shelf / deck support, skew, water, semi-integral, integral) the three
-//      sheets are built, fit their sheet, the DXF passes SharedDxf.validate, and no text of a sheet's drawing overlaps another text
-//      (tests/engine/overlap.mjs textOverlaps, the Steel Bridge app's check; title block apart).
+//      ABD2 (2026-11-10): the slab at its skew in plan (L along the roadway at θ; far end parallel to the abutment or square to the
+//      roadway) and the shelf (b_S x h_S) under the slab bottom, conventional / semi-integral / integral.
+//   2. Drawings: for 9 projects (spread / pile footing, slab on / off, shelf / deck support, skew, water, semi-integral, integral) every
+//      sheet is built (the three of ABDW, then the ABD2 detail sheets that apply: approach slab and shelf, seat, joint / pile embedment,
+//      wingwall, general notes; numbered N OF M), fits its sheet, the DXF passes SharedDxf.validate, and no text of a sheet's drawing
+//      overlaps another text (tests/engine/overlap.mjs textOverlaps, the Steel Bridge app's check; title block apart).
 //   3. The Drawings tab opens, previews, picks a sheet (per-browser key abutcalc_dwgSheet_v1, not in S), "Download DXF" saves a valid file;
 //      no horizontal scroll at 390 px; no console errors.
 //   node tests/smoke/abutment-drawings.mjs
@@ -41,6 +44,21 @@ console.log('1. 3D view: the approach slab');
     const r = await withCase(p, su, pr);
     check(!r.err && r.n === 1 && Math.abs(r.ymax - r.top) < 1e-6 && r.dis === false, `${nm}: one slab, its top at the top of the wall ${r.top} ft (${JSON.stringify(r)})`);
   }
+  // ABD2: the slab at its skew (edges along the roadway at θ; far end parallel to the abutment or square to the roadway) on the shelf
+  const geo = `() => { build3D(window.LAST_R); const P = window.LAST_R.ap, out = { slab: null, shelf: null };
+    D3.group.children.forEach(c => { if (!c.isMesh || !c.material || !c.material.color) return; const h = c.material.color.getHex(); c.geometry.computeBoundingBox(); const b = c.geometry.boundingBox;
+      const e = { x: b.max.x - b.min.x, z: b.max.z - b.min.z, y0: b.min.y, y1: b.max.y };
+      if (h === 0xcfd8dc) out.slab = e; if (h === 0xb5b5a6) out.shelf = e; });
+    return { ...out, L: P.L, Lw: P.Lw, W: P.W, th: P.th, rule: P.rule, t: P.t, bS: P.bS, hS: P.hS, Lab: +S.geom.Lab }; }`;
+  for (const [nm, su] of [['conventional 0°', () => { S.apSlab.on = true; S.geom.skew = 0; }], ['conventional 30°, far end follows', () => { S.apSlab.on = true; S.geom.skew = 30; }],
+    ['conventional 30°, far end square', () => { S.apSlab.on = true; S.geom.skew = 30; S.apSlab.skew = 'square'; }], ['semi-integral 30°', () => { S.iab.type = 'semi'; S.apSlab.on = true; S.geom.skew = 30; }],
+    ['integral 20°', () => { S.iab.type = 'integral'; S.apSlab.on = true; S.geom.skew = 20; }]]) {
+    const r = await withCase(p, su, geo); if (r.err) { check(false, `${nm}: ${r.err}`); continue; }
+    const c = Math.cos(r.th * Math.PI / 180), sn = Math.sin(r.th * Math.PI / 180), xr = r.rule === 'square' ? (r.L + r.Lw * sn) * c : r.L * c, zr = r.Lw + r.L * sn;   // square: the longest side L + W tan θ ends inside the span of the shortest
+    const ok = r.slab && Math.abs(r.slab.x - xr) < 1e-6 && Math.abs(r.slab.z - zr) < 1e-6 && r.shelf && Math.abs(r.shelf.x - r.bS / 12) < 1e-6 && Math.abs(r.shelf.z - Math.min(r.Lw, r.Lab)) < 1e-6
+      && Math.abs(r.shelf.y1 - r.slab.y0) < 1e-6 && Math.abs(r.shelf.y1 - r.shelf.y0 - r.hS / 12) < 1e-6;
+    check(ok, `${nm}: slab ${r.slab && r.slab.x.toFixed(3)} x ${r.slab && r.slab.z.toFixed(3)} ft in plan (expected ${xr.toFixed(3)} x ${zr.toFixed(3)}: L ${r.L} along the roadway at θ ${r.th}°, ${r.rule}), shelf ${r.bS} in x ${r.hS} in under the slab bottom along ${Math.min(r.Lw, r.Lab).toFixed(2)} ft`);
+  }
   const hid = await p.evaluate(() => { const s0 = JSON.stringify(S); S.apSlab.on = true; recalcAll(); renderTab3D(window.LAST_R);
     const cb = document.querySelector('input[data-d3tog="ap"]'); cb.checked = false; cb.dispatchEvent(new Event('change'));
     const color = c => c.isMesh && c.material && c.material.color && c.material.color.getHex() === 0xcfd8dc, n1 = D3.group.children.filter(color).length, key = localStorage.getItem('abutcalc_d3ApSlab_v1');
@@ -60,9 +78,13 @@ console.log('2. Drawings: sheets, DXF validity, no overlapping text');
     'semi-integral + slab': () => { S.iab.type = 'semi'; S.apSlab.on = true; }, 'integral + slab': () => { S.iab.type = 'integral'; S.apSlab.on = true; } };
   let n = 0;
   for (const [nm, su] of Object.entries(cases)) {
-    const r = await withCase(p, su, () => { const B = abdwBuild(window.LAST_R), t = B.D.toDXF({ ltscale: 1 }); return { valid: SharedDxf.validate(t), sheets: B.S.map(s => ({ id: s.id, k: s.k, over: s.over, E: B.D.E.slice(s.i0, s.iC) })) }; });
+    const r = await withCase(p, su, () => { const B = abdwBuild(window.LAST_R), t = B.D.toDXF({ ltscale: 1 }), G = B.G;
+      // ABD2: the sheets expected from the inputs (the first three always; then the detail sheets that apply)
+      const want = ['sec', 'plan', 'bars'].concat(G.ap ? ['apslab'] : [], G.integ ? [] : ['seat'], ['joint'], S.wing.on && window.LAST_R.wing ? ['wing'] : [], ['notes']);
+      return { valid: SharedDxf.validate(t), want, sheetNo: B.S.map(s => s.sheetEnt.s), sheets: B.S.map(s => ({ id: s.id, k: s.k, over: s.over, E: B.D.E.slice(s.i0, s.iC) })) }; });
     if (r.err) { check(false, `${nm}: ${r.err}`); continue; }
-    check(r.valid.ok && r.sheets.length === 3, `${nm}: 3 sheets (${r.sheets.map(s => s.id + ' 1:' + s.k).join(', ')}), DXF valid${r.valid.ok ? '' : ': ' + r.valid.errors.slice(0, 3).join('; ')}`);
+    const ids = r.sheets.map(s => s.id).join(',');
+    check(r.valid.ok && ids === r.want.join(',') && r.sheetNo.every((t, j) => t === `${j + 1} OF ${r.sheets.length}`), `${nm}: ${r.sheets.length} sheets (${r.sheets.map(s => s.id + ' 1:' + s.k).join(', ')}), expected ${r.want.join(',')}, numbered N OF ${r.sheets.length}, DXF valid${r.valid.ok ? '' : ': ' + r.valid.errors.slice(0, 3).join('; ')}`);
     for (const s of r.sheets) { const ov = textOverlaps({ E: s.E }, X); n++;
       check(!s.over && ov.length === 0, `${nm}, ${s.id}: fits the sheet, ${ov.length} text overlaps${ov.length ? ': ' + ov.slice(0, 4).map(describe).join(' | ') : ''}`); }
   }
@@ -75,8 +97,8 @@ for (const vw of [1440, 390]) {
   const o = await openPage(FILE, { vw, vh: 900 }), p = o.p; await ready(p);
   const s0 = await p.evaluate(() => JSON.stringify(S));
   await p.click('#tabbar .tab[data-tab="tab-dwg"]'); await p.waitForSelector('#abdwSheet .sdx-view, .abdwBox svg', { timeout: 30000 }).catch(() => {});
-  const a = await p.evaluate(() => ({ svg: !!document.querySelector('.abdwBox svg'), n: document.querySelectorAll('#abdwSheet option').length, tab: S.ui.tab, on: ABDW.on }));
-  check(a.svg && a.n === 3 && a.on && a.tab !== 'tab-dwg', `${vw} px: preview shown, 3 sheets in the list, the tab not stored in S.ui.tab (${JSON.stringify(a)})`);
+  const a = await p.evaluate(() => ({ svg: !!document.querySelector('.abdwBox svg'), n: document.querySelectorAll('#abdwSheet option').length, nb: ABDW.B.S.length, tab: S.ui.tab, on: ABDW.on }));
+  check(a.svg && a.n === a.nb && a.n >= 6 && a.on && a.tab !== 'tab-dwg', `${vw} px: preview shown, ${a.n} sheets in the list, the tab not stored in S.ui.tab (${JSON.stringify(a)})`);
   await p.selectOption('#abdwSheet', 'plan');
   const b = await p.evaluate(() => ({ cur: ABDW.cur, key: localStorage.getItem('abutcalc_dwgSheet_v1'), head: document.querySelector('.abdwHead').textContent, sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
   check(b.cur === 'plan' && b.key === 'plan' && /FOOTING PLAN/.test(b.head), `${vw} px: sheet picked and kept per browser (${b.head})`);
