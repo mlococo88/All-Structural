@@ -14,7 +14,8 @@
        depth (6.7.4.2; owner rules OWN34–OWN36), CF11 owner details (OWN34, OWN35, OWN37);
      - cfDiaChecks (anchor `function cfDiaChecks(`): the channel or rolled W diaphragm in place of the cross-frame (CFD) and at the
        bearing lines (CFE): depth (6.7.4.2), brace stiffness 6EI_x/S and the brace moment and its shear (6.7.4.2.2), jacking (3.4.3.1),
-       wind M_w = F_w d (4.6.2.7.1), the bolted connection (6.13.2), the connection plate fit (6.13.2.6.6); with cfDiaSec, cfDiaOn,
+       wind M_w = F_w d (4.6.2.7.1), the bolted connection (6.13.2), the connection plate fit (6.13.2.6.6); added in this app (SBDX,
+       2026-11-10): a channel's flexure per 6.12.2.2.5 (chFlex; GirderDetail: 6.10.8) and the axial checks under F_w (diaAxial); with cfDiaSec, cfDiaOn,
        cfDiaGap, cfDiaEnd, cfTypeRec, cfTsCP, cfCPsize, cfBsCP, cfCP, cfDiaFit, angleProps, ANGLES, CF_MEM, CF_CH, CF_DIA, BOLT, FUB, PHI;
      - the cross-frame and diaphragm weight in DC1 (XF1, anchors `function gdXfW(`, `function gdXfModel(`, `function gdXfPts(`): each
        frame weighs W and puts W/2 on each of the two girders it connects, at that girder's own frame station from the framing layout
@@ -301,31 +302,86 @@
         if (c.items.length) out.add(c); } }
     return out;
   }
+  /* SBDX (2026-11-10, engineer approval "yes do all three"): two additions to the diaphragm checks, from nominal dimensions (fillets neglected),
+     thin-walled centerline values for J and C_w:
+     chFlex(X, Fy, Lb, Sx, Iy, ry): a CHANNEL diaphragm's flexural resistance about its strong axis per AASHTO LRFD 10th Ed. Art. 6.12.2.2.5
+       (channels; in place of the 6.10.8 I-section approximation, which rolled W diaphragms keep): M_n is the lesser of yielding M_p = F_yZ_x
+       and lateral-torsional buckling with L_b = S, C_b = 1.0 (as before): L_p = 1.76r_y√(E/F_y); L_r per Eq. 6.12.2.2.5-8; between them the
+       linear transition from M_p to 0.7F_yS_x; beyond L_r M_n = F_crS_x ≤ M_p with the elastic F_cr of Eq. 6.12.2.2.5-4; c = (h_o/2)√(I_y/C_w),
+       r_ts² = √(I_yC_w)/S_x, C_w per Eq. 6.12.2.2.5-6 (b = flange toe to web centerline), J = (2bt_f³ + h_ot_w³)/3. Rolled channels have compact
+       flanges and webs (C6.12.2.2.5), so FLB and web local buckling are not checked. φ_f = 1.0.
+     diaAxial(X, q, Fy, Fu, Ix, Iy, S, db, primary): the diaphragm as an axial member under the wind force P = F_w (both signs): compression per
+       6.9.4.1 (flexural buckling; a channel also flexural–torsional buckling about its axis of symmetry, 6.9.4.1.3-2; for a W torsional
+       buckling is not a mode since K_zℓ_z = K_yℓ_y, 6.9.4.1.1) with K = 1.0 and ℓ = S − 2e (bolt line to bolt line: the member's own length;
+       a single row of web bolts gives little end restraint, so the 0.75 of Art. 4.6.2.5 for frame members is not used) and K_zℓ_z = ℓ; slender
+       elements by the effective area of 6.9.4.2.2 (webs of rolled I- and channel sections c_1 = 0.18, c_2 = 1.31; flanges c_1 = 0.22,
+       c_2 = 1.49; Table 6.9.4.2.2b-1); φ_c = 0.95. Tension per 6.8.2.1: yielding 0.95F_yA_g, fracture 0.80F_uA_nU with A_n = A_g − n d_h t_w
+       (one row of n bolts through the web, holes drilled: R_p = 1.0) and U = A_web/A_g (the connected element: one transverse row has no
+       connection length for Table 6.8.2.2-1 Case 2, so the lower bound of Art. 6.8.2.2 is used). Slenderness Kℓ/r_min ≤ 120 (primary) or
+       140 (secondary) (6.9.3). Combined with the wind moment M_w per 6.9.2.2. */
+  function chFlex(X, Fy, Lb, Sx, Iy, ry) {
+    const { d, bf, tf, tw, hw } = X, ho = d - tf, b = bf - tw / 2, Zx = bf * tf * (d - tf) + tw * hw * hw / 4, Mp = Fy * Zx, Cb = 1.0;
+    const J = (2 * b * tf ** 3 + ho * tw ** 3) / 3, Cw = tf * b ** 3 * ho ** 2 / 12 * (3 * b * tf + 2 * ho * tw) / (6 * b * tf + ho * tw);
+    const c = ho / 2 * Math.sqrt(Iy / Cw), rts = Math.sqrt(Math.sqrt(Iy * Cw) / Sx), jr = J * c / (Sx * ho);
+    const Lp = 1.76 * ry * Math.sqrt(ES / Fy), Lr = 1.95 * rts * ES / (0.7 * Fy) * Math.sqrt(jr + Math.sqrt(jr * jr + 6.76 * (0.7 * Fy / ES) ** 2));
+    const Fcr = Cb * Math.PI ** 2 * ES / (Lb / rts) ** 2 * Math.sqrt(1 + 0.078 * jr * (Lb / rts) ** 2);
+    const zone = Lb <= Lp ? 'p' : Lb <= Lr ? 'i' : 'e', Mltb = zone === 'p' ? Mp : zone === 'i' ? Math.min(Cb * (Mp - (Mp - 0.7 * Fy * Sx) * (Lb - Lp) / (Lr - Lp)), Mp) : Math.min(Fcr * Sx, Mp);
+    return { ho, b, Zx, Mp, Cb, J, Cw, c, rts, jr, Lp, Lr, Fcr, zone, Lb, Mltb, Mn: Math.min(Mp, Mltb) };
+  }
+  function diaAxial(X, q, Fy, Fu, Ix, Iy, S, db, primary) {
+    const { chS, d, bf, tf, tw, hw, A } = X, ecc = +q.ecc || 3.5, L = S - 2 * ecc, K = 1.0, KL = K * L, G = 0.385 * ES, ho = d - tf, P2 = Math.PI ** 2;
+    const rx = Math.sqrt(Ix / A), ry = Math.sqrt(Iy / A), b = chS ? bf - tw / 2 : bf;
+    const J = (2 * b * tf ** 3 + ho * tw ** 3) / 3, Cw = chS ? tf * b ** 3 * ho ** 2 / 12 * (3 * b * tf + 2 * ho * tw) / (6 * b * tf + ho * tw) : Iy * ho * ho / 4;
+    const Pex = P2 * ES * A / (KL / rx) ** 2, Pey = P2 * ES * A / (KL / ry) ** 2;
+    let ft = null;
+    if (chS) { const xb = (hw * tw * tw / 2 + 2 * bf * tf * bf / 2) / A, xc = xb - tw / 2, e = 3 * b * b * tf / (6 * b * tf + ho * tw), xo = e + xc, ro2 = xo * xo + (Ix + Iy) / A, H = 1 - xo * xo / ro2;
+      const Pez = (P2 * ES * Cw / KL ** 2 + G * J) / (A * ro2), Pft = (Pex + Pez) / (2 * H) * (1 - Math.sqrt(1 - 4 * Pex * Pez * H / (Pex + Pez) ** 2));
+      ft = { xb, xc, e, xo, ro2, H, Pez, Pft }; }
+    const Pe = Math.min(Pex, Pey, ft ? ft.Pft : Infinity), mode = Pe === Pey ? 'flexural, y-axis' : Pe === Pex ? 'flexural, x-axis' : 'flexural–torsional';
+    const Po = Fy * A, Pcr = Pe >= 0.44 * Po ? 0.658 ** (Po / Pe) * Po : 0.877 * Pe, Fcr = Pcr / A;
+    const be = (w, lam, lr, c1, c2) => { if (lam <= lr * Math.sqrt(Fy / Fcr) + 1e-12) return { be: w, slender: lam > lr, Fel: null }; const Fel = (c2 * lr / lam) ** 2 * Fy, r = Math.sqrt(Fel / Fcr); return { be: Math.min(w, w * (1 - c1 * r) * r), slender: true, Fel }; };
+    const lrw = 1.49 * Math.sqrt(ES / Fy), lrf = 0.56 * Math.sqrt(ES / Fy), lw = hw / tw, wf = chS ? bf : bf / 2, lf = wf / tf, nf = chS ? 2 : 4;
+    const W_ = be(hw, lw, lrw, 0.18, 1.31), F_ = be(wf, lf, lrf, 0.22, 1.49), Aeff = A - (hw - W_.be) * tw - nf * (wf - F_.be) * tf;
+    const Pn = Fcr * Aeff, Pr = 0.95 * Pn;
+    const nb = Math.max(2, Math.round(+q.nb || 2)), dh = (BOLT[String(db)] || {}).dh || db + 0.0625, An = A - nb * dh * tw, U = hw * tw / A, Pyr = 0.95 * Fy * A, Pur = 0.80 * Fu * An * U, Pt = Math.min(Pyr, Pur);
+    const rmin = Math.min(rx, ry), sl = KL / rmin, lim = primary ? 120 : 140;
+    return { L, K, KL, ecc, rx, ry, rmin, J, Cw, G, Pex, Pey, ft, Pe, mode, Po, Pcr, Fcr, lrw, lrf, lw, lf, wf, nf, W: W_, F: F_, Aeff, Pn, Pr, nb, dh, An, U, Pyr, Pur, Pt, sl, lim, Fu };
+  }
   /* cfDiaChecks(R, out, end): the diaphragm in place of the cross-frame (CFD) or at the bearing lines (end: CFE) */
   function cfDiaChecks(R, out, end) {
     const E = R.E || env0(), p = R.p, q0 = p.dia || {}; if (q0.on !== 'yes') return; const q = end ? cfDiaEnd(q0) : q0, X = cfDiaSec(q), { chS, d, bf, tf, tw, nm_ } = X, Fy = +q.gr || 50, Es = 29000, S = R.S, SB = R.SB;
     const hw = X.hw, A = X.A, Ix = bf * d ** 3 / 12 - (bf - tw) * hw ** 3 / 12, Sx = 2 * Ix / d,
       Iy = chS ? (() => { const xb = (hw * tw * tw / 2 + 2 * bf * tf * bf / 2) / A; return hw * tw ** 3 / 12 + hw * tw * (tw / 2 - xb) ** 2 + 2 * (tf * bf ** 3 / 12 + bf * tf * (bf / 2 - xb) ** 2); })() : 2 * tf * bf ** 3 / 12 + hw * tw ** 3 / 12, ry = Math.sqrt(Iy / A), dgT = nm(p.dg);
-    const lt = FX().ltbFnc({ bfc: bf, tfc: tf, Dc: hw / 2, tw, Lb: S, Cb: 1.0, Rb: 1, Rh: 1, Fyc: Fy, Fyw: Fy }), Mn = lt.Fnc * Sx;   // 6.10.8 for a noncomposite rolled I-section, L_b = girder spacing
+    const lt = FX().ltbFnc({ bfc: bf, tfc: tf, Dc: hw / 2, tw, Lb: S, Cb: 1.0, Rb: 1, Rh: 1, Fyc: Fy, Fyw: Fy });   // 6.10.8 for a noncomposite rolled I-section, L_b = girder spacing
+    const CH = chS ? chFlex(X, Fy, S, Sx, Iy, ry) : null, Mn = CH ? CH.Mn : lt.Fnc * Sx;   // SBDX: a channel per 6.12.2.2.5 (was F_nc S_x of 6.10.8, as a W keeps)
     const k = 5, lam = hw / tw, r1 = 1.12 * Math.sqrt(Es * k / Fy), r2 = 1.40 * Math.sqrt(Es * k / Fy), C = lam <= r1 ? 1 : lam <= r2 ? r1 / lam : 1.57 / lam ** 2 * (Es * k / Fy), Vn = C * 0.58 * Fy * hw * tw;
     const wk = R.W.III.Fw >= R.W.V.Fw ? 'III' : 'V', Fw = R.W[wk].Fw, Mw = Fw * dgT, Vw = 2 * Mw / S;
     const id = end ? 'CFE' : 'CFD', c = { id, grp: end ? 'End diaphragms (bearing lines)' : 'Diaphragm (intermediate bracing used)', title: end ? `${chS ? 'Channel' : 'Rolled'} end diaphragm ${nm_} at the bearing lines (in place of the end cross-frames)` : `${chS ? 'Channel' : 'Rolled'} diaphragm ${nm_} (intermediate bracing used in place of the cross-frame)`,
-      ref: `${ED} Arts. 6.7.4.2, 6.7.4.2.2, 6.10.8, 6.10.9, 6.13.2, 3.4.3.1, 4.6.2.7.1`, items: [],
-      note: `Properties from nominal dimensions (fillets neglected): I_x = ${f0(Ix)} in⁴, S_x = ${f0(Sx)} in³, r_y = ${f2(ry)} in. Flexural resistance per 6.10.8 as a noncomposite rolled I-section braced only at the girders (L_b = S, C_b = 1.0, conservative). The brace stiffness 6EI/S assumes reverse-curvature bending between girders.${chS ? ' Channel: the 6.10.8 lateral-torsional buckling model is for I-sections and is used as an approximation (verify against AISC 360-16 F2).' : ''} Wind (Strength ${wk}): the bottom-flange wind force F_w of the exterior girder is carried to the deck through the diaphragm, a torque F_w d resisted by diaphragm bending with shear 2M_w/S; its axial force is not combined with the flexure (assumption to verify).` };
+      ref: `${ED} Arts. 6.7.4.2, 6.7.4.2.2, ${chS ? '6.12.2.2.5' : '6.10.8'}, 6.10.9, 6.9.2.2, 6.9.3, 6.9.4.1, 6.9.4.2.2, 6.8.2.1, 6.13.2, 3.4.3.1, 4.6.2.7.1`, items: [],
+      note: `Properties from nominal dimensions (fillets neglected): I_x = ${f0(Ix)} in⁴, S_x = ${f0(Sx)} in³, r_y = ${f2(ry)} in. ${chS ? 'Flexural resistance per 6.12.2.2.5 (channels): the lesser of yielding F_yZ_x and lateral-torsional buckling with L_b = S, C_b = 1.0 (conservative); J and C_w from thin-walled centerline dimensions.' : 'Flexural resistance per 6.10.8 as a noncomposite rolled I-section braced only at the girders (L_b = S, C_b = 1.0, conservative).'} The brace stiffness 6EI/S assumes reverse-curvature bending between girders. Wind (Strength ${wk}): the bottom-flange wind force F_w of the exterior girder is carried to the deck through the diaphragm, a torque F_w d resisted by diaphragm bending with shear 2M_w/S, and the axial force P = F_w (either sign), checked in compression (6.9.4.1, K = 1.0, ℓ = S − 2e) and tension (6.8.2.1) and combined with M_w per 6.9.2.2.` };
     const st = id.toLowerCase(), it = (loc, dem, res, s, r, demand, capacity, step) => c.items.push({ loc, cells: [dem, res, r != null ? f2(r) : '—'], st: s, r, demand, capacity, step: step || `cf.${st}` });
+    const tag = k => { c.items[c.items.length - 1][k] = true; };   // SBDX: items new in this app (sbdx) and items that use M_n (mn), for the GirderDetail parity test
+    const MnT = CH ? `6.12.2.2.5, ${{ p: 'L_b ≤ L_p', i: 'L_p < L_b ≤ L_r', e: 'L_b > L_r' }[CH.zone]}` : `F_nc = ${f2(lt.Fnc)} ksi`;
     const fD = cfTypeRec(p, E).frac;   // OWN36 (MassDOT 3.6.3.6): 0.5 for a plate girder under 48 in; 0.75 otherwise
     if (dgT > 0) it(fD === 0.75 ? 'Depth (6.7.4.2: at least 0.75 of the plate girder depth d)' : `Depth (6.7.4.2 rolled beams, ${E.cite(E.rule('dia.depth'))}: at least ${fD} of the depth d)`, `${f2(d)} in`, `${f2(fD * dgT)} in`, d >= fD * dgT - 1e-6 ? 'pass' : 'warn', fD * dgT / d, fD * dgT, d);
     let bbr = null, bT = null;
     if (SB) { if (!end) { bbr = 6 * Es * Ix / S; bT = 1 / (1 / bbr + (isFinite(SB.bsec) ? 1 / SB.bsec : 0) + 1 / SB.bg); const r = SB.bReq / bT;
       it('Torsional brace system stiffness (6.7.4.2.2)', `β_T,req = ${f0(SB.bReq)} kip-in/rad`, `β_T = ${f0(bT)} (β_br = ${f0(bbr)}, β_sec = ${isFinite(SB.bsec) ? f0(SB.bsec) : '∞'}, β_g = ${f0(SB.bg)}; d_dia ${SB.deep ? '≥' : '<'} 0.8 D = ${f2(0.8 * SB.Dg)} in)`, r <= 1 ? 'pass' : 'fail', r, SB.bReq, bT); }
-      const rm = SB.Mbr / (1.0 * Mn); it('Brace moment M_br (6.7.4.2.2)', `${f0(SB.Mbr)} kip-in`, `φ_f M_n = ${f0(Mn)} kip-in (F_nc = ${f2(lt.Fnc)} ksi)`, rm <= 1 ? 'pass' : 'fail', rm, SB.Mbr, Mn);
+      const rm = SB.Mbr / (1.0 * Mn); it('Brace moment M_br (6.7.4.2.2)', `${f0(SB.Mbr)} kip-in`, `φ_f M_n = ${f0(Mn)} kip-in (${MnT})`, rm <= 1 ? 'pass' : 'fail', rm, SB.Mbr, Mn, `cf.${st}.Mn`); tag('mn');
       const Vb = 2 * SB.Mbr / S; it('Shear from the brace moment', `${f2(Vb)} kip`, `φ_v V_n = ${f2(Vn)} kip (C = ${n3(C)})`, Vb <= Vn ? 'pass' : 'fail', Vb / Vn, Vb, Vn); }
     else it('Stability bracing', 'enter the girder and bracing data (Stability bracing inputs)', '—', 'na');
     if (end && q.end === 'yes' && +q.Rj > 0) { const Mj = +q.Rj * +q.aj, rm = Mj / Mn, rv = +q.Rj / Vn;
-      it('Jacking: flexure (3.4.3.1)', `${f0(Mj)} kip-in`, `φ_f M_n = ${f0(Mn)} kip-in`, rm <= 1 ? 'pass' : 'fail', rm, Mj, Mn); it('Jacking: shear', `${f2(+q.Rj)} kip`, `φ_v V_n = ${f2(Vn)} kip`, rv <= 1 ? 'pass' : 'fail', rv, +q.Rj, Vn); }
+      it('Jacking: flexure (3.4.3.1)', `${f0(Mj)} kip-in`, `φ_f M_n = ${f0(Mn)} kip-in`, rm <= 1 ? 'pass' : 'fail', rm, Mj, Mn, `cf.${st}.Mn`); tag('mn'); it('Jacking: shear', `${f2(+q.Rj)} kip`, `φ_v V_n = ${f2(Vn)} kip`, rv <= 1 ? 'pass' : 'fail', rv, +q.Rj, Vn); }
     { const rm = Mw / Mn, rv = Vw / Vn;
-      it(`Wind, Strength ${wk}: flexure M_w = F_w d (4.6.2.7.1)`, `${f0(Mw)} kip-in (F_w = ${f2(Fw)} kip)`, `φ_f M_n = ${f0(Mn)} kip-in`, rm <= 1 ? 'pass' : 'fail', rm, Mw, Mn);
+      it(`Wind, Strength ${wk}: flexure M_w = F_w d (4.6.2.7.1)`, `${f0(Mw)} kip-in (F_w = ${f2(Fw)} kip)`, `φ_f M_n = ${f0(Mn)} kip-in`, rm <= 1 ? 'pass' : 'fail', rm, Mw, Mn, `cf.${st}.Mw`); tag('mn');
       it(`Wind, Strength ${wk}: shear 2M_w/S`, `${f2(Vw)} kip`, `φ_v V_n = ${f2(Vn)} kip`, rv <= 1 ? 'pass' : 'fail', rv, Vw, Vn); }
+    // SBDX: the diaphragm as an axial member under P = F_w (compression and tension), its slenderness, and P with M_w (6.9.2.2)
+    const AX = diaAxial(X, q, Fy, Fy === 36 ? 58 : 65, Ix, Iy, S, +((p.conn || {}).d) || 0.875, R.primary);
+    { const rc_ = Fw / AX.Pr, rt_ = Fw / AX.Pt, pr = Fw / AX.Pr, mr = Mw / Mn, ia = pr < 0.2 ? pr / 2 + mr : pr + 8 / 9 * mr; AX.ia = ia; AX.pr = pr; AX.mr = mr;
+      it(`Wind, Strength ${wk}: axial compression P = F_w (6.9.4.1, ${AX.F.slender || AX.W.slender ? '6.9.4.2.2 effective area, ' : ''}Kℓ = ${f2(AX.KL)} in; ${AX.mode})`, `${f2(Fw)} kip`, `φ_c P_n = ${f2(AX.Pr)} kip`, rc_ <= 1 ? 'pass' : 'fail', rc_, Fw, AX.Pr, `cf.${st}.ax.Pr`); tag('sbdx');
+      it(`Wind, Strength ${wk}: axial tension P = F_w (6.8.2.1, yielding and net-section fracture)`, `${f2(Fw)} kip`, `P_r = ${f2(AX.Pt)} kip`, rt_ <= 1 ? 'pass' : 'fail', rt_, Fw, AX.Pt, `cf.${st}.ax.Pt`); tag('sbdx');
+      it(`Slenderness Kℓ/r_min (6.9.3, ${R.primary ? 'primary' : 'secondary'} member)`, `${f2(AX.sl)}`, `≤ ${AX.lim}`, AX.sl <= AX.lim ? 'pass' : 'fail', AX.sl / AX.lim, AX.sl, AX.lim, `cf.${st}.ax.sl`); tag('sbdx');
+      it(`Wind, Strength ${wk}: axial and flexure (6.9.2.2, P_u/P_r = ${n3(pr)})`, `${n3(ia)}`, '≤ 1.0', ia <= 1 + 1e-12 ? 'pass' : 'fail', ia, ia, 1, `cf.${st}.ax.ia`); tag('sbdx'); tag('mn'); }
     const nb = Math.max(2, Math.round(+q.nb || 2)), s = +q.pitch || 3, db = +((p.conn || {}).d) || 0.875, Ab = Math.PI * db * db / 4, thr = (p.conn || {}).thr === 'excl' ? 0.56 : 0.45, phiRs = 0.80 * thr * Ab * (FUB[(p.conn || {}).gr] || 120), phiRb = 0.80 * 2.4 * db * tw * (Fy === 36 ? 58 : 65);
     const ys = [...Array(nb)].map((_, i) => (i - (nb - 1) / 2) * s), sy2 = ys.reduce((a, y) => a + y * y, 0), ym = Math.max(...ys.map(Math.abs)), res = Math.min(phiRs, phiRb);
     const V = SB ? 2 * SB.Mbr / S : 0, Vt = V + (end && q.end === 'yes' ? +q.Rj || 0 : 0), M = (SB ? SB.Mbr : 0) + Vt * (+q.ecc || 0), fmax = Math.hypot(Vt / nb, M * ym / (sy2 || 1)), r = fmax / res;
@@ -338,7 +394,7 @@
     const src = cp.src === 'bs' ? `bearing stiffener Type ${cp.bsT.k}` : cp.src === 'ts' ? `Transverse stiffeners Type ${cp.ts.k}` : 'inputs b_s, t_s', pl = `${frac(cp.bs)} × ${frac(cp.tp)} in, ${src}`;
     it(`Connection plate fit: bolt line ${f2(G.ecc)} in from the web centerline, edge distances to the plate's free edge and to the diaphragm end (6.13.2.6.6)`, `${f2(G.edge)} in to the plate edge, ${f2(de)} in to the diaphragm end${G.gap < cp.tw / 2 + 1e-9 ? ' (diaphragm end reaches the web)' : ''}`, `≥ ${frac(em)} in (plate ${pl})`, okA ? 'pass' : 'fail', mA > 0 ? em / mA : 99.99, em, mA);
     it(`Connection plate fit: end bolts to the plate ends (flange faces less the ${frac(cp.c)} in corner clip; 6.13.2.6.6)`, `${f2(G.vEdge)} in`, `≥ ${frac(em)} in`, G.vEdge >= em - 1e-9 ? 'pass' : 'fail', G.vEdge > 0 ? em / G.vEdge : 99.99, em, G.vEdge);
-    (R.DIA = R.DIA || {})[end ? 'e' : 'i'] = { nm_, chS, d, A, Ix, Sx, Iy, ry, Mn, Fnc: lt.Fnc, lt, Vn, C, lam, wk, Fw, Mw, Vw, Mbr: SB ? SB.Mbr : null, bbr, bT, jack: end && q.end === 'yes' && +q.Rj > 0 ? { Rj: +q.Rj, aj: +q.aj } : null, nb, s, db, Ab, thr, ecc: +q.ecc || 0, ys, sy2, ym, V, Vt, M, fmax, Mc, fw, res, phiRs, phiRb, need, avail, cp, G, fD };
+    (R.DIA = R.DIA || {})[end ? 'e' : 'i'] = { nm_, chS, d, bf, tf, tw, hw, A, Ix, Sx, Iy, ry, Mn, Fnc: lt.Fnc, lt, CH, AX, MnI: lt.Fnc * Sx, Fy, Vn, C, lam, wk, Fw, Mw, Vw, Mbr: SB ? SB.Mbr : null, bbr, bT, jack: end && q.end === 'yes' && +q.Rj > 0 ? { Rj: +q.Rj, aj: +q.aj } : null, nb, s, db, Ab, thr, ecc: +q.ecc || 0, ys, sy2, ym, V, Vt, M, fmax, Mc, fw, res, phiRs, phiRb, need, avail, cp, G, fD };
     diaSteps(R, end);
     out.add(c);
   }
@@ -398,9 +454,38 @@
   function diaSteps(R, end) {
     const D = R.DIA[end ? 'e' : 'i'], id = end ? 'cfe' : 'cfd', w = St().work('cf'), lab = end ? 'End diaphragm' : 'Diaphragm';
     w.add({ id: `${id}.Sx`, label: `${lab} ${D.nm_}: section modulus (nominal dimensions)`, sym: 'S_{x}', eq: '\\frac{2I_{x}}{d}', sub: `\\frac{2(${n0(D.Ix)})}{${n2(D.d)}}`, value: D.Sx, unit: 'in^{3}', d: 1 });
-    w.add({ id: `${id}.Mn`, label: `${lab}: flexural resistance (6.10.8, L_b = S, C_b = 1.0; F_nc = ${n2(D.Fnc)} ksi)`, sym: '\\phi_{f}M_{n}', eq: 'F_{nc}S_{x}', sub: `${n2(D.Fnc)}(${n2(D.Sx)})`, value: D.Mn, unit: 'kip-in', d: 0, ref: `${ED} Arts. 6.10.8.2.2, 6.10.8.2.3` });
+    if (!D.CH) w.add({ id: `${id}.Mn`, label: `${lab}: flexural resistance (6.10.8, L_b = S, C_b = 1.0; F_nc = ${n2(D.Fnc)} ksi)`, sym: '\\phi_{f}M_{n}', eq: 'F_{nc}S_{x}', sub: `${n2(D.Fnc)}(${n2(D.Sx)})`, value: D.Mn, unit: 'kip-in', d: 0, ref: `${ED} Arts. 6.10.8.2.2, 6.10.8.2.3` });
+    else { const H = D.CH, E_ = '29{,}000', Fy = D.Fy;   // SBDX: a channel per 6.12.2.2.5
+      w.add({ id: `${id}.ch.Zx`, label: `${lab} ${D.nm_}: plastic section modulus (nominal rectangles: flanges b_f × t_f at h_o/2, web h_w × t_w)`, sym: 'Z_{x}', eq: 'b_{f}t_{f}(d - t_{f}) + \\frac{t_{w}h_{w}^{2}}{4}', sub: `${n3(D.bf)}(${n3(D.tf)})(${n2(D.d)} - ${n3(D.tf)}) + \\frac{${n3(D.tw)}(${n3(D.hw)})^{2}}{4}`, value: H.Zx, unit: 'in^{3}', d: 2, note: 'Nominal dimensions, fillets neglected; b_f, t_f (average), t_w, d from the shape table.' });
+      w.add({ id: `${id}.ch.Mp`, label: `${lab}: plastic moment (yielding)`, sym: 'M_{p}', eq: 'F_{y}Z_{x}', sub: `${n0(Fy)}(${n2(H.Zx)})`, value: H.Mp, unit: 'kip-in', d: 0, ref: `${ED} Eq. 6.12.2.2.5-1` });
+      w.add({ id: `${id}.ch.JCw`, label: `${lab}: torsional constants (thin-walled, centerline: b = b_f − t_w/2 = ${n3(H.b)} in, h_o = d − t_f = ${n3(H.ho)} in)`, sym: 'J,\\ C_{w}', eq: 'J = \\frac{2bt_{f}^{3} + h_{o}t_{w}^{3}}{3},\\ C_{w} = \\frac{t_{f}b^{3}h_{o}^{2}}{12}\\,\\frac{3bt_{f} + 2h_{o}t_{w}}{6bt_{f} + h_{o}t_{w}}', sub: `J = ${n4(H.J)},\\ C_{w} = ${n2(H.Cw)}`, value: H.J, unit: 'in^{4}', d: 4, ref: `${ED} Eq. 6.12.2.2.5-6`, note: `C_w = ${n2(H.Cw)} in⁶. J from the thin-walled formula (the shape tables' J includes fillets and sloping flanges; C6.12.2.2.5 allows the tabulated values).` });
+      w.add({ id: `${id}.ch.rts`, label: `${lab}: c and r_ts`, sym: 'c,\\ r_{ts}', eq: 'c = \\frac{h_{o}}{2}\\sqrt{\\frac{I_{y}}{C_{w}}},\\ r_{ts}^{2} = \\frac{\\sqrt{I_{y}C_{w}}}{S_{x}}', sub: `c = \\frac{${n3(H.ho)}}{2}\\sqrt{\\frac{${n3(D.Iy)}}{${n2(H.Cw)}}},\\ r_{ts}^{2} = \\frac{\\sqrt{${n3(D.Iy)}(${n2(H.Cw)})}}{${n3(D.Sx)}}`, value: H.rts, unit: 'in', d: 3, ref: `${ED} Eqs. 6.12.2.2.5-5, -9`, note: `c = ${n3(H.c)}; r_ts = ${n3(H.rts)} in.` });
+      w.add({ id: `${id}.ch.Lp`, label: `${lab}: limiting unbraced length for M_p (r_y = ${n3(D.ry)} in)`, sym: 'L_{p}', eq: '1.76r_{y}\\sqrt{\\frac{E}{F_{y}}}', sub: `1.76(${n3(D.ry)})\\sqrt{\\frac{${E_}}{${n0(Fy)}}}`, value: H.Lp, unit: 'in', d: 2, ref: `${ED} Eq. 6.12.2.2.5-7` });
+      w.add({ id: `${id}.ch.Lr`, label: `${lab}: limiting unbraced length for the onset of yielding (Jc/(S_xh_o) = ${n4(H.jr)})`, sym: 'L_{r}', eq: '1.95r_{ts}\\frac{E}{0.7F_{y}}\\sqrt{\\frac{Jc}{S_{x}h_{o}} + \\sqrt{\\left(\\frac{Jc}{S_{x}h_{o}}\\right)^{2} + 6.76\\left(\\frac{0.7F_{y}}{E}\\right)^{2}}}', sub: `1.95(${n3(H.rts)})\\frac{${E_}}{0.7(${n0(Fy)})}\\sqrt{${n4(H.jr)} + \\sqrt{${n4(H.jr)}^{2} + 6.76\\left(\\frac{0.7(${n0(Fy)})}{${E_}}\\right)^{2}}}`, value: H.Lr, unit: 'in', d: 2, ref: `${ED} Eq. 6.12.2.2.5-8` });
+      const ze = H.zone === 'p' ? { eq: 'M_{p}', sub: `${n0(H.Mp)}` } : H.zone === 'i' ? { eq: 'C_{b}\\left[M_{p} - (M_{p} - 0.7F_{y}S_{x})\\frac{L_{b} - L_{p}}{L_{r} - L_{p}}\\right] \\le M_{p}', sub: `1.0\\left[${n0(H.Mp)} - (${n0(H.Mp)} - 0.7(${n0(Fy)})(${n3(D.Sx)}))\\frac{${n2(H.Lb)} - ${n2(H.Lp)}}{${n2(H.Lr)} - ${n2(H.Lp)}}\\right]` }
+        : { eq: 'F_{cr}S_{x} \\le M_{p},\\ F_{cr} = \\frac{C_{b}\\pi^{2}E}{(L_{b}/r_{ts})^{2}}\\sqrt{1 + 0.078\\frac{Jc}{S_{x}h_{o}}\\left(\\frac{L_{b}}{r_{ts}}\\right)^{2}}', sub: `${n2(H.Fcr)}(${n3(D.Sx)})` };
+      w.add({ id: `${id}.Mn`, label: `${lab}: flexural resistance, channel (6.12.2.2.5; L_b = S = ${n2(H.Lb)} in, C_b = 1.0: ${{ p: 'L_b ≤ L_p, yielding', i: 'L_p < L_b ≤ L_r, inelastic LTB', e: 'L_b > L_r, elastic LTB' }[H.zone]}; φ_f = 1.0)`, sym: '\\phi_{f}M_{n}', eq: ze.eq, sub: ze.sub, value: D.Mn, unit: 'kip-in', d: 0, ref: `${ED} Eqs. 6.12.2.2.5-1 to -4`,
+        note: `Before (6.10.8 I-section approximation): F_nc S_x = ${n2(D.Fnc)}(${n3(D.Sx)}) = ${n0(D.MnI)} kip-in. L_b = S and C_b = 1.0 as before (braced only at the girders, conservative). Rolled channels have compact flanges and webs (C6.12.2.2.5): FLB and web local buckling not checked.` }); }
     w.add({ id: `${id}.Vn`, label: `${lab}: shear resistance (unstiffened web, k = 5, D/t_w = ${n2(D.lam)})`, sym: '\\phi_{v}V_{n}', eq: 'C(0.58F_{y}Dt_{w})', sub: `${n4(D.C)}(0.58)F_{y}(h_{w})(t_{w})`, value: D.Vn, unit: 'kip', d: 2, ref: `${ED} Eq. 6.10.9.2-1` });
     w.add({ id: `${id}.Mw`, label: `${lab}: wind moment, Strength ${D.wk}`, sym: 'M_{w}', eq: 'F_{w}d', sub: `${n2(D.Fw)}(${n2(D.Mw / D.Fw)})`, value: D.Mw, unit: 'kip-in', d: 0, ref: `${ED} Art. 4.6.2.7.1`, ok: D.Mw <= D.Mn });
+    { const X = D.AX, E_ = '29{,}000', Fy = D.Fy, pi = '\\pi^{2}', ch = D.chS;   // SBDX: the diaphragm as an axial member under P = F_w
+      w.add({ id: `${id}.ax.L`, label: `${lab}: length and effective length for axial load (bolt line to bolt line; K = 1.0)`, sym: 'K\\ell', eq: 'K(S - 2e)', sub: `1.0(${n2(R.S)} - 2(${n2(X.ecc)}))`, value: X.KL, unit: 'in', d: 2, ref: `${ED} Art. 4.6.2.5`,
+        note: 'Assumption: K = 1.0 about both axes and K_zℓ_z = ℓ (twist restrained only at the connections). The diaphragm is bolted through its web in one row at each end, which gives little end restraint; the 0.75 of Art. 4.6.2.5 is for compression members of triangulated trusses and frames and is not used.' });
+      w.add({ id: `${id}.ax.Pe`, label: `${lab}: elastic flexural buckling resistances (r_x = ${n3(X.rx)} in, r_y = ${n3(X.ry)} in)`, sym: 'P_{ex},\\ P_{ey}', eq: '\\frac{\\pi^{2}EA_{g}}{(K\\ell/r)^{2}}', sub: `\\frac{${pi}(${E_})(${n3(D.A)})}{(${n2(X.KL)}/${n3(X.rx)})^{2}},\\ \\frac{${pi}(${E_})(${n3(D.A)})}{(${n2(X.KL)}/${n3(X.ry)})^{2}}`, value: X.Pey, unit: 'kip', d: 1, ref: `${ED} Eq. 6.9.4.1.2-1`, note: `P_ex = ${n0(X.Pex)} kip, P_ey = ${n2(X.Pey)} kip.` });
+      if (ch) { const F = X.ft;
+        w.add({ id: `${id}.ax.ft`, label: `${lab}: flexural–torsional buckling, channel symmetric about its x-axis (J = ${n4(X.J)} in⁴, C_w = ${n2(X.Cw)} in⁶, G = 0.385E; shear center e = 3b²t_f/(6bt_f + h_ot_w) = ${n3(F.e)} in from the web centerline, centroid ${n3(F.xc)} in: x_o = ${n3(F.xo)} in)`, sym: 'P_{e,FT}',
+          eq: '\\frac{P_{ex} + P_{ez}}{2H}\\left[1 - \\sqrt{1 - \\frac{4P_{ex}P_{ez}H}{(P_{ex} + P_{ez})^{2}}}\\right],\\ P_{ez} = \\frac{\\pi^{2}EC_{w}/(K_{z}\\ell_{z})^{2} + GJ}{A_{g}r_{o}^{2}},\\ r_{o}^{2} = x_{o}^{2} + \\frac{I_{x} + I_{y}}{A_{g}},\\ H = 1 - \\frac{x_{o}^{2}}{r_{o}^{2}}',
+          sub: `P_{ez} = ${n2(F.Pez)},\\ r_{o}^{2} = ${n3(F.ro2)},\\ H = ${n4(F.H)}`, value: F.Pft, unit: 'kip', d: 1, ref: `${ED} Eqs. 6.9.4.1.3-2 to -6`, note: 'The channel is singly symmetric: flexural buckling about the y-axis and flexural–torsional buckling (x-axis flexure with twist) apply (6.9.4.1.1). Thin-walled centerline J and C_w (nominal dimensions).' }); }
+      w.add({ id: `${id}.ax.Pcr`, label: `${lab}: nominal resistance on the gross area (governing mode: ${X.mode}${ch ? '' : '; a W is doubly symmetric and K_zℓ_z = K_yℓ_y, so torsional buckling is not a mode, 6.9.4.1.1'}; P_o = F_yA_g = ${n2(X.Po)} kip)`, sym: 'P_{cr}', eq: X.Pe >= 0.44 * X.Po ? '0.658^{P_{o}/P_{e}}P_{o}' : '0.877P_{e}', sub: X.Pe >= 0.44 * X.Po ? `0.658^{${n2(X.Po)}/${n2(X.Pe)}}(${n2(X.Po)})` : `0.877(${n2(X.Pe)})`, value: X.Pcr, unit: 'kip', d: 2, ref: `${ED} Eqs. 6.9.4.1.1-1, -2`, note: `F_cr = P_cr/A_g = ${n3(X.Fcr)} ksi.` });
+      const el = (nm, E2, lam, lr, c1, c2, wd, t) => `${nm}: λ = ${n2(lam)} ${E2.slender ? `> λ_r = ${n2(lr)}` : `≤ λ_r = ${n2(lr)}`}${E2.Fel != null ? `; F_el = (${c2}λ_r/λ)²F_y = ${n2(E2.Fel)} ksi, b_e = b(1 − ${c1}√(F_el/F_cr))√(F_el/F_cr) = ${n3(E2.be)} in of ${n3(wd)} in` : E2.slender ? `; λ ≤ λ_r√(F_y/F_cr) = ${n2(lr * Math.sqrt(Fy / X.Fcr))}: fully effective` : ''}`;
+      w.add({ id: `${id}.ax.Aeff`, label: `${lab}: effective area for local buckling of slender elements (rolled-section form A_g − Σ(b − b_e)t)`, sym: 'A_{eff}', eq: 'A_{g} - \\sum(b - b_{e})t', sub: `${n3(D.A)} - (${n3(D.hw)} - ${n3(X.W.be)})(${n3(D.tw)}) - ${X.nf}(${n3(X.wf)} - ${n3(X.F.be)})(${n3(D.tf)})`, value: X.Aeff, unit: 'in^{2}', d: 3, ref: `${ED} Eqs. 6.9.4.2.2a-3, 6.9.4.2.2b-1, -2; Tables 6.9.4.2.1-1, 6.9.4.2.2b-1`,
+        note: `${el('Web (h_w/t_w, c_1 = 0.18, c_2 = 1.31)', X.W, X.lw, X.lrw, 0.18, 1.31, D.hw)}; ${el(ch ? 'flanges (b_f/t_f, c_1 = 0.22, c_2 = 1.49)' : 'flanges (b_f/(2t_f), c_1 = 0.22, c_2 = 1.49)', X.F, X.lf, X.lrf, 0.22, 1.49, X.wf)}. Element widths from nominal dimensions (web h_w = d − 2t_f, fillets neglected).` });
+      w.add({ id: `${id}.ax.Pr`, label: `${lab}: factored compressive resistance against P = F_w = ${n2(D.Fw)} kip (Strength ${D.wk})`, sym: '\\phi_{c}P_{n}', eq: '0.95F_{cr}A_{eff}', sub: `0.95(${n3(X.Fcr)})(${n3(X.Aeff)})`, value: X.Pr, unit: 'kip', d: 2, ref: `${ED} Eqs. 6.9.2.1-1, 6.9.4.2.2a-1`, ok: D.Fw <= X.Pr });
+      w.add({ id: `${id}.ax.Pt`, label: `${lab}: factored tensile resistance, the lesser of yielding and net-section fracture (${X.nb} holes d_h = ${n4(X.dh)} in through the web; U = A_web/A_g = ${n3(X.U)})`, sym: 'P_{r}', eq: '\\min(0.95F_{y}A_{g},\\ 0.80F_{u}A_{n}U)', sub: `\\min(0.95(${n0(Fy)})(${n3(D.A)}),\\ 0.80(${n0(X.Fu)})(${n3(X.An)})(${n3(X.U)}))`, value: X.Pt, unit: 'kip', d: 2, ref: `${ED} Eqs. 6.8.2.1-1, -2; Art. 6.8.2.2`, ok: D.Fw <= X.Pt,
+        note: 'A_n = A_g − n d_h t_w (one row of n bolts across the web). U: one transverse row has no connection length for Table 6.8.2.2-1 Case 2, so U is the lower bound of Art. 6.8.2.2, the gross area of the connected element (the web, h_w t_w) over A_g. Holes drilled or subpunched and reamed: R_p = 1.0 (assumption).' });
+      w.add({ id: `${id}.ax.sl`, label: `${lab}: slenderness (${R.primary ? 'primary' : 'secondary'} member)`, sym: '\\frac{K\\ell}{r_{min}}', eq: '', sub: `\\frac{${n2(X.KL)}}{${n3(X.rmin)}}`, value: X.sl, unit: '', d: 1, ref: `${ED} Art. 6.9.3`, ok: X.sl <= X.lim, note: `Limit ${X.lim} (${R.primary ? 'primary' : 'secondary'} member, the project's Primary members choice).` });
+      w.add({ id: `${id}.ax.ia`, label: `${lab}: axial force and wind moment (P_u = F_w, M_u = M_w; P_u/P_r = ${n3(X.pr)} ${X.pr < 0.2 ? '< 0.2' : '≥ 0.2'})`, sym: '', eq: X.pr < 0.2 ? '\\frac{P_{u}}{2P_{r}} + \\frac{M_{u}}{M_{r}} \\le 1.0' : '\\frac{P_{u}}{P_{r}} + \\frac{8}{9}\\frac{M_{u}}{M_{r}} \\le 1.0', sub: X.pr < 0.2 ? `\\frac{${n2(D.Fw)}}{2(${n2(X.Pr)})} + \\frac{${n0(D.Mw)}}{${n0(D.Mn)}}` : `\\frac{${n2(D.Fw)}}{${n2(X.Pr)}} + \\frac{8}{9}\\frac{${n0(D.Mw)}}{${n0(D.Mn)}}`, value: X.ia, unit: '', d: 3, ref: `${ED} Eqs. 6.9.2.2-1, -2`, ok: X.ia <= 1 + 1e-12,
+        note: `Compression with the wind moment (the compressive resistance governs over tension). M_u is not amplified for second-order effects: P_u/P_e = ${n4(D.Fw / X.Pe)}, so the amplification 1/(1 − P_u/(0.95P_e)) = ${n4(1 / (1 - D.Fw / (0.95 * X.Pe)))} is taken as 1.0 (assumption).` }); }
     if (D.bbr != null) w.add({ id: `${id}.bT`, label: `${lab}: brace system stiffness with β_br = 6EI_x/S = ${n0(D.bbr)}`, sym: '\\beta_{T}', eq: '', sub: '', value: D.bT, unit: 'kip-in/rad', d: 0, ref: `${ED} Art. 6.7.4.2.2`, ok: R.SB ? D.bT >= R.SB.bReq : undefined });
     w.add({ id: `${id}.bolt`, label: `${lab}: largest bolt force, ${D.nb} bolts at ${n2(D.s)} in (brace moment${D.jack ? ' and jacking' : ''})`, sym: 'f', eq: '\\sqrt{(V/n)^{2} + (My_{max}/\\sum y^{2})^{2}}', sub: `\\sqrt{(${n2(D.Vt)}/${D.nb})^{2} + (${n0(D.M)}(${n2(D.ym)})/${n2(D.sy2)})^{2}}`, value: D.fmax, unit: 'kip', d: 2, ref: `${ED} Art. 6.13.2`, ok: D.fmax <= D.res });
     w.add({ id: `${id}.boltw`, label: `${lab}: largest bolt force under wind`, sym: 'f_{w}', eq: '\\sqrt{(V_{w}/n)^{2} + (M_{c}y_{max}/\\sum y^{2} + F_{w}/n)^{2}}', sub: `\\sqrt{(${n2(D.Vw)}/${D.nb})^{2} + (${n0(D.Mc)}(${n2(D.ym)})/${n2(D.sy2)} + ${n2(D.Fw)}/${D.nb})^{2}}`, value: D.fw, unit: 'kip', d: 2, ref: `${ED} Art. 6.13.2`, ok: D.fw <= D.res });
