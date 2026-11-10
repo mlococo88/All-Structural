@@ -458,7 +458,7 @@ function geo() {
   const b = P.br, E = [], W = [], spans = b.spans.map(num), nSup = spans.length + 1;
   if (!spans.length || spans.some(s => !(s > 0))) E.push('Every span length must be a positive number.');
   const bays = b.bays.map(num); if (!bays.length || bays.some(s => !(s > 0))) E.push('Every girder spacing must be a positive number.');
-  b.skews.forEach((s, k) => { if (!(Math.abs(num(s)) < 60)) E.push(`Support ${k + 1}: skew must be between −60° and 60°.`); });
+  b.skews.forEach((s, k) => { if (!(Math.abs(num(s)) < 60)) E.push(`${(P.units[k] && P.units[k].name) || `Support ${k + 1}`}: skew must be between −60° and 60°.`); });   // SLIC: the support name of the Supports table
   const X = [0]; spans.forEach(s => X.push(X[X.length - 1] + s));
   const nb = bays.length + 1, ohL = nz(b.ohL), ohR = nz(b.ohR), Wd = ohL + bays.reduce((a, c) => a + c, 0) + ohR;
   const yL = Wd / 2, yR = -Wd / 2, yg = [yL - ohL]; bays.forEach(s => yg.push(yg[yg.length - 1] - s));
@@ -1012,7 +1012,7 @@ function listTables() {
   [['f_spans', 'Span lengths', 'L'], ['f_bays', 'Girder spacings', 'S']].forEach(([id, label, sym]) => {
     const inp = document.getElementById(id); if (!inp || !window.SharedListInput) return;
     let was = inp.value;
-    const ctl = SharedListInput.bindInput(inp, { label, events: ['input'], columns: [{ label: sym, unit: 'ft', min: 0, minExclusive: true, width: '6.5em' }] });
+    const ctl = SharedListInput.bindInput(inp, { label, events: ['input'], columns: [{ label: sym, unit: 'ft', min: 0, minExclusive: true, lenient: true, width: '6.5em' }] });
     ctl.el.addEventListener('focusout', () => setTimeout(() => {   // after the event: a redraw (Enter, ×) moves the focus within the table
       if (!ctl.el.isConnected || ctl.el.contains(document.activeElement)) return;
       if (inp.value !== was) { was = inp.value; inp.dispatchEvent(new Event('change', { bubbles: true })); } }, 0));
@@ -4504,6 +4504,332 @@ window.addEventListener('beforeprint', () => {
   box.innerHTML = '<div class="rp"><article class="rp-doc">' + SharedReport.html(SLR.doc, { lazy: false }) + '</article></div>';
   document.body.classList.add('rp-printing');
 });
+/* =====================================================================
+   SLIC (2026-11-10; engineer request: "invalid input must be highlighted so the user can fix it, and results must not be displayed",
+   the rule of the Steel Bridge app, apps/steel-bridge/engine/inputcheck.js, #1283). Every numeric input has a valid range (IC_RULES,
+   below; the same table is listed as a note on the Project tab and in the Report's "Project and design basis"). collect() lists every
+   input in use (shown on its input tab) that is blank where a value is needed, not a number, or out of its range, and the span and
+   girder spacing lists while their text is not valid (the table cell is red and the last valid list is still in the project: it is
+   never used while the text is invalid). While one exists:
+     - the field is outlined with its message beside it; the input tab (Project, Bridge, Units, Reactions) and the unit button show a count;
+     - every output tab, the Report and the elevation strip show "N inputs need fixing before results can be shown" with each error a
+       link that opens its tab (and unit) and focuses the field; no result is shown (the strip keeps its height);
+     - Print, Drawings (DXF), Export abutments and the abutment and foundation loads sends are held (a message says why), so no stale
+       loads reach the Abutment Calculator, Pile Designer or Shallow Foundation Design. Pulls (receiving) work as before.
+   Nothing is computed or stored here: no project field is written, so a saved project with a now-invalid value opens, shows the error
+   and keeps the value. For valid inputs every result is unchanged. */
+let IC_LIST = {};   // list text being edited that is not valid: { 'br.spans': { text, base } } (session only, never saved)
+const IC = (function () {
+  const RNG = {   // ranges: gt / ge / lt / le, int (whole number), any (any number), blank (blank allowed: its meaning in the label or note)
+    pos: { gt: 0 }, nn: { ge: 0 }, any: { any: true }, frac: { gt: 0, le: 1 }, ang90: { ge: -90, le: 90 }, int1: { int: true, ge: 1 } };
+  const U = (o, x) => Object.assign({}, RNG[o] || o, x || {});
+  /* [tab, path, label, unit, range, when]   paths: br.* / meta.*; u.* is units.<k>.* for every unit; when(u, c) mirrors the input tab:
+     a field that is not shown (another type, an option off) is not in use and not checked */
+  const isT = (...t) => u => t.includes(u.type);
+  const elastOn = (u, c) => (u.rows || []).slice(0, c.joint ? 2 : 1).some(r => r && r.brg === 'elast');
+  const wOn = u => u.type !== 'abut' && u.water && u.water.on === 'yes';
+  const cvOn = u => u.type !== 'abut' && u.cv && u.cv.on === 'yes';
+  const ftgT = (u, ty) => u.type !== 'pile' && u.ftg && (ty ? u.ftg.type === ty : u.ftg.type !== 'none');
+  const RULES = [
+    ['bridge', 'br.ohL', 'Left overhang', 'ft', 'nn'], ['bridge', 'br.ohR', 'Right overhang', 'ft', 'nn'],
+    ['bridge', 'br.barL', 'Left barrier width', 'ft', 'nn'], ['bridge', 'br.barR', 'Right barrier width', 'ft', 'nn'],
+    ['bridge', 'br.barH', 'Barrier height', 'in', 'nn'], ['bridge', 'br.ts', 'Deck thickness', 'in', 'pos'], ['bridge', 'br.haunch', 'Haunch', 'in', 'nn'],
+    ['bridge', 'br.d', 'Girder depth', 'in', 'pos'], ['bridge', 'br.bf', 'Flange width', 'in', 'pos'], ['bridge', 'br.tf', 'Flange thickness', 'in', 'pos'],
+    ['bridge', 'br.tw', 'Web thickness', 'in', 'pos'], ['bridge', 'br.wc', 'Concrete unit weight', 'kcf', 'pos'],
+    ['bridge', 'br.IM', 'Dynamic load allowance IM', '%', { ge: 0, le: 100 }], ['bridge', 'br.skKg', 'Girder Kg for the skew correction', 'in⁴', { gt: 0, blank: true }],
+    ['bridge', 'br.swL', 'Left sidewalk width', 'ft', 'nn'], ['bridge', 'br.swR', 'Right sidewalk width', 'ft', 'nn'], ['bridge', 'br.plP', 'Pedestrian pressure', 'ksf', 'nn'],
+    ['bridge', 'br.nBR', 'Lanes in one direction (BR)', 'lanes', { int: true, ge: 1, blank: true }], ['bridge', 'br.Rc', 'Curve radius', 'ft', { gt: 0, blank: true }],
+    ['bridge', 'br.Vd', 'Design speed', 'mph', { ge: 0, blank: true }],
+    ['bridge', 'br.V', 'Wind speed V, Strength III', 'mph', 'nn'], ['bridge', 'br.Gf', 'Gust effect factor G', '', 'pos'],
+    ['bridge', 'br.CDsup', 'CD, superstructure', '', 'pos'], ['bridge', 'br.CDsub', 'CD, substructure', '', 'pos'], ['bridge', 'br.Ifac', 'Substructure Ieff / Ig', '', 'frac'],
+    ['bridge', 'br.tMaxB', 'TMaxDesign', '°F', 'any', b => b.tProc === 'B'], ['bridge', 'br.tMinB', 'TMinDesign', '°F', 'any', b => b.tProc === 'B'],
+    ['bridge', 'br.tSet', 'Setting temperature', '°F', 'any'], ['bridge', 'br.alpha', 'α', '/°F', { gt: 0, blank: true }],
+    ['bridge', 'br.mu', 'Friction μ, sliding bearings', '', { ge: 0, le: 1 }], ['bridge', 'br.shStrain', 'Shrinkage + creep strain', 'in/in', 'nn'],
+    ['bridge', 'br.lat', 'Latitude', '°', { ge: -90, le: 90, blank: true }], ['bridge', 'br.lon', 'Longitude', '°', { ge: -180, le: 180, blank: true }],
+    ['bridge', 'br.gEQ', 'γEQ on live load', '', { ge: 0, le: 1 }],
+    ['bridge', 'br.gSoil', 'Soil γ over pier footings', 'kcf', 'nn'],
+    ['bridge', 'br.ehMax', 'γEH max', '', 'nn'], ['bridge', 'br.ehMin', 'γEH min', '', 'nn'], ['bridge', 'br.ehAtMax', 'γEH max, at rest', '', 'nn'], ['bridge', 'br.ehAtMin', 'γEH min, at rest', '', 'nn'],
+    ['bridge', 'br.evMax', 'γEV max', '', 'nn'], ['bridge', 'br.evMin', 'γEV min', '', 'nn'], ['bridge', 'br.esMax', 'γES max', '', 'nn'], ['bridge', 'br.esMin', 'γES min', '', 'nn'],
+    ['bridge', 'br.khR', 'Seismic kh / kh0', '', 'nn'], ['bridge', 'br.kv', 'kv', '', { ge: 0, lt: 1 }], ['bridge', 'br.hEQr', 'ΔPAE height / H', '', 'frac'],
+    ['bridge', 'br.gEHEQ', 'γEH, EE I (agency policy)', '', 'nn', b => b.ehEQmode === 'agency'], ['bridge', 'br.deckFc', 'Deck f′c (deck-beam stiffness)', 'ksi', 'pos'],
+    // units (every unit, as shown on the Units tab for its type and options)
+    ['units', 'u.hb', 'Bearing height', 'in', 'nn'], ['units', 'u.hp', 'Pedestal height', 'in', 'nn'],
+    ['units', 'u.rowOff', 'Bearing row offset from CL pier', 'ft', 'pos', (u, c) => c.joint],
+    ['units', 'u.elast.G', 'Elastomer G', 'ksi', 'pos', elastOn], ['units', 'u.elast.hrt', 'Total rubber hrt', 'in', 'pos', elastOn],
+    ['units', 'u.elast.L', 'Pad length (along girder)', 'in', 'pos', elastOn], ['units', 'u.elast.W', 'Pad width', 'in', 'pos', elastOn],
+    ['units', 'u.abut.stemT', 'Stem thickness', 'ft', 'pos', isT('abut')], ['units', 'u.abut.brgA', 'CL bearing to front face', 'ft', 'nn', isT('abut')],
+    ['units', 'u.abut.bwT', 'Backwall thickness', 'ft', 'pos', isT('abut')], ['units', 'u.abut.toe', 'Footing toe', 'ft', 'nn', isT('abut')],
+    ['units', 'u.cap.b', 'Cap width (normal to line)', 'ft', 'pos', isT('mcb', 'pile')], ['units', 'u.cap.h', 'Cap depth', 'ft', 'pos', isT('mcb', 'pile')],
+    ['units', 'u.capE', 'Cap beyond exterior bearing', 'ft', 'nn', u => ['mcb', 'pile', 'ham'].includes(u.type) || (u.type === 'wall' && String((u.wall || {}).Lauto) !== 'false')],
+    ['units', 'u.col.n', 'Number of columns', '', 'int1', isT('mcb')],
+    ['units', 'u.col.s', 'Column spacing along line', 'ft', 'nn', u => u.type === 'mcb' && !(Math.round(nz(u.col.n)) > 1)],
+    ['units', 'u.col.s', 'Column spacing along line', 'ft', 'pos', u => u.type === 'mcb' && Math.round(nz(u.col.n)) > 1],
+    ['units', 'u.col.D', 'Column diameter', 'ft', 'pos', u => u.type === 'mcb' && u.col.shape === 'round'],
+    ['units', 'u.col.bx', 'Column width along line', 'ft', 'pos', u => u.type === 'mcb' && u.col.shape !== 'round'],
+    ['units', 'u.col.by', 'Column width normal to line', 'ft', 'pos', u => u.type === 'mcb' && u.col.shape !== 'round'],
+    ['units', 'u.fc', 'Concrete f′c', 'ksi', 'pos', isT('mcb', 'pile')],
+    ['units', 'u.pile.n', 'Number of piles', '', 'int1', isT('pile')],
+    ['units', 'u.pile.s', 'Pile spacing along line', 'ft', 'nn', u => u.type === 'pile' && !(Math.round(nz(u.pile.n)) > 1)],
+    ['units', 'u.pile.s', 'Pile spacing along line', 'ft', 'pos', u => u.type === 'pile' && Math.round(nz(u.pile.n)) > 1],
+    ['units', 'u.pile.w', 'Pile depth / width or size', 'in', 'pos', isT('pile')], ['units', 'u.pile.wt', 'Pile weight', 'lb/ft', 'pos', u => u.type === 'pile' && u.pile.shape === 'hp'],
+    ['units', 'u.pile.fix', 'Depth to fixity below ground', 'ft', 'nn', isT('pile')],
+    ['units', 'u.pile.A', 'Pile area', 'in²', 'pos', u => u.type === 'pile' && u.pile.shape === 'hp'],
+    ['units', 'u.pile.Ix', 'Pile Ix', 'in⁴', 'pos', u => u.type === 'pile' && u.pile.shape === 'hp'], ['units', 'u.pile.Iy', 'Pile Iy', 'in⁴', 'pos', u => u.type === 'pile' && u.pile.shape === 'hp'],
+    ['units', 'u.ham.b', 'Cap width (normal to line)', 'ft', 'pos', isT('ham')], ['units', 'u.ham.hr', 'Cap depth at column', 'ft', 'pos', isT('ham')],
+    ['units', 'u.ham.ht', 'Cap depth at tip', 'ft', 'pos', isT('ham')],
+    ['units', 'u.ham.D', 'Column diameter', 'ft', 'pos', u => u.type === 'ham' && u.ham.shape === 'round'],
+    ['units', 'u.ham.bx', 'Column width along line', 'ft', 'pos', u => u.type === 'ham' && u.ham.shape !== 'round'],
+    ['units', 'u.ham.by', 'Column width normal to line', 'ft', 'pos', u => u.type === 'ham' && u.ham.shape !== 'round'],
+    ['units', 'u.wall.t', 'Wall thickness', 'ft', 'pos', isT('wall')], ['units', 'u.wall.L', 'Wall length', 'ft', 'pos', u => u.type === 'wall' && String(u.wall.Lauto) === 'false'],
+    ['units', 'u.ftg.Bi', 'Footing length along line', 'ft', 'pos', u => ftgT(u, 'indiv')], ['units', 'u.ftg.Wi', 'Footing width', 'ft', 'pos', u => ftgT(u, 'indiv')],
+    ['units', 'u.ftg.L', 'Footing length', 'ft', 'pos', u => ftgT(u, 'comb') && u.type !== 'abut' && String(u.ftg.Lauto) === 'false'],
+    ['units', 'u.ftg.W', 'Footing width', 'ft', 'pos', u => ftgT(u, 'comb')], ['units', 'u.ftg.t', 'Footing thickness', 'ft', 'pos', u => ftgT(u, 'comb') || ftgT(u, 'indiv')],
+    ['units', 'u.topFtg', 'Top of footing', 'ft', 'any', u => u.type !== 'pile'], ['units', 'u.ground', 'Ground or streambed', 'ft', 'any'],
+    ['units', 'u.water.wse', 'Design flood WSE', 'ft', { any: true, blank: true }, wOn], ['units', 'u.water.v', 'Design velocity', 'ft/s', { ge: 0, blank: true }, wOn],
+    ['units', 'u.water.scour', 'Design scour El.', 'ft', { any: true, blank: true }, wOn], ['units', 'u.water.wseC', 'Check flood WSE', 'ft', { any: true, blank: true }, wOn],
+    ['units', 'u.water.vC', 'Check velocity', 'ft/s', { ge: 0, blank: true }, wOn], ['units', 'u.water.scourC', 'Check scour El.', 'ft', { any: true, blank: true }, wOn],
+    ['units', 'u.water.angle', 'Flow angle to the pier', '°', 'ang90', wOn],
+    ['units', 'u.water.debW', 'Raft width', 'ft', 'pos', u => wOn(u) && u.water.debris === 'yes'], ['units', 'u.water.debD', 'Raft depth', 'ft', 'pos', u => wOn(u) && u.water.debris === 'yes'],
+    ['units', 'u.water.iceT', 'Ice thickness t', 'ft', 'pos', u => wOn(u) && u.water.ice === 'yes'], ['units', 'u.water.iceP', 'Crushing strength p', 'ksf', 'pos', u => wOn(u) && u.water.ice === 'yes'],
+    ['units', 'u.water.iceZ', 'Ice elevation', 'ft', 'any', u => wOn(u) && u.water.ice === 'yes'], ['units', 'u.water.iceA', 'Nose inclination α', '°', { ge: 0, lt: 90 }, u => wOn(u) && u.water.ice === 'yes'],
+    ['units', 'u.water.iceB', 'Nose angle β in plan', '°', { gt: 0, le: 180, blank: true }, u => wOn(u) && u.water.ice === 'yes'],
+    ['units', 'u.water.iceF', 'Friction angle θf', '°', { ge: 0, lt: 90 }, u => wOn(u) && u.water.ice === 'yes'],
+    ['units', 'u.cv.DWT', 'DWT', 'tonnes', 'pos', u => cvOn(u) && u.cv.type === 'ship'], ['units', 'u.cv.Vs', 'Impact speed V', 'ft/s', 'pos', u => cvOn(u) && (u.cv.type === 'ship' || u.cv.type === 'barge')],
+    ['units', 'u.cv.W', 'Barge weight W', 'tonnes', 'pos', u => cvOn(u) && u.cv.type === 'barge'], ['units', 'u.cv.BB', 'Barge width BB', 'ft', { gt: 0, blank: true }, u => cvOn(u) && u.cv.type === 'barge'],
+    ['units', 'u.cv.CH', 'CH', '', { ge: 1.05, le: 1.25 }, u => cvOn(u) && u.cv.type === 'barge'],
+    ['units', 'u.cv.F', 'Design impact force', 'kip', 'pos', u => cvOn(u) && u.cv.type !== 'ship' && u.cv.type !== 'barge'],
+    ['units', 'u.cv.mhw', 'Impact El. (mean high water)', 'ft', 'any', cvOn], ['units', 'u.cv.chAng', 'Channel at an angle to the line', '°', 'ang90', cvOn],
+    ['units', 'u.ct.road', 'Roadway at an angle to the line', '°', 'ang90', u => u.type !== 'abut' && u.ct && u.ct.on === 'yes' && u.ct.dirMode === 'road'],
+    ['units', 'u.earth.gamma', 'Backfill γ', 'kcf', 'pos', isT('abut')], ['units', 'u.earth.phi', 'φ', '°', { gt: 0, lt: 90 }, isT('abut')],
+    ['units', 'u.earth.delta', 'δ (wall friction)', '°', { ge: 0, lt: 90 }, u => u.type === 'abut' && u.earth && u.earth.method === 'coulomb'],
+    ['units', 'u.earth.beta', 'Backfill slope β', '°', { gt: -90, lt: 90 }, isT('abut')],
+    ['units', 'u.earth.soilH', 'Soil height over the heel', 'ft', { gt: 0, blank: true }, isT('abut')], ['units', 'u.earth.hw', 'Water table above bottom of footing', 'ft', 'nn', isT('abut')],
+    ['units', 'u.earth.heq5', 'heq at H = 5 ft', 'ft', 'nn', isT('abut')], ['units', 'u.earth.heq10', 'heq at H = 10 ft', 'ft', 'nn', isT('abut')], ['units', 'u.earth.heq20', 'heq at H ≥ 20 ft', 'ft', 'nn', isT('abut')],
+    ['units', 'u.earth.esQ', 'Earth surcharge ES', 'ksf', 'nn', isT('abut')], ['units', 'u.earth.constrFill', 'Construction fill above footing', 'ft', 'nn', isT('abut')],
+    ['units', 'u.earth.gLLc', 'γLS during construction', '', 'nn', isT('abut')],
+    ['units', 'u.earth.asW', 'Approach slab width', 'ft', { gt: 0, blank: true }, u => u.type === 'abut' && u.earth && u.earth.asOn === 'yes'],
+    ['units', 'u.earth.asL', 'Approach slab length', 'ft', 'pos', u => u.type === 'abut' && u.earth && u.earth.asOn === 'yes'],
+    ['units', 'u.earth.asT', 'Approach slab thickness', 'in', 'pos', u => u.type === 'abut' && u.earth && u.earth.asOn === 'yes'],
+    ['units', 'u.earth.asPct', 'Share of slab weight on the abutment', '%', { ge: 0, le: 100 }, u => u.type === 'abut' && u.earth && u.earth.asOn === 'yes'],
+    ['units', 'u.mu', 'Friction μ at sliding bearings', '', { ge: 0, le: 1, blank: true }],
+    ['units', 'u.cv.daf', 'Vessel force dynamic amplification', '', 'pos', u => u.cv && u.cv.on === 'yes'],
+    ['units', 'u.water.iceStat', 'Static ice pressure', 'kip/ft', 'nn', u => u.water && u.water.on === 'yes' && u.water.ice === 'yes'],
+    ['units', 'u.water.iceVert', 'Vertical ice force', 'kip', 'nn', u => u.water && u.water.on === 'yes' && u.water.ice === 'yes']
+  ].map(([tab, path, label, unit, r, when]) => ({ tab, path, label, unit, r: U(r), when }));
+  const LF_KEYS = [['dcMax', 'DC max'], ['dcMin', 'DC min'], ['dwMax', 'DW max'], ['dwMin', 'DW min'], ['ll', 'LL'], ['ws', 'WS'], ['wl', 'WL'], ['tu', 'TU']];
+  const TAB = { project: 'Project', bridge: 'Bridge', units: 'Units', rx: 'Reactions' };
+  const fmt = x => String(x).replace(/^-/, '−');
+  const sfx = u => u ? (/^[°%]/.test(u) ? u : ' ' + u) : '';
+  function rangeText(r, unit) {   // "greater than 0 ft", "from 0 to 1", …
+    const s = v => fmt(v) + sfx(unit);
+    if (r.any) return 'any number';
+    if (r.int) return `a whole number of ${r.ge} or more`;
+    const lo = r.gt != null ? `greater than ${s(r.gt)}` : r.ge != null ? `${s(r.ge)} or more` : '', hi = r.lt != null ? `less than ${s(r.lt)}` : r.le != null ? `at most ${s(r.le)}` : '';
+    if (r.ge != null && r.le != null) return `from ${s(r.ge)} to ${s(r.le)}`;
+    return lo && hi ? `${lo} and ${hi}` : lo || hi;
+  }
+  /* test(v, r, unit): '' or the message (without the field name) */
+  function test(v, r, unit) {
+    const blank = v == null || String(v).trim() === '';
+    if (blank) return r.blank ? '' : 'enter a value' + (r.any ? '' : ` (${rangeText(r, unit)})`);
+    const x = num(v); if (!isFinite(x)) return `"${String(v).slice(0, 24)}" is not a number`;
+    if (r.any) return '';
+    const bad = (r.int && !Number.isInteger(x)) || (r.gt != null && !(x > r.gt)) || (r.ge != null && !(x >= r.ge)) || (r.lt != null && !(x < r.lt)) || (r.le != null && !(x <= r.le));
+    return bad ? `must be ${rangeText(r, unit)} (entered ${fmt(v)})` : '';
+  }
+  const unitName = k => (P.units[k] && P.units[k].name) || `Support ${k + 1}`;
+  /* collect(): every invalid input in use: [{ tab, k (unit, or null), path, label, msg, list?, cell? }] */
+  function collect() {
+    const E = [], b = P.br || {}, n = (P.units || []).length;
+    const add = (tab, k, path, label, msg, o) => { if (msg) E.push(Object.assign({ tab, k, path, label, msg }, o || {})); };
+    const val = path => getK(path);
+    // the span and girder spacing lists: the text being edited (if not valid), else the saved lists
+    [['br.spans', 'Span length', 'f_spans'], ['br.bays', 'Girder spacing', 'f_bays']].forEach(([path, lab, id]) => {
+      const L = IC_LIST[path], base = JSON.stringify(val(path) || []);
+      if (L && L.base === base) {
+        const tok = L.text.split(/[,\s]+/).filter(Boolean);
+        if (!tok.length) add('bridge', null, path, lab + 's', 'enter at least one value', { list: id });
+        tok.forEach((t, i) => add('bridge', null, path, `${lab} ${i + 1}`, test(t, RNG.pos, 'ft'), { list: id, cell: i }));
+        return; }
+      const a = Array.isArray(val(path)) ? val(path) : [];
+      if (!a.length) add('bridge', null, path, lab + 's', 'enter at least one value', { list: id });
+      a.forEach((x, i) => add('bridge', null, path, `${lab} ${i + 1}`, test(x, RNG.pos, 'ft'), { list: id, cell: i }));
+    });
+    for (let k = 0; k < n; k++) {
+      add('bridge', null, `br.skews.${k}`, `${unitName(k)} skew`, test((b.skews || [])[k], { gt: -60, lt: 60 }, '°'));
+      add('bridge', null, `br.elev.${k}`, `${unitName(k)} deck El. at CL`, test((b.elev || [])[k], RNG.any, 'ft'));
+    }
+    RULES.forEach(R => {
+      if (R.path.startsWith('u.')) {
+        (P.units || []).forEach((u, k) => {
+          if (!u) return; const end = k === 0 || k === n - 1, c = { k, end, joint: !end && (b.joint || [])[k] === 'joint' };
+          let on = true; try { on = R.when ? !!R.when(u, c) : true; } catch (e) { on = false; }   // a sub-object not there yet (filled with its defaults when used)
+          if (!on) return;
+          const path = `units.${k}.${R.path.slice(2)}`, v = getK(path); if (v === undefined || v === null) return;   // not in the file: the tool's default is used
+          add('units', k, path, R.label, test(v, R.r, R.unit));
+        });
+      } else {
+        if (R.when && !R.when(b)) return;
+        const v = val(R.path); if (v === undefined || v === null) return;
+        add(R.tab, null, R.path, R.label, test(v, R.r, R.unit));
+      }
+    });
+    // cross checks
+    if (b.tProc === 'B' && isFinite(num(b.tMinB)) && isFinite(num(b.tMaxB)) && !(num(b.tMinB) < num(b.tMaxB))) add('bridge', null, 'br.tMinB', 'TMinDesign', `must be lower than TMaxDesign (${fmt(b.tMaxB)}°F)`);
+    if (num(b.Rc) > 0 && String(b.Vd == null ? '' : b.Vd).trim() !== '' && isFinite(num(b.Vd)) && !(num(b.Vd) > 0)) add('bridge', null, 'br.Vd', 'Design speed', 'must be greater than 0 mph for a curved bridge (a curve radius is entered)');
+    else if (num(b.Rc) > 0 && String(b.Vd == null ? '' : b.Vd).trim() === '') add('bridge', null, 'br.Vd', 'Design speed', 'enter the design speed for a curved bridge (a curve radius is entered), or clear the radius');
+    if (Array.isArray(b.eqSa)) { const filled = b.eqSa.map(v => v != null && String(v).trim() !== '');
+      if (filled.some(Boolean)) SA_T.forEach((T, i) => { const v = b.eqSa[i]; add('bridge', null, `br.eqSa.${i}`, `Sa at T = ${T} s`, filled[i] ? test(v, RNG.nn, '') : 'enter all 22 Sa values, or clear the table'); }); }
+    if (b.lf && typeof b.lf === 'object') COMBOS.forEach(c => { const o = b.lf[c.id]; if (!o) return; LF_KEYS.forEach(([key, nm]) => { const v = o[key]; if (v === undefined || v === null) return;
+      add('bridge', null, `br.lf.${c.id}.${key}`, `${c.name} ${nm} load factor`, test(v, { ge: 0, blank: true }, '')); }); });
+    (P.units || []).forEach((u, k) => { if (!u || u.type !== 'abut' || !u.earth) return; const e = u.earth, ph = num(e.phi), be = num(e.beta);
+      if (isFinite(ph) && isFinite(be) && ph > 0 && ph < 90 && be > -90 && !(be < ph)) add('units', k, `units.${k}.earth.beta`, 'Backfill slope β', `must be less than φ (${fmt(e.phi)}°): active earth pressure theory does not apply`); });
+    // reactions: a blank cell reads as 0 (as before); text that is not a number is an error
+    ((P.rx || {}).data || []).forEach((row, k) => (row || []).forEach((r, j) => { if (!r) return; ['dc1', 'dc2', 'dw', 'dc1a', 'dc2a', 'dwa', 'ut', 'uf', 'uta', 'ufa'].forEach(c => {
+      const v = r[c]; if (v === undefined || v === null || k >= n) return; add('rx', k, `rx.data.${k}.${j}.${c}`, `G${j + 1} ${c.toUpperCase().replace(/A$/, ' ahead')}`, test(v, { any: true, blank: true }, 'kip')); }); }));
+    return E;
+  }
+  const count = n => `${n} input${n === 1 ? ' needs' : 's need'} fixing before results can be shown`;
+  const where = e => `${TAB[e.tab] || e.tab} › ${e.k != null ? esc(unitName(e.k)) + ' › ' : ''}${esc(e.label)}`;
+  let shown = [];   // the errors the links point to (data-icgo = index)
+  function banner(L, o) {
+    o = o || {}; shown = L;
+    return `<div class="card ic-banner" role="alert"><div class="card-h"><h2>${count(L.length)}</h2></div><div class="card-b"><ul class="ic-list">${L.map((e, i) => `<li><a href="#" data-icgo="${i}"><b>${where(e)}</b>: ${esc(e.msg)}</a></li>`).join('')}</ul>`
+      + `<p class="ic-none">Results not shown: fix the inputs above. ${o.what || 'Each link opens the input and puts the cursor in it.'}</p>`
+      + `<p class="note" style="padding:0">Valid input ranges: <a href="#" data-icranges>Project tab, Input checks</a>.</p></div></div>`;
+  }
+  /* the input ranges, as a note (Project tab) and in the Report: from the rule table above, so they always agree */
+  function rangeItems() {
+    const g = { bridge: [], units: [] }, seen = new Set();
+    const put = (tab, label, r, unit) => { const t = `${label}: ${r.blank ? 'blank or ' : ''}${rangeText(r, unit)}`; if (!seen.has(t)) { seen.add(t); g[tab].push(t); } };
+    put('bridge', 'Span lengths and girder spacings', RNG.pos, 'ft'); put('bridge', 'Skew', { gt: -60, lt: 60 }, '°'); put('bridge', 'Deck El. at CL', RNG.any, 'ft');
+    RULES.forEach(R => { if (R.path === 'u.col.s' || R.path === 'u.pile.s') { if (!seen.has(R.label)) { seen.add(R.label); g.units.push(`${R.label}: greater than 0 ft with 2 or more, 0 ft or more with one`); } return; } put(R.tab, R.label, R.r, R.unit); });
+    put('bridge', 'Load factors (Load factors table)', { ge: 0, blank: true }, ''); put('bridge', 'Sa table', { ge: 0 }, '');
+    return [['Bridge tab:', g.bridge.join('; ') + '. With Procedure B, T<sub>MinDesign</sub> below T<sub>MaxDesign</sub>; with a curve radius, a design speed above 0; the S<sub>a</sub> table all 22 values or none.'],
+      ['Units tab (inputs in use for the unit type and options):', g.units.join('; ') + '. Backfill slope β below φ.'],
+      ['Reactions tab:', 'any number (blank reads as 0).']];
+  }
+  const LEAD = 'Input checks: results are shown only while every input in use is valid.';
+  const NOTE_ITEMS = () => [['Invalid:', 'a blank where a value is needed, text that is not a number, or a value out of its range. The field is outlined with its message, its input tab and unit show a count, and every output tab, the Report and the elevation list the errors with links to the fields; Print, Drawings, Export abutments and the abutment and foundation loads sends are held until they are fixed. Pulls from other tools work as before.'],
+    ['Saved projects', 'with a value now out of range open as saved and show the error; nothing is changed until you edit it.'], ...rangeItems()];
+  return { RULES, collect, test, rangeText, banner, count, where, rangeItems, LEAD, NOTE_ITEMS, get shown() { return shown; }, unitName, TAB };
+})();
+(function slicWire() {
+  const css = document.createElement('style'); css.textContent = `
+    .fld.ic-badf .in{border-color:var(--fail);}
+    #sidebar input.ic-bad, #sidebar select.ic-bad{border-color:var(--fail)!important;background:var(--fail-dim);outline:1px solid var(--fail);outline-offset:0;}
+    .ic-msg{color:var(--fail);font-size:.78rem;line-height:1.3;margin-top:2px;grid-column:1/-1;}
+    .itab .ic-n,.unit-pick .ic-n{display:inline-block;min-width:15px;padding:0 4px;margin-left:4px;border-radius:8px;background:var(--fail);color:#fff;font-size:.7rem;line-height:15px;text-align:center;font-family:var(--font,inherit);vertical-align:1px;}
+    .itab.ic-err{color:var(--fail);}
+    .unit-pick button.ic-err{border-color:var(--fail);}
+    .tab-panel.ic-blocked > :not(.ic-block){display:none!important;}
+    .ic-banner{border-color:var(--fail);} .ic-banner .card-h h2{color:var(--fail);} .ic-list{margin:2px 0 6px;padding-left:18px;} .ic-list li{margin:3px 0;} .ic-list a{color:var(--fail);}
+    .ic-none{font-weight:600;color:var(--fail);margin:6px 0;}
+    .ic-strip-ph{height:118px;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--fail);font-size:.85rem;border:1px dashed var(--fail);border-radius:4px;background:var(--fail-dim);padding:0 12px;box-sizing:border-box;}
+    .ic-strip-ph.ic-empty{border-color:var(--border-hi);color:var(--muted);background:none;}
+    #strip-note a{color:var(--fail);}
+    @media print{.ic-list a{color:#000;text-decoration:none;}}`;
+  document.head.appendChild(css);
+  const qa = s => String(s).replace(/["\\]/g, '\\$&');
+  /* the field marks, the tab and unit counts, and what the sidebar shows that is computed (Derived, totals) */
+  function icMark() {
+    const L = IC.collect(), sb = $('#sidebar'); if (!sb) return L;
+    sb.querySelectorAll('.ic-msg').forEach(x => x.remove()); sb.querySelectorAll('.ic-bad').forEach(x => x.classList.remove('ic-bad'));
+    sb.querySelectorAll('.fld.ic-badf').forEach(x => { x.classList.remove('ic-badf'); const i = x.querySelector('[data-kind="num"]'); if (!(i && i.value.trim() !== '' && !isFinite(num(i.value))) && !x.querySelector('[data-list]')) x.classList.remove('bad'); });
+    const tabbed = new Map();   // a table -> its messages (shown under it)
+    L.forEach(e => {
+      if (e.tab !== P.ui.itab || (e.tab === 'units' && e.k !== P.ui.sel)) return;
+      if (e.list) { const inp = document.getElementById(e.list), f = inp && inp.closest('.fld'); if (!f) return; f.classList.add('bad', 'ic-badf');
+        let m = f.querySelector('.ic-msg'); if (!m) { m = document.createElement('div'); m.className = 'ic-msg'; m.setAttribute('role', 'alert'); f.appendChild(m); } m.innerHTML += (m.innerHTML ? '<br>' : '') + esc(e.label + ': ' + e.msg); return; }
+      const el = sb.querySelector(`[data-k="${qa(e.path)}"]`); if (!el) return; el.classList.add('ic-bad'); el.setAttribute('aria-invalid', 'true');
+      const td = el.closest('td'), f = el.closest('.fld');
+      if (td) { const t = el.closest('table'); if (!tabbed.has(t)) tabbed.set(t, []); tabbed.get(t).push(e.label + ': ' + e.msg); return; }
+      if (f) { f.classList.add('bad', 'ic-badf'); const m = document.createElement('div'); m.className = 'ic-msg'; m.setAttribute('role', 'alert'); m.textContent = e.msg.charAt(0).toUpperCase() + e.msg.slice(1) + '.'; f.appendChild(m); }
+    });
+    sb.querySelectorAll('[aria-invalid="true"]:not(.ic-bad)').forEach(x => x.removeAttribute('aria-invalid'));
+    tabbed.forEach((msgs, t) => { const m = document.createElement('div'); m.className = 'ic-msg'; m.setAttribute('role', 'alert'); m.innerHTML = msgs.map(esc).join('<br>'); t.insertAdjacentElement('afterend', m); });
+    const cnt = {}, cu = {}; L.forEach(e => { cnt[e.tab] = (cnt[e.tab] || 0) + 1; if (e.tab === 'units') cu[e.k] = (cu[e.k] || 0) + 1; });
+    document.querySelectorAll('.itab').forEach(b => { const n = cnt[b.dataset.pane] || 0; let s = b.querySelector('.ic-n');
+      if (n) { if (!s) { s = document.createElement('span'); s.className = 'ic-n'; b.appendChild(s); } s.textContent = n; b.classList.add('ic-err'); b.setAttribute('aria-label', `${b.firstChild.textContent.trim()}: ${n} input${n > 1 ? 's' : ''} to fix`); }
+      else { if (s) s.remove(); b.classList.remove('ic-err'); b.removeAttribute('aria-label'); } });
+    sb.querySelectorAll('.unit-pick [data-unit]').forEach(b => { const n = cu[b.dataset.unit] || 0; let s = b.querySelector('.ic-n');
+      if (n) { if (!s) { s = document.createElement('span'); s.className = 'ic-n'; b.appendChild(s); } s.textContent = n; b.classList.add('ic-err'); b.title = `${n} input${n > 1 ? 's' : ''} to fix`; }
+      else { if (s) s.remove(); b.classList.remove('ic-err'); b.removeAttribute('title'); } });
+    if (L.length) {   // computed values in the sidebar are not shown either
+      const d = $('#derived'); if (d) d.innerHTML = '<p class="note" style="grid-column:1/-1;padding:0;color:var(--fail)">Not shown: fix the inputs first.</p>';
+      sb.querySelectorAll('[data-rxt]').forEach(td => { td.textContent = '—'; });
+      sb.querySelectorAll('.fld').forEach(f => { const lb = f.querySelector('label'), i = f.querySelector('input[readonly]'); if (lb && i && lb.textContent.trim() === 'Suggested') i.value = '—'; });
+    }
+    const ho = document.getElementById('slHo'); if (ho) { let nt = document.getElementById('icHoNote'); const g = [...ho.querySelectorAll('.slHoGrp')].find(x => /^Send/.test(x.textContent));
+      if (L.length && g) { if (!nt) { nt = document.createElement('p'); nt.id = 'icHoNote'; nt.className = 'note'; nt.style.cssText = 'padding:0 0 4px;color:var(--fail)'; g.insertAdjacentElement('afterend', nt); } nt.textContent = `Sending is held: ${IC.count(L.length)} (no stale loads are sent).`; }
+      else if (nt) nt.remove(); }
+    return L;
+  }
+  const mb = markBad; markBad = function () { mb(); icMark(); };
+  const rc = recompute; recompute = function () { const r = rc.apply(this, arguments); icMark(); return r; };   // after the Derived box and the totals are written
+  /* the list tables: the text being edited, while it is not valid, is kept on screen and blocks results */
+  const lt = listTables; listTables = function () {
+    [['f_spans', 'br.spans'], ['f_bays', 'br.bays']].forEach(([id, path]) => { const L = IC_LIST[path], inp = document.getElementById(id);
+      if (L && inp && L.base === JSON.stringify(getK(path) || [])) inp.value = L.text; });
+    lt();
+    [['f_spans', 'Span lengths'], ['f_bays', 'Girder spacings']].forEach(([id]) => { const inp = document.getElementById(id), f = inp && inp.closest('.fld');
+      if (f && IC_LIST[inp.dataset.list] && IC_LIST[inp.dataset.list].base === JSON.stringify(getK(inp.dataset.list) || [])) f.classList.add('bad'); });
+  };
+  document.addEventListener('input', e => { const t = e.target; if (!t || !t.dataset || !t.dataset.list) return;
+    const a = t.value.split(/[,\s]+/).filter(Boolean).map(num), bad = !a.length || a.some(x => !(x > 0));
+    if (bad) IC_LIST[t.dataset.list] = { text: t.value, base: JSON.stringify(getK(t.dataset.list) || []) }; else delete IC_LIST[t.dataset.list];
+    markBad(); recomputeSoon(); });
+  document.addEventListener('change', e => { const t = e.target; if (!t || !t.dataset || !t.dataset.list) return;   // after the tool's own commit (a valid list): nothing pending
+    const a = t.value.split(/[,\s]+/).filter(Boolean).map(num); if (a.length && !a.some(x => !(x > 0))) { delete IC_LIST[t.dataset.list]; markBad(); } });
+  /* output tabs: the errors instead of the results (the Manual stays) */
+  const block = (el, L) => { el.classList.add('ic-blocked'); let d = el.querySelector(':scope > .ic-block'); if (!d) { d = document.createElement('div'); d.className = 'ic-block'; el.insertBefore(d, el.firstChild); } d.innerHTML = IC.banner(L); };
+  const unblock = el => { el.classList.remove('ic-blocked'); const d = el.querySelector(':scope > .ic-block'); if (d) d.remove(); };
+  const rt = renderTab; renderTab = function () {
+    const L = IC.collect(), id = P.ui.tab, el = document.getElementById('tab-' + id);
+    if (!L.length || id === 'manual') { document.querySelectorAll('.tab-panel.ic-blocked').forEach(p => { if (p.id !== 'tab-report') unblock(p); }); return rt.apply(this, arguments); }
+    if (el) block(el, L);
+    if (typeof SLR !== 'undefined' && SLR.on) slrRender();
+  };
+  const sr = slrRender; slrRender = function () {
+    const T = document.getElementById('tab-report'), L = IC.collect();
+    if (T && L.length) { T.innerHTML = '<div class="ic-block">' + IC.banner(L) + '</div>'; SLR.api = null; SLR.doc = null; return; }
+    return sr.apply(this, arguments);
+  };
+  /* the elevation strip keeps its height: a placeholder with the first error while inputs need fixing (or the bridge cannot be drawn) */
+  const rs = renderStrip; renderStrip = function () {
+    const host = $('#strip-host'), L = IC.collect();
+    if (L.length && host) { host.innerHTML = `<div class="ic-strip-ph">Elevation not drawn: ${esc(IC.count(L.length))}.</div>`;
+      $('#strip-note').innerHTML = `<a href="#" data-icgo="0">${IC.where(L[0])}: ${esc(L[0].msg)}</a>${L.length > 1 ? ` (and ${L.length - 1} more)` : ''}`; IC.banner(L); return; }
+    rs.apply(this, arguments);
+    if (host && !host.firstChild) host.innerHTML = `<div class="ic-strip-ph ic-empty">Elevation not drawn.</div>`;
+  };
+  /* Print, Drawings, Export abutments and the sends are held while an input needs fixing (no stale results or loads leave the tool) */
+  const HOLD = ['btn-dxf', 'btn-print', 'btn-abx', 'btn-abx-send', 'btn-abx-hf', 'btn-fdx', 'fdx-send', 'fdx-export', 'v3-png'];
+  window.addEventListener('click', e => { const b = e.target && e.target.closest && e.target.closest('button'); if (!b || !HOLD.includes(b.id)) return;
+    const L = IC.collect(); if (!L.length) return; e.preventDefault(); e.stopImmediatePropagation();
+    flash(`Held: ${IC.count(L.length)} (first: ${IC.where(L[0]).replace(/<[^>]+>/g, '')}). Nothing was printed, exported or sent.`, 'fail'); }, true);
+  /* a link to an error: its input tab (and unit), the field scrolled to and focused */
+  function goErr(e) {
+    if (!e) return; P.ui.itab = e.tab; if (e.k != null && e.tab === 'units') P.ui.sel = e.k; buildSide(); renderStrip(); autosave();
+    let el = null;
+    if (e.list) { const inp = document.getElementById(e.list), host = inp && inp.nextElementSibling, cells = host ? [...host.querySelectorAll('input.sli-in')].filter(c => c.value.trim() !== '') : [];
+      el = (e.cell != null && cells[e.cell]) || (host && host.querySelector('input.sli-in.sli-error')) || (host && host.querySelector('input.sli-in')); }
+    else el = document.querySelector(`#sidebar [data-k="${qa(e.path)}"]`);
+    if (el) { el.scrollIntoView({ block: 'center' }); try { el.focus({ preventScroll: true }); } catch (er) { el.focus(); } }
+  }
+  document.addEventListener('click', e => {
+    const a = e.target.closest && e.target.closest('[data-icgo]');
+    if (a) { e.preventDefault(); goErr(IC.shown[+a.dataset.icgo]); return; }
+    const r = e.target.closest && e.target.closest('[data-icranges]');
+    if (r) { e.preventDefault(); P.ui.itab = 'project'; buildSide(); autosave(); const s = document.getElementById('icRanges'); if (s) s.scrollIntoView({ block: 'start' }); }
+  });
+  /* the rule as a note (CLAUDE.md §6): the Project tab and the Report's "Project and design basis" */
+  const pp = paneProject; paneProject = function () { return pp.apply(this, arguments) + `<div class="sec-h" id="icRanges">Input checks <small>valid ranges</small></div><div class="sec-body one"><div class="note slNL" style="padding:0">${slNL(IC.LEAD, IC.NOTE_ITEMS())}</div></div>`; };
+  const sx = slxAdd; slxAdd = function () { const M = sx.apply(this, arguments), s = ((M && M.sections) || []).find(x => x && x.title === 'Project and design basis');   // the last sub-section: the others keep their numbers
+    if (s && Array.isArray(s.subs)) s.subs.push({ title: 'Input checks', items: slrNL(IC.LEAD, IC.NOTE_ITEMS().map(([a, t]) => [a, slrPlain(t)])) });
+    return M; };
+  window.SubLoadsInputCheck = { collect: IC.collect, test: IC.test, RULES: IC.RULES, rangeItems: IC.rangeItems, mark: icMark };
+})();
 </script>
 <script>
 /* ---------- start ---------- */
