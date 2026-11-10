@@ -164,7 +164,9 @@
      secAt(x) -> plates, D, impl (optional fe* functions, for the parity test) }. Returns { LbC, CbC, nprC, seg }. */
   function bracingC(x, env, opt) {
     const F = FX(), I = opt.impl || {}, feCb_ = I.feCb || F.feCb, feNpr_ = I.feNpr || F.feNpr, feGe_ = I.feGe || F.feGe, feGeA_ = I.feGeA || F.feGeA, feGov_ = I.feGov || F.feGov, feAt_ = I.feAt || F.feAt;
-    const xs = env.xs, N = xs.length, Lend = opt.L, C0 = factors(), Mc = env.Mc || xs.map((_, k) => C0.cdc * env.MDC1[k] + C0.ccl * env.MCL[k]);   // FONE (2026-11-01): γ from factors(), was 1.25, 1.5
+    // FONE (2026-11-01): γ from factors(), was 1.25, 1.5. SBCON (DRAFT, not approved): M_DCc where location() uses it (useDCc), so that the
+    // flange in compression, C_b and the γ_e of a nonprismatic L_b (6.10.8.2.3c, K = f_max/f_x) come from the moments the check uses; was M_DC1 always
+    const xs = env.xs, N = xs.length, Lend = opt.L, C0 = factors(), Mc = env.Mc || xs.map((_, k) => C0.cdc * (env.MDCc && useDCc(env.MDCc[k]) ? +env.MDCc[k] : env.MDC1[k]) + C0.ccl * env.MCL[k]);
     const bp = [...new Set(opt.braces.map(v => +(+v).toFixed(3)))].sort((p1, p2) => p1 - p2).filter((v, k, arr) => k === 0 || v - arr[k - 1] > 0.25);
     const ib = bp.findIndex(v => Math.abs(v - x) < 0.25), Lg = bp[bp.length - 1], segs = [];
     if (ib >= 0) { if (ib > 0) segs.push([bp[ib - 1], bp[ib]]); if (ib < bp.length - 1) segs.push([bp[ib], bp[ib + 1]]); }
