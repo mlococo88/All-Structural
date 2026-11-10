@@ -69,7 +69,7 @@
      60 % of the window high (the drawing is wide: it fits the card width at a reading scale) */
   function splice(host, ctx, s, list, sel, onSel) {
     if (list && list.length) put(host, 'splice-strip', ctx, TX => TX.spliceStrip(list, ctx.P, { sel, narrow: window.innerWidth < 700 }), onSel ? v => { if (v && v.k === 'fs') onSel(v.i); } : null, { minPx: 60, phoneZoom: false });
-    if (s) put(host, 'splice', ctx, TX => TX.splice(s, {}), null, { maxVh: 60 });
+    if (s) putDet(host, 'splice', ctx, TX => TX.splice(s, {}), 'splice', { s }) || put(host, 'splice', ctx, TX => TX.splice(s, {}), null, { maxVh: 60 });
   }
   function rating(host, ctx, B, sel, onSel) { put(host, 'rating', ctx, TX => TX.ratingChart(B, ctx.P, { gi: gi(ctx), sel }), onSel); }
 

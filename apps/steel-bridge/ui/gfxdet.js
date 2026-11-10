@@ -11,6 +11,7 @@
      bear(slot, { R, opt, dxf, file })      Shear & stiffeners: the bearing stiffener (opt.i its row)
      crossframe(slot, { B, opt, dxf, file }) Cross-frames: the cross-frame elevation (B = SBDFramingUI.build result; opt.dia: diaphragm in use)
      weld(slot, { B, opt, dxf, file })      Welds: the flange-to-web weld size detail (B = SBDWeldsUI.build result; opt.i the location)
+     splice(slot, { s, dxf, file })         Field splices: the splice detail (s = one entry of the splice list); spliceFigure(s, W): the Report's static figure (HTML string)
    Fix log: fixlog/steel-bridge.md (DETC, 2026-11-10). */
 (function () {
   'use strict';
@@ -302,5 +303,62 @@
       notes: ['Two fillet welds (one each side of the web) per flange; the sketch is drawn 6 times larger than the plates (sizes as dimensioned), not to scale along the web.'] });
   }
 
-  window.SBDGfxDet = { ltb, ltbModel, bracket, bracketModel, stiff, stiffModel, bear, bearModel, crossframe, cfModel, weld, weldModel };
+  /* ================= #18 Field splices: the splice detail (also the Report's figure) =================
+     As engine/tabgraphics-b.js splice (s = one entry of the splice list): the web splice in elevation, the top and bottom flange splices in plan, to scale in inches
+     (one scale for the three views), bolts at their gauges and pitches; the plate and bolt group of the governing strength check (strGov, as the tab) highlighted. */
+  function spliceGroupOf(gov) { if (!gov) return null; const id = gov.c.id, mm = /^(TF|BF|WS)/.exec(id); if (!mm) return null; const loc = gov.it.loc || ''; return { g: mm[1] === 'TF' ? 'top' : mm[1] === 'BF' ? 'bot' : 'web', inner: /inner/i.test(loc), outer: /outer/i.test(loc), id, loc, r: gov.it.r }; }
+  function spliceModel(s, opt) {
+    const R = s && s.R; if (!R || (R.errors && R.errors.length) || !R.fl) return null; opt = opt || {};
+    const TX = window.SBDTabGfxB, gov = spliceGroupOf(opt.gov || (TX && TX.strGov ? TX.strGov(s.CK) : null)), W = R.web;
+    return { s, R, gov, W, gap: R.gap, rb: (R.bolt.dh || R.bolt.d + 0.0625) / 2, Lw: 2 * (W.ew + (W.ncw - 1) * W.sh + W.ewp) + R.gap, gr: (s.p && s.p.bolts && s.p.bolts.gr) || '' };
+  }
+  function spliceSvg(m, W) {
+    const K = VK(), S = K.scene(), nar = W < 640, R = m.R, Wb = m.W, gap = m.gap, rb = m.rb, hl = g => m.gov && m.gov.g === g, Lf = Math.max(R.fl.top.Lpl, R.fl.bot.Lpl, m.Lw), half = Lf / 2 + 2;
+    const mw = nar ? W - 24 : W * 0.3, fsz = nar ? 10.5 : 11;
+    const GE = { fill: '#E2E8F0', stroke: '#94A3B8', sw: 0.8 }, ends = (cx, y0, y1) => { S.rect(cx - gap / 2 - half, y0, cx - gap / 2, y1, 'dt-pl', GE); S.rect(cx + gap / 2, y0, cx + gap / 2 + half, y1, 'dt-pl', GE); };   // the girder ends: light (the splice plates are drawn over them)
+    const bolt = (x, y, on) => S.circ(x, y, rb, on ? 'dt-band' : 'dt-bolt');
+    // web splice, elevation (centre of the joint at x = 0, bottom of the web at y = 0)
+    const D0 = R.D, onW = hl('web'), py = (D0 - Wb.hw) / 2;
+    ends(0, 0, D0); S.rect(-m.Lw / 2, py, m.Lw / 2, py + Wb.hw, onW ? 'dt-govf' : 'dt-pl', onW ? {} : { fill: '#94A3B8' });
+    Wb.bolts.forEach(b => [-1, 1].forEach(sd => bolt(sd * (gap / 2 + Wb.xbar) + b.dx, py + Wb.hw / 2 + b.dy, onW)));
+    S.dimV(py, py + Wb.hw, -half, -14, `PL ${X_().fmtFtIn(Wb.hw)}`, { xr: -m.Lw / 2 });
+    S.dimH(-m.Lw / 2, m.Lw / 2, 0, -16, X_().fmtFtIn(m.Lw), { yr: py });
+    S.text(-half, D0, `Web splice (elevation)${onW ? ': governs' : ''}`, { dy: -10, sz: 12, w: true, cls: onW ? 'dt-g' : 'dt-t' });
+    S.text(-half, 0, `2 PL ${frac(Wb.hw)} × ${frac(Wb.twp)}; ${Wb.nrw} rows × ${Wb.ncw} col. each side`, { dy: 40, sz: fsz, maxw: mw });
+    S.region(-m.Lw / 2, py, m.Lw / 2, py + Wb.hw, `Web splice: 2 PL ${frac(Wb.hw)} × ${frac(Wb.twp)}; ${Wb.nrw} rows × ${Wb.ncw} col. each side${onW ? ' (governing group)' : ''}`);
+    // the flange plans: beside the web (wide) or under it (phone); bottom plan first, top plan above it (as the CAD drawing)
+    const plan = (F, key, cx, y0, tag) => {
+      const fw = Math.max(F.bL, F.bR), cy = y0 + fw / 2, on = hl(key);
+      S.rect(cx - gap / 2 - half, cy - F.bL / 2, cx - gap / 2, cy + F.bL / 2, 'dt-pl', GE); S.rect(cx + gap / 2, cy - F.bR / 2, cx + gap / 2 + half, cy + F.bR / 2, 'dt-pl', GE);
+      S.rect(cx - F.Lpl / 2, cy - F.bo / 2, cx + F.Lpl / 2, cy + F.bo / 2, on && !m.gov.inner ? 'dt-govf' : 'dt-pl', on && !m.gov.inner ? {} : { fill: '#94A3B8' });
+      if (F.inner) [-1, 1].forEach(sg => S.rect(cx - F.Lpl / 2, sg > 0 ? cy + F.yiI : cy - F.yiO, cx + F.Lpl / 2, sg > 0 ? cy + F.yiO : cy - F.yiI, on && m.gov.inner ? 'dt-gov' : 'dt-hid', on && m.gov.inner ? { dash: '4 3', sw: 1.6 } : {}));
+      [-1, 1].forEach(sd => { for (let j = 0; j < F.nr; j++) for (let l = 0; l < F.nl; l++) [-1, 1].forEach(sy => bolt(cx + sd * (gap / 2 + F.ef + j * F.s), cy + sy * (F.g0 + l * F.g), on)); });
+      S.line(cx - half - 3, cy, cx + half + 3, cy, 'dt-cl');
+      S.dimH(cx - F.Lpl / 2, cx + F.Lpl / 2, y0, -16, X_().fmtFtIn(F.Lpl), { yr: cy - F.bo / 2 });
+      S.text(cx - half, y0 + fw, tag + (on ? ': governs' : ''), { dy: -10, sz: 12, w: true, cls: on ? 'dt-g' : 'dt-t' });
+      const nt = `Outer PL ${frac(F.bo)} × ${frac(F.to)}; ${F.nl} lines each side × ${F.nr} rows, ${dIn(F.s)} pitch${F.inner ? `; 2 inner PL ${frac(F.bi)} × ${frac(F.ti)}` : ''}`;
+      if (nar) S.text(cx - half, y0, nt, { dy: 40, sz: fsz, maxw: mw }); else S.text(cx + half, cy, nt, { dx: 12, vc: true, sz: fsz, maxw: Math.max(160, W * 0.28) });
+      S.region(cx - F.Lpl / 2, cy - F.bo / 2, cx + F.Lpl / 2, cy + F.bo / 2, `${tag}: ${nt}${on ? ' (governing group)' : ''}`);
+      return fw; };
+    const fwB = Math.max(R.fl.bot.bL, R.fl.bot.bR), fwT = Math.max(R.fl.top.bL, R.fl.top.bR);
+    if (nar) { const yT = -40 - fwT - 30, yB = yT - 50 - fwB; plan(R.fl.top, 'top', 0, yT, 'Top flange splice (plan)'); plan(R.fl.bot, 'bot', 0, yB, 'Bottom flange splice (plan)'); }
+    else { const dx = Lf + 12 + 48, yB0 = 4, yT0 = yB0 + fwB + 22; plan(R.fl.bot, 'bot', dx, yB0, 'Bottom flange splice (plan)'); plan(R.fl.top, 'top', dx, yT0, 'Top flange splice (plan)'); }
+    return { svg: S.render({ W, maxH: nar ? 900 : 420, label: `${m.s.name || 'Field splice'}: web splice elevation and flange splice plans` }).svg, nar };
+  }
+  const spliceTexts = m => { const g = m.gov, R = m.R; return { gov: g ? `Governing strength check: ${g.id} ${g.loc}, ratio ${f3(g.r)} (highlighted)` : 'No strength check governs',
+    bolts: `Bolts ${frac(R.bolt.d)} in, ${m.gr}; gap ${dIn(m.gap)} between the girder ends; sketch to scale in inches.` }; };
+  function splice(slot, o) {
+    const K = VK(); let m = null; try { m = spliceModel(o.s, o.opt); } catch (e) { m = null; }
+    if (!m) { slot.innerHTML = '<p class="note">No splice design to draw.</p>'; return null; }
+    const t = spliceTexts(m);
+    return K.detCard(slot, { id: 'dt-spl', title: esc(o.s.name || 'Field splice'), sub: 'Web splice elevation and flange splice plans, to scale', dxf: o.dxf, file: o.file,
+      top: `<p class="vk-cap" style="margin:0 0 6px;${m.gov ? 'color:var(--vk-acc);font-weight:600' : ''}">${sb(t.gov)}</p>`,
+      draw: W => { const q = spliceSvg(m, W); return { html: q.svg, nar: q.nar }; }, hint: 'Point at (or tap) a splice plate to read its plates and bolts.',
+      cap: `<p class="vk-cap">${esc(t.bolts)} Highlighted (blue): the plate and bolt group of the governing strength check; dashed: the inner plates.</p>` });
+  }
+  /* the Report's static figure of a splice (no interaction): the same SVG at a fixed width, with its texts, in a .vk box (the print style applies) */
+  function spliceFigure(s, W) { const m = spliceModel(s); if (!m) return null; const t = spliceTexts(m); VK().detCss();
+    return `<div class="vk vk-det" style="max-width:${W || 760}px"><p class="vk-cap" style="margin:0 0 4px">${sb(t.gov)}</p>${spliceSvg(m, W || 760).svg}<p class="vk-cap">${esc(t.bolts)}</p></div>`; }
+
+  window.SBDGfxDet = { ltb, ltbModel, bracket, bracketModel, stiff, stiffModel, bear, bearModel, crossframe, cfModel, weld, weldModel, splice, spliceModel, spliceFigure };
 })();

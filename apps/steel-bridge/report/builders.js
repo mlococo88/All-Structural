@@ -413,7 +413,10 @@
       items.push(note(`Unfactored, per girder; ${s.dm.custom ? `as entered (Custom), row x = ${f(s.dm.xi, 3)} ft.` : `moments at the analysis station x = ${f(s.dm.xi, 2)} ft (Analysis section), shears the largest magnitude of elements ${s.dm.e} ± 1.`}${s.design ? ` Auto-design${s.design.ok ? '' : ' (not every check passes)'}: ${s.design.msg}` : ''}`));
       if (R && !R.errors.length) {
         items.push(note(`Top flange: ${R.fl.top.nl} line(s) each side × ${R.fl.top.nr} rows, outer PL ${SP.frac(R.fl.top.bo)} × ${SP.frac(R.fl.top.to)}${R.fl.top.inner ? `, 2 inner PL ${SP.frac(R.fl.top.bi)} × ${SP.frac(R.fl.top.ti)}` : ''}. Bottom flange: ${R.fl.bot.nl} line(s) × ${R.fl.bot.nr} rows, outer PL ${SP.frac(R.fl.bot.bo)} × ${SP.frac(R.fl.bot.to)}${R.fl.bot.inner ? `, 2 inner PL ${SP.frac(R.fl.bot.bi)} × ${SP.frac(R.fl.bot.ti)}` : ''}. Web: 2 PL ${SP.frac(R.web.hw)} × ${SP.frac(R.web.twp)}, ${R.web.nrw} rows × ${R.web.ncw} column(s) each side. Bolts ${SP.frac(R.bolt.d)} in ${s.p.bolts.gr}; plates ${s.p.sec.gP}.`));
-        const fg = splFig(G => G.splice(s, {}), `${s.name}: flange splice plans and web splice elevation, to scale; the governing plate and bolt group highlighted (as the [[tab:spl|Field splices tab]])`);
+        // DETC (2026-11-10): the figure in the option C style of the tab (ui/gfxdet.js spliceFigure), else the CAD drawing as before
+        const cap18 = `${s.name}: flange splice plans and web splice elevation, to scale; the governing plate and bolt group highlighted (as the [[tab:spl|Field splices tab]])`;
+        let fg = null; try { const h18 = window.SBDGfxDet && window.SBDVizKit && window.SBDVizKit.scene ? window.SBDGfxDet.spliceFigure(s, 760) : null; if (h18) fg = { type: 'figure', svg: h18, caption: cap18 }; } catch (e) { fg = null; }
+        if (!fg) fg = splFig(G => G.splice(s, {}), cap18);
         if (fg) items.push(fg); else { const dw = SP.svg(R); if (dw) items.push({ type: 'figure', svg: dw.flange + dw.web, caption: 'Plan of the bottom flange splice and elevation of the web splice, to scale' }); }   // the simple sketch only without the graphics modules
       } else if (R) items.push(note(R.errors.join(' '), true));
       if (s.CK) { items.push(tbl(['ID', 'Check', 'Governing item', 'Ratio', 'Status', ED], s.CK.map(c => { const it = c.gov >= 0 ? c.items[c.gov] : null;
