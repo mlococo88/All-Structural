@@ -5,6 +5,7 @@
 //   1. The output tab reads "Diaphragms"; its cards: "Diaphragms: governing", "Diaphragms: elevation" (the diaphragm drawing, no X / K truss
 //      graphic), the checks heading lists only CF10 / CF11 / CFD / CFE; no CF1 to CF9 row; no "Member forces (truss model)"; no truss steps.
 //   2. The Summary column and the left check column chip read "Diaphragms"; the Report section is "Framing and diaphragms" with no truss member forces.
+//   SBDX (2026-11-10): the axial items of CFD / CFE with their steps (§), the channel's 6.12.2.2.5 steps in the Report, 0 KaTeX errors.
 //   3. Back to an X-frame: "Cross-frames" again, the truss card and graphic back.
 //   0 console errors.   node tests/smoke/steel-bridge-diaphragm.mjs [--shots <dir>]
 import path from 'path';
@@ -32,6 +33,14 @@ for (const [mode, shape] of [['ch', 'MC18x42.7'], ['w', 'W21x44']]) {
     assert.deepEqual(t.rows.filter(r => /^CF[1-9]$/.test(r)), [], 'no CF1 to CF9 rows'); assert.ok(t.rows.includes('CFD') && t.rows.includes('CFE'));
     assert.deepEqual(t.steps.filter(id => /^st-cf\.(tr\d|user\.|top\.|bot\.|diag\.|geo$|sb\.bbr$|sb\.bT$)/.test(id)), [], 'no truss steps');
     assert.match(await p.evaluate(() => document.querySelector('#out svg[aria-label="Diaphragm elevation"]').textContent), new RegExp(shape.replace('.', '\\.')));
+    // SBDX: the new items (axial compression, tension, slenderness, axial + flexure) in CFD / CFE, each linked (§) to its step
+    const ax = await p.evaluate(() => [...document.querySelectorAll('#out table.tbl tr')].filter(tr => /axial compression P = F|axial tension P = F|Slenderness Kℓ\/r|axial and flexure \(6\.9\.2\.2/.test(tr.textContent)).map(tr => (tr.querySelector('a.wk') || {}).dataset && tr.querySelector('a.wk').dataset.cfgo));
+    assert.equal(ax.length, 8, 'four new items in CFD and in CFE'); assert.ok(ax.every(id => /^cf\.cf[de]\.ax\./.test(id || '')), JSON.stringify(ax));
+    assert.ok(await p.evaluate(ids => ids.every(id => document.getElementById('st-' + id)), ax), 'each § finds its step');
+    // the worked steps of the tab (every group opened): the new steps are there and every TeX line renders (KaTeX)
+    const kx = await p.evaluate(async () => { document.querySelectorAll('#out details').forEach(d => { d.open = true; }); await new Promise(r => setTimeout(r, 600));
+      return { err: document.querySelectorAll('#out .katex-error').length, kat: document.querySelectorAll('#out .katex').length, ch: !!document.getElementById('st-cf.cfd.ch.Lr'), ax: ['ax.L', 'ax.Pe', 'ax.Pcr', 'ax.Aeff', 'ax.Pr', 'ax.Pt', 'ax.sl', 'ax.ia'].every(k => document.getElementById('st-cf.cfd.' + k)) }; });
+    assert.ok(kx.kat > 0, 'TeX rendered'); assert.equal(kx.err, 0, 'KaTeX errors on the tab'); assert.ok(kx.ax, 'axial steps on the tab'); assert.equal(kx.ch, mode === 'ch', 'channel 6.12.2.2.5 steps on the tab');
     await shot(p, `dia-${mode}-tab`);
     console.log(`  ok   ${shape}: tab "Diaphragms", ${ck}, diaphragm elevation, no truss output`);
     // 2. Summary, left column, Report
@@ -41,6 +50,7 @@ for (const [mode, shape] of [['ch', 'MC18x42.7'], ['w', 'W21x44']]) {
     assert.equal(s.chip, 'Diaphragms');
     await shot(p, `dia-${mode}-summary`);
     await p.click('#tabBar [data-otab="rpt"]'); await p.click('#rp_build'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 300000 });
+    assert.equal(await p.evaluate(() => document.querySelectorAll('.rp-doc .katex-error').length), 0, 'KaTeX errors in the Report');
     const r = await p.evaluate(() => { const t = document.querySelector('.rp-doc').innerText; return { dia: /FRAMING AND DIAPHRAGMS|Framing and diaphragms/.test(t), xf: /Framing and cross-frames|FRAMING AND CROSS-FRAMES/.test(t), mf: /Member forces \(truss model\)/i.test(t) }; });
     assert.ok(r.dia && !r.xf && !r.mf, JSON.stringify(r));
     console.log(`  ok   ${shape}: Summary column and left chip "Diaphragms"; Report "Framing and diaphragms", no truss member forces`);

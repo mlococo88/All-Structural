@@ -81,11 +81,18 @@ function compareCF(P, where) {
   cmp(L, where);
   const C = CF.checks(R);
   assert.deepEqual(J(C.map(c => c.id)), J(g.C.map(c => c.id)), `${where} check list`);
-  g.C.forEach((c, i) => { const m = C[i]; assert.equal(m.items.length, c.items.length, `${where} ${c.id} items`); assert.equal(m.status, c.status, `${where} ${c.id} status`); assert.equal(m.gov, c.gov, `${where} ${c.id} governing item`);
+  // SBDX (2026-11-10, engineer approval): CFD / CFE have items new in this app (sbdx: axial, slenderness, axial + flexure) and a channel's M_n
+  // per 6.12.2.2.5 (GirderDetail: 6.10.8): those are left out of the parity here (tests/engine/sb-diaphragm.test.mjs checks them by hand);
+  // every other item equals GirderDetail's. The check's status and governing item include the new items, so they are compared for the rest only.
+  const dia = id => /^CF[DE]$/.test(id), chOf = id => !!CF.cfDiaSec(id === 'CFE' ? CF.cfDiaEnd(P.cf.dia || {}) : P.cf.dia || {}).chS;
+  g.C.forEach((c, i) => { const m0 = C[i], m = dia(c.id) ? { ...m0, items: m0.items.filter(it => !it.sbdx) } : m0, skipMn = dia(c.id) && chOf(c.id);
+    assert.equal(m.items.length, c.items.length, `${where} ${c.id} items`);
+    if (!dia(c.id)) { assert.equal(m.status, c.status, `${where} ${c.id} status`); assert.equal(m.gov, c.gov, `${where} ${c.id} governing item`); }
     assert.equal(!!m.naWhy, !!c.naWhy, `${where} ${c.id} naWhy`);
-    c.items.forEach((it, j) => { stats.items++; assert.equal(m.items[j].st, it.st, `${where} ${c.id} item ${j} (${it.loc}) status`); cmp([[`${c.id}.${j}.r`, m.items[j].r ?? null, it.r ?? null]], where);
+    c.items.forEach((it, j) => { if (skipMn && m.items[j].mn) return; stats.items++; assert.equal(m.items[j].st, it.st, `${where} ${c.id} item ${j} (${it.loc}) status`); cmp([[`${c.id}.${j}.r`, m.items[j].r ?? null, it.r ?? null]], where);
       if (it.cells && m.items[j].cells && c.id !== 'CF10') cmp(it.cells.map((v, q) => [`${c.id}.${j}.cell${q}`, m.items[j].cells[q], v]).filter(([, x, y]) => !/[a-zA-Z(]/.test(String(y))), where); }); });
-  ['i', 'e'].forEach(k => { const x = b.DIA && b.DIA[k], y = a.DIA && a.DIA[k]; assert.equal(!!y, !!x, `${where} DIA.${k}`); if (x) cmp(DIAK.map(q => [`DIA.${k}.${q}`, y[q], x[q]]), where); });
+  ['i', 'e'].forEach(k => { const x = b.DIA && b.DIA[k], y = a.DIA && a.DIA[k]; assert.equal(!!y, !!x, `${where} DIA.${k}`); if (x) cmp(DIAK.filter(q => !(q === 'Mn' && y.chS)).map(q => [`DIA.${k}.${q}`, y[q], x[q]]), where);
+    if (x && y.chS) cmp([[`DIA.${k}.MnI (6.10.8, as GirderDetail)`, y.MnI, x.Mn]], where); });   // SBDX: a channel's 6.10.8 value is kept as MnI
   return { R, C };
 }
 /* variations of a GirderDetail state */

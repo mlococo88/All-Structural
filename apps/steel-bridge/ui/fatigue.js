@@ -159,7 +159,7 @@
     const faIn = { limit: F.limit, gam: { ...F.gam }, ADTT: F.ADTT, p: F.p, life: F.life, gW: m.steel.web, negSec: F.negSec, dist: { ...F.dist }, ev: { on: 'no' },
       ts: pl ? dk.ts : P.deck.ts, hh: pl ? dk.haunch : P.deck.haunch, beff: pl ? dk.beff : G.beff, fc: pl ? +pm.fc : m.concrete.fc, wc: pl ? +pm.wc || 0.15 : m.concrete.wc, K1: pl ? 1 : m.concrete.K1, nRule: pl ? 'exact' : m.concrete.nRule,
       Ar: pl ? +dk.Ar || 0 : (P.deck.rebar.top.A || 0) + (P.deck.rebar.bot.A || 0), dr: pl ? dk.ts / 2 : P.deck.ts / 2, rows };
-    const FR = FA.compute(faIn, { owner: own.owner, lf }), FC = FR.errors.length ? null : FA.checks(FR);
+    const FR = FA.compute(faIn, { owner: own.owner, lf, dia: !!(window.SBDCrossframes && P.crossframes && window.SBDCrossframes.cfDiaOn(P.crossframes)) }), FC = FR.errors.length ? null : FA.checks(FR);
     // ---- GS17 (file only): every station GirderDetail checks
     let gs17 = null;
     if (pl) { const d = FX.fromPayload(pl, { owner: own.owner, ...(frB ? { braces: frB.braces, lenOf: frB.lenOf } : {}) }), Gr = FX.girder(CU ? window.SBDCustomDemands.keepAt(d.locs, CU.xs) : d.locs, d.prj, { supports: d.supports });

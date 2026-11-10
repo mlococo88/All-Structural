@@ -1207,7 +1207,7 @@ function detailing(F,sh,neg,govMu,Vu,tor,torD){
       [[&quot;A_{s,min}=\\max\\left(\\dfrac{3\\sqrt{f'_c}}{f_y}b_w d,\\;\\dfrac{200}{f_y}b_w d\\right)&quot;,
         `\\max\\left(\\dfrac{3\\sqrt{${fmt(fc*1000,0)}}}{${fmt(fyA*1000,0)}}(${fmt(bwA)})(${fmt(F.dCent)}),\\;\\dfrac{200}{${fmt(fyA*1000,0)}}(${fmt(bwA)})(${fmt(F.dCent)})\\right)`,
         [fy>80?`f_y = ${fmt(fy*1000,0)} psi is limited to 80,000 psi here (9.6.1.2).`:&quot;&quot;,
-         flgT?(detm?`Flange in tension, statically determinate beam: b_w = min(b_f, 2b_w) = min(${fmt(S.sec.bf)}, ${fmt(2*bw)}) = ${fmt(bwA)} in (9.6.1.2).`
+         flgT?(detm?`Flange in tension, statically determinate beam (the default unless the beam is marked continuous): b_w = min(b_f, 2b_w) = min(${fmt(S.sec.bf)}, ${fmt(2*bw)}) = ${fmt(bwA)} in (9.6.1.2).`
                    :`Flange in tension, beam marked statically indeterminate (continuous): b_w = ${fmt(bw)} in (9.6.1.2).`):&quot;&quot;].filter(Boolean).join(&quot; &quot;)],
        [&quot;A_{s,min}=\\max(&quot;+fmt(t1,3)+&quot;,\\;&quot;+fmt(t2,3)+&quot;)=&quot;+fmt(AsMin,3)+&quot;\\text{ in}^2&quot;,&quot;&quot;,
         t1>=t2?&quot;3√f′c/f_y term governs&quot;:&quot;200/f_y term governs&quot;]]);
@@ -1227,7 +1227,7 @@ function detailing(F,sh,neg,govMu,Vu,tor,torD){
       add(&quot;dSkin&quot;,&quot;Skin reinforcement spacing (h > 36 in)&quot;,&quot;ACI 9.7.2.3, 24.3.2&quot;,
         skOn?skS:Infinity,skMax,&quot;\\le&quot;,&quot;in&quot;,skOn&amp;&amp;skS<=skMax+1e-9,
         [[`h = ${fmt(h)}\\text{ in} > 36\\text{ in}`,&quot;&quot;,`Skin bars required on both side faces for h/2 = ${fmt(h/2)} in from the tension face (9.7.2.3).`],
-         [`f_s = \\tfrac{2}{3}f_y = ${fmt(fsk,0)}\\text{ psi},\\qquad c_c = ${fmt(cc)}+${fmt(ds,3)} = ${fmt(cck)}\\text{ in}`,&quot;&quot;,&quot;c_c: clear cover from the skin bar to the side face, the skin bars taken inside the stirrup.&quot;],
+         [`f_s = \\tfrac{2}{3}f_y = ${fmt(fsk,0)}\\text{ psi},\\qquad c_c = ${fmt(cc)}+${fmt(ds,3)} = ${fmt(cck)}\\text{ in}`,&quot;&quot;,&quot;f_s = 2/3 f_y (24.3.2.1) whatever f_s basis is chosen for crack control; c_c: clear cover from the skin bar to the side face, the skin bars taken inside the stirrup.&quot;],
          [&quot;s_{max} = \\min\\left(15\\dfrac{40{,}000}{f_s}-2.5c_c,\\;12\\dfrac{40{,}000}{f_s}\\right)&quot;,
           `\\min(${fmt(k1)},\\;${fmt(k2)}) = ${fmt(skMax)}\\text{ in}`,&quot;&quot;],
          [skOn?`s_{skin} = ${fmt(skS)}\\text{ in (\\#${skSz})}`:&quot;\\text{skin bars: none}&quot;,&quot;&quot;,skOn?&quot;&quot;:noSk]]);
@@ -1810,9 +1810,8 @@ function validate(){
   if(S.tor.present &amp;&amp; S.code==='ACI' &amp;&amp; S.stir.present)
     N.push({code:&quot;ACI 22.7.6.1&quot;,msg:&quot;Shear and torsion share the same closed stirrup. The Shear tab reserves the transverse steel required for torsion and reports \u03c6V_n on the remainder; the \u03c6V_n that ignores torsion is also shown for reference but is not used in any demand/capacity ratio.&quot;});
   if(S.code==='ACI' &amp;&amp; S.stir.present)
-    N.push(cbNLx({code:&quot;ACI 9.7.6.2.2&quot;,msg:&quot;The tighter d/4 spacing limit is triggered from V_s REQUIRED (V_u/φ − V_c) rather than the V_s the detailed stirrups could provide. The provision exists to control diagonal crack width where stirrups work hard in shear; stirrups placed for torsion or minimum area are not. Both values are shown in the Detailing derivation so the alternative reading can be checked. Decision (pending engineer review, 2026-11-07): this V_s-required reading is kept as common practice (it avoids the circularity of a spacing limit that depends on the spacing chosen); under the literal reading (V_s = the strength provided by the stirrups) the d/4 limit applies wherever V_s,provided > 4√f′c b_w d, which can be tighter.&quot;},&quot;nl&quot;,{lead:&quot;The tighter d/4 spacing limit is triggered from V_s REQUIRED (V_u/φ − V_c) rather than the V_s the detailed stirrups could provide.&quot;,   /* CBNL: display only; msg unchanged */
-        items:[[&quot;Why:&quot;,&quot;the provision exists to control diagonal crack width where stirrups work hard in shear; stirrups placed for torsion or minimum area are not.&quot;],[&quot;Both values:&quot;,&quot;shown in the Detailing derivation so the alternative reading can be checked.&quot;]],
-        act:[&quot;Decision (pending engineer review, 2026-11-07): this V_s-required reading is kept as common practice (it avoids the circularity of a spacing limit that depends on the spacing chosen); under the literal reading (V_s = the strength provided by the stirrups) the d/4 limit applies wherever V_s,provided > 4√f′c b_w d, which can be tighter.&quot;]}));
+    N.push(cbNLx({code:&quot;ACI 9.7.6.2.2&quot;,msg:&quot;The tighter d/4 spacing limit is triggered from V_s REQUIRED (V_u/φ − V_c) rather than the V_s the detailed stirrups could provide. The provision exists to control diagonal crack width where stirrups work hard in shear; stirrups placed for torsion or minimum area are not. Both values are shown in the Detailing derivation so the alternative reading can be checked. This tool uses the V_s-required reading, as common practice (it avoids the circularity of a spacing limit that depends on the spacing chosen); under the literal reading (V_s = the strength provided by the stirrups) the d/4 limit applies wherever V_s,provided > 4√f′c b_w d, which can be tighter.&quot;},&quot;nl&quot;,{lead:&quot;The tighter d/4 spacing limit is triggered from V_s REQUIRED (V_u/φ − V_c) rather than the V_s the detailed stirrups could provide.&quot;,   /* CBNL: display only; msg unchanged */
+        items:[[&quot;Why:&quot;,&quot;the provision exists to control diagonal crack width where stirrups work hard in shear; stirrups placed for torsion or minimum area are not.&quot;],[&quot;Both values:&quot;,&quot;shown in the Detailing derivation so the alternative reading can be checked.&quot;],[&quot;Reading used:&quot;,&quot;this tool uses the V_s-required reading, as common practice (it avoids the circularity of a spacing limit that depends on the spacing chosen); under the literal reading (V_s = the strength provided by the stirrups) the d/4 limit applies wherever V_s,provided > 4√f′c b_w d, which can be tighter.&quot;]]}));   /* CBASM: a plain statement (was an action line) */
   if(S.tor.present &amp;&amp; S.code==='ACI')
     N.push({code:&quot;ACI 9.7.5.1&quot;,msg:&quot;Longitudinal torsion steel is entered as a total area, so the requirement for a bar at every corner of the closed stirrup and a maximum 12 in spacing around p_h cannot be verified automatically. That check is reported N/A and must be confirmed by inspection.&quot;});
   if(S.code==='ACI') N.push({code:&quot;ACI 9.6.1.3&quot;,msg:&quot;The exception allowing A_{s,min} to be waived where A_s provided is at least 4/3 of A_s required is NOT applied; the full 9.6.1.2 minimum is always enforced. This is conservative.&quot;});
@@ -2077,7 +2076,7 @@ function buildInput(){
       if(S.code==='ACI'){   /* CBM4: ACI 318-19 9.6.1.2, b_w of A_s,min with the flange in tension */
         fRow(b,&quot;Beam (for A_s,min, flange in tension)&quot;,selIn([&quot;determinate&quot;,&quot;indeterminate&quot;],()=>S.sec.asminSupport||&quot;determinate&quot;,v=>{S.sec.asminSupport=v;},
           o=>o===&quot;determinate&quot;?&quot;Statically determinate (cantilever, simple span)&quot;:&quot;Statically indeterminate (continuous)&quot;,o=>o,&quot;asminSupport&quot;),&quot;&quot;);
-        b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;ACI 9.6.1.2: for a statically determinate beam with the flange in tension (negative M_u), A_s,min uses b_w = min(b_f, 2b_w). Choose \u201cindeterminate\u201d only for a continuous beam.&quot;));
+        b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;ACI 9.6.1.2: for a statically determinate beam with the flange in tension (negative M_u), A_s,min uses b_w = min(b_f, 2b_w). Statically determinate is the default (the larger A_s,min), also for a project saved before this input; choose \u201cindeterminate\u201d only for a continuous beam.&quot;));
       }
     }
     b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;The sign of M_u in each load combination sets which face is in tension. A T-section in negative bending is analysed with the web in compression, since the flange cracks.&quot;));
@@ -2091,6 +2090,7 @@ function buildInput(){
       r.appendChild(el(&quot;label&quot;,null,&quot;Element of 5.4.3.3, flexural shear without torsion: f_yt up to 100 ksi (5.7.2.7; otherwise 60 ksi, or 75 ksi above 60)&quot;)); b.appendChild(r); }
     fRow(b,&quot;Aggregate size&quot;,numIn(()=>S.mat.dagg,v=>S.mat.dagg=v,&quot;0.25&quot;,&quot;dagg&quot;),&quot;in&quot;);
     fRow(b,&quot;λ (lightweight)&quot;,numIn(()=>S.mat.lambda,v=>S.mat.lambda=v,&quot;0.05&quot;,&quot;lam&quot;),&quot;&quot;);
+    b.appendChild(el(&quot;div&quot;,&quot;note&quot;,cbcLamBasis()));   /* CBASM */
     if(S.code==='AASHTO'){ fRow(b,&quot;Unit weight w_c (for E_c; blank = Table 3.5.1-1)&quot;,numIn(()=>S.mat.wc>0?S.mat.wc:&quot;&quot;,v=>S.mat.wc=Math.max(0,v),&quot;0.005&quot;,&quot;wc&quot;),&quot;kcf&quot;);   /* CBL7b */
       b.appendChild(cbNL(&quot;note&quot;,&quot;w_c enters E_c (Eq. 5.4.2.4-1), used for the computed service steel stress f_ss.&quot;,[[&quot;Blank:&quot;,&quot;normal weight per Table 3.5.1-1&quot;+(S.mat.lambda<1?&quot;; lightweight (λ &amp;lt; 1): 0.110 kcf, the low end of the Table 3.5.1-1 range (conservative).&quot;:&quot;.&quot;)],
         S.mat.lambda<1?[&quot;If known:&quot;,&quot;enter the specified unit weight.&quot;]:null])); }   /* CBNL */
@@ -2164,7 +2164,7 @@ function buildInput(){
     /* CBM3: skin reinforcement on each side face */
     fRow(b,&quot;Skin bars (each side face)&quot;,selIn([&quot;&quot;].concat(BAR_SIZES),()=>(S.skin&amp;&amp;S.skin.size)||&quot;&quot;,v=>{S.skin=Object.assign({size:&quot;&quot;,s:0},S.skin,{size:v});},o=>o?&quot;#&quot;+o:&quot;None&quot;,o=>o,&quot;skz&quot;),&quot;&quot;);
     if(S.skin&amp;&amp;S.skin.size) fRow(b,&quot;Skin bar spacing&quot;,numIn(()=>S.skin.s,v=>{S.skin.s=v;},&quot;0.5&quot;,&quot;sks&quot;),&quot;in&quot;);
-    b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Skin reinforcement is required on both side faces where h > 36 in (ACI 9.7.2.3) or d_\u2113 > 36 in (AASHTO 5.6.7); it is checked in Detailing only then.&quot;));
+    b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Skin reinforcement is required on both side faces where h > 36 in (ACI 9.7.2.3) or d_\u2113 > 36 in (AASHTO 5.6.7); it is checked in Detailing only then. The section figures and drawing sheets show the bars over that zone only, the first one spacing from the outermost tension layer.&quot;));   /* CBASM: second sentence */
   },P);
 
   if(S.code==='ACI'){
@@ -2244,6 +2244,7 @@ function buildInput(){
     add.addEventListener(&quot;click&quot;,()=>{ S.combos.push({name:&quot;Combo &quot;+(S.combos.length+1),Mu:0,Vu:0,Tu:0}); refresh(); });
     br.appendChild(add); b.appendChild(br);
     b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;A negative M_u is hogging (tension at the top face).&quot;));
+    if(S.code==='AASHTO') b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;AASHTO: every T_u entered is checked against the 5.7.2.1 threshold 0.25φT_cr (Shear tab) and, above it, is used as entered in the torsion design (no compatibility-torsion reduction).&quot;));   /* CBASM */
   },P);
 
   mkSection(&quot;inAssume&quot;,NT(&quot;Engineering Assumptions&quot;),b=>{
@@ -2278,6 +2279,10 @@ function cbcInputErrs(){
   return E;
 }
 function cbcLamOk(){ const l=S.mat.lambda; return S.code==='ACI'?(l>=0.75&amp;&amp;l<=1.0):(l>0&amp;&amp;l<=1.0); }
+/* CBASM (2026-11-10): the lambda range this tab accepts, stated under the input and in the Report inputs (CLAUDE.md §6) */
+function cbcLamBasis(){ return S.code==='ACI'
+  ?'\u03bb is accepted from 0.75 to 1.0 (ACI 318-19 19.2.4.1, Tables 19.2.4.1(a)/(b); 1.0 for normalweight concrete); outside that range no results are shown.'
+  :'\u03bb is accepted above 0 and up to 1.0 (AASHTO LRFD 10th Ed. 5.4.2.8: Eq. 5.4.2.8-1, from f_ct, has no lower bound, so a value below 0.75 is accepted here; Eq. 5.4.2.8-2, from w_c, gives 0.75 to 1.0). The Development &amp; Splice tab accepts 0.75 to 1.0.'; }
 function cbcLamMsg(){ return S.code==='ACI'
   ?'\u03bb must be between 0.75 and 1.0 (ACI 318-19 19.2.4.1, Tables 19.2.4.1(a)/(b); 1.0 for normalweight concrete, 19.2.4.3).'
   :'\u03bb must be greater than 0 and not more than 1.0 (AASHTO LRFD 10th Ed. 5.4.2.8; 1.0 for normal weight concrete).'; }
@@ -2926,6 +2931,12 @@ function workFlexure(b,r){
   b.appendChild(v);
 }
 
+/* CBASM (2026-11-10): the basis of the AASHTO torsion design, as stated on the Torsion Design card and in the Report (CLAUDE.md §6) */
+function cbcTorABasis(){ return [
+  [&quot;Shear flow path:&quot;,&quot;A_o per C5.7.3.6.2, the area inside the centreline of a wall b_e = A_cp/p_c thick, with A_cp and p_c of the web b_w × h (any flange ignored, as for T_cr); p_h to the centreline of the closed stirrup.&quot;],
+  [&quot;V_eff:&quot;,&quot;also replaces V_u in the |M_u| ≥ |V_u|d_v floor of Eq. 5.7.3.4.2-4 and in v_u of the 5.7.2.6 spacing tier (Detailing): a larger demand.&quot;],
+  [&quot;Section limit:&quot;,&quot;AASHTO LRFD 10th Ed. gives no separate cross-section limit for combined shear and torsion of a solid section; the web-crushing limit of Eq. 5.7.3.3-2 is applied to V_eff, which is not less conservative than applying it to V_u.&quot;],
+  [&quot;T_u:&quot;,&quot;used as entered: the compatibility-torsion reduction to φT_cr (5.7.2.1) and the reduction of the longitudinal torsion steel in the flexural compression zone (C5.7.3.6.3) are not applied.&quot;]]; }
 /* CBH1b (2026-11-07): worked AASHTO torsion design of one combination (Shear tab card shTorD<ci>) */
 function workTorA(b,r){
   const t=r.torD, sh=r.sh, ok=v=>v<=1.0001, dc=v=>isFinite(v)?fmt(v,3):&quot;\\infty&quot;;
@@ -2952,8 +2963,7 @@ function workTorA(b,r){
   b.appendChild(eqBlock({title:&quot;Section limit with torsion&quot;,ref:&quot;AASHTO Eq. 5.7.3.3-2 with V_eff&quot;,
     lines:[`\\phi\\,0.25f'_cb_vd_v = ${fmt(sh.phi,2)}(0.25)(${fmt(t.fc)})(${fmt(t.bw)})(${fmt(t.dv)}) = ${fmt(t.VlimR,1)}\\text{ kip}`,
       `V_{eff} = ${fmt(t.Veff)}\\text{ kip} \\;${ok(t.dcSec)?&quot;\\le&quot;:&quot;>&quot;}\\; ${fmt(t.VlimR,1)}\\text{ kip}\\qquad D/C = ${dc(t.dcSec)}`]}));
-  b.appendChild(cbNL(&quot;note&quot;,&quot;Torsion with shear, other limits:&quot;,[[&quot;f′c:&quot;,&quot;f′c is limited to 10 ksi for torsion and shear (5.7.2.1).&quot;],[&quot;Longitudinal reinforcement:&quot;,&quot;with torsion (Eq. 5.7.3.6.3-1) it is worked in Longitudinal Reinforcement.&quot;],[&quot;Corner bars:&quot;,&quot;at least one longitudinal bar is needed in each corner of the closed stirrup (5.7.3.6.3, not checked by the tool).&quot;]],
-    {act:[&quot;Decision (pending engineer review): AASHTO gives no separate cross-section limit for combined shear and torsion of a solid section; the web-crushing limit of Eq. 5.7.3.3-2 is applied to V_eff, which is not less conservative than applying it to V_u.&quot;]}));   /* CBNL */
+  b.appendChild(cbNL(&quot;note&quot;,&quot;Torsion with shear, basis and other limits:&quot;,[...cbcTorABasis(),[&quot;f′c:&quot;,&quot;f′c is limited to 10 ksi for torsion and shear (5.7.2.1).&quot;],[&quot;Longitudinal reinforcement:&quot;,&quot;with torsion (Eq. 5.7.3.6.3-1) it is worked in Longitudinal Reinforcement.&quot;],[&quot;Corner bars:&quot;,&quot;at least one longitudinal bar is needed in each corner of the closed stirrup (5.7.3.6.3, not checked by the tool).&quot;]]));   /* CBNL; CBASM: the basis items (the section limit was an action line) */
   const w=Math.max(t.dcT,t.dcComb,t.dcSec), v=el(&quot;div&quot;,ok(w)?&quot;okBox&quot;:&quot;errBox&quot;);
   v.innerHTML=&quot;<b>&quot;+(ok(w)?&quot;PASS&quot;:&quot;FAIL&quot;)+&quot;</b> \u2014 torsion design under &quot;+r.name+&quot;: T_u/\u03c6T_n = &quot;+fmt(t.dcT)+&quot;, transverse &quot;+fmt(t.dcComb)+&quot;, section limit &quot;+fmt(t.dcSec)+&quot;.&quot;;
   b.appendChild(v);
@@ -2987,7 +2997,7 @@ function buildShearTab(pg){
     });
     /* CBM2 (2026-11-07): AASHTO 5.7.3.5 longitudinal reinforcement, every combination */
     mkSection(&quot;shLonA&quot;,&quot;Longitudinal Reinforcement (AASHTO 5.7.3.5)&quot;,b=>{
-      b.appendChild(cbNL(&quot;note&quot;,&quot;Shear adds tension in the longitudinal reinforcement on the flexural tension side (Eq. 5.7.3.5-1, no prestress, N_u = 0).&quot;,[[&quot;A_s:&quot;,&quot;the tension steel of the combination's sense, taken as fully developed at the section.&quot;],[&quot;V_s:&quot;,&quot;not taken greater than V_u/φ_v.&quot;],[&quot;With torsion:&quot;,&quot;where torsion must be considered (5.7.2.1), Eq. 5.7.3.6.3-1 (solid section) is used instead: the shear term becomes the square root of the sum of the squares of the shear and torsion terms.&quot;]]));   /* CBNL */
+      b.appendChild(cbNL(&quot;note&quot;,&quot;Shear adds tension in the longitudinal reinforcement on the flexural tension side (Eq. 5.7.3.5-1, no prestress, N_u = 0).&quot;,[[&quot;A_s:&quot;,&quot;the tension steel of the combination's sense, taken as fully developed at the section.&quot;],[&quot;V_s:&quot;,&quot;not taken greater than V_u/φ_v.&quot;],[&quot;With torsion:&quot;,&quot;where torsion must be considered (5.7.2.1), Eq. 5.7.3.6.3-1 (solid section) is used instead: the shear term becomes the square root of the sum of the squares of the shear and torsion terms.&quot;],[&quot;End support:&quot;,&quot;the end-support form (Eq. 5.7.3.5-2) is not checked separately: with M_u = 0, Eq. 5.7.3.5-1 gives the same shear term.&quot;]]));   /* CBNL; CBASM: End support */
       CC.combos.forEach(r=>{ const L=r.lonA; if(!L) return;
         if(L.tor){ const t=r.torD;   /* CBH1b: Eq. 5.7.3.6.3-1 */
           b.appendChild(eqBlock({title:&quot;Combination &quot;+(r.ci+1)+&quot; (&quot;+r.name+&quot;), with torsion&quot;,ref:&quot;AASHTO 5.7.3.6.3, Eq. 5.7.3.6.3-1&quot;,
@@ -4756,6 +4766,8 @@ function buildDrawingsTab(pg){
     '<div class=&quot;note&quot;>'+cbdwEsc(SharedDxf.PRINT_NOTE)+'</div>'+
     '<div class=&quot;note cbNL&quot;>'+cbNLh('One DXF file (AutoCAD R12, model space, full size in inches):',[['Sheets:','each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side.'],
       ['Layers:','CB-CONC, CB-REBAR, CB-STIRRUP, CB-DIMS, CB-TEXT, CB-LEADER, CB-TABLE, CB-TBLK, CB-BRDR, CB-BREAK, CB-HIDDEN.'],['Title block:','the project fields in the header (Project, Project No., Subject, Calculated By, Date, Checked By, Checked Date).'],
+      ['Cross section:','drawn in the positive-moment orientation (the bottom face holds the layers named &quot;Tension&quot;), whatever the sign of the governing moment; skin bars over the zone next to the tension face of the governing combination.'],
+      ['Stirrup:','both 135° hooks at the top-left corner; interior legs (3 or 4 legs) are drawn straight and left to the detailer.'],
       B.dev?null:['Development and splice lengths:','they come from the Development &amp;amp; Splice tab of the suite: not available when this tab is opened on its own.']])+'</div>'+   /* CBNL */
     '<div class=&quot;note&quot;><b>'+(B.S.indexOf(cur)+1)+'. '+cbdwEsc(cur.title)+'</b> · scale '+cbdwEsc(cur.scale)+(cur.over?' · <span style=&quot;color:var(--red-600)&quot;>does not fit the sheet even at the smallest scale</span>':'')+'</div>'+
     '<div class=&quot;cbdwBox&quot;></div><div class=&quot;note&quot;>Wheel: zoom about the cursor · drag: pan · pinch · double-click: fit · + / − / Fit buttons.</div>'+
@@ -5386,9 +5398,9 @@ function cbcRptModel(){
       ['Design code',codeName,''],['Section type',S.sec.type==='tee'?'T-beam':'Rectangular',''],['Web width $b_{w}$',{t:fmt(S.sec.bw),n:true},'in'],['Overall depth h',{t:fmt(S.sec.h),n:true},'in'],
       ...(S.sec.type==='tee'?[['Flange width $b_{f}$',{t:fmt(S.sec.bf),n:true},'in'],['Flange thickness $h_{f}$',{t:fmt(S.sec.hf),n:true},'in']].concat(S.code==='ACI'?[['Beam for $A_{s,min}$, flange in tension (9.6.1.2)',S.sec.asminSupport==='indeterminate'?'statically indeterminate':'statically determinate','']]:[]):[]),
       [&quot;$f^{\\prime}_{c}$&quot;,{t:fmt(S.mat.fc),n:true},'ksi'],['$f_{y}$',{t:fmt(S.mat.fy),n:true},'ksi'],['$f_{yt}$',{t:fmt(S.mat.fyt),n:true},'ksi'],...(S.code==='AASHTO'?[['$f_{yt}$ up to 100 ksi (5.4.3.3, no torsion; 5.7.2.7)',S.mat.fyt100?'yes':'no','']]:[]),['$\\lambda$',{t:fmt(S.mat.lambda,2),n:true},''],...(S.code==='AASHTO'?[['Unit weight $w_{c}$ for $E_{c}$',S.mat.wc>0?{t:fmt(S.mat.wc,3),n:true}:(S.mat.lambda<1?'0.110 (lightweight, not entered)':'Table 3.5.1-1'),'kcf']]:[]),
-      ['Aggregate size',{t:fmt(S.mat.dagg),n:true},'in'],['Clear cover provided / required',fmt(S.cover.cc)+' / '+fmt(S.cover.req),'in']]}]});
+      ['Aggregate size',{t:fmt(S.mat.dagg),n:true},'in'],['Clear cover provided / required',fmt(S.cover.cc)+' / '+fmt(S.cover.req),'in']]},{type:'note',text:cbcLamBasis()}]});   /* CBASM: the lambda note */
     subs.push({title:'Reinforcement',items:[{type:'table',head:['Layer','Bars','Size','$A_{s}$ (in²)','Face','d (in)','Source'],rows:G.map((L,i)=>[L.side+(i+1),String(L.n),'#'+L.size,{t:fmt(L.As),n:true},L.face==='tension'?'Tension':'Compression',{t:fmt(L.d),n:true},L.manual?'manual override':'auto-stacked'])},
-      ...cbrNL('Other reinforcement:',[S.stir.present?['Transverse:',S.stir.legs+'-leg #'+S.stir.size+' closed stirrup at '+fmt(S.stir.s)+' in. ($A_{v}$ = '+fmt(S.stir.legs*REBAR[S.stir.size].a)+' in²).']:'No transverse reinforcement specified.',S.tor.present&amp;&amp;ACI?['Torsion:',(S.tor.kind==='compatibility'?'compatibility':'equilibrium')+' torsion, θ = '+fmt(S.tor.theta,0)+'°, $A_{\\ell}$ = '+fmt(S.tor.Al)+' in².']:null,S.skin&amp;&amp;S.skin.size&amp;&amp;S.skin.s>0?['Skin bars:','#'+S.skin.size+' at '+fmt(S.skin.s)+' in on each side face.']:['Skin bars:','none entered.'],['Clear spacing between layers:',fmt(S.layerClear)+' in.']])]});   /* CBM3: skin bars; CBNL: as a list */
+      ...cbrNL('Other reinforcement:',[S.stir.present?['Transverse:',S.stir.legs+'-leg #'+S.stir.size+' closed stirrup at '+fmt(S.stir.s)+' in. ($A_{v}$ = '+fmt(S.stir.legs*REBAR[S.stir.size].a)+' in²).']:'No transverse reinforcement specified.',S.tor.present&amp;&amp;ACI?['Torsion:',(S.tor.kind==='compatibility'?'compatibility':'equilibrium')+' torsion, θ = '+fmt(S.tor.theta,0)+'°, $A_{\\ell}$ = '+fmt(S.tor.Al)+' in².']:null,S.skin&amp;&amp;S.skin.size&amp;&amp;S.skin.s>0?['Skin bars:','#'+S.skin.size+' at '+fmt(S.skin.s)+' in on each side face (drawn over the zone of 9.7.2.3 / 5.6.7 only, the first one spacing from the outermost tension layer).']:['Skin bars:','none entered.'],['Clear spacing between layers:',fmt(S.layerClear)+' in.']])]});   /* CBM3: skin bars; CBNL: as a list */
     const hasT=(S.tor.present&amp;&amp;ACI)||!ACI;   /* CBH1b: T_u shown in AASHTO mode (as the Loads input) */
     subs.push({title:'Load combinations',items:[{type:'table',head:['#','Combination','$M_{u}$ (kip-ft)','$V_{u}$ (kip)'].concat(hasT?['$T_{u}$ (kip-ft)']:[]),rows:CC.combos.map(r=>[String(r.ci+1),r.name,{t:fmt(r.Mu),n:true},{t:fmt(r.Vu),n:true}].concat(hasT?[{t:fmt(r.Tu),n:true}]:[]))}]});
     if(String(S.assumptions||'').trim()) subs.push({title:'Assumptions',items:[{type:'note',text:String(S.assumptions).trim()}]});
@@ -5422,7 +5434,7 @@ function cbcRptModel(){
     CC.combos.forEach(r=>{ const T=r.torA; if(!T) return;
       st.push(cS({id:'Tu'+r.ci,label:cn(r)+': T_u against the threshold'+(T.consider?' — torsion must be considered: designed below (5.7.3.6)':' — torsion may be neglected'),sym:'T_{u}/(0.25\\phi T_{cr})',eq:'',sub:'\\dfrac{'+fmt(T.Tu,1)+'}{'+fmt(T.thr,1)+'}',value:T.dcr,d:3})); });   /* CBH1b: information (before: FAIL above 1) */
     const tsubs=[{title:'Torsion threshold, every combination',items:[{type:'topics',scope:'tth',title:'Worked steps',list:[{title:'Torsion threshold',ref:'AASHTO LRFD 10th Ed. 5.7.2.1',steps:st}]},
-      {type:'note',text:'Above the threshold the combination is designed for combined shear and torsion (AASHTO 5.7.3.6) below. [[tab:tabShear|On screen: Shear tab]]'}]}];
+      {type:'note',text:'Every T_u entered is checked; A_cp and p_c are those of the web, b_w × h (any flange ignored: smaller T_cr, conservative). Above the threshold the combination is designed for combined shear and torsion (AASHTO 5.7.3.6) below. [[tab:tabShear|On screen: Shear tab]]'}]}];   /* CBASM: the first sentence */
     /* CBH1b (2026-11-07): AASHTO torsion design, each combination above the threshold */
     const dl=[];
     CC.combos.forEach(r=>{ const t=r.torD; if(!t||(r.sameAs!==undefined&amp;&amp;r.sameAs!==r.ci)) return; const k=r.ci, sh=r.sh;
@@ -5436,9 +5448,9 @@ function cbcRptModel(){
         cS({id:'avV'+k,label:'Transverse steel for shear',sym:'(A_v/s)_{V}',eq:'\\dfrac{\\max(0,\\;|V_u|/\\phi - V_c)}{f_y d_v\\cot\\theta}',sub:'\\dfrac{\\max(0,\\;'+fmt(t.V)+'/'+fmt(sh.phi,2)+' - '+fmt(sh.Vc)+')}{('+fmt(t.fyt)+')('+fmt(t.dv)+')\\cot '+fmt(t.th,2)+'^\\circ}',value:t.Av_s_req,unit:'in^{2}/in',d:5}),
         cS({id:'atT'+k,label:'Transverse steel for the concurrent torsion, one leg',sym:'(A_t/s)_{T}',eq:'\\dfrac{T_u}{\\phi\\,2A_of_y\\cot\\theta}',sub:'\\dfrac{'+fmt(t.Tu,1)+'}{'+fmt(t.phi,2)+'(2)('+fmt(t.Ao,1)+')('+fmt(t.fyt)+')\\cot '+fmt(t.th,2)+'^\\circ}',value:t.At_s_req,unit:'in^{2}/in',d:5}),
         cS({id:'dcC'+k,label:'Combined transverse reinforcement: required / provided (A_v/s = '+fmt(t.comb_prov,5)+')',sym:'\\dfrac{(A_v/s)_V+2(A_t/s)_T}{A_v/s}',eq:'\\le 1',sub:'\\dfrac{'+fmt(t.Av_s_req,5)+'+2('+fmt(t.At_s_req,5)+')}{'+fmt(t.comb_prov,5)+'}',value:t.dcComb,d:3,ok:t.dcComb<=1.0001,ref:'AASHTO LRFD 10th Ed. 5.7.3.6.1'}),
-        cS({id:'dcS'+k,label:'Section limit with torsion (Eq. 5.7.3.3-2 applied with V_eff; decision pending engineer review)',sym:'V_{eff}/\\phi(0.25f\'_cb_vd_v)',eq:'\\le 1',sub:'\\dfrac{'+fmt(t.Veff)+'}{'+fmt(sh.phi,2)+'(0.25)('+fmt(t.fc)+')('+fmt(t.bw)+')('+fmt(t.dv)+')}',value:t.dcSec,d:3,ok:t.dcSec<=1.0001})]}); });
+        cS({id:'dcS'+k,label:'Section limit with torsion (Eq. 5.7.3.3-2 applied with V_eff)',sym:'V_{eff}/\\phi(0.25f\'_cb_vd_v)',eq:'\\le 1',sub:'\\dfrac{'+fmt(t.Veff)+'}{'+fmt(sh.phi,2)+'(0.25)('+fmt(t.fc)+')('+fmt(t.bw)+')('+fmt(t.dv)+')}',value:t.dcSec,d:3,ok:t.dcSec<=1.0001})]}); });
     if(dl.length) tsubs.push({title:'Torsion design, combinations above the threshold (solid section)',items:[{type:'topics',scope:'tad',title:'Worked steps',list:dl},
-      {type:'note',text:'f′c ≤ 10 ksi (5.7.2.1); d_v, θ and V_c are worked in the Shear section of the same combination (with V_eff). The longitudinal reinforcement with torsion (Eq. 5.7.3.6.3-1) is worked in the Longitudinal reinforcement section; a longitudinal bar is needed in each corner of the closed stirrup (5.7.3.6.3). [[tab:tabShear|On screen: Shear tab]]'}]});
+      {type:'note',text:'f′c ≤ 10 ksi (5.7.2.1); d_v, θ and V_c are worked in the Shear section of the same combination (with V_eff). The longitudinal reinforcement with torsion (Eq. 5.7.3.6.3-1) is worked in the Longitudinal reinforcement section; a longitudinal bar is needed in each corner of the closed stirrup (5.7.3.6.3). [[tab:tabShear|On screen: Shear tab]]'},...cbrNL('Basis of the torsion design:',cbcTorABasis())]});   /* CBASM */
     secs.push({title:'Torsion (AASHTO 5.7.2.1, 5.7.3.6)',subs:tsubs});
     /* CBM2 (2026-11-07): AASHTO 5.7.3.5 longitudinal reinforcement */
     const lst=[];
@@ -5453,7 +5465,7 @@ function cbcRptModel(){
         cS({id:'cap'+r.ci,label:'Tensile capacity of the tension steel',sym:'A_{s}f_{y}',eq:'',sub:'('+fmt(L.As,3)+')('+fmt(L.fy)+')',value:L.cap,unit:'kip',d:1}),
         cS({id:'dc'+r.ci,label:'Longitudinal reinforcement: demand / capacity',sym:'T_{req}/(A_s f_y)',eq:'\\le 1',sub:'\\dfrac{'+fmt(L.dem,1)+'}{'+fmt(L.cap,1)+'}',value:L.dcr,d:3,ok:L.dcr<=1+1e-9})]}); });
     secs.push({title:'Longitudinal reinforcement (AASHTO 5.7.3.5)',subs:[{title:'Longitudinal reinforcement for moment and shear, every combination',items:[{type:'topics',scope:'lon',title:'Worked steps',list:lst},
-      {type:'note',text:'A_s taken as fully developed at the section; where torsion must be considered (5.7.2.1) Eq. 5.7.3.6.3-1 (solid section) is used. [[tab:tabShear|On screen: Shear tab]]'}]}]});
+      {type:'note',text:'A_s taken as fully developed at the section; where torsion must be considered (5.7.2.1) Eq. 5.7.3.6.3-1 (solid section) is used. The end-support form (Eq. 5.7.3.5-2) is not checked separately: with M_u = 0, Eq. 5.7.3.5-1 gives the same shear term. [[tab:tabShear|On screen: Shear tab]]'}]}]});
   }
   if(S.tor.present&amp;&amp;ACI) per('Torsion','tq',r=>r.tor?cbcRptTor(r):[{type:'note',text:'Torsion is not enabled.'}],'tabTor',CC.govTorIndex);
   /* 6. serviceability (governing combination, as the tab) */
@@ -7091,7 +7103,7 @@ function buildFigureTab(pg){
     const sv=asdStressSVG(R); if(!sv){ b.appendChild(el(&quot;div&quot;,&quot;infoBox&quot;,&quot;No stress diagram: the allowable moments are not positive (check A_s and the allowable stresses).&quot;)); return; }
     const w=el(&quot;div&quot;,&quot;figWrap&quot;); w.innerHTML=sv; b.appendChild(w);
     b.appendChild(el(&quot;div&quot;,&quot;figCap&quot;,&quot;Stresses at M_all, &quot;+P.lv.toLowerCase()+&quot; level, where the &quot;+P.ctrl.toLowerCase()+
-      &quot; is at its allowable stress. Section to scale; stresses to their own scale; the steel stress is drawn as f_s/n so it lies on the linear strain line.&quot;));
+      &quot; is at its allowable stress. Section to scale; stresses to their own scale; the steel stress is drawn as f_s/n so it lies on the linear strain line. The tool rates by allowable moments and computes no stress under the applied M_DL + M_LL+I, so no service-stress diagram is drawn.&quot;));   /* CBASM: last sentence */
     b.appendChild(eqBlock({title:&quot;Stresses at the allowable moment (the capacity equations of card 4 are linear in the stress)&quot;,ref:&quot;AASHTO Std. Spec. 8.15.2&quot;,
       lines:[&quot;f_c = f_{c,all}\\dfrac{M_{all}}{M_{conc}} = &quot;+grp(P.fcA)+&quot;\\times\\dfrac{&quot;+fmt(P.Mg)+&quot;}{&quot;+fmt(P.Mc)+&quot;} = &quot;+grp(P.fc)+&quot;\\text{ psi}&quot;,
              &quot;f_s = f_{s,all}\\dfrac{M_{all}}{M_{steel}} = &quot;+grp(P.fsA)+&quot;\\times\\dfrac{&quot;+fmt(P.Mg)+&quot;}{&quot;+fmt(P.Ms)+&quot;} = &quot;+grp(P.fs)+&quot;\\text{ psi}&quot;,
@@ -7405,7 +7417,7 @@ function asdRptModel(){
       aS({id:'sd.T',label:'Steel tension resultant',sym:'T',eq:'A_s f_s',sub:F(R.As)+'\\times'+G(P.fs)+'/1000',value:P.T/1000,unit:'kip'})]}); }
   const fig=(()=>{ try{ return (drawSection(CC).match(/<svg[\s\S]*<\/svg>/)||[''])[0]; }catch(e){ return ''; } })();
   const sfig=(()=>{ try{ return asdStressSVG(R); }catch(e){ return ''; } })();   /* CBVL */
-  secs.push({title:'Analysis and rating',subs:[{title:'Working stress analysis and load rating',items:[].concat(fig?[{type:'figure',svg:fig,caption:'Transformed section and stress block'}]:[],sfig?[{type:'figure',svg:sfig,caption:'Elastic stress diagram at the allowable moment (kd, f_c, f_s): section to scale, stresses to their own scale; f_c, f_s, C and T worked: [[an/sd.fc]]'}]:[],[
+  secs.push({title:'Analysis and rating',subs:[{title:'Working stress analysis and load rating',items:[].concat(fig?[{type:'figure',svg:fig,caption:'Transformed section and stress block'}]:[],sfig?[{type:'figure',svg:sfig,caption:'Elastic stress diagram at the allowable moment (kd, f_c, f_s): section to scale, stresses to their own scale; f_c, f_s, C and T worked: [[an/sd.fc]]. No service-stress diagram: the tool rates by allowable moments and computes no stress under the applied M_DL + M_LL+I'}]:[],[
     {type:'topics',scope:'an',title:'Worked steps',list:T},
     {type:'table',caption:'Load rating summary',head:['Rating level','$M_{all}$ (kip-ft)','Controlled by','RF','Status'],rows:[].concat(
       S.mode.inv?[['Inventory',{t:F(R.M_inv),n:true,key:'an/inv.M'},R.ctrl_inv,{t:isFinite(R.rf_inv)?F(R.rf_inv):'—',n:true,key:'an/inv.RF'},isFinite(R.rf_inv)?{t:R.rf_inv>=1?'PASS':'FAIL',cls:R.rf_inv>=1?'ok':'ng'}:{t:'N/A',cls:'na'}]]:[],
@@ -9948,7 +9960,7 @@ function rbCapRpt(inp,k){
   const d=F.d, cb='Beam Capacity chapter, '+(d.links&amp;&amp;d.links.flex?'Flexure, '+d.links.flex.name:'Flexure');
   if(k==='prov') return {note:'from Beam Capacity: tension steel '+(d.bars||'')+' of combination '+(d.ci+1)+' = '+fmt(d.asProv,3)+' in² rounded down; see '+cb};
   return {note:'from Beam Capacity: max(A_s,flex '+fmt(d.asFlex,3)+', A_s,min '+fmt(d.asMin,3)+') = '+fmt(d.asReq,3)+' in² rounded up, '
-    +(d.gov==='flexure'?'flexure governs':'minimum governs')+' (A_s,flex = A_s,prov·|M_u|/φM_n; A_s,min per '+d.min.ref+'); see '+cb
+    +(d.gov==='flexure'?'flexure governs':'minimum governs')+' (A_s,flex = A_s,prov·|M_u|/φM_n; A_s,min per '+d.min.ref+', the largest among the combinations in the same sense of bending, M_u = 0 counted as positive); see '+cb
     +(d.gov==='flexure'?'':(d.code==='ACI'?' and Detailing, Minimum flexural reinforcement':' and Serviceability, Minimum flexural reinforcement'))};
 }
 
@@ -10085,7 +10097,7 @@ function rbrComp(inp,f){
   const gov=c.gov==='8in'?'the 8 in. minimum governs':(c.gov==='eqA'?'expression (a) governs':'expression (b) governs');
   const exS=inp.useExcess?[rbS({id:'excess',label:'Excess reinforcement factor',sym:f.AASHTO?'\\lambda_{er}':'\\text{factor}',value:f.excess,unit:'',d:3,note:'see §excess'})]:[];
   const tail=r=>[
-    rbS({id:'ldccalc',label:'Larger expression'+(inp.useExcess?', times the excess reinforcement factor':'')+(f.AASHTO?', divided by λ':''),sym:'l_{dc,calc}',eq:'\\max(l_{dc,a},\\, l_{dc,b})'+(inp.useExcess?'\\cdot \\frac{A_{s,req}}{A_{s,prov}}':'')+(f.AASHTO?'\\, /\\, \\lambda':''),
+    rbS({id:'ldccalc',label:'Larger expression'+(inp.useExcess?', times the excess reinforcement factor':'')+(f.AASHTO?', divided by λ; λ_rc taken as 1.0 (the reduction for spirals or hoops of 5.10.8.2.2b is not applied: conservative)':''),sym:'l_{dc,calc}',eq:'\\max(l_{dc,a},\\, l_{dc,b})'+(inp.useExcess?'\\cdot \\frac{A_{s,req}}{A_{s,prov}}':'')+(f.AASHTO?'\\, /\\, \\lambda':''),
       sub:'\\max('+rbN(c.a)+',\\, '+rbN(c.b)+')'+(inp.useExcess?'\\times '+rbN(f.excess,3):'')+(f.AASHTO?'\\, /\\, '+rbN(f.lambda):''),value:c.ldc_calc,unit:'in'}),
     rbS({id:'ldc',label:'Compression development length (8 in. minimum)',sym:'l_{dc}',eq:'\\max(l_{dc,calc},\\, 8\\, \\text{in.})',sub:'\\max('+rbN(c.ldc_calc)+',\\, 8)',value:c.ldc,unit:'in',ref:r,note:gov})];
   if(!f.AASHTO){
@@ -10376,6 +10388,7 @@ function rbCapNote(){
   n.innerHTML=sub(`<b>From Beam Capacity</b> (${escHTML(d.code==='ACI'?'ACI 318-19':'AASHTO LRFD')}, flexure-governing combination ${d.ci+1} &quot;${escHTML(d.combo)}&quot;, ${sense}${d.bars?' '+escHTML(d.bars):''}): `
     +`A_s,req = max(A_s,flex, A_s,min) = max(${fmt(d.asFlex,3)}, ${fmt(d.asMin,3)}) = ${fmt(d.asReq,3)} in², <b>${d.gov==='flexure'?'flexure governs':'the minimum governs'}</b>; `
     +`A_s,flex = A_s,prov·|M_u|/φM_n = ${fmt(d.asProv,2)} × ${fmt(d.Mu,1)}/${fmt(d.phiMn,1)} = ${fmt(d.asFlex,3)} in² (in proportion to the moment; slightly more than the exact value); ${minTxt}; `
+    +`A_s,min is the largest minimum among the combinations in the same sense of bending (the other sense concerns the other face's bars; a combination with M_u = 0 counts as positive bending), as the enveloped check; `   /* CBASM */
     +`A_s,prov = ${fmt(d.asProv,2)} in². Filled: A_s,req = ${fmt(F.asReq,2)} (rounded up), A_s,prov = ${fmt(F.asProv,2)} in² (rounded down), ratio ${fmt(F.asReq/F.asProv,3)}`
     +(F.barTxt?`; ${escHTML(F.barTxt)}`:'')+'.'
     +(F.matTxt?` <b>Check:</b> ${escHTML(F.matTxt)}`:'')
