@@ -4946,7 +4946,7 @@ format changed. Anchor text `QA2` marks each change. New file `ui/sub.js` (in th
   decision 2026-11-10: new app only; a deliberate difference).
 - **Open items:** the M_DCc envelope sign jump near M_DC1 inflections and C_b < 1.0 from `feCb` (see the SBCON entry).
 
-## 2026-11-10 — PR: claude/sb-constr-twosign (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Constructibility: both signs of the pour envelope checked; C_b and γ_e per sign case from its own side of the envelope (SBTS; engineer decision 2026-11-10, items 1 and 3; changes computed values)
+## 2026-11-10 — PR: claude/sb-constr-twosign (PR #1289: https://github.com/mlococo88/All-Structural/pull/1289) — Constructibility: both signs of the pour envelope checked; C_b and γ_e per sign case from its own side of the envelope (SBTS; engineer decision 2026-11-10, items 1 and 3; changes computed values)
 - **Problem:** (1) With the pour sequence on, the M_DCc envelope (`engine/analysis.js` `seq.MDCc`) takes the positive side where M_DC1 ≥ 0 and
   the negative side elsewhere. Near an inflection of M_DC1 the pour stages give large moments of the other sign that were never checked
   (skewed 100-130-100 G2 x = 71 ft: only M_c = −73.81 kip-ft was checked; the pour stages give M_DCc+ = 408.45 kip-ft, M_c = +499.86).
