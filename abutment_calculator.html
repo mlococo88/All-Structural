@@ -3394,7 +3394,7 @@ function computeAll(){
   const xStemCenter = g.Ltoe+g.tsb/2;         // centroidal axis of the stem base section, from toe
   const eBrg = xStemCenter-xBrg;              // bearing offset from stem center; + = bearing toward toe (adds heel-face tension)
   R.geo={B,seatW,zSeat,xStemBack,xStemTopFront,xBwFront,xBrg,H,hTotal,xStemCenter,eBrg};
-  if(OFF){ R.geo.off=OFF;   // ABSH: input errors of the offset geometry (the results below are not valid while one shows)
+  if(OFF){ R.geo.off=OFF; R.geo.zShelf=OFF.zSh;   // ABSH: zShelf = the stem-shelf (approach-slab seat) elevation above the footing base, a derived geometry value (set only with e > 0); input errors of the offset geometry (the results below are not valid while one shows)
     if(OFF.e+g.tbw>g.tst+1e-9) warn(`Input error — Backwall offset: e + t_bw = ${fmt(OFF.eIn,1)} + ${fmt(g.tbw*12,1)} = ${fmt(OFF.eIn+g.tbw*12,1)} in exceeds the stem top thickness t_st = ${fmt(g.tst*12,1)} in (panel I-1): the backwall would overhang the front of the stem. Reduce e or t_bw, or increase t_st.`,"err");
     else if(seatW<=1e-9) warn(`Input error — Backwall offset: the bridge seat width t_st − t_bw − e = 0 (panel I-1): no seat is left in front of the backwall for the bearings.`,"err");
     if(!(OFF.d>0)) warn("Input error — Stem shelf: enter the shelf depth d_sh below the top of the backwall (panel I-1); with no approach slab (panel I-0b) there is no slab thickness to take it from.","err");
@@ -9323,6 +9323,7 @@ function d3ApSlab(R,M,xb,yTop,th,Lab){
     if(Math.abs(th)>0.05) lab('slab edges ∥ roadway, skew θ = '+fmt(th,1)+'°',V(xb+0.55*sC*ux,yTop+0.5,0.55*sC*uz));
     const fA=far(A), fB=far(B); lab(Math.abs(th)<=0.05?'far end ∥ abutment (no skew)':P.rule==="square"?'far end square to the roadway':'far end ∥ abutment (skew followed)',V((fA[0]+fB[0])/2+0.6,yTop+0.4,(fA[1]+fB[1])/2));
     if(P.sup==="shelf") lab('shelf b_S × h_S / h_E = '+fmt(P.bS,0)+' × '+fmt(P.hS,0)+' / '+fmt(P.hE,0)+' in',V(xb+P.bS/24,y-P.hS/12-0.4,-shL/2));
+    else if(P.sup==="stem") lab('slab on the stem shelf, e = '+fmt(P.bS,1)+' in (no corbel)',V(xb,y-0.4,-shL/2));   // ABSH
     else lab('slab on the deck end (no shelf)',V(xb,y-0.4,-shL/2)); }
   return {xEnd:Math.max(far(A)[0],far(B)[0])};
 }
@@ -9680,7 +9681,7 @@ function abdwGeo(R){
   const W=R.wing, w=S.wing; G.wing=null;
   if(w&&w.on&&W){ const att=W.type==="attached"; G.wingKind=att?(w.orient==="inline"?"inline":"U"):"indep";
     if(att&&w.orient!=="inline") G.wing={L:W.L*12, pts:[[0,-W.H0*12],[0,0],[W.L*12,W.bT*W.L*12],[W.L*12,(-W.H0+W.dB*W.L)*12]]}; }
-  G.xbw=G.xb;   // ABD2: the back face of the backwall / end diaphragm / integral wall (the shelf and the slab bear on it)
+  G.xbw=G.xbwB;   // ABSH: the inset backwall's back face (= G.xb when e = 0)   // ABD2: the back face of the backwall / end diaphragm / integral wall (the shelf and the slab bear on it)
   return G;
 }
 function abdwBuild(R){
@@ -10018,7 +10019,7 @@ function abdwBuild(R){
       }};
       const sec={m:k/kS, title:"SECTION A-A, ALONG THE ROADWAY - SCALE "+abdwScName(kS), notes:["THE WALL"+(sh?" AND THE SHELF":"")+" CUT AT THE SKEW (WIDTHS / COS THETA)"+(sq?"; SLAB LENGTH AT A-A":"")], draw:m=>{
         const p=(x,y)=>[x*m,y*m], c=1/Math.max(cs,0.2), yb=-(t+(sh?hS:0)+12);
-        const wp=[p(0,yb)]; if(sh) wp.push(p(0,-t-hS),p(bS*c,-t-hE),p(bS*c,-t)); wp.push(p(0,-t),p(0,0),p(-twall*c,0),p(-twall*c,yb));
+        const wp=[G.off? p(G.off.e*c,yb) : p(0,yb)]; if(sh) wp.push(p(0,-t-hS),p(bS*c,-t-hE),p(bS*c,-t)); if(G.off) wp.push(p(G.off.e*c,-t)); wp.push(p(0,-t),p(0,0),p(-twall*c,0),p(-twall*c,yb));   // ABSH: the stem shelf (width e) under the slab
         D.pline(L.conc,wp,false); brk(...p(-twall*c,yb),...p(0,yb));
         D.line(L.ap,...p(0,0),...p(Lcut,0)); D.line(L.ap,...p(0,-t),...p(Lcut,-t)); D.line(L.ap,...p(Lcut,0),...p(Lcut,-t));
         free(L.txt,-twall*c*m/2,(yb+6)*m,h,wallNm,1,90);
@@ -10030,7 +10031,8 @@ function abdwBuild(R){
         else free(L.txt,Lcut*m/2,-t*m-0.4*k,h,"SLAB BARS NOT DESIGNED (PANEL I-0B DESIGN OFF)",1);
         dH(p(0,0),p(Lcut,0),0.45*k,sq?"<> AT A-A":"L = <>"); dV(p(Lcut,-t),p(Lcut,0),Lcut*m+0.3*k);
         lead(Lcut*m,-t*m*0.5,Lcut*m+0.5*k,-t*m-0.9*k,farTxt.replace(": ",":\n"),0,hb);
-        if(!sh) lead(0,-t*m,0.6*k,yb*m,"SLAB BEARS ON THE DECK END OVER THE "+wallNm+" (PANEL I-0B)",0,hb);
+        if(G.off) lead(G.off.e*c*m/2,-t*m,0.6*k,yb*m,"SLAB BEARS ON THE STEM SHELF, E = "+IN(G.off.e)+" (PANEL I-1; STEM CONCRETE, NO CORBEL)",0,hb);   // ABSH
+        else if(!sh) lead(0,-t*m,0.6*k,yb*m,"SLAB BEARS ON THE DECK END OVER THE "+wallNm+" (PANEL I-0B)",0,hb);
       }};
       const det=sh? {m:k/kD, title:"SHELF DETAIL - SCALE "+abdwScName(kD), notes:["PAVING NOTCH, NORMAL TO THE ABUTMENT"].concat(Hs?[(Hs.corbel?"A_V <= D: BRACKET":"A_V > D: CANTILEVER")+"; D = "+f1(Hs.d)+" (TAB "+(G.integ?"10 10.7":"5 5.8")+")"]:[]), draw:m=>{
         const p=(x,y)=>[x*m,y*m], wi=Math.min(twall,8), ys=-(hS+6), sl=bS+12;
@@ -10060,7 +10062,7 @@ function abdwBuild(R){
           D.text(L.txt,T.w/2,-T.h-0.3*k,0.11*k,"APPROACH SLAB AND SHELF BARS",1); y=-T.h-0.65*k; }
         nt.forEach(t=>wrap(t,95).forEach((q,i)=>{ D.text(L.txt,0,y,0.075*k,(i?"   ":"")+q,0); y-=0.15*k; })); }});
       const nt=["APPROACH SLAB (PANEL I-0B): L = "+FI(Lr)+" ALONG THE ROADWAY"+(sq?" (SHORTEST SIDE)":"")+", W = "+FI(Wn)+" NORMAL TO IT, T = "+FI(t)+", SKEW THETA = "+th.toFixed(1)+"°; "+ruleTxt+".",
-        "SUPPORT AT THE ABUTMENT: "+(sh?"SHELF (PAVING NOTCH) B_S = "+IN(bS)+", H_S = "+IN(hS)+", H_E = "+IN(hE):"THE DECK END OVER THE "+wallNm)+"; "+farTxt+".",
+        "SUPPORT AT THE ABUTMENT: "+(G.off?"STEM SHELF BEHIND THE INSET BACKWALL, E = "+IN(G.off.e)+", "+IN(G.off.d)+" BELOW THE TOP":sh?"SHELF (PAVING NOTCH) B_S = "+IN(bS)+", H_S = "+IN(hS)+", H_E = "+IN(hE):"THE DECK END OVER THE "+wallNm)+"; "+farTxt+".",
         "CLEAR COVER: SLAB BOTTOM "+IN(+A.cov)+" (PANEL I-0B); SLAB TOP SHOWN THE SAME (NOT AN INPUT, DETAILER TO CONFIRM); SHELF "+IN(+S.mat.coverT)+" (PANEL I-2).",
         "NOT SIZED BY THE TOOL (DETAILER TO CONFIRM): BAR LENGTHS, LAPS, HOOKS, BENDS AND END COVER; S1 DEVELOPMENT INTO THE WALL AND ITS FRONT ANCHOR; P2 LAYOUT AT THE SKEWED ENDS; SLAB-TO-WALL CONNECTION AND JOINT; SLEEPER SLAB."];
       let bb=null;
@@ -10075,7 +10077,8 @@ function abdwBuild(R){
       const h=D.h, hb=0.085*k, yb=Math.max(G.tf+1,G.ySeat-24), xf=y=>G.Ltoe+(G.xstF-G.Ltoe)*(y-G.tf)/G.hstem;
       const v={title:(G.semi?"SEAT AND END DIAPHRAGM":"SEAT AND BACKWALL")+", NORMAL TO THE ABUTMENT - SCALE "+abdwScName(k), draw:()=>{
         const shP=sh?[[G.xbw,shY],[G.xbw+ap.bS,shY],[G.xbw+ap.bS,shY-ap.hE],[G.xbw,shY-ap.hS]]:[];
-        if(!G.semi) D.pline(L.conc,[[xf(yb),yb],[G.xstF,G.ySeat],[G.xbwF,G.ySeat],[G.xbwF,G.yTop],[G.xbw,G.yTop],...shP,[G.xb,yb]],false);
+        if(!G.semi) D.pline(L.conc,[[xf(yb),yb],[G.xstF,G.ySeat],[G.xbwF,G.ySeat],[G.xbwF,G.yTop],[G.xbw,G.yTop],...shP,...(G.off?[[G.xbw,G.ySh],[G.xb,G.ySh]]:[]),[G.xb,yb]],false);   // ABSH: the stem shelf
+        if(G.off){ D.line(L.cj,G.xbwF,G.ySh,G.xbw,G.ySh); dH([G.xbw,G.ySh],[G.xb,G.ySh],G.ySh-0.35*k,"E = <>"); }
         else{ D.pline(L.conc,[[xf(yb),yb],[G.xstF,G.ySeat],[G.xb,G.ySeat],[G.xb,yb]],false); D.pline(L.conc,[[G.xbwF,y0],[G.xbwF,G.yTop],[G.xbw,G.yTop],...shP,[G.xbw,y0]],true); }
         brk(G.xb,yb,xf(yb),yb);
         if(ap){ const x1=G.xbw+Math.min(ap.Ln,(sh?ap.bS:0)+24); D.line(L.ap,G.xbw,G.yTop,x1,G.yTop); D.line(L.ap,G.xbw,shY,x1,shY); brk(x1,shY,x1,G.yTop,L.ap);
@@ -10088,8 +10091,8 @@ function abdwBuild(R){
         if(xg!==null&&Cs) dH([G.xstF,G.ySeat],[xg,y0],G.yTop+0.9*k,"N = <> PROV.; "+f1(Cs.NreqP)+" REQ. (TAB 3 3.5)");
         dV([G.xstF,G.ySeat],[G.xbwF,G.yTop],xf(yb)-0.45*k,null,true);
         // bars
-        if(!G.semi){ const xA=G.xb-cT-db(rf.stem.size)/2, xA2=xA-db(rf.stem.size)-0.5, xB=G.xbw-cT-db(rf.bw.size)/2-db(rf.stem.size);
-          D.line(L.bar,xA2,yb,xA2,G.ySeat-2); D.line(L.bar,xB,G.yTop-cT,xB,G.ySeat-12);
+        if(!G.semi){ const xA=G.xb-cT-db(rf.stem.size)/2, xA2=xA-db(rf.stem.size)-0.5, xB=G.off? G.xbw-cT-db(rf.bw.size)/2 : G.xbw-cT-db(rf.bw.size)/2-db(rf.stem.size);
+          D.line(L.bar,xA2,yb,xA2,G.off? G.ySh-cT : G.ySeat-2); D.line(L.bar,xB,G.yTop-cT,xB,G.off? G.ySh-12 : G.ySeat-12);   // ABSH: A1 up into the shelf, B1 at the inset face
           lead(xA2,yb+0.3*(G.ySeat-yb),G.xbw+0.6*k+(ap?(sh?ap.bS:0)+24:0),yb+0.2*k,"A1 "+bl(rf.stem.size,rf.stem.sp)+" STEM, BACK FACE",0,hb);
           lead(xB,G.ySeat+G.hbw*0.55,G.xbw+0.6*k+(ap?(sh?ap.bS:0)+24:0),G.ySeat+G.hbw*0.3,"B1 "+bl(rf.bw.size,rf.bw.sp)+" BACKWALL, BACK FACE\nLAPPED WITH A1 (EXTENT AS TAB 5)",0,hb);
           if(rf.bwH&&rf.bwH.size!=="0"&&+rf.bwH.sp>0){ const sp=+rf.bwH.sp, d=db(rf.bwH.size); for(let y=G.ySeat+sp/2;y<G.yTop-cT;y+=sp){ dot(G.xbwF+cT+d/2,y,d/2); dot(xB-db(rf.bw.size)/2-d/2,y,d/2); }
