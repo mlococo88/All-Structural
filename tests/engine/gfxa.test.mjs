@@ -60,9 +60,9 @@ test('gfxa: Section properties graphic (both regions, all load cases): layers, n
 
 // SECC (2026-11-10): the screen graphic (option C, ui/vizkit.js) takes its numbers from secModel; they are the values the DXF line drawing (secGraphic) prints:
 // the stress at each end of each stressed part (steel; deck ÷ n or 3n), the selected case's section and every neutral axis at the table's values
-test('gfxa: Section properties screen graphic (secModel) = the DXF drawing\'s stresses and axes, every case and region', () => {
+test('gfxa: Section properties screen graphic (secModel) = the DXF drawing\'s stresses and axes, every case, positive region', () => {
   let n = 0;
-  for (const [name, P] of projects()) for (const region of ['pos', 'neg']) {
+  for (const [name, P] of projects()) for (const region of ['pos']) {   // SECN: the negative region is tested below (its own sections and a negative unit moment)
     const R = secResult(P, 0, 0, region), c = R.c;
     for (const cs of ['steel', '3n', 'n']) { const m = GA.secModel(P, R, cs), g = GA.secGraphic(P, R, cs, 1);
       const dxf = g.D.E.filter(e => e.t === 'TEXT' && / KSI$/.test(e.s)).map(e => e.s.replace(/ KSI$/, '')).sort();
@@ -76,7 +76,43 @@ test('gfxa: Section properties screen graphic (secModel) = the DXF drawing\'s st
   // the built-in project, steel case: +10.78 top, −9.04 bottom of steel (per 1000 kip-ft)
   const P0 = projects()[0][1], m0 = GA.secModel(P0, secResult(P0, 0, 0, 'pos'), 'steel');
   assert.equal(m0.segs[0].fb.toFixed(2), '10.78'); assert.equal(m0.segs[0].fa.toFixed(2), '-9.04');
-  assert.ok(n >= 36, 'cases ' + n);
+  assert.ok(n >= 18, 'cases ' + n);
+});
+
+// SECN (engineer decision 2026-11-10): negative-flexure region: the cases are the sections the engine's negative-region stresses use (engine/flexure.js location():
+// DC1 on the steel section, DC2 / DW / LL on steel + rebar = the card's cr), under M = −1000 kip-ft: f = −1000 · 12 (y − ȳ) / I (compression +) with the card's own
+// ȳ and I, at the top and bottom of steel and at each bar layer (y_rt, y_rb of the card); no deck stress. The same values, sign reversed, are the flexure engine's
+// stage stresses for −1000 kip-ft (its fAt: tension +).
+test('gfxa: Section properties screen graphic, negative region: steel (DC1) and steel + rebar (DC2, DW, LL) under −1000 kip-ft', () => {
+  let n = 0;
+  for (const [name, P] of projects()) {
+    const R = secResult(P, 0, 0, 'neg'), c = R.c, d = c.s.d, f = (sec, y) => -1000 * 12 * (y - sec.yb) / sec.I;
+    if (c.comp) { const s0 = P.girders[0].segments[0], dk = P.deck, mat = { Fyt: 50, Fyb: 50, Fyw: 50, Fyr: 60, fc: 4 };   // the engine's stage stresses (flexure location), same section and deck
+      const r = W.SBDFlexure.location({ name: 't', x: 0, region: 'neg', plates: { D: s0.D, tw: s0.tw, topB: s0.topB, topT: s0.topT, botB: s0.botB, botT: s0.botT }, beff: R.g.beff, Lb: 20, Cb: 1, M: { DC1: -1000, DC2: -1000, DW: -1000, LLn: -1000 } },
+        { mat, deck: { ts: dk.ts, haunch: OWN.haunchInProps(dk.haunch, R.lf), rebar: dk.rebar }, n: R.nr.n });
+      assert.equal(r.stg.DC1.sec, r.card.s, `${name}: engine DC1 on steel`); ['DC2', 'DW', 'LL'].forEach(k => assert.equal(r.stg[k].sec, r.card.cr, `${name}: engine ${k} on steel + rebar`));
+      const m1 = GA.secModel(P, R, 'steel'), m2 = GA.secModel(P, R, 'cr');
+      assert.ok(Math.abs(m1.segs[0].fb + r.stg.DC1.top) < 1e-9 && Math.abs(m1.segs[0].fa + r.stg.DC1.bot) < 1e-9, `${name}: DC1 = engine`);
+      ['DC2', 'DW', 'LL'].forEach(k => assert.ok(Math.abs(m2.segs[0].fb + r.stg[k].top) < 1e-9 && Math.abs(m2.segs[0].fa + r.stg[k].bot) < 1e-9, `${name}: ${k} = engine`)); }
+    const cases = c.comp ? ['steel', 'cr'] : ['steel'];
+    for (const cs of cases.concat(['3n', 'n'])) { const m = GA.secModel(P, R, cs), key = c.comp && cs === 'cr' ? 'cr' : 'steel', sec = key === 'cr' ? c.cr : c.s;
+      assert.equal(m.key, key, `${name} ${cs}: case`); assert.equal(m.sc, sec, `${name} ${cs}: section`); assert.equal(m.M, -1000); assert.ok(m.neg);
+      assert.deepEqual(Object.keys(m.CS), ['steel', 'cr'], `${name}: the negative region's buttons`);
+      assert.equal(m.segs.length, 1, `${name} ${cs}: no deck stress`); assert.equal(m.segs[0].fa, f(sec, 0)); assert.equal(m.segs[0].fb, f(sec, d));
+      assert.ok(m.segs[0].fb < 0 && m.segs[0].fa > 0, `${name} ${cs}: top flange in tension, bottom in compression`);
+      const bars = key === 'cr' ? [['top', c.cr.yRt, (P.deck.rebar || {}).top], ['bottom', c.cr.yRb, (P.deck.rebar || {}).bot]].filter(q => q[2] && q[2].A > 0) : [];
+      assert.deepEqual(J(m.rebar.map(b => [b.w, b.y, b.f])), J(bars.map(([w, y]) => [w, y, f(c.cr, y)])), `${name} ${cs}: rebar stresses`);
+      m.rebar.forEach(b => assert.ok(b.f < 0, `${name}: bars in tension`));
+      const ax = Object.fromEntries(m.axes.map(a => [a.key, a.y])); assert.equal(ax.steel, c.s.yb); assert.equal(ax.pna, c.yp); assert.equal(ax['3n'], undefined); assert.equal(ax.n, undefined);
+      if (c.comp) assert.equal(ax.cr, c.cr.yb);
+      n++; }
+  }
+  // hand check, built-in project, G1 segment 1 as a negative-region section: steel + rebar ȳ = 33.535 in, I = 51,050 in⁴; y_rt = 69.375, y_rb = 65.625 in
+  const P0 = projects()[0][1], R0 = secResult(P0, 0, 0, 'neg'), m0 = GA.secModel(P0, R0, 'cr'), s0 = GA.secModel(P0, R0, 'steel');
+  assert.deepEqual([R0.c.cr.yb.toFixed(3), Math.round(R0.c.cr.I)], ['33.535', 51050]);
+  assert.deepEqual([m0.segs[0].fb, m0.segs[0].fa, ...m0.rebar.map(b => b.f)].map(v => v.toFixed(2)), ['-6.66', '7.88', '-8.42', '-7.54']);
+  assert.deepEqual([s0.segs[0].fb, s0.segs[0].fa].map(v => v.toFixed(2)), ['-10.78', '9.04']);
+  assert.ok(n >= 12, 'cases ' + n);
 });
 
 test('gfxa: Loads & LLDF graphic: lane lines, wheels at the lever-rule values, every girder and region', () => {
