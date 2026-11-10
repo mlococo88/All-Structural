@@ -20375,7 +20375,7 @@ Cross-tool PR with the Retaining Wall Designer (Phase 8f, HANDOFF.md §4.6 / §4
   - 0 page errors.
 - **Other copies:** none.
 
-## 2026-11-10 — PR: claude/massdot-edition-pile (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (PDMED) — MassDOT Bridge Manual cited as the Hundredth Anniversary Edition   [text only; no result, saved key or format change]
+## 2026-11-10 — PR: claude/massdot-edition-pile (PR #1335: https://github.com/mlococo88/All-Structural/pull/1335) (PDMED) — MassDOT Bridge Manual cited as the Hundredth Anniversary Edition   [text only; no result, saved key or format change]
 - **Engineer (2026-11-10):** every MassDOT LRFD Bridge Manual citation marked "edition: verify" cites the Hundredth Anniversary Edition (reference copy: `structural_references/MassDOT Bridge Manual - Hundredth Edition.pdf`). Other "edition: verify" markers (AISC SCM, FHWA GEC 12) are left as they are.
 - **Where (to re-apply by hand):** `function pileRefs(I)`, IAB branch, first row (anchor `["MassDOT BM", "MassDOT LRFD Bridge Manual`). Used by the References table on screen and in the Report (`add("basis", sub("References", …pileRefs(I)…))`).
   Before: `["MassDOT BM", "MassDOT LRFD Bridge Manual Part I, §3.10 Integral Abutment Bridges — §3.10.2, §3.10.10, §3.10.11.1–.5, Tables 3.10.11-1 to -4; edition: verify"],`
