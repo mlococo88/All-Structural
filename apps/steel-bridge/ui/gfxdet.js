@@ -360,5 +360,6 @@
   function spliceFigure(s, W) { const m = spliceModel(s); if (!m) return null; const t = spliceTexts(m); VK().detCss();
     return `<div class="vk vk-det" style="max-width:${W || 760}px"><p class="vk-cap" style="margin:0 0 4px">${sb(t.gov)}</p>${spliceSvg(m, W || 760).svg}<p class="vk-cap">${esc(t.bolts)}</p></div>`; }
 
-  window.SBDGfxDet = { ltb, ltbModel, bracket, bracketModel, stiff, stiffModel, bear, bearModel, crossframe, cfModel, weld, weldModel, splice, spliceModel, spliceFigure };
+  window.SBDGfxDet = { ltb, ltbModel, bracket, bracketModel, stiff, stiffModel, bear, bearModel, crossframe, cfModel, weld, weldModel, splice, spliceModel, spliceFigure,
+    _svg: { ltbSvg, bracketSvg, stiffSvg, bearSvg, cfSvg, weldSvg, spliceSvg } };   // _svg: the SVG builders (tests)
 })();
