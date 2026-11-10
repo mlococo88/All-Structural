@@ -69,6 +69,10 @@ node tests/smoke/retaining-wall-checks.mjs [--file <file or git ref>]
 # Phone / tablet layout (PHN): at 390 and 768 px the page never scrolls sideways, on load and on every tab (one entry per tool in TOOLS)
 node tests/smoke/phone-layout.mjs [--tool smd,...] [--file <file or git ref>] [--w 390,768]
 
+# Gusset Plate Rating: the MBE 4th Edition (2026) values adopted 2026-11-10 (hand-check values of the default project and the validation model;
+# a project saved before keeps its φ_s; owner RIDOT; Validation tab; 0 console errors). ~1 min
+node tests/smoke/gusset-mbe4.mjs
+
 # LL & DL Distribution (lldf.html): two-panel layout (inputs / results in tabs; page never scrolls; links open the right tab; the
 # Dead load tab with the 4D steps; Ctrl+P prints the Report from every tab; 390 px stacked; inside index.html's frame). ~7 min
 node tests/smoke/lldf-layout.mjs [--shots <dir>] [--no-index]
