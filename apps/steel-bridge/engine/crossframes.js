@@ -344,14 +344,18 @@
   }
 
   /* ================= worked steps (new; the values above, worked) ================= */
+  /* SBDIA (2026-11-10): with a diaphragm (dia.on = 'yes') the truss steps of the angle cross-frame (member forces per kip, entered forces, the
+     angle members CF1 to CF6 and CF9, the connection geometry CF6, the X / K brace stiffness and its system stiffness CF8) are not listed: CFD /
+     CFE work the diaphragm's own. Display only: the values computed are unchanged. TRUSS: their step ids. */
+  const TRUSS = /^cf\.(tr\d+|user\.|top\.|bot\.|diag\.|geo$|sb\.bbr$|sb\.bT$)/;
   function steps(R) {
-    const w = St().work('cf'), p = R.p, W = R.W;
+    const w = St().work('cf'), p = R.p, W = R.W, dOn = cfDiaOn(p), brN = dOn ? 'diaphragm' : 'cross-frame';
     w.add({ id: 'dg', label: 'Girder depth (out-to-out of the flanges)', sym: 'd', eq: '', sub: '', value: R.dft * 12, unit: 'in', d: 2 });
-    w.add({ id: 'Lb', label: 'Cross-frame spacing (the largest unbraced length on any girder)', sym: 'L_{b}', eq: '', sub: '', value: R.Lb, unit: 'ft', d: 2, ref: `${ED} Art. 6.7.4.2.1` });
+    w.add({ id: 'Lb', label: `${dOn ? 'Diaphragm' : 'Cross-frame'} spacing (the largest unbraced length on any girder)`, sym: 'L_{b}', eq: '', sub: '', value: R.Lb, unit: 'ft', d: 2, ref: `${ED} Art. 6.7.4.2.1` });
     [['III', `Strength III, V = ${n0(W.III.V)} mph`], ['V', 'Strength V, V = 80 mph']].forEach(([k, l]) => { const q = W[k];
       w.add({ id: `w${k}.PZ`, label: `Design wind pressure, ${l}`, sym: 'P_{Z}', eq: '2.56 \\times 10^{-6}V^{2}K_{z}GC_{D}', sub: `2.56 \\times 10^{-6}(${n0(q.V)})^{2}(${n2(nm(p.wind.Kz))})(${n2(nm(p.wind.G))})(${n2(nm(p.wind.Cd))})`, value: q.PZ, unit: 'ksf', d: 4, ref: `${ED} Eq. 3.8.1.2.1-1` });
       w.add({ id: `w${k}.W`, label: `Wind on the lower half of the exterior girder, carried by the bottom flange (γ_WS = 1.0η = ${n3(R.gWS)})`, sym: 'W', eq: '\\frac{\\gamma_{WS}P_{Z}d}{2}', sub: `\\frac{${n3(R.gWS)}(${n4(q.PZ)})(${n3(R.dft)})}{2}`, value: q.W, unit: 'kip/ft', d: 4, ref: `${ED} Art. 4.6.2.7.1` });
-      w.add({ id: `w${k}.Fw`, label: `Wind force at the bottom flange per cross-frame, ${l}`, sym: 'F_{w}', eq: 'WL_{b}', sub: `${n4(q.W)}(${n2(R.Lb)})`, value: q.Fw, unit: 'kip', d: 2, ref: `${ED} Art. 4.6.2.7.1` }); });
+      w.add({ id: `w${k}.Fw`, label: `Wind force at the bottom flange per ${brN}, ${l}`, sym: 'F_{w}', eq: 'WL_{b}', sub: `${n4(q.W)}(${n2(R.Lb)})`, value: q.Fw, unit: 'kip', d: 2, ref: `${ED} Art. 4.6.2.7.1` }); });
     R.frames.forEach((e, i) => w.add({ id: `tr${i}`, label: `${e.lbl}: force per kip of F_w (truss model, top chord work points held by the deck) and per kip-in of brace moment`, sym: 'f_{w},\\ f_{br}', eq: '', sub: `${n4(e.unit)},\\ ${n4(e.ubr)}`, value: e.unit, unit: 'kip/kip', d: 4, note: `Length ${n2(e.L)} in.` }));
     // CFRM: the entered member forces and how they combine (only where a force is entered or "Replace computed" is chosen)
     const UM = R.UM || userModes(p), uOf = g => ['top', 'bot', 'diag'].map(k => nm(((p.user || {})[g] || {})[k]) || 0), uAny = g => uOf(g).some(v => v !== 0) || UM[g] === 'replace';
@@ -364,7 +368,7 @@
     const SB = R.SB; if (SB) {
       w.add({ id: 'sb.Iyeff', label: 'Effective I_y of the girder for torsional bracing', sym: 'I_{yeff}', eq: 'I_{yc} + \\frac{t}{c}I_{yt}', sub: `${n2(SB.Iyc)} + \\frac{${n2(SB.tD)}}{${n2(SB.cD)}}(${n2(SB.Iyt)})`, value: SB.Iyeff, unit: 'in^{4}', d: 2, ref: `${ED} Art. 6.7.4.2.2` });
       w.add({ id: 'sb.ho', label: 'Distance between flange centroids', sym: 'h_{o}', eq: 'D + \\frac{t_{c} + t_{t}}{2}', sub: `${n2(SB.Dg)} + \\frac{${n3(SB.tc)} + ${n3(SB.tt)}}{2}`, value: SB.ho, unit: 'in', d: 2 });
-      w.add({ id: 'sb.C', label: `Coefficient C (${SB.full ? 'cross-frame ≥ 0.8 of the web depth on full-depth plates' : 'otherwise'})`, sym: 'C', eq: '', sub: `h_{br} = ${n2(SB.hBr)} ${SB.deepFrame ? '\\ge' : '\\lt'} 0.8D = ${n2(0.8 * SB.Dg)}`, value: SB.C, unit: '', d: 1, ref: `${ED} Art. 6.7.4.2.2` });
+      w.add({ id: 'sb.C', label: `Coefficient C (${SB.full ? `${brN} ≥ 0.8 of the web depth on full-depth plates` : 'otherwise'})`, sym: 'C', eq: '', sub: `h_{br} = ${n2(SB.hBr)} ${SB.deepFrame ? '\\ge' : '\\lt'} 0.8D = ${n2(0.8 * SB.Dg)}`, value: SB.C, unit: '', d: 1, ref: `${ED} Art. 6.7.4.2.2` });
       w.add({ id: 'sb.Mbr', label: 'Brace moment during deck placement', sym: 'M_{br}', eq: '\\frac{CL}{nEI_{yeff}}\\left(\\frac{M_{u}}{C_{b}}\\right)^{2}\\frac{L_{b}}{500h_{o}}', sub: `\\frac{${SB.C}(${n0(SB.L)})}{${n0(SB.n)}(29{,}000)(${n2(SB.Iyeff)})}\\left(\\frac{${n0(SB.Mu)}}{${n2(SB.Cb)}}\\right)^{2}\\frac{${n2(SB.Lb)}}{500(${n2(SB.ho)})}`, value: SB.Mbr, unit: 'kip-in', d: 1, ref: `${ED} Eq. 6.7.4.2.2-14` });
       w.add({ id: 'sb.bbr', label: `Brace stiffness (${SB.isX ? 'X: tension-only diagonal' : 'K frame'}; areas × R = 0.65)`, sym: '\\beta_{br}', eq: SB.isX ? '\\frac{A_{d}ES^{2}h^{2}}{L_{c}^{3}}' : '\\frac{2ES^{2}h^{2}}{8L_{c}^{3}/A_{d} + S^{3}/A_{h}}', sub: SB.isX ? `\\frac{${n3(SB.Ad)}(29{,}000)(${n2(R.S)})^{2}(${n2(R.h)})^{2}}{(${n2(SB.Lc)})^{3}}` : `\\frac{2(29{,}000)(${n2(R.S)})^{2}(${n2(R.h)})^{2}}{8(${n2(SB.Lc)})^{3}/${n3(SB.Ad)} + (${n2(R.S)})^{3}/${n3(SB.Ah)}}`, value: SB.bbr, unit: 'kip-in/rad', d: 0, ref: `${ED} Art. 6.7.4.2.2; C4.6.3.3.4` });
       w.add({ id: 'sb.bsec', label: 'Web distortional stiffness (infinite when the bracing is at least 0.8 of the web depth)', sym: '\\beta_{sec}', eq: SB.deep ? '\\infty' : '\\frac{3.3E}{h_{o}}\\left(\\frac{1.5h_{o}t_{w}^{3}}{12} + \\frac{t_{s}b_{s}^{3}}{12}\\right)', sub: SB.deep ? '' : `\\frac{3.3(29{,}000)}{${n2(SB.ho)}}\\left(\\frac{1.5(${n2(SB.ho)})(${n4(SB.tw)})^{3}}{12} + \\frac{${n4(SB.tsp)}(${n3(SB.bs)})^{3}}{12}\\right)`, value: isFinite(SB.bsec) ? SB.bsec : 'infinite', unit: 'kip-in/rad', d: 0, ref: `${ED} Art. 6.7.4.2.2`, note: `Connection plate b_s × t_s = ${n3(SB.bs)} × ${n4(SB.tsp)} in (${SB.cpTs ? `Transverse stiffeners Type ${SB.cpTs.k}` : 'the Cross-frames inputs'}).` });
@@ -388,7 +392,7 @@
       w.add({ id: `${id}.brg`, label: `${m.l}: bolt bearing, angle and gusset (CF5)`, sym: '\\sum\\phi_{bb}\\min(2.4dtF_{u},\\ 1.2L_{c}tF_{u})', eq: '', sub: `\\min(${n2(m.brgA)},\\ ${n2(m.brgG)})`, value: m.brgR, unit: 'kip', d: 2, ref: `${ED} Eqs. 6.13.2.9-1, -2`, ok: ge(m.brgR, m.Fmax) });
       if (m.dP > 0) w.add({ id: `${id}.fat`, label: `${m.l}: factored stress range (CF9)`, sym: '\\gamma(\\Delta f)', eq: '\\gamma_{Fat\\,I}(0.65)\\frac{\\Delta P}{A_{g}}', sub: `${n2(R.gFI)}(0.65)\\frac{${n2(m.dP)}}{${n3(m.A)}}`, value: m.df, unit: 'ksi', d: 2, ref: `${ED} Table 3.4.1-1, Art. 6.6.1.2`, ok: ge(R.FT, m.df) }); });
     w.add({ id: 'geo', label: 'Connection geometry (CF6)', sym: 's,\\ e_{end},\\ t_{g}', eq: '', sub: `${n3(R.s)},\\ ${n3(R.e0)},\\ ${n3(R.tg)}`, value: R.s, unit: 'in', d: 3, ref: `${ED} Art. 6.13.2.6, Table 6.13.2.6.6-1` });
-    return w.steps;
+    return dOn ? w.steps.filter(s => !TRUSS.test(s.id)) : w.steps;   // SBDIA
   }
   /* diaSteps(R, end): the diaphragm values (CFD / CFE), appended to R.steps */
   function diaSteps(R, end) {
