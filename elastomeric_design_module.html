@@ -783,7 +783,7 @@ function computeEDM(loadsOverride){
   if(isPlain()){
     add("sigP","Compressive stress — plain [14.7.6.3.2]",sigTL/Math.min(sigGS,+cf.sigCapPlainA),"σs ≤ min("+fmt(+cf.GSplainA)+"GS, "+fmt(+cf.sigCapPlainA)+" ksi)");
     add("shearP","Shear deformation [14.7.6.3.4]",(2*(+L.deltaS))/hrt,"hrt ≥ 2Δs");
-    add("stabP","Stability thickness",hrt/(Math.min(planL,planW)/3),"hrt ≤ L/3, W/3");
+    add("stabP","Stability thickness [14.7.6.3.6]",hrt/(Math.min(planL,planW)/3),"hrt ≤ L/3, W/3");
     add("deflP","Compressive deflection ≤ 0.09 t (PEP ×3) [14.7.6.3.3]",R.defl.dcA,"3ε ≤ 0.09");   // M3
     addAnc("ancP");
   } else if(S.method==="B"){
@@ -1493,7 +1493,7 @@ function edrModel(){
       dcStep(w,"sigP","Compressive stress","\\frac{\\sigma_{s}}{\\min(\\sigma_{GS},\\,\\sigma_{cap})}","\\frac{"+edrN(R.sigTL,3)+"}{\\min("+edrN(ma.sigGS,3)+",\\,"+edrN(+cf.sigCapPlainA)+")}",EDR_AA+"Art. 14.7.6.3.2");
       w=topic(T,"shear","Shear deformation",EDR_AA+"Art. 14.7.6.3.4");
       dcStep(w,"shearP","Shear deformation: h_rt ≥ 2Δ_s","\\frac{2\\,\\Delta_{s}}{h_{rt}}","\\frac{2\\cdot "+edrN(+L.deltaS,3)+"}{"+edrN(R.hrt,3)+"}",EDR_AA+"Art. 14.7.6.3.4");
-      SUB="Stability"; w=topic(T,"stabT","Stability thickness",""); stabT(w,"stabP","");
+      SUB="Stability"; w=topic(T,"stabT","Stability thickness",EDR_AA+"Art. 14.7.6.3.6"); stabT(w,"stabP",EDR_AA+"Art. 14.7.6.3.6");
       SUB="Compressive deflection"; defl(); /* M3 */
       SUB="Anchorage"; w=topic(T,"anc","Anchorage: slip check, friction coefficient 0.2",EDR_AA+"Art. 14.8.3.1 / C14.8.3.1"); anc(w,"ancP");
     } else if(S.method==="B"){

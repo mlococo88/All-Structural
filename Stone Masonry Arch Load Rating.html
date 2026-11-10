@@ -7886,10 +7886,10 @@ function validate(p,M,results){
         `${esc(CALC.secTag(w.Mo,w.s.sec))}, ${w.nEl}-element mesh); dead load alone ${nfx(dw.d.worst.dc,3)}.`],
           bad?["Friction is exceeded:","the joints would slide before the compressive stress reaches f<sub>a</sub>."]
             :["Friction holds","at every joint and position, so sliding does not govern before the compressive stress."],
-          bad?["Ratings:","The reported rating factors are the §7.2.7 compressive-stress ratings and are NOT reduced by this check; "+
-            "the engineer must decide how to treat it."]:null,
+          bad?["Ratings:","The reported rating factors are the §7.2.7 compressive-stress ratings and are NOT reduced by this check: "+
+            "the check is advisory (the optional f<sub>v</sub> shear rating is the input that folds a joint shear limit into the rating factor)."]:null,
           ["V and N","are resolved on the section normal at each node (the radial joint)."]],
-          {act:[bad?"Decision pending engineer review: how to treat the exceeded friction.":null]})+
+          {act:[bad?"Friction is exceeded and the rating factors do not include it: assess the joints separately before relying on the rating.":null]})+
         archWorkedIn([{tab:"rate",card:"rate_slide",txt:"D/C "+nfx(w.s.dc,3),lab:"Rating · Bed-joint sliding"}]),
         "advisory");
     }
@@ -8553,7 +8553,10 @@ function liveLoadSection(p,M,veh,pos,dir){
       ((p.lanes==="1")?" (Trucks side by side is set to 1 lane).":
         ` (the ${nfx(p.barrelW,1)} ft barrel is narrower than 20 ft, so one lane is assumed per Art. 3.6.3).`),[
         ["More than one lane:","If the roadway carries more than one lane, select the number of lanes on the input panel: under deep fill "+
-      "the spread areas of side-by-side trucks overlap and Art. 6.4.2 combines them."]]));
+      "the spread areas of side-by-side trucks overlap and Art. 6.4.2 combines them."],
+        ["Barrel width:","the distribution width of the spread through the fill (Art. 6.4.2, one truck or merged trucks) "+
+      "is never taken wider than the barrel: Art. 6.4.2 limits it to the width of the supporting slab, applied here to the "+
+      "barrel (verify, not in references). The concentrated width E of the shallow-fill branch is not capped."]]));
   else
     h+=msg("inf","Side-by-side trucks",
       R.arNL(`${nLanes} lanes `+((p.lanes==="auto")?`from the ${nfx(p.barrelW,1)} ft barrel width (Art. 3.6.3: two lanes for 20 to `+   /* ARNL */
@@ -8566,7 +8569,10 @@ function liveLoadSection(p,M,veh,pos,dir){
         ["Overlap:","Where the spreads of adjacent trucks overlap they are combined over their outside limits (Art. 6.4.2) or "+
       "superimposed (Art. 3.24.3.2, concentrated branch); the result is a factor κ ≥ 1 on the one-truck pressure:"+
       "<br>κ = max over n of [ (1, 1, 0.90, 0.75…)·k_n·(P/2) / W_n ] ÷ [ the same for one truck ],"+
-      "<br>with k_n wheel lines in the governing merged group of width W_n."]]));
+      "<br>with k_n wheel lines in the governing merged group of width W_n."],
+        ["Barrel width:","the distribution width of the spread through the fill (Art. 6.4.2, one truck or merged trucks) "+
+      "is never taken wider than the barrel: Art. 6.4.2 limits it to the width of the supporting slab, applied here to the "+
+      "barrel (verify, not in references). The concentrated width E of the shallow-fill branch is not capped."]]));
   h+=step({label:"Longitudinal spread length at depth H",ref:"Std Spec 6.4",
     sym:dTL.tire?"L_s=\\ell_t+1.75H":"L_s=1.75H",sub:dTL.tire?`${num(ARCH.TIRE_L,3)}+1.75H`:"1.75H",res:"",units:"ft"});
   h+=step({label:"Transverse spread width at depth H",ref:"Std Spec 6.4",
@@ -11624,8 +11630,13 @@ function buildOutput(p){
         ["MassDOT §7.2.4.2B:","a component rated for an H vehicle at 12 tons or less is also rated with the Std. Spec. "+
       "lane loading (0.64 klf plus an 18 kip concentrated load for moment; Std. Spec. Art. 3.7, verify, not in "+
       "references)."],
+        ["H vehicle:","both H20 and HS20 are taken as H vehicles (conservative): either one reported at 12 tons or less triggers the check."],
         ["Sweep:","The lane loading is a load train swept like a vehicle over four loaded lengths; its point loads use "+
       "the wheel-load distribution (6 ft gage), a narrower width than the 10 ft lane, which is conservative."],
+        ["Load train:","the 18 kip load at the end of the train (the front or the back, by the direction of the sweep), then the "+
+      "uniform load as point loads at 2 ft centres; loaded lengths &frac14;, &frac12;, &frac34; and 1 times the axis span, plus 4 ft."],
+        ["Shear load:","the 26 kip concentrated load for shear is not used: the rating is governed by compressive stress."],
+        ["Mesh:",`the lane loading is rated on the ${M.nEl}-element mesh of the worked steps only, not over the three meshes of the convergence study.`],
         ["Reported:","The reported rating of the vehicle is the lower of the truck and the lane loading."]]));
     for(const row of archLane.rows){
       lh+=`<h4>${esc(row.name)}: truck RF ${nfx(row.truckRF,3)} (${nfx(row.truckTons,1)} tons)</h4>`+
@@ -11642,10 +11653,12 @@ function buildOutput(p){
     let hh=msg("inf","HS20 rear-axle spacing varied from 14 to 30 ft",
       R.arNL(null,[   /* ARNL */
         ["AASHTO Std. Spec. 17th Ed. Art. 3.7.6","(verify, not in references): the spacing V between the two 32 kip axles of the "+
-      "HS20 truck is varied from 14 to 30 ft and the spacing that produces the maximum effect is used."],
+      "HS20 truck is varied from 14 to 30 ft and the spacing that produces the maximum effect is used. This program "+
+      "takes V in 2 ft steps."],
         ["Each spacing below","is a complete rating (swept in both directions at the same step) on the "+H.Mo.nEl+"-element mesh that the reported "+
       "HS20 rating comes from."],
-        ["Reported:","The reported HS20 rating is the lowest of the nine."]]))+
+        ["Reported:","The reported HS20 rating is the lowest of the nine; a longer spacing replaces V = 14 ft only when it "+
+      "rates lower beyond round-off (a tie keeps V = 14 ft)."]]))+
       dtab([{k:"V",h:"Rear-axle spacing V (ft)",dp:0},{k:"rf",h:"HS20 RF",dp:3},{k:"t",h:"tons",dp:1}],
         H.runs.map((q,i)=>({__i:i,V:q.V,rf:q.rf,t:q.rf*36})),{})+
       `<div class="note">Reported HS20: RF = <b>${nfx(b.rf,3)}</b> at V = ${b.V} ft `+
@@ -11666,10 +11679,12 @@ function buildOutput(p){
       "axis (the radial bed joint at the node)."],
         ["Where:","It is evaluated at every section and every vehicle position, with each "+
       "vehicle's live load at its reported rating factor (the load the rating says the arch carries), including impact."],
+        (p.loadMode!=="rail")?["Vehicle checked:","a vehicle whose reported rating is governed by the lane loading is checked as its truck at "+
+      "that rating factor; an HS20 governed by a longer rear-axle spacing is checked with that spacing."]:null,
         ["Advisory:","It is reported beside the rating and does <b>not</b> change any rating factor."],
         ["&mu; =",nfx(C.mu,2)+
       " (input; 0.6 is a common judgment value for stone on stone or mortared joints in masonry arch assessment, "+
-      "not a code value: verify against the joint condition)."]]));
+      "not a code value: verify against the joint condition). A project saved before &mu; was an input opens on 0.6."]]));
     sh+=R.step({label:"Friction demand / capacity at the governing joint",ref:"advisory",
       sym:"\\dfrac{D}{C}=\\dfrac{|V_{DL}+m\\,(1+I)\\,V_{LL}|}{\\mu\\,\\left(N_{DL}+m\\,(1+I)\\,N_{LL}\\right)}",
       sub:`\\dfrac{|${R.num(ws.VD,3)}+${R.num(ws.m,3)}\\times(${R.num(ws.VL,3)})|}{${R.num(C.mu,2)}\\times(${R.num(ws.ND,3)}+${R.num(ws.m,3)}\\times ${R.num(ws.NL,3)})}`,
@@ -11703,13 +11718,18 @@ function buildOutput(p){
       "has no tensile strength, unlimited compressive strength, and joints do not slide."],
         ["Four hinges,","on the intrados "+
       "or the extrados at the nodes of the "+C.nH+"-element mesh (a pinned springing is an axis hinge), turn the ring into "+
-      "a three-block chain."],
+      "a three-block chain. The hinge mesh is the element count in use rounded up to a multiple of 4, at least 24 and at "+
+      "most 48; a hinge lies d/2 from the axis, d being the ring depth the stress check uses at that node."],
         ["&lambda;:","For each admissible chain (every hinge opening) the virtual work of the loads gives the "+
       "live load factor at collapse; the lowest over "+C.nMech.toLocaleString("en-US")+" chains and every vehicle position "+
       "(swept at "+nfx(G.r.step,2)+" ft in both directions, same wheel-load distribution and impact as the rating) is "+
       "&lambda;."],
         ["Not a rating:","The elastic §7.2.7 rating stands; &lambda; carries no safety factor and ignores crushing, so it is only "+
-      "a check that the elastic rating is not above the collapse load."]]));
+      "a check that the elastic rating is not above the collapse load."],
+        ["Vehicles:","each selected vehicle as listed"+((p.loadMode!=="rail")?" (HS20 with V = 14 ft; the lane loading is not swept)":"")+
+      "; &lambda; is compared with the vehicle's reported rating factor."],
+        ["Flag:","the dashboard shows REVIEW where &lambda; is below the elastic rating factor (FAIL where dead load alone forms a "+
+      "mechanism); no minimum ratio of &lambda; to the rating factor is required."]]));
     if(C.dlRun)mh+=msg("err","Dead load alone forms a mechanism",
       `Hinges at ${C.dlRun.n.map((i,k)=>esc(CALC.secTag(Mh,i))+" ("+["intrados","extrados","axis"][C.dlRun.f[k]]+")").join(", ")}: `+
       `the dead load does positive work (P<sub>D</sub> = ${nfx(C.dlRun.PD,3)} k·ft/ft per unit rotation), so no thrust line `+
