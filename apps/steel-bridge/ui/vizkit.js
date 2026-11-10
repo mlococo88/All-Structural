@@ -17,9 +17,10 @@
      VK.stack(items, gap, ymax)       items [{ py }] sorted, each given ty >= its py and >= gap below the previous one (and <= ymax, pushing up)
      VK.niceStep(span, n)             1 / 2 / 5 x 10^k step for about n divisions
      VK.ruler({ x, Y, y0, y1, step, title, titleDy, ticks: [{ y, label, title, sel }], labels, labelDx })   a y ruler (scale on the left of x) with marker ticks
-     VK.diagram({ segs: [{ ya, yb, fa, fb }], x0, kx, Y, yMin, yMax, grad, badges, fmt, xmin, xmax, gap })   a value diagram along y: area of each
+     VK.diagram({ segs: [{ ya, yb, fa, fb }], x0, kx, Y, yMin, yMax, grad, badges, fmt, xmin, xmax, gap, pts })   a value diagram along y: area of each
                                       segment split at zero, gradient fill on screen, grey compression / hatched tension in print, profile line,
-                                      zero line and value badges (badges: true) stacked apart per side
+                                      zero line and value badges (badges: true) stacked apart per side; pts [{ y, f }]: point values drawn as a
+                                      stem and a dot (the deck bars of the steel + rebar section; SECN), badged with the segments
      VK.readout(svg, { at(y user units of the SVG) -> null | [line1, line2], x0, x1, out (element for the text, aria-live) })
                                       hover (mouse) and tap (touch, pen, click) read-out: a dashed line and a tip in the SVG, and the same text in out
      VK.fit(el, render)               calls render(width) now and again whenever el's width changes (window resize, 'sbd2:panelresize' of
@@ -66,6 +67,7 @@
 .vk svg .nat{fill:#CBD5E1;} .vk svg .nat.sel{fill:var(--vk-acc);} .vk svg text.selt{fill:var(--vk-acc);font-weight:600;}
 .vk svg .nasel{stroke:var(--vk-acc);stroke-width:1.6;} .vk svg .naoth{stroke:#64748B;stroke-width:1;} .vk svg .pill{fill:var(--vk-acc);} .vk svg text.pillt{fill:#fff;font-weight:600;font-size:11px;}
 .vk svg .pc,.vk svg .pt{fill:none;} .vk svg .gprof{stroke:#334155;stroke-width:1.6;fill:none;}
+.vk svg .gpc{stroke:var(--vk-c);stroke-width:2.5;} .vk svg .gpt{stroke:var(--vk-t);stroke-width:2.5;} .vk svg .gpcd{fill:var(--vk-c);} .vk svg .gptd{fill:var(--vk-t);}
 .vk svg .bc{fill:#EFF4FF;stroke:#BFD3FB;} .vk svg .bt{fill:#FDF1EA;stroke:#F2C7AE;} .vk svg text.vc,.vk svg text.cc{fill:var(--vk-ct);} .vk svg text.vt,.vk svg text.tt{fill:var(--vk-tt);} .vk svg text.vc,.vk svg text.vt{font-size:11px;font-weight:600;}
 .vk svg .hl{stroke:var(--vk-ink);stroke-width:.6;stroke-dasharray:3 3;} .vk svg .tip{fill:var(--vk-ink);opacity:.88;} .vk svg .vk-hov text{fill:#fff;font-size:11px;} .vk svg .vk-hov{pointer-events:none;}
 @media (max-width:760px){.vk-tiles{grid-template-columns:repeat(3,minmax(0,1fr));} .vk-seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;} .vk-seg button{padding:5px 4px;line-height:1.25;}}
@@ -75,7 +77,7 @@
   .vk svg .pc{fill:#D4D4D4;} .vk svg .pt{fill:url(#vk-ht);} .vk svg .vk-gf{fill:none!important;} .vk svg .nat{fill:#777;} .vk svg .bc,.vk svg .bt{fill:#fff;stroke:#000;} .vk svg .stl{stroke:#000;stroke-width:.6;} .vk svg .vk-hov{display:none;}
   .vk{break-inside:avoid;}}
 @media (forced-colors:active){.vk svg text,.vk svg text.xs,.vk svg text.m{fill:CanvasText;} .vk svg text.pillt{fill:Canvas;} .vk svg .pill,.vk svg .nat.sel{fill:Highlight;} .vk svg .stl{fill:GrayText;} .vk svg .dk,.vk svg .hn,.vk svg .bc,.vk svg .bt{fill:Canvas;stroke:CanvasText;}
-  .vk svg .gprof,.vk svg .ax0,.vk svg .nasel,.vk svg .naoth,.vk svg .ext{stroke:CanvasText;} .vk-tile{border-color:CanvasText;} .vk-seg button[aria-pressed=true],.vk-chips button[aria-pressed=true]{outline:2px solid Highlight;}}`;
+  .vk svg .gprof,.vk svg .ax0,.vk svg .nasel,.vk svg .naoth,.vk svg .ext,.vk svg .gpc,.vk svg .gpt{stroke:CanvasText;} .vk svg .gpcd,.vk svg .gptd{fill:CanvasText;} .vk-tile{border-color:CanvasText;} .vk-seg button[aria-pressed=true],.vk-chips button[aria-pressed=true]{outline:2px solid Highlight;}}`;
     document.head.appendChild(st);
   }
 
@@ -125,8 +127,10 @@
     o.segs.forEach(s => { if (s.fa * s.fb < 0) { const y0 = s.ya + (s.yb - s.ya) * (-s.fa) / (s.fb - s.fa); pieces.push([s.ya, y0, s.fa, 0], [y0, s.yb, 0, s.fb]); } else pieces.push([s.ya, s.yb, s.fa, s.fb]); });
     pieces.forEach(([ya, yb, fa, fb]) => { const p = [[x0, Y(ya)], [x0 + fa * kx, Y(ya)], [x0 + fb * kx, Y(yb)], [x0, Y(yb)]]; if (o.grad) out.push(PG(p, 'vk-gf', ` style="fill:url(#${o.grad})"`)); out.push(PG(p, fa + fb >= 0 ? 'pc' : 'pt')); });
     o.segs.forEach(s => out.push(PL([[x0 + s.fa * kx, Y(s.ya)], [x0 + s.fb * kx, Y(s.yb)]], 'gprof')));
+    (o.pts || []).forEach(q => out.push(L(x0, Y(q.y), x0 + q.f * kx, Y(q.y), q.f >= 0 ? 'gpc' : 'gpt'), `<circle cx="${r2(x0 + q.f * kx)}" cy="${r2(Y(q.y))}" r="3" class="${q.f >= 0 ? 'gpcd' : 'gptd'}"/>`));   // SECN: point values (bars)
     if (o.zero !== false) out.push(L(x0, Y(o.yMin) + 4, x0, Y(o.yMax) - 4, 'ax0'));
     if (o.badges) { const v = []; o.segs.forEach(s => [[s.ya, s.fa], [s.yb, s.fb]].forEach(([y, f]) => v.push({ py: Y(y) + 4, f, x: x0 + f * kx + (f >= 0 ? 8 : -8), side: f >= 0 })));
+      (o.pts || []).forEach(q => v.push({ py: Y(q.y) + 4, f: q.f, x: x0 + q.f * kx + (q.f >= 0 ? 8 : -8), side: q.f >= 0 }));
       [true, false].forEach(sd => stack(v.filter(q => q.side === sd), o.gap || 18).forEach(q => { const t = fmt(q.f), w = t.length * 6.4 + 10; let bx = q.side ? q.x : q.x - w;
         if (o.xmax != null) bx = Math.min(bx, o.xmax - w); if (o.xmin != null) bx = Math.max(bx, o.xmin);
         out.push(`<rect x="${r2(bx)}" y="${r2(q.ty - 12)}" width="${r2(w)}" height="16" rx="3" class="${q.side ? 'bc' : 'bt'}"/>`, T(bx + w / 2, q.ty, t, { a: 'middle', cls: q.side ? 'vc' : 'vt' })); })); }
