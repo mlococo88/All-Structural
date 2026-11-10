@@ -56,8 +56,34 @@ try {
   const print = async (name) => { if (!SHOTS) return; await p.emulateMedia({ media: 'print' }); await p.screenshot({ path: path.join(SHOTS, name + '-print.png'), fullPage: false }); await p.emulateMedia({ media: 'screen' }); };
   const chk = async (name, sel, minTexts) => { await p.waitForSelector(sel + ' svg', { timeout: 180000 }); const n = await p.evaluate(s => document.querySelectorAll(s + ' svg text').length, sel); assert.ok(n >= minTexts, `${name}: ${n} texts`); await p.locator(`${sel} .sdx-view`).first().scrollIntoViewIfNeeded(); await shot(name); await print(name); await zoomOk(sel); return n; };
   // Section properties
-  await tab('sec'); await settle(); await chk('tab-section', '#gfx_sec', 15);
-  await p.selectOption('#gfx_sec_c', '3n'); await p.waitForTimeout(150); await chk('tab-section-3n', '#gfx_sec', 15);
+  // SECC (2026-11-10): the Section properties graphic is the data-viz style (ui/vizkit.js): a segmented control for the load case (buttons, aria-pressed),
+  // six tiles, the selected case's ENA drawn and labelled, the stress badges, chips for the other axes, hover / tap read-out, Download DXF = the line drawing
+  await tab('sec'); await settle(); await p.waitForSelector('#gfx_sec .vk svg', { timeout: 180000 });
+  const secState = () => p.evaluate(() => { const r = document.querySelector('#gfx_sec .vk'); return { pressed: [...r.querySelectorAll('[data-vkseg]')].filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.dataset.vkseg),
+    tiles: [...r.querySelectorAll('.vk-tile b')].map(b => b.textContent.trim()), pill: (r.querySelector('svg text.pillt') || {}).textContent, badges: [...r.querySelectorAll('svg text.vc, svg text.vt')].map(t => t.textContent).sort(),
+    others: r.querySelectorAll('svg line.naoth').length, chips: [...r.querySelectorAll('[data-vkchip]')].map(b => [b.dataset.vkchip, b.getAttribute('aria-pressed'), b.disabled]) }; });
+  const EXP = { steel: { yb: '28.213', I: '37,472', top: '+10.78', bot: '−9.04', last: '63.75', badges: ['+10.78', '−9.04'] },
+    '3n': { yb: '44.565', I: '79,056', top: '+2.63', bot: '−6.76', last: '+0.20', badges: ['+0.14', '+0.20', '+2.63', '−6.76'] },
+    n: { yb: '55.100', I: '106,168', top: '+0.77', bot: '−6.23', last: '+0.28', badges: ['+0.15', '+0.28', '+0.77', '−6.23'] } };
+  for (const cs of ['steel', '3n', 'n', 'steel']) { await p.click(`#gfx_sec [data-vkseg="${cs}"]`); await p.waitForTimeout(150); const st = await secState(), e = EXP[cs];
+    assert.deepEqual(st.pressed, [cs], `section ${cs}: segmented control`); assert.deepEqual([st.tiles[0], st.tiles[1], st.tiles[3], st.tiles[4], st.tiles[5]], [e.yb, e.I, e.top, e.bot, e.last], `section ${cs}: tiles ${st.tiles}`);
+    assert.equal(st.pill, `ȳ = ${e.yb} in`, `section ${cs}: the selected axis`); assert.deepEqual(st.badges, e.badges.slice().sort(), `section ${cs}: stress values`);
+    assert.ok(st.chips.some(([k, pr, dis]) => k === cs && pr === 'true' && dis), `section ${cs}: its chip pressed`); await shot('tab-section-' + cs); await print('tab-section-' + cs); }
+  // the case stays when the tab is drawn again (same state as the former selector); chips toggle the other axes
+  await p.click('#gfx_sec [data-vkseg="3n"]'); await tab('flex'); await tab('sec'); await p.waitForSelector('#gfx_sec .vk svg', { timeout: 180000 }); assert.deepEqual((await secState()).pressed, ['3n'], 'section: case kept');
+  await p.click('#gfx_sec [data-vkchip="pna"]'); await p.click('#gfx_sec [data-vkchip="steel"]'); let st = await secState(); assert.equal(st.others, 2, 'chips: two other axes drawn');
+  assert.deepEqual(st.chips.filter(q => q[1] === 'true').map(q => q[0]).sort(), ['3n', 'pna', 'steel']); await p.click('#gfx_sec [data-vkchip="pna"]'); assert.equal((await secState()).others, 1, 'chip off');
+  // hover and tap (click) read-out: y and f(y) on the 3n section
+  { await p.locator('#gfx_sec .vk-fig svg').scrollIntoViewIfNeeded(); const bx = await p.locator('#gfx_sec .vk-fig svg').boundingBox();
+    await p.mouse.move(bx.x + bx.width * 0.4, bx.y + bx.height * 0.7); await p.waitForTimeout(100); const rd = await p.textContent('#gfx_sec .vk-read'); assert.match(rd, /^y = [\d.]+ in · steel · f = [+−][\d.]+ ksi$/, 'hover read-out: ' + rd);
+    assert.ok(await p.evaluate(() => document.querySelector('#gfx_sec .vk-hov').style.display !== 'none'), 'hover tip shown');
+    await p.mouse.move(bx.x + 2, bx.y + bx.height + 40); await p.mouse.click(bx.x + bx.width * 0.4, bx.y + bx.height * 0.5); assert.match(await p.textContent('#gfx_sec .vk-read'), /^y = .* f = /, 'tap/click read-out'); }
+  // Download DXF: the line drawing (layers of secGraphic), valid
+  { const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#gfx_sec [data-secdxf]')]); const txt = fs.readFileSync(await dl.path(), 'utf8'); assert.ok(/S-STRESS-C/.test(txt) && /S-NA-3N/.test(txt) && /EOF/.test(txt), 'section DXF'); }
+  // the width follows the panel (resize / sbd2:panelresize)
+  { const w0 = await p.evaluate(() => document.querySelector('#gfx_sec svg').viewBox.baseVal.width); await p.setViewportSize({ width: 1100, height: 1000 }); await p.waitForTimeout(300);
+    const w1 = await p.evaluate(() => document.querySelector('#gfx_sec svg').viewBox.baseVal.width); assert.notEqual(w1, w0, 'section redrawn at the new width'); await p.setViewportSize({ width: 1400, height: 1000 }); await p.waitForTimeout(300); }
+  assert.deepEqual(errs, [], 'console errors (section)');
   // Loads & LLDF
   await tab('loads'); await settle(); await chk('tab-loads', '#gfx_ld', 15);
   const cases = await p.evaluate(() => [...document.querySelectorAll('#gfx_ld_c option')].map(o => o.value)); assert.ok(cases.length >= 2, 'LLDF cases ' + cases);
