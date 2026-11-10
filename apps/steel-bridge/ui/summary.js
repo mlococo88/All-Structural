@@ -146,10 +146,15 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
   }
 
   /* ---------- drawing ---------- */
-  // QA2 (2026-11-09): a ratio that is not a number shows ∞ (infinite) or — (not a number), the reason in the cell's tooltip; still counted REVIEW (report/summary.js, unchanged)
-  const vTxt = (c, col) => !c || c.st === 'notrun' ? 'not run' : c.st === 'na' ? 'n/a' : col.rf ? (isFinite(c.rf) ? fmt(c.rf, 2) : '—') : (isFinite(c.r) ? fmt(c.r, 3) : c.r === Infinity ? '∞' : '—');
+  // QA2 (2026-11-09/10): a ratio that is not finite shows ∞ (infinite: Infinity), −∞ or NaN (a true NaN only), the reason in the cell's tooltip and the
+  // cell a link to its tab; still counted REVIEW (report/summary.js, unchanged)
+  const nfTxt = r => r === Infinity ? '∞' : r === -Infinity ? '−∞' : 'NaN';
+  const NF_WHY = { '∞': 'Ratio ∞: the demand / capacity ratio is infinite (the capacity, or a factor in it such as the 6.10.1.6 flange lateral bending amplification, is zero or has no finite value for this demand). The work is on its tab (click). ',
+    '−∞': 'Ratio −∞: the demand / capacity ratio is negative and has no finite value. The work is on its tab (click). ',
+    'NaN': 'Ratio NaN: the demand / capacity ratio is not a number (e.g. 0 / 0, or a missing value). The work is on its tab (click). ' };
+  const vTxt = (c, col) => !c || c.st === 'notrun' ? 'not run' : c.st === 'na' ? 'n/a' : col.rf ? (isFinite(c.rf) ? fmt(c.rf, 2) : '—') : (isFinite(c.r) ? fmt(c.r, 3) : nfTxt(c.r));
   const cellHtml = (G, col, k0) => { const c = G.cells[col.id] || { st: 'notrun' };
-    const nn = c.st !== 'na' && c.st !== 'notrun' && !col.rf && c.r != null && !isFinite(c.r) ? 'Ratio not a finite number: the check has no finite demand / capacity ratio (counted as REVIEW; the reason is on its tab). ' : '';
+    const nn = c.st !== 'na' && c.st !== 'notrun' && !col.rf && c.r != null && !isFinite(c.r) ? NF_WHY[nfTxt(c.r)] + '(Counted as REVIEW.) ' : '';
     const tip = c.st === 'na' ? c.why : c.st === 'notrun' ? 'Not run yet: click to run' : `${nn}${G.label}: ${c.check} — ${c.loc}${c.nWarn ? ` (${c.nWarn} warning item(s) on the tab)` : ''}`;
     return `<td class="s-${c.st}${k0 ? ' g0' : ''}" title="${esc(String(tip || '').replace(/\$|\{\}|[{}]|\\/g, ''))}"><a href="#" data-sumgo="${G.gi}|${col.id}">${vTxt(c, col)}</a></td>`; };
   function overview(P, list) {
@@ -203,7 +208,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
     const bcls = verdict === 'FAIL' ? 'fail' : verdict === 'PASS' ? 'pass' : verdict === 'REVIEW' ? 'review' : 'none';
     const link = (G, col, c, t) => `<a href="#" data-sumgo="${G.gi}|${col.id}">${t}</a>`;
     const govTxt = top ? `<b>Governing:</b> ${esc(top.c.head)}, girder ${esc(top.G.label)}, ${txt(top.q.loc)}: ${txt(top.q.check)} — ${link(top.G, top.c, top.q, `${top.c.rf ? 'RF ' + fmt(top.q.rf, 2) : 'D/C ' + (isFinite(top.q.r) ? fmt(top.q.r, 3) : 'not a number')}`)}` : 'No check has run yet.';
-    const nanTxt = ov.nan.length ? `<span class="sum-low"><b>Not evaluated</b> (ratio not a number, REVIEW): ${ov.nan.map(z => `${esc(z.c.head)}, ${esc(z.G.label)} ${link(z.G, z.c, z.q, txt(z.q.loc))}`).join('; ')}.</span>` : '';
+    const nanTxt = ov.nan.length ? `<span class="sum-low"><b>Not evaluated</b> (ratio not finite, REVIEW): ${ov.nan.map(z => `${esc(z.c.head)}, ${esc(z.G.label)} ${link(z.G, z.c, z.q, txt(z.q.loc))}: ${txt(z.q.check)} — <span title="${esc(NF_WHY[nfTxt(z.q.r)])}">ratio ${nfTxt(z.q.r)}</span>`).join('; ')}.</span>` : '';
     const low = ov.low && ov.low !== top ? `<span class="sum-low"><b>Lowest rating factor:</b> ${esc(ov.low.c.head.replace('Rating, ', ''))} ${link(ov.low.G, ov.low.c, ov.low.q, fmt(ov.low.q.rf, 2))} (${esc(ov.low.G.label)}, ${txt(ov.low.q.loc)}).</span>` : '';
     const AD = window.SBDAutoDesignUI && window.SBDAutoDesignUI.lastWarns ? window.SBDAutoDesignUI.lastWarns(P) : null;
     const cdTxt = (() => { const CD = window.SBDCustomDemands, ks = CD ? ['flex', 'shear', 'cn', 'fat', 'rt', 'spl', 'wt'].filter(k => CD.srcGet(P, k) === 'custom') : [];
@@ -211,7 +216,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
     let h = `<section class="sec" id="sum-verdict"><div class="secHead">Summary: overall verdict</div><div class="secBody">
       <div class="sum-verd"><span class="sum-badge ${bcls}">${verdict}</span><span class="sum-cnt"><span class="c-fail">${n.fail} FAIL</span><span class="c-review">${n.review} REVIEW</span><span class="c-pass">${n.pass} PASS</span>${n.na ? `<span class="c-na">${n.na} n/a</span>` : ''}${n.notrun ? `<span class="c-na">${n.notrun} not run</span>` : ''}</span></div>
       <p class="sum-gov">${govTxt}${low}${nanTxt}</p>
-      <p class="note">Counts: one per girder and column of the table below. FAIL: demand / capacity &gt; 1.0, or a rating factor RF &lt; 1.0. REVIEW: a check whose ratio is not a number, or a module item with a Warning status (welds, cross-frames, deflection over the owner's preferred limit). A cell showing ∞ or — (not a rating factor): that check's demand / capacity ratio is not a finite number (∞: no finite capacity for the demand; —: not a number); it is counted as REVIEW, and the reason is on its tab (the cell's tooltip says so). Demands: ${cdTxt} A hand-off file or the Example demands chosen on a tab for this page view, and the Flexure tab's "6.10.8 only" choice, are not used here (each tab's own run uses them). Every value is the module's own governing value, worked on its tab; each links there. AASHTO LRFD 10th Ed. (2024); MBE for the rating.</p>
+      <p class="note">Counts: one per girder and column of the table below. FAIL: demand / capacity &gt; 1.0, or a rating factor RF &lt; 1.0. REVIEW: a check whose ratio is not a number, or a module item with a Warning status (welds, cross-frames, deflection over the owner's preferred limit). A ratio cell showing ∞ (or −∞ / NaN): that check's demand / capacity ratio has no finite value (∞: infinite, e.g. a capacity, or a factor in it such as the 6.10.1.6 amplification, that is zero or not finite for the demand; NaN: not a number, e.g. 0 / 0); it is counted as REVIEW, and its tooltip and link give the reason and the work on its tab. Demands: ${cdTxt} A hand-off file or the Example demands chosen on a tab for this page view, and the Flexure tab's "6.10.8 only" choice, are not used here (each tab's own run uses them). Every value is the module's own governing value, worked on its tab; each links there. AASHTO LRFD 10th Ed. (2024); MBE for the rating.</p>
       <div class="sum-run">${S.busy ? `<span role="status" aria-live="polite"><span class="spin" aria-hidden="true"></span>${esc(S.prog)}</span>` : `<span role="status" aria-live="polite">${done ? `Up to date${S.secs != null ? ` (last run ${fmt(S.secs, 1)} s)` : ' (shown from the last run of this project state)'}.` : 'Out of date.'}</span>`}
         <button type="button" id="sum_rerun" title="Run every module of every girder again">Re-run all</button>
         <a href="#" id="sum_rpt" title="The Report tab, every girder: the governing ratios of each girder with the work of each girder's report">Report: every girder</a></div></div></section>`;

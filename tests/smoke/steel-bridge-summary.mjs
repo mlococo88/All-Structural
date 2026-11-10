@@ -29,7 +29,7 @@ async function cellsMatch(p) {
   const r = await p.evaluate(() => {
     const st = window.SBDSummaryUI.state(), COLS = window.SBDSummary.COLS, U = window.SharedUnits, bad = [];
     st.list.forEach(G => COLS.forEach(c => { const q = G.cells[c.id], a = document.querySelector(`#sum-table a[data-sumgo="${G.gi}|${c.id}"]`);
-      const want = q.st === 'notrun' ? 'not run' : q.st === 'na' ? 'n/a' : c.rf ? U.fmt(q.rf, 2) : isFinite(q.r) ? U.fmt(q.r, 3) : q.r === Infinity ? '∞' : '—';   // QA2: ∞ / — (was NaN)
+      const want = q.st === 'notrun' ? 'not run' : q.st === 'na' ? 'n/a' : c.rf ? U.fmt(q.rf, 2) : isFinite(q.r) ? U.fmt(q.r, 3) : q.r === Infinity ? '∞' : q.r === -Infinity ? '−∞' : 'NaN';   // QA2: ∞ for Infinity (NaN only for a true NaN)
       if (!a || a.textContent !== want || !a.closest('td').classList.contains('s-' + q.st)) bad.push(`${G.label} ${c.id}: ${a && a.textContent} vs ${want}`); }));
     return { bad, rows: document.querySelectorAll('#sum-table tbody tr').length, n: st.list.length };
   });
