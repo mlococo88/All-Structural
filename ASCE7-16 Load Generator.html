@@ -49,6 +49,10 @@ input:focus,select:focus,textarea:focus{outline:2px solid #9db8dc;outline-offset
 #a7prjPane .prjGrp{margin:0 0 8px}
 #a7prjPane .prjGrp>b{display:block;font-size:10pt;color:var(--navy)}
 #a7prjPane .prjGrp .hint{margin:1px 0 3px}
+#tbshare .prjGrp{border-top:1px solid #d5dce5;padding-top:5px}
+#tbshare .prjGrp>b{display:inline}
+#tbshare .hoFrom{font-size:8.5pt;color:#555}
+#tbshare .hoGrp{margin:8px 0 3px;font-size:8pt;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#555}
 #appid .alltools{display:inline-block;margin-top:3px;font-size:9pt;color:var(--navy);text-decoration:none}
 #appid .alltools:hover{text-decoration:underline}
 @media print{.alltools,#tbshare{display:none!important}}
@@ -299,14 +303,19 @@ svg.sch .ld{stroke:var(--bad);fill:var(--bad)}
         </div>
         <div class="hint">Printed on the report and the Excel calculation sheet.</div>
       </div></div>
-      <div class="pnl"><div class="hd"><span class="ttl">Shared project info and hand-offs</span></div><div class="bd" id="tbshare">
-        <div class="prjGrp"><b>Project info</b><div class="hint">Copy the title block from or to the other tools.</div><div class="btnrow">
-        <button class="btn" type="button" onclick="bxUseProjectInfo()">Use shared project info</button>
+      <!-- HOC (2026-11-10): "Shared project info and hand-offs" laid out as Receive / Send with the last send (display only; same buttons and handlers) -->
+      <div class="pnl"><div class="hd"><span class="ttl">Hand-offs</span></div><div class="bd" id="tbshare">
+        <div class="hint">Nothing changes here until you confirm: "Use shared project info" shows what it will overwrite first. Sends go to the other tools only when you click.</div>
+        <div class="hoGrp">Receive from other tools</div>
+        <div class="prjGrp"><b>Shared project info</b> <span class="hoFrom">from any tool</span><div class="btnrow">
+        <button class="btn" type="button" onclick="bxUseProjectInfo()">Use shared project info</button></div></div>
+        <div class="hoGrp">Send to other tools</div>
+        <div class="prjGrp"><b>Shared project info</b> <span class="hoFrom">to every tool</span><div class="btnrow">
         <button class="btn" type="button" onclick="bxShareProjectInfo()">Share project info</button></div></div>
-        <div class="prjGrp"><b>Building loads to other tools</b><div class="hint">Nominal area loads (psf) and seismic parameters for Steel Beam Design, or as a file.</div><div class="btnrow">
+        <div class="prjGrp"><b>Building loads</b> <span class="hoFrom">to Steel Beam Design</span><div class="hint">Nominal area loads (psf) and seismic parameters for Steel Beam Design, or as a file.</div><div class="btnrow">
         <button class="btn" type="button" onclick="bxSendBuildingLoads()" title="Publish the nominal area loads (psf) and seismic parameters for Steel Beam Design (HANDOFF.md, channel buildingLoads)">Send to other tools</button>
         <button class="btn" type="button" onclick="bxExportBuildingLoads()" title="Save the same hand-off as a JSON file">Export hand-off (JSON)</button>
-        </div></div>
+        </div><div class="hint"><b>Last sent:</b> <span id="bxBldSent"></span></div></div>
       </div></div>
       </div>
     </div>
@@ -5647,7 +5656,13 @@ window.addEventListener("DOMContentLoaded",()=>{
       "\n  W roof uplift = "+f(a.W.roofUplift)+", roof down = "+f(a.W.roofDown)+", wall = "+f(a.W.wall)+
       "\n  SDS = "+f(r.payload.seismic.SDS)+", SD1 = "+f(r.payload.seismic.SD1)+", SDC = "+f(r.payload.seismic.SDC)+", Ie = "+f(r.payload.seismic.Ie)+
       "\n\nOpen Steel Beam Design and click \"Pull from ASCE 7-16\".");
+    hoSent();
   };
+  /* HOC (2026-11-10): the Hand-offs card's "Last sent" line, read from the channel key when this tool sent it (nothing stored) */
+  function hoSent(){ var el=document.getElementById("bxBldSent"); if(!el) return; var p=null; try{ p=JSON.parse(localStorage.getItem(BridgeXfer.NS+"buildingLoads")||"null"); }catch(e){}
+    var d=p&&p.producer===PRODUCER&&p.producedAt? new Date(p.producedAt) : null;
+    el.textContent=d&&!isNaN(d)? d.toLocaleString()+((p.project&&p.project.name)?" ("+p.project.name+")":"")+", from this browser." : "nothing sent from this browser yet."; }
+  hoSent(); window.addEventListener("storage",hoSent);
   window.bxExportBuildingLoads=function(){
     var b=bxBuildingLoadsPayload(); if(!b.ok){ alert(b.error); return; }
     var p=b.payload;   /* stamped here, not published: the file export does not change what other tools see */
