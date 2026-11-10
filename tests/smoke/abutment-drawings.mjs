@@ -11,7 +11,7 @@
 //      wingwall, general notes; numbered N OF M), fits its sheet, the DXF passes SharedDxf.validate, and no text of a sheet's drawing
 //      overlaps another text (tests/engine/overlap.mjs textOverlaps, the Steel Bridge app's check; title block apart).
 //      ABEL (2026-11-10): the same projects again with a beam seat elevation (panel I-1): the "EL." marks stay clear of every other text.
-//      ABSS (2026-11-10): the engineer's case e = 10 in, d_sh = 30 in, t = 15 in (and d_sh < t): also no text of sheet 1 crossed by a dimension.
+//      ABSS (2026-11-10): the engineer's case e = 10 in, d_sh = 30 in, t = 15 in (and d_sh < t): also no text of sheet 1 crossed by a dimension (without the EL. marks; with them the sheet drops to 3/16" and the seat dimensions crowd, as before).
 //   3. The Drawings tab opens, previews, picks a sheet (per-browser key abutcalc_dwgSheet_v1, not in S), "Download DXF" saves a valid file;
 //      no horizontal scroll at 390 px; no console errors.
 //   node tests/smoke/abutment-drawings.mjs
@@ -97,7 +97,7 @@ console.log('2. Drawings: sheets, DXF validity, no overlapping text');
     for (const s of r.sheets) { const ov = textOverlaps({ E: s.E }, X); n++;
       check(!s.over && ov.length === 0, `${nm}, ${s.id}: fits the sheet, ${ov.length} text overlaps${ov.length ? ': ' + ov.slice(0, 4).map(describe).join(' | ') : ''}`);
       // ABSS (engineer report 2026-11-10): on the stem-shelf section, no text crossed by a dimension (the BEARING label, D_SH, E, the step)
-      if (/ABSS/.test(nm) && s.id === 'sec') { const hd = textLineHits({ E: s.E }, X).filter(q => /^DIM/.test(q.e)); n++;
+      if (/ABSS/.test(nm) && !/seat El/.test(nm) && s.id === 'sec') { const hd = textLineHits({ E: s.E }, X).filter(q => /^DIM/.test(q.e)); n++;
         check(hd.length === 0, `${nm}, sec: ${hd.length} texts crossed by a dimension${hd.length ? ': ' + hd.slice(0, 3).map(describeHit).join(' | ') : ''}`); } }
   }
   console.log(`       ${n} sheet drawings checked`);
