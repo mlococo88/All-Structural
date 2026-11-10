@@ -45,7 +45,19 @@ async function run(file) {
 // STDS-P (2026-11-06): the Project tab block (#pdPrjBlock: the new "Save and open" card replaced "Project file" and "Project library") and the
 // header buttons are left out of the A vs B text: the page's results (the rest of the page) must be identical
 const text = p => p.evaluate(() => { const c = document.body.cloneNode(true); c.querySelectorAll('[data-sp],script,style,#pdPrjBlock,.pd-hdrBtns').forEach(x => x.remove()); return c.innerText.replace(/saved to browser|auto-save on/g, '').replace(/Project fileSave \/ load \.json · auto-saves to this browser.Project libraryStored in this browser \(IndexedDB\)./, '')   /* main's two collapsed panels (STDS-P: replaced by the card) */.replace(/\s+/g, ' '); });
-const state = async p => ({ text: await text(p), inputs: await p.evaluate(() => localStorage.getItem('micropile_lrfd_inputs_v1')) });
+// PDLB (2026-11-10, engineer): L_b,req = STL/(phi_geo q_b), the pile self-weight no longer added. While A predates it (A's file has no
+// "PDLB (2026-11-10"), the L_b,req values, the comparison sign and status of "L_b,eff >= L_b,req", its Summary row (D/C, PASS/FAIL)
+// and the PDLB note text are masked in both A and B; every other character must still be identical. With A at or after PDLB: exact.
+let PDLB_MASK = false;
+const pdlbMask = async (p, t) => { if (!PDLB_MASK) return t;
+  const L = await p.evaluate(() => { const R = computeAll(JSON.parse(localStorage.getItem('micropile_lrfd_inputs_v1'))); return [fmt(R.geo.Lb_req, 2), fmt(R.geo.Lb_req, 1)]; });
+  L.forEach(v => { t = t.split(v).join('#LR#'); });
+  return t.split('The pile self-weight is not included in the required bond length; L_b,req is based on STL only (engineer’s decision, 2026-11-10). The factored weight γ_DC W_pile is still added to the geotechnical bond resistance check, φ_geo P_n ≥ STL + γ_DC W_pile.').join('')
+    .replace('is added to this check. It is not added to the required bond length, which uses STL only (engineer’s decision, 2026-11-10).', 'is added to this check and to the required bond length.')
+    .replace(/(?:<|≥|\\geq)(?=\s?(?:\\;)?\s?(?:L_\{b,req\}|Lb,req))/g, '~')
+    .replace(/(#LR# ft)(✗ NG|✓ OK|NG|OK)/g, '$1~')
+    .replace(/(effective bond length ≥ required:D\/C = )[\d.]+( \(AASHTO 10\.9\.3\.5; §[\d.]+\))(FAIL|PASS)/g, '$1~$2~'); };
+const state = async p => ({ text: await pdlbMask(p, await text(p)), inputs: await p.evaluate(() => localStorage.getItem('micropile_lrfd_inputs_v1')) });
 const change = async p => {   // HDRS: the chip (lib()) leaves the Project rail tab open, which has no number input: the next rail tab (Pile) first
   if (!(await p.evaluate(() => [...document.querySelectorAll('.input-rail input[type=number]')].some(x => x.offsetParent && x.value !== '')))) { await p.evaluate(() => [...document.querySelectorAll('.rail-tabs button')].find(b => !/^Project/.test(b.textContent)).click()); await p.waitForTimeout(400); }
   await p.evaluate(() => { const i = [...document.querySelectorAll('.input-rail input[type=number]')].find(x => x.offsetParent && x.value !== '');
@@ -54,8 +66,12 @@ const same = (a, b, m) => { const eq = JSON.stringify(a) === JSON.stringify(b); 
   if (!eq && a && b && typeof a.text === 'string') { let i = 0; while (i < a.text.length && a.text[i] === b.text[i]) i++; console.log('       A: …' + a.text.slice(Math.max(0, i - 80), i + 120) + '\n       B: …' + b.text.slice(Math.max(0, i - 80), i + 120) + '\n       inputs same: ' + (a.inputs === b.inputs)); } };
 
 console.log(`pile-library: ${FILE}  A = ${REF} (${sha})  B = working tree`);
+PDLB_MASK = !fs.readFileSync(path.join(ADIR, FILE), 'utf8').includes('PDLB (2026-11-10');
+if (PDLB_MASK) console.log('  (A predates PDLB: L_b,req values, its check and the PDLB note masked in the A vs B text)');
 const A = await run(path.join(ADIR, FILE)), B = await run(path.join(REPO, FILE));
 const a0 = await state(A.p), b0 = await state(B.p); same(a0, b0, 'on load: page text and autosaved inputs identical');
+ok(await B.p.evaluate(() => { const I = JSON.parse(localStorage.getItem('micropile_lrfd_inputs_v1')), g = computeAll(I).geo; return Math.abs(g.Lb_req - I.STL / (g.perFt_bond * g.phi_geo)) < 1e-9 && g.demand > I.STL; })
+  && /The pile self-weight is not included in the required bond length; L_b,req is based on STL only/.test(await text(B.p)), 'PDLB: B has L_b,req = STL/(\u03c6_geo q_b) (pile weight not added; the geotechnical demand still adds it) and the note');
 await change(A.p); await change(B.p);
 const a1 = await state(A.p), b1 = await state(B.p); same(a1, b1, 'after an input change: identical');
 ok(JSON.stringify(a1) !== JSON.stringify(a0), 'the input change changes the page (the test change is real)');
