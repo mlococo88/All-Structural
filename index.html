@@ -1470,7 +1470,7 @@ const VEHICLE_GROUPS = [
   // edit the per-vehicle DLA). SU4 already had defaultDLA 33.
   { group:"AASHTO Legal / Posting", color:"#6d28d9", vehicles:[
     { name:"AASHTO Legal Type 3",     label:"Legal Type 3",   code:"AASHTO LEGAL/PERMIT LOAD", defaultDLA:0, selectDLA:33,
-      gvwKips:50, description:'MBE Appendix D — 3-axle SU truck · 16k front + 17k + 17k tandem (4\' spacing) · 50k GVW = 25T',
+      gvwKips:50, description:'MBE Appendix D6A — 3-axle SU truck · 16k front + 17k + 17k tandem (4\' spacing) · 50k GVW = 25T',
       axles:[{load:16,dist:0},{load:17,dist:15},{load:17,dist:19}],
       trailingLoad:0, trailingNote:'',
     },
@@ -10138,7 +10138,7 @@ function mbeRF(C, gDC, DC, gDW, DW, gLL, LL) {
    wrong sign. */
 function hoggingMag(m) { return Math.abs(Math.min(0, +m || 0)); }
 
-// ── Fatigue detail categories — MBE Table 6A.6.4.2.1-1 ───────────────────────
+// ── Fatigue detail categories — AASHTO LRFD 10th Ed. Table 6.6.1.2.3-1 (A, (ΔF)_TH; MBE 4th Ed. 7.2.4) ──
 // A_coeff in ksi³, threshold in ksi
 const FATIGUE_CATEGORIES = {
   'A':  { label:'A',  A:250e8, threshold:24.0 },
@@ -11457,12 +11457,12 @@ function idxVehicleLCs(loadedLCs, vn){
   return [...m.filter(lc=>lc===vn), ...m.filter(lc=>lc!==vn)];
 }
 
-// Permit live-load factor — MBE (3rd Ed.) Table 6A.4.5.4.2a-1, ROUTINE / ANNUAL permits
+// Permit live-load factor — MBE (4th Ed., 2026) Table 6A.4.5.4.2a-1, ROUTINE / ANNUAL permits
 // (unlimited crossings, mixed with traffic, two or more lanes loaded). Columns are the
 // permit weight ratio GVW/AL (kip/ft): <= 2.0 | 2.0–3.0 | >= 3.0; rows ADTT (one direction)
 // >= 5000 | 1000 | <= 100, linear between ADTT rows. Not interpolated across the weight-ratio
 // columns (the factor falls as GVW/AL rises, so taking the lower column is conservative).
-// VERIFY against the printed MBE edition in use. Special / limited-crossing permits
+// Checked against the MBE 4th Ed. (2026), p. 6-43. Special / limited-crossing permits
 // (escorted single trip, single trip or < 100 crossings mixed with traffic) are not
 // tabulated here: override γLL for those vehicles. Replaces the flat 1.10 (sweep IDX-O9).
 const PERMIT_GAMLL_ROUTINE = [[5000,[1.40,1.35,1.30]],[1000,[1.35,1.25,1.20]],[100,[1.30,1.20,1.15]]];
@@ -19729,7 +19729,7 @@ DEFAULT_CFG.loadCombos = buildDefaultCombos(DEFAULT_CFG.deadLoads);
    the result lines (RF and PASS/FAIL from the tool's own values) and the print header / "Page X
    of Y" footer (@page margin boxes, idxPageCSS, print only). Nothing is recomputed here. */
 const IDX_REFS_MBE=[
-  ['AASHTO MBE','Manual for Bridge Evaluation: 6A.4.2.1 (LRFR rating equation; Eq. 6A.4.2.1-3, φc·φs ≥ 0.85), Table 6A.4.2.2-1 (load factors), Table 6A.4.2.3-1 (condition factor φc), Table 6A.4.2.4-1 (system factor φs), 6A.4.4 (legal-load rating; Table 6A.4.4.2.3a-1, legal γLL), 6A.8 (posting; Eq. 6A.8.3-1), Section 6B (LFR). Edition: verify'],
+  ['AASHTO MBE','Manual for Bridge Evaluation, 4th Edition (2026): 6A.4.2.1 (LRFR rating equation; Eq. 6A.4.2.1-3, φc·φs ≥ 0.85), Table 6A.4.2.2-1 (load factors), Table 6A.4.2.3-1 (condition factor φc), Table 6A.4.2.4-1 (system factor φs), 6A.4.4 (legal-load rating; Table 6A.4.4.2.3a-1, legal γLL), 6A.8 (posting; Eq. 6A.8.3-1), Section 6B (LFR)'],
   ['AASHTO LRFD','Bridge Design Specifications, 10th Ed. (2024): 3.6.1.2.2 / 3.6.1.2.3 (HL-93 truck and tandem), 3.6.2.1 (dynamic load allowance IM), 4.6.2.2 (distribution factor g), Table 3.4.1-1 (load factors), 6.10.8.2.3 and App. A6.3.3 (lateral-torsional buckling of steel zones; Lp per Eq. 6.10.8.2.3a-4 / A6.3.3.1-4)'],
   ['MIDAS Civil','Analysis results (beam forces) pasted from the MIDAS model built from the MCT file in this report'],
 ];
@@ -19929,7 +19929,7 @@ function idxrModel(cfg, rs, rows, zones, combos){
   const cell=(v,d,key,cls)=>({t:(typeof v==='number')?(isFinite(v)?N(v,d):'—'):String(v==null||v===''?'—':v),n:typeof v==='number',key,cls});
   const one=(scope,steps,title,ref,res)=>{ const t=S.group(steps,[{key:'t',title,ref:ref||'',ids:()=>true,res}],{strip:false})[0];
     return {type:'steps',scope,steps,topics:t?[{title,ref:ref||'',n:steps.length,cls:t.cls,chip:t.chip,res:t.res}]:[]}; };
-  const gfs=(cfg.geomMode||'beam')==='gfs', MBE='AASHTO MBE (edition: verify)';
+  const gfs=(cfg.geomMode||'beam')==='gfs', MBE='AASHTO MBE 4th Ed. (2026)';
   /* ---------- 1. Project and model ---------- */
   {
     const kv=[['Project',plain(cfg.projectName)],['Bridge ID',plain(cfg.projectBridgeId)],['Engineer',plain(cfg.projectUser)],['Date',plain(cfg.projectDate)],['Revision',plain(cfg.projectRevision)],
@@ -20005,9 +20005,9 @@ function idxrModel(cfg, rs, rows, zones, combos){
       {type:'note',text:'• Their buttons: print this report.'},
       {type:'note',text:'• Worked on their steps: Service II, fatigue, PS checks and multi-vehicle ratings.'},
       ...ixasmNotes({lead:'Basis of two of the checks worked on their steps:',items:[['Service II:',IXASM_RT.sv2],['PS Service III:',IXASM_RT.ps3]]})]},
-    {title:'References',items:[{type:'table',head:['Reference','Provisions used'],rows:[['AASHTO Manual for Bridge Evaluation','Section 6A: Art. 6A.4.2.1 (rating equation), Tables 6A.4.2.2-1, 6A.4.2.3-1, 6A.4.2.4-1, Art. 6A.8.3 (posting). Edition: verify.'],
+    {title:'References',items:[{type:'table',head:['Reference','Provisions used'],rows:[['AASHTO Manual for Bridge Evaluation, 4th Edition (2026)','Section 6A: Art. 6A.4.2.1 (rating equation), Tables 6A.4.2.2-1, 6A.4.2.3-1, 6A.4.2.4-1, Art. 6A.8.3 (posting).'],
       ['AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)','Art. 3.6.1.2, 3.6.2.1 (HL-93, IM), 4.6.2.2 (distribution factor g), Table 3.4.1-1'],['MIDAS Civil','Analysis results (beam forces) pasted from the model built from this project\'s MCT file']]}]}]});
-  return {title:'Bridge Rating & MCT — Calculation Report',subtitle:(cfg.projectName||'Untitled')+(cfg.projectBridgeId?' · '+cfg.projectBridgeId:''),code:'AASHTO MBE Section 6A (LRFR) · AASHTO LRFD 10th Ed. (2024)',
+  return {title:'Bridge Rating & MCT — Calculation Report',subtitle:(cfg.projectName||'Untitled')+(cfg.projectBridgeId?' · '+cfg.projectBridgeId:''),code:'AASHTO MBE 4th Ed. (2026) Section 6A (LRFR) · AASHTO LRFD 10th Ed. (2024)',
     info:[['Project',cfg.projectName||''],['Bridge ID',cfg.projectBridgeId||''],['Calculated by',cfg.projectUser||''],['Date',cfg.projectDate||''],['Checked by',''],['Checked date','']],
     head:{left:'Bridge '+(cfg.projectBridgeId||'—')+' — '+String(cfg.projectName||'—').slice(0,40),right:'Computed: '+(cfg.projectUser||'—')+' '+(cfg.projectDate||'')+' · Checked: —',foot:(cfg.projectName||'Untitled')+' (Bridge Rating & MCT)'},
     sections:secs};
@@ -20927,7 +20927,7 @@ function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
     desc: cfg.projectName||cfg.projectBridgeId||'', by: cfg.projectUser||'', date: cfg.projectDate||'', chk: '', chkDate: '' };
   return idxCalcSheet(html, {
     title: 'Bridge Rating & MCT Report', project: cfg.projectName||cfg.projectBridgeId||'(unnamed project)',
-    codes: 'MIDAS Civil MCT model · AASHTO MBE '+((ratingMethod||'LRFR')==='LFR'?'Section 6B (LFR)':'Section 6A (LRFR)')+' · AASHTO LRFD',
+    codes: 'MIDAS Civil MCT model · AASHTO MBE 4th Ed. (2026) '+((ratingMethod||'LRFR')==='LFR'?'Section 6B (LFR)':'Section 6A (LRFR)')+' · AASHTO LRFD',
     tb, info: projMeta, desc: cfg.projectDesc||'', tool: 'MIDAS Civil MCT Generator',
     gov: (hasRating&&govRating)
       ? `Governing rating factor (${rateLbl}): RF = ${govRating.rfGov.toFixed(3)} → ${govRating.rfTons.toFixed(1)} tons (${ratingVehicleName||'rated vehicle'}) at node ${govRating.node}, x = ${govRating.pos.toFixed(2)} ft — ${govRating.rfGov>=1?'PASS':'FAIL'}`
