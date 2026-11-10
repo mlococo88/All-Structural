@@ -5819,7 +5819,7 @@ function levelingNutCheck(cc){
         "\\ell_b = z + n\\,d_0 = "+fmt(z,3)+" + "+fmt(n,2)+"\\times"+fmt(d0,3)+" = "+fmt(Lb,3)+"\\ \\text{in}"],
        vars:[["e_b",fmt(ebClear,3)+" in","clear gap, concrete surface to plate underside ("+(so.groutFilled?"grout-filled":"air")+")"],
              ["t_p/2",fmt((S.plate.t||0)/2,3)+" in","half the plate thickness — PROFIS measures z to plate mid-thickness"],
-             ["n",fmt(n,2),"restraint level of the anchor plate (PROFIS default 0.5)"],
+             ["n",fmt(n,2),(S.standoff&&S.standoff.restraintOverride!=null&&S.standoff.restraintOverride!=="")? "restraint level of the anchor plate (entered)" : so.type==="clamp"? "restraint level of the anchor plate: 0 for a clamped stand-off, as PROFIS 3.1.36 (engineer decision 2026-10-16)" : "restraint level of the anchor plate (PROFIS default 0.5)"],
              ["\\ell_b",fmt(Lb,3)+" in","internal lever arm, adjusted for surface spalling"]]},
 
       {title:"Step 6 — Design shear resistance from bending",ref:"lever-arm method of EN 1992-4 / ETAG 001 Annex C as used by Hilti PROFIS (not an ACI 318 equation); φ = 0.65 per ACI 318-19 Table 17.5.3 (steel, shear)",   /* BPL5 */
