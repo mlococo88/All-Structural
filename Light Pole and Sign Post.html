@@ -1556,7 +1556,7 @@ function cableComponents(c,inp){
   const qBase=0.00256*KzC*inp.Kzt*inp.Kd*inp.cfCable;   // shared, no G, no V
   const Gc=(inp.Gcable!==undefined)?inp.Gcable:inp.G;   // LPGC: the cables' G (G_f at h = H when p > 0 on a flexible pole)
   const qW = qBase*Gc*inp.V*inp.V;           // regular wind WITH gust G
-  const qWI= qBase*Gc*inp.Vice*inp.Vice;     // wind-on-ice, WITH gust G (ASCE 7-22 §10.5 → Ch. 26–29, verify)
+  const qWI= qBase*Gc*inp.Vice*inp.Vice;     // wind-on-ice, WITH gust G (ASCE 7-16 §10.5 → Ch. 26–31; G per §26.11)
   const D_v  = c.g;                    // dead vertical (lb/ft)
   const Di_v = wIce;                   // ice vertical (lb/ft)
   const W_h  = qW*(c.D/12);            // wind on bare, horizontal (lb/ft)
@@ -1719,7 +1719,7 @@ function poleWindNominal(inp){
   // Mast wind is integrated over the height in NSTRIP strips (ASCE 7-16 §29.4.1 applied to each
   // strip: q_z at the strip centroid, local width). A single resultant at q_z(H/2) acting at H/2
   // under-estimated the base moment of a prismatic mast (power-law profile) and ignored the taper.
-  // Wind-on-ice uses the iced width D + 2t and the gust factor G (ASCE 7-22 §10.5 → Ch. 26–29, verify).
+  // Wind-on-ice uses the iced width D + 2t and the gust factor G (ASCE 7-16 §10.5 → Ch. 26–31; G per §26.11).
   const NSTRIP=100, dzs=inp.H/NSTRIP, strips=[];
   let Fpole=0, Mpole=0, FpoleI=0, MpoleI=0;
   const rectDir=inp.poleShape==='rect' && inp.mode!=='sign' && inp.poleDepthTop>0;   // LPH2
@@ -1906,8 +1906,8 @@ function signWind(inp){
     caseC={bands, F:Ftot, e:eC, factor:cc.factor, xR};
   }
   // ---- atmospheric ice on the sign (added 2026-11-01, engineer decision; ASCE 7-22 Ch. 10) ----
-  // Panel: flat vertical plate. Ice volume per §10.4.1 (flat plates): the area of one side × t_d × 0.8 for a vertical plate
-  // (as read; verify), t_d at the panel centroid height (§10.4.6). Wind on ice (§10.5): the projected panel grows by t_d on every
+  // Panel: flat vertical plate. Ice volume per ASCE 7-16 §10.4.1 (flat plates, Eq. 10.4-2): the area of one side × t_d × 0.8 for a
+  // vertical plate (taken without the factor π printed in Eq. 10.4-2), t_d at the panel centroid height (§10.4.6). Wind on ice (§10.5): the projected panel grows by t_d on every
   // edge, (B + 2t_d)(s + 2t_d), same C_f, at V_ice with the sign K_d and G; Cases B and C keep their eccentricity, scaled by the
   // same factor. Posts: radial ice t_d (§10.4.1, cylinder) on the whole post (weight) and the iced width D + 2t_d for the exposed
   // drag at V_ice.
@@ -1939,7 +1939,7 @@ function signWind(inp){
 function fixtureComponents(x,inp){
   const Kzf=Kz(lppZg(inp,x.hf),inp.expo);   // LPPJ: mount height above the pole base + p
   const qz  = 0.00256*Kzf*inp.Kzt*inp.Kd*inp.G*inp.V*inp.V;      // regular wind, WITH gust
-  const qzi = 0.00256*Kzf*inp.Kzt*inp.Kd*inp.G*inp.Vice*inp.Vice; // wind-on-ice, WITH gust G (ASCE 7-22 §10.5, verify)
+  const qzi = 0.00256*Kzf*inp.Kzt*inp.Kd*inp.G*inp.Vice*inp.Vice; // wind-on-ice, WITH gust G (ASCE 7-16 §10.5 → Ch. 26–31)
   const Fw  = qz*x.epa*inp.cfLum;                                 // lb, bare fixture
   // iced fixture presents a slightly larger area: grow EPA by a perimeter-based ice band.
   // Approximate the fixture as a square face of side √EPA; radial ice t adds 2t to each side.
@@ -2930,7 +2930,7 @@ manPart("p4a","4A. Wind &amp; Load Path",[
 {ul:[
  "<b>Pole and cable primary wind:</b> q<sub>z</sub> is computed without G, and G appears once in the force equation F = q<sub>z</sub>\u00b7G\u00b7C<sub>f</sub>\u00b7A.",
  "<b>Sign panel:</b> q<sub>h</sub> includes G, and the force is F = q<sub>h</sub>\u00b7C<sub>f</sub>\u00b7A<sub>s</sub>. Same single application, different grouping.",
- "<b>Wind-on-ice:</b> uses the lower concurrent ice-wind speed V<sub>ice</sub> on the iced projected area, with the same single gust factor G as the primary wind (ASCE 7-22 §10.5 refers the wind load to Chapters 26–29, verify). Before 2026-10-12 this tool omitted G here, which over-estimated wind-on-ice by 1/G."
+ "<b>Wind-on-ice:</b> uses the lower concurrent ice-wind speed V<sub>ice</sub> on the iced projected area, with the same single gust factor G as the primary wind (ASCE 7-16 §10.5 refers the wind load on ice-covered structures to Chapters 26 through 31; G per §26.11). Before 2026-10-12 this tool omitted G here, which over-estimated wind-on-ice by 1/G."
 ]},
 
 {h:"4A.3 Cable mechanics"},
@@ -5913,7 +5913,7 @@ function cableWorkedHTML(comps,inp){
   H+=`<div class="subhead">Cable wind pressures (computed, per cable)</div>`;
   H+=eqB(
     'Wind pressure on the cables, q_W and q_Wi',
-    ['Each cable sees wind pressure computed from the same velocity-pressure form as the pole, evaluated at that cable\'s attachment height h_c.',[['Two conditions','apply from different ASCE 7 maps:',['the primary wind (bare cable), which carries the gust factor G;','the concurrent wind-on-ice, which uses the lower ice-wind speed V_ice and the same gust factor G (ASCE 7-22 §10.5 → Ch. 26–29, verify).']],['C_f','is the cable drag coefficient.']]],   // LPNL
+    ['Each cable sees wind pressure computed from the same velocity-pressure form as the pole, evaluated at that cable\'s attachment height h_c.',[['Two conditions','apply from different ASCE 7 maps:',['the primary wind (bare cable), which carries the gust factor G;','the concurrent wind-on-ice, which uses the lower ice-wind speed V_ice and the same gust factor G (ASCE 7-16 §10.5 → Ch. 26–31; G per §26.11).']],['C_f','is the cable drag coefficient.']]],   // LPNL
     `q_W=0.00256\\,K_z(h_c)K_{zt}K_d\\,G\\,C_{f}\\,V^2\\qquad q_{Wi}=0.00256\\,K_z(h_c)K_{zt}K_d\\,G\\,C_{f}\\,V_{ice}^2`,
     ['Evaluated per cable below.',[['Height:','higher attachment heights give slightly larger K_z and thus pressure.'],inp.Gcable!==undefined?['Cables:',`G = ${n(inp.Gcable,3)}, the flexible G_f with h = H = ${n(inp.H,2)} ft (engineer, 2026-11-03), not the G = ${n(inp.G,3)} (h = H + p) of the pole and fixtures.`]:null]],   // LPNL
     'ASCE 7 Ch. 26 &amp; 10');
@@ -6085,8 +6085,8 @@ function signWindWorkedHTML(sw, inp){
   H+=`<p class="eq-result"><b>${nPost===1?'Torsion':'Limitation — torsion'}:</b> ${nPost===1?'the eccentric Cases B/C twist the monopost (T = F·e); the post, anchor bolts and shaft threshold are checked for it, the soil torsional resistance is not.':'eccentric Cases B/C are applied as an unequal two-post force split, and no member is checked for torsion; if true torsional resistance is required, a separate analysis is needed.'} All applicable cases are enveloped per post in the load-combination matrix below.</p>`;
   H+=cfPoleWorkedHTML(inp);   // post drag C_f (used for the exposed post below the panel)
   if(sw.F_Ai!==undefined){
-    H+=step(`Ice on the sign ${ref('ASCE 7-22 §10.4.1, §10.4.6, §10.5')}`);
-    H+=`<div class="eq-why lpNL">${lpNL('Ice on the sign:',[['Design ice thickness',`at the panel centroid (z = ${fmt(sw.zc,2)} ft) and at the post mid-height;`],['Panel ice volume','per §10.4.1 for a flat plate (one side × t<sub>d</sub> × 0.8 for a vertical plate, as read — verify);'],['Wind','on the iced panel on (B + 2t<sub>d</sub>)(s + 2t<sub>d</sub>) with the same C<sub>f</sub> at V<sub>ice</sub>;'],['Cases B/C','scaled by the same factor;'],['Posts:','radial ice on the whole post and the iced width for the exposed drag.']])}</div>`;   // LPNL
+    H+=step(`Ice on the sign ${ref('ASCE 7-16 §10.4.1, §10.4.6, §10.5')}`);
+    H+=`<div class="eq-why lpNL">${lpNL('Ice on the sign:',[['Design ice thickness',`at the panel centroid (z = ${fmt(sw.zc,2)} ft) and at the post mid-height;`],['Panel ice volume','per ASCE 7-16 §10.4.1 for a flat plate (Eq. 10.4-2, A<sub>s</sub> = area of one side, × 0.8 permitted for a vertical plate); the tool takes V<sub>i</sub> = 0.8A<sub>s</sub>t<sub>d</sub>, without the factor π printed in Eq. 10.4-2;'],['Wind','on the iced panel on (B + 2t<sub>d</sub>)(s + 2t<sub>d</sub>) with the same C<sub>f</sub> at V<sub>ice</sub>;'],['Cases B/C','scaled by the same factor;'],['Posts:','radial ice on the whole post and the iced width for the exposed drag.']])}</div>`;   // LPNL
     H+=g(`t_d = ${fmt(sw.tdP,3)}\\ \\text{in}\\qquad W_{i,panel} = \\gamma_{ice}(0.8)A_s\\,t_d = ${fmt(inp.iceDen,0)}(0.8)(${fmt(sw.As,1)})\\left(\\tfrac{${fmt(sw.tdP,3)}}{12}\\right) = ${fmt(sw.WiPanel,1)}\\ \\text{lb}`);
     H+=g(`q_{hi}K_dG = 0.00256(${fmt(sw.Kzh,3)})(${fmt(inp.Kzt,2)})(1.00)(${fmt(inp.Vice,0)})^2(${fmt(inp.KdSign,2)})(${fmt(inp.G,2)}) = ${fmt(sw.qhI,2)}\\ \\text{psf}\\qquad A_{s,i} = (B+2t_d)(s+2t_d) = ${fmt(sw.AsI,2)}\\ \\text{ft}^2`);
     H+=g(`F_{A,i} = q_{hi}K_dG\\,C_f\\,A_{s,i} = ${fmt(sw.qhI,2)}(${fmt(sw.cfAB,3)})(${fmt(sw.AsI,2)}) = ${fmt(sw.F_Ai,0)}\\ \\text{lb}${sw.caseC?`\\qquad F_{C,i} = ${fmt(sw.caseC.FI,0)}\\ \\text{lb}`:''}`);
