@@ -1838,6 +1838,9 @@ const rwHt  = r => r && r.h_p > 0 ? 'H_{ret}' : 'H';        // KaTeX
 const rwHu  = r => r && r.h_p > 0 ? 'H_ret' : 'H';          // plain text
 const rwHst = r => r && r.h_p > 0 ? 'H_{s,ret}' : 'H_s';
 const rwHsu = r => r && r.h_p > 0 ? 'H_s,ret' : 'H_s';
+/* ASM (2026-11-10): the ACI base-friction basis as chosen (Design options, Base Friction Method; default tan(⅔φ), F19) */
+function rwMuBasis() { const e = document.getElementById('mu_method'), v = e ? e.value : 'twothirds';
+  return v === 'phi' ? 'tan φ (soil on soil)' : v === 'custom' ? 'custom value' : 'tan(⅔φ) (concrete on soil)'; }
 function rwHpEq(r, stem) {   // '' at h_p = 0
   if (!(r && r.h_p > 0)) return '';
   const N = (v, d) => (isFinite(v) ? (+v).toFixed(d) : '—');
@@ -1845,12 +1848,12 @@ function rwHpEq(r, stem) {   // '' at h_p = 0
     ? eq('Retained height on the stem (the stem projects h<sub>p</sub> above the retained grade)',
         `H_{s,ret} = H_s - h_p = ${N(r.inp.Hs,2)} - ${N(r.h_p,2)} = \\boxed{${N(r.Hs_ret,2)}\\ \\text{ft}}`, '',
         [{sym:'H_s', desc:'stem height (footing top to stem top)', val:N(r.inp.Hs,2), unit:'ft'},
-         {sym:'h_p', desc:'stem projection above the retained grade (input)', val:N(r.h_p,2), unit:'ft'},
+         {sym:'h_p', desc:'stem projection above the retained grade (input' + (r.inp && r.inp.vh_enable ? '; the same h_p along the whole variable-height wall' : '') + ')', val:N(r.h_p,2), unit:'ft'},   // ASM (2026-11-10): RWHP decision 5
          {sym:'H_{s,ret}', desc:'retained height on the stem: earth, water and surcharge act below the grade only', val:N(r.Hs_ret,2), unit:'ft'}])
     : eq('Retained height (the stem projects h<sub>p</sub> above the retained grade)',
         `H_{ret} = H - h_p = (H_s + t_f) - h_p = ${N(r.H,3)} - ${N(r.h_p,2)} = \\boxed{${N(r.H_ret,3)}\\ \\text{ft}}`, '',
         [{sym:'H', desc:'total wall height H_s + t_f (stem top to footing bottom)', val:N(r.H,3), unit:'ft'},
-         {sym:'h_p', desc:'stem projection above the retained grade (input)', val:N(r.h_p,2), unit:'ft'},
+         {sym:'h_p', desc:'stem projection above the retained grade (input' + (r.inp && r.inp.vh_enable ? '; the same h_p along the whole variable-height wall' : '') + ')', val:N(r.h_p,2), unit:'ft'},   // ASM
          {sym:'H_{ret}', desc:'retained height, backfill surface at the stem to footing bottom: earth, water and surcharge act on it; the stem self weight is on the full H_s', val:N(r.H_ret,3), unit:'ft'}]);
 }
 // RWHP: the results seen from the retained grade, for drawing the retained side: H → H_ret, wt_d → wt_r (wt_d_top keeps the depth from the
@@ -2356,7 +2359,7 @@ function calcAll(inp) {
     Pe_inc = Math.max(0, Pae - Pa_MO);
     // Acts at 0.6H′ from base (Seed & Whitman / ASCE 7 commentary)
     Mo_seis = Pe_inc * (0.6 * Hq);
-    if (inp.basis !== 'AASHTO') warnings.push(`Seismic: ΔPe = ${f(Pe_inc/1000,3)} k/ft acting at 0.6H${Hq > H_ret + 1e-9 ? '′' : (h_p > 0 ? '_ret' : '')} = ${f(0.6*Hq,2)} ft. Add to O.T. check. Verify with geotechnical engineer.`);   // RWE1: ACI branch only (AASHTO: Extreme Event I)
+    if (inp.basis !== 'AASHTO') warnings.push(`Seismic: ΔPe = ${f(Pe_inc/1000,3)} k/ft acting at 0.6H${Hq > H_ret + 1e-9 ? '′' : (h_p > 0 ? '_ret' : '')} = ${f(0.6*Hq,2)} ft; ${inp.fnd && inp.fnd.type === 'pile' ? 'in the pile combinations at 0.7ΔP_E (Piles tab, Pile Step 2)' : 'in the overturning and sliding checks at 0.7ΔP_E (FS ≥ 1.1, Stability Steps 4 and 5) and in bearing and eccentricity at 1.0ΔP_E (Step 6)'}. Verify with geotechnical engineer.`);   // ASM (2026-11-10): was "Add to O.T. check." (the checks include it, RWIB / RW2H1)   // RWE1: ACI branch only (AASHTO: Extreme Event I)
   }
 
   // ── Column / beam loads (per linear foot of wall) ─────────────
@@ -4956,8 +4959,9 @@ function renderStabilityAASHTO(r) {
 
   let h = `<div class="sec-heading">Stability \u2014 AASHTO LRFD 10th Ed. \u00b7 Limit-State Design</div>`;
   h += `<div class="alert info" style="margin-bottom:16px;">${rwNL('<strong>Design basis: AASHTO LRFD Bridge Design Specifications, 10th Edition (2024).</strong>', [   // RWNL (2026-11-08)
-    ['Earth pressure:', `${methodName}, ${condName}.`], ['Load modifier', `η = ${F(a.eta,2)}.`],
-    ['Load &amp; resistance factors', 'per Tables 3.4.1-1/-2.'], ['Eccentricity limit', `e ≤ ${a.e_limit_label} (user-selected).`]])}</div>`;
+    ['Earth pressure:', `${methodName}, ${condName}.`], ['Load modifier', `η = ${F(a.eta,2)} on the Strength I / Ia load effects (Art. 1.3.2.1): η on the loads at their maximum factors, 1/η on those at their minimum factors; the water uplift takes η where it reduces the resistance and 1/η where it relieves the bearing; η = 1.0 in Extreme Event I and II.`],   // ASM (2026-11-10): basis stated (RW2H4)
+    ['Load &amp; resistance factors', 'per Tables 3.4.1-1/-2.'], ['Eccentricity limit', `e ≤ ${a.e_limit_label} (user-selected).`],
+    ['Overall stability', '(global, deep-seated) is not computed by this tool, static or seismic (Art. 11.6.3.7): by the geotechnical engineer.']])}</div>`;   // ASM: RWE1
 
   // ── LOAD COMBINATION SUMMARY ──
   {
@@ -5231,7 +5235,9 @@ function renderStabilityAASHTO(r) {
     });
     h += `<div class="alert info" style="margin-top:6px;">${rwNL('ℹ Extreme Event I assumptions:', [['Vertical components', 'of P_AE and P_A are neglected (conservative).'],   // RWNL (2026-11-08)
       ['Unit weight:', 'the seismic earth force uses the moist unit weight γ_s (water, if any, is added as hydrostatic at γ = 1.0).'],
-      ['Column:', 'the column, if any, is in the bearing check only (DL + γ_EQ·LL).'], ['Not designed:', 'the stem and footing are not designed for this case.']])}</div>`;
+      ['Column:', 'the column, if any, is in the bearing check only (DL + γ_EQ·LL).'],
+      ['Load modifier:', 'η = 1.0 (the η input applies to the Strength limit states).'], ['Overall stability:', 'not computed (Art. 11.6.3.7), as for the static case.'],
+      ['Stem and footing:', r.eeFtg ? 'the stem is designed for this case (Stem design tab); the heel and toe are checked for it with the Strength I bars (Footing design tab).' : 'the stem is designed for this case (Stem design tab); on piles the heel and toe are not checked for it (see the warning).']])}</div>`;   // ASM (2026-11-10): was "Not designed: the stem and footing are not designed for this case." (stale since RWSQ / RW2M1)
     h += `</div></div>`;
   }
 
@@ -5259,7 +5265,7 @@ function renderStabilityAASHTO(r) {
       h += `<div class="alert info" style="margin:4px 0 8px;">\u2139 MassDOT \u00a73.3.2.4: the collision "shall be assumed to engage the entire section of wall" \u2014 a section is the length between expansion joints. No 45\u00b0 spread is taken.</div>`;
     h += eq('Lever arm and overturning moment about the toe',
       `y_{CT} = H + h_{CT} = ${F(r.H,2)} + ${F(A.ct_h_app/12,2)} = \\boxed{${F(c.y_CT,2)}\\ \\text{ft}} \\;\\Rightarrow\\; M_{CT} = CT\\cdot y_{CT} = \\boxed{${F(c.M_CT/1000,2)}\\ \\text{kip\u00b7ft/ft}}`,'',
-      [{sym:'H', desc:'top of stem above base of footing = ROADWAY level' + (r.h_p > 0 ? ' (with the stem projecting h_p = ' + F(r.h_p,2) + ' ft above the retained grade, the collision is still applied from the stem top: Decision, pending engineer review)' : ''), val:F(r.H,2), unit:'ft'},   // RWHP
+      [{sym:'H', desc:'top of stem above base of footing = ROADWAY level' + (r.h_p > 0 ? ' (with the stem projecting h_p = ' + F(r.h_p,2) + ' ft above the retained grade, the collision is still applied from the stem top: conservative)' : ''), val:F(r.H,2), unit:'ft'},   // RWHP
        {sym:'h_{CT}', desc:'height of application above roadway (Table 3.3.2-1)', val:F(A.ct_h_app/12,2), unit:'ft'},
        {sym:'y_{CT}', desc:'lever arm above base of footing', val:F(c.y_CT,2), unit:'ft'},
        {sym:'M_{CT}', desc:'collision overturning moment', val:F(c.M_CT/1000,2), unit:'kip·ft/ft'}]);
@@ -5439,6 +5445,10 @@ function renderStabilityAASHTO(r) {
         [{sym:'w', desc:'service downward load on the heel: soil + footing + LS + q_s', val:F(S.w_dn,1), unit:'psf'},
          {sym:'M_{up}', desc: S.pile ? 'pile-row reactions (and, heel, the water uplift) about the face' : 'upward base pressure about the face (\u222bq(x)\u00b7a dx)', val:F(S.Mup_heel,0) + ' / ' + F(S.Mup_toe,0), unit:'lb·ft/ft'}]);
     }
+    h += `<div class="note">${rwNL('Crack control basis:', [   // ASM (2026-11-10): F20 / N4, RW2M2, RW2L4 (the Report's Step 9 states the same)
+      ['E<sub>c</sub>:', 'Eq. 5.4.2.4-1 with K<sub>1</sub> = 1.0 and w<sub>c</sub> = the concrete unit weight input γ<sub>c</sub>.'],
+      ['Reversed moment:', 'where M<sub>s,heel</sub> or M<sub>s,toe</sub> is ≤ 0 the bars F1 / F2 are not in tension and M<sub>s</sub> = 0 is used.'],
+      ['Not checked:', 'S4 (front-face T&amp;S bars: no Service I flexural tension), K1 (the passive load on the key is a resistance, not a service load) and the bottom face of the heel.']])}</div>`;
     h += rwWorkedIn(r, [['stemFlex','S1 (s, A<sub>s</sub>, M<sub>u</sub>)'], ['heelFlex','F1'], ['toeFlex','F2']]);
     h += `</div></div>`;
   }
@@ -5576,8 +5586,10 @@ function renderPiles(r) {
     + rwptGroupSteps(r)
     + `<div class="note">${rwNL(A ? 'AASHTO LRFD 10th Ed.: factored loads per limit state.' : 'ACI 318-19 / IBC 2018: service (ASD) loads, ASCE 7-16 §2.4.1:', [   // RWNL (2026-11-08)
         ...(A ? [['Resistances:', 'φ<sub>c</sub>R<sub>n</sub>, φ<sub>up</sub>R<sub>n,up</sub> (Art. 10.5.5.2.3), H<sub>r</sub> as entered;'], ['Extreme Event:', 'φ = 1.0, uplift 0.80 (Art. 10.5.5.3.3).']]
-            : [['Against', 'the allowable capacities (IBC 2018 §1810.3.3.1, §1810.3.3.2).'], ['Soil under the cap:', 'carries no vertical load (§1810.3.11).']]),
-        ['Horizontal load:', 'each pile takes H/N of the horizontal load.'], P.passive ? ['Passive', 'in front of the toe credited: ' + F(P.Hpass, 3) + ' kip/ft.'] : 'No passive or base friction credited.'])}</div></div></div>`;
+            : [['Against', 'the allowable capacities (IBC 2018 §1810.3.3.1, §1810.3.3.2).'], ['Soil under the cap:', 'carries no vertical load (§1810.3.11).'],
+               ['Minimum vertical:', '0.6D + H takes 0.6 on the dead loads and on the vertical earth thrust and 1.0 on the water uplift; the surcharge and the column live / snow loads are left out.'],   // ASM (2026-11-10): RWPL 8c
+               ['With E:', 'D + H + L + 0.7E (it covers ASCE 7-16 §2.4.1 combinations 5 and 6b) and 0.6D + 0.7E + H.']]),
+        ['Horizontal load:', 'each pile takes H/N of the horizontal load.'], P.passive ? ['Passive', 'in front of the toe credited: ' + F(P.Hpass, 3) + ' kip/ft (the toe passive only, not the shear key\'s; it reduces H, not the moment).'] : 'No passive or base friction credited.'])}</div></div></div>`;
   const cr = rwptCombRows(r);   // RWPT2: every combination, P per row, P_max / P_min, h, D/C; governing rows highlighted
   const gc = P.govC, x0 = gc.L.rows[gc.L.iMax];
   h += `<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Pile Step 2 — Pile Reactions and Checks</span><span class="card-ref">${A ? 'AASHTO LRFD 10th Ed. Sec. 10.7' : 'IBC 2018 §1810; ASCE 7-16 §2.4.1'}</span></div><div class="card-body">
@@ -5590,7 +5602,7 @@ function renderPiles(r) {
         ['Needed:', `the uplift needs a designed pile-to-cap tension connection: embedded bars, strands or dowels developed into the cap and the pile's own tension capacity (${r.checks.pileCapT.ref}).`]],
         { act: ['Design it outside this tool (Pile Designer) and keep the record with the calculation.'] })}</div>` : '')   // RW2M3
     + eqCheck('2.4 Lateral', `h = \\frac{H}{N} = \\frac{${F(P.govH.H, 3)}}{${F(g.N, 4)}} = ${F(P.govH.L.rows[0].h, 2)} \\le ${P.govH.cap.hs} = ${F(P.govH.cap.h, 2)}\\ \\text{kip}`, r.checks.pileLat.ok, r.checks.pileLat.ref)
-    + `<div class="note">Detailing: c-c spacing ${F(P.det.cc, 1)} in${P.det.ccMin ? ' (min. ' + F(P.det.ccMin, 1) + ' in)' : ''}; pile side to footing edge ${F(P.det.edge, 1)} in (min. ${F(P.det.edgeMin, 0)} in); embedment ${F(P.det.embed, 1)} in (min. ${F(P.det.embMin, 0)} in) — ${P.det.ref}.</div></div></div>`;
+    + `<div class="note">Detailing: c-c spacing ${F(P.det.cc, 1)} in (the smaller of the spacing along the wall and the row-to-row distance; adjacent rows taken as in line)${P.det.ccMin ? ' (min. ' + F(P.det.ccMin, 1) + ' in)' : ''}; pile side to footing edge ${F(P.det.edge, 1)} in (min. ${F(P.det.edgeMin, 0)} in); embedment ${F(P.det.embed, 1)} in (min. ${F(P.det.embMin, 0)} in) — ${P.det.ref}.</div></div></div>`;
   // ── Pile Step 3: every pile check ──
   const CK = [['pileComp', 'stabPile'], ['pileUplift', 'stabPile'], ['pileCapT', 'stabPile'], ['pileLat', 'stabPile'], ['pileSpacing', 'stabPile'], ['pileEdge', 'stabPile'], ['pileEmbed', 'stabPile'], ['pileCapD', 'ftgPunch'], ['pilePunch', 'ftgPunch']];
   const ckr = CK.filter(([k]) => r.checks[k]).map(([k]) => { const c = r.checks[k], ck = RW_CHECK_CARD[k] || 'stabPile';
@@ -5886,7 +5898,7 @@ function renderStabilitySoil(r) {
     ['Dead column load', 'stays in.']])}</div>`;   // RWNL (2026-11-08)
   h += eq('Friction resistance at base',
     `F_{fr} = \\mu\\,\\Sigma V_{fr} = (${F(inp.mu,4)})(${F(r.SumV_slide,1)}) = ${F(inp.mu*r.SumV_slide,1)}\\ \\text{lb/ft}`,'',
-    [{sym:'\\mu', desc:'base friction coefficient', val:F(inp.mu,4), unit:''}]);
+    [{sym:'\\mu', desc:'base friction coefficient — basis: ' + rwMuBasis(), val:F(inp.mu,4), unit:''}]);   // ASM (2026-11-10): F19
   h += eq('Total sliding resistance (friction + passive)',
     `F_r = \\mu\\,\\Sigma V_{fr} + P_p = ${F(inp.mu*r.SumV_slide,1)} + ${F(r.Pp,1)} = \\boxed{${F(r.Fr,1)}\\ \\text{lb/ft}}`,'',
     [{sym:'P_p', desc:inp.inclPassive?'passive resistance (included)':'passive (neglected — toggle off)', val:F(r.Pp,1), unit:'lb/ft'},
@@ -6040,7 +6052,7 @@ function renderStabilitySoil(r) {
       [{sym:'P_{a,MO}', desc:'static active force, the same M-O expression at \u03b8 = 0: \u00bdK_A,MO\u03b3_s' + (r.Hp > r.H_ret + 1e-9 ? 'H\u2032\u00b2' : rwHu(r) + '\u00b2'), val:F(r.Pa_MO,1), unit:'lb/ft'},   // RW2H2
        {sym:'\\Delta P_E', desc:'seismic force increment', val:F(r.Pe_inc,1), unit:'lb/ft'}]);
     h += `<div class="alert warn">${rwNL('⚠ Simplified M-O per Seed &amp; Whitman (1970).', [['Verify', 'with the project geotechnical engineer; sites with liquefaction potential require site-specific study (IBC §1803.5.12).'],   // RWNL (2026-11-08)
-      ['Seismic FOS:', 'acceptance criteria may be reduced to 1.1 per local practice — confirm with AHJ.']])}</div>`;
+      ['Seismic FOS:', 'with 0.7ΔP_E the overturning and sliding checks (Steps 4 and 5) use FS ≥ 1.1 (IBC 2018 §1807.2.3 Exception); without E, FS ≥ 1.5.']])}</div>`;   // ASM (2026-11-10): was "acceptance criteria may be reduced to 1.1 per local practice — confirm with AHJ." (the tool applies 1.1 with 0.7E, RWIB)
     h += `</div></div>`;
   }
 
@@ -6487,6 +6499,7 @@ function renderStem(r) {
        {sym:'\\mu', desc:'0.6\u03bb: concrete placed against hardened concrete not intentionally roughened (Table 22.9.4.2(c); conservative)', val:F(J.mu,2), unit:''},
        {sym:'A_c', desc:'joint area t_bot \u00d7 12', val:F(J.Ac,0), unit:'in²/ft'},
        {sym:'A_{vf,req}', desc:'V_u/(\u03c6\u03bcf_y)', val:F(J.Avf_req,3), unit:'in²/ft'}]);
+    h += `<div class="alert info" style="margin:4px 0 8px;">ℹ Shear friction basis: μ = 0.6 for a joint not intentionally roughened; the permanent compression across the joint (ACI 318-19 §22.9.4.5) is not added (conservative).</div>`;   // ASM (2026-11-10): RW2L8
   }
   h += `</div></div>`;
 
@@ -6593,7 +6606,9 @@ function renderStem(r) {
     <div class="card-hd"><span class="card-title">Mid Step 3 — S3–S1 Lap, End of S1 &amp; Moment along the Height</span><span class="card-ref">${r.isAASHTO?'AASHTO §5.10.8.4.3a / §5.10.8.1.2a; ACI 318-19 §25.5.2.2 (adopted)':'ACI 318-19 §25.5.2 / §7.7.3.3 / §13.3.6.3'}</span></div>
     <div class="card-body">`;
   h += `<div class="alert info" style="margin-bottom:8px;">${rwNL('Layout of the back-face bars:', [['S1', `(lapped with the S1D dowels at the joint) runs from the footing to mid-height + the S3–S1 lap${r.s1_full ? ' — here that reaches the top, so S1 runs full height' : ''};`],   // RWNL (2026-11-08)
-    ['S3', `runs from mid-height (${F(r.Hs_mid,2)} ft) to the top.`], ['Lap:', 'all S3 bars lap S1 at one level, so the lap is Class B.'], 'No alternate-bar cut-off.'])}</div>`;
+    ['S3', `runs from mid-height (${F(r.Hs_mid,2)} ft) to the top.`], ['Lap:', 'all S3 bars lap S1 at one level, so the lap is Class B.'], 'No alternate-bar cut-off.',
+    ['End of S1:', 'a lap splice with S3 (the bars are continuous), not a bar cut-off: ' + (r.isAASHTO ? 'the Art. 5.10.8.1.2a limit on bars cut off at one section is' : 'ACI 318-19 §7.7.3.5 (cut-off in a tension zone) is') + ' not applied to it.'],
+    ['Top end:', 'the bars are taken as anchored at the stem top (no development length is deducted there).']])}</div>`;   // ASM (2026-11-10): RWS13
   h += eq('Lap length of each bar alone — Class B, ℓ_d before the 12-in minimum' + (r.isAASHTO ? ' (§5.10.8.2.1a)' : ' (§25.4.2.1(a))'),
     `\\ell_{st,S1} = \\max(1.3(${F(r.s13_ld_a1,2)}),\\;12) = ${F(r.s13_lst1,1)}\\ \\text{in};\\quad \\ell_{st,S3} = \\max(1.3(${F(r.s13_ld_a3,2)}),\\;12) = ${F(r.s13_lst3,1)}\\ \\text{in}`, r.isAASHTO ? '§5.10.8.4.3a' : 'Table 25.5.2.1');
   h += eqCheck(r.s13_diff ? 'S3–S1 lap, bars of different size (#' + r.sel_stem.bar.num + ' / #' + r.sel_stemT.bar.num + '): the greater of ℓ_d of the larger bar (' + r.s13_big + ') and ℓ_st of the smaller' + (r.isAASHTO ? ' — ACI 318-19 §25.5.2.2, adopted by the engineer for AASHTO mode' : '') : 'S3–S1 lap, bars of the same size: the larger ℓ_st',
@@ -6798,6 +6813,10 @@ function renderFooting(r) {
       hp.rows.map((rw, j) => ({ sym: 'q_{' + (j + 1) + '}', desc: 'pile row at x = ' + F(rw.x, 2) + ' ft from the toe', val: F(rw.q, 1), unit: 'lb/ft' })));
     if (hp.water) h += rwPileWaterEq(hp.water, 'heel', F);   // RW2H3
     h += rwWorkedIn(r, [['stabPile', 'pile reactions']]);
+    h += `<div class="alert info" style="margin:4px 0 8px;">${rwNL('ℹ Footing on piles:', [   // ASM (2026-11-10): RWPL 8d, RW2H3
+      ['Rows:', 'a pile row loads the heel when its centre is behind the back face of the stem and the toe when it is in front of the front face; a row under the stem loads neither.'],
+      ['One-way shear:', 'at the stem face, with every pile row in front of or behind the face counted in full; the partial count of piles near the critical section is not used (conservative).'],
+      hp.water ? ['Water:', `the heel takes the pile reactions of V − γ<sub>U</sub>·U with the uplift on its underside (${r.isAASHTO ? 'γ<sub>WA</sub> = 1.0, without η' : 'γ<sub>U</sub> = 0.9'}); the toe and the punching checks keep the pile reactions of the total vertical load (conservative).`] : null])}</div>`;
   } else {
   if (upHs) h += rwUpTabEq(upHs.filter(o => !/^M/.test(o.id)));
   else h += eq('Factored upward bearing (varies linearly along heel)',
@@ -6831,7 +6850,7 @@ function renderFooting(r) {
     `M_u = \\boxed{${Fk(Math.abs(r.Mu_heel_net))}\\ \\text{kip·ft/ft}} \\;(${heel_down?'\\text{TOP bars}':'\\text{BOTTOM bars}'}), \\quad V_u = \\boxed{${Fk(r.Vu_heel)}\\ \\text{kip/ft}}`,'',
     [{sym:'M_u', desc:'heel design moment at stem face', val:F(r.Mu_heel_net,1), unit:'lb·ft/ft'},
      {sym:'V_u', desc:'heel design shear at stem face', val:F(r.Vu_heel,1), unit:'lb/ft'}]);
-  h += `<div class="alert info" style="margin:4px 0 8px;">${HINTS.heel_basis[r.heelBasis] || ''}<div style="opacity:.85">Change the basis under <b>Design Options → Heel flexure/shear design basis</b>. Serviceability (crack control) always uses the unfactored no-relief moment.</div></div>`;   // RWNL: a line of its own after the hint's list (was <br><span>)
+  h += `<div class="alert info" style="margin:4px 0 8px;">${HINTS.heel_basis[r.heelBasis] || ''}<div style="opacity:.85">Change the basis under <b>Design Options → Heel flexure/shear design basis</b>. ${r.isAASHTO ? 'Crack control does not depend on this basis: it uses the Service I heel moment from the Service I base reaction (Stability tab, Step 9).' : 'Crack control does not depend on this basis: ACI 318-19 §24.3.2 with f<sub>s</sub> = ⅔f<sub>y</sub> (Report, Crack-control bar spacing).'}</div></div>`;   // ASM (2026-11-10): was "Serviceability (crack control) always uses the unfactored no-relief moment." (not what the code does since RW2M2; ACI uses f_s = ⅔f_y)   // RWNL: a line of its own after the hint's list (was <br><span>)
   if (r.useMassDOTFtg) {
     // RWMW (2026-11-07, display only): w_DL as computed: the soil column w_soil_col (γ_sat below the water table) + γ_c·t_f; + the slope wedge
     const hSat = r.hasWT ? Math.max(0, r.Hs_ret - r.wt_r) : 0, wDL = r.w_soil_col + inp.gamma_c*r.tf_ft, mW = r.M_wedge_heel > 0;
@@ -7048,7 +7067,9 @@ function renderFooting(r) {
     h += `<div class="alert info" style="margin-bottom:8px;">${rwNL('ℹ How the extreme-event cases load the footing:', [   // RWNL (2026-11-08)
       ['Base reaction:', 'each extreme-event case (Stability tab, Steps 7a / 7b; maximum and minimum vertical) loads the footing with its total base reaction (water uplift added back; trapezoid, or the block 3x̄ in partial contact).'],
       ['Heel down:', 'w = soil + footing + q_s + γ_LS·LS at γ = 1.0;'], ['Toe down:', 'the footing weight at γ = 1.0.'],
-      ['Capacity:', 'M_n and V_c of the Strength I design with φ = 1.0.']])}</div>`;
+      ['Capacity:', 'M_n and V_c of the Strength I design with φ = 1.0.'],
+      ['A check, not a redesign:', 'a failing extreme-event case shows FAIL; the bars are then increased with the bar override.'],
+      ['Not checked for the extreme events:', 'the shear key, the development of the bars and crack control.']])}</div>`;   // ASM (2026-11-10): RW2M1
     h += `<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Case</th><th>V<sub>tot</sub> (k/ft)</th><th>x\u0304 (ft)</th><th>q<sub>toe</sub> / q<sub>heel</sub> (ksf)</th><th>w heel (psf)</th><th>M heel = M<sub>down</sub> \u2212 M<sub>up</sub> (k-ft/ft)</th><th>V heel (k/ft)</th><th>M toe (k-ft/ft)</th><th>V toe (k/ft)</th></tr></thead><tbody>${X.cases.map(c => `<tr><td>${c.label}</td><td>${k(c.Vt)}</td><td>${F(c.xRt,3)}</td><td>${k(c.qt)} / ${k(c.qh)}</td><td>${F(c.w,0)}</td><td>${k(c.Md)} \u2212 ${k(c.Mup)} = ${k(c.Mh)}</td><td>${k(c.Vh)}</td><td>${k(c.MupT)} \u2212 ${k(inp.gamma_c*r.tf_ft*inp.Lt**2/2)} = ${k(c.Mt)}</td><td>${k(c.Vt_toe)}</td></tr>`).join('')}</tbody></table></div>`;
     h += eqCheck('Heel (F1) under the extreme events, \u03c6 = 1.0',
       `M = ${k(Math.max(0, X.gH.Mh))} \\le M_n = ${k(X.Mn_heel)};\\quad V = ${k(X.gHV.Vh)} \\le V_c = ${k(X.Vn_heel)}\\ \\text{kip, kip·ft per ft}`, r.checks.heelEE.ok, r.checks.heelEE.ref);
@@ -7068,6 +7089,11 @@ function renderFooting(r) {
       `p_{top} = K_p\\gamma_s D_f = (${F(r.Kp,3)})(${F(inp.gamma_s,0)})(${F(r.Df,3)}) = ${F(k.p_top,1)};\\quad p_{bot} = K_p\\gamma_s(D_f + d_k) = ${F(k.p_bot,1)}\\ \\text{psf}`, '',
       [{sym:'P_k', desc:'passive force on the key = (p_top + p_bot)/2 · d_k (= P_p,key)', val:F(k.P_k,1), unit:'lb/ft'},
        {sym:'M_k', desc:'moment at the footing underside = p_top d_k²/2 + (p_bot − p_top) d_k²/6', val:F(k.M_k,1), unit:'lb·ft/ft'}]);
+    h += `<div class="alert info" style="margin:4px 0 8px;">${rwNL('ℹ Shear key basis:', [   // ASM (2026-11-10): RWSK
+      ['Pressure:', 'passive pressure on the key depth with the moist unit weight γ<sub>s</sub>; no water pressure on the key face (as for P<sub>p</sub>).'],
+      ['Designed', 'whether or not the passive resistance is counted for sliding.'],
+      r.isAASHTO ? ['AASHTO:', 'no article covers shear keys; Section 5 is used with the passive pressure as EH at γ = 1.50 (Table 3.4.1-2).'] : null,
+      ['Position:', 'centred under the stem (as drawn).']])}</div>`;
     h += eq('Factored demand (' + (r.isAASHTO ? 'EH max 1.50' : 'H 1.6') + ')',
       `V_u = ${gs}(${F(k.P_k,1)}) = \\boxed{${F(k.Vu,0)}\\ \\text{lb/ft}};\\quad M_u = ${gs}(${F(k.M_k,1)}) = \\boxed{${F(k.Mu,0)}\\ \\text{lb·ft/ft}}`, r.isAASHTO ? 'Table 3.4.1-2' : 'ACI 5.3.8');
     if (!r.isAASHTO) {
@@ -11101,7 +11127,7 @@ function rwrModel(r) {
       ['Footing thickness t_f', rwrCell(inp.tf, 1), 'in'], ['Stem thickness at base t_s,bot', rwrCell(inp.ts_bot, 1), 'in'], ['Stem thickness at top t_s,top', rwrCell(inp.ts_top, 1), 'in'],
       ['Toe length L_t', rwrCell(inp.Lt, 2), 'ft'], ['Heel length L_h', rwrCell(inp.Lh, 2), 'ft'], ['Toe soil cover above footing D_f,add', rwrCell(inp.Df_add, 2), 'ft'],
       ['Total toe embedment D_f = t_f + D_f,add', rwrCell(r.Df, 3), 'ft'], ['Footing width B', rwrCell(r.B, 3), 'ft'], ['Total wall height H = H_s + t_f', rwrCell(r.H, 3), 'ft'],
-      ...(r.h_p > 0 ? [['Stem projection above the retained grade h_p', rwrCell(r.h_p, 2), 'ft'], ['Retained height H_ret = H − h_p (on the stem H_s − h_p = ' + rwrN(r.Hs_ret, 2) + ' ft)', rwrCell(r.H_ret, 3), 'ft']] : []),   // RWHP
+      ...(r.h_p > 0 ? [['Stem projection above the retained grade h_p' + (inp.vh_enable ? ' (the same along the whole variable-height wall)' : ''), rwrCell(r.h_p, 2), 'ft'], ['Retained height H_ret = H − h_p (on the stem H_s − h_p = ' + rwrN(r.Hs_ret, 2) + ' ft)', rwrCell(r.H_ret, 3), 'ft']] : []),   // RWHP
       ...(inp.useShearKey ? [['Shear key depth d_k', rwrCell(inp.dk, 0), 'in'], ['Shear key width b_k', rwrCell(r.keyR ? r.keyR.bk : inp.key_bk, 0), 'in']] : []),   // RWSK: + b_k
       ...(r.hasBarrier ? [['Barrier height / weight W_bar', rwrN(r.bar_h_ft, 2) + ' ft / ' + rwrN(r.W_bar, 0) + ' lb/ft', '–'],
         ['Barrier weight from', inp.bar_mode === 'geom' ? 'geometry: thickness ' + rwrN(inp.bar_t, 1) + ' in × height × γ_c' : 'entered weight', '–'], ['Barrier offset from the stem-top centreline (+ toward the heel)', rwrCell(inp.bar_ecc, 1), 'in']] : [])];   // RWPR: + barrier mode / offset
@@ -11110,7 +11136,7 @@ function rwrModel(r) {
       fig ? { type: 'figure', svg: fig, caption: 'Wall section (as on the Overview tab)' } : null]));
     const soil = [['Soil unit weight γ_s', rwrCell(inp.gamma_s, 0), 'pcf'], ['Friction angle φ', rwrCell(inp.phi, 0), 'deg'], ['Cohesion c', rwrCell(inp.coh, 0), 'psf'],
       ['Backfill slope β', rwrCell(inp.beta, 0), 'deg'], ['Surcharge q_s', rwrCell(inp.q_sur, 0), 'psf'], ['Allowable bearing q_a', rwrCell(inp.qa, 0), 'psf'], ...(r.isAASHTO ? [] : [['Eccentricity limit (service)', r.aci_ecc_limit === 'b6' ? 'middle third, e ≤ B/6' : r.aci_ecc_limit === 'b4' ? 'e ≤ B/4' : 'none (e for information)', '–']]),   // RWEC
-      ['Base friction coefficient μ (ACI basis)', rwrCell(inp.mu, 4), '–'], ['Passive resistance', inp.inclPassive ? 'included' : 'neglected', '–'],
+      ['Base friction coefficient μ (ACI basis: ' + rwMuBasis() + ')', rwrCell(inp.mu, 4), '–'],   // ASM (2026-11-10): F19 ['Passive resistance', inp.inclPassive ? 'included' : 'neglected', '–'],
       ...(r.hasWT ? [['Water table depth from top d_WT', rwrCell(r.wt_d, 2), 'ft'], ['Water height at footing base h_w', rwrCell(r.hw, 3), 'ft'], ['Water unit weight γ_w', rwrCell(r.gamma_w, 1), 'pcf'],
         ['Saturated / buoyant unit weight γ_sat / γ′', rwrN(r.gamma_sat, 1) + ' / ' + rwrN(r.gamma_s_sub, 1), 'pcf'], ['Hydrostatic uplift distribution', r.upliftTri ? 'triangular' : 'uniform', '–']] : [['Water table', 'none', '–']]),
       ...(r.hasSeismic ? [['Seismic k_h / k_v', rwrN(inp.kh, 3) + ' / ' + rwrN(inp.kv, 3), '–'], ['M-O wall friction δ', rwrCell(inp.delta_mo, 0), 'deg']] : [])];
@@ -11310,7 +11336,7 @@ function rwrModel(r) {
       subs.push(sub('Step 7 — Vehicular collision load (Extreme Event II)', [rwrItem('sa7', [{ title: 'Collision', steps: [
         rwrS({ id: 'Ft', label: 'Collision force per test level ' + (TLN[c.tl] || c.tl) + ' (L_t = ' + rwrN(A.ct_wh, 1) + ' ft, h_CT = ' + rwrN(A.ct_h_app, 0) + ' in above the roadway)', sym: 'F_{t}', eq: '', sub: '', value: c.Ft, unit: 'kip', d: 0, ref: 'MassDOT LRFD Bridge Manual Table 3.3.2-1' }),
         rwrS({ id: 'CT', label: c.distMode === 'section' ? 'Distributed over the full wall section between joints' : 'Distributed over a 45° spread (capped at the joint spacing)', sym: 'CT', eq: '\\frac{F_{t}}{L_{dist}}', sub: '\\frac{' + rwrN(c.Ft, 0) + '}{' + rwrN(c.Ldist, 1) + '}', value: c.CT_h, unit: 'kip/ft', d: 3, ref: c.distMode === 'section' ? 'MassDOT LRFD Bridge Manual §3.3.2.4' : '' }),
-        rwrS({ id: 'yCT', label: 'Lever arm above the base of the footing (roadway at the top of the stem)', sym: 'y_{CT}', eq: 'H + h_{CT}', sub: rwrN(r.H, 2) + ' + ' + rwrN(A.ct_h_app / 12, 2), value: c.y_CT, unit: 'ft', d: 2 }),
+        rwrS({ id: 'yCT', label: 'Lever arm above the base of the footing (roadway at the top of the stem' + (r.h_p > 0 ? '; with the stem projecting above the retained grade the collision is still applied from the stem top: conservative' : '') + ')', sym: 'y_{CT}', eq: 'H + h_{CT}', sub: rwrN(r.H, 2) + ' + ' + rwrN(A.ct_h_app / 12, 2), value: c.y_CT, unit: 'ft', d: 2 }),
         rwrS({ id: 'MCT', label: 'Collision overturning moment about the toe', sym: 'M_{CT}', eq: 'CT\\cdot y_{CT}', sub: '(' + rwrN(c.CT_h, 3) + ')(' + rwrN(c.y_CT, 2) + ')', value: c.M_CT / 1000, unit: 'kip-ft/ft', d: 2 })] }])]));
       const sb = [rwrS({ id: 'Q', label: 'Factored driving force' + (E.ehDropped ? ' (γ_EH = 0, MassDOT §3.3.2.4: the wall pulls away from the backfill)' : ' (γ_EH = 1.0, earth pressure concurrent)'), sym: '\\sum\\gamma Q', eq: '1.0\\,CT' + (E.ehDropped ? '' : ' + 1.0\\,P_{EH}') + (!E.ehDropped && a.P_ES > 0 ? ' + 1.0\\,P_{ES}' : '') + (a.P_hyd > 0 ? ' + 1.0\\,P_{WA}' : '') + ' + ' + rwrN(E.gLS_ct, 2) + '\\,P_{LS}', sub: rwrN(c.CT_h * 1000, 0) + (E.ehDropped ? '' : ' + ' + rwrN(a.P_EH, 0)) + (!E.ehDropped && a.P_ES > 0 ? ' + ' + rwrN(a.P_ES, 0) : '') + (a.P_hyd > 0 ? ' + ' + rwrN(a.P_hyd, 0) : '') + ' + ' + rwrN(E.gLS_ct, 2) + '\\cdot' + rwrN(a.P_LS, 0), value: E.H_drive_ct, unit: 'lb/ft', d: 0 }),
         rwrS({ id: 'V', label: 'Resisting vertical load (DC + EV' + (a.V_ES_v > 0 ? ' + ES' : '') + ' at γ = 1.0' + (r.Pa_tri_v > 0 ? '; vertical earth thrust P_a,V at γ_EH,CT = ' + rwrN(E.gEH_ct, 2) : '') + (a.V_up > 0 ? ', less the uplift U at γ_WA = 1.0' : '') + ')', sym: 'V', eq: '1.0(W_{ftg} + W_{stem}' + (r.hasBarrier ? ' + W_{bar}' : '') + ') + 1.0\\,W_{soil}' + (r.Pa_tri_v > 0 ? ' + ' + rwrN(E.gEH_ct, 1) + '\\,P_{a,V}' : '') + (a.V_ES_v > 0 ? ' + 1.0\\,V_{ES}' : '') + (a.V_up > 0 ? ' \\minus 1.0\\,U' : ''), sub: '1.0(' + rwrN(r.Wftg, 0) + ' + ' + rwrN(r.Wstem, 0) + (r.hasBarrier ? ' + ' + rwrN(r.W_bar, 0) : '') + ') + 1.0(' + rwrN(r.Wsoil, 0) + ')' + (r.Pa_tri_v > 0 ? ' + ' + rwrN(E.gEH_ct, 1) + '(' + rwrN(r.Pa_tri_v, 0) + ')' : '') + (a.V_ES_v > 0 ? ' + 1.0(' + rwrN(a.V_ES_v, 0) + ')' : '') + (a.V_up > 0 ? ' \\minus 1.0(' + rwrN(a.V_up, 0) + ')' : ''), value: E.V_ct_min, unit: 'lb/ft', d: 0, note: E.ehDropped && r.Pa_tri_v > 0 ? 'P_a,V = ' + rwrN(r.Pa_tri_v, 0) + ' lb/ft is dropped with the horizontal earth thrust (one load, one factor: AASHTO Table 3.4.1-1).' : '' }),   // RWCV: values substituted
@@ -11321,7 +11347,7 @@ function rwrModel(r) {
         rwrS({ id: 'Vmax', label: 'Vertical load for bearing: V plus the live-load surcharge on the heel at γ_LS = ' + rwrN(E.gLS_ct, 2) + ' (V_LS = q_LL L_h = ' + rwrN(a.V_LS_v, 0) + ' lb/ft)', sym: 'V_{max}', eq: 'V + ' + rwrN(E.gLS_ct, 2) + '\\,V_{LS}', sub: rwrN(E.V_ct_min, 0) + ' + ' + rwrN(E.gLS_ct, 2) + '(' + rwrN(a.V_LS_v, 0) + ')', value: E.V_ct_max, unit: 'lb/ft', d: 0, ref: AA('Table 3.4.1-1') }),   // RWCT
         a.onRock ? rwrS({ id: 'qu', label: 'Bearing pressure on rock (linear distribution), e = ' + rwrN(Math.abs(E.e_brg_ct), 3) + ' ft', sym: 'q_{u}', eq: Math.abs(E.e_brg_ct) <= r.B / 6 ? '\\frac{V}{B}\\left(1 + \\frac{6e}{B}\\right)' : '\\frac{2V}{3(B/2 \\minus e)}', sub: '', value: E.q_ult_ct / 1000, unit: 'ksf', d: 2, ref: AA('Art. 10.6.5, Eq. 11.6.3.2-' + (Math.abs(E.e_brg_ct) <= r.B / 6 ? '2' : '3')) })
           : rwrS({ id: 'qu', label: "Effective width B' = B − 2|e| = " + rwrN(E.B_eff_ct, 3) + ' ft and bearing pressure (Meyerhof)', sym: 'q_{u}', eq: '\\frac{V_{max}}{B^{\\prime}}', sub: '\\frac{' + rwrN(E.V_ct_max, 0) + '}{' + rwrN(E.B_eff_ct, 3) + '}\\frac{1}{1000}', value: E.q_ult_ct / 1000, unit: 'ksf', d: 2 }),
-        rwrS({ id: 'br', label: 'Bearing under collision: q_u ≤ q_R = φ_b q_n = ' + rwrN(E.phi_b_ct, 2) + ' × ' + rwrN(E.q_R_ct / E.phi_b_ct / 1000, 2) + ' = ' + rwrN(E.q_R_ct / 1000, 2) + ' ksf (Art. 11.5.8)', sym: '\\frac{q_{u}}{q_{R}}', eq: '', sub: '\\frac{' + rwrN(E.q_ult_ct / 1000, 2) + '}{' + rwrN(E.q_R_ct / 1000, 2) + '}', value: dcv('ctBearing'), unit: '', d: 3, ok: ok('ctBearing') })];
+        rwrS({ id: 'br', label: 'Bearing under collision: q_u ≤ q_R = φ_b q_n = ' + rwrN(E.phi_b_ct, 2) + ' × ' + rwrN(E.q_R_ct / E.phi_b_ct / 1000, 2) + ' = ' + rwrN(E.q_R_ct / 1000, 2) + ' ksf (Art. 11.5.8; φ_b = min(0.80, the φ input))', sym: '\\frac{q_{u}}{q_{R}}', eq: '', sub: '\\frac{' + rwrN(E.q_ult_ct / 1000, 2) + '}{' + rwrN(E.q_R_ct / 1000, 2) + '}', value: dcv('ctBearing'), unit: '', d: 3, ok: ok('ctBearing') })];
       CK.ctSliding = 'sa7b/sl'; CK.ctEcc = 'sa7b/ec'; CK.ctBearing = 'sa7b/br';
       subs.push(sub('Step 7b — Stability under collision (Extreme Event II)', [rwrItem('sa7b', [{ title: 'Sliding', steps: sb.slice(0, 3) }, { title: 'Eccentricity', steps: sb.slice(3, 6) }, { title: 'Bearing', steps: sb.slice(6) }]), onTab('stabCT')]));
       if (c.yl) { const y = c.yl, k8 = y.isEnd ? '' : '8';
@@ -11360,8 +11386,10 @@ function rwrModel(r) {
       ['Stem', 'Heel', 'Toe'].forEach(x => { CK['crack' + x] = 'sa9/' + x.toLowerCase() + '.ok'; CK['minRf' + x] = 'sa9/' + x.toLowerCase() + '.mr'; });
       CK.crackStemT = 'sa9/stemT.ok';   // RW2L4
       subs.push(sub('Step 9 — Serviceability: crack control and minimum reinforcement', [rwrItem('sa9', T),
-        ...rwrNL('n = ' + rwrN(sv.n_modular, 0) + ' (E_c = ' + rwrN(sv.Ec / 1000, 0) + ' ksi, Eq. 5.4.2.4-1).', [['Service I stem moment:', (sv.serv_ko ? 'K_0 = ' + rwrN(sv.K_serv, 3) + ' for the earth term, K_a for the surcharge' : 'K_a') + ';'],   // RWNL
-          ['Heel:', 'full downward load, no upward relief;'], ['Toe:', '|M_u| / 1.5 (approximation of the tool).'], ['Minimum reinforcement:', 'heel and toe minimum reinforcement are status-bar checks without a card on the tab.']]), onTab('stabServ')])); }
+        ...rwrNL('n = ' + rwrN(sv.n_modular, 0) + ' (E_c = ' + rwrN(sv.Ec / 1000, 0) + ' ksi, Eq. 5.4.2.4-1, with K_1 = 1.0 and w_c = the concrete unit weight input γ_c).', [['Service I stem moment:', (sv.serv_ko ? 'K_0 = ' + rwrN(sv.K_serv, 3) + ' for the earth term, K_a for the surcharge' : 'K_a') + ';'],   // RWNL
+          ['Heel:', 'the Service I downward load less the Service I reaction about the back face (above);'], ['Toe:', 'the Service I reaction about the front face less the footing weight (above);'],   // ASM (2026-11-10): was "full downward load, no upward relief" / "|M_u| / 1.5 (approximation of the tool)" (stale since RW2M2)
+          ['Reversed moment:', 'where M_s,heel or M_s,toe is ≤ 0 the bars F1 / F2 are not in tension and M_s = 0 is used.'],
+          ['Not checked:', 'S4 (front-face T&S bars: no Service I flexural tension), K1 (the passive load on the key is a resistance, not a service load) and the bottom face of the heel.'], ['Minimum reinforcement:', 'heel and toe minimum reinforcement are status-bar checks without a card on the tab.']]), onTab('stabServ')])); }
     { const sI = [rwrS({ id: 'V', label: 'Factored vertical load on the footing underside, Strength I maximum (total: water uplift added back, it acts on the same underside)', sym: 'V_{u}', eq: '\\eta(1.25\\,DC + 1.35\\,EV + \\gamma_{EH}\\,P_{a,V} + 1.75\\,LS_{v}' + (a.V_ES_v > 0 ? ' + 1.50\\,ES_{v}' : '') + (a.eta !== 1 ? ' + V_{col})' : ') + V_{col}'), sub: '', value: a.V_str_max_tot, unit: 'lb/ft', d: 0, ref: AA('Table 3.4.1-1') })];
       const eI = a.e_tot;   // RWETOT: the Strength I footing-design eccentricity returned by calcAll (with or without water uplift)
       sI.push(...rwrTrap('', a.V_str_max_tot, eI, a.x_R_tot, a.quA_toe, a.quA_heel, a.quA_front, a.quA_back, 'V_{u}'));
@@ -11629,7 +11657,7 @@ function rwrModel(r) {
         return { title: nm, ref: 'ACI 318-19 §24.3.2', steps: [
           rwrS({ id: k + '.smax', label: nm + ': maximum bar spacing (f_s = ⅔ f_y = ' + rwrN(x.fs, 0) + ' psi, c_c = ' + rwrN(x.cc, 2) + ' in)', sym: 's_{max}', eq: '\\min\\left(15\\,\\frac{40000}{f_{s}} \\minus 2.5\\,c_{c},\\; 12\\,\\frac{40000}{f_{s}}\\right)', sub: '\\min(' + rwrN(15 * 40000 / x.fs - 2.5 * x.cc, 2) + ',\\; ' + rwrN(12 * 40000 / x.fs, 2) + ')', value: x.smax, unit: 'in', d: 2, ref: 'ACI 318-19 §24.3.2' }),
           rwrS({ id: k + '.dc', label: nm + ': s ≤ s_max', sym: '\\frac{s}{s_{max}}', eq: '', sub: '\\frac{' + rwrN(x.spacing, 2) + '}{' + rwrN(x.smax, 2) + '}', value: dcv('crack' + K), unit: '', d: 3, ok: ok('crack' + K) })] }; });
-      subs.push(sub('Crack-control bar spacing', [rwrItem('crk', T), { type: 'note', text: 'ACI 318-19 §24.3.2 with f_s = ⅔ f_y. Not worked on a result tab (worked here only).' }]));
+      subs.push(sub('Crack-control bar spacing', [rwrItem('crk', T), { type: 'note', text: 'ACI 318-19 §24.3.2 with f_s = ⅔ f_y. Not worked on a result tab (worked here only). Not checked: S4 (not designed in ACI mode), K1 (the passive load on the key is a resistance, not a service load) and the bottom face of the heel.' }]));
     }
     secs.push({ title: 'Reinforcement schedule', subs });
   }
@@ -11660,9 +11688,11 @@ function rwrModel(r) {
       ...P.rows.map((rw, i) => ['Row ' + (i + 1) + ': x from the toe / spacing along the wall', N(rw.x, 2) + ' / ' + N(rw.s, 2), 'ft']),
       ...(isA ? [['Nominal compression R_n, φ_c', N(inp.fnd.Rn, 1) + ', ' + N(inp.fnd.phic, 2), 'kip, –'], ['Nominal uplift R_n,up, φ_up', N(inp.fnd.Rnup, 1) + ', ' + N(inp.fnd.phiup, 2), 'kip, –'], ['Factored lateral resistance H_r', rwrCell(inp.fnd.Hr, 1), 'kip']]
              : [['Allowable compression P_a', rwrCell(inp.fnd.Pa, 1), 'kip'], ['Allowable uplift T_a', rwrCell(inp.fnd.Ta, 1), 'kip'], ['Allowable lateral H_a', rwrCell(inp.fnd.Ha, 1), 'kip']]),
-      ['Passive in front of the toe', P.passive ? 'credited against H: ' + N(P.Hpass, 3) + ' kip/ft' : 'not credited (no passive, no base friction)', '–']] },
+      ['Passive in front of the toe', P.passive ? 'credited against H: ' + N(P.Hpass, 3) + ' kip/ft (the toe passive only, not the shear key\'s; it reduces H, not the moment)' : 'not credited (no passive, no base friction)', '–']] },
       ...(isA ? rwrNL('AASHTO LRFD 10th Ed.: rigid cap on vertical piles.', [['Loads:', 'factored loads per limit state;'], ['Resistances:', 'φ_c R_n, φ_up R_n,up (Art. 10.5.5.2.3); Extreme Event φ = 1.0, uplift φ = 0.80 (Art. 10.5.5.3.3); H_r as entered.'], ['Not checked:', 'soil bearing, base sliding and overturning.']])   // RWNL
-              : rwrNL('IBC 2018 §1810: service (ASD) combinations of ASCE 7-16 §2.4.1 against the allowable capacities (§1810.3.3.1, §1810.3.3.2).', [['Soil under the cap:', 'carries no vertical load (§1810.3.11).'], ['Not checked:', 'soil bearing, base sliding and overturning.']]))]));
+              : rwrNL('IBC 2018 §1810: service (ASD) combinations of ASCE 7-16 §2.4.1 against the allowable capacities (§1810.3.3.1, §1810.3.3.2).', [['Soil under the cap:', 'carries no vertical load (§1810.3.11).'],
+                 ['Minimum vertical:', '0.6D + H takes 0.6 on the dead loads and on the vertical earth thrust and 1.0 on the water uplift; the surcharge and the column live / snow loads are left out.'],   // ASM (2026-11-10): RWPL 8c
+                 ['With E:', 'D + H + L + 0.7E (it covers ASCE 7-16 §2.4.1 combinations 5 and 6b) and 0.6D + 0.7E + H.'], ['Not checked:', 'soil bearing, base sliding and overturning.']]))]));
     { let Bd = null; try { Bd = rwdwBuild(r); } catch (e) { Bd = null; }   // RWPT2: the pile layout plan of the Piles tab (Drawings sheet), to scale
       const pl = Bd && Bd.S ? Bd.S.find(x => x.id === 'piles') : null;
       if (pl && pl.iv) subs[subs.length - 1].items.push({ type: 'figure', svg: rwovView(Bd, pl.i0, pl.iv, '3.4in'), caption: 'Pile layout plan, from above, toe at the bottom, to scale with its scale bar — Piles tab[[tab:piles| ↗]] and Drawings tab, sheet ' + (Bd.S.indexOf(pl) + 1) + ' (' + pl.scale + ').' }); }
@@ -11685,7 +11715,7 @@ function rwrModel(r) {
       ...(r.checks.pileCapT ? [rwrS({ id: 'capT', label: 'Pile–cap tension connection for T = ' + N(-gt.L.Pmin, 2) + ' kip per pile (embedment ' + N(P.det.embed, 1) + ' in): not designed in this tool (' + r.checks.pileCapT.ref + ')', sym: 'T', eq: '\\minus P_{min}', sub: '', value: -gt.L.Pmin, unit: 'kip', d: 2, ok: ok('pileCapT') })] : []),   // RW2M3
       rwrS({ id: 'lat', label: 'Lateral load per pile (' + gh.label + ')', sym: 'h', eq: '\\frac{H}{N}', sub: '\\frac{' + N(gh.H, 3) + '}{' + N(G.N, 4) + '}', value: gh.L.rows[0].h, unit: 'kip', d: 2 }),
       rwrS({ id: 'latdc', label: 'Lateral check', sym: '\\frac{h}{' + gh.cap.hs + '}', eq: '', sub: '\\frac{' + N(gh.L.rows[0].h, 2) + '}{' + N(gh.cap.h, 2) + '}', value: gh.dcH, unit: '', d: 3, ok: ok('pileLat') })];
-    const d = P.det, dt = [['Center-to-center spacing (along the wall and row to row)', N(d.cc, 1) + ' in', d.ccMin ? '≥ ' + N(d.ccMin, 1) + ' in' : 'no minimum (group effects: §1810.2.5)'],
+    const d = P.det, dt = [['Center-to-center spacing (along the wall and row to row; adjacent rows taken as in line)', N(d.cc, 1) + ' in', d.ccMin ? '≥ ' + N(d.ccMin, 1) + ' in' : 'no minimum (group effects: §1810.2.5)'],
       ['Pile side to the footing edge (toe / heel)', N(d.edge, 1) + ' in', '≥ ' + N(d.edgeMin, 0) + ' in'], ['Embedment into the footing', N(d.embed, 1) + ' in', '≥ ' + N(d.embMin, 0) + ' in']];
     subs.push(sub('Pile Step 2 — Pile reactions and checks', [{ type: 'table', wide: true, head, rows }, ...rwrNL(...rwptCombNL(r), { html: true }), rwrItem('pl2', [{ title: 'Governing pile loads', ref: isA ? AA('Sec. 10.7') : 'IBC 2018 §1810', steps: ck }]),
       { type: 'table', head: ['Detailing', 'Provided', 'Required (' + d.ref + ')'], rows: dt }, onTab('stabPile')]));
@@ -12170,7 +12200,7 @@ const RWMAN_PARTS = [
   { ul: [
     'ACI 318-19 §24.3.2: s ≤ min(15(40000/f_s) − 2.5c_c, 12(40000/f_s)) with f_s = ⅔f_y, for S1, S3, F1 and F2.',
     'AASHTO Art. 5.6.7: s ≤ 700γ_e/(β_s f_ss) − 2d_c with f_ss ≤ 0.6f_y from Service I moments (optionally with K₀ for the service earth pressure); S1 at the base, S3 at mid-height, F1 and F2 from the Service I base reaction ([[go:card:stabServ|Step 9]]).',
-    'S4, K1 and the bottom face of the heel are not checked for crack control (decision pending).' ] } ] },
+    'S4, K1 and the bottom face of the heel are not checked for crack control: S4 carries no Service I flexural tension, and the passive load on the key is a resistance, not a service load.' ] } ] },
 
 { id: 'footing', title: 'Footing design: heel, toe, extreme events, T&S', go: [['tab:footing', 'Footing design tab']], blocks: [
   { ul: [
@@ -12273,10 +12303,10 @@ const RWMAN_PARTS = [
     'Crack control of S4 (front face), K1 (key) and the heel bottom face; S4 is not designed in ACI mode.',
     'Cohesion (input shown only), frost depth, drainage (weep holes, drains, filters), joints and the wall length, corners and wall ends, construction stages, durability (exposure classes and cover requirements beyond the input covers), the barrier and its anchorage (only its yield-line capacity is checked).',
     'Counterfort, gravity, MSE, sheet-pile and soldier-pile walls; SI units.',
-    'The MassDOT provisions used (variable-height rule, collision on walls, heel top-steel rule) are cited by section; the manual edition is to be verified by the engineer.' ] } ] },
+    'The MassDOT provisions used (variable-height rule, collision on walls, heel top-steel rule) are cited by section; the tool does not state the manual\u2019s edition.' ] } ] },
 
-{ id: 'decisions', title: 'Appendix: decisions pending engineer review', go: [], blocks: [
-  { p: 'Judgments recorded in the fix log (fixlog/Retaining Wall Designer.md) as "Decision (pending engineer review)", in the order they were made. Codes are the fix-log tags. Items since overtaken by a later change are marked so; the rest are open.' },
+{ id: 'decisions', title: 'Appendix: design decisions and assumptions', go: [], blocks: [
+  { p: 'Judgments recorded in the fix log (fixlog/Retaining Wall Designer.md) as decisions, in the order they were made; each is also stated as a note where it applies (tab and Report). Codes are the fix-log tags. Items since overtaken by a later change are marked so; the rest describe what the tool does.' },
   { table: { head: ['Tag', 'Subject', 'Decision (paraphrased)'], rows: [
     ['STDS', 'Save as / New', 'Save as does not write the name into Project Name; New loads the page defaults; Back up all kept.'],
     ['RWTH', 'Look', 'Masthead byline; result values in Times; RW’s label-above input layout kept.'],
