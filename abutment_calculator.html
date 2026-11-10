@@ -795,6 +795,23 @@ function bwOffGeo(){
   const A=S.apSlab, apOn=!!(A&&A.on), dIn=(+g.shD>0)? +g.shD : (apOn? Math.max(0,+A.t||0)*12 : 0), d=dIn/12, hbw=+g.hbw;
   const hSh=Math.max(0,hbw-d), zSeat=(+g.tf)+(+g.hstem), xb=(+g.Ltoe)+(+g.tsb);
   return {e, eIn:e*12, dIn, d, dAuto:!(+g.shD>0), apOn, hSh, hC:Math.min(hbw,d), zSeat, zSh:zSeat+hSh, xStemBack:xb, xBwBack:xb-e, xBwFront:xb-e-(+g.tbw), xSh:xb-e/2}; }
+/* ABBF2 (2026-11-10, engineer request): the bearing line is entered as a_f = geom.brgFront (ft), the front face of the stem at the seat
+   (x_stemTopFront) to the CL of bearing; x_brg = x_stemTopFront + a_f. geom.brgSetback (the setback from the flush backwall face,
+   x_stem,back − t_bw) is kept in step, a_brg = t_st − t_bw − a_f, so every reader of it works unchanged. Saved data (CLAUDE.md §5): a project,
+   defaultState() or hand-off without brgFront derives it once, a_f = t_st − t_bw − brgSetback, and keeps its brgSetback as saved (identical
+   results). Afterwards a_f is the input: a change of t_st, t_bw (or e) leaves the bearing line at a_f from the front face and moves the setback.
+   A writer that changes only brgSetback on the same geom object (e.g. a hand-off) moves a_f with it. Not in the Input ID (it is fixed by
+   t_st, t_bw and brgSetback). */
+let AB_BRG_MEMO=null;
+function abBrgSync(){
+  const g=S&&S.geom; if(!g) return;
+  const w=(+g.tst)-(+g.tbw), sb=+g.brgSetback; if(!isFinite(w)) return;
+  const fv=g.brgFront, hasF=fv!==undefined&&fv!==null&&fv!==""&&isFinite(+fv);
+  const M=AB_BRG_MEMO&&AB_BRG_MEMO.g===g? AB_BRG_MEMO : null;
+  if(isFinite(sb)&&(!hasF||(M&&sb!==M.sb&&+fv===M.f))) g.brgFront=Math.round((w-sb)*1e6)/1e6;   // migration / a writer of brgSetback only
+  else if(hasF&&!(Math.abs(w-(+fv)-sb)<=1e-6)) g.brgSetback=Math.round((w-(+fv))*1e9)/1e9;   // a_f entered (or t_st, t_bw changed): the setback follows
+  AB_BRG_MEMO={g, sb:+g.brgSetback, f:+g.brgFront};
+}
 function defaultState(){
   return {
     proj:{name:"Example Single-Span Bridge", num:"", calcBy:"", date:new Date().toISOString().slice(0,10), chkBy:"", chkDate:""},
@@ -802,7 +819,7 @@ function defaultState(){
       hbw:5.00, tbw:1.50,           // backwall height/thickness (ft)
       bwOff:0, shD:0,               // ABSH: backwall offset e, stem back face to backwall back face (in; 0 = flush); stem-shelf depth below the top of the backwall (in; 0 = approach slab t)
       hstem:14.00, tst:4.50, tsb:4.50, // stem height, top & bottom thickness (ft)
-      brgSetback:1.25,              // bearing setback from front face of backwall (ft)
+      brgSetback:1.25,              // bearing setback from front face of backwall (ft); ABBF2: the input is a_f = brgFront (= t_st − t_bw − setback = 1.75 ft), derived by abBrgSync()
       endGap:4.0,                   // girder end to backwall face incl. opening movement (in); N provided = seat width − endGap [4.7.4.4]
       Ltoe:3.50, Lheel:5.00, tf:3.00, // toe length, heel length, footing thickness (ft)
       Lab:44.00,                    // wall (stem/backwall) length carrying earth pressure & self-weight (ft)
@@ -1002,7 +1019,7 @@ function abutOwnCtx(R){
   const rows=new Set(act.map(q=>q.x.toFixed(2))).size;
   const Ltot=(+S.own.Ltot>0)? +S.own.Ltot : +g.spanL;
   const Lg=S.longit||{}, dExp=(+Lg.cte||0)*(+Lg.dTrise||0)*(+Lg.Lexp||0)*12;   // in: expansion toward the backwall (temperature rise)
-  const seatW=R.geo.seatW, brgFront=(R.geo.off? g.tst-g.tbw : seatW)-g.brgSetback;   // ft: stem front face (at the seat) to CL bearing (ABBF: bearings fixed, as e = 0)
+  const seatW=R.geo.seatW, brgFront=(R.geo.off? g.tst-g.tbw : seatW)-g.brgSetback;   // ft: stem front face (at the seat) to CL bearing = a_f, geom.brgFront (ABBF2; computed in the setback form, results bit-identical)
   const bars=[["bw","Backwall",S.reinf.bw],["stem","Stem",S.reinf.stem],["toe","Toe",S.reinf.toe],["heel","Heel",S.reinf.heel]];
   return {g,B,Lftg,pile,act,D,sMin,sMax,sMinAt,sMaxAt,eMin,eAt,eSide,rows,Ltot,dExp,seatW,brgFront,bars,
     cFront:R.checks.bearingSeat?R.checks.bearingSeat.cFront:NaN, mat:Lg.material==="concrete"?"concrete":"steel",
@@ -1078,7 +1095,7 @@ ABUT_OWN.rules=[
   {owner:"RIDOT", id:"seat.w", kind:"should-warning", sec:"11.3.4 (p. 11-9)", text:"Beam seat width preferably at least 2'-6\" (and enough for the bearings and the AASHTO seismic support length)",
     ev:C=>({st:ownGE(C.seatW,2.5)?"pass":"warn", val:`t<sub>st</sub> − t<sub>bw</sub>${bwOffGeo()?" − e":""} = ${fmt(C.seatW,2)} ft`, lim:"≥ 2.50 ft (preferred)", tex:bwOffGeo()? `b_{seat} = t_{st}-t_{bw}-e = ${ownF(C.g.tst)}-${ownF(C.g.tbw)}-${ownF(bwOffGeo().e)} = ${ownF(C.seatW)}\\ \\text{ft}` : `b_{seat} = t_{st}-t_{bw} = ${ownF(C.g.tst)}-${ownF(C.g.tbw)} = ${ownF(C.seatW)}\\ \\text{ft}`, link:OWN_LK.supp})},
   {owner:"RIDOT", id:"pad.edge", kind:"shall-check", sec:"11.3.4 (p. 11-9)", text:"Bearing pad or masonry plate at least 2 in from the face of the beam seat",
-    ev:C=>({st:ownGE(C.cFront,2)?"pass":"fail", val:`${fmt(C.cFront,1)} in`, lim:"≥ 2 in", tex:bwOffGeo()? `c_{front} = (t_{st}-t_{bw}-a_{brg})\\cdot12-L_{pad}/2 = (${ownF(C.g.tst)}-${ownF(C.g.tbw)}-${ownF(C.g.brgSetback)})(12)-${ownF(+S.bearing.padL,1)}/2 = ${ownF(C.cFront,1)}\\ \\text{in}\\ \\text{(bearings as with } e=0)` : `c_{front} = (b_{seat}-a_{brg})\\cdot12-L_{pad}/2 = (${ownF(C.seatW)}-${ownF(C.g.brgSetback)})(12)-${ownF(+S.bearing.padL,1)}/2 = ${ownF(C.cFront,1)}\\ \\text{in}`, link:OWN_LK.seat})},
+    ev:C=>({st:ownGE(C.cFront,2)?"pass":"fail", val:`${fmt(C.cFront,1)} in`, lim:"≥ 2 in", tex:`c_{front} = 12\\,a_{f}-L_{pad}/2 = 12(${ownF(C.brgFront)})-${ownF(+S.bearing.padL,1)}/2 = ${ownF(C.cFront,1)}\\ \\text{in}\\ \\ (a_{f}\\text{: CL bearing from the front face of the stem, panel I-1})`, link:OWN_LK.seat})},
   {owner:"RIDOT", id:"gap", kind:"shall-check", sec:"11.3.4 (p. 11-9)", text:"Girder end (or diaphragm) to backwall at least the predicted superstructure movement plus 2 in",
     ev:C=>{ const Lg=S.longit, need=C.dExp+2; return {st:ownGE(+C.g.endGap,need)?"pass":"fail", val:`g<sub>end</sub> = ${fmt(+C.g.endGap,2)} in (panel I-1)`, lim:`≥ Δ + 2 = ${fmt(need,2)} in`,
       tex:`\\Delta = \\alpha\\,\\Delta T_{rise}\\,L_{exp} = (${ownF(+Lg.cte*1e6,2)}\\times10^{-6})(${ownF(+Lg.dTrise,0)})(${ownF(+Lg.Lexp)}\\cdot12) = ${ownF(C.dExp,3)}\\ \\text{in};\\quad \\Delta+2 = ${ownF(need,3)}\\ \\text{in}`, link:OWN_LK.tu}; }},
@@ -1118,7 +1135,7 @@ ABUT_OWN.rules=[
     ev:C=>({st:"note", val:"free-draining backfill assumed (Assumption 1)", lim:"drainage system", link:OWN_LK.basis})},
   /* ---------------- CTDOT BRSDM, Release 1 (2024) ---------------- */
   {owner:"CTDOT", id:"brg.front", kind:"shall-check", sec:"V2 11.6.8.1CT (p. 11-3)", text:"At the seat, front face of the stem to the centerline of bearings at least 1.25 ft (9 in for butted deck units and box beams, V2 11.6.8.2CT)",
-    ev:C=>({st:ownGE(C.brgFront,1.25)?"pass":"fail", val:`${fmt(C.brgFront,2)} ft`, lim:"≥ 1.25 ft (girders)", tex:bwOffGeo()? `a = (t_{st}-t_{bw})-a_{brg} = ${ownF(C.g.tst-C.g.tbw)}-${ownF(C.g.brgSetback)} = ${ownF(C.brgFront)}\\ \\text{ft}\\ \\text{(bearings as with } e=0)` : `a = b_{seat}-a_{brg} = (t_{st}-t_{bw})-a_{brg} = ${ownF(C.seatW)}-${ownF(C.g.brgSetback)} = ${ownF(C.brgFront)}\\ \\text{ft}`, link:OWN_LK.sketch})},
+    ev:C=>({st:ownGE(C.brgFront,1.25)?"pass":"fail", val:`a<sub>f</sub> = ${fmt(C.brgFront,2)} ft (panel I-1)`, lim:"≥ 1.25 ft (girders)", tex:`a_{f} = ${ownF(C.brgFront)}\\ \\text{ft}\\ \\text{(entered, panel I-1: CL bearing from the front face of the stem at the seat)}`, link:OWN_LK.sketch})},
   {owner:"CTDOT", id:"bw.min", kind:"shall-check", sec:"V2 11.6.8.1CT (p. 11-3)", text:"Backwall thickness at least 1.25 ft",
     ev:C=>ownMinT(+C.g.tbw,1.25,"t<sub>bw</sub>")},
   {owner:"CTDOT", id:"frost", kind:"shall-check", sec:"V2 10.6.1.2, 10.7.1.2 (p. 10-3)", text:"Bottom of footing or pile cap at least 4 ft below finished grade (measured normal to grade); no minimum on competent rock",
@@ -1483,7 +1500,7 @@ const VALID = {
   "geom.hstem": {hard:[0.5,60], typ:[4,30],   msg:"Stem height outside the typical 4–30 ft range."},
   "geom.tst":   {hard:[0.5,20], typ:[2,8],    msg:"Stem top thickness outside the typical 2–8 ft range."},
   "geom.tsb":   {hard:[0.5,20], typ:[2,10],   msg:"Stem bottom thickness outside the typical 2–10 ft range."},
-  "geom.brgSetback":{hard:[0,10], typ:[0.75,3], msg:"Bearing setback outside the typical 0.75–3 ft range."},
+  "geom.brgSetback":{hard:[0,10], typ:[0.75,3], msg:"Bearing setback from the backwall face (t_st − t_bw − a_f, panel I-1) outside the typical 0.75–3 ft range."},
   "geom.endGap":{hard:[0,48], typ:[1,6], msg:"Girder end to backwall gap outside the typical 1–6 in range."},
   "geom.Ltoe":  {hard:[0,40],  typ:[1,12],    msg:"Toe length outside the typical 1–12 ft range."},
   "geom.Lheel": {hard:[0,60],  typ:[2,20],    msg:"Heel length outside the typical 2–20 ft range."},
@@ -1784,6 +1801,7 @@ function pileReaction(V,My,Mx,xi,yi,pi){ return SharedPileGroup.reaction(V,My,Mx
 
 /* ---------- state migration / resizing of dynamic arrays ---------- */
 function migrate(){
+  abBrgSync();   // ABBF2: a_f (geom.brgFront) and the setback in step
   const defRev0=(S.meta&&+S.meta.defRev)||0;   // ABCHK: revision of the saved defaults before this migration (0 = a new project)
   const N=S.beams.N;
   // spacings / positions arrays
@@ -2208,12 +2226,13 @@ function buildInputs(){
     ${inpRow("Backwall thickness t<sub>bw</sub>","geom.tbw","ft")}
     ${iabType()==="conv"?inpRow("Offset, back face of abutment stem to back face of backwall e","geom.bwOff","in",{title:"0 = the backwall flush with the back face of the stem (as before). A positive value insets the backwall toward the bridge: the top of the stem behind it is a shelf (the stem at its full thickness, no corbel or paving notch) that the approach slab bears on."})
       +(+g.bwOff>0?inpRow("&nbsp;&nbsp;Shelf depth below the top of the backwall d<sub>sh</sub> (0 = slab t)","geom.shD","in",{title:"The stem shelf (approach-slab seat) is d_sh below the top of the backwall. 0 = the approach slab thickness t of panel I-0b (the slab top at the top of the backwall)."})
-      +`<div class="in-note">${abNL("Backwall offset e (stem shelf):",[["Geometry:","the backwall's back face is e in front of the stem's back face; behind it the stem rises at its full thickness to the shelf, d<sub>sh</sub> below the top of the backwall. Bridge seat = t<sub>st</sub> − t<sub>bw</sub> − e."],["Bearings (engineer decision 2026-11-10):","they stay where they would be with e = 0: the setback is measured from x<sub>stem,back</sub> − t<sub>bw</sub>, so e<sub>brg</sub> and the distance from the seat front edge to the bearing line do not change. Only the run from the bearing line to the inset backwall shrinks, a<sub>bw</sub> = setback − e; the pad must fit in it (a<sub>bw</sub> ≥ L<sub>pad</sub>/2, else an input error) and the girder end gap g<sub>end</sub> must be less than a<sub>bw</sub>."],["Support length:",'N = 12(t<sub>st</sub> − t<sub>bw</sub> − e) − g<sub>end</sub>, from the girder end (g<sub>end</sub> in front of the inset backwall) to the seat front edge: <span class="xlink" data-jump="tab-stab|o-seat">Tab 3 §3.5</span>.'],["Approach slab:",'bears on the shelf at mid-width, e/2 behind the backwall (replaces the paving notch of panel I-0b): <span class="xlink" data-jump="tab-loads|o-ap">Tab 1 §1.4a</span>; bearing in <span class="xlink" data-jump="tab-struct|o-ap-shelf">Tab 5 §5.8</span>.'],["Loads:",'the backwall weight at its new centroid and the stem shelf e × h<sub>sh</sub> in the self-weight (<span class="xlink" data-jump="tab-loads|o-selfwt">Tab 1 §1.2</span>); they change the stem-base and footing moments through their lever arms.'],["Backwall design:",'section at the shelf elevation, cantilever h<sub>c</sub> = d<sub>sh</sub> (<span class="xlink" data-jump="tab-struct|o-str-Backwall">Tab 5 §5.1</span>).'],["Earth pressure:","on the virtual back plane at the heel for stability, and on the stem back face for the stem, as before."],["Approach slab top (engineer report 2026-11-10):","the slab is t thick (panel I-0b) and bears ON the shelf, so its top is at the shelf + t: level with the top of the backwall only when d<sub>sh</sub> = t (0 here takes d<sub>sh</sub> = t). With d<sub>sh</sub> &gt; t the depth d<sub>sh</sub> − t over the slab (pavement or fill) is not a load in the tool: put its weight in the slab's wearing surface (DW, panel I-0b) if it rides on the slab. d<sub>sh</sub> &lt; t puts the slab top above the backwall (a check-input warning). Drawn and dimensioned as a step on the Drawings tab; elevations in <span class=\"xlink\" data-jump=\"tab-loads|o-elev\">Tab 1 §1.1a</span>."]])}</div>`:""):""}
+      +`<div class="in-note">${abNL("Backwall offset e (stem shelf):",[["Geometry:","the backwall's back face is e in front of the stem's back face; behind it the stem rises at its full thickness to the shelf, d<sub>sh</sub> below the top of the backwall. Bridge seat = t<sub>st</sub> − t<sub>bw</sub> − e."],["Bearings:","the bearing line is a<sub>f</sub> from the front face of the stem (row below), so e does not move it: e<sub>brg</sub> and the distance from the seat front edge to the bearing line do not change. Only the run from the bearing line to the inset backwall shrinks, a<sub>bw</sub> = t<sub>st</sub> − t<sub>bw</sub> − e − a<sub>f</sub>; the pad must fit in it (a<sub>bw</sub> ≥ L<sub>pad</sub>/2, else an input error) and the girder end gap g<sub>end</sub> must be less than a<sub>bw</sub>."],["Support length:",'N = 12(t<sub>st</sub> − t<sub>bw</sub> − e) − g<sub>end</sub>, from the girder end (g<sub>end</sub> in front of the inset backwall) to the seat front edge: <span class="xlink" data-jump="tab-stab|o-seat">Tab 3 §3.5</span>.'],["Approach slab:",'bears on the shelf at mid-width, e/2 behind the backwall (replaces the paving notch of panel I-0b): <span class="xlink" data-jump="tab-loads|o-ap">Tab 1 §1.4a</span>; bearing in <span class="xlink" data-jump="tab-struct|o-ap-shelf">Tab 5 §5.8</span>.'],["Loads:",'the backwall weight at its new centroid and the stem shelf e × h<sub>sh</sub> in the self-weight (<span class="xlink" data-jump="tab-loads|o-selfwt">Tab 1 §1.2</span>); they change the stem-base and footing moments through their lever arms.'],["Backwall design:",'section at the shelf elevation, cantilever h<sub>c</sub> = d<sub>sh</sub> (<span class="xlink" data-jump="tab-struct|o-str-Backwall">Tab 5 §5.1</span>).'],["Earth pressure:","on the virtual back plane at the heel for stability, and on the stem back face for the stem, as before."],["Approach slab top (engineer report 2026-11-10):","the slab is t thick (panel I-0b) and bears ON the shelf, so its top is at the shelf + t: level with the top of the backwall only when d<sub>sh</sub> = t (0 here takes d<sub>sh</sub> = t). With d<sub>sh</sub> &gt; t the depth d<sub>sh</sub> − t over the slab (pavement or fill) is not a load in the tool: put its weight in the slab's wearing surface (DW, panel I-0b) if it rides on the slab. d<sub>sh</sub> &lt; t puts the slab top above the backwall (a check-input warning). Drawn and dimensioned as a step on the Drawings tab; elevations in <span class=\"xlink\" data-jump=\"tab-loads|o-elev\">Tab 1 §1.1a</span>."]])}</div>`:""):""}
     <div class="subhead">Stem (seat to top of footing)</div>
     ${inpRow("Stem height h<sub>stem</sub>","geom.hstem","ft")}
     ${inpRow("Stem thickness at top t<sub>st</sub>","geom.tst","ft",{title:"Includes the bridge seat width plus the backwall thickness. Back face is vertical; any taper is on the front face."})}
     ${inpRow("Stem thickness at bottom t<sub>sb</sub>","geom.tsb","ft")}
-    ${inpRow("Bearing setback from backwall face","geom.brgSetback","ft",+g.bwOff>0&&iabType()==="conv"?{title:"With a backwall offset e > 0 the setback is measured from where the backwall's front face would be with e = 0 (x_stem,back − t_bw): the bearings stay put and the inset backwall is setback − e from the bearing line (engineer decision 2026-11-10)."}:undefined)}
+    ${inpRow("CL bearing from front face of stem (at seat) a<sub>f</sub>","geom.brgFront","ft",{title:"Distance from the front face of the stem at the bridge seat (top of the stem front face) to the centerline of bearings. The bearing line is x_brg = x_stem,top,front + a_f. Worked in Tab 1 §1.1."})}
+    <div class="derived" id="abBrgDer">${abBrgDerHTML()}</div>
     ${inpRow("Girder end to backwall face g<sub>end</sub>","geom.endGap","in",{title:"Gap between the girder end and the backwall face, including the opening movement (thermal fall, creep, shrinkage). The provided support length N is the girder overlap on the seat = seat width − g_end [4.7.4.4, C4.7.4.4]. Default 4 in."})}
     ${bwOffGeo()?`<div class="derived">${bwOffDerivedHTML()}</div>`:`<div class="derived">Derived: bridge seat width = t<sub>st</sub> − t<sub>bw</sub> = <b>${fmt(derivedSeat)} ft</b> &nbsp;·&nbsp; seat elevation (above footing base) = <b>${fmt(g.tf+g.hstem)} ft</b><br>Bearing eccentricity from stem centerline e<sub>brg</sub> = t<sub>bw</sub> + setback − t<sub>sb</sub>/2 = <b>${fmt(g.tbw+g.brgSetback-g.tsb/2)} ft</b> ${(g.tbw+g.brgSetback-g.tsb/2)>=0?"(toward toe → adds stem moment)":"(toward heel → relieves stem moment)"}</div>`}
     <div class="in-row"><label title="Optional. The elevation of the beam seat (bridge seat${iabType()==="integral"?"; integral abutment: the seat of panel I-0a, h_c above the bottom of the cap":""}). Every other elevation is derived from it and the heights of the geometry inputs (Tab 1 §1.1a). Blank = no elevations shown. Display only: no result depends on it.">Beam seat elevation El<sub>seat</sub> (blank = none)</label>
@@ -3459,6 +3478,7 @@ function computeAp(R){
    ------------------------------------------------------------ */
 function computeAll(){
   WARNINGS=[];
+  abBrgSync();   // ABBF2
   collectInputWarnings();
   const g=S.geom, m=S.mat, R={};
 
@@ -3470,7 +3490,7 @@ function computeAll(){
   const xStemBack = g.Ltoe+g.tsb;             // back face of stem (= back face of backwall; ABSH: the backwall's back face is e in front of it)
   const xStemTopFront = xStemBack-g.tst;      // front face of stem at top
   const xBwFront = OFF? OFF.xBwFront : xStemBack-g.tbw;   // ABSH: x_stem,back − e − t_bw
-  const xBrg = (xStemBack-g.tbw)-g.brgSetback;   // bearing line, from toe. ABBF (engineer decision 2026-11-10): the setback is measured as if the backwall were flush (from x_stem,back − t_bw), so the bearings stay put when e > 0; only the seat behind them narrows by e
+  const xBrg = (xStemBack-g.tbw)-g.brgSetback;   // ABBF2: = x_stemTopFront + a_f (brgSetback = t_st − t_bw − a_f, abBrgSync; written in the setback form so a saved project's results stay bit-identical). Bearing line, from toe. ABBF (engineer decision 2026-11-10): the setback is measured as if the backwall were flush (from x_stem,back − t_bw), so the bearings stay put when e > 0; only the seat behind them narrows by e
   const hWedge = g.Lheel*Math.tan(deg2rad(+g.beta||0)); // sloping backfill: rise of the ground surface over the heel
   const H = g.tf+g.soilH+hWedge;              // retained height at virtual back plane (heel end)
   const hTotal = g.tf+g.hstem+g.hbw;
@@ -3488,15 +3508,15 @@ function computeAll(){
     const A=S.apSlab, tIn=(+A.t)*12, stp=OFF.dIn-tIn;
     if(OFF.apOn&&!OFF.dAuto&&stp<-0.01) warn(`Check input — Stem shelf: the shelf depth d_sh = ${fmt(OFF.dIn,1)} in is less than the approach slab thickness t = ${fmt(tIn,1)} in (panels I-1, I-0b): the slab bears on the shelf, so its top is ${fmt(-stp,1)} in ABOVE the top of the backwall. Confirm the backwall top is meant to stop below the slab top (e.g. at the underside of the deck overlay); otherwise make d_sh ≥ t.`);
     else if(OFF.apOn&&!OFF.dAuto&&stp>0.01) warn(`Stem shelf: the shelf depth d_sh = ${fmt(OFF.dIn,1)} in exceeds the approach slab thickness t = ${fmt(tIn,1)} in (panels I-1, I-0b): the slab bears on the shelf, its top ${fmt(stp,1)} in below the top of the backwall. The depth d_sh − t = ${fmt(stp,1)} in over the slab (pavement or fill) is not modelled as a load: enter its weight in the slab's wearing surface (panel I-0b, DW) if it rides on the slab.`);
-    // ABBF: bearings fixed — the clear run from the bearing line to the inset backwall's front face is a_bw = setback − e; the pad must fit in it
+    // ABBF: bearings fixed — the clear run from the bearing line to the inset backwall's front face is a_bw = setback − e = t_st − t_bw − e − a_f (ABBF2); the pad must fit in it
     OFF.aBw=g.brgSetback-OFF.e; OFF.cBw=OFF.aBw*12-(+S.bearing.padL||0)/2;   // ft; in (pad edge to the backwall front face)
-    if(OFF.aBw<=1e-9) warn(`Input error — Backwall offset: the bearing line is at or behind the inset backwall's front face (a_bw = setback − e = ${fmt(g.brgSetback*12,1)} − ${fmt(OFF.eIn,1)} = ${fmt(OFF.aBw*12,1)} in; panel I-1). The bearings stay where they would be with e = 0; reduce e or increase the bearing setback.`,"err");
-    else if(OFF.cBw<-1e-9) warn(`Input error — Backwall offset: the bearing pad runs into the inset backwall: a_bw − L_pad/2 = (${fmt(g.brgSetback*12,1)} − ${fmt(OFF.eIn,1)}) − ${fmt(+S.bearing.padL,1)}/2 = ${fmt(OFF.cBw,1)} in < 0 (panels I-1, I-4). Reduce e, increase the bearing setback, or shorten the pad.`,"err");
+    if(OFF.aBw<=1e-9) warn(`Input error — Backwall offset: the bearing line is at or behind the inset backwall's front face (a_bw = t_st − t_bw − e − a_f = ${fmt(g.tst*12,1)} − ${fmt(g.tbw*12,1)} − ${fmt(OFF.eIn,1)} − ${fmt(g.brgFront*12,1)} = ${fmt(OFF.aBw*12,1)} in; panel I-1). The bearing line is a_f from the front face of the stem; reduce e, t_bw or a_f (CL bearing from the front face of the stem).`,"err");
+    else if(OFF.cBw<-1e-9) warn(`Input error — Backwall offset: the bearing pad runs into the inset backwall: a_bw − L_pad/2 = (${fmt(g.tst*12,1)} − ${fmt(g.tbw*12,1)} − ${fmt(OFF.eIn,1)} − ${fmt(g.brgFront*12,1)}) − ${fmt(+S.bearing.padL,1)}/2 = ${fmt(OFF.cBw,1)} in < 0 (panels I-1, I-4). Reduce e or a_f (CL bearing from the front face of the stem), or shorten the pad.`,"err");
     if(!OFF.apOn) warn("Stem shelf without an approach slab (panel I-0b): the backfill over the shelf (e × d_sh) is not added to the vertical earth load (it would act behind the stem centroid and relieve the stem; small). Turn the approach slab on if it bears on the shelf."); }
 
   if(OFF&&seatW<=0){}   // ABSH: reported above
   else if(seatW<=0) warnFor("conv","Bridge seat width (t_st − t_bw) is ≤ 0 — backwall is thicker than the stem top. Geometry invalid.","err");
-  if(xBrg<xStemTopFront) warnFor("conv","Bearing line falls in front of the stem top front face — bearing is off the seat. Check setback/seat geometry.","err");
+  if(xBrg<xStemTopFront) warnFor("conv","Bearing line falls in front of the stem top front face — bearing is off the seat. Check a_f (CL bearing from the front face of the stem, panel I-1).","err");
   else if(xBrg-xStemTopFront < 0.75) warnFor("conv","Bearing line is within 9 in of the front edge of the seat — verify edge distance and bearing detailing.");
   if(g.tst>g.tsb) warnFor("conv","Stem top thickness exceeds bottom thickness (negative front batter) — verify intent.");
   if(Math.abs(g.soilH-(g.hstem+g.hbw))>0.01) warnFor("conv",`Soil height over heel (${fmt(g.soilH)} ft) differs from stem + backwall height (${fmt(g.hstem+g.hbw)} ft). The tool uses the entered value; confirm the grading assumption.`);
@@ -5398,6 +5418,7 @@ function computeAll(){
   {
     const fpS=JSON.parse(JSON.stringify(Object.assign({},S,{ui:undefined, own:abutOwner()==="AASHTO"?undefined:S.own})));   // OWNA: owner AASHTO leaves the Input ID unchanged
     if(fpS.soil&&fpS.soil.Kmode==="active") delete fpS.soil.Kmode;
+    if(fpS.geom) delete fpS.geom.brgFront;   // ABBF2: a_f is fixed by t_st, t_bw and brgSetback (in the ID): an old project keeps its Input ID
     if(fpS.geom&&(fpS.geom.elSeat===null||fpS.geom.elSeat===undefined||fpS.geom.elSeat==="")) delete fpS.geom.elSeat;   // ABEL: no seat elevation leaves the Input ID unchanged
     ["elBrgH","elGird","elHaunch","elDeck"].forEach(q=>{ if(fpS.geom&&(fpS.geom[q]===null||fpS.geom[q]===undefined||fpS.geom[q]==="")) delete fpS.geom[q]; });   // ABEL2: blank leaves the Input ID unchanged
     if(fpS.piles&&(fpS.piles.elLpile===null||fpS.piles.elLpile===undefined||fpS.piles.elLpile==="")) delete fpS.piles.elLpile;   // ABEL2
@@ -6656,6 +6677,7 @@ function renderTabLoads(R){
       ["x_{brg}","Bearing line, from toe",geo.xBrg,"ft"],
       ["H","Retained height at heel plane = t<sub>f</sub> + h<sub>soil</sub>",geo.H,"ft"],
       ["H_{tot}","Total abutment height",geo.hTotal,"ft"]])}
+    ${abBrgWorkHTML(R)}
     ${geo.off?bwOffWorkHTML(R):""}
   `);
   h+=abElevPanelHTML(R);   // ABEL: §1.1a elevations (only with a beam seat elevation)
@@ -6946,22 +6968,38 @@ function apLoadsHTML(R){
 }
 /* shelf (bracket) panel: §5.8 (conventional, semi-integral) / §10.7 (integral) */
 /* ABSH: worked positions and lever arms of the inset backwall, the stem shelf and the slab reaction (Tab 1 §1.1; quoted in the Report) */
+/* ABBF2: panel I-1, under the a_f input: the setback from the (flush) backwall face and the CL bearing to the backwall front face, worked */
+function abBrgDerHTML(){ const g=S.geom, O=bwOffGeo(), af=+g.brgFront, sb=+g.brgSetback, aBw=O? sb-O.e : sb;
+  return `Derived (worked in <span class="xlink" data-jump="tab-loads|o-sketch">Tab 1 §1.1</span>): setback from the backwall face (flush, as e = 0) a<sub>brg</sub> = t<sub>st</sub> − t<sub>bw</sub> − a<sub>f</sub> = ${fmt(+g.tst)} − ${fmt(+g.tbw)} − ${fmt(af)} = <b>${fmt(sb)} ft</b>`
+    +`<br>CL bearing to the ${O?"inset ":""}backwall front face a<sub>bw</sub> = t<sub>st</sub> − t<sub>bw</sub>${O?" − e":""} − a<sub>f</sub> = ${O?fmt(sb*12,1)+" − "+fmt(O.eIn,1)+" = ":""}<b>${fmt(aBw*12,1)} in</b>`
+    +`<div class="in-note">${abNL("Bearing line:",[["a<sub>f</sub>:","from the front face of the stem at the seat to the CL of bearings; x<sub>brg</sub> = x<sub>stem,top,front</sub> + a<sub>f</sub>."],["Fixed:","the bearing line stays a<sub>f</sub> from the front face when t<sub>st</sub>, t<sub>bw</sub>"+(iabType()==="conv"?" or the backwall offset e":"")+" change; the setback a<sub>brg</sub> and a<sub>bw</sub> follow."],["Saved projects:","a project saved with only the setback opens with a<sub>f</sub> = t<sub>st</sub> − t<sub>bw</sub> − setback: the same bearing line and results."]])}</div>`; }
 function bwOffDerivedHTML(){ const g=S.geom, O=bwOffGeo(); if(!O) return "";
   const seat=g.tst-g.tbw-O.e, eb=(+g.tbw)+(+g.brgSetback)-g.tsb/2, aBw=(+g.brgSetback)-O.e, cBw=aBw*12-(+S.bearing.padL||0)/2;   // ABBF: bearings fixed (as e = 0)
   return `Derived: bridge seat width = t<sub>st</sub> − t<sub>bw</sub> − e = <b>${fmt(seat)} ft</b> &nbsp;·&nbsp; seat elevation (above footing base) = <b>${fmt(g.tf+g.hstem)} ft</b> &nbsp;·&nbsp; shelf elevation = <b>${fmt(O.zSh)} ft</b> (d<sub>sh</sub> = ${fmt(O.dIn,1)} in${O.dAuto?" = slab t":""})<br>Bearing eccentricity from stem centerline e<sub>brg</sub> = t<sub>bw</sub> + setback − t<sub>sb</sub>/2 = <b>${fmt(eb)} ft</b> ${eb>=0?"(toward toe → adds stem moment)":"(toward heel → relieves stem moment)"} (bearings as with e = 0)<br>Bearing line to the inset backwall a<sub>bw</sub> = setback − e = <b>${fmt(aBw*12,1)} in</b>; pad clear of it a<sub>bw</sub> − L<sub>pad</sub>/2 = <b>${fmt(cBw,1)} in</b> ${cBw<0?'<span style="color:#c62828">(the pad runs into the backwall — input error)</span>':""}`; }
+/* ABBF2: the bearing line from a_f (panel I-1), worked: Tab 1 §1.1 (the Report ports this panel) */
+function abBrgWorkHTML(R){
+  if(iabType()==="integral") return "";   // no bearings
+  const g=S.geom, t=fmtT, geo=R.geo, O=geo.off, af=+g.brgFront, sb=+g.brgSetback, aBw=O? O.aBw : sb;
+  return eqB("Bearing line (CL of bearings) from a<sub>f</sub>","statics; panel I-1",[
+    `a_{f} = ${t(af)}\\ \\text{ft (entered: front face of the stem at the seat to the CL of bearings)}`,
+    `x_{stem,top,front} = x_{stem,back} - t_{st} = ${t(geo.xStemBack,3)} - ${t(+g.tst)} = ${t(geo.xStemTopFront,3)}\\ \\text{ft}\\,, \\quad x_{brg} = x_{stem,top,front} + a_{f} = ${t(geo.xStemTopFront,3)} + ${t(af)} = ${t(geo.xBrg,3)}\\ \\text{ft from the toe}`,
+    `a_{brg} = t_{st} - t_{bw} - a_{f} = ${t(+g.tst)} - ${t(+g.tbw)} - ${t(af)} = ${t(sb)}\\ \\text{ft (setback from the backwall face, flush as } e = 0)`,
+    O? `a_{bw} = a_{brg} - e = ${t(sb)} - ${t(O.e,4)} = ${t(aBw,4)}\\ \\text{ft} = ${t(aBw*12,1)}\\ \\text{in (CL of bearings to the inset backwall front face)}`
+      : `a_{bw} = a_{brg} = ${t(sb)}\\ \\text{ft} = ${t(aBw*12,1)}\\ \\text{in (CL of bearings to the backwall front face)}`],
+    abNL("Bearing line:",[["Basis:","a<sub>f</sub> is entered (panel I-1); the bearing line stays a<sub>f</sub> from the front face of the stem when t<sub>st</sub>, t<sub>bw</sub>"+(O||iabType()==="conv"?" or the backwall offset e":"")+" change, and the setback a<sub>brg</sub> follows."],["Used in:","the bearing eccentricity e<sub>brg</sub> and the girder reactions' lever arms (x<sub>brg</sub>), the seat edge distances of the bearing check (<span class=\"xlink\" data-jump=\"tab-struct|o-str-bearing\">Tab 5 §5.6</span>) and the owner seat checks (<span class=\"xlink\" data-jump=\"tab-loads|o-owner\">Tab 1 §1.0a</span>)."]])); }
 function bwOffWorkHTML(R){
   const O=R.geo.off, g=S.geom, t=fmtT, geo=R.geo, P=R.ap; if(!O) return "";
   const xsc=geo.xStemCenter, xbw=geo.xBwFront+g.tbw/2, pb=R.parts.find(p=>p.name==="Backwall"), ps=R.parts.find(p=>/^Stem shelf/.test(p.name));
   return eqB("Backwall offset e — positions and lever arms (x from the toe)","statics; panel I-1",[
     `x_{bw,back} = x_{stem,back} - e = ${t(geo.xStemBack,3)} - \\dfrac{${t(O.eIn,2)}}{12} = ${t(O.xBwBack,3)}\\ \\text{ft}\\,, \\quad x_{bw,front} = x_{bw,back} - t_{bw} = ${t(O.xBwBack,3)} - ${t(+g.tbw,3)} = ${t(geo.xBwFront,3)}\\ \\text{ft}`,
-    `w_{seat} = t_{st} - t_{bw} - e = ${t(+g.tst)} - ${t(+g.tbw)} - ${t(O.e,3)} = ${t(geo.seatW,3)}\\ \\text{ft}\\,, \\quad x_{brg} = x_{stem,back} - t_{bw} - a_{brg} = ${t(geo.xStemBack,3)} - ${t(+g.tbw,3)} - ${t(+g.brgSetback)} = ${t(geo.xBrg,3)}\\ \\text{ft (as with } e = 0)`,
-    `a_{bw} = x_{bw,front} - x_{brg} = a_{brg} - e = ${t(+g.brgSetback)} - ${t(O.e,4)} = ${t(O.aBw,4)}\\ \\text{ft} = ${t(O.aBw*12,1)}\\ \\text{in}\\,, \\quad c_{bw} = 12a_{bw} - \\dfrac{L_{pad}}{2} = ${t(O.aBw*12,1)} - \\dfrac{${t(+S.bearing.padL,1)}}{2} = ${t(O.cBw,1)}\\ \\text{in}\\ ${O.cBw<0?"< 0\\ \\text{(the pad runs into the backwall: input error)}":"\\ge 0\\ \\text{(the pad fits)}"}`,
+    `w_{seat} = t_{st} - t_{bw} - e = ${t(+g.tst)} - ${t(+g.tbw)} - ${t(O.e,3)} = ${t(geo.seatW,3)}\\ \\text{ft}\\,, \\quad x_{brg} = x_{stem,top,front} + a_{f} = ${t(geo.xStemTopFront,3)} + ${t(+g.brgFront)} = ${t(geo.xBrg,3)}\\ \\text{ft (above; e does not move it)}`,
+    `a_{bw} = x_{bw,front} - x_{brg} = t_{st} - t_{bw} - e - a_{f} = a_{brg} - e = ${t(+g.brgSetback)} - ${t(O.e,4)} = ${t(O.aBw,4)}\\ \\text{ft} = ${t(O.aBw*12,1)}\\ \\text{in}\\,, \\quad c_{bw} = 12a_{bw} - \\dfrac{L_{pad}}{2} = ${t(O.aBw*12,1)} - \\dfrac{${t(+S.bearing.padL,1)}}{2} = ${t(O.cBw,1)}\\ \\text{in}\\ ${O.cBw<0?"< 0\\ \\text{(the pad runs into the backwall: input error)}":"\\ge 0\\ \\text{(the pad fits)}"}`,
     `\\bar x_{bw} = x_{bw,front} + \\dfrac{t_{bw}}{2} = ${t(geo.xBwFront,3)} + \\dfrac{${t(+g.tbw)}}{2} = ${t(xbw,3)}\\ \\text{ft}\\,, \\quad W_{bw} = ${t(pb?pb.W:0,2)}\\ \\text{kip (unchanged)}`,
     `h_{sh} = h_{bw} - d_{sh} = ${t(+g.hbw)} - \\dfrac{${t(O.dIn,2)}}{12} = ${t(O.hSh,3)}\\ \\text{ft}\\,, \\quad z_{sh} = t_f + h_{stem} + h_{sh} = ${t(O.zSh,3)}\\ \\text{ft (shelf elevation above the footing base)}`,
     ps? `W_{sh} = e\\,h_{sh}\\gamma_c L_{ab} = (${t(O.e,4)})(${t(O.hSh,3)})(${t(+S.mat.gc,3)})(${t(+g.Lab)}) = ${t(ps.W,2)}\\ \\text{kip at } \\bar x_{sh} = x_{stem,back} - \\dfrac{e}{2} = ${t(O.xSh,3)}\\ \\text{ft}` : `h_{sh} = 0:\\ \\text{no stem shelf above the seat}`,
     ...(P? [`x_{ap} = x_{stem,back} - \\dfrac{e}{2} = ${t(P.x,3)}\\ \\text{ft (approach slab reaction, mid-bearing of the shelf; §1.4a)}`] : []),
     `\\text{arms to the stem-base centroid } x_{sc} = ${t(xsc,3)}\\ \\text{ft (+ = toward the toe):}\\ \\ x_{sc}-\\bar x_{bw} = ${t(xsc-xbw,3)}${ps?`,\\ x_{sc}-\\bar x_{sh} = ${t(xsc-O.xSh,3)}`:""}${P?`,\\ x_{sc}-x_{ap} = ${t(xsc-P.x,3)}`:""},\\ x_{sc}-x_{brg} = ${t(xsc-geo.xBrg,3)}\\ \\text{ft}`],
-    abNL("Assumptions (engineer request 2026-11-10):",[["Shelf:","the stem at its full thickness carried up behind the backwall to the shelf (no corbel or paving notch); its weight is a stem part (§1.2)."],["Bearings (engineer decision 2026-11-10):","fixed where they would be with e = 0 (setback from x<sub>stem,back</sub> − t<sub>bw</sub>); only the seat between the bearing line and the inset backwall narrows by e, to a<sub>bw</sub>. The bearing arm x<sub>sc</sub> − x<sub>brg</sub> is that of e = 0."],["Earth pressure:","stability on the virtual back plane at the heel and the stem on its back face, as before; the backwall's retained height is above the shelf (Tab 5 §5.1)."],["Moments:","these arms enter the stem-base eccentric moment (Tab 5 §5.2) and the footing / stability moments about the toe (Tab 2) through the load groups of §1.9."]]));
+    abNL("Assumptions (engineer request 2026-11-10):",[["Shelf:","the stem at its full thickness carried up behind the backwall to the shelf (no corbel or paving notch); its weight is a stem part (§1.2)."],["Bearings:","the bearing line is a<sub>f</sub> from the front face of the stem (panel I-1), where it would be with e = 0; only the seat between the bearing line and the inset backwall narrows by e, to a<sub>bw</sub>. The bearing arm x<sub>sc</sub> − x<sub>brg</sub> is that of e = 0."],["Earth pressure:","stability on the virtual back plane at the heel and the stem on its back face, as before; the backwall's retained height is above the shelf (Tab 5 §5.1)."],["Moments:","these arms enter the stem-base eccentric moment (Tab 5 §5.2) and the footing / stability moments about the toe (Tab 2) through the load groups of §1.9."]]));
 }
 /* ABSH: the approach slab on the stem shelf (backwall offset e > 0): bearing only (the shelf is stem concrete, no bracket) */
 function apStemShHTML(R,no){
@@ -8079,8 +8117,8 @@ function renderTabStruct(R){
       `q_R = \\varphi_b\\,(0.85 f'_c)\\,m = ${fmtT(bs.phiB,2)}(0.85\\times${fmtT(m.fc,1)})(${fmtT(bs.m,3)}) = ${fmtT(bs.qR,3)}\\ \\text{ksi}`],
       abNL("Bearing pressure and area:",[["P_u:","the most heavily loaded single bearing: the factored girder reaction (γ_DC,max·DC + γ_DW,max·DW + γ_LL·LL + wind) divided by n_b, the bearings per girder line (panel I-10), evaluated at Strength I and V; the governing bearing is the one with the largest q_b/q_R."],
         ["A₂:","concentric with the pad, extended by the smallest clear edge distance c:"],
-        ["c_front","= (t_st − t_bw − setback)·12 − L_pad/2 to the seat front edge;"],
-        ["c_back","= (setback + t_bw)·12 − L_pad/2 to the stem back face (the stem continues under the backwall);"],
+        ["c_front","= 12a<sub>f</sub> − L_pad/2 to the seat front edge (a<sub>f</sub>: CL bearing from the front face of the stem, panel I-1; Tab 1 §1.1);"],
+        ["c_back","= (a<sub>brg</sub> + t_bw)·12 − L_pad/2 to the stem back face, a<sub>brg</sub> = t_st − t_bw − a<sub>f</sub> (the stem continues under the backwall);"],
         ["c_trans","= the lesser of the distance to the wall end and half the clear distance to the next girder's pad (Fig. 5.6.5-1)."],
         ["m","= 1 if c ≤ 0; the uniform-stress form √(A₂/A₁) ≤ 2 is used (the reduced form of 5.6.5 for a non-uniform bearing stress, e.g. under pad rotation, is not applied)."],
         bs.nBg>1?["With "+bs.nBg+" bearings per girder","each pad is placed at the girder centreline for c_trans (the pad spacing within a girder is not an input): check c_trans by hand."]:null]))}
@@ -8729,7 +8767,7 @@ function svgSeatPlan(R){
   const X=x=>mL+x*sc, Y=y=>mT+(halfY+y)*sc, xc=OFs? (g.tst-g.tbw-g.brgSetback)*12 : seatIn-g.brgSetback*12;   // ABBF: bearings as with e = 0
   const J="tab-struct|o-str-bearing";
   let b=svgT(10,18,isGov?`Bearing seat plan — girder ${bs.pgirder} (governing q_b/q_R)`:`Bearing seat plan — girder ${bs.pgirder} (selected; governing: girder ${R.checks.bearingSeat.pgirder})`,{b:1,fs:12});
-  b+=`<rect x="${X(0)}" y="${Y(-halfY)}" width="${Math.max(0,seatIn)*sc}" height="${2*halfY*sc}" fill="#f2f2ec" stroke="#555"${FIG_STATIC?"":fia(`Bridge seat: width ${fF(R.geo.seatW,2)} ft = ${fF(seatIn,1)} in (t_st − t_bw); bearing setback ${fF(g.brgSetback,2)} ft from the backwall`,J)}/>`;
+  b+=`<rect x="${X(0)}" y="${Y(-halfY)}" width="${Math.max(0,seatIn)*sc}" height="${2*halfY*sc}" fill="#f2f2ec" stroke="#555"${FIG_STATIC?"":fia(`Bridge seat: width ${fF(R.geo.seatW,2)} ft = ${fF(seatIn,1)} in (t_st − t_bw); CL bearing a_f = ${fF(g.brgFront,2)} ft from the seat front edge (setback ${fF(g.brgSetback,2)} ft from the backwall)`,J)}/>`;
   b+=`<rect x="${X(seatIn)}" y="${Y(-halfY)}" width="${tbwIn*sc}" height="${2*halfY*sc}" fill="#dcdcd4" stroke="#555"/>`;
   if(OFs) b+=`<rect x="${X(seatIn+tbwIn)}" y="${Y(-halfY)}" width="${eIn*sc}" height="${2*halfY*sc}" fill="#ecebe4" stroke="#555" stroke-dasharray="4 2"/>`+svgT(X(seatIn+tbwIn+eIn/2),Y(halfY)+12,"shelf e",{a:"middle",fs:9.5,c:"#555"});
   b+=svgT(X(seatIn+tbwIn/2),Y(-halfY)-6,"backwall",{a:"middle",fs:10,c:"#555"})+svgT(X(0),Y(-halfY)-6,"seat front edge",{fs:10,c:"#555"});
@@ -8737,9 +8775,9 @@ function svgSeatPlan(R){
   const padTip=`Bearing pad, girder ${bs.pgirder}: A₁ = L_pad·W_pad = ${fF(Lp,1)} × ${fF(Wp,1)} = ${fF(bs.A1,0)} in²`+(isGov?`\nP_u = P_u,girder/n_b = ${fF(bs.PuG)}/${bs.nBg} = ${fF(bs.Pu)} kip (${bs.pls})\nq_b = P_u/A₁ = ${fF(bs.Pu)}/${fF(bs.A1,0)} = ${fF(bs.qb,3)} ksi\nq_R = φ_b(0.85f'_c)m = ${fF(bs.phiB,2)}(0.85 × ${fF(S.mat.fc,1)})(${fF(bs.m,3)}) = ${fF(bs.qR,3)} ksi\nq_b/q_R = ${fF(bs.dc,3)}`:`\nm = ${fF(bs.m,3)}; the factored load and q_b/q_R are worked for the governing girder ${R.checks.bearingSeat.pgirder} in §5.6`);
   b+=`<rect x="${X(xc-Lp/2)}" y="${Y(-Wp/2)}" width="${Lp*sc}" height="${Wp*sc}" fill="#c9c3b3" stroke="#333" stroke-width="1.4"${FIG_STATIC?"":fia(padTip,J)}/>`;
   b+=fg(padTip,J,svgT(X(xc),Y(0)+4,`pad ${fmt(Lp,1)}" × ${fmt(Wp,1)}"`,{a:"middle",fs:10}));
-  b+=fg(OFs? `c_front = (t_st − t_bw − setback)·12 − L_pad/2 = (${fF(g.tst-g.tbw,3)} − ${fF(g.brgSetback,3)})(12) − ${fF(Lp,1)}/2 = ${fF(bs.cFront,1)} in (pad to the seat front edge; bearings as with e = 0)` : `c_front = (w_seat − setback)·12 − L_pad/2 = (${fF(R.geo.seatW,3)} − ${fF(g.brgSetback,3)})(12) − ${fF(Lp,1)}/2 = ${fF(bs.cFront,1)} in (pad to the seat front edge)`,J,dimH(X(0),X(xc-Lp/2),Y(Wp/2)+22,`c_front ${fmt(bs.cFront,1)}"`));
-  b+=fg(`c_back = (setback + t_bw)·12 − L_pad/2 = (${fF(g.brgSetback,3)} + ${fF(g.tbw,3)})(12) − ${fF(Lp,1)}/2 = ${fF(bs.cBack,1)} in (pad to the stem back face)`,J,dimH(X(xc+Lp/2),X(seatIn+tbwIn+eIn),Y(Wp/2)+22,`c_back ${fmt(bs.cBack,1)}"`));
-  if(OFs) b+=fg(`c_bw = (setback − e)·12 − L_pad/2 = (${fF(g.brgSetback*12,1)} − ${fF(eIn,1)}) − ${fF(Lp,1)}/2 = ${fF(OFs.cBw,1)} in (pad to the inset backwall's front face; < 0 = the pad runs into the backwall)`,J,dimH(X(xc+Lp/2),X(seatIn),Y(-Wp/2)-14,`c_bw ${fmt(OFs.cBw,1)}"`));
+  b+=fg(`c_front = 12·a_f − L_pad/2 = 12(${fF(g.brgFront,3)}) − ${fF(Lp,1)}/2 = ${fF(bs.cFront,1)} in (pad to the seat front edge; a_f = CL bearing from the front face of the stem, panel I-1)`,J,dimH(X(0),X(xc-Lp/2),Y(Wp/2)+22,`c_front ${fmt(bs.cFront,1)}"`));
+  b+=fg(`c_back = (a_brg + t_bw)·12 − L_pad/2, a_brg = t_st − t_bw − a_f: (${fF(g.brgSetback,3)} + ${fF(g.tbw,3)})(12) − ${fF(Lp,1)}/2 = ${fF(bs.cBack,1)} in (pad to the stem back face)`,J,dimH(X(xc+Lp/2),X(seatIn+tbwIn+eIn),Y(Wp/2)+22,`c_back ${fmt(bs.cBack,1)}"`));
+  if(OFs) b+=fg(`c_bw = (t_st − t_bw − e − a_f)·12 − L_pad/2 = (a_brg − e)·12 − L_pad/2 = (${fF(g.brgSetback*12,1)} − ${fF(eIn,1)}) − ${fF(Lp,1)}/2 = ${fF(OFs.cBw,1)} in (pad to the inset backwall's front face; < 0 = the pad runs into the backwall)`,J,dimH(X(xc+Lp/2),X(seatIn),Y(-Wp/2)-14,`c_bw ${fmt(OFs.cBw,1)}"`));
   b+=fg(`c_trans = ${fF(bs.cT,1)} in, girder ${bs.pgirder}: the lesser of the distance to the wall end (L_ab/2 − |y|)·12 − W_pad/2 and half the clear distance to the next girder's pad`,J,dimV(Y(-Wp/2),Y(-Wp/2-Math.max(0,Math.min(bs.cT,halfY-Wp/2))),X(xc)+Lp*sc/2+18,`c_trans ${fmt(bs.cT,1)}"`));
   if(c>0) b+=svgT(X(xc-Lp/2-c),Y(Wp/2+c)+14,`A₂ = (${fmt(Lp,1)} + 2·${fmt(c,1)})(${fmt(Wp,1)} + 2·${fmt(c,1)}) = ${fmt(bs.A2,0)} in²`,{fs:10,c:"#1f3a5f"});
   b+=svgT(10,Hp-10,`c = min(c_front, c_back, c_trans) = ${fmt(bs.c,1)}" (${esc(bs.cBy)}); m = √(A₂/A₁) = ${fmt(bs.mRaw,3)} → ${fmt(bs.m,3)}. Worked above.`,{fs:9.5,c:"#555"});
@@ -9033,6 +9071,8 @@ function drawXsec(){
   s+=`<rect x="${X(xb)-6}" y="${Y(g.tf+g.hstem)-8}" width="12" height="8" fill="#8a8a80" stroke="#333"/>
       <line x1="${X(xb)}" y1="${Y(g.tf+g.hstem)-26}" x2="${X(xb)}" y2="${Y(g.tf+g.hstem)-8}" stroke="#444" marker-end="url(#arr)"/>
       <text x="${X(xb)}" y="${Y(g.tf+g.hstem)-30}" text-anchor="middle" font-size="12" font-family="Times New Roman" fill="#222">brg</text>`;
+  if(iabType()!=="integral"&&isFinite(+g.brgFront)&&Math.abs(xb-(xsb-g.tst))>0.01)   // ABBF2: front face of the stem (at the seat) to the CL of bearings, a_f (panel I-1)
+    s+=`<g><title>a_f = ${fmt(+g.brgFront)} ft: front face of the stem at the seat to the CL of bearings (panel I-1; worked below)</title>${dimH(X(xsb-g.tst),X(xb),Y(g.tf+g.hstem)+12,`a_f=${fmt(+g.brgFront)}'`,14)}</g>`;
   // EH active-pressure wedge on the virtual back plane through the heel (triangular, zero at soil surface → max at base)
   {
     const pw=Math.min((g.Lheel)*sc*0.72, 52);
@@ -10077,7 +10117,7 @@ function abdwBuild(R){
       D.dim(L.dim,[0,0],[0,G.tf],[-0.5*k,0],90); dV([0,G.tf],[G.xstF,G.ySeat],-0.5*k,null,true);
       if(!G.semi) dV([G.xstF,G.ySeat],[G.xbwF,G.yTop],-0.5*k,null,true); else dV([G.xstF,G.ySeat],[G.xbwF,G.yTop],-0.5*k,null,true);
       dV([0,0],[G.xbwF,G.yTop],-1.0*k,null,true);
-      const yT=G.yTop+0.45*k; dH([G.xstF,G.ySeat],[G.xBrg,G.ySeat],yT); dH([G.xBrg,G.ySeat],[G.xbwF,G.yTop],yT); dH([G.xbwF,G.yTop],[G.xbwB,G.yTop],yT);
+      const yT=G.yTop+0.45*k; dH([G.xstF,G.ySeat],[G.xBrg,G.ySeat],yT,"<> (A_F)");   // ABBF2: front face of stem to CL BRG., a_f (panel I-1) dH([G.xBrg,G.ySeat],[G.xbwF,G.yTop],yT); dH([G.xbwF,G.yTop],[G.xbwB,G.yTop],yT);
       // ABSH; ABSS (2026-11-10): E with its value beside the extension line (10 in is narrower than its text); D_SH behind the backwall, its value
       // written level beside the dimension line above the slab (it was inside the slab when the slab was drawn d_sh thick)
       if(G.off){ const yE=yT+(G.ap?0.4*k:0); D.dim(L.dim,[G.xbwB,G.ySh],[G.xb,G.ySh],[G.xbwB,yE],0," "); free(L.dim,G.xb+0.1*k,yE-0.4*h,h,"E = "+IN(G.off.e),0,0,1);
@@ -10392,7 +10432,7 @@ function abdwBuild(R){
         D.line(L.cl,G.xBrg,G.ySeat-0.2*k,G.xBrg,G.yTop+1.3*k); D.text(L.txt,G.xBrg,G.yTop+1.38*k,h,"CL BRG.",1);
         lead(G.xBrg-padL/2,y0-G.padH/2,xf(yb)-0.5*k,y0+0.3*k,"BEARING "+padL+" x "+padW+" IN, H_RT = "+IN(+S.bearing.hrt||0)+"\n"+(G.brgH!=null?"(TOTAL HEIGHT "+IN(G.brgH)+", PANEL I-1)":"(PAD HEIGHT SCHEMATIC)"),2,hb);
         let xg=null; if(!G.semi){ xg=G.xbwF-(+S.geom.endGap||0); if(xg>G.xstF){ D.line(L.hid,xg,y0,xg,Math.min(G.yTop,y0+18)); lead(xg,y0+12,xf(yb)-0.5*k,y0+1.0*k,"GIRDER END (END GAP "+IN(+S.geom.endGap||0)+")",2,hb); } else xg=null; }
-        const yD=G.yTop+0.45*k; dH([G.xstF,G.ySeat],[G.xBrg,y0],yD); dH([G.xBrg,y0],[G.xbwF,G.yTop],yD); dH([G.xbwF,G.yTop],[G.xbw,G.yTop],yD);
+        const yD=G.yTop+0.45*k; dH([G.xstF,G.ySeat],[G.xBrg,y0],yD,"<> (A_F)");   // ABBF2 dH([G.xBrg,y0],[G.xbwF,G.yTop],yD); dH([G.xbwF,G.yTop],[G.xbw,G.yTop],yD);
         if(xg!==null&&Cs) dH([G.xstF,G.ySeat],[xg,y0],G.yTop+0.9*k,"N = <> PROV.; "+f1(Cs.NreqP)+" REQ. (TAB 3 3.5)");
         dV([G.xstF,G.ySeat],[G.xbwF,G.yTop],xf(yb)-0.45*k,null,true);
         // bars
@@ -11245,12 +11285,13 @@ function abrModel(){
       ...ABRX_SRC.map(f=>{ try{ return f(); }catch(e){ return ""; } }).filter(Boolean).map(t=>({type:"note",text:t}))]});
     const gr=[["Footing: toe L_toe / heel L_heel / thickness t_f",abrN(g.Ltoe)+" / "+abrN(g.Lheel)+" / "+abrN(g.tf),"ft"],["Footing width B = L_toe + t_sb + L_heel",abrCell(B),"ft"],
       ["Stem: height h_stem / top t_st / bottom t_sb",abrN(g.hstem)+" / "+abrN(g.tst)+" / "+abrN(g.tsb),"ft"],["Backwall: height h_bw / thickness t_bw",abrN(g.hbw)+" / "+abrN(g.tbw),"ft"],
-      ["Bearing setback from the backwall front face",abrCell(+g.brgSetback),"ft"],["Wall length L_ab / footing length L_ftg",abrN(Lab)+" / "+abrN(Lftg),"ft"],
+      ["CL bearing from the front face of the stem (at the seat) a_f",abrCell(+g.brgFront),"ft"],["Setback from the backwall face (flush) a_brg = t_st − t_bw − a_f = "+abrN(g.tst)+" − "+abrN(g.tbw)+" − "+abrN(+g.brgFront),abrCell(+g.brgSetback),"ft"],
+      ["Bearing line x_brg = x_stem,top,front + a_f = "+abrN(R.geo.xStemTopFront,3)+" + "+abrN(+g.brgFront),abrCell(R.geo.xBrg,3),"ft"],["Wall length L_ab / footing length L_ftg",abrN(Lab)+" / "+abrN(Lftg),"ft"],
       ["Soil height over the heel / backfill slope β",abrN(g.soilH)+" ft / "+abrN(+g.beta||0,1)+"°",""],["Water table above the footing base h_w",abrCell(+g.hw||0),"ft"],
       ["Span length / skew",abrN(g.spanL,1)+" ft / "+abrN(+g.skew||0,1)+"°",""],["Retained height at the heel H",abrCell(R.geo.H),"ft"]];
     const OFr=R.geo.off;   // ABSH: backwall offset
     if(OFr) gr.push(["Backwall offset e (stem back face to backwall back face) / stem-shelf depth d_sh below the top",abrN(OFr.eIn,1)+" / "+abrN(OFr.dIn,1)+(OFr.dAuto?" (= slab t)":""),"in"],["Bridge seat width t_st − t_bw − e",abrCell(R.geo.seatW),"ft"]);
-    subs.push({title:"Geometry",items:[{type:"table",head:["Quantity","Value","Unit"],rows:gr},{type:"note",text:"Entered on the input tabs; derived values as on "+abrTab("tab-loads")+"."}].concat(OFr?[{type:"note",text:"Backwall offset (engineer request 2026-11-10): the backwall's back face is e in front of the stem's back face; behind it the stem rises at its full thickness to the stem shelf, d_sh below the top of the backwall (no corbel or paving notch). The approach slab bears on the shelf at mid-width e/2; the backwall is designed at the shelf elevation. Bearings (engineer decision 2026-11-10): they stay where they would be with e = 0 (setback measured from x_stem,back − t_bw), so e_brg and the seat front edge distance are those of e = 0; only the run from the bearing line to the inset backwall shrinks, a_bw = setback − e, and the pad must fit in it (a_bw ≥ L_pad/2). Support length N = 12(t_st − t_bw − e) − g_end, from the girder end (g_end in front of the inset backwall) to the seat front edge (see §3.5). Positions and lever arms: see Loads, \"Backwall offset\" ("+abrTab("tab-loads")+" §1.1)."+(R.ap&&!R.ap.legacy?" Approach slab top (engineer report 2026-11-10): the slab, t = "+abrN(R.ap.t*12,1)+" in, bears on the shelf, so its top is at the shelf + t"+(Math.abs(OFr.dIn-R.ap.t*12)<0.01?", level with the top of the backwall (d_sh = t).":", "+abrN(Math.abs(OFr.dIn-R.ap.t*12),1)+" in "+(OFr.dIn>R.ap.t*12?"below":"above")+" the top of the backwall (d_sh = "+abrN(OFr.dIn,1)+" in; see §1.1a)."+(OFr.dIn>R.ap.t*12?" The pavement or fill over the slab (d_sh − t) is not modelled as a load; include it in the slab wearing surface (DW, panel I-0b) if it rides on the slab.":"")):"")}]:[])});
+    subs.push({title:"Geometry",items:[{type:"table",head:["Quantity","Value","Unit"],rows:gr},{type:"note",text:"Entered on the input tabs; derived values as on "+abrTab("tab-loads")+"."}].concat(IT!=="integral"?[{type:"note",text:"Bearing line: a_f is entered, from the front face of the stem at the seat to the CL of bearings; x_brg = x_stem,top,front + a_f, and the bearing line stays a_f from the front face when t_st, t_bw"+(IT==="conv"?" or the backwall offset e":"")+" change (the setback a_brg follows). A project saved with only the setback opens with a_f = t_st − t_bw − setback: the same bearing line. Worked on "+abrTab("tab-loads")+" §1.1."}]:[]).concat(OFr?[{type:"note",text:"Backwall offset (engineer request 2026-11-10): the backwall's back face is e in front of the stem's back face; behind it the stem rises at its full thickness to the stem shelf, d_sh below the top of the backwall (no corbel or paving notch). The approach slab bears on the shelf at mid-width e/2; the backwall is designed at the shelf elevation. Bearings: the bearing line is a_f from the front face of the stem (panel I-1), where it would be with e = 0, so e_brg and the seat front edge distance are those of e = 0; only the run from the bearing line to the inset backwall shrinks, a_bw = t_st − t_bw − e − a_f, and the pad must fit in it (a_bw ≥ L_pad/2). Support length N = 12(t_st − t_bw − e) − g_end, from the girder end (g_end in front of the inset backwall) to the seat front edge (see §3.5). Positions and lever arms: see Loads, \"Backwall offset\" ("+abrTab("tab-loads")+" §1.1)."+(R.ap&&!R.ap.legacy?" Approach slab top (engineer report 2026-11-10): the slab, t = "+abrN(R.ap.t*12,1)+" in, bears on the shelf, so its top is at the shelf + t"+(Math.abs(OFr.dIn-R.ap.t*12)<0.01?", level with the top of the backwall (d_sh = t).":", "+abrN(Math.abs(OFr.dIn-R.ap.t*12),1)+" in "+(OFr.dIn>R.ap.t*12?"below":"above")+" the top of the backwall (d_sh = "+abrN(OFr.dIn,1)+" in; see §1.1a)."+(OFr.dIn>R.ap.t*12?" The pavement or fill over the slab (d_sh − t) is not modelled as a load; include it in the slab wearing surface (DW, panel I-0b) if it rides on the slab.":"")):"")}]:[])});
     const mr=[["Concrete f′c / unit weight γ_c",abrN(fc,1)+" ksi / "+abrN(m.gc,3)+" kcf",""],["Reinforcement f_y ("+(m.rebar||"A615")+")",abrCell(fy,1),"ksi"],["Cover: footing / walls",abrN(m.coverF,2)+" / "+abrN(m.coverT,2),"in"],
       ["Backfill γ / φ",abrN(gam,3)+" kcf / "+abrN(S.soil.phi,1)+"°",""],["Earth pressure method / state",(S.soil.method||"rankine")+" / "+(R.Ksel?R.Ksel.eff:"—"),""],
       ["Foundation",fn.branch==="pile"?"pile-supported":"spread footing on "+fn.matl,""]];
@@ -11295,7 +11336,7 @@ function abrModel(){
         ["P_AE (kip/ft) / increment ΔP_AE,h (kip/ft)",abrN(q.PAE,3)+" / "+abrN(q.dPAEh,3)],["Wall inertia W_i (kip)",abrN(q.WiW,1)]]},{type:"note",text:"Mononobe–Okabe, AASHTO LRFD 10th Ed. Art. 11.6.5 and Appendix A11; worked on "+abrTab("tab-loads")+"."}]}); }
     if(R.geo.off){ const O=R.geo.off, xsc=R.geo.xStemCenter, xbw=R.geo.xBwFront+(+g.tbw)/2, ps=parts.find(p=>/^Stem shelf/.test(p.name)), P=R.ap;   // ABSH
       const rows=[["x_bw,back = x_stem,back − e",abrN(R.geo.xStemBack,3)+" − "+abrN(O.e,4),abrCell(O.xBwBack,3),"ft"],["x_bw,front = x_bw,back − t_bw",abrN(O.xBwBack,3)+" − "+abrN(+g.tbw,3),abrCell(R.geo.xBwFront,3),"ft"],
-        ["x_brg = x_stem,back − t_bw − setback (bearings as with e = 0)",abrN(R.geo.xStemBack,3)+" − "+abrN(+g.tbw,3)+" − "+abrN(+g.brgSetback,3),abrCell(R.geo.xBrg,3),"ft"],["a_bw = setback − e (bearing line to the inset backwall); c_bw = 12a_bw − L_pad/2",abrN(+g.brgSetback,3)+" − "+abrN(O.e,4)+"; "+abrN(O.aBw*12,1)+" − "+abrN(+S.bearing.padL/2,1),abrN(O.aBw*12,1)+" in; "+abrN(O.cBw,1)+" in"+(O.cBw<0?" (pad runs into the backwall: input error)":""),""],["Backwall centroid x̄_bw = x_bw,front + t_bw/2",abrN(R.geo.xBwFront,3)+" + "+abrN(+g.tbw/2,3),abrCell(xbw,3),"ft"],
+        ["x_brg = x_stem,top,front + a_f (e does not move it)",abrN(R.geo.xStemTopFront,3)+" + "+abrN(+g.brgFront,3),abrCell(R.geo.xBrg,3),"ft"],["a_bw = t_st − t_bw − e − a_f = a_brg − e (bearing line to the inset backwall); c_bw = 12a_bw − L_pad/2",abrN(+g.brgSetback,3)+" − "+abrN(O.e,4)+"; "+abrN(O.aBw*12,1)+" − "+abrN(+S.bearing.padL/2,1),abrN(O.aBw*12,1)+" in; "+abrN(O.cBw,1)+" in"+(O.cBw<0?" (pad runs into the backwall: input error)":""),""],["Backwall centroid x̄_bw = x_bw,front + t_bw/2",abrN(R.geo.xBwFront,3)+" + "+abrN(+g.tbw/2,3),abrCell(xbw,3),"ft"],
         ["Shelf height above the seat h_sh = h_bw − d_sh",abrN(+g.hbw,3)+" − "+abrN(O.d,3),abrCell(O.hSh,3),"ft"]];
       if(ps) rows.push(["Stem shelf W_sh = e·h_sh·γ_c·L_ab at x̄_sh = x_stem,back − e/2",abrN(O.e,4)+"·"+abrN(O.hSh,3)+"·"+abrN(+S.mat.gc,3)+"·"+abrN(Lab),abrCell(ps.W,2)+" kip at "+abrN(O.xSh,3)+" ft",""]);
       if(P) rows.push(["Approach slab reaction x_ap = x_stem,back − e/2 (mid-bearing)",abrN(R.geo.xStemBack,3)+" − "+abrN(O.e/2,4),abrCell(P.x,3),"ft"]);
@@ -11708,7 +11749,8 @@ function recalcAll(){
 function updateDerivedInInputs(){
   // refresh derived readouts & computed beam-position cells without rebuilding (keeps focus)
   const g=S.geom;
-  const dv=document.querySelectorAll("#inputCol .derived");
+  const dv=document.querySelectorAll("#inputCol .derived:not(#abBrgDer)");   // ABBF2: the a_f readout is refreshed by its id
+  { const bd=document.getElementById("abBrgDer"); if(bd) bd.innerHTML=abBrgDerHTML(); }
   if(dv[0]) dv[0].innerHTML=bwOffGeo()? bwOffDerivedHTML() : `Derived: bridge seat width = t<sub>st</sub> − t<sub>bw</sub> = <b>${fmt(g.tst-g.tbw)} ft</b> &nbsp;·&nbsp; seat elevation (above footing base) = <b>${fmt(g.tf+g.hstem)} ft</b>`;
   { const ei=document.getElementById("abElevIn"); if(ei) ei.innerHTML=abElevInHTML(); }   // ABEL
   { const ei=document.getElementById("abElLpIn"); if(ei) ei.innerHTML=abElLpInHTML(); }   // ABEL2
@@ -12151,7 +12193,7 @@ function inputEchoHTML(){
     ["Design load multiplier m (LL reaction, BR)",fmt(+S.own.mLL||1,2),"–"]].concat(abutOwner()==="RIDOT"?[["ADT (η_I)",S.own.ADT===""?"not entered (η = 1.00)":fmt(+S.own.ADT,0),"veh/day"]]:[])):"")+"<h3>Geometry</h3>"+echoRows(itg?[["Abutment length L_ab",g.Lab,"ft"],["Span length / skew",fmt(g.spanL)+" / "+fmt(g.skew,1)+"°","ft / deg"]]:[
     [semi?"End diaphragm height / thickness (h_bw / t_bw)":"Backwall height / thickness",fmt(g.hbw)+" / "+fmt(g.tbw),"ft"],
     ["Stem height; top / bottom thickness",fmt(g.hstem)+"; "+fmt(g.tst)+" / "+fmt(g.tsb),"ft"],
-    ["Bearing setback from backwall face",g.brgSetback,"ft"],
+    ["CL bearing from front face of stem (at seat) a_f / setback from backwall face (t_st − t_bw − a_f)",fmt(+g.brgFront)+" / "+fmt(+g.brgSetback),"ft"],
     ["Girder end to backwall face g_end (support length)",fmt(+g.endGap||0,1),"in"],
     ["Toe / stem base / heel  (B total)",fmt(g.Ltoe)+" / "+fmt(g.tsb)+" / "+fmt(g.Lheel)+"  (B = "+fmt(g.Ltoe+g.tsb+g.Lheel)+")","ft"],
     ["Footing thickness",g.tf,"ft"],["Wall (stem/backwall) length L_ab",g.Lab,"ft"],["Footing length L_ftg",fmt(g.Lftg),"ft"],
@@ -12611,6 +12653,7 @@ document.addEventListener("DOMContentLoaded",init);
     items.filter(isLay).forEach(it=>it.paths.forEach((q,i)=>setPath(S,q,Array.isArray(it.vals[i])?it.vals[i].slice():it.vals[i])));
     migrate();                                                   // sizes the reaction matrix to N
     items.filter(it=>!isLay(it)).forEach(it=>it.paths.forEach((q,i)=>setPath(S,q,it.vals[i])));
+    if(items.some(it=>it.paths.includes("geom.brgSetback"))&&S.geom) delete S.geom.brgFront;   // ABBF2: a_f re-derived from the setback sent (migrate below)
     const grp=secs.filter(s=>s.k!=="linked").map(s=>s.k);
     S.subloadsSrc={ producer:p.producer||"", producedAt:p.producedAt||"", project:(p.project&&p.project.name)||"", abutment:o.name, groups:grp,
       choices:{ ll:grp.indexOf("ll")>=0?st.ll:null, ws:grp.indexOf("ws")>=0?o.wsC[st.ws].name:null, wl:grp.indexOf("wl")>=0?o.wlC[st.wl].name:null, tu:grp.indexOf("tu")>=0?st.tu:null,
