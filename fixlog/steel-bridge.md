@@ -5789,6 +5789,10 @@ index 10a32fd..16f867d 100644
 - **Open items:** Decision (pending engineer review): the Service II f_ℓ/2 term is kept (6A.6.4.2.2 makes it optional for straight girders at the Owner's discretion). The Flexure tab's design check GS12 keeps LRFD 0.95R_hF_yf (design, not rating).
 - **Other copies:** ST-Girder in `Steel Bridge Design.html` (superseded; not changed by instruction).
 
+## 2026-11-10 — PR: claude/handoffs-card-subloads (PR #1356: https://github.com/mlococo88/All-Structural/pull/1356) — "Send to Substructure Loading" alert names the receiver's new place (HOC, cross-tool with Bridge Substructure Loading)   [text only]
+- **Where:** `apps/steel-bridge/ui/handoffs.js` `async function subSend(P, file)`, last `alert(…)`: `In Bridge Substructure Loading: Bridge tab, "Pull geometry from Steel Bridge Design"; Reactions tab, "Pull from PS-Beam / GirderDetail". Each asks which project first.` → `In Bridge Substructure Loading: Project tab, Hand-offs card, "Pull geometry from Steel Bridge Design" and "Pull from PS-Beam / GirderDetail". Each asks which project first.`
+- **Provisions / computed values / saved data:** none. **Other copies:** none.
+
 ## 2026-11-10 — PR: claude/sb-mbe4-fatlife (PR #1362: https://github.com/mlococo88/All-Structural/pull/1362) — Remaining fatigue life by the MBE 4th Ed. Section 7, and its inputs on the Fatigue & studs tab   [calculation change, approved: engineer standing rule 2026-11-10]
 - **Engineer (2026-11-10):** load rating and evaluation follow the AASHTO MBE 4th Edition (2026); item 3 of the open items of PR #1349 (above).
 - **Where (to re-apply by hand):**

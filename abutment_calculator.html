@@ -117,6 +117,10 @@ header.app-head{
 #prjPane .prjBtns button:hover{background:var(--panel-h);}
 #prjPane .prjGrp{margin:2px 0 10px;}
 #prjPane .prjGrp>b{display:block;font-size:0.85rem;}
+#prjPane #abHo .prjGrp{border-top:1px solid var(--line);padding-top:6px;}
+#prjPane #abHo .prjGrp>b{display:inline;}
+#prjPane #abHo .hoFrom{font-size:0.78rem;color:#555;}
+#prjPane #abHo .hoGrp{margin:10px 0 4px;font-size:0.72rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#555;}
 @media screen and (max-width:700px){#hdrActs{margin-left:0;justify-content:flex-start;width:100%;}#hdrProj{flex:1 1 100%;max-width:none;}}
 
 /* ================= MAIN LAYOUT ================= */
@@ -566,22 +570,30 @@ svg circle.fi[data-pile].fhl,svg circle.fi[data-pile]:hover,svg circle.fi[data-p
     </div>
         <div class="in-note">Printed on the Report.</div>
       </div></div>
-      <div class="panel"><div class="p-head"><span class="tri">▼</span><span>Shared project info and hand-offs</span></div><div class="p-body">
-        <div class="prjGrp"><b>Project info</b><div class="in-note">Copy the title block from or to the other tools.</div><div class="prjBtns bx-pm-row"><button type="button" id="bx-pm-use" title="Fill this title block from the project info shared by another tool">Use shared project info</button><button type="button" id="bx-pm-share" title="Share this title block with the other tools">Share project info</button></div></div>
-        <div class="prjGrp"><b>Abutment loads (Bridge Substructure Loading)</b><div class="in-note">Loads sent by SubLoads, or its hand-off / "Export abutments" file.</div><div class="prjBtns">
+      <!-- HOC (2026-11-10, engineer request "the push/pull should probably all be in the Project tab"): the panel "Shared project info and
+           hand-offs" becomes "Hand-offs" with "Receive from other tools" and "Send to other tools"; the same buttons, ids and handlers;
+           status and last received / sent lines filled by the hand-off scripts' paint() (display only) -->
+      <div class="panel" id="abHo"><div class="p-head"><span class="tri">▼</span><span>Hand-offs</span></div><div class="p-body">
+        <div class="in-note">Nothing changes until you confirm: each pull or import first shows what it will change, and what you apply is recorded with this project (saved with it and printed in the Report).</div>
+        <div class="hoGrp">Receive from other tools</div>
+        <div class="prjGrp"><b>Shared project info</b> <span class="hoFrom">from any tool</span><div class="prjBtns bx-pm-row"><button type="button" id="bx-pm-use" title="Fill this title block from the project info shared by another tool">Use shared project info</button></div></div>
+        <div class="prjGrp"><b>Abutment loads</b> <span class="hoFrom">from Bridge Substructure Loading</span><div class="in-note">Loads sent by SubLoads, or its hand-off / "Export abutments" file.</div><div class="prjBtns">
         <button id="axh-pull" title="Pull the abutment loads sent by Bridge Substructure Loading (asks first; nothing changes until you apply)">Pull from SubLoads<span id="axh-new" class="axh-new" hidden> ● new data</span></button>
         <button id="axh-imp" title="Import an abutmentLoads hand-off JSON file, or a SubLoads &quot;Export abutments&quot; file (asks first)">Import hand-off (JSON)</button>
         <input type="file" id="axh-file" accept=".json,application/json" style="display:none">
-        <span id="axh-src" class="axh-src"></span>
-        </div></div>
-        <div class="prjGrp"><b>Bearings (Elastomeric Bearing Design)</b><div class="in-note">Opens EDM with this abutment's geometry, loads and thermal movement.</div><div class="prjBtns">
-        <button id="btnOpenEDM" title="Open the Elastomeric Bearing Design Module and hand off geometry, loads and thermal movement">↗ Open EDM (Bearing Design)</button>
-        </div></div>
-        <div class="prjGrp"><b>Foundation (Pile Designer / Shallow Foundation Design)</b><div class="in-note">Send the footing / pile-cap loads; pull the pile results back.</div><div class="prjBtns">
-        <button id="fdx-send" title="Send to other tools: the factored and service load combinations at the bottom of the footing / pile cap, per limit state (channel foundationLoads), for Pile Designer and Shallow Foundation Design; with piles also the pile layout, section and each pile's reactions, and the governing compression / uplift pile per limit state; for an integral abutment the data of Pile Designer's integral-abutment mode. The dialog also offers Export hand-off (JSON)">Send foundation loads</button>
+        </div><div class="in-note"><b>Status:</b> <span id="axh-st"></span> <b>Last received:</b> <span id="axh-src" class="axh-src"></span></div></div>
+        <div class="prjGrp"><b>Pile results</b> <span class="hoFrom">from Pile Designer</span><div class="in-note">Geotechnical R<sub>n</sub> and φ, the p-y pile moment of each matched limit state (the review lists the matches), the depth to fixity, the integral-abutment pile-head moment.</div><div class="prjBtns">
         <button id="pxr-pull" title="Pull the pile results sent by Pile Designer (channel pileResults): geotechnical R_n and φ, the p-y pile moment of each matched limit state, the depth to fixity, integral-abutment pile-head moment. Asks first; nothing changes until you import">Pull pile results<span id="pxr-new" class="axh-new" hidden> ● new data</span></button>
         <button id="pxr-imp" title="Import a pileResults hand-off JSON file from Pile Designer (asks first)">Import pile results (JSON)</button>
         <input type="file" id="pxr-file" accept=".json,application/json" style="display:none">
+        </div><div class="in-note"><b>Status:</b> <span id="pxr-st0"></span><span data-pxr-st="1"></span> <b>Last received:</b> <span id="pxr-src"></span></div></div>
+        <div class="hoGrp">Send to other tools</div>
+        <div class="prjGrp"><b>Shared project info</b> <span class="hoFrom">to every tool</span><div class="prjBtns bx-pm-row"><button type="button" id="bx-pm-share" title="Share this title block with the other tools">Share project info</button></div></div>
+        <div class="prjGrp"><b>Foundation loads</b> <span class="hoFrom">to Pile Designer and Shallow Foundation Design</span><div class="in-note">The footing / pile-cap loads per limit state; Pile Designer's results come back under Pile results above.</div><div class="prjBtns">
+        <button id="fdx-send" title="Send to other tools: the factored and service load combinations at the bottom of the footing / pile cap, per limit state (channel foundationLoads), for Pile Designer and Shallow Foundation Design; with piles also the pile layout, section and each pile's reactions, and the governing compression / uplift pile per limit state; for an integral abutment the data of Pile Designer's integral-abutment mode. The dialog also offers Export hand-off (JSON)">Send foundation loads</button>
+        </div><div class="in-note"><b>Last sent:</b> <span id="fdx-sent"></span></div></div>
+        <div class="prjGrp"><b>Bearings</b> <span class="hoFrom">to and from Elastomeric Bearing Design</span><div class="in-note">Opens EDM with this abutment's geometry, loads and thermal movement; its "Send Pad to Abutment" returns the pad (G, h<sub>rt</sub>, pad size, low-temperature multiplier) to panel I-6b.</div><div class="prjBtns">
+        <button id="btnOpenEDM" title="Open the Elastomeric Bearing Design Module and hand off geometry, loads and thermal movement">↗ Open EDM (Bearing Design)</button>
         </div></div>
       </div></div>
     </div></div>
@@ -11155,6 +11167,19 @@ document.getElementById("hdrProj").addEventListener("click",ev=>{
     if(window.matchMedia&&window.matchMedia("(max-width:1100px)").matches) window.scrollTo(0,pn.getBoundingClientRect().top+window.scrollY-(tb&&getComputedStyle(tb).position==="sticky"?tb.offsetHeight:0)-6); }
   i.focus({preventScroll:true});
 });
+/* HOC (2026-11-10): "Hand-offs: Project tab" links (next to an item-level control kept where it is) open the Project tab and scroll the
+   Hand-offs panel into view in the scrolling input column (panel layout, ABSC) or the page (narrow layout); a foundation-load send
+   refreshes the card's "Last sent" line. Display only. */
+document.addEventListener("click",ev=>{
+  const t=ev.target; if(!t||!t.closest) return;
+  if(t.id==="fdx-go"){ setTimeout(()=>{ try{ if(window.AbutPileResults) AbutPileResults.paint(); }catch(e){} },0); return; }
+  const l=t.closest("[data-go-ho]"); if(!l) return;
+  ev.preventDefault(); abutSetInTab("proj",true);
+  const c=document.getElementById("abHo"), col=document.getElementById("inputCol"), tb=document.getElementById("abutInTabs"); if(!c) return;
+  const hTb=tb&&getComputedStyle(tb).position==="sticky"? tb.offsetHeight : 0;
+  if(abPanelLayout()&&col) col.scrollTop+=c.getBoundingClientRect().top-col.getBoundingClientRect().top-hTb-6;
+  else window.scrollTo(0,c.getBoundingClientRect().top+window.scrollY-hTb-6);
+});
 /* ---------- JSON export / import ---------- */
 document.getElementById("btnExport").addEventListener("click",()=>{
   const blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"});
@@ -11733,8 +11758,11 @@ document.addEventListener("DOMContentLoaded",init);
   function srcText(){ const s=S.subloadsSrc; if(!s||!s.producedAt&&!s.producer) return "";
     return "Loads from "+(s.producer||"SubLoads")+", "+when(s.producedAt)+(s.project?" ("+s.project+")":"")+": "+(s.abutment||"")+" — "+(s.groups||[]).map(g=>GL[g]||g).join(", "); }
   function paint(){
-    const n=document.getElementById("axh-new"); if(n) n.hidden=!(BX()&&BX().isNew(CH,RID));
-    const s=document.getElementById("axh-src"); if(s) s.textContent=srcText();
+    const nw=!!(BX()&&BX().isNew(CH,RID)), n=document.getElementById("axh-new"); if(n) n.hidden=!nw;
+    const s=document.getElementById("axh-src"); if(s){ const tx=srcText(); s.textContent=tx? tx+"." : "none."; }
+    // HOC (2026-11-10): the Hand-offs card's status line (the same isNew as the new-data marker; nothing stored)
+    let up=""; try{ up=BX()? localStorage.getItem(BX().NS+CH+".updatedAt")||"" : ""; }catch(e){}
+    const st=document.getElementById("axh-st"); if(st) st.textContent=nw? "new data available." : up? "no new data since the last pull." : "nothing available (SubLoads has not sent).";
   }
   window.addEventListener("storage",paint); window.addEventListener("focus",paint);
   if(typeof recalcAll==="function"){ const rc=recalcAll; recalcAll=function(){ const r=rc.apply(this,arguments); try{ paint(); }catch(e){} return r; }; }
@@ -12271,12 +12299,16 @@ document.addEventListener("DOMContentLoaded",init);
     else if(s.integral){ const q=s.integral; h+=`<br>${esc(q.section)} (${esc(q.orient)}): gravity D/C ${f(q.dcr,3)}${num(q.interaction)?"; Tier 2 interaction "+f(q.interaction,3)+" (nonlinear "+f(q.interaction_nl,3)+"), M<sub>uy</sub> = "+f(q.Muy,1)+" (nonlinear "+f(q.Muy_nl,1)+"), M<sub>ux</sub> = "+f(q.Mux,1)+" kip-ft":""}.`;
       if(s.geo) h+=`<br>Geotechnical (Pile Designer Module 13${num(s.geo.toe)?", toe "+f(s.geo.toe,1)+" ft below the cap":""}): static R<sub>n</sub> = ${f(s.geo.Rn,1)} kip, φ = ${f(s.geo.phi,3)}; R<sub>n,up</sub> = ${f(s.geo.RnUp,1)} kip, φ<sub>up</sub> = ${f(s.geo.phiUp,3)}${s.geo.field?"; field method "+esc(s.geo.field.label)+": required R<sub>n</sub> = "+f(s.geo.field.RnReq,1)+" kip, φ<sub>dyn</sub> = "+f(s.geo.field.phi,3)+", R<sub>ndr</sub> = "+f(s.geo.field.Rndr,1)+" kip":""}${s.choices&&s.choices.geo?" (imported"+(PXR_STALE?"; STALE, not used":"")+": "+(s.choices.rn==="field"?"field method":"static")+"; Tab 10 §10.4)":" (not imported)"}.`;   // PDA-IAB
       if(s.geo&&s.geo.minPen) h+=`<br>Minimum penetration (10.7.6): z<sub>min</sub> = ${f(s.geo.minPen.zMin,1)} ft below the cap (${esc(s.geo.minPen.governs)})${num(s.geo.minPen.tipElMin)?", tip El. "+f(s.geo.minPen.tipElMin,1):""}; controlling tip ${f(s.geo.minPen.ctrl,1)} ft${num(s.geo.minPen.tipElCtrl)?" (El. "+f(s.geo.minPen.tipElCtrl,1)+")":""}.`; }
-    h+=`<br><span class="pxr-stline" data-pxr-st="1"></span> <button type="button" class="mini-btn" data-pxr-clear="1">Clear Pile Designer results</button></div>`;
+    h+=`<br><span class="pxr-stline" data-pxr-st="1"></span> <button type="button" class="mini-btn" data-pxr-clear="1">Clear Pile Designer results</button> <a href="#" data-go-ho="1" class="hoLink">Hand-offs: Project tab</a></div>`;
     return h;
   }
   function statusNow(){ const s=S.pileRes; if(!s) return null; return stale(s.basis); }
   function paint(){
-    const n=document.getElementById("pxr-new"); if(n) n.hidden=!(BX()&&BX().isNew(CH,RID));
+    const nw=!!(BX()&&BX().isNew(CH,RID)), n=document.getElementById("pxr-new"); if(n) n.hidden=!nw;
+    // HOC (2026-11-10): the Hand-offs card: "new data available" (isNew), the stale / current line (data-pxr-st, below) and the last import (S.pileRes)
+    const s0=document.getElementById("pxr-st0"); if(s0) s0.textContent=nw? "new data available. " : (!S.pileRes? "nothing imported yet. " : "");
+    const sr=document.getElementById("pxr-src"), ps=S.pileRes; if(sr) sr.textContent=ps? "from "+(ps.producer||"Pile Designer")+", "+when(ps.producedAt)+(ps.project?" ("+ps.project+")":"")+(ps.basis?"; based on the foundation loads sent "+when(ps.basis.producedAt):"")+"." : "none.";
+    const fs=document.getElementById("fdx-sent"); if(fs){ let sent=null; try{ sent=JSON.parse(localStorage.getItem("bridgeSuite.v1.foundationLoads.by.abutment")||"null"); }catch(e){} fs.textContent=sent&&sent.producedAt? when(sent.producedAt)+(sent.element&&sent.element.label?", "+sent.element.label:"")+", "+((sent.cases||[]).length)+" case(s) (from this browser)." : "nothing sent from this browser yet."; }
     const st=LAST; document.querySelectorAll("[data-pxr-st]").forEach(el=>{ el.textContent=st? st.msg : ""; el.className="pxr-stline"+(st&&(st.level==="stale"||st.level==="nomatch")?" pxr-stale":""); });
   }
   css();

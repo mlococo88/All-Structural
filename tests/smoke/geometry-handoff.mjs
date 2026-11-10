@@ -4,7 +4,7 @@
 //   the channel keys, the .by.<id> copies and the per-project copies of both channels are written (same payload), nothing before the
 //   click; Geometry alone; no project name -> no per-project copy.
 // Receiver (same browser storage): Bridge Substructure Loading.html with a second project's copy present ("Elm Street Bridge", 2 spans,
-//   sent later): the Bridge tab marker; Pull geometry -> the picker lists both projects (and the no-project copy) newest first, nothing
+//   sent later): the Project tab marker (HOC 2026-11-10: the pulls are in the Project tab's Hand-offs card); Pull geometry -> the picker lists both projects (and the no-project copy) newest first, nothing
 //   preselected for a project of another name; renamed "New steel bridge" -> that project preselected; review (current -> incoming);
 //   Apply -> P.br as sent (skews sign-converted, the largest depth), units unchanged, P.geoSrc recorded, the marker cleared; the reactions
 //   Pull also asks for the project first and its dialog lists that project's copy. A 2-span project adds no unit but removes Pier 2.
@@ -58,7 +58,7 @@ try {
   await q.goto('file://' + path.join(REPO, 'Bridge Substructure Loading.html'));
   await q.waitForFunction(() => typeof P === 'object' && !!document.querySelector('.itab[data-pane="bridge"]'));
   const br0 = await q.evaluate(() => JSON.parse(JSON.stringify(P.br)));
-  await q.click('.itab[data-pane="bridge"]'); await q.waitForSelector('#geo-pull');
+  await q.click('.itab[data-pane="project"]'); await q.waitForSelector('#slHo #geo-pull');
   assert.equal(await q.evaluate(() => !!document.getElementById('geo-new')), false);   // no copy matches "Example three-span continuous", nothing pulled yet
   await q.click('#geo-pull'); await q.waitForSelector('#gxp-modal tr[data-gxp-row]');
   const pk = await q.evaluate(() => ({ rows: [...document.querySelectorAll('#gxp-modal tbody tr')].map(r => [...r.cells].slice(1).map(c => c.innerText.trim())), checked: document.querySelectorAll('#gxp-modal input[type=radio]:checked').length, next: document.getElementById('gxp-next').disabled }));
@@ -69,8 +69,9 @@ try {
   await q.click('#gxp-cancel');
   // a SubLoads project named like the sent one: preselected
   await q.click('.itab[data-pane="project"]'); await q.fill('[data-k="meta.name"]', 'New steel bridge'); await q.dispatchEvent('[data-k="meta.name"]', 'input'); await q.dispatchEvent('[data-k="meta.name"]', 'change');
-  await q.click('.itab[data-pane="bridge"]'); await q.waitForSelector('#geo-pull');
+  await q.click('.itab[data-pane="project"]'); await q.waitForSelector('#slHo #geo-pull');
   assert.equal(await q.evaluate(() => !!document.getElementById('geo-new')), true);   // a copy matches the open project
+  assert.equal(await q.evaluate(() => document.querySelector('.itab[data-pane="project"]').classList.contains('bx-new')), true);   // HOC: the marker is on the Project tab (Hand-offs card)
   await q.click('#geo-pull'); await q.waitForSelector('#gxp-modal tr[data-gxp-row]');
   assert.equal(await q.evaluate(() => { const r = document.querySelector('#gxp-modal input[type=radio]:checked'); return r && r.closest('tr').cells[2].innerText.trim(); }), 'New steel bridge');
   if (shots) await q.locator('#gxp-modal .modal-box').screenshot({ path: path.join(shots, 'picker-preselected.png') });
@@ -94,10 +95,12 @@ try {
   if (K0 != null) assert.equal(br1.skKg, K0);   // the box was off: the skew-correction K_g in use is kept
   assert.deepEqual(nU, ['Abut. 1', 'Pier 1', 'Pier 2', 'Abut. 2']);
   assert.equal(src.pid, '~New steel bridge'); assert.equal(src.depthChoice, 'largest'); assert.equal(src.skewSign, 'flip'); assert.equal(src.producer, 'Steel Bridge Design');
-  assert.equal(await q.evaluate(() => !!document.getElementById('geo-new')), false); assert.match(await q.evaluate(() => document.getElementById('geo-src').innerText), /^Bridge geometry from Steel Bridge Design/);
+  assert.equal(await q.evaluate(() => !!document.getElementById('geo-new')), false);
+  await q.click('.itab[data-pane="bridge"]'); assert.equal(await q.locator('#sidebar [data-go-ho]').count(), 1);   // HOC: the Bridge tab links to the Hand-offs card
+  assert.match(await q.evaluate(() => document.getElementById('geo-src').innerText), /^Bridge geometry from Steel Bridge Design/);
   await q.waitForTimeout(400); assert.equal(await q.evaluate(() => JSON.parse(localStorage.getItem('subloads_v1')).geoSrc.pid), '~New steel bridge');   // saved with the project (autosave)
   // reactions pull: the picker first, then the reactions dialog with that project's copy (the app's per-project copy)
-  await q.click('.itab[data-pane="rx"]'); await q.waitForSelector('#rx-pull'); await q.click('#rx-pull'); await q.waitForSelector('#gxp-modal tr[data-gxp-row]');
+  await q.click('.itab[data-pane="project"]'); await q.waitForSelector('#slHo #rx-pull'); await q.click('#rx-pull'); await q.waitForSelector('#gxp-modal tr[data-gxp-row]');
   const rxRows = await q.evaluate(() => [...document.querySelectorAll('#gxp-modal tbody tr')].map(r => r.cells[2].innerText.trim()));
   assert.deepEqual(rxRows, ['New steel bridge']);   // the reactions were sent for that project only
   assert.equal(await q.evaluate(() => !!document.querySelector('#gxp-modal input[type=radio]:checked')), true);
@@ -106,7 +109,7 @@ try {
   await q.click('#rxh-apply'); await q.waitForTimeout(300);
   assert.equal(await q.evaluate(() => P.rxSrc[P.rxSrc.length - 1].pid), '~New steel bridge');
   // the 2-span project: Pier 2 removed (listed), Abut. 2 kept
-  await q.click('.itab[data-pane="bridge"]'); await q.click('#geo-pull'); await q.waitForSelector('#gxp-modal tr[data-gxp-row]');
+  await q.click('.itab[data-pane="project"]'); await q.click('#geo-pull'); await q.waitForSelector('#gxp-modal tr[data-gxp-row]');
   await q.click('#gxp-modal tbody tr:nth-child(1)'); await q.click('#gxp-next'); await q.waitForSelector('#gxg-apply');
   const t2 = await q.evaluate(() => document.querySelector('#gxg-modal').innerText);
   assert.match(t2, /Removed with their inputs: Pier 2/); assert.match(t2, /reactions on the Reactions tab are for 4 supports × 5 girders; the incoming bridge has 3 supports/);
