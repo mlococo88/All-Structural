@@ -151,5 +151,31 @@ console.log('4. Drawings, 3D, Report, 390 px');
   check(!o.errs.length, `console errors: ${o.errs.length} ${o.errs.slice(0, 2).join(' | ')}`);
   await o.b.close(); }
 
+console.log('5. ABSS (engineer report 2026-11-10): d_sh = 30 in > t = 15 in, e = 10 in — the slab t thick on the shelf, its top 15 in below the top of the backwall');
+{ const o = await openPage(FB, { vw: 1400, vh: 1000 }), p = o.p; await p.waitForFunction(() => window.LAST_R, null, { timeout: 60000 });
+  const run = su => p.evaluate(su => { const s0 = JSON.stringify(S); eval(su); recalcAll(); const R = window.LAST_R, P = R.ap, O = R.geo.off, ee = R.bwEE && R.bwEE.ee;
+    const r = { RDC: P.RDC, qDC: P.qDC, qDW: P.qDW, wDC: P.wDC, zSh: O.zSh, zSlab: P.zSlab, hC: O.hC, hSh: O.hSh, ee: ee ? { Mu: ee.Mu, Wa: ee.apE.Wa, zA: ee.apE.zA } : null, W: WARNINGS.map(w => w.level + '|' + w.msg),
+      sec: (() => { const B = abdwBuild(R); const sh = B.S.find(x => x.id === 'sec'); return B.D.E.slice(sh.i0, sh.iC).filter(e => e.t === 'PL' && /APPROACH-SLAB/.test(e.l)).map(e => e.pts.map(q => q[1])); })() };
+    const st = JSON.parse(s0); Object.keys(S).forEach(k => delete S[k]); Object.assign(S, st); recalcAll(); return r; }, su);
+  const base = 'S.apSlab.on = true; S.apSlab.t = 1.25; S.geom.bwOff = 10; S.geom.shD = 30;';
+  const a = await run(base);
+  // hand check: w_DC = 0.150(1.25) = 0.1875 ksf; q_DC = 0.1875(16)/2 = 1.500 kip/ft; h_sh = 5 − 30/12 = 2.50 ft; z_sh = 3 + 14 + 2.5 = 19.50 ft;
+  // z_slab = 19.50 + 1.25/2 = 20.125 ft; h_c = d_sh = 2.50 ft (backwall design height)
+  check(near(a.wDC, 0.1875) && near(a.qDC, 1.5) && near(a.hSh, 2.5) && near(a.zSh, 19.5) && near(a.zSlab, 20.125) && near(a.hC, 2.5),
+    `slab weight from t: w_DC ${a.wDC}, q_DC ${a.qDC}; shelf h_sh ${a.hSh}, z_sh ${a.zSh}; EQ slab height z = z_sh + t/2 = ${a.zSlab}; backwall h_c = d_sh ${a.hC}`);
+  const ys = a.sec.flat(), yT = Math.max(...ys), yB = Math.min(...ys);   // sheet units (in): the slab outline on sheet 1
+  check(near(yT - yB, 15, 1e-6), `sheet 1: the slab drawn t = 15 in thick (${(yT - yB).toFixed(3)} in), not d_sh`);
+  check(a.W.some(w => /^warn\|Stem shelf: the shelf depth d_sh = 30\.0 in exceeds .* t = 15\.0 in.*not modelled as a load/.test(w)), 'advisory: d_sh > t, the pavement / fill over the slab not modelled');
+  const e = await run(base + ' S.seismic.on = true; S.geom.HsupMode = "wall";');
+  // Extreme Event I backwall: W_a = f_I k_h (q_DC + q_DW) = 1.0(0.075)(1.500 + 0.240) = 0.1305 kip/ft at z_A = t/2 = 0.625 ft above the shelf
+  // (was d_sh − t/2 = 1.875 ft): M_u 0.39344 -> 0.39344 − 0.1305(1.875 − 0.625) = 0.23032 kip-ft/ft
+  check(e.ee && near(e.ee.Wa, 0.1305) && near(e.ee.zA, 0.625) && near(e.ee.Mu, 0.39344 - 0.1305 * 1.25, 1e-4), `EE-I backwall: slab inertia ${e.ee && e.ee.Wa} kip/ft at t/2 = ${e.ee && e.ee.zA} ft, M_u ${e.ee && e.ee.Mu.toFixed(5)} (hand 0.23032)`);
+  const u = await run('S.apSlab.on = true; S.apSlab.t = 1.25; S.geom.bwOff = 10; S.geom.shD = 12;');
+  check(u.W.some(w => /^warn\|Check input — Stem shelf: the shelf depth d_sh = 12\.0 in is less than .* 3\.0 in ABOVE/.test(w)) && !u.W.some(w => /^err\|.*Stem shelf: the shelf depth/.test(w)), 'd_sh < t: a check-input warning (not an input error), the slab top 3 in above the backwall');
+  const q = await run('S.apSlab.on = true; S.apSlab.t = 1.25; S.geom.bwOff = 10; S.geom.shD = 0;');
+  check(!q.W.some(w => /Stem shelf: the shelf depth/.test(w)), 'd_sh = 0 (= t): no step warning');
+  check(!o.errs.length, `console errors: ${o.errs.length}`);
+  await o.b.close(); }
+
 console.log(fails ? `\n${fails} FAILED` : '\nall ok');
 process.exit(fails ? 1 : 0);

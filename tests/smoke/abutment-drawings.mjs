@@ -11,6 +11,7 @@
 //      wingwall, general notes; numbered N OF M), fits its sheet, the DXF passes SharedDxf.validate, and no text of a sheet's drawing
 //      overlaps another text (tests/engine/overlap.mjs textOverlaps, the Steel Bridge app's check; title block apart).
 //      ABEL (2026-11-10): the same projects again with a beam seat elevation (panel I-1): the "EL." marks stay clear of every other text.
+//      ABSS (2026-11-10): the engineer's case e = 10 in, d_sh = 30 in, t = 15 in (and d_sh < t): also no text of sheet 1 crossed by a dimension (without the EL. marks; with them the sheet drops to 3/16" and the seat dimensions crowd, as before).
 //      ABEL2 (2026-11-10): and again with the bearing height, girder + haunch + deck and pile length (top of bearing / deck, pile tips).
 //   3. The Drawings tab opens, previews, picks a sheet (per-browser key abutcalc_dwgSheet_v1, not in S), "Download DXF" saves a valid file;
 //      no horizontal scroll at 390 px; no console errors.
@@ -19,7 +20,7 @@ import fs from 'fs';
 import path from 'path';
 import vm from 'vm';
 import { openPage, REPO } from '../lib.mjs';
-import { textOverlaps, describe } from '../engine/overlap.mjs';
+import { textOverlaps, describe, textLineHits, describeHit } from '../engine/overlap.mjs';
 
 const ctx = { window: {} }; vm.createContext(ctx); vm.runInContext(fs.readFileSync(path.join(REPO, 'shared/dxf.js'), 'utf8'), ctx); const X = ctx.window.SharedDxf;
 let fails = 0; const check = (ok, m) => { console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${m}`); if (!ok) fails++; };
@@ -78,6 +79,8 @@ console.log('2. Drawings: sheets, DXF validity, no overlapping text');
     'slab on the deck, 25° skew, far end on soil': () => { S.apSlab.on = true; S.apSlab.sup = 'deck'; S.geom.skew = 25; S.apSlab.far = 'soil'; },
     'water table, in-line wings': () => { S.geom.hw = 6; S.wing.orient = 'inline'; }, 'pile footing, one pile omitted': () => { S.fnd.branch = 'pile'; recalcAll(); S.piles.coords[3].active = false; },
     'stem shelf: backwall offset e = 10 in + slab (ABSH)': () => { S.apSlab.on = true; S.apSlab.t = 0.75; S.geom.tbw = 2; S.geom.tst = 5.5; S.geom.tsb = 5.5; S.geom.bwOff = 10; S.geom.shD = 9; },
+    'stem shelf d_sh 30 in > slab t 15 in, e = 10 in (ABSS)': () => { S.apSlab.on = true; S.apSlab.t = 1.25; S.geom.bwOff = 10; S.geom.shD = 30; },
+    'stem shelf d_sh 12 in < slab t 15 in, e = 10 in (ABSS)': () => { S.apSlab.on = true; S.apSlab.t = 1.25; S.geom.bwOff = 10; S.geom.shD = 12; },
     'stem shelf, no slab, pile footing (ABSH)': () => { S.fnd.branch = 'pile'; S.geom.bwOff = 8; S.geom.shD = 12; },
     'semi-integral + slab': () => { S.iab.type = 'semi'; S.apSlab.on = true; }, 'integral + slab': () => { S.iab.type = 'integral'; S.apSlab.on = true; } };
   const base = { ...cases };
@@ -98,7 +101,10 @@ console.log('2. Drawings: sheets, DXF validity, no overlapping text');
     const ids = r.sheets.map(s => s.id).join(',');
     check(r.valid.ok && ids === r.want.join(',') && r.sheetNo.every((t, j) => t === `${j + 1} OF ${r.sheets.length}`), `${nm}: ${r.sheets.length} sheets (${r.sheets.map(s => s.id + ' 1:' + s.k).join(', ')}), expected ${r.want.join(',')}, numbered N OF ${r.sheets.length}, DXF valid${r.valid.ok ? '' : ': ' + r.valid.errors.slice(0, 3).join('; ')}`);
     for (const s of r.sheets) { const ov = textOverlaps({ E: s.E }, X); n++;
-      check(!s.over && ov.length === 0, `${nm}, ${s.id}: fits the sheet, ${ov.length} text overlaps${ov.length ? ': ' + ov.slice(0, 4).map(describe).join(' | ') : ''}`); }
+      check(!s.over && ov.length === 0, `${nm}, ${s.id}: fits the sheet, ${ov.length} text overlaps${ov.length ? ': ' + ov.slice(0, 4).map(describe).join(' | ') : ''}`);
+      // ABSS (engineer report 2026-11-10): on the stem-shelf section, no text crossed by a dimension (the BEARING label, D_SH, E, the step)
+      if (/ABSS/.test(nm) && !/seat El/.test(nm) && s.id === 'sec') { const hd = textLineHits({ E: s.E }, X).filter(q => /^DIM/.test(q.e)); n++;
+        check(hd.length === 0, `${nm}, sec: ${hd.length} texts crossed by a dimension${hd.length ? ': ' + hd.slice(0, 3).map(describeHit).join(' | ') : ''}`); } }
   }
   console.log(`       ${n} sheet drawings checked`);
   check(!o.errs.length, `console errors: ${o.errs.length} ${o.errs.slice(0, 3).join(' | ')}`);
