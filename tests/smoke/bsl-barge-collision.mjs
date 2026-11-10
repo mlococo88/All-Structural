@@ -42,7 +42,7 @@ try {
   ok(() => { assert.equal(r50.BB, 50); assert.equal(r20.inp, '20'); assert.equal(r50.inp, '50'); }, 'Units pane: Barge width input shows the saved u.cv.BB');
   await run({ BB: 50 });   // the Report at W = 1,700 t, V = 6 ft/s, B_B = 50 ft
   const rpt = await p.evaluate(async () => { const rb = [...document.querySelectorAll('.tab-btn')].find(x => /Report/.test(x.textContent)); rb.click(); await new Promise(r => setTimeout(r, 2500)); return SLR.doc ? SharedReport.text(SLR.doc) : ''; });
-  ok(() => { assert.match(rpt, /never below the 35 ft hopper barge value \(engineer's decision, 2026-11-10\)/); assert.match(rpt, /= 10\.2\[\(1 \+ 2,201\/5672\)\^1\/2 − 1\] = 1\.817 ft \(Eq\. 3\.14\.12-1/); assert.match(rpt, /= 2,127\.0 kip/); assert.match(rpt, /UF\/FDOT report 2010\/68901/); assert.doesNotMatch(rpt, /3\.14\.9-1|no barge width ratio/); }, 'Report: basis note, worked a_B (Eq. 3.14.12-1), P_B 2,127.0 kip, references');
+  ok(() => { assert.match(rpt, /never below the 35 ft hopper barge value \(engineer's decision, 2026-11-10\)/); assert.match(rpt, /= 10\.2\[\(1 \+ 2,201\/5672\)\^\(?1\/2\)? − 1\] = 1\.817 ft \(Eq\. 3\.14\.12-1/); assert.match(rpt, /= 2,127\.0 kip/); assert.match(rpt, /UF\/FDOT report 2010\/68901/); assert.doesNotMatch(rpt, /3\.14\.9-1|no barge width ratio/); }, 'Report: basis note, worked a_B (Eq. 3.14.12-1), P_B 2,127.0 kip, references');
   ok(() => assert.deepEqual(errs, []), '0 console errors');
 } finally { await b.close(); }
 console.log(fails ? `${fails} FAILED` : 'all passed');

@@ -100,20 +100,25 @@ header { height: 54px; flex: none; display: flex; align-items: center; gap: 10px
 .mini-t input:hover, .mini-t select:hover { border-color: var(--border-hi); background: var(--surface); }
 .mini-t input:focus, .mini-t select:focus { border-color: var(--blue); background: var(--surface); outline: none; }
 .mini-t td.lbl { font-weight: 600; white-space: nowrap; }
+/* SLLAY: the Bridge pane Supports table fits the sidebar: fixed column widths, the Superstructure select wide enough for its options */
+.mini-t.sup-t { table-layout: fixed; }
+.mini-t.sup-t th { white-space: normal; vertical-align: bottom; }
+.mini-t.sup-t td.lbl { overflow: hidden; text-overflow: ellipsis; }
+.mini-t.sup-t select { padding-left: 2px; padding-right: 0; }
 .unit-pick { display: flex; gap: 6px; padding: 12px 16px 2px; flex-wrap: wrap; }
 .unit-pick button { border: 1px solid var(--border-hi); background: var(--surface); border-radius: 999px; padding: 3px 11px; font-size: .84rem; font-weight: 600; cursor: pointer; }
 .unit-pick button.on { background: var(--blue); border-color: var(--blue); color: #fff; }
 
 /* main */
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-.tab-bar { display: flex; gap: 2px; padding: 0 12px; background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: thin; flex: none; }
+.tab-bar { display: flex; flex-wrap: wrap; gap: 0 2px; padding: 0 12px; background: var(--surface); border-bottom: 1px solid var(--border); flex: none; }   /* SLLAY (2026-11-10): the tabs wrap onto rows (as the abutment and steel-bridge apps) instead of one sideways-scrolling row */
 .tab-btn { border: 0; background: none; padding: 11px 10px 9px; font-family: var(--cond); font-weight: 600; font-size: .95rem; color: var(--text-dim); cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; display: flex; align-items: center; gap: 5px; }
 .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
 .tab-btn.plan { color: var(--muted); font-weight: 500; }
 .tab-btn .ph { font-family: var(--sans); font-size: .68rem; font-weight: 600; border: 1px solid var(--border-hi); border-radius: 4px; padding: 0 4px; color: var(--muted); }
 .tab-sep { width: 1px; background: var(--border); margin: 9px 4px; flex: none; }
 .tab-panels { flex: 1; overflow-y: auto; padding: 18px 22px 60px; }
-.tab-panel { display: none; max-width: 1180px; }
+.tab-panel { display: none; }   /* SLLAY: full width of the output pane (was max-width 1180px) */
 .tab-panel.active { display: block; }
 #tab-v3d.active { display: flex; flex-direction: column; max-width: none; height: 100%; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); margin-bottom: 16px; }
@@ -132,6 +137,15 @@ header { height: 54px; flex: none; display: flex; align-items: center; gap: 10px
 .tbl td { padding: 5px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
 .tbl td.lbl { font-weight: 600; white-space: nowrap; }
 .tbl tr.tot td { font-weight: 700; border-top: 1px solid var(--border-hi); }
+/* SLLAY: the Combinations table: headers wrap, the effect labels stay on one line in a sticky first column; in a pane narrower than
+   1400 px each "max / min" is set on two lines (max over min), so the table fits the pane when it can and scrolls in its own box
+   (label column kept in view) when not */
+.tbl.cmb th { white-space: normal; }
+.tbl.cmb th, .tbl.cmb td { padding-left: 6px; padding-right: 6px; }
+.tbl.cmb tr > :first-child { white-space: nowrap; position: sticky; left: 0; z-index: 1; background: var(--surface); }
+.tbl.cmb .nw { white-space: nowrap; }
+.tscroll.cmb-w { container-type: inline-size; }
+@container (max-width: 1399px) { .tbl.cmb .nw { display: block; } }
 .tbl td.dim { color: var(--muted); }
 .chk { display: flex; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border); align-items: flex-start; }
 .chk:last-child { border-bottom: 0; }
@@ -142,6 +156,7 @@ header { height: 54px; flex: none; display: flex; align-items: center; gap: 10px
 .pill { display: inline-block; font-size: .76rem; font-weight: 600; border-radius: 4px; padding: 0 6px; margin: 1px 2px 1px 0; }
 .pill.fix { background: var(--fail-dim); color: var(--fail); } .pill.exp { background: var(--blue-dim); color: var(--blue); } .pill.gd { background: var(--warn-dim); color: var(--warn); }
 .dwg { width: 100%; height: auto; display: block; background: #fbfcfa; border: 1px solid var(--border); border-radius: var(--r); }
+.dwg.dwg-geo { max-width: 1120px; margin: 0 auto; }   /* SLLAY: the Geometry plan and elevation keep a readable scale on a wide screen */
 .dwg-row { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: .82rem; color: var(--text-dim); margin-top: 8px; }
 .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
@@ -173,6 +188,18 @@ header { height: 54px; flex: none; display: flex; align-items: center; gap: 10px
   .brand-sub { display: none; }
   header { height: auto; padding: 8px 10px; flex-wrap: wrap; }
   .hdr-group { flex-wrap: wrap; min-width: 0; }   /* PHN (2026-11-02): the header buttons wrap instead of widening the page */
+  .tab-btn { padding: 8px 8px 6px; }
+}
+/* SLLAY: phone header in two rows: title, All tools; then the project chip, Undo, Redo and Print on one line (the chip shortens) */
+@media (max-width: 600px) {
+  header { gap: 4px 8px; padding: 6px 10px; }
+  .hdr-spacer { display: none; }
+  header .hdr-group { flex: 1 1 100%; flex-wrap: nowrap; align-items: center; }
+  header .hdr-group [data-sp="row"] { flex: 1 1 auto; min-width: 0; flex-wrap: nowrap !important; }
+  header .hdr-group .spChip { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+  header .hdr-group .spChip > * { white-space: nowrap; flex: none; }
+  header .hdr-group .spChip > b { flex: 0 1 auto; min-width: 0; }
+  header .hdr-group .btn { flex: none; }
 }
 @media print {
   header, .strip, .side, .tab-bar, #flash { display: none !important; }
@@ -686,8 +713,8 @@ function dxfOf(parts, prefix = 'S-') {
 }
 
 /* ---------- plan ---------- */
-function planDwg(G, UG) {
-  const DEFER = [], d = new Dwg(), h = Math.max(G.L, G.Wd) * 0.011, tan = t => Math.tan(t);
+function planDwg(G, UG, o = {}) {   // o.ts (SLLAY): text height scale for the Geometry tab on screen; the DXF and print sheets use 1
+  const DEFER = [], d = new Dwg(), h = Math.max(G.L, G.Wd) * 0.011 * (o.ts || 1), tan = t => Math.tan(t);
   const edge = (S, y, dx = 0) => [S.X + dx + y * tan(S.th), y];
   const S0 = G.sup[0], Sn = G.sup[G.nSup - 1];
   d.poly([edge(S0, G.yL), edge(Sn, G.yL), edge(Sn, G.yR), edge(S0, G.yR)], 'DECK');
@@ -777,7 +804,7 @@ function unitDwg(G, UG, k) {
 
 /* ---------- longitudinal elevation (also the unit strip) ---------- */
 function longDwg(G, UG, o = {}) {
-  const d = new Dwg(), VE = o.ve || 1, Z = z => z * VE, h = o.h || G.L * 0.012, top = [], bot = [];
+  const d = new Dwg(), VE = o.ve || 1, Z = z => z * VE, h = o.h || G.L * 0.012 * (o.ts || 1), top = [], bot = [];
   for (let i = 0; i <= 80; i++) { const x = -2 + (G.L + 4) * i / 80, z = G.elevAt(x); top.push([x, Z(z)]); bot.push([x, Z(z - G.dSup)]); }
   d.poly([...top, ...bot.reverse()], 'GIRD');
   const gp = [];
@@ -937,13 +964,13 @@ function paneProject() {
 }
 function paneBridge() {
   const b = P.br, n = b.spans.length + 1;
-  const rows = [...Array(n)].map((_, k) => `<tr><td class="lbl">${esc(P.units[k] ? P.units[k].name : k)}</td>
+  const rows = [...Array(n)].map((_, k) => `<tr><td class="lbl" title="${esc(P.units[k] ? P.units[k].name : k)}">${esc(P.units[k] ? P.units[k].name : k)}</td>
     <td><input data-k="br.skews.${k}" data-kind="num" value="${esc(b.skews[k])}"></td>
     <td><input data-k="br.elev.${k}" data-kind="num" value="${esc(b.elev[k])}"></td>
     <td>${k === 0 || k === n - 1 ? '<span class="note" style="padding:0">end</span>' : `<select data-k="br.joint.${k}"><option value="cont"${b.joint[k] !== 'joint' ? ' selected' : ''}>Continuous</option><option value="joint"${b.joint[k] === 'joint' ? ' selected' : ''}>Exp. joint</option></select>`}</td></tr>`).join('');
   return sec('Spans', `<div class="fld full"><label for="f_spans">Span lengths along CL bridge, CL bearing to CL bearing</label><input id="f_spans" data-list="br.spans" value="${esc(b.spans.join(', '))}"></div>`, { one: true })
     + `<p class="note">One span per row (Enter adds a row). Changing the number of spans adds or removes piers.</p>`
-    + `<div class="sec-h">Supports <small>skew + when the left end of the line is ahead</small></div><div class="sec-body one"><table class="mini-t"><thead><tr><th>Support</th><th>Skew (°)</th><th>Deck El. at CL (ft)</th><th>Superstructure</th></tr></thead><tbody>${rows}</tbody></table></div>`
+    + `<div class="sec-h">Supports <small>skew + when the left end of the line is ahead</small></div><div class="sec-body one"><table class="mini-t sup-t"><colgroup><col style="width:23%"><col style="width:18%"><col style="width:23%"><col style="width:36%"></colgroup><thead><tr><th>Support</th><th>Skew (°)</th><th>Deck El. at CL (ft)</th><th>Superstructure</th></tr></thead><tbody>${rows}</tbody></table></div>`
     + `<p class="note">Deck elevation is the top of deck on CL bridge at CL bearing; the profile is taken straight between supports and the cross slope is not modeled yet.</p>`
     + sec('Cross-section', `<div class="fld full"><label for="f_bays">Girder spacings, left to right looking ahead</label><input id="f_bays" data-list="br.bays" value="${esc(b.bays.join(', '))}"></div>`
       + fld('Left overhang', 'br.ohL', 'ft') + fld('Right overhang', 'br.ohR', 'ft') + fld('Left barrier width', 'br.barL', 'ft', 'num', { title: 'Deck edge to the roadway face of the barrier or curb' }) + fld('Right barrier width', 'br.barR', 'ft') + fld('Barrier height', 'br.barH', 'in') + fld('Deck thickness', 'br.ts', 'in') + fld('Haunch', 'br.haunch', 'in') + fld('Girder depth', 'br.d', 'in') + fld('Flange width', 'br.bf', 'in') + fld('Flange thickness', 'br.tf', 'in') + fld('Web thickness', 'br.tw', 'in') + fld('Concrete unit weight', 'br.wc', 'kcf'))
@@ -1078,12 +1105,13 @@ function summaryHtml() {
     ${UG.map((R, k) => R.comps.map((c, i) => `<tr><td class="lbl">${i ? '' : esc(P.units[k].name)}</td><td>${esc(c.name)}</td><td class="val">${c.steel ? 'steel' : f1(c.vol)}</td><td class="val">${f2(c.wt)}</td></tr>`).join('') + `<tr class="tot"><td></td><td>Total</td><td></td><td class="val">${f2(R.wt)}</td></tr>`).join('')}</tbody></table></div></div>`;
   return h;
 }
+const GEO_TS = 1.5;   // SLLAY (2026-11-10): the Geometry tab's plan and elevation drawn with 1.5× text height (labels about 11 px at 1440 px wide; were about 7 px)
 function geometryHtml() {
   const G = MODEL.G, UG = MODEL.UG; if (G.E.length) return `<div class="card"><div class="card-b">Fix the input errors on the Summary tab to draw the bridge.</div></div>`;
   const zs = []; UG.forEach((R, k) => zs.push(nz(P.units[k].ground), R.ftgBot != null ? R.ftgBot : nz(P.units[k].ground))); G.sup.forEach(S => zs.push(S.deckZ + 3));
   const ve = Math.max(1, (G.L / (Math.max(...zs) - Math.min(...zs))) / 8);
-  let h = `<div class="card"><div class="card-h"><h2>Plan</h2><span class="sub">Bearings colored by longitudinal fixity; footings and columns under the caps dashed</span></div><div class="card-b">${svgOf(planDwg(G, UG))}<div class="legend"><span><i style="background:#b8322a"></i>Fixed</span><span><i style="background:#2346c2"></i>Expansion</span></div></div></div>`;
-  h += `<div class="card"><div class="card-h"><h2>Elevation</h2><span class="sub">Along CL bridge${ve > 1 ? `, vertical scale exaggerated ×${f1(ve)}` : ''}</span></div><div class="card-b">${svgOf(longDwg(G, UG, { ve }))}</div></div>`;
+  let h = `<div class="card"><div class="card-h"><h2>Plan</h2><span class="sub">Bearings colored by longitudinal fixity; footings and columns under the caps dashed</span></div><div class="card-b">${svgOf(planDwg(G, UG, { ts: GEO_TS }), { cls: 'dwg dwg-geo' })}<div class="legend"><span><i style="background:#b8322a"></i>Fixed</span><span><i style="background:#2346c2"></i>Expansion</span></div></div></div>`;
+  h += `<div class="card"><div class="card-h"><h2>Elevation</h2><span class="sub">Along CL bridge${ve > 1 ? `, vertical scale exaggerated ×${f1(ve)}` : ''}</span></div><div class="card-b">${svgOf(longDwg(G, UG, { ve, ts: GEO_TS }), { cls: 'dwg dwg-geo' })}</div></div>`;
   UG.forEach((R, k) => { const u = P.units[k], S = G.sup[k];
     h += `<div class="card"><div class="card-h"><h2>${esc(u.name)}</h2><span class="sub">${TYPE_NAME[u.type]}, elevation looking ahead station</span></div><div class="card-b">${svgOf(unitDwg(G, UG, k), { h: 520 })}
       <div class="tscroll" style="margin-top:10px"><table class="tbl"><thead><tr>${S.joint ? '<th>Row</th>' : ''}<th>Girder</th><th class="right">Station (ft)</th><th class="right">Along line (ft)</th><th class="right">Deck El.</th><th class="right">Bottom of girder El.</th><th class="right">Bearing seat El.</th><th class="right">Pedestal (in)</th><th>Longitudinal</th></tr></thead><tbody>
@@ -1524,7 +1552,7 @@ function skewCorrLL(G, k, UM, LL) {
 const fv = (v, u) => !isFinite(v) ? '—' : Math.abs(v) < 0.005 ? '0.0' : u === 'kip-ft' ? f0(v) : f1(v);
 function unitChips() { return `<div class="dwg-row">${P.units.map((x, i) => `<button type="button" class="btn btn-sm${i === P.ui.sel ? ' btn-primary' : ''}" data-unit="${i}">${esc(x.name)}</button>`).join('')}</div>`; }
 function respTable(defs, cols, rowFn, o = {}) {
-  let h = `<div class="tscroll"><table class="tbl"><thead><tr><th>Effect</th>${cols.map(c => `<th class="${c.r === false ? '' : 'right'}">${c.t}</th>`).join('')}</tr></thead><tbody>`, g = null;
+  let h = `<div class="tscroll${o.cls ? ' ' + o.cls + '-w' : ''}"><table class="tbl${o.cls ? ' ' + o.cls : ''}"><thead><tr><th>Effect</th>${cols.map(c => `<th class="${c.r === false ? '' : 'right'}">${c.t}</th>`).join('')}</tr></thead><tbody>`, g = null;
   defs.forEach((d, q) => { if (o.skip && o.skip(d)) return; if (d.grp !== g) { g = d.grp; h += `<tr><td colspan="${cols.length + 1}" style="font-family:var(--cond);font-weight:700;padding-top:10px;border-bottom-color:var(--border-hi)">${esc(g)}</td></tr>`; }
     h += `<tr${o.sel === q ? ' style="background:var(--blue-dim)"' : ''}><td>${d.label} <span class="dim" style="color:var(--muted);font-size:.8rem">${d.u}${d.noIM ? ', no IM' : ''}</span></td>${rowFn(d, q)}</tr>`; });
   return h + '</tbody></table></div>';
@@ -1810,7 +1838,8 @@ function windHtml() {
     <table class="tbl"><thead><tr><th>Limit state</th><th class="right">V (mph)</th><th class="right">Z (ft)</th><th class="right">K<sub>z</sub></th><th class="right">G</th><th class="right">P<sub>Z</sub> (ksf)</th><th class="right">Depth (ft)</th>${ANG.map(a => `<th class="right">${a}°: T / L (klf)</th>`).join('')}</tr></thead><tbody>
     ${Object.keys(LS).map(key => { const w = W[key]; return `<tr><td class="lbl">${LS[key]}</td><td class="val">${f0(w.V)}</td><td class="val">${f1(w.Z)}</td><td class="val">${f3(w.kz)}</td><td class="val">${f2(w.gf)}</td><td class="val">${f3(w.Pz)}</td><td class="val">${f2(w.D)}</td>${ANG.map((a, i) => `<td class="val">${f3(w.wT[i])} / ${f3(w.wL[i])}</td>`).join('')}</tr>`; }).join('')}</tbody></table>
     <div class="note slNL" style="padding:8px 0 0">${slNL('Wind speeds, coefficients, and how the wind reaches the units:', [['Speeds:', 'Strength V uses 80 mph, Service I 70 mph, and Service IV 0.75 of the Strength III speed.'], ['K<sub>z</sub> and G', 'apply to Strength III and Service IV only; for Strength V and Service I both are taken as 1.0, on the superstructure and the substructure (3.8.1.2.1).'], ['Attack angles:', 'transverse and longitudinal shares by attack angle from Table 3.8.1.2.3a-1 (girders);'], ['Minimum:', '0.30 klf minimum applied to Strength III: a requirement of earlier editions kept as agency practice (it is not in the 10th Ed.; conservative).'], ['Z', `is the average height of the top of the superstructure above the ground at the supports, ${f1(W.III.Z)} ft, also used for the substructure, which does not extend above the superstructure (3.8.1.2.1; K<sub>z</sub> uses at least 33 ft).`], ['To the units:', 'transverse load goes to each unit by tributary length at the bearings; longitudinal load by stiffness.'], ['Vertical wind', `on the ${f2(G.Wd)} ft deck at the windward quarter point acts with the 0° cases of Strength III (0.020 ksf) and Service IV (${P.br.vwSIV === 'code' ? '0.010 ksf, 3.8.2' : '0.020 ksf: conservative; 3.8.2 gives 0.010 ksf for Service IV (option on the Bridge tab)'}) (3.8.2).`]])}</div>
-    <h3 style="font-family:var(--cond);margin:12px 0 4px">Wind on live load, WL (3.8.1.3)</h3><p style="max-width:80ch">${ANG.map((a, i) => `${a}°: ${f3(WLT[i])} / ${f3(WLL[i])}`).join('; ')} klf (transverse / longitudinal), 6 ft above the deck, with Strength V and Service I.</p></div></div>`;
+    <h3 style="font-family:var(--cond);margin:12px 0 4px">Wind on live load, WL (3.8.1.3)</h3><table class="tbl" style="width:auto"><thead><tr><th>Attack angle</th><th class="right">Transverse (klf)</th><th class="right">Longitudinal (klf)</th></tr></thead><tbody>${ANG.map((a, i) => `<tr><td class="lbl">${a}°</td><td class="val">${f3(WLT[i])}</td><td class="val">${f3(WLL[i])}</td></tr>`).join('')}</tbody></table>
+    <p class="note" style="padding:6px 0 0">WL acts 6 ft above the deck, with Strength V and Service I.</p></div></div>`;   // SLLAY (2026-11-10): WL as a table (was a paragraph; same values, same order)
   const pts = p3.subPts;
   h += `<div class="card"><div class="card-h"><h2>Wind on the substructure: ${esc(u.name)}</h2><span class="sub">Strength III, C<sub>D</sub> = ${f2(nz(b.CDsub) || 1.6)}, exposed above the ground; pressure resolved normal to the front and end faces (3.8.1.2.3b)</span></div><div class="card-b">${unitChips()}
     ${u.type === 'abut' ? '<p>Abutments are not loaded by wind here.</p>' : `<div class="tscroll"><table class="tbl"><thead><tr><th>Component</th><th class="right">Centroid El.</th><th class="right">P<sub>Z</sub> (ksf)</th><th class="right">Front area (ft²)</th><th class="right">End area (ft²)</th><th class="right">Wind normal to line (kip)</th><th class="right">Wind along line (kip)</th></tr></thead><tbody>
@@ -1835,7 +1864,7 @@ function comboHtml() {
   const k = P.ui.sel, u = P.units[k], C = combine(k), r = unitRes(k); if (!C) return `<div class="card"><div class="card-b">${unitChips()}<p style="color:var(--fail)">${esc(r.err || phase3(k).err || 'Could not combine.')}</p></div></div>`;
   const defs = r.UM.defs, CV = COMBOS.filter(c => C[c.id]);
   return `<div class="card"><div class="card-h"><h2>Load combinations: ${esc(u.name)}</h2><span class="sub">Factored maximum / minimum, η = 1.0</span></div><div class="card-b">${unitChips()}
-    ${respTable(defs, [...CV.map(c => ({ t: c.name })), { t: 'Strength and Extreme Event envelope' }, { t: 'Governs', r: false }], (d, q) => CV.map(c => `<td class="val" style="white-space:nowrap">${fv(C[c.id].max[q], d.u)} / ${fv(C[c.id].min[q], d.u)}</td>`).join('') + `<td class="val" style="white-space:nowrap"><b>${fv(C.env.max[q], d.u)} / ${fv(C.env.min[q], d.u)}</b></td><td style="font-size:.8rem;white-space:nowrap">${C.env.gmx[q] ? C.env.gmx[q].replace('Strength ', '') : ''} / ${C.env.gmn[q] ? C.env.gmn[q].replace('Strength ', '') : ''}</td>`)}
+    ${respTable(defs, [...CV.map(c => ({ t: c.name })), { t: 'Strength and Extreme Event envelope' }, { t: 'Governs', r: false }], (d, q) => CV.map(c => `<td class="val"><span class="nw">${fv(C[c.id].max[q], d.u)} /</span> <span class="nw">${fv(C[c.id].min[q], d.u)}</span></td>`).join('') + `<td class="val"><b><span class="nw">${fv(C.env.max[q], d.u)} /</span> <span class="nw">${fv(C.env.min[q], d.u)}</span></b></td><td style="font-size:.8rem;white-space:nowrap">${C.env.gmx[q] ? C.env.gmx[q].replace('Strength ', '') : ''} / ${C.env.gmn[q] ? C.env.gmn[q].replace('Strength ', '') : ''}</td>`, { cls: 'cmb' })}
     <div class="note slNL" style="padding:8px 0 0">${slNL('Load factors and how each effect is enveloped:', [['Load factors:', '', CV.map(c => { const L = typeof lfOf === 'function' ? lfOf(c) : { dc: c.dc, dw: c.dw, ll: c.ll, gws: 1, wl: c.wl, tu: c.tu }; return `<b>${c.name}:</b> DC ${f2(L.dc[0])}/${f2(L.dc[1])}, DW ${f2(L.dw[0])}/${f2(L.dw[1])}${L.ll ? `, LL, BR, CE ${f2(L.ll)}` : ''}${c.ws ? `, WS ${f2(L.gws)} at ${f0(vLS(c.ws))} mph` : ''}${L.wl ? `, WL ${f2(L.wl)}` : ''}`; })], ['Details per limit state:', '', CV.map(c => `<b>${c.name}:</b> DC ${c.dc[0]}/${c.dc[1]}, DW ${c.dw[0]}/${c.dw[1]}${c.ll ? `, LL, BR, CE ${c.ll}` : ''}${c.ws ? `, WS 1.0 at ${f0(vLS(c.ws))} mph` : ''}${c.wl ? ', WL 1.0' : ''}${c.tu ? `, TU ${f2(c.tu)}, FR 1.0, WA 1.0 (design flood)` : ''}${c.ee2 ? ', FR 1.0, and WA 1.0 at the check flood or IC 1.0 with the design flood' : ''}${c.eq ? ', γ<sub>EQ</sub> × LL, EQ 1.0, WA 1.0 (design flood), FR 1.0' : ''}`)], ['Each effect is enveloped on its own:', 'the permanent-load factor that governs is used for DC (superstructure plus substructure self-weight) and DW, live load takes its maximum or minimum from the lane search, BR and CE are added when they increase the effect, and wind (with wind on live load in Strength V and Service I) takes the worst of its directions.'], ['Values in a row', 'need not occur together.'], ['Collision loads', 'are added in Phase 6.']])}${SIGNS_NL}</div></div></div>`;
 }
 
@@ -3917,7 +3946,7 @@ async function rxImport(file) {
   const srcLine = () => { const s = P.geoSrc; if (!s) return ''; const pr = s.project || {};
     return `Bridge geometry from ${esc(s.producer)}${s.producerFile ? ` (${esc(s.producerFile)})` : ''}, project ${esc([pr.bridgeId, pr.name].filter(Boolean).join(' — ') || '(not stated)')}, produced ${esc(when(s.producedAt))}, pulled ${esc(when(s.adoptedAt))}: spans, skews${s.skewSign === 'asis' ? ' (sign as sent)' : ' (sign converted)'}, joints, girder spacings, overhangs, barrier widths, deck, haunch, girder depth ${f3(s.depth)} in (${esc(s.depthChoice)}) and flange / web${s.skKgKept ? `; skew-correction K<sub>g</sub> kept at ${f0(s.skKgKept)} in⁴` : s.lldf ? '; the live-load girder data follows the section' : ''}. Elevations, bearings and units are this tool's. Values may have been edited since.`; };
   const pb = paneBridge; paneBridge = function () { const h = pb();
-    const btns = `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:2px 0 8px"><span class="note" data-ho-link style="padding:0;align-self:center">Send/receive data: <a href="#" data-go-ho>Project tab → Hand-offs</a></span></div>${P.geoSrc ? `<p class="note" style="padding:0 0 6px" id="geo-src">${srcLine()}</p>` : ''}`;   // HOC (2026-11-10): the Pull / Import buttons are in the Project tab's Hand-offs card (hoRow)
+    const btns = `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:2px 16px 8px"><span class="note" data-ho-link style="padding:0;align-self:center">Send/receive data: <a href="#" data-go-ho>Project tab → Hand-offs</a></span></div>${P.geoSrc ? `<p class="note" style="padding:0 16px 6px" id="geo-src">${srcLine()}</p>` : ''}`;   // HOC (2026-11-10): the Pull / Import buttons are in the Project tab's Hand-offs card (hoRow)
     return h.replace('<p class="note">One span per row (Enter adds a row). Changing the number of spans adds or removes piers.</p>', m => m + btns); };
   // HOC (2026-11-10): the new-data marker is on the Project tab (slHdr show(), from isNewGeo()); hoRow(): the Geometry row of the Hand-offs card
   function hoRow() { const n = isNewGeo(), s = P.geoSrc;
@@ -4157,6 +4186,11 @@ const slrN = (x, d) => SharedSteps.n(+x, d == null ? 2 : d);
 const slrP = (x, d) => (+x < 0 ? '(' + slrN(x, d) + ')' : slrN(x, d));
 const slrPlain = s => String(s == null ? '' : s).replace(/<sub>(.*?)<\/sub>/g, '_$1').replace(/<sup>(.*?)<\/sup>/g, '^$1').replace(/<br\s*\/?>/g, '; ').replace(/<[^>]+>/g, '')
   .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
+/* SLLAY (2026-11-10, display only): text for the report's rich-text places (table cells, captions, notes): a subscript / superscript
+   becomes $…$ notation joined to the word before it ("M<sub>t</sub>" -> "$M_{t}$"), which the shared report sets as a subscript on
+   screen and in print and writes "M_t" in the plain text, as the other tools' reports. Step labels (set as plain text) keep slrPlain. */
+const slrJoin = t => String(t).replace(/([A-Za-zΑ-ωφγδ′]+)\$([_^]\{[^$]*\})\$/g, '$$$1$2$$').replace(/\$\$/g, '');
+const slrRich = s => slrJoin(slrPlain(String(s == null ? '' : s).replace(/\$/g, '').replace(/<sub>(.*?)<\/sub>/g, (m, x) => '$_{' + x.replace(/<[^>]+>/g, '') + '}$').replace(/<sup>(.*?)<\/sup>/g, (m, x) => '$^{' + x.replace(/<[^>]+>/g, '') + '}$')));
 const slrTx = s => String(s == null ? '' : s).replace(/[\\{}$&#%_^~]/g, '');   // text placed inside \text{}
 const slrCell = (v, d) => ({ t: (typeof v === 'number' && isFinite(v)) ? slrN(v, d) : String(v == null || v === '' ? '—' : v), n: typeof v === 'number' });
 const SLR_AA = 'AASHTO LRFD 10th Ed. ';
@@ -4203,7 +4237,7 @@ function slrModel() {
       { title: 'Load factors', items: [{ type: 'table', head: ['Limit state', 'DC max / min', 'DW max / min', 'LL', 'WS', 'WL', 'TU'], rows: lf }, { type: 'note', text: 'AASHTO LRFD 10th Ed. Tables 3.4.1-1, 3.4.1-2 and 3.4.1-6; a value entered on the Bridge tab replaces the default. Earth-load factors as on the Earth loads tab. γ_EQ (live load in Extreme Event I) is project-specific (Art. 3.4.1; C3.4.1 notes 0.5 as reasonable for a wide range of ADTT): the Bridge tab value, or 0 with MassDOT (Bridge Manual 3.4.3.3).' }] }] });
   }
   if (!G || G.E.length || bad) {
-    secs.push({ title: 'Input checks', subs: [{ title: 'Items to fix', items: (MODEL.C || []).filter(c => c[0] === 'fail').map(c => ({ type: 'note', warn: true, text: slrPlain(c[1] + ': ' + c[2]) })).concat([{ type: 'note', text: bad || 'Fix the input errors on the Summary tab.' }]) }] });
+    secs.push({ title: 'Input checks', subs: [{ title: 'Items to fix', items: (MODEL.C || []).filter(c => c[0] === 'fail').map(c => ({ type: 'note', warn: true, text: slrRich(c[1] + ': ' + c[2]) })).concat([{ type: 'note', text: bad || 'Fix the input errors on the Summary tab.' }]) }] });
     return slrDoc(secs);
   }
   /* ---------- 2. Bridge and substructure units ---------- */
@@ -4290,11 +4324,11 @@ function slrModel() {
     CV.forEach(c => { const X = comboComps(k, c); if (!X) return; const w = slrTopic(T, c.id, c.name, SLR_AA + 'Table 3.4.1-1');
       RQ.q.filter(x => x[0] === 'P' || x[0] === 'Mt' || x[0] === 'Ml').forEach(([nm, sym, q]) => { [1, -1].forEach(s => { if (nm !== 'P' && s < 0) return; slrComboStep(w, k, c, q, s, sym, defs[q], X, s > 0 ? C[c.id].max[q] : C[c.id].min[q]); }); }); });
     subs.push({ title: 'Factored effects at the resultant, ' + slrPlain(RQ.loc), items: [...slrNL('Each limit state is the sum of its loads at the resultant section, with the factors of §1.2 (η = 1.0):', [['Permanent loads', '(DC, DW, EH, EV, ES) with the maximum or minimum γ_p that gives the extreme;'], ['LL + IM', 'with γ_LL;'], ['Shown already factored', '(the governing case of each): BR, CE, LS, WS + WL, TU + FR, WA, IC, EQ, CV and CT.'], ['Unfactored loads:', ['dl', 'll', 'brce', 'wind', 'temp', 'water', 'ice', 'eq', 'cv', 'ct'].map(t => slrTab(t, k)).join('; ') + '.']]), slrTopics(scope, T, { title: 'Worked steps' })] });
-    const env = RQ.q.map(([nm, sym, q]) => { const d = defs[q], dd = d.u === 'kip-ft' ? 0 : 1; gov.push([u.name, slrPlain(d.label), slrCell(C.env.max[q], dd), C.env.gmx[q] || '—', slrCell(C.env.min[q], dd), C.env.gmn[q] || '—', { t: '', key: CV.length && (nm === 'P' || nm === 'Mt' || nm === 'Ml') ? scope + '/' + (CV.find(c => c.name === C.env.gmx[q]) || CV[0]).id + '.' + sym.replace(/[^A-Za-z]/g, '') + 'max' : undefined }]);
+    const env = RQ.q.map(([nm, sym, q]) => { const d = defs[q], dd = d.u === 'kip-ft' ? 0 : 1; gov.push([u.name, slrRich(d.label), slrCell(C.env.max[q], dd), C.env.gmx[q] || '—', slrCell(C.env.min[q], dd), C.env.gmn[q] || '—', { t: '', key: CV.length && (nm === 'P' || nm === 'Mt' || nm === 'Ml') ? scope + '/' + (CV.find(c => c.name === C.env.gmx[q]) || CV[0]).id + '.' + sym.replace(/[^A-Za-z]/g, '') + 'max' : undefined }]);
       return q; });
-    const lsRows = key => CV.map(c => [c.name, ...RQ.q.map(([nm, sym, q]) => slrCell(C[c.id][key][q], defs[q].u === 'kip-ft' ? 0 : 1))]), effH = RQ.q.map(([nm, sym, q]) => slrPlain(defs[q].label).replace(/, .*$/, '') + ' (' + defs[q].u + ')');
-    subs.push({ title: 'Limit-state table at the resultant', items: [{ type: 'table', wide: true, caption: 'Maximum effects at the resultant, ' + slrPlain(RQ.loc), head: ['Limit state', ...effH], rows: lsRows('max') },
-      { type: 'table', wide: true, caption: 'Minimum effects at the resultant, ' + slrPlain(RQ.loc), head: ['Limit state', ...effH], rows: lsRows('min') },
+    const lsRows = key => CV.map(c => [c.name, ...RQ.q.map(([nm, sym, q]) => slrCell(C[c.id][key][q], defs[q].u === 'kip-ft' ? 0 : 1))]), effH = RQ.q.map(([nm, sym, q]) => slrRich(defs[q].label).replace(/, .*$/, '') + ' (' + defs[q].u + ')');
+    subs.push({ title: 'Limit-state table at the resultant', items: [{ type: 'table', wide: true, caption: 'Maximum effects at the resultant, ' + slrRich(RQ.loc), head: ['Limit state', ...effH], rows: lsRows('max') },
+      { type: 'table', wide: true, caption: 'Minimum effects at the resultant, ' + slrRich(RQ.loc), head: ['Limit state', ...effH], rows: lsRows('min') },
       { type: 'note', text: 'Every section of the unit (cap, columns, footing) is tabulated on the ' + slrTab('combo', k) + ', with the concurrent design sets.' }] });
     secs.push({ title: u.name + ': ' + TYPE_NAME[u.type], subs });
   });
@@ -4302,13 +4336,13 @@ function slrModel() {
   secs.push({ title: 'Governing design forces', subs: [{ title: 'Strength and Extreme Event envelopes at each unit resultant', items: [{ type: 'table', wide: true, head: ['Unit', 'Effect', 'Max', 'Limit state', 'Min', 'Limit state', 'Worked in'], rows: gov.map(g => g[6].key ? g : g.slice(0, 6).concat(['—'])) }] }] });
   /* ---------- checks, assumptions, references ---------- */
   const C0 = MODEL.C || [], order = { fail: 0, warn: 1, info: 2, pass: 3 };
-  secs.push({ title: 'Input checks and assumptions', subs: [{ title: 'Input checks', items: C0.length ? C0.slice().sort((a, b) => order[a[0]] - order[b[0]]).map(c => ({ type: 'note', warn: c[0] === 'fail' || c[0] === 'warn', text: ({ fail: 'Fix', warn: 'Check', info: 'Note', pass: 'OK' }[c[0]]) + ' — ' + slrPlain(c[1]) + ': ' + slrPlain(c[2]) })) : [{ type: 'note', text: 'No input checks.' }] },
+  secs.push({ title: 'Input checks and assumptions', subs: [{ title: 'Input checks', items: C0.length ? C0.slice().sort((a, b) => order[a[0]] - order[b[0]]).map(c => ({ type: 'note', warn: c[0] === 'fail' || c[0] === 'warn', text: ({ fail: 'Fix', warn: 'Check', info: 'Note', pass: 'OK' }[c[0]]) + ' — ' + slrRich(c[1]) + ': ' + slrPlain(c[2]) })) : [{ type: 'note', text: 'No input checks.' }] },
     { title: 'Engineering assumptions', items: [{ type: 'note', text: slrPlain(m.notes || '—') }] }] });
   return slrDoc(secs);
 }
 function slrDoc(secs) {
   const m = P.meta || {};
-  secs.push({ title: 'References', subs: [{ title: 'Codes and references cited', items: [{ type: 'table', head: ['Reference', 'Provisions used'], rows: SL_REFS.map(([a, b]) => [a || '', slrPlain(b)]) }] }] });
+  secs.push({ title: 'References', subs: [{ title: 'Codes and references cited', items: [{ type: 'table', head: ['Reference', 'Provisions used'], rows: SL_REFS.map(([a, b]) => [a || '', slrRich(b)]) }] }] });
   return { title: 'Bridge Substructure Loads — Calculation Report', subtitle: m.name || 'Untitled', code: 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 3' + (isMass() ? ' · MassDOT LRFD Bridge Manual' : ''),
     info: [['Project', m.name], ['Project No.', m.num], ['Calculated by', m.by], ['Date', m.date], ['Checked by', m.chk], ['Checked date', '']],
     head: { left: 'Project No. ' + (m.num || '—') + ' — ' + String(m.name || '—').slice(0, 40), right: 'Computed: ' + (m.by || '—') + ' ' + (m.date || '') + ' · Checked: ' + (m.chk || '—'), foot: (m.name || 'Untitled') + ' (SubLoads: Bridge Substructure Loads)' },
@@ -4328,23 +4362,23 @@ const SLX_BLK = /^(DIV|P|UL|OL|LI|TABLE|THEAD|TBODY|TR|H1|H2|H3|H4|H5|H6|SECTION
 const slxIsBlk = n => n.nodeType === 1 && (SLX_BLK.test(n.tagName) || n.tagName.toLowerCase() === 'svg');
 const slxSq = t => String(t).replace(/\s+/g, ' ').trim();
 /* the text of an inline subtree; a "Worked in" link becomes a marker (resolved by slxFix once every ported card is known) */
-function slxInline(e, mark) {
+function slxInline(e, mark, rx) {   // rx (SLLAY, display only): <sub> / <sup> as $…$ notation (slrJoin), for the report's rich-text places
   let s = '';
   e.childNodes.forEach(n => {
     if (n.nodeType === 3) { s += n.textContent.replace(/\$/g, '').replace(/\[\[/g, '[ ['); return; }
     if (n.nodeType !== 1 || n.matches(SLX_SKIP)) return;
     if (n.matches('.sl-wk')) { const d = n.dataset; s += mark ? '\u0001' + [d.wt || '', d.wu || '', slxSq(d.wc || ''), d.txt || '', n.classList.contains('sl-in') ? 'in' : 'wk', slxSq(slxInline(n, false))].join('\u0003') + '\u0002' : slxInline(n, false); return; }
     const tg = n.tagName.toUpperCase();
-    if (tg === 'SUB') { s += '_' + slxInline(n, false); return; }
-    if (tg === 'SUP') { s += '^' + slxInline(n, false); return; }
+    if (tg === 'SUB') { s += rx ? '$_{' + slxInline(n, false) + '}$' : '_' + slxInline(n, false); return; }
+    if (tg === 'SUP') { s += rx ? '$^{' + slxInline(n, false) + '}$' : '^' + slxInline(n, false); return; }
     if (tg === 'BR') { s += ' '; return; }
     if (tg === 'SVG') return;
-    s += slxInline(n, mark);
+    s += slxInline(n, mark, rx);
   });
-  return s;
+  return rx ? slrJoin(s) : s;
 }
 function slxCell(c) {
-  const t = slxSq(slxInline(c, true)), o = { t };
+  const t = slxSq(slxInline(c, true, true)), o = { t };
   if (c.colSpan > 1) o.span = c.colSpan;
   if (c.classList.contains('val') || /^[\s\d.,−\-+%/()×]+$/.test(t) && /\d/.test(t)) o.n = true;
   const tag = c.querySelector('.tag,.pill');
@@ -4367,23 +4401,23 @@ function slxTable(t, ctx) {
 function slxWalk(node, out, ctx) {
   let buf = '';
   const push = it => { if (ctx.tp) { it.topic = { title: ctx.tp, no: ++ctx.ntp }; ctx.tp = null; } out.push(it); };
-  const flush = () => { const t = slxSq(buf); if (t && !/^[·•\-–—:,;.\s]*$/.test(t)) push({ type: 'note', text: t }); buf = ''; };
+  const flush = () => { const t = slxSq(slrJoin(buf)); if (t && !/^[·•\-–—:,;.\s]*$/.test(t)) push({ type: 'note', text: t }); buf = ''; };
   node.childNodes.forEach(n => {
     if (n.nodeType === 3) { buf += n.textContent.replace(/\$/g, '').replace(/\[\[/g, '[ ['); return; }
     if (n.nodeType !== 1 || n.matches(SLX_SKIP)) return;
-    if (!slxIsBlk(n)) { const w = document.createElement('span'); w.appendChild(n.cloneNode(true)); buf += slxInline(w, true); return; }
+    if (!slxIsBlk(n)) { const w = document.createElement('span'); w.appendChild(n.cloneNode(true)); buf += slxInline(w, true, true); return; }
     flush();
     const tg = n.tagName.toUpperCase();
     if (tg === 'TABLE') { const t = slxTable(n, ctx); if (t) push(t); return; }
     if (tg === 'SVG') { push({ type: 'figure', svg: n.outerHTML, caption: '' }); return; }
     if (tg === 'IMG') { if (n.getAttribute('src')) push({ type: 'figure', svg: '<img src="' + n.getAttribute('src') + '" alt="' + esc(n.getAttribute('alt') || '') + '" style="max-width:100%;height:auto">', caption: '' }); return; }
     if (/^H[1-6]$/.test(tg)) { const t = slxSq(slxInline(n, true)); if (t) { if (ctx.tp) push({ type: 'note', text: '' }); ctx.tp = t; } return; }
-    if (n.classList.contains('facts')) { const rows = [...n.querySelectorAll('.fact')].map(f => { const b = f.querySelector('b'), sp = f.querySelector('span'); return [sp ? slxSq(slxInline(sp, true)) : '', { t: b ? slxSq(slxInline(b, true)) : '', n: true }]; }); if (rows.length) push({ type: 'table', head: ['Item', 'Value'], rows }); return; }
-    if (n.classList.contains('chk')) { const tag = n.querySelector('.tag'), c = n.cloneNode(true); c.querySelectorAll('.tag').forEach(x => x.remove()); const t = slxSq(slxInline(c, true));
+    if (n.classList.contains('facts')) { const rows = [...n.querySelectorAll('.fact')].map(f => { const b = f.querySelector('b'), sp = f.querySelector('span'); return [sp ? slxSq(slxInline(sp, true, true)) : '', { t: b ? slxSq(slxInline(b, true, true)) : '', n: true }]; }); if (rows.length) push({ type: 'table', head: ['Item', 'Value'], rows }); return; }
+    if (n.classList.contains('chk')) { const tag = n.querySelector('.tag'), c = n.cloneNode(true); c.querySelectorAll('.tag').forEach(x => x.remove()); const t = slxSq(slxInline(c, true, true));
       if (t) push({ type: 'note', text: (tag ? tag.textContent.trim() + ': ' : '') + t, warn: !!(tag && (tag.classList.contains('fail') || tag.classList.contains('warn'))) || undefined }); return; }
-    if (n.classList.contains('sl-wkl')) { const c = n.cloneNode(true); if (c.firstChild && c.firstChild.nodeType === 3) c.firstChild.textContent = ''; const t = slxSq(slxInline(c, true)); if (t) push({ type: 'note', text: t }); return; }   // "Worked in:" reads as the package's links
+    if (n.classList.contains('sl-wkl')) { const c = n.cloneNode(true); if (c.firstChild && c.firstChild.nodeType === 3) c.firstChild.textContent = ''; const t = slxSq(slxInline(c, true, true)); if (t) push({ type: 'note', text: t }); return; }   // "Worked in:" reads as the package's links
     if ([...n.childNodes].some(slxIsBlk)) { slxWalk(n, out, ctx); return; }
-    let t = slxSq(slxInline(n, true)); if (!t) return;
+    let t = slxSq(slxInline(n, true, true)); if (!t) return;
     t = t.replace(/\s*Hover the limit state to see the loads and cases it uses\./, '');   // a tooltip does not print (as the package)
     if (t) push({ type: 'note', text: (tg === 'LI' ? '• ' : '') + t, warn: /color:\s*var\(--fail\)/.test(n.getAttribute('style') || '') || undefined });
   });
@@ -4397,7 +4431,7 @@ function slxSubs(html, chTitle, pre, keyOf) {
   const walk = el => { [...el.children].forEach(c => {
     if (c.matches('.card')) { const h = c.querySelector(':scope > .card-h > h2'), sb = c.querySelector(':scope > .card-h > .sub'), t = h ? slxSq(slxInline(h, false)) : '';
       const ctx = { nt: 0, ntp: 0, tp: null, title: t || chTitle }, items = [];
-      if (sb) { const st = slxSq(slxInline(sb, true)); if (st) items.push({ type: 'note', text: st }); }
+      if (sb) { const st = slxSq(slxInline(sb, true, true)); if (st) items.push({ type: 'note', text: st }); }
       [...c.children].forEach(b => { if (!b.matches('.card-h')) { const w = document.createElement('div'); w.appendChild(b.cloneNode(true)); slxWalk(w, items, ctx); } });
       subs.push({ title: t ? (pre ? pre + ': ' : '') + t : (pre || chTitle), key: keyOf(subs.length), cardTitle: t, items: items.length ? items : [{ type: 'note', text: '(no content)' }] }); loose = null; return; }
     if (c.matches(SLX_SKIP)) return;
@@ -4436,8 +4470,8 @@ function slxAdd(M) {
       if (subs.length && !map['ch|unit|' + ch.k]) map['ch|unit|' + ch.k] = subs[0].key;
       if (map['combo|' + ch.k]) { let h = ''; try { h = slResults(ch.k, `<span class="sl-wk" data-wt="combo" data-wu="${ch.k}" data-wc="" data-txt="worked">worked</span>`); } catch (e) { h = ''; }
         if (h) { const w = document.createElement('div'); w.innerHTML = h; const hd = w.querySelector('.sl-resh');
-          const rows = [...w.querySelectorAll('.sl-line')].map(l => [...l.children].map(c => slxSq(slxInline(c, true))));
-          subs.push({ title: 'Results: governing effects at the resultant', key: 'slx.u' + ch.k + '.res', items: [{ type: 'note', text: hd ? slxSq(slxInline(hd, true)) : '' }, { type: 'table', head: ['Limit state', 'Factored effects (maximum / minimum)'], rows }] }); } }
+          const rows = [...w.querySelectorAll('.sl-line')].map(l => [...l.children].map(c => slxSq(slxInline(c, true, true))));
+          subs.push({ title: 'Results: governing effects at the resultant', key: 'slx.u' + ch.k + '.res', items: [{ type: 'note', text: hd ? slxSq(slxInline(hd, true, true)) : '' }, { type: 'table', head: ['Limit state', 'Factored effects (maximum / minimum)'], rows }] }); } }
       secs.push({ title: ch.title + ' (tab chapters)', key: 'slx.ch' + ci, subs }); return; }
     const subs = slxSubs(ch.html, ch.title, '', i => 'slx.' + ch.key + '.' + i);
     if (ch.key === 'govsum') subs.forEach(q => { q.items = [].concat(...q.items.map(it => { const u = it.topic && P.units.findIndex(x => `${x.name}: ${TYPE_NAME[x.type]}` === it.topic.title);

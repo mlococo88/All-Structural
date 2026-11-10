@@ -2773,3 +2773,42 @@ function listTables() {
 - **Saved data (§5):** none.
 - **Decisions (pending engineer review):** (1) The new-data marker moves from the Bridge / Reactions tabs to the Project tab (where the Pull buttons now are). (2) The records of what was pulled stay where they were (Bridge tab `#geo-src`, Reactions tab "Hand-off sources" and per-support tags, Summary, Dead load, report) and are also shown as "Last received" in the card. (3) "Last sent" is read from the channel keys in this browser (no new record). (4) "Export abutments" (the file) stays with the abutment loads send; the DXF export moves to its own "Project files" card. (5) Foundation loads: the unit is still chosen in the send dialog (no selector in the card).
 - **Other copies:** none.
+
+## 2026-11-10 — PR: sl-layout (PR #1398: https://github.com/mlococo88/All-Structural/pull/1398) — layout and formatting fixes from the layout audit (SLLAY; display only)
+- **Where (all in `Bridge Substructure Loading.html`):**
+  - CSS `.tab-bar`: `overflow-x: auto; scrollbar-width: thin;` → `flex-wrap: wrap; gap: 0 2px;`. `.tab-panel { display: none; max-width: 1180px; }` → `.tab-panel { display: none; }`.
+  - CSS, new rules after `.tbl tr.tot td`: `.tbl.cmb th { white-space: normal; }`, cell padding 6px, `.tbl.cmb tr > :first-child { white-space: nowrap; position: sticky; left: 0; z-index: 1; background: var(--surface); }`, `.tbl.cmb .nw { white-space: nowrap; }`, `.tscroll.cmb-w { container-type: inline-size; }`, `@container (max-width: 1399px) { .tbl.cmb .nw { display: block; } }`.
+  - CSS, new rules after `.mini-t td.lbl`: `.mini-t.sup-t { table-layout: fixed; }` (+ th wrap, label ellipsis, select padding 2px 0).
+  - CSS `@media (max-width: 900px)`: `.tab-btn { padding: 8px 8px 6px; }`. New `@media (max-width: 600px)` block: the header in two rows (`.hdr-spacer` hidden, `.hdr-group` 100 % wide, nowrap; `[data-sp="row"]` nowrap; `.spChip` shrinks, its `b` ellipsizes).
+  - CSS: `.dwg.dwg-geo { max-width: 1120px; margin: 0 auto; }`.
+  - `respTable()`: `<div class="tscroll"><table class="tbl">` → `<div class="tscroll${o.cls ? ' ' + o.cls + '-w' : ''}"><table class="tbl${o.cls ? ' ' + o.cls : ''}">`.
+  - `comboHtml()`: cells `<td class="val" style="white-space:nowrap">${max} / ${min}</td>` → `<td class="val"><span class="nw">${max} /</span> <span class="nw">${min}</span></td>` (envelope cell the same, inside `<b>`), and the respTable option `{ cls: 'cmb' }`. The Governs cell is unchanged.
+  - `paneBridge()`: `<table class="mini-t">` → `<table class="mini-t sup-t"><colgroup>` with widths 23 %/18 %/23 %/36 %. The label cell gets `title="<unit name>"`. Option values and text are unchanged.
+  - Geometry hand-off IIFE (`const pb = paneBridge; paneBridge = function () { const h = pb();`): `margin:2px 0 8px` → `margin:2px 16px 8px`; `#geo-src` `padding:0 0 6px` → `padding:0 16px 6px`.
+  - `windHtml()`: `<p style="max-width:80ch">${ANG.map(… `${a}°: ${f3(WLT[i])} / ${f3(WLL[i])}`).join('; ')} klf (transverse / longitudinal), 6 ft above the deck, with Strength V and Service I.</p>` → a `.tbl` (Attack angle | Transverse (klf) | Longitudinal (klf)), one row per angle, followed by the note "WL acts 6 ft above the deck, with Strength V and Service I."
+  - `planDwg(G, UG)` → `planDwg(G, UG, o = {})` with `h = Math.max(G.L, G.Wd) * 0.011 * (o.ts || 1)`. In `longDwg`, `h = o.h || G.L * 0.012` → `h = o.h || G.L * 0.012 * (o.ts || 1)`. New `const GEO_TS = 1.5` before `geometryHtml()`, which calls `svgOf(planDwg(G, UG, { ts: GEO_TS }), { cls: 'dwg dwg-geo' })` and `svgOf(longDwg(G, UG, { ve, ts: GEO_TS }), { cls: 'dwg dwg-geo' })`. The DXF (`dxfOf` parts), the sheets (`sheetSet`) and the strip are unchanged (no `ts`).
+  - Report (SLRP block): new `slrJoin` and `slrRich` after `slrPlain`. `slrRich` turns `X<sub>y</sub>` into `$X_{y}$` (and `<sup>` into `$^{…}$`), joined to the word before it. It replaces `slrPlain` for input-check notes, the §8.1 governing cells, the limit-state table heads and captions, and the references table; step labels keep `slrPlain`. `slxInline(e, mark)` → `slxInline(e, mark, rx)`: with `rx`, SUB/SUP become `$_{…}$` / `$^{…}$` and the result goes through `slrJoin`. `rx = true` for cells, notes, facts, check lines, "Worked in" lines, card subtitles and result lines; not for h2/h3 titles (the shared report prints topic titles with `esc`). `slxWalk` `flush()` applies `slrJoin(buf)`.
+- **Problem:** layout audit findings:
+  - 358 px blank at 1920 px;
+  - output tabs off-screen in one sideways row;
+  - Combinations labels wrapped 4–5 lines and the last columns were clipped;
+  - Supports select truncated ("Continuou");
+  - hand-off line flush to the sidebar edge;
+  - WL was a loose paragraph;
+  - 147 px phone header;
+  - Report "M_t" instead of M<sub>t</sub>;
+  - about 7 px Geometry labels.
+- **Governing provision:** none (display only). **Check case:** main-vs-branch probe of every number in every output tab for every unit, plus `SharedReport.text` (13,397 numbers) and the rendered Report: identical, 0 differences, 0 console errors. Measured:
+  - smallest Geometry label at 1440 px: plan 7.4 → 10.7 px, elevation 8.2 → 12.4 px;
+  - Combinations Pier 1 at 1440 px: scrollWidth 1198 → 1002 (box 1002);
+  - phone header: 147 → 75 px;
+  - select width: 84 → 110 px.
+- **Tests:** new `tests/smoke/bsl-layout.mjs`. In `tests/smoke/bsl-barge-collision.mjs`, the Report regex `\^1\/2` → `\^\(?1\/2\)?`: the plain text of the superscript now reads `^(1/2)`.
+- **Saved data (§5):** none.
+- **Decisions (pending engineer review):**
+  1. The Combinations max / min pairs go on two lines when the table box is narrower than 1400 px, so the whole table is visible at 1440 px.
+  2. The Geometry text scale is 1.5, and the plan and elevation are capped at 1120 px wide.
+- **Open items:**
+  - Report worked-step labels still read "M_t". `shared/report.js` prints step labels with `esc()`, so a shared-file change is needed.
+  - Geometry labels at 390 px are still about 3–5 px (planned restyle).
+- **Other copies:** none.
