@@ -10,6 +10,7 @@
 //      sheet is built (the three of ABDW, then the ABD2 detail sheets that apply: approach slab and shelf, seat, joint / pile embedment,
 //      wingwall, general notes; numbered N OF M), fits its sheet, the DXF passes SharedDxf.validate, and no text of a sheet's drawing
 //      overlaps another text (tests/engine/overlap.mjs textOverlaps, the Steel Bridge app's check; title block apart).
+//      ABEL (2026-11-10): the same projects again with a beam seat elevation (panel I-1): the "EL." marks stay clear of every other text.
 //   3. The Drawings tab opens, previews, picks a sheet (per-browser key abutcalc_dwgSheet_v1, not in S), "Download DXF" saves a valid file;
 //      no horizontal scroll at 390 px; no console errors.
 //   node tests/smoke/abutment-drawings.mjs
@@ -78,6 +79,9 @@ console.log('2. Drawings: sheets, DXF validity, no overlapping text');
     'stem shelf: backwall offset e = 10 in + slab (ABSH)': () => { S.apSlab.on = true; S.apSlab.t = 0.75; S.geom.tbw = 2; S.geom.tst = 5.5; S.geom.tsb = 5.5; S.geom.bwOff = 10; S.geom.shD = 9; },
     'stem shelf, no slab, pile footing (ABSH)': () => { S.fnd.branch = 'pile'; S.geom.bwOff = 8; S.geom.shD = 12; },
     'semi-integral + slab': () => { S.iab.type = 'semi'; S.apSlab.on = true; }, 'integral + slab': () => { S.iab.type = 'integral'; S.apSlab.on = true; } };
+  // ABEL (2026-11-10): every case again with a beam seat elevation (the EL. marks on the section and detail sheets), plus water in front and D_f
+  for (const [nm, su] of Object.entries({ ...cases, 'water both sides, passive D_f': () => { S.geom.hw = 6; S.geom.hwFr = 2; S.fnd.usePassive = true; } }))
+    cases[nm + ', seat El. 52.00'] = eval('() => { (' + su.toString() + ')(); S.geom.elSeat = 52; }');   // a source text: withCase sends it to the page
   let n = 0;
   for (const [nm, su] of Object.entries(cases)) {
     const r = await withCase(p, su, () => { const B = abdwBuild(window.LAST_R), t = B.D.toDXF({ ltscale: 1 }), G = B.G;

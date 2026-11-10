@@ -16806,6 +16806,30 @@ Engineer request (2026-11-10, paraphrased): add the input "Offset, back face of 
 - With no approach slab the fill over the shelf is not added to EV (warning). The slab inertia acts on the backwall at its mid-depth above the shelf.
 - Construction joint drawn at the base of the backwall (shelf elevation), consistent with the design section.
 
+## 2026-11-10 — PR: claude/abutment-elevations (PR #1374: https://github.com/mlococo88/All-Structural/pull/1374) (ABEL) — elevations from the beam seat elevation (display only)
+- **Engineer (2026-11-10):** "I want to be able to see elevations as well. I want to define the beam seat elevation and all other elevations would be determined based on that."
+- **Where (all in `abutment_calculator.html`):**
+  - `defaultState()` geom: before `      hwFr:null                     // ABM6:` add `      elSeat:null,` (beam seat elevation, ft; null = none).
+  - Fingerprint (C-21): before `    if(fpS.geom&&(fpS.geom.hwFr===null||` add `if(fpS.geom&&(fpS.geom.elSeat===null||…===undefined||…==="")) delete fpS.geom.elSeat;` (blank leaves the Input ID unchanged).
+  - Panel I-1 (before `    <div class="subhead">Footing</div>`): the input row `data-path="geom.elSeat" data-blank="1"` and `<div class="in-note" id="abElevIn">${abElevInHTML()}</div>`; `updateDerivedInInputs()` refreshes `#abElevIn` (not a `.derived` block: dv[0] / dv[1] indexes kept).
+  - New functions before `function drawXsec(){`: `abElevOn`, `abElev(R)` (rows {k, lab, el, how, y, side, x, src, dwg, abs}, flags, notes), `abElevInHTML`, `ABEL_SN` (short names), `abElevSvg`, `abElevMarks`, `abElevPanelHTML` (Tab 1 §1.1a, panel `o-elev`). No calculation calls them; nothing is added to `R`.
+  - `renderTabLoads` (after the §1.1 `varsTbl`) and `renderIntLoads` (after the §1.1 integral figcap): `h+=abElevPanelHTML(R);`.
+  - `drawXsec`: `ml` + 170 and width + 260 only with an elevation; `abElevSvg(Ev,X,Y,{F:X(0)-76,B:X(B)+104})` before `</svg>`. `svgIabSection` (integral): `El.` labels at the left of the dims.
+  - `abdwBuild`: `EV`, `ELM`, layer `ELEV` (only with an elevation), `elev()` placer (the column moves outward until the text is clear). Marks: section sheet (all levels; integral tips at the drawn tip; a sheet note; source link `o-elev`), apslab shelf detail (slab seat, top of slab; alternative view layouts tried only with an elevation), seat sheet (bridge seat, top of backwall / end diaphragm, slab seat incl. the ABSH stem shelf), joint sheet (top / bottom of footing).
+  - `build3D` / `build3DIntegral` (dimensions on): `abElev3D` labels. `inputEchoHTML`: the elevation row when entered.
+- **Levels (El_seat = E):**
+  - conventional / semi: top of the backwall or end diaphragm E + h_bw; slab top = top (ABSH: shelf + t); slab seat = top − t (ABSH: E + (h_bw − d_sh)); shelf bottom − h_S.
+  - top of footing E − h_stem; bottom of footing − t_f; backfill top of footing + h_soil; front grade bottom of footing + D_f (when D_f is in use); water bottom of footing + h_w and + h_w,f.
+  - integral: deck E + h_d; bottom of cap E − h_c; grade + D_front; tips − L_pile.
+  - Pile Designer tip El. (hand-off, absolute): shown as sent.
+- **Flags:** water / backfill above the top; front grade above the seat (integral: above the deck); ABSH slab top not level with the backwall top; Pile Designer tip El. not below the footing / cap, or ≠ the derived integral tip (> 0.05 ft).
+- **Provisions / formulas / factors / units:** none changed (§4). With the field blank, Tab 1, the DXF, the Report and the Input ID are identical to main; `LAST_R` is identical with the field blank or set.
+- **Saved data (§5):** new optional key `geom.elSeat` (null); no key renamed; a saved project without it opens blank.
+- **Check case:** built-in project, seat El. 52.00, slab on, h_w 6, h_w,f 2, passive D_f 3: top 57.00, slab seat 55.75, shelf bottom 54.50, top of footing 38.00, bottom 35.00, backfill 57.00, front grade 38.00, water 41.00 / 37.00. ABSH detail (t_bw 2, e 10 in, d_sh 9 in, slab 9 in): slab seat 56.25, slab top 57.00. Integral: deck 57.00, cap 48.00, grade 52.00, tips 18.00.
+- **Decisions (pending engineer review):** slab top = top of the backwall (ABSH: shelf + t); no bearing top (no total bearing height), no conventional deck surface, no pile-footing tips (no inputs); front grade only when D_f is in use; the Pile Designer tip El. is not converted; an entered elevation changes the Input ID; approach-slab sheet: marks on the shelf detail, not on section A-A.
+- **How verified:** `tests/smoke/abutment-elevations.mjs` (new), `abutment-drawings` (every project again with El. 52.00: 169 sheet drawings, 0 text overlaps), `abutment-pile-group-parity` 14/14 vs main, `abutment-stem-shelf`, `project-library --tool abutment`, `abutment-panel-scroll`, `dxf-print-sheets --tool ab`, `check-syntax`; 0 console errors; 390 px.
+- **Other copies:** none.
+
 ## 2026-11-10 — PR: claude/abutment-pile-mat-level (PR #1375: https://github.com/mlococo88/All-Structural/pull/1375) (ABPM) — Pile punching uses the footing design's bottom mat (c_F, panel I-2); the I-7 clear cover pile top to bottom mat greyed out and unused   [§4 calculation change, pile mode only; no saved key or format change]
 
 Engineer decision (2026-11-10): "Yes, same bottom mat." The pile punching and pile-cap checks use the bottom-mat level of the footing design (I-2 bottom cover c_F, the d of the footing flexure and shear design). Follows #1372 (the pile detail drew the mat at the I-7 clear distance) and ABPB #1158.
