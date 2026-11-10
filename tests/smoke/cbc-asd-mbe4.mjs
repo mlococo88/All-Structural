@@ -15,6 +15,9 @@
 //    2,000 psi; lower row between rows; below 2,000 psi no rule, entry kept). Before: 0.40 f'c. n stays Std. Spec. 8.15.3.4.
 //    Hand check, same beam at f'c = 3,500 psi (n = 9 as at 3,000): f_c,inv 1,400 -> 1,200 psi; Gr 60 inventory M_all
 //    201.85 (steel) -> 173.18 (concrete), RF 1.697 -> 1.220; Gr 40 / 50 inventory RF 1.137 (steel) unchanged.
+//  - MBE4C: f'c < 2,000 psi (no table row): automatic f_c,inv = 0.40 f'c, f_c,op = 0.60 f'c (lowest row x f'c/2,000); REVIEW stays.
+//    Hand check f'c 1,800 (n = 12, z = 24.845, C = 76.76): f_c,inv 1,200 -> 720, f_c,op 1,900 -> 1,080; Gr 60 inv RF 1.512 -> 0.240,
+//    op RF 3.302 -> 1.194 (concrete); Gr 40 inv 1.094 -> 0.240, op 2.198 -> 1.194.
 //  - 0 console errors; no sideways scroll at 390 px.
 //   node tests/smoke/cbc-asd-mbe4.mjs [--file <Concrete Beam Capacity.html>]
 import path from 'path';
@@ -67,7 +70,14 @@ for (const vw of [1400, 390]) {
   for (const [fc, v] of [[2000, 800], [2450, 800], [2500, 1000], [3000, 1200], [3950, 1200], [4000, 1600], [5000, 2000], [8000, 2000]]) {
     r = await run(fc, 60000); ok(r.A.fc_inv === v && !r.ovr.fc_inv, `f'c ${fc}: f_c,inv ${r.A.fc_inv} (${v})`); }
   r = await run(1800, 60000);
-  ok(r.A.fc_inv === 1200 && r.dash.includes('Allowable f_c,inv') && r.rpt.includes('inventory $f_{c}$ = 1,200 psi is the entered value'), 'f\'c 1,800: no inventory row, entry kept (1,200), REVIEW and Report note');
+  ok(r.A.fc_inv === 720 && !r.ovr.fc_inv && r.dash.includes('Allowable f_c,inv') && r.rpt.includes('inventory $f_{c}$ = 0.40') && r.rpt.includes('= 720 psi is used automatically'), 'MBE4C f\'c 1,800: f_c,inv = 0.40 f\'c = 720 (automatic), REVIEW and Report note');
+  ok(r.n === 12 && near(r.Mci, 114.42) && r.ci === 'Concrete' && near(r.rfi, 0.240, 0.001) && near(r.Mco, 171.63) && r.co === 'Concrete' && near(r.rfo, 1.194, 0.001),
+    `MBE4C f'c 1,800 Gr 60: inv ${r.Mci.toFixed(2)} RF ${r.rfi.toFixed(3)} (114.42, 0.240; before 190.70 conc, 1.512), op ${r.Mco.toFixed(2)} RF ${r.rfo.toFixed(3)} (171.63, 1.194; before 298.14 steel, 3.302)`);
+  r = await run(1800, 40000);
+  ok(near(r.rfi, 0.240, 0.001) && near(r.rfo, 1.194, 0.001), `MBE4C f'c 1,800 Gr 40: RF inv ${r.rfi.toFixed(3)} (0.240; before 1.094), op ${r.rfo.toFixed(3)} (1.194; before 2.198)`);
+  for (const [fc, vi, vo] of [[1000, 400, 600], [1500, 600, 900], [1990, 796, 1194]]) { r = await run(fc, 60000); ok(r.A.fc_inv === vi && r.A.fc_op === vo, `MBE4C f'c ${fc}: ${r.A.fc_inv} / ${r.A.fc_op} (${vi} / ${vo})`); }
+  r = await run(1800, 60000, { fc_inv: 900, fs_inv: 24000, fc_op: 1300, fs_op: 36000, ovr: { fc_inv: true, fs_inv: false, fs_op: false, fc_op: true } });
+  ok(r.A.fc_inv === 900 && r.A.fc_op === 1300 && r.dash.includes('the entered 900 psi is used'), 'MBE4C f\'c 1,800: typed overrides stay (900 / 1,300), REVIEW names them');
   await run(3500, 60000);
   await f.evaluate(() => { const i = document.querySelector('[data-fkey="fcInv"]'); i.value = '1400'; i.dispatchEvent(new Event('input', { bubbles: true })); });
   r = await f.evaluate(() => ({ A: { ...S.allow }, ovr: { ...S.allow.ovr }, dash: JSON.stringify(asdDashItems()), rpt: JSON.stringify(asdRptModel()) }));
@@ -84,7 +94,7 @@ for (const vw of [1400, 390]) {
   for (const [fc, v] of [[2000, 1200], [2450, 1200], [2500, 1500], [2900, 1500], [3950, 1900], [4000, 2400], [4900, 2400], [5000, 3000], [8000, 3000]]) {
     r = await run(fc, 60000); ok(r.A.fc_op === v && !r.ovr.fc_op, `f'c ${fc}: f_c,op ${r.A.fc_op} (${v})`); }
   r = await run(1800, 60000);
-  ok(r.A.fc_op === 1900 && r.dash.includes('no row for f′c') && r.rpt.includes('below the first row'), 'f\'c 1,800: no row, entry kept (1,900), REVIEW notice and Report note');
+  ok(r.A.fc_op === 1080 && r.dash.includes('no row for f′c') && r.rpt.includes('below the first row'), 'f\'c 1,800: no row, f_c,op = 0.60 f\'c = 1,080 (MBE4C; was the entry 1,900), REVIEW notice and Report note');
   // typed value = override, kept when f'c changes; above the table value -> REVIEW
   await run(4000, 60000);
   await f.evaluate(() => { const i = document.querySelector('[data-fkey="fcOp"]'); i.value = '2600'; i.dispatchEvent(new Event('input', { bubbles: true })); });
