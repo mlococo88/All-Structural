@@ -256,6 +256,8 @@
   }
   function loads(slot, o) {
     const rg = o.R.regions[o.lr], mem = rg && rg.members[o.lg]; if (!mem) { slot.innerHTML = ''; return null; }
+    // DETC (2026-11-10): the screen graphic is the option C style (ui/gfxdet.js SBDGfxDet.lldf; the case as a segmented control, S.loadCase as before); Download DXF is loadsGraphic, unchanged
+    if (window.SBDGfxDet && window.SBDVizKit && window.SBDVizKit.detCard) return window.SBDGfxDet.lldf(slot, { P: o.P, R: o.R, lg: o.lg, lr: o.lr, cs: S.loadCase, onCase: v => { S.loadCase = v; loads(slot, o); }, dxf: use => loadsGraphic(o.P, o.R, o.lg, o.lr, use) });
     const g0 = loadsGraphic(o.P, o.R, o.lg, o.lr, S.loadCase); if (g0.errors) { slot.innerHTML = `<div class="note">${esc(g0.errors.join(' '))}</div>`; return null; }
     const host = block(slot, { id: 'gfx_ld', cases: g0.opts, cur: g0.use, caseLabel: 'LLDF case', onCase: v => { S.loadCase = v; loads(slot, o); } });
     return GR().mount(host, () => loadsGraphic(o.P, o.R, o.lg, o.lr, g0.use), { key: `loads${o.lg}.${o.lr}.${g0.use}` });

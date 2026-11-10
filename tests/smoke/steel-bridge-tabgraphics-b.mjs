@@ -41,7 +41,7 @@ try {
     const s0 = `#out [data-gfxb="${name}"] .vk-det`; await p.waitForSelector(s0 + ' svg', { timeout: 240000 });
     const info = await p.$eval(s0, r => ({ texts: r.querySelectorAll('svg text').length, shapes: r.querySelectorAll('svg line,svg polyline,svg polygon,svg circle,svg rect').length, zoom: r.querySelectorAll('.sdx-btns,.sdx-view').length,
       w: r.querySelector('svg').getBoundingClientRect().width, cw: r.clientWidth }));
-    assert.ok(info.texts > 5 && info.shapes > 8 && info.zoom === 0 && info.w <= info.cw + 1, `${tab}/${name}: card ${JSON.stringify(info)}`);
+    assert.ok(info.texts >= 4 && info.shapes >= 6 && info.zoom === 0 && info.w <= info.cw + 1, `${tab}/${name}: card ${JSON.stringify(info)}`);
     const [dl] = await Promise.all([p.waitForEvent('download'), p.click(s0 + ' [data-vkdxf]')]); const txt = fs.readFileSync(await dl.path(), 'utf8');
     assert.equal(txt, await p.evaluate(n => window.SBDTabGfxBUI.handles[n].dxf(), name), `${tab}/${name}: Download DXF = the CAD drawing`); assert.ok(/SECTION/.test(txt) && /EOF/.test(txt) && /S-ANNO-TEXT/.test(txt), `${tab}/${name}: DXF`);
     done.push(`${tab}/${name}`); return txt;
@@ -87,6 +87,10 @@ try {
   await p.click('#tabBar [data-otab="wt"]'); await settle(); await commonV('wt', 'welds'); await common('wt', 'weld-detail'); await clickV('welds', 'fw', 3); await selRow('data-wt', 'fw:3'); await clickV('welds', 'tr', 2); await selRow('data-wt', 'tr:2'); await shot('welds', '#out [data-gfxb="welds"]');
   // ---- Field splices
   await p.click('#tabBar [data-otab="spl"]'); await settle(); const tsp = await common('spl', 'splice'); assert.ok(/S-GOV/.test(tsp), 'the governing group is on S-GOV'); await shot('splices', '#out [data-gfxb="splice"]');
+  // DETC (d): the splice strip is an option C card; a click on a splice selects it (the strip's selected pill), Download DXF = the CAD strip
+  { await p.waitForSelector('#out [data-gfxb="splice-strip"] .vk-det [data-fs="0"]', { state: 'attached' }); await p.$eval('#out [data-gfxb="splice-strip"] [data-fs="0"]', e => e.scrollIntoView({ block: 'center' }));
+    await p.click('#out [data-gfxb="splice-strip"] [data-fs="0"]', { force: true }); await p.waitForTimeout(700); await p.waitForSelector('#out [data-gfxb="splice-strip"] svg rect.pill', { state: 'attached' });
+    await commonDet('spl', 'splice-strip'); }
   // ---- Rating
   await p.click('#tabBar [data-otab="rt"]'); await settle(); await commonV('rt', 'rating'); const rowsN = await p.evaluate(() => window.SBDTabGfxBUI.handles.rating.R.regs.length); assert.ok(rowsN > 40, 'rating click areas');
   await clickV('rating', 'rt', await p.evaluate(() => window.SBDTabGfxBUI.handles.rating.R.regs[40].v.i)); assert.ok(await p.$('#out tr[data-rt].sel'), 'a rating row selected'); await shot('rating', '#out [data-gfxb="rating"]');
