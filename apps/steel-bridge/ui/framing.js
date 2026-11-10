@@ -161,6 +161,8 @@
   /* diaSvg(B): a simple elevation of the intermediate diaphragm between two girders (nominal shape, centred on the girder depth, as the
      Drawings sheet), the connection plates and the bolt rows; the governing check below it. Not to scale vertically when d ≫ S. */
   function diaSvg(B) {
+    // DETC (2026-11-10): in the option C style (ui/gfxdet.js SBDGfxDet.diaphragm, the same numbers); below, the former sketch (without the kit)
+    if (window.SBDGfxDet && window.SBDGfxDet.diaphragm && window.SBDVizKit && window.SBDVizKit.scene) { try { return window.SBDGfxDet.diaphragm(B); } catch (e) { /* the sketch below */ } }
     const CF = window.SBDCrossframes, p = B.I.p, q = p.dia || {}, X = CF.cfDiaSec(q), g = CF.cfDiaGap(q), S = +p.S, dg = +p.dg, D = B.R.DIA && B.R.DIA.i;
     const W = 720, pad = 60, sc = (W - 2 * pad) / Math.max(S, 1), Hg = dg * sc, H = Hg + 90, X0 = pad, Y0 = 30, x = v => (X0 + v * sc).toFixed(1), y = v => (Y0 + v * sc).toFixed(1);
     const bf = 16, tfl = 1, y0 = (dg - X.d) / 2, nb = Math.max(2, Math.round(+q.nb || 2)), sp = +q.pitch || 3, ec = +q.ecc || 3.5, bs = 5;
