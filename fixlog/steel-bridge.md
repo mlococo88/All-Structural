@@ -4665,7 +4665,7 @@ except the duplicated stations removed by fix 1 (listed there) and the Summary's
   `node tests/check-syntax.mjs`; steel-bridge smoke tests; phone-layout `sbapp`; project-library.
 - **Other copies:** none.
 
-## 2026-11-10 — PR: sb-invalid-input (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — invalid inputs are marked and block every result (SBINV)
+## 2026-11-10 — PR: sb-invalid-input (PR #1283: https://github.com/mlococo88/All-Structural/pull/1283) — invalid inputs are marked and block every result (SBINV)
 - **Problem (QA, engineer decision 2026-11-09: "Invalid input should be highlighted so the user can fix; results should not be displayed"):** with a
   sidewalk fence load entered and its position left blank, the loads module refused its input (engine/loads.js `xsIn`), but every other tab still
   ran with zero dead loads and unit LLDF (engine/analysis.js `loadsOf` / `dfOf`: "Nothing entered: loads 0 and factors 1") and showed a full
