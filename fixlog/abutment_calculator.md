@@ -17039,6 +17039,15 @@ Engineer decision 2026-11-10 (geometry). AASHTO LRFD 10th Ed. (2024): 5.6.5 / Fi
   - 0 console errors; 390 px.
 - **Other copies:** none.
 
+## 2026-11-10 — ABGRT: input tab "Girders" renamed "Girders & Reactions" (display only)
+- **Request (engineer, 2026-11-10):** "The girders tab should be girders and reactions."
+- **Change:** `ABUT_IN_TABS`, anchor `['gird','Girders']`:
+  - before: `['gird','Girders']`
+  - after: `['gird','Girders & Reactions']`
+  The tab id `gird` and the saved input-tab key `abutcalc_inputTab_v1` are unchanged, so saved projects and the remembered tab still work. The panels in the tab are unchanged: I-5 Girders — Layout & Reaction Matrix, the distribution panel, and the longitudinal panel.
+- **Provisions / values:** none (§4 not affected).
+- **Check case:** open the tool; the input tab bar shows "Girders & Reactions" and the tab holds panel I-5.
+- **PR:** https://github.com/mlococo88/All-Structural/pull/1385
 ## 2026-11-10 — PR: fix/abutment-slab-shelf-drawing (PR #1387: https://github.com/mlococo88/All-Structural/pull/1387) (ABSS) — Approach slab on the stem shelf drawn t thick with its top at shelf + t (a dimensioned step when d_sh ≠ t); Extreme Event I backwall: slab inertia arm t/2 above the shelf   [§4 calculation change, e > 0 with d_sh ≠ t and the EE-I M–O backwall check only; no saved key or format change]
 - **Engineer report (2026-11-10):** "The approach slab thickness is not correct in the drawing if I include the shelf depth below backwall." Photo of sheet 1 at e = 10 in, d_sh = 30 in, t = 15 in: slab drawn 2'-6" thick; "D_SH = 2'-6"" inside the slab; the BEARING label across a dimension line.
 - **Root cause:** `abdwBuild` drew the slab from the shelf (`shY = G.ySh`) up to the top of the backwall (`G.yTop`), so its thickness was d_sh. The tab figure, 3D view and elevations card already used shelf + t. Section A-A of the approach-slab sheet drew the backwall top at the slab top (wall height t above the shelf, not d_sh).
