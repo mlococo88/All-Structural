@@ -127,6 +127,11 @@ node tests/smoke/bridge-suite-compare.mjs --a <folder with origin/main> [--app l
 # Splice tab, the takeover of the old page's storage, and an Export JSON from the OLD standalone (git ref --old) importing identically. ~1 min
 node tests/smoke/rebar-redirect.mjs [--old f9ec0f9]
 
+# Development & Splice tab, AASHTO compression lap splice (CBCL): m = 1.33 for f'c < 3.0 ksi (#8, f_y 60 / 80 ksi, f'c 2.5 ksi: 39.90 / 63.84 in.),
+# f'c >= 3.0 ksi and ACI unchanged, #14 same-size N/P banner / Report step / bar-schedule footnote cite 5.10.8.4.5a, basis note on the tab and
+# in the Report, 1400 and 390 px, 0 console errors. ~30 s
+node tests/smoke/rebar-comp-lap.mjs [--file <Concrete Beam Capacity.html>]
+
 # Pile Designer's saved-project library is in IndexedDB (not covered above): page text and autosave main vs the working tree, Undo / Redo,
 # Save as new / rename / duplicate / refused write / load / delete (React 18.3.1 served from the kit's 18.2.0, test-only). ~1 min
 node tests/smoke/pile-library.mjs [--a origin/main]
