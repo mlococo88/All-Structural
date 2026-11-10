@@ -48,6 +48,12 @@
     { id: 'rtInv', grp: 'Rating', head: 'Rating, Inventory RF', short: 'RF Inv.', tab: 'rt', rf: true },
     { id: 'rtOpr', grp: 'Rating', head: 'Rating, Operating RF', short: 'RF Opr.', tab: 'rt', rf: true }];
   const GROUPS = [...new Set(COLS.map(c => c.grp))];
+  /* SBDIA (2026-11-10): with a rolled or channel diaphragm as the intermediate bracing (crossframes.dia.on = 'yes') the Cross-frames column
+     and chip read "Diaphragms" (checks CF10, CF11, CFD, CFE; CF1 to CF9 are not made). Display only: the column id 'cf' and the group key
+     'Cross-frames' (data-sdgrp, the Report's governing group) are unchanged. label(c, P): the column as shown; grpLabel(grp, P): the chip name. */
+  const isDia = P => !!(P && W().SBDCrossframes && W().SBDCrossframes.cfDiaOn(P.crossframes || {}));
+  const label = (c, P) => c && c.id === 'cf' && isDia(P) ? { ...c, head: 'Diaphragms', short: 'Diaphr.', what: 'CF10, CF11, CFD, CFE', grp: 'Diaphragms' } : c;
+  const grpLabel = (grp, P) => grp === 'Cross-frames' && isDia(P) ? 'Diaphragms' : grp;
   const modOf = col => MODS.find(m => m.cols.includes(col));
   /* the Report's governing groups (report/builders.js model().gov[].grp) of each column */
   const GRP = { shear: /^Shear & stiffeners: (Web panels|Stations)$/, stiff: /^Shear & stiffeners: (Transverse|Bearing) stiffeners$/, fat: /^Fatigue & studs: (Fatigue details|Flanges, every station)$/,
@@ -91,7 +97,7 @@
     });
     // warnings of the modules (the Report's own list) and those not in a group's ratio
     if (M && M.sections) M.sections.forEach(s => (s.subs || []).forEach(q => (q.items || []).forEach(it => { if (it.type === 'note' && it.warn && /^Welds: |Not evaluated/.test(it.text || '')) out.warn.push(it.text); })));
-    if (B.frm && B.frm.C) B.frm.C.forEach(c => c.items.forEach(it => { if (it.st === 'warn') out.warn.push(`Cross-frames: ${c.id} ${c.title}, ${it.loc}: Warning.`); }));
+    if (B.frm && B.frm.C) B.frm.C.forEach(c => c.items.forEach(it => { if (it.st === 'warn') out.warn.push(`${isDia(P) ? 'Diaphragms' : 'Cross-frames'}: ${c.id} ${c.title}, ${it.loc}: Warning.`); }));
     if (B.an && B.an.warnings) B.an.warnings.forEach(w => out.warn.push('Analysis: ' + (w.msg || w)));
     if (B.flex && !B.flex.err && W().SBDProportions) { const PS = W().SBDProportions.summary(B.flex.rows);
       if (PS && PS.warn.length) [...new Set(PS.warn.map(q => q.id))].forEach(id => { const L = PS.warn.filter(q => q.id === id); out.warn.push(`Flexure: ${id} at ${L.length} location(s), e.g. ${L[0].row.name}: ${L[0].c.na}`); }); }
@@ -106,7 +112,7 @@
     if (e) return e;
     if (col === 'defl') return 'No live-load deflection limit checked (the owner rule or the Analysis settings: optional criterion, 2.5.2.6.2).';
     if (col === 'spl') return 'No field splice on this girder.';
-    if (col === 'cf') return 'No cross-frame check with a ratio.';
+    if (col === 'cf') return isDia(B.P) ? 'No diaphragm check with a ratio.' : 'No cross-frame check with a ratio.';
     return 'No check with a ratio.';
   }
   /* flexCell(B, col): the governing flexure check of one limit state over every location (the Flexure tab's rows) */
@@ -151,5 +157,5 @@
      steel with the detail allowance, worked in the Analysis tab's step eq.DC1steel), kip; null where the analysis has not run */
   function weight(an) { return an && an.segs && an.wSteel ? an.segs.reduce((a, s, i) => a + an.wSteel[i] * (s.x1 - s.x0), 0) : null; }
 
-  window.SBDSummary = { weight, MODS, COLS, GROUPS, run, cells, overall, grpStat, modOf, FLEX_CLS };
+  window.SBDSummary = { weight, MODS, COLS, GROUPS, run, cells, overall, grpStat, modOf, FLEX_CLS, label, grpLabel };
 })();
