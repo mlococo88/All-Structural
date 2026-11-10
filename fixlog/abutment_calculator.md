@@ -16735,3 +16735,152 @@ Engineer instruction (2026-11-07, paraphrased): "same deal for the abutment" as 
 - **Saved data (§5):** none.
 - **Decisions (pending engineer review):** (1) The per-limit-state choice of the pile results stays in the review dialog (it lists the matched limit states); the item-level "Clear Pile Designer results" stays on the pile panels with a "Hand-offs: Project tab" link next to it. (2) The elastomeric bearing link is listed under "Send to other tools" (it opens EDM with this abutment's data; the pad comes back from EDM's "Send Pad to Abutment" and is applied as before, without a review, so it has no "Last received" line). (3) "Last sent" (foundation loads) is read from the copy this calculator already writes (`foundationLoads.by.abutment`, also used by the pile-results stale check); no new record. (4) Status lines use the existing new-data marker logic and the existing pile-results current / STALE message.
 - **Other copies:** none.
+
+## 2026-11-10 — PR: claude/abut-drawings2 (PR #1372: https://github.com/mlococo88/All-Structural/pull/1372) (ABD2) — detail drawing sheets (approach slab and shelf, seat, joint / pile embedment, wingwall, general notes); the approach-slab skew and shelf shown in the 3D view   [display / export only; no result, saved key or saved format change]
+- **Engineer (2026-11-10):** "The abutment app should have more drawings. Maybe a detail sheet that shows the approach slab rebar, the approach slab shelf and others? Also the approach slab skew should be shown in the 3D model along with the shelf."
+- **Drawings (all in `abdwBuild`, script "DRAWINGS tab (ABDW …)"):**
+  - `abdwGeo`: before `  return G;\n}\nfunction abdwBuild(R){` add `G.xbw=G.xb;` (the back face of the backwall / end diaphragm / integral wall).
+  - `function sheet(id,title,content,ks,src){` → `function sheet(id,title,content,ks,src,scName){`; `sc=abdwScName(k)` → `sc=scName||abdwScName(k)`; `ret=content(kk)||null; const b=D.bbox(i0);` → `… const b=(ret&&ret.bb)||D.bbox(i0);` and `const Pk=k, b=D.bbox(i0),` → `const Pk=k, b=(ret&&ret.bb)||D.bbox(i0),` (a content may return its extents with the texts; the three existing sheets return none, so they are unchanged).
+  - New block before `  SH.forEach((s,j)=>{ s.sheetEnt.s=SharedDxf.str((j+1)+" OF "+SH.length); });`: helpers `stdGE`, `bbT` (extents with the text boxes), `views(rows)` (views drawn at their own origin, magnified by m = k / k_view with `D.fmt` quoting the true length, placed in rows), `noteView`, `brk` (break line), `dot`; sheets
+    4. `apslab` APPROACH SLAB AND SHELF DETAILS (when `G.ap`): plan at the skew (u along the abutment, roadway r = (sin θ, cos θ); far end `P.rule` follow / square as `computeAp` / `d3ApSlab`; dims L along the roadway, L + W tan θ for a square far end, W normal to the roadway, W / cos θ along the abutment; θ arc, CL roadway, hidden shelf edge, typical P1 / P2, cut A-A), section A-A along the roadway (scale from its length; wall and shelf widths / cos θ; P1 / P2 / P3 at their spacings, bottom clear cover `apSlab.cov`), shelf detail normal to the abutment at 1" (else 3/4", 1/2") = 1'-0" (b_S, h_S, h_E, a_v, t; S1 at `apShelf.cov`, S2 within 2d_e/3), bar table S1, S2 (`R.apShelf`), P1–P3 (`R.apDes`; S1 est. length b_S + 18 in as the Tab 5 schedule, P1 ℓ_d = `apDes.sec.ld`, span `apDes.Ls`), notes;
+    5. `seat` BRIDGE SEAT AND BACKWALL / END DIAPHRAGM DETAIL (not integral): seat, pad (height schematic), CL brg., girder end at `geom.endGap`, dims seat / setback / backwall, N prov. vs `checks.seat.NreqP`, A1, B1, bwH / stemH / end-diaphragm `iab.hBar` dots, F1 seat mat (pad + 1'-0" each side, as the schedule "pad + 2·1.0");
+    6. `joint` STEM-FOOTING JOINT [AND PILE EMBEDMENT] / PILE EMBEDMENT (integral): A1 dowel (hook, `checks.dowel.lReq` vs `lAv`, lap `lapProv` or `lapReq`), C1 / D1 / ftgL, clear cover, construction joint `checks.shearFric.prep.name`; pile: embedment `piles.embed` (integral `iab.embed`), mat at `piles.clrTop` above the pile top (§4.6);
+    7. `wing` WINGWALL ELEVATION AND SECTION (panel I-13 on): attached (outline from `R.wing` L, H0, bT, dB; horizontal bars on the soil face with `wing.dev.lReq` into the abutment; vertical each face; section at the junction t = `wing.tb`) or independent (elevation on the footing; section at the design section `wing.Hs`, stem t_top + batter, footing bars `ftBBar` / `ftTBar`);
+    8. `notes` GENERAL NOTES AND MATERIALS (scale "NONE"): specification and owner, abutment type, L_ab, skew, loads basis, seismic, f'c, γc, f_y and bar spec, covers, γ_e, foundation, backfill, drawing notes.
+  - Drawings tab note (`One DXF file (AutoCAD R12 …`): new item "Detail sheets:" before "Title block:".
+- **3D (AB3A `d3ApSlab`):** the shelf mesh `M.conc` → its own material (color 0xb5b5a6; wireframe: `M.conc`); with `S.ui.d3Tog.dims`: dashed roadway centreline on the slab top, labels "slab edges ∥ roadway, skew θ = …" (θ > 0.05°), the far end ("far end ∥ abutment (skew followed)" / "far end square to the roadway" / "(no skew)"), "shelf b_S × h_S / h_E = …" or "slab on the deck end (no shelf)". The slab geometry is as #1351 (skew followed or square far end per `R.ap.rule`).
+- **Decisions (pending engineer review):** (1) the "N OF M" text of sheets 1–3 counts the detail sheets (their only change); (2) section A-A is along the roadway, the wall and shelf cut at the skew (÷ cos θ); true shelf dimensions on the shelf detail; square far end: the strip length at A-A; (3) the plan sense of the skew is schematic; (4) P2 drawn normal to the roadway (perpendicular to P1); its layout at skewed ends: detailer; (5) slab top cover shown = bottom cover (only the bottom cover is an input); (6) the pile detail shows the mat at the panel I-7 clear distance (§4.6) and notes that the footing design uses the panel I-2 bottom cover; (7) bearing pad height schematic (6 in); (8) not sized by the tool → "DETAILER TO CONFIRM", not drawn to a size (bar lengths, laps except the A1 dowel lap, bends / hooks except the A1 hook, S1 anchorage, slab-to-wall joint, sleeper slab, anchor bolts, keeper blocks, shear keys, pile head).
+- **Formulas, factors, units, code references:** none changed (§4). **Saved data:** none changed (§5); no new key.
+- **Check case:** built-in project, panel I-0b on, pile footing, skew 30°: sheet 4 at 1/8" = 1'-0", L = 16'-0" along the roadway, W = 38'-1 1/4" (= 44 cos 30°), 44'-0" along the abutment, shelf 12 / 15 / 9 in, S1 #5 @ 9" est. 2'-6", P1 #8 @ 6" ℓ_d 31.5"; sheet 5 N prov. 2'-8" (36 − 4 in) vs 12.4" req.; sheet 6 A1 ℓ_dh 20.7" req., 31.0" avail.; 3D slab plan extents 13.856 × 52.000 ft (L cos θ × (W/cos θ + L sin θ)), shelf 12 × 15 in under the slab along 44 ft.
+- **How verified:** `abutment-drawings` (extended: 3D skew extents and shelf, conventional / semi-integral / integral; 9 projects, 66 sheet drawings, expected sheet list, N OF M, 0 text overlaps, fit, DXF valid; tab at 1440 / 390 px), `dxf-print-sheets --tool ab` (Print all 7 pages), `abutment-pile-group-parity` main vs branch (14 / 14), main-vs-branch probe (6 projects: LAST_R, S and the sheet 1–3 entities identical apart from the sheet count), `project-library --tool abutment`, `abutment-panel-scroll`, `tests/engine/run.mjs handoffs`, `pile-group`, check-syntax.
+- **Other copies:** none.
+## 2026-11-10 — PR: claude/abut-stem-shelf (PR #1373: https://github.com/mlococo88/All-Structural/pull/1373) (ABSH) — Backwall offset e: the backwall inset toward the bridge, the stem shelf behind it carries the approach slab   [calc change: new input, default 0 = no change] [§4 callout in the PR]
+
+Engineer request (2026-11-10, paraphrased): add the input "Offset, back face of abutment stem to back face of backwall", default 0 in. A positive value insets the backwall toward the bridge; the stem at its full thickness rises behind it to a shelf that the approach slab bears on (no separate corbel or paving notch). Plan detail: 2'-0" backwall, slab seat 9 in below the top on the stem top behind it, 10 in shelf, 5S@12 backwall bars, 6C@12 stem bars continuing up, construction joint.
+
+### ABSH-1. Inputs and saved data
+- `defaultState().geom`: new `bwOff:0` (e, in) and `shD:0` (d_sh, the shelf depth below the top of the backwall, in; 0 = the approach slab thickness t). Anchor `ABSH: backwall offset e, stem back face to backwall back face`.
+- `migrate()`: `if(S.geom.bwOff===undefined) S.geom.bwOff=0; if(S.geom.shD===undefined) S.geom.shD=0;` (a saved project without the fields = e = 0, identical results). No key renamed, no format change.
+- Input ID (C-21): `if(fpS.geom&&!(+fpS.geom.bwOff>0)){ delete fpS.geom.bwOff; delete fpS.geom.shD; }` — e = 0 leaves the Input ID unchanged.
+- Panel I-1 (conventional abutment only): the two rows (d_sh shown when e > 0), a basis note, the derived seat line `t_st − t_bw − e` and `e_brg = e + t_bw + setback − t_sb/2` (`bwOffDerivedHTML`, also in `updateDerivedInInputs`). A change of e rebuilds the inputs (`change` handler, anchor `ABSH: the shelf-depth row and panel I-0b's support follow e`).
+- Panel I-0b: with e > 0 the support choice (paving notch / deck end) and the bracket inputs are replaced by a note ("stem shelf"); `apInUse` does not validate them. Validation ranges `geom.bwOff`, `geom.shD`: hard 0–120 in, typical 0–24 in.
+
+### ABSH-2. Calculation (`bwOffGeo`, `computeAll`, `computeAp`)
+- `bwOffGeo()` (after `iabType`): null when e = 0 or the abutment is not conventional; else `{e, eIn, dIn, d, dAuto, hSh = h_bw − d_sh, hC = d_sh, zSh = t_f + h_stem + h_sh, xBwBack = x_stem,back − e, xBwFront = x_bwBack − t_bw, xSh = x_stem,back − e/2}`.
+- C-1 geometry. Before: `const seatW = g.tst-g.tbw;` … `const xBwFront = xStemBack-g.tbw;` After: `const OFF = bwOffGeo(); const seatW = OFF? g.tst-g.tbw-OFF.e : g.tst-g.tbw;` … `const xBwFront = OFF? OFF.xBwFront : xStemBack-g.tbw;` (the bearing line `xBrg = xBwFront − setback` follows). `R.geo.off = OFF` when set.
+- Input errors (`"err"`): e + t_bw > t_st; seat width 0; e > 0 with no slab and d_sh = 0; d_sh > h_bw. Warnings: d_sh ≠ slab t; no slab (the fill over the shelf, e × d_sh, is not added to EV — it would relieve).
+- C-2 self-weight, after the Backwall part: `if(OFF&&OFF.hSh>0) parts.push({name:"Stem shelf (behind the backwall)", A:OFF.e*OFF.hSh, W:OFF.e*OFF.hSh*gcSub*Lab, x:OFF.xSh, y:zSeat+OFF.hSh/2, note:"e·h_sh·γ_c·L_ab"});` The backwall part's x = xBwFront + t_bw/2 moves with xBwFront. Through `R.parts` both reach DCsub (stability, footing, piles), the stem M_ecc and the seismic wall inertia (stability).
+- `computeAp`: after `P.zSlab=…`: `if(OFF){ P.sup="stem"; P.stemShelf=true; P.bS=OFF.eIn; P.av=OFF.eIn/2; P.wSh=0; P.xSh=0; P.WSh=0; P.eBw=0; P.eSh=0; P.x=OFF.xSh; P.xShT=OFF.xSh; P.zSlab=OFF.zSh+P.t/2; }`; `P.eqWall` true for "stem" (slab inertia on the wall, as the notch). The notch warning (t + h_S > h_bw) is skipped with e > 0.
+- Backwall (Tab 5 §5.1): `hbwC = OFF? OFF.hC : g.hbw`; `hbwRet = OFF? max(0, min(hbwC, h_soil − h_stem − h_sh)) : (as before)`; `heqBW = interpHeq(hbwRet||hbwC)`; wheel strip X = E-argument = hbwC; S&T width `min(L_ab, hbwC)`; EE I backwall inertia `k_h γ_c t_bw hbwC` at `hbwC/2`; slab inertia arm `max(0, hbwC − t/2)`. The MassDOT seismic stop keeps `h_bw/2` (conservative). The slab couple on the backwall is 0 (e_bw = 0), so no front-face check; no wheel load (slab on).
+- Stem EE I inertia: `aSh = e·h_sh` added to `wallApf`, at `h_stem + h_sh/2` in `zWi` (+0 when e = 0).
+- Seat bearing A2 (5.6.5): `cBack = (setback + t_bw + e)·12 − L_pad/2` with e > 0.
+- New `R.apStemSh` (only when set): bearing of the slab on the stem shelf, q_b = V_u,slab/(12e), q_R = 0.70·0.85f′c (5.6.5, m = 1); dashboard `apSSB`, Tab 5 §5.8 `apStemShHTML`, Report topic. No bracket checks (the shelf is stem concrete; no shear plane or tie).
+
+### ABSH-3. Display, drawings
+- Tab 1 §1.1: `bwOffWorkHTML` (positions, seat, bearing line, backwall and shelf centroids, slab reaction, arms to x_sc); §1.4a: support "stem shelf", `x_ap = x_stem,back − e/2`; z of the slab inertia. Tab 5 §5.1: "Backwall design section at the shelf elevation" and the stem-shelf slab block; §5.2 EQ z_W with A_sh. Owner seat checks: `t_st − t_bw − e`.
+- Report: Geometry rows and basis note; Loads "Backwall offset e: positions and lever arms"; Structural design topic "Approach slab on the stem shelf".
+- Drawings tab / DXF (`abdwGeo`: `G.off`, `G.xbwB`, `G.ySh`, `G.xs`): section outline with the stem shelf, construction joint at the base of the backwall, E and D_SH dimensions, labels; plan line at the backwall's back face; reinforcement: A1 stem bars up into the shelf, B1 at the inset back face, no S1 / S2. 3D: the stepped wall section and the slab from the backwall's back face. In-app figures (§1.1 section, §1.4a slab, §5.7 sketches, FBD) draw the inset backwall and the shelf.
+
+### Governing provisions
+- Engineer request 2026-11-10 (geometry and load path).
+- AASHTO LRFD 10th Ed. (2024): Art. 3.5.1 (DC), Table 3.4.1-1/-2 (γ unchanged), 11.6.3.3 (eccentricity), 10.6.3.1 / 10.6.3.4 (bearing, sliding), 5.6.3 / 5.7.3 (backwall and stem sections), 5.6.5 (Eq. 5.6.5-2, slab bearing on the shelf; seat bearing), 4.7.4.4 (support length from the seat width), 11.6.5.1 (inertia).
+
+### Check case (hand check: default project with t_bw = 2.0 ft, t_st = t_sb = 5.5 ft, approach slab on with t = 0.75 ft; e = 10 in, d_sh = 9 in)
+- Geometry (x from the toe, x_stem,back = 3.5 + 5.5 = 9.0 ft): x_bw,front 7.000 → 6.1667; x_brg 5.750 → 4.9167; seat 3.500 → 2.6667 ft; e_brg 0.500 → 1.3333 ft; N provided 38 → 28 in.
+- Backwall 66.00 kip at x̄ 8.000 → 7.1667. Stem shelf (new): 0.8333 × 4.25 × 0.150 × 44 = 23.375 kip at 8.5833. ΣDC_sub 851.40 → 874.775 kip, M_v 5644.65 → 5790.285 kip-ft.
+- Approach slab: R_DC 39.60 kip at 9.500 + notch 6.60 kip at 9.4583 (APdc M_v 438.625) → 39.60 kip at 8.5833, no notch (339.900); DW 10.56 kip M_v 100.32 → 90.64; LL 124.62 kip M_v 1183.88 → 1069.64. Girder DC 510 kip M_v 2932.5 → 2507.5.
+- Stem base (Strength I, per ft): M_ecc = [P_v(x_sc − x_brg) + γ_DC ΣW(x_sc − x̄) + M_ap]/L_ab: before [1302(0.5) + 0.9(−115.5) − 186.3675]/44 = 8.1973; after (γ_DC 1.25 governs) [1480.5(1.3333) + 1.25(−115.0417) − 152.46]/44 = 38.1304. M_u 81.087 → 111.020 kip-ft/ft; stem flexure D/C 0.2164 → 0.2963.
+- Footing, Strength I 0.90·DC + 0.65·DW + 1.00·EV + 1.50·EH + 1.75·(BR,LS), LL off: ΔV = 0.9(23.375 − 6.6) = 15.0975 kip; ΔM_v = 0.9(145.635 − 98.725 − 425) + 0.65(−60 − 9.68) = −385.573 kip-ft; e = 1.6130 → 1.8598 ft. Governing eccentricity D/C 0.3456 → 0.4100 (now the LL-on permutation, e = 1.9133 ft); sliding 1.0041 → 0.9884; bearing 0.7765 → 0.8366.
+- Backwall: retained height 5.00 → 0.75 ft above the shelf. Shelf bearing: V_u = 1.25(0.900) + 1.5(0.240) + 1.75(6.3549) = 12.606 kip/ft, q_b = 12.606/120 = 0.1051 ksi, D/C 0.0441 (was the bracket checks of the notch).
+
+### How verified
+- `tests/smoke/abutment-stem-shelf.mjs` (new): e = 0 identical to origin/main (LAST_R, warnings, Input ID) over 10 projects + a saved project without the fields; the hand check above; input errors; DXF valid; 3D slab top; Report; 390 px; no console errors. `abutment-drawings.mjs` gains two e > 0 projects (no text overlaps).
+- check-syntax, abutment-pile-group-parity (14/14), project-library --tool abutment, abutment-drawings, abutment-panel-scroll, dxf-print-sheets --tool ab, tests/engine/handoffs.test.mjs.
+
+### Decisions (pending engineer review)
+- The offset applies to the conventional abutment only (semi-integral end diaphragm and integral wall ignore it).
+- e > 0 replaces both support options of panel I-0b (paving notch and deck end) with the stem shelf; their inputs are kept for e = 0.
+- The shelf elevation is a new input d_sh (0 = the slab thickness t), since the tool had no shelf elevation of its own (the notch top was the backwall top − t).
+- The bearing setback stays measured from the backwall's front face, so the bearing line moves e toward the toe with the backwall.
+- The backwall design section is at the shelf (cantilever d_sh); the section below it (t_bw + e) is not checked separately. The MassDOT seismic stop keeps its force at h_bw/2 on the t_bw section (conservative).
+- With no approach slab the fill over the shelf is not added to EV (warning). The slab inertia acts on the backwall at its mid-depth above the shelf.
+- Construction joint drawn at the base of the backwall (shelf elevation), consistent with the design section.
+
+## 2026-11-10 — PR: claude/abutment-elevations (PR #1374: https://github.com/mlococo88/All-Structural/pull/1374) (ABEL) — elevations from the beam seat elevation (display only)
+- **Engineer (2026-11-10):** "I want to be able to see elevations as well. I want to define the beam seat elevation and all other elevations would be determined based on that."
+- **Where (all in `abutment_calculator.html`):**
+  - `defaultState()` geom: before `      hwFr:null                     // ABM6:` add `      elSeat:null,` (beam seat elevation, ft; null = none).
+  - Fingerprint (C-21): before `    if(fpS.geom&&(fpS.geom.hwFr===null||` add `if(fpS.geom&&(fpS.geom.elSeat===null||…===undefined||…==="")) delete fpS.geom.elSeat;` (blank leaves the Input ID unchanged).
+  - Panel I-1 (before `    <div class="subhead">Footing</div>`): the input row `data-path="geom.elSeat" data-blank="1"` and `<div class="in-note" id="abElevIn">${abElevInHTML()}</div>`; `updateDerivedInInputs()` refreshes `#abElevIn` (not a `.derived` block: dv[0] / dv[1] indexes kept).
+  - New functions before `function drawXsec(){`: `abElevOn`, `abElev(R)` (rows {k, lab, el, how, y, side, x, src, dwg, abs}, flags, notes), `abElevInHTML`, `ABEL_SN` (short names), `abElevSvg`, `abElevMarks`, `abElevPanelHTML` (Tab 1 §1.1a, panel `o-elev`). No calculation calls them; nothing is added to `R`.
+  - `renderTabLoads` (after the §1.1 `varsTbl`) and `renderIntLoads` (after the §1.1 integral figcap): `h+=abElevPanelHTML(R);`.
+  - `drawXsec`: `ml` + 170 and width + 260 only with an elevation; `abElevSvg(Ev,X,Y,{F:X(0)-76,B:X(B)+104})` before `</svg>`. `svgIabSection` (integral): `El.` labels at the left of the dims.
+  - `abdwBuild`: `EV`, `ELM`, layer `ELEV` (only with an elevation), `elev()` placer (the column moves outward until the text is clear). Marks: section sheet (all levels; integral tips at the drawn tip; a sheet note; source link `o-elev`), apslab shelf detail (slab seat, top of slab; alternative view layouts tried only with an elevation), seat sheet (bridge seat, top of backwall / end diaphragm, slab seat incl. the ABSH stem shelf), joint sheet (top / bottom of footing).
+  - `build3D` / `build3DIntegral` (dimensions on): `abElev3D` labels. `inputEchoHTML`: the elevation row when entered.
+- **Levels (El_seat = E):**
+  - conventional / semi: top of the backwall or end diaphragm E + h_bw; slab top = top (ABSH: shelf + t); slab seat = top − t (ABSH: E + (h_bw − d_sh)); shelf bottom − h_S.
+  - top of footing E − h_stem; bottom of footing − t_f; backfill top of footing + h_soil; front grade bottom of footing + D_f (when D_f is in use); water bottom of footing + h_w and + h_w,f.
+  - integral: deck E + h_d; bottom of cap E − h_c; grade + D_front; tips − L_pile.
+  - Pile Designer tip El. (hand-off, absolute): shown as sent.
+- **Flags:** water / backfill above the top; front grade above the seat (integral: above the deck); ABSH slab top not level with the backwall top; Pile Designer tip El. not below the footing / cap, or ≠ the derived integral tip (> 0.05 ft).
+- **Provisions / formulas / factors / units:** none changed (§4). With the field blank, Tab 1, the DXF, the Report and the Input ID are identical to main; `LAST_R` is identical with the field blank or set.
+- **Saved data (§5):** new optional key `geom.elSeat` (null); no key renamed; a saved project without it opens blank.
+- **Check case:** built-in project, seat El. 52.00, slab on, h_w 6, h_w,f 2, passive D_f 3: top 57.00, slab seat 55.75, shelf bottom 54.50, top of footing 38.00, bottom 35.00, backfill 57.00, front grade 38.00, water 41.00 / 37.00. ABSH detail (t_bw 2, e 10 in, d_sh 9 in, slab 9 in): slab seat 56.25, slab top 57.00. Integral: deck 57.00, cap 48.00, grade 52.00, tips 18.00.
+- **Decisions (pending engineer review):** slab top = top of the backwall (ABSH: shelf + t); no bearing top (no total bearing height), no conventional deck surface, no pile-footing tips (no inputs); front grade only when D_f is in use; the Pile Designer tip El. is not converted; an entered elevation changes the Input ID; approach-slab sheet: marks on the shelf detail, not on section A-A.
+- **How verified:** `tests/smoke/abutment-elevations.mjs` (new), `abutment-drawings` (every project again with El. 52.00: 169 sheet drawings, 0 text overlaps), `abutment-pile-group-parity` 14/14 vs main, `abutment-stem-shelf`, `project-library --tool abutment`, `abutment-panel-scroll`, `dxf-print-sheets --tool ab`, `check-syntax`; 0 console errors; 390 px.
+- **Other copies:** none.
+
+## 2026-11-10 — PR: claude/abutment-pile-mat-level (PR #1375: https://github.com/mlococo88/All-Structural/pull/1375) (ABPM) — Pile punching uses the footing design's bottom mat (c_F, panel I-2); the I-7 clear cover pile top to bottom mat greyed out and unused   [§4 calculation change, pile mode only; no saved key or format change]
+
+Engineer decision (2026-11-10): "Yes, same bottom mat." The pile punching and pile-cap checks use the bottom-mat level of the footing design (I-2 bottom cover c_F, the d of the footing flexure and shear design). Follows #1372 (the pile detail drew the mat at the I-7 clear distance) and ABPB #1158.
+
+### ABPM-1. Punching (`computeAll`, C-13, anchor `ABPM (2026-11-10, engineer decision "Yes, same bottom mat")`)
+Before:
+```js
+    const embP=Math.max(0,+p.embed||0), clrP=Math.max(0,+p.clrTop||0);
+    const hP=g.tf*12-embP;                               // in
+    const deF=hP-clrP-dbF;                               // footing effective depth over the pile heads, in
+    const dvF=Math.max(0.9*deF,0.72*hP);                 // in
+    if(!(deF>0)) warnFor("conv",`Punching shear: no effective depth above the pile heads (t_f − embedment − clear cover − d_b = ${fmt(deF,1)} in) — check panel I-7.`,"err");
+```
+After:
+```js
+    const embP=Math.max(0,+p.embed||0), clrP=Math.max(0,+p.clrTop||0);
+    const tF=R.checks.toeFlex, hP=g.tf*12;               // in
+    const deF=tF.d;                                      // the footing design's d (Tab 5 §5.3), in
+    const dvF=tF.dv;                                     // = max(0.9d_e, 0.72h_p), in
+    if(!(deF>0)) warnFor("conv",`Punching shear: no effective depth (t_f − c_F − d_b/2 = ${fmt(deF,1)} in) — check panels I-1, I-2.`,"err");
+```
+`R.checks.punching` gains `cF:+m.coverF` (display). b_0, V_n, φ, V_u are unchanged in form.
+
+### ABPM-2. Thin footing (`pileCapThin`, `collectInputWarnings`, `markFieldValidity`)
+- `lim=e+c+2` with `c=clrTop` → `c=0, lim=e+2`; the message drops "+ clear cover" and the d_e formula; only t_f and the embedment are marked red.
+
+### ABPM-3. I-7 input greyed out
+- `inpRow` takes `{dis:true}` (adds `disabled`); CSS `.in-row input:disabled{opacity:.55;cursor:not-allowed;}`. `piles.clrTop` row: label "Clear cover, pile top to bottom mat (not used)", `dis:true`, new tooltip; a basis note (abNL) under it. `apInUse("piles.clrTop")` → false (no range warning); `markFieldValidity` skips disabled inputs. The embedment tooltip is reworded.
+- Saved value kept in S, the Report input echo ("… (not used: one bottom mat at c_F, see §4.6)") and the Pile Designer hand-off `clearTop` (unread by receivers).
+
+### ABPM-4. Display
+- Tab 4 §4.6: h_p = t_f, d_e = t_f − c_F − d_b/2, d_v; basis list (one mat level, link to Tab 5 §5.3; d_b = toe bar C1; the clear cover is not used, with the old formula). Tab 5 §5.3 toe pile note: "Punching uses this same d and d_v". Warning "Pile cap …" w2 → "Punching uses the same bottom mat: d = t_f − c_F − d_b/2 (Tab 4 §4.6; engineer decision 2026-11-10)."
+- Report worksheet: step d_e "Effective depth to the bottom mat of the footing design …" (`h_p − c_F − d_b/2`); a note "Punching depth basis (engineer decision 2026-11-10): …" after the topic.
+- Sheet "joint", view "PILE IN THE FOOTING": C1 drawn at c_F + d_b/2 (broken at the pile when the pile head projects above it), CLR. dimension 0 → c_F, label "C1 … BOTTOM AT THE FOOTING COVER (PANEL I-2), BETWEEN THE PILE HEADS (FOOTING DESIGN AND PUNCHING)"; note 1 → "ONE BOTTOM MAT AT THE FOOTING COVER … (PANEL I-2) FOR THE FOOTING DESIGN (TAB 5 5.3) AND THE PUNCHING CHECK (TAB 4 4.6); …". Was: a mat at e_pile + c_top + d_b/2 labelled "BOTTOM MAT OVER THE PILES AT THE CLEAR DISTANCE OF PANEL I-7".
+- defRev 3 / 4 one-time notices reworded (they described a mat over the pile heads).
+
+### Governing provisions
+- Engineer decision 2026-11-10 (mat level). AASHTO LRFD 10th Ed. (2024): Art. 5.12.8.6.1, 5.12.8.6.3 (Eq. 5.12.8.6.3-1), 5.7.2.8, 5.6.3.2.
+
+### Check cases
+- Default switched to piles (f′c 4; t_f 36, c_F 3, e 12, c_top 3, #8; HP 12, interior): d_e 20.0 → 32.5 in; h_p 24 → 36; d_v 18.0 → 29.25; b_0 120 → 165 in; V_n 544.32 → 1216.22 kip; φV_n 489.89 → 1094.59; V_u 200.97; D/C 0.410 → 0.184.
+- Variant (t_f 42, e 18, c_top 4): d_e 19.0 → 38.5; d_v 17.28 → 34.65; b_0 117.12 → 186.6; V_n 510.01 → 1629.35; D/C 0.455 (pile 1) → 0.142 (pile 2). Round D 12: 0.522 → 0.234.
+- e_pile 0, c_top = c_F − d_b/2 = 2.5: identical before/after. Spread: identical.
+
+### How verified
+- Headless probe main vs branch (10 cases); abutment-pile-group-parity (spread identical; pile cases differ only in checks.punching.*, dash, nFail); new tests/smoke/abutment-pile-mat-level.mjs; check-syntax; project-library --tool abutment; abutment-drawings; abutment-panel-scroll; abutment-stem-shelf (only its pile parity vs main differs, in punching, as intended).
+
+### Decisions (pending engineer review)
+- d_punch = the toe d to the C1 bar centroid (− d_b/2), per the decision; the two-layer average would be 0.5 in less.
+- Thin-footing limit t_f > e_pile + 2 in.
+- The I-7 clear cover is greyed out, not kept as a detailing check (no meaning with the mat between the pile heads).
+
+### Saved data
+- No key, input or format change; defRev and Input IDs unchanged. A saved `piles.clrTop` is kept but changes no result.
