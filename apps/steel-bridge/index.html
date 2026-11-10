@@ -71,6 +71,7 @@
     'ui/rating.js',
     'engine/welds.js',
     'ui/welds.js',
+    'engine/inputcheck.js',   // SBINV (2026-11-10): every blocking input error in one list (collect); no results are shown while one exists
     '../../shared/report.js',
     'report/data.js',
     'report/builders.js',
@@ -80,6 +81,7 @@
     'ui/dash.js',
     'ui/bridgexfer.js',
     'ui/handoffs.js',
+    'ui/inputcheck.js',   // SBINV: the field marks, the tab counts and the banner (display only)
     'ui/lists.js'
   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
 })();
@@ -353,7 +355,8 @@
     return {
       proj: card('Save and open', '<div id="pbHost"></div>')   // STDS-B: the standard card (projectBar, mounted after each redraw)
         + card('Project', ['name', 'number', 'owner', 'designer', 'checker', 'date'].map(k => num('project.' + k, k === 'owner' ? 'Client name (title block, optional)' : k[0].toUpperCase() + k.slice(1), '', { text: true })).join('')
-          + '<p class="note">Client name: blank = the selected DOT\'s name (Bridge owner (DOT) rules, below) is used in the title block, the report and the drawings.</p>')
+          + '<p class="note">Client name: blank = the selected DOT\'s name (Bridge owner (DOT) rules, below) is used in the title block, the report and the drawings.</p>'
+          + (window.SBDInputCheck ? `<p class="note">${esc(window.SBDInputCheck.NOTE)}</p>` : ''))   // SBINV: the input check rule (engineer rule 2026-11-10: decisions noted in the app)
         + UL.ownerCard(P, { num, sel, card, esc })   // moved here from the Cross-section & loads tab (UI only)
         + (window.SBDHandoffUI ? window.SBDHandoffUI.card(P, ui) : ''),   // B2: hand-offs to and from the other tools (ui/handoffs.js)
       // TABR (2026-11-09): the input tabs reorganised, display only (every input keeps its data-path, kind and handler; nothing computed changes)
@@ -397,13 +400,30 @@
       showOut: () => { ui.otab = 'ad'; saveUi(); drawOut(); }, done: () => { drawInputs(); if (ui.otab === 'ad') drawOut(); } });   // ADIN
     markErrors();
   }
+  /* SBINV (2026-11-10; engineer 2026-11-09: "Invalid input should be highlighted so the user can fix; results should not be displayed"):
+     the blocking input errors (engine/inputcheck.js collect: the model checks, the loads module's input checks and those of the other
+     engines on the entered values) mark their fields (ui/inputcheck.js) and count on their input tab; while one exists no output tab shows
+     results (drawOut0). Its warnings are the model's, as before. */
+  const IC = () => window.SBDInputCheck, ICU = () => window.SBDInputCheckUI, icO = () => ({ P, ui, tabOf });
+  let icErr = [];   // the errors listed now (the banner's links are their indices)
   function markErrors() {
-    const v = M.validate(P), bad = new Set(v.errors.map(e => e.path));
-    document.querySelectorAll('#inPanes [data-path]').forEach(el => el.classList.toggle('bad', bad.has(el.dataset.path)));
-    const $s = $('i_spans'); if ($s) $s.classList.toggle('bad', [...bad].some(p => p.startsWith('spans.lengths')));
-    const errTabs = new Set(v.errors.map(e => tabOf(e.path)));
-    document.querySelectorAll('#inTabs [data-itab]').forEach(b => b.classList.toggle('has-err', errTabs.has(b.dataset.itab)));
+    const v = IC().collect(P); icErr = v.errors;
+    ICU().mark(v.errors, icO());
+    const cnt = {}; v.errors.forEach(e => { if (e.host) return; const t = tabOf(e.path); cnt[t] = (cnt[t] || 0) + 1; });
+    document.querySelectorAll('#inTabs [data-itab]').forEach(b => { const n = cnt[b.dataset.itab] || 0, d = b.querySelector('.inDot');
+      b.classList.toggle('has-err', n > 0); if (d) d.textContent = n ? String(n) : '';
+      if (n) b.title = `${n} input${n > 1 ? 's' : ''} to fix on this tab`; else b.removeAttribute('title'); });
     return v;
+  }
+  /* gotoErr(e): a banner link: the field's input tab (its girder and segment when the field is one girder's), scrolled to and focused; a
+     field on an output tab (e.host): that tab */
+  function gotoErr(e) {
+    if (!e) return;
+    if (e.host) { ui.otab = e.host; saveUi(); drawOut(); $('outputPanel').scrollTop = 0; setTimeout(() => ICU().focus(e, icO()), 0); return; }
+    const m = e.path.match(/^girders\.(\d+)(?:\.segments\.(\d+))?/), gi = m ? +m[1] : null;
+    if (gi != null && P.girders[gi] && gi !== ui.g) { ui.g = gi; ui.seg = m[2] != null ? Math.min(+m[2], P.girders[gi].segments.length - 1) : 0; stale = true; }
+    ui.itab = tabOf(e.path); saveUi(); drawInputs(); drawOut();
+    ICU().focus(e, icO());
   }
   $('inTabs').addEventListener('click', e => { const b = e.target.closest('[data-itab]'); if (!b) return; ui.itab = b.dataset.itab; saveUi(); drawInputs(); });
   $('inPanes').addEventListener('change', e => {
@@ -611,6 +631,7 @@
   function autoMsg(t, busy) { const bar = $('autoBar'); bar.hidden = !AUTO_BTN[t]; $('autoMsg').innerHTML = busy ? `<span class="spin" aria-hidden="true"></span>${esc(busy)}` : ''; }
   function autoRun() {
     const t = ui.otab || 'sec', delay = autoNow ? 0 : AUTO_MS; autoNow = false; clearTimeout(autoT); autoPend = false; autoMsg(t, '');
+    if (IC().blocked(P)) { $('autoBar').hidden = true; return; }   // SBINV: nothing runs while an input error exists; the change that fixes it runs the tab
     if (autoBusy || !autoStale(t, autoBtn(t)) || autoLast[t] === autoKey(t)) return;
     if (delay) autoMsg(t, 'Inputs changed — updating…');
     autoPend = true;
@@ -627,7 +648,25 @@
   $('bRerun').addEventListener('click', () => { const t = ui.otab || 'sec', b = autoBtn(t); if (!b) return; autoMsg(t, 'Calculating…'); requestAnimationFrame(() => setTimeout(() => { b.click(); autoWatch(t); }, 0)); });
   // a tab's own redraw (a choice on the tab: demand source, girder, options) runs it at once; skipped while a run is pending or running
   new MutationObserver(() => { if (autoBusy || autoPend) return; autoNow = true; autoRun(); }).observe($('out'), { childList: true });
+  /* SBINV: while a blocking input error exists every output tab (the Summary, each module, the Report, the Drawings, the 3D view) shows the
+     banner and "Results not shown" instead of its results. A tab that holds an errored field itself (e.host: Flexure f_ℓ, Rating φ, the
+     Welds inputs, a Custom demand table, …) is drawn for the fix, out of date and with its Calculate button off (hostFix). */
   function drawOut0() {
+    const E = icErr = IC().collect(P).errors, t = ui.otab || 'sec';
+    if (E.length && !E.some(e => e.host === t)) {
+      document.querySelectorAll('#tabBar [data-otab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.otab === t)));
+      $('out').onchange = null; $('out').onclick = null; $('out').innerHTML = ICU().blocked(E, icO()); return; }
+    drawTab();
+    if (E.length) hostFix(t, E);
+  }
+  function hostFix(t, E) {
+    const out = $('out'), b = autoBtn(t), st = b && b.closest('.alert.stale');
+    if (!st || st.hidden) { out.onchange = null; out.onclick = null; out.innerHTML = ICU().blocked(E, icO()); return; }   // results on screen: not while an error exists
+    b.disabled = true; const sp = st.querySelector('span'); if (sp) sp.textContent = 'Results not shown: fix the inputs listed above.';
+    out.insertAdjacentHTML('afterbegin', ICU().banner(E, icO()) + '<p class="note ic-note">This tab is shown so that the field marked on it can be fixed; its results stay withheld until every input error is fixed.</p>');
+    markErrors();   // the fields of this tab
+  }
+  function drawTab() {
     document.querySelectorAll('#tabBar [data-otab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.otab === (ui.otab || 'sec'))));
     $('out').onchange = null; $('out').onclick = null;   // the Analysis tab's own handlers (ui/analysis.js sets them)
     if (ui.otab === 'flex') { window.SBDFlexureUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Flexure tab (ui/flexure.js)
@@ -676,7 +715,8 @@
     ST.wire($('out'), { onToggle: (k, open) => { if (open) secOpen.add(k); else secOpen.delete(k); } });
     if (window.SBDGfxA && $('gfx_sec') && R && !stale && !R.errors) window.SBDGfxA.section($('gfx_sec'), { P, R, seg: ui.seg + 1 });   // graphic (ui/gfxa.js)
   }
-  $('out').addEventListener('click', e => { const gt = e.target.closest && e.target.closest('[data-goto]'); if (gt) { e.preventDefault(); ui.itab = gt.dataset.goto; saveUi(); drawInputs(); return; }   // a link to an input tab
+  $('out').addEventListener('click', e => { const ig = e.target.closest && e.target.closest('[data-icgo]'); if (ig) { e.preventDefault(); gotoErr(icErr[+ig.dataset.icgo]); return; }   // SBINV: a banner link
+    const gt = e.target.closest && e.target.closest('[data-goto]'); if (gt) { e.preventDefault(); ui.itab = gt.dataset.goto; saveUi(); drawInputs(); return; }   // a link to an input tab
     if (e.target.id === 'bCalc') { calc(); return; } const id = UL.onOutClick(e, ui); if (id) { saveUi(); drawOut(); const t = ST.reveal($('out'), id.replace(/^st-/, '')) || $(id); if (t) { t.scrollIntoView({ block: 'center' }); t.style.background = '#FFF7D6'; } } });
   $('out').addEventListener('change', e => { if (e.target.id === 'o_region') { ui.region = e.target.value; saveUi(); calc(); } else if (UL.onOutChange(e, ui)) { saveUi(); drawOut(); } });
   $('tabBar').addEventListener('click', e => { const b = e.target.closest('[data-otab]'); if (!b) return; ui.otab = b.dataset.otab; saveUi(); autoNow = true; drawOut(); });   // AUTO: selecting a tab runs it at once
@@ -701,7 +741,7 @@
     loadAs(r.project, null, null); window.SBDLegacyUI.show(r.summary); });
 
   drawInputs(); calc();
-  if (window.SBDDashUI) window.SBDDashUI.init({ el: $('sbDashCol'), store, getP: () => P, ui: () => ui, goto: gotoOut });   // DASH (2026-11-09)
+  if (window.SBDDashUI) window.SBDDashUI.init({ el: $('sbDashCol'), store, getP: () => P, ui: () => ui, goto: gotoOut, fix: i => gotoErr(icErr[i]), errUi: icO });   // DASH (2026-11-09)
   { const lc = LIB.getCur(LS);   // which saved project the autosave belongs to (nothing to lose when it is a blank new project)
     if (L.source === 'saved' && lc) { const r = LIB.open(LS, lc); if (r.ok) cur = { id: lc, text: norm(r.project) }; }
     else if (L.source === 'default') cur = { id: null, text: norm(P) };
