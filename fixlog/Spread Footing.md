@@ -7701,7 +7701,7 @@ index 4844242..cca603d 100644
    window.addEventListener('storage',refreshBar);
 ```
 
-## 2026-11-11 — PR: sf-barends (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SFBE) — footing mats: "Bar ends: straight / hooked" input per mat (engineer request 2026-11-11)   [input option; §4: the development outcome changes only when the user sets the bar ends; results identical with the field absent]
+## 2026-11-11 — PR: sf-barends (PR #1425: https://github.com/mlococo88/All-Structural/pull/1425) (SFBE) — footing mats: "Bar ends: straight / hooked" input per mat (engineer request 2026-11-11)   [input option; §4: the development outcome changes only when the user sets the bar ends; results identical with the field absent]
 - **Engineer (2026-11-11):** add a "Bar ends: straight / hooked" input for the footing mats (per direction, and the top mat), so the "Footing bar development" check no longer has to say REVIEW ("the tool does not know whether the bars are hooked").
 - **Where (to re-apply by hand):**
   - **Input (Reinforcement tab, `#sec-rebar`).** After the mat table (anchor `<div class="row"><label>Outer bottom layer (nearest the soil)</label>`), a new small table `sfdRbEnds` with four selects `data-path="freinf.<botX|botY|topX|topY>.ends"`, options `''` Not set / `straight` Straight / `hooked` Hooked 90°. A "Bar ends" line is added to the note above the table.
