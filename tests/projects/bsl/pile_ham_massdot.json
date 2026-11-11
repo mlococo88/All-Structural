@@ -1,0 +1,858 @@
+{
+ "app": "SubLoads",
+ "v": 1,
+ "meta": {
+  "name": "Pile bent and hammerhead, MassDOT",
+  "num": "",
+  "by": "",
+  "chk": "",
+  "date": "2026-11-11",
+  "notes": ""
+ },
+ "br": {
+  "spans": [
+   110,
+   140,
+   110
+  ],
+  "skews": [
+   15,
+   15,
+   15,
+   15
+  ],
+  "elev": [
+   125,
+   126.1,
+   126.1,
+   125
+  ],
+  "joint": [
+   "",
+   "joint",
+   "cont",
+   ""
+  ],
+  "bays": [
+   9.5,
+   9.5,
+   9.5,
+   9.5
+  ],
+  "ohL": 3.25,
+  "ohR": 3.25,
+  "barL": 1.5,
+  "barR": 1.5,
+  "barH": 42,
+  "ts": 8,
+  "haunch": 2,
+  "d": 63,
+  "bf": 16,
+  "tf": 1.25,
+  "tw": 0.5625,
+  "wc": 0.15,
+  "IM": 33,
+  "deck": "lever",
+  "skCorr": "yes",
+  "skKg": "",
+  "traffic": "two",
+  "nBR": "",
+  "Rc": 1500,
+  "Vd": 50,
+  "curveDir": "left",
+  "V": 130,
+  "exp": "C",
+  "Gf": 1,
+  "CDsup": 1.3,
+  "CDsub": 1.6,
+  "barSolid": "yes",
+  "Ifac": 1,
+  "tProc": "A",
+  "climate": "cold",
+  "supMat": "steel",
+  "tMaxB": 105,
+  "tMinB": -15,
+  "tSet": 60,
+  "alpha": "",
+  "mu": 0.06,
+  "shStrain": 0,
+  "lat": "",
+  "lon": "",
+  "siteClass": "D",
+  "pga": "",
+  "ss": "",
+  "s1": "",
+  "Fpga": "",
+  "Fa": "",
+  "Fv": "",
+  "opClass": "other",
+  "gEQ": 0.5,
+  "usgs": null,
+  "eqSa": [
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  "eqSiteClass": "",
+  "eqVs": "auto",
+  "eqOpCat": "ordinary",
+  "gSoil": 0.12,
+  "ehMax": 1.5,
+  "ehMin": 0.9,
+  "ehAtMax": 1.35,
+  "ehAtMin": 0.9,
+  "evMax": 1.35,
+  "evMin": 1,
+  "esMax": 1.5,
+  "esMin": 0.75,
+  "khR": 0.5,
+  "kv": 0,
+  "hEQr": 0.6,
+  "gEHEQ": 1,
+  "ehEQmode": "gp",
+  "swL": 0,
+  "swR": 0,
+  "plP": 0.075,
+  "owner": "massdot",
+  "subWind": "component",
+  "transDist": "trib",
+  "deckFc": 4,
+  "lfRev": 2
+ },
+ "rx": {
+  "data": [
+   [
+    {
+     "dc1": 43.6,
+     "dc2": 13.5,
+     "dw": 8.2
+    },
+    {
+     "dc1": 51.8,
+     "dc2": 9.9,
+     "dw": 8.2
+    },
+    {
+     "dc1": 51.8,
+     "dc2": 6.3,
+     "dw": 8.2
+    },
+    {
+     "dc1": 51.8,
+     "dc2": 9.9,
+     "dw": 8.2
+    },
+    {
+     "dc1": 43.6,
+     "dc2": 13.5,
+     "dw": 8.2
+    }
+   ],
+   [
+    {
+     "dc1": 81.55,
+     "dc2": 23.95,
+     "dw": 14.6,
+     "dc1a": 81.55,
+     "dc2a": 23.95,
+     "dwa": 14.6
+    },
+    {
+     "dc1": 96.45,
+     "dc2": 17.6,
+     "dw": 14.55,
+     "dc1a": 96.45,
+     "dc2a": 17.6,
+     "dwa": 14.55
+    },
+    {
+     "dc1": 96.45,
+     "dc2": 11.25,
+     "dw": 14.55,
+     "dc1a": 96.45,
+     "dc2a": 11.25,
+     "dwa": 14.55
+    },
+    {
+     "dc1": 96.45,
+     "dc2": 17.6,
+     "dw": 14.55,
+     "dc1a": 96.45,
+     "dc2a": 17.6,
+     "dwa": 14.55
+    },
+    {
+     "dc1": 81.55,
+     "dc2": 23.95,
+     "dw": 14.6,
+     "dc1a": 81.55,
+     "dc2a": 23.95,
+     "dwa": 14.6
+    }
+   ],
+   [
+    {
+     "dc1": 163.2,
+     "dc2": 47.9,
+     "dw": 29.2
+    },
+    {
+     "dc1": 193,
+     "dc2": 35.2,
+     "dw": 29.1
+    },
+    {
+     "dc1": 193,
+     "dc2": 22.5,
+     "dw": 29.1
+    },
+    {
+     "dc1": 193,
+     "dc2": 35.2,
+     "dw": 29.1
+    },
+    {
+     "dc1": 163.2,
+     "dc2": 47.9,
+     "dw": 29.2
+    }
+   ],
+   [
+    {
+     "dc1": 43.6,
+     "dc2": 13.5,
+     "dw": 8.2
+    },
+    {
+     "dc1": 51.9,
+     "dc2": 9.9,
+     "dw": 8.2
+    },
+    {
+     "dc1": 51.9,
+     "dc2": 6.3,
+     "dw": 8.2
+    },
+    {
+     "dc1": 51.9,
+     "dc2": 9.9,
+     "dw": 8.2
+    },
+    {
+     "dc1": 43.6,
+     "dc2": 13.5,
+     "dw": 8.2
+    }
+   ]
+  ]
+ },
+ "units": [
+  {
+   "name": "Abut. 1",
+   "type": "abut",
+   "rows": [
+    {
+     "long": "exp",
+     "trans": "fix",
+     "brg": "elast"
+    },
+    {
+     "long": "exp",
+     "trans": "fix",
+     "brg": "elast"
+    }
+   ],
+   "rowOff": 1.25,
+   "hb": 4.5,
+   "hp": 6,
+   "elast": {
+    "G": 0.15,
+    "L": 14,
+    "W": 20,
+    "hrt": 3.5
+   },
+   "capE": 2.5,
+   "cap": {
+    "b": 4.5,
+    "h": 4.5
+   },
+   "col": {
+    "n": 3,
+    "s": 15,
+    "shape": "round",
+    "D": 3.5,
+    "bx": 3.5,
+    "by": 3.5
+   },
+   "ham": {
+    "b": 6.5,
+    "hr": 7.5,
+    "ht": 4.5,
+    "shape": "rect",
+    "bx": 7,
+    "by": 4.5,
+    "D": 6
+   },
+   "wall": {
+    "t": 3.5,
+    "nose": "round",
+    "Lauto": true,
+    "L": 40
+   },
+   "pile": {
+    "n": 7,
+    "s": 6,
+    "shape": "hp",
+    "w": 14,
+    "wt": 89,
+    "fix": 8,
+    "A": 26.1,
+    "Ix": 904,
+    "Iy": 326,
+    "orient": "strong"
+   },
+   "abut": {
+    "stemT": 4,
+    "brgA": 1.75,
+    "bwT": 1.5,
+    "toe": 4
+   },
+   "ftg": {
+    "type": "comb",
+    "W": 14,
+    "t": 3,
+    "Lauto": true,
+    "L": 46,
+    "Bi": 10,
+    "Wi": 10
+   },
+   "topFtg": 108,
+   "ground": 112,
+   "inWater": false,
+   "base": "fixed",
+   "fc": 4,
+   "water": {
+    "on": "no",
+    "wse": "",
+    "v": "",
+    "scour": "",
+    "wseC": "",
+    "vC": "",
+    "scourC": "",
+    "angle": 0,
+    "dir": "left",
+    "cd": "auto",
+    "debris": "no",
+    "debW": 20,
+    "debD": 6,
+    "ice": "no",
+    "iceT": 1.5,
+    "iceP": 16,
+    "iceZ": "",
+    "iceA": 0,
+    "iceB": "",
+    "iceF": 10,
+    "iceAll": "up",
+    "iceStat": 0,
+    "iceVert": 0
+   },
+   "cv": {
+    "on": "no",
+    "type": "barge",
+    "DWT": 10000,
+    "Vs": 6,
+    "W": 1700,
+    "BB": 35,
+    "CH": 1.05,
+    "F": "",
+    "mhw": "",
+    "chAng": 0,
+    "hit": "all",
+    "daf": 1
+   },
+   "ct": {
+    "on": "no",
+    "prot": "none",
+    "dirMode": "any",
+    "road": 0,
+    "hit": "all"
+   },
+   "earth": {
+    "asOn": "no",
+    "asW": "",
+    "asL": 20,
+    "asT": 12,
+    "asPct": 50,
+    "asLL": "no",
+    "method": "rankine",
+    "gamma": 0.12,
+    "phi": 32,
+    "delta": 17,
+    "beta": 0,
+    "soilH": "",
+    "hw": 0,
+    "heq5": 4,
+    "heq10": 3,
+    "heq20": 2,
+    "esQ": 0,
+    "constrFill": 0,
+    "gLLc": 0
+   },
+   "mu": "",
+   "basePin": "plane"
+  },
+  {
+   "name": "Pier 1",
+   "type": "pile",
+   "rows": [
+    {
+     "long": "fix",
+     "trans": "fix",
+     "brg": "elast"
+    },
+    {
+     "long": "exp",
+     "trans": "fix",
+     "brg": "elast"
+    }
+   ],
+   "rowOff": 1.25,
+   "hb": 4.5,
+   "hp": 6,
+   "elast": {
+    "G": 0.15,
+    "L": 14,
+    "W": 20,
+    "hrt": 3.5
+   },
+   "capE": 2.5,
+   "cap": {
+    "b": 4.5,
+    "h": 4.5
+   },
+   "col": {
+    "n": 3,
+    "s": 15,
+    "shape": "round",
+    "D": 3.5,
+    "bx": 3.5,
+    "by": 3.5
+   },
+   "ham": {
+    "b": 6.5,
+    "hr": 7.5,
+    "ht": 4.5,
+    "shape": "rect",
+    "bx": 7,
+    "by": 4.5,
+    "D": 6
+   },
+   "wall": {
+    "t": 3.5,
+    "nose": "round",
+    "Lauto": true,
+    "L": 40
+   },
+   "pile": {
+    "n": 7,
+    "s": 6,
+    "shape": "hp",
+    "w": 14,
+    "wt": 89,
+    "fix": 8,
+    "A": 26.1,
+    "Ix": 904,
+    "Iy": 326,
+    "orient": "strong"
+   },
+   "abut": {
+    "stemT": 4,
+    "brgA": 1.75,
+    "bwT": 1.5,
+    "toe": 4
+   },
+   "ftg": {
+    "type": "comb",
+    "W": 14,
+    "t": 4,
+    "Lauto": true,
+    "L": 46,
+    "Bi": 10,
+    "Wi": 10
+   },
+   "topFtg": 101,
+   "ground": 104.5,
+   "inWater": false,
+   "base": "fixed",
+   "fc": 4,
+   "water": {
+    "on": "no",
+    "wse": "",
+    "v": "",
+    "scour": "",
+    "wseC": "",
+    "vC": "",
+    "scourC": "",
+    "angle": 0,
+    "dir": "left",
+    "cd": "auto",
+    "debris": "no",
+    "debW": 20,
+    "debD": 6,
+    "ice": "no",
+    "iceT": 1.5,
+    "iceP": 16,
+    "iceZ": "",
+    "iceA": 0,
+    "iceB": "",
+    "iceF": 10,
+    "iceAll": "up",
+    "iceStat": 0,
+    "iceVert": 0
+   },
+   "cv": {
+    "on": "no",
+    "type": "barge",
+    "DWT": 10000,
+    "Vs": 6,
+    "W": 1700,
+    "BB": 35,
+    "CH": 1.05,
+    "F": "",
+    "mhw": "",
+    "chAng": 0,
+    "hit": "all",
+    "daf": 1
+   },
+   "ct": {
+    "on": "yes",
+    "prot": "none",
+    "dirMode": "road",
+    "road": 10,
+    "hit": "all"
+   },
+   "mu": "",
+   "basePin": "plane"
+  },
+  {
+   "name": "Pier 2",
+   "type": "ham",
+   "rows": [
+    {
+     "long": "exp",
+     "trans": "fix",
+     "brg": "elast"
+    },
+    {
+     "long": "exp",
+     "trans": "fix",
+     "brg": "elast"
+    }
+   ],
+   "rowOff": 1.25,
+   "hb": 4.5,
+   "hp": 6,
+   "elast": {
+    "G": 0.15,
+    "L": 14,
+    "W": 20,
+    "hrt": 3.5
+   },
+   "capE": 2.5,
+   "cap": {
+    "b": 4.5,
+    "h": 4.5
+   },
+   "col": {
+    "n": 3,
+    "s": 15,
+    "shape": "round",
+    "D": 3.5,
+    "bx": 3.5,
+    "by": 3.5
+   },
+   "ham": {
+    "b": 6.5,
+    "hr": 7.5,
+    "ht": 4.5,
+    "shape": "rect",
+    "bx": 7,
+    "by": 4.5,
+    "D": 6
+   },
+   "wall": {
+    "t": 3.5,
+    "nose": "round",
+    "Lauto": true,
+    "L": 40
+   },
+   "pile": {
+    "n": 7,
+    "s": 6,
+    "shape": "hp",
+    "w": 14,
+    "wt": 89,
+    "fix": 8,
+    "A": 26.1,
+    "Ix": 904,
+    "Iy": 326,
+    "orient": "strong"
+   },
+   "abut": {
+    "stemT": 4,
+    "brgA": 1.75,
+    "bwT": 1.5,
+    "toe": 4
+   },
+   "ftg": {
+    "type": "comb",
+    "W": 18,
+    "t": 4,
+    "Lauto": false,
+    "L": 20,
+    "Bi": 10,
+    "Wi": 10
+   },
+   "topFtg": 99,
+   "ground": 103,
+   "inWater": false,
+   "base": "fixed",
+   "fc": 4,
+   "water": {
+    "on": "no",
+    "wse": "",
+    "v": "",
+    "scour": "",
+    "wseC": "",
+    "vC": "",
+    "scourC": "",
+    "angle": 0,
+    "dir": "left",
+    "cd": "auto",
+    "debris": "no",
+    "debW": 20,
+    "debD": 6,
+    "ice": "no",
+    "iceT": 1.5,
+    "iceP": 16,
+    "iceZ": "",
+    "iceA": 0,
+    "iceB": "",
+    "iceF": 10,
+    "iceAll": "up",
+    "iceStat": 0,
+    "iceVert": 0
+   },
+   "cv": {
+    "on": "yes",
+    "type": "ship",
+    "DWT": 20000,
+    "Vs": 8,
+    "W": 1700,
+    "BB": 35,
+    "CH": 1.05,
+    "F": "",
+    "mhw": 106,
+    "chAng": 0,
+    "hit": "all",
+    "daf": 1
+   },
+   "ct": {
+    "on": "yes",
+    "prot": "b42",
+    "dirMode": "any",
+    "road": 0,
+    "hit": "ext"
+   },
+   "mu": "",
+   "basePin": "plane"
+  },
+  {
+   "name": "Abut. 2",
+   "type": "abut",
+   "rows": [
+    {
+     "long": "exp",
+     "trans": "fix",
+     "brg": "elast"
+    },
+    {
+     "long": "exp",
+     "trans": "fix",
+     "brg": "elast"
+    }
+   ],
+   "rowOff": 1.25,
+   "hb": 4.5,
+   "hp": 6,
+   "elast": {
+    "G": 0.15,
+    "L": 14,
+    "W": 20,
+    "hrt": 3.5
+   },
+   "capE": 2.5,
+   "cap": {
+    "b": 4.5,
+    "h": 4.5
+   },
+   "col": {
+    "n": 3,
+    "s": 15,
+    "shape": "round",
+    "D": 3.5,
+    "bx": 3.5,
+    "by": 3.5
+   },
+   "ham": {
+    "b": 6.5,
+    "hr": 7.5,
+    "ht": 4.5,
+    "shape": "rect",
+    "bx": 7,
+    "by": 4.5,
+    "D": 6
+   },
+   "wall": {
+    "t": 3.5,
+    "nose": "round",
+    "Lauto": true,
+    "L": 40
+   },
+   "pile": {
+    "n": 7,
+    "s": 6,
+    "shape": "hp",
+    "w": 14,
+    "wt": 89,
+    "fix": 8,
+    "A": 26.1,
+    "Ix": 904,
+    "Iy": 326,
+    "orient": "strong"
+   },
+   "abut": {
+    "stemT": 4,
+    "brgA": 1.75,
+    "bwT": 1.5,
+    "toe": 4
+   },
+   "ftg": {
+    "type": "comb",
+    "W": 14,
+    "t": 3,
+    "Lauto": true,
+    "L": 46,
+    "Bi": 10,
+    "Wi": 10
+   },
+   "topFtg": 108,
+   "ground": 112,
+   "inWater": false,
+   "base": "fixed",
+   "fc": 4,
+   "water": {
+    "on": "no",
+    "wse": "",
+    "v": "",
+    "scour": "",
+    "wseC": "",
+    "vC": "",
+    "scourC": "",
+    "angle": 0,
+    "dir": "left",
+    "cd": "auto",
+    "debris": "no",
+    "debW": 20,
+    "debD": 6,
+    "ice": "no",
+    "iceT": 1.5,
+    "iceP": 16,
+    "iceZ": "",
+    "iceA": 0,
+    "iceB": "",
+    "iceF": 10,
+    "iceAll": "up",
+    "iceStat": 0,
+    "iceVert": 0
+   },
+   "cv": {
+    "on": "no",
+    "type": "barge",
+    "DWT": 10000,
+    "Vs": 6,
+    "W": 1700,
+    "BB": 35,
+    "CH": 1.05,
+    "F": "",
+    "mhw": "",
+    "chAng": 0,
+    "hit": "all",
+    "daf": 1
+   },
+   "ct": {
+    "on": "no",
+    "prot": "none",
+    "dirMode": "any",
+    "road": 0,
+    "hit": "all"
+   },
+   "earth": {
+    "asOn": "no",
+    "asW": "",
+    "asL": 20,
+    "asT": 12,
+    "asPct": 50,
+    "asLL": "no",
+    "method": "rankine",
+    "gamma": 0.12,
+    "phi": 32,
+    "delta": 17,
+    "beta": 0,
+    "soilH": "",
+    "hw": 0,
+    "heq5": 4,
+    "heq10": 3,
+    "heq20": 2,
+    "esQ": 0,
+    "constrFill": 0,
+    "gLLc": 0
+   },
+   "mu": "",
+   "basePin": "plane"
+  }
+ ],
+ "ui": {
+  "sel": 1,
+  "tab": "summary",
+  "itab": "units",
+  "v3": {
+   "deck": true,
+   "gird": true,
+   "sub": true,
+   "brg": true,
+   "grnd": true,
+   "lbl": true,
+   "focus": "all"
+  }
+ }
+}
