@@ -614,6 +614,10 @@ svg circle.fi[data-pile].fhl,svg circle.fi[data-pile]:hover,svg circle.fi[data-p
         <div class="prjGrp"><b>Foundation loads</b> <span class="hoFrom">to Pile Designer and Shallow Foundation Design</span><div class="in-note">The footing / pile-cap loads per limit state; Pile Designer's results come back under Pile results above.</div><div class="prjBtns">
         <button id="fdx-send" title="Send to other tools: the factored and service load combinations at the bottom of the footing / pile cap, per limit state (channel foundationLoads), for Pile Designer and Shallow Foundation Design; with piles also the pile layout, section and each pile's reactions, and the governing compression / uplift pile per limit state; for an integral abutment the data of Pile Designer's integral-abutment mode. The dialog also offers Export hand-off (JSON)">Send foundation loads</button>
         </div><div class="in-note"><b>Last sent:</b> <span id="fdx-sent"></span></div></div>
+        <div class="prjGrp"><b>Abutment</b> <span class="hoFrom">to Bridge Substructure Loading</span><div class="in-note">This abutment's geometry, lengths, soil and backfill, approach slab, elevations, seismic settings and pad, for "Pull abutment from the Abutment Calculator" in SubLoads (kept per project; SubLoads shows every change first).</div><div class="prjBtns">
+        <button type="button" id="abd-send" title="Send to other tools: this abutment's definition (channel abutmentDef) for SubLoads">Send abutment to SubLoads</button>
+        <button type="button" id="abd-hf" title="Write the abutmentDef hand-off to a file, for &quot;Import hand-off (JSON)&quot; in SubLoads">Export hand-off (JSON)</button>
+        </div><div class="in-note"><b>Last sent:</b> <span id="abd-sent"></span></div></div>
         <div class="prjGrp"><b>Bearings</b> <span class="hoFrom">to and from Elastomeric Bearing Design</span><div class="in-note">Opens EDM with this abutment's geometry, loads and thermal movement; its "Send Pad to Abutment" returns the pad (G, h<sub>rt</sub>, pad size, low-temperature multiplier) to panel I-6b.</div><div class="prjBtns">
         <button id="btnOpenEDM" title="Open the Elastomeric Bearing Design Module and hand off geometry, loads and thermal movement">↗ Open EDM (Bearing Design)</button>
         </div></div>
@@ -12864,6 +12868,54 @@ document.addEventListener("DOMContentLoaded",init);
     render();
   },true);
   paint();
+})();
+</script>
+<script>
+/* ---------- abutment definition to Bridge Substructure Loading (ABX, 2026-11-11; HANDOFF.md §4.15, channel abutmentDef, producer id abutment) ----------
+   Hand-offs card, "Send to other tools": "Send abutment to SubLoads" publishes this abutment's definition (shared/abutment-def.js
+   fromAbutment: geometry, lengths, soil and backfill, approach slab with its computed reaction as a share, elevations when entered, seismic
+   settings, concrete, pad; wingwalls and refined inputs as information only) with BridgeXfer (channel key, .updatedAt) and the per-project copy
+   bridgeSuite.v1.abutmentDef.by.abutment.<project id> (§5.1); "Export hand-off (JSON)" writes the same payload to a file. Conventional
+   abutments only (SubLoads models a conventional abutment on a footing). Reads S and LAST_R only; nothing here changes an input or a result. */
+(function(){
+  const CH="abutmentDef", PROD="abutment";
+  const BX=()=>window.BridgeXfer, HS=()=>window.SharedHandoffStore, AD=()=>window.SharedAbutmentDef;
+  const when=iso=>{ const d=new Date(iso); return isNaN(d)?String(iso||"?"):d.toLocaleString(); };
+  function wingText(){ const w=S.wing; if(!w||!w.on) return [];
+    return [(w.type==="indep"?"independent":"attached, "+(w.orient==="inline"?"in line":"U"))+" wingwalls, L = "+fmt(+w.L,2)+" ft, H = "+fmt(+w.H0,2)+" / "+fmt(+w.HL,2)+" ft, t = "+fmt(+(w.type==="indep"?w.ttop:w.t),2)+" ft (panel I-13)"]; }
+  function payload(){
+    if(!AD()) return { err:"The shared file shared/abutment-def.js is not loaded; keep the whole folder together." };
+    if(iabType()!=="conv") return { err:"Only a conventional abutment can be sent: SubLoads models a conventional cantilever abutment on a footing (this one is "+(iabType()==="integral"?"integral":"semi-integral")+")." };
+    const R=window.LAST_R, def=AD().fromAbutment(S,{ name:"", ap:R&&R.ap||null, wingText:wingText() }), v=AD().validate(def);
+    if(!v.ok) return { err:"The abutment cannot be sent: "+v.errors.join("; ")+"." };
+    const sp=BX()&&BX().sharedProject?BX().sharedProject():null, dev=HS()?HS().deviceName(localStorage):"";
+    const p={ _schema:AD().SCHEMA, schemaVersion:1, producer:"Abutment Calculator", producerFile:"abutment_calculator.html",
+      project:{ name:(S.proj&&S.proj.name)||"", bridgeId:(sp&&sp.bridgeId)||"" }, ...(dev?{ device:dev }:{}), units:Object.assign({},AD().UNITS), abutType:"conv",
+      contentHash:AD().hash(def), definition:def,
+      notes:["Lengths and elevations in ft; display heights (bearing, girder, haunch, deck) and the pad in in; G in ksi; unit weights kcf; pressures ksf; angles deg.",
+        "The skew is the calculator's magnitude |θ|; SubLoads keeps its own skew, spans, elevations and bearings (it owns the bridge).",
+        "stem.tTop / tBot: the calculator's stem thickness at the seat and at the footing; SubLoads models a prismatic stem (t_top).",
+        "approachSlab.sharePct = the calculator's computed slab reaction R_DC as a % of the slab weight w_c·t·W·L.",
+        "Not sent (calculator only): backwall offset and stem shelf, Coulomb heel cases, K rules, water in front, q_c, the approach-slab model, piles, resistances, reinforcement, owner rules."] };
+    return { p };
+  }
+  function sentLine(){ let p=null; try{ p=JSON.parse(localStorage.getItem(BX().NS+CH)||"null"); }catch(e){ p=null; }
+    const el=document.getElementById("abd-sent"); if(!el) return;
+    el.textContent=p&&p.producer==="Abutment Calculator"&&p.producedAt?when(p.producedAt)+(p.project&&p.project.name?", project \""+p.project.name+"\"":"")+"." : "nothing sent from this browser yet."; }
+  document.addEventListener("click",ev=>{
+    const t=ev.target, id=t&&t.id; if(id!=="abd-send"&&id!=="abd-hf") return;
+    if(!BX()){ alert("The hand-off helper is not available in this browser."); return; }
+    const b=payload(); if(b.err){ alert(b.err); return; }
+    const ss=document.getElementById("saveStatus");
+    if(id==="abd-hf"){ const r=BX().exportFile(CH,Object.assign({},b.p,{ producedAt:new Date().toISOString() })); if(r.error) alert(r.error); else if(ss) ss.textContent="abutment hand-off exported"; return; }
+    const r=BX().publish(CH,b.p,"Abutment Calculator","abutment_calculator.html");
+    if(r.error){ alert(r.error); return; }
+    if(HS()) HS().send({ storage:localStorage, channel:CH, producer:PROD, payload:r.payload, fetch:(u,i)=>window.fetch(u,i) }).catch(()=>{});
+    if(ss) ss.textContent="abutment sent to SubLoads (open it and click \"Pull abutment from the Abutment Calculator\")";
+    sentLine();
+  });
+  window.AbutDefSend={ payload, sentLine };   // used by tests; no effect on results
+  sentLine();
 })();
 </script>
 <script>
