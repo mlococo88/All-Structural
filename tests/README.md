@@ -94,6 +94,11 @@ node tests/smoke/bsl-show-work.mjs [--shots <dir>]
 # .by.subloads.<project id> (the published payload), one copy per project (the last unit sent), none for a blank project, no request with sync off. ~20 s
 node tests/smoke/bsl-fdx-copies.mjs
 
+# Pile Designer, project picker of the foundation-load pull (PDPK, HANDOFF.md §4.6, §5.1): SubLoads per-project copies and each sender's
+# latest copy listed (sender, project, unit, date), the open project's newest copy preselected, an older copy flagged, the chosen copy imported,
+# "Latest sent" and old single-key data as before, main-vs-branch probe of the imported inputs, 390 px, 0 console errors. ~1 min
+node tests/smoke/pile-fdx-picker.mjs [--a origin/main]
+
 # Phone / tablet layout (PHN): at 390 and 768 px the page never scrolls sideways, on load and on every tab (one entry per tool in TOOLS)
 node tests/smoke/phone-layout.mjs [--tool smd,...] [--file <file or git ref>] [--w 390,768]
 
