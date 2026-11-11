@@ -238,6 +238,7 @@ header { height: 54px; flex: none; display: flex; align-items: center; gap: 10px
 <script src="shared/projects-ui.js"></script>
 <script src="shared/github-sync.js"></script>   <!-- GHS (2026-11-05): copy of the saved projects to a private GitHub repository; off until set up -->
 <script src="shared/handoff-store.js"></script>   <!-- GXF (2026-11-09): per-project hand-off copies (HANDOFF.md §5.1): the project picker of the geometry and reactions pulls -->
+<script src="shared/dxf.js"></script>   <!-- SLDW (2026-11-11): the Drawings tab and Export DXF (shared DXF R12 writer, preview and print) -->
 <script>
 /* BridgeXfer v1 — cross-tool hand-off helper. Spec: HANDOFF.md. Duplicated verbatim in each tool that sends or receives (CLAUDE.md §3). */
 (function(){
@@ -4874,6 +4875,192 @@ const IC = (function () {
     return M; };
   window.SubLoadsInputCheck = { collect: IC.collect, test: IC.test, RULES: IC.RULES, rangeItems: IC.rangeItems, mark: icMark };
 })();
+</script>
+<script>
+/* =====================================================================
+   SLDW (2026-11-11, engineer request "give SubLoads a Drawings tab with DXF export built on shared/dxf.js, like the other developed
+   apps"): the Drawings output tab and Project → Export DXF, one DXF R12 file (shared/dxf.js SharedDxf.drawing → toDXF), previewed from
+   the same entities (SharedDxf.sheetSVG, SharedDxf.viewer) and printed one 11 × 17 in landscape page per sheet (SharedDxf.printSheets).
+   Replaces the Pyodide + ezdxf writer (SL_DXF_PY, AutoCAD 2018 with paper space layouts; it loaded Python and ezdxf from the internet on
+   the first export and failed offline) and its R12 fallback (dxfOf / exportSheets).
+   Content: the sheet set of sheetSet() (the drawings the tool draws on screen, list of Dwg primitives in feet), unchanged, with the index
+   and design basis sheet first:
+     1  Index and design basis, 2 Plan, 3 Elevation, then for every unit its elevation, load diagrams and live load lane arrangements,
+     then every unit's factored load summary table.
+   Each sheet: paper D (34 × 22 in, as before) or B (17 × 11 in), drawn full size in inches at the smallest standard scale 1" = N'-0" of
+   SCALES at which it fits, inside its border (SharedDxf.sheetBorder) and title block, side by side in model space; text normalized to
+   about 0.10 in (D) or 0.08 in (B) plotted, as before; dimensions are DIMENSION entities (D.dim). The labels of the converted drawings
+   that would overlap another text or cross a line are moved clear (sldwFree, display only).
+   Display and export only: every value is read from the results as computed (sheetSet, loadSets, unitRes, combine); nothing here is used
+   by a calculation. Saved: the chosen sheet and paper, per browser (subloads_dwgSheet_v1, subloads_dwgPaper_v1; not in P, the autosave
+   or the project file). The tab is not stored in P.ui.tab (as the Report tab): SLDW.on.
+   ===================================================================== */
+const SLDW_PAPER = { D: { W: 34, H: 22, m: 0.5, tb: 1.75, th: 0.10, name: 'D, 34 × 22 in' }, B: { W: 17, H: 11, m: 0.375, tb: 1.0, th: 0.08, name: 'B, 17 × 11 in' } };
+const SLDW = { on: false, B: null, cur: null, paper: null, kSheet: 'subloads_dwgSheet_v1', kPaper: 'subloads_dwgPaper_v1' };
+const sldwScName = N => `1" = ${N}'-0"`;
+const sldwLs = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { } return null; };
+/* the tab (and unit) where each sheet's content is worked (CLAUDE.md §6) */
+function sldwSrc(s) {
+  if (s.id === 'index') return [['summary', '', 'Summary']];
+  if (s.id === 'plan' || s.id === 'elev') return [['geometry', '', 'Geometry']];
+  const k = s.k, kind = s.kind;
+  if (kind === 'unit') return [['geometry', k, 'Geometry'], ['summary', k, 'Summary (units)']];
+  if (kind === 'loads') { const T = { earth: 'Earth loads', brce: 'Braking and centrifugal', wind: 'Wind', temp: 'Temperature', water: 'Water and scour', ice: 'Ice', eq: 'Seismic', cv: 'Vessel collision', ct: 'Vehicle collision' };
+    return Object.keys(TAB_SETS).filter(t => (s.sets || []).some(id => TAB_SETS[t].includes(id))).map(t => [t, k, T[t] || t]); }
+  if (kind === 'll') return [['ll', k, 'Live load']];
+  if (kind === 'table') return [['combo', k, 'Combinations']];
+  return [];
+}
+/* sldwFree(D, i0, i1): the labels of entities i0..i1 clear of every other text and line (display only). A text that overlaps another text
+   or is crossed by a line (line, polyline edge, circle, dimension line) is moved to the nearest free place (across its baseline first, in
+   steps of 0.35 of its height, then along it); a dimension whose text is not clear has its dimension line moved instead. Text widths:
+   Arial / Helvetica advance widths (as tests/engine/overlap.mjs measures them). */
+const SLDW_AW = (() => { const W = { ' ': 278, '!': 278, '"': 355, '#': 556, '$': 556, '%': 889, '&': 667, "'": 191, '(': 333, ')': 333, '*': 389, '+': 584, ',': 278, '-': 333, '.': 278, '/': 278, ':': 278, ';': 278, '<': 584, '=': 584, '>': 584, '?': 556, '@': 1015, '[': 278, '\\': 278, ']': 278, '^': 469, _: 556, '`': 333, '{': 334, '|': 260, '}': 334, '~': 584 };
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach((c, i) => { W[c] = [667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611][i]; });
+  'abcdefghijklmnopqrstuvwxyz'.split('').forEach((c, i) => { W[c] = [556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500][i]; });
+  for (let i = 0; i < 10; i++) W[String(i)] = 556; return W; })();
+const sldwTW = (s, hh) => { let w = 0; for (const c of String(s).replace(/%%[dcp]/g, 'o')) w += SLDW_AW[c] != null ? SLDW_AW[c] : 600; return w / 1000 * hh; };
+function sldwFree(D, i0, i1) {
+  const E = D.E, X = SharedDxf, mg = 0.06;
+  const boxT = (e, dx, dy) => { const hh = e.hh, w = sldwTW(e.s, hh), r = (e.rot || 0) * Math.PI / 180, c = Math.cos(r), s = Math.sin(r), sh = e.j === 2 ? -w : e.j === 1 ? -w / 2 : 0;
+    const ax = e.pts[0][0] + (dx || 0), ay = e.pts[0][1] + (dy || 0), Pp = (u, v) => [ax + u * c - v * s, ay + u * s + v * c];
+    return [Pp(sh - mg * hh, -(0.1 + mg) * hh), Pp(sh + w + mg * hh, -(0.1 + mg) * hh), Pp(sh + w + mg * hh, (0.82 + mg) * hh), Pp(sh - mg * hh, (0.82 + mg) * hh)]; };
+  const circ = e => { const o = [], c = e.pts[0]; for (let i = 0; i < 16; i++) { const a = i / 16 * 2 * Math.PI, b = (i + 1) / 16 * 2 * Math.PI; o.push([[c[0] + e.r * Math.cos(a), c[1] + e.r * Math.sin(a)], [c[0] + e.r * Math.cos(b), c[1] + e.r * Math.sin(b)]]); } return o; };
+  const geo = i => { const e = E[i], seg = [], txt = [];
+    if (e.t === 'LINE') seg.push(e.pts); else if (e.t === 'PL') { for (let k = 0; k < e.pts.length - 1; k++) seg.push([e.pts[k], e.pts[k + 1]]); if (e.closed) seg.push([e.pts[e.pts.length - 1], e.pts[0]]); }
+    else if (e.t === 'CIRCLE') seg.push(...circ(e));
+    else if (e.t === 'TEXT') { if (String(e.s).trim()) txt.push(boxT(e)); }
+    else if (e.t === 'DIM') X.dimGeo(e).g.forEach(q => { if (q.t === 'LINE') seg.push(q.pts); else if (String(q.s).trim()) txt.push(boxT(q)); });
+    const all = seg.flat().concat(txt.flat()), bb = all.length ? [Math.min(...all.map(p => p[0])), Math.min(...all.map(p => p[1])), Math.max(...all.map(p => p[0])), Math.max(...all.map(p => p[1]))] : null;
+    return { seg, txt, bb }; };
+  const GEO = []; for (let i = i0; i < i1; i++) GEO[i] = geo(i);
+  const bbOf = Q => [Math.min(...Q.map(p => p[0])), Math.min(...Q.map(p => p[1])), Math.max(...Q.map(p => p[0])), Math.max(...Q.map(p => p[1]))];
+  const side = (p, q, r) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+  const segHit = (poly, a, b) => { const ins = p => { let sg = 0; for (let i = 0; i < 4; i++) { const c = side(poly[i], poly[(i + 1) % 4], p); if (Math.abs(c) < 1e-12) return false; if (!sg) sg = Math.sign(c); else if (Math.sign(c) !== sg) return false; } return true; };
+    if (ins(a) || ins(b)) return true;
+    for (let i = 0; i < 4; i++) { const p = poly[i], q = poly[(i + 1) % 4], d1 = side(a, b, p), d2 = side(a, b, q), d3 = side(p, q, a), d4 = side(p, q, b); if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) return true; }
+    return false; };
+  const polyHit = (A, B) => { for (const poly of [A, B]) for (let i = 0; i < 4; i++) { const p = poly[i], q = poly[(i + 1) % 4], nx = q[1] - p[1], ny = p[0] - q[0]; const pr = Pp => Pp.map(v => v[0] * nx + v[1] * ny), a = pr(A), b = pr(B);
+    if (Math.max(...a) <= Math.min(...b) || Math.max(...b) <= Math.min(...a)) return false; } return true; };
+  const ovl = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
+  /* is the text polygon Q of entity i clear of every other entity (own dimension lines excepted)? */
+  const clear = (i, Qs) => { for (const Q of Qs) { const qb = bbOf(Q);
+    for (let j = i0; j < i1; j++) { if (j === i) continue; const g = GEO[j]; if (!g.bb || !ovl(qb, g.bb)) continue;
+      if (g.seg.some(([a, b]) => segHit(Q, a, b))) return false;
+      if (g.txt.some(T => polyHit(Q, T))) return false; } } return true; };
+  const dimTexts = (e, s) => { const n = [-Math.sin(e.ang * Math.PI / 180), Math.cos(e.ang * Math.PI / 180)], q = { ...e, pts: [e.pts[0], e.pts[1], [e.pts[2][0] + n[0] * s, e.pts[2][1] + n[1] * s], [e.pts[3][0] + n[0] * s, e.pts[3][1] + n[1] * s]] };
+    return { q, T: X.dimGeo(q).g.filter(x => x.t === 'TEXT' && String(x.s).trim()).map(x => boxT(x)) }; };
+  let left = 0;
+  for (let pass = 0; pass < 3; pass++) { let moved = 0; left = 0;
+    for (let i = i0; i < i1; i++) { const e = E[i];
+      if (e.t === 'TEXT' && String(e.s).trim()) { if (clear(i, [boxT(e)])) continue;
+        const hh = e.hh, r = (e.rot || 0) * Math.PI / 180, u = [Math.cos(r), Math.sin(r)], v = [-u[1], u[0]], C = [];
+        for (let a = -24; a <= 24; a++) for (let b = -30; b <= 30; b++) if (a || b) C.push([a * 0.5 * hh, b * 0.35 * hh, Math.abs(b) * 0.35 + Math.abs(a) * 0.5 * 0.8]);
+        C.sort((p, q) => p[2] - q[2]); let ok = false;
+        for (const [du, dv] of C) { const dx = u[0] * du + v[0] * dv, dy = u[1] * du + v[1] * dv; if (!clear(i, [boxT(e, dx, dy)])) continue;
+          e.pts[0][0] += dx; e.pts[0][1] += dy; GEO[i] = geo(i); moved++; ok = true; break; }
+        if (!ok) left++; }
+      else if (e.t === 'DIM') { if (clear(i, dimTexts(e, 0).T)) continue; let ok = false;
+        for (let n = 1; n <= 48; n++) { const s = (n % 2 ? 1 : -1) * Math.ceil(n / 2) * 0.6 * e.hh, d = dimTexts(e, s); if (!clear(i, d.T)) continue;
+          e.pts[2] = d.q.pts[2]; e.pts[3] = d.q.pts[3]; GEO[i] = geo(i); moved++; ok = true; break; }
+        if (!ok) left++; } }
+    if (!moved) break; }
+  return left;
+}
+/* sldwBuild(paper) -> { D, S: [sheet], paper } ; sheet = { id, kind, k (unit), title, N, kM (plot scale), i0, iC, i1, ox, W, H, over, sheetEnt } */
+function sldwBuild(paperId) {
+  if (!window.SharedDxf) throw new Error('shared/dxf.js is not loaded');
+  const G = MODEL.G, UG = MODEL.UG; if (!G || G.E.length) throw new Error('Fix the input errors on the Summary tab first.');
+  const PA = SLDW_PAPER[paperId] || SLDW_PAPER.D, D = SharedDxf.drawing({ prefix: 'S-' }), SH = [], m0 = P.meta, X = SharedDxf;
+  const lay = Lk => { const s = LAY[Lk] || LAY.TEXT; return D.layer(s.dxf, s.aci == null ? 7 : s.aci, s.lt); };
+  const Lb = D.layer('BORD', 7);
+  const AW = PA.W - 2 * PA.m - 0.5, AH = PA.H - 2 * PA.m - PA.tb - 0.6;
+  // the sheets: index first, then sheetSet (ids and kinds for the index links)
+  const list = sheetSet(G, UG).map(s => {
+    const t = s.title, u = P.units.findIndex(q => t.indexOf(q.name + ': ') === 0), rest = u >= 0 ? t.slice(P.units[u].name.length + 2) : t;
+    const kind = t === 'Plan' ? 'plan' : t === 'Elevation' ? 'elev' : rest === 'elevation' ? 'unit' : rest === 'load diagrams' ? 'loads' : /^live load/.test(rest) ? 'll' : /load summary$/.test(rest) ? 'table' : 'other';
+    return { ...s, k: u, kind, id: kind === 'plan' || kind === 'elev' ? kind : `${kind}${u}`, sets: kind === 'loads' ? loadSets(u).map(q => q.id) : null };
+  }).flatMap(s => {   // a sheet of several drawings whose text would have to grow more than 1.25 times to plot at the paper's height is split (paper B)
+    const ps = s.comp.parts; if (ps.length < 2) return [s];
+    const cy = q => { const e = q.d.ext(); return (e.y0 + e.y1) / 2 + q.dy; }, cols = Math.max(1, ps.filter(q => Math.abs(cy(q) - cy(ps[0])) < 1e-6).length);   // the drawings in compose's first row
+    const dw = ps.map(q => q.d), hs = dw.flatMap(d => d.p.filter(e => e.t === 't').map(e => e.h)).sort((a, b) => a - b), med = hs.length ? hs[Math.floor(hs.length / 2)] : 1;
+    let c = dw.length;
+    for (; c > 1; c--) { const cp = compose(dw.slice(0, c), Math.min(cols, c)), N = SCALES.find(sc => cp.w <= AW * sc && cp.h <= AH * sc) || SCALES[SCALES.length - 1]; if (PA.th * N / med <= 1.25) break; }
+    if (c >= dw.length) return [s];
+    const out = [], nCh = Math.ceil(dw.length / c);
+    for (let i = 0; i < nCh; i++) { const part = dw.slice(i * c, (i + 1) * c); out.push({ ...s, id: `${s.id}-${i + 1}`, title: `${s.title} (${i + 1} of ${nCh})`, comp: compose(part, Math.min(cols, part.length)), sets: s.sets ? s.sets.slice(i * c, (i + 1) * c) : null }); }
+    return out;
+  });
+  const n = list.length + 1;
+  // sheet 1: index and design basis (the text of the AutoCAD 2018 writer, with the R12 version's temperature line)
+  const idx = new Dwg(); let y = 0; const tl = (s, hh = 0.55, w) => { idx.text(0, y, s, hh, 'TEXT', 'l', 0, w ? { w } : {}); y -= hh * 1.9; };
+  tl(`${m0.name || 'Bridge'}: substructure loads`, 1.1, 700); tl('Sheet index', 0.7, 700); tl('1  Index and design basis'); list.forEach((s, i) => tl(`${i + 2}  ${s.title}`)); y -= 0.9;
+  tl('Design basis', 0.7, 700); tl('AASHTO LRFD Bridge Design Specifications, 10th Edition, Section 3.' + (isMass() ? ' MassDOT Bridge Manual Part I, Chapter 3 (written to the AASHTO LRFD 9th Ed.).' : ''));
+  const T = tempRange(), S0 = eqSite(), BL = brLanes(G); tl(`Spans ${G.spans.map(s => f1(s)).join(' + ')} ft; ${G.nb} girders; roadway ${f2(G.rw)} ft, ${G.NL} design lanes; IM ${f0(nz(P.br.IM))}%.`);
+  tl(`Braking: ${BL.n} lane(s) in one direction. Wind: V = ${f0(nz(P.br.V))} mph, exposure ${P.br.exp || 'C'}. Temperature: Procedure ${T.proc}, ${f0(T.tmin)} to ${f0(T.tmax)} deg F, setting ${f0(T.ts)} deg F.`);
+  tl(S0.ok ? `Seismic: AASHTO-USGS risk-targeted Sa (3.10.4.1), site class ${S0.sc}; As ${f3(S0.As)}, SD1 ${f3(S0.SD1)}; Zone ${S0.zone}; ${OPC_NAME[S0.op]} bridge.` : 'Seismic: ground motion not entered.');
+  (m0.notes || '').split(/\n/).filter(Boolean).slice(0, 12).forEach(l => tl(l.slice(0, 120)));
+  list.unshift({ id: 'index', kind: 'index', k: -1, title: 'Index and design basis', comp: compose([idx], 1) });
+
+  let ox = 0;
+  /* one part (a Dwg, feet) into D at model inches, text heights times f; its dimensions as DIMENSION entities */
+  const put = (p, f, kM) => {
+    const I = v => v * 12;
+    p.d.p.forEach(q => { if (q.dimId) return; const l = lay(q.L);
+      if (q.t === 'l') D.line(l, I(q.a[0] + p.dx), I(q.a[1] + p.dy), I(q.a[2] + p.dx), I(q.a[3] + p.dy));
+      else if (q.t === 'p') D.pline(l, q.pts.map(pt => [I(pt[0] + p.dx), I(pt[1] + p.dy)]), !!q.closed);
+      else if (q.t === 'c') D.circle(l, I(q.x + p.dx), I(q.y + p.dy), I(q.r));
+      else if (q.t === 't') { if (String(q.s).trim()) D.text(l, I(q.x + p.dx), I(q.y + p.dy), I(q.h * f), q.s, q.al === 'c' ? 1 : q.al === 'r' ? 2 : 0, q.rot || 0); } });
+    (p.d.dims || []).forEach(dm => { let a = [I(dm.x1 + p.dx), I(dm.y1 + p.dy)], b = [I(dm.x2 + p.dx), I(dm.y2 + p.dy)], off = I(dm.off);
+      const ddx = b[0] - a[0], ddy = b[1] - a[1], L0 = Math.hypot(ddx, ddy); if (L0 < 1e-6) return;
+      const nx = -ddy / L0, ny = ddx / L0, base = [a[0] + nx * off, a[1] + ny * off];
+      D.k = kM; D.h = I(dm.h * f); D.dim(lay(dm.L || 'DIMS'), a, b, base, Math.atan2(ddy, ddx) * 180 / Math.PI, dm.label); });
+  };
+  const textMed = d => { const hs = d.p.filter(e => e.t === 't').map(e => e.h).sort((a, b) => a - b); return hs.length ? hs[Math.floor(hs.length / 2)] : 1; };
+  list.forEach((s, si) => {
+    const comp = s.comp, i0 = D.mark(); let N = null, over = false;
+    const fitsAt = SCALES.filter(sc => comp.w <= AW * sc && comp.h <= AH * sc), tryList = fitsAt.length ? fitsAt : [SCALES[SCALES.length - 1]];
+    for (const sc of tryList) { D.E.length = i0; const kM = 12 * sc;
+      comp.parts.forEach(p => { const f = Math.min(2.5, Math.max(0.4, PA.th * sc / textMed(p.d))); put(p, f, kM); });
+      const b = D.bbox(i0); if (!isFinite(b[0]) || ((b[2] - b[0]) / kM <= AW && (b[3] - b[1]) / kM <= AH)) { N = sc; break; } }
+    if (N == null) { N = tryList[tryList.length - 1]; over = true; }
+    const left = sldwFree(D, i0, D.mark());
+    const kM = 12 * N, W = PA.W * kM, H = PA.H * kM, m = PA.m * kM, tb = PA.tb * kM, b = D.bbox(i0);
+    const cx = ox + W / 2, cy = m + tb + 0.3 * kM + AH * kM / 2; if (isFinite(b[0])) D.move(i0, cx - (b[0] + b[2]) / 2, cy - (b[1] + b[3]) / 2);
+    const iC = D.mark();
+    // border and title block (paper inches × kM)
+    X.sheetBorder(D, Lb, ox, W, H, kM); D.rect(Lb, ox + m, m, ox + W - m, H - m);
+    const x0 = ox + m, y0 = m, w = W - 2 * m, fh = 0.28 * tb, yc = y0 + fh, ch = tb - fh;
+    D.rect(Lb, x0, y0, x0 + w, y0 + tb); D.line(Lb, x0, yc, x0 + w, yc);
+    const cells = [[0.31, 'PROJECT', m0.name || 'Bridge', m0.num ? `Project no. ${m0.num}` : ''], [0.25, 'SHEET TITLE', s.title, `Scale: ${sldwScName(N)}`],
+      [0.15, 'DESIGNED / CHECKED', `${m0.by || '-'} / ${m0.chk || '-'}`, ''], [0.10, 'DATE', m0.date || today(), ''],
+      [0.12, 'SPECIFICATION', 'AASHTO LRFD 10th Ed.', isMass() ? 'MassDOT BM Part I' : ''], [0.07, 'SHEET', '?', '']];
+    const hL = 0.07 * PA.tb / 1.0 * kM * (PA.W === 34 ? 1.3 : 1), hV = (PA.W === 34 ? 0.18 : 0.11) * kM, hV2 = (PA.W === 34 ? 0.13 : 0.085) * kM, pad = 0.08 * kM;
+    let xc = x0, sheetEnt = null;
+    cells.forEach(([fw, lab, v1, v2], ci) => { const cw = fw * w, fit = (t, hh) => { let q = SharedDxf.str(t); const mx = Math.max(4, Math.floor((cw - 2 * pad) / (hh * 0.62))); return q.length > mx ? q.slice(0, mx - 1) + '.' : q; };
+      D.text(Lb, xc + pad, yc + ch - pad - hL, hL, lab, 0);
+      D.text(Lb, xc + pad, yc + ch * 0.36, hV, fit(v1, hV), 0); if (lab === 'SHEET') sheetEnt = D.E[D.E.length - 1];
+      if (v2) D.text(Lb, xc + pad, yc + ch * 0.1, hV2, fit(v2, hV2), 0);
+      xc += cw; if (ci < cells.length - 1) D.line(Lb, xc, yc, xc, y0 + tb); });
+    D.text(Lb, x0 + pad, y0 + fh * 0.32, hV2, 'SubLoads: substructure loads. Unfactored and factored loads per AASHTO LRFD Section 3; schematic drawings generated from the inputs and results; verify before use.', 0);
+    SH.push({ id: s.id, kind: s.kind, k: s.k, sets: s.sets, title: s.title, N, kM, i0, iC, left, i1: D.mark(), ox, W, H, over, sheetEnt, scale: sldwScName(N) });
+    ox += W + 4 * kM;
+  });
+  SH.forEach((s, j) => { s.n = j + 1; s.sheetEnt.s = SharedDxf.str(`${j + 1} OF ${SH.length}`); });
+  return { D, S: SH, paper: paperId in SLDW_PAPER ? paperId : 'D' };
+}
+const sldwPaper = () => { const p = SLDW.paper || sldwLs(SLDW.kPaper); return p === 'B' ? 'B' : 'D'; };
+/* Project → Export DXF and the tab's Download DXF: the whole set */
+function sldwDownload() {
+  const G = MODEL.G; if (!G || G.E.length) return flash('Fix the input errors on the Summary tab first.', 'fail');
+  let B; try { B = sldwBuild(sldwPaper()); } catch (e) { console.error(e); return flash('The DXF could not be built: ' + e.message, 'fail'); }
+  const txt = B.D.toDXF({ ltscale: 1 }), chk = SharedDxf.validate(txt);
+  if (!chk.ok) { flash('The DXF file failed its structure check: ' + chk.errors.slice(0, 3).join('; '), 'fail'); return; }
+  SharedDxf.download(txt, `${fname()}_substructure_sheets.dxf`);
+  flash(`DXF written: ${B.S.length} sheets (paper ${SLDW_PAPER[B.paper].name}, R12, model space, full size in inches; plot each sheet at its title-block scale).`);
+}
+exportDxf = sldwDownload;
+{ const i = PENDING.findIndex(p => /DXF dimensions are drawn/.test(p[1])); if (i >= 0) PENDING.splice(i, 1); }   // dimensions are DIMENSION entities
 </script>
 <script>
 /* ---------- start ---------- */
