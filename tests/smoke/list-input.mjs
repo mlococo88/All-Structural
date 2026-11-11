@@ -148,7 +148,10 @@ const TOOLS = {
     // three merged §4 PRs #1093 (K_Z = G = 1.0 for Strength V / Service I wind), #1123 (γEQ 0.5 for new projects, skew
     // correction of bearing LL: P.br.gEQ 0 -> 0.5, skCorr -> 'yes', skKg -> '') and #1127 (E_c per Eq. 5.4.2.4-1, wind Z per
     // 3.8.1.2.1); the other 14 commits change display text only (reworded Summary / Dead load notes, Report §1.4, labels).
-    base: '5d8eeba',
+    // re-baselined 2026-11-11 (SLPL PR) to origin/main f572c90: 5d8eeba → 8d82112 passed this test at each merge (SLAL, SLDW, ABX, SLLS:
+    // display text only in these two cases, no approach slab); 8d82112 → f572c90 is SLFH #1410 alone (§4, engineer decision: TU / WS / WL at the
+    // abutment seat; the abutment moments on the Summary and the Report subsection "Height of the superstructure horizontal forces")
+    base: 'f572c90',
     expect: '{"spans":[110,150,120,95],"bays":[9,9.5,10]}',
     setup: async p => { await p.waitForTimeout(2500); await p.click('.itab[data-pane="bridge"]'); await p.waitForTimeout(400); },
     typeOld: async (p, v) => { for (const k of ['spans', 'bays']) { await p.evaluate(([k, v]) => { const i = document.getElementById('f_' + k); i.value = v;
@@ -158,7 +161,7 @@ const TOOLS = {
     read: async p => {
       // SLAL (2026-11-11): the abutment-length note (Geometry tab, Report) and its two input-check ranges (Report §1.4) are display text
       // added after BASE; they are taken out of the page text here (every result, input and saved field is still compared)
-      await p.evaluate(() => { window.slalStrip = t => t.replace(/\n?Abutment length: L[\s\S]*?as before this input was added\./g, '').replace(/Abutment length along the bearing line L_ab: blank or greater than 0 ft; (Footing length L_ftg: blank or greater than 0 ft; )?/g, ''); });
+      await p.evaluate(() => { window.slalStrip = t => t.replace(/\n?Abutment length: L[\s\S]*?as before this input was added\./g, '').replace(/Abutment length along the bearing line L_ab: blank or greater than 0 ft; (Footing length L_ftg: blank or greater than 0 ft; )?/g, '').replace(/Combined PAE height \/ H: blank or from 0\.4 to 0\.5; /g, ''); });   // SLPL: its input-check range (Report §1.4)
       const out = await p.evaluate(() => ({ P: JSON.parse(JSON.stringify(P)), C: JSON.parse(JSON.stringify(MODEL.C)),
         stored: JSON.parse(localStorage.getItem(KEY) || 'null') }));
       if (out.P.ui) delete out.P.ui.tab; if (out.stored && out.stored.ui) delete out.stored.ui.tab;
@@ -170,6 +173,7 @@ const TOOLS = {
       await p.click('.itab[data-pane="bridge"]'); await p.waitForTimeout(300);
       out.side = await p.evaluate(() => { const k = document.getElementById('sidebar').cloneNode(true);
         k.querySelectorAll('[data-sli],script,style,.note,#f_spans ~ .u,#f_bays ~ .u').forEach(x => x.remove());
+        ['f_br_hEQmode', 'f_br_hAEr'].forEach(id => { const q = k.querySelector('#' + id); if (q && q.closest('.fld')) q.closest('.fld').remove(); });   // SLPL (2026-11-11): the new seismic earth pressure location field (Bridge pane)
         return k.innerText.replace(/(CL bearing|looking ahead)ft/g, '$1'); });   // the unit moved into the column header
       return out;
     },
