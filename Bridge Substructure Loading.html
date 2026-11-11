@@ -2808,7 +2808,7 @@ function abutHandoffPayload() {
   let j; try { j = abutExportData(); } catch (e) { return { err: 'The abutment export failed: ' + e.message }; }
   const good = j.abutments.filter(a => !a.error);
   if (!good.length) return { err: 'No abutment could be exported: ' + j.abutments.map(a => `${a.name}: ${a.error}`).join('; ') };
-  good.forEach(a => { const d = abutDefOf(a.supportIndex); if (d) a.definition = d; });   // ABX (2026-11-11): additive definition block (HANDOFF.md §4.5); the "Export abutments" file is unchanged
+  good.forEach(a => { const d = abutDefOf(a.supportIndex); if (d) { a.definition = d; a.notes = a.notes.map(n => /^Earth pressure, soil, and backfill properties are not exported/.test(n) ? 'Earth pressure is not exported: the abutment calculator computes it. The soil and backfill inputs are in the definition block.' : n); } });   // ABX (2026-11-11): additive definition block (HANDOFF.md §4.5); the "Export abutments" file is unchanged
   const sp = window.BridgeXfer && BridgeXfer.sharedProject ? BridgeXfer.sharedProject() : null;
   const p = Object.assign({}, j, {
     _schema: 'bridge-abutment-loads', schemaVersion: 1, producer: 'Bridge Substructure Loading', producerFile: 'Bridge Substructure Loading.html',

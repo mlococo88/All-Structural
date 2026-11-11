@@ -78,7 +78,7 @@
         heq5: r4(nz(e.heq5)), heq10: r4(nz(e.heq10)), heq20: r4(nz(e.heq20)), esQ: r4(nz(e.esQ)), hw: r4(Math.max(0, nz(e.hw))), soilH: r4(soilHe), soilHAuto: !pos(e.soilH),
         constrFill: r4(nz(e.constrFill)), gLLc: r4(nz(e.gLLc)) },
       approachSlab: { on: e.asOn === 'yes', W: r4(x.aslW), WAuto: !pos(e.asW), L: r4(nz(e.asL)), t: r4(nz(e.asT) / 12), sharePct: r4(nz(e.asPct)), RDC: null, LL: e.asLL === 'yes' ? 'yes' : 'no' },
-      seismic: { As: r4(x.As), khR: r4(nz(b.khR)), kv: r4(nz(b.kv)), hEQr: r4(nz(b.hEQr) || 0.6), hEQmode: 'ratio' },
+      seismic: { As: isN(x.As) ? r4(x.As) : null, khR: r4(nz(b.khR)), kv: r4(nz(b.kv)), hEQr: r4(nz(b.hEQr) || 0.6), hEQmode: 'ratio' },
       concrete: { gc: r4(nz(b.wc) || 0.150) },
       pad: x.brgType === 'elast' ? { L: r4(nz((x.elast || {}).L)), W: r4(nz((x.elast || {}).W)), G: r4(nz((x.elast || {}).G)), hrt: r4(nz((x.elast || {}).hrt)) } : null,
       info: { kRule: e.method === 'atrest' ? 'at rest (k0 = 1 − sin φ)' : 'active', lsRed: null, wingwalls: [], battered: false, refined: [] } };
@@ -168,7 +168,8 @@
     const a = d.approachSlab;
     if (a && a.on) [['W', a.W, 1, 500], ['L', a.L, 1, 100], ['t', a.t, 0.25, 5], ['share', a.sharePct, 0, 100]].forEach(([n, v, lo, hi]) => { if (!inR(v, lo, hi)) bad('aps', n + ' = ' + fmt(v)); });
     const q = d.seismic;
-    if (q) [['A_s', q.As, 0, 2], ['k_h ratio', q.khR, 0, 1.5], ['k_v', q.kv, 0, 0.99], ['ΔP_AE height ratio', q.hEQr, 0, 1]].forEach(([n, v, lo, hi]) => { if (!inR(v, lo, hi)) bad('seisset', n + ' = ' + fmt(v)); });
+    if (q && q.As != null && !inR(q.As, 0, 2)) bad('seisset', 'A_s = ' + fmt(q.As));
+    if (q) [ ['k_h ratio', q.khR, 0, 1.5], ['k_v', q.kv, 0, 0.99], ['ΔP_AE height ratio', q.hEQr, 0, 1]].forEach(([n, v, lo, hi]) => { if (!inR(v, lo, hi)) bad('seisset', n + ' = ' + fmt(v)); });
     if (d.concrete && !inR(d.concrete.gc, 0.1, 0.2)) bad('bridgewide', 'w_c = ' + fmt(d.concrete.gc));
     const p = d.pad;
     if (p) [['pad length', p.L, 1, 60], ['pad width', p.W, 1, 80], ['G', p.G, 0.05, 0.4], ['h_rt', p.hrt, 0.25, 20]].forEach(([n, v, lo, hi]) => { if (!inR(v, lo, hi)) bad('brg', n + ' = ' + fmt(v)); });

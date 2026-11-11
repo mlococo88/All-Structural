@@ -12522,7 +12522,7 @@ document.addEventListener("DOMContentLoaded",init);
       const rng=(k,items)=>{ const b=(items||[]).filter(x=>typeof x.val==="number"&&typeof VALID!=="undefined"&&VALID[x.path]&&!hardOK(x.path,x.val)).map(x=>x.lbl+" = "+nfmt(x.val)); if(b.length) o.gerr[k]="out of the calculator's accepted range or not a number: "+b.join("; "); };
       const nan=(k,items)=>{ const b=(items||[]).filter(x=>typeof x.val==="number"&&!fin(x.val)).map(x=>x.lbl); if(b.length) o.gerr[k]="not a number: "+b.join("; "); };
       [["geom",o.geom],["bridge",o.bridgeG],["soil",o.soilI],["aps",o.apsI],["elev",o.elevI],["seisset",o.seissetI]].forEach(([k,it])=>{ if(!o.gerr[k]){ nan(k,it); if(!o.gerr[k]) rng(k,it); } });
-      ["bridge","soil","aps","elev","seisset"].forEach(k=>{ if(!o.gerr[k]&&o.T.gerr[k]&&k==="bridge") o.gerr[k]=o.T.gerr[k]; });
+      ["geom","bridge","soil","aps","elev","seisset"].forEach(k=>{ if(!o.gerr[k]&&o.T.gerr[k]) o.gerr[k]=o.T.gerr[k]; });
     }
     o.skewSent=+a.skewDeg;   // ABPF (2026-11-11): SubLoads' skew is signed; the calculator takes |θ| (shown in the review row)
     if(fin(+G.footingWidth)&&Math.abs((+G.toe)+(+G.stemThickness)+(+G.heel)-(+G.footingWidth))>0.01) o.warns.push("SubLoads footing width "+nfmt(+G.footingWidth)+" ft ≠ toe + stem + heel = "+nfmt((+G.toe)+(+G.stemThickness)+(+G.heel))+" ft; the calculator uses toe + stem + heel.");
