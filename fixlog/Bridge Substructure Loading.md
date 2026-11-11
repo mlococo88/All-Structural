@@ -3032,3 +3032,29 @@ function listTables() {
 - **Decisions (pending engineer review):** the default ticks above; battered stem sent as t_top with the weight note; SubLoads keeps its own elevations (mismatches listed; optional top-of-footing group); bridge-wide inputs unticked and labelled; slab share as the equivalent %; wingwalls listed only; auto values kept blank when equal within 0.005 ft; default target the unit that last pulled the project, else Abut. 1.
 - **How verified:** main-vs-branch probe (default project: combinations, export, `P` identical); `abutment-subloads-exchange` B1–B4; `bsl-inputcheck`, `bsl-abut-length`, `bsl-drawings`, `project-library --tool bsl`.
 - **Other copies:** none.
+## 2026-11-11 — PR: subloads-ls-slab (PR #1406: https://github.com/mlococo88/All-Structural/pull/1406) — live-load surcharge removed with an approach slab under AASHTO 3.11.6.5 too (SLLS; engineer decision 2026-11-11)   [§4: changes results for AASHTO abutments with an approach slab]
+- **Engineer decision (2026-11-11, confirmed):** "Approach slab should remove surcharge", aligned with the Abutment Calculator (`lsRed`, default on, `apLsRule`). The calculator's scope: final state h_eq = 0 on the wall, stem, backwall and over the heel; the construction stage keeps its LS; MassDOT/CTDOT automatic; AASHTO/RIDOT an option, default on.
+- **Where:** `earthAbut` (anchor `noLS = lsSlabRem(e)`); new helpers `lsSlabRem(e)`, `lsSlabRef()` (before `fillEarth`); the Units pane approach-slab fields (`paneUnits` wrapper, anchor `Live-load surcharge LS with the slab`); the Earth loads tab note (anchor `'Approach slab and LS:'`); the Report unit section (`lsSub`, anchor `Live-load surcharge with the approach slab`); `basisExtra` Backfill row.
+- **Before:**
+  `const heq = heqOf(e, H), pLS = ka * gam * heq, noLS = isMass() && e.asOn === 'yes';`
+- **After:**
+  `const heq = heqOf(e, H), pLS = ka * gam * heq, noLS = lsSlabRem(e);` with
+  `const lsSlabRem = e => !!e && e.asOn === 'yes' && (isMass() || e.lsRed !== 'no');`
+  `earthAbut` also returns `lsRem` and `lsOff` (the LS values not applied, for the notes).
+- **Removed:** the three final-state LS items (`LSh` on the virtual back plane, `LSh` on the stem and backwall, `LSv` over the heel). **Kept:** `LShc`, `LSvc` (construction stage, no slab yet).
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 3.11.6.5 (C3.11.6.5): the surcharge may be reduced where vehicles reach the abutment through a structural slab not supported on the backfill. MassDOT Part I 3.3.1.3 is unchanged.
+- **Check case:** default project, Abut. 1, approach slab on with the default slab (20 ft × 12 in, 50 %, no LL). k_a = 0.30726, γ = 0.120 kcf, H = 20 ft (17 ft soil), h_eq = 2 ft, heel 6 ft, L = 46.070 ft; p_LS = 0.073742 ksf.
+  - LS on the virtual plane: 67.946 kip at 10 ft (M = 679.456 kip-ft) → 0
+  - LS on the stem: 57.754 kip → 0
+  - LS vertical over the heel: 66.340 kip → 0
+  - Strength I at the bottom of footing: P max 2624.176 → 2508.080; V_l max 683.879 → 564.975; M_l max 4439.331 → 3250.283
+  - Service I at the bottom of footing: P 1921.165 → 1854.825; V_l 465.759 → 397.813; M_l 2415.203 → 1735.747
+- **How verified:** main-vs-branch probe of every combination at every section of every unit. Cases: default, slab, slab + LL, slab under MassDOT, A_s 0.15, and A_s 0.15 + slab. Only the abutments with a slab under AASHTO change: Str I, Str V, Ser I, EE I and EE II, at the top-of-footing M_l and V_l and at the bottom-of-footing P, M_l and V_l. The construction stage, bridge seat, piers, no-slab cases and MassDOT are identical. With `lsRed: 'no'` the results are identical to main.
+- **Tests:** new `tests/smoke/bsl-ls-slab.mjs`. `bsl-inputcheck.mjs`: the abut-earth-seismic project sets `lsRed: 'no'`, so it still compares every result with main. The new note text is stripped from both sides.
+- **Saved data (§5):** new optional `units[k].earth.lsRed` ('yes' | 'no'); absent = removed. Saved AASHTO projects with an approach slab change on opening (intended, engineer's rule); choose "Kept" for the old results.
+- **Hand-off:** no field carries the LS rule. The `approachSlab` block is unchanged, and no hand-off code was touched.
+- **Decisions (pending engineer review):**
+  1. The option is hidden under MassDOT (automatic removal).
+  2. "Kept" means the full LS, with no partial reduction (as the calculator).
+- **Other copies:** none (the Abutment Calculator has its own implementation).
+- **Open item (not changed here, hand-off code being changed by the exchange work):** `shared/abutment-def.js` `fromSubLoads` sends `info.lsRed: null`. Its pull review row "LS with an approach slab" (anchor `'removed only under MassDOT rules'`) still describes SubLoads as removing LS only under MassDOT. Once this merges it should read "removed with the slab (3.11.6.5 option, default removed; MassDOT automatic)" and send `lsRed: lsSlabRem(earth)`.
