@@ -13235,6 +13235,10 @@ document.addEventListener("DOMContentLoaded",init);
     const r=BridgeXfer.publish(CH,b.p,"Abutment Calculator","abutment_calculator.html");
     if(r.error){ alert("Could not send: "+r.error); return; }
     try{ localStorage.setItem("bridgeSuite.v1."+CH+".by."+SID, JSON.stringify(r.payload)); }catch(e){}
+    /* FPU (2026-11-11): per-project copy bridgeSuite.v1.foundationLoads.by.abutment.<pid> (HANDOFF.md §4.6, §5.1; uploaded with Cloud sync); when
+       this project was pulled from a SubLoads abutment (S.subloadsSrc.abutment, e.g. "Abut. 1") the copy is per unit: .by.abutment.<pid>.<unit id> */
+    const HS=window.SharedHandoffStore, un=S.subloadsSrc&&typeof S.subloadsSrc.abutment==="string"?S.subloadsSrc.abutment.trim():"";
+    if(HS) HS.send({ storage:localStorage, channel:CH, producer:SID, payload:r.payload, ...(un?{ unit:HS.unitId(un) }:{}), fetch:(u,i)=>window.fetch(u,i) }).catch(()=>{});
     close(); if(ss) ss.textContent="foundation loads sent ("+b.n+" cases) — pull them in Pile Designer";
   }
   document.addEventListener("click",ev=>{

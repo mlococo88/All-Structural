@@ -16,16 +16,26 @@
    Storage (CLAUDE.md §5: new keys only, no existing key or format changed)
      bridgeSuite.v1.<channel>.by.<producer id>.<project id>   the stamped payload, exactly as published (JSON)
      bridgeSuite.v1.handoffStore.pending                      [{ channel, producer, pid }] uploads waiting (only while sync is set up)
+     bridgeSuite.v1.<channel>.by.<producer id>.<project id>.<unit id>   (since 2026-11-11, FPU) a copy per unit of a project, for senders
+                                                              that send one unit at a time (foundationLoads: SubLoads per support,
+                                                              the Abutment Calculator per abutment)
+   Unit id: enc(unit) of a sender-chosen unit name (e.g. 'support-2'), so it holds no '.', '/' or '~'; longer than 60 characters it is
+   cut to 50 and ends with '_h' + the FNV-1a hash. The queue's pid field holds the copy id (<project id> or <project id>.<unit id>).
    Project id: enc(bridgeId) + '~' + enc(name), each trimmed with inner white space collapsed; enc keeps A-Z a-z 0-9 space _ - and writes
    every other character as %XX of its UTF-8 bytes, so the id holds no '.', '/' or '~' of its own; '' when both are blank (no per-project
    copy). An id longer than 120 characters is cut to 100 and ends with '~h' + the FNV-1a hash of the whole id.
 
    API (Node-testable: storage, fetch and the GitHub sync namespace are passed in or read at call time)
      norm(s), enc(s), fnv(text) -> 8 hex, contentHash(obj) -> 8 hex, projectOf(payload) -> { name, bridgeId }, pidOf(project) -> id
-     copyKey(channel, producer, pid), cloudPath(channel, producer, pid), fileText(payload)
-     write(storage, channel, producer, payload) -> { ok, pid, key } (per-project copy only; '' pid: nothing written)
-     send(o) -> Promise { ok, pid, key, cloud: { ok } | { skipped } | { error, queued } }
-         o = { storage, channel, producer, payload (already stamped), fetch, sync (default window.SharedGitHubSync), now }
+     copyKey(channel, producer, pid, unit?), cloudPath(channel, producer, pid, unit?), fileText(payload), unitId(name) -> unit id
+     write(storage, channel, producer, payload, unit?) -> { ok, pid, unit, key } (per-project copy only; '' pid: nothing written)
+     send(o) -> Promise { ok, pid, unit, key, cloud: { ok } | { skipped } | { error, queued } }
+         o = { storage, channel, producer, payload (already stamped), unit (optional unit id), fetch, sync (default window.SharedGitHubSync), now }
+     Entries (local, cloud, list) carry unit: the unit id of a per-unit copy, '' otherwise.
+     unitKey(payload or saved source record) -> producer | element.unitIndex (else element.label): which unit a copy is of (FPU)
+     pickDefault(groups, open, last) -> { pid, entry, how: 'unit' | 'project' } | null   the open project's copy of the unit last pulled
+         (last = the receiver's saved source record: producer, project, element), else the open project's newest copy (FPU)
+     newerOfUnit(groups, entry) -> the newest copy of the same project and unit when it is newer than entry, else null (FPU)
      local(o) -> { entries, errors }   o = { storage, channel, schema, maxVersion, producers: [ids] | null, legacy: [{ key, via }] }
      cloud(o) -> Promise { ok, entries, errors } | { off: true }   GitHub copies not already identical here (git blob sha)
      list(o) -> Promise { groups, errors, cloud: 'off' | 'ok' | <message> }   (local + cloud, grouped)
@@ -82,22 +92,30 @@
     return id.length > 120 ? id.slice(0, 100) + '~h' + fnv(id) : id;
   }
   function okIds(channel, producer) { return ID_RX.test(String(channel || '')) && ID_RX.test(String(producer || '')); }
-  const copyKey = (channel, producer, pid) => `${NS}${channel}.by.${producer}.${pid}`;
-  const cloudPath = (channel, producer, pid) => `${DIR}/${channel}/${producer}/${pid}.json`;
+  /* FPU (2026-11-11): a copy per unit -> '<pid>.<unit id>' (the unit id is enc'd, so it holds no '.', and a pid never does) */
+  function unitId(u) { const id = enc(norm(u)); return id.length > 60 ? id.slice(0, 50) + '_h' + fnv(id) : id; }
+  const UNIT_RX = /^[A-Za-z0-9 _%-]{1,62}$/;
+  const cid = (pid, unit) => unit ? pid + '.' + unit : pid;
+  function splitId(id) { const d = id.indexOf('.'); return d < 0 ? { pid: id, unit: '' } : { pid: id.slice(0, d), unit: id.slice(d + 1) }; }
+  const copyKey = (channel, producer, pid, unit) => `${NS}${channel}.by.${producer}.${cid(pid, unit)}`;
+  const cloudPath = (channel, producer, pid, unit) => `${DIR}/${channel}/${producer}/${cid(pid, unit)}.json`;
   const fileText = p => JSON.stringify(p, null, 1);
   function readJSON(storage, k) { try { const t = storage.getItem(k); return t ? JSON.parse(t) : null; } catch (e) { return null; } }
   function syncOf(o) { return o.sync !== undefined ? o.sync : (typeof window !== 'undefined' ? window.SharedGitHubSync : null); }
   function settingsOf(o) { const G = syncOf(o); if (!G || !o.storage) return null; try { const s = G.settings(o.storage); return G.configured(s) ? s : null; } catch (e) { return null; } }
   function deviceName(storage, sync) { const s = settingsOf({ storage, sync }); return s ? String(s.device || '') : ''; }
 
-  /* write(storage, channel, producer, payload): the per-project copy (the sender writes its legacy keys itself, as before) */
-  function write(storage, channel, producer, payload) {
+  /* write(storage, channel, producer, payload, unit): the per-project copy, or with a unit id the per-unit copy of the project (FPU)
+     (the sender writes its legacy keys itself, as before) */
+  function write(storage, channel, producer, payload, unit) {
     if (!okIds(channel, producer)) return { ok: false, error: 'bad channel or producer id' };
+    unit = unit ? String(unit) : '';
+    if (unit && !UNIT_RX.test(unit)) return { ok: false, error: 'bad unit id (use SharedHandoffStore.unitId)' };
     const pid = pidOf(projectOf(payload));
-    if (!pid) return { ok: true, pid: '', key: null };
-    const key = copyKey(channel, producer, pid);
-    try { storage.setItem(key, JSON.stringify(payload)); } catch (e) { return { ok: false, pid, key, error: 'Could not save the per-project copy (storage full?): ' + e.message }; }
-    return { ok: true, pid, key };
+    if (!pid) return { ok: true, pid: '', unit, key: null };
+    const key = copyKey(channel, producer, pid, unit);
+    try { storage.setItem(key, JSON.stringify(payload)); } catch (e) { return { ok: false, pid, unit, key, error: 'Could not save the per-project copy (storage full?): ' + e.message }; }
+    return { ok: true, pid, unit, key };
   }
   function pending(storage) { const v = readJSON(storage, PEND); return Array.isArray(v) ? v.filter(x => x && okIds(x.channel, x.producer) && x.pid) : []; }
   function setPending(storage, list) { try { if (list.length) storage.setItem(PEND, JSON.stringify(list)); else storage.removeItem(PEND); } catch (e) { /* retried later */ } }
@@ -121,12 +139,13 @@
   }
   /* send(o): the per-project copy, then (sync set up) its upload and any queued uploads */
   async function send(o) {
-    const w = write(o.storage, o.channel, o.producer, o.payload);
+    const w = write(o.storage, o.channel, o.producer, o.payload, o.unit);
     if (!w.ok) return w;
     const s = settingsOf(o);
     if (!s || !w.pid) return { ...w, cloud: { skipped: true } };
-    const r = await upload1(o, s, o.channel, o.producer, w.pid, o.payload);
-    queue(o.storage, { channel: o.channel, producer: o.producer, pid: w.pid }, !r.ok);
+    const id = cid(w.pid, w.unit);   // the queue's pid field holds the copy id (FPU)
+    const r = await upload1(o, s, o.channel, o.producer, id, o.payload);
+    queue(o.storage, { channel: o.channel, producer: o.producer, pid: id }, !r.ok);
     if (r.ok) await flush(o);
     return { ...w, cloud: r.ok ? { ok: true } : { error: r.message || 'upload failed', queued: true } };
   }
@@ -155,17 +174,17 @@
     const entries = [], errors = [], pre = `${NS}${o.channel}.by.`, prods = Array.isArray(o.producers) ? o.producers : null;
     keys(o.storage).forEach(k => {
       if (k.indexOf(pre) !== 0) return; const rest = k.slice(pre.length), dot = rest.indexOf('.'); if (dot < 1) return;
-      const producer = rest.slice(0, dot), pid = rest.slice(dot + 1);
-      if (pid.indexOf('~') < 0 || !ID_RX.test(producer) || (prods && prods.indexOf(producer) < 0)) return;
+      const producer = rest.slice(0, dot), { pid, unit } = splitId(rest.slice(dot + 1));
+      if (pid.indexOf('~') < 0 || (unit && !UNIT_RX.test(unit)) || !ID_RX.test(producer) || (prods && prods.indexOf(producer) < 0)) return;
       let p = null; try { p = JSON.parse(o.storage.getItem(k)); } catch (e) { errors.push(`${producer} copy "${pid}": stored hand-off is corrupt`); return; }
       const err = validate(p, o.schema, o.maxVersion); if (err) { errors.push(`${producer} copy "${pid}": ${err}`); return; }
-      entries.push({ key: k, via: 'this browser', source: 'local', producer, pid, payload: p });
+      entries.push({ key: k, via: 'this browser', source: 'local', producer, pid, unit, payload: p });
     });
     (o.legacy || []).forEach(l => {
       let t = null; try { t = o.storage.getItem(l.key); } catch (e) { t = null; }
       if (!t) return; let p = null; try { p = JSON.parse(t); } catch (e) { errors.push(`${l.via || l.key}: stored hand-off is corrupt`); return; }
       const err = validate(p, o.schema, o.maxVersion); if (err) { errors.push(`${l.via || l.key}: ${err}`); return; }
-      entries.push({ key: l.key, via: l.via || 'this browser', source: 'legacy', producer: l.producer || '', pid: pidOf(projectOf(p)), payload: p });
+      entries.push({ key: l.key, via: l.via || 'this browser', source: 'legacy', producer: l.producer || '', pid: pidOf(projectOf(p)), unit: '', payload: p });
     });
     return { entries, errors };
   }
@@ -174,26 +193,26 @@
     const s = settingsOf(o); if (!s) return { off: true, entries: [], errors: [] };
     const G = syncOf(o), c = G.client(s, o.fetch), dir = `${DIR}/${o.channel}`, prods = Array.isArray(o.producers) ? o.producers : null;
     const t = await c.tree(dir); if (!t.ok) return { ok: false, entries: [], errors: [t.message || 'GitHub could not be read'] };
-    const mine = new Map(); (o.localEntries || []).filter(e => e.source === 'local').forEach(e => mine.set(cloudPath(o.channel, e.producer, e.pid), G.gitSha(fileText(e.payload))));
+    const mine = new Map(); (o.localEntries || []).filter(e => e.source === 'local').forEach(e => mine.set(cloudPath(o.channel, e.producer, e.pid, e.unit), G.gitSha(fileText(e.payload))));
     const entries = [], errors = [];
     for (const [path, sha] of t.files) {
       const parts = path.slice(dir.length + 1).split('/'); if (parts.length !== 2 || !/\.json$/.test(parts[1])) continue;
-      const producer = parts[0], pid = parts[1].slice(0, -5);
-      if (!ID_RX.test(producer) || pid.indexOf('~') < 0 || (prods && prods.indexOf(producer) < 0)) continue;
-      if (mine.get(path) === sha) { (o.localEntries || []).forEach(e => { if (e.source === 'local' && e.producer === producer && e.pid === pid) e.synced = true; }); continue; }
+      const producer = parts[0], { pid, unit } = splitId(parts[1].slice(0, -5));
+      if (!ID_RX.test(producer) || pid.indexOf('~') < 0 || (unit && !UNIT_RX.test(unit)) || (prods && prods.indexOf(producer) < 0)) continue;
+      if (mine.get(path) === sha) { (o.localEntries || []).forEach(e => { if (e.source === 'local' && e.producer === producer && e.pid === pid && (e.unit || '') === unit) e.synced = true; }); continue; }
       const r = await c.raw(path); if (!r.ok) { errors.push(`GitHub ${producer}/${pid}: ${r.message}`); continue; }
       let p = null; try { p = JSON.parse(r.text); } catch (e) { errors.push(`GitHub ${producer}/${pid}: not valid JSON`); continue; }
       const err = validate(p, o.schema, o.maxVersion); if (err) { errors.push(`GitHub ${producer}/${pid}: ${err}`); continue; }
-      entries.push({ key: path, via: 'GitHub', source: 'github', producer, pid, payload: p });
+      entries.push({ key: path, via: 'GitHub', source: 'github', producer, pid, unit, payload: p });
     }
     return { ok: true, entries, errors };
   }
   const at = e => String((e && e.payload && e.payload.producedAt) || '');
   /* group(entries): one group per project id, the copies newest first; the same payload (producer + producedAt) listed once, a
-     per-project copy before a legacy or GitHub copy of it */
+     per-project copy before a legacy or GitHub copy of it, and a per-unit copy before the project copy of the same send (FPU) */
   function group(entries) {
     const rank = { local: 0, github: 1, legacy: 2 }, by = new Map();
-    entries.slice().sort((a, b) => at(b).localeCompare(at(a)) || (rank[a.source] - rank[b.source])).forEach(e => {
+    entries.slice().sort((a, b) => at(b).localeCompare(at(a)) || (rank[a.source] - rank[b.source]) || ((b.unit ? 1 : 0) - (a.unit ? 1 : 0))).forEach(e => {
       const g = by.get(e.pid) || { pid: e.pid, entries: [], seen: {} };
       const id = (e.payload.producer || '') + '|' + at(e); if (g.seen[id]) return; g.seen[id] = 1;
       g.entries.push(e); by.set(e.pid, g);
@@ -213,6 +232,27 @@
     if (b) { const g = groups.find(x => x.pid && x.project.bridgeId.toLowerCase() === b); if (g) return g.pid; }
     if (n) { const g = groups.find(x => x.pid && x.project.name.toLowerCase() === n); if (g) return g.pid; }
     return null;
+  }
+  /* FPU (2026-11-11): which unit a copy is of: the sender (envelope producer) and element.unitIndex, else element.label. Works on a
+     payload and on a receiver's saved source record (both carry producer and element). '' when neither is known. */
+  function unitKey(p) {
+    const el = p && p.element; if (!el || typeof el !== 'object') return '';
+    const u = isFinite(el.unitIndex) && el.unitIndex !== null && el.unitIndex !== '' ? '#' + Number(el.unitIndex) : norm(el.label) ? 'L' + norm(el.label).toLowerCase() : '';
+    return u ? norm(p.producer) + '|' + u : '';
+  }
+  /* pickDefault(groups, open, last): the open project's (match) copy of the unit last pulled (last: the receiver's saved source record,
+     used only when its project is the open project's group), else the open project's newest copy; null when no group matches */
+  function pickDefault(groups, open, last) {
+    const pid = match(groups, open); if (pid == null) return null;
+    const g = groups.find(x => x.pid === pid), k = unitKey(last);
+    if (k && last && pidOf(projectOf(last)) === pid) { const e = g.entries.find(x => unitKey(x.payload) === k); if (e) return { pid, entry: e, how: 'unit' }; }
+    return { pid, entry: g.entries[0], how: 'project' };
+  }
+  /* newerOfUnit(groups, e): the newest copy of e's project and unit (unitKey; the project's newest when the unit is unknown) if newer */
+  function newerOfUnit(groups, e) {
+    if (!e || !e.pid) return null; const g = groups.find(x => x.pid === e.pid); if (!g) return null;
+    const k = unitKey(e.payload), n = g.entries.find(x => !k || unitKey(x.payload) === k);
+    return n && at(n) > at(e) ? n : null;
   }
 
   /* ---------- channel helpers (HANDOFF.md §4.14, §4.4): the checks and the one-line summary the picker shows ---------- */
@@ -268,6 +308,6 @@
     return '';
   }
 
-  window.SharedHandoffStore = { NS, DIR, PEND, norm, enc, fnv, contentHash, projectOf, pidOf, copyKey, cloudPath, fileText, write, send, flush, pending,
-    validate, local, cloud, group, list, match, deviceName, geometryHash, checkGeometry, summary };
+  window.SharedHandoffStore = { NS, DIR, PEND, norm, enc, fnv, contentHash, projectOf, pidOf, unitId, copyKey, cloudPath, fileText, write, send, flush, pending,
+    validate, local, cloud, group, list, match, unitKey, pickDefault, newerOfUnit, deviceName, geometryHash, checkGeometry, summary };
 })();
