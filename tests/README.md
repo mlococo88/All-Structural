@@ -66,6 +66,10 @@ node tests/smoke/spread-footing-scroll.mjs [--libs <folder with the pinned katex
 # a renderer that throws marks its tab "Out of date"
 node tests/smoke/spread-footing-nobear.mjs [--file <file or git ref>] [--shots <dir>]
 
+# Spread Footing: wall loads entered per foot (SFWP): p = 12 kip/ft x 20 ft gives the results of P = 240 kip; switching converts;
+# a b_y change keeps per-foot values; wall along x; length 0 error; foundationLoads import switches a per-foot wall to totals; 390 px
+node tests/smoke/spread-footing-wall-perft.mjs [--file <file or git ref>] [--shots <dir>]
+
 # Retaining Wall Designer: required inputs (RWIE) and the self-consistency panel (RWSC): a blank / invalid input gives the "Input error: no results" banner on the check
 # summary, every output tab, the Drawings and the Report, the field marked with its reason, a working link; REVIEW does not block
 node tests/smoke/retaining-wall-checks.mjs [--file <file or git ref>]
