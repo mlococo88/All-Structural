@@ -203,7 +203,7 @@ if (REF) {
   // SLLS (2026-11-11): the approach-slab LS notes (Earth loads tab, Report section and Backfill row) are display text new on this branch
   const slls = t => typeof t !== 'string' ? t : t.replace(/(\n• *)?\n?Approach slab and LS:[^\n]*/g, '').replace(/, live-load surcharge (removed in the final state \([^)]*\)|kept \(3\.11\.6\.5 reduction not taken\))/g, '')
     .replace(/\n?[^\n]*Live-load surcharge with the approach slab[^\n]*/g, '').replace(/\n?(Final-state live-load surcharge LS removed|Live-load surcharge kept with the approach slab)[^\n]*/g, '')
-    .replace(/(\n• *)?\n?Seismic earth location:[^\n]*/g, '').replace(/\n?[^\n]*Seismic earth pressure location[^\n]*/g, '').replace(/\n?\(a\) Seed & Whitman: ΔP_AE at 0\.6H[^\n]*/g, '')   // SLPL notes (display text)
+    .replace(/(\n• *)?\n?Seismic earth location:[^\n]*/g, '').replace(/\n?[^\n]*Seismic earth pressure location[^\n]*/g, '').replace(/\n?\(a\) Seed & Whitman: ΔP_AE at 0\.6H[^\n]*/g, '').replace(/Combined PAE height \/ H: blank or from 0\.4 to 0\.5; /g, '')   // SLPL notes and input-check range (display text)
     .replace(/\n{3,}/g, '\n\n');
   [...A, ...B].forEach(r => { const o = r.o; Object.keys(o.tabs).forEach(k => { o.tabs[k] = slls(slal(o.tabs[k])); }); o.report = slls(slal(o.report)); });
   for (let i = 0; i < A.length; i++) { const a = A[i], bb = B[i].o;

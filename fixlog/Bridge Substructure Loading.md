@@ -3110,7 +3110,10 @@ function listTables() {
   - (c) 0.45: z_c 9.000, z_Δ 25.148, EE I 4855.820
   - (d): as (c) 0.5
 - **How verified:** main-vs-branch probe (default, slab, slab + LL, slab MassDOT, A_s 0.15, A_s 0.15 + slab): 0 differences.
-- **Tests:** new `tests/smoke/bsl-pae-loc.mjs`. `bsl-inputcheck` / `bsl-drawings` strip the new note text on both sides.
+- **Tests:**
+  - New `tests/smoke/bsl-pae-loc.mjs`.
+  - `bsl-inputcheck` / `bsl-drawings` strip the new note text and the input-check range on both sides.
+  - `list-input --part bsl` re-baselined to origin/main f572c90. 5d8eeba → 8d82112 passed it at each merge. 8d82112 → f572c90 is SLFH #1410 only (§4: abutment moments, and its Report subsection). The new Bridge-pane field and its input-check range are stripped from the readout.
 - **Saved data (§5):** new optional `P.br.hEQmode` and `P.br.hAEr`; absent = (a). Saved projects are unchanged.
 - **Decisions (pending engineer review):**
   1. Bridge-wide, like `br.hEQr`.
