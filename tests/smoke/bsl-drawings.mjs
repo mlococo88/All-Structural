@@ -168,7 +168,9 @@ if (REF) {
   const slal = t => typeof t !== 'string' ? t : t.replace(/\n?Abutment length: L[\s\S]*?as before this input was added\./g, '').replace(/Abutment length along the bearing line L_ab: blank or greater than 0 ft; (Footing length L_ftg: blank or greater than 0 ft; )?/g, '');
   // SLLS (2026-11-11): the approach-slab LS notes are display text new on that branch (the slab project keeps LS: lsRed 'no')
   const slls = t => typeof t !== 'string' ? t : t.replace(/(\n• *)?\n?Approach slab and LS:[^\n]*/g, '').replace(/, live-load surcharge (removed in the final state \([^)]*\)|kept \(3\.11\.6\.5 reduction not taken\))/g, '')
-    .replace(/\n?[^\n]*Live-load surcharge with the approach slab[^\n]*/g, '').replace(/\n?(Final-state live-load surcharge LS removed|Live-load surcharge kept with the approach slab)[^\n]*/g, '').replace(/\n{3,}/g, '\n\n');
+    .replace(/\n?[^\n]*Live-load surcharge with the approach slab[^\n]*/g, '').replace(/\n?(Final-state live-load surcharge LS removed|Live-load surcharge kept with the approach slab)[^\n]*/g, '')
+    .replace(/(\n• *)?\n?Seismic earth location:[^\n]*/g, '').replace(/\n?[^\n]*Seismic earth pressure location[^\n]*/g, '').replace(/\n?\(a\) Seed & Whitman: ΔP_AE at 0\.6H[^\n]*/g, '')   // SLPL notes (display text)
+    .replace(/\n{3,}/g, '\n\n');
   [...A, ...B].forEach(r => { const o = r.o; Object.keys(o.tabs).forEach(k => { o.tabs[k] = slls(slal(o.tabs[k])); }); o.report = slls(slal(o.report)); });
   for (let i = 0; i < A.length; i++) { const a = A[i].o, bb = B[i].o;
     const keys = [...Object.keys(a.num).map(k => ['num', k]), ...Object.keys(a.tabs).filter(k => !/^manual/.test(k)).map(k => ['tabs', k])];
