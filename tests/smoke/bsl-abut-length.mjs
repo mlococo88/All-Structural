@@ -28,7 +28,7 @@ try {
     const R = MODEL.UG[0], E = earthAbut(0), sum = (c, sec, k) => E.items.filter(i => i.cls === c && i.sec === sec).reduce((a, i) => a + (i[k] || 0), 0);
     const defs = unitRes(0).UM.defs, C = combine(0), at = l => defs.findIndex(x => x.label === l), wt = n => R.comps.find(c => c.name === n).wt;
     let abx = null; try { const a = abutHandoffPayload(); const ab = a.p.abutments.find(x => x.supportIndex === 0); abx = { Lab: ab.calculatorInput.geom.Lab, Lftg: ab.calculatorInput.geom.Lftg, stem: ab.geometry.stemLengthAlongSkew }; } catch (e) { abx = 'ERR ' + e.message; }
-    return { L: R.capLen, Lf: R.ftgL, stem: wt('Stem'), bw: wt('Backwall'), ftg: wt('Footing'), EHb: sum('EH', 'bot', 'H'), EHt: sum('EH', 'top', 'H'), LSb: sum('LSh', 'bot', 'H'), LSt: sum('LSh', 'top', 'H'), EV: sum('EV', 'bot', 'W'),
+    return { L: R.capLen, Lf: abFtgL(R), stem: wt('Stem'), bw: wt('Backwall'), ftg: wt('Footing'), EHb: sum('EH', 'bot', 'H'), EHt: sum('EH', 'top', 'H'), LSb: sum('LSh', 'bot', 'H'), LSt: sum('LSh', 'top', 'H'), EV: sum('EV', 'bot', 'W'),
       P: C.StrI.max[at('Axial, bottom of footing')], V: C.StrI.max[at('V<sub>l</sub>, bottom of footing')], M: C.StrI.max[at('M<sub>l</sub>, bottom of footing')],
       C: MODEL.C.map(c => c[0] + ' ' + c[2]), ic: SubLoadsInputCheck.collect().map(x => x.label + ': ' + x.msg), abx };
   }, [L, Lf]);
