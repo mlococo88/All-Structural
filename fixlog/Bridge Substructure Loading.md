@@ -3081,7 +3081,8 @@ function listTables() {
   - Strength I M_l max at the bottom of footing: 4499.406 → 4451.591 (Δ 1.00 × 51.641 × 0.926 = 47.815). M_t max: 3621.220 → 3608.408. Service I M_l max: 2481.953 → 2430.150.
   - A_s 0.15: EE I M_l max 4328.052 → 4210.395.
 - **How verified:** main-vs-branch probe (default, slab, slab + LL, slab MassDOT, A_s 0.15, A_s 0.15 + slab). Only the abutment M_l and M_t change (bridge seat, top and bottom of footing), in Str I/III/V, Ser I/IV, EE I and the envelope. P, V, bearings, EE II, construction, BR/CE, piers and the hand-off payload are identical.
-- **Tests:** new `tests/smoke/bsl-force-height.mjs`.
+- **Tests:** new `tests/smoke/bsl-force-height.mjs`. Hand-check values updated in `bsl-ls-slab.mjs` (Strength I M_l 4439.331 → 4391.516, 3250.283 → 3202.468, 4499.406 → 4451.591; Service I 2415.203 → 2363.400, 1735.747 → 1683.944) and `bsl-abut-length.mjs` (4499.406 → 4451.591, 4725.755 → 4677.940).
+  - The main-comparison tests `bsl-inputcheck`, `bsl-drawings`, `project-library --tool bsl` and `list-input --part bsl` differ from the pre-merge main exactly in the two abutment units of each project (combine, comps, and the brce / wind / temp / eq / combo tabs of the first and last unit, plus the Summary). Every pier unit (multi-column, wall, pile bent, hammerhead) and the hand-off payload are identical. Against main after the merge they compare equal.
 - **Saved data (§5):** none changed.
 - **Decisions (pending engineer review):**
   1. Piers keep the top of the bearings. The code is shared, but the rule and the calculator's convention are for abutments, and a pier's bearing and pedestal height is a lever arm on its cap and columns.
