@@ -816,6 +816,37 @@ function defaultState(){
 let state=defaultState(), collapseState={};
 function getPath(o,p){return p.split('.').reduce((a,k)=>a&&a[k],o);}
 function setPath(o,p,v){const ks=p.split('.');let a=o;for(let i=0;i<ks.length-1;i++){if(a[ks[i]]===undefined||a[ks[i]]===null)a[ks[i]]={};a=a[ks[i]];}a[ks[ks.length-1]]=v;}
+/* SFWP (2026-11-11, engineer: "when I'm defining a wall load, I want to be able to define the loads as per-foot loading or the
+   point load it already accepts"). Saved field peds[i].loadEntry: 'perFt' = the load table and the direct set of a Wall element
+   hold per-foot values (kip/ft, kip-ft/ft); absent / 'total' = totals (kip, kip-ft), as before. The per-foot numbers are stored
+   as entered and converted at compute (computeAll): total = per-foot x L, L = l_w = the longer plan side (b_y when b_y >= b_x,
+   as sfdWallInfo), so the loads stay per foot if the length changes. Per foot: P, V_x, V_y, and the moment about the wall's long
+   axis (M_y for a wall along y, M_x along x). Totals always: the moment about the horizontal axis normal to the wall (in-plane),
+   T_u, the load offsets. Only a Wall element reads the field. */
+function sfdWallPerFt(p){return !!(p&&p.elemType==='wall'&&p.loadEntry==='perFt');}
+function sfdWallLen(p){const bx=Math.max(num(p&&p.bx),0),by=Math.max(num(p&&p.by),0);return by>=bx?by:bx;}
+function sfdWallAx(p){return Math.max(num(p&&p.by),0)>=Math.max(num(p&&p.bx),0)?'y':'x';}
+function sfdPfComps(p){return ['P','Vx','Vy',sfdWallAx(p)==='y'?'My':'Mx'];}
+function sfdLdTotRow(p,row){if(!row||!sfdWallPerFt(p))return row;const L=sfdWallLen(p),o=Object.assign({},row);sfdPfComps(p).forEach(k=>{o[k]=num(row[k])*L;});return o;}
+function sfdLdTotLoads(p){if(!sfdWallPerFt(p)||!p.loads)return p.loads;const o={};Object.keys(p.loads).forEach(tp=>{o[tp]=sfdLdTotRow(p,p.loads[tp]);});return o;}
+/* switch the entry of element i, converting the stored numbers with the current L so the totals are unchanged */
+function sfdLdEntrySet(i,to){const p=state.peds[i];if(!p)return;to=to==='perFt'?'perFt':'total';
+ const from=(p.elemType==='wall'&&p.loadEntry==='perFt')?'perFt':'total',L=sfdWallLen(p);
+ if(from!==to&&L>0){const cv=row=>{if(!row)return;sfdPfComps(p).forEach(k=>{const v=num(row[k]);row[k]=to==='perFt'?v/L:v*L;});};
+  Object.keys(p.loads||{}).forEach(tp=>cv(p.loads[tp]));cv(p.direct);}
+ p.loadEntry=to;}
+const SFWP_U={P:['kips','kip/ft'],Vx:['kips','kip/ft'],Vy:['kips','kip/ft'],Mx:['kip-ft','kip-ft/ft'],My:['kip-ft','kip-ft/ft']};
+function sfdLdUnit(p,cm){return (sfdWallPerFt(p)&&sfdPfComps(p).indexOf(cm)>=0)?SFWP_U[cm][1]:COMP_UNIT[cm];}
+/* the conversion shown under the load table (tab) */
+function sfdWallPfNote(p){if(!sfdWallPerFt(p))return '';
+ const L=sfdWallLen(p),ax=sfdWallAx(p),pf=sfdPfComps(p),mt=ax==='y'?'Mx':'My',sub=k=>k.charAt(0)+'<sub>'+k.slice(1)+'</sub>';
+ const rows=[];const add=(lab,row)=>{if(!row)return;const t=pf.filter(k=>num(row[k])!==0).map(k=>sub(k)+' = '+f2(num(row[k]))+' × '+f2(L)+' = '+f2(num(row[k])*L)+' '+COMP_UNIT[k]);if(t.length)rows.push([lab+':',t.join('; ')]);};
+ if(state.loadMode==='direct')add('Direct',p.direct);else TYPES.forEach(tp=>add(tp,p.loads&&p.loads[tp]));
+ return sfNL('Per foot of wall: the analysis uses the totals, value × L, with L = ℓ<sub>w</sub> = '+f2(L)+' ft (b<sub>'+ax+'</sub>, the longer plan side; the wall runs along '+ax+').',[
+  ['Per foot:','P, V<sub>x</sub>, V<sub>y</sub> and '+sub(ax==='y'?'My':'Mx')+' (about the wall’s long axis).'],
+  ['Totals:',sub(mt)+' (about the horizontal axis normal to the wall), T<sub>u</sub> and the load offsets.'],
+  ...(rows.length?rows:[['Loads:','all zero']]),
+  ['Switching:','converts the numbers with the current L (per foot = total ÷ L, total = per foot × L), so the totals and the results do not change. A later change of b<sub>x</sub> or b<sub>y</sub> keeps the per-foot values.']]);}
 /* ================= persistence ================= */
 function migrateState(){
  // backfill fields that may be absent in states saved before a feature existed
@@ -949,6 +980,9 @@ function refreshVis(){
  $$('.qa-over').forEach(e=>e.style.display=(sm==='vesic'&&state.soil.qaOverride==='on')?'flex':'none');
  $$('.mu-user').forEach(e=>e.style.display=state.stab.muMode==='user'?'flex':'none');
  $$('.sfdWallOnly').forEach(e=>{const q=state.peds[+e.dataset.ped];e.style.display=(q&&q.elemType==='wall')?'':'none';});   /* SFWC: wall-only inputs */
+ $$('.sfdLdU').forEach(e=>{const q=state.peds[+e.dataset.ped];if(q)e.textContent=sfdLdUnit(q,e.dataset.cm);});   /* SFWP: units follow the entry and the wall axis */
+ $$('.sfdWpNote').forEach(e=>{const q=state.peds[+e.dataset.ped],h=q?sfdWallPfNote(q):'';e.innerHTML=h;e.style.display=h?'':'none';});
+ $$('select[data-path$=".loadEntry"]').forEach(e=>{const m=e.dataset.path.match(/^peds\.(\d+)\.loadEntry$/),q=m&&state.peds[+m[1]];if(q)e.value=q.loadEntry==='perFt'?'perFt':'total';});
  $$('.swUser').forEach(e=>e.style.display=state.mat.swMode==='user'?'flex':'none');
  const lmn=$('#loadModeNote');
  if(lmn){lmn.innerHTML=(state.loadMode==='direct')
@@ -999,10 +1033,13 @@ function buildPedCards(){
      direct factored P; 0 = centred (older projects). */
   b.appendChild(rowInput('Load offset e\u2093 (from ped. centroid)','peds.'+i+'.loadEx','num','ft',p.loadEx||0));
   b.appendChild(rowInput('Load offset e\u1D67 (from ped. centroid)','peds.'+i+'.loadEy','num','ft',p.loadEy||0));
+  /* SFWP (2026-11-11): wall loads entered as totals (absent = total, as before) or per foot of wall */
+  {const r=el('div','row sfdWallOnly','<label>Wall loads entered as</label><select data-path="peds.'+i+'.loadEntry" style="width:auto"><option value="total">Total (kip, kip-ft)</option><option value="perFt">Per foot of wall (kip/ft, kip-ft/ft)</option></select><span class="hint">Wall only: per foot = P, V and the moment about the wall\u2019s long axis per foot of \u2113<sub>w</sub>; switching converts the numbers with the current length so the totals stay the same</span>');r.dataset.ped=i;b.appendChild(r);
+   r.querySelector('select').value=p.loadEntry==='perFt'?'perFt':'total';}
   if(state.loadMode==='direct'){
    const dh=el('div','',' <b style="font-size:11px">Direct factored loads (LRFD, at top of pedestal)</b>');dh.style.marginTop='6px';b.appendChild(dh);
    const dt2=document.createElement('table');dt2.className='tbl ldtbl';
-   let dhd='<tr>';COMP.forEach(cm=>dhd+='<th>'+cm+'<br><span style="font-weight:normal">'+COMP_UNIT[cm]+'</span></th>');dhd+='</tr>';
+   let dhd='<tr>';COMP.forEach(cm=>dhd+='<th>'+cm+'<br><span class="sfdLdU" data-ped="'+i+'" data-cm="'+cm+'" style="font-weight:normal">'+sfdLdUnit(p,cm)+'</span></th>');dhd+='</tr>';   /* SFWP: unit follows the entry */
    dt2.innerHTML=dhd;
    const dtr=document.createElement('tr');
    COMP.forEach(cm=>{const td=document.createElement('td');
@@ -1012,7 +1049,7 @@ function buildPedCards(){
    dt2.appendChild(dtr);b.appendChild(dt2);
   }else{
    const t=document.createElement('table');t.className='tbl ldtbl';
-   let hd='<tr><th>Load</th>';COMP.forEach(cm=>hd+='<th>'+cm+'<br><span style="font-weight:normal">'+COMP_UNIT[cm]+'</span></th>');hd+='</tr>';
+   let hd='<tr><th>Load</th>';COMP.forEach(cm=>hd+='<th>'+cm+'<br><span class="sfdLdU" data-ped="'+i+'" data-cm="'+cm+'" style="font-weight:normal">'+sfdLdUnit(p,cm)+'</span></th>');hd+='</tr>';   /* SFWP */
    t.innerHTML=hd;
    TYPES.forEach(tp=>{const tr=document.createElement('tr');
     tr.innerHTML='<td title="'+TYPE_DESC[tp]+'">'+tp+'</td>';
@@ -1023,6 +1060,7 @@ function buildPedCards(){
     t.appendChild(tr);});
    b.appendChild(t);
   }
+  {const n=el('div','note sfdWpNote');n.dataset.ped=i;n.style.fontSize='10.5px';const h=sfdWallPfNote(p);n.innerHTML=h;n.style.display=h?'':'none';b.appendChild(n);}   /* SFWP: per-foot conversion (also refreshed by refreshVis) */
   /* SFTQ (2026-11-07): factored torsion T_u, a direct factored value used in every LRFD combination (both load modes); 0 / blank = not checked */
   {const r=el('div','row','<label>Factored torsion T<sub>u</sub></label><input type="number" step="any" data-path="peds.'+i+'.Tu" data-num placeholder="0"><span class="unit">k-ft</span><span class="hint">Pedestal only: factored (LRFD) torsion about the vertical axis, used as entered in every strength combination; checked against the ACI 318-19 22.7 threshold \u03c6T<sub>th</sub>. Blank / 0 = not checked</span>');b.appendChild(r);
    r.querySelector('input').value=num(p.Tu)?p.Tu:'';}
@@ -1103,6 +1141,11 @@ function handleFieldChange(inp){
  if(inp.type==='checkbox')v=inp.dataset.on!==undefined?(inp.checked?inp.dataset.on:inp.dataset.off):inp.checked;   /* SFDB */
  else if(inp.classList.contains('barsel'))v=parseInt(v,10);
  else if(inp.dataset.num!==undefined)v=(v==='')?0:num(v);
+ /* SFWP: switching the wall load entry converts the stored numbers (same totals); a Wall changed to a Pedestal goes back to totals */
+ {const me=inp.dataset.path.match(/^peds\.(\d+)\.loadEntry$/);
+  if(me){sfdLdEntrySet(+me[1],v);buildPedCards();refreshVis();saveAuto();recalcDebounced();return;}
+  const mt=inp.dataset.path.match(/^peds\.(\d+)\.elemType$/);
+  if(mt&&v!=='wall'&&sfdWallPerFt(state.peds[+mt[1]])){sfdLdEntrySet(+mt[1],'total');setPath(state,inp.dataset.path,v);buildPedCards();refreshVis();saveAuto();recalcDebounced();return;}}
  setPath(state,inp.dataset.path,v);
  if(inp.dataset.path.endsWith('.label')){const card=inp.closest('details');if(card)card.querySelector('summary').textContent=v;
   const mi=inp.dataset.path.match(/^peds\.(\d+)\.label$/),rh=mi&&document.querySelector('.sfdPedRb[data-ped="'+mi[1]+'"] .sfdPedRbH b');if(rh)rh.textContent=v;}   /* SFDB */
@@ -1368,7 +1411,7 @@ function sfAashtoDirect(){
  const s=state.bxSrc&&state.bxSrc.foundationLoads; if(!s||!s.applied||typeof s.applied!=='object') return null;
  const ls=String(s.limitState||''), kind=/^strength/i.test(ls)?'str':/^extreme/i.test(ls)?'ee':/^service/i.test(ls)?'svc':null; if(!kind) return null;
  const p=(state.peds||[])[s.pedIndex]; if(!p) return null;
- const d=p.direct||{}; if(['P','Vx','Vy','Mx','My'].some(k=>!(Math.abs(num(d[k])-num(s.applied[k]))<=1e-6))) return null;
+ const d=sfdLdTotRow(p,p.direct||{}); if(['P','Vx','Vy','Mx','My'].some(k=>!(Math.abs(num(d[k])-num(s.applied[k]))<=1e-6))) return null;   /* SFWP: totals */
  const cmb=(typeof s.combination==='string'&&s.combination.trim())?s.combination:null;
  const fac=re=>{ if(!cmb) return null; const m=cmb.match(re); return m?parseFloat(m[1]):null; };
  const gDC=fac(/(\d+(?:\.\d+)?)\s*[· ]\s*DC\b/), gEV=fac(/(\d+(?:\.\d+)?)\s*[· ]\s*EV\b/), gES=fac(/(\d+(?:\.\d+)?)\s*[· ]\s*ES\b/);
@@ -1625,7 +1668,10 @@ function computeAll(){
   if(num(p.bx)<=0||num(p.by)<=0)W.push({lvl:'err',msg:'Pedestal "'+p.label+'": plan dimensions must be positive.'});
   if(num(p.h)<0)W.push({lvl:'err',msg:'Pedestal "'+p.label+'": height cannot be negative.'});
  });
- const peds=state.peds.map(p=>({label:p.label,x:num(p.x),y:num(p.y),bx:Math.max(num(p.bx),0),by:Math.max(num(p.by),0),h:Math.max(num(p.h),0),loads:p.loads,direct:p.direct||{P:0,Vx:0,Vy:0,Mx:0,My:0},
+ /* SFWP (2026-11-11): a wall with loads entered per foot needs a length; its per-foot values become totals x L here (sfdLdTotRow) */
+ state.peds.forEach(p=>{if(sfdWallPerFt(p)&&!(sfdWallLen(p)>0))W.push({lvl:'err',msg:'Wall "'+p.label+'": loads are entered per foot of wall, so the wall length (the longer of b\u2093, b\u1D67) must be greater than 0.'});});
+ const peds=state.peds.map(p=>({label:p.label,x:num(p.x),y:num(p.y),bx:Math.max(num(p.bx),0),by:Math.max(num(p.by),0),h:Math.max(num(p.h),0),loads:sfdLdTotLoads(p),direct:sfdLdTotRow(p,p.direct||{P:0,Vx:0,Vy:0,Mx:0,My:0}),
+  ...(sfdWallPerFt(p)?{pf:{L:sfdWallLen(p),ax:sfdWallAx(p),comps:sfdPfComps(p),loads:p.loads,direct:p.direct||{P:0,Vx:0,Vy:0,Mx:0,My:0}}}:{}),   /* SFWP: the entered per-foot values, for the Report */
   lex:num(p.loadEx),ley:num(p.loadEy)}));   /* SFLO: load offset from the pedestal centroid (ft) */
  if(peds.length===0)W.push({lvl:'err',msg:'No pedestals defined. Add at least one load point.'});
  peds.forEach(p=>{
@@ -4108,7 +4154,18 @@ function sfrModel(){
   subs.push({title:'Pedestals and applied loads',items:[
    {type:'table',head:['Pedestal','x (ft)','y (ft)','b_x × b_y × h (ft)','load offset e_x, e_y (ft)','Element type','Reinforcement'],rows:pr},
    {type:'table',caption:'Loads at the top of each pedestal'+(R.directMode?' (direct factored)':' (unfactored, by type)')+'; P down +, M_x shifts the soil resultant toward +y, M_y toward +x',head:['Pedestal','Load','P (kip)','V_x (kip)','V_y (kip)','M_x (kip-ft)','M_y (kip-ft)'],rows:lr},
-   {type:'note',text:'Axes: origin at the footing centroid, +x toward B/2, +y toward L/2, +z up. A load offset e_x, e_y places P at (x + e_x, y + e_y) on the pedestal top: +P·e_x adds to M_y and +P·e_y to M_x ([[S-res]], [[S-pd]]).'}]});
+   {type:'note',text:'Axes: origin at the footing centroid, +x toward B/2, +y toward L/2, +z up. A load offset e_x, e_y places P at (x + e_x, y + e_y) on the pedestal top: +P·e_x adds to M_y and +P·e_y to M_x ([[S-res]], [[S-pd]]).'},
+   ...(R.peds.some((p,i)=>(state.peds[i]||{}).elemType==='wall')?[{type:'note',text:'Wall load entry: '+R.peds.map((p,i)=>(state.peds[i]||{}).elemType!=='wall'?null:p.label+': '+(p.pf?'per foot of wall (kip/ft, kip-ft/ft); the table above shows the totals used, per-foot value × L, worked in [[S-wpf]]':'total (kip, kip-ft), as entered')).filter(Boolean).join('; ')+'.'}]:[])]});   /* SFWP: the entry mode of each wall */
+  /* SFWP (2026-11-11): a wall's loads entered per foot: total = per-foot value x L (L = l_w, the longer plan side) */
+  if(R.peds.some(p=>p.pf)){const w2=sfrW(),SY={P:['P','p'],Vx:['V_{x}','v_{x}'],Vy:['V_{y}','v_{y}'],Mx:['M_{x}','m_{x}'],My:['M_{y}','m_{y}']},its=[];
+   R.peds.forEach((p,i)=>{if(!p.pf)return;const L=p.pf.L,ax=p.pf.ax;
+    w2.add({id:'wpf.'+i+'.L',label:p.label+': wall length L = ℓ_w, the longer plan side (the wall runs along '+ax+')',sym:'L',eq:'\\max(b_{x},\\, b_{y})',sub:'\\max('+sfrN(p.bx)+',\\,'+sfrN(p.by)+')',value:L,unit:'ft'});
+    const one=(tag,row)=>{if(!row)return;p.pf.comps.forEach(k=>{const v=num(row[k]);if(v===0)return;
+     w2.add({id:'wpf.'+i+'.'+tag+'.'+k,label:p.label+', '+(tag==='dir'?'direct factored':tag)+': '+k+' total = per-foot value × L',sym:SY[k][0],eq:SY[k][1]+'\\,L',sub:sfrN(v,3)+'\\cdot'+sfrN(L),value:v*L,unit:k.charAt(0)==='M'?'kip-ft':'kip'});});};
+    if(R.directMode)one('dir',p.pf.direct);else TYPES.forEach(tp=>one(tp,p.pf.loads&&p.pf.loads[tp]));});
+   its.push({type:'steps',scope:'wpf',steps:w2.steps,title:'Totals from the per-foot values (the values in the loads table above and used in every check)'});
+   its.push(...sfrNL('Set on the Pedestals input card, "Wall loads entered as"[[tab:in-peds| ↗]].',[['Per foot:','P, V_x, V_y and the moment about the wall\'s long axis (M_y for a wall along y, M_x for a wall along x).'],['Totals:','the moment about the horizontal axis normal to the wall, T_u and the load offsets, as entered.'],['Length:','L = ℓ_w, the longer plan side, as the wall checks use; a later change of b_x or b_y keeps the per-foot values.'],['Switching the entry:','converts the numbers with the current L, so the totals do not change.']]));
+   subs.push({title:'Wall loads entered per foot',key:'S-wpf',items:its});}
   const pl=planSVG(), se=sectSVG();
   subs.push({title:'Plan and elevation',items:[{type:'figure',svg:(pl.querySelector('svg')||{}).outerHTML||'',caption:'Plan: footing, pedestals, load points (red), kern (green), resultant of the governing bearing combination (red ⊗)'},
    {type:'figure',svg:(se.querySelector('svg')||{}).outerHTML||'',caption:'Elevation looking along −y: grade, soil cover, water table, P and V_x arrows'}]});
@@ -4883,7 +4940,7 @@ function sfxEcho(){
   (tps.length?tps:['D']).forEach(tp=>{const q=p.loads[tp];ld.push([p.label,tp,...COMP.map(c=>({t:f2(num(q[c])),n:true}))]);});});
  return [{type:'table',caption:'General inputs',head:['Quantity','Value','Unit'],rows:gen},
   {type:'table',caption:'Pedestal geometry',head:['Pedestal','x (ft)','y (ft)','b_x × b_y × h (ft)','Load offset e_x, e_y (ft)','Element type'],rows:geo},
-  {type:'table',caption:'Applied loads at top of pedestal'+(R.directMode?' (direct mode: the factored LRFD envelope as entered)':' (unfactored, by load type; load types with a non-zero component)'),
+  {type:'table',caption:'Applied loads at top of pedestal'+(R.directMode?' (direct mode: the factored LRFD envelope as entered)':' (unfactored, by load type; load types with a non-zero component)')+(R.peds.some(p=>p.pf)?'; '+R.peds.filter(p=>p.pf).map(p=>p.label).join(', ')+': entered per foot of wall, shown as the totals used (per-foot value × L, L = ℓ_w)':''),   /* SFWP */
    head:['Pedestal',R.directMode?'Basis':'Case','P (k)','Vx (k)','Vy (k)','Mx (k-ft)','My (k-ft)'],rows:ld,wide:true}];
 }
 /* the result lines the print report printed after each tab (one per dashboard chip) */
@@ -10167,7 +10224,7 @@ buildManualTab();
     if(!used.length) r.err.push('Map at least one load type to a pedestal row.');
     used.forEach(function(tr){
       if(from[tr].length>1) r.warn.push(from[tr].join(' + ')+' are added together into row '+tr+'.');
-      var cur=(ped.loads&&ped.loads[tr])||{P:0,Vx:0,Vy:0,Mx:0,My:0}, nw={};
+      var cur=sfdLdTotRow(ped,(ped.loads&&ped.loads[tr]))||{P:0,Vx:0,Vy:0,Mx:0,My:0}, nw={};   /* SFWP: totals */
       ['P','Vx','Vy','Mx','My'].forEach(function(k){
         var old=+cur[k]||0, v;
         if(k in add[tr]) v=(o.mode==='add'?old:0)+add[tr][k];
@@ -10180,6 +10237,7 @@ buildManualTab();
       if(!o.zeroOther && ['Vx','Vy','Mx','My'].some(function(k){ return !(k in add[tr]) && (+cur[k]||0)!==0; }))
         r.warn.push('Row '+tr+' of '+ped.label+' keeps its existing shear/moment ('+['Vx','Vy','Mx','My'].filter(function(k){ return !(k in add[tr]) && (+cur[k]||0)!==0; }).map(function(k){ return k+' '+f2(+cur[k]); }).join(', ')+'). Tick the option to set them to 0.');
     });
+    if(sfdWallPerFt(ped)) r.warn.push(ped.label+'\'s loads are entered per foot of wall. The hand-off loads are totals: importing switches '+ped.label+' to "Total (kip, kip-ft)" and converts its other values \u00d7 L = '+f2(sfdWallLen(ped))+' ft, so they keep the same totals.');   /* SFWP */
     if(state.loadMode==='direct') r.warn.push('The footing is in Direct factored mode. The by-load-type rows are filled but not used until you switch "Load input mode" to "By load type".');
     if(s.support==='fixed' && ax.c) r.warn.push('Fixed support: M is applied as '+ax.c+' = '+(ax.k<0?'−':'+')+'M (beam runs toward footing '+o.axis+'). Check this orientation against your framing plan.');
     return r;
@@ -10187,6 +10245,7 @@ buildManualTab();
   function apply(p,chk,o,via){
     var r=plan(p,chk,o); if(r.err.length) return r;
     var ped=state.peds[o.ped];
+    if(sfdWallPerFt(ped)) sfdLdEntrySet(o.ped,'total');   /* SFWP: incoming loads are totals */
     Object.keys(r.set).forEach(function(tr){
       if(!ped.loads[tr]) ped.loads[tr]={P:0,Vx:0,Vy:0,Mx:0,My:0};
       Object.keys(r.set[tr]).forEach(function(k){ ped.loads[tr][k]=r.set[tr][k]; });
@@ -10438,7 +10497,8 @@ buildManualTab();
     var m=mapAxes(c,o.ax), hp=Math.max(+ped.h||0,0), on=state.stab.shearCouple!=='off';
     var corr=o.hCorr && on && hp>0;
     if(corr){ m.My-=m.Vx*hp; m.Mx-=m.Vy*hp; }
-    var cur=ped.direct||{P:0,Vx:0,Vy:0,Mx:0,My:0}, set={};
+    var cur=sfdLdTotRow(ped,ped.direct||{P:0,Vx:0,Vy:0,Mx:0,My:0}), set={};   /* SFWP: totals */
+    if(sfdWallPerFt(ped)) r.warn.push(ped.label+'\'s loads are entered per foot of wall. The hand-off loads are totals: importing switches '+ped.label+' to "Total (kip, kip-ft)" and converts its other values \u00d7 L = '+f2(sfdWallLen(ped))+' ft, so they keep the same totals.');   /* SFWP */
     ['P','Vx','Vy','Mx','My'].forEach(function(k){ var v=Math.round(m[k]*1e6)/1e6; set[k]=v; r.changes.push({what:ped.label+' direct '+k,from:+cur[k]||0,to:v,u:k[0]==='M'?'kip-ft':'kips'}); });
     r.set=set; r.mapped=m; r.corr=corr; r.h=hp;
     if(o.toDirect && state.loadMode!=='direct') r.changes.push({what:'Load input mode',from:'By load type',to:'Direct factored',u:''});
@@ -10457,6 +10517,7 @@ buildManualTab();
   function apply(p,chk,o,via){
     var r=plan(p,chk,o); if(r.err.length) return r;
     var ped=state.peds[o.ped], c=chk.cases[o.ci];
+    if(sfdWallPerFt(ped)) sfdLdEntrySet(o.ped,'total');   /* SFWP: incoming loads are totals */
     if(!ped.direct) ped.direct={P:0,Vx:0,Vy:0,Mx:0,My:0};
     Object.keys(r.set).forEach(function(k){ ped.direct[k]=r.set[k]; });
     if(o.toDirect) state.loadMode='direct';
