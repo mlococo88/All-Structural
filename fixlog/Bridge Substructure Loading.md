@@ -3044,3 +3044,4 @@ function listTables() {
   1. The option is hidden under MassDOT (automatic removal).
   2. "Kept" means the full LS, with no partial reduction (as the calculator).
 - **Other copies:** none (the Abutment Calculator has its own implementation).
+- **Open item (not changed here, hand-off code being changed by the exchange work):** `shared/abutment-def.js` `fromSubLoads` sends `info.lsRed: null`. Its pull review row "LS with an approach slab" (anchor `'removed only under MassDOT rules'`) still describes SubLoads as removing LS only under MassDOT. Once this merges it should read "removed with the slab (3.11.6.5 option, default removed; MassDOT automatic)" and send `lsRed: lsSlabRem(earth)`.
