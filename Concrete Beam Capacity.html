@@ -1838,7 +1838,7 @@ function captureUI(){
 }
 /* DECE (2026-11-11): typing into a number field re-renders the whole input panel (refresh), which rebuilt the field from the
    committed number, so a partial entry was lost (&quot;9.&quot; -&gt; &quot;9&quot;, then &quot;96&quot;; &quot;-&quot; -&gt; &quot;0&quot;). The field being typed in is now kept
-   (its text, caret and undo) in place of its rebuilt copy, which lends it its attributes and its get/set (__nb). Display only:
+   (its text and caret) in place of its rebuilt copy, which lends it its attributes and its get/set (__nb). Display only:
    the committed value is the same parseFloat of the same text as before. A field whose committed value differs from its text
    (rounded, clamped, or set by a preset, e.g. bars 9.6 -&gt; 10, legs 1 -&gt; 2) shows the committed value when it is left (cbNumBlur),
    no longer while typing (before: &quot;12&quot; legs became &quot;22&quot;). */
@@ -6539,7 +6539,7 @@ function captureUI(){
 }
 /* DECE (2026-11-11): typing into a number field re-renders the whole input panel (refresh), which rebuilt the field from the
    committed number, so a partial entry was lost (&quot;9.&quot; -&gt; &quot;9&quot;, then &quot;96&quot;; &quot;-&quot; -&gt; &quot;0&quot;). The field being typed in is now kept
-   (its text, caret and undo) in place of its rebuilt copy, which lends it its attributes and its get/set (__nb). Display only:
+   (its text and caret) in place of its rebuilt copy, which lends it its attributes and its get/set (__nb). Display only:
    the committed value is the same parseFloat of the same text as before. A field whose committed value differs from its text
    (rounded, clamped, or set by a preset, e.g. bars 9.6 -&gt; 10, legs 1 -&gt; 2) shows the committed value when it is left (cbNumBlur),
    no longer while typing (before: &quot;12&quot; legs became &quot;22&quot;). */
