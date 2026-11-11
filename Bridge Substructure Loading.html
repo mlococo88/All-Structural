@@ -681,37 +681,7 @@ function svgOf(d, o = {}) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.map(n).join(' ')}" class="${o.cls || 'dwg'}" preserveAspectRatio="xMidYMid meet"${o.h ? ` style="max-height:${o.h}px"` : ''}>${out}</svg>`;
 }
 
-/* ---------- DXF (R12, inches, model space) ---------- */
-function dxfOf(parts, prefix = 'S-') {
-  const L = [], w = (c, v) => L.push(c, v), S = 12;
-  const lays = [...new Set(Object.values(LAY).map(l => l.dxf))];
-  const lt = d => { const l = Object.values(LAY).find(x => x.dxf === d); return l && l.lt || 'CONTINUOUS'; };
-  const aci = d => { const l = Object.values(LAY).find(x => x.dxf === d); return l ? l.aci : 7; };
-  w(0, 'SECTION'); w(2, 'HEADER'); w(9, '$ACADVER'); w(1, 'AC1009'); w(9, '$LTSCALE'); w(40, 24); w(9, '$INSBASE'); w(10, 0); w(20, 0); w(30, 0); w(0, 'ENDSEC');
-  w(0, 'SECTION'); w(2, 'TABLES');
-  w(0, 'TABLE'); w(2, 'LTYPE'); w(70, 3);
-  [['CONTINUOUS', 'Solid line', []], ['DASHED', '__ __ __', [0.5, -0.25]], ['CENTER', '____ _ ____', [1.25, -0.25, 0.25, -0.25]]].forEach(([n, d, pat]) => {
-    w(0, 'LTYPE'); w(2, n); w(70, 0); w(3, d); w(72, 65); w(73, pat.length); w(40, pat.reduce((a, b) => a + Math.abs(b), 0)); pat.forEach(p => w(49, p)); });
-  w(0, 'ENDTAB');
-  w(0, 'TABLE'); w(2, 'LAYER'); w(70, lays.length + 1);
-  w(0, 'LAYER'); w(2, '0'); w(70, 0); w(62, 7); w(6, 'CONTINUOUS');
-  lays.forEach(n => { w(0, 'LAYER'); w(2, prefix + n); w(70, 0); w(62, aci(n)); w(6, lt(n)); });
-  w(0, 'ENDTAB');
-  w(0, 'TABLE'); w(2, 'STYLE'); w(70, 1); w(0, 'STYLE'); w(2, 'STANDARD'); w(70, 0); w(40, 0); w(41, 1); w(50, 0); w(71, 0); w(42, 0.2); w(3, 'txt'); w(4, ''); w(0, 'ENDTAB');
-  w(0, 'ENDSEC');
-  w(0, 'SECTION'); w(2, 'ENTITIES');
-  const r = v => +(v * S).toFixed(4);
-  parts.forEach(({ d, dx, dy }) => d.p.forEach(q => {
-    const lay = prefix + ((LAY[q.L] || LAY.TEXT).dxf);
-    if (q.t === 'l') { w(0, 'LINE'); w(8, lay); w(10, r(q.a[0] + dx)); w(20, r(q.a[1] + dy)); w(30, 0); w(11, r(q.a[2] + dx)); w(21, r(q.a[3] + dy)); w(31, 0); }
-    else if (q.t === 'p') { w(0, 'POLYLINE'); w(8, lay); w(66, 1); w(70, q.closed ? 1 : 0); w(10, 0); w(20, 0); w(30, 0);
-      q.pts.forEach(p => { w(0, 'VERTEX'); w(8, lay); w(10, r(p[0] + dx)); w(20, r(p[1] + dy)); w(30, 0); }); w(0, 'SEQEND'); w(8, lay); }
-    else if (q.t === 'c') { w(0, 'CIRCLE'); w(8, lay); w(10, r(q.x + dx)); w(20, r(q.y + dy)); w(30, 0); w(40, r(q.r)); }
-    else if (q.t === 't') { const al = q.al === 'c' ? 1 : q.al === 'r' ? 2 : 0; w(0, 'TEXT'); w(8, lay); w(10, r(q.x + dx)); w(20, r(q.y + dy)); w(30, 0); w(40, r(q.h)); w(1, q.s.replace(/[\r\n]+/g, ' ').replace(/°/g, '%%d').replace(/[^\x20-\x7e]/g, '-')); if (q.rot) w(50, +q.rot.toFixed(4)); if (al) { w(72, al); w(11, r(q.x + dx)); w(21, r(q.y + dy)); w(31, 0); } }
-  }));
-  w(0, 'ENDSEC'); w(0, 'EOF');
-  return L.join('\r\n') + '\r\n';
-}
+/* ---------- DXF: the Drawings tab and Export DXF write the sheets with shared/dxf.js (SLDW, after the input check script) ---------- */
 
 /* ---------- plan ---------- */
 function planDwg(G, UG, o = {}) {   // o.ts (SLLAY): text height scale for the Geometry tab on screen; the DXF and print sheets use 1
@@ -1125,7 +1095,7 @@ function manualHtml() {
   <h3>Workflow</h3><ul><li>Define the spans, supports, and cross-section on the Bridge tab.</li><li>Enter the unfactored superstructure DC1, DC2, and DW reactions of every girder at every support on the Reactions tab, typed or pasted from a spreadsheet. The table follows the bridge: it grows or shrinks with the number of supports and girders.</li><li>Define each unit on the Units tab, or click it in the strip across the top.</li><li>Live load is calculated here from HL-93; it is never entered.</li></ul>
   <h3>Conventions</h3><ul><li>Stations are along CL bridge from CL bearing at Abut. 1. Transverse offsets are positive to the left looking ahead station.</li><li>Skew is the angle of the bearing line from the normal to CL bridge, positive when the left end of the line is ahead station.</li><li>Every transverse dimension of a unit (cap length, column spacing, footing length) is measured along its bearing line. Widths normal to the line are measured horizontally at right angles to it.</li><li>The deck profile is straight between the support elevations. Cross slope is not modeled: each bearing seat elevation is the deck elevation at that bearing's station minus the superstructure depth and the bearing height.</li><li>The top of cap is set by the highest seat less the pedestal height; the Geometry tab lists the resulting pedestal height at every bearing.</li><li>At an expansion joint over a pier, the unit has back and ahead bearing rows offset from CL pier, each with its own fixity.</li></ul>
   <h3>Fixity checks</h3><div class="slNLl">The superstructure is split into continuous segments at expansion joints.</div><ul class="slNLu"><li><b class="slNLk">Restraint:</b> each segment must be restrained longitudinally and transversely, either by fixed or guided bearings or by elastomeric bearing stiffness;</li><li><b class="slNLk">More than one fixed unit</b> is allowed and noted, because temperature forces then develop between them.</li></ul>
-  <h3>Drawings and DXF</h3><div class="slNLl">The plan, elevation, and unit drawings are built once as a list of lines, polylines, circles, text, and dimensions, rendered on screen and written to the DXF, so the file matches the screen.</div><ul class="slNLu"><li><b class="slNLk">DXF:</b> AutoCAD R12, full size in inches in model space, with layers prefixed S- (deck, girders, fixed and expansion bearings, substructure, hidden lines, footings, ground, centerlines, dimensions, text).</li><li><b class="slNLk">Dimensions</b> are drawn as lines and text in this phase.</li><li><b class="slNLk">Sheets</b> with borders and title blocks come in Phase 7.</li></ul>
+  <h3>Drawings and DXF</h3><div class="slNLl">The plan, elevation, and unit drawings are built once as a list of lines, polylines, circles, text, and dimensions, rendered on screen and written to the DXF, so the file matches the screen.</div><ul class="slNLu"><li><b class="slNLk">DXF:</b> AutoCAD R12 (the shared writer, shared/dxf.js), full size in inches in model space, with layers prefixed S- (deck, girders, fixed and expansion bearings, substructure, hidden lines, footings, ground, centerlines, dimensions, text, live load, border and title block).</li><li><b class="slNLk">Dimensions</b> are DIMENSION entities.</li><li><b class="slNLk">Sheets</b> with borders and title blocks are on the Drawings tab (below).</li></ul>
   <h3>Files</h3><ul class="slNLu"><li><b class="slNLk">Save</b> (Ctrl+S) keeps the project in this browser's list of saved projects (and on GitHub when Cloud sync is on);</li><li><b class="slNLk">Save as…</b> asks for a name and where;</li><li><b class="slNLk">Saved projects…</b> opens, renames, duplicates and deletes them.</li><li><b class="slNLk">Export JSON</b> writes the whole project as a .subloads.json file;</li><li><b class="slNLk">Import JSON</b> reads it back.</li><li><b class="slNLk">Autosave:</b> the app also keeps your last session in this browser (autosave).</li></ul></div></div>`;
 }
 
@@ -1198,15 +1168,7 @@ function openProject(j, file) {
   if (!(P.ui.sel >= 0 && P.ui.sel < P.units.length)) P.ui.sel = 0;
   syncSupports(); V3.homed = false; buildTabs(); buildSide(); recompute(); showTab(P.ui.tab); autosave(); flash(`Opened ${file}.`);   // OPN (2026-11-10): MODEL rebuilt before the open tab is drawn (it used the old supports)
 }
-function exportDxf() {
-  const G = MODEL.G, UG = MODEL.UG; if (!G || G.E.length) return flash('Fix the input errors on the Summary tab first.', 'fail');
-  const parts = [], gap = Math.max(G.L, G.Wd) * 0.12, plan = planDwg(G, UG), pe = plan.ext(); parts.push({ d: plan, dx: -pe.x0, dy: -pe.y0 });
-  const title = new Dwg(); title.text(0, pe.y1 - pe.y0 + gap * 0.5, `${P.meta.name || 'Bridge'}${P.meta.num ? ', ' + P.meta.num : ''}: substructure layout`, Math.max(G.L, 60) * 0.02, 'TEXT'); parts.push({ d: title, dx: 0, dy: 0 });
-  const lg = longDwg(G, UG, {}), le = lg.ext(); let y = -gap - (le.y1 - le.y0); parts.push({ d: lg, dx: -le.x0, dy: y - le.y0 });
-  y -= gap; let x = 0, rowH = 0; const unitsY = y;
-  UG.forEach((R, k) => { const d = unitDwg(G, UG, k), e = d.ext(); parts.push({ d, dx: x - e.x0, dy: unitsY - e.y1 }); x += (e.x1 - e.x0) + gap * 0.6; rowH = Math.max(rowH, e.y1 - e.y0); });
-  download(`${fname()}_substructure.dxf`, dxfOf(parts), 'application/dxf'); flash('DXF written: plan, elevation, and every unit, full size in inches.');
-}
+function exportDxf() { return sldwDownload(); }   /* SLDW (2026-11-11): Project → Export DXF writes the sheet set of the Drawings tab (shared/dxf.js) */
 function printReport() { slrPrintAny(); }   /* SLRX (2026-11-03): Print prints the Report tab from any tab (the Report script) */
 let _as = null; function autosave() { clearTimeout(_as); _as = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(P)); } catch (e) { } if (window.SLPL) SLPL.h.record(); /* PLIB: one undo step per change */ }, 300); }
 let _fl = null; function flash(m, c = 'pass') { const f = $('#flash'); f.textContent = m; f.className = 'on' + (c === 'fail' ? ' fail' : ''); clearTimeout(_fl); _fl = setTimeout(() => f.className = '', 3200); }
@@ -2606,36 +2568,6 @@ function sheetSet(G, UG) {
   });
   return sheets;
 }
-function sheetFrame(i, n, title, N, x0, y0) {   // 34 x 22 in sheet at 1 in = N ft; returns a Dwg in model feet
-  const d = new Dwg(), W = 34 * N, H = 22 * N, m = 0.5 * N, tb = 2.6 * N, t = v => v * N, m0 = P.meta;
-  d.rect(x0, y0, x0 + W, y0 + H, 'BORD').rect(x0 + m, y0 + m, x0 + W - m, y0 + H - m, 'BORD').line(x0 + m, y0 + m + tb, x0 + W - m, y0 + m + tb, 'BORD');
-  const cols = [0, 11, 19, 25, 29.5, 33.5].map(v => x0 + t(v) + (v === 0 ? m : 0)); cols.slice(1, -1).forEach(x => d.line(x, y0 + m, x, y0 + m + tb, 'BORD'));
-  const r1 = y0 + m + tb - t(0.45), r2 = y0 + m + t(1.3), r3 = y0 + m + t(0.5);
-  d.text(cols[0] + t(0.2), r1, 'PROJECT', t(0.14), 'TBLK').text(cols[0] + t(0.2), r2, (m0.name || 'Bridge').slice(0, 60), t(0.32), 'TBLK').text(cols[0] + t(0.2), r3, m0.num ? `Project no. ${m0.num}` : '', t(0.2), 'TBLK');
-  d.text(cols[1] + t(0.2), r1, 'SHEET TITLE', t(0.14), 'TBLK').text(cols[1] + t(0.2), r2, title.slice(0, 44), t(0.26), 'TBLK').text(cols[1] + t(0.2), r3, `Scale: 1" = ${N}'-0"`, t(0.2), 'TBLK');
-  d.text(cols[2] + t(0.2), r1, 'DESIGNED / CHECKED', t(0.14), 'TBLK').text(cols[2] + t(0.2), r2, `${m0.by || '—'} / ${m0.chk || '—'}`, t(0.22), 'TBLK').text(cols[2] + t(0.2), r3, m0.date || '', t(0.2), 'TBLK');
-  d.text(cols[3] + t(0.2), r1, 'SPECIFICATION', t(0.14), 'TBLK').text(cols[3] + t(0.2), r2, 'AASHTO LRFD 10th Ed.', t(0.2), 'TBLK').text(cols[3] + t(0.2), r3, 'SubLoads', t(0.2), 'TBLK');
-  d.text(cols[4] + t(0.2), r1, 'SHEET', t(0.14), 'TBLK').text(cols[4] + t(0.2), r2, `${i} of ${n}`, t(0.32), 'TBLK');
-  return d;
-}
-function exportSheets() {
-  const G = MODEL.G, UG = MODEL.UG; if (!G || G.E.length) return flash('Fix the input errors on the Summary tab first.', 'fail');
-  const sheets = sheetSet(G, UG), n = sheets.length + 1, parts = []; let xOff = 0;
-  const fixText = (comp, N) => { comp.parts.forEach(p => { const ts = p.d.p.filter(e => e.t === 't'); if (!ts.length) return; const hs = ts.map(e => e.h).sort((x, y) => x - y), med = hs[Math.floor(hs.length / 2)] || 1, f = Math.min(2.5, Math.max(0.4, 0.10 * N / med)); ts.forEach(e => { e.h *= f; }); }); };   // plotted text about 0.10 in at the sheet scale
-  const place = (i, title, comp) => { const N = SCALES.find(s => comp.w <= 32 * s && comp.h <= 17.4 * s) || SCALES[SCALES.length - 1], fr = sheetFrame(i, n, title, N, xOff, 0); fixText(comp, N);
-    parts.push({ d: fr, dx: 0, dy: 0 }); const cx = xOff + 17 * N, cy = (0.5 + 2.6 + 0.3) * N + 17.4 * N / 2; comp.parts.forEach(p => parts.push({ d: p.d, dx: p.dx + cx - comp.w / 2, dy: p.dy + cy + comp.h / 2 })); xOff += 34 * N + 4 * N; return N; };
-  // sheet 1: index and basis
-  const idx = new Dwg(), lh = 0.9; let y = 0; const tl = (s, hh = 0.55, w) => { idx.text(0, y, s, hh, 'TEXT', 'l', 0, w ? { w } : {}); y -= hh * 1.9; };
-  tl(`${P.meta.name || 'Bridge'}: substructure loads`, 1.1, 700); tl('Sheet index', 0.7, 700); tl('1  Index and design basis'); sheets.forEach((s, i) => tl(`${i + 2}  ${s.title}`)); y -= lh;
-  tl('Design basis', 0.7, 700); tl('AASHTO LRFD Bridge Design Specifications, 10th Edition, Section 3.');
-  const T = tempRange(), S0 = eqSite(), BL = brLanes(G); tl(`Spans ${G.spans.map(s => f1(s)).join(' + ')} ft; ${G.nb} girders; roadway ${f2(G.rw)} ft, ${G.NL} design lanes; IM ${f0(nz(P.br.IM))}%.`);
-  tl(`Braking: ${BL.n} lane(s) in one direction. Wind: V = ${f0(nz(P.br.V))} mph, exposure ${P.br.exp || 'C'}. Temperature: Procedure ${T.proc}, ${f0(T.tmin)} to ${f0(T.tmax)} deg F, setting ${f0(T.ts)} deg F.`);
-  tl(S0.ok ? `Seismic: AASHTO-USGS risk-targeted Sa (3.10.4.1), site class ${S0.sc}; As ${f3(S0.As)}, SD1 ${f3(S0.SD1)}; Zone ${S0.zone}; ${OPC_NAME[S0.op]} bridge.` : 'Seismic: ground motion not entered.');
-  (P.meta.notes || '').split(/\n/).filter(Boolean).slice(0, 12).forEach(l => tl(l.slice(0, 120)));
-  place(1, 'Index and design basis', compose([idx], 1));
-  sheets.forEach((s, i) => place(i + 2, s.title, s.comp));
-  download(`${fname()}_substructure_sheets.dxf`, dxfOf(parts), 'application/dxf'); flash(`DXF written: ${n} sheets (34 × 22 in, R12, full size in inches, plot each border at its title-block scale).`);
-}
 
 /* ---------- 3D: loads and lane layouts ---------- */
 function v3Loads() {
@@ -2717,11 +2649,11 @@ function pendingMd() { const g = {}; PENDING.forEach(([a, t]) => (g[a] = g[a] ||
     .modal-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
     `; document.head.appendChild(css);   /* SLRX (2026-11-03): the package's print CSS (#print-area, .rpt-*) removed */
   const rt = renderTab; renderTab = function () { rt(); const id = P.ui.tab, el = document.getElementById('tab-' + id); if (el && TAB_SETS[id] && !/Fix the/.test(el.textContent.slice(0, 200))) { try { el.insertAdjacentHTML('beforeend', diagramCard(P.ui.sel, TAB_SETS[id])); } catch (e) { } } };
-  const mh = manualHtml; manualHtml = function () { return mh().replace('<h3>Files</h3>', `<h3>Drawings, 3D, and printing (Phase 7)</h3><ul><li><b>Load diagrams</b> on each load tab show the forces as applied to the selected unit; they come from the same load cases the analysis uses.</li><li><b>Export DXF</b> writes a sheet set: an index and design basis sheet, the plan, the elevation, and for every unit its elevation, its load diagrams, and its governing live load lane arrangements.<ul class="slNLu"><li><b class="slNLk">File:</b> the file is an AutoCAD 2018 DXF written the same way as GirderDetail's: the app builds the drawing list and an embedded Python writer runs ezdxf in the browser through Pyodide (loaded from the internet on the first export).</li><li><b class="slNLk">Model space:</b> all drawings are in model space at full size (inches) with real DIMENSION entities.</li><li><b class="slNLk">Sheets:</b> each sheet is its own layout tab (01, 02, ...) with the 34 × 22 in border and title block in paper space, a locked viewport at the smallest standard scale that fits (stated in the title block), and a DWG To PDF ANSI full-bleed D page setup with monochrome.ctb, ready for Publish.</li><li><b class="slNLk">Load summary:</b> each unit also gets a factored load summary sheet.</li><li><b class="slNLk">Offline,</b> the export falls back to the R12 model-space version (borders drawn around the drawings in model space).</li></ul></li><li><b>3D</b>: choose a load to show its forces on every unit as arrows sized by magnitude, or <i>Live load lanes</i> to show the arrangement selected on the Live load tab.</li><li><b>Print</b> (and Ctrl+P or the browser's Print, from any tab) prints the Report tab; its Include boxes choose the calculation package's chapters and units it holds.</li></ul>${pendingHtml()}<h3>Verification</h3><div class="slNLl">Checked against FHWA's LRFD Steel Girder Superstructure Design Example, Design Step 8 (hammerhead pier, two 120 ft spans, five girders), rebuilt in SubLoads, and against independent calculations.</div><ul class="slNLu"><li><b class="slNLk">FHWA example:</b> pier self-weight, braking, wind on the superstructure and live load, the vertical wind couples, and the lever-rule bearing reactions for the published lane positions match the example to the rounding shown;</li><li><b class="slNLk">Live load:</b> the live load is about 1.4% lower because the example used a nonprismatic girder.</li><li><b class="slNLk">Independent checks:</b> the bent frame matches anaStruct exactly; the seismic transverse model matches an independent finite element solution; temperature, water, ice, barge, K<sub>z</sub>, site factors, and the combinations match hand calculations.</li><li><b class="slNLk">Report:</b> the full comparison is in the verification report.</li></ul><h3>Files</h3>`); };
+  const mh = manualHtml; manualHtml = function () { return mh().replace('<h3>Files</h3>', `<h3>Drawings, 3D, and printing (Phase 7)</h3><ul><li><b>Load diagrams</b> on each load tab show the forces as applied to the selected unit; they come from the same load cases the analysis uses.</li><li><b>Drawings</b> (output tab, before Manual) and <b>Export DXF</b> (Project tab, Project files) write the same sheet set: an index and design basis sheet, the plan, the elevation, and for every unit its elevation, its load diagrams, and its governing live load lane arrangements, then each unit's factored load summary.<ul class="slNLu"><li><b class="slNLk">File:</b> one AutoCAD R12 DXF written in the browser by the shared writer (shared/dxf.js), the same as the other bridge tools; nothing is downloaded, so it works offline.</li><li><b class="slNLk">Model space:</b> every sheet is drawn at full size (inches) inside its border and title block, side by side, with DIMENSION entities; plot each sheet at the scale in its title block.</li><li><b class="slNLk">Paper:</b> D (34 × 22 in, the default) or B (17 × 11 in), chosen on the Drawings tab (kept in this browser); each sheet at the smallest standard scale 1" = N'-0" at which it fits. On paper B a sheet of several load diagrams or lane arrangements is split into numbered sheets when its text would otherwise crowd.</li><li><b class="slNLk">Preview and print:</b> the Drawings tab shows each sheet from the same entities as the file (zoom and pan) and prints one 11 × 17 in landscape page per sheet (paper D: half size).</li><li><b class="slNLk">Schematic:</b> the drawings are generated from the inputs and the results as computed; labels are moved clear of other text and lines.</li></ul></li><li><b>3D</b>: choose a load to show its forces on every unit as arrows sized by magnitude, or <i>Live load lanes</i> to show the arrangement selected on the Live load tab.</li><li><b>Print</b> (and Ctrl+P or the browser's Print, from any tab) prints the Report tab; its Include boxes choose the calculation package's chapters and units it holds.</li></ul>${pendingHtml()}<h3>Verification</h3><div class="slNLl">Checked against FHWA's LRFD Steel Girder Superstructure Design Example, Design Step 8 (hammerhead pier, two 120 ft spans, five girders), rebuilt in SubLoads, and against independent calculations.</div><ul class="slNLu"><li><b class="slNLk">FHWA example:</b> pier self-weight, braking, wind on the superstructure and live load, the vertical wind couples, and the lever-rule bearing reactions for the published lane positions match the example to the rounding shown;</li><li><b class="slNLk">Live load:</b> the live load is about 1.4% lower because the example used a nonprismatic girder.</li><li><b class="slNLk">Independent checks:</b> the bent frame matches anaStruct exactly; the seismic transverse model matches an independent finite element solution; temperature, water, ice, barge, K<sub>z</sub>, site factors, and the combinations match hand calculations.</li><li><b class="slNLk">Report:</b> the full comparison is in the verification report.</li></ul><h3>Files</h3>`); };
   const bt = buildTabs; buildTabs = function () { bt(); const bar = $('.v3-bar'); if (bar && !$('#v3-load')) bar.insertAdjacentHTML('beforeend', `<select id="v3-load" aria-label="Show loads"><option value="none">No loads</option><option value="ll">Live load lanes</option><option value="br">Braking</option><option value="ce">Centrifugal</option><option value="ws">Wind, Str. III 0°</option><option value="wl">Wind on live load</option><option value="tu">Temperature rise</option><option value="wa">Water, design flood</option><option value="ic">Ice</option><option value="eqL">Seismic, long.</option><option value="eqT">Seismic, trans.</option><option value="cv">Vessel collision</option><option value="ct">Vehicle collision</option><option value="eh">Earth loads (abutments), soil on footings</option></select>`); const s = $('#v3-load'); if (s) s.value = P.ui.v3.load || 'none'; };
   const vb = v3Build; v3Build = function () { vb(); try { v3Loads(); } catch (e) { } };
 })();
-exportDxf = exportSheets;   /* SLRX (2026-11-03): Print prints the Report tab (printReport); the package dialog (rptModal) is retired */
+/* SLRX (2026-11-03): Print prints the Report tab (printReport); the package dialog (rptModal) is retired */
 document.addEventListener('change', e => { if (e.target.id === 'v3-load') { P.ui.v3.load = e.target.value; try { v3Loads(); } catch (err) { } autosave(); }
   });
 document.addEventListener('click', e => { if (e.target.id === 'pend-dl') download('SubLoads_open_items.md', pendingMd(), 'text/markdown'); });
@@ -3248,66 +3180,6 @@ function concHtml(k) {
   const j = PENDING.findIndex(p => /^Strength II \(permit\) is not included\.$/.test(p[1])); if (j >= 0) PENDING.splice(j, 1, ['Combinations', 'Load factors are editable per limit state (defaults AASHTO LRFD 10th Ed. Table 3.4.1-1, with γTU = 1.00 for force effects per Table 3.4.1-6); Strength II (permit) is not included.']);
   const vi = PENDING.findIndex(p => /AASHTO static method can underpredict/.test(p[1])); if (vi >= 0) PENDING.splice(vi, 1, ['Vessel collision', 'A user dynamic amplification factor is available; no amplification method (e.g. SBIA) is built in.']);
 })();
-/* =====================================================================
-   DXF sheet set with paper space layouts, the GirderDetail way: the app builds a JSON spec
-   (model-space entities in inches, real DIMENSIONs, one sheet per layout) and an embedded
-   Python writer runs ezdxf through Pyodide in the browser to write an AutoCAD 2018 DXF.
-   First export loads Pyodide and ezdxf from the internet; offline, the R12 model-space
-   version is written instead.
-   ===================================================================== */
-const SL_DXF_PY = "\"\"\"SubLoads DXF writer: spec (JSON from the app) -> AutoCAD 2018 DXF with model space\ndrawings at full size (inches) and one paper space layout per sheet (border, title block,\nlocked viewport at the sheet scale). Adapted from the GirderDetail writer. Runs in the\nbrowser through Pyodide, or locally: python sl_dxf.py spec.json out.dxf\"\"\"\nimport io, json, re\nimport ezdxf\nfrom ezdxf import units\nfrom ezdxf.enums import TextEntityAlignment\n\nAL = {0: TextEntityAlignment.LEFT, 1: TextEntityAlignment.BOTTOM_CENTER, 2: TextEntityAlignment.BOTTOM_RIGHT}\n\n\ndef _dimstyle(doc, k, txt):\n    name = f'SL{int(round(k))}'\n    if name in doc.dimstyles:\n        return name\n    ds = doc.dimstyles.new(name)\n    for a, v in dict(dimscale=k, dimtxt=txt, dimasz=0.07, dimtsz=0.07, dimexo=0.06, dimexe=0.12, dimgap=0.05,\n                     dimtad=1, dimtih=0, dimtoh=0, dimlunit=4, dimdec=3, dimfrac=2, dimzin=3, dimtxsty='SL',\n                     dimclrd=0, dimclre=0, dimclrt=0, dimtix=0, dimtofl=1, dimdsep=46).items():\n        ds.dxf.set(a, v)\n    return name\n\n\ndef _title_block(lay, sh, W, H, lyr):\n    B, T = lyr['BRDR'], lyr['TBLK']\n    lay.add_lwpolyline([(0, 0), (W, 0), (W, H), (0, H)], close=True, dxfattribs={'layer': B})\n    lay.add_lwpolyline([(0.75, 0.5), (W - 0.5, 0.5), (W - 0.5, H - 0.5), (0.75, H - 0.5)], close=True, dxfattribs={'layer': B, 'lineweight': 70})\n    ty, th = 0.5, 2.6\n    lay.add_line((0.75, ty + th), (W - 0.5, ty + th), dxfattribs={'layer': T})\n    sx = W / 34.0\n    for i, (cx, lab, val) in enumerate(sh['cells']):\n        x = cx * sx\n        if i:\n            lay.add_line((x, ty), (x, ty + th), dxfattribs={'layer': T})\n        lay.add_text(lab, height=0.1, dxfattribs={'layer': T, 'style': 'SL'}).set_placement((x + 0.15, ty + th - 0.35))\n        for j, line in enumerate(str(val).upper().split('\\n')[:3]):\n            lay.add_text(line, height=0.18 if j == 0 else 0.12, dxfattribs={'layer': T, 'style': 'SL'}).set_placement((x + 0.15, ty + 1.3 - j * 0.35))\n    lay.add_text(sh['foot'], height=0.08, dxfattribs={'layer': T, 'style': 'SL'}).set_placement((0.9, ty + 0.25))\n\n\ndef _mono(lay):\n    # always plot black and white: color-dependent plot style table monochrome.ctb, plot with plot styles on\n    dl = lay.dxf_layout\n    dl.dxf.current_style_sheet = 'monochrome.ctb'\n    dl.dxf.plot_layout_flags = dl.dxf.plot_layout_flags | 32\n\n\ndef build(spec_json):\n    S = json.loads(spec_json)\n    doc = ezdxf.new('R2018', setup=True)\n    doc.units = units.IN\n    for k, v in {'$PSTYLEMODE': 1, '$LUNITS': 4, '$LUPREC': 3, '$INSUNITS': 1, '$MEASUREMENT': 0, '$PSLTSCALE': 1, '$LTSCALE': 1.0}.items():\n        doc.header[k] = v\n    if 'SL' not in doc.styles:\n        doc.styles.add('SL', font='romans.shx')\n    for name, o in S['layers'].items():\n        if name not in doc.layers:\n            lt = o.get('lt', 'CONTINUOUS')\n            doc.layers.add(name, color=o.get('color', 7), linetype=lt if lt in doc.linetypes else 'CONTINUOUS')\n    msp = doc.modelspace()\n    for e in S['entities']:\n        t, a, p = e['t'], {'layer': e['l']}, e['pts']\n        if t == 'LINE':\n            msp.add_line(p[0], p[1], dxfattribs=a)\n        elif t == 'PL':\n            msp.add_lwpolyline(p, close=bool(e.get('closed')), dxfattribs=a)\n        elif t == 'CIRCLE':\n            msp.add_circle(p[0], e['r'], dxfattribs=a)\n        elif t == 'TEXT':\n            a.update(style='SL', rotation=e.get('rot', 0) or 0)\n            msp.add_text(e['s'], height=e['hh'], dxfattribs=a).set_placement(p[0], align=AL.get(e.get('j', 0), TextEntityAlignment.LEFT))\n    for d in S.get('dims', []):\n        ds = _dimstyle(doc, d['k'], S.get('txt', 0.1))\n        dim = msp.add_aligned_dim(p1=d['p1'], p2=d['p2'], distance=d['dist'], text=d.get('txt') or '<>', dimstyle=ds, dxfattribs={'layer': d['l']})\n        dim.render()\n    # paper space: one layout per sheet\n    lyr = {}\n    for n, c in (('BRDR', 7), ('TBLK', 7), ('VPRT', 8)):\n        nm = S['prefix'] + n\n        if nm not in doc.layers:\n            L = doc.layers.add(nm, color=c)\n            if n == 'VPRT':\n                L.dxf.plot = 0\n        lyr[n] = nm\n    for i, sh in enumerate(S['sheets']):\n        W, H, k = sh['W'], sh['H'], sh['k']\n        name = re.sub(r'[<>/\\\\\":;?*|,=`]', '', f\"{i + 1:02d} {sh['title']}\")[:60].strip()\n        lay = doc.layouts.new(name)\n        media = 'ANSI_full_bleed_D' if W > 20 else 'ANSI_full_bleed_B'\n        lay.page_setup(size=(W, H), margins=(0, 0, 0, 0), units='inch', scale=(1, 1), name=media, device='DWG To PDF.pc3')   # ready for PUBLISH\n        _mono(lay)\n        _title_block(lay, sh, W, H, lyr)\n        # viewport over the drawing area; model point m0 maps to paper point p0\n        x0, y0, x1, y1 = 1.0, 3.3, W - 0.75, H - 0.75\n        cxp, cyp = (x0 + x1) / 2, (y0 + y1) / 2\n        (m0x, m0y), (p0x, p0y) = sh['m0'], sh['p0']\n        vp = lay.add_viewport(center=(cxp, cyp), size=(x1 - x0, y1 - y0),\n                              view_center_point=(m0x + (cxp - p0x) * k, m0y + (cyp - p0y) * k), view_height=(y1 - y0) * k,\n                              dxfattribs={'layer': lyr['VPRT']})\n        vp.dxf.flags = vp.dxf.flags | 16384   # display locked\n    _mono(doc.layouts.get('Model'))\n    if 'Layout1' in doc.layouts and len(S['sheets']):\n        doc.layouts.delete('Layout1')\n    s = io.StringIO()\n    doc.write(s)\n    return s.getvalue()\n\n\nif __name__ == '__main__':\n    import sys\n    if len(sys.argv) > 2:   # command line only; in the browser the app calls build() directly\n        open(sys.argv[2], 'w').write(build(open(sys.argv[1]).read()))\n";
-let SL_PY = null;
-const dxfStr = s => String(s).replace(/<[^>]+>/g, '').replace(/[°º]/g, '%%d').replace(/[⌀Ø]/g, '%%c').replace(/[×]/g, 'x').replace(/[−–—]/g, '-').replace(/℄/g, 'CL').replace(/[′]/g, "'").replace(/[″]/g, '"').replace(/[^\x20-\x7e%]/g, '');
-async function slPy(msg) {
-  if (SL_PY) return SL_PY;
-  msg('Loading the Python runtime (first export only)...');
-  if (!window.loadPyodide) await new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js'; sc.onload = res; sc.onerror = () => rej(new Error('Could not load the Python runtime from the internet.')); document.head.appendChild(sc); });
-  const py = await loadPyodide(); msg('Loading the DXF library (first export only)...');
-  await py.loadPackage(['micropip', 'numpy']); await py.runPythonAsync("import micropip\nawait micropip.install('ezdxf')"); py.runPython(SL_DXF_PY); SL_PY = py; return py;
-}
-/* the spec: every sheet placed in model space side by side, as in the R12 version */
-function slDxfSpec() {
-  const G = MODEL.G, UG = MODEL.UG, sheets = sheetSet(G, UG), n = sheets.length + 1, prefix = 'S-', ents = [], dims = [], out = []; let xOff = 0;
-  const layers = {}; Object.values(LAY).forEach(l => { layers[prefix + l.dxf] = { color: l.aci || 7, lt: l.lt || 'CONTINUOUS' }; });
-  const lyOf = q => prefix + ((LAY[q.L] || LAY.TEXT).dxf), I = v => +(v * 12).toFixed(4), m = P.meta;
-  const fixText = (comp, N) => { comp.parts.forEach(p => { const ts = p.d.p.filter(e => e.t === 't'); if (!ts.length) return; const hs = ts.map(e => e.h).sort((x, y) => x - y), med = hs[Math.floor(hs.length / 2)] || 1, f = Math.min(2.5, Math.max(0.4, 0.10 * N / med)); ts.forEach(e => { e.h *= f; }); }); };
-  const place = (i, title, comp) => { const N = SCALES.find(s => comp.w <= 32 * s && comp.h <= 17.4 * s) || SCALES[SCALES.length - 1]; fixText(comp, N);
-    const cx = xOff + 17 * N, cy = 12.1 * N;
-    comp.parts.forEach(p => { const dx = p.dx + cx - comp.w / 2, dy = p.dy + cy + comp.h / 2;
-      p.d.p.forEach(q => { if (q.dimId) return; const l = lyOf(q);
-        if (q.t === 'l') ents.push({ t: 'LINE', l, pts: [[I(q.a[0] + dx), I(q.a[1] + dy)], [I(q.a[2] + dx), I(q.a[3] + dy)]] });
-        else if (q.t === 'p') ents.push({ t: 'PL', l, closed: !!q.closed, pts: q.pts.map(pt => [I(pt[0] + dx), I(pt[1] + dy)]) });
-        else if (q.t === 'c') ents.push({ t: 'CIRCLE', l, r: I(q.r), pts: [[I(q.x + dx), I(q.y + dy)]] });
-        else if (q.t === 't') { const s = dxfStr(q.s); if (s.trim()) ents.push({ t: 'TEXT', l, s, hh: I(q.h), rot: q.rot || 0, j: q.al === 'c' ? 1 : q.al === 'r' ? 2 : 0, pts: [[I(q.x + dx), I(q.y + dy)]] }); } });
-      (p.d.dims || []).forEach(dm => { let p1 = [I(dm.x1 + dx), I(dm.y1 + dy)], p2 = [I(dm.x2 + dx), I(dm.y2 + dy)], dist = I(dm.off);
-        const ddx = p2[0] - p1[0], ddy = p2[1] - p1[1]; if (ddx < -1e-6 || (Math.abs(ddx) <= 1e-6 && ddy < 0)) { [p1, p2] = [p2, p1]; dist = -dist; }   // always left to right (or upward) so the text reads upright; the offset side is mirrored with the swap
-        dims.push({ l: prefix + ((LAY[dm.L] || LAY.DIMS).dxf), k: N * 12, p1, p2, dist, txt: dxfStr(dm.label) }); }); });
-    out.push({ title, W: 34, H: 22, k: N * 12, m0: [I(cx), I(cy)], p0: [17.125, 12.275],
-      cells: [[0.75, 'PROJECT', `${m.name || 'Bridge'}${m.num ? '\nProject no. ' + m.num : ''}`], [11, 'SHEET TITLE', `${dxfStr(title).slice(0, 44)}\nScale: 1" = ${N}'-0"`], [19, 'DESIGNED / CHECKED', `${m.by || '-'} / ${m.chk || '-'}`], [24, 'DATE', m.date || new Date().toISOString().slice(0, 10)], [28, 'SPECIFICATION', `AASHTO LRFD 10th Ed.${isMass() ? '\nMassDOT BM Part I' : ''}`], [31.5, 'SHEET', `${i} OF ${n}`]],
-      foot: 'SubLoads: substructure loads. Unfactored and factored loads per AASHTO LRFD Section 3; verify before use.' });
-    xOff += 34 * N + 4 * N; };
-  const idx = new Dwg(); let y = 0; const tl = (s, hh = 0.55) => { idx.text(0, y, s, hh, 'TEXT', 'l'); y -= hh * 1.9; };
-  tl(`${m.name || 'Bridge'}: substructure loads`, 1.1); tl('Sheet index', 0.7); tl('1  Index and design basis'); sheets.forEach((s, i) => tl(`${i + 2}  ${s.title}`)); y -= 0.9;
-  tl('Design basis', 0.7); tl('AASHTO LRFD Bridge Design Specifications, 10th Edition, Section 3.' + (isMass() ? ' MassDOT Bridge Manual Part I, Chapter 3 (written to the AASHTO LRFD 9th Ed.).' : ''));
-  const T = tempRange(), S0 = eqSite(), BL = brLanes(G); tl(`Spans ${G.spans.map(s => f1(s)).join(' + ')} ft; ${G.nb} girders; roadway ${f2(G.rw)} ft, ${G.NL} design lanes; IM ${f0(nz(P.br.IM))}%.`);
-  tl(`Braking: ${BL.n} lane(s) in one direction. Wind: V = ${f0(nz(P.br.V))} mph, exposure ${P.br.exp || 'C'}. Temperature: ${T.proc}, ${f0(T.tmin)} to ${f0(T.tmax)} deg F.`);
-  tl(S0.ok ? `Seismic: AASHTO-USGS risk-targeted Sa (3.10.4.1), site class ${S0.sc}; As ${f3(S0.As)}, SD1 ${f3(S0.SD1)}; Zone ${S0.zone}; ${OPC_NAME[S0.op]} bridge.` : 'Seismic: ground motion not entered.');
-  (m.notes || '').split(/\n/).filter(Boolean).slice(0, 12).forEach(l => tl(l.slice(0, 120)));
-  place(1, 'Index and design basis', compose([idx], 1)); sheets.forEach((s, i) => place(i + 2, s.title, s.comp));
-  return { prefix, txt: 0.10, layers, entities: ents, dims, sheets: out };
-}
-const exportDxfR12 = exportSheets;   // model-space sheets (R12), the offline fallback
-async function exportDxfLayouts() {
-  const G = MODEL.G; if (!G || G.E.length) return flash('Fix the input errors on the Summary tab first.', 'fail');
-  let spec; try { spec = slDxfSpec(); } catch (e) { console.error(e); return flash('The DXF could not be built: ' + e.message, 'fail'); }
-  window.SL_DXF_SPEC = spec; const msg = t => flash(t);
-  try { const py = await slPy(msg); msg('Writing the drawing...'); await new Promise(z => setTimeout(z, 30)); py.globals.set('SL_SPEC', JSON.stringify(spec)); const text = py.runPython('build(SL_SPEC)');
-    download(`${fname()}_substructure_sheets.dxf`, text, 'application/dxf');
-    flash(`DXF exported (AutoCAD 2018): ${spec.sheets.length} layouts, ${spec.dims.length} dimensions; drawings in model space at full size, each layout with its title block and a locked viewport at the sheet scale.`); }
-  catch (e) { console.warn(e); flash(`Layouts could not be written (${e.message}). Writing the model-space version (R12) instead.`, 'fail'); setTimeout(() => exportDxfR12(), 400); }
-}
-exportDxf = exportDxfLayouts;
-{ const i = PENDING.findIndex(p => /DXF dimensions are drawn/.test(p[1])); if (i >= 0) PENDING.splice(i, 1); }
 /* =====================================================================
    Report completeness and input checks from the review of the printed package:
    wide tables split for print, cards kept with their headers, governing-force summary,
@@ -4518,7 +4390,7 @@ function slxWire(T) {
 /* Print: from any tab the Report is shown (not saved: SLR.on), printed, and the tab of before comes back after printing */
 const SLRX = { back: null };
 function slrPrintPrep() {
-  if (SLR.on || !window.SharedReport || !window.SharedSteps || document.body.classList.contains('rp-printing')) return false;
+  if (SLR.on || !window.SharedReport || !window.SharedSteps || document.body.classList.contains('rp-printing') || document.body.classList.contains('sdx-printing')) return false;   // SLDW: the drawing sheets print alone (SharedDxf.printSheets)
   SLRX.back = P.ui.tab; showTab('report'); return true;
 }
 function slrPrintAny() {
@@ -4921,7 +4793,7 @@ const SLDW_AW = (() => { const W = { ' ': 278, '!': 278, '"': 355, '#': 556, '$'
   for (let i = 0; i < 10; i++) W[String(i)] = 556; return W; })();
 const sldwTW = (s, hh) => { let w = 0; for (const c of String(s).replace(/%%[dcp]/g, 'o')) w += SLDW_AW[c] != null ? SLDW_AW[c] : 600; return w / 1000 * hh; };
 function sldwFree(D, i0, i1) {
-  const E = D.E, X = SharedDxf, mg = 0.06;
+  const E = D.E, X = SharedDxf, mg = 0.1;
   const boxT = (e, dx, dy) => { const hh = e.hh, w = sldwTW(e.s, hh), r = (e.rot || 0) * Math.PI / 180, c = Math.cos(r), s = Math.sin(r), sh = e.j === 2 ? -w : e.j === 1 ? -w / 2 : 0;
     const ax = e.pts[0][0] + (dx || 0), ay = e.pts[0][1] + (dy || 0), Pp = (u, v) => [ax + u * c - v * s, ay + u * s + v * c];
     return [Pp(sh - mg * hh, -(0.1 + mg) * hh), Pp(sh + w + mg * hh, -(0.1 + mg) * hh), Pp(sh + w + mg * hh, (0.82 + mg) * hh), Pp(sh - mg * hh, (0.82 + mg) * hh)]; };
@@ -4955,7 +4827,7 @@ function sldwFree(D, i0, i1) {
     for (let i = i0; i < i1; i++) { const e = E[i];
       if (e.t === 'TEXT' && String(e.s).trim()) { if (clear(i, [boxT(e)])) continue;
         const hh = e.hh, r = (e.rot || 0) * Math.PI / 180, u = [Math.cos(r), Math.sin(r)], v = [-u[1], u[0]], C = [];
-        for (let a = -24; a <= 24; a++) for (let b = -30; b <= 30; b++) if (a || b) C.push([a * 0.5 * hh, b * 0.35 * hh, Math.abs(b) * 0.35 + Math.abs(a) * 0.5 * 0.8]);
+        for (let a = -24; a <= 24; a++) for (let b = -80; b <= 80; b++) if ((a || b) && (Math.abs(b) <= 30 || a % 4 === 0)) C.push([a * 0.5 * hh, b * 0.35 * hh, Math.abs(b) * 0.35 + Math.abs(a) * 0.5 * 0.8]);
         C.sort((p, q) => p[2] - q[2]); let ok = false;
         for (const [du, dv] of C) { const dx = u[0] * du + v[0] * dv, dy = u[1] * du + v[1] * dv; if (!clear(i, [boxT(e, dx, dy)])) continue;
           e.pts[0][0] += dx; e.pts[0][1] += dy; GEO[i] = geo(i); moved++; ok = true; break; }
@@ -5000,12 +4872,12 @@ function sldwBuild(paperId) {
   tl(`Braking: ${BL.n} lane(s) in one direction. Wind: V = ${f0(nz(P.br.V))} mph, exposure ${P.br.exp || 'C'}. Temperature: Procedure ${T.proc}, ${f0(T.tmin)} to ${f0(T.tmax)} deg F, setting ${f0(T.ts)} deg F.`);
   tl(S0.ok ? `Seismic: AASHTO-USGS risk-targeted Sa (3.10.4.1), site class ${S0.sc}; As ${f3(S0.As)}, SD1 ${f3(S0.SD1)}; Zone ${S0.zone}; ${OPC_NAME[S0.op]} bridge.` : 'Seismic: ground motion not entered.');
   (m0.notes || '').split(/\n/).filter(Boolean).slice(0, 12).forEach(l => tl(l.slice(0, 120)));
-  list.unshift({ id: 'index', kind: 'index', k: -1, title: 'Index and design basis', comp: compose([idx], 1) });
+  list.unshift({ id: 'index', kind: 'index', k: -1, title: 'Index and design basis', comp: compose([idx], 1), ts: 1.8 });   // a text sheet: text 1.8 times the drawings' height
 
   let ox = 0;
   /* one part (a Dwg, feet) into D at model inches, text heights times f; its dimensions as DIMENSION entities */
-  const put = (p, f, kM) => {
-    const I = v => v * 12;
+  const put = (p, f, kM, g) => {   // g: the text sheet (index) scaled as a whole, positions with its text
+    const I = v => v * 12 * (g || 1); f = g ? 1 : f;
     p.d.p.forEach(q => { if (q.dimId) return; const l = lay(q.L);
       if (q.t === 'l') D.line(l, I(q.a[0] + p.dx), I(q.a[1] + p.dy), I(q.a[2] + p.dx), I(q.a[3] + p.dy));
       else if (q.t === 'p') D.pline(l, q.pts.map(pt => [I(pt[0] + p.dx), I(pt[1] + p.dy)]), !!q.closed);
@@ -5020,7 +4892,9 @@ function sldwBuild(paperId) {
   list.forEach((s, si) => {
     const comp = s.comp, i0 = D.mark(); let N = null, over = false;
     const fitsAt = SCALES.filter(sc => comp.w <= AW * sc && comp.h <= AH * sc), tryList = fitsAt.length ? fitsAt : [SCALES[SCALES.length - 1]];
-    for (const sc of tryList) { D.E.length = i0; const kM = 12 * sc;
+    if (s.ts) { N = tryList[0]; const kM = 12 * N;   // the index: text 1.8 times the drawings' height, smaller (to 0.8 times) when the list is long
+      for (let ts = s.ts; ; ts *= 0.9) { D.E.length = i0; comp.parts.forEach(p => put(p, 1, kM, PA.th * ts * N / textMed(p.d))); const b = D.bbox(i0); if (ts < 0.8 || ((b[2] - b[0]) / kM <= AW && (b[3] - b[1]) / kM <= AH)) { over = ts < 0.8; break; } } }
+    else for (const sc of tryList) { D.E.length = i0; const kM = 12 * sc;
       comp.parts.forEach(p => { const f = Math.min(2.5, Math.max(0.4, PA.th * sc / textMed(p.d))); put(p, f, kM); });
       const b = D.bbox(i0); if (!isFinite(b[0]) || ((b[2] - b[0]) / kM <= AW && (b[3] - b[1]) / kM <= AH)) { N = sc; break; } }
     if (N == null) { N = tryList[tryList.length - 1]; over = true; }
@@ -5059,8 +4933,69 @@ function sldwDownload() {
   SharedDxf.download(txt, `${fname()}_substructure_sheets.dxf`);
   flash(`DXF written: ${B.S.length} sheets (paper ${SLDW_PAPER[B.paper].name}, R12, model space, full size in inches; plot each sheet at its title-block scale).`);
 }
-exportDxf = sldwDownload;
 { const i = PENDING.findIndex(p => /DXF dimensions are drawn/.test(p[1])); if (i >= 0) PENDING.splice(i, 1); }   // dimensions are DIMENSION entities
+/* the sheets of the open project, kept until the project or the paper changes (not saved) */
+function sldwGet(paper) { const key = JSON.stringify(Object.assign({}, P, { ui: undefined })) + '|' + paper;
+  if (!SLDW.B || SLDW.key !== key) { SLDW.B = sldwBuild(paper); SLDW.key = key; } return SLDW.B; }
+/* the Drawings tab (CLAUDE.md §6: the note says what the drawings are; each sheet links to the tab where its content is worked) */
+function sldwRender() {
+  const T = document.getElementById('tab-drawings'); if (!T) return;
+  const L = typeof IC !== 'undefined' ? IC.collect() : []; if (L.length) { T.innerHTML = '<div class="ic-block">' + IC.banner(L) + '</div>'; return; }   // SLIC: no drawings while an input needs fixing
+  if (!window.SharedDxf) { T.innerHTML = '<div class="card"><div class="card-b">The Drawings tab needs the shared folder (shared/dxf.js) next to this file.</div></div>'; return; }
+  const G = MODEL.G; if (!G || G.E.length) { T.innerHTML = '<div class="card"><div class="card-b">Fix the input errors on the Summary tab to draw the sheets.</div></div>'; return; }
+  const paper = sldwPaper(); let B;
+  try { B = sldwGet(paper); } catch (e) { console.error(e); T.innerHTML = `<div class="card"><div class="card-b" style="color:var(--fail)">The drawings could not be drawn: ${esc(e && e.message)}</div></div>`; return; }
+  const want = SLDW.cur || sldwLs(SLDW.kSheet) || '', base = want.replace(/-\d+$/, ''), cur = B.S.find(s => s.id === want) || B.S.find(s => s.id === base || s.id === base + '-1') || B.S[0]; SLDW.cur = cur.id;   // a sheet split on paper B: its first part
+  const wk = s => sldwSrc(s).map(([tb, k, t]) => `<span class="sl-wk" role="link" tabindex="0" data-wt="${tb}" data-wu="${k === '' || k < 0 ? '' : k}" data-wc="">${esc(t)}${k !== '' && k >= 0 ? ` (${esc(P.units[k].name)})` : ''}</span>`).join(', ') || '—';
+  const PA = SLDW_PAPER[paper];
+  T.innerHTML = `<div class="card"><div class="card-h"><h2>Drawings</h2><span class="sub">${B.S.length} sheets, DXF R12</span></div><div class="card-b">
+    <div class="sldw-bar"><label>Paper <select id="sldwPaper">${Object.entries(SLDW_PAPER).map(([k, q]) => `<option value="${k}"${k === paper ? ' selected' : ''}>${q.name}</option>`).join('')}</select></label>
+      <label>Sheet <select id="sldwSheet">${B.S.map(s => `<option value="${esc(s.id)}"${s === cur ? ' selected' : ''}>${s.n}. ${esc(s.title)}</option>`).join('')}</select></label>
+      <button type="button" class="btn btn-sm" id="sldwDxf">Download DXF (${B.S.length} sheets)</button>
+      <button type="button" class="btn btn-sm" id="sldwPrint1" title="Print the sheet shown on one 11 x 17 in landscape page">Print sheet</button>
+      <button type="button" class="btn btn-sm" id="sldwPrintAll" title="Print every sheet, one 11 x 17 in landscape page each">Print all sheets (${B.S.length})</button></div>
+    <div class="note slNL" style="padding:6px 0 0">${slNL('The drawings are schematic: they are generated from the inputs and the results as computed (nothing new is calculated) and are not construction drawings.', [
+      ['Scale:', `each sheet is paper ${esc(PA.name)} at the smallest standard scale 1" = N'-0" at which it fits (in its title block and below); text plots at about ${PA.th.toFixed(2)} in.`],
+      ['Simplifications:', 'the unit elevations are drawn along the bearing line (skewed lengths), looking ahead station, with the back bearing row at a joint; the plan shows the bearing layout and footing outlines; piles are drawn to a nominal 8 ft below the ground; girders, bearings and pedestals use the entered dimensions with a minimum drawn size; load diagrams show unfactored loads; labels are moved clear of other text and lines.'],
+      ['File:', 'one DXF (AutoCAD R12, model space, full size in inches): each sheet inside its border and title block, side by side; layers S-DECK, S-GIRD, S-BRG-FIX, S-BRG-EXP, S-SUBS, S-SUBS-HIDN, S-FTG, S-FTG-HIDN, S-GRND, S-CNTR, S-DIMS, S-TEXT, S-LL-LANE, S-LL-LOAD, S-BORD; dimensions are DIMENSION entities. The preview is drawn from the same entities as the file. Project → Export DXF writes the same file.'],
+      ['Print:', `${esc(SharedDxf.PRINT_NOTE)}${paper === 'D' ? ' Paper D (34 × 22 in) prints half size on 11 × 17: each sheet at half its stated scale.' : ''}`]])}</div></div></div>
+    <div class="card"><div class="card-h"><h2>${cur.n}. ${esc(cur.title)}</h2><span class="sub">Scale ${esc(cur.scale)}${cur.over ? ' · <span style="color:var(--fail)">does not fit the sheet even at the smallest scale</span>' : ''} · worked in: ${wk(cur)}</span></div><div class="card-b">
+      <div class="sldw-box"></div><div class="note" style="padding:6px 0 0">Wheel: zoom about the cursor · drag: pan · pinch on a touch screen · double-click or double-tap: fit · + / − / Fit buttons.</div></div></div>
+    <div class="card"><div class="card-h"><h2>Sheets</h2><span class="sub">Click a sheet to preview it</span></div><div class="card-b"><div class="sldw-grid">${B.S.map(s => `<div class="sldw-th${s === cur ? ' on' : ''}" data-sldw="${esc(s.id)}" role="button" tabindex="0" aria-label="Sheet ${s.n}: ${esc(s.title)}"><img alt="" data-src="${s.n}"><div><b>${s.n}.</b> ${esc(s.title)}</div><div class="note" style="padding:0">${esc(s.scale)} · ${wk(s)}</div></div>`).join('')}</div></div></div>`;
+  SharedDxf.viewer(T.querySelector('.sldw-box'), SharedDxf.sheetSVG(B.D, cur), { height: '62vh' });
+  // thumbnails: each sheet as an image (not in the page's DOM), made when it scrolls into view
+  const mk = img => { if (img.getAttribute('src')) return; const s = B.S[+img.dataset.src - 1]; img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(SharedDxf.sheetSVG(B.D, s)); };
+  const imgs = [...T.querySelectorAll('.sldw-th img')];
+  if (window.IntersectionObserver) { const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { mk(e.target); io.unobserve(e.target); } }), { rootMargin: '200px' }); imgs.forEach(i => io.observe(i)); }
+  else imgs.forEach(mk);
+  const pick = id => { SLDW.cur = id; sldwLs(SLDW.kSheet, id); sldwRender(); const c = T.querySelector('.sldw-box'); if (c) c.closest('.card').scrollIntoView({ block: 'nearest' }); };
+  T.querySelector('#sldwSheet').addEventListener('change', e => pick(e.target.value));
+  T.querySelector('#sldwPaper').addEventListener('change', e => { SLDW.paper = e.target.value === 'B' ? 'B' : 'D'; sldwLs(SLDW.kPaper, SLDW.paper); sldwRender(); });
+  T.querySelectorAll('[data-sldw]').forEach(el => { const go = e => { if (e.target.closest('.sl-wk')) return; pick(el.dataset.sldw); };
+    el.addEventListener('click', go); el.addEventListener('keydown', e => { if (e.target.closest('.sl-wk')) return; if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(e); } }); });
+  T.querySelector('#sldwDxf').addEventListener('click', () => sldwDownload());
+  const prt = list => SharedDxf.printSheets(list.map(s => ({ svg: SharedDxf.sheetSVG(B.D, s), title: s.title })), { paper: [17, 11] });
+  T.querySelector('#sldwPrint1').addEventListener('click', () => prt([cur]));
+  T.querySelector('#sldwPrintAll').addEventListener('click', () => prt(B.S));
+}
+(function () {
+  const css = document.createElement('style'); css.textContent = `.sldw-bar{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;font-size:.88rem}.sldw-bar label{max-width:100%}.sldw-bar select{max-width:min(100%,360px)}
+    .sldw-box{border:1px solid var(--border);background:#fff}.sldw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+    .sldw-th{border:1px solid var(--border);border-radius:6px;padding:6px;cursor:pointer;font-size:.84rem;min-width:0;overflow-wrap:anywhere}.sldw-th.on{outline:2px solid var(--blue)}.sldw-th img{display:block;width:100%;aspect-ratio:17/11;background:#fff;border:1px solid var(--border);margin-bottom:4px}`;
+  document.head.appendChild(css);
+  /* the tab after the load tabs, before Manual and Report; not in TABS (never stored in P.ui.tab, as the Report tab) */
+  const bt = buildTabs; buildTabs = function () { const r = bt.apply(this, arguments);
+    const man = document.querySelector('#tab-bar .tab-btn[data-tab="manual"]');
+    if (man && !document.querySelector('#tab-bar .tab-btn[data-tab="drawings"]')) man.insertAdjacentHTML('beforebegin', `<button type="button" class="tab-btn${SLDW.on ? ' active' : ''}" data-tab="drawings">Drawings</button><span class="tab-sep"></span>`);
+    if (!document.getElementById('tab-drawings')) { const d = document.createElement('div'); d.className = 'tab-panel'; d.id = 'tab-drawings'; $('#tab-panels').appendChild(d); }
+    return r; };
+  const st = showTab; showTab = function (id) {
+    if (id === 'drawings') { SLDW.on = true; if (typeof SLR !== 'undefined') SLR.on = false;
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === 'drawings')); document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-drawings'));
+      sldwRender(); return; }
+    SLDW.on = false; return st.apply(this, arguments); };
+  const rt = renderTab; renderTab = function () { const r = rt.apply(this, arguments); if (SLDW.on) sldwRender(); return r; };
+})();
 </script>
 <script>
 /* ---------- start ---------- */
