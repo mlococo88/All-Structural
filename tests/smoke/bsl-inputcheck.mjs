@@ -185,7 +185,7 @@ if (REF) {
     const o = { tabs: {}, num: {} }, fl = v => JSON.stringify(v, (k, x) => (x instanceof Float64Array || Array.isArray(x)) ? Array.from(x).map(y => typeof y === 'number' ? +y.toPrecision(12) : y) : x);
     const ids = TABS.filter(t => t !== '|' && t[0] !== 'v3d').map(t => t[0]);
     for (let k = 0; k < P.units.length; k++) { P.ui.sel = k;
-      for (const id of ids) { if (k && ['summary', 'geometry', 'manual'].includes(id)) continue; showTab(id); await sleep(15); o.tabs[id + '~' + k] = document.getElementById('tab-' + id).innerText; }
+      for (const id of ids) { if (k && ['summary', 'geometry', 'manual'].includes(id)) continue; showTab(id); await sleep(15); const el = document.getElementById('tab-' + id), hid = [...el.querySelectorAll('.slw-card, .slw-top')]; hid.forEach(x => { x.style.display = 'none'; }); o.tabs[id + '~' + k] = el.innerText; hid.forEach(x => { x.style.display = ''; }); }   // SLWS (2026-11-11): the tabs' worked-steps card (the Report's steps, display) left out
       try { o.num['combine' + k] = fl(combine(k)); } catch (e) { o.num['combine' + k] = 'ERR ' + e.message; }
       o.num['comps' + k] = fl(COMBOS.map(c => { try { return comboComps(k, c); } catch (e) { return 'ERR'; } })); }
     try { const a = abutHandoffPayload(); o.num.abx = fl(a.err ? a : JSON.parse(JSON.stringify(a.p, (k, v) => (/At$/.test(k) || k === 'exported' || k === 'definition' || k === 'notes') ? undefined : v))); } catch (e) { o.num.abx = 'ERR ' + e.message; }   // ABX (2026-11-11): the additive definition block and the payload notes are not compared

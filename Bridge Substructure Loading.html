@@ -5632,5 +5632,75 @@ function sldwRender() {
   place(); buildTabs(); buildSide(); splitApply(); showId(); dash();
 })();
 </script>
+<script>
+/* =====================================================================
+   SLWS (2026-11-11, CLAUDE.md §6 "show the work and link to it"; display only): each output tab ends with a "Worked steps" card for
+   the selected unit: the Report's own worked steps for that tab (the same step objects slrModel() builds: the combination of every limit
+   state worked symbolically, then with the values substituted, then the result; braking, centrifugal, wind and temperature parameters;
+   each unfactored load at the resultant with its source and case), grouped in topics (SharedSteps.groupsHTML, KaTeX as in the
+   Report), each topic with a "see §n.m" link that opens the Report at that step. A value quoted on another tab links here (the
+   "Worked in" links and the summary column already open the tab). Nothing is recomputed: the steps are read from slrModel(), built once
+   per model (MODEL is replaced on every recompute). The card is added to the tab's DOM after it renders (renderTab), not to the tab's
+   HTML, so the Report's calculation package (which reads the tabs' render functions) is unchanged.
+   The Report's step labels are plain text (shared/report.js); "M_t", "V_l" … are set as subscripts on screen and in print after the
+   viewer renders (the plain text, SharedReport.text, keeps "M_t" as the other tools' reports do).
+   ===================================================================== */
+(function slws() {
+  const TABMAP = {   // tab -> [scope prefix, topic keys (RegExp on the step id's work prefix)]
+    dl: [['l', /^(DCsup|DCsub|DW|UF)$/]], earth: [['l', /^E/]], ll: [['l', /^LL$/]],
+    brce: [['bw', /^(br|ce)$/], ['l', /^(BR|CE)$/]], wind: [['bw', /^ws/], ['w', /^sw$/], ['l', /^(WS|WL)/]],
+    temp: [['bw', /^tu$/], ['l', /^(TU|FR|SH)$/]], water: [['l', /^WA[dc]$/]], ice: [['l', /^IC$/]], eq: [['l', /^EQ$/]],
+    cv: [['l', /^CV$/]], ct: [['l', /^CT$/]], combo: [['u', /./]] };
+  const C = { model: null, out: null };
+  function data() {
+    if (C.model === MODEL && C.out) return C.out;
+    let M = null; try { M = slrModel(); } catch (e) { C.model = MODEL; return (C.out = { err: e.message, items: [] }); }
+    let doc = null; try { doc = SharedReport.build(M); } catch (e) { doc = null; }
+    const items = [];
+    (M.sections || []).forEach(s => (s.subs || []).forEach(q => (q.items || []).forEach(it => { if (it.type !== 'steps' || !it.steps || !it.steps.length) return;
+      let i0 = 0; (it.topics && it.topics.length ? it.topics : [{ title: q.title, ref: '', n: it.steps.length }]).forEach(t => { const st = it.steps.slice(i0, i0 + t.n); i0 += t.n; if (!st.length) return;
+        const key = String(st[0].id).split('.')[0]; items.push({ scope: it.scope, key, title: t.title, ref: t.ref || '', steps: st, sec: s.title, sub: q.title, rk: (it.scope ? it.scope + '/' : '') + st[0].id }); }); })));
+    C.model = MODEL; return (C.out = { M, doc, items });
+  }
+  const sub = s => esc(s).replace(/\b([A-Za-zΑ-ωφγδ]+)_\{?([A-Za-z0-9,]+)\}?/g, '$1<sub>$2</sub>');
+  function topicsFor(tab, k) {
+    const D = data(), map = TABMAP[tab]; if (!map || D.err) return [];
+    return D.items.filter(t => map.some(([sc, re]) => (sc === 'bw' ? t.scope === 'bw' : t.scope === sc + k) && re.test(t.key)));
+  }
+  function cardHtml(tab, k) {
+    const T = topicsFor(tab, k); if (!T.length) return '';
+    const D = data(), ref = key => { try { return D.doc ? SharedReport.ref(D.doc, key) : null; } catch (e) { return null; } };
+    const groups = T.map((t, i) => { const g = SharedSteps.group(t.steps, [{ key: 'k' + i, title: t.title, ref: t.ref, ids: () => true }], { strip: false })[0]; return Object.assign(g, { key: tab + '.' + t.rk, rk: t.rk, sec: t.sec }); });
+    const item = s => `<li id="st-slw-${esc(String(s.id))}"><span class="slwL">${sub(s.label)}${s.ref ? ` <span class="slwR">(${esc(s.ref)})</span>` : ''}:</span> <span class="slwE">${SharedSteps.line(s, true)}</span>${s.note ? `<div class="slwN">${sub(SharedSteps.noteText(s.note))}</div>` : ''}</li>`;
+    const see = t => { const n = ref(t.rk); return n ? `<a href="#" class="sg-see" data-slw-rpt="${esc(t.rk)}" title="Open the Report at this step (${esc(t.sec)})">see ${esc(n)}</a>` : ''; };
+    const first = ref(T[0].rk);
+    return `<div class="card slw-card" data-slw="${tab}"><div class="card-h"><h2>Worked steps${tab === 'combo' || T.some(t => /^[lwu]/.test(t.scope)) ? ': ' + esc(P.units[k] ? P.units[k].name : '') : ''}</h2><span class="sub">The steps the Report prints for this tab${first ? ` (${esc(first)})` : ''}: equation, values substituted, result</span></div><div class="card-b">${SharedSteps.groupsHTML(groups, { item, see })}</div></div>`;
+  }
+  const css = document.createElement('style'); css.textContent = `.slw-card ol.steps{list-style:none;padding-left:4px}.slw-card ol.steps li{margin:4px 0;line-height:1.5;overflow-x:auto;overflow-y:hidden}.slw-card .slwL{color:var(--text-dim)}.slw-card .slwR{font-size:.78rem;color:var(--muted)}.slw-card .slwN{font-size:.78rem;color:var(--muted);padding-left:12px;white-space:pre-line}.slw-card .sg-see{font-size:.8rem;margin-left:8px}.slw-card .katex{font-size:1.02em}`;
+  document.head.appendChild(css);
+  function add() {
+    const id = P.ui.tab, el = document.getElementById('tab-' + id); if (!el || !TABMAP[id]) return;
+    el.querySelectorAll('.slw-card, .slw-top').forEach(x => x.remove());
+    if (/Fix the/.test(el.textContent.slice(0, 300)) || el.querySelector('.ic-banner')) return;
+    let h = ''; try { h = cardHtml(id, P.ui.sel); } catch (e) { console.warn('worked steps', e); h = ''; }
+    if (!h) return; el.insertAdjacentHTML('beforeend', h); const c = el.querySelector('.slw-card'); if (!c) return; SharedSteps.wire(c); subs(c, '.sg-sum');
+    const n = c.querySelectorAll('details.sg-t').length, ref = c.querySelector('[data-slw-rpt]');
+    el.insertAdjacentHTML('afterbegin', `<p class="note slw-top" style="padding:0 2px 8px"><a href="#" data-slw-jump>Worked steps for this tab</a> (${n} topic${n > 1 ? 's' : ''}: equation, values, result)${ref ? `; in the Report: <a href="#" data-slw-rpt="${esc(ref.dataset.slwRpt)}">${esc(ref.textContent)}</a>` : ''}.</p>`);
+  }
+  { const rt = renderTab; renderTab = function () { const r = rt.apply(this, arguments); if (!(typeof SLR !== 'undefined' && SLR.on) && !(typeof SLDW !== 'undefined' && SLDW.on)) add(); return r; }; }
+  document.addEventListener('click', e => { const j = e.target.closest && e.target.closest('[data-slw-jump]'); if (!j) return; e.preventDefault(); const c = j.closest('.tab-panel').querySelector('.slw-card'); if (c) c.scrollIntoView({ block: 'start', behavior: 'smooth' }); });
+  document.addEventListener('click', e => { const a = e.target.closest && e.target.closest('[data-slw-rpt]'); if (!a) return; e.preventDefault();
+    const key = a.dataset.slwRpt; showTab('report'); setTimeout(() => { try { if (SLR.api) SLR.api.jump(key); } catch (er) { } }, 60); });
+  /* the Report: step labels and topic titles with M_t, V_l … as subscripts (display only, after the viewer renders) */
+  const SUBRE = /\b([MVPHA])_([tlnse]|max|min)\b/g;
+  function subs(root, sel) { if (!root) return; root.querySelectorAll(sel || '.rp-d, .rp-tt, .rp-tsum').forEach(n => { const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT), L = []; while (w.nextNode()) { const t = w.currentNode; if (t.parentElement && t.parentElement.closest('.katex, .rp-ref')) continue; SUBRE.lastIndex = 0; if (SUBRE.test(t.nodeValue)) L.push(t); }
+    L.forEach(t => { const s = document.createElement('span'); s.className = 'slSubT'; s.innerHTML = esc(t.nodeValue).replace(SUBRE, '$1<sub>$2</sub>'); t.replaceWith(s); }); }); }
+  { const r0 = slrRender; slrRender = function () { const r = r0.apply(this, arguments); subs(document.getElementById('tab-report')); return r; }; }
+  window.addEventListener('beforeprint', () => subs(document.getElementById('rp-print')));   // registered after the Report's own beforeprint (it fills #rp-print first)
+  { const T = document.getElementById('tab-report'); if (T && window.MutationObserver) { let q = 0; new MutationObserver(() => { if (q) return; q = requestAnimationFrame(() => { q = 0; subs(T); }); }).observe(T, { childList: true, subtree: true }); } }   // lazy items filled when opened
+  window.SubLoadsWorked = { topicsFor, cardHtml, data, subs };   // used by tests; no effect on results
+  try { if (P.ui.tab && TABMAP[P.ui.tab]) add(); } catch (e) { }
+})();
+</script>
 </body>
 </html>
