@@ -3090,3 +3090,32 @@ function listTables() {
   3. FR, SH and EQ inertia move with TU, WS and WL as bearing-delivered forces.
   4. The vertical couples stay referred to the top of the bearings.
 - **Other copies:** none.
+
+## 2026-11-11 — PR: subloads-pae-loc (PR #1411: https://github.com/mlococo88/All-Structural/pull/1411) — seismic earth pressure location option (a)–(d) for abutments (SLPL; engineer-approved 2026-11-11)   [§4 only when (b), (c) or (d) is chosen; default (a) = as before]
+- **Request:** a "Seismic earth pressure location" choice with the Abutment Calculator's four options, in the same order and with the same values (`seismic.hEQmode`: 'sw', 'static', 'comb', 'nonyield'; `hAEr` for (c)). In SubLoads they are `P.br.hEQmode` and `P.br.hAEr` (Bridge tab, Earth loads section).
+- **Where:**
+  - `earthAbut`: the seismic block, anchor `const loc = paeLocOf(), zInc =`.
+  - Helpers `PAE_LOC`, `paeLocOf`, `paeZc` and `paeLocTxt` (before `fillEarth`).
+  - `paneBridge` wrapper (the field, the hAEr input and the note); input check row `br.hAEr`.
+  - Earth loads tab note (anchor `'Seismic earth location:'`); Report (`paeSub`, anchor `Seismic earth pressure location`).
+- **Before:**
+  `add({ ... ΔPAE, virtual back plane ..., z: zb + hr * H });  add({ ... ΔPAE, stem and backwall ..., z: zt + hr * soilH });`
+- **After:**
+  `const qV = zInc(PAE, VP.Pa, H, VP.z), qS = zInc(PAEs, ST.Pa, soilH, ST.z);` then `z: zb + qV.zi` and `z: zt + qS.zi`. Here `zInc` returns `{ zi: hr·h }` for 'sw'. Otherwise it returns `zc = max(paeZc(loc)·h, z_s)` and `zi = (P_AE·zc − P_A·z_s) / (P_AE − P_A)`, with paeZc = 1/3 ('static'), hAEr or 0.5 ('comb'), or 0.5 ('nonyield').
+- **Governing provision:** AASHTO LRFD 10th Ed. C11.6.5.3 (Seed and Whitman 0.6h past practice; combined resultant at h/3, not below the static resultant, or 0.4h to 0.5h) and C11.6.5.4 (h/2, nonyielding wall).
+- **Check case:** default project, Abut. 1, A_s 0.15 (site class D). k_h 0.075, K_AE 0.3517, H 20 ft, L 46.070 ft; P_AE 388.819, P_A 339.728 at 6.667 ft, ΔP_AE 49.091 kip.
+  - (a): z_Δ 12.000, M 589.093, EE I M_l max 4210.395 (unchanged)
+  - (b): z_c 6.667, z_Δ 6.667, M 327.274, EE I 3948.576
+  - (c) 0.5: z_c 10.000, z_Δ 33.068, M 1623.338, EE I 5244.639
+  - (c) 0.45: z_c 9.000, z_Δ 25.148, EE I 4855.820
+  - (d): as (c) 0.5
+- **How verified:** main-vs-branch probe (default, slab, slab + LL, slab MassDOT, A_s 0.15, A_s 0.15 + slab): 0 differences.
+- **Tests:** new `tests/smoke/bsl-pae-loc.mjs`. `bsl-inputcheck` / `bsl-drawings` strip the new note text on both sides.
+- **Saved data (§5):** new optional `P.br.hEQmode` and `P.br.hAEr`; absent = (a). Saved projects are unchanged.
+- **Decisions (pending engineer review):**
+  1. Bridge-wide, like `br.hEQr`.
+  2. (a) keeps the entered `br.hEQr` (default 0.6).
+  3. (d) changes the location only (the M-O magnitude with the project's k_h).
+  4. The static-resultant floor applies to (b), (c) and (d), as in the calculator.
+- **Open item (hand-off):** `shared/abutment-def.js` `fromSubLoads` sends `seismic.hEQmode: 'ratio'` (fixed), and the SubLoads receiver maps only `hEQr`. Mapping `P.br.hEQmode` / `hAEr` both ways (the values are already the calculator's) is a change to the shared hand-off file, left to the exchange work.
+- **Other copies:** the Abutment Calculator has its own implementation (SEL, #1409).
