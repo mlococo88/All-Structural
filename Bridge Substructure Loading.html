@@ -5477,7 +5477,7 @@ function sldwRender() {
     [/^br\.(eqSa(\.\d+)?|eqSiteClass|eqVs|lat|lon|eqOpCat|gEQ|eqCompR)$/, 'eq'], [/^br\.(gSoil|eh\w*|ev\w*|es\w*|khR|kv|hEQmode|hEQr|hAEr|gEHEQ)$/, 'earth'], [/^br\.(owner|vwSIV|subWind|transDist|deckFc)$/, 'project'], [/^br\.(Ifac|lf\..*)$/, 'fac'],
     [/^units\.\d+\.water\./, 'water'], [/^units\.\d+\.(cv|ct)\./, 'coll'], [/^units\.\d+\.earth\./, 'earth'], [/^units\./, 'units'], [/^rx\./, 'rx'], [/^meta\./, 'project'], [/^br\./, 'bridge']];
   const tabOfPath = path => { const x = BR_RE.find(([re]) => re.test(String(path || ''))); return x ? x[1] : null; };
-  const tabOfErr = e => (e && (e.list ? tabOfPath(e.list) : tabOfPath(e.path))) || (e && e.tab) || 'bridge';
+  const tabOfErr = e => (e && (e.list ? tabOfPath(e.list) : tabOfPath(e.path))) || (e && (e.tab0 || e.tab)) || 'bridge';
   window.slTabOfPath = tabOfPath;
   const secTitle = h => { const c = h.cloneNode(true); c.querySelectorAll('.ino, small, .ic-n').forEach(x => x.remove()); return c.textContent.trim(); };
   function pickSections(src, want) {   // the current #sidebar (pane src just built): the nodes of the sections that go to tab want
@@ -5604,7 +5604,9 @@ function sldwRender() {
       const sb = $id('sidebar'), top = sb ? sb.scrollTop : 0, frag = document.createDocumentFragment(), src = SRC[want]; let r;
       _busy = true;
       const part = {};   // the Project pane last: its Save and Hand-offs cards are parked by every other pane's build (SLHD)
-      try { src.slice().sort((a, b) => (a === 'project') - (b === 'project')).forEach(s => { P.ui.itab = s; r = bs.apply(this, arguments); const f = part[s] = document.createDocumentFragment(); pickSections(s, want).forEach(n => f.appendChild(n));
+      try { src.slice().sort((a, b) => (a === 'project') - (b === 'project')).forEach(s => { P.ui.itab = s; const lf0 = P.br && P.br.lf ? new Set(Object.keys(P.br.lf)) : null; r = bs.apply(this, arguments);
+          if (s === 'bridge' && want !== 'fac' && P.br && P.br.lf) { Object.keys(P.br.lf).forEach(c => { if ((!lf0 || !lf0.has(c)) && P.br.lf[c] && typeof P.br.lf[c] === 'object' && !Object.keys(P.br.lf[c]).length) delete P.br.lf[c]; }); if (!lf0 && !Object.keys(P.br.lf).length) delete P.br.lf; }   // the load-factor table (Factors tab) adds empty br.lf.<id> = {} when it is drawn: not when it is only built to be left out
+          const f = part[s] = document.createDocumentFragment(); pickSections(s, want).forEach(n => f.appendChild(n));
           if (want === 'earth' && s === 'bridge') { const d = document.createElement('div'); d.className = 'sec-h'; d.textContent = 'Each unit'; d.dataset.slit = '1'; f.appendChild(d); } });
         src.forEach(s => frag.appendChild(part[s])); }
       finally { P.ui.itab = want; _busy = false; }
@@ -5613,13 +5615,17 @@ function sldwRender() {
         if (miss && !sb.querySelector('.sec-h:not([data-slit])' + (want === 'earth' ? ' ~ .sec-h:not([data-slit])' : ''))) sb.insertAdjacentHTML('beforeend', `<p class="note slItNote">${esc(miss)}</p>`);
         else if (miss && want === 'earth' && ![...sb.querySelectorAll('.sec-h')].some(h => /^Backfill/.test(secTitle(h)))) sb.insertAdjacentHTML('beforeend', `<p class="note slItNote">${esc(miss)}</p>`);
         sb.scrollTop = top; }
-      try { markBad(); } catch (e) { }
+      try { markBad(); } catch (e) { } try { if (window.SubLoadsInputCheck && SubLoadsInputCheck.mark) SubLoadsInputCheck.mark(); } catch (e) { }
       numItabs(); numSecs(); return r; }; }
   /* a unit button or the strip keeps a per-unit loading tab (water, earth, collision) open instead of going to Units */
   { const su = selectUnit; selectUnit = function (k) { const t = P.ui.itab; if (t === 'water' || t === 'earth' || t === 'coll') { P.ui.sel = k; buildSide(); renderStrip(); autosave(); if (P.ui.tab === 'v3d' && V3.ok) { P.ui.v3.focus = String(k); v3Focus(k); } return; } return su.apply(this, arguments); }; }
-  /* an input-check link: open the tab that holds the field (and its unit) */
+  /* the input checks name, count and mark each error on the tab that holds its field: IC.collect (the list every part of the input check
+     reads: field marks, tab counts, banner, links) gives e.tab as the new tab id (the pane id kept in e.tab0); the banner's "where" names it */
+  if (typeof IC !== 'undefined' && IC && IC.collect) { const c0 = IC.collect; IC.collect = function () { return c0.apply(this, arguments).map(e => { if (e.tab0 === undefined) { e.tab0 = e.tab; e.tab = tabOfErr(e); } return e; }); };
+    if (IC.TAB) TABS_I.forEach(([id, nm]) => { IC.TAB[id] = nm; }); }
+  /* an input-check link to a per-unit loading tab (water, earth, collision): select the unit first (the tool's link selects it for Units only) */
   document.addEventListener('click', e => { const a = e.target.closest && e.target.closest('[data-icgo]'); if (!a || typeof IC === 'undefined') return; const er = IC.shown && IC.shown[+a.dataset.icgo]; if (!er) return;
-    const t = tabOfErr(er); if (PER_UNIT.has(t) && er.k != null) P.ui.sel = er.k; er.tab = t; }, true);
+    if (PER_UNIT.has(er.tab) && er.k != null) P.ui.sel = er.k; }, true);
   document.addEventListener('input', () => setTimeout(numItabs, 0));
   { const rc = recompute; recompute = function () { const r = rc.apply(this, arguments); showId(); dashSoon(); numItabs(); return r; }; }
   { const st = showTab; showTab = function () { const r = st.apply(this, arguments); numTabs(); return r; }; }

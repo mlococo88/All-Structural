@@ -36,7 +36,7 @@ try {
   await ok('input check: (c) ratio 0.4 to 0.5', async () => { assert.deepEqual(R.c45.ic, []); const r = await run('comb', 0.6); assert.ok(r.ic.some(x => /^Combined PAE height \/ H: /.test(x)), r.ic.join('\n')); });
   await ok('§6 notes: Bridge pane, Earth loads tab, Report', async () => {
     const t = await p.evaluate(async () => { P = defP(); syncSupports(); P.br.eqSa = SA_T.map(T => T === 0 ? 0.15 : Math.min(0.35, 0.12 / Math.max(T, 0.01))).map(v => String(+v.toFixed(4))); P.br.eqSiteClass = 'D'; P.br.hEQmode = 'static'; MODEL.cacheEE = null; recompute();
-      P.ui.itab = 'bridge'; buildSide(); const side = document.getElementById('sidebar').innerText, opts = [...document.getElementById('f_br_hEQmode').options].map(o => o.value + '|' + o.textContent);
+      P.ui.itab = document.querySelector('.itab[data-pane=earth]') ? 'earth' : 'bridge'; buildSide();   /* SLIT: the Earth loads input tab */ const side = document.getElementById('sidebar').innerText, opts = [...document.getElementById('f_br_hEQmode').options].map(o => o.value + '|' + o.textContent);
       P.ui.sel = 0; showTab('earth'); await new Promise(r => setTimeout(r, 200)); return { side, opts, tab: document.getElementById('tab-earth').innerText, rpt: JSON.stringify(slrModel()) }; });
     assert.deepEqual(t.opts.map(o => o.split('|')[0]), ['sw', 'static', 'comb', 'nonyield']);
     assert.match(t.opts[0], /\(a\) Seed & Whitman: ΔP_AE at 0\.6H, static P_A at H\/3/); assert.match(t.opts[3], /\(d\) Nonyielding wall: combined P_AE at H\/2 \[C11\.6\.5\.4\]/);

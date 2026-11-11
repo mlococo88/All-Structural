@@ -165,16 +165,20 @@ const TOOLS = {
       const out = await p.evaluate(() => ({ P: JSON.parse(JSON.stringify(P)), C: JSON.parse(JSON.stringify(MODEL.C)),
         stored: JSON.parse(localStorage.getItem(KEY) || 'null') }));
       if (out.P.ui) delete out.P.ui.tab; if (out.stored && out.stored.ui) delete out.stored.ui.tab;
+      // SLIT (2026-11-11): the load-factor table (now on the Factors and analysis input tab) adds empty br.lf.<id> = {} when it is drawn; the old
+      // Bridge pane drew it at setup. Empty objects are no input (lfOf reads a missing cell as the default): left out on both sides
+      const noEmptyLf = o => { if (o && o.br && o.br.lf) { Object.keys(o.br.lf).forEach(c => { if (o.br.lf[c] && typeof o.br.lf[c] === 'object' && !Object.keys(o.br.lf[c]).length) delete o.br.lf[c]; }); if (!Object.keys(o.br.lf).length) delete o.br.lf; } };
+      noEmptyLf(out.P); noEmptyLf(out.stored);
       // SLDW (2026-11-11): the Drawings tab (new, display only; tests/smoke/bsl-drawings.mjs) and the Manual (static text; its drawings paragraphs were rewritten) are not compared
       const ids = await p.$$eval('.tab-btn', e => e.map(b => b.dataset.tab).filter(t => t !== 'v3d' && t !== 'drawings' && t !== 'manual')); out.tabs = {};
       for (const id of ids) { await p.click(`.tab-btn[data-tab="${id}"]`); await p.waitForTimeout(400);
         out.tabs[id] = await p.evaluate(id => { const e = document.getElementById('tab-' + id); if (!e) return null; const k = e.cloneNode(true);
-          k.querySelectorAll('[data-sli],script,style').forEach(x => x.remove()); return slalStrip(k.innerText); }, id); }
-      await p.click('.itab[data-pane="bridge"]'); await p.waitForTimeout(300);
-      out.side = await p.evaluate(() => { const k = document.getElementById('sidebar').cloneNode(true);
-        k.querySelectorAll('[data-sli],script,style,.note,#f_spans ~ .u,#f_bays ~ .u').forEach(x => x.remove());
-        ['f_br_hEQmode', 'f_br_hAEr'].forEach(id => { const q = k.querySelector('#' + id); if (q && q.closest('.fld')) q.closest('.fld').remove(); });   // SLPL (2026-11-11): the new seismic earth pressure location field (Bridge pane)
-        return k.innerText.replace(/(CL bearing|looking ahead)ft/g, '$1'); });   // the unit moved into the column header
+          k.querySelectorAll('[data-sli],script,style').forEach(x => x.remove()); return slalStrip(k.innerText).replace(/\n?Input ID:?\s*[0-9A-F]{8}-[0-9A-F]{4}/g, ''); }, id); }   // SLGP (2026-11-11): the Report title block's Input ID (display)
+      // SLIT (2026-11-11): the Bridge pane is split into several input tabs (display only), so the input panel is read as the value of every
+      // bridge-wide field (br.*, meta.*) over every input tab, not as the Bridge pane's text
+      out.side = await p.evaluate(async () => { const v = {}; for (const b of [...document.querySelectorAll('.itab')]) { b.click(); await new Promise(r => setTimeout(r, 60));
+          document.querySelectorAll('#sidebar [data-k^="br."], #sidebar [data-k^="meta."], #sidebar [data-list]').forEach(x => { const k = x.dataset.k || x.dataset.list; if (k === 'br.hEQmode' || k === 'br.hAEr') return; v[k] = x.value; }); }
+        document.querySelector('.itab[data-pane="bridge"]').click(); return Object.fromEntries(Object.keys(v).sort().map(k => [k, v[k]])); });   // SLPL (2026-11-11): the new seismic earth pressure location fields left out
       return out;
     },
     tableSel: '#f_spans + [data-sli="host"]',
