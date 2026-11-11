@@ -3134,3 +3134,12 @@ function listTables() {
 - **Governing provision / check case / decisions:** see `fixlog/shared-abutment-def.md`, same PR (SubLoads default Abut. 1: (a) → (c) 0.45:
   EE I M_l max 4210.395 → 4855.820; LS removed → kept: Strength I M_l max 3202.468 → 4391.516 kip-ft).
 - **How verified:** tests/smoke/abutment-subloads-exchange.mjs (part C1: calculator (c) 0.45 + LS kept → P.br.hEQmode 'comb', hAEr 0.45, earth.lsRed 'no', z_c = 0.45H), and the SubLoads tests listed in the PR.
+
+## 2026-11-11 — PR: sl-baseline (PR #1413: https://github.com/mlococo88/All-Structural/pull/1413) — results regression baseline (tests/bsl-compare.mjs, tests/baselines/bsl.json)   [test only: the tool file is unchanged]
+
+- **Where:** `tests/bsl-compare.mjs` (new), `tests/baselines/bsl.json` (new), `tests/projects/bsl/*.json` (new: water_wall, pile_ham_massdot, abut_coulomb, rect_indiv, skew30), `tests/README.md`.
+- **What:** six projects (the built-in default and five built from it) are opened with the tool's own `openProject`; every unit's load components per limit state (`comboComps`), combinations (`combine`), concurrent sets, the foundationLoads payload at every level, the abutmentLoads payload, the input checks, every output tab's value cells for every unit and the Report's values are hashed per section and compared with the baseline recorded on origin/main 470b5cb.
+- **Run:** `node tests/bsl-compare.mjs --baseline tests/baselines/bsl.json` (regression); `node tests/bsl-compare.mjs --text` (main vs branch with the display text, for display-only PRs).
+- **Check case:** the Strength I LL factor 1.75 changed to 1.7500001 in a copy: 16 sections of `default` differ (exit 1); the unchanged tool: all identical.
+- **Re-record** only after a change on main that is meant to move a result: `node tests/bsl-compare.mjs --a origin/main --record-baseline tests/baselines/bsl.json`.
+- **Decision (pending engineer review):** numbers only in the baseline (not prose), so display-only PRs do not re-record it.
