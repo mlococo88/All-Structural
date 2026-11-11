@@ -1833,20 +1833,45 @@ function captureUI(){
   return {ipTop:ip?ip.scrollTop:0, opTop:op?op.scrollTop:0,
     key:(a&amp;&amp;a.getAttribute)?a.getAttribute(&quot;data-fkey&quot;):null,
     ss:(a&amp;&amp;a.selectionStart!=null)?a.selectionStart:null,
-    se:(a&amp;&amp;a.selectionEnd!=null)?a.selectionEnd:null};
+    se:(a&amp;&amp;a.selectionEnd!=null)?a.selectionEnd:null,
+    live:cbLiveIn(a)};
+}
+/* DECE (2026-11-11): typing into a number field re-renders the whole input panel (refresh), which rebuilt the field from the
+   committed number, so a partial entry was lost (&quot;9.&quot; -&gt; &quot;9&quot;, then &quot;96&quot;; &quot;-&quot; -&gt; &quot;0&quot;). The field being typed in is now kept
+   (its text and caret) in place of its rebuilt copy, which lends it its attributes and its get/set (__nb). Display only:
+   the committed value is the same parseFloat of the same text as before. A field whose committed value differs from its text
+   (rounded, clamped, or set by a preset, e.g. bars 9.6 -&gt; 10, legs 1 -&gt; 2) shows the committed value when it is left (cbNumBlur),
+   no longer while typing (before: &quot;12&quot; legs became &quot;22&quot;). */
+function cbLiveIn(a){
+  const ev=window.event;
+  return (ev&amp;&amp;ev.type===&quot;input&quot;&amp;&amp;ev.target===a&amp;&amp;a.tagName===&quot;INPUT&quot;&amp;&amp;a.type===&quot;number&quot;&amp;&amp;a.__nb)?a:null;
+}
+function cbKeepLive(a,e){
+  if(!a||!e||a===e||e.tagName!==&quot;INPUT&quot;||e.type!==&quot;number&quot;||!e.__nb) return e;
+  for(const at of [...a.attributes]) if(!e.hasAttribute(at.name)) a.removeAttribute(at.name);
+  for(const at of [...e.attributes]) if(at.name!==&quot;value&quot;) a.setAttribute(at.name,at.value);
+  a.readOnly=e.readOnly; a.disabled=e.disabled; a.__nb=e.__nb;
+  e.replaceWith(a); return a;
+}
+/* DECE: on leaving a number field, show the committed value if the text left differs (&quot;-&quot;, &quot;&quot;, a value replaced by a preset) */
+function cbNumBlur(i){
+  setTimeout(()=>{ if(!i.isConnected||document.activeElement===i||!i.__nb) return;
+    const c=i.__nb.get(); if(i.validity.badInput||i.value===&quot;&quot;||parseFloat(i.value)!==parseFloat(c)) i.value=c; },0);
 }
 function restoreUI(st){
   if(!st) return;
   const ip=document.getElementById(&quot;inputPanel&quot;), op=document.getElementById(&quot;outputPanel&quot;);
   if(ip)ip.scrollTop=st.ipTop; if(op)op.scrollTop=st.opTop;
   if(st.key){
-    const e=document.querySelector('[data-fkey=&quot;'+st.key+'&quot;]');
+    const e=cbKeepLive(st.live,document.querySelector('[data-fkey=&quot;'+st.key+'&quot;]'));   /* DECE */
     if(e){ e.focus(); try{ if(st.ss!=null&amp;&amp;e.setSelectionRange) e.setSelectionRange(st.ss,st.se); }catch(x){} }
   }
 }
 function numIn(get,set,step,key){
   const i=tag(el(&quot;input&quot;),key); i.type=&quot;number&quot;; i.step=step||&quot;any&quot;; i.value=get();
-  i.addEventListener(&quot;input&quot;,()=>{ const v=parseFloat(i.value); set(isNaN(v)?0:v); refresh(); });
+  i.__nb={get,set};   /* DECE: get/set looked up on the field, so a kept field uses its rebuilt copy's */
+  i.addEventListener(&quot;input&quot;,()=>{ const v=parseFloat(i.value); i.__nb.set(isNaN(v)?0:v); refresh(); });
+  i.addEventListener(&quot;blur&quot;,()=>cbNumBlur(i));
   return i;
 }
 function txtIn(get,set,key){
@@ -2133,7 +2158,8 @@ function buildInput(){
       const di=tag(el(&quot;input&quot;),&quot;ld&quot;+i); di.type=&quot;number&quot;; di.step=&quot;0.25&quot;;
       di.value=fmt(L.dMan!=null?L.dMan:G[i].d); di.readOnly=L.dMan==null; di.classList.toggle(&quot;autoD&quot;,L.dMan==null);
       di.title=L.dMan==null?&quot;Auto-computed from cover, stirrup \u0026 bar size \u2014 updates live as inputs change. Tick \u201cSet d\u201d to type an exact value.&quot;:&quot;Manual depth override&quot;;
-      di.addEventListener(&quot;input&quot;,()=>{ if(di.readOnly) return; const v=parseFloat(di.value); if(!isNaN(v)){L.dMan=v;refresh();} });
+      di.__nb={get:()=>L.dMan!=null?L.dMan:G[i].d,set:v=>{L.dMan=v;}};   /* DECE: kept while typing (cbKeepLive) */
+      di.addEventListener(&quot;input&quot;,()=>{ if(di.readOnly) return; const v=parseFloat(di.value); if(!isNaN(v)){di.__nb.set(v);refresh();} });
       c4.appendChild(di); tr.appendChild(c4);
       const c5=el(&quot;td&quot;,&quot;x&quot;);
       const rm=el(&quot;button&quot;,null,&quot;\u00d7&quot;); rm.title=&quot;Remove layer&quot;;
@@ -6508,20 +6534,45 @@ function captureUI(){
   return {ipTop:ip?ip.scrollTop:0, opTop:op?op.scrollTop:0,
     key:(a&amp;&amp;a.getAttribute)?a.getAttribute(&quot;data-fkey&quot;):null,
     ss:(a&amp;&amp;a.selectionStart!=null)?a.selectionStart:null,
-    se:(a&amp;&amp;a.selectionEnd!=null)?a.selectionEnd:null};
+    se:(a&amp;&amp;a.selectionEnd!=null)?a.selectionEnd:null,
+    live:cbLiveIn(a)};
+}
+/* DECE (2026-11-11): typing into a number field re-renders the whole input panel (refresh), which rebuilt the field from the
+   committed number, so a partial entry was lost (&quot;9.&quot; -&gt; &quot;9&quot;, then &quot;96&quot;; &quot;-&quot; -&gt; &quot;0&quot;). The field being typed in is now kept
+   (its text and caret) in place of its rebuilt copy, which lends it its attributes and its get/set (__nb). Display only:
+   the committed value is the same parseFloat of the same text as before. A field whose committed value differs from its text
+   (rounded, clamped, or set by a preset, e.g. bars 9.6 -&gt; 10, legs 1 -&gt; 2) shows the committed value when it is left (cbNumBlur),
+   no longer while typing (before: &quot;12&quot; legs became &quot;22&quot;). */
+function cbLiveIn(a){
+  const ev=window.event;
+  return (ev&amp;&amp;ev.type===&quot;input&quot;&amp;&amp;ev.target===a&amp;&amp;a.tagName===&quot;INPUT&quot;&amp;&amp;a.type===&quot;number&quot;&amp;&amp;a.__nb)?a:null;
+}
+function cbKeepLive(a,e){
+  if(!a||!e||a===e||e.tagName!==&quot;INPUT&quot;||e.type!==&quot;number&quot;||!e.__nb) return e;
+  for(const at of [...a.attributes]) if(!e.hasAttribute(at.name)) a.removeAttribute(at.name);
+  for(const at of [...e.attributes]) if(at.name!==&quot;value&quot;) a.setAttribute(at.name,at.value);
+  a.readOnly=e.readOnly; a.disabled=e.disabled; a.__nb=e.__nb;
+  e.replaceWith(a); return a;
+}
+/* DECE: on leaving a number field, show the committed value if the text left differs (&quot;-&quot;, &quot;&quot;, a value replaced by a preset) */
+function cbNumBlur(i){
+  setTimeout(()=>{ if(!i.isConnected||document.activeElement===i||!i.__nb) return;
+    const c=i.__nb.get(); if(i.validity.badInput||i.value===&quot;&quot;||parseFloat(i.value)!==parseFloat(c)) i.value=c; },0);
 }
 function restoreUI(st){
   if(!st) return;
   const ip=document.getElementById(&quot;inputPanel&quot;), op=document.getElementById(&quot;outputPanel&quot;);
   if(ip)ip.scrollTop=st.ipTop; if(op)op.scrollTop=st.opTop;
-  if(st.key){ const e=document.querySelector('[data-fkey=&quot;'+st.key+'&quot;]');
+  if(st.key){ const e=cbKeepLive(st.live,document.querySelector('[data-fkey=&quot;'+st.key+'&quot;]'));   /* DECE */
     if(e){ e.focus(); try{ if(st.ss!=null&amp;&amp;e.setSelectionRange) e.setSelectionRange(st.ss,st.se); }catch(x){} } }
 }
 
 /* ---------- input builders ---------- */
 function numIn(get,set,step,key){
   const i=tagf(el(&quot;input&quot;),key); i.type=&quot;number&quot;; i.step=step||&quot;any&quot;; i.value=get();
-  i.addEventListener(&quot;input&quot;,()=>{ const v=parseFloat(i.value); set(isNaN(v)?0:v); refresh(); });
+  i.__nb={get,set};   /* DECE: get/set looked up on the field, so a kept field uses its rebuilt copy's */
+  i.addEventListener(&quot;input&quot;,()=>{ const v=parseFloat(i.value); i.__nb.set(isNaN(v)?0:v); refresh(); });
+  i.addEventListener(&quot;blur&quot;,()=>cbNumBlur(i));
   return i;
 }
 function selIn(opts,get,set,lab,val,key){

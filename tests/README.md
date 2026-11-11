@@ -114,6 +114,11 @@ node tests/smoke/spread-footing-fdx-picker.mjs [--a origin/main]
 # Phone / tablet layout (PHN): at 390 and 768 px the page never scrolls sideways, on load and on every tab (one entry per tool in TOOLS)
 node tests/smoke/phone-layout.mjs [--tool smd,...] [--file <file or git ref>] [--w 390,768]
 
+# Decimal entry (DECE): every visible number field takes "9.6", "0.75", "-1.5" and "9.6" with the number-pad "." typed key by key, keeps
+# the focus and shows what was typed (default: the Concrete Beam Capacity suite, cbc,cbc2,cbasd,cbdev, with its behaviour checks; ~4 min).
+# Other tools are in TOOLS for a sweep (--list prints every field; an integer field that rounds shows e.g. 9.6 -> "9"). Some fail today.
+node tests/smoke/decimal-entry.mjs [--tool cbc,...] [--file <file>] [--strings 9.6,0.75,-1.5] [--max <n per view>] [--list]
+
 # Gusset Plate Rating: the MBE 4th Edition (2026) values adopted 2026-11-10 (hand-check values of the default project and the validation model;
 # a project saved before keeps its φ_s; owner RIDOT; Validation tab; 0 console errors). ~1 min
 node tests/smoke/gusset-mbe4.mjs
