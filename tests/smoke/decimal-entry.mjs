@@ -42,7 +42,7 @@ const TOOLS = {
   lp: { file: 'Light Pole and Sign Post.html', tabs: '#lppInTabs .lppInTab, #tabBar button', wait: 3000 },
   bpad: { file: 'BasePlateAnchorDesigner.html', tabs: '[role=tab], .tab-btn, .itab, .tab, [data-tab], .otab', wait: 5000 },
   asce7: { file: 'ASCE7-16 Load Generator.html', tabs: '#tabs .tab', wait: 3000 },
-  mlg: { file: 'Moving Load Generator.html', tabs: '#mlgInTabs button, #mlgOutTabs button', wait: 4000 },
+  mlg: { file: 'Moving Load Generator.html', tabs: '#mlgInTabs button, #mlgOutTabs button', wait: 4000, checks: 'mlgChecks' },
   bgeo: { file: 'Bridge Geometry.html', tabs: '.tabbtn[data-tab]', wait: 3000 },
   elasto: { file: 'elastomeric_design_module.html', tabs: TABS, wait: 4000 },
   sbapp: { file: 'apps/steel-bridge/index.html', tabs: '#inTabs [data-itab], #tabBar [data-otab]', wait: 3000 },
@@ -134,6 +134,33 @@ const CHECKS = {
     await leave();
     await typeIn('bf', '40.5'); chk(await F.evaluate(() => S.sec.bf) === 40.5 && await shown('bf') === '40.5', 'Flange width "40.5": kept and committed');
     await leave();
+    return out;
+  },
+  // Moving Load Generator (DECE, 2026-11-11): the headway (shown only for the two-vehicle step case), a lone "-" in the variable
+  // spacing and headway (the minimum is used while typing and put back on leaving the field), and the highway deflection DF and
+  // limit typed while a rail vehicle is selected (the rail DF and limit are used then)
+  async mlgChecks(p, F) {
+    const out = [], chk = (c, m) => { if (!c) out.push(m); console.log(`   ${c ? 'ok  ' : 'FAIL'} ${m}`); };
+    const typeIn = async (id, s) => { await F.evaluate(id => { const e = document.getElementById(id); e.scrollIntoView(); e.focus(); e.select(); }, id);
+      await p.keyboard.press('Control+A'); for (const ch of s) await p.keyboard.type(ch); await p.waitForTimeout(60);
+      return F.evaluate(() => document.activeElement.value); };
+    const leave = () => F.evaluate(() => document.activeElement.blur()).then(() => p.waitForTimeout(100));
+    await F.evaluate(() => { $('sCase').value = 'm'; $('sCase').dispatchEvent(new Event('input', { bubbles: true })); });
+    chk(await typeIn('sH', '-1.5') === '-1.5', 'Headway "-1.5": the typed text stays while typing'); await leave();
+    await typeIn('sH', '-');   // a lone "-" reads as an empty field; before, the minimum was written into it while typing
+    chk(await F.evaluate(() => { const e = document.activeElement, a = JSON.stringify(stepCfg()); if (e.id !== 'sH' || e.value !== '') return false;
+      e.value = RES.m.mHmin; const b = JSON.stringify(stepCfg()); e.value = ''; return a === b; }), 'Headway "-" alone: not overwritten while typing; the step uses the minimum headway (as before)');
+    const hMin = await F.evaluate(() => RES.m.mHmin);
+    await leave(); chk(await F.evaluate(() => $('sH').value) === String(hMin), `Headway "-" left: the minimum ${hMin} is put back (as before)`);
+    await F.evaluate(() => { $('sCase').value = 'p'; $('sCase').dispatchEvent(new Event('input', { bubbles: true })); });
+    await typeIn('sSp', '-'); const used = await F.evaluate(() => { const e = document.activeElement, a = JSON.stringify(stepCfg()); if (e.id !== 'sSp' || e.value !== '') return false;
+      e.value = RES.m.vMin; const b = JSON.stringify(stepCfg()); return a === b; });
+    chk(used, 'Var. spacing "-" alone: the step uses the minimum spacing (as before)'); await leave();
+    await F.evaluate(() => { $('preset').value = 'E80'; $('preset').dispatchEvent(new Event('change', { bubbles: true })); run(); });
+    await p.waitForTimeout(1500);
+    chk(await F.evaluate(() => !!(RES && RES.m.rail)), 'rail vehicle (E80) selected');
+    chk(await typeIn('dDF', '9.6') === '9.6', 'Deflection DF "9.6" with a rail vehicle: the typed text stays'); await leave();
+    chk(await typeIn('dLim', '-5') === '-5', 'Limit L/ "-5" with a rail vehicle: the typed text stays'); await leave();
     return out;
   },
 };
