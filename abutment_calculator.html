@@ -32,6 +32,8 @@
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
 <script src="shared/github-sync.js"></script>   <!-- GHS2 (2026-11-05): copy of the saved projects to a private GitHub repository; off until set up -->
+<script src="shared/handoff-store.js"></script>   <!-- ABX (2026-11-11): per-project hand-off copies (HANDOFF.md §5.1): the SubLoads pull lists them; the abutment definition is sent with one -->
+<script src="shared/abutment-def.js"></script>   <!-- ABX (2026-11-11): the abutment definition exchanged with Bridge Substructure Loading (HANDOFF.md §4.5 definition block, §4.15 abutmentDef) -->
 <style>
 /* ================= GLOBAL / THEME ================= */
 :root{
@@ -12504,26 +12506,25 @@ document.addEventListener("DOMContentLoaded",init);
     if(!o.wlC) o.gerr.wl="no valid wind-on-live-load cases";
     o.wlGov=o.wlC&&L.WL.governing&&o.wlC[+L.WL.governing.index]?+L.WL.governing.index:0;
     if(nb<2||nb>13) o.gerr.layout="the calculator takes 2 to 13 beams; SubLoads sent "+nb;
-    // geometry (ft) mapped to the calculator's names
-    const G=a.geometry||{}, E=G.elevations||{}, ci=a.calculatorInput||{}, cg=ci.geom||{};
-    const span=fin(+cg.spanL)?+cg.spanL:(p.bridge&&Array.isArray(p.bridge.spans)&&p.bridge.spans.length?+(o.end==="end"?p.bridge.spans[p.bridge.spans.length-1]:p.bridge.spans[0]):NaN);
-    o.geom=[["geom.hbw",+G.backwallHeight,"Backwall height h_bw","ft"],["geom.tbw",+G.backwallThickness,"Backwall thickness t_bw","ft"],
-      ["geom.hstem",+G.stemHeight,"Stem height","ft"],["geom.tst",+G.stemThickness,"Stem thickness, top","ft"],["geom.tsb",+G.stemThickness,"Stem thickness, bottom (SubLoads stem is prismatic)","ft"],
-      ["geom.brgSetback",+G.stemThickness-(+G.bearingToStemFront)-(+G.backwallThickness),"Bearing setback from backwall front = t_stem − (bearing to stem front) − t_bw","ft"],
-      ["geom.Ltoe",+G.toe,"Toe length","ft"],["geom.Lheel",+G.heel,"Heel length","ft"],["geom.tf",+G.footingThickness,"Footing thickness","ft"],
-      ["geom.Lab",+G.stemLengthAlongSkew,"Wall length (along skew)","ft"],["geom.Lftg",+G.stemLengthAlongSkew,"Footing length (= SubLoads stem length along skew)","ft"],
-      ["geom.soilH",(+E.topOfBackwall)-(+E.topOfFooting),"Soil height over heel = top of backwall − top of footing","ft"],
-      ["geom.spanL",span,"Span length (adjacent span)","ft"],["geom.skew",Math.abs(+a.skewDeg),"Skew |θ| (the calculator's skew is a magnitude)","deg"],
-      ["fnd.Df",(+E.ground)-(+E.bottomOfFooting),"Footing embedment D_f = ground − bottom of footing (passive)","ft"]];
-    if(ci.mat&&ci.mat.gc!=null) o.geom.push(["mat.gc",+ci.mat.gc,"Concrete unit weight","kcf"]);
+    /* ABX (2026-11-11): the geometry comes from the abutment definition (shared/abutment-def.js): the payload's definition block when it is
+       there and valid, else the same values read from an older payload's geometry / elevations (fromLoads); the soil, approach slab,
+       elevations and seismic-settings groups need the definition block. Geometry is split: "Abutment geometry and lengths" (owned by the
+       calculator) and "Bridge data at this abutment" (span, skew, roadway width: owned by SubLoads). L_ftg is the SubLoads L_ftg. */
+    const G=a.geometry||{}, ci=a.calculatorInput||{}, AD=window.SharedAbutmentDef;
+    if(!AD){ o.gerr.geom=o.gerr.bridge="the shared file shared/abutment-def.js is not loaded (keep the whole folder together)"; o.geom=[]; o.bridgeG=[]; o.T={ groups:{}, gerr:{} }; }
+    else {
+      let def=null; if(a.definition){ const v=AD.validate(a.definition); if(v.ok) def=a.definition; else o.warns.push("The definition block of this abutment is not used ("+v.errors.join("; ")+"); its geometry is read from the loads payload."); }
+      if(!def) def=AD.fromLoads(a,p);
+      o.def=def; o.T=AD.toAbutment(def,{ integral:iabType()==="integral", roadwayW:p.bridge&&p.bridge.roadwayWidth!=null?+p.bridge.roadwayWidth:null });
+      const gr=o.T.groups;
+      o.geom=gr.geom.items; o.bridgeG=gr.bridge.items; if(gr.geom.skip&&gr.geom.skip.length) o.geomSkip=gr.geom.skip;   // AXI: integral, only L_ab and w_c of the geometry
+      ["soil","aps","elev","seisset"].forEach(k=>{ o[k+"I"]=gr[k]?gr[k].items:null; o[k+"N"]=gr[k]&&gr[k].notes||[]; if(!gr[k]) o.gerr[k]=o.T.gerr[k]||"not sent"; });
+      const rng=(k,items)=>{ const b=(items||[]).filter(x=>typeof x.val==="number"&&typeof VALID!=="undefined"&&VALID[x.path]&&!hardOK(x.path,x.val)).map(x=>x.lbl+" = "+nfmt(x.val)); if(b.length) o.gerr[k]="out of the calculator's accepted range or not a number: "+b.join("; "); };
+      const nan=(k,items)=>{ const b=(items||[]).filter(x=>typeof x.val==="number"&&!fin(x.val)).map(x=>x.lbl); if(b.length) o.gerr[k]="not a number: "+b.join("; "); };
+      [["geom",o.geom],["bridge",o.bridgeG],["soil",o.soilI],["aps",o.apsI],["elev",o.elevI],["seisset",o.seissetI]].forEach(([k,it])=>{ if(!o.gerr[k]){ nan(k,it); if(!o.gerr[k]) rng(k,it); } });
+      ["bridge","soil","aps","elev","seisset"].forEach(k=>{ if(!o.gerr[k]&&o.T.gerr[k]&&k==="bridge") o.gerr[k]=o.T.gerr[k]; });
+    }
     o.skewSent=+a.skewDeg;   // ABPF (2026-11-11): SubLoads' skew is signed; the calculator takes |θ| (shown in the review row)
-    if(p.bridge&&p.bridge.roadwayWidth!=null) o.geom.push(["longit.roadwayW",+p.bridge.roadwayWidth,"Clear roadway width (used only by the calculator's own BR)","ft"]);
-    /* AXI (2026-10-21): integral abutment — no stem, footing, backwall or bearings: only the length, span, skew and concrete weight
-       of the geometry group apply; bearings, BR / TU / CR·SH (TU = the movement of Tab 10 §10.2; BR, CR·SH go into the superstructure
-       strut) and WS / WL (not used by the integral design) are not offered. DC, DW, LL, layout, A_s and ΔT apply. */
-    if(iabType()==="integral"){ const keep=["geom.Lab","geom.spanL","geom.skew","mat.gc"]; o.geomSkip=o.geom.filter(g=>!keep.includes(g[0])).map(g=>g[2]); o.geom=o.geom.filter(g=>keep.includes(g[0])); }
-    const gBad=o.geom.filter(g=>!hardOK(g[0],g[1])).map(g=>g[2]+" = "+nfmt(g[1]));
-    if(gBad.length) o.gerr.geom="out of the calculator's accepted range or not a number: "+gBad.join("; ");
     if(fin(+G.footingWidth)&&Math.abs((+G.toe)+(+G.stemThickness)+(+G.heel)-(+G.footingWidth))>0.01) o.warns.push("SubLoads footing width "+nfmt(+G.footingWidth)+" ft ≠ toe + stem + heel = "+nfmt((+G.toe)+(+G.stemThickness)+(+G.heel))+" ft; the calculator uses toe + stem + heel.");
     const B=a.bearings||{};
     o.brg=[["bearing.padL",+B.padLengthIn,"Pad length (along span)","in"],["bearing.padW",+B.padWidthIn,"Pad width (transverse)","in"],["bearing.G",+B.shearModulusKsi,"Elastomer shear modulus G","ksi"],["bearing.hrt",+B.rubberThicknessIn,"Total elastomer thickness h_rt","in"],["bearing.nBrgPerGird",1,"Bearings per girder (SubLoads: one per girder)",""]];
@@ -12546,7 +12547,18 @@ document.addEventListener("DOMContentLoaded",init);
     ["dc","DC per girder (DC1 + DC2)",true],["dw","DW per girder",true],["ll","LL+IM per girder",true],
     ["ws","WS: wind on structure (Strength III case)",true],["wl","WL: wind on live load",true],
     ["br","BR: braking (SubLoads share)",false],["tu","TU: uniform temperature (SubLoads share)",false],["crsh","CR/SH (SubLoads share)",false],
-    ["geom","Abutment geometry",true],["brg","Bearing pad",true],["seis","Seismic A_s",true],["therm","Temperature range ΔT rise / fall",false]];
+    ["bridge","Bridge data at this abutment: span, skew |θ|, roadway width",true],
+    ["geom","Abutment geometry and lengths",true],["soil","Soil and backfill",false],["aps","Approach slab",true],
+    ["brg","Bearing pad",true],["elev","Elevations (display only, Tab 1 §1.1a)",true],["seis","Seismic A_s",true],["seisset","Seismic settings: k_h ratio, k_v, ΔP_AE height ratio",false],
+    ["therm","Temperature range ΔT rise / fall",false]];
+  /* ABX (2026-11-11, engineer decisions): the calculator owns the abutment itself (geometry, lengths, soil, backfill); SubLoads owns the
+     bridge (span, skew, elevations, bearings, superstructure loads). Default ticks: SubLoads-owned groups ticked; the calculator-owned
+     geometry and approach slab ticked only while this project still has the calculator's default values for them (a new project), else
+     unticked with every difference shown; soil and backfill always unticked; seismic settings (bridge-wide in SubLoads) unticked. */
+  const OWNED=["geom","aps"];
+  function isDefaultGroup(o,k){ const D0=defaultState(), items=k==="geom"?o.geom:k==="aps"?(o.apsI||[]):[];
+    if(k==="aps"){ const A=S.apSlab||{}, A0=D0.apSlab; return ["on","L","t","W"].every(q=>JSON.stringify(A[q])===JSON.stringify(A0[q])); }
+    return items.every(x=>x.path==="geom.brgSetback"||JSON.stringify(getPath(S,x.path))===JSON.stringify(getPath(D0,x.path))); }
   const WHY={
     layout:"Needed when the beam count or offsets differ; the reaction rows are per girder.",
     dc:"DC1 (non-composite) and DC2 (composite) are summed: the calculator has one DC row and both take γDC.",
@@ -12557,7 +12569,13 @@ document.addEventListener("DOMContentLoaded",init);
     tu:"Off by default: the calculator can compute TU from its own pad shear. If ticked: Vx only, TU share set to 100% and the calculator's own TU switched off.",
     crsh:"Off by default: the calculator can compute CR/SH from its own pad shear. If ticked: |Vx| of the SubLoads SH case, CR/SH share set to 100% and the calculator's own CR/SH switched off.",
     crsh0:"SubLoads sent no creep/shrinkage case for this abutment. Ticked (the default when the calculator's own CR/SH generator is off): the calculator's CR/SH row is set to 0 for every girder, so an example or earlier hand-entered value does not stay in with SubLoads' loads; the CR/SH share is not changed, and the calculator's own CR/SH generator is switched off if it was on. Untick to keep the calculator's row as it is.",
-    geom:"Fills the I-1 geometry from the SubLoads abutment unit (the soil height and D_f from its elevations; the skew as |θ|). Soil, backfill and water inputs are not sent and stay as they are; so do the approach slab (panel I-0b), the display-only elevations (Tab 1 §1.1a) and the calculator-only geometry (backwall offset e, stem-shelf depth, wingwalls), which are listed when set.",
+    geom:"Fills the I-1 geometry and lengths (L_ab, L_ftg) from the SubLoads abutment unit (the soil height and D_f from its elevations). The calculator owns the abutment: ticked by default only while this project still has the calculator's default geometry; otherwise every difference is shown here and you decide. The calculator-only geometry (backwall offset e, stem-shelf depth, wingwalls) is kept and listed when set.",
+    geomOwn:"Unticked by default: this project has its own abutment geometry (the calculator owns the abutment). Tick it to take the SubLoads geometry; every difference is listed below when ticked.",
+    bridge:"Span length (adjacent span) and skew |θ| (the calculator's skew is a magnitude), and the clear roadway width used only by the calculator's own BR. SubLoads owns the bridge.",
+    soil:"Backfill γ, φ, δ, slope β, the h_eq table, ES, the water table h_w and the construction-stage fill and γ_LS from the SubLoads unit. Unticked by default: the calculator owns the soil and backfill.",
+    aps:"On / off, length, thickness and width of the approach slab (panel I-0b). The calculator computes its own slab reaction, wearing surface and live load from them; SubLoads' share and live-load option are not imported. Ticked by default only while this project still has the calculator's default slab inputs.",
+    elev:"The display-only elevations of Tab 1 §1.1a: beam seat elevation (SubLoads' bridge seat, top of stem), total bearing height (bearing + pedestal), girder depth, haunch and deck. No calculation reads them. SubLoads owns the elevations.",
+    seisset:"k_h / k_h0 (the calculator's automatic k_h ratio is switched off), k_v and the ΔP_AE height ratio. Bridge-wide in SubLoads (the same for every unit), so unticked by default; the calculator's ΔP_AE height mode is not changed.",
     brg:"Elastomeric pad size and properties (used by the calculator's own TU/CR·SH pad shear and the seat checks).",
     seis:"Site acceleration coefficient A_s only; the Extreme Event I on/off switch and the other seismic inputs are not changed.",
     therm:"Only used by the calculator's own TU generator."};
@@ -12594,9 +12612,12 @@ document.addEventListener("DOMContentLoaded",init);
     if(on("tu")) add("tu",[rxRow("TU","Vx",tuSet(o,st).map(x=>x.Vx))]);
     if(on("crsh")) add("crsh",[o.sh?rxRow("CRSH","Vx",o.sh.map(x=>Math.abs(x.Vx)))
       : Object.assign(rxRow("CRSH","Vx",o.y.map(()=>0)),{ note:CRSH_NONE })]);   // ABPF: SubLoads sent no SH case -> 0
-    if(on("geom")){ const it=o.geom.map(g=>one(g[0],r3(g[1]),g[2]+" ("+g[3]+")")), sk=it.find(x=>x.paths[0]==="geom.skew");
+    const ofI=items=>(items||[]).map(x=>Object.assign(one(x.path,x.val,x.lbl),x.note?{note:x.note}:{}));   // ABX: definition items (shared/abutment-def.js toAbutment)
+    if(on("bridge")){ const it=ofI(o.bridgeG), sk=it.find(x=>x.paths[0]==="geom.skew");
       if(sk&&fin(o.skewSent)&&o.skewSent<0) sk.note="Sign: SubLoads sent θ = "+nfmt(o.skewSent)+"° (signed, as entered there); the calculator's skew is a magnitude (0–60°), so |θ| = "+nfmt(r3(Math.abs(o.skewSent)))+"° is imported.";   // ABPF
-      add("geom",it); const kp=keptGeom(); if(kp.length) secs[secs.length-1].notes=["Kept as they are (calculator-only geometry, not sent by SubLoads; check them against the SubLoads abutment): "+kp.join("; ")+"."]; }
+      add("bridge",it); }
+    if(on("geom")){ add("geom",ofI(o.geom)); const kp=keptGeom(); if(kp.length) secs[secs.length-1].notes=["Kept as they are (calculator-only geometry, not sent by SubLoads; check them against the SubLoads abutment): "+kp.join("; ")+"."]; }
+    ["soil","aps","elev","seisset"].forEach(k=>{ if(on(k)){ add(k,ofI(o[k+"I"])); if(o[k+"N"]&&o[k+"N"].length&&secs.length&&secs[secs.length-1].k===k) secs[secs.length-1].notes=o[k+"N"].slice(); } });
     if(on("brg")) add("brg",o.brg.map(g=>one(g[0],r3(g[1]),g[2]+(g[3]?" ("+g[3]+")":""))));
     if(on("seis")) add("seis",[one("seismic.As",r3(o.As),"Acceleration coefficient A_s")]);
     if(on("therm")) add("therm",[one("longit.dTrise",r3(o.dT[0]),"Design temperature rise (°F)"),one("longit.dTfall",r3(o.dT[1]),"Design temperature fall (°F)")]);
@@ -12628,33 +12649,51 @@ document.addEventListener("DOMContentLoaded",init);
     u.push(["FR (bearing friction)","the calculator has no FR row"]);
     u.push(o.shNone?["SH (creep / shrinkage)","none sent for this abutment"+(st.on.crsh&&!o.gerr.crsh?"; the CR/SH group sets the calculator's row to 0":"; the calculator's CR/SH row is kept as it is")]:["SH P and Vy","the calculator's CR/SH row is Vx only"]);   // ABPF
     u.push(["EQ (superstructure seismic force"+(L.EQ&&L.EQ.basis?", "+L.EQ.basis:"")+")","the calculator computes its own superstructure inertia A_s·(DC+DW)·share for Extreme Event I and its own seat connection force per 3.10.9 (Zone 1: 0.15/0.25; single-span floor A_s·(DC+DW)); SubLoads' value is not imported"]);
-    u.push(["Approach slab"+(L.approachSlab?" (reaction, width, length, thickness, share)":""),(L.approachSlab?"NOT imported: ":"none sent; ")+"the calculator computes its own approach slab loads from its panel I-0b (Tab 1 §1.4a), which this pull does not change — "+(apOn()?"on":"off")+" in the calculator now"]);   // ABPF: the calculator has an approach slab (APS), not \"no load\"
-    u.push(["Bearing fixity, type, height, pedestal, seat and bottom-of-girder elevations; girder stations; unit station","not imported: the calculator's longitudinal restraint model (panel I-6) and its display-only bearing height, girder depth and seat elevation (Tab 1 §1.1a) are left as they are"]);
-    u.push(["Footing width; deck at ℄, bridge seat elevations","not imported: the calculator uses B = toe + stem + heel, and its display-only elevations (Tab 1 §1.1a, from its own seat elevation) are left as they are. Of the SubLoads elevations only top of backwall − top of footing (soil height) and ground − bottom of footing (D_f) are used, in the geometry group"]);
-    u.push(["Bridge data: spans, skews of other units, girder spacings, deck width, design lanes, IM %","no matching input (roadway width is used, in the geometry group)"]);
+    const dfn=!!(o.def&&!o.def.legacy);   // ABX (2026-11-11): the payload has a definition block: soil, approach slab, elevations and seismic settings are offered as groups
+    if(dfn) u.push(["Approach slab reaction and share sent by SubLoads"+(L.approachSlab?" ("+nfmt(+L.approachSlab.shareOnAbutment)+"% of the slab weight)":""),"not imported: the calculator computes its own slab reaction (half the slab, its skew rule, wearing surface and live load) from panel I-0b; the slab's on / off, length, thickness and width are in the Approach slab group"+(st.on.aps&&!o.gerr.aps?" (ticked)":" (not ticked: panel I-0b stays as it is, "+(apOn()?"on":"off")+")")]);
+    else u.push(["Approach slab"+(L.approachSlab?" (reaction, width, length, thickness, share)":""),(L.approachSlab?"NOT imported: ":"none sent; ")+"the calculator computes its own approach slab loads from its panel I-0b (Tab 1 §1.4a), which this pull does not change — "+(apOn()?"on":"off")+" in the calculator now"]);   // ABPF: the calculator has an approach slab (APS), not \"no load\"
+    if(dfn){ u.push(["Bearing fixity and type; per-girder seat and bottom-of-girder elevations; girder stations; unit station","not imported: the calculator's longitudinal restraint model (panel I-6) is left as it is; the bridge seat, bearing + pedestal height, girder, haunch and deck are in the Elevations group (display only)"]);
+      u.push(["Footing width","not imported: the calculator uses B = toe + stem + heel"]); }
+    else { u.push(["Bearing fixity, type, height, pedestal, seat and bottom-of-girder elevations; girder stations; unit station","not imported: the calculator's longitudinal restraint model (panel I-6) and its display-only bearing height, girder depth and seat elevation (Tab 1 §1.1a) are left as they are"]);
+    u.push(["Footing width; deck at ℄, bridge seat elevations","not imported: the calculator uses B = toe + stem + heel, and its display-only elevations (Tab 1 §1.1a, from its own seat elevation) are left as they are. Of the SubLoads elevations only top of backwall − top of footing (soil height) and ground − bottom of footing (D_f) are used, in the geometry group"]); }
+    u.push(["Bridge data: spans, skews of other units, girder spacings, deck width, design lanes, IM %","no matching input (the adjacent span, this abutment's skew and the roadway width are used, in the Bridge data group)"]);
     u.push(["calculatorInput block","not read directly; the same values are mapped here from the load cases and geometry (it is used only for the concrete unit weight and A_s)"]);
-    u.push(["Earth pressure, soil, backfill, water","not sent by SubLoads; the calculator computes EH, EV, LS, ES and water from its own soil, backfill and water inputs, which this pull does not change"]);
+    if(dfn) u.push(["Earth pressure","the calculator computes EH, EV, LS, ES and water itself; the SubLoads soil and backfill inputs are in the Soil and backfill group"+(st.on.soil&&!o.gerr.soil?" (ticked)":" (not ticked: the calculator's own inputs are kept)")+"; its K rule, Coulomb heel cases and water in front are its own"]);
+    else u.push(["Earth pressure, soil, backfill, water","not sent by SubLoads; the calculator computes EH, EV, LS, ES and water from its own soil, backfill and water inputs, which this pull does not change"]);
+    if(dfn) u.push(["Bridge-wide SubLoads inputs (concrete w_c, seismic k_h ratio, k_v, ΔP_AE ratio)","the same for every SubLoads unit: w_c is in the geometry group (the calculator's concrete), the seismic ones in the Seismic settings group (not ticked by default)"]);
     return u;
   }
+  /* ABX (2026-11-11): definitions that differ between the two tools; information only (separate engineer decisions, not aligned here) */
+  function diffs(o){ const q=S.seismic||{}, sd=o.def&&o.def.seismic;
+    return [["Live load surcharge with an approach slab","SubLoads removes LS only under MassDOT rules (3.3.1.3); the calculator also takes the AASHTO 3.11.6.5 reduction when panel I-0b says so ("+(apOn()?(S.apSlab.lsRed!==false?"on here":"off here"):"no slab here")+")"],
+      ["Height of the TU / WS / WL forces","SubLoads: top of bearing; the calculator: bridge seat"],
+      ["ΔP_AE height","SubLoads: "+(sd?nfmt(sd.hEQr):"0.6")+"·H; the calculator: "+(q.hEQmode==="ratio"?nfmt(+q.hEQr)+"·H (ratio mode)":"the static-pressure height (≥ H/3, 11.6.5.3)")],
+      ["Transverse BR / TU","their V_y is not imported (Vx only); the calculator's M_t comes from its own beam offsets and imported rows"],
+      ["TU","one direction is imported (rise or fall, Vx only); SubLoads sends both"]]; }
+
 
   /* ---------- dialog ---------- */
   function css(){ if(document.getElementById("axh-css")) return; const s=document.createElement("style"); s.id="axh-css";
     s.textContent=".axh-new{color:#c62828;font-weight:700}.axh-src{font-size:.8rem;color:#555}"+
       "#axh-ov{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 8px}"+
+      "#axh-pk-ov{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 8px}"+
+      "#axh-pk{background:#fff;color:#1a1a1a;max-width:760px;width:100%;border-radius:6px;padding:14px 18px;box-shadow:0 6px 30px rgba(0,0,0,.3);font-size:.86rem}#axh-pk table{border-collapse:collapse;width:100%;margin:4px 0}#axh-pk td,#axh-pk th{border:1px solid #ddd;padding:2px 6px;text-align:left;vertical-align:top}#axh-pk .axh-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}#axh-pk .axh-warn{color:#b26a00}"+
+      "#axh-dlg details.axh-off{margin:8px 0}#axh-dlg details.axh-off summary{cursor:pointer}"+
       "#axh-dlg{background:#fff;color:#1a1a1a;max-width:980px;width:100%;border-radius:6px;padding:14px 18px;box-shadow:0 6px 30px rgba(0,0,0,.3);font-size:.86rem}"+
       "#axh-dlg h3{margin:0 0 6px 0;font-size:1.05rem}#axh-dlg h4{margin:12px 0 4px 0;font-size:.92rem}#axh-dlg table{border-collapse:collapse;width:100%;margin:4px 0}"+
       "#axh-dlg td,#axh-dlg th{border:1px solid #ddd;padding:2px 6px;text-align:left;vertical-align:top}#axh-dlg .axh-grp{margin:3px 0}#axh-dlg .axh-why{color:#555;font-size:.8rem;margin-left:22px}"+
       "#axh-dlg .axh-err{color:#c62828}#axh-dlg .axh-warn{color:#b26a00}#axh-dlg .axh-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}#axh-dlg select{max-width:100%}"+
-      "@media print{#axh-pull,#axh-imp,#axh-ov{display:none !important}}";
+      "@media print{#axh-pull,#axh-imp,#axh-ov,#axh-pk-ov{display:none !important}}";
     document.head.appendChild(s); }
-  function open(p){
-    p=normalize(p); const c=check(p);
+  function open(p,meta){
+    meta=meta||{}; p=normalize(p); const c=check(p);
     if(c.err){ alert("Cannot use this hand-off: "+c.err); return; }
     const o0=c.abuts[0], st={ ai:0, ySys:"sent", ll:"conc", ws:o0.wsGov, wl:o0.wlGov, tu:"gov", spd:+(S.factors&&S.factors.vWS3)>0, on:{} };
     GROUPS.forEach(g=>{ st.on[g[0]]=g[2]; }); if(!(o0.As>0)) st.on.seis=false;
-    st.on.crsh=crshDef(o0);
-    DLG={ p, c, st }; css(); render();
+    st.on.crsh=crshDef(o0); ownTicks(o0,st);
+    DLG={ p, c, st, pid:meta.pid||"", via:meta.via||"" }; css(); render();
   }
+  function ownTicks(o,st){ st.dflt={}; OWNED.forEach(k=>{ st.dflt[k]=isDefaultGroup(o,k); st.on[k]=st.dflt[k]; }); }   // ABX: calculator-owned groups
   function close(){ const ov=document.getElementById("axh-ov"); if(ov) ov.remove(); DLG=null; }
   function cellTxt(v){ return Array.isArray(v)?v.map(nfmt).join(", "):nfmt(v); }
   function render(){
@@ -12674,7 +12713,7 @@ document.addEventListener("DOMContentLoaded",init);
     if(o.tu) h+="<tr><td>TU case</td><td><select data-axh='tu'><option value='gov'"+(st.tu==="gov"?" selected":"")+">Larger push toward the span (SubLoads' choice)</option><option value='rise'"+(st.tu==="rise"?" selected":"")+">Rise ("+nfmt(+o.L.TU.riseDegF)+" °F)</option><option value='fall'"+(st.tu==="fall"?" selected":"")+">Fall ("+nfmt(+o.L.TU.fallDegF)+" °F)</option></select></td></tr>";
     h+="</table><h4>Groups to import</h4>";
     GROUPS.forEach(([k,lab])=>{ const dis=o.gerr[k], z=k==="crsh"&&o.shNone;   // ABPF: CR/SH with no SH case sent = set the row to 0
-      h+="<div class='axh-grp'><label><input type='checkbox' data-axh-g='"+k+"'"+(st.on[k]&&!dis?" checked":"")+(dis?" disabled":"")+"> <b>"+esc(z?"CR/SH: set to 0 (SubLoads sent no CR/SH case)":lab)+"</b></label>"+(dis?" <span class='axh-err'>— not available: "+esc(dis)+"</span>":"")+"<div class='axh-why'>"+esc(z?WHY.crsh0:(WHY[k]||""))+"</div></div>"; });
+      h+="<div class='axh-grp'><label><input type='checkbox' data-axh-g='"+k+"'"+(st.on[k]&&!dis?" checked":"")+(dis?" disabled":"")+"> <b>"+esc(z?"CR/SH: set to 0 (SubLoads sent no CR/SH case)":lab)+"</b></label>"+(dis?" <span class='axh-err'>— not available: "+esc(dis)+"</span>":"")+"<div class='axh-why'>"+esc(z?WHY.crsh0:(WHY[k]||"")+(OWNED.indexOf(k)>=0&&st.dflt&&st.dflt[k]===false&&!dis?" "+WHY.geomOwn.replace("abutment geometry",k==="aps"?"approach slab inputs":"abutment geometry"):""))+"</div></div>"; });
     const nMis=(st.on.layout&&!o.gerr.layout)?0:(+S.beams.N!==o.nb?1:0), rxOn=["dc","dw","ll","ws","wl","br","tu","crsh"].some(k=>st.on[k]&&!o.gerr[k]);
     const errs=[]; if(nMis&&rxOn) errs.push("The calculator has "+S.beams.N+" beams and SubLoads sent "+o.nb+": tick \"Girder layout\" to import per-girder reactions.");
     const warns=o.warns.slice();
@@ -12689,7 +12728,12 @@ document.addEventListener("DOMContentLoaded",init);
     secs.forEach(s=>{ h+="<table><tr><th colspan='3'>"+esc(s.title)+"</th></tr>"+s.items.map(it=>{ const cur=it.paths.length===1?getPath(S,it.paths[0]):it.paths.map(q=>getPath(S,q)), nv=it.paths.length===1?it.vals[0]:it.vals;
       return "<tr><td style='width:32%'>"+esc(it.lbl)+"</td><td>"+esc(cellTxt(cur))+"</td><td><b>"+esc(cellTxt(nv))+"</b></td></tr>"+(it.note?"<tr><td colspan='3' class='axh-why axh-note'>"+esc(it.note)+"</td></tr>":""); }).join("")
       +(s.notes||[]).map(n=>"<tr><td colspan='3' class='axh-why axh-note'>"+esc(n)+"</td></tr>").join("")+"</table>"; });
+    /* ABX (2026-11-11): the groups not ticked, current vs incoming side by side (kept as they are unless ticked) */
+    const offK=GROUPS.map(g=>g[0]).filter(k=>!st.on[k]&&!o.gerr[k]), offS=offK.length?plan(o,Object.assign({},st,{ on:Object.fromEntries(offK.map(k=>[k,true])) })).filter(x=>x.k!=="linked"):[];
+    if(offS.length) h+="<details class='axh-off'><summary><b>Not ticked</b>: current vs SubLoads for "+offS.length+" group"+(offS.length>1?"s":"")+" (kept as they are)</summary>"+offS.map(s=>"<table><tr><th colspan='3'>"+esc(s.title)+" — not ticked</th></tr>"+s.items.map(it=>{ const cur=it.paths.length===1?getPath(S,it.paths[0]):it.paths.map(q=>getPath(S,q)), nv=it.paths.length===1?it.vals[0]:it.vals;
+      return "<tr><td style='width:32%'>"+esc(it.lbl)+"</td><td>"+esc(cellTxt(cur))+"</td><td>"+esc(cellTxt(nv))+(cellTxt(cur)!==cellTxt(nv)?" <span class='axh-warn'>differs</span>":"")+"</td></tr>"; }).join("")+(s.notes||[]).map(n=>"<tr><td colspan='3' class='axh-why axh-note'>"+esc(n)+"</td></tr>").join("")+"</table>").join("")+"</details>";
     h+="<h4>Sent but not used</h4><table><tr><th>Field</th><th>Why</th></tr>"+unused(o,st).map(r=>"<tr><td>"+esc(r[0])+"</td><td>"+esc(r[1])+"</td></tr>").join("")+"</table>";
+    h+="<h4>Different definitions in the two tools (information only)</h4><table><tr><th>Item</th><th>SubLoads / this calculator</th></tr>"+diffs(o).map(r=>"<tr><td>"+esc(r[0])+"</td><td>"+esc(r[1])+"</td></tr>").join("")+"</table><div class='axh-why'>Not aligned by this pull; each tool keeps its own definition.</div>";
     h+="<div class='axh-btns'><button type='button' id='axh-cancel'>Cancel</button><button type='button' id='axh-apply' class='primary'"+(errs.length||!secs.length?" disabled":"")+">Apply to the calculator</button></div>";
     let ov=document.getElementById("axh-ov");
     if(!ov){ ov=document.createElement("div"); ov.id="axh-ov"; ov.innerHTML="<div id='axh-dlg' role='dialog' aria-modal='true' aria-label='Pull abutment loads from SubLoads'></div>"; document.body.appendChild(ov); }
@@ -12710,7 +12754,10 @@ document.addEventListener("DOMContentLoaded",init);
     const nts=[]; if(grp.indexOf("crsh")>=0&&o.shNone) nts.push("CR/SH row set to 0 (SubLoads sent no creep/shrinkage case)");
     if(grp.indexOf("geom")>=0&&fin(o.skewSent)&&o.skewSent<0) nts.push("skew |θ| = "+nfmt(r3(Math.abs(o.skewSent)))+"° (SubLoads sent "+nfmt(o.skewSent)+"°; the calculator's skew is a magnitude)");
     if(grp.indexOf("geom")>=0){ const kp=keptGeom(); if(kp.length) nts.push("calculator-only geometry kept: "+kp.join("; ")); }
+    if(o.def&&!o.def.legacy&&grp.indexOf("geom")<0&&st.dflt&&st.dflt.geom===false) nts.push("abutment geometry kept (this project's own; not ticked)");   // ABX
+    if(grp.indexOf("soil")>=0) nts.push("soil and backfill from SubLoads");
     S.subloadsSrc={ producer:p.producer||"", producedAt:p.producedAt||"", project:(p.project&&p.project.name)||"", abutment:o.name, groups:grp,
+      ...(DLG.pid?{ pid:DLG.pid }:{}), ...(DLG.via?{ via:DLG.via }:{}), ...(o.def&&!o.def.legacy&&window.SharedAbutmentDef?{ defHash:SharedAbutmentDef.hash(o.def) }:{}),   // ABX (optional): the project copy pulled, and the definition's hash
       choices:{ ll:grp.indexOf("ll")>=0?st.ll:null, ws:grp.indexOf("ws")>=0?o.wsC[st.ws].name:null, wl:grp.indexOf("wl")>=0?o.wlC[st.wl].name:null, tu:grp.indexOf("tu")>=0?st.tu:null,
         ySign:o.end==="end"&&st.ySys==="span"?"mirrored (+ left looking from the backfill toward the span)":"as sent (+ left looking ahead station)", windSpeeds:grp.indexOf("ws")>=0&&st.spd&&o.spdOK }, appliedAt:new Date().toISOString() };
     if(nts.length) S.subloadsSrc.notes=nts;
@@ -12720,13 +12767,44 @@ document.addEventListener("DOMContentLoaded",init);
     const ss=document.getElementById("saveStatus"); if(ss) ss.textContent="loads pulled from SubLoads ("+o.name+")";
   }
 
+  /* ---------- ABX (2026-11-11): per-project copies (HANDOFF.md §5.1, shared/handoff-store.js): the pull lists this browser's copies
+     (bridgeSuite.v1.abutmentLoads.by.subloads.<project id> and the latest hand-off), and with Cloud sync the GitHub copies; with more than
+     one project it first asks which one (the project named like this one is preselected). One project: the review opens at once. ---------- */
+  let PKA=null;
+  function listOpts(){ return { storage:localStorage, channel:CH, schema:SCH, maxVersion:1, producers:["subloads"], legacy:[{ key:BX().NS+CH, via:"latest hand-off" }], fetch:(u,i)=>window.fetch(u,i) }; }
+  function syncOn(){ try{ return !!(window.SharedGitHubSync&&SharedGitHubSync.configured(SharedGitHubSync.settings(localStorage))); }catch(e){ return false; } }
+  function listCopies(cb){
+    const HS=window.SharedHandoffStore;
+    if(!HS){ const r=BX().read(CH,SCH,1); cb(r.error?{ groups:[], errors:r.empty?[]:[r.error] }:{ groups:[{ pid:"", label:"latest hand-off", project:{}, entries:[{ payload:r.payload }], newest:{ payload:r.payload, source:"legacy" } }], errors:[] }); return; }
+    if(!syncOn()){ const L=HS.local(listOpts()); cb({ groups:HS.group(L.entries), errors:L.errors, cloud:"off" }); return; }
+    HS.list(listOpts()).then(cb,e=>cb({ groups:[], errors:[String(e&&e.message||e)] }));
+  }
+  const viaOf=g=>(g.pid?"pull, project "+g.label:"pull")+(g.newest&&g.newest.source==="github"?" (GitHub)":"");
+  function picker(r){ const HS=window.SharedHandoffStore; PKA={ groups:r.groups, errs:r.errors||[], cloud:r.cloud||"off", sel:HS?HS.match(r.groups,{ name:(S.proj&&S.proj.name)||"", bridgeId:"" }):null }; css(); pkRender(); }
+  function pkClose(){ const ov=document.getElementById("axh-pk-ov"); if(ov) ov.remove(); PKA=null; }
+  function pkRender(){
+    const K=PKA, nm=(S.proj&&S.proj.name)||"";
+    let h="<h3>Pull abutment loads from SubLoads: which project?</h3><p>Newest first. "+(K.sel!=null?"Preselected: the project named like this one (\""+esc(nm)+"\").":"None matches this project's name"+(nm?" (\""+esc(nm)+"\")":"")+": pick one.")+" "+(K.cloud==="ok"?"Copies sent from other devices (GitHub) are included.":K.cloud==="off"?"Cloud sync is not set up: the copies sent in this browser only.":"GitHub could not be read: this browser's copies only.")+"</p>";
+    h+="<table><tr><th></th><th>Project</th><th>Sent</th><th>Abutments</th></tr>"+K.groups.map((g,i)=>{ const p=g.newest.payload, ab=(p.abutments||[]).filter(a=>a&&!a.error).map(a=>a.name).join(", ");
+      return "<tr data-axh-pk='"+i+"' style='cursor:pointer'><td><input type='radio' name='axh-pk'"+(K.sel!=null&&K.sel===g.pid?" checked":"")+" aria-label='"+esc(g.label)+"'></td><td>"+(g.noProject?"<i>"+esc(g.label)+"</i>":esc(g.label))+"</td><td>"+esc(when(p.producedAt))+(p.device?", "+esc(p.device):"")+"</td><td>"+esc(ab)+"</td></tr>"; }).join("")+"</table>";
+    if(K.errs.length) h+="<div class='axh-warn'>Not offered: "+esc(K.errs.join("; "))+"</div>";
+    const ok=K.sel!=null&&K.groups.some(g=>g.pid===K.sel);
+    h+="<div class='axh-btns'><button type='button' id='axh-pk-cancel'>Cancel</button><button type='button' id='axh-pk-next' class='primary'"+(ok?"":" disabled")+">Next: review</button></div>";
+    let ov=document.getElementById("axh-pk-ov");
+    if(!ov){ ov=document.createElement("div"); ov.id="axh-pk-ov"; ov.className="axh-ovl"; ov.innerHTML="<div id='axh-pk' class='axh-box' role='dialog' aria-modal='true' aria-label='Pull abutment loads: which project?'></div>"; document.body.appendChild(ov); }
+    ov.querySelector("#axh-pk").innerHTML=h; }
+  /* new data for the pulled project: a copy of S.subloadsSrc.pid in this browser newer than the one applied (no request) */
+  function newerCopy(){ const HS=window.SharedHandoffStore, s=S.subloadsSrc; if(!HS||!s||!s.pid) return false;
+    try{ return HS.local(listOpts()).entries.some(e=>e.pid===s.pid&&String(e.payload.producedAt||"")>String(s.producedAt||"")); }catch(e){ return false; } }
+
   /* ---------- toolbar state, report line ---------- */
-  const GL={ layout:"layout", dc:"DC", dw:"DW", ll:"LL+IM", ws:"WS", wl:"WL", br:"BR", tu:"TU", crsh:"CR/SH", geom:"geometry", brg:"bearing", seis:"A_s", therm:"ΔT" };
+  const GL={ layout:"layout", dc:"DC", dw:"DW", ll:"LL+IM", ws:"WS", wl:"WL", br:"BR", tu:"TU", crsh:"CR/SH", geom:"geometry", brg:"bearing", seis:"A_s", therm:"ΔT",
+    bridge:"span / skew", soil:"soil and backfill", aps:"approach slab", elev:"elevations", seisset:"seismic settings" };   // ABX
   function srcText(){ const s=S.subloadsSrc; if(!s||!s.producedAt&&!s.producer) return "";
     return "Loads from "+(s.producer||"SubLoads")+", "+when(s.producedAt)+(s.project?" ("+s.project+")":"")+": "+(s.abutment||"")+" — "+(s.groups||[]).map(g=>GL[g]||g).join(", ")
       +(Array.isArray(s.notes)&&s.notes.length?" ("+s.notes.join("; ")+")":""); }   // ABPF: the pull's assumptions
   function paint(){
-    const nw=!!(BX()&&BX().isNew(CH,RID)), n=document.getElementById("axh-new"); if(n) n.hidden=!nw;
+    const nw=!!(BX()&&(BX().isNew(CH,RID)||newerCopy())), n=document.getElementById("axh-new"); if(n) n.hidden=!nw;
     const s=document.getElementById("axh-src"); if(s){ const tx=srcText(); s.textContent=tx? tx+"." : "none."; }
     // HOC (2026-11-10): the Hand-offs card's status line (the same isNew as the new-data marker; nothing stored)
     let up=""; try{ up=BX()? localStorage.getItem(BX().NS+CH+".updatedAt")||"" : ""; }catch(e){}
@@ -12742,9 +12820,14 @@ document.addEventListener("DOMContentLoaded",init);
     const t=ev.target; if(!t||!t.closest) return;
     if(t.closest("#axh-pull")){
       if(!BX()){ alert("The hand-off helper is not available in this browser."); return; }
-      const r=BX().read(CH,SCH,1);
-      if(r.error){ alert(r.empty?"Nothing has been sent yet. In Bridge Substructure Loading, click \"Send to Abutment Calculator\" (or use \"Import hand-off (JSON)\")." :"Cannot use the SubLoads hand-off: "+r.error); return; }
-      open(r.payload); return; }
+      listCopies(r=>{
+        if(!r.groups.length){ alert(r.errors.length?"Cannot use the SubLoads hand-off: "+r.errors.join("; "):"Nothing has been sent yet. In Bridge Substructure Loading, click \"Send to Abutment Calculator\" (or use \"Import hand-off (JSON)\")."); return; }
+        if(r.groups.length===1){ const g=r.groups[0]; open(g.newest.payload,{ pid:g.pid, via:viaOf(g) }); return; }
+        picker(r); });
+      return; }
+    if(t.id==="axh-pk-cancel"){ pkClose(); return; }
+    if(t.id==="axh-pk-next"){ const K=PKA; if(!K) return; const g=K.groups.find(x=>x.pid===K.sel); if(!g) return; pkClose(); open(g.newest.payload,{ pid:g.pid, via:viaOf(g) }); return; }
+    const pr=t.closest("tr[data-axh-pk]"); if(pr&&PKA){ PKA.sel=PKA.groups[+pr.getAttribute("data-axh-pk")].pid; pkRender(); return; }
     if(t.closest("#axh-imp")){ const f=document.getElementById("axh-file"); if(f) f.click(); return; }
     if(t.id==="axh-cancel"){ close(); return; }
     if(t.id==="axh-apply"){ apply(); return; }
@@ -12752,13 +12835,13 @@ document.addEventListener("DOMContentLoaded",init);
   document.addEventListener("change",ev=>{
     const t=ev.target; if(!t) return;
     if(t.id==="axh-file"){ const f=t.files&&t.files[0]; if(!f) return;
-      const fr=new FileReader(); fr.onload=()=>{ let p; try{ p=JSON.parse(fr.result); }catch(e){ alert("Import failed: the file is not valid JSON."); return; } open(p); };
+      const fr=new FileReader(); fr.onload=()=>{ let p; try{ p=JSON.parse(fr.result); }catch(e){ alert("Import failed: the file is not valid JSON."); return; } open(p,{ via:"file: "+f.name }); };
       fr.onerror=()=>alert("Import failed: could not read the file."); fr.readAsText(f); t.value=""; return; }
     if(!DLG||!t.closest||!t.closest("#axh-dlg")) return;
     ev.stopPropagation();
     const st=DLG.st, k=t.getAttribute("data-axh"), g=t.getAttribute("data-axh-g");
     if(g){ st.on[g]=t.checked; }
-    else if(k==="ai"){ st.ai=+t.value; const o=DLG.c.abuts[st.ai]; st.ws=o.wsGov; st.wl=o.wlGov; st.on.seis=o.As>0; st.on.crsh=crshDef(o); }
+    else if(k==="ai"){ st.ai=+t.value; const o=DLG.c.abuts[st.ai]; st.ws=o.wsGov; st.wl=o.wlGov; st.on.seis=o.As>0; st.on.crsh=crshDef(o); ownTicks(o,st); }
     else if(k==="spd"){ st.spd=t.checked; }
     else if(k==="ws"||k==="wl"){ st[k]=+t.value; }
     else if(k){ st[k]=t.value; }

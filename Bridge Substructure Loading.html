@@ -238,6 +238,7 @@ header { height: 54px; flex: none; display: flex; align-items: center; gap: 10px
 <script src="shared/projects-ui.js"></script>
 <script src="shared/github-sync.js"></script>   <!-- GHS (2026-11-05): copy of the saved projects to a private GitHub repository; off until set up -->
 <script src="shared/handoff-store.js"></script>   <!-- GXF (2026-11-09): per-project hand-off copies (HANDOFF.md §5.1): the project picker of the geometry and reactions pulls -->
+<script src="shared/abutment-def.js"></script>   <!-- ABX (2026-11-11): the abutment definition exchanged with the abutment calculator (HANDOFF.md §4.5 definition block, §4.15 abutmentDef) -->
 <script src="shared/dxf.js"></script>   <!-- SLDW (2026-11-11): the Drawings tab and Export DXF (shared DXF R12 writer, preview and print) -->
 <script>
 /* BridgeXfer v1 — cross-tool hand-off helper. Spec: HANDOFF.md. Duplicated verbatim in each tool that sends or receives (CLAUDE.md §3). */
@@ -2807,6 +2808,7 @@ function abutHandoffPayload() {
   let j; try { j = abutExportData(); } catch (e) { return { err: 'The abutment export failed: ' + e.message }; }
   const good = j.abutments.filter(a => !a.error);
   if (!good.length) return { err: 'No abutment could be exported: ' + j.abutments.map(a => `${a.name}: ${a.error}`).join('; ') };
+  good.forEach(a => { const d = abutDefOf(a.supportIndex); if (d) a.definition = d; });   // ABX (2026-11-11): additive definition block (HANDOFF.md §4.5); the "Export abutments" file is unchanged
   const sp = window.BridgeXfer && BridgeXfer.sharedProject ? BridgeXfer.sharedProject() : null;
   const p = Object.assign({}, j, {
     _schema: 'bridge-abutment-loads', schemaVersion: 1, producer: 'Bridge Substructure Loading', producerFile: 'Bridge Substructure Loading.html',
@@ -2819,8 +2821,20 @@ function abutHandoffPayload() {
       'LL+IM values are total bearing reactions per girder with IM and multiple presence already included (not per lane).',
       'Vx is + toward the span (toward the toe); Vy and girder offsets y are + to the left looking ahead station; P is + downward.',
       'Horizontal forces are already this abutment\'s share (stiffness distribution in SubLoads), split equally among the girders.',
-      'Earth pressure, soil and backfill properties are not sent: the abutment calculator computes them.'].concat(j.abutments.filter(a => a.error).map(a => `${a.name} was not exported: ${a.error}`)) });
+      'Earth pressure is not sent: the abutment calculator computes it. Each abutment carries a definition block (geometry, lengths, elevations, soil and backfill, approach slab, seismic settings); the calculator owns the soil and backfill, so its pull offers them unticked.'].concat(j.abutments.filter(a => a.error).map(a => `${a.name} was not exported: ${a.error}`)) });
   return { p, n: good.length };
+}
+/* ABX (2026-11-11): the abutment definition of unit k (shared/abutment-def.js fromSubLoads: the canonical definition the abutment calculator
+   reads, HANDOFF.md §4.5): geometry, lengths, elevations, soil and backfill, approach slab, seismic settings, concrete and pad, read from
+   the unit's inputs and the unit geometry already computed (MODEL.UG). Read only; nothing here changes a SubLoads input or result. */
+function abutDefOf(k) {
+  if (!window.SharedAbutmentDef) return null;
+  const G = MODEL.G, R = MODEL.UG[k], u = P.units[k], S = G.sup[k], b = P.br; if (!R || u.type !== 'abut') return null;
+  const e = fillEarth(u).earth, S0 = eqSite();
+  return SharedAbutmentDef.fromSubLoads({ name: u.name, end: k === 0 ? 'begin' : 'end', skewDeg: nz(b.skews[k]), spanL: G.spans[k === 0 ? 0 : G.spans.length - 1],
+    abut: u.abut, ftg: u.ftg, Lab: R.capLen, Lftg: abFtgL(R), stemTop: R.stemTop, bwTop: R.bwTop, topFtg: nz(u.topFtg), ftgBot: R.ftgBot, ground: nz(u.ground), deckZ: S.deckZ,
+    hbIn: nz(u.hb), hpIn: nz(u.hp), br: { d: nz(b.d), haunch: nz(b.haunch), ts: nz(b.ts), wc: nz(b.wc) || 0.150, khR: nz(b.khR), kv: nz(b.kv), hEQr: nz(b.hEQr) || 0.6 }, As: S0.As,
+    earth: e, aslW: num(e.asW) > 0 ? num(e.asW) : G.Wd, elast: u.elast, brgType: S.rows[0].fx.brg });
 }
 (function patchAbxHandoff() {
   const g = document.querySelector('.hdr-group'), ax = document.getElementById('btn-abx');
@@ -2838,6 +2852,7 @@ document.addEventListener('click', e => {
   if (id === 'btn-abx-hf') { const r = BridgeXfer.exportFile('abutmentLoads', Object.assign({}, b.p, { producedAt: new Date().toISOString() })); return r.error ? flash(r.error, 'fail') : flash(`Exported the abutment loads hand-off (${b.n} abutment${b.n > 1 ? 's' : ''}).`); }
   const r = BridgeXfer.publish('abutmentLoads', b.p, 'Bridge Substructure Loading', 'Bridge Substructure Loading.html');
   if (r.error) return flash(r.error, 'fail');
+  if (window.SharedHandoffStore) SharedHandoffStore.send({ storage: localStorage, channel: 'abutmentLoads', producer: 'subloads', payload: r.payload, fetch: (u, i) => window.fetch(u, i) }).catch(() => { });   // ABX (2026-11-11): per-project copy bridgeSuite.v1.abutmentLoads.by.subloads.<pid> (HANDOFF.md §5.1)
   flash(`Sent ${b.n} abutment${b.n > 1 ? 's' : ''} to the abutment calculator. Open it and click "Pull from SubLoads".`);
 });
 /* =====================================================================
@@ -5114,7 +5129,7 @@ function sldwRender() {
     + '<div id="slHoRecv"></div>'
     + '<div class="slHoGrp">Send to other tools</div>'
     + R('Shared project info', 'to every tool', '<div class="slRow" style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn btn-sm" id="bx-pm-share" title="Share these project fields with the other tools">Share project info</button></div>')
-    + R('Abutment loads', 'to the abutment calculator (bridgeSuite.v1.abutmentLoads)', '<p class="note" style="padding:0">Unfactored abutment reactions per girder and geometry: a JSON file, or sent to "Pull from SubLoads".</p><div class="slRow" data-ids="btn-abx-send btn-abx-hf btn-abx"></div><p class="note" style="padding:2px 0 0" id="slHoSentAbx"></p>')
+    + R('Abutment loads', 'to the abutment calculator (bridgeSuite.v1.abutmentLoads)', '<p class="note" style="padding:0">Unfactored abutment reactions per girder, and each abutment\'s definition (geometry, lengths, elevations, soil and backfill, approach slab, seismic settings): a JSON file, or sent to "Pull from SubLoads" (kept per project).</p><div class="slRow" data-ids="btn-abx-send btn-abx-hf btn-abx"></div><p class="note" style="padding:2px 0 0" id="slHoSentAbx"></p>')
     + R('Foundation loads', 'to Pile Designer and Shallow Foundation Design (bridgeSuite.v1.foundationLoads)', '<p class="note" style="padding:0">Factored and service loads at the bottom of a unit, per limit state (the dialog asks which unit).</p><div class="slRow" data-ids="btn-fdx"></div><p class="note" style="padding:2px 0 0" id="slHoSentFdx"></p>'), { one: true })
     + '</div>' + sec('Project files', G('Drawings', 'The bridge and its units as a DXF file.', 'btn-dxf'));
   const hoCss = document.createElement('style'); hoCss.textContent = '#slHo .slHoGrp{margin:8px 0 2px;font-size:.72rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted,#64748b)}#slHo .slHoRow{border-top:1px solid var(--line,#e2e8f0);padding:6px 0 4px}#slHo .slHoWho{font-size:.85rem}#slHo .slRow{display:flex;gap:6px;flex-wrap:wrap;align-items:center}';
