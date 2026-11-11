@@ -49,7 +49,7 @@ const PROJ = async () => {
   P.br.owner = 'massdot'; P.br.Rc = 1500; P.br.Vd = 45; P.br.nBR = 2; P.br.traffic = 'one'; P.br.joint[2] = 'joint'; syncSupports(); P.units[2].rowOff = 1.5;
   await snap('pile-ham-ship-massdot');
   P = defP(); P.br.spans = [120]; syncSupports(); recompute();
-  { const u = P.units[0]; fillEarth(u); Object.assign(u.earth, { method: 'coulomb', delta: 20, phi: 34, beta: 5, gamma: 0.125, hw: 3, asOn: 'yes', asW: '', asL: 25, asT: 15, asPct: 50, asLL: 'yes', esQ: 0.1, constrFill: 6, gLLc: 1.5 }); fillEarth(P.units[1]); }
+  { const u = P.units[0]; fillEarth(u); Object.assign(u.earth, { method: 'coulomb', delta: 20, phi: 34, beta: 5, gamma: 0.125, hw: 3, asOn: 'yes', asW: '', asL: 25, asT: 15, asPct: 50, asLL: 'yes', esQ: 0.1, constrFill: 6, gLLc: 1.5 , lsRed: 'no' }); fillEarth(P.units[1]); }
   P.br.eqSa = [0.18, 0.182, 0.19, 0.21, 0.25, 0.29, 0.32, 0.36, 0.37, 0.36, 0.34, 0.3, 0.26, 0.19, 0.14, 0.09, 0.066, 0.042, 0.03, 0.023, 0.014, 0.0095];
   P.br.eqSiteClass = 'D'; P.br.gEQ = 0.5; P.br.ehEQmode = 'agency'; P.br.gEHEQ = 1.2; P.br.lf = P.br.lf || {}; P.br.lf.StrI = { dcMax: 1.3, ll: 1.8 }; P.br.khR = 0.6; P.br.kv = 0.1;
   await snap('abut-earth-seismic');
@@ -166,7 +166,10 @@ if (REF) {
   // SLAL (2026-11-11): the abutment-length note (Geometry tab, Report) and its two input-check ranges are display text added after
   // this test; taken out of both sides' text (every result is still compared)
   const slal = t => typeof t !== 'string' ? t : t.replace(/\n?Abutment length: L[\s\S]*?as before this input was added\./g, '').replace(/Abutment length along the bearing line L_ab: blank or greater than 0 ft; (Footing length L_ftg: blank or greater than 0 ft; )?/g, '');
-  [...A, ...B].forEach(r => { const o = r.o; Object.keys(o.tabs).forEach(k => { o.tabs[k] = slal(o.tabs[k]); }); o.report = slal(o.report); });
+  // SLLS (2026-11-11): the approach-slab LS notes are display text new on that branch (the slab project keeps LS: lsRed 'no')
+  const slls = t => typeof t !== 'string' ? t : t.replace(/\n?Approach slab and LS:[^\n]*/g, '').replace(/, live-load surcharge (removed in the final state \([^)]*\)|kept \(3\.11\.6\.5 reduction not taken\))/g, '')
+    .replace(/\n?[^\n]*Live-load surcharge with the approach slab[^\n]*/g, '').replace(/\n?(Final-state live-load surcharge LS removed|Live-load surcharge kept with the approach slab)[^\n]*/g, '');
+  [...A, ...B].forEach(r => { const o = r.o; Object.keys(o.tabs).forEach(k => { o.tabs[k] = slls(slal(o.tabs[k])); }); o.report = slls(slal(o.report)); });
   for (let i = 0; i < A.length; i++) { const a = A[i].o, bb = B[i].o;
     const keys = [...Object.keys(a.num).map(k => ['num', k]), ...Object.keys(a.tabs).filter(k => !/^manual/.test(k)).map(k => ['tabs', k])];
     const diff = keys.filter(([g, k]) => a[g][k] !== bb[g][k]).map(x => x.join('.')); n += keys.length + 2;
