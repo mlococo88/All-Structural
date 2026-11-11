@@ -19,6 +19,7 @@
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
 <script src="shared/github-sync.js"></script>   <!-- GHS (2026-11-05): copy of the saved projects to a private GitHub repository; off until set up -->
+<script src="shared/handoff-store.js"></script>   <!-- SFPK (2026-11-11): per-project hand-off copies (HANDOFF.md §5.1): the foundation-load pull lists them (project picker; read only) -->
 <style>
 *{box-sizing:border-box}
 body{font-family:"Times New Roman",Times,serif;font-size:12px;color:#111;background:#fafafa;margin:0}
@@ -10756,11 +10757,79 @@ buildManualTab();
     // HOC (2026-11-10): the Hand-offs status line (the same isNew as the marker; nothing stored)
     var st=document.getElementById('bxFlSt'); if(st){ var up=''; try{ up=localStorage.getItem(BridgeXfer.NS+CH+'.updatedAt')||''; }catch(e){} st.textContent=BridgeXfer.isNew(CH,RID)? 'new data available.' : up? 'no new data since the last pull.' : 'nothing available (no foundation loads sent yet).'; }
   }
-  window.bxPullFoundationLoads=function(){
+  function pullLatest(){
     var list=candidates();
     if(!list.length){ var r=BridgeXfer.read(CH,SCHEMA,MAXV);
       alert('Pull foundation loads: '+(r.ok?'no valid payload.':r.error)+(r.empty?'\n\nIn the abutment calculator or Bridge Substructure Loading, click "Send foundation loads" first.':'')); return null; }
     return openDialog(list,'pull');
+  }
+  /* SFPK (2026-11-11): project picker (HANDOFF.md §4.6, §5.1; shared/handoff-store.js, read only; as Pile Designer's PDPK). Bridge
+     Substructure Loading keeps one copy of its foundationLoads send per project (bridgeSuite.v1.foundationLoads.by.subloads.<project id>:
+     the last unit sent for that project). When any such copy exists (this browser, or GitHub with Cloud sync), "Pull from Abutment /
+     SubLoads" first lists every copy: those per-project copies and each sender's latest copy (.by.abutment, .by.subloads, the channel
+     key; the same payload once), newest first, with the sender, project, unit and date. Preselected: the newest copy of the open project
+     (bridge id, else project name: this tool's project name, else the shared project info), else "Latest sent" (the pull as before:
+     every sender's latest, the sender chosen in the review dialog). The chosen copy opens the same review dialog as before (its apply,
+     incl. the per-foot wall switch to Total, unchanged); a copy older than the latest one of its project is flagged. Without any
+     per-project copy (older data) the pull is exactly as before. Nothing is written here; the new-data marker is unchanged (every send
+     also updates the channel's .updatedAt). */
+  var PKN={abutment:'Abutment Calculator',subloads:'SubLoads',retwall:'Retaining Wall Designer'};
+  function pkProd(e){ var p=e.payload||{}, x=String(p.producer||'');
+    return PKN[e.producer] || (/abut/i.test(x)?PKN.abutment:/substructure|subloads/i.test(x)?PKN.subloads:/retaining/i.test(x)?PKN.retwall:(x||'?')); }
+  function pkOpts(){ return {storage:localStorage,channel:CH,schema:SCHEMA,maxVersion:MAXV,producers:BY,
+    legacy:BY.map(function(b){ return {key:BridgeXfer.NS+CH+'.by.'+b,via:'latest from '+(PKN[b]||b),producer:b}; }).concat([{key:BridgeXfer.NS+CH,via:'latest hand-off'}]),
+    fetch:function(u,i){ return window.fetch(u,i); }}; }
+  function pkSync(){ try{ return !!(window.SharedGitHubSync && SharedGitHubSync.configured(SharedGitHubSync.settings(localStorage))); }catch(e){ return false; } }
+  function pkList(cb){
+    var HS=window.SharedHandoffStore; if(!HS){ cb(null); return; }
+    if(!pkSync()){ var L; try{ L=HS.local(pkOpts()); }catch(e){ cb(null); return; } cb({groups:HS.group(L.entries),errors:L.errors,cloud:'off'}); return; }
+    HS.list(pkOpts()).then(cb,function(e){ cb({groups:[],errors:[String(e&&e.message||e)],cloud:'GitHub could not be read'}); });
+  }
+  function pkOpen(){ var sp=BridgeXfer.sharedProject? BridgeXfer.sharedProject() : null, n=String((state&&state.meta&&state.meta.project)||'').trim();
+    return {name:n||(sp&&sp.name)||'', bridgeId:(sp&&sp.bridgeId)||''}; }
+  function pkRows(r){ var rows=[]; r.groups.forEach(function(g){ g.entries.forEach(function(e){ rows.push({e:e,g:g}); }); });
+    rows.sort(function(a,b){ return String(b.e.payload.producedAt||'').localeCompare(String(a.e.payload.producedAt||'')); }); return rows; }
+  function pkOlder(K,i){ var q=K.rows[i]; if(!q || !q.g.pid) return null; var n=q.g.newest;
+    return String(n.payload.producedAt||'')>String(q.e.payload.producedAt||'')? n : null; }
+  function picker(r){
+    var HS=window.SharedHandoffStore, op=pkOpen(), pid=HS.match(r.groups,op), rows=pkRows(r), K={rows:rows,sel:-1,errs:r.errors||[],cloud:r.cloud||'off'};
+    if(pid!=null) rows.some(function(q,i){ if(q.g.pid===pid){ K.sel=i; return true; } return false; });
+    var old=document.getElementById('bxFlPkOverlay'); if(old) old.remove();
+    var ov=h('div'); ov.id='bxFlPkOverlay';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:200;display:flex;align-items:center;justify-content:center';
+    var box=h('div'); box.style.cssText='background:#fff;border:2px solid #333;padding:12px 16px;width:820px;max-width:96vw;max-height:90vh;overflow:auto;font-size:12px;box-sizing:border-box';
+    box.setAttribute('role','dialog'); box.setAttribute('aria-modal','true'); box.setAttribute('aria-label','Pull foundation loads: which copy?'); ov.appendChild(box);
+    var TD='border:1px solid #ccc;padding:2px 5px;vertical-align:top;text-align:left', WB='background:#fff8e1;border:1px solid #f9a825;padding:5px 8px;margin:6px 0';
+    function draw(){
+      var on=[op.bridgeId,op.name].filter(Boolean).join(' — '), x='<b style="font-size:14px">Pull foundation loads: which copy?</b>'+
+        '<div class="note" style="margin:4px 0">Newest first. '+(K.sel>=0?'Preselected: the newest copy of the open project ('+esc(on)+').'
+          :'No copy matches the open project'+(on?' ('+esc(on)+')':'')+': "Latest sent" is preselected.')+' '+
+        (K.cloud==='ok'?'Copies sent from other devices (GitHub) are included.':K.cloud==='off'?'Cloud sync is not set up: the copies in this browser only.':'GitHub could not be read: this browser\'s copies only.')+'</div>';
+      x+='<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;margin:4px 0"><tr><th style="'+TD+'"></th><th style="'+TD+'">Sender</th><th style="'+TD+'">Project</th><th style="'+TD+'">Unit</th><th style="'+TD+'">Sent</th></tr>'+
+        '<tr data-bxfl-pk="-1" style="cursor:pointer"><td style="'+TD+'"><input type="radio" name="bxFlPk"'+(K.sel<0?' checked':'')+' aria-label="Latest sent"></td><td style="'+TD+'" colspan="4"><b>Latest sent</b> (as before: the latest copy from each sender; choose the sender in the next dialog)</td></tr>'+
+        rows.map(function(q,i){ var p=q.e.payload, el=p.element||{}, per=q.e.source!=='legacy', sub=per && q.e.producer==='subloads', ol=pkOlder(K,i);
+          return '<tr data-bxfl-pk="'+i+'" style="cursor:pointer"><td style="'+TD+'"><input type="radio" name="bxFlPk"'+(K.sel===i?' checked':'')+' aria-label="'+esc(pkProd(q.e)+' '+(q.g.label||''))+'"></td>'+
+            '<td style="'+TD+'">'+esc(pkProd(q.e))+'</td><td style="'+TD+'">'+(q.g.noProject?'<i>'+esc(q.g.label)+'</i>':esc(q.g.label))+'</td>'+
+            '<td style="'+TD+'">'+esc(el.label||el.type||'—')+(sub?' <span style="color:#666">(last unit sent for this project)</span>':'')+'</td>'+
+            '<td style="'+TD+'">'+esc(when(p.producedAt))+(p.device?', '+esc(p.device):'')+' <span style="color:#666">('+esc(q.e.source==='github'?'GitHub':per?'project copy':q.e.via)+')</span>'+(ol?' <b style="color:#b45309">older</b>':'')+'</td></tr>'; }).join('')+'</table></div>';
+      var ol=K.sel>=0? pkOlder(K,K.sel) : null;
+      if(ol){ var np=ol.payload; x+='<div id="bxFlPkOlder" style="'+WB+'">This copy is older than the latest hand-off for the same project: '+esc(pkProd(ol))+', '+esc(when(np.producedAt))+((np.element&&np.element.label)?', '+esc(np.element.label):'')+'.</div>'; }
+      if(K.errs.length) x+='<div style="'+WB+'">Not offered: '+esc(K.errs.join('; '))+'</div>';
+      x+='<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;border-top:1px solid #ccc;padding-top:8px"><button type="button" id="bxFlPkCancel">Cancel</button><button type="button" id="bxFlPkNext"><b>Next: review</b></button></div>';
+      box.innerHTML=x;
+    }
+    box.addEventListener('click',function(ev){ var t=ev.target; if(!t || !t.closest) return;
+      if(t.id==='bxFlPkCancel'){ ov.remove(); return; }
+      if(t.closest('#bxFlPkNext')){ ov.remove(); if(K.sel<0) pullLatest(); else openDialog([rows[K.sel].e.payload],'pull'); return; }
+      var tr=t.closest('tr[data-bxfl-pk]'); if(tr){ K.sel=+tr.getAttribute('data-bxfl-pk'); draw(); } });
+    draw(); document.body.appendChild(ov);
+    return {overlay:ov, state:K};
+  }
+  window.bxPullFoundationLoads=function(){
+    var res=null;
+    pkList(function(r){ var per=!!r && r.groups.some(function(g){ return g.entries.some(function(e){ return e.source!=='legacy'; }); });
+      res= per? picker(r) : pullLatest(); });
+    return res;
   };
   window.bxImportFoundationLoads=function(ev){
     var f=ev && ev.target && ev.target.files && ev.target.files[0]; if(!f) return;
@@ -10771,7 +10840,7 @@ buildManualTab();
     ev.target.value='';
   };
   window.sfFlSourceLine=sourceLine;
-  window.bxFl={check:check,level:level,mapAxes:mapAxes,candidates:candidates,plan:plan,apply:apply,defaults:defaults,openDialog:openDialog,sourceLine:sourceLine,refreshBar:refreshBar};
+  window.bxFl={pullLatest:pullLatest,picker:picker,check:check,level:level,mapAxes:mapAxes,candidates:candidates,plan:plan,apply:apply,defaults:defaults,openDialog:openDialog,sourceLine:sourceLine,refreshBar:refreshBar};
   refreshBar();
   window.addEventListener('focus',refreshBar);
   window.addEventListener('storage',refreshBar);

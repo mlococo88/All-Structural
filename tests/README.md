@@ -99,6 +99,11 @@ node tests/smoke/bsl-fdx-copies.mjs
 # "Latest sent" and old single-key data as before, main-vs-branch probe of the imported inputs, 390 px, 0 console errors. ~1 min
 node tests/smoke/pile-fdx-picker.mjs [--a origin/main]
 
+# Spread Footing, project picker of the foundation-load pull (SFPK, HANDOFF.md §4.6, §5.1): as pile-fdx-picker (copies of both senders, the
+# open project's newest copy preselected by the title block's Project Name, older copy flagged, "Latest sent" and old data as before), a pull
+# into a per-foot wall switches it to Total (SFWP), main-vs-branch probe of the state and results, 390 px, 0 console errors. ~1.5 min
+node tests/smoke/spread-footing-fdx-picker.mjs [--a origin/main]
+
 # Phone / tablet layout (PHN): at 390 and 768 px the page never scrolls sideways, on load and on every tab (one entry per tool in TOOLS)
 node tests/smoke/phone-layout.mjs [--tool smd,...] [--file <file or git ref>] [--w 390,768]
 
