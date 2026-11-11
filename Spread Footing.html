@@ -1010,7 +1010,9 @@ function sfdRbVis(){
  document.querySelectorAll('.sfdPedRb').forEach(rb=>{const i=+rb.dataset.ped,q=state.peds[i];if(!q)return;
   const wl=q.elemType==='wall', ws=sfdWallSpc(q)>0, tie=sfdWallTies(i), wc=sfdWallChk(q);
   const sh=(sel,on)=>rb.querySelectorAll(sel).forEach(e=>{e.style.display=on?'':'none';});
-  sh('.sfdNCol',!(wl&&ws));sh('.sfdModeTbl',!(wl&&ws));sh('.sfdWsCol',wl);sh('.sfdTieCol',tie);sh('.sfdLbP',!wc);sh('.sfdLbW',wc);});
+  sh('.sfdNCol',!(wl&&ws));sh('.sfdModeTbl',!(wl&&ws));sh('.sfdWsCol',wl);sh('.sfdTieCol',tie);sh('.sfdLbP',!wc);sh('.sfdLbW',wc);
+  rb.querySelectorAll('.sfdHPos').forEach(x=>{const st=(q.wallIn||{}).hSize==='sameTie';x.disabled=st;x.value=st?'out':((q.wallIn||{}).hPos==='in'?'in':'out');x.title=st?'\u201cSame as ties\u201d: the ties enclose the vertical bars, so these bars are outside (the stored choice is kept)':'';});
+  const hin=sfdHzIn(q);sh('.sfdLbWo',!hin);sh('.sfdLbWi',hin);});   /* SFHP */
 }
 function buildPedCards(){
  const c=$('#pedContainer');c.innerHTML='';
@@ -1103,7 +1105,7 @@ function buildPedCards(){
   {const x=rr.querySelector('[data-path$=".wallSpc"]'),v=state.peds[i].reinf.wallSpc;x.value=(v==null?'':v);}
   /* SFTC: exposure of the pedestal, for the clear cover to the ties (ACI 318-19 Table 20.5.1.3.1) */
   const et=document.createElement('table');et.className='tbl';et.style.fontSize='11px';
-  et.innerHTML='<tr><th title="ACI 318-19 Table 20.5.1.3.1: sets the minimum clear cover to the ties (wall: to the horizontal bars)">Exposure (<span class="sfdLbP">tie cover</span><span class="sfdLbW" style="display:none">cover to the horizontal bars</span>, ACI Table 20.5.1.3.1)</th></tr>';
+  et.innerHTML='<tr><th title="ACI 318-19 Table 20.5.1.3.1: sets the minimum clear cover to the ties (wall: to the horizontal bars, or to the vertical bars where the horizontal bars are inside them)">Exposure (<span class="sfdLbP">tie cover</span><span class="sfdLbW" style="display:none"><span class="sfdLbWo">cover to the horizontal bars</span><span class="sfdLbWi" style="display:none">cover to the vertical bars, horizontal bars inside</span></span>, ACI Table 20.5.1.3.1)</th></tr>';
   const er=document.createElement('tr');
   er.appendChild(cell('<select data-path="peds.'+i+'.reinf.exposure" style="width:auto;max-width:100%">'+Object.keys(SFTC_EXP).map(k=>'<option value="'+k+'">'+SFTC_EXP[k][0]+'</option>').join('')+'</select>'));
   et.appendChild(er);rb.appendChild(et);
@@ -1120,12 +1122,13 @@ function buildPedCards(){
   /* SFWC (2026-11-06): wall horizontal (transverse) bars, one bar in each of the two curtains (one near each face) at s;
      'sameTie' = the tie size and spacing above (the long legs of the perimeter ties are the horizontal bars); SFWH: blank = input needed */
   {const wt=document.createElement('table');wt.className='tbl sfdWallOnly';wt.dataset.ped=i;wt.style.fontSize='11px';
-   wt.innerHTML='<tr><th title="Wall only (ACI 318-19 11.6, 11.5.4.3): horizontal bar in each of the two curtains (one near each face); blank = input needed">Wall horizontal bar (each face)</th><th title="Wall only: spacing of the horizontal bars; blank = the tie spacing with &quot;same as ties&quot;, otherwise input needed">Horizontal spc (in)</th></tr>';
+   wt.innerHTML='<tr><th title="Wall only (ACI 318-19 11.6, 11.5.4.3): horizontal bar in each of the two curtains (one near each face); blank = input needed">Wall horizontal bar (each face)</th><th title="Wall only: spacing of the horizontal bars; blank = the tie spacing with &quot;same as ties&quot;, otherwise input needed">Horizontal spc (in)</th><th title="Wall only (SFHP): where the horizontal bars sit on each face. The cover c is the clear cover to the vertical bars either way (d of the wall checks unchanged). Outside: cover checked to the horizontal bars, c \u2212 d_b,h. Inside: the vertical bars are the outermost bars, cover c checked against the vertical bar size (ACI 318-19 Table 20.5.1.3.1). &quot;Same as ties&quot; is always outside.">Horizontal bars</th></tr>';
    const wr=document.createElement('tr');
    wr.appendChild(cell('<select data-path="peds.'+i+'.wallIn.hSize" style="width:auto" title="Blank = input needed: the wall checks that need \u03c1_t show REVIEW until the horizontal bars are entered (SFWH)"><option value="">\u2014 enter \u2014</option><option value="sameTie">same as ties</option>'+BAR_SIZES.filter(z=>z>0).map(z=>'<option value="'+z+'">#'+z+'</option>').join('')+'</select>'));
    wr.appendChild(cell('<input type="number" step="0.5" min="0" data-path="peds.'+i+'.wallIn.hSpc" placeholder="ties" style="width:56px">'));
+   wr.appendChild(cell('<select class="sfdHPos" data-path="peds.'+i+'.wallIn.hPos" style="width:auto"><option value="out">Outside the vertical bars</option><option value="in">Inside the vertical bars</option></select>'));   /* SFHP: absent = outside */
    wt.appendChild(wr);rb.appendChild(wt);
-   const wi=state.peds[i].wallIn||{};wr.querySelector('select').value=String(wi.hSize||'');wr.querySelector('input').value=(wi.hSpc==null?'':wi.hSpc);}
+   const wi=state.peds[i].wallIn||{};wr.querySelector('select').value=String(wi.hSize||'');wr.querySelector('input').value=(wi.hSpc==null?'':wi.hSpc);wr.querySelector('.sfdHPos').value=wi.hPos==='in'?'in':'out';}
   mr.querySelectorAll('select,input').forEach(x=>{const v=getPath(state,x.dataset.path);x.value=(v===undefined||v===null)?'':v;});
   const dt=document.createElement('table');dt.className='tbl';dt.style.fontSize='11px';
   const dlw=el('div','',' <label title="SFDB: the dowel size, count and layout are those of the pedestal longitudinal bars, which run continuously into the footing (no lap at the joint)"><input type="checkbox" data-path="peds.'+i+'.reinf.dowelLong"> Pedestal longitudinal bars act as the dowels</label>');dlw.style.fontSize='11px';rb.appendChild(dlw);
@@ -1434,7 +1437,7 @@ function sfdPedBarInfo(){
    b.wall?['Bars per face (wall, '+longF+'-face along \u2113<sub>w</sub>):','n = ceil(L<sub>c</sub>/s<sub>v</sub>) + 1 = ceil('+f2(Lc)+'/'+f2(b.s)+') + 1 = '+nF+'; spacing provided L<sub>c</sub>/(n \u2212 1) = '+f2(Lc)+'/'+(nF-1)+' = '+f2(nF>1?Lc/(nF-1):0)+' in \u2264 s<sub>v</sub>; the end faces by the same rule ('+(longF==='y'?b.nx:b.ny)+' bars). The first and last bars are the corner bars at cover + d<sub>b</sub>/2 from the wall ends.']
     :b.mode==='spacing'?['Bars per face:','ceil(L<sub>c</sub>/s) + 1.']:b.mode==='total'?['Split:','so the two faces have spacings as equal as possible.']:null,
    wl&&!b.wall?['Saved wall entry kept:','no single spacing gives the same bars as this saved entry, so it is used as saved; enter s<sub>v</sub> to define the vertical bars by spacing.']:null,   /* SFWS */
-   wc?['Horizontal bars:',hzI&&!hzI.need?'#'+hzI.size+' @ '+f2(hzI.s)+' in, each face'+(hzI.fromTie?' (same as ties)':'')+', outside the vertical bars.':'not entered (Wall horizontal bar below).']:null,
+   wc?['Horizontal bars:',hzI&&!hzI.need?'#'+hzI.size+' @ '+f2(hzI.s)+' in, each face'+(hzI.fromTie?' (same as ties; ties enclose the vertical bars, so always outside)':'')+(hzI.inside?', inside the vertical bars (the vertical bars are the outermost bars: cover c checked against the vertical bar size; d of the wall checks unchanged).':', outside the vertical bars (cover check c \u2212 d<sub>b,h</sub>).'):'not entered (Wall horizontal bar below).']:null,
    wc?['Ties:',sfdWallTies(i)?((q.wallIn||{}).hSize==='sameTie'?'the horizontal bars are entered as \u201csame as ties\u201d: the tie inputs give them.':'required: A<sub>st</sub> &gt; 0.01A<sub>g</sub> (ACI 318-19 11.7.4.1).'):'none: a wall needs ties only where A<sub>st</sub> &gt; 0.01A<sub>g</sub> (ACI 318-19 11.7.4.1); the tie inputs are hidden and kept as stored.']:null,   /* SFHB */
    DB.fromLong?['Dowels:','the '+DB.n+' #'+DB.size+' '+(wl?'vertical':'longitudinal')+' bars, continuous into the footing.']:null,
    P2&&P2.dowels&&P2.dowels[i]&&!P2.dowels[i].isPatch?['Dowels and shear friction worked in:',sfdLink('o-fd-bear','',['tab-footdes','5.6 Concrete Bearing & Dowels'])+'.']:null,   /* SFLK */
@@ -1443,14 +1446,21 @@ function sfdPedBarInfo(){
  sfdRbVis();   /* SFHB */
 }
 /* SFTC: one line for the clear cover to the ties */
-function sftcTxt(pd){return 'Clear cover to the vertical bars c = '+f2(pd.cov)+' in '+(pd.vertCovOK?'\u2265':'<')+' '+f2(pd.vertCovMin)+' in min'+(pd.vertCovOK?'':' \u2014 NG')+'. Clear cover to '+sftcTrName(pd)+' c \u2212 d<sub>'+sftcTrSub(pd)+'</sub> = '+f2(pd.cov)+' \u2212 '+f3(pd.tieDb)+' = '+f3(pd.tieCov)+' in '+(pd.tieCovOK?'\u2265':'<')+' '+f2(pd.tieCovMin)+' in min ('+SFTC_EXP[pd.exposure][1]+', ACI 318-19 Table 20.5.1.3.1)'+(pd.tieCovOK?'.':' \u2014 NG.')+(pd.wallTr?' '+SFHB_ARR:'');
+function sftcTxt(pd){return 'Clear cover to the vertical bars c = '+f2(pd.cov)+' in '+(pd.vertCovOK?'\u2265':'<')+' '+f2(pd.vertCovMin)+' in min'+(pd.vertCovOK?'':' \u2014 NG')+'. '+(pd.trKind==='horizIn'?'Cover check to '+sftcTrName(pd)+' c = '+f2(pd.cov)+' in '+(pd.tieCovOK?'\u2265':'<')+' '+f2(pd.tieCovMin)+' in min ('+SFTC_EXP[pd.exposure][1]+', ACI 318-19 Table 20.5.1.3.1, #'+(pd.trSize||0)+' row)'+(pd.tieCovOK?'.':' \u2014 NG.')+' '+sfhbArr(true):'Clear cover to '+sftcTrName(pd)+' c \u2212 d<sub>'+sftcTrSub(pd)+'</sub> = '+f2(pd.cov)+' \u2212 '+f3(pd.tieDb)+' = '+f3(pd.tieCov)+' in '+(pd.tieCovOK?'\u2265':'<')+' '+f2(pd.tieCovMin)+' in min ('+SFTC_EXP[pd.exposure][1]+', ACI 318-19 Table 20.5.1.3.1)'+(pd.tieCovOK?'.':' \u2014 NG.')+(pd.wallTr?' '+sfhbArr(pd.hzIn):''));   /* SFHP */
 }
 /* SFHB (2026-11-11): the transverse bars of the clear-cover check (pd.trKind): ties (pedestal), the wall's horizontal bars, or the tie input
    for a wall whose horizontal bars are not entered / where ties also apply and govern */
-function sftcTrName(pd){const k=pd&&pd.trKind;return k==='horiz'?'the horizontal bars (#'+pd.trSize+', each face)':k==='tieW'?'the ties (#'+pd.trSize+'; they govern over the horizontal bars)':k==='tieNoH'?'the transverse bars (horizontal bars not entered: the tie input #'+(pd.trSize||0)+' is used until they are)':'the ties';}
+function sftcTrName(pd){const k=pd&&pd.trKind;return k==='horizIn'?'the vertical bars (#'+pd.trSize+'; the horizontal bars are inside them, so the vertical bars are the outermost bars)':k==='horiz'?'the horizontal bars (#'+pd.trSize+', each face)':k==='tieW'?'the ties (#'+pd.trSize+'; they govern over the horizontal bars)':k==='tieNoH'?'the transverse bars (horizontal bars not entered: the tie input #'+(pd.trSize||0)+' is used until they are)':'the ties';}
 function sfdWallHzTxt(i){const w=P2&&P2.bearing&&P2.bearing[i]&&P2.bearing[i].wall,h=w&&w.hz;return 'horizontal bars '+(h&&!h.need?'#'+h.size+' at '+f2(h.s)+' in each face'+(h.fromTie?' (same as ties)':''):'not entered');}   /* SFHB */
 function sftcTrSub(pd){return pd&&pd.trKind==='horiz'?'b,h':'b,tie';}
 const SFHB_ARR='Wall bar arrangement: the cover c is the clear cover to the vertical bars (d\u2032 = c + d<sub>b</sub>/2 in the wall checks); the horizontal bars are outside them, one layer on each face, so they are the outermost bars (clear cover c \u2212 d<sub>b,h</sub>); a wall has no ties unless A<sub>st</sub> &gt; 0.01A<sub>g</sub> (ACI 318-19 11.7.4.1).';
+/* SFHP (2026-11-11, engineer: "The bars should allow a drop down for either inside or outside of the vertical bars"): wallIn.hPos
+   'in' = the horizontal bars inside the vertical bars on each face; 'out' or absent = outside (the #1420 arrangement; saved projects
+   unchanged). "Same as ties" stays outside (the ties enclose the vertical bars). The cover c stays the clear cover to the vertical bars
+   (d' = c + d_b/2) either way. */
+function sfdHzIn(q){const w=(q&&q.wallIn)||{};return w.hPos==='in'&&w.hSize!=='sameTie';}
+const SFHP_ARR_IN='Wall bar arrangement: the cover c is the clear cover to the vertical bars (d\u2032 = c + d<sub>b</sub>/2 in the wall checks); the horizontal bars are inside them, one layer on each face, so the vertical bars are the outermost bars (clear cover c, checked against the minimum for the vertical bar size); a wall has no ties unless A<sub>st</sub> &gt; 0.01A<sub>g</sub> (ACI 318-19 11.7.4.1).';
+function sfhbArr(inside){return inside?SFHP_ARR_IN:SFHB_ARR;}
 /* link from an output card to an input tab (Reinforcement): open the tab and flash the section */
 function sfdGotoInput(tab,secId){
  sfdSetInTab(tab,true);
@@ -4084,7 +4094,7 @@ function sfdResultRows(){
   'Wall ties and bar fit (ACI 318-19 11.7.4.1, 25.2.3)':()=>{const W=(P2.wallD||[]).map((o,i)=>[o,i]).filter(([o])=>o&&o.applied);return ['ACI 318-19 §11.7.4.1 (ties where A<sub>st</sub> > 0.01A<sub>g</sub>), §25.7.2, §25.2.3',null,W.map(([o,i])=>'o-wd-'+i)];},
   'Wall minimum thickness (ACI 318-19 11.3.1.1)':()=>{const W=(P2.wallD||[]).map((o,i)=>[o,i]).filter(([o])=>o&&o.applied);return ['ACI 318-19 §11.3.1.1, Table 11.3.1.1 (information: walls designed by §11.5.3 only); h<sub>min</sub>/t shown',mx(W.map(([o])=>o.tmin.v/o.tw)),W.map(([o,i])=>'o-wd-'+i)];},
   'Wall checks (ACI 318-19 Ch. 11)':()=>['ACI 318-19 §2.3 (wall); not checked: Chapter 18 (special structural walls, boundary elements, coupling beams), §11.7.5 (openings), §11.5.4.1 strut-and-tie, §11.8, §21.2.4',null,real.filter(z=>z.wall&&z.wall.sel).map(z=>sfdElCard(z.idx).id)],   /* SFWL */
-  'Pedestal tie cover':()=>['ACI 318-19 Table 20.5.1.3.1; D/C = c<sub>min</sub>/(c \u2212 d<sub>b,tie</sub>)'+((P2.pedDes||[]).some(z=>z.trKind==='horiz')?' (wall: d<sub>b,h</sub>, the horizontal bars, outside the vertical bars)':''),mx(P2.pedDes.filter(z=>!z.isPatch).map(z=>z.tieCov>0?z.tieCovMin/z.tieCov:Infinity)),P2.pedDes.map((z,i)=>z.isPatch?null:sfdElCard(i).id).filter(Boolean)]};
+  'Pedestal tie cover':()=>['ACI 318-19 Table 20.5.1.3.1; D/C = c<sub>min</sub>/(c \u2212 d<sub>b,tie</sub>)'+((P2.pedDes||[]).some(z=>z.trKind==='horiz')?' (wall: d<sub>b,h</sub>, the horizontal bars, outside the vertical bars)':'')+((P2.pedDes||[]).some(z=>z.trKind==='horizIn')?' (wall with the horizontal bars inside the vertical bars: d<sub>b</sub> = 0, c vs c<sub>min</sub> of the vertical bars)':''),mx(P2.pedDes.filter(z=>!z.isPatch).map(z=>z.tieCov>0?z.tieCovMin/z.tieCov:Infinity)),P2.pedDes.map((z,i)=>z.isPatch?null:sfdElCard(i).id).filter(Boolean)]};
  return $$('#dashboard .chip').map(c=>{
   const name=c.querySelector('.cn').textContent, val=c.querySelector('.cv').textContent;
   const st=['pass','fail','warn','na'].find(k=>c.classList.contains(k))||'na';
@@ -4815,7 +4825,7 @@ function sfrWallSub(i,pd,S){
   ...(o.tieReq?[S({id:'wo.tie',chk:'wall ties',label:'Ties #'+rf.tieSize+' at s ≤ min(16d_b, 48d_b,tie, t) = '+sfrN(pd.tieMax)+' in'+(X&&X.nXt>0?'; '+X.nXt+' crossties per set (25.7.2.3): detail them (REVIEW)':''),rev:X&&X.nXt>0?'crossties':'',sym:'s',eq:'',sub:'',value:num(rf.tieSpc),unit:'in',ok:!!(pd.tieOK&&pd.tieSizeOK),ref:'ACI 318-19 25.7.2'})]:[]),
   S({id:'wo.fit',chk:'wall bar fit',label:'Vertical bar clear spacing ≥ max(1.5d_b, 1.5 in, 4/3 d_agg) = '+sfrN(pd.clrMin)+' in',sym:'s_{clear}',eq:'',sub:'',value:Math.min(pd.clrX,pd.clrY),unit:'in',ok:!!pd.barFitOK,ref:'ACI 318-19 25.2.3 (kept, conservative)'}),
   S({id:'wo.vcov',label:'Clear cover to the vertical bars (min '+sfrN(pd.vertCovMin)+' in)',sym:'c',eq:'',sub:'',value:pd.cov,unit:'in',ok:!!pd.vertCovOK,ref:'ACI 318-19 Table 20.5.1.3.1'}),
-  S({id:'wo.tcov',label:'Clear cover to '+sftcTrName(pd)+' (min '+sfrN(pd.tieCovMin)+' in)',sym:pd.trKind==='horiz'?'c_{h}':'c_{tie}',eq:'c \\minus d_{'+sftcTrSub(pd)+'}',sub:sfrN(pd.cov)+' \\minus '+sfrN(pd.tieDb,3),value:pd.tieCov,unit:'in',d:3,ok:!!pd.tieCovOK,ref:'ACI 318-19 Table 20.5.1.3.1',note:SFHB_ARR.replace(/<sub>(.*?)<\/sub>/g,'_$1').replace(/&gt;/g,'>')+' (SFHB)'}),   /* SFHB */
+  S({id:'wo.tcov',label:(pd.trKind==='horizIn'?'Cover check to ':'Clear cover to ')+sftcTrName(pd)+' (min '+sfrN(pd.tieCovMin)+' in'+(pd.trKind==='horizIn'?', #'+(pd.trSize||0)+' row':'')+')',sym:pd.trKind==='horizIn'?'c':pd.trKind==='horiz'?'c_{h}':'c_{tie}',eq:pd.trKind==='horizIn'?'':'c \\minus d_{'+sftcTrSub(pd)+'}',sub:pd.trKind==='horizIn'?'':sfrN(pd.cov)+' \\minus '+sfrN(pd.tieDb,3),value:pd.tieCov,unit:'in',d:3,ok:!!pd.tieCovOK,ref:'ACI 318-19 Table 20.5.1.3.1',note:sfhbArr(pd.hzIn).replace(/<sub>(.*?)<\/sub>/g,'_$1').replace(/&gt;/g,'>')+' (SFHB)'}),   /* SFHB */
   S({id:'wo.tmin',label:'Minimum thickness, Table 11.3.1.1 (information: applies only to a wall designed by 11.5.3; this wall is designed by 11.5.2); t = '+sfrN(o.tw)+' in',sym:'h_{min}',eq:'\\max\\left(4,\\;\\frac{\\min(\\ell_{u},\\ell_{w})}{25}\\right)',sub:'\\max(4,\\;'+sfrN(o.tmin.lc)+'/25)',value:o.tmin.v,unit:'in',ref:'ACI 318-19 11.3.1.1'})]});}
  return {key:'S-wd'+i,title:pd.label+' (wall, '+sfrN(pd.bx,1)+' × '+sfrN(pd.by,1)+' × '+sfrN(pd.h,1)+' in)',items:[...sfrNL('Wall statement:',sfdWallItems(w).map(([a,t])=>[a+':',t+'.'])),{type:'figure',svg:sfdWallSketchSVG(i),caption:pd.label+': wall elevation and plan, bars, load, b_eff,top (ACI 318-19 11.2.3.1) and b_eff,base (the larger of b_eff,top and the 45° spread)'},sfrTopics('pd'+i,T),
   {type:'table',wide:true,head:['Combination','P_u (kip)','M_u,out (kip-ft)','M_u,in (kip-ft)',o.slender?'M_c (kip-ft)':'M_u (kip-ft)','N more / less (kip/ft)','M (kip-ft/ft)','φM_n at N','ratio','V_u/φV_c'],
@@ -5418,13 +5428,15 @@ function sfdwPedLayout(i){
    are one layer on each face outside the vertical bars, centres at t/2 - c + d_b,h/2 from the wall centre line. Levels: the first at
    s_h/2 above the footing top, then every s_h, up to h - c (the Wall Design sketch's rule; at least one bar, at min(s_h/2, h/2)). Length
    along the wall: l_w - 2c (end cover c, as the vertical bars). The ties of a wall are drawn only where 11.7.4.1 requires them
-   (A_st > 0.01A_g, pd.wTieReq). Returns null for a pedestal, a wall with l_w/t <= 3, or where the bars are not entered. */
+   (A_st > 0.01A_g, pd.wTieReq). Returns null for a pedestal, a wall with l_w/t <= 3, or where the bars are not entered.
+   SFHP (2026-11-11, engineer): with "Inside the vertical bars" (w.hz.inside) the centres are at t/2 - c - d_b,v - d_b,h/2 (in contact
+   with the vertical bars, on the inside); the length and levels are unchanged. */
 function sfdwWallHz(i){
  const w=P2&&P2.bearing&&P2.bearing[i]&&P2.bearing[i].wall, pd=P2&&P2.pedDes&&P2.pedDes[i], p=state.peds[i];
  if(!w||!w.applied||!pd||pd.isPatch||!p)return null;
- const rf=p.reinf||{}, cov=num(rf.cover), h=num(p.h)*12, hz=w.hz||{}, ok=!hz.need&&hz.size>0&&hz.s>0, db=ok?BAR_DIA[hz.size]||0:0;
+ const rf=p.reinf||{}, cov=num(rf.cover), h=num(p.h)*12, hz=w.hz||{}, ok=!hz.need&&hz.size>0&&hz.s>0, db=ok?BAR_DIA[hz.size]||0:0, inside=!!hz.inside, dbv=BAR_DIA[rf.longSize]||0;   /* SFHP */
  const zs=[];if(ok){for(let z=hz.s/2;z<=h-cov+1e-9;z+=hz.s)zs.push(z);if(!zs.length&&h>0)zs.push(Math.min(hz.s/2,h/2));}
- return {dir:w.dir,lw:w.lw,tw:w.tw,cov,ok,size:hz.size,s:hz.s,db,fromTie:!!hz.fromTie,zs,off:w.tw/2-cov+db/2,half:w.lw/2-cov,ties:!!pd.wTieReq,
+ return {dir:w.dir,lw:w.lw,tw:w.tw,cov,ok,size:hz.size,s:hz.s,db,fromTie:!!hz.fromTie,zs,off:inside?w.tw/2-cov-dbv-db/2:w.tw/2-cov+db/2,half:w.lw/2-cov,ties:!!pd.wTieReq,inside,posTxt:inside?'INSIDE VERT BARS':'OUTSIDE VERT BARS',
   txt:ok?('#'+hz.size+' @ '+sfdwIn(hz.s)+' EF HORIZ'):'HORIZ BARS NOT ENTERED'};}
 /* SFHK (2026-11-05): the dowel ends in the footing, for the drawings and the 3D view (display only; no result uses these).
    90-degree standard hook: straight extension 12 d_b beyond the bend (ACI 318-19 Table 25.3.1), inside bend diameter per
@@ -5620,7 +5632,7 @@ function sfdwBuild(){
      if(alongW)W.zs.forEach(z=>D.line(L.bar,c-W.half,t12+z,c+W.half,t12+z));
      else W.zs.forEach(z=>[c-W.off,c+W.off].forEach(xb=>D.circle(L.bar,xb,t12+z,Math.max(W.db/2,0.012*k))));
      const zc=W.zs.map(z=>t12+z).reduce((a,z)=>Math.abs(z+0.14*k-g)>Math.abs(a+0.14*k-g)?z:a), xe=alongW?c-W.half*0.6:c-W.off, xt=c-b/2-0.25*k;   /* callout to the left of the element, leader to a bar */
-     D.pline(L.bar,[[xe,zc],[xt+0.05*k,zc+0.18*k],[xt,zc+0.18*k]]);T(L.txt,xt-0.04*k,zc+0.18*k-0.04*k,0.08*k,W.txt+(alongW?'':' (OUTSIDE VERT BARS)'),2);}
+     D.pline(L.bar,[[xe,zc],[xt+0.05*k,zc+0.18*k],[xt,zc+0.18*k]]);T(L.txt,xt-0.04*k,zc+0.18*k-0.04*k,0.08*k,W.txt+(alongW?'':' ('+W.posTxt+')'),2);}   /* SFHP */
     sfhkEnds(c,a,i,t12,LV.topOfBot);   /* SFHK */
     const lx=c+(dir==='A'?p.lex:p.ley)*12;D.line(L.ld,lx,t12+hh+0.55*k,lx,t12+hh+0.05*k);D.line(L.ld,lx,t12+hh+0.05*k,lx-0.04*k,t12+hh+0.14*k);D.line(L.ld,lx,t12+hh+0.05*k,lx+0.04*k,t12+hh+0.14*k);
     T(L.ld,lx,t12+hh+0.62*k,0.08*k,'P'+((dir==='A'?p.lex:p.ley)?' (e = '+sfdwFI((dir==='A'?p.lex:p.ley)*12)+')':''),1);
@@ -5673,13 +5685,13 @@ function sfdwBuild(){
    /* plan section */
    D.rect(L.ped,-bx/2,-by/2,bx/2,by/2);
    if(!(Lp.W&&!Lp.W.ties))D.rect(L.bar,-Lp.tx,-Lp.ty,Lp.tx,Lp.ty);   /* SFHB: a wall shows no tie unless 11.7.4.1 requires ties */
-   if(Lp.W&&Lp.W.ok){const W=Lp.W;   /* SFHB: the horizontal bars along each long face, outside the vertical bars */
+   if(Lp.W&&Lp.W.ok){const W=Lp.W;   /* SFHB: the horizontal bars along each long face, outside the vertical bars (SFHP: or inside, W.off) */
     if(W.dir==='y')[-W.off,W.off].forEach(x=>D.line(L.bar,x,-W.half,x,W.half));else [-W.off,W.off].forEach(y=>D.line(L.bar,-W.half,y,W.half,y));}
    Lp.pts.forEach(([x,y])=>D.circle(L.bar,x,y,Math.max(Lp.db/2,0.012*k)));
    D.chainH(L.dim,Lp.xs,-by/2-0.45*k,-by/2);D.dimH(L.dim,-bx/2,bx/2,-by/2-0.85*k,-by/2);
    D.chainV(L.dim,Lp.ys,bx/2+0.45*k,bx/2);D.dimV(L.dim,-by/2,by/2,bx/2+0.85*k,bx/2);
    const nts=[(Lp.PB.n+'-#'+rf.longSize+' VERT  ('+Lp.PB.nx+' PER x-FACE, '+Lp.PB.ny+' PER y-FACE)').toUpperCase(),
-    (Lp.W?(Lp.W.ok?Lp.W.txt+(Lp.W.fromTie?' (SAME AS TIES)':'')+', OUTSIDE VERT BARS;  COVER '+sfdwIn(Lp.cov)+' CLR TO VERT BARS, '+sfdwIn(Lp.cov-Lp.W.db)+' CLR TO HORIZ BARS'+(Lp.W.ties?';  #'+rf.tieSize+' TIES @ '+sfdwIn(num(rf.tieSpc))+' (11.7.4.1)':';  NO TIES'):Lp.W.txt+';  COVER '+sfdwIn(Lp.cov)+' CLR TO VERT BARS'+(Lp.W.ties?';  #'+rf.tieSize+' TIES @ '+sfdwIn(num(rf.tieSpc)):';  NO TIES'))   /* SFHB */
+    (Lp.W?(Lp.W.ok?Lp.W.txt+(Lp.W.fromTie?' (SAME AS TIES)':'')+', '+Lp.W.posTxt+';  COVER '+sfdwIn(Lp.cov)+' CLR TO VERT BARS'+(Lp.W.inside?'':', '+sfdwIn(Lp.cov-Lp.W.db)+' CLR TO HORIZ BARS')+(Lp.W.ties?';  #'+rf.tieSize+' TIES @ '+sfdwIn(num(rf.tieSpc))+' (11.7.4.1)':';  NO TIES'):Lp.W.txt+';  COVER '+sfdwIn(Lp.cov)+' CLR TO VERT BARS'+(Lp.W.ties?';  #'+rf.tieSize+' TIES @ '+sfdwIn(num(rf.tieSpc)):';  NO TIES'))   /* SFHB */
      :('#'+rf.tieSize+' TIES @ '+sfdwIn(num(rf.tieSpc))+';  COVER '+sfdwIn(Lp.cov)+' CLR TO VERT BARS, '+sfdwIn(Lp.cov-Lp.tie)+' CLR TO TIES')).toUpperCase(),(sfdDowelBars(i).fromLong?'VERT BARS ACT AS DOWELS':'DOWELS '+(rf.dowelN||0)+'-#'+rf.dowelSize).toUpperCase()];
    if(Lp.PB.wall)nts[0]=nts[0]+(' @ '+sfdwIn(Lp.PB.s)+' EF MAX').toUpperCase();   /* SFWS: entered by spacing */
    nts.forEach((q,j)=>T(L.txt,-bx/2,by/2+(0.5-0.2*j)*k,h,q,0));
@@ -5714,7 +5726,7 @@ function sfdwBuild(){
   const rv=rows[rows.length-1];   /* SFHB: the vertical-bar row */
   if(Lp.PB.wall)rv[5]='@ '+sfdwIn(Lp.PB.s)+' EF MAX ('+(Lp.W&&Lp.W.dir==='x'?Lp.PB.nx:Lp.PB.ny)+' PER FACE)';   /* SFWS */
   if(Lp.tie>0&&!(Lp.W&&!Lp.W.ties))rows.push([n+'T',String(p.label).toUpperCase()+' TIES','#'+rf.tieSize,String(Lp.nt),sfdwFI(4*0+2*(2*Lp.tx)+2*(2*Lp.ty)),'@ '+sfdwIn(Lp.ts),'CLOSED TIE, PERIMETER ON CL; HOOKS NOT INCL.']);
-  if(Lp.W&&Lp.W.ok)rows.push([n+'H',String(p.label).toUpperCase()+' HORIZONTAL','#'+Lp.W.size,String(2*Lp.W.zs.length),sfdwFI(2*Lp.W.half),'@ '+sfdwIn(Lp.W.s)+' EF ('+Lp.W.zs.length+' PER FACE)','EF, OUTSIDE VERT BARS; 1ST AT S/2 ABOVE FTG'+(Lp.W.fromTie?'; = TIES':'; NO LAPS')]);   /* SFHB */
+  if(Lp.W&&Lp.W.ok)rows.push([n+'H',String(p.label).toUpperCase()+' HORIZONTAL','#'+Lp.W.size,String(2*Lp.W.zs.length),sfdwFI(2*Lp.W.half),'@ '+sfdwIn(Lp.W.s)+' EF ('+Lp.W.zs.length+' PER FACE)','EF, '+Lp.W.posTxt+'; 1ST AT S/2 ABOVE FTG'+(Lp.W.fromTie?'; = TIES':'; NO LAPS')]);   /* SFHB */
   if(sfdDowelBars(i).fromLong){const z=P2&&P2.dowels&&P2.dowels[i];   /* SFDB: the vertical bars run into the footing as the dowels */
    rv[6]='EXTEND INTO FTG AS DOWELS'+(z&&!z.isPatch?': '+sfdwDowelNote(i,P2.bearing[i]):'');if(z&&!z.isPatch)rv[4]=sfdwFI(Lp.h-Lp.cov+z.availEmb+(z.hook==='hook90'?12*z.db:0));}
   else if(rf.dowelN>0)rows.push([n+'D',String(p.label).toUpperCase()+' DOWELS','#'+rf.dowelSize,String(rf.dowelN),(()=>{const z=P2&&P2.dowels&&P2.dowels[i];return z&&!z.isPatch&&!z.full?sfdwFI(z.availEmb+z.Lprov+(z.hook==='hook90'?12*z.db:0)):'—';})(),'—',bz?sfdwDowelNote(i,bz):'']);});
@@ -5744,7 +5756,7 @@ function sfdwBuild(){
    'ALLOWABLE BEARING PRESSURE'+(state.soil.mode==='vesic'?' (GOVERNING CASE '+(G?G.cb.name:'')+')':'')+': '+(qa!=null?f2(qa)+' KSF':'N/A')+'. SOIL UNIT WEIGHT '+Math.round(R.gs*1000)+' PCF; WATER TABLE '+(R.dw===Infinity?'NOT PRESENT':f2(R.dw)+' FT BELOW GRADE')+'.',
    "CONCRETE: F'C = "+Math.round(R.fc)+' PSI, UNIT WEIGHT '+Math.round(R.gc*1000)+' PCF'+', MAX. AGGREGATE '+sfdwIn(sfdDagg())+(num(state.mat.lambda)<1?', LIGHTWEIGHT FACTOR '+f2(num(state.mat.lambda)):'')+'.',
    'REINFORCEMENT: ASTM A615 / A706 BARS, FY = '+Math.round(num(state.mat.fy))+' PSI'+(state.mat.coating==='epoxy'?', EPOXY-COATED':', UNCOATED')+'.',
-   'CLEAR COVER: '+sfdwIn(num(state.mat.coverBot))+' BOTTOM (CAST AGAINST EARTH), '+sfdwIn(num(state.mat.coverTop))+' TOP, '+sfdwIn(sfdEndCover())+' SIDES AND ENDS'+(P2&&P2.covChk?' (MIN. PER ACI 318-19 TABLE 20.5.1.3.1: '+P2.covChk.rows.filter(z=>z.applies).map(z=>z.k.toUpperCase()+' '+sfdwIn(z.min)).join(', ')+(P2.covChk.ok?')':'; NG)'):'')+'; PEDESTALS (CLEAR TO VERTICAL BARS / TO TIES; MIN. TO TIES PER ACI 318-19 TABLE 20.5.1.3.1): '+state.peds.map((p,i)=>{const pd=P2&&P2.pedDes&&P2.pedDes[i];return String(p.label).toUpperCase()+' '+sfdwIn(num(p.reinf.cover))+(p.h>0?' / '+(pd&&pd.wallTr?sfdwIn(pd.tieCov)+(pd.trKind==='horiz'?' (WALL: TO HORIZ BARS)':' (WALL: TO #'+pd.trSize+' TIES)'):sfdwIn(num(p.reinf.cover)-(BAR_DIA[p.reinf.tieSize]||0)))+(pd?' (MIN. '+sfdwIn(pd.tieCovMin)+', '+SFTC_EXP[pd.exposure][1].toUpperCase()+(pd.tieCovOK?')':'; NG)'):''):'');}).join(', ')+'.',
+   'CLEAR COVER: '+sfdwIn(num(state.mat.coverBot))+' BOTTOM (CAST AGAINST EARTH), '+sfdwIn(num(state.mat.coverTop))+' TOP, '+sfdwIn(sfdEndCover())+' SIDES AND ENDS'+(P2&&P2.covChk?' (MIN. PER ACI 318-19 TABLE 20.5.1.3.1: '+P2.covChk.rows.filter(z=>z.applies).map(z=>z.k.toUpperCase()+' '+sfdwIn(z.min)).join(', ')+(P2.covChk.ok?')':'; NG)'):'')+'; PEDESTALS (CLEAR TO VERTICAL BARS / TO TIES; MIN. TO TIES PER ACI 318-19 TABLE 20.5.1.3.1): '+state.peds.map((p,i)=>{const pd=P2&&P2.pedDes&&P2.pedDes[i];return String(p.label).toUpperCase()+' '+sfdwIn(num(p.reinf.cover))+(p.h>0?' / '+(pd&&pd.wallTr?sfdwIn(pd.tieCov)+(pd.trKind==='horiz'?' (WALL: TO HORIZ BARS)':pd.trKind==='horizIn'?' (WALL: TO VERT BARS, HORIZ BARS INSIDE)':' (WALL: TO #'+pd.trSize+' TIES)'):sfdwIn(num(p.reinf.cover)-(BAR_DIA[p.reinf.tieSize]||0)))+(pd?' (MIN. '+sfdwIn(pd.tieCovMin)+', '+SFTC_EXP[pd.exposure][1].toUpperCase()+(pd.tieCovOK?')':'; NG)'):''):'');}).join(', ')+'.',
    'FOOTING: '+sfdwFI(R.B*12)+' (x) BY '+sfdwFI(R.L*12)+' (y) BY '+sfdwFI(R.t*12)+' THICK; BEARING '+sfdwFI(R.Df*12)+' BELOW GRADE; SOIL COVER '+sfdwFI(R.covEff*12)+'.',
    'LOADS AT THE TOP OF EACH PEDESTAL AT THE LOAD POINT SHOWN (OFFSET e FROM THE PEDESTAL CENTROID). '+(R.directMode?'DIRECT FACTORED LOADS.':'SERVICE LOADS BY TYPE; COMBINATIONS GENERATED.'),
    'PEDESTAL / FOOTING CONSTRUCTION JOINT (SHEAR FRICTION, ACI 318-19 22.9): '+state.peds.map((p,i)=>{const z=P2&&P2.shearFr&&P2.shearFr[i];return z&&!z.isPatch?String(p.label).toUpperCase()+' '+(z.rough?'INTENTIONALLY ROUGHENED TO 1/4 IN AMPLITUDE, CLEAN':'CLEAN, NOT INTENTIONALLY ROUGHENED')+' (MU = '+f2(z.mu)+')':null;}).filter(Boolean).join('; ')+'.',
@@ -6436,7 +6448,7 @@ function sfdWallItems(w){
   ['Column provisions not applied','the column minimum ρ_g ≥ 1 % (10.6.1.1), one-way shear by 22.5 in the in-plane direction and the column tie rules (25.7.2) are not applied to a wall: ACI 318-19 Chapter 11 replaces them with 11.6, 11.5.4 and 11.7.4.1, all checked here'],
   ['Spacing and layers','11.7.2.1, 11.7.3.1, 11.7.2.3: Wall bar spacing and layers'],
   ['Vertical bars (entry)',w.vEnt&&w.vEnt.wall?'#'+w.v.size+' @ s = '+f2(w.vEnt.s)+' in each face (engineer 2026-11-11: walls entered by spacing); bars per long face n = ceil(L_c/s) + 1 = ceil('+f2(w.vEnt.Lc)+'/'+f2(w.vEnt.s)+') + 1 = '+w.v.nF+', L_c = ℓ_w − 2c − d_b (the corner-bar centre span: the end bars at c + d_b/2 from the wall ends); s_v = L_c/(n − 1) = '+f2(w.v.s)+' in ≤ s, used in ρ_ℓ and the per-ft steel':w.v.nF+' bars per long face as saved (no single spacing reproduces this saved entry); s_v = L_c/(n − 1) = '+f2(w.v.s)+' in'],
-  ['Horizontal bars and cover',(w.hz&&!w.hz.need?'#'+w.hz.size+' @ '+f2(w.hz.s)+' in each face':'not entered')+'; one layer on each face, outside the vertical bars (the cover c is the clear cover to the vertical bars, d′ = c + d_b/2), so the clear cover to the horizontal bars is c − d_b,h (Table 20.5.1.3.1); no ties unless A_st > 0.01A_g (11.7.4.1). Drawings and 3D: first bar s_h/2 above the footing top, then every s_h'],
+  ['Horizontal bars and cover',(w.hz&&!w.hz.need?'#'+w.hz.size+' @ '+f2(w.hz.s)+' in each face':'not entered')+(w.hz&&w.hz.inside?'; one layer on each face, inside the vertical bars (Wall reinforcement card choice; the cover c is the clear cover to the vertical bars, d′ = c + d_b/2, unchanged), so the vertical bars are the outermost bars and the cover check is c against the minimum for the vertical bar size (Table 20.5.1.3.1)':'; one layer on each face, outside the vertical bars (the cover c is the clear cover to the vertical bars, d′ = c + d_b/2), so the clear cover to the horizontal bars is c − d_b,h (Table 20.5.1.3.1)')+'; no ties unless A_st > 0.01A_g (11.7.4.1). Drawings and 3D: first bar s_h/2 above the footing top, then every s_h'],
   ['Two-way shear around the wall','still checked (conservative): ACI 318-19 22.6.4.1 does not exempt walls; the footing one-way shear at d from the wall faces (13.2.7.1, Table 13.2.7.1: face of a concrete wall) is also checked'],
   ['Not checked','the list at the end of this wall\u2019s card and Report section (Chapter 18, openings, strut-and-tie, 11.8, 21.2.4, loads between top and base, deflections)']];
 }
@@ -6537,6 +6549,7 @@ function sfdWallInfo(i,p,combos,fc,fy,lam){
  o.vEnt={wall:!!PB.wall,s:PB.wall?PB.s:null,Lc:dir==='y'?PB.Ly:PB.Lx,mode:PB.mode};   /* SFWS: how the vertical bars were entered (display only) */
  o.hz=hNeed?{need:true,size:hSz>0?hSz:0,fromTie:hTie,sFromTie:sTie,Ab:hSz>0?Abh:0,s:hS>0?hS:0,rho:null}
   :{need:false,size:hSz,fromTie:hTie,sFromTie:sTie,Ab:Abh,s:hS,rho:(hS>0&&tw>0)?nC*Abh/(hS*tw):0};
+ o.hz.inside=wi.hPos==='in'&&!hTie;   /* SFHP: the horizontal bars inside the vertical bars (display / cover check only; no wall result uses the position) */
  o.rows.forEach(z=>{z.rtReq=Math.max(0,(z.Vin*1000/(0.75*Acv)-z.ac*lam*sq)/fyt);});
  o.rtGov=o.rows.reduce((a,z)=>(!a||z.rtReq>a.rtReq)?z:a,null);o.rhoTreq=o.rtGov?o.rtGov.rtReq:0;
  const t1=sz=>sz>0&&sz<=5&&fy>=60000;
@@ -7600,10 +7613,15 @@ function computePhase2(R){
      governs. Before: the tie input (c - d_b,tie) for every element. Unchanged: pedestals, a wall with l_w/t <= 3, a wall whose
      horizontal bars are not entered (the tie input, as before) or are "same as ties" (the same bar). */
   const wB=bearing[i]&&bearing[i].wall, wl=!isPatch&&!!(wB&&wB.applied), wTieReq=wl&&Ag>0&&Ast/Ag>0.01+1e-12;
-  const tr=[];if(wl&&wB.hz&&wB.hz.size>0)tr.push({kind:'horiz',size:wB.hz.size});
+  /* SFHP (2026-11-11, engineer): horizontal bars entered INSIDE the vertical bars (wallIn.hPos 'in'): the vertical bars are the
+     outermost bars, so the check is c (clear cover to the vertical bars) against the Table 20.5.1.3.1 cover for the vertical bar size
+     (kind 'horizIn', d_b subtracted = 0). Outside / absent: as SFHB above. Ties, where 11.7.4.1 requires them, are outside the vertical
+     bars either way and are still checked (smaller margin governs). */
+  const hzIn=wl&&!!(wB.hz&&wB.hz.inside);
+  const tr=[];if(wl&&wB.hz&&wB.hz.size>0)tr.push(hzIn?{kind:'horizIn',size:rf.longSize||0,noDb:true}:{kind:'horiz',size:wB.hz.size});
   if(!tr.length||(wTieReq&&rf.tieSize>0&&!(wB.hz&&wB.hz.fromTie)))tr.push({kind:'tie',size:rf.tieSize||0});
-  tr.forEach(z=>{z.db=BAR_DIA[z.size]||0;z.cov=cov-z.db;z.min=sftcMin(exposure,z.size);z.m=z.cov-z.min;});
-  const trG=tr.reduce((a,z)=>(!a||z.m<a.m-1e-12)?z:a,null), trKind=wl?(trG.kind==='horiz'?'horiz':(tr.some(z=>z.kind==='horiz')?'tieW':'tieNoH')):'tie';
+  tr.forEach(z=>{z.db=z.noDb?0:(BAR_DIA[z.size]||0);z.cov=cov-z.db;z.min=sftcMin(exposure,z.size);z.m=z.cov-z.min;});
+  const trG=tr.reduce((a,z)=>(!a||z.m<a.m-1e-12)?z:a,null), trKind=wl?(trG.kind==='horiz'||trG.kind==='horizIn'?trG.kind:(tr.some(z=>z.kind==='horiz'||z.kind==='horizIn')?'tieW':'tieNoH')):'tie';
   const tieDb=trG.db, tieCov=trG.cov, tieCovMin=trG.min, tieCovOK=isPatch?true:(tieCov>=tieCovMin-1e-9), trSize=trG.size;
   /* SFCV (2026-11-01, engineer): the clear cover to the vertical bars (the input c) against the same table row, by the vertical bar size */
   const vertCovMin=sftcMin(exposure,rf.longSize), vertCovOK=isPatch?true:(cov>=vertCovMin-1e-9);
@@ -7664,7 +7682,7 @@ function computePhase2(R){
   const pmRange=pmRat.filter(z=>z.mode==='range').map(z=>z.name);
   return{idx:i,label:p.label,isPedestal,Ag,nBars,Ast,rho,P0:P0/1000,Pn_max,phiPn_max,
    PuMax,MuxMax,MuyMax,govMx,govMy,tieMax,tieOK,tieSizeOK,nBarsOK,rhoOK,rhoMin,rhoMax,barFitOK,clrX,clrY,clrMin,dbL,r,klu_r,slenderFlag,kSl,dcrAxial,bmin,h,bx,by,isPatch,
-   pmBars,pmPts,pmRat,pmGov,pmRange,pmPts1,pmRat1,slm,slGov,slFail,fc,fy,PB,dPr,dX,dY,exposure,cov,tieDb,tieCov,tieCovMin,tieCovOK,vertCovMin,vertCovOK,trKind,trSize,wTieReq,wallTr:wl};
+   pmBars,pmPts,pmRat,pmGov,pmRange,pmPts1,pmRat1,slm,slGov,slFail,fc,fy,PB,dPr,dX,dY,exposure,cov,tieDb,tieCov,tieCovMin,tieCovOK,vertCovMin,vertCovOK,trKind,trSize,wTieReq,wallTr:wl,hzIn};
  });
  /* ----- SFDO: full dowel checks per pedestal (new; no other result reads them) ----- */
  /* SFCV: footing covers vs ACI 318-19 Table 20.5.1.3.1: bottom cast against earth 3 in; top in contact with ground (No. 6+ 2 in,
@@ -8654,11 +8672,11 @@ function sfdWallSketchSVG(i){
  t(W/2,14,'Elevation along ℓ_w = '+f(lw)+' in (to scale)',{fs:12});
  /* plan */
  E.push('<rect x="'+x0.toFixed(1)+'" y="'+yPlan.toFixed(1)+'" width="'+wl.toFixed(1)+'" height="'+tpx.toFixed(1)+'" fill="#f4f1ea" stroke="#333" stroke-width="1.2"/>');
- {const WH=sfdwWallHz(i);if(WH&&WH.ok)[-1,1].forEach(sg=>{const v=sg*WH.off/tw*tpx;ln(X(lw/2-WH.half),yPlan+tpx/2+v,X(lw/2+WH.half),yPlan+tpx/2+v,'stroke="#2e7d32" stroke-width="1.2" stroke-dasharray="5 3"');});}   /* SFHB: the horizontal bars in plan, each face outside the vertical bars */
+ {const WH=sfdwWallHz(i);if(WH&&WH.ok)[-1,1].forEach(sg=>{const v=sg*WH.off/tw*tpx;ln(X(lw/2-WH.half),yPlan+tpx/2+v,X(lw/2+WH.half),yPlan+tpx/2+v,'stroke="#2e7d32" stroke-width="1.2" stroke-dasharray="5 3"');});}   /* SFHB: the horizontal bars in plan, each face outside the vertical bars (SFHP: or inside, WH.off) */
  (pd.pmBars||[]).forEach(q=>{const u=lw/2+(dir==='y'?q.y:q.x),v=(dir==='y'?q.x:q.y)/tw*tpx;E.push('<circle cx="'+X(u).toFixed(1)+'" cy="'+(yPlan+tpx/2+v).toFixed(1)+'" r="2.4" fill="#1f4e8c"/>');});
  if(conc){const a=Math.max(0,u0-b/2),c=Math.min(lw,u0+b/2);E.push('<rect x="'+X(a).toFixed(1)+'" y="'+yPlan.toFixed(1)+'" width="'+Math.max(X(c)-X(a),2).toFixed(1)+'" height="'+tpx.toFixed(1)+'" fill="rgba(198,40,40,0.18)" stroke="#c62828"/>');}
  t(W/2,yPlan-10,'Plan: t = '+f(tw)+' in'+(tpx>tw*sc*1.05?' (drawn ×'+(tpx/(tw*sc)).toFixed(1)+')':'')+', '+(pd.pmBars||[]).length+' vertical bars',{fs:11});
- t(8,Ht-(conc?40:26),'blue: vertical bars; green dashed: horizontal bars'+(w&&w.hz&&!w.hz.need&&w.hz.s>0?' #'+w.hz.size+' @ '+f(w.hz.s)+' in EF':' (input needed)')+'; red: load and b'+(conc&&topGovB?'; red dotted: b_eff,top carried to the base':''),{a:'start',fs:10,c:'#444'});
+ t(8,Ht-(conc?40:26),'blue: vertical bars; green dashed: horizontal bars'+(w&&w.hz&&!w.hz.need&&w.hz.s>0?' #'+w.hz.size+' @ '+f(w.hz.s)+' in EF, '+(w.hz.inside?'inside':'outside')+' the vertical bars':' (input needed)')+'; red: load and b'+(conc&&topGovB?'; red dotted: b_eff,top carried to the base':''),{a:'start',fs:10,c:'#444'});
  if(conc){t(8,Ht-26,'purple dashed: 45° spread; b_eff,base = min(max(b_eff,top, spread), s, ℓ_w)',{a:'start',fs:10,c:'#444'});
   t(8,Ht-12,'b_eff,top = min(min(b/2 + 2t, a₁) + min(b/2 + 2t, a₂), s, ℓ_w); a₁, a₂ = load to the wall ends',{a:'start',fs:10,c:'#444'});}
  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+W+' '+Ht.toFixed(0)+'" style="width:100%;max-width:'+W+'px;height:auto;font-family:Times New Roman,serif" role="img" aria-label="Wall elevation and plan">'+E.join('')+'</svg>';}
@@ -8790,10 +8808,12 @@ function sfdWallCard(b,i){
    's_{clear,x} = '+f2(pd.clrX)+',\\;s_{clear,y} = '+f2(pd.clrY)+'\\;\\mathrm{in}\\;\\text{vs}\\;'+f2(pd.clrMin)+'\\;\\mathrm{in}',
    pd.barFitOK?'\\checkmark':'\\text{NG}'));
   b.appendChild(eqBlock('Wall: clear cover','ACI 318-19 11.7.1.1, 20.5.1.3, Table 20.5.1.3.1 ('+SFTC_EXP[pd.exposure][1]+')',
+   pd.trKind==='horizIn'?'c \\ge c_{min}\\;(\\text{vertical bars, the outermost bars: the horizontal bars are inside them})':   /* SFHP */
    'c \\ge c_{min}\\;(\\text{vertical bars}),\\quad c - d_{'+sftcTrSub(pd)+'} \\ge c_{min}\\;(\\text{'+(pd.trKind==='horiz'?'horizontal bars outside the vertical bars':'ties / horizontal bars outside them')+'})',
+   pd.trKind==='horizIn'?'c = '+f2(pd.cov)+'\\;\\text{vs}\\;'+f2(pd.tieCovMin)+'\\;\\mathrm{in}\\;(\\#'+(pd.trSize||0)+')':
    'c = '+f2(pd.cov)+'\\;\\text{vs}\\;'+f2(pd.vertCovMin)+',\\quad '+(pd.trKind==='horiz'?'c_{h}':'c_{tie}')+' = '+f2(pd.cov)+' - '+f3(pd.tieDb)+' = '+f3(pd.tieCov)+'\\;\\text{vs}\\;'+f2(pd.tieCovMin)+'\\;\\mathrm{in}\\;(\\#'+(pd.trSize||0)+')',
    (pd.vertCovOK&&pd.tieCovOK)?'\\checkmark':'\\text{NG}'));
-  b.appendChild(sfwUl([['Bar arrangement',SFHB_ARR.replace(/^Wall bar arrangement: /,'')],['Cover checked to',sftcTrName(pd)+(pd.wTieReq?'; ties also apply (A<sub>st</sub> &gt; 0.01A<sub>g</sub>): the smaller margin governs':'')]]));}   /* SFHB */
+  b.appendChild(sfwUl([['Bar arrangement',sfhbArr(pd.hzIn).replace(/^Wall bar arrangement: /,'')],['Cover checked to',sftcTrName(pd)+(pd.wTieReq?'; ties also apply (A<sub>st</sub> &gt; 0.01A<sub>g</sub>): the smaller margin governs':'')]]));}   /* SFHB */
  /* 11.3.1.1 information */
  b.appendChild(eqBlock('Wall: minimum thickness (information)','ACI 318-19 11.3.1.1, Table 11.3.1.1 and its note [1]',
   'h_{min} = \\max\\left(4\\;\\mathrm{in},\\;\\frac{\\min(\\ell_u,\\,\\ell_w)}{25}\\right)\\;\\text{(bearing walls designed by 11.5.3 only)}',
@@ -8847,7 +8867,7 @@ function renderPedestalDesign(){
  const t=document.createElement('table');t.className='tbl';
  t.innerHTML='<tr><th>Pedestal</th><th>Class</th><th>b\u2093\u00d7b\u1D67\u00d7h (in)</th><th>n bars</th><th>A_st (in\u00b2)</th><th>\u03c1 (%)</th><th>\u03c6P_n,max (k)</th><th>P_u (k)</th><th>Axial DCR</th><th>P\u2013M ratio (own P_u)</th><th>Ties</th><th>Tie cover (in)</th><th>Slender?</th></tr>';
  const tw=t.cloneNode(true);tw.querySelector('th').textContent='Wall';   /* SFWD */
- {const th=tw.querySelectorAll('th');if(th[11])th[11].textContent='Cover to horizontal bars (in)';}   /* SFHB: a wall has no ties; its outermost bars are the horizontal bars */
+ {const th=tw.querySelectorAll('th');if(th[11])th[11].textContent=wIdx.length&&wIdx.every(i=>P2.pedDes[i].hzIn)?'Cover to vertical bars (in)':wIdx.some(i=>P2.pedDes[i].hzIn)?'Cover to the outermost bars (in)':'Cover to horizontal bars (in)';}   /* SFHB: a wall has no ties; its outermost bars are the horizontal bars; SFHP: the vertical bars where the horizontal bars are inside */
  P2.pedDes.forEach(pd=>{const tr=document.createElement('tr');
   const wA=P2.bearing[pd.idx]&&P2.bearing[pd.idx].wall&&P2.bearing[pd.idx].wall.applied;   /* SFWL */
   const wDo=wA&&P2.wallD&&P2.wallD[pd.idx], tiesTxt=(wDo&&!wDo.tieReq)?'not required (11.7.4.1)':((pd.tieOK&&pd.tieSizeOK)?'OK':'CHECK');   /* SFHB: walls, ties only where A_st > 0.01A_g */
@@ -9366,7 +9386,7 @@ function buildRebar(){
    const geo=new THREE.CylinderGeometry(db/2,db/2,p.h*0.98,8);const m=new THREE.Mesh(geo,steel);m.position.copy(e2v(xx,yy,p.h/2));g.add(m);});
   // ties (rectangular loops) at tie spacing
   const tie=BAR_DIA[rf.tieSize||0]/12;const spc=(rf.tieSpc||12)/12;
-  const WH=sfdwWallHz(i);   /* SFHB: a wall: its horizontal bars, each face outside the vertical bars (as the drawings); ties only where 11.7.4.1 requires them */
+  const WH=sfdwWallHz(i);   /* SFHB: a wall: its horizontal bars, each face outside the vertical bars (SFHP: or inside, WH.off; as the drawings); ties only where 11.7.4.1 requires them */
   if(WH&&WH.ok){const hm=steel;
    WH.zs.forEach(z=>[-WH.off,WH.off].forEach(o=>{const a=WH.dir==='y'?[o,-WH.half]:[-WH.half,o],b=WH.dir==='y'?[o,WH.half]:[WH.half,o];
     path3([[a[0],a[1],z],[b[0],b[1],z]],WH.db/12,hm);V3D.wallHz++;}));}
@@ -9927,7 +9947,7 @@ manPart("p2","2. Input Reference",[
 {h:"2.6 Footing reinforcement"},
 {p:"Bottom and top mats, each direction: bar size and either a spacing or a total quantity. &ldquo;\u2014 none&rdquo; suppresses a mat. The <b>outer bottom layer</b> (y-bars by default, or x-bars) and the top mat (x-bars outer) fix the per-layer d (\u00a70.3.4). Steel is checked against demand, against the 0.0018A<sub>g</sub> minimum \u2014 which, per ACI 318-19 &sect;7.6.1.1 (combined footing: &sect;13.3.4.1 &rarr; &sect;8.6.1.1), <i>is</i> the minimum flexural reinforcement of a footing (the 3&radic;f\u2032c/f<sub>y</sub> beam minimum of &sect;9.6.1.2 does not apply) \u2014 against s<sub>max</sub> = min(2h, 18 in) (&sect;8.7.2.2) and against the minimum clear spacing (&sect;25.2.1). The &ldquo;&ell;<sub>d</sub> reduction for excess A<sub>s</sub>&rdquo; option (ACI 318-19 &sect;25.4.10.1; off by default) is on this tab, below the mats; so are the per-pedestal reinforcement and dowels (&sect;2.7) and the option <b>Always require &ell;<sub>dc</sub> for dowels</b> (&sect;4C.4)."},
 {h:"2.7 Pedestals"},
-{p:"Each pedestal card (Pedestals &amp; Loads tab): label; plan position (x, y) of its centroid <i>relative to the footing centroid</i>; plan dimensions b<sub>x</sub> &times; b<sub>y</sub>; height h above the footing top; the <b>load offsets</b> e<sub>x</sub>, e<sub>y</sub> of the load point from the pedestal centroid; an optional factored torsion T<sub>u</sub>; and the load table (per mode: D, L, Lr, S, Wx, Wy, E by type, or one factored envelope). <b>Element type</b>: Pedestal (default) or Wall; a Wall with &ell;<sub>w</sub>/t &gt; 3 adds the wall inputs (total height h<sub>w</sub>, the two-layer exemption, top-of-wall bracing, k and &ell;<sub>u</sub>, how the load is applied and its bearing width, the spacing to adjacent concentrated loads, and the horizontal bars on the Reinforcement tab, blank until entered). Its reinforcement (long. bar size, bars per face n<sub>x</sub>/n<sub>y</sub> or a total quantity, tie size and spacing, cover, exposure, dowels, dowel projection, joint surface) is entered on the Reinforcement tab, under Pedestal Reinforcement &amp; Dowels. <b>Pedestal longitudinal bars act as the dowels</b> (ticked for new pedestals): the dowel size, count and layout are those of the longitudinal bars, which run continuously into the footing, and the separate dowel inputs are greyed out. <b>Hooked end in footing</b> (ticked for new pedestals): a standard 90\u00b0 hook at the footing end, developed by \u2113<sub>dh</sub>; unticked, a straight bar developed by \u2113<sub>d</sub>. Projects saved before these options open with both unticked. The pedestal <b>cover</b> is the clear cover to the longitudinal bars: the bar-fit check, the bar layout, the P\u2013M interaction and the drawings all place the bar centres at cover + d<sub>b</sub>/2 from each face, with the ties outside the bars (clear cover to the ties = cover \u2212 d<sub>tie</sub>). <b>Walls</b> (2026-11-11): the vertical bars are entered as a spacing s<sub>v</sub> on each face (bars per face = ceil(L<sub>c</sub>/s<sub>v</sub>) + 1, L<sub>c</sub> = b \u2212 2&middot;cover \u2212 d<sub>b</sub>; a wall saved with bars per face or a total opens with the spacing that gives the same bars, or keeps its entry where none does); a wall has no ties unless A<sub>st</sub> &gt; 0.01A<sub>g</sub> (ACI 318-19 11.7.4.1), so the tie inputs are hidden; its horizontal bars are one layer on each face outside the vertical bars (clear cover = cover \u2212 d<sub>b,h</sub>, checked against Table 20.5.1.3.1) and are drawn in the sections, the element detail, the bar schedule and the 3D view (first bar s<sub>h</sub>/2 above the footing top)."},
+{p:"Each pedestal card (Pedestals &amp; Loads tab): label; plan position (x, y) of its centroid <i>relative to the footing centroid</i>; plan dimensions b<sub>x</sub> &times; b<sub>y</sub>; height h above the footing top; the <b>load offsets</b> e<sub>x</sub>, e<sub>y</sub> of the load point from the pedestal centroid; an optional factored torsion T<sub>u</sub>; and the load table (per mode: D, L, Lr, S, Wx, Wy, E by type, or one factored envelope). <b>Element type</b>: Pedestal (default) or Wall; a Wall with &ell;<sub>w</sub>/t &gt; 3 adds the wall inputs (total height h<sub>w</sub>, the two-layer exemption, top-of-wall bracing, k and &ell;<sub>u</sub>, how the load is applied and its bearing width, the spacing to adjacent concentrated loads, and the horizontal bars on the Reinforcement tab, blank until entered). Its reinforcement (long. bar size, bars per face n<sub>x</sub>/n<sub>y</sub> or a total quantity, tie size and spacing, cover, exposure, dowels, dowel projection, joint surface) is entered on the Reinforcement tab, under Pedestal Reinforcement &amp; Dowels. <b>Pedestal longitudinal bars act as the dowels</b> (ticked for new pedestals): the dowel size, count and layout are those of the longitudinal bars, which run continuously into the footing, and the separate dowel inputs are greyed out. <b>Hooked end in footing</b> (ticked for new pedestals): a standard 90\u00b0 hook at the footing end, developed by \u2113<sub>dh</sub>; unticked, a straight bar developed by \u2113<sub>d</sub>. Projects saved before these options open with both unticked. The pedestal <b>cover</b> is the clear cover to the longitudinal bars: the bar-fit check, the bar layout, the P\u2013M interaction and the drawings all place the bar centres at cover + d<sub>b</sub>/2 from each face, with the ties outside the bars (clear cover to the ties = cover \u2212 d<sub>tie</sub>). <b>Walls</b> (2026-11-11): the vertical bars are entered as a spacing s<sub>v</sub> on each face (bars per face = ceil(L<sub>c</sub>/s<sub>v</sub>) + 1, L<sub>c</sub> = b \u2212 2&middot;cover \u2212 d<sub>b</sub>; a wall saved with bars per face or a total opens with the spacing that gives the same bars, or keeps its entry where none does); a wall has no ties unless A<sub>st</sub> &gt; 0.01A<sub>g</sub> (ACI 318-19 11.7.4.1), so the tie inputs are hidden; its horizontal bars are one layer on each face, outside or inside the vertical bars as chosen in the \u201cHorizontal bars\u201d drop-down next to them (blank in older projects = outside; \u201csame as ties\u201d is always outside). The cover is the clear cover to the vertical bars either way, so d of the wall checks does not change. Outside: the clear cover to the horizontal bars, cover \u2212 d<sub>b,h</sub>, is checked against Table 20.5.1.3.1 for the horizontal bar size. Inside: the vertical bars are the outermost bars and the cover is checked against the minimum for the vertical bar size. The bars are drawn in the sections, the element detail, the bar schedule and the 3D view (first bar s<sub>h</sub>/2 above the footing top)."},
 {key:"n<sub>x</sub> and n<sub>y</sub> are the bar counts along each face, counted as a perimeter arrangement (total = 2(n<sub>x</sub>+n<sub>y</sub>)\u22124). A physical <b>bar-fit check</b> (clear spacing \u2265 max(1.5d<sub>b</sub>, 1.5 in, 4/3 d<sub>agg</sub>), ACI 25.2.3) guards against a mistyped count that would still pass the 1\u20138% \u03c1 limit \u2014 a real incident from this program\u2019s own validation history."},
 {h:"2.8 Defaults on import"},
 {p:"When an exported JSON predates a setting, the importer backfills it so the old project reproduces its results: shearCouple &rarr; include; passive fraction &rarr; 0; manual print &rarr; off; depth factors &rarr; On; simultaneous wind &rarr; Off; S<sub>DS</sub> and the E loads &rarr; 0; dowels &rarr; separate and straight; the excess-reinforcement, size-effect and &ldquo;always require &ell;<sub>dc</sub>&rdquo; options &rarr; off; outer bottom layer &rarr; y-bars; load offsets and T<sub>u</sub> &rarr; 0; a removed &ldquo;Not checked&rdquo; eccentricity choice opens as &ldquo;No eccentricity limit&rdquo;; every other stab/soil/EV key at its documented default. Existing values are never overwritten."}
