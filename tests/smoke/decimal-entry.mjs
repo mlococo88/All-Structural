@@ -67,9 +67,10 @@ const collect = F => F.evaluate(() => {
     if (e.hasAttribute('data-dece')) continue;
     if (sig) window.__deceSeen[sig] = 1;
     const n = ++window.__deceN; e.setAttribute('data-dece', String(n));
+    const ord = [...document.querySelectorAll('input')].indexOf(e);   // a field rebuilt without an id is found again by its place
     const lab = (e.labels && e.labels[0] && e.labels[0].textContent) || e.getAttribute('aria-label') || e.title ||
       (e.closest('.fRow, tr, label, .row, .field') || e.parentElement).textContent || '';
-    out.push({ n, sig, type: e.type, lab: lab.trim().replace(/\s+/g, ' ').slice(0, 50) });
+    out.push({ n, sig, ord, type: e.type, lab: lab.trim().replace(/\s+/g, ' ').slice(0, 50) });
   }
   return out;
 });
@@ -88,8 +89,8 @@ async function testField(p, F, fld) {
   for (const s0 of [...STR, 'np9.6']) {
     const np = s0.startsWith('np'), s = np ? s0.slice(2) : s0;
     const sel = fld.sig ? `[data-fkey="${fld.sig}"], [id="${fld.sig}"]` : `[data-dece="${fld.n}"]`;
-    const orig = await F.evaluate(([sel, n]) => { const e = document.querySelector(`[data-dece="${n}"]`) || document.querySelector(sel);
-      if (!e || !e.isConnected || !e.getClientRects().length) return null; e.focus(); try { e.select(); } catch (x) {} return e.value; }, [sel, fld.n]);
+    const orig = await F.evaluate(([sel, n, ord]) => { const e = document.querySelector(`[data-dece="${n}"]`) || (sel.startsWith('[data-dece') ? document.querySelectorAll('input')[ord] : document.querySelector(sel));
+      if (!e || !e.isConnected || !e.getClientRects().length) return null; e.focus(); try { e.select(); } catch (x) {} return e.value; }, [sel, fld.n, fld.ord]);
     if (orig === null) { res.push(`${s0}: field gone`); break; }
     await p.keyboard.press('Control+A');
     for (const ch of s) { if (np && ch === '.') await numpadDot(p); else await p.keyboard.type(ch); }
@@ -161,7 +162,9 @@ for (const key of keys) {
   } catch (e) { bad.push('error: ' + e.message.split('\n')[0]); }
   finally { await b.close(); }
   failures += bad.length + (errs.length ? 1 : 0);
-  console.log(`${bad.length || errs.length ? 'FAIL' : 'ok  '} ${key} (${src.label}): ${tested} numeric fields, ${bad.length} lose a keystroke or the focus${errs.length ? `, ${errs.length} console errors: ${errs.slice(0, 3).join(' | ')}` : ''}`);
+  const kind = re => bad.filter(x => re.test(x.split('): ').slice(1).join('): '))).length;   // which typed string a field failed on first
+  console.log(`${bad.length || errs.length ? 'FAIL' : 'ok  '} ${key} (${src.label}): ${tested} numeric fields, ${bad.length} lose a keystroke or the focus` +
+    (bad.length ? ` (on a decimal: ${kind(/^(np)?(9\.6|0\.75) -> /)}, on the minus sign: ${kind(/^-1\.5 -> /)}, field gone / focus lost: ${kind(/gone|focus lost/)})` : '') + `${errs.length ? `, ${errs.length} console errors: ${errs.slice(0, 3).join(' | ')}` : ''}`);
   for (const x of bad.slice(0, 60)) console.log('     ' + x);
   if (bad.length > 60) console.log(`     … ${bad.length - 60} more`);
 }
