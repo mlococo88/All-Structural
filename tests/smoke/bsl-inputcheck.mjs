@@ -198,7 +198,7 @@ if (REF) {
   const A = await run(path.join(dir, 'Bridge Substructure Loading.html')), B = await run(FILE);
   let n = 0;
   for (let i = 0; i < A.length; i++) { const a = A[i], bb = B[i].o;
-    const keys = [...Object.keys(a.o.num).map(k => ['num', k]), ...Object.keys(a.o.tabs).map(k => ['tabs', k])];
+    const keys = [...Object.keys(a.o.num).map(k => ['num', k]), ...Object.keys(a.o.tabs).filter(k => !/^manual~/.test(k)).map(k => ['tabs', k])];   // the Manual (static text) is not compared (SLDW rewrote its drawings paragraphs; tests/smoke/bsl-drawings.mjs checks them)
     const diff = keys.filter(([g, k]) => a.o[g][k] !== bb[g][k]).map(x => x.join('.')); n += keys.length + 2;
     const la = a.o.report.split('\n'), lb = bb.report.split('\n'), extra = lb.filter(l => !la.includes(l)), miss = la.filter(l => !lb.includes(l));
     console.log(`  ${a.name}: ${keys.length} results and tabs compared, ${diff.length} different; Report ${la.length} → ${lb.length} lines (+${extra.length} "Input checks", −${miss.length})`);
