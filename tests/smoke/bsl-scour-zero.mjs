@@ -43,7 +43,7 @@ try {
   });
   await ok('§6 note on the Water tab and the Units pane', async () => {
     assert.match(zero.txt, /blank scour elevation means the ground line \(El\. 104\.50\); an entered 0\.0 is El\. 0\.0/);
-    const side = await p.evaluate(async () => { P.ui.sel = 1; P.ui.itab = 'units'; buildSide(); return document.getElementById('sidebar').innerText; });
+    const side = await p.evaluate(async () => { P.ui.sel = 1; P.ui.itab = document.querySelector('.itab[data-pane=water]') ? 'water' : 'units'; buildSide();   /* SLIT: the Water and ice input tab */ return document.getElementById('sidebar').innerText; });
     assert.match(side, /an entered 0\.0 is El\. 0\.0, not blank/);
   });
   await ok('0 console errors', () => assert.deepEqual(errs, []));

@@ -70,6 +70,12 @@ node tests/smoke/spread-footing-nobear.mjs [--file <file or git ref>] [--shots <
 # summary, every output tab, the Drawings and the Report, the field marked with its reason, a working link; REVIEW does not block
 node tests/smoke/retaining-wall-checks.mjs [--file <file or git ref>]
 
+# Bridge Substructure Loading layout parity (SLGP) and twelve input tabs (SLIT): check summary column (collapsed below 1800 px, open at 1920 px,
+# the Combinations envelope, a click opens the tab), I-1…I-12 input tabs and I-n.m sections (every field in exactly one tab, the input-check
+# counts and links follow the field, unit buttons keep a loading tab), numbered output tabs, the grab bar (subloads_splitRatio_v1), the Input ID
+# (header, Report title block, stable across a reload), 390 px, 0 console errors. ~2 min
+node tests/smoke/bsl-gap-layout.mjs [--shots <dir>]
+
 # Phone / tablet layout (PHN): at 390 and 768 px the page never scrolls sideways, on load and on every tab (one entry per tool in TOOLS)
 node tests/smoke/phone-layout.mjs [--tool smd,...] [--file <file or git ref>] [--w 390,768]
 

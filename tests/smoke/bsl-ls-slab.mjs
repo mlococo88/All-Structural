@@ -41,7 +41,7 @@ try {
     near(Sn.S[0][0] - S.S[0][0], 1.75 * 66.340, 0.002, 'ΔP = 1.75 LSv'); near(Sn.S[0][1] - S.S[0][1], 1.75 * 67.946, 0.002, 'ΔV = 1.75 LSh'); near(Sn.S[0][2] - S.S[0][2], 1.75 * 679.456, 0.01, 'ΔM'); });
   await ok('MassDOT: removed whatever lsRed says (3.3.1.3)', () => { assert.equal(M.rem, true); assert.equal(M.LSb + M.LSt + M.LSv, 0); });
   await ok('§6 notes: Units pane option and note, Earth loads tab, Report', async () => {
-    const t = await p.evaluate(async () => { P = defP(); syncSupports(); P.units[0].earth.asOn = 'yes'; recompute(); P.ui.sel = 0; P.ui.itab = 'units'; buildSide();
+    const t = await p.evaluate(async () => { P = defP(); syncSupports(); P.units[0].earth.asOn = 'yes'; recompute(); P.ui.sel = 0; P.ui.itab = document.querySelector('.itab[data-pane=earth]') ? 'earth' : 'units'; buildSide();   /* SLIT: the Earth loads input tab */
       const side = document.getElementById('sidebar').innerText, sel = document.getElementById('f_units_0_earth_lsRed').value;
       showTab('earth'); await new Promise(r => setTimeout(r, 200)); const tab = document.getElementById('tab-earth').innerText;
       const rpt = JSON.stringify(slrModel()); return { side, sel, tab, rpt }; });
