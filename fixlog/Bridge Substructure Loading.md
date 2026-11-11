@@ -3173,3 +3173,10 @@ function listTables() {
 - **Check case:** skew30 project, Geometry plan smallest label 9.94 px → 10.6 px at 1440 px; default project at 390 px: plan smallest label ≈ 4 px → 8.6 px, Pier 1 elevation 3.6 px → 10.3 px.
 - **Not done:** the response spectrum and influence-line SVGs (custom drawings) keep their style.
 - **Decisions (pending engineer review):** bearing colours of the palette (fixed orange, expansion blue) on screen; graphics scroll sideways in their box on a phone; LL arrangement and load diagrams keep their max heights at 1440 px (labels about 7 px, as before).
+
+## 2026-11-11 — PR: sl-fdx-copies (PR #1419: https://github.com/mlococo88/All-Structural/pull/1419) — per-project copies of the foundationLoads send (SLFC; HANDOFF.md §5.1)   [no calculation; storage: new keys only]
+
+- **Where:** the foundation loads hand-off IIFE, function `send(how)`, after the anchor `localStorage.setItem('bridgeSuite.v1.' + CH + '.by.' + SID, JSON.stringify(r.payload));`.
+- **Before:** the send wrote the channel key and `bridgeSuite.v1.foundationLoads.by.subloads`. **After:** also `if (window.SharedHandoffStore) SharedHandoffStore.send({ storage: localStorage, channel: CH, producer: SID, payload: r.payload, fetch: (u, i) => window.fetch(u, i) }).catch(() => { });` → `bridgeSuite.v1.foundationLoads.by.subloads.<project id>` (and the Cloud sync upload), as abutmentLoads (#1405).
+- **Check case:** default project named "Bridge A", Pier 1 sent: the three keys hold the same payload (element "Pier 1"); "Bridge B" / Pier 2 adds its own copy; "Bridge A" / Abut. 1 replaces A's copy (tests/smoke/bsl-fdx-copies.mjs).
+- **Receivers:** Pile Designer and Spread Footing have no §5.1 picker (they do not load shared/handoff-store.js): unchanged, they read the channel key as before. Open item: their picker.
