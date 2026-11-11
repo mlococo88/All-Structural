@@ -48,7 +48,8 @@ async function importNow(p) { await p.waitForSelector('#pfxGo', { timeout: 15000
 const errsAll = [];
 async function session(file, ls, fn, vw = 1400) { const o = await openPage(file, { ls, vw, vh: 1000 }); try { await ready(o.p); await o.p.waitForTimeout(500); return await fn(o.p, o); } finally {
   // the test kit has no Tailwind (cdn.tailwindcss.com, blocked): its one failed load is not a page error
-  const tw = [...o.blocked].every(u => /^https:\/\/cdn\.tailwindcss\.com\//.test(u));
+  // FPU cloud section: with Cloud sync set up the page may ask GitHub before the test routes api.github.com to gh-mock (not a page error)
+  const tw = [...o.blocked].every(u => /^https:\/\/(cdn\.tailwindcss\.com|api\.github\.com)\//.test(u));
   errsAll.push(...o.errs.filter(e => !(tw && /^Failed to load resource: net::ERR_FAILED$/.test(e))).map(e => path.basename(file) + ': ' + e)); await o.b.close(); } }
 
 // main's tree (only what the page loads) in a temporary folder, removed at the end

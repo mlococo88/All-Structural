@@ -55,7 +55,10 @@ const snap = p => p.evaluate(() => {
 async function mainPull(p) { await pull(p); await p.waitForSelector('#bxFlPkOverlay, #bxFlGo', { timeout: 15000 }); if (await p.$('#bxFlPkOverlay')) await p.click('#bxFlPkNext'); return importNow(p); }
 async function importNow(p) { await p.waitForSelector('#bxFlGo', { timeout: 15000 }); await p.click('#bxFlGo'); await p.waitForTimeout(1200); return snap(p); }
 const errsAll = [];
-async function session(file, ls, fn, vw = 1400) { const o = await openPage(file, { ls, vw, vh: 1000 }); try { await ready(o.p); return await fn(o.p, o); } finally { errsAll.push(...o.errs.map(e => path.basename(path.dirname(file)) + '/' + path.basename(file) + ': ' + e)); await o.b.close(); } }
+async function session(file, ls, fn, vw = 1400) { const o = await openPage(file, { ls, vw, vh: 1000 }); try { await ready(o.p); return await fn(o.p, o); } finally {
+  // FPU cloud section: with Cloud sync set up the page may ask GitHub before the test routes api.github.com to gh-mock; that blocked load is not a page error
+  const gh = o.blocked.size > 0 && [...o.blocked].every(u => /^https:\/\/api\.github\.com\//.test(u));
+  errsAll.push(...o.errs.filter(e => !(gh && /^Failed to load resource: net::ERR_FAILED$/.test(e))).map(e => path.basename(path.dirname(file)) + '/' + path.basename(file) + ': ' + e)); await o.b.close(); } }
 
 const sha = execFileSync('git', ['-C', REPO, 'rev-parse', '--short', REF], { encoding: 'utf8' }).trim();
 const MDIR = fs.mkdtempSync(path.join(os.tmpdir(), 'sfpk-main-'));
