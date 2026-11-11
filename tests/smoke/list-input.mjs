@@ -159,7 +159,8 @@ const TOOLS = {
       const out = await p.evaluate(() => ({ P: JSON.parse(JSON.stringify(P)), C: JSON.parse(JSON.stringify(MODEL.C)),
         stored: JSON.parse(localStorage.getItem(KEY) || 'null') }));
       if (out.P.ui) delete out.P.ui.tab; if (out.stored && out.stored.ui) delete out.stored.ui.tab;
-      const ids = await p.$$eval('.tab-btn', e => e.map(b => b.dataset.tab).filter(t => t !== 'v3d')); out.tabs = {};
+      // SLDW (2026-11-11): the Drawings tab (new, display only; tests/smoke/bsl-drawings.mjs) and the Manual (static text; its drawings paragraphs were rewritten) are not compared
+      const ids = await p.$$eval('.tab-btn', e => e.map(b => b.dataset.tab).filter(t => t !== 'v3d' && t !== 'drawings' && t !== 'manual')); out.tabs = {};
       for (const id of ids) { await p.click(`.tab-btn[data-tab="${id}"]`); await p.waitForTimeout(400);
         out.tabs[id] = await p.evaluate(id => { const e = document.getElementById('tab-' + id); if (!e) return null; const k = e.cloneNode(true);
           k.querySelectorAll('[data-sli],script,style').forEach(x => x.remove()); return k.innerText; }, id); }
