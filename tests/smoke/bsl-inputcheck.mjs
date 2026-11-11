@@ -201,8 +201,8 @@ if (REF) {
   // branch; taken out of both sides' text (every result is still compared)
   const slal = t => typeof t !== 'string' ? t : t.replace(/\n?Abutment length: L[\s\S]*?as before this input was added\./g, '').replace(/Abutment length along the bearing line L_ab: blank or greater than 0 ft; (Footing length L_ftg: blank or greater than 0 ft; )?/g, '');
   // SLLS (2026-11-11): the approach-slab LS notes (Earth loads tab, Report section and Backfill row) are display text new on this branch
-  const slls = t => typeof t !== 'string' ? t : t.replace(/\n?Approach slab and LS:[^\n]*/g, '').replace(/, live-load surcharge (removed in the final state \([^)]*\)|kept \(3\.11\.6\.5 reduction not taken\))/g, '')
-    .replace(/\n?[^\n]*Live-load surcharge with the approach slab[^\n]*/g, '').replace(/\n?(Final-state live-load surcharge LS removed|Live-load surcharge kept with the approach slab)[^\n]*/g, '');
+  const slls = t => typeof t !== 'string' ? t : t.replace(/(\n• *)?\n?Approach slab and LS:[^\n]*/g, '').replace(/, live-load surcharge (removed in the final state \([^)]*\)|kept \(3\.11\.6\.5 reduction not taken\))/g, '')
+    .replace(/\n?[^\n]*Live-load surcharge with the approach slab[^\n]*/g, '').replace(/\n?(Final-state live-load surcharge LS removed|Live-load surcharge kept with the approach slab)[^\n]*/g, '').replace(/\n{3,}/g, '\n\n');
   [...A, ...B].forEach(r => { const o = r.o; Object.keys(o.tabs).forEach(k => { o.tabs[k] = slls(slal(o.tabs[k])); }); o.report = slls(slal(o.report)); });
   for (let i = 0; i < A.length; i++) { const a = A[i], bb = B[i].o;
     const keys = [...Object.keys(a.o.num).map(k => ['num', k]), ...Object.keys(a.o.tabs).filter(k => !/^manual~/.test(k)).map(k => ['tabs', k])];   // the Manual (static text) is not compared (SLDW rewrote its drawings paragraphs; tests/smoke/bsl-drawings.mjs checks them)

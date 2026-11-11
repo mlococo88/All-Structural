@@ -23,7 +23,7 @@ try {
   const run = o => p.evaluate(o => { P = defP(); syncSupports(); const e = P.units[0].earth; if (o.owner) P.br.owner = o.owner; if (o.slab) e.asOn = 'yes'; if (o.lsRed !== undefined) e.lsRed = o.lsRed; recompute();
     const E = earthAbut(0), sum = (c, sec, k) => E.items.filter(i => i.cls === c && (!sec || i.sec === sec)).reduce((a, i) => a + (i[k] || 0), 0);
     const defs = unitRes(0).UM.defs, C = combine(0), at = l => defs.findIndex(x => x.label === l), q = n => at(n + ', bottom of footing');
-    return { LSb: sum('LSh', 'bot', 'H'), LSt: sum('LSh', 'top', 'H'), LSv: sum('LSv', 'bot', 'W'), LShc: sum('LShc', '', 'H'), LSvc: sum('LSvc', '', 'W'), rem: E.lsRem,
+    return { LSb: sum('LSh', 'bot', 'H'), LSt: sum('LSh', 'top', 'H'), LSv: sum('LSv', 'bot', 'W'), LShc: sum('LShc', '', 'H'), LSvc: sum('LSvc', '', 'W'), rem: lsSlabRem(P.units[0].earth),
       S: ['StrI', 'SerI'].map(id => [C[id].max[q('Axial')], C[id].max[q('V<sub>l</sub>')], C[id].max[q('M<sub>l</sub>')]]), ic: SubLoadsInputCheck.collect().length }; }, o);
   const A = await run({}), S = await run({ slab: true }), Sy = await run({ slab: true, lsRed: 'yes' }), Sn = await run({ slab: true, lsRed: 'no' }), M = await run({ slab: true, owner: 'massdot', lsRed: 'no' });
   await ok('no approach slab: LS as before (67.946 / 57.754 / 66.340 kip), Strength I P, V_l, M_l unchanged', () => {
