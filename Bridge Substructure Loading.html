@@ -4246,6 +4246,7 @@ async function rxImport(file) {
     const r = BridgeXfer.publish(CH, b.p, 'Bridge Substructure Loading', 'Bridge Substructure Loading.html');
     if (r.error) return flash(r.error, 'fail');
     try { localStorage.setItem('bridgeSuite.v1.' + CH + '.by.' + SID, JSON.stringify(r.payload)); } catch (e) { }
+    if (window.SharedHandoffStore) SharedHandoffStore.send({ storage: localStorage, channel: CH, producer: SID, payload: r.payload, fetch: (u, i) => window.fetch(u, i) }).catch(() => { });   // SLFC (2026-11-11): per-project copy bridgeSuite.v1.foundationLoads.by.subloads.<pid> (HANDOFF.md §5.1), as abutmentLoads (#1405); the channel key and .by.subloads are written as before
     close(); flash(`Sent ${b.n} foundation load case${b.n > 1 ? 's' : ''} (${b.unit}). Open Pile Designer or Shallow Foundation Design and pull them.`);
   }
   (function addButton() {
