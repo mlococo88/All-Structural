@@ -11,6 +11,7 @@
 //    M_l max 2481.52 → 2432.80; P unchanged (2540.43 / 1431.84).
 // 2. Negative skew (−15°): the geometry group is available (it was blocked by the 0–60° range), skew = |θ| = 15 with the sign
 //    note; the BR / TU ticks equal the positive-skew dialog; every result equals the positive-skew pull.
+// 4. ABXC (2026-11-11): every group ticked: BR couple P and V_y, TU V_y and the TU rise as its own case (the reversed permutations), pinned above.
 // 3. Calculator-only geometry (e, d_sh, wingwalls) listed as kept; approach slab / elevations / earth texts; CR/SH generator on →
 //    the zero group is not ticked by default; no console errors; 390 px: no page scroll, the new note rows wrap.
 import fs from 'fs';
@@ -41,11 +42,12 @@ const RUN = async ([setup, mode, ticks]) => {
   const env = {};
   if (mode === 'all') { S.wing.on = false; if (S.apSlab) S.apSlab.on = false; recalcAll();
     const R = window.LAST_R, B = R.geo.B;
-    ['Strength I', 'Service I'].forEach(n => { const a = []; for (const pm of R.permutations(n, true)) for (const x of [false, true]) { const e = R.comboEffects(n, pm.perm, pm.liveOn, x); a.push({ P: e.V, Ml: e.V * B / 2 - e.Mv + e.Mh, Vl: e.Hx }); }
-      env[n] = Object.fromEntries(['P', 'Ml', 'Vl'].map(q => [q, [Math.max(...a.map(e => e[q])), Math.min(...a.map(e => e[q]))]])); });
+    ['Strength I', 'Service I'].forEach(n => { const a = []; for (const pm of R.permutations(n, true)) for (const x of [false, true]) { const e = R.comboEffects(n, pm.perm, pm.liveOn, x); a.push({ P: e.V, Ml: e.V * B / 2 - e.Mv + e.Mh, Vl: e.Hx, Mt: e.Mt, Vt: e.Hy }); }
+      env[n] = Object.fromEntries(['P', 'Ml', 'Vl', 'Mt', 'Vt'].map(q => [q, [Math.max(...a.map(e => e[q])), Math.min(...a.map(e => e[q]))]])); });
     env.CR = { Hx: R.groups.CRSH.Hx, Mh: R.groups.CRSH.Mh }; env.z = R.geo.zSeat; }
+  const grp = {}; ['BR', 'TU', 'TUr'].forEach(k => { const x = window.LAST_R.groups[k]; if (x) grp[k] = { V: x.V, Hx: x.Hx, Hy: x.Hy, Mh: x.Mh, Mt: x.Mt }; });
   let rpt = ''; try { abrShow(); const d = document.createElement('div'); d.innerHTML = SharedReport.html(ABRP.doc, { lazy: false }); rpt = d.textContent; } catch (e) { rpt = 'ERR ' + e.message; }
-  return { groups0, text0, text, fit, env, rx: S.rx.CRSH.map(x => x.Vx), shCR: S.dist.shCR, model: S.dist.model, gen: S.longit.computeCRSH, skew: S.geom.skew,
+  return { groups0, text0, text, fit, env, grp, rx: S.rx.CRSH.map(x => x.Vx), shCR: S.dist.shCR, model: S.dist.model, gen: S.longit.computeCRSH, skew: S.geom.skew,
     geom: JSON.parse(JSON.stringify(S.geom)), src: JSON.parse(JSON.stringify(S.subloadsSrc || null)), card: (document.getElementById('axh-src') || {}).textContent || '', rpt };
 };
 async function run(pay, mode, { setup, ticks, vw = 1400 } = {}) {
@@ -78,12 +80,18 @@ check(near(e0.CR.Hx, 3.75, 1e-9) && near(e0.CR.Mh, 3.75 * 12.991, 1e-6) && near(
 check(e1.CR.Hx === 0 && e1.CR.Mh === 0, 'CR/SH zeroed: H = M = 0');
 const pin = (e, n, q, i, v) => check(near(e[n][q][i], v), `${n} ${q} ${i ? 'min' : 'max'} = ${e[n][q][i].toFixed(2)} (pinned ${v})`);
 pin(e0, 'Strength I', 'Vl', 0, 687.63); pin(e1, 'Strength I', 'Vl', 0, 683.88);
-pin(e0, 'Strength I', 'Ml', 0, 4501.80); pin(e1, 'Strength I', 'Ml', 0, 4453.08);
-pin(e0, 'Strength I', 'Ml', 1, -1030.62); pin(e1, 'Strength I', 'Ml', 1, -1079.34);
+pin(e0, 'Strength I', 'Ml', 0, 4499.15); pin(e1, 'Strength I', 'Ml', 0, 4450.43);   // ABXC (2026-11-11): BR couple P = −1.21 kip imported: −1.75 × 1.21 × (B/2 − x_brg = 1.25) = −2.65
+pin(e0, 'Strength I', 'Ml', 1, -806.98); pin(e1, 'Strength I', 'Ml', 1, -855.70);   // ABXC: reversed case TU rise −447.22 kip·ft instead of −670.86 (+223.64)
 pin(e0, 'Service I', 'Vl', 0, 474.32); pin(e1, 'Service I', 'Vl', 0, 470.57);
-pin(e0, 'Service I', 'Ml', 0, 2481.52); pin(e1, 'Service I', 'Ml', 0, 2432.80);
-pin(e1, 'Strength I', 'P', 0, 2540.43); pin(e1, 'Strength I', 'P', 1, 1431.84);
+pin(e0, 'Service I', 'Ml', 0, 2480.01); pin(e1, 'Service I', 'Ml', 0, 2431.29);   // ABXC: −1.0 × 1.21 × 1.25 = −1.51
+pin(e1, 'Strength I', 'P', 0, 2542.55); pin(e1, 'Strength I', 'P', 1, 1429.72);   // ABXC: ± 1.75 × 1.21 = ± 2.12
 check(near(e0['Strength I'].Vl[0] - e1['Strength I'].Vl[0], 3.75, 1e-9) && near(e0['Strength I'].Ml[0] - e1['Strength I'].Ml[0], 48.71625, 1e-6), 'difference = γ_CR (1.0) × (3.75 kip, 48.716 kip·ft)');
+// ABXC (2026-11-11): BR couple P and V_y, TU V_y and the TU rise as its own case (the reversed permutations), all groups ticked
+const g1 = allZ.grp;
+check(near(g1.BR.V, -1.21, 1e-9) && near(g1.BR.Hy, 0.575, 1e-9) && near(g1.BR.Mt, 7.469825, 1e-6), `BR: V = ΣP = 5 × −0.242 = −1.21 kip, H_y = 5 × 0.115 = 0.575 kip, M_t = 0.575 × 12.991 + ΣP·y = 7.470 (${g1.BR.V}, ${g1.BR.Hy}, ${g1.BR.Mt})`);
+check(near(g1.TU.Hx, 51.64, 1e-9) && near(g1.TU.Hy, 13.835, 1e-9) && near(g1.TUr.Hx, -34.425, 1e-9) && near(g1.TUr.Hy, -9.225, 1e-9) && near(g1.TUr.Mh, -34.425 * 12.991, 1e-6), 'TU (fall) H_x 51.64, H_y 13.835; TU rise its own case: H_x = 5 × −6.885 = −34.425, H_y = 5 × −1.845 = −9.225, M = H_x × 12.991');
+pin(e1, 'Strength I', 'Vl', 1, 271.33); pin(e1, 'Strength I', 'Vt', 0, 14.84); pin(e1, 'Strength I', 'Mt', 0, 1874.28);
+check(near(e1['Strength I'].Vt[0], 13.835 + 1.75 * 0.575, 0.006), 'Strength I V_t max = 1.0 × 13.835 + 1.75 × 0.575 = 14.84');
 check(allZ.errs.length + allK.errs.length === 0, 'no console errors');
 
 console.log('2. negative skew (−15°)');
