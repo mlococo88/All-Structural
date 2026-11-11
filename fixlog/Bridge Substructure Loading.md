@@ -3032,3 +3032,61 @@ function listTables() {
 - **Decisions (pending engineer review):** the default ticks above; battered stem sent as t_top with the weight note; SubLoads keeps its own elevations (mismatches listed; optional top-of-footing group); bridge-wide inputs unticked and labelled; slab share as the equivalent %; wingwalls listed only; auto values kept blank when equal within 0.005 ft; default target the unit that last pulled the project, else Abut. 1.
 - **How verified:** main-vs-branch probe (default project: combinations, export, `P` identical); `abutment-subloads-exchange` B1–B4; `bsl-inputcheck`, `bsl-abut-length`, `bsl-drawings`, `project-library --tool bsl`.
 - **Other copies:** none.
+## 2026-11-11 — PR: subloads-ls-slab (PR #1406: https://github.com/mlococo88/All-Structural/pull/1406) — live-load surcharge removed with an approach slab under AASHTO 3.11.6.5 too (SLLS; engineer decision 2026-11-11)   [§4: changes results for AASHTO abutments with an approach slab]
+- **Engineer decision (2026-11-11, confirmed):** "Approach slab should remove surcharge", aligned with the Abutment Calculator (`lsRed`, default on, `apLsRule`). The calculator's scope: final state h_eq = 0 on the wall, stem, backwall and over the heel; the construction stage keeps its LS; MassDOT/CTDOT automatic; AASHTO/RIDOT an option, default on.
+- **Where:** `earthAbut` (anchor `noLS = lsSlabRem(e)`); new helpers `lsSlabRem(e)`, `lsSlabRef()` (before `fillEarth`); the Units pane approach-slab fields (`paneUnits` wrapper, anchor `Live-load surcharge LS with the slab`); the Earth loads tab note (anchor `'Approach slab and LS:'`); the Report unit section (`lsSub`, anchor `Live-load surcharge with the approach slab`); `basisExtra` Backfill row.
+- **Before:**
+  `const heq = heqOf(e, H), pLS = ka * gam * heq, noLS = isMass() && e.asOn === 'yes';`
+- **After:**
+  `const heq = heqOf(e, H), pLS = ka * gam * heq, noLS = lsSlabRem(e);` with
+  `const lsSlabRem = e => !!e && e.asOn === 'yes' && (isMass() || e.lsRed !== 'no');`
+  `earthAbut` also returns `lsRem` and `lsOff` (the LS values not applied, for the notes).
+- **Removed:** the three final-state LS items (`LSh` on the virtual back plane, `LSh` on the stem and backwall, `LSv` over the heel). **Kept:** `LShc`, `LSvc` (construction stage, no slab yet).
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 3.11.6.5 (C3.11.6.5): the surcharge may be reduced where vehicles reach the abutment through a structural slab not supported on the backfill. MassDOT Part I 3.3.1.3 is unchanged.
+- **Check case:** default project, Abut. 1, approach slab on with the default slab (20 ft × 12 in, 50 %, no LL). k_a = 0.30726, γ = 0.120 kcf, H = 20 ft (17 ft soil), h_eq = 2 ft, heel 6 ft, L = 46.070 ft; p_LS = 0.073742 ksf.
+  - LS on the virtual plane: 67.946 kip at 10 ft (M = 679.456 kip-ft) → 0
+  - LS on the stem: 57.754 kip → 0
+  - LS vertical over the heel: 66.340 kip → 0
+  - Strength I at the bottom of footing: P max 2624.176 → 2508.080; V_l max 683.879 → 564.975; M_l max 4439.331 → 3250.283
+  - Service I at the bottom of footing: P 1921.165 → 1854.825; V_l 465.759 → 397.813; M_l 2415.203 → 1735.747
+- **How verified:** main-vs-branch probe of every combination at every section of every unit. Cases: default, slab, slab + LL, slab under MassDOT, A_s 0.15, and A_s 0.15 + slab. Only the abutments with a slab under AASHTO change: Str I, Str V, Ser I, EE I and EE II, at the top-of-footing M_l and V_l and at the bottom-of-footing P, M_l and V_l. The construction stage, bridge seat, piers, no-slab cases and MassDOT are identical. With `lsRed: 'no'` the results are identical to main.
+- **Tests:** new `tests/smoke/bsl-ls-slab.mjs`. `bsl-inputcheck.mjs`: the abut-earth-seismic project sets `lsRed: 'no'`, so it still compares every result with main. The new note text is stripped from both sides.
+- **Saved data (§5):** new optional `units[k].earth.lsRed` ('yes' | 'no'); absent = removed. Saved AASHTO projects with an approach slab change on opening (intended, engineer's rule); choose "Kept" for the old results.
+- **Hand-off:** no field carries the LS rule. The `approachSlab` block is unchanged, and no hand-off code was touched.
+- **Decisions (pending engineer review):**
+  1. The option is hidden under MassDOT (automatic removal).
+  2. "Kept" means the full LS, with no partial reduction (as the calculator).
+- **Other copies:** none (the Abutment Calculator has its own implementation).
+- **Open item (not changed here, hand-off code being changed by the exchange work):** `shared/abutment-def.js` `fromSubLoads` sends `info.lsRed: null`. Its pull review row "LS with an approach slab" (anchor `'removed only under MassDOT rules'`) still describes SubLoads as removing LS only under MassDOT. Once this merges it should read "removed with the slab (3.11.6.5 option, default removed; MassDOT automatic)" and send `lsRed: lsSlabRem(earth)`.
+
+## 2026-11-11 — PR: subloads-force-height (PR #1410: https://github.com/mlococo88/All-Structural/pull/1410) — abutment superstructure horizontal forces at the bridge seat (SLFH; engineer decision 2026-11-11)   [§4: abutment moments change]
+- **Engineer decision (2026-11-11, confirmed):** "Height is at the seat", aligned with the Abutment Calculator (z_brg = zSeat = t_f + h_stem for BR, TU, CR/SH, WS, WL).
+- **Seat:** `R.stemTop` (top of the stem under the pedestals), the existing "bridge seat" resultant level.
+- **Where:**
+  - `unitModel`: anchor `const zSeat = t === 'abut' ? R.stemTop : null, zH =`; `hLoads` uses `zH(lc, ri)`. The UM also returns `zSeat` and `zH`.
+  - `superCase`: `seat: !!spec.seat`. `rowCase`: `seat: true`.
+  - `phase3`: WS and WL calls pass `seat: true`.
+  - `phase5`: the EQ `mk`, `m` and `m1` row cases carry `seat: true`.
+  - `loadSets`: `rowsOf` uses `UM.zH`, and the WS / WL / EQ sets pass the flag.
+  - New `abSeatInfo` / `abSeatNote` (before `patchReport`), wrapping `brceHtml`, `windHtml`, `tempHtml` and `eqHtml`. The Report unit section has a subsection (anchor `Height of the superstructure horizontal forces`).
+- **Before:** `const hLoads = lc => { ... L.push({ z: zB[ri], Hn: ... }) ...`
+- **After:** `const hLoads = lc => { ... L.push({ z: zH(lc, ri), Hn: ... }) ...` with `zH = (lc, ri) => lc.seat && zSeat != null ? zSeat : zB[ri]`
+- **Moved (abutments):** TU, FR, SH, WS on the superstructure (horizontal), WL (horizontal), EQ superstructure inertia.
+- **Not moved:** BR and CE (6 ft above the deck, couple at the bearings); the vertical couples of WS and WL; the wind on the substructure, water, ice, collision and earth; every pier.
+- **Governing basis:** the load path through the bearings to the seat (the calculator's convention). The force magnitudes (AASHTO LRFD 10th Ed. 3.12.2, 3.13, 3.12.4/5, 3.8.1.2, 3.8.1.3, 3.10.9) are unchanged.
+- **Check case:** default project, Abut. 1.
+  - Bottom of footing El. 105.000; top of bearings El. 118.917 (arm 13.917 ft); seat El. 117.991 (arm 12.991 ft).
+  - TU fall: 51.641 kip, M_l 718.671 → 670.856. TU rise: −34.427 kip, −479.114 → −447.237.
+  - WS (Str III, 0°): −168.119 → −161.004. WL (0°): −19.810 → −18.492. BR: 28.243, unchanged.
+  - Strength I M_l max at the bottom of footing: 4499.406 → 4451.591 (Δ 1.00 × 51.641 × 0.926 = 47.815). M_t max: 3621.220 → 3608.408. Service I M_l max: 2481.953 → 2430.150.
+  - A_s 0.15: EE I M_l max 4328.052 → 4210.395.
+- **How verified:** main-vs-branch probe (default, slab, slab + LL, slab MassDOT, A_s 0.15, A_s 0.15 + slab). Only the abutment M_l and M_t change (bridge seat, top and bottom of footing), in Str I/III/V, Ser I/IV, EE I and the envelope. P, V, bearings, EE II, construction, BR/CE, piers and the hand-off payload are identical.
+- **Tests:** new `tests/smoke/bsl-force-height.mjs`. Hand-check values updated in `bsl-ls-slab.mjs` (Strength I M_l 4439.331 → 4391.516, 3250.283 → 3202.468, 4499.406 → 4451.591; Service I 2415.203 → 2363.400, 1735.747 → 1683.944) and `bsl-abut-length.mjs` (4499.406 → 4451.591, 4725.755 → 4677.940).
+  - The main-comparison tests `bsl-inputcheck`, `bsl-drawings`, `project-library --tool bsl` and `list-input --part bsl` differ from the pre-merge main exactly in the two abutment units of each project (combine, comps, and the brce / wind / temp / eq / combo tabs of the first and last unit, plus the Summary). Every pier unit (multi-column, wall, pile bent, hammerhead) and the hand-off payload are identical. Against main after the merge they compare equal.
+- **Saved data (§5):** none changed.
+- **Decisions (pending engineer review):**
+  1. Piers keep the top of the bearings. The code is shared, but the rule and the calculator's convention are for abutments, and a pier's bearing and pedestal height is a lever arm on its cap and columns.
+  2. CE is not moved (6 ft above the deck, like BR).
+  3. FR, SH and EQ inertia move with TU, WS and WL as bearing-delivered forces.
+  4. The vertical couples stay referred to the top of the bearings.
+- **Other copies:** none.
