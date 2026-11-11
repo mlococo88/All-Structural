@@ -135,3 +135,51 @@ test('handoff-store: checkGeometry accepts a §4.14 payload and refuses bad unit
   assert.equal(H.summary('superReactions', { supports: [{ girders: [{ label: 'G1' }, { label: 'G2' }] }, { girders: [{ label: 'G1' }, { label: 'G2' }] }], span: { length: 120 }, allGirders: true }), 'reactions at 2 supports, 120 ft, 2 girders');
   assert.equal(H.summary('superGeometry', {}), '');
 });
+
+/* FPU (2026-11-11): per-unit copies (.by.<producer>.<pid>.<unit id>), unitKey / pickDefault / newerOfUnit, and their GitHub path */
+const fpay = (name, bridgeId, at, unitIndex, label, producer) => ({ _schema: 'bridge-foundation-loads', schemaVersion: 1, producer: producer || 'Bridge Substructure Loading',
+  producedAt: at, project: { name, bridgeId }, units: { force: 'kip' }, notes: [], element: { type: 'pier', label, ...(unitIndex == null ? {} : { unitIndex }) }, cases: [] });
+const FO = (s, extra) => ({ storage: s, channel: 'foundationLoads', schema: 'bridge-foundation-loads', maxVersion: 1, producers: null, sync: G, ...(extra || {}) });
+test('handoff-store: per-unit copies listed as their own entries in the project group; unit copy before the project copy of the same send', () => {
+  const s = mem();
+  assert.equal(H.unitId('support-2'), 'support-2'); assert.equal(H.unitId(' Abut.  1 '), 'Abut%2E 1'); assert.ok(!/[./~]/.test(H.unitId('a.b/c~d')));
+  const lu = H.unitId('x'.repeat(100)); assert.equal(lu.length, 50 + 2 + 8); assert.match(lu, /_h[0-9a-f]{8}$/);
+  assert.equal(H.copyKey('foundationLoads', 'subloads', 'B-1~A', 'support-2'), 'bridgeSuite.v1.foundationLoads.by.subloads.B-1~A.support-2');
+  assert.equal(H.cloudPath('foundationLoads', 'subloads', 'B-1~A', 'support-2'), 'handoffs/foundationLoads/subloads/B-1~A.support-2.json');
+  const p1 = fpay('A', 'B-1', '2026-11-11T10:00:00.000Z', 1, 'Pier 1'), p2 = fpay('A', 'B-1', '2026-11-11T11:00:00.000Z', 2, 'Pier 2'), p1b = fpay('A', 'B-1', '2026-11-11T09:00:00.000Z', 1, 'Pier 1');
+  assert.equal(H.write(s, 'foundationLoads', 'subloads', p1b, 'support-2').key, 'bridgeSuite.v1.foundationLoads.by.subloads.B-1~A.support-2');
+  const w1 = H.write(s, 'foundationLoads', 'subloads', p1, 'support-2'); assert.deepEqual([w1.pid, w1.unit], ['B-1~A', 'support-2']);   // replaces p1b
+  H.write(s, 'foundationLoads', 'subloads', p2, 'support-3'); H.write(s, 'foundationLoads', 'subloads', p2);   // + the project copy (last unit), same payload
+  assert.equal(H.write(s, 'foundationLoads', 'subloads', p2, 'bad.unit').ok, false);
+  const L = H.local(FO(s)); assert.equal(L.entries.length, 3);
+  const gs = H.group(L.entries); assert.equal(gs.length, 1);
+  assert.deepEqual(J(gs[0].entries.map(e => [e.unit, e.payload.element.label])), [['support-3', 'Pier 2'], ['support-2', 'Pier 1']]);   // the project copy of p2 listed once (as the unit copy)
+  // unitKey: producer + unitIndex, else label; works on a receiver's saved record too
+  assert.equal(H.unitKey(p1), 'Bridge Substructure Loading|#1'); assert.equal(H.unitKey({ producer: 'Abutment Calculator', element: { label: ' Br  A ' } }), 'Abutment Calculator|Lbr a'); assert.equal(H.unitKey({}), '');
+  // pickDefault: the unit last pulled into the open project, else its newest; newerOfUnit per unit
+  assert.equal(H.pickDefault(gs, { name: 'A', bridgeId: 'B-1' }, { producer: p1.producer, project: p1.project, element: p1.element }).entry.payload.element.label, 'Pier 1');
+  assert.equal(H.pickDefault(gs, { name: 'A', bridgeId: 'B-1' }, { producer: p1.producer, project: p1.project, element: p1.element }).how, 'unit');
+  const d = H.pickDefault(gs, { name: 'A', bridgeId: '' }, null); assert.equal(d.how, 'project'); assert.equal(d.entry.payload.element.label, 'Pier 2');
+  assert.equal(H.pickDefault(gs, { name: 'A', bridgeId: 'B-1' }, { producer: p1.producer, project: { name: 'Other' }, element: p1.element }).how, 'project');   // last pull was another project
+  assert.equal(H.pickDefault(gs, { name: 'Z' }, null), null);
+  assert.equal(H.newerOfUnit(gs, gs[0].entries[1]), null);   // Pier 1 is not "older" than Pier 2
+  const old = { ...gs[0].entries[1], payload: p1b }; assert.equal(H.newerOfUnit(gs, old).payload.producedAt, p1.producedAt);
+});
+test('handoff-store: per-unit copies upload to <pid>.<unit>.json, queue by copy id, merge from GitHub with their unit', async () => {
+  const s = mem(), gh = makeGitHubMock(); assert.equal(G.saveSettings(s, SETUP).ok, true);
+  const o = { storage: s, channel: 'foundationLoads', producer: 'subloads', fetch: gh.fetch, sync: G };
+  const p1 = fpay('A', 'B-1', '2026-11-11T10:00:00.000Z', 1, 'Pier 1');
+  const r1 = await H.send({ ...o, payload: p1, unit: 'support-2' }); assert.deepEqual(J(r1.cloud), { ok: true }); assert.equal(r1.unit, 'support-2');
+  assert.equal(gh.files.get('handoffs/foundationLoads/subloads/B-1~A.support-2.json'), H.fileText(p1));
+  gh.offline = true; const p2 = fpay('A', 'B-1', '2026-11-11T11:00:00.000Z', 2, 'Pier 2');
+  assert.equal((await H.send({ ...o, payload: p2, unit: 'support-3' })).cloud.queued, true);
+  assert.deepEqual(J(H.pending(s)), [{ channel: 'foundationLoads', producer: 'subloads', pid: 'B-1~A.support-3' }]);
+  gh.offline = false;
+  const pr = fpay('A', 'B-1', '2026-11-11T12:00:00.000Z', null, 'A', 'Abutment Calculator');
+  gh.setRemote('handoffs/foundationLoads/abutment/B-1~A.Abut%2E 1.json', H.fileText(pr));
+  const l = await H.list(FO(s, { fetch: gh.fetch }));
+  assert.equal(l.cloud, 'ok'); assert.deepEqual(J(H.pending(s)), []); assert.equal(gh.files.get('handoffs/foundationLoads/subloads/B-1~A.support-3.json'), H.fileText(p2));
+  assert.equal(l.groups.length, 1);
+  assert.deepEqual(J(l.groups[0].entries.map(e => [e.source, e.producer, e.unit])), [['github', 'abutment', 'Abut%2E 1'], ['local', 'subloads', 'support-3'], ['local', 'subloads', 'support-2']]);
+  assert.ok(l.groups[0].entries.slice(1).every(e => e.synced));
+});

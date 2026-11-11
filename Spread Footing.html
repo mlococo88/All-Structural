@@ -10792,7 +10792,11 @@ buildManualTab();
      every sender's latest, the sender chosen in the review dialog). The chosen copy opens the same review dialog as before (its apply,
      incl. the per-foot wall switch to Total, unchanged); a copy older than the latest one of its project is flagged. Without any
      per-project copy (older data) the pull is exactly as before. Nothing is written here; the new-data marker is unchanged (every send
-     also updates the channel's .updatedAt). */
+     also updates the channel's .updatedAt).
+     FPU (2026-11-11): SubLoads also keeps a copy per unit (.by.subloads.<pid>.support-<n>) and the Abutment Calculator a copy per project
+     (.by.abutment.<pid>, per unit .<unit id> when the project was pulled from a SubLoads abutment): each unit copy is its own row; the
+     preselected row is the open project's copy of the unit last pulled (the saved source record's producer and element), else the open
+     project's newest copy, else "Latest sent"; the "(last unit sent for this project)" caveat stays only on a project copy without a unit. */
   var PKN={abutment:'Abutment Calculator',subloads:'SubLoads',retwall:'Retaining Wall Designer'};
   function pkProd(e){ var p=e.payload||{}, x=String(p.producer||'');
     return PKN[e.producer] || (/abut/i.test(x)?PKN.abutment:/substructure|subloads/i.test(x)?PKN.subloads:/retaining/i.test(x)?PKN.retwall:(x||'?')); }
@@ -10809,11 +10813,12 @@ buildManualTab();
     return {name:n||(sp&&sp.name)||'', bridgeId:(sp&&sp.bridgeId)||''}; }
   function pkRows(r){ var rows=[]; r.groups.forEach(function(g){ g.entries.forEach(function(e){ rows.push({e:e,g:g}); }); });
     rows.sort(function(a,b){ return String(b.e.payload.producedAt||'').localeCompare(String(a.e.payload.producedAt||'')); }); return rows; }
-  function pkOlder(K,i){ var q=K.rows[i]; if(!q || !q.g.pid) return null; var n=q.g.newest;
-    return String(n.payload.producedAt||'')>String(q.e.payload.producedAt||'')? n : null; }
+  /* FPU (2026-11-11): "older" = a newer copy of the same project AND unit exists (SharedHandoffStore.newerOfUnit), so a copy of one pier
+     is not flagged by a newer copy of another */
+  function pkOlder(K,i){ var q=K.rows[i]; if(!q || !q.g.pid) return null; return window.SharedHandoffStore.newerOfUnit(K.groups,q.e); }
   function picker(r){
-    var HS=window.SharedHandoffStore, op=pkOpen(), pid=HS.match(r.groups,op), rows=pkRows(r), K={rows:rows,sel:-1,errs:r.errors||[],cloud:r.cloud||'off'};
-    if(pid!=null) rows.some(function(q,i){ if(q.g.pid===pid){ K.sel=i; return true; } return false; });
+    var HS=window.SharedHandoffStore, op=pkOpen(), d=HS.pickDefault(r.groups,op,state&&state.bxSrc&&state.bxSrc.foundationLoads), rows=pkRows(r), K={rows:rows,sel:-1,errs:r.errors||[],cloud:r.cloud||'off',groups:r.groups,how:d?d.how:''};
+    if(d) K.sel=rows.findIndex(function(q){ return q.e===d.entry; });   // FPU: the open project's copy of the unit last pulled, else its newest copy
     var old=document.getElementById('bxFlPkOverlay'); if(old) old.remove();
     var ov=h('div'); ov.id='bxFlPkOverlay';
     ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:200;display:flex;align-items:center;justify-content:center';
@@ -10822,18 +10827,18 @@ buildManualTab();
     var TD='border:1px solid #ccc;padding:2px 5px;vertical-align:top;text-align:left', WB='background:#fff8e1;border:1px solid #f9a825;padding:5px 8px;margin:6px 0';
     function draw(){
       var on=[op.bridgeId,op.name].filter(Boolean).join(' — '), x='<b style="font-size:14px">Pull foundation loads: which copy?</b>'+
-        '<div class="note" style="margin:4px 0">Newest first. '+(K.sel>=0?'Preselected: the newest copy of the open project ('+esc(on)+').'
+        '<div class="note" style="margin:4px 0">Newest first. '+(K.sel>=0?'Preselected: '+(K.how==='unit'?'the copy of the unit last pulled into':'the newest copy of')+' the open project ('+esc(on)+').'
           :'No copy matches the open project'+(on?' ('+esc(on)+')':'')+': "Latest sent" is preselected.')+' '+
         (K.cloud==='ok'?'Copies sent from other devices (GitHub) are included.':K.cloud==='off'?'Cloud sync is not set up: the copies in this browser only.':'GitHub could not be read: this browser\'s copies only.')+'</div>';
       x+='<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;margin:4px 0"><tr><th style="'+TD+'"></th><th style="'+TD+'">Sender</th><th style="'+TD+'">Project</th><th style="'+TD+'">Unit</th><th style="'+TD+'">Sent</th></tr>'+
         '<tr data-bxfl-pk="-1" style="cursor:pointer"><td style="'+TD+'"><input type="radio" name="bxFlPk"'+(K.sel<0?' checked':'')+' aria-label="Latest sent"></td><td style="'+TD+'" colspan="4"><b>Latest sent</b> (as before: the latest copy from each sender; choose the sender in the next dialog)</td></tr>'+
-        rows.map(function(q,i){ var p=q.e.payload, el=p.element||{}, per=q.e.source!=='legacy', sub=per && q.e.producer==='subloads', ol=pkOlder(K,i);
+        rows.map(function(q,i){ var p=q.e.payload, el=p.element||{}, per=q.e.source!=='legacy', sub=per && q.e.producer==='subloads' && !q.e.unit, ol=pkOlder(K,i);
           return '<tr data-bxfl-pk="'+i+'" style="cursor:pointer"><td style="'+TD+'"><input type="radio" name="bxFlPk"'+(K.sel===i?' checked':'')+' aria-label="'+esc(pkProd(q.e)+' '+(q.g.label||''))+'"></td>'+
             '<td style="'+TD+'">'+esc(pkProd(q.e))+'</td><td style="'+TD+'">'+(q.g.noProject?'<i>'+esc(q.g.label)+'</i>':esc(q.g.label))+'</td>'+
             '<td style="'+TD+'">'+esc(el.label||el.type||'—')+(sub?' <span style="color:#666">(last unit sent for this project)</span>':'')+'</td>'+
-            '<td style="'+TD+'">'+esc(when(p.producedAt))+(p.device?', '+esc(p.device):'')+' <span style="color:#666">('+esc(q.e.source==='github'?'GitHub':per?'project copy':q.e.via)+')</span>'+(ol?' <b style="color:#b45309">older</b>':'')+'</td></tr>'; }).join('')+'</table></div>';
+            '<td style="'+TD+'">'+esc(when(p.producedAt))+(p.device?', '+esc(p.device):'')+' <span style="color:#666">('+esc(q.e.source==='github'?'GitHub':q.e.unit?'unit copy':per?'project copy':q.e.via)+')</span>'+(ol?' <b style="color:#b45309">older</b>':'')+'</td></tr>'; }).join('')+'</table></div>';
       var ol=K.sel>=0? pkOlder(K,K.sel) : null;
-      if(ol){ var np=ol.payload; x+='<div id="bxFlPkOlder" style="'+WB+'">This copy is older than the latest hand-off for the same project: '+esc(pkProd(ol))+', '+esc(when(np.producedAt))+((np.element&&np.element.label)?', '+esc(np.element.label):'')+'.</div>'; }
+      if(ol){ var np=ol.payload; x+='<div id="bxFlPkOlder" style="'+WB+'">This copy is older than the latest hand-off for the same project and unit: '+esc(pkProd(ol))+', '+esc(when(np.producedAt))+((np.element&&np.element.label)?', '+esc(np.element.label):'')+'.</div>'; }
       if(K.errs.length) x+='<div style="'+WB+'">Not offered: '+esc(K.errs.join('; '))+'</div>';
       x+='<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;border-top:1px solid #ccc;padding-top:8px"><button type="button" id="bxFlPkCancel">Cancel</button><button type="button" id="bxFlPkNext"><b>Next: review</b></button></div>';
       box.innerHTML=x;
