@@ -376,7 +376,10 @@ tr.pier td{background:#f8fafc;font-weight:600}
 <script src="shared/github-sync.js"></script>   <!-- GHS (2026-11-05): copy of the saved projects to a private GitHub repository; off until set up -->
 <script>
 const $=id=>document.getElementById(id);
-const num=(id,d)=>{const e=$(id);const v=e?parseFloat(e.value):NaN;return isNaN(v)?d:v;};
+// numAlias (DECE, 2026-11-11): read another field in place of id (the rail deflection DF/limit stand in for dDF/dLim while the
+// deflection is computed and drawn), so no field is rewritten while it is being typed in
+const numAlias={};
+const num=(id,d)=>{const e=$(numAlias[id]||id);const v=e?parseFloat(e.value):NaN;return isNaN(v)?d:v;};
 const sp=(load,arr)=>arr.map(s=>[load,s]);
 /* MLNL (2026-11-08): a long note as an action line (o.act, warning style), a bold lead and a list; items [lead words, text] or
    text, null items skipped. Display only: the caller gives the container the class "mlNL". */
@@ -578,7 +581,8 @@ function render(){
 let stepTimer=null;
 function stepCfg(){
   if(!RES)return null;
-  const sv=parseFloat($('sSp').value),H=parseFloat($('sH').value);
+  const m=RES.m,typing=id=>$(id).value===''&&document.activeElement===$(id);
+  const sv=parseFloat(typing('sSp')?(RES.varOK?m.vMin:''):$('sSp').value),H=parseFloat(typing('sH')?m.mHmin:$('sH').value);
   return RES.stepCase($('sCase').value||'p',isNaN(sv)?null:sv,isNaN(H)?null:H);
 }
 function updateStepUI(){
@@ -592,8 +596,10 @@ function updateStepUI(){
   $('sSpF').classList.toggle('hidden',!(R.varOK&&c!=='s'));
   $('sHF').classList.toggle('hidden',c!=='m');
   $('sLane').classList.toggle('hidden',m.udl.mode!=='lane');
-  if($('sSp').value==='')$('sSp').value=R.varOK?m.vMin:'';
-  if($('sH').value==='')$('sH').value=m.mHmin;
+  // an empty field is refilled with the minimum, except while it is being typed in (a lone "-" or "." reads as empty): stepCfg
+  // then uses that same minimum, and the field is refilled on leaving it (DECE, 2026-11-11)
+  if($('sSp').value===''&&document.activeElement!==$('sSp'))$('sSp').value=R.varOK?m.vMin:'';
+  if($('sH').value===''&&document.activeElement!==$('sH'))$('sH').value=m.mHmin;
   const cfg=stepCfg(),Lv=cfg.offs[cfg.offs.length-1],ext=Lv+(cfg.trail?cfg.trail.gap:0);
   const sl=$('sPos');sl.min=(-ext).toFixed(2);sl.max=(R.Lt+ext).toFixed(2);sl.step=Math.max(0.1,num('sStep',1));
   if($('sPosN').value===''){setPos(Math.min(R.Lt,(R.sup[1]||R.Lt)/2+Lv/2));return;}
@@ -650,6 +656,7 @@ $('sPlay').onclick=()=>{
     if(nx>+$('sPos').max||nx<+$('sPos').min){clearInterval(stepTimer);stepTimer=null;$('sPlay').textContent='▶ Play';return;}setPos(nx);},120);
 };
 ['sCase','sDir','sSp','sH','sLane','sStep'].forEach(id=>$(id).addEventListener('input',updateStepUI));
+['sSp','sH'].forEach(id=>$(id).addEventListener('blur',()=>{if($(id).value==='')updateStepUI();}));
 const _render=render; render=function(){_render();updateStepUI();};
 
 // ═══════════ VEHICLE CONFIGURATION GRAPHIC ═══════════
@@ -1081,14 +1088,14 @@ function deflK(){
 }
 const _deflAnalyze=deflAnalyze;
 deflAnalyze=function(){
-  const rail=RES&&RES.m.rail,e=$('dDF'),old=e.value; if(rail)e.value=$('dDFr').value;
-  let D; try{D=_deflAnalyze();}finally{e.value=old;}
+  const rail=RES&&RES.m.rail; if(rail)numAlias.dDF='dDFr';
+  let D; try{D=_deflAnalyze();}finally{delete numAlias.dDF;}
   const k=deflK(); if(k!==1)D.res.forEach(r=>{r.dn/=k;r.up/=k;}); D.k=k; return D;
 };
 const _drawDefl=drawDefl;
 drawDefl=function(){
-  const rail=RES&&RES.m.rail,e=$('dLim'),old=e.value; if(rail)e.value=$('dLimR').value;
-  try{_drawDefl();}finally{e.value=old;}
+  const rail=RES&&RES.m.rail; if(rail)numAlias.dLim='dLimR';
+  try{_drawDefl();}finally{delete numAlias.dLim;}
   if(DEF&&RES)$('dNote').textContent+=` · ${rail?'rail':'highway'} DF and limit`+(DEF.k&&DEF.k!==1?` · stiffness factor ${DEF.k.toFixed(3)} (${num('dBw',0)} in width; approximate: deflections divided by the length-weighted mean of I(width)/I(b_eff) over the segments, not re-solved with each segment's I)`:'');
 };
 ['dDFr','dLimR','dBw'].forEach(id=>$(id).addEventListener('input',()=>{if(RES){try{DEF=deflAnalyze();}catch(e){console.error(e);}drawDefl();}}));
