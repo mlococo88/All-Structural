@@ -20,3 +20,6 @@ and §4.15 (abutmentDef). Tests: `node tests/engine/run.mjs abutment-def` (Node)
   W 44, L 16, L̄ 18 ft: share = 18/32 = 56.25 %.
 - **How verified:** `node tests/engine/run.mjs abutment-def` (8 tests).
 - **Other copies:** none.
+
+## 2026-11-11 — PR: claude/abx-b (PR #1407: https://github.com/mlococo88/All-Structural/pull/1407) — used by the new abutmentDef channel (ABX, PR B)   [file not changed]
+- `fromAbutment`, `checkPayload`, `toSubLoads`, `rows` and `summary` are now called by the calculator's "Send abutment to SubLoads" and SubLoads' "Pull abutment from the Abutment Calculator" (HANDOFF.md §4.15). No change to this file; tests `node tests/engine/run.mjs abutment-def` pass.
