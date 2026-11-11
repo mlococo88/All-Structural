@@ -226,7 +226,11 @@ header { height: 54px; flex: none; display: flex; align-items: center; gap: 10px
    900 px) and the Input ID (header and Report title block). Nothing here is computed; the column quotes the Combinations tab's envelope. */
 #slDashCol, #slSplit { display: none; }
 .itab .ino, .sec-h .ino, .tab-btn .tno { font-family: var(--sans); font-weight: 700; font-size: .7rem; color: var(--muted); margin-right: 4px; letter-spacing: 0; }
-.itab { white-space: nowrap; padding-left: 2px; padding-right: 2px; } .tab-btn .tno { margin-right: 3px; }
+.tab-btn .tno { margin-right: 3px; }
+/* SLIT (2026-11-11): twelve input tabs, wrapped onto rows */
+#itabs { flex-wrap: wrap; gap: 0 2px; padding: 2px 6px 0; }
+#itabs .itab { flex: 0 1 auto; white-space: nowrap; padding: 7px 7px 5px; font-size: .88rem; }
+.slItNote { margin: 6px 16px; }
 .itab.active .ino, .tab-btn.active .tno { color: var(--blue); }
 #slInputId { font-size: .78rem; color: var(--muted); white-space: nowrap; align-self: center; }
 #slInputId b { font-family: var(--cond); font-weight: 600; color: var(--text-dim); letter-spacing: .03em; }
@@ -424,11 +428,19 @@ header { height: 54px; flex: none; display: flex; align-items: center; gap: 10px
     <div id="slDash"></div><div id="slDashNote"></div>
   </aside>
   <div class="side">
-    <div class="itabs" role="tablist" id="itabs">
+    <div class="itabs" role="tablist" id="itabs"><!-- SLIT (2026-11-11, engineer request): twelve input tabs (the four panes split by topic) -->
       <button type="button" class="itab" data-pane="project">Project</button>
       <button type="button" class="itab" data-pane="bridge">Bridge</button>
-      <button type="button" class="itab" data-pane="units">Units</button>
       <button type="button" class="itab" data-pane="rx">Reactions</button>
+      <button type="button" class="itab" data-pane="units">Units</button>
+      <button type="button" class="itab" data-pane="ll">Live load</button>
+      <button type="button" class="itab" data-pane="wind">Wind</button>
+      <button type="button" class="itab" data-pane="temp">Temperature</button>
+      <button type="button" class="itab" data-pane="water">Water and ice</button>
+      <button type="button" class="itab" data-pane="earth">Earth loads</button>
+      <button type="button" class="itab" data-pane="eq">Seismic</button>
+      <button type="button" class="itab" data-pane="coll">Collision</button>
+      <button type="button" class="itab" data-pane="fac">Factors and analysis</button>
     </div>
     <aside class="sidebar" id="sidebar"></aside>
   </div>
@@ -5447,11 +5459,55 @@ function sldwRender() {
   const showId = () => { const b = idEl.querySelector('b'); if (b) b.textContent = inputId(); };
   { const d0 = slrDoc; slrDoc = function () { const d = d0.apply(this, arguments); try { d.info = (d.info || []).concat([['Input ID', inputId()]]); } catch (e) { } return d; }; }
 
-  /* ---------- numbering ---------- */
-  const ITAB = { project: 1, bridge: 2, units: 3, rx: 4 };
-  function numItabs() { document.querySelectorAll('#itabs .itab').forEach(b => { const n = ITAB[b.dataset.pane]; if (!n) return; let s = b.querySelector('.ino'); if (!s) { s = document.createElement('span'); s.className = 'ino'; b.insertBefore(s, b.firstChild); } s.textContent = 'I-' + n; }); }
+  /* ---------- SLIT (2026-11-11, engineer request: "The input needs to be divided into more input tabs … Loading, as an example"):
+     twelve input tabs. The four panes (paneProject, paneBridge, paneRx, paneUnits and every patch on them) are built as before, one at a
+     time with P.ui.itab set to that pane, and their sections (a .sec-h and what follows it up to the next one) are moved into the tab
+     they belong to, by section title (SECT). Nothing is rebuilt differently: the same fields, ids, data-k paths, notes and handlers; the
+     input checks mark the fields while their pane is built. P.ui.itab holds the new tab id; the four old ids (project, bridge, units, rx)
+     are tab ids still, so a saved P.ui.itab needs no migration. The per-unit sections (water and ice, backfill, collision) keep the unit
+     buttons. Each tab's error count follows its fields (tabOfPath); an input-check link opens the tab that holds the field. ---------- */
+  const TABS_I = [['project', 'Project'], ['bridge', 'Bridge'], ['rx', 'Reactions'], ['units', 'Units'], ['ll', 'Live load'], ['wind', 'Wind'], ['temp', 'Temperature'], ['water', 'Water and ice'], ['earth', 'Earth loads'], ['eq', 'Seismic'], ['coll', 'Collision'], ['fac', 'Factors and analysis']];
+  const ITAB = Object.fromEntries(TABS_I.map((t, i) => [t[0], i + 1]));
+  const SECT = {   // source pane -> [[section title RegExp, tab]] (first match; else the pane's own tab)
+    bridge: [[/^(Live load|Braking and centrifugal)/, 'll'], [/^Wind/, 'wind'], [/^Temperature/, 'temp'], [/^Seismic/, 'eq'], [/^Earth loads/, 'earth'], [/^Owner and analysis options/, 'project'], [/^(Force distribution|Load factors|More options)/, 'fac']],
+    units: [[/^Water and ice/, 'water'], [/^Collision/, 'coll'], [/^Backfill and earth pressure/, 'earth']] };
+  const SRC = { project: ['project', 'bridge'], bridge: ['bridge'], rx: ['rx'], units: ['units'], ll: ['bridge'], wind: ['bridge'], temp: ['bridge'], water: ['units'], earth: ['bridge', 'units'], eq: ['bridge'], coll: ['units'], fac: ['bridge'] };
+  const PER_UNIT = new Set(['units', 'water', 'earth', 'coll']);
+  const BR_RE = [[/^br\.(IM|deck|skCorr|skKg|traffic|nBR|Rc|Vd|curveDir)$/, 'll'], [/^br\.(V|exp|Gf|CDsup|CDsub|barSolid)$/, 'wind'], [/^br\.(tProc|climate|supMat|tSet|alpha|mu|shStrain|gSH|tMaxB|tMinB)$/, 'temp'],
+    [/^br\.(eqSa(\.\d+)?|eqSiteClass|eqVs|lat|lon|eqOpCat|gEQ|eqCompR)$/, 'eq'], [/^br\.(gSoil|eh\w*|ev\w*|es\w*|khR|kv|hEQmode|hEQr|hAEr|gEHEQ)$/, 'earth'], [/^br\.(owner|vwSIV|subWind|transDist|deckFc)$/, 'project'], [/^br\.(Ifac|lf\..*)$/, 'fac'],
+    [/^units\.\d+\.water\./, 'water'], [/^units\.\d+\.(cv|ct)\./, 'coll'], [/^units\.\d+\.earth\./, 'earth'], [/^units\./, 'units'], [/^rx\./, 'rx'], [/^meta\./, 'project'], [/^br\./, 'bridge']];
+  const tabOfPath = path => { const x = BR_RE.find(([re]) => re.test(String(path || ''))); return x ? x[1] : null; };
+  const tabOfErr = e => (e && (e.list ? tabOfPath(e.list) : tabOfPath(e.path))) || (e && e.tab) || 'bridge';
+  window.slTabOfPath = tabOfPath;
+  const secTitle = h => { const c = h.cloneNode(true); c.querySelectorAll('.ino, small, .ic-n').forEach(x => x.remove()); return c.textContent.trim(); };
+  function pickSections(src, want) {   // the current #sidebar (pane src just built): the nodes of the sections that go to tab want
+    const sb = $id('sidebar'), out = [], rules = SECT[src] || []; let cur = null, lead = true;
+    const tabOfSec = h => { if (h.dataset.slt) return h.dataset.slt; const t = secTitle(h), r = rules.find(([re]) => re.test(t)); return r ? r[1] : src; };
+    /* a section that mixes fields of several tabs (a unit's "More options": friction, vessel force amplification, static and vertical ice):
+       each field that belongs to another tab moves to a section of the same title in that tab */
+    { let c = null; const extra = {}; [...sb.children].forEach(n => { if (n.classList.contains('sec-h')) { c = { h: n, tab: tabOfSec(n) }; return; } if (!c || !n.classList.contains('sec-body')) return;
+        n.querySelectorAll(':scope > .fld').forEach(f => { const k = f.querySelector('[data-k]'), t = k && tabOfPath(k.dataset.k); if (!t || t === c.tab) return;
+          const key = t + '|' + secTitle(c.h); if (!extra[key]) { const h = document.createElement('div'); h.className = 'sec-h'; h.textContent = secTitle(c.h); h.dataset.slt = t; const b = document.createElement('div'); b.className = n.className; extra[key] = [h, b]; }
+          extra[key][1].appendChild(f); }); });
+      Object.values(extra).forEach(([h, b]) => { sb.appendChild(h); sb.appendChild(b); }); }
+    [...sb.childNodes].forEach(n => {
+      if (n.nodeType === 1 && n.classList.contains('sec-h')) { lead = false; cur = tabOfSec(n); }
+      const to = lead ? (n.nodeType === 1 && n.classList.contains('unit-pick') ? (PER_UNIT.has(want) ? want : null) : src) : cur;
+      if (to === want) out.push(n);
+    });
+    return out;
+  }
+  let _busy = false;
+  function numItabs() {
+    const L = window.SubLoadsInputCheck ? SubLoadsInputCheck.collect() : [], cnt = {}; L.forEach(e => { const t = tabOfErr(e); cnt[t] = (cnt[t] || 0) + 1; });
+    document.querySelectorAll('#itabs .itab').forEach(b => { const id = b.dataset.pane, n = ITAB[id]; if (!n) return;
+      let s = b.querySelector('.ino'); if (!s) { s = document.createElement('span'); s.className = 'ino'; b.insertBefore(s, b.firstChild); } s.textContent = 'I-' + n;
+      b.classList.toggle('active', id === P.ui.itab); b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', id === P.ui.itab ? 'true' : 'false');
+      const c = cnt[id] || 0; let q = b.querySelector('.ic-n'); if (c) { if (!q) { q = document.createElement('span'); q.className = 'ic-n'; b.appendChild(q); } q.textContent = c; q.title = c + ' input' + (c > 1 ? 's' : '') + ' to fix'; } else if (q) q.remove();
+      b.classList.toggle('ic-err', c > 0); });
+  }
   function numSecs() { const n = ITAB[P.ui.itab] || 0, sb = $id('sidebar'); if (!sb) return; sb.querySelectorAll('.sec-h > .ino').forEach(x => x.remove());
-    if (!n) return; [...sb.querySelectorAll('.sec-h')].forEach((h, i) => { const s = document.createElement('span'); s.className = 'ino'; s.textContent = `I-${n}.${i + 1}`; h.insertBefore(s, h.firstChild); }); }
+    if (!n) return; [...sb.querySelectorAll('.sec-h')].filter(h => !h.closest('[hidden]')).forEach((h, i) => { const s = document.createElement('span'); s.className = 'ino'; s.textContent = `I-${n}.${i + 1}`; h.insertBefore(s, h.firstChild); }); }
   function numTabs() { [...document.querySelectorAll('#tab-bar .tab-btn')].forEach((b, i) => { let s = b.querySelector('.tno'); if (!s) { s = document.createElement('span'); s.className = 'tno'; b.insertBefore(s, b.firstChild); } s.textContent = (i + 1) + ' ·'; }); }
   const tabNo = id => { const L = [...document.querySelectorAll('#tab-bar .tab-btn')], i = L.findIndex(b => b.dataset.tab === id); return i < 0 ? '' : (i + 1) + ' · '; };
   window.slTabNo = tabNo;
@@ -5542,10 +5598,32 @@ function sldwRender() {
 
   /* ---------- hooks ---------- */
   { const bt = buildTabs; buildTabs = function () { const r = bt.apply(this, arguments); numTabs(); return r; }; }
-  { const bs = buildSide; buildSide = function () { const r = bs.apply(this, arguments); numItabs(); numSecs(); return r; }; }
+  { const bs = buildSide; buildSide = function () {
+      if (_busy) return bs.apply(this, arguments);
+      let want = P.ui.itab; if (!ITAB[want]) want = P.ui.itab = 'units';
+      const sb = $id('sidebar'), top = sb ? sb.scrollTop : 0, frag = document.createDocumentFragment(), src = SRC[want]; let r;
+      _busy = true;
+      const part = {};   // the Project pane last: its Save and Hand-offs cards are parked by every other pane's build (SLHD)
+      try { src.slice().sort((a, b) => (a === 'project') - (b === 'project')).forEach(s => { P.ui.itab = s; r = bs.apply(this, arguments); const f = part[s] = document.createDocumentFragment(); pickSections(s, want).forEach(n => f.appendChild(n));
+          if (want === 'earth' && s === 'bridge') { const d = document.createElement('div'); d.className = 'sec-h'; d.textContent = 'Each unit'; d.dataset.slit = '1'; f.appendChild(d); } });
+        src.forEach(s => frag.appendChild(part[s])); }
+      finally { P.ui.itab = want; _busy = false; }
+      if (sb) { sb.innerHTML = ''; sb.appendChild(frag);
+        const u = P.units[P.ui.sel], miss = { water: u && u.type === 'abut' ? 'Water, scour and ice apply to piers: pick a pier above.' : '', coll: u && u.type === 'abut' ? 'Vessel and vehicle collision apply to piers: pick a pier above.' : '', earth: u && u.type !== 'abut' ? 'Backfill and earth pressure apply to abutments: pick an abutment above. Pier units use the bridge-wide soil unit weight over the footing.' : '' }[want];
+        if (miss && !sb.querySelector('.sec-h:not([data-slit])' + (want === 'earth' ? ' ~ .sec-h:not([data-slit])' : ''))) sb.insertAdjacentHTML('beforeend', `<p class="note slItNote">${esc(miss)}</p>`);
+        else if (miss && want === 'earth' && ![...sb.querySelectorAll('.sec-h')].some(h => /^Backfill/.test(secTitle(h)))) sb.insertAdjacentHTML('beforeend', `<p class="note slItNote">${esc(miss)}</p>`);
+        sb.scrollTop = top; }
+      try { markBad(); } catch (e) { }
+      numItabs(); numSecs(); return r; }; }
+  /* a unit button or the strip keeps a per-unit loading tab (water, earth, collision) open instead of going to Units */
+  { const su = selectUnit; selectUnit = function (k) { const t = P.ui.itab; if (t === 'water' || t === 'earth' || t === 'coll') { P.ui.sel = k; buildSide(); renderStrip(); autosave(); if (P.ui.tab === 'v3d' && V3.ok) { P.ui.v3.focus = String(k); v3Focus(k); } return; } return su.apply(this, arguments); }; }
+  /* an input-check link: open the tab that holds the field (and its unit) */
+  document.addEventListener('click', e => { const a = e.target.closest && e.target.closest('[data-icgo]'); if (!a || typeof IC === 'undefined') return; const er = IC.shown && IC.shown[+a.dataset.icgo]; if (!er) return;
+    const t = tabOfErr(er); if (PER_UNIT.has(t) && er.k != null) P.ui.sel = er.k; er.tab = t; }, true);
+  document.addEventListener('input', () => setTimeout(numItabs, 0));
   { const rc = recompute; recompute = function () { const r = rc.apply(this, arguments); showId(); dashSoon(); numItabs(); return r; }; }
   { const st = showTab; showTab = function () { const r = st.apply(this, arguments); numTabs(); return r; }; }
-  place(); buildTabs(); numItabs(); numSecs(); splitApply(); showId(); dash();
+  place(); buildTabs(); buildSide(); splitApply(); showId(); dash();
 })();
 </script>
 </body>

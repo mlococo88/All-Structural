@@ -4,7 +4,8 @@
 //     open at 1920 px; « / » toggles and is remembered in subloads_dashCollapsed_v1; hidden below 1200 px and in print;
 //   - its governing forces are the Combinations tab's envelope (combine(k).env at the lowest resultant level), a click opens the
 //     Combinations tab for that unit; the input-check line turns FAIL with an invalid input and the values are withheld;
-//   - input tabs I-1 to I-4, sections I-n.m; output tabs "1 · Summary" … in the order and names of before;
+//   - input tabs I-1 to I-12 (SLIT: the four panes split by topic; every field in exactly one tab, the input-check counts and links follow
+//     the field), sections I-n.m; output tabs "1 · Summary" … in the order and names of before;
 //   - the grab bar: drag widens the input pane and stores subloads_splitRatio_v1, the width survives a reload, Enter / double-click
 //     resets (key removed, 360 px); no generic localStorage key is written;
 //   - Input ID: XXXXXXXX-XXXX in the header, the same after a reload and after visiting every input tab, different after an input
@@ -36,8 +37,35 @@ const allErrs = [];
       const r = await p.evaluate(() => ({ t: [...document.querySelectorAll('#tab-bar .tab-btn')].map(b => b.textContent.trim()), i: [...document.querySelectorAll('#itabs .itab')].map(b => b.textContent.trim()), s: [...document.querySelectorAll('#sidebar .sec-h .ino')].map(x => x.textContent) }));
       const names = ['Summary', 'Geometry', '3D', 'Dead load', 'Earth loads', 'Live load', 'Braking and centrifugal', 'Wind', 'Force distribution', 'Combinations', 'Temperature', 'Water and scour', 'Ice', 'Seismic', 'Vessel collision', 'Vehicle collision', 'Drawings', 'Manual', 'Report'];
       assert.deepEqual(r.t, names.map((n, i) => `${i + 1} ·${n}`));
-      assert.deepEqual(r.i, ['I-1Project', 'I-2Bridge', 'I-3Units', 'I-4Reactions']);
-      assert.ok(r.s.length >= 4 && r.s.every((x, i) => x === `I-3.${i + 1}`), r.s.join(','));
+      assert.deepEqual(r.i, ['I-1Project', 'I-2Bridge', 'I-3Reactions', 'I-4Units', 'I-5Live load', 'I-6Wind', 'I-7Temperature', 'I-8Water and ice', 'I-9Earth loads', 'I-10Seismic', 'I-11Collision', 'I-12Factors and analysis']);
+      assert.ok(r.s.length >= 4 && r.s.every((x, i) => x === `I-4.${i + 1}`), r.s.join(','));
+    });
+    await ok('SLIT: twelve input tabs; every field of every tab (each unit) is in the tab its path belongs to; every input field of the four old panes is in exactly one tab', async () => {
+      const r = await p.evaluate(() => { const seen = {}, bad = [], old = new Set();
+        for (const pane of ['project', 'bridge', 'units', 'rx']) for (let k = 0; k < P.units.length; k++) { P.ui.sel = k; document.querySelector(`.itab[data-pane="${pane}"]`).click(); }
+        for (const b of document.querySelectorAll('#itabs .itab')) for (let k = 0; k < P.units.length; k++) { P.ui.sel = k; b.click();
+          document.querySelectorAll('#sidebar [data-k]').forEach(x => { const t = b.dataset.pane, pp = x.dataset.k.replace(/^units\.\d+\./, 'units.K.') + '|' + k; if (slTabOfPath(x.dataset.k) !== t) bad.push(t + ':' + x.dataset.k); (seen[pp] = seen[pp] || new Set()).add(t); }); }
+        P.ui.sel = 1; document.querySelector('.itab[data-pane="units"]').click();
+        return { bad, multi: Object.entries(seen).filter(([, v]) => v.size > 1).map(([k, v]) => k + ':' + [...v]), n: Object.keys(seen).length }; });
+      assert.deepEqual(r.bad, []); assert.deepEqual(r.multi, []); assert.ok(r.n > 200, 'fields ' + r.n);
+    });
+    await ok('SLIT: an invalid wind speed counts on I-6 Wind (not Bridge), its link opens the Wind tab with the field focused; a vessel speed error counts on I-11 for Pier 1', async () => {
+      const r = await p.evaluate(async () => { const v0 = P.br.V, cv0 = JSON.stringify(P.units[1].cv); P.br.V = -5; fillCol(P.units[1]); P.units[1].cv.on = 'yes'; P.units[1].cv.mhw = 108; P.units[1].cv.Vs = -2; recompute(); buildSide(); await new Promise(r => setTimeout(r, 300));
+        const badge = t => { const q = document.querySelector(`.itab[data-pane="${t}"] .ic-n`); return q ? +q.textContent : 0; };
+        const b = { wind: badge('wind'), bridge: badge('bridge'), coll: badge('coll'), units: badge('units') };
+        showTab('summary'); await new Promise(r => setTimeout(r, 200)); const links = [...document.querySelectorAll('#tab-summary [data-icgo]')];
+        const lw = links.find(a => /Wind speed/.test(a.textContent)); lw.click(); await new Promise(r => setTimeout(r, 200));
+        const w = { itab: P.ui.itab, focus: document.activeElement && document.activeElement.dataset.k };
+        P.ui.sel = 0; showTab('summary'); await new Promise(r => setTimeout(r, 200)); const lc = [...document.querySelectorAll('#tab-summary [data-icgo]')].find(a => /speed V|Impact speed/i.test(a.textContent) && !/Wind/.test(a.textContent)); lc.click(); await new Promise(r => setTimeout(r, 200));
+        const c = { itab: P.ui.itab, sel: P.ui.sel, focus: document.activeElement && document.activeElement.dataset.k };
+        P.br.V = v0; P.units[1].cv = JSON.parse(cv0); recompute(); P.ui.itab = 'units'; buildSide(); await new Promise(r => setTimeout(r, 300));
+        return { b, w, c, after: badge('wind') + badge('coll') }; });
+      assert.deepEqual(r.b, { wind: 1, bridge: 0, coll: 1, units: 0 }); assert.deepEqual(r.w, { itab: 'wind', focus: 'br.V' }); assert.deepEqual(r.c, { itab: 'coll', sel: 1, focus: 'units.1.cv.Vs' }); assert.equal(r.after, 0);
+    });
+    await ok('SLIT: a unit button on Water and ice keeps that tab; an old saved P.ui.itab ("bridge") opens the Bridge tab', async () => {
+      const r = await p.evaluate(async () => { document.querySelector('.itab[data-pane="water"]').click(); document.querySelector('#sidebar .unit-pick [data-unit="2"]').click(); await new Promise(r => setTimeout(r, 100));
+        const a = { itab: P.ui.itab, sel: P.ui.sel }; P.ui.itab = 'bridge'; buildSide(); const b = document.querySelector('.itab.active').dataset.pane; P.ui.sel = 1; P.ui.itab = 'units'; buildSide(); return { a, b }; });
+      assert.deepEqual(r.a, { itab: 'water', sel: 2 }); assert.equal(r.b, 'bridge');
     });
     await ok('« opens the column (stored "0"); the values are the envelope of combine(k) at the lowest level; a click opens Combinations', async () => {
       const r = await p.evaluate(async () => { document.getElementById('slDashTgl').click(); await new Promise(r => setTimeout(r, 300));
