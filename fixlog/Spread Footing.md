@@ -7984,7 +7984,7 @@ index cfb3ac3..ff198bc 100644
  {p:"<b>Shear friction</b> (ACI 318-19 22.9): V<sub>u</sub> = &radic;(V<sub>ux</sub>&sup2;+V<sub>uy</sub>&sup2;) &le; &phi;V<sub>n</sub> = 0.75 min(&mu;(A<sub>vf</sub>f<sub>y</sub> + N<sub>u</sub>), V<sub>n,max</sub>) in every LRFD combination, with &mu; = 1.0&lambda; (intentionally roughened about 1/4 in; a drawing note is required) or 0.6&lambda; by the joint-surface input, N<sub>u</sub> = 0.9D, and A<sub>vf</sub> developed on both sides of the joint; where the development falls short and only shear friction needs it, a proportional credit is taken and the dowel chip is REVIEW."},
 ```
 
-## 2026-11-11 — PR: sf-plain (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SFPL) — flexure of one direction as plain concrete, ACI 318-19 Chapter 14 (engineer request 2026-11-11)   [input option; §4: new checks only when the user chooses; results identical with the field absent]
+## 2026-11-11 — PR: sf-plain (PR #1426: https://github.com/mlococo88/All-Structural/pull/1426) (SFPL) — flexure of one direction as plain concrete, ACI 318-19 Chapter 14 (engineer request 2026-11-11)   [input option; §4: new checks only when the user chooses; results identical with the field absent]
 - **Engineer (2026-11-11):** "Flexure in this direction: Reinforced | Plain concrete (ACI 318-19 Ch. 14)", at least for the transverse direction of wall / strip footings. If the plain check passes, the transverse flexural steel is not required.
 - **Where (to re-apply by hand):**
   - **Input (Reinforcement tab):** after the ℓ_d-reduction row (anchor `<div class="note" id="sfdRbNote"></div>`), a select `data-path="freinf.plain"`: '' None / 'x' / 'y'.
