@@ -517,10 +517,14 @@ function unitGeo(G, k) {
   const rowSpan = S.joint ? 2 * nz(u.rowOff) : 0;
   const colPos = (n, s) => [...Array(n)].map((_, i) => ((n - 1) / 2 - i) * s);   // numbered left to right looking ahead
   if (u.type === 'abut') {
-    const a = u.abut, L = G.Wd / S.c, stemTop = seat - nz(u.hp) / 12, H = stemTop - nz(u.topFtg);
+    /* SLAL (2026-11-11): abutment length along the bearing line L_ab = u.abut.L (blank or absent = auto, the deck width along the skewed
+       line W_deck / cos θ, as before) and footing length L_ftg = u.abut.Lftg (blank or absent = L_ab), the abutment calculator's
+       geom.Lab / geom.Lftg split. L_ab: stem and backwall self-weight and every earth item (earthAbut L); L_ftg: footing self-weight. */
+    const a = u.abut, Lauto = G.Wd / S.c, L = num(a.L) > 0 ? num(a.L) : Lauto, Lf = num(a.Lftg) > 0 ? num(a.Lftg) : L, stemTop = seat - nz(u.hp) / 12, H = stemTop - nz(u.topFtg);
     R.capLen = L; R.capMid = 0; R.stemTop = stemTop; R.H = H; R.bwTop = G.elevAt(S.X) ; R.front = k === 0 ? 1 : -1;
+    R.abLauto = Lauto; R.abLin = num(a.L) > 0; R.abLfIn = num(a.Lftg) > 0; R.abLf = Lf;
     add('Stem', L * nz(a.stemT) * Math.max(H, 0)); add('Backwall', L * nz(a.bwT) * Math.max(R.bwTop - stemTop, 0));
-    if (u.ftg.type !== 'none') add('Footing', L * nz(u.ftg.W) * nz(u.ftg.t));
+    if (u.ftg.type !== 'none') { R.ftgL = Lf; add('Footing', Lf * nz(u.ftg.W) * nz(u.ftg.t)); }
     if (!(H > 0)) iss.push(['fail', 'The stem height is zero or negative: raise the bridge or lower the top of footing.']);
     R.brgA = nz(a.brgA); if (R.brgA < 0.75) iss.push(['warn', 'The bearing is within 9 in of the front face of the stem.']);
   } else if (u.type === 'mcb' || u.type === 'pile') {
@@ -734,7 +738,7 @@ function planDwg(G, UG, o = {}) {   // o.ts (SLLAY): text height scale for the G
     d.text(lp[0], lp[1] - h * 1.35 + h * 2.6, `${TYPE_NAME[u.type]}, skew ${f1(nz(P.br.skews[k]))}°`, h * 0.8, 'NOTE', 'c');
     if (R.type === 'abut') { const a = R.u.abut, f = R.front, L2 = R.capLen / 2, fr = f * R.brgA, bk = fr - f * nz(a.stemT);
       d.poly(quad(-L2, L2, fr, bk), 'SUBS'); d.poly(quad(-L2, L2, bk, bk + f * nz(a.bwT)), 'SUBS');
-      if (u.ftg.type !== 'none') d.poly(quad(-L2, L2, fr + f * nz(a.toe), fr + f * nz(a.toe) - f * nz(u.ftg.W)), 'HID'); return; }
+      if (u.ftg.type !== 'none') { const F2 = (R.ftgL || R.capLen) / 2; d.poly(quad(-F2, F2, fr + f * nz(a.toe), fr + f * nz(a.toe) - f * nz(u.ftg.W)), 'HID'); } return; }   // SLAL: footing L_ftg
     const L2 = R.capLen / 2, m = R.capMid, B2 = R.capB / 2;
     if (R.type === 'wall') { const t2 = R.wallT / 2, nose = R.u.wall.nose;
       if (nose === 'square') d.poly(quad(m - L2, m + L2, -t2, t2), 'SUBS');
@@ -768,8 +772,8 @@ function unitDwg(G, UG, k) {
     d.rect(x - bw / 2 - 0.25, top, x + bw / 2 + 0.25, z0, 'PED');
     d.rect(x - bw / 2, z0, x + bw / 2, p.zGb, row.fx.long === 'fix' ? 'BRGF' : 'BRGE'); });
   const L2 = R.capLen / 2, m = R.capMid; let gx0, gx1;
-  if (R.type === 'abut') { d.rect(X(-L2), nz(u.topFtg), X(L2), R.stemTop, 'SUBS'); gx0 = -L2; gx1 = L2;
-    if (u.ftg.type !== 'none') d.rect(X(-L2), R.ftgBot, X(L2), nz(u.topFtg), 'FTG'); }
+  if (R.type === 'abut') { d.rect(X(-L2), nz(u.topFtg), X(L2), R.stemTop, 'SUBS'); const F2 = u.ftg.type !== 'none' ? (R.ftgL || R.capLen) / 2 : 0; gx0 = -Math.max(L2, F2); gx1 = Math.max(L2, F2);   // SLAL: stem L_ab, footing L_ftg
+    if (u.ftg.type !== 'none') d.rect(X(-F2), R.ftgBot, X(F2), nz(u.topFtg), 'FTG'); }
   else if (R.type === 'mcb' || R.type === 'pile') { d.rect(X(m - L2), R.capBot, X(m + L2), R.capTop, 'SUBS');
     R.cols.forEach(q => { if (R.type === 'pile') { d.rect(X(q.s - q.bx / 2), nz(u.ground), X(q.s + q.bx / 2), R.capBot, 'SUBS'); d.rect(X(q.s - q.bx / 2), nz(u.ground) - 8, X(q.s + q.bx / 2), nz(u.ground), 'PILE'); }
       else d.rect(X(q.s - q.bx / 2), nz(u.topFtg), X(q.s + q.bx / 2), R.capBot, 'SUBS'); });
@@ -797,6 +801,7 @@ function unitDwg(G, UG, k) {
   const zLow = Math.min(R.ftgBot != null ? R.ftgBot : gz, gz - (R.type === 'pile' ? 8 : 0)) - h * 2.2;
   if (R.cols.length > 1) { const cs = R.cols.map(q => q.s).sort((a, b) => a - b); for (let i = 0; i < cs.length - 1; i++) d.dim(X(cs[i]), zLow, X(cs[i + 1]), zLow, 0.001, ftin(cs[i + 1] - cs[i]), h * 0.9); }
   d.dim(X(m - L2), zLow - h * 2.6, X(m + L2), zLow - h * 2.6, 0.001, `${R.type === 'abut' ? 'Stem' : R.type === 'wall' ? 'Wall' : 'Cap'} ${ftin(R.capLen)}`, h * 0.9);
+  if (R.type === 'abut' && R.ftgL && Math.abs(R.ftgL - R.capLen) > 0.005) d.dim(X(-R.ftgL / 2), zLow, X(R.ftgL / 2), zLow, 0.001, `Footing ${ftin(R.ftgL)}`, h * 0.9);   // SLAL: L_ftg ≠ L_ab
   d.text(X(m), zLow - h * 5.6, `${u.name}: ${TYPE_NAME[u.type]}, looking ahead station`, h * 1.25, 'TEXT', 'c', 0, { w: 700 });
   d.text(X(m), zLow - h * 7.2, `Dimensions along the bearing line (skew ${f1(nz(P.br.skews[k]))}°). ${S.joint ? 'Back bearing row shown.' : ''}`, h * 0.85, 'NOTE', 'c');
   return d;
@@ -907,7 +912,7 @@ function v3Build() {
       box(sp - bw / 2, sp + bw / 2, r.o - bl / 2, r.o + bl / 2, p.zSeat, p.zGb, r.fx.long === 'fix' ? 'fix' : 'exp', L.brg); }));
     if (R.type === 'abut') { const a = u.abut, f = R.front, L2 = R.capLen / 2, fr = f * R.brgA, bk = fr - f * nz(a.stemT), s0 = Math.min(fr, bk), s1 = Math.max(fr, bk), bw1 = bk + f * nz(a.bwT);
       box(-L2, L2, s0, s1, nz(u.topFtg), R.stemTop, 'conc'); box(-L2, L2, Math.min(bk, bw1), Math.max(bk, bw1), R.stemTop, R.bwTop, 'conc');
-      if (u.ftg.type !== 'none') { const t0 = fr + f * nz(a.toe), t1 = t0 - f * nz(u.ftg.W); box(-L2, L2, Math.min(t0, t1), Math.max(t0, t1), R.ftgBot, nz(u.topFtg), 'ftg'); } }
+      if (u.ftg.type !== 'none') { const t0 = fr + f * nz(a.toe), t1 = t0 - f * nz(u.ftg.W), F2 = (R.ftgL || R.capLen) / 2; box(-F2, F2, Math.min(t0, t1), Math.max(t0, t1), R.ftgBot, nz(u.topFtg), 'ftg'); } }   // SLAL: footing L_ftg
     else { const L2 = R.capLen / 2, m = R.capMid, B2 = R.capB / 2;
       if (R.type === 'mcb' || R.type === 'pile') { box(m - L2, m + L2, -B2, B2, R.capBot, R.capTop, 'conc'); R.cols.forEach(c => col(c, R.type === 'pile' ? nz(u.ground) : nz(u.topFtg), R.capBot)); }
       else if (R.type === 'ham') { const c = R.cols[0], hr = nz(u.ham.hr), ht = nz(u.ham.ht), a0 = c.s - c.bx / 2, a1 = c.s + c.bx / 2;
@@ -948,7 +953,7 @@ function fld(label, path, unit = '', kind = 'num', o = {}) {
   if (kind === 'sel') ctl = `<select id="${id}" data-k="${path}">${o.options.map(([k, t]) => `<option value="${k}"${String(v) === String(k) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
   else if (kind === 'area') ctl = `<textarea id="${id}" data-k="${path}" data-kind="text">${esc(v)}</textarea>`;
   else if (kind === 'ro') ctl = `<input id="${id}" data-ro="${path}" readonly tabindex="-1" value="${esc(o.value != null ? o.value : '')}">`;
-  else ctl = `<input id="${id}" data-k="${path}" data-kind="${kind}" value="${esc(v == null ? '' : v)}" inputmode="${kind === 'num' ? 'decimal' : 'text'}" autocomplete="off">`;
+  else ctl = `<input id="${id}" data-k="${path}" data-kind="${kind}" value="${esc(v == null ? '' : v)}"${o.ph ? ` placeholder="${esc(o.ph)}"` : ''} inputmode="${kind === 'num' ? 'decimal' : 'text'}" autocomplete="off">`;
   return `<div class="${cls}"${o.title ? ` title="${esc(o.title)}"` : ''}><label for="${id}">${label}</label><div class="in">${ctl}${unit ? `<span class="u">${unit}</span>` : ''}</div></div>`;
 }
 const sec = (t, body, o = {}) => `<div class="sec-h">${t}${o.sub ? ` <small>${o.sub}</small>` : ''}</div><div class="sec-body${o.one ? ' one' : ''}">${body}</div>`;
@@ -976,6 +981,20 @@ function paneBridge() {
       + fld('Left overhang', 'br.ohL', 'ft') + fld('Right overhang', 'br.ohR', 'ft') + fld('Left barrier width', 'br.barL', 'ft', 'num', { title: 'Deck edge to the roadway face of the barrier or curb' }) + fld('Right barrier width', 'br.barR', 'ft') + fld('Barrier height', 'br.barH', 'in') + fld('Deck thickness', 'br.ts', 'in') + fld('Haunch', 'br.haunch', 'in') + fld('Girder depth', 'br.d', 'in') + fld('Flange width', 'br.bf', 'in') + fld('Flange thickness', 'br.tf', 'in') + fld('Web thickness', 'br.tw', 'in') + fld('Concrete unit weight', 'br.wc', 'kcf'))
     + `<p class="note">The girder shape is used for the drawings, the 3D view, and exposed depth for wind. Superstructure weight comes from the reactions.</p>`;
 }
+/* SLAL (2026-11-11): the abutment lengths of unit k and their note (Units tab and the Geometry tab / Report geometry section) */
+function abLenInfo(k) {
+  const G = MODEL.G, u = P.units[k], R = MODEL.UG && MODEL.UG[k]; if (!G || !G.sup || !G.sup[k] || !u || u.type !== 'abut') return null;
+  const S = G.sup[k], a = u.abut || {}, auto = G.Wd / S.c, L = num(a.L) > 0 ? num(a.L) : auto, ftg = !u.ftg || u.ftg.type !== 'none', Lf = num(a.Lftg) > 0 ? num(a.Lftg) : L;
+  return { k, Wd: G.Wd, th: nz(P.br.skews[k]), auto, L, Lin: num(a.L) > 0, Lf, LfIn: num(a.Lftg) > 0, ftg, R };
+}
+function abLenNote(A) {
+  const ws = `L<sub>ab,auto</sub> = W<sub>deck</sub> / cos θ = ${f2(A.Wd)} / cos ${f1(A.th)}° = ${f2(A.auto)} ft`;
+  return slNL(`Abutment length: ${ws}; L<sub>ab</sub> = ${f2(A.L)} ft (${A.Lin ? 'entered' : 'auto'})${A.ftg ? `, L<sub>ftg</sub> = ${f2(A.Lf)} ft (${A.LfIn ? 'entered' : 'blank = L<sub>ab</sub>'})` : ''}.`, [
+    ['L<sub>ab</sub>', 'is the stem and backwall length along the skewed bearing line. Blank uses the out-to-out deck width (left overhang + girder spacings + right overhang) measured along the bearing line, W<sub>deck</sub> / cos θ. It sets the stem and backwall self-weight (DC) and every earth item on the Earth loads tab: active earth EH, live load surcharge LS, earth surcharge ES, the soil over the heel EV, the seismic earth increment and stem, backwall and soil-block inertia, and the construction stage.'],
+    A.ftg ? ['L<sub>ftg</sub>', 'is the footing (or pile cap) plan length along the bearing line; blank = L<sub>ab</sub>. It sets the footing self-weight (DC) and the footing inertia in Extreme Event I. The earth loads over the heel stay on L<sub>ab</sub>, as in the abutment calculator.'] : null,
+    ['Approach slab:', 'its reaction uses the slab\'s own width (blank = deck width), not L<sub>ab</sub>.'],
+    ['Default:', 'with both lengths blank, the abutment and its footing are the deck width along the bearing line, as before this input was added.']]);
+}
 function paneUnits() {
   const G = MODEL.G, k = P.ui.sel, u = P.units[k]; if (!u) return '';
   const n = P.units.length, end = k === 0 || k === n - 1, joint = !end && P.br.joint[k] === 'joint', p = `units.${k}`;
@@ -987,7 +1006,9 @@ function paneUnits() {
   h += `<div class="sec-body">${fld('Bearing height', `${p}.hb`, 'in')}${fld('Pedestal height', `${p}.hp`, 'in', 'num', { title: 'Minimum pedestal, at the highest bearing seat' })}${joint ? fld('Bearing row offset from CL pier', `${p}.rowOff`, 'ft') : ''}
     ${u.rows.slice(0, joint ? 2 : 1).some(r => r.brg === 'elast') ? fld('Elastomer G', `${p}.elast.G`, 'ksi') + fld('Total rubber h<sub>rt</sub>', `${p}.elast.hrt`, 'in') + fld('Pad length (along girder)', `${p}.elast.L`, 'in') + fld('Pad width', `${p}.elast.W`, 'in') : ''}</div>`;
   const t = u.type;
-  if (t === 'abut') h += sec('Abutment', fld('Stem thickness', `${p}.abut.stemT`, 'ft') + fld('CL bearing to front face', `${p}.abut.brgA`, 'ft') + fld('Backwall thickness', `${p}.abut.bwT`, 'ft') + fld('Footing toe', `${p}.abut.toe`, 'ft')) + `<p class="note">Earth pressure is outside this app; the abutment carries its bearing reactions here, exported for the earth-pressure app.</p>`;
+  const ABL = t === 'abut' ? abLenInfo(k) : null;   // SLAL: L_ab, L_ftg (auto values as hints)
+  if (t === 'abut') h += sec('Abutment', fld('Abutment length along the bearing line L<sub>ab</sub> (blank = auto)', `${p}.abut.L`, 'ft', 'num', { full: true, ph: ABL ? `auto ${f2(ABL.auto)}` : 'auto' }) + fld('Stem thickness', `${p}.abut.stemT`, 'ft') + fld('CL bearing to front face', `${p}.abut.brgA`, 'ft') + fld('Backwall thickness', `${p}.abut.bwT`, 'ft') + fld('Footing toe', `${p}.abut.toe`, 'ft'))
+    + (ABL ? `<div class="note slNL" id="sl-ablen">${abLenNote(ABL)}</div>` : '') + `<p class="note">Earth pressure is outside this app; the abutment carries its bearing reactions here, exported for the earth-pressure app.</p>`;
   if (t === 'mcb' || t === 'pile') h += sec('Cap', fld('Cap width (normal to line)', `${p}.cap.b`, 'ft') + fld('Cap depth', `${p}.cap.h`, 'ft') + fld('Cap beyond exterior bearing', `${p}.capE`, 'ft'));
   if (t === 'mcb') h += sec('Columns', fld('Number of columns', `${p}.col.n`) + fld('Spacing along line', `${p}.col.s`, 'ft') + fld('Shape', `${p}.col.shape`, '', 'sel', { options: [['round', 'Round'], ['rect', 'Rectangular']] })
     + (u.col.shape === 'round' ? fld('Diameter', `${p}.col.D`, 'ft') : fld('Width along line', `${p}.col.bx`, 'ft') + fld('Width normal to line', `${p}.col.by`, 'ft')));
@@ -999,7 +1020,7 @@ function paneUnits() {
     const fopts = t === 'mcb' ? [['comb', 'Combined footing'], ['indiv', 'Individual footings'], ['none', 'None (drilled shafts)']] : [['comb', 'Spread footing or pile cap'], ['none', 'None']];
     let fb = fld('Foundation', `${p}.ftg.type`, '', 'sel', { full: true, options: fopts });
     if (u.ftg.type === 'indiv') fb += fld('Length along line', `${p}.ftg.Bi`, 'ft') + fld('Width', `${p}.ftg.Wi`, 'ft') + fld('Thickness', `${p}.ftg.t`, 'ft');
-    else if (u.ftg.type === 'comb') fb += (t === 'abut' ? '' : fld('Length', `${p}.ftg.Lauto`, '', 'sel', { options: [['true', 'Match the cap'], ['false', 'Entered']] }) + (String(u.ftg.Lauto) === 'false' ? fld('Footing length', `${p}.ftg.L`, 'ft') : '<div></div>')) + fld('Width', `${p}.ftg.W`, 'ft') + fld('Thickness', `${p}.ftg.t`, 'ft');
+    else if (u.ftg.type === 'comb') fb += (t === 'abut' ? fld('Footing length L<sub>ftg</sub> (blank = L<sub>ab</sub>)', `${p}.abut.Lftg`, 'ft', 'num', { full: true, ph: ABL ? `= L_ab ${f2(ABL.L)}` : '= L_ab' }) : fld('Length', `${p}.ftg.Lauto`, '', 'sel', { options: [['true', 'Match the cap'], ['false', 'Entered']] }) + (String(u.ftg.Lauto) === 'false' ? fld('Footing length', `${p}.ftg.L`, 'ft') : '<div></div>')) + fld('Width', `${p}.ftg.W`, 'ft') + fld('Thickness', `${p}.ftg.t`, 'ft');
     h += sec('Foundation', fb);
   }
   h += sec('Elevations', (t !== 'pile' ? fld('Top of footing', `${p}.topFtg`, 'ft') : '') + fld('Ground or streambed', `${p}.ground`, 'ft'));
@@ -1010,8 +1031,11 @@ function derivedHtml() {
   const R = MODEL.UG && MODEL.UG[P.ui.sel]; if (!R) return '';
   const ro = (l, v, u) => `<div class="fld ro"><label>${l}</label><div class="in"><input readonly tabindex="-1" value="${esc(v)}"><span class="u">${u}</span></div></div>`;
   let h = ro(R.type === 'abut' ? 'Bridge seat El.' : 'Top of cap El.', f2(R.capTop != null ? R.capTop : R.stemTop), 'ft') + ro(R.type === 'abut' ? 'Stem length' : 'Cap length', f2(R.capLen), 'ft');
+  if (R.type === 'abut' && R.ftgL) h += ro('Footing length', f2(R.ftgL), 'ft');   // SLAL
   h += ro(R.type === 'pile' ? 'Exposed pile length' : R.type === 'wall' ? 'Wall height' : R.type === 'abut' ? 'Stem height' : 'Column clear height', f2(R.H), 'ft');
   h += ro('Self-weight', f1(R.wt), 'kip');
+  if (R.type === 'abut') { const A = abLenInfo(P.ui.sel), nb = document.getElementById('sl-ablen'), fi = document.getElementById('f_units_' + P.ui.sel + '_abut_Lftg');   // SLAL: keep the length note and hint current while typing
+    if (A && nb) nb.innerHTML = abLenNote(A); if (A && fi) fi.placeholder = `= L_ab ${f2(A.L)}`; }
   return h;
 }
 function paneRx() {
@@ -1115,7 +1139,7 @@ function geometryHtml() {
   UG.forEach((R, k) => { const u = P.units[k], S = G.sup[k];
     h += `<div class="card"><div class="card-h"><h2>${esc(u.name)}</h2><span class="sub">${TYPE_NAME[u.type]}, elevation looking ahead station</span></div><div class="card-b">${svgOf(unitDwg(G, UG, k), { h: 520 })}
       <div class="tscroll" style="margin-top:10px"><table class="tbl"><thead><tr>${S.joint ? '<th>Row</th>' : ''}<th>Girder</th><th class="right">Station (ft)</th><th class="right">Along line (ft)</th><th class="right">Deck El.</th><th class="right">Bottom of girder El.</th><th class="right">Bearing seat El.</th><th class="right">Pedestal (in)</th><th>Longitudinal</th></tr></thead><tbody>
-      ${S.rows.map(r => r.brg.map(p => `<tr>${S.joint ? `<td>${r.side}</td>` : ''}<td class="lbl">G${p.j + 1}</td><td class="val">${f2(p.x)}</td><td class="val">${f2(p.s)}</td><td class="val">${f2(p.zDeck)}</td><td class="val">${f2(p.zGb)}</td><td class="val">${f2(p.zSeat)}</td><td class="val">${f1((p.zSeat - (R.capTop != null ? R.capTop : R.stemTop)) * 12)}</td><td>${FIX[r.fx.long]}</td></tr>`).join('')).join('')}</tbody></table></div></div></div>`; });
+      ${S.rows.map(r => r.brg.map(p => `<tr>${S.joint ? `<td>${r.side}</td>` : ''}<td class="lbl">G${p.j + 1}</td><td class="val">${f2(p.x)}</td><td class="val">${f2(p.s)}</td><td class="val">${f2(p.zDeck)}</td><td class="val">${f2(p.zGb)}</td><td class="val">${f2(p.zSeat)}</td><td class="val">${f1((p.zSeat - (R.capTop != null ? R.capTop : R.stemTop)) * 12)}</td><td>${FIX[r.fx.long]}</td></tr>`).join('')).join('')}</tbody></table></div>${u.type === 'abut' && abLenInfo(k) ? `<div class="note slNL" style="padding:8px 0 0">${abLenNote(abLenInfo(k))}</div>` : ''}</div></div>`; });   // SLAL: the abutment lengths, worked
   return h;
 }
 function manualHtml() {
@@ -2788,7 +2812,7 @@ function abutExportData() {
         WS: perGirder(wsLc.III[iWS]), WL: perGirder(wlLc[iWL]) },
       dist: { model: 'manual', shBR: 100, shTU: 100, shCR: 100, shWS: 100 },
       longit: { computeBR: false, computeTU: false, computeCRSH: false },
-      geom: { hbw: r3(hbw), tbw: r3(bwT), hstem: r3(hstem), tst: r3(stemT), tsb: r3(stemT), brgSetback: r3(stemT - brgA - bwT), Ltoe: r3(toe), Lheel: r3(heel), tf: r3(nz(u.ftg.t)), Lab: r3(R.capLen), Lftg: r3(R.capLen), soilH: r3(R.bwTop - nz(u.topFtg)), spanL: r3(spanL), skew: r3(nz(b.skews[k])) },
+      geom: { hbw: r3(hbw), tbw: r3(bwT), hstem: r3(hstem), tst: r3(stemT), tsb: r3(stemT), brgSetback: r3(stemT - brgA - bwT), Ltoe: r3(toe), Lheel: r3(heel), tf: r3(nz(u.ftg.t)), Lab: r3(R.capLen), Lftg: r3(R.ftgL || R.capLen), soilH: r3(R.bwTop - nz(u.topFtg)), spanL: r3(spanL), skew: r3(nz(b.skews[k])) },
       mat: { gc: r3(nz(b.wc) || 0.150) },
       bearing: { padL: r3(nz(u.elast.L)), padW: r3(nz(u.elast.W)), G: r3(nz(u.elast.G)), hrt: r3(nz(u.elast.hrt)), nBrgPerGird: 1 },
       seismic: { As: r3(S0.As) } };
@@ -3318,6 +3342,9 @@ exportDxf = exportDxfLayouts;
     const i = C.findIndex(c => c[1] === 'Reactions' && c[0] === 'info'); if (i >= 0) C[i] = ['warn', 'Reactions', 'All superstructure DC/DW reactions are zero, so dead load, combinations, friction, and the seismic mass and connection forces exclude the superstructure. Enter them on the Reactions tab before using the results.'];
     P.units.forEach((u, k) => { const R = UG[k]; if (!R) return;
       if (u.ftg && u.ftg.type === 'comb' && (u.type === 'mcb') && R.cols && R.ftgL) { const ext = Math.max(...R.cols.map(c => Math.abs(c.s - (R.capMid || 0)) + c.bx / 2)); if (ext > R.ftgL / 2 + 0.01) C.push(['warn', 'Footings', `${u.name}: the columns extend ${f2(2 * ext)} ft along the bent but the combined footing is only ${f2(R.ftgL)} ft long; the outer columns fall off the footing. Lengthen the footing or set its length to automatic.`]); }
+      if (u.type === 'abut' && G.sup[k]) { const S = G.sup[k], need = (R.sMax - R.sMin) + Math.max(nz(u.elast.W) / 12, 0.8) / S.c + 0.5;   // SLAL: exterior bearings' pedestals out to out, along the line (as drawn)
+        if (R.abLin && R.capLen < need - 0.005) C.push(['warn', 'Abutments', `${u.name}: the abutment length L<sub>ab</sub> = ${f2(R.capLen)} ft is shorter than the out-to-out of the exterior girders' bearing pedestals along the bearing line (${f2(R.sMax - R.sMin)} ft between the exterior bearings + pedestal ${f2(Math.max(nz(u.elast.W) / 12, 0.8) / S.c + 0.5)} ft = ${f2(need)} ft). Check the entered length.`]);
+        if (R.ftgL && R.capLen > R.ftgL + 0.01) C.push(['warn', 'Footings', `${u.name}: the stem (L<sub>ab</sub> = ${f2(R.capLen)} ft) is longer than its footing (L<sub>ftg</sub> = ${f2(R.ftgL)} ft).`]); }
       if (u.type === 'wall' && u.ftg && u.ftg.type !== 'none' && R.ftgL && R.capLen > R.ftgL + 0.01) C.push(['warn', 'Footings', `${u.name}: the wall (${f2(R.capLen)} ft) is longer than its footing (${f2(R.ftgL)} ft).`]);
       const w = u.water || {}; if (u.type !== 'abut' && w.on === 'yes') { const miss = [['wse', 'design flood water surface'], ['v', 'design flood velocity']].filter(([f]) => !isFinite(num(w[f]))).map(x => x[1]);
         if (miss.length) C.push(['warn', 'Water', `${u.name} is set in water but the ${miss.join(' and ')} ${miss.length > 1 ? 'are' : 'is'} blank, so no water loads are applied. Enter the flood data or set In water to No.`]);
@@ -4603,6 +4630,8 @@ const IC = (function () {
     ['units', 'u.elast.L', 'Pad length (along girder)', 'in', 'pos', elastOn], ['units', 'u.elast.W', 'Pad width', 'in', 'pos', elastOn],
     ['units', 'u.abut.stemT', 'Stem thickness', 'ft', 'pos', isT('abut')], ['units', 'u.abut.brgA', 'CL bearing to front face', 'ft', 'nn', isT('abut')],
     ['units', 'u.abut.bwT', 'Backwall thickness', 'ft', 'pos', isT('abut')], ['units', 'u.abut.toe', 'Footing toe', 'ft', 'nn', isT('abut')],
+    ['units', 'u.abut.L', 'Abutment length along the bearing line L_ab', 'ft', { gt: 0, blank: true }, isT('abut')],   // SLAL: blank = auto
+    ['units', 'u.abut.Lftg', 'Footing length L_ftg', 'ft', { gt: 0, blank: true }, u => u.type === 'abut' && ftgT(u, 'comb')],   // SLAL: blank = L_ab
     ['units', 'u.cap.b', 'Cap width (normal to line)', 'ft', 'pos', isT('mcb', 'pile')], ['units', 'u.cap.h', 'Cap depth', 'ft', 'pos', isT('mcb', 'pile')],
     ['units', 'u.capE', 'Cap beyond exterior bearing', 'ft', 'nn', u => ['mcb', 'pile', 'ham'].includes(u.type) || (u.type === 'wall' && String((u.wall || {}).Lauto) !== 'false')],
     ['units', 'u.col.n', 'Number of columns', '', 'int1', isT('mcb')],
