@@ -199,7 +199,7 @@ if (REF) {
   let n = 0;
   // SLAL (2026-11-11): the abutment-length note (Geometry tab, Report) and its two input-check ranges are display text new on this
   // branch; taken out of both sides' text (every result is still compared)
-  const slal = t => typeof t !== 'string' ? t : t.replace(/Abutment length: L[\s\S]*?as before this input was added\.\n*/g, '').replace(/Abutment length along the bearing line L_ab: blank or greater than 0 ft; (Footing length L_ftg: blank or greater than 0 ft; )?/g, '');
+  const slal = t => typeof t !== 'string' ? t : t.replace(/\n?Abutment length: L[\s\S]*?as before this input was added\.(?=\n|$)/g, '').replace(/Abutment length along the bearing line L_ab: blank or greater than 0 ft; (Footing length L_ftg: blank or greater than 0 ft; )?/g, '');
   [...A, ...B].forEach(r => { const o = r.o; Object.keys(o.tabs).forEach(k => { o.tabs[k] = slal(o.tabs[k]); }); o.report = slal(o.report); });
   for (let i = 0; i < A.length; i++) { const a = A[i], bb = B[i].o;
     const keys = [...Object.keys(a.o.num).map(k => ['num', k]), ...Object.keys(a.o.tabs).map(k => ['tabs', k])];

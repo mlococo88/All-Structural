@@ -158,7 +158,7 @@ const TOOLS = {
     read: async p => {
       // SLAL (2026-11-11): the abutment-length note (Geometry tab, Report) and its two input-check ranges (Report §1.4) are display text
       // added after BASE; they are taken out of the page text here (every result, input and saved field is still compared)
-      await p.evaluate(() => { window.slalStrip = t => t.replace(/Abutment length: L[\s\S]*?as before this input was added\.\n*/g, '').replace(/Abutment length along the bearing line L_ab: blank or greater than 0 ft; (Footing length L_ftg: blank or greater than 0 ft; )?/g, ''); });
+      await p.evaluate(() => { window.slalStrip = t => t.replace(/\n?Abutment length: L[\s\S]*?as before this input was added\.(?=\n|$)/g, '').replace(/Abutment length along the bearing line L_ab: blank or greater than 0 ft; (Footing length L_ftg: blank or greater than 0 ft; )?/g, ''); });
       const out = await p.evaluate(() => ({ P: JSON.parse(JSON.stringify(P)), C: JSON.parse(JSON.stringify(MODEL.C)),
         stored: JSON.parse(localStorage.getItem(KEY) || 'null') }));
       if (out.P.ui) delete out.P.ui.tab; if (out.stored && out.stored.ui) delete out.stored.ui.tab;
