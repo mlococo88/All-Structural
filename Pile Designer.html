@@ -6448,6 +6448,25 @@ function StatusPill({
     }
   }, label || (pass ? "OK" : "NG"));
 }
+/* DECE (2026-11-11): a number input that keeps the text being typed. Every keystroke still calls the field's own onChange
+   (the same value stored as before), but the field shows what was typed while it has the focus: a re-render no longer writes the
+   stored number back over a partial entry ("-" is read as empty and was stored as NaN or 0, which wiped the minus sign; a derived
+   or clamped value replaced "0.7" or "0"). The stored value is shown again on leaving the field, or at once if it is changed
+   from elsewhere while the field has the focus. Used for every React number input of this tool. */
+const PdNumIn = React.forwardRef(function PdNumIn(props, ref) {
+  const [draft, setDraft] = React.useState(null);   // { t: the field's text after the last keystroke, v: the value prop then }
+  let value = props.value;
+  if (draft !== null && value !== undefined) {
+    if (!("v" in draft)) draft.v = value;
+    if (Object.is(draft.v, value)) value = draft.t;
+  }
+  return React.createElement("input", Object.assign({}, props, {
+    ref: ref,
+    value: value,
+    onChange: e => { setDraft({ t: e.target.value }); if (props.onChange) props.onChange(e); },
+    onBlur: e => { setDraft(null); if (props.onBlur) props.onBlur(e); }
+  }));
+});
 function Field({
   label,
   sub,
@@ -6472,7 +6491,7 @@ function Field({
     className: "text-[10px] font-mono-tech text-slate-400"
   }, unit)), sub && /*#__PURE__*/React.createElement("div", {
     className: "text-[10px] text-slate-400 leading-tight mb-1"
-  }, sub), /*#__PURE__*/React.createElement("input", {
+  }, sub), /*#__PURE__*/React.createElement(PdNumIn, {
     type: "number",
     step: step,
     value: value,
@@ -8064,7 +8083,7 @@ function hpResMethodBlock(I, set, r, iab) {
       /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Minimum penetration requirements (AASHTO 10.7.6), depth below " + (iab ? "the bottom of the cap" : "grade") + ", ft (0 = n/a)"),
       /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-4 gap-1.5" },
         [["settle", "Settlement"], ["defl", "Lat. deflection"], ["uplift", "Uplift"], ["drag", "Below drag soil"], ["scour", "Below scour"], ["fixity", "Lat. fixity"], ["ee", "Extreme event"]].map(([k, l]) => /*#__PURE__*/React.createElement("label", { key: k, className: "text-[9.5px] text-slate-500" }, l,
-          /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full font-mono-tech text-[10px] px-1 py-0.5 rounded-sm border border-slate-300", value: (I.hpMinPen && I.hpMinPen[k]) || 0,
+          /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full font-mono-tech text-[10px] px-1 py-0.5 rounded-sm border border-slate-300", value: (I.hpMinPen && I.hpMinPen[k]) || 0,
             onChange: e => set('hpMinPen', Object.assign({}, I.hpMinPen || {}, { [k]: Math.max(parseFloat(e.target.value) || 0, 0) })) }))),
         !iab && (r.buckling && r.buckling.lateralFixity > 0) && /*#__PURE__*/React.createElement("button", { type: "button", className: "text-[9px] underline text-[var(--blueprint2)] self-end text-left",
           title: "Depth to fixity from the lateral analysis (Module 02, moment zero crossing below M_max)",
@@ -13057,7 +13076,7 @@ function LoadCasesCard({ cases, updCases, applyCase, runAllCases, caseRes, I, up
       /*#__PURE__*/React.createElement("span", { className: "flex items-center gap-2 flex-wrap" },
         ro ? /*#__PURE__*/React.createElement("span", { className: "text-[9px] font-mono-tech text-slate-500" }, "svc defl limit ", fmt(I.deflLimit, 2), " in")
         : /*#__PURE__*/React.createElement("span", { className: "flex items-center gap-1 text-[9px] font-mono-tech text-slate-500" },
-          "svc defl limit", /*#__PURE__*/React.createElement("input", { type: "number", step: 0.05, "aria-label": "Service deflection limit, in", value: I.deflLimit,
+          "svc defl limit", /*#__PURE__*/React.createElement(PdNumIn, { type: "number", step: 0.05, "aria-label": "Service deflection limit, in", value: I.deflLimit,
             onChange: e => updCasesLimit(parseFloat(e.target.value) || 0),
             className: "w-14 font-mono-tech text-[9px] px-1 py-0.5 rounded-sm border border-slate-300" }), "in"),
         /*#__PURE__*/React.createElement("button", { onClick: runAllCases, className: "font-mono-tech text-[9.5px] px-2 py-1 rounded-sm text-white", style: { background: "var(--blueprint2)" } },
@@ -13087,13 +13106,13 @@ function LoadCasesCard({ cases, updCases, applyCase, runAllCases, caseRes, I, up
             ["strength", "extreme", "service", "tension"].map(t => /*#__PURE__*/React.createElement("option", { key: t, value: t }, t)))),
         /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1" },
           rd ? /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[9.5px]", style: { color: "#14304a" } }, fmt(c.STL, 1))
-          : /*#__PURE__*/React.createElement("input", { type: "number", className: cell, "aria-label": "Case " + (i + 1) + " axial load, kip", value: c.STL, onChange: e => upd(i, 'STL', parseFloat(e.target.value) || 0) })),
+          : /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: cell, "aria-label": "Case " + (i + 1) + " axial load, kip", value: c.STL, onChange: e => upd(i, 'STL', parseFloat(e.target.value) || 0) })),
         /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1" },
           rd ? /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[9.5px]", style: { color: "#14304a" } }, fmt(c.Plat, 2))
-          : /*#__PURE__*/React.createElement("input", { type: "number", className: cell, "aria-label": "Case " + (i + 1) + " lateral load, kip", value: c.Plat, onChange: e => upd(i, 'Plat', parseFloat(e.target.value) || 0) })),
+          : /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: cell, "aria-label": "Case " + (i + 1) + " lateral load, kip", value: c.Plat, onChange: e => upd(i, 'Plat', parseFloat(e.target.value) || 0) })),
         /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1" },
           rd ? /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[9.5px] text-slate-500" }, fmt(c.Mhead || 0, 1))
-          : /*#__PURE__*/React.createElement("input", { type: "number", className: cell, "aria-label": "Case " + (i + 1) + " head moment, kip-ft", value: c.Mhead || 0, onChange: e => upd(i, 'Mhead', parseFloat(e.target.value) || 0) })),
+          : /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: cell, "aria-label": "Case " + (i + 1) + " head moment, kip-ft", value: c.Mhead || 0, onChange: e => upd(i, 'Mhead', parseFloat(e.target.value) || 0) })),
         /*#__PURE__*/React.createElement("td", { className: "py-0.5 text-right" },
           !rd && cases.length > 1 && /*#__PURE__*/React.createElement("button", { onClick: () => updCases(cases.filter((_, j) => j !== i)), className: "text-slate-400 hover:text-red-600 px-1" }, "×"))); }))),
     !ro && /*#__PURE__*/React.createElement("button", { onClick: () => updCases([...cases, { name: "Case " + (cases.length + 1), type: "strength", STL: I.STL, Plat: I.Plat, Mhead: 0 }]),
@@ -14425,13 +14444,13 @@ function GroupWorkspaceBody({ I, set, cap, g, rail, cases, activeIdx }) {
 
   const capF = (lbl, key, unit) => /*#__PURE__*/React.createElement("div", null,
     /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, lbl, /*#__PURE__*/React.createElement("span", { className: "text-slate-400" }, " (" + unit + ")")),
-    /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, key), title: PileFoundationXfer.mkTip(I, key), value: I[key] || 0, onChange: e => set(key, parseFloat(e.target.value) || 0) }));
+    /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, key), title: PileFoundationXfer.mkTip(I, key), value: I[key] || 0, onChange: e => set(key, parseFloat(e.target.value) || 0) }));
   const leftA = [
           /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-2" }, "1 \u00b7 Pile layout"),
           /*#__PURE__*/React.createElement("div", { className: "flex items-end gap-2 mb-2" },
-            /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500" }, "rows"), /*#__PURE__*/React.createElement("input", { type: "number", className: "w-14 text-[11px] px-1 py-0.5 border border-slate-300 rounded-sm" + PileFoundationXfer.mkCls(I, 'groupNrows'), title: PileFoundationXfer.mkTip(I, 'groupNrows'), value: I.groupNrows, onChange: e => set('groupNrows', Math.max(1, Math.round(+e.target.value))) })),
-            /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500" }, "cols"), /*#__PURE__*/React.createElement("input", { type: "number", className: "w-14 text-[11px] px-1 py-0.5 border border-slate-300 rounded-sm" + PileFoundationXfer.mkCls(I, 'groupNcols'), title: PileFoundationXfer.mkTip(I, 'groupNcols'), value: I.groupNcols, onChange: e => set('groupNcols', Math.max(1, Math.round(+e.target.value))) })),
-            /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500" }, I.pileType === "hpile" ? "spacing \u00d7B" : "spacing \u00d7dia"), /*#__PURE__*/React.createElement("input", { type: "number", className: "w-16 text-[11px] px-1 py-0.5 border border-slate-300 rounded-sm", title: I.pileType === "hpile" ? "c/c spacing in multiples of B = " + fmt(groupB(I), 2) + " in (H-pile p-y width normal to the load)" : "c/c spacing in multiples of the casing OD = " + fmt(pileWidth(I), 2) + " in", value: I.groupSpacingDia, onChange: e => set('groupSpacingDia', +e.target.value) })),
+            /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500" }, "rows"), /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-14 text-[11px] px-1 py-0.5 border border-slate-300 rounded-sm" + PileFoundationXfer.mkCls(I, 'groupNrows'), title: PileFoundationXfer.mkTip(I, 'groupNrows'), value: I.groupNrows, onChange: e => set('groupNrows', Math.max(1, Math.round(+e.target.value))) })),
+            /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500" }, "cols"), /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-14 text-[11px] px-1 py-0.5 border border-slate-300 rounded-sm" + PileFoundationXfer.mkCls(I, 'groupNcols'), title: PileFoundationXfer.mkTip(I, 'groupNcols'), value: I.groupNcols, onChange: e => set('groupNcols', Math.max(1, Math.round(+e.target.value))) })),
+            /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500" }, I.pileType === "hpile" ? "spacing \u00d7B" : "spacing \u00d7dia"), /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-16 text-[11px] px-1 py-0.5 border border-slate-300 rounded-sm", title: I.pileType === "hpile" ? "c/c spacing in multiples of B = " + fmt(groupB(I), 2) + " in (H-pile p-y width normal to the load)" : "c/c spacing in multiples of the casing OD = " + fmt(pileWidth(I), 2) + " in", value: I.groupSpacingDia, onChange: e => set('groupSpacingDia', +e.target.value) })),
             /*#__PURE__*/React.createElement("button", { onClick: genGrid, className: "text-[10px] px-2 py-1 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, "\u21bb generate grid")),
           /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mb-1" }, "Generate fills the table; then edit x,y freely for irregular layouts. Coordinates in ft, any origin (centroid computed automatically)."),
           /*#__PURE__*/React.createElement("div", { className: "border border-slate-200 rounded-sm overflow-auto", style: { maxHeight: "180px" } },
@@ -14444,8 +14463,8 @@ function GroupWorkspaceBody({ I, set, cap, g, rail, cases, activeIdx }) {
                 const isSel = cap && cap.piles[i] && cap.piles[i].id === cap.selId;
                 return /*#__PURE__*/React.createElement("tr", { key: i, style: { borderTop: "1px solid #eef2f6", background: isSel ? "rgba(201,98,46,0.08)" : "transparent" } },
                   /*#__PURE__*/React.createElement("td", { className: "px-2 py-0.5 text-slate-400" }, i + 1),
-                  /*#__PURE__*/React.createElement("td", { className: "px-1" }, /*#__PURE__*/React.createElement("input", { type: "number", className: "w-14 text-[10px] px-1 py-0.5 border border-slate-200 rounded-sm" + PileFoundationXfer.mkCls(I, 'groupPiles'), title: PileFoundationXfer.mkTip(I, 'groupPiles'), value: p.x, onChange: e => updPile(i, 'x', e.target.value) })),
-                  /*#__PURE__*/React.createElement("td", { className: "px-1" }, /*#__PURE__*/React.createElement("input", { type: "number", className: "w-14 text-[10px] px-1 py-0.5 border border-slate-200 rounded-sm" + PileFoundationXfer.mkCls(I, 'groupPiles'), title: PileFoundationXfer.mkTip(I, 'groupPiles'), value: p.y, onChange: e => updPile(i, 'y', e.target.value) })),
+                  /*#__PURE__*/React.createElement("td", { className: "px-1" }, /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-14 text-[10px] px-1 py-0.5 border border-slate-200 rounded-sm" + PileFoundationXfer.mkCls(I, 'groupPiles'), title: PileFoundationXfer.mkTip(I, 'groupPiles'), value: p.x, onChange: e => updPile(i, 'x', e.target.value) })),
+                  /*#__PURE__*/React.createElement("td", { className: "px-1" }, /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-14 text-[10px] px-1 py-0.5 border border-slate-200 rounded-sm" + PileFoundationXfer.mkCls(I, 'groupPiles'), title: PileFoundationXfer.mkTip(I, 'groupPiles'), value: p.y, onChange: e => updPile(i, 'y', e.target.value) })),
                   cap && /*#__PURE__*/React.createElement("td", { className: "px-2", style: { color: cp && cp.axial < 0 ? "#b23b3b" : "#14304a" } }, cp ? fmt(cp.axial, 1) : "\u2014"),
                   /*#__PURE__*/React.createElement("td", { className: "px-1" }, /*#__PURE__*/React.createElement("button", { onClick: () => delPile(i), className: "text-[10px] text-slate-300 hover:text-[var(--no)]" }, "\u00d7")));
               })))),
@@ -14460,8 +14479,8 @@ function GroupWorkspaceBody({ I, set, cap, g, rail, cases, activeIdx }) {
                 /*#__PURE__*/React.createElement("td", { className: "px-1" }, /*#__PURE__*/React.createElement("input", { className: "w-20 text-[9.5px] px-1 py-0.5 border border-slate-200 rounded-sm", value: pt.name != null ? pt.name : ("Load " + (i + 1)), onChange: e => updPoint(i, 'name', e.target.value) })),
                 ["x", "y", "z"].map(k => /*#__PURE__*/React.createElement("td", { key: k, className: "px-0.5" },
                   (k === "z" && pt.atStemTop && I.stemEnable && I.stemH > 0)
-                    ? /*#__PURE__*/React.createElement("input", { type: "number", disabled: true, className: "w-12 text-[9.5px] px-1 py-0.5 border border-slate-200 rounded-sm bg-slate-100 text-slate-400", value: I.stemH, title: "z locked to stem-wall top (" + fmt(I.stemH, 2) + " ft above cap)" })
-                    : /*#__PURE__*/React.createElement("input", { type: "number", className: "w-12 text-[9.5px] px-1 py-0.5 border border-slate-200 rounded-sm", value: pt[k] || 0, onChange: e => updPoint(i, k, e.target.value) }),
+                    ? /*#__PURE__*/React.createElement(PdNumIn, { type: "number", disabled: true, className: "w-12 text-[9.5px] px-1 py-0.5 border border-slate-200 rounded-sm bg-slate-100 text-slate-400", value: I.stemH, title: "z locked to stem-wall top (" + fmt(I.stemH, 2) + " ft above cap)" })
+                    : /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-12 text-[9.5px] px-1 py-0.5 border border-slate-200 rounded-sm", value: pt[k] || 0, onChange: e => updPoint(i, k, e.target.value) }),
                   k === "z" && I.stemEnable && /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-0.5 mt-0.5 text-[7.5px] text-slate-500 cursor-pointer whitespace-nowrap", title: "Apply this load at the top of the stem wall (z auto-set to stem height, applies to all load types in every case)" },
                     /*#__PURE__*/React.createElement("input", { type: "checkbox", style: { width: "9px", height: "9px" }, checked: !!pt.atStemTop, onChange: e => updPoint(i, 'atStemTop', e.target.checked) }),
                     "stem top"))),
@@ -14503,7 +14522,7 @@ function GroupWorkspaceBody({ I, set, cap, g, rail, cases, activeIdx }) {
                   /*#__PURE__*/React.createElement("select", { className: "text-[8.5px] px-0.5 py-0.5 border border-slate-200 rounded-sm bg-white", value: c.type || "strength", onChange: e => updCaseMeta(i, 'type', e.target.value) },
                     ["strength", "extreme", "service", "tension"].map(t => /*#__PURE__*/React.createElement("option", { key: t, value: t }, t)))),
                 loadPoints.map(pt => ["P", "Vx", "Vy", "Mx", "My"].map((comp, ci) => /*#__PURE__*/React.createElement("td", { key: pt.id + comp, className: "px-0.5" + (ci === 0 ? " border-l border-slate-200" : "") },
-                  /*#__PURE__*/React.createElement("input", { type: "number", className: "w-10 text-[9px] px-0.5 py-0.5 border border-slate-200 rounded-sm", value: (c.mags && c.mags[pt.id] && c.mags[pt.id][comp]) || 0, onChange: e => updCaseMag(i, pt.id, comp, e.target.value) })))),
+                  /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-10 text-[9px] px-0.5 py-0.5 border border-slate-200 rounded-sm", value: (c.mags && c.mags[pt.id] && c.mags[pt.id][comp]) || 0, onChange: e => updCaseMag(i, pt.id, comp, e.target.value) })))),
                 (() => { const R = caseResultant(c); const z = !R || caseIsZero(c);
                   const cell = (key, dec) => /*#__PURE__*/React.createElement("td", { key: "r" + key, className: "px-1 text-right" + (key === "P" ? " border-l-2 border-slate-400" : ""), style: { color: z ? "#cbd5e1" : "#8a5a1f", whiteSpace: "nowrap" } }, z ? "\u2014" : fmt(R[key], dec));
                   return [cell("P", 1), cell("Vx", 1), cell("Vy", 1), cell("Mx", 0), cell("My", 0)]; })(),
@@ -14572,7 +14591,7 @@ function GroupWorkspaceBody({ I, set, cap, g, rail, cases, activeIdx }) {
               /*#__PURE__*/React.createElement("div", { className: "flex items-center justify-between gap-2 mb-1" },
                 /*#__PURE__*/React.createElement("span", null, "Edge distance (pile center → cap edge): min = ", /*#__PURE__*/React.createElement("b", null, fmt(worst2.e, 1), " in"), " at pile P", worst2.id),
                 /*#__PURE__*/React.createElement("span", { className: "flex items-center gap-1 text-slate-500" }, "min req'd",
-                  /*#__PURE__*/React.createElement("input", { type: "number", className: "w-14 font-mono-tech text-[9.5px] px-1 py-0.5 rounded-sm border border-slate-300", value: I.capEdgeMin || 0, onChange: e => set('capEdgeMin', parseFloat(e.target.value) || 0) }), "in")),
+                  /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-14 font-mono-tech text-[9.5px] px-1 py-0.5 rounded-sm border border-slate-300", value: I.capEdgeMin || 0, onChange: e => set('capEdgeMin', parseFloat(e.target.value) || 0) }), "in")),
               outside ? /*#__PURE__*/React.createElement("div", null, "✗ Pile P", worst2.id, " lies OUTSIDE the defined cap plan — fix the layout or cap dimensions.")
                 : short2 ? /*#__PURE__*/React.createElement("div", null, "⚠ Edge distance below the project minimum (", fmt(minReq, 1), " in) — enlarge the cap or move the pile.")
                 : /*#__PURE__*/React.createElement("div", { className: "text-slate-500" }, minReq > 0 ? "✓ All piles meet the entered minimum." : "Enter a project minimum to check (set per structural detailing criteria — e.g. cover + embedment; a common rule of thumb is ≥ ~1.5×OD, verify per project)."));
@@ -14660,7 +14679,7 @@ function PmAutoToggle({ I, set, where }) {
       : !py ? e("div", { className: "text-[9px] text-slate-500 mt-1" }, "Needs the built-in nonlinear p-y analysis (Module 02 lateral basis). With an external LPILE moment, enter the row f", e("sub", null, "m"), " in LPILE.")
       : on ? e("div", { className: "flex items-center gap-2 mt-1.5 text-[9.5px] font-mono-tech" },
           e("span", { className: "text-slate-600" }, "modifier on row f", e("sub", null, "m")),
-          e("input", { type: "number", step: 0.05, min: 0, "aria-label": "Modifier on the row p-multiplier", value: I.groupPmMod != null ? I.groupPmMod : 1,
+          e(PdNumIn, { type: "number", step: 0.05, min: 0, "aria-label": "Modifier on the row p-multiplier", value: I.groupPmMod != null ? I.groupPmMod : 1,
             onChange: ev => set('groupPmMod', parseFloat(ev.target.value)), className: "w-16 font-mono-tech text-[10px] px-1 py-0.5 rounded-sm border border-slate-300" }),
           e("span", { className: "text-slate-400" }, "default 1.00; the p-multiplier field (" + fmt(I.pyPM || 1, 2) + ") is not used while this is on"))
       : null,
@@ -15265,7 +15284,7 @@ function PyLayerTable({ I, set }) {
         const isRock = ly.type === "weakrock";
         return /*#__PURE__*/React.createElement("tr", { key: i, style: { borderTop: "1px solid #eef2f6" } },
           /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1", style: { width: "16%" } },
-            /*#__PURE__*/React.createElement("input", { type: "number", className: cell, value: ly.topDepth, disabled: i === 0,
+            /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: cell, value: ly.topDepth, disabled: i === 0,
               onChange: e => upd(i, 'topDepth', parseFloat(e.target.value) || 0) })),
           /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1", style: { width: "24%" } },
             /*#__PURE__*/React.createElement("select", { className: cell, value: ly.type === "weakrock" ? "weakrock" : (isClay ? ly.type : "sand"),
@@ -15275,24 +15294,24 @@ function PyLayerTable({ I, set }) {
               /*#__PURE__*/React.createElement("option", { value: "stiffclay" }, "stiff clay (W&R)"),
               /*#__PURE__*/React.createElement("option", { value: "weakrock" }, "weak rock (Reese 1997)"))),
           isRock ? /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1", style: { width: "16%" } },
-            /*#__PURE__*/React.createElement("input", { type: "number", className: cell, step: 0.1, title: "qu unconfined comp. strength (ksi)", value: ly.qu == null ? 1.0 : ly.qu,
+            /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: cell, step: 0.1, title: "qu unconfined comp. strength (ksi)", value: ly.qu == null ? 1.0 : ly.qu,
               onChange: e => upd(i, 'qu', parseFloat(e.target.value) || 0) }))
           : /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1", style: { width: "16%" } },
-            /*#__PURE__*/React.createElement("input", { type: "number", className: cell, value: ly.gamma == null ? 120 : ly.gamma,
+            /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: cell, value: ly.gamma == null ? 120 : ly.gamma,
               onChange: e => upd(i, 'gamma', parseFloat(e.target.value) || 0) })),
           isRock ? /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1", style: { width: "18%" } },
-            /*#__PURE__*/React.createElement("input", { type: "number", className: cell, step: 50, title: "Em rock mass modulus (ksi)", value: ly.Em == null ? 300 : ly.Em,
+            /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: cell, step: 50, title: "Em rock mass modulus (ksi)", value: ly.Em == null ? 300 : ly.Em,
               onChange: e => upd(i, 'Em', parseFloat(e.target.value) || 0) }))
           : /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1", style: { width: "18%" } },
-            /*#__PURE__*/React.createElement("input", { type: "number", className: cell,
+            /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: cell,
               value: isClay ? (ly.su == null ? 1000 : ly.su) : (ly.phi == null ? 32 : ly.phi),
               onChange: e => upd(i, isClay ? 'su' : 'phi', parseFloat(e.target.value) || 0) })),
           isRock ? /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1", style: { width: "18%" } },
-            /*#__PURE__*/React.createElement("input", { type: "number", className: cell, step: 5, title: "RQD % (sets alpha_r)", value: ly.rqd == null ? 50 : ly.rqd,
+            /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: cell, step: 5, title: "RQD % (sets alpha_r)", value: ly.rqd == null ? 50 : ly.rqd,
               onChange: e => upd(i, 'rqd', parseFloat(e.target.value) || 0) }))
           : /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1", style: { width: "18%" } },
             /*#__PURE__*/React.createElement("div", { className: "flex gap-0.5 items-center" },
-              /*#__PURE__*/React.createElement("input", { type: "number", className: cell, step: isClay ? 0.005 : 5,
+              /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: cell, step: isClay ? 0.005 : 5,
                 value: isClay ? (ly.eps50 == null ? 0.02 : ly.eps50) : (ly.k == null ? 90 : ly.k),
                 onChange: e => upd(i, isClay ? 'eps50' : 'k', parseFloat(e.target.value) || 0) }),
               !isClay && /*#__PURE__*/React.createElement("button", {
@@ -15357,11 +15376,11 @@ function PyLayerTable({ I, set }) {
                 /*#__PURE__*/React.createElement("option", { value: "silt" }, "silt"),
                 /*#__PURE__*/React.createElement("option", { value: "clay" }, "clay"))),
             /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1" }, sClay ? "—" :
-              /*#__PURE__*/React.createElement("input", { type: "number", className: cell, value: ly.N60 != null ? ly.N60 : "", onChange: e => upd(i, 'N60', parseFloat(e.target.value) || 0) })),
+              /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: cell, value: ly.N60 != null ? ly.N60 : "", onChange: e => upd(i, 'N60', parseFloat(e.target.value) || 0) })),
             /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1" }, !sClay ? "—" :
-              /*#__PURE__*/React.createElement("input", { type: "number", className: cell, value: ly.Su != null ? ly.Su : "", onChange: e => upd(i, 'Su', parseFloat(e.target.value) || 0) })),
+              /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: cell, value: ly.Su != null ? ly.Su : "", onChange: e => upd(i, 'Su', parseFloat(e.target.value) || 0) })),
             /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1" }, !sClay ? "—" :
-              /*#__PURE__*/React.createElement("input", { type: "number", step: 0.05, className: cell, value: ly.alpha != null ? ly.alpha : 0.5, onChange: e => upd(i, 'alpha', parseFloat(e.target.value) || 0) })));
+              /*#__PURE__*/React.createElement(PdNumIn, { type: "number", step: 0.05, className: cell, value: ly.alpha != null ? ly.alpha : 0.5, onChange: e => upd(i, 'alpha', parseFloat(e.target.value) || 0) })));
         }))),
       /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-2 mt-1.5 text-[9px] text-slate-600" },
         /*#__PURE__*/React.createElement("input", { type: "checkbox", checked: !!I.hpSmallGroup, onChange: e => set('hpSmallGroup', e.target.checked) }),
@@ -15731,7 +15750,7 @@ function BucklingTabs({ b, I, set, pcr, computePcr }) {
         "Override the fixity depth manually"),
       b.lfOverrideActive && /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-2 mt-1" },
         /*#__PURE__*/React.createElement("span", { className: "text-[9.5px] text-slate-500" }, "L\u1da0 ="),
-        /*#__PURE__*/React.createElement("input", {
+        /*#__PURE__*/React.createElement(PdNumIn, {
           type: "number", step: "0.5", className: "w-20 text-[10px] border border-slate-300 rounded-sm px-1 py-0.5",
           value: I.LfBuckle, onChange: e => set('LfBuckle', parseFloat(e.target.value) || 0)
         }),
@@ -16145,7 +16164,7 @@ function LayerTable({
   }, /*#__PURE__*/React.createElement("span", null, "Top, ft"), /*#__PURE__*/React.createElement("span", null, "Type"), /*#__PURE__*/React.createElement("span", null, "n_h / k_h"), /*#__PURE__*/React.createElement("span", null)), sorted.map(L => /*#__PURE__*/React.createElement("div", {
     key: L._i,
     className: "grid grid-cols-[auto_1fr_1fr_auto] gap-1.5 items-center mb-1.5"
-  }, /*#__PURE__*/React.createElement("input", {
+  }, /*#__PURE__*/React.createElement(PdNumIn, {
     type: "number",
     value: L.topDepth,
     onChange: e => update(L._i, {
@@ -16163,7 +16182,7 @@ function LayerTable({
     value: "sand"
   }, "sand (n_h·z)"), /*#__PURE__*/React.createElement("option", {
     value: "clay"
-  }, "clay (k_h)")), L.type === "sand" ? /*#__PURE__*/React.createElement("input", {
+  }, "clay (k_h)")), L.type === "sand" ? /*#__PURE__*/React.createElement(PdNumIn, {
     type: "number",
     value: L.nh,
     onChange: e => update(L._i, {
@@ -16171,7 +16190,7 @@ function LayerTable({
     }),
     className: cellInput,
     title: "n_h (kip/ft³)"
-  }) : /*#__PURE__*/React.createElement("input", {
+  }) : /*#__PURE__*/React.createElement(PdNumIn, {
     type: "number",
     value: L.kh,
     onChange: e => update(L._i, {
@@ -18673,31 +18692,31 @@ function App() {
     /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-3 mb-2" },
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Skew angle ", /*#__PURE__*/React.createElement("span", { className: "text-slate-400" }, "(\u00b0, \u226430)")),
-        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabSkew'), title: PileFoundationXfer.mkTip(I, 'iabSkew'), value: I.iabSkew || 0, onChange: e => set('iabSkew', parseFloat(e.target.value) || 0) })),
+        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabSkew'), title: PileFoundationXfer.mkTip(I, 'iabSkew'), value: I.iabSkew || 0, onChange: e => set('iabSkew', parseFloat(e.target.value) || 0) })),
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Geotech length ", /*#__PURE__*/React.createElement("span", { className: "text-slate-400" }, "(ft)")),
-        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300", value: I.iabGeoLength || 0, onChange: e => set('iabGeoLength', parseFloat(e.target.value) || 0) }))),
+        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300", value: I.iabGeoLength || 0, onChange: e => set('iabGeoLength', parseFloat(e.target.value) || 0) }))),
     // PDA-IAB2 (2026-10-21): designed pile length below the cap (from the abutment calculator); checked against the required length
     /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-3 mb-2 items-end" },
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Designed pile length below the cap ", /*#__PURE__*/React.createElement("span", { className: "text-slate-400" }, "(ft; 0 = not entered)")),
-        /*#__PURE__*/React.createElement("input", { type: "number", id: "iabLpile", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabLpile'), title: PileFoundationXfer.mkTip(I, 'iabLpile'), value: I.iabLpile || 0, onChange: e => set('iabLpile', Math.max(parseFloat(e.target.value) || 0, 0)) })),
+        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", id: "iabLpile", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabLpile'), title: PileFoundationXfer.mkTip(I, 'iabLpile'), value: I.iabLpile || 0, onChange: e => set('iabLpile', Math.max(parseFloat(e.target.value) || 0, 0)) })),
       r.iab && /*#__PURE__*/React.createElement("div", { className: "text-[9px] pb-1", style: { color: !r.iab.lenChk ? "#64748b" : r.iab.lenChk.pass ? "#2f6f3e" : "#b23b3b" } },
         r.iab.lenChk ? (r.iab.lenChk.pass ? "\u2713 " : "\u2717 ") + "required L = max(L_geo, L_f + 5) = " + fmt(r.iab.lenChk.req, 1) + " ft " + (r.iab.lenChk.pass ? "\u2264" : ">") + " designed " + fmt(r.iab.lenChk.des, 1) + " ft (\u00a73.10.11.2)" : "required L = " + fmt(r.iab.reqLength, 1) + " ft (no designed length: not checked)")),
     /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1 mt-1" }, "Gravity load per pile (unfactored)"),
     /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-3 mb-1" },
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Dead load DL ", /*#__PURE__*/React.createElement("span", { className: "text-slate-400" }, "(kip)")),
-        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabDL'), title: PileFoundationXfer.mkTip(I, 'iabDL'), value: I.iabDL || 0, onChange: e => set('iabDL', parseFloat(e.target.value) || 0) })),
+        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabDL'), title: PileFoundationXfer.mkTip(I, 'iabDL'), value: I.iabDL || 0, onChange: e => set('iabDL', parseFloat(e.target.value) || 0) })),
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Live load LL ", /*#__PURE__*/React.createElement("span", { className: "text-slate-400" }, "(kip)")),
-        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabLL'), title: PileFoundationXfer.mkTip(I, 'iabLL'), value: I.iabLL || 0, onChange: e => set('iabLL', parseFloat(e.target.value) || 0) }))),
+        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabLL'), title: PileFoundationXfer.mkTip(I, 'iabLL'), value: I.iabLL || 0, onChange: e => set('iabLL', parseFloat(e.target.value) || 0) }))),
     // ABPX2: DW per pile at γDW, and η
     /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-3 gap-2 mb-1" },
       [["iabDW", "DW (wearing surface, utilities)", "kip", 0], ["iabGammaDW", "\u03b3DW", "", 1.5], ["iabEta", "\u03b7 = \u03b7D\u00b7\u03b7R\u00b7\u03b7I", "", 1]].map(([k, lbl, u, d0]) =>
         /*#__PURE__*/React.createElement("div", { key: k },
           /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, lbl, u ? /*#__PURE__*/React.createElement("span", { className: "text-slate-400" }, " (" + u + ")") : null),
-          /*#__PURE__*/React.createElement("input", { type: "number", step: "any", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, k), title: PileFoundationXfer.mkTip(I, k), value: I[k] != null ? I[k] : d0, onChange: e => set(k, parseFloat(e.target.value) || (k === "iabDW" ? 0 : d0)) })))),
+          /*#__PURE__*/React.createElement(PdNumIn, { type: "number", step: "any", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, k), title: PileFoundationXfer.mkTip(I, k), value: I[k] != null ? I[k] : d0, onChange: e => set(k, parseFloat(e.target.value) || (k === "iabDW" ? 0 : d0)) })))),
     r.iab && (r.iab.DW > 0 || r.iab.eta !== 1) && /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-3 leading-snug" },
       "Strength I: P", /*#__PURE__*/React.createElement("sub", null, "u"), " = \u03b7(\u03b3DC\u00b7DL + \u03b3DW\u00b7DW + \u03b3LL\u00b7LL) = ", fmt(r.iab.eta, 2), "[", fmt(r.iab.gDC, 2), "(", fmt(r.iab.DL, 1), ") + ", fmt(r.iab.gDW, 2), "(", fmt(r.iab.DW, 1), ") + ", fmt(r.iab.gLL, 2), "(", fmt(r.iab.LL, 1), ")] = ", /*#__PURE__*/React.createElement("b", null, fmt(r.iab.demand, 1), " kip")),
     r.iab && !(r.iab.DW > 0 || r.iab.eta !== 1) && /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-3 leading-snug" },
@@ -18711,19 +18730,19 @@ function App() {
           /*#__PURE__*/React.createElement("option", { value: "concrete" }, "Concrete (\u2264200 ft)"))),
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Total bridge length (ft)"),
-        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full text-[10px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabBridgeLength'), title: PileFoundationXfer.mkTip(I, 'iabBridgeLength'), value: I.iabBridgeLength || 0, onChange: e => set('iabBridgeLength', parseFloat(e.target.value) || 0) }),
+        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full text-[10px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabBridgeLength'), title: PileFoundationXfer.mkTip(I, 'iabBridgeLength'), value: I.iabBridgeLength || 0, onChange: e => set('iabBridgeLength', parseFloat(e.target.value) || 0) }),
         !((I.iabBridgeLength || 0) > 0) && /*#__PURE__*/React.createElement("div", { className: "text-[9px] mt-0.5 leading-tight", style: { color: "#b23b3b" } }, "enter the bridge length (eligibility)"))),
     /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-3 gap-2 mb-2" },
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Abut. height (ft)"),
-        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabAbutHeight'), title: PileFoundationXfer.mkTip(I, 'iabAbutHeight'), value: I.iabAbutHeight || 0, onChange: e => set('iabAbutHeight', parseFloat(e.target.value) || 0) }),
+        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabAbutHeight'), title: PileFoundationXfer.mkTip(I, 'iabAbutHeight'), value: I.iabAbutHeight || 0, onChange: e => set('iabAbutHeight', parseFloat(e.target.value) || 0) }),
         !((I.iabAbutHeight || 0) > 0) && /*#__PURE__*/React.createElement("div", { className: "text-[9px] mt-0.5 leading-tight", style: { color: "#b23b3b" } }, "enter a value")),
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Grade diff (%)"),
-        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabGradeDiff'), title: PileFoundationXfer.mkTip(I, 'iabGradeDiff'), value: I.iabGradeDiff || 0, onChange: e => set('iabGradeDiff', parseFloat(e.target.value) || 0) })),
+        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabGradeDiff'), title: PileFoundationXfer.mkTip(I, 'iabGradeDiff'), value: I.iabGradeDiff || 0, onChange: e => set('iabGradeDiff', parseFloat(e.target.value) || 0) })),
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Curve (\u00b0)"),
-        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabCurveAngle'), title: PileFoundationXfer.mkTip(I, 'iabCurveAngle'), value: I.iabCurveAngle || 0, onChange: e => set('iabCurveAngle', parseFloat(e.target.value) || 0) }))),
+        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabCurveAngle'), title: PileFoundationXfer.mkTip(I, 'iabCurveAngle'), value: I.iabCurveAngle || 0, onChange: e => set('iabCurveAngle', parseFloat(e.target.value) || 0) }))),
     /*#__PURE__*/React.createElement("div", { className: "space-y-1" },
       [["iabParallel", "Straight bridge or parallel straight beams"], ["iabParallelAbut", "Parallel abutments and piers"], ["iabUwingwalls", "Parallel U-wingwalls"], ["iabBedrockBelow", "Top of bedrock below pile tip"], ["iabNotScour", "Abutments not scour-susceptible"]].map(([key, lbl]) =>
         /*#__PURE__*/React.createElement("label", { key: key, className: "flex items-center gap-1.5 text-[9.5px] text-slate-600 cursor-pointer" + PileFoundationXfer.mkCls(I, key), title: PileFoundationXfer.mkTip(I, key) },
@@ -18732,12 +18751,12 @@ function App() {
     /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-2 mt-2 items-end" },
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Pile embedment into cap (in)"),
-        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabEmbed != null ? I.iabEmbed : 24, onChange: e => set('iabEmbed', parseFloat(e.target.value) || 0) })),
+        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabEmbed != null ? I.iabEmbed : 24, onChange: e => set('iabEmbed', parseFloat(e.target.value) || 0) })),
       r.iab && r.iab.embedChk && /*#__PURE__*/React.createElement("div", { className: "text-[9px] pb-1", style: { color: r.iab.embedChk.pass ? "#2f6f3e" : "#b23b3b" } }, (r.iab.embedChk.pass ? "\u2713 " : "\u2717 ") + fmt(r.iab.embedChk.prov, 1) + " in vs \u2265 " + fmt(r.iab.embedChk.req, 0) + " in (" + r.iab.embedChk.src + ")"),
       // PDA-IS (2026-10-20): pile spacing and the owner rule for the detailing checks
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Pile spacing c/c (ft; 0 = not checked)"),
-        /*#__PURE__*/React.createElement("input", { type: "number", step: "0.25", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabSpacing || 0, onChange: e => set('iabSpacing', parseFloat(e.target.value) || 0) })),
+        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", step: "0.25", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabSpacing || 0, onChange: e => set('iabSpacing', parseFloat(e.target.value) || 0) })),
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Detailing rules"),
         /*#__PURE__*/React.createElement("select", { className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300 bg-white", value: I.iabDetailRule || "auto", onChange: e => set('iabDetailRule', e.target.value) },
@@ -18812,10 +18831,10 @@ function App() {
       /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-2 mb-2" },
         /*#__PURE__*/React.createElement("div", null,
           /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "\u03b8\u1d62 weak-axis term"),
-          /*#__PURE__*/React.createElement("input", { type: "number", step: "0.05", className: "w-full text-[10px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabThetaWeak'), title: PileFoundationXfer.mkTip(I, 'iabThetaWeak'), value: I.iabThetaWeak, onChange: e => set('iabThetaWeak', parseFloat(e.target.value) || 1.0) })),
+          /*#__PURE__*/React.createElement(PdNumIn, { type: "number", step: "0.05", className: "w-full text-[10px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabThetaWeak'), title: PileFoundationXfer.mkTip(I, 'iabThetaWeak'), value: I.iabThetaWeak, onChange: e => set('iabThetaWeak', parseFloat(e.target.value) || 1.0) })),
         /*#__PURE__*/React.createElement("div", null,
           /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "\u03b8\u1d62 strong-axis term"),
-          /*#__PURE__*/React.createElement("input", { type: "number", step: "0.05", className: "w-full text-[10px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabThetaStrong'), title: PileFoundationXfer.mkTip(I, 'iabThetaStrong'), value: I.iabThetaStrong, onChange: e => set('iabThetaStrong', parseFloat(e.target.value) || 1.0) }))),
+          /*#__PURE__*/React.createElement(PdNumIn, { type: "number", step: "0.05", className: "w-full text-[10px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabThetaStrong'), title: PileFoundationXfer.mkTip(I, 'iabThetaStrong'), value: I.iabThetaStrong, onChange: e => set('iabThetaStrong', parseFloat(e.target.value) || 1.0) }))),
       /*#__PURE__*/React.createElement("div", { className: "text-[8px] text-slate-400 mb-2 leading-snug" }, "\u03b8\u1d62 = 1.75 (inelastic rotation credit) is defensible only for a compact section in weak-axis bending with no unbraced length (MassDOT \u00a73.10.11.3); it reverts to 1.0 under scour automatically."),
       /*#__PURE__*/React.createElement("div", { className: "mb-2" },
         /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "\u03b4\u1d1b source"),
@@ -18825,11 +18844,11 @@ function App() {
       I.iabDeltaSource === "direct"
         ? /*#__PURE__*/React.createElement("div", { className: "mb-2" },
             /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "\u03b4\u1d1b per abutment ", /*#__PURE__*/React.createElement("span", { className: "text-slate-400" }, "(in)")),
-            /*#__PURE__*/React.createElement("input", { type: "number", step: "0.05", className: "w-full text-[10px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabDeltaT'), title: PileFoundationXfer.mkTip(I, 'iabDeltaT'), value: I.iabDeltaT || 0, onChange: e => set('iabDeltaT', parseFloat(e.target.value) || 0) }))
+            /*#__PURE__*/React.createElement(PdNumIn, { type: "number", step: "0.05", className: "w-full text-[10px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabDeltaT'), title: PileFoundationXfer.mkTip(I, 'iabDeltaT'), value: I.iabDeltaT || 0, onChange: e => set('iabDeltaT', parseFloat(e.target.value) || 0) }))
         : /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-2 mb-2" },
             /*#__PURE__*/React.createElement("div", null,
               /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "\u0394T range (\u00b0F)"),
-              /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabTempRange || 0, onChange: e => set('iabTempRange', parseFloat(e.target.value) || 0) })),
+              /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabTempRange || 0, onChange: e => set('iabTempRange', parseFloat(e.target.value) || 0) })),
             /*#__PURE__*/React.createElement("div", null,
               /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "\u03b1 (/\u00b0F)"),
               /*#__PURE__*/React.createElement("select", { className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300 bg-white", value: I.iabAlpha, onChange: e => set('iabAlpha', parseFloat(e.target.value)) },
@@ -18838,18 +18857,18 @@ function App() {
       /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-2 mb-1" },
         /*#__PURE__*/React.createElement("div", null,
           /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Scour/peat depth (ft)"),
-          /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabScourDepth || 0, onChange: e => set('iabScourDepth', parseFloat(e.target.value) || 0) })),
+          /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabScourDepth || 0, onChange: e => set('iabScourDepth', parseFloat(e.target.value) || 0) })),
         /*#__PURE__*/React.createElement("div", null,
           /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Ext. moment override (kip\u00b7ft)"),
-          /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabMoments_ext || 0, onChange: e => set('iabMoments_ext', parseFloat(e.target.value) || 0) }))),
+          /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabMoments_ext || 0, onChange: e => set('iabMoments_ext', parseFloat(e.target.value) || 0) }))),
       // PDA-D2 (2026-10-20): scour column (design flood) and check-flood axial check, MassDOT 3.10.11.3
       /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-3 gap-2 mb-1" },
         /*#__PURE__*/React.createElement("div", { title: "Effective length factor of the scour column (AASHTO LRFD 10th Ed. Table C4.6.2.5-1). 1.2: pile head rotation fixed in the cap, translation free; fixed at the depth to fixity." },
           /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "K (scour column)"),
-          /*#__PURE__*/React.createElement("input", { type: "number", step: "0.05", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabKb != null ? I.iabKb : 1.2, onChange: e => set('iabKb', parseFloat(e.target.value) || 1.2) })),
+          /*#__PURE__*/React.createElement(PdNumIn, { type: "number", step: "0.05", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabKb != null ? I.iabKb : 1.2, onChange: e => set('iabKb', parseFloat(e.target.value) || 1.2) })),
         /*#__PURE__*/React.createElement("div", { title: "Scour depth below the bottom of the cap at the scour check flood (MassDOT 3.2.10.5). The pile is checked for axial load only with this unbraced length (MassDOT 3.10.11.3). 0 = not checked." },
           /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Check-flood scour (ft)"),
-          /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabScourCheck || 0, onChange: e => set('iabScourCheck', parseFloat(e.target.value) || 0) })),
+          /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabScourCheck || 0, onChange: e => set('iabScourCheck', parseFloat(e.target.value) || 0) })),
         /*#__PURE__*/React.createElement("div", { title: "Live-load factor at the scour check flood, Extreme Event II: 0.5; 1.0 for a critical / essential bridge (MassDOT 3.2.10.5)." },
           /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "\u03b3LL check flood"),
           /*#__PURE__*/React.createElement("select", { className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300 bg-white", value: String(I.iabCheckGammaLL != null ? I.iabCheckGammaLL : 0.5), onChange: e => set('iabCheckGammaLL', parseFloat(e.target.value)) },
@@ -18961,7 +18980,7 @@ function App() {
     "data-rtab-fixed": "checks",
     onClick: () => gotoLoadsTab(setRailTab, "group"),
     className: "w-full mt-2 font-mono-tech text-[11px] tracking-wider py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition flex items-center justify-center gap-1.5"
-  }, "▦ PILE GROUP \u2192 Loads & group tab", (cases[activeIdx] && cases[activeIdx]._fromGroup) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--accent)" } }, "GROUP CASE ACTIVE") : (groupEnabled && groupCase) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, "APPLIED") : null), /*#__PURE__*/React.createElement("div", { className: "mt-3 pt-2 border-t border-slate-200" }, /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mb-1" }, "Head condition"), /*#__PURE__*/React.createElement("div", { className: "flex gap-2 text-[11px] font-mono-tech" }, [["free", "free / pinned"], ["fixed", "fixed / capped"]].map(([v, l]) => /*#__PURE__*/React.createElement("button", { key: v, onClick: () => set('solverHead', v), className: "flex-1 px-2 py-1 rounded-sm border " + (I.solverHead === v ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50") }, l))), I.solverHead !== "fixed" && /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1.5 mt-1.5" }, /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500 font-mono-tech" }, "K\u03b8"), /*#__PURE__*/React.createElement("input", { type: "number", "aria-label": "Head rotational stiffness K-theta, kip-in per radian", value: I.pyKrot || 0, onChange: e => set('pyKrot', parseFloat(e.target.value) || 0), className: "w-24 font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" }), /*#__PURE__*/React.createElement("span", { className: "text-[9px] text-slate-400 font-mono-tech" }, "kip\u00b7in/rad \u00b7 0 = pinned")), /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug pdNL" }, pdNL(null, [["Free:", "head rotates (flagpole/pinned), or is partially restrained by Kθ."], ["Fixed:", "rotation fully restrained by a rigid cap connection."], ["Drives", "the p-y boundary condition, the deflection-matched buckling basis, and the cap-embedment check."]])), /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mt-2.5 mb-1" }, "p-y loading criterion"), /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-1.5 text-[10px] text-slate-600 font-mono-tech" }, /*#__PURE__*/React.createElement("input", { type: "checkbox", checked: !!I.pyCyclic, onChange: e => { const on = e.target.checked; set('pyCyclic', on); if (on) setCycInfoOpen(true); } }), "cyclic p-y curves"), /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, !!I.pyCyclic ? [/*#__PURE__*/React.createElement("b", { key: "b", style: { color: "#8a5a1f" } }, "\u26a0 Cyclic active. "), "Models soil-resistance degradation under repeated large-amplitude reversal (offshore wave, seismic). Static is the usual basis for bridge substructure. ", /*#__PURE__*/React.createElement("button", { key: "d", onClick: () => setCycInfoOpen(true), className: "underline font-mono-tech" }, "details")] : "Unchecked = static (the usual basis for bridge substructure lateral analysis). Cyclic models soil degradation under repeated reversal \u2014 an offshore/seismic criterion."), /*#__PURE__*/React.createElement(CyclicInfoModal, { open: cycInfoOpen, onClose: () => setCycInfoOpen(false), onRevert: () => { set('pyCyclic', false); setCycInfoOpen(false); } }), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mt-2.5 mb-1" }, "Large head-deflection warning"), /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1.5" }, /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500 font-mono-tech" }, "y\u2080 >"), /*#__PURE__*/React.createElement("input", { type: "number", step: 0.05, min: 0, "aria-label": "Large head-deflection warning, multiple of the pile width D", value: (typeof I.pyDeflWarnD === "number" && isFinite(I.pyDeflWarnD)) ? I.pyDeflWarnD : "", onChange: e => set('pyDeflWarnD', e.target.value === "" ? NaN : parseFloat(e.target.value)), className: "w-16 font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" }), /*#__PURE__*/React.createElement("span", { className: "text-[9px] text-slate-400 font-mono-tech" }, "\u00d7 D \u00b7 0 = off \u00b7 blank = 0.25")), /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug pdNL" }, pdNL("Amber warning, not a check.", [["Shown", "when the p-y head deflection |y₀| exceeds this multiple of the pile width D (default 0.25 D), for the active case and for each case of the envelope."], ["No status change:", "nothing becomes NG because of it."], ["Service deflection limit", "(Loads & group tab): separate."]])))), /*#__PURE__*/React.createElement("button", { onClick: () => gotoSoilProfileTab(setRailTab), className: "w-full mt-2 font-mono-tech text-[11px] tracking-wider py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition flex items-center justify-center gap-1.5" }, "\u2261 SOIL PROFILE", (Array.isArray(I.soilLayers) && I.soilLayers.length) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, I.soilLayers.length, " LAYER", I.soilLayers.length > 1 ? "S" : "") : /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm", style: { background: "#e2e8f0", color: "#64748b" } }, "UNIFORM")), /*#__PURE__*/React.createElement("div", { className: "mt-1 text-[8.5px] text-slate-400 font-mono-tech leading-snug" }, (Array.isArray(I.soilLayers) && I.soilLayers.length) ? ["Drives the p-y lateral analysis and the Davisson fixity depth (Module 10). Top layer: ", (() => { const t = [...I.soilLayers].sort((a, b) => (a.topDepth || 0) - (b.topDepth || 0))[0]; return t.type === "sand" ? "sand n\u2095=" + fmt(t.nh, 0) : (t.type === "stiffclay" ? "stiff clay" : t.type === "weakrock" ? "weak rock" : "clay") + " k\u2095=" + fmt(t.kh, 0); })(), "."] : "No layered profile \u2014 the analysis uses the uniform soil set in Module 02."), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
+  }, "▦ PILE GROUP \u2192 Loads & group tab", (cases[activeIdx] && cases[activeIdx]._fromGroup) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--accent)" } }, "GROUP CASE ACTIVE") : (groupEnabled && groupCase) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, "APPLIED") : null), /*#__PURE__*/React.createElement("div", { className: "mt-3 pt-2 border-t border-slate-200" }, /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mb-1" }, "Head condition"), /*#__PURE__*/React.createElement("div", { className: "flex gap-2 text-[11px] font-mono-tech" }, [["free", "free / pinned"], ["fixed", "fixed / capped"]].map(([v, l]) => /*#__PURE__*/React.createElement("button", { key: v, onClick: () => set('solverHead', v), className: "flex-1 px-2 py-1 rounded-sm border " + (I.solverHead === v ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50") }, l))), I.solverHead !== "fixed" && /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1.5 mt-1.5" }, /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500 font-mono-tech" }, "K\u03b8"), /*#__PURE__*/React.createElement(PdNumIn, { type: "number", "aria-label": "Head rotational stiffness K-theta, kip-in per radian", value: I.pyKrot || 0, onChange: e => set('pyKrot', parseFloat(e.target.value) || 0), className: "w-24 font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" }), /*#__PURE__*/React.createElement("span", { className: "text-[9px] text-slate-400 font-mono-tech" }, "kip\u00b7in/rad \u00b7 0 = pinned")), /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug pdNL" }, pdNL(null, [["Free:", "head rotates (flagpole/pinned), or is partially restrained by Kθ."], ["Fixed:", "rotation fully restrained by a rigid cap connection."], ["Drives", "the p-y boundary condition, the deflection-matched buckling basis, and the cap-embedment check."]])), /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mt-2.5 mb-1" }, "p-y loading criterion"), /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-1.5 text-[10px] text-slate-600 font-mono-tech" }, /*#__PURE__*/React.createElement("input", { type: "checkbox", checked: !!I.pyCyclic, onChange: e => { const on = e.target.checked; set('pyCyclic', on); if (on) setCycInfoOpen(true); } }), "cyclic p-y curves"), /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, !!I.pyCyclic ? [/*#__PURE__*/React.createElement("b", { key: "b", style: { color: "#8a5a1f" } }, "\u26a0 Cyclic active. "), "Models soil-resistance degradation under repeated large-amplitude reversal (offshore wave, seismic). Static is the usual basis for bridge substructure. ", /*#__PURE__*/React.createElement("button", { key: "d", onClick: () => setCycInfoOpen(true), className: "underline font-mono-tech" }, "details")] : "Unchecked = static (the usual basis for bridge substructure lateral analysis). Cyclic models soil degradation under repeated reversal \u2014 an offshore/seismic criterion."), /*#__PURE__*/React.createElement(CyclicInfoModal, { open: cycInfoOpen, onClose: () => setCycInfoOpen(false), onRevert: () => { set('pyCyclic', false); setCycInfoOpen(false); } }), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mt-2.5 mb-1" }, "Large head-deflection warning"), /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1.5" }, /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500 font-mono-tech" }, "y\u2080 >"), /*#__PURE__*/React.createElement(PdNumIn, { type: "number", step: 0.05, min: 0, "aria-label": "Large head-deflection warning, multiple of the pile width D", value: (typeof I.pyDeflWarnD === "number" && isFinite(I.pyDeflWarnD)) ? I.pyDeflWarnD : "", onChange: e => set('pyDeflWarnD', e.target.value === "" ? NaN : parseFloat(e.target.value)), className: "w-16 font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" }), /*#__PURE__*/React.createElement("span", { className: "text-[9px] text-slate-400 font-mono-tech" }, "\u00d7 D \u00b7 0 = off \u00b7 blank = 0.25")), /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug pdNL" }, pdNL("Amber warning, not a check.", [["Shown", "when the p-y head deflection |y₀| exceeds this multiple of the pile width D (default 0.25 D), for the active case and for each case of the envelope."], ["No status change:", "nothing becomes NG because of it."], ["Service deflection limit", "(Loads & group tab): separate."]])))), /*#__PURE__*/React.createElement("button", { onClick: () => gotoSoilProfileTab(setRailTab), className: "w-full mt-2 font-mono-tech text-[11px] tracking-wider py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition flex items-center justify-center gap-1.5" }, "\u2261 SOIL PROFILE", (Array.isArray(I.soilLayers) && I.soilLayers.length) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, I.soilLayers.length, " LAYER", I.soilLayers.length > 1 ? "S" : "") : /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm", style: { background: "#e2e8f0", color: "#64748b" } }, "UNIFORM")), /*#__PURE__*/React.createElement("div", { className: "mt-1 text-[8.5px] text-slate-400 font-mono-tech leading-snug" }, (Array.isArray(I.soilLayers) && I.soilLayers.length) ? ["Drives the p-y lateral analysis and the Davisson fixity depth (Module 10). Top layer: ", (() => { const t = [...I.soilLayers].sort((a, b) => (a.topDepth || 0) - (b.topDepth || 0))[0]; return t.type === "sand" ? "sand n\u2095=" + fmt(t.nh, 0) : (t.type === "stiffclay" ? "stiff clay" : t.type === "weakrock" ? "weak rock" : "clay") + " k\u2095=" + fmt(t.kh, 0); })(), "."] : "No layered profile \u2014 the analysis uses the uniform soil set in Module 02."), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
     title: "Loads",
     sub: "active case · edit in the Loads & group tab"
   }, (() => {
@@ -19083,7 +19102,7 @@ function App() {
       /*#__PURE__*/React.createElement("div", { className: "text-[11px] text-[var(--blueprint)] font-medium mb-1" }, "C\u1d47 for lateral\u2013torsional buckling (strong axis, over L\u1d64)"),
       /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-5 gap-1.5 items-end" },
         [["hpCb", "C\u1d47"], ["hpCbMmax", "M\u2098\u2090\u2093"], ["hpCbMA", "M\u1d00"], ["hpCbMB", "M\u0299"], ["hpCbMC", "M\u1d04"]].map(([k, l]) => /*#__PURE__*/React.createElement("label", { key: k, className: "text-[9.5px] text-slate-500" }, l,
-          /*#__PURE__*/React.createElement("input", { type: "number", step: "any", className: "w-full font-mono-tech text-[10px] px-1 py-0.5 rounded-sm border border-slate-300", value: I[k] != null ? I[k] : (k === "hpCb" ? 1.0 : ""), onChange: e => set(k, e.target.value === "" ? null : parseFloat(e.target.value)) })))),
+          /*#__PURE__*/React.createElement(PdNumIn, { type: "number", step: "any", className: "w-full font-mono-tech text-[10px] px-1 py-0.5 rounded-sm border border-slate-300", value: I[k] != null ? I[k] : (k === "hpCb" ? 1.0 : ""), onChange: e => set(k, e.target.value === "" ? null : parseFloat(e.target.value)) })))),
       (() => { const c = hpCbCalc(I); return /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mt-1 leading-snug" },
         c ? (c.ok ? [c.txt + " ", /*#__PURE__*/React.createElement("button", { key: "a", type: "button", className: "underline text-[var(--blueprint2)]", onClick: () => set('hpCb', c.Cb) }, "apply C\u1d47 = " + c.Cb.toFixed(3))] : c.why)
           : "C\u1d47 = 1.0 is conservative (6.10.8.2.3b). To compute it, enter |M| (kip\u00b7ft) over the unbraced length: M\u2098\u2090\u2093 and the quarter-, mid- and three-quarter-point moments M\u1d00, M\u0299, M\u1d04 (Eq. 6.10.8.2.3b-1), then apply."); })()),
@@ -19173,7 +19192,7 @@ function App() {
     key: u,
     onClick: () => set('betaUnit', u),
     className: "px-1.5 py-0.5 rounded-sm border transition " + (I.betaUnit === u ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300 text-slate-500")
-  }, u)))), /*#__PURE__*/React.createElement("input", {
+  }, u)))), /*#__PURE__*/React.createElement(PdNumIn, {
     type: "number",
     step: "any",
     "aria-label": "Bond value beta, " + (I.betaUnit === "psi" ? "psi" : "ksf"),
@@ -21978,7 +21997,7 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
     ok && pyRes.curves && pyRes.curves.length > 0 && e("div", { style: { marginTop: "12px" } }, e(LatPanel, { title: "p-y curves at 1, 2.5, 5, 10 and 20 pile widths below grade · ● = operating point" },
       /*#__PURE__*/React.createElement("p", { className: "pd-lg-note", style: { marginTop: 0 } }, "The nonlinear soil springs: horizontal resistance p (per unit length) vs pile deflection y, at several depths. Stiffer/stronger with depth. The ● marks where each spring is actually operating under the design load — near the flat top means the soil is near its ultimate resistance there."),
       /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1 text-[11px] font-mono-tech text-slate-500 mb-1" }, "probe depth",
-        /*#__PURE__*/React.createElement("input", { type: "number", "aria-label": "p-y curve probe depth, ft below grade", value: I.pyCurveDepth || 0, onChange: ev => set('pyCurveDepth', parseFloat(ev.target.value) || 0),
+        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", "aria-label": "p-y curve probe depth, ft below grade", value: I.pyCurveDepth || 0, onChange: ev => set('pyCurveDepth', parseFloat(ev.target.value) || 0),
           className: "w-16 text-[11px] px-1 py-0.5 rounded-sm border border-slate-300" }), "ft below grade (0 = off)"),
       /*#__PURE__*/React.createElement(Plot, {
         data: [
