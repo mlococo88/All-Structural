@@ -1344,8 +1344,13 @@ function unitModel(G, UG, k, opt = {}) {
   const rowH = S.rows.map((r, ri) => ({ n: add('Bearings', `${S.joint ? pre(ri) + 'h' : 'H'}orizontal H<sub>n</sub>, row total`, { u: 'kip', lat: true }), t: add('Bearings', `${S.joint ? pre(ri) + 'h' : 'H'}orizontal H<sub>t</sub>, row total`, { u: 'kip', lat: true }) }));
   const brgH = S.rows.map((r, ri) => r.brg.map(p => ({ n: add('Bearings', `${pre(ri)}G${p.j + 1} H<sub>n</sub> (equal share of the row)`, { u: 'kip', lat: true }), t: add('Bearings', `${pre(ri)}G${p.j + 1} H<sub>t</sub> (equal share of the row)`, { u: 'kip', lat: true }) })));   // individual bearing shears
   const zB = S.rows.map(r => r.brg.reduce((a, p) => a + p.zGb, 0) / r.brg.length);
+  /* SLFH (engineer decision 2026-11-11, aligned with the Abutment Calculator): at an abutment the superstructure horizontal forces delivered
+     through the bearings (lc.seat: TU, FR, SH, WS on the superstructure, WL, EQ superstructure inertia) act at the bridge seat, the top of the
+     stem under the pedestals (R.stemTop), as the calculator's z_brg = t_f + h_stem; before: at the top of the bearings (mean bottom of girder,
+     zB). BR and CE (6 ft above the deck, with their couple at the bearings) stay at zB. Piers keep zB. */
+  const zSeat = t === 'abut' ? R.stemTop : null, zH = (lc, ri) => lc.seat && zSeat != null ? zSeat : zB[ri];
   const brgLoads = (loads) => { const L = []; S.rows.forEach((r, ri) => r.brg.forEach(p => { const v = loads && loads[ri] ? loads[ri][p.j] || 0 : 0; if (v) L.push({ s: p.s, o: r.o, P: v, ri, j: p.j }); })); return L; };
-  const hLoads = lc => { const L = []; (lc.rows || []).forEach((h, ri) => { if (h && (h.Hn || h.Ht)) L.push({ z: zB[ri], Hn: h.Hn || 0, Ht: h.Ht || 0, ri }); }); (lc.pts || []).forEach(p => L.push(p)); return L; };
+  const hLoads = lc => { const L = []; (lc.rows || []).forEach((h, ri) => { if (h && (h.Hn || h.Ht)) L.push({ z: zH(lc, ri), Hn: h.Hn || 0, Ht: h.Ht || 0, ri }); }); (lc.pts || []).forEach(p => L.push(p)); return L; };
   const stat = (L, zs, only) => { let Vt = 0, Vl = 0, Mt = 0, Ml = 0; L.forEach(f => { if (only && !only(f)) return; Vt += f.Ht || 0; Vl += f.Hn || 0; Mt += (f.Ht || 0) * (f.z - zs); Ml += (f.Hn || 0) * (f.z - zs); }); return { Vt, Vl, Mt, Ml }; };
   const resDefs = (name, noIM, withMl = true) => ({ P: add('Resultant', `Axial, ${name}`, { u: 'kip', noIM }), Mt: add('Resultant', `M<sub>t</sub>, ${name}`, { u: 'kip-ft', noIM }), Ml: withMl ? add('Resultant', `M<sub>l</sub>, ${name}`, { u: 'kip-ft', noIM }) : -1, Vt: add('Resultant', `V<sub>t</sub>, ${name}`, { u: 'kip', noIM, lat: true }), Vl: add('Resultant', `V<sub>l</sub>, ${name}`, { u: 'kip', noIM, lat: true }) });
   const putRes = (v, rd, s, zs, L, dz = 0) => { const Lf = dz ? L : L.filter(f => f.comp !== 'ftg' && f.z >= zs - 1e-6), q = stat(Lf, zs); v[rd.Vt] += q.Vt; v[rd.Vl] += q.Vl; v[rd.Mt] += q.Mt + q.Vt * dz; if (rd.Ml >= 0) v[rd.Ml] += q.Ml + q.Vl * dz;
@@ -1451,7 +1456,7 @@ function unitModel(G, UG, k, opt = {}) {
   }
   const inf = S.rows.map((r, ri) => G.yg.map((y, j) => { const ld = S.rows.map(() => new Float64Array(G.nb)); ld[ri][j] = 1; return evalFn(ld, false); }));
   const evalCase = lc => { const a = evalFn(lc.V || null, false), b = evalLat(lc); for (let q = 0; q < a.length; q++) a[q] += b[q]; return a; };
-  return { defs, inf, evalFn, evalLat, evalCase, ftgNoIM, rows: S.rows, zB, latK, AB };
+  return { defs, inf, evalFn, evalLat, evalCase, ftgNoIM, rows: S.rows, zB, zSeat, zH, latK, AB };
 }
 
 /* ---------- dead load ---------- */
@@ -1714,7 +1719,7 @@ function distrib(G, UG) {
    FTrow(row) a force delivered directly to a row, dz height of the force above the top of deck, Fup upward
    vertical wind (kip per ft of segment) at transverse position yUp. Returns the lc for unit k. */
 function superCase(G, D, k, spec) {
-  const S = G.sup[k], nb = G.nb, lc = { rows: S.rows.map(() => ({ Hn: 0, Ht: 0 })), V: S.rows.map(() => new Float64Array(nb)), pts: [] };
+  const S = G.sup[k], nb = G.nb, lc = { rows: S.rows.map(() => ({ Hn: 0, Ht: 0 })), V: S.rows.map(() => new Float64Array(nb)), pts: [], seat: !!spec.seat };   // SLFH: spec.seat = horizontal at the abutment seat (WS, WL)
   const Sy2 = G.yg.reduce((a, y) => a + y * y, 0) || 1, share = MODEL.share || (MODEL.share = makeShares(G));
   D.rows.filter(r => r.k === k).forEach(r => {
     const FL = (spec.FL ? spec.FL(r.si) : 0) * r.fL, FT = (spec.wT || 0) * r.Ls * r.fT + (spec.FTrow ? spec.FTrow(r) : 0), row = S.rows[r.ri];
@@ -1768,9 +1773,9 @@ function phase3(k) {
     // wind on structure and on live load
     const cases = windCases(); out.wcases = cases; out.WS = {}; out.ws = {};
     Object.keys(LS).forEach(key => { const W = windSuper(G, key); out.ws[key] = W;
-      out.WS[key] = cases.map(c => { const lc = superCase(G, D, k, { FL: si => c.sL * W.wL[c.i] * (G.X[D.segs[si].b] - G.X[D.segs[si].a]), wT: c.sT * W.wT[c.i], dz: W.dz, ...((key === 'III' || key === 'SIV') && c.i === 0 ? { Fup: vwP(key) * G.Wd, yUp: -c.sT * G.Wd / 4 } : {}) });
+      out.WS[key] = cases.map(c => { const lc = superCase(G, D, k, { seat: true, FL: si => c.sL * W.wL[c.i] * (G.X[D.segs[si].b] - G.X[D.segs[si].a]), wT: c.sT * W.wT[c.i], dz: W.dz, ...((key === 'III' || key === 'SIV') && c.i === 0 ? { Fup: vwP(key) * G.Wd, yUp: -c.sT * G.Wd / 4 } : {}) });
         lc.pts = subWindPts(G, UG, k, W.V, c.sL * Math.sin(rad(c.a)), c.sT * Math.cos(rad(c.a)), key); return UM.evalCase(lc); }); });
-    out.WL = cases.map(c => UM.evalCase(superCase(G, D, k, { FL: si => c.sL * WLL[c.i] * (G.X[D.segs[si].b] - G.X[D.segs[si].a]), wT: c.sT * WLT[c.i], dz: 6 })));
+    out.WL = cases.map(c => UM.evalCase(superCase(G, D, k, { seat: true, FL: si => c.sL * WLL[c.i] * (G.X[D.segs[si].b] - G.X[D.segs[si].a]), wT: c.sT * WLT[c.i], dz: 6 })));
     out.subPts = subWindPts(G, UG, k, vLS('III'), 0, 1);
   } catch (e) { out.err = e.message; }
   return (C[k] = out);
@@ -1912,7 +1917,7 @@ function thermal(G, UG) {
   const rise = fixRigid(cases(T.a * T.rise)), fall = fixRigid(cases(-T.a * T.fall)), eSh = -nz(P.br.shStrain);
   return { T, rows, rise, fall, frR: fric(rise), frF: fric(fall), sh: eSh ? fixRigid(cases(eSh)) : null, warn };
 }
-const rowCase = (G, k, list) => { const S = G.sup[k], lc = { rows: S.rows.map(() => ({ Hn: 0, Ht: 0 })) }; list.filter(r => r.k === k).forEach(r => { lc.rows[r.ri].Hn += r.F * S.c; lc.rows[r.ri].Ht += r.F * S.s; }); return lc; };
+const rowCase = (G, k, list) => { const S = G.sup[k], lc = { rows: S.rows.map(() => ({ Hn: 0, Ht: 0 })), seat: true }; list.filter(r => r.k === k).forEach(r => { lc.rows[r.ri].Hn += r.F * S.c; lc.rows[r.ri].Ht += r.F * S.s; }); return lc; };   // SLFH: TU, FR, SH at the abutment seat (lc.seat)
 
 /* ---------- water ---------- */
 const CLtab = [[0, 0], [5, 0.5], [10, 0.7], [20, 0.9], [30, 1.0]];
@@ -2209,17 +2214,17 @@ function phase5(k) {
   try {
     const SM = MODEL.seis || (MODEL.seis = seismicModel(G, UG)); out.SM = SM; if (!SM.site.ok) return (C[k] = out);
     const S = G.sup[k], L = eqLoads(G, k, SM); out.L = L;
-    const mk = (fL, fT) => { const lc = { rows: S.rows.map(() => ({ Hn: 0, Ht: 0 })) }; L.forEach(q => { const FL = fL * q.dL, FT = fT * q.dT; lc.rows[q.ri].Hn += FL * S.c - FT * S.s; lc.rows[q.ri].Ht += FL * S.s + FT * S.c; }); return lc; };
+    const mk = (fL, fT) => { const lc = { rows: S.rows.map(() => ({ Hn: 0, Ht: 0 })), seat: true }; L.forEach(q => { const FL = fL * q.dL, FT = fT * q.dT; lc.rows[q.ri].Hn += FL * S.c - FT * S.s; lc.rows[q.ri].Ht += FL * S.s + FT * S.c; }); return lc; };
     const UMe = umEE(k, 'eq'), vL = UMe.evalCase(mk(1, 0)), vT = UMe.evalCase(mk(0, 1)); out.vL = vL; out.vT = vT;
     const cr = eqCompR(k, SM.site.zone); if (cr) {   // foundations and bearings with their own R (see eqCompR)
-      const ev = rf => { const Lc = eqLoads(G, k, SM, rf), m = (fL, fT) => { const lc = { rows: S.rows.map(() => ({ Hn: 0, Ht: 0 })) }; Lc.forEach(q => { const FL = fL * q.dL, FT = fT * q.dT; lc.rows[q.ri].Hn += FL * S.c - FT * S.s; lc.rows[q.ri].Ht += FL * S.s + FT * S.c; }); return lc; }; return [UMe.evalCase(m(1, 0)), UMe.evalCase(m(0, 1))]; };
+      const ev = rf => { const Lc = eqLoads(G, k, SM, rf), m = (fL, fT) => { const lc = { rows: S.rows.map(() => ({ Hn: 0, Ht: 0 })), seat: true }; Lc.forEach(q => { const FL = fL * q.dL, FT = fT * q.dT; lc.rows[q.ri].Hn += FL * S.c - FT * S.s; lc.rows[q.ri].Ht += FL * S.s + FT * S.c; }); return lc; }; return [UMe.evalCase(m(1, 0)), UMe.evalCase(m(0, 1))]; };
       const [fL, fT] = ev(cr.fdn), [cL, cT] = ev(cr.con), u = P.units[k];
       UMe.defs.forEach((d, q) => { if (eqFdnDef(u, d)) { vL[q] = fL[q]; vT[q] = fT[q]; } else if (d.grp === 'Bearings') { vL[q] = cL[q]; vT[q] = cT[q]; } });
       out.compR = { L: L.map(q => ({ ri: q.ri, fL: cr.fdn(q.RL.R), fT: cr.fdn(q.RT.R), cL: cr.con(q.RL.R), cT: cr.con(q.RT.R) })) }; }
     if (isMass() && SM.site.zone === 1 && (P.units[k].type === 'abut' || SM.site.As < 0.05)) { vL.fill(0); vT.fill(0); out.massExempt = P.units[k].type === 'abut' ? 'MassDOT 3.4.4.3: abutments in SDC A are not designed for seismic forces; only the connections are.' : 'MassDOT 3.4.4.4: in a \u201cLow\u201d SDC A site (A<sub>s</sub> < 0.05) substructures are not designed for seismic forces; only the connections are.'; }
     out.EQ = []; [[1, 0.3], [0.3, 1]].forEach(([a, b]) => [1, -1].forEach(sL => [1, -1].forEach(sT => out.EQ.push(vL.map((x, q) => sL * a * x + sT * b * vT[q])))));
     if (SM.site.zone >= 3 && P.units[k].type !== 'abut') {   // CSH (2026-11-07): Zones 3 and 4, the elastic (R = 1) effects, shown next to the column shear (display only; plastic hinging forces of 3.10.9.4.3 are not computed)
-      const L1 = eqLoads(G, k, SM, () => 1), m1 = (fL, fT) => { const lc = { rows: S.rows.map(() => ({ Hn: 0, Ht: 0 })) }; L1.forEach(q => { const FL = fL * q.dL, FT = fT * q.dT; lc.rows[q.ri].Hn += FL * S.c - FT * S.s; lc.rows[q.ri].Ht += FL * S.s + FT * S.c; }); return lc; };
+      const L1 = eqLoads(G, k, SM, () => 1), m1 = (fL, fT) => { const lc = { rows: S.rows.map(() => ({ Hn: 0, Ht: 0 })), seat: true }; L1.forEach(q => { const FL = fL * q.dL, FT = fT * q.dT; lc.rows[q.ri].Hn += FL * S.c - FT * S.s; lc.rows[q.ri].Ht += FL * S.s + FT * S.c; }); return lc; };
       const eL = UMe.evalCase(m1(1, 0)), eT = UMe.evalCase(m1(0, 1)); out.EQ1 = []; [[1, 0.3], [0.3, 1]].forEach(([a, b]) => [1, -1].forEach(sL => [1, -1].forEach(sT => out.EQ1.push(eL.map((x, q) => sL * a * x + sT * b * eT[q]))))); }
   } catch (e) { out.err = e.message; }
   return (C[k] = out);
@@ -2528,19 +2533,19 @@ const PENDING = [
 function loadSets(k) {
   const G = MODEL.G, UG = MODEL.UG, u = P.units[k], r = unitRes(k), sets = []; if (r.err) return sets;
   const D = MODEL.dist || (MODEL.dist = distrib(G, UG)), zB = r.UM.zB, sM = UG[k].capMid || 0, S = G.sup[k];
-  const rowsOf = lc => (lc.rows || []).map((h, ri) => ({ z: zB[ri], s: sM, o: S.rows[ri].o, Ht: h.Ht || 0, Hn: h.Hn || 0, lab: S.joint ? (ri ? 'ahead' : 'back') : 'at bearings' })).filter(i => Math.abs(i.Ht) + Math.abs(i.Hn) > 0.05);
+  const rowsOf = lc => (lc.rows || []).map((h, ri) => ({ z: r.UM.zH ? r.UM.zH(lc, ri) : zB[ri], s: sM, o: S.rows[ri].o, Ht: h.Ht || 0, Hn: h.Hn || 0, lab: S.joint ? (ri ? 'ahead' : 'back') : 'at bearings' })).filter(i => Math.abs(i.Ht) + Math.abs(i.Hn) > 0.05);
   const ptsOf = pts => (pts || []).map(p => ({ z: p.z, s: p.s != null ? p.s : sM, o: 0, Ht: p.Ht || 0, Hn: p.Hn || 0, up: p.up || 0, lab: p.comp === 'col' ? `${u.type === 'pile' ? 'pile' : 'col.'} ${p.i + 1}` : p.comp === 'ftg' ? 'footing' : p.comp === 'cap' ? 'cap' : 'pier' })).filter(i => Math.abs(i.Ht) + Math.abs(i.Hn) + Math.abs(i.up) > 0.05);
   try {
     const p3 = phase3(k); if (!p3.err) {
       sets.push({ id: 'br', title: 'Braking, BR, toward ahead', items: rowsOf(superCase(G, D, k, { FL: si => p3.br.brSeg[si].tot, dz: 6 })) });
       if (p3.ce) sets.push({ id: 'ce', title: 'Centrifugal force, CE', items: rowsOf(superCase(G, D, k, { FTrow: row => row.k === k ? p3.ce.dir * p3.ce.Cf * p3.ce.cm.f * p3.ce.tr.rows[row.ri] : 0, dz: 6 })) });
-      const W = p3.ws.III; sets.push({ id: 'ws', title: `Wind, WS, Strength III (${f0(W.V)} mph), 0° from the right`, items: rowsOf(superCase(G, D, k, { wT: W.wT[0], dz: W.dz })).concat(ptsOf(subWindPts(G, UG, k, W.V, 0, 1))) });
-      sets.push({ id: 'wl', title: 'Wind on live load, WL, 0° from the right', items: rowsOf(superCase(G, D, k, { wT: WLT[0], dz: 6 })) }); }
+      const W = p3.ws.III; sets.push({ id: 'ws', title: `Wind, WS, Strength III (${f0(W.V)} mph), 0° from the right`, items: rowsOf(superCase(G, D, k, { seat: true, wT: W.wT[0], dz: W.dz })).concat(ptsOf(subWindPts(G, UG, k, W.V, 0, 1))) });
+      sets.push({ id: 'wl', title: 'Wind on live load, WL, 0° from the right', items: rowsOf(superCase(G, D, k, { seat: true, wT: WLT[0], dz: 6 })) }); }
     const p4 = phase4(k); if (!p4.err) {
       sets.push({ id: 'tu', title: `Uniform temperature, TU, rise of ${f0(p4.TH.T.rise)} °F`, items: rowsOf(rowCase(G, k, p4.TH.rise)) });
       if (p4.wd && p4.wd.pts.length) sets.push({ id: 'wa', title: 'Water, WA, design flood', items: ptsOf(p4.wd.pts), wse: p4.wd.W });
       if (p4.ice && p4.ice.cases) sets.push({ id: 'ic', title: `Ice, IC, ${p4.ice.cases[0].nm.replace(/<[^>]+>/g, '')}`, items: ptsOf(p4.ice.cases[0].pts) }); }
-    const p5 = phase5(k); if (!p5.err && p5.L) { const mk = (fL, fT) => { const lc = { rows: S.rows.map(() => ({ Hn: 0, Ht: 0 })) }; p5.L.forEach(q => { const FL = fL * q.dL, FT = fT * q.dT; lc.rows[q.ri].Hn += FL * S.c - FT * S.s; lc.rows[q.ri].Ht += FL * S.s + FT * S.c; }); return lc; };
+    const p5 = phase5(k); if (!p5.err && p5.L) { const mk = (fL, fT) => { const lc = { rows: S.rows.map(() => ({ Hn: 0, Ht: 0 })), seat: true }; p5.L.forEach(q => { const FL = fL * q.dL, FT = fT * q.dT; lc.rows[q.ri].Hn += FL * S.c - FT * S.s; lc.rows[q.ri].Ht += FL * S.s + FT * S.c; }); return lc; };
       sets.push({ id: 'eqL', title: 'Seismic, EQ, longitudinal design force', items: rowsOf(mk(1, 0)) }, { id: 'eqT', title: 'Seismic, EQ, transverse design force', items: rowsOf(mk(0, 1)) }); }
     const p6 = phase6(k); if (!p6.err) {
       if (p6.cv) { const [d, fr] = p6.cv.dirs[0], pp = p6.cv.parts[0]; if (pp) sets.push({ id: 'cv', title: `Vessel collision, CV, ${f0(p6.cv.F)} kip parallel to the channel`, items: ptsOf([{ z: p6.cv.z, ...planDir(d, p6.cv.F, fr), comp: pp.comp, i: pp.i, s: pp.s }]) }); }
@@ -3277,6 +3282,12 @@ function basisExtra() { const b = P.br, G = MODEL.G, rows = [];
   const warns = MODEL.C ? MODEL.C.filter(c => c[0] === 'fail' || c[0] === 'warn') : []; if (warns.length) rows.push(['Open input issues', `<span style="color:var(--fail)">${warns.map(c => esc(c[2]).replace(/&lt;(\/?sub)&gt;/g, '<$1>')).join('<br>')}</span>`]);
   return rows.map(([a, v]) => `<tr><td class="lbl">${a}</td><td>${v}</td></tr>`).join('');
 }
+/* SLFH (engineer decision 2026-11-11): §6 note on the force height at an abutment, on the Braking and centrifugal, Wind, Temperature and
+   Seismic tabs (and their printed chapters) and in the Report's unit section */
+function abSeatInfo(k) { const u = P.units[k], r = unitRes(k); if (!u || u.type !== 'abut' || r.err || r.UM.zSeat == null) return null; const R = MODEL.UG[k], zb = u.ftg.type === 'none' ? nz(u.topFtg) : R.ftgBot;
+  return { seat: r.UM.zSeat, brg: r.UM.zB[0], zb, hSeat: r.UM.zSeat - zb, hBrg: r.UM.zB[0] - zb, base: u.ftg.type === 'none' ? 'base of the stem' : 'bottom of footing' }; }
+function abSeatNote(k) { const A = abSeatInfo(k); if (!A) return ''; return `<div class="card"><div class="card-b"><div class="note slNL">${slNL(`Force height at ${esc(P.units[k].name)}:`, [['At the bridge seat:', `the superstructure horizontal forces delivered through the bearings (TU, FR, SH, WS on the superstructure, WL and the EQ superstructure inertia) act at the bridge seat, El. ${f2(A.seat)} (the top of the stem under the pedestals, ${f2(A.hSeat)} ft above the ${A.base}), as in the Abutment Calculator (z<sub>brg</sub> = t<sub>f</sub> + h<sub>stem</sub>): the bearing and pedestal pass the shear down to the seat, and their height is not taken as a lever arm (engineer decision, 2026-11-11).`], ['Not moved:', `BR (3.6.4) and CE (3.6.3) are applied 6 ft above the deck: their horizontal force acts at the top of the bearings, El. ${f2(A.brg)} (${f2(A.hBrg)} ft above the ${A.base}), with the couple to the deck-level point carried by the bearings as vertical forces.`], ['Piers', 'keep the forces at the top of the bearings.']])}</div></div></div>`; }
+['brceHtml', 'windHtml', 'tempHtml', 'eqHtml'].forEach(n => { const f0 = window[n]; if (typeof f0 !== 'function') return; window[n] = function () { const h = f0.apply(this, arguments); try { return h + abSeatNote(P.ui.sel); } catch (e) { return h; } }; });
 (function patchReport() {
   /* SLRX (2026-11-03): the package's print CSS and its rptPrint / rptModal wrappers (splitWideTables) removed with the package */
   const rt = renderTab; renderTab = function () { rt(); if (P.ui.tab === 'll') { const el = document.getElementById('tab-ll'); if (el && !/Fix the/.test(el.textContent.slice(0, 200))) el.insertAdjacentHTML('beforeend', ilCard(P.ui.sel)); } if (P.ui.tab === 'summary') { const el = document.getElementById('tab-summary'); if (el && !/Fix the/.test(el.textContent.slice(0, 200))) { try { el.insertAdjacentHTML('beforeend', govSumHtml()); } catch (e) { } } } };
@@ -4230,6 +4241,7 @@ function slrModel() {
           w.add({ id: 'Ht' + i, label: cmp + ': force along the unit line (end area A_e = ' + slrN(pt.Ae, 1) + ' ft²)', sym: 'H_{t}', eq: '', sub: '', value: pt.Ht, unit: 'kip', d: 2 }); });
         subs.push({ title: 'Wind on the substructure components', items: [slrTopics('w' + k, Wt, { title: 'Worked steps' }), { type: 'note', text: 'Pressure P_z on each component, resolved on the unit skew into H_n and H_t (the projected-area option uses the projected area); as on the ' + slrTab('wind', k) + '.' }] }); }
     }
+    { const A = abSeatInfo(k); if (A) subs.push({ title: 'Height of the superstructure horizontal forces', items: [{ type: 'note', text: 'TU, FR, SH, WS on the superstructure, WL and the EQ superstructure inertia act at the bridge seat, El. ' + slrN(A.seat, 2) + ' (top of the stem under the pedestals, ' + slrN(A.hSeat, 2) + ' ft above the ' + A.base + '), as in the Abutment Calculator; the bearing and pedestal pass the shear to the seat (engineer decision, 2026-11-11). BR (Art. 3.6.4) and CE (Art. 3.6.3) are applied 6 ft above the deck: horizontal at the top of the bearings, El. ' + slrN(A.brg, 2) + ' (' + slrN(A.hBrg, 2) + ' ft above the ' + A.base + '), with their couple carried by the bearings. Worked on the ' + slrTab('temp', k) + ', ' + slrTab('wind', k) + ' and ' + slrTab('brce', k) + '.' }] }); }   // SLFH
     const scope = 'u' + k, T = [], CV = COMBOS.filter(c => C[c.id]);
     CV.forEach(c => { const X = comboComps(k, c); if (!X) return; const w = slrTopic(T, c.id, c.name, SLR_AA + 'Table 3.4.1-1');
       RQ.q.filter(x => x[0] === 'P' || x[0] === 'Mt' || x[0] === 'Ml').forEach(([nm, sym, q]) => { [1, -1].forEach(s => { if (nm !== 'P' && s < 0) return; slrComboStep(w, k, c, q, s, sym, defs[q], X, s > 0 ? C[c.id].max[q] : C[c.id].min[q]); }); }); });
