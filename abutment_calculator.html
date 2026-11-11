@@ -12585,7 +12585,8 @@ document.addEventListener("DOMContentLoaded",init);
     else {
       let def=null; if(a.definition){ const v=AD.validate(a.definition); if(v.ok) def=a.definition; else o.warns.push("The definition block of this abutment is not used ("+v.errors.join("; ")+"); its geometry is read from the loads payload."); }
       if(!def) def=AD.fromLoads(a,p);
-      o.def=def; o.T=AD.toAbutment(def,{ integral:iabType()==="integral", roadwayW:p.bridge&&p.bridge.roadwayWidth!=null?+p.bridge.roadwayWidth:null });
+      const ow=abutOwner(), lsAuto=ow==="MassDOT"?"MassDOT Part I 3.3.1.3":ow==="CTDOT"?"CTDOT BRSDM V2 CT11.1.1.3":null;   // ABXM: owner rules that remove LS with a slab automatically (apLsRule)
+      o.def=def; o.T=AD.toAbutment(def,{ integral:iabType()==="integral", roadwayW:p.bridge&&p.bridge.roadwayWidth!=null?+p.bridge.roadwayWidth:null, lsAuto });
       const gr=o.T.groups;
       o.geom=gr.geom.items; o.bridgeG=gr.bridge.items; if(gr.geom.skip&&gr.geom.skip.length) o.geomSkip=gr.geom.skip;   // AXI: integral, only L_ab and w_c of the geometry
       ["soil","aps","elev","seisset"].forEach(k=>{ o[k+"I"]=gr[k]?gr[k].items:null; o[k+"N"]=gr[k]&&gr[k].notes||[]; if(!gr[k]) o.gerr[k]=o.T.gerr[k]||"not sent"; });
@@ -12619,7 +12620,7 @@ document.addEventListener("DOMContentLoaded",init);
     ["br","BR: braking (SubLoads share)",false],["tu","TU: uniform temperature (SubLoads share)",false],["crsh","CR/SH (SubLoads share)",false],
     ["bridge","Bridge data at this abutment: span, skew |θ|, roadway width",true],
     ["geom","Abutment geometry and lengths",true],["soil","Soil and backfill",false],["aps","Approach slab",true],
-    ["brg","Bearing pad",true],["elev","Elevations (display only, Tab 1 §1.1a)",true],["seis","Seismic A_s",true],["seisset","Seismic settings: k_h ratio, k_v, ΔP_AE height ratio",false],
+    ["brg","Bearing pad",true],["elev","Elevations (display only, Tab 1 §1.1a)",true],["seis","Seismic A_s",true],["seisset","Seismic settings: k_h ratio, k_v, seismic earth pressure location and its ratios",false],
     ["therm","Temperature range ΔT rise / fall",false]];
   /* ABX (2026-11-11, engineer decisions): the calculator owns the abutment itself (geometry, lengths, soil, backfill); SubLoads owns the
      bridge (span, skew, elevations, bearings, superstructure loads). Default ticks: SubLoads-owned groups ticked; the calculator-owned
@@ -12627,7 +12628,7 @@ document.addEventListener("DOMContentLoaded",init);
      unticked with every difference shown; soil and backfill always unticked; seismic settings (bridge-wide in SubLoads) unticked. */
   const OWNED=["geom","aps"];
   function isDefaultGroup(o,k){ const D0=defaultState(), items=k==="geom"?o.geom:k==="aps"?(o.apsI||[]):[];
-    if(k==="aps"){ const A=S.apSlab||{}, A0=D0.apSlab; return ["on","L","t","W"].every(q=>JSON.stringify(A[q])===JSON.stringify(A0[q])); }
+    if(k==="aps"){ const A=S.apSlab||{}, A0=D0.apSlab; return ["on","L","t","W"].every(q=>JSON.stringify(A[q])===JSON.stringify(A0[q]))&&(A.lsRed!==false)===(A0.lsRed!==false); }   // ABXM: + the LS option
     return items.every(x=>x.path==="geom.brgSetback"||JSON.stringify(getPath(S,x.path))===JSON.stringify(getPath(D0,x.path))); }
   const WHY={
     layout:"Needed when the beam count or offsets differ; the reaction rows are per girder.",
@@ -12643,9 +12644,9 @@ document.addEventListener("DOMContentLoaded",init);
     geomOwn:"Unticked by default: this project has its own abutment geometry (the calculator owns the abutment). Tick it to take the SubLoads geometry; every difference is listed below when ticked.",
     bridge:"Span length (adjacent span) and skew |θ| (the calculator's skew is a magnitude), and the clear roadway width used only by the calculator's own BR. SubLoads owns the bridge.",
     soil:"Backfill γ, φ, δ, slope β, the h_eq table, ES, the water table h_w and the construction-stage fill and γ_LS from the SubLoads unit. Unticked by default: the calculator owns the soil and backfill.",
-    aps:"On / off, length, thickness and width of the approach slab (panel I-0b). The calculator computes its own slab reaction, wearing surface and live load from them; SubLoads' share and live-load option are not imported. Ticked by default only while this project still has the calculator's default slab inputs.",
+    aps:"On / off, length, thickness and width of the approach slab (panel I-0b), and whether the final-state live-load surcharge LS is removed with it (AASHTO 3.11.6.5 option, as SubLoads). The calculator computes its own slab reaction, wearing surface and live load from them; SubLoads' share and live-load option are not imported. Ticked by default only while this project still has the calculator's default slab inputs.",
     elev:"The display-only elevations of Tab 1 §1.1a: beam seat elevation (SubLoads' bridge seat, top of stem), total bearing height (bearing + pedestal), girder depth, haunch and deck. No calculation reads them. SubLoads owns the elevations.",
-    seisset:"k_h / k_h0 (the calculator's automatic k_h ratio is switched off), k_v and the ΔP_AE height ratio. Bridge-wide in SubLoads (the same for every unit), so unticked by default; the calculator's ΔP_AE height mode is not changed.",
+    seisset:"k_h / k_h0 (the calculator's automatic k_h ratio is switched off), k_v, the seismic earth pressure location (panel I-11) and its ratios. Bridge-wide in SubLoads (the same for every unit), so unticked by default.",
     brg:"Elastomeric pad size and properties (used by the calculator's own TU/CR·SH pad shear and the seat checks).",
     seis:"Site acceleration coefficient A_s only; the Extreme Event I on/off switch and the other seismic inputs are not changed.",
     therm:"Only used by the calculator's own TU generator."};
@@ -12735,14 +12736,20 @@ document.addEventListener("DOMContentLoaded",init);
     u.push(["calculatorInput block","not read directly; the same values are mapped here from the load cases and geometry (it is used only for the concrete unit weight and A_s)"]);
     if(dfn) u.push(["Earth pressure","the calculator computes EH, EV, LS, ES and water itself; the SubLoads soil and backfill inputs are in the Soil and backfill group"+(st.on.soil&&!o.gerr.soil?" (ticked)":" (not ticked: the calculator's own inputs are kept)")+"; its K rule, Coulomb heel cases and water in front are its own"]);
     else u.push(["Earth pressure, soil, backfill, water","not sent by SubLoads; the calculator computes EH, EV, LS, ES and water from its own soil, backfill and water inputs, which this pull does not change"]);
-    if(dfn) u.push(["Bridge-wide SubLoads inputs (concrete w_c, seismic k_h ratio, k_v, ΔP_AE ratio)","the same for every SubLoads unit: w_c is in the geometry group (the calculator's concrete), the seismic ones in the Seismic settings group (not ticked by default)"]);
+    if(dfn) u.push(["Bridge-wide SubLoads inputs (concrete w_c, seismic k_h ratio, k_v, seismic earth pressure location and its ratios)","the same for every SubLoads unit: w_c is in the geometry group (the calculator's concrete), the seismic ones in the Seismic settings group (not ticked by default)"]);
     return u;
   }
-  /* ABX (2026-11-11): definitions that differ between the two tools; information only (separate engineer decisions, not aligned here) */
-  function diffs(o){ const q=S.seismic||{}, sd=o.def&&o.def.seismic;
-    return [["Live load surcharge with an approach slab","SubLoads removes LS only under MassDOT rules (3.3.1.3); the calculator also takes the AASHTO 3.11.6.5 reduction when panel I-0b says so ("+(apOn()?(S.apSlab.lsRed!==false?"on here":"off here"):"no slab here")+")"],
-      ["Height of the TU / WS / WL forces","SubLoads: top of bearing; the calculator: bridge seat"],
-      ["ΔP_AE height","SubLoads: "+(sd?nfmt(sd.hEQr):"0.6")+"·H; the calculator: "+(q.hEQmode==="ratio"?nfmt(+q.hEQr)+"·H (ratio mode)":"the static-pressure height (≥ H/3, 11.6.5.3)")]]; }
+  /* ABX (2026-11-11): definitions that differ between the two tools; information only (separate engineer decisions, not aligned here).
+     ABXM (2026-11-11): the LS removal with a slab (SLLS / APS) and the seismic earth pressure location (SLPL / SEL) are mapped in the Approach
+     slab and Seismic settings groups; TU, FR, SH, WS, WL and the EQ superstructure inertia act at the bridge seat in both tools (SLFH). A row
+     stays only where a difference remains: BR / CE height; the LS rule when this project's owner removes LS automatically or the hand-off is
+     from an earlier SubLoads; the location when the hand-off does not state it. */
+  function diffs(o){ const q=S.seismic||{}, d=o.def||{}, sd=d.seismic, sa=d.approachSlab, ow=abutOwner(), r=[];
+    r.push(["Height of BR (and CE)","SubLoads: at the top of the bearings, with the couple of the 6 ft above-deck height (3.6.4, 3.6.3) at the bearings; this calculator: at the bridge seat (its own BR without that couple; an imported SubLoads BR keeps its couple P, with V_x at the seat); no CE row"]);
+    if(sa&&sa.on&&typeof sa.lsRed!=="boolean") r.push(["Live load surcharge with an approach slab","SubLoads: not stated (a hand-off from an earlier SubLoads); this calculator: "+(apOn()?(apLsRule().rem?"removed":"kept")+" ("+(apLsRule().ref||"equivalent dead load")+")":"no slab here")]);
+    else if(sa&&sa.on&&(ow==="MassDOT"||ow==="CTDOT")) r.push(["Live load surcharge with an approach slab","SubLoads: "+(sa.lsRed?"removed":"kept")+(sa.lsRule?" ("+sa.lsRule+")":"")+"; this calculator: removed automatically under "+ow+" rules ("+(ow==="MassDOT"?"MassDOT Part I 3.3.1.3":"CTDOT BRSDM V2 CT11.1.1.3")+"), whatever the option"]);
+    if(sd&&!(Object.prototype.hasOwnProperty.call(sd,"hAEr")&&["sw","static","comb","nonyield","ratio"].includes(sd.hEQmode))) r.push(["Seismic earth pressure location","SubLoads: not stated (a hand-off from an earlier SubLoads; ΔP_AE ratio "+nfmt(sd.hEQr)+"); this calculator: "+eqLocTxt(true)+" (panel I-11), not changed"]);
+    return r; }
 
 
   /* ---------- dialog ---------- */
@@ -12941,7 +12948,8 @@ document.addEventListener("DOMContentLoaded",init);
   function payload(){
     if(!AD()) return { err:"The shared file shared/abutment-def.js is not loaded; keep the whole folder together." };
     if(iabType()!=="conv") return { err:"Only a conventional abutment can be sent: SubLoads models a conventional cantilever abutment on a footing (this one is "+(iabType()==="integral"?"integral":"semi-integral")+")." };
-    const R=window.LAST_R, def=AD().fromAbutment(S,{ name:"", ap:R&&R.ap||null, wingText:wingText() }), v=AD().validate(def);
+    const lr=apLsRule(), lsRule=lr.on?{ rem:!!lr.rem, legacy:!!lr.legacy, ref:lr.legacy?"":lr.ref+(lr.auto?", automatic":", the permitted reduction (option)") }:null;   // ABXM: the final-state LS rule with the slab (APS)
+    const R=window.LAST_R, def=AD().fromAbutment(S,{ name:"", ap:R&&R.ap||null, wingText:wingText(), lsRule }), v=AD().validate(def);
     if(!v.ok) return { err:"The abutment cannot be sent: "+v.errors.join("; ")+"." };
     const sp=BX()&&BX().sharedProject?BX().sharedProject():null, dev=HS()?HS().deviceName(localStorage):"";
     const p={ _schema:AD().SCHEMA, schemaVersion:1, producer:"Abutment Calculator", producerFile:"abutment_calculator.html",

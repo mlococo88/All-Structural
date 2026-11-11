@@ -46,7 +46,8 @@ await o.p.waitForFunction(() => window.LAST_R, null, { timeout: 60000 });
 let r = await o.p.evaluate(G => { document.getElementById('axh-pull').click(); const g = eval('(' + G + ')')(); const t = document.getElementById('axh-dlg').innerText; return { g, t }; }, groupsOf.toString());
 check(r.g.geom.on && r.g.aps.on && r.g.bridge.on && r.g.elev.on && r.g.brg.on && r.g.layout.on && r.g.dc.on, 'ticked: geometry, approach slab (default project), bridge data, elevations, bearing, layout, DC');
 check(!r.g.soil.on && !r.g.soil.dis && !r.g.seisset.on && !r.g.seisset.dis, 'offered unticked: soil and backfill, seismic settings');
-check(/Different definitions in the two tools \(information only\)/.test(r.t) && /ΔP_AE height/.test(r.t), 'information rows for the definitions not aligned');
+{ const df = (r.t.split('Different definitions in the two tools (information only)')[1] || '');   // ABXM: LS and the seismic location are mapped; TU / WS / WL at the seat in both tools
+  check(/Height of BR \(and CE\)/.test(df) && !/TU \/ WS \/ WL/.test(df) && !/only under MassDOT/.test(df) && !/ΔP_AE height|Seismic earth pressure location/.test(df), 'information rows: BR / CE height only (no TU / WS / WL, LS or ΔP_AE row: mapped)'); }
 check(/Not ticked: current vs SubLoads for \d+ groups? \(kept as they are\)/.test(r.t), 'unticked groups shown current vs incoming');
 if (SHOTS) { await o.p.setViewportSize({ width: 1100, height: 1400 }); await o.p.screenshot({ path: path.join(SHOTS, 'abutment-pull-from-subloads.png'), fullPage: false }); }
 r = await o.p.evaluate(() => { document.getElementById('axh-apply').click(); return { g: JSON.parse(JSON.stringify(S.geom)), soil: JSON.parse(JSON.stringify(S.soil)), src: S.subloadsSrc, sk: S.seismic.khRAuto }; });
@@ -162,6 +163,8 @@ check(b2.marker, 'Hand-offs: new-data marker before any pull (a copy named like 
 check(b2.pkRows === 2 && b2.pkSel === 0, 'picker: 2 projects, the one named like this project preselected');
 check(b2.ticks.geom && b2.ticks.soil && b2.ticks.aps && !b2.ticks.brg && !b2.ticks.ftgEl && !b2.ticks.bridgewide, 'ticks: geometry, soil, approach slab; not pad, top of footing, bridge-wide');
 check(/Battered stem: the calculator has t_top = 4\.5 ft, t_bot = 5\.5 ft/.test(b2.txt) && /applies to every unit/.test(b2.txt) && /Wingwalls/.test(b2.txt) && /ΔP_AE height/.test(b2.txt), 'battered-stem note, bridge-wide label, wingwalls and definition rows');
+{ const inf = b2.txt.split('Not applied (information)')[1] || '';   // ABXM
+  check(/Seismic earth pressure location/.test(b2.txt.split('Not applied (information)')[0]) && /Height of BR \(and CE\)/.test(inf) && !/top of bearing\b/.test(inf) && !/only under MassDOT/.test(inf) && !/ΔP_AE height/.test(inf), 'the location offered in the bridge-wide group; information: BR / CE height row, no TU / WS / WL, LS or ΔP_AE row'); }
 const u3 = b2.P1.units[3];
 check(u3.abut.L === 50 && u3.abut.stemT === 4.5 && u3.ftg.W === 3.5 + 5.5 + 5 && u3.earth.phi === 34 && b2.P1.units[0].abut.L === b2.P0.units[0].abut.L, 'applied to Abut. 2 only: L_ab 50, stem 4.5, footing 14, φ 34');
 check(u3.abutSrc && u3.abutSrc.pid === '~Route 9 over Mill Brook' && u3.abutSrc.groups.join() === 'geom,soil,aps' && /battered stem/.test((u3.abutSrc.notes || []).join()), 'P.units[3].abutSrc recorded (pid, groups, battered note)');
@@ -194,5 +197,30 @@ check(r5.via && /^file: /.test(r5b || ''), 'Import hand-off (JSON): the same rev
 check(r5.fit && r5.box, '390 px: no horizontal page scroll; the dialog fits the screen');
 check(o5.errs.length === 0, 'no console errors' + (o5.errs.length ? ': ' + o5.errs.join(' | ') : ''));
 await o5.b.close();
+// C. ABXM (2026-11-11): the LS option with the slab and the seismic earth pressure location, both ways, with the groups ticked
+console.log('C1. calculator (c) 0.45, slab on, LS kept -> SubLoads, bridge-wide ticked');
+const c1 = await abSend(null, () => { S.proj.name = 'Example three-span continuous'; S.seismic.hEQmode = 'comb'; S.seismic.hAEr = 0.45; S.apSlab.on = true; S.apSlab.lsRed = false; });
+const oc = await openPage(SLF, { ls: c1.ls, vw: 1400 }); await oc.p.waitForFunction('typeof MODEL !== "undefined" && MODEL.G && MODEL.UG', null, { timeout: 60000 });
+const rc = await oc.p.evaluate(async () => { const w = ms => new Promise(r => setTimeout(r, ms)); P.br.eqSa = SA_T.map(T => T === 0 ? 0.15 : Math.min(0.35, 0.12 / Math.max(T, 0.01))).map(v => String(+v.toFixed(4))); P.br.eqSiteClass = 'D'; MODEL.cacheEE = null; recompute();   // A_s = 0.15 (as bsl-pae-loc)
+  P.ui.itab = 'project'; buildSide(); await w(100);
+  const z0 = earthLoads(0).E.seis; document.getElementById('abd-pull').click(); await w(600); document.getElementById('gxp-next').click(); await w(200);
+  const m = document.getElementById('abd-modal'), cb = m.querySelector('input[data-abd-g="bridgewide"]'); cb.checked = true; cb.dispatchEvent(new Event('change', { bubbles: true })); await w(100);
+  const txt = document.getElementById('abd-modal').innerText; document.getElementById('abd-apply').click(); await w(500);
+  const E = earthLoads(0).E; return { txt, br: { m: P.br.hEQmode, a: P.br.hAEr }, ls: P.units[0].earth.lsRed, z0: { loc: z0.loc, zi: z0.zi }, z1: { loc: E.seis.loc, zc: E.seis.zc, zi: E.seis.zi, H: E.H } }; });
+check(rc.br.m === 'comb' && rc.br.a === 0.45 && rc.ls === 'no', 'applied: P.br.hEQmode comb, hAEr 0.45 (bridge-wide), Abut. 1 earth.lsRed no');
+check(rc.z0.loc === 'sw' && rc.z1.loc === 'comb' && Math.abs(rc.z1.zc - 0.45 * rc.z1.H) < 1e-9, 'SubLoads placement: (a) before, the combined P_AE at 0.45H after (' + JSON.stringify(rc.z1) + ')');
+check(/LS with the slab/.test(rc.txt) && /changes/.test(rc.txt), 'review: the LS row in the Approach slab group');
+check(oc.errs.length === 0, 'no console errors' + (oc.errs.length ? ': ' + oc.errs.join(' | ') : ''));
+await oc.b.close();
+
+console.log('C2. SubLoads (d) nonyielding, slab on, LS kept -> calculator, seismic settings ticked');
+const c2 = await subloadsSend(() => { P.br.hEQmode = 'nonyield'; P.units[0].earth.asOn = 'yes'; P.units[0].earth.lsRed = 'no'; });
+const od = await openPage(ABF, { ls: c2.ls, vw: 1400 }); await od.p.waitForFunction(() => window.LAST_R, null, { timeout: 60000 });
+const rd = await od.p.evaluate(() => { document.getElementById('axh-pull').click(); const cb = document.querySelector('#axh-dlg input[data-axh-g="seisset"]'); cb.checked = true; cb.dispatchEvent(new Event('change', { bubbles: true }));
+  const t = document.getElementById('axh-dlg').innerText; document.getElementById('axh-apply').click(); return { t, m: S.seismic.hEQmode, ls: S.apSlab.lsRed, on: S.apSlab.on }; });
+check(rd.m === 'nonyield' && rd.on === true && rd.ls === false, 'applied: seismic.hEQmode nonyield, approach slab on with LS kept (apSlab.lsRed false)');
+check(/Seismic earth pressure location \(panel I-11\)/.test(rd.t) && /nonyielding wall/.test(rd.t), 'review: the location row with its SubLoads text');
+check(od.errs.length === 0, 'no console errors' + (od.errs.length ? ': ' + od.errs.join(' | ') : ''));
+await od.b.close();
 console.log(fails ? `\n${fails} FAILED` : '\nall passed');
 process.exit(fails ? 1 : 0);

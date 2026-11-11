@@ -2838,8 +2838,9 @@ function abutDefOf(k) {
   const e = fillEarth(u).earth, S0 = eqSite();
   return SharedAbutmentDef.fromSubLoads({ name: u.name, end: k === 0 ? 'begin' : 'end', skewDeg: nz(b.skews[k]), spanL: G.spans[k === 0 ? 0 : G.spans.length - 1],
     abut: u.abut, ftg: u.ftg, Lab: R.capLen, Lftg: abFtgL(R), stemTop: R.stemTop, bwTop: R.bwTop, topFtg: nz(u.topFtg), ftgBot: R.ftgBot, ground: nz(u.ground), deckZ: S.deckZ,
-    hbIn: nz(u.hb), hpIn: nz(u.hp), br: { d: nz(b.d), haunch: nz(b.haunch), ts: nz(b.ts), wc: nz(b.wc) || 0.150, khR: nz(b.khR), kv: nz(b.kv), hEQr: nz(b.hEQr) || 0.6 }, As: S0.As,
-    earth: e, aslW: num(e.asW) > 0 ? num(e.asW) : G.Wd, elast: u.elast, brgType: S.rows[0].fx.brg });
+    hbIn: nz(u.hb), hpIn: nz(u.hp), br: { d: nz(b.d), haunch: nz(b.haunch), ts: nz(b.ts), wc: nz(b.wc) || 0.150, khR: nz(b.khR), kv: nz(b.kv), hEQr: nz(b.hEQr) || 0.6, hEQmode: paeLocOf(), hAEr: b.hAEr }, As: S0.As,
+    earth: e, aslW: num(e.asW) > 0 ? num(e.asW) : G.Wd, elast: u.elast, brgType: S.rows[0].fx.brg,
+    lsRem: e.asOn === 'yes' ? lsSlabRem(e) : null, lsRef: lsSlabRef() + (isMass() ? ', automatic' : ', the permitted reduction (option)') });   // ABXM: the seismic earth pressure location (SLPL) and the LS rule with the slab (SLLS)
 }
 (function patchAbxHandoff() {
   const g = document.querySelector('.hdr-group'), ax = document.getElementById('btn-abx');
@@ -3949,19 +3950,21 @@ async function rxImport(file) {
   const shut = id => { const m = document.getElementById(id); if (m) { m.hidden = true; m.innerHTML = ''; } };
   const GRP = [['geom', 'Abutment geometry and lengths', true, 'L_ab, L_ftg, stem, bearing to the stem front, backwall, toe and footing. The calculator owns the abutment.'],
     ['soil', 'Soil and backfill', true, 'Theory, γ, φ, δ, β, the h_eq table, ES, water table, retained height, construction fill and γ_LS. The calculator owns the soil and backfill.'],
-    ['aps', 'Approach slab', true, 'On / off, width, length, thickness and the share of its weight on this abutment (the calculator\'s computed reaction as a %).'],
+    ['aps', 'Approach slab', true, 'On / off, width, length, thickness, the share of its weight on this abutment (the calculator\'s computed reaction as a %) and whether the final-state live-load surcharge is removed with it.'],
     ['brg', 'Bearing pad', false, 'Pad length, width, G and h_rt. SubLoads owns the bearings: not ticked by default.'],
     ['ftgEl', 'Set the top of footing El. to match the calculator\'s stem height', false, 'SubLoads keeps its own elevations; this moves only this unit\'s top of footing (and ground, from D_f) so the stem height equals the calculator\'s.'],
-    ['bridgewide', 'Bridge-wide inputs: seismic k_h ratio, k_v, ΔP_AE height ratio, concrete w_c (applies to every unit)', false, 'These are one value for the whole bridge in SubLoads: ticking changes every unit, not only this abutment.']];
+    ['bridgewide', 'Bridge-wide inputs: seismic k_h ratio, k_v, seismic earth pressure location and its ratios, concrete w_c (applies to every unit)', false, 'These are one value for the whole bridge in SubLoads: ticking changes every unit, not only this abutment.']];
   const abUnits = () => (P.units || []).map((u, k) => [u, k]).filter(([u]) => u.type === 'abut').map(([, k]) => k);
   let AD_ = null;   // { p, via, pid, c, k, on:{} }
   function ctxOf(k) {
     const u = P.units[k], b = P.br, G = MODEL.G, R = MODEL.UG && MODEL.UG[k], S = G && G.sup && G.sup[k], ok = G && !G.E.length && R && S && R.type === 'abut';
-    const c = { name: u.name, ftgType: u.ftg.type, topFtg: nz(u.topFtg), ground: nz(u.ground), hbIn: nz(u.hb), hpIn: nz(u.hp), skewDeg: nz(b.skews[k]), spanL: G && G.spans ? G.spans[k === 0 ? 0 : G.spans.length - 1] : NaN };
+    const c = { name: u.name, ftgType: u.ftg.type, topFtg: nz(u.topFtg), ground: nz(u.ground), hbIn: nz(u.hb), hpIn: nz(u.hp), skewDeg: nz(b.skews[k]), spanL: G && G.spans ? G.spans[k === 0 ? 0 : G.spans.length - 1] : NaN,
+      mass: isMass(), lsRedNow: (u.earth || {}).lsRed };   // ABXM: the LS option with the slab (SLLS)
     if (ok) Object.assign(c, { Lauto: G.Wd / S.c, soilHAuto: R.bwTop - nz(u.topFtg), stemTop: R.stemTop, bwTop: R.bwTop, GWd: G.Wd, deckZ: S.deckZ });
     return c;
   }
-  const getU = (k, scope) => path => { const o = scope === 'bridge' ? P.br : P.units[k]; if (scope !== 'bridge') fillEarth(P.units[k]); return path.split('.').reduce((a, q) => a == null ? a : a[q], o); };
+  const getU = (k, scope) => path => { const o = scope === 'bridge' ? P.br : P.units[k]; if (scope !== 'bridge') fillEarth(P.units[k]); const v = path.split('.').reduce((a, q) => a == null ? a : a[q], o);
+    return v == null && scope === 'bridge' && path === 'hEQmode' ? paeLocOf() : v; };   // ABXM: P.br.hEQmode absent = 'sw' (SLPL), shown as such
   const setU = (k, scope, path, v) => { let o = scope === 'bridge' ? P.br : P.units[k]; const ks = path.split('.'); for (let i = 0; i < ks.length - 1; i++) { if (o[ks[i]] == null) o[ks[i]] = {}; o = o[ks[i]]; } o[ks[ks.length - 1]] = v; };
   function open(p, via, errs, pid) {
     if (!AD()) { alert('The shared file shared/abutment-def.js is not loaded; keep the whole folder together.'); return; }
@@ -3989,7 +3992,7 @@ async function rxImport(file) {
     GRP.forEach(([g, lab, , why]) => { const G = T.groups[g], dis = !G ? (T.gerr[g] || 'not sent') : T.gerr[g];
       h += `<div class="abd-grp" style="border-top:1px solid var(--line,#e2e8f0);padding:6px 0"><label style="display:flex;gap:6px;align-items:flex-start;font-size:.92rem"><input type="checkbox" data-abd-g="${g}"${D.on[g] && !dis ? ' checked' : ''}${dis ? ' disabled' : ''}> <span><b>${esc(lab)}</b>${dis ? ` <span style="color:var(--fail)">— not available: ${esc(dis)}</span>` : ''}<br><small style="color:var(--text-dim)">${esc(why)}</small></span></label>`;
       if (G) { const rows = AD().rows(G.items, getU(uk, G.scope));
-        h += `<div style="overflow-x:auto"><table class="mini-t"><thead><tr><th>Input</th><th>Now</th><th>Incoming</th></tr></thead><tbody>${rows.map(r => `<tr${r.chg ? ' style="font-weight:600"' : ''}><td class="lbl">${esc(r.lbl)}</td><td>${esc(r.cur)}</td><td>${esc(r.inc)}${r.chg ? ' <span style="color:var(--warn)">changes</span>' : ''}</td></tr>`).join('')}</tbody></table></div>`;
+        h += `<div style="overflow-x:auto"><table class="mini-t"><thead><tr><th>Input</th><th>Now</th><th>Incoming</th></tr></thead><tbody>${rows.map(r => `<tr${r.chg ? ' style="font-weight:600"' : ''}><td class="lbl">${esc(r.lbl)}${r.note ? `<br><small style="font-weight:400;color:var(--text-dim)">${esc(r.note)}</small>` : ''}</td><td>${esc(r.cur)}</td><td>${esc(r.inc)}${r.chg ? ' <span style="color:var(--warn)">changes</span>' : ''}</td></tr>`).join('')}</tbody></table></div>`;
         if (G.notes && G.notes.length) h += G.notes.map(n => `<p class="note abd-note" style="padding:2px 0 0">${esc(n)}</p>`).join(''); }
       h += `</div>`; });
     h += `<h3>Not applied (information)</h3><div style="overflow-x:auto"><table class="mini-t"><thead><tr><th>Item</th><th>Abutment Calculator</th><th>SubLoads</th><th>Why</th></tr></thead><tbody>${T.info.map(r => `<tr><td class="lbl">${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td><td>${esc(r[3])}</td></tr>`).join('')}</tbody></table></div>`;
@@ -4005,7 +4008,7 @@ async function rxImport(file) {
     if (!groups.length) return false;
     const p = D.p, pr = HS() ? HS().projectOf(p) : (p.project || {}), notes = [];
     const d = p.definition; if (groups.indexOf('geom') >= 0 && d.stem && Math.abs(d.stem.tBot - d.stem.tTop) > 1e-6) notes.push(`battered stem: t_top ${f2(d.stem.tTop)} ft used (t_bot ${f2(d.stem.tBot)} ft)`);
-    if (groups.indexOf('bridgewide') >= 0) notes.push('bridge-wide k_h ratio, k_v, ΔP_AE ratio and w_c changed for every unit');
+    if (groups.indexOf('bridgewide') >= 0) notes.push('bridge-wide k_h ratio, k_v, seismic earth pressure location and its ratios, and w_c changed for every unit');
     if (groups.indexOf('ftgEl') >= 0) notes.push('top of footing El. set to match the calculator\'s stem height');
     u.abutSrc = { producer: String(p.producer || ''), producerFile: String(p.producerFile || ''), producedAt: String(p.producedAt || ''), project: pr, pid: D.pid || '', via: D.via, adoptedAt: new Date().toISOString(),
       contentHash: p.contentHash || null, name: String(d.name || ''), groups, ...(notes.length ? { notes } : {}) };
