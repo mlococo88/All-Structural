@@ -81,6 +81,11 @@ node tests/smoke/bsl-gap-layout.mjs [--shots <dir>]
 # scrolling box, the Drawings tab's DXF identical to --ref (default origin/main), a tooltip on every input field of every input tab and unit. ~1 min
 node tests/smoke/bsl-graphics.mjs [--ref <git ref>] [--shots <dir>]
 
+# Bridge Substructure Loading, show the work on the tabs (SLWS): each load tab's "Worked steps" card = the Report's own steps (one for one, every
+# unit, default and water_wall), "see §n.m" opens the Report, the Combinations Strength I worked line, the Report's M_t / V_l labels as
+# subscripts (plain text unchanged), no card in the Report's package or while an input is invalid, 390 px, 0 console errors. ~1 min
+node tests/smoke/bsl-show-work.mjs [--shots <dir>]
+
 # Phone / tablet layout (PHN): at 390 and 768 px the page never scrolls sideways, on load and on every tab (one entry per tool in TOOLS)
 node tests/smoke/phone-layout.mjs [--tool smd,...] [--file <file or git ref>] [--w 390,768]
 

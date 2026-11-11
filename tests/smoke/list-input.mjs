@@ -173,7 +173,9 @@ const TOOLS = {
       const ids = await p.$$eval('.tab-btn', e => e.map(b => b.dataset.tab).filter(t => t !== 'v3d' && t !== 'drawings' && t !== 'manual')); out.tabs = {};
       for (const id of ids) { await p.click(`.tab-btn[data-tab="${id}"]`); await p.waitForTimeout(400);
         out.tabs[id] = await p.evaluate(id => { const e = document.getElementById('tab-' + id); if (!e) return null; const k = e.cloneNode(true);
-          k.querySelectorAll('[data-sli],script,style').forEach(x => x.remove()); return slalStrip(k.innerText).replace(/\n?Input ID:?\s*[0-9A-F]{8}-[0-9A-F]{4}/g, ''); }, id); }   // SLGP (2026-11-11): the Report title block's Input ID (display)
+          // SLWS (2026-11-11): the worked-steps card (display) left out; the Report labels' M_t … subscripts read as before
+          k.querySelectorAll('[data-sli],script,style,.slw-card,.slw-top').forEach(x => x.remove()); k.querySelectorAll('.slSubT sub').forEach(x => x.replaceWith('_' + x.textContent));
+          return slalStrip(k.innerText).replace(/\n?Input ID:?\s*[0-9A-F]{8}-[0-9A-F]{4}/g, ''); }, id); }   // SLGP (2026-11-11): the Report title block's Input ID (display)
       // SLIT (2026-11-11): the Bridge pane is split into several input tabs (display only), so the input panel is read as the value of every
       // bridge-wide field (br.*, meta.*) over every input tab, not as the Bridge pane's text
       out.side = await p.evaluate(async () => { const v = {}; for (const b of [...document.querySelectorAll('.itab')]) { b.click(); await new Promise(r => setTimeout(r, 60));
