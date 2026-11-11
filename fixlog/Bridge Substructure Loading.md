@@ -3058,3 +3058,34 @@ function listTables() {
   2. "Kept" means the full LS, with no partial reduction (as the calculator).
 - **Other copies:** none (the Abutment Calculator has its own implementation).
 - **Open item (not changed here, hand-off code being changed by the exchange work):** `shared/abutment-def.js` `fromSubLoads` sends `info.lsRed: null`. Its pull review row "LS with an approach slab" (anchor `'removed only under MassDOT rules'`) still describes SubLoads as removing LS only under MassDOT. Once this merges it should read "removed with the slab (3.11.6.5 option, default removed; MassDOT automatic)" and send `lsRed: lsSlabRem(earth)`.
+
+## 2026-11-11 — PR: subloads-force-height (PR #1410: https://github.com/mlococo88/All-Structural/pull/1410) — abutment superstructure horizontal forces at the bridge seat (SLFH; engineer decision 2026-11-11)   [§4: abutment moments change]
+- **Engineer decision (2026-11-11, confirmed):** "Height is at the seat", aligned with the Abutment Calculator (z_brg = zSeat = t_f + h_stem for BR, TU, CR/SH, WS, WL).
+- **Seat:** `R.stemTop` (top of the stem under the pedestals), the existing "bridge seat" resultant level.
+- **Where:**
+  - `unitModel`: anchor `const zSeat = t === 'abut' ? R.stemTop : null, zH =`; `hLoads` uses `zH(lc, ri)`. The UM also returns `zSeat` and `zH`.
+  - `superCase`: `seat: !!spec.seat`. `rowCase`: `seat: true`.
+  - `phase3`: WS and WL calls pass `seat: true`.
+  - `phase5`: the EQ `mk`, `m` and `m1` row cases carry `seat: true`.
+  - `loadSets`: `rowsOf` uses `UM.zH`, and the WS / WL / EQ sets pass the flag.
+  - New `abSeatInfo` / `abSeatNote` (before `patchReport`), wrapping `brceHtml`, `windHtml`, `tempHtml` and `eqHtml`. The Report unit section has a subsection (anchor `Height of the superstructure horizontal forces`).
+- **Before:** `const hLoads = lc => { ... L.push({ z: zB[ri], Hn: ... }) ...`
+- **After:** `const hLoads = lc => { ... L.push({ z: zH(lc, ri), Hn: ... }) ...` with `zH = (lc, ri) => lc.seat && zSeat != null ? zSeat : zB[ri]`
+- **Moved (abutments):** TU, FR, SH, WS on the superstructure (horizontal), WL (horizontal), EQ superstructure inertia.
+- **Not moved:** BR and CE (6 ft above the deck, couple at the bearings); the vertical couples of WS and WL; the wind on the substructure, water, ice, collision and earth; every pier.
+- **Governing basis:** the load path through the bearings to the seat (the calculator's convention). The force magnitudes (AASHTO LRFD 10th Ed. 3.12.2, 3.13, 3.12.4/5, 3.8.1.2, 3.8.1.3, 3.10.9) are unchanged.
+- **Check case:** default project, Abut. 1.
+  - Bottom of footing El. 105.000; top of bearings El. 118.917 (arm 13.917 ft); seat El. 117.991 (arm 12.991 ft).
+  - TU fall: 51.641 kip, M_l 718.671 → 670.856. TU rise: −34.427 kip, −479.114 → −447.237.
+  - WS (Str III, 0°): −168.119 → −161.004. WL (0°): −19.810 → −18.492. BR: 28.243, unchanged.
+  - Strength I M_l max at the bottom of footing: 4499.406 → 4451.591 (Δ 1.00 × 51.641 × 0.926 = 47.815). M_t max: 3621.220 → 3608.408. Service I M_l max: 2481.953 → 2430.150.
+  - A_s 0.15: EE I M_l max 4328.052 → 4210.395.
+- **How verified:** main-vs-branch probe (default, slab, slab + LL, slab MassDOT, A_s 0.15, A_s 0.15 + slab). Only the abutment M_l and M_t change (bridge seat, top and bottom of footing), in Str I/III/V, Ser I/IV, EE I and the envelope. P, V, bearings, EE II, construction, BR/CE, piers and the hand-off payload are identical.
+- **Tests:** new `tests/smoke/bsl-force-height.mjs`.
+- **Saved data (§5):** none changed.
+- **Decisions (pending engineer review):**
+  1. Piers keep the top of the bearings. The code is shared, but the rule and the calculator's convention are for abutments, and a pier's bearing and pedestal height is a lever arm on its cap and columns.
+  2. CE is not moved (6 ft above the deck, like BR).
+  3. FR, SH and EQ inertia move with TU, WS and WL as bearing-delivered forces.
+  4. The vertical couples stay referred to the top of the bearings.
+- **Other copies:** none.
