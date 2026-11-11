@@ -7,7 +7,7 @@
 //    and approach slab ticked; soil, seismic settings unticked; a project with its own geometry: geometry unticked and listed under "Not
 //    ticked"); L_ftg carried; elevations applied; the project picker when this browser holds copies of two projects (preselects the one
 //    named like the open project); Import hand-off (JSON); 390 px; no console errors.
-// B. calculator -> SubLoads (abutmentDef): see the second half of the file.
+// B. calculator -> SubLoads (abutmentDef): see the second half of the file (part B).
 import fs from 'fs';
 import path from 'path';
 import { openPage, REPO } from '../lib.mjs';
@@ -100,6 +100,99 @@ check(/^file: /.test(r.via) && r.Lftg === 50, 'Import hand-off (JSON): the same 
 check(o.errs.length === 0, 'no console errors');
 await o.b.close();
 
-/*__PART_B__*/
+// ---------------------------------------------------------------------------------------------------------------------------------
+// B. calculator -> SubLoads (abutmentDef, HANDOFF.md §4.15): "Send abutment to SubLoads" writes the channel, .updatedAt and the copy
+//    bridgeSuite.v1.abutmentDef.by.abutment.<project id>; an integral abutment is refused. SubLoads' "Pull abutment from the Abutment
+//    Calculator": project picker (preselects the project named like the open one), target unit, default ticks per ownership (geometry,
+//    soil, approach slab ticked; pad, top-of-footing El., bridge-wide unticked), battered-stem note, apply into Abut. 2, P.units[k].abutSrc,
+//    the unit pane note and the report row, Import hand-off (JSON), 390 px. Round trip: SubLoads default Abut. 1 -> calculator (default
+//    project, default ticks) -> SubLoads (default ticks): no SubLoads input and no result changes (only abutSrc is added).
+const grab = re => p => p.evaluate(r => { const o = {}; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (new RegExp(r).test(k)) o[k] = localStorage.getItem(k); } return o; }, re);
+async function abSend(ls, setup) {
+  const o = await openPage(ABF, { ls, vw: 1400 });
+  await o.p.waitForFunction(() => window.LAST_R, null, { timeout: 60000 });
+  const r = await o.p.evaluate(s => { if (s) { eval('(' + s + ')')(); migrate(); buildInputs(); recalcAll(); }
+    document.getElementById('abd-send').click(); return { sent: (document.getElementById('abd-sent') || {}).textContent || '' }; }, setup ? setup.toString() : null);
+  await new Promise(res => setTimeout(res, 300)); r.ls = await grab('^bridgeSuite\\.v1\\.abutmentDef')(o.p); r.dialogs = o.dialogs; r.errs = o.errs; await o.b.close(); return r;
+}
+const SL_SNAP = () => { const o = {}; P.units.forEach((u, k) => { const C = combine(k); o[k] = Object.fromEntries(Object.entries(C).map(([id, c]) => [id, c && c.max ? [Array.from(c.max), Array.from(c.min)] : null])); }); return o; };
+async function slPull(ls, { name, pick, unit, vw = 1400, shot, setup } = {}) {
+  const o = await openPage(SLF, { ls, vw, vh: 1000 });
+  await o.p.waitForFunction('typeof MODEL !== "undefined" && MODEL.G && MODEL.UG', null, { timeout: 60000 });
+  const r = await o.p.evaluate(async ([name, pick, unit, snapS, setup]) => {
+    const snap = eval('(' + snapS + ')'), w = ms => new Promise(r => setTimeout(r, ms));
+    if (setup) { eval('(' + setup + ')')(); recompute(); }
+    if (name) P.meta.name = name; P.ui.itab = 'project'; buildSide(); await w(100);
+    const P0 = JSON.parse(JSON.stringify(P)), r0 = snap(), marker = !!document.getElementById('abd-new');
+    document.getElementById('abd-pull').click(); await w(600);
+    const pk = document.getElementById('gxp-modal'), pkRows = pk ? pk.querySelectorAll('tr[data-gxp-row]').length : 0, pkSel = pk ? [...pk.querySelectorAll('input[type=radio]')].findIndex(x => x.checked) : -1;
+    if (pick != null) { pk.querySelector(`tr[data-gxp-row="${pick}"]`).click(); await w(100); }
+    document.getElementById('gxp-next').click(); await w(200);
+    const m = () => document.getElementById('abd-modal');
+    if (unit != null) { const sel = m().querySelector('select[data-abd="k"]'); sel.value = String(unit); sel.dispatchEvent(new Event('change', { bubbles: true })); await w(100); }
+    const ticks = Object.fromEntries([...m().querySelectorAll('input[data-abd-g]')].map(c => [c.dataset.abdG, c.checked && !c.disabled])), txt = m().innerText;
+    const fit = document.documentElement.scrollWidth <= window.innerWidth + 1, box = m().querySelector('.modal-box'), boxFit = box.getBoundingClientRect().right <= window.innerWidth + 1;
+    return { P0, r0, marker, pkRows, pkSel, ticks, txt, fit, boxFit };
+  }, [name || null, pick == null ? null : pick, unit == null ? null : unit, SL_SNAP.toString(), setup ? setup.toString() : null]);
+  if (shot) await o.p.screenshot({ path: shot });
+  Object.assign(r, await o.p.evaluate(async snapS => { const snap = eval('(' + snapS + ')');
+    document.getElementById('abd-apply').click(); await new Promise(r => setTimeout(r, 500));
+    const P1 = JSON.parse(JSON.stringify(P)), r1 = snap(); let rpt = ''; try { rpt = basisExtra(); } catch (e) { rpt = 'ERR ' + e.message; }
+    P.ui.itab = 'units'; P.ui.sel = P.units.findIndex(u => u.abutSrc); buildSide(); const note = (document.getElementById('abd-src') || {}).textContent || '';
+    return { P1, r1, rpt, note }; }, SL_SNAP.toString()));
+  r.errs = o.errs; r.dialogs = o.dialogs; await o.b.close(); return r;
+}
+const diffP = (a, b) => { const d = []; const walk = (x, y, p) => { if (x && y && typeof x === 'object' && typeof y === 'object') new Set([...Object.keys(x), ...Object.keys(y)]).forEach(k => walk(x[k], y[k], p + '.' + k)); else if (JSON.stringify(x) !== JSON.stringify(y)) d.push(p); }; walk(a, b, 'P'); return d; };
+
+console.log('B1. calculator send; integral refused');
+const b1 = await abSend(null);
+const bk = Object.keys(b1.ls), dpay = JSON.parse(b1.ls[NS + 'abutmentDef']);
+check(bk.includes(NS + 'abutmentDef.updatedAt') && bk.includes(NS + 'abutmentDef.by.abutment.~Example Single-Span Bridge'), 'channel, .updatedAt and the per-project copy by.abutment.<pid>');
+check(dpay._schema === 'bridge-abutment-def' && dpay.schemaVersion === 1 && dpay.producer === 'Abutment Calculator' && dpay.abutType === 'conv' && /^[0-9a-f]{8}$/.test(dpay.contentHash), 'envelope: schema, producer, type, content hash');
+check(dpay.definition.lengths.Lab === 44 && dpay.definition.stem.tTop === 4.5 && dpay.definition.footing.W === 13 && dpay.definition.info.wingwalls.length === 1, 'definition: L_ab 44, stem 4.5, footing 3.5 + 4.5 + 5 = 13, wingwalls listed');
+check(/project "Example Single-Span Bridge"/.test(b1.sent) && b1.errs.length === 0, 'Last sent line; no console errors');
+const bI = await abSend(null, () => { S.iab.type = 'integral'; });
+check(bI.dialogs.some(d => /Only a conventional abutment can be sent/.test(d)) && !Object.keys(bI.ls).length, 'integral abutment: refused, nothing sent');
+
+console.log('B2. SubLoads pull: picker, target unit, ticks, battered stem, apply into Abut. 2');
+const bat = await abSend(null, () => { S.proj.name = 'Route 9 over Mill Brook'; S.geom.tsb = 5.5; S.geom.Lab = 50; S.soil.phi = 34; });
+const ls3 = Object.assign({}, b1.ls, bat.ls);
+const b2 = await slPull(ls3, { name: 'Route 9 over Mill Brook', unit: 3, shot: SHOTS ? path.join(SHOTS, 'subloads-pull-from-abutment.png') : null });
+check(b2.marker, 'Hand-offs: new-data marker before any pull (a copy named like this project)');
+check(b2.pkRows === 2 && b2.pkSel === 0, 'picker: 2 projects, the one named like this project preselected');
+check(b2.ticks.geom && b2.ticks.soil && b2.ticks.aps && !b2.ticks.brg && !b2.ticks.ftgEl && !b2.ticks.bridgewide, 'ticks: geometry, soil, approach slab; not pad, top of footing, bridge-wide');
+check(/Battered stem: the calculator has t_top = 4\.5 ft, t_bot = 5\.5 ft/.test(b2.txt) && /applies to every unit/.test(b2.txt) && /Wingwalls/.test(b2.txt) && /ΔP_AE height/.test(b2.txt), 'battered-stem note, bridge-wide label, wingwalls and definition rows');
+const u3 = b2.P1.units[3];
+check(u3.abut.L === 50 && u3.abut.stemT === 4.5 && u3.ftg.W === 3.5 + 5.5 + 5 && u3.earth.phi === 34 && b2.P1.units[0].abut.L === b2.P0.units[0].abut.L, 'applied to Abut. 2 only: L_ab 50, stem 4.5, footing 14, φ 34');
+check(u3.abutSrc && u3.abutSrc.pid === '~Route 9 over Mill Brook' && u3.abutSrc.groups.join() === 'geom,soil,aps' && /battered stem/.test((u3.abutSrc.notes || []).join()), 'P.units[3].abutSrc recorded (pid, groups, battered note)');
+check(b2.P1.br.khR === b2.P0.br.khR && b2.P1.units[3].elast.L === b2.P0.units[3].elast.L && b2.P1.units[3].topFtg === b2.P0.units[3].topFtg, 'unticked: bridge-wide, pad and elevations unchanged');
+check(/Abutment definition/.test(b2.rpt) && /Abut\. 2: abutment from Abutment Calculator/.test(b2.rpt) && /abutment from Abutment Calculator/.test(b2.note), 'report row and the unit pane note');
+check(b2.errs.length === 0, 'no console errors' + (b2.errs.length ? ': ' + b2.errs.join(' | ') : ''));
+
+console.log('B3. round trip: SubLoads default Abut. 1 -> calculator -> SubLoads');
+const s0 = await subloadsSend(null);
+const o4 = await openPage(ABF, { ls: s0.ls, vw: 1400 }); await o4.p.waitForFunction(() => window.LAST_R, null, { timeout: 60000 });
+await o4.p.evaluate(() => { S.proj.name = 'Example three-span continuous'; document.getElementById('axh-pull').click(); document.getElementById('axh-apply').click(); recalcAll(); document.getElementById('abd-send').click(); });
+await new Promise(res => setTimeout(res, 300)); const lsRT = await grab('^bridgeSuite\\.v1\\.abutmentDef')(o4.p); await o4.b.close();
+const rt = await slPull(lsRT, {});
+const dRT = diffP(rt.P0, rt.P1).filter(p => !/^P\.ui\./.test(p));
+check(dRT.length === 1 && dRT[0] === 'P.units.0.abutSrc', 'only P.units[0].abutSrc is added: ' + dRT.join(', '));
+check(JSON.stringify(rt.r0) === JSON.stringify(rt.r1), 'every unit\'s combinations identical after the round trip');
+check(Object.values(rt.ticks).filter(Boolean).length === 3 && !/changes/.test(rt.txt.split('Bearing pad')[0].split('Groups')[1] || ''), 'default ticks; no changed row in the ticked groups');
+check(rt.errs.length === 0, 'no console errors');
+
+console.log('B4. Import hand-off (JSON); 390 px');
+const o5 = await openPage(SLF, { vw: 390, vh: 900 }); await o5.p.waitForFunction('typeof MODEL !== "undefined" && MODEL.G && MODEL.UG', null, { timeout: 60000 });
+await o5.p.evaluate(() => { P.ui.itab = 'project'; buildSide(); });
+const tf2 = path.join(REPO, 'tests', '.abx-import-def.json'); fs.writeFileSync(tf2, JSON.stringify(dpay));
+await o5.p.setInputFiles('#abd-hf-in', tf2); await o5.p.waitForSelector('#abd-modal .modal-box', { timeout: 10000 }); fs.unlinkSync(tf2);
+const r5 = await o5.p.evaluate(() => { const m = document.getElementById('abd-modal'), box = m.querySelector('.modal-box');
+  return { via: /via file: /.test(m.innerText), fit: document.documentElement.scrollWidth <= window.innerWidth + 1, box: box.getBoundingClientRect().right <= window.innerWidth + 1 }; });
+if (SHOTS) await o5.p.screenshot({ path: path.join(SHOTS, 'subloads-pull-from-abutment-390.png') });
+const r5b = await o5.p.evaluate(async () => { document.getElementById('abd-apply').click(); await new Promise(r => setTimeout(r, 400)); return P.units[0].abutSrc && P.units[0].abutSrc.via; });
+check(r5.via && /^file: /.test(r5b || ''), 'Import hand-off (JSON): the same review, via file');
+check(r5.fit && r5.box, '390 px: no horizontal page scroll; the dialog fits the screen');
+check(o5.errs.length === 0, 'no console errors' + (o5.errs.length ? ': ' + o5.errs.join(' | ') : ''));
+await o5.b.close();
 console.log(fails ? `\n${fails} FAILED` : '\nall passed');
 process.exit(fails ? 1 : 0);

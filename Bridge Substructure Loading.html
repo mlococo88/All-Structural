@@ -3744,7 +3744,7 @@ async function rxImport(file) {
     h += `<table class="mini-t" style="margin-top:6px"><thead><tr><th></th><th>Bridge ID</th><th>Project</th><th>Sent</th><th>Device</th><th>Summary</th></tr></thead><tbody>`;
     K.groups.forEach((g, i) => { const n = g.newest, p = n.payload, dev = p.device ? esc(p.device) + (n.source === 'github' ? ' (GitHub)' : '') : n.source === 'github' ? 'GitHub' : 'this browser';
       const prods = [...new Set(g.entries.map(e => e.payload.producer || '?'))];
-      h += `<tr data-gxp-row="${i}" style="cursor:pointer"><td><input type="radio" name="gxp" data-gxp="${i}"${K.sel === g.pid && K.sel != null ? ' checked' : ''} aria-label="${esc(g.label)}"></td><td>${esc(g.project.bridgeId || '—')}</td><td>${g.noProject ? `<i>${esc(g.label)}</i>` : esc(g.project.name || '—')}</td><td>${esc(when(p.producedAt))}</td><td>${dev}</td><td>${esc(HS().summary(o.channel, p) || '')}<br><small>${esc(prods.join(', '))}${g.entries.length > 1 ? `; ${g.entries.length} copies` : ''}</small></td></tr>`; });
+      h += `<tr data-gxp-row="${i}" style="cursor:pointer"><td><input type="radio" name="gxp" data-gxp="${i}"${K.sel === g.pid && K.sel != null ? ' checked' : ''} aria-label="${esc(g.label)}"></td><td>${esc(g.project.bridgeId || '—')}</td><td>${g.noProject ? `<i>${esc(g.label)}</i>` : esc(g.project.name || '—')}</td><td>${esc(when(p.producedAt))}</td><td>${dev}</td><td>${esc((o.summary ? o.summary(p) : HS().summary(o.channel, p)) || '')}<br><small>${esc(prods.join(', '))}${g.entries.length > 1 ? `; ${g.entries.length} copies` : ''}</small></td></tr>`; });
     h += `</tbody></table>`;
     if (K.errs.length) h += `<p style="color:var(--warn);margin-top:6px">Not offered: ${esc(K.errs.join('; '))}</p>`;
     const ok = K.sel != null && K.groups.some(g => g.pid === K.sel);
@@ -3897,6 +3897,133 @@ async function rxImport(file) {
   document.addEventListener('keydown', e => { if (e.key !== 'Escape') return; if (PK) { shut('gxp-modal'); PK = null; } else if (GD) { shut('gxg-modal'); GD = null; } });
   window.addEventListener('storage', e => { if (e.key && e.key.indexOf(NS + CH) === 0) buildSide(); });   // HOC: the Hand-offs card and the Project tab marker
   window.SubLoadsGeoHandoff = { pull, openGeo, applyGeo, plan, check, state: () => GD, isNewGeo, hoRow };   // used by tests; no effect on results
+})();
+/* ---------- abutment definition from the abutment calculator (ABX, 2026-11-11; HANDOFF.md §4.15, channel abutmentDef, receiver id subloads) ----------
+   Project tab, Hand-offs card: "Pull abutment from the Abutment Calculator" (new-data marker per pulled project) and "Import hand-off (JSON)".
+   The pull first asks which project (SubLoadsPicker, §5.1), then the review: the target unit (an abutment of this bridge), the groups with
+   current vs incoming side by side, each group ticked or not (engineer decision 2026-11-11, ownership: the calculator owns the abutment
+   (geometry, lengths, soil and backfill: ticked; the approach slab: ticked), SubLoads owns the bridge (bearing pad, elevations and the
+   bridge-wide inputs: unticked)), the information rows (skew, span, elevations, definitions that differ, wingwalls, refined calculator
+   inputs) and Apply. The mapping is shared/abutment-def.js toSubLoads. Record: the new optional field P.units[k].abutSrc, shown on the
+   unit's Abutment section, in the Hand-offs card and in the report. Nothing is applied without Apply; nothing on page load. */
+(function patchAbutDefHandoff() {
+  const NS = 'bridgeSuite.v1.', HS = () => window.SharedHandoffStore, BX = () => window.BridgeXfer, AD = () => window.SharedAbutmentDef;
+  const CH = 'abutmentDef', SCH = 'bridge-abutment-def', PRODS = ['abutment'], RID = 'subloads';
+  const when = iso => { const d = new Date(iso); return isNaN(d) ? String(iso || '?') : d.toLocaleString(); };
+  const modal = id => { let m = document.getElementById(id); if (!m) { m = document.createElement('div'); m.className = 'modal'; m.id = id; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); document.body.appendChild(m); } m.hidden = false; return m; };
+  const shut = id => { const m = document.getElementById(id); if (m) { m.hidden = true; m.innerHTML = ''; } };
+  const GRP = [['geom', 'Abutment geometry and lengths', true, 'L_ab, L_ftg, stem, bearing to the stem front, backwall, toe and footing. The calculator owns the abutment.'],
+    ['soil', 'Soil and backfill', true, 'Theory, γ, φ, δ, β, the h_eq table, ES, water table, retained height, construction fill and γ_LS. The calculator owns the soil and backfill.'],
+    ['aps', 'Approach slab', true, 'On / off, width, length, thickness and the share of its weight on this abutment (the calculator\'s computed reaction as a %).'],
+    ['brg', 'Bearing pad', false, 'Pad length, width, G and h_rt. SubLoads owns the bearings: not ticked by default.'],
+    ['ftgEl', 'Set the top of footing El. to match the calculator\'s stem height', false, 'SubLoads keeps its own elevations; this moves only this unit\'s top of footing (and ground, from D_f) so the stem height equals the calculator\'s.'],
+    ['bridgewide', 'Bridge-wide inputs: seismic k_h ratio, k_v, ΔP_AE height ratio, concrete w_c (applies to every unit)', false, 'These are one value for the whole bridge in SubLoads: ticking changes every unit, not only this abutment.']];
+  const abUnits = () => (P.units || []).map((u, k) => [u, k]).filter(([u]) => u.type === 'abut').map(([, k]) => k);
+  let AD_ = null;   // { p, via, pid, c, k, on:{} }
+  function ctxOf(k) {
+    const u = P.units[k], b = P.br, G = MODEL.G, R = MODEL.UG && MODEL.UG[k], S = G && G.sup && G.sup[k], ok = G && !G.E.length && R && S && R.type === 'abut';
+    const c = { name: u.name, ftgType: u.ftg.type, topFtg: nz(u.topFtg), ground: nz(u.ground), hbIn: nz(u.hb), hpIn: nz(u.hp), skewDeg: nz(b.skews[k]), spanL: G && G.spans ? G.spans[k === 0 ? 0 : G.spans.length - 1] : NaN };
+    if (ok) Object.assign(c, { Lauto: G.Wd / S.c, soilHAuto: R.bwTop - nz(u.topFtg), stemTop: R.stemTop, bwTop: R.bwTop, GWd: G.Wd, deckZ: S.deckZ });
+    return c;
+  }
+  const getU = (k, scope) => path => { const o = scope === 'bridge' ? P.br : P.units[k]; if (scope !== 'bridge') fillEarth(P.units[k]); return path.split('.').reduce((a, q) => a == null ? a : a[q], o); };
+  const setU = (k, scope, path, v) => { let o = scope === 'bridge' ? P.br : P.units[k]; const ks = path.split('.'); for (let i = 0; i < ks.length - 1; i++) { if (o[ks[i]] == null) o[ks[i]] = {}; o = o[ks[i]]; } o[ks[ks.length - 1]] = v; };
+  function open(p, via, errs, pid) {
+    if (!AD()) { alert('The shared file shared/abutment-def.js is not loaded; keep the whole folder together.'); return; }
+    const c = AD().checkPayload(p), ks = abUnits();
+    if (!ks.length) { alert('This bridge has no abutment unit to pull into.'); return; }
+    const pr = HS() ? HS().projectOf(p) : { name: '', bridgeId: '' }, ppid = pid || (HS() ? HS().pidOf(pr) : '');
+    const prev = ks.find(k => P.units[k].abutSrc && P.units[k].abutSrc.pid && P.units[k].abutSrc.pid === ppid);
+    AD_ = { p, via, pid: ppid, errs: errs || [], c, k: prev != null ? prev : ks[0], on: {} };
+    GRP.forEach(g => { AD_.on[g[0]] = g[2]; });
+    render();
+  }
+  function plan() { const D = AD_; return AD().toSubLoads(D.p.definition, ctxOf(D.k)); }
+  function render() {
+    const m = modal('abd-modal'), D = AD_, p = D.p, c = D.c, pr = HS() ? HS().projectOf(p) : (p.project || {});
+    let h = `<div class="modal-box" style="width:min(900px,96vw)"><h2>Pull abutment from the Abutment Calculator</h2><table class="mini-t"><tbody>
+      <tr><td class="lbl">Producer</td><td>${esc(p.producer || '?')}${p.producerFile ? ` (${esc(p.producerFile)})` : ''}</td></tr><tr><td class="lbl">Produced</td><td>${esc(when(p.producedAt))}${p.device ? `, on ${esc(p.device)}` : ''}; via ${esc(D.via)}</td></tr>
+      <tr><td class="lbl">Project</td><td>${esc([pr.bridgeId, pr.name].filter(Boolean).join(' — ') || '(not stated)')}${p.definition && p.definition.name ? ` (abutment "${esc(p.definition.name)}")` : ''}</td></tr></tbody></table>`;
+    if (Array.isArray(p.notes) && p.notes.length) h += `<h3>Notes from ${esc(p.producer || 'the producer')}</h3><ul style="margin:0 0 0 18px;font-size:.85rem;color:var(--text-dim)">${p.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>`;
+    if (D.errs.length) h += `<p style="color:var(--warn);margin-top:6px">Not offered: ${esc(D.errs.join('; '))}</p>`;
+    if (!c.ok) { m.innerHTML = h + `<p style="color:var(--fail);margin-top:10px"><b>Refused:</b> ${esc(c.errors.join('; '))}. Nothing will be changed.</p><div class="modal-foot"><button type="button" class="btn" id="abd-cancel">Close</button></div></div>`; return; }
+    if (c.warnings.length) h += `<p style="color:var(--warn);margin-top:6px">${esc(c.warnings.join(' '))}</p>`;
+    h += `<h3>Into</h3><select data-abd="k" aria-label="Target abutment unit">${abUnits().map(k => `<option value="${k}"${k === D.k ? ' selected' : ''}>${esc(P.units[k].name)}${P.units[k].abutSrc ? ` (last pulled ${esc(when(P.units[k].abutSrc.producedAt))})` : ''}</option>`).join('')}</select>`;
+    const T = plan(), uk = D.k;
+    h += `<h3>Groups</h3><p style="margin:0 0 4px;font-size:.85rem">Each group shows this unit now and the incoming value; changed rows are bold. Ticked by default: what the calculator owns (the abutment itself). Tick or untick any group.</p>`;
+    GRP.forEach(([g, lab, , why]) => { const G = T.groups[g], dis = !G ? (T.gerr[g] || 'not sent') : T.gerr[g];
+      h += `<div class="abd-grp" style="border-top:1px solid var(--line,#e2e8f0);padding:6px 0"><label style="display:flex;gap:6px;align-items:flex-start;font-size:.92rem"><input type="checkbox" data-abd-g="${g}"${D.on[g] && !dis ? ' checked' : ''}${dis ? ' disabled' : ''}> <span><b>${esc(lab)}</b>${dis ? ` <span style="color:var(--fail)">— not available: ${esc(dis)}</span>` : ''}<br><small style="color:var(--text-dim)">${esc(why)}</small></span></label>`;
+      if (G) { const rows = AD().rows(G.items, getU(uk, G.scope));
+        h += `<div style="overflow-x:auto"><table class="mini-t"><thead><tr><th>Input</th><th>Now</th><th>Incoming</th></tr></thead><tbody>${rows.map(r => `<tr${r.chg ? ' style="font-weight:600"' : ''}><td class="lbl">${esc(r.lbl)}</td><td>${esc(r.cur)}</td><td>${esc(r.inc)}${r.chg ? ' <span style="color:var(--warn)">changes</span>' : ''}</td></tr>`).join('')}</tbody></table></div>`;
+        if (G.notes && G.notes.length) h += G.notes.map(n => `<p class="note abd-note" style="padding:2px 0 0">${esc(n)}</p>`).join(''); }
+      h += `</div>`; });
+    h += `<h3>Not applied (information)</h3><div style="overflow-x:auto"><table class="mini-t"><thead><tr><th>Item</th><th>Abutment Calculator</th><th>SubLoads</th><th>Why</th></tr></thead><tbody>${T.info.map(r => `<tr><td class="lbl">${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td><td>${esc(r[3])}</td></tr>`).join('')}</tbody></table></div>`;
+    h += `<p style="margin-top:6px;font-size:.85rem">Never sent by the calculator: backwall offset and stem shelf, batter detail beyond t<sub>top</sub> / t<sub>bot</sub>, Coulomb heel cases, K rules, water in front, construction surcharge q<sub>c</sub>, the approach-slab model, piles, resistances, reinforcement, owner rules, integral and semi-integral types.</p>`;
+    const any = GRP.some(([g]) => D.on[g] && T.groups[g] && !T.gerr[g]);
+    h += `<div class="modal-foot"><button type="button" class="btn" id="abd-cancel">Cancel</button><button type="button" class="btn btn-primary" id="abd-apply"${any ? '' : ' disabled'}>Apply</button></div></div>`;
+    m.innerHTML = h;
+  }
+  function apply() {
+    const D = AD_; if (!D || !D.c.ok) return false; const T = plan(), k = D.k, u = P.units[k], groups = [];
+    fillEarth(u);
+    GRP.forEach(([g]) => { const G = T.groups[g]; if (!D.on[g] || !G || T.gerr[g]) return; groups.push(g); const cur = getU(k, G.scope); G.items.forEach(it => { if (it.val === '' && (cur(it.path) == null || cur(it.path) === '')) return; setU(k, G.scope, it.path, it.val); }); });   // a blank (auto) value stays as it is
+    if (!groups.length) return false;
+    const p = D.p, pr = HS() ? HS().projectOf(p) : (p.project || {}), notes = [];
+    const d = p.definition; if (groups.indexOf('geom') >= 0 && d.stem && Math.abs(d.stem.tBot - d.stem.tTop) > 1e-6) notes.push(`battered stem: t_top ${f2(d.stem.tTop)} ft used (t_bot ${f2(d.stem.tBot)} ft)`);
+    if (groups.indexOf('bridgewide') >= 0) notes.push('bridge-wide k_h ratio, k_v, ΔP_AE ratio and w_c changed for every unit');
+    if (groups.indexOf('ftgEl') >= 0) notes.push('top of footing El. set to match the calculator\'s stem height');
+    u.abutSrc = { producer: String(p.producer || ''), producerFile: String(p.producerFile || ''), producedAt: String(p.producedAt || ''), project: pr, pid: D.pid || '', via: D.via, adoptedAt: new Date().toISOString(),
+      contentHash: p.contentHash || null, name: String(d.name || ''), groups, ...(notes.length ? { notes } : {}) };
+    try { if (BX()) BX().markAdopted(CH, RID, p.producedAt || ''); } catch (e) { /* marker only */ }
+    shut('abd-modal'); AD_ = null; buildSide(); recompute(); autosave();
+    flash(`Abutment from ${u.abutSrc.producer} applied to ${u.name}.`);
+    return true;
+  }
+  const GL = { geom: 'geometry and lengths', soil: 'soil and backfill', aps: 'approach slab', brg: 'bearing pad', ftgEl: 'top of footing El.', bridgewide: 'bridge-wide inputs' };
+  const srcLine = k => { const s = P.units[k].abutSrc; if (!s) return ''; const pr = s.project || {};
+    return `${esc(P.units[k].name)}: abutment from ${esc(s.producer)}${s.producerFile ? ` (${esc(s.producerFile)})` : ''}, project ${esc([pr.bridgeId, pr.name].filter(Boolean).join(' — ') || '(not stated)')}, produced ${esc(when(s.producedAt))}, pulled ${esc(when(s.adoptedAt))}: ${esc((s.groups || []).map(g => GL[g] || g).join(', '))}${s.notes && s.notes.length ? ` (${esc(s.notes.join('; '))})` : ''}. Elevations, skew, spans and bearings are SubLoads'; values may have been edited since.`; };
+  function pull() {
+    if (!HS() || !window.SubLoadsPicker) { alert('The hand-off helper (shared/handoff-store.js) is not loaded; keep the whole folder together.'); return; }
+    SubLoadsPicker.open({ channel: CH, schema: SCH, title: 'Pull abutment', producers: PRODS, legacy: [{ key: NS + CH, via: 'latest hand-off' }], summary: p => AD() ? AD().summary(p) : '',
+      empty: 'No abutment has been sent yet. In the Abutment Calculator, Project tab, Hand-offs, click "Send abutment to SubLoads", then pull here.',
+      onPick: (g, errs) => open(g.newest.payload, g.pid ? `pull, project ${g.label}${g.newest.source === 'github' ? ' (GitHub)' : ''}` : 'pull', errs, g.pid) });
+  }
+  function importFile(file) {
+    const fr = new FileReader();
+    fr.onload = () => { let p; try { p = JSON.parse(fr.result); } catch (e) { alert(`Cannot import ${file.name}: the file is not valid JSON.`); return; } open(p, 'file: ' + file.name, []); };
+    fr.onerror = () => alert(`Could not read ${file.name}.`); fr.readAsText(file);
+  }
+  /* new-data marker: per pulled project (a newer copy of a unit's abutSrc.pid in this browser); before any pull, a copy that matches this project */
+  function isNew() {
+    if (!HS() || !window.SubLoadsPicker) return false; const srcs = (P.units || []).map(u => u.abutSrc).filter(s => s && s.pid);
+    if (srcs.length) return srcs.some(s => SubLoadsPicker.newer(CH, SCH, PRODS, s.pid, s.producedAt));
+    if ((P.units || []).some(u => u.abutSrc)) return false;
+    const L = HS().local({ storage: localStorage, channel: CH, schema: SCH, maxVersion: 1, producers: PRODS });
+    return HS().match(HS().group(L.entries), { name: String((P.meta || {}).name || ''), bridgeId: '' }) != null;
+  }
+  function hoRow() { const n = isNew(), ks = (P.units || []).map((u, k) => k).filter(k => P.units[k].abutSrc);
+    return `<div class="slHoRow"><div class="slHoWho"><b>Abutment</b> <span class="note" style="padding:0">from the Abutment Calculator (bridgeSuite.v1.abutmentDef)</span></div>
+      <div class="slRow" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><button type="button" class="btn btn-sm" id="abd-pull" title="Pull an abutment (geometry, lengths, soil and backfill, approach slab; optionally the pad, the footing elevation and the bridge-wide inputs) sent by the Abutment Calculator (asks which project and which unit, then shows every change first)">Pull abutment from the Abutment Calculator</button><button type="button" class="btn btn-sm" id="abd-hf-imp" title="Import an abutmentDef hand-off JSON file (asks first)">Import hand-off (JSON)</button><input type="file" id="abd-hf-in" accept=".json,application/json" hidden>${n ? '<span class="rxh-new" id="abd-new">New data available</span>' : ''}</div>
+      <p class="note" style="padding:2px 0 0"><b>Status:</b> ${n ? 'new data available' : ks.length ? 'no newer copy of the pulled project' : 'no copy for this project yet'}. <b>Last received:</b> ${ks.length ? ks.map(srcLine).join(' ') : 'none.'} Applied to the <a href="#" data-go-itab="units">Units tab</a> after the review.</p></div>`; }
+  const be = basisExtra; basisExtra = function () { const h = be(), ks = (P.units || []).map((u, k) => k).filter(k => P.units[k].abutSrc); if (!ks.length) return h; return h + `<tr><td class="lbl">Abutment definition</td><td>${ks.map(srcLine).join('<br>')}</td></tr>`; };
+  const pu = paneUnits; paneUnits = function () { const h = pu(), k = P.ui.sel, u = P.units[k]; if (!u || u.type !== 'abut' || !u.abutSrc) return h;
+    const tag = '<div class="sec-h">Abutment'; const i = h.indexOf(tag); if (i < 0) return h;
+    return h.slice(0, i) + `<p class="note" id="abd-src" style="padding:4px 16px">${srcLine(k)} <a href="#" data-go-ho>Hand-offs</a></p>` + h.slice(i); };
+  document.addEventListener('click', e => {
+    const t = e.target.closest ? e.target.closest('button, input') : null; if (!t) return;
+    if (t.id === 'abd-pull') pull();
+    else if (t.id === 'abd-hf-imp') { const i = document.getElementById('abd-hf-in'); if (i) i.click(); }
+    else if (t.id === 'abd-cancel') { shut('abd-modal'); AD_ = null; }
+    else if (t.id === 'abd-apply') apply();
+  });
+  document.addEventListener('change', e => { const t = e.target;
+    if (t.id === 'abd-hf-in' && t.files && t.files[0]) { importFile(t.files[0]); t.value = ''; return; }
+    if (!AD_ || !t.dataset) return;
+    if (t.dataset.abd === 'k') { AD_.k = +t.value; render(); }
+    else if (t.dataset.abdG) { AD_.on[t.dataset.abdG] = !!t.checked; render(); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && AD_) { shut('abd-modal'); AD_ = null; } });
+  window.addEventListener('storage', e => { if (e.key && e.key.indexOf(NS + CH) === 0) buildSide(); });
+  window.SubLoadsAbutHandoff = { pull, open, apply, plan, state: () => AD_, isNew, hoRow };   // used by tests; no effect on results
 })();
 /* ---------- foundation loads hand-off (HANDOFF.md §4.6, channel foundationLoads) ----------
    "Send foundation loads" opens a dialog: pick the unit, the level (reference point) and the limit states.
@@ -5140,11 +5267,11 @@ function sldwRender() {
     return `<b>Last sent</b> (from this browser): ${isNaN(d) ? esc(p.producedAt) : esc(d.toLocaleString())}${what ? `, ${esc(what(p))}` : ''}${pr.name ? `, project "${esc(pr.name)}"` : ''}.`; };
   const showHo = () => {
     const rv = pane.querySelector('#slHoRecv');
-    if (rv) rv.innerHTML = (window.SubLoadsGeoHandoff && SubLoadsGeoHandoff.hoRow ? SubLoadsGeoHandoff.hoRow() : '') + (window.SubLoadsRxHandoff && SubLoadsRxHandoff.hoRow ? SubLoadsRxHandoff.hoRow() : '');
+    if (rv) rv.innerHTML = (window.SubLoadsGeoHandoff && SubLoadsGeoHandoff.hoRow ? SubLoadsGeoHandoff.hoRow() : '') + (window.SubLoadsRxHandoff && SubLoadsRxHandoff.hoRow ? SubLoadsRxHandoff.hoRow() : '') + (window.SubLoadsAbutHandoff ? SubLoadsAbutHandoff.hoRow() : '');   // ABX: the Abutment row
     const a = pane.querySelector('#slHoSentAbx'), f = pane.querySelector('#slHoSentFdx');
     if (a) a.innerHTML = sentTxt('bridgeSuite.v1.abutmentLoads', p => `${(p.abutments || []).filter(x => !x.error).length} abutment(s)`);
     if (f) f.innerHTML = sentTxt('bridgeSuite.v1.foundationLoads.by.subloads', p => `${(p.element && p.element.label) || 'unit'}, ${(p.cases || []).length} case(s)`);
-    let n = false; try { n = !!((window.SubLoadsGeoHandoff && SubLoadsGeoHandoff.isNewGeo()) || (window.SubLoadsRxHandoff && SubLoadsRxHandoff.newOK && SubLoadsRxHandoff.newOK())); } catch (e) { n = false; }
+    let n = false; try { n = !!((window.SubLoadsGeoHandoff && SubLoadsGeoHandoff.isNewGeo()) || (window.SubLoadsRxHandoff && SubLoadsRxHandoff.newOK && SubLoadsRxHandoff.newOK()) || (window.SubLoadsAbutHandoff && SubLoadsAbutHandoff.isNew())); } catch (e) { n = false; }
     const tp = document.querySelector('.itab[data-pane="project"]'); if (tp) { tp.classList.toggle('bx-new', n); tp.title = n ? 'New data from another tool is available to pull (Hand-offs)' : ''; }
   };
   pane.querySelectorAll('[data-ids]').forEach(r => r.dataset.ids.split(' ').forEach(id => { const b = $id(id); if (b) r.appendChild(b); }));
