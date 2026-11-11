@@ -20400,3 +20400,149 @@ Cross-tool PR with the Retaining Wall Designer (Phase 8f, HANDOFF.md §4.6 / §4
 - **Saved data (§5):** none.
 - **Decisions (pending engineer review):** (1) One row per mode: the integral-abutment buttons (`…Iab` ids) are shown instead of the normal ones in integral-abutment mode, as each panel showed them before. (2) "Last sent" is read from the channel key in this browser. (3) The sandbox cannot load the Tailwind CDN, so the screenshots show the panel without Tailwind's styles (the `pd-*` styles of the panel itself apply).
 - **Other copies:** none.
+
+## 2026-11-11 — PR: claude/pile-project-picker (PR #1421: https://github.com/mlococo88/All-Structural/pull/1421) (PDPK) — project picker for the foundation-load pull   [read only; no computed value, payload, storage key or saved-data format change]
+- **Engineer (2026-11-11):** "Add a project picker to Pile Designer and Spread Footing." (SubLoads keeps per-project copies of foundationLoads since #1419, SLFC.)
+- **Where (to re-apply by hand):**
+  - Head: after `<script src="shared/github-sync.js"></script>` add `<script src="shared/handoff-store.js"></script>` (with a PDPK comment).
+  - `PileFoundationXfer` IIFE: `function pull(I,setter){ var list=candidates(); …` (anchor `function pull(I,setter){`) is renamed `pullLatest` (body unchanged). After it, the PDPK block is added: `PKN`, `pkProd`, `pkOpts`, `pkSync`, `pkList`, `pkOpen`, `pkRows`, `pkOlder`, `picker`, and a new `pull(I,setter)`. The new `pull` opens the picker when any listed copy is not legacy (a per-project or GitHub copy), else calls `pullLatest`.
+  - The export `window.PileFoundationXfer={check:…` gains `pullLatest:pullLatest,picker:picker,`.
+  - Exact before / after code: the diff below.
+- **Behaviour:**
+  - The picker lists "Latest sent" (the old pull) and each copy, newest first, with the sender, project, unit, date and kind of copy.
+  - It preselects the newest copy of the open project, else "Latest sent".
+  - It flags a copy that is older than its project's newest copy.
+  - "Next: review" goes to the unchanged `openDialog([payload],I,setter,'pull')`; "Latest sent" goes to `pullLatest`.
+- **Governing provision:** none (hand-off UI; HANDOFF.md §4.6, §5.1 updated). **Formulas, factors, units:** none changed.
+- **Saved data (§5):** none. No new key; `I.foundationSrc` is unchanged (`via` stays "pull").
+- **Check case:** `tests/smoke/pile-fdx-picker.mjs`, seeded with:
+  - SubLoads project copies: Bridge A (B-1), Pier 1, 10:00, P = 900; and Bridge B, Pier 2, 09:00, P = 700;
+  - `.by.abutment`: Bridge A, Abut 1, 11:00, P = 1100.
+
+  Results:
+  - The picker preselects the Abutment row and marks the SubLoads Bridge A row "older".
+  - Importing the SubLoads Bridge A copy gives `foundationSrc.producedAt` 10:00, Pier 1, 2 tagged group cases (P 900 / 630).
+  - Probe vs origin/main 2ffbd94: the newest copy, "Latest sent", and a SubLoads copy alone each give main's imported inputs exactly (`adoptedAt` aside).
+- **How verified:**
+  - check-syntax: pass.
+  - pile-fdx-picker: all passed, including 390 px and 0 console errors.
+  - pile-library: ALL PASS.
+  - retwall-pile-handoff: all passed.
+  - github-sync-tools: ALL PASS.
+  - project-library: does not run this tool.
+- **Decisions (pending engineer review):**
+  1. The picker opens only when a per-project copy exists; older data pulls as before.
+  2. "Latest sent" is the default when no copy matches the open project ("else the latest").
+  3. The open project is `I.projName`, else the shared project info's name, plus the shared bridgeId.
+  4. The new-data marker is unchanged (channel `.updatedAt`); no `pid` is saved.
+  5. SubLoads stores only the last unit sent per project. The picker row says so, and a per-unit copy is recommended for SubLoads (not changed here).
+  6. The Abutment Calculator writes no per-project `foundationLoads` copy (only `.by.abutment` and the channel key); its latest copy is listed.
+- **Other copies:** none. **Open items:** the SubLoads per-unit copy (decision 5); Spread Footing's picker follows in its own PR.
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 86c84c8..1e86dac 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -23,6 +23,8 @@
+ <script src="shared/projects-ui.js"></script>
+ <!-- STDS-P (2026-11-06): GitHub sync of the saved projects (off until set up; docs/github-sync-setup.md) -->
+ <script src="shared/github-sync.js"></script>
++<!-- PDPK (2026-11-11): per-project hand-off copies (HANDOFF.md §5.1): the foundation-load pull lists them (project picker; read only) -->
++<script src="shared/handoff-store.js"></script>
+ <!-- Plotly -->
+ <script src="https://cdn.plot.ly/plotly-2.32.0.min.js" charset="utf-8"></script>
+ 
+@@ -1245,12 +1247,81 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+     var ps=document.getElementById('pxrSentTxt'); if(ps){ var sp=null; try{ sp=JSON.parse(localStorage.getItem(BridgeXfer.NS+'pileResults')||'null'); }catch(e){}   // "Last sent" (read only)
+       ps.textContent=sp&&sp.producer==='Pile Designer'&&sp.producedAt? new Date(sp.producedAt).toLocaleString()+((sp.project&&sp.project.name)?' ('+sp.project.name+')':'')+', from this browser.' : 'nothing sent from this browser yet.'; }
+     var st=document.getElementById('pfxSt'); if(st){ var up=''; try{ up=localStorage.getItem(BridgeXfer.NS+CH+'.updatedAt')||''; }catch(e){} st.textContent=n? 'new data available.' : up? 'no new data since the last pull.' : 'nothing available (no foundation loads sent yet).'; } }
+-  function pull(I,setter){
++  function pullLatest(I,setter){
+     var list=candidates();
+     if(!list.length){ var r=BridgeXfer.read(CH,SCHEMA,MAXV);
+       alert('Pull foundation loads: '+(r.ok?'no valid payload.':r.error)+(r.empty?'\n\nIn the abutment calculator or Bridge Substructure Loading, click "Send foundation loads" first.':'')); return null; }
+     return openDialog(list,I,setter,'pull');
+   }
++  /* PDPK (2026-11-11): project picker (HANDOFF.md §4.6, §5.1; shared/handoff-store.js, read only). Bridge Substructure Loading
++     keeps one copy of its foundationLoads send per project (bridgeSuite.v1.foundationLoads.by.subloads.<project id>: the last
++     unit sent for that project). When any such copy exists (this browser, or GitHub with Cloud sync), "Pull from Abutment /
++     SubLoads" first lists every copy: those per-project copies and each sender's latest copy (.by.abutment, .by.subloads,
++     .by.retwall, the channel key; the same payload once), newest first, with the sender, project, unit and date. Preselected:
++     the newest copy of the open project (bridge id, else project name: this tool's project name, else the shared project info),
++     else "Latest sent" (the pull as before: every sender's latest, the sender chosen in the review dialog). The chosen copy opens
++     the same review dialog as before; a copy older than the latest one of its project is flagged. Without any per-project copy
++     (older data) the pull is exactly as before. Nothing is written here; the new-data marker is unchanged (every send also
++     updates the channel's .updatedAt). */
++  var PKN={abutment:'Abutment Calculator',subloads:'SubLoads',retwall:'Retaining Wall Designer'};
++  function pkProd(e){ var p=e.payload||{}, x=String(p.producer||'');
++    return PKN[e.producer] || (/abut/i.test(x)?PKN.abutment:/substructure|subloads/i.test(x)?PKN.subloads:/retaining/i.test(x)?PKN.retwall:(x||'?')); }
++  function pkOpts(){ return {storage:localStorage,channel:CH,schema:SCHEMA,maxVersion:MAXV,producers:BY,
++    legacy:BY.map(function(b){ return {key:BridgeXfer.NS+CH+'.by.'+b,via:'latest from '+(PKN[b]||b),producer:b}; }).concat([{key:BridgeXfer.NS+CH,via:'latest hand-off'}]),
++    fetch:function(u,i){ return window.fetch(u,i); }}; }
++  function pkSync(){ try{ return !!(window.SharedGitHubSync && SharedGitHubSync.configured(SharedGitHubSync.settings(localStorage))); }catch(e){ return false; } }
++  function pkList(cb){
++    var HS=window.SharedHandoffStore; if(!HS){ cb(null); return; }
++    if(!pkSync()){ var L; try{ L=HS.local(pkOpts()); }catch(e){ cb(null); return; } cb({groups:HS.group(L.entries),errors:L.errors,cloud:'off'}); return; }
++    HS.list(pkOpts()).then(cb,function(e){ cb({groups:[],errors:[String(e&&e.message||e)],cloud:'GitHub could not be read'}); });
++  }
++  function pkOpen(I){ var sp=BridgeXfer.sharedProject? BridgeXfer.sharedProject() : null, n=String((I&&I.projName)||'').trim();
++    if(typeof PILE_PROJ_OLD_PLACEHOLDER!=='undefined' && n===PILE_PROJ_OLD_PLACEHOLDER.projName) n='';
++    return {name:n||(sp&&sp.name)||'', bridgeId:(sp&&sp.bridgeId)||''}; }
++  function pkRows(r){ var rows=[]; r.groups.forEach(function(g){ g.entries.forEach(function(e){ rows.push({e:e,g:g}); }); });
++    rows.sort(function(a,b){ return String(b.e.payload.producedAt||'').localeCompare(String(a.e.payload.producedAt||'')); }); return rows; }
++  function pkOlder(K,i){ var q=K.rows[i]; if(!q || !q.g.pid) return null; var n=q.g.newest;
++    return String(n.payload.producedAt||'')>String(q.e.payload.producedAt||'')? n : null; }
++  function picker(r,I,setter){
++    var HS=window.SharedHandoffStore, op=pkOpen(I), pid=HS.match(r.groups,op), rows=pkRows(r), K={rows:rows,sel:-1,errs:r.errors||[],cloud:r.cloud||'off',pid:pid,op:op};
++    if(pid!=null) rows.some(function(q,i){ if(q.g.pid===pid){ K.sel=i; return true; } return false; });
++    var old=document.getElementById('pfxPkOverlay'); if(old) old.remove();
++    var ov=h('div','position:fixed;inset:0;background:rgba(8,18,28,.55);z-index:1000;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif'); ov.id='pfxPkOverlay';
++    var box=h('div','background:#fff;color:#1a1a1a;border-radius:6px;padding:12px 16px;width:820px;max-width:96vw;max-height:90vh;overflow:auto;font-size:12px;line-height:1.4;box-sizing:border-box');
++    box.setAttribute('role','dialog'); box.setAttribute('aria-modal','true'); box.setAttribute('aria-label','Pull foundation loads: which copy?'); ov.appendChild(box);
++    var TD='border:1px solid #ddd;padding:2px 5px;vertical-align:top', WB='background:#fff8e1;border:1px solid #f9a825;padding:5px 8px;margin:6px 0';
++    function draw(){
++      var on=op.bridgeId||op.name, x='<b style="font-size:14px">Pull foundation loads: which copy?</b>'+
++        '<div style="color:#334155;margin:4px 0">Newest first. '+(K.sel>=0?'Preselected: the newest copy of the open project ('+esc([op.bridgeId,op.name].filter(Boolean).join(' — '))+').'
++          :'No copy matches the open project'+(on?' ('+esc([op.bridgeId,op.name].filter(Boolean).join(' — '))+')':'')+': "Latest sent" is preselected.')+' '+
++        (K.cloud==='ok'?'Copies sent from other devices (GitHub) are included.':K.cloud==='off'?'Cloud sync is not set up: the copies in this browser only.':'GitHub could not be read: this browser\'s copies only.')+'</div>';
++      x+='<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;margin:4px 0"><tr><th style="'+TD+'"></th><th style="'+TD+'">Sender</th><th style="'+TD+'">Project</th><th style="'+TD+'">Unit</th><th style="'+TD+'">Sent</th></tr>'+
++        '<tr data-pfx-pk="-1" style="cursor:pointer"><td style="'+TD+'"><input type="radio" name="pfxPk"'+(K.sel<0?' checked':'')+' aria-label="Latest sent"></td><td style="'+TD+'" colspan="4"><b>Latest sent</b> (as before: the latest copy from each sender; choose the sender in the next dialog)</td></tr>'+
++        rows.map(function(q,i){ var p=q.e.payload, el=p.element||{}, per=q.e.source!=='legacy', sub=per && q.e.producer==='subloads', ol=pkOlder(K,i);
++          return '<tr data-pfx-pk="'+i+'" style="cursor:pointer"><td style="'+TD+'"><input type="radio" name="pfxPk"'+(K.sel===i?' checked':'')+' aria-label="'+esc(pkProd(q.e)+' '+(q.g.label||''))+'"></td>'+
++            '<td style="'+TD+'">'+esc(pkProd(q.e))+'</td><td style="'+TD+'">'+(q.g.noProject?'<i>'+esc(q.g.label)+'</i>':esc(q.g.label))+'</td>'+
++            '<td style="'+TD+'">'+esc(el.label||el.type||'—')+(sub?' <span style="color:#64748b">(last unit sent for this project)</span>':'')+'</td>'+
++            '<td style="'+TD+'">'+esc(when(p.producedAt))+(p.device?', '+esc(p.device):'')+' <span style="color:#64748b">('+esc(q.e.source==='github'?'GitHub':per?'project copy':q.e.via)+')</span>'+(ol?' <b style="color:#b45309">older</b>':'')+'</td></tr>'; }).join('')+'</table></div>';
++      var ol=K.sel>=0? pkOlder(K,K.sel) : null;
++      if(ol){ var np=ol.payload; x+='<div id="pfxPkOlder" style="'+WB+'">This copy is older than the latest hand-off for the same project: '+esc(pkProd(ol))+', '+esc(when(np.producedAt))+((np.element&&np.element.label)?', '+esc(np.element.label):'')+'.</div>'; }
++      if(K.errs.length) x+='<div style="'+WB+'">Not offered: '+esc(K.errs.join('; '))+'</div>';
++      x+='<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;border-top:1px solid #ccc;padding-top:8px"><button type="button" id="pfxPkCancel" style="padding:3px 10px;border:1px solid #94a3b8;border-radius:3px">Cancel</button>'+
++        '<button type="button" id="pfxPkNext" style="padding:3px 10px;border:1px solid #14304a;border-radius:3px;background:#14304a;color:#fff"><b>Next: review</b></button></div>';
++      box.innerHTML=x;
++    }
++    box.addEventListener('click',function(ev){ var t=ev.target; if(!t || !t.closest) return;
++      if(t.id==='pfxPkCancel'){ ov.remove(); return; }
++      if(t.closest('#pfxPkNext')){ ov.remove(); if(K.sel<0) pullLatest(I,setter); else openDialog([rows[K.sel].e.payload],I,setter,'pull'); return; }
++      var tr=t.closest('tr[data-pfx-pk]'); if(tr){ K.sel=+tr.getAttribute('data-pfx-pk'); draw(); } });
++    draw(); document.body.appendChild(ov);
++    return {overlay:ov, state:K};
++  }
++  function pull(I,setter){
++    var res=null;
++    pkList(function(r){ var per=!!r && r.groups.some(function(g){ return g.entries.some(function(e){ return e.source!=='legacy'; }); });
++      res= per? picker(r,I,setter) : pullLatest(I,setter); });
++    return res;
++  }
+   function importFile(ev,I,setter){
+     var f=ev && ev.target && ev.target.files && ev.target.files[0]; if(!f) return;
+     BridgeXfer.importFile(f,SCHEMA,MAXV,function(r){
+@@ -1259,7 +1330,7 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+     });
+     ev.target.value='';
+   }
+-  window.PileFoundationXfer={check:check,mapAxes:mapAxes,candidates:candidates,centroid:centroid,defaults:defaults,plan:plan,apply:apply,openDialog:openDialog,sourceLine:sourceLine,refreshBar:refreshBar,pull:pull,importFile:importFile,
++  window.PileFoundationXfer={pullLatest:pullLatest,picker:picker,check:check,mapAxes:mapAxes,candidates:candidates,centroid:centroid,defaults:defaults,plan:plan,apply:apply,openDialog:openDialog,sourceLine:sourceLine,refreshBar:refreshBar,pull:pull,importFile:importFile,
+     adoptedLayout:adoptedLayout,marked:marked,mkCls:mkCls,mkTip:mkTip};
+   window.addEventListener('focus',refreshBar);
+   window.addEventListener('storage',refreshBar);
+```
