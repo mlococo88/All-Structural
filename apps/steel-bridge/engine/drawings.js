@@ -157,32 +157,92 @@
   const brgType = (G, k) => { const B = ((G.stf || {}).bearing || {}).types || {}; return (k === 0 || k === G.sup.length - 1 ? B.A : B.B) || { np: 1, bt: 7, tp: 0.75, sp: 0 }; };
   const tsType = (G, r) => (((G.stf || {}).transverse || {}).types || {})[r] || { bt: 6, tp: 0.5 };
 
+  /* SBTXT (2026-11-11, engineer: the framing plan sheet had about 18 places where a line ran through a text): placement helpers. A label
+     is put at the first of its candidate places where its text box crosses no line and no other text already drawn, and its leader (if
+     any) crosses no text. Text boxes: the advance widths of Arial / Helvetica (the font the preview draws with), from 0.1 of the height
+     below the baseline to 0.82 above (as tests/engine/overlap.mjs). */
+  const AWD = { ' ': 278, '!': 278, '"': 355, '#': 556, '$': 556, '%': 889, '&': 667, "'": 191, '(': 333, ')': 333, '*': 389, '+': 584, ',': 278, '-': 333, '.': 278, '/': 278, ':': 278, ';': 278, '<': 584, '=': 584, '>': 584, '?': 556, '@': 1015,
+    A: 667, B: 667, C: 722, D: 722, E: 667, F: 611, G: 778, H: 722, I: 278, J: 500, K: 667, L: 556, M: 833, N: 722, O: 778, P: 667, Q: 778, R: 722, S: 667, T: 611, U: 722, V: 667, W: 944, X: 667, Y: 667, Z: 611, '[': 278, '\\': 278, ']': 278, '^': 469, _: 556, '`': 333,
+    a: 556, b: 556, c: 500, d: 556, e: 556, f: 278, g: 556, h: 556, i: 222, j: 222, k: 500, l: 222, m: 833, n: 556, o: 556, p: 556, q: 556, r: 333, s: 500, t: 278, u: 556, v: 500, w: 722, x: 500, y: 500, z: 500, '{': 334, '|': 260, '}': 334, '~': 584 };
+  const txW = (s, hh) => { let w = 0; for (const c of X_().str(s).replace(/%%[dcp]/g, 'o')) w += AWD[c] != null ? AWD[c] : (/\d/.test(c) ? 556 : 600); return w / 1000 * hh; };
+  /* the box [x0, y0, x1, y1] of a text (j: 0 left, 1 centre, 2 right; rot in degrees: the box around the turned text) */
+  function txBox(s, x, y, hh, j, rot) {
+    const w = txW(s, hh), r = (rot || 0) * Math.PI / 180, c = Math.cos(r), sn = Math.sin(r), sh = j === 2 ? -w : j === 1 ? -w / 2 : 0;
+    const P = [[sh, -0.1 * hh], [sh + w, -0.1 * hh], [sh + w, 0.82 * hh], [sh, 0.82 * hh]].map(([u, v]) => [x + u * c - v * sn, y + u * sn + v * c]);
+    return [Math.min(...P.map(p => p[0])), Math.min(...P.map(p => p[1])), Math.max(...P.map(p => p[0])), Math.max(...P.map(p => p[1]))];
+  }
+  /* the lines (segments) and text boxes of the entities i0.. of D (dimensions as their lines and text; circles as their square) */
+  function scene(D, i0) {
+    const segs = [], boxes = [];
+    D.E.slice(i0).forEach(e => {
+      if (e.t === 'TEXT') { if (String(e.s).trim()) boxes.push(txBox(e.s, e.pts[0][0], e.pts[0][1], e.hh, e.j, e.rot)); }
+      else if (e.t === 'LINE') segs.push(e.pts);
+      else if (e.t === 'PL') { const n = e.pts.length; for (let i = 0; i < (e.closed ? n : n - 1); i++) segs.push([e.pts[i], e.pts[(i + 1) % n]]); }
+      else if (e.t === 'CIRCLE') { const [x, y] = e.pts[0], r = e.r; boxes.push([x - r, y - r, x + r, y + r]); }
+      else if (e.t === 'DIM') X_().dimGeo(e).g.forEach(q => { if (q.t === 'TEXT') { if (String(q.s).trim()) boxes.push(txBox(q.s, q.pts[0][0], q.pts[0][1], q.hh, q.j, q.rot)); } else segs.push(q.pts); });
+    });
+    return { segs, boxes };
+  }
+  const bHit = (A, B) => A[0] < B[2] && A[2] > B[0] && A[1] < B[3] && A[3] > B[1];
+  /* does the segment [a, b] enter the box B (Liang-Barsky clip)? */
+  function sHit([a, b], B) {
+    let t0 = 0, t1 = 1; const dx = b[0] - a[0], dy = b[1] - a[1];
+    for (const [p, q] of [[-dx, a[0] - B[0]], [dx, B[2] - a[0]], [-dy, a[1] - B[1]], [dy, B[3] - a[1]]]) {
+      if (Math.abs(p) < 1e-12) { if (q < 0) return false; continue; }
+      const t = q / p; if (p < 0) { if (t > t1) return false; if (t > t0) t0 = t; } else { if (t < t0) return false; if (t < t1) t1 = t; } }
+    return t1 > t0;
+  }
+  /* is a candidate clear: its boxes cross no line or text of S (boxes grown by pad), its lines cross no text of S or of its own boxes (own: the
+     boxes its lines must not enter) */
+  const clearOf = (S, bx, sg, own, pad) => bx.every(B => { const Q = [B[0] - pad, B[1] - pad, B[2] + pad, B[3] + pad]; return !S.boxes.some(q => bHit(Q, q)) && !S.segs.some(s => sHit(s, Q)); })
+    && sg.every(s => !S.boxes.some(q => sHit(s, q)) && !(own || []).some(q => sHit(s, q)));
+  const sceneAdd = (S, bx, sg) => { S.boxes.push(...bx); S.segs.push(...sg); };
+
   /* ---------- 1: framing plan (GirderDetail dxfPlan) ----------
      SBFLIP (2026-11-10, engineer): G1 at the top, G_nb at the bottom, stations increasing to the right, as the screen plan, the 3D view and
      the cross-section: the plan is mirrored about the bridge axis, Y(y) = (y_nb − y)·12 (G1 at y = y_nb·12, G_nb at 0). The x of every point
      is unchanged, so a + skew still puts the G_nb (lower) end of a support line ahead-station. Text is placed, never mirrored; the
      annotations along G1 (its cross-frame chain, the spans, the support labels) are above the plan, those along G_nb (its chain, the
      field splices, the skew labels) below it, and the connection plates, stiffeners, top-flange labels and tags stay on the same side of
-     each girder as before (toward the next girder). */
+     each girder as before (toward the next girder).
+     SBTXT (2026-11-11, engineer): no line through a text and no text over a text. The same items, scale and layers; moved:
+       - the cross-frame chains along G1 and G_nb and the field-splice chain are laid out by chainFit (as the typical section): a run's text
+         that does not fit its run, or that a support line would cross, goes on a row beyond the chain with a leader; the rows above push the
+         span dimensions, the support labels and the title up (y_S = max(y_G1 + 6 h, top of the G1 chain + 1.8 h)), the rows below push the
+         splice chain, the FS labels and the tables down;
+       - the skew labels: below the G_nb chains, in the FS row (or a row lower, or up to 6 h to the side, where that place is taken), on a
+         centerline leader from the support line's end (they were at the line's end, on the G_nb chain);
+       - the cross-frame tags (X intermediate, E end) above the plan, between the span dimensions and the support labels, the leader from
+         the middle of a bay-1 cross-frame (they were in bay 1 and the next bays, on the cross-frames and the girder-spacing dimensions);
+       - the top-flange labels: along their plate segment, in bay 1 under G1 or else just above G1, where no cross-frame, stiffener or support
+         line crosses them (they were at the middle of each segment).
+     Without the tables (opt.noTables, the paper-B sheet: SBDSheets puts them on the next sheet); planTables(G) gives them. */
+  function planTables(G) {
+    const X = x => x * 12, BW = bwName(G);
+    return [{ title: 'GIRDER LENGTHS ALONG GIRDER CL (CL BRG. TO CL BRG.) AND FIELD SPLICE LOCATIONS', cols: ['GIRDER', ...G.spans.map((_, k) => `SPAN ${k + 1}`), 'TOTAL', ...G.splices.map((_, k) => `FS${k + 1} FROM BRG.`), BW === 'DIAPHRAGM' ? 'INT. DIAPHRAGMS' : 'INT. X-FRAMES'],
+      rows: G.girders.map(g => [g.label, ...G.spans.map((_, k) => dFI(X(g.bear[k + 1] - g.bear[k]))), dFI(X(g.bear[g.bear.length - 1] - g.bear[0])), ...g.spl.map(s => dFI(X(s - g.bear[0]))), String(g.cps.length)]) },
+    { title: `${BW} LOCATIONS`, cols: ['GIRDER', `INTERMEDIATE ${BW} LOCATIONS FROM CL BRG. ABUT. 1, ALONG GIRDER`],
+      rows: G.girders.flatMap(g => { const L = g.cps.map(q => dFI(X(q.s - g.bear[0]))), out = []; for (let i = 0; i < Math.max(1, L.length); i += 12) out.push([i ? '' : g.label, L.slice(i, i + 12).join(', ')]); return out; }) }];
+  }
   function plan(G, D, opt) {
     opt = opt || {};
     const FR = G.FR, nb = G.nb, wid = G.ys[nb - 1], Lx = Math.max(...G.girders.map(g => g.x0 + g.bear[g.bear.length - 1])) - Math.min(...G.girders.map(g => g.x0));
     D.k = opt.k || scaleFor(Lx * 12 * 1.15, 30); D.h = TXT * D.k; const h = D.h, i0 = D.mark();
     const ly = { g: D.layer('GRDR', 5), b: D.layer('BRNG-CNTR', 8), x: D.layer('XFRM', 3), xe: D.layer('XFRM-END', 6), s: D.layer('SPLC', 1), d: D.layer('DIMS', 7), t: D.layer('ANNO-TEXT', 7), tb: D.layer('TABL', 7) };
     const cl = D.ltype('CENTER'), X = x => x * 12, Y = y => (wid - y) * 12, yT = Y(G.ys[0]), yB = Y(wid), sup = G.sup, BW = bwName(G);   // SBFLIP: yT = G1 (top), yB = G_nb (bottom)
-    sup.forEach((xs, k) => { const ax = X(FR.xb(k, 0)), ay = yT, bx = X(FR.xb(k, nb - 1)), by = yB, L = Math.hypot(bx - ax, by - ay) || 1, ux = (bx - ax) / L, uy = (by - ay) / L, ex = 3 * h;
-      D.line(ly.b, ax - ux * ex, ay - uy * ex, bx + ux * ex, by + uy * ex, cl);
-      D.line(ly.b, ax - ux * ex, ay - uy * ex, ax - ux * ex, yT + 10 * h, cl); D.text(ly.t, ax - ux * ex, yT + 10.6 * h, h, k === 0 ? 'CL BRG. ABUT. 1' : k === sup.length - 1 ? 'CL BRG. ABUT. 2' : `CL PIER ${k}`, 1);
-      D.text(ly.t, bx + ux * ex * 1.6, by + uy * ex * 1.6 - 1.2 * h, h * 0.8, `SKEW ${f2(G.skews[k])}%%d`, 1); });
+    // support lines, run on 3 h past G1 (at) and G_nb (ab) along the line (true skew)
+    const SL = sup.map((xs, k) => { const ax = X(FR.xb(k, 0)), ay = yT, bx = X(FR.xb(k, nb - 1)), by = yB, L = Math.hypot(bx - ax, by - ay) || 1, ux = (bx - ax) / L, uy = (by - ay) / L, ex = 3 * h;
+      return { bx, at: [ax - ux * ex, ay - uy * ex], ab: [bx + ux * ex, by + uy * ex] }; });
+    SL.forEach(s => D.line(ly.b, s.at[0], s.at[1], s.ab[0], s.ab[1], cl));
     FR.frames.forEach(f => D.line(f.type === 'sup' ? ly.xe : ly.x, X(f.xa), Y(G.ys[f.bay]), X(f.xc), Y(G.ys[f.bay + 1])));
     // RIDOT stepped (GirderDetail 2026-10-19): CL roadway, W.P.s, the intermediate lines parallel to CL of bearings, spacing along CL roadway
-    if (FR.orient && FR.orient.some(o => o.stp)) { const yc = Y(FR.yc), lxl = D.layer('XFRM-LINE', 3);
+    const stepped = FR.orient && FR.orient.some(o => o.stp);
+    if (stepped) { const yc = Y(FR.yc), lxl = D.layer('XFRM-LINE', 3);
       D.line(ly.b, X(sup[0]) - 6 * h, yc, X(sup[sup.length - 1]) + 6 * h, yc, cl); D.text(ly.t, X(sup[sup.length - 1]) + 7 * h, yc - h / 2, h, 'CL ROADWAY');
       sup.forEach(x => D.text(ly.t, X(x) + 0.6 * h, yc - 1.8 * h, h * 0.8, 'W.P.'));
       FR.orient.forEach(o => { if (!o.stp) return; const k = o.k, Lc = o.stp.Lc, at = (t, i) => { const f = t / Lc; return (1 - f) * FR.xb(k, i) + f * FR.xb(k + 1, i); };
         o.stp.ln.forEach(t => D.line(lxl, X(at(t, 0)), Y(G.ys[0]), X(at(t, nb - 1)), Y(G.ys[nb - 1]), cl));
-        D.chainH(ly.d, [sup[k], ...o.stp.ln.map(t => sup[k] + t), sup[k + 1]].map(X), yc + 2 * h, yc); });
-      D.text(ly.t, Math.min(...sup.map((_, k) => Math.min(X(FR.xb(k, 0)), X(FR.xb(k, nb - 1))))), yT + 16 * h, h * 0.75, `INTERMEDIATE ${BW} LINES PARALLEL TO CL OF BEARINGS (TYP.), ONE NORMAL TO THE GIRDERS IN EACH BAY. SPACING MEASURED ALONG CL ROADWAY. W.P. = CL ROADWAY ON CL BEARING.`); }
+        D.chainH(ly.d, [sup[k], ...o.stp.ln.map(t => sup[k] + t), sup[k + 1]].map(X), yc + 2 * h, yc); }); }
     const lf = D.layer('GRDR-FLNG', 5), lst = D.layer('GRDR-STIF', 30), lbr = D.layer('BRNG', 8), gcl = D.layer('GRDR-CNTR', 8), cp = tsType(G, 'B'), ts = tsType(G, 'A');
     G.girders.forEach((g, i) => { const gy = Y(g.y), S = g.segs;
       S.forEach((s, k) => { const x0 = X(g.x0 + s.s0), x1 = X(g.x0 + s.s1), hb = s.topB / 2; D.line(lf, x0, gy - hb, x1, gy - hb); D.line(lf, x0, gy + hb, x1, gy + hb);
@@ -198,21 +258,51 @@
     // dimensions: girder spacing, cross-frames along G1 and Gn, splices along Gn, spans along G1
     const xMin = Math.min(...sup.map((_, k) => Math.min(X(FR.xb(k, 0)), X(FR.xb(k, nb - 1))))), g0 = G.girders[0], gN = G.girders[nb - 1];
     D.chainV(ly.d, G.ys.map(Y), xMin - 4 * h, X(g0.x0) - h); D.dimV(ly.d, yB, yT, xMin - 8 * h, null, '<> CL-CL EXT. GIRDERS');
-    D.chainH(ly.d, [...g0.bear.map(b => X(g0.x0 + b)), ...g0.cps.filter(q => q.side > 0).map(q => X(g0.x0 + q.s))], yT + 3 * h, yT);
-    D.chainH(ly.d, [...gN.bear.map(b => X(gN.x0 + b)), ...gN.cps.filter(q => q.side < 0).map(q => X(gN.x0 + q.s))], yB - 3 * h, yB);
-    if (gN.spl.length) { D.chainH(ly.d, [X(gN.x0 + gN.bear[0]), ...gN.spl.map(s => X(gN.x0 + s)), X(gN.x0 + gN.bear[gN.bear.length - 1])], yB - 6 * h, yB);
-      gN.spl.forEach((s, k) => D.text(ly.t, X(gN.x0 + s), yB - 9.2 * h, h * 0.8, `FS${k + 1}`, 1)); }
-    G.spans.forEach((_, k) => D.dimH(ly.d, X(g0.x0 + g0.bear[k]), X(g0.x0 + g0.bear[k + 1]), yT + 6 * h, yT, `SPAN ${k + 1} = <> (G1)`));
-    { const f = FR.frames.find(q => q.type !== 'sup' && q.bay === 0), fe = FR.frames.find(q => q.type === 'sup' && q.bay === 0);
-      if (f) tag(D, ly.t, X((f.xa + f.xc) / 2), Y((G.ys[0] + G.ys[1]) / 2), 'X', `INTERMEDIATE ${BW}`, 1, -1);
-      if (fe) tag(D, ly.t, X((fe.xa + fe.xc) / 2), Y((G.ys[0] + G.ys[1]) / 2), 'E', `END ${BW}`, -1, -1); }
-    D.text(ly.t, xMin, yT + 14 * h, h * 1.6, 'FRAMING PLAN');
-    D.text(ly.t, xMin, yT + 12.4 * h, h * 0.75, `TOP FLANGES, CONNECTION PLATES, BEARING STIFFENERS AND INTERMEDIATE STIFFENERS SHOWN TO SCALE. SQUARE = BEARING. SCALE ${SCALE_NAME[D.k]} WHEN PLOTTED.`);
-    g0.segs.forEach(s => D.text(ly.t, X(g0.x0 + (s.s0 + s.s1) / 2), Y(g0.y) - s.topB / 2 - 1.5 * h, h * 0.7, `TOP FL. ${frac(s.topB)} x ${frac(s.topT)}`, 1));
-    // framing data tables
-    const y = yB - 11 * h, rows = G.girders.map(g => [g.label, ...G.spans.map((_, k) => dFI(X(g.bear[k + 1] - g.bear[k]))), dFI(X(g.bear[g.bear.length - 1] - g.bear[0])), ...g.spl.map(s => dFI(X(s - g.bear[0]))), String(g.cps.length)]);
-    const t1 = table(D, ly.tb, xMin, y, ['GIRDER', ...G.spans.map((_, k) => `SPAN ${k + 1}`), 'TOTAL', ...G.splices.map((_, k) => `FS${k + 1} FROM BRG.`), BW === 'DIAPHRAGM' ? 'INT. DIAPHRAGMS' : 'INT. X-FRAMES'], rows, 'GIRDER LENGTHS ALONG GIRDER CL (CL BRG. TO CL BRG.) AND FIELD SPLICE LOCATIONS');
-    table(D, ly.tb, xMin, t1.y - h, ['GIRDER', `INTERMEDIATE ${BW} LOCATIONS FROM CL BRG. ABUT. 1, ALONG GIRDER`], G.girders.flatMap(g => { const L = g.cps.map(q => dFI(X(q.s - g.bear[0]))), out = []; for (let i = 0; i < Math.max(1, L.length); i += 12) out.push([i ? '' : g.label, L.slice(i, i + 12).join(', ')]); return out; }), `${BW} LOCATIONS`);
+    const vT = SL.map(s => s.at[0]), vB = SL.map(s => s.ab[0]), dB = SL.map(s => [Math.min(s.bx, s.ab[0]), Math.max(s.bx, s.ab[0])]);   // the support lines' leaders above G1 and below G_nb; their runs past G_nb
+    const C1 = chainFit(D, ly.d, [...g0.bear.map(b => [X(g0.x0 + b), yT]), ...g0.cps.filter(q => q.side > 0).map(q => [X(g0.x0 + q.s), yT])], yT + 3 * h, 1, { obst: [...vT, ...g0.bear.map(b => X(g0.x0 + b))], r0: 1.75, strict: true });
+    const yS = Math.max(yT + 6 * h, C1.edge + 1.8 * h);
+    G.spans.forEach((_, k) => D.dimH(ly.d, X(g0.x0 + g0.bear[k]), X(g0.x0 + g0.bear[k + 1]), yS, yT, `SPAN ${k + 1} = <> (G1)`));
+    SL.forEach((s, k) => { D.line(ly.b, s.at[0], s.at[1], s.at[0], yS + 4 * h, cl); D.text(ly.t, s.at[0], yS + 4.6 * h, h, k === 0 ? 'CL BRG. ABUT. 1' : k === sup.length - 1 ? 'CL BRG. ABUT. 2' : `CL PIER ${k}`, 1); });
+    const C2 = chainFit(D, ly.d, [...gN.bear.map(b => [X(gN.x0 + b), yB]), ...gN.cps.filter(q => q.side < 0).map(q => [X(gN.x0 + q.s), yB])], yB - 3 * h, -1, { strict: true, obst: [...vB, ...dB, ...(gN.spl.length ? [gN.bear[0], ...gN.spl, gN.bear[gN.bear.length - 1]].map(v => X(gN.x0 + v)) : [])] });
+    let yLo = C2.edge;
+    if (gN.spl.length) yLo = chainFit(D, ly.d, [[X(gN.x0 + gN.bear[0]), yB], ...gN.spl.map(s => [X(gN.x0 + s), yB]), [X(gN.x0 + gN.bear[gN.bear.length - 1]), yB]], Math.min(yB - 6 * h, C2.edge - 1.8 * h), -1, { obst: vB, strict: true }).edge;
+    const yF = yLo - 2 * h; let yEnd = yF;
+    gN.spl.forEach((s, k) => D.text(ly.t, X(gN.x0 + s), yF, h * 0.8, `FS${k + 1}`, 1));
+    // the labels placed where they are clear (SBTXT)
+    const S = scene(D, i0), pad = 0.08 * h;
+    // skew labels: on the support line's leader below G_nb, in the FS row or lower
+    SL.forEach((s, k) => { const t = `SKEW ${f2(G.skews[k])}%%d`, hh = 0.8 * h, x = s.ab[0];
+      let pick = null; for (let r = 0; r < 8 && !pick; r++) for (const dx of [0, 1, -1, 2, -2, 3, -3, 4, -4, 6, -6]) { const xx = x + dx * h, y = yF - 1.4 * h * r, B = txBox(t, xx, y, hh, 1), sg = [[s.ab, [xx, B[3] + 0.25 * h]]]; if (clearOf(S, [B], sg, [], pad)) { pick = { x: xx, y, B, sg }; break; } }
+      if (!pick) { const y = yF, B = txBox(t, x, y, hh, 1); pick = { x, y, B, sg: [[s.ab, [x, B[3] + 0.25 * h]]] }; }
+      D.line(ly.b, s.ab[0], s.ab[1], pick.x, pick.sg[0][1][1], cl); D.text(ly.t, pick.x, pick.y, hh, t, 1); sceneAdd(S, [pick.B], pick.sg); yEnd = Math.min(yEnd, pick.y); });
+    // top-flange labels of G1: along their segment, under G1 (bay 1) or else above it
+    g0.segs.forEach(s => { const t = `TOP FL. ${frac(s.topB)} x ${frac(s.topT)}`, hh = 0.7 * h, w = txW(t, hh), xa = X(g0.x0 + s.s0) + w / 2 + 0.3 * h, xb = X(g0.x0 + s.s1) - w / 2 - 0.3 * h, xm = X(g0.x0 + (s.s0 + s.s1) / 2), gy = Y(g0.y);
+      const xs = [xm]; for (let d = 0.5 * h; xm - d >= xa || xm + d <= xb; d += 0.5 * h) { if (xm - d >= xa) xs.push(xm - d); if (xm + d <= xb) xs.push(xm + d); }
+      const ys = [gy - s.topB / 2 - 1.5 * h, gy - s.topB / 2 - 1.1 * h, gy + s.topB / 2 + 0.6 * h, gy + s.topB / 2 + 1.2 * h]; let pick = null;
+      for (const y of ys) { for (const x of xs) { const B = txBox(t, x, y, hh, 1); if (clearOf(S, [B], [], [], pad)) { pick = { x, y, B }; break; } } if (pick) break; }
+      // else beside the segment with a leader from the middle of the segment's flange edge (the short segments)
+      for (let d = 1; d <= 40 && !pick; d++) for (const sd of [1, -1]) { if (pick) break; for (const y of ys) { const x = xm + sd * d * 0.5 * h, B = txBox(t, x, y, hh, 1), up = y > gy, ey = gy + (up ? 1 : -1) * s.topB / 2, sg = [[[xm, ey], [x, up ? B[1] - 0.1 * h : B[3] + 0.1 * h]]];
+        if (clearOf(S, [B], sg, [], pad)) { pick = { x, y, B, sg }; break; } } }
+      if (!pick) pick = { x: xm, y: ys[0], B: txBox(t, xm, ys[0], hh, 1) };
+      if (pick.sg) D.line(ly.t, pick.sg[0][0][0], pick.sg[0][0][1], pick.sg[0][1][0], pick.sg[0][1][1]);
+      D.text(ly.t, pick.x, pick.y, hh, t, 1); sceneAdd(S, [pick.B], pick.sg || []); });
+    // cross-frame tags above the plan (between the span dimensions and the support labels), the leader from a bay-1 cross-frame
+    const tagAt = (fs, t, note, dir) => { if (!fs.length) return; const r = 1.1 * h, cy = yS + 2.9 * h, nh = 0.75 * h; let pick = null;
+      for (const f of fs) { const fx = X((f.xa + f.xc) / 2), fy = Y((G.ys[0] + G.ys[1]) / 2);
+        for (let d = 2; d <= 30 && !pick; d++) for (const sd of [dir, -dir]) for (const nd of [sd, -sd]) { if (pick) break; const cx = fx + sd * d * h, L = Math.hypot(cx - fx, cy - fy), px = cx - (cx - fx) / L * r, py = cy - (cy - fy) / L * r;
+          const C = [cx - r, cy - r, cx + r, cy + r], N = txBox(note, cx + nd * (r + 0.6 * h), cy - 0.4 * h, nh, nd < 0 ? 2 : 0), sg = [[[fx, fy], [px, py]]];
+          if (clearOf(S, [C, N], sg, [N], pad)) pick = { fx, fy, cx, px, py, nd, C, N, sg }; }
+        if (pick) break; }
+      if (!pick) { const f = fs[0], fx = X((f.xa + f.xc) / 2), fy = Y((G.ys[0] + G.ys[1]) / 2), cx = fx + dir * 4 * h, L = Math.hypot(cx - fx, cy - fy);
+        pick = { fx, fy, cx, px: cx - (cx - fx) / L * r, py: cy - (cy - fy) / L * r, nd: dir, C: [cx - r, cy - r, cx + r, cy + r], N: txBox(note, cx + dir * (r + 0.6 * h), cy - 0.4 * h, nh, dir < 0 ? 2 : 0), sg: [] }; }
+      D.line(ly.t, pick.fx, pick.fy, pick.px, pick.py); D.circle(ly.t, pick.cx, cy, r); D.text(ly.t, pick.cx, cy - 0.45 * h, h * 0.9, t, 1);
+      D.text(ly.t, pick.cx + pick.nd * (r + 0.6 * h), cy - 0.4 * h, nh, note, pick.nd < 0 ? 2 : 0); sceneAdd(S, [pick.C, pick.N], [[[pick.fx, pick.fy], [pick.px, pick.py]]]); };
+    if (nb > 1) { tagAt(FR.frames.filter(q => q.type !== 'sup' && q.bay === 0), 'X', `INTERMEDIATE ${BW}`, 1); tagAt(FR.frames.filter(q => q.type === 'sup' && q.bay === 0), 'E', `END ${BW}`, -1); }
+    if (stepped) D.text(ly.t, xMin, yS + 10 * h, h * 0.75, `INTERMEDIATE ${BW} LINES PARALLEL TO CL OF BEARINGS (TYP.), ONE NORMAL TO THE GIRDERS IN EACH BAY. SPACING MEASURED ALONG CL ROADWAY. W.P. = CL ROADWAY ON CL BEARING.`);
+    D.text(ly.t, xMin, yS + 8 * h, h * 1.6, 'FRAMING PLAN');
+    D.text(ly.t, xMin, yS + 6.4 * h, h * 0.75, `TOP FLANGES, CONNECTION PLATES, BEARING STIFFENERS AND INTERMEDIATE STIFFENERS SHOWN TO SCALE. SQUARE = BEARING. SCALE ${SCALE_NAME[D.k]} WHEN PLOTTED.`);
+    // framing data tables (paper D; on paper B the next sheet)
+    if (!opt.noTables) { const TB = planTables(G), t1 = table(D, ly.tb, xMin, yEnd - 1.8 * h, TB[0].cols, TB[0].rows, TB[0].title); table(D, ly.tb, xMin, t1.y - h, TB[1].cols, TB[1].rows, TB[1].title); }
     return { id: 'plan', title: 'Framing plan', i0, i1: D.mark(), k: D.k, h: D.h };
   }
 
@@ -286,7 +376,9 @@
   const hitX = (a0, a1, xs) => xs.some(x => Array.isArray(x) ? a1 > x[0] && a0 < x[1] : x > a0 && x < a1);   // xs: x or [x0, x1]
   /* chainFit(D, l, pts, y, dir, o): a horizontal chain through y of the points pts = [[x, yref], …] (n@s runs as chainH), each run's text
      inside its run where it fits (its width + 0.8 h, clear of o.obst, the x or [x0, x1] of lines and texts crossing the text band), else on a row beyond the
-     chain (dir +1 above, −1 below) with a leader. o.txt(a, b, n, d): the text of a run (default the measured length or n@s). Returns
+     chain (dir +1 above, −1 below) with a leader. o.txt(a, b, n, d): the text of a run (default the measured length or n@s). o.r0 (SBTXT, the
+     framing plan: 1.75): the first row above the chain, in text heights (default 1.6, the typical section); o.strict (SBTXT, the framing plan):
+     a row's leader must not cross a text written inside a run either. Returns
      { edge (the outermost y used), boxes [[x0, y0, x1, y1]] (texts), lines [x] (extension lines and leaders) } */
   function chainFit(D, l, pts, y, dir, o) {
     o = o || {}; const h = D.h, k = D.k, ref = new Map(pts.map(p => [+p[0].toFixed(4), p[1]])), obst = o.obst || [], boxes = [], lines = [], out = [];
@@ -296,9 +388,10 @@
       if (fits) boxes.push([mid - w / 2, y + 0.06 * k, mid + w / 2, y + 0.07 * k + 0.82 * h]); else out.push({ t, w, mid }); });
     let edge = dir > 0 ? y + 0.12 * k : y - 0.12 * k; const rows = [];
     out.forEach(q => { for (let r = 0; r < 40; r++) {
-      const yb = dir > 0 ? y + 1.6 * h + 1.5 * h * r : y - 2.4 * h - 1.5 * h * r, ly = yb + (dir > 0 ? -0.15 * h : 0.95 * h);   // text baseline (its box 0.1 h below to 0.82 h above); leader end
+      const yb = dir > 0 ? y + (o.r0 || 1.6) * h + 1.5 * h * r : y - 2.4 * h - 1.5 * h * r, ly = yb + (dir > 0 ? -0.15 * h : 0.95 * h);   // text baseline (its box 0.1 h below to 0.82 h above); leader end
       for (const off of [0, 1, -1, 2, -2, 3, -3, 4, -4, 6, -6, 8, -8]) { const c = q.mid + off * 0.5 * q.w, B = { x0: c - q.w / 2, x1: c + q.w / 2, y0: yb - 0.1 * h, y1: yb + 0.82 * h };
-        if (hitX(B.x0 - 0.3 * h, B.x1 + 0.3 * h, obst) || rows.some(p => (p.r === r && B.x0 < p.x1 + 0.6 * h && B.x1 > p.x0 - 0.6 * h) || (p.r < r && segBox(q.mid, y, c, ly, p)) || (p.r > r && segBox(p.lx, y, p.c, p.ly, B)))) continue;
+        if (hitX(B.x0 - 0.3 * h, B.x1 + 0.3 * h, obst) || rows.some(p => (p.r === r && B.x0 < p.x1 + 0.6 * h && B.x1 > p.x0 - 0.6 * h) || (p.r < r && segBox(q.mid, y, c, ly, p)) || (p.r > r && segBox(p.lx, y, p.c, p.ly, B)))
+          || (o.strict && boxes.some(b => segBox(q.mid, y, c, ly, { x0: b[0], y0: b[1], x1: b[2], y1: b[3] })))) continue;   // SBTXT (o.strict, the framing plan): nor a leader through a text inside its run
         rows.push({ r, ...B, lx: q.mid, c, ly }); D.line(l, q.mid, y, c, ly); D.text(l, c, yb, h, q.t, 1); boxes.push([B.x0, B.y0, B.x1, B.y1]); lines.push(q.mid);
         edge = dir > 0 ? Math.max(edge, B.y1) : Math.min(edge, B.y0); return; } } });
     return { edge, boxes, lines };
@@ -315,6 +408,21 @@
     D.dim(l, p1, p2, [x, p1[1]], 90, ' ');
     if (out === 'lo') { const ye = yOut - 0.8 * h; D.line(l, x, p1[1], x, ye - w); D.text(l, x - 0.07 * k, ye, h, t, 2, 90); }
     else { const ye = yOut + 0.8 * h; D.line(l, x, p2[1], x, ye + w); D.text(l, x - 0.07 * k, ye, h, t, 0, 90); }
+  }
+  /* the general notes of the typical section sheet (GirderDetail dxfSection; the data of this project) */
+  function secNotes(G) {
+    const dk = G.deck, nb = G.nb, ts = dk.ts, hh = dk.haunch;
+    const P = G.P, bo = (P.splices || {}).bolts || {}, sc = P.studs || {};
+    const lines = ['DESIGN SPECIFICATION: AASHTO LRFD BRIDGE DESIGN SPECIFICATIONS, 10TH EDITION (2024). LIVE LOAD: HL-93.',
+      `STRUCTURAL STEEL: ASTM A709 GRADE ${G.mat.top} TOP FLANGE, ${G.mat.web} WEB, ${G.mat.bot} BOTTOM FLANGE. CHARPY V-NOTCH TESTING PER AASHTO LRFD TABLE 6.6.2.1-2 FOR THE PROJECT TEMPERATURE ZONE.`,
+      nb <= 2 ? 'GIRDER TENSION FLANGES AND WEB TENSION ZONES ARE NONREDUNDANT STEEL TENSION MEMBERS (NSTM): FABRICATE UNDER THE FRACTURE CONTROL PLAN OF AASHTO/AWS D1.5 CLAUSE 12.' : `THE BRIDGE HAS ${nb} GIRDERS AND IS LOAD-PATH REDUNDANT; THERE ARE NO NONREDUNDANT STEEL TENSION MEMBERS (NSTM).`,
+      `HIGH-STRENGTH BOLTS: ASTM F3125 GRADE ${X_().str(bo.gr || 'A325')}, ${frac(+bo.d || 0.875)} IN. DIAMETER, SLIP-CRITICAL CONNECTIONS WITH CLASS ${X_().str(bo.cls || 'B')} FAYING SURFACES.`,
+      `SHEAR CONNECTORS: ${frac(+sc.d || 0.875)} IN. DIAMETER x ${frac(+sc.h || 6)} IN. HEADED STUDS, ASTM A108, AASHTO/AWS D1.5.`,
+      `DECK: ${frac(ts)} IN. STRUCTURAL CONCRETE${dk.tdeck > ts + 1e-9 ? ` (${frac(dk.tdeck)} IN. TOTAL)` : ''}, f'c = ${f2(+G.mat.fc || 0)} KSI, HAUNCH ${frac(hh)} IN.${dk.composite ? '' : ' NONCOMPOSITE.'}`,
+      'WELDING: AASHTO/AWS D1.5 BRIDGE WELDING CODE. FLANGE BUTT SPLICES CJP, GROUND FLUSH AND SMOOTH IN THE DIRECTION OF STRESS.',
+      'ALL DIMENSIONS TO BE VERIFIED AGAINST THE CONTRACT DRAWINGS. GENERATED BY STEEL BRIDGE DESIGN (NEW).'];
+    if (G.app && G.app.items.some(a => a.sch)) lines.push('BARRIER, RAILING AND FENCE SHAPES AND HEIGHTS ARE SCHEMATIC.');
+    return lines;
   }
   function section(G, D, opt) {
     opt = opt || {}; const dk = G.deck, nb = G.nb, xg = G.ys.map(y => y * 12), W = xg[nb - 1], xL = -dk.ohL * 12, xR = W + dk.ohR * 12;
@@ -343,18 +451,8 @@
     vdim(D, ly.d, [xL, yT + hh], [xL, yDT], col(3), 'DECK <>', 'hi', yDT);
     D.text(ly.t, xL, yDk + 4 * h, h * 1.6, 'TYPICAL CROSS-SECTION');
     D.text(ly.t, xL, yDk + 2.3 * h, h * 0.8, `SECTION AT CL BRG. ABUT. 1 (FIRST PLATE SEGMENT OF EACH GIRDER); SEE THE PLATE SCHEDULE FOR OTHER PLATES. SCALE ${SCALE_NAME[D.k]} WHEN PLOTTED.`);
-    // general notes (GirderDetail dxfSection; the data of this project)
-    const P = G.P, bo = (P.splices || {}).bolts || {}, sc = P.studs || {};
-    const lines = ['DESIGN SPECIFICATION: AASHTO LRFD BRIDGE DESIGN SPECIFICATIONS, 10TH EDITION (2024). LIVE LOAD: HL-93.',
-      `STRUCTURAL STEEL: ASTM A709 GRADE ${G.mat.top} TOP FLANGE, ${G.mat.web} WEB, ${G.mat.bot} BOTTOM FLANGE. CHARPY V-NOTCH TESTING PER AASHTO LRFD TABLE 6.6.2.1-2 FOR THE PROJECT TEMPERATURE ZONE.`,
-      nb <= 2 ? 'GIRDER TENSION FLANGES AND WEB TENSION ZONES ARE NONREDUNDANT STEEL TENSION MEMBERS (NSTM): FABRICATE UNDER THE FRACTURE CONTROL PLAN OF AASHTO/AWS D1.5 CLAUSE 12.' : `THE BRIDGE HAS ${nb} GIRDERS AND IS LOAD-PATH REDUNDANT; THERE ARE NO NONREDUNDANT STEEL TENSION MEMBERS (NSTM).`,
-      `HIGH-STRENGTH BOLTS: ASTM F3125 GRADE ${X_().str(bo.gr || 'A325')}, ${frac(+bo.d || 0.875)} IN. DIAMETER, SLIP-CRITICAL CONNECTIONS WITH CLASS ${X_().str(bo.cls || 'B')} FAYING SURFACES.`,
-      `SHEAR CONNECTORS: ${frac(+sc.d || 0.875)} IN. DIAMETER x ${frac(+sc.h || 6)} IN. HEADED STUDS, ASTM A108, AASHTO/AWS D1.5.`,
-      `DECK: ${frac(ts)} IN. STRUCTURAL CONCRETE${dk.tdeck > ts + 1e-9 ? ` (${frac(dk.tdeck)} IN. TOTAL)` : ''}, f'c = ${f2(+G.mat.fc || 0)} KSI, HAUNCH ${frac(hh)} IN.${dk.composite ? '' : ' NONCOMPOSITE.'}`,
-      'WELDING: AASHTO/AWS D1.5 BRIDGE WELDING CODE. FLANGE BUTT SPLICES CJP, GROUND FLUSH AND SMOOTH IN THE DIRECTION OF STRESS.',
-      'ALL DIMENSIONS TO BE VERIFIED AGAINST THE CONTRACT DRAWINGS. GENERATED BY STEEL BRIDGE DESIGN (NEW).'];
-    if (G.app && G.app.items.some(a => a.sch)) lines.push('BARRIER, RAILING AND FENCE SHAPES AND HEIGHTS ARE SCHEMATIC.');
-    notes(D, ly.t, xL, yF - 4.5 * h, 'GENERAL NOTES', lines, 90);
+    // general notes (GirderDetail dxfSection; the data of this project). SBTXT: secNotes(G); opt.noNotes (the paper-B sheet: SBDSheets puts them on the next sheet)
+    if (!opt.noNotes) notes(D, ly.t, xL, yF - 4.5 * h, 'GENERAL NOTES', secNotes(G), 90);
     return { id: 'sec', title: 'Typical cross-section', i0, i1: D.mark(), k: D.k, h: D.h };
   }
   /* appurtenances on the section (GirderDetail dxfApp); returns the height used above the deck top. SBXS: the deck-edge chain with chainFit;
@@ -420,5 +518,5 @@
   /* dxf(G, opt): the DXF text of all() */
   function dxf(G, opt) { const A = all(G, opt); return A.D.toDXF({ ltscale: 1 }); }
 
-  window.SBDDrawings = { SCALES, SCALE_NAME, TXT, scaleFor, plateGirderOf, appOf, model, plan, elevation, section, all, dxf, table, notes, tag, segAt, splR, brgType, tsType, bwName };
+  window.SBDDrawings = { fit: { scene, clearOf, sceneAdd, txBox, txW }, SCALES, SCALE_NAME, TXT, scaleFor, plateGirderOf, appOf, model, plan, planTables, secNotes, elevation, section, all, dxf, table, notes, tag, segAt, splR, brgType, tsType, bwName };
 })();

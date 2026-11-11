@@ -6,7 +6,9 @@
 //    on a 30° skew, two hand-off payloads), each written as its own DXF (its entities, the set's layer, linetype and dimension style
 //    tables), against tests/baselines/dxf-sheets.json (SHA-256, recorded on origin/main before the change: RECORD_DXF=1 node
 //    tests/engine/run.mjs dxf-sheets). Only the "sec" entries were re-recorded after the change; each sheet's plot scale is in the key
-//    list too (the section sheet kept its scale, so the sheets after it did not move).
+//    list too (the section sheet kept its scale, so the sheets after it did not move). SBTXT (2026-11-11) re-recorded every sheet (RECORD_DXF=1):
+//    the paper-D framing plans (labels moved) and on paper B the split plan and section sheets, the cover (sheet index) and the sheet numbers
+//    of every later sheet; every other D sheet identical (fixlog/steel-bridge.md SBTXT lists them).
 // 2. No text of the cross-section drawing overlaps another text, and no line (extension line, dimension line, leader, outline) crosses a
 //    text, other than the lines of the text's own dimension: the sheet and the Summary figure, built-in and 11-girder projects (text boxes
 //    as tests/engine/overlap.mjs).
@@ -53,7 +55,7 @@ test('SBXS: every sheet other than the typical section is byte-identical to orig
     fs.writeFileSync(BASE, JSON.stringify(out, null, 0).replace(/,"/g, ',\n"') + '\n'); console.log(`       recorded ${n} sheet hashes${keep ? ` (the "${ids.join('", "')}" sheets only)` : ''} in ${path.relative(ROOT, BASE)}`); return; }
   const want = JSON.parse(fs.readFileSync(BASE, 'utf8')), diff = Object.keys(want).filter(k => want[k] !== got[k]), miss = Object.keys(want).filter(k => !(k in got));
   assert.deepEqual(miss, [], 'sheets not built'); assert.deepEqual(diff, [], 'DXF changed');
-  console.log(`       ${n / 2} sheets identical to the baseline (${Object.keys(want).filter(k => /\|sec$/.test(k)).length} typical-section sheets re-recorded for SBXS, ${Object.keys(want).filter(k => /\|(plan|erect)$/.test(k)).length} framing-plan and erection sheets for SBFLIP; every plot scale unchanged)`);
+  console.log(`       ${n / 2} sheets identical to the baseline (${Object.keys(want).filter(k => /\|sec$/.test(k)).length} typical-section sheets re-recorded for SBXS, ${Object.keys(want).filter(k => /\|(plan|erect)$/.test(k)).length} framing-plan and erection sheets for SBFLIP; SBTXT: every sheet re-recorded (RECORD_DXF=1): the D plans, every B sheet (numbering), the B plan and section split)`);
 });
 
 import { textOverlaps, textLineHits, describe, describeHit } from './overlap.mjs';
@@ -110,4 +112,35 @@ test('SBFLIP: plan and erection sheets have G1 at the top; support lines at the 
   }
   close(hand[0], 456, 1e-9, 'G1-G5'); close(hand[1], 263.2717, 1e-4, 'Δx'); close(hand[2], 30, 1e-9, 'angle');
   console.log(`       ${cases.length} projects, plan and erection sheets: G1 on top, ${nL} support lines at their skew (G_nb end ahead for +)`);
+});
+
+// SBTXT (2026-11-11, engineer): the framing plan sheet had about 18 places where a line ran through a text (after SBFLIP: 18 on the
+// built-in project, 19 on it with a 30° skew and two splices, 74 on the 11-girder bridge), and on paper B the typical section (and the
+// plan) did not fit at any scale (1" = 100'-0", the last of the list). Checks, on papers D and B, for the dxf-sheets projects, the 11
+// girders on shallow girders and the built-in at 0° and 30° with two splices: every framing-plan and typical-section sheet (the
+// drawing, notes and tables; not the title block) has no line through a text and no text over a text (tests/engine/overlap.mjs) and
+// fits its drawing area (s.over false); on B the plan and the section are numbered sheets "(1 OF n)" … with the drawing alone on the
+// first at a standard scale of the list, the continuation sheets at the same scale. Hand check: built-in project on B: the section
+// fits at 1/4" = 1'-0" (1:48: the drawing about 12.3 x 4.6 in in the 14.75 x 6.45 in area) and the plan at 1" = 30'-0" (1:360).
+test('SBTXT: framing plan and typical section, papers D and B: no line through a text, no text over a text, every sheet fits', () => {
+  const cases = [...projects(), ['11 girders, shallow', p11s()]];
+  for (const sk of [0, 30]) { const P = J(M.defaultProject()); P.xs.skews = P.xs.skews.map(() => sk); P.framing = { ...M.defaultFraming(), splices: [82, 278] }; cases.push([`built-in ${sk}° 2 splices`, P]); }
+  const bad = [], ks = {}; let n = 0;
+  for (const [name, P] of cases) for (const paper of ['D', 'B']) {
+    const G = DW.model(P); assert.equal(G.errors.length, 0, name);
+    const B = SH.build(G, null, { paper, only: ['plan', 'sec'], date: '2026-11-11' });
+    for (const grp of ['plan', 'sec']) {
+      const ss = B.sheets.filter(s => s.id === grp || s.id.startsWith(grp) && /^\d+$/.test(s.id.slice(grp.length)));
+      if (paper === 'D') assert.equal(ss.length, 1, `${name} D ${grp}: one sheet`);
+      else { assert.ok(ss.length >= 2, `${name} B ${grp}: split`); ss.forEach((s, i) => { assert.match(s.title, new RegExp(`\\(${i + 1} OF ${ss.length}\\)$`), `${name} B ${grp}: title ${s.title}`); assert.equal(s.k, ss[0].k, `${name} B ${s.id}: the scale of sheet 1`); }); }
+      for (const s of ss) { n++; ks[`${name}|${paper}|${s.id}`] = s.k;
+        assert.ok(!s.over, `${name} ${paper} ${s.id}: does not fit (1:${s.k})`); assert.ok(DW.SCALE_NAME[s.k], `${name} ${paper} ${s.id}: scale 1:${s.k} of the list`);
+        const Ds = { ...B.D, E: B.D.E.slice(s.i0, s.iC) };
+        textOverlaps(Ds, X).forEach(o => bad.push(`${name}, ${paper} ${s.id}: text over text ${describe(o)}`)); textLineHits(Ds, X).forEach(o => bad.push(`${name}, ${paper} ${s.id}: ${describeHit(o)}`)); }
+    }
+  }
+  assert.deepEqual(bad, [], bad.slice(0, 20).join('\n'));
+  assert.equal(ks['built-in|B|sec'], 48, 'built-in B section 1/4" = 1\'-0"'); assert.equal(ks['built-in|B|plan'], 360, 'built-in B plan 1" = 30\'-0"');
+  assert.equal(ks['built-in|D|sec'], 32, 'built-in D section unchanged (3/8" = 1\'-0")'); assert.equal(ks['built-in|D|plan'], 240, 'built-in D plan unchanged (1" = 20\'-0")');
+  console.log(`       ${n} plan and section sheets (${cases.length} projects, papers D and B): no line through a text, no text over a text, all fit (B section 1:${ks['built-in|B|sec']}, plan 1:${ks['built-in|B|plan']})`);
 });
