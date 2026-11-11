@@ -7700,3 +7700,13 @@ index 4844242..cca603d 100644
    window.addEventListener('focus',refreshBar);
    window.addEventListener('storage',refreshBar);
 ```
+
+## 2026-11-11 — PR: fdx-perunit (PR #1424: https://github.com/mlococo88/All-Structural/pull/1424) — picker: one row per unit copy, default = the unit last pulled, per-unit "older" (FPU)   [no calculation; read only]
+
+- **Where:** SFPK block: `pkOlder`, `picker(r)` (anchor `var HS=window.SharedHandoffStore, op=pkOpen()`), the row and "Preselected" texts.
+- **Before / After:** as Pile Designer's FPU entry, with `last` = `state&&state.bxSrc&&state.bxSrc.foundationLoads` and ids `bxFlPk*`.
+- **Check case:** tests/smoke/spread-footing-fdx-picker.mjs section 8: Pier 1 unit copy applied → direct P = 900; reopen → Pier 1 preselected; the pre-FPU Pier 1 project copy flagged older; Pier 2 unit copy and the Abutment copy = main's state and results; per-foot wall pull unchanged (My 320 − 12·3 = 284).
+- **Decisions (pending engineer review):** (1) SubLoads unit id = support number `support-<n>` (not the name); (2) the per-project copy `.by.subloads.<pid>` (last unit) is still written and uploaded after the unit copy, for backward compatibility; (3) the Abutment Calculator writes one copy per project, per unit (the SubLoads unit name `S.subloadsSrc.abutment`) when the project was pulled from a SubLoads abutment; (4) "older" is per project and unit; (5) the picker default is the unit last pulled into the open project, read from the existing saved source record (nothing new saved); (6) the upload queue's `pid` field holds the copy id (format unchanged).
+- **Calculations:** none (§4 not engaged): a pull of any copy imports exactly the payload that unit's send produced; main-vs-branch probes identical (PR description).
+- **Saved data (§5):** new prefixed keys only (`bridgeSuite.v1.foundationLoads.by.<producer>.<project id>.<unit id>`, and `.by.abutment.<project id>`); no existing key or format changed.
+- **Other copies:** none.
