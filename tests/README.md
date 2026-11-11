@@ -90,6 +90,10 @@ node tests/smoke/bsl-graphics.mjs [--ref <git ref>] [--shots <dir>]
 # subscripts (plain text unchanged), no card in the Report's package or while an input is invalid, 390 px, 0 console errors. ~1 min
 node tests/smoke/bsl-show-work.mjs [--shots <dir>]
 
+# Bridge Substructure Loading foundationLoads per-project copies (SLFC, HANDOFF.md §5.1): the send writes the channel key, .by.subloads and
+# .by.subloads.<project id> (the published payload), one copy per project (the last unit sent), none for a blank project, no request with sync off. ~20 s
+node tests/smoke/bsl-fdx-copies.mjs
+
 # Phone / tablet layout (PHN): at 390 and 768 px the page never scrolls sideways, on load and on every tab (one entry per tool in TOOLS)
 node tests/smoke/phone-layout.mjs [--tool smd,...] [--file <file or git ref>] [--w 390,768]
 
