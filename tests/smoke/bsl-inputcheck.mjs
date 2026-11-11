@@ -187,7 +187,7 @@ if (REF) {
       for (const id of ids) { if (k && ['summary', 'geometry', 'manual'].includes(id)) continue; showTab(id); await sleep(15); o.tabs[id + '~' + k] = document.getElementById('tab-' + id).innerText; }
       try { o.num['combine' + k] = fl(combine(k)); } catch (e) { o.num['combine' + k] = 'ERR ' + e.message; }
       o.num['comps' + k] = fl(COMBOS.map(c => { try { return comboComps(k, c); } catch (e) { return 'ERR'; } })); }
-    try { const a = abutHandoffPayload(); o.num.abx = fl(a.err ? a : JSON.parse(JSON.stringify(a.p, (k, v) => (/At$/.test(k) || k === 'exported') ? undefined : v))); } catch (e) { o.num.abx = 'ERR ' + e.message; }
+    try { const a = abutHandoffPayload(); o.num.abx = fl(a.err ? a : JSON.parse(JSON.stringify(a.p, (k, v) => (/At$/.test(k) || k === 'exported' || k === 'definition' || k === 'notes') ? undefined : v))); } catch (e) { o.num.abx = 'ERR ' + e.message; }   // ABX (2026-11-11): the additive definition block and the payload notes are not compared
     o.num.C = fl(MODEL.C);
     showTab('report'); await sleep(2500); o.report = SLR.doc ? SharedReport.text(SLR.doc) : 'NO DOC'; showTab('summary'); await sleep(50);
     o.strip = document.getElementById('strip-host').innerHTML; o.ic = window.SubLoadsInputCheck ? SubLoadsInputCheck.collect().length : 0;

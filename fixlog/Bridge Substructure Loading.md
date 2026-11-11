@@ -3006,3 +3006,16 @@ function listTables() {
   3. The short-length warning compares an entered L_ab with the out-to-out of the exterior bearing pedestals along the line, as drawn: (s_max − s_min) + max(pad W, 0.8 ft) / cos θ + 0.5 ft. It is a warning, not an error, and only for an entered L_ab: the auto length is the deck width, and with blank inputs no new message appears. A warning is added when L_ab > L_ftg.
   4. L_ftg is on the Foundation section, next to the footing width and thickness, and only for a spread footing or pile cap. L_ab is on the Abutment section.
 - **Other copies:** none.
+
+## 2026-11-11 — PR: claude/abx-a (PR #1405: https://github.com/mlococo88/All-Structural/pull/1405) (ABX, PR A) — abutmentLoads: the abutment definition block and the per-project copy   [no calculation; storage: new key and optional field only]
+- **Why:** engineer request 2026-11-11 (the abutment app and SubLoads "should talk with each other more"); HANDOFF.md §4.5.
+- **Where:**
+  - Head: `<script src="shared/abutment-def.js">` after `shared/handoff-store.js`.
+  - New `abutDefOf(k)` before `(function patchAbxHandoff() {`: `SharedAbutmentDef.fromSubLoads` from the unit inputs and `MODEL.UG[k]` (L_ab = `R.capLen`, L_ftg = `abFtgL(R)`, `R.stemTop`, `R.bwTop`, `R.ftgBot`, the deck elevation, hb + hp, `fillEarth(u).earth`, the approach-slab width (entered, else the deck width), `eqSite().As`, `br.khR / kv / hEQr / wc`, the pad).
+  - `abutHandoffPayload`: after `const good = …`: `good.forEach(a => { const d = abutDefOf(a.supportIndex); if (d) { a.definition = d; a.notes = …the earth note reworded… } });`. The payload note "Earth pressure, soil and backfill properties are not sent…" → "Earth pressure is not sent… Each abutment carries a definition block…". `abutExportData` (the "Export abutments" file) is not changed.
+  - Send handler: after `BridgeXfer.publish('abutmentLoads', …)`: `SharedHandoffStore.send({ storage: localStorage, channel: 'abutmentLoads', producer: 'subloads', payload: r.payload, … })` (the copy `bridgeSuite.v1.abutmentLoads.by.subloads.<pid>`).
+  - Hand-offs card, row "Abutment loads": the note names the definition and "kept per project".
+- **Governing provision:** none (no calculation).
+- **Check case:** default project: Send → keys `bridgeSuite.v1.abutmentLoads`, `.updatedAt`, `.by.subloads.~Example three-span continuous`; Abut. 1 definition: L_ab 46.0698 (auto), stem 4 × 9.9908, backwall 1.5 × 7.0092, footing 14 × 3 (toe 4, heel 6), D_f 7, seat 117.9908, h_brg 10.5 in, soil γ 0.120 φ 32 (soil height 17, auto).
+- **How verified:** main-vs-branch probe of the default project: every unit's `combine()` envelopes, `abutExportData()` (timestamp blanked) and `P` identical. Tests: `abutment-subloads-exchange` (new), `bsl-inputcheck`, `bsl-abut-length`, `bsl-drawings`, `geometry-handoff`, `project-library --tool bsl`.
+- **Other copies:** none.
