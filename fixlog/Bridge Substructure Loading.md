@@ -3123,7 +3123,7 @@ function listTables() {
 - **Open item (hand-off):** `shared/abutment-def.js` `fromSubLoads` sends `seismic.hEQmode: 'ratio'` (fixed), and the SubLoads receiver maps only `hEQr`. Mapping `P.br.hEQmode` / `hAEr` both ways (the values are already the calculator's) is a change to the shared hand-off file, left to the exchange work.
 - **Other copies:** the Abutment Calculator has its own implementation (SEL, #1409).
 
-## 2026-11-11 — PR: fix/abut-subloads-map (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — abutment exchange: LS with the slab and the seismic earth pressure location mapped both ways (ABXM)   [no SubLoads result changes on load; a pull can now write earth.lsRed (Approach slab group, ticked by default) and P.br.hEQmode / hAEr (Bridge-wide group, unticked): §4 callout in the PR]
+## 2026-11-11 — PR: fix/abut-subloads-map (PR #1412: https://github.com/mlococo88/All-Structural/pull/1412) — abutment exchange: LS with the slab and the seismic earth pressure location mapped both ways (ABXM)   [no SubLoads result changes on load; a pull can now write earth.lsRed (Approach slab group, ticked by default) and P.br.hEQmode / hAEr (Bridge-wide group, unticked): §4 callout in the PR]
 - Closes the open item of the SLPL entry above (hand-off `hEQmode` fixed to 'ratio').
 - **Where / before → after:**
   - `abutDefOf(k)` (anchor `return SharedAbutmentDef.fromSubLoads({`): `br: { …, hEQr: nz(b.hEQr) || 0.6 }` → `br: { …, hEQr: nz(b.hEQr) || 0.6, hEQmode: paeLocOf(), hAEr: b.hAEr }`, plus `lsRem: e.asOn === 'yes' ? lsSlabRem(e) : null, lsRef: lsSlabRef() + …`.

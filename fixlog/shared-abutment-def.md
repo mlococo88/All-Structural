@@ -24,7 +24,7 @@ and §4.15 (abutmentDef). Tests: `node tests/engine/run.mjs abutment-def` (Node)
 ## 2026-11-11 — PR: claude/abx-b (PR #1407: https://github.com/mlococo88/All-Structural/pull/1407) — used by the new abutmentDef channel (ABX, PR B)   [file not changed]
 - `fromAbutment`, `checkPayload`, `toSubLoads`, `rows` and `summary` are now called by the calculator's "Send abutment to SubLoads" and SubLoads' "Pull abutment from the Abutment Calculator" (HANDOFF.md §4.15). No change to this file; tests `node tests/engine/run.mjs abutment-def` pass.
 
-## 2026-11-11 — PR: fix/abut-subloads-map (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — LS with the approach slab and the seismic earth pressure location mapped both ways; information rows corrected (ABXM)   [mapping only; a pull can now write earth.lsRed / apSlab.lsRed and P.br.hEQmode / hAEr / seismic.hEQmode / hAEr: §4 callout in the PR]
+## 2026-11-11 — PR: fix/abut-subloads-map (PR #1412: https://github.com/mlococo88/All-Structural/pull/1412) — LS with the approach slab and the seismic earth pressure location mapped both ways; information rows corrected (ABXM)   [mapping only; a pull can now write earth.lsRed / apSlab.lsRed and P.br.hEQmode / hAEr / seismic.hEQmode / hAEr: §4 callout in the PR]
 - **Why:** after #1406 (SubLoads removes LS with a slab under AASHTO too), #1409 / #1411 (the same four seismic earth pressure locations in
   both tools) and #1410 (abutment superstructure horizontal forces at the seat in SubLoads) the exchange still sent `info.lsRed: null` and
   a row "removed only under MassDOT", a fixed `seismic.hEQmode: 'ratio'` (SubLoads) / `'static'` for every non-ratio mode (calculator),
