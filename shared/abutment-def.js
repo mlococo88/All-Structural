@@ -21,8 +21,12 @@
        elevations:{ seat, topOfBackwall, topOfFooting, bottomOfFooting, ground, deck } | null,   // the bridge seat (top of stem)
        superstructure:{ brgHIn, girderIn, haunchIn, deckIn } | null,   // seat to underside of girder (bearing + pedestal), girder, haunch, deck
        soil:{ method:'rankine'|'coulomb'|'atrest', gamma, phi, delta, beta, heq5, heq10, heq20, esQ, hw, soilH, soilHAuto, constrFill, gLLc } | null,
-       approachSlab:{ on, W, WAuto, L, t, sharePct, RDC, LL } | null,   // t in ft; sharePct = the slab weight share on this abutment (%)
-       seismic:{ As, khR, kv, hEQr, hEQmode:'ratio'|'static' } | null,
+       approachSlab:{ on, W, WAuto, L, t, sharePct, RDC, LL, lsRed, lsRule } | null,   // t in ft; sharePct = the slab weight share on this abutment (%);
+                                                           // lsRed = the sender removes the final-state LS with the slab (true / false; null = no slab;
+                                                           // absent = an earlier hand-off), lsRule = the sender's rule for it (text)
+       seismic:{ As, khR, kv, hEQr, hEQmode:'sw'|'static'|'comb'|'nonyield'|'ratio', hAEr } | null,   // the seismic earth pressure location
+                                                           // (the calculator's panel I-11 values; 'ratio' = its earlier option, ΔP_AE at hEQr·H);
+                                                           // hAEr = the option (c) ratio; no hAEr key = an earlier hand-off (location not stated)
        concrete:{ gc } | null, pad:{ L, W, G, hrt } | null,
        info:{ kRule, lsRed, wingwalls:[text], battered, refined:[text] } }   // information only: never applied
    Refined Abutment Calculator data is never put in it: backwall offset / stem shelf, batter detail beyond t_top / t_bot, the Coulomb heel
@@ -48,6 +52,15 @@
   const UNITS = { length: 'ft', elevation: 'ft', display: 'in', pad: 'in', shearModulus: 'ksi', unitWeight: 'kcf', pressure: 'ksf', angle: 'deg', force: 'kip' };
   const OWNER = { geom: 'abutment', soil: 'abutment', aps: 'abutment', bridge: 'bridge', elev: 'bridge', brg: 'bridge', seisset: 'bridge', bridgewide: 'bridge', ftgEl: 'bridge' };
   const isN = v => typeof v === 'number' && isFinite(v);
+  /* the seismic earth pressure location (the calculator's seismic.hEQmode, panel I-11; SubLoads P.br.hEQmode, bridge-wide). SubLoads' (a) puts
+     ΔP_AE at its hEQr·H (0.6 by default); the calculator's (a) at 0.6H and its earlier 'ratio' option at hEQr·H. */
+  const LOC_SL = ['sw', 'static', 'comb', 'nonyield'], LOC_AB = LOC_SL.concat(['ratio']);
+  const LOC_TXT = { sw: '(a) Seed & Whitman: ΔP_AE at 0.6H, static P_A at its own resultant', static: '(b) combined P_AE at H/3, not lower than the static resultant [C11.6.5.3]',
+    comb: '(c) combined P_AE at the entered ratio × H (0.4 to 0.5) [C11.6.5.3]', nonyield: '(d) nonyielding wall: combined P_AE at H/2 [C11.6.5.4]', ratio: 'earlier option: ΔP_AE at the entered ratio × H' };
+  const locTxt = (m, q) => m === 'sw' && q && isN(q.hEQr) && Math.abs(q.hEQr - 0.6) > 5e-5 ? '(a) Seed & Whitman: ΔP_AE at ' + r3(q.hEQr) + 'H (SubLoads\' ΔP_AE ratio), static P_A at its own resultant'
+    : m === 'comb' && q && isN(q.hAEr) ? '(c) combined P_AE at ' + r3(q.hAEr) + 'H, not lower than the static resultant [C11.6.5.3]' : m === 'ratio' && q && isN(q.hEQr) ? 'earlier option: ΔP_AE at ' + r3(q.hEQr) + 'H' : (LOC_TXT[m] || String(m));
+  /* locStated(q): the hand-off states the location (a definition from an earlier version has no hAEr key and a fixed 'ratio' / 'static') */
+  const locStated = q => !!q && Object.prototype.hasOwnProperty.call(q, 'hAEr') && LOC_AB.indexOf(q.hEQmode) >= 0;
   const num = v => { if (v === '' || v == null) return NaN; const x = typeof v === 'number' ? v : parseFloat(v); return isFinite(x) ? x : NaN; };
   const nz = v => { const x = num(v); return isFinite(x) ? x : 0; };
   const r3 = v => isN(v) ? Math.round(v * 1000) / 1000 : v;
@@ -59,11 +72,12 @@
 
   /* ---------- builders ---------- */
   /* fromSubLoads(x): x = { name, end, skewDeg, spanL, abut:{ L, Lftg, stemT, brgA, bwT, toe }, ftg:{ type, W, t }, Lab, Lftg (effective),
-       stemTop, bwTop, topFtg, ftgBot, ground, deckZ, hbIn, hpIn, br:{ d, haunch, ts, wc, khR, kv, hEQr }, As, earth (filled), aslW (effective
-       approach-slab width), elast:{ L, W, G, hrt }, brgType } */
+       stemTop, bwTop, topFtg, ftgBot, ground, deckZ, hbIn, hpIn, br:{ d, haunch, ts, wc, khR, kv, hEQr, hEQmode, hAEr }, As, earth (filled), aslW (effective
+       approach-slab width), elast:{ L, W, G, hrt }, brgType, lsRem (SubLoads lsSlabRem: LS removed with the slab), lsRef (its rule) } */
   function fromSubLoads(x) {
     const a = x.abut || {}, f = x.ftg || {}, e = x.earth || {}, b = x.br || {}, tS = nz(a.stemT), toe = nz(a.toe), W = nz(f.W);
     const soilHe = pos(e.soilH) ? num(e.soilH) : x.bwTop - x.topFtg;
+    const lsSL = e.asOn === 'yes' ? (typeof x.lsRem === 'boolean' ? x.lsRem : e.lsRed !== 'no') : null;   // SLLS: absent / 'yes' = removed
     return {
       v: VER, source: 'subloads', name: String(x.name || ''), end: x.end || '',
       skewDeg: r4(nz(x.skewDeg)), spanL: r4(x.spanL),
@@ -77,11 +91,12 @@
       soil: { method: ['rankine', 'coulomb', 'atrest'].indexOf(e.method) >= 0 ? e.method : 'rankine', gamma: r4(nz(e.gamma) || 0.120), phi: r4(nz(e.phi)), delta: r4(nz(e.delta)), beta: r4(nz(e.beta)),
         heq5: r4(nz(e.heq5)), heq10: r4(nz(e.heq10)), heq20: r4(nz(e.heq20)), esQ: r4(nz(e.esQ)), hw: r4(Math.max(0, nz(e.hw))), soilH: r4(soilHe), soilHAuto: !pos(e.soilH),
         constrFill: r4(nz(e.constrFill)), gLLc: r4(nz(e.gLLc)) },
-      approachSlab: { on: e.asOn === 'yes', W: r4(x.aslW), WAuto: !pos(e.asW), L: r4(nz(e.asL)), t: r4(nz(e.asT) / 12), sharePct: r4(nz(e.asPct)), RDC: null, LL: e.asLL === 'yes' ? 'yes' : 'no' },
-      seismic: { As: isN(x.As) ? r4(x.As) : null, khR: r4(nz(b.khR)), kv: r4(nz(b.kv)), hEQr: r4(nz(b.hEQr) || 0.6), hEQmode: 'ratio' },
+      approachSlab: { on: e.asOn === 'yes', W: r4(x.aslW), WAuto: !pos(e.asW), L: r4(nz(e.asL)), t: r4(nz(e.asT) / 12), sharePct: r4(nz(e.asPct)), RDC: null, LL: e.asLL === 'yes' ? 'yes' : 'no',
+        lsRed: lsSL, lsRule: lsSL == null ? null : String(x.lsRef || 'AASHTO LRFD 10th Ed. Art. 3.11.6.5') },
+      seismic: { As: isN(x.As) ? r4(x.As) : null, khR: r4(nz(b.khR)), kv: r4(nz(b.kv)), hEQr: r4(nz(b.hEQr) || 0.6), hEQmode: LOC_SL.indexOf(b.hEQmode) >= 0 ? b.hEQmode : 'sw', hAEr: r4(num(b.hAEr) > 0 ? num(b.hAEr) : 0.5) },
       concrete: { gc: r4(nz(b.wc) || 0.150) },
       pad: x.brgType === 'elast' ? { L: r4(nz((x.elast || {}).L)), W: r4(nz((x.elast || {}).W)), G: r4(nz((x.elast || {}).G)), hrt: r4(nz((x.elast || {}).hrt)) } : null,
-      info: { kRule: e.method === 'atrest' ? 'at rest (k0 = 1 − sin φ)' : 'active', lsRed: null, wingwalls: [], battered: false, refined: [] } };
+      info: { kRule: e.method === 'atrest' ? 'at rest (k0 = 1 − sin φ)' : 'active', lsRed: lsSL, wingwalls: [], battered: false, refined: [] } };
   }
   /* fromLoads(a, p): an abutmentLoads abutment of an older SubLoads (no definition block): geometry, elevations and bearings only */
   function fromLoads(a, p) {
@@ -103,7 +118,8 @@
       pad: B.type === 'elastomeric' ? { L: +B.padLengthIn, W: +B.padWidthIn, G: +B.shearModulusKsi, hrt: +B.rubberThicknessIn } : null,
       info: { kRule: null, lsRed: null, wingwalls: [], battered: false, refined: [] } };
   }
-  /* fromAbutment(S, ctx): the Abutment Calculator's inputs; ctx = { name, ap: LAST_R.ap (the computed approach slab, or null), wingText:[..] } */
+  /* fromAbutment(S, ctx): the Abutment Calculator's inputs; ctx = { name, ap: LAST_R.ap (the computed approach slab, or null), wingText:[..],
+       lsRule: apLsRule() ({ rem, ref }: the calculator's final-state LS rule with the slab; absent: its option apSlab.lsRed) } */
   function fromAbutment(S, ctx) {
     ctx = ctx || {}; const g = S.geom || {}, so = S.soil || {}, c = S.constr || {}, sq = S.seismic || {}, A = S.apSlab || {}, bg = S.bearing || {}, ap = ctx.ap || null;
     const tTop = num(g.tst), tBot = num(g.tsb), tbw = num(g.tbw), af = isFinite(num(g.brgFront)) ? num(g.brgFront) : tTop - tbw - num(g.brgSetback);
@@ -115,8 +131,10 @@
     if (A.on) {
       const W = ap && isN(ap.W) ? ap.W : (pos(A.W) ? +A.W : num(g.Lab) * Math.cos((nz(g.skew)) * Math.PI / 180));
       const L = num(A.L), t = num(A.t), gc = nz((S.mat || {}).gc) || 0.150, RDC = ap && isN(ap.RDC) ? ap.RDC : gc * t * W * L / 2;
-      slab = { on: true, W: r4(W), WAuto: !pos(A.W), L: r4(L), t: r4(t), sharePct: r4(W * L * t * gc > 0 ? 100 * RDC / (gc * t * W * L) : 50), RDC: r4(RDC), LL: null };
-    } else slab = { on: false, W: null, WAuto: true, L: null, t: null, sharePct: null, RDC: null, LL: null };
+      const lr = ctx.lsRule && typeof ctx.lsRule.rem === 'boolean' ? ctx.lsRule : { rem: A.lsRed !== false, ref: 'AASHTO LRFD 10th Ed. Art. 3.11.6.5' };
+      slab = { on: true, W: r4(W), WAuto: !pos(A.W), L: r4(L), t: r4(t), sharePct: r4(W * L * t * gc > 0 ? 100 * RDC / (gc * t * W * L) : 50), RDC: r4(RDC), LL: null,
+        lsRed: lr.rem, lsRule: String(lr.ref || (lr.legacy ? 'equivalent dead load (a project saved before the approach-slab panel)' : '')) };
+    } else slab = { on: false, W: null, WAuto: true, L: null, t: null, sharePct: null, RDC: null, LL: null, lsRed: null, lsRule: null };
     const wing = S.wing && S.wing.on ? (ctx.wingText || ['wingwalls on (panel I-13)']) : [];
     const refined = [];
     if (+g.bwOff > 0) refined.push('backwall offset e = ' + r3(+g.bwOff) + ' in and stem shelf (panel I-1)');
@@ -139,7 +157,7 @@
         heq5: r4(num(so.heq5)), heq10: r4(num(so.heq10)), heq20: r4(num(so.heq20)), esQ: r4(nz(so.esQ)), hw: r4(Math.max(0, nz(g.hw))), soilH: r4(num(g.soilH)), soilHAuto: false,
         constrFill: r4(nz(c.hFill)), gLLc: r4(nz(c.gLL)) },
       approachSlab: slab,
-      seismic: { As: r4(num(sq.As)), khR: r4(num(sq.khR)), kv: r4(nz(sq.kv)), hEQr: r4(num(sq.hEQr)), hEQmode: sq.hEQmode === 'ratio' ? 'ratio' : 'static' },
+      seismic: { As: r4(num(sq.As)), khR: r4(num(sq.khR)), kv: r4(nz(sq.kv)), hEQr: r4(num(sq.hEQr)), hEQmode: LOC_AB.indexOf(sq.hEQmode) >= 0 ? sq.hEQmode : 'static', hAEr: r4(num(sq.hAEr) > 0 ? num(sq.hAEr) : 0.5) },   // the calculator's eqMode(): any other value = 'static'
       concrete: { gc: r4(nz((S.mat || {}).gc) || 0.150) },
       pad: { L: r4(num(bg.padL)), W: r4(num(bg.padW)), G: r4(num(bg.G)), hrt: r4(num(bg.hrt)) },
       info: { kRule: so.Kmode && so.Kmode !== 'active' ? so.Kmode : 'active', lsRed: A.on ? A.lsRed !== false : null, wingwalls: wing, battered: Math.abs(tBot - tTop) > 1e-6, refined } };
@@ -170,6 +188,7 @@
     const q = d.seismic;
     if (q && q.As != null && !inR(q.As, 0, 2)) bad('seisset', 'A_s = ' + fmt(q.As));
     if (q) [ ['k_h ratio', q.khR, 0, 1.5], ['k_v', q.kv, 0, 0.99], ['ΔP_AE height ratio', q.hEQr, 0, 1]].forEach(([n, v, lo, hi]) => { if (!inR(v, lo, hi)) bad('seisset', n + ' = ' + fmt(v)); });
+    if (q && locStated(q) && q.hEQmode === 'comb' && !inR(q.hAEr, 0.4, 0.5)) bad('seisset', 'combined P_AE height ratio = ' + fmt(q.hAEr) + ' (0.4 to 0.5, C11.6.5.3)');
     if (d.concrete && !inR(d.concrete.gc, 0.1, 0.2)) bad('bridgewide', 'w_c = ' + fmt(d.concrete.gc));
     const p = d.pad;
     if (p) [['pad length', p.L, 1, 60], ['pad width', p.W, 1, 80], ['G', p.G, 0.05, 0.4], ['h_rt', p.hrt, 0.25, 20]].forEach(([n, v, lo, hi]) => { if (!inR(v, lo, hi)) bad('brg', n + ' = ' + fmt(v)); });
@@ -193,7 +212,8 @@
   }
 
   /* ---------- mapping into the Abutment Calculator (SubLoads -> Abutment) ---------- */
-  /* ctx = { integral: bool, roadwayW: number|null, gerr: {} } */
+  /* ctx = { integral: bool, roadwayW: number|null, gerr: {}, lsAuto: the calculator's automatic LS rule with a slab (owner MassDOT / CTDOT: its
+     reference text; else null) } */
   function toAbutment(d, ctx) {
     ctx = ctx || {}; const G = {}, gerr = Object.assign({}, validate(d).gerr), it = (path, val, lbl, unit, note) => ({ path, val: r3(val), lbl: lbl + (unit ? ' (' + unit + ')' : ''), ...(note ? { note } : {}) });
     const st = d.stem, bw = d.backwall, f = d.footing, L = d.lengths, s = d.soil || {}, integ = !!ctx.integral;
@@ -227,7 +247,10 @@
       else { const th = Math.abs(nz(d.skewDeg)) * Math.PI / 180, auto = Math.abs(a.W - L.Lab * Math.cos(th)) < 0.01;
         G.aps = { items: [it('apSlab.on', true, 'Approach slab (panel I-0b)'), it('apSlab.L', a.L, 'Length L along the roadway', 'ft'), it('apSlab.t', a.t, 'Thickness t', 'ft'),
           it('apSlab.W', auto ? 0 : a.W, auto ? 'Width W (0 = L_ab·cos θ = the SubLoads width ' + r3(a.W) + ' ft)' : 'Width W, edge to edge', 'ft')],
-          notes: ['SubLoads puts ' + r3(a.sharePct) + "% of the slab weight on the abutment; the calculator computes its own reaction from the slab's plan (half the slab, area/2, with its skew rule), its wearing surface and its live load (Tab 1 §1.4a). SubLoads' share and its approach-slab live load option (" + (a.LL === 'yes' ? 'on' : 'off') + ') are not imported.'] }; }
+          notes: ['SubLoads puts ' + r3(a.sharePct) + "% of the slab weight on the abutment; the calculator computes its own reaction from the slab's plan (half the slab, area/2, with its skew rule), its wearing surface and its live load (Tab 1 §1.4a). SubLoads' share and its approach-slab live load option (" + (a.LL === 'yes' ? 'on' : 'off') + ') are not imported.'] };
+        if (typeof a.lsRed === 'boolean') { G.aps.items.push(it('apSlab.lsRed', a.lsRed, 'Remove the final-state live-load surcharge LS with the slab (SubLoads: ' + (a.lsRed ? 'removed' : 'kept') + (a.lsRule ? ', ' + a.lsRule : '') + ')'));
+          G.aps.notes.push('Live-load surcharge with the slab: SubLoads ' + (a.lsRed ? 'removes the final-state LS' : 'keeps the final-state LS') + (a.lsRule ? ' (' + a.lsRule + ')' : '') + '; the construction stage keeps it in both tools.'
+            + (ctx.lsAuto ? ' This project uses owner rules that remove it automatically (' + ctx.lsAuto + '): the option is stored and used only under AASHTO or RIDOT rules.' : '')); } }
     } else gerr.aps = gerr.aps || 'not sent (an older SubLoads)';
     if (d.elevations && d.superstructure && !integ) {
       const e = d.elevations, u = d.superstructure;
@@ -235,14 +258,24 @@
         it('geom.elGird', u.girderIn, 'Girder depth d_g', 'in'), it('geom.elHaunch', u.haunchIn, 'Haunch h_h', 'in'), it('geom.elDeck', u.deckIn, 'Deck thickness t_d', 'in')],
         notes: ['Display only in the calculator (Tab 1 §1.1a): no calculation reads them. SubLoads takes the bridge seat at the lowest bearing of the line; top of deck there = seat + (h_brg + d_g + h_h + t_d)/12 = ' + r3(e.seat + (u.brgHIn + u.girderIn + u.haunchIn + u.deckIn) / 12) + ' ft (SubLoads deck at ℄: ' + r3(e.deck) + ' ft).'] };
     } else gerr.elev = gerr.elev || (integ ? 'integral abutment: the elevations of Tab 1 §1.1a are for a conventional or semi-integral abutment' : 'not sent (an older SubLoads)');
-    if (d.seismic) G.seisset = { items: [it('seismic.khRAuto', false, 'k_h ratio set automatically from the foundation'), it('seismic.khR', d.seismic.khR, 'k_h / k_h0', ''), it('seismic.kv', d.seismic.kv, 'k_v', ''), it('seismic.hEQr', d.seismic.hEQr, 'ΔP_AE height ratio (used only in the calculator\'s "ratio" mode)', '')],
-      notes: ['Bridge-wide in SubLoads (the same for every unit). The calculator\'s ΔP_AE height mode is not changed: SubLoads applies ΔP_AE at ' + r3(d.seismic.hEQr) + 'H; the calculator applies it at the ratio only in its "ratio" mode (default "static", ≥ H/3, 11.6.5.3).'] };
+    if (d.seismic) { const q = d.seismic, si = [it('seismic.khRAuto', false, 'k_h ratio set automatically from the foundation'), it('seismic.khR', q.khR, 'k_h / k_h0', ''), it('seismic.kv', q.kv, 'k_v', '')];
+      if (locStated(q)) {
+        /* SubLoads (a) puts ΔP_AE at its hEQr·H: with 0.6 it is the calculator's (a); with another ratio it is the calculator's earlier "ratio"
+           option at that ratio (the same placement); (b) to (d) map one to one */
+        const sw = q.hEQmode === 'sw' || q.hEQmode === 'ratio', m = sw ? (Math.abs(q.hEQr - 0.6) < 5e-5 ? 'sw' : 'ratio') : q.hEQmode;
+        si.push(it('seismic.hEQmode', m, 'Seismic earth pressure location (panel I-11)', '', 'SubLoads: ' + locTxt(q.hEQmode === 'ratio' ? 'sw' : q.hEQmode, q) + (m === 'ratio' ? '; the calculator\'s (a) is fixed at 0.6H, so its earlier "ratio" option at ' + r3(q.hEQr) + 'H is used (the same placement)' : '')));
+        if (m === 'comb') si.push(it('seismic.hAEr', q.hAEr, 'Combined P_AE height ratio, option (c)', ''));
+        si.push(it('seismic.hEQr', q.hEQr, 'ΔP_AE height ratio (used only by the calculator\'s "ratio" option)', ''));
+        G.seisset = { items: si, notes: ['Bridge-wide in SubLoads (the same for every unit). The location and its ratios set the same placement of P_AE in both tools (AASHTO LRFD 10th Ed. C11.6.5.3, C11.6.5.4).'] };
+      } else { si.push(it('seismic.hEQr', q.hEQr, 'ΔP_AE height ratio (used only by the calculator\'s "ratio" option)', ''));
+        G.seisset = { items: si, notes: ['Bridge-wide in SubLoads (the same for every unit). This hand-off is from an earlier SubLoads that does not state its seismic earth pressure location: the calculator\'s location (panel I-11) is not changed; check it against SubLoads (Bridge tab) by hand.'] }; } }
     else gerr.seisset = gerr.seisset || 'not sent (an older SubLoads)';
     return { groups: G, gerr };
   }
 
   /* ---------- mapping into SubLoads (Abutment -> SubLoads) ---------- */
-  /* ctx: the SubLoads unit now = { name, Lauto, soilHAuto, stemTop, bwTop, topFtg, ground, ftgType, GWd, skewDeg, spanL, deckZ, seatMin, hbIn, hpIn, d, haunch, ts } */
+  /* ctx: the SubLoads unit now = { name, Lauto, soilHAuto, stemTop, bwTop, topFtg, ground, ftgType, GWd, skewDeg, spanL, deckZ, seatMin, hbIn, hpIn, d, haunch, ts,
+       mass (SubLoads uses MassDOT rules), lsRedNow (the unit's stored earth.lsRed: absent / '' = removed, the default) } */
   function toSubLoads(d, ctx) {
     ctx = ctx || {}; const G = {}, v = validate(d), gerr = Object.assign({}, v.gerr), it = (path, val, lbl, unit, note) => ({ path, val: typeof val === 'number' ? r3(val) : val, lbl: lbl + (unit ? ' (' + unit + ')' : ''), ...(note ? { note } : {}) });
     const st = d.stem, bw = d.backwall, f = d.footing, L = d.lengths, s = d.soil, gc = d.concrete && isN(d.concrete.gc) ? d.concrete.gc : 0.150;
@@ -274,17 +307,31 @@
       else { const wAuto = isN(ctx.GWd) && Math.abs(a.W - ctx.GWd) < 0.005;
         G.aps = { scope: 'unit', items: [it('earth.asOn', 'yes', 'Approach slab on the backwall'), it('earth.asW', wAuto ? '' : a.W, wAuto ? 'Approach slab width (blank = the deck width, equals ' + r3(ctx.GWd) + ' ft)' : 'Approach slab width', 'ft'),
           it('earth.asL', a.L, 'Approach slab length', 'ft'), it('earth.asT', a.t * 12, 'Approach slab thickness', 'in'), it('earth.asPct', a.sharePct, 'Share of the slab weight on the abutment', '%')],
-          notes: ['Share = the calculator\'s slab reaction R_DC as a % of the slab weight: R_DC / (w_c·t·W·L) = ' + r3(a.RDC) + ' / (' + r3(gc) + ' × ' + r3(a.t) + ' × ' + r3(a.W) + ' × ' + r3(a.L) + ') = ' + r3(a.sharePct) + '% (the calculator takes half the slab, area/2' + (a.sharePct > 50.0005 ? ', with the far end square to the roadway' : '') + '). Not carried: its wearing surface, live load on the slab and the slab model (support, far end, friction, design).'] }; }
+          notes: ['Share = the calculator\'s slab reaction R_DC as a % of the slab weight: R_DC / (w_c·t·W·L) = ' + r3(a.RDC) + ' / (' + r3(gc) + ' × ' + r3(a.t) + ' × ' + r3(a.W) + ' × ' + r3(a.L) + ') = ' + r3(a.sharePct) + '% (the calculator takes half the slab, area/2' + (a.sharePct > 50.0005 ? ', with the far end square to the roadway' : '') + '). Not carried: its wearing surface, live load on the slab and the slab model (support, far end, friction, design).'] };
+        if (typeof a.lsRed === 'boolean') { const now = ctx.lsRedNow, unset = now == null || now === '';   // removed: stays blank (= removed, the default) when it is blank now
+          G.aps.items.push(it('earth.lsRed', a.lsRed ? (unset ? '' : 'yes') : 'no', 'Live-load surcharge LS with the slab (' + (a.lsRed ? (unset ? 'blank = removed in the final state, the default' : 'yes = removed in the final state') : 'no = kept') + '; the calculator: ' + (a.lsRed ? 'removed' : 'kept') + (a.lsRule ? ', ' + a.lsRule : '') + ')'));
+          G.aps.notes.push('Live-load surcharge with the slab: the calculator ' + (a.lsRed ? 'removes the final-state LS' : 'keeps the final-state LS') + (a.lsRule ? ' (' + a.lsRule + ')' : '') + '; the construction stage keeps it in both tools.'
+            + (ctx.mass ? ' SubLoads uses MassDOT rules here, which remove it automatically (MassDOT Bridge Manual Part I 3.3.1.3): the option is stored and used only under AASHTO rules.' : '')); } }
     } else gerr.aps = gerr.aps || 'not sent';
     if (d.pad) G.brg = { scope: 'unit', items: [it('elast.L', d.pad.L, 'Pad length (along span)', 'in'), it('elast.W', d.pad.W, 'Pad width (transverse)', 'in'), it('elast.G', d.pad.G, 'Shear modulus G', 'ksi'), it('elast.hrt', d.pad.hrt, 'Total elastomer thickness h_rt', 'in')] };
     else gerr.brg = gerr.brg || 'not sent';
     if (isN(ctx.stemTop)) { const top = ctx.stemTop - st.H, gi2 = [it('topFtg', top, 'Top of footing El. = SubLoads bridge seat ' + r3(ctx.stemTop) + ' − the calculator\'s stem height ' + r3(st.H), 'ft')];
       if (isN(f.Df)) gi2.push(it('ground', top - f.t + f.Df, 'Ground El. = top of footing − t_f + D_f (' + r3(f.Df) + ')', 'ft'));
       G.ftgEl = { scope: 'unit', items: gi2, notes: ['SubLoads keeps its own elevations (deck, girder, bearing and pedestal heights set the seat); this only moves the footing so the stem height matches the calculator.'] }; }
-    if (d.seismic || d.concrete) { const bi = [];
-      if (d.seismic) bi.push(it('khR', d.seismic.khR, 'Seismic k_h / k_h0', ''), it('kv', d.seismic.kv, 'k_v', ''), it('hEQr', d.seismic.hEQr, 'ΔP_AE height / H', ''));
+    if (d.seismic || d.concrete) { const bi = [], q = d.seismic, st_ = q && locStated(q); let qn = '';
+      if (q) { bi.push(it('khR', q.khR, 'Seismic k_h / k_h0', ''), it('kv', q.kv, 'k_v', ''));
+        if (st_) {
+          /* the calculator's (a) is ΔP_AE at 0.6H: SubLoads (a) with its ratio 0.6; its earlier "ratio" option at hEQr·H: SubLoads (a) with that
+             ratio (SubLoads' (a) puts ΔP_AE at its ΔP_AE ratio × H); (b) to (d) one to one; the ratio of the other modes is sent as stored (not used) */
+          const m = q.hEQmode === 'ratio' ? 'sw' : q.hEQmode, r = q.hEQmode === 'sw' ? 0.6 : q.hEQr;
+          bi.push(it('hEQmode', m, 'Seismic earth pressure location', '', 'The calculator: ' + locTxt(q.hEQmode, q)));
+          if (m === 'comb') bi.push(it('hAEr', q.hAEr, 'Combined P_AE height / H, option (c)', ''));
+          bi.push(it('hEQr', r, 'ΔP_AE height / H' + (m === 'sw' ? (q.hEQmode === 'sw' ? ' (the calculator\'s (a): 0.6)' : ' (the calculator\'s earlier "ratio" option)') : ' (used only by option (a))'), ''));
+          qn = ' The seismic earth pressure location and its ratio set the same placement of P_AE in both tools (AASHTO LRFD 10th Ed. C11.6.5.3, C11.6.5.4).';
+        } else { bi.push(it('hEQr', q.hEQr, 'ΔP_AE height / H', ''));
+          qn = ' This hand-off is from an earlier Abutment Calculator that does not state its seismic earth pressure location: SubLoads\' location (Bridge tab) is not changed; the ratio sent is the calculator\'s stored ΔP_AE ratio.'; } }
       if (d.concrete) bi.push(it('wc', d.concrete.gc, 'Concrete unit weight w_c', 'kcf'));
-      G.bridgewide = { scope: 'bridge', items: bi, notes: ['These apply to every unit of the bridge, not only this abutment.' + (d.seismic && d.seismic.hEQmode === 'static' ? ' The calculator applies ΔP_AE at the static-pressure height (≥ H/3, 11.6.5.3); SubLoads always applies it at the ratio × H: the ratio sent is the calculator\'s stored ratio, not its static height.' : '')] }; }
+      G.bridgewide = { scope: 'bridge', items: bi, notes: ['These apply to every unit of the bridge, not only this abutment.' + qn] }; }
     // information rows: [label, the calculator, SubLoads now, why it is not applied]
     const info = [], e = d.elevations;
     info.push(['Skew', r3(d.skewDeg) + '° (magnitude)', isN(ctx.skewDeg) ? r3(ctx.skewDeg) + '°' : '—', 'SubLoads owns the bridge: its skew is kept']);
@@ -294,10 +341,11 @@
     if (e && isN(ctx.stemTop)) info.push(['Bridge seat El.', r3(e.seat) + ' ft', r3(ctx.stemTop) + ' ft', 'SubLoads keeps its own elevations']);
     if (e && isN(e.deck) && isN(ctx.deckZ)) info.push(['Top of deck El.', r3(e.deck) + ' ft', r3(ctx.deckZ) + ' ft (at ℄)', 'SubLoads keeps its own elevations']);
     if (d.superstructure && isN(ctx.hbIn)) info.push(['Bearing + pedestal height', fmt(d.superstructure.brgHIn) + ' in', r3(nz(ctx.hbIn) + nz(ctx.hpIn)) + ' in', 'SubLoads owns the bearings']);
-    if (d.seismic) info.push(['ΔP_AE height', d.seismic.hEQmode === 'static' ? 'static pressure height (≥ H/3, 11.6.5.3)' : r3(d.seismic.hEQr) + 'H', 'ratio × H (bridge-wide)', 'different definitions; not aligned by this pull']);
+    if (d.seismic && !locStated(d.seismic)) info.push(['Seismic earth pressure location', 'not stated (a hand-off from an earlier version)', 'set on the Bridge tab (bridge-wide)', 'not changed by this pull: check it by hand']);
     if (d.seismic) info.push(['Site coefficient A_s', fmt(d.seismic.As), 'from the SubLoads site inputs', 'SubLoads computes A_s from its own response spectrum']);
-    if (d.info && d.info.lsRed != null) info.push(['LS with an approach slab', d.info.lsRed ? 'reduced (AASHTO 3.11.6.5)' : 'not reduced', 'removed only under MassDOT rules', 'different definitions; not aligned by this pull']);
-    info.push(['Height of TU / WS / WL forces', 'bridge seat', 'top of bearing', 'different definitions; not aligned by this pull']);
+    if (a && a.on && typeof a.lsRed !== 'boolean' && d.info && d.info.lsRed != null) info.push(['LS with an approach slab', 'option: ' + (d.info.lsRed ? 'removed' : 'kept') + ' (a hand-off from an earlier version: its owner rule is not stated)', ctx.mass ? 'removed (MassDOT 3.3.1.3)' : 'the unit\'s option (AASHTO 3.11.6.5)', 'not changed by this pull: check it by hand']);
+    // SLFH / the calculator: TU, FR, SH, WS, WL and the EQ superstructure inertia act at the bridge seat in both tools; BR and CE differ
+    info.push(['Height of BR (and CE)', 'at the bridge seat: its own BR without the 6 ft above-deck couple; an imported SubLoads BR keeps its couple P, with V_x at the seat', 'at the top of the bearings, with the couple of the 6 ft above-deck height (3.6.4, 3.6.3) at the bearings; the calculator has no CE', 'different definitions; not aligned by this pull']);
     info.push(['Wingwalls', d.info && d.info.wingwalls && d.info.wingwalls.length ? d.info.wingwalls.join('; ') : 'none', 'none (SubLoads has no wingwalls)', 'listed only']);
     if (d.info && d.info.refined && d.info.refined.length) info.push(['Refined calculator inputs', d.info.refined.join('; '), '—', 'calculator only: not sent']);
     return { groups: G, gerr, info, labAuto, ftgAuto };

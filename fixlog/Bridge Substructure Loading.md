@@ -3122,3 +3122,15 @@ function listTables() {
   4. The static-resultant floor applies to (b), (c) and (d), as in the calculator.
 - **Open item (hand-off):** `shared/abutment-def.js` `fromSubLoads` sends `seismic.hEQmode: 'ratio'` (fixed), and the SubLoads receiver maps only `hEQr`. Mapping `P.br.hEQmode` / `hAEr` both ways (the values are already the calculator's) is a change to the shared hand-off file, left to the exchange work.
 - **Other copies:** the Abutment Calculator has its own implementation (SEL, #1409).
+
+## 2026-11-11 — PR: fix/abut-subloads-map (PR #1412: https://github.com/mlococo88/All-Structural/pull/1412) — abutment exchange: LS with the slab and the seismic earth pressure location mapped both ways (ABXM)   [no SubLoads result changes on load; a pull can now write earth.lsRed (Approach slab group, ticked by default) and P.br.hEQmode / hAEr (Bridge-wide group, unticked): §4 callout in the PR]
+- Closes the open item of the SLPL entry above (hand-off `hEQmode` fixed to 'ratio').
+- **Where / before → after:**
+  - `abutDefOf(k)` (anchor `return SharedAbutmentDef.fromSubLoads({`): `br: { …, hEQr: nz(b.hEQr) || 0.6 }` → `br: { …, hEQr: nz(b.hEQr) || 0.6, hEQmode: paeLocOf(), hAEr: b.hAEr }`, plus `lsRem: e.asOn === 'yes' ? lsSlabRem(e) : null, lsRef: lsSlabRef() + …`.
+  - `patchAbutDefHandoff` `ctxOf(k)`: + `mass: isMass(), lsRedNow: (u.earth || {}).lsRed`. `getU`: P.br.hEQmode absent reads as `paeLocOf()` ('sw') in the review.
+  - Review rows show an item's note under its label. Labels: Approach slab group "… and whether the final-state live-load surcharge is removed with it";
+    Bridge-wide group "seismic k_h ratio, k_v, seismic earth pressure location and its ratios, concrete w_c (applies to every unit)"; the
+    `abutSrc.notes` text for the bridge-wide group likewise.
+- **Governing provision / check case / decisions:** see `fixlog/shared-abutment-def.md`, same PR (SubLoads default Abut. 1: (a) → (c) 0.45:
+  EE I M_l max 4210.395 → 4855.820; LS removed → kept: Strength I M_l max 3202.468 → 4391.516 kip-ft).
+- **How verified:** tests/smoke/abutment-subloads-exchange.mjs (part C1: calculator (c) 0.45 + LS kept → P.br.hEQmode 'comb', hAEr 0.45, earth.lsRed 'no', z_c = 0.45H), and the SubLoads tests listed in the PR.

@@ -36,7 +36,7 @@ test('abutment-def: SubLoads builder (heights from the elevations, heel, soil he
   assert.equal(d.footing.heel, 6); assert.equal(d.footing.W, 14); assert.equal(d.footing.Df, 7);
   assert.ok(near(d.lengths.Lab, 46.0698, 1e-4)); assert.equal(d.lengths.LabAuto, true); assert.equal(d.lengths.LftgAuto, true);
   assert.equal(d.soil.soilH, 17); assert.equal(d.soil.soilHAuto, true);
-  assert.equal(d.superstructure.brgHIn, 10.5); assert.equal(d.seismic.hEQmode, 'ratio'); assert.equal(d.pad.L, 14);
+  assert.equal(d.superstructure.brgHIn, 10.5); assert.equal(d.seismic.hEQmode, 'sw', 'SubLoads P.br.hEQmode absent = (a)'); assert.equal(d.seismic.hAEr, 0.5); assert.equal(d.pad.L, 14);   // ABXM: was a fixed 'ratio'
   assert.equal(D.validate(d).ok, true);
   const x = SL(); x.earth.soilH = 15; x.abut.L = 40; x.brgType = 'steel'; const d2 = D.fromSubLoads(x);
   assert.equal(d2.soil.soilH, 15); assert.equal(d2.soil.soilHAuto, false); assert.equal(d2.lengths.LabAuto, false); assert.equal(d2.pad, null);
@@ -132,4 +132,76 @@ test('abutment-def: round trip SubLoads default Abut. 1 -> calculator (default p
   assert.deepEqual(J(U), U0);
   // the review shows no changed row for those groups
   ['geom', 'soil', 'aps'].forEach(g => assert.ok(D.rows(R.groups[g].items, p => get(U0, p) == null ? '' : get(U0, p)).every(r => !r.chg), g));
+});
+
+// ABXM (2026-11-11): the LS removal with the slab (SubLoads earth.lsRed / the calculator's apSlab.lsRed) and the seismic earth pressure
+// location (SubLoads P.br.hEQmode / hAEr, bridge-wide; the calculator's seismic.hEQmode / hAEr) are mapped both ways; the information rows
+// no longer say SubLoads removes LS "only under MassDOT" or puts TU / WS / WL at the top of the bearing.
+test('abutment-def: LS with the approach slab, both ways', () => {
+  assert.equal(D.fromSubLoads(SL()).approachSlab.lsRed, null, 'no slab: null');
+  const x = SL(); x.earth.asOn = 'yes'; assert.equal(D.fromSubLoads(x).approachSlab.lsRed, true, 'absent = removed (SLLS)');
+  x.earth.lsRed = 'no'; let d = D.fromSubLoads(x); assert.equal(d.approachSlab.lsRed, false); assert.equal(d.info.lsRed, false);
+  x.lsRem = true; x.lsRef = 'MassDOT Bridge Manual Part I 3.3.1.3, automatic'; assert.equal(D.fromSubLoads(x).approachSlab.lsRed, true, 'SubLoads effective rule (MassDOT) wins');
+  delete x.lsRem; d = D.fromSubLoads(x);
+  const T = D.toAbutment(d, {}), li = T.groups.aps.items.find(i => i.path === 'apSlab.lsRed');
+  assert.equal(li.val, false); assert.match(li.lbl, /SubLoads: kept/);
+  assert.match(D.toAbutment(d, { lsAuto: 'MassDOT Part I 3.3.1.3' }).groups.aps.notes.join(' '), /remove it automatically \(MassDOT Part I 3\.3\.1\.3\)/);
+  // calculator -> SubLoads
+  const S = AB(); S.apSlab.on = true; S.apSlab.lsRed = false;
+  const da = D.fromAbutment(S, {}); assert.equal(da.approachSlab.lsRed, false); assert.match(da.approachSlab.lsRule, /3\.11\.6\.5/);
+  const it = (dd, c) => D.toSubLoads(dd, c).groups.aps.items.find(i => i.path === 'earth.lsRed');
+  assert.equal(it(da, {}).val, 'no');
+  const db = D.fromAbutment(Object.assign(AB(), { apSlab: { on: true, L: 16, t: 1.25, W: 0, lsRed: false } }), { lsRule: { rem: true, ref: 'MassDOT Part I 3.3.1.3, automatic' } });
+  assert.equal(db.approachSlab.lsRed, true, 'the calculator\'s effective rule (owner MassDOT) is sent');
+  assert.equal(it(db, {}).val, '', 'removed: stays blank (= removed) when the unit has no stored option');
+  assert.equal(it(db, { lsRedNow: 'no' }).val, 'yes'); assert.equal(it(db, { lsRedNow: 'yes' }).val, 'yes');
+  assert.match(D.toSubLoads(db, { mass: true }).groups.aps.notes.join(' '), /MassDOT rules here/);
+  const off = D.toSubLoads(D.fromAbutment(AB(), {}), {}); assert.ok(!off.groups.aps.items.some(i => i.path === 'earth.lsRed'), 'slab off: no LS item');
+  // an earlier calculator hand-off (no approachSlab.lsRed): not applied, an information row
+  const old = J(da); delete old.approachSlab.lsRed; delete old.approachSlab.lsRule;
+  const To = D.toSubLoads(old, {}); assert.ok(!To.groups.aps.items.some(i => i.path === 'earth.lsRed')); assert.ok(To.info.some(r => /LS with an approach slab/.test(r[0]) && /earlier version/.test(r[1])));
+  assert.ok(!D.toSubLoads(da, {}).info.some(r => /only under MassDOT/.test(r.join(' '))), 'no "only under MassDOT" row');
+});
+
+test('abutment-def: seismic earth pressure location, SubLoads -> calculator', () => {
+  const seis = (mode, r, aer) => { const x = SL(); Object.assign(x.br, { hEQmode: mode, hEQr: r, hAEr: aer }); const T = D.toAbutment(D.fromSubLoads(x), {}); return Object.fromEntries(T.groups.seisset.items.map(i => [i.path, i.val])); };
+  let v = seis(undefined, 0.6, ''); assert.equal(v['seismic.hEQmode'], 'sw'); assert.equal(v['seismic.hAEr'], undefined);
+  v = seis('sw', 0.55, ''); assert.equal(v['seismic.hEQmode'], 'ratio', 'SubLoads (a) at 0.55H = the calculator\'s earlier ratio option at 0.55'); assert.equal(v['seismic.hEQr'], 0.55);
+  v = seis('static', 0.6, ''); assert.equal(v['seismic.hEQmode'], 'static');
+  v = seis('comb', 0.6, 0.45); assert.equal(v['seismic.hEQmode'], 'comb'); assert.equal(v['seismic.hAEr'], 0.45);
+  v = seis('comb', 0.6, ''); assert.equal(v['seismic.hAEr'], 0.5, 'blank = 0.5 (SubLoads paeZc)');
+  v = seis('nonyield', 0.6, ''); assert.equal(v['seismic.hEQmode'], 'nonyield');
+  const x = SL(); x.br.hEQmode = 'comb'; x.br.hAEr = 0.7; assert.match(D.validate(D.fromSubLoads(x)).gerr.seisset, /0\.4 to 0\.5/);
+  // an earlier SubLoads hand-off (fixed 'ratio', no hAEr): the location is not changed
+  const old = D.fromSubLoads(SL()); old.seismic.hEQmode = 'ratio'; delete old.seismic.hAEr;
+  const T = D.toAbutment(old, {}); assert.ok(!T.groups.seisset.items.some(i => i.path === 'seismic.hEQmode')); assert.match(T.groups.seisset.notes[0], /earlier SubLoads/);
+});
+
+test('abutment-def: seismic earth pressure location, calculator -> SubLoads; information rows', () => {
+  const ctx = { Lauto: 46.0698, soilHAuto: 17, stemTop: 117.49, bwTop: 125, topFtg: 108, GWd: 44.5, ftgType: 'comb' };
+  const seis = q => { const S = AB(); Object.assign(S.seismic, q); const T = D.toSubLoads(D.fromAbutment(S, {}), ctx); return { v: Object.fromEntries(T.groups.bridgewide.items.map(i => [i.path, i.val])), T }; };
+  let r = seis({ hEQmode: 'sw', hEQr: 0.5 }); assert.equal(r.v.hEQmode, 'sw'); assert.equal(r.v.hEQr, 0.6, 'the calculator\'s (a) is 0.6H whatever its stored ratio');
+  r = seis({ hEQmode: 'ratio', hEQr: 0.55 }); assert.equal(r.v.hEQmode, 'sw'); assert.equal(r.v.hEQr, 0.55, 'earlier ratio option = SubLoads (a) at that ratio');
+  r = seis({ hEQmode: 'comb', hAEr: 0.4 }); assert.equal(r.v.hEQmode, 'comb'); assert.equal(r.v.hAEr, 0.4);
+  r = seis({ hEQmode: 'nonyield' }); assert.equal(r.v.hEQmode, 'nonyield'); assert.equal(r.v.hAEr, undefined);
+  r = seis({ hEQmode: 'bogus' }); assert.equal(r.v.hEQmode, 'static', 'any other value: the calculator\'s eqMode() "static"');
+  assert.equal(r.T.groups.bridgewide.scope, 'bridge'); assert.match(r.T.groups.bridgewide.notes[0], /every unit/);
+  assert.ok(!r.T.info.some(x => /Seismic earth pressure location|ΔP_AE height/.test(x[0])), 'mapped: no information row');
+  assert.ok(!r.T.info.some(x => /TU \/ WS \/ WL/.test(x[0])), 'no TU / WS / WL height row (both tools: the bridge seat)');
+  assert.ok(r.T.info.some(x => /Height of BR/.test(x[0])), 'the BR / CE height row stays');
+  const old = D.fromAbutment(AB(), {}); delete old.seismic.hAEr;
+  const To = D.toSubLoads(old, ctx); assert.ok(!To.groups.bridgewide.items.some(i => i.path === 'hEQmode'));
+  assert.ok(To.info.some(x => /Seismic earth pressure location/.test(x[0]) && /not stated/.test(x[1])));
+});
+
+test('abutment-def: round trip of the bridge-wide seismic location and the LS option (all groups ticked)', () => {
+  [['sw', 0.6, ''], ['sw', 0.55, ''], ['static', 0.6, ''], ['comb', 0.6, 0.45], ['nonyield', 0.6, '']].forEach(([m, r, a]) => ['yes', 'no'].forEach(ls => {
+    const x = SL(); Object.assign(x.br, { hEQmode: m, hEQr: r, hAEr: a }); x.earth.asOn = 'yes'; x.earth.lsRed = ls;
+    const S = AB(), T = D.toAbutment(D.fromSubLoads(x), {});
+    ['seisset', 'aps'].forEach(g => T.groups[g].items.forEach(i => set(S, i.path, i.val)));
+    const B = { hEQmode: m, hEQr: r, hAEr: a }, R = D.toSubLoads(D.fromAbutment(S, {}), { lsRedNow: ls }), e = { lsRed: ls };
+    R.groups.bridgewide.items.forEach(i => { if (i.path in B) B[i.path] = i.val; }); R.groups.aps.items.filter(i => i.path === 'earth.lsRed').forEach(i => { e.lsRed = i.val; });
+    const zc = q => q.hEQmode === 'sw' ? 'inc@' + q.hEQr : q.hEQmode === 'comb' ? 'comb@' + q.hAEr : q.hEQmode;   // the placement SubLoads computes
+    assert.equal(zc(B), zc({ hEQmode: m, hEQr: r, hAEr: a || 0.5 }), m + ' ' + r + ' ' + a); assert.equal(e.lsRed, ls, 'LS ' + ls);
+  }));
 });
