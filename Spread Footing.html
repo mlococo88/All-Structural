@@ -1011,7 +1011,8 @@ function sfdRbVis(){
   const wl=q.elemType==='wall', ws=sfdWallSpc(q)>0, tie=sfdWallTies(i), wc=sfdWallChk(q);
   const sh=(sel,on)=>rb.querySelectorAll(sel).forEach(e=>{e.style.display=on?'':'none';});
   sh('.sfdNCol',!(wl&&ws));sh('.sfdModeTbl',!(wl&&ws));sh('.sfdWsCol',wl);sh('.sfdTieCol',tie);sh('.sfdLbP',!wc);sh('.sfdLbW',wc);
-  rb.querySelectorAll('.sfdHPos').forEach(x=>{const st=(q.wallIn||{}).hSize==='sameTie';x.disabled=st;x.value=st?'out':((q.wallIn||{}).hPos==='in'?'in':'out');x.title=st?'\u201cSame as ties\u201d: the ties enclose the vertical bars, so these bars are outside (the stored choice is kept)':'';});});   /* SFHP */
+  rb.querySelectorAll('.sfdHPos').forEach(x=>{const st=(q.wallIn||{}).hSize==='sameTie';x.disabled=st;x.value=st?'out':((q.wallIn||{}).hPos==='in'?'in':'out');x.title=st?'\u201cSame as ties\u201d: the ties enclose the vertical bars, so these bars are outside (the stored choice is kept)':'';});
+  const hin=sfdHzIn(q);sh('.sfdLbWo',!hin);sh('.sfdLbWi',hin);});   /* SFHP */
 }
 function buildPedCards(){
  const c=$('#pedContainer');c.innerHTML='';
@@ -1104,7 +1105,7 @@ function buildPedCards(){
   {const x=rr.querySelector('[data-path$=".wallSpc"]'),v=state.peds[i].reinf.wallSpc;x.value=(v==null?'':v);}
   /* SFTC: exposure of the pedestal, for the clear cover to the ties (ACI 318-19 Table 20.5.1.3.1) */
   const et=document.createElement('table');et.className='tbl';et.style.fontSize='11px';
-  et.innerHTML='<tr><th title="ACI 318-19 Table 20.5.1.3.1: sets the minimum clear cover to the ties (wall: to the horizontal bars)">Exposure (<span class="sfdLbP">tie cover</span><span class="sfdLbW" style="display:none">cover to the horizontal bars</span>, ACI Table 20.5.1.3.1)</th></tr>';
+  et.innerHTML='<tr><th title="ACI 318-19 Table 20.5.1.3.1: sets the minimum clear cover to the ties (wall: to the horizontal bars, or to the vertical bars where the horizontal bars are inside them)">Exposure (<span class="sfdLbP">tie cover</span><span class="sfdLbW" style="display:none"><span class="sfdLbWo">cover to the horizontal bars</span><span class="sfdLbWi" style="display:none">cover to the vertical bars, horizontal bars inside</span></span>, ACI Table 20.5.1.3.1)</th></tr>';
   const er=document.createElement('tr');
   er.appendChild(cell('<select data-path="peds.'+i+'.reinf.exposure" style="width:auto;max-width:100%">'+Object.keys(SFTC_EXP).map(k=>'<option value="'+k+'">'+SFTC_EXP[k][0]+'</option>').join('')+'</select>'));
   et.appendChild(er);rb.appendChild(et);
