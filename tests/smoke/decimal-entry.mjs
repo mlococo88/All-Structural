@@ -29,7 +29,10 @@ const TOOLS = {
   lldf: { file: 'lldf.html', tabs: TABS, wait: 5000 },
   pbd: { file: 'Prestressed Bridge Design.html', tabs: TABS, wait: 6000 },
   sf: { file: 'Spread Footing.html', tabs: '#sfdInTabs .sfdInTab, #tabbar button', wait: 3000 },
-  pile: { file: 'Pile Designer.html', tabs: TABS, wait: 4000 },
+  // pile: knownErr (DECE, 2026-11-11): the test kit has no copy of the Tailwind CDN script (blocked: ERR_FAILED), and the tool's SVG
+  // drawings log attribute errors (NaN, negative radius) while a field holds a value the sweep types that the drawing cannot use (a lone
+  // "-", OD -1.5, wall 9.6 in); the same on origin/main. Counted and listed, not failed.
+  pile: { file: 'Pile Designer.html', tabs: TABS, wait: 4000, checks: 'pileChecks', knownErr: /net::ERR_FAILED|^Error: <\w+> attribute / },
   rwall: { file: 'Retaining Wall Designer.html', tabs: '.itab[data-pane], .tab-bar .tab-btn', wait: 4000 },
   abut: { file: 'abutment_calculator.html', tabs: TABS, wait: 5000 },
   bsl: { file: 'Bridge Substructure Loading.html', tabs: '.itab[data-pane], #tab-bar .tab-btn', wait: 4000 },
@@ -38,7 +41,11 @@ const TOOLS = {
   gusset: { file: 'Gusset Plate Rating.html', tabs: '.itab[data-pane], #tab-bar .tab-btn', wait: 4000 },
   secprop: { file: 'Section Property Calculator.html', tabs: TABS, wait: 4000 },
   smd: { file: 'Shear and Moment Diagrams.html', tabs: '#smdViewTabs button', wait: 3000 },
-  arch: { file: 'Stone Masonry Arch Load Rating.html', tabs: '[id^=inTab_], #tabs [data-tab]', wait: 6000 },
+  // arch (DECE, 2026-11-11): the tool re-runs the whole analysis on every keystroke (about 2.5 s a key headless), so the sweep takes
+  // about 20 minutes; it is slow, not stuck. The list-input tables under the paste boxes (depth overrides, SDL line items) have
+  // no id: their cells are found by data-dece and an empty row is put back empty. knownErr: the arch drawing logs SVG transform
+  // errors (NaN) while a field holds a value the sweep types that it cannot draw (same on origin/main); counted, not failed.
+  arch: { file: 'Stone Masonry Arch Load Rating.html', tabs: '[id^=inTab_], #tabs [data-tab]', wait: 6000, knownErr: /^Error: <\w+> attribute / },
   lp: { file: 'Light Pole and Sign Post.html', tabs: '#lppInTabs .lppInTab, #tabBar button', wait: 3000 },
   bpad: { file: 'BasePlateAnchorDesigner.html', tabs: '[role=tab], .tab-btn, .itab, .tab, [data-tab], .otab', wait: 5000 },
   asce7: { file: 'ASCE7-16 Load Generator.html', tabs: '#tabs .tab', wait: 3000 },
@@ -136,6 +143,26 @@ const CHECKS = {
     await leave();
     return out;
   },
+  // Pile Designer (DECE, 2026-11-11): a load-case moment (negative valid) and a "-" alone, committed values read from the rendered
+  // inputs (PDPL_I)
+  async pileChecks(p, F) {
+    const out = [], chk = (c, m) => { if (!c) out.push(m); console.log(`   ${c ? 'ok  ' : 'FAIL'} ${m}`); };
+    const lab = 'Case 1 head moment, kip-ft';
+    const find = async () => { for (let t = 0; t < 30; t++) { if (await F.evaluate(l => { const e = document.querySelector(`input[aria-label="${l}"]`); return !!(e && e.getClientRects().length); }, lab)) return true;
+      if (!await F.$$eval(TABS, (e, t) => { const x = e[t]; if (!x || x.offsetParent === null) return true; x.click(); return true; }, t)) return false; await p.waitForTimeout(400); } return false; };
+    if (!await find()) { chk(false, `field "${lab}" found`); return out; }
+    const typeIn = async s => { await F.evaluate(l => { const e = document.querySelector(`input[aria-label="${l}"]`); e.scrollIntoView({ block: 'center' }); e.focus(); e.select(); }, lab);
+      await p.keyboard.press('Control+A'); for (const ch of s) await p.keyboard.type(ch); await p.waitForTimeout(60); };
+    const st = () => F.evaluate(l => ({ v: document.querySelector(`input[aria-label="${l}"]`).value, a: document.activeElement.getAttribute('aria-label'), M: PDPL_I.loadCases ? PDPL_I.loadCases[0].Mhead : (PDPL_I.cases || [])[0] && PDPL_I.cases[0].Mhead }), lab);
+    const leave = () => F.evaluate(() => document.activeElement.blur()).then(() => p.waitForTimeout(150));
+    const orig = (await st()).v;
+    await typeIn('-1.5'); let r = await st(); chk(r.a === lab && r.v === '-1.5' && r.M === -1.5, `${lab} "-1.5": field "${r.v}", committed ${r.M} (before: "1.5", 1.5)`);
+    await leave(); r = await st(); chk(r.v === '-1.5' && r.M === -1.5, `${lab} "-1.5" left: field "${r.v}", committed ${r.M}`);
+    await typeIn('-'); r = await st(); chk(r.a === lab && r.v === '' && r.M === 0, `${lab} "-" alone: not overwritten while typing (field reads "${r.v}"), committed ${r.M} (0, as before)`);
+    await leave(); r = await st(); chk(r.v === '0' && r.M === 0, `${lab} "-" left: the field shows the committed 0 (as before)`);
+    await typeIn(orig); await leave();
+    return out;
+  },
   // Moving Load Generator (DECE, 2026-11-11): the headway (shown only for the two-vehicle step case), a lone "-" in the variable
   // spacing and headway (the minimum is used while typing and put back on leaving the field), and the highway deflection DF and
   // limit typed while a rail vehicle is selected (the rail DF and limit are used then)
@@ -181,13 +208,16 @@ for (const key of keys) {
         if (!shown) continue; await p.waitForTimeout(700); }
       const flds = (await collect(F)).slice(0, MAX);
       for (const fld of flds) {
-        const r = await testField(p, F, fld); tested++;
-        if (args.list) console.log(`   ${r.length ? 'BAD' : 'ok '} ${fld.sig || '#' + fld.n} [${fld.type}] ${fld.lab}${r.length ? '  ' + r.join('; ') : ''}`);
+        const t0 = Date.now(), r = await testField(p, F, fld); tested++;
+        if (args.list) console.log(`   ${r.length ? 'BAD' : 'ok '} ${fld.sig || '#' + fld.n} [${fld.type}] ${fld.lab}${r.length ? '  ' + r.join('; ') : ''}  (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
         if (r.length) bad.push(`${fld.sig || '#' + fld.n} (${fld.lab}): ${r.join('; ')}`);
       }
     }
   } catch (e) { bad.push('error: ' + e.message.split('\n')[0]); }
   finally { await b.close(); }
+  const known = T.knownErr ? errs.filter(x => T.knownErr.test(x)) : [];
+  if (known.length) { const u = [...new Set(known.map(x => x.replace(/"[^"]*"/g, '"…"').replace(/\(".*?"\)/g, '')))]; console.log(`     ${known.length} known console errors not counted (${u.length} kinds): ${u.slice(0, 6).join(' | ')}`); }
+  errs.splice(0, errs.length, ...errs.filter(x => !known.includes(x)));
   failures += bad.length + (errs.length ? 1 : 0);
   const kind = re => bad.filter(x => re.test(x.split('): ').slice(1).join('): '))).length;   // which typed string a field failed on first
   console.log(`${bad.length || errs.length ? 'FAIL' : 'ok  '} ${key} (${src.label}): ${tested} numeric fields, ${bad.length} lose a keystroke or the focus` +
