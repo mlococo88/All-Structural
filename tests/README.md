@@ -76,6 +76,11 @@ node tests/smoke/retaining-wall-checks.mjs [--file <file or git ref>]
 # (header, Report title block, stable across a reload), 390 px, 0 console errors. ~2 min
 node tests/smoke/bsl-gap-layout.mjs [--shots <dir>]
 
+# Bridge Substructure Loading graphics and tooltips (SLGX, SLTT): the tab graphics in the Steel Bridge option C style (vizkit palette, label halo),
+# plan / elevation labels >= 10 px at 1440 and >= 7.5 px at 390 px with no overlaps (three projects), every tab graphic >= 7.5 px at 390 in its own
+# scrolling box, the Drawings tab's DXF identical to --ref (default origin/main), a tooltip on every input field of every input tab and unit. ~1 min
+node tests/smoke/bsl-graphics.mjs [--ref <git ref>] [--shots <dir>]
+
 # Phone / tablet layout (PHN): at 390 and 768 px the page never scrolls sideways, on load and on every tab (one entry per tool in TOOLS)
 node tests/smoke/phone-layout.mjs [--tool smd,...] [--file <file or git ref>] [--w 390,768]
 

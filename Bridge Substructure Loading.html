@@ -274,6 +274,11 @@ header { height: 54px; flex: none; display: flex; align-items: center; gap: 10px
 @media (max-width: 900px) { #slInputId { order: 0; } }
 @media (max-width: 600px) { #slInputId { flex: 1 1 100%; font-size: .72rem; } }
 @media print { #slDashCol, #slSplit, #slInputId { display: none !important; } }
+/* SLGX (2026-11-11): tab graphics in the Steel Bridge option C style (vizkit palette); white panel, light border */
+.vk-dwg-box { background: #fff; border: 1px solid #E4E7EB; border-radius: 8px; padding: 6px; }
+.vk-dwg-box > svg.dwg { border: 0; background: #fff; border-radius: 0; }
+@media (max-width: 700px) { .vk-dwg-box { overflow-x: auto; overscroll-behavior-x: contain; } .vk-dwg-box.vk-wide > svg.dwg { min-width: 760px; } .vk-dwg-box:not(.vk-wide) > svg.dwg { min-width: 860px; max-height: none !important; } }   /* SLGX: on a phone every tab graphic keeps readable labels (its box scrolls sideways, the page does not) */
+@media print { .vk-dwg-box { border: 0; padding: 0; } .vk-dwg-box.vk-wide > svg.dwg { min-width: 0; } }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -713,6 +718,7 @@ const LAY = {
   TEXT: { c: '#17212b', aci: 7, dxf: 'TEXT' },
   NOTE: { c: '#6d7883', aci: 8, dxf: 'TEXT' },
   HI: { c: '#2346c2', w: 1.6, fill: '#2346c2', aci: 5, dxf: 'SUBS' } };
+window.LAY_BASE = LAY;   // SLGX: svgOf's default palette (the DXF layers' screen colours)
 class Dwg {
   constructor() { this.p = []; this.g = null; this.cls = ''; }
   line(x1, y1, x2, y2, L) { this.p.push({ t: 'l', a: [x1, y1, x2, y2], L, g: this.g, cls: this.cls }); return this; }
@@ -737,7 +743,18 @@ class Dwg {
       else if (q.t === 't') { const w = q.s.length * q.h * 0.55, c = Math.cos(rad(q.rot)), s = Math.sin(rad(q.rot)), o = q.al === 'c' ? -w / 2 : q.al === 'r' ? -w : 0; e(q.x + c * o - s * q.h, q.y + s * o + c * q.h); e(q.x + c * (o + w), q.y + s * (o + w)); e(q.x, q.y); } });
     return { x0, y0, x1, y1 }; }
 }
+/* SLGX (2026-11-11, display only): the tab graphics in the Steel Bridge "option C" style (apps/steel-bridge/ui/vizkit.js SBDVizKit palette:
+   slate steel and lines, warm deck, navy substructure, blue accent; white panel, light border; labels with a white halo). svgOf(d, { vk: true })
+   draws the same entity list with this palette; the entity lists (planDwg, longDwg, unitDwg, llDwg, loadDwg), the Drawings tab and the DXF
+   are unchanged (they keep LAY). Fixed bearings orange (the palette's tension colour), expansion blue (its compression / accent colour). */
+const LAY_VK = {
+  DECK: { c: '#B4A98F', w: 1.1, fill: '#ECE7DC' }, BARR: { c: '#9C9178', w: 1.0, fill: '#DDD5C3' }, GIRD: { c: '#475569', w: 1.2, fill: '#94A3B8' },
+  BRGF: { c: '#B4541F', w: 1.0, fill: '#DC6B2F' }, BRGE: { c: '#1D4ED8', w: 1.0, fill: '#2563EB' }, PED: { c: '#334155', w: 0.9, fill: '#F1F5F9' },
+  SUBS: { c: '#1E3A5F', w: 1.6, fill: '#DCE3EC' }, HID: { c: '#64748B', w: 0.9, dash: '5 3' }, FTG: { c: '#1E3A5F', w: 1.3, fill: '#EEF2F6' },
+  PILE: { c: '#64748B', w: 0.9, dash: '5 3' }, GRND: { c: '#8A5A44', w: 1.6 }, GHAT: { c: '#C4A68F', w: 0.7 }, CNTR: { c: '#2563EB', w: 0.8, dash: '14 3 3 3' },
+  DIMS: { c: '#64748B', w: 0.7 }, TEXT: { c: '#0F172A' }, NOTE: { c: '#475569' }, HI: { c: '#2563EB', w: 1.8, fill: '#2563EB' } };
 function svgOf(d, o = {}) {
+  const LAY = o.vk ? Object.assign({}, window.LAY_BASE || {}, LAY_VK) : window.LAY_BASE;
   const E = d.ext(), pad = o.pad != null ? o.pad : Math.max(E.x1 - E.x0, E.y1 - E.y0) * 0.03, vb = [E.x0 - pad, -(E.y1 + pad), E.x1 - E.x0 + 2 * pad, E.y1 - E.y0 + 2 * pad];
   const n = v => +v.toFixed(3), st = L => { const s = LAY[L] || LAY.TEXT; return `stroke="${s.c}" stroke-width="${s.w || 1}" vector-effect="non-scaling-stroke"${s.dash ? ` stroke-dasharray="${s.dash}"` : ''}`; };
   let out = '', gOpen = null;
@@ -746,9 +763,10 @@ function svgOf(d, o = {}) {
     if (q.t === 'l') out += `<line x1="${n(q.a[0])}" y1="${n(-q.a[1])}" x2="${n(q.a[2])}" y2="${n(-q.a[3])}" ${st(q.L)}${cls}/>`;
     else if (q.t === 'p') out += `<${q.closed ? 'polygon' : 'polyline'} points="${q.pts.map(p => n(p[0]) + ',' + n(-p[1])).join(' ')}" fill="${q.closed && s.fill ? s.fill : 'none'}" ${st(q.L)}${cls} stroke-linejoin="round"/>`;
     else if (q.t === 'c') out += `<circle cx="${n(q.x)}" cy="${n(-q.y)}" r="${n(q.r)}" fill="${s.fill || 'none'}" ${st(q.L)}${cls}/>`;
-    else if (q.t === 't') out += `<text transform="translate(${n(q.x)} ${n(-q.y)}) rotate(${n(-q.rot)})" font-size="${n(q.h)}" text-anchor="${q.al === 'c' ? 'middle' : q.al === 'r' ? 'end' : 'start'}" fill="${s.c}" font-family="Barlow Semi Condensed, Barlow, Arial, sans-serif"${q.w ? ` font-weight="${q.w}"` : ''}${cls}>${esc(q.s)}</text>`; });
+    else if (q.t === 't') out += `<text transform="translate(${n(q.x)} ${n(-q.y)}) rotate(${n(-q.rot)})" font-size="${n(q.h)}" text-anchor="${q.al === 'c' ? 'middle' : q.al === 'r' ? 'end' : 'start'}" fill="${s.c}" font-family="Barlow Semi Condensed, Barlow, Arial, sans-serif"${q.w ? ` font-weight="${q.w}"` : ''}${o.vk ? ` stroke="#fff" stroke-width="${n(q.h * 0.22)}" stroke-linejoin="round" paint-order="stroke"` : ''}${cls}>${esc(q.s)}</text>`; });
   if (gOpen != null) out += '</g>';
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.map(n).join(' ')}" class="${o.cls || 'dwg'}" preserveAspectRatio="xMidYMid meet"${o.h ? ` style="max-height:${o.h}px"` : ''}>${out}</svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.map(n).join(' ')}" class="${o.cls || 'dwg'}${o.vk ? ' vk-dwg' : ''}" preserveAspectRatio="xMidYMid meet"${o.h ? ` style="max-height:${o.h}px"` : ''}>${out}</svg>`;
+  return o.vk ? `<div class="vk-dwg-box${o.wide ? ' vk-wide' : ''}">${svg}</div>` : svg;
 }
 
 /* ---------- DXF: the Drawings tab and Export DXF write the sheets with shared/dxf.js (SLDW, after the input check script) ---------- */
@@ -1167,15 +1185,15 @@ function summaryHtml() {
     ${UG.map((R, k) => R.comps.map((c, i) => `<tr><td class="lbl">${i ? '' : esc(P.units[k].name)}</td><td>${esc(c.name)}</td><td class="val">${c.steel ? 'steel' : f1(c.vol)}</td><td class="val">${f2(c.wt)}</td></tr>`).join('') + `<tr class="tot"><td></td><td>Total</td><td></td><td class="val">${f2(R.wt)}</td></tr>`).join('')}</tbody></table></div></div>`;
   return h;
 }
-const GEO_TS = 1.5;   // SLLAY (2026-11-10): the Geometry tab's plan and elevation drawn with 1.5× text height (labels about 11 px at 1440 px wide; were about 7 px)
+const GEO_TS = 1.6;   // SLLAY (2026-11-10): the Geometry tab's plan and elevation drawn with 1.5× text height (labels about 11 px at 1440 px wide; were about 7 px)
 function geometryHtml() {
   const G = MODEL.G, UG = MODEL.UG; if (G.E.length) return `<div class="card"><div class="card-b">Fix the input errors on the Summary tab to draw the bridge.</div></div>`;
   const zs = []; UG.forEach((R, k) => zs.push(nz(P.units[k].ground), R.ftgBot != null ? R.ftgBot : nz(P.units[k].ground))); G.sup.forEach(S => zs.push(S.deckZ + 3));
   const ve = Math.max(1, (G.L / (Math.max(...zs) - Math.min(...zs))) / 8);
-  let h = `<div class="card"><div class="card-h"><h2>Plan</h2><span class="sub">Bearings colored by longitudinal fixity; footings and columns under the caps dashed</span></div><div class="card-b">${svgOf(planDwg(G, UG, { ts: GEO_TS }), { cls: 'dwg dwg-geo' })}<div class="legend"><span><i style="background:#b8322a"></i>Fixed</span><span><i style="background:#2346c2"></i>Expansion</span></div></div></div>`;
-  h += `<div class="card"><div class="card-h"><h2>Elevation</h2><span class="sub">Along CL bridge${ve > 1 ? `, vertical scale exaggerated ×${f1(ve)}` : ''}</span></div><div class="card-b">${svgOf(longDwg(G, UG, { ve, ts: GEO_TS }), { cls: 'dwg dwg-geo' })}</div></div>`;
+  let h = `<div class="card"><div class="card-h"><h2>Plan</h2><span class="sub">Bearings colored by longitudinal fixity; footings and columns under the caps dashed</span></div><div class="card-b">${svgOf(planDwg(G, UG, { ts: GEO_TS }), { cls: 'dwg dwg-geo', vk: true, wide: true })}<div class="legend"><span><i style="background:#DC6B2F"></i>Fixed</span><span><i style="background:#2563EB"></i>Expansion</span></div></div></div>`;
+  h += `<div class="card"><div class="card-h"><h2>Elevation</h2><span class="sub">Along CL bridge${ve > 1 ? `, vertical scale exaggerated ×${f1(ve)}` : ''}</span></div><div class="card-b">${svgOf(longDwg(G, UG, { ve, ts: GEO_TS }), { cls: 'dwg dwg-geo', vk: true, wide: true })}</div></div>`;
   UG.forEach((R, k) => { const u = P.units[k], S = G.sup[k];
-    h += `<div class="card"><div class="card-h"><h2>${esc(u.name)}</h2><span class="sub">${TYPE_NAME[u.type]}, elevation looking ahead station</span></div><div class="card-b">${svgOf(unitDwg(G, UG, k), { h: 520 })}
+    h += `<div class="card"><div class="card-h"><h2>${esc(u.name)}</h2><span class="sub">${TYPE_NAME[u.type]}, elevation looking ahead station</span></div><div class="card-b">${svgOf(unitDwg(G, UG, k), { h: 520, vk: true })}
       <div class="tscroll" style="margin-top:10px"><table class="tbl"><thead><tr>${S.joint ? '<th>Row</th>' : ''}<th>Girder</th><th class="right">Station (ft)</th><th class="right">Along line (ft)</th><th class="right">Deck El.</th><th class="right">Bottom of girder El.</th><th class="right">Bearing seat El.</th><th class="right">Pedestal (in)</th><th>Longitudinal</th></tr></thead><tbody>
       ${S.rows.map(r => r.brg.map(p => `<tr>${S.joint ? `<td>${r.side}</td>` : ''}<td class="lbl">G${p.j + 1}</td><td class="val">${f2(p.x)}</td><td class="val">${f2(p.s)}</td><td class="val">${f2(p.zDeck)}</td><td class="val">${f2(p.zGb)}</td><td class="val">${f2(p.zSeat)}</td><td class="val">${f1((p.zSeat - (R.capTop != null ? R.capTop : R.stemTop)) * 12)}</td><td>${FIX[r.fx.long]}</td></tr>`).join('')).join('')}</tbody></table></div>${u.type === 'abut' && abLenInfo(k) ? `<div class="note slNL" style="padding:8px 0 0">${abLenNote(abLenInfo(k))}</div>` : ''}</div></div>`; });   // SLAL: the abutment lengths, worked
   return h;
@@ -1676,7 +1694,7 @@ function llHtml() {
   h += respTable(defs, [{ t: 'Maximum' }, { t: 'Lanes', r: false }, { t: 'Minimum' }, { t: 'Lanes', r: false }], (d, q) => ['max', 'min'].map(key => `<td class="val">${fv(B[q][key].v, d.u)}</td><td><button type="button" class="btn btn-sm" data-llq="${q}:${key}"${sel.q === q && sel.key === key ? ' style="border-color:var(--blue);color:var(--blue)"' : ''}>${desc(B[q][key])}</button></td>`).join(''), { sel: sel.q });
   h += `<div class="note slNL" style="padding:8px 0 0">${SIGNS_NL}${slNL('Lane search:', [['Lanes', 'are stepped across the roadway in 0.5 ft increments with the 10 ft loaded width moved within each lane;'], ['Each lane', 'takes its own worst longitudinal placement (maximum or minimum reaction);'], ['Loaded lanes:', 'the best combination of loaded lanes is kept with its multiple presence factor.'], ['No IM:', 'rows marked no IM are foundation components below ground (3.6.2.1).']])}</div></div></div>`;
   const a = B[sel.q][sel.key], dd = defs[sel.q];
-  h += `<div class="card"><div class="card-h"><h2>Governing arrangement</h2><span class="sub">${dd.grp}: ${dd.label}, ${sel.key === 'max' ? 'maximum' : 'minimum'} ${fv(a.v, dd.u)} ${dd.u}</span></div><div class="card-b">${svgOf(llDwg(G, MODEL.UG, k, a), { h: 560 })}
+  h += `<div class="card"><div class="card-h"><h2>Governing arrangement</h2><span class="sub">${dd.grp}: ${dd.label}, ${sel.key === 'max' ? 'maximum' : 'minimum'} ${fv(a.v, dd.u)} ${dd.u}</span></div><div class="card-b">${svgOf(llDwg(G, MODEL.UG, k, a), { h: 560, vk: true })}
     <h3 style="font-family:var(--cond);margin:12px 0 4px">Concurrent effects of this arrangement</h3>${respTable(defs, [{ t: 'Value' }], (d, q) => `<td class="val">${fv(a.conc[q], d.u)}</td>`, { skip: d => d.grp === 'Bearings' && S.rows[0].brg.length > 6 })}</div></div>`;
   h += skewCardHtml(G, k, r);
   return h;
@@ -2638,7 +2656,7 @@ function loadDwg(k, set) {
 }
 const TAB_SETS = { earth: ['eh'], brce: ['br', 'ce'], wind: ['ws', 'wl'], temp: ['tu'], water: ['wa'], ice: ['ic'], eq: ['eqL', 'eqT'], cv: ['cv'], ct: ['ct'] };
 function diagramCard(k, ids) { const sets = loadSets(k).filter(s => ids.includes(s.id)); if (!sets.length) return '';
-  return `<div class="card"><div class="card-h"><h2>Load diagram${sets.length > 1 ? 's' : ''}: ${esc(P.units[k].name)}</h2><span class="sub">Forces as applied to the unit, looking ahead station</span></div><div class="card-b">${sets.map(s => svgOf(loadDwg(k, s), { h: 480 })).join('<div style="height:12px"></div>')}</div></div>`; }
+  return `<div class="card"><div class="card-h"><h2>Load diagram${sets.length > 1 ? 's' : ''}: ${esc(P.units[k].name)}</h2><span class="sub">Forces as applied to the unit, looking ahead station</span></div><div class="card-b">${sets.map(s => svgOf(loadDwg(k, s), { h: 480, vk: true })).join('<div style="height:12px"></div>')}</div></div>`; }
 
 /* ---------- DXF sheet set ---------- */
 Object.assign(LAY, { ARWO: { c: '#2346c2', w: 1.3, aci: 5, dxf: 'LL-LOAD' }, BORD: { c: '#17212b', w: 1.2, aci: 7, dxf: 'BORD' }, TBLK: { c: '#17212b', aci: 7, dxf: 'BORD' } });
@@ -5630,6 +5648,83 @@ function sldwRender() {
   { const rc = recompute; recompute = function () { const r = rc.apply(this, arguments); showId(); dashSoon(); numItabs(); return r; }; }
   { const st = showTab; showTab = function () { const r = st.apply(this, arguments); numTabs(); return r; }; }
   place(); buildTabs(); buildSide(); splitApply(); showId(); dash();
+})();
+</script>
+<script>
+/* =====================================================================
+   SLTT (2026-11-11, display only; parity with the Abutment Calculator's input tooltips): every input field on every input tab has a
+   tooltip (title). Fields that already had one keep it. The others get: a short explanation for the main inputs (TIP, below; what the
+   value is, where it is used and the governing article), then the field's unit and its valid range from the input-check rule table
+   (IC.RULES / IC.rangeText, the same text as the Project tab's "Input checks" note); a read-only field says it is computed. The
+   load-factor, support and reaction table cells get "<row> <column>" with the same range. Nothing is computed or stored.
+   ===================================================================== */
+(function sltt() {
+  const TIP = {
+    'meta.name': 'Project name: shown in the header, the title block of the Report and the drawings, and the file names.',
+    'meta.num': 'Project number: Report title block and running header.', 'meta.date': 'Date printed in the Report title block (not part of the Input ID).',
+    'meta.by': 'Designer: Report title block.', 'meta.chk': 'Checker: Report title block.', 'meta.notes': 'Engineering assumptions printed in the Report (Project and design basis).',
+    'br.spans': 'Span lengths along CL bridge, CL bearing to CL bearing, in order from Abut. 1. Sets the number of supports.',
+    'br.bays': 'Girder spacings at the bearings, left to right looking ahead station. Sets the number of girders.',
+    'br.ohL': 'Deck overhang beyond the left exterior girder (deck edge to CL girder).', 'br.ohR': 'Deck overhang beyond the right exterior girder.',
+    'br.barH': 'Barrier height above the deck: part of the exposed depth for wind (3.8.1.2) when barriers are counted.',
+    'br.ts': 'Structural deck thickness: deck dead load geometry, exposed depth and the skew correction K_g estimate.', 'br.haunch': 'Haunch between the deck and the top flange: superstructure depth.',
+    'br.d': 'Girder depth: superstructure depth for wind, braking and centrifugal force heights, bearing elevations.',
+    'br.bf': 'Top flange width (drawings, 3D view and the K_g estimate).', 'br.tf': 'Top flange thickness (drawings and the K_g estimate).', 'br.tw': 'Web thickness (drawings and the K_g estimate).',
+    'br.wc': 'Unit weight of the substructure concrete for its self-weight (DC), AASHTO LRFD Table 3.5.1-1.',
+    'br.IM': 'Dynamic load allowance on the truck and tandem (3.6.2.1, 33 %); not applied to the lane load or to footings below ground.',
+    'br.deck': 'How the deck carries wheel loads to the girders: lever rule (simple spans between girders) or a continuous beam on the girders.',
+    'br.skCorr': 'Skew correction factor of the bearing LL + IM at the obtuse corner, AASHTO LRFD Table 4.6.2.2.3c-1.',
+    'br.swL': 'Left sidewalk width, inside the left barrier width; over 2.0 ft carries the pedestrian load (3.6.1.6).', 'br.swR': 'Right sidewalk width, inside the right barrier width; over 2.0 ft carries the pedestrian load (3.6.1.6).',
+    'br.plP': 'Pedestrian live load on sidewalks wider than 2.0 ft (3.6.1.6: 0.075 ksf).',
+    'br.traffic': 'Direction of traffic: sets the lanes that brake in the same direction (3.6.4).', 'br.nBR': 'Lanes loaded in one direction for braking (3.6.4); blank = from the traffic setting.',
+    'br.Rc': 'Horizontal curve radius for the centrifugal force CE (3.6.3); blank for a straight bridge.', 'br.Vd': 'Highway design speed for the centrifugal force (3.6.3).', 'br.curveDir': 'Side of the centre of the curve, for the direction of CE.',
+    'br.V': 'Basic wind speed for Strength III (3.8.1.1.2, Figure 3.8.1.1.2-1).', 'br.exp': 'Wind exposure category B, C or D (3.8.1.1.4), for K_z.',
+    'br.Gf': 'Gust effect factor G (3.8.1.2.1) for Strength III and Service IV.', 'br.CDsup': 'Drag coefficient of the superstructure (Table 3.8.1.2.1-2).', 'br.CDsub': 'Drag coefficient of the substructure components (Table 3.8.1.2.1-2).',
+    'br.barSolid': 'Whether the barriers count in the exposed depth of the superstructure for wind.',
+    'br.Ifac': 'Ratio of the effective to the gross moment of inertia of columns, piles and walls for the longitudinal stiffness (force distribution).',
+    'br.tProc': 'Design temperature range: Procedure A (climate, Table 3.12.2.1-1) or B (contour maps, 3.12.2.2).', 'br.climate': 'Climate for Procedure A (Table 3.12.2.1-1).',
+    'br.supMat': 'Superstructure material: temperature range, α and shrinkage.', 'br.tSet': 'Temperature at which the bearings are set (rise and fall measured from it).',
+    'br.mu': 'Friction coefficient of sliding bearings for the friction force FR (3.13).', 'br.shStrain': 'Shrinkage plus creep strain of a concrete superstructure.',
+    'br.eqSiteClass': 'Site class (Table 3.10.3.1-1) used with the S_a values.', 'br.eqOpCat': 'Operational category (3.10.5): critical, essential or other bridges.',
+    'br.gEQ': 'Load factor on live load in Extreme Event I, γ_EQ (3.4.1).', 'br.owner': 'Owner amendments applied on top of AASHTO LRFD (MassDOT Bridge Manual Part I, Chapter 3).',
+    'br.gSoil': 'Unit weight of the soil over pier footings (EV at the bottom of the footing).', 'br.ehMax': 'Maximum load factor on active horizontal earth pressure EH (Table 3.4.1-2).', 'br.ehMin': 'Minimum load factor on active EH (Table 3.4.1-2).',
+    'br.evMax': 'Maximum load factor on vertical earth pressure EV (Table 3.4.1-2).', 'br.evMin': 'Minimum load factor on EV (Table 3.4.1-2).', 'br.esMax': 'Maximum load factor on earth surcharge ES (Table 3.4.1-2).', 'br.esMin': 'Minimum load factor on ES (Table 3.4.1-2).',
+    'br.khR': 'Ratio k_h / k_h0 for the seismic earth pressure (11.6.5.2.2).', 'br.kv': 'Vertical seismic coefficient k_v (usually 0).',
+    'u.name': 'Unit name, used in every table, tab and the Report.', 'u.type': 'Unit type: multi-column bent, hammerhead, wall pier, pile bent or abutment.',
+    'u.hb': 'Bearing height (bottom of girder to top of pedestal).', 'u.hp': 'Pedestal height (top of cap or seat to bottom of bearing).',
+    'u.elast.G': 'Shear modulus of the elastomer (14.7.5.2) for the bearing stiffness G A / h_rt.', 'u.elast.hrt': 'Total elastomer thickness h_rt.', 'u.elast.L': 'Pad length along the girder.', 'u.elast.W': 'Pad width across the girder.',
+    'u.cap.b': 'Cap width normal to the bearing line.', 'u.cap.h': 'Cap depth.', 'u.capE': 'Cap or wall length beyond the exterior bearing.',
+    'u.col.n': 'Number of columns.', 'u.col.s': 'Column spacing along the bearing line.', 'u.col.shape': 'Column section shape.', 'u.col.D': 'Column diameter.',
+    'u.ftg.type': 'Foundation under the unit.', 'u.ftg.W': 'Footing width normal to the bearing line.', 'u.ftg.t': 'Footing thickness.',
+    'u.topFtg': 'Elevation of the top of the footing (or the point of fixity of shafts).', 'u.ground': 'Ground line or streambed elevation at the unit.',
+    'u.base': 'Column base fixity in the bent frame model.', 'u.fc': 'Concrete strength for the stiffness E_c (Eq. 5.4.2.4-1).',
+    'u.abut.L': 'Abutment length along the bearing line L_ab; blank = deck width / cos(skew).', 'u.abut.Lftg': 'Footing length L_ftg; blank = L_ab.',
+    'u.water.on': 'Whether the unit stands in a stream: water load WA (3.7), scour and ice (3.9).', 'u.water.wse': 'Design flood water surface elevation (Strength and Service).', 'u.water.wseC': 'Check flood water surface elevation (Extreme Event II).',
+    'u.water.v': 'Design flood stream velocity for p = C_D V²/1000 (3.7.3.1).', 'u.water.vC': 'Check flood stream velocity.', 'u.water.scour': 'Design scour elevation; blank = the ground line, 0.0 = El. 0.0.', 'u.water.scourC': 'Check flood scour elevation.',
+    'u.water.ice': 'Dynamic ice forces on the pier (3.9.2).', 'u.water.iceT': 'Ice thickness t (3.9.2.2).', 'u.water.iceP': 'Effective ice crushing strength p (3.9.2.2).', 'u.water.iceZ': 'Elevation at which the ice acts.',
+    'u.earth.method': 'Earth pressure theory: Rankine, Coulomb or at rest (3.11.5).', 'u.earth.gamma': 'Backfill unit weight.', 'u.earth.phi': 'Backfill friction angle φ.', 'u.earth.delta': 'Wall friction angle δ (Coulomb).', 'u.earth.beta': 'Backfill slope β above horizontal; must be below φ.',
+    'u.earth.asOn': 'Approach slab bearing on the backwall: its dead load and live load reach the abutment.',
+    'u.cv.on': 'Vessel collision on this unit (3.14).', 'u.cv.type': 'Design vessel: barge, ship or an entered force.', 'u.cv.mhw': 'Impact elevation (mean high water, 3.14.14.1).',
+    'u.ct.on': 'Vehicle collision on this unit within 30 ft of a roadway (3.6.5).', 'u.ct.prot': 'Protection that exempts the pier from vehicle collision (3.6.5.1).' };
+  const IC0 = typeof IC !== 'undefined' ? IC : null;
+  const RULE = {}; if (IC0 && IC0.RULES) IC0.RULES.forEach(R => { if (!RULE[R.path]) RULE[R.path] = R; });
+  const norm = k => String(k || '').replace(/^units\.\d+\./, 'u.').replace(/\.\d+$/, '');
+  const range = k => { const R = RULE[norm(k)]; if (!R || !IC0.rangeText) return ''; try { return 'Valid: ' + (R.r.blank ? 'blank or ' : '') + IC0.rangeText(R.r, R.unit) + '.'; } catch (e) { return ''; } };
+  const txt = el => (el ? el.textContent : '').replace(/\s+/g, ' ').trim();
+  function tips() {
+    const sb = document.getElementById('sidebar'); if (!sb) return;
+    sb.querySelectorAll('.fld').forEach(f => { if (f.getAttribute('title')) return; const c = f.querySelector('[data-k], [data-list], [data-ro]'); if (!c || c.getAttribute('title')) return;
+      const k = c.dataset.k || c.dataset.list || '', lab = txt(f.querySelector('label')), u = txt(f.querySelector('.u'));
+      if (c.dataset.ro != null) { f.title = `${lab}: computed by the tool from the inputs (read only).`; return; }
+      const t = TIP[norm(k)] || TIP[k], opts = c.tagName === 'SELECT' ? 'Options: ' + [...c.options].map(o => o.textContent.trim()).join('; ') + '.' : '';
+      f.title = [t || lab + (u ? ` (${u})` : '') + '.', u && t ? `Unit: ${u}.` : '', range(k), !t && opts ? opts : ''].filter(Boolean).join(' '); });
+    sb.querySelectorAll('td input[data-k], td select[data-k]').forEach(c => { if (c.getAttribute('title')) return; const td = c.closest('td'), tr = c.closest('tr'), tb = c.closest('table');
+      const col = tb && tb.tHead ? txt(tb.tHead.rows[tb.tHead.rows.length - 1].cells[td.cellIndex]) : '', row = tr && tr.cells[0] ? txt(tr.cells[0]) : '';
+      const k = c.dataset.k; c.title = [`${row} ${col}`.trim() + '.', /^br\.lf\./.test(k) ? 'Blank uses the AASHTO value shown (Table 3.4.1-1).' : '', range(k)].filter(Boolean).join(' '); });
+  }
+  { const bs = buildSide; buildSide = function () { const r = bs.apply(this, arguments); try { tips(); } catch (e) { } return r; }; }
+  window.SubLoadsTips = { TIP, tips };
+  try { tips(); } catch (e) { }
 })();
 </script>
 </body>
