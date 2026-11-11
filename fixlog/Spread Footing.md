@@ -7983,3 +7983,301 @@ index cfb3ac3..ff198bc 100644
  {p:"<b>Dowels</b>: minimum 0.005A<sub>g</sub> across the interface (ACI 16.3.4.1; for an element set to <b>Wall</b> with &ell;<sub>w</sub>/t &gt; 3, &rho;<sub>&ell;</sub>A<sub>g</sub> by 16.3.4.2 with the governing wall &rho;<sub>&ell;</sub>: the wall&rsquo;s minimum &rho;<sub>&ell;</sub> and &rho;<sub>t</sub> are the larger of Table 11.6.1 and 11.6.2 for every wall, whatever the in-plane shear (engineer, 2026-11-06); a note says which of 11.6.1 or 11.6.2 is the code case, from in-plane V<sub>u</sub> against 0.5&phi;&alpha;<sub>c</sub>&lambda;&radic;f&prime;<sub>c</sub>A<sub>cv</sub>), with a REVIEW where separate dowels do not match the vertical-bar count. Compression development L<sub>dc</sub> (25.4.9.2, &radic;f&prime;<sub>c</sub> &le; 100 psi) is checked where P<sub>u</sub> exceeds the lesser concrete bearing strength of the pedestal and the footing (ACI 16.3.1.2(a), 16.3.3.4); where concrete bearing carries P<sub>u</sub> in every combination, L<sub>dc</sub> is not required. Option <b>Always require &ell;<sub>dc</sub> for dowels (detailing practice)</b> (Reinforcement tab, Pedestal Reinforcement &amp; Dowels; default off): when on, L<sub>dc</sub> is checked for every pedestal and wall, as before the 16.3.1.2(a) gate; where the gate alone would not require it, card 5.6, the dashboard, the Report and the drawings say it is required by the engineer&rsquo;s option and that 16.3.1.2(a) would not require it there. L<sub>dc</sub> is the same value either way. Where a combination puts the interface in tension (uplift, or the resultant outside the kern of the pedestal section), the dowels are taken as the reinforcement of the interface section by strain compatibility at that combination&rsquo;s P<sub>u</sub>: the required area, tension development into the footing (&ell;<sub>d</sub>, or &ell;<sub>dh</sub> for hooked dowels), the Class B tension lap into the pedestal; the projection must also cover the compression lap (25.5.5). Dowels take no 25.4.10.1 reduction."},
  {p:"<b>Shear friction</b> (ACI 318-19 22.9): V<sub>u</sub> = &radic;(V<sub>ux</sub>&sup2;+V<sub>uy</sub>&sup2;) &le; &phi;V<sub>n</sub> = 0.75 min(&mu;(A<sub>vf</sub>f<sub>y</sub> + N<sub>u</sub>), V<sub>n,max</sub>) in every LRFD combination, with &mu; = 1.0&lambda; (intentionally roughened about 1/4 in; a drawing note is required) or 0.6&lambda; by the joint-surface input, N<sub>u</sub> = 0.9D, and A<sub>vf</sub> developed on both sides of the joint; where the development falls short and only shear friction needs it, a proportional credit is taken and the dowel chip is REVIEW."},
 ```
+
+## 2026-11-11 — PR: sf-plain (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SFPL) — flexure of one direction as plain concrete, ACI 318-19 Chapter 14 (engineer request 2026-11-11)   [input option; §4: new checks only when the user chooses; results identical with the field absent]
+- **Engineer (2026-11-11):** "Flexure in this direction: Reinforced | Plain concrete (ACI 318-19 Ch. 14)", at least for the transverse direction of wall / strip footings. If the plain check passes, the transverse flexural steel is not required.
+- **Where (to re-apply by hand):**
+  - **Input (Reinforcement tab):** after the ℓ_d-reduction row (anchor `<div class="note" id="sfdRbNote"></div>`), a select `data-path="freinf.plain"`: '' None / 'x' / 'y'.
+  - **New functions** before `function sfdDevAll(){`: `sfdPlainDirIn`, `sfdPlainAll`, `sfdPlainOn`. `sfdPlainAll` computes the checks and, where it applies, stores the reinforced values in `des.rc`. It then sets `des.plain = true` and points the D/C fields of that direction to the plain checks: `dcrBot`, `dcrBotFull`, `dcrTop`, `dcrV`, `maxV`, `phiV`, `oneWayOutside`. The flags `asMin*OK`, `spc*OK` and `tc*OK` are set true, and `topNeeded` false.
+  - **recalc:** `P2.dev=sfdDevAll();` becomes `{const pl=sfdPlainAll();if(pl)P2.plain=pl;P2.dev=sfdDevAll();}`.
+  - **`sfdDevAll`:** after `if(!size||!(m.As>0))return;`, a plain direction is skipped (`if(sfdPlainOn(dir))return;`).
+  - **Dashboard:** a new chip "Plain concrete (ACI 318-19 Ch. 14)" after "One-way shear". The D/C summary and the chip → Report-section map get matching entries. The Flexure and One-way shear reference texts mention the plain direction.
+  - **Validation:** a warning when the option is set on a footing with more than one bearing element.
+  - **Footing Design 5.2 / 5.3:** `sfdPlainTab` for the plain direction. 5.4 shows "Development of the x-bars: not required — plain concrete".
+  - **Report:** S-fd<dir> becomes the plain steps `pl.h`, `pl.hs`, `pl.Sm`, `pl.MnT`, `pl.MnC`, `pl.phiMn`, `pl.Mu`, `pl.dcrM` (and `pl.dcrMN` for hogging), then `pl.Vn` / `pl.phiVn` / `pl.Vu` / `pl.dcrV` or `pl.vna`, then `pl.nr`, `pl.bars`, `pl.dc`.
+  - **Drawings:** the section callout and the schedule mark that direction's bars "NOMINAL".
+  - **Manual:** a new checks-list entry.
+  - **Exact before / after code:** the diff below.
+- **Governing provisions:** ACI 318-19, verified in the reference PDF (printed pp. 203–210 and 391; pp. 461–463 for 24.4):
+  - **Scope and permission:** 14.1.3(a) (plain concrete permitted for members continuously supported by soil). 14.1.4(a): in SDC D, E or F a plain wall footing needs two continuous No. 4 longitudinal bars of area ≥ 0.002A_g; this is reported, since the SDC is not an input.
+  - **Thickness:** 14.3.2.1, footing thickness ≥ 8 in.
+  - **Critical sections:** Table 14.4.3.2.1 (face of a concrete wall or pedestal); 14.4.3.3.1 (one-way shear at h from that location).
+  - **Strength:** 14.5.1.2 and Table 21.2.1(i), φ = 0.60. 14.5.1.6: no strength assigned to reinforcement. 14.5.1.7: for concrete cast against soil, h is taken 2 in less than specified.
+  - **Flexure:** 14.5.2.1, Eq. (14.5.2.1a) M_n = 5λ√f′c·S_m and Eq. (14.5.2.1b) M_n = 0.85f′c·S_m; the lesser governs.
+  - **One-way shear:** Table 14.5.5.1(a), V_n = (4/3)λ√f′c·b_w·h.
+  - **Joints and openings:** 14.3.4 (joints) and 14.6 (bars around openings only) — Chapter 14 asks for no minimum or shrinkage-and-temperature steel in a plain footing.
+  - **24.4.1:** shrinkage-and-temperature steel in one-way *slabs*, perpendicular to their flexural reinforcement. It is not applied to the plain direction (Decision 4).
+- **§4 callout:** these checks are new and run only when the user chooses them. No existing formula, factor, unit or reference is changed.
+  - Before: the direction was always designed as reinforced (22.3 flexure, A_s,min 0.0018A_g, s_max, ε_t, development 25.4, one-way shear 22.5).
+  - After (plain chosen): φM_n = 0.60·min(5λ√f′c, 0.85f′c)·b(h − 2)²/6 ≥ M_u at the face; φV_n = 0.60·(4/3)λ√f′c·b(h − 2) ≥ V_u at h from the face; h ≥ 8 in.
+  - When these pass, the reinforced checks of that direction read "not required — plain concrete (ACI 318-19 Ch. 14)", and the bars are nominal.
+- **Hand check (tests/smoke/spread-footing-plain.mjs):** strip footing B = 2 ft (x, transverse) × L = 4 ft, 12 in thick, under a 12 in wall (bearing footprint 1 × 4 ft, h = 0). f′c = 4000 psi, direct factored wall load 3 kip/ft (P = 12 kip), no soil cover. Bars: bottom x #4 @ 12, bottom y #4 @ 9.
+  - **Soil pressure:** q_u = 3/2 = 1.50 ksf.
+  - **Moment at the wall face:** M_u = 1.5·0.5²/2 = 0.1875 kip-ft/ft (0.750 kip-ft over L).
+  - **Section modulus:** h − 2 = 10 in; S_m = 12·10²/6 = 200 in³/ft (800 in³ over 48 in).
+  - **Flexural strength:** M_n = 5·1.0·63.25·200/12000 = 5.270 kip-ft/ft (the compression form gives 56.7, so tension governs); φM_n = 3.162 kip-ft/ft (12.649 total).
+  - **Flexure D/C:** 0.1875/3.162 = **0.059**.
+  - **One-way shear:** the section at h from the face is at 0.5 + 1.0 = 1.5 ft, beyond the edge at 1.0 ft, so the check does not apply (14.4.3.3.1). For information, φV_n = 0.60·(4/3)·63.25·12·10/1000 = 6.07 kip/ft against V at the face = 1.5·0.5 = 0.75 kip/ft.
+  - **Thickness:** h = 12 ≥ 8 in.
+  - **Before (field absent, reinforced):** Footing bar development NG (x-bars: ℓ_d 12, ℓ_dh 6 > 3 in available), and Flexure FAIL, A_s < A_s,min (bottom x: 0.200 < 0.259 in²/ft).
+  - **After (plain x):** Plain concrete PASS, D/C 0.059. Flexure PASS (0.06). No x development row ("not required"). The x-bars are nominal.
+  - **NG case:** B = 6 ft, 30 kip/ft. q_u = 5 ksf; M_u = 15.625 kip-ft/ft, D/C = 4.94; V_u at h = 5·1.5 = 7.5 kip/ft against 6.07, D/C 1.235. NG.
+  - **h < 8 in:** t = 0.6 ft (7.2 in) gives NG by 14.3.2.1.
+- **Probe vs origin/main (field absent):** R, P2, Report text and dashboard are identical in six cases: default, isolated, wall, 2 ft strip, top mat / hogging, and the excess option.
+  - A two-element footing with the field set gives P2 identical except `P2.plain = {applies: false}`, plus the warning.
+- **Saved data (§5):** one new optional field, `freinf.plain`. Absent or '' means both directions reinforced, as before. No key or format changed.
+- **How verified:**
+  - **Pass:**
+    - check-syntax;
+    - spread-footing-plain (new): all pass, 0 console errors, 390 px;
+    - spread-footing-bar-ends, -wall-perft, -wall-hbars, -nobear and -scroll;
+    - phone-layout --tool sf, project-library --tool spreadfooting and dxf-print-sheets --tool sf.
+  - **spread-footing-fdx-picker:** step 6 (probe vs main) times out as on origin/main. The test loads main from the system temp folder, outside the repo, where `shared/` is missing. This failure was there before.
+- **Decisions (pending engineer review):**
+  1. **Where the option applies:** either direction (x or y) of any footing with **one** bearing element, i.e. a wall / strip or an isolated footing. Only one direction can be plain at a time. With more elements the option is ignored, with a warning, because combined-footing strips and hogging between supports are not covered.
+  2. **When the plain check fails:** that direction is NG with its D/C. The reinforced checks of that direction are still not used, since the user chose plain.
+  3. **Cast against soil:** h − 2 in is always used for strength. The tool's footings are cast against soil. The location of the shear section uses the specified h (14.4.3.3.1).
+  4. **No shrinkage-and-temperature or minimum steel in the plain direction:** Chapter 14 asks for none, and 24.4.1 is for one-way slabs perpendicular to their flexural steel. 14.1.4(a) for SDC D–F is reported, not checked.
+  5. **Critical section:** always the face (concrete wall or pedestal). The masonry-wall and base-plate locations of Table 14.4.3.2.1 are noted, not modelled.
+  6. **Other checks stay as before:** two-way shear and bearing remain the reinforced-concrete checks with d_avg (22.6, 22.8), and 13.3.1.2 (d ≥ 6 in) is unchanged.
+- **Open items:** none.
+- **Diff (`Spread Footing.html`):**
+```diff
+diff --git a/Spread Footing.html b/Spread Footing.html
+index ff198bc..1a6aa58 100644
+--- a/Spread Footing.html	
++++ b/Spread Footing.html	
+@@ -457,6 +457,7 @@ a.wkA:hover{text-decoration:underline}
+  <table class="tbl sfdRbTbl sfdRbEnds" style="font-size:10.5px;margin-top:4px" title="Bar ends (SFBE): Not set = straight, with &quot;hook the bars&quot; (REVIEW) where only a hook develops; Straight = l_d only; Hooked 90 deg = standard hook at both ends, l_dh and the hook's fit in the depth"><tr><th colspan="4" style="text-align:left">Bar ends (development, Footing Design 5.4)</th></tr><tr><td>Bottom x</td><td><select data-path="freinf.botX.ends" class="sfdRbEnd" style="width:96px"><option value="">Not set</option><option value="straight">Straight</option><option value="hooked">Hooked 90&deg;</option></select></td><td>Bottom y</td><td><select data-path="freinf.botY.ends" class="sfdRbEnd" style="width:96px"><option value="">Not set</option><option value="straight">Straight</option><option value="hooked">Hooked 90&deg;</option></select></td></tr><tr><td>Top x</td><td><select data-path="freinf.topX.ends" class="sfdRbEnd" style="width:96px"><option value="">Not set</option><option value="straight">Straight</option><option value="hooked">Hooked 90&deg;</option></select></td><td>Top y</td><td><select data-path="freinf.topY.ends" class="sfdRbEnd" style="width:96px"><option value="">Not set</option><option value="straight">Straight</option><option value="hooked">Hooked 90&deg;</option></select></td></tr></table>   <!-- SFBE -->
+  <div class="row"><label>Outer bottom layer (nearest the soil)</label><select data-path="freinf.botOuter"><option value="y">y-bars (default)</option><option value="x">x-bars</option></select><span class="hint">sets d<sub>x</sub>, d<sub>y</sub> of the bottom mat; top mat: x-bars outer</span></div>   <!-- SFBO -->
+  <div class="row"><label>&ell;<sub>d</sub> reduction for excess A<sub>s</sub></label><select data-path="mat.ldExcess"><option value="off">Off (not taken)</option><option value="on">On: &ell;<sub>d</sub>&middot;A<sub>s,req</sub>/A<sub>s,prov</sub></option></select><span class="hint">ACI 25.4.10.1; footing mats, straight bars; A<sub>s,req</sub> = max(flexure, A<sub>s,min</sub>)</span></div>   <!-- SFDV; SFML: moved from Materials -->
++ <div class="row"><label>Flexure as plain concrete (ACI 318-19 Ch. 14)</label><select data-path="freinf.plain"><option value="">None: both directions reinforced</option><option value="x">x-direction: plain concrete</option><option value="y">y-direction: plain concrete</option></select><span class="hint">one bearing element only (wall / strip or isolated footing); that direction's bars become nominal where the plain checks pass (Footing Design 5.2 / 5.3)</span></div>   <!-- SFPL -->
+  <div class="note" id="sfdRbNote"></div>
+ </div>
+ </details>
+@@ -1739,6 +1740,8 @@ function computeAll(){
+  ['otGate','eccMode','eccCustom'].forEach(k=>{if(state.stab[k]===undefined)state.stab[k]=defaultState().stab[k];});
+  ['FSot','FSsl','FSfl'].forEach(k=>{if(num(state.stab[k])<1)W.push({lvl:'warn',msg:'Target factor of safety '+k+' = '+f2(num(state.stab[k]))+' is less than 1.0.'});});
+  if(num(state.mat.ks)<=0)W.push({lvl:'warn',msg:'Subgrade modulus k_s must be positive for the rigid-footing verification; the rigidity check will be skipped.'});
++ /* SFPL: the plain-concrete direction applies to a footing with one bearing element */
++ if(((state.freinf||{}).plain==='x'||(state.freinf||{}).plain==='y')&&state.peds.length!==1)W.push({lvl:'warn',msg:'Plain concrete in the '+state.freinf.plain+'-direction (Reinforcement tab) is checked only for a footing with one bearing element (a wall / strip or an isolated footing): ignored here, both directions are designed as reinforced.'});
+  /* SFRQ: bars entered as a quantity */
+  [['botX','bottom x'],['botY','bottom y'],['topX','top x'],['topY','top y']].forEach(([k,lab])=>{const m=(state.freinf||{})[k]||{};
+   if(m.mode==='qty'&&m.size&&Math.round(num(m.n))<2)W.push({lvl:'warn',msg:'Footing reinforcement, '+lab+' mat: entered as a quantity of '+Math.round(num(m.n))+' bar(s); at least 2 are needed to define a spacing.'});});
+@@ -2216,6 +2219,10 @@ function renderDashboard(){
+   const vmax=Math.max(P2.desX.dcrV,P2.desY.dcrV);
+   if(owBoth)d.appendChild(chip('One-way shear','critical plane outside footing','na',undefined,{tab:'tab-footdes',sec:'o-fd-x'}));
+   else d.appendChild(chip('One-way shear','max DCR = '+f2(vmax),vmax<=1?'pass':'fail',undefined,{tab:'tab-footdes',sec:'o-fd-x'}));
++  /* SFPL: one direction as plain concrete (ACI 318-19 Ch. 14) */
++  if(P2.plain&&P2.plain.applies){const q=P2.plain;
++   d.appendChild(chip('Plain concrete (ACI 318-19 Ch. 14)',q.dir+'-direction: M_u '+f2(q.Mu)+' vs \u03c6M_n '+f2(q.phiMn)+' k-ft'+(q.MuN>0?' (hogging '+f2(q.MuN)+')':'')+'; V_u '+(q.anyV?f2(q.Vu)+' vs \u03c6V_n '+f2(q.phiVn)+' k':'n/a (section at h beyond the edge)')+'; h '+f2(q.h)+(q.hOK?' \u2265 ':' < ')+'8 in'+(q.ok?'; '+q.dir+'-bars nominal (not required)':''),
++    q.ok?'pass':'fail',undefined,{tab:'tab-footdes',sec:'o-fd-'+q.dir}));}
+   const punchAppl=P2.punch.filter(z=>!z.perimOutside);
+   const pmax=punchAppl.reduce((a,z)=>Math.max(a,z.dcr),0);
+   if(!punchAppl.length)d.appendChild(chip('Punching shear','not applicable \u2014 no closed cone','na',undefined,{tab:'tab-footdes',sec:'o-fd-punch'}));
+@@ -4068,9 +4075,9 @@ function sfdResultRows(){
+   'Contact area':()=>['no-tension soil, rigid footing',null,['o-br-press']],
+   'Rigidity (rigid method)':()=>['Bowles: λℓ ≤ π/4; D/C = λℓ/(π/4)',Math.max(R.rig.vx,R.rig.vy)/R.rig.limit,['o-st-rig']],
+   'Input validation':()=>['input checks',null,[]],
+-  'Flexure (footing)':()=>['ACI 318-19 §22.3; A<sub>s,min</sub> '+(sfrCombined()?'§13.3.4.1 → §8.6.1.1':'§7.6.1.1')+' / §24.4.3.2; s<sub>max</sub> §8.7.2.2',   /* SFLW: combined footing, Chapter 8 */
++  'Flexure (footing)':()=>['ACI 318-19 §22.3; A<sub>s,min</sub> '+(sfrCombined()?'§13.3.4.1 → §8.6.1.1':'§7.6.1.1')+' / §24.4.3.2; s<sub>max</sub> §8.7.2.2'+(P2.plain&&P2.plain.applies?'; '+P2.plain.dir+'-direction plain concrete: M<sub>u</sub>/φM<sub>n</sub>, §14.5.2.1':''),   /* SFPL */   /* SFLW: combined footing, Chapter 8 */
+    Math.max(P2.desX.dcrBot,P2.desY.dcrBot,...[P2.desX.dcrTop,P2.desY.dcrTop].filter(v=>v!=null)),['o-fd-x','o-fd-y']],
+-  'One-way shear':()=>[(state.mat.vcMode==='a'?'override 2λ√f′<sub>c</sub> (not ACI 318-19 Table 22.5.5.1(c))':'ACI 318-19 Table 22.5.5.1(c), size effect §22.5.5.1.3')+(state.mat.lamsFtg==='on'?'; λ<sub>s</sub> neglected, §13.2.6.2':''),
++  'One-way shear':()=>[(state.mat.vcMode==='a'?'override 2λ√f′<sub>c</sub> (not ACI 318-19 Table 22.5.5.1(c))':'ACI 318-19 Table 22.5.5.1(c), size effect §22.5.5.1.3')+(state.mat.lamsFtg==='on'?'; λ<sub>s</sub> neglected, §13.2.6.2':'')+(P2.plain&&P2.plain.applies?'; '+P2.plain.dir+'-direction plain concrete: Table 14.5.5.1(a) at h from the face (§14.4.3.3.1)':''),   /* SFPL */
+    (P2.desX.oneWayOutside&&P2.desY.oneWayOutside)?null:Math.max(P2.desX.dcrV,P2.desY.dcrV),['o-fd-x','o-fd-y']],
+   'Punching shear':()=>['ACI 318-19 §22.6.5.2, §8.4.4.2'+(state.mat.lamsFtg==='on'?'; λ<sub>s</sub> neglected, §13.2.6.2':''),mx(P2.punch.filter(z=>!z.perimOutside).map(z=>z.dcr)),['o-fd-punch']],
+   'Concrete bearing':()=>['ACI 318-19 §16.3.3.4, §22.8.3.2, Table 22.8.3.2: φB<sub>n</sub> = lesser of the footing (√(A<sub>2</sub>/A<sub>1</sub>) ≤ 2) and the pedestal (0.85f′<sub>c</sub>A<sub>1</sub>)',mx(P2.bearing.map(z=>z.dcrEff)),['o-fd-bear']],
+@@ -4083,6 +4090,7 @@ function sfdResultRows(){
+   'Dowels (tension, laps)':()=>['ACI 318-19 §16.3.1.1, §16.3.3, §22.4 (interface tension), §25.4.2 / §25.4.3 (tension development), §25.5.2 / §25.5.5 (laps); §16.3.4.1 (minimum); D/C = A<sub>s,gov</sub>/A<sub>s,prov</sub>, A<sub>s,gov</sub> = max(0.005A<sub>g</sub>, A<sub>s,req</sub>)',mx((P2.dowels||[]).filter(z=>!z.isPatch).map(z=>z.dcAs)),['o-fd-bear']],
+   'Pedestal P\u2013M (biaxial)':()=>['ACI 318-19 §22.4, §22.2; D/C = |M<sub>u</sub>|/|φM<sub>n</sub>|<sub>θ</sub> on the contour at each combination’s own P<sub>u</sub> (P<sub>u</sub>/φP<sub>n,max</sub> above the axial cap)'+(P2.pedDes.some(z=>z.slm)?'; slender pedestal: magnified moments, §6.6.4.6, §6.6.4.5, §6.2.5.3':''),mx(P2.pedDes.filter(z=>!z.isPatch&&z.pmGov&&!sfdIsWallEl(z.idx)).map(z=>z.pmRange&&z.pmRange.length?Infinity:(isNaN(z.pmGov.ratio)?0:z.pmGov.ratio))),P2.pedDes.map((z,i)=>(z.isPatch||sfdIsWallEl(i))?null:sfdElCard(i).id).filter(Boolean)],
+   'Concrete cover':()=>['ACI 318-19 Table 20.5.1.3.1; D/C = c<sub>min</sub>/c',mx([...(P2.covChk?P2.covChk.rows.filter(z=>z.applies).map(z=>z.c>0?z.min/z.c:Infinity):[]),...P2.pedDes.filter(z=>!z.isPatch).map(z=>z.cov>0?z.vertCovMin/z.cov:Infinity)]),['o-fd-basis']],
++  'Plain concrete (ACI 318-19 Ch. 14)':()=>{const q=P2.plain;return ['ACI 318-19 §14.5.2.1 (M<sub>n</sub> = 5λ√f′<sub>c</sub>S<sub>m</sub>), §14.5.1.7 (h − 2 in), Table 14.5.5.1(a), §14.4.3.3.1, §14.3.2.1 (h ≥ 8 in), φ = 0.60 Table 21.2.1(i); D/C = max(M<sub>u</sub>/φM<sub>n</sub>, V<sub>u</sub>/φV<sub>n</sub>, 8 in/h)',q.dc,['o-fd-'+q.dir]];},   /* SFPL */
+   'Footing bar development':()=>['ACI 318-19 §25.4.2.4 (straight), §25.4.3.1 / Table 25.4.3.2 (standard hook)'+(state.mat.ldExcess==='on'?', §25.4.10.1 (excess A<sub>s</sub>, straight bars; A<sub>s,req</sub> = max(flexure, A<sub>s,min</sub>), R8.6.1.1)':'')+'; D/C = ℓ<sub>d</sub> (or ℓ<sub>dh</sub> where hooked)/available'+(((P2&&P2.dev)?P2.dev.rows:[]).some(z=>z.ends==='hooked')?'; bars hooked as entered: also the hook height r<sub>c</sub> + 12d<sub>b</sub> / the room in the depth (§25.3.1, §25.3.2)':''),mx(((P2&&P2.dev)?P2.dev.rows:[]).map(z=>z.dc)),['o-fd-dev']],   /* SFBE */
+   'Pedestal shear':()=>['ACI 318-19 Table 22.5.5.1, §22.5.1.10–22.5.1.11 (biaxial), §10.6.2; D/C = V<sub>u</sub>/φV<sub>c</sub>',mx((P2.pedShear||[]).filter(z=>!z.isPatch&&z.gov&&!sfdIsWallEl(z.idx)).map(z=>z.gov.ratio)),P2.pedDes.map((z,i)=>z.isPatch?null:sfdElCard(i).id).filter(Boolean)],
+   'Pedestal torsion':()=>['ACI 318-19 §22.7.1.1, §22.7.4.1, Table 22.7.4.1(a)(c), §10.5.4.1; φ = 0.75 (Table 21.2.1); D/C = T<sub>u</sub>/φT<sub>th</sub>, torsion may be neglected where T<sub>u</sub> &lt; φT<sub>th</sub>',mx((P2.pedTor||[]).filter(z=>z.on&&!z.isPatch&&z.gov&&!sfdIsWallEl(z.idx)).map(z=>z.gov.ratio)),(P2.pedTor||[]).filter(z=>z.on&&!z.isPatch&&!sfdIsWallEl(z.idx)).map(z=>sfdElCard(z.idx).id)],   /* SFTQ */
+@@ -4440,6 +4448,36 @@ function sfrModel(){
+    ...sfrNL('Strength (LRFD) combinations ([[S-lrfd]]).',[['Pressure:','the net factored pressure is solved for each combination on a rigid footing with no-tension soil from the pedestal loads (axial, applied moments, V·h couples and P·e from load offsets) and the body forces; moments and shears at each critical section are integrated from that pressure solid.'],['Capacities','per foot of width, A_s = 12 A_b / s ([[S-rb]]).'],['Shear and moment diagrams:','Footing Design tab[[tab:footdes| ↗]].']])]});
+   ['x','y'].forEach(dir=>{
+    const des=dir==='x'?P2.desX:P2.desY, k='fd'+dir, cb=des.capBot, mt=dir==='x'?state.freinf.botX:state.freinf.botY;
++   if(des.plain){const q=P2.plain, PT=[], nb=(m,t)=>m.size?(t+' #'+m.size+' '+(m.mode==='qty'?m.n+' bars':'@ '+sfrN(m.spc)+' in')):'';   /* SFPL: the plain-concrete direction */
++    PT.push({title:'Plain concrete: thickness and section',ref:'ACI 318-19 14.3.2.1, 14.5.1.7, 14.4.3.2.1',steps:[
++     S({id:'pl.h',label:'Footing thickness, at least 8 in for a plain footing',chk:'h ≥ 8 in',sym:'h',eq:'',sub:sfrN(q.h)+(q.hOK?' \\ge ':' \\lt ')+'8',value:q.h,unit:'in',ok:q.hOK,ref:'ACI 318-19 14.3.2.1'}),
++     S({id:'pl.hs',label:'Thickness for strength: cast against soil, 2 in less than specified',sym:'h_{s}',eq:'h \\minus 2',sub:sfrN(q.h)+' \\minus 2',value:q.hs,unit:'in',ref:'ACI 318-19 14.5.1.7'}),
++     S({id:'pl.Sm',label:'Elastic section modulus over the full width b = '+sfrN(q.b/12)+' ft ('+q.bw+')',sym:'S_{m}',eq:'\\frac{b\\,h_{s}^{2}}{6}',sub:'\\frac{'+sfrN(q.b,1)+'\\cdot'+sfrN(q.hs)+'^{2}}{6}',value:q.Sm,unit:'in^{3}',d:1})]});
++    PT.push({title:'Plain concrete: flexure at the face',ref:'ACI 318-19 14.5.2.1, Table 21.2.1(i), Table 14.4.3.2.1',steps:[
++     S({id:'pl.MnT',label:'Nominal moment, tension face',sym:'M_{n,t}',eq:'5\\lambda\\sqrt{'+SFR_FC+'}\\,S_{m}',sub:'5\\cdot'+sfrN(q.lam)+'\\cdot\\sqrt{'+sfrN(q.fc,0)+'}\\cdot'+sfrN(q.Sm,1)+'/12000',value:q.MnT,unit:'kip-ft',d:3,ref:'ACI 318-19 Eq. (14.5.2.1a)'}),
++     S({id:'pl.MnC',label:'Nominal moment, compression face',sym:'M_{n,c}',eq:'0.85\\,'+SFR_FC+'\\,S_{m}',sub:'0.85\\cdot'+sfrN(q.fc,0)+'\\cdot'+sfrN(q.Sm,1)+'/12000',value:q.MnC,unit:'kip-ft',d:1,ref:'ACI 318-19 Eq. (14.5.2.1b)'}),
++     S({id:'pl.phiMn',label:'Design moment strength (the lesser; φ = 0.60 for plain concrete)',sym:'\\phi M_{n}',eq:'0.60\\,\\min(M_{n,t},\\,M_{n,c})',sub:'0.60\\cdot'+sfrN(q.Mn,3),value:q.phiMn,unit:'kip-ft',d:3,ref:'ACI 318-19 Table 21.2.1(i)'}),
++     S({id:'pl.Mu',label:'Factored moment at the face (envelope, total over the width)'+(q.govM?'; governing combination: '+q.govM:''),sym:'M_{u}',eq:'',sub:'',value:q.Mu,unit:'kip-ft',d:3,note:'the same section and moment envelope as the reinforced design (direct integration of the factored soil pressure; diagram on the Footing Design tab)'}),
++     S({id:'pl.dcrM',label:'Plain flexure: demand / capacity',sym:'DCR',eq:'\\frac{M_{u}}{\\phi M_{n}}',sub:'\\frac{'+sfrN(q.Mu,3)+'}{'+sfrN(q.phiMn,3)+'}',value:q.dcrM,unit:'',d:3,ok:q.dcrM<=1+1e-9}),
++     ...(q.MuN>0?[S({id:'pl.dcrMN',label:'Hogging (top face in tension)'+(q.govN?', '+q.govN:''),sym:'DCR^{\\minus}',eq:'\\frac{M_{u}^{\\minus}}{\\phi M_{n}}',sub:'\\frac{'+sfrN(q.MuN,3)+'}{'+sfrN(q.phiMn,3)+'}',value:q.dcrMN,unit:'',d:3,ok:q.dcrMN<=1+1e-9})]:[])]});
++    PT.push({title:'Plain concrete: one-way shear',ref:'ACI 318-19 14.4.3.3.1, Table 14.5.5.1(a)',steps:q.anyV?[
++     S({id:'pl.Vn',label:'Nominal one-way shear strength',sym:'V_{n}',eq:'\\frac{4}{3}\\lambda\\sqrt{'+SFR_FC+'}\\,b\\,h_{s}',sub:'\\frac{4}{3}\\cdot'+sfrN(q.lam)+'\\cdot\\sqrt{'+sfrN(q.fc,0)+'}\\cdot'+sfrN(q.b,1)+'\\cdot'+sfrN(q.hs)+'/1000',value:q.Vn,unit:'kip',d:3,ref:'ACI 318-19 Table 14.5.5.1(a)'}),
++     S({id:'pl.phiVn',label:'Design shear strength',sym:'\\phi V_{n}',eq:'0.60\\,V_{n}',sub:'0.60\\cdot'+sfrN(q.Vn,3),value:q.phiVn,unit:'kip',d:3}),
++     S({id:'pl.Vu',label:'Factored shear at h = '+sfrN(q.h)+' in from the face ('+dir+' = '+sfrN(q.vLoc,3)+' ft; '+q.govV+')',sym:'V_{u}',eq:'',sub:'',value:q.Vu,unit:'kip',d:3,ref:'ACI 318-19 14.4.3.3.1'}),
++     S({id:'pl.dcrV',label:'Plain one-way shear: demand / capacity',sym:'DCR',eq:'\\frac{V_{u}}{\\phi V_{n}}',sub:'\\frac{'+sfrN(q.Vu,3)+'}{'+sfrN(q.phiVn,3)+'}',value:q.dcrV,unit:'',d:3,ok:q.dcrV<=1+1e-9})]
++     :[S({id:'pl.vna',label:'The critical section at h = '+sfrN(q.h)+' in from the face falls outside the footing (cantilever '+sfrN((q.half-Math.max(Math.abs(q.face[0]),Math.abs(q.face[1])))*12)+' in ≤ h)',sym:'V_{u}',eq:'',sub:'',value:'not applicable',ref:'ACI 318-19 14.4.3.3.1'})]});
++    const bars=[nb(q.barsB,'bottom'),nb(q.barsT,'top')].filter(Boolean).join('; ');
++    PT.push({title:'Reinforced checks of the '+dir+'-direction',ref:'ACI 318-19 14.5.1.6',steps:[
++     S({id:'pl.nr',label:'Flexural steel, A_s,min, s_max, tension-controlled, development: not required — plain concrete (ACI 318-19 Ch. 14): no strength is assigned to reinforcement (14.5.1.6)'+(q.ok?'':'; the plain check does not pass (NG): use reinforced design in this direction or revise the footing'),sym:'',eq:'',sub:'',value:q.ok?'not required':'NG'}),
++     S({id:'pl.bars',label:'Bars entered in '+dir+': '+(bars||'none')+(bars?' — nominal (distribution) bars, not counted':''),sym:'',eq:'',sub:'',value:''}),
++     S({id:'pl.dc',label:'Plain concrete, governing D/C = max(flexure, shear, 8 in / h)',sym:'DCR',eq:'',sub:'',value:q.dc,unit:'',d:3,ok:q.ok})]});
++    subs.push({key:'S-fd'+dir,title:(dir==='x'?'Longitudinal (x-direction)':'Transverse (y-direction)')+': plain concrete (ACI 318-19 Ch. 14) — flexure, one-way shear, thickness',items:[sfrTopics(k,PT),
++     ...sfrNL('The '+dir+'-direction is checked as plain concrete (Reinforcement tab input; Footing Design tab[[tab:footdes| ↗]]).',[
++      ['Critical section:','the face of the wall / pedestal (Table 14.4.3.2.1), as the reinforced design (13.2.7.1).'],
++      ['Shrinkage and temperature steel:','none required by Chapter 14 (14.6 covers only openings); joints per 14.3.4. The 24.4.1 reinforcement is for one-way slabs perpendicular to their flexural steel: not applied to the plain direction.'],
++      ['SDC D, E, F:','plain wall footings need two continuous No. 4 longitudinal bars, ≥ 0.002 A_g (14.1.4(a)); the SDC is not an input: confirm.'],
++      ['Unchanged:','the other direction (reinforced), two-way shear and bearing.']])]});
++    return;}
+    const T=[];
+    const fl=[S({id:'Mu',label:'Factored moment, bottom (envelope; total over the width '+sfrN(des.wperp)+' ft)',sym:'M_{u}',eq:'',sub:'',value:des.MuPos,unit:'kip-ft',note:des.govPos?'governing combination: '+des.govPos.cb.name+' at '+dir+' = '+sfrN(des.govMloc,3)+' ft':''}),
+     S({id:'As',label:'Bottom steel across the width',sym:'A_{s}',eq:'A_{s}/\\text{ft} \\cdot w',sub:sfrN(des.AsBot,3)+'\\cdot'+sfrN(des.wperp),value:cb.As,unit:'in^{2}',d:3}),
+@@ -4729,7 +4767,7 @@ function sfrModel(){
+   const W={'Bearing (service)':['S-qa','S-bp'],'Overturning':['S-st'],'Eccentricity limit':['S-ecc'],'Eccentricity (information)':['S-ecc'],'Sliding, x':['S-st'],'Sliding, y':['S-st'],'Sliding, resultant \u221a(Hx\u00b2+Hy\u00b2)':['S-st'],
+    'Flotation':['S-st'],'Contact area':['S-bp'],'Rigidity (rigid method)':['S-st'],'Flexure (footing)':xy,'One-way shear':xy,'Footing bar clear spacing':xy,'Punching shear':['S-pun'],
+    'Concrete bearing':['S-cbr'],'Dowel steel (min 0.005A_g)':['S-cbr','S-dow'],'Dowel development (\u2113dc)':['S-cbr','S-dow'],'Interface shear friction':['S-sf'],'Dowels (tension, laps)':['S-dow'],
+-   'Pedestal design':pd,'Pedestal P\u2013M (biaxial)':pd,'Pedestal tie cover':pd,'Footing bar development':xy,'Pedestal shear':pd,'Pedestal crossties':pd,'Concrete cover':['S-cov',...pd],'Wall checks (ACI 318-19 Ch. 11)':((P2&&P2.bearing)||[]).filter(z=>z.wall&&z.wall.sel).map(z=>(z.wall.applied?'S-wd':'S-pd')+z.idx),
++   'Pedestal design':pd,'Pedestal P\u2013M (biaxial)':pd,'Pedestal tie cover':pd,'Footing bar development':xy,'Plain concrete (ACI 318-19 Ch. 14)':xy,'Pedestal shear':pd,'Pedestal crossties':pd,'Concrete cover':['S-cov',...pd],'Wall checks (ACI 318-19 Ch. 11)':((P2&&P2.bearing)||[]).filter(z=>z.wall&&z.wall.sel).map(z=>(z.wall.applied?'S-wd':'S-pd')+z.idx),
+    'Wall reinforcement (ACI 318-19 11.6)':((P2&&P2.bearing)||[]).filter(z=>z.wall&&z.wall.applied).map(z=>'S-wd'+z.idx),   /* SFWC */
+    'Wall in-plane shear (ACI 318-19 11.5.4)':((P2&&P2.bearing)||[]).filter(z=>z.wall&&z.wall.applied).map(z=>'S-wd'+z.idx),   /* SFWC-2 */
+    'Wall bar spacing and layers (ACI 318-19 11.7)':((P2&&P2.bearing)||[]).filter(z=>z.wall&&z.wall.applied).map(z=>'S-wd'+z.idx)};
+@@ -5665,7 +5703,7 @@ function sfdwBuild(){
+    const lab={botX:'BOTTOM x-BARS',botY:'BOTTOM y-BARS',topX:'TOP x-BARS',topY:'TOP y-BARS'};
+    const cx=x1+1.7*k;bars.sort((a,b)=>b.y-a.y);
+    const step=0.22*k, ytop=t12/2+(bars.length-1)*step/2;
+-   bars.forEach((q,j)=>{const ty=ytop-j*step;D.pline(L.bar,[[q.x,q.y],[cx-0.5*k,ty],[cx-0.08*k,ty]]);T(L.txt,cx,ty-h/2,h,lab[q.k]+': '+sfdMatTxt(q.k).replace('→','->').toUpperCase()+(sfdBarEnds(q.k)==='hooked'?', STD 90 DEG HOOK EA END':''),0);});   /* SFBE */
++   bars.forEach((q,j)=>{const ty=ytop-j*step;D.pline(L.bar,[[q.x,q.y],[cx-0.5*k,ty],[cx-0.08*k,ty]]);T(L.txt,cx,ty-h/2,h,lab[q.k]+': '+sfdMatTxt(q.k).replace('→','->').toUpperCase()+(sfdBarEnds(q.k)==='hooked'?', STD 90 DEG HOOK EA END':'')+(sfdPlainOn(q.k.slice(-1).toLowerCase())?' (NOMINAL: PLAIN CONCRETE DIR.)':''),0);});   /* SFPL */   /* SFBE */
+    /* dimensions */
+    D.dimV(L.dim,0,t12,x0-0.45*k,x0);D.dimV(L.dim,0,g,x0-0.9*k,x0);D.dimH(L.dim,x0,x1,-0.55*k,0);
+    T(L.txt,x0,-0.95*k,0.08*k,'COVER: '+sfdwIn(num(state.mat.coverBot))+' CLR BOTTOM, '+sfdwIn(num(state.mat.coverTop))+' CLR TOP, '+sfdwIn(sfdEndCover())+' CLR SIDES / ENDS',0);
+@@ -5739,7 +5777,7 @@ function sfdwBuild(){
+   /* SFBE: hooked bars: standard 90-degree hook at each end (bottom up, top down); length = the sum of the out-to-out dimensions,
+      e.len (outside of the hooks at the end cover) + 2 legs of r_c + 12d_b + d_b/2 */
+   const hkd=sfdBarEnds(k)==='hooked', G=sfdHookGeo(e.size), leg=G.rc+G.tail+e.db/2;
+-  rows.push([mk[k][0],mk[k][1],'#'+e.size,String(e.pos.length),sfdwFI(hkd?e.len+2*leg:e.len),(e.mode==='qty'?e.n+' BARS -> @ '+sfdwIn(e.spc):'@ '+sfdwIn(e.spc))+' '+mk[k][2],(hkd?'STD 90 DEG HOOK EA END '+(k.slice(0,3)==='bot'?'UP':'DOWN')+', LEG '+sfdwIn(leg):'STRAIGHT')+'; '+sfdwIn(e.c)+' END COVER'+(e.mode==='qty'?'; ENTERED AS QTY':'')]);});
++  rows.push([mk[k][0],mk[k][1],'#'+e.size,String(e.pos.length),sfdwFI(hkd?e.len+2*leg:e.len),(e.mode==='qty'?e.n+' BARS -> @ '+sfdwIn(e.spc):'@ '+sfdwIn(e.spc))+' '+mk[k][2],(sfdPlainOn(k.slice(-1).toLowerCase())?'NOMINAL (PLAIN CONC.); ':'')+(hkd?'STD 90 DEG HOOK EA END '+(k.slice(0,3)==='bot'?'UP':'DOWN')+', LEG '+sfdwIn(leg):'STRAIGHT')+'; '+sfdwIn(e.c)+' END COVER'+(e.mode==='qty'?'; ENTERED AS QTY':'')]);});
+  ped.forEach((p,i)=>{if(p.h<=0)return;const Lp=sfdwPedLayout(i),rf=Lp.rf,n='P'+(i+1),bz=(P2&&P2.bearing&&P2.bearing[i])||null;
+   rows.push([n+'V',String(p.label).toUpperCase()+' VERTICAL','#'+rf.longSize,String(Lp.PB.n),sfdwFI(Lp.h-Lp.cov),Lp.PB.nx+' PER x-FACE, '+Lp.PB.ny+' PER y-FACE','PED. HEIGHT LESS TOP COVER; EXTENSION INTO FTG BY DETAIL']);
+   const rv=rows[rows.length-1];   /* SFHB: the vertical-bar row */
+@@ -5974,7 +6012,7 @@ function recalc(){
+  clearTimeout(rcTimer);sfdSetStale(false);   /* SFAC */
+  const ALL=['dashboard','warnings','tab-schem','tab-combos','tab-bearing','tab-stab','tab-footdes','tab-peddes','tab-walldes','tab-3d','tab-report','tab-drawings'];   /* SFWD: tab-walldes */
+  ALL.forEach(id=>SFD_OOD.delete(id+'|computeAll'));
+- if(!sfdRun(ALL,'computeAll',()=>{R=computeAll();P2=R.fatal?null:computePhase2(R);if(P2&&!P2.noCombo)P2.dev=sfdDevAll();})){ALL.forEach(id=>sfdMarkOod(id,true));return;}   /* SFDV */
++ if(!sfdRun(ALL,'computeAll',()=>{R=computeAll();P2=R.fatal?null:computePhase2(R);if(P2&&!P2.noCombo){const pl=sfdPlainAll();if(pl)P2.plain=pl;P2.dev=sfdDevAll();}})){ALL.forEach(id=>sfdMarkOod(id,true));return;}   /* SFDV */
+  const L=[[['dashboard'],'renderDashboard',()=>{renderDashboard();sfdDashDecorate();}],[['warnings'],'renderWarnings',()=>{renderWarnings();renderConsistency();}]];   /* SFDC */
+  if(!R.fatal){L.push([['tab-schem'],'renderSchematic',renderSchematic],[['tab-combos'],'renderCombos',renderCombos],[['tab-bearing'],'renderBearing',renderBearing],[['tab-stab'],'renderStability',renderStability],
+   [['tab-footdes'],'renderFootingDesign',renderFootingDesign],[['tab-peddes','tab-walldes'],'renderPedestalDesign',renderPedestalDesign],[sfdPlotTabs,'renderPlots',renderPlots]);}
+@@ -8065,6 +8103,43 @@ function sfdMatHookFit(k){
+  const zEnd=top?zc-G.rc-G.tail:zc+G.rc+G.tail, lim=top?cvB:t-cvT, fit=top?zEnd>=lim-1e-9:zEnd<=lim+1e-9;
+  return {zc,rc:G.rc,D:G.D,db:G.db,tail:G.tail,zEnd,lim,fit,top,t,need:G.rc+G.tail,room:top?zc-cvB:t-cvT-zc};
+ }
++/* SFPL (2026-11-11, engineer): flexure of one direction as plain concrete, ACI 318-19 Chapter 14 (input freinf.plain = 'x' | 'y';
++   absent / '' = both directions reinforced, as before). Applies to a footing with one bearing element (a wall / strip footing, or an
++   isolated footing); with more elements the input is ignored (warning). In the plain direction (verified in ACI 318-19, printed
++   pp. 203-210 and 391):
++   - critical section for M_u: face of the concrete wall / pedestal, Table 14.4.3.2.1 (the same section as the reinforced design,
++     13.2.7.1): M_u = des.MuPos (sagging) and des.MuNeg (hogging, top face) over the full width b;
++   - strength on h_s = h - 2 in (cast against soil, 14.5.1.7); S_m = b h_s^2 / 6; M_n = min(5 lambda sqrt(f'c) S_m (14.5.2.1a, tension
++     face), 0.85 f'c S_m (14.5.2.1b)); phi = 0.60 (Table 21.2.1(i), 14.5.1.2);
++   - one-way shear at h from the face (14.4.3.3.1, h = the specified thickness): V_n = (4/3) lambda sqrt(f'c) b h_s (Table 14.5.5.1(a));
++   - thickness h >= 8 in (14.3.2.1); no strength assigned to reinforcement (14.5.1.6): the bars entered in that direction are nominal.
++   Where it applies, the reinforced checks of that direction (flexure, A_s,min, s_max, tension-controlled, development, one-way shear
++   by 22.5) are replaced: des.rc keeps the reinforced values, des.plain = true and the D/C fields read the plain checks. */
++function sfdPlainDirIn(){const v=(state.freinf||{}).plain;return (v==='x'||v==='y')?v:'';}
++function sfdPlainAll(){
++ const dir=sfdPlainDirIn();if(!dir||!P2||P2.noCombo)return null;
++ if(R.peds.length!==1)return {dir,applies:false};
++ const des=dir==='x'?P2.desX:P2.desY, lam=P2.lam, fc=P2.fc, sq=Math.sqrt(fc), h=R.t*12, hs=h-2, b=des.wperp*12, bw=dir==='x'?'L':'B';
++ const Sm=b*hs*hs/6, MnT=5*lam*sq*Sm/12000, MnC=0.85*fc*Sm/12000, Mn=Math.min(MnT,MnC), phi=0.6, phiMn=phi*Mn;
++ const Mu=des.MuPos, MuN=des.MuNeg>0.01?des.MuNeg:0, dcrM=phiMn>0?Mu/phiMn:(Mu>0?Infinity:0), dcrMN=MuN>0?(phiMn>0?MuN/phiMn:Infinity):0;
++ const ped=R.peds[0], c=dir==='x'?ped.x:ped.y, hw=(dir==='x'?ped.bx:ped.by)/2, half=(dir==='x'?R.B:R.L)/2;
++ let Vu=0,govV=null,vLoc=null,anyV=false;
++ [[c+hw+h/12,+1],[c-hw-h/12,-1]].forEach(([sc,side])=>{if(Math.abs(sc)>=half)return;anyV=true;
++  P2.combos.forEach(cb=>{const v=Math.abs(P2.pressShearBeyond(cb.pp,dir,sc,side,cb.nr.pl,cb.nr));if(v>Vu){Vu=v;govV=cb;vLoc=sc;}});});
++ const Vn=4/3*lam*sq*b*hs/1000, phiVn=phi*Vn, dcrV=anyV?(phiVn>0?Vu/phiVn:Infinity):0;
++ const hMin=8, hOK=h>=hMin-1e-9, face=[c-hw,c+hw];
++ const ok=dcrM<=1+1e-9&&dcrMN<=1+1e-9&&dcrV<=1+1e-9&&hOK;
++ const dc=Math.max(dcrM,dcrMN,dcrV,hOK?0:hMin/h);
++ const o={dir,applies:true,bw,h,hs,b,Sm,lam,fc,sq,MnT,MnC,Mn,phi,phiMn,Mu,MuN,dcrM,dcrMN,govM:des.govPos?des.govPos.cb.name:'',govMloc:des.govMloc,govN:des.govNeg?des.govNeg.cb.name:'',
++  Vu,govV:govV?govV.cb.name:'',vLoc,anyV,Vn,phiVn,dcrV,hMin,hOK,ok,dc,face,half,
++  barsB:sfdMat(dir==='x'?'botX':'botY'),barsT:sfdMat(dir==='x'?'topX':'topY')};
++ des.rc={dcrBot:des.dcrBot,dcrBotFull:des.dcrBotFull,dcrTop:des.dcrTop,asMinBotOK:des.asMinBotOK,asMinTopOK:des.asMinTopOK,asMinTopReq:des.asMinTopReq,spcBotOK:des.spcBotOK,spcTopOK:des.spcTopOK,
++  tcBotOK:des.tcBotOK,tcStripOK:des.tcStripOK,tcTopOK:des.tcTopOK,topNeeded:des.topNeeded,dcrV:des.dcrV,maxV:des.maxV,phiV:des.phiV,oneWayOutside:des.oneWayOutside};
++ Object.assign(des,{plain:true,dcrBot:dcrM,dcrBotFull:dcrM,dcrTop:MuN>0?dcrMN:null,asMinBotOK:true,asMinTopOK:true,asMinTopReq:false,spcBotOK:true,spcTopOK:true,tcBotOK:true,tcStripOK:true,tcTopOK:true,
++  topNeeded:false,dcrV,maxV:Vu,phiV:phiVn,oneWayOutside:!anyV});
++ return o;
++}
++function sfdPlainOn(dir){return !!(P2&&P2.plain&&P2.plain.applies&&P2.plain.dir===dir);}
+ function sfdDevAll(){
+  if(!P2||P2.noCombo)return null;
+  const exOn=state.mat.ldExcess==='on', coat=state.mat.coating, fc=P2.fc, fy=P2.fy, lam=P2.lam, sq=Math.min(Math.sqrt(fc),100);
+@@ -8072,6 +8147,7 @@ function sfdDevAll(){
+  [['botX','x',false],['botY','y',false],['topX','x',true],['topY','y',true]].forEach(([k,dir,top])=>{
+   const des=dir==='x'?P2.desX:P2.desY, m=sfdMat(k), size=m.size;
+   if(!size||!(m.As>0))return;
++  if(sfdPlainOn(dir))return;   /* SFPL: plain-concrete direction: the bars are nominal, no development required */
+   if(top&&!(des.MuNeg>0.01&&des.topProvided))return;   // the top mat is a flexural mat only where there is hogging
+   const hf=(dir==='x'?R.B:R.L)/2;
+   let sec=top?des.govNegLoc:des.govMloc;
+@@ -8121,6 +8197,33 @@ function sfdDevAll(){
+  out.status=out.rows.some(z=>z.status==='fail')?'fail':(out.rows.some(z=>z.status==='review')?'review':'pass');
+  return out;
+ }
++/* SFPL: Footing Design 5.2 / 5.3 for the plain-concrete direction: the work, then the reinforced checks it replaces */
++function sfdPlainTab(b,des,q){
++ const dir=q.dir, nb=(m,t)=>m.size?(t+' #'+m.size+' '+(m.mode==='qty'?m.n+' bars':'@ '+f2(m.spc)+' in')):'';
++ b.appendChild(el('div','note sfNL',sfNL('The '+dir+'-direction is checked as <b>plain concrete</b> (input: Reinforcement tab).',[
++  ['Critical section:','the face of the wall / pedestal (ACI 318-19 Table 14.4.3.2.1; the same section as the reinforced design, 13.2.7.1), '+dir+' = '+(q.govMloc==null?'\u2013':f3(q.govMloc))+' ft; moments over the full width b = '+f2(q.b/12)+' ft ('+q.bw+').'],
++  ['Strength section:','h \u2212 2 in = '+f2(q.hs)+' in: the footing is cast against soil (14.5.1.7). No strength from the bars (14.5.1.6).'],
++  ['Governing combinations:',(q.govM||'\u2013')+' (flexure)'+(q.anyV?', '+q.govV+' (shear)':'')+'.']])));
++ b.appendChild(eqBlock('Minimum thickness, plain footing','ACI 318-19 14.3.2.1','h \\ge 8\\;\\mathrm{in}','h = '+f2(q.h)+'\\;\\mathrm{in}',q.hOK?'\\text{OK}\\;\\checkmark':'\\text{NG: } h < 8\\;\\mathrm{in}'));
++ b.appendChild(eqBlock('Plain-concrete flexure \u2014 demand vs capacity','ACI 318-19 14.5.2.1, 14.5.1.7, \u03c6 = 0.60 Table 21.2.1(i)',
++  'S_m = \\frac{b\\,(h-2)^2}{6} = \\frac{'+f2(q.b)+'\\cdot'+f2(q.hs)+'^2}{6} = '+f2(q.Sm)+'\\;\\mathrm{in^3}',
++  'M_n = \\min(5\\lambda\\sqrt{f\'_c}S_m,\\;0.85f\'_cS_m) = \\min(\\tfrac{5\\cdot'+f2(q.lam)+'\\cdot'+f2(q.sq)+'\\cdot'+f2(q.Sm)+'}{12000},\\;\\tfrac{0.85\\cdot'+f2(q.fc)+'\\cdot'+f2(q.Sm)+'}{12000}) = \\min('+f2(q.MnT)+',\\;'+f2(q.MnC)+') = '+f2(q.Mn)+'\\;\\mathrm{k\\text{-}ft}',
++  '\\phi M_n = 0.60\\cdot'+f2(q.Mn)+' = '+f2(q.phiMn)+'\\;\\mathrm{k\\text{-}ft},\\quad M_u = '+f2(q.Mu)+'\\;\\mathrm{k\\text{-}ft},\\quad \\mathrm{DCR} = \\mathbf{'+f3(q.dcrM)+'}'+(q.dcrM<=1?'\\;\\checkmark':'\\;\\text{NG}')+(q.MuN>0?',\\quad M_u^- = '+f2(q.MuN)+'\\;(\\text{top face}),\\;\\mathrm{DCR} = '+f3(q.dcrMN)+(q.dcrMN<=1?'\\;\\checkmark':'\\;\\text{NG}'):'')));
++ if(q.anyV)b.appendChild(eqBlock('Plain-concrete one-way shear at h from the face','ACI 318-19 14.4.3.3.1, Table 14.5.5.1(a), 14.5.1.7',
++  'V_n = \\tfrac{4}{3}\\lambda\\sqrt{f\'_c}\\,b\\,(h-2) = \\tfrac{4}{3}\\cdot'+f2(q.lam)+'\\cdot'+f2(q.sq)+'\\cdot'+f2(q.b)+'\\cdot'+f2(q.hs)+'/1000 = '+f2(q.Vn)+'\\;\\mathrm{k}',
++  '\\phi V_n = 0.60\\cdot'+f2(q.Vn)+' = '+f2(q.phiVn)+'\\;\\mathrm{k};\\quad V_u = '+f2(q.Vu)+'\\;\\mathrm{k}\\;(\\text{at }'+dir+' = '+f3(q.vLoc)+'\\;\\mathrm{ft})',
++  '\\mathrm{DCR} = \\mathbf{'+f3(q.dcrV)+'}'+(q.dcrV<=1?'\\;\\checkmark':'\\;\\text{NG}')));
++ else b.appendChild(el('div','note','<b>One-way shear does not apply</b> in the '+dir+'-direction: the critical section at h = '+f2(q.h)+' in from the face (ACI 318-19 14.4.3.3.1) falls outside the footing (cantilever '+f2((q.half-Math.max(Math.abs(q.face[0]),Math.abs(q.face[1])))*12)+' in \u2264 h).'));
++ b.appendChild(el('div',q.ok?'note':'failbox','<b>'+(q.ok?'Plain concrete: OK.':'NG \u2014 plain concrete.')+'</b> '+(q.ok?'The '+dir+'-direction needs no flexural reinforcement. ':'D/C = '+f3(q.dc)+'. Use reinforced design in this direction (input) or revise the footing. ')+'Governing D/C = max(flexure, shear, 8 in / h) = '+f3(q.dc)+'.'));
++ const bars=[nb(q.barsB,'bottom'),nb(q.barsT,'top')].filter(Boolean).join('; ');
++ b.appendChild(el('div','note sfNL',sfNL('Reinforced checks of the '+dir+'-direction: <b>not required \u2014 plain concrete (ACI 318-19 Ch. 14)</b>'+(q.ok?'':' (and the plain check does not pass)')+'.',[
++  ['Flexural steel, A<sub>s,min</sub> (7.6.1.1 / 24.4.3.2), s<sub>max</sub> (8.7.2.2), tension-controlled (7.3.3.1), development (25.4):','not required; no strength is assigned to reinforcement in plain concrete (14.5.1.6).'],
++  ['Bars entered in '+dir+':',bars?bars+': reported and drawn as nominal (distribution) bars, not counted.':'none.'],
++  ['Shrinkage and temperature steel:','Chapter 14 asks for none in a plain footing (14.6 covers only openings); restraint stresses are handled by contraction / isolation joints (14.3.4). The 24.4 shrinkage-and-temperature reinforcement (24.4.1) applies to one-way <i>slabs</i>, perpendicular to their flexural reinforcement; it is not applied to the plain direction.'],
++  ['Seismic Design Category D, E, F:','plain footings supporting walls are permitted only with at least two continuous No. 4 longitudinal bars of area \u2265 0.002 A<sub>g</sub> (14.1.4(a)); the tool does not know the SDC: confirm.'],
++  ['Masonry wall or steel base plate:','the critical section moves (Table 14.4.3.2.1: halfway between the centre and the face of a masonry wall; halfway between the column face and the plate edge); the tool uses the face.'],
++  ['Unchanged:','the other direction (reinforced), two-way shear and bearing (reinforced-concrete checks, 22.6 / 22.8).']])));
++}
+ function renderFootingDesign(){
+  const T=$('#tab-footdes');T.innerHTML='';
+  if(R.fatal){return;}
+@@ -8159,7 +8262,8 @@ function renderFootingDesign(){
+  intro.appendChild(el('div','wkLink','<a class="wkA sfdInA" href="#sec-rebar" data-intab="rebar" data-insec="sec-rebar"><span class="wkScr">Bars set on the Reinforcement tab (inputs) \u2192 bottom x '+sfdMatTxt('botX')+', bottom y '+sfdMatTxt('botY')+', top x '+sfdMatTxt('topX')+', top y '+sfdMatTxt('topY')+'</span><span class="wkPrt">Bars (Reinforcement input): bottom x '+sfdMatTxt('botX')+', bottom y '+sfdMatTxt('botY')+', top x '+sfdMatTxt('topX')+', top y '+sfdMatTxt('topY')+'</span></a>'));   /* link to the Reinforcement input tab */
+  ['x','y'].forEach(dir=>{
+   const des=(dir==='x')?P2.desX:P2.desY;
+-  const b=secPanel(T,'o-fd-'+dir,'5.'+(dir==='x'?2:3)+'  '+(dir==='x'?'Longitudinal (x-direction)':'Transverse (y-direction)')+' \u2014 Flexure & One-Way Shear');
++  const b=secPanel(T,'o-fd-'+dir,'5.'+(dir==='x'?2:3)+'  '+(dir==='x'?'Longitudinal (x-direction)':'Transverse (y-direction)')+' \u2014 Flexure & One-Way Shear'+(des.plain?' (plain concrete, ACI 318-19 Ch. 14)':''));
++  if(des.plain){sfdPlainTab(b,des,P2.plain);const pd=el('div','plot');pd.id='plot-vm-'+dir;b.appendChild(pd);return;}   /* SFPL */
+   b.appendChild(el('div','note sfNL',sfNL('Bars in the '+dir+'-direction resist bending about the '+(dir==='x'?'y':'x')+'-axis.',[   /* SFNL */
+    ['Moment envelope:','taken over all LRFD combinations; total moment distributed across the full footing width ('+f2(des.wperp)+' ft) per the rigid method.'],
+    des.govPos?['Governing combination for flexure:','<b>'+des.govPos.cb.name+'</b>.']:null,
+@@ -8242,6 +8346,7 @@ function renderFootingDesign(){
+  [['x',state.freinf.botX.size],['y',state.freinf.botY.size]].forEach(([dir,size])=>{
+   if(!size)return;
+   if(((P2.dev&&P2.dev.rows)||[]).some(z=>z.dir===dir&&!z.top))return;
++  if(sfdPlainOn(dir)){bd.appendChild(el('div','note','<b>Development of the '+dir+'-bars: not required \u2014 plain concrete (ACI 318-19 Ch. 14).</b> '+(P2.plain.ok?'The '+dir+'-direction is checked as plain concrete (5.'+(dir==='x'?2:3)+'), so no strength is assigned to these bars (14.5.1.6): they are nominal (distribution) bars and need no development length.':'The '+dir+'-direction is checked as plain concrete and does <b>not</b> pass (5.'+(dir==='x'?2:3)+'): change the input to reinforced or revise the footing; the bars are not counted.')));return;}   /* SFPL */
+    bd.appendChild(el('div','note','<b>Development of the '+dir+'-bars is not applicable</b> \u2014 there is no cantilever in the '+dir+'-direction (every bearing element reaches the footing edge), so there is no length beyond a critical section over which these bars must develop. Detail for continuity across the footing instead.'));
+  });
+  ((P2.dev&&P2.dev.rows)||[]).forEach(z=>{const dv=z.dv,BL=z.dir==='x'?'B':'L', showH=z.ends==='hooked'||(z.ends!=='straight'&&!z.strOK);   /* SFBE */
+@@ -10041,6 +10146,7 @@ manPart("p3","3. Output Reference",[
+  ["Concrete cover","footing bottom (cast against earth, 3 in), top (in contact with ground, by bar size), sides/ends (cast against earth, or formed) and the pedestal vertical bars (pedestal exposure, by bar size) \u2265 ACI 318-19 Table 20.5.1.3.1"],
+  ["Pedestal tie cover","clear cover to the ties c \u2212 d<sub>b,tie</sub> \u2265 ACI 318-19 Table 20.5.1.3.1 minimum for the pedestal exposure (input on the Reinforcement tab)"],
+  ["Footing bar development","each footing mat at every pedestal face with a moment of that sign (ACI 318-19 13.2.8.3): straight \u2113<sub>d</sub> \u2264 available (25.4.2.4; with the excess-reinforcement option, 25.4.10.1): PASS; straight too long but a standard hook fits (\u2113<sub>dh</sub>, 25.4.3.1): REVIEW (hook the bars); both too long: FAIL. With the mat's Bar ends set (Reinforcement tab): Straight, \u2113<sub>d</sub> only (PASS / FAIL); Hooked 90\u00b0, \u2113<sub>dh</sub> and the hook's fit in the depth (25.3.1, 25.3.2) (PASS / FAIL)"],
++ ["Plain concrete (ACI 318-19 Ch. 14)","only where the Reinforcement tab sets one direction as plain concrete (one bearing element): in that direction M<sub>u</sub> at the face \u2264 \u03c6M<sub>n</sub>, M<sub>n</sub> = 5\u03bb\u221af\u2032<sub>c</sub>S<sub>m</sub> on h \u2212 2 in (14.5.2.1, 14.5.1.7), V<sub>u</sub> at h from the face \u2264 \u03c6(4/3)\u03bb\u221af\u2032<sub>c</sub>b(h \u2212 2) (Table 14.5.5.1(a)), \u03c6 = 0.60, h \u2265 8 in (14.3.2.1); the bars of that direction are nominal (flexural steel, A<sub>s,min</sub>, spacing and development not required)"],   /* SFPL */
+  ["Pedestal shear","pedestals only, every LRFD combination: V<sub>u</sub> \u2264 \u03c6V<sub>c</sub> (ACI 318-19 22.5; biaxial interaction 22.5.1.10\u201311; V<sub>s</sub> of the ties not counted), and A<sub>v</sub> \u2265 A<sub>v,min</sub> where V<sub>u</sub> &gt; 0.5\u03c6V<sub>c</sub> (10.6.2.1)"],
+  ["Pedestal torsion","only where a T<sub>u</sub> is entered: T<sub>u</sub> &lt; \u03c6T<sub>th</sub> (ACI 318-19 22.7.1.1, Table 22.7.4.1(a)), torsion may be neglected; otherwise FAIL (torsion design is not performed)"],
+  ["Pedestal crossties","ACI 318-19 25.7.2.3: PASS where the perimeter tie supports every bar that needs support; REVIEW with the number of crossties per tie set to detail (the tool takes no crosstie input)"],
+```
