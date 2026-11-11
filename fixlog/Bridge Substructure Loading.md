@@ -2958,3 +2958,51 @@ function listTables() {
   3. Labels that collide are moved automatically (nearest clear place); where many identical labels share one point (e.g. a pile bent's piles with the same wind load), they spread out vertically.
   4. No "current sheet only" DXF (the other apps offer the whole set only).
 - **Other copies:** none (`shared/dxf.js` is unchanged).
+
+## 2026-11-11 — PR: sub-abut-length (PR #1403: https://github.com/mlococo88/All-Structural/pull/1403) — abutment length L_ab and footing length L_ftg inputs (SLAL; engineer request 2026-11-11)   [§4: changes results only where a length is entered; blank = as before]
+- **Request.** "Add the abutment length input." The engineer confirmed (2026-11-11): "Both the footing and the stem wall": separate lengths for the stem wall (L_ab) and the footing (L_ftg).
+- **Problem.** An abutment's length was fixed at the deck width along the skewed bearing line, `L = G.Wd / S.c` (W_deck = left overhang + Σ girder spacings + right overhang). It could not be entered.
+- **Every use of the abutment length found (`R.capLen`, the `L` of `unitGeo`'s abutment branch):**
+  - `unitGeo`: stem and backwall volumes (L_ab), footing volume (now L_ftg).
+  - `earthAbut` (`L = R.capLen`): every earth item. That is EH on the virtual back plane and on the stem (horizontal and vertical), EV soil over the heel, LS horizontal and vertical, ES, the seismic ΔPAE (both planes) and `seis.PAE / dPAE`, and the construction-stage EH / EV / LS / ES. All stay on L_ab. The stem, backwall and footing inertia use the component weights (L_ab, L_ab and L_ftg); the soil-block inertia uses W_ev (L_ab). The approach slab uses its own width (`asW`, blank = deck width), not L.
+  - `unitModel` (abutment branch): `L2 = R.capLen / 2` is declared but not used by the abutment evaluation, whose resultants are per unit. No change.
+  - Drawings: plan (`planDwg`, stem, backwall, footing), unit elevation (`unitDwg`, stem and footing rectangles, "Stem" dimension), 3D (`v3Build` boxes and the camera target radius), and the earth load-diagram spread (`loadSets` wrapper, `span = R.capLen × 0.8`). The DXF sheets draw from `unitDwg` / `planDwg`.
+  - Readouts: the Units pane Derived "Stem length" and the Summary table "Length along line".
+  - Hand-off: `abutHandoffPayload` → `geometry.stemLengthAlongSkew` and `calculatorInput.geom.Lab` / `geom.Lftg` (both were `R.capLen`).
+- **Where / before / after:**
+  - `unitGeo`, anchor `const a = u.abut, Lauto = G.Wd / S.c`:
+    - before: `const a = u.abut, L = G.Wd / S.c, …` and `if (u.ftg.type !== 'none') add('Footing', L * nz(u.ftg.W) * nz(u.ftg.t));`
+    - after: `const a = u.abut, Lauto = G.Wd / S.c, L = num(a.L) > 0 ? num(a.L) : Lauto, Lf = num(a.Lftg) > 0 ? num(a.Lftg) : L, …`, with `R.abLauto`, `R.abLin`, `R.abLfIn`, `R.abLf`, and `if (u.ftg.type !== 'none') { R.ftgL = Lf; add('Footing', Lf * nz(u.ftg.W) * nz(u.ftg.t)); }`. `R.capLen = L` as before, so every reader of `R.capLen` (above) follows L_ab.
+  - Drawings: in `planDwg` (anchor `// SLAL: footing L_ftg`), `unitDwg` (anchor `// SLAL: stem L_ab, footing L_ftg`, plus a "Footing" dimension when L_ftg ≠ L_ab, anchor `// SLAL: L_ftg ≠ L_ab`) and the 3D `v3Build` footing box (anchor `F2 = (R.ftgL || R.capLen) / 2`), the footing spans ±L_ftg/2 (was ±L/2).
+  - `abutHandoffPayload`: `Lftg: r3(R.capLen)` → `Lftg: r3(R.ftgL || R.capLen)`. `Lab` and `stemLengthAlongSkew` stay `R.capLen` (= L_ab).
+  - Inputs: in `paneUnits`, the Abutment section gets "Abutment length along the bearing line L_ab (blank = auto)" (`units.k.abut.L`, placeholder "auto 46.07"). The Foundation section (abutment, spread footing or pile cap) gets "Footing length L_ftg (blank = L_ab)" (`units.k.abut.Lftg`). `fld` gets an optional `o.ph` placeholder. The Derived block gets "Footing length".
+  - New helpers `abLenInfo(k)` and `abLenNote(A)` (before `paneUnits`): the §6 note.
+  - Input check (#1399 rules): `u.abut.L` `{ gt: 0, blank: true }` for abutments, and `u.abut.Lftg` `{ gt: 0, blank: true }` for abutments with a footing.
+  - `checks` wrapper (anchor `// SLAL: exterior bearings' pedestals out to out`), two warnings:
+    - an entered L_ab shorter than (s_max − s_min) + max(pad W / 12, 0.8 ft) / cos θ + 2 × 0.25 ft, the out-to-out of the exterior pedestals as drawn;
+    - L_ab > L_ftg ("the stem is longer than its footing"), as for wall piers.
+- **Units pane earth note (text only).** The note "Earth pressure is outside this app; the abutment carries its bearing reactions here, exported for the earth-pressure app." was stale. It now reads: "Earth loads (EH, LS, ES, EV over the heel, seismic earth, approach slab) are computed on the Earth loads tab, over the abutment length L_ab; the backfill inputs are below. The bearing reactions and geometry can also be sent to the abutment calculator." The approach slab note states that the slab uses its own width (blank = W_deck, square to the girders, not divided by cos θ), not L_ab; that is unchanged.
+- **Tests that compare page text with main.** `bsl-inputcheck.mjs`, `bsl-drawings.mjs` and `list-input.mjs --part bsl` (bsl `read`) strip the new note and the two new input-check ranges before comparing. Every result, input and saved field is still compared.
+- **§6 notes.** The Units pane, under the Abutment section (kept current while typing, from `derivedHtml`), and the Geometry tab card of each abutment both carry the worked line "L_ab,auto = W_deck / cos θ = 44.50 / cos 15.0° = 46.07 ft; L_ab = … (entered / auto), L_ftg = …", plus what each length is and which loads it governs. The Report prints the Geometry tab, so its geometry section carries the same note.
+- **Governing provision:** no specification value changed. The lengths multiply the per-foot loads of AASHTO LRFD 10th Ed. 3.5.1 (DC), 3.11.5 (EH), 3.11.6.1 (ES), 3.11.6.4 (LS), 3.5.2 (EV) and 11.6.5 (seismic earth). The split follows the abutment calculator (`geom.Lab` / `geom.Lftg`): L_ab carries earth pressure, surcharge, soil over the heel and stem/backwall self-weight; L_ftg carries footing self-weight.
+- **Check case:** default project, Abut. 1. Inputs: skew 15°, W_deck = 3.25 + 4 × 9.5 + 3.25 = 44.50 ft; stem t = 4 ft, H = 9.991 ft; backwall 1.5 ft × 7.009 ft; footing 14 ft × 3 ft; w_c = 0.150 kcf; Rankine k_a = 0.30726, γ = 0.120 kcf, H = 20 ft (17 ft of soil), h_eq = 2 ft, heel 6 ft. Before = auto, L = 44.50 / cos 15° = 46.070 ft; after = L_ab 50 ft (L_ftg blank = 50 ft).
+  - DC, stem 4 × 9.991 × L × 0.150: 276.163 → 299.723 kip
+  - DC, backwall 1.5 × 7.009 × L × 0.150: 72.656 → 78.854 kip
+  - DC, footing 14 × 3 × L × 0.150: 290.240 → 315.000 kip (L_ftg = 40: 252.000)
+  - EH, virtual plane ½ k_a γ H² = 7.3742 k/ft × L: 339.728 → 368.710 kip
+  - EH, stem ½ k_a γ 17² = 5.3279 k/ft × L: 245.454 → 266.393 kip
+  - LS, virtual plane k_a γ h_eq H = 1.47484 k/ft × L: 67.946 → 73.742 kip; LS, stem 1.25361 k/ft × L: 57.754 → 62.681 kip
+  - EV, heel 0.120 × 17 × 6 = 12.24 k/ft × L: 563.894 → 612.000 kip; LS vertical over the heel 1.44 k/ft × L: 66.340 → 72.000 kip
+  - Strength I, bottom of footing: P max 2,540.738 → 2,683.733 kip (Δ = 1.25 × 54.518 + 1.35 × 48.106 + 1.75 × 5.660 = 142.99). V_l max 683.879 → 737.496 kip (Δ = 1.50 × 28.982 + 1.75 × 5.796 = 53.62). M_l max 4,499.406 → 4,725.755 kip-ft. P min 1,366.599 → 1,463.771 kip.
+  - L_ab 50 ft and L_ftg 40 ft: P max 2,683.733 − 1.25 × 63.000 = 2,604.983 kip; V_l and M_l as for L_ab = 50 (earth stays on L_ab).
+- **How verified:** main-vs-branch probe of 6 projects with both lengths blank: default, wall-water-barge (skew −20°), pile-ham-ship-massdot (pile bent), abut-earth-seismic (approach slab with LL, Abut. 2 no footing), mcb-rect-indiv-joint-sidewalk, and skew30-endpile-aslab (30° skew, a pile bent at the end support, approach slab). Compared: `combine`, `comboComps` of every limit state, the abutment payload, `MODEL.C`, every output tab of every unit, the strip, and the Report text. Result: 0 numeric differences in all 6 projects and 0 console errors on either side. The only differences are display text: the new note on the Geometry tab and in the Report geometry section, and the two new ranges in Report §1.4 (input checks).
+- **Tests:** new `tests/smoke/bsl-abut-length.mjs` covers the hand-check values (absent, blank, 50, 50/40), both warnings, the input-check messages, the hand-off lengths, the notes and 0 console errors.
+- **Saved data (§5):** new optional fields `units[k].abut.L` and `units[k].abut.Lftg` (ft). Absent or blank = auto, so every existing project gives identical results. No key or format changed. The existing hidden `u.ftg.L` / `u.ftg.Lauto` of an abutment stay unused, as before.
+- **Hand-off (HANDOFF.md §4.5):** the payload already carries `calculatorInput.geom.Lab` / `geom.Lftg` and `geometry.stemLengthAlongSkew`. They are now filled from L_ab and L_ftg; no field was added. The abutment calculator's receiver maps its `geom.Lftg` from `geometry.stemLengthAlongSkew` (= L_ab), not from `calculatorInput.geom.Lftg`, so an entered L_ftg does not reach it yet. That is left for the two-way abutment exchange task.
+- **Engineer decision (2026-11-11):** separate inputs for the stem wall (L_ab) and the footing (L_ftg).
+- **Decisions (pending engineer review):**
+  1. L_ftg blank = L_ab (the abutment calculator's default, `S.geom.Lftg = S.geom.Lab`).
+  2. Earth items (EH, LS, ES, EV over the heel, M-O, construction stage) stay on L_ab, as in the abutment calculator, even when L_ftg > L_ab. The footing's self-weight and inertia use L_ftg. The approach slab keeps its own width.
+  3. The short-length warning compares an entered L_ab with the out-to-out of the exterior bearing pedestals along the line, as drawn: (s_max − s_min) + max(pad W, 0.8 ft) / cos θ + 0.5 ft. It is a warning, not an error, and only for an entered L_ab: the auto length is the deck width, and with blank inputs no new message appears. A warning is added when L_ab > L_ftg.
+  4. L_ftg is on the Foundation section, next to the footing width and thickness, and only for a spread footing or pile cap. L_ab is on the Abutment section.
+- **Other copies:** none.

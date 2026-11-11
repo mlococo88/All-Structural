@@ -156,6 +156,9 @@ const TOOLS = {
     typeNew: async (p, v) => { for (const k of ['spans', 'bays']) { await fillTable(p, `#f_${k} + [data-sli="host"]`, v[k]); await p.evaluate(() => document.activeElement.blur()); await p.waitForTimeout(500); } },
     saved: p => p.evaluate(() => JSON.stringify({ spans: P.br.spans, bays: P.br.bays })),
     read: async p => {
+      // SLAL (2026-11-11): the abutment-length note (Geometry tab, Report) and its two input-check ranges (Report §1.4) are display text
+      // added after BASE; they are taken out of the page text here (every result, input and saved field is still compared)
+      await p.evaluate(() => { window.slalStrip = t => t.replace(/\n?Abutment length: L[\s\S]*?as before this input was added\./g, '').replace(/Abutment length along the bearing line L_ab: blank or greater than 0 ft; (Footing length L_ftg: blank or greater than 0 ft; )?/g, ''); });
       const out = await p.evaluate(() => ({ P: JSON.parse(JSON.stringify(P)), C: JSON.parse(JSON.stringify(MODEL.C)),
         stored: JSON.parse(localStorage.getItem(KEY) || 'null') }));
       if (out.P.ui) delete out.P.ui.tab; if (out.stored && out.stored.ui) delete out.stored.ui.tab;
@@ -163,7 +166,7 @@ const TOOLS = {
       const ids = await p.$$eval('.tab-btn', e => e.map(b => b.dataset.tab).filter(t => t !== 'v3d' && t !== 'drawings' && t !== 'manual')); out.tabs = {};
       for (const id of ids) { await p.click(`.tab-btn[data-tab="${id}"]`); await p.waitForTimeout(400);
         out.tabs[id] = await p.evaluate(id => { const e = document.getElementById('tab-' + id); if (!e) return null; const k = e.cloneNode(true);
-          k.querySelectorAll('[data-sli],script,style').forEach(x => x.remove()); return k.innerText; }, id); }
+          k.querySelectorAll('[data-sli],script,style').forEach(x => x.remove()); return slalStrip(k.innerText); }, id); }
       await p.click('.itab[data-pane="bridge"]'); await p.waitForTimeout(300);
       out.side = await p.evaluate(() => { const k = document.getElementById('sidebar').cloneNode(true);
         k.querySelectorAll('[data-sli],script,style,.note,#f_spans ~ .u,#f_bays ~ .u').forEach(x => x.remove());
