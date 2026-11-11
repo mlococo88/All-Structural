@@ -20546,3 +20546,14 @@ index 86c84c8..1e86dac 100644
    window.addEventListener('focus',refreshBar);
    window.addEventListener('storage',refreshBar);
 ```
+
+## 2026-11-11 — PR: fdx-perunit (PR #1424: https://github.com/mlococo88/All-Structural/pull/1424) — picker: one row per unit copy, default = the unit last pulled, per-unit "older" (FPU)   [no calculation; read only]
+
+- **Where:** PDPK block: `pkOlder`, `picker(r,I,setter)` (anchor `var HS=window.SharedHandoffStore, op=pkOpen(I)`), the row and "Preselected" texts.
+- **Before:** `pid=HS.match(r.groups,op)` and the first row of that project preselected; `pkOlder` = the project's newest is newer; caveat on every SubLoads project copy; source label "project copy".
+- **After:** `d=HS.pickDefault(r.groups,op,I&&I.foundationSrc)`, `K.sel=rows.findIndex(q=>q.e===d.entry)`, text "the copy of the unit last pulled into" when `d.how==='unit'`; `pkOlder` = `SharedHandoffStore.newerOfUnit(K.groups,q.e)`; caveat only when `!q.e.unit`; label "unit copy" for unit copies; older note "for the same project and unit".
+- **Check case:** tests/smoke/pile-fdx-picker.mjs section 7: Bridge A units Abut. 1 / Pier 1 / Pier 2 + Abutment copy → 7 rows, Abutment preselected; pull Pier 1 (P = 900); reopen → Pier 1 preselected; Pier 2 unit copy import = main's import of the same payload.
+- **Decisions (pending engineer review):** (1) SubLoads unit id = support number `support-<n>` (not the name); (2) the per-project copy `.by.subloads.<pid>` (last unit) is still written and uploaded after the unit copy, for backward compatibility; (3) the Abutment Calculator writes one copy per project, per unit (the SubLoads unit name `S.subloadsSrc.abutment`) when the project was pulled from a SubLoads abutment; (4) "older" is per project and unit; (5) the picker default is the unit last pulled into the open project, read from the existing saved source record (nothing new saved); (6) the upload queue's `pid` field holds the copy id (format unchanged).
+- **Calculations:** none (§4 not engaged): a pull of any copy imports exactly the payload that unit's send produced; main-vs-branch probes identical (PR description).
+- **Saved data (§5):** new prefixed keys only (`bridgeSuite.v1.foundationLoads.by.<producer>.<project id>.<unit id>`, and `.by.abutment.<project id>`); no existing key or format changed.
+- **Other copies:** none.
