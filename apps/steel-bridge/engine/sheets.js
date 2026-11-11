@@ -224,7 +224,7 @@
 
   /* ---------- typical section, general notes, weld symbols, quantities (DW.section + dxfSection) ---------- */
   function section(D, C) {
-    const G = C.G, h = D.h, i0 = D.mark(); DW().section(G, D, { k: D.k });
+    const G = C.G, h = D.h, i0 = D.mark(); DW().section(G, D, { k: D.k, noNotes: !!C.split });   // SBTXT: paper B, the notes on the next sheet
     const lt = D.layer('ANNO-TEXT', 7), sec = G.girders.map(g => g.segs[0]), tTop = Math.max(...sec.map(s => s.topT)), j = Math.min(1, G.nb - 1), s = sec[j], x = G.ys[j] * 12;
     const yt = -(tTop - s.topT), w = fwSize(C.P, s);
     /* SBXS: the two weld symbols in the bays either side of the girder (top: to the right, leader down from the top flange; bottom: to
@@ -236,7 +236,19 @@
     const room = d => { const i = j + d; if (i < 0 || i >= G.nb) return Infinity; const q = sec[i]; return Math.abs(G.ys[i] * 12 - x) - Math.max(q.topB, q.botB) / 2 - s.tw / 2 - 0.6 * h; };
     const wT = 8.4 * h + tl(nT) > room(1), wB = 8.4 * h + tl(nB) > room(-1);
     const rT = -Math.max(1.0 * h, Math.min(3 * h, yTj - yLo - (wT ? 2.5 : 1.3) * h)), rB = Math.max(1.0 * h, Math.min(3 * h, s.D - 1.0 * h));
-    weld(D, lt, x + s.tw / 2, yTj, dIn(w), true, 'fillet', nT, 1, { rise: rT, wrap: wT }); weld(D, lt, x - s.tw / 2, yBj, dIn(w), true, 'fillet', nB, -1, { rise: rB, wrap: wB });
+    weld(D, lt, x + s.tw / 2, yTj, dIn(w), true, 'fillet', C.split ? '' : nT, 1, { rise: rT, wrap: wT }); weld(D, lt, x - s.tw / 2, yBj, dIn(w), true, 'fillet', C.split ? '' : nB, -1, { rise: rB, wrap: wB });
+    /* SBTXT (paper B, where the section is drawn at a smaller scale): each weld note where it is clear, first its place on paper D, else
+       the nearest clear place in rows 1.2 h apart, with a leader from the end of the reference line */
+    if (C.split) { const F = DW().fit, S = F.scene(D, i0), pad = 0.08 * h, nh = 0.7 * h;
+      [[x + s.tw / 2, yTj, rT, 1, nT, wT], [x - s.tw / 2, yBj, rB, -1, nB, wB]].forEach(([wx, wy, rise, dir, note, wrap]) => {
+        const rx = wx + dir * 3 * h, ry = wy + rise, x1 = rx + dir * 5 * h, j = dir > 0 ? 0 : 2, at = (xx, yy) => ({ xx, yy, B: F.txBox(note, xx, yy, nh, j) });
+        let pick = null; const first = wrap ? at(rx, ry - 2.4 * h) : at(x1 + dir * 0.4 * h, ry - 0.35 * h);
+        if (F.clearOf(S, [first.B], [], [], pad)) pick = { ...first, sg: [] };
+        for (let m = 0; m <= 16 && !pick; m++) for (const sm of m ? [-1, 1] : [1]) { if (pick) break; for (let d = 0; d <= 60; d++) { const c = at(x1 + dir * (0.4 + 0.5 * d) * h, ry - 0.35 * h + sm * m * 1.2 * h), ex = dir > 0 ? c.B[0] - 0.1 * h : c.B[2] + 0.1 * h, sg = m || d ? [[[x1, ry], [ex, c.yy + 0.3 * h]]] : [];
+          if (F.clearOf(S, [c.B], sg, [], pad)) { pick = { ...c, sg }; break; } } }
+        if (!pick) pick = { ...first, sg: [] };
+        pick.sg.forEach(q => D.line(lt, q[0][0], q[0][1], q[1][0], q[1][1])); D.text(lt, pick.xx, pick.yy, nh, note, j); F.sceneAdd(S, [pick.B], pick.sg); });
+      return null; }   // SBTXT: paper B, the tables on the next sheet (secBlocks)   // SBTXT: paper B, the tables on the next sheet (secBlocks)
     const b = D.bbox(i0), Q = quantities(G, C.RS), T = DW().table, tb = D.layer('TABL', 7);
     const T1 = T(D, tb, b[2] + 8 * h, b[3], ['ITEM', 'QUANTITY', 'UNIT'], Q.rows, 'ESTIMATED QUANTITIES (WHOLE BRIDGE)');
     T(D, tb, b[2] + 8 * h, T1.y - 2 * h, ['WELD', 'SIZE', 'LINES', 'LENGTH (FT)', 'WELD METAL (LB)'], Q.welds.map(q => [q.k, dIn(q.w), String(q.lines), f0(q.Lft), f0(q.wt)]).concat([['TOTAL', '', '', f0(Q.welds.reduce((a, q) => a + q.Lft, 0)), f0(Q.welds.reduce((a, q) => a + q.wt, 0))]]),
@@ -515,13 +527,45 @@
       if (++col === 3) { col = 0; gx = 0; gy -= rowH + 8 * h; rowH = 0; } });
   }
 
+  /* ---------- SBTXT (2026-11-11, engineer): paper B, the framing plan and the typical section on numbered sheets ----------
+     On paper B (17 x 11 in) the framing plan with its two tables and the typical section with its notes and two quantity tables did not
+     fit the drawing area at any plot scale (they fell to 1" = 100'-0", the last of the list, text over the drawing): their tables and notes
+     are text, the same size on paper at every scale. On B each is split, as the SubLoads app splits crowded sheets: sheet "(1 OF n)" the
+     drawing alone, at the smallest plot scale of the list at which it fits (as every sheet); sheets "(2 OF n)" … the tables (and, for the
+     section, the general notes) at the same plot scale, packed top-down in columns, a table longer than a sheet continued on the next with
+     "(CONTINUED)". Paper D is unchanged (one sheet each). Blocks: { t: 'table', title, cols, rows } | { t: 'notes', title, lines, wc }. */
+  const blockDraw = (D, b, x, y) => b.t === 'notes' ? DW().notes(D, D.layer('ANNO-TEXT', 7), x, y, b.title, b.lines, b.wc) : DW().table(D, D.layer('TABL', 7), x, y, b.cols, b.rows, b.title);
+  function blockBox(b) { const D = X_().drawing({ prefix: 'S-' }); D.k = 1; D.h = DW().TXT; blockDraw(D, b, 0, 0); return D.bbox(0); }   // [x0, y0, x1, y1] in plotted inches, origin at (0, 0)
+  /* the pages of blocks in the drawing area aw x ah (plotted inches): [[{ b, x, y }]] with x, y the block's origin from the area's top left */
+  function blockPages(blocks, aw, ah) {
+    const gapY = 0.25, gapX = 0.5, list = [];
+    blocks.forEach(b => { if (b.t !== 'table') { list.push(b); return; } let rows = b.rows, first = true;   // a table taller than the area: continued
+      while (rows.length) { let n = rows.length; const part = m => ({ ...b, title: first ? b.title : `${b.title} (CONTINUED)`, rows: rows.slice(0, m) }); const H = m => { const q = blockBox(part(m)); return q[3] - q[1]; };
+        while (n > 1 && H(n) > ah) n--; list.push(part(n)); rows = rows.slice(n); first = false; } });
+    const pages = [[]]; let cx = 0, cy = 0, cw = 0;
+    list.forEach(b => { const q = blockBox(b), w = q[2] - q[0], hh = q[3] - q[1];
+      if (cy > 0 && cy + hh > ah) { cx += cw + gapX; cy = 0; cw = 0; }
+      if (cx > 0 && cx + w > aw) { pages.push([]); cx = 0; cy = 0; cw = 0; }
+      pages[pages.length - 1].push({ b, x: cx - q[0], y: -cy - q[3] }); cy += hh + gapY; cw = Math.max(cw, w); });
+    return pages;
+  }
+  const pageFn = items => (D, C) => items.forEach(p => blockDraw(D, p.b, p.x * D.k, p.y * D.k));
+  /* the blocks of the paper-B continuation sheets: the framing plan's tables; the typical section's general notes and quantity tables */
+  const planBlocks = G => DW().planTables(G).map(q => ({ t: 'table', ...q }));
+  function secBlocks(G, RS) {
+    const Q = quantities(G, RS);
+    return [{ t: 'notes', title: 'GENERAL NOTES', lines: DW().secNotes(G), wc: 90 }, { t: 'table', title: 'ESTIMATED QUANTITIES (WHOLE BRIDGE)', cols: ['ITEM', 'QUANTITY', 'UNIT'], rows: Q.rows },
+      { t: 'table', title: 'WELD QUANTITIES (WHOLE BRIDGE): FILLET WELD METAL = w^2/2 x LENGTH x 490 PCF; LENGTH = LINES x WELDED LENGTH', cols: ['WELD', 'SIZE', 'LINES', 'LENGTH (FT)', 'WELD METAL (LB)'],
+        rows: Q.welds.map(q => [q.k, dIn(q.w), String(q.lines), f0(q.Lft), f0(q.wt)]).concat([['TOTAL', '', '', f0(Q.welds.reduce((a, q) => a + q.Lft, 0)), f0(Q.welds.reduce((a, q) => a + q.wt, 0))]]) }];
+  }
+
   /* ---------- sheets (dxfSheet, dxfBuild) ---------- */
   const scaleName = k => DW().SCALE_NAME[k] || `1:${k}`;
   /* one sheet: the smallest plot scale (not below S.kmin) at which the drawing fits the drawing area; the drawing placed top left in
      the sheet at x offset ox; border, inner border and title block at the plot scale */
   function sheet(D, S, ox, C) {
     const [pw, ph] = PAPER[S.paper] || PAPER.D, aw = pw - 2.25, ah = ph - 4.55, i0 = D.mark(), SC = DW().SCALES; let k = null, b = null;
-    for (const kk of SC) { if (kk < (S.kmin || 1)) continue; D.E.length = i0; D.k = kk; D.h = (S.txt || DW().TXT) * kk; S.fn(D, S.c); b = D.bbox(i0); if (!isFinite(b[0])) b = [0, 0, 0, 0]; if ((b[2] - b[0]) / kk <= aw && (b[3] - b[1]) / kk <= ah) { k = kk; break; } }
+    for (const kk of SC) { if (kk < (S.kmin || 1) || (S.kAt && kk < S.kAt)) continue; D.E.length = i0; D.k = kk; D.h = (S.txt || DW().TXT) * kk; S.fn(D, S.c); b = D.bbox(i0); if (!isFinite(b[0])) b = [0, 0, 0, 0]; if ((b[2] - b[0]) / kk <= aw && (b[3] - b[1]) / kk <= ah) { k = kk; break; } }
     const over = !k; if (!k) k = D.k;
     const W = pw * k, H = ph * k; D.move(i0, ox + 1.25 * k - b[0], H - 1.0 * k - b[3]); const iC = D.mark();
     const pj = C.P.project || {}, cells = [[0.75, 'PROJECT', pj.name || ''], [9, 'PROJECT NO.', pj.number || ''], [13, 'SHEET TITLE', S.title], [24, 'SCALE', scaleName(k) + (S.half ? ' (HALF SIZE)' : '')], [28, 'DESIGNED / CHECKED', `${pj.designer || '-'} / ${pj.checker || '-'}`], [31, 'SHEET', `${S.n} OF ${S.of}`]];
@@ -541,14 +585,18 @@
   function build(G, RS, opt) {
     opt = opt || {}; const P = G.P, D = X_().drawing({ prefix: opt.prefix == null ? 'S-' : opt.prefix });
     const C = { G, RS, P, o: opt, list: [], miss: [], date: opt.date || new Date().toISOString().slice(0, 10) }, list = [], skip = (w, why) => C.miss.push([w, why]);
-    const add = (id, title, fn, c, kmin) => list.push({ id, title, fn, c: { ...C, ...(c || {}) }, kmin });
+    const add = (id, title, fn, c, kmin, grp, kOf) => list.push({ id, title, fn, c: { ...C, ...(c || {}) }, kmin, grp, kOf });   // SBTXT: grp (the sheets of a split drawing, for opt.only), kOf (at the scale of that sheet)
     const NOR = 'RESULTS NOT CALCULATED (DRAWINGS TAB: CALCULATE RESULTS)', anOk = pg => RS && RS.pg[pg] && RS.pg[pg].an;
     add('cover', 'COVER AND SHEET INDEX', cover, {}, 1);
-    add('plan', 'FRAMING PLAN', (D_, C_) => DW().plan(G, D_, { k: D_.k, RS }), {}, 48);
+    const B = opt.paper === 'B', [pwB, phB] = PAPER.B, awB = pwB - 2.25, ahB = phB - 4.55;   // SBTXT: paper B, the plan and the section on numbered sheets (see blockPages)
+    const addSplit = (id, title, fn, kmin, pages) => { const n = pages.length + 1; add(id, `${title} (1 OF ${n})`, fn, { split: true }, kmin, id);
+      pages.forEach((items, i) => add(`${id}${i + 2}`, `${title} (${i + 2} OF ${n})`, pageFn(items), {}, kmin, id, id)); };
+    if (B) addSplit('plan', 'FRAMING PLAN', (D_, C_) => DW().plan(G, D_, { k: D_.k, RS, noTables: true }), 48, blockPages(planBlocks(G), awB, ahB));
+    else add('plan', 'FRAMING PLAN', (D_, C_) => DW().plan(G, D_, { k: D_.k, RS }), {}, 48);
     add('erect', 'ERECTION DIAGRAM AND GIRDER LAYOUT', erect, {}, 48);
     add('elev', 'GIRDER ELEVATION AND CAMBER', elev, { gi: 0, one: false }, 48);
     G.girders.forEach(g => add(`gelev${g.i + 1}`, `GIRDER ${g.label} ELEVATION`, elev, { gi: g.i, one: true }, 48));
-    add('sec', 'TYPICAL SECTION AND NOTES', section, {}, 12);
+    if (B) addSplit('sec', 'TYPICAL SECTION AND NOTES', section, 12, blockPages(secBlocks(G, RS), awB, ahB)); else add('sec', 'TYPICAL SECTION AND NOTES', section, {}, 12);
     if (G.splices.length) {
       if (!RS) skip('FIELD SPLICE', NOR);
       else RS.pgs.forEach(pg => { const r = RS.pg[pg], L = (r.spl && r.spl.list) || [], ln = linesOf(G, pg);
@@ -569,10 +617,10 @@
     if (studZones(C)) add('sc', 'SHEAR CONNECTOR DETAILS', sc, {}, 3); else skip('SHEAR CONNECTOR DETAILS', RS ? 'NO STUD PITCH ZONES' : `NO STUD PITCH ZONES ENTERED; ${NOR}`);
     add('std', 'STANDARD DETAILS AND STAGING NOTES', std, {}, 3);
     if (!RS) skip('FLANGE TRANSITION DETAILS', NOR); else if (trGroups(C).length) add('wt', 'FLANGE TRANSITION DETAILS', wt, {}, 3); else skip('FLANGE TRANSITION DETAILS', 'NO SHOP FLANGE TRANSITIONS');
-    const only = opt.only ? list.filter(s => opt.only.includes(s.id)) : list;
+    const only = opt.only ? list.filter(s => opt.only.includes(s.grp || s.id)) : list;
     only.forEach(s => C.list.push(s.title));
     let ox = 0; const sheets = [];
-    only.forEach((S, i) => { const r = sheet(D, { ...S, paper: opt.paper || 'D', n: i + 1, of: only.length, half: !!opt.half }, ox, C); sheets.push(r); ox += r.W + 2 * r.k * 12; });
+    only.forEach((S, i) => { const kAt = S.kOf ? (sheets.find(q => q.id === S.kOf) || {}).k : null; const r = sheet(D, { ...S, kAt, paper: opt.paper || 'D', n: i + 1, of: only.length, half: !!opt.half }, ox, C); sheets.push(r); ox += r.W + 2 * r.k * 12; });
     return { D, sheets, miss: C.miss, Q: quantities(G, RS) };
   }
 
