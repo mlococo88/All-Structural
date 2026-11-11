@@ -80,6 +80,11 @@ node tests/smoke/retaining-wall-checks.mjs [--file <file or git ref>]
 # (header, Report title block, stable across a reload), 390 px, 0 console errors. ~2 min
 node tests/smoke/bsl-gap-layout.mjs [--shots <dir>]
 
+# Bridge Substructure Loading graphics and tooltips (SLGX, SLTT): the tab graphics in the Steel Bridge option C style (vizkit palette, label halo),
+# plan / elevation labels >= 10 px at 1440 and >= 7.5 px at 390 px with no overlaps (three projects), every tab graphic >= 7.5 px at 390 in its own
+# scrolling box, the Drawings tab's DXF identical to --ref (default origin/main), a tooltip on every input field of every input tab and unit. ~1 min
+node tests/smoke/bsl-graphics.mjs [--ref <git ref>] [--shots <dir>]
+
 # Bridge Substructure Loading, show the work on the tabs (SLWS): each load tab's "Worked steps" card = the Report's own steps (one for one, every
 # unit, default and water_wall), "see §n.m" opens the Report, the Combinations Strength I worked line, the Report's M_t / V_l labels as
 # subscripts (plain text unchanged), no card in the Report's package or while an input is invalid, 390 px, 0 console errors. ~1 min
