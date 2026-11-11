@@ -66,9 +66,24 @@ node tests/smoke/spread-footing-scroll.mjs [--libs <folder with the pinned katex
 # a renderer that throws marks its tab "Out of date"
 node tests/smoke/spread-footing-nobear.mjs [--file <file or git ref>] [--shots <dir>]
 
+# Spread Footing: wall loads entered per foot (SFWP): p = 12 kip/ft x 20 ft gives the results of P = 240 kip; switching converts;
+# a b_y change keeps per-foot values; wall along x; length 0 error; foundationLoads import switches a per-foot wall to totals; 390 px
+node tests/smoke/spread-footing-wall-perft.mjs [--file <file or git ref>] [--shots <dir>]
+
 # Retaining Wall Designer: required inputs (RWIE) and the self-consistency panel (RWSC): a blank / invalid input gives the "Input error: no results" banner on the check
 # summary, every output tab, the Drawings and the Report, the field marked with its reason, a working link; REVIEW does not block
 node tests/smoke/retaining-wall-checks.mjs [--file <file or git ref>]
+
+# Bridge Substructure Loading layout parity (SLGP) and twelve input tabs (SLIT): check summary column (collapsed below 1800 px, open at 1920 px,
+# the Combinations envelope, a click opens the tab), I-1…I-12 input tabs and I-n.m sections (every field in exactly one tab, the input-check
+# counts and links follow the field, unit buttons keep a loading tab), numbered output tabs, the grab bar (subloads_splitRatio_v1), the Input ID
+# (header, Report title block, stable across a reload), 390 px, 0 console errors. ~2 min
+node tests/smoke/bsl-gap-layout.mjs [--shots <dir>]
+
+# Bridge Substructure Loading, show the work on the tabs (SLWS): each load tab's "Worked steps" card = the Report's own steps (one for one, every
+# unit, default and water_wall), "see §n.m" opens the Report, the Combinations Strength I worked line, the Report's M_t / V_l labels as
+# subscripts (plain text unchanged), no card in the Report's package or while an input is invalid, 390 px, 0 console errors. ~1 min
+node tests/smoke/bsl-show-work.mjs [--shots <dir>]
 
 # Phone / tablet layout (PHN): at 390 and 768 px the page never scrolls sideways, on load and on every tab (one entry per tool in TOOLS)
 node tests/smoke/phone-layout.mjs [--tool smd,...] [--file <file or git ref>] [--w 390,768]

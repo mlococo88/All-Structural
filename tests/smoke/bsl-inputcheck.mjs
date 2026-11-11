@@ -62,7 +62,8 @@ try {
     ['a reaction cell that is not a number', 'rx', 0, 'rx.data.0.0.dc1', 'x12', '43.6', 'G1 DC1', /"x12" is not a number/],
     ['negative bearing height', 'units', 0, 'units.0.hb', '-1', '4.5', 'Bearing height', /0 in or more/],
   ];
-  for (const [what, tab, k, pth, bad, fix, label, msg] of CASES) {
+  for (const [what, tab0, k, pth, bad, fix, label, msg] of CASES) {
+    const tab = (await p.evaluate(x => window.slTabOfPath ? slTabOfPath(x) : null, pth)) || tab0;   // SLIT (2026-11-11): the input tab that holds the field (twelve tabs)
     await show('summary'); await pane(tab, k);
     await p.fill(`#sidebar [data-k="${pth}"]`, bad); await sleep(450);
     const s = await state(), e = s.errs.find(x => x.path === pth);
@@ -88,7 +89,7 @@ try {
       assert.deepEqual(s2.errs, []); assert.equal(s2.banner, false); assert.equal(s2.badges[tab], ''); near(a2, AXIAL, 1e-3, 'axial'); assert.ok(Math.abs(s2.stripH - H0) < 1); });
   }
   await ok('cross check: backfill slope β at or above φ on an abutment is an input error (was: no earth loads, silently)', async () => {
-    await pane('units', 0); await p.fill('#sidebar [data-k="units.0.earth.beta"]', '40'); await sleep(450);
+    await pane((await p.evaluate(() => window.slTabOfPath ? slTabOfPath('units.0.earth.beta') : null)) || 'units', 0); await p.fill('#sidebar [data-k="units.0.earth.beta"]', '40'); await sleep(450);
     const s = await state(); assert.ok(s.errs.some(e => e.path === 'units.0.earth.beta' && /less than φ \(32°\)/.test(e.msg)));
     await p.fill('#sidebar [data-k="units.0.earth.beta"]', '0'); await sleep(450); assert.deepEqual((await state()).errs, []); });
   if (SHOTS) {   // the Units pane with a field error and the blocked Summary
@@ -184,7 +185,7 @@ if (REF) {
     const o = { tabs: {}, num: {} }, fl = v => JSON.stringify(v, (k, x) => (x instanceof Float64Array || Array.isArray(x)) ? Array.from(x).map(y => typeof y === 'number' ? +y.toPrecision(12) : y) : x);
     const ids = TABS.filter(t => t !== '|' && t[0] !== 'v3d').map(t => t[0]);
     for (let k = 0; k < P.units.length; k++) { P.ui.sel = k;
-      for (const id of ids) { if (k && ['summary', 'geometry', 'manual'].includes(id)) continue; showTab(id); await sleep(15); o.tabs[id + '~' + k] = document.getElementById('tab-' + id).innerText; }
+      for (const id of ids) { if (k && ['summary', 'geometry', 'manual'].includes(id)) continue; showTab(id); await sleep(15); const el = document.getElementById('tab-' + id), hid = [...el.querySelectorAll('.slw-card, .slw-top')]; hid.forEach(x => { x.style.display = 'none'; }); o.tabs[id + '~' + k] = el.innerText; hid.forEach(x => { x.style.display = ''; }); }   // SLWS (2026-11-11): the tabs' worked-steps card (the Report's steps, display) left out
       try { o.num['combine' + k] = fl(combine(k)); } catch (e) { o.num['combine' + k] = 'ERR ' + e.message; }
       o.num['comps' + k] = fl(COMBOS.map(c => { try { return comboComps(k, c); } catch (e) { return 'ERR'; } })); }
     try { const a = abutHandoffPayload(); o.num.abx = fl(a.err ? a : JSON.parse(JSON.stringify(a.p, (k, v) => (/At$/.test(k) || k === 'exported' || k === 'definition' || k === 'notes') ? undefined : v))); } catch (e) { o.num.abx = 'ERR ' + e.message; }   // ABX (2026-11-11): the additive definition block and the payload notes are not compared
@@ -213,7 +214,7 @@ if (REF) {
     console.log(`  ${a.name}: ${keys.length} results and tabs compared, ${diff.length} different; Report ${la.length} → ${lb.length} lines (+${extra.length} "Input checks", −${miss.length})`);
     await ok(`valid inputs (${a.name}): every result identical to ${REF}; the Report only gains the Input checks note; no input error`, () => {
       assert.deepEqual(diff, []); assert.equal(a.o.strip, bb.strip, 'strip'); assert.deepEqual(miss, []); assert.equal(bb.ic, 0);
-      assert.ok(extra.every(l => /Input checks|^• |results are shown only while/.test(l)), JSON.stringify(extra.filter(l => !/Input checks|^• |results are shown only while/.test(l))).slice(0, 300)); });
+      assert.ok(extra.every(l => /Input checks|^• |results are shown only while|^Input ID: [0-9A-F]{8}-[0-9A-F]{4}$/.test(l)), JSON.stringify(extra.filter(l => !/Input checks|^• |results are shown only while|^Input ID: /.test(l))).slice(0, 300)); });   // SLGP (2026-11-11): the title block's Input ID line
   }
   console.log(`  identical-results probe: ${n} items over ${A.length} projects`);
   fs.rmSync(dir, { recursive: true, force: true });

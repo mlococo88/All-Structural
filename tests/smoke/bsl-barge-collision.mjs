@@ -28,7 +28,7 @@ try {
     const p6 = phase6(1), defs = unitRes(1).UM.defs, q = defs.findIndex(d => d.grp === 'Resultant' && /^V<sub>t<\/sub>, bottom of footing$/.test(d.label));
     const E = combine(1).EEII;
     P.ui.sel = 1; showTab('cv'); await new Promise(r => setTimeout(r, 100));
-    const tab = document.getElementById('tab-cv').innerText; document.querySelector('.itab[data-pane=units]').click(); await new Promise(r => setTimeout(r, 100)); const inp = document.getElementById('f_units_1_cv_BB');
+    const tab = document.getElementById('tab-cv').innerText; document.querySelector(document.querySelector('.itab[data-pane=coll]') ? '.itab[data-pane=coll]' : '.itab[data-pane=units]').click();   /* SLIT: the Collision input tab */ await new Promise(r => setTimeout(r, 100)); const inp = document.getElementById('f_units_1_cv_BB');
     return { F: p6.cv.F, aB: p6.cv.aB, RB: p6.cv.RB, KE: p6.cv.KE, how: p6.cv.how, q, Vt: E.max[q], tab, BB: u.cv.BB, inp: inp ? inp.value : null };
   }, cv);
   const r35 = await run({ BB: 35 }), r50 = await run({ BB: 50 }), r20 = await run({ BB: 20 }), rs = await run({ BB: 50, W: 200, Vs: 2 });
