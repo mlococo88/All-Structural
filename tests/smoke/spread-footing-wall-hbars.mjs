@@ -17,6 +17,10 @@
 //   7. a saved wall whose bars no single spacing reproduces keeps its entry (wallSpc blank, note on the card), results unchanged;
 //      a Pedestal changed to a Wall on the card starts at the exact spacing of its bars;
 //   8. 0 console errors; no horizontal page scroll at 390 px with the wall card.
+//   9. SFHP (engineer 2026-11-11): wallIn.hPos absent / 'out' = outside (as 1-8); 'in' = inside the vertical bars: centres at
+//      t/2 - c - d_b,v - d_b,h/2 = 6 - 2 - 0.75 - 0.25 = 3.00 in (A-A dots 6.00 apart vs 8.50 outside), callouts / detail /
+//      schedule / general note follow, cover check c = 2.00 >= 2.00 (#6 verticals row) PASS, #5 @ 10 back to PASS; d' unchanged;
+//      "same as ties" stays outside; the card dropdown writes hPos; 3D 6 bars at 3.00 in.
 //   node tests/smoke/spread-footing-wall-hbars.mjs [--file <file or git ref>] [--shots <dir>]
 import fs from 'fs';
 import { openPage, resolveFile, diff } from '../lib.mjs';
@@ -136,6 +140,55 @@ await open("state.peds=[state.peds[0]];const p=state.peds[0];p.x=0;p.y=0;p.bx=1;
 const PW = await o.p.evaluate(async () => { const s = document.querySelector('select[data-path="peds.0.elemType"]'); const n0 = sfdPedBars(0).n; s.value = 'wall'; s.dispatchEvent(new Event('change', { bubbles: true })); await new Promise(r => setTimeout(r, 900));
   return { n0, n1: sfdPedBars(0).n, s: state.peds[0].reinf.wallSpc, wall: !!sfdPedBars(0).wall }; });
 check(PW.wall && PW.n0 === PW.n1 && PW.s > 0, 'Pedestal -> Wall: spacing ' + PW.s + ' in keeps the ' + PW.n0 + ' bars');
+
+console.log('9. SFHP: horizontal bars inside / outside the vertical bars (engineer 2026-11-11)');
+// photo wall (#6 verticals d_b 0.75, #4 horizontals d_b 0.5, c = 2.00, t = 12, weather)
+const HP = async (post) => { await open(WALL, post); return o.p.evaluate(() => {
+  const B = sfdwBuild(), Dd = B.D, sh = id => B.S.find(s => s.id === id), ents = s => Dd.E.slice(s.i0, s.iv), W = sfdwWallHz(0), pd = P2.pedDes[0];
+  const a = ents(sh('secA')).filter(e => e.t === 'CIRCLE' && Math.abs(e.r - 0.25) < 1e-9).map(e => e.c ? e.c[0] : (e.pts ? e.pts[0][0] : e.x));
+  const txt = id => ents(sh(id)).filter(e => e.t === 'TEXT').map(e => e.s);
+  const dxf = Dd.toDXF({ ltscale: 1 }), v = SharedDxf.validate(dxf);
+  return { off: W.off, inside: W.inside, dotsA: a, callA: txt('secA').filter(s => /HORIZ/.test(s)), ped: txt('ped0'), sched: txt('sched'), notes: txt('notes').join(' '),
+    tieCov: pd.tieCov, tieCovMin: pd.tieCovMin, ok: pd.tieCovOK, kind: pd.trKind, trSize: pd.trSize, dPr: pd.dPr, w: P2.wallD && P2.wallD[0] ? { gov: P2.wallD[0].gov && P2.wallD[0].gov.ratio } : null, v: v.ok,
+    txt: sftcTxt(pd), items: sfdWallTxt(P2.bearing[0].wall), sketch: sfdWallSketchSVG(0) }; }); };
+const OUT = await HP(''), OUT2 = await HP("state.peds[0].wallIn.hPos='out';"), IN = await HP("state.peds[0].wallIn.hPos='in';");
+check(OUT.kind === 'horiz' && near(OUT.tieCov, 1.5) && OUT.tieCovMin === 1.5 && OUT.ok && !OUT.inside, 'absent = outside: c_h = 2.00 - 0.500 = 1.500 >= 1.50 (#4) PASS');
+check(JSON.stringify([OUT2.tieCov, OUT2.tieCovMin, OUT2.kind, OUT2.off]) === JSON.stringify([OUT.tieCov, OUT.tieCovMin, OUT.kind, OUT.off]), '"out" = absent');
+check(IN.kind === 'horizIn' && near(IN.tieCov, 2.0) && IN.tieCovMin === 2 && IN.ok && IN.trSize === 6, 'inside: cover to the vertical bars c = 2.00 >= 2.00 (Table 20.5.1.3.1, weather, No. 6 through No. 18 row: #6 verticals) PASS, D/C 1.00 (got ' + [IN.tieCov, IN.tieCovMin, IN.trSize, IN.kind] + ')');
+check(near(OUT.off, 4.25) && near(IN.off, 6 - 2 - 0.75 - 0.25), 'bar centres: outside 6 - 2 + 0.25 = 4.25; inside 6 - 2 - 0.75 - 0.25 = 3.00 in (got ' + OUT.off + ', ' + IN.off + ')');
+const spanA = d => d.length ? Math.max(...d) - Math.min(...d) : 0;
+check(IN.dotsA.length === 6 && OUT.dotsA.length === 6 && near(spanA(OUT.dotsA), 8.5) && near(spanA(IN.dotsA), 6.0), 'section A-A dots 2 x off apart: outside 8.50, inside 6.00 in (got ' + spanA(OUT.dotsA) + ', ' + spanA(IN.dotsA) + ')');
+check(OUT.callA.some(s => /OUTSIDE VERT BARS/.test(s)) && IN.callA.some(s => /INSIDE VERT BARS/.test(s)), 'section A-A callout follows the choice');
+check(IN.ped.some(s => /EF HORIZ, INSIDE VERT BARS/.test(s) && /CLR TO VERT BARS/.test(s) && !/CLR TO HORIZ BARS/.test(s)) && OUT.ped.some(s => /OUTSIDE VERT BARS/.test(s) && /CLR TO HORIZ BARS/.test(s)), 'element detail note follows the choice');
+check(IN.sched.some(s => /INSIDE VERT BARS/.test(s)) && OUT.sched.some(s => /OUTSIDE VERT BARS/.test(s)) && IN.sched.includes('19\'-8"') && OUT.sched.includes('19\'-8"'), 'schedule notes follow the choice; length l_w - 2c = 19\'-8" both');
+check(/WALL: TO VERT BARS, HORIZ BARS INSIDE/.test(IN.notes) && /WALL: TO HORIZ BARS/.test(OUT.notes), 'general cover note follows the choice');
+check(IN.v && OUT.v, 'DXF structure check, both');
+check(near(IN.dPr, OUT.dPr) && near(IN.dPr, 2.375) && IN.w && OUT.w && near(IN.w.gov, OUT.w.gov, 1e-12), "d' = c + d_b/2 = 2.375 both; wall out-of-plane ratio identical");
+check(/inside the vertical bars/.test(IN.items) && /outside the vertical bars/.test(OUT.items) && /Cover check to the vertical bars/.test(IN.txt), 'Wall statement and cover sentence follow the choice');
+check(/inside the vertical bars/.test(IN.sketch) && /outside the vertical bars/.test(OUT.sketch), 'Wall Design sketch legend follows the choice');
+// #5 @ 10 with tie #3 (the #1420 NG case): back to PASS with inside
+const C5o = await HP("state.peds[0].wallIn.hSize='5';state.peds[0].wallIn.hSpc=10;state.peds[0].reinf.tieSize=3;");
+const C5i = await HP("state.peds[0].wallIn.hSize='5';state.peds[0].wallIn.hSpc=10;state.peds[0].reinf.tieSize=3;state.peds[0].wallIn.hPos='in';");
+check(near(C5o.tieCov, 1.375) && !C5o.ok, '#5 @ 10 outside: 2.00 - 0.625 = 1.375 < 1.50 NG');
+check(near(C5i.tieCov, 2.0) && C5i.tieCovMin === 2 && C5i.ok, '#5 @ 10 inside: c = 2.00 >= 2.00 (#6 verticals row) PASS');
+const C5n = await HP("state.peds[0].wallIn.hPos='in';state.peds[0].reinf.cover=1.75;");
+check(near(C5n.tieCov, 1.75) && C5n.tieCovMin === 2 && !C5n.ok, 'inside, c = 1.75 with #6 verticals: 1.75 < 2.00 NG (the vertical-bar row governs)');
+// same as ties: always outside, dropdown disabled
+const ST = await HP("state.peds[0].wallIn.hSize='sameTie';state.peds[0].reinf.tieSize=4;state.peds[0].wallIn.hPos='in';");
+check(!ST.inside && ST.kind === 'horiz', '"same as ties" with a stored "in": drawn and checked outside');
+// card dropdown and the 3D view (inside)
+await open(WALL, "state.peds[0].wallIn.hPos='in';");
+await o.p.evaluate(() => sfdSetInTab('rebar')); await o.p.waitForTimeout(400);
+const CD = await o.p.evaluate(() => { const x = document.querySelector('.sfdHPos'); return { v: x && x.value, vis: x && x.offsetParent !== null, info: document.querySelector('.sfdPbInfo').innerText }; });
+check(CD.v === 'in' && CD.vis && /inside the vertical bars/.test(CD.info), 'card: dropdown shows Inside, card note says inside');
+if (args.shots) { const rb = await o.p.$('.sfdPedRb'); await rb.screenshot({ path: args.shots + '/sfhp-card-inside.png' }); }
+const chg = await o.p.evaluate(async () => { const x = document.querySelector('.sfdHPos'); x.value = 'out'; x.dispatchEvent(new Event('input', { bubbles: true })); await new Promise(r => setTimeout(r, 900)); const r = [state.peds[0].wallIn.hPos, P2.pedDes[0].trKind];
+  x.value = 'in'; x.dispatchEvent(new Event('input', { bubbles: true })); await new Promise(r => setTimeout(r, 900)); return r.concat([state.peds[0].wallIn.hPos, P2.pedDes[0].trKind]); });
+check(JSON.stringify(chg) === '["out","horiz","in","horizIn"]', 'card dropdown writes wallIn.hPos and recalculates ' + JSON.stringify(chg));
+await o.p.click('#tabbar button[data-tab="tab-3d"]'); await o.p.waitForTimeout(2500);
+const g3 = await o.p.evaluate(() => { const W = sfdwWallHz(0); return { n: V3D.wallHz, off: W.off }; });
+check(g3.n === 6 && near(g3.off, 3.0), '3D inside: 6 bars at 3.00 in from the wall centre line');
+if (args.shots) await o.p.screenshot({ path: args.shots + '/sfhp-3d-inside.png' });
 
 console.log('8. errors and phone width');
 check(o.errs.length === 0, '0 console errors ' + JSON.stringify(o.errs.slice(0, 3)));
