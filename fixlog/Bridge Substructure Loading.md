@@ -2935,7 +2935,7 @@ function listTables() {
 - **Saved data (§5):** none changed (a saved 0 or "0.0" now reads as El. 0.0, the engineer's decision).
 - **Other copies:** none.
 
-## 2026-11-11 — PR: sl-drawings (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Drawings tab and Export DXF on shared/dxf.js; the Pyodide + ezdxf writer removed (SLDW; engineer request 2026-11-11)   [display and export only: no computed value changes]
+## 2026-11-11 — PR: sl-drawings (PR #1402: https://github.com/mlococo88/All-Structural/pull/1402) — Drawings tab and Export DXF on shared/dxf.js; the Pyodide + ezdxf writer removed (SLDW; engineer request 2026-11-11)   [display and export only: no computed value changes]
 - **Problem.** Export DXF ran an embedded Python writer (`SL_DXF_PY`) through Pyodide 0.26.4 and an unpinned `ezdxf` from the internet (about 10 MB on the first export). Offline or on a locked-down laptop it failed and fell back to an R12 writer (`exportSheets` / `dxfOf`) with dimensions drawn as lines and text. There was no drawing preview; the other developed apps have a Drawings tab on `shared/dxf.js`.
 - **Where / before / after:**
   - `<head>`: after `<script src="shared/handoff-store.js">` added `<script src="shared/dxf.js"></script>`.
