@@ -168,7 +168,7 @@ if (REF) {
     P.br.owner = 'massdot'; P.br.Rc = 1500; P.br.Vd = 45; P.br.nBR = 2; P.br.traffic = 'one'; P.br.joint[2] = 'joint'; syncSupports(); P.units[2].rowOff = 1.5;
     await snap('pile-ham-ship-massdot');
     P = defP(); P.br.spans = [120]; syncSupports(); recompute();
-    { const u = P.units[0]; fillEarth(u); Object.assign(u.earth, { method: 'coulomb', delta: 20, phi: 34, beta: 5, gamma: 0.125, hw: 3, asOn: 'yes', asW: '', asL: 25, asT: 15, asPct: 50, asLL: 'yes', esQ: 0.1, constrFill: 6, gLLc: 1.5 }); fillEarth(P.units[1]); }
+    { const u = P.units[0]; fillEarth(u); Object.assign(u.earth, { method: 'coulomb', delta: 20, phi: 34, beta: 5, gamma: 0.125, hw: 3, asOn: 'yes', asW: '', asL: 25, asT: 15, asPct: 50, asLL: 'yes', esQ: 0.1, constrFill: 6, gLLc: 1.5, lsRed: 'no' }); fillEarth(P.units[1]); }   // SLLS: LS kept with the slab, as the reference (the removal is checked in bsl-ls-slab.mjs)
     P.br.eqSa = [0.18, 0.182, 0.19, 0.21, 0.25, 0.29, 0.32, 0.36, 0.37, 0.36, 0.34, 0.3, 0.26, 0.19, 0.14, 0.09, 0.066, 0.042, 0.03, 0.023, 0.014, 0.0095];
     P.br.eqSiteClass = 'D'; P.br.gEQ = 0.5; P.br.ehEQmode = 'agency'; P.br.gEHEQ = 1.2; P.br.lf = P.br.lf || {}; P.br.lf.StrI = { dcMax: 1.3, ll: 1.8 }; P.br.khR = 0.6; P.br.kv = 0.1;
     await snap('abut-earth-seismic');
@@ -187,7 +187,7 @@ if (REF) {
       for (const id of ids) { if (k && ['summary', 'geometry', 'manual'].includes(id)) continue; showTab(id); await sleep(15); o.tabs[id + '~' + k] = document.getElementById('tab-' + id).innerText; }
       try { o.num['combine' + k] = fl(combine(k)); } catch (e) { o.num['combine' + k] = 'ERR ' + e.message; }
       o.num['comps' + k] = fl(COMBOS.map(c => { try { return comboComps(k, c); } catch (e) { return 'ERR'; } })); }
-    try { const a = abutHandoffPayload(); o.num.abx = fl(a.err ? a : JSON.parse(JSON.stringify(a.p, (k, v) => (/At$/.test(k) || k === 'exported') ? undefined : v))); } catch (e) { o.num.abx = 'ERR ' + e.message; }
+    try { const a = abutHandoffPayload(); o.num.abx = fl(a.err ? a : JSON.parse(JSON.stringify(a.p, (k, v) => (/At$/.test(k) || k === 'exported' || k === 'definition' || k === 'notes') ? undefined : v))); } catch (e) { o.num.abx = 'ERR ' + e.message; }   // ABX (2026-11-11): the additive definition block and the payload notes are not compared
     o.num.C = fl(MODEL.C);
     showTab('report'); await sleep(2500); o.report = SLR.doc ? SharedReport.text(SLR.doc) : 'NO DOC'; showTab('summary'); await sleep(50);
     o.strip = document.getElementById('strip-host').innerHTML; o.ic = window.SubLoadsInputCheck ? SubLoadsInputCheck.collect().length : 0;
@@ -200,7 +200,10 @@ if (REF) {
   // SLAL (2026-11-11): the abutment-length note (Geometry tab, Report) and its two input-check ranges are display text new on this
   // branch; taken out of both sides' text (every result is still compared)
   const slal = t => typeof t !== 'string' ? t : t.replace(/\n?Abutment length: L[\s\S]*?as before this input was added\./g, '').replace(/Abutment length along the bearing line L_ab: blank or greater than 0 ft; (Footing length L_ftg: blank or greater than 0 ft; )?/g, '');
-  [...A, ...B].forEach(r => { const o = r.o; Object.keys(o.tabs).forEach(k => { o.tabs[k] = slal(o.tabs[k]); }); o.report = slal(o.report); });
+  // SLLS (2026-11-11): the approach-slab LS notes (Earth loads tab, Report section and Backfill row) are display text new on this branch
+  const slls = t => typeof t !== 'string' ? t : t.replace(/(\n• *)?\n?Approach slab and LS:[^\n]*/g, '').replace(/, live-load surcharge (removed in the final state \([^)]*\)|kept \(3\.11\.6\.5 reduction not taken\))/g, '')
+    .replace(/\n?[^\n]*Live-load surcharge with the approach slab[^\n]*/g, '').replace(/\n?(Final-state live-load surcharge LS removed|Live-load surcharge kept with the approach slab)[^\n]*/g, '').replace(/\n{3,}/g, '\n\n');
+  [...A, ...B].forEach(r => { const o = r.o; Object.keys(o.tabs).forEach(k => { o.tabs[k] = slls(slal(o.tabs[k])); }); o.report = slls(slal(o.report)); });
   for (let i = 0; i < A.length; i++) { const a = A[i], bb = B[i].o;
     const keys = [...Object.keys(a.o.num).map(k => ['num', k]), ...Object.keys(a.o.tabs).filter(k => !/^manual~/.test(k)).map(k => ['tabs', k])];   // the Manual (static text) is not compared (SLDW rewrote its drawings paragraphs; tests/smoke/bsl-drawings.mjs checks them)
     const diff = keys.filter(([g, k]) => a.o[g][k] !== bb[g][k]).map(x => x.join('.')); n += keys.length + 2;

@@ -3006,3 +3006,55 @@ function listTables() {
   3. The short-length warning compares an entered L_ab with the out-to-out of the exterior bearing pedestals along the line, as drawn: (s_max − s_min) + max(pad W, 0.8 ft) / cos θ + 0.5 ft. It is a warning, not an error, and only for an entered L_ab: the auto length is the deck width, and with blank inputs no new message appears. A warning is added when L_ab > L_ftg.
   4. L_ftg is on the Foundation section, next to the footing width and thickness, and only for a spread footing or pile cap. L_ab is on the Abutment section.
 - **Other copies:** none.
+
+## 2026-11-11 — PR: claude/abx-a (PR #1405: https://github.com/mlococo88/All-Structural/pull/1405) (ABX, PR A) — abutmentLoads: the abutment definition block and the per-project copy   [no calculation; storage: new key and optional field only]
+- **Why:** engineer request 2026-11-11 (the abutment app and SubLoads "should talk with each other more"); HANDOFF.md §4.5.
+- **Where:**
+  - Head: `<script src="shared/abutment-def.js">` after `shared/handoff-store.js`.
+  - New `abutDefOf(k)` before `(function patchAbxHandoff() {`: `SharedAbutmentDef.fromSubLoads` from the unit inputs and `MODEL.UG[k]` (L_ab = `R.capLen`, L_ftg = `abFtgL(R)`, `R.stemTop`, `R.bwTop`, `R.ftgBot`, the deck elevation, hb + hp, `fillEarth(u).earth`, the approach-slab width (entered, else the deck width), `eqSite().As`, `br.khR / kv / hEQr / wc`, the pad).
+  - `abutHandoffPayload`: after `const good = …`: `good.forEach(a => { const d = abutDefOf(a.supportIndex); if (d) { a.definition = d; a.notes = …the earth note reworded… } });`. The payload note "Earth pressure, soil and backfill properties are not sent…" → "Earth pressure is not sent… Each abutment carries a definition block…". `abutExportData` (the "Export abutments" file) is not changed.
+  - Send handler: after `BridgeXfer.publish('abutmentLoads', …)`: `SharedHandoffStore.send({ storage: localStorage, channel: 'abutmentLoads', producer: 'subloads', payload: r.payload, … })` (the copy `bridgeSuite.v1.abutmentLoads.by.subloads.<pid>`).
+  - Hand-offs card, row "Abutment loads": the note names the definition and "kept per project".
+- **Governing provision:** none (no calculation).
+- **Check case:** default project: Send → keys `bridgeSuite.v1.abutmentLoads`, `.updatedAt`, `.by.subloads.~Example three-span continuous`; Abut. 1 definition: L_ab 46.0698 (auto), stem 4 × 9.9908, backwall 1.5 × 7.0092, footing 14 × 3 (toe 4, heel 6), D_f 7, seat 117.9908, h_brg 10.5 in, soil γ 0.120 φ 32 (soil height 17, auto).
+- **How verified:** main-vs-branch probe of the default project: every unit's `combine()` envelopes, `abutExportData()` (timestamp blanked) and `P` identical. Tests: `abutment-subloads-exchange` (new), `bsl-inputcheck`, `bsl-abut-length`, `bsl-drawings`, `geometry-handoff`, `project-library --tool bsl`.
+- **Other copies:** none.
+
+## 2026-11-11 — PR: claude/abx-b (PR #1407: https://github.com/mlococo88/All-Structural/pull/1407) (ABX, PR B) — "Pull abutment from the Abutment Calculator" (new channel abutmentDef, receiver id subloads)   [§4: results change only when the user pulls; storage: new optional field P.units[k].abutSrc]
+- **Why:** engineer request 2026-11-11 and decisions 2026-11-11 (ownership: the calculator owns the abutment itself, SubLoads the bridge; pulls tick the owner's groups and show current vs incoming); HANDOFF.md §4.15.
+- **Where:**
+  - New IIFE after `window.SubLoadsGeoHandoff = …` (anchor `(function patchAbutDefHandoff() {`): `open` (checks with `SharedAbutmentDef.checkPayload`; target unit), `plan` (`SharedAbutmentDef.toSubLoads(def, ctxOf(k))`, ctx = the unit's auto L_ab W_deck/cos θ, auto retained height, `R.stemTop`, `R.bwTop`, deck width, skew, span), `render` (`#abd-modal`: Into, groups with ticks and current vs incoming rows, notes, "Not applied (information)"), `apply` (ticked groups' items into `P.units[k]` or `P.br` for the bridge-wide group; a blank incoming value leaves a blank current value; `P.units[k].abutSrc`), `pull` (SubLoadsPicker), `importFile`, `isNew`, `hoRow`; `basisExtra` row "Abutment definition"; `paneUnits` note `#abd-src` before the Abutment section.
+  - Groups and default ticks (`GRP`): geometry and lengths ✓, soil and backfill ✓, approach slab ✓, bearing pad ✗, top of footing El. ✗, bridge-wide (k_h ratio, k_v, ΔP_AE ratio, w_c; "applies to every unit") ✗.
+  - `SubLoadsPicker` `renderPicker`: `HS().summary(o.channel, p)` → `(o.summary ? o.summary(p) : HS().summary(o.channel, p))` (a channel's own summary; the other pulls unchanged).
+  - `slHdr` `showHo`: the Abutment row (`SubLoadsAbutHandoff.hoRow()`) after the reactions row; the Project-tab marker also from `SubLoadsAbutHandoff.isNew()`.
+- **Governing provision:** none changed (input mapping). Relations used: SubLoads stem t ← the calculator's t_top; footing W = toe + t_bot + heel; top of footing = SubLoads bridge seat − h_stem (option); ground = top of footing − t_f + D_f (option); approach-slab share = 100·R_DC/(w_c·t·W·L).
+- **Check case (§4, only when pulled):** battered stem t_top 4.5, t_bot 5.5 ft, L_ab 50 ft, into Abut. 2 (H = 9.991 ft): SubLoads stem = w_c·L_ab·H·t_top = 0.150 × 50 × 9.991 × 4.5 = 337.2 kip; the calculator's = 0.150 × 50 × 9.991 × 5.0 = 374.7 kip; difference 37.47 kip, stated in the dialog. Round trip (SubLoads default Abut. 1 → calculator default project → SubLoads, default ticks): no input changes (L_ab, L_ftg and the retained height stay blank = auto; stem 4, a_f 1.75, backwall 1.5, toe 4, W 14, t 3, soil and slab equal); only `abutSrc` is added; every unit's combinations identical.
+- **Decisions (pending engineer review):** the default ticks above; battered stem sent as t_top with the weight note; SubLoads keeps its own elevations (mismatches listed; optional top-of-footing group); bridge-wide inputs unticked and labelled; slab share as the equivalent %; wingwalls listed only; auto values kept blank when equal within 0.005 ft; default target the unit that last pulled the project, else Abut. 1.
+- **How verified:** main-vs-branch probe (default project: combinations, export, `P` identical); `abutment-subloads-exchange` B1–B4; `bsl-inputcheck`, `bsl-abut-length`, `bsl-drawings`, `project-library --tool bsl`.
+- **Other copies:** none.
+## 2026-11-11 — PR: subloads-ls-slab (PR #1406: https://github.com/mlococo88/All-Structural/pull/1406) — live-load surcharge removed with an approach slab under AASHTO 3.11.6.5 too (SLLS; engineer decision 2026-11-11)   [§4: changes results for AASHTO abutments with an approach slab]
+- **Engineer decision (2026-11-11, confirmed):** "Approach slab should remove surcharge", aligned with the Abutment Calculator (`lsRed`, default on, `apLsRule`). The calculator's scope: final state h_eq = 0 on the wall, stem, backwall and over the heel; the construction stage keeps its LS; MassDOT/CTDOT automatic; AASHTO/RIDOT an option, default on.
+- **Where:** `earthAbut` (anchor `noLS = lsSlabRem(e)`); new helpers `lsSlabRem(e)`, `lsSlabRef()` (before `fillEarth`); the Units pane approach-slab fields (`paneUnits` wrapper, anchor `Live-load surcharge LS with the slab`); the Earth loads tab note (anchor `'Approach slab and LS:'`); the Report unit section (`lsSub`, anchor `Live-load surcharge with the approach slab`); `basisExtra` Backfill row.
+- **Before:**
+  `const heq = heqOf(e, H), pLS = ka * gam * heq, noLS = isMass() && e.asOn === 'yes';`
+- **After:**
+  `const heq = heqOf(e, H), pLS = ka * gam * heq, noLS = lsSlabRem(e);` with
+  `const lsSlabRem = e => !!e && e.asOn === 'yes' && (isMass() || e.lsRed !== 'no');`
+  `earthAbut` also returns `lsRem` and `lsOff` (the LS values not applied, for the notes).
+- **Removed:** the three final-state LS items (`LSh` on the virtual back plane, `LSh` on the stem and backwall, `LSv` over the heel). **Kept:** `LShc`, `LSvc` (construction stage, no slab yet).
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 3.11.6.5 (C3.11.6.5): the surcharge may be reduced where vehicles reach the abutment through a structural slab not supported on the backfill. MassDOT Part I 3.3.1.3 is unchanged.
+- **Check case:** default project, Abut. 1, approach slab on with the default slab (20 ft × 12 in, 50 %, no LL). k_a = 0.30726, γ = 0.120 kcf, H = 20 ft (17 ft soil), h_eq = 2 ft, heel 6 ft, L = 46.070 ft; p_LS = 0.073742 ksf.
+  - LS on the virtual plane: 67.946 kip at 10 ft (M = 679.456 kip-ft) → 0
+  - LS on the stem: 57.754 kip → 0
+  - LS vertical over the heel: 66.340 kip → 0
+  - Strength I at the bottom of footing: P max 2624.176 → 2508.080; V_l max 683.879 → 564.975; M_l max 4439.331 → 3250.283
+  - Service I at the bottom of footing: P 1921.165 → 1854.825; V_l 465.759 → 397.813; M_l 2415.203 → 1735.747
+- **How verified:** main-vs-branch probe of every combination at every section of every unit. Cases: default, slab, slab + LL, slab under MassDOT, A_s 0.15, and A_s 0.15 + slab. Only the abutments with a slab under AASHTO change: Str I, Str V, Ser I, EE I and EE II, at the top-of-footing M_l and V_l and at the bottom-of-footing P, M_l and V_l. The construction stage, bridge seat, piers, no-slab cases and MassDOT are identical. With `lsRed: 'no'` the results are identical to main.
+- **Tests:** new `tests/smoke/bsl-ls-slab.mjs`. `bsl-inputcheck.mjs`: the abut-earth-seismic project sets `lsRed: 'no'`, so it still compares every result with main. The new note text is stripped from both sides.
+- **Saved data (§5):** new optional `units[k].earth.lsRed` ('yes' | 'no'); absent = removed. Saved AASHTO projects with an approach slab change on opening (intended, engineer's rule); choose "Kept" for the old results.
+- **Hand-off:** no field carries the LS rule. The `approachSlab` block is unchanged, and no hand-off code was touched.
+- **Decisions (pending engineer review):**
+  1. The option is hidden under MassDOT (automatic removal).
+  2. "Kept" means the full LS, with no partial reduction (as the calculator).
+- **Other copies:** none (the Abutment Calculator has its own implementation).
+- **Open item (not changed here, hand-off code being changed by the exchange work):** `shared/abutment-def.js` `fromSubLoads` sends `info.lsRed: null`. Its pull review row "LS with an approach slab" (anchor `'removed only under MassDOT rules'`) still describes SubLoads as removing LS only under MassDOT. Once this merges it should read "removed with the slab (3.11.6.5 option, default removed; MassDOT automatic)" and send `lsRed: lsSlabRem(earth)`.
