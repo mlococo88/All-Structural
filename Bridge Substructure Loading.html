@@ -221,6 +221,55 @@ header { height: 54px; flex: none; display: flex; align-items: center; gap: 10px
 #slPrjPane .slGrp .note { padding: 0 0 4px; }
 #slPrjPane .slRow { display: flex; gap: 6px; flex-wrap: wrap; }
 @media (max-width: 900px) { #hdrProj { flex: 1 1 100%; max-width: none; order: -1; } }
+/* SLGP (2026-11-11, layout parity with the Abutment Calculator; display only): the left check-summary column (#slDashCol, from 1200 px),
+   the numbered input sections (I-n.m) and output tabs ("n · Name"), the grab bar between the input and output panes (#slSplit, wider than
+   900 px) and the Input ID (header and Report title block). Nothing here is computed; the column quotes the Combinations tab's envelope. */
+#slDashCol, #slSplit { display: none; }
+.itab .ino, .sec-h .ino, .tab-btn .tno { font-family: var(--sans); font-weight: 700; font-size: .7rem; color: var(--muted); margin-right: 4px; letter-spacing: 0; }
+.itab { white-space: nowrap; padding-left: 2px; padding-right: 2px; } .tab-btn .tno { margin-right: 3px; }
+.itab.active .ino, .tab-btn.active .tno { color: var(--blue); }
+#slInputId { font-size: .78rem; color: var(--muted); white-space: nowrap; align-self: center; }
+#slInputId b { font-family: var(--cond); font-weight: 600; color: var(--text-dim); letter-spacing: .03em; }
+@media screen and (min-width: 1200px) {
+  body.slDashWide #slDashCol { display: flex; flex-direction: column; flex: none; width: 240px; min-height: 0; overflow-y: auto; overflow-x: hidden; background: var(--surface); border-right: 1px solid var(--border); overscroll-behavior: contain; }
+  body.slDashWide.slDashColl #slDashCol { width: 42px; overflow: hidden; }
+  #slDashHead { position: sticky; top: 0; z-index: 2; background: var(--surface); display: flex; align-items: center; gap: 4px 8px; flex-wrap: wrap; padding: 8px 8px 4px; border-bottom: 1px solid var(--border); }
+  #slDashTtl { font-family: var(--cond); font-weight: 700; font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text); margin: 0; }
+  #slDashTgl { border: 1px solid var(--border-hi); background: var(--surface); border-radius: 4px; padding: 0 7px; font-size: .85rem; cursor: pointer; line-height: 1.5; }
+  #slDashCnt { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+  #slDashCnt .tag, #slDash .tag { font-size: .68rem; font-weight: 700; border-radius: 4px; padding: 0 5px; }
+  #slDash { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 6px 8px 16px; }
+  .slDh { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 6px 0 0; }
+  .slCh { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 5px; padding: 3px 6px 3px 2px; border: 1px solid var(--border); border-radius: 5px; background: var(--sidebar); font-size: .8rem; line-height: 1.35; cursor: pointer; min-width: 0; }
+  .slCh:hover { border-color: var(--blue); } .slCh:focus-visible { box-shadow: var(--ring); outline: none; }
+  .slCh.pass { border-color: rgba(21,114,74,.45); } .slCh.fail { border-color: var(--fail); background: var(--fail-dim); } .slCh.warn { border-color: rgba(154,100,16,.5); }
+  .slCh .slChX { border: 0; background: none; padding: 0 3px; font-size: .62rem; cursor: pointer; color: var(--text-dim); }
+  .slCh .slChN { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .slCh .slChR { white-space: nowrap; color: var(--blue); font-variant-numeric: tabular-nums; }
+  .slCh .slChV { grid-column: 1 / -1; display: none; padding: 2px 0 2px 16px; font-size: .74rem; color: var(--text-dim); }
+  .slCh .slChV table { border-collapse: collapse; width: 100%; } .slCh .slChV td { padding: 0 3px 0 0; vertical-align: top; } .slCh .slChV td.v { text-align: right; white-space: nowrap; color: var(--text); }
+  .slCh .slChV .ls { color: var(--muted); font-size: .68rem; }
+  .slCh.slOpen .slChV { display: block; }
+  .slCh .slChRef { grid-column: 1 / -1; display: none; padding-left: 16px; font-size: .72rem; font-style: italic; color: var(--muted); }
+  .slCh.slOpen .slChRef { display: block; }
+  #slDashNote { font-size: .72rem; color: var(--muted); padding: 2px 8px 10px; }
+  body.slDashWide.slDashColl #slDash, body.slDashWide.slDashColl #slDashNote { display: none; }
+  body.slDashWide.slDashColl #slDashHead { flex-direction: column; align-items: center; padding: 8px 2px; border-bottom: 0; }
+  body.slDashWide.slDashColl #slDashTtl { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; margin: 4px 0; }
+  body.slDashWide.slDashColl #slDashCnt { flex-direction: column; align-items: center; }
+  body.slDashWide.slDashColl #slDashCnt .tag { font-size: .58rem; padding: 1px 2px; width: 34px; text-align: center; white-space: normal; }
+}
+@media screen and (min-width: 1500px) { body.slDashWide:not(.slDashColl) #slDashCol { width: 280px; } }
+@media screen and (min-width: 900.02px) {
+  #slSplit { display: block; flex: none; width: 7px; margin-left: -1px; cursor: col-resize; background: var(--sidebar); border-right: 1px solid var(--border); position: relative; touch-action: none; }
+  #slSplit::after { content: ''; position: absolute; left: 2px; top: 50%; width: 3px; height: 36px; margin-top: -18px; border-left: 1px dotted var(--border-hi); border-right: 1px dotted var(--border-hi); }
+  #slSplit:hover, #slSplit.drag, #slSplit:focus-visible { background: var(--blue-dim); }
+  body.slSplitDrag { cursor: col-resize; user-select: none; }
+  .side { width: var(--side-w); }
+}
+@media (max-width: 900px) { #slInputId { order: 0; } }
+@media (max-width: 600px) { #slInputId { flex: 1 1 100%; font-size: .72rem; } }
+@media print { #slDashCol, #slSplit, #slInputId { display: none !important; } }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -370,6 +419,10 @@ header { height: 54px; flex: none; display: flex; align-items: center; gap: 10px
   <div id="strip-host" role="img" aria-label="Elevation of the bridge with its substructure units"></div>
 </section>
 <div class="app">
+  <aside id="slDashCol" aria-label="Check summary"><!-- SLGP (2026-11-11): the check summary column, screens 1200 px and wider -->
+    <div id="slDashHead"><button type="button" id="slDashTgl" aria-controls="slDash" aria-expanded="true">&laquo;</button><h2 id="slDashTtl">Check summary</h2><span id="slDashCnt"></span></div>
+    <div id="slDash"></div><div id="slDashNote"></div>
+  </aside>
   <div class="side">
     <div class="itabs" role="tablist" id="itabs">
       <button type="button" class="itab" data-pane="project">Project</button>
@@ -379,6 +432,7 @@ header { height: 54px; flex: none; display: flex; align-items: center; gap: 10px
     </div>
     <aside class="sidebar" id="sidebar"></aside>
   </div>
+  <div id="slSplit" role="separator" aria-orientation="vertical" aria-controls="sidebar" aria-label="Resize the input pane (arrow keys; double-click or Enter resets)" tabindex="0" title="Drag to resize the input and output panes; double-click to reset"></div>
   <main class="main">
     <nav class="tab-bar" id="tab-bar"></nav>
     <div class="tab-panels" id="tab-panels"></div>
@@ -5351,6 +5405,147 @@ function sldwRender() {
     i.focus({ preventScroll: true });
   });
   show();
+})();
+</script>
+<script>
+/* =====================================================================
+   SLGP (2026-11-11): layout parity with the Abutment Calculator. Display only: nothing here computes a result, changes an input, the
+   autosave, the saved projects or a hand-off; the only new storage are two per-browser UI keys, subloads_splitRatio_v1 (the grab bar)
+   and subloads_dashCollapsed_v1 (the summary column), never in the project or the export.
+   - Check summary column (#slDashCol, screens 1200 px and wider; hidden in print): the input check status (SubLoadsInputCheck) and the
+     Summary tab's checks (MODEL.C), then each unit's governing forces at its lowest resultant level: the Strength and Extreme Event
+     envelope as the Combinations tab shows it (combine(k).env, the same fv() format), with the governing limit state. A click opens the
+     tab where the value is worked (CLAUDE.md §6). Collapsed to a 42 px strip by « (remembered per browser); with no stored choice it is
+     collapsed when the window is narrower than 1800 px, so the Combinations table still fits the output pane at 1440 px (SLLAY).
+   - Numbering: input tabs I-1 to I-4 and their sections I-n.m (in the order shown); output tabs "n · Name" (names and order unchanged).
+   - Grab bar (#slSplit, wider than 900 px), the pattern of apps/steel-bridge/ui/splitter.js: the input pane width is a share r of the
+     width beside the summary column; no stored key = the layout before (360 px). Pointer, keyboard (arrows 16 px, Shift 64 px, Page
+     Up / Down 80 px, Home / End), double-click or Enter resets.
+   - Input ID: a hash of the inputs (P without P.ui and the date, keys sorted, empty load-factor cells and objects left out), shown in
+     the header and in the Report title block; the same project gives the same ID after a reload.
+   ===================================================================== */
+(function slgp() {
+  const $id = id => document.getElementById(id), lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, lsSet = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { } };
+
+  /* ---------- Input ID ---------- */
+  const prune = (v, inLf) => {
+    if (Array.isArray(v)) return v.map(x => prune(x, false));
+    if (v && typeof v === 'object') { const o = {}; Object.keys(v).sort().forEach(k => { const x = prune(v[k], inLf || k === 'lf'); if (x === undefined) return; if (inLf && (x === '' || x === null)) return; if (x && typeof x === 'object' && !Array.isArray(x) && !Object.keys(x).length) return; o[k] = x; }); return o; }
+    return v;
+  };
+  function inputId() {
+    const q = JSON.parse(JSON.stringify(P)); delete q.ui; if (q.meta) delete q.meta.date;
+    const s = JSON.stringify(prune(q, false)); let h1 = 5381, h2 = 52711;
+    for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); h1 = ((h1 * 33) ^ c) >>> 0; h2 = ((h2 * 31) + c) >>> 0; }
+    return ('00000000' + h1.toString(16)).slice(-8).toUpperCase() + '-' + ('00000000' + h2.toString(16)).slice(-8).toUpperCase().slice(0, 4);
+  }
+  window.slInputId = inputId;
+  const idEl = document.createElement('span'); idEl.id = 'slInputId';
+  idEl.title = 'Input ID: a fingerprint of every input of this project (not the date or the view). The same inputs give the same ID; it is printed in the Report title block.';
+  idEl.innerHTML = 'Input ID <b></b>';
+  { const sp = document.querySelector('header .hdr-spacer'); if (sp) sp.before(idEl); }
+  const showId = () => { const b = idEl.querySelector('b'); if (b) b.textContent = inputId(); };
+  { const d0 = slrDoc; slrDoc = function () { const d = d0.apply(this, arguments); try { d.info = (d.info || []).concat([['Input ID', inputId()]]); } catch (e) { } return d; }; }
+
+  /* ---------- numbering ---------- */
+  const ITAB = { project: 1, bridge: 2, units: 3, rx: 4 };
+  function numItabs() { document.querySelectorAll('#itabs .itab').forEach(b => { const n = ITAB[b.dataset.pane]; if (!n) return; let s = b.querySelector('.ino'); if (!s) { s = document.createElement('span'); s.className = 'ino'; b.insertBefore(s, b.firstChild); } s.textContent = 'I-' + n; }); }
+  function numSecs() { const n = ITAB[P.ui.itab] || 0, sb = $id('sidebar'); if (!sb) return; sb.querySelectorAll('.sec-h > .ino').forEach(x => x.remove());
+    if (!n) return; [...sb.querySelectorAll('.sec-h')].forEach((h, i) => { const s = document.createElement('span'); s.className = 'ino'; s.textContent = `I-${n}.${i + 1}`; h.insertBefore(s, h.firstChild); }); }
+  function numTabs() { [...document.querySelectorAll('#tab-bar .tab-btn')].forEach((b, i) => { let s = b.querySelector('.tno'); if (!s) { s = document.createElement('span'); s.className = 'tno'; b.insertBefore(s, b.firstChild); } s.textContent = (i + 1) + ' ·'; }); }
+  const tabNo = id => { const L = [...document.querySelectorAll('#tab-bar .tab-btn')], i = L.findIndex(b => b.dataset.tab === id); return i < 0 ? '' : (i + 1) + ' · '; };
+  window.slTabNo = tabNo;
+
+  /* ---------- check summary column ---------- */
+  const DK = 'subloads_dashCollapsed_v1', mqW = window.matchMedia ? window.matchMedia('screen and (min-width:1200px)') : null, D = { open: new Map(), coll: null };
+  const collapsedNow = () => { const v = lsGet(DK); if (v === '1' || v === '0') return v === '1'; return window.innerWidth < 1800; };
+  function place() { document.body.classList.toggle('slDashWide', !!(mqW && mqW.matches)); coll(collapsedNow(), false); }
+  function coll(v, save) {
+    D.coll = !!v; document.body.classList.toggle('slDashColl', D.coll); const t = $id('slDashTgl');
+    if (t) { t.setAttribute('aria-expanded', D.coll ? 'false' : 'true'); t.innerHTML = D.coll ? '&raquo;' : '&laquo;'; t.title = D.coll ? 'Show the check summary column (remembered in this browser)' : 'Shrink the check summary column (remembered in this browser)'; }
+    if (save) { lsSet(DK, D.coll ? '1' : '0'); requestAnimationFrame(() => { splitApply(); window.dispatchEvent(new Event('resize')); }); }
+  }
+  const strip = h => { const d = document.createElement('div'); d.innerHTML = h || ''; return d.textContent; };
+  function lowestLevel(defs) { let lev = null; ['bridge seat', 'top of footing', 'bottom of footing'].forEach(l => { if (defs.some(d => d.grp === 'Resultant' && d.label === 'Axial, ' + l)) lev = l; }); if (!lev) { const d = defs.filter(x => x.grp === 'Resultant' && /^Axial, /.test(x.label)).pop(); if (d) lev = d.label.replace(/^Axial, /, ''); } return lev; }
+  function line(o) {   // o: { key, cls, name, val, tag, body, ref, go }
+    const c = document.createElement('div'); c.className = 'slCh ' + (o.cls || ''); c.tabIndex = 0; c.setAttribute('role', 'button'); c.dataset.key = o.key;
+    c.innerHTML = `<button type="button" class="slChX" aria-expanded="false" title="Show the values and where they are worked"></button><span class="slChN">${esc(o.name)}</span><span class="slChR">${o.val}</span>`
+      + (o.body ? `<div class="slChV">${o.body}</div>` : '') + (o.ref ? `<div class="slChRef">→ ${esc(o.ref)}</div>` : '');
+    c.title = o.name + (o.tip ? '\n' + o.tip : '') + (o.ref ? '\nClick: → ' + o.ref : '');
+    const x = c.querySelector('.slChX'), set = v => { c.classList.toggle('slOpen', v); x.setAttribute('aria-expanded', v ? 'true' : 'false'); x.textContent = v ? '▾' : '▸'; };
+    set(D.open.has(o.key) ? D.open.get(o.key) : !!o.openDef);
+    x.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); const v = !c.classList.contains('slOpen'); D.open.set(o.key, v); set(v); });
+    c.addEventListener('click', () => o.go && o.go()); c.addEventListener('keydown', e => { if (e.target !== c) return; if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); o.go && o.go(); } });
+    return c;
+  }
+  const goTab = (id, k) => { if (k != null) { P.ui.sel = k; try { renderStrip(); } catch (e) { } } showTab(id); const tp = document.querySelector('.tab-panels'); if (tp) tp.scrollTop = 0; };
+  function dash() {
+    const box = $id('slDash'), cnt = $id('slDashCnt'), note = $id('slDashNote'); if (!box) return;
+    box.innerHTML = ''; const add = el => box.appendChild(el), hd = t => { const h = document.createElement('div'); h.className = 'slDh'; h.textContent = t; add(h); };
+    const G = MODEL.G, IC = window.SubLoadsInputCheck ? SubLoadsInputCheck.collect() : [], C = MODEL.C || [];
+    const nFix = C.filter(c => c[0] === 'fail').length, nChk = C.filter(c => c[0] === 'warn').length, gE = G && G.E ? G.E.length : 0;
+    hd('Inputs');
+    add(line({ key: 'ic', cls: IC.length ? 'fail' : 'pass', name: 'Input checks', val: IC.length ? `<span class="tag fail">${IC.length} invalid</span>` : '<span class="tag pass">OK</span>', openDef: IC.length > 0,
+      body: IC.length ? '<ul style="margin:0;padding-left:14px">' + IC.slice(0, 8).map(e => `<li>${esc(e.label)}: ${esc(e.msg)}</li>`).join('') + (IC.length > 8 ? `<li>and ${IC.length - 8} more</li>` : '') + '</ul>' : 'Every input in use is valid.',
+      ref: tabNo('summary') + 'Summary (the list links to each field)', go: () => goTab('summary') }));
+    add(line({ key: 'mc', cls: nFix || gE ? 'fail' : nChk ? 'warn' : 'pass', name: 'Model checks', val: gE ? '<span class="tag fail">error</span>' : nFix ? `<span class="tag fail">${nFix} Fix</span>` : nChk ? `<span class="tag warn">${nChk} Check</span>` : '<span class="tag pass">OK</span>',
+      body: gE ? esc(G.E[0]) : `${nFix} to fix, ${nChk} to check, ${C.filter(c => c[0] === 'info').length} notes, ${C.filter(c => c[0] === 'pass').length} OK.`, ref: tabNo('summary') + 'Summary, Input checks', go: () => goTab('summary') }));
+    const blocked = IC.length || !G || gE || (typeof needOK === 'function' && needOK());
+    hd('Governing forces');
+    if (blocked) { const p = document.createElement('div'); p.className = 'note'; p.style.padding = '2px 2px 4px'; p.textContent = IC.length ? 'Results not shown: fix the inputs above.' : 'Results not shown: fix the items marked Fix on the Summary tab.'; add(p); }
+    else P.units.forEach((u, k) => {
+      let r = null, Cb = null; try { r = unitRes(k); Cb = combine(k); } catch (e) { r = null; } if (!r || r.err || !Cb || !Cb.env) { add(line({ key: 'u' + k, cls: 'warn', name: u.name, val: '—', body: esc((r && r.err) || 'Not computed.'), ref: tabNo('combo') + 'Combinations', go: () => goTab('combo', k) })); return; }
+      const defs = r.UM.defs, lev = lowestLevel(defs); if (!lev) return;
+      const q = lab => defs.findIndex(d => d.grp === 'Resultant' && d.label === `${lab}, ${lev}`), E = Cb.env;
+      const rows = [['Axial', 'P'], ['M<sub>t</sub>', 'M<sub>t</sub>'], ['M<sub>l</sub>', 'M<sub>l</sub>'], ['V<sub>t</sub>', 'V<sub>t</sub>'], ['V<sub>l</sub>', 'V<sub>l</sub>']].map(([lab, sym]) => ({ sym, q: q(lab) })).filter(x => x.q >= 0);
+      const qp = q('Axial'); if (qp < 0) return; const un = d => d.u || '';
+      const body = `<div style="margin:1px 0 2px">${esc(lev.charAt(0).toUpperCase() + lev.slice(1))}, Strength and Extreme Event envelope:</div><table>${rows.map(x => { const d = defs[x.q]; return `<tr><td>${x.sym} max</td><td class="v">${fv(E.max[x.q], d.u)} ${esc(un(d))}</td><td class="ls">${esc(E.gmx[x.q] || '')}</td></tr><tr><td>${x.sym} min</td><td class="v">${fv(E.min[x.q], d.u)} ${esc(un(d))}</td><td class="ls">${esc(E.gmn[x.q] || '')}</td></tr>`; }).join('')}</table>`;
+      add(line({ key: 'u' + k, cls: '', name: `${u.name}`, val: `P ${fv(E.max[qp], defs[qp].u)}`, tip: `P max ${fv(E.max[qp], defs[qp].u)} kip (${E.gmx[qp] || ''}), ${lev}`, body, ref: `${tabNo('combo')}Combinations, ${u.name} (envelope column)`, go: () => goTab('combo', k) }));
+    });
+    if (cnt) cnt.innerHTML = IC.length ? `<span class="tag fail">${IC.length} INVALID</span>` : nFix || gE ? `<span class="tag fail">${nFix || 1} FIX</span>` : nChk ? `<span class="tag warn">${nChk} CHECK</span>` : '<span class="tag pass">OK</span>';
+    if (note) note.innerHTML = blocked ? '' : 'Governing forces: each unit’s lowest resultant level (bottom of footing where there is one), the envelope of the Strength and Extreme Event limit states (each value its own extreme, not concurrent), as worked on the Combinations tab. Click a line to open it.';
+  }
+  let _dq = 0; const dashSoon = () => { if (_dq) return; _dq = requestAnimationFrame(() => { _dq = 0; try { dash(); } catch (e) { console.warn('summary column', e); } }); };
+  { const t = $id('slDashTgl'); if (t) t.addEventListener('click', () => coll(!D.coll, true)); }
+  if (mqW) { const f = () => { place(); splitApply(); }; if (mqW.addEventListener) mqW.addEventListener('change', f); else if (mqW.addListener) mqW.addListener(f); }
+
+  /* ---------- grab bar (apps/steel-bridge/ui/splitter.js pattern) ---------- */
+  const SK = 'subloads_splitRatio_v1', MIN_IN = 300, MIN_OUT = 480, mqS = window.matchMedia ? window.matchMedia('(min-width:900.02px)') : null;
+  const S = { want: null, el: $id('slSplit'), app: document.querySelector('.app'), inp: document.querySelector('.side'), out: document.querySelector('main.main'), dash: $id('slDashCol') };
+  const rd = () => { const v = parseFloat(lsGet(SK)); return isFinite(v) && v > 0.02 && v < 0.98 ? v : null; };
+  const side = () => !!S.el && !!(mqS ? mqS.matches : true) && getComputedStyle(S.el).display !== 'none';
+  function geo() { const aw = S.app.clientWidth, dw = S.dash && getComputedStyle(S.dash).display !== 'none' ? S.dash.getBoundingClientRect().width : 0, sw = S.el.getBoundingClientRect().width, base = Math.max(1, aw - dw);
+    return { base, lo: MIN_IN, hi: Math.max(MIN_IN, base - sw - MIN_OUT) }; }
+  const clampPx = (px, g) => Math.min(g.hi, Math.max(g.lo, px));
+  function aria(g, r) { const pct = x => Math.round(1000 * x / g.base) / 10; S.el.setAttribute('aria-valuemin', String(pct(g.lo))); S.el.setAttribute('aria-valuemax', String(pct(g.hi))); S.el.setAttribute('aria-valuenow', String(Math.round(1000 * r) / 10));
+    S.el.setAttribute('aria-valuetext', `Input pane ${Math.round(100 * r)} % of the width (${Math.round(S.inp.getBoundingClientRect().width)} px)${S.want == null ? ', default' : ''}`); }
+  function splitApply() { if (!S.el || !S.app || !S.inp) return; if (!side()) { S.app.style.removeProperty('--side-w'); return; } const g = geo();
+    if (S.want == null) { S.app.style.removeProperty('--side-w'); aria(g, S.inp.getBoundingClientRect().width / g.base); }
+    else { const px = clampPx(S.want * g.base, g); S.app.style.setProperty('--side-w', Math.round(px) + 'px'); aria(g, px / g.base); } }
+  let _rz = 0; const resized = () => { if (_rz) return; _rz = requestAnimationFrame(() => { _rz = 0; window.dispatchEvent(new Event('resize')); }); };
+  function setPx(px, save) { const g = geo(); S.want = clampPx(px, g) / g.base; splitApply(); if (save) lsSet(SK, S.want.toFixed(4)); resized(); }
+  function reset() { S.want = null; lsSet(SK, null); splitApply(); resized(); }
+  if (S.el && S.app && S.inp && S.out) {
+    S.want = rd(); let drag = null;
+    S.el.addEventListener('pointerdown', e => { if (e.button !== 0 || !side()) return; e.preventDefault(); S.el.focus({ preventScroll: true });
+      drag = { id: e.pointerId, x0: e.clientX, w0: S.inp.getBoundingClientRect().width, x: e.clientX }; try { S.el.setPointerCapture(e.pointerId); } catch (er) { } S.el.classList.add('drag'); document.body.classList.add('slSplitDrag'); });
+    S.el.addEventListener('pointermove', e => { if (!drag || e.pointerId !== drag.id) return; drag.x = e.clientX; setPx(drag.w0 + drag.x - drag.x0, false); });
+    const end = e => { if (!drag || (e && e.pointerId !== drag.id)) return; if (drag.x !== drag.x0) setPx(drag.w0 + drag.x - drag.x0, true); try { S.el.releasePointerCapture(drag.id); } catch (er) { } drag = null; S.el.classList.remove('drag'); document.body.classList.remove('slSplitDrag'); };
+    S.el.addEventListener('pointerup', end); S.el.addEventListener('pointercancel', end); S.el.addEventListener('lostpointercapture', end);
+    S.el.addEventListener('dblclick', e => { e.preventDefault(); reset(); });
+    S.el.addEventListener('keydown', e => { if (!side()) return; const w = S.inp.getBoundingClientRect().width, g = geo(), st = e.shiftKey ? 64 : 16;
+      const m = { ArrowLeft: w - st, ArrowRight: w + st, PageUp: w - 80, PageDown: w + 80, Home: g.lo, End: g.hi }[e.key];
+      if (e.key === 'Enter') { e.preventDefault(); reset(); return; } if (m == null) return; e.preventDefault(); setPx(m, true); });
+    window.addEventListener('resize', () => splitApply()); if (mqS) { const f = () => splitApply(); if (mqS.addEventListener) mqS.addEventListener('change', f); else if (mqS.addListener) mqS.addListener(f); }
+  }
+  window.SubLoadsLayout = { inputId, dash: () => dash(), splitReset: reset, setSplitPx: px => setPx(px, true), collapse: v => coll(v, true) };   // used by tests; no effect on results
+
+  /* ---------- hooks ---------- */
+  { const bt = buildTabs; buildTabs = function () { const r = bt.apply(this, arguments); numTabs(); return r; }; }
+  { const bs = buildSide; buildSide = function () { const r = bs.apply(this, arguments); numItabs(); numSecs(); return r; }; }
+  { const rc = recompute; recompute = function () { const r = rc.apply(this, arguments); showId(); dashSoon(); numItabs(); return r; }; }
+  { const st = showTab; showTab = function () { const r = st.apply(this, arguments); numTabs(); return r; }; }
+  place(); buildTabs(); numItabs(); numSecs(); splitApply(); showId(); dash();
 })();
 </script>
 </body>
