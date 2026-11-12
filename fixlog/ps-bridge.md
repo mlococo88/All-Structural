@@ -245,7 +245,7 @@ PR #1452: https://github.com/mlococo88/All-Structural/pull/1452
 - Next: PR 2c (Losses, Stresses, Flexure, Shear tabs; strand-pattern and stress graphics) with harness B against the old app.
 
 ## 2026-11-12 — PR 2c-1: Losses and Stresses output tabs, strand-pattern and stress graphics (steel style), check chips; browser harness B (no calculation change)
-PR #PR2C1: https://github.com/mlococo88/All-Structural/pull/PR2C1
+PR #1456: https://github.com/mlococo88/All-Structural/pull/1456
 ### Engineer-confirmed (2026-11-12, PS-15)
 - The interim single design girder (`P.design`, engine/design.js, PR 2b-1) and the blocking errors for unequal bays and for different skews
   at the two supports of the design span stay until phase 3 (PR 3a). Recorded here as confirmed by the engineer; no change.
