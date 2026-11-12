@@ -8577,7 +8577,7 @@ index 58fb573..567da1c 100644
   ["Pedestal crossties","ACI 318-19 25.7.2.3: PASS where the perimeter tie supports every bar that needs support; REVIEW with the number of crossties per tie set to detail (the tool takes no crosstie input)"],
 ```
 
-## 2026-11-12 — PR: claude/sf-direct-label (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SFDL) — Direct factored load mode labelled "ASCE 7 / indicative"; Q-SF1–Q-SF4 decided (engineer 2026-11-12)   [DISPLAY ONLY; no computed value, saved key or saved-data format change]
+## 2026-11-12 — PR: claude/sf-direct-label (PR #1432: https://github.com/mlococo88/All-Structural/pull/1432) (SFDL) — Direct factored load mode labelled "ASCE 7 / indicative"; Q-SF1–Q-SF4 decided (engineer 2026-11-12)   [DISPLAY ONLY; no computed value, saved key or saved-data format change]
 - **Engineer decisions 2026-11-12** (questions in the 2026-10-12 entry, "Needs engineer"; ENGINEER_CHECKS.md):
   - **Q-SF1 (Direct mode basis):** keep the calculation as is (ASCE 7 1.2 / 0.9 self-weight / EV bracket, factored loads against the allowable bearing, stability indicative) and label Direct mode "ASCE 7 / indicative"; bridge (AASHTO) work uses a case pulled from the Abutment Calculator / Bridge Substructure Loading (SFAD: AASHTO LRFD 10th Ed. factors) or By-load-type mode. Done here.
   - **Q-SF2 (seismic E):** closed, resolved by SFEQ (PR #1054, 2026-11-07).
