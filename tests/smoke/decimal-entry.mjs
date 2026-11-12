@@ -204,6 +204,24 @@ const CHECKS = {
     await typeIn('-'); r = await st(); chk(r.a === lab && r.v === '' && r.M === 0, `${lab} "-" alone: not overwritten while typing (field reads "${r.v}"), committed ${r.M} (0, as before)`);
     await leave(); r = await st(); chk(r.v === '0' && r.M === 0, `${lab} "-" left: the field shows the committed 0 (as before)`);
     await typeIn(orig); await leave();
+    // PDNB (2026-11-12): Casing OD (negative invalid, no clamp): "-1.5" kept while typing, then an input error (field marked, listed
+    // in the banner, results withheld); the original OD gives the results back
+    const odSel = () => F.evaluate(() => { const l = [...document.querySelectorAll('aside.input-rail label')].find(x => (x.querySelector('span') || {}).textContent === 'Casing OD');
+      const e = l && l.querySelector('input'); if (!e) return false; e.setAttribute('data-test-od', '1'); return true; });
+    if (!await odSel()) { chk(false, 'Casing OD field found'); return out; }
+    await F.evaluate(() => { const b = [...document.querySelectorAll('.rail-tab')].find(x => /^Pile/.test(x.textContent)); if (b) b.click(); });
+    await p.waitForTimeout(300);
+    const odType = async s => { await F.evaluate(() => { const e = document.querySelector('[data-test-od]'); e.scrollIntoView({ block: 'center' }); e.focus(); e.select(); });
+      await p.keyboard.press('Control+A'); for (const ch of s) await p.keyboard.type(ch); await p.waitForTimeout(60); };
+    const odSt = () => F.evaluate(() => { const e = document.querySelector('[data-test-od]'); return { v: e.value, a: document.activeElement === e, OD: PDPL_I.OD, inv: e.getAttribute('aria-invalid'),
+      ban: !!document.querySelector('#pdNegBanner [data-pdneg-go="OD"]'), mods: document.querySelectorAll('.app-shell section[data-module]').length }; });
+    const od0 = (await odSt()).v;
+    await odType('-1.5'); r = await odSt();
+    chk(r.a && r.v === '-1.5' && r.OD === -1.5, `Casing OD "-1.5": field "${r.v}" while typing, committed ${r.OD}`);
+    chk(r.inv === 'true' && r.ban && r.mods === 0, `Casing OD -1.5: input error (field marked ${r.inv}, listed ${r.ban}, result modules shown ${r.mods})`);
+    await leave(); r = await odSt(); chk(r.v === '-1.5' && r.ban && r.mods === 0, `Casing OD -1.5 left: field "${r.v}", error still listed, results withheld`);
+    await odType(od0); await leave(); r = await odSt();
+    chk(r.v === od0 && !r.ban && r.inv !== 'true' && r.mods > 0, `Casing OD back to ${od0}: no error, results shown (${r.mods} modules)`);
     return out;
   },
   // Moving Load Generator (DECE, 2026-11-11): the headway (shown only for the two-vehicle step case), a lone "-" in the variable
