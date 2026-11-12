@@ -99,7 +99,7 @@ Every PR: `fixlog/ps-bridge.md` entry, tests, only `apps/ps-bridge/` + its tests
 | 1 | **Skeleton:** folder, shell (panels, check-summary column, splitter, stacked phone layout), input tabs and output tabs with placeholders, `engine/model.js` (`psb2.project` v1: project, spans, xs; validate/migrate/save/load with backup), model test, `tools.html` card "(new, in development)" | no calculation |
 | 2a | **Engine moved in** (`pbd-*.js` verbatim) + verbatim test + Node parity harness A (38 + ~600 cases); `model.base` = `DEFAULTS` via `mergeInputs`; `computeAll` time measured | 0 differences |
 | 2b | Input tabs wired to `base` (one design), input checks; Section properties, Loads & LLDF and Analysis tabs, steel style | values = engine values |
-| 2c | Losses, Stresses, Flexure, Shear tabs; strand-pattern and stress graphics in the steel style | harness B values |
+| 2c | Losses, Stresses, Flexure, Shear tabs; strand-pattern and stress graphics in the steel style | harness B values. **2c-1 (Losses, Stresses, strand pattern, chips; harness B `tests/psbridge-compare.mjs`) and 2c-2 (Flexure, Shear)** |
 | 2d | End zone & hold-down, Camber & deflection, Handling, Deck, Rating tabs | harness B values |
 | 2e | Report (steel builders; every value = `psrModel` value) + browser harness B on all cases | harness B report |
 | 2f | **From old app**: `engine/legacy.js` reads `psbeam.inputs.v1`, `psbeam.bridge.v1` (every cell), old Export JSON, Bridge Suite slices — read only | old keys untouched (test) |

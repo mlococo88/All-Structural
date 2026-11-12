@@ -10,6 +10,9 @@
 //   4. an unreadable saved project is kept under psb2.project.unreadable.<time> and the page says so;
 //   3c. PR 2b-2: Section properties, Loads & LLDF, Analysis for three designs: every shown engine value (data-ev) = computeAll on the page;
 //      graphics and KaTeX steps drawn; a link to another tab's step; the station choice; an input error blocks the three tabs;
+//   3d. PR 2c-1: Losses and Stresses on the same designs (values = computeAll, >= 2 graphics, KaTeX); the strand-pattern graphic on the
+//      Girders & strands input tab (draped label, hold-down dimension); the check summary chips (ratio = the engine's, a chip opens the
+//      worked step of its value on its tab); the stress station and stage choices;
 //   5. 390 x 844 (phone): stacked panels, no splitter, no check summary column, no horizontal page scroll; 0 console errors.
 //   node tests/smoke/ps-bridge-skeleton.mjs [--file <index.html>] [--shots <dir>]
 import fs from 'fs';
@@ -81,6 +84,10 @@ await p.fill('[data-path="base.rows.3.y"]', '90'); await p.press('[data-path="ba
 check(await p.$eval('[data-path="base.rows.3.y"]', e => e.classList.contains('bad')) && /not inside the girder/.test(await p.textContent('#inPanes')), 'row outside the girder marked');
 await p.click('[data-act="del"][data-tbl="base.rows"][data-i="3"]');
 check(!/to fix/.test(await p.textContent('#sbDashCol')), 'row deleted, no errors');
+await p.click('#inTabs [data-itab="gird"]'); await p.waitForTimeout(200);
+{ const t = (await p.textContent('#gfx_strands_in')).replace(/\s+/g, ' ');
+  check(/draped/.test(t) && /0\.400 L/.test(t) && /hold-down/.test(t), 'strand pattern on the input tab: draped, hold-down at frac x L: ' + t.slice(0, 200)); }
+if (args.shots) { await p.click('#tabBar [data-otab="loss"]'); await p.waitForTimeout(300); await p.screenshot({ path: path.join(args.shots, 'ps-bridge-1400-gird-loss.png') }); }
 ls = await lsSnap(p);
 check(Object.keys(ls).every(k => k.startsWith('psb2.') || k in SEED || k === '__seeded'), 'keys after edits: ' + Object.keys(ls).join(', '));
 Object.entries(SEED).forEach(([k, v]) => check(ls[k] === v, 'untouched after edits ' + k));
@@ -108,20 +115,35 @@ const DESIGNS = [['default', null], ['continuous, exterior G1 in span 2, restrai
 for (const [lab, setup] of DESIGNS) {
   if (setup) await setup();
   check(!/to fix/.test(await p.textContent('#sbDashCol')), `${lab}: no input error`);
-  for (const t of ['sec', 'lds', 'an']) {
+  for (const t of ['sec', 'lds', 'an', 'loss', 'str']) {
     await p.click(`#tabBar [data-otab="${t}"]`); await p.waitForTimeout(250);
     const r = await evCheck();
     check(r.n >= 20 && !r.bad.length, `${lab} / ${t}: ${r.n} values, mismatches ${r.bad.slice(0, 5).join(' | ')}`);
-    check(r.svg >= 1 && r.katex >= 5, `${lab} / ${t}: graphic ${r.svg}, KaTeX ${r.katex}`);
+    check(r.svg >= (t === 'loss' || t === 'str' ? 2 : 1) && r.katex >= 5, `${lab} / ${t}: graphic ${r.svg}, KaTeX ${r.katex}`);
+    if (args.shots && (t === 'loss' || t === 'str')) await p.screenshot({ path: path.join(args.shots, `ps-bridge-1400-${t}-${lab.split(',')[0].replace(/[^A-Za-z0-9]+/g, '_')}.png`) });
   }
+  // the check summary column: a chip per built group with the engine's governing ratio
+  const dash = await p.evaluate(() => { const s0 = localStorage.getItem('psb2.project.current'), P = s0 ? window.PSBModel.importJSON(s0).project : window.PSBModel.defaultProject(), R = computeAll(window.PSBDesign.inputs(P));
+    const grp = window.PSBDashUI.GROUPS.filter(g => g.checks), bad = [];
+    grp.forEach(g => { const cs = g.checks.map(q => R.checks.find(c => c.n === q[0])).filter(Boolean); if (!cs.length) return; const gov = cs.reduce((b, c) => c.r > b.r ? c : b);
+      const el = document.querySelector(`#sbDashCol [data-sdgrp="${g.id}"] .sdVal`); if (!el || el.textContent !== gov.r.toFixed(3)) bad.push(`${g.id}: ${el && el.textContent} vs ${gov.r}`); });
+    return { n: grp.length, bad }; });
+  check(!dash.bad.length, `${lab}: check summary chips ${dash.bad.join(' | ')}`);
 }
 await p.click('#tabBar [data-otab="lds"]'); await p.click('#out a.wk[data-gotab="sec"]');
 check(await p.evaluate(() => { const el = document.getElementById('st-sec.g.wsw'); return !!el && el.closest('details').open && document.querySelector('#tabBar [data-otab="sec"]').getAttribute('aria-selected') === 'true'; }), 'link to a step of another tab opens it');
 await p.click('#tabBar [data-otab="an"]'); await p.selectOption('#o_anSel', '0');
 check(/x = 0\.00 ft/.test(await p.textContent('#out')), 'station choice');
+// PR 2c-1: a chip opens the worked step of its value; the stress station and the stage; the strand-pattern graphic on the input tab
+await p.click('#tabBar [data-otab="sum"]'); await p.click('#sbDashCol [data-sdgrp="srv"] .sdMain');
+check(await p.evaluate(() => document.querySelector('#tabBar [data-otab="str"]').getAttribute('aria-selected') === 'true' && [...document.querySelectorAll('#out details[open] li[id^="st-st."]')].length > 0), 'chip opens the Stresses tab and the step');
+await p.click('#sbDashCol [data-sdgrp="rel"] .sdX'); check((await p.$$('#sbDashCol [data-sdgrp="rel"] .sdList li')).length >= 2, 'chip lists its checks');
+await p.selectOption('#o_stSel', '0'); check(/selected station x = 0\.00 ft/.test(await p.textContent('#out')), 'stress station choice');
+await p.click('#stSecFig [data-vkseg="s2"]'); check(await p.evaluate(() => /s2Top/.test(document.querySelector('#stSecFig h3').textContent)), 'stress stage choice');
+if (args.shots) { await p.click('#tabBar [data-otab="str"]'); await p.waitForTimeout(300); await p.screenshot({ path: path.join(args.shots, 'ps-bridge-1400-gird-str.png') }); }
 // an input error blocks every result tab
 await p.click('#inTabs [data-itab="mat"]'); await p.fill('#i_base\\.mat\\.fci', '-1'); await p.press('#i_base\\.mat\\.fci', 'Tab');
-for (const t of ['sec', 'lds', 'an']) { await p.click(`#tabBar [data-otab="${t}"]`); check(/Results not shown/.test(await p.textContent('#out')) && !(await p.$('#out [data-ev]')), 'blocked ' + t); }
+for (const t of ['sec', 'lds', 'an', 'loss', 'str']) { await p.click(`#tabBar [data-otab="${t}"]`); check(/Results not shown/.test(await p.textContent('#out')) && !(await p.$('#out [data-ev]')), 'blocked ' + t); }
 await p.fill('#i_base\\.mat\\.fci', '6.8'); await p.press('#i_base\\.mat\\.fci', 'Tab');
 check(!o.errs.length, 'console errors (result tabs): ' + o.errs.join(' | '));
 await o.b.close();
@@ -138,8 +160,10 @@ const ph = await p.evaluate(() => { const r = id => document.getElementById(id).
   return { dash: cs('sbDashCol'), split: cs('sbSplit'), i: r('inputPanel'), o: r('outputPanel'), x: document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth }; });
 check(ph.dash === 'none' && ph.split === 'none' && ph.i.width <= 390 && ph.o.top >= ph.i.bottom - 1 && ph.x <= 0, 'phone layout ' + JSON.stringify(ph));
 for (const t of ['layout', 'xsec', 'gird', 'mat', 'dd', 'loads', 'own']) { await p.click(`#inTabs [data-itab="${t}"]`); check(await p.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth) <= 0, 'no sideways scroll on ' + t); }
-for (const t of ['sec', 'lds', 'an']) { await p.click(`#tabBar [data-otab="${t}"]`); await p.waitForTimeout(300); check(await p.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth) <= 0 && (await p.$$('#out svg')).length >= 1, 'phone: no sideways scroll, graphic on ' + t); }
+for (const t of ['sec', 'lds', 'an', 'loss', 'str']) { await p.click(`#tabBar [data-otab="${t}"]`); await p.waitForTimeout(300); check(await p.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth) <= 0 && (await p.$$('#out svg')).length >= 1, 'phone: no sideways scroll, graphic on ' + t); }
+await p.click('#inTabs [data-itab="gird"]'); await p.waitForTimeout(300); check(await p.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth) <= 0 && (await p.$$('#gfx_strands_in svg')).length >= 3, 'phone: strand pattern without sideways scroll');
 await p.click('#inTabs [data-itab="proj"]');
+if (args.shots) { await p.click('#tabBar [data-otab="str"]'); await p.waitForTimeout(300); await p.screenshot({ path: path.join(args.shots, 'ps-bridge-390-str.png'), fullPage: true }); }
 if (args.shots) await p.screenshot({ path: path.join(args.shots, 'ps-bridge-390.png'), fullPage: true });
 check(!o.errs.length, 'console errors (390 px): ' + o.errs.join(' | '));
 await o.b.close();

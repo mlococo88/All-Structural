@@ -11,7 +11,8 @@
      Engine: engine/*.js (no DOM). Report: report/*.js. UI: ui/*.js. Saved data: localStorage keys psb2.* only (engine/model.js).
      PR 1 (skeleton): the shell, the input and output tabs with placeholders, the project model (psb2.project v1). PR 2a: the old app's
      engine moved in unchanged (engine/pbd-*.js) and the project's base design (model base). PR 2b: the input tabs wired to base (one design
-     girder, engine/design.js) with the input checks (engine/inputcheck.js, ui/inputcheck.js).
+     girder, engine/design.js) with the input checks (engine/inputcheck.js, ui/inputcheck.js); the Section properties, Loads & LLDF and
+     Analysis tabs. PR 2c-1: the Losses and Stresses tabs, the strand-pattern graphic, the check chips of their checks.
      The old Prestressed Bridge Design.html stays the working tool. -->
 <!-- KaTeX for the worked-step equations: the steel app's pinned version and URL (CLAUDE.md §2; used from PR 2b) -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
@@ -39,6 +40,7 @@
     'engine/fields.js',      // PR 2b: every engine input on its input tab (label, unit, tooltip, rule)
     'engine/inputcheck.js',  // PR 2b: the blocking input errors (the steel app's pattern)
     'engine/worked.js',      // PR 2b-2: the worked steps of the Section properties, Loads & LLDF and Analysis tabs (values = the engine's)
+    'engine/worked-stress.js', // PR 2c-1: the worked steps of the Losses and Stresses tabs (values = the engine's)
     'report/sections.js',
     '../../shared/steps.js', // the worked-step format and renderer (shared; also used by the steel app)
     'ui/inputs.js',      // PR 2b: the girder design's input cards
@@ -49,6 +51,9 @@
     'ui/section.js',     // PR 2b-2: Section properties tab
     'ui/loads.js',       // PR 2b-2: Loads & LLDF tab
     'ui/analysis.js',    // PR 2b-2: Analysis tab
+    'ui/strands.js',     // PR 2c-1: the strand-pattern graphic (Girders & strands input tab, Losses tab)
+    'ui/losses.js',      // PR 2c-1: Losses tab
+    'ui/stresses.js',    // PR 2c-1: Stresses tab
     'ui/dash.js',     // the check summary column (adapted copy of apps/steel-bridge/ui/dash.js)
     'ui/splitter.js'  // the splitter between the input and output panels (copy of apps/steel-bridge/ui/splitter.js)
   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
@@ -219,6 +224,8 @@
   ul.asm{margin:4px 0;padding-left:18px;} ul.asm li{margin:3px 0;}
   #inPanes table.tbl td input{width:70px;}
   button:disabled{opacity:.45;cursor:default;}
+  /* this app (PR 2c-1): check status in the tables of the result tabs */
+  table.tbl tr.ng td{background:#FEF2F2;} table.tbl td.ok{color:var(--pass);font-weight:600;} table.tbl td.ngt{color:var(--fail);font-weight:700;} b.drp{color:#B45309;font-weight:600;font-size:8.5pt;}
 </style>
 </head>
 <body>
@@ -304,7 +311,8 @@
         + IN.cards('xsec', P)
         + ph('Barriers, sidewalks and dead-load distribution', '3a', ['DC2 and DW to each girder by the Steel Bridge app\'s method, with unequal bays (PS-9; a calculation change against the old app, with §4 callouts)']),
       gird: IN.cards('gird', P)
-        + ph('Strand-pattern graphic and girder groups', '2c / 3a', ['the strand pattern in the Steel Bridge graphic style (PR 2c)', 'the same shape for every girder of a span; interior and exterior design per span, optional per-girder override (PS-8, PR 3a)', 'girder library from the standard sheets (NEBT, NEDBT, NEXT, boxes): PR 4, waits for the sheets (PS-2)']),
+        + '<section class="sec"><div class="secHead">Strand pattern</div><div class="secBody" id="gfx_strands_in"><p class="note">Shown when the inputs have no error.</p></div></section>'
+        + ph('Girder groups', '3a', ['the same shape for every girder of a span; interior and exterior design per span, optional per-girder override (PS-8, PR 3a)', 'girder library from the standard sheets (NEBT, NEDBT, NEXT, boxes): PR 4, waits for the sheets (PS-2)']),
       mat: IN.cards('mat', P),
       dd: IN.cards('dd', P),
       loads: IN.cards('loads', P),
@@ -317,6 +325,8 @@
     const p = panes();
     $('inPanes').innerHTML = TABS.map(([k]) => `<div class="pane" data-pane="${k}"${ui.itab === k ? '' : ' hidden'}>${p[k]}</div>`).join('');
     markErrors();
+    // PR 2c-1: the strand-pattern graphic of the design (the engine's strand system), on the Girders & strands tab, when the inputs have no error
+    if (ui.itab === 'gird' && !errs.length && window.PSBStrandGfx) { const rc = result(); if (!rc.R.error) { try { window.PSBStrandGfx.mount($('gfx_strands_in'), { R: rc.R, inp: rc.inp }, { id: 'inStrandFig', title: 'Strand pattern of the design girder', compact: true }); } catch (e) { console.warn(e); } } }
   }
   /* the blocking input errors (engine/inputcheck.js collect: the model, the design girder, every field of the input cards): their fields
      marked with their message (ui/inputcheck.js, the steel app's pattern), counted on their input tab; no results while one exists */
@@ -366,8 +376,6 @@
 
   /* ---------- outputs (placeholders; docs/ps-bridge-plan.md §2.3, §5) ---------- */
   const OUT = {
-    loss: ['2c', ['instantaneous and long-term prestress losses, with the losses graphic']],
-    str: ['2c', ['release and service stresses at every station, with the stress diagrams']],
     flex: ['2c', ['Strength I flexural resistance and minimum reinforcement']],
     shear: ['2c', ['shear resistance, stirrup spacing and the longitudinal reinforcement check']],
     end: ['2d', ['splitting and confinement steel, debonding rules', 'draped strands and the hold-down force against its limit (PS-1, PS-10)']],
@@ -385,17 +393,18 @@
   function result() {
     const inp = window.PSBDesign.inputs(P), key = JSON.stringify(inp);
     if (RC.key !== key) { let R; try { R = computeAll(JSON.parse(key)); } catch (e) { R = { error: e.message }; } RC = { key, inp, R, W: null }; }
-    if (!RC.R.error && !RC.W) { const PW = window.PSBWorked; try { RC.W = { section: PW.section(RC.inp, RC.R), loads: PW.loads(RC.inp, RC.R), analysis: PW.analysis(RC.inp, RC.R) }; } catch (e) { RC.R = { error: 'Worked steps: ' + e.message }; } }
+    if (!RC.R.error && !RC.W) { const PW = window.PSBWorked, PS = window.PSBWorkedStress; try { RC.W = { section: PW.section(RC.inp, RC.R), loads: PW.loads(RC.inp, RC.R), analysis: PW.analysis(RC.inp, RC.R),
+      losses: PS.losses(RC.inp, RC.R), stresses: PS.stresses(RC.inp, RC.R) }; } catch (e) { RC.R = { error: 'Worked steps: ' + e.message }; } }
     return RC;
   }
-  const TABUI = { sec: () => window.PSBUiSection, lds: () => window.PSBUiLoads, an: () => window.PSBUiAnalysis };
+  const TABUI = { sec: () => window.PSBUiSection, lds: () => window.PSBUiLoads, an: () => window.PSBUiAnalysis, loss: () => window.PSBUiLosses, str: () => window.PSBUiStresses };
   let ctxOut = null;
   function drawOut() {
     $('tabBar').innerHTML = OTABS.map(([k, t]) => `<button type="button" role="tab" data-otab="${k}" aria-selected="${ui.otab === k}">${t}</button>`).join('');
     let h = '';
     if (L.note) h += `<div class="alert err">${esc(L.note)}</div>`;
     if (errs.length) h += window.PSBInputCheckUI.blocked(errs, icO());
-    h += `<div class="alert">In development (PR 2b): Section properties, Loads &amp; LLDF and Analysis show the design girder's results; the checks follow from PR 2c. Use the old <a href="../../Prestressed%20Bridge%20Design.html">Prestressed Bridge Design</a> for design work.</div>`;
+    h += `<div class="alert">In development (PR 2c-1): Section properties, Loads &amp; LLDF, Analysis, Losses and Stresses show the design girder's results; Flexure and Shear follow (PR 2c-2), then the other checks (PR 2d). Use the old <a href="../../Prestressed%20Bridge%20Design.html">Prestressed Bridge Design</a> for design work.</div>`;
     const name = (OTABS.find(t => t[0] === ui.otab) || [, ''])[1];
     let rc = null; ctxOut = null;
     if (!errs.length) { rc = result(); if (rc.R.error) h += `<div class="alert err" role="alert"><b>The engine could not compute this design:</b> ${esc(rc.R.error)}. Results not shown.</div>`; }
@@ -422,6 +431,8 @@
     if (window.PSBDashUI) window.PSBDashUI.refresh();
   }
   const gotoOut = t => { ui.otab = t; saveUi(); drawOut(); $('outputPanel').scrollTop = 0; };
+  /* gotoStep(tab, id): that output tab, then the worked step id with its topic opened (the check summary chips, PR 2c-1) */
+  const gotoStep = (t, id) => { gotoOut(t); if (id) { const el = window.SharedSteps.reveal($('out'), id); if (el) el.scrollIntoView({ block: 'center' }); } };
   $('tabBar').addEventListener('click', e => { const b = e.target.closest('[data-otab]'); if (b) gotoOut(b.dataset.otab); });
   $('out').addEventListener('click', e => {
     const a = e.target.closest('[data-icgo]'); if (a) { e.preventDefault(); gotoErr(+a.dataset.icgo); return; }
@@ -430,7 +441,7 @@
     const gt = e.target.closest('[data-gotab]'); if (gt) { e.preventDefault(); gotoOut(gt.dataset.gotab); const h = gt.getAttribute('href') || '';
       if (/^#st-/.test(h)) { const el = window.SharedSteps.reveal($('out'), h.slice(4)); if (el) el.scrollIntoView({ block: 'center' }); } }
   });
-  $('out').addEventListener('change', e => { if (window.PSBUiAnalysis.onOutChange(e, ui)) { saveUi(); drawOut(); } });
+  $('out').addEventListener('change', e => { if (Object.values(TABUI).some(f => f().onOutChange && f().onOutChange(e, ui))) { saveUi(); drawOut(); } });
 
   /* toast(text): a message (the inputs an owner change set), closed by its button */
   function toast(text) { const t = $('toast'); t.className = ''; t.innerHTML = `<div>${esc(text)}</div><div class="tBtns"><button type="button" id="tClose">Close</button></div>`; t.hidden = false; $('tClose').onclick = () => { t.hidden = true; }; }
@@ -448,7 +459,7 @@
     rd.readAsText(f); });
 
   drawInputs(); drawOut(); syncBar();
-  if (window.PSBDashUI) window.PSBDashUI.init({ el: $('sbDashCol'), store, getP: () => P, errors: () => errs, goto: gotoOut, fix: gotoErr });
+  if (window.PSBDashUI) window.PSBDashUI.init({ el: $('sbDashCol'), store, getP: () => P, errors: () => errs, result: () => { if (errs.length) return null; const rc = result(); return rc.R.error ? null : rc.R; }, goto: gotoStep, fix: gotoErr });
 })();
 </script>
 </body>
