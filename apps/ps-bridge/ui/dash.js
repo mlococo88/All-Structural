@@ -33,7 +33,7 @@
     if (D.coll) { o.el.innerHTML = head('<span class="sdC"><span class="sdN">not run</span></span>'); return; }
     const chips = GROUPS.map(g => `<div class="sdChip sd-notrun"><span></span><a href="#" class="sdMain" data-sdtab="${g.tab}" title="Not built yet: comes in PR ${g.pr} (docs/ps-bridge-plan.md §5)"><span class="sdName">${esc(g.name)}</span><span class="sdVal">not run</span><span class="sdSt">PR ${g.pr}</span></a></div>`).join('');
     o.el.innerHTML = head('<span class="sdC"><span class="sdN">not run</span></span>')
-      + '<div class="sdVerd"><b class="sd-notrun">—</b></div><div class="sdRun">In development: no checks yet. The prestressed engine moves in with PR 2a; the checks show here from PR 2c.</div>'
+      + '<div class="sdVerd"><b class="sd-notrun">—</b></div><div class="sdRun">In development: no checks yet. The inputs reach the moved engine (PR 2b); the checks show here from PR 2c.</div>'
       + `<div id="sbDash">${chips}</div><p class="sdNote">Each chip will show the governing ratio (demand / capacity, OK ≤ 1.0; rating RF OK ≥ 1.0) over every girder and span, as on the <a href="#" data-sdtab="sum">Summary tab</a>, and link to the card that works it.</p>`;
   }
   function init(o) {
