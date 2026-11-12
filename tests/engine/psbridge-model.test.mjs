@@ -70,15 +70,38 @@ test('the page: classic scripts by relative path (file://), no modules or fetch,
   const html = fs.readFileSync(path.join(APP, 'index.html'), 'utf8'), steel = fs.readFileSync(path.join(ROOT, 'apps/steel-bridge/index.html'), 'utf8');
   assert.ok(!/type\s*=\s*["']module["']|\bimport\s*\(|\bfetch\s*\(|XMLHttpRequest|text\/babel/.test(html));
   const list = [...html.matchAll(/^\s*'([^']+\.js)',?/gm)].map(m => m[1]);
-  assert.deepEqual(list, ['engine/model.js', 'report/sections.js', 'ui/dash.js', 'ui/splitter.js']);
+  const pbd = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => `engine/pbd-${n}.js`);
+  assert.deepEqual(list, [...pbd, 'engine/model.js', 'report/sections.js', 'ui/dash.js', 'ui/splitter.js']);   // PR 2a: the moved engine first
   list.forEach(f => { assert.ok(!f.startsWith('/') && !/^\w+:/.test(f), f); assert.ok(fs.existsSync(path.join(APP, f)), f); });
   const cdn = s => [...s.matchAll(/(?:src|href)="(https:[^"]+)"/g)].map(m => m[1]).sort();
   const ours = cdn(html); assert.equal(ours.length, 4); ours.forEach(u => assert.ok(cdn(steel).includes(u), u));   // KaTeX 0.16.9, three r128 + OrbitControls 0.128.0
   // the code (comments removed): no sbd2.* key and no window.SBD* namespace of the steel app is used; every storage key literal is psb2.*
   const code = t => t.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"\\])\/\/.*$/gm, '$1');
-  for (const f of ['index.html', ...list]) {
+  // the moved engine files (verbatim, PR 2a) are left out of the key check: they name the old app's keys (PBD.KEY psbeam.bridge.v1, its
+  // load/save) as on the old page; this app never calls PBD.load / PBD.save (checked below), so it reads and writes no psbeam.* key
+  for (const f of ['index.html', ...list.filter(f => !pbd.includes(f))]) {
     const c = code(fs.readFileSync(path.join(APP, f), 'utf8'));
     assert.ok(!/sbd2[.:]|window\.SBD|\bSBD[A-Z]/.test(c), `${f}: a steel key or namespace is used`);
     [...c.matchAll(/'((?:psb2|psbeam)\.[\w.]+)'/g)].forEach(m => assert.ok(m[1].startsWith('psb2.'), `${f}: ${m[1]}`));
+    assert.ok(!/PBD\s*\.\s*(load|save|select|edit)\b|bridgeNav\s*\(/.test(c), `${f}: calls the old app's storage or navigation`);
   }
+});
+
+// PR 2a: the base girder design (plan §2.4): model.base = mergeInputs(DEFAULTS shape) of the moved engine, loaded before model.js
+test('base design (PR 2a): a new project carries the old app\'s defaults; a PR 1 project without base reads with them; base is merged onto DEFAULTS', () => {
+  const files = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge']
+    .map(n => path.join(APP, `engine/pbd-${n}.js`));
+  const E = loadShared(...files, path.join(APP, 'engine/model.js')), ME = E.PSBModel, D = J(E.mergeInputs(null));
+  const p = ME.defaultProject(); assert.equal(ME.validate(p).errors.length, 0);
+  assert.deepEqual(J(p.base), D); assert.equal(p.base.girder, 'PCI BT-72'); assert.equal(p.base.L, 120); assert.equal(p.base.S, 9);   // = PR 1's default span and spacing
+  assert.notEqual(p.base, E.mergeInputs(null));   // a copy, not the engine's DEFAULTS object
+  const pr1 = M.defaultProject(); assert.equal(pr1.base, undefined);   // model.js alone (PR 1 shape)
+  const s = store({ 'psb2.project.current': M.exportJSON(pr1) }), r = ME.load(s);
+  assert.equal(r.source, 'saved'); assert.deepEqual(J(r.project.base), D); assert.deepEqual(J(r.project.xs), J(pr1.xs));
+  assert.equal(s.getItem('psb2.project.current'), M.exportJSON(pr1));   // reading changes nothing stored
+  const q = ME.defaultProject(); q.base = { girder: 'AASHTO Type IV', L: 85, mat: { fc: 7 } };
+  const b = ME.importJSON(ME.exportJSON(q)).project.base;
+  assert.equal(b.girder, 'AASHTO Type IV'); assert.equal(b.L, 85); assert.equal(b.mat.fc, 7); assert.equal(b.mat.fci, D.mat.fci); assert.deepEqual(J(b.rows), D.rows);
+  const bad = ME.defaultProject(); bad.base = [1]; assert.equal(ME.validate(bad).errors[0].path, 'base');
+  const R = E.computeAll(J(p.base)); assert.equal(R.error, null); assert.ok(R.checks.length > 10);   // the engine computes the base design
 });
