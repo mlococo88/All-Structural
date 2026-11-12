@@ -17527,6 +17527,7 @@ Engineer decision 2026-11-10 (geometry). AASHTO LRFD 10th Ed. (2024): 5.6.5 / Fi
     and `puT` gets `br:pbr` (worked P_u display).
   - `perBearingLoads(R,sel)` (3D view): `P: ns*(fDC·DC + fDW·DW + fLL·LL + fWS·WS + fWL·WL)` → `… + fBR*pg[i]` (fBR = γ_LL·m of the limit state, 1 for the BR load case).
   - `edmPayload()` (elastomeric module hand-off): `const Pll=(S.rx.LL[i]?S.rx.LL[i].P:0)/nBg;` → `const Pll=((S.rx.LL[i]?S.rx.LL[i].P:0)+Pbr)/nBg;` with `Pbr = pg[i]` (service, unfactored; the representative `loads.Pll` follows, first interior girder). The EDM status line says P_LL includes the couple.
+    - **Engineer-confirmed 2026-11-12:** the couple added to the elastomeric P_LL as service live load without IM, as built. **Superseded in part by ABXF (PR #1449):** the imported couple is at its full value, not × the BR share.
   - Texts: §1.6a card (`brCoupleHTML`, new `AB5_TXT(per)`: where else the couple goes, and why not the stem; haunch-blank note; imported card too), §1.6a REVIEW text, Tab 5 §5.6 worked P_u (`+ γ_LL P_BR,i`) and its "P_BR,i" note, the 3D note, the Report (section 3 BR couple rows; section 5 seat P_u row label), panel I-1 note and haunch tooltip, `defaultState` comment.
 - **Before / after expressions (per girder i, Strength I / V; governing per bearing = /n_b):**
   - Before: P_u,girder = γ_DC P_DC + γ_DW P_DW + γ_LL m P_LL (+ γ_WS P_WS + γ_WL P_WL at Strength V) (+ approach slab, diaphragm).
@@ -17549,3 +17550,54 @@ Engineer decision 2026-11-10 (geometry). AASHTO LRFD 10th Ed. (2024): 5.6.5 / Fi
 - **Saved data (§5):** no key or format changed; Input IDs unchanged. The EDM postMessage payload format is unchanged (only the P_LL value).
 - **How verified:** `tests/smoke/abutment-br-couple.mjs` extended (the cases above: seat P_u / D/C, EDM P_LL, 3D per-bearing, imported, AB-7 haunch blank and girder depth blank, stem unchanged, Tab 5 §5.6 and Report text, KaTeX); main-vs-branch probe of 7 cases (only the values above differ); the abutment smoke tests (`abutment-seis-loc` alone), `abutment-subloads-exchange`, `abutment-pile-group-parity`, `abutment-pile-length`, `project-library --tool abutment` (against this branch: all pass; against main only the `R.brCouple` record differs: `hh` null → 0, `hhBlank`, `miss` no longer names the haunch), `check-syntax`; `abutment-brg-front`'s number walk now leaves out `R.brCouple` as its first comparison already did. No elastomeric smoke test reads the abutment hand-off (the EDM side is unchanged).
 - **Other copies:** none.
+
+## 2026-11-12 — PR: abutment-br-couple-full (PR #1449: https://github.com/mlococo88/All-Structural/pull/1449) (ABXF) — SubLoads-imported BR vertical couple at its full value, not × this abutment's BR share; AB-5 elastomeric P_LL as service LL without IM engineer-confirmed   [§4: results change only for projects with a SubLoads-imported BR couple and BR share ≠ 100 %; no saved key or format change]
+- **Engineer decision (2026-11-12, follow-up to #1447):** the vertical braking couple imported from SubLoads must NOT be multiplied by this abutment's BR share; the share applies to the horizontal BR only. Use SubLoads' couple at full value everywhere it is applied: the foundation load groups (ABXC #1408), the seat bearing check, the per-bearing loads, and the elastomeric P_LL. Also confirmed: the couple is added to the elastomeric P_LL as service live load without IM, as built in #1447 (AB-5).
+- **What SubLoads' P is (verified in `Bridge Substructure Loading.html`):**
+  - `superCase(G, D, k, spec)`: `if (spec.FL && r.end) { const FLs = spec.FL(r.si), sg = r.end === 'ahead' ? 1 : -1; for (let j = 0; j < nb; j++) V[j] += sg * FLs * e / r.Ls / nb; }`.
+  - FLs is the whole continuous segment's braking force (`brSeg[si].tot`, before the unit share f_L). e = deck + 6 ft − the bearing level, so it is the height of BR above the bearings. r.Ls is the segment length (`distrib`: `Ls = G.X[sg.b] − G.X[sg.a]`). nb is the number of bearings in the row.
+  - So P per girder = BR_segment·h/L_segment/N at the segment's end support, which is the abutment's whole vertical reaction from the couple. The share f_L multiplies only the horizontal force (`FL * r.fL`).
+  - The export (`perGirder`) writes `lc.V[0][p.j]` per girder unchanged, and its `calculatorInput` sets `dist.shBR: 100`.
+  - Applying × share in the calculator therefore under-counted the couple whenever the share was below 100 %. At the full value nothing is double counted: the calculator's own couple is not added when the couple is imported (#1445).
+- **Where (all in `abutment_calculator.html`):**
+  - `computeAll`, after the ABXC comment: `if(agg.BR.P){ groups.BR.V=agg.BR.P*shBR; groups.BR.Mv=agg.BR.P*shBR*xBrg; groups.BR.Mt+=agg.BR.MtP*shBR; }` → `if(agg.BR.P){ groups.BR.V=agg.BR.P; groups.BR.Mv=agg.BR.P*xBrg; groups.BR.Mt+=agg.BR.MtP; }` (ABXF comment added).
+  - `brCouple`, imported: `pg:S.rx.BR.map(r=>Math.abs(+r.P||0)*shBR)` → `pg:S.rx.BR.map(r=>Math.abs(+r.P||0))`. This feeds the seat bearing (§5.6), `perBearingLoads` (3D) and `edmPayload` (elastomeric P_LL), all unchanged themselves.
+  - Texts:
+    - The §1.6a imported card was "ΣP × the BR share = V"; it is now "V = ΣP at its full value, not × the BR share (…)".
+    - Tab 5 §5.6 "P_BR,i" note.
+    - Report section 3 row: was `eq "\Sigma P\,s_{BR}"`, now `"\Sigma P"`; label and note.
+    - SubLoads pull help text for BR: "P is applied at its full value whatever the BR share".
+- **Before / after:**
+  - Group V_BR: before ΣP_i·s_BR, after ΣP_i.
+  - M_v: V_BR·x_brg. M_t (couple part): before ΣP_i·y_i·s_BR, after ΣP_i·y_i.
+  - Per girder (seat, per-bearing, EDM): before |P_i|·s_BR, after |P_i|.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 3.6.4 (BR 6 ft above the deck, either direction); 5.6.5 and Table 3.4.1-1 unchanged in use.
+- **Check case:** the page's default project plus a SubLoads-imported couple P = −0.242 kip on each of 6 girders, BR share 50 %. Spread footing unless noted.
+
+  | Result | Before | After |
+  |---|---|---|
+  | Per girder | 0.242 × 0.50 = **0.121 kip** | **0.242 kip** |
+  | Group V_BR | −0.726 kip | **−1.452 kip** |
+  | M_v at x_brg 5.25 ft | −3.81 kip-ft | −7.62 kip-ft |
+  | Strength I reversed permutation (BR toward the backfill), ΣV | 2401.177 kip | 2402.447 kip (+1.75 × 0.726 = +1.271) |
+  | Seat bearing (Strength I, girder 1) P_u | 246.750 + 1.75 × 0.121 = 246.962 kip | 246.750 + 1.75 × 0.242 = **247.173 kip** |
+  | Seat bearing q_b/q_R | 0.12010 | **0.12020** |
+  | Spread footing bearing, governing V | 2912.54 kip | 2911.27 kip |
+  | Spread footing bearing D/C | 0.8800 | 0.8797 |
+  | Sliding | 1.1005 | 1.1005 (unchanged) |
+  | Piles (same project on piles): P_max | 200.893 kip | 200.817 kip |
+  | Piles: compression D/C | 0.9366 | 0.9362 |
+  | Piles: P_min | 10.552 kip | 10.522 kip |
+  | Elastomeric P_LL per bearing | 70.121 kip | **70.242 kip** |
+  | nFail | 1 | 1 |
+
+  - Share 100 % (as SubLoads' pull sets it): identical before and after (V −1.452 kip, seat 247.173 kip, EDM P_LL 70.242 kip).
+  - Projects without an imported couple, including the computed couple of #1445 (already not × the share): identical.
+- **Values that change (saved projects):** only projects with a SubLoads-imported BR couple (BR P ≠ 0 in the reaction table) whose BR share is not 100 % and whose distribution model is not "fixed". The pull sets 100 %, so this means projects where the share was changed after the pull. In those projects, every BR-couple result changes: the load groups (V, M_v, M_t), so sliding, eccentricity, bearing, pile reactions and the foundation hand-off; the seat bearing; the 3D per-bearing P; and the elastomeric P_LL.
+- **Saved data (§5):** no key or format changed; Input IDs unchanged.
+- **How verified:**
+  - `tests/smoke/abutment-br-couple.mjs`: the share-50 % imported case now expects full value: V −1.452, seat 247.173, EDM 70.242.
+  - Main-vs-branch probe of 5 cases: only the share-50 % imported cases differ.
+  - The abutment smoke tests (`abutment-seis-loc` alone), `abutment-subloads-exchange`, `abutment-subloads-pull`, `abutment-pile-group-parity`, `project-library --tool abutment`, `check-syntax`.
+- **Other copies:** none. SubLoads is unchanged.
+
