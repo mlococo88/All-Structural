@@ -41,8 +41,7 @@ const TOOLS = {
   gusset: { file: 'Gusset Plate Rating.html', tabs: '.itab[data-pane], #tab-bar .tab-btn', wait: 4000 },
   secprop: { file: 'Section Property Calculator.html', tabs: TABS, wait: 4000 },
   smd: { file: 'Shear and Moment Diagrams.html', tabs: '#smdViewTabs button', wait: 3000 },
-  // arch (DECE, 2026-11-11): the tool re-runs the whole analysis on every keystroke (about 2.5 s a key headless), so the sweep takes
-  // about 20 minutes; it is slow, not stuck. The list-input tables under the paste boxes (depth overrides, SDL line items) have
+  // arch (DECE, 2026-11-11; ARDB 2026-11-12: the tool now recalculates 0.4 s after typing stops, so the sweep takes about 2.5 min, not 20): the list-input tables
   // no id: their cells are found by data-dece and an empty row is put back empty. knownErr: the arch drawing logs SVG transform
   // errors (NaN) while a field holds a value the sweep types that it cannot draw (same on origin/main); counted, not failed.
   arch: { file: 'Stone Masonry Arch Load Rating.html', tabs: '[id^=inTab_], #tabs [data-tab]', wait: 6000, knownErr: /^Error: <\w+> attribute / },
