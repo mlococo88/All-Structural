@@ -66,7 +66,8 @@ async function snapAll(file) {
 
 console.log(`1. e = 0: identical to ${REF} (${sha})`);
 { const [a, b] = await Promise.all([snapAll(FA), snapAll(FB)]);
-  for (const nm of [...Object.keys(CASES), 'saved']) { const x = a.out[nm], y = b.out[nm], dR = diff(x.R, y.R), dW = diff(x.W || [], y.W || []);
+  // AB-1 (2026-11-12): the BR vertical couple (R.brCouple, its REVIEW warning while the elevation inputs are blank) is new; tests/smoke/abutment-br-couple.mjs
+  for (const nm of [...Object.keys(CASES), 'saved']) { const x = a.out[nm], y = b.out[nm], dR = diff(x.R, y.R).filter(d => !/^\.brCouple/.test(d[0])), dW = diff((x.W || []).filter(m => !/Braking vertical couple/.test(m)), (y.W || []).filter(m => !/Braking vertical couple/.test(m)));
     check(!dR.length && !dW.length && x.fp === y.fp, `${nm}: LAST_R ${dR.length ? dR.length + ' diffs ' + JSON.stringify(dR.slice(0, 2)) : 'identical'} (${JSON.stringify(y.R).length} chars), warnings ${dW.length ? 'DIFF' : 'same'}, Input ID ${y.fp}`); }
   check(b.out.saved.bwOff === 0, 'saved project without geom.bwOff opens with e = 0');
   check(!b.errs.length, `console errors (B): ${b.errs.length} ${b.errs.slice(0, 2).join(' | ')}`); }

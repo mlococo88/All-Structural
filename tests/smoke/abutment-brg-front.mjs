@@ -69,13 +69,14 @@ console.log(`1. Main (${REF} ${sha}) vs this tree: identical geometry, identical
 { const [a, b, c] = await Promise.all([snapAll(FA, 'old'), snapAll(FB, 'old'), snapAll(FB, 'entered')]);
   for (const nm of Object.keys(CASES)) { const x = a.out[nm], y = b.out[nm], z = c.out[nm];
     // the owner check rows quote a_f now (ABBF2): their display strings .val / .tex change, nothing else
-    const TXT = /^\.own\.rows\[\d+\]\.(val|tex)$/, dAll = diff(x.R, y.R), dR = dAll.filter(d => !TXT.test(d[0]));
+    // AB-1 (2026-11-12): the BR vertical couple (R.brCouple, its REVIEW warning while the elevation inputs are blank) is new; tests/smoke/abutment-br-couple.mjs
+    const TXT = /^\.own\.rows\[\d+\]\.(val|tex)$/, dAll = diff(x.R, y.R).filter(d => !/^\.brCouple/.test(d[0])), dR = dAll.filter(d => !TXT.test(d[0]));
     dAll.filter(d => TXT.test(d[0])).forEach(d => console.log(`       owner row text ${d[0]}:\n         − ${String(d[1]).slice(0, 200)}\n         + ${String(d[2]).slice(0, 200)}`));
-    const wA = x.W.slice(), wB = y.W.slice(); let ren = 0;
+    const wA = x.W.filter(m => !/Braking vertical couple/.test(m)), wB = y.W.filter(m => !/Braking vertical couple/.test(m)); let ren = 0;
     const rw = []; const wOK = wA.length === wB.length && wA.every((m, i) => m === wB[i] || (RENAMED_MSG.some(([p, q]) => p.test(m) && q.test(wB[i])) && rw.push([m, wB[i]]))); ren = rw.length;
     rw.forEach(([m, n]) => console.log('       reworded warning:\n         − ' + m.slice(0, 300) + '\n         + ' + n.slice(0, 300)));
     check(!dR.length && wOK && x.fp === y.fp, `${nm} (saved without a_f → a_f = ${y.af}): LAST_R ${dR.length ? dR.length + ' diffs ' + JSON.stringify(dR.slice(0, 2)) : 'identical'} (${JSON.stringify(y.R).length} chars), warnings ${wOK ? 'same' + (ren ? ` (${ren} reworded, same values)` : '') : 'DIFF ' + JSON.stringify([wA, wB]).slice(0, 400)}, Input ID ${x.fp} / ${y.fp}`);
-    let bad = []; (function walk(p, q, k) { if (/^R\.own\.rows\.\d+\.(val|tex)$/.test(k)) return; if (typeof p === 'number' && typeof q === 'number') { if (!near(p, q)) bad.push(k + ': ' + p + ' / ' + q); } else if (p && typeof p === 'object' && q && typeof q === 'object') { for (const j of Object.keys(p)) walk(p[j], q[j], k + '.' + j); } else if (p !== q) bad.push(k + ': ' + JSON.stringify(p).slice(0, 60) + ' / ' + JSON.stringify(q).slice(0, 60)); })(x.R, z.R, 'R');
+    let bad = []; (function walk(p, q, k) { if (/^R\.own\.rows\.\d+\.(val|tex)$/.test(k) || /^R\.brCouple\b/.test(k)) return;   /* AB-7: R.brCouple.miss no longer lists the haunch */ if (typeof p === 'number' && typeof q === 'number') { if (!near(p, q)) bad.push(k + ': ' + p + ' / ' + q); } else if (p && typeof p === 'object' && q && typeof q === 'object') { for (const j of Object.keys(p)) walk(p[j], q[j], k + '.' + j); } else if (p !== q) bad.push(k + ': ' + JSON.stringify(p).slice(0, 60) + ' / ' + JSON.stringify(q).slice(0, 60)); })(x.R, z.R, 'R');
     check(!bad.length && x.fp === z.fp, `${nm} (a_f entered = ${z.af}, setback ${z.sb}): every number within 1e-9 (${bad.length} diffs ${bad.slice(0, 2).join(' | ')}), Input ID ${z.fp}`);
     for (const [k, lab] of [['txt', 'tabs'], ['rpt', 'Report']]) { const d = textDiff(x[k], y[k]);
       console.log(`       ${lab} text: ${d.gone.length} line(s) of main changed, ${d.added.length} new/changed in this tree`);

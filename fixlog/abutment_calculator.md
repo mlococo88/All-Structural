@@ -17438,14 +17438,166 @@ Engineer decision 2026-11-10 (geometry). AASHTO LRFD 10th Ed. (2024): 5.6.5 / Fi
   - L_pile 40, L_u 5: L_req = 16.845, D/C 0.421. L_pile 15: D/C 0.790 PASS, L_s/T_x = 14/3.247 = 4.31 < 5, flagged. L_pile 6: L_s 5.00 < D_f 5.845, D/C 1.974 FAIL (nFail 0 → 1), both flags. Clay (S_u 1 ksf), L_pile 30: D_f 7.585, D/C 0.453, L_s/R_x 5.35.
 - **Values that change:** only with L_pile entered on a pile footing (conventional or semi-integral): the new dashboard row (nFail when > 1) and the warnings. Every other `LAST_R` value is identical to main: the default project, the default on piles with L_pile blank, and a spread footing with a stored L_pile. Integral: unchanged.
 - **Saved data (§5):** none changed (`piles.elLpile` is the ABEL2 key); Input IDs unchanged.
-- **Decisions (pending engineer review):**
-  1. The 5 ft margin is applied to pile footings, as the engineer stated. AASHTO / MassDOT 3.2.2.2 require only reaching fixity.
-  2. D_f = the C10.7.3.13.4 (or entered / Pile Designer) depth to fixity of §4.4b, not a p-y second point of zero deflection.
-  3. The long-pile threshold is 5T (5R for clay).
-  4. A pile that does not reach D_f is an error-level warning plus the D/C row. The buckling result is kept.
+- **Decisions (engineer-decided 2026-11-12, see AB-4 #1446):**
+  1. The 5 ft margin is applied to pile footings, as the engineer stated. AASHTO / MassDOT 3.2.2.2 require only reaching fixity. — **Decided (AB-2):** kept; adopted from MassDOT 3.10.11.2 (integral rule) for pile footings, stated in the app note and the Report.
+  2. D_f = the C10.7.3.13.4 (or entered / Pile Designer) depth to fixity of §4.4b, not a p-y second point of zero deflection. — **Decided (AB-3):** confirmed.
+  3. The long-pile threshold is 5T (5R for clay). — **Decided (AB-4):** confirmed, and L_s < 5T on an axis carrying moment is now a FAILED check (dashboard row, D/C = 5T/L_s).
+  4. A pile that does not reach D_f is an error-level warning plus the D/C row. The buckling result is kept. — **Decided (AB-4):** the error stays.
+- **Engineer-decided 2026-11-12 (AB-8, PR #1447):** the short-pile check as built in #1446, one dashboard row on the governing axis (the bending axis with the larger T), is confirmed; no code change ("we have a pile design app, so no need to go overboard with the piles in the abutment app").
 - **How verified:**
   - New `tests/smoke/abutment-pile-length.mjs` (the cases above, Tab 4 §4.4c, Report, 0 console errors).
   - Main-vs-branch probe of 13 cases: only `checks.pileLen`, the dashboard row (index shift) and nFail where it fails.
   - `abutment-pile-group-parity` 14/14 identical.
   - The abutment smoke tests, `abutment-subloads-exchange`, `project-library --tool abutment` and `check-syntax`.
 - **Other copies:** none.
+
+## 2026-11-12 — PR: abut-br-couple (PR #1445: https://github.com/mlococo88/All-Structural/pull/1445) (AB-1) — Braking vertical couple P_BR = BR·(h_brg + d_g + h_h + t_d + 6 ft)/L at the bearings, both braking directions   [§4: results change for projects with BR and all four superstructure elevation inputs entered; otherwise only a REVIEW warning; no saved key or format change]
+- **Engineer decision (2026-11-12, AB-1):** add the AASHTO LRFD 10th Ed. 3.6.4 braking vertical couple, P_BR = BR × (h_brg + d_g + haunch + t_deck + 6 ft) / L_span, with the elevation inputs of ABEL2 #1383; the end span for a continuous bridge (conservative); a vertical BR load at the seat in both braking directions with BR's load factors; blank inputs: not applied with a REVIEW note; a BR imported from SubLoads already carries its couple P (ABXC #1408): use that one. Before: the §1.6 card said the couple "is not transferred to a single substructure line and is not included".
+- **Where (all in `abutment_calculator.html`):**
+  - New `brCouple(agg,groups,xBrg,shBR)` after `function eqFB(dK,kA){`:
+    ```js
+    integral → null;  imported (|agg.BR.P| > 0, ABXC) → {src:"imported", Psum, sh, V: groups.BR.V} (nothing added)
+    F = √(ΣV_x² + ΣV_y²) of BR (before the share; = BR_total of §1.6 when computed); F = 0 → null
+    h_brg = geom.elBrgH (≥ 0), d_g = geom.elGird (> 0), h_h = geom.elHaunch (≥ 0), t_d = geom.elDeck (> 0), L = geom.spanL (> 0)
+    any blank → not applied, warn("REVIEW — Braking vertical couple [3.6.4] not applied: … not entered …")
+    h = (h_brg + d_g + h_h + t_d)/12 + 6;  P = F·h/L;  V = −sign(ΣV_x)·P   (uplift with BR toward the span)
+    groups.BR.V = V;  groups.BR.Mv = V·x_brg
+    ```
+    A BR pulled before ABXC (S.subloadsSrc.groups has "br", P = 0, own BR off): REVIEW warning (its BR is this abutment's share; pull again).
+  - `computeAll`, after `if(agg.BR.P){ groups.BR.V=agg.BR.P*shBR; …}`: `{ const bc=brCouple(agg,groups,xBrg,shBR); if(bc) R.brCouple=bc; }`.
+  - `permutations`: `const revs=…(groups.BR&&Math.abs(groups.BR.Hx)>1e-9)…` → `(groups.BR&&(Math.abs(groups.BR.Hx)>1e-9||Math.abs(groups.BR.V)>1e-9))` (a couple with BR share 0 still runs both directions). `comboEffects` unchanged: the reversed permutations negate the whole BR group, so V is downward with BR toward the backfill.
+  - Tab 1: new card §1.6a `o-br-couple` (`brCoupleHTML(R)`, before `/* ================= APS (2026-10-20)`), shown after §1.6 whenever R.brCouple exists (worked h, P, V, M_v; REVIEW when blank; the imported note). §1.6 note: was "…adds a superstructure couple that is not transferred to a single substructure line and is not included.", now links §1.6a.
+  - Report, section 3 Loads, topic "Braking vertical couple at the bearings (engineer decision 2026-11-12)" after EV (h, P_BR; or the imported V; or not applied), "see Tab 1 §1.6a".
+  - Texts: panel I-1 superstructure note and the h_brg / d_g / h_h / t_d tooltips (were "Display only … no calculation reads it"), the input echo rows, the SubLoads pull texts ("Height of BR (and CE)", the Elevations group "not imported" rows), `defaultState` and ABEL2 comments.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 3.6.4 (BR applied 6 ft above the deck, either direction); Table 3.4.1-1 γ_LL (BR) and Table 3.4.1-2 unchanged. Units: elevation inputs in inches /12 → ft; L in ft.
+- **Not in (as the imported couple, ABXC):** the stem eccentric moment (Tab 5; BR acts toward the span there, its couple is uplift) and the bearing on the concrete seat (§5.x, Strength I/V per girder), and the per-bearing loads (3D / hand-off per girder). Open item (question in the PR). — **Engineer-decided 2026-11-12 (AB-5, PR #1447):** the couple (computed and SubLoads-imported) also goes into the seat bearing (§5.6, Strength I / V) and the per-bearing loads (3D view, elastomeric hand-off), downward case; not the stem eccentric moment (it only relieves the governing direction). **AB-7:** a blank haunch counts as 0; h_brg, d_g, t_d still required (REVIEW). **AB-6:** a pre-2026-11-11 SubLoads BR pull (couple from the stored share + REVIEW re-pull warning), as built: engineer-confirmed 2026-11-12.
+- **Check cases** (BR 3.5 kip × 6 girders in the reaction table = the page's default project; share 50 %; L = 80 ft):
+  - Default project as opened (elevation inputs blank): couple not applied, one REVIEW warning; every result unchanged.
+  - Default + h_brg 3, d_g 54, h_h 2, t_d 8 in: h = (3 + 54 + 2 + 8)/12 + 6 = 11.583 ft; P = 21 × 11.583/80 = 3.041 kip; V = −3.041 kip at x_brg = 5.25 ft (M_v −15.96 kip-ft). Strength I governing bearing: V 2913.81 → 2908.49 (−1.75 × 3.041 = −5.321), D/C 0.8804 → 0.8790; eccentricity 0.6420 → 0.6431. Reversed permutations: V +5.321.
+  - Same on piles (24 piles, 3 rows × 8 at x′ = ±4.25, 0 ft, Σx′² = 289 ft²): ΔP = −5.321/24 − 5.321 × (6.50 − 5.25) × 4.25/289 = −0.2217 − 0.0978 = −0.320 kip: P_max 200.97 → 200.65 kip, pile compression D/C 0.9369 → 0.9354; P_min 10.58 → 10.46; pile combined 1.0774 → 1.0768 (FAIL both).
+  - Computed BR (BR_total 45.90 kip): P = 45.90 × 11.583/80 = 6.646 kip.
+  - SubLoads-imported BR (P −0.242 × 6, share 100 %): V = −1.452 kip from ABXC, as before; no own couple; LAST_R values unchanged (R.brCouple record only).
+  - Stem M_u, seat bearing: unchanged in every case. Integral: no couple.
+- **Saved data (§5):** no key or format changed; Input ID unchanged. Saved projects change only when BR ≠ 0, not imported, and all four elevation inputs are entered.
+- **How verified:** new `tests/smoke/abutment-br-couple.mjs`; main-vs-branch probe of 22 cases; `abutment-brg-front`, `abutment-stem-shelf`, `abutment-pile-group-parity` (R.brCouple and the new REVIEW warning excluded from the main comparison), `abutment-elevations` (its invariance cases run without BR; echo text); the other abutment smoke tests, `abutment-subloads-exchange`, `project-library --tool abutment` (against this branch; against main it shows only R.brCouple), `check-syntax`.
+- **Other copies:** none (SubLoads computes its own couple).
+
+## 2026-11-12 — PR: abut-short-pile (PR #1446: https://github.com/mlococo88/All-Structural/pull/1446) (AB-4, with the AB-2 / AB-3 notes) — Pile footing: L_s < 5T (5R in clay) on an axis carrying moment is a FAILED check (dashboard row D/C = 5T/L_s); the 5 ft margin and D_f confirmed as engineer decisions   [§4: check change, only with L_pile entered and the elastic lateral solution in use; no saved key or format change]
+- **Engineer decisions (2026-11-12):** AB-2: keep the +5 ft in the pile length check (ABPL); state that it is adopted from MassDOT 3.10.11.2 (integral rule) for pile footings (AASHTO 10.7.6 / C10.7.3.12 and MassDOT 3.2.2.2 require only fixity). AB-3: D_f stays C10.7.3.13.4 or entered / Pile Designer. AB-4: the short-pile condition L_s < 5T (5R in clay) on an axis carrying moment becomes a FAILED check (dashboard row, D/C = 5T/L_s, counted in nFail), results still shown; the "does not reach D_f" error stays.
+- **Where (all in `abutment_calculator.html`):**
+  - `pileLength(ps,pf)`, after `out.mr.short=["L","T"].filter(k=>out.mr[k].used&&out.mr[k].z<5-1e-9);`:
+    ```js
+    const us=["L","T"].filter(k=>out.mr[k].used);
+    if(us.length){ const k=us.reduce((a,b)=>out.mr[b].T>out.mr[a].T?b:a); out.mr.gov=k; out.mr.dc=out.Ls>1e-9? 5*out.mr[k].T/out.Ls : Infinity; }
+    ```
+    (the axis with the larger T among those that bend governs 5T/L_s; T = R in clay, as `pileCombined`'s `lat()`).
+  - Dashboard, after the `addD("pileLen",…)` line: `if(PL&&PL.mr&&PL.mr.dc!=null) addD("pileShort","Pile long-pile premise L_s ≥ 5T (5R clay), elastic lateral solution [engineer decision 2026-11-12]",PL.mr.dc,"tab-found",…,false, L_s ≤ 0 → "L_s ≤ 0: FAIL")`. `DASH_CARD`: `pileShort:"o-pilelen"`. nFail counts it (`dash.filter(d=>d.pass===false)`).
+  - Warning "Pile length: the elastic lateral solution (Matlock–Reese) assumes a long pile …": before a plain warning ending "The long-pile moment C_M·H·T is kept: check it with a p-y analysis …"; after level "err", "…: FAILS (D/C = 5T/L_s = …; engineer decision 2026-11-12). The long-pile moment C_M·H·T and its results are still shown: lengthen the pile, or analyse it with its actual length (p-y, Pile Designer) and enter or pull that moment."
+  - Tab 4 §4.4c (`pileLenPanelHTML`): the L_s/T lines use R in clay and say "short pile: FAILS"; new `checkLine("Long-pile premise", 5T/L_s …)`; notes: "Requirement" (AB-2 wording: AASHTO 10.7.6 / C10.7.3.12 and MassDOT 3.2.2.2 require only fixity; the 5 ft adopted from MassDOT 3.10.11.2 for pile footings by engineer decision 2026-11-12), new "Depth to fixity" (AB-3), "Premise" / new "Check" (AB-4). Before, "Premise" ended "shorter is flagged and the long-pile moment is kept".
+  - Report (topic "Pile length: depth to fixity + 5 ft"): the L_req row label carries the AB-2 statement, a note with AB-3; the L_s/T rows say "SHORT: FAILS"; new `dcStep(…,"pileShort","Long-pile premise (… H; L_s < 5T fails, engineer decision 2026-11-12)", 5T/L_s)`.
+  - `pileLength` header comment.
+- **Governing provisions:** AASHTO LRFD 10th Ed. (2024) 10.7.6, 10.7.3.12, C10.7.3.12, 10.7.3.13.4 / C10.7.3.13.4 (unchanged use); MassDOT LRFD Bridge Manual Part I 3.2.2.2 and 3.10.11.2 (basis notes); Matlock & Reese (1960) relative stiffness T = (EI/n_h)^(1/5), clay R = (EI/E_s)^(1/4) (unchanged).
+- **Check case (ABPL's: default state on piles, HP12X53, T_x = 3.247 ft, e = 12 in, L_u = 0):**
+  - L_pile 15 ft: L_s = 15 − 1 − 0 = 14 ft; L_s/T_x = 4.31 < 5. Before: PASS (length D/C 0.790), flagged only. After: new row D/C = 5 × 3.247/14 = 16.236/14 = **1.160 FAIL**, nFail 0 → 1; length row 0.790 PASS unchanged; pile results unchanged.
+  - L_pile 40 ft: D/C = 16.236/39 = 0.416 PASS (row added, nFail unchanged).
+  - L_pile 6 ft: L_s 5: D/C 3.247 FAIL; with the length row (1.974 FAIL) nFail 0 → 2 (main: 1).
+  - p-y moment entered (elastic solution not used), square pile, spread footing, integral, L_pile blank: no row.
+- **Values that change:** only with L_pile entered on a pile footing whose moment is from the elastic solution: the new dashboard row (index shift of later rows), nFail where L_s < 5T, the warning text and level. Everything else in `LAST_R` is identical.
+- **Saved data (§5):** none changed; Input IDs unchanged.
+- **How verified:** `tests/smoke/abutment-pile-length.mjs` extended (rows, nFail, Tab 4 / Report text, KaTeX); main-vs-branch probe; `abutment-elevations` invariance also leaves out the `pileShort` row; `abutment-brg-front` / `abutment-stem-shelf`: the AB-1 REVIEW warning is now left out on both sides of the main comparison (main has AB-1 since #1445); the abutment smoke tests, `abutment-pile-group-parity`, `abutment-subloads-exchange`, `abutment-girder-depth`, `project-library --tool abutment`, `check-syntax`.
+- **Other copies:** none.
+
+## 2026-11-12 — PR: abut-br-couple-seat (PR #1447: https://github.com/mlococo88/All-Structural/pull/1447) (AB-5, AB-7; AB-6 / AB-8 confirmed) — Braking vertical couple also in the seat bearing (§5.6) and the per-bearing loads (3D view, elastomeric hand-off), downward case; a blank haunch counts as 0   [§4: results change for projects with a BR couple (computed with the elevation inputs, or imported from SubLoads); no saved key or format change]
+- **Engineer decisions (2026-11-12), on the #1445 / #1446 questions:**
+  - AB-5: apply the braking vertical couple P_BR [3.6.4] (computed, and the one imported from SubLoads via ABXC) also to (b) the bearing-on-concrete seat check per girder (Strength I / V) and (c) the per-bearing loads (what the tool reports / sends for bearing design), using the DOWNWARD case (BR toward the backfill; conservative). Not to the stem eccentric moment: there the couple is uplift with BR toward the span, the governing direction, so it only relieves it (stated on the §1.6a card and in the Report).
+  - AB-7: a blank haunch counts as 0 for the couple (noted on the §1.6a card, the I-1 inputs and the Report); bearing height, girder depth and deck thickness still required (REVIEW lists what is missing).
+  - AB-6 (confirmed, notes only): a SubLoads BR pulled before 2026-11-11 (no couple P): couple computed from the stored BR, which is this abutment's share, plus the REVIEW re-pull warning, as built in #1445.
+  - AB-8 (confirmed, no code change): the #1446 short-pile check, one row on the governing axis, as built. (The engineer withdrew the request to show L_s/T for both axes on the §4.4c card: "We have a pile design app, so no need to go overboard with the piles in the abutment app.")
+- **Where (all in `abutment_calculator.html`):**
+  - `brCouple(agg,groups,xBrg,shBR)`:
+    - imported: before `return {src:"imported", F, Psum:+BR.P, sh:shBR, V:groups.BR.V};` after `…, V:groups.BR.V, pg:S.rx.BR.map(r=>Math.abs(+r.P||0)*shBR)};` (per girder |P_i| × BR share: the same share ABXC applies to the groups, downward).
+    - haunch (AB-7): before `hh=abElNum("geom.elHaunch")` and `if(hh===null) miss.push("haunch h_h (0 = no haunch)");`; after `hh0=abElNum("geom.elHaunch"), hh=hh0===null?0:hh0` (no `miss` entry), `c.hhBlank=hh0===null`.
+    - computed: after `c.h=(hb+dg+hh+td)/12+6; c.P=F*c.h/Ls; c.V=-c.sgn*c.P;` new `c.pg = [P/N, …]` (N girders, equal share).
+    - The groups (V, M_v at x_brg, both directions) are unchanged.
+  - Seat bearing (`/* ===== C-15 Bearing on concrete — bridge seat [AASHTO 5.6.5] ===== */`, per girder loop), after the `WdiaAdd` line:
+    ```js
+    const pbr=(R.brCouple&&R.brCouple.pg&&R.brCouple.pg[i])||0;
+    if(pbr){ SI+=L1.LL*L1.mLL*pbr; SV+=L5.LL*L5.mLL*pbr; }
+    ```
+    and `puT` gets `br:pbr` (worked P_u display).
+  - `perBearingLoads(R,sel)` (3D view): `P: ns*(fDC·DC + fDW·DW + fLL·LL + fWS·WS + fWL·WL)` → `… + fBR*pg[i]` (fBR = γ_LL·m of the limit state, 1 for the BR load case).
+  - `edmPayload()` (elastomeric module hand-off): `const Pll=(S.rx.LL[i]?S.rx.LL[i].P:0)/nBg;` → `const Pll=((S.rx.LL[i]?S.rx.LL[i].P:0)+Pbr)/nBg;` with `Pbr = pg[i]` (service, unfactored; the representative `loads.Pll` follows, first interior girder). The EDM status line says P_LL includes the couple.
+    - **Engineer-confirmed 2026-11-12:** the couple added to the elastomeric P_LL as service live load without IM, as built. **Superseded in part by ABXF (PR #1449):** the imported couple is at its full value, not × the BR share.
+  - Texts: §1.6a card (`brCoupleHTML`, new `AB5_TXT(per)`: where else the couple goes, and why not the stem; haunch-blank note; imported card too), §1.6a REVIEW text, Tab 5 §5.6 worked P_u (`+ γ_LL P_BR,i`) and its "P_BR,i" note, the 3D note, the Report (section 3 BR couple rows; section 5 seat P_u row label), panel I-1 note and haunch tooltip, `defaultState` comment.
+- **Before / after expressions (per girder i, Strength I / V; governing per bearing = /n_b):**
+  - Before: P_u,girder = γ_DC P_DC + γ_DW P_DW + γ_LL m P_LL (+ γ_WS P_WS + γ_WL P_WL at Strength V) (+ approach slab, diaphragm).
+  - After: … + γ_LL m P_BR,i, with P_BR,i = P_BR/N (computed: P_BR = BR·h/L, h = (h_brg + d_g + h_h + t_d)/12 + 6 ft) or |P_i|·s_BR (imported).
+  - EDM P_LL per bearing: before P_LL,i/n_b; after (P_LL,i + P_BR,i)/n_b.
+  - h with haunch blank: before not applied (REVIEW); after h_h = 0.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 3.6.4 (BR 6 ft above the deck, either direction), 5.6.5 (bearing, Eq. 5.6.5-1/-2), Table 3.4.1-1 (γ_LL for BR in Strength I 1.75, Strength V 1.35), 14.4.1 / 14.7 (elastomeric bearing loads, service). Units: in /12 → ft; kip.
+- **Check cases** (the page's default project: BR 3.5 kip × 6 girders = 21 kip, table, share 50 %, L = 80 ft; DC/DW/LL reactions of the example table; seat bearing governs at girder 1, Strength I, n_b = 1):
+  - Default + h_brg 3, d_g 54, h_h 2, t_d 8 in: h = 67/12 + 6 = 11.583 ft; P_BR = 21 × 11.583/80 = 3.0406 kip; per girder 3.0406/6 = 0.5068 kip.
+    - Seat bearing: P_u 246.750 → 246.750 + 1.75 × 0.5068 = **247.637 kip**; q_b/q_R **0.12000 → 0.12043**.
+    - Per-bearing loads (3D, Strength I): P 246.750 → 247.637 kip each girder; BR load case: 0 → 0.507 kip.
+    - Elastomeric hand-off: P_LL per bearing **70.000 → 70.507 kip** (each girder and the representative load).
+    - Stem M_u unchanged (112.06 kip-ft); sliding / bearing / piles unchanged from #1445.
+  - Haunch blank (AB-7), h_brg 3, d_g 54, t_d 8: before not applied (REVIEW); after h = 65/12 + 6 = 11.417 ft, P_BR = 21 × 11.417/80 = 2.9969 kip (computed BR 45.90 kip: 6.550 kip), applied everywhere the couple goes (groups, seat, per-bearing): seat P_u 246.750 → 247.624 kip, EDM P_LL 70.499.
+  - SubLoads-imported (default + P = −0.242 kip per girder, share 50 %): per girder |−0.242| × 0.50 = 0.121 kip; seat P_u 246.750 → 246.750 + 1.75 × 0.121 = **246.962 kip**, q_b/q_R 0.12000 → 0.12010; EDM P_LL 70.000 → 70.121; group V −0.726 kip as before.
+  - defaultState with BR computed (45.90 kip, elevations as above): P_BR = 6.646, per girder 1.108; seat P_u + 1.75 × 1.108 = +1.938 kip.
+  - Semi-integral, default + elevations: seat P_u 257.063 → 257.949 kip (diaphragm share included as before).
+  - Integral: no couple, nothing changes.
+- **Values that change (saved projects):** conventional / semi-integral projects with BR ≠ 0 and either (a) h_brg, d_g and t_d entered (computed or table BR, any haunch), or (b) a SubLoads-imported BR couple P: the seat bearing row (`R.checks.bearingSeat` P_u, q_b, D/C, and possibly the governing girder / limit state, the STM-required flag at q_b > 0.6 q_R), the 3D per-bearing P, and the elastomeric hand-off P_LL. Projects with h_brg, d_g, t_d entered but the haunch blank (AB-7) also change in every couple result of #1445 (sliding, eccentricity, bearing, pile reactions, foundation hand-off). Projects without BR, without the elevation inputs and without an imported couple, and integral abutments: unchanged. The stem results never change.
+- **Saved data (§5):** no key or format changed; Input IDs unchanged. The EDM postMessage payload format is unchanged (only the P_LL value).
+- **How verified:** `tests/smoke/abutment-br-couple.mjs` extended (the cases above: seat P_u / D/C, EDM P_LL, 3D per-bearing, imported, AB-7 haunch blank and girder depth blank, stem unchanged, Tab 5 §5.6 and Report text, KaTeX); main-vs-branch probe of 7 cases (only the values above differ); the abutment smoke tests (`abutment-seis-loc` alone), `abutment-subloads-exchange`, `abutment-pile-group-parity`, `abutment-pile-length`, `project-library --tool abutment` (against this branch: all pass; against main only the `R.brCouple` record differs: `hh` null → 0, `hhBlank`, `miss` no longer names the haunch), `check-syntax`; `abutment-brg-front`'s number walk now leaves out `R.brCouple` as its first comparison already did. No elastomeric smoke test reads the abutment hand-off (the EDM side is unchanged).
+- **Other copies:** none.
+
+## 2026-11-12 — PR: abutment-br-couple-full (PR #1449: https://github.com/mlococo88/All-Structural/pull/1449) (ABXF) — SubLoads-imported BR vertical couple at its full value, not × this abutment's BR share; AB-5 elastomeric P_LL as service LL without IM engineer-confirmed   [§4: results change only for projects with a SubLoads-imported BR couple and BR share ≠ 100 %; no saved key or format change]
+- **Engineer decision (2026-11-12, follow-up to #1447):** the vertical braking couple imported from SubLoads must NOT be multiplied by this abutment's BR share; the share applies to the horizontal BR only. Use SubLoads' couple at full value everywhere it is applied: the foundation load groups (ABXC #1408), the seat bearing check, the per-bearing loads, and the elastomeric P_LL. Also confirmed: the couple is added to the elastomeric P_LL as service live load without IM, as built in #1447 (AB-5).
+- **What SubLoads' P is (verified in `Bridge Substructure Loading.html`):**
+  - `superCase(G, D, k, spec)`: `if (spec.FL && r.end) { const FLs = spec.FL(r.si), sg = r.end === 'ahead' ? 1 : -1; for (let j = 0; j < nb; j++) V[j] += sg * FLs * e / r.Ls / nb; }`.
+  - FLs is the whole continuous segment's braking force (`brSeg[si].tot`, before the unit share f_L). e = deck + 6 ft − the bearing level, so it is the height of BR above the bearings. r.Ls is the segment length (`distrib`: `Ls = G.X[sg.b] − G.X[sg.a]`). nb is the number of bearings in the row.
+  - So P per girder = BR_segment·h/L_segment/N at the segment's end support, which is the abutment's whole vertical reaction from the couple. The share f_L multiplies only the horizontal force (`FL * r.fL`).
+  - The export (`perGirder`) writes `lc.V[0][p.j]` per girder unchanged, and its `calculatorInput` sets `dist.shBR: 100`.
+  - Applying × share in the calculator therefore under-counted the couple whenever the share was below 100 %. At the full value nothing is double counted: the calculator's own couple is not added when the couple is imported (#1445).
+- **Where (all in `abutment_calculator.html`):**
+  - `computeAll`, after the ABXC comment: `if(agg.BR.P){ groups.BR.V=agg.BR.P*shBR; groups.BR.Mv=agg.BR.P*shBR*xBrg; groups.BR.Mt+=agg.BR.MtP*shBR; }` → `if(agg.BR.P){ groups.BR.V=agg.BR.P; groups.BR.Mv=agg.BR.P*xBrg; groups.BR.Mt+=agg.BR.MtP; }` (ABXF comment added).
+  - `brCouple`, imported: `pg:S.rx.BR.map(r=>Math.abs(+r.P||0)*shBR)` → `pg:S.rx.BR.map(r=>Math.abs(+r.P||0))`. This feeds the seat bearing (§5.6), `perBearingLoads` (3D) and `edmPayload` (elastomeric P_LL), all unchanged themselves.
+  - Texts:
+    - The §1.6a imported card was "ΣP × the BR share = V"; it is now "V = ΣP at its full value, not × the BR share (…)".
+    - Tab 5 §5.6 "P_BR,i" note.
+    - Report section 3 row: was `eq "\Sigma P\,s_{BR}"`, now `"\Sigma P"`; label and note.
+    - SubLoads pull help text for BR: "P is applied at its full value whatever the BR share".
+- **Before / after:**
+  - Group V_BR: before ΣP_i·s_BR, after ΣP_i.
+  - M_v: V_BR·x_brg. M_t (couple part): before ΣP_i·y_i·s_BR, after ΣP_i·y_i.
+  - Per girder (seat, per-bearing, EDM): before |P_i|·s_BR, after |P_i|.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 3.6.4 (BR 6 ft above the deck, either direction); 5.6.5 and Table 3.4.1-1 unchanged in use.
+- **Check case:** the page's default project plus a SubLoads-imported couple P = −0.242 kip on each of 6 girders, BR share 50 %. Spread footing unless noted.
+
+  | Result | Before | After |
+  |---|---|---|
+  | Per girder | 0.242 × 0.50 = **0.121 kip** | **0.242 kip** |
+  | Group V_BR | −0.726 kip | **−1.452 kip** |
+  | M_v at x_brg 5.25 ft | −3.81 kip-ft | −7.62 kip-ft |
+  | Strength I reversed permutation (BR toward the backfill), ΣV | 2401.177 kip | 2402.447 kip (+1.75 × 0.726 = +1.271) |
+  | Seat bearing (Strength I, girder 1) P_u | 246.750 + 1.75 × 0.121 = 246.962 kip | 246.750 + 1.75 × 0.242 = **247.173 kip** |
+  | Seat bearing q_b/q_R | 0.12010 | **0.12020** |
+  | Spread footing bearing, governing V | 2912.54 kip | 2911.27 kip |
+  | Spread footing bearing D/C | 0.8800 | 0.8797 |
+  | Sliding | 1.1005 | 1.1005 (unchanged) |
+  | Piles (same project on piles): P_max | 200.893 kip | 200.817 kip |
+  | Piles: compression D/C | 0.9366 | 0.9362 |
+  | Piles: P_min | 10.552 kip | 10.522 kip |
+  | Elastomeric P_LL per bearing | 70.121 kip | **70.242 kip** |
+  | nFail | 1 | 1 |
+
+  - Share 100 % (as SubLoads' pull sets it): identical before and after (V −1.452 kip, seat 247.173 kip, EDM P_LL 70.242 kip).
+  - Projects without an imported couple, including the computed couple of #1445 (already not × the share): identical.
+- **Values that change (saved projects):** only projects with a SubLoads-imported BR couple (BR P ≠ 0 in the reaction table) whose BR share is not 100 % and whose distribution model is not "fixed". The pull sets 100 %, so this means projects where the share was changed after the pull. In those projects, every BR-couple result changes: the load groups (V, M_v, M_t), so sliding, eccentricity, bearing, pile reactions and the foundation hand-off; the seat bearing; the 3D per-bearing P; and the elastomeric P_LL.
+- **Saved data (§5):** no key or format changed; Input IDs unchanged.
+- **How verified:**
+  - `tests/smoke/abutment-br-couple.mjs`: the share-50 % imported case now expects full value: V −1.452, seat 247.173, EDM 70.242.
+  - Main-vs-branch probe of 5 cases: only the share-50 % imported cases differ.
+  - The abutment smoke tests (`abutment-seis-loc` alone), `abutment-subloads-exchange`, `abutment-subloads-pull`, `abutment-pile-group-parity`, `project-library --tool abutment`, `check-syntax`.
+- **Other copies:** none. SubLoads is unchanged.
+
