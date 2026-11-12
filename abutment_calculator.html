@@ -911,7 +911,7 @@ function defaultState(){
       shEQ:100,                                                   // seismic share of the superstructure inertia at this abutment (%): EQsup = A_s·(DC+DW)·shEQ
       siteClass:"",                                               // ABCHK: site class [T.3.10.3.1-1] for k_h0 = 1.2·A_s on A, B, B/C [11.6.5.2.1]; "" = not selected (k_h0 = A_s)
       bwStop:false, bwW:0,
-      hEQmode:"sw", hAEr:0.5, nonConc:true, shEQt:100 },   // SEL (2026-11-11): location of the seismic earth pressure, new projects (a) Seed & Whitman (was "static", (b)); hAEr = the (c) ratio [C11.6.5.3]                // ABR3: P_AE height "static" (as the static pressure, ≥ H/3, 11.6.5.3) | "ratio" (hEQr·H); P_AE / P_IR nonconcurrent [11.6.5.1]; transverse superstructure share (%) [3.10.8]                                      // ABR1: MassDOT 3.4.8.1 backwall as the longitudinal seismic stop (MassDOT owner default on); superstructure permanent weight (kip, 0 = 2(DC + DW)·L_tot/L)
+      hEQmode:"static", hAEr:0.5, nonConc:true, shEQt:100 },   // SEL (2026-11-11): location of the seismic earth pressure; SDB (engineer decision 2026-11-12): new projects (b) "static", combined P_AE at H/3 (#1409 had made (a) "sw" the default); hAEr = the (c) ratio [C11.6.5.3]                // ABR3: P_AE height "static" (as the static pressure, ≥ H/3, 11.6.5.3) | "ratio" (hEQr·H); P_AE / P_IR nonconcurrent [11.6.5.1]; transverse superstructure share (%) [3.10.8]                                      // ABR1: MassDOT 3.4.8.1 backwall as the longitudinal seismic stop (MassDOT owner default on); superstructure permanent weight (kip, 0 = 2(DC + DW)·L_tot/L)
     meta:{ revs:[] },                                             // revision history: {n, ts, fp} on each project save
     own:{ owner:"AASHTO", Ltot:0, ADT:"", mLL:1.0, dv:6 },        // OWNA: bridge owner (AASHTO | MassDOT | RIDOT | CTDOT); total bridge length for the integral screening (0 = span L)
     factors:{
@@ -2904,8 +2904,8 @@ function computeLongitudinal(agg){
 /* EGM (2026-11-07): low-temperature force multiplier m_LT on the pad shear force [AASHTO LRFD 10th Ed. 14.7.5.2, Table 14.7.5.2-1]: 1, 2 or 4 (any other value: 1) */
 function bearingMLT(){ const m=+(S.bearing&&S.bearing.Gmult); return [1,2,4].includes(m)? m : 1; }
 /* SEL (2026-11-11, engineer-approved): location of the seismic earth pressure (panel I-11), seismic.hEQmode:
-   "sw"       (a) Seed & Whitman: the increment ΔP_AE at 0.6H, the static P_A at its own resultant [C11.6.5.3] — default for new projects;
-   "static"   (b) the combined P_AE at H/3, not lower than the static resultant [C11.6.5.3] (the earlier default: same stored value, same results);
+   "sw"       (a) Seed & Whitman: the increment ΔP_AE at 0.6H, the static P_A at its own resultant [C11.6.5.3];
+   "static"   (b) the combined P_AE at H/3, not lower than the static resultant [C11.6.5.3] — default for new projects (engineer decision 2026-11-12; the default before #1409 too: same stored value, same results);
    "comb"     (c) the combined P_AE at an entered ratio × H, 0.4 to 0.5 (seismic.hAEr, default 0.5), not lower than the static resultant [C11.6.5.3];
    "nonyield" (d) nonyielding wall: the combined P_AE at H/2 [C11.6.5.4] (the companion of k_h = 1.0·k_h0, 11.6.5.4);
    "ratio"    earlier option kept for saved projects: ΔP_AE at the entered hEQr × H (= (a) when hEQr = 0.6). Any other value: "static", as before.
@@ -2924,7 +2924,7 @@ function eqIncZ(dK,kA){ const m=eqMode(); if(m!=="comb"&&m!=="nonyield"){ const 
 function eqLocNoteHTML(){ const m=eqMode(), kr=+S.seismic.khR, rst=kr>=1-1e-9;
   return "Seismic earth pressure location: "+eqLocTxt()+". "+
     "(a) treats the increment separately at 0.6H with the static pressure as usual (the earlier practice of Seed &amp; Whitman, 1970); (b) to (d) locate the resultant of the static plus seismic pressure: at H/3 (the more recent research cited in C11.6.5.3), at 0.4H to 0.5H (C11.6.5.3 allows a slightly higher location, e.g. where the impact of failure is high), or at H/2 for a nonyielding wall (C11.6.5.4); never lower than the static resultant. "+
-    "Option (a) is the tool default for new projects. The 11.6.5.1 case B uses ½P<sub>AE</sub> at the same location. Worked in Tab 3 §3.6a (abutment), Tab 5 §5.1a and §5.2 (backwall, stem) and Tab 9 §9.1 (wingwall)."+
+    "Option (b) is the tool default for new projects (engineer decision 2026-11-12). The 11.6.5.1 case B uses ½P<sub>AE</sub> at the same location. Worked in Tab 3 §3.6a (abutment), Tab 5 §5.1a and §5.2 (backwall, stem) and Tab 9 §9.1 (wingwall)."+
     (m==="nonyield"&&!rst? " <b>Check:</b> a nonyielding wall takes k<sub>h</sub> = 1.0·k<sub>h0</sub> [11.6.5.4]; the k<sub>h</sub> ratio here is "+fmt(kr,2)+"." : "")+
     (m!=="nonyield"&&rst? " The k<sub>h</sub> ratio is 1.0 (k<sub>h</sub> = k<sub>h0</sub>, the wall taken as restrained, 11.6.5.2.2 / 11.6.5.4); for a nonyielding wall C11.6.5.4 suggests considering the combined resultant at H/2 — option (d)." : ""); }
 function eqLocTxt(short){ const m=eqMode(), r=fmt(+S.seismic.hAEr,2);
