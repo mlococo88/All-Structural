@@ -18,6 +18,7 @@ import path from 'path';
 import fs from 'fs';
 import assert from 'assert/strict';
 import { openPage, REPO } from '../lib.mjs';
+import { SBD_SEED } from './sbd-seed.mjs';   // SB-2: the one-girder built-in project saved (a new project now has two girder types)
 
 const ai = process.argv.indexOf('--shots'), SHOTS = ai > 0 ? process.argv[ai + 1] : null;
 if (SHOTS) fs.mkdirSync(SHOTS, { recursive: true });
@@ -39,7 +40,7 @@ async function cellsMatch(p) {
 }
 
 { // 1–3: default project
-  const { b, p, errs } = await openPage(FILE, { vw: 1440, vh: 1000 });
+  const { b, p, errs } = await openPage(FILE, { vw: 1440, vh: 1000, ls: { ...SBD_SEED } });
   try {
     assert.equal(await p.evaluate(() => document.querySelector('#tabBar [data-otab]').dataset.otab), 'sum', 'Summary is the first output tab');
     const s0 = Date.now();
@@ -80,7 +81,7 @@ async function cellsMatch(p) {
 }
 
 { // 4: skewed three-span, two girders (saved as the open project, then the page reloaded); 6: phone
-  const { b, p, errs } = await openPage(FILE, { vw: 1440, vh: 1000 });
+  const { b, p, errs } = await openPage(FILE, { vw: 1440, vh: 1000, ls: { ...SBD_SEED } });
   try {
     await p.evaluate(() => { const M = window.SBDModel, P = M.defaultProject(); P.project.name = 'Summary smoke: skewed';
       P.spans.lengths = [100, 130, 100]; P.xs.skews = [35, 30, 30, 35];
@@ -114,7 +115,7 @@ async function cellsMatch(p) {
 }
 
 { // 5: an old saved ui.otab opens its tab
-  const { b, p, errs } = await openPage(FILE, { vw: 1200, vh: 900, ls: { 'sbd2.ui': JSON.stringify({ itab: 'proj', otab: 'flex', g: 0 }) } });
+  const { b, p, errs } = await openPage(FILE, { vw: 1200, vh: 900, ls: { ...SBD_SEED, 'sbd2.ui': JSON.stringify({ itab: 'proj', otab: 'flex', g: 0 }) } });
   try {
     await p.waitForSelector('#out #fx_src');
     assert.equal(await p.evaluate(() => document.querySelector('#tabBar [aria-selected="true"]').dataset.otab), 'flex');
@@ -126,7 +127,7 @@ async function cellsMatch(p) {
 { // 7 (GFXS; SBSF): the cross-section and framing plan graphics: the app's own drawings, stacked at every width, each as wide as the card
   //   (the cross-section narrower and centred only where its height would pass the cap, its aspect kept), resized with the window, the left
   //   column and the splitter; stacked and fitting at 390 px; links to the input tabs where they are edited and the tabs where they are drawn; printed full width
-  const { b, p, errs } = await openPage(FILE, { vw: 1440, vh: 1000, ls: { 'sbd2.ui': JSON.stringify({ otab: 'sum' }) } });
+  const { b, p, errs } = await openPage(FILE, { vw: 1440, vh: 1000, ls: { ...SBD_SEED, 'sbd2.ui': JSON.stringify({ otab: 'sum' }) } });
   const lay = () => p.evaluate(() => { const r = e => e.getBoundingClientRect(), a = r(document.getElementById('sum-xs')), c = r(document.getElementById('sum-plan')), bx = [...document.querySelectorAll('#sum-gfx .sum-gbox')].map(r), sv = [...document.querySelectorAll('#sum-gfx .sum-gbox')].map(b => [...b.querySelectorAll('svg')].find(e => getComputedStyle(e).display !== 'none')).map(e => {   // SKP: the plan's SVG inside its scroll box (.fp-sc)
  const q = r(e), vb = e.getAttribute('viewBox').split(/[\s,]+/).map(Number); return { w: q.width, h: q.height, l: q.left, ar: vb[2] / vb[3], mw: parseFloat(getComputedStyle(e).minWidth) || 0 }; });
     const cap = Math.max(360, Math.min(760, 0.8 * innerHeight));
