@@ -3192,8 +3192,8 @@ function listTables() {
 - **Saved data (§5):** new prefixed keys only (`bridgeSuite.v1.foundationLoads.by.<producer>.<project id>.<unit id>`, and `.by.abutment.<project id>`); no existing key or format changed.
 - **Other copies:** none.
 
-## 2026-11-12 — PR: subloads-seis-default-b (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — seismic earth pressure location: new projects on (b) combined P_AE at H/3 (SDB; engineer decision 2026-11-12)   [§4: results change for NEW projects with a ground motion entered only; saved files unchanged; no migration change]
-- **Engineer decision (2026-11-12):** the default for NEW projects is option (b) "combined P_AE at H/3, not lower than the static resultant (C11.6.5.3)", not (a) Seed & Whitman, here and in the Abutment Calculator (its own PR). The options, their order and their calculations are unchanged.
+## 2026-11-12 — PR: subloads-seis-default-b (PR #1436: https://github.com/mlococo88/All-Structural/pull/1436) — seismic earth pressure location: new projects on (b) combined P_AE at H/3 (SDB; engineer decision 2026-11-12)   [§4: results change for NEW projects with a ground motion entered only; saved files unchanged; no migration change]
+- **Engineer decision (2026-11-12):** the default for NEW projects is option (b) "combined P_AE at H/3, not lower than the static resultant (C11.6.5.3)", not (a) Seed & Whitman, here and in the Abutment Calculator (PR #1435). The options, their order and their calculations are unchanged.
 - **Where / before → after:**
   - New global `function newProjP() { const p = defP(); p.br.hEQmode = 'static'; return p; }` after `paeLocOf` / the SLPL comment (comment extended).
   - Start (anchor `(function start() {`): before `P = defP();` after `P = newProjP();` (the tool opened with no autosave).
@@ -3208,4 +3208,4 @@ function listTables() {
 - **Baseline:** `tests/baselines/bsl.json`, case `default` only: `bsl.inputs` 11088c9f6c38 → d4ff310556b9 (`.br.hEQmode` undefined → "static") and `bsl.pay.abutmentLoads` 480cd495a3f4 → 9f49b49ae8a7 (`.abutments[0|1].definition.seismic.hEQmode` "sw" → "static"); every other section and case identical (main-vs-branch run lists exactly these).
 - **How verified:** `bsl-compare` main vs branch: the default case differs only as above; the 5 project files (opened with `openProject`) identical. `tests/smoke/bsl-pae-loc.mjs`: new project (start and `newProjP`) on (b) with the hand values; defP without the field; files on each option and without the field reopen on their option; the default notes. `abutment-subloads-exchange.mjs` C1: the new SubLoads project is on (b) before the pull. `list-input --part bsl` (main vs branch) differs only in `br.hEQmode` (stored) and the hidden ΔP_AE height/H field (shown only for (a)).
 - **Saved data (§5):** no key or format change; files without the field keep (a).
-- **Other copies:** the Abutment Calculator (`defaultState().seismic.hEQmode`), its own PR (SDB).
+- **Other copies:** the Abutment Calculator (`defaultState().seismic.hEQmode`), PR #1435 (SDB).
