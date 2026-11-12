@@ -2,7 +2,7 @@
    docs/ps-bridge-plan.md §2). ADAPTED COPY, to move to shared/ later (CLAUDE.md §3): the column's head, the « / » shrink toggle, the chip
    and input-error layout follow apps/steel-bridge/ui/dash.js (window.SBDDashUI) and use the same CSS (#sbDashCol, #sbDashHead, .sdChip, …,
    copied into index.html). The steel file reads the steel modules' results (SBDSummary); this one reads the design girder's engine checks
-   (computeAll R.checks, PR 2c-1): one chip per check group whose tab is built (the steel dash pattern: its governing ratio and check,
+   (computeAll R.checks, PR 2c-1; Flexure and Shear PR 2c-2): one chip per check group whose tab is built (the steel dash pattern: its governing ratio and check,
    PASS / FAIL, ▸ opens each check of the group; a chip or a check opens its tab and the worked step of the value), the other groups listed
    "not run" with the PR that brings them; the input errors are listed as links. Display only: nothing is calculated here (the ratios are
    the engine's c.r, PASS = the engine's c.pass, r ≤ 1.0001). Screens 1200 px and wider (CSS); not printed. The shrunk state is the
@@ -21,7 +21,8 @@
     { id: 'srv', name: 'Service stresses', tab: 'str', checks: [['Srv comp (perm)', 'st.s1'], ['Srv comp (full)', 'st.s2'], ['Srv tens (top)', 'st.s2t'], ['Srv III tens', 'st.s3'], ['Deck comp', 'st.dk'],
       ['Srv III top tens (pier, 5.12.3.3.5)', 'st.pier.s3TopN'], ['Top tens. steel (pier, 5.12.3.3.5)', 'st.pier.AsTop'], ['Srv comp (bot, −M, 5.12.3.3.5)', 'st.pier.fBot']] },
     { id: 'fat', name: 'Fatigue I', tab: 'str', checks: [['Fatigue I (strand)', 'st.fat.dfs'], ['Fatigue I (concrete, 5.5.3.1)', 'st.fat.cTop']] },
-    { id: 'flex', name: 'Flexure', tab: 'flex', pr: '2c-2' }, { id: 'shear', name: 'Shear', tab: 'shear', pr: '2c-2' },
+    { id: 'flex', name: 'Flexure', tab: 'flex', checks: [['Flexure', 'fx.gov'], ['Min reinf', 'fx.min.r'], ['Neg flexure (pier)', 'fx.pier.r'], ['Pos. moment connection (5.12.3.3.8)', 'fx.conn.r']] },
+    { id: 'shear', name: 'Shear', tab: 'shear', checks: [['Shear', 'sh.gov'], ['Long. reinf (5.7.3.5)', 'sh.Tr'], ['Interface shear (5.7.4)', 'sh.ifr']] },
     { id: 'end', name: 'End zone & hold-down', tab: 'end', pr: '2d' }, { id: 'camb', name: 'Camber & deflection', tab: 'camb', pr: '2d' },
     { id: 'hand', name: 'Handling', tab: 'hand', pr: '2d' }, { id: 'deck', name: 'Deck', tab: 'deck', pr: '2d' }, { id: 'rt', name: 'Rating', tab: 'rt', pr: '2d' }];
   const fx = (v, d) => typeof v === 'number' && isFinite(v) ? v.toFixed(d) : v === Infinity ? '∞' : '—';
@@ -64,7 +65,7 @@
     const verd = nF ? 'fail' : 'pass';
     o.el.innerHTML = head(cnt)
       + `<div class="sdVerd"><b class="sd-${verd}">${nF ? 'FAIL' : 'PASS'}</b>${top ? ` · max ratio ${fx(top.c.r, 3)}` : ''}</div>${top ? `<div class="sdGov">Governing: <a href="#" data-sdgo="${tabOf(top.st)}|${top.st}">${esc(top.c.n)}: ${fx(top.c.r, 3)}</a></div>` : ''}
-        <div class="sdRun">In development: the checks of the tabs built so far (PR 2c-1), the design girder only; the others follow (PR 2c-2, 2d).</div>`
+        <div class="sdRun">In development: the checks of the tabs built so far (PR 2c), the design girder only; the others follow (PR 2d).</div>`
       + `<div id="sbDash">${chips}</div><p class="sdNote">Each chip: the governing ratio of its checks for the design girder (demand / capacity, OK ≤ 1.0), the engine's value. Click: its tab and the worked step of the value. The bridge-level Summary (every girder and span) comes with PR 3b.</p>`;
   }
   function init(o) {

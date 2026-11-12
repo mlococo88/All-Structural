@@ -315,3 +315,49 @@ PR #1456: https://github.com/mlococo88/All-Structural/pull/1456
 - Old app display: the old stress derivation always wrote the gross-section release expression, also when the transformed section is used;
   the new steps write the transformed expression (A_t, y_bt, I_t) the engine uses.
 - Next: PR 2c-2 (Flexure and Shear tabs, the pier negative-moment resistance and the positive moment connection; chips; harness B).
+
+## 2026-11-12 — PR 2c-2: Flexure and Shear output tabs (pier negative-moment resistance, positive moment connection), check chips; harness B (no calculation change)
+PR #1457: https://github.com/mlococo88/All-Structural/pull/1457
+### Where
+- `apps/ps-bridge/engine/worked-strength.js` (new, `window.PSBWorkedStrength`, no DOM): `flexure(inp, R)`, `shear(inp, R)` → `{ steps, pairs, paths }`.
+  Flexure: M_u at midspan (η, m, restraint where added), β_1, d_p, c (rectangular Eq. 5.6.3.1.1-4 or flanged -3; developed tension where the
+  strand is not developed), a, f_ps, M_n, ε_t, φ (Eq. 5.5.4.2-2), φM_n, the governing ratio; minimum reinforcement (f_r, f_cpe, M_cr Eq.
+  5.6.3.3-1, min(M_cr, 1.33 M_u) at midspan and at the governing station, ratio). Made continuous: the pier's LL per lane (truck or tandem +
+  lane, two trucks at 90 %, governing), M_LL,n = −DF_M M_LL,lane, M_u,n, d, a, β_1, c, ε_t, φ (Eq. 5.5.4.2-1), M_n, φM_n, ratio; the positive
+  moment connection (M = M_res + M_DC2 + M_DW + m M_LL+, T = 0.9M/(0.9h_c), A_s,req = T/36, f_s and the ratio with A_s,pos entered).
+  Shear at the critical section: x, d_p and a (the engine's flexure() at x: display intermediate), d_v, V_u (components; simple span:
+  display intermediates), V_p, |M_u|, ε_s (Eq. 5.7.3.4.2-4; recomputed with E_cA_ct when negative), β, θ, V_c, V_s, V_n, the ratio, the
+  governing ratio; v_u, s_max, s_Av,min, s_max,gov; the tie T and T_r (Eq. 5.7.3.5-1) and the governing ratio; interface v_ui, A_vf,req,
+  A_vf,min, A_vf, the governing ratio; ℓ_t, ℓ_d bonded and debonded.
+- `apps/ps-bridge/ui/flexure.js` (new, `PSBUiFlexure`): Flexure tab — graphic card (tiles; M_u against φM_n along the girder, −M_u and the
+  pier −φM_n when continuous, the unfactored components on a second row (chips)), Strength I flexure, Minimum reinforcement, the flexure
+  stations (twentieth points to midspan, † where not developed), Negative moment at the pier (with the pier section graphic: deck bars,
+  compression block in the bottom flange), Positive moment connection (with the RIDOT 1.2 M_cr report item when the owner rule applies),
+  worked steps. As the old app's Flexure tab plus the connection (old: Continuity input card and report).
+- `apps/ps-bridge/ui/shear.js` (new, `PSBUiShear`): Shear tab — graphic card (tiles; V_u, φV_n, φ(V_c + V_p) along the girder, the design
+  stations), governing values, Section-by-section design, the longitudinal tie table, Strand development, Interface shear table, worked
+  steps. As the old app's Shear tab.
+- `apps/ps-bridge/ui/dash.js`: the Flexure (flexure, minimum reinforcement, pier, connection) and Shear (shear, tie, interface) chips.
+- `apps/ps-bridge/index.html`: loads the new files; result() makes the Flexure and Shear steps; the two tabs replace their placeholders.
+### Copies from the Steel Bridge app (to move to shared/ later, CLAUDE.md §3)
+- None new (the PR 2b-2 copies `ui/vizkit.js`, `ui/vizalong.js` of `apps/steel-bridge/ui/` at `28e1605` are used).
+### Shared files
+- None changed.
+### Governing provisions
+- None changed (§4). AASHTO LRFD 10th Ed. articles as cited on each step (5.6.3, 5.6.3.3, 5.5.4.2, 5.12.3.3, 5.12.3.3.8a, 5.7.2, 5.7.3,
+  5.7.3.5, 5.7.4, 5.9.4.3).
+### Check case
+- Default design (PCI BT-72, L = 120 ft): M_u = 1.25(17,833 + 23,490 + 6,480) + 1.50(5,400) + 1.75(31,519) = 123,012 kip-in; c = 8.680 × 270 /
+  (0.85 × 4.00 × 0.850 × 108 + 0.28 × 8.680 × 270/74.90) = 7.30 in; f_ps = 270(1 − 0.28 × 7.304/74.90) = 262.6 ksi; M_n = 8.680 × 262.63 ×
+  (74.90 − 6.208/2) = 163,667 kip-in; φ = 1.0; ratio 0.752. Shear at x = 5.41 ft: d_v = max(61.06 − 4.285/2, 0.9 × 61.06, 0.72 × 80) = 58.92 in;
+  V_u = 1.25(45.07 + 59.37 + 16.38) + 1.50(13.65) + 1.75(106.95) = 358.65 kip; V_p = 36.36 kip; ε_s = −0.000400 (recomputed, limited);
+  β = 6.857, θ = 27.60°; V_c = 223.32, V_s = 450.78, V_n = 710.46 kip; V_u/φV_n = 0.561 (governing 0.721 at x = 30.0 ft).
+### How verified
+- `node tests/engine/run.mjs psbridge-tabs` (10 designs, + a flanged-flexure design made continuous with a positive restraint moment and
+  connection steel): every pair to 1e-9, every path value exact; `tex.test.mjs`.
+- **Harness B** (`node tests/psbridge-compare.mjs`, now Losses, Stresses, Flexure, Shear): 10 designs, **9,187 values shown and 1,474 step
+  values = the old app's computeAll values, 0 differences**; `psbeam.*` untouched; 0 console errors.
+- `node tests/smoke/ps-bridge-skeleton.mjs` (136 checks: Flexure and Shear on three designs, the pier graphic on the continuous one, the
+  chips, 390 px), `node tests/check-syntax.mjs`.
+### Open items
+- Next: PR 2d (End zone & hold-down, Camber & deflection, Handling, Deck, Rating tabs; their chips; harness B on them).
