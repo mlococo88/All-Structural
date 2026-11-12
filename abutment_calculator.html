@@ -2949,14 +2949,14 @@ function eqFB(dK,kA){ return dK>1e-12? Math.max(0,0.5*(dK+kA)-kA)/dK : 0; }
    Imported: a BR pulled from SubLoads carries its own couple P (ABXC #1408, applied above): that one is used, nothing is added.
    Inputs blank: not applied, REVIEW warning (AB-7, 2026-11-12: a blank haunch counts as 0). The groups (stability, bearing, piles, foundation
    hand-off) take it, as the imported P; AB-5 (2026-11-12, engineer decision): also the bearing on the concrete seat (§5.6) and the per-bearing
-   loads (3D view, elastomeric hand-off), downward case (BR toward the backfill, conservative), P_BR/N per girder (imported: |P_i|·share);
+   loads (3D view, elastomeric hand-off), downward case (BR toward the backfill, conservative), P_BR/N per girder (imported: |P_i|, full value, ABXF);
    not the stem eccentric moment (the couple only relieves its governing direction, BR toward the span). */
 function brCouple(agg,groups,xBrg,shBR){
   if(iabType()==="integral") return null;
   const BR=agg.BR, F=Math.hypot(+BR.Vx||0,+BR.Vy||0), Lg=S.longit||{};
   /* AB-5 (2026-11-12, engineer decision): pg[i] = the downward (BR toward the backfill) unfactored couple on girder i, for the seat bearing
-     (§5.6, Strength I / V) and the per-bearing loads (3D view, elastomeric hand-off): imported |P_i|·share; computed P_BR/N */
-  if(Math.abs(+BR.P||0)>1e-12) return {src:"imported", F, Psum:+BR.P, sh:shBR, V:groups.BR.V, pg:S.rx.BR.map(r=>Math.abs(+r.P||0)*shBR)};
+     (§5.6, Strength I / V) and the per-bearing loads (3D view, elastomeric hand-off): imported |P_i| (ABXF 2026-11-12: full value, not × the share); computed P_BR/N */
+  if(Math.abs(+BR.P||0)>1e-12) return {src:"imported", F, Psum:+BR.P, sh:shBR, V:groups.BR.V, pg:S.rx.BR.map(r=>Math.abs(+r.P||0))};   // ABXF (2026-11-12): full value, not × the share (was |P_i|·share)
   if(!(F>1e-9)) return null;
   const hb=abElNum("geom.elBrgH"), dg=abElNum("geom.elGird",true), hh0=abElNum("geom.elHaunch"), hh=hh0===null?0:hh0, td=abElNum("geom.elDeck",true), Ls=+S.geom.spanL;   // AB-7 (2026-11-12, engineer decision): a blank haunch counts as 0
   const miss=[]; if(hb===null) miss.push("total bearing height h_brg"); if(dg===null) miss.push("girder depth d_g");
@@ -3846,8 +3846,11 @@ function computeAll(){
      the BR vertical couple P from SubLoads is applied with BR (V = ΣP·share at the bearing line, M_t = ΣP·y·share); its V_y was already applied
      (H_y, M_t). A TU rise imported from SubLoads as its own case (optional S.rxTUr, per girder {P,Vx,Vy}; absent = as before) is the TU of the
      reversed permutations (toward the backfill) instead of the reversed TU row: group TUr below, comboEffects. BR P is 0 in every project that
-     did not pull it (the reaction table offers BR V_x only), so those results are unchanged. */
-  if(agg.BR.P){ groups.BR.V=agg.BR.P*shBR; groups.BR.Mv=agg.BR.P*shBR*xBrg; groups.BR.Mt+=agg.BR.MtP*shBR; }
+     did not pull it (the reaction table offers BR V_x only), so those results are unchanged.
+     ABXF (2026-11-12, engineer decision): the couple is applied at its full value, NOT × the BR share (the share is for H_BR only): SubLoads'
+     P per girder is the whole segment's BR × its height above the bearings / the segment length / N at this end (superCase), already the
+     vertical reaction at this abutment. Before: V = ΣP·share, M_t = ΣP·y·share. */
+  if(agg.BR.P){ groups.BR.V=agg.BR.P; groups.BR.Mv=agg.BR.P*xBrg; groups.BR.Mt+=agg.BR.MtP; }
   { const bc=brCouple(agg,groups,xBrg,shBR); if(bc) R.brCouple=bc; }   // AB-1 (2026-11-12, engineer decision): the BR vertical couple [3.6.4] when none was imported (Tab 1 §1.6a)
   if(Array.isArray(S.rxTUr)&&S.rxTUr.length===S.rx.TU.length&&!Lg.computeTU){
     let Vx=0,Vy=0; S.rxTUr.forEach(r=>{ Vx+=+r.Vx||0; Vy+=+r.Vy||0; });
@@ -7081,7 +7084,7 @@ function renderTabLoads(R){
 function AB5_TXT(per){ return `Also, by engineer decision 2026-11-12 (AB-5), in the downward case (BR toward the backfill; conservative): the bearing on the concrete seat (<span class="xlink" data-jump="tab-struct|o-str-bearing">Tab 5 §5.6</span>, Strength I / V, γ<sub>LL</sub>·m), the per-bearing loads of the 3D view and the per-girder live load sent to the elastomeric module (G<sub>i</sub>: ${per}, ÷ n<sub>b</sub> per bearing). Not in the stem eccentric moment (Tab 5): the couple is uplift when BR acts toward the span, the governing direction there, so it only relieves it.`; }
 function brCoupleHTML(R){
   const c=R.brCouple, ttl="Braking Vertical Couple (BR) [AASHTO 3.6.4]";
-  if(c.src==="imported") return panel("o-br-couple","1.6a",ttl,`<div class="note-box">BR pulled from SubLoads carries its own vertical couple P (the force at 6 ft above the deck, 3.6.4; ABXC): ΣP = ${fmt(c.Psum,3)} kip × the BR share ${fmt(c.sh*100,0)}% = <b>V = ${fmt(c.V,3)} kip</b> at the bearing line, applied with BR and reversed with it (both braking directions). The calculator's own couple P<sub>BR</sub> = BR·h/L is <b>not added</b> (no double count; engineer decision 2026-11-12). ${AB5_TXT("|P<sub>i</sub>| × the BR share per girder")}</div>`);
+  if(c.src==="imported") return panel("o-br-couple","1.6a",ttl,`<div class="note-box">BR pulled from SubLoads carries its own vertical couple P (the force at 6 ft above the deck, 3.6.4; ABXC): <b>V = ΣP = ${fmt(c.V,3)} kip</b> at the bearing line, at its full value: <b>not</b> × the BR share (${fmt(c.sh*100,0)}%, which applies to H<sub>BR</sub> only; SubLoads' P is already the vertical reaction at this abutment from the whole segment's BR, BR·h/L ÷ N per girder; engineer decision 2026-11-12), applied with BR and reversed with it (both braking directions). The calculator's own couple P<sub>BR</sub> = BR·h/L is <b>not added</b> (no double count; engineer decision 2026-11-12). ${AB5_TXT("|P<sub>i</sub>| per girder, full value")}</div>`);
   const srcT=c.src==="computed"? `BR<sub>total</sub> of <span class="xlink" data-jump="tab-loads|o-longit-br">§1.6</span> (along the girders)`
     : `the BR of the reaction table (panel I-5), √(ΣV<sub>x</sub>² + ΣV<sub>y</sub>²), before the share`+(c.legacy?" (pulled from SubLoads before 2026-11-11 without its couple: this abutment's share, not the bridge total; pull BR again to import SubLoads' couple)":"");
   const basis=`The braking force acts 6 ft above the deck [3.6.4]; H<sub>BR</sub> is applied at the bridge seat (z = ${fmt(R.geo.zSeat)} ft), so the force × its height above the seat is resisted by a vertical couple on the supports of the span. L = the span length (panel I-1); for a continuous bridge the end span (conservative). Engineer decision 2026-11-12.`;
@@ -8348,7 +8351,7 @@ function renderTabStruct(R){
       `m = \\sqrt{A_2/A_1} = \\sqrt{${fmtT(bs.A2,0)}/${fmtT(bs.A1,0)}} = ${fmtT(bs.mRaw,3)} \\le 2 \\;\\Rightarrow\\; m = ${fmtT(bs.m,3)}`,
       `q_R = \\varphi_b\\,(0.85 f'_c)\\,m = ${fmtT(bs.phiB,2)}(0.85\\times${fmtT(m.fc,1)})(${fmtT(bs.m,3)}) = ${fmtT(bs.qR,3)}\\ \\text{ksi}`],
       abNL("Bearing pressure and area:",[["P_u:","the most heavily loaded single bearing: the factored girder reaction (γ_DC,max·DC + γ_DW,max·DW + γ_LL·LL + wind) divided by n_b, the bearings per girder line (panel I-10), evaluated at Strength I and V; the governing bearing is the one with the largest q_b/q_R."],
-        R.brCouple&&R.brCouple.pg?["P_BR,i:",`the braking vertical couple on girder i, downward case (BR toward the backfill; conservative), with BR's γ_LL·m [3.6.4]: ${R.brCouple.src==="imported"?"|P_i| × the BR share, imported from SubLoads":"P_BR/N = "+fmt(R.brCouple.P,3)+"/"+S.beams.N}; worked in <span class="xlink" data-jump="tab-loads|o-br-couple">Tab 1 §1.6a</span> (engineer decision 2026-11-12).`]:null,
+        R.brCouple&&R.brCouple.pg?["P_BR,i:",`the braking vertical couple on girder i, downward case (BR toward the backfill; conservative), with BR's γ_LL·m [3.6.4]: ${R.brCouple.src==="imported"?"|P_i|, imported from SubLoads (full value, not × the BR share)":"P_BR/N = "+fmt(R.brCouple.P,3)+"/"+S.beams.N}; worked in <span class="xlink" data-jump="tab-loads|o-br-couple">Tab 1 §1.6a</span> (engineer decision 2026-11-12).`]:null,
         ["A₂:","concentric with the pad, extended by the smallest clear edge distance c:"],
         ["c_front","= 12a<sub>f</sub> − L_pad/2 to the seat front edge (a<sub>f</sub>: CL bearing from the front face of the stem, panel I-1; Tab 1 §1.1);"],
         ["c_back","= (a<sub>brg</sub> + t_bw)·12 − L_pad/2 to the stem back face, a<sub>brg</sub> = t_st − t_bw − a<sub>f</sub> (the stem continues under the backwall);"],
@@ -11585,7 +11588,7 @@ function abrModel(){
       sub:"("+abrN(gam,3)+"\\cdot "+abrN(R.EV.dry)+" + "+abrN(gamB,4)+"\\cdot "+abrN(R.EV.sub)+")\\cdot "+abrN(g.Lheel)+"\\cdot "+abrN(Lab)+(R.EV.Wwedge>0?" + "+abrN(R.EV.Wwedge,1):""),value:R.EV.W,unit:"kip",d:1});
     { const c=R.brCouple;   // AB-1 (2026-11-12, engineer decision): the braking vertical couple, Tab 1 §1.6a
       if(c){ w=topic(T,"BRv","Braking vertical couple at the bearings (engineer decision 2026-11-12)",ABR_AA+"Art. 3.6.4");
-        if(c.src==="imported") w.add({id:"V",label:"Imported from SubLoads with BR (ΣP × BR share "+abrN(c.sh*100,0)+" %); the calculator's couple not added (no double count)",sym:"V_{BR}",eq:"\\Sigma P\\,s_{BR}",sub:abrN(c.Psum,3)+"\\cdot "+abrN(c.sh,2),value:c.V,unit:"kip",d:3,note:"also |P_i| × share per girder, downward, in the seat bearing (§5.6) and the per-bearing / elastomeric loads; not the stem eccentricity (only relieves it). See Tab 1 §1.6a."});
+        if(c.src==="imported") w.add({id:"V",label:"Imported from SubLoads with BR, full value (not × the BR share "+abrN(c.sh*100,0)+" %, engineer decision 2026-11-12); the calculator's couple not added (no double count)",sym:"V_{BR}",eq:"\\Sigma P",sub:abrN(c.Psum,3),value:c.V,unit:"kip",d:3,note:"also |P_i| per girder, downward, in the seat bearing (§5.6) and the per-bearing / elastomeric loads; not the stem eccentricity (only relieves it). See Tab 1 §1.6a."});
         else if(c.P==null) w.add({id:"P",label:"Not applied (REVIEW): "+c.miss.join(", ")+" not entered (panel I-1; a blank haunch counts as 0)",sym:"P_{BR}",eq:"",sub:"",value:0,unit:"kip",d:0,note:"see Tab 1 §1.6a"});
         else { w.add({id:"h",label:"Height of BR above the bridge seat (h_brg "+abrN(c.hb,2)+", d_g "+abrN(c.dg,2)+", h_h "+abrN(c.hh,2)+(c.hhBlank?" (not entered: 0, engineer decision 2026-11-12)":"")+", t_d "+abrN(c.td,2)+" in; 6 ft above the deck)",sym:"h",eq:"\\frac{h_{brg} + d_{g} + h_{h} + t_{d}}{12} + 6",sub:"\\frac{"+abrN(c.hb,2)+" + "+abrN(c.dg,2)+" + "+abrN(c.hh,2)+" + "+abrN(c.td,2)+"}{12} + 6",value:c.h,unit:"ft",d:3});
           w.add({id:"P",label:"Vertical couple on the span supports (BR = "+(c.src==="computed"?"BR_total, §1.6":"the reaction table BR, before the share")+"; L = span, the end span if continuous)",sym:"P_{BR}",eq:"\\frac{BR\\,h}{L}",sub:"\\frac{"+abrN(c.F,2)+"\\cdot "+abrN(c.h,3)+"}{"+abrN(c.Ls,1)+"}",value:c.P,unit:"kip",d:3,
@@ -12811,7 +12814,7 @@ document.addEventListener("DOMContentLoaded",init);
     ll:"Total LL+IM bearing reactions per girder, with IM and multiple presence already included (not per lane). The calculator applies no IM, MPF or distribution of its own to these rows.",
     ws:"P (the overturning couple and uplift), Vx (toward the span) and Vy, per girder. SubLoads already took this abutment's share, so the calculator's WS share is set to 100%.",
     wl:"P, Vx and Vy per girder for the chosen case. The calculator's WS share (it applies to WS and WL) is set to 100%.",
-    br:"Off by default: the calculator can compute BR itself (HL-93, its own lanes and share). SubLoads' value is its stiffness share of the bridge's braking force, which can be much smaller or larger. If ticked: P (the vertical couple of the braking force at its application height, 3.6.4), Vx and Vy per girder, BR share set to 100% and the calculator's own BR switched off.",
+    br:"Off by default: the calculator can compute BR itself (HL-93, its own lanes and share). SubLoads' value is its stiffness share of the bridge's braking force, which can be much smaller or larger. If ticked: P (the vertical couple of the braking force at its application height, 3.6.4), Vx and Vy per girder, BR share set to 100% and the calculator's own BR switched off. P is applied at its full value whatever the BR share (the share is for V<sub>x</sub>, V<sub>y</sub> only; engineer decision 2026-11-12).",
     tu:"Off by default: the calculator can compute TU from its own pad shear. If ticked: Vx and Vy per girder (TU case \"Both\": the push toward the span as TU and SubLoads' other case, the rise, as its own case for the reversed permutations), TU share set to 100% and the calculator's own TU switched off.",
     crsh:"Off by default: the calculator can compute CR/SH from its own pad shear. If ticked: |Vx| of the SubLoads SH case, CR/SH share set to 100% and the calculator's own CR/SH switched off.",
     crsh0:"SubLoads sent no creep/shrinkage case for this abutment. Ticked (the default when the calculator's own CR/SH generator is off): the calculator's CR/SH row is set to 0 for every girder, so an example or earlier hand-entered value does not stay in with SubLoads' loads; the CR/SH share is not changed, and the calculator's own CR/SH generator is switched off if it was on. Untick to keep the calculator's row as it is.",

@@ -41,8 +41,9 @@ check(r.edm.every(v => near(v, 70.507, 1e-6)) && def0.edm.every(v => v === 70), 
 check(r.pb.every(v => near(v, 247.6369, 1e-3)) && r.pbBR.every(v => near(v, 0.50677, 1e-4)) && def0.pbBR.every(v => v === 0), `AB-5 per-bearing loads (3D): Strength I P ${r.pb[0].toFixed(3)}, BR alone ${r.pbBR[0].toFixed(4)} kip`);
 check(r.stemMu === def0.stemMu, 'AB-5: stem M_u unchanged (the couple only relieves the stem)');
 r = await run('seedExampleReactions(); S.longit.computeBR=false; S.rx.BR.forEach(r=>{r.P=-0.242;}); S.dist.shBR=50;');
-check(r.c.src === 'imported' && near(r.seat, 246.75 + 1.75 * 0.121, 1e-3) && r.edm.every(v => near(v, 70.121, 1e-6)) && r.stemMu === def0.stemMu,
-  `AB-5 SubLoads-imported couple (P -0.242/girder, share 50 %): seat P_u ${r.seat.toFixed(3)} (+1.75 x 0.121), EDM P_LL ${r.edm[0]}`);
+// ABXF (2026-11-12, engineer decision): the imported couple at full value, not x the BR share (was 0.121 = 0.242 x 50 % per girder)
+check(r.c.src === 'imported' && near(r.BR.V, -1.452) && near(r.BR.Mv, -1.452 * 5.25) && near(r.seat, 246.75 + 1.75 * 0.242, 1e-3) && r.edm.every(v => near(v, 70.242, 1e-6)) && r.stemMu === def0.stemMu,
+  `AB-5 / ABXF SubLoads-imported couple (P -0.242/girder, share 50 %): V ${r.BR.V.toFixed(3)} (full), seat P_u ${r.seat.toFixed(3)} (+1.75 x 0.242), EDM P_LL ${r.edm[0]}`);
 r = await run('S.longit.computeBR=true;');
 check(r.c && r.c.P == null && r.c.miss.length === 3 && !r.c.miss.some(m => /haunch/.test(m)) && r.BR.V === 0 && r.warn.length === 1 && /^REVIEW/.test(r.warn[0]), 'BR on, elevation inputs blank: not applied, REVIEW warning (h_brg, d_g, t_d; not the haunch: AB-7)');
 const noC = r;
@@ -67,7 +68,7 @@ check(near(r.V1 - r.V0, 2 * 1.75 * 6.64594, 1e-3), 'share 0 (no H_BR here): the 
 
 // imported SubLoads BR: its own P, nothing added
 r = await run(IMP + ELEV);
-check(r.c && r.c.src === 'imported' && near(r.BR.V, -1.452) && !r.warn.length, `imported BR: V = ΣP·share = ${r.BR.V.toFixed(3)} kip (6 × -0.242), no own couple`);
+check(r.c && r.c.src === 'imported' && near(r.BR.V, -1.452) && !r.warn.length, `imported BR: V = ΣP (share 100 %; full value, ABXF) = ${r.BR.V.toFixed(3)} kip (6 × -0.242), no own couple`);
 r = await run('S.iab.type="integral"; S.fnd.branch="pile"; S.longit.computeBR=true;' + ELEV);
 check(!r.c, 'integral abutment: no couple');
 r = await run('S.iab.type="semi"; S.longit.computeBR=true;' + ELEV);
