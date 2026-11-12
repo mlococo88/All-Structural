@@ -18,8 +18,10 @@
     const w = S().work(prefix), pairs = [];
     /* add(o, shown): a step whose value is the engine's (o.value); shown = the expression from the substituted values (or undefined: a value
        the engine finds by a search, or an input) */
-    const add = (o, shown) => { const v = w.add(o); if (shown !== undefined) pairs.push({ id: (prefix ? prefix + '.' : '') + o.id, shown, engine: o.value }); return v; };
-    return { w, add, pairs, done: () => ({ steps: w.steps, pairs }) };
+    const paths = {};
+    /* path (PR 2c): where the step's value is in R (a dotted path, as the tabs' data-ev): tests/psbridge-compare.mjs compares it with the old app's */
+    const add = (o, shown, path) => { const v = w.add(o), id = (prefix ? prefix + '.' : '') + o.id; if (shown !== undefined) pairs.push({ id, shown, engine: o.value }); if (path) paths[id] = path; return v; };
+    return { w, add, pairs, paths, done: () => ({ steps: w.steps, pairs, paths }) };
   }
   const n = (x, d) => S().n(x, d), g = (x, d) => S().g(x, d);
   const par = (x, d) => (x < 0 ? `(${n(x, d)})` : n(x, d));
@@ -223,5 +225,5 @@
     }
     return K.done();
   }
-  window.PSBWorked = { section, loads, analysis };
+  window.PSBWorked = { section, loads, analysis, kit, n, g, par };   // kit, n, g, par: for the worked steps of the PR 2c tabs (engine/worked-stress.js, worked-strength.js)
 })();

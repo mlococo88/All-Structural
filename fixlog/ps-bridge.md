@@ -243,3 +243,75 @@ PR #1452: https://github.com/mlococo88/All-Structural/pull/1452
   error blocks the three tabs; 390 px with no sideways scroll; 0 console errors under file://. `node tests/check-syntax.mjs`.
 ### Open items
 - Next: PR 2c (Losses, Stresses, Flexure, Shear tabs; strand-pattern and stress graphics) with harness B against the old app.
+
+## 2026-11-12 — PR 2c-1: Losses and Stresses output tabs, strand-pattern and stress graphics (steel style), check chips; browser harness B (no calculation change)
+PR #PR2C1: https://github.com/mlococo88/All-Structural/pull/PR2C1
+### Engineer-confirmed (2026-11-12, PS-15)
+- The interim single design girder (`P.design`, engine/design.js, PR 2b-1) and the blocking errors for unequal bays and for different skews
+  at the two supports of the design span stay until phase 3 (PR 3a). Recorded here as confirmed by the engineer; no change.
+### Where
+- `apps/ps-bridge/engine/worked-stress.js` (new, `window.PSBWorkedStress`, no DOM): `losses(inp, R)`, `stresses(inp, R)` → `{ steps, pairs, paths }`
+  (shared/steps.js format; each step's value is the engine's; `pairs` = the expression evaluated from its substituted values against it;
+  `paths` = where the value is in R). Losses: f_pbt, E_ci, M_g, the closed-form Δf_pES (Eq. C5.9.3.2.3a-1), f_pt, P_i, f_cgp; approximate
+  (γ_h, γ_st, Eq. 5.9.3.3-1, Δf_pR) and refined (k_s, k_hs, k_hc, k_f, K_td, k_td^id/if/df, ε_bid, ε_bif, ψ_b ×3, K_id, Δf_pSR, Δf_pCR,
+  Δf_pR1, e_pc, K_df, Δf_pSD, Δf_cd, Δf_pCD, Δf_pR2, Δf_pSS with its deck terms when computed, Σ) — both methods worked, the selected one
+  used; total, %, f_pe; the elastic gains (C5.9.3.4.3) and f_pe with the permanent gains; the stages of strand row 1 (r_1, f_pt, f_pD, f_pe,
+  forces). Stresses: the 5.9.2.3 limits; the fibre stress at the station where each check governs (release gross with P_i, or transformed
+  with P at f_pbt (A_t, y_bt, I_t shown); Service top permanent / full, Service III bottom with γ_LL and m, deck top; restraint moment
+  where the engine adds it) and each ratio; the 5.12.3.3.5 checks at an interior support (top tension Service III with the negative LL,
+  T and A_s,req, bottom compression); Fatigue I (M_fat, DF_fat, M_fat,g, f_b,perm, Δf_b, f_b,min, 0.095√f′c, Δf_p, the concrete check);
+  crack control (β_s, f_ss, s_max) when Service III cracks. Display intermediates the engine does not keep are named in their notes (the
+  transformed section at a release station; ε_ddf, ψ_d, Δf_cdf of Δf_pSS; f_ss). No new formula: the expressions of the moved engine.
+- `apps/ps-bridge/engine/worked.js`: `kit` records a step's R path (third argument of `add`); `kit`, `n`, `g`, `par` exported.
+- `apps/ps-bridge/ui/losses.js` (new, `PSBUiLosses`): Losses tab — graphic card (tiles; loss components and strand stress through the
+  stages, the steel bar chart), Prestress losses, Elastic gains, Strand force and stress by row and stage, Refined estimate, Approximate
+  estimate, the strand pattern, worked steps in topics with § links. As the old app's Losses tab.
+- `apps/ps-bridge/ui/stresses.js` (new, `PSBUiStresses`): Stresses tab — graphic card (tiles; release and service stresses along the
+  girder with the limits and the governing stations, the steel along-girder chart; station choice), Governing stresses (every stress check
+  with x, actual, limit, ratio, PASS / FAIL, § link), the selected station (choice; every fibre stress there) with the stress distribution
+  on the girder section (stage Release / Service permanent / Service full; linear profile, neutral axis, limits, strands at the station),
+  the tenth points table, the interior-support card (5.12.3.3.5), Fatigue I, Crack control, worked steps. As the old app's Stresses tab, plus
+  the 5.12.3.3.5 checks the old app lists in its report.
+- `apps/ps-bridge/ui/strands.js` (new, `PSBStrandGfx`): the strand-pattern graphic in the steel detail style — elevation (vertical scale
+  exaggerated): ℄ bearings, girder ends, straight rows (debonded lengths dashed), the draped strands labelled "draped", the two hold-down
+  points at frac × L_span from ℄ bearing, dimensioned (PS-5, PS-13); sections at ℄ bearing and at midspan (debonded strands hollow,
+  draped strands as pairs about their centroid y_end / y_mid). On the Girders & strands input tab (replacing its placeholder) and the Losses tab.
+- `apps/ps-bridge/ui/dash.js`: the check summary chips (the steel dash pattern): Release stresses, Service stresses, Fatigue I — each the
+  governing engine ratio (R.checks c.r) of its checks with PASS / FAIL, ▸ lists each check; a chip or a check opens its tab and the worked
+  step of the value; the head counts FAIL / PASS; the groups not built yet stay "not run" with their PR (Flexure, Shear: 2c-2).
+- `apps/ps-bridge/index.html`: loads the new files; result() makes the Losses and Stresses steps; the two tabs replace their
+  placeholders; the strand pattern on the Girders & strands tab; output-tab choices of every tab (`onOutChange`); the chips' step links.
+### Copies from the Steel Bridge app (to move to shared/ later, CLAUDE.md §3)
+- None new in this PR. Used: the copies of PR 2b-2 (`ui/vizkit.js`, `ui/vizalong.js` from `apps/steel-bridge/ui/` at `28e1605`) and the
+  adapted `ui/dash.js` (chip markup and CSS of `apps/steel-bridge/ui/dash.js`).
+### Shared files
+- None changed. `shared/steps.js` loaded as before.
+### Governing provisions
+- None changed (§4): no formula, factor, unit or reference of the engine; the steps restate the moved engine's expressions with its values.
+  AASHTO LRFD 10th Ed. articles as cited on each step (5.9.3, 5.9.2.3, 5.12.3.3.5, 5.5.3, 5.6.7).
+### Check case
+- Default design (PCI BT-72, L = 120 ft, 40 strands 0.6 in, refined losses), values on the tab: f_pbt = 0.750 × 270 = 202.50 ksi;
+  E_ci = 120,000(1.0)(0.145)²(6.80)^0.33 = 4,749 ksi; M_g = 0.8256 × 120² / 8 × 12 = 17,833 kip-in; I_g + e_m²A_g = 545,894 + 31.5² × 767
+  = 1,306,950 in⁴; Δf_pES = (8.680 × 202.50 × 1,306,950 − 31.5 × 17,833 × 767) / (8.680 × 1,306,950 + 767 × 545,894 × 4,749 / 28,500)
+  = 23.01 ksi; Δf_pLT (refined) = 5.300 + 16.605 + 1.129 + 1.956 − 0.052 + 1.129 − 1.257 = 24.810 ksi; f_pe = 202.50 − 23.01 − 24.81 = 154.68 ksi.
+  Release compression at x = 48.0 ft: 1558.0/767 + 1558.0 × 31.5/14,915 − 17,119/14,915 = 4.174 ksi ≤ 0.65 × 6.80 = 4.420 (ratio 0.944).
+  Service III bottom at midspan: 1342.6/767 + 1342.6 × 31.5/14,915 − 41,323/14,915 − (11,880 + 0.80 × 31,519)/20,231 = −0.018 ksi (ratio 0.033).
+### How verified
+- `node tests/engine/run.mjs psbridge-tabs` (9 designs, cases now in `tests/engine/psbridge-tab-cases.mjs`: + approximate losses with the
+  transformed release section, severe corrosion, bonded release steel, entered fatigue DF and Δf_pSS; + a cracked design made continuous
+  with top steel): every pair agrees to 1e-9, every step with a path holds R's value exactly (Object.is); `tex.test.mjs` parses every step.
+- **Harness B** (new, `node tests/psbridge-compare.mjs`): the 9 designs; the new app on each project, the old `Prestressed Bridge Design.html`
+  (frozen) on the same engine inputs (its stored inputs read back equal on every design): **2,674 values shown on the Losses and Stresses
+  tabs and 850 step values = the old app's computeAll values, 0 differences** (text as formatted, numbers exact); a seeded `psbeam.*` key
+  byte-identical, only `psb2.*` keys written; 0 console errors. `--control` (a 1e-9 change) is reported as a difference.
+- `node tests/smoke/ps-bridge-skeleton.mjs` (120 checks): on three designs every value shown on Losses and Stresses (data-ev) = computeAll
+  on the page, ≥ 2 graphics, KaTeX steps; the chips' ratios = the engine's; a chip opens the step; the station and stage choices; the strand
+  pattern on the input tab (draped, hold-down at 0.400 L); 390 px with no sideways scroll on both tabs and the strand pattern; 0 console
+  errors under file://. `node tests/check-syntax.mjs`.
+### Open items
+- Old app display (frozen, not changed): its Losses tab shows "f_pe with permanent gains credited" as f_pe + Δf_p,perm + Δf_pSS, adding the
+  deck shrinkage gain that the refined Δf_pLT already subtracts; the new tab shows the engine's `fpeGain` = f_pe + Δf_p,perm (DC1 + DC2/DW
+  gains). No check uses either value. For the engineer: confirm the old display double-counts Δf_pSS (refined method).
+- Old app display: the old stress derivation always wrote the gross-section release expression, also when the transformed section is used;
+  the new steps write the transformed expression (A_t, y_bt, I_t) the engine uses.
+- Next: PR 2c-2 (Flexure and Shear tabs, the pier negative-moment resistance and the positive moment connection; chips; harness B).
