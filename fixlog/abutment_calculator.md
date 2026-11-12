@@ -17450,7 +17450,7 @@ Engineer decision 2026-11-10 (geometry). AASHTO LRFD 10th Ed. (2024): 5.6.5 / Fi
   - The abutment smoke tests, `abutment-subloads-exchange`, `project-library --tool abutment` and `check-syntax`.
 - **Other copies:** none.
 
-## 2026-11-12 — PR: abut-br-couple (PR #TBD1) (AB-1) — Braking vertical couple P_BR = BR·(h_brg + d_g + h_h + t_d + 6 ft)/L at the bearings, both braking directions   [§4: results change for projects with BR and all four superstructure elevation inputs entered; otherwise only a REVIEW warning; no saved key or format change]
+## 2026-11-12 — PR: abut-br-couple (PR #1445: https://github.com/mlococo88/All-Structural/pull/1445) (AB-1) — Braking vertical couple P_BR = BR·(h_brg + d_g + h_h + t_d + 6 ft)/L at the bearings, both braking directions   [§4: results change for projects with BR and all four superstructure elevation inputs entered; otherwise only a REVIEW warning; no saved key or format change]
 - **Engineer decision (2026-11-12, AB-1):** add the AASHTO LRFD 10th Ed. 3.6.4 braking vertical couple, P_BR = BR × (h_brg + d_g + haunch + t_deck + 6 ft) / L_span, with the elevation inputs of ABEL2 #1383; the end span for a continuous bridge (conservative); a vertical BR load at the seat in both braking directions with BR's load factors; blank inputs: not applied with a REVIEW note; a BR imported from SubLoads already carries its couple P (ABXC #1408): use that one. Before: the §1.6 card said the couple "is not transferred to a single substructure line and is not included".
 - **Where (all in `abutment_calculator.html`):**
   - New `brCouple(agg,groups,xBrg,shBR)` after `function eqFB(dK,kA){`:
