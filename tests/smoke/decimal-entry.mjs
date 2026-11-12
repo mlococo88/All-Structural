@@ -25,7 +25,7 @@ const TOOLS = {
     init: F => F.evaluate(() => { S.sec.type = 'tee'; S.code = 'AASHTO'; S.layers[0].dMan = 15.5; refresh(); }), checks: 'cbcChecks' },
   cbasd: { file: 'Concrete Beam Capacity.html', hash: '#asd', frame: '#suite-frame-asd', tabs: '[role=tab]', wait: 5000 },
   cbdev: { file: 'Concrete Beam Capacity.html', hash: '#dev', frame: '#suite-frame-dev', tabs: '[role=tab], .tab-btn, .itab, .tab, [data-tab]', wait: 5000 },
-  index: { file: 'index.html', tabs: '#root>div>header+div>nav>button', wait: 8000 },
+  index: { file: 'index.html', tabs: '#root>div>header+div>nav>button', wait: 8000, checks: 'ixChecks' },
   lldf: { file: 'lldf.html', tabs: TABS, wait: 5000 },
   pbd: { file: 'Prestressed Bridge Design.html', tabs: TABS, wait: 6000 },
   sf: { file: 'Spread Footing.html', tabs: '#sfdInTabs .sfdInTab, #tabbar button', wait: 3000 },
@@ -143,6 +143,49 @@ const CHECKS = {
     await leave();
     return out;
   },
+  // index.html Moving Loads step (IXDLA, 2026-11-12): the Global DLA (%) and per-vehicle DLA (%) fields take a decimal (parseInt
+  // truncated 12.5 to 12, and "33." was stored as 0 and shown as "0" while typing), what is stored (mct_cfg_v3) and the MCT
+  // *MVLDCASE SCALE written from it; min 0 / max 100 are the input's attributes only (no clamp, as before).
+  async ixChecks(p, F) {
+    const out = [], chk = (c, m) => { if (!c) out.push(m); console.log(`   ${c ? 'ok  ' : 'FAIL'} ${m}`); };
+    await F.$$eval('#root>div>header+div>nav>button', e => { const x = e.find(b => /Moving Loads/.test(b.textContent)); if (x) x.click(); });
+    await p.waitForTimeout(600);
+    const cfg = () => F.evaluate(() => JSON.parse(localStorage.getItem('mct_cfg_v3') || '{}'));
+    const setGlobal = on => F.evaluate(on => { const t = [...document.querySelectorAll('span')].find(s => s.textContent === 'Override all with global value');
+      const c = JSON.parse(localStorage.getItem('mct_cfg_v3') || '{}'); if (t && !!c.useGlobalDLA !== on) t.parentElement.click(); }, on).then(() => p.waitForTimeout(300));
+    const tag = () => F.evaluate(() => { document.querySelectorAll('[data-ixdla]').forEach(e => e.removeAttribute('data-ixdla'));
+      const lab = [...document.querySelectorAll('label')].find(l => l.textContent === 'Global DLA (%)');
+      if (lab) lab.parentElement.querySelector('input').setAttribute('data-ixdla', 'g');
+      const v = [...document.querySelectorAll('div')].find(d => d.textContent === 'HL-93TRK' && d.previousElementSibling);
+      const row = v && v.parentElement.parentElement; const i = row && row.querySelector('input[type=number]'); if (i) i.setAttribute('data-ixdla', 'v'); });
+    const typeIn = async (k, s) => { await tag(); await F.evaluate(k => { const e = document.querySelector(`[data-ixdla="${k}"]`); e.scrollIntoView({ block: 'center' }); e.focus(); e.select(); }, k);
+      await p.keyboard.press('Control+A'); for (const ch of s) await p.keyboard.type(ch); await p.waitForTimeout(80);
+      return F.evaluate(() => ({ v: document.activeElement.value, k: document.activeElement.getAttribute('data-ixdla') })); };
+    const leave = () => F.evaluate(() => document.activeElement.blur()).then(() => p.waitForTimeout(150));
+    const shown = k => F.evaluate(k => document.querySelector(`[data-ixdla="${k}"]`).value, k);
+    const scale = () => F.evaluate(() => { const c = JSON.parse(localStorage.getItem('mct_cfg_v3')); c.selectedVehicles = ['HL-93TRK'];
+      const l = generateMCT(c).split('\n').find(x => /^\s*VL, HL-93TRK,/.test(x)); return l ? l.split(',')[2].trim() : null; });
+    const c0 = await cfg();
+    await setGlobal(true);
+    let r = await typeIn('g', '33.3'); chk(r.k === 'g' && r.v === '33.3', `Global DLA typed "33.3" key by key: field "${r.v}" (main: "33", the point dropped)`);
+    chk((await cfg()).globalDLA === 33.3, `Global DLA "33.3": stored ${(await cfg()).globalDLA} (main: 33)`);
+    await leave(); chk(await shown('g') === '33.3', 'Global DLA "33.3" left: field "33.3"');
+    chk(await scale() === '1.333', `Global DLA 33.3: MCT SCALE ${await scale()} = 1 + 33.3/100`);
+    r = await typeIn('g', '12.5'); await leave(); chk((await cfg()).globalDLA === 12.5, `Global DLA "12.5": stored ${(await cfg()).globalDLA} (before: 12)`);
+    r = await typeIn('g', '33'); await leave(); chk((await cfg()).globalDLA === 33 && await scale() === '1.33', 'Global DLA "33": stored 33, SCALE 1.33 (as before)');
+    r = await typeIn('g', '-'); chk(r.v === '' && (await cfg()).globalDLA === 0, `Global DLA "-" alone: not overwritten while typing, stored 0 (as before)`);
+    await leave(); chk(await shown('g') === '0', 'Global DLA "-" left: the field shows the stored 0 (as before)');
+    r = await typeIn('g', '150'); await leave(); chk((await cfg()).globalDLA === 150, 'Global DLA "150": stored 150, not clamped (max 100 is the spinner limit only, as before)');
+    await setGlobal(false);
+    r = await typeIn('v', '12.5'); chk(r.k === 'v' && r.v === '12.5', `HL-93TRK DLA typed "12.5": field "${r.v}"`);
+    await leave(); chk((await cfg()).vehicleDLA['HL-93TRK'] === 12.5 && await shown('v') === '12.5', `HL-93TRK DLA "12.5": stored ${(await cfg()).vehicleDLA['HL-93TRK']} (before: 12)`);
+    chk(await scale() === '1.125', `HL-93TRK DLA 12.5: MCT SCALE ${await scale()} (main: 1.12)`);
+    await F.evaluate(c0 => { localStorage.setItem('mct_cfg_v3', JSON.stringify(c0)); }, c0);   // the sweep runs on the page as it is; the stored cfg is put back
+    r = await typeIn('v', String(c0.vehicleDLA && c0.vehicleDLA['HL-93TRK'] != null ? c0.vehicleDLA['HL-93TRK'] : 33)); await leave();
+    await setGlobal(!!c0.useGlobalDLA);
+    await typeIn('g', String(c0.globalDLA ?? 0)).catch(() => {}); await leave();
+    return out;
+  },
   // Pile Designer (DECE, 2026-11-11): a load-case moment (negative valid) and a "-" alone, committed values read from the rendered
   // inputs (PDPL_I)
   async pileChecks(p, F) {
@@ -161,6 +204,24 @@ const CHECKS = {
     await typeIn('-'); r = await st(); chk(r.a === lab && r.v === '' && r.M === 0, `${lab} "-" alone: not overwritten while typing (field reads "${r.v}"), committed ${r.M} (0, as before)`);
     await leave(); r = await st(); chk(r.v === '0' && r.M === 0, `${lab} "-" left: the field shows the committed 0 (as before)`);
     await typeIn(orig); await leave();
+    // PDNB (2026-11-12): Casing OD (negative invalid, no clamp): "-1.5" kept while typing, then an input error (field marked, listed
+    // in the banner, results withheld); the original OD gives the results back
+    const odSel = () => F.evaluate(() => { const l = [...document.querySelectorAll('aside.input-rail label')].find(x => (x.querySelector('span') || {}).textContent === 'Casing OD');
+      const e = l && l.querySelector('input'); if (!e) return false; e.setAttribute('data-test-od', '1'); return true; });
+    if (!await odSel()) { chk(false, 'Casing OD field found'); return out; }
+    await F.evaluate(() => { const b = [...document.querySelectorAll('.rail-tab')].find(x => /^Pile/.test(x.textContent)); if (b) b.click(); });
+    await p.waitForTimeout(300);
+    const odType = async s => { await F.evaluate(() => { const e = document.querySelector('[data-test-od]'); e.scrollIntoView({ block: 'center' }); e.focus(); e.select(); });
+      await p.keyboard.press('Control+A'); for (const ch of s) await p.keyboard.type(ch); await p.waitForTimeout(60); };
+    const odSt = () => F.evaluate(() => { const e = document.querySelector('[data-test-od]'); return { v: e.value, a: document.activeElement === e, OD: PDPL_I.OD, inv: e.getAttribute('aria-invalid'),
+      ban: !!document.querySelector('#pdNegBanner [data-pdneg-go="OD"]'), mods: document.querySelectorAll('.app-shell section[data-module]').length }; });
+    const od0 = (await odSt()).v;
+    await odType('-1.5'); r = await odSt();
+    chk(r.a && r.v === '-1.5' && r.OD === -1.5, `Casing OD "-1.5": field "${r.v}" while typing, committed ${r.OD}`);
+    chk(r.inv === 'true' && r.ban && r.mods === 0, `Casing OD -1.5: input error (field marked ${r.inv}, listed ${r.ban}, result modules shown ${r.mods})`);
+    await leave(); r = await odSt(); chk(r.v === '-1.5' && r.ban && r.mods === 0, `Casing OD -1.5 left: field "${r.v}", error still listed, results withheld`);
+    await odType(od0); await leave(); r = await odSt();
+    chk(r.v === od0 && !r.ban && r.inv !== 'true' && r.mods > 0, `Casing OD back to ${od0}: no error, results shown (${r.mods} modules)`);
     return out;
   },
   // Moving Load Generator (DECE, 2026-11-11): the headway (shown only for the two-vehicle step case), a lone "-" in the variable
