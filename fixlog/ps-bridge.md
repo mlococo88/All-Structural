@@ -6,7 +6,7 @@ Tests: `node tests/engine/run.mjs psbridge`; `node tests/smoke/ps-bridge-skeleto
 unchanged and stays the working tool until the switch-over.
 
 ## 2026-11-12 — PR 1: ps-bridge-skeleton — folder, shell, tabs (placeholders), project model psb2.project v1 (new files)
-PR: (link added below)
+PR #1444: https://github.com/mlococo88/All-Structural/pull/1444
 ### Where
 - `apps/ps-bridge/index.html` (new): the Steel Bridge shell (header, check summary column from 1200 px, input panel, splitter from
   900 px, output panel; stacked below 900 px), the CBUST `document.write` loader of classic scripts with `?v=<lastModified>`, KaTeX 0.16.9 and
