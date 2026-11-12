@@ -197,7 +197,7 @@ PR #1450: https://github.com/mlococo88/All-Structural/pull/1450
 - Next: PR 2b-2 (Section properties, Loads & LLDF, Analysis output tabs with worked steps; values = engine values).
 
 ## 2026-11-12 — PR 2b-2: Section properties, Loads & LLDF and Analysis output tabs (steel style, worked steps; values = engine values)
-PR #PR2B2: https://github.com/mlococo88/All-Structural/pull/PR2B2
+PR #1452: https://github.com/mlococo88/All-Structural/pull/1452
 ### Where
 - `apps/ps-bridge/engine/worked.js` (new, `window.PSBWorked`, no DOM): `section(inp, R)`, `loads(inp, R)`, `analysis(inp, R)` → `{ steps, pairs }`.
   Every step (shared/steps.js format: symbol → equation → values substituted → result) carries the engine's own value (R = computeAll of the
