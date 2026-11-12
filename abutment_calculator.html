@@ -4269,7 +4269,7 @@ function computeAll(){
       { const PLc=pileLength(R.checks.pileStr, R.checks.pileCF); if(PLc) R.checks.pileLen=PLc; }   // ABPL (2026-11-12): pile length vs the depth to fixity, long-pile premise (Tab 4 §4.4c); only with L_pile entered
       { const PL=R.checks.pileLen;
         if(PL&&PL.Df!=null&&!PL.reach) warnFor("conv",`Pile length: the pile does not reach the depth to fixity — length in the soil L<sub>s</sub> = L<sub>pile</sub> − e − L<sub>u</sub> = ${fmt(PL.Ls,2)} ft, less than D<sub>f</sub> = ${fmt(PL.Df,2)} ft (Tab 4 §4.4c). The buckling length K(L<sub>u</sub> + D<sub>f</sub>) of §4.4b assumes fixity [10.7.3.13.4, C10.7.3.13.4] and the minimum penetration should provide it [10.7.6, 10.7.3.12]: lengthen the pile or analyse it with its actual length (p-y, Pile Designer).`,"err");
-        if(PL&&PL.mr&&PL.mr.short.length) warnFor("conv",`Pile length: the elastic lateral solution (Matlock–Reese) assumes a long pile, L<sub>s</sub> ≥ 5T; here L<sub>s</sub> = ${fmt(PL.Ls,2)} ft, ${PL.mr.short.map(k=>(k==="L"?"x (longitudinal H)":"y (transverse H)")+": "+fmt(PL.mr[k].z,2)+"T (T = "+fmt(PL.mr[k].T,2)+" ft)").join("; ")} (Tab 4 §4.4c). The long-pile moment C<sub>M</sub>·H·T is kept: check it with a p-y analysis of the actual length (Pile Designer) and enter or pull that moment.`); }
+        if(PL&&PL.mr&&PL.mr.short.length) warnFor("conv",`Pile length: the elastic lateral solution (Matlock–Reese) assumes a long pile, L<sub>s</sub> ≥ 5T; here L<sub>s</sub> = ${fmt(PL.Ls,2)} ft, ${PL.mr.short.map(k=>(k==="L"?"x (longitudinal H)":"y (transverse H)")+": "+fmt(PL.mr[k].z,2)+"T (T = "+fmt(PL.mr[k].T,2)+" ft)").join("; ")} (Tab 4 §4.4c): FAILS (D/C = 5T/L<sub>s</sub> = ${fmt(PL.mr.dc,3)}; engineer decision 2026-11-12). The long-pile moment C<sub>M</sub>·H·T and its results are still shown: lengthen the pile, or analyse it with its actual length (p-y, Pile Designer) and enter or pull that moment.`,"err"); }
       }   // PG1
     }
   }
@@ -4445,7 +4445,9 @@ function computeAll(){
          fixed at their ends) assume: flagged; the buckling result is kept.
      (c) The elastic lateral solution (ABR3, Matlock–Reese) models a long pile: 12T in the soil, free tip (T = (EI/n_h)^(1/5); clay R =
          (EI/E_s)^(1/4)). Where it gives a limit state's moment and L_s < 5T (z_max = L_s/T < 5, short pile; Matlock & Reese 1960) for an axis
-         it bends: flagged; the long-pile moment is kept. No calculation result changes here other than the length D/C. */
+         it bends: flagged; the long-pile moment is kept. No calculation result changes here other than the length D/C.
+     AB-4 (2026-11-12, engineer decisions): (c) is a FAILED check (dashboard "pileShort", D/C = 5T/L_s; results still shown); the 5 ft of (a) is
+     adopted from MassDOT 3.10.11.2 for pile footings (AB-2); D_f stays C10.7.3.13.4 or entered / Pile Designer (AB-3). */
   function pileLength(ps,pf){
     const L=abElNum("piles.elLpile",true); if(L===null) return null;
     const p=S.piles, G=ps&&ps.geom? ps.geom : null, emb=Math.max(0,+p.embed||0)/12, Lu=Math.max(0,+p.Lu||0);
@@ -4457,7 +4459,11 @@ function computeAll(){
     if(mrRows.length&&pf.latL&&pf.latT){
       const ax=(Lx,key)=>({T:Lx.T, z:out.Ls/Lx.T, used:mrRows.some(x=>x[key]>1e-9)});
       out.mr={L:ax(pf.latL,"ML"), T:ax(pf.latT,"MT"), ls:mrRows.map(x=>x.ls)};
-      out.mr.short=["L","T"].filter(k=>out.mr[k].used&&out.mr[k].z<5-1e-9); }
+      out.mr.short=["L","T"].filter(k=>out.mr[k].used&&out.mr[k].z<5-1e-9);
+      /* AB-4 (2026-11-12, engineer decision): L_s < 5T (5R in clay) on an axis carrying moment is a FAILED check (dashboard "pileShort",
+         D/C = 5T/L_s of the axis with the larger T among those that bend; results still shown). L_s ≤ 0: D/C ∞. */
+      const us=["L","T"].filter(k=>out.mr[k].used);
+      if(us.length){ const k=us.reduce((a,b)=>out.mr[b].T>out.mr[a].T?b:a); out.mr.gov=k; out.mr.dc=out.Ls>1e-9? 5*out.mr[k].T/out.Ls : Infinity; } }
     return out;
   }
   function actIndexToNo(act,i){ // map index within active piles → overall pile number
@@ -5627,6 +5633,8 @@ function computeAll(){
       addD("pileV","Pile shear H/n [6.10.9.2, 6.12.1.2.3]",pf.ok?pf.dcV:0,"tab-found",pf.ok?(pf.gV.ls+", φ_v = 1.0"):(pf.note||"not checked"),!pf.ok); }
     const PL=R.checks.pileLen;   // ABPL (2026-11-12): only with L_pile entered (panel I-7)
     if(PL) addD("pileLen","Pile length ≥ e + L_u + D_f + 5 ft [10.7.6; engineer decision 2026-11-12]",PL.dc!=null?PL.dc:0,"tab-found",PL.dc!=null?("L_pile "+fmt(PL.L,2)+" ft vs "+fmt(PL.req,2)+" ft required"+(PL.reach?"":"; does not reach D_f")+(PL.mr&&PL.mr.short.length?"; shorter than 5T (lateral solution)":"")):PL.note,PL.dc==null);
+    if(PL&&PL.mr&&PL.mr.dc!=null) addD("pileShort","Pile long-pile premise L_s ≥ 5"+(PL.mode==="clay"?"R":"T")+", elastic lateral solution [engineer decision 2026-11-12]",PL.mr.dc,"tab-found",   // AB-4 (2026-11-12)
+      "L_s "+fmt(PL.Ls,2)+" ft vs 5"+(PL.mode==="clay"?"R":"T")+" = "+fmt(5*PL.mr[PL.mr.gov].T,2)+" ft ("+(PL.mr.gov==="L"?"longitudinal":"transverse")+" H)",false,isFinite(PL.mr.dc)?"":"L_s ≤ 0: FAIL");
   }
   addD("seat","Minimum support length [4.7.4.4]",R.checks.seat.dc,"tab-stab","");
   if(R.checks.shearFric) addD("shearFric","Stem-base shear friction [5.7.4]",R.checks.shearFric.dc,"tab-struct",R.checks.shearFric.ls||"");
@@ -6590,7 +6598,7 @@ const DASH_ANCHOR={pileGrp:"o-pgrp",pileGrpUp:"o-pgrp",ts_stem:"o-ts",ts_bw:"o-t
   iabEEP:"o-iab-ee",iabEEWF:"o-iab-ee",iabEEWV:"o-iab-ee",iabEERF:"o-iab-ee",iabEERV:"o-iab-ee",   // ABC (d)
   iabDF:"o-str-End diaphragm horizontal",iabDV:"o-str-End diaphragm horizontal",iabDMin:"o-str-End diaphragm horizontal",iabDCrack:"o-str-End diaphragm horizontal",sliding:"o-slide",ecc:"o-ecc",bearing:"o-brg",seat:"o-seat",   // ABT: iabC1Crack–iabC3Crack, iabDCrack
   shearFric:"o-str-shearfric",bearingSeat:"o-str-bearing",pileC:"o-pilecap",pileU:"o-pilecap",punching:"o-punch",
-  pileS:"o-pilestr",pileM:"o-pilecf",pileV:"o-pilecf",pileLen:"o-pilelen",dowelDev:"o-str-dowel",dowelLap:"o-str-dowel",   // ABCHK; ABR2
+  pileS:"o-pilestr",pileM:"o-pilecf",pileV:"o-pilecf",pileLen:"o-pilelen",pileShort:"o-pilelen",dowelDev:"o-str-dowel",dowelLap:"o-str-dowel",   // ABCHK; ABR2
   bwFlex:"o-str-Backwall",bwShear:"o-str-Backwall",bwFlexMin:"o-str-Backwall",bwFlexCrack:"o-str-Backwall",bwEEF:"o-str-bwee",bwEEV:"o-str-bwee",bwStopF:"o-str-bwee",bwStopV:"o-str-bwee",iabDEF:"o-iab-cap",iabDEV:"o-iab-cap",
   stemFlex:"o-str-Stem",stemShear:"o-str-Stem",stemFlexMin:"o-str-Stem",stemFlexCrack:"o-str-Stem",
   toeFlex:"o-str-Toe",toeShear:"o-str-Toe",toeFlexMin:"o-str-Toe",toeFlexCrack:"o-str-Toe",
@@ -6770,19 +6778,22 @@ function pileLenPanelHTML(PL){
     `D_f = ${t(PL.Df,3)}\\ \\text{ft below the ground (${PL.DfUser?"entered":PL.mode==="sand"?"Eq. C10.7.3.13.4-2":"Eq. C10.7.3.13.4-1"}, worked in §4.4b)}`,
     `L_{req} = \\dfrac{e}{12} + L_u + D_f + 5 = ${t(PL.emb,3)} + ${t(PL.Lu)} + ${t(PL.Df,3)} + 5 = ${t(PL.req,3)}\\ \\text{ft}`,
     `L_s ${PL.reach?"\\ge":"\\lt"} D_f:\\ ${t(PL.Ls,3)}\\ ${PL.reach?"\\ge":"\\lt"}\\ ${t(PL.Df,3)}\\ \\text{ft}\\quad(\\text{${PL.reach?"reaches":"does not reach"} the depth to fixity})`];
-  const mrL=[]; if(PL.mr) ["L","T"].forEach(k=>{ const a=PL.mr[k], ax=k==="L"?"x":"y";
-    mrL.push(`\\dfrac{L_s}{T_${ax}} = \\dfrac{${t(PL.Ls,3)}}{${t(a.T,3)}} = ${t(a.z,2)}\\ ${a.z>=5?"\\ge":"\\lt"}\\ 5\\quad(${a.used?(a.z>=5?"\\text{long pile}":"\\text{short pile: the long-pile moment is not valid}"):"\\text{no moment about this axis}"})`); });
+  const mrL=[], TT=PL.mode==="clay"?"R":"T"; if(PL.mr) ["L","T"].forEach(k=>{ const a=PL.mr[k], ax=k==="L"?"x":"y";
+    mrL.push(`\\dfrac{L_s}{${TT}_${ax}} = \\dfrac{${t(PL.Ls,3)}}{${t(a.T,3)}} = ${t(a.z,2)}\\ ${a.z>=5?"\\ge":"\\lt"}\\ 5\\quad(${a.used?(a.z>=5?"\\text{long pile}":"\\text{short pile: FAILS, the long-pile moment is not valid}"):"\\text{no moment about this axis}"})`); });
   return panel("o-pilelen","4.4c","Pile Length — Depth to Fixity and the Long-Pile Premise [10.7.6, 10.7.3.13.4]",`
     ${abutWorkedIn([["tab-found","o-pilecf","4.4b Depth to fixity D_f, elastic lateral solution T","D_f, T"]])}
     ${eqB("Pile length against the depth to fixity","AASHTO LRFD 10th Ed. 10.7.6, 10.7.3.12, 10.7.3.13.4, C10.7.3.13.4; engineer decision 2026-11-12 (+ 5 ft)",L,
       abNL("Pile length (engineer decision 2026-11-12):",[["L<sub>pile</sub>:","the total length entered in panel I-7, pile head inside the footing to the tip (incl. the embedment e = "+fmt(PL.emb*12,1)+" in); the same input gives the pile tip elevation of Tab 1 §1.1a."],
-        ["Requirement:","the minimum penetration provides fixity for the lateral loads (10.7.6, 10.7.3.12); D<sub>f</sub> is the depth to fixity below the ground of §4.4b (the buckling length K(L<sub>u</sub> + D<sub>f</sub>), 10.7.3.13.4). The added 5 ft is the margin of the engineer's decision (MassDOT 3.10.11.2 uses L<sub>f</sub> + 5 ft for integral-abutment piles; AASHTO sets no margin)."],
+        ["Requirement:","the minimum penetration provides fixity for the lateral loads (10.7.6, 10.7.3.12). AASHTO 10.7.6 / C10.7.3.12 and MassDOT 3.2.2.2 (pile footings) require only that the pile reaches fixity; the added 5 ft is adopted from MassDOT 3.10.11.2 (its L<sub>f</sub> + 5 ft rule for integral-abutment piles) for pile footings by engineer decision 2026-11-12."],
+        ["Depth to fixity:","D<sub>f</sub> is the depth to fixity below the ground of §4.4b (Eq. C10.7.3.13.4-1/-2, or entered / from Pile Designer), the one of the buckling length K(L<sub>u</sub> + D<sub>f</sub>), 10.7.3.13.4 (engineer decision 2026-11-12)."],
         ["Not reaching D<sub>f</sub>:","Eqs. C10.7.3.13.4-1/-2 take the pile as fixed at its end; a shorter pile is flagged (the buckling result of §4.4a/§4.4b is kept)."],
         ["Geotechnical length:","the length for the axial resistance, uplift, scour and settlement (10.7.6) is by the geotechnical engineer / Pile Designer."]]))}
     ${checkLine("Pile length",`\\dfrac{L_{req}}{L_{pile}} = \\dfrac{${t(PL.req,3)}}{${t(PL.L)}}`,PL.dc)}
-    ${PL.mr? eqB("Long-pile premise of the elastic lateral solution (Matlock–Reese)","Matlock & Reese (1960); AASHTO LRFD 10th Ed. 10.7.3.12 (p-y analysis)",mrL,
+    ${PL.mr? eqB("Long-pile premise of the elastic lateral solution (Matlock–Reese)","Matlock & Reese (1960); AASHTO LRFD 10th Ed. 10.7.3.12 (p-y analysis); engineer decision 2026-11-12",mrL,
       abNL("Elastic lateral solution:",[["Model:","§4.4b models the pile as long: 12T in the soil with a free tip (T = (EI/n<sub>h</sub>)<sup>1/5</sup>; clay R = (EI/E<sub>s</sub>)<sup>1/4</sup>), used for "+esc(PL.mr.ls.join(", "))+"."],
-        ["Premise:","a pile with L<sub>s</sub>/T ≥ 5 behaves as a long pile (the solution of §4.4b at 5T is within 0.5 % of the 12T moment, sand and clay, free and fixed head); shorter is flagged and the long-pile moment is kept: check it with a p-y analysis of the actual length (Pile Designer) and enter or pull that moment (panel I-7)."]])) : `<div class="note-box">Elastic lateral solution: not used for any limit state (the pile moment is from a p-y analysis, panel I-7 / Pile Designer), so its long-pile premise is not checked.</div>`}`);
+        ["Premise:","a pile with L<sub>s</sub>/T ≥ 5 (L<sub>s</sub>/R ≥ 5 in clay) behaves as a long pile (the solution of §4.4b at 5T is within 0.5 % of the 12T moment, sand and clay, free and fixed head)."],
+        ["Check:","on an axis that carries moment, L<sub>s</sub> < 5"+TT+" FAILS (engineer decision 2026-11-12): D/C = 5"+TT+"/L<sub>s</sub>, the axis with the larger "+TT+" of those that bend. The long-pile moment and its results (§4.4b) are still shown: lengthen the pile, or analyse it with its actual length (p-y, Pile Designer) and enter or pull that moment (panel I-7); the elastic solution is then not used and this check does not apply."]]))
+      + (PL.mr.dc!=null? checkLine("Long-pile premise",isFinite(PL.mr.dc)? `\\dfrac{5${TT}_${PL.mr.gov==="L"?"x":"y"}}{L_s} = \\dfrac{5(${t(PL.mr[PL.mr.gov].T,3)})}{${t(PL.Ls,3)}}` : `L_s = ${t(PL.Ls,3)} \\le 0`,PL.mr.dc) : "") : `<div class="note-box">Elastic lateral solution: not used for any limit state (the pile moment is from a p-y analysis, panel I-7 / Pile Designer), so its long-pile premise is not checked.</div>`}`);
 }
 /* ================= TAB 1 — GEOMETRY & LOADS ================= */
 function renderTabLoads(R){
@@ -11723,9 +11734,11 @@ function abrModel(){
       const PL=C.pileLen; if(PL&&PL.dc!=null&&has("pileLen")){ const w=topic(T,"pL","Pile length: depth to fixity + 5 ft (engineer decision 2026-11-12)",ABR_AA+"Art. 10.7.6, 10.7.3.12, C10.7.3.13.4");   // ABPL
         w.add({id:"Ls",label:"Length in the soil below the ground (L_pile = "+abrN(PL.L,2)+" ft total, panel I-7; embedment e; unsupported length L_u)",sym:"L_{s}",eq:"L_{pile} \\minus \\frac{e}{12} \\minus L_{u}",sub:abrN(PL.L,2)+" \\minus "+abrN(PL.emb,3)+" \\minus "+abrN(PL.Lu,2),value:PL.Ls,unit:"ft",d:3});
         w.add({id:"Df",label:"Depth to fixity below the ground ("+(PL.DfUser?"entered":"Eq. C10.7.3.13.4-"+(PL.mode==="sand"?"2":"1"))+", as for the buckling length)"+(PL.reach?"":" — NOT REACHED by L_s"),sym:"D_{f}",eq:"",sub:"",value:PL.Df,unit:"ft",d:3});
-        w.add({id:"Lreq",label:"Required pile length (D_f + 5 ft below the ground)",sym:"L_{req}",eq:"\\frac{e}{12} + L_{u} + D_{f} + 5",sub:abrN(PL.emb,3)+" + "+abrN(PL.Lu,2)+" + "+abrN(PL.Df,3)+" + 5",value:PL.req,unit:"ft",d:3});
-        if(PL.mr) ["L","T"].forEach(k=>{ const a=PL.mr[k]; if(a.used) w.add({id:"z"+k,label:"Long-pile premise of the elastic lateral solution, "+(k==="L"?"longitudinal":"transverse")+" H (≥ 5: long pile"+(a.z<5?"; SHORT: the long-pile moment is kept and flagged":"")+")",sym:"\\frac{L_{s}}{T}",eq:"",sub:"\\frac{"+abrN(PL.Ls,3)+"}{"+abrN(a.T,3)+"}",value:a.z,unit:"",d:2,ref:"Matlock & Reese (1960)"}); });
-        dcStep(w,"fd","pileLen","Pile length","\\frac{L_{req}}{L_{pile}}","\\frac{"+abrN(PL.req,3)+"}{"+abrN(PL.L,2)+"}",ABR_AA+"Art. 10.7.6; engineer decision 2026-11-12"); }
+        w.add({id:"Lreq",label:"Required pile length (D_f + 5 ft below the ground; the 5 ft margin adopted from MassDOT 3.10.11.2, the integral-abutment rule, for pile footings by engineer decision 2026-11-12; AASHTO 10.7.6 / C10.7.3.12 and MassDOT 3.2.2.2 require only fixity)",note:"D_f: C10.7.3.13.4, or entered / Pile Designer (engineer decision 2026-11-12). See Tab 4 §4.4c.",sym:"L_{req}",eq:"\\frac{e}{12} + L_{u} + D_{f} + 5",sub:abrN(PL.emb,3)+" + "+abrN(PL.Lu,2)+" + "+abrN(PL.Df,3)+" + 5",value:PL.req,unit:"ft",d:3});
+        if(PL.mr) ["L","T"].forEach(k=>{ const a=PL.mr[k]; if(a.used) w.add({id:"z"+k,label:"Long-pile premise of the elastic lateral solution, "+(k==="L"?"longitudinal":"transverse")+" H (≥ 5: long pile"+(a.z<5?"; SHORT: FAILS, the long-pile moment is still shown":"")+")",sym:"\\frac{L_{s}}{T}",eq:"",sub:"\\frac{"+abrN(PL.Ls,3)+"}{"+abrN(a.T,3)+"}",value:a.z,unit:"",d:2,ref:"Matlock & Reese (1960)"}); });
+        dcStep(w,"fd","pileLen","Pile length","\\frac{L_{req}}{L_{pile}}","\\frac{"+abrN(PL.req,3)+"}{"+abrN(PL.L,2)+"}",ABR_AA+"Art. 10.7.6; engineer decision 2026-11-12");
+        if(PL.mr&&PL.mr.dc!=null&&has("pileShort")){ const a=PL.mr[PL.mr.gov], TT=PL.mode==="clay"?"R":"T";   // AB-4 (2026-11-12)
+          dcStep(w,"fd","pileShort","Long-pile premise ("+(PL.mr.gov==="L"?"longitudinal":"transverse")+" H; L_s < 5"+TT+" fails, engineer decision 2026-11-12)",isFinite(PL.mr.dc)?"\\frac{5"+TT+"}{L_{s}}":"L_{s} \\le 0",isFinite(PL.mr.dc)?"\\frac{5\\cdot "+abrN(a.T,3)+"}{"+abrN(PL.Ls,3)+"}":"",ABR_AA+"Art. 10.7.3.12; Matlock & Reese (1960)"); } }
       const pu=C.punching; if(pu&&has("punching")){ const w=topic(T,"pun","Punching shear at the governing pile (pile "+pu.pile+")",ABR_AA+"Art. 5.12.8.6");
         w.add({id:"hp",label:"Concrete above the pile head (pile embedment e_pile = "+abrN(pu.embed,1)+" in)",sym:"h_{p}",eq:"t_{f} \\minus e_{pile}",sub:abrN(pu.hP+pu.embed,1)+" \\minus "+abrN(pu.embed,1),value:pu.hP,unit:"in",d:1});   // ABPH (ABPM #1375: d_e = t_f − c_F − d_b/2)
         if(pu.matAbove) w.add({id:"de",label:"Effective depth to the bottom mat, at or above the pile head (footing cover c_F = "+abrN(pu.cF,2)+" in; the toe d, Tab 5 §5.3)",sym:"d_{e}",eq:"t_{f} \\minus c_{F} \\minus \\frac{d_{b}}{2}",sub:abrN(pu.hP+pu.embed,1)+" \\minus "+abrN(pu.cF,2)+" \\minus \\frac{"+abrN(pu.db,3)+"}{2}",value:pu.de,unit:"in",d:2});
