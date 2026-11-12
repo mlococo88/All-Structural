@@ -155,6 +155,7 @@
   .inTabs button[aria-selected="true"],#tabBar button[aria-selected="true"]{background:var(--paper);font-weight:600;color:var(--color-primary);box-shadow:inset 0 3px 0 var(--color-secondary);}
   .inDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--fail);margin-left:6px;}
   .inTabs button.has-err .inDot{display:inline-block;}
+  #gBar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:6px 0 0;font-family:var(--font-ui);font-size:9pt;color:#475569;} #gBar[hidden]{display:none;} #gBar select{font-size:9pt;max-width:100%;}
   #autoBar{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin:6px 0 2px;font-family:var(--font-ui);font-size:9pt;color:#475569;min-height:26px;} #autoBar[hidden]{display:none;}
   #autoBar .spin{display:inline-block;width:12px;height:12px;border:2px solid #CBD5E1;border-top-color:var(--color-primary);border-radius:50%;animation:sbspin .8s linear infinite;vertical-align:-2px;margin-right:6px;}
   @keyframes sbspin{to{transform:rotate(360deg);}} @media (prefers-reduced-motion:reduce){#autoBar .spin{animation:none;}}
@@ -331,7 +332,7 @@
     <div id="sbSplit" role="separator" aria-orientation="vertical" aria-controls="inputPanel outputPanel" aria-label="Width of the input and output panels (arrow keys move it, Home / End to the limits, double-click or Enter resets)" tabindex="0" title="Drag to change the width of the input and output panels; double-click to reset"></div><!-- SBW (2026-11-09): splitter, ui/splitter.js -->
     <main id="outputPanel">
       <div id="tabBar" role="tablist"><button type="button" role="tab" aria-selected="false" data-otab="sum">Summary</button><button type="button" role="tab" aria-selected="true" data-otab="sec">Section properties</button><button type="button" role="tab" aria-selected="false" data-otab="flex">Flexure</button><button type="button" role="tab" aria-selected="false" data-otab="loads">Loads &amp; LLDF</button><button type="button" role="tab" aria-selected="false" data-otab="shear">Shear &amp; stiffeners</button><button type="button" role="tab" aria-selected="false" data-otab="fat">Fatigue &amp; studs</button><button type="button" role="tab" aria-selected="false" data-otab="an">Analysis</button><button type="button" role="tab" aria-selected="false" data-otab="defl">Deflection</button><button type="button" role="tab" aria-selected="false" data-otab="cn">Constructibility</button><button type="button" role="tab" aria-selected="false" data-otab="cf">Cross-frames</button><button type="button" role="tab" aria-selected="false" data-otab="spl">Field splices</button><button type="button" role="tab" aria-selected="false" data-otab="rt">Rating</button><button type="button" role="tab" aria-selected="false" data-otab="wt">Welds</button><button type="button" role="tab" aria-selected="false" data-otab="rpt">Report</button><button type="button" role="tab" aria-selected="false" data-otab="dwg">Drawings</button><button type="button" role="tab" aria-selected="false" data-otab="ad">Auto design</button><button type="button" role="tab" aria-selected="false" data-otab="3d">3D view</button></div>
-      <div id="autoBar" hidden><span id="autoMsg" role="status" aria-live="polite"></span><button type="button" id="bRerun" title="Calculate this tab again now">Re-run</button></div>
+      <div id="gBar" hidden></div><!-- SB-2 PR 2: the girder type and line of the output tab --><div id="autoBar" hidden><span id="autoMsg" role="status" aria-live="polite"></span><button type="button" id="bRerun" title="Calculate this tab again now">Re-run</button></div>
       <div id="out"></div>
     </main>
   </div>
@@ -433,7 +434,9 @@
      calculated values shown are that line's (SBDModel.atLine: a read view; the design line is the project itself). The entered values and
      the override boxes belong to the type: they apply on every line of it. */
   const lnSel = () => { const gi = Math.min(ui.g, P.girders.length - 1), L = M.typeLines(P, gi); return L.includes(ui.ln) ? ui.ln : M.designLine(P, P.girders[gi]); };
-  const loadsView = () => M.atLine(P, Math.min(ui.g, P.girders.length - 1), lnSel());
+  let viewMemo = null;
+  const loadsView = () => { const gi = Math.min(ui.g, P.girders.length - 1), j = lnSel();   // SB-2 PR 2: the same view object while P, the type and the line stay
+    if (!viewMemo || viewMemo.P !== P || viewMemo.gi !== gi || viewMemo.j !== j) viewMemo = { P, gi, j, V: M.atLine(P, gi, j) }; return viewMemo.V; };
   function loadsPick() {
     const gi = Math.min(ui.g, P.girders.length - 1), L = M.typeLines(P, gi), j = lnSel();
     return card('Girder type and line', `<div class="fRow"><label for="i__gLd">Girder type</label><select id="i__gLd">${P.girders.map((q, i) => `<option value="${i}"${i === gi ? ' selected' : ''}>${esc(q.label || q.id)}</option>`).join('')}</select><span class="unit">the same choice as the Girders &amp; plates tab</span></div>
@@ -714,13 +717,13 @@
   function markStale() { stale = true; drawOut(); }
   function calc() {
     const v = markErrors(); if (v.errors.length) { R = { errors: v.errors }; stale = false; drawOut(); return; }
-    const g = P.girders[ui.g], s = g.segments[ui.seg] || g.segments[0], G = M.GRADES, m = P.materials, d = P.deck;
+    const g = P.girders[ui.g], s = g.segments[ui.seg] || g.segments[0], G = M.GRADES, m = P.materials, d = P.deck, PV = loadsView();   // SB-2 PR 2: the loads of the line chosen
     const lf = OWN.loadFactors(P.ownerRules.owner, P.ownerRules.eta, P.xs.nb);   // owner rules: OWN8 haunch, OWN17 w_c for E_c
     const nr = SEC.modularRatio(m.concrete.fc, m.concrete.wcE > 0 ? m.concrete.wcE : m.concrete.wc, m.concrete.K1, m.concrete.nRule);
     const plates = { D: s.D, tw: s.tw, topB: s.topB, topT: s.topT, botB: s.botB, botT: s.botT };
     const deck = { composite: d.composite, ts: d.ts, haunch: OWN.haunchInProps(d.haunch, lf), beff: g.beff, rebar: d.rebar };
     const mat = { Fyt: G[m.steel.top].Fy, Fyb: G[m.steel.bot].Fy, Fyw: G[m.steel.web].Fy, Fyr: m.rebar.Fyr, fc: m.concrete.fc };
-    R = { g, s, nr, lf, c: SEC.card(plates, deck, mat, nr.n, { region: ui.region, rebarInPositive: d.rebarInPositiveMp }), warnings: v.warnings, loads: UL.calc(P, ui.g) };
+    R = { g, s, nr, lf, c: SEC.card(plates, deck, mat, nr.n, { region: ui.region, rebarInPositive: d.rebarInPositiveMp }), warnings: v.warnings, loads: UL.calc(PV, ui.g) };
     stale = false; drawOut();
   }
   const secOpen = new Set();
@@ -739,7 +742,7 @@
   let autoT = null, autoNow = false, autoBusy = false, autoPend = false;
   const autoBtn = t => AUTO_BTN[t] ? $('out').querySelector(AUTO_BTN[t]) : null;
   const autoStale = (t, b) => !!b && (t === 'dwg' ? b.classList.contains('primary') && !b.disabled : !!(b.closest('.alert.stale') && !b.closest('.alert.stale').hidden));
-  const autoKey = t => t + '|' + ui.g + '|' + JSON.stringify(P) + '|' + [...$('out').querySelectorAll('select,input:not([type=file])')].filter(e => !e.closest('.alert')).map(e => e.id + '=' + (e.type === 'checkbox' ? e.checked : e.value)).join('&');
+  const autoKey = t => t + '|' + ui.g + '|' + lnSel() + '|' + JSON.stringify(P) + '|' + [...$('out').querySelectorAll('select,input:not([type=file])')].filter(e => !e.closest('.alert')).map(e => e.id + '=' + (e.type === 'checkbox' ? e.checked : e.value)).join('&');
   function autoMsg(t, busy) { const bar = $('autoBar'); bar.hidden = !AUTO_BTN[t]; $('autoMsg').innerHTML = busy ? `<span class="spin" aria-hidden="true"></span>${esc(busy)}` : ''; }
   function autoRun() {
     const t = ui.otab || 'sec', delay = autoNow ? 0 : AUTO_MS; autoNow = false; clearTimeout(autoT); autoPend = false; autoMsg(t, '');
@@ -756,14 +759,29 @@
   function autoWatch(t) { const b = autoBtn(t); if (autoStale(t, b) || /Calculating/.test(($('out').querySelector('.alert:not(.stale)') || {}).textContent || '') || (b && b.disabled)) { setTimeout(() => (ui.otab || 'sec') === t && autoWatch(t), 250); return; } autoMsg(t, ''); }
   function drawOut() { drawOut0(); autoRun(); if (window.SBDDashUI) window.SBDDashUI.refresh(); }   // DASH: the left check summary follows the project
   /* gotoOut(tab, gi): an output tab with girder gi selected (as the Girder select of the Girders & plates tab); the Summary tab's links and the left check summary */
-  function gotoOut(t, gi) { if (gi != null && gi !== ui.g && P.girders[gi]) { ui.g = gi; ui.seg = 0; stale = true; drawInputs(); } ui.otab = t; saveUi(); autoNow = true; drawOut(); $('outputPanel').scrollTop = 0; }
+  function gotoOut(t, gi, ln) { if (Number.isInteger(ln) && ln !== lnSel()) { ui.ln = ln; stale = true; if (gi == null || gi === ui.g) drawInputs(); } if (gi != null && gi !== ui.g && P.girders[gi]) { ui.g = gi; ui.seg = 0; stale = true; drawInputs(); } ui.otab = t; saveUi(); autoNow = true; drawOut(); $('outputPanel').scrollTop = 0; }
   $('bRerun').addEventListener('click', () => { const t = ui.otab || 'sec', b = autoBtn(t); if (!b) return; autoMsg(t, 'Calculating…'); requestAnimationFrame(() => setTimeout(() => { b.click(); autoWatch(t); }, 0)); });
   // a tab's own redraw (a choice on the tab: demand source, girder, options) runs it at once; skipped while a run is pending or running
   new MutationObserver(() => { if (autoBusy || autoPend) return; autoNow = true; autoRun(); }).observe($('out'), { childList: true });
   /* SBINV: while a blocking input error exists every output tab (the Summary, each module, the Report, the Drawings, the 3D view) shows the
      banner and "Results not shown" instead of its results. A tab that holds an errored field itself (e.host: Flexure f_ℓ, Rating φ, the
      Welds inputs, a Custom demand table, …) is drawn for the fix, out of date and with its Calculate button off (hostFix). */
+  /* gBar (SB-2 PR 2): above a per-girder output tab, the girder type (ui.g, as the Girders & plates tab) and the line it is worked on (ui.ln,
+     as the Loads tab; the type's design line by default, whose results are the project's own). Shown when there is a choice to make. */
+  const G_TABS = ['sec', 'flex', 'loads', 'shear', 'an', 'fat', 'cf', 'spl', 'cn', 'rt', 'wt', 'rpt'];
+  function drawGBar() {
+    const b = $('gBar'), t = ui.otab || 'sec', gi = Math.min(ui.g, P.girders.length - 1), L = M.typeLines(P, gi), j = lnSel(), dl = M.designLine(P, P.girders[gi]);
+    if (!G_TABS.includes(t) || (P.girders.length < 2 && L.length < 2) || (t === 'rpt' && ui.rpt && ui.rpt.scope === 'all')) { b.hidden = true; b.innerHTML = ''; return; }
+    b.hidden = false;
+    b.innerHTML = `<label for="o_gt">Girder type</label><select id="o_gt">${P.girders.map((q, i) => `<option value="${i}"${i === gi ? ' selected' : ''}>${esc(q.label || q.id)}</option>`).join('')}</select>
+      <label for="o_ln">on line</label><select id="o_ln">${(L.includes(j) ? L : [j, ...L]).map(k => `<option value="${k}"${k === j ? ' selected' : ''}>${lnName(k)}${k === dl ? ' (design line)' : ''}</option>`).join('')}</select>
+      <span>${L.length > 1 ? `checked on ${lnList(L)}; every line in the <a href="#" data-gbsum="1">Summary</a>` : L.length ? '' : 'no line assigned (its design line shown)'}</span>`;
+  }
+  $('gBar').addEventListener('change', e => { if (e.target.id === 'o_gt') { ui.g = +e.target.value; ui.seg = 0; delete ui.ln; } else if (e.target.id === 'o_ln') ui.ln = +e.target.value; else return;
+    saveUi(); stale = true; drawInputs(); autoNow = true; drawOut(); });
+  $('gBar').addEventListener('click', e => { if (e.target.closest('[data-gbsum]')) { e.preventDefault(); ui.otab = 'sum'; saveUi(); autoNow = true; drawOut(); } });
   function drawOut0() {
+    drawGBar();
     const E = icErr = IC().collect(P).errors, t = ui.otab || 'sec';
     { const b = document.querySelector('#tabBar [data-otab="cf"]'), t = window.SBDFramingUI.isDia(P) ? 'Diaphragms' : 'Cross-frames'; if (b && b.textContent !== t) b.textContent = t; }   // SBDIA (2026-11-10): the tab's name with a diaphragm as the bracing
     if (E.length && !E.some(e => e.host === t)) {
@@ -782,18 +800,18 @@
   function drawTab() {
     document.querySelectorAll('#tabBar [data-otab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.otab === (ui.otab || 'sec'))));
     $('out').onchange = null; $('out').onclick = null;   // the Analysis tab's own handlers (ui/analysis.js sets them)
-    if (ui.otab === 'flex') { window.SBDFlexureUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Flexure tab (ui/flexure.js)
-    if (ui.otab === 'shear') { window.SBDShearUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Shear & stiffeners tab (ui/shear.js)
-    if (ui.otab === 'an') { window.SBDAnalysisUI.draw($('out'), { P, gi: ui.g, changed: () => changed(false) }); return; }   // Analysis tab (ui/analysis.js)
+    if (ui.otab === 'flex') { window.SBDFlexureUI.render($('out'), { P: loadsView(), g: ui.g, changed: () => changed(false) }); return; }   // Flexure tab (ui/flexure.js)
+    if (ui.otab === 'shear') { window.SBDShearUI.render($('out'), { P: loadsView(), g: ui.g, changed: () => changed(false) }); return; }   // Shear & stiffeners tab (ui/shear.js)
+    if (ui.otab === 'an') { window.SBDAnalysisUI.draw($('out'), { P: loadsView(), gi: ui.g, changed: () => changed(false) }); return; }   // Analysis tab (ui/analysis.js)
     if (ui.otab === 'defl') { window.SBDDeflectionUI.render($('out'), { P, g: ui.g, setG: gi => { ui.g = gi; ui.seg = 0; saveUi(); drawInputs(); markStale(); } }); return; }   // Deflection tab (ui/deflection.js; DEFL): its girder choice is ui.g, as the Girders & plates tab (i__g)
-    if (ui.otab === 'fat') { window.SBDFatigueUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Fatigue & studs tab (ui/fatigue.js)
-    if (ui.otab === 'cf') { window.SBDFramingUI.render($('out'), { P, g: ui.g }); return; }   // Cross-frames tab (ui/framing.js)
-    if (ui.otab === 'spl') { window.SBDSplicesUI.render($('out'), { P, g: ui.g, changed: () => changed(true) }); return; }   // Field splices tab (ui/splices.js)
+    if (ui.otab === 'fat') { window.SBDFatigueUI.render($('out'), { P: loadsView(), g: ui.g, changed: () => changed(false) }); return; }   // Fatigue & studs tab (ui/fatigue.js)
+    if (ui.otab === 'cf') { window.SBDFramingUI.render($('out'), { P: loadsView(), g: ui.g }); return; }   // Cross-frames tab (ui/framing.js)
+    if (ui.otab === 'spl') { window.SBDSplicesUI.render($('out'), { P: loadsView(), g: ui.g, changed: () => changed(true) }); return; }   // Field splices tab (ui/splices.js)
     if (ui.otab === 'ad') { window.SBDAutoDesignUI.render($('out'), { P, g: ui.g, changed: r => changed(r) }); return; }   // Auto design tab (ui/autodesign.js)
-    if (ui.otab === 'cn') { window.SBDConstrUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Constructibility tab (ui/constructibility.js)
-    if (ui.otab === 'rt') { window.SBDRatingUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Rating tab (ui/rating.js)
-    if (ui.otab === 'wt') { window.SBDWeldsUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Welds tab (ui/welds.js)
-    if (ui.otab === 'rpt') { ui.rpt = ui.rpt || {}; window.SBDReportUI.render($('out'), { P, g: ui.g, opts: ui.rpt, save: saveUi, goto: t => { ui.otab = t; saveUi(); autoNow = true; drawOut(); $('outputPanel').scrollTop = 0; } }); return; }   // Report tab (ui/report.js; its choices kept in ui.rpt)
+    if (ui.otab === 'cn') { window.SBDConstrUI.render($('out'), { P: loadsView(), g: ui.g, changed: () => changed(false) }); return; }   // Constructibility tab (ui/constructibility.js)
+    if (ui.otab === 'rt') { window.SBDRatingUI.render($('out'), { P: loadsView(), g: ui.g, changed: () => changed(false) }); return; }   // Rating tab (ui/rating.js)
+    if (ui.otab === 'wt') { window.SBDWeldsUI.render($('out'), { P: loadsView(), g: ui.g, changed: () => changed(false) }); return; }   // Welds tab (ui/welds.js)
+    if (ui.otab === 'rpt') { ui.rpt = ui.rpt || {}; window.SBDReportUI.render($('out'), { P: loadsView(), base: P, g: ui.g, opts: ui.rpt, save: saveUi, goto: t => { ui.otab = t; saveUi(); autoNow = true; drawOut(); $('outputPanel').scrollTop = 0; } }); return; }   // Report tab (ui/report.js; its choices kept in ui.rpt)
     if (ui.otab === 'dwg') { window.SBDDrawingsUI.render($('out'), { P, g: ui.g, ui, saveUi, goto: t => { ui.otab = t; saveUi(); autoNow = true; drawOut(); } }); return; }   // Drawings tab (ui/drawings.js)
     /* Summary tab (ui/summary.js, 2026-11-09; display only): runs the modules out of date itself (now: selected now, else after 600 ms of quiet);
        goto(tab, gi): a cell's link opens that output tab with that girder selected (as the Girder select of the Girders & plates tab) */

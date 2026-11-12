@@ -12,6 +12,7 @@
 //   7. The cross-section and framing plan graphics (GFXS; SBSF 2026-11-10: stacked at every width, each the card's width, the cross-section's
 //      height capped with its aspect kept): at 1200 / 1440 / 1920 px, the left column open and collapsed, the splitter dragged wide and narrow
 //      (resized on 'sbd2:panelresize'), within 390 px, their links, printed at full page width.
+//   8. SB-2 PR 2: a new project's girder types (a row per type and line, the governing line, a line's link selects the type and line).
 //   0 console errors.
 //   node tests/smoke/steel-bridge-summary.mjs [--shots <dir>]
 import path from 'path';
@@ -34,7 +35,7 @@ async function cellsMatch(p) {
     st.list.forEach(G => COLS.forEach(c => { const q = G.cells[c.id], a = document.querySelector(`#sum-table a[data-sumgo="${G.gi}|${c.id}"]`);
       const want = q.st === 'notrun' ? 'not run' : q.st === 'na' ? 'n/a' : c.rf ? U.fmt(q.rf, 2) : isFinite(q.r) ? U.fmt(q.r, 3) : q.r === Infinity ? '∞' : q.r === -Infinity ? '−∞' : 'NaN';   // QA2: ∞ for Infinity (NaN only for a true NaN)
       if (!a || a.textContent !== want || !a.closest('td').classList.contains('s-' + q.st)) bad.push(`${G.label} ${c.id}: ${a && a.textContent} vs ${want}`); }));
-    return { bad, rows: document.querySelectorAll('#sum-table tbody tr').length, n: st.list.length };
+    return { bad, rows: document.querySelectorAll('#sum-table tbody tr:not(.sum-line)').length, n: st.list.length };
   });
   assert.deepEqual(r.bad, []); assert.equal(r.rows, r.n); return r;
 }
@@ -81,7 +82,7 @@ async function cellsMatch(p) {
 }
 
 { // 4: skewed three-span, two girders (saved as the open project, then the page reloaded); 6: phone
-  const { b, p, errs } = await openPage(FILE, { vw: 1440, vh: 1000, ls: { ...SBD_SEED } });
+  const { b, p, errs } = await openPage(FILE, { vw: 1440, vh: 1000 });
   try {
     await p.evaluate(() => { const M = window.SBDModel, P = M.defaultProject(); P.project.name = 'Summary smoke: skewed';
       P.spans.lengths = [100, 130, 100]; P.xs.skews = [35, 30, 30, 35];
@@ -172,6 +173,24 @@ async function cellsMatch(p) {
     assert.ok(pr.shown && pr.n === 2 && pr.stacked && pr.full, 'print: ' + JSON.stringify(pr));
     await p.emulateMedia({ media: 'screen' });
     console.log(`  ok   cross-section and framing plan: stacked, full card width (${seen.join(', ')} px card), left column open / collapsed, splitter wide / narrow, within 390 px, links, printed full width`);
+    allErrs.push(...errs);
+  } finally { await b.close(); }
+}
+
+{ // 8 (SB-2 PR 2, 2026-11-12): a new project (two girder types, Interior on G2–G4, Exterior on G1 and G5): one unit per type and line, the
+  // type row the worst line with its line named, a row per line, a line row's link opens its tab with that type and line (#gBar)
+  const { b, p, errs } = await openPage(FILE, { vw: 1400, vh: 1000, ls: { 'sbd2.ui': JSON.stringify({ otab: 'sum' }) } });
+  try {
+    await upToDate(p); await cellsMatch(p);
+    const r = await p.evaluate(() => { const st = window.SBDSummaryUI.state(), E = st.list[1];
+      return { n: st.list.length, lines: st.list.map(G => G.lines), rows: document.querySelectorAll('#sum-table tr.sum-line').length, ext: E.cells.flexStr, byLine: E.byLine.map(q => q.cells.flexStr.r), verd: document.querySelector('#sum-verdict .sum-gov').textContent }; });
+    assert.equal(r.n, 2); assert.deepEqual(r.lines, [[1, 2, 3], [0, 4]]); assert.equal(r.rows, 5, 'a row per line');
+    assert.equal(r.ext.r, Math.max(...r.byLine), 'the type: its worst line'); assert.ok([0, 4].includes(r.ext.ln));
+    assert.match(r.verd, /girder Exterior on G[15],/);
+    await p.click('#sum-table tr.sum-line a[data-sumgo="1|flexStr|4"]');
+    await p.waitForFunction(() => document.querySelector('#tabBar [aria-selected="true"]').dataset.otab === 'flex' && document.querySelector('#gBar #o_ln') && document.querySelector('#gBar #o_ln').value === '4', null, { timeout: 60000 });
+    assert.equal(await p.$eval('#gBar #o_gt', e => e.value), '1');
+    console.log(`  ok   girder types: 2 types on 5 lines, a row per line, Exterior ${r.ext.r.toFixed(3)} on G${r.ext.ln + 1}; a line's link opens Flexure with Exterior on G5`);
     allErrs.push(...errs);
   } finally { await b.close(); }
 }

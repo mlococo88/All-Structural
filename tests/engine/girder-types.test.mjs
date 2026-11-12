@@ -68,3 +68,22 @@ test('drawings: the type assigned to a line gives its plates; a project without 
   const D = W.SBDDrawings, P = M.newProject(); assert.deepEqual([0, 1, 2, 3, 4].map(i => D.plateGirderOf(P, i, 5)), [1, 0, 0, 0, 1]);
   const Q = M.defaultProject(); assert.deepEqual([0, 1, 2, 3, 4].map(i => D.plateGirderOf(Q, i, 5)), [0, 0, 0, 0, 0]);
 });
+
+// SB-2 PR 2: report/summary.js units (each type on each of its lines) and merge (each column the governing line)
+const W2 = loadShared('units.js', 'steps.js', ENG('model.js'), path.join(ROOT, 'apps/steel-bridge/report/summary.js'));
+test('units: a type per line (design line = the project itself); a saved project: one unit per girder, the project itself', () => {
+  const M2 = W2.SBDModel, SM = W2.SBDSummary, P = M2.newProject(), U = SM.units(P);
+  assert.deepEqual(J(U.map(u => [u.gi, u.j])), [[0, 1], [0, 2], [0, 3], [1, 0], [1, 4]]);
+  assert.equal(U[0].P, P, 'Interior on its design line G2: the project'); assert.equal(U[3].P, P, 'Exterior on its design line G1: the project');
+  assert.equal(U[1].P.girders[0].line, 2); assert.equal(U[4].P.girders[1].line, 4);
+  const D = M2.defaultProject(), UD = SM.units(D); assert.equal(UD.length, 1); assert.equal(UD[0].P, D);
+});
+test('merge: each column the governing line (largest ratio, smallest RF; a run before not run / n/a); one line: unchanged', () => {
+  const SM = W2.SBDSummary, P = W2.SBDModel.newProject();
+  const G = (r, rf, st) => ({ gi: 1, label: 'Exterior', cells: { flexStr: { st: st || 'pass', r }, rtInv: { st: 'pass', rf }, shear: { st: 'na' } }, warn: ['w1'], err: {} });
+  const one = G(0.5, 1.2); assert.equal(SM.merge(P, 1, [{ j: 0, G: one }]), one);
+  const m = SM.merge(P, 1, [{ j: 0, G: G(0.8, 1.1) }, { j: 4, G: G(0.9, 1.3) }]);
+  assert.equal(m.cells.flexStr.r, 0.9); assert.equal(m.cells.flexStr.ln, 4); assert.equal(m.cells.rtInv.rf, 1.1); assert.equal(m.cells.rtInv.ln, 0);
+  assert.equal(m.cells.shear.st, 'na'); assert.deepEqual(J(m.lines), [0, 4]); assert.deepEqual(J(m.warn), ['G1, G5: w1'], 'a warning of both lines listed once');
+  const n = SM.merge(P, 1, [{ j: 0, G: G(NaN, 1, 'review') }, { j: 4, G: G(5, 1) }]); assert.equal(n.cells.flexStr.ln, 0, 'a ratio not a number governs');
+});
