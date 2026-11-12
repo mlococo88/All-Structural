@@ -7290,6 +7290,22 @@ function StepLoads({cfg,set,dlLocked,onToggleDLLock,setStep}) {   // HOC: setSte
   </div>);
 }
 
+/* IXDLA (2026-11-12): a number input that keeps the text being typed (as PdNumIn in Pile Designer, DECE). Every keystroke still
+   calls the field's own onChange, but while the field has the focus it shows what was typed instead of the stored number: "33."
+   reads as an empty number field, was stored as 0 and React wrote "0" back over it, so a decimal could not be typed. The stored
+   value is shown again on leaving the field, or at once if it is changed from elsewhere while the field has the focus. */
+function IxNumIn(props){
+  const [draft,setDraft]=React.useState(null);   // { t: the field's text after the last keystroke, v: the value prop then }
+  let value=props.value;
+  if(draft!==null&&value!==undefined){
+    if(!('v' in draft)) draft.v=value;
+    if(Object.is(draft.v,value)) value=draft.t;
+  }
+  return <input {...props} value={value}
+    onChange={e=>{ setDraft({t:e.target.value}); if(props.onChange) props.onChange(e); }}
+    onBlur={e=>{ setDraft(null); if(props.onBlur) props.onBlur(e); }}/>;
+}
+
 function StepMovingLoads({cfg,set}) {
   const isGFS = (cfg.geomMode||'beam')==='gfs';
   // Newly selected vehicles with a selectDLA (legal / posting trucks, MBE 6A.4.4.3) get that
@@ -7305,7 +7321,7 @@ function StepMovingLoads({cfg,set}) {
     set('selectedVehicles',cur.includes(name)?cur.filter(v=>v!==name):[...cur,name]);
     if(!cur.includes(name)) applySelectDLA([name]);
   };
-  const setVDLA=(name,val)=>set('vehicleDLA',{...cfg.vehicleDLA,[name]:parseInt(val)||0});
+  const setVDLA=(name,val)=>set('vehicleDLA',{...cfg.vehicleDLA,[name]:parseFloat(val)||0});
   const toggleGroup=grp=>{
     const names=grp.vehicles.map(v=>v.name);
     const allSel=names.every(n=>cfg.selectedVehicles.includes(n));
@@ -7350,8 +7366,8 @@ function StepMovingLoads({cfg,set}) {
           {cfg.useGlobalDLA
             ? <Field label="Global DLA (%)" hint="0 = code built-in  ·  33 = 33%  ·  100 = 100%">
                 <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
-                  <input type="number" style={{...INP,width:'88px'}} min="0" max="100" value={cfg.globalDLA}
-                    onChange={e=>set('globalDLA',parseInt(e.target.value)||0)}/>
+                  <IxNumIn type="number" style={{...INP,width:'88px'}} min="0" max="100" value={cfg.globalDLA}
+                    onChange={e=>set('globalDLA',parseFloat(e.target.value)||0)}/>
                   <span style={{color:'#6b7280',fontSize:'12px'}}>%</span>
                 </div>
               </Field>
@@ -7439,7 +7455,7 @@ function StepMovingLoads({cfg,set}) {
                     <div style={{fontSize:'9px',color:'#9ca3af',fontFamily:'monospace'}}>{v.name}{isLongVehicle?' · Moving load vehicle · scale results by span multiplier':''}</div>
                   </div>
                   {!isLongVehicle&&<div style={{display:'flex',justifyContent:'center'}} onClick={e=>e.stopPropagation()}>
-                    <input type="number" min="0" max="100"
+                    <IxNumIn type="number" min="0" max="100"
                       style={{...INP,width:'60px',textAlign:'center',fontSize:'12px',padding:'4px 6px',
                         opacity:cfg.useGlobalDLA?0.3:1,background:cfg.useGlobalDLA?'#f9fafb':'#fff',
                         color:cfg.useGlobalDLA?'#9ca3af':'#111827'}}
@@ -20038,7 +20054,7 @@ function idxrModel(cfg, rs, rows, zones, combos){
       ['Description',plain(cfg.projectDesc)],['Model',gfs?'Girder–floorbeam–stringer grillage ('+((cfg.gfs&&cfg.gfs.nGirders)||2)+' girders, span '+N(+((cfg.gfs&&cfg.gfs.span)||0),2)+' ft)':'Single beam line']];
     if(!gfs) kv.push(['Spans',(cfg.spans||[]).map(s=>N(+s,2)).join(', ')+' ft (total '+N((cfg.spans||[]).reduce((a,b)=>a+(+b),0),2)+' ft)'],['Elements per span',String(cfg.elemsPerSpan)]);
     kv.push(['Material grade',plain(cfg.materialGrade)],['Moving-load code',plain(cfg.movingLoadCode)],['Vehicles',(cfg.selectedVehicles||[]).map(plain).join(', ')||'—'],
-      ['Dynamic load allowance',cfg.useGlobalDLA?('global '+N(+cfg.globalDLA,0)+'%'):'per vehicle (as entered)']);
+      ['Dynamic load allowance',cfg.useGlobalDLA?('global '+(Number.isInteger(+cfg.globalDLA)?N(+cfg.globalDLA,0):String(+cfg.globalDLA))+'%'):'per vehicle (as entered)']);
     const items=[{type:'kv',rows:kv},{type:'note',text:'As entered on the [[tab:Project|Project]], [[tab:Geometry|Geometry]] and [[tab:Moving Loads|Moving Loads]] steps.'},
       ...ixasmNotes(gfs?IXASM_LL.gfs:IXASM_LL.beam)];   /* IXASM: the live-load model, as the Moving Loads step states it */
     const subs=[{title:'Project and model',items}];
