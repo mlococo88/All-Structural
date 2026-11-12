@@ -17402,3 +17402,50 @@ Engineer decision 2026-11-10 (geometry). AASHTO LRFD 10th Ed. (2024): 5.6.5 / Fi
 - **Decisions (pending engineer review):** (1) the larger of the two when they differ (every limit is an upper limit on the girder depth); (2) new projects have no default girder depth (was 4.0 ft): the rows that need it are not met until d_g is entered; (3) d_g blank and a saved value: the saved value is used without a warning (the I-0a note says so); (4) integral: the d_g input sits in panel I-0a (the panel I-1 superstructure rows are hidden for an integral abutment).
 - **How verified:** new `tests/smoke/abutment-girder-depth.mjs` (the cases above, UI typing and clearing, 0 console errors); main-vs-branch probe (10 cases: only `own.rows[*].val/tex/st` and `own.nFail` differ, as listed); `abutment-elevations` (main comparison: the integral case is now a project saved with iab.dg 4.0, and the Report echo row is normalised), `abutment-brg-front` and `abutment-stem-shelf` (their semi / integral main comparisons set iab.dg 4.0, as saved before); `abutment-pile-group-parity` 14/14; `abutment-drawings`, `abutment-fdx-copies`, `abutment-panel-scroll`, `abutment-pile-mat-level`, `abutment-rx-table`, `abutment-seis-loc`, `abutment-subloads-exchange`, `abutment-subloads-pull`, `project-library --tool abutment`, `check-syntax`.
 - **Other copies:** none (SubLoads and Pile Designer do not read iab.dg).
+
+## 2026-11-12 — PR: abut-pile-length (PR #1441: https://github.com/mlococo88/All-Structural/pull/1441) (ABPL) — Pile footing: the pile length L_pile (panel I-7) is checked against the depth to fixity + 5 ft; flags when the pile does not reach D_f or is shorter than 5T for the elastic lateral solution   [§4: new check, only with L_pile entered; no existing result changes; no saved key or format change]
+- **Engineer decision (2026-11-12):** use the pile length L_pile (total incl. the embedment, ABEL2 #1383) in the pile checks: (a) the pile is longer than the depth to fixity plus 5 ft or the applicable owner rule; (b) where a calc assumes a length or "long pile" behaviour, keep it and flag when L_pile is too short. Follows ABEL2 "Existing calculations that could use these (reported, not connected)": "the pile depth to fixity / buckling length / Matlock–Reese (pile length)".
+- **Basis found (references, paraphrased):**
+  - AASHTO LRFD 10th Ed. (2024) 10.7.6 (minimum penetration, where applicable, includes the penetration needed to obtain fixity for the lateral loads) and C10.7.3.12 (minimum penetration set so that fixity is obtained). No margin below fixity is given.
+  - 10.7.3.13.4 / C10.7.3.13.4: effective length = unsupported length + depth to fixity. Eqs. C10.7.3.13.4-1/-2 (preliminary) take the pile as fixed at its ends.
+  - MassDOT Bridge Manual Part I 3.2.2.2 (pile footings): the pile length provides the minimum penetration for lateral stability (no margin). 3.10.11.2: L_f + 5 ft applies to integral-abutment piles only, with L_f from MassDOT Tables 3.10.11-2/-3. RIDOT BDM (2026) 11.3.2 and CTDOT BRSDM CT11.1.1.1 (10 ft minimum) are also integral-only.
+  - So for a pile footing the owner rule is AASHTO's "reach fixity". The added 5 ft is the engineer's stated rule (see Questions in the PR).
+  - Integral abutments: the length is already `iab.Lpile` (pile below the cap), checked by MassDOT 3.10.11.2 (dashboard `iabTip`), RIDOT 11.3.2 and CTDOT CT11.1.1.1. Unchanged.
+- **Where (all in `abutment_calculator.html`):**
+  - `computeAll` pile branch, after `R.checks.pileCF=pileCombined(perLS, R.checks.pileStr);`:
+    - `{ const PLc=pileLength(R.checks.pileStr, R.checks.pileCF); if(PLc) R.checks.pileLen=PLc; }`;
+    - two `warnFor("conv",…)`: "Pile length: the pile does not reach the depth to fixity …" (error) and "Pile length: the elastic lateral solution (Matlock–Reese) assumes a long pile, L_s ≥ 5T …".
+  - New `pileLength(ps,pf)` before `function actIndexToNo(act,i){`:
+    ```js
+    L = piles.elLpile (ft, > 0; blank → null, no check)
+    L_s = L − e/12 − L_u                       // length in the soil below the ground
+    D_f = pileGeom().Df                        // C10.7.3.13.4 or entered, as §4.4b
+    L_req = e/12 + L_u + D_f + 5;  D/C = L_req/L;  reach = L_s ≥ D_f
+    mr (elastic solution used for a limit state): per axis z = L_s/T (T of pf.latL / pf.latT), short when the axis carries moment and z < 5
+    ```
+  - Dashboard, after `addD("pileV",…)`: `addD("pileLen","Pile length ≥ e + L_u + D_f + 5 ft [10.7.6; engineer decision 2026-11-12]",…)` (n/a for a square pile: no D_f). `DASH_CARD`: `pileLen:"o-pilelen"`.
+  - Tab 4 (anchor `}else if(pf){ h+=panel("o-pilecf","4.4b",…`): `{ const PL=R.checks.pileLen; if(PL) h+=pileLenPanelHTML(PL); }`. New `pileLenPanelHTML(PL)` before `/* ================= TAB 1`: card §4.4c, with L_s, D_f, L_req and L_s vs D_f worked, the check line, the long-pile premise per axis and the basis notes (link to §4.4b).
+  - Report worksheet (anchor `const pu=C.punching; if(pu&&has("punching")){`): topic "Pile length: depth to fixity + 5 ft (engineer decision 2026-11-12)" with L_s, D_f, L_req, L_s/T and dcStep `pileLen`. The block condition gains `||has("pileLen")`. Input echo row: "(the pile tip elevation, Tab 1 §1.1a; the pile length check, Tab 4 §4.4c)".
+  - Panel I-7: the L_pile tooltip and `abElLpInHTML()` note now say it is used for the length check (was "Display only … not used by any check"). `defaultState` comment.
+- **Not changed (kept, flagged):**
+  - The buckling length K(L_u + D_f) of §4.4a/§4.4b. It needs the pile to reach D_f; L_pile does not enter it.
+  - The elastic lateral solution (`pileLatSolve`, 12T in the soil, free tip; ABR3). Its long-pile moment is kept. With the tool's solver, C_M at 5T is within 0.5 % of 12T (sand: 0.999–1.000, free or fixed head, L_u 0 or 5 ft; clay: 0.998–0.999). At 4T it is 0.6 % (sand) to 2 % (clay) off; at 3T 4–13 %.
+- **Check case (default project on piles; HP12X53 auto, I_w = I_y = 125.355 in⁴ = 0.0060453 ft⁴; s_min 4.25 ft → s/D = 4.25 → group factor 0.25 + 0.75(1.25/5) = 0.4375; n_h = 1.11 × 0.4375 = 0.485625 ksi/ft; e = 12 in; L_u = 0):**
+  - D_f = 1.8(29000 × 0.0060453 / 0.485625)^0.2 = 1.8(361.0)^0.2 = 1.8 × 3.247 = 5.845 ft.
+  - T_x = (EI/n_h)^(1/5), EI = 29000 × 125.355/144 = 25245 kip-ft² → T_x = 3.247 ft. T_y = 4.063 ft (strong axis; no transverse moment).
+  - Before: no length check (L_pile was display only).
+  - After, L_pile 40 ft: L_s = 40 − 1 − 0 = 39 ft ≥ D_f; L_req = 1 + 0 + 5.845 + 5 = 11.845 ft; D/C = 11.845/40 = 0.296 PASS; L_s/T_x = 12.01 ≥ 5 (long pile).
+  - L_pile 40, L_u 5: L_req = 16.845, D/C 0.421. L_pile 15: D/C 0.790 PASS, L_s/T_x = 14/3.247 = 4.31 < 5, flagged. L_pile 6: L_s 5.00 < D_f 5.845, D/C 1.974 FAIL (nFail 0 → 1), both flags. Clay (S_u 1 ksf), L_pile 30: D_f 7.585, D/C 0.453, L_s/R_x 5.35.
+- **Values that change:** only with L_pile entered on a pile footing (conventional or semi-integral): the new dashboard row (nFail when > 1) and the warnings. Every other `LAST_R` value is identical to main: the default project, the default on piles with L_pile blank, and a spread footing with a stored L_pile. Integral: unchanged.
+- **Saved data (§5):** none changed (`piles.elLpile` is the ABEL2 key); Input IDs unchanged.
+- **Decisions (pending engineer review):**
+  1. The 5 ft margin is applied to pile footings, as the engineer stated. AASHTO / MassDOT 3.2.2.2 require only reaching fixity.
+  2. D_f = the C10.7.3.13.4 (or entered / Pile Designer) depth to fixity of §4.4b, not a p-y second point of zero deflection.
+  3. The long-pile threshold is 5T (5R for clay).
+  4. A pile that does not reach D_f is an error-level warning plus the D/C row. The buckling result is kept.
+- **How verified:**
+  - New `tests/smoke/abutment-pile-length.mjs` (the cases above, Tab 4 §4.4c, Report, 0 console errors).
+  - Main-vs-branch probe of 13 cases: only `checks.pileLen`, the dashboard row (index shift) and nFail where it fails.
+  - `abutment-pile-group-parity` 14/14 identical.
+  - The abutment smoke tests, `abutment-subloads-exchange`, `project-library --tool abutment` and `check-syntax`.
+- **Other copies:** none.
