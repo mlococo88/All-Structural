@@ -13,12 +13,13 @@ import path from 'path';
 import fs from 'fs';
 import assert from 'assert/strict';
 import { openPage, REPO } from '../lib.mjs';
+import { SBD_SEED } from './sbd-seed.mjs';   // SB-2: the one-girder built-in project saved (a new project now has two girder types)
 
 const ai = process.argv.indexOf('--shots'), SHOTS = ai > 0 ? process.argv[ai + 1] : null;
 if (SHOTS) fs.mkdirSync(SHOTS, { recursive: true });
 const shot = async (p, n) => { if (SHOTS) await p.screenshot({ path: path.join(SHOTS, n + '.png') }); };
 const t0 = Date.now();
-const { b, p, errs } = await openPage(path.join(REPO, 'apps/steel-bridge/index.html'), { vw: 1440, vh: 1000 });
+const { b, p, errs } = await openPage(path.join(REPO, 'apps/steel-bridge/index.html'), { vw: 1440, vh: 1000, ls: { ...SBD_SEED } });
 const W = () => p.evaluate(() => { const r = id => document.getElementById(id).getBoundingClientRect(); return { dash: r('sbDashCol').width, dashL: r('sbDashCol').left, inL: r('inputPanel').left, inp: r('inputPanel').width, out: r('outputPanel').width, app: r('app').width }; });
 const flashed = tab => p.waitForFunction(t => document.querySelector('#tabBar [aria-selected="true"]').dataset.otab === t && document.querySelector('#out .sum-flash'), tab, { timeout: 120000 });
 try {

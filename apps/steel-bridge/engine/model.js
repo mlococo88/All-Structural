@@ -82,6 +82,12 @@
                   live load; absent: on when loadsManual.CL is entered (as before)
      girders[i].line: the cross-section girder (0-based, of xs.nb) whose loads and factors this plate girder takes
                   (absent: the first exterior girder for position 'exterior', else the first interior girder)
+     -- added 2026-11-12 (SB-2, girder types; engineer decision 2026-11-12), optional: absent = the girder sits on its one line (line
+        above, or the automatic line), exactly as before. Each girders[i] is a GIRDER TYPE: one plate girder design (its segments, b_eff,
+        position, label) assigned to one or more cross-section girder lines. --
+     girders[i].lines: [j, …] (0-based lines of xs.nb, each line in at most one type): the lines this type is checked on. Written only by an
+                  assignment the user makes (typeLines / setLines below); girders[i].line stays the type's design line (the line the
+                  output tabs work, as before) and is always one of lines when lines is not empty. Absent: [the line of line / automatic].
      girders[i].loadsManual: { DC1wet, DC2, DW, CL, UT, UF (klf), xf: [{ x (ft), P (kip) }] } and girders[i].dfManual: { gM, gMpier,
                   gV, fatM, fatV, gDef }: entered values, used where the loads module gives none (CL and xf: the module has none yet)
      girders[i].loadsOverride, girders[i].dfOverride (added 2026-11-09, analysis inputs moved to the Loads tab; optional, true | false): the
@@ -225,6 +231,82 @@
   function defaultWelds() { return { Fexx: 70, w: '', gam: { dc: 1.25, dw: 1.50, ll: 1.75, fat: 1.75 }, ground: 'yes' }; }
   const OWNERS = ['AASHTO', 'RIDOT', 'MassDOT', 'CTDOT'];
 
+  /* ---------- girder types (SB-2, 2026-11-12) ----------
+     A girder type is a girders[] entry (its plates, b_eff, position, label); its lines are the cross-section girder lines (0-based, of
+     xs.nb) it is checked on. Nothing here changes a computed value: every engine reads the type's design line girders[i].line (or the
+     automatic line) as before. typeLines / lineTypes / unassigned read; setLines, assignLine, addType, deleteType write on a user action. */
+  const nbOf = P => { const n = Math.round(+(((P || {}).xs) || {}).nb); return Number.isInteger(n) && n > 0 && n < 100 ? n : 0; };
+  /* designLine(P, g): the line girders[i] works on the output tabs: engine/analysis.js lineOf (line when valid, else the first exterior
+     line G1 for position 'exterior' or N_b < 3, else the first interior line G2). The same rule, here so that the model needs no engine. */
+  function designLine(P, g) { const nb = nbOf(P); if (g && isNum(g.line) && g.line >= 0 && g.line < nb) return Math.round(g.line); return (g && g.position === 'exterior') || nb < 3 ? 0 : 1; }
+  /* typeLines(P, gi): the lines of type gi, ascending, those of xs.nb only (a stored line beyond N_b is kept in the file, not checked) */
+  function typeLines(P, gi) {
+    const g = ((P && P.girders) || [])[gi], nb = nbOf(P); if (!g || !nb) return [];
+    if (!Array.isArray(g.lines)) return [designLine(P, g)].filter(j => j < nb);
+    return [...new Set(g.lines.filter(j => Number.isInteger(j) && j >= 0 && j < nb))].sort((a, b) => a - b);
+  }
+  /* lineTypes(P): for each line 0 … N_b − 1 the types on it ([] = no type; two or more: a conflict, shown, never resolved silently) */
+  function lineTypes(P) { const nb = nbOf(P), out = Array.from({ length: nb }, () => []); ((P && P.girders) || []).forEach((g, gi) => typeLines(P, gi).forEach(j => out[j].push(gi))); return out; }
+  const unassigned = P => lineTypes(P).map((t, j) => t.length ? -1 : j).filter(j => j >= 0);
+  const isExtLine = (P, j) => { const nb = nbOf(P); return j === 0 || j === nb - 1; };
+  /* tribBeff(xs, j): the tributary deck width of line j, in (AASHTO LRFD 10th Ed. Art. 4.6.2.6.1: b_eff = the tributary width; exterior:
+     half the adjacent spacing + the overhang; interior: half of each adjacent spacing), the rule engine/legacy.js uses for its girders */
+  function tribBeff(xs, j) { const n = Math.round(+xs.nb), B = xs.bays || []; if (!(n >= 2) || B.length !== n - 1) return NaN;
+    const ft = j === 0 ? B[0] / 2 + +xs.ohL : j === n - 1 ? B[n - 2] / 2 + +xs.ohR : (B[j - 1] + B[j]) / 2; return +(ft * 12).toFixed(6); }
+  /* setLines(P, gi, lines): type gi takes exactly these lines; each is removed from any other type (which then stores its own lines). The
+     design line: kept when still one of the lines (written as a number), else the first of them. */
+  function setLines(P, gi, lines) {
+    const G = P.girders, nb = nbOf(P), want = [...new Set(lines.filter(j => Number.isInteger(j) && j >= 0 && j < nb))].sort((a, b) => a - b);
+    G.forEach((q, k) => { if (k === gi) return; const own = typeLines(P, k); if (own.some(j => want.includes(j))) fix(k, own.filter(j => !want.includes(j))); });
+    fix(gi, want);
+    function fix(k, L) { const q = G[k], dl = designLine(P, q); q.lines = L; if (L.length) q.line = L.includes(dl) ? dl : L[0]; }
+  }
+  /* assignLine(P, j, gi): line j to type gi (removed from the type it had) */
+  function assignLine(P, j, gi) { setLines(P, gi, [...typeLines(P, gi), j]); }
+  /* addType(P, src, o): a new type, a copy of type src's plates, b_eff, position and its stiffener bays and splice plate entries (the
+     design of src); o = { label, lines (default none) }. Not copied: the loads and factors entered or pulled for src (each line has its own),
+     its custom demands. Returns the new index. */
+  function addType(P, src, o) {
+    o = o || {}; const G = P.girders, s = G[src] || G[0], ids = new Set([...G.map(q => q.id), ...Object.values(P.custom || {}).flatMap(m => Object.keys(m || {}))]);
+    let k = G.length + 1; while (ids.has('G' + k)) k++;
+    const g = { id: 'G' + k, label: o.label || `Type ${G.length + 1}`, position: s.position, beff: s.beff, segments: JSON.parse(JSON.stringify(s.segments)) };
+    const gi = G.push(g) - 1, sNo = G.indexOf(s) + 1;
+    const ly = P.stiffeners && P.stiffeners.layout; if (ly && Array.isArray(ly.bays)) ly.bays.filter(q => +q.g === sNo).forEach(q => ly.bays.push({ ...q, g: gi + 1 }));
+    const pl = P.splices && P.splices.plates; if (Array.isArray(pl)) pl.filter(q => q && q.g != null && +q.g === sNo - 1).forEach(q => pl.push({ ...JSON.parse(JSON.stringify(q)), g: gi }));
+    g.lines = []; if (o.lines && o.lines.length) setLines(P, gi, o.lines);
+    return gi;
+  }
+  /* deleteType(P, gi, to): removes type gi; its lines go to type to (an index before the removal). The stiffener bays and splice plate
+     entries of gi are removed and those of later types renumbered (they are stored by girder number / index). Its custom demands
+     (stored by id) are kept in the file. Returns false when gi is the only type. */
+  function deleteType(P, gi, to) {
+    const G = P.girders; if (G.length < 2 || !G[gi] || !G[to] || to === gi) return false;
+    const L = typeLines(P, gi); if (L.length) setLines(P, to, [...typeLines(P, to), ...L]);
+    G.splice(gi, 1);
+    const ly = P.stiffeners && P.stiffeners.layout; if (ly && Array.isArray(ly.bays)) ly.bays = ly.bays.filter(q => +q.g !== gi + 1).map(q => +q.g > gi + 1 ? { ...q, g: +q.g - 1 } : q);
+    const S = P.splices; if (S && Array.isArray(S.plates)) S.plates = S.plates.filter(q => !(q && q.g != null && +q.g === gi)).map(q => q && q.g != null && +q.g > gi ? { ...q, g: +q.g - 1 } : q);
+    return true;
+  }
+  /* newProject(): the project the page starts a NEW project with (engineer 2026-11-12, SB-2): defaultProject() with two girder types,
+     Interior (the default girder, unchanged: id G1, its plates and b_eff 114 in) on the interior lines and Exterior (the same plates, b_eff
+     the tributary width of G1) on the two exterior lines. defaultProject() itself is unchanged (the engines' tests and baselines use it). */
+  function newProject() {
+    const p = defaultProject(), nb = p.xs.nb, g = p.girders[0];
+    g.label = 'Interior'; g.line = 1; g.lines = Array.from({ length: nb - 2 }, (_, i) => i + 1);
+    p.girders.push({ id: 'G2', label: 'Exterior', position: 'exterior', line: 0, lines: [0, nb - 1], beff: tribBeff(p.xs, 0), segments: JSON.parse(JSON.stringify(g.segments)) });
+    return p;
+  }
+  /* atLine(P, gi, j): P as seen with type gi on line j (a read view: girders[gi].line reads j; every write goes to P itself). P itself when
+     j is the type's design line, so the design line's results are those of P exactly. */
+  function atLine(P, gi, j) {
+    const g = P && P.girders && P.girders[gi]; if (!g || !Number.isInteger(j) || j === designLine(P, g)) return P;
+    const gp = new Proxy(g, { get: (t, k) => k === 'line' ? j : Reflect.get(t, k), has: (t, k) => k === 'line' || Reflect.has(t, k),
+      ownKeys: t => { const K = Reflect.ownKeys(t); return K.includes('line') ? K : [...K, 'line']; },
+      getOwnPropertyDescriptor: (t, k) => k === 'line' ? { value: j, writable: true, enumerable: true, configurable: true } : Reflect.getOwnPropertyDescriptor(t, k) });
+    const ga = new Proxy(P.girders, { get: (t, k) => String(k) === String(gi) ? gp : Reflect.get(t, k) });
+    return new Proxy(P, { get: (t, k) => k === 'girders' ? ga : Reflect.get(t, k) });
+  }
+
   const isNum = v => typeof v === 'number' && isFinite(v);
   /* equalSpacing(xs) (EQSP, 2026-11-09; engineer's definition 2026-11-09): equally spaced girders from the exterior girder spacing.
      S = W_cc / (N_b − 1): W_cc the exterior girder spacing (℄ to ℄ of the two exterior girders, ft), N_b − 1 the number of bays.
@@ -271,6 +353,7 @@
       if (!g || typeof g !== 'object') { E(gp, 'Girder is not an object.'); return; }
       if (!g.id || ids.has(g.id)) E(`${gp}.id`, 'Each girder needs its own id.'); ids.add(g.id);
       if (!['interior', 'exterior'].includes(g.position)) E(`${gp}.position`, 'Position must be "interior" or "exterior".');
+      if (g.lines != null && !(Array.isArray(g.lines) && g.lines.every(j => Number.isInteger(j) && j >= 0))) E(`${gp}.lines`, `${g.label || g.id}: the girder lines of the type must be a list of line numbers.`);   // SB-2
       if (d.composite) pos(g.beff, `${gp}.beff`, 'Effective flange width');
       const S = Array.isArray(g.segments) ? g.segments : [];
       if (!S.length) E(`${gp}.segments`, `${g.label || g.id}: enter at least one plate segment.`);
@@ -477,5 +560,5 @@
      (ownerRules.owner) when it is not AASHTO, else '' (as before the owner card moved to the Project tab). Display only; nothing computed or saved. */
   const clientName = P => { const t = String(((P || {}).project || {}).owner == null ? '' : P.project.owner).trim(), o = ((P || {}).ownerRules || {}).owner;
     return t || (o && o !== 'AASHTO' ? o : ''); };
-  window.SBDModel = { clientName, SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, defaultXs, equalSpacing, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, defaultWelds, validate, migrate, migrateNbList, legacyKind, importLegacy, exportJSON, importJSON, save, load };
+  window.SBDModel = { clientName, SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, newProject, designLine, typeLines, lineTypes, unassigned, isExtLine, tribBeff, setLines, assignLine, addType, deleteType, atLine, defaultXs, equalSpacing, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, defaultWelds, validate, migrate, migrateNbList, legacyKind, importLegacy, exportJSON, importJSON, save, load };
 })();

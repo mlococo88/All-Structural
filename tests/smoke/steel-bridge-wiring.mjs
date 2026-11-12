@@ -10,9 +10,10 @@
 import path from 'path';
 import assert from 'assert/strict';
 import { openPage, REPO } from '../lib.mjs';
+import { SBD_SEED } from './sbd-seed.mjs';   // SB-2: the one-girder built-in project saved (a new project now has two girder types)
 
 const t0 = Date.now();
-const { b, p, errs, blocked } = await openPage(path.join(REPO, 'apps/steel-bridge/index.html'), { vw: 1400, vh: 1000 });
+const { b, p, errs, blocked } = await openPage(path.join(REPO, 'apps/steel-bridge/index.html'), { vw: 1400, vh: 1000, ls: { ...SBD_SEED } });
 try {
   await p.waitForSelector('#tabBar [data-otab="flex"]');
   const bars = {};

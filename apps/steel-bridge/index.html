@@ -345,6 +345,7 @@
   const memStore = { getItem: () => null, setItem: () => {} };
   if (window.SBDReportData && window.SBDReportData.install) window.SBDReportData.install();   // one analysis cache for every output tab and the report (paths PR, 2026-10-30)
   const L = M.load(store || memStore);
+  if (L.source === 'default') L.project = M.newProject();   // SB-2 (2026-11-12): a new project starts with two girder types (Interior, Exterior)
   let P = L.project, autosave = !L.noAutosave, stale = true, R = null;
   const LIB = window.SBDLibrary, LS = store || memStore;
   /* saved-project link (engine/library.js): cur.id = the library item the open project was last saved to / opened from; cur.text = its
@@ -377,11 +378,68 @@
     [/^(spans|xs\.skews)\b/, 'layout'], [/^(analysis\b|girders\.\d+\.(loadsManual|dfManual|loadsOverride|dfOverride|clOverride)\b)/, 'loads'], [/^xs\.(ws|overlays|sip|allow|extra|dlMethod|lldf)\b/, 'loads'], [/^(xs|deck)\b/, 'xsec'], [/^(project|ownerRules)\b/, 'proj'], [/^girders\b/, 'gird'], [/^autodesign\b/, 'ad']];
   const tabOf = p => { const el = p && document.querySelector(`#inPanes [data-path="${String(p).replace(/["\\]/g, '\\$&')}"]`), pn = el && el.closest('[data-pane]');
     if (pn) return pn.dataset.pane; const r = TAB_RULES.find(q => q[0].test(p || '')); return r ? r[1] : 'mat'; };
-  // SB2-A7: the cross-section girder whose dead loads and distribution factors this plate girder takes (girders[i].line; blank = automatic,
-  // engine/analysis.js lineOf: the first exterior girder G1 for position 'exterior', else the first interior girder G2)
-  const lineSel = g => { const nb = P.xs ? Math.round(P.xs.nb) : 0; if (!(nb > 0)) return '';
-    const auto = window.SBDAnalysis ? window.SBDAnalysis.lineOf(P, { position: g.position }) : (g.position === 'exterior' || nb < 3 ? 0 : 1), cur = Number.isInteger(g.line) && g.line >= 0 && g.line < nb ? g.line : '';
-    return `<div class="fRow"><label for="i_line">Loads from cross-section girder</label><select id="i_line" data-kind="line">${[['', `Automatic (G${auto + 1})`], ...[...Array(nb)].map((_, j) => [j, `G${j + 1}${j === 0 || j === nb - 1 ? ' (exterior)' : ''}`])].map(([v, t]) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select><span class="unit">dead loads and LLDF (Loads &amp; LLDF tab)</span></div>`; };
+  /* SB-2 (2026-11-12, engineer: girder types): each girders[] entry is a girder TYPE (its plates, b_eff, position, label) assigned to one or
+     more cross-section girder lines (engine/model.js typeLines / setLines). The Girders & plates tab lists the types, their lines and the
+     lines with no type; the Cross-section tab assigns a type to each line. Display and input only: every engine still works a type on its
+     design line girders[i].line (blank = automatic, SB2-A7), as before. */
+  const lnName = j => `G${j + 1}`;
+  const lnList = L => L.map(lnName).join(', ');
+  const tyName = gi => { const q = P.girders[gi]; return q ? q.label || q.id : ''; };
+  let delAsk = null;   // the type whose Delete asks where its lines go (inline, Girders & plates tab)
+  /* unassignedNote(): the lines with no type and the lines with two types, with "Assign remaining lines to <type>" (never done silently) */
+  function unassignedNote() {
+    const U = M.unassigned(P), LT = M.lineTypes(P), dup = LT.map((t, j) => t.length > 1 ? j : -1).filter(j => j >= 0); let h = '';
+    if (U.length) h += `<div class="alert err" data-sbtypes="unassigned"><b>Line${U.length > 1 ? 's' : ''} ${lnList(U)} ${U.length > 1 ? 'have' : 'has'} no girder type</b>, so ${U.length > 1 ? 'they are' : 'it is'} not checked. Every cross-section girder line needs a type for the checks to cover the bridge.
+      <div style="margin-top:4px">${P.girders.map((q, gi) => `<button type="button" data-asgall="${gi}">Assign ${U.length > 1 ? 'them' : 'it'} to ${esc(tyName(gi))}</button>`).join(' ')}</div></div>`;
+    if (dup.length) h += `<div class="alert err">Line${dup.length > 1 ? 's' : ''} ${dup.map(j => `${lnName(j)} (${LT[j].map(tyName).map(esc).join(', ')})`).join('; ')}: more than one type on one line. Assign the line to one type (Cross-section tab, Girder type of each line).</div>`;
+    return h;
+  }
+  /* typeNotes(gi): the type's lines whose position (exterior / interior) or tributary width differs from the type's own inputs (the type's
+     position and b_eff are used on every line; a note only, nothing changed) */
+  function typeNotes(gi) {
+    const g = P.girders[gi], L = M.typeLines(P, gi), out = [];
+    const pos = L.filter(j => M.isExtLine(P, j) !== (g.position === 'exterior')); if (pos.length) out.push(`Line${pos.length > 1 ? 's' : ''} ${lnList(pos)} ${pos.length > 1 ? 'are' : 'is'} ${g.position === 'exterior' ? 'interior' : 'exterior'}; this type's position is ${esc(g.position)} (used on every line).`);
+    const bw = L.map(j => [j, M.tribBeff(P.xs, j)]).filter(([, b]) => isFinite(b) && isFinite(+g.beff) && Math.abs(b - +g.beff) > 0.5);
+    if (bw.length) out.push(`Tributary width (4.6.2.6.1) ${bw.map(([j, b]) => `${lnName(j)} ${U.fmt(b, 1)} in`).join(', ')}; this type's b<sub>eff</sub> ${U.fmt(+g.beff, 1)} in is used on every line.`);
+    if (!L.length) out.push('No line is assigned to this type: it is not checked on the bridge (the output tabs show it on its design line).');
+    return out.length ? `<p class="note" data-sbtypes="notes">${out.join('<br>')}</p>` : '';
+  }
+  /* typesCard(): the Girder types card (Girders & plates tab): one row per type, its lines; Add / Copy / Delete; the selected type's lines
+     as check boxes (checking a line moves it to this type; a line leaves a type only by being assigned to another, so it always keeps one) */
+  function typesCard() {
+    const nb = P.xs ? M.lineTypes(P).length : 0, gi0 = Math.min(ui.g, P.girders.length - 1), g = P.girders[gi0], L = M.typeLines(P, gi0);
+    const rows = P.girders.map((q, gi) => { const Lq = M.typeLines(P, gi); return `<tr class="${gi === gi0 ? 'sel' : ''}"><td><button type="button" data-gsel="${gi}" title="Select this type">${esc(tyName(gi))}</button></td><td>${esc(q.position)}</td><td class="lft">${Lq.length ? lnList(Lq) : '<i>none</i>'}</td><td>${Lq.length ? lnName(M.designLine(P, q)) : ''}</td></tr>`; }).join('');
+    const cbs = nb ? `<div class="fRow" style="flex-wrap:wrap"><label>Lines of ${esc(tyName(gi0))}</label><span data-sbtypes="lines">${[...Array(nb)].map((_, j) => { const own = L.includes(j), oth = M.lineTypes(P)[j].filter(k => k !== gi0);
+        return `<label style="white-space:nowrap;margin-right:8px"><input type="checkbox" data-gline="${j}"${own ? ' checked disabled title="Assign this line to another type to take it off this one (a line always keeps a type)"' : ` title="${oth.length ? `Move ${lnName(j)} from ${esc(oth.map(tyName).join(', '))} to this type` : `Assign ${lnName(j)} to this type`}"`}> ${lnName(j)}${M.isExtLine(P, j) ? ' (ext.)' : ''}${!own && oth.length ? ` <span class="note">${esc(oth.map(tyName).join(', '))}</span>` : ''}</label>`; }).join('')}</span></div>` : '';
+    const dsel = L.length ? `<div class="fRow"><label for="i_dline">Design line (output tabs)</label><select id="i_dline" data-kind="line">${(Number.isInteger(g.line) ? [] : [['', `Automatic (${lnName(M.designLine(P, g))})`]]).concat(L.map(j => [j, lnName(j)])).map(([v, t]) => `<option value="${v}"${String(Number.isInteger(g.line) ? g.line : '') === String(v) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select><span class="unit">dead loads and LLDF of this line on the output tabs</span></div>` : '';
+    const del = delAsk === gi0 && P.girders.length > 1 ? `<div class="alert" data-sbtypes="delask">Delete type <b>${esc(tyName(gi0))}</b>?${L.length ? ` Its line${L.length > 1 ? 's' : ''} ${lnList(L)} go${L.length > 1 ? '' : 'es'} to <select id="i_delTo">${P.girders.map((q, k) => k === gi0 ? '' : `<option value="${k}">${esc(tyName(k))}</option>`).join('')}</select>.` : ''}
+      Its stiffener bays and splice plate entries are removed with it. <button type="button" id="bDelTypeOk">Delete</button> <button type="button" id="bDelTypeNo">Cancel</button></div>` : '';
+    return card('Girder types', `<p class="note">A girder type is one plate girder design (plates, b<sub>eff</sub>, position) used on the cross-section girder lines assigned to it (engineer, 2026-11-12). Each line has one type.</p>
+      ${unassignedNote()}<div class="tscroll"><table class="tbl"><thead><tr><th>Type</th><th>Position</th><th class="lft">Lines</th><th>Design line</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div style="margin:4px 0"><button type="button" id="bAddType" title="A new type with the plates of ${esc(tyName(gi0))}, no line yet">Add type</button> <button type="button" id="bCopyType" title="A copy of ${esc(tyName(gi0))} (plates, b_eff, position), no line yet">Copy type</button> <button type="button" id="bDelType"${P.girders.length < 2 ? ' disabled title="The only type cannot be deleted"' : ''}>Delete type</button></div>${del}`)
+      + card('Selected type', `${sel('_g', 'Girder type', P.girders.map((q, i) => [i, q.label || q.id]), gi0)}${num(`girders.${gi0}.label`, 'Label', '', { text: true })}
+          ${sel(`girders.${gi0}.position`, 'Position', [['interior', 'Interior'], ['exterior', 'Exterior']])}${cbs}${dsel}${num(`girders.${gi0}.beff`, 'Effective flange width b<sub>eff</sub>', 'in')}${typeNotes(gi0)}`);
+  }
+  /* lineTypeCard(): the Cross-section tab's "Girder type of each line" (a select per line; a line with no type, as a saved project's other
+     lines, shows "— none —" until a type is chosen) */
+  function lineTypeCard() {
+    const LT = M.lineTypes(P); if (!LT.length) return '';
+    return card('Girder type of each line', `${unassignedNote()}<div class="tscroll"><table class="tbl"><thead><tr><th>Line</th><th class="lft">Girder type</th><th>Tributary width (in)</th></tr></thead><tbody>
+      ${LT.map((t, j) => `<tr><td>${lnName(j)}${M.isExtLine(P, j) ? ' (exterior)' : ''}</td><td class="lft"><select data-ltype="${j}" aria-label="girder type of line ${lnName(j)}">${t.length === 1 ? '' : `<option value="" selected>${t.length ? esc(t.map(tyName).join(' + ')) + ' (conflict)' : '— none —'}</option>`}${P.girders.map((q, gi) => `<option value="${gi}"${t.length === 1 && t[0] === gi ? ' selected' : ''}>${esc(tyName(gi))}</option>`).join('')}</select></td><td>${U.fmt(M.tribBeff(P.xs, j), 1)}</td></tr>`).join('')}
+      </tbody></table></div><p class="note">The plates of each type: <a href="#" data-itgo="gird">Girders &amp; plates tab</a>. A line moves to the type chosen here.</p>`);
+  }
+  /* SB-2: the Loads tab's per-girder cards (dead loads, construction live load, distribution factors: ui/analysis.js inputs) are those of the
+     girder type of the Girders & plates tab (ui.g, the same choice) on one of its lines (ui.ln; the type's design line by default). The
+     calculated values shown are that line's (SBDModel.atLine: a read view; the design line is the project itself). The entered values and
+     the override boxes belong to the type: they apply on every line of it. */
+  const lnSel = () => { const gi = Math.min(ui.g, P.girders.length - 1), L = M.typeLines(P, gi); return L.includes(ui.ln) ? ui.ln : M.designLine(P, P.girders[gi]); };
+  const loadsView = () => M.atLine(P, Math.min(ui.g, P.girders.length - 1), lnSel());
+  function loadsPick() {
+    const gi = Math.min(ui.g, P.girders.length - 1), L = M.typeLines(P, gi), j = lnSel();
+    return card('Girder type and line', `<div class="fRow"><label for="i__gLd">Girder type</label><select id="i__gLd">${P.girders.map((q, i) => `<option value="${i}"${i === gi ? ' selected' : ''}>${esc(q.label || q.id)}</option>`).join('')}</select><span class="unit">the same choice as the Girders &amp; plates tab</span></div>
+      <div class="fRow"><label for="i__lnLd">Line</label><select id="i__lnLd">${(L.includes(j) ? L : [j, ...L]).map(k => `<option value="${k}"${k === j ? ' selected' : ''}>${lnName(k)}${k === M.designLine(P, P.girders[gi]) ? ' (design line)' : ''}</option>`).join('')}</select><span class="unit">${L.length > 1 ? `the type is on ${lnList(L)}` : L.length ? '' : 'no line assigned: its design line'}</span></div>
+      <p class="note">The calculated values below are those of line ${lnName(j)}. Entered values and the override boxes belong to the type and apply on every line of it.</p>${M.unassigned(P).length ? `<p class="note">Line(s) ${lnList(M.unassigned(P))} have no girder type: <a href="#" data-itgo="gird">Girders &amp; plates tab</a>.</p>` : ''}`);
+  }
   function panes() {
     const g = P.girders[ui.g] || P.girders[0];
     const xsp = UL.parts(P, { num, sel, card, esc });   // the cross-section and load cards (ui/loads.js), on the Bridge layout, Cross-section, Materials and Loads tabs
@@ -398,7 +456,7 @@
         <p class="note">One span per row (Enter adds a row). Total ${U.fmt(P.spans.lengths.reduce((a, b) => a + (+b || 0), 0), 2)} ft. The last plate segment of each girder must end there.</p>`)
         + card('Support skews', `${xsp.skews}<p class="note">Left to right: abutment, piers, abutment. The cross-frame orientation and the flange lateral bending from skew: <a href="#" data-itgo="framing">Framing &amp; bracing tab</a>.</p>`)
         + card('Plan', window.SBDFramingUI.layoutPlan(P)),   // the framing plan of the Framing & bracing tab (ui/framing.js plan), for a look at the skews and spans
-      xsec: xsp.girders
+      xsec: xsp.girders + lineTypeCard()   // SB-2: the girder type of each line
         + card('Deck', `${sel('deck.composite', 'Composite', [['true', 'Yes'], ['false', 'No (noncomposite)']])}${num('deck.ts', 'Structural slab t<sub>s</sub>', 'in')}${num('deck.tdeck', 'Total deck thickness', 'in')}${num('deck.haunch', 'Haunch', 'in')}
           ${num('deck.rebar.top.A', 'Top layer A<sub>rt</sub> (per girder)', 'in²')}${num('deck.rebar.top.c', 'Top layer, centroid below top of slab', 'in')}
           ${num('deck.rebar.bot.A', 'Bottom layer A<sub>rb</sub> (per girder)', 'in²')}${num('deck.rebar.bot.c', 'Bottom layer, centroid above bottom of slab', 'in')}
@@ -409,14 +467,13 @@
         + card('Deck concrete and reinforcement', `${num('materials.concrete.fc', 'f′<sub>c</sub>', 'ksi')}${num('materials.concrete.wc', 'w<sub>c</sub>', 'kcf')}${xsp.wcE}${num('materials.concrete.K1', 'K<sub>1</sub>', '')}
           ${sel('materials.concrete.nRule', 'Modular ratio n', [['exact', 'Exact (E_s/E_c)'], ['round', 'Rounded to an integer']])}${num('materials.rebar.Fyr', 'Rebar F<sub>yr</sub>', 'ksi')}
           <p class="note">Slab thickness, haunch and the rebar areas: <a href="#" data-itgo="xsec">Cross-section tab</a>.</p>`),
-      gird: card('Girder', `${sel('_g', 'Girder', P.girders.map((q, i) => [i, q.label || q.id]), ui.g)}${num(`girders.${ui.g}.label`, 'Label', '', { text: true })}
-          ${sel(`girders.${ui.g}.position`, 'Position', [['interior', 'Interior'], ['exterior', 'Exterior']])}${lineSel(g)}${num(`girders.${ui.g}.beff`, 'Effective flange width b<sub>eff</sub>', 'in')}`)
-        + card('Plate segments (from the left end)', `<div class="tscroll"><table class="tbl"><thead><tr><th></th><th>x<sub>0</sub><br>ft</th><th>x<sub>1</sub><br>ft</th><th>D<br>in</th><th>t<sub>w</sub><br>in</th><th>b<sub>t</sub><br>in</th><th>t<sub>t</sub><br>in</th><th>b<sub>b</sub><br>in</th><th>t<sub>b</sub><br>in</th><th></th></tr></thead><tbody>
+      gird: typesCard()
+        + card(`Plate segments of ${esc(g.label || g.id)} (from the left end)`, `<div class="tscroll"><table class="tbl"><thead><tr><th></th><th>x<sub>0</sub><br>ft</th><th>x<sub>1</sub><br>ft</th><th>D<br>in</th><th>t<sub>w</sub><br>in</th><th>b<sub>t</sub><br>in</th><th>t<sub>t</sub><br>in</th><th>b<sub>b</sub><br>in</th><th>t<sub>b</sub><br>in</th><th></th></tr></thead><tbody>
           ${g.segments.map((s, i) => `<tr class="${i === ui.seg ? 'sel' : ''}"><td><button type="button" data-seg="${i}" title="Show this segment's section properties">${i + 1}</button></td>${['x0', 'x1', 'D', 'tw', 'topB', 'topT', 'botB', 'botT'].map(k => `<td><input type="number" step="any" data-path="girders.${ui.g}.segments.${i}.${k}" data-kind="num" value="${esc(s[k])}" aria-label="segment ${i + 1} ${k}"></td>`).join('')}<td><button type="button" data-del="${i}" title="Remove this segment"${g.segments.length < 2 ? ' disabled' : ''}>×</button></td></tr>`).join('')}
           </tbody></table></div><button type="button" id="bAddSeg">Add segment</button><p class="note">Segments are contiguous: each starts where the one before ends. Plate thicknesses may be typed as decimals (0.5625).</p>`),
       framing: window.SBDFramingUI.inputs(P, { num, sel, card, esc }, ui),   // framing.* and crossframes.* (the wind card: Loads tab)
       loads: xsp.ws + xsp.extra + xsp.dist + window.SBDFramingUI.windCard(P, { num, sel, card, esc })
-        + window.SBDAnalysisUI.inputs(P, Math.min(ui.g, P.girders.length - 1)),   // AIN (2026-11-09): the analysis inputs, moved here from the Analysis output tab
+        + loadsPick() + window.SBDAnalysisUI.inputs(loadsView(), Math.min(ui.g, P.girders.length - 1)),   // AIN (2026-11-09): the analysis inputs, moved here from the Analysis output tab
       stf: window.SBDShearUI.inputs(P, { num, sel, card, esc }, ui),
       fs: window.SBDFatigueUI.inputs(P, { num, sel, card, esc }, ui),
       spl: window.SBDSplicesUI.inputs(P, { num, sel, card, esc }, ui),
@@ -461,9 +518,14 @@
   $('inTabs').addEventListener('click', e => { const b = e.target.closest('[data-itab]'); if (!b) return; ui.itab = b.dataset.itab; saveUi(); drawInputs(); });
   $('inPanes').addEventListener('change', e => {
     const el = e.target;
-    if (el.id === 'i__g' || el.id === 'i__gHo') { ui.g = +el.value; ui.seg = 0; saveUi(); drawInputs(); markStale(); return; }
+    if (el.id === 'i__g' || el.id === 'i__gHo' || el.id === 'i__gLd') { ui.g = +el.value; ui.seg = 0; delete ui.ln; delAsk = null; saveUi(); drawInputs(); markStale(); return; }
+    if (el.id === 'i__lnLd') { ui.ln = +el.value; saveUi(); drawInputs(); return; }   // SB-2: the line of the Loads tab's cards (display only)
     if (window.SBDAnalysisUI.onInputChange(el, P, Math.min(ui.g, P.girders.length - 1))) { changed(true); return; }   // AIN: the analysis inputs (ui/analysis.js)
+    if (el.dataset.path === 'xs.nb') { const nb0 = M.lineTypes(P).length; if (UL.onChange(el, P)) { changed(true); nbOffer(nb0); return; } }   // SB-2: N_b changed: offer to assign the new lines
     if (UL.onChange(el, P)) { changed(true); return; }
+    if (el.dataset.ltype != null) { if (el.value !== '') { M.assignLine(P, +el.dataset.ltype, +el.value); changed(true); } return; }   // SB-2: Cross-section tab, the type of a line
+    if (el.dataset.gline != null) { if (el.checked) { M.assignLine(P, +el.dataset.gline, Math.min(ui.g, P.girders.length - 1)); changed(true); } return; }   // SB-2: a line checked on the selected type
+    if (el.id === 'i_delTo') return;
     if (el.dataset.kind === 'line') { const g = P.girders[ui.g]; if (el.value === '') delete g.line; else g.line = Number(el.value); changed(false); return; }   // SB2-A7
     if (window.SBDSplicesUI.onChange(el, P)) { changed(true); return; }
     if (window.SBDFramingUI.onChange(el, P)) { changed(true); return; }
@@ -481,6 +543,13 @@
     if (window.SBDFatigueUI.onClick(e, P, ui)) { changed(true); return; }
     if (window.SBDSplicesUI.onClick(e, P, ui)) { changed(true); return; }
     if (window.SBDHandoffUI && window.SBDHandoffUI.onClick(e, P, ui)) { changed(true); return; }   // B2
+    { const gs = e.target.closest('[data-gsel]'), ga = e.target.closest('[data-asgall]'), id = e.target.id, gi = Math.min(ui.g, P.girders.length - 1);   // SB-2: girder types
+      if (gs) { ui.g = +gs.dataset.gsel; ui.seg = 0; delAsk = null; saveUi(); drawInputs(); markStale(); return; }
+      if (ga) { const U = M.unassigned(P); if (U.length) { M.setLines(P, +ga.dataset.asgall, [...M.typeLines(P, +ga.dataset.asgall), ...U]); changed(true); } return; }
+      if (id === 'bAddType' || id === 'bCopyType') { const n = M.addType(P, gi, id === 'bCopyType' ? { label: `${tyName(gi)} copy` } : {}); ui.g = n; ui.seg = 0; delAsk = null; saveUi(); changed(true); return; }
+      if (id === 'bDelType') { delAsk = gi; drawInputs(); return; }
+      if (id === 'bDelTypeNo') { delAsk = null; drawInputs(); return; }
+      if (id === 'bDelTypeOk') { const to = $('i_delTo') ? +$('i_delTo').value : (gi ? 0 : 1); delAsk = null; if (M.deleteType(P, gi, to)) { ui.g = Math.min(to > gi ? to - 1 : to, P.girders.length - 1); ui.seg = 0; saveUi(); changed(true); } return; } }
     const s = e.target.closest('[data-seg]'), d = e.target.closest('[data-del]');
     if (s) { ui.seg = +s.dataset.seg; saveUi(); drawInputs(); markStale(); return; }
     if (d) { const g = P.girders[ui.g], i = +d.dataset.del, S = g.segments; S.splice(i, 1); if (S[i]) S[i].x0 = i ? S[i - 1].x1 : 0; ui.seg = Math.min(ui.seg, S.length - 1); changed(true); return; }
@@ -521,10 +590,20 @@
     toast(`<strong>${esc(od.owner)} defaults applied: ${od.changes.length} input${od.changes.length > 1 ? 's' : ''} changed</strong><ul>${od.changes.map(c => `<li><span class="tFld">${esc(c.tab)} › ${esc(c.field)}</span>: ${esc(c.from)} <span class="tArr">→</span> ${esc(c.to)}${c.unit ? ' ' + esc(c.unit) : ''}</li>`).join('')}</ul>`
       + (od.same.length ? `<div class="note">Already at the default, not changed: ${od.same.map(c => esc(c.field)).join(', ')}.</div>` : ''), { undo: true });
   }
+  /* nbOffer(nb0): after N_b changes (SB-2), the lines with no type are offered to a type (a button per type; nothing assigned silently),
+     and the lines beyond N_b that types still store are named (kept in the file, not checked; they come back if N_b grows again) */
+  function nbOffer(nb0) {
+    const nb = M.lineTypes(P).length, U = M.unassigned(P); if (nb === nb0) return;
+    const gone = P.girders.map((q, gi) => [gi, (Array.isArray(q.lines) ? q.lines : []).filter(j => j >= nb)]).filter(([, L]) => L.length);
+    if (!U.length && !gone.length) return;
+    toast(`<strong>N<sub>b</sub> is now ${nb}.</strong>${U.length ? ` Line${U.length > 1 ? 's' : ''} ${lnList(U)} ${U.length > 1 ? 'have' : 'has'} no girder type and ${U.length > 1 ? 'are' : 'is'} not checked until assigned:<div>${P.girders.map((q, gi) => `<button type="button" data-tasg="${gi}">Assign to ${esc(tyName(gi))}</button>`).join(' ')}</div>` : ''}`
+      + (gone.length ? `<div class="note">No longer on the bridge (kept with the type, not checked): ${gone.map(([gi, L]) => `${esc(tyName(gi))} ${lnList(L)}`).join('; ')}. The exterior lines changed too: check each type's lines and position (Girders &amp; plates tab).</div>` : ''));
+  }
   function closeToast() { $('toast').hidden = true; }
   /* loadNotes(notes): the one-line notices of the field migrations run on load (engine/model.js importJSON notes, e.g. migrateNbList) */
   const loadNotes = n => { if (n && n.length) toast(n.map(t => esc(t)).join('<br>')); };
-  $('toast').addEventListener('click', e => { if (e.target.id === 'tClose') closeToast(); else if (e.target.id === 'tUndo') undo(); });
+  $('toast').addEventListener('click', e => { const ta = e.target.closest && e.target.closest('[data-tasg]'); if (ta) { const U = M.unassigned(P), gi = +ta.dataset.tasg; if (U.length && P.girders[gi]) { M.setLines(P, gi, [...M.typeLines(P, gi), ...U]); changed(true); } closeToast(); return; }   // SB-2: nbOffer
+    if (e.target.id === 'tClose') closeToast(); else if (e.target.id === 'tUndo') undo(); });
   const loadAs = (proj, id, textFn) => { P = proj; ui.g = 0; ui.seg = 0; autosave = true; undoS = []; redoS = []; closeToast(); changed(true, true); cur = { id, text: textFn ? textFn(P) : null }; LIB.setCur(LS, id); snap = JSON.stringify(P); syncBar(); };   // a different project: the undo history starts again
   /* STDS-B (2026-11-06): the standard save (shared/projects-ui.js projectBar; engineer-approved standard, 2026-11-05): header chip ·
      Undo · Redo · Save (Ctrl+S) · Saved projects…; the Project tab's first card "Save and open" (Save · Save as… · Saved projects… · New;
@@ -604,7 +683,7 @@
     displayName: () => clean(P.project.name),
     save: pbSave,
     open: v => { const i = vItem(v); if (!i) return false; const r = LIB.open(LS, i.id); if (!r.ok) { alert(r.error); return false; } loadAs(r.project, i.id, norm); loadNotes(r.notes); return true; },
-    newProject: () => loadAs(M.defaultProject(), null, norm),
+    newProject: () => loadAs(M.newProject(), null, norm),   // SB-2: two girder types
     exportFile: v => { if (!v || v === vName(cur.id) || v === P.project.name) { exportFile(P); return; } const Q = JSON.parse(JSON.stringify(P)); Q.project.name = v; exportFile(Q); },
     importFile: () => $('fImport').click(),
     exportOne: v => { const i = vItem(v); if (!i) return; const t = LIB.text(LS, i.id); if (t != null) SPUI.download(String(i.name || 'steel-bridge').replace(/[^\w.-]+/g, '_') + '.sbd2.json', t); },

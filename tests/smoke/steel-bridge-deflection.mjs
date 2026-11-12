@@ -16,13 +16,14 @@ import fs from 'fs';
 import path from 'path';
 import assert from 'assert/strict';
 import { openPage, REPO } from '../lib.mjs';
+import { SBD_SEED } from './sbd-seed.mjs';   // SB-2: the one-girder built-in project saved (a new project now has two girder types)
 
 const av = process.argv.slice(2), shots = av.includes('--shots') ? av[av.indexOf('--shots') + 1] : null;
 if (shots) fs.mkdirSync(shots, { recursive: true });
 const FILE = path.join(REPO, 'apps/steel-bridge/index.html'), t0 = Date.now();
 const settle = (p, t = 240000) => p.waitForFunction(() => !document.querySelector('#out .alert.stale:not([hidden])') && !/Calculating|updating/.test((document.querySelector('#autoMsg') || {}).textContent || '') && !/Calculating/.test(((document.querySelector('#out') || {}).innerText || '').slice(0, 400)), null, { timeout: t });
 
-let { b, p, errs, blocked } = await openPage(FILE, { vw: 1440, vh: 1000 });
+let { b, p, errs, blocked } = await openPage(FILE, { vw: 1440, vh: 1000, ls: { ...SBD_SEED } });
 try {
   await p.waitForSelector('#tabBar [data-otab="defl"]');
   const order = await p.$$eval('#tabBar [data-otab]', bs => bs.map(x => x.dataset.otab));
@@ -101,7 +102,7 @@ try {
 } finally { await b.close(); }
 
 // 7. phone layout: 390 px
-({ b, p, errs } = await openPage(FILE, { vw: 390, vh: 844 }));
+({ b, p, errs } = await openPage(FILE, { vw: 390, vh: 844, ls: { ...SBD_SEED } }));
 try {
   await p.waitForSelector('#tabBar [data-otab="defl"]');
   await p.click('#tabBar [data-otab="defl"]'); await settle(p); await p.waitForSelector('#df-ll table', { timeout: 240000 });

@@ -43,7 +43,8 @@
   /* plate girder (index in P.girders) of cross-section girder i of nb */
   function plateGirderOf(P, i, nb) {
     const G = P.girders || [], ext = i === 0 || i === nb - 1;
-    let j = G.findIndex(g => Number.isInteger(g.line) && g.line === i); if (j >= 0) return j;
+    let j = G.findIndex(g => Array.isArray(g.lines) && g.lines.includes(i)); if (j >= 0) return j;   // SB-2 (2026-11-12): the girder type assigned to the line (absent lines: as before)
+    j = G.findIndex(g => Number.isInteger(g.line) && g.line === i); if (j >= 0) return j;
     j = G.findIndex(g => !Number.isInteger(g.line) && (g.position === 'exterior') === ext); if (j >= 0) return j;
     return 0;
   }
