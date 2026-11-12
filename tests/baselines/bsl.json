@@ -2,9 +2,9 @@
  "tool": "bsl",
  "cases": {
   "default": {
-   "a": "origin/main (470b5cb)",
+   "a": "origin/main (470b5cb) + SDB (new-project hEQmode 'static')",
    "sections": {
-    "bsl.inputs": "11088c9f6c38",
+    "bsl.inputs": "d4ff310556b9",
     "bsl.checks": "cb297293b96b",
     "bsl.u0.defs": "8ee8c01469bb",
     "bsl.u0.comps": "1b62faa216b5",
@@ -26,7 +26,7 @@
     "bsl.u3.combine": "adc3d8ef5565",
     "bsl.u3.conc": "ece0233d8814",
     "bsl.u3.found": "63a66cefb550",
-    "bsl.pay.abutmentLoads": "480cd495a3f4",
+    "bsl.pay.abutmentLoads": "9f49b49ae8a7",
     "bsl.tab.summary": "89ec90f0e178",
     "bsl.tab.geometry": "5be98b98192b",
     "bsl.tab.dl": "348bc8a7fcee",
